@@ -7,23 +7,23 @@ import { parseNvidiaSmiOutput } from "./gpu-vram";
 describe("parseNvidiaSmiOutput", () => {
   it("单卡正常解析（used, total）", () => {
     expect(parseNvidiaSmiOutput("2048, 8192")).toEqual({
-      usedMiB: 2048,
       totalMiB: 8192,
+      usedMiB: 2048,
     });
   });
 
   it("多卡取首块（与状态栏单值口径一致）", () => {
     const raw = "2048, 8192\n1024, 4096";
     expect(parseNvidiaSmiOutput(raw)).toEqual({
-      usedMiB: 2048,
       totalMiB: 8192,
+      usedMiB: 2048,
     });
   });
 
   it("CRLF 换行也能解析", () => {
     expect(parseNvidiaSmiOutput("512, 4096\r\n")).toEqual({
-      usedMiB: 512,
       totalMiB: 4096,
+      usedMiB: 512,
     });
   });
 
@@ -44,8 +44,8 @@ describe("parseNvidiaSmiOutput", () => {
 
   it("已用超过总量时 clamp 到总量（驱动读数抖动）", () => {
     expect(parseNvidiaSmiOutput("9000, 8192")).toEqual({
-      usedMiB: 8192,
       totalMiB: 8192,
+      usedMiB: 8192,
     });
   });
 });

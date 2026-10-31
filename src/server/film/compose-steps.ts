@@ -26,7 +26,7 @@ export function buildSegmentVf(opts: {
   height: number;
   width: number;
 }): string {
-  const { width: W, height: H, fps, fadeOut } = opts;
+  const { fadeOut, fps, height: H, width: W } = opts;
   return (
     `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
     `pad=${W}:${H}:(${W}-iw)/2:(${H}-ih)/2,setsar=1,` +
@@ -39,7 +39,7 @@ export function buildSegmentVf(opts: {
  *
  *  `text` 由调用方传入（镜头标题或提示词，已截断），本函数只管时间轴与格式。 */
 export function buildSrtBody(opts: { dur: number; text: string }): string {
-  const { text, dur } = opts;
+  const { dur, text } = opts;
   const endSec = String(Math.floor(dur)).padStart(2, "0");
   return `1\n00:00:00,000 --> 00:00:${endSec},000\n${text}\n`;
 }
@@ -56,7 +56,7 @@ export function buildNormalizeArgs(opts: {
   srtPath: string | null;
   vf: string;
 }): Array<string> {
-  const { clip, vf, dur, out, srtPath } = opts;
+  const { clip, dur, out, srtPath, vf } = opts;
   const vfWithSub =
     srtPath !== null ? `${vf},subtitles='${escapeFilter(normalizeSlashes(srtPath))}'` : vf;
   return [

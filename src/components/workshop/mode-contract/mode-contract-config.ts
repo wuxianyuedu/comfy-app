@@ -111,9 +111,9 @@ export const CUSTOM_INPUT_KINDS: ReadonlyArray<{
   kind: ModeContractCustomKind;
   label: string;
 }> = [
-  { kind: "text", label: "文本", hint: "单行文本，可落到工作流的文本行" },
-  { kind: "image", label: "图片", hint: "选本地图片上传，可落到图片行" },
-  { kind: "number", label: "数字", hint: "数值输入，可落到数值 / 选项行" },
+  { hint: "单行文本，可落到工作流的文本行", kind: "text", label: "文本" },
+  { hint: "选本地图片上传，可落到图片行", kind: "image", label: "图片" },
+  { hint: "数值输入，可落到数值 / 选项行", kind: "number", label: "数字" },
 ];
 
 /** 自定义口类型 → 展示名。 */
@@ -130,10 +130,10 @@ export function contractInputCatalog(
   inputs: ReadonlyArray<string>,
 ): Array<{ added: boolean; label: string; type: ModeContractInputType }> {
   return MODE_CONTRACT_INPUT_TYPES.map((item) => ({
-    type: item.type,
-    label: item.label,
     added: inputs.some((id) =>
       item.type === "reference-image" ? id.startsWith("reference-image") : id === item.type,
     ),
+    label: item.label,
+    type: item.type,
   }));
 }

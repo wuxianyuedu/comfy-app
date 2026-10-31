@@ -103,9 +103,8 @@ export function useComfyuiControl() {
           return result;
         },
         {
-          report: (kind, text) =>
-            kind === "ok" ? toast.success(text) : toast.error(text),
           failureText: "启动 ComfyUI 失败",
+          report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
         },
       );
     } finally {
@@ -123,9 +122,8 @@ export function useComfyuiControl() {
           return result;
         },
         {
-          report: (kind, text) =>
-            kind === "ok" ? toast.success(text) : toast.error(text),
           failureText: "关闭 ComfyUI 失败",
+          report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
         },
       );
     } finally {
@@ -174,8 +172,8 @@ export function useComfyuiControl() {
           const base = fresh.data?.base ?? comfyStatusQ.data?.base ?? null;
           if (!base) {
             return {
-              ok: false,
               detail: "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",
+              ok: false,
             };
           }
           /* 桌面壳：打开方式由服务端探测结论决定（ISSUE #310）——目标是**只有多页签**、
@@ -187,25 +185,23 @@ export function useComfyuiControl() {
           // 用稳定 id 打开 ComfyUI 页签：重启后端口偏移（base 变化）时
           // 复用同一页签并刷新地址，而不是叠出重复页签。
           useShellTabs.getState().openTab({
+            blockedReason: decision.target === "blocked" ? decision.detail : null,
+            closable: true,
             id: "comfyui",
             label: "ComfyUI",
             url: decision.embedUrl,
-            closable: true,
-            blockedReason:
-              decision.target === "blocked" ? decision.detail : null,
             /* 不可嵌时把地址一并带进说明：用户能复制到浏览器自查，也能判断
              * 是外壳拦的还是 ComfyUI 自己拦的（ISSUE #310）。 */
             blockedUrl: decision.target === "blocked" ? decision.base : null,
           });
           return {
-            ok: decision.target === "embed",
             detail: decision.detail,
+            ok: decision.target === "embed",
           };
         },
         {
-          report: (kind, text) =>
-            kind === "ok" ? toast.success(text) : toast.error(text),
           failureText: "打开 ComfyUI 失败",
+          report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
         },
       );
     } finally {
@@ -225,9 +221,8 @@ export function useComfyuiControl() {
    *
    * 与 openComfy 一样先 refetch 一次状态，避免拿几秒前的旧结论误报「未运行」。 */
   const openComfyInBrowserAction = useExternalAction({
+    report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
     target: "browser",
-    report: (kind, text) =>
-      kind === "ok" ? toast.success(text) : toast.error(text),
   });
   const openComfyInBrowser = useCallback(async () => {
     await openComfyInBrowserAction.run(async () => {
@@ -242,8 +237,8 @@ export function useComfyuiControl() {
    * 否则挂载 / 刷新时取一次。 */
   const comfyLogActive = comfyStarting || !!comfyStatusQ.data?.starting;
   const comfyLog = useRuntimeLogSource({
-    source: "comfyui-runtime",
     active: comfyLogActive,
+    source: "comfyui-runtime",
   });
 
   const status = comfyStatusQ.data;
@@ -252,12 +247,12 @@ export function useComfyuiControl() {
     /** 运行态（四态投影见 `comfyui-control-config`）。 */
     status: status
       ? {
-          up: !!status.up,
-          starting: !!status.starting,
-          probing: !!status.probing,
-          stopping: !!status.stopping,
           base: status.base ?? null,
           port: status.port ?? 0,
+          probing: !!status.probing,
+          starting: !!status.starting,
+          stopping: !!status.stopping,
+          up: !!status.up,
           via: status.via ?? null,
           /* 库里已保存的路径（服务端 `comfyStatus` 一直有这一格，此前视图没收）：
            * 它是启动动作**实际会用的那一条**，写在页上让「改了没保存」当场可见。 */
@@ -265,15 +260,15 @@ export function useComfyuiControl() {
         }
       : null,
     /** 安装形态（路径没配时为 null，视图据此给「去设置」出口）。 */
-    instance: comfyInstanceQ.data ?? null,
-    starting: comfyStarting,
-    stopping: comfyStopping,
-    opening: comfyOpening,
     browserOpening: openComfyInBrowserAction.busy,
-    startComfy,
-    stopComfy,
+    instance: comfyInstanceQ.data ?? null,
     openComfy,
     openComfyInBrowser,
+    opening: comfyOpening,
+    startComfy,
+    starting: comfyStarting,
+    stopComfy,
+    stopping: comfyStopping,
     /** 「立刻再问一次」—— 状态本身事件驱动，这颗是「我不信刚才那一拍」的出口。 */
     refreshStatus: async () => {
       await comfyStatusQ.refetch();

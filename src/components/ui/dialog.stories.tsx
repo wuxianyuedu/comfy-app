@@ -32,8 +32,8 @@ import { Label } from "~/components/ui/label";
  * 弹窗是**受控 / 非受控都支持**的；base-ui 负责 Esc、点遮罩关闭、焦点锁与归还。
  */
 const meta = {
-  title: "UI/Dialog",
   component: Dialog,
+  title: "UI/Dialog",
 } satisfies Meta<typeof Dialog>;
 
 export default meta;

@@ -57,10 +57,10 @@ type TitleBarTabsProps = {
 
 /** 单个页签：标题 + 可选关闭按钮（点击不触发拖拽，见 data-no-drag）。 */
 function TitleBarTab({
-  tab,
   active,
   onActivate,
   onClose,
+  tab,
 }: {
   active: boolean;
   onActivate: (id: string) => void;
@@ -110,17 +110,17 @@ function TitleBarTab({
  *  「最大化 / 还原」图标跟着状态走这种细节不会在两处漂移（§12.12）。 */
 
 export function TitleBarTabs({
-  tabs,
   activeTabId,
+  activeViewKey,
   onActivate,
   onClose,
-  viewTabs,
-  activeViewKey,
-  projectNameOf,
-  onSelectViewTab,
   onCloseViewTab,
-  openableViews,
   onOpenView,
+  onSelectViewTab,
+  openableViews,
+  projectNameOf,
+  tabs,
+  viewTabs,
 }: TitleBarTabsProps) {
   /* 有视图页签时，「主应用」那一个伪页签由它们代表 —— 同一条横条里出现
      「主应用」+「首页」+「模型」这种并列，用户分不清哪个才是当前页。 */

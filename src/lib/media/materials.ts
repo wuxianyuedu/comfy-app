@@ -230,15 +230,15 @@ export async function listFolderItems(scope: string, folder: string): Promise<Ar
         continue;
       }
       items.push({
-        id: `${scope}/${folder}/${name}`,
-        name,
         folder,
         folderName: folderName(folder),
+        id: `${scope}/${folder}/${name}`,
         kind: inferKind(name),
-        url: artifactUrl(["materials", scope, folder, name].map(encodeURIComponent)),
+        name,
+        scope,
         size: st.size,
         updatedAt: st.mtime.toISOString(),
-        scope,
+        url: artifactUrl(["materials", scope, folder, name].map(encodeURIComponent)),
       });
     } catch {
       // 单个文件 stat 失败（被占用 / 刚被删）不应让整个列表 500

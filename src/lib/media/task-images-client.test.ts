@@ -25,10 +25,10 @@ afterEach(() => {
 describe("fetchTaskImages", () => {
   it("按 id / localPath / isCover 收窄", async () => {
     taskDetailQuery.mockResolvedValue({
-      images: [{ id: "i-1", localPath: "/outputs/a.png", isCover: true }],
+      images: [{ id: "i-1", isCover: true, localPath: "/outputs/a.png" }],
     });
     expect(await fetchTaskImages("t-1")).toEqual([
-      { id: "i-1", localPath: "/outputs/a.png", isCover: true },
+      { id: "i-1", isCover: true, localPath: "/outputs/a.png" },
     ]);
   });
 
@@ -37,7 +37,7 @@ describe("fetchTaskImages", () => {
       images: [{ localPath: "/outputs/b.png" }],
     });
     expect(await fetchTaskImages("t-1")).toEqual([
-      { id: "", localPath: "/outputs/b.png", isCover: false },
+      { id: "", isCover: false, localPath: "/outputs/b.png" },
     ]);
   });
 

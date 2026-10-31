@@ -12,13 +12,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 
 const toast = {
-  success: vi.fn(),
+  dismiss: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
   loading: vi.fn(),
-  update: vi.fn(),
-  dismiss: vi.fn(),
+  success: vi.fn(),
   toast: vi.fn(),
+  update: vi.fn(),
 };
 
 vi.mock("~/components/studio/ToastProvider", () => ({ useToast: () => toast }));
@@ -26,10 +26,10 @@ vi.mock("~/components/studio/ToastProvider", () => ({ useToast: () => toast }));
 /* 本文件只管拒收提示那一段；落盘三件套（防抖 / mutation / beforeunload）
  * 的写盘动作在这里必须是空气，否则每个用例都会真的发一次镜像请求。 */
 vi.mock("~/lib/project-canvas/canvas-store", () => ({
-  upsertProject: vi.fn(),
   clearActiveIfDraft: vi.fn(),
   isEmptyDraftName: vi.fn(() => false),
   reapEmptyProject: vi.fn(),
+  upsertProject: vi.fn(),
 }));
 
 import { recordSyncFailure } from "~/lib/project-canvas/sync-notice";
@@ -42,11 +42,11 @@ import { useProjectPersistence } from "./use-project-persistence";
 
 function args() {
   return {
-    projectId: "proj_toast",
-    nodes: [],
     edges: [],
-    projectName: "灵感板",
     loaded: true,
+    nodes: [],
+    projectId: "proj_toast",
+    projectName: "灵感板",
   };
 }
 
@@ -56,7 +56,7 @@ function refusal(id: string, name: string, message: string, code = "FORBIDDEN"):
     { id, name },
     Object.assign(new Error(message), {
       data: { code },
-      shape: { message, code },
+      shape: { code, message },
     }),
   );
 }
@@ -158,11 +158,11 @@ describe("空草稿回收：先问能不能收，再决定清不清 active", () 
   function flushNow(projectId: string) {
     const { result, unmount } = renderHook(() =>
       useProjectPersistence({
-        projectId,
-        nodes: [],
         edges: [],
-        projectName: "未命名",
         loaded: true,
+        nodes: [],
+        projectId,
+        projectName: "未命名",
       }),
     );
     /* unmount 的清理里会立刻 flush 一次（防抖还没到点也要落盘）。 */

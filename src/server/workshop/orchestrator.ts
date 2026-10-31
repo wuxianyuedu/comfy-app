@@ -53,8 +53,8 @@ function buildScriptMessages(
     .filter(Boolean)
     .join("\n");
   return [
-    { role: "system", content: SCRIPT_SYSTEM },
-    { role: "user", content: brief },
+    { content: SCRIPT_SYSTEM, role: "system" },
+    { content: brief, role: "user" },
   ];
 }
 
@@ -64,8 +64,8 @@ function buildScriptMessages(
 export function rebuildCharacterPrompts(characters: Array<Character>): Array<Character> {
   return characters.map((c) => ({
     ...c,
-    positivePrompt: buildCharacterPrompt(c),
     negativePrompt: buildCharacterNegative(c),
+    positivePrompt: buildCharacterPrompt(c),
   }));
 }
 
@@ -80,8 +80,8 @@ export function rebuildShotPrompts(
     const linked = characters.filter((c) => shot.characterIds.includes(c.id));
     return {
       ...shot,
-      prompt: buildShotPrompt(shot, scene, linked),
       negativePrompt: buildShotNegative(linked),
+      prompt: buildShotPrompt(shot, scene, linked),
     };
   });
 }
@@ -148,16 +148,16 @@ export async function generateScript(id: string) {
   const cfg = await getWorkshopLLMConfig();
   const script = await completeWorkshopLLM(cfg, buildScriptMessages(state.idea, state.meta));
   const scenes = parseIdeaToScenes(script, {
-    title: state.meta.title,
-    type: state.meta.type,
-    tone: state.meta.tone,
     logline: state.meta.logline,
+    title: state.meta.title,
+    tone: state.meta.tone,
+    type: state.meta.type,
   });
   state.meta = { ...state.meta, scriptMarkdown: script };
   state.scenes = scenes;
   state.stage = "script";
   await repo.updateState(id, state);
-  return { script, sceneCount: scenes.length, scenes };
+  return { sceneCount: scenes.length, scenes, script };
 }
 
 export async function setScript(id: string, markdown: string, parse = true) {
@@ -165,18 +165,18 @@ export async function setScript(id: string, markdown: string, parse = true) {
   state.meta = { ...state.meta, scriptMarkdown: markdown };
   if (parse) {
     state.scenes = parseIdeaToScenes(markdown, {
-      title: state.meta.title,
-      type: state.meta.type,
-      tone: state.meta.tone,
       logline: state.meta.logline,
+      title: state.meta.title,
+      tone: state.meta.tone,
+      type: state.meta.type,
     });
   }
   state.stage = "script";
   await repo.updateState(id, state);
   return {
-    scriptLength: markdown.length,
     sceneCount: state.scenes.length,
     scenes: state.scenes,
+    scriptLength: markdown.length,
   };
 }
 
@@ -193,11 +193,11 @@ export async function extractCharacters(id: string) {
     buildExtractCharactersMessages(state.meta.scriptMarkdown),
   );
   const drafts = parseExtractedCharacters(text);
-  const { list, added, skipped } = mergeCharacterDrafts(state.characters, drafts, []);
+  const { added, list, skipped } = mergeCharacterDrafts(state.characters, drafts, []);
   state.characters = list;
   state.stage = "character";
   await repo.updateState(id, state);
-  return { added, skipped, total: list.length, characters: list };
+  return { added, characters: list, skipped, total: list.length };
 }
 
 export async function setCharacters(id: string, characters: Array<Character>) {
@@ -273,10 +273,10 @@ export async function generateImage(id: string, input: GenerateImageInput) {
   }
   if (channel === "comfyui") {
     const url = await generateImageViaComfyUI({
-      prompt,
       negative,
-      size: input.size,
+      prompt,
       sessionId: id,
+      size: input.size,
     });
     if (shot) {
       shot.imageUrl = url;
@@ -285,11 +285,11 @@ export async function generateImage(id: string, input: GenerateImageInput) {
       character.positivePrompt = prompt;
     }
     await repo.updateState(id, state);
-    return { url, channel: "comfyui" };
+    return { channel: "comfyui", url };
   }
   const url = await generateImageViaApi({
-    prompt,
     negative,
+    prompt,
     /* 上游 images/generations 只认 "WxH" —— 尺寸表达在**外部 wire** 边界折算。 */
     ...(input.size ? { size: sizeSpecToWxH(input.size, "image") } : {}),
   });
@@ -327,9 +327,9 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
       imageDataUrl = await resolveMediaDataUrl(shot.imageUrl);
     }
     const r = await submitVideoViaComfyUI({
-      prompt: input.prompt ?? shot.description,
-      negative: input.negative ?? shot.negativePrompt,
       imageDataUrl,
+      negative: input.negative ?? shot.negativePrompt,
+      prompt: input.prompt ?? shot.description,
       sessionId: id,
     });
     if (r.url) {
@@ -337,18 +337,18 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
       shot.clipStatus = "done";
     }
     await repo.updateState(id, state);
-    return { url: r.url, channel: "comfyui" };
+    return { channel: "comfyui", url: r.url };
   }
   let imageDataUrl: string | undefined;
   if (input.useFirstFrame && shot.imageUrl) {
     imageDataUrl = await resolveMediaDataUrl(shot.imageUrl);
   }
   const result = await submitVideoViaApi({
-    prompt: input.prompt ?? shot.description,
-    negative: input.negative ?? shot.negativePrompt,
-    imageDataUrl,
-    frames: input.frames,
     fps: input.fps,
+    frames: input.frames,
+    imageDataUrl,
+    negative: input.negative ?? shot.negativePrompt,
+    prompt: input.prompt ?? shot.description,
   });
   if (result.url) {
     shot.clipUrl = result.url;
@@ -370,9 +370,9 @@ export async function pollVideo(id: string, shotId: string) {
   const taskId = extractRemoteTaskId(shot.clipUrl);
   if (!taskId) {
     return {
+      note: "该镜头没有待轮询的异步任务",
       pending: false,
       url: shot.clipUrl,
-      note: "该镜头没有待轮询的异步任务",
     };
   }
   const r = await pollVideoViaApi(taskId);
@@ -417,7 +417,7 @@ export async function composeFinal(
   }
   state.stage = "final_edit";
   await repo.updateState(id, state);
-  return { plan, planPath, outputPath, renderNote };
+  return { outputPath, plan, planPath, renderNote };
 }
 
 export type { WorkshopSessionState };

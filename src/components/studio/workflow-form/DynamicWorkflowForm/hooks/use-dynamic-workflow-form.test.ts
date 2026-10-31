@@ -41,12 +41,12 @@ function renderFormWithPicker(props: DynamicWorkflowFormProps) {
   }
   const rendered = render(createElement(Probe, props));
   return {
+    rendered,
     result: {
       get current() {
         return { controller: captured! };
       },
     },
-    rendered,
   };
 }
 
@@ -57,10 +57,10 @@ function pickPickerFile(file: File) {
   }
   const files = /* SAFETY: 类型断言已复核 */ {
     0: file,
-    length: 1,
     item: () => file,
+    length: 1,
   } as unknown as FileList;
-  Object.defineProperty(input, "files", { value: files, configurable: true });
+  Object.defineProperty(input, "files", { configurable: true, value: files });
   input.dispatchEvent(new Event("change", { bubbles: true }));
   /* 复位行为本身也是被测项：不复位时用户连选同一个文件不会触发 change。 */
   return input;
@@ -71,9 +71,9 @@ function widget(name: string, over: Partial<WorkflowIOEntry> = {}): WorkflowIOEn
   return {
     direction: "input",
     kind: "widget",
-    nodeId: "1",
-    name,
     label: name,
+    name,
+    nodeId: "1",
     ...over,
   };
 }
@@ -83,15 +83,15 @@ function wire(name: string, over: Partial<WorkflowIOEntry> = {}): WorkflowIOEntr
   return {
     direction: "input",
     kind: "param",
-    nodeId: "2",
-    name,
     label: name,
+    name,
+    nodeId: "2",
     ...over,
   };
 }
 
 function output(name: string): WorkflowIOEntry {
-  return { direction: "output", kind: "param", nodeId: "9", name, label: name };
+  return { direction: "output", kind: "param", label: name, name, nodeId: "9" };
 }
 
 function ioMap(...entries: Array<WorkflowIOEntry>): WorkflowIOMap {
@@ -105,8 +105,8 @@ function ioMap(...entries: Array<WorkflowIOEntry>): WorkflowIOMap {
 function baseProps(over: Partial<DynamicWorkflowFormProps> = {}): DynamicWorkflowFormProps {
   return {
     io: null,
-    values: {},
     onChange: vi.fn(),
+    values: {},
     ...over,
   };
 }
@@ -200,8 +200,8 @@ describe("useDynamicWorkflowForm — 数值参数的行归属（运行态 vs 作
 
 describe("useDynamicWorkflowForm — 多模式可见性过滤", () => {
   const hiddenInTxt2img: WorkflowIOEntry = widget("denoise", {
-    type: "FLOAT",
     modeOverrides: { txt2img: { visible: false } },
+    type: "FLOAT",
   });
 
   it("当前模式下 visible=false 的行不显示（展示层过滤）", () => {
@@ -258,7 +258,7 @@ describe("useDynamicWorkflowForm — set 与 values 的不可变更新", () => {
   it("set 产生新对象（不原地改 values），并只改目标键", () => {
     const values = { a: 1, b: 2 };
     const onChange = vi.fn();
-    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ values, onChange })));
+    const { result } = renderHook(() => useDynamicWorkflowForm(baseProps({ onChange, values })));
 
     act(() => result.current.set("b", 99));
 
@@ -306,15 +306,15 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     act(() =>
       result.current.dragHandlers!.onDragStart("from")(
         /* SAFETY: 类型断言已复核 */ {
-          dataTransfer: { setData: vi.fn(), effectAllowed: "" },
+          dataTransfer: { effectAllowed: "", setData: vi.fn() },
         } as never,
       ),
     );
     act(() =>
       result.current.dragHandlers!.onDrop("to")(
         /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
           dataTransfer: {},
+          preventDefault: vi.fn(),
         } as never,
       ),
     );
@@ -332,12 +332,12 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     act(() =>
       result.current.dragHandlers!.onDrop("to")(
         /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
-          dataTransfer: {},
           clientY: 80,
           currentTarget: {
-            getBoundingClientRect: () => ({ top: 0, height: 100 }),
+            getBoundingClientRect: () => ({ height: 100, top: 0 }),
           },
+          dataTransfer: {},
+          preventDefault: vi.fn(),
         } as never,
       ),
     );
@@ -352,9 +352,9 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     act(() =>
       result.current.dragHandlers!.onDragStart("k1")(
         /* SAFETY: 类型断言已复核 */ {
-          target: { closest: () => ({}) }, // 命中可编辑控件（input/select…）
+          dataTransfer: { effectAllowed: "", setData },
           preventDefault,
-          dataTransfer: { setData, effectAllowed: "" },
+          target: { closest: () => ({}) }, // 命中可编辑控件（input/select…）
         } as never,
       ),
     );
@@ -371,8 +371,8 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     act(() =>
       result.current.dragHandlers!.onDrop("same")(
         /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
           dataTransfer: {},
+          preventDefault: vi.fn(),
         } as never,
       ),
     );
@@ -388,8 +388,8 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     act(() =>
       result.current.dragHandlers!.onDragOver("k1")(
         /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
           dataTransfer: {},
+          preventDefault: vi.fn(),
         } as never,
       ),
     );
@@ -398,8 +398,8 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     act(() =>
       result.current.dragHandlers!.onDragOver("k2")(
         /* SAFETY: 类型断言已复核 */ {
-          preventDefault: vi.fn(),
           dataTransfer: { dropEffect: "" },
+          preventDefault: vi.fn(),
         } as never,
       ),
     );
@@ -412,7 +412,7 @@ describe("useDynamicWorkflowForm — 拖拽重排", () => {
     act(() =>
       result.current.dragHandlers!.onDragStart("k1")(
         /* SAFETY: 类型断言已复核 */ {
-          dataTransfer: { setData, effectAllowed: "" },
+          dataTransfer: { effectAllowed: "", setData },
         } as never,
       ),
     );
@@ -535,8 +535,8 @@ describe("useDynamicWorkflowForm — 组合控件（dimension / video）不重�
       useDynamicWorkflowForm(
         baseProps({
           io: ioMap(
-            widget("width", { type: "INT", defaultValue: 1024 }),
-            widget("height", { type: "INT", defaultValue: 1024 }),
+            widget("width", { defaultValue: 1024, type: "INT" }),
+            widget("height", { defaultValue: 1024, type: "INT" }),
           ),
         }),
       ),
@@ -560,8 +560,8 @@ describe("IO 默认值刷新链路（ISSUE #288 的同源规则）", () => {
       useDynamicWorkflowForm(
         baseProps({
           io: ioMap(
-            widget("steps", { type: "INT", defaultValue: 25 }),
-            widget("prompt", { type: "STRING", defaultValue: "一只猫" }),
+            widget("steps", { defaultValue: 25, type: "INT" }),
+            widget("prompt", { defaultValue: "一只猫", type: "STRING" }),
           ),
         }),
       ),
@@ -576,7 +576,7 @@ describe("IO 默认值刷新链路（ISSUE #288 的同源规则）", () => {
     const { result } = renderHook(() =>
       useDynamicWorkflowForm(
         baseProps({
-          io: ioMap(widget("steps", { type: "INT", defaultValue: 25 })),
+          io: ioMap(widget("steps", { defaultValue: 25, type: "INT" })),
           values: {},
         }),
       ),
@@ -593,7 +593,7 @@ describe("IO 默认值刷新链路（ISSUE #288 的同源规则）", () => {
     const { result } = renderHook(() =>
       useDynamicWorkflowForm(
         baseProps({
-          io: ioMap(widget("steps", { type: "INT", defaultValue: 25 })),
+          io: ioMap(widget("steps", { defaultValue: 25, type: "INT" })),
           values: { "1::widget::steps": 8 },
         }),
       ),

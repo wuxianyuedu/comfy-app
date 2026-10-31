@@ -16,19 +16,19 @@ import { useAppServiceMessageLog } from "./use-app-service-message-log";
 
 const EXIT_RECORD = {
   at: "2026-10-10T10:00:00.000Z",
-  kind: "dev-server",
   code: 137,
-  signal: null,
-  reason: "Next.js dev server 提前退出（exit=137）",
+  kind: "dev-server",
   port: 3100,
+  reason: "Next.js dev server 提前退出（exit=137）",
   runId: "run-old",
+  signal: null,
 };
 
 /** 让 `/api/dev/last-exit` 回一份记录，并记录它被打了几次。 */
 function stubExitEndpoint({
-  record = EXIT_RECORD,
   currentRunId = "run-new",
   fail = false,
+  record = EXIT_RECORD,
 }: {
   currentRunId?: string | null;
   fail?: boolean;
@@ -46,7 +46,7 @@ function stubExitEndpoint({
       if (fail) {
         throw new Error("network down");
       }
-      return new Response(JSON.stringify({ record, currentRunId }), {
+      return new Response(JSON.stringify({ currentRunId, record }), {
         status: 200,
       });
     }),
@@ -95,9 +95,9 @@ const DEFAULT_RUN_ID = "a1b2c3";
  */
 function mount(initial: Partial<Facts> = {}) {
   let cur: Facts = {
-    state: "starting",
-    processIsNew: false,
     currentRunId: DEFAULT_RUN_ID,
+    processIsNew: false,
+    state: "starting",
     unprobedMs: 0,
     ...initial,
   };
@@ -118,7 +118,7 @@ function messages() {
 }
 
 beforeEach(() => {
-  useMessageCenterStore.setState({ open: false, messages: [] });
+  useMessageCenterStore.setState({ messages: [], open: false });
   window.localStorage.clear();
 });
 
@@ -134,8 +134,8 @@ afterEach(() => {
 describe("useAppServiceMessageLog：断开", () => {
   it("探活第一次不通时记一条「已断开」，带时刻", async () => {
     const calls = stubExitEndpoint();
-    const { rerender } = mount({ state: "online", processIsNew: false });
-    rerender({ state: "offline", processIsNew: false });
+    const { rerender } = mount({ processIsNew: false, state: "online" });
+    rerender({ processIsNew: false, state: "offline" });
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.kind).toBe("offline");
@@ -149,11 +149,11 @@ describe("useAppServiceMessageLog：断开", () => {
     stubExitEndpoint();
     stubShellExitRecord({ ...EXIT_RECORD, runId: DEFAULT_RUN_ID });
     const { rerender } = mount({
-      state: "online",
-      processIsNew: false,
       currentRunId: DEFAULT_RUN_ID,
+      processIsNew: false,
+      state: "online",
     });
-    rerender({ state: "offline", processIsNew: false });
+    rerender({ processIsNew: false, state: "offline" });
 
     await expect.poll(() => messages().length).toBe(1);
     const m = messages()[0]!;
@@ -167,11 +167,11 @@ describe("useAppServiceMessageLog：断开", () => {
     stubExitEndpoint();
     stubShellExitRecord({ ...EXIT_RECORD, runId: "another-run" });
     const { rerender } = mount({
-      state: "online",
-      processIsNew: false,
       currentRunId: DEFAULT_RUN_ID,
+      processIsNew: false,
+      state: "online",
     });
-    rerender({ state: "offline", processIsNew: false });
+    rerender({ processIsNew: false, state: "offline" });
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.body).not.toContain("原因：");
@@ -179,10 +179,10 @@ describe("useAppServiceMessageLog：断开", () => {
 
   it("持续断开不重复发（2 秒一拍，逐拍发就是刷屏）", async () => {
     stubExitEndpoint();
-    const { rerender } = mount({ state: "online", processIsNew: false });
-    rerender({ state: "offline", processIsNew: false });
-    rerender({ state: "offline", processIsNew: false });
-    rerender({ state: "offline", processIsNew: false });
+    const { rerender } = mount({ processIsNew: false, state: "online" });
+    rerender({ processIsNew: false, state: "offline" });
+    rerender({ processIsNew: false, state: "offline" });
+    rerender({ processIsNew: false, state: "offline" });
     await expect.poll(() => messages().length).toBe(1);
   });
 });
@@ -190,8 +190,8 @@ describe("useAppServiceMessageLog：断开", () => {
 describe("useAppServiceMessageLog：路由表不完整", () => {
   it("进入 stale 记一条「路由异常」，正文给出重启应用这个出口", () => {
     stubExitEndpoint();
-    const { rerender } = mount({ state: "online", processIsNew: false });
-    rerender({ state: "stale", processIsNew: false });
+    const { rerender } = mount({ processIsNew: false, state: "online" });
+    rerender({ processIsNew: false, state: "stale" });
 
     const last = messages().at(-1)!;
     expect(last.title).toBe("应用服务路由异常");
@@ -202,9 +202,9 @@ describe("useAppServiceMessageLog：路由表不完整", () => {
 
   it("持续 stale 不重复发，且不冒充「已断开」", () => {
     stubExitEndpoint();
-    const { rerender } = mount({ state: "online", processIsNew: false });
-    rerender({ state: "stale", processIsNew: false });
-    rerender({ state: "stale", processIsNew: false });
+    const { rerender } = mount({ processIsNew: false, state: "online" });
+    rerender({ processIsNew: false, state: "stale" });
+    rerender({ processIsNew: false, state: "stale" });
     const stale = messages().filter((m) => m.title === "应用服务路由异常");
     expect(stale).toHaveLength(1);
     expect(messages().some((m) => m.title === "应用服务已断开")).toBe(false);
@@ -214,8 +214,8 @@ describe("useAppServiceMessageLog：路由表不完整", () => {
 describe("useAppServiceMessageLog：启动 / 恢复", () => {
   it("冷启动：记一条「已重启」，带时刻与上一次结束的原因和建议", async () => {
     stubExitEndpoint();
-    const { rerender } = mount({ state: "starting", processIsNew: false });
-    rerender({ state: "online", processIsNew: true });
+    const { rerender } = mount({ processIsNew: false, state: "starting" });
+    rerender({ processIsNew: true, state: "online" });
 
     await expect.poll(() => messages().length).toBe(1);
     const m = messages()[0]!;
@@ -234,11 +234,11 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
      * 前」测的就不是因果而是排序的稳定性（真实现场里两拍至少隔 4 秒）。 */
     const base = Date.now();
     vi.useFakeTimers({ toFake: ["Date"] });
-    const { rerender } = mount({ state: "online", processIsNew: false });
+    const { rerender } = mount({ processIsNew: false, state: "online" });
     vi.setSystemTime(base + 1_000);
-    rerender({ state: "offline", processIsNew: false });
+    rerender({ processIsNew: false, state: "offline" });
     vi.setSystemTime(base + 10_000);
-    rerender({ state: "online", processIsNew: false });
+    rerender({ processIsNew: false, state: "online" });
     vi.useRealTimers();
 
     await expect.poll(() => messages().length).toBe(2);
@@ -258,11 +258,11 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
      * `unprobedMs` 单独给（它来自探活那一侧），这里只验接线把它递到文案。 */
     const base = Date.now();
     vi.useFakeTimers({ toFake: ["Date"] });
-    const { rerender } = mount({ state: "online", processIsNew: false });
+    const { rerender } = mount({ processIsNew: false, state: "online" });
     vi.setSystemTime(base + 1_000);
-    rerender({ state: "offline", processIsNew: false });
+    rerender({ processIsNew: false, state: "offline" });
     vi.setSystemTime(base + 130_000);
-    rerender({ state: "online", processIsNew: false, unprobedMs: 60_000 });
+    rerender({ processIsNew: false, state: "online", unprobedMs: 60_000 });
     vi.useRealTimers();
 
     await expect.poll(() => messages().length).toBe(2);
@@ -276,18 +276,18 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
 
   it("整页刷新（进程没换新）不发任何消息", () => {
     stubExitEndpoint();
-    const { rerender } = mount({ state: "online", processIsNew: true });
-    rerender({ state: "online", processIsNew: true });
-    rerender({ state: "online", processIsNew: true });
+    const { rerender } = mount({ processIsNew: true, state: "online" });
+    rerender({ processIsNew: true, state: "online" });
+    rerender({ processIsNew: true, state: "online" });
     expect(messages()).toHaveLength(0);
   });
 
   it("进程换新（探活没失败过的那种快速重启）仍记一条，不靠「断开」这条边沿", async () => {
     stubExitEndpoint();
-    const { rerender } = mount({ state: "online", processIsNew: false });
+    const { rerender } = mount({ processIsNew: false, state: "online" });
     /* 真→假→真：重启之后判据要重新走一遍「这份进程是新的」。 */
-    rerender({ state: "online", processIsNew: false });
-    rerender({ state: "online", processIsNew: true });
+    rerender({ processIsNew: false, state: "online" });
+    rerender({ processIsNew: true, state: "online" });
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.kind).toBe("restart");
@@ -297,8 +297,8 @@ describe("useAppServiceMessageLog：启动 / 恢复", () => {
 describe("useAppServiceMessageLog：原因读不到时", () => {
   it("端点挂了：仍然发消息，并说明这一次是什么（不编一个成因，也不整条吞掉）", async () => {
     stubExitEndpoint({ fail: true });
-    const { rerender } = mount({ state: "starting", processIsNew: false });
-    rerender({ state: "online", processIsNew: true });
+    const { rerender } = mount({ processIsNew: false, state: "starting" });
+    rerender({ processIsNew: true, state: "online" });
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.title).toBe("应用服务已启动");
@@ -307,8 +307,8 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
 
   it("端点没记录（record: null）→ 按「没有原因可讲」发", async () => {
     stubExitEndpoint({ record: null });
-    const { rerender } = mount({ state: "starting", processIsNew: false });
-    rerender({ state: "online", processIsNew: true });
+    const { rerender } = mount({ processIsNew: false, state: "starting" });
+    rerender({ processIsNew: true, state: "online" });
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.body).toContain("冷启动");
@@ -316,8 +316,8 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
 
   it("记录说的就是当前这份进程（runId 相同）→ 不拿它当「上一次结束」", async () => {
     stubExitEndpoint({ record: { ...EXIT_RECORD, runId: "run-new" } });
-    const { rerender } = mount({ state: "starting", processIsNew: false });
-    rerender({ state: "online", processIsNew: true });
+    const { rerender } = mount({ processIsNew: false, state: "starting" });
+    rerender({ processIsNew: true, state: "online" });
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.body).not.toContain("自身退出");
@@ -330,11 +330,11 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
     stubExitEndpoint({ record: null });
     const base = Date.now();
     vi.useFakeTimers({ toFake: ["Date"] });
-    const { rerender } = mount({ state: "online", processIsNew: false });
+    const { rerender } = mount({ processIsNew: false, state: "online" });
     vi.setSystemTime(base + 1_000);
-    rerender({ state: "offline", processIsNew: false });
+    rerender({ processIsNew: false, state: "offline" });
     vi.setSystemTime(base + 10_000);
-    rerender({ state: "online", processIsNew: false });
+    rerender({ processIsNew: false, state: "online" });
     vi.useRealTimers();
 
     await expect.poll(() => messages().length).toBe(2);
@@ -362,10 +362,10 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
     );
 
     const { rerender, unmount } = mount({
-      state: "starting",
       processIsNew: false,
+      state: "starting",
     });
-    rerender({ state: "online", processIsNew: true });
+    rerender({ processIsNew: true, state: "online" });
     /* 等「请求确实发出去了」这个**事实**（而不是等一段时间）：没发出去就卸载
      * 的话，这条用例根本没测到想测的东西。 */
     await expect.poll(() => requested.done).toBe(true);
@@ -375,7 +375,7 @@ describe("useAppServiceMessageLog：原因读不到时", () => {
      * React 提交一起排空，不需要挂钟。 */
     await act(async () => {
       release?.(
-        new Response(JSON.stringify({ record: EXIT_RECORD, currentRunId: "run-new" }), {
+        new Response(JSON.stringify({ currentRunId: "run-new", record: EXIT_RECORD }), {
           status: 200,
         }),
       );
@@ -396,18 +396,18 @@ describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
     const base = Date.now();
     vi.useFakeTimers({ toFake: ["Date"] });
     const { rerender } = mount({
-      state: "online",
-      processIsNew: false,
       currentRunId: "old0001",
+      processIsNew: false,
+      state: "online",
     });
     vi.setSystemTime(base + 1_000);
     rerender({
-      state: "offline",
-      processIsNew: false,
       currentRunId: "old0001",
+      processIsNew: false,
+      state: "offline",
     });
     vi.setSystemTime(base + 10_000);
-    rerender({ state: "online", processIsNew: true, currentRunId: "new0002" });
+    rerender({ currentRunId: "new0002", processIsNew: true, state: "online" });
     vi.useRealTimers();
 
     await expect.poll(() => messages().length).toBe(2);
@@ -424,14 +424,14 @@ describe("useAppServiceMessageLog：每条消息盖「启动戳」", () => {
     expect(useMessageCenterStore.getState().currentRunId).toBe("d4e5f6");
 
     /* 推一条**不带 runId** 的（代码更新 / 版本更新就是这种），它应盖上当前这一次。 */
-    useMessageCenterStore.getState().push({ kind: "info", title: "某次更新", body: "正文" });
+    useMessageCenterStore.getState().push({ body: "正文", kind: "info", title: "某次更新" });
     expect(messages()[0]!.runId).toBe("d4e5f6");
   });
 
   it("拿不到 runId 时留 null（落「未标记启动」那一组，不编一个值）", async () => {
     stubExitEndpoint();
     const { rerender } = mount({ currentRunId: null });
-    rerender({ state: "online", processIsNew: true, currentRunId: null });
+    rerender({ currentRunId: null, processIsNew: true, state: "online" });
 
     await expect.poll(() => messages().length).toBe(1);
     expect(messages()[0]!.runId).toBeNull();

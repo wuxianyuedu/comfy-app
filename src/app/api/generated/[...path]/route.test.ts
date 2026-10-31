@@ -30,24 +30,24 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { stat, open, readCalls, disk, userMock, loginRequiredMock, foreignMock } = vi.hoisted(
+const { disk, foreignMock, loginRequiredMock, open, readCalls, stat, userMock } = vi.hoisted(
   () => ({
-    stat: vi.fn(),
+    disk: { bytes: Buffer.from("") },
+    foreignMock: vi.fn<(segments: Array<string>, userId: string) => Promise<boolean>>(
+      async () => false,
+    ),
+    loginRequiredMock: vi.fn<() => boolean>(() => false),
     open: vi.fn(),
     readCalls: /* SAFETY: type assertion reviewed */ [] as Array<{
       length: number;
       position: number;
     }>,
-    disk: { bytes: Buffer.from("") },
+    stat: vi.fn(),
     userMock: vi.fn<() => Promise<{ id: string } | null>>(),
-    loginRequiredMock: vi.fn<() => boolean>(() => false),
-    foreignMock: vi.fn<(segments: Array<string>, userId: string) => Promise<boolean>>(
-      async () => false,
-    ),
   }),
 );
 
-vi.mock("fs", () => ({ promises: { stat, open } }));
+vi.mock("fs", () => ({ promises: { open, stat } }));
 vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: userMock,
 }));
@@ -94,15 +94,15 @@ function putFile(bytes: Uint8Array | string) {
     size: disk.bytes.length,
   }));
   open.mockImplementation(async () => ({
+    close: async () => undefined,
     read: async (buf: Buffer, offset: number, length: number, position: number) => {
       readCalls.push({ length, position });
       disk.bytes.subarray(position, position + length).copy(buf, offset);
       return {
-        bytesRead: Math.min(length, Math.max(disk.bytes.length - position, 0)),
         buffer: buf,
+        bytesRead: Math.min(length, Math.max(disk.bytes.length - position, 0)),
       };
     },
-    close: async () => undefined,
   }));
 }
 
@@ -256,11 +256,11 @@ describe("整份读（没有 Range）", () => {
     // 会在 Coverage 的分支上留痕（这里刻意断言**没有** Content-Range：整份请求
     // 客户端没要窗口，给它一个 206 的形状才是真错）。
     open.mockImplementationOnce(async () => ({
+      close: async () => undefined,
       read: async (buf: Buffer, offset: number) => {
         Buffer.from("01").copy(buf, offset);
-        return { bytesRead: 2, buffer: buf };
+        return { buffer: buf, bytesRead: 2 };
       },
-      close: async () => undefined,
     }));
     const res = await get(["t1", "a.png"]);
     expect(res.status).toBe(200);
@@ -271,13 +271,13 @@ describe("整份读（没有 Range）", () => {
   it("读完必须 close 句柄（漏了它，Windows 上产物会被自己锁住，重生成即失败）", async () => {
     let closed = 0;
     open.mockImplementationOnce(async () => ({
+      close: async () => {
+        closed += 1;
+      },
       read: async (buf: Buffer, offset: number, length: number, position: number) => {
         readCalls.push({ length, position });
         disk.bytes.subarray(position, position + length).copy(buf, offset);
-        return { bytesRead: length, buffer: buf };
-      },
-      close: async () => {
-        closed += 1;
+        return { buffer: buf, bytesRead: length };
       },
     }));
     await get(["t1", "a.png"]);
@@ -287,11 +287,11 @@ describe("整份读（没有 Range）", () => {
   it("读取抛错时也必须把已经拿到的句柄闭上（finally 那条路）", async () => {
     let closed = 0;
     open.mockImplementationOnce(async () => ({
-      read: async () => {
-        throw new Error("EIO");
-      },
       close: async () => {
         closed += 1;
+      },
+      read: async () => {
+        throw new Error("EIO");
       },
     }));
     expect((await get(["t1", "a.png"])).status).toBe(404);
@@ -343,8 +343,8 @@ describe("Range：三种结论翻成三个状态码", () => {
 
   it("一个字节都没读到（文件被裁到起点之前）→ 404，而不是回一个空体的 206", async () => {
     open.mockImplementationOnce(async () => ({
-      read: async (buf: Buffer) => ({ bytesRead: 0, buffer: buf }),
       close: async () => undefined,
+      read: async (buf: Buffer) => ({ buffer: buf, bytesRead: 0 }),
     }));
     expect((await get(["t1", "a.png"], "bytes=2-5")).status).toBe(404);
   });
@@ -376,12 +376,12 @@ describe("Range：三种结论翻成三个状态码", () => {
 
   it("文件在一次请求内被换短：按实际读到的字节回，别让长度比正文长", async () => {
     open.mockImplementationOnce(async () => ({
+      close: async () => undefined,
       read: async (buf: Buffer, offset: number) => {
         // 只给得出 2 个字节，尽管要 6 个（同名产物被重新生成的那一刻）
         Buffer.from("ab").copy(buf, offset);
-        return { bytesRead: 2, buffer: buf };
+        return { buffer: buf, bytesRead: 2 };
       },
-      close: async () => undefined,
     }));
     const res = await get(["t1", "a.png"], "bytes=0-5");
     expect(res.status).toBe(206);

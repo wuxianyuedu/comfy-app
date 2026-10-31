@@ -100,7 +100,7 @@ export type DraggablePositionController<T extends HTMLElement> = {
  * （例如徽标数字从 9 变 99+），缓存一份就会在夹取时算错边界。 */
 function measureBox(element: HTMLElement): DraggableBox {
   const rect = element.getBoundingClientRect();
-  return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+  return { height: rect.height, width: rect.width, x: rect.left, y: rect.top };
 }
 
 /**
@@ -121,15 +121,15 @@ function clampOffset(
   const maxRight = Math.max(DRAG_EDGE_GAP_PX, viewport.width - box.width - DRAG_EDGE_GAP_PX);
   const maxBottom = Math.max(DRAG_EDGE_GAP_PX, viewport.height - box.height - DRAG_EDGE_GAP_PX);
   return {
-    right: clamp(offset.right, DRAG_EDGE_GAP_PX, maxRight),
     bottom: clamp(offset.bottom, DRAG_EDGE_GAP_PX, maxBottom),
+    right: clamp(offset.right, DRAG_EDGE_GAP_PX, maxRight),
   };
 }
 
 export function useDraggablePosition<T extends HTMLElement>({
-  storageKey,
   defaultOffset,
   onClick,
+  storageKey,
 }: UseDraggablePositionOptions): DraggablePositionController<T> {
   /* 元素**是不是已经在 DOM 里**。由回调 ref 回答（React 调它的时候就说明
    * 挂了 / 卸了）—— 它的身份会变，所以能安全地进各种依赖；而 ref 对象的
@@ -191,7 +191,7 @@ export function useDraggablePosition<T extends HTMLElement>({
         ? null
         : clampOffset(
             readStorageJson<DraggableOffset>(storageKey, defaultOffset),
-            element === null ? { width: 0, height: 0 } : measureBox(element),
+            element === null ? { height: 0, width: 0 } : measureBox(element),
             viewport,
           ),
     [defaultOffset, element, storageKey, viewport],
@@ -217,11 +217,11 @@ export function useDraggablePosition<T extends HTMLElement>({
       }
 
       dragRef.current = {
+        moved: false,
         pointerId: event.pointerId,
+        startOffset: offset,
         startX: event.clientX,
         startY: event.clientY,
-        startOffset: offset,
-        moved: false,
       };
 
       const onMove = (moveEvent: PointerEvent) => {
@@ -247,8 +247,8 @@ export function useDraggablePosition<T extends HTMLElement>({
         setManual(
           clampOffset(
             {
-              right: drag.startOffset.right - dx,
               bottom: drag.startOffset.bottom - dy,
+              right: drag.startOffset.right - dx,
             },
             measureBox(dragged),
             nextViewport,
@@ -289,9 +289,9 @@ export function useDraggablePosition<T extends HTMLElement>({
   );
 
   return {
-    offset,
     dragging,
-    handleProps: { onPointerDown },
     elementCallbackRef,
+    handleProps: { onPointerDown },
+    offset,
   };
 }

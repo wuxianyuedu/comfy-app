@@ -38,8 +38,8 @@ export function seedModeOverrides(
       continue;
     }
     out.push({
-      nodeId: entry.nodeId,
       name: "control_after_generate",
+      nodeId: entry.nodeId,
       value: toComfySeedMode(mode),
     });
   }

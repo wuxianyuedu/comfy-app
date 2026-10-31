@@ -14,18 +14,18 @@ import { loadModeContracts, saveModeContracts } from "~/lib/workshop/mode-contra
 
 /** 适配器输入行：统一输入类型 → 请求体字段名 */
 const adapterInputSchema = z.object({
+  field: z.string().min(1),
   type: z.enum(
     /* SAFETY: 类型断言已复核 */ WORKSHOP_INPUT_TYPES.map((t) => t.type) as [
       string,
       ...Array<string>,
     ],
   ),
-  field: z.string().min(1),
 });
 const adapterSchema = z.object({
-  mode: z.string().min(1),
   endpointPath: z.string().min(1),
   inputs: z.array(adapterInputSchema).min(1),
+  mode: z.string().min(1),
   outputField: z.string().optional(),
 });
 
@@ -90,8 +90,8 @@ export const llmRouter = createTRPCRouter({
                   id: z.string().refine(isCustomContractInputId, {
                     message: "自定义口 id 形如 custom-text-1 / custom-image-2",
                   }),
-                  label: z.string().min(1),
                   kind: z.enum(["text", "image", "number"]),
+                  label: z.string().min(1),
                 }),
               )
               .optional(),
@@ -118,8 +118,8 @@ export const llmRouter = createTRPCRouter({
   workshopAdaptersSave: authedProcedure
     .input(
       z.object({
-        name: z.string().min(1),
         adapters: z.array(adapterSchema),
+        name: z.string().min(1),
       }),
     )
     .mutation(async ({ input }) => {
@@ -134,15 +134,15 @@ export const llmRouter = createTRPCRouter({
   configSave: authedProcedure
     .input(
       z.object({
-        provider: z.enum(["local", "remote"]).optional(),
         apiKey: z.string().optional(),
         baseUrl: z.string().refine(isHttpUrl, { message: "baseUrl 必须为 http/https" }).optional(),
         model: z.string().optional(),
+        provider: z.enum(["local", "remote"]).optional(),
         /** 候选清单：字符串=本地 ollama 候选；对象=远端独立模型（写入 remoteModel 表） */
         extraModels: extraModelsSchema.optional(),
+        maxTokens: z.number().optional(),
         temperature: z.number().optional(),
         temperatureByTask: z.record(z.enum(taskTypeKeys), z.number()).optional(),
-        maxTokens: z.number().optional(),
       }),
     )
     .mutation(async ({ input }) => {

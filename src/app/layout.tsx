@@ -36,9 +36,9 @@ import { MessageCenterPanel } from "~/components/message-center/MessageCenterPan
  * 添一个没人消费的配置项，等于给下一个人留一道「它到底管什么」的题。
  */
 export const metadata: Metadata = {
-  title: { default: "Comfy-APP", template: "%s · Comfy-APP" },
   description: "基于 ComfyUI 的本地 AI 创作桌面应用",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
+  title: { default: "Comfy-APP", template: "%s · Comfy-APP" },
 };
 
 const geist = Geist({

@@ -6,9 +6,9 @@ import { useResourceLibrary } from "./use-resource-library";
 
 function mockFetch(body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue({
+    json: async () => body,
     ok: true,
     status: 200,
-    json: async () => body,
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -16,8 +16,8 @@ function mockFetch(body: unknown) {
 
 const BODY = {
   folders: [
-    { id: "ref", name: "参考素材", count: 2 },
-    { id: "audio", name: "音效", count: 3 },
+    { count: 2, id: "ref", name: "参考素材" },
+    { count: 3, id: "audio", name: "音效" },
   ],
   items: [],
 };
@@ -45,13 +45,9 @@ describe("useResourceLibrary", () => {
     act(() => result.current.setScope("cross"));
     await expect.poll(() => result.current.library.scope).toBe("cross");
     await expect
-      .poll(
-        () =>
-          fetchMock.mock.calls.some((call) =>
-            String(call[0]).includes("scope=cross"),
-          ),
-        { message: "切到跨项目后查询串要带上 scope=cross" },
-      )
+      .poll(() => fetchMock.mock.calls.some((call) => String(call[0]).includes("scope=cross")), {
+        message: "切到跨项目后查询串要带上 scope=cross",
+      })
       .toBe(true);
   });
 

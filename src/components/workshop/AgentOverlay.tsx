@@ -21,9 +21,9 @@ const GREETING =
   "你好！我是工坊的创作指挥助手。你可以直接用自然语言告诉我想做什么，我会帮你指挥整个创作流程。\n\n比如：\n• 「帮我写一个海边重逢的温暖短片剧本」\n• 「在现有剧本基础上提取主要角色」\n• 「把分镜规划出来」";
 
 const TOOL_STATUS_LABEL: Record<AgentToolRun["status"], string> = {
-  running: "执行中…",
   done: "完成",
   error: "失败",
+  running: "执行中…",
 };
 
 /** 浮层入口图标的直径（`size-10` = 40px）与「入口 ↔ 面板」之间的间距。 */
@@ -85,28 +85,28 @@ export function panelPlacement(
    *  地址栏收放）让面板被 `max-height` 截短或伸出视口，而那种不一致没有任何
    *  东西会报警。`height` 只给自然高度，实际显示高由 `max-height` 收口。 */
   return {
-    top: `calc(100dvh - ${anchorBottom - PANEL_ANCHOR_OFFSET}px)`,
     height: `${PANEL_HEIGHT_PX}px`,
     maxHeight: `calc(100dvh - ${anchorBottom}px - ${PANEL_ANCHOR_OFFSET}px - ${PANEL_EDGE_GAP_PX}px)`,
+    top: `calc(100dvh - ${anchorBottom - PANEL_ANCHOR_OFFSET}px)`,
   };
 }
 
 const TOOL_STATUS_COLOR: Record<AgentToolRun["status"], string> = {
-  running: "bg-warning",
   done: "bg-success",
   error: "bg-destructive",
+  running: "bg-warning",
 };
 
 export function AgentOverlay({
-  controller,
   anchor,
+  controller,
 }: {
   /** 浮层入口当前所在位置（距视口右 / 下）—— 展开的对话窗跟着它走，见下方
    *  「面板与入口的相对位置」注释。 */
   anchor: { bottom: number; right: number };
   controller: WorkshopAgentController;
 }) {
-  const { open, messages, input, busy, error, toolRuns, closeAgent, setInput, send } = controller;
+  const { busy, closeAgent, error, input, messages, open, send, setInput, toolRuns } = controller;
   const taRef = React.useRef<HTMLTextAreaElement>(null);
 
   /* 面板纵向落点要判「图标上方放不放得下」，这需要视口高（见
@@ -133,9 +133,9 @@ export function AgentOverlay({
     messages.length === 0
       ? [
           {
+            content: GREETING,
             id: "greeting",
             role: /* SAFETY: 类型断言已复核 */ "assistant" as const,
-            content: GREETING,
           },
         ]
       : messages;
@@ -309,8 +309,8 @@ export function AgentOverlay({
            * 此前这里没判 IME，中文输入法下**候选词未上屏的 Enter 会被当成发送**
            *（把半截拼音发给 AI），见 §16.2.4.29。 */
           {...enterCommit({
-            onCommit: () => void send(),
             excludeShift: true,
+            onCommit: () => void send(),
           })}
           className="field-sizing-normal border-border bg-subtle text-ink placeholder:text-muted-foreground/50 focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 flex-1 resize-none rounded-xl px-3 py-2 text-sm"
           placeholder="描述你的创作想法… (Enter 发送)"
@@ -353,11 +353,11 @@ export function AgentOverlay({
  * 展开后的位置），本组件不自己持有一份。
  */
 export function AgentFab({
-  elementRef,
-  onOpen,
-  offset,
   dragging,
+  elementRef,
   handleProps,
+  offset,
+  onOpen,
 }: {
   dragging: boolean;
   /** 挂在按钮上的 ref 回调（由 `useDraggablePosition` 给）——
@@ -384,7 +384,7 @@ export function AgentFab({
           dragging ? "cursor-grabbing" : "cursor-grab"
         }`}
         onClick={onOpen}
-        style={{ right: offset.right, bottom: offset.bottom }}
+        style={{ bottom: offset.bottom, right: offset.right }}
       >
         <Icon data-icon="inline-start" name="bot" size={18} />
       </Button>

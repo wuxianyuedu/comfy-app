@@ -64,7 +64,7 @@ function presetHint(preset: ConsolePreset) {
   );
 }
 
-export function ConsolePresetList({ onFill, disabled }: ConsolePresetListProps) {
+export function ConsolePresetList({ disabled, onFill }: ConsolePresetListProps) {
   /* 展开集合走唯一出口：键是分组 id，缺键 = 未表态 = 折起
    * （`useExpansionSet` 的既定语义，正是这里要的默认值）。 */
   const groups = useExpansionSet();

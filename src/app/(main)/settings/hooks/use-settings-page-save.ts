@@ -52,18 +52,18 @@ export function useSettingsSave(input: {
   showFlash: (kind: "ok" | "err", text: string) => void;
 }) {
   const {
-    settingsDraft,
-    llmDraft,
     llmApiKey,
-    setSaving,
-    setLlmApiKey,
-    showFlash,
-    saveSettingM,
-    settingsQ,
-    saveLlmCfgM,
+    llmDraft,
     llmQ,
     refetchComfyInstance,
     refetchComfyStorage,
+    saveLlmCfgM,
+    saveSettingM,
+    setLlmApiKey,
+    setSaving,
+    settingsDraft,
+    settingsQ,
+    showFlash,
   } = input;
 
   /** 把给定草稿落库。远程模型的添加 / 编辑 / 移除即时保存也走这里；
@@ -84,14 +84,14 @@ export function useSettingsSave(input: {
               ...draft.extraModels,
             ];
             await saveLlmCfgM.mutateAsync({
-              provider: draft.provider,
               apiKey: llmApiKey || undefined,
               baseUrl: draft.baseUrl,
-              model: draft.model,
               extraModels: payloadExtra,
+              maxTokens: draft.maxTokens,
+              model: draft.model,
+              provider: draft.provider,
               temperature: draft.temperature,
               temperatureByTask: draft.temperatureByTask,
-              maxTokens: draft.maxTokens,
             });
             if (llmApiKey) {
               setLlmApiKey("");
@@ -99,16 +99,16 @@ export function useSettingsSave(input: {
             await llmQ.refetch();
           },
           {
-            report: showFlash,
             failureText: "保存失败",
+            report: showFlash,
             successText: "LLM 配置已保存",
           },
         );
         return result.ok
           ? { ok: /* SAFETY: 类型断言已复核 */ true as const }
           : {
-              ok: /* SAFETY: 类型断言已复核 */ false as const,
               error: result.detail,
+              ok: /* SAFETY: 类型断言已复核 */ false as const,
             };
       } finally {
         setSaving(false);
@@ -141,8 +141,8 @@ export function useSettingsSave(input: {
           await refetchComfyStorage();
         },
         {
-          report: showFlash,
           failureText: "保存失败",
+          report: showFlash,
           successText: "偏好已保存",
         },
       );

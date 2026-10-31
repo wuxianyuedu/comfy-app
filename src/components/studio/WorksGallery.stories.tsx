@@ -20,9 +20,9 @@ import { projectScene, useSeededProjects } from "../../../.storybook/screen-fram
  * 「名字撞了怎么办」「有没有置为活跃」都在这套规则里，手拼字面量会跳过它们。
  */
 const meta = {
-  title: "Studio/WorksGallery",
   component: WorksGallery,
   parameters: { layout: "fullscreen" },
+  title: "Studio/WorksGallery",
 } satisfies Meta<typeof WorksGallery>;
 
 export default meta;
@@ -32,8 +32,8 @@ type Story = StoryObj<typeof GallerHarness>;
 /** 适配件：真项目 + 真 `WorksGallery`；`count` 决定摆几屏。 */
 function GallerHarness({ projectNames }: { projectNames: ReadonlyArray<string> }) {
   const projects = useSeededProjects({
-    primary: projectScene("namedProject"),
     extraNames: projectNames,
+    primary: projectScene("namedProject"),
   });
   return (
     <div className="bg-bg h-180 w-full overflow-hidden">

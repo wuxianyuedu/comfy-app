@@ -31,8 +31,8 @@ import type { ValidationError } from "~/lib/comfyui/validation";
 import { cn } from "~/lib/utils";
 
 export function ValidationErrorList({
-  errors,
   className = "",
+  errors,
 }: {
   className?: string;
   errors: Array<ValidationError> | null | undefined;

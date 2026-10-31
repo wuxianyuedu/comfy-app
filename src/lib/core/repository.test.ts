@@ -63,13 +63,13 @@ beforeEach(() => {
 
 describe("DrizzleRepository 基类", () => {
   it("CRUD 四件套走真实 SQL：缺记录返回 null、更新不存在抛 NotFoundError", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     // 用 Project 作被测实体（有 id 主键、无 JSON 列的干扰）
     await projectRepository.upsertForUser("u1", {
+      edges: "[]",
       id: "p1",
       name: "首版",
       nodes: "[]",
-      edges: "[]",
     });
 
     expect((await projectRepository.findById("p1"))?.name).toBe("首版");
@@ -95,12 +95,12 @@ describe("DrizzleRepository 基类", () => {
     // 列对象来自同一张表，但契约是「传入哪列就按哪列定位」。
     const { project } = await import("~/server/db/schema");
     const repo = new DrizzleRepository<{ id: string; name: string }>(project, project.id);
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     await projectRepository.upsertForUser("u1", {
+      edges: "[]",
       id: "p-explicit",
       name: "显式主键列",
       nodes: "[]",
-      edges: "[]",
     });
 
     expect((await repo.findById("p-explicit"))?.name).toBe("显式主键列");
@@ -113,7 +113,7 @@ describe("DrizzleRepository 基类", () => {
     const repo = new DrizzleRepository<{ id: string; name: string }>(
       (await import("~/server/db/schema")).workflowModelTag,
     );
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     await workflowModelTagRepository.upsertByName("u1", "动漫");
     expect(await repo.findAll()).toHaveLength(1);
   });
@@ -123,7 +123,7 @@ describe("DrizzleRepository 基类", () => {
      * 于是「基类那套标准 CRUD」实际只有三件套有人跑过。这条钉两件事：`.returning()`
      * 回的是**落库那一行**（`nodes`/`edges` 由 SQL 默认值补出来，入参里根本没有它们），
      * 而不是把入参原样吐回去。 */
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     const { project } = await import("~/server/db/schema");
     const repo = new DrizzleRepository<Project>(project, project.id);
 
@@ -132,8 +132,8 @@ describe("DrizzleRepository 基类", () => {
     const created = await repo.create(
       /* SAFETY: 类型断言已复核 */ {
         id: "p-create",
-        userId: "u1",
         name: "基类写入",
+        userId: "u1",
       } as Project,
     );
 
@@ -151,12 +151,12 @@ describe("DrizzleRepository 基类", () => {
 
 describe("ProjectRepository", () => {
   it("upsertForUser：不存在则插入、存在则整份覆盖并按 updatedAt 倒序", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     await projectRepository.upsertForUser("u1", {
+      edges: "[]",
       id: "p1",
       name: "老项目",
       nodes: JSON.stringify([{ id: "n1" }]),
-      edges: "[]",
     });
     await projectRepository.upsertForUser("u1", {
       id: "p2",
@@ -183,8 +183,8 @@ describe("ProjectRepository", () => {
   });
 
   it("deleteForUser 只删自己的项目：别人的 id 命中 0 行", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
+    seedUser(tdb, { email: "u2@test.dev", id: "u2" });
     await projectRepository.upsertForUser("u1", { id: "p1", name: "甲" });
 
     await projectRepository.deleteForUser("u2", "p1");
@@ -198,14 +198,14 @@ describe("ProjectRepository", () => {
 
 describe("SkillRepository", () => {
   const SEED = {
-    name: "电影感",
-    slug: "cinematic",
+    category: "style",
     description: "宽银幕",
     icon: "🎬",
-    category: "style",
+    name: "电影感",
     promptTemplate: "{prompt}, cinematic",
-    tags: ["film"],
+    slug: "cinematic",
     sortOrder: 1,
+    tags: ["film"],
   };
 
   it("ensureBuiltIns 幂等：第二次调用不再重复插入", async () => {
@@ -217,15 +217,15 @@ describe("SkillRepository", () => {
   });
 
   it("list 的三种筛选：默认排除停用、category=all 不筛、q 命中名字/描述/标签", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     await skillRepository.ensureBuiltIns([SEED]);
     const mine = await skillRepository.createUserSkill({
-      name: "我的风格",
-      slug: "mine",
+      category: "custom",
       description: "自定义",
       icon: "✨",
-      category: "custom",
+      name: "我的风格",
       promptTemplate: "x",
+      slug: "mine",
       sortOrder: 9,
       tags: ["我的"],
     });
@@ -244,19 +244,19 @@ describe("SkillRepository", () => {
     // q 命中 tags 列（JSON 字符串里搜子串）
     expect((await skillRepository.list({ q: "film" })).map((s) => s.slug)).toEqual(["cinematic"]);
     // 停用的那条默认不可见，但 includeInactive 可见
-    expect(await skillRepository.list({ q: "自定义", includeInactive: true })).toHaveLength(1);
+    expect(await skillRepository.list({ includeInactive: true, q: "自定义" })).toHaveLength(1);
   });
 
   it("groupByActiveCategory 只统计启用项，count 是数字不是 BigInt", async () => {
     await skillRepository.ensureBuiltIns([SEED]);
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     const s = await skillRepository.createUserSkill({
-      name: "b",
-      slug: "b",
+      category: "style",
       description: "d",
       icon: "✨",
-      category: "style",
+      name: "b",
       promptTemplate: "x",
+      slug: "b",
       sortOrder: 2,
       tags: [],
     });
@@ -272,7 +272,7 @@ describe("SkillRepository", () => {
 
 describe("WorkflowModelTagRepository", () => {
   it("upsertByName 幂等：同名复用既有行，不新增", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     const first = await workflowModelTagRepository.upsertByName("u1", "SDXL");
     const second = await workflowModelTagRepository.upsertByName("u1", "SDXL");
     expect(second.id).toBe(first.id);
@@ -280,7 +280,7 @@ describe("WorkflowModelTagRepository", () => {
   });
 
   it("listByUser 的 count 用的是 count(列)：未绑定标签显示 0 而不是 1", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     await workflowModelTagRepository.upsertByName("u1", "空标签");
     const bound = await workflowModelTagRepository.upsertByName("u1", "已绑定");
     // 只给**已存在**的标签挂一个模板（seedWorkflowTemplate 的 modelTags 会自己
@@ -289,15 +289,15 @@ describe("WorkflowModelTagRepository", () => {
     await workflowTemplateRepository.setModelTags("wt1", [bound.id]);
 
     const rows = await workflowModelTagRepository.listByUser("u1");
-    expect(rows.map(({ name, count }) => ({ name, count }))).toEqual([
-      { name: "已绑定", count: 1 },
-      { name: "空标签", count: 0 },
+    expect(rows.map(({ count, name }) => ({ count, name }))).toEqual([
+      { count: 1, name: "已绑定" },
+      { count: 0, name: "空标签" },
     ]);
     expect(rows.every((r) => typeof r.id === "string" && r.id !== "")).toBe(true);
   });
 
   it("upsertByNames 批量补齐缺失标签并按输入顺序返回 id；重复名收敛为同一个", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     const first = await workflowModelTagRepository.upsertByNames("u1", ["风景", "赛博", "风景"]);
     expect(first).toHaveLength(3);
     expect(first[0]).toBe(first[2]);
@@ -309,8 +309,8 @@ describe("WorkflowModelTagRepository", () => {
   });
 
   it("rename 与 deleteById；listIdsByNames 空数组短路且不误命中他人标签", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
+    seedUser(tdb, { email: "u2@test.dev", id: "u2" });
     const a = await workflowModelTagRepository.upsertByName("u1", "甲");
     await workflowModelTagRepository.upsertByName("u2", "甲");
 
@@ -319,14 +319,14 @@ describe("WorkflowModelTagRepository", () => {
     expect(await workflowModelTagRepository.findByUserAndName("u1", "乙")).toBeNull();
 
     const renamed = await workflowModelTagRepository.rename(a.id, "乙");
-    expect(renamed).toMatchObject({ name: "乙", count: 0 });
+    expect(renamed).toMatchObject({ count: 0, name: "乙" });
 
     await workflowModelTagRepository.deleteById(a.id);
     expect(await workflowModelTagRepository.findById(a.id)).toBeNull();
   });
 
   it("getTemplateTagRows 空数组短路；templateHasTagIdsWhere 能组合进模板查询", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     const tag = await workflowModelTagRepository.upsertByName("u1", "动漫");
     const wt = seedWorkflowTemplate(tdb, { id: "wt1", userId: "u1" });
     await workflowTemplateRepository.setModelTags("wt1", [tag.id]);
@@ -336,7 +336,7 @@ describe("WorkflowModelTagRepository", () => {
       await workflowModelTagRepository.getTemplateTagRows([
         /* SAFETY: 类型断言已复核 */ wt.id as string,
       ]),
-    ).toEqual([{ templateId: "wt1", name: "动漫" }]);
+    ).toEqual([{ name: "动漫", templateId: "wt1" }]);
 
     const hit = await workflowTemplateRepository.listForUser("u1", {
       where: workflowModelTagRepository.templateHasTagIdsWhere([tag.id]),
@@ -349,11 +349,11 @@ describe("WorkflowModelTagRepository", () => {
   });
 
   it("listForUser 只取列表页要用的列：大字段 positions 不下发", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     seedWorkflowTemplate(tdb, {
       id: "wt-pos",
-      userId: "u1",
       positions: { "1": [10, 20] },
+      userId: "u1",
     });
 
     const rows = await workflowTemplateRepository.listForUser("u1");
@@ -375,28 +375,28 @@ describe("WorkflowModelTagRepository", () => {
 
 describe("WorkflowTemplateRepository", () => {
   it("createImported 落库字段可读回；setModelTags 整份覆盖关联", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     const created = await workflowTemplateRepository.createImported({
-      userId: "u1",
+      defaultMode: "i2v",
+      modes: ["flf2v", "i2v"],
       name: "工作流 A",
-      taskType: "I2V",
       paramMap: { seed: "1" },
-      rawJson: { raw: true },
       positions: { p: 1 },
-      sourcePath: "/tmp/a.json",
+      rawJson: { raw: true },
       sourceChecksum: "abc",
       sourceMtime: 123,
-      modes: ["flf2v", "i2v"],
-      defaultMode: "i2v",
+      sourcePath: "/tmp/a.json",
+      taskType: "I2V",
+      userId: "u1",
     });
     expect(created).toMatchObject({
       name: "工作流 A",
       taskType: "I2V",
       // modes 是 text(JSON) 列：仓储写入时 JSON.stringify，读回是**字符串**
-      modes: '["flf2v","i2v"]',
       defaultMode: "i2v",
-      sourceMtime: 123,
+      modes: '["flf2v","i2v"]',
       sourceChecksum: "abc",
+      sourceMtime: 123,
     });
     expect(created.rawJson).toEqual({ raw: true });
 
@@ -407,7 +407,7 @@ describe("WorkflowTemplateRepository", () => {
     // 再设一次 → 旧关联被清掉（不是追加）
     await workflowTemplateRepository.setModelTags(created.id, [tagB.id]);
     expect(await workflowModelTagRepository.getTemplateTagRows([created.id])).toEqual([
-      { templateId: created.id, name: "B" },
+      { name: "B", templateId: created.id },
     ]);
     // 空数组 = 解绑全部
     await workflowTemplateRepository.setModelTags(created.id, []);
@@ -415,13 +415,13 @@ describe("WorkflowTemplateRepository", () => {
   });
 
   it("findByIdForUser 隔离他人数据；relinkSourcePath 只改路径两列", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
+    seedUser(tdb, { email: "u2@test.dev", id: "u2" });
     const wt = seedWorkflowTemplate(tdb, {
       id: "wt1",
-      userId: "u1",
       name: "甲的工作流",
       rawJson: { keep: true },
+      userId: "u1",
     });
 
     expect(await workflowTemplateRepository.findByIdForUser("u2", "wt1")).toBeNull();
@@ -431,13 +431,13 @@ describe("WorkflowTemplateRepository", () => {
     expect((await workflowTemplateRepository.findByIdForUser("u1", "wt1"))?.id).toBe("wt1");
 
     await workflowTemplateRepository.relinkSourcePath("wt1", {
-      sourcePath: "/tmp/new.json",
       sourceMtime: 999,
+      sourcePath: "/tmp/new.json",
     });
     const after = await workflowTemplateRepository.findById("wt1");
     expect(after).toMatchObject({
-      sourcePath: "/tmp/new.json",
       sourceMtime: 999,
+      sourcePath: "/tmp/new.json",
       // 不带 _select 的 full row 读法仍保留 rawJson 列
       name: "甲的工作流",
     });
@@ -454,18 +454,18 @@ describe("WorkflowTemplateRepository", () => {
 describe("ModelRepository", () => {
   it("upsertScanned 按 (fileName,folder) 冲突更新；disableAllLocal 只动 LOCAL", async () => {
     await modelRepository.upsertScanned({
+      baseModel: "SDXL",
       fileName: "a.safetensors",
       folder: "checkpoints",
       name: "A v1",
       type: "CHECKPOINT",
-      baseModel: "SDXL",
     });
     await modelRepository.upsertScanned({
+      baseModel: "SDXL",
       fileName: "a.safetensors",
       folder: "checkpoints",
       name: "A v2",
       type: "CHECKPOINT",
-      baseModel: "SDXL",
     });
     const rows = await modelRepository.findAll();
     expect(rows).toHaveLength(1);
@@ -479,29 +479,29 @@ describe("ModelRepository", () => {
   it("upsertScannedMany 批量写入，冲突时按 (fileName,folder) 更新", async () => {
     await modelRepository.upsertScannedMany([
       {
+        baseModel: "SDXL",
         fileName: "a.safetensors",
         folder: "checkpoints",
         name: "A v1",
         type: "CHECKPOINT",
-        baseModel: "SDXL",
       },
       {
+        baseModel: "SDXL",
         fileName: "b.safetensors",
         folder: "checkpoints",
         name: "B v1",
         type: "CHECKPOINT",
-        baseModel: "SDXL",
       },
     ]);
     expect(await modelRepository.findAll()).toHaveLength(2);
 
     await modelRepository.upsertScannedMany([
       {
+        baseModel: "Flux",
         fileName: "a.safetensors",
         folder: "checkpoints",
         name: "A v2",
         type: "CHECKPOINT",
-        baseModel: "Flux",
       },
     ]);
     const rows = await modelRepository.findAll();
@@ -514,31 +514,31 @@ describe("ModelRepository", () => {
 
   it("upsertScannedMany 跨分片不丢行（超过单条 INSERT 的行数上限）", async () => {
     const inputs = Array.from({ length: 401 }, (_, index) => ({
+      baseModel: "SDXL",
       fileName: `m${index}.safetensors`,
       folder: "checkpoints",
       name: `M${index}`,
       type: "CHECKPOINT",
-      baseModel: "SDXL",
     }));
     await modelRepository.upsertScannedMany(inputs);
     expect(await modelRepository.findAll()).toHaveLength(401);
   });
 
   it("list 只出可用项，支持 type 与 q（like）筛选、上限 300", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     await modelRepository.upsertScanned({
+      baseModel: "SDXL",
       fileName: "a.safetensors",
       folder: "checkpoints",
       name: "DreamShaper",
       type: "CHECKPOINT",
-      baseModel: "SDXL",
     });
     await modelRepository.upsertScanned({
+      baseModel: "SDXL",
       fileName: "b.safetensors",
       folder: "loras",
       name: "AnimeLine",
       type: "LORA",
-      baseModel: "SDXL",
     });
     await modelRepository.setAvailabilityByFolder("loras", false);
 
@@ -555,11 +555,11 @@ describe("ModelRepository", () => {
       ["a.safetensors", "checkpoints"],
     ] as const) {
       await modelRepository.upsertScanned({
+        baseModel: "SDXL",
         fileName,
         folder,
         name: fileName,
         type: "CHECKPOINT",
-        baseModel: "SDXL",
       });
     }
     expect(await modelRepository.listAvailableFileNamesByFolders([])).toEqual([]);
@@ -572,18 +572,18 @@ describe("ModelRepository", () => {
 
   it("countsByFolder 只数可用项、按文件夹分组", async () => {
     await modelRepository.upsertScanned({
+      baseModel: "SDXL",
       fileName: "a.safetensors",
       folder: "checkpoints",
       name: "A",
       type: "CHECKPOINT",
-      baseModel: "SDXL",
     });
     await modelRepository.upsertScanned({
+      baseModel: "SDXL",
       fileName: "b.safetensors",
       folder: "loras",
       name: "B",
       type: "LORA",
-      baseModel: "SDXL",
     });
     // 不可用的一行不进计数
     await modelRepository.setAvailabilityByFolder("loras", false);
@@ -592,8 +592,8 @@ describe("ModelRepository", () => {
   });
 
   it("UserModelConfigRepository：addOrEnable / patchForUser 幂等，deleteForUser 只动本人", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
+    seedUser(tdb, { email: "u2@test.dev", id: "u2" });
 
     const c = await userModelConfigRepository.addOrEnable("u1", "loras", "LoRA");
     expect(c).toMatchObject({ enabled: true, isCustom: true });
@@ -622,30 +622,30 @@ describe("ModelRepository", () => {
 
 describe("TaskRepository", () => {
   const queued = {
-    userId: "u1",
-    type: "TXT2IMG",
-    prompt: "一只猫",
     params: { steps: 20 },
+    prompt: "一只猫",
+    type: "TXT2IMG",
+    userId: "u1",
     workflowName: "wf-a",
   };
 
   beforeEach(() => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
+    seedUser(tdb, { email: "u2@test.dev", id: "u2" });
   });
 
   it("createQueued 落 QUEUED 且可带 projectId / snapshot；listByUser 支持分页与状态过滤", async () => {
     const t1 = await taskRepository.createQueued({
       ...queued,
       projectId: "p1",
+      referenceImages: ["a.png"],
       shotId: "s7",
       workflowSnapshot: { nodes: [] },
-      referenceImages: ["a.png"],
     });
     expect(t1).toMatchObject({
-      status: "QUEUED",
       projectId: "p1",
       shotId: "s7",
+      status: "QUEUED",
     });
     // 归属列要真落盘、真读得回来（内存 SQLite 真库，不是 mock 的调用断言）
     expect((await taskRepository.findById(t1.id))?.shotId).toBe("s7");
@@ -674,25 +674,25 @@ describe("TaskRepository", () => {
     const t = await taskRepository.createQueued(queued);
     await taskRepository.createImages(t.id, [
       {
-        localPath: "b.png",
-        sortIndex: 1,
         isCover: false,
+        localPath: "b.png",
         mediaType: "image",
         seed: null,
+        sortIndex: 1,
       },
       {
-        localPath: "cover.png",
-        sortIndex: 5,
         isCover: true,
+        localPath: "cover.png",
         mediaType: "image",
         seed: "7",
+        sortIndex: 5,
       },
       {
-        localPath: "a.png",
-        sortIndex: 0,
         isCover: false,
+        localPath: "a.png",
         mediaType: "image",
         seed: null,
+        sortIndex: 0,
       },
     ]);
 
@@ -705,8 +705,8 @@ describe("TaskRepository", () => {
     expect(
       await taskRepository.listByUser("u1", {
         includeImages: true,
-        take: 1,
         skip: 0,
+        take: 1,
       }),
     ).toHaveLength(1);
     expect(await taskRepository.listByUser("u1", { includeImages: true, skip: 1 })).toHaveLength(0);
@@ -720,7 +720,7 @@ describe("TaskRepository", () => {
     const updated = await taskRepository.updateStatusForUser("u1", t.id, "RUNNING", {
       progress: 10,
     });
-    expect(updated).toMatchObject({ status: "RUNNING", progress: 10 });
+    expect(updated).toMatchObject({ progress: 10, status: "RUNNING" });
     await expect(
       taskRepository.updateStatusForUser("u2", t.id, "CANCELLED"),
     ).rejects.toBeInstanceOf(NotFoundError);
@@ -730,11 +730,11 @@ describe("TaskRepository", () => {
     const t = await taskRepository.createQueued({ ...queued, projectId: "p1" });
     await taskRepository.createImages(t.id, [
       {
-        localPath: "x.png",
-        sortIndex: 0,
         isCover: true,
+        localPath: "x.png",
         mediaType: "image",
         seed: null,
+        sortIndex: 0,
       },
     ]);
 
@@ -755,8 +755,8 @@ describe("TaskRepository", () => {
     const t = await taskRepository.createQueued({
       ...queued,
       projectId: "p1",
-      workflowSnapshot: { nodes: [1] },
       referenceImages: ["r.png"],
+      workflowSnapshot: { nodes: [1] },
     });
     await taskRepository.markRunning(t.id, "pid-1");
     await taskRepository.updateProgress(t.id, 42);
@@ -766,28 +766,28 @@ describe("TaskRepository", () => {
     });
     expect(await taskRepository.findStatusById("nope")).toBeNull();
     expect(await taskRepository.findSnapshotById(t.id)).toEqual({
-      workflowSnapshot: { nodes: [1] },
       projectId: "p1",
+      workflowSnapshot: { nodes: [1] },
     });
     expect(await taskRepository.findStatusAndPromptById(t.id)).toEqual({
-      status: "RUNNING",
       promptId: "pid-1",
+      status: "RUNNING",
     });
 
     const meta = await taskRepository.findExecutionMeta(t.id);
     expect(meta).toMatchObject({
       projectId: "p1",
       prompt: "一只猫",
-      workflowName: "wf-a",
       referenceImages: ["r.png"],
+      workflowName: "wf-a",
     });
     expect(meta?.createdAt).toBeInstanceOf(Date);
 
     expect(await taskRepository.findExecutionProgress(t.id)).toEqual({
-      status: "RUNNING",
+      error: null,
       progress: 42,
       resultImages: null,
-      error: null,
+      status: "RUNNING",
     });
     expect(await taskRepository.findExecutionMeta("nope")).toBeNull();
   });
@@ -795,27 +795,27 @@ describe("TaskRepository", () => {
   it("终态写入：success / failure / cancel / reaper 各自的字段集合", async () => {
     const ok = await taskRepository.createQueued(queued);
     await taskRepository.finalizeSuccess(ok.id, {
-      resultImages: ["1.png"],
       params: { steps: 30 },
+      resultImages: ["1.png"],
       workflowSnapshot: { nodes: [2] },
     });
     const okRow = await taskRepository.findById(ok.id);
-    expect(okRow).toMatchObject({ status: "SUCCEEDED", progress: 100 });
+    expect(okRow).toMatchObject({ progress: 100, status: "SUCCEEDED" });
     expect(okRow?.resultImages).toEqual(["1.png"]);
     expect(okRow?.finishedAt).toBeInstanceOf(Date);
 
     // workflowSnapshot 未传时不覆盖（对象展开的条件分支）
     const ok2 = await taskRepository.createQueued(queued);
     await taskRepository.finalizeSuccess(ok2.id, {
-      resultImages: [],
       params: {},
+      resultImages: [],
     });
     expect((await taskRepository.findById(ok2.id))?.workflowSnapshot).toBeNull();
 
     const bad = await taskRepository.createQueued(queued);
     await taskRepository.finalizeFailure(bad.id, "上游 500", [{ node: 1 }]);
     const badRow = await taskRepository.findById(bad.id);
-    expect(badRow).toMatchObject({ status: "FAILED", error: "上游 500" });
+    expect(badRow).toMatchObject({ error: "上游 500", status: "FAILED" });
     expect(badRow?.validationErrors).toBe(JSON.stringify([{ node: 1 }]));
 
     // validationErrors 空数组 → 落 null（不是 "[]"）
@@ -830,8 +830,8 @@ describe("TaskRepository", () => {
     const r = await taskRepository.createQueued(queued);
     await taskRepository.finalizeFromReaper(r.id, "FAILED", "进程没了");
     expect(await taskRepository.findById(r.id)).toMatchObject({
-      status: "FAILED",
       error: "进程没了",
+      status: "FAILED",
     });
   });
 
@@ -873,15 +873,15 @@ describe("TaskRepository", () => {
  */
 describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
   const queued = {
-    userId: "u1",
-    type: "TXT2IMG",
-    prompt: "一条镜头",
     params: {},
+    prompt: "一条镜头",
+    type: "TXT2IMG",
+    userId: "u1",
     workflowName: "wf-wire",
   };
 
   beforeEach(() => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
   });
 
   it("includeImages 且只给 skip：第二页照样装着 images（LIMIT -1 OFFSET 那条语法）", async () => {
@@ -898,11 +898,11 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
       });
       await taskRepository.createImages(t.id, [
         {
-          localPath: `${t.id}.png`,
-          sortIndex: 0,
           isCover: true,
+          localPath: `${t.id}.png`,
           mediaType: "image",
           seed: null,
+          sortIndex: 0,
         },
       ]);
       ids.push(t.id);
@@ -963,8 +963,8 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
     const got = await taskRepository.findExecutionProgressMany([a.id, b.id, "nope"]);
     expect(got).toHaveLength(2);
     expect(got.find((row) => row.id === a.id)).toMatchObject({
-      status: "RUNNING",
       progress: 30,
+      status: "RUNNING",
     });
     expect(got.find((row) => row.id === b.id)).toMatchObject({ progress: 0 });
     /* 空数组不发 SQL：成片监看每 4s 一轮，镜头为空的轮次不该打一条 `IN ()`。 */
@@ -981,11 +981,11 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
 
     const snap = await taskRepository.findSseSnapshot(t.id);
     expect(snap).toMatchObject({
-      status: "QUEUED",
-      progress: 0,
       error: null,
-      workflowName: "wf-wire",
       logs: [{ level: "info", msg: "起图" }],
+      progress: 0,
+      status: "QUEUED",
+      workflowName: "wf-wire",
     });
     /* 「轻投影」的边界是不含 workflowSnapshot（整份工作流，单行可达数 MB），
      * 而 progressNode / logs 是 3-C 之后轮询要读的。写成整行查询不报错，
@@ -1034,27 +1034,27 @@ describe("TaskRepository 的状态栏 / 分页装载 / 领取三口", () => {
 
 describe("FilmRepository / FilmShotRepository", () => {
   const CREATE = {
-    userId: "u1",
-    title: "短片甲",
-    script: "第一幕",
-    type: "short_video",
-    size: '{"w":1280,"h":720}',
     fps: 16,
     framesPerShot: 49,
+    script: "第一幕",
+    size: '{"w":1280,"h":720}',
     subtitleOn: true,
+    title: "短片甲",
+    type: "short_video",
+    userId: "u1",
   };
 
   beforeEach(() => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
-    seedUser(tdb, { id: "u2", email: "u2@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
+    seedUser(tdb, { email: "u2@test.dev", id: "u2" });
   });
 
   it("create 落 PARSING；listByUser 带镜头数并按时间倒序、隔离他人", async () => {
     const f1 = await filmRepository.create(CREATE);
     const f2 = await filmRepository.create({ ...CREATE, title: "短片乙" });
     await filmShotRepository.createMany(f2.id, [
-      { order: 0, prompt: "镜头 1", params: {} },
-      { order: 1, prompt: "镜头 2", params: {} },
+      { order: 0, params: {}, prompt: "镜头 1" },
+      { order: 1, params: {}, prompt: "镜头 2" },
     ]);
 
     const list = await filmRepository.listByUser("u1");
@@ -1112,8 +1112,8 @@ describe("FilmRepository / FilmShotRepository", () => {
   it("findByIdForUser 的 includeShots 走关系装载并按 order 升序", async () => {
     const f = await filmRepository.create(CREATE);
     await filmShotRepository.createMany(f.id, [
-      { order: 2, prompt: "三", heading: "C", negative: "x", params: { a: 1 } },
-      { order: 0, prompt: "一", params: {} },
+      { heading: "C", negative: "x", order: 2, params: { a: 1 }, prompt: "三" },
+      { order: 0, params: {}, prompt: "一" },
     ]);
 
     expect(await filmRepository.findByIdForUser("u2", f.id)).toBeNull();
@@ -1139,52 +1139,52 @@ describe("FilmRepository / FilmShotRepository", () => {
   it("状态机写入：generating / progress / composing / done / failed / cancelled / 日志追加", async () => {
     const f = await filmRepository.create(CREATE);
 
-    await filmRepository.appendLog(f.id, { t: 1, level: "info", msg: "开始" });
+    await filmRepository.appendLog(f.id, { level: "info", msg: "开始", t: 1 });
     await filmRepository.appendLog(f.id, {
-      t: 2,
       level: "progress",
       msg: "50%",
+      t: 2,
     });
     expect((await filmRepository.findById(f.id))?.logs).toEqual([
-      { t: 1, level: "info", msg: "开始" },
-      { t: 2, level: "progress", msg: "50%" },
+      { level: "info", msg: "开始", t: 1 },
+      { level: "progress", msg: "50%", t: 2 },
     ]);
 
     await filmRepository.markGenerating(f.id);
     expect(await filmRepository.findById(f.id)).toMatchObject({
-      status: "GENERATING",
       progress: 0,
+      status: "GENERATING",
     });
     await filmRepository.updateProgress(f.id, 55);
     expect((await filmRepository.findById(f.id))?.progress).toBe(55);
     await filmRepository.markComposing(f.id);
     expect(await filmRepository.findById(f.id)).toMatchObject({
-      status: "COMPOSING",
       progress: 90,
+      status: "COMPOSING",
     });
     await filmRepository.markDone(f.id, "/tmp/final.mp4");
     expect(await filmRepository.findById(f.id)).toMatchObject({
-      status: "DONE",
-      progress: 100,
       finalVideo: "/tmp/final.mp4",
+      progress: 100,
+      status: "DONE",
     });
     await filmRepository.markFailed(f.id, "合片失败");
     expect(await filmRepository.findById(f.id)).toMatchObject({
-      status: "FAILED",
       error: "合片失败",
+      status: "FAILED",
     });
     await filmRepository.markCancelled(f.id);
     expect(await filmRepository.findById(f.id)).toMatchObject({
-      status: "CANCELLED",
       error: "已取消",
+      status: "CANCELLED",
     });
   });
 
   it("镜头状态流转与两类筛选：status / onlyWithVideo", async () => {
     const f = await filmRepository.create(CREATE);
     await filmShotRepository.createMany(f.id, [
-      { order: 0, prompt: "甲", params: {} },
-      { order: 1, prompt: "乙", params: {} },
+      { order: 0, params: {}, prompt: "甲" },
+      { order: 1, params: {}, prompt: "乙" },
     ]);
     const shots = await filmShotRepository.listByFilm(f.id);
     expect(shots.map((s) => s.status)).toEqual(["IDLE", "IDLE"]);
@@ -1195,28 +1195,28 @@ describe("FilmRepository / FilmShotRepository", () => {
     ).toEqual([shots[0]!.id]);
 
     await filmShotRepository.updateFromTask(shots[0]!.id, {
-      status: "SUCCEEDED",
-      progress: 100,
-      videoPath: "/tmp/shot0.mp4",
       duration: 3.2,
+      progress: 100,
+      status: "SUCCEEDED",
+      videoPath: "/tmp/shot0.mp4",
     });
     await filmShotRepository.updateFromTask(shots[1]!.id, {
-      status: "FAILED",
       progress: 0,
+      status: "FAILED",
     });
     expect(
       (await filmShotRepository.listByFilm(f.id, { onlyWithVideo: true })).map((s) => s.id),
     ).toEqual([shots[0]!.id]);
     expect(await filmShotRepository.listActiveWithTask(f.id)).toEqual([]);
     expect((await filmShotRepository.listByFilm(f.id))[0]).toMatchObject({
-      videoPath: "/tmp/shot0.mp4",
       duration: 3.2,
+      videoPath: "/tmp/shot0.mp4",
     });
 
     // updateFromTask 不给 videoPath → 保留原值（`?? undefined` 不覆盖）
     await filmShotRepository.updateFromTask(shots[0]!.id, {
-      status: "SUCCEEDED",
       progress: 100,
+      status: "SUCCEEDED",
     });
     expect((await filmShotRepository.listByFilm(f.id))[0]!.videoPath).toBe("/tmp/shot0.mp4");
   });
@@ -1224,16 +1224,16 @@ describe("FilmRepository / FilmShotRepository", () => {
   it("markAllActiveFailed 只动 QUEUED/RUNNING；markFailed 单条；listActiveWithTask", async () => {
     const f = await filmRepository.create(CREATE);
     await filmShotRepository.createMany(f.id, [
-      { order: 0, prompt: "甲", params: {} },
-      { order: 1, prompt: "乙", params: {} },
-      { order: 2, prompt: "丙", params: {} },
+      { order: 0, params: {}, prompt: "甲" },
+      { order: 1, params: {}, prompt: "乙" },
+      { order: 2, params: {}, prompt: "丙" },
     ]);
     const shots = await filmShotRepository.listByFilm(f.id);
     await filmShotRepository.markQueued(shots[0]!.id, "t0");
     await filmShotRepository.markQueued(shots[1]!.id, "t1");
     await filmShotRepository.updateFromTask(shots[2]!.id, {
-      status: "SUCCEEDED",
       progress: 100,
+      status: "SUCCEEDED",
     });
 
     expect((await filmShotRepository.listActiveWithTask(f.id)).map((s) => s.taskId)).toEqual([
@@ -1277,12 +1277,12 @@ describe("LlmConfigRepository", () => {
       apiKey: "sk-plain",
     });
     expect(cfg).toMatchObject({
-      id: "singleton",
-      provider: "local",
-      model: "",
-      temperature: 0.7,
-      maxTokens: 2048,
       apiKey: "sk-plain",
+      id: "singleton",
+      maxTokens: 2048,
+      model: "",
+      provider: "local",
+      temperature: 0.7,
     });
 
     // 关键断言：DB 里存的不是明文（这条只有读原始行才能证明）
@@ -1296,9 +1296,9 @@ describe("LlmConfigRepository", () => {
 
   it("二次 upsert 走 update：只覆盖传入字段，未传字段保持原值", async () => {
     await llmConfigRepository.upsertSingleton({
-      provider: "local",
-      model: "llama3",
       apiKey: "sk-1",
+      model: "llama3",
+      provider: "local",
       temperature: 0.3,
     });
     const patched = await llmConfigRepository.upsertSingleton({
@@ -1306,9 +1306,9 @@ describe("LlmConfigRepository", () => {
       temperatureByTask: { chat: 0.9 },
     });
     expect(patched).toMatchObject({
-      provider: "local",
-      model: "qwen2",
       apiKey: "sk-1",
+      model: "qwen2",
+      provider: "local",
       temperature: 0.3,
       temperatureByTask: { chat: 0.9 },
     });
@@ -1319,20 +1319,20 @@ describe("LlmConfigRepository", () => {
       extraModels: [
         "local-candidate",
         {
-          name: "rm",
-          baseUrl: "https://r/v1",
           apiKey: "sk-remote",
+          baseUrl: "https://r/v1",
           kind: "chat",
+          name: "rm",
         },
       ],
     });
     expect(cfg.extraModels).toEqual([
       "local-candidate",
       {
-        name: "rm",
-        baseUrl: "https://r/v1",
         apiKey: "sk-remote",
+        baseUrl: "https://r/v1",
         kind: "chat",
+        name: "rm",
       },
     ]);
 
@@ -1354,20 +1354,20 @@ describe("RemoteModelRepository", () => {
   it("replaceAll 是全量同步：新增 / 更新 / 删除，并去重与裁剪空白", async () => {
     await remoteModelRepository.replaceAll([
       {
-        name: " 甲 ",
-        baseUrl: " https://a/v1 ",
         apiKey: " sk-a ",
+        baseUrl: " https://a/v1 ",
         kind: "chat",
+        name: " 甲 ",
       },
-      { name: "甲", baseUrl: "https://dup/v1" },
+      { baseUrl: "https://dup/v1", name: "甲" },
       { name: "   " },
     ]);
     let rows = await remoteModelRepository.list();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
-      name: "甲",
       baseUrl: "https://a/v1",
       kind: "chat",
+      name: "甲",
     });
     // 密钥**不以明文落盘**（`llmConfig` 那条路径一直如此；`remoteModel` 此前直接
     // 落明文，而 `db.sqlite` 会被 next build 复制进 standalone 产物 —— 硬规则 17）
@@ -1378,8 +1378,8 @@ describe("RemoteModelRepository", () => {
     /* 第二次保存没带 `apiKey` 键（= 服务端脱敏下发后原样回写的形态）→ 继承既有那把，
      * 不是清空。这正是台账 A11 修掉的语义，与 `workshopAdapters` 的继承同源。 */
     rows = await remoteModelRepository.replaceAll([
-      { name: "甲", baseUrl: "https://b/v1" },
-      { name: "乙", kind: "video" },
+      { baseUrl: "https://b/v1", name: "甲" },
+      { kind: "video", name: "乙" },
     ]);
     expect(rows.map((r) => r.name)).toEqual(["甲", "乙"]);
     expect(rows.find((r) => r.name === "甲")).toMatchObject({
@@ -1399,10 +1399,10 @@ describe("RemoteModelRepository", () => {
   it("replaceAll 保留已有的工坊适配器（不被配置同步清掉）", async () => {
     const adapters = [
       {
-        mode: "t2i",
-        inputs: [{ type: "prompt", field: "prompt" }],
-        outputField: "data.0.url",
         endpointPath: "/v1/images/generations",
+        inputs: [{ field: "prompt", type: "prompt" }],
+        mode: "t2i",
+        outputField: "data.0.url",
       },
     ];
     const created = await remoteModelRepository.replaceAll([{ name: "甲" }]);
@@ -1412,20 +1412,20 @@ describe("RemoteModelRepository", () => {
     );
     expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
       {
-        mode: "T2I",
-        inputs: [{ type: "prompt", field: "prompt" }],
-        outputField: "data.0.url",
         endpointPath: "/v1/images/generations",
+        inputs: [{ field: "prompt", type: "prompt" }],
+        mode: "T2I",
+        outputField: "data.0.url",
       },
     ]);
 
-    await remoteModelRepository.replaceAll([{ name: "甲", baseUrl: "https://new/v1" }]);
+    await remoteModelRepository.replaceAll([{ baseUrl: "https://new/v1", name: "甲" }]);
     expect(await remoteModelRepository.getWorkshopAdapters("甲")).toEqual([
       {
-        mode: "T2I",
-        inputs: [{ type: "prompt", field: "prompt" }],
-        outputField: "data.0.url",
         endpointPath: "/v1/images/generations",
+        inputs: [{ field: "prompt", type: "prompt" }],
+        mode: "T2I",
+        outputField: "data.0.url",
       },
     ]);
     expect((await remoteModelRepository.list())[0]!.id).toBe(created[0]!.id);
@@ -1438,13 +1438,13 @@ describe("RemoteModelRepository", () => {
      * 就把所有远端密钥清掉。同一条批量语句里 `workshopAdapters` 早就在继承了，
      * 语义必须对齐。 */
     await remoteModelRepository.replaceAll([
-      { name: "甲", baseUrl: "https://a/v1", apiKey: "sk-keep-me" },
+      { apiKey: "sk-keep-me", baseUrl: "https://a/v1", name: "甲" },
     ]);
     const cipherOf = () => remoteModelRepository.findByName("甲").then((r) => r?.apiKey ?? null);
 
     // ① 缺键 → 继承既有那份
     const before = await cipherOf();
-    await remoteModelRepository.replaceAll([{ name: "甲", baseUrl: "https://a2/v1" }]);
+    await remoteModelRepository.replaceAll([{ baseUrl: "https://a2/v1", name: "甲" }]);
     const after = await cipherOf();
     /* 继承必须是**原样搬运**：重新加密会换 IV、字节必然不同，而那份「二次加密」的
      * 东西读出来就解不开（`decryptLlmKey` 只解一层）。所以这里比的不是「能解出同一个
@@ -1453,13 +1453,13 @@ describe("RemoteModelRepository", () => {
     expect(decryptLlmKey(after)).toBe("sk-keep-me");
 
     // ② 显式 null → 清空（这才是「用户按了清除密钥」的形状）
-    await remoteModelRepository.replaceAll([{ name: "甲", apiKey: null }]);
+    await remoteModelRepository.replaceAll([{ apiKey: null, name: "甲" }]);
     expect(await cipherOf()).toBeNull();
 
     // ③ 空串 / 全空白同样按清空处理（表单里「把字段删空」的形态）
-    await remoteModelRepository.replaceAll([{ name: "甲", apiKey: "sk-again" }]);
+    await remoteModelRepository.replaceAll([{ apiKey: "sk-again", name: "甲" }]);
     expect(decryptLlmKey(await cipherOf())).toBe("sk-again");
-    await remoteModelRepository.replaceAll([{ name: "甲", apiKey: "   " }]);
+    await remoteModelRepository.replaceAll([{ apiKey: "   ", name: "甲" }]);
     expect(await cipherOf()).toBeNull();
   });
 
@@ -1487,8 +1487,8 @@ describe("RemoteModelRepository", () => {
 
   it("第二条写失败 ⇒ 第一条不残留：整份配置与其中的密钥都还在（#2586 的正案）", async () => {
     await remoteModelRepository.replaceAll([
-      { name: "甲", baseUrl: "https://a/v1", apiKey: "sk-lost" },
-      { name: "丙", baseUrl: "https://c/v1" },
+      { apiKey: "sk-lost", baseUrl: "https://a/v1", name: "甲" },
+      { baseUrl: "https://c/v1", name: "丙" },
     ]);
     /* 注入一个**非锁族**错误：那样有界重试会「认不出原因就原样抛」，
      * 这条用例测到的才是回滚，而不是重试成功后又落了一遍。 */
@@ -1558,7 +1558,7 @@ describe("RemoteModelRepository", () => {
   });
 
   it("seedRemoteModel 落库的是密文（测试基建与生产写入同形）", async () => {
-    seedRemoteModel(tdb, { name: "甲", apiKey: "sk-seed" });
+    seedRemoteModel(tdb, { apiKey: "sk-seed", name: "甲" });
     const raw = /* SAFETY: 类型断言已复核 */ tdb.$tables.remoteModels[0]!.apiKey as string;
     expect(raw).not.toBe("sk-seed");
     expect(raw.startsWith("enc:v1:")).toBe(true);
@@ -1584,12 +1584,12 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
   /** 起态：库里已有一份单例配置与两条远端模型 —— 回滚的断言要有对照物。 */
   async function seedState(): Promise<void> {
     await llmConfigRepository.upsertSingleton({
-      model: "旧模型",
       apiKey: "sk-old",
+      model: "旧模型",
     });
     await remoteModelRepository.replaceAll([
-      { name: "甲", baseUrl: "https://a/v1", apiKey: "sk-a" },
-      { name: "丙", baseUrl: "https://c/v1" },
+      { apiKey: "sk-a", baseUrl: "https://a/v1", name: "甲" },
+      { baseUrl: "https://c/v1", name: "丙" },
     ]);
   }
   const names = async () => (await remoteModelRepository.list()).map((r) => r.name).sort();
@@ -1598,8 +1598,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     await seedState();
     tdb.$sqlTrace.length = 0;
     await saveLlmSettings({
+      extraModels: ["llama3", { apiKey: "sk-b", baseUrl: "https://b/v1", name: "乙" }],
       model: "新模型",
-      extraModels: ["llama3", { name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" }],
     });
     expect(tdb.$sqlTrace.map(head)).toEqual([
       "begin",
@@ -1625,8 +1625,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     /* 注入**非锁族**错误：有界重试会「认不出原因就原样抛」，这条测到的才是回滚。 */
     const gate = armStatementFailure(llmConfigWrite);
     const failure = await saveLlmSettings({
+      extraModels: [{ apiKey: "sk-b", baseUrl: "https://b/v1", name: "乙" }],
       model: "坏模型",
-      extraModels: [{ name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" }],
     })
       .then(() => null)
       .catch(
@@ -1659,8 +1659,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
     /* 包装层与 #2586 那条同形：drizzle 把宿主抛的东西放进 `Failed query: …`，
      * 注入的那句挂在 `cause` 上 —— 只看 message 会读不到原因（#1250 记的形态）。 */
     const failure = await saveLlmSettings({
+      extraModels: [{ baseUrl: "https://b/v1", name: "乙" }],
       provider: "remote",
-      extraModels: [{ name: "乙", baseUrl: "https://b/v1" }],
     })
       .then(() => null)
       .catch(
@@ -1692,13 +1692,13 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
 
   it("成功那一跑：本地候选名进 llmConfig、远端条目进 remoteModel，两份是同一次的新态", async () => {
     await saveLlmSettings({
-      extraModels: ["llama3", { name: "乙", baseUrl: "https://b/v1", apiKey: "sk-b" }],
+      extraModels: ["llama3", { apiKey: "sk-b", baseUrl: "https://b/v1", name: "乙" }],
     });
     const cfg = await llmConfigRepository.findSingleton();
     expect(cfg?.extraModels).toEqual(["llama3"]);
     const rows = await remoteModelRepository.list();
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ name: "乙", baseUrl: "https://b/v1" });
+    expect(rows[0]).toMatchObject({ baseUrl: "https://b/v1", name: "乙" });
     expect(decryptLlmKey(rows[0]!.apiKey)).toBe("sk-b");
     expect(String(rows[0]!.apiKey).startsWith("enc:v1:")).toBe(true);
   });
@@ -1719,8 +1719,8 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
      * 断言的是**这一次保存**重试了几回，不清零就会把起态那次一起数进来。 */
     tdb.$sqlTrace.length = 0;
     await saveLlmSettings({
+      extraModels: [{ baseUrl: "https://b/v1", name: "乙" }],
       model: "新模型",
-      extraModels: [{ name: "乙", baseUrl: "https://b/v1" }],
     });
     expect(gate.hits()).toBe(SETTINGS_DB_WRITE.maxAttempts - 1);
     const heads = tdb.$sqlTrace.map(head);
@@ -1732,12 +1732,12 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
 
   it("两次保存按顺序整体生效：终态等于后一次，不留前一次的远端残行", async () => {
     await saveLlmSettings({
-      model: "A",
       extraModels: [{ name: "甲" }, "llama-A"],
+      model: "A",
     });
     await saveLlmSettings({
-      model: "B",
       extraModels: [{ name: "乙" }, "llama-B"],
+      model: "B",
     });
     expect(await names()).toEqual(["乙"]);
     const cfg = await llmConfigRepository.findSingleton();
@@ -1772,15 +1772,15 @@ describe("saveLlmSettings —— 远端清单与 llmConfig 单例在同一次事
 
 describe("PostRepository", () => {
   it("getLatest 取最新一条；create 落库", async () => {
-    seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+    seedUser(tdb, { email: "u1@test.dev", id: "u1" });
     expect(await postRepository.getLatest()).toBeNull();
 
-    await postRepository.create({ name: "旧公告", createdById: "u1" });
+    await postRepository.create({ createdById: "u1", name: "旧公告" });
     // sleep-ok: 必须走真挂钟：要 createdAt / updatedAt 拉开真实的毫秒差，假定时器会把被测的时间戳逻辑一起冻住。
     await new Promise((r) => setTimeout(r, 5));
     const latest = await postRepository.create({
-      name: "新公告",
       createdById: "u1",
+      name: "新公告",
     });
     expect(latest.name).toBe("新公告");
     expect(latest.createdAt).toBeInstanceOf(Date);

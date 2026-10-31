@@ -37,19 +37,19 @@ export class SkillRepository extends DrizzleRepository<Skill> {
     }
     await db.insert(skill).values(
       seeds.map((s) => ({
-        name: s.name,
-        slug: s.slug,
+        category: s.category,
+        coverUrl: s.coverUrl,
+        defaultParams: s.defaultParams,
         description: s.description,
         icon: s.icon,
-        category: s.category,
-        promptTemplate: s.promptTemplate,
-        negativePrompt: s.negativePrompt,
-        defaultParams: s.defaultParams,
-        recommendedModel: s.recommendedModel,
-        coverUrl: s.coverUrl,
-        sortOrder: s.sortOrder,
-        isBuiltIn: true,
         isActive: true,
+        isBuiltIn: true,
+        name: s.name,
+        negativePrompt: s.negativePrompt,
+        promptTemplate: s.promptTemplate,
+        recommendedModel: s.recommendedModel,
+        slug: s.slug,
+        sortOrder: s.sortOrder,
         tags: JSON.stringify(s.tags),
       })),
     );
@@ -114,20 +114,20 @@ export class SkillRepository extends DrizzleRepository<Skill> {
     const rows = await db
       .insert(skill)
       .values({
-        name: input.name,
-        slug: input.slug,
+        category: input.category,
+        coverUrl: input.coverUrl ?? undefined,
+        defaultParams: input.defaultParams,
         description: input.description,
         icon: input.icon,
-        category: input.category,
-        promptTemplate: input.promptTemplate,
+        isActive: true,
+        isBuiltIn: false,
+        name: input.name,
         negativePrompt: input.negativePrompt ?? undefined,
-        defaultParams: input.defaultParams,
+        promptTemplate: input.promptTemplate,
         recommendedModel: input.recommendedModel ?? undefined,
-        coverUrl: input.coverUrl ?? undefined,
+        slug: input.slug,
         sortOrder: input.sortOrder,
         tags: JSON.stringify(input.tags),
-        isBuiltIn: false,
-        isActive: true,
       })
       .returning();
     return firstRowRequired(rows, "技能插入");

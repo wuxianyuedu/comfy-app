@@ -123,8 +123,8 @@ export function CanvasGrid({
  *  限幅现在从 `useCanvasSettings()` 读，因此这个小片遵守用户在面板里设的
  *  同一套 minZoom / maxZoom。 */
 export function ZoomIndicator({
-  minZoom = DEFAULT_CANVAS_SETTINGS.minZoom,
   maxZoom = DEFAULT_CANVAS_SETTINGS.maxZoom,
+  minZoom = DEFAULT_CANVAS_SETTINGS.minZoom,
 }: {
   maxZoom?: number;
   minZoom?: number;
@@ -184,7 +184,7 @@ export function ZoomIndicator({
     }
     e.preventDefault();
     justDraggedRef.current = false;
-    dragRef.current = { startY: e.clientY, startZoom: zoom, moved: false };
+    dragRef.current = { moved: false, startY: e.clientY, startZoom: zoom };
     setDragging(true);
 
     const onMove = (ev: MouseEvent) => {
@@ -298,7 +298,7 @@ export function CanvasRulers({
       if (sx < -4 || sx > width + 4) {
         continue;
       }
-      out.push({ world: x, screen: sx });
+      out.push({ screen: sx, world: x });
     }
     return out;
   }, [tx, zoom, width, labelStep]);
@@ -319,7 +319,7 @@ export function CanvasRulers({
       if (sy < -4 || sy > height + 4) {
         continue;
       }
-      out.push({ world: y, screen: sy });
+      out.push({ screen: sy, world: y });
     }
     return out;
   }, [ty, zoom, height, labelStep]);
@@ -338,16 +338,16 @@ export function CanvasRulers({
   return (
     <div aria-hidden className="z-base pointer-events-none absolute inset-0">
       {/* 上边 —— X 坐标 */}
-      {xLabels.map(({ world, screen }) => (
+      {xLabels.map(({ screen, world }) => (
         <div
           className={labelBase}
           key={`rt-${world}`}
           style={{
+            color: "var(--color-canvas-ruler-ink)",
             left: screen,
+            textShadow: "var(--color-canvas-ruler-shadow)",
             top: 2,
             transform: "translateX(-50%)",
-            color: "var(--color-canvas-ruler-ink)",
-            textShadow: "var(--color-canvas-ruler-shadow)",
           }}
         >
           {fmt(world)}
@@ -355,48 +355,48 @@ export function CanvasRulers({
       ))}
       {/* 下边 —— X 坐标（上移到缩放控件之上，好让
        *  左下角按钮簇不盖住最左侧的标签） */}
-      {xLabels.map(({ world, screen }) => (
+      {xLabels.map(({ screen, world }) => (
         <div
           className={labelBase}
           key={`rb-${world}`}
           style={{
-            left: screen,
             bottom: 2,
-            transform: "translateX(-50%)",
             color: "var(--color-canvas-ruler-ink)",
+            left: screen,
             textShadow: "var(--color-canvas-ruler-shadow)",
+            transform: "translateX(-50%)",
           }}
         >
           {fmt(world)}
         </div>
       ))}
       {/* 左边 —— Y 坐标 */}
-      {yLabels.map(({ world, screen }) => (
+      {yLabels.map(({ screen, world }) => (
         <div
           className={labelBase}
           key={`rl-${world}`}
           style={{
-            top: screen,
-            left: 3,
-            transform: "translateY(-50%)",
             color: "var(--color-canvas-ruler-ink)",
+            left: 3,
             textShadow: "var(--color-canvas-ruler-shadow)",
+            top: screen,
+            transform: "translateY(-50%)",
           }}
         >
           {fmt(world)}
         </div>
       ))}
       {/* 右边 —— Y 坐标 */}
-      {yLabels.map(({ world, screen }) => (
+      {yLabels.map(({ screen, world }) => (
         <div
           className={labelBase}
           key={`rr-${world}`}
           style={{
-            top: screen,
-            right: 3,
-            transform: "translateY(-50%)",
             color: "var(--color-canvas-ruler-ink)",
+            right: 3,
             textShadow: "var(--color-canvas-ruler-shadow)",
+            top: screen,
+            transform: "translateY(-50%)",
           }}
         >
           {fmt(world)}

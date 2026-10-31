@@ -113,11 +113,11 @@ export function logSyncIssue(action: string, e: unknown, projectId?: string): vo
  * 界面上只留这一句（动作 + 该做的事）。
  */
 const REFUSAL_PHRASES: Partial<Record<TRPC_ERROR_CODE_KEY, string>> = {
-  FORBIDDEN: "这个画布编号已经属于别的用户，改个名字另存一份就能保住",
-  UNAUTHORIZED: "登录已经失效，重新登录后会自动补存",
-  NOT_FOUND: "服务端没有找到这条画布的位置",
   BAD_REQUEST: "这份画布的内容形状服务端不接受（多半是名字为空）",
+  FORBIDDEN: "这个画布编号已经属于别的用户，改个名字另存一份就能保住",
+  NOT_FOUND: "服务端没有找到这条画布的位置",
   PAYLOAD_TOO_LARGE: "这份画布太大，服务端不收",
+  UNAUTHORIZED: "登录已经失效，重新登录后会自动补存",
 };
 
 /** 界面上那一句：能按码翻成人话的翻，翻不出的一律走已翻译的原文。 */
@@ -156,9 +156,9 @@ export function recordSyncFailure(
     return false;
   }
   notices.set(project.id, {
+    detail,
     projectId: project.id,
     projectName: project.name,
-    detail,
   });
   emitAppEvent("comfyapp:canvas-sync-changed");
   return true;

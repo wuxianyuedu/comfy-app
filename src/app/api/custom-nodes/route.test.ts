@@ -58,16 +58,16 @@ type StubFile = {
   text?: string;
 };
 
-const { spawnMock, userMock, settingsMock, fsState } = vi.hoisted(() => {
+const { fsState, settingsMock, spawnMock, userMock } = vi.hoisted(() => {
   const files = new Map<string, StubFile>();
   const reads = new Map<string, number>();
   return {
-    spawnMock: vi.fn(),
-    userMock: vi.fn<() => Promise<{ id: string } | null>>(),
+    fsState: { files, reads },
     settingsMock: vi.fn<() => { comfyuiPath: string }>(() => ({
       comfyuiPath: "C:/ComfyUI",
     })),
-    fsState: { files, reads },
+    spawnMock: vi.fn(),
+    userMock: vi.fn<() => Promise<{ id: string } | null>>(),
   };
 });
 
@@ -76,9 +76,9 @@ vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: userMock,
 }));
 vi.mock("~/lib/app-settings/app-settings.server", () => ({
-  getSettingsSync: settingsMock,
   deriveComfyuiSubdir: (root: string, sub: string) => (root ? `${root}/${sub}` : ""),
   deriveComfyuiWorkflowsDir: (root: string) => (root ? `${root}/workflows` : ""),
+  getSettingsSync: settingsMock,
 }));
 vi.mock("~/lib/envfile", () => ({ readEnvVar: () => undefined }));
 
@@ -148,10 +148,10 @@ vi.mock("node:fs", async (importOriginal) => {
         throw e;
       }
       return {
-        size: hit.size ?? (hit.text ?? "").length,
-        mtimeMs: hit.mtimeMs ?? 0,
-        isFile: () => true,
         isDirectory: () => false,
+        isFile: () => true,
+        mtimeMs: hit.mtimeMs ?? 0,
+        size: hit.size ?? (hit.text ?? "").length,
       };
     },
   };
@@ -171,22 +171,22 @@ let nextStdout = "";
 
 function installFakeChild() {
   spawnMock.mockImplementation(() => {
-    const child: FakeChild = { proc: {}, out: {}, err: {} };
+    const child: FakeChild = { err: {}, out: {}, proc: {} };
     const reg = (bag: Record<string, Array<Cb>>) => (ev: string, cb: Cb) => {
       (bag[ev] ??= []).push(cb);
     };
     // `spawnCapture` 会先 `setEncoding("utf8")` 再挂 data —— 假流必须两样都有。
     const stream = (bag: Record<string, Array<Cb>>) => ({
       on: reg(bag),
-      setEncoding: (): void => undefined,
       resume: (): void => undefined,
+      setEncoding: (): void => undefined,
     });
     const handle = {
-      on: reg(child.proc),
-      stdout: stream(child.out),
-      stderr: stream(child.err),
       kill: vi.fn(),
+      on: reg(child.proc),
       pid: 4242,
+      stderr: stream(child.err),
+      stdout: stream(child.out),
     };
     children.push(child);
     /* 延后一拍再收尾：注册必须先于触发。stdout 为空时 `spawnCapture` 判成
@@ -213,8 +213,8 @@ function emitClose(child: FakeChild, code: number) {
 
 async function post(body: unknown) {
   const req = /* SAFETY: 类型断言已复核 */ new Request("http://127.0.0.1:3000/api/custom-nodes", {
-    method: "POST",
     headers: { "content-type": "application/json" },
+    method: "POST",
     // body 允许是「不是 JSON」的原文 —— 畸形体这一路也在测
     body: typeof body === "string" ? body : JSON.stringify(body),
   }) as unknown as NextRequest;
@@ -282,8 +282,8 @@ describe("POST /api/custom-nodes —— 鉴权与请求体", () => {
     const res = await post({ action: "nope" });
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({
-      ok: false,
       error: "unknown action",
+      ok: false,
     });
     expect(spawnMock).not.toHaveBeenCalled();
   });
@@ -441,7 +441,7 @@ describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () 
 
   it("第一个候选 ENOENT（真形状：error 之后还有一次 close）→ 收尾归第二个候选", async () => {
     putReport({ mode: "full", packages: {} });
-    queueChild({ error: { code: "ENOENT" }, closeCode: null });
+    queueChild({ closeCode: null, error: { code: "ENOENT" } });
     queueChild({ closeCode: 0 });
     const res = await post({ action: "parse", packages: ["ComfyUI-Foo"] });
     const events = await eventsOf(res);
@@ -574,9 +574,9 @@ let nowSpy: { mockRestore(): void } | null = null;
 function putManifest(value: unknown, over: StubFile = {}): void {
   const text = typeof value === "string" ? value : JSON.stringify(value);
   fsState.files.set(MANIFEST, {
-    text,
-    size: text.length,
     mtimeMs: ++mtime,
+    size: text.length,
+    text,
     ...over,
   });
 }
@@ -584,7 +584,7 @@ function putManifest(value: unknown, over: StubFile = {}): void {
 /** 把解析报告登记成「存在且可读」。 */
 function putReport(value: unknown): void {
   const text = typeof value === "string" ? value : JSON.stringify(value);
-  fsState.files.set(REPORT, { text, size: text.length, mtimeMs: ++mtime });
+  fsState.files.set(REPORT, { mtimeMs: ++mtime, size: text.length, text });
 }
 
 /** 某个路径被真读了几次（缓存短路的判据就落在这里）。 */
@@ -620,7 +620,7 @@ function scriptDiscover(
     if (opts.spawnThrows) {
       throw Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" });
     }
-    const child: FakeChild = { proc: {}, out: {}, err: {} };
+    const child: FakeChild = { err: {}, out: {}, proc: {} };
     const reg = (bag: Record<string, Array<Cb>>) => (ev: string, cb: Cb) => {
       (bag[ev] ??= []).push(cb);
     };
@@ -629,11 +629,11 @@ function scriptDiscover(
       setEncoding: (): void => undefined,
     });
     const handle = {
-      on: reg(child.proc),
-      stdout: stream(child.out),
-      stderr: stream(child.err),
       kill: vi.fn(),
+      on: reg(child.proc),
       pid: 7,
+      stderr: stream(child.err),
+      stdout: stream(child.out),
     };
     children.push(child);
     setTimeout(() => {
@@ -651,21 +651,21 @@ function scriptDiscover(
 /** 一份「解析过一次」的完整清单，字段取界面上真会显示的那几样。 */
 const FULL_MANIFEST = {
   generatedAt: "2026-10-01T10:00:00",
-  sources: ["/tmp/custom_nodes"],
   nodes: { FooAdd: {}, FooMul: {} },
   packages: {
     "ComfyUI-Foo": {
-      path: "/tmp/custom_nodes/ComfyUI-Foo",
+      contentHash: "abc123",
+      errors: [],
       nodeCount: 2,
       nodeTypes: ["FooAdd", "FooMul"],
-      status: "ok",
-      errors: [],
-      contentHash: "abc123",
       parsedAt: "2026-10-01T09:59:59",
       parsedFileCount: 7,
+      path: "/tmp/custom_nodes/ComfyUI-Foo",
+      status: "ok",
     },
   },
   parseErrors: [],
+  sources: ["/tmp/custom_nodes"],
 };
 
 /** 摘要事件里的 `summary` 字段（冷/热两种返回形态都走这一个口子取）。 */
@@ -719,7 +719,7 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
     /* `existsSync` 抛错正是路由注释里点名的那一档（挂载点失效 / 权限）。
        此前它会把整个请求炸成 Next 的默认错误页，前端崩在
        「读取 undefined 的 paths 属性」上，真实原因反而看不见（硬规则 4）。 */
-    fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
+    fsState.files.set(MANIFEST, { existsFails: true, text: "{}" });
     const res = await GET();
     expect(res.status).toBe(500);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
@@ -731,7 +731,7 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
   });
 
   it("抛上来的东西没有可读详情 → 兜底成「读取配置失败」，而不是空文案或 undefined", async () => {
-    fsState.files.set(MANIFEST, { text: "{}", existsFails: "silent" });
+    fsState.files.set(MANIFEST, { existsFails: "silent", text: "{}" });
     const res = await GET();
     expect(res.status).toBe(500);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
@@ -741,7 +741,7 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
   });
 
   it("500 的信封里只有 error —— 消费方靠「没有 settings」判失败，形状不许偷偷加字段", async () => {
-    fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
+    fsState.files.set(MANIFEST, { existsFails: true, text: "{}" });
     const res = await GET();
     expect(
       Object.keys(/* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>),
@@ -787,16 +787,16 @@ describe("GET 摘要：清单的六种坏法", () => {
     const summary = await summaryOf();
     expect(summary?.packages).toEqual([
       {
+        contentHash: "",
+        errors: [],
+        generatedAt: null,
         name: "ComfyUI-Broken",
-        path: "",
         nodeCount: 0,
         nodeTypes: [],
-        status: "ok",
-        errors: [],
-        contentHash: "",
         parsedAt: null,
         parsedFileCount: 0,
-        generatedAt: null,
+        path: "",
+        status: "ok",
       },
     ]);
   });
@@ -805,10 +805,10 @@ describe("GET 摘要：清单的六种坏法", () => {
     putManifest({ packages: {} });
     const summary = await summaryOf();
     expect(summary).toMatchObject({
-      totalNodes: 0,
-      sources: [],
-      parseErrors: [],
       packages: [],
+      parseErrors: [],
+      sources: [],
+      totalNodes: 0,
     });
   });
 
@@ -823,27 +823,27 @@ describe("GET 摘要：清单的六种坏法", () => {
     const summary = await summaryOf();
     expect(summary).toEqual({
       generatedAt: "2026-10-01T10:00:00",
-      totalNodes: 2,
+      missingPaths: [],
       packages: [
         {
+          contentHash: "abc123",
+          errors: [],
           name: "ComfyUI-Foo",
-          path: "/tmp/custom_nodes/ComfyUI-Foo",
           nodeCount: 2,
           nodeTypes: ["FooAdd", "FooMul"],
-          status: "ok",
-          errors: [],
-          contentHash: "abc123",
           parsedAt: "2026-10-01T09:59:59",
           parsedFileCount: 7,
+          path: "/tmp/custom_nodes/ComfyUI-Foo",
+          status: "ok",
           /* 包级 generatedAt 拿的是**清单根**的时间戳：解析器只写根上那一份
            *（`parse_custom_nodes.py` 的 `existing["generatedAt"]`），
            * 改成读包条目自己会得到恒 null —— 那不是更对，那是更空。 */
           generatedAt: "2026-10-01T10:00:00",
         },
       ],
-      missingPaths: [],
       parseErrors: [],
       sources: ["/tmp/custom_nodes"],
+      totalNodes: 2,
     });
   });
 
@@ -889,18 +889,18 @@ describe("GET 摘要缓存：按 (size, mtime) 指纹短路", () => {
   it("只改 mtime（size 相同）→ 同样要重读：指纹少用一半就等于漏失效", async () => {
     const same = JSON.stringify({ ...FULL_MANIFEST, generatedAt: "T-A" });
     fsState.files.set(MANIFEST, {
-      text: same,
-      size: same.length,
       mtimeMs: 1000,
+      size: same.length,
+      text: same,
     });
     expect((await summaryOf())?.generatedAt).toBe("T-A");
     const rewritten = JSON.stringify({ ...FULL_MANIFEST, generatedAt: "T-B" });
     // 字节数刻意一致，只有时间戳前进 —— 这正是「解析器原地重写」的形态。
     expect(rewritten.length).toBe(same.length);
     fsState.files.set(MANIFEST, {
-      text: rewritten,
-      size: rewritten.length,
       mtimeMs: 2000,
+      size: rewritten.length,
+      text: rewritten,
     });
     expect((await summaryOf())?.generatedAt).toBe("T-B");
     expect(readsOf(MANIFEST)).toBe(2);
@@ -940,11 +940,11 @@ describe("GET 的 lastReport：原样透传，读不出来时按 null", () => {
 
   it("报告有效时逐字段原样透（视图侧要读 mode / addedNodes 这些增量字段）", async () => {
     const report = {
+      addedNodes: 2,
       generatedAt: "2026-10-01T10:00:01",
       mode: "subset",
+      packages: [{ error: 0, name: "ComfyUI-Foo" }],
       totalNodes: 12,
-      addedNodes: 2,
-      packages: [{ name: "ComfyUI-Foo", error: 0 }],
     };
     putReport(report);
     const events = await getEvents();
@@ -983,9 +983,9 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     expect(events[0]).toMatchObject({ parents: [parent], total: 1 });
     expect(events[1]).toMatchObject({ phase: "queue" });
     expect(events[2]).toMatchObject({
-      phase: "scan",
-      msg: "🔎 扫描中",
       discovered: 3,
+      msg: "🔎 扫描中",
+      phase: "scan",
     });
     expect(events[4]).toMatchObject({
       cached: false,
@@ -1099,21 +1099,21 @@ type ChildPlan = {
 
 function queueChild(plan: ChildPlan): void {
   spawnMock.mockImplementationOnce(() => {
-    const child: FakeChild = { proc: {}, out: {}, err: {} };
+    const child: FakeChild = { err: {}, out: {}, proc: {} };
     const reg = (bag: Record<string, Array<Cb>>) => (ev: string, cb: Cb) => {
       (bag[ev] ??= []).push(cb);
     };
     const stream = (bag: Record<string, Array<Cb>>) => ({
       on: reg(bag),
-      setEncoding: (): void => undefined,
       resume: (): void => undefined,
+      setEncoding: (): void => undefined,
     });
     const handle = {
-      on: reg(child.proc),
-      stdout: stream(child.out),
-      stderr: stream(child.err),
       kill: vi.fn(),
+      on: reg(child.proc),
       pid: 9,
+      stderr: stream(child.err),
+      stdout: stream(child.out),
     };
     children.push(child);
     const fire = (bag: Record<string, Array<Cb>>, ev: string, arg: unknown): void => {
@@ -1257,7 +1257,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
      * 第二个真跑成的那一档随后被 `if (resolved) return` 丢掉。
      * 这一条要的就是**第二个候选的结果落地**，不是「有个 discover_done 就行」。 */
     coldRoot();
-    queueChild({ error: { code: "ENOENT" }, closeCode: null });
+    queueChild({ closeCode: null, error: { code: "ENOENT" } });
     queueChild({ lines: [ONE_PKG_LINE] });
     const events = await getEvents();
     expect(interpreterNames()).toEqual(ORDER.slice(0, 2));
@@ -1286,8 +1286,8 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
     });
     const events = await getEvents();
     expect(progressWith(events, "算哈希")).toMatchObject({
-      phase: "hash",
       done: 7,
+      phase: "hash",
       total: 20,
     });
   });
@@ -1334,7 +1334,7 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
 
   it("收尾时最后一行不是合法 JSON → 失败进度里带退出码，流不挂着", async () => {
     coldRoot();
-    queueChild({ lines: ["{not json at all"], closeCode: 3 });
+    queueChild({ closeCode: 3, lines: ["{not json at all"] });
     const events = await getEvents();
     const hit = events.find((e) => msgOf(e).includes("解析失败"));
     expect(hit, `没有那句带退出码的失败进度：${JSON.stringify(events)}`).toBeTruthy();

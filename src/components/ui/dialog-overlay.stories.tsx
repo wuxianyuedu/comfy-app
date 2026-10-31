@@ -23,9 +23,9 @@ import { dialogBackdropClass } from "~/components/ui/dialog-overlay";
  * 的 story 里看遮罩。
  */
 const meta = {
-  title: "UI/DialogOverlay",
   component: OverlayClassDemo,
   render: () => <OverlayClassDemo />,
+  title: "UI/DialogOverlay",
 } satisfies Meta<typeof OverlayClassDemo>;
 
 export default meta;
@@ -52,8 +52,8 @@ function OverlayClassDemo() {
         </pre>
       </div>
       <p className="text-ink-muted text-xs">
-        两行里都同时有「铺满视口」与 <code>top-title-bar</code> ——
-        后者覆盖前者的 顶部偏移，遮罩因此从标题行下方开始。这也是
+        两行里都同时有「铺满视口」与 <code>top-title-bar</code> —— 后者覆盖前者的
+        顶部偏移，遮罩因此从标题行下方开始。这也是
         <code>check-title-bar-clearance.cjs</code> 要求的同一行形态。
       </p>
     </div>
@@ -79,8 +79,8 @@ export const WithCustomClass: Story = {
         </pre>
       </div>
       <p className="text-ink-muted text-xs">
-        真形态：打开任意一条 <code>Dialog</code> 或 <code>Sheet</code> 的
-        story， 看遮罩是否让出了页面顶部的标题行。
+        真形态：打开任意一条 <code>Dialog</code> 或 <code>Sheet</code> 的 story，
+        看遮罩是否让出了页面顶部的标题行。
       </p>
     </div>
   ),

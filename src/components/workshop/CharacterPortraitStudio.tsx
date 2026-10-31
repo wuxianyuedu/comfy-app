@@ -50,7 +50,7 @@ type Props = {
 
 /** 单张角色卡里的「定妆照」区块：生成 / 导入 / 挑选。 */
 export function CharacterPortraitStudio({ character, portrait }: Props) {
-  const { session, actions, apiChannels, workflows, onOpenModelAdapters } = portrait;
+  const { actions, apiChannels, onOpenModelAdapters, session, workflows } = portrait;
   /* 导入定妆照：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({
     accept: "image/*",
@@ -165,8 +165,8 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
                 ? { remoteModel: effectiveRemoteModel }
                 : session.channel === "local" && session.localWorkflowId
                   ? {
-                      localWorkflowId: session.localWorkflowId,
                       localLabel: localOptionLabels[session.localWorkflowId] ?? "库工作流",
+                      localWorkflowId: session.localWorkflowId,
                     }
                   : undefined,
             )

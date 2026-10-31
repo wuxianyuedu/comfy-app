@@ -148,11 +148,11 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
   }, []);
 
   return {
-    tabs: tabsState.tabs,
     activeKey: tabsState.activeKey,
-    viewMode,
+    closeTab,
     navigateTo,
     selectTab,
-    closeTab,
+    tabs: tabsState.tabs,
+    viewMode,
   };
 }

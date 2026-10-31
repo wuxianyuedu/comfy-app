@@ -10,9 +10,9 @@ export async function sendAgentMessage(req: AgentChatRequest): Promise<AgentChat
   let res: Response;
   try {
     res = await fetch("/api/agent/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     });
   } catch {
     throw new Error("无法连接服务器");
@@ -28,7 +28,7 @@ export async function sendAgentMessage(req: AgentChatRequest): Promise<AgentChat
 
 function parseAgentResponse(data: unknown): AgentChatResponse {
   if (!isRecord(data)) {
-    return { reply: "（无有效响应）", done: true };
+    return { done: true, reply: "（无有效响应）" };
   }
   const result: AgentChatResponse = {};
   if (typeof data.reply === "string") {
@@ -41,9 +41,9 @@ function parseAgentResponse(data: unknown): AgentChatResponse {
         (call) => typeof call.id === "string" && typeof call.name === "string" && call.id !== "",
       )
       .map((call) => ({
+        arguments: typeof call.arguments === "string" ? call.arguments : "{}",
         id: /* SAFETY: 类型断言已复核 */ call.id as string,
         name: /* SAFETY: 类型断言已复核 */ call.name as string,
-        arguments: typeof call.arguments === "string" ? call.arguments : "{}",
       }));
   }
   if (data.done === true) {

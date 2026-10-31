@@ -94,7 +94,7 @@ export function useAgentRun(): AgentRunController {
         .then(apply)
         .catch(() => undefined);
     },
-    { ms: active ? RUN_POLL_MS : null, immediate: false },
+    { immediate: false, ms: active ? RUN_POLL_MS : null },
   );
 
   const report: ActionReport = useCallback((kind, detail) => {
@@ -115,7 +115,7 @@ export function useAgentRun(): AgentRunController {
           async () => {
             apply(await op(projectId));
           },
-          { report, failureText: "操作失败", readResultEnvelope: false },
+          { failureText: "操作失败", readResultEnvelope: false, report },
         ),
       );
     },
@@ -123,21 +123,21 @@ export function useAgentRun(): AgentRunController {
   );
 
   return {
-    projectId,
-    run,
     action,
+    approvalMode,
+    approve: () => act(approveRun),
+    autoReview,
     busy: busyAction.busy,
+    cancel: () => act(cancelRun),
     error,
     goal,
-    setGoal,
-    approvalMode,
-    setApprovalMode,
-    autoReview,
-    setAutoReview,
-    start: () => act((id) => startRun(id, { goal, approvalMode, autoReview })),
     pause: () => act(pauseRun),
+    projectId,
     resume: () => act(resumeRun),
-    approve: () => act(approveRun),
-    cancel: () => act(cancelRun),
+    run,
+    setApprovalMode,
+    setAutoReview,
+    setGoal,
+    start: () => act((id) => startRun(id, { approvalMode, autoReview, goal })),
   };
 }

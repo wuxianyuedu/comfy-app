@@ -27,17 +27,17 @@ vi.mock("~/trpc/vanilla", () => {
   const query = () => vi.fn(() => pending());
   return {
     vanillaApi: {
-      workflow: {
-        list: { query: query() },
+      task: {
+        cancel: { mutate: vi.fn(() => pending()) },
         detail: { query: query() },
+      },
+      workflow: {
+        detail: { query: query() },
+        list: { query: query() },
         update: { mutate: vi.fn(() => pending()) },
       },
       workflowModel: {
         list: { query: query() },
-      },
-      task: {
-        detail: { query: query() },
-        cancel: { mutate: vi.fn(() => pending()) },
       },
     },
   };
@@ -46,23 +46,20 @@ vi.mock("~/trpc/vanilla", () => {
 /* ── NodeProps 构造：data 用 canvas-types 的 defaultData(kind) 生成 ──
  * CanvasNode 的 props 是 NodeProps<CanvasNodeType>，按 @xyflow/system 的
  * NodePropsBase 补齐必填的 flow 运行时字段（渲染冒烟只需稳定值）。 */
-function makeProps(
-  data: CanvasNodeData,
-  id = "node-under-test",
-): NodeProps<CanvasNodeType> {
+function makeProps(data: CanvasNodeData, id = "node-under-test"): NodeProps<CanvasNodeType> {
   return {
-    id,
     data,
-    type: "canvasNode",
-    selected: false,
-    dragging: false,
-    zIndex: 0,
-    selectable: true,
     deletable: true,
     draggable: true,
+    dragging: false,
+    id,
     isConnectable: true,
     positionAbsoluteX: 0,
     positionAbsoluteY: 0,
+    selectable: true,
+    selected: false,
+    type: "canvasNode",
+    zIndex: 0,
   };
 }
 
@@ -75,9 +72,7 @@ describe("CanvasNode（按 kind 渲染冒烟）", () => {
     expect(screen.getByText(meta.typeChar)).toBeInTheDocument(); // I
     expect(screen.getByText("待开始")).toBeInTheDocument(); // StatusBadge idle
     // 非 content-carrier 节点：头部有删除按钮
-    expect(
-      screen.getByRole("button", { name: "删除节点" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除节点" })).toBeInTheDocument();
     // ImageGenerationPanel 三步级联：未选工作流时 CTA 为禁用占位
     expect(screen.getByText("请先选择工作流")).toBeDisabled();
     // 输出端口行（image 专属 footer）
@@ -92,41 +87,31 @@ describe("CanvasNode（按 kind 渲染冒烟）", () => {
     expect(
       screen.getByPlaceholderText("输入要喂给下游生成节点的提示词 / 参考文字…"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "编辑文本" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "编辑文本" })).toBeInTheDocument();
     // 资产节点（text/picture/movie）头部只留 NodeChip
     expect(screen.queryByText("待开始")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "删除节点" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除节点" })).not.toBeInTheDocument();
   });
 
   it("kind=picture：头部 P/「图片」+ 拖入上传占位 + 左右两个 Handle", () => {
-    const { container } = renderWithFlow(
-      <CanvasNode {...makeProps(defaultData("picture"))} />,
-    );
+    const { container } = renderWithFlow(<CanvasNode {...makeProps(defaultData("picture"))} />);
     const meta = NODE_META.picture;
     expect(screen.getByText(meta.label)).toBeInTheDocument(); // 图片
     expect(screen.getByText(meta.typeChar)).toBeInTheDocument(); // P
     expect(screen.getByText("拖入上传图片")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "上传图片" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上传图片" })).toBeInTheDocument();
     // 未选中时不展开 ImageGenerationPanel
     expect(screen.queryByText("请先选择工作流")).not.toBeInTheDocument();
     // 左侧 inputImage（target）+ 右侧 output（source）
-    const handles = container.querySelectorAll<HTMLElement>(
-      ".react-flow__handle",
-    );
+    const handles = container.querySelectorAll<HTMLElement>(".react-flow__handle");
     expect(handles).toHaveLength(2);
   });
 
   it("error 状态：渲染 ErrorPanel 关键文案，展开后显示「原始错误」", async () => {
     const data: CanvasNodeData = {
       ...defaultData("image"),
-      status: "error",
       error: "模拟后端崩溃：未知异常",
+      status: "error",
     };
     renderWithFlow(<CanvasNode {...makeProps(data)} />);
     // ErrorPanel 头部：errorStatus 为空 → 「未捕获异常 · client」

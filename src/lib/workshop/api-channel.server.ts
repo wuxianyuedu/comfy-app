@@ -89,12 +89,12 @@ export type { ApiImageRequest, ApiVideoSubmitRequest, ApiVideoSubmitResult };
 /** 统一输入的当前取值（适配器按类型取值落字段）。 */
 function unifiedImageInputs(req: ApiImageRequest): Partial<Record<WorkshopInputType, unknown>> {
   return {
-    prompt: req.prompt ?? undefined,
-    negative: req.negative ?? undefined,
     "aspect-ratio": req.aspectRatio ?? undefined,
+    image: req.image ?? undefined,
     megapixels: req.megapixels ?? undefined,
     multiple: req.multiple ?? undefined,
-    image: req.image ?? undefined,
+    negative: req.negative ?? undefined,
+    prompt: req.prompt ?? undefined,
   };
 }
 
@@ -106,7 +106,7 @@ function bodyFromAdapter(
 ): Record<string, unknown> {
   const unified = unifiedImageInputs(req);
   const body: Record<string, unknown> = {};
-  for (const { type, field } of adapter.inputs) {
+  for (const { field, type } of adapter.inputs) {
     const value = unified[type];
     if (value === undefined || value === "") {
       continue;
@@ -135,13 +135,13 @@ async function resolveTarget(
    * 做端点的最终拼装（未配置时的可读错误也在那里判）。 */
   const wantedModel = (req.model ?? "").trim();
   if (!wantedModel) {
-    return { target: fallbackTarget(channel), channel, adapter: null };
+    return { adapter: null, channel, target: fallbackTarget(channel) };
   }
   try {
     const entries = await remoteModelRepository.list();
     const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
     if (!entry) {
-      return { target: fallbackTarget(channel), channel, adapter: null };
+      return { adapter: null, channel, target: fallbackTarget(channel) };
     }
     // 模式适配器优先：条目配置了该模式的输入映射就按它翻译统一输入。
     const adapters = await remoteModelRepository.getWorkshopAdapters(wantedModel);
@@ -151,27 +151,27 @@ async function resolveTarget(
       adapters.find((a) => a.mode === wantedMode) ??
       (adapters.length === 1 ? (onlyAdapter ?? null) : null);
     return {
+      adapter,
+      channel,
       target: {
+        apiKey: entry.apiKey ?? "",
         endpoint: adapter
           ? `${(entry.baseUrl ?? "").replace(/\/+$/, "")}${adapter.endpointPath}`
           : resolveImagesGenerationsEndpoint(entry.baseUrl ?? ""),
-        apiKey: entry.apiKey ?? "",
         model: entry.name,
       },
-      channel,
-      adapter,
     };
   } catch {
     // 表不可用（未迁移等）→ 回落通道设置
-    return { target: fallbackTarget(channel), channel, adapter: null };
+    return { adapter: null, channel, target: fallbackTarget(channel) };
   }
 }
 
 /** 通道设置里的生图上游（含「未配置」时端点为空串的既有行为）。 */
 function fallbackTarget(channel: ApiChannelStored): ApiUpstreamTarget {
   return {
-    endpoint: endpointFor(channel),
     apiKey: channel.apiKey,
+    endpoint: endpointFor(channel),
     model: channel.model,
   };
 }
@@ -183,11 +183,11 @@ export async function generateImageViaApi(req: ApiImageRequest): Promise<string>
   /* 有适配器：请求体按字段映射落统一输入 + 按 outputField 取结果；
    * 无适配器：OpenAI 兼容默认映射（含「未配置」时抛既有的可读错误）。 */
   return callImageGeneration(req, resolved.channel, () => resolved.target, {
-    readJson: readUpstreamJson,
     bodyOverride: resolved.adapter
       ? bodyFromAdapter(resolved.adapter, req, resolved.target.model)
       : undefined,
     outputField: resolved.adapter?.outputField,
+    readJson: readUpstreamJson,
   });
 }
 

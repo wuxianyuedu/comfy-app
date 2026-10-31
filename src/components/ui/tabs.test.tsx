@@ -27,8 +27,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 function Demo({
   initialValue = "params",
   onValueChange,
-  variant = "default",
   orientation,
+  variant = "default",
 }: {
   initialValue?: string;
   onValueChange?: (value: string) => void;

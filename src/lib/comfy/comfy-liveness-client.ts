@@ -34,9 +34,9 @@ function parseSignal(raw: unknown): ComfyLivenessSignal | null {
     return null;
   }
   return {
-    seq: o.seq,
     at: o.at,
     reason: o.reason,
+    seq: o.seq,
     userStopped: o.userStopped === true,
   };
 }

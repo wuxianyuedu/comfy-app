@@ -35,18 +35,18 @@ export type ImageRedrawPanelProps = {
 };
 
 export function ImageRedrawPanel({
-  prompt,
-  projectId,
-  parentTaskId,
   imageUrl,
+  parentTaskId,
+  projectId,
+  prompt,
   toastReport,
 }: ImageRedrawPanelProps) {
-  const controller = useImageRedrawClient({ prompt, projectId, parentTaskId }, toastReport);
+  const controller = useImageRedrawClient({ parentTaskId, projectId, prompt }, toastReport);
 
   useEffect(() => {
     void runAsyncAction(controller.ensureTemplates, {
-      report: toastReport,
       failureText: "模板清单加载失败",
+      report: toastReport,
     });
     // 只在面板挂载时拉一次（ensureTemplates 自带去重）。
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ensureTemplates 是稳定回调

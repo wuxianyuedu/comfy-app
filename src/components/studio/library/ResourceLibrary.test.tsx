@@ -11,16 +11,16 @@ afterEach(cleanup);
 
 function mockFetch(body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue({
+    json: async () => body,
     ok: true,
     status: 200,
-    json: async () => body,
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
 
 const BODY = {
-  folders: [{ id: "ref", name: "参考素材", count: 1 }],
+  folders: [{ count: 1, id: "ref", name: "参考素材" }],
   items: [],
 };
 

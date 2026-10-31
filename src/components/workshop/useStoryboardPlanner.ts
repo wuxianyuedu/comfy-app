@@ -62,23 +62,23 @@ function recompute(
   const params = mergeParams(style, undefined);
   return {
     ...shot,
-    prompt,
     negativePrompt: neg,
     params: { ...shot.params, ...params },
+    prompt,
   };
 }
 
 export function useStoryboardPlanner(props: Props) {
   const {
-    scriptMarkdown,
-    scenes,
     characters,
-    styles,
-    shots,
-    onShotsChange,
-    onGenerate,
-    onCharactersChange,
     extract,
+    onCharactersChange,
+    onGenerate,
+    onShotsChange,
+    scenes,
+    scriptMarkdown,
+    shots,
+    styles,
   } = props;
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const ai = useBusyAction();
@@ -91,28 +91,28 @@ export function useStoryboardPlanner(props: Props) {
    * `./useStoryboardExtractFlow`；依赖（shots/scenes/characters/styles、写回、
    * 剧本源、LLM 配置）显式注入。返回形状与原 controller 逐字段一致。 */
   const {
-    extractChannelValue,
-    setExtractChannelValue,
-    extractChannel,
     extractBusy,
-    extractProgress,
-    extractStatus,
+    extractChannel,
+    extractChannelValue,
     extractError,
     extractionLog,
-    hasScript,
+    extractProgress,
+    extractStatus,
     handleExtract,
     handleImportFile,
+    hasScript,
+    setExtractChannelValue,
   } = useStoryboardExtractFlow({
-    shots,
-    scenes,
     characters,
-    styles,
-    onShotsChange,
-    onCharactersChange,
-    scriptMarkdown,
-    extract,
     config,
+    extract,
+    onCharactersChange,
+    onShotsChange,
     openSettings,
+    scenes,
+    scriptMarkdown,
+    shots,
+    styles,
   });
 
   // 从剧本导入镜头：每个场景 → shotCount 个镜头
@@ -124,16 +124,16 @@ export function useStoryboardPlanner(props: Props) {
       for (let i = 0; i < count; i++) {
         n += 1;
         const shot: Shot = {
+          characterIds: [],
+          description: i === 0 ? scene.action : "",
           id: workshopUid("shot"),
           index: n,
-          sceneId: scene.id,
-          sceneHeading: scene.heading,
-          shotType: i === 0 ? "wide" : "medium",
-          description: i === 0 ? scene.action : "",
-          characterIds: [],
-          prompt: "",
           negativePrompt: "",
           params: {},
+          prompt: "",
+          sceneHeading: scene.heading,
+          sceneId: scene.id,
+          shotType: i === 0 ? "wide" : "medium",
           status: "idle",
         };
         // 自动构建提示词
@@ -201,16 +201,16 @@ export function useStoryboardPlanner(props: Props) {
               .filter((character) => character.name && raw.characterNames.includes(character.name))
               .map((character) => character.id);
             const shot: Shot = {
+              characterIds: charIds,
+              description: raw.description,
               id: workshopUid("shot"),
               index: n,
-              sceneId: scene.id,
-              sceneHeading: scene.heading,
-              shotType: raw.shotType,
-              description: raw.description,
-              characterIds: charIds,
-              prompt: "",
               negativePrompt: "",
               params: {},
+              prompt: "",
+              sceneHeading: scene.heading,
+              sceneId: scene.id,
+              shotType: raw.shotType,
               status: "idle",
             };
             const linkedChars = characters.filter((character) => charIds.includes(character.id));
@@ -258,15 +258,15 @@ export function useStoryboardPlanner(props: Props) {
         const full = await streamChat({
           messages: [
             {
-              role: "system",
               content:
                 "你是 AI 绘画提示词工程师。用户给出一个分镜镜头的要素清单（构图、场景、角色、风格）。" +
                 "请把它改写为一段 60~120 词的英文画面提示词：保留全部要素，补足光影、氛围、镜头语言与画面叙事，" +
                 "用逗号分隔的短语，不要解释、不要换行以外的多余文字。只输出提示词本身。",
+              role: "system",
             },
             {
-              role: "user",
               content: shot.prompt || shot.description || sceneFallback(shot),
+              role: "user",
             },
           ],
           opts: { temperature: 0.7 },
@@ -305,34 +305,34 @@ export function useStoryboardPlanner(props: Props) {
 
   return {
     aiBusy: ai.busy,
-    aiProgress,
     aiError,
+    aiProgress,
+    clearShots,
     config,
-    extractChannelValue,
-    setExtractChannelValue,
-    extractChannel,
     extractBusy,
-    extractProgress,
-    extractStatus,
+    extractChannel,
+    extractChannelValue,
     extractError,
     extractionLog,
-    hasScript,
+    extractProgress,
+    extractStatus,
+    handleAISplit,
     handleExtract,
     handleImportFile,
+    hasScript,
     importFromScript,
-    updateShot,
-    removeShot,
-    clearShots,
-    handleAISplit,
     polishBusyId: polishAction.busyId,
+    removeShot,
+    setExtractChannelValue,
+    updateShot,
     /* 「这一条忙不忙」的判据收在出口里，视图不再自己写 `busyId === item.id`
      * （规范 16 §16.2.4.40）。`polishAnyBusy` 同理。 */
-    polishIsBusy: polishAction.isBusy,
+    generateAll,
+    polishAll,
     polishAnyBusy: polishAction.anyBusy,
     polishBusyAll: polishAllBusy.busy,
     polishErrors,
+    polishIsBusy: polishAction.isBusy,
     polishOne,
-    polishAll,
-    generateAll,
   };
 }

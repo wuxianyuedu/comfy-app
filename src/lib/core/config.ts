@@ -111,13 +111,13 @@ export const CONFIG_ENV_DEFAULTS = /* SAFETY: 类型断言已复核 */ {
 function readRawEnv(): Record<string, unknown> {
   const env = process.env;
   return {
-    nodeEnv: env.NODE_ENV,
-    logLevel: env.LOG_LEVEL,
-    databaseUrl: env.DATABASE_URL,
     comfyuiBaseUrl: env.COMFYUI_BASE_URL,
+    databaseUrl: env.DATABASE_URL,
+    debugModeDefault: env.DEBUG_MODE_DEFAULT,
+    logLevel: env.LOG_LEVEL,
+    nodeEnv: env.NODE_ENV,
     port: env.COMFYAPP_PORT,
     reaperEnabled: env.REAPER_ENABLED,
-    debugModeDefault: env.DEBUG_MODE_DEFAULT,
   };
 }
 
@@ -165,9 +165,9 @@ function envBool(field: string) {
  * 仅对「格式正确性」做硬校验（如 URL 形态），非法则 fail-fast。
  */
 const configSchema = z.object({
-  nodeEnv: z.enum(["development", "test", "production"]).default("development"),
-  logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   databaseUrl: z.string().min(1).default("file:./dev.db"),
+  logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  nodeEnv: z.enum(["development", "test", "production"]).default("development"),
   /* 默认值走 {@link CONFIG_ENV_DEFAULTS}（本机端点的单一事实源）：这里再写一遍
    * 裸地址/裸端口，就会出现「配置兜底值与连接侧/拉起侧各自漂移」的口径分叉
    * （规范 §12.14）。 */
@@ -175,8 +175,8 @@ const configSchema = z.object({
   port: z.coerce.number().int().positive().max(65535).default(CONFIG_ENV_DEFAULTS.port),
   /* 开关型配置用 envBool() 解析字面量，不用 z.coerce.boolean() —— 后者按 JS
    * 真值判断，`REAPER_ENABLED=false` 会被读成 true（见 envBool 的说明）。 */
-  reaperEnabled: envBool("REAPER_ENABLED"),
   debugModeDefault: envBool("DEBUG_MODE_DEFAULT").default(false),
+  reaperEnabled: envBool("REAPER_ENABLED"),
 });
 
 /** 由原始 env 解析出强类型配置；失败时抛出可读错误（fail-fast）。 */
@@ -196,6 +196,10 @@ function buildConfig(): AppConfig {
   const data = parsed.data;
 
   return {
+    comfyuiBaseUrl: data.comfyuiBaseUrl,
+
+    databaseUrl: data.databaseUrl,
+
     env: data.nodeEnv,
 
     isDev: data.nodeEnv === "development",
@@ -206,21 +210,17 @@ function buildConfig(): AppConfig {
 
     logLevel: data.logLevel,
 
-    databaseUrl: data.databaseUrl,
-
-    comfyuiBaseUrl: data.comfyuiBaseUrl,
-
     // WebSocket 地址：把 http(s):// 换成 ws(s)://
 
     comfyuiWsUrl: data.comfyuiBaseUrl.replace(/^http/, "ws"),
 
-    port: data.port,
-
     features: {
-      reaperEnabled: data.reaperEnabled,
-
       debugModeDefault: data.debugModeDefault,
+
+      reaperEnabled: data.reaperEnabled,
     },
+
+    port: data.port,
   };
 }
 

@@ -24,9 +24,9 @@ import type { LogOriginCounts, LogOriginFilter } from "~/components/studio/logs/
  *    曾经让整批 e2e 必红。
  */
 const meta = {
-  title: "Studio/Logs/OriginSelect",
   component: OriginSelect,
   parameters: { storeScene: "mixed" },
+  title: "Studio/Logs/OriginSelect",
 } satisfies Meta<typeof OriginSelect>;
 
 export default meta;

@@ -25,9 +25,9 @@ import { OptionListPopover } from "./option-list-popover";
 afterEach(cleanup);
 
 const TAGS = [
-  { value: "all", label: "全部模型" },
-  { value: "sdxl", label: "SDXL" },
-  { value: "flux", label: "FLUX" },
+  { label: "全部模型", value: "all" },
+  { label: "SDXL", value: "sdxl" },
+  { label: "FLUX", value: "flux" },
 ];
 
 describe("OptionListPopover", () => {

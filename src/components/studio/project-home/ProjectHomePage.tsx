@@ -35,10 +35,10 @@ type HomeEntry = {
 };
 
 const ENTRIES: Array<HomeEntry> = [
-  { id: "workshop", label: "全链路工坊", desc: "剧本 → 分镜 → 成片" },
-  { id: "canvas", label: "画布", desc: "自由编排节点工作流" },
-  { id: "outputs", label: "产出", desc: "看这个项目生成了什么" },
-  { id: "film", label: "成片", desc: "时间线与合成" },
+  { desc: "剧本 → 分镜 → 成片", id: "workshop", label: "全链路工坊" },
+  { desc: "自由编排节点工作流", id: "canvas", label: "画布" },
+  { desc: "看这个项目生成了什么", id: "outputs", label: "产出" },
+  { desc: "时间线与合成", id: "film", label: "成片" },
 ];
 
 export type ProjectHomePageProps = {
@@ -50,9 +50,9 @@ export type ProjectHomePageProps = {
   projectName: string;
 };
 
-export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectHomePageProps) {
+export function ProjectHomePage({ onNavigate, projectId, projectName }: ProjectHomePageProps) {
   const controller = useProjectHome();
-  const { overview, headline, loading } = controller;
+  const { headline, loading, overview } = controller;
 
   return (
     <DocumentFrame

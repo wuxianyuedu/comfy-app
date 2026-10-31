@@ -49,18 +49,18 @@ describe("translateWorkflowUnknownNodesError（comfy-cli 校验错误翻中文�
     const env = {
       error: {
         code: "workflow_unknown_nodes",
-        message: "Workflow has 1 validation error(s) against server",
         details: {
           errors: [
             {
-              node_id: "459:452",
-              field: "images",
               code: "autogrow_no_slots",
-              message: "required autogrow input 'images' has no connected slots",
+              field: "images",
               hint: "wire one key per connection: images.image_1, images.image_2",
+              message: "required autogrow input 'images' has no connected slots",
+              node_id: "459:452",
             },
           ],
         },
+        message: "Workflow has 1 validation error(s) against server",
       },
     };
     const out = translateWorkflowUnknownNodesError(env);
@@ -94,19 +94,19 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
     const onProgress = vi.fn();
     const finish = vi.fn();
     const p = createCliEnvelopeParser({
-      taskId: "t1",
-      log: noLog,
       finish,
-      onPromptId,
+      log: noLog,
       onProgress,
+      onPromptId,
+      taskId: "t1",
       trace: noTrace,
       ...over,
     });
-    return { p, onPromptId, onProgress, finish };
+    return { finish, onProgress, onPromptId, p };
   };
 
   it("跨 chunk 的半行被拼起来（buffer 累积）", () => {
-    const { p, onPromptId } = mk();
+    const { onPromptId, p } = mk();
     p.sink('{"type":"queued","prompt_');
     expect(onPromptId).not.toHaveBeenCalled();
     p.sink('id":"abc"}\n');
@@ -114,7 +114,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
   });
 
   it("多个事件在一行里逐行分发（不丢行）", () => {
-    const { p, onPromptId, onProgress } = mk();
+    const { onProgress, onPromptId, p } = mk();
     p.sink('{"type":"queued","prompt_id":"p1"}\n{"type":"progress","completed":1,"total":4}\n');
     expect(onPromptId).toHaveBeenCalledWith("p1");
     // 事件不带 node：第二参为 undefined（3-C D1 的透传契约）
@@ -122,40 +122,40 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
   });
 
   it("progress 事件带 node 时透传当前节点步数（3-C D1：调用方落 progressNode）", () => {
-    const { p, onProgress } = mk();
+    const { onProgress, p } = mk();
     p.sink('{"type":"progress","node":"76:69","completed":3,"total":25}\n');
     // 这一格没给 `patched` ⇒ 认不出类名，但 id 与步数照旧透出（进度不许因为
     // 类名缺失就丢帧）—— #1202 之前的常态就是这个形状。
     expect(onProgress).toHaveBeenCalledWith(12, {
       id: "76:69",
-      value: 3,
       max: 25,
+      value: 3,
     });
   });
 
   it("给了 patched（提交那一刻的图）就把类名与中文标签一起透出（ISSUE #1202）", () => {
     // raw 任务的进度历史上全走 comfy-cli 这条路，所以状态栏「当前节点」能不能显示
     // 类名取决于这里，而不是 executor-ws 那一侧。子图 id（`76:69`）也要认得出。
-    const { p, onProgress } = mk({
+    const { onProgress, p } = mk({
       patched: {
-        nodes: [{ id: 76, type: "SUBGRAPH_ID", inputs: [] }],
         definitions: {
           subgraphs: [
             {
               id: "SUBGRAPH_ID",
-              nodes: [{ id: 69, type: "KSampler", inputs: [] }],
+              nodes: [{ id: 69, inputs: [], type: "KSampler" }],
             },
           ],
         },
+        nodes: [{ id: 76, inputs: [], type: "SUBGRAPH_ID" }],
       },
     });
     p.sink('{"type":"progress","node":"76:69","completed":3,"total":25}\n');
     expect(onProgress).toHaveBeenCalledWith(12, {
-      id: "76:69",
-      value: 3,
-      max: 25,
       classType: "KSampler",
+      id: "76:69",
       label: "采样去噪",
+      max: 25,
+      value: 3,
     });
   });
 
@@ -167,7 +167,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
       },
       // 图里这一格故意给一个不同的类名：真出图实测 `executing` 带 class_type，
       // 事件那一份才是 ComfyUI 真正在跑的那个节点。
-      patched: { nodes: [{ id: 76, type: "KSampler", inputs: [] }] },
+      patched: { nodes: [{ id: 76, inputs: [], type: "KSampler" }] },
     });
 
     p.sink(
@@ -181,17 +181,17 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
   });
 
   it("`progress` 事件不带类名 ⇒ 按 `patched` 那张图认（与 WS 帧同一个出口）", () => {
-    const { p, onProgress } = mk({
-      patched: { nodes: [{ id: 76, type: "SUBGRAPH_ID", inputs: [] }] },
+    const { onProgress, p } = mk({
+      patched: { nodes: [{ id: 76, inputs: [], type: "SUBGRAPH_ID" }] },
     });
     p.sink('{"schema":"event/1","type":"progress","node":"76","completed":1,"total":25}\n');
 
     expect(onProgress).toHaveBeenCalledWith(4, {
-      id: "76",
-      value: 1,
-      max: 25,
       classType: "SUBGRAPH_ID",
+      id: "76",
       label: "SUBGRAPH_ID", // 表里没有的类名，nodeLabel 原样回类名（不编一个中文名）
+      max: 25,
+      value: 1,
     });
   });
 
@@ -201,7 +201,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
       log: (taskId, level, msg) => {
         lines.push([taskId, level, msg]);
       },
-      patched: { nodes: [{ id: 3, type: "LoraLoader", inputs: [] }] },
+      patched: { nodes: [{ id: 3, inputs: [], type: "LoraLoader" }] },
     });
 
     p.sink('{"type":"executing","node":"3"}\n');
@@ -215,12 +215,12 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
   });
 
   it("envelope 事件触发收口，ok 原样透给 finish", () => {
-    const { p, finish } = mk();
+    const { finish, p } = mk();
     p.sink('{"type":"envelope","ok":false,"error":{"message":"x"}}\n');
     expect(finish).toHaveBeenCalledWith(false, {
-      type: "envelope",
-      ok: false,
       error: { message: "x" },
+      ok: false,
+      type: "envelope",
     });
   });
 
@@ -234,7 +234,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
 
   it("execution_cached 给一行按节点现场，且**不写** progressNode", () => {
     const lines: Array<[string, string, string]> = [];
-    const { p, onProgress } = mk({
+    const { onProgress, p } = mk({
       log: (taskId, level, msg) => {
         lines.push([taskId, level, msg]);
       },
@@ -272,7 +272,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
 
   it("节点数对得上才给汇总行，且不影响收口（finish 照旧）", () => {
     const lines: Array<[string, string, string]> = [];
-    const { p, finish } = mk({
+    const { finish, p } = mk({
       log: (taskId, level, msg) => {
         lines.push([taskId, level, msg]);
       },
@@ -289,15 +289,15 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
     expect(lines.map((l) => l[2]).filter((m) => m.includes("全部命中"))).toEqual([
       "≡ 本轮 2 个节点全部命中 ComfyUI 执行缓存（未重算，因此没有按节点进度）",
     ]);
-    expect(finish).toHaveBeenCalledWith(true, { type: "envelope", ok: true });
+    expect(finish).toHaveBeenCalledWith(true, { ok: true, type: "envelope" });
   });
 
   it("混合轮（只有部分命中）与没有 converted 的轮都不给汇总行", () => {
     for (const over of [
       // 只有 1 个 cached、converted 报 11 个 ⇒ 真话是「部分命中」，不许写「全部」。
-      { nodeCount: 11, cached: 1 },
+      { cached: 1, nodeCount: 11 },
       // 没有 converted ⇒ 总数未知，不许凭 cached>0 就下结论。
-      { nodeCount: undefined, cached: 3 },
+      { cached: 3, nodeCount: undefined },
     ]) {
       const lines: Array<[string, string, string]> = [];
       const { p } = mk({
@@ -321,7 +321,7 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
   });
 
   it("非 JSON 行不抛错，也不触发任何分发", () => {
-    const { p, onPromptId, finish } = mk();
+    const { finish, onPromptId, p } = mk();
     expect(() => p.sink("Traceback (most recent call last):\n")).not.toThrow();
     expect(onPromptId).not.toHaveBeenCalled();
     expect(finish).not.toHaveBeenCalled();
@@ -345,14 +345,14 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
 
 describe("createCliStderrSink（噪声过滤 + 限行 + 完整留底）", () => {
   it("过滤 DeprecationWarning 噪声并计数，不占行数上限", () => {
-    const s = createCliStderrSink({ taskId: "t1", log: noLog, trace: noTrace });
+    const s = createCliStderrSink({ log: noLog, taskId: "t1", trace: noTrace });
     s.sink("DeprecationWarning: blah\nreal error line\n");
     expect(s.noisyWarningLines()).toBe(1);
     expect(s.raw()).toContain("real error line");
   });
 
   it("raw 始终完整累积（不受 60 行上限影响）", () => {
-    const s = createCliStderrSink({ taskId: "t1", log: noLog, trace: noTrace });
+    const s = createCliStderrSink({ log: noLog, taskId: "t1", trace: noTrace });
     for (let i = 0; i < 100; i++) {
       s.sink(`line-${i}\n`);
     }
@@ -365,32 +365,32 @@ describe("createCliFinisher（完成 / 失败收口）", () => {
     const complete = vi.fn();
     const fail = vi.fn();
     const f = createCliFinisher({
-      taskId: "t1",
-      log: noLog,
-      settle,
-      promptId: () => "p1",
       complete,
       fail,
+      log: noLog,
+      promptId: () => "p1",
+      settle,
+      taskId: "t1",
     });
-    return { f, complete, fail };
+    return { complete, f, fail };
   };
 
   it("成功：调 complete 并带上 promptId", () => {
-    const { f, complete, fail } = mk(() => true);
-    f(true, { type: "envelope", ok: true });
+    const { complete, f, fail } = mk(() => true);
+    f(true, { ok: true, type: "envelope" });
     expect(complete).toHaveBeenCalledWith("t1", "p1");
     expect(fail).not.toHaveBeenCalled();
   });
 
   it("失败：调 fail 并把结构化校验错误作为第 4 参", () => {
-    const { f, complete, fail } = mk(() => true);
+    const { complete, f, fail } = mk(() => true);
     f(false, {
-      type: "envelope",
-      ok: false,
       error: {
+        details: { node_errors: [{ errors: [], node_id: "3" }] },
         message: "bad",
-        details: { node_errors: [{ node_id: "3", errors: [] }] },
       },
+      ok: false,
+      type: "envelope",
     });
     expect(complete).not.toHaveBeenCalled();
     expect(fail).toHaveBeenCalled();
@@ -400,12 +400,12 @@ describe("createCliFinisher（完成 / 失败收口）", () => {
 
   it("幂等：settle 返回 false 时直接返回，不重复收口", () => {
     let n = 0;
-    const { f, complete } = mk(() => {
+    const { complete, f } = mk(() => {
       n++;
       return n === 1;
     });
-    f(true, { type: "envelope", ok: true });
-    f(true, { type: "envelope", ok: true });
+    f(true, { ok: true, type: "envelope" });
+    f(true, { ok: true, type: "envelope" });
     expect(complete).toHaveBeenCalledTimes(1);
   });
 });

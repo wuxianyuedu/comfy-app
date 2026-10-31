@@ -98,10 +98,10 @@ export function OutputRowPort({
         dir="out"
         id={outKey}
         style={{
+          boxShadow: "none",
           right: -6,
           top: 14,
           transform: "translateY(-50%)",
-          boxShadow: "none",
         }}
         type={outType}
       />

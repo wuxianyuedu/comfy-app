@@ -20,16 +20,16 @@ vi.mock("~/lib/browser-io", () => ({ downloadJson: vi.fn() }));
 
 function makeShot(patch: Partial<Shot> = {}): Shot {
   return {
+    characterIds: [],
+    description: "",
     id: "shot-1",
     index: 1,
-    sceneId: "scene-1",
-    sceneHeading: "场景1 · 清晨",
-    shotType: "medium",
-    description: "",
-    characterIds: [],
-    prompt: "a cat, cinematic",
     negativePrompt: "",
     params: {},
+    prompt: "a cat, cinematic",
+    sceneHeading: "场景1 · 清晨",
+    sceneId: "scene-1",
+    shotType: "medium",
     status: "done",
     ...patch,
   };
@@ -47,7 +47,7 @@ function renderComposer(shots: Array<Shot>, rendered = false) {
       title="测试项目"
     />,
   );
-  return { onShotsChange, onRendered };
+  return { onRendered, onShotsChange };
 }
 
 beforeEach(() => {
@@ -67,9 +67,9 @@ describe("FinalComposer 时间线呈现", () => {
       makeShot({ id: "s1", imageUrl: "/api/generated/1.png" }),
       makeShot({
         id: "s2",
+        imageUrl: undefined,
         index: 2,
         sceneHeading: "场景2 · 正午",
-        imageUrl: undefined,
       }),
     ]);
     expect(screen.getByText("场景1 · 清晨")).toBeTruthy();
@@ -121,14 +121,14 @@ describe("FinalComposer 导出合成清单", () => {
   it("导出：产物按时间线序携带镜头字段，并记账 rendered", () => {
     const { onRendered } = renderComposer([
       makeShot({
-        id: "s2",
-        index: 2,
+        clipUrl: "/api/generated/2.mp4",
+        dialogue: "台词一句",
         duration: 6,
+        id: "s2",
+        imageUrl: "/api/generated/2.png",
+        index: 2,
         motion: "high",
         transition: "dissolve",
-        dialogue: "台词一句",
-        imageUrl: "/api/generated/2.png",
-        clipUrl: "/api/generated/2.mp4",
       }),
       makeShot({ id: "s1", imageUrl: "/api/generated/1.png" }),
     ]);
@@ -140,25 +140,25 @@ describe("FinalComposer 导出合成清单", () => {
     expect(filename).toBe("测试项目-合成清单.json");
     expect(plan).toMatchObject({
       project: "测试项目",
-      totalShots: 2,
       timeline: [
         {
-          order: 1,
-          shotId: "s2",
+          clipUrl: "/api/generated/2.mp4",
+          dialogue: "台词一句",
           durationSec: 6,
           motion: "high",
+          order: 1,
+          shotId: "s2",
           transition: "dissolve",
-          dialogue: "台词一句",
-          clipUrl: "/api/generated/2.mp4",
         },
         {
-          order: 2,
-          shotId: "s1",
-          imageUrl: "/api/generated/1.png",
           clipUrl: null,
           durationSec: 4,
+          imageUrl: "/api/generated/1.png",
+          order: 2,
+          shotId: "s1",
         },
       ],
+      totalShots: 2,
     });
     expect(onRendered).toHaveBeenCalledTimes(1);
   });
@@ -167,7 +167,7 @@ describe("FinalComposer 导出合成清单", () => {
 describe("FinalComposer 逐镜编辑", () => {
   it("时长输入被钳到 1~20：越界值写回前收口", async () => {
     const user = userEvent.setup();
-    const { onShotsChange } = renderComposer([makeShot({ id: "s1", duration: 5 })]);
+    const { onShotsChange } = renderComposer([makeShot({ duration: 5, id: "s1" })]);
 
     const input = screen.getByDisplayValue("5");
     await user.clear(input);
@@ -181,7 +181,7 @@ describe("FinalComposer 逐镜编辑", () => {
 
   it("清空时长按缺省 4 处理（NaN 兜底）", async () => {
     const user = userEvent.setup();
-    const { onShotsChange } = renderComposer([makeShot({ id: "s1", duration: 5 })]);
+    const { onShotsChange } = renderComposer([makeShot({ duration: 5, id: "s1" })]);
 
     const input = screen.getByDisplayValue("5");
     await user.clear(input);

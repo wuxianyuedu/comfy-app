@@ -19,25 +19,25 @@ import { ParamOwnerTag } from "./ParamOwnerTag";
 afterEach(cleanup);
 
 const io: WorkflowIOMap = {
-  "9::widget::text": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "9",
-    nodeTitle: "Text to Image",
-    name: "positive_prompt",
-    label: "提示词",
-    type: "STRING",
-    defaultValue: "3只小猫在喝山泉，一张足够长的描述词用于判定为提示词口",
-  },
   "5::widget::height": {
+    defaultValue: 1024,
     direction: "input",
     kind: "widget",
+    label: "高度",
+    name: "height",
     nodeId: "5",
     nodeTitle: "分辨率选择器",
-    name: "height",
-    label: "高度",
     type: "INT",
-    defaultValue: 1024,
+  },
+  "9::widget::text": {
+    defaultValue: "3只小猫在喝山泉，一张足够长的描述词用于判定为提示词口",
+    direction: "input",
+    kind: "widget",
+    label: "提示词",
+    name: "positive_prompt",
+    nodeId: "9",
+    nodeTitle: "Text to Image",
+    type: "STRING",
   },
 };
 
@@ -45,10 +45,10 @@ const entries = buildParamEntries(io);
 
 /** 尺寸的子口按形态连到同名的那一行（真实工作流就是一条形态一行）。 */
 const SIZE_PIN_NAME: Record<string, string> = {
-  "size-width": "width",
-  "size-height": "height",
   "size-aspect": "aspect_ratio",
+  "size-height": "height",
   "size-megapixels": "megapixels",
+  "size-width": "width",
 };
 
 /** 作者画过的线（尺寸按形态连、其余连第一个候选）—— 落点只由作者画的线决定，
@@ -189,22 +189,22 @@ describe("WorkflowParamCardColumn", () => {
      *  React Flow 只认第一颗，第二颗拖着没反应。 */
     const dupIo: WorkflowIOMap = {
       "6::widget::text": {
+        defaultValue: "a",
         direction: "input",
         kind: "widget",
-        nodeId: "6",
-        name: "text",
         label: "正向",
+        name: "text",
+        nodeId: "6",
         type: "STRING",
-        defaultValue: "a",
       },
       "9::widget::text": {
+        defaultValue: "b",
         direction: "input",
         kind: "widget",
-        nodeId: "9",
-        name: "text",
         label: "负向",
+        name: "text",
+        nodeId: "9",
         type: "STRING",
-        defaultValue: "b",
       },
     };
     const dupEntries = buildParamEntries(dupIo, undefined, { mode: "T2I" });

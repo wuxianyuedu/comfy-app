@@ -18,8 +18,8 @@ function makeDeps(over: Partial<ImageRedrawDeps> = {}): ImageRedrawDeps {
       { id: "wf-in", name: "重绘", taskType: "INPAINT" },
     ]),
     prepareImage: vi.fn(async (image: string) => `up-${image}`),
-    submit: vi.fn(async () => "task-new"),
     report: vi.fn(),
+    submit: vi.fn(async () => "task-new"),
     ...over,
   };
 }
@@ -29,13 +29,13 @@ function setup(over?: { deps?: Partial<ImageRedrawDeps> }) {
   const deps = makeDeps(over?.deps);
   const hook = renderHook(() =>
     useImageRedraw(deps, {
-      prompt: "原提示词",
-      projectId: "proj-1",
       parentId: "task-old",
+      projectId: "proj-1",
+      prompt: "原提示词",
     }),
   );
   const current = (): ImageRedrawController => hook.result.current;
-  return { deps, current };
+  return { current, deps };
 }
 
 beforeEach(() => {
@@ -44,7 +44,7 @@ beforeEach(() => {
 
 describe("useImageRedraw", () => {
   it("模板清单拉一次并默认选中第一个", async () => {
-    const { deps, current } = setup();
+    const { current, deps } = setup();
     await act(async () => {
       await current().ensureTemplates();
     });
@@ -60,7 +60,7 @@ describe("useImageRedraw", () => {
   });
 
   it("放大：原图进参考图槽，parentId / projectId 随载荷，成功带新任务号", async () => {
-    const { deps, current } = setup();
+    const { current, deps } = setup();
     await act(async () => {
       await current().ensureTemplates();
     });
@@ -73,22 +73,19 @@ describe("useImageRedraw", () => {
     expect(deps.prepareImage).toHaveBeenCalledWith("/generated/t/1.png");
     expect(deps.submit).toHaveBeenCalledWith(
       expect.objectContaining({
-        workflow: "wf-up",
+        parentId: "task-old",
+        projectId: "proj-1",
         prompt: "放大提示词",
         referenceImages: ["up-/generated/t/1.png"],
-        projectId: "proj-1",
-        parentId: "task-old",
+        workflow: "wf-up",
       }),
     );
     expect(current().resultTaskId).toBe("task-new");
-    expect(deps.report).toHaveBeenCalledWith(
-      "ok",
-      expect.stringContaining("task-new"),
-    );
+    expect(deps.report).toHaveBeenCalledWith("ok", expect.stringContaining("task-new"));
   });
 
   it("局部重绘：原图 + 蒙版两槽；没画蒙版先拦下（不提交）", async () => {
-    const { deps, current } = setup();
+    const { current, deps } = setup();
     await act(async () => {
       await current().ensureTemplates();
     });
@@ -99,10 +96,7 @@ describe("useImageRedraw", () => {
       await current().run("/generated/t/1.png");
     });
     expect(deps.submit).not.toHaveBeenCalled();
-    expect(deps.report).toHaveBeenCalledWith(
-      "err",
-      expect.stringContaining("蒙版"),
-    );
+    expect(deps.report).toHaveBeenCalledWith("err", expect.stringContaining("蒙版"));
 
     act(() => {
       current().setMask("data:image/png;base64,AAAA");
@@ -110,15 +104,10 @@ describe("useImageRedraw", () => {
     await act(async () => {
       await current().run("/generated/t/1.png");
     });
-    expect(deps.prepareImage).toHaveBeenCalledWith(
-      "data:image/png;base64,AAAA",
-    );
+    expect(deps.prepareImage).toHaveBeenCalledWith("data:image/png;base64,AAAA");
     expect(deps.submit).toHaveBeenCalledWith(
       expect.objectContaining({
-        referenceImages: [
-          "up-/generated/t/1.png",
-          "up-data:image/png;base64,AAAA",
-        ],
+        referenceImages: ["up-/generated/t/1.png", "up-data:image/png;base64,AAAA"],
       }),
     );
   });
@@ -134,10 +123,7 @@ describe("useImageRedraw", () => {
       await current().run("/generated/t/1.png");
     });
     expect(deps.submit).not.toHaveBeenCalled();
-    expect(deps.report).toHaveBeenCalledWith(
-      "err",
-      expect.stringContaining("模板"),
-    );
+    expect(deps.report).toHaveBeenCalledWith("err", expect.stringContaining("模板"));
 
     await act(async () => {
       await current().ensureTemplates();

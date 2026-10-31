@@ -19,9 +19,9 @@ import { useLogPanel } from "~/components/studio/logs/LogProvider";
  * 悬停提示说清存下来的是哪一类」为主 —— 那正是它在真机上大多数时候的样子。
  */
 const meta = {
-  title: "Studio/Logs/SaveExportButton",
   component: SaveExportButton,
   parameters: { storeScene: "mixed" },
+  title: "Studio/Logs/SaveExportButton",
 } satisfies Meta<typeof SaveExportButton>;
 
 export default meta;

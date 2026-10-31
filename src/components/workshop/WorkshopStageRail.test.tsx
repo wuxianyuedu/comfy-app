@@ -17,13 +17,13 @@ import {
 } from "./stage-config";
 
 const ctx: StageViewContext = {
-  scriptReady: true,
   characterCount: 0,
+  clipDoneCount: 0,
+  imageDoneCount: 0,
   sceneCount: 0,
+  scriptReady: true,
   shotCount: 0,
   shotTarget: 0,
-  imageDoneCount: 0,
-  clipDoneCount: 0,
 };
 const ratios = computeStageRatios(ctx, false);
 const ACTIVE: Tab = "storyboard";
@@ -48,7 +48,7 @@ function renderRail() {
   const badge = (index: number) => buttons[index]?.querySelector<HTMLElement>("span");
   const sub = (index: number) =>
     buttons[index]?.querySelector<HTMLElement>("div > div:nth-child(2)");
-  return { nav, buttons, badge, sub };
+  return { badge, buttons, nav, sub };
 }
 
 afterEach(cleanup);
@@ -63,7 +63,7 @@ describe("WorkshopStageRail 的结构", () => {
   });
 
   it("是一个带名字的导航区，六段各一项、逐项占满列宽", () => {
-    const { nav, buttons } = renderRail();
+    const { buttons, nav } = renderRail();
     expect(nav.getAttribute("aria-label")).toBe("工坊阶段");
     expect(buttons).toHaveLength(STAGE_DEFS.length);
     for (const button of buttons) {
@@ -72,7 +72,7 @@ describe("WorkshopStageRail 的结构", () => {
   });
 
   it("文案与判据同横条一致：阶段名 + stageSubtitle，当前段才有 aria-current", () => {
-    const { buttons, sub, badge } = renderRail();
+    const { badge, buttons, sub } = renderRail();
     buttons.forEach((button, index) => {
       const stage = STAGE_DEFS[index];
       expect(button.querySelector("div > div:nth-child(1)")?.textContent).toBe(stage?.label);

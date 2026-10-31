@@ -34,9 +34,9 @@ vi.mock("./hooks/use-schema-sync-status", async (importOriginal) => {
   return {
     ...actual,
     useSchemaSyncStatus: (): SchemaSyncModule.SchemaSyncStatus => ({
-      phase: "ready",
-      detail: null,
       canPush: false,
+      detail: null,
+      phase: "ready",
     }),
   };
 });
@@ -45,11 +45,11 @@ vi.mock("./hooks/use-comfy-queue", async (importOriginal) => {
   return {
     ...actual,
     useComfyQueue: (): ComfyQueueModule.ComfyQueueView => ({
-      online: false,
-      comfy: { running: 0, pending: 0 },
-      running: null,
-      queued: 0,
+      comfy: { pending: 0, running: 0 },
       elapsedMs: null,
+      online: false,
+      queued: 0,
+      running: null,
     }),
   };
 });
@@ -57,7 +57,7 @@ vi.mock("./hooks/use-comfy-queue", async (importOriginal) => {
 vi.mock("./logs/LogProvider", () => ({
   useLogPanel: <T,>(
     selector: (state: { counts: { error: number }; isOpen: boolean; toggleOpen: () => void }) => T,
-  ) => selector({ isOpen: false, counts: { error: 0 }, toggleOpen: noop }),
+  ) => selector({ counts: { error: 0 }, isOpen: false, toggleOpen: noop }),
 }));
 // 应用服务那一格的 controller 换成桩：判据本身在 ~/lib/dev-server-status
 // 有独立用例，这里只断言「状态栏把状态渲染成用户看得见的文案与色调」。
@@ -91,26 +91,26 @@ const GIB = 1024 * 1024 * 1024;
 function viewModel(over: Partial<ComfyStatusViewModel> = {}): ComfyStatusViewModel {
   const online = over.online ?? true;
   return {
-    stats: null,
-    online,
     connecting: false,
-    stale: false,
-    cudaVram: { used: 2 * GIB, total: 8 * GIB, pct: 25 },
-    smiVram: null,
-    ram: { used: 16 * GIB, total: 32 * GIB, pct: 50 },
+    cudaVram: { pct: 25, total: 8 * GIB, used: 2 * GIB },
     degradedNote: null,
+    online,
+    ram: { pct: 50, total: 32 * GIB, used: 16 * GIB },
+    smiVram: null,
+    stale: false,
+    stats: null,
     ...over,
   };
 }
 
 function devServer(over: Partial<DevServerStatusViewModel> = {}): DevServerStatusViewModel {
   return {
-    state: "online",
-    label: "应用服务运行中",
-    title: "应用服务（dev server）在线：页面查询、保存与任务提交都走它",
-    lastRestartAt: null,
     exitNotice: null,
+    label: "应用服务运行中",
     lastExitAt: null,
+    lastRestartAt: null,
+    state: "online",
+    title: "应用服务（dev server）在线：页面查询、保存与任务提交都走它",
     /* 状态栏自己不画它，但消息中心「已启动 / 已恢复」那条记录靠它判边沿；
      * 夹具不给真值的话，接线会安静地退化成「永不记录」。 */
     processIsNew: true,
@@ -145,7 +145,7 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
   });
 
   it("双口径同时可用：nvidia-smi 与 ComfyUI 两项并列且有可读标签", () => {
-    renderBar(viewModel({ smiVram: { used: 3 * GIB, total: 12 * GIB, pct: 25 } }));
+    renderBar(viewModel({ smiVram: { pct: 25, total: 12 * GIB, used: 3 * GIB } }));
 
     expect(screen.getByTitle(/nvidia-smi 物理专用显存/)).toBeInTheDocument();
     expect(screen.getByText("显存")).toBeInTheDocument();
@@ -155,12 +155,12 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
   it("ComfyUI 未运行：占用条隐藏但降级提示可见，且状态栏不再为它单列一格", () => {
     renderBar(
       viewModel({
-        online: false,
         connecting: false,
         cudaVram: null,
-        smiVram: null,
-        ram: null,
         degradedNote: "ComfyUI 未运行，显存/内存暂不可用",
+        online: false,
+        ram: null,
+        smiVram: null,
       }),
     );
 
@@ -183,8 +183,8 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
       viewModel(),
       60,
       devServer({
-        state: "offline",
         label: "应用服务已断开",
+        state: "offline",
         title: "应用服务（dev server）当前不可达：页面里的查询与保存都会失败",
       }),
     );
@@ -199,9 +199,9 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
       viewModel(),
       60,
       devServer({
-        state: "online",
         label: "应用服务已重启",
         lastRestartAt: new Date("2026-09-12T08:30:00").getTime(),
+        state: "online",
       }),
     );
 
@@ -217,15 +217,15 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
       viewModel(),
       60,
       devServer({
-        state: "offline",
-        label: "应用服务已断开",
-        title: "本地服务自身退出了。服务被 SIGKILL 结束。看 log/nextjs/ 下最新一份输出。",
         exitNotice: {
-          why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
+          action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
           detail:
             "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
-          action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
+          why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
         },
+        label: "应用服务已断开",
+        state: "offline",
+        title: "本地服务自身退出了。服务被 SIGKILL 结束。看 log/nextjs/ 下最新一份输出。",
       }),
     );
 
@@ -243,10 +243,10 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
       viewModel(),
       60,
       devServer({
-        state: "offline",
-        label: "应用服务已断开",
-        title: "应用服务不可达：页面里的查询与保存都会失败。",
         exitNotice: null,
+        label: "应用服务已断开",
+        state: "offline",
+        title: "应用服务不可达：页面里的查询与保存都会失败。",
       }),
     );
     expect(screen.queryByText(/未知/)).toBeNull();

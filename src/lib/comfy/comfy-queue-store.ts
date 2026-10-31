@@ -36,10 +36,10 @@ const ELAPSED_TICK_MS = 1000;
 const COMFY_QUEUE_FALLBACK_MS = 15_000;
 
 const EMPTY: ComfyQueueStatus = {
+  comfy: { pending: 0, running: 0 },
   online: false,
-  comfy: { running: 0, pending: 0 },
-  running: null,
   queued: 0,
+  running: null,
 };
 
 const SERVER_SNAPSHOT: ComfyQueueView = { ...EMPTY, elapsedMs: null };
@@ -111,12 +111,12 @@ function parseRunning(value: unknown): ComfyRunningTask | null {
     return null;
   }
   return {
+    model: typeof value.model === "string" ? value.model : null,
+    nodeType: typeof value.nodeType === "string" ? value.nodeType : null,
+    progress: numberOr(value.progress, 0),
+    startedAt: value.startedAt,
     taskId: value.taskId,
     workflowName: typeof value.workflowName === "string" ? value.workflowName : null,
-    model: typeof value.model === "string" ? value.model : null,
-    startedAt: value.startedAt,
-    progress: numberOr(value.progress, 0),
-    nodeType: typeof value.nodeType === "string" ? value.nodeType : null,
   };
 }
 
@@ -126,13 +126,13 @@ function parseStatus(data: unknown): ComfyQueueStatus {
   }
   const comfy = isRecord(data.comfy) ? data.comfy : {};
   return {
-    online: data.online === true,
     comfy: {
-      running: numberOr(comfy.running, 0),
       pending: numberOr(comfy.pending, 0),
+      running: numberOr(comfy.running, 0),
     },
-    running: parseRunning(data.running),
+    online: data.online === true,
     queued: numberOr(data.queued, 0),
+    running: parseRunning(data.running),
   };
 }
 
@@ -221,13 +221,13 @@ function ensurePolling(): void {
   }
   // 慢速兜底轮询：事件通道掉线 / 还没连上时的安全网（事件为主、轮询兜底）。
   stopPolling = startPollTimer(pollOnce, {
-    ms: COMFY_QUEUE_FALLBACK_MS,
     immediate: true,
+    ms: COMFY_QUEUE_FALLBACK_MS,
     onError: ignorePollError,
   });
   stopTicking ??= startPollTimer(tickElapsed, {
-    ms: ELAPSED_TICK_MS,
     immediate: false,
+    ms: ELAPSED_TICK_MS,
     onError: ignorePollError,
   });
   if (stopEvents === null && typeof EventSource !== "undefined") {

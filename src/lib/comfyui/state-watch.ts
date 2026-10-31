@@ -104,10 +104,10 @@ export function noteComfyStateChange(
   now = Date.now(),
 ): ComfyStateChange {
   const change: ComfyStateChange = {
-    seq: (st.seq ?? 0) + 1,
     at: now,
-    kind,
     detail,
+    kind,
+    seq: (st.seq ?? 0) + 1,
   };
   st.seq = change.seq;
   st.last = change;
@@ -127,7 +127,7 @@ export function getComfyStateChange(): {
   last: ComfyStateChange | null;
   seq: number;
 } {
-  return { seq: st.seq ?? 0, last: st.last ?? null };
+  return { last: st.last ?? null, seq: st.seq ?? 0 };
 }
 
 /** 订阅后续变化；返回退订函数。

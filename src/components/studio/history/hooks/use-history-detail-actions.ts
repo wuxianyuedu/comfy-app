@@ -90,8 +90,8 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
            * 是**全库唯一一处**判这个的文件，于是「点了什么都没发生」在别处
            * 根本不是一个可表达的状态（防静默失败，硬规则 4）。 */
           setFolderPopover({
-            path: result.absolutePath ?? "",
             helperMissing: false,
+            path: result.absolutePath ?? "",
           });
           const helper = detectFolderHelper(() =>
             setFolderPopover((prev) => (prev ? { ...prev, helperMissing: false } : prev)),
@@ -100,8 +100,8 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
           const state = await helper.settle();
           if (state === "missing") {
             setFolderPopover({
-              path: result.absolutePath ?? "",
               helperMissing: true,
+              path: result.absolutePath ?? "",
             });
           }
         } else if (result.error === "directory missing") {
@@ -119,7 +119,7 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
           async () => {
             throw error;
           },
-          { report, failureText: "打开目录失败" },
+          { failureText: "打开目录失败", report },
         );
       } finally {
         openFolderAction.set(false);
@@ -131,8 +131,8 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
   /* 路径复制走 toast 通道（这一族动作的既有表现层选择）。反馈形态是调用处
    * 的事，但**成败两条都要有出口**归出口管（规范 16 §16.2.4.43）。 */
   const copyPathFeedback = useCopyFeedback({
-    onSuccess: () => toast.success("路径已复制", "粘贴到资源管理器地址栏（Alt+D）即可跳转"),
     onFailure: () => toast.error("复制失败", "请手动选择路径复制"),
+    onSuccess: () => toast.success("路径已复制", "粘贴到资源管理器地址栏（Alt+D）即可跳转"),
   });
   const copyPath = useCallback(() => {
     if (!folderPopover) {
@@ -155,7 +155,7 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
             downloadJson(result.workflow, "workflow.json");
             return true;
           },
-          { report, failureText: "下载失败" },
+          { failureText: "下载失败", report },
         ),
       );
     },
@@ -165,12 +165,12 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
   const dismissFolderPopover = useCallback(() => setFolderPopover(null), []);
 
   return {
-    folderPopover,
-    openFolderBusy: openFolderAction.busy,
-    downloading: downloadAction.busy,
-    openFolder,
-    downloadWorkflow,
     copyPath,
     dismissFolderPopover,
+    downloading: downloadAction.busy,
+    downloadWorkflow,
+    folderPopover,
+    openFolder,
+    openFolderBusy: openFolderAction.busy,
   };
 }

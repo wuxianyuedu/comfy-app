@@ -28,10 +28,10 @@ export const MEGAPIXEL_MAX = (MAX_SIZE * MAX_SIZE) / 1_000_000;
 const MEGAPIXEL_DECIMALS = 1;
 
 export function MegapixelStepper({
-  value,
-  onChange,
-  disabled = false,
   className,
+  disabled = false,
+  onChange,
+  value,
 }: {
   className?: string;
   disabled?: boolean;

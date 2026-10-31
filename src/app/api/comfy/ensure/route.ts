@@ -42,9 +42,9 @@ export async function POST() {
   const up = await probeComfyUi(1_500);
   if (up) {
     return NextResponse.json({
-      ok: true,
       base: up,
       detail: "ComfyUI 已在运行",
+      ok: true,
     });
   }
 
@@ -56,13 +56,13 @@ export async function POST() {
       onLog: (msg) => logger.info(`[comfyui-ensure] ${msg}`),
     });
     if (r.ok) {
-      return NextResponse.json({ ok: true, base: r.base, detail: r.detail });
+      return NextResponse.json({ base: r.base, detail: r.detail, ok: true });
     }
     return NextResponse.json(
       {
+        detail: r.detail,
         ok: false,
         pending: true,
-        detail: r.detail,
         timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS,
       },
       { status: 202 },
@@ -70,6 +70,6 @@ export async function POST() {
   } catch (e) {
     const detail = errorMessage(e, "启动失败");
     logger.error(`[comfyui-ensure] 启动失败：${detail}`);
-    return NextResponse.json({ ok: false, pending: false, detail }, { status: 503 });
+    return NextResponse.json({ detail, ok: false, pending: false }, { status: 503 });
   }
 }

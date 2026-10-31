@@ -23,7 +23,7 @@ describe("fetchProduction", () => {
   it("exists:true 时回传 production", async () => {
     mockFetch({
       exists: true,
-      production: { title: "我的短剧", shots: [{ id: "s1" }] },
+      production: { shots: [{ id: "s1" }], title: "我的短剧" },
     });
     const got = await fetchProduction("proj_1");
     expect(got).toMatchObject({ title: "我的短剧" });
@@ -61,19 +61,19 @@ describe("fetchProductionProgress", () => {
   it("回读并规范化 progress", async () => {
     mockFetch({
       exists: true,
-      production: { progress: { stage: "render", rendered: true } },
+      production: { progress: { rendered: true, stage: "render" } },
     });
     expect(await fetchProductionProgress("proj_1")).toEqual({
-      stage: "render",
       rendered: true,
+      stage: "render",
     });
   });
 
   it("progress 是脏 JSON → 宽容成默认（仍返回非 null，因该行存在）", async () => {
     mockFetch({ exists: true, production: { progress: { stage: "乱" } } });
     expect(await fetchProductionProgress("proj_1")).toEqual({
-      stage: "script",
       rendered: false,
+      stage: "script",
     });
   });
 

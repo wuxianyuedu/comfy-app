@@ -175,12 +175,12 @@ describe("page-window —— 尾部窗口的增量追加", () => {
 
 describe("page-window —— 平行分块", () => {
   it("从头按片长切，第 index 块给出它覆盖的范围", () => {
-    expect(chunkRange(10, 4, 0)).toEqual({ start: 0, end: 4, total: 3 });
-    expect(chunkRange(10, 4, 1)).toEqual({ start: 4, end: 8, total: 3 });
+    expect(chunkRange(10, 4, 0)).toEqual({ end: 4, start: 0, total: 3 });
+    expect(chunkRange(10, 4, 1)).toEqual({ end: 8, start: 4, total: 3 });
   });
 
   it("最后一块在末尾收口（不外溢）", () => {
-    expect(chunkRange(10, 4, 2)).toEqual({ start: 8, end: 10, total: 3 });
+    expect(chunkRange(10, 4, 2)).toEqual({ end: 10, start: 8, total: 3 });
   });
 
   it("越界块号钳回有效区间", () => {
@@ -197,20 +197,20 @@ describe("page-window —— 平行分块", () => {
   });
 
   it("空列表是「1 块的空块」", () => {
-    expect(chunkRange(0, 4, 0)).toEqual({ start: 0, end: 0, total: 1 });
+    expect(chunkRange(0, 4, 0)).toEqual({ end: 0, start: 0, total: 1 });
   });
 
   it("负数 / 非有限条目数当 0 处理（不会出现负的 end 或 Infinity 块）", () => {
-    expect(chunkRange(-5, 4, 0)).toEqual({ start: 0, end: 0, total: 1 });
-    expect(chunkRange(NaN, 4, 0)).toEqual({ start: 0, end: 0, total: 1 });
-    expect(chunkRange(Infinity, 4, 0)).toEqual({ start: 0, end: 0, total: 1 });
+    expect(chunkRange(-5, 4, 0)).toEqual({ end: 0, start: 0, total: 1 });
+    expect(chunkRange(NaN, 4, 0)).toEqual({ end: 0, start: 0, total: 1 });
+    expect(chunkRange(Infinity, 4, 0)).toEqual({ end: 0, start: 0, total: 1 });
   });
 
   it("片长为 0 / 负数 / NaN 时按 1 处理（不会出现 Infinity 块）", () => {
     for (const size of [0, -1, NaN]) {
       const r = chunkRange(3, size, 0);
       expect(r.total).toBe(3);
-      expect(r).toEqual({ start: 0, end: 1, total: 3 });
+      expect(r).toEqual({ end: 1, start: 0, total: 3 });
     }
   });
 });

@@ -27,10 +27,10 @@ import {
 /** 一组合法事实（默认「空闲且可见」），用例只覆盖自己关心的那几项。 */
 function facts(over: Partial<LivenessFacts> = {}): LivenessFacts {
   return {
-    up: true,
-    starting: false,
     busy: false,
     hidden: false,
+    starting: false,
+    up: true,
     verifying: false,
     ...over,
   };
@@ -39,17 +39,17 @@ function facts(over: Partial<LivenessFacts> = {}): LivenessFacts {
 describe("classifyLivenessPhase", () => {
   it("崩溃复核优先于一切：收到退出信号就不该等下一拍", () => {
     expect(classifyLivenessPhase(facts({ verifying: true }))).toBe("verifying");
-    expect(classifyLivenessPhase(facts({ verifying: true, hidden: true }))).toBe("verifying");
+    expect(classifyLivenessPhase(facts({ hidden: true, verifying: true }))).toBe("verifying");
   });
 
   it("隐藏优先于启动等待与出图：用户看不见时先省资源", () => {
     expect(classifyLivenessPhase(facts({ hidden: true }))).toBe("hidden");
     expect(classifyLivenessPhase(facts({ hidden: true, starting: true }))).toBe("hidden");
-    expect(classifyLivenessPhase(facts({ hidden: true, busy: true }))).toBe("hidden");
+    expect(classifyLivenessPhase(facts({ busy: true, hidden: true }))).toBe("hidden");
   });
 
   it("启动等待优先于出图：用户在盯着转圈，用出图档会把「就绪」拖成半分钟", () => {
-    expect(classifyLivenessPhase(facts({ starting: true, busy: true }))).toBe("starting");
+    expect(classifyLivenessPhase(facts({ busy: true, starting: true }))).toBe("starting");
   });
 
   it("有活儿就是出图档，其余是空闲档", () => {

@@ -38,8 +38,8 @@ export function pythonAttempts(
   platform: NodeJS.Platform = process.platform,
 ): Array<PythonAttempt> {
   return pythonCandidates(platform).map((command) => ({
-    command,
     args: pythonProbeArgs(command, [...scriptArgs]),
+    command,
   }));
 }
 

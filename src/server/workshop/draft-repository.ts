@@ -15,14 +15,14 @@ import { workshopDb } from "./db";
 /** 纯函数：线上草稿 → 可写行（不含 id / 时间戳）。 */
 export function draftToRow(draft: WorkshopDraftDto): Partial<WorkshopDraftInsert> {
   return {
-    title: draft.meta.title ?? "",
-    type: draft.meta.type ?? "short_video",
-    tone: draft.meta.tone ?? "",
-    logline: draft.meta.logline ?? "",
-    scriptMarkdown: draft.scriptMarkdown ?? "",
-    scenes: draft.scenes,
     characters: draft.characters,
+    logline: draft.meta.logline ?? "",
+    scenes: draft.scenes,
+    scriptMarkdown: draft.scriptMarkdown ?? "",
     shots: draft.shots,
+    title: draft.meta.title ?? "",
+    tone: draft.meta.tone ?? "",
+    type: draft.meta.type ?? "short_video",
   };
 }
 
@@ -30,11 +30,11 @@ export function draftToRow(draft: WorkshopDraftDto): Partial<WorkshopDraftInsert
 export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
   return parseDraftDto({
     meta: {
-      title: row.title,
-      type: row.type,
-      tone: row.tone,
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,
+      title: row.title,
+      tone: row.tone,
+      type: row.type,
     },
     scriptMarkdown: row.scriptMarkdown,
     /* SAFETY: 类型断言已复核 */
@@ -108,16 +108,16 @@ export async function upsertDraft(
   }
   // insert 分支：补齐必填列（createdAt/updatedAt 由 drizzle 默认函数生成）。
   const insertRow: WorkshopDraftInsert = {
-    id,
-    userId: userId ?? null,
-    title: draft.meta.title ?? "",
-    type: draft.meta.type ?? "short_video",
-    tone: draft.meta.tone ?? "",
-    logline: draft.meta.logline ?? "",
-    scriptMarkdown: draft.scriptMarkdown ?? "",
-    scenes: draft.scenes,
     characters: draft.characters,
+    id,
+    logline: draft.meta.logline ?? "",
+    scenes: draft.scenes,
+    scriptMarkdown: draft.scriptMarkdown ?? "",
     shots: draft.shots,
+    title: draft.meta.title ?? "",
+    tone: draft.meta.tone ?? "",
+    type: draft.meta.type ?? "short_video",
+    userId: userId ?? null,
   };
   await workshopDb.insert(workshopDraft).values(insertRow);
 }

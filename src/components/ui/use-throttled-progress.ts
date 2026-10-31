@@ -138,7 +138,7 @@ export function useThrottledProgress(
     setValue(initial);
   }, [initial]);
 
-  return { value, report, flush, reset };
+  return { flush, report, reset, value };
 }
 
 /**
@@ -250,7 +250,7 @@ export function useThrottledProgressMap(
     });
   }, []);
 
-  return { progress, report, flush, clear };
+  return { clear, flush, progress, report };
 }
 
 /**

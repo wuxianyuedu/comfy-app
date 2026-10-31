@@ -104,20 +104,20 @@ export class TaskRepository extends DrizzleRepository<Task> {
     const rows = await db
       .insert(task)
       .values({
-        userId: input.userId,
-        type: input.type,
-        prompt: input.prompt,
-        negativePrompt: input.negativePrompt ?? null,
-        params: input.params,
-        workflowName: input.workflowName,
-        projectId: input.projectId ?? null,
-        shotId: input.shotId ?? null,
-        referenceImages: input.referenceImages ?? undefined,
-        workflowSnapshot: input.workflowSnapshot ?? undefined,
         claimedBy: input.claimedBy ?? null,
         execPayload: input.execPayload ?? null,
+        negativePrompt: input.negativePrompt ?? null,
+        params: input.params,
         parentId: input.parentId ?? null,
+        projectId: input.projectId ?? null,
+        prompt: input.prompt,
+        referenceImages: input.referenceImages ?? undefined,
+        shotId: input.shotId ?? null,
         status: "QUEUED",
+        type: input.type,
+        userId: input.userId,
+        workflowName: input.workflowName,
+        workflowSnapshot: input.workflowSnapshot ?? undefined,
       })
       .returning();
     return firstRowRequired(rows, "任务插入");
@@ -173,13 +173,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
         return withImages(page);
       }
       const rows = await db.query.task.findMany({
-        where,
         orderBy: [desc(task.createdAt)],
+        where,
         ...(opts.take !== undefined ? { limit: opts.take } : {}),
         /* 列表卡只要十来个字段：`workflowSnapshot` 与 `logs` 单行可达数 MB，
          * take=60 时是几十 MB 的白拉白反序列化（router 只映射卡片字段）。
          * 详情查询（findByIdWithImages）不受影响，仍取全列。 */
-        columns: { workflowSnapshot: false, logs: false },
+        columns: { logs: false, workflowSnapshot: false },
         with: {
           images: {
             orderBy: [desc(taskImage.isCover), asc(taskImage.sortIndex)],
@@ -248,8 +248,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
   ): Promise<{ projectId: string | null; workflowSnapshot: unknown } | null> {
     const rows = await db
       .select({
-        workflowSnapshot: task.workflowSnapshot,
         projectId: task.projectId,
+        workflowSnapshot: task.workflowSnapshot,
       })
       .from(task)
       .where(eq(task.id, id))
@@ -259,8 +259,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   async findByProjectIdWithImages(projectId: string) {
     return db.query.task.findMany({
-      where: eq(task.projectId, projectId),
       orderBy: [desc(task.createdAt)],
+      where: eq(task.projectId, projectId),
       with: { images: { orderBy: [asc(taskImage.sortIndex)] } },
     });
   }
@@ -284,10 +284,10 @@ export class TaskRepository extends DrizzleRepository<Task> {
   } | null> {
     const rows = await db
       .select({
-        status: task.status,
+        error: task.error,
         progress: task.progress,
         resultImages: task.resultImages,
-        error: task.error,
+        status: task.status,
       })
       .from(task)
       .where(eq(task.id, taskId))
@@ -315,9 +315,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
     return db
       .select({
         id: task.id,
-        status: task.status,
         progress: task.progress,
         resultImages: task.resultImages,
+        status: task.status,
       })
       .from(task)
       .where(inArray(task.id, taskIds));
@@ -340,9 +340,9 @@ export class TaskRepository extends DrizzleRepository<Task> {
   } | null> {
     const rows = await db
       .select({
-        status: task.status,
-        progress: task.progress,
         error: task.error,
+        progress: task.progress,
+        status: task.status,
         validationErrors: task.validationErrors,
         workflowName: task.workflowName,
         // 终态收口要带产出清单（host 模式没有进程内 done 帧，见 stream 路由）；
@@ -351,8 +351,8 @@ export class TaskRepository extends DrizzleRepository<Task> {
         // 3-C（ADR §13 D1/D2）：SSE 单源化后轮询要读节点进度与日志增量。
         // 「轻量投影」的边界随之从「不含大列」改为「不含 workflowSnapshot」——
         // 本机 libsql 异步驱动、单用户个位数活跃流，3s 一次可承受。
-        progressNode: task.progressNode,
         logs: task.logs,
+        progressNode: task.progressNode,
       })
       .from(task)
       .where(eq(task.id, id))
@@ -389,13 +389,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
   } | null> {
     const rows = await db
       .select({
-        id: task.id,
-        workflowName: task.workflowName,
-        progress: task.progress,
-        progressNode: task.progressNode,
         claimedAt: task.claimedAt,
         createdAt: task.createdAt,
         execPayload: task.execPayload,
+        id: task.id,
+        progress: task.progress,
+        progressNode: task.progressNode,
+        workflowName: task.workflowName,
       })
       .from(task)
       .where(eq(task.status, "RUNNING"))

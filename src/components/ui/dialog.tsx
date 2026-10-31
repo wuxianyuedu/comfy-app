@@ -43,8 +43,8 @@ function DialogContent({
   className,
   /** 给弹窗本体的额外 class（如形态按状态切换的宽度/边框）；与调用处传入的
    *  `className` 分开，是为了让「内容体」与「外层容器」各自可覆盖。 */
-  popupClassName,
   children,
+  popupClassName,
   /** 是否渲染内置的右上角关闭按钮（`absolute top-2 right-2`）。
    *
    *  **调用处只要自绘了关闭按钮，就必须传 `false`**：本仓库的弹窗形态约定
@@ -134,9 +134,9 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function DialogFooter({
+  children,
   className,
   showCloseButton = false,
-  children,
   ...props
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean;

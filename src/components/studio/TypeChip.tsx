@@ -23,11 +23,11 @@ import { cn } from "~/lib/utils";
  * 不是调用点的个性化需求；调用点再传 `style` 时排在后面，仍可覆盖。
  */
 export function TypeChip({
-  size = "sm",
-  tone = "neutral",
-  className,
-  style,
   children,
+  className,
+  size = "sm",
+  style,
+  tone = "neutral",
 }: {
   children?: React.ReactNode;
   className?: string;

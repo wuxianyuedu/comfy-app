@@ -119,26 +119,26 @@ function rowTitle(port: ParamOutputPort, side: "right" | "left"): string {
 }
 
 export function WorkflowParamCard({
-  entryId,
-  cls,
-  label,
-  idLabel,
-  classLabel,
-  hostNodeId,
-  width,
-  canWire,
-  readOnly = false,
   canReset,
-  onReset,
-  outputPorts,
-  footNote,
-  wired = false,
+  canWire,
+  classLabel,
+  cls,
   endpoint,
-  side = "right",
-  selected = false,
-  onSelect,
-  hoverRef,
+  entryId,
+  footNote,
+  hostNodeId,
   hoverEvents,
+  hoverRef,
+  idLabel,
+  label,
+  onReset,
+  onSelect,
+  outputPorts,
+  readOnly = false,
+  selected = false,
+  side = "right",
+  width,
+  wired = false,
 }: WorkflowParamCardProps) {
   const style = paramClassStyle(cls);
   const disabled = !canWire || readOnly;
@@ -174,9 +174,9 @@ export function WorkflowParamCard({
       <div
         className="flex shrink-0 items-center gap-1.5 px-2"
         style={{
-          height: PARAM_NODE_HEADER_H,
-          borderBottom: "1px solid var(--color-border-subtle)",
           background: `${style.color}14`,
+          borderBottom: "1px solid var(--color-border-subtle)",
+          height: PARAM_NODE_HEADER_H,
         }}
       >
         <span
@@ -267,9 +267,9 @@ export function WorkflowParamCard({
               className="text-4xs shrink-0 rounded px-1 font-mono leading-3.5"
               data-testid={`param-node-out-type-${entryId}-${index}`}
               style={{
-                color: style.color,
                 background: `${style.color}1f`,
                 border: `1px solid ${style.color}44`,
+                color: style.color,
               }}
             >
               {port.type}

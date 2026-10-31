@@ -62,7 +62,7 @@ export type BackoffOptions = {
  * 那一半**：delay 的算法。
  */
 export function backoffDelayMs(opts: BackoffOptions): number {
-  const { attempt, baseMs, shape, maxMs, maxAttempt } = opts;
+  const { attempt, baseMs, maxAttempt, maxMs, shape } = opts;
   const n = Math.max(0, attempt);
   if (shape === "fixed") {
     return baseMs;
@@ -79,25 +79,25 @@ export function backoffDelayMs(opts: BackoffOptions): number {
 
 /** WS 断线重连：基数 1s、封顶 15s、`2 ** attempt` 夹在 8。 */
 export const WS_RECONNECT = /* SAFETY: 类型断言已复核 */ {
-  shape: "exponential",
   baseMs: 1000,
   maxMs: 15000,
+  shape: "exponential",
   /** `2 ** 8 = 256` → 1s × 256 = 256s 远超封顶，再涨没有意义。 */
   maxAttempt: 8,
 } as const satisfies BackoffShapeOptions;
 
 /** history 轮询：12 轮 × 250ms（共 3s）—— 覆盖「结果晚一拍落盘」。 */
 export const HISTORY_READ = /* SAFETY: 类型断言已复核 */ {
-  shape: "fixed",
   baseMs: 250,
   maxAttempts: 12,
+  shape: "fixed",
 } as const;
 
 /** Ollama 冷启动就绪：20 次 × 2s（共 40s）—— 覆盖冷启动的常见耗时。 */
 export const OLLAMA_READY = /* SAFETY: 类型断言已复核 */ {
-  shape: "fixed",
   baseMs: 2000,
   maxAttempts: 20,
+  shape: "fixed",
 } as const;
 
 /** 首帧（文生视频的第一跳）等库里收口：150 次 × 2s（共 5min）。
@@ -108,30 +108,30 @@ export const OLLAMA_READY = /* SAFETY: 类型断言已复核 */ {
  *  也与本助手改之前的超时一致（改前是 emitter 订阅 + `withTimeout`，见
  *  `comfyui/firstframe.ts`）。 */
 export const FIRST_FRAME_WAIT = /* SAFETY: 类型断言已复核 */ {
-  shape: "fixed",
   baseMs: 2000,
   maxAttempts: 150,
+  shape: "fixed",
 } as const;
 
 /** ComfyUI 停止后的探针：5 次 × 500ms（共 2.5s）—— 等进程树退出。 */
 export const COMFY_STOP_PROBE = /* SAFETY: 类型断言已复核 */ {
-  shape: "fixed",
   baseMs: 500,
   maxAttempts: 5,
+  shape: "fixed",
 } as const;
 
 /** Drizzle Studio 停止后的探针：8 次 × 400ms（共 3.2s）。 */
 export const DRIZZLE_STOP_PROBE = /* SAFETY: 类型断言已复核 */ {
-  shape: "fixed",
   baseMs: 400,
   maxAttempts: 8,
+  shape: "fixed",
 } as const;
 
 /** Ollama 停止后的探针：10 次 × 500ms（共 5s）。 */
 export const OLLAMA_STOP_PROBE = /* SAFETY: 类型断言已复核 */ {
-  shape: "fixed",
   baseMs: 500,
   maxAttempts: 10,
+  shape: "fixed",
 } as const;
 
 /**
@@ -150,9 +150,9 @@ export const OLLAMA_STOP_PROBE = /* SAFETY: 类型断言已复核 */ {
  * 收口拖在库里没有意义，用户的界面在等这个终态。
  */
 export const TERMINAL_DB_WRITE = /* SAFETY: 类型断言已复核 */ {
-  shape: "exponential",
   baseMs: 40,
   maxMs: 300,
+  shape: "exponential",
   /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
   maxAttempts: 4,
 } as const;
@@ -172,9 +172,9 @@ export const TERMINAL_DB_WRITE = /* SAFETY: 类型断言已复核 */ {
  * 磁盘满一类真故障，那类必须让构建或启动失败得看得见。
  */
 export const SQLITE_PRAGMA_BOOT = /* SAFETY: 类型断言已复核 */ {
-  shape: "exponential",
   baseMs: 25,
   maxMs: 200,
+  shape: "exponential",
   /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
   maxAttempts: 5,
 } as const;
@@ -193,9 +193,9 @@ export const SQLITE_PRAGMA_BOOT = /* SAFETY: 类型断言已复核 */ {
  * 穷尽之后**把错误呈现给用户**比让界面卡着更诚实（失败路径必须有用户可见出口，硬规则 4）。
  */
 export const SETTINGS_DB_WRITE = /* SAFETY: 类型断言已复核 */ {
-  shape: "exponential",
   baseMs: 40,
   maxMs: 200,
+  shape: "exponential",
   /** 含首次尝试的总次数（循环边界写在这里，退避算法仍在调用处）。 */
   maxAttempts: 3,
 } as const;

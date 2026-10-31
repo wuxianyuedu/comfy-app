@@ -69,22 +69,22 @@ export async function syncFilmToProject(
     }
     return {
       ...shot,
-      clipUrl: clip.videoPath ?? undefined,
       clipStatus: "done",
+      clipUrl: clip.videoPath ?? undefined,
     };
   });
 
   await productionRepository.upsertForUser(userId, {
-    id: row.id,
-    title: row.title,
-    type: row.type,
-    tone: row.tone,
-    logline: row.logline,
-    scriptMarkdown: row.scriptMarkdown,
-    scenes: row.scenes,
     characters: row.characters,
+    id: row.id,
+    logline: row.logline,
+    progress: { ...progress, rendered: true, stage: "render" },
+    scenes: row.scenes,
+    scriptMarkdown: row.scriptMarkdown,
     shots: nextShots,
-    progress: { ...progress, stage: "render", rendered: true },
+    title: row.title,
+    tone: row.tone,
+    type: row.type,
   });
 }
 
@@ -154,8 +154,8 @@ export async function composeFilm(id: string) {
   }
 
   const shots = await filmShotRepository.listByFilm(id, {
-    status: "SUCCEEDED",
     onlyWithVideo: true,
+    status: "SUCCEEDED",
   });
   if (!shots.length) {
     await filmRepository.markFailed(id, "没有可用的镜头视频");
@@ -165,7 +165,7 @@ export async function composeFilm(id: string) {
   const cwd = process.cwd();
   /* 成片画幅：列里存的是尺寸表达（老行是 "1280x720" 字符串，`toSizeSpec` 兼容），
    * ffmpeg 要的是像素 —— 在这里折算。 */
-  const { width: W, height: H } = sizeSpecDims(toSizeSpec(film.size), "video");
+  const { height: H, width: W } = sizeSpecDims(toSizeSpec(film.size), "video");
   const fps = film.fps;
   const tmpDir = path.join(filmsRoot(), `_tmp_${id}`);
   await fs.mkdir(tmpDir, { recursive: true });
@@ -186,43 +186,43 @@ export async function composeFilm(id: string) {
         // 在起 ffmpeg 之前就说清是哪一条、存的是哪个地址，别让它变成一句
         // 「No such file or directory」的 stderr 片段（硬规则 4）。
         throw new Error(
-          `镜头 ${i + 1} 的视频地址不在产物目录内：${clampText(videoPath, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+          `镜头 ${i + 1} 的视频地址不在产物目录内：${clampText(videoPath, { marker: "", maxLength: INLINE_SNIPPET_MAX })}`,
         );
       }
       const segOut = path.join(tmpDir, `seg_${i}.mp4`);
       const dur = shot.duration ?? film.framesPerShot / fps;
       const fadeOut = Math.max(0, dur - 0.3);
-      const vf = buildSegmentVf({ width: W, height: H, fps, fadeOut });
+      const vf = buildSegmentVf({ fadeOut, fps, height: H, width: W });
 
       const srtPath = path.join(tmpDir, `seg_${i}.srt`);
       if (film.subtitleOn) {
         // 空串标题也要回落到 prompt（|| 语义），沿用既有行为。
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
         const srtText = (shot.heading || shot.prompt).slice(0, 80);
-        await fs.writeFile(srtPath, buildSrtBody({ text: srtText, dur }), "utf-8");
+        await fs.writeFile(srtPath, buildSrtBody({ dur, text: srtText }), "utf-8");
       }
 
       const tryWithSub = film.subtitleOn;
       let res = await runFFmpeg(
         buildNormalizeArgs({
           clip,
-          vf,
           dur,
           out: segOut,
           srtPath: tryWithSub ? srtPath : null,
+          vf,
         }),
         tmpDir,
       );
       if (res.code !== 0 && tryWithSub) {
         await appendFilmLog(id, "warn", `镜头 ${i + 1} 字幕烧录失败，重试（无字幕）`);
         res = await runFFmpeg(
-          buildNormalizeArgs({ clip, vf, dur, out: segOut, srtPath: null }),
+          buildNormalizeArgs({ clip, dur, out: segOut, srtPath: null, vf }),
           tmpDir,
         );
       }
       if (res.code !== 0) {
         throw new Error(
-          `镜头 ${i + 1} 归一化失败：${clampText(res.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+          `镜头 ${i + 1} 归一化失败：${clampText(res.stderr, { marker: "", maxLength: INLINE_SNIPPET_MAX })}`,
         );
       }
       await appendFilmLog(id, "info", `镜头 ${i + 1}/${shots.length} 已就绪`);
@@ -239,7 +239,7 @@ export async function composeFilm(id: string) {
     );
     if (cres.code !== 0) {
       throw new Error(
-        `拼接失败：${clampText(cres.stderr, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
+        `拼接失败：${clampText(cres.stderr, { marker: "", maxLength: INLINE_SNIPPET_MAX })}`,
       );
     }
 
@@ -304,8 +304,8 @@ export async function composeFilm(id: string) {
           film.projectId,
           finalShots.map((s) => ({
             shotId: s.shotId ?? null,
-            videoPath: s.videoPath ?? null,
             status: /* SAFETY: 类型断言已复核 */ s.status as ShotStatus,
+            videoPath: s.videoPath ?? null,
           })),
         );
       } catch (e) {
@@ -316,6 +316,6 @@ export async function composeFilm(id: string) {
     await filmRepository.markFailed(id, errorMessage(e, "合成失败"));
     await appendFilmLog(id, "error", errorText(e, "合成失败"));
   } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+    await fs.rm(tmpDir, { force: true, recursive: true }).catch(() => undefined);
   }
 }

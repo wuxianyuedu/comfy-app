@@ -39,7 +39,7 @@ export function makeExtractLog(
   summary: string,
   detail?: string,
 ): ExtractLogEntry {
-  return { ts: nowTs(), kind, summary, detail };
+  return { detail, kind, summary, ts: nowTs() };
 }
 
 /** 把一条消息的 content（纯文本或多模态块）压成可记录的纯文本。 */

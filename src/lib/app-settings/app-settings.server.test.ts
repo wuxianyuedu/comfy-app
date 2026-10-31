@@ -1,12 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  utimesSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -36,7 +29,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.cwd = () => originalCwd;
-  rmSync(sandbox, { recursive: true, force: true });
+  rmSync(sandbox, { force: true, recursive: true });
 });
 
 describe("getSettingsSync 的跨进程失效", () => {
@@ -45,7 +38,7 @@ describe("getSettingsSync 的跨进程失效", () => {
      * 取值时读盘。这一条在「有缓存就永远用缓存」的实现下会红 —— 用户在设置页填完
      * comfy-cli 解释器点「重试」，宿主仍拿空值（桌包实测复现过同一个 FAILED）。 */
     writeSettings({ comfyCliPython: "" });
-    const { getSettingsSync, DEFAULTS } = await loadSettingsServer();
+    const { DEFAULTS, getSettingsSync } = await loadSettingsServer();
     expect(getSettingsSync().comfyCliPython).toBe("");
 
     writeSettings({
@@ -59,7 +52,7 @@ describe("getSettingsSync 的跨进程失效", () => {
   });
 
   it("文件从缺失到出现：缺失期拿默认值，出现后读得到", async () => {
-    const { getSettingsSync, DEFAULTS } = await loadSettingsServer();
+    const { DEFAULTS, getSettingsSync } = await loadSettingsServer();
     expect(getSettingsSync().comfyuiPath).toBe(DEFAULTS.comfyuiPath);
 
     writeSettings({ comfyuiPath: "D:/ComfyUI" });
@@ -117,7 +110,7 @@ describe("getSettingsSync 的跨进程失效", () => {
 
   it("saveSettings 落盘后本进程读到的是刚写的值", async () => {
     writeSettings({ comfyCliPython: "" });
-    const { saveSettings, getSettingsSync } = await loadSettingsServer();
+    const { getSettingsSync, saveSettings } = await loadSettingsServer();
     const saved = await saveSettings({ comfyCliPython: "D:/x/python.exe" });
     expect(saved.comfyCliPython).toBe("D:/x/python.exe");
     expect(getSettingsSync().comfyCliPython).toBe("D:/x/python.exe");

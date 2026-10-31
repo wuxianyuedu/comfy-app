@@ -39,14 +39,14 @@ const subgraphWrapperNode = {
 };
 
 function rawJsonWith(node: unknown) {
-  return { nodes: [node], links: [] };
+  return { links: [], nodes: [node] };
 }
 
 describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回退", () => {
   it("子图 wrapper 无 control 哨兵槽时，randomize 应兜底刷新 seed 值", () => {
     const raw = rawJsonWith(JSON.parse(JSON.stringify(subgraphWrapperNode)));
     const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
-      { nodeId: "76", name: "control_after_generate", value: "randomize" },
+      { name: "control_after_generate", nodeId: "76", value: "randomize" },
     ]) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
 
     const node = result.nodes.find((n) => n.id === 76)!;
@@ -64,7 +64,6 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
     // KSampler 有 6 个 widget 输入 + 7 个 widgets_values → 有哨兵槽
     const ksampler = {
       id: 69,
-      type: "KSampler",
       inputs: [
         { name: "model", type: "MODEL" },
         { name: "positive", type: "CONDITIONING" },
@@ -77,11 +76,12 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
         { name: "scheduler", widget: { name: "scheduler" } },
         { name: "denoise", widget: { name: "denoise" } },
       ],
+      type: "KSampler",
       widgets_values: [276260017540259, "fixed", 25, 4, "res_multistep", "simple", 1],
     };
     const raw = rawJsonWith(JSON.parse(JSON.stringify(ksampler)));
     const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
-      { nodeId: "69", name: "control_after_generate", value: "randomize" },
+      { name: "control_after_generate", nodeId: "69", value: "randomize" },
     ]) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
 
     const node = result.nodes.find((n) => n.id === 69)!;
@@ -93,7 +93,7 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
   it("非 randomize 且无哨兵槽时保持原值（不误改 seed）", () => {
     const raw = rawJsonWith(JSON.parse(JSON.stringify(subgraphWrapperNode)));
     const result = /* SAFETY: 类型断言已复核 */ applyRawOverrides(raw, [
-      { nodeId: "76", name: "control_after_generate", value: "fixed" },
+      { name: "control_after_generate", nodeId: "76", value: "fixed" },
     ]) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
 
     const node = result.nodes.find((n) => n.id === 76)!;
@@ -103,13 +103,13 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
   it("没有 seed widget 的节点跳过，不报错", () => {
     const note = {
       id: 35,
-      type: "MarkdownNote",
       inputs: [],
+      type: "MarkdownNote",
       widgets_values: ["hello"],
     };
     const raw = rawJsonWith(JSON.parse(JSON.stringify(note)));
     const result = applyRawOverrides(raw, [
-      { nodeId: "35", name: "control_after_generate", value: "randomize" },
+      { name: "control_after_generate", nodeId: "35", value: "randomize" },
     ]);
     const node = /* SAFETY: 类型断言已复核 */ (
       result as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> }
@@ -133,133 +133,21 @@ describe("applyRawOverrides — control_after_generate=randomize 的哨兵槽回
  *  KSampler 69 / CLIPTextEncode 67，边界连线从哨兵节点 -10 出发。 */
 function liblibSubgraphFixture() {
   return {
-    nodes: [
-      {
-        id: 76,
-        type: "9b9009e4-2d3d-445f-9be5-6063f465757e",
-        inputs: [
-          { name: "text", type: "STRING", widget: { name: "text" } },
-          { name: "text_1", type: "STRING", widget: { name: "text_1" } },
-          { name: "width_1", type: "INT", widget: { name: "width_1" } },
-          { name: "height_1", type: "INT", widget: { name: "height_1" } },
-          { name: "steps_1", type: "INT", widget: { name: "steps_1" } },
-          { name: "cfg_1", type: "FLOAT", widget: { name: "cfg_1" } },
-          { name: "seed", type: "INT", widget: { name: "seed" } },
-          {
-            name: "unet_name_1",
-            type: "COMBO",
-            widget: { name: "unet_name_1" },
-          },
-          {
-            name: "clip_name_1",
-            type: "COMBO",
-            widget: { name: "clip_name_1" },
-          },
-          { name: "vae_name_1", type: "COMBO", widget: { name: "vae_name_1" } },
-        ],
-        widgets_values: [
-          "旧提示词（工作流里存的）",
-          "negative",
-          1024,
-          1024,
-          25,
-          4,
-          276260017540259,
-          "z_image_int8_convrot.safetensors",
-          "qwen_3_4b.safetensors",
-          "ae.safetensors",
-        ],
-        properties: {
-          proxyWidgetErrorQuarantine: [
-            {
-              originalEntry: ["69", "control_after_generate"],
-              reason: "missingSubgraphInput",
-            },
-          ],
-        },
-      },
-    ],
-    links: [],
     definitions: {
       subgraphs: [
         {
           id: "9b9009e4-2d3d-445f-9be5-6063f465757e",
-          name: "Text to Image",
           inputs: [
-            { id: "p1", name: "text", type: "STRING", linkIds: [108] },
-            { id: "p2", name: "text_1", type: "STRING", linkIds: [125] },
-            { id: "p3", name: "width_1", type: "INT", linkIds: [126] },
-            { id: "p4", name: "height_1", type: "INT", linkIds: [127] },
-            { id: "p5", name: "steps_1", type: "INT", linkIds: [128] },
-            { id: "p6", name: "cfg_1", type: "FLOAT", linkIds: [129] },
-            { id: "p7", name: "seed", type: "INT", linkIds: [130] },
-            { id: "p8", name: "unet_name_1", type: "COMBO", linkIds: [131] },
-            { id: "p9", name: "clip_name_1", type: "COMBO", linkIds: [132] },
-            { id: "p10", name: "vae_name_1", type: "COMBO", linkIds: [133] },
-          ],
-          outputs: [{ id: "o1", name: "IMAGE", type: "IMAGE", linkIds: [79] }],
-          nodes: [
-            {
-              id: 67,
-              type: "CLIPTextEncode",
-              inputs: [
-                { name: "clip", type: "CLIP", link: 78 },
-                {
-                  name: "text",
-                  type: "STRING",
-                  widget: { name: "text" },
-                  link: 108,
-                },
-              ],
-              widgets_values: ["旧提示词（工作流里存的）"],
-            },
-            {
-              id: 69,
-              type: "KSampler",
-              inputs: [
-                { name: "model", type: "MODEL", link: 74 },
-                { name: "positive", type: "CONDITIONING", link: 75 },
-                { name: "negative", type: "CONDITIONING", link: 83 },
-                { name: "latent_image", type: "LATENT", link: 145 },
-                {
-                  name: "seed",
-                  type: "INT",
-                  widget: { name: "seed" },
-                  link: 130,
-                },
-                {
-                  name: "steps",
-                  type: "INT",
-                  widget: { name: "steps" },
-                  link: 128,
-                },
-                {
-                  name: "cfg",
-                  type: "FLOAT",
-                  widget: { name: "cfg" },
-                  link: 129,
-                },
-                {
-                  name: "sampler_name",
-                  type: "COMBO",
-                  widget: { name: "sampler_name" },
-                  link: null,
-                },
-                {
-                  name: "scheduler",
-                  type: "COMBO",
-                  widget: { name: "scheduler" },
-                  link: null,
-                },
-                {
-                  name: "denoise",
-                  type: "FLOAT",
-                  widget: { name: "denoise" },
-                  link: null,
-                },
-              ],
-              widgets_values: [276260017540259, "randomize", 25, 4, "res_multistep", "simple", 1],
-            },
+            { id: "p1", linkIds: [108], name: "text", type: "STRING" },
+            { id: "p2", linkIds: [125], name: "text_1", type: "STRING" },
+            { id: "p3", linkIds: [126], name: "width_1", type: "INT" },
+            { id: "p4", linkIds: [127], name: "height_1", type: "INT" },
+            { id: "p5", linkIds: [128], name: "steps_1", type: "INT" },
+            { id: "p6", linkIds: [129], name: "cfg_1", type: "FLOAT" },
+            { id: "p7", linkIds: [130], name: "seed", type: "INT" },
+            { id: "p8", linkIds: [131], name: "unet_name_1", type: "COMBO" },
+            { id: "p9", linkIds: [132], name: "clip_name_1", type: "COMBO" },
+            { id: "p10", linkIds: [133], name: "vae_name_1", type: "COMBO" },
           ],
           links: [
             {
@@ -287,9 +175,121 @@ function liblibSubgraphFixture() {
               type: "LATENT",
             },
           ],
+          name: "Text to Image",
+          nodes: [
+            {
+              id: 67,
+              inputs: [
+                { link: 78, name: "clip", type: "CLIP" },
+                {
+                  link: 108,
+                  name: "text",
+                  type: "STRING",
+                  widget: { name: "text" },
+                },
+              ],
+              type: "CLIPTextEncode",
+              widgets_values: ["旧提示词（工作流里存的）"],
+            },
+            {
+              id: 69,
+              inputs: [
+                { link: 74, name: "model", type: "MODEL" },
+                { link: 75, name: "positive", type: "CONDITIONING" },
+                { link: 83, name: "negative", type: "CONDITIONING" },
+                { link: 145, name: "latent_image", type: "LATENT" },
+                {
+                  link: 130,
+                  name: "seed",
+                  type: "INT",
+                  widget: { name: "seed" },
+                },
+                {
+                  link: 128,
+                  name: "steps",
+                  type: "INT",
+                  widget: { name: "steps" },
+                },
+                {
+                  link: 129,
+                  name: "cfg",
+                  type: "FLOAT",
+                  widget: { name: "cfg" },
+                },
+                {
+                  link: null,
+                  name: "sampler_name",
+                  type: "COMBO",
+                  widget: { name: "sampler_name" },
+                },
+                {
+                  link: null,
+                  name: "scheduler",
+                  type: "COMBO",
+                  widget: { name: "scheduler" },
+                },
+                {
+                  link: null,
+                  name: "denoise",
+                  type: "FLOAT",
+                  widget: { name: "denoise" },
+                },
+              ],
+              type: "KSampler",
+              widgets_values: [276260017540259, "randomize", 25, 4, "res_multistep", "simple", 1],
+            },
+          ],
+          outputs: [{ id: "o1", linkIds: [79], name: "IMAGE", type: "IMAGE" }],
         },
       ],
     },
+    links: [],
+    nodes: [
+      {
+        id: 76,
+        inputs: [
+          { name: "text", type: "STRING", widget: { name: "text" } },
+          { name: "text_1", type: "STRING", widget: { name: "text_1" } },
+          { name: "width_1", type: "INT", widget: { name: "width_1" } },
+          { name: "height_1", type: "INT", widget: { name: "height_1" } },
+          { name: "steps_1", type: "INT", widget: { name: "steps_1" } },
+          { name: "cfg_1", type: "FLOAT", widget: { name: "cfg_1" } },
+          { name: "seed", type: "INT", widget: { name: "seed" } },
+          {
+            name: "unet_name_1",
+            type: "COMBO",
+            widget: { name: "unet_name_1" },
+          },
+          {
+            name: "clip_name_1",
+            type: "COMBO",
+            widget: { name: "clip_name_1" },
+          },
+          { name: "vae_name_1", type: "COMBO", widget: { name: "vae_name_1" } },
+        ],
+        properties: {
+          proxyWidgetErrorQuarantine: [
+            {
+              originalEntry: ["69", "control_after_generate"],
+              reason: "missingSubgraphInput",
+            },
+          ],
+        },
+        type: "9b9009e4-2d3d-445f-9be5-6063f465757e",
+        widgets_values: [
+          "旧提示词（工作流里存的）",
+          "negative",
+          1024,
+          1024,
+          25,
+          4,
+          276260017540259,
+          "z_image_int8_convrot.safetensors",
+          "qwen_3_4b.safetensors",
+          "ae.safetensors",
+        ],
+      },
+    ],
   };
 }
 
@@ -305,7 +305,7 @@ type FixtureResult = {
 describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () => {
   it("提示词覆盖要写进内层 CLIPTextEncode（宿主数组随后被漂移中和清空）", () => {
     const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(liblibSubgraphFixture(), [
-      { nodeId: "76", name: "text", value: "3只小猫在喝山泉" },
+      { name: "text", nodeId: "76", value: "3只小猫在喝山泉" },
     ]) as unknown as FixtureResult;
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
@@ -320,7 +320,7 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
 
   it("seed 覆盖要写进内层 KSampler 的 seed 槽（跳过 control 哨兵）", () => {
     const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(liblibSubgraphFixture(), [
-      { nodeId: "76", name: "seed", value: 12345 },
+      { name: "seed", nodeId: "76", value: 12345 },
     ]) as unknown as FixtureResult;
 
     const inner = raw.definitions.subgraphs[0]!.nodes.find((n) => n.id === 69)!;
@@ -334,7 +334,7 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
 
   it("randomize 兜底生成的随机种子同样要落到内层 KSampler", () => {
     const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(liblibSubgraphFixture(), [
-      { nodeId: "76", name: "control_after_generate", value: "randomize" },
+      { name: "control_after_generate", nodeId: "76", value: "randomize" },
     ]) as unknown as FixtureResult;
 
     const wrapper = raw.nodes.find((n) => n.id === 76)!;
@@ -351,25 +351,25 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
   it("非子图节点不受影响（顶层普通节点仍只改自己）", () => {
     const raw = /* SAFETY: 类型断言已复核 */ applyRawOverrides(
       {
+        links: [],
         nodes: [
           {
             id: 5,
-            type: "CLIPTextEncode",
             inputs: [
-              { name: "clip", type: "CLIP", link: 1 },
+              { link: 1, name: "clip", type: "CLIP" },
               {
+                link: null,
                 name: "text",
                 type: "STRING",
                 widget: { name: "text" },
-                link: null,
               },
             ],
+            type: "CLIPTextEncode",
             widgets_values: ["old"],
           },
         ],
-        links: [],
       },
-      [{ nodeId: "5", name: "text", value: "new" }],
+      [{ name: "text", nodeId: "5", value: "new" }],
     ) as { nodes: Array<{ id: number; widgets_values: Array<unknown> }> };
     expect(raw.nodes[0]!.widgets_values[0]).toBe("new");
   });

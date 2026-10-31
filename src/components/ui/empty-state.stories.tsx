@@ -5,13 +5,13 @@ import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 
 const meta = {
-  title: "UI/EmptyState",
-  component: EmptyState,
   args: {
-    title: "还没有工作流",
     description: "从磁盘导入一个 workflow.json，或直接在画布上新建。",
     icon: FolderTree,
+    title: "还没有工作流",
   },
+  component: EmptyState,
+  title: "UI/EmptyState",
 } satisfies Meta<typeof EmptyState>;
 
 export default meta;
@@ -28,18 +28,18 @@ export const WithAction: Story = {
 
 export const Error: Story = {
   args: {
-    variant: "error",
-    title: "加载失败",
     description: "磁盘上的工作流目录不可读，请检查路径后重试。",
     icon: TriangleAlert,
+    title: "加载失败",
+    variant: "error",
   },
 };
 
 /** `hint` 是行内提示条，不是居中卡片——用同一段说明它的形态边界。 */
 export const Hint: Story = {
   args: {
-    variant: "hint",
     title: "该工作流未暴露对外参数",
+    variant: "hint",
   },
 };
 

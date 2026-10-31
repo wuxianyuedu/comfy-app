@@ -173,19 +173,19 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
     io: /* SAFETY: 类型断言已复核 */ (row.workflowIO ?? null) as Parameters<
       typeof deriveEncapsulationStatus
     >[0]["io"],
+    mode: typeof mode === "string" ? mode : null,
     paramMap: /* SAFETY: 类型断言已复核 */ (row.paramMap ?? null) as Parameters<
       typeof deriveEncapsulationStatus
     >[0]["paramMap"],
-    mode: typeof mode === "string" ? mode : null,
   }).ready;
   return {
     id,
     name,
     ...(taskType !== undefined ? { taskType } : {}),
     category,
-    modes,
-    modelTags,
     encapsulationReady,
+    modelTags,
+    modes,
   };
 }
 
@@ -219,12 +219,12 @@ function toStyleRef(row: Record<string, unknown>): StyleRef | null {
     return null;
   }
   return {
-    slug,
-    name,
-    icon: typeof row.icon === "string" ? row.icon : "✨",
-    promptTemplate,
-    negativePrompt: typeof row.negativePrompt === "string" ? row.negativePrompt : undefined,
     defaultParams: isRecord(row.defaultParams) ? row.defaultParams : undefined,
+    icon: typeof row.icon === "string" ? row.icon : "✨",
+    name,
+    negativePrompt: typeof row.negativePrompt === "string" ? row.negativePrompt : undefined,
+    promptTemplate,
+    slug,
   };
 }
 
@@ -305,12 +305,12 @@ export async function buildLibraryWorkflowInput(
     requestedMode && requestedMode.trim() !== ""
       ? requestedMode
       : (detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null);
-  const { workflowInputs, unmatched } = buildEncapsulatedInputs({
-    io,
-    paramMap: detail?.paramMap ?? null,
-    mode,
-    values,
+  const { unmatched, workflowInputs } = buildEncapsulatedInputs({
     contractIds,
+    io,
+    mode,
+    paramMap: detail?.paramMap ?? null,
+    values,
   });
   /* 尺寸**不**再带 `size`（"WxH"）兼容字段：尺寸只以「比例 + 分辨率」或
    *  「比例 + 百万像素 + 倍数」表达，逐端口落进 `workflowInputs`；
@@ -328,9 +328,9 @@ export async function buildLibraryWorkflowInput(
   };
   return {
     input,
-    unmatched,
     mode,
     modes,
+    unmatched,
     usesFirstFrame: modeUsesFirstFrame(mode),
     usesLastFrame: modeUsesLastFrame(mode),
   };
@@ -386,9 +386,9 @@ function narrowLogEntry(raw: unknown): TaskLogEntry | null {
     return null;
   }
   return {
-    t,
     level: lv,
     msg,
+    t,
     ...(typeof raw.src === "string" && raw.src ? { src: raw.src } : {}),
   };
 }
@@ -421,7 +421,7 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
   const note = (msg: string) => {
     const line = `${tag} ${msg}`;
     console.info(line);
-    h.onLog?.({ t: Date.now(), level: "info", msg: line, src: "client" });
+    h.onLog?.({ level: "info", msg: line, src: "client", t: Date.now() });
   };
 
   const es = new EventSource(`/api/tasks/${encodeURIComponent(taskId)}/stream`);
@@ -438,7 +438,7 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
     settled = true;
     es.close();
     note(ok ? "落定：成功，已关闭流" : `落定：失败，已关闭流（原因：${message ?? "未提供"}）`);
-    h.onSettled({ ok, message });
+    h.onSettled({ message, ok });
   };
   es.onmessage = (ev: MessageEvent<string>) => {
     try {
@@ -461,8 +461,8 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
             if (typeof id === "string" && typeof value === "number" && typeof max === "number") {
               node = {
                 id,
-                value,
                 max,
+                value,
                 ...(typeof label === "string" && label ? { label } : {}),
               };
             }
@@ -581,9 +581,9 @@ async function postRelay(body: Record<string, unknown>): Promise<RelayResponse> 
   let res: Response;
   try {
     res = await fetch("/api/workshop-api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
       signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
     });
   } catch (e: unknown) {
@@ -630,8 +630,8 @@ export async function apiGenerateImage(req: {
 }): Promise<string> {
   const data = await postRelay({
     kind: "image",
-    prompt: req.prompt,
     negative: req.negative,
+    prompt: req.prompt,
     size: req.size,
     ...(req.model ? { model: req.model } : {}),
     ...(req.mode ? { mode: req.mode } : {}),
@@ -664,12 +664,12 @@ export async function apiSubmitVideo(req: {
   prompt: string;
 }): Promise<ApiVideoSubmitResult> {
   const data = await postRelay({
-    kind: "video",
-    prompt: req.prompt,
-    negative: req.negative,
-    image: req.image,
-    frames: req.frames,
     fps: req.fps,
+    frames: req.frames,
+    image: req.image,
+    kind: "video",
+    negative: req.negative,
+    prompt: req.prompt,
   });
   if (!data) {
     throw new Error("API 视频响应格式错误");
@@ -680,7 +680,7 @@ export async function apiSubmitVideo(req: {
   if (!url && !remoteTaskId) {
     throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
   }
-  return { url, remoteTaskId };
+  return { remoteTaskId, url };
 }
 
 /* API 通道：对异步视频任务做一次轮询。 */
@@ -692,16 +692,16 @@ export async function apiPollVideo(
     return { pending: true };
   }
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
-  return { url, pending: !url };
+  return { pending: !url, url };
 }
 
 /* 把生成出/参考用的图片上传进本机 ComfyUI 的 input 目录，
  * 好让视频工作流的 LoadImage 节点能消费它；返回文件名。 */
 export async function prepareLocalInputImage(image: string): Promise<string> {
   const res = await fetch("/api/workshop-local/prepare", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
   });
   let data: unknown;
   try {
@@ -761,17 +761,17 @@ export async function preparePortraitReferences(
       failedCount += 1;
     }
   }
-  return { files, failedCount };
+  return { failedCount, files };
 }
 
 function narrowChannel(v: unknown, fallbackPath: string): ApiChannelView {
   const rec = isRecord(v) ? v : {};
   return {
-    configured: rec.configured === true,
     baseUrl: typeof rec.baseUrl === "string" ? rec.baseUrl : "",
-    path: typeof rec.path === "string" && rec.path ? rec.path : fallbackPath,
-    model: typeof rec.model === "string" ? rec.model : "",
+    configured: rec.configured === true,
     hasApiKey: rec.hasApiKey === true,
+    model: typeof rec.model === "string" ? rec.model : "",
+    path: typeof rec.path === "string" && rec.path ? rec.path : fallbackPath,
   };
 }
 

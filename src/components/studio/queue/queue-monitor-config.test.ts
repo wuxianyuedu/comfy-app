@@ -28,19 +28,19 @@ import {
 /** 只造这一屏真的会读到的字段，其余按契约填死。 */
 function row(over: Partial<QueueRow> & Pick<QueueRow, "status">): QueueRow {
   return {
-    id: over.id ?? `t-${over.status}`,
-    type: "IMAGE",
-    workflowName: over.workflowName ?? "测试工作流",
-    status: over.status,
-    prompt: over.prompt ?? "一句提示词",
-    createdAt: over.createdAt ?? new Date("2026-01-01T00:00:00Z"),
-    cover: null,
     checkpoint: null,
-    videoPath: null,
-    mediaType: "image",
-    projectId: null,
-    progress: over.progress ?? 0,
+    cover: null,
+    createdAt: over.createdAt ?? new Date("2026-01-01T00:00:00Z"),
     error: over.error ?? null,
+    id: over.id ?? `t-${over.status}`,
+    mediaType: "image",
+    progress: over.progress ?? 0,
+    projectId: null,
+    prompt: over.prompt ?? "一句提示词",
+    status: over.status,
+    type: "IMAGE",
+    videoPath: null,
+    workflowName: over.workflowName ?? "测试工作流",
   };
 }
 
@@ -175,7 +175,7 @@ describe("recentWithin", () => {
 describe("reprintText", () => {
   it("带上重投要用的三项内容", () => {
     const text = reprintText(
-      row({ status: "FAILED", prompt: "海岸黎明", workflowName: "SDXL 风光" }),
+      row({ prompt: "海岸黎明", status: "FAILED", workflowName: "SDXL 风光" }),
     );
     expect(text).toContain("海岸黎明");
     expect(text).toContain("SDXL 风光");

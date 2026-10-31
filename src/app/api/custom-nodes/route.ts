@@ -152,27 +152,27 @@ function readManifestSummary() {
     for (const [name, info] of Object.entries(pmap)) {
       const fields: Record<string, unknown> | undefined = isPlainRecord(info) ? info : undefined;
       pkgs.push({
+        contentHash: jsonField(fields, "contentHash", ""),
+        errors: jsonField<Array<unknown>>(fields, "errors", []),
+        generatedAt: jsonField<string | null>(m, "generatedAt", null),
         name,
-        path: jsonField(fields, "path", ""),
         nodeCount: jsonField(fields, "nodeCount", 0),
         nodeTypes: jsonField<Array<string>>(fields, "nodeTypes", []),
-        status: jsonField(fields, "status", "ok"),
-        errors: jsonField<Array<unknown>>(fields, "errors", []),
-        contentHash: jsonField(fields, "contentHash", ""),
         parsedAt: jsonField<string | null>(fields, "parsedAt", null),
         parsedFileCount: jsonField(fields, "parsedFileCount", 0),
-        generatedAt: jsonField<string | null>(m, "generatedAt", null),
+        path: jsonField(fields, "path", ""),
+        status: jsonField(fields, "status", "ok"),
       });
     }
     const sources: Array<string> = jsonField<Array<string>>(m, "sources", []);
     const nodes: unknown = jsonField(m, "nodes", null);
     const summary = {
       generatedAt: jsonField<string | null>(m, "generatedAt", null),
-      totalNodes: isPlainRecord(nodes) ? Object.keys(nodes).length : 0,
-      packages: pkgs,
       missingPaths: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+      packages: pkgs,
       parseErrors: jsonField<Array<unknown>>(m, "parseErrors", []),
       sources,
+      totalNodes: isPlainRecord(nodes) ? Object.keys(nodes).length : 0,
     };
     // stat 失败（极罕见）时 stamp 为 null：返回结果但不缓存。
     if (stamp !== null) {
@@ -340,10 +340,10 @@ function runDiscoverStreaming(
   const cached = discoverCache.get(parent);
   if (cached && Date.now() - cached.at < 5000) {
     send({
-      type: "discover_done",
-      parent,
-      packages: cached.result,
       cached: true,
+      packages: cached.result,
+      parent,
+      type: "discover_done",
     });
     return Promise.resolve(cached.result);
   }
@@ -368,10 +368,10 @@ function runDiscoverStreaming(
         if (!resolved) {
           resolved = true;
           send({
-            type: "progress",
+            msg: `⚠️ ${missingInterpreterMessage()}`,
             parent,
             phase: "scan",
-            msg: `⚠️ ${missingInterpreterMessage()}`,
+            type: "progress",
           });
           resolve([]);
         }
@@ -405,7 +405,7 @@ function runDiscoverStreaming(
           // 取出 msg=...（若其中含 `|` 也没关系：我们把它之后
           // 直到下一个 `|key=` 或行尾的内容整体当作 msg）。
           // 向后兼容：没有 `|msg=` 的旧格式行，就把剩余部分整体当 msg。
-          const fields: DiscoverProgressFields = { phase, msg: "" };
+          const fields: DiscoverProgressFields = { msg: "", phase };
           const msgM = /\|?msg=([^|]*)/.exec(rest);
           if (msgM) {
             fields.msg = msgM[1]!;
@@ -425,23 +425,23 @@ function runDiscoverStreaming(
               fields.total = n;
             }
           }
-          send({ type: "progress", parent, ...fields });
+          send({ parent, type: "progress", ...fields });
         } else if (line.startsWith("{")) {
           // 以最后一行为准（解析器只在末尾打印一次结果）
           finalJson = line;
         } else {
           // 其它日志行 —— 也当作扫描进度透出去
-          send({ type: "progress", parent, phase: "scan", msg: line });
+          send({ msg: line, parent, phase: "scan", type: "progress" });
         }
       });
       /* stderr 也按行切，与解析口那条链同形：整块一次透出会把两行警告挤成
        * 事件里一句带换行的文案，界面上只显示第一行。 */
       forEachOutputLine(cp.stderr, (line) => {
         send({
-          type: "progress",
+          msg: "⚠️ " + line,
           parent,
           phase: "scan",
-          msg: "⚠️ " + line,
+          type: "progress",
         });
       });
 
@@ -461,10 +461,10 @@ function runDiscoverStreaming(
         if (!resolved) {
           resolved = true;
           send({
-            type: "progress",
+            msg: errorText(e, "⚠️ 启动解析进程失败"),
             parent,
             phase: "scan",
-            msg: errorText(e, "⚠️ 启动解析进程失败"),
+            type: "progress",
           });
           resolve([]);
         }
@@ -490,19 +490,19 @@ function runDiscoverStreaming(
           rememberDiscover(parent, pkgs);
           resolved = true;
           send({
-            type: "discover_done",
-            parent,
-            packages: pkgs,
             cached: false,
+            packages: pkgs,
+            parent,
+            type: "discover_done",
           });
           resolve(pkgs);
         } catch {
           resolved = true;
           send({
-            type: "progress",
+            msg: "⚠️ 解析失败，退出码 " + code,
             parent,
             phase: "scan",
-            msg: "⚠️ 解析失败，退出码 " + code,
+            type: "progress",
           });
           resolve([]);
         }
@@ -566,16 +566,16 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
         const attempt = attempts.at(i);
         if (!attempt) {
           send({
-            type: "log",
             level: "error",
             msg: missingInterpreterMessage(),
+            type: "log",
           });
           send({
-            type: "done",
+            exitCode: null,
             ok: false,
             report: null,
             stderr: "no python interpreter",
-            exitCode: null,
+            type: "done",
           });
           controller.close();
           return;
@@ -603,16 +603,16 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
           }
           closed = true;
           send({
-            type: "log",
             level: "error",
             msg: errorText(e, "启动解析进程失败"),
+            type: "log",
           });
           send({
-            type: "done",
+            exitCode: null,
             ok: false,
             report: null,
             stderr: e.message,
-            exitCode: null,
+            type: "done",
           });
           controller.close();
         });
@@ -620,7 +620,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
         /* 按行切分交给内核 —— 与探测口原本是一段孪生实现（两份 `indexOf("\n")` 循环，
          * 一份在 `end` 时补发尾行、一份不补）。 */
         const pipeLogs = (s: NodeJS.ReadableStream, defaultLevel: "info" | "error" = "info") => {
-          forEachOutputLine(s, (line) => send({ type: "log", level: defaultLevel, msg: line }));
+          forEachOutputLine(s, (line) => send({ level: defaultLevel, msg: line, type: "log" }));
         };
         // 解析器的 stdout 是正常进度（绿色 info）。
         // stderr 是错误（红色）—— 解析器把语法错误与一般异常经 log_stderr()
@@ -654,11 +654,11 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
             report = null;
           }
           send({
-            type: "done",
+            exitCode: code,
             ok: !!report,
             report: /* SAFETY: 类型断言已复核 */ report as ParseReport | null,
             stderr: "",
-            exitCode: code,
+            type: "done",
           });
           controller.close();
         });
@@ -670,9 +670,9 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "application/x-ndjson; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "Content-Type": "application/x-ndjson; charset=utf-8",
     },
   });
 }
@@ -721,7 +721,7 @@ async function buildGetResponse(): Promise<Response> {
   // 两条分支都带上 localWorkflowPaths，
   // 好让设置对话框在没配 CUSTOM_NODES_PATH 时（冷路径）
   // 也能填充那个伴随字段。
-  const settings = { paths, localWorkflowPaths };
+  const settings = { localWorkflowPaths, paths };
   if (allCached) {
     const discoveredByParent: Record<string, Array<unknown>> = {};
     /* `allCached` 已逐个查过缓存，这里的 `?? []` 只是让类型与判据同一处
@@ -730,11 +730,11 @@ async function buildGetResponse(): Promise<Response> {
       discoveredByParent[p] = discoverCache.get(p)?.result ?? [];
     }
     return NextResponse.json({
+      byPath,
+      discoveredByParent,
+      lastReport,
       settings,
       summary,
-      lastReport,
-      discoveredByParent,
-      byPath,
     });
   }
 
@@ -745,7 +745,7 @@ async function buildGetResponse(): Promise<Response> {
       const send = (ev: SettingsStreamEvent) =>
         controller.enqueue(encoder.encode(JSON.stringify(ev) + "\n"));
       try {
-        send({ type: "discover_start", parents: paths, total: paths.length });
+        send({ parents: paths, total: paths.length, type: "discover_start" });
         const discoveredByParent: Record<string, Array<unknown>> = {};
         /* 遍历本身就是「取元素 + 收窄类型」：写 `paths[idx]` 就得多一次
          * `!` 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉。 */
@@ -753,25 +753,25 @@ async function buildGetResponse(): Promise<Response> {
         for (const parent of paths) {
           idx += 1;
           send({
-            type: "progress",
+            msg: `📂 [${idx}/${paths.length}] ${parent}`,
             parent,
             phase: "queue",
-            msg: `📂 [${idx}/${paths.length}] ${parent}`,
+            type: "progress",
           });
           discoveredByParent[parent] = await runDiscoverStreaming(parent, send);
         }
         // 把伴随的 LOCAL_WORKFLOWS_PATH 列表沿同一条流送下去，
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
         send({
-          type: "summary",
-          summary: /* SAFETY: 类型断言已复核 */ summary as SettingsResp["summary"],
-          lastReport: /* SAFETY: 类型断言已复核 */ lastReport as ParseReport | null,
           byPath,
-          settings: { paths, localWorkflowPaths },
+          lastReport: /* SAFETY: 类型断言已复核 */ lastReport as ParseReport | null,
+          settings: { localWorkflowPaths, paths },
+          summary: /* SAFETY: 类型断言已复核 */ summary as SettingsResp["summary"],
+          type: "summary",
         });
         send({ type: "done" });
       } catch (e) {
-        send({ type: "error", message: apiErrorDetail(e, String(e)) });
+        send({ message: apiErrorDetail(e, String(e)), type: "error" });
       } finally {
         controller.close();
       }
@@ -780,9 +780,9 @@ async function buildGetResponse(): Promise<Response> {
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "application/x-ndjson; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "Content-Type": "application/x-ndjson; charset=utf-8",
     },
   });
 }
@@ -809,9 +809,9 @@ export async function POST(req: NextRequest) {
      *  getLocalWorkflowPaths）。旧客户端仍可能 PUT 这两个字段 —— 这里显式
      *  拒绝写入 .env，防止残留配置重新挂上已从 UI 移除的输入框。 */
     return NextResponse.json({
+      localWorkflowPaths: getLocalWorkflowPaths(),
       ok: true,
       paths: getPaths(),
-      localWorkflowPaths: getLocalWorkflowPaths(),
     });
   }
 
@@ -824,7 +824,7 @@ export async function POST(req: NextRequest) {
       for (const p of rawPkgs) {
         const s = safeSpawnArg(p);
         if (s === null) {
-          return NextResponse.json({ ok: false, error: "invalid package entry" }, { status: 400 });
+          return NextResponse.json({ error: "invalid package entry", ok: false }, { status: 400 });
         }
         sanitized.push(s);
       }
@@ -837,8 +837,8 @@ export async function POST(req: NextRequest) {
     if (paths.length === 0) {
       return NextResponse.json(
         {
-          ok: false,
           error: "CUSTOM_NODES_PATH 未配置（请先填写自定义节点目录）",
+          ok: false,
         },
         { status: 400 },
       );
@@ -853,7 +853,7 @@ export async function POST(req: NextRequest) {
     for (const p of parentsRaw) {
       const s = safeSpawnArg(p);
       if (s === null) {
-        return NextResponse.json({ ok: false, error: "invalid parent path" }, { status: 400 });
+        return NextResponse.json({ error: "invalid parent path", ok: false }, { status: 400 });
       }
       parents.push(s);
     }
@@ -867,5 +867,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, packages: result });
   }
 
-  return NextResponse.json({ ok: false, error: "unknown action" }, { status: 400 });
+  return NextResponse.json({ error: "unknown action", ok: false }, { status: 400 });
 }

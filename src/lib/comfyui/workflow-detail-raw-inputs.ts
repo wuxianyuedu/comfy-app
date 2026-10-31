@@ -158,7 +158,7 @@ async function enrichSubgraphProxyWidgets(input: {
   /** 原地更新：每个封装节点的条目列表会被整体替换。 */
   rawInputsById: Record<string, Array<RawInputEntry>>;
 }): Promise<void> {
-  const { raw, rawInputsById, comboOptionsForClassField, multilineForClassField } = input;
+  const { comboOptionsForClassField, multilineForClassField, raw, rawInputsById } = input;
   if (raw?.definitions?.subgraphs) {
     const subs = raw.definitions.subgraphs;
     /* 按 id 给每个子图定义里的内部节点建索引，查找降到 O(1)。 */
@@ -182,12 +182,12 @@ async function enrichSubgraphProxyWidgets(input: {
     const resolveSubDef = (classType: string): { def: RawSubgraphDef; key: string } | null => {
       const direct = subs[classType];
       if (direct) {
-        return { key: classType, def: direct };
+        return { def: direct, key: classType };
       }
       for (const k of Object.keys(subs)) {
         const cand = subs[k];
         if (cand?.id === classType) {
-          return { key: k, def: cand };
+          return { def: cand, key: k };
         }
       }
       return null;
@@ -340,8 +340,8 @@ async function enrichSubgraphProxyWidgets(input: {
            *  找到真实字段名与其 label / localized（ISSUE #349）。 */
           if (internalNodeId && fieldName) {
             updated.proxyField = {
-              nodeId: internalNodeId,
               field: fieldName,
+              nodeId: internalNodeId,
               ...(typeof inp?.label === "string" ? { label: inp.label } : {}),
               ...(typeof inp?.localized_name === "string" ? { localized: inp.localized_name } : {}),
             };
@@ -354,7 +354,7 @@ async function enrichSubgraphProxyWidgets(input: {
         } else if (internalNodeId && fieldName) {
           /* 内部节点缺失（子图定义不完整 / 同名冲突）时也要留下字段名——
            *  它仍比别名 value_1 有信息量，富化按 field 兜底。 */
-          updated.proxyField = { nodeId: internalNodeId, field: fieldName };
+          updated.proxyField = { field: fieldName, nodeId: internalNodeId };
         }
         return updated;
       });
@@ -595,11 +595,11 @@ export async function buildRawInputs(
             ? subgraphAuthorLabels[rnClassType]?.[inp.name]
             : undefined;
         const entry: RawInputEntry = {
-          name: inp.name,
+          isConnection: isConn,
           label: wrapperAuthorLabel ?? (typeof inp.label === "string" ? inp.label : undefined),
           localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
+          name: inp.name,
           type: typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
-          isConnection: isConn,
         };
         if (widgetName) {
           entry.widget = { name: widgetName };
@@ -646,9 +646,9 @@ export async function buildRawInputs(
           }
           const type = inferInputType(rnClassType, w.name, w.value);
           list.push({
+            isConnection: false,
             name: w.name,
             type,
-            isConnection: false,
             widget: { name: w.name },
             widgetValue: w.value,
             ...(type === "STRING" &&
@@ -678,12 +678,12 @@ export async function buildRawInputs(
           const wv0 = rn.widgets_values?.[0];
           const fname = typeof wv0 === "string" ? wv0.trim() : "";
           list.push({
-            name: "__loadimage_preview__",
+            isConnection: false,
             label: "image",
             localized: "图像",
-            type: "IMAGE",
-            isConnection: false,
+            name: "__loadimage_preview__",
             preview: true,
+            type: "IMAGE",
             ...(fname
               ? {
                   imageRef: {
@@ -700,10 +700,10 @@ export async function buildRawInputs(
   }
   /* 第二阶段：子图封装节点的 proxyWidgets 富化（独立函数，见其说明）。 */
   await enrichSubgraphProxyWidgets({
-    raw,
-    rawInputsById,
     comboOptionsForClassField,
     multilineForClassField,
+    raw,
+    rawInputsById,
   });
 
   return { rawInputsById, sizeById };

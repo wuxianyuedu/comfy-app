@@ -137,11 +137,11 @@ function sameMsLines(spec: {
   message: (index: number) => string;
 }): string {
   return appLines({
-    count: spec.count,
     baseMs: spec.atMs,
+    count: spec.count,
     /* 步长 0 = 时刻全等：这正是「同一毫秒」那一档要摆的东西（排序要看 seq 次键）。 */
-    stepMs: 0,
     message: spec.message,
+    stepMs: 0,
   });
 }
 
@@ -217,8 +217,8 @@ export const LOG_STORE_SCENES = {
       {
         origin: "app-runtime",
         text: sameMsLines({
-          count: 14,
           atMs: new Date("2026-10-05T08:31:00").getTime() + 214,
+          count: 14,
           message: (index) => `[comfyui] 节点 ${index + 1}/14 提交完成（同一毫秒）`,
         }),
       },
@@ -270,11 +270,11 @@ export const LOG_STORE_SCENES = {
       {
         origin: "app",
         text: appLines({
-          count: 2600,
           baseMs: new Date("2026-10-05T07:00:00").getTime(),
-          stepMs: 1200,
+          count: 2600,
           levels: ["INFO", "INFO", "INFO", "WARN", "INFO", "ERROR"],
           message: (index) => `[trpc] poll.tick #${index + 1} 完成（${180 + (index % 40)}ms）`,
+          stepMs: 1200,
         }),
       },
     ],
@@ -303,9 +303,9 @@ export const LOG_STORE_SCENES = {
             `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}` +
             `.${pad(at.getMilliseconds(), 3)}`;
           const payload = JSON.stringify({
+            class_type: index % 2 === 0 ? "KSampler" : "VAEDecode",
             kind: "envelope",
             node_id: String(index + 1),
-            class_type: index % 2 === 0 ? "KSampler" : "VAEDecode",
             output: {
               images: [
                 {
@@ -343,8 +343,8 @@ export type SceneName = keyof typeof LOG_STORE_SCENES;
 /** Args 面板里那条「store 场景」旋钮（选项取自注册表）。 */
 export function logSceneArgType() {
   return {
-    description: "写进真 store 的日志场景（原文由 store 自己解析入库）",
     control: { type: "select" as const },
+    description: "写进真 store 的日志场景（原文由 store 自己解析入库）",
     options: LOG_STORE_SCENE_NAMES,
   };
 }

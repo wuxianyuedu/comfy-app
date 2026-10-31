@@ -7,6 +7,9 @@ import { cn } from "~/lib/utils";
 const alertVariants = cva(
   "group/alert relative grid w-full gap-0.5 rounded-lg border px-2.5 py-2 text-left text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-4",
   {
+    defaultVariants: {
+      variant: "default",
+    },
     variants: {
       variant: {
         default: "bg-card text-card-foreground",
@@ -17,17 +20,14 @@ const alertVariants = cva(
            `danger` 接管「边框 + 底色 + 文字档」三件事，文字一律走 -strong
            token（同一色相的原色当浅底上的文字对比度不足）。变体名取语义
            角色不取色名，换品牌色时调用处不用改（§3.6.2）。 */
-        warning:
-          "border-warning/30 bg-warning/10 text-warning-strong *:data-[slot=alert-description]:text-warning-strong/90 *:[svg]:text-current",
+        danger:
+          "border-destructive/30 bg-destructive/10 text-danger-strong *:data-[slot=alert-description]:text-danger-strong/90 *:[svg]:text-current",
         info: "border-info/30 bg-info/10 text-info-strong *:data-[slot=alert-description]:text-info-strong/90 *:[svg]:text-current",
         success:
           "border-success/30 bg-success/10 text-success-strong *:data-[slot=alert-description]:text-success-strong/90 *:[svg]:text-current",
-        danger:
-          "border-destructive/30 bg-destructive/10 text-danger-strong *:data-[slot=alert-description]:text-danger-strong/90 *:[svg]:text-current",
+        warning:
+          "border-warning/30 bg-warning/10 text-warning-strong *:data-[slot=alert-description]:text-warning-strong/90 *:[svg]:text-current",
       },
-    },
-    defaultVariants: {
-      variant: "default",
     },
   },
 );

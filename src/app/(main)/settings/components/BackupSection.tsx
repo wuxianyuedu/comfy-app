@@ -22,10 +22,10 @@ import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /** 一份备份的展示行：名字（= 认人用的那个标识）+ 时刻 + 大小。 */
 function BackupRow({
-  entry,
-  pending,
   disabled,
+  entry,
   onRestore,
+  pending,
 }: {
   disabled: boolean;
   entry: BackupEntry;

@@ -111,15 +111,15 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   }, [data.classType, data.rawOutputs]);
 
   return {
-    rawMeta,
     allEntries,
     connEntries,
-    widgetEntries,
+    imagePreviewEntries,
+    orderedEntries,
+    outputs,
+    rawMeta,
     uniqueConnEntries,
     uniqueWidgetEntries,
-    orderedEntries,
     visibleWidgetEntries,
-    imagePreviewEntries,
-    outputs,
+    widgetEntries,
   };
 }

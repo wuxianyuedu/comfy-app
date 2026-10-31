@@ -23,10 +23,10 @@ describe("IOEditStore.toggleIO", () => {
   it("顶层勾选只记身份字段（显示名由 IoRef 类型挡在外面）", () => {
     const store = createIOEditStore("wf");
     store.getState().toggleIO({
-      nodeId: "24",
-      name: "image",
-      kind: "widget",
       direction: "input",
+      kind: "widget",
+      name: "image",
+      nodeId: "24",
     });
     const entry = store.getState().workflowIO["24::widget::image"]!;
     expect(entry.hostNodeId).toBeUndefined();
@@ -37,11 +37,11 @@ describe("IOEditStore.toggleIO", () => {
   it("子图内部勾选把宿主 id 一起落库", () => {
     const store = createIOEditStore("wf");
     store.getState().toggleIO({
-      nodeId: "1670",
-      hostNodeId: "4",
-      name: "value",
-      kind: "widget",
       direction: "input",
+      hostNodeId: "4",
+      kind: "widget",
+      name: "value",
+      nodeId: "1670",
     });
     expect(store.getState().workflowIO["1670::widget::value"]!.hostNodeId).toBe("4");
   });
@@ -49,11 +49,11 @@ describe("IOEditStore.toggleIO", () => {
   it("再次勾选同一 pin 时整体摘掉条目", () => {
     const store = createIOEditStore("wf");
     const ref = {
-      nodeId: "1670",
-      hostNodeId: "4",
-      name: "value",
-      kind: /* SAFETY: 类型断言已复核 */ "widget" as const,
       direction: /* SAFETY: 类型断言已复核 */ "input" as const,
+      hostNodeId: "4",
+      kind: /* SAFETY: 类型断言已复核 */ "widget" as const,
+      name: "value",
+      nodeId: "1670",
     };
     store.getState().toggleIO(ref);
     store.getState().toggleIO(ref);
@@ -68,10 +68,10 @@ describe("IOEditStore 写入路径不改写作者命名", () => {
   function storeWithRenamedSeed() {
     const store = createIOEditStore("wf");
     store.getState().toggleIO({
-      nodeId: "4",
-      name: "value_1",
-      kind: "widget",
       direction: "input",
+      kind: "widget",
+      name: "value_1",
+      nodeId: "4",
     });
     store.getState().setIOLabel(KEY, "我的种子");
     return store;
@@ -94,10 +94,10 @@ describe("IOEditStore 写入路径不改写作者命名", () => {
   it("取消勾选再重新勾选不会复活任何显示名", () => {
     const store = createIOEditStore("wf");
     const ref = {
-      nodeId: "4",
-      name: "value_1",
-      kind: /* SAFETY: 类型断言已复核 */ "widget" as const,
       direction: /* SAFETY: 类型断言已复核 */ "input" as const,
+      kind: /* SAFETY: 类型断言已复核 */ "widget" as const,
+      name: "value_1",
+      nodeId: "4",
     };
     store.getState().toggleIO(ref);
     store.getState().toggleIO(ref);
@@ -108,10 +108,10 @@ describe("IOEditStore 写入路径不改写作者命名", () => {
   it("改名成与 pin 名逐字相同的名字也留得住（图三「修改了也不行」）", () => {
     const store = createIOEditStore("wf");
     store.getState().toggleIO({
-      nodeId: "24",
-      name: "image",
-      kind: "widget",
       direction: "input",
+      kind: "widget",
+      name: "image",
+      nodeId: "24",
     });
     store.getState().setIOLabel("24::widget::image", "image");
     expect(store.getState().workflowIO["24::widget::image"]!.label).toBe("image");
@@ -120,10 +120,10 @@ describe("IOEditStore 写入路径不改写作者命名", () => {
   it("清空改名 = 恢复默认显示名", () => {
     const store = createIOEditStore("wf");
     store.getState().toggleIO({
-      nodeId: "24",
-      name: "image",
-      kind: "widget",
       direction: "input",
+      kind: "widget",
+      name: "image",
+      nodeId: "24",
     });
     store.getState().setIOLabel("24::widget::image", "尾帧图");
     store.getState().setIOLabel("24::widget::image", "  ");
@@ -170,10 +170,10 @@ describe("IOEditStore 编辑模式与预览的开关耦合（ISSUE #400）", () 
   it("关闭编辑模式不碰 IO 勾选结果（只关面板，不清选择）", () => {
     const store = createIOEditStore("wf");
     store.getState().toggleIO({
-      nodeId: "24",
-      name: "image",
-      kind: "widget",
       direction: "input",
+      kind: "widget",
+      name: "image",
+      nodeId: "24",
     });
     store.getState().setIoEditMode(false);
     expect(store.getState().workflowIO["24::widget::image"]).toBeDefined();
@@ -183,10 +183,10 @@ describe("IOEditStore 编辑模式与预览的开关耦合（ISSUE #400）", () 
     const store = createIOEditStore("wf");
     store.getState().setIoPreviewOpen(true);
     store.getState().toggleIO({
-      nodeId: "24",
-      name: "image",
-      kind: "widget",
       direction: "input",
+      kind: "widget",
+      name: "image",
+      nodeId: "24",
     });
     store.getState().setIoPreviewOpen(false);
     expect(store.getState().workflowIO["24::widget::image"]).toBeDefined();
@@ -219,8 +219,8 @@ describe("callStoreAction", () => {
         [key]: {
           direction: "input",
           kind: "widget",
-          nodeId: "4",
           name: "value_1",
+          nodeId: "4",
         },
       },
     });

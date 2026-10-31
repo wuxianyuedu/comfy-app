@@ -42,9 +42,9 @@ export type OptionListItem = {
 };
 
 export function OptionListPopover({
-  value,
   items,
   onSelect,
+  value,
   /** 触发器内容（chip 的外观与当前值回显）。 */
   trigger,
   /** 浮层内容区的宽度类（如 `w-72`）。 */
@@ -60,8 +60,8 @@ export function OptionListPopover({
   /** 浮层开合（受控）。用于「画布一变换就关掉」这类外部联动。 */
   onOpenChange,
   /** 禁用触发器（不可点开）。 */
-  disabled,
   align = "start",
+  disabled,
 }: {
   align?: "start" | "center" | "end";
   contentClassName?: string;

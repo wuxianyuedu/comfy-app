@@ -7,8 +7,8 @@ import type { WorkflowGroup } from "../workflow-types";
 import { Toggle } from "~/components/ui/toggle";
 
 export function RgthreeFastGroupsBypasserBody({
-  matchTitle,
   groups,
+  matchTitle,
 }: {
   groups: Array<WorkflowGroup>;
   matchTitle: string;
@@ -79,29 +79,29 @@ export function RgthreeFastGroupsBypasserBody({
               onPressedChange={() => ctx.setBypass(group.id, !bypass)}
               pressed={bypass}
               style={{
-                marginLeft: 6,
-                width: 26,
-                height: 14,
-                borderRadius: 7,
-                cursor: "pointer",
                 background: bypass ? "rgba(236, 72, 153, 0.55)" : "rgba(63, 63, 70, 0.55)",
                 border: "1px solid var(--color-border-strong)",
-                position: "relative",
+                borderRadius: 7,
+                cursor: "pointer",
                 flex: "0 0 auto",
+                height: 14,
+                marginLeft: 6,
+                position: "relative",
                 transition: "background 120ms",
+                width: 26,
               }}
               title={bypass ? "点击取消旁路" : "点击旁路此 group"}
             >
               <span
                 style={{
+                  background: bypass ? "var(--color-accent-soft)" : "var(--color-ink-subtle)",
+                  borderRadius: 5,
+                  height: 10,
+                  left: bypass ? 13 : 1,
                   position: "absolute",
                   top: 1,
-                  left: bypass ? 13 : 1,
-                  width: 10,
-                  height: 10,
-                  borderRadius: 5,
-                  background: bypass ? "var(--color-accent-soft)" : "var(--color-ink-subtle)",
                   transition: "left 120ms",
+                  width: 10,
                 }}
               />
             </Toggle>
@@ -173,11 +173,11 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
           <span
             aria-hidden
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: 999,
               background: "rgba(167, 139, 250, 0.95)",
+              borderRadius: 999,
               display: "inline-block",
+              height: 8,
+              width: 8,
             }}
           />
           Lora Stack
@@ -198,8 +198,8 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
           className="text-3xs rounded px-1.5 py-3 text-center"
           style={{
             background: "var(--color-subtle)",
-            color: "var(--color-ink-muted)",
             border: "1px dashed var(--color-border-strong)",
+            color: "var(--color-ink-muted)",
           }}
         >
           暂无 Lora — 点击下方按钮添加
@@ -268,10 +268,10 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
       >
         <span
           style={{
-            fontSize: 14,
-            lineHeight: 1,
             color: "rgba(167, 139, 250, 0.95)",
+            fontSize: 14,
             fontWeight: 600,
+            lineHeight: 1,
           }}
         >
           +
@@ -289,8 +289,8 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
  *  会抑制标准标题栏（ComfyUI 不显示独立头部），
  *  好让绘制的文字读起来就是整个节点。 */
 export function RgthreeLabelBody({
-  text,
   properties,
+  text,
 }: {
   properties: Record<string, unknown>;
   text: string;
@@ -311,20 +311,20 @@ export function RgthreeLabelBody({
       style={{
         background: bg,
         borderRadius: typeof p.borderRadius === "number" ? p.borderRadius : 0,
-        transform: angle ? `rotate(${angle}deg)` : undefined,
         overflow: "hidden",
+        transform: angle ? `rotate(${angle}deg)` : undefined,
       }}
     >
       <span
         style={{
+          color: fontColor,
           fontFamily,
           fontSize,
-          color: fontColor,
-          textAlign,
-          width: "100%",
           lineHeight: 1.1,
-          wordBreak: "break-word",
+          textAlign,
           whiteSpace: "pre-wrap",
+          width: "100%",
+          wordBreak: "break-word",
         }}
         title={text}
       >

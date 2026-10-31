@@ -9,10 +9,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as GenerationClient from "~/lib/workshop/generation-client";
-import type {
-  TaskLogEntry,
-  TaskWatchHandlers,
-} from "~/lib/workshop/generation-client";
+import type { TaskLogEntry, TaskWatchHandlers } from "~/lib/workshop/generation-client";
 
 const watchTaskMock = vi.hoisted(() => vi.fn());
 
@@ -24,7 +21,7 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
 import { useTaskLogStream } from "./use-task-log-stream";
 
 function logEntry(msg: string): TaskLogEntry {
-  return { t: Date.now(), level: "info", msg };
+  return { level: "info", msg, t: Date.now() };
 }
 
 /** 当前订阅的 handlers 与 closer：用例直接对它们注入帧。 */
@@ -76,16 +73,16 @@ describe("useTaskLogStream", () => {
     });
     expect(result.current.started).toBe(true);
     act(() => {
-      handlers.onSettled?.({ ok: false, message: "CUDA out of memory" });
+      handlers.onSettled?.({ message: "CUDA out of memory", ok: false });
     });
     expect(result.current.settled).toEqual({
-      ok: false,
       message: "CUDA out of memory",
+      ok: false,
     });
   });
 
   it("换 taskId：旧订阅断开、日志与终态全部重置", () => {
-    const { result, rerender } = renderHook(({ id }) => useTaskLogStream(id), {
+    const { rerender, result } = renderHook(({ id }) => useTaskLogStream(id), {
       initialProps: { id: "t-1" },
     });
     act(() => {
@@ -107,7 +104,7 @@ describe("useTaskLogStream", () => {
     /* props 类型用变量显式钉住（而不是「t-1」上做断言）：rerender 要传 null，
      * 从 initialProps 推导成 { id: string } 会在调用处报错。 */
     const initial: { id: string | null } = { id: "t-1" };
-    const { result, rerender } = renderHook(
+    const { rerender, result } = renderHook(
       (props: { id: string | null }) => useTaskLogStream(props.id),
       { initialProps: initial },
     );

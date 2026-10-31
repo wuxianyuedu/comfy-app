@@ -42,42 +42,42 @@ V3 小满:今天的事太奇怪了。
 
 function makeCharacter(overrides: Partial<Character> = {}): Character {
   return {
-    id: "char_1",
-    name: "小满",
     ageGender: "",
     appearance: "",
     costume: "",
-    personality: "",
-    temperament: "",
-    styleTags: [],
-    positivePrompt: "",
+    id: "char_1",
+    name: "小满",
     negativePrompt: "",
     params: {},
+    personality: "",
+    positivePrompt: "",
+    styleTags: [],
+    temperament: "",
     ...overrides,
   };
 }
 
 function makeScene(overrides: Partial<Scene> = {}): Scene {
   return {
-    id: "scene_1",
-    heading: "1-1 场景 外 旧城区天台(黄昏)",
-    location: "",
-    time: "",
     action: "",
     dialogue: "",
+    heading: "1-1 场景 外 旧城区天台(黄昏)",
+    id: "scene_1",
+    location: "",
     shotCount: 2,
+    time: "",
     ...overrides,
   };
 }
 
 const STYLES: Array<StyleRef> = [
   {
-    slug: "pixar",
-    name: "皮克斯",
+    defaultParams: { cfg: 6.5, steps: 30 },
     icon: "🎬",
-    promptTemplate: "pixar style, 3d render",
+    name: "皮克斯",
     negativePrompt: "realistic photo",
-    defaultParams: { steps: 30, cfg: 6.5 },
+    promptTemplate: "pixar style, 3d render",
+    slug: "pixar",
   },
 ];
 
@@ -240,12 +240,12 @@ describe("parseExtractedShots 解析 LLM 分镜 JSON", () => {
 describe("parseImportedCharacterCards 导入角色卡 JSON", () => {
   it("支持数组、单对象与 characters 包装", () => {
     const card = {
-      name: "小满",
       ageGender: "女",
       appearance: "短发",
-      styleTags: ["厚涂"],
-      skillSlug: "pixar",
+      name: "小满",
       params: { steps: 25 },
+      skillSlug: "pixar",
+      styleTags: ["厚涂"],
     };
     for (const raw of [
       JSON.stringify([card]),
@@ -275,22 +275,22 @@ describe("mergeCharacterDrafts 草稿并入角色列表", () => {
       existing,
       [
         {
-          name: "小满",
           ageGender: "",
           appearance: "",
           costume: "",
+          name: "小满",
           personality: "",
-          temperament: "",
           styleTags: [],
+          temperament: "",
         },
         {
-          name: "阿声",
           ageGender: "",
           appearance: "复古收音机",
           costume: "",
+          name: "阿声",
           personality: "神秘",
-          temperament: "",
           styleTags: ["厚涂"],
+          temperament: "",
         },
       ],
       STYLES,
@@ -302,29 +302,29 @@ describe("mergeCharacterDrafts 草稿并入角色列表", () => {
     expect(added?.name).toBe("阿声");
     expect(added?.positivePrompt).toContain("复古收音机");
     expect(added?.negativePrompt).toContain("realistic photo");
-    expect(added?.params).toEqual({ steps: 30, cfg: 6.5 });
+    expect(added?.params).toEqual({ cfg: 6.5, steps: 30 });
   });
 });
 
 describe("buildShotsFromEntries 条目写入分镜", () => {
   it("场景按标题匹配(精确与包含),角色按名字关联,镜号顺延,台词写入", () => {
-    const scenes = [makeScene(), makeScene({ id: "scene_2", heading: "场景2 · 出租屋" })];
+    const scenes = [makeScene(), makeScene({ heading: "场景2 · 出租屋", id: "scene_2" })];
     const characters = [makeCharacter(), makeCharacter({ id: "char_2", name: "阿声" })];
     const shots = buildShotsFromEntries(
       [
         {
+          characterNames: ["小满"],
+          description: "天台初遇",
+          dialogue: "小满:你好",
           sceneHeading: "1-1 场景 外 旧城区天台(黄昏)",
           shotType: "wide",
-          description: "天台初遇",
-          characterNames: ["小满"],
-          dialogue: "小满:你好",
         },
         {
+          characterNames: ["路人"],
+          description: "书桌特写",
+          dialogue: "",
           sceneHeading: "场景2",
           shotType: "close",
-          description: "书桌特写",
-          characterNames: ["路人"],
-          dialogue: "",
         },
       ],
       3,

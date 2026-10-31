@@ -10,11 +10,11 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 
 export function ActionButton({
-  onClick,
+  disabled,
   icon,
   label,
+  onClick,
   title,
-  disabled,
   variant = "default",
 }: {
   disabled?: boolean;

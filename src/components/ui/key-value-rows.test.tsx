@@ -69,7 +69,7 @@ describe("rows 布局（缺省）", () => {
 describe("stacked 布局", () => {
   it("标签在值上方，hint 渲染在值下面", () => {
     const { container } = render(
-      <KeyValueRows items={[{ key: "触发词", raw: "abc", hint: "本次真实值" }]} layout="stacked" />,
+      <KeyValueRows items={[{ hint: "本次真实值", key: "触发词", raw: "abc" }]} layout="stacked" />,
     );
     expect(container.textContent).toContain("触发词");
     expect(container.textContent).toContain("abc");

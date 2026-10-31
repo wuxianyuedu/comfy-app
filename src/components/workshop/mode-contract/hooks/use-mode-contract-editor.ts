@@ -123,8 +123,8 @@ export function useModeContractEditor(): ModeContractEditorController {
       const id = nextCustomInputId(prev.inputs, kind);
       return {
         ...prev,
+        customInputs: [...(prev.customInputs ?? []), { id, kind, label: trimmed }],
         inputs: [...prev.inputs, id],
-        customInputs: [...(prev.customInputs ?? []), { id, label: trimmed, kind }],
       };
     });
     setSaved(false);
@@ -198,26 +198,26 @@ export function useModeContractEditor(): ModeContractEditorController {
   }, [draft, registry]);
 
   return {
-    mode,
+    addCustomInput,
+    appendInput,
     draft,
-    stored: registry.contracts,
-    saving: registry.saving,
-    isRequired,
-    toggleRequired,
     hasAnyRequired: effectiveRequired.length > 0,
+    isRequired,
+    mode,
+    moveInput,
+    nextReferenceImageId: draft ? nextReferenceImageId(draft.inputs) : null,
+    removeInput,
+    renameCustomInput,
+    save,
+    saved,
+    saving: registry.saving,
     selectMode,
     setDraft: (next: ModeContract) => {
       setDraft(next);
       setSaved(false);
     },
-    appendInput,
-    removeInput,
-    moveInput,
-    addCustomInput,
-    renameCustomInput,
-    nextReferenceImageId: draft ? nextReferenceImageId(draft.inputs) : null,
     setOutput,
-    save,
-    saved,
+    stored: registry.contracts,
+    toggleRequired,
   };
 }

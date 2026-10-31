@@ -136,31 +136,31 @@ export function parseSubgraphLinks(sub: RawSubgraphDef): {
     const targetSlot = Number(rec.target_slot) || 0;
     const type = toStringValue(rec.type ?? "*");
     linkById[id] = {
-      src: Number.isFinite(originId) ? String(originId) : "?",
       slot: originSlot,
-      type,
+      src: Number.isFinite(originId) ? String(originId) : "?",
       targetId: Number.isFinite(targetId) ? String(targetId) : "?",
       targetSlot,
+      type,
     };
     /* 只要有一端是哨兵，就把这条连线标进边界跟踪表。 */
     if (originId === -10 && Number.isFinite(targetId)) {
       boundaryLinkInfoById[id] = {
-        kind: "input",
-        pinId: `__pin_tbd__:${id}`, // resolved below after we walk boundary pins
         innerNodeId: String(targetId),
         innerSlot: targetSlot,
+        kind: "input",
+        pinId: `__pin_tbd__:${id}`, // resolved below after we walk boundary pins
       };
     } else if (targetId === -20 && Number.isFinite(originId)) {
       boundaryLinkInfoById[id] = {
-        kind: "output",
-        pinId: `__pin_tbd__:${id}`,
         innerNodeId: String(originId),
         innerSlot: originSlot,
+        kind: "output",
+        pinId: `__pin_tbd__:${id}`,
       };
     }
   }
 
-  return { linkById, boundaryLinkInfoById };
+  return { boundaryLinkInfoById, linkById };
 }
 
 /** 一个输入槽位在「槽位下标」与「raw 数组位置」两套坐标系里的落点。 */
@@ -243,7 +243,7 @@ export function parseSubgraphSlots(
       inputNameByNodeSlot[nodeId] = slots.map(({ slot }) => slotNameAt(slots, rawInputs, slot));
       // 按槽位顺序拍一份 widget 值快照，边界那一趟才能顺带给出默认 `value`
       // （封装节点把提示词暴露成输入时，CLIPTextEncode 的 `text` 就在这里）。
-      inputWidgetValueByNodeSlot[nodeId] = slots.map(({ slot, index }) => {
+      inputWidgetValueByNodeSlot[nodeId] = slots.map(({ index, slot }) => {
         const slotInput = rawInputs[index];
         if (!slotNameAt(slots, rawInputs, slot)) {
           return undefined;
@@ -262,8 +262,8 @@ export function parseSubgraphSlots(
 
   return {
     inputNameByNodeSlot,
-    outputNameByNodeSlot,
     inputWidgetValueByNodeSlot,
+    outputNameByNodeSlot,
   };
 }
 
@@ -425,15 +425,15 @@ export function buildSubgraphGraph(
           inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         const widgetValue = widgetName ? wvMap[widgetName] : undefined;
         const entry: RawInputEntry = {
-          name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
           localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
+          name: inp.name,
           type: typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
           /* 把边界连线（origin_id = -10/-20）标成 "isBoundary"，
            *  画布便能渲染成「封装节点暴露出来的输入」（它仍是一条连接，
            *  但子图内部没有真实的源节点）。 */
-          isConnection: isConn,
           isBoundary: false, // set later if needed
+          isConnection: isConn,
         };
         if (widgetName) {
           entry.widget = { name: widgetName };
@@ -552,11 +552,11 @@ export function buildSubgraphGraph(
           }
         }
         rawOutputs.push({
-          name: o.name,
-          localized: typeof o.localized_name === "string" ? o.localized_name : undefined,
-          type: typeof o.type === "string" ? o.type : "*",
-          links: Array.isArray(o.links) ? o.links.map((n) => Number(n) || 0) : [],
           isBoundary: isBoundaryOut,
+          links: Array.isArray(o.links) ? o.links.map((n) => Number(n) || 0) : [],
+          localized: typeof o.localized_name === "string" ? o.localized_name : undefined,
+          name: o.name,
+          type: typeof o.type === "string" ? o.type : "*",
         });
       }
     }
@@ -578,13 +578,13 @@ export function buildSubgraphGraph(
           const wv0 = rn.widgets_values?.[0];
           const fname = typeof wv0 === "string" ? wv0.trim() : "";
           rawInputs.push({
-            name: "__loadimage_preview__",
+            isBoundary: false,
+            isConnection: false,
             label: "image",
             localized: "图像",
-            type: "IMAGE",
-            isConnection: false,
-            isBoundary: false,
+            name: "__loadimage_preview__",
             preview: true,
+            type: "IMAGE",
             ...(fname
               ? {
                   imageRef: {
@@ -600,11 +600,11 @@ export function buildSubgraphGraph(
       rawInputsById[nodeId] = rawInputs;
       rawOutputsById[nodeId] = rawOutputs;
       rawNodeMeta.push({
-        id: nodeId,
-        widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
-        outputs: rawOutputs,
         flags: typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {},
+        id: nodeId,
         mode: typeof rn.mode === "number" ? rn.mode : 0,
+        outputs: rawOutputs,
+        widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
       });
     }
   }
@@ -625,13 +625,13 @@ export function buildSubgraphGraph(
     const isInEp = inputEndpointNodes.has(nodeId);
     const isOutEp = outputEndpointNodes.has(nodeId);
     return {
-      id: nodeId,
       class_type: classType,
-      title: n._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
-      is_subgraph: isUuidClass,
-      raw_inputs: rawInputsById[nodeId] ?? [],
+      id: nodeId,
       is_input_endpoint: isInEp,
       is_output_endpoint: isOutEp,
+      is_subgraph: isUuidClass,
+      raw_inputs: rawInputsById[nodeId] ?? [],
+      title: n._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
       /* 该内部节点的 ComfyUI 精确外框尺寸（[w, h]）。子图定义没带
        *  逐节点尺寸（少见）时为 undefined。 */
       size: sizeById[nodeId],
@@ -644,24 +644,24 @@ export function buildSubgraphGraph(
       /* 本端点在内部真正连到的第一个非哨兵中间节点 —— 客户端据此把 wfIoPort
        *  摆在它的目标/源中间节点旁边。纯透传端点（RandomNoise 那种）为
        *  undefined，此时回落到保存的位置。 */
-      connects_to: connectsToByNode[nodeId] ?? null,
       connects_from: connectsFromByNode[nodeId] ?? null,
+      connects_to: connectsToByNode[nodeId] ?? null,
     };
   });
 
   return {
-    graph,
-    rawInputsById,
-    rawOutputsById,
-    rawNodeMeta,
-    sizeById,
-    nodes,
-    inputEndpointNodes,
-    outputEndpointNodes,
     boundaryInputByNode,
     boundaryOutputByNode,
-    connectsToByNode,
     connectsFromByNode,
+    connectsToByNode,
+    graph,
+    inputEndpointNodes,
+    nodes,
+    outputEndpointNodes,
+    rawInputsById,
+    rawNodeMeta,
+    rawOutputsById,
+    sizeById,
     /* 槽位名查找表与边界 IO 在同一趟里算好，拼结果时已经是终值。 */
     inputNameByNodeSlot,
     outputNameByNodeSlot,

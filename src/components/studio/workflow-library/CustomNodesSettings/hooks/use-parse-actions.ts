@@ -29,14 +29,14 @@ export type ParseActionsDeps = {
 };
 
 export function createParseActions({
-  savedPaths,
+  clearPerPkgParsing,
   discoveredByParent,
   parseBusy,
-  setError,
-  setReport,
-  setPerPkgParsing,
   runParse,
-  clearPerPkgParsing,
+  savedPaths,
+  setError,
+  setPerPkgParsing,
+  setReport,
 }: ParseActionsDeps) {
   async function onParseAll() {
     if (savedPaths.length === 0) {
@@ -70,5 +70,5 @@ export function createParseActions({
     await parseBusy.run(() => runParse(targets));
   }
 
-  return { onParseAll, onParseSingle, onParseAllParent };
+  return { onParseAll, onParseAllParent, onParseSingle };
 }

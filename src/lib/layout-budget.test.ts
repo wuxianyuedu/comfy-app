@@ -31,10 +31,7 @@ const REM_PX = 16;
 
 /** 读 src 下的真实源码（相对本文件定位，不依赖 cwd）。 */
 function sourceOf(relFromSrc: string): string {
-  return readFileSync(
-    new URL(path.join("..", relFromSrc), import.meta.url),
-    "utf8",
-  );
+  return readFileSync(new URL(path.join("..", relFromSrc), import.meta.url), "utf8");
 }
 
 describe("左轨让位这笔账的算式", () => {
@@ -55,28 +52,22 @@ describe("左轨让位这笔账的算式", () => {
     expect(NAV_WIDTH_COLLAPSED_PX).toBeLessThan(NAV_WIDTH_EXPANDED_PX);
     /* 方向不能写反：收起换出来的宽度必须够内容区站到下限之上，否则自动收起是
        「收了也白收」的抖动。取阈值那一档（最窄的允许展开宽）来验。 */
-    expect(NAV_COLLAPSE_LEAVES_VIEWPORT_PX).toBeGreaterThanOrEqual(
-      WORKSPACE_MIN_PX,
-    );
+    expect(NAV_COLLAPSE_LEAVES_VIEWPORT_PX).toBeGreaterThanOrEqual(WORKSPACE_MIN_PX);
   });
 });
 
 describe("resolveRailCollapsed 的三档优先", () => {
   it("未表态：跟随窗宽", () => {
-    expect(
-      resolveRailCollapsed({ narrow: true, crossings: 0, choice: null }),
-    ).toBe(true);
-    expect(
-      resolveRailCollapsed({ narrow: false, crossings: 0, choice: null }),
-    ).toBe(false);
+    expect(resolveRailCollapsed({ choice: null, crossings: 0, narrow: true })).toBe(true);
+    expect(resolveRailCollapsed({ choice: null, crossings: 0, narrow: false })).toBe(false);
   });
 
   it("窄窗里用户点开：跨越次数没变之前听用户的，不再被纪律按下去", () => {
     expect(
       resolveRailCollapsed({
-        narrow: true,
+        choice: { atCrossing: 1, open: true },
         crossings: 1,
-        choice: { open: true, atCrossing: 1 },
+        narrow: true,
       }),
     ).toBe(false);
   });
@@ -86,17 +77,17 @@ describe("resolveRailCollapsed 的三档优先", () => {
        （第 3 次）—— 表态时的跨越次数已经不等，纪律必须重新接管。 */
     expect(
       resolveRailCollapsed({
-        narrow: true,
+        choice: { atCrossing: 1, open: true },
         crossings: 3,
-        choice: { open: true, atCrossing: 1 },
+        narrow: true,
       }),
     ).toBe(true);
     /* 同一表态在宽窗一侧同样不该被拿出来当挡箭牌。 */
     expect(
       resolveRailCollapsed({
-        narrow: false,
+        choice: { atCrossing: 1, open: false },
         crossings: 2,
-        choice: { open: false, atCrossing: 1 },
+        narrow: false,
       }),
     ).toBe(false);
   });
@@ -104,9 +95,9 @@ describe("resolveRailCollapsed 的三档优先", () => {
   it("宽窗档的表态在宽窗下继续有效（收起就该是收起）", () => {
     expect(
       resolveRailCollapsed({
-        narrow: false,
+        choice: { atCrossing: 0, open: false },
         crossings: 0,
-        choice: { open: false, atCrossing: 0 },
+        narrow: false,
       }),
     ).toBe(true);
   });
@@ -114,18 +105,18 @@ describe("resolveRailCollapsed 的三档优先", () => {
   it("没有本次表态时，跨会话存下来的偏好只在宽窗生效", () => {
     expect(
       resolveRailCollapsed({
-        narrow: false,
-        crossings: 0,
         choice: null,
+        crossings: 0,
+        narrow: false,
         preferredOpen: false,
       }),
     ).toBe(true);
     /* 窄窗时不能用上次的展开偏好去否决布局纪律。 */
     expect(
       resolveRailCollapsed({
-        narrow: true,
-        crossings: 0,
         choice: null,
+        crossings: 0,
+        narrow: true,
         preferredOpen: true,
       }),
     ).toBe(true);
@@ -145,17 +136,12 @@ describe("账与真实列宽一致（漂移判据）", () => {
   it("工坊阶段轨道列宽与 globals 的刻度同源", () => {
     const css = sourceOf(path.join("app", "globals.css"));
     const declared = /--spacing-stage-rail:\s*(\d+(?:\.\d+)?)rem/.exec(css);
-    expect(
-      declared,
-      "globals.css 里找不到 --spacing-stage-rail 的 rem 刻度",
-    ).not.toBeNull();
+    expect(declared, "globals.css 里找不到 --spacing-stage-rail 的 rem 刻度").not.toBeNull();
     expect(Number(declared?.[1]) * REM_PX).toBe(STAGE_RAIL_WIDTH_PX);
   });
 
   it("工坊检查器列宽、列间距与内边距与网格模板一致", () => {
-    const pipeline = sourceOf(
-      path.join("components", "workshop", "WorkshopPipeline.tsx"),
-    );
+    const pipeline = sourceOf(path.join("components", "workshop", "WorkshopPipeline.tsx"));
     /* 网格模板第三列就是检查器宽。 */
     const inspector = /_([0-9.]+)px]/.exec(pipeline);
     expect(inspector, "找不到检查器列宽（网格模板第三列）").not.toBeNull();

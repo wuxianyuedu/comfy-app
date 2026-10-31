@@ -58,7 +58,7 @@ function useVirtualWindow(input: {
   viewportWidth: number;
   wrap: boolean;
 }) {
-  const { pageLogs, wrap, viewportWidth, viewportHeight, scrollTop, expansionMap } = input;
+  const { expansionMap, pageLogs, scrollTop, viewportHeight, viewportWidth, wrap } = input;
   const cliJsonIds = useMemo(() => {
     const ids = new Set<string>();
     for (const entry of pageLogs) {
@@ -91,16 +91,16 @@ function useVirtualWindow(input: {
   const { height: scrollHeight } = scrollHeightOf(totalSize);
   const rowWindow = useMemo(() => {
     if (viewportHeight <= 0) {
-      return { start: 0, end: pageLogs.length, entries: pageLogs };
+      return { end: pageLogs.length, entries: pageLogs, start: 0 };
     }
     const range = visibleRange(rows, scrollTop, viewportHeight);
     return {
-      start: range.start,
       end: range.end,
       entries: pageLogs.slice(range.start, range.end),
+      start: range.start,
     };
   }, [rows, scrollTop, viewportHeight, pageLogs]);
-  return { rows, scrollHeight, rowWindow };
+  return { rows, rowWindow, scrollHeight };
 }
 /* 面板的宽度档：默认 6xl —— 行是「时刻 + 级别 + 正文 + 来源」四列，比执行日志
  * 多一列，默认就该更宽；加宽档统一贴视线两边。宽度写 `w-*` 而不是 `max-w-*`
@@ -114,18 +114,18 @@ const NO_LOG_ENTRIES: Array<LogEntry> = [];
 
 export function LogPanel() {
   const {
-    filteredLogs,
-    filter,
-    origin,
-    search,
-    isOpen,
+    anchorId,
+    autoScroll,
+    bootId,
     counts,
     countsByOrigin,
+    filter,
+    filteredLogs,
+    isOpen,
+    origin,
     page,
     pageSize,
-    bootId,
-    autoScroll,
-    anchorId,
+    search,
     viewBaselineAfter,
   } = useLogPanel((state) => state.header);
   /* 计数一律看**当前来源**：「全部来源」下是全局数，选了某个来源就是该来源自己
@@ -155,11 +155,11 @@ export function LogPanel() {
   const copyOutcome = useFlashState(1500);
   const [copyFailed, setCopyFailed] = useState(false);
   const copyAll = useCopyFeedback({
+    onFailure: () => setCopyFailed(true),
     onSuccess: () => {
       setCopyFailed(false);
       copyOutcome.flash();
     },
-    onFailure: () => setCopyFailed(true),
   });
 
   /* 「复制全部」的文本要到点击那一刻才从 store 取（当前筛选 × 所有页），
@@ -266,13 +266,13 @@ export function LogPanel() {
    * 否则 `translateY` 与滚动条会各说各话。2000 行的乘法远低于一帧预算。
    * `viewport.width` 为 0（首帧未量到 / jsdom 不做布局）时 `layoutRows` 只按
    * 显式换行估高——宁可少估，也不瞎估。 */
-  const { rows, scrollHeight, rowWindow } = useVirtualWindow({
-    pageLogs,
-    wrap,
-    viewportWidth: viewport.width,
-    viewportHeight: viewport.height,
-    scrollTop,
+  const { rows, rowWindow, scrollHeight } = useVirtualWindow({
     expansionMap: expansion.map,
+    pageLogs,
+    scrollTop,
+    viewportHeight: viewport.height,
+    viewportWidth: viewport.width,
+    wrap,
   });
 
   useEffect(() => {
@@ -311,26 +311,26 @@ export function LogPanel() {
   /* 贴底只追到「基线」——沉在 use-log-panel-pin（ISSUE #262 复审）。
    * refs（基线 / 上次落位 / 上次写入的 scrollTop）随 hook 走。 */
   const { onScroll } = useLogPanelPin({
-    isOpen,
     autoScroll,
-    safePage,
-    followResetAt,
-    revision,
-    visibleLogs,
-    rows,
     bodyRef,
-    setScrollTop,
+    followResetAt,
+    isOpen,
+    revision,
+    rows,
+    safePage,
     setFollowBottom,
+    setScrollTop,
+    visibleLogs,
   });
   const shouldPin = selectShouldPinToLatest(safePage, autoScroll);
   const newLogCount = useLogPanel(
     useCallback(
       (state: LogPanelState) =>
         selectNewLogCount({
-          unseenAfterView,
+          autoScroll,
           baselineAfterView: viewBaselineAfter,
           page: state.page,
-          autoScroll,
+          unseenAfterView,
         }),
       [autoScroll, unseenAfterView, viewBaselineAfter],
     ),

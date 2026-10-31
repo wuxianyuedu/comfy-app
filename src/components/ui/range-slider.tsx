@@ -68,12 +68,12 @@ export type RangeSliderProps = {
 };
 
 export function RangeSlider({
-  value,
-  min,
-  max,
-  step = 1,
-  onChange,
   className,
+  max,
+  min,
+  onChange,
+  step = 1,
+  value,
   ...rest
 }: RangeSliderProps) {
   return (

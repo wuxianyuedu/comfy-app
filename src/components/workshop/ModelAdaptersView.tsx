@@ -69,7 +69,7 @@ function modeLabel(mode: string): string {
  * id 是 `text-2xs` 且 `font-mono` —— 它**不是给读的文案**，是给「代码 / 日志 /
  * 配置里对得上」的记号，所以允许比正文小一档。中文名本身必须落在
  * `text-xs`(12px) 及以上，此前这里整条是 10px。 */
-function FieldLabelRow({ label, id }: { id?: string; label: string }) {
+function FieldLabelRow({ id, label }: { id?: string; label: string }) {
   return (
     <span className="text-ink/80 text-xs font-medium">
       {label}
@@ -83,11 +83,11 @@ function FieldLabelRow({ label, id }: { id?: string; label: string }) {
  * 三格 + 一枚删除按钮。此前它是一行里塞 SelectMenu / 箭头 / input / ✕ 四件，
  * 且全部 10–11px；现在每一格按自己的角色取档（下拉与输入框 12px，箭头弱化）。 */
 function InputMappingRow({
-  mode,
-  row,
   index,
+  mode,
   onChange,
   onRemove,
+  row,
 }: {
   index: number;
   mode: string;
@@ -105,8 +105,8 @@ function InputMappingRow({
         )}
         onChange={(value) =>
           onChange({
-            type: /* SAFETY: 类型断言已复核 */ value as WorkshopInputType,
             field: row.field,
+            type: /* SAFETY: 类型断言已复核 */ value as WorkshopInputType,
           })
         }
         options={WORKSHOP_INPUT_TYPES.map((t) => t.type)}
@@ -118,7 +118,7 @@ function InputMappingRow({
       <input
         aria-label={`${modeLabel(mode)} 第 ${index + 1} 行的请求体字段名`}
         className="border-border bg-bg focus:border-primary min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
-        onChange={(event) => onChange({ type: row.type, field: event.target.value })}
+        onChange={(event) => onChange({ field: event.target.value, type: row.type })}
         placeholder="请求体字段名"
         value={row.field}
       />
@@ -138,16 +138,16 @@ function InputMappingRow({
 export function ModelAdaptersView() {
   const controller = useModelAdapters();
   const {
-    candidates,
-    loading,
-    draft,
-    setDraft,
-    selectModel,
-    selectedModel,
     addMode,
+    candidates,
+    draft,
+    loading,
+    message,
     save,
     saving,
-    message,
+    selectedModel,
+    selectModel,
+    setDraft,
   } = controller;
 
   const [addModeOpen, setAddModeOpen] = React.useState(false);
@@ -351,7 +351,7 @@ export function ModelAdaptersView() {
                           WORKSHOP_INPUT_TYPES[0];
                         return {
                           ...x,
-                          inputs: [...x.inputs, { type: next.type, field: next.type }],
+                          inputs: [...x.inputs, { field: next.type, type: next.type }],
                         };
                       })
                     }

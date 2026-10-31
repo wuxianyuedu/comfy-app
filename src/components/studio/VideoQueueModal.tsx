@@ -27,19 +27,19 @@ type StatusMeta = { cls: string; icon: string; label: string };
 
 const STATUS_META: Record<"QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED", StatusMeta> =
   {
-    QUEUED: { icon: "hourglass", label: "排队中", cls: "text-ink-muted" },
+    CANCELLED: { cls: "text-ink-fainter", icon: "ban", label: "已取消" },
+    FAILED: { cls: "text-destructive", icon: "x", label: "失败" },
+    QUEUED: { cls: "text-ink-muted", icon: "hourglass", label: "排队中" },
     RUNNING: {
+      cls: "text-warning-strong",
       icon: "zap",
       label: "生成中",
-      cls: "text-warning-strong",
     },
     SUCCEEDED: {
+      cls: "text-success-strong",
       icon: "check",
       label: "已完成",
-      cls: "text-success-strong",
     },
-    FAILED: { icon: "x", label: "失败", cls: "text-destructive" },
-    CANCELLED: { icon: "ban", label: "已取消", cls: "text-ink-fainter" },
   };
 
 /** 按任务状态取展示元数据。`task.status` 是宽字符串（来自后端），这里收口
@@ -57,7 +57,7 @@ export type VideoQueueModalProps = {
   open: boolean;
 };
 
-export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalProps) {
+export function VideoQueueModal({ onClose, onOpenTask, open }: VideoQueueModalProps) {
   const [tasks, setTasks] = useState<Array<VideoTask>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");

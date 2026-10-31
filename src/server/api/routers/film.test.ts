@@ -22,7 +22,9 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { orchestrator, composeFilm, ffmpegAvailable } = vi.hoisted(() => ({
+const { composeFilm, ffmpegAvailable, orchestrator } = vi.hoisted(() => ({
+  composeFilm: vi.fn(async (_id: string) => undefined),
+  ffmpegAvailable: vi.fn(async () => true),
   orchestrator: {
     createFilm: vi.fn(async (_args: Record<string, unknown>) => ({
       id: "film-new",
@@ -34,8 +36,6 @@ const { orchestrator, composeFilm, ffmpegAvailable } = vi.hoisted(() => ({
     })),
     startFilm: vi.fn(async (_id: string) => undefined),
   },
-  composeFilm: vi.fn(async (_id: string) => undefined),
-  ffmpegAvailable: vi.fn(async () => true),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -46,7 +46,7 @@ vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock("~/server/film/orchestrator", () => ({
   createFilm: orchestrator.createFilm,
@@ -86,10 +86,10 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
-  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-  seedUser(tdb, { id: "user-b", email: "b@test.dev" });
-  seedFilm(tdb, { id: "film-a", userId: "user-a", title: "我的成片" });
-  seedFilm(tdb, { id: "film-b", userId: "user-b", title: "别人的成片" });
+  seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+  seedUser(tdb, { email: "b@test.dev", id: "user-b" });
+  seedFilm(tdb, { id: "film-a", title: "我的成片", userId: "user-a" });
+  seedFilm(tdb, { id: "film-b", title: "别人的成片", userId: "user-b" });
 });
 
 describe("film.list —— 读侧归属", () => {
@@ -129,9 +129,7 @@ describe("film.cancel / start / compose —— 拒绝必须发生在副作用之
   });
 
   it("自己的成片：取消真的落到仓储", async () => {
-    const mark = vi
-      .spyOn(filmRepository, "markCancelled")
-      .mockResolvedValue(undefined);
+    const mark = vi.spyOn(filmRepository, "markCancelled").mockResolvedValue(undefined);
     await expect(caller().cancel({ id: "film-a" })).resolves.toEqual({
       ok: true,
     });
@@ -164,50 +162,44 @@ describe("film.cancel / start / compose —— 拒绝必须发生在副作用之
 describe("film.create / createFromProject —— 上下文只能来自会话", () => {
   it("建片把会话里的 userId 传给编排层（不能以自己的身份建到别人名下）", async () => {
     await caller().create({
-      title: "新片",
       script: "一段剧本",
+      title: "新片",
       type: "short_video",
     });
     expect(orchestrator.createFilm).toHaveBeenCalledTimes(1);
     expect(orchestrator.createFilm.mock.calls[0]?.[0]).toMatchObject({
-      userId: "user-a",
       title: "新片",
+      userId: "user-a",
     });
   });
 
   it("没给画幅时透传 `FILM_COMPOSE_SIZE` 那份常量，不在路由里硬编码尺寸", async () => {
-    await caller().create({ title: "T", script: "S", type: "short_video" });
-    expect(orchestrator.createFilm.mock.calls[0]?.[0]?.size).toBe(
-      FILM_COMPOSE_SIZE,
-    );
+    await caller().create({ script: "S", title: "T", type: "short_video" });
+    expect(orchestrator.createFilm.mock.calls[0]?.[0]?.size).toBe(FILM_COMPOSE_SIZE);
   });
 
   it("从项目建片同样只传会话用户；项目归属判定在编排层（orchestrator.test.ts 已判）", async () => {
-    seedProject(tdb, { id: "proj-a", userId: "user-a", name: "我的画布" });
+    seedProject(tdb, { id: "proj-a", name: "我的画布", userId: "user-a" });
     await caller().createFromProject({ projectId: "proj-a" });
-    expect(orchestrator.createFilmFromProject.mock.calls[0]?.[0]).toMatchObject(
-      {
-        userId: "user-a",
-        projectId: "proj-a",
-      },
-    );
+    expect(orchestrator.createFilmFromProject.mock.calls[0]?.[0]).toMatchObject({
+      projectId: "proj-a",
+      userId: "user-a",
+    });
   });
 
   it("标题超 200 字 / 空剧本 → BAD_REQUEST（不落到编排层）", async () => {
     expect(
       await codeOf(
         caller().create({
-          title: "x".repeat(201),
           script: "S",
+          title: "x".repeat(201),
           type: "short_video",
         }),
       ),
     ).toBe("BAD_REQUEST");
-    expect(
-      await codeOf(
-        caller().create({ title: "T", script: "", type: "short_video" }),
-      ),
-    ).toBe("BAD_REQUEST");
+    expect(await codeOf(caller().create({ script: "", title: "T", type: "short_video" }))).toBe(
+      "BAD_REQUEST",
+    );
     expect(orchestrator.createFilm).not.toHaveBeenCalled();
   });
 });

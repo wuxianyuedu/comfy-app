@@ -62,7 +62,7 @@ async function resolveUserByEmail(email: string, name: string | null): Promise<S
     name,
     password: "oauth-not-used",
   });
-  return { id: user.id, email: user.email, name: user.name ?? null };
+  return { email: user.email, id: user.id, name: user.name ?? null };
 }
 
 /**

@@ -29,12 +29,12 @@ import type { MissingItem } from "~/components/workshop/stage-config";
  * 避免把 txt2img 混进视频下拉（两类工作流的对外参数口径不同）。
  * 选定后工坊只暴露 提示词 / 尺寸 / 参考图(首帧)，其余参数用工作流默认值。 */
 function WorkshopWorkflowSelect({
-  label,
-  placeholder,
   category,
-  options,
-  value,
+  label,
   onChange,
+  options,
+  placeholder,
+  value,
 }: {
   category: WorkshopWorkflowCategory;
   label: string;
@@ -90,17 +90,17 @@ type WorkshopAsideProps = {
 };
 
 export function WorkshopAside({
-  missing,
-  workflowOptions,
-  workflowId,
-  onWorkflowChange,
-  videoWorkflowId,
-  onVideoWorkflowChange,
   apiChannels,
   characterCount,
-  imageDoneCount,
   clipDoneCount,
+  imageDoneCount,
+  missing,
   onGoScript,
+  onVideoWorkflowChange,
+  onWorkflowChange,
+  videoWorkflowId,
+  workflowId,
+  workflowOptions,
 }: WorkshopAsideProps) {
   const anyChannelConfigured =
     apiChannels?.image.configured === true || apiChannels?.video.configured === true;

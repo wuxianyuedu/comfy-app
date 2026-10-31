@@ -14,7 +14,7 @@ function stubFetch(impl: (...args: Array<unknown>) => unknown) {
 }
 
 function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
-  return { ok, status, json: async () => body };
+  return { json: async () => body, ok, status };
 }
 
 describe("readApiErrorMessage", () => {
@@ -38,18 +38,18 @@ describe("saveApiChannels", () => {
   it("成功时返回脱敏视图", async () => {
     const channels = {
       image: {
-        configured: true,
         baseUrl: "https://a",
-        path: "/p",
-        model: "m",
+        configured: true,
         hasApiKey: true,
+        model: "m",
+        path: "/p",
       },
       video: {
-        configured: false,
         baseUrl: "",
-        path: "/p",
-        model: "",
+        configured: false,
         hasApiKey: false,
+        model: "",
+        path: "/p",
       },
     };
     const fetchMock = stubFetch(async () => jsonResponse({ channels }));
@@ -79,11 +79,11 @@ describe("saveApiChannels", () => {
 
   it("响应体非法 JSON 时按空对象处理，不二次抛错", async () => {
     stubFetch(async () => ({
-      ok: false,
-      status: 500,
       json: async () => {
         throw new Error("not json");
       },
+      ok: false,
+      status: 500,
     }));
     await expect(saveApiChannels({})).rejects.toThrow("保存失败");
   });

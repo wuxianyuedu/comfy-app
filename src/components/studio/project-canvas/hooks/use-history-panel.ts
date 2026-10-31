@@ -64,7 +64,7 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /* 「按需求重跑一遍取数」走唯一出口（规范 16 §16.2.4.70）。 */
-  const { ticket: reloadKey, refresh } = useRefreshTicket();
+  const { refresh, ticket: reloadKey } = useRefreshTicket();
 
   /** 全局是否有记录 —— 本项目为空时用来决定是否提示「查看全部」。 */
   const [globalCount, setGlobalCount] = useState<number | null>(null);
@@ -127,17 +127,17 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
   useInterval(refresh, { ms: activeCount > 0 ? POLL_MS : null });
 
   return {
-    tasks,
-    loading,
-    error,
-    scope,
-    filter,
-    display,
     activeCount,
+    display,
+    error,
+    filter,
     globalCount,
-    setScope,
-    setFilter,
-    setDisplay,
+    loading,
     refresh,
+    scope,
+    setDisplay,
+    setFilter,
+    setScope,
+    tasks,
   };
 }

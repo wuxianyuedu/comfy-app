@@ -45,10 +45,10 @@ beforeEach(() => {
 
 function startWatch(partial: Partial<TaskWatchHandlers> = {}) {
   const handlers: TaskWatchHandlers = {
-    onSettled: vi.fn(),
+    onLog: vi.fn(),
     onOutput: vi.fn(),
     onProgress: vi.fn(),
-    onLog: vi.fn(),
+    onSettled: vi.fn(),
     ...partial,
   };
   watchTask("t-host-1", handlers);
@@ -68,10 +68,10 @@ describe("watchTask 的终态落定路径", () => {
   it("state 帧 SUCCEEDED + images：逐条 onOutput、settle(true)、关流", () => {
     const { es, handlers } = startWatch();
     es.emit({
-      type: "state",
-      status: "SUCCEEDED",
-      progress: 100,
       images: IMAGES,
+      progress: 100,
+      status: "SUCCEEDED",
+      type: "state",
     });
     expect(handlers.onOutput).toHaveBeenCalledTimes(2);
     expect(handlers.onSettled).toHaveBeenCalledTimes(1);
@@ -81,17 +81,17 @@ describe("watchTask 的终态落定路径", () => {
 
   it("state 帧 SUCCEEDED 但无产出：按失败落定", () => {
     const { es, handlers } = startWatch();
-    es.emit({ type: "state", status: "SUCCEEDED", progress: 100, images: [] });
+    es.emit({ images: [], progress: 100, status: "SUCCEEDED", type: "state" });
     expect(handlers.onSettled).toHaveBeenCalledWith({
-      ok: false,
       message: "任务完成但没有产出文件",
+      ok: false,
     });
     expect(es.close).toHaveBeenCalled();
   });
 
   it("非终态 state 帧（RUNNING）只刷进度、不落定", () => {
     const { es, handlers } = startWatch();
-    es.emit({ type: "state", status: "RUNNING", progress: 42 });
+    es.emit({ progress: 42, status: "RUNNING", type: "state" });
     expect(handlers.onProgress).toHaveBeenCalled();
     expect(handlers.onSettled).not.toHaveBeenCalled();
     expect(es.close).not.toHaveBeenCalled();
@@ -100,17 +100,17 @@ describe("watchTask 的终态落定路径", () => {
   it("终态被读到两次也只落定一次：产出回调不许重发", () => {
     const { es, handlers } = startWatch();
     es.emit({
-      type: "state",
-      status: "SUCCEEDED",
-      progress: 100,
       images: IMAGES,
+      progress: 100,
+      status: "SUCCEEDED",
+      type: "state",
     });
     expect(handlers.onSettled).toHaveBeenCalledTimes(1);
     es.emit({
-      type: "state",
-      status: "SUCCEEDED",
-      progress: 100,
       images: IMAGES,
+      progress: 100,
+      status: "SUCCEEDED",
+      type: "state",
     });
     expect(handlers.onSettled).toHaveBeenCalledTimes(1);
     expect(handlers.onOutput).toHaveBeenCalledTimes(IMAGES.length);
@@ -118,17 +118,17 @@ describe("watchTask 的终态落定路径", () => {
 
   it("已退役的 done 帧即使从别处冒出来也只是被忽略", () => {
     const { es, handlers } = startWatch();
-    es.emit({ type: "done", images: IMAGES });
+    es.emit({ images: IMAGES, type: "done" });
     expect(handlers.onSettled).not.toHaveBeenCalled();
     expect(handlers.onOutput).not.toHaveBeenCalled();
   });
 
   it("state 帧 FAILED 带 error：按失败落定并用 DB 原因", () => {
     const { es, handlers } = startWatch();
-    es.emit({ type: "state", status: "FAILED", error: "工作流校验未通过" });
+    es.emit({ error: "工作流校验未通过", status: "FAILED", type: "state" });
     expect(handlers.onSettled).toHaveBeenCalledWith({
-      ok: false,
       message: "工作流校验未通过",
+      ok: false,
     });
   });
 });

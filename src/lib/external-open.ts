@@ -35,8 +35,8 @@ export type ExternalTarget = "browser" | "folder" | "update" | "relaunch";
 const TARGET_VERB: Record<ExternalTarget, string> = {
   browser: "在浏览器打开",
   folder: "打开目录",
-  update: "检查更新",
   relaunch: "重启应用",
+  update: "检查更新",
 };
 
 /**
@@ -73,7 +73,7 @@ export function toExternalResult(raw: {
   const ok = raw.ok ?? raw.triggered ?? false;
   const detail =
     raw.detail ?? raw.error ?? (ok ? "已交给外部程序" : "外部动作未能发起，请重试或手动处理");
-  return { ok, detail };
+  return { detail, ok };
 }
 
 /** `「<动词>失败」` —— 失败文案的唯一拼装处。 */

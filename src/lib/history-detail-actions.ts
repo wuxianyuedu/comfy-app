@@ -38,17 +38,17 @@ export async function revealTaskFolder(taskId: string): Promise<{ detail: string
   const folder = await openTaskFolder(taskId);
   if (!folder.opened || !folder.absolutePath) {
     return {
-      ok: false,
       detail:
         folder.error === "directory missing"
           ? "该任务尚未生成文件目录"
           : (folder.error ?? "未能打开输出目录，可在任务详情里复制文件路径"),
+      ok: false,
     };
   }
   const revealed = await vanillaApi.setting.revealPath.mutate({
     path: folder.absolutePath,
   });
-  return { ok: revealed.ok === true, detail: revealed.detail };
+  return { detail: revealed.detail, ok: revealed.ok === true };
 }
 
 /** 拉取任务执行时捕获的工作流快照（下载 workflow.json 用）。 */

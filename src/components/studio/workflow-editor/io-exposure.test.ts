@@ -1,67 +1,51 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
-import {
-  enrichFromViewNodes,
-  mergeExposedEntry,
-  resolveExposedLabel,
-} from "./io-exposure";
+import { enrichFromViewNodes, mergeExposedEntry, resolveExposedLabel } from "./io-exposure";
 
 /** 服务端富化条目（workflow-detail-io 的输出形状）。 */
 function enriched(partial: Partial<WorkflowIOEntry> = {}): WorkflowIOEntry {
   return {
+    defaultValue: -94475632327396,
     direction: "input",
     kind: "widget",
-    nodeId: "node-uuid",
-    name: "value_1",
     label: "value_1",
+    name: "value_1",
+    nodeId: "node-uuid",
     type: "INT",
-    defaultValue: -94475632327396,
     ...partial,
   };
 }
 
 describe("resolveExposedLabel — 暴露条目的显示名回退链", () => {
   it("作者在面板里的重命名优先于服务端富化名", () => {
-    expect(resolveExposedLabel({ label: "seed" }, enriched(), "value_1")).toBe(
-      "seed",
-    );
+    expect(resolveExposedLabel({ label: "seed" }, enriched(), "value_1")).toBe("seed");
   });
 
   it("本地没重命名过时用服务端富化名", () => {
-    expect(
-      resolveExposedLabel({}, enriched({ label: "随机种子" }), "value_1"),
-    ).toBe("随机种子");
+    expect(resolveExposedLabel({}, enriched({ label: "随机种子" }), "value_1")).toBe("随机种子");
   });
 
   it("本地与服务端都没有名字时回退原始 pin 名", () => {
     expect(resolveExposedLabel({}, undefined, "value_1")).toBe("value_1");
-    expect(
-      resolveExposedLabel({}, enriched({ label: undefined }), "value_1"),
-    ).toBe("value_1");
+    expect(resolveExposedLabel({}, enriched({ label: undefined }), "value_1")).toBe("value_1");
   });
 
   it("空白本地 label 视为未命名", () => {
-    expect(resolveExposedLabel({ label: "   " }, undefined, "value_1")).toBe(
-      "value_1",
-    );
+    expect(resolveExposedLabel({ label: "   " }, undefined, "value_1")).toBe("value_1");
   });
 
   it("库里的 label 直读 —— 哪怕它长得像别名（不再有让位判定）", () => {
     /* `label` 的唯一写入点是面板改名框（勾选不再抄画布显示名进库），所以
      *  库里存着 `value_1` 就是作者真的要它叫 `value_1`；想回到富化名，清空
      *  改名即可（下一条）。 */
-    expect(
-      resolveExposedLabel(
-        { label: "value_1" },
-        enriched({ label: "Seed" }),
-        "value_1",
-      ),
-    ).toBe("value_1");
+    expect(resolveExposedLabel({ label: "value_1" }, enriched({ label: "Seed" }), "value_1")).toBe(
+      "value_1",
+    );
     expect(
       resolveExposedLabel(
         { label: "image" },
-        enriched({ name: "image", label: "Last Frame Image" }),
+        enriched({ label: "Last Frame Image", name: "image" }),
         "image",
       ),
     ).toBe("image");
@@ -69,33 +53,19 @@ describe("resolveExposedLabel — 暴露条目的显示名回退链", () => {
 
   it("清掉改名（label 为空）后回到富化名", () => {
     expect(
-      resolveExposedLabel(
-        { label: undefined },
-        enriched({ label: "Last Frame Image" }),
-        "image",
-      ),
+      resolveExposedLabel({ label: undefined }, enriched({ label: "Last Frame Image" }), "image"),
     ).toBe("Last Frame Image");
     /* 富化链也停在 pin 名时，如实显示 pin 名（没有别的名字可用）。 */
     expect(
-      resolveExposedLabel(
-        { label: undefined },
-        enriched({ label: "value_1" }),
-        "value_1",
-      ),
+      resolveExposedLabel({ label: undefined }, enriched({ label: "value_1" }), "value_1"),
     ).toBe("value_1");
   });
 
   it("与画布同款清洗：剥掉 COMBO 候选串，两处显示完全一致", () => {
-    expect(
-      resolveExposedLabel({ label: "模型: A = B | C = D" }, undefined, "model"),
-    ).toBe("模型");
-    expect(
-      resolveExposedLabel(
-        {},
-        enriched({ label: "模型: A = B | C = D" }),
-        "model",
-      ),
-    ).toBe("模型");
+    expect(resolveExposedLabel({ label: "模型: A = B | C = D" }, undefined, "model")).toBe("模型");
+    expect(resolveExposedLabel({}, enriched({ label: "模型: A = B | C = D" }), "model")).toBe(
+      "模型",
+    );
   });
 });
 
@@ -112,8 +82,8 @@ describe("mergeExposedEntry — 本地编辑态覆盖服务端富化", () => {
     const merged = mergeExposedEntry(
       {
         label: "seed",
-        required: true,
         modeOverrides: { i2v: { visible: false } },
+        required: true,
       },
       enriched(),
     );
@@ -122,10 +92,7 @@ describe("mergeExposedEntry — 本地编辑态覆盖服务端富化", () => {
   });
 
   it("本地没有 label 时沿用服务端富化名，不会把名字清空", () => {
-    const merged = mergeExposedEntry(
-      {},
-      enriched({ label: "Last Frame Image" }),
-    );
+    const merged = mergeExposedEntry({}, enriched({ label: "Last Frame Image" }));
     expect(merged.label).toBe("Last Frame Image");
   });
 });
@@ -133,17 +100,17 @@ describe("mergeExposedEntry — 本地编辑态覆盖服务端富化", () => {
 describe("enrichFromViewNodes — 子图内层视图的就地富化兜底", () => {
   const viewNodes = [
     {
-      id: "1670",
       class_type: "PrimitiveInt",
+      id: "1670",
       raw_inputs: [
         {
-          name: "value",
           label: "Seed",
           localized: "随机种",
+          name: "value",
           type: "INT",
           widgetValue: 1234,
         },
-        { name: "model_name", localized: "模型", type: "COMBO" },
+        { localized: "模型", name: "model_name", type: "COMBO" },
       ],
     },
   ];

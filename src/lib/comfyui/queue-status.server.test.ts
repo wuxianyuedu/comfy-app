@@ -20,31 +20,31 @@ import { stripComments } from "../../../tests/helpers/strip-comments";
  * `unbound-method` 判据）；`state` 是用例间可改的输入。 */
 const stub = vi.hoisted(() => {
   const state = {
-    running: /* SAFETY: 类型断言已复核 */ null as Record<string, unknown> | null,
     queued: 0,
+    running: /* SAFETY: 类型断言已复核 */ null as Record<string, unknown> | null,
     /** 进程级快照的桩返回值（`status.ts` 的 `ComfyRuntimeSnapshot` 子集）。 */
     snapshot: /* SAFETY: 类型断言已复核 */ {
+      didQueryProcTable: true,
       running: false,
       unverified: false,
-      didQueryProcTable: true,
     } as { didQueryProcTable: boolean; running: boolean; unverified: boolean },
   };
   return {
-    state,
-    findRunning: vi.fn(async (): Promise<unknown> => state.running),
     countQueued: vi.fn(async () => state.queued),
+    findRunning: vi.fn(async (): Promise<unknown> => state.running),
     getQueue: vi.fn(async (): Promise<unknown> => ({
-      queue_running: [{ prompt_id: "p1" }],
       queue_pending: [{ prompt_id: "p2" }, { prompt_id: "p3" }],
+      queue_running: [{ prompt_id: "p1" }],
     })),
     getSnapshot: vi.fn(async () => state.snapshot),
+    state,
   };
 });
 
 vi.mock("~/lib/core/repository-task", () => ({
   taskRepository: {
-    findRunningForStatusBar: stub.findRunning,
     countQueuedForStatusBar: stub.countQueued,
+    findRunningForStatusBar: stub.findRunning,
   },
 }));
 vi.mock("~/lib/comfyui/client", () => ({ getComfyQueue: stub.getQueue }));
@@ -68,19 +68,19 @@ const RAW_WITH_MODEL = {
 
 function baseRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: "t-1",
-    workflowName: "image_z_image_int8_t2i",
-    progress: 42,
-    progressNode: {
-      id: "7",
-      classType: "KSampler",
-      label: "采样器",
-      value: 3,
-      max: 20,
-    },
     claimedAt: new Date("2026-01-01T00:00:10.000Z"),
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     execPayload: RAW_WITH_MODEL,
+    id: "t-1",
+    progress: 42,
+    progressNode: {
+      classType: "KSampler",
+      id: "7",
+      label: "采样器",
+      max: 20,
+      value: 3,
+    },
+    workflowName: "image_z_image_int8_t2i",
     ...overrides,
   };
 }
@@ -89,16 +89,16 @@ beforeEach(() => {
   stub.state.running = baseRow();
   stub.state.queued = 2;
   stub.state.snapshot = {
+    didQueryProcTable: true,
     running: false,
     unverified: false,
-    didQueryProcTable: true,
   };
   // 三条句柄在用例间不清零的话，「各发一次」那条会累计成 8 次。
   stub.findRunning.mockClear();
   stub.countQueued.mockClear();
   stub.getQueue.mockReset().mockImplementation(async () => ({
-    queue_running: [{ prompt_id: "p1" }],
     queue_pending: [{ prompt_id: "p2" }, { prompt_id: "p3" }],
+    queue_running: [{ prompt_id: "p1" }],
   }));
   stub.getSnapshot.mockClear();
 });
@@ -108,16 +108,16 @@ describe("状态栏那一格的全部来源都是库", () => {
     const status = await mod.collectComfyQueueStatus();
 
     expect(status).toEqual({
+      comfy: { pending: 2, running: 1 },
       online: true,
-      comfy: { running: 1, pending: 2 },
       queued: 2,
       running: {
+        model: "flux1-dev.safetensors",
+        nodeType: "KSampler",
+        progress: 42,
+        startedAt: Date.parse("2026-01-01T00:00:10.000Z"),
         taskId: "t-1",
         workflowName: "image_z_image_int8_t2i",
-        model: "flux1-dev.safetensors",
-        startedAt: Date.parse("2026-01-01T00:00:10.000Z"),
-        progress: 42,
-        nodeType: "KSampler",
       },
     });
   });
@@ -156,7 +156,7 @@ describe("状态栏那一格的全部来源都是库", () => {
 
   it("cli 那条进度事件没有 classType 时，节点类名为 null（与内存版旧行为一致）", async () => {
     stub.state.running = baseRow({
-      progressNode: { id: "7", value: 3, max: 20 },
+      progressNode: { id: "7", max: 20, value: 3 },
     });
     const status = await mod.collectComfyQueueStatus();
     expect(status.running?.nodeType).toBeNull();
@@ -168,7 +168,7 @@ describe("状态栏那一格的全部来源都是库", () => {
     const status = await mod.collectComfyQueueStatus();
 
     expect(status.online).toBe(false);
-    expect(status.comfy).toEqual({ running: 0, pending: 0 });
+    expect(status.comfy).toEqual({ pending: 0, running: 0 });
     expect(status.queued).toBe(2);
     expect(status.running?.taskId).toBe("t-1");
   });
@@ -176,9 +176,9 @@ describe("状态栏那一格的全部来源都是库", () => {
   it("HTTP 没读到但进程活着（跑图满载 /queue 连续超时的那一档）：仍算在线", async () => {
     stub.getQueue.mockResolvedValue(null);
     stub.state.snapshot = {
+      didQueryProcTable: true,
       running: true,
       unverified: false,
-      didQueryProcTable: true,
     };
 
     const status = await mod.collectComfyQueueStatus();
@@ -187,7 +187,7 @@ describe("状态栏那一格的全部来源都是库", () => {
     expect(status.online).toBe(true);
     /* comfy 计数置 0 的含义是「这一拍没读到」，不是「队列空了」；
      * 本应用自己的两个数照常来自库。 */
-    expect(status.comfy).toEqual({ running: 0, pending: 0 });
+    expect(status.comfy).toEqual({ pending: 0, running: 0 });
     expect(status.queued).toBe(2);
     expect(status.running?.taskId).toBe("t-1");
   });
@@ -195,9 +195,9 @@ describe("状态栏那一格的全部来源都是库", () => {
   it("HTTP 没读到且快照 unverified（进程表也查失败）：不当作在跑", async () => {
     stub.getQueue.mockResolvedValue(null);
     stub.state.snapshot = {
+      didQueryProcTable: true,
       running: false,
       unverified: true,
-      didQueryProcTable: true,
     };
 
     const status = await mod.collectComfyQueueStatus();

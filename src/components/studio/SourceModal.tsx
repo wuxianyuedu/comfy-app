@@ -44,7 +44,7 @@ export type SourceModalProps = {
   onClose: () => void;
 };
 
-export function SourceModal({ data, loading, error, onClose }: SourceModalProps) {
+export function SourceModal({ data, error, loading, onClose }: SourceModalProps) {
   const activeText = useMemo(() => {
     if (data?.source == null) {
       return "";

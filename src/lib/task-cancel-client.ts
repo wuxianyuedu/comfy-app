@@ -35,10 +35,10 @@ export async function fetchTaskStatus(taskId: string): Promise<TaskStatusSnapsho
   try {
     const t = await vanillaApi.task.detail.query({ id: taskId });
     return {
-      status: t?.status ?? null,
       error: typeof t?.error === "string" ? t.error : null,
+      status: t?.status ?? null,
     };
   } catch {
-    return { status: null, error: null };
+    return { error: null, status: null };
   }
 }

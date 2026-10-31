@@ -239,8 +239,8 @@ export function useWorkflowLibrary(
       return;
     }
     const snapshot = JSON.stringify({
-      wf: listQ.data.workflows ?? [],
       pend: listQ.data.localPending ?? [],
+      wf: listQ.data.workflows ?? [],
     });
     if (snapshot === lastSyncedRef.current) {
       return;
@@ -275,16 +275,16 @@ export function useWorkflowLibrary(
   const filteredWorkflows = useMemo(
     () =>
       filterWorkflows(workflows, {
-        source: sourceFilter,
-        type: typeFilter,
         model: modelFilter,
         search,
+        source: sourceFilter,
+        type: typeFilter,
       }),
     [workflows, search, sourceFilter, typeFilter, modelFilter],
   );
 
   const pendingRows = useMemo(
-    () => filterPending(localPending, { source: sourceFilter, search }),
+    () => filterPending(localPending, { search, source: sourceFilter }),
     [localPending, sourceFilter, search],
   );
 
@@ -312,18 +312,18 @@ export function useWorkflowLibrary(
   const [pendingLoading, setPendingLoading] = useState<Record<string, boolean>>({});
 
   const actions = useWorkflowActions({
-    setDeleting,
-    setPendingDelete,
-    setActionError,
+    createMut,
+    deleteMut,
+    load,
+    resyncMut,
     runBundle: bundleAction.run,
     runResync: resyncAction.run,
+    setActionError,
+    setDeleting,
+    setPendingDelete,
     setPendingLoading,
     setWorkflows,
-    load,
     updateMut,
-    deleteMut,
-    resyncMut,
-    createMut,
   });
 
   const importState = useWorkflowImport({ createMut, load });
@@ -373,61 +373,61 @@ export function useWorkflowLibrary(
   }, [editingId, trpc, queryClient]);
 
   return {
-    workflows: filteredWorkflows,
-    pendingRows,
-    sourceCounts,
-    typeCounts,
-    modelTags,
-    search,
-    setSearch,
-    sourceFilter,
-    setSourceFilter,
-    typeFilter,
-    setTypeFilter,
-    modelFilter,
-    setModelFilter,
-    selectedId,
-    selectedRow,
-    setSelectedId,
-    editingId,
-    setEditingId,
-    showModelManager,
-    setShowModelManager,
-    showImport: importState.showImport,
-    toggleImport,
-    closeImport,
-    importState,
-    pendingDelete,
-    deleting,
-    cancelDelete,
-    confirmDelete: actions.handleDelete,
+    actionError,
     bundleBusy: bundleAction.busyId,
-    resyncBusy: resyncAction.busyId,
+    cancelDelete,
+    closeImport,
+    confirmDelete: actions.handleDelete,
+    deleting,
+    editingId,
+    handleDeleteClick,
+    handleDownload: actions.downloadJson,
+    handleEdit,
+    handleEditorClose,
+    handleLoadPending: actions.handleLoadPending,
+    handleResync: actions.resyncWorkflow,
+    handleUse,
+    importState,
     isBundleBusy: bundleAction.isBusy,
     isResyncBusy: resyncAction.isBusy,
-    pendingLoading,
-    actionError,
+    load,
     loadError: listQ.error
       ? errorText(listQ.error, "工作流列表加载失败")
       : tagsQ.error
         ? errorText(tagsQ.error, "模型标签库加载失败")
         : null,
     loading: listQ.isLoading && !listQ.data && !listQ.isError,
+    loadModelTags,
     loadStalled,
     localRootsHint,
-    load,
-    refresh,
-    loadModelTags,
-    handleUse,
-    handleDeleteClick,
-    handleDownload: actions.downloadJson,
-    handleResync: actions.resyncWorkflow,
-    handleLoadPending: actions.handleLoadPending,
-    handleEdit,
-    handleEditorClose,
-    patchModes: actions.patchModes,
+    modelFilter,
+    modelTags,
     patchModelTags: actions.patchModelTags,
-    patchWorkflowIO: actions.patchWorkflowIO,
+    patchModes: actions.patchModes,
     patchParamMap: actions.patchParamMap,
+    patchWorkflowIO: actions.patchWorkflowIO,
+    pendingDelete,
+    pendingLoading,
+    pendingRows,
+    refresh,
+    resyncBusy: resyncAction.busyId,
+    search,
+    selectedId,
+    selectedRow,
+    setEditingId,
+    setModelFilter,
+    setSearch,
+    setSelectedId,
+    setShowModelManager,
+    setSourceFilter,
+    setTypeFilter,
+    showImport: importState.showImport,
+    showModelManager,
+    sourceCounts,
+    sourceFilter,
+    toggleImport,
+    typeCounts,
+    typeFilter,
+    workflows: filteredWorkflows,
   };
 }

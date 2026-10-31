@@ -61,44 +61,44 @@ describe("合法的一档 → partial，且窗口是闭区间、按 size 裁过"
   it("完整区间原样给（`0-0` 就是 1 个字节，不是 0 个）", () => {
     expect(resolveByteRange("bytes=0-0", SIZE)).toEqual({
       kind: "partial",
-      window: { start: 0, endInclusive: 0 },
+      window: { endInclusive: 0, start: 0 },
     });
     expect(resolveByteRange("bytes=100-199", SIZE)).toEqual({
       kind: "partial",
-      window: { start: 100, endInclusive: 199 },
+      window: { endInclusive: 199, start: 100 },
     });
   });
 
   it("开放终点 `bytes=a-` 到文件末尾", () => {
     expect(resolveByteRange("bytes=900-", SIZE)).toEqual({
       kind: "partial",
-      window: { start: 900, endInclusive: 999 },
+      window: { endInclusive: 999, start: 900 },
     });
   });
 
   it("终点超过文件长度时裁剪（RFC 要求服务端收边界，不许回一段不存在的字节）", () => {
     expect(resolveByteRange("bytes=990-99999", SIZE)).toEqual({
       kind: "partial",
-      window: { start: 990, endInclusive: 999 },
+      window: { endInclusive: 999, start: 990 },
     });
   });
 
   it("后缀形式 `bytes=-n` 取末尾 n 个字节（与「起点 0 终点 n」不是同一件事）", () => {
     expect(resolveByteRange("bytes=-20", SIZE)).toEqual({
       kind: "partial",
-      window: { start: 980, endInclusive: 999 },
+      window: { endInclusive: 999, start: 980 },
     });
     // 要得比整个文件还多：从 0 开始，不是负数起点
     expect(resolveByteRange("bytes=-5000", SIZE)).toEqual({
       kind: "partial",
-      window: { start: 0, endInclusive: 999 },
+      window: { endInclusive: 999, start: 0 },
     });
   });
 
   it("前后空白与大小写都不影响判定（浏览器一般规矩，但代理层不一定）", () => {
     expect(resolveByteRange("  BYTES=10-20  ", SIZE)).toEqual({
       kind: "partial",
-      window: { start: 10, endInclusive: 20 },
+      window: { endInclusive: 20, start: 10 },
     });
   });
 });
@@ -131,9 +131,7 @@ describe("语法对而当前文件满足不了 → unsatisfiable（这一支才�
 
 describe("Content-Range 的拼法只有一处", () => {
   it("partial 写「起点-终点/总长」", () => {
-    expect(contentRangeHeader({ start: 0, endInclusive: 99 }, 1000)).toBe(
-      "bytes 0-99/1000",
-    );
+    expect(contentRangeHeader({ endInclusive: 99, start: 0 }, 1000)).toBe("bytes 0-99/1000");
   });
 
   it("416 那一支只写总长（没有起点终点）", () => {
@@ -146,7 +144,7 @@ describe("大文件与安全整数", () => {
     const big = 300 * 1024 * 1024;
     expect(resolveByteRange(`bytes=${big - 1}-`, big)).toEqual({
       kind: "partial",
-      window: { start: big - 1, endInclusive: big - 1 },
+      window: { endInclusive: big - 1, start: big - 1 },
     });
   });
 

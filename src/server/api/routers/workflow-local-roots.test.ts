@@ -16,8 +16,8 @@ vi.mock("~/lib/envfile", () => ({
   readEnvVar: vi.fn(() => envStub.localWorkflowsPath),
 }));
 vi.mock("~/lib/app-settings/app-settings.server", () => ({
-  getSettingsSync: vi.fn(() => ({ comfyuiPath: "" })),
   deriveComfyuiWorkflowsDir: vi.fn(() => null),
+  getSettingsSync: vi.fn(() => ({ comfyuiPath: "" })),
 }));
 
 import {

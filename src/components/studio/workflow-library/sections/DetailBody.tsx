@@ -65,19 +65,19 @@ type DetailBodyProps = {
 };
 
 export function DetailBody({
-  workflow,
-  tab,
-  isLoading,
-  workflowIO,
-  paramMap,
-  sourceData,
-  usable,
   activeMode,
+  isLoading,
+  meta,
   onActiveModeChange,
   onEdit,
-  meta,
-  onSeedModeChange,
   onPatchParamMap,
+  onSeedModeChange,
+  paramMap,
+  sourceData,
+  tab,
+  usable,
+  workflow,
+  workflowIO,
 }: DetailBodyProps) {
   /* 懒加载的画布预览撞上「分块已被换掉」时，这一块自己给出路（见下方边界）。 */
   const chunkFallback = useLazyChunkFallback("画布预览");

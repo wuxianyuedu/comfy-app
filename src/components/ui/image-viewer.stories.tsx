@@ -36,7 +36,7 @@ type StoryArgs = {
   sourceName: MediaSourceName;
 };
 
-function ViewerWithSource({ sourceName, label, open: initialOpen }: StoryArgs) {
+function ViewerWithSource({ label, open: initialOpen, sourceName }: StoryArgs) {
   const [open, setOpen] = useState(initialOpen);
   const src = String(resolveSource("media", sourceName));
   return (
@@ -54,10 +54,10 @@ function ViewerWithSource({ sourceName, label, open: initialOpen }: StoryArgs) {
 }
 
 const meta = {
-  title: "UI/ImageViewer",
-  component: ViewerWithSource,
-  args: { sourceName: "sample-landscape.svg", label: "样例图", open: true },
+  args: { label: "样例图", open: true, sourceName: "sample-landscape.svg" },
   argTypes: { sourceName: sourceNameArgType("media") },
+  component: ViewerWithSource,
+  title: "UI/ImageViewer",
 } satisfies Meta<StoryArgs>;
 
 export default meta;
@@ -69,12 +69,12 @@ export const Landscape: Story = {};
 
 /** 竖图：折算的另一端（宽度触底），也是「1:1 看长图要拖」那条路径。 */
 export const Portrait: Story = {
-  args: { sourceName: "sample-portrait.svg", label: "竖图 720 × 1280" },
+  args: { label: "竖图 720 × 1280", sourceName: "sample-portrait.svg" },
 };
 
 /** 超宽图（2400 × 600）：适应窗口下横向铺满、纵向留白最多的一档。 */
 export const Wide: Story = {
-  args: { sourceName: "sample-wide.svg", label: "超宽 2400 × 600" },
+  args: { label: "超宽 2400 × 600", sourceName: "sample-wide.svg" },
 };
 
 /**

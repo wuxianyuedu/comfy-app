@@ -77,8 +77,8 @@ export function buildOutline(value: string): Array<OutlineItem> {
     if (match) {
       items.push({
         level: (match.at(1) ?? "").length,
-        text: (match.at(2) ?? "").trim(),
         line: index,
+        text: (match.at(2) ?? "").trim(),
       });
     }
   });

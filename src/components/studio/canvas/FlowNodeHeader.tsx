@@ -29,21 +29,21 @@ type FlowNodeHeaderProps = {
 
 export function FlowNodeHeader({
   data,
-  role,
+  displayTitle,
   io,
-  outputs,
   isCollapsed,
   onToggleCollapsed,
+  outputs,
   palette,
-  displayTitle,
+  role,
 }: FlowNodeHeaderProps) {
   return (
     <div
       className="flex shrink-0 items-center gap-2 rounded-t-lg px-2 text-xs"
       style={{
-        height: NODE_TITLE_H,
         background: palette.headerBg,
         borderBottom: "1px solid var(--color-border-subtle)",
+        height: NODE_TITLE_H,
       }}
     >
       {/* 收起 / 展开开关。Button 默认 type="button"，以免将来外层
@@ -108,11 +108,11 @@ export function FlowNodeHeader({
           io={io}
           ioRef={
             {
-              nodeId: data.nodeId,
-              hostNodeId: data.hostNodeId,
-              name: outputs.at(0)?.[0] ?? "",
-              kind: "output",
               direction: "output",
+              hostNodeId: data.hostNodeId,
+              kind: "output",
+              name: outputs.at(0)?.[0] ?? "",
+              nodeId: data.nodeId,
             } satisfies IoRef
           }
         />

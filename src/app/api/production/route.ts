@@ -88,17 +88,17 @@ export async function PUT(req: NextRequest) {
       ? inheritDerivedFields(production.characters, existingCharacters, CHARACTER_DERIVED_FIELDS)
       : production.characters;
     await productionRepository.upsertForUser(user.id, {
+      characters,
       id: project,
-      title: typeof production.title === "string" ? production.title : undefined,
-      type: typeof production.type === "string" ? production.type : undefined,
-      tone: typeof production.tone === "string" ? production.tone : undefined,
       logline: typeof production.logline === "string" ? production.logline : undefined,
+      progress: production.progress,
+      scenes: production.scenes,
       scriptMarkdown:
         typeof production.scriptMarkdown === "string" ? production.scriptMarkdown : undefined,
-      scenes: production.scenes,
-      characters,
       shots,
-      progress: production.progress,
+      title: typeof production.title === "string" ? production.title : undefined,
+      tone: typeof production.tone === "string" ? production.tone : undefined,
+      type: typeof production.type === "string" ? production.type : undefined,
     });
     return NextResponse.json({ ok: true });
   } catch (e) {

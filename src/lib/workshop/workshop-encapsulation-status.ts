@@ -116,7 +116,7 @@ export function deriveEncapsulationStatus(args: {
   paramMap: Record<string, unknown> | null | undefined;
   requiredInputs?: ReadonlyArray<string>;
 }): EncapsulationStatus {
-  const { io, paramMap, mode, contractEntries, requiredInputs } = args;
+  const { contractEntries, io, mode, paramMap, requiredInputs } = args;
   /* 调用方（封装面板 / 库列表 / 生成前预检）传的是**存库原始形状**
    *  （`{ source: { "mode:X": {…} } }`），而下游 `resolveMapping` /
    *  `manualTargetFor` 只认解析后的 `ParamMapping` —— 没有这一次解析，落点
@@ -126,8 +126,8 @@ export function deriveEncapsulationStatus(args: {
   /* 口子清单与下面的 `canonical` 同源：调用方给了生效契约就按它列（未给回落内置
    *  默认）—— 两处各取一份会让「这一口有没有落点」与「这一口存不存在」对不上。 */
   const entries = buildParamEntries(io, undefined, {
-    mode: mode ?? null,
     contractIds: contractEntries?.map((item) => item.id),
+    mode: mode ?? null,
   });
   const resolved = resolveMapping(entries, io, mapping, mode ?? null);
   /* 契约口必须显式可见：工作流缺对应端口时 buildParamEntries 会整口省略，
@@ -140,9 +140,9 @@ export function deriveEncapsulationStatus(args: {
   }> =
     contractEntries ??
     exposedParamsForMode(mode ?? null).map((d) => ({
+      control: controlFor(d.id),
       id: d.id,
       label: d.label,
-      control: controlFor(d.id),
     }));
   /* 「尺寸」在映射层是四个子口（宽 / 高 / 宽高比 / 像素量 / 分辨率档，见
    *  workflow-param-mapping 的 `SIZE_SUB_IDS`）：**能定出宽高**才算配置完成
@@ -187,11 +187,11 @@ export function deriveEncapsulationStatus(args: {
         : null
       : (resolved[slot.id] ?? (manual !== undefined ? manual : null));
     return {
+      control: slot.control,
       id: slot.id,
       label: displayLabel(slot.id, slot.label),
-      control: slot.control,
-      targetIoKey: target,
       required: requiredSet.has(slot.id),
+      targetIoKey: target,
     };
   });
   const ordered = Array.from(new Map(mapped.map((e) => [e.id, e])).values());
@@ -212,9 +212,9 @@ export function deriveEncapsulationStatus(args: {
   }
   return {
     entries: ordered,
-    ready: missingRequired.length === 0,
-    missingRequired,
-    resolvedCount,
     missingLabels: ordered.filter((e) => e.targetIoKey === null).map((e) => e.label),
+    missingRequired,
+    ready: missingRequired.length === 0,
+    resolvedCount,
   };
 }

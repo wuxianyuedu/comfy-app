@@ -25,9 +25,9 @@ type FilmStudioPropertyPanelProps = {
 
 export function FilmStudioPropertyPanel({
   c,
+  onPatchShot,
   selectedShot,
   selectedShotId,
-  onPatchShot,
 }: FilmStudioPropertyPanelProps) {
   return (
     <aside className="border-border-subtle bg-panel-deep flex w-70 shrink-0 flex-col border-l">

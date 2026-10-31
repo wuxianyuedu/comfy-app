@@ -28,21 +28,21 @@ const tdb = getTestDb();
 
 beforeEach(() => {
   tdb.$reset();
-  seedUser(tdb, { id: "u1", email: "u1@test.dev" });
+  seedUser(tdb, { email: "u1@test.dev", id: "u1" });
   auth.user = { id: "u1" };
 });
 
 function putRequest(body: unknown) {
   return /* SAFETY: 类型断言已复核 */ {
-    nextUrl: new URL("http://localhost/api/production"),
     json: async () => body,
+    nextUrl: new URL("http://localhost/api/production"),
   } as never;
 }
 
 describe("PUT /api/production", () => {
   it("未鉴权 → 401", async () => {
     auth.user = null;
-    const res = await PUT(putRequest({ project: "proj_1", production: {} }));
+    const res = await PUT(putRequest({ production: {}, project: "proj_1" }));
     expect(res.status).toBe(401);
   });
 
@@ -59,12 +59,12 @@ describe("PUT /api/production", () => {
   it("正常 PUT 落库一行，JSON 列原样存回", async () => {
     const res = await PUT(
       putRequest({
-        project: "proj_1",
         production: {
-          title: "我的短剧",
+          progress: { rendered: false, stage: "storyboard" },
           shots: [{ id: "s1", prompt: "p" }],
-          progress: { stage: "storyboard", rendered: false },
+          title: "我的短剧",
         },
+        project: "proj_1",
       }),
     );
     expect(res.status).toBe(200);
@@ -72,7 +72,7 @@ describe("PUT /api/production", () => {
     const got = await productionRepository.getForUser("u1", "proj_1");
     expect(got?.title).toBe("我的短剧");
     expect(got?.shots).toEqual([{ id: "s1", prompt: "p" }]);
-    expect(got?.progress).toEqual({ stage: "storyboard", rendered: false });
+    expect(got?.progress).toEqual({ rendered: false, stage: "storyboard" });
   });
 });
 
@@ -105,8 +105,8 @@ describe("GET /api/production", () => {
   it("有行 → exists:true 且回传 production（JSON 列已解析）", async () => {
     await productionRepository.upsertForUser("u1", {
       id: "proj_1",
-      title: "我的短剧",
       shots: [{ id: "s1" }],
+      title: "我的短剧",
     });
     const res = await GET(getRequest("proj_1"));
     expect(res.status).toBe(200);

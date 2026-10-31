@@ -20,11 +20,11 @@ function run(over: Partial<ProductionRun> = {}): ProductionRun {
 }
 function view(over: Partial<ProductionRunView> = {}): ProductionRunView {
   return {
+    characterCount: 0,
+    filmRendered: false,
     hasScript: false,
     scriptDigest: "",
-    characterCount: 0,
     shots: [],
-    filmRendered: false,
     ...over,
   };
 }
@@ -37,13 +37,13 @@ describe("normalizeProductionRun", () => {
 
   it("合法值原样读出", () => {
     const r = normalizeProductionRun({
-      status: "running",
       approvalMode: "shot",
-      stage: "shots",
-      goal: "g",
       awaitingStage: "video",
-      processedShotRev: { a: 2 },
       error: "e",
+      goal: "g",
+      processedShotRev: { a: 2 },
+      stage: "shots",
+      status: "running",
       updatedAt: "t",
     });
     expect(r.status).toBe("running");
@@ -56,9 +56,9 @@ describe("normalizeProductionRun", () => {
 
   it("非法 status / approvalMode / stage → 回落默认档", () => {
     const r = normalizeProductionRun({
-      status: "乱",
       approvalMode: "乱",
       stage: "乱",
+      status: "乱",
     });
     expect(r.status).toBe("idle");
     expect(r.approvalMode).toBe("stage");
@@ -74,10 +74,10 @@ describe("normalizeProductionRun", () => {
 
   it("字符串字段类型不符 → 回落空/默认，不抛", () => {
     const r = normalizeProductionRun({
-      goal: 1,
-      error: 2,
-      updatedAt: {},
       awaitingStage: 5,
+      error: 2,
+      goal: 1,
+      updatedAt: {},
     });
     expect(r.goal).toBe("");
     expect(r.error).toBeNull();
@@ -89,64 +89,64 @@ describe("normalizeProductionRun", () => {
 describe("toRunView", () => {
   it("null → 全空视图（连剧本都还没有）", () => {
     expect(toRunView(null)).toEqual({
+      characterCount: 0,
+      filmRendered: false,
       hasScript: false,
       scriptDigest: scriptDigestOf(""),
-      characterCount: 0,
-      shots: [],
-      filmRendered: false,
       scriptHumanVerdict: null,
+      shots: [],
     });
   });
 
   it("从 production 归一镜头视图 + 角色数 + 剧本 + rendered", () => {
     const v = toRunView({
-      scriptMarkdown: "有内容",
       characters: [{}, {}, {}],
+      progress: { rendered: true, stage: "render" },
+      scriptMarkdown: "有内容",
       shots: [
-        { id: "a", rev: 3, imageUrl: "/x.png" },
-        { id: "b", clipUrl: "/y.mp4" },
+        { id: "a", imageUrl: "/x.png", rev: 3 },
+        { clipUrl: "/y.mp4", id: "b" },
       ],
-      progress: { stage: "render", rendered: true },
     });
     expect(v.hasScript).toBe(true);
     expect(v.characterCount).toBe(3);
     expect(v.filmRendered).toBe(true);
     expect(v.shots).toEqual([
       {
+        hasClip: false,
+        hasImage: true,
+        humanRating: null,
+        humanVerdict: null,
         id: "a",
         rev: 3,
-        hasImage: true,
-        hasClip: false,
-        humanVerdict: null,
-        humanRating: null,
       },
       {
+        hasClip: true,
+        hasImage: false,
+        humanRating: null,
+        humanVerdict: null,
         id: "b",
         rev: 0,
-        hasImage: false,
-        hasClip: true,
-        humanVerdict: null,
-        humanRating: null,
       },
     ]);
   });
 
   it("无 id 的镜头项跳过；rev 非数字归 0；whitespace 剧本算无", () => {
     const v = toRunView({
-      scriptMarkdown: "   ",
       characters: "not-array",
+      scriptMarkdown: "   ",
       shots: [{ noId: 1 }, { id: "a", rev: "x" }],
     });
     expect(v.hasScript).toBe(false);
     expect(v.characterCount).toBe(0);
     expect(v.shots).toEqual([
       {
+        hasClip: false,
+        hasImage: false,
+        humanRating: null,
+        humanVerdict: null,
         id: "a",
         rev: 0,
-        hasImage: false,
-        hasClip: false,
-        humanVerdict: null,
-        humanRating: null,
       },
     ]);
   });
@@ -170,15 +170,15 @@ describe("planNextRunAction", () => {
 
   it("awaiting_approval 透出待确认阶段（缺省回落到游标阶段）", () => {
     expect(
-      planNextRunAction(view(), run({ status: "awaiting_approval", awaitingStage: "shots" })),
+      planNextRunAction(view(), run({ awaitingStage: "shots", status: "awaiting_approval" })),
     ).toEqual({ kind: "await_approval", stage: "shots" });
     expect(
       planNextRunAction(
         view(),
         run({
-          status: "awaiting_approval",
-          stage: "video",
           awaitingStage: null,
+          stage: "video",
+          status: "awaiting_approval",
         }),
       ),
     ).toEqual({ kind: "await_approval", stage: "video" });
@@ -192,45 +192,45 @@ describe("planNextRunAction", () => {
       kind: "extract_characters",
     });
     expect(
-      planNextRunAction(view({ hasScript: true, characterCount: 2 }), run({ status: "running" })),
+      planNextRunAction(view({ characterCount: 2, hasScript: true }), run({ status: "running" })),
     ).toEqual({ kind: "plan_storyboard" });
   });
 
   it("有镜头：缺图 / 被改（rev 高于快照）的镜头纳入待生图", () => {
     const shots = [
-      { id: "a", rev: 1, hasImage: true, hasClip: false },
-      { id: "b", rev: 2, hasImage: false, hasClip: false },
+      { hasClip: false, hasImage: true, id: "a", rev: 1 },
+      { hasClip: false, hasImage: false, id: "b", rev: 2 },
     ];
     // a 已按 rev1 处理、b 无图 → 只需处理 b。
     expect(
       planNextRunAction(
-        view({ hasScript: true, characterCount: 1, shots }),
-        run({ status: "running", processedShotRev: { a: 1 } }),
+        view({ characterCount: 1, hasScript: true, shots }),
+        run({ processedShotRev: { a: 1 }, status: "running" }),
       ),
     ).toEqual({ kind: "render_images", shotIds: ["b"] });
     // 用户在 a 处理后又改过（rev 变 3）→ a 重新纳入。
     expect(
       planNextRunAction(
         view({
-          hasScript: true,
           characterCount: 1,
+          hasScript: true,
           shots: [{ ...shots[0]!, rev: 3 }, shots[1]!],
         }),
-        run({ status: "running", processedShotRev: { a: 1 } }),
+        run({ processedShotRev: { a: 1 }, status: "running" }),
       ),
     ).toEqual({ kind: "render_images", shotIds: ["a", "b"] });
   });
 
   it("图齐未出片 → render_film；已出片 → done", () => {
-    const shots = [{ id: "a", rev: 1, hasImage: true, hasClip: true }];
-    const base = { hasScript: true, characterCount: 1, shots };
+    const shots = [{ hasClip: true, hasImage: true, id: "a", rev: 1 }];
+    const base = { characterCount: 1, hasScript: true, shots };
     expect(
-      planNextRunAction(view(base), run({ status: "running", processedShotRev: { a: 1 } })),
+      planNextRunAction(view(base), run({ processedShotRev: { a: 1 }, status: "running" })),
     ).toEqual({ kind: "render_film" });
     expect(
       planNextRunAction(
         view({ ...base, filmRendered: true }),
-        run({ status: "running", processedShotRev: { a: 1 } }),
+        run({ processedShotRev: { a: 1 }, status: "running" }),
       ),
     ).toEqual({ kind: "done" });
   });
@@ -240,8 +240,8 @@ describe("markActionProcessed", () => {
   it("render_images：把被处理镜头的当前 rev 记进快照", () => {
     const v = view({
       shots: [
-        { id: "a", rev: 4, hasImage: false, hasClip: false },
-        { id: "b", rev: 2, hasImage: false, hasClip: false },
+        { hasClip: false, hasImage: false, id: "a", rev: 4 },
+        { hasClip: false, hasImage: false, id: "b", rev: 2 },
       ],
     });
     const r = markActionProcessed(run({ status: "running" }), v, {
@@ -263,10 +263,10 @@ describe("markActionProcessed", () => {
 
 describe("appendRunStep", () => {
   const step = (i: number) => ({
-    ts: `t${i}`,
+    detail: `#${i}`,
     kind: "generate_script",
     ok: true,
-    detail: `#${i}`,
+    ts: `t${i}`,
   });
   it("尾部追加、不可变（不改原 run.log）", () => {
     const base = run();
@@ -291,15 +291,15 @@ describe("normalizeProductionRun · log", () => {
   it("解析合法 step 条目；无 ts / 非对象项丢弃；ok 缺省视为 true", () => {
     const r = normalizeProductionRun({
       log: [
-        { ts: "a", kind: "generate_script", ok: true, detail: "x" },
+        { detail: "x", kind: "generate_script", ok: true, ts: "a" },
         { kind: "no_ts" },
         "junk",
-        { ts: "b", detail: "y" },
+        { detail: "y", ts: "b" },
       ],
     });
     expect(r.log).toEqual([
-      { ts: "a", kind: "generate_script", ok: true, detail: "x" },
-      { ts: "b", kind: "info", ok: true, detail: "y" },
+      { detail: "x", kind: "generate_script", ok: true, ts: "a" },
+      { detail: "y", kind: "info", ok: true, ts: "b" },
     ]);
   });
   it("log 缺省 / 非数组 → 空数组", () => {
@@ -309,12 +309,12 @@ describe("normalizeProductionRun · log", () => {
 });
 
 describe("planNextRunAction · 自动评审", () => {
-  const shots = [{ id: "a", rev: 1, hasImage: true, hasClip: false }];
-  const base = { hasScript: true, characterCount: 1, shots };
+  const shots = [{ hasClip: false, hasImage: true, id: "a", rev: 1 }];
+  const base = { characterCount: 1, hasScript: true, shots };
 
   it("autoReview 关：图齐直接 render_film（不评审）", () => {
     expect(
-      planNextRunAction(view(base), run({ status: "running", processedShotRev: { a: 1 } })),
+      planNextRunAction(view(base), run({ processedShotRev: { a: 1 }, status: "running" })),
     ).toEqual({ kind: "render_film" });
   });
 
@@ -323,9 +323,9 @@ describe("planNextRunAction · 自动评审", () => {
       planNextRunAction(
         view(base),
         run({
-          status: "running",
           autoReview: true,
           processedShotRev: { a: 1 },
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "review_shots", shotIds: ["a"] });
@@ -334,11 +334,11 @@ describe("planNextRunAction · 自动评审", () => {
   it("待生图优先于评审：有镜缺图/被改时先 render_images", () => {
     expect(
       planNextRunAction(
-        view({ hasScript: true, characterCount: 1, shots }),
+        view({ characterCount: 1, hasScript: true, shots }),
         run({
-          status: "running",
           autoReview: true,
           processedShotRev: { a: 0 }, // rev1 > 0 → 该镜需重出图
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "render_images", shotIds: ["a"] });
@@ -349,10 +349,10 @@ describe("planNextRunAction · 自动评审", () => {
       planNextRunAction(
         view(base),
         run({
-          status: "running",
           autoReview: true,
           processedShotRev: { a: 1 },
           reviewedShotRev: { a: 1 },
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "render_film" });
@@ -362,15 +362,15 @@ describe("planNextRunAction · 自动评审", () => {
     expect(
       planNextRunAction(
         view({
-          hasScript: true,
           characterCount: 1,
-          shots: [{ id: "a", rev: 2, hasImage: true, hasClip: false }],
+          hasScript: true,
+          shots: [{ hasClip: false, hasImage: true, id: "a", rev: 2 }],
         }),
         run({
-          status: "running",
           autoReview: true,
           processedShotRev: { a: 2 },
           reviewedShotRev: { a: 1 },
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "review_shots", shotIds: ["a"] });
@@ -381,22 +381,22 @@ describe("planNextRunAction · 自动评审", () => {
     expect(
       planNextRunAction(
         view({
-          hasScript: true,
           characterCount: 1,
+          hasScript: true,
           shots: [
             {
+              hasClip: false,
+              hasImage: true,
+              humanVerdict: { at: "t", note: "", pass: true, rev: 1 },
               id: "a",
               rev: 1,
-              hasImage: true,
-              hasClip: false,
-              humanVerdict: { pass: true, note: "", at: "t", rev: 1 },
             },
           ],
         }),
         run({
-          status: "running",
           autoReview: true,
           processedShotRev: { a: 1 },
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "render_film" });
@@ -406,23 +406,23 @@ describe("planNextRunAction · 自动评审", () => {
     expect(
       planNextRunAction(
         view({
-          hasScript: true,
           characterCount: 1,
+          hasScript: true,
           shots: [
             {
+              hasClip: false,
+              hasImage: true,
+              humanVerdict: { at: "t", note: "崩了", pass: false, rev: 1 },
               id: "a",
               rev: 1,
-              hasImage: true,
-              hasClip: false,
-              humanVerdict: { pass: false, note: "崩了", at: "t", rev: 1 },
             },
           ],
         }),
         run({
-          status: "running",
           autoReview: true,
           processedShotRev: { a: 1 },
           reviewedShotRev: { a: 1 }, // AI 已定稿
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "review_shots", shotIds: ["a"] });
@@ -432,24 +432,24 @@ describe("planNextRunAction · 自动评审", () => {
     expect(
       planNextRunAction(
         view({
-          hasScript: true,
           characterCount: 1,
+          hasScript: true,
           shots: [
             {
+              hasClip: false,
+              hasImage: true,
+              humanVerdict: { at: "t", note: "还是崩", pass: false, rev: 1 },
               id: "a",
               rev: 1,
-              hasImage: true,
-              hasClip: false,
-              humanVerdict: { pass: false, note: "还是崩", at: "t", rev: 1 },
             },
           ],
         }),
         run({
-          status: "running",
           autoReview: true,
           processedShotRev: { a: 1 },
-          reviewedShotRev: { a: 1 },
           reviewAttempts: { a: REVIEW_MAX_RETRY },
+          reviewedShotRev: { a: 1 },
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "render_film" });
@@ -459,22 +459,22 @@ describe("planNextRunAction · 自动评审", () => {
     expect(
       planNextRunAction(
         view({
-          hasScript: true,
           characterCount: 1,
+          hasScript: true,
           shots: [
             {
+              hasClip: false,
+              hasImage: true,
+              humanVerdict: { at: "t", note: "崩了", pass: false, rev: 1 },
               id: "a",
               rev: 2,
-              hasImage: true,
-              hasClip: false,
-              humanVerdict: { pass: false, note: "崩了", at: "t", rev: 1 },
             },
           ],
         }),
         run({
-          status: "running",
           autoReview: true,
           processedShotRev: { a: 2 },
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "review_shots", shotIds: ["a"] });
@@ -483,30 +483,30 @@ describe("planNextRunAction · 自动评审", () => {
   it("人工通过且剧本没变（digest 相等）→ 豁免剧本评审；剧本变过 → 不豁免", () => {
     const viewFactory = (verdictDigest: string, scriptDigest: string) =>
       view({
+        characterCount: 1,
         hasScript: true,
         scriptDigest,
-        characterCount: 1,
-        shots,
         scriptHumanVerdict: {
-          pass: true,
-          note: "",
           at: "t",
           digest: verdictDigest,
+          note: "",
+          pass: true,
         },
+        shots,
       });
     // 人拍板过且剧本此后没变 → 视为已收口（脚本指纹 = 收口快照 = 裁决快照）：
     // 评审被跳过，规划器落到下一动作（补分镜）而不是 review_script
     expect(
       planNextRunAction(
         viewFactory("d1", "d1"),
-        run({ status: "running", autoReview: true, scriptReviewDigest: "d1" }),
+        run({ autoReview: true, scriptReviewDigest: "d1", status: "running" }),
       ),
     ).toEqual({ kind: "plan_storyboard" });
     // 剧本改过：裁决的 digest 落后（d1 ≠ 当前 d2）→ 重新评审
     expect(
       planNextRunAction(
         viewFactory("d1", "d2"),
-        run({ status: "running", autoReview: true, scriptReviewDigest: "d1" }),
+        run({ autoReview: true, scriptReviewDigest: "d1", status: "running" }),
       ),
     ).toEqual({ kind: "review_script" });
   });
@@ -516,8 +516,8 @@ describe("normalizeProductionRun · 自动评审字段", () => {
   it("autoReview 只认 true；rev 映射只收有限数字", () => {
     const r = normalizeProductionRun({
       autoReview: true,
-      reviewedShotRev: { a: 2, b: "x", c: NaN },
       reviewAttempts: { a: 1 },
+      reviewedShotRev: { a: 2, b: "x", c: NaN },
     });
     expect(r.autoReview).toBe(true);
     expect(r.reviewedShotRev).toEqual({ a: 2 });
@@ -533,27 +533,27 @@ describe("normalizeProductionRun · 自动评审字段", () => {
 
   it("剧本闭环字段（#2478）：类型不符回落默认；轮数只收非负有限数", () => {
     const r = normalizeProductionRun({
-      scriptReviewDigest: 5,
       scriptReviewAttempts: -1,
+      scriptReviewDigest: 5,
       scriptRevisionPending: "yes",
       storyboardScriptDigest: null,
     });
     expect(r).toMatchObject({
-      scriptReviewDigest: "",
       scriptReviewAttempts: 0,
+      scriptReviewDigest: "",
       scriptRevisionPending: false,
       storyboardScriptDigest: "",
     });
     expect(
       normalizeProductionRun({
-        scriptReviewDigest: "abc",
         scriptReviewAttempts: 2.9,
+        scriptReviewDigest: "abc",
         scriptRevisionPending: true,
         storyboardScriptDigest: "def",
       }),
     ).toMatchObject({
-      scriptReviewDigest: "abc",
       scriptReviewAttempts: 2,
+      scriptReviewDigest: "abc",
       scriptRevisionPending: true,
       storyboardScriptDigest: "def",
     });
@@ -576,7 +576,7 @@ describe("planNextRunAction · 剧本评审闭环（FR-QA-07 ④ · #2478）", (
     expect(
       planNextRunAction(
         view({ hasScript: true, scriptDigest: digest }),
-        run({ status: "running", autoReview: true }),
+        run({ autoReview: true, status: "running" }),
       ),
     ).toEqual({ kind: "review_script" });
     expect(
@@ -586,9 +586,9 @@ describe("planNextRunAction · 剧本评审闭环（FR-QA-07 ④ · #2478）", (
           scriptDigest: scriptDigestOf("# 人改过的新版本"),
         }),
         run({
-          status: "running",
           autoReview: true,
           scriptReviewDigest: digest, // AI/人改过剧本 → 快照落后
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "review_script" });
@@ -599,9 +599,9 @@ describe("planNextRunAction · 剧本评审闭环（FR-QA-07 ④ · #2478）", (
       planNextRunAction(
         view({ hasScript: true, scriptDigest: digest }),
         run({
-          status: "running",
           autoReview: true,
           scriptReviewDigest: digest,
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "extract_characters" });
@@ -618,32 +618,32 @@ describe("planNextRunAction · 剧本评审闭环（FR-QA-07 ④ · #2478）", (
       planNextRunAction(
         view({ hasScript: true, scriptDigest: digest }),
         run({
-          status: "running",
           autoReview: true,
           scriptRevisionPending: true,
+          status: "running",
         }),
       ),
     ).toEqual({ kind: "revise_script" });
   });
 
   it("分镜联动：分镜后剧本变过（storyboard 快照落后）→ 重排 plan_storyboard", () => {
-    const shots = [{ id: "a", rev: 1, hasImage: true, hasClip: false }];
+    const shots = [{ hasClip: false, hasImage: true, id: "a", rev: 1 }];
     const newDigest = scriptDigestOf("# 改写定稿后的剧本");
     expect(
       planNextRunAction(
         view({
+          characterCount: 1,
           hasScript: true,
           scriptDigest: newDigest,
-          characterCount: 1,
           shots,
         }),
         run({
-          status: "running",
           autoReview: true,
-          scriptReviewDigest: newDigest, // 剧本质量节点已收口
-          storyboardScriptDigest: digest, // 分镜还停在旧版剧本上
           processedShotRev: { a: 1 },
           reviewedShotRev: { a: 1 },
+          scriptReviewDigest: newDigest, // 剧本质量节点已收口
+          status: "running",
+          storyboardScriptDigest: digest, // 分镜还停在旧版剧本上
         }),
       ),
     ).toEqual({ kind: "plan_storyboard" });
@@ -651,18 +651,18 @@ describe("planNextRunAction · 剧本评审闭环（FR-QA-07 ④ · #2478）", (
     expect(
       planNextRunAction(
         view({
+          characterCount: 1,
           hasScript: true,
           scriptDigest: digest,
-          characterCount: 1,
           shots,
         }),
         run({
-          status: "running",
           autoReview: true,
-          scriptReviewDigest: digest,
-          storyboardScriptDigest: digest,
           processedShotRev: { a: 1 },
           reviewedShotRev: { a: 1 },
+          scriptReviewDigest: digest,
+          status: "running",
+          storyboardScriptDigest: digest,
         }),
       ),
     ).toEqual({ kind: "render_film" });

@@ -30,9 +30,9 @@ export async function openUrlInBrowser(url: string): Promise<{ detail: string; o
    * 前端拿得到原因（硬规则 4）。 */
   if (!isHttpUrl(url)) {
     return {
-      ok: false,
       detail:
         "只允许在浏览器打开 http/https 地址（`file:`、`javascript:` 与自定义协议一律拒绝），已拦下、未发起外部动作",
+      ok: false,
     };
   }
   const platform = process.platform;
@@ -60,11 +60,11 @@ export async function openUrlInBrowser(url: string): Promise<{ detail: string; o
         resolve();
       });
     });
-    return { ok: true, detail: `已调用系统默认浏览器打开 ${url}` };
+    return { detail: `已调用系统默认浏览器打开 ${url}`, ok: true };
   } catch (e) {
     return {
-      ok: false,
       detail: `${errorText(e, "打开系统浏览器失败")}。可手动在浏览器访问 ${url}`,
+      ok: false,
     };
   }
 }

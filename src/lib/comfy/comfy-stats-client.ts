@@ -33,22 +33,22 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
     if (!res.ok) {
       return {
         online: false,
-        vramUsed: 0,
+        ramTotal: 0,
+        ramUsed: 0,
         vramFree: 0,
         vramTotal: 0,
-        ramUsed: 0,
-        ramTotal: 0,
+        vramUsed: 0,
       };
     }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as ComfyStatsPayload;
   } catch {
     return {
       online: false,
-      vramUsed: 0,
+      ramTotal: 0,
+      ramUsed: 0,
       vramFree: 0,
       vramTotal: 0,
-      ramUsed: 0,
-      ramTotal: 0,
+      vramUsed: 0,
     };
   }
 }

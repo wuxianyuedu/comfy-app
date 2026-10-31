@@ -28,17 +28,17 @@ export async function synthesizeFirstFrame(opts: {
   /** 用来合成首帧的**图类**工作流库工作流 id。 */
   workflowId: string;
 }): Promise<string> {
-  const { userId, workflowId, prompt, negative, size, projectId, seed } = opts;
+  const { negative, projectId, prompt, seed, size, userId, workflowId } = opts;
   const { taskId } = await createWorkflowRunTask({
-    userId,
-    workflowId,
     projectId: projectId ?? null,
+    userId,
     values: {
       prompt,
       ...(negative !== undefined ? { negativePrompt: negative } : {}),
       ...(size !== undefined ? { size } : {}),
       ...(seed !== undefined ? { seed } : {}),
     },
+    workflowId,
   });
 
   const localPath = await waitForImage(taskId);

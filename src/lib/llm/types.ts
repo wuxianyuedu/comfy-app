@@ -8,41 +8,41 @@ export type LLMProviderType = "local" | "remote";
  *  `defaultTemperature` 是该任务类型未配置覆盖时的推荐默认值（取 hint 区间中位），
  *  不再一律回落到全局 0.7。 */
 export const TASK_TYPES = /* SAFETY: 类型断言已复核 */ {
-  txt2img: {
-    label: "文生图",
-    desc: "严谨确定，保证输出稳定可复现",
-    hint: "0.1~0.3",
-    defaultTemperature: 0.2,
-  },
-  img2video: {
-    label: "图生视频",
-    desc: "中低随机性，平衡连贯性与变化",
-    hint: "0.3~0.5",
-    defaultTemperature: 0.4,
-  },
   chat: {
-    label: "对话聊天",
+    defaultTemperature: 0.7,
     desc: "自然平衡，日常交互默认档位",
     hint: "0.6~0.8",
-    defaultTemperature: 0.7,
+    label: "对话聊天",
   },
   code: {
-    label: "代码生成",
+    defaultTemperature: 0.1,
     desc: "极低随机性，输出精确符合语法",
     hint: "0.05~0.2",
-    defaultTemperature: 0.1,
+    label: "代码生成",
   },
   creative: {
-    label: "创意写作",
+    defaultTemperature: 1.0,
     desc: "高发散性，激发灵感与多样性",
     hint: "0.9~1.2",
-    defaultTemperature: 1.0,
+    label: "创意写作",
+  },
+  img2video: {
+    defaultTemperature: 0.4,
+    desc: "中低随机性，平衡连贯性与变化",
+    hint: "0.3~0.5",
+    label: "图生视频",
   },
   review: {
-    label: "内容评审",
+    defaultTemperature: 0.1,
     desc: "低温稳定，判定与评分可复现",
     hint: "0.05~0.2",
-    defaultTemperature: 0.1,
+    label: "内容评审",
+  },
+  txt2img: {
+    defaultTemperature: 0.2,
+    desc: "严谨确定，保证输出稳定可复现",
+    hint: "0.1~0.3",
+    label: "文生图",
   },
 } as const;
 
@@ -126,8 +126,8 @@ function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
   const kind: unknown = rec.kind;
   const apiKey = normalizeEntryApiKey(rec);
   return {
-    name,
     baseUrl: typeof rec.baseUrl === "string" && rec.baseUrl.trim() !== "" ? rec.baseUrl : null,
+    name,
     // 三态：`undefined` 时**不挂这个键**（「不提供意见」不能被写成「清空」）
     ...(apiKey === undefined ? {} : { apiKey }),
     /* SAFETY: 类型断言已复核 */
@@ -149,7 +149,7 @@ export function normalizeExtraModels(raw: unknown): Array<RemoteModelEntry> {
     if (typeof item === "string") {
       // 字符串形态只带了名字，对连接参数**不提供意见**（挂 null 会被读成「清空」）
       if (item.trim() !== "") {
-        out.push({ name: item, baseUrl: null, kind: null });
+        out.push({ baseUrl: null, kind: null, name: item });
       }
       continue;
     }
@@ -278,7 +278,7 @@ export function resolveTaskTemperature(opts: {
   overrides?: Record<TaskType, number> | null;
   taskType?: TaskType;
 }): number {
-  const { taskType, explicitTemperature, overrides, fallback } = opts;
+  const { explicitTemperature, fallback, overrides, taskType } = opts;
   if (taskType && overrides?.[taskType] != null) {
     return overrides[taskType];
   }

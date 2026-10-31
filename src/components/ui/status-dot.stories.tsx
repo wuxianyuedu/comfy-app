@@ -11,12 +11,12 @@ type StatusDotState = NonNullable<React.ComponentProps<typeof StatusDot>["state"
 const STATES: Array<StatusDotState> = ["up", "busy", "probing", "down"];
 
 const meta = {
-  title: "UI/StatusDot",
-  component: StatusDot,
   args: { state: "up" },
   argTypes: {
     state: { control: "select", options: STATES },
   },
+  component: StatusDot,
+  title: "UI/StatusDot",
 } satisfies Meta<typeof StatusDot>;
 
 export default meta;

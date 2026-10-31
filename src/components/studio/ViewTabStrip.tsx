@@ -65,14 +65,14 @@ export type OpenableView = {
  * 与「镜头胶片带」那种只有跳转、没有选中态的控件刻意不同。
  */
 export function ViewTabStrip({
-  tabs,
   activeKey,
-  projectNameOf,
-  onSelect,
-  onClose,
-  openableViews,
-  onOpenView,
   inTitleBar = false,
+  onClose,
+  onOpenView,
+  onSelect,
+  openableViews,
+  projectNameOf,
+  tabs,
 }: ViewTabStripProps) {
   return (
     <div

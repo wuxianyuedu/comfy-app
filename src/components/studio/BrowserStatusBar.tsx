@@ -59,20 +59,20 @@ function fmtClock(t: number | null): string {
 }
 
 const fpsTextColor: Record<string, string> = {
-  ok: "text-success-strong",
-  warn: "text-warning-strong",
   bad: "text-destructive",
+  ok: "text-success-strong",
   unknown: "text-ink-muted",
+  warn: "text-warning-strong",
 };
 
 /* 状态点的光晕：色相走 `--color-glow-*`（两态，理由与对比读数写在 globals.css 那一段），
  * 强度与同栏的 devServer 点取同一个 80%。此前这三是基准色 α=1 的实心光晕，而隔壁
  * devServer 那点已经是浅彩档 —— 同一栏里两个同尺寸、同语义的点用两套配方。 */
 const fpsDotColor: Record<string, string> = {
-  ok: "bg-success shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]",
-  warn: "bg-warning shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-warning)_80%,transparent)]",
   bad: "bg-destructive shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-danger)_80%,transparent)]",
+  ok: "bg-success shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-success)_80%,transparent)]",
   unknown: "bg-ink-fainter",
+  warn: "bg-warning shadow-[0_0_6px_color-mix(in_srgb,var(--color-glow-warning)_80%,transparent)]",
 };
 
 /**
@@ -85,10 +85,10 @@ const fpsDotColor: Record<string, string> = {
  */
 function UsageItem({
   label,
-  title,
-  used,
-  total,
   pct,
+  title,
+  total,
+  used,
 }: {
   label: string;
   pct: number;
@@ -131,9 +131,9 @@ function UsageItem({
  * 这里只把 tone 映射成颜色。
  */
 const SCHEMA_TONE_CLASS: Record<SchemaSyncNotice["tone"], string> = {
+  error: "text-destructive",
   info: "text-ink-soft",
   ok: "text-success-strong",
-  error: "text-destructive",
 };
 
 function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
@@ -268,7 +268,7 @@ export function BrowserStatusBar() {
   }, []);
 
   const fps = useFps();
-  const { cudaVram, smiVram, ram, degradedNote, stale } = useComfyReadiness();
+  const { cudaVram, degradedNote, ram, smiVram, stale } = useComfyReadiness();
   const devServer = useDevServerStatus();
   /* 「应用服务断开 / 启动」记进消息中心（时间 + 原因）。
    *
@@ -280,8 +280,8 @@ export function BrowserStatusBar() {
    * 位置在早退分支之前：非主应用页签（内嵌 ComfyUI 等）状态下状态栏整体隐藏，
    * 但记录必须继续——否则「看的是内嵌页面时服务断了一次」就彻底没人记。 */
   useAppServiceMessageLog({
-    state: devServer.state,
     processIsNew: devServer.processIsNew,
+    state: devServer.state,
     /* 当前是哪一次启动：消息中心按它把历史消息分成「每一次启动」一组，
      * 并标出哪一组是用户此刻身处的这一次。 */
     currentRunId: devServer.currentRunId,
@@ -335,7 +335,7 @@ export function BrowserStatusBar() {
       >
         {/* 三档资源的标签、口径 title 与「缺值整档隐藏」的判据都在
            `comfy-resource-metrics`（首页算力卡读同一份），这里只负责行内排版。 */}
-        {selectVisibleResourceMetrics({ cudaVram, smiVram, ram }).map(({ descriptor, bar }) => (
+        {selectVisibleResourceMetrics({ cudaVram, ram, smiVram }).map(({ bar, descriptor }) => (
           <UsageItem
             key={descriptor.key}
             label={descriptor.label}

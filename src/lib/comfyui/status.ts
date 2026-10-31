@@ -118,13 +118,13 @@ function isStale(snap: ComfyRuntimeSnapshot, at: number, now: number): boolean {
 /** 不带快照的空结果。 */
 function emptySnapshot(): ComfyRuntimeSnapshot {
   return {
-    running: false,
+    didQueryProcTable: false,
     pid: null,
     port: null,
-    via: null,
-    unverified: false,
-    didQueryProcTable: false,
+    running: false,
     source: null,
+    unverified: false,
+    via: null,
   };
 }
 
@@ -278,13 +278,13 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   if (bound) {
     const port = await resolvePortFast(bound, configuredPortOf(settings));
     return {
-      running: true,
+      didQueryProcTable: true,
       pid: bound,
       port,
-      via: "本应用启动的进程",
-      unverified: false,
-      didQueryProcTable: true,
+      running: true,
       source: "bound",
+      unverified: false,
+      via: "本应用启动的进程",
     };
   }
 
@@ -305,13 +305,13 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   const configuredPortUp = (await probeComfyAtPort(configuredPort)) !== null;
   if (configuredPortUp) {
     return {
-      running: true,
+      didQueryProcTable: true,
       pid: null,
       port: configuredPort,
-      via: "配置端口上的实例",
-      unverified: false,
-      didQueryProcTable: true,
+      running: true,
       source: "port",
+      unverified: false,
+      via: "配置端口上的实例",
     };
   }
 
@@ -343,13 +343,13 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
     const lookup = await findPidForMainPyDetailed(plan.mainPy);
     if (lookup.pid) {
       return {
-        running: true,
+        didQueryProcTable: true,
         pid: lookup.pid,
         port: await resolvePortFast(lookup.pid, configuredPort, configuredPortUp),
-        via: "配置路径的实例",
-        unverified: false,
-        didQueryProcTable: true,
+        running: true,
         source: "process",
+        unverified: false,
+        via: "配置路径的实例",
       };
     }
     if (lookup.failed) {
@@ -403,13 +403,13 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
     }
     if (lookup.pid) {
       return {
-        running: true,
+        didQueryProcTable: true,
         pid: lookup.pid,
         port: await resolvePortFast(lookup.pid, configuredPort, configuredPortUp),
-        via: candidate.via,
-        unverified: false,
-        didQueryProcTable: true,
+        running: true,
         source: snapshotSourceFor(candidate.via),
+        unverified: false,
+        via: candidate.via,
       };
     }
   }
@@ -418,8 +418,8 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   // 上层不能把这份空快照当成「探明没在跑」。
   return {
     ...emptySnapshot(),
-    unverified: lookupFailed,
     didQueryProcTable: candidates.length > 0,
+    unverified: lookupFailed,
   };
 }
 

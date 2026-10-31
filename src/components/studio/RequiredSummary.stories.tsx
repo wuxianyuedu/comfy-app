@@ -25,64 +25,64 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 const ENTRY = /* SAFETY: 类型断言已复核 */ {
   direction: "input",
   kind: "widget",
-  nodeId: "5",
   name: "width",
+  nodeId: "5",
 } as const;
 
 /** 步数那条：多模式那份要基于它改，所以单独命名（`REAL_IO` 里引这一份）。 */
 const STEPS_ENTRY: WorkflowIOMap[string] = {
   ...ENTRY,
-  nodeId: "3",
-  name: "steps",
-  label: "步数",
-  type: "INT",
-  required: false,
   defaultValue: 24,
+  label: "步数",
+  name: "steps",
+  nodeId: "3",
+  required: false,
+  type: "INT",
 };
 
 /** 一份真 IO map：三个必填 widget + 两个可选 + 一个输出（输出不计入统计）。 */
 const REAL_IO: WorkflowIOMap = {
-  "5:width": {
+  "3:seed": {
     ...ENTRY,
-    label: "宽度",
+    defaultValue: 0,
+    label: "随机种子",
+    name: "seed",
+    nodeId: "3",
+    required: false,
+    seedMode: "random",
     type: "INT",
-    required: true,
-    defaultValue: 1024,
   },
+  "3:steps": STEPS_ENTRY,
   "5:height": {
     ...ENTRY,
-    name: "height",
-    label: "高度",
-    type: "INT",
-    required: true,
     defaultValue: 1024,
+    label: "高度",
+    name: "height",
+    required: true,
+    type: "INT",
+  },
+  "5:width": {
+    ...ENTRY,
+    defaultValue: 1024,
+    label: "宽度",
+    required: true,
+    type: "INT",
   },
   "6:text": {
     ...ENTRY,
-    nodeId: "6",
-    name: "text",
     label: "提示词",
-    type: "STRING",
     multiline: true,
+    name: "text",
+    nodeId: "6",
     required: true,
+    type: "STRING",
   },
-  "3:seed": {
-    ...ENTRY,
-    nodeId: "3",
-    name: "seed",
-    label: "随机种子",
-    type: "INT",
-    required: false,
-    defaultValue: 0,
-    seedMode: "random",
-  },
-  "3:steps": STEPS_ENTRY,
   "9:images": {
     direction: "output",
     kind: "output",
-    nodeId: "9",
-    name: "images",
     label: "输出图像",
+    name: "images",
+    nodeId: "9",
     type: "IMAGE",
   },
 };
@@ -99,21 +99,21 @@ const MODE_IO: WorkflowIOMap = {
   ...REAL_IO,
   "3:steps": {
     ...STEPS_ENTRY,
-    modeOverrides: { turbo: { required: true }, draft: { visible: false } },
+    modeOverrides: { draft: { visible: false }, turbo: { required: true } },
   },
 };
 
 const meta = {
-  title: "Studio/RequiredSummary",
-  component: RequiredSummary,
   args: { io: REAL_IO, mode: null },
   argTypes: {
     mode: {
       control: { type: "select" },
-      options: [null, "turbo", "draft"],
       description: "多模式：按该模式解析 required",
+      options: [null, "turbo", "draft"],
     },
   },
+  component: RequiredSummary,
+  title: "Studio/RequiredSummary",
 } satisfies Meta<typeof RequiredSummary>;
 
 export default meta;

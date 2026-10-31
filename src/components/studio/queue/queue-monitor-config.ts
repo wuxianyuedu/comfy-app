@@ -63,7 +63,7 @@ export function bucketQueueRows(rows: ReadonlyArray<QueueRow>): QueueBuckets {
      */
     queued.push(row);
   }
-  return { running, queued, recent };
+  return { queued, recent, running };
 }
 
 /**
@@ -78,7 +78,7 @@ export function queuedWithPosition(
 ): Array<{ position: number; row: QueueRow }> {
   const total = queued.length;
   return queued
-    .map((row, index) => ({ row, position: total - index }))
+    .map((row, index) => ({ position: total - index, row }))
     .sort((a, b) => a.position - b.position)
     .slice(0, QUEUED_WINDOW);
 }
@@ -134,8 +134,8 @@ export function runningElapsedText(elapsedMs: number | null): string {
  */
 export function offlineEmptyText(): { description: string; title: string } {
   return {
-    title: "ComfyUI 未运行",
     description: "队列里的任务不会开始。启动后端后这一屏会自动接上，不用手动刷新。",
+    title: "ComfyUI 未运行",
   };
 }
 
@@ -145,8 +145,8 @@ export function offlineEmptyText(): { description: string; title: string } {
  */
 export function offlineBannerText(): { description: string; title: string } {
   return {
-    title: "ComfyUI 未连接",
     description: "队列里的任务暂时不会开始；连接恢复后这一屏自动接上，不用手动刷新。",
+    title: "ComfyUI 未连接",
   };
 }
 
@@ -163,19 +163,19 @@ export function runningHintText(
 ): { description: string; title: string } {
   if (!online) {
     return {
-      title: "没有在跑的任务",
       description: "连接恢复后，排队的任务会自动接上。",
+      title: "没有在跑的任务",
     };
   }
   if (waitingCount > 0) {
     return {
-      title: "上一条刚跑完",
       description: `还有 ${String(waitingCount)} 个在排队，后端空出来就开工。`,
+      title: "上一条刚跑完",
     };
   }
   return {
-    title: "没有在跑的任务，也没有排队中的条目",
     description: "从画布或工坊提交一次生成，它会立刻出现在这里。",
+    title: "没有在跑的任务，也没有排队中的条目",
   };
 }
 

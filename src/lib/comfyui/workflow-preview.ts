@@ -202,7 +202,7 @@ function buildGraphTopology(entries: Array<[string, WorkflowGraphNode]>): GraphT
     }
   }
 
-  return { incoming, outAdj, level };
+  return { incoming, level, outAdj };
 }
 
 /**
@@ -217,17 +217,17 @@ export function buildWorkflowPreview(graph: Record<string, unknown>): WorkflowPr
   const total = entries.length;
   if (total === 0) {
     return {
-      nodes: [],
       edges: [],
-      total: 0,
-      width: 280,
       height: 80,
+      nodes: [],
+      total: 0,
       truncated: false,
+      width: 280,
     };
   }
 
   // 收连线 + 最长路径分层（Kahn 风格 BFS，深度 = 父节点最大深度 + 1）。
-  const { outAdj, level } = buildGraphTopology(entries);
+  const { level, outAdj } = buildGraphTopology(entries);
 
   // 节点太多时挑一个有代表性的子集：最多保留 14 个，
   // 偏向数据源与数据汇，以及靠前的层。
@@ -267,8 +267,8 @@ export function buildWorkflowPreview(graph: Record<string, unknown>): WorkflowPr
     }
     const lv = level[id] ?? 0;
     nodes.push({
-      id,
       class_type: node.class_type,
+      id,
       kind: classifyNode(node.class_type),
       level: lv,
       row: (byLevel[lv] ?? []).indexOf(id),
@@ -286,7 +286,7 @@ export function buildWorkflowPreview(graph: Record<string, unknown>): WorkflowPr
     }
   }
 
-  return { nodes, edges, total, width, height, truncated };
+  return { edges, height, nodes, total, truncated, width };
 }
 
 /** 完整（不裁剪）详情预览的布局常量。 */
@@ -308,16 +308,16 @@ export function buildWorkflowPreviewFull(graph: Record<string, unknown>): Workfl
   const total = entries.length;
   if (total === 0) {
     return {
-      nodes: [],
       edges: [],
-      total: 0,
-      width: 0,
       height: 0,
+      nodes: [],
+      total: 0,
       truncated: false,
+      width: 0,
     };
   }
 
-  const { outAdj, level } = buildGraphTopology(entries);
+  const { level, outAdj } = buildGraphTopology(entries);
 
   const byLevel: Record<number, Array<string>> = {};
   for (const [id] of entries) {
@@ -333,8 +333,8 @@ export function buildWorkflowPreviewFull(graph: Record<string, unknown>): Workfl
     const arr = byLevel[lv] ?? [];
     const row = arr.indexOf(id);
     return {
-      id,
       class_type: node.class_type,
+      id,
       kind: classifyNode(node.class_type),
       level: lv,
       row,
@@ -355,5 +355,5 @@ export function buildWorkflowPreviewFull(graph: Record<string, unknown>): Workfl
   const width = (maxLevel + 1) * FULL_PREVIEW_LEVEL_GAP + FULL_PREVIEW_MARGIN * 2;
   const height = (maxRow + 1) * FULL_PREVIEW_ROW_GAP + FULL_PREVIEW_MARGIN * 2;
 
-  return { nodes, edges, total, width, height, truncated: false };
+  return { edges, height, nodes, total, truncated: false, width };
 }

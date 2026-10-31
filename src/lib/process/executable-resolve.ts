@@ -104,8 +104,8 @@ export const realUsabilityProbe: UsabilityProbe = {
   spawn: (candidate, args) => {
     const probe = spawnSync(candidate, args, {
       stdio: "ignore",
-      windowsHide: true,
       timeout: USABILITY_PROBE_TIMEOUT_MS,
+      windowsHide: true,
     });
     const err = /* SAFETY: 类型断言已复核 */ probe.error as SpawnSyncError;
     return err?.code ?? null;
@@ -454,8 +454,8 @@ export function usableCommand(
     probe.access(candidate);
   } catch {
     return {
-      ok: false,
       command: candidate,
+      ok: false,
       prefixArgs: [],
       reason: "no-exec-permission",
     };
@@ -470,16 +470,16 @@ export function usableCommand(
     const host = powershellHost({ env, platform });
     if (host) {
       return {
-        ok: true,
         command: host,
+        ok: true,
         prefixArgs: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", candidate],
         reason: null,
       };
     }
     // 没有宿主就**不能**把这个 `.ps1` 当作可用 —— 它起不来。
     return {
-      ok: false,
       command: candidate,
+      ok: false,
       prefixArgs: [],
       reason: "no-powershell-host",
     };
@@ -494,8 +494,8 @@ export function usableCommand(
       return fallback;
     }
     return {
-      ok: false,
       command: candidate,
+      ok: false,
       prefixArgs: [],
       reason: "batch-script",
     };
@@ -509,7 +509,7 @@ export function usableCommand(
    * 判据放这里而不是默认探针里：探针只负责**取事实**（libuv 给了什么 code），
    * 「这个 code 算不算不可用」是判据，对所有探针（含单测注入的那些）一视同仁。 */
   if (isTransientSpawnCode(code)) {
-    return { ok: true, command: candidate, prefixArgs: [], reason: null };
+    return { command: candidate, ok: true, prefixArgs: [], reason: null };
   }
 
   const fallback = siblingFallback(candidate, { env, platform });
@@ -517,8 +517,8 @@ export function usableCommand(
     return fallback;
   }
   return {
-    ok: false,
     command: candidate,
+    ok: false,
     prefixArgs: [],
     reason: String(code),
   };
@@ -548,8 +548,8 @@ function siblingFallback(
     return null;
   }
   return {
-    ok: true,
     command: host,
+    ok: true,
     prefixArgs: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script],
     reason: null,
   };

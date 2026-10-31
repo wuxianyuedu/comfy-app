@@ -27,8 +27,8 @@ vi.mock("~/lib/comfyui/executor-continuation", () => ({
 /* `repository` 是 server-only 的 Drizzle 实现（import 即读库），本用例只想验
  * 编排判决，故两个仓储整体换桩（与 server/film/orchestrator.test.ts 同一口径）。 */
 vi.mock("~/lib/core/repository", () => ({
-  workflowTemplateRepository: wfRepoStub,
   taskRepository: taskRepo,
+  workflowTemplateRepository: wfRepoStub,
 }));
 
 const wfRepoStub = vi.hoisted(() => ({
@@ -43,20 +43,20 @@ beforeEach(() => {
 
 const IO = {
   "1::widget::prompt": {
+    defaultValue: "",
     direction: "input",
     kind: "widget",
-    nodeId: "1",
     name: "prompt",
+    nodeId: "1",
     type: "STRING",
-    defaultValue: "",
   },
   "2::widget::steps": {
+    defaultValue: 20,
     direction: "input",
     kind: "widget",
-    nodeId: "2",
     name: "steps",
+    nodeId: "2",
     type: "INT",
-    defaultValue: 20,
   },
 };
 
@@ -66,8 +66,8 @@ describe("createWorkflowRunTask", () => {
     await expect(
       createWorkflowRunTask({
         userId: "u1",
-        workflowId: "nope",
         values: { prompt: "hi" },
+        workflowId: "nope",
       }),
     ).rejects.toThrow("工作流不存在");
     expect(taskRepo.createQueued).not.toHaveBeenCalled();
@@ -76,25 +76,25 @@ describe("createWorkflowRunTask", () => {
 
   it("rawJson 工作流 → 建行带 execPayload + workflowInputs，随后踢一次领取", async () => {
     wfRepoStub.findByIdForUser.mockResolvedValue({
-      id: "wf-1",
-      name: "库生图",
-      taskType: "T2I",
-      modes: "[]",
       defaultMode: null,
+      id: "wf-1",
+      modes: "[]",
+      name: "库生图",
       rawJson: { nodes: [{ id: "1", type: "KSampler" }] },
+      taskType: "T2I",
       workflowIO: IO,
       /* 落点只认作者连的线：提示词口连到该端口。 */
       paramMap: { source: { "mode:T2I": { prompt: "1::widget::prompt" } } },
     });
     const res = await createWorkflowRunTask({
       userId: "u1",
-      workflowId: "wf-1",
       values: { prompt: "一只猫" },
+      workflowId: "wf-1",
     });
     expect(res).toEqual({
       taskId: "task-1",
-      workflowName: "库生图",
       taskType: "T2I",
+      workflowName: "库生图",
     });
     const created = /* SAFETY: 类型断言已复核 */ taskRepo.createQueued.mock.calls[0]![0] as {
       params: {
@@ -106,8 +106,8 @@ describe("createWorkflowRunTask", () => {
     expect(created.prompt).toBe("一只猫");
     expect(created.workflowName).toBe("库生图");
     expect(created.params.workflowInputs).toContainEqual({
-      nodeId: "1",
       name: "prompt",
+      nodeId: "1",
       value: "一只猫",
     });
     // 载荷只随行走（§14 D1 第二刀：派发是库里的一次 pull，不再有内存 Job）
@@ -122,20 +122,20 @@ describe("createWorkflowRunTask", () => {
 
   it("无 rawJson → 抛「没有可执行内容」，不建任务也不踢领取", async () => {
     wfRepoStub.findByIdForUser.mockResolvedValue({
-      id: "wf-2",
-      name: "空工作流",
-      taskType: "T2I",
-      modes: "[]",
       defaultMode: null,
-      rawJson: null,
-      workflowIO: IO,
+      id: "wf-2",
+      modes: "[]",
+      name: "空工作流",
       paramMap: { source: { "mode:T2I": { prompt: "1::widget::prompt" } } },
+      rawJson: null,
+      taskType: "T2I",
+      workflowIO: IO,
     });
     await expect(
       createWorkflowRunTask({
         userId: "u1",
-        workflowId: "wf-2",
         values: { prompt: "新提示词" },
+        workflowId: "wf-2",
       }),
     ).rejects.toThrow("工作流没有可执行内容");
     expect(kickMock).not.toHaveBeenCalled();

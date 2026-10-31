@@ -15,12 +15,12 @@ import { VALID_TASK_TYPE_CODES } from "~/lib/workflow/workflow-types";
 const CODES = [...VALID_TASK_TYPE_CODES];
 
 const meta = {
-  title: "UI/TaskTypeChip",
-  component: TaskTypeChip,
   args: { taskType: "image" },
   argTypes: {
     taskType: { control: "select", options: CODES },
   },
+  component: TaskTypeChip,
+  title: "UI/TaskTypeChip",
 } satisfies Meta<typeof TaskTypeChip>;
 
 export default meta;

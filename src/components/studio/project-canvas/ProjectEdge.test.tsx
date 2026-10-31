@@ -20,17 +20,17 @@ const GRADIENT_STROKE = "url(#canvas-edge-gradient)";
 
 function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
   return /* SAFETY: 类型断言已复核 */ {
+    data,
     id: "pe-test",
     source: "1",
-    target: "2",
+    sourcePosition: "right",
     sourceX: 0,
     sourceY: 0,
+    style: { stroke: GRADIENT_STROKE, strokeWidth: 2.5 },
+    target: "2",
+    targetPosition: "left",
     targetX: 200,
     targetY: 0,
-    sourcePosition: "right",
-    targetPosition: "left",
-    data,
-    style: { stroke: GRADIENT_STROKE, strokeWidth: 2.5 },
   } as unknown as EdgeProps;
 }
 
@@ -42,15 +42,15 @@ function wireStyle(data: Record<string, unknown> | undefined) {
   expect(painted.length).toBe(1);
   const style = painted[0]!.getAttribute("style") ?? "";
   return {
+    opacity: Number(/(?:^|;)\s*opacity:\s*([\d.]+)/.exec(style)?.[1] ?? "1"),
     style,
     width: Number(/stroke-width:\s*([\d.]+)/.exec(style)?.[1]),
-    opacity: Number(/(?:^|;)\s*opacity:\s*([\d.]+)/.exec(style)?.[1] ?? "1"),
   };
 }
 
 describe("ProjectEdge 选中态样式", () => {
   it("未选中任何节点：保持画布默认的 2.5px 满不透明渐变", () => {
-    const { width, opacity, style } = wireStyle(undefined);
+    const { opacity, style, width } = wireStyle(undefined);
     expect(width).toBe(2.5);
     expect(opacity).toBe(1);
     /* 描边仍是那层渐变（React 会把 url(#x) 序列化成带引号的形式）。 */
@@ -59,7 +59,7 @@ describe("ProjectEdge 选中态样式", () => {
   });
 
   it("相关连线：加粗到 4px 并提亮，渐变本身不被替换", () => {
-    const { width, opacity, style } = wireStyle({
+    const { opacity, style, width } = wireStyle({
       [EDGE_FOCUS_DATA_KEY]: "upstream",
     });
     expect(width).toBe(4);

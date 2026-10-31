@@ -20,11 +20,11 @@ export type WorkshopLLMConfig = {
 
 function envDefaults(): WorkshopLLMConfig {
   return {
-    baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
-    model: process.env.LLM_MODEL ?? "",
     apiKey: process.env.LLM_API_KEY ?? null,
-    temperature: Number(process.env.LLM_TEMPERATURE ?? 0.7),
+    baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
     maxTokens: Number(process.env.LLM_MAX_TOKENS ?? 2048),
+    model: process.env.LLM_MODEL ?? "",
+    temperature: Number(process.env.LLM_TEMPERATURE ?? 0.7),
   };
 }
 
@@ -78,15 +78,15 @@ export async function completeWorkshopLLM(
   let res: Response;
   try {
     res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: headersFor(cfg),
       body: JSON.stringify({
-        model: cfg.model,
-        messages,
-        temperature: cfg.temperature,
         max_tokens: cfg.maxTokens,
+        messages,
+        model: cfg.model,
         stream: false,
+        temperature: cfg.temperature,
       }),
+      headers: headersFor(cfg),
+      method: "POST",
       signal: AbortSignal.timeout(180_000),
     });
   } catch (e) {
@@ -104,7 +104,7 @@ export async function completeWorkshopLLM(
     const detail = await res.text().catch(() => "");
     const hint = res.status === 401 || res.status === 403 ? "（API Key 无效或未授权）" : "";
     throw new Error(
-      `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}` : ""}`,
+      `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${clampText(detail, { marker: "", maxLength: INLINE_SNIPPET_MAX })}` : ""}`,
     );
   }
   const json = /* SAFETY: 类型断言已复核 */ (await res.json()) as {

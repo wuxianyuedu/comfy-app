@@ -163,7 +163,7 @@ export function extractSavedOutputs(value: unknown): Array<SavedOutput> {
   const out: Array<SavedOutput> = [];
   for (const entry of list) {
     if (typeof entry === "string") {
-      out.push({ url: entry, kind: guessMediaKind(entry) });
+      out.push({ kind: guessMediaKind(entry), url: entry });
       continue;
     }
     if (!isRecord(entry)) {
@@ -178,7 +178,7 @@ export function extractSavedOutputs(value: unknown): Array<SavedOutput> {
       rawKind === "video" || rawKind === "image" || rawKind === "other"
         ? rawKind
         : guessMediaKind(rawPath);
-    out.push({ url: rawPath, kind });
+    out.push({ kind, url: rawPath });
   }
   return out;
 }

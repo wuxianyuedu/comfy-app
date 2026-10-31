@@ -29,22 +29,22 @@ import { getWorkflowType } from "~/lib/workflow/workflow-types";
  *  「尺寸」在契约层是一个口（`size`），到这里按接口请求体细分为三行：
  *  宽高比 / 百万像素 / 倍数 —— 与尺寸选择器的两类表达同一口径。 */
 export const WORKSHOP_INPUT_TYPES = /* SAFETY: 类型断言已复核 */ [
-  { type: "prompt", label: "提示词" },
-  { type: "negative", label: "负向提示词" },
-  { type: "aspect-ratio", label: "宽高比" },
-  { type: "megapixels", label: "百万像素" },
-  { type: "multiple", label: "倍数（宽高对齐）" },
-  { type: "image", label: "图片" },
-  { type: "first-frame", label: "首帧图片" },
-  { type: "last-frame", label: "尾帧图片" },
+  { label: "提示词", type: "prompt" },
+  { label: "负向提示词", type: "negative" },
+  { label: "宽高比", type: "aspect-ratio" },
+  { label: "百万像素", type: "megapixels" },
+  { label: "倍数（宽高对齐）", type: "multiple" },
+  { label: "图片", type: "image" },
+  { label: "首帧图片", type: "first-frame" },
+  { label: "尾帧图片", type: "last-frame" },
   /** 视频：时长。远端按 field 映射成该接口的字段名（duration / seconds…）。 */
-  { type: "duration", label: "时长" },
-  { type: "mask", label: "掩码图" },
-  { type: "depth", label: "深度图" },
-  { type: "pose", label: "姿态骨架图" },
-  { type: "lineart", label: "线稿图" },
-  { type: "edge", label: "边缘图" },
-  { type: "seed", label: "种子" },
+  { label: "时长", type: "duration" },
+  { label: "掩码图", type: "mask" },
+  { label: "深度图", type: "depth" },
+  { label: "姿态骨架图", type: "pose" },
+  { label: "线稿图", type: "lineart" },
+  { label: "边缘图", type: "edge" },
+  { label: "种子", type: "seed" },
 ] as const;
 
 export type WorkshopInputType = (typeof WORKSHOP_INPUT_TYPES)[number]["type"];
@@ -79,57 +79,57 @@ export function defaultInputsForMode(mode: string): Array<{
   const code = upperToken(mode);
   /* 「尺寸」的默认三行：比例 + 百万像素 + 倍数（与契约层的 size 口同一口径）。 */
   const size: Array<{ field: string; type: WorkshopInputType }> = [
-    { type: "aspect-ratio", field: "aspect_ratio" },
-    { type: "megapixels", field: "megapixels" },
-    { type: "multiple", field: "multiple" },
+    { field: "aspect_ratio", type: "aspect-ratio" },
+    { field: "megapixels", type: "megapixels" },
+    { field: "multiple", type: "multiple" },
   ];
   /** 视频口：时长（秒）。 */
   const durationRow: { field: string; type: WorkshopInputType } = {
-    type: "duration",
     field: "duration",
+    type: "duration",
   };
   const base: Array<{ field: string; type: WorkshopInputType }> = [
-    { type: "prompt", field: "prompt" },
+    { field: "prompt", type: "prompt" },
   ];
   switch (code) {
     case "T2I":
       return [...base, ...size];
     case "TI2I":
     case "R2I":
-      return [...base, { type: "image", field: "image" }, ...size];
+      return [...base, { field: "image", type: "image" }, ...size];
     case "I2I":
-      return [{ type: "image", field: "image" }, ...base, ...size];
+      return [{ field: "image", type: "image" }, ...base, ...size];
     case "E2I":
-      return [...base, { type: "edge", field: "edge_image" }, ...size];
+      return [...base, { field: "edge_image", type: "edge" }, ...size];
     case "D2I":
-      return [...base, { type: "depth", field: "depth_image" }, ...size];
+      return [...base, { field: "depth_image", type: "depth" }, ...size];
     case "P2I":
-      return [...base, { type: "pose", field: "pose_image" }, ...size];
+      return [...base, { field: "pose_image", type: "pose" }, ...size];
     case "S2I":
-      return [...base, { type: "lineart", field: "lineart_image" }, ...size];
+      return [...base, { field: "lineart_image", type: "lineart" }, ...size];
     case "M2I":
-      return [...base, { type: "mask", field: "mask_image" }, ...size];
+      return [...base, { field: "mask_image", type: "mask" }, ...size];
     case "INPAINT":
-      return [...base, { type: "image", field: "image" }, { type: "mask", field: "mask" }];
+      return [...base, { field: "image", type: "image" }, { field: "mask", type: "mask" }];
     case "OUTPAINT":
-      return [...base, { type: "image", field: "image" }, ...size];
+      return [...base, { field: "image", type: "image" }, ...size];
     default:
       break;
   }
   if (isVideoMode(code)) {
     if (/^I2V$/.test(code)) {
-      return [{ type: "image", field: "image" }, ...base, durationRow];
+      return [{ field: "image", type: "image" }, ...base, durationRow];
     }
     if (/^(FLF2V|FMF2V)$/.test(code)) {
       return [
-        { type: "first-frame", field: "first_frame" },
-        { type: "last-frame", field: "last_frame" },
+        { field: "first_frame", type: "first-frame" },
+        { field: "last_frame", type: "last-frame" },
         ...base,
         durationRow,
       ];
     }
     if (/^TI2V$/.test(code)) {
-      return [...base, { type: "image", field: "image" }, durationRow];
+      return [...base, { field: "image", type: "image" }, durationRow];
     }
     return [...base, ...size, durationRow];
   }
@@ -189,7 +189,7 @@ export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> 
         if (inputs.some((i) => i.type === r.type)) {
           continue;
         }
-        inputs.push({ type: r.type, field });
+        inputs.push({ field, type: r.type });
       }
     }
     if (inputs.length === 0) {
@@ -202,9 +202,9 @@ export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> 
         : defaultEndpointPathForMode(mode);
     const outputField = typeof rec.outputField === "string" ? rec.outputField.trim() : "";
     out.push({
-      mode,
       endpointPath,
       inputs,
+      mode,
       outputField,
     });
   }
@@ -256,20 +256,20 @@ export function readFieldPath(payload: unknown, path: string): unknown {
  *  节点」的卡片列），各写一份字符串必然漂移（ISSUE #596：「尺寸」在一处带括号、
  *  另一处不带，读起来像两个口）。这里的 type 只做「契约 id → 展示名」的取值。 */
 export const MODE_CONTRACT_INPUT_TYPES = /* SAFETY: 类型断言已复核 */ [
-  { type: "prompt", label: EXPOSED_PARAM_DISPLAY_LABEL.prompt },
-  { type: "negative", label: EXPOSED_PARAM_DISPLAY_LABEL.negative },
-  { type: "size", label: EXPOSED_PARAM_DISPLAY_LABEL.size },
-  { type: "duration", label: EXPOSED_PARAM_DISPLAY_LABEL.duration },
+  { label: EXPOSED_PARAM_DISPLAY_LABEL.prompt, type: "prompt" },
+  { label: EXPOSED_PARAM_DISPLAY_LABEL.negative, type: "negative" },
+  { label: EXPOSED_PARAM_DISPLAY_LABEL.size, type: "size" },
+  { label: EXPOSED_PARAM_DISPLAY_LABEL.duration, type: "duration" },
   /* 种子口（#942 抽卡纠偏）是内置口：exposedParamsForMode 对每个模式都产它，
    * 这里不同步认它的话，契约一旦走归一化 / 保存链路，seed 口会被静默过滤掉
    *（isModeContractInputId 判 false），编辑器里也看不到这一口。 */
-  { type: "seed", label: EXPOSED_PARAM_DISPLAY_LABEL.seed },
+  { label: EXPOSED_PARAM_DISPLAY_LABEL.seed, type: "seed" },
   {
-    type: "reference-image",
     label: EXPOSED_PARAM_DISPLAY_LABEL["reference-image"],
+    type: "reference-image",
   },
-  { type: "first-frame", label: EXPOSED_PARAM_DISPLAY_LABEL["first-frame"] },
-  { type: "last-frame", label: EXPOSED_PARAM_DISPLAY_LABEL["last-frame"] },
+  { label: EXPOSED_PARAM_DISPLAY_LABEL["first-frame"], type: "first-frame" },
+  { label: EXPOSED_PARAM_DISPLAY_LABEL["last-frame"], type: "last-frame" },
 ] as const;
 
 export type ModeContractInputType = (typeof MODE_CONTRACT_INPUT_TYPES)[number]["type"];
@@ -501,8 +501,8 @@ export function derivedModeContract(mode: string): ModeContract {
     (d) => /* SAFETY: 类型断言已复核 */ d.id as ModeContractInputId,
   );
   return {
-    mode: upperToken(mode),
     inputs,
+    mode: upperToken(mode),
     output: outputKindForMode(mode),
     required: builtInRequiredInputs(inputs),
   };
@@ -610,8 +610,8 @@ export function parseModeContracts(raw: unknown): Array<ModeContract> {
     const usedCustomInputs = customInputs.filter((def) => inputs.includes(def.id));
     seen.add(mode);
     out.push({
-      mode,
       inputs,
+      mode,
       output,
       ...(required !== undefined ? { required } : {}),
       ...(usedCustomInputs.length > 0 ? { customInputs: usedCustomInputs } : {}),
@@ -643,7 +643,7 @@ function parseCustomInputs(raw: unknown): Array<ModeContractCustomInput> {
     if (out.some((def) => def.id === id)) {
       continue;
     }
-    out.push({ id, label, kind });
+    out.push({ id, kind, label });
   }
   return out;
 }
@@ -696,9 +696,9 @@ export function modeContractEntries(
     return contractToStatusEntries(stored);
   }
   return exposedParamsForMode(mode).map((def) => ({
+    control: contractControlFor(def.id),
     id: def.id,
     label: def.label,
-    control: contractControlFor(def.id),
   }));
 }
 
@@ -712,8 +712,8 @@ export function contractToStatusEntries(contract: ModeContract): Array<ContractE
   return contract.inputs.map((type) => ({
     id: type,
     // 带序号的参考图口展示为「参考图 2」（与 exposedParamsForMode 的命名一致）
-    label: modeContractInputIdLabel(type, customInputs),
     control: contractControlFor(type, customInputs),
+    label: modeContractInputIdLabel(type, customInputs),
   }));
 }
 
@@ -738,21 +738,21 @@ const CONTRACT_INPUT_TO_ADAPTER: Record<
   ModeContractInputType,
   Array<{ field: string; type: WorkshopInputType }>
 > = {
-  prompt: [{ type: "prompt", field: "prompt" }],
-  negative: [{ type: "negative", field: "negative_prompt" }],
+  duration: [{ field: "duration", type: "duration" }],
+  "first-frame": [{ field: "first_frame", type: "first-frame" }],
+  "last-frame": [{ field: "last_frame", type: "last-frame" }],
+  negative: [{ field: "negative_prompt", type: "negative" }],
+  prompt: [{ field: "prompt", type: "prompt" }],
+  "reference-image": [{ field: "image", type: "image" }],
   size: [
-    { type: "aspect-ratio", field: "aspect_ratio" },
-    { type: "megapixels", field: "megapixels" },
-    { type: "multiple", field: "multiple" },
+    { field: "aspect_ratio", type: "aspect-ratio" },
+    { field: "megapixels", type: "megapixels" },
+    { field: "multiple", type: "multiple" },
   ],
-  "reference-image": [{ type: "image", field: "image" }],
-  "first-frame": [{ type: "first-frame", field: "first_frame" }],
-  "last-frame": [{ type: "last-frame", field: "last_frame" }],
-  duration: [{ type: "duration", field: "duration" }],
   /* 种子：远端接口的通行字段名就是 seed（WORKSHOP_INPUT_TYPES 里同名声明的
    * 那一族）。是否真的下发由适配器的 inputs 行决定 —— 这里只保证「契约 →
    * 适配器」的桥接层不缺行（本表存在的意义就是不让新预制口在这里静默漏）。 */
-  seed: [{ type: "seed", field: "seed" }],
+  seed: [{ field: "seed", type: "seed" }],
 };
 
 export function adapterInputsFromContract(

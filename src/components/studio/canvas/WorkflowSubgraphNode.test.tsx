@@ -16,11 +16,11 @@ afterEach(cleanup);
 function makeStores(): WFStores {
   return {
     io: createIOEditStore("wf-test"),
-    rgthree: createRgthreeGroupsStore({ workflowId: "wf-test", detail: null }),
+    rgthree: createRgthreeGroupsStore({ detail: null, workflowId: "wf-test" }),
     viewer: createNodeJsonViewerStore({
       detail: null,
-      rawMetaById: {},
       positions: null,
+      rawMetaById: {},
       subgraphRawContext: null,
       subgraphStackLength: 0,
     }),
@@ -36,11 +36,11 @@ function renderNode(ui: ReactNode, stores: WFStores = makeStores()) {
 }
 
 const baseData = {
+  inputs: [],
   nodeId: "10",
+  outputs: [],
   title: "我的子图",
   uid: "abcd1234",
-  inputs: [],
-  outputs: [],
   widgetValues: [],
 };
 
@@ -75,20 +75,20 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
     ...baseData,
     inputs: [
       {
-        name: "value_1",
-        type: "INT",
         isConnection: false,
+        name: "value_1",
+        proxyField: { field: "seed", label: "随机种子", nodeId: "12" },
+        type: "INT",
         widget: { name: "value_1" },
         widgetValue: 12345,
-        proxyField: { nodeId: "12", field: "seed", label: "随机种子" },
       },
       {
-        name: "value_2",
-        type: "INT",
         isConnection: false,
+        name: "value_2",
+        proxyField: { field: "steps", nodeId: "12" },
+        type: "INT",
         widget: { name: "value_2" },
         widgetValue: 20,
-        proxyField: { nodeId: "12", field: "steps" },
       },
     ],
   };
@@ -121,8 +121,8 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
   it("IO 编辑模式下子图输出端点仍在，仅视觉降级", () => {
     const data = {
       ...baseData,
-      outputs: [{ name: "IMAGE", type: "IMAGE", links: [1] }],
       connectedOutputs: new Set(["IMAGE"]),
+      outputs: [{ links: [1], name: "IMAGE", type: "IMAGE" }],
     };
     const stores = makeStores();
     renderNode(<WorkflowSubgraphNode data={data} />, stores);

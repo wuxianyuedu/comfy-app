@@ -18,13 +18,13 @@ export type RunSnapshot = {
 };
 
 const IDLE_SNAPSHOT: RunSnapshot = {
-  run: normalizeProductionRun(null),
   action: { kind: "idle" },
+  run: normalizeProductionRun(null),
 };
 
 /** 归一 tRPC 回包（run/action 已是服务端类型，这里只兜 run 的脏 JSON）。 */
 function toSnapshot(res: { action: RunAction; run: ProductionRun }): RunSnapshot {
-  return { run: normalizeProductionRun(res.run), action: res.action };
+  return { action: res.action, run: normalizeProductionRun(res.run) };
 }
 
 /** 读当前 run + 下一步动作；无活跃项目 → idle。 */
@@ -85,8 +85,8 @@ export async function reviewCharacter(
   characterId: string,
 ): Promise<ReviewVerdict> {
   const res = await vanillaApi.run.reviewCharacter.mutate({
-    projectId,
     characterId,
+    projectId,
   });
   return res.verdict;
 }
@@ -122,11 +122,11 @@ export async function setHumanVerdict(
   note = "",
 ): Promise<HumanVerdict> {
   const res = await vanillaApi.run.setHumanVerdict.mutate({
-    projectId,
     kind,
-    targetId,
-    pass,
     note,
+    pass,
+    projectId,
+    targetId,
   });
   return res.humanVerdict;
 }
@@ -137,7 +137,7 @@ export async function setHumanRating(
   shotId: string,
   rating: number | null,
 ): Promise<void> {
-  await vanillaApi.run.setHumanRating.mutate({ projectId, shotId, rating });
+  await vanillaApi.run.setHumanRating.mutate({ projectId, rating, shotId });
 }
 
 /** 人工裁决整份剧本；裁决快照带当前剧本指纹（规划器据此豁免 AI 复评）。 */
@@ -147,9 +147,9 @@ export async function setScriptHumanVerdict(
   note = "",
 ): Promise<HumanVerdict> {
   const res = await vanillaApi.run.setScriptHumanVerdict.mutate({
-    projectId,
-    pass,
     note,
+    pass,
+    projectId,
   });
   return res.humanVerdict;
 }
@@ -179,9 +179,9 @@ export async function regenerateShot(
   newPrompt?: string,
 ): Promise<void> {
   await vanillaApi.run.regenerateShot.mutate({
+    mode,
     projectId,
     shotId,
-    mode,
     ...(newPrompt !== undefined ? { newPrompt } : {}),
   });
 }

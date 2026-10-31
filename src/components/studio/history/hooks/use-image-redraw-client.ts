@@ -32,13 +32,13 @@ export function useImageRedrawClient(
         }));
       },
       prepareImage: prepareLocalInputImage,
-      submit: startLocalGenerate,
       report,
+      submit: startLocalGenerate,
     },
     {
-      prompt: initial.prompt,
-      projectId: initial.projectId,
       parentId: initial.parentTaskId,
+      projectId: initial.projectId,
+      prompt: initial.prompt,
     },
   );
 }

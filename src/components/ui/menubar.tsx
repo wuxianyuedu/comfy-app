@@ -58,9 +58,9 @@ function MenubarTrigger({ className, ...props }: React.ComponentProps<typeof Dro
 }
 
 function MenubarContent({
-  className,
   align = "start",
   alignOffset = -4,
+  className,
   sideOffset = 8,
   ...props
 }: React.ComponentProps<typeof DropdownMenuContent>) {
@@ -100,9 +100,9 @@ function MenubarItem({
 }
 
 function MenubarCheckboxItem({
-  className,
-  children,
   checked,
+  children,
+  className,
   inset,
   ...props
 }: MenuPrimitive.CheckboxItem.Props & {
@@ -134,8 +134,8 @@ function MenubarRadioGroup({ ...props }: React.ComponentProps<typeof DropdownMen
 }
 
 function MenubarRadioItem({
-  className,
   children,
+  className,
   inset,
   ...props
 }: MenuPrimitive.RadioItem.Props & {

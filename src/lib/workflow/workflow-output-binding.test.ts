@@ -19,30 +19,30 @@ import {
 import type { WorkflowIOMap } from "./workflow-io-types";
 
 const outputs = [
-  { ioKey: "9::output::IMAGE", displayOrder: 0 },
-  { ioKey: "9::output::MASK", displayOrder: 1 },
+  { displayOrder: 0, ioKey: "9::output::IMAGE" },
+  { displayOrder: 1, ioKey: "9::output::MASK" },
 ];
 
 const io: WorkflowIOMap = {
   "9::output::IMAGE": {
     direction: "output",
     kind: "output",
-    nodeId: "9",
     name: "images",
+    nodeId: "9",
     type: "IMAGE",
   },
   "9::output::MASK": {
     direction: "output",
     kind: "output",
-    nodeId: "9",
     name: "mask",
+    nodeId: "9",
     type: "MASK",
   },
   "9::widget::text": {
     direction: "input",
     kind: "widget",
-    nodeId: "9",
     name: "text",
+    nodeId: "9",
     type: "STRING",
   },
 };
@@ -52,8 +52,8 @@ describe("默认落点", () => {
     expect(defaultOutputSource(outputs)).toBe("9::output::IMAGE");
     expect(
       defaultOutputSource([
-        { ioKey: "b", displayOrder: 2 },
-        { ioKey: "a", displayOrder: 1 },
+        { displayOrder: 2, ioKey: "b" },
+        { displayOrder: 1, ioKey: "a" },
       ]),
     ).toBe("a");
   });
@@ -76,14 +76,12 @@ describe("读写往返", () => {
         source: { "mode:T2I": { prompt: "9::widget::text" } },
       },
       {
-        outputIoKey: "9::output::MASK",
         ioKey: "9::output::IMAGE",
         mode: "T2I",
+        outputIoKey: "9::output::MASK",
       },
     );
-    expect(manualOutputSource(next, "9::output::MASK", "T2I")).toBe(
-      "9::output::IMAGE",
-    );
+    expect(manualOutputSource(next, "9::output::MASK", "T2I")).toBe("9::output::IMAGE");
     /* 输入侧的 source 表不动 —— 两张表各管各的。 */
     expect(next.source).toEqual({ "mode:T2I": { prompt: "9::widget::text" } });
     expect(next.positiveNode).toBe("9");
@@ -91,23 +89,21 @@ describe("读写往返", () => {
 
   it("断开落库为 null，读回来仍是「显式断开」（不会被默认落点复活）", () => {
     const next = applyOutputBindingEdit(null, {
-      outputIoKey: "9::output::IMAGE",
       ioKey: null,
       mode: "T2I",
+      outputIoKey: "9::output::IMAGE",
     });
     expect(manualOutputSource(next, "9::output::IMAGE", "T2I")).toBeNull();
-    expect(
-      resolveOutputSource(next, outputs[0]!, outputs, "T2I", io),
-    ).toBeNull();
+    expect(resolveOutputSource(next, outputs[0]!, outputs, "T2I", io)).toBeNull();
   });
 
   it("没有模式时写入是空操作（覆盖必须归属一个模式）", () => {
     const base = { source: { "mode:T2I": {} } };
     expect(
       applyOutputBindingEdit(base, {
-        outputIoKey: "9::output::IMAGE",
         ioKey: "9::output::MASK",
         mode: null,
+        outputIoKey: "9::output::IMAGE",
       }),
     ).toEqual(base);
     /* 没有模式时也读不出任何手工线。 */
@@ -117,22 +113,18 @@ describe("读写往返", () => {
 
   it("撤销只删这一个口，该模式下别的覆盖原样保留；删空后整条 mode 键消失", () => {
     let next = applyOutputBindingEdit(null, {
-      outputIoKey: "9::output::IMAGE",
       ioKey: "9::output::MASK",
       mode: "T2I",
+      outputIoKey: "9::output::IMAGE",
     });
     next = applyOutputBindingEdit(next, {
-      outputIoKey: "9::output::MASK",
       ioKey: "9::output::IMAGE",
       mode: "T2I",
+      outputIoKey: "9::output::MASK",
     });
     const cleared = clearOutputBindingEdit(next, "9::output::IMAGE", "T2I");
-    expect(
-      manualOutputSource(cleared, "9::output::IMAGE", "T2I"),
-    ).toBeUndefined();
-    expect(manualOutputSource(cleared, "9::output::MASK", "T2I")).toBe(
-      "9::output::IMAGE",
-    );
+    expect(manualOutputSource(cleared, "9::output::IMAGE", "T2I")).toBeUndefined();
+    expect(manualOutputSource(cleared, "9::output::MASK", "T2I")).toBe("9::output::IMAGE");
     const empty = clearOutputBindingEdit(cleared, "9::output::MASK", "T2I");
     /* 整条 mode 表删空后连命名空间一起摘掉：落库形状不留下空壳。 */
     expect(empty.output).toBeUndefined();
@@ -141,56 +133,42 @@ describe("读写往返", () => {
 
 describe("落点解析", () => {
   it("没连过 → 默认落点（排在最前的输出行）", () => {
-    expect(resolveOutputSource(null, outputs[0]!, outputs, "T2I", io)).toBe(
-      "9::output::IMAGE",
-    );
+    expect(resolveOutputSource(null, outputs[0]!, outputs, "T2I", io)).toBe("9::output::IMAGE");
     /* 排在后面的输出没连过就是「悬空」—— 不给它硬凑一个来源。 */
-    expect(
-      resolveOutputSource(null, outputs[1]!, outputs, "T2I", io),
-    ).toBeNull();
+    expect(resolveOutputSource(null, outputs[1]!, outputs, "T2I", io)).toBeNull();
   });
 
   it("连到别的输出行 → 就是那一行", () => {
     const paramMap = applyOutputBindingEdit(null, {
-      outputIoKey: "9::output::MASK",
       ioKey: "9::output::IMAGE",
       mode: "T2I",
+      outputIoKey: "9::output::MASK",
     });
-    expect(resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io)).toBe(
-      "9::output::IMAGE",
-    );
+    expect(resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io)).toBe("9::output::IMAGE");
   });
 
   it("落点已不存在（工作流改版）→ 悬空，不静默退回默认", () => {
     const paramMap = applyOutputBindingEdit(null, {
-      outputIoKey: "9::output::MASK",
       ioKey: "9::output::GONE",
       mode: "T2I",
+      outputIoKey: "9::output::MASK",
     });
-    expect(
-      resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io),
-    ).toBeNull();
+    expect(resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io)).toBeNull();
   });
 
   it("别的模式的覆盖不影响当前模式", () => {
     const paramMap = applyOutputBindingEdit(null, {
-      outputIoKey: "9::output::MASK",
       ioKey: "9::output::IMAGE",
       mode: "T2V",
+      outputIoKey: "9::output::MASK",
     });
-    expect(
-      resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io),
-    ).toBeNull();
-    expect(resolveOutputSource(paramMap, outputs[1]!, outputs, "T2V", io)).toBe(
-      "9::output::IMAGE",
-    );
+    expect(resolveOutputSource(paramMap, outputs[1]!, outputs, "T2I", io)).toBeNull();
+    expect(resolveOutputSource(paramMap, outputs[1]!, outputs, "T2V", io)).toBe("9::output::IMAGE");
   });
 
   it("畸形 paramMap（数组 / 数字 / 脏值）一律按「没连过」处理", () => {
     expect(manualOutputSource([], "9::output::IMAGE", "T2I")).toBeUndefined();
-    expect(
-      manualOutputSource({ output: 42 }, "9::output::IMAGE", "T2I"),
-    ).toBeUndefined();
+    expect(manualOutputSource({ output: 42 }, "9::output::IMAGE", "T2I")).toBeUndefined();
     expect(
       manualOutputSource(
         { output: { "mode:T2I": { "9::output::IMAGE": 7 } } },
@@ -203,23 +181,13 @@ describe("落点解析", () => {
 
 describe("可落库判定", () => {
   it("必须是真实存在的输出行；输入行 / 不存在的键一律拒绝", () => {
-    expect(
-      canApplyOutputBindingEdit({ ioKey: "9::output::IMAGE", mode: "T2I" }, io),
-    ).toBe(true);
-    expect(
-      canApplyOutputBindingEdit({ ioKey: "9::widget::text", mode: "T2I" }, io),
-    ).toBe(false);
-    expect(
-      canApplyOutputBindingEdit({ ioKey: "9::output::GONE", mode: "T2I" }, io),
-    ).toBe(false);
+    expect(canApplyOutputBindingEdit({ ioKey: "9::output::IMAGE", mode: "T2I" }, io)).toBe(true);
+    expect(canApplyOutputBindingEdit({ ioKey: "9::widget::text", mode: "T2I" }, io)).toBe(false);
+    expect(canApplyOutputBindingEdit({ ioKey: "9::output::GONE", mode: "T2I" }, io)).toBe(false);
   });
 
   it("断开只需要有模式", () => {
-    expect(canApplyOutputBindingEdit({ ioKey: null, mode: "T2I" }, io)).toBe(
-      true,
-    );
-    expect(canApplyOutputBindingEdit({ ioKey: null, mode: null }, io)).toBe(
-      false,
-    );
+    expect(canApplyOutputBindingEdit({ ioKey: null, mode: "T2I" }, io)).toBe(true);
+    expect(canApplyOutputBindingEdit({ ioKey: null, mode: null }, io)).toBe(false);
   });
 });

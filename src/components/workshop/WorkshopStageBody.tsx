@@ -80,7 +80,7 @@ function StageFallback() {
  * `label` 是用户能认出来的那一段的名字 —— 只说「加载失败」等于让用户自己在
  * 六个卡片里找哪块坏了。
  */
-function StageBoundary({ label, children }: { children: React.ReactNode; label: string }) {
+function StageBoundary({ children, label }: { children: React.ReactNode; label: string }) {
   const fallback = useLazyChunkFallback(label);
   return (
     <ErrorBoundary fallback={fallback}>
@@ -97,50 +97,50 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
   const {
     /* 任务归属：这一屏的生成要落到哪个项目（镜头号在每条生成路径上现取） */
     activeProjectId,
-    tab,
-    setTab,
-    stageIndex,
-    stageTitle,
-    stageDesc,
-    prereq,
-    meta,
-    setMeta,
-    scriptMarkdown,
-    setScriptMarkdown,
-    scenes,
-    characters,
-    setCharacters,
-    shots,
-    setShots,
-    styles,
-    workflowOptions,
-    workflowId,
-    videoWorkflowId,
     apiChannels,
-    imageDoneCount,
-    clipDoneCount,
-    generating,
-    shotProgress,
+    cancelShotTask,
     characterExtract,
     characterExtractActions,
-    storyboardExtract,
-    storyboardExtractActions,
     characterPortrait,
     characterPortraitActions,
-    isScriptEditorOpen,
-    notice,
-    integrity,
-    rendered,
-    generateShot,
-    openScriptEditor,
+    characters,
+    clipDoneCount,
     closeScriptEditor,
-    saveScriptEditor,
-    openModelAdapters,
-    markRendered,
-    goToFilm,
     dismissNotice,
+    generateShot,
+    generating,
+    goToFilm,
+    imageDoneCount,
+    integrity,
+    isScriptEditorOpen,
+    markRendered,
+    meta,
+    notice,
+    openModelAdapters,
+    openScriptEditor,
+    prereq,
+    rendered,
+    saveScriptEditor,
+    scenes,
+    scriptMarkdown,
+    setCharacters,
+    setMeta,
+    setScriptMarkdown,
+    setShots,
+    setTab,
+    shotProgress,
+    shots,
     showNotice,
-    cancelShotTask,
+    stageDesc,
+    stageIndex,
+    stageTitle,
+    storyboardExtract,
+    storyboardExtractActions,
+    styles,
+    tab,
+    videoWorkflowId,
+    workflowId,
+    workflowOptions,
   } = controller;
 
   /* 本地剧本文件导入：读取 .md / .txt 内容并写入 scriptMarkdown。
@@ -298,16 +298,16 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               <LazyCharacterDesigner
                 characters={characters}
                 extract={{
-                  session: characterExtract,
                   actions: characterExtractActions,
+                  session: characterExtract,
                 }}
                 onCharactersChange={setCharacters}
                 portrait={{
-                  session: characterPortrait,
                   actions: characterPortraitActions,
                   apiChannels,
-                  workflows: workflowOptions,
                   onOpenModelAdapters: openModelAdapters,
+                  session: characterPortrait,
+                  workflows: workflowOptions,
                 }}
                 scriptMarkdown={scriptMarkdown}
                 styles={styles}
@@ -338,8 +338,8 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
               <LazyStoryboardPlanner
                 characters={characters}
                 extract={{
-                  session: storyboardExtract,
                   actions: storyboardExtractActions,
+                  session: storyboardExtract,
                 }}
                 generating={generating}
                 onCharactersChange={setCharacters}

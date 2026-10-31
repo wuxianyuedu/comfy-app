@@ -15,12 +15,12 @@ export const inputCls =
 export const SECTION_ACCENT = "#FF9C5B"; /* = ACCENT.text：文本类段头 */
 export const PIN_ACCENT = "#5BC6FF"; /* = ACCENT.link：连线条目段头 */
 export const ACCENT: Record<ControlKind, string> = {
+  float: "#FFD571",
   image: "#5BE3C4",
-  textarea: "#FF9C5B",
-  text: "#FF9C5B",
+  int: "#B584FF",
+  link: "#5BC6FF",
   select: "#8B7CFC",
   switch: "#67E89D",
-  int: "#B584FF",
-  float: "#FFD571",
-  link: "#5BC6FF",
+  text: "#FF9C5B",
+  textarea: "#FF9C5B",
 };

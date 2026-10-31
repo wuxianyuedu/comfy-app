@@ -25,7 +25,7 @@ export type ProjectHomeStatusProps = {
 };
 
 /** 阶段行的图标：完成 → 勾、当前 → 转圈、未开始 → 空圈。 */
-function StageIcon({ done, current }: { current: boolean; done: boolean }) {
+function StageIcon({ current, done }: { current: boolean; done: boolean }) {
   if (done) {
     return <Check aria-hidden className="text-success-strong" size={13} />;
   }
@@ -43,7 +43,7 @@ function stageStateText(done: boolean, current: boolean): string {
   return current ? "进行中" : "未开始";
 }
 
-export function ProjectHomeStatus({ overview, loading, onNavigate }: ProjectHomeStatusProps) {
+export function ProjectHomeStatus({ loading, onNavigate, overview }: ProjectHomeStatusProps) {
   /* 计数在「还没读到」时给占位符：`displayValue(null)` 给 `—`。
    * 直接写 0 会让用户在打开主页的一瞬间读到「剧本 0 字 / 0 镜」，而那是假的。 */
   const raw = (value: number): number | null => (loading ? null : value);

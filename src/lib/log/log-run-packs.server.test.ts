@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(root, { force: true, recursive: true });
 });
 
 type PackSpec = {
@@ -57,9 +57,9 @@ function makePack(name: string, spec: PackSpec = {}): void {
   fs.writeFileSync(
     path.join(dir, "run.json"),
     JSON.stringify({
+      crashed: spec.crashed === true,
       runId: name.slice(name.lastIndexOf("-") + 1),
       startedAt: new Date(2026, 9, 4, 14, 0, 0).toISOString(),
-      crashed: spec.crashed === true,
     }),
     "utf8",
   );
@@ -71,17 +71,17 @@ async function scan(
   maxPacks = 50,
 ) {
   return scanRunPacks({
-    runsDir: runs,
-    sourceDir: "services",
-    runJsonName: "run.json",
     maxPacks,
+    runJsonName: "run.json",
+    runsDir: runs,
     source,
+    sourceDir: "services",
   });
 }
 
 describe("列包", () => {
   it("runs/ 还不存在（从没正常退出过）→ 空列表，不是错误", async () => {
-    fs.rmSync(runs, { recursive: true, force: true });
+    fs.rmSync(runs, { force: true, recursive: true });
     expect(await scan()).toEqual({ packs: [], total: 0 });
   });
 
@@ -116,9 +116,9 @@ describe("列包", () => {
   it("只列本来源的份（一个包里四个来源并存）", async () => {
     makePack("2026-10-04_140000-bbbbbb", {
       files: {
+        "app-runtime-20261004-140002.log": "app\n",
         "comfyui-runtime-20261004-140000.log": "comfy\n",
         "ollama-runtime-20261004-140001.log": "ollama\n",
-        "app-runtime-20261004-140002.log": "app\n",
       },
     });
 
@@ -141,9 +141,9 @@ describe("列包", () => {
   it("包内多份按时间序（旧→新）给，同秒分叉也在", async () => {
     makePack("2026-10-04_140000-bbbbbb", {
       files: {
-        "comfyui-runtime-20261004-140003.log": "第三次\n",
-        "comfyui-runtime-20261004-140001.log": "第一次\n",
         "comfyui-runtime-20261004-140001-2.log": "同秒第二次\n",
+        "comfyui-runtime-20261004-140001.log": "第一次\n",
+        "comfyui-runtime-20261004-140003.log": "第三次\n",
       },
     });
 
@@ -158,8 +158,8 @@ describe("列包", () => {
   it("迁移前的旧固定名也列（排最前 —— 「更早」是对它的定义）", async () => {
     makePack("2026-10-04_140000-bbbbbb", {
       files: {
-        "comfyui-runtime.log": "迁移前的全部\n",
         "comfyui-runtime-20261004-140000.log": "新的\n",
+        "comfyui-runtime.log": "迁移前的全部\n",
       },
     });
 
@@ -175,8 +175,8 @@ describe("列包", () => {
 describe("包的元信息（run.json）", () => {
   it("crashed 如实带出来（崩溃现场最该看，界面要标）", async () => {
     makePack("2026-10-04_140000-bbbbbb", {
-      files: { "comfyui-runtime-20261004-140000.log": "崩\n" },
       crashed: true,
+      files: { "comfyui-runtime-20261004-140000.log": "崩\n" },
     });
     expect((await scan()).packs[0]!.crashed).toBe(true);
   });

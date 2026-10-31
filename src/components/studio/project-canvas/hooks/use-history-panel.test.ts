@@ -21,17 +21,17 @@ const mockedProbe = vi.mocked(probeGlobalTaskCount);
 
 function row(over: Record<string, unknown> = {}) {
   return {
+    cover: "/outputs/a.png",
+    createdAt: new Date().toISOString(),
+    error: null,
     id: "t-1",
+    mediaType: "image",
+    progress: 100,
+    projectId: "p-1",
+    prompt: "一只猫",
+    status: "SUCCEEDED",
     type: "image",
     workflowName: "wf",
-    status: "SUCCEEDED",
-    prompt: "一只猫",
-    createdAt: new Date().toISOString(),
-    cover: "/outputs/a.png",
-    mediaType: "image",
-    projectId: "p-1",
-    progress: 100,
-    error: null,
     ...over,
   };
 }

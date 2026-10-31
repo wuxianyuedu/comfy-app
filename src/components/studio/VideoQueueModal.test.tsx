@@ -28,12 +28,12 @@ function renderModal() {
 }
 
 const oneTask: VideoTask = {
-  id: "t1",
-  status: "SUCCEEDED",
-  prompt: "让镜头慢慢推进",
-  workflowName: "t2v-animated",
-  video: null,
   error: null,
+  id: "t1",
+  prompt: "让镜头慢慢推进",
+  status: "SUCCEEDED",
+  video: null,
+  workflowName: "t2v-animated",
 };
 
 describe("VideoQueueModal：队列只读视图（批量提交已整格撤掉，#2169）", () => {

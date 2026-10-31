@@ -19,17 +19,17 @@ import { BreadcrumbPath, type BreadcrumbSegment } from "~/components/ui/breadcru
  * 才能确认「末段的样式档」与「中间段的 hover 档」没有互相漂移。
  */
 const meta = {
-  title: "UI/BreadcrumbPath",
-  component: BreadcrumbPath,
   args: {
-    segments: [
-      { label: "参考素材", key: null },
-      { label: "角色参考", key: "characters" },
-      { label: "小夜", key: null },
-    ] satisfies Array<BreadcrumbSegment>,
-    onNavigate: () => undefined,
     navigable: true,
+    onNavigate: () => undefined,
+    segments: [
+      { key: null, label: "参考素材" },
+      { key: "characters", label: "角色参考" },
+      { key: null, label: "小夜" },
+    ] satisfies Array<BreadcrumbSegment>,
   },
+  component: BreadcrumbPath,
+  title: "UI/BreadcrumbPath",
 } satisfies Meta<typeof BreadcrumbPath>;
 
 export default meta;
@@ -42,7 +42,7 @@ export const Default: Story = {};
 /** 只有一段：路径就是当前所在处 —— 调用处不必为「首页」写特例分支。 */
 export const SingleLevel: Story = {
   args: {
-    segments: [{ label: "参考素材", key: null }],
+    segments: [{ key: null, label: "参考素材" }],
   },
 };
 
@@ -50,10 +50,10 @@ export const SingleLevel: Story = {
 export const Deep: Story = {
   args: {
     segments: [
-      { label: "本项目", key: null },
-      { label: "素材", key: "materials" },
-      { label: "角色参考", key: "characters" },
-      { label: "小夜", key: null },
+      { key: null, label: "本项目" },
+      { key: "materials", label: "素材" },
+      { key: "characters", label: "角色参考" },
+      { key: null, label: "小夜" },
     ],
   },
 };

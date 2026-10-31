@@ -113,9 +113,9 @@ export function parseRuntimeLogFileName(name: string): RuntimeLogFileName | null
   ).getTime();
   const ordinal = ordinalText ? Number(ordinalText) : 1;
   return {
+    ordinal: Number.isFinite(ordinal) && ordinal > 0 ? ordinal : 1,
     source,
     startedAt: Number.isFinite(startedAt) ? startedAt : null,
-    ordinal: Number.isFinite(ordinal) && ordinal > 0 ? ordinal : 1,
   };
 }
 

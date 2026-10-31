@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   /* 读 body / 取条目名 / 解析连接参数与提交路由同一份实现（§12.12）。 */
   const prologue = await readUsageTestPrologue(req);
   if (!prologue.ok) {
-    return NextResponse.json({ ok: false, detail: prologue.detail });
+    return NextResponse.json({ detail: prologue.detail, ok: false });
   }
   const { name, rec, up } = prologue;
   const model = name; // 条目名即模型参数值（与提交路由一致）
@@ -43,8 +43,8 @@ export async function POST(req: NextRequest) {
 
   if (!taskId) {
     return NextResponse.json({
-      ok: false,
       detail: "缺少任务 ID，无法继续查询",
+      ok: false,
     });
   }
 
@@ -54,25 +54,25 @@ export async function POST(req: NextRequest) {
     if (r.done) {
       const savedPath = await saveMediaToLocalTemp("video", name, r.url);
       return NextResponse.json({
-        ok: true,
         detail: "生成成功",
-        videoUrl: r.url,
-        savedPath,
         elapsedMs: Date.now() - startedAt,
+        ok: true,
+        savedPath,
+        videoUrl: r.url,
       });
     }
     return NextResponse.json({
-      ok: true,
       detail: pendingDetail("任务仍在生成中"),
-      taskId,
-      pending: true,
       elapsedMs: Date.now() - startedAt,
+      ok: true,
+      pending: true,
+      taskId,
     });
   } catch (e) {
     return NextResponse.json({
-      ok: false,
       detail: apiErrorDetail(e, "查询失败"),
       elapsedMs: Date.now() - startedAt,
+      ok: false,
     });
   }
 }

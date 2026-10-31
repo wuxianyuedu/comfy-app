@@ -56,9 +56,9 @@ export const TRANSITIONS = /* SAFETY: 类型断言已复核 */ ["cut", "dissolve
 export type Transition = (typeof TRANSITIONS)[number];
 
 export const MOTION_LABELS: Record<MotionLevel, string> = {
+  high: "强运动",
   low: "轻运动",
   medium: "中运动",
-  high: "强运动",
 };
 
 export const TRANSITION_LABELS: Record<Transition, string> = {
@@ -105,23 +105,23 @@ export function normalizeShotType(raw: unknown): ShotType {
 }
 
 export const SHOT_TYPE_LABELS: Record<ShotType, string> = {
-  extreme_wide: "大远景",
-  wide: "远景",
-  full: "全景",
-  medium: "中景",
   close: "近景",
   extreme_close: "特写",
-  poi: "仰拍",
+  extreme_wide: "大远景",
+  full: "全景",
+  medium: "中景",
   pod: "俯拍",
+  poi: "仰拍",
+  wide: "远景",
 };
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
-  short_video: "短视频",
-  micro_film: "微电影",
-  animation: "动画",
   ad: "广告",
+  animation: "动画",
   comic: "漫画/漫剧",
+  micro_film: "微电影",
   other: "其他",
+  short_video: "短视频",
 };
 
 /* 从技能系统取来的风格预设（SkillData 的子集）。 */
@@ -233,8 +233,8 @@ function paramsObject(value: unknown): Record<string, unknown> {
 
 export const characterPortraitInputSchema = z.object({
   /** 浏览器可直接引用的图片地址（本机产物走 /api/generated，导入走素材库）。 */
-  url: z.string().min(1),
   source: z.enum(["local", "remote", "import"]),
+  url: z.string().min(1),
   /** 生成时使用的模型（本机 checkpoint / 远端 API 模型名），导入来源没有。 */
   model: z.string().optional(),
   /** 本机通道的 ComfyUI 任务 id，便于回溯任务历史。 */
@@ -252,26 +252,26 @@ export const characterPortraitInputSchema = z.object({
 /** 一份能产出 ComfyUI 提示词的角色设定。 */
 export const characterInputSchema = z
   .object({
-    id: z.string().min(1),
-    name: z.string().min(1),
     ageGender: z.string().default(""), // 年龄/性别
     appearance: z.string().default(""), // 外貌特征
     costume: z.string().default(""), // 服装
+    id: z.string().min(1),
+    name: z.string().min(1),
     personality: z.string().default(""), // 性格
-    temperament: z.string().default(""), // 气质
-    styleTags: stringList.default([]), // 自由风格关键词（如 ["皮克斯", "厚涂"]）
     skillSlug: z.string().optional(), // 关联的画风 Skill
+    styleTags: stringList.default([]), // 自由风格关键词（如 ["皮克斯", "厚涂"]）
+    temperament: z.string().default(""), // 气质
     /** 定妆照候选（多次生成 / 外部导入累积，供挑选；上限见 character-portrait.ts）。
      *  存在角色本身而非独立表 —— 角色随草稿 JSON 列一起持久化，新增字段无需迁移。 */
     portraits: z.array(characterPortraitInputSchema).optional(),
     /** 已选定的定妆照（portraits 里的一张），后续分镜图以此作为参考图。 */
-    portraitUrl: z.string().optional(),
     params: z.unknown().optional().transform(paramsObject), // 推荐生成参数
+    portraitUrl: z.string().optional(),
   })
   .transform((character) => ({
     ...character,
-    positivePrompt: "",
     negativePrompt: "",
+    positivePrompt: "",
   }));
 
 /** 一个分镜镜头，对应一次图片生成任务（之后还会对应一段视频片段）。 */
@@ -279,8 +279,8 @@ export const shotInputSchema = z
   .object({
     id: z.string().min(1),
     index: z.number().int(), // 镜号
-    sceneId: z.string().default(""), // 来源场景
     sceneHeading: z.string().default(""),
+    sceneId: z.string().default(""), // 来源场景
     /**
      * 景别走**既有归一器**（脏值落默认档，不原样落库）。
      *
@@ -291,29 +291,29 @@ export const shotInputSchema = z
      * `.default()` 才同时在两层成立：JSON Schema 里是带 default 的可选字段，
      * zod 侧缺值先补默认再交给归一器。
      */
+    characterIds: stringList.default([]), // 关联角色
+    description: z.string().default(""), // 画面描述
+    imageUrl: z.string().optional(),
     shotType: z
       .string()
       .default(DEFAULT_SHOT_TYPE)
       .transform((value) => normalizeShotType(value)),
-    description: z.string().default(""), // 画面描述
-    characterIds: stringList.default([]), // 关联角色
     skillSlug: z.string().optional(), // 风格 Skill
     status: z.enum(SHOT_STATUSES).default("idle"),
     taskId: z.string().optional(),
-    imageUrl: z.string().optional(),
     // ── 视频生成计划 ──
-    dialogue: z.string().optional(), // 对白 / 字幕文本
-    motion: optionalEnum(MOTION_LEVELS), // 运动强度（I2V）
-    duration: z.number().optional(), // 镜头时长（秒）
-    transition: optionalEnum(TRANSITIONS), // 与下一镜的转场
     clipStatus: optionalEnum(SHOT_STATUSES),
     clipUrl: z.string().optional(), // 生成的视频片段地址
+    dialogue: z.string().optional(), // 对白 / 字幕文本
+    duration: z.number().optional(), // 镜头时长（秒）
+    motion: optionalEnum(MOTION_LEVELS), // 运动强度（I2V）
+    transition: optionalEnum(TRANSITIONS), // 与下一镜的转场
     /** 本机视频任务的 id（同 `taskId`：随草稿持久化，重挂载后据此恢复失联任务）。
      *  API 直连通道的 remoteTaskId 是另一套体系，不落这里。 */
     clipTaskId: z.string().optional(),
     params: z.unknown().optional().transform(paramsObject),
   })
-  .transform((shot) => ({ ...shot, prompt: "", negativePrompt: "" }));
+  .transform((shot) => ({ ...shot, negativePrompt: "", prompt: "" }));
 
 /** 一份角色卡数组（MCP `workshop_set_characters` 的入参形状）。 */
 export const characterListInputSchema = z.array(characterInputSchema);

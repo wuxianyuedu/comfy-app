@@ -175,8 +175,8 @@ export function layoutRows(
   /* `Array.from` 而不是 `new Array(n)`：后者在 lint 下是 `any[]`，会一路传染到
      下面的 `rows[i]` 赋值上。 */
   const rows: Array<RowLayout> = Array.from({ length: entries.length }, () => ({
-    start: 0,
     size: LOG_ROW_SINGLE,
+    start: 0,
   }));
   let start = 0;
   for (const [i, entry] of entries.entries()) {
@@ -191,7 +191,7 @@ export function layoutRows(
       const lines = wrap ? countLines(entry.message, availableWidth) : 1;
       size = LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
     }
-    rows[i] = { start, size };
+    rows[i] = { size, start };
     start += size;
   }
   return { rows, totalSize: start };
@@ -214,7 +214,7 @@ export function visibleRange(
 ): { end: number; start: number } {
   const count = rows.length;
   if (count === 0) {
-    return { start: 0, end: 0 };
+    return { end: 0, start: 0 };
   }
   const top = Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0;
   const height = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0;
@@ -224,7 +224,7 @@ export function visibleRange(
   const last = firstVisibleRow(rows, top + height);
   const start = Math.max(0, first - pad);
   const end = Math.min(count, last + 1 + pad);
-  return { start, end: Math.max(start, end) };
+  return { end: Math.max(start, end), start };
 }
 
 /**
@@ -263,12 +263,12 @@ export function scrollHeightOf(estimated: number): {
   /* 取不到 / 负数一律当 0：`Math.max(0, NaN)` 是 NaN，直接交给 style 会得到
    * 一个非法的 `height: NaNpx`（浏览器静默忽略，滚动条长度就与内容对不上了）。 */
   if (!Number.isFinite(estimated) || estimated <= 0) {
-    return { height: 0, compressed: false };
+    return { compressed: false, height: 0 };
   }
   if (estimated <= LOG_SCROLL_MAX) {
-    return { height: estimated, compressed: false };
+    return { compressed: false, height: estimated };
   }
-  return { height: LOG_SCROLL_MAX, compressed: true };
+  return { compressed: true, height: LOG_SCROLL_MAX };
 }
 
 /* ── 贴底（pin）：新日志到达时把「已读水位」钉住 ────────────────────────

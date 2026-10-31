@@ -91,9 +91,9 @@ export type ImageZoom = {
  */
 export function useImageZoom({
   naturalSize,
-  viewportWidth,
-  viewportHeight,
   padding = 0,
+  viewportHeight,
+  viewportWidth,
 }: UseImageZoomOptions): ImageZoom {
   const [mode, setMode] = useState<ImageZoomMode>("fit");
   const [manualScale, setManualScale] = useState(1);
@@ -128,15 +128,15 @@ export function useImageZoom({
   );
 
   return {
-    mode,
-    scale,
-    percent: Math.round(scale * 100),
+    actualSize,
+    fit,
     fitScale,
+    mode,
+    percent: Math.round(scale * 100),
+    scale,
+    scaleTo,
+    toggleFitActual,
     zoomIn,
     zoomOut,
-    fit,
-    actualSize,
-    toggleFitActual,
-    scaleTo,
   };
 }

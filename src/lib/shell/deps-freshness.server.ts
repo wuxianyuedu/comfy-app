@@ -63,18 +63,18 @@ export function readDepsFreshness(root: string = process.cwd()): DepsFreshness |
     return null;
   }
   if (drift.state === "drift") {
-    return { stale: true, state: "drift", missing: [] };
+    return { missing: [], stale: true, state: "drift" };
   }
   if (drift.state === "no-install") {
-    return { stale: true, state: "no-install", missing: [] };
+    return { missing: [], stale: true, state: "no-install" };
   }
 
   /* lockfile 实质一致也仍可能有个别声明依赖解析不到：本地依赖树停在「装它之前」
    * 的那一套上，新加的包只以传递依赖的旧版本落在私有层里。 */
   const missing = unresolvableDeclaredDeps(root);
   if (missing.length > 0) {
-    return { stale: true, state: "unresolved", missing };
+    return { missing, stale: true, state: "unresolved" };
   }
 
-  return { stale: false, state: "fresh", missing: [] };
+  return { missing: [], stale: false, state: "fresh" };
 }

@@ -19,7 +19,7 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { userMock, getView, FakeViewError } = vi.hoisted(() => {
+const { FakeViewError, getView, userMock } = vi.hoisted(() => {
   /** 与真 `ComfyViewError` 同形状；路由里的 `instanceof` 判的就是它（所以必须来自
    *  同一份 hoisted 引用 —— 放在模块顶层会撞 `vi.mock` 的提前提升）。 */
   class FakeViewError extends Error {
@@ -31,9 +31,9 @@ const { userMock, getView, FakeViewError } = vi.hoisted(() => {
     }
   }
   return {
-    userMock: vi.fn<() => Promise<{ id: string } | null>>(),
-    getView: vi.fn(async () => Buffer.from("bytes")),
     FakeViewError,
+    getView: vi.fn(async () => Buffer.from("bytes")),
+    userMock: vi.fn<() => Promise<{ id: string } | null>>(),
   };
 });
 

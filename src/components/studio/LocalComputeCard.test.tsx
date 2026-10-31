@@ -31,27 +31,25 @@ afterEach(() => {
 
 const GIB = 1024 * 1024 * 1024;
 
-function viewModel(
-  over: Partial<ComfyStatusViewModel> = {},
-): ComfyStatusViewModel {
+function viewModel(over: Partial<ComfyStatusViewModel> = {}): ComfyStatusViewModel {
   const online = over.online ?? true;
   return {
+    connecting: false,
+    cudaVram: { pct: 8, total: 24 * GIB, used: 2 * GIB },
+    degradedNote: null,
+    online,
+    ram: { pct: 50, total: 32 * GIB, used: 16 * GIB },
+    smiVram: { pct: 25, total: 24 * GIB, used: 6 * GIB },
+    stale: false,
     stats: {
-      online,
       gpuName: "NVIDIA GeForce RTX 4090",
-      vramUsed: 2 * GIB,
+      online,
+      ramTotal: 32 * GIB,
+      ramUsed: 16 * GIB,
       vramFree: 22 * GIB,
       vramTotal: 24 * GIB,
-      ramUsed: 16 * GIB,
-      ramTotal: 32 * GIB,
+      vramUsed: 2 * GIB,
     },
-    online,
-    connecting: false,
-    stale: false,
-    cudaVram: { used: 2 * GIB, total: 24 * GIB, pct: 8 },
-    smiVram: { used: 6 * GIB, total: 24 * GIB, pct: 25 },
-    ram: { used: 16 * GIB, total: 32 * GIB, pct: 50 },
-    degradedNote: null,
     ...over,
   };
 }
@@ -61,11 +59,7 @@ describe("LocalComputeCard 有读数时", () => {
     readinessMock.mockReturnValue(viewModel());
     render(<LocalComputeCard />);
     const bars = screen.getAllByRole("progressbar");
-    expect(bars.map((b) => b.getAttribute("aria-valuenow"))).toEqual([
-      "25",
-      "8",
-      "50",
-    ]);
+    expect(bars.map((b) => b.getAttribute("aria-valuenow"))).toEqual(["25", "8", "50"]);
     /* 卡里的标签文案必须就是共享那一份（两处消费点不许各抄一遍字面量）。 */
     for (const metric of RESOURCE_METRICS) {
       expect(screen.getByText(metric.label)).toBeTruthy();
@@ -100,11 +94,11 @@ describe("LocalComputeCard 有读数时", () => {
       viewModel({
         stats: {
           online: true,
-          vramUsed: 2 * GIB,
+          ramTotal: 32 * GIB,
+          ramUsed: 16 * GIB,
           vramFree: 22 * GIB,
           vramTotal: 24 * GIB,
-          ramUsed: 16 * GIB,
-          ramTotal: 32 * GIB,
+          vramUsed: 2 * GIB,
         },
       }),
     );
@@ -118,12 +112,12 @@ describe("LocalComputeCard 读不到数时", () => {
   it("后端未运行：画 0% 是谎，改为整档隐藏并显示降级说明", () => {
     readinessMock.mockReturnValue(
       viewModel({
-        online: false,
-        stats: null,
         cudaVram: null,
-        smiVram: null,
-        ram: null,
         degradedNote: "ComfyUI 未运行，显存/内存暂不可用",
+        online: false,
+        ram: null,
+        smiVram: null,
+        stats: null,
       }),
     );
     render(<LocalComputeCard />);
@@ -135,7 +129,7 @@ describe("LocalComputeCard 读不到数时", () => {
 
   it("连着但首帧未到：说「读取中」，不说「未运行」", () => {
     readinessMock.mockReturnValue(
-      viewModel({ connecting: true, cudaVram: null, smiVram: null, ram: null }),
+      viewModel({ connecting: true, cudaVram: null, ram: null, smiVram: null }),
     );
     render(<LocalComputeCard />);
     expect(screen.getByText(WAIT_FIRST_SAMPLE_NOTE)).toBeTruthy();

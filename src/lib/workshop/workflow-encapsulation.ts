@@ -190,7 +190,7 @@ function toContractValues(args: {
   resolved: Record<string, string | null>;
   values: WorkshopExposedValues;
 }): Record<string, unknown> {
-  const { io, mode, values, resolved, entries } = args;
+  const { entries, io, mode, resolved, values } = args;
   const out: Record<string, unknown> = {};
 
   if (values.prompt !== undefined) {
@@ -437,29 +437,29 @@ export function buildEncapsulatedInputs(args: {
   paramMap: unknown;
   values: WorkshopExposedValues;
 }): EncapsulatedInputs {
-  const { io, paramMap, mode, values, contractIds } = args;
+  const { contractIds, io, mode, paramMap, values } = args;
   if (!io || typeof io !== "object") {
-    return { workflowInputs: [], unmatched: [] };
+    return { unmatched: [], workflowInputs: [] };
   }
   const effectiveMode = mode ?? null;
   const entries = buildParamEntries(io, undefined, {
-    mode: effectiveMode,
     contractIds,
+    mode: effectiveMode,
   });
   const mapping = parseParamMapping(paramMap);
   const resolved = resolveMapping(entries, io, mapping, effectiveMode);
   const { inputs, unmatched } = applyParamMapping({
-    io,
     entries,
+    io,
     mapping,
+    mode: effectiveMode,
     values: toContractValues({
+      entries,
       io,
       mode: effectiveMode,
-      values,
       resolved,
-      entries,
+      values,
     }),
-    mode: effectiveMode,
   });
   /* 「这个模式压根不暴露这个口」映射层看不见（它只遍历契约条目）：工坊给了图片 /
    *  时长这类值、而契约里没有对应口时在这里补报 —— 否则用户会以为值已经下发下去
@@ -496,7 +496,7 @@ export function buildEncapsulatedInputs(args: {
       reported.add(id);
     }
   }
-  return { workflowInputs: inputs, unmatched: [...reported] };
+  return { unmatched: [...reported], workflowInputs: inputs };
 }
 
 /* ── unmatched 的用户口径 ──────────────────────────────────────────────
@@ -507,13 +507,13 @@ export function buildEncapsulatedInputs(args: {
 
 /** 预制契约口 id → 用户口径名。 */
 const UNMATCHED_LABELS: Record<string, string> = {
-  prompt: "正向提示词",
-  negative: "负向提示词",
-  size: "尺寸",
+  duration: "时长",
   "first-frame": "首帧",
   "last-frame": "尾帧",
-  duration: "时长",
+  negative: "负向提示词",
+  prompt: "正向提示词",
   seed: "种子",
+  size: "尺寸",
 };
 
 /** 参考图口（reference-image / reference-image-2 …）统一叫「参考图」；

@@ -30,9 +30,9 @@ import { TreeChildren } from "~/components/ui/tree-rows";
  * 真实形态（状态在 hook、交互在 Disclosure）。
  */
 const meta = {
-  title: "UI/ExpansionSet",
   component: ExpansionDemo,
   render: () => <ExpansionDemo />,
+  title: "UI/ExpansionSet",
 } satisfies Meta<typeof ExpansionDemo>;
 
 export default meta;

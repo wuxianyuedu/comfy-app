@@ -17,20 +17,20 @@ vi.mock("./repository", () => {
   const createSession = vi.fn(async (input: CreateSessionInput = {}) => {
     const id = "sess_" + Math.random().toString(36).slice(2);
     const state: WorkshopSessionState = {
+      characters: [],
       idea: input.idea ?? "",
       meta: {
-        title: input.title ?? "未命名工坊项目",
-        type: /* SAFETY: 类型断言已复核 */ (input.type ??
-          "short_video") as WorkshopSessionState["meta"]["type"],
-        tone: input.tone ?? "",
         logline: input.logline ?? "",
         scriptMarkdown: "",
+        title: input.title ?? "未命名工坊项目",
+        tone: input.tone ?? "",
+        type: /* SAFETY: 类型断言已复核 */ (input.type ??
+          "short_video") as WorkshopSessionState["meta"]["type"],
       },
+      projectId: null,
       scenes: [],
-      characters: [],
       shots: [],
       stage: "script",
-      projectId: null,
     };
     store.set(id, state);
     return id;
@@ -47,21 +47,14 @@ vi.mock("./repository", () => {
   });
   return {
     createSession,
-    getSession,
-    updateState,
-    listSessions,
     deleteSession,
+    getSession,
+    listSessions,
+    updateState,
   };
 });
 
 vi.mock("./llm", () => ({
-  getWorkshopLLMConfig: vi.fn(async (): Promise<WorkshopLLMConfig> => ({
-    baseUrl: "http://x",
-    model: "m",
-    apiKey: null,
-    temperature: 0.7,
-    maxTokens: 100,
-  })),
   completeWorkshopLLM: vi.fn(
     async (_cfg: WorkshopLLMConfig, messages: Array<LLMMessage>): Promise<string> => {
       const sys = typeof messages[0]?.content === "string" ? messages[0].content : "";
@@ -71,10 +64,10 @@ vi.mock("./llm", () => ({
       if (sys.includes("剧本分析师")) {
         return JSON.stringify([
           {
-            name: "小满",
             ageGender: "女,20岁",
             appearance: "短发",
             costume: "红裙",
+            name: "小满",
             personality: "活泼",
             styleTags: ["厚涂"],
           },
@@ -83,58 +76,65 @@ vi.mock("./llm", () => ({
       if (sys.includes("分镜师")) {
         return JSON.stringify([
           {
+            characterNames: ["小满"],
+            description: "全景",
+            dialogue: "",
             sceneHeading: "场景1 · 咖啡馆",
             shotType: "wide",
-            description: "全景",
-            characterNames: ["小满"],
-            dialogue: "",
           },
         ]);
       }
       return "";
     },
   ),
+  getWorkshopLLMConfig: vi.fn(async (): Promise<WorkshopLLMConfig> => ({
+    apiKey: null,
+    baseUrl: "http://x",
+    maxTokens: 100,
+    model: "m",
+    temperature: 0.7,
+  })),
 }));
 
 vi.mock("./api-channel", () => ({
   generateImageViaApi: vi.fn(async () => "http://img/1.png"),
-  submitVideoViaApi: vi.fn(async () => ({ remoteTaskId: "task123" })),
   pollVideoViaApi: vi.fn(async () => ({
-    url: "http://vid/1.mp4",
     pending: false,
+    url: "http://vid/1.mp4",
   })),
   resolveMediaDataUrl: vi.fn(async (ref: string) => ref),
+  submitVideoViaApi: vi.fn(async () => ({ remoteTaskId: "task123" })),
 }));
 
 vi.mock("./comfyui", () => ({
   generateImageViaComfyUI: vi.fn(async () => "file://comfy/1.png"),
-  submitVideoViaComfyUI: vi.fn(async () => ({ url: "file://comfy/v.mp4" })),
-  saveComfySettings: vi.fn(async (p: unknown) => p),
   resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
+  saveComfySettings: vi.fn(async (p: unknown) => p),
+  submitVideoViaComfyUI: vi.fn(async () => ({ url: "file://comfy/v.mp4" })),
 }));
 
 vi.mock("./final-compose", () => ({
   buildCompositionPlan: vi.fn((title: string, shots: Array<Shot>) => ({
-    project: title,
     exportedAt: "",
-    totalShots: shots.length,
-    totalDurationSec: 0,
+    project: title,
     segments: shots.map((s, i) => ({
-      order: i + 1,
-      shotId: s.id,
-      scene: s.sceneHeading,
-      shotType: s.shotType,
-      prompt: s.prompt,
-      imageUrl: s.imageUrl ?? null,
       clipUrl: s.clipUrl ?? null,
-      durationSec: 4,
-      motion: s.motion ?? "medium",
-      transition: s.transition ?? "cut",
       dialogue: s.dialogue ?? "",
+      durationSec: 4,
+      imageUrl: s.imageUrl ?? null,
+      motion: s.motion ?? "medium",
+      order: i + 1,
+      prompt: s.prompt,
+      scene: s.sceneHeading,
+      shotId: s.id,
+      shotType: s.shotType,
+      transition: s.transition ?? "cut",
     })),
+    totalDurationSec: 0,
+    totalShots: shots.length,
   })),
+  renderComposition: vi.fn(async () => ({ note: "no ffmpeg", ok: false })),
   writeCompositionPlan: vi.fn(async () => "/data/workshop-compositions/x.json"),
-  renderComposition: vi.fn(async () => ({ ok: false, note: "no ffmpeg" })),
 }));
 
 import * as orchestrator from "./orchestrator";
@@ -178,17 +178,17 @@ describe("workshop orchestrator 全流程", () => {
   it("rebuildCharacterPrompts 重算提示词含角色名", () => {
     const out = orchestrator.rebuildCharacterPrompts([
       {
-        id: "c1",
-        name: "小满",
         ageGender: "女",
         appearance: "短发",
         costume: "",
-        personality: "活泼",
-        temperament: "",
-        styleTags: [],
-        positivePrompt: "",
+        id: "c1",
+        name: "小满",
         negativePrompt: "",
         params: {},
+        personality: "活泼",
+        positivePrompt: "",
+        styleTags: [],
+        temperament: "",
       } satisfies Character,
     ]);
     expect(out[0]?.positivePrompt).toContain("活泼");
@@ -203,8 +203,8 @@ describe("workshop orchestrator 全流程", () => {
     const board = await orchestrator.buildStoryboard(id);
     const shot = board.shots[0]!;
     const r = await orchestrator.generateImage(id, {
-      shotId: shot.id,
       channel: "comfyui",
+      shotId: shot.id,
     });
     expect(r.url).toBe("file://comfy/1.png");
     const after = await orchestrator.getSession(id);
@@ -220,8 +220,8 @@ describe("workshop orchestrator 全流程", () => {
     const shot = board.shots[0]!;
     await orchestrator.generateImage(id, { shotId: shot.id }); // api 通道填 imageUrl
     const r = await orchestrator.submitVideo(id, {
-      shotId: shot.id,
       channel: "comfyui",
+      shotId: shot.id,
       useFirstFrame: true,
     });
     expect(r.url).toBe("file://comfy/v.mp4");

@@ -24,18 +24,14 @@ vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
 import { skillRepository } from "~/lib/core/repository";
 import { BUILTIN_SKILLS } from "~/lib/skills-seed";
 import { skillRouter } from "~/server/api/routers/skill";
-import {
-  getTestDb,
-  seedUser,
-  type TestDb,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedUser, type TestDb } from "../../../../tests/helpers/test-db";
 import { makeCtx } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(skillRouter);
@@ -50,16 +46,16 @@ async function envelope(p: Promise<unknown>): Promise<string> {
 }
 
 const newSkill = (over: Record<string, unknown> = {}) => ({
-  name: "我的技能",
-  slug: "my-skill",
   description: "一句说明",
+  name: "我的技能",
   promptTemplate: "把 {{prompt}} 画成插画",
+  slug: "my-skill",
   ...over,
 });
 
 beforeEach(() => {
   tdb.$reset();
-  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
+  seedUser(tdb, { email: "a@test.dev", id: "user-a" });
 });
 
 describe("skill.list —— 内置补齐与三个默认值", () => {
@@ -73,7 +69,7 @@ describe("skill.list —— 内置补齐与三个默认值", () => {
   });
 
   it("没在标签表里登记过的分类，展示名回退成分类本身（不是 undefined）", async () => {
-    await caller().create(newSkill({ slug: "odd-cat", category: "自定分类" }));
+    await caller().create(newSkill({ category: "自定分类", slug: "odd-cat" }));
     const res = await caller().list();
     const odd = res.categories.find((c) => c.id === "自定分类");
     expect(odd?.label).toBe("自定分类");
@@ -99,9 +95,7 @@ describe("skill.list —— 内置补齐与三个默认值", () => {
 describe("skill.create —— 重名的码与形状闸", () => {
   it("slug 撞车 → CONFLICT，且不覆盖已有的那一行", async () => {
     await caller().create(newSkill());
-    expect(await envelope(caller().create(newSkill({ name: "改掉它" })))).toBe(
-      "CONFLICT",
-    );
+    expect(await envelope(caller().create(newSkill({ name: "改掉它" })))).toBe("CONFLICT");
     const row = await skillRepository.findBySlug("my-skill");
     expect(row?.name).toBe("我的技能");
   });
@@ -114,22 +108,16 @@ describe("skill.create —— 重名的码与形状闸", () => {
     await caller().list(); // 先让内置补齐落库
     expect(
       await envelope(
-        caller().create(
-          newSkill({ slug: taken, name: "覆盖内置", description: "x" }),
-        ),
+        caller().create(newSkill({ description: "x", name: "覆盖内置", slug: taken })),
       ),
     ).toBe("CONFLICT");
-    expect((await skillRepository.findBySlug(String(taken)))?.name).not.toBe(
-      "覆盖内置",
-    );
+    expect((await skillRepository.findBySlug(String(taken)))?.name).not.toBe("覆盖内置");
   });
 
   it("slug 带大写或空格 → BAD_REQUEST，且一次数据库都不查", async () => {
     const find = vi.spyOn(skillRepository, "findBySlug");
     for (const bad of ["My-Skill", "有中文", "a b", ""]) {
-      expect(await envelope(caller().create(newSkill({ slug: bad })))).toBe(
-        "BAD_REQUEST",
-      );
+      expect(await envelope(caller().create(newSkill({ slug: bad })))).toBe("BAD_REQUEST");
     }
     expect(find).not.toHaveBeenCalled();
     find.mockRestore();

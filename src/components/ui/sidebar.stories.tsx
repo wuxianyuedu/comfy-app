@@ -68,23 +68,23 @@ const MENU_BUTTON_VARIANTS: Array<SidebarMenuButtonVariant> = ["default", "outli
 const MENU_BUTTON_SIZES: Array<SidebarMenuButtonSize> = ["default", "sm", "lg"];
 
 const meta = {
-  title: "UI/Sidebar",
-  component: Sidebar,
   args: { children: null },
   argTypes: /* SAFETY: 类型断言已复核 */ {
-    variant: {
-      control: {
-        type: /* SAFETY: 类型断言已复核 */ "select" as const,
-      },
-      options: MENU_BUTTON_VARIANTS,
-    },
     size: {
       control: {
         type: /* SAFETY: 类型断言已复核 */ "select" as const,
       },
       options: MENU_BUTTON_SIZES,
     },
+    variant: {
+      control: {
+        type: /* SAFETY: 类型断言已复核 */ "select" as const,
+      },
+      options: MENU_BUTTON_VARIANTS,
+    },
   } as Record<string, { control: { type: "select" }; options: Array<string> }>,
+  component: Sidebar,
+  title: "UI/Sidebar",
 } satisfies Meta<typeof Sidebar>;
 
 export default meta;
@@ -95,9 +95,9 @@ type Story = StoryObj<typeof meta>;
  *  （含 `Sub` / `Action` / `Badge` / 骨架）。 */
 function Shell({
   collapsible = "icon",
-  variant = "sidebar",
-  side = "left",
   defaultOpen = true,
+  side = "left",
+  variant = "sidebar",
 }: {
   collapsible?: "offcanvas" | "icon" | "none";
   defaultOpen?: boolean;

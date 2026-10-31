@@ -7,9 +7,9 @@ import { Kbd, KbdGroup } from "~/components/ui/kbd";
  * 组合键靠 `KbdGroup` 的 `inline-flex gap-1` 排列。
  */
 const meta = {
-  title: "UI/Kbd",
-  component: Kbd,
   args: { children: "K" },
+  component: Kbd,
+  title: "UI/Kbd",
 } satisfies Meta<typeof Kbd>;
 
 export default meta;

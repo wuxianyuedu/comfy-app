@@ -16,5 +16,5 @@ export async function appendFilmLog(
   level: "info" | "progress" | "warn" | "error" | "success",
   msg: string,
 ) {
-  await filmRepository.appendLog(id, { t: Date.now(), level, msg });
+  await filmRepository.appendLog(id, { level, msg, t: Date.now() });
 }

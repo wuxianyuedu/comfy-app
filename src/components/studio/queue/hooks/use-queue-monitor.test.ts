@@ -24,18 +24,18 @@ function queueView(
   over: Partial<ComfyQueueModule.ComfyQueueView> = {},
 ): ComfyQueueModule.ComfyQueueView {
   return {
+    comfy: { pending: 0, running: 1 },
+    elapsedMs: 30_000,
     online: true,
-    comfy: { running: 1, pending: 0 },
+    queued: 2,
     running: {
+      model: "sd.safetensors",
+      nodeType: null,
+      progress: 0,
+      startedAt: 0,
       taskId: "run-1",
       workflowName: "正在跑的工作流",
-      model: "sd.safetensors",
-      startedAt: 0,
-      progress: 0,
-      nodeType: null,
     },
-    queued: 2,
-    elapsedMs: 30_000,
     ...over,
   };
 }
@@ -43,24 +43,24 @@ function queueView(
 /** 一行 `task.list` 的返回。类型标出来，别靠推导出 string 再在调用处报错。 */
 function queuedRow(id: string, workflowName: string): QueueRow {
   return {
-    id,
-    type: "IMAGE",
-    workflowName,
-    status: "QUEUED",
-    prompt: `提示词 ${id}`,
-    createdAt: new Date("2026-01-01T00:00:00Z"),
-    cover: null,
     checkpoint: null,
-    videoPath: null,
-    mediaType: "image",
-    projectId: null,
-    progress: 0,
+    cover: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
     error: null,
+    id,
+    mediaType: "image",
+    progress: 0,
+    projectId: null,
+    prompt: `提示词 ${id}`,
+    status: "QUEUED",
+    type: "IMAGE",
+    videoPath: null,
+    workflowName,
   };
 }
 
 const refetch = vi.fn();
-const toast = { info: vi.fn(), error: vi.fn() };
+const toast = { error: vi.fn(), info: vi.fn() };
 const copyResult = vi.fn<(text: string) => Promise<boolean>>();
 let listTasks: Array<QueueRow> = [];
 let queueResult: ComfyQueueModule.ComfyQueueView = queueView();
@@ -80,8 +80,8 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
     ...actual,
     useQuery: () => ({
       data: { tasks: listTasks },
-      isPending: false,
       isError: false,
+      isPending: false,
       refetch,
     }),
   };
@@ -132,12 +132,12 @@ describe("useQueueMonitor", () => {
   it("进度回来之后才给剩余时间", () => {
     queueResult = queueView({
       running: {
+        model: "sd.safetensors",
+        nodeType: "KSampler",
+        progress: 25,
+        startedAt: 0,
         taskId: "run-1",
         workflowName: "正在跑的工作流",
-        model: "sd.safetensors",
-        startedAt: 0,
-        progress: 25,
-        nodeType: "KSampler",
       },
     });
     const { result } = renderHook(() => useQueueMonitor());
@@ -190,8 +190,8 @@ describe("useQueueMonitor", () => {
 
   it("打开输出目录：把服务端的失败原因原样给用户", async () => {
     mockedReveal.mockResolvedValue({
-      ok: false,
       detail: "该任务还没有产出文件",
+      ok: false,
     });
     const { result } = renderHook(() => useQueueMonitor());
     await act(async () => {
@@ -204,8 +204,8 @@ describe("useQueueMonitor", () => {
    * 成功路径把 `comfyappUrl` 丢掉也没人发现 —— 报的是一句与事实无关的成功。 */
   it("打开输出目录：成功时报的是服务端探出来的定位结论", async () => {
     mockedReveal.mockResolvedValue({
-      ok: true,
       detail: "已在文件管理器里定位：F:\\gen\\task-late",
+      ok: true,
     });
     const { result } = renderHook(() => useQueueMonitor());
     await act(async () => {
@@ -220,8 +220,8 @@ describe("useQueueMonitor", () => {
     /* 两个口径都要给非零值，否则「相加」这件事根本没被断言到：
      * `queued` 是本应用排队的条数，`comfy.pending` 含用户在 ComfyUI 原生界面排的。 */
     queueResult = queueView({
+      comfy: { pending: 1, running: 0 },
       online: true,
-      comfy: { running: 0, pending: 1 },
       queued: 2,
     });
     const { result } = renderHook(() => useQueueMonitor());
@@ -239,8 +239,8 @@ describe("useQueueMonitor", () => {
       { ...queuedRow("run-1", "在跑的工作流"), status: "RUNNING" },
     ];
     queueResult = queueView({
+      comfy: { pending: 0, running: 0 },
       online: false,
-      comfy: { running: 0, pending: 0 },
       queued: 0,
       running: null,
     });
@@ -255,10 +255,10 @@ describe("useQueueMonitor", () => {
     const { result } = renderHook(() => useQueueMonitor());
     expect(result.current.logRow).toBeNull();
     const target = {
-      id: "t-1",
-      workflowName: "某工作流",
-      status: "RUNNING",
       error: null,
+      id: "t-1",
+      status: "RUNNING",
+      workflowName: "某工作流",
     };
     act(() => {
       result.current.openLog(target);

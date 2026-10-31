@@ -53,8 +53,8 @@ export function buildScriptMarkdownMessages(
 灵感/粗稿：
 ${idea}`;
   return [
-    { role: "system", content: SCRIPT_MD_SYSTEM },
-    { role: "user", content: user },
+    { content: SCRIPT_MD_SYSTEM, role: "system" },
+    { content: user, role: "user" },
   ];
 }
 
@@ -85,8 +85,8 @@ export function buildCharacterMessages(c: {
     .filter(Boolean)
     .join("\n");
   return [
-    { role: "system", content: CHARACTER_SYSTEM },
-    { role: "user", content: brief || "请帮我设计一个原创角色" },
+    { content: CHARACTER_SYSTEM, role: "system" },
+    { content: brief || "请帮我设计一个原创角色", role: "user" },
   ];
 }
 
@@ -116,8 +116,8 @@ export const CHARACTER_FROM_BRIEF_SYSTEM = `你是角色设定助手。用户会
 
 export function buildCharacterFromBriefMessages(brief: string): Array<LLMMessage> {
   return [
-    { role: "system", content: CHARACTER_FROM_BRIEF_SYSTEM },
-    { role: "user", content: brief },
+    { content: CHARACTER_FROM_BRIEF_SYSTEM, role: "system" },
+    { content: brief, role: "user" },
   ];
 }
 
@@ -129,11 +129,11 @@ export function parseCharacterFull(text: string): RawCharacterFull {
   const obj = /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
-    name: asText(obj.name, "未命名角色"),
-
     appearance: asText(obj.appearance),
 
     costume: asText(obj.costume),
+
+    name: asText(obj.name, "未命名角色"),
 
     personality: asText(obj.personality),
   };
@@ -162,8 +162,8 @@ export function buildStoryboardMessages(
 画面：${scene.action}
 台词：${scene.dialogue}`;
   return [
-    { role: "system", content: STORYBOARD_SYSTEM },
-    { role: "user", content: user },
+    { content: STORYBOARD_SYSTEM, role: "system" },
+    { content: user, role: "user" },
   ];
 }
 
@@ -179,13 +179,13 @@ export function parseStoryboard(text: string): Array<RawShot> {
     const obj = /* SAFETY: 类型断言已复核 */ (datum ?? {}) as Record<string, unknown>;
 
     return {
-      shotType: normalizeShotType(obj.shotType),
-
-      description: asText(obj.description, ""),
-
       characterNames: Array.isArray(obj.characterNames)
         ? /* SAFETY: 类型断言已复核 */ (obj.characterNames as Array<unknown>).map(String)
         : [],
+
+      description: asText(obj.description, ""),
+
+      shotType: normalizeShotType(obj.shotType),
     };
   });
 }
@@ -254,10 +254,10 @@ ${sourceText}
 请评审这份${kindLabel}是否合格。`;
   return [
     {
-      role: "system",
       content: REVIEW_SYSTEM + scoringAddendum(rubricText ?? ""),
+      role: "system",
     },
-    { role: "user", content: user },
+    { content: user, role: "user" },
   ];
 }
 
@@ -292,10 +292,10 @@ ${sourceText || "（空）"}
 请评审这份剧本是否合格。`;
   return [
     {
-      role: "system",
       content: SCRIPT_REVIEW_SYSTEM + scoringAddendum(rubricText ?? ""),
+      role: "system",
     },
-    { role: "user", content: user },
+    { content: user, role: "user" },
   ];
 }
 
@@ -359,8 +359,8 @@ ${lowScores}
 
 请产出定向改进后的完整剧本。`;
   return [
-    { role: "system", content: SCRIPT_REVISION_SYSTEM },
-    { role: "user", content: user },
+    { content: SCRIPT_REVISION_SYSTEM, role: "system" },
+    { content: user, role: "user" },
   ];
 }
 
@@ -412,23 +412,23 @@ export function buildShotImageReviewMessages(
 
 请对照上面的提示词与定妆照，评审这张图是否合格（重点看：对不对题、角色认不认得出、景别对不对、有没有崩）。`;
   const imageParts: Array<LLMContentPart> = [
-    { type: "image_url", image_url: { url: input.imageUrl } },
+    { image_url: { url: input.imageUrl }, type: "image_url" },
     ...input.portraitUrls
       .filter((url) => url.trim() !== "")
       .map((url) => ({
-        type: /* SAFETY: 类型断言已复核 */ "image_url" as const,
         image_url: { url },
+        type: /* SAFETY: 类型断言已复核 */ "image_url" as const,
       })),
   ];
   return [
     {
-      role: "system",
       content: SHOT_IMAGE_REVIEW_SYSTEM + scoringAddendum(rubricText ?? ""),
+      role: "system",
     },
     {
       role: "user",
       // 文本上下文在前、图在后：多数多模态模型按「先读文再读图」理解更稳定。
-      content: [{ type: "text", text: context }, ...imageParts],
+      content: [{ text: context, type: "text" }, ...imageParts],
     },
   ];
 }
@@ -464,7 +464,7 @@ ${defects}
 
 请产出改进后的镜头提示词。`;
   return [
-    { role: "system", content: REPROMPT_SYSTEM },
-    { role: "user", content: user },
+    { content: REPROMPT_SYSTEM, role: "system" },
+    { content: user, role: "user" },
   ];
 }

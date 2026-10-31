@@ -66,10 +66,10 @@ export type ResolvePythonOptions = {
  * 别把两者糊成一句「去装个 Python」。
  */
 export function resolvePython({
+  candidates,
   env = process.env,
   platform = process.platform,
   probe,
-  candidates,
 }: ResolvePythonOptions = {}): PythonResolution | null {
   return findPython({ env, platform, ...(probe ? { probe } : {}), candidates }).hit;
 }
@@ -88,10 +88,10 @@ export function resolvePython({
  * @returns `hit` 命中时为 `PythonResolution`，否则 `null`；`missed` 是逐候选的失败形态
  */
 export function findPython({
+  candidates,
   env = process.env,
   platform = process.platform,
   probe,
-  candidates,
 }: ResolvePythonOptions = {}): {
   hit: PythonResolution | null;
   missed: Array<PythonMiss>;
@@ -116,7 +116,7 @@ export function findPython({
     });
     if (found) {
       return {
-        hit: { command: name, path: found, args: pythonProbeArgs(name), tried },
+        hit: { args: pythonProbeArgs(name), command: name, path: found, tried },
         missed,
       };
     }
@@ -125,7 +125,7 @@ export function findPython({
      * 只回「能不能用」，判具体的 errno 要它再起一次，那是重复付费）。 */
     missed.push({
       command: name,
-      failure: { kind: "spawn-error", code: "ENOENT" },
+      failure: { code: "ENOENT", kind: "spawn-error" },
     });
   }
   return { hit: null, missed };

@@ -29,24 +29,24 @@ const TITLE = `启动日志（${FILE_NAME}）`;
 
 function controller(over: Partial<RuntimeLogController> = {}): RuntimeLogController {
   return {
-    text: "[spawn] pid=1\n",
+    active: false,
+    refresh: vi.fn(async () => undefined),
     segments: [{ text: "[spawn] pid=1\n" }],
+    selectSession: vi.fn(),
+    sessionId: "comfyui-runtime-20260930-100741.log",
     sessions: [
       {
-        id: "comfyui-runtime-20260930-100741.log",
-        title: "09-30 10:07:41",
-        startedAt: new Date(2026, 8, 30, 10, 7, 41).getTime(),
-        scope: "current",
         crashed: false,
+        id: "comfyui-runtime-20260930-100741.log",
+        scope: "current",
+        startedAt: new Date(2026, 8, 30, 10, 7, 41).getTime(),
+        title: "09-30 10:07:41",
       },
     ],
-    sessionId: "comfyui-runtime-20260930-100741.log",
+    text: "[spawn] pid=1\n",
+    total: 1,
     truncated: false,
     windowed: false,
-    total: 1,
-    active: false,
-    selectSession: vi.fn(),
-    refresh: vi.fn(async () => undefined),
     ...over,
   };
 }
@@ -70,18 +70,18 @@ function renderBox(log: RuntimeLogController) {
 function twoSessions(): RuntimeLogController["sessions"] {
   return [
     {
-      id: "comfyui-runtime-20260930-100103.log",
-      title: "09-30 10:01:03",
-      startedAt: new Date(2026, 8, 30, 10, 1, 3).getTime(),
-      scope: "current",
       crashed: false,
+      id: "comfyui-runtime-20260930-100103.log",
+      scope: "current",
+      startedAt: new Date(2026, 8, 30, 10, 1, 3).getTime(),
+      title: "09-30 10:01:03",
     },
     {
-      id: "comfyui-runtime-20260930-100741.log",
-      title: "09-30 10:07:41",
-      startedAt: new Date(2026, 8, 30, 10, 7, 41).getTime(),
-      scope: "current",
       crashed: false,
+      id: "comfyui-runtime-20260930-100741.log",
+      scope: "current",
+      startedAt: new Date(2026, 8, 30, 10, 7, 41).getTime(),
+      title: "09-30 10:07:41",
     },
   ];
 }
@@ -97,8 +97,8 @@ describe("RuntimeLogBox", () => {
   it("多次启动时下拉列出每份的时刻，切换回传那一份的文件名", async () => {
     const user = userEvent.setup();
     const log = controller({
-      sessions: twoSessions(),
       sessionId: "comfyui-runtime-20260930-100741.log",
+      sessions: twoSessions(),
     });
     renderBox(log);
 
@@ -138,7 +138,7 @@ describe("RuntimeLogBox", () => {
   });
 
   it("正文为空时显示分区自己的空态引导", () => {
-    renderBox(controller({ text: "", segments: [] }));
+    renderBox(controller({ segments: [], text: "" }));
     expect(screen.getByText("暂无日志 —— 点「启动 ComfyUI」后这里会实时输出")).toBeTruthy();
   });
 
@@ -157,8 +157,8 @@ describe("RuntimeLogBox", () => {
 
   it("全屏查看：铺满内容区的面板里带同一个下拉，退出后回到小窗口", () => {
     const log = controller({
-      sessions: twoSessions(),
       sessionId: "comfyui-runtime-20260930-100741.log",
+      sessions: twoSessions(),
     });
     renderBox(log);
 
@@ -181,8 +181,8 @@ describe("RuntimeLogBox", () => {
     // （想拖动窗口）把全屏视图整个关掉是用户实测反馈，这里钉住不回归。
     renderBox(
       controller({
-        sessions: twoSessions(),
         sessionId: "comfyui-runtime-20260930-100741.log",
+        sessions: twoSessions(),
       }),
     );
     fireEvent.click(screen.getByLabelText("全屏查看"));

@@ -31,10 +31,7 @@ let spawning = false;
 
 export async function POST() {
   if (spawning) {
-    return NextResponse.json(
-      { ok: false, error: "已有一次同步在发起中" },
-      { status: 409 },
-    );
+    return NextResponse.json({ error: "已有一次同步在发起中", ok: false }, { status: 409 });
   }
 
   const file = SCHEMA_SYNC_STATUS_FILE;
@@ -48,11 +45,9 @@ export async function POST() {
   if (phase !== "stale" && phase !== "missing") {
     return NextResponse.json(
       {
-        ok: false,
         error:
-          phase === "syncing"
-            ? "数据库正在同步中，请等它结束"
-            : "当前没有需要同步的数据库结构变更",
+          phase === "syncing" ? "数据库正在同步中，请等它结束" : "当前没有需要同步的数据库结构变更",
+        ok: false,
       },
       { status: 409 },
     );
@@ -63,7 +58,7 @@ export async function POST() {
     const started = spawnSchemaSync(process.cwd(), { force: true });
     if (!started.started) {
       return NextResponse.json(
-        { ok: false, error: started.reason ?? "无法发起同步" },
+        { error: started.reason ?? "无法发起同步", ok: false },
         { status: 404 },
       );
     }

@@ -13,19 +13,19 @@ function shot(
   },
 ): unknown {
   return {
+    humanRating: opts.human,
     id,
-    imageUrl: `/${id}.png`,
     imageReview: {
-      pass: opts.aiPass,
       issues: [],
-      suggestion: "",
+      pass: opts.aiPass,
       scoredAt: "t",
       scores: {
-        promptAlignment: { score: opts.aiMean, note: "" },
-        characterConsistency: { score: opts.aiMean, note: "" },
+        characterConsistency: { note: "", score: opts.aiMean },
+        promptAlignment: { note: "", score: opts.aiMean },
       },
+      suggestion: "",
     },
-    humanRating: opts.human,
+    imageUrl: `/${id}.png`,
   };
 }
 
@@ -33,7 +33,7 @@ describe("calibrateFromShots（#2480 校准读数）", () => {
   it("空 / 全是没对齐样本 → 全 null 读数，不硬造", () => {
     expect(calibrateFromShots([])).toEqual(emptyCalibrationReport());
     // 只有 AI 判定、没人评分 → 样本 0
-    const onlyAi = calibrateFromShots([shot("a", { aiPass: true, aiMean: 4, human: null })]);
+    const onlyAi = calibrateFromShots([shot("a", { aiMean: 4, aiPass: true, human: null })]);
     expect(onlyAi.samples).toBe(0);
     expect(onlyAi.mae).toBeNull();
     expect(onlyAi.decisionAgreement).toBeNull();
@@ -44,10 +44,10 @@ describe("calibrateFromShots（#2480 校准读数）", () => {
 
   it("样本对齐：MAE 与判定一致率只在「AI 判定 × 人评分」齐全的镜头上算", () => {
     const report = calibrateFromShots([
-      shot("a", { aiPass: true, aiMean: 5, human: 5 }), // 人映射 5 → MAE 0，一致
-      shot("b", { aiPass: true, aiMean: 5, human: 1 }), // 人映射 1.8 → MAE 3.2；AI 过人 1 星 → 不一致
-      shot("c", { aiPass: false, aiMean: 2, human: 2 }), // 人映射 2.6 → MAE 0.6；AI 不过人 2 星 → 一致
-      shot("d", { aiPass: false, aiMean: 2, human: null }), // 没人评 → 不进样本
+      shot("a", { aiMean: 5, aiPass: true, human: 5 }), // 人映射 5 → MAE 0，一致
+      shot("b", { aiMean: 5, aiPass: true, human: 1 }), // 人映射 1.8 → MAE 3.2；AI 过人 1 星 → 不一致
+      shot("c", { aiMean: 2, aiPass: false, human: 2 }), // 人映射 2.6 → MAE 0.6；AI 不过人 2 星 → 一致
+      shot("d", { aiMean: 2, aiPass: false, human: null }), // 没人评 → 不进样本
     ]);
     // aiMeanAvg 是「有 AI 判定」全样本（含没人评分的 d）口径：(5+5+2+2)/4
     expect(report.aiMeanAvg).toBeCloseTo(3.5, 5);
@@ -62,8 +62,8 @@ describe("calibrateFromShots（#2480 校准读数）", () => {
 
   it("按维度聚合：每个 rubric 维度给 AI 均分与同样本集人评均分（1~5 映射）", () => {
     const report = calibrateFromShots([
-      shot("a", { aiPass: true, aiMean: 4, human: 5 }),
-      shot("b", { aiPass: true, aiMean: 2, human: 3 }),
+      shot("a", { aiMean: 4, aiPass: true, human: 5 }),
+      shot("b", { aiMean: 2, aiPass: true, human: 3 }),
     ]);
     const dims = Object.fromEntries(report.perDimension.map((d) => [d.key, d]));
     expect(dims.promptAlignment?.aiAvg).toBeCloseTo(3, 5);
@@ -84,7 +84,7 @@ describe("calibrateFromShots（#2480 校准读数）", () => {
       "垃圾",
       null,
       { id: "x", imageReview: { note: "缺 pass" } },
-      shot("ok", { aiPass: true, aiMean: 4, human: 4 }),
+      shot("ok", { aiMean: 4, aiPass: true, human: 4 }),
     ]);
     expect(report.samples).toBe(1);
     expect(report.decisionAgreement).toBe(1);

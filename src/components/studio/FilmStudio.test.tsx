@@ -9,18 +9,18 @@ import { FilmStudio } from "./FilmStudio";
  * cancel/compose/detail）同样给出桩实现，避免误触发真实网络请求。 */
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
-    skill: { list: { query: vi.fn().mockResolvedValue({ skills: [] }) } },
     film: {
-      list: {
-        query: vi.fn().mockResolvedValue({ films: [], ffmpegAvailable: false }),
-      },
-      detail: { query: vi.fn().mockResolvedValue(null) },
-      create: { mutate: vi.fn().mockResolvedValue({ id: "f-1" }) },
-      createFromProject: { mutate: vi.fn().mockResolvedValue({ id: "f-1" }) },
-      start: { mutate: vi.fn().mockResolvedValue({}) },
       cancel: { mutate: vi.fn().mockResolvedValue({}) },
       compose: { mutate: vi.fn().mockResolvedValue({}) },
+      create: { mutate: vi.fn().mockResolvedValue({ id: "f-1" }) },
+      createFromProject: { mutate: vi.fn().mockResolvedValue({ id: "f-1" }) },
+      detail: { query: vi.fn().mockResolvedValue(null) },
+      list: {
+        query: vi.fn().mockResolvedValue({ ffmpegAvailable: false, films: [] }),
+      },
+      start: { mutate: vi.fn().mockResolvedValue({}) },
     },
+    skill: { list: { query: vi.fn().mockResolvedValue({ skills: [] }) } },
   },
 }));
 

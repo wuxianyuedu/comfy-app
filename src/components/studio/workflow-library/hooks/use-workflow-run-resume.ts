@@ -65,19 +65,19 @@ export function watchWorkflowRun(taskId: string, handlers: WorkflowRunHandlers):
    * §16.2.4.68）。闸门按 taskId 分，重连后不会与上一轮的窗口混在一起。 */
   const gate = createThrottleGate();
   return watchTask(taskId, {
-    onProgress: (pct, node) => {
-      if (!gate.allow(taskId)) {
-        return;
-      }
-      patchWorkflowRun(taskId, { progress: pct });
-      handlers.onProgress(taskId, pct, node);
-    },
     onLog: (entry) => handlers.onLog(taskId, entry),
     onOutput: (output) => {
       if (output.kind === "image" && output.url) {
         patchWorkflowRun(taskId, { resultUrl: output.url });
       }
       handlers.onOutput(taskId, output);
+    },
+    onProgress: (pct, node) => {
+      if (!gate.allow(taskId)) {
+        return;
+      }
+      patchWorkflowRun(taskId, { progress: pct });
+      handlers.onProgress(taskId, pct, node);
     },
     onSettled: (result) => {
       /* 终值必须落进去：节流窗口会在边界上吃掉最后一次读数。 */
@@ -108,9 +108,9 @@ export type UseWorkflowRunResumeArgs = {
  * (workflowId) 变化时跑一次，不能闭包住首帧的回调。
  */
 export function useWorkflowRunResume({
-  workflowId,
-  source,
   handlers,
+  source,
+  workflowId,
 }: UseWorkflowRunResumeArgs): void {
   const handlersRef = useRef(handlers);
   useEffect(() => {
@@ -134,8 +134,8 @@ export function useWorkflowRunResume({
     if (run.status === "done") {
       if (run.resultUrl) {
         handlersRef.current.onOutput(run.taskId, {
-          url: run.resultUrl,
           kind: "image",
+          url: run.resultUrl,
         });
       }
       handlersRef.current.onSettled(run.taskId, { ok: true });
@@ -143,8 +143,8 @@ export function useWorkflowRunResume({
     }
     if (run.status === "failed") {
       handlersRef.current.onSettled(run.taskId, {
-        ok: false,
         message: run.errorMessage,
+        ok: false,
       });
       return;
     }
@@ -153,9 +153,9 @@ export function useWorkflowRunResume({
      * 「生成中」视角，而不是等下一个进度帧才知道有这么一次运行。 */
     handlersRef.current.onProgress(run.taskId, run.progress ?? 0);
     return watchWorkflowRun(run.taskId, {
-      onProgress: (taskId, pct, node) => handlersRef.current.onProgress(taskId, pct, node),
       onLog: (taskId, entry) => handlersRef.current.onLog(taskId, entry),
       onOutput: (taskId, output) => handlersRef.current.onOutput(taskId, output),
+      onProgress: (taskId, pct, node) => handlersRef.current.onProgress(taskId, pct, node),
       onSettled: (taskId, result) => handlersRef.current.onSettled(taskId, result),
     });
   }, [workflowId, source]);

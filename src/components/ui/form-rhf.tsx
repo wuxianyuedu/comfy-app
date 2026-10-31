@@ -66,7 +66,7 @@ const FormItemContext = React.createContext<FormItemContextValue>(
 function useFormField() {
   const fieldContext = React.useContext(FormFieldContext);
   const itemContext = React.useContext(FormItemContext);
-  const { getFieldState, formState } = useFormContext();
+  const { formState, getFieldState } = useFormContext();
 
   const fieldState = getFieldState(fieldContext.name, formState);
 
@@ -77,11 +77,11 @@ function useFormField() {
   const { id } = itemContext;
 
   return {
+    formDescriptionId: `${id}-form-item-description`,
+    formItemId: `${id}-form-item`,
+    formMessageId: `${id}-form-item-message`,
     id,
     name: fieldContext.name,
-    formItemId: `${id}-form-item`,
-    formDescriptionId: `${id}-form-item-description`,
-    formMessageId: `${id}-form-item-message`,
     ...fieldState,
   };
 }
@@ -110,15 +110,15 @@ function FormLabel({ className, ...props }: React.ComponentProps<typeof Label>) 
 }
 
 function FormControl(props: React.PropsWithChildren) {
-  const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
+  const { error, formDescriptionId, formItemId, formMessageId } = useFormField();
 
   const child = /* SAFETY: 类型断言已复核 */ React.Children.only(
     props.children,
   ) as React.ReactElement<Record<string, unknown>>;
   return React.cloneElement(child, {
-    id: formItemId,
     "aria-describedby": !error ? `${formDescriptionId}` : `${formDescriptionId} ${formMessageId}`,
     "aria-invalid": !!error,
+    id: formItemId,
   });
 }
 

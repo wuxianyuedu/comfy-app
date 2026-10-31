@@ -29,10 +29,10 @@ export type WorkflowModesController = {
 };
 
 export function useWorkflowModes({
-  workflowId,
   modes,
-  setModes,
   onFailed,
+  setModes,
+  workflowId,
 }: UseWorkflowModesArgs): WorkflowModesController {
   const saveModes = useCallback(
     async (next: WorkflowModesState) => {
@@ -42,13 +42,13 @@ export function useWorkflowModes({
       setModes(next);
       try {
         await patchWorkflow({
+          defaultMode: next.defaultMode,
           id: workflowId,
           modes: next.modes,
-          defaultMode: next.defaultMode,
         });
       } catch (err) {
         // 回滚本地状态，避免出现「僵尸模式章」
-        setModes(modes ?? { modes: [], defaultMode: null });
+        setModes(modes ?? { defaultMode: null, modes: [] });
         onFailed(errorMessage(err, "保存模式失败，请重试"));
       }
     },

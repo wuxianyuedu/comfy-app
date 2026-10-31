@@ -23,9 +23,9 @@ function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
 function DropdownMenuContent({
   align = "start",
   alignOffset = 0,
+  className,
   side = "bottom",
   sideOffset = 4,
-  className,
   ...props
 }: MenuPrimitive.Popup.Props &
   Pick<MenuPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
@@ -106,9 +106,9 @@ function DropdownMenuSub({ ...props }: MenuPrimitive.SubmenuRoot.Props) {
 }
 
 function DropdownMenuSubTrigger({
+  children,
   className,
   inset,
-  children,
   ...props
 }: MenuPrimitive.SubmenuTrigger.Props & {
   inset?: boolean;
@@ -132,9 +132,9 @@ function DropdownMenuSubTrigger({
 function DropdownMenuSubContent({
   align = "start",
   alignOffset = -3,
+  className,
   side = "right",
   sideOffset = 0,
-  className,
   ...props
 }: React.ComponentProps<typeof DropdownMenuContent>) {
   return (
@@ -154,9 +154,9 @@ function DropdownMenuSubContent({
 }
 
 function DropdownMenuCheckboxItem({
-  className,
-  children,
   checked,
+  children,
+  className,
   inset,
   ...props
 }: MenuPrimitive.CheckboxItem.Props & {
@@ -191,8 +191,8 @@ function DropdownMenuRadioGroup({ ...props }: MenuPrimitive.RadioGroup.Props) {
 }
 
 function DropdownMenuRadioItem({
-  className,
   children,
+  className,
   inset,
   ...props
 }: MenuPrimitive.RadioItem.Props & {

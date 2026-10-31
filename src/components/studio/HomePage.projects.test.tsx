@@ -16,23 +16,23 @@ import { HomePage, type RecentProject } from "./HomePage";
    项目区，逐个换成静默桩。 */
 vi.mock("./hooks/use-comfy-readiness", () => ({
   useComfyReadiness: () => ({
-    stats: null,
-    online: false,
     connecting: false,
-    stale: false,
     cudaVram: null,
-    smiVram: null,
-    ram: null,
     degradedNote: "ComfyUI 未运行，显存/内存暂不可用",
+    online: false,
+    ram: null,
+    smiVram: null,
+    stale: false,
+    stats: null,
   }),
 }));
 vi.mock("./hooks/use-model-overview", () => ({
   useModelOverview: () => ({
-    groups: [],
-    total: 0,
     emptyFolderCount: 0,
-    loading: false,
     error: null,
+    groups: [],
+    loading: false,
+    total: 0,
   }),
 }));
 
@@ -44,10 +44,10 @@ afterEach(() => {
 function project(over: Partial<RecentProject> = {}): RecentProject {
   return {
     id: "p1",
-    name: "山与海",
-    updatedAt: "2 小时前",
     kind: "canvas",
+    name: "山与海",
     subtitle: "12 节点",
+    updatedAt: "2 小时前",
     ...over,
   };
 }
@@ -81,9 +81,9 @@ describe("HomePage 项目区", () => {
              只有它能暴露「栅格绕过共用规则、自己又写一遍三元式」。实测把
              onClick 换成 `onOpenProject?.(proj.id)` 之后，原来那版夹具（栅格里
              只有非画布项）四条全绿 —— 那等于没在判这件事。 */
-          project({ id: "c1", name: "画布大卡那条", kind: "canvas" }),
-          project({ id: "c2", name: "画布栅格那条", kind: "canvas" }),
-          project({ id: "g1", name: "生成那条", kind: "generation" }),
+          project({ id: "c1", kind: "canvas", name: "画布大卡那条" }),
+          project({ id: "c2", kind: "canvas", name: "画布栅格那条" }),
+          project({ id: "g1", kind: "generation", name: "生成那条" }),
         ]}
       />,
     );

@@ -13,9 +13,9 @@ import { Textarea } from "~/components/ui/textarea";
  * 3. **`disabled` / 长短文案**的排版：`md:text-sm` 让桌面比移动端小一档。
  */
 const meta = {
-  title: "UI/Textarea",
+  args: { "aria-label": "提示词", placeholder: "写点什么…" },
   component: Textarea,
-  args: { placeholder: "写点什么…", "aria-label": "提示词" },
+  title: "UI/Textarea",
 } satisfies Meta<typeof Textarea>;
 
 export default meta;

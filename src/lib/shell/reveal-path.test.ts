@@ -33,8 +33,8 @@ function installFakeChild(errorCode?: string) {
       on: (ev: string, cb: Cb) => {
         (handlers[ev] ??= []).push(cb);
       },
-      unref: vi.fn(),
       pid: 4242,
+      unref: vi.fn(),
     };
     setTimeout(() => {
       if (errorCode) {
@@ -186,7 +186,7 @@ describe("命令与参数形态", () => {
       expect(args.at(-1)).toBe(tmp);
       expect(args.at(-1)).not.toContain("/select");
     } finally {
-      rmSync(tmp, { recursive: true, force: true });
+      rmSync(tmp, { force: true, recursive: true });
     }
   });
 });

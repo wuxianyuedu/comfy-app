@@ -36,17 +36,17 @@ type WidgetControlProps = {
 };
 
 export function WidgetControl({
-  entry,
-  label,
-  value,
   compact,
   disabled,
-  uploading,
-  seedMode,
+  entry,
+  label,
+  onPickFile,
   onSeedModeChange,
   onValueChange,
-  onPickFile,
   previewSrc,
+  seedMode,
+  uploading,
+  value,
 }: WidgetControlProps) {
   /* 标记必填但仍为空 → 红框，提醒作者补齐后再发布。 */
   const missingRequired = !!entry.required && !isInputFilled(value);

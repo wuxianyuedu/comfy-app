@@ -81,18 +81,18 @@ export type ComfyStatsSnapshot = {
 
 const OFFLINE_STATS: ComfyStatsPayload = {
   online: false,
-  vramUsed: 0,
+  ramTotal: 0,
+  ramUsed: 0,
   vramFree: 0,
   vramTotal: 0,
-  ramUsed: 0,
-  ramTotal: 0,
+  vramUsed: 0,
 };
 
 let snapshot: ComfyStatsSnapshot = {
-  stats: null,
+  crashed: false,
   online: false,
   stale: false,
-  crashed: false,
+  stats: null,
 };
 
 /**
@@ -174,14 +174,14 @@ function recordMissedObservation(): void {
   feedLiveness(false);
   if (observeOnline(false)) {
     publish({
-      stats: snapshot.stats,
+      crashed,
       online: snapshot.stats?.online === true,
       stale: true,
-      crashed,
+      stats: snapshot.stats,
     });
     return;
   }
-  publish({ stats: OFFLINE_STATS, online: false, stale: false, crashed });
+  publish({ crashed, online: false, stale: false, stats: OFFLINE_STATS });
 }
 
 /** 把判活判决折算进 `crashed`（只在翻转时改，避免每拍都新建快照）。 */
@@ -222,7 +222,7 @@ async function pollOnce(): Promise<void> {
   if (next.online) {
     feedLiveness(true);
     observeOnline(true);
-    publish({ stats: next, online: true, stale: false, crashed });
+    publish({ crashed, online: true, stale: false, stats: next });
     return;
   }
   /* 进程活着、只是这一拍没应答（跑图满载）：这不是「掉线」观测——不计入连续失败
@@ -235,9 +235,9 @@ async function pollOnce(): Promise<void> {
       /* 「在线结论保持」= 直接写 `true`。此前这里是 `processAlive || …`，而上一行
          刚把那个模块级标志置真，右操作数永远求不到 —— 一个永不可达的分支把这条
          门槛挂在死式上（v8 实测这一支分支覆盖 95.23%，空缺就是它）。 */
+      crashed,
       online: true,
       stale: snapshot.stats !== null,
-      crashed,
     });
     return;
   }
@@ -273,10 +273,10 @@ function verifyOnce(): void {
 /** 此刻的阶段（存活判据侧）。 */
 function currentPhase(): ReturnType<typeof classifyLivenessPhase> {
   return classifyLivenessPhase({
-    up: snapshot.online,
-    starting: startingSince !== null,
     busy: getComfyBusy(),
     hidden: typeof document !== "undefined" && document.visibilityState !== "visible",
+    starting: startingSince !== null,
+    up: snapshot.online,
     verifying,
   });
 }
@@ -381,7 +381,7 @@ export function resetComfyStatsStoreForTest(): void {
   startingSince = null;
   verifying = false;
   crashed = false;
-  snapshot = { stats: null, online: false, stale: false, crashed: false };
+  snapshot = { crashed: false, online: false, stale: false, stats: null };
 }
 
 /** 此刻的阶段与下一拍间隔（只给用例：把「按阶段给频率」这张表钉在用例里）。
@@ -393,5 +393,5 @@ export function getComfyLivenessForTest(): {
   intervalMs: number;
   phase: ReturnType<typeof classifyLivenessPhase>;
 } {
-  return { phase: currentPhase(), intervalMs: nextIntervalMs(), crashed };
+  return { crashed, intervalMs: nextIntervalMs(), phase: currentPhase() };
 }

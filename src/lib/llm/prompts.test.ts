@@ -22,7 +22,7 @@ import {
 describe("buildScriptMarkdownMessages", () => {
   it("项目类型 / 基调 / 梗概 / 灵感都进 user 消息，system 是剧本规范", () => {
     const [system, user] = buildScriptMarkdownMessages(
-      { type: "micro_film", tone: "悬疑", logline: "一句话梗概" },
+      { logline: "一句话梗概", tone: "悬疑", type: "micro_film" },
       "一段灵感",
     );
     expect(system!.role).toBe("system");
@@ -34,7 +34,7 @@ describe("buildScriptMarkdownMessages", () => {
 
   it("基调与梗概留空时用可读占位，不留下空行或 undefined", () => {
     const [, user] = buildScriptMarkdownMessages(
-      { type: "micro_film", tone: "", logline: "" },
+      { logline: "", tone: "", type: "micro_film" },
       "idea",
     );
     expect(user!.content).not.toContain("undefined");
@@ -46,8 +46,8 @@ describe("buildScriptMarkdownMessages", () => {
 describe("buildCharacterMessages", () => {
   it("只带已有信息，空字段不占位", () => {
     const [, user] = buildCharacterMessages({
-      name: "阿离",
       appearance: "短发",
+      name: "阿离",
     });
     expect(user!.content).toContain("阿离");
     expect(user!.content).toContain("短发");
@@ -124,11 +124,11 @@ describe("buildStoryboardMessages", () => {
   it("场景信息与角色名单进 user 消息", () => {
     const [, user] = buildStoryboardMessages(
       {
+        action: "奔跑",
+        dialogue: "快跑",
         heading: "场景1",
         location: "天台",
         time: "夜",
-        action: "奔跑",
-        dialogue: "快跑",
       },
       ["阿离", "老张"],
       "写实",
@@ -140,7 +140,7 @@ describe("buildStoryboardMessages", () => {
 
   it("无角色 / 无风格时给出可读占位", () => {
     const [, user] = buildStoryboardMessages(
-      { heading: "h", location: "l", time: "t", action: "a", dialogue: "d" },
+      { action: "a", dialogue: "d", heading: "h", location: "l", time: "t" },
       [],
     );
     expect(user!.content).toContain("（无）");
@@ -154,7 +154,7 @@ describe("parseStoryboard", () => {
     const got = parseStoryboard(
       '[{"shotType":"close","description":"特写","characterNames":["阿离"]}]',
     );
-    expect(got).toEqual([{ shotType: "close", description: "特写", characterNames: ["阿离"] }]);
+    expect(got).toEqual([{ characterNames: ["阿离"], description: "特写", shotType: "close" }]);
   });
 
   it("越界景别回落到 medium（不把非法值透给下游）", () => {
@@ -198,11 +198,11 @@ describe("buildCharacterFromBriefMessages", () => {
 
 describe("buildReviewMessages", () => {
   const ctx = {
-    title: "夜班车",
-    type: "微电影",
-    tone: "冷峻",
     logline: "司机与乘客",
     scriptExcerpt: "Δ 司机点烟",
+    title: "夜班车",
+    tone: "冷峻",
+    type: "微电影",
   };
   it("system 是评审规范；user 带创作上下文 + 待评审内容 + 实体名", () => {
     const [system, user] = buildReviewMessages("分镜镜头", "空荡的路", ctx);
@@ -216,11 +216,11 @@ describe("buildReviewMessages", () => {
   });
   it("空字段兜底（未命名 / 未指定 / 无）", () => {
     const [, user] = buildReviewMessages("角色卡", "设定", {
-      title: "",
-      type: "",
-      tone: "",
       logline: "",
       scriptExcerpt: "",
+      title: "",
+      tone: "",
+      type: "",
     });
     expect(user!.content).toContain("未命名");
     expect(user!.content).toContain("剧本节选：\n（无）");
@@ -243,11 +243,11 @@ describe("buildReviewMessages", () => {
 
 describe("buildScriptReviewMessages", () => {
   const ctx = {
-    title: "夜班车",
-    type: "微电影",
-    tone: "冷峻",
     logline: "司机与乘客",
     scriptExcerpt: "",
+    title: "夜班车",
+    tone: "冷峻",
+    type: "微电影",
   };
   it("system 是剧本评审规范；user 带项目信息与完整剧本", () => {
     const [system, user] = buildScriptReviewMessages("## 场景1", ctx);
@@ -266,22 +266,22 @@ describe("buildScriptReviewMessages", () => {
 
 describe("buildScriptRevisionMessages", () => {
   const ctx = {
-    title: "夜班车",
-    type: "微电影",
-    tone: "冷峻",
     logline: "司机与乘客",
     scriptExcerpt: "",
+    title: "夜班车",
+    tone: "冷峻",
+    type: "微电影",
   };
   it("system 是定向改写规范；user 带当前剧本 + 缺陷 + 低分维度（带依据）+ 建议", () => {
     const [system, user] = buildScriptRevisionMessages(
       "## 场景1",
       {
         issues: ["高潮缺失"],
-        suggestion: "补一场对峙",
         lowScores: [
-          { key: "structure", score: 2, note: "无高潮" },
-          { key: "pacing", score: 3, note: "推进平" },
+          { key: "structure", note: "无高潮", score: 2 },
+          { key: "pacing", note: "推进平", score: 3 },
         ],
+        suggestion: "补一场对峙",
       },
       ctx,
     );
@@ -297,7 +297,7 @@ describe("buildScriptRevisionMessages", () => {
   it("无缺陷 / 无低分维度 / 无建议 → 可读占位，不产出 undefined", () => {
     const [, user] = buildScriptRevisionMessages(
       "",
-      { issues: [], suggestion: "", lowScores: [] },
+      { issues: [], lowScores: [], suggestion: "" },
       ctx,
     );
     expect(user!.content).toContain("（空）");
@@ -310,11 +310,11 @@ describe("buildScriptRevisionMessages", () => {
 
 describe("buildShotRepromptMessages", () => {
   const ctx = {
-    title: "",
-    type: "动画",
-    tone: "温暖",
     logline: "",
     scriptExcerpt: "旁白",
+    title: "",
+    tone: "温暖",
+    type: "动画",
   };
   it("原提示词 + 缺陷清单 + 建议都进 user，system 是改写规范", () => {
     const [system, user] = buildShotRepromptMessages(
@@ -338,11 +338,11 @@ describe("buildShotRepromptMessages", () => {
 describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
   it("user 消息用内容块数组：文本上下文在前，图在后（镜头图 + 定妆照都进 image_url）", () => {
     const msgs = buildShotImageReviewMessages({
+      characterNames: ["司机"],
       imageUrl: "/shot.png",
       portraitUrls: ["/p1.png", "/p2.png"],
       prompt: "雨中司机",
       shotType: "中景",
-      characterNames: ["司机"],
     });
     expect(msgs).toHaveLength(2);
     expect(msgs[0]!.role).toBe("system");
@@ -365,11 +365,11 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
 
   it("没有定妆照时只带镜头图一张", () => {
     const content = /* SAFETY: 类型断言已复核 */ buildShotImageReviewMessages({
+      characterNames: [],
       imageUrl: "/shot.png",
       portraitUrls: [],
       prompt: "x",
       shotType: "",
-      characterNames: [],
     })[1]!.content as Array<{ image_url?: { url: string }; type: string }>;
     const imageUrls = content.filter((p) => p.type === "image_url").map((p) => p.image_url!.url);
     expect(imageUrls).toEqual(["/shot.png"]);
@@ -378,11 +378,11 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
   it("传生图 rubric 文本时，system 追加维度评分要求", () => {
     const system = /* SAFETY: 类型断言已复核 */ buildShotImageReviewMessages(
       {
+        characterNames: [],
         imageUrl: "/s",
         portraitUrls: [],
         prompt: "x",
         shotType: "",
-        characterNames: [],
       },
       "维度要求文本",
     )[0]!.content as string;

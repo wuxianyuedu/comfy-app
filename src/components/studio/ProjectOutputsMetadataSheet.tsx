@@ -24,10 +24,10 @@ import type { ProjectOutputItem } from "./hooks/use-project-outputs";
 
 /** 任务类型 → 中文徽标文案（网格卡片与元数据抽屉同一份）。 */
 export const TYPE_CHIP: Record<string, string> = {
-  TXT2IMG: "文生图",
+  HIRERES: "高清放大",
   IMG2IMG: "图生图",
   INPAINT: "局部重绘",
-  HIRERES: "高清放大",
+  TXT2IMG: "文生图",
   VIDEO: "视频",
 };
 
@@ -44,13 +44,13 @@ export type ProjectOutputsMetadataSheetProps = {
 };
 
 export function ProjectOutputsMetadataSheet({
-  selected,
-  projectId,
   copyFailed,
   copySucceeded,
+  onClose,
   onCopy,
   onExport,
-  onClose,
+  projectId,
+  selected,
 }: ProjectOutputsMetadataSheetProps) {
   return (
     <>

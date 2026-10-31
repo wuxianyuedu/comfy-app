@@ -19,14 +19,14 @@ vi.mock("../app-settings/app-settings.server", () => ({
 }));
 vi.mock("./launch-path", () => ({
   resolveComfyLaunchPlan: vi.fn().mockReturnValue({
-    cmd: "python",
     baseArgs: ["-s", "/x/main.py"],
+    cmd: "python",
     cwd: "/x",
     mainPy: "/x/main.py",
   }),
 }));
 vi.mock("./proc-detect", () => ({
-  findPidForMainPyDetailed: vi.fn().mockResolvedValue({ pid: null, failed: false }),
+  findPidForMainPyDetailed: vi.fn().mockResolvedValue({ failed: false, pid: null }),
   findPidListeningPort: vi.fn().mockResolvedValue(null),
 }));
 /* runEnsureLaunch 的端口冲突用例需要封闭的探测面：./probe（快照的端口探测）、
@@ -36,14 +36,14 @@ vi.mock("./proc-detect", () => ({
  * 会拉起 ~/lib/core/logger → app-runtime-log → log-paths 的整条链，而本文件对
  * log-paths 的 mock 只给了 SERVICES_LOG_DIR（本文件的用例用不到别的导出）。 */
 vi.mock("./client", () => ({
-  probeComfyBase: vi.fn().mockResolvedValue(null),
   probeComfyAtPort: vi.fn().mockResolvedValue(null),
-  resolveComfyBase: vi.fn().mockRejectedValue(new Error("not running")),
+  probeComfyBase: vi.fn().mockResolvedValue(null),
   resetComfyBase: vi.fn(),
+  resolveComfyBase: vi.fn().mockRejectedValue(new Error("not running")),
 }));
 vi.mock("./probe", () => ({
-  probeComfyAtPort: vi.fn().mockResolvedValue(null),
   probeBaseOnce: vi.fn().mockResolvedValue(null),
+  probeComfyAtPort: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("./status", () => ({
   getComfyRuntimeSnapshot: vi.fn(),
@@ -80,14 +80,14 @@ import {
 
 function fakeHost(): LaunchHost {
   return {
-    st: { stopRequested: false },
     appendRuntimeLog: vi.fn(),
     beginRuntimeSession: () => "/tmp/comfyui-runtime-test.log",
     clearComfyStopping: vi.fn(),
     localTimestamp: () => "stamp",
-    markSessionStart: vi.fn(),
     markSessionEnd: vi.fn(),
+    markSessionStart: vi.fn(),
     probeComfyUi: vi.fn().mockResolvedValue("http://127.0.0.1:8188"),
+    st: { stopRequested: false },
   };
 }
 
@@ -104,8 +104,8 @@ function lastWatcherDeps(): WatcherDeps | undefined {
 function arm(h: LaunchHost): void {
   ensureKeepAliveWatchOnAdoption({
     host: h,
-    settings: getSettingsSync(),
     note: vi.fn(),
+    settings: getSettingsSync(),
   });
 }
 
@@ -270,13 +270,13 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     const { getComfyRuntimeSnapshot } = await import("./status");
     vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
-        running: true,
+        didQueryProcTable: true,
         pid: 97356,
         port: 8188,
-        via: "配置路径的实例",
-        unverified: false,
-        didQueryProcTable: true,
+        running: true,
         source: "process",
+        unverified: false,
+        via: "配置路径的实例",
       } as never,
     );
 
@@ -285,24 +285,24 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     /* 探针编排：等待循环第 1 轮（还没读到冲突行之前）应答 null → 置冲突标记；
      * 第 2 轮 earlyExit 中止并转接管 —— 此后实例应答，接管成功。 */
     const host: LaunchHost = {
-      st: { stopRequested: false },
       appendRuntimeLog: vi.fn(),
       beginRuntimeSession: () => "/tmp/comfyui-runtime-test.log",
       clearComfyStopping: vi.fn(),
       localTimestamp: () => "stamp",
-      markSessionStart: vi.fn(),
       markSessionEnd: vi.fn(),
+      markSessionStart: vi.fn(),
       probeComfyUi: vi.fn().mockResolvedValueOnce(null).mockResolvedValue("http://127.0.0.1:8188"),
+      st: { stopRequested: false },
     };
 
     const r = await runEnsureLaunch({
       host,
+      note: (msg) => notes.push(msg),
       settings: getSettingsSync(),
       timeoutMs: 30_000,
-      note: (msg) => notes.push(msg),
     });
 
-    expect(r.ok, JSON.stringify({ r, notes })).toBe(true);
+    expect(r.ok, JSON.stringify({ notes, r })).toBe(true);
     expect(r.detail).toContain("接管");
     // 关键：没有为「接管」再 spawn 第二个进程
     expect(vi.mocked(spawnManaged)).toHaveBeenCalledTimes(1);

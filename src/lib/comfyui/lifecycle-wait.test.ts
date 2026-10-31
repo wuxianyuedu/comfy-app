@@ -19,17 +19,17 @@ describe("waitForComfyReady（单一等待循环 + 策略注入）", () => {
     const onReady = vi.fn();
     const r = await waitForComfyReady({
       deadline: null,
-      timeoutDetail: "超时",
-      readyDetail: "ComfyUI 已启动并就绪（保活模式）",
+      intervalMs: 1,
+      isDead: vi.fn().mockResolvedValue(null),
       onReady,
       probe: vi.fn().mockResolvedValue("http://127.0.0.1:8188"),
-      isDead: vi.fn().mockResolvedValue(null),
-      intervalMs: 1,
+      readyDetail: "ComfyUI 已启动并就绪（保活模式）",
+      timeoutDetail: "超时",
     });
     expect(r).toEqual({
-      ok: true,
       base: "http://127.0.0.1:8188",
       detail: "ComfyUI 已启动并就绪（保活模式）",
+      ok: true,
     });
     expect(onReady).toHaveBeenCalledWith("http://127.0.0.1:8188");
   });
@@ -38,11 +38,11 @@ describe("waitForComfyReady（单一等待循环 + 策略注入）", () => {
     const onDead = vi.fn();
     const r = await waitForComfyReady({
       deadline: null,
-      timeoutDetail: "超时",
+      intervalMs: 1,
+      isDead: vi.fn().mockResolvedValue("ComfyUI 启动失败：保活进程已退出。"),
       onDead,
       probe: vi.fn().mockResolvedValue(null),
-      isDead: vi.fn().mockResolvedValue("ComfyUI 启动失败：保活进程已退出。"),
-      intervalMs: 1,
+      timeoutDetail: "超时",
     });
     expect(r.ok).toBe(false);
     expect(r.detail).toBe("ComfyUI 启动失败：保活进程已退出。");
@@ -53,11 +53,11 @@ describe("waitForComfyReady（单一等待循环 + 策略注入）", () => {
     const probe = vi.fn().mockResolvedValue(null);
     const r = await waitForComfyReady({
       deadline: null,
-      timeoutDetail: "超时",
-      earlyExit: () => ({ ok: false, base: null, detail: "已手动关闭" }),
-      probe,
-      isDead: vi.fn().mockResolvedValue(null),
+      earlyExit: () => ({ base: null, detail: "已手动关闭", ok: false }),
       intervalMs: 1,
+      isDead: vi.fn().mockResolvedValue(null),
+      probe,
+      timeoutDetail: "超时",
     });
     expect(r.detail).toBe("已手动关闭");
     expect(probe).not.toHaveBeenCalled();
@@ -72,10 +72,10 @@ describe("waitForComfyReady（单一等待循环 + 策略注入）", () => {
     });
     const r = await waitForComfyReady({
       deadline: 1000,
-      timeoutDetail: "comfyui 启动超过 10s 仍未就绪",
-      probe,
-      isDead: vi.fn().mockResolvedValue(null),
       intervalMs: 1,
+      isDead: vi.fn().mockResolvedValue(null),
+      probe,
+      timeoutDetail: "comfyui 启动超过 10s 仍未就绪",
     });
     nowSpy.mockRestore();
     expect(r.ok).toBe(false);
@@ -100,8 +100,8 @@ describe("createOutputSink（事件回调用具名函数 + 显式依赖）", () 
     const logs: Array<string> = [];
     const sink = createOutputSink({
       appendRuntimeLog: (l) => logs.push(l),
-      pushRecent: () => undefined,
       maxLineChars: 3,
+      pushRecent: () => undefined,
     });
     sink("abcdef");
     expect(logs[0]).toBe("[out] abc");
@@ -132,29 +132,29 @@ describe("createChildExitHandler（退出回调可单测）", () => {
     const logs: Array<string> = [];
     let cleared = 0;
     const onExit = createChildExitHandler({
-      subject: over.subject ?? "ComfyUI",
       appendRuntimeLog: (l) => {
         lines.push(l);
         if (l.startsWith("■")) {
           over.onBanner?.(l);
         }
       },
-      log: (m) => logs.push(m),
       clearChild: () => {
         cleared++;
       },
       context: () => ({
-        pid: 4242,
-        uptimeMs: 137_000,
-        stopRequested: over.stopRequested ?? false,
         mode: "bound",
+        pid: 4242,
+        stopRequested: over.stopRequested ?? false,
+        uptimeMs: 137_000,
       }),
+      log: (m) => logs.push(m),
+      subject: over.subject ?? "ComfyUI",
     });
     return {
-      onExit,
+      cleared: () => cleared,
       lines,
       logs,
-      cleared: () => cleared,
+      onExit,
       /* 「横幅」在实现里是写进 runtime 文件的第一条 —— 这里按同一个形状取，
        * 让各条断言保持「读一条日志行」的语义（一次启动一份文件之后没有独立的
        * 横幅出口）。 */

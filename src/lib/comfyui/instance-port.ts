@@ -47,12 +47,12 @@ export type InstanceQuery = {
 /** 空结果（未配置路径 / 一条判据都问不到）。 */
 function noProcess(extra: Partial<InstanceQuery> = {}): InstanceQuery {
   return {
-    running: false,
     pid: null,
     port: null,
+    running: false,
     source: null,
-    via: null,
     unverified: false,
+    via: null,
     ...extra,
   };
 }
@@ -96,19 +96,19 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
   if (registered) {
     candidates.push({
       cmd: registered,
-      via: "setup 中登记的启动器",
       source: "launcher",
+      via: "setup 中登记的启动器",
     });
   }
   if (!("error" in plan)) {
     for (const cmd of launcherCommandCandidates(plan.cmd)) {
-      candidates.push({ cmd, via: "配置路径的解释器", source: "process" });
+      candidates.push({ cmd, source: "process", via: "配置路径的解释器" });
     }
   }
   // ③ 环境反查：standalone-env 的解释器常由 uv 托管（不在实例根），
   //    顺 pyvenv.cfg 的 home/executable 与 uv 目录反推（见 env-python.ts）。
   for (const c of collectComfyPythonCandidates(classify.instanceRoot ?? root)) {
-    candidates.push({ cmd: c.exe, via: c.via, source: "any" });
+    candidates.push({ cmd: c.exe, source: "any", via: c.via });
   }
 
   // 候选**并发**查进程表：它们是「同一件事的几种问法」，彼此无依赖；串行
@@ -143,12 +143,12 @@ async function withPort(
   via: string,
 ): Promise<InstanceQuery> {
   return {
-    running: true,
     pid,
     port: await findPidListeningPort(pid),
+    running: true,
     source,
-    via,
     unverified: false,
+    via,
   };
 }
 

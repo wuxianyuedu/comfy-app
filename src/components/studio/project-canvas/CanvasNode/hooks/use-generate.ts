@@ -49,16 +49,16 @@ export type UseGenerateArgs = {
 };
 
 export function useGenerate({
-  id,
   d,
-  patch,
-  wfIO,
-  wfParamMap,
-  wfMode,
-  setNodes,
-  setEdges,
   getNode,
+  id,
+  patch,
   screenToFlowPosition,
+  setEdges,
+  setNodes,
+  wfIO,
+  wfMode,
+  wfParamMap,
 }: UseGenerateArgs) {
   /* 挂载时对账 —— 若节点带着陈旧的 `status="running"` 被
    *  加载（例如生成进行中 dev server 重启了，或用户在运行中
@@ -93,18 +93,18 @@ export function useGenerate({
         if (t.status === "SUCCEEDED") {
           guard.commit(() =>
             patch({
-              status: "done",
               error: undefined,
               progress: 100,
+              status: "done",
               ...(t.resultImages ? { resultImages: t.resultImages } : {}),
             }),
           );
         } else if (t.status === "FAILED" || t.status === "CANCELLED") {
           guard.commit(() =>
             patch({
-              status: "error",
               error: t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
               progress: 0,
+              status: "error",
             }),
           );
         }
@@ -134,17 +134,17 @@ export function useGenerate({
        *  覆盖层从底部起步，不受上一轮残留值
        *  影响。pollTask 的 onProgress 会随
        *  后端上报的 task.progress 把它顶上去。 */
-      patch({ status: "running", error: undefined, progress: 0 });
+      patch({ error: undefined, progress: 0, status: "running" });
       /* 把 `payload` 提到外层，好让 catch 块也能把
        *  请求快照进 errorContext。try 块赋值前它是 `null`。 */
       let payload: GenerateInput | null = null;
       try {
         payload = buildCanvasGeneratePayload({
           d,
-          wfIO,
-          wfParamMap,
-          wfMode,
           projectId: getActiveId(),
+          wfIO,
+          wfMode,
+          wfParamMap,
         });
         const taskId = await startGenerate(payload);
         patch({ taskId });
@@ -161,16 +161,16 @@ export function useGenerate({
               imported = null;
             }
             patch({
-              status: "done",
-              resultPath: result.localPath,
-              resultMediaType: result.mediaType,
-              mediaPath: imported ?? result.localPath.split("/").pop() ?? "",
               mediaName: d.workflowName ?? "生成结果",
+              mediaPath: imported ?? result.localPath.split("/").pop() ?? "",
+              resultMediaType: result.mediaType,
+              resultPath: result.localPath,
+              status: "done",
             });
             emitAppEvent("canvas:produce", {
               id,
-              resultPath: result.localPath,
               resultMediaType: result.mediaType,
+              resultPath: result.localPath,
             });
             return;
           }
@@ -199,15 +199,15 @@ export function useGenerate({
             const sinkData = isVideoOut
               ? {
                   ...defaultData("video"),
-                  resultPath: result.localPath,
                   resultMediaType: result.mediaType,
+                  resultPath: result.localPath,
                 }
               : {
                   ...defaultData("image"),
-                  resultPath: result.localPath,
-                  resultMediaType: result.mediaType,
                   inputImage: imported ?? null,
                   mode: imported ? "img2img" : "txt2img",
+                  resultMediaType: result.mediaType,
+                  resultPath: result.localPath,
                 };
             /* 节点 id 由出口生成 —— 先在本地算一份，好让紧接着的自动连线
              * 用同一个 id（出口的 `placeCanvasNode` 只吃「已经定好的 id」
@@ -215,11 +215,11 @@ export function useGenerate({
             const nid = makeNodeId();
             setNodes((nds) =>
               placeCanvasNode({
-                nodes: nds,
-                id: nid,
-                flowPosition: { x: base.x + 340, y: base.y },
-                flow: { screenToFlowPosition },
                 data: /* SAFETY: 类型断言已复核 */ sinkData as CanvasNodeData,
+                flow: { screenToFlowPosition },
+                flowPosition: { x: base.x + 340, y: base.y },
+                id: nid,
+                nodes: nds,
               }),
             );
             setEdges((eds) => [
@@ -235,22 +235,22 @@ export function useGenerate({
             sinkId = nid;
           }
           patch({
-            status: "done",
-            resultPath: result.localPath,
             resultMediaType: result.mediaType,
+            resultPath: result.localPath,
+            status: "done",
             workflowSinkId: sinkId,
           });
           emitAppEvent("canvas:produce", {
             id,
-            resultPath: result.localPath,
             resultMediaType: result.mediaType,
+            resultPath: result.localPath,
           });
         } else {
           patch({
-            status: "error",
             error: result.error,
-            taskId: result.taskId,
             errorStatus: result.status,
+            status: "error",
+            taskId: result.taskId,
             /* 结构化校验错误落节点数据，错误面板渲染逐字段列表 */
             validationErrors: result.validationErrors,
             /* 失败面板要展示「执行了什么」 */
@@ -262,12 +262,12 @@ export function useGenerate({
         }
       } catch (e: unknown) {
         patch({
-          status: "error",
           error: errorMessage(e, "生成失败"),
           errorContext: {
             request: payload,
             timestamp: new Date().toISOString(),
           },
+          status: "error",
         });
       }
       return;
@@ -294,49 +294,49 @@ export function useGenerate({
     const parsed = parseGenerateInput(req);
     if (!parsed.ok) {
       patch({
-        status: "error",
         error: parsed.message,
         errorContext: { request: req, timestamp: new Date().toISOString() },
+        status: "error",
       });
       return;
     }
     try {
-      patch({ status: "running", error: undefined });
+      patch({ error: undefined, status: "running" });
       const taskId = await startGenerate(parsed.input);
       patch({ taskId });
       setActiveTaskId(taskId, id);
       const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
       if (isTaskSuccess(result)) {
         patch({
-          status: "done",
-          resultPath: result.localPath,
           resultMediaType: result.mediaType,
+          resultPath: result.localPath,
+          status: "done",
         });
       } else {
         patch({
-          status: "error",
           error: result.error,
-          taskId: result.taskId,
           errorStatus: result.status,
+          status: "error",
+          taskId: result.taskId,
           /* 重试失败也带回结构化校验错误 */
-          validationErrors: result.validationErrors,
           errorContext: {
             request: result.params ?? req,
             timestamp: new Date().toISOString(),
           },
+          validationErrors: result.validationErrors,
         });
       }
     } catch (e: unknown) {
       patch({
-        status: "error",
         error: errorMessage(e, "生成失败"),
         errorContext: {
           request: req,
           timestamp: new Date().toISOString(),
         },
+        status: "error",
       });
     }
   };
 
-  return { runGenerate, retryGenerate };
+  return { retryGenerate, runGenerate };
 }

@@ -174,8 +174,8 @@ describe("SettingsShell", () => {
     /* 落点用 `behavior: "auto"`（瞬时）：平滑动画期间观察器会先报当前视图里
        那几节，高亮会闪一下再跳到位。 */
     expect(scrollIntoView).toHaveBeenCalledWith({
-      block: "start",
       behavior: "auto",
+      block: "start",
     });
     expect(scrollIntoView.mock.instances[0]).toBe(
       document.getElementById(sectionAnchorId("comfyui")),

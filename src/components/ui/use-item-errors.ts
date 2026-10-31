@@ -134,11 +134,11 @@ export function useItemErrors(keys?: ReadonlyArray<string>): ItemErrors {
 
   return useMemo(
     () => ({
+      clear,
+      clearAll,
       get,
       hasAny: Object.keys(visible).length > 0,
       report,
-      clear,
-      clearAll,
     }),
     [get, visible, report, clear, clearAll],
   );

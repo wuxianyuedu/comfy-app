@@ -61,8 +61,8 @@ describe("asCanvasNodeData — 唯一的数据收口点", () => {
   it("把 ReactFlow 的宽 data 收窄成严格声明（单点断言）", () => {
     const raw: unknown = {
       kind: "image",
-      status: "idle",
       prompt: "一只猫",
+      status: "idle",
       steps: 25,
     };
     const d = asCanvasNodeData(raw);

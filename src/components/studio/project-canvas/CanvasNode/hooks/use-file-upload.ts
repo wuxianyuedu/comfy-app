@@ -49,7 +49,7 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
     accept: "image/*,video/*",
     onPick: (f) => {
       void uploadMediaFile(f)
-        .then(({ name }) => patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined }))
+        .then(({ name }) => patch({ mediaName: f.name, mediaPath: name, upstreamId: undefined }))
         .catch((err: unknown) => patch({ error: errorMessage(err, "上传失败"), status: "error" }));
     },
   });
@@ -67,7 +67,7 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
   const onUploadFile = async (f: File) => {
     try {
       const { name } = await uploadMediaFile(f);
-      patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined });
+      patch({ mediaName: f.name, mediaPath: name, upstreamId: undefined });
     } catch (err: unknown) {
       patch({ error: errorMessage(err, "上传失败"), status: "error" });
     }
@@ -75,9 +75,9 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
 
   return {
     ImageInput: imagePicker.Input,
-    pickFile,
     MediaInput: mediaPicker.Input,
-    pickMedia,
     onUploadFile,
+    pickFile,
+    pickMedia,
   };
 }

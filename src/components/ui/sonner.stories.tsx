@@ -28,8 +28,8 @@ import { Toaster } from "~/components/ui/sonner";
  * 渲染消息的容器 —— 所以两者都要在，本 story 才能弹得出来。
  */
 const meta = {
-  title: "UI/Sonner",
   component: Toaster,
+  title: "UI/Sonner",
 } satisfies Meta<typeof Toaster>;
 
 export default meta;

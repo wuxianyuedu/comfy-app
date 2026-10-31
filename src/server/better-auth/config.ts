@@ -4,10 +4,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
 import { env } from "~/env";
 import { db } from "~/server/db";
-import {
-  authBaseUrlConfig,
-  authTrustedOrigins,
-} from "~/server/better-auth/origin-policy";
+import { authBaseUrlConfig, authTrustedOrigins } from "~/server/better-auth/origin-policy";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -24,12 +21,11 @@ export const auth = betterAuth({
   baseURL: authBaseUrlConfig(env.BETTER_AUTH_URL),
   // 显式可信 origin 名单（**顶掉** better-auth 按 allowedHosts 派生的那份，所以
   // 必须写全）：回环两个 host 形状 + 配置项给出的 origin。
-  trustedOrigins: authTrustedOrigins(env.BETTER_AUTH_URL),
   emailAndPassword: {
     enabled: true,
     // OWASP A07（认证失败）：强制一个真正有意义的最小密码长度。
-    minPasswordLength: 12,
     maxPasswordLength: 128,
+    minPasswordLength: 12,
   },
   socialProviders: {
     github: {
@@ -43,15 +39,16 @@ export const auth = betterAuth({
       // 要在公网部署上跑 OAuth，那一条要在 `BETTER_AUTH_URL` 给出固定 origin。
     },
   },
+  trustedOrigins: authTrustedOrigins(env.BETTER_AUTH_URL),
   // ── 生产级限流（OWASP A07 / A08）：auth 端点防暴破 ──────────
   rateLimit: {
-    enabled: true,
-    window: 10, // 秒
-    max: 100, // 每窗口最大请求
     customRules: {
-      "/sign-in/email": { window: 10, max: 5 }, // 登录更严
-      "/forget-password": { window: 60, max: 3 }, // 找回密码最严
+      "/forget-password": { max: 3, window: 60 }, // 找回密码最严
+      "/sign-in/email": { max: 5, window: 10 }, // 登录更严
     },
+    enabled: true,
+    max: 100, // 每窗口最大请求
+    window: 10, // 秒
   },
 });
 

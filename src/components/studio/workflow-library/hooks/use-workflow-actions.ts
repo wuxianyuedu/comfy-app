@@ -58,18 +58,18 @@ export type UseWorkflowActionsArgs = {
 
 export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   const {
-    setDeleting,
-    setPendingDelete,
-    setActionError,
+    createMut,
+    deleteMut,
+    load,
+    resyncMut,
     runBundle,
     runResync,
+    setActionError,
+    setDeleting,
+    setPendingDelete,
     setPendingLoading,
     setWorkflows,
-    load,
     updateMut,
-    deleteMut,
-    resyncMut,
-    createMut,
   } = args;
   const trpc = useTRPC();
   const queryClient = useQueryClient();
@@ -95,12 +95,12 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
        * 注入，所以这里换一个 `report`（出口只负责文案归一）。 */
       try {
         const result = await runAsyncAction(() => deleteMut.mutateAsync({ id }), {
+          failureText: "删除失败",
           report: (kind, detail) => {
             if (kind === "err") {
               setActionError(detail);
             }
           },
-          failureText: "删除失败",
         });
         if (result.ok) {
           setPendingDelete(null);
@@ -121,7 +121,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       setWorkflows((prev) =>
         prev.map((workflow) =>
           workflow.id === id
-            ? { ...workflow, modes, defaultMode, taskType: defaultMode }
+            ? { ...workflow, defaultMode, modes, taskType: defaultMode }
             : workflow,
         ),
       );
@@ -130,12 +130,12 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       const result = await runAsyncAction(
         () =>
           updateMut.mutateAsync({
+            defaultMode,
             id,
             modes,
-            defaultMode,
             taskType: defaultMode,
           }),
-        { report, failureText: "更新模式失败" },
+        { failureText: "更新模式失败", report },
       );
       /* 失败回滚：重新拉取列表，本地乐观更新的值被服务端真值替换。 */
       if (!result.ok) {
@@ -152,8 +152,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         prev.map((workflow) => (workflow.id === id ? { ...workflow, modelTags: names } : workflow)),
       );
       const result = await runAsyncAction(() => updateMut.mutateAsync({ id, modelTags: names }), {
-        report,
         failureText: "更新模型标签失败",
+        report,
       });
       if (!result.ok) {
         void load();
@@ -176,7 +176,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           await queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
           await queryClient.invalidateQueries(trpc.workflow.detailFull.queryFilter({ id }));
         },
-        { report, failureText: "更新参数映射失败" },
+        { failureText: "更新参数映射失败", report },
       );
     },
     [updateMut, trpc, queryClient, report],
@@ -192,7 +192,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           await queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
           await queryClient.invalidateQueries(trpc.workflow.detailFull.queryFilter({ id }));
         },
-        { report, failureText: "更新参数配置失败" },
+        { failureText: "更新参数配置失败", report },
       );
     },
     [updateMut, trpc, queryClient, report],
@@ -223,7 +223,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
             toast.success("已下载工作流", `${tpl.name ?? name}.json`);
             return true;
           },
-          { report, failureText: "下载失败" },
+          { failureText: "下载失败", report },
         );
         /* 忙标记由 `useItemAction` 的 `finally` 清（收口前这里是手写的
          * `setBundleBusy(null)`，漏一处就留下一个永不解除的忙标记）。 */
@@ -251,7 +251,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
             }
             return true;
           },
-          { report, failureText: "同步请求失败" },
+          { failureText: "同步请求失败", report },
         );
       });
     },
@@ -266,12 +266,12 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
       const result = await runAsyncAction(
         () =>
           createMut.mutateAsync({
-            sourcePath: pending.sourcePath,
             name: pending.name,
+            sourcePath: pending.sourcePath,
           }),
         {
-          report,
           failureText: "载入失败",
+          report,
           successText: `已载入「${pending.name}」`,
         },
       );
@@ -288,13 +288,13 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
   );
 
   return {
+    downloadJson,
     handleDelete,
-    patchModes,
+    handleLoadPending,
     patchModelTags,
+    patchModes,
     patchParamMap,
     patchWorkflowIO,
-    downloadJson,
     resyncWorkflow,
-    handleLoadPending,
   };
 }

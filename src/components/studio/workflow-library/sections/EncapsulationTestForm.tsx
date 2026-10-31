@@ -67,12 +67,12 @@ type EncapsulationTestFormProps = {
 };
 
 export function EncapsulationTestForm({
-  entries,
-  scene,
-  running,
   canRun,
-  runDisabledReason,
+  entries,
   onRun,
+  runDisabledReason,
+  running,
+  scene,
   uploadImage,
 }: EncapsulationTestFormProps) {
   /* 文本 / 图片口的值按契约口 id 存；尺寸与时长的值形状不同（对象 / 数字），
@@ -121,12 +121,12 @@ export function EncapsulationTestForm({
             setTexts((prev) => withExposedValue(prev, entryId, filename));
           },
           {
+            failureText: "上传失败",
             report: (kind, detail) => {
               if (kind === "err") {
                 setError(detail);
               }
             },
-            failureText: "上传失败",
           },
         );
         setUploadingId(null);
@@ -263,12 +263,12 @@ function FieldLabel({ label, unwired }: { label: string; unwired?: boolean }) {
 
 /** 图片口一行：当前文件名 + 「选择图片」（隐藏 input 由`useFilePicker` 管）。 */
 function ImageField({
+  disabled,
   entry,
-  value,
+  onPick,
   previewSrc,
   uploading,
-  disabled,
-  onPick,
+  value,
 }: {
   disabled: boolean;
   entry: EncapsulationEntryStatus;

@@ -25,13 +25,13 @@ function noop(): void {
 function setViewport(width: number, height: number) {
   Object.defineProperty(window, "innerWidth", {
     configurable: true,
-    writable: true,
     value: width,
+    writable: true,
   });
   Object.defineProperty(window, "innerHeight", {
     configurable: true,
-    writable: true,
     value: height,
+    writable: true,
   });
 }
 
@@ -39,7 +39,7 @@ describe("useViewportSize", () => {
   it("首帧是 null（不拿假数字摆位），挂载后立刻量到真实视口", () => {
     setViewport(1024, 768);
     const { result } = renderHook(() => useViewportSize());
-    expect(result.current).toEqual({ width: 1024, height: 768 });
+    expect(result.current).toEqual({ height: 768, width: 1024 });
   });
 
   it("resize 之后跟着变", () => {
@@ -49,7 +49,7 @@ describe("useViewportSize", () => {
     act(() => {
       window.dispatchEvent(new Event("resize"));
     });
-    expect(result.current).toEqual({ width: 800, height: 600 });
+    expect(result.current).toEqual({ height: 600, width: 800 });
   });
 
   it("取值没变时返回同一个引用（resize 高频触发也不换身份）", () => {
@@ -73,7 +73,7 @@ describe("useViewportSize", () => {
     act(() => {
       window.dispatchEvent(new Event("resize"));
     });
-    expect(result.current).toEqual({ width: 1024, height: 768 });
+    expect(result.current).toEqual({ height: 768, width: 1024 });
     expect(spy).not.toHaveBeenCalled();
   });
 });

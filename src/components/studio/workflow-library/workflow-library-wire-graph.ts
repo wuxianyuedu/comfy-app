@@ -87,9 +87,9 @@ export function libraryEdgeOwner(
     return null;
   }
   return {
-    namespace,
     entryId: rest.slice(0, sep),
     handleId: rest.slice(sep + 1),
+    namespace,
   };
 }
 
@@ -111,9 +111,9 @@ export const MANUAL_STROKE = "#a78bfa";
  *  描边色。默认落点仍算在 `resolved` 里（卡片与运行期读它），只是不在画布上画
  *  一条虚线占位。 */
 export const LIBRARY_EDGE_STYLE = /* SAFETY: 类型断言已复核 */ {
+  opacity: 1,
   stroke: MANUAL_STROKE,
   strokeWidth: 2.5,
-  opacity: 1,
 } as const;
 /** 拖动中的预览线描边色（React Flow 的 connection line）。 */
 export const DRAG_STROKE = "#c4b5fd";
@@ -171,10 +171,10 @@ export type LibraryNodeSizing = {
  *  这是**首帧**的位置：面板靠 `fitView` 把内容收进视口，位置只需单调可读。
  *  用户拖过的位置由 React Flow 自己持有（不受控画布）。 */
 export function layoutLibraryNodes(sizing: LibraryNodeSizing): LibNodeLayout {
-  const { paramsWidth, hostWidth, columnGap, originX, originY } = sizing;
+  const { columnGap, hostWidth, originX, originY, paramsWidth } = sizing;
   return {
-    [LIB_NODE_PARAMS]: { x: originX, y: originY },
     [LIB_NODE_HOST]: { x: originX + paramsWidth + columnGap, y: originY },
+    [LIB_NODE_PARAMS]: { x: originX, y: originY },
     /* 右列的位置与宿主卡片的**实测**宽度有关（卡片高度随行数变化，宽度固定），
      * 首帧用声明的宽度；画布 fitView 之后差值由用户感知不到。 */
     [LIB_NODE_OUTPUTS]: {
@@ -200,10 +200,10 @@ export function libraryContentExtent(sizing: LibraryNodeSizing): {
   height: number;
   width: number;
 } {
-  const { paramsWidth, hostWidth, outputsWidth, columnGap, envelopeHeight } = sizing;
+  const { columnGap, envelopeHeight, hostWidth, outputsWidth, paramsWidth } = sizing;
   return {
-    width: paramsWidth + hostWidth + outputsWidth + columnGap * 2,
     height: envelopeHeight,
+    width: paramsWidth + hostWidth + outputsWidth + columnGap * 2,
   };
 }
 
@@ -215,8 +215,8 @@ export function libraryBackdropSize(
   const content = libraryContentExtent(sizing);
   const clamp = (viewportSide: number) => Math.max(1, Math.round(viewportSide));
   return {
-    width: Math.max(content.width, clamp(viewport.width)) + BACKDROP_PADDING,
     height: Math.max(content.height, clamp(viewport.height)) + BACKDROP_PADDING,
+    width: Math.max(content.width, clamp(viewport.width)) + BACKDROP_PADDING,
   };
 }
 

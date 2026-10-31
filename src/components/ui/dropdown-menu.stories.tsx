@@ -42,8 +42,8 @@ type DropdownMenuItemVariant = NonNullable<
 const ITEM_VARIANTS: Array<DropdownMenuItemVariant> = ["default", "destructive"];
 
 const meta = {
-  title: "UI/DropdownMenu",
   component: DropdownMenu,
+  title: "UI/DropdownMenu",
 } satisfies Meta<typeof DropdownMenu>;
 
 export default meta;

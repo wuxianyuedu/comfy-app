@@ -18,29 +18,29 @@ export const STAGE_DEFS = /* SAFETY: 类型断言已复核 */ [
 export type Tab = (typeof STAGE_DEFS)[number]["id"];
 
 export const STAGE_TITLES: Record<Tab, { desc: string; title: string }> = {
-  script: {
-    title: "剧本",
-    desc: "编写或导入完整剧本，为后续角色提取、分镜规划与全流程生成提供基础。",
-  },
   character: {
-    title: "角色卡 · 角色设计",
     desc: "为项目创建并管理角色形象、特征与参考，统一后续分镜与生图风格。",
-  },
-  storyboard: {
-    title: "场景分镜 · 分镜脚本",
-    desc: "将剧本拆解为可执行的镜头序列，规划画面、动作与镜头语言。",
-  },
-  shots: {
-    title: "镜头生图 · 画面生成",
-    desc: "为每个镜头生成画面 — 本地 ComfyUI 工作流 / API 直连双通道，提示词自动带入，可随时改写重跑。",
-  },
-  video: {
-    title: "视频生成 · 图生视频",
-    desc: "把镜头画面驱动为视频片段 — 首帧与时长自动带入，支持本地 img2video 工作流 / API 直连。",
+    title: "角色卡 · 角色设计",
   },
   render: {
-    title: "成片合成 · 时间线",
     desc: "将全部镜头按顺序合成成片 — 串播预览、时长/转场编辑与合成清单导出。",
+    title: "成片合成 · 时间线",
+  },
+  script: {
+    desc: "编写或导入完整剧本，为后续角色提取、分镜规划与全流程生成提供基础。",
+    title: "剧本",
+  },
+  shots: {
+    desc: "为每个镜头生成画面 — 本地 ComfyUI 工作流 / API 直连双通道，提示词自动带入，可随时改写重跑。",
+    title: "镜头生图 · 画面生成",
+  },
+  storyboard: {
+    desc: "将剧本拆解为可执行的镜头序列，规划画面、动作与镜头语言。",
+    title: "场景分镜 · 分镜脚本",
+  },
+  video: {
+    desc: "把镜头画面驱动为视频片段 — 首帧与时长自动带入，支持本地 img2video 工作流 / API 直连。",
+    title: "视频生成 · 图生视频",
   },
 };
 
@@ -65,12 +65,12 @@ export type StageRatios = Record<Tab, number>;
 /** 各阶段完成度 0..1（等权平均即总进度）。 */
 export function computeStageRatios(ctx: StageViewContext, rendered: boolean): StageRatios {
   return {
-    script: ctx.scriptReady ? 1 : 0,
     character: ctx.characterCount > 0 ? 1 : 0,
-    storyboard: ctx.shotCount > 0 ? 1 : 0,
-    shots: ctx.shotCount > 0 ? ctx.imageDoneCount / ctx.shotCount : 0,
-    video: ctx.shotCount > 0 ? ctx.clipDoneCount / ctx.shotCount : 0,
     render: rendered ? 1 : ctx.shotCount > 0 ? 0.5 : 0,
+    script: ctx.scriptReady ? 1 : 0,
+    shots: ctx.shotCount > 0 ? ctx.imageDoneCount / ctx.shotCount : 0,
+    storyboard: ctx.shotCount > 0 ? 1 : 0,
+    video: ctx.shotCount > 0 ? ctx.clipDoneCount / ctx.shotCount : 0,
   };
 }
 
@@ -115,36 +115,36 @@ export function stagePrereq(id: Tab, ctx: StageViewContext): { go: Tab; text: st
       return ctx.scriptReady
         ? null
         : {
-            text: "建议先完成「剧本」— 角色卡会自动复用剧本文本提取角色。",
             go: "script",
+            text: "建议先完成「剧本」— 角色卡会自动复用剧本文本提取角色。",
           };
     case "storyboard":
       return ctx.scriptReady
         ? null
         : {
-            text: "建议先完成「剧本」— 分镜提取依赖剧本文本,角色可自动并入镜头。",
             go: "script",
+            text: "建议先完成「剧本」— 分镜提取依赖剧本文本,角色可自动并入镜头。",
           };
     case "shots":
       return ctx.shotCount > 0
         ? null
         : {
-            text: "建议先完成「场景分镜」— 镜头提示词与角色参考会自动带入本阶段。",
             go: "storyboard",
+            text: "建议先完成「场景分镜」— 镜头提示词与角色参考会自动带入本阶段。",
           };
     case "video":
       return ctx.shotCount > 0
         ? null
         : {
-            text: "建议先完成「场景分镜」— 镜头时长与运动设定会自动带入本阶段。",
             go: "storyboard",
+            text: "建议先完成「场景分镜」— 镜头时长与运动设定会自动带入本阶段。",
           };
     case "render":
       return ctx.shotCount > 0
         ? null
         : {
-            text: "建议先完成「场景分镜」与生成 — 成片时间线直接消费镜头数据。",
             go: "storyboard",
+            text: "建议先完成「场景分镜」与生成 — 成片时间线直接消费镜头数据。",
           };
     default:
       return null;
@@ -175,19 +175,19 @@ export function buildMissingSummary(ctx: StageViewContext): Array<MissingItem> {
   const shotGap = ctx.shotTarget > 0 ? Math.max(ctx.shotTarget - ctx.shotCount, 0) : null;
   return [
     {
-      label: "角色卡",
-      gap: null,
       done: ctx.characterCount > 0,
-    },
-    {
-      label: "场景",
       gap: null,
-      done: ctx.sceneCount > 0,
+      label: "角色卡",
     },
     {
-      label: "分镜脚本",
-      gap: shotGap,
+      done: ctx.sceneCount > 0,
+      gap: null,
+      label: "场景",
+    },
+    {
       done: shotGap === null ? ctx.shotCount > 0 : shotGap === 0,
+      gap: shotGap,
+      label: "分镜脚本",
     },
   ];
 }
@@ -221,9 +221,9 @@ export function buildHealthSnapshot(ratios: StageRatios, _ctx: StageViewContext)
     return {
       id: stage.id,
       label: stage.label,
-      shortLabel: stage.shortLabel,
-      ratio,
       pending: ratio < 1,
+      ratio,
+      shortLabel: stage.shortLabel,
     };
   });
 }

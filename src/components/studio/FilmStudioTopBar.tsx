@@ -17,9 +17,9 @@ type FilmStudioTopBarProps = {
 export function FilmStudioTopBar({
   c,
   isPlaying,
+  onRedo,
   onTogglePlay,
   onUndo,
-  onRedo,
 }: FilmStudioTopBarProps) {
   return (
     <header className="border-border-subtle bg-panel z-base relative flex shrink-0 items-center gap-3 border-b px-4 py-0">

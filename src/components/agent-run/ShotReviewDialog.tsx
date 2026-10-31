@@ -38,11 +38,11 @@ export type ShotReviewDialogProps = {
 };
 
 export function ShotReviewDialog({
-  open,
   onOpenChange,
+  onRegenerated,
+  open,
   projectId,
   shot,
-  onRegenerated,
 }: ShotReviewDialogProps) {
   const review = useShotReview(projectId, onRegenerated);
 
@@ -56,7 +56,7 @@ export function ShotReviewDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, shot.id]);
 
-  const { verdict, reviewing, regenerating, error } = review;
+  const { error, regenerating, reviewing, verdict } = review;
   const busy = reviewing || regenerating;
 
   /* 校准读数（只读）：弹窗打开时拉一次本项目的「人评 ⇄ AI 评分」偏差。 */

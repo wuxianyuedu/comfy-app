@@ -77,12 +77,12 @@ function useSidebar() {
 }
 
 function SidebarProvider({
-  defaultOpen = true,
-  open: openProp,
-  onOpenChange: setOpenProp,
-  className,
-  style,
   children,
+  className,
+  defaultOpen = true,
+  onOpenChange: setOpenProp,
+  open: openProp,
+  style,
   ...props
 }: React.ComponentProps<"div"> & {
   defaultOpen?: boolean;
@@ -91,7 +91,7 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile();
   /* 窄窗判据与跨越次数（阈值那笔账在 ~/lib/layout-budget）。 */
-  const { narrow, crossings } = useNarrowNavState();
+  const { crossings, narrow } = useNarrowNavState();
   const [openMobile, setOpenMobile] = React.useState(false);
 
   /* 内部态；两个 prop 同时给了就是受控（`openProp` 优先）。
@@ -103,9 +103,9 @@ function SidebarProvider({
      于是生效态是纯推导，不需要在 effect 里清标记。 */
   const [choice, setChoice] = React.useState<RailChoice | null>(null);
   const collapsed = resolveRailCollapsed({
-    narrow,
-    crossings,
     choice,
+    crossings,
+    narrow,
     preferredOpen,
   });
   const open = !collapsed;
@@ -118,7 +118,7 @@ function SidebarProvider({
       const openState = typeof value === "function" ? value(open) : value;
       /* 记下「用户表态」与表态时的跨越次数：自动收起走的不是这条路，
          所以纪律不会把用户的偏好写脏（cookie 也只在这里写）。 */
-      setChoice({ open: openState, atCrossing: crossings });
+      setChoice({ atCrossing: crossings, open: openState });
       if (setOpenProp) {
         setOpenProp(openState);
       } else {
@@ -147,13 +147,13 @@ function SidebarProvider({
 
   const contextValue = React.useMemo<SidebarContextProps>(
     () => ({
-      state,
-      open,
-      setOpen,
-      isMobile,
-      openMobile,
-      setOpenMobile,
       collapsedByAuto,
+      isMobile,
+      open,
+      openMobile,
+      setOpen,
+      setOpenMobile,
+      state,
       toggleSidebar,
     }),
     [state, open, setOpen, isMobile, openMobile, setOpenMobile, collapsedByAuto, toggleSidebar],
@@ -191,19 +191,19 @@ function SidebarProvider({
 }
 
 function Sidebar({
+  children,
+  className,
+  collapsible = "offcanvas",
+  dir,
   side = "left",
   variant = "sidebar",
-  collapsible = "offcanvas",
-  className,
-  children,
-  dir,
   ...props
 }: React.ComponentProps<"div"> & {
   collapsible?: "offcanvas" | "icon" | "none";
   side?: "left" | "right";
   variant?: "sidebar" | "floating" | "inset";
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+  const { isMobile, openMobile, setOpenMobile, state } = useSidebar();
 
   if (collapsible === "none") {
     return (
@@ -293,7 +293,7 @@ function Sidebar({
 }
 
 function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<typeof Button>) {
-  const { toggleSidebar, collapsedByAuto } = useSidebar();
+  const { collapsedByAuto, toggleSidebar } = useSidebar();
 
   /* 文案必须区分自动与手动：不分的话用户会以为是自己点坏了 —— 这是设计评审当时
      点出的问题。自动态还要给出「为什么收」与「怎么不再自动收」：只有阈值数字能
@@ -448,8 +448,8 @@ function SidebarGroupLabel({
     ),
     render,
     state: {
-      slot: "sidebar-group-label",
       sidebar: "group-label",
+      slot: "sidebar-group-label",
     },
   });
 }
@@ -472,8 +472,8 @@ function SidebarGroupAction({
     ),
     render,
     state: {
-      slot: "sidebar-group-action",
       sidebar: "group-action",
+      slot: "sidebar-group-action",
     },
   });
 }
@@ -538,32 +538,32 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 const sidebarMenuButtonVariants = cva(
   "peer/menu-button group/menu-button relative flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm ring-sidebar-ring outline-hidden transition-[width,height,padding,background-color,color] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground data-active:bg-sidebar-selected data-active:font-medium data-active:text-sidebar-accent-foreground before:absolute before:top-1/2 before:left-0 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-primary-strong before:opacity-0 before:transition-opacity data-active:before:opacity-100 [&_svg]:size-4 [&_svg]:shrink-0 [&>span:last-child]:truncate",
   {
+    defaultVariants: {
+      size: "default",
+      variant: "default",
+    },
     variants: {
+      size: {
+        default: "h-8 text-sm",
+        lg: "h-12 text-sm group-data-[collapsible=icon]:p-0!",
+        sm: "h-7 text-xs",
+      },
       variant: {
         default: "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         outline:
           "bg-background shadow-[0_0_0_1px_var(--sidebar-border)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_var(--sidebar-accent)]",
       },
-      size: {
-        default: "h-8 text-sm",
-        sm: "h-7 text-xs",
-        lg: "h-12 text-sm group-data-[collapsible=icon]:p-0!",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
     },
   },
 );
 
 function SidebarMenuButton({
-  render,
+  className,
   isActive = false,
-  variant = "default",
+  render,
   size = "default",
   tooltip,
-  className,
+  variant = "default",
   ...props
 }: useRender.ComponentProps<"button"> &
   React.ComponentProps<"button"> & {
@@ -575,16 +575,16 @@ function SidebarMenuButton({
     defaultTagName: "button",
     props: mergeProps<"button">(
       {
-        className: cn(sidebarMenuButtonVariants({ variant, size }), className),
+        className: cn(sidebarMenuButtonVariants({ size, variant }), className),
       },
       props,
     ),
     render: !tooltip ? render : <TooltipTrigger render={render} />,
     state: {
-      slot: "sidebar-menu-button",
+      active: isActive,
       sidebar: "menu-button",
       size,
-      active: isActive,
+      slot: "sidebar-menu-button",
     },
   });
 
@@ -635,8 +635,8 @@ function SidebarMenuAction({
     ),
     render,
     state: {
-      slot: "sidebar-menu-action",
       sidebar: "menu-action",
+      slot: "sidebar-menu-action",
     },
   });
 }
@@ -714,10 +714,10 @@ function SidebarMenuSubItem({ className, ...props }: React.ComponentProps<"li">)
 }
 
 function SidebarMenuSubButton({
+  className,
+  isActive = false,
   render,
   size = "md",
-  isActive = false,
-  className,
   ...props
 }: useRender.ComponentProps<"a"> &
   React.ComponentProps<"a"> & {
@@ -737,10 +737,10 @@ function SidebarMenuSubButton({
     ),
     render,
     state: {
-      slot: "sidebar-menu-sub-button",
+      active: isActive,
       sidebar: "menu-sub-button",
       size,
-      active: isActive,
+      slot: "sidebar-menu-sub-button",
     },
   });
 }

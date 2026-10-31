@@ -16,9 +16,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { requireRequestUser, readFile, stat } = vi.hoisted(() => ({
-  requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
+const { readFile, requireRequestUser, stat } = vi.hoisted(() => ({
   readFile: vi.fn<(p: string) => Promise<string>>(),
+  requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
   stat: vi.fn<(p: string) => Promise<{ mtime: Date; size: number }>>(),
 }));
 
@@ -112,7 +112,7 @@ describe("GET /api/debug/source", () => {
   it("白名单内的源码文件 → 200，回相对显示路径 + 可打开的绝对路径 + 内容", async () => {
     readFile.mockResolvedValueOnce("export const x = 1;");
     const mtime = new Date("2026-01-02T03:04:05.000Z");
-    stat.mockResolvedValueOnce({ size: 19, mtime });
+    stat.mockResolvedValueOnce({ mtime, size: 19 });
     const { GET } = await import("./route");
     const res = await GET(requestWith("src/lib/clamp.ts"));
     expect(res.status).toBe(200);

@@ -172,13 +172,13 @@ async function buildWorkflowDetailJson(input: {
   tpl: WorkflowDetailTemplateRow;
 }): Promise<string> {
   const {
-    tpl,
     comboOptionsForClassField,
     comboOptionsForFieldName,
     multilineForClassField,
-    sourcePath,
-    sourceOutdated,
     sourceMissing,
+    sourceOutdated,
+    sourcePath,
+    tpl,
   } = input;
   /* rawJson 收窄为 RawWorkflow 视图（根不是普通对象时为 null，下游均有守卫，
    * 路径与旧 any 代码等价）。 */
@@ -267,11 +267,11 @@ async function buildWorkflowDetailJson(input: {
       }
     }
     return {
-      id: nodeId,
       class_type: classType,
-      title: resolvedTitle ?? n._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
+      id: nodeId,
       is_subgraph: isUuidClass,
       raw_inputs: rawInputsById[nodeId] ?? [],
+      title: resolvedTitle ?? n._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
       /* 该节点的 ComfyUI 精确外框尺寸（[w, h]）。rawJson 里没有该节点时为
        *  undefined —— 客户端回落到按内容驱动的 min/max 宽度布局。 */
       size: sizeById[nodeId],
@@ -321,18 +321,18 @@ async function buildWorkflowDetailJson(input: {
    * 以及画布的自动派生逻辑（第一个输出的 `type` 决定下游节点是图像还是视频）。
    * 实现落在 workflow-detail-io.ts。 */
   const workflowIO = await enrichWorkflowIO({
-    workflowIORaw,
     rawInputsById,
+    workflowIORaw,
     /* 子图内部节点索引：下钻到子工作流里勾选的参数，nodeId 指向内部节点，
      *  顶层 rawInputsById 查不到 —— 没有它类型/显示名都会退化（ISSUE #349）。 */
-    innerInputsById: buildInnerNodeInputs(raw),
-    rawNodeMeta,
-    graph: viewGraph,
-    nodeTitleById,
-    nodeTypeById: buildNodeTypeMap(raw),
     comboOptionsForClassField,
     comboOptionsForFieldName,
+    graph: viewGraph,
+    innerInputsById: buildInnerNodeInputs(raw),
     multilineForClassField,
+    nodeTitleById,
+    nodeTypeById: buildNodeTypeMap(raw),
+    rawNodeMeta,
   });
 
   /* ── 分组（ComfyUI 的 frame 矩形）──
@@ -350,8 +350,6 @@ async function buildWorkflowDetailJson(input: {
       const bounds: Array<unknown> =
         Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
       groups.push({
-        id: toStringValue(rec.id ?? `g-${idx}`),
-        title: typeof rec.title === "string" ? rec.title : "",
         bounding: [
           Number(bounds[0]) || 0,
           Number(bounds[1]) || 0,
@@ -359,6 +357,8 @@ async function buildWorkflowDetailJson(input: {
           Number(bounds[3]) || 0,
         ],
         color: typeof rec.color === "string" ? rec.color : "#3b3b3b",
+        id: toStringValue(rec.id ?? `g-${idx}`),
+        title: typeof rec.title === "string" ? rec.title : "",
         /* 分组旁路状态。透传出去，rgthree 的 `Fast Groups Bypasser`
          *  运行期 UI 才能反映、并经 PATCH 切换每个匹配分组的
          *  `flags.bypass`。存在 rawJson 里该分组的 `flags` 对象上 ——
@@ -384,12 +384,12 @@ async function buildWorkflowDetailJson(input: {
       // 没有就留空，客户端会回落到「从第一行 markdown 标题里提取」。
       const title = typeof n.title === "string" ? n.title : "";
       notes.push({
+        color: typeof n.color === "string" ? n.color : "#3a3a3a",
         id: String(n.id),
-        title,
-        text,
         pos: [Number(pos[0]) || 0, Number(pos[1]) || 0],
         size: [Number(size[0]) || 220, Number(size[1]) || 120],
-        color: typeof n.color === "string" ? n.color : "#3a3a3a",
+        text,
+        title,
       });
     });
   }
@@ -411,17 +411,27 @@ async function buildWorkflowDetailJson(input: {
     graph: viewGraph,
     /** 导入时的原始 RAW（UI 格式）JSON —— 透传出去，客户端便能按原生形态
      *  查看 / 重新下载源。 */
-    rawJson: raw,
     nodes,
+    rawJson: raw,
     /** RAW 视图专用节点/位置/图（保留 subgraph wrapper）。
      *  rawView 从 rawJson 派生，RAW 视图据此渲染原始节点（含 wrapper 紫色整卡）。
      *  null 表示该工作流无 rawJson。 */
-    rawView,
     paramMap,
+    rawView,
     /* 把 enrichWorkflowIO 下发的宽类型条目（direction / kind 各为独立宽联合）
      *  收窄成判别联合：direction 由 kind 决定（output → output，其余 → input），
      *  这样 `WorkflowDetail.workflowIO`（客户端 WorkflowIOParam，同为判别联合）
      *  在 tRPC 推断上严格兼容，非法组合（output+param 等）在类型层面被排除。 */
+    format: "raw",
+    groups,
+    hasRaw: detailHasRaw,
+    notes,
+    positions,
+    rawNodes: rawNodeMeta,
+    sourceMissing,
+    sourceOutdated,
+    sourcePath,
+    usable: detailUsable,
     workflowIO: Object.fromEntries(
       Object.entries(workflowIO).map(([k, e]) => {
         /* direction 由 kind 决定（output → output，其余 → input），先合成判别联合
@@ -437,16 +447,6 @@ async function buildWorkflowDetailJson(input: {
         return [k, { ...e, ...slot } satisfies WorkflowDetailIOEntry];
       }),
     ),
-    positions,
-    groups,
-    notes,
-    rawNodes: rawNodeMeta,
-    format: "raw",
-    hasRaw: detailHasRaw,
-    usable: detailUsable,
-    sourcePath,
-    sourceOutdated,
-    sourceMissing,
     /** 分类：绑定到磁盘文件时为 "local"，否则 "online"。 */
     source: sourcePath ? "local" : "online",
   });
@@ -544,10 +544,10 @@ export async function buildWorkflowDetailFull(
    *  「有更新」提示，而内容其实已经是最新（自相矛盾）。 */
   if (sourcePath && sourceOutdated && getSettingsSync().autoSyncLocalWorkflow) {
     const reimported = await reimportFromSource({
-      sourcePath: tpl.sourcePath ?? "",
-      sourceMtime: tpl.sourceMtime,
-      sourceChecksum: tpl.sourceChecksum,
       existingTaskType: tpl.taskType,
+      sourceChecksum: tpl.sourceChecksum,
+      sourceMtime: tpl.sourceMtime,
+      sourcePath: tpl.sourcePath ?? "",
     });
     if (!reimported.missing && reimported.update) {
       /* 先把字段落到内存里的 tpl：下面 buildWorkflowDetailJson 用的是 tpl，
@@ -559,11 +559,11 @@ export async function buildWorkflowDetailFull(
       tpl.sourceChecksum = reimported.update.sourceChecksum ?? tpl.sourceChecksum;
       tpl.taskType = reimported.update.taskType ?? tpl.taskType;
       await workflowTemplateRepository.update(tpl.id, {
-        rawJson: tpl.rawJson,
         paramMap: tpl.paramMap,
         positions: tpl.positions,
-        sourceMtime: tpl.sourceMtime,
+        rawJson: tpl.rawJson,
         sourceChecksum: tpl.sourceChecksum,
+        sourceMtime: tpl.sourceMtime,
         taskType: tpl.taskType,
       });
       /* 详情缓存 TTL 30s：不清的话同一次窗口内再进详情还是旧内容，而标记已
@@ -581,13 +581,13 @@ export async function buildWorkflowDetailFull(
    * 陈旧度也最多锁在 30 秒。 */
   const detailJson = await cacheJson(cacheKey, 30_000, () =>
     buildWorkflowDetailJson({
-      tpl,
       comboOptionsForClassField,
       comboOptionsForFieldName,
       multilineForClassField,
-      sourcePath,
-      sourceOutdated,
       sourceMissing,
+      sourceOutdated,
+      sourcePath,
+      tpl,
     }),
   );
 
@@ -653,7 +653,7 @@ export async function buildSubgraphDetail(
   const detailJson = await cacheJson(cacheKey, 120_000, async () => {
     /* 哨兵连线索引 + 内部节点图转换 + 边界栏杆，全都在
      * workflow-subgraph-parse.ts 里（见那个模块的文档）。 */
-    const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(sub);
+    const { boundaryLinkInfoById, linkById } = parseSubgraphLinks(sub);
     /* 边界槽位下标要先于槽位表算出来：ComfyUI 的 \`target_slot\` 与节点自带
      *  \`idx\` 在某些导出路径上口径不同，只有哨兵边记下的关联是权威事实
      *  （见 \`parseSubgraphSlots\`）。 */
@@ -693,7 +693,7 @@ export async function buildSubgraphDetail(
           continue;
         }
         inp.label = authorLabel;
-        inp.proxyField ??= { nodeId: "", field: inp.name, label: authorLabel };
+        inp.proxyField ??= { field: inp.name, label: authorLabel, nodeId: "" };
       }
     }
     const { boundaryPins, pinIdByLinkId } = parseSubgraphPins(sub);
@@ -714,17 +714,17 @@ export async function buildSubgraphDetail(
     );
 
     return JSON.stringify({
+      format: "raw-subgraph",
+      graph: sg.graph,
+      groups: ann.groups,
       id: `${tpl.id}#subgraph:${uid}`,
       name: typeof sub.name === "string" && sub.name ? sub.name : "子工作流",
-      taskType: tpl.taskType,
-      graph: sg.graph,
       nodes: sg.nodes,
+      notes: ann.notes,
       paramMap: tpl.paramMap ?? {},
       positions: ann.positions,
-      groups: ann.groups,
-      notes: ann.notes,
       rawNodes: sg.rawNodeMeta,
-      format: "raw-subgraph",
+      taskType: tpl.taskType,
       /* 带上父工作流 id 与子图 uid，客户端想重新拉取时，
        *  面包屑才对得上。 */
       parentId: tpl.id,
@@ -736,8 +736,8 @@ export async function buildSubgraphDetail(
        *  `name`、`type`、`label`、`pos`（保存的 [x, y]）与 `linkIds`
        *  （进出内部节点的穿边界线）。
        *  nodes). */
-      boundaryPins,
       boundaryLinks,
+      boundaryPins,
     });
   });
 

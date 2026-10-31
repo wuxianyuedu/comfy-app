@@ -226,7 +226,7 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
         p = j + q.length;
       }
       if (count > 0) {
-        targets.push({ node: t, count });
+        targets.push({ count, node: t });
       }
     }
     cur = walker.nextNode();
@@ -292,7 +292,7 @@ export type JsonViewerProps = {
   title?: string;
 };
 
-export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: JsonViewerProps) {
+export function JsonViewer({ data, initialCollapsedDepth = 1, title = "JSON" }: JsonViewerProps) {
   // ── 搜索 + 命中索引 ──
   const [query, setQuery] = useState("");
   const [hitIndex, setHitIndex] = useState(0);
@@ -353,7 +353,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
       if (!el) {
         return;
       }
-      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   }, [hitIndex, hits]);
 
@@ -395,11 +395,11 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
   const copied = useFlashState();
   const [copyFailed, setCopyFailed] = useState(false);
   const copy = useCopyFeedback({
+    onFailure: () => setCopyFailed(true),
     onSuccess: () => {
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
   });
 
   // ── 渲染 ──

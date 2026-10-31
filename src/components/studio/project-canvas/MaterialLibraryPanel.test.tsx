@@ -8,9 +8,9 @@ afterEach(cleanup);
 
 function mockFetch(body: unknown, ok = true) {
   const fetchMock = vi.fn().mockResolvedValue({
+    json: async () => body,
     ok,
     status: ok ? 200 : 500,
-    json: async () => body,
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -18,15 +18,15 @@ function mockFetch(body: unknown, ok = true) {
 
 const sampleItems: Array<MaterialItem> = [
   {
-    id: "m-1",
-    name: "poster.png",
     folder: "ref",
     folderName: "参考素材",
+    id: "m-1",
     kind: "image",
-    url: "/files/m-1",
+    name: "poster.png",
+    scope: "project",
     size: 20480,
     updatedAt: "2026-01-01T00:00:00.000Z",
-    scope: "project",
+    url: "/files/m-1",
   },
 ];
 
@@ -40,7 +40,7 @@ describe("MaterialLibraryPanel", () => {
 
   it("拉取成功后渲染素材项", async () => {
     mockFetch({
-      folders: [{ id: "ref", name: "参考素材", count: 1 }],
+      folders: [{ count: 1, id: "ref", name: "参考素材" }],
       items: sampleItems,
     });
     const onUse = vi.fn();

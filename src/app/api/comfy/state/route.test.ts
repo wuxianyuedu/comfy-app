@@ -10,10 +10,7 @@
  */
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  noteComfyStateChange,
-  resetComfyStateWatchForTest,
-} from "~/lib/comfyui/state-watch";
+import { noteComfyStateChange, resetComfyStateWatchForTest } from "~/lib/comfyui/state-watch";
 
 beforeEach(() => {
   resetComfyStateWatchForTest();
@@ -30,9 +27,9 @@ describe("GET /api/comfy/state", () => {
     const res = await get("?since=0");
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toMatchObject({
-      seq: 1,
-      kind: "ready",
       detail: "ComfyUI 已就绪",
+      kind: "ready",
+      seq: 1,
     });
   });
 
@@ -40,7 +37,7 @@ describe("GET /api/comfy/state", () => {
     noteComfyStateChange("start", "用户启动了 ComfyUI");
     const res = await get();
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ seq: 1, kind: "start" });
+    await expect(res.json()).resolves.toMatchObject({ kind: "start", seq: 1 });
   });
 
   it("坏参数（非数字 / 负数）当 0 处理，不抛错", async () => {

@@ -17,12 +17,12 @@ import {
 function rec(over: Partial<AppServiceExitRecord> = {}): AppServiceExitRecord {
   return {
     at: "2026-10-10T10:00:00.000Z",
-    kind: "dev-server",
     code: 1,
-    signal: null,
-    reason: "Next.js dev server 提前退出（exit=1）",
+    kind: "dev-server",
     port: 3100,
+    reason: "Next.js dev server 提前退出（exit=1）",
     runId: "run-old",
+    signal: null,
     ...over,
   };
 }
@@ -49,8 +49,8 @@ describe("parseAppServiceExitRecord", () => {
     // 升级前后版本混跑时常见：未知成因仍值得说「退出了、退出码 N」。
     const parsed = parseAppServiceExitRecord({
       at: "t",
-      reason: "x",
       kind: "something-new",
+      reason: "x",
     });
     expect(parsed?.kind).toBe("unknown");
   });
@@ -58,18 +58,18 @@ describe("parseAppServiceExitRecord", () => {
   it("type 不对的可选字段退回 null（不编值）", () => {
     const parsed = parseAppServiceExitRecord({
       at: "t",
-      reason: "x",
-      kind: "dev-server",
       code: "1",
-      signal: "",
+      kind: "dev-server",
       port: "3100",
+      reason: "x",
       runId: 7,
+      signal: "",
     });
     expect(parsed).toMatchObject({
       code: null,
-      signal: null,
       port: null,
       runId: null,
+      signal: null,
     });
   });
 });
@@ -143,7 +143,7 @@ describe("describeAppServiceExit", () => {
   });
 
   it("detail 是这一次的具体退出事实，与 why 各司其职", () => {
-    const notice = describeAppServiceExit(rec({ kind: "dev-server", code: 137 }));
+    const notice = describeAppServiceExit(rec({ code: 137, kind: "dev-server" }));
     expect(notice.detail).toContain("137");
     expect(notice.why).not.toContain("137");
   });
@@ -169,23 +169,23 @@ describe("isCurrentDisconnectExit（断开那一刻：这份记录是不是这�
   const NOW = Date.parse("2026-10-14T16:22:09.000Z");
 
   it("两边 runId 都有值 → 相等才算（不等说明盘上留的是更早那一次的结论）", () => {
-    const same = rec({ runId: "run-now", at: "2026-10-14T16:22:05.000Z" });
+    const same = rec({ at: "2026-10-14T16:22:05.000Z", runId: "run-now" });
     expect(isCurrentDisconnectExit(same, "run-now", NOW)).toBe(true);
-    const older = rec({ runId: "run-old", at: "2026-10-14T16:22:05.000Z" });
+    const older = rec({ at: "2026-10-14T16:22:05.000Z", runId: "run-old" });
     expect(isCurrentDisconnectExit(older, "run-now", NOW)).toBe(false);
   });
 
   it("任一方拿不到 runId → 退回新鲜度：刚写下的算，陈旧的（单槽文件里留着的上一次）不算", () => {
-    const fresh = rec({ runId: null, at: "2026-10-14T16:22:05.000Z" });
+    const fresh = rec({ at: "2026-10-14T16:22:05.000Z", runId: null });
     expect(isCurrentDisconnectExit(fresh, "run-now", NOW)).toBe(true);
     expect(isCurrentDisconnectExit(fresh, null, NOW)).toBe(true);
-    const stale = rec({ runId: null, at: "2026-10-13T16:22:05.000Z" });
+    const stale = rec({ at: "2026-10-13T16:22:05.000Z", runId: null });
     expect(isCurrentDisconnectExit(stale, null, NOW)).toBe(false);
   });
 
   it("记录的时刻读不懂 / 在未来（时钟漂移）→ 不可当作「刚刚」", () => {
-    expect(isCurrentDisconnectExit(rec({ runId: null, at: "坏时刻" }), null, NOW)).toBe(false);
-    const future = rec({ runId: null, at: "2026-10-14T17:00:00.000Z" });
+    expect(isCurrentDisconnectExit(rec({ at: "坏时刻", runId: null }), null, NOW)).toBe(false);
+    const future = rec({ at: "2026-10-14T17:00:00.000Z", runId: null });
     expect(isCurrentDisconnectExit(future, null, NOW)).toBe(false);
   });
 });

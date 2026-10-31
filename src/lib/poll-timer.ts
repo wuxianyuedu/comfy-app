@@ -66,7 +66,7 @@ export type PollTimerOptions = {
  */
 export function startPollTimer(
   run: () => unknown,
-  { ms, immediate = true, pauseWhenHidden = true, pauseWhenUnfocused, onError }: PollTimerOptions,
+  { immediate = true, ms, onError, pauseWhenHidden = true, pauseWhenUnfocused }: PollTimerOptions,
 ): () => void {
   /* 固定间隔与函数间隔走**两条装表路径**：固定值用 `setInterval`（最省事、语义
    * 也最直白），函数值必须用 `setTimeout` 链 —— 每拍跑完才知道下一拍等多久。 */

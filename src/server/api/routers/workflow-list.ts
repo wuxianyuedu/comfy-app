@@ -46,9 +46,9 @@ export const workflowListProcedures = {
     .input(
       z
         .object({
-          type: z.string().optional(),
           category: z.string().optional(),
           model: z.string().optional(),
+          type: z.string().optional(),
         })
         .optional(),
     )
@@ -93,8 +93,8 @@ export const workflowListProcedures = {
 
       const where = whereConditions.length > 0 ? and(...whereConditions) : undefined;
       const list = await workflowTemplateRepository.listForUser(userId, {
-        where,
         orderBy: [desc(workflowTemplate.createdAt)],
+        where,
       });
 
       // 批量取出每个模板的模型标签名（一次性取全部模板的标签，避免逐条查）
@@ -132,22 +132,22 @@ export const workflowListProcedures = {
          * 不返回，前端无限转圈。超时后抛 `TimeoutError`，由 tRPC 转成可展示错误，
          * 用户至少能看到原因并重试。 */
         const SCAN_TIMEOUT_MS = 30_000;
-        const { roots, allFiles } = await withTimeout(
+        const { allFiles, roots } = await withTimeout(
           scanLocalWorkflowRoots(localRoots, { recursive: true }),
           SCAN_TIMEOUT_MS,
           { label: "扫描本地工作流目录" },
         );
         localRootsSummary = roots.map((root) => ({
-          rawPath: root.rawPath,
           absPath: root.absPath,
-          exists: root.exists,
           count: root.files.length,
           error: root.error,
+          exists: root.exists,
+          rawPath: root.rawPath,
         }));
         localRootsList = roots.map((root) => ({
-          rawPath: root.rawPath,
           absPath: root.absPath,
           exists: root.exists,
+          rawPath: root.rawPath,
         }));
         localAllFiles = allFiles;
       }
@@ -195,8 +195,8 @@ export const workflowListProcedures = {
           const newName = lastSegments(hit.absPath, 1) || hit.absPath;
           try {
             await workflowTemplateRepository.relinkSourcePath(w.id, {
-              sourcePath: hit.absPath,
               sourceMtime: Math.floor(hit.mtimeMs / 1000),
+              sourcePath: hit.absPath,
             });
             w.sourcePath = hit.absPath;
             w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
@@ -239,31 +239,31 @@ export const workflowListProcedures = {
         }
         const renamed = renamedFromTo.get(list.id) ?? null;
         return {
+          createdAt: list.createdAt,
+          defaultMode: list.defaultMode ?? null,
           id: list.id,
+          modes: parseModesJson(list.modes),
           name: list.name,
           taskType: list.taskType,
-          modes: parseModesJson(list.modes),
-          defaultMode: list.defaultMode ?? null,
-          createdAt: list.createdAt,
           /* 走权威读边界：这一列的形状有唯一出处（`WorkflowParamMap`），
            * 路由只负责把它收窄，不在出口再抄一份声明（ISSUE #1460）。 */
+          isGenerative: def?.isGenerative ?? true,
           paramMap: parseWorkflowParamMap(list.paramMap),
-          sourcePath: list.sourcePath,
           source: list.sourcePath ? "local" : "online",
-          typeLabel: def?.label ?? list.taskType,
+          sourcePath: list.sourcePath,
           typeCategory: def?.category ?? "image",
           typeDescription: def?.description ?? "",
-          isGenerative: def?.isGenerative ?? true,
+          typeLabel: def?.label ?? list.taskType,
           ...exec,
-          preview: buildWorkflowPreview(graphObj ?? {}),
-          workflowIO: parseWorkflowIOMap(list.workflowIO),
-          modelTags: tagsByName.get(list.id) ?? [],
-          sourceMtimeSec: typeof list.sourceMtime === "number" ? list.sourceMtime : null,
-          diskMtimeSec,
           diskDirty,
           diskMissing,
+          diskMtimeSec,
           diskRenamed: renamed !== null,
           diskRenamedTo: renamed,
+          modelTags: tagsByName.get(list.id) ?? [],
+          preview: buildWorkflowPreview(graphObj ?? {}),
+          sourceMtimeSec: typeof list.sourceMtime === "number" ? list.sourceMtime : null,
+          workflowIO: parseWorkflowIOMap(list.workflowIO),
         };
       });
 
@@ -287,34 +287,34 @@ export const workflowListProcedures = {
           }
           const friendly = f.name.replace(/\.(json|workflow)$/i, "").trim() || "未命名工作流";
           localPending.push({
+            defaultMode: null,
             id: pendingId(f.absPath),
+            modes: [],
             name: friendly,
             taskType: "",
-            modes: [],
-            defaultMode: null,
             /* 与已导入行**同一形状**：`createdAt` 是 `Date`（那不是「格式选择」，
              *  superjson 过线后它就是 `Date`；这里写成 ISO 字符串会让同一份 payload
              *  里出现两种形状，视图读哪一行都得先判形状）。 */
             createdAt: new Date(f.mtimeMs),
+            hasRaw: false,
+            isGenerative: false,
             paramMap: {},
+            source: "local-pending",
             sourcePath: f.absPath,
             sourceRoot: f.rootRawPath,
-            source: "local-pending",
-            typeLabel: "本地工作流（未导入）",
             typeCategory: "image",
             typeDescription: "",
-            isGenerative: false,
-            hasRaw: false,
+            typeLabel: "本地工作流（未导入）",
             usable: false,
             /* 空图预览走**同一个构造器**，不手写一份 `{ nodes, edges, w, h }`
              *  ——那个字面量的字段名与 `WorkflowPreview`（`total` / `width` /
              *  `height` / `truncated`）对不上，是同一类「形状各写一份」的错配。 */
-            preview: buildWorkflowPreview({}),
-            workflowIO: {},
             modelTags: [],
             pending: true,
-            pendingSize: f.size,
             pendingMtime: f.mtimeMs,
+            pendingSize: f.size,
+            preview: buildWorkflowPreview({}),
+            workflowIO: {},
           });
         }
       }
@@ -339,9 +339,9 @@ export const workflowListProcedures = {
       }
 
       return {
-        workflows: enrichedWithRoot,
         localPending,
         localRoots: localRootsSummary,
+        workflows: enrichedWithRoot,
       };
     }),
 };

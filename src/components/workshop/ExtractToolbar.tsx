@@ -79,20 +79,20 @@ type ExtractToolbarProps = {
 /** 剧本提取区块：分组模型下拉（工具/本地/远端）+ 提取按钮 + 外部导入。
  * 选完模型点「提取」即开始；模型通道的提取过程实时展示在下方。 */
 export function ExtractToolbar({
-  title,
+  busy,
   channelValue,
+  errorText,
+  executionLog,
+  extractDisabled = false,
+  extractDisabledReason,
+  importAccept = ".md,.txt,.json",
+  logStage,
   onChannelValueChange,
   onExtract,
   onImportFile,
-  importAccept = ".md,.txt,.json",
-  busy,
   progressText,
   statusText,
-  errorText,
-  executionLog,
-  logStage,
-  extractDisabled = false,
-  extractDisabledReason,
+  title,
 }: ExtractToolbarProps) {
   /* 外部导入选择器：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({

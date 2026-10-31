@@ -14,18 +14,18 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { userMock, readMock, pathMock } = vi.hoisted(() => ({
-  userMock: vi.fn<() => Promise<{ id: string } | null>>(),
-  readMock: vi.fn(),
+const { pathMock, readMock, userMock } = vi.hoisted(() => ({
   pathMock: vi.fn(() => "C:\\repo\\src\\generated\\customNodes.manifest.json"),
+  readMock: vi.fn(),
+  userMock: vi.fn<() => Promise<{ id: string } | null>>(),
 }));
 
 vi.mock("~/server/auth/request-user", () => ({
   requireRequestUser: userMock,
 }));
 vi.mock("~/lib/comfyui/custom-nodes-manifest.server", () => ({
-  readCustomNodesManifest: readMock,
   customNodesManifestPath: pathMock,
+  readCustomNodesManifest: readMock,
 }));
 
 import { GET, dynamic, runtime } from "./route";
@@ -51,7 +51,7 @@ describe("会话闸 —— 拒绝必须发生在读盘之前", () => {
    * 那就是一份机器画像。口径同产物读取口（台账 A13 那一族）——
    * 响应取决于「你是谁」就不许公开，`public` 等于让共享缓存代读。 */
   it("成功响应是 private：共享缓存不能替别人留一份画像", async () => {
-    readMock.mockReturnValue({ kind: "ok", text: "{}", stamp: "2:1" });
+    readMock.mockReturnValue({ kind: "ok", stamp: "2:1", text: "{}" });
     const res = await GET();
     expect(res.status).toBe(200);
     expect(res.headers.get("Cache-Control")).toContain("private");
@@ -72,7 +72,7 @@ describe("三相比两相：404 与 500 是两件事", () => {
   });
 
   it("unreadable → 500 + custom_nodes.manifest_unreadable，并带上 errno", async () => {
-    readMock.mockReturnValue({ kind: "unreadable", detail: "EISDIR" });
+    readMock.mockReturnValue({ detail: "EISDIR", kind: "unreadable" });
     const res = await GET();
     expect(res.status).toBe(500);
     const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
@@ -87,7 +87,7 @@ describe("三相比两相：404 与 500 是两件事", () => {
     const missing = /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
       error: { code: string };
     };
-    readMock.mockReturnValue({ kind: "unreadable", detail: "EACCES" });
+    readMock.mockReturnValue({ detail: "EACCES", kind: "unreadable" });
     const unreadable = /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
       error: { code: string };
     };
@@ -104,7 +104,7 @@ describe("三相比两相：404 与 500 是两件事", () => {
 describe("成功路径：原文直出，不经第二轮解析", () => {
   it("200 + 原文逐字 + application/json", async () => {
     const text = '{"nodes":{"KSampler":{"displayName":"K 采样器"}}}';
-    readMock.mockReturnValue({ kind: "ok", text, stamp: "123:456" });
+    readMock.mockReturnValue({ kind: "ok", stamp: "123:456", text });
     const res = await GET();
     expect(res.status).toBe(200);
     expect(await res.text()).toBe(text);
@@ -115,7 +115,7 @@ describe("成功路径：原文直出，不经第二轮解析", () => {
    * 任何一条中间缓存把旧清单当成新答案，复现的就是本次事故的形状（恒空 / 恒旧）。
    * 摘要端点用 (size, mtime) 指纹做服务端短路缓存是安全的，那份思路搬到这里不安全。 */
   it("Cache-Control 精确是 `private, no-store`，不许退化成 max-age", async () => {
-    readMock.mockReturnValue({ kind: "ok", text: "{}", stamp: null });
+    readMock.mockReturnValue({ kind: "ok", stamp: null, text: "{}" });
     const res = await GET();
     expect(res.headers.get("Cache-Control")).toBe("private, no-store");
     expect(res.headers.get("Cache-Control")).not.toMatch(/max-age/);
@@ -123,7 +123,7 @@ describe("成功路径：原文直出，不经第二轮解析", () => {
 
   it("指纹为 null 的一次读取照样回原文：能不能进缓存是调用方的事", async () => {
     // 反证：handler 若拿 stamp 当「读到没读到」的判据，这一格会被误判成故障。
-    readMock.mockReturnValue({ kind: "ok", text: '{"nodes":{}}', stamp: null });
+    readMock.mockReturnValue({ kind: "ok", stamp: null, text: '{"nodes":{}}' });
     const res = await GET();
     expect(res.status).toBe(200);
   });
@@ -132,8 +132,8 @@ describe("成功路径：原文直出，不经第二轮解析", () => {
     // 「解析出 0 个」是合法结果；把它回成 404 就把它并回了「还没解析过」。
     readMock.mockReturnValue({
       kind: "ok",
-      text: '{"nodes":{}}',
       stamp: "11:1",
+      text: '{"nodes":{}}',
     });
     const res = await GET();
     expect(res.status).toBe(200);
@@ -150,7 +150,7 @@ describe("构建期取数口径", () => {
   });
 
   it("两次请求各读一次盘（没有隐藏的模块级缓存）", async () => {
-    readMock.mockReturnValue({ kind: "ok", text: "{}", stamp: "2:1" });
+    readMock.mockReturnValue({ kind: "ok", stamp: "2:1", text: "{}" });
     await GET();
     await GET();
     expect(readMock).toHaveBeenCalledTimes(2);

@@ -65,15 +65,15 @@ export type ElementBox = {
 };
 
 const EMPTY_RECT: DOMRect = {
+  bottom: 0,
+  height: 0,
+  left: 0,
+  right: 0,
+  toJSON: () => ({}),
+  top: 0,
+  width: 0,
   x: 0,
   y: 0,
-  left: 0,
-  top: 0,
-  right: 0,
-  bottom: 0,
-  width: 0,
-  height: 0,
-  toJSON: () => ({}),
 };
 
 /**
@@ -111,18 +111,18 @@ export function readElementBox(
       : box.getBoundingClientRect();
   const view = typeof window === "undefined" ? null : window;
   return {
-    left: rect.left,
-    top: rect.top,
-    right: rect.right,
     bottom: rect.bottom,
-    width: rect.width,
-    height: rect.height,
-    clientWidth: box.clientWidth ?? 0,
     clientHeight: box.clientHeight ?? 0,
-    scrollWidth: box.scrollWidth ?? 0,
-    scrollHeight: box.scrollHeight ?? 0,
+    clientWidth: box.clientWidth ?? 0,
+    height: rect.height,
+    left: rect.left,
     pageX: view?.scrollX ?? 0,
     pageY: view?.scrollY ?? 0,
+    right: rect.right,
+    scrollHeight: box.scrollHeight ?? 0,
+    scrollWidth: box.scrollWidth ?? 0,
+    top: rect.top,
+    width: rect.width,
   };
 }
 
@@ -225,14 +225,14 @@ export type AnchorRect = {
  */
 export function rectToAnchorRect(rect: DOMRect): AnchorRect {
   return {
+    bottom: rect.bottom,
+    height: rect.height,
+    left: rect.left,
+    right: rect.right,
+    top: rect.top,
+    width: rect.width,
     x: rect.x,
     y: rect.y,
-    left: rect.left,
-    top: rect.top,
-    right: rect.right,
-    bottom: rect.bottom,
-    width: rect.width,
-    height: rect.height,
   };
 }
 

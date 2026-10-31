@@ -17,31 +17,31 @@ afterEach(cleanup);
 
 /** 复刻 ISSUE #311 里 LoadImage 节点被勾成对外参数的形状。 */
 const LOAD_IMAGE_IO: WorkflowIOMap = {
-  "23::widget::image": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "23",
-    name: "image",
-    label: "First Frame Image",
-    type: "COMBO",
-    options: ["tmp3g2v80p6.png"],
-    defaultValue: "tmp3g2v80p6.png",
-  },
-  "23::widget::upload": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "23",
-    name: "upload",
-    label: "choose 1st frame to upload",
-    type: "IMAGEUPLOAD",
-    defaultValue: "",
-  },
   "23::output::IMAGE": {
     direction: "output",
     kind: "output",
-    nodeId: "23",
     name: "IMAGE",
+    nodeId: "23",
     type: "IMAGE",
+  },
+  "23::widget::image": {
+    defaultValue: "tmp3g2v80p6.png",
+    direction: "input",
+    kind: "widget",
+    label: "First Frame Image",
+    name: "image",
+    nodeId: "23",
+    options: ["tmp3g2v80p6.png"],
+    type: "COMBO",
+  },
+  "23::widget::upload": {
+    defaultValue: "",
+    direction: "input",
+    kind: "widget",
+    label: "choose 1st frame to upload",
+    name: "upload",
+    nodeId: "23",
+    type: "IMAGEUPLOAD",
   },
 };
 

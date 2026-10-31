@@ -13,23 +13,23 @@ describe("buildProductionPayload", () => {
       ...emptyWorkshopDraft(),
       meta: {
         ...emptyWorkshopDraft().meta,
-        title: "我的短剧",
-        type: "short_video",
-        tone: "轻松",
         logline: "一句话",
+        title: "我的短剧",
+        tone: "轻松",
+        type: "short_video",
       },
       scriptMarkdown: "# 剧本",
       shots: [/* SAFETY: 类型断言已复核 */ { id: "a" } as Shot],
     };
     const payload = buildProductionPayload(draft, "storyboard", true);
     expect(payload).toMatchObject({
-      title: "我的短剧",
-      type: "short_video",
-      tone: "轻松",
       logline: "一句话",
+      progress: { rendered: true, stage: "storyboard" },
       scriptMarkdown: "# 剧本",
       shots: [{ id: "a" }],
-      progress: { stage: "storyboard", rendered: true },
+      title: "我的短剧",
+      tone: "轻松",
+      type: "short_video",
     });
   });
 });
@@ -37,18 +37,18 @@ describe("buildProductionPayload", () => {
 describe("inheritDerivedFields（#2615 保存继承）", () => {
   const existing = [
     {
+      humanVerdict: { at: "t3", note: "重画", pass: false },
       id: "shot-1",
+      imageReview: {
+        issues: ["手崩"],
+        pass: false,
+        scoredAt: "t2",
+        suggestion: "",
+      },
       prompt: "库里的旧提示词",
       rev: 3,
-      review: { pass: true, issues: [], suggestion: "", scoredAt: "t1" },
-      imageReview: {
-        pass: false,
-        issues: ["手崩"],
-        suggestion: "",
-        scoredAt: "t2",
-      },
-      humanVerdict: { pass: false, note: "重画", at: "t3" },
-      reviewHistory: [{ pass: false, issues: [], suggestion: "", scoredAt: "t0" }],
+      review: { issues: [], pass: true, scoredAt: "t1", suggestion: "" },
+      reviewHistory: [{ issues: [], pass: false, scoredAt: "t0", suggestion: "" }],
     },
     { id: "shot-gone", rev: 9 }, // 库里有、草稿已删 → 不出现在结果里
   ];
@@ -61,20 +61,20 @@ describe("inheritDerivedFields（#2615 保存继承）", () => {
     );
     expect(result).toEqual([
       {
+        humanVerdict: existing[0]!.humanVerdict,
         id: "shot-1",
+        imageReview: existing[0]!.imageReview,
         prompt: "草稿的新提示词",
-        status: "done",
         rev: 3,
         review: existing[0]!.review,
-        imageReview: existing[0]!.imageReview,
-        humanVerdict: existing[0]!.humanVerdict,
         reviewHistory: existing[0]!.reviewHistory,
+        status: "done",
       },
     ]);
   });
 
   it("入参显式带了衍生字段 → 以入参为准（继承只兜「草稿不知道」）", () => {
-    const mine = { pass: true, issues: [], suggestion: "", scoredAt: "mine" };
+    const mine = { issues: [], pass: true, scoredAt: "mine", suggestion: "" };
     const result = inheritDerivedFields(
       [{ id: "shot-1", rev: 7, review: mine }],
       existing,

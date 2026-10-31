@@ -30,42 +30,42 @@ export function prettyFolder(folder: string): string {
  */
 export const FIELD_TO_FOLDERS: Record<string, Array<string>> = {
   ckpt_name: ["checkpoints"],
-  unet_name: ["unet", "diffusion_models"],
-  vae_name: ["vae"],
-  vae: ["vae"],
+  clip: ["clip"],
   clip_name: ["clip"],
   clip_name1: ["clip"],
   clip_name2: ["clip"],
-  clip: ["clip"],
-  clip_vision_name: ["clip_vision"],
   clip_vision: ["clip_vision"],
-  text_encoders: ["text_encoders", "clip", "clip_vision"],
-  lora_name: ["loras"],
-  lora: ["loras"],
-  control_net_name: ["controlnet"],
+  clip_vision_name: ["clip_vision"],
   control_net: ["controlnet"],
+  control_net_name: ["controlnet"],
   controlnet: ["controlnet"],
   embedding: ["embeddings"],
   embeddings: ["embeddings"],
-  upscale_model: ["upscale_models"],
-  ipadapter_model_name: ["ipadapter"],
-  ipadapter: ["ipadapter"],
-  style_model_name: ["style_models"],
-  hypernetwork_name: ["hypernetworks"],
-  gligen_name: ["gligen"],
   gligen_model: ["gligen"],
-  photomaker_model_name: ["photomaker"],
-  photomaker: ["photomaker"],
-  instantid_file: ["instantid"],
-  instantid: ["instantid"],
-  motion_model: ["animatediff_models", "animatediff_motion_lora"],
-  motion_model_settings: ["animatediff_models", "animatediff_motion_lora"],
+  gligen_name: ["gligen"],
+  hypernetwork_name: ["hypernetworks"],
   insightface: ["insightface"],
   insightface_name: ["insightface"],
-  sam_model: ["sam"],
+  instantid: ["instantid"],
+  instantid_file: ["instantid"],
+  ipadapter: ["ipadapter"],
+  ipadapter_model_name: ["ipadapter"],
   liveportrait: ["liveportrait"],
   liveportrait_path: ["liveportrait"],
+  lora: ["loras"],
+  lora_name: ["loras"],
+  motion_model: ["animatediff_models", "animatediff_motion_lora"],
+  motion_model_settings: ["animatediff_models", "animatediff_motion_lora"],
+  photomaker: ["photomaker"],
+  photomaker_model_name: ["photomaker"],
   pose: ["pose"],
+  sam_model: ["sam"],
+  style_model_name: ["style_models"],
+  text_encoders: ["text_encoders", "clip", "clip_vision"],
+  unet_name: ["unet", "diffusion_models"],
+  upscale_model: ["upscale_models"],
+  vae: ["vae"],
+  vae_name: ["vae"],
 };
 
 /* 反向映射：目录名 → 从它读取的字段名（用于提示气泡）。 */
@@ -150,109 +150,109 @@ export function modelFoldersForField(field: string): Array<string> {
 
 /* 为常见 ComfyUI 目录手工整理的展示元数据。 */
 const FOLDER_META: Record<string, { color: string; label: string }> = {
-  checkpoints: {
-    label: "Checkpoint",
-    color: "text-violet-700 dark:text-violet-300 bg-violet-500/15",
-  },
-  loras: {
-    label: "LoRA",
-    color: "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15",
-  },
-  vae: { label: "VAE", color: "text-sky-700 dark:text-sky-300 bg-sky-500/15" },
-  clip: {
-    label: "CLIP",
-    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
-  },
-  clip_vision: {
-    label: "CLIP Vision",
-    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
-  },
-  text_encoders: {
-    label: "Text Encoder",
-    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
-  },
-  unet: {
-    label: "UNet",
-    color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15",
-  },
-  diffusion_models: {
-    label: "Diffusion Models",
-    color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15",
-  },
-  diffusers: {
-    label: "Diffusers",
-    color: "text-indigo-700 dark:text-indigo-300 bg-indigo-500/15",
-  },
-  controlnet: {
-    label: "ControlNet",
-    color: "text-amber-700 dark:text-amber-300 bg-amber-500/15",
-  },
-  embeddings: { label: "Embedding", color: "text-pink-600 bg-pink-500/15" },
-  upscale_models: {
-    label: "Upscale",
-    color: "text-rose-700 dark:text-rose-300 bg-rose-500/15",
-  },
-  ipadapter: {
-    label: "IP-Adapter",
-    color: "text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-500/15",
-  },
-  style_models: {
-    label: "Style",
-    color: "text-orange-700 dark:text-orange-300 bg-orange-500/15",
-  },
-  hypernetworks: {
-    label: "Hypernetwork",
-    color: "text-lime-600 bg-lime-500/15",
-  },
-  gligen: {
-    label: "GLIGEN",
-    color: "text-purple-700 dark:text-purple-300 bg-purple-500/15",
-  },
-  photomaker: {
-    label: "PhotoMaker",
-    color: "text-orange-700 dark:text-orange-300 bg-orange-500/15",
-  },
-  instantid: {
-    label: "InstantID",
-    color: "text-orange-700 dark:text-orange-300 bg-orange-500/15",
+  adetailer: {
+    color: "text-red-700 dark:text-red-300 bg-red-500/15",
+    label: "ADetailer",
   },
   animatediff_models: {
-    label: "AnimateDiff",
     color: "text-blue-700 dark:text-blue-300 bg-blue-500/15",
+    label: "AnimateDiff",
   },
   animatediff_motion_lora: {
-    label: "AnimateDiff LoRA",
     color: "text-blue-700 dark:text-blue-300 bg-blue-500/15",
-  },
-  insightface: {
-    label: "InsightFace",
-    color: "text-red-700 dark:text-red-300 bg-red-500/15",
-  },
-  ultralytics: {
-    label: "Ultralytics",
-    color: "text-red-700 dark:text-red-300 bg-red-500/15",
-  },
-  sam: { label: "SAM", color: "text-red-700 dark:text-red-300 bg-red-500/15" },
-  liveportrait: {
-    label: "LivePortrait",
-    color: "text-yellow-700 dark:text-yellow-300 bg-yellow-500/15",
-  },
-  pose: {
-    label: "Pose",
-    color: "text-slate-700 dark:text-slate-300 bg-slate-500/15",
-  },
-  adetailer: {
-    label: "ADetailer",
-    color: "text-red-700 dark:text-red-300 bg-red-500/15",
-  },
-  blip: {
-    label: "BLIP",
-    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
+    label: "AnimateDiff LoRA",
   },
   background_removal: {
-    label: "Background Removal",
     color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15",
+    label: "Background Removal",
   },
+  blip: {
+    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
+    label: "BLIP",
+  },
+  checkpoints: {
+    color: "text-violet-700 dark:text-violet-300 bg-violet-500/15",
+    label: "Checkpoint",
+  },
+  clip: {
+    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
+    label: "CLIP",
+  },
+  clip_vision: {
+    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
+    label: "CLIP Vision",
+  },
+  controlnet: {
+    color: "text-amber-700 dark:text-amber-300 bg-amber-500/15",
+    label: "ControlNet",
+  },
+  diffusers: {
+    color: "text-indigo-700 dark:text-indigo-300 bg-indigo-500/15",
+    label: "Diffusers",
+  },
+  diffusion_models: {
+    color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15",
+    label: "Diffusion Models",
+  },
+  embeddings: { color: "text-pink-600 bg-pink-500/15", label: "Embedding" },
+  gligen: {
+    color: "text-purple-700 dark:text-purple-300 bg-purple-500/15",
+    label: "GLIGEN",
+  },
+  hypernetworks: {
+    color: "text-lime-600 bg-lime-500/15",
+    label: "Hypernetwork",
+  },
+  insightface: {
+    color: "text-red-700 dark:text-red-300 bg-red-500/15",
+    label: "InsightFace",
+  },
+  instantid: {
+    color: "text-orange-700 dark:text-orange-300 bg-orange-500/15",
+    label: "InstantID",
+  },
+  ipadapter: {
+    color: "text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-500/15",
+    label: "IP-Adapter",
+  },
+  liveportrait: {
+    color: "text-yellow-700 dark:text-yellow-300 bg-yellow-500/15",
+    label: "LivePortrait",
+  },
+  loras: {
+    color: "text-emerald-700 dark:text-emerald-300 bg-emerald-500/15",
+    label: "LoRA",
+  },
+  photomaker: {
+    color: "text-orange-700 dark:text-orange-300 bg-orange-500/15",
+    label: "PhotoMaker",
+  },
+  pose: {
+    color: "text-slate-700 dark:text-slate-300 bg-slate-500/15",
+    label: "Pose",
+  },
+  sam: { color: "text-red-700 dark:text-red-300 bg-red-500/15", label: "SAM" },
+  style_models: {
+    color: "text-orange-700 dark:text-orange-300 bg-orange-500/15",
+    label: "Style",
+  },
+  text_encoders: {
+    color: "text-teal-700 dark:text-teal-300 bg-teal-500/15",
+    label: "Text Encoder",
+  },
+  ultralytics: {
+    color: "text-red-700 dark:text-red-300 bg-red-500/15",
+    label: "Ultralytics",
+  },
+  unet: {
+    color: "text-cyan-700 dark:text-cyan-300 bg-cyan-500/15",
+    label: "UNet",
+  },
+  upscale_models: {
+    color: "text-rose-700 dark:text-rose-300 bg-rose-500/15",
+    label: "Upscale",
+  },
+  vae: { color: "text-sky-700 dark:text-sky-300 bg-sky-500/15", label: "VAE" },
 };
 
 /* 非空数组：模运算取下标时用 `.at()`，缺席有兜底项（见 `folderMeta`）。 */
@@ -286,8 +286,8 @@ export function folderMeta(folder: string): { color: string; label: string } {
     return curated;
   }
   return {
-    label: prettyFolder(folder),
     color: FALLBACK_PALETTE.at(hashString(folder) % FALLBACK_PALETTE.length) ?? FALLBACK_PALETTE[0],
+    label: prettyFolder(folder),
   };
 }
 

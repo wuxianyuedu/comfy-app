@@ -57,16 +57,16 @@ export const settingRouter = createTRPCRouter({
   save: authedProcedure
     .input(
       z.object({
-        comfyuiPort: z.number().int().min(0).max(65535).optional(),
-        comfyuiPath: z.string().optional(),
         comfyuiExtraArgs: z.string().optional(),
+        comfyuiPath: z.string().optional(),
+        comfyuiPort: z.number().int().min(0).max(65535).optional(),
         /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
         comfyCliPython: z.string().optional(),
         /** 出图进程的 CPU 档位（ISSUE #1959）：off / yield / throttle。
          *  取值集合由 `~/lib/comfyui/cpu-limit` 的 `CPU_LIMIT_MODES` 单点持有，
          *  这里用 `z.enum` 跟着它 —— 别在路由里手抄一份字面量清单。 */
-        comfyuiCpuLimit: z.enum(CPU_LIMIT_MODES).optional(),
         comfyuiAutoStart: z.boolean().optional(),
+        comfyuiCpuLimit: z.enum(CPU_LIMIT_MODES).optional(),
         exitKillComfyui: z.boolean().optional(),
         exitKillOllama: z.boolean().optional(),
         /** 绑定到本地文件的工作流：进详情是否自动把磁盘最新内容同步回库。 */
@@ -128,8 +128,8 @@ export const settingRouter = createTRPCRouter({
     const status = await getComfyUiStatus();
     const base = status.base;
     return {
-      up: status.up,
       base,
+      up: status.up,
       // 「启动中」也包含「进程在但端口未绑定」（外部实例正在加载）：状态行据此
       // 显示启动中而不是未运行。
       starting: status.starting,
@@ -140,10 +140,10 @@ export const settingRouter = createTRPCRouter({
       stopping: status.stopping,
       /* 进程级快照补充信息：命中但 HTTP 未就绪时端口仍有值，状态行可提示
        * 「端口监听中」；via 说明这个实例是怎么起来的（排查「不是我起的」）。 */
-      port: status.port ?? settings.comfyuiPort,
-      via: status.via ?? null,
       autoStart: settings.comfyuiAutoStart,
       path: settings.comfyuiPath,
+      port: status.port ?? settings.comfyuiPort,
+      via: status.via ?? null,
     };
   }),
 
@@ -160,8 +160,8 @@ export const settingRouter = createTRPCRouter({
       // 手动启动＝用户明确要求拉起：manual:true 会先清掉「手动关闭后不自动
       // 启动」闩锁，确保这次手动启动不被上次手动关闭拦住（ISSUE #290）。
       const r = await ensureComfyUiReady({
-        timeoutMs: input.timeoutMs,
         manual: true,
+        timeoutMs: input.timeoutMs,
       });
       return r;
     }),
@@ -212,7 +212,7 @@ export const settingRouter = createTRPCRouter({
   dbStudioStatus: authedProcedure.query(async () => {
     const port = DRIZZLE_STUDIO_DEFAULT_PORT;
     const up = await probeDrizzleStudio(port).catch(() => false);
-    return { up, port, starting: isDrizzleStudioStarting() };
+    return { port, starting: isDrizzleStudioStarting(), up };
   }),
 
   /** 启动 Drizzle Studio（设置页按钮）：未运行时解析 drizzle-kit 并拉起等待就绪 */

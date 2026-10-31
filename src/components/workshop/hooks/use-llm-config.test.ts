@@ -7,33 +7,30 @@ import SuperJSON from "superjson";
 import { describe, expect, it, afterAll, afterEach, beforeAll } from "vitest";
 
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
-import {
-  createTestTRPC,
-  testTrpcEndpoint,
-} from "../../../../tests/helpers/test-trpc";
+import { createTestTRPC, testTrpcEndpoint } from "../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
 import { useLLMConfig } from "./use-llm-config";
 
 const CFG = {
-  provider: "local",
   baseUrl: "http://localhost:11434/v1",
-  model: "qwen3:14b",
   extraModels: [
     "qwen3:14b",
     "llama3",
     // chat 类型
-    { name: "gpt-4o", baseUrl: "https://x/v1", apiKey: "k", kind: "chat" },
+    { apiKey: "k", baseUrl: "https://x/v1", kind: "chat", name: "gpt-4o" },
     // kind 缺省 → 按 chat 处理
-    { name: "legacy-model", baseUrl: "https://w/v1", apiKey: "k" },
+    { apiKey: "k", baseUrl: "https://w/v1", name: "legacy-model" },
     // 图片 / 视频类型 → 不应收入工坊文本候选
-    { name: "dall-e-3", baseUrl: "https://y/v1", apiKey: "k", kind: "image" },
-    { name: "sora", baseUrl: "https://z/v1", apiKey: "k", kind: "video" },
+    { apiKey: "k", baseUrl: "https://y/v1", kind: "image", name: "dall-e-3" },
+    { apiKey: "k", baseUrl: "https://z/v1", kind: "video", name: "sora" },
   ],
-  temperature: 0.7,
-  maxTokens: 2048,
   hasApiKey: false,
+  maxTokens: 2048,
+  model: "qwen3:14b",
+  provider: "local",
+  temperature: 0.7,
 };
 
 const t = createTestTRPC();
@@ -62,9 +59,9 @@ function makeWrapper(qc: QueryClient) {
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
       createElement(TRPCProvider, {
-        trpcClient: client,
-        queryClient: qc,
         children,
+        queryClient: qc,
+        trpcClient: client,
       }),
     );
   };
@@ -80,9 +77,7 @@ describe("useLLMConfig 播种：本地/远端候选拆出", () => {
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => result.current.localModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.localModels.length).toBeGreaterThan(0);
     expect(result.current.localModels).toContain("llama3");
     expect(result.current.remoteModels).toContain("gpt-4o");
   });
@@ -92,18 +87,14 @@ describe("useLLMConfig 播种：本地/远端候选拆出", () => {
     const first = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => first.result.current.localModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => first.result.current.localModels.length).toBeGreaterThan(0);
     first.unmount();
 
     // 查询缓存仍在，首帧即命中 —— 回归：播种守卫若只比引用会被缓存命中跳过。
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => result.current.localModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.localModels.length).toBeGreaterThan(0);
     expect(result.current.localModels).toContain("llama3");
     expect(result.current.remoteModels).toContain("gpt-4o");
   });
@@ -115,9 +106,7 @@ describe("useLLMConfig 远端模型 kind 过滤", () => {
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => result.current.remoteModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.remoteModels.length).toBeGreaterThan(0);
 
     // chat kind 与 kind 缺省（null → chat）都应保留
     expect(result.current.remoteModels).toContain("gpt-4o");
@@ -141,9 +130,7 @@ describe("useLLMConfig 远端生图模型清单", () => {
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => result.current.remoteImageModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.remoteImageModels.length).toBeGreaterThan(0);
     expect(result.current.remoteImageModels).toContain("dall-e-3");
     // chat / video 条目不进生图清单
     expect(result.current.remoteImageModels).not.toContain("gpt-4o");
@@ -154,13 +141,13 @@ describe("useLLMConfig 远端生图模型清单", () => {
 describe("useLLMConfig 生效提供方（本机 ollama 误存为「远端」的归组修正）", () => {
   it("provider=remote 但 baseUrl 回环且无密钥 → 主模型归本地组，config.provider 按本地生效", async () => {
     currentCfg = {
-      provider: "remote",
       baseUrl: "http://127.0.0.1:11434/v1",
-      model: "qwen3:14b",
       extraModels: ["llama3"],
-      temperature: 0.7,
-      maxTokens: 2048,
       hasApiKey: false,
+      maxTokens: 2048,
+      model: "qwen3:14b",
+      provider: "remote",
+      temperature: 0.7,
     };
     const qc = createTestQueryClient();
     const { result } = renderHook(() => useLLMConfig(), {
@@ -175,14 +162,14 @@ describe("useLLMConfig 生效提供方（本机 ollama 误存为「远端」的�
 
   it("回环但配置了密钥（本机网关转发远端的形态）→ 仍按远端分组", async () => {
     currentCfg = {
-      provider: "remote",
-      baseUrl: "http://127.0.0.1:3000/v1",
-      model: "qwen3:14b",
-      extraModels: [],
       apiKey: "sk-gateway",
-      temperature: 0.7,
-      maxTokens: 2048,
+      baseUrl: "http://127.0.0.1:3000/v1",
+      extraModels: [],
       hasApiKey: true,
+      maxTokens: 2048,
+      model: "qwen3:14b",
+      provider: "remote",
+      temperature: 0.7,
     };
     const qc = createTestQueryClient();
     const { result } = renderHook(() => useLLMConfig(), {
@@ -195,13 +182,13 @@ describe("useLLMConfig 生效提供方（本机 ollama 误存为「远端」的�
 
   it("真远端（非回环）配置不受影响，主模型归远端组", async () => {
     currentCfg = {
-      provider: "remote",
       baseUrl: "https://api.openai.com/v1",
-      model: "gpt-4o",
       extraModels: [],
-      temperature: 0.7,
-      maxTokens: 2048,
       hasApiKey: false,
+      maxTokens: 2048,
+      model: "gpt-4o",
+      provider: "remote",
+      temperature: 0.7,
     };
     const qc = createTestQueryClient();
     const { result } = renderHook(() => useLLMConfig(), {

@@ -21,11 +21,11 @@ const AUTOSTART_TIMEOUT_MS = 120_000;
 /** `ensureComfyUiReady` 的入参形状（路由传的是短窗口 timeoutMs + onLog）。 */
 type EnsureOptions = { onLog: (msg: string) => void; timeoutMs: number };
 
-const { requireRequestUser, probeComfyUi, ensureComfyUiReady, logger } = vi.hoisted(() => ({
-  requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
-  probeComfyUi: vi.fn<(ms: number) => Promise<string | null>>(),
+const { ensureComfyUiReady, logger, probeComfyUi, requireRequestUser } = vi.hoisted(() => ({
   ensureComfyUiReady: vi.fn<(options: EnsureOptions) => Promise<unknown>>(),
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+  probeComfyUi: vi.fn<(ms: number) => Promise<string | null>>(),
+  requireRequestUser: vi.fn<() => Promise<{ id: string } | null>>(),
 }));
 
 vi.mock("~/server/auth/request-user", () => ({
@@ -33,9 +33,9 @@ vi.mock("~/server/auth/request-user", () => ({
 }));
 
 vi.mock("~/lib/comfyui/lifecycle", () => ({
-  probeComfyUi: (ms: number) => probeComfyUi(ms),
-  ensureComfyUiReady: (options: EnsureOptions) => ensureComfyUiReady(options),
   COMFYUI_AUTOSTART_TIMEOUT_MS: 120_000,
+  ensureComfyUiReady: (options: EnsureOptions) => ensureComfyUiReady(options),
+  probeComfyUi: (ms: number) => probeComfyUi(ms),
 }));
 
 vi.mock("~/server/lib/logger", () => ({ logger }));
@@ -65,9 +65,9 @@ describe("POST /api/comfy/ensure", () => {
     const res = await POST();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      ok: true,
       base: "http://127.0.0.1:8188",
       detail: "ComfyUI 已在运行",
+      ok: true,
     });
     expect(ensureComfyUiReady).not.toHaveBeenCalled();
   });
@@ -79,18 +79,18 @@ describe("POST /api/comfy/ensure", () => {
     ensureComfyUiReady.mockImplementationOnce(async (options) => {
       options.onLog("正在拉起 ComfyUI…");
       return {
-        ok: true,
         base: "http://127.0.0.1:8189",
         detail: "已启动并就绪",
+        ok: true,
       };
     });
     const { POST } = await import("./route");
     const res = await POST();
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({
-      ok: true,
       base: "http://127.0.0.1:8189",
       detail: "已启动并就绪",
+      ok: true,
     });
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining("[comfyui-ensure] 正在拉起 ComfyUI…"),
@@ -100,16 +100,16 @@ describe("POST /api/comfy/ensure", () => {
   it("还在启动中 → 202 pending，并回自动启动的等待上限供前端计时", async () => {
     probeComfyUi.mockResolvedValueOnce(null);
     ensureComfyUiReady.mockResolvedValueOnce({
-      ok: false,
       detail: "ComfyUI 正在启动，请稍候",
+      ok: false,
     });
     const { POST } = await import("./route");
     const res = await POST();
     expect(res.status).toBe(202);
     await expect(res.json()).resolves.toEqual({
+      detail: "ComfyUI 正在启动，请稍候",
       ok: false,
       pending: true,
-      detail: "ComfyUI 正在启动，请稍候",
       timeoutMs: AUTOSTART_TIMEOUT_MS,
     });
   });
@@ -126,9 +126,9 @@ describe("POST /api/comfy/ensure", () => {
       pending: boolean;
     };
     expect(body).toEqual({
+      detail: "找不到 comfy-cli 的虚拟环境",
       ok: false,
       pending: false,
-      detail: "找不到 comfy-cli 的虚拟环境",
     });
     // 失败必须有日志（AGENTS 硬规则 4），不能只回一个状态码。
     expect(logger.error).toHaveBeenCalled();
@@ -147,7 +147,7 @@ describe("POST /api/comfy/ensure", () => {
 
   it("单次请求只等短窗口：整段冷启动交给前端轮，而不是把请求挂死", async () => {
     probeComfyUi.mockResolvedValueOnce(null);
-    ensureComfyUiReady.mockResolvedValueOnce({ ok: false, detail: "启动中" });
+    ensureComfyUiReady.mockResolvedValueOnce({ detail: "启动中", ok: false });
     const { POST } = await import("./route");
     await POST();
     const options = ensureComfyUiReady.mock.calls[0]?.[0];

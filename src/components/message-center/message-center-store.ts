@@ -101,12 +101,24 @@ function makeId(): string {
 const MAX_MESSAGES = 200;
 
 export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
-  open: false,
-  messages: [],
-  hydrated: false,
+  clear: () => set({ messages: [] }),
   currentRunId: null,
-  setOpen: (open) => set({ open }),
-  toggleOpen: () => set({ open: !get().open }),
+  hydrate: () =>
+    set((s) => ({
+      hydrated: true,
+      messages: restoreMessages(s.messages),
+    })),
+  hydrated: false,
+  markAllRead: () =>
+    set((s) => ({
+      messages: s.messages.map((x) => (x.read ? x : { ...x, read: true })),
+    })),
+  markRead: (id) =>
+    set((s) => ({
+      messages: s.messages.map((x) => (x.id === id ? { ...x, read: true } : x)),
+    })),
+  messages: [],
+  open: false,
   push: (m) =>
     set((s) => ({
       messages: [
@@ -120,10 +132,10 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
            * （纯手工 `pnpm dev` 起的服务、探活还没答过第一次），它必须留 null；
            * 被 `??` 补成当前启动，等于断言「它属于现在这次启动」——一个不知道的
            * 事实，而面板据此分组，断言错了就是分错批次。 */
-          runId: m.runId === undefined ? s.currentRunId : m.runId,
           id: makeId(),
-          time: m.time ?? Date.now(),
           read: false,
+          runId: m.runId === undefined ? s.currentRunId : m.runId,
+          time: m.time ?? Date.now(),
         },
         ...s.messages,
       ]
@@ -132,22 +144,10 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
         .sort((a, b) => b.time - a.time)
         .slice(0, MAX_MESSAGES),
     })),
-  setCurrentRunId: (runId) => set({ currentRunId: runId }),
-  markRead: (id) =>
-    set((s) => ({
-      messages: s.messages.map((x) => (x.id === id ? { ...x, read: true } : x)),
-    })),
-  markAllRead: () =>
-    set((s) => ({
-      messages: s.messages.map((x) => (x.read ? x : { ...x, read: true })),
-    })),
   remove: (id) => set((s) => ({ messages: s.messages.filter((x) => x.id !== id) })),
-  clear: () => set({ messages: [] }),
-  hydrate: () =>
-    set((s) => ({
-      hydrated: true,
-      messages: restoreMessages(s.messages),
-    })),
+  setCurrentRunId: (runId) => set({ currentRunId: runId }),
+  setOpen: (open) => set({ open }),
+  toggleOpen: () => set({ open: !get().open }),
 }));
 
 /* ── 持久化：消息中心此前是纯内存的，于是「记了等于没记」 ──────────────────
@@ -208,13 +208,13 @@ function asMessageRecord(raw: unknown): MessageRecord | null {
     return null;
   }
   return {
+    body: o.body,
     id: o.id,
     kind: /* SAFETY: 类型断言已复核 */ o.kind as MessageKind,
-    title: o.title,
-    body: o.body,
-    time: o.time,
     read: o.read,
     runId: typeof o.runId === "string" && o.runId ? o.runId : null,
+    time: o.time,
+    title: o.title,
   };
 }
 

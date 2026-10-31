@@ -53,16 +53,16 @@ type HistoryDetailModalProps = {
  * 网络在 lib/history-detail-actions.ts；本文件只做排版与事件上抛。
  */
 export function HistoryDetailModal({
-  detailId,
   detail,
+  detailId,
   detailLoading,
-  workflowIO,
   modeContracts,
   onClose,
+  workflowIO,
 }: HistoryDetailModalProps) {
   const actions = useHistoryDetailActions({
-    openFolder: openTaskFolder,
     fetchWorkflow: fetchTaskWorkflow,
+    openFolder: openTaskFolder,
   });
   const toast = useToast();
   /* 重绘 / 放大的反馈通道（与 use-history-detail-actions 的 toast 适配同一形状，
@@ -83,9 +83,9 @@ export function HistoryDetailModal({
       ? deriveWorkshopParams(current, current?.type ?? null, modeContracts, workflowIO)
       : [];
   const {
+    hasAny: hasParams,
     rows: paramRows,
     topLevelEntries,
-    hasAny: hasParams,
   } = deriveWorkflowParams(current, workflowIO);
   const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
   const snapSource = /* SAFETY: 类型断言已复核 */ (
@@ -279,8 +279,8 @@ export function HistoryDetailModal({
                             读数的人侧输入，收藏是 few-shot 沉淀机制的输入。 */}
                         <ImageFeedbackRow
                           image={{
-                            id: img.id,
                             humanRating: img.humanRating ?? null,
+                            id: img.id,
                             isFavorite: img.isFavorite,
                           }}
                         />
@@ -327,13 +327,13 @@ export function HistoryDetailModal({
                       items={workshopParams.map((row) => ({
                         id: row.id,
                         key: row.label,
+                        title: row.label,
                         value:
                           row.value === undefined ? (
                             <span className="text-ink-fainter">未提供</span>
                           ) : (
                             kvValueText(row.value)
                           ),
-                        title: row.label,
                       }))}
                       keyClassName="text-ink-muted"
                       layout="table"

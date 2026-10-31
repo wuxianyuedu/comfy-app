@@ -23,20 +23,20 @@ const VARIANTS: Array<AlertVariant> = [
 ];
 
 const meta = {
-  title: "UI/Alert",
-  component: Alert,
   args: {
-    variant: "info",
     children: (
       <>
         <AlertTitle>工作流未保存</AlertTitle>
         <AlertDescription>关闭前请先保存，否则本次改动会丢失。</AlertDescription>
       </>
     ),
+    variant: "info",
   },
   argTypes: {
     variant: { control: "select", options: VARIANTS },
   },
+  component: Alert,
+  title: "UI/Alert",
 } satisfies Meta<typeof Alert>;
 
 export default meta;
@@ -62,7 +62,6 @@ export const Variants: Story = {
 /** 带图标：`has-[>svg]` 那套栅格只在真的有图标时才生效。 */
 export const WithIcon: Story = {
   args: {
-    variant: "warning",
     children: (
       <>
         <TriangleAlert />
@@ -70,6 +69,7 @@ export const WithIcon: Story = {
         <AlertDescription>该端口已被另一个实例监听，请先关闭它再重试。</AlertDescription>
       </>
     ),
+    variant: "warning",
   },
 };
 
@@ -99,7 +99,6 @@ export const WithAction: Story = {
 /** 错误面板的形态：图标 + 标题 + 可照做的下一步。 */
 export const Attention: Story = {
   args: {
-    variant: "destructive",
     children: (
       <>
         <CircleAlert />
@@ -107,5 +106,6 @@ export const Attention: Story = {
         <AlertDescription>workflow.json 不是合法的 JSON，请检查文件后重试。</AlertDescription>
       </>
     ),
+    variant: "destructive",
   },
 };

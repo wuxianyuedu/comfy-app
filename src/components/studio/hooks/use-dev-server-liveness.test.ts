@@ -21,12 +21,12 @@ import {
 
 const EXIT_RECORD = {
   at: "2026-10-10T10:00:00.000Z",
-  kind: "dev-server",
   code: 137,
-  signal: null,
-  reason: "Next.js dev server 提前退出（exit=137）",
+  kind: "dev-server",
   port: 3100,
+  reason: "Next.js dev server 提前退出（exit=137）",
   runId: "run-old",
+  signal: null,
 };
 
 /** 取请求 URL（输入可能是字符串 / URL / Request 三种形态）。 */
@@ -40,16 +40,16 @@ function urlOf(input: RequestInfo | URL): string {
 /** 造一条 fetch 实现：按 URL 分派，并记录每个端点被打了几次。 */
 function stubFetch({
   bootId = "dev-boot:new",
-  runId = "a1b2c3",
   currentRunId = "run-new",
   record = EXIT_RECORD,
+  runId = "a1b2c3",
 }: {
   bootId?: string;
   currentRunId?: string | null;
   record?: unknown;
   runId?: string | null;
 } = {}) {
-  const calls = { serverId: 0, lastExit: 0 };
+  const calls = { lastExit: 0, serverId: 0 };
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -60,7 +60,7 @@ function stubFetch({
       }
       if (url.includes("/api/dev/last-exit")) {
         calls.lastExit += 1;
-        return new Response(JSON.stringify({ record, currentRunId }), {
+        return new Response(JSON.stringify({ currentRunId, record }), {
           status: 200,
         });
       }
@@ -119,8 +119,8 @@ describe("useDevServerLiveness：上一次结束的原因", () => {
 
   it("记录说的就是当前这份进程（runId 相同）→ 不显示（描写的不是过去那一次）", async () => {
     const calls = stubFetch({
-      record: { ...EXIT_RECORD, runId: "run-new" },
       currentRunId: "run-new",
+      record: { ...EXIT_RECORD, runId: "run-new" },
     });
     const { result } = renderHook(() => useDevServerLiveness());
     await expect.poll(() => result.current.everOnline).toBe(true);
@@ -189,7 +189,7 @@ describe("useDevServerLiveness：当前是哪一次启动（runId）", () => {
           }
           return new Response(JSON.stringify({ bootId: "b1", runId: "a1b2c3" }), { status: 200 });
         }
-        return new Response(JSON.stringify({ record: null, currentRunId: "a1b2c3" }), {
+        return new Response(JSON.stringify({ currentRunId: "a1b2c3", record: null }), {
           status: 200,
         });
       }),
@@ -231,7 +231,7 @@ describe("useDevServerLiveness：单拍抖动不算断开", () => {
             status: 200,
           });
         }
-        return new Response(JSON.stringify({ record: null, currentRunId: "run-new" }), {
+        return new Response(JSON.stringify({ currentRunId: "run-new", record: null }), {
           status: 200,
         });
       }),
@@ -285,7 +285,7 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           return new Response("{}", { status: 404 });
         }
-        return new Response(JSON.stringify({ record: null, currentRunId: null }), { status: 200 });
+        return new Response(JSON.stringify({ currentRunId: null, record: null }), { status: 200 });
       }),
     );
   }
@@ -309,7 +309,7 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
             ? new Response("{}", { status: 404 })
             : new Response(JSON.stringify({ bootId: "b1" }), { status: 200 });
         }
-        return new Response(JSON.stringify({ record: null, currentRunId: null }), { status: 200 });
+        return new Response(JSON.stringify({ currentRunId: null, record: null }), { status: 200 });
       }),
     );
     const { result } = renderHook(() => useDevServerLiveness());
@@ -326,7 +326,7 @@ describe("useDevServerLiveness：探活端点 404（陈旧路由表）", () => {
         if (urlOf(input).includes("/api/dev/server-id")) {
           throw new Error("ECONNREFUSED");
         }
-        return new Response(JSON.stringify({ record: null, currentRunId: null }), { status: 200 });
+        return new Response(JSON.stringify({ currentRunId: null, record: null }), { status: 200 });
       }),
     );
     const { result } = renderHook(() => useDevServerLiveness());

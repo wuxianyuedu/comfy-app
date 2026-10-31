@@ -14,9 +14,9 @@ export const MAX_PORTRAIT_LOG = 200;
 
 /** 候选来源角标文案。 */
 export const PORTRAIT_SOURCE_LABELS: Record<PortraitSource, string> = {
+  import: "导入",
   local: "本地",
   remote: "远端",
-  import: "导入",
 };
 
 /** 定妆照生成过程的一条日志（进度 / 结果 / 错误），供界面折叠展示。 */
@@ -28,7 +28,7 @@ export type PortraitLogEntry = {
 };
 
 export function makePortraitLog(level: PortraitLogEntry["level"], text: string): PortraitLogEntry {
-  return { ts: Date.now(), level, text };
+  return { level, text, ts: Date.now() };
 }
 
 /** 追加一条日志；超上限丢最旧的一条。 */
@@ -57,9 +57,9 @@ export function normalizePortrait(raw: unknown): CharacterPortrait | null {
   }
   const createdAt = candidate.createdAt;
   return {
-    url,
-    source: isPortraitSource(candidate.source) ? candidate.source : "import",
     createdAt: typeof createdAt === "number" && Number.isFinite(createdAt) ? createdAt : 0,
+    source: isPortraitSource(candidate.source) ? candidate.source : "import",
+    url,
     ...(typeof candidate.model === "string" && candidate.model ? { model: candidate.model } : {}),
     ...(typeof candidate.taskId === "string" && candidate.taskId
       ? { taskId: candidate.taskId }

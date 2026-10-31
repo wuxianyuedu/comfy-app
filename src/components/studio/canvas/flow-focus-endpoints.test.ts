@@ -22,8 +22,8 @@ function focusOf(
   const selectedSet = new Set(selected);
   return resolveEdgeFocus({
     endpoints,
-    resolveNodeId: identity,
     isSelected: (nodeId) => selectedSet.has(nodeId),
+    resolveNodeId: identity,
   });
 }
 
@@ -55,8 +55,8 @@ describe("resolveEdgeFocus", () => {
   it("端点解析不出来（不在当前图里）→ 不当作选中，回落 none", () => {
     const focus = resolveEdgeFocus({
       endpoints: { source: "ghost", target: "ghost2" },
-      resolveNodeId: () => null,
       isSelected: () => true,
+      resolveNodeId: () => null,
     });
     expect(focus).toBe("none");
   });
@@ -65,9 +65,9 @@ describe("resolveEdgeFocus", () => {
     /* 折叠节点用锚点 id 渲染，边挂在锚点上；选中事实源却是业务节点 id。 */
     const focus = resolveEdgeFocus({
       endpoints: { source: "collapse:7", target: "9" },
+      isSelected: (nodeId) => nodeId === "7",
       resolveNodeId: (visualNodeId) =>
         visualNodeId === "collapse:7" ? "7" : visualNodeId === "9" ? null : null,
-      isSelected: (nodeId) => nodeId === "7",
     });
     expect(focus).toBe("downstream");
   });

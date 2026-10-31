@@ -22,8 +22,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover
  * 翻转 / 收边（`flip` / `shift`）由 base-ui 的 Positioner 自带，不必自己夹紧视口。
  */
 const meta = {
-  title: "UI/Popover",
   component: Popover,
+  title: "UI/Popover",
 } satisfies Meta<typeof Popover>;
 
 export default meta;

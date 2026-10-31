@@ -53,13 +53,11 @@ function offlineIdea(text: string, kind: "image" | "video" = "image"): AgentSpec
   const trimmed = text.trim();
 
   return {
-    prompt: `${trimmed}，电影级构图，细节丰富，光影自然，8k 高清`,
+    kind,
 
     negative: "低质量，模糊，变形，水印，多余文字",
 
     params: {
-      steps: 25,
-
       cfg: kind === "video" ? 6 : 7,
 
       sampler: "euler",
@@ -67,11 +65,13 @@ function offlineIdea(text: string, kind: "image" | "video" = "image"): AgentSpec
       scheduler: "normal",
 
       size: kind === "video" ? "832x480" : "1024x1024",
+
+      steps: 25,
     },
 
-    skillHint: "",
+    prompt: `${trimmed}，电影级构图，细节丰富，光影自然，8k 高清`,
 
-    kind,
+    skillHint: "",
   };
 }
 
@@ -94,31 +94,31 @@ function offlineAgent(history: Array<ChatMessage>): AgentTurnResult {
   const userMsgs = history.filter((history) => history.role === "user").map((msg) => msg.content);
   if (userMsgs.length === 0) {
     return {
-      reply: "你好！想生成【图片】还是【视频】？简单描述下主题就行～",
       ready: false,
+      reply: "你好！想生成【图片】还是【视频】？简单描述下主题就行～",
     };
   }
   const kind = detectKind(userMsgs);
   if (!kind) {
     return {
-      reply: "明白～那你想生成的是【图片】还是【视频】呢？",
       ready: false,
+      reply: "明白～那你想生成的是【图片】还是【视频】呢？",
     };
   }
   if (userMsgs.length < 2) {
     return {
+      ready: false,
       reply:
         kind === "video"
           ? "好的，视频大概几秒？（如 3 秒 / 5 秒）想要什么风格？"
           : "好的，想要什么风格？（如 写实 / 动漫 / 电影感 / 水彩）以及大致尺寸？",
-      ready: false,
     };
   }
   const text = userMsgs.join("，");
   const spec = offlineIdea(text, kind);
   return {
-    reply: `好的，我已整理好${kind === "video" ? "视频" : "图片"}生成方案，点击下方按钮即可生成。`,
     ready: true,
+    reply: `好的，我已整理好${kind === "video" ? "视频" : "图片"}生成方案，点击下方按钮即可生成。`,
     spec,
   };
 }
@@ -134,16 +134,16 @@ type RawSpec = {
 function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
   const params = s?.params ?? {};
   return {
-    prompt: typeof s?.prompt === "string" ? s.prompt : "",
-    negative: typeof s?.negative === "string" ? s.negative : undefined,
     kind: s?.kind === "video" ? "video" : "image",
+    negative: typeof s?.negative === "string" ? s.negative : undefined,
     params: {
-      steps: typeof params.steps === "number" ? params.steps : undefined,
       cfg: typeof params.cfg === "number" ? params.cfg : undefined,
       sampler: typeof params.sampler === "string" ? params.sampler : undefined,
       scheduler: typeof params.scheduler === "string" ? params.scheduler : undefined,
       size: typeof params.size === "string" ? params.size : undefined,
+      steps: typeof params.steps === "number" ? params.steps : undefined,
     },
+    prompt: typeof s?.prompt === "string" ? s.prompt : "",
     skillHint: typeof s?.skillHint === "string" ? s.skillHint : undefined,
   };
 }
@@ -154,16 +154,16 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
  *                 系统提示词在内部注入）。
  */
 export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnResult> {
-  const sysMsg: ChatMessage = { role: "system", content: MULTITURN_SYSTEM };
+  const sysMsg: ChatMessage = { content: MULTITURN_SYSTEM, role: "system" };
   try {
     const res = await fetch("/api/llm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        maxTokens: 700,
         messages: [sysMsg, ...history],
         temperature: 0.7,
-        maxTokens: 700,
       }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
     });
     if (!res.ok) {
       throw new Error("llm failed");
@@ -182,14 +182,14 @@ export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnR
       };
       if (parsed.ready === true && parsed.spec) {
         return {
-          reply: parsed.reply ?? "已为你整理好方案。",
           ready: true,
+          reply: parsed.reply ?? "已为你整理好方案。",
           spec: normalizeSpec(parsed.spec),
         };
       }
-      return { reply: parsed.reply ?? content, ready: false };
+      return { ready: false, reply: parsed.reply ?? content };
     }
-    return { reply: content || "（无回复）", ready: false };
+    return { ready: false, reply: content || "（无回复）" };
   } catch {
     return offlineAgent(history);
   }
@@ -197,6 +197,6 @@ export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnR
 
 /* 一次性扩写（兼容旧调用的助手）。 */
 export async function expandIdea(text: string): Promise<AgentSpec> {
-  const res = await chatAgent([{ role: "user", content: text }]);
+  const res = await chatAgent([{ content: text, role: "user" }]);
   return res.spec ?? offlineIdea(text);
 }

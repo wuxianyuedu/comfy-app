@@ -8,18 +8,17 @@ import { deriveDevServerStatus } from "./dev-server-status";
 
 const base = {
   everOnline: true,
+  lastExit: null,
+  lastRestartAt: null,
   reachable: true,
   restarted: false,
-  lastRestartAt: null,
-  lastExit: null,
 };
 
 /** 一条「上一次为什么结束」的通知（形态与 describeAppServiceExit 一致）。 */
 const exitNotice = {
-  why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
   action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
-  detail:
-    "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+  detail: "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+  why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
 };
 
 describe("deriveDevServerStatus", () => {
@@ -51,8 +50,8 @@ describe("deriveDevServerStatus", () => {
   it("检测到真正重启 → 仍在 online，但文案切到「已重启」并提示任务已丢", () => {
     const s = deriveDevServerStatus({
       ...base,
-      restarted: true,
       lastRestartAt: Date.parse("2026-09-12T08:30:00"),
+      restarted: true,
     });
     expect(s.state).toBe("online");
     expect(s.label).toBe("应用服务已重启");
@@ -61,8 +60,7 @@ describe("deriveDevServerStatus", () => {
 
   it("四态文案互不相同且非空（状态必须一眼可辨）", () => {
     const labels = [
-      deriveDevServerStatus({ ...base, everOnline: false, reachable: false })
-        .label,
+      deriveDevServerStatus({ ...base, everOnline: false, reachable: false }).label,
       deriveDevServerStatus(base).label,
       deriveDevServerStatus({ ...base, reachable: false }).label,
       deriveDevServerStatus({
@@ -114,8 +112,8 @@ describe("deriveDevServerStatus", () => {
   it("断开且原因已知 → 状态栏 title 说出**为什么**与**怎么办**（规范 §10.3.1）", () => {
     const s = deriveDevServerStatus({
       ...base,
-      reachable: false,
       lastExit: exitNotice,
+      reachable: false,
     });
     expect(s.state).toBe("offline");
     expect(s.title).toContain(exitNotice.why);
@@ -133,9 +131,9 @@ describe("deriveDevServerStatus", () => {
   it("刚重启且原因已知 → title 把「后果」与「为什么」接成一句（过去只有后果）", () => {
     const s = deriveDevServerStatus({
       ...base,
-      restarted: true,
-      lastRestartAt: Date.parse("2026-10-10T10:00:00"),
       lastExit: exitNotice,
+      lastRestartAt: Date.parse("2026-10-10T10:00:00"),
+      restarted: true,
     });
     expect(s.state).toBe("online");
     expect(s.title).toContain(exitNotice.why);
@@ -154,8 +152,8 @@ describe("deriveDevServerStatus", () => {
     const s = deriveDevServerStatus({
       ...base,
       everOnline: false,
-      reachable: false,
       lastExit: exitNotice,
+      reachable: false,
     });
     expect(s.state).toBe("starting");
     expect(s.exitNotice).toBeNull();

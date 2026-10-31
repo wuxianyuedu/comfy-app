@@ -39,8 +39,8 @@ export function useModeContracts() {
     /** 用户改过的契约（未改过的模式不在其中）。 */
     contracts,
     loading: query.isLoading,
+    refetch: query.refetch,
     save,
     saving: saveBusy.busy,
-    refetch: query.refetch,
   };
 }

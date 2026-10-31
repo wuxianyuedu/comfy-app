@@ -23,8 +23,8 @@ type SeedMode = "fixed" | "increment" | "decrement" | "random";
 const MODES: Array<SeedMode> = ["fixed", "increment", "decrement", "random"];
 
 const meta = {
-  title: "UI/SeedModeButton",
   component: SeedModeButton,
+  title: "UI/SeedModeButton",
   /* `onPick` 是必填回调（真机上由画布层写回节点的 `seedModes`）——
      它的位置在 Args 里可由 Storybook 的 action 面板替下来，但类型上是必填的，
      所以给一个显式空实现而不是省略它。 */

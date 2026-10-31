@@ -13,16 +13,16 @@ afterEach(cleanup);
 
 function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
   return {
+    data,
     id: "e-test",
     source: "1",
-    target: "2",
+    sourcePosition: /* SAFETY: 类型断言已复核 */ "right" as Position,
     sourceX: 0,
     sourceY: 0,
+    target: "2",
+    targetPosition: /* SAFETY: 类型断言已复核 */ "left" as Position,
     targetX: 200,
     targetY: 0,
-    sourcePosition: /* SAFETY: 类型断言已复核 */ "right" as Position,
-    targetPosition: /* SAFETY: 类型断言已复核 */ "left" as Position,
-    data,
   };
 }
 
@@ -40,8 +40,8 @@ function wireStyles(data: Record<string, unknown> | undefined) {
   return painted.map((path) => {
     const style = path.getAttribute("style") ?? "";
     return {
-      width: Number(/stroke-width:\s*([\d.]+)/.exec(style)?.[1]),
       opacity: Number(/(?:^|;)\s*opacity:\s*([\d.]+)/.exec(style)?.[1]),
+      width: Number(/stroke-width:\s*([\d.]+)/.exec(style)?.[1]),
     };
   });
 }

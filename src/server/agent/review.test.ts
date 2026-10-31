@@ -8,15 +8,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { completeLLM, completeLLMStructured, getLLMConfig, getVisionLLMConfig } = vi.hoisted(() => ({
   completeLLM: vi.fn(async (_cfg: unknown, _msgs: unknown) => "## 场景1 · 街道（夜）· 改写版"),
   completeLLMStructured: vi.fn<(cfg: unknown, msgs: unknown, schema: unknown) => Promise<unknown>>(
-    async () => ({ pass: true, issues: [], suggestion: "" }),
+    async () => ({ issues: [], pass: true, suggestion: "" }),
   ),
   getLLMConfig: vi.fn(async () => ({})),
   getVisionLLMConfig: vi.fn(async () => ({ model: "vision" })),
 }));
 vi.mock("~/lib/llm/server", () => ({
-  getLLMConfig,
-  completeLLMStructured,
   completeLLM,
+  completeLLMStructured,
+  getLLMConfig,
   getVisionLLMConfig,
 }));
 
@@ -51,16 +51,16 @@ async function seed(content: {
   shots?: Array<unknown>;
 }) {
   await productionRepository.upsertForUser(USER, {
-    id: PROJ,
-    title: "夜班车",
-    type: "short_video",
-    tone: "冷峻",
-    logline: "司机与乘客",
-    scriptMarkdown: content.scriptMarkdown ?? "# 剧本",
-    scenes: [],
     characters: content.characters ?? [],
+    id: PROJ,
+    logline: "司机与乘客",
+    progress: { rendered: false, stage: "script" },
+    scenes: [],
+    scriptMarkdown: content.scriptMarkdown ?? "# 剧本",
     shots: content.shots ?? [],
-    progress: { stage: "script", rendered: false },
+    title: "夜班车",
+    tone: "冷峻",
+    type: "short_video",
   });
 }
 
@@ -75,11 +75,11 @@ async function rows(col: "shots" | "characters"): Promise<Array<Record<string, u
 
 beforeEach(() => {
   tdb.$reset();
-  seedUser(tdb, { id: USER, email: "a@test.dev" });
+  seedUser(tdb, { email: "a@test.dev", id: USER });
   completeLLMStructured.mockReset();
   completeLLMStructured.mockResolvedValue({
-    pass: true,
     issues: [],
+    pass: true,
     suggestion: "",
   });
   completeLLM.mockReset();
@@ -90,17 +90,17 @@ beforeEach(() => {
 describe("reviewContent", () => {
   it("评审镜头：结构化判定写回 shot.review 并返回（含 scoredAt）", async () => {
     await seed({
-      shots: [{ id: "s1", index: 1, description: "空荡的路", prompt: "路" }],
+      shots: [{ description: "空荡的路", id: "s1", index: 1, prompt: "路" }],
     });
     completeLLMStructured.mockResolvedValueOnce({
-      pass: false,
       issues: ["画面含混"],
+      pass: false,
       suggestion: "补主体与光线",
     });
     const verdict = await reviewContent(USER, PROJ, "shot", "s1");
     expect(verdict).toMatchObject({
-      pass: false,
       issues: ["画面含混"],
+      pass: false,
       suggestion: "补主体与光线",
     });
     expect(typeof verdict.scoredAt).toBe("string");
@@ -115,11 +115,11 @@ describe("reviewContent", () => {
 
   it("评审角色卡：判定写回 character.review", async () => {
     await seed({
-      characters: [{ id: "c1", name: "司机", appearance: "中年" }],
+      characters: [{ appearance: "中年", id: "c1", name: "司机" }],
     });
     completeLLMStructured.mockResolvedValueOnce({
-      pass: true,
       issues: [],
+      pass: true,
       suggestion: "",
     });
     const verdict = await reviewContent(USER, PROJ, "character", "c1");
@@ -141,7 +141,7 @@ describe("reviewContent", () => {
   });
 
   it("评审温度走 review 档：getLLMConfig 收到 taskType=review（FR-QA-07 ③）", async () => {
-    await seed({ shots: [{ id: "s1", description: "x" }] });
+    await seed({ shots: [{ description: "x", id: "s1" }] });
     await reviewContent(USER, PROJ, "shot", "s1");
     expect(getLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
   });
@@ -149,19 +149,19 @@ describe("reviewContent", () => {
   it("判定带维度评分与 rubric 版本（FR-QA-07 ①）：scores 落库、越界分夹取", async () => {
     await seed({ characters: [{ id: "c1", name: "司机" }] });
     completeLLMStructured.mockResolvedValueOnce({
-      pass: false,
       issues: [],
-      suggestion: "",
+      pass: false,
       scores: {
-        visual: { score: 9, note: "很具象" },
         costume: { score: 2 },
+        visual: { note: "很具象", score: 9 },
       },
+      suggestion: "",
     });
     const verdict = await reviewContent(USER, PROJ, "character", "c1");
     expect(verdict.rubricVersion).toBe(REVIEW_RUBRICS.character.version);
     expect(verdict.scores).toEqual({
-      visual: { score: 5, note: "很具象" },
-      costume: { score: 2, note: "" },
+      costume: { note: "", score: 2 },
+      visual: { note: "很具象", score: 5 },
     });
     const [c] = await rows("characters");
     expect(c?.review).toEqual(verdict);
@@ -172,17 +172,17 @@ describe("reviewScript", () => {
   it("评审判定写回 production.scriptReview 列（含 rubric 版本与维度评分），并回完整曲线", async () => {
     await seed({ scriptMarkdown: "## 场景1 · 街道（夜）" });
     completeLLMStructured.mockResolvedValueOnce({
-      pass: false,
       issues: ["高潮缺失"],
+      pass: false,
+      scores: { structure: { note: "无高潮", score: 2 } },
       suggestion: "补一场对峙",
-      scores: { structure: { score: 2, note: "无高潮" } },
     });
     const outcome = await reviewScript(USER, PROJ);
     expect(outcome.verdict.pass).toBe(false);
     expect(outcome.verdict.rubricVersion).toBe(REVIEW_RUBRICS.script.version);
     expect(outcome.verdict.scores?.structure).toEqual({
-      score: 2,
       note: "无高潮",
+      score: 2,
     });
     expect(outcome.history).toEqual([outcome.verdict]); // 首评曲线只含本轮
     const row = await productionRepository.getForUser(USER, PROJ);
@@ -194,8 +194,8 @@ describe("reviewScript", () => {
   it("二次评审：上轮判定进 reviewHistory，回包曲线 = [...history, review]", async () => {
     await seed({ scriptMarkdown: "# 剧本" });
     completeLLMStructured
-      .mockResolvedValueOnce({ pass: false, issues: ["a"], suggestion: "s" })
-      .mockResolvedValueOnce({ pass: true, issues: [], suggestion: "" });
+      .mockResolvedValueOnce({ issues: ["a"], pass: false, suggestion: "s" })
+      .mockResolvedValueOnce({ issues: [], pass: true, suggestion: "" });
     const first = await reviewScript(USER, PROJ);
     const second = await reviewScript(USER, PROJ);
     const row = await productionRepository.getForUser(USER, PROJ);
@@ -219,10 +219,10 @@ describe("reviseScript", () => {
   it("消费低分维度定向改写：新剧本落 scriptMarkdown，旧版留档 revisions", async () => {
     await seed({ scriptMarkdown: "## 场景1 · 旧版剧本" });
     completeLLMStructured.mockResolvedValueOnce({
-      pass: false,
       issues: ["高潮缺失"],
+      pass: false,
+      scores: { structure: { note: "无高潮", score: 2 } },
       suggestion: "补一场对峙",
-      scores: { structure: { score: 2, note: "无高潮" } },
     });
     await reviewScript(USER, PROJ);
     completeLLM.mockResolvedValueOnce("## 场景1 · 改写后的剧本");
@@ -249,8 +249,8 @@ describe("reviseScript", () => {
   it("模型空返回 → 抛错保留原剧本，不落库", async () => {
     await seed({ scriptMarkdown: "# 原剧本" });
     completeLLMStructured.mockResolvedValueOnce({
-      pass: false,
       issues: ["x"],
+      pass: false,
       suggestion: "y",
     });
     await reviewScript(USER, PROJ);
@@ -272,12 +272,12 @@ describe("regenerateShot", () => {
     await seed({
       shots: [
         {
-          id: "s1",
-          prompt: "原提示词",
-          imageUrl: "/x.png",
           clipUrl: "/y.mp4",
-          status: "done",
+          id: "s1",
+          imageUrl: "/x.png",
+          prompt: "原提示词",
           rev: 2,
+          status: "done",
         },
       ],
     });
@@ -292,7 +292,7 @@ describe("regenerateShot", () => {
   });
 
   it("reprompt（显式给新提示词）：换 prompt + 退回，不调模型", async () => {
-    await seed({ shots: [{ id: "s1", prompt: "旧", imageUrl: "/x", rev: 0 }] });
+    await seed({ shots: [{ id: "s1", imageUrl: "/x", prompt: "旧", rev: 0 }] });
     await regenerateShot(USER, PROJ, "s1", "reprompt", "新的具象提示词");
     const [shot] = await rows("shots");
     expect(shot?.prompt).toBe("新的具象提示词");
@@ -305,16 +305,16 @@ describe("regenerateShot", () => {
     await seed({
       shots: [
         {
-          id: "s1",
           description: "一个人走路",
-          prompt: "一个人走路",
+          id: "s1",
           imageUrl: "/x",
+          prompt: "一个人走路",
           rev: 1,
           review: {
-            pass: false,
             issues: ["太含混"],
-            suggestion: "补动作与光线",
+            pass: false,
             scoredAt: "t",
+            suggestion: "补动作与光线",
           },
         },
       ],
@@ -331,7 +331,7 @@ describe("regenerateShot", () => {
 
   it("reprompt：模型空返回 → 兜底保留原提示词（不抹空），仍完成退回", async () => {
     await seed({
-      shots: [{ id: "s1", prompt: "原样", imageUrl: "/x", rev: 0 }],
+      shots: [{ id: "s1", imageUrl: "/x", prompt: "原样", rev: 0 }],
     });
     completeLLMStructured.mockResolvedValueOnce({ prompt: "   " });
     await regenerateShot(USER, PROJ, "s1", "reprompt");
@@ -355,24 +355,24 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
       characters: [{ id: "c1", name: "司机", portraitUrl: "/portrait.png" }],
       shots: [
         {
+          characterIds: ["c1"],
           id: "s1",
+          imageUrl: "/shot.png",
           prompt: "雨中司机",
           shotType: "中景",
-          characterIds: ["c1"],
-          imageUrl: "/shot.png",
         },
       ],
     });
     completeLLMStructured.mockResolvedValueOnce({
-      pass: true,
       issues: [],
+      pass: true,
+      scores: { promptAlignment: { note: "对题", score: 4 } },
       suggestion: "",
-      scores: { promptAlignment: { score: 4, note: "对题" } },
     });
     const verdict = await reviewShotImage(USER, PROJ, "s1");
     expect(verdict.pass).toBe(true);
     expect(verdict.rubricVersion).toBe(REVIEW_RUBRICS.shotImage.version);
-    expect(verdict.scores?.promptAlignment).toEqual({ score: 4, note: "对题" });
+    expect(verdict.scores?.promptAlignment).toEqual({ note: "对题", score: 4 });
     const [shot] = await rows("shots");
     // 视觉判定独立落 imageReview，不污染文本 review
     expect(shot?.imageReview).toEqual(verdict);
@@ -411,23 +411,23 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
 
 describe("autoselectShotImage", () => {
   const cover = (id: string, path: string): Row => ({
+    height: 512,
     id,
+    isCover: true,
     localPath: path,
     mediaType: "image",
     seed: "42",
-    width: 512,
-    height: 512,
-    isCover: true,
     sortIndex: 0,
+    width: 512,
   });
 
   beforeEach(() => {
     // 默认判定带一个维度分（mean = score）；各用例再按需覆盖。
     completeLLMStructured.mockImplementation(async () => ({
-      pass: true,
       issues: [],
+      pass: true,
+      scores: { 对齐: { note: "", score: 3 } },
       suggestion: "",
-      scores: { 对齐: { score: 3, note: "" } },
     }));
   });
 
@@ -436,40 +436,40 @@ describe("autoselectShotImage", () => {
       shots: [
         {
           id: "shot-1",
+          imageUrl: "/generated/task-a/1.png",
           index: 1,
           prompt: "一只猫",
           status: "done",
-          imageUrl: "/generated/task-a/1.png",
         },
       ],
     });
     seedTask(tdb, {
       id: "task-a",
-      userId: USER,
-      status: "SUCCEEDED",
-      projectId: PROJ,
       images: [cover("a1", "/generated/task-a/1.png")],
+      projectId: PROJ,
+      status: "SUCCEEDED",
+      userId: USER,
     });
     seedTask(tdb, {
       id: "task-b",
-      userId: USER,
-      status: "SUCCEEDED",
-      projectId: PROJ,
       images: [cover("b1", "/generated/task-b/1.png")],
+      projectId: PROJ,
+      status: "SUCCEEDED",
+      userId: USER,
     });
     // 候选 A 得 3 分、候选 B 得 5 分 → B 胜出。
     completeLLMStructured
       .mockResolvedValueOnce({
-        pass: true,
         issues: [],
+        pass: true,
+        scores: { 对齐: { note: "", score: 3 } },
         suggestion: "",
-        scores: { 对齐: { score: 3, note: "" } },
       })
       .mockResolvedValueOnce({
-        pass: true,
         issues: [],
+        pass: true,
+        scores: { 对齐: { note: "", score: 5 } },
         suggestion: "",
-        scores: { 对齐: { score: 5, note: "" } },
       });
 
     console.log("DEBUG row:", (await productionRepository.getForUser(USER, PROJ))?.id);
@@ -493,9 +493,9 @@ describe("autoselectShotImage", () => {
     });
     seedTask(tdb, {
       id: "task-empty",
-      userId: USER,
-      status: "FAILED",
       projectId: PROJ,
+      status: "FAILED",
+      userId: USER,
     });
     await expect(
       autoselectShotImage(USER, PROJ, "shot-1", ["task-empty", "task-empty"]),
@@ -506,11 +506,11 @@ describe("autoselectShotImage", () => {
     await seed({ shots: [{ id: "shot-1", index: 1, prompt: "x" }] });
     seedTask(tdb, {
       id: "task-other",
-      userId: "user-b",
-      status: "SUCCEEDED",
       projectId: PROJ,
+      status: "SUCCEEDED",
+      userId: "user-b",
     });
-    seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+    seedUser(tdb, { email: "b@test.dev", id: "user-b" });
     await expect(
       autoselectShotImage(USER, PROJ, "shot-1", ["task-other", "task-other"]),
     ).rejects.toThrow(/不属于当前用户/);

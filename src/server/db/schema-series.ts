@@ -19,35 +19,25 @@
  * `production.characters` 工作副本做双向同步时形状一致。
  */
 
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
-import {
-  relations,
-  type InferInsertModel,
-  type InferSelectModel,
-} from "drizzle-orm";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { relations, type InferInsertModel, type InferSelectModel } from "drizzle-orm";
 import { cuid, dateNotNull, user } from "./schema-common";
 
 export const series = sqliteTable(
   "series",
   {
+    coverUrl: text("coverUrl"),
+    description: text("description").notNull().default(""),
     id: cuid(),
+    title: text("title").notNull().default("未命名系列"),
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    title: text("title").notNull().default("未命名系列"),
-    description: text("description").notNull().default(""),
-    coverUrl: text("coverUrl"),
     /** 系列风格锚：关联 `skill.slug`，系列下各集默认沿用。 */
-    styleSlug: text("styleSlug"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    styleSlug: text("styleSlug"),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
@@ -59,15 +49,15 @@ export const series = sqliteTable(
 export const season = sqliteTable(
   "season",
   {
-    id: cuid(),
-    seriesId: text("seriesId")
-      .notNull()
-      .references(() => series.id, { onDelete: "cascade" }),
-    seasonNumber: integer("seasonNumber").notNull().default(1),
-    title: text("title").notNull().default(""),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    id: cuid(),
+    seasonNumber: integer("seasonNumber").notNull().default(1),
+    seriesId: text("seriesId")
+      .notNull()
+      .references(() => series.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default(""),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
@@ -86,17 +76,17 @@ export const episode = sqliteTable(
     /** 外链 `project.id`（= `production.id`）。可空以便回填存量项目；唯一：
      *  一个项目至多归属一个 episode，未归属的 episode 为 NULL（SQLite 唯一索引
      *  对 NULL 不视为相等，允许多个未归属 episode 共存）。 */
-    projectId: text("projectId"),
-    episodeNumber: integer("episodeNumber").notNull().default(1),
-    title: text("title").notNull().default(""),
-    synopsis: text("synopsis").notNull().default(""),
     coverUrl: text("coverUrl"),
+    episodeNumber: integer("episodeNumber").notNull().default(1),
+    projectId: text("projectId"),
+    synopsis: text("synopsis").notNull().default(""),
     targetDurationSec: integer("targetDurationSec"),
+    title: text("title").notNull().default(""),
     /** draft | producing | done。 */
-    status: text("status").notNull().default("draft"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    status: text("status").notNull().default("draft"),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
@@ -112,26 +102,26 @@ export const episode = sqliteTable(
 export const character = sqliteTable(
   "character",
   {
-    id: cuid(),
-    seriesId: text("seriesId")
-      .notNull()
-      .references(() => series.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
     ageGender: text("ageGender").notNull().default(""),
     appearance: text("appearance").notNull().default(""),
     costume: text("costume").notNull().default(""),
-    personality: text("personality").notNull().default(""),
-    temperament: text("temperament").notNull().default(""),
-    styleTags: text("styleTags", { mode: "json" }).notNull().default("[]"),
-    skillSlug: text("skillSlug"),
-    positivePrompt: text("positivePrompt").notNull().default(""),
-    negativePrompt: text("negativePrompt").notNull().default(""),
-    params: text("params", { mode: "json" }).notNull().default("{}"),
-    portraitUrl: text("portraitUrl"),
-    portraits: text("portraits", { mode: "json" }).notNull().default("[]"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    id: cuid(),
+    name: text("name").notNull(),
+    negativePrompt: text("negativePrompt").notNull().default(""),
+    params: text("params", { mode: "json" }).notNull().default("{}"),
+    personality: text("personality").notNull().default(""),
+    portraits: text("portraits", { mode: "json" }).notNull().default("[]"),
+    portraitUrl: text("portraitUrl"),
+    positivePrompt: text("positivePrompt").notNull().default(""),
+    seriesId: text("seriesId")
+      .notNull()
+      .references(() => series.id, { onDelete: "cascade" }),
+    skillSlug: text("skillSlug"),
+    styleTags: text("styleTags", { mode: "json" }).notNull().default("[]"),
+    temperament: text("temperament").notNull().default(""),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
@@ -144,18 +134,18 @@ export const character = sqliteTable(
 export const episodeCharacter = sqliteTable(
   "episode_character",
   {
-    id: cuid(),
-    episodeId: text("episodeId")
-      .notNull()
-      .references(() => episode.id, { onDelete: "cascade" }),
     characterId: text("characterId")
       .notNull()
       .references(() => character.id, { onDelete: "cascade" }),
+    episodeId: text("episodeId")
+      .notNull()
+      .references(() => episode.id, { onDelete: "cascade" }),
+    id: cuid(),
     /** 该角色在本集中的定位 / 备注（如「男主」「反派」）。 */
-    role: text("role").notNull().default(""),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    role: text("role").notNull().default(""),
   },
   (t) => [
     index("episode_character_episode_idx").on(t.episodeId),
@@ -166,30 +156,27 @@ export const episodeCharacter = sqliteTable(
 export const seriesRelations = relations(series, ({ many }) => ({
   seasons: many(season),
 }));
-export const seasonRelations = relations(season, ({ one, many }) => ({
-  series: one(series, { fields: [season.seriesId], references: [series.id] }),
+export const seasonRelations = relations(season, ({ many, one }) => ({
   episodes: many(episode),
+  series: one(series, { fields: [season.seriesId], references: [series.id] }),
 }));
-export const episodeRelations = relations(episode, ({ one, many }) => ({
-  season: one(season, { fields: [episode.seasonId], references: [season.id] }),
+export const episodeRelations = relations(episode, ({ many, one }) => ({
   characters: many(episodeCharacter),
+  season: one(season, { fields: [episode.seasonId], references: [season.id] }),
 }));
 export const characterRelations = relations(character, ({ many }) => ({
   episodeLinks: many(episodeCharacter),
 }));
-export const episodeCharacterRelations = relations(
-  episodeCharacter,
-  ({ one }) => ({
-    episode: one(episode, {
-      fields: [episodeCharacter.episodeId],
-      references: [episode.id],
-    }),
-    character: one(character, {
-      fields: [episodeCharacter.characterId],
-      references: [character.id],
-    }),
+export const episodeCharacterRelations = relations(episodeCharacter, ({ one }) => ({
+  character: one(character, {
+    fields: [episodeCharacter.characterId],
+    references: [character.id],
   }),
-);
+  episode: one(episode, {
+    fields: [episodeCharacter.episodeId],
+    references: [episode.id],
+  }),
+}));
 
 export type Series = InferSelectModel<typeof series>;
 export type Season = InferSelectModel<typeof season>;

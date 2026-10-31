@@ -24,12 +24,12 @@ import { PageHeader } from "~/components/ui/page-header";
  * 没有变体轴（`as` 是标签名不是外观变体），所以 Args 面板只摆文本与节点。
  */
 const meta = {
-  title: "UI/PageHeader",
-  component: PageHeader,
   args: {
-    title: "控制台",
     description: "在项目根执行命令；命令与其子进程在切走视图或点「停止」时一并回收。",
+    title: "控制台",
   },
+  component: PageHeader,
+  title: "UI/PageHeader",
 } satisfies Meta<typeof PageHeader>;
 
 export default meta;
@@ -39,16 +39,16 @@ type Story = StoryObj<typeof meta>;
 /** 真实形态之一：一句话说清时间口径（历史屏就是这么写的）。 */
 export const Default: Story = {
   args: {
-    title: "历史记录",
     description: "所有生成任务与执行日志，按时间倒序排列。",
+    title: "历史记录",
   },
 };
 
 /** 想不出「答案在别处拿不到的那句话」时不传副说明 —— 标题区不占第二行。 */
 export const WithoutDescription: Story = {
   args: {
-    title: "资源库",
     description: undefined,
+    title: "资源库",
   },
 };
 
@@ -58,18 +58,16 @@ export const WithoutDescription: Story = {
  *  时，读屏用户仍然需要一个可跳转的标题（规范 06）。 */
 export const TabNamed: Story = {
   args: {
-    title: undefined,
-    srTitle: "队列",
     description: undefined,
     help: "每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。",
+    srTitle: "队列",
+    title: undefined,
   },
 };
 
 /** 右侧动作组：整组 `shrink-0`，窄窗下换行而不是被压成两行小字。 */
 export const WithActions: Story = {
   args: {
-    title: "队列与运行",
-    description: "每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。",
     actions: (
       <>
         <span className="text-ink-faint text-xs tabular-nums">待执行 3</span>
@@ -79,6 +77,8 @@ export const WithActions: Story = {
         </Button>
       </>
     ),
+    description: "每 2 秒读一次本机后端；位次按提交先后排，第 1 位就是下一个开跑的。",
+    title: "队列与运行",
   },
   /** 动作组的下限宽度：低于它就走「整排换行」，标题不再被继续压缩。 */
   parameters: { viewport: { defaultViewport: "mobile1" } },
@@ -87,14 +87,14 @@ export const WithActions: Story = {
 /** 长标题（项目名当标题）：先截断标题，再考虑换行。 */
 export const LongTitle: Story = {
   args: {
-    title: "一个名字特别长的项目：雾中来信（重制版）",
-    description: undefined,
-    titleSuffix: "· 产出",
     actions: (
       <Button size="sm" variant="outline">
         刷新
       </Button>
     ),
+    description: undefined,
+    title: "一个名字特别长的项目：雾中来信（重制版）",
+    titleSuffix: "· 产出",
   },
 };
 
@@ -104,12 +104,12 @@ export const LongTitle: Story = {
  */
 export const WithExtra: Story = {
   args: {
-    title: "工坊管线",
     description: "六段流程的完成度按已落地的产物算，不按点过几下算。",
     extra: (
       <div className="bg-surface-2 mt-2 h-1.5 w-64 overflow-hidden rounded-full">
         <div className="bg-primary h-full w-2/5 rounded-full" />
       </div>
     ),
+    title: "工坊管线",
   },
 };

@@ -70,11 +70,11 @@ function attrSet(id: string): AttributeOptionSet {
 
 export function CharacterDesigner({
   characters,
-  styles,
-  onCharactersChange,
-  scriptMarkdown,
   extract,
+  onCharactersChange,
   portrait,
+  scriptMarkdown,
+  styles,
 }: Props) {
   const [brief, setBrief] = React.useState("");
   const { config, openSettings } = useLLM();
@@ -83,45 +83,45 @@ export function CharacterDesigner({
    * （与 useStoryboardExtractFlow 同族）；依赖显式注入，返回形状与
    * 原内联实现逐字段一致。 */
   const {
-    extractChannelValue,
-    setExtractChannelValue,
     extractBusy,
-    extractStatus,
-    extractProgress,
+    extractChannelValue,
     extractError,
     extractionLog,
-    hasScript,
+    extractProgress,
+    extractStatus,
     handleExtract,
     handleImportFile,
+    hasScript,
+    setExtractChannelValue,
   } = useCharacterExtractFlow({
     characters,
-    styles,
-    onCharactersChange,
-    scriptMarkdown,
-    extract,
     config,
+    extract,
+    onCharactersChange,
     openSettings,
+    scriptMarkdown,
+    styles,
   });
   const {
-    genEffective,
-    genSelectValue,
-    gen,
-    genProgress,
-    genStatus,
-    genError,
-    setGenSel,
-    handleAIGenerate,
-    handleAICard,
     aiAction,
+    gen,
+    genEffective,
+    genError,
+    genProgress,
+    genSelectValue,
+    genStatus,
+    handleAICard,
+    handleAIGenerate,
+    setGenSel,
   } = useCharacterAiFlow({
-    characters,
-    styles,
-    onCharactersChange,
-    update,
     brief,
-    setBrief,
+    characters,
     config,
+    onCharactersChange,
     openSettings,
+    setBrief,
+    styles,
+    update,
   });
 
   function update(id: string, patch: Partial<Character>) {
@@ -195,12 +195,12 @@ export function CharacterDesigner({
             value={brief}
             /* Enter 触发 AI 生成（Shift+Enter 不触发）；生成中不响应。 */
             {...enterCommit({
+              excludeShift: true,
               onCommit: () => {
                 if (!gen.busy) {
                   void handleAIGenerate();
                 }
               },
-              excludeShift: true,
             })}
             className="border-border bg-bg focus:border-primary flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
             placeholder="例如：一位穿唐装的白发剑客，气质孤傲"
@@ -405,9 +405,9 @@ export function CharacterDesigner({
 
 function Field({
   label,
-  value,
   onChange,
   placeholder,
+  value,
 }: {
   label: string;
   onChange: (v: string) => void;

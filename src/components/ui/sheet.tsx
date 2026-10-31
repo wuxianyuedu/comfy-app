@@ -39,11 +39,11 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
 
 /** 抽屉面板 + 遮罩的成对渲染：调用处只关心面板内容。 */
 function SheetContent({
+  children,
   className,
   panelClassName,
-  side = "right",
   showCloseButton = true,
-  children,
+  side = "right",
   ...props
 }: SheetPrimitive.Popup.Props & {
   panelClassName?: string;

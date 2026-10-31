@@ -41,17 +41,17 @@ export type RenderChainModule = {
 const PILL_STYLE: CSSProperties = {
   /* 原生 `<button>` 的默认外观在这里一律还原给药丸样式 —— 换语义不带视觉变化。
    * `font: inherit` 是必需的：`<button>` 默认不继承字体族。 */
-  font: "inherit",
+  borderRadius: 999,
   cursor: "pointer",
-  userSelect: "none",
+  font: "inherit",
   fontFamily: "var(--font-mono)",
   fontSize: 9,
   lineHeight: 1,
   padding: "2px 6px",
-  borderRadius: 999,
+  userSelect: "none",
   /* 琥珀状态色两态可读：浅色下深琥珀字 + 浅琥珀底，深色下保持原亮琥珀。 */
-  border: "1px solid rgba(251,191,36,0.45)",
   background: "rgba(251,191,36,0.12)",
+  border: "1px solid rgba(251,191,36,0.45)",
   color: "var(--color-warning)",
   whiteSpace: "nowrap",
 };
@@ -105,11 +105,11 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
   const copyOutcome = useFlashState(1400);
   const [copyFailed, setCopyFailed] = useState(false);
   const onCopyText = useCopyFeedback({
+    onFailure: () => setCopyFailed(true),
     onSuccess: () => {
       setCopyFailed(false);
       copyOutcome.flash();
     },
-    onFailure: () => setCopyFailed(true),
   });
 
   /* 弹窗内容只在 openFile 非空时渲染；提起为局部常量让内部的类型收窄
@@ -152,21 +152,21 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
     return (
       <div
         style={{
+          alignItems: "center",
           display: "flex",
           flexWrap: "wrap",
           gap: 3,
-          alignItems: "center",
         }}
       >
         <span
           style={{
+            background: "var(--color-border-subtle)",
+            borderRadius: 4,
+            color: "var(--color-ink-fainter)",
+            fontFamily: "var(--font-mono)",
             fontSize: 8.5,
             lineHeight: 1,
             padding: "2px 5px",
-            borderRadius: 4,
-            background: "var(--color-border-subtle)",
-            color: "var(--color-ink-fainter)",
-            fontFamily: "var(--font-mono)",
             whiteSpace: "nowrap",
           }}
         >
@@ -203,12 +203,12 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
         onMouseDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
         style={{
+          background: "var(--color-canvas-deep)",
+          borderTop: "1px solid var(--color-border-subtle)",
           display: "flex",
           flexDirection: "column",
           gap: 3,
           padding: "4px 8px 6px",
-          borderTop: "1px solid var(--color-border-subtle)",
-          background: "var(--color-canvas-deep)",
         }}
       >
         {renderGroup("画布级", canvasModules)}

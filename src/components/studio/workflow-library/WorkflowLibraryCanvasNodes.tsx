@@ -40,7 +40,7 @@ export const LibraryParamsNode = memo(function LibraryParamsNode(_props: NodePro
   if (!content) {
     return null;
   }
-  const { cards, canWire, contractEntries, selectedEntryId, onSelect, onReset } = content;
+  const { canWire, cards, contractEntries, onReset, onSelect, selectedEntryId } = content;
   return (
     <div data-testid="wflib-canvas-node-params">
       <WorkflowParamCardColumn
@@ -79,7 +79,7 @@ export const LibraryOutputsNode = memo(function LibraryOutputsNode(_props: NodeP
   if (!content) {
     return null;
   }
-  const { cards, canWire, selectedOutputId, onSelect, onReset } = content;
+  const { canWire, cards, onReset, onSelect, selectedOutputId } = content;
   return (
     <div data-testid="wflib-canvas-node-outputs">
       <WorkflowOutputParamCardColumn

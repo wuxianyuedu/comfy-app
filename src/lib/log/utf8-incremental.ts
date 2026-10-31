@@ -108,8 +108,8 @@ export function decodeIncremental(
   const merged = carry.length === 0 ? next : concatBytes(carry, next);
   const cut = merged.length - incompleteTailLength(merged);
   return {
-    text: decode(merged.subarray(0, cut)),
     carry: merged.slice(cut),
+    text: decode(merged.subarray(0, cut)),
   };
 }
 

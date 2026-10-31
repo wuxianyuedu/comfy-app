@@ -21,8 +21,8 @@ import type {
 /* 元信息条里的一个小信息芯片。就是个带样式的 span ——
  * 不需要按钮语义（点了没有任何反应）。 */
 export const KNOWN_PACKAGE_HEURISTIC: Record<string, string> = {
-  SetNode: "efficiency-nodes",
   GetNode: "efficiency-nodes",
+  SetNode: "efficiency-nodes",
 };
 
 /** 解析工作流节点所属的包来源标签。
@@ -133,11 +133,11 @@ export const NODE_TITLE_H = 30;
 export function pseudoFrostPalette(modeColor: string | null) {
   const mode = modeColor ?? "#ec4899";
   return {
+    cool: "rgba(110, 145, 215, 0.32)", // 冷蓝「漏光」
     primary: hexToRgba(mode, 0.45), // 模式色的主块
     secondary: hexToRgba(mode, 0.3), // 模式色的网点
-    cool: "rgba(110, 145, 215, 0.32)", // 冷蓝「漏光」
-    warm: "rgba(255, 255, 255, 0.10)", // 自上方来的光
     shadow: "rgba(0, 0, 0, 0.36)", // 未受光的角落
+    warm: "rgba(255, 255, 255, 0.10)", // 自上方来的光
   };
 }
 
@@ -149,38 +149,38 @@ export function inferOutputTypeAll(classType: string): Record<string, string> {
   // 因此改用按槽位的名字。CheckpointLoaderSimple 这类就是 MODEL/CLIP/VAE，
   // 与 ComfyUI 的默认显示一致。
   const KNOWN_NAMES: Record<string, Array<string>> = {
-    CheckpointLoaderSimple: ["MODEL", "CLIP", "VAE"],
     CheckpointLoader: ["MODEL", "CLIP", "VAE"],
-    UNETLoader: ["MODEL"],
-    UNetLoader: ["MODEL"],
+    CheckpointLoaderSimple: ["MODEL", "CLIP", "VAE"],
     CLIPLoader: ["CLIP"],
-    DualCLIPLoader: ["CLIP", "CLIP"],
-    VAELoader: ["VAE"],
-    ControlNetLoader: ["CONTROL_NET"],
-    LoraLoader: ["MODEL", "CLIP"],
-    KSampler: ["LATENT"],
-    KSamplerAdvanced: ["LATENT"],
     CLIPTextEncode: ["CONDITIONING"],
     CLIPTextEncodeSDXL: ["positive", "negative"],
-    VAEDecode: ["IMAGE"],
-    VAEEncode: ["LATENT"],
+    ConditioningAverage: ["CONDITIONING"],
+    ConditioningCombine: ["CONDITIONING"],
+    ControlNetApply: ["CONDITIONING"],
+    ControlNetLoader: ["CONTROL_NET"],
+    DualCLIPLoader: ["CLIP", "CLIP"],
     EmptyLatentImage: ["LATENT"],
-    LoadImage: ["IMAGE", "MASK"],
     ImageScale: ["IMAGE"],
     ImageUpscaleWithModel: ["IMAGE"],
+    KSampler: ["LATENT"],
+    KSamplerAdvanced: ["LATENT"],
     LatentUpscale: ["LATENT"],
-    SetLatentNoiseMask: ["LATENT"],
-    ControlNetApply: ["CONDITIONING"],
-    ConditioningCombine: ["CONDITIONING"],
-    ConditioningAverage: ["CONDITIONING"],
-    SaveImage: [],
+    LoadImage: ["IMAGE", "MASK"],
+    LoraLoader: ["MODEL", "CLIP"],
     PreviewImage: [],
-    WanVideoSampler: ["LATENT"],
+    SaveImage: [],
+    SetLatentNoiseMask: ["LATENT"],
+    UNETLoader: ["MODEL"],
+    UNetLoader: ["MODEL"],
+    VAEDecode: ["IMAGE"],
+    VAEEncode: ["LATENT"],
+    VAELoader: ["VAE"],
     WanVideoDecode: ["IMAGE"],
     WanVideoImageToVideoEncode: ["LATENT"],
-    WanVideoTextEncode: ["CONDITIONING"],
-    WanVideoT5TextEncode: ["CONDITIONING"],
     WanVideoModelLoader: ["MODEL", "CLIP", "VAE"],
+    WanVideoSampler: ["LATENT"],
+    WanVideoT5TextEncode: ["CONDITIONING"],
+    WanVideoTextEncode: ["CONDITIONING"],
   };
   const types = KNOWN_NAMES[classType] ?? [];
   const out: Record<string, string> = {};
@@ -593,21 +593,21 @@ export function buildEdges(
         }
       }
       edges.push({
+        animated: false,
         id: `e-${srcId}-${nodeId}-${inputName}-${i++}`,
         source: srcId,
-        target: nodeId,
         sourceHandle: outName ? `out:${outName}` : "out",
-        targetHandle: inputName,
-        animated: false,
         style: {
           /* 对齐 WorkflowEdge 那套「锐利 + 辉光」参数（strokeWidth 2.5、
            *  opacity 1），这样即使某些边落到 React Flow 的默认渲染器上，
            *  看起来仍与 `wf` 类型的边一样扎实。早先的 2/0.9 是针对
            *  旧的、没有辉光的细线 WorkflowEdge 调的。 */
+          opacity: 1,
           stroke,
           strokeWidth: 2.5,
-          opacity: 1,
         },
+        target: nodeId,
+        targetHandle: inputName,
       });
     }
   }
@@ -638,24 +638,24 @@ export function buildEdges(
       if (bl.kind === "input") {
         /* pin（外部输入）→ 内部节点对应的输入槽。 */
         edges.push({
+          animated: false,
           id: `e-bb-${bl.linkId}-in`,
           source: pinNodeId,
           sourceHandle: "in",
+          style: { opacity: 0.9, stroke, strokeWidth: 2 },
           target: bl.innerNodeId,
           targetHandle: bl.innerSlotName || "in",
-          animated: false,
-          style: { stroke, strokeWidth: 2, opacity: 0.9 },
         });
       } else {
         /* 内部节点对应的输出 handle → 输出 pin。 */
         edges.push({
+          animated: false,
           id: `e-bb-${bl.linkId}-out`,
           source: bl.innerNodeId,
           sourceHandle: bl.innerSlotName ? `out:${bl.innerSlotName}` : "out",
+          style: { opacity: 0.9, stroke, strokeWidth: 2 },
           target: pinNodeId,
           targetHandle: "out",
-          animated: false,
-          style: { stroke, strokeWidth: 2, opacity: 0.9 },
         });
       }
     }
@@ -682,10 +682,10 @@ export function buildInputSources(
     }
     const src = nodesById[value[0]];
     out[key] = {
-      id: value[0],
-      title: src?.title ?? `#${value[0]}`,
-      slot: Number(value[1] ?? 0),
       classType: src?.class_type,
+      id: value[0],
+      slot: Number(value[1] ?? 0),
+      title: src?.title ?? `#${value[0]}`,
     };
   }
   return out;

@@ -27,8 +27,8 @@ const MAX_LINES = 5;
 /** 哪一类元素归哪一屏。方向是视图 → lib（判据不许反过来认识页签，硬规则 22）。
  *  镜头落在「场景分镜」而不是「镜头生图」：形状不对要改的是数据，改数据在那一屏。 */
 const KIND_TAB: Record<DraftElementKind, Tab> = {
-  scene: "script",
   character: "character",
+  scene: "script",
   shot: "storyboard",
 };
 

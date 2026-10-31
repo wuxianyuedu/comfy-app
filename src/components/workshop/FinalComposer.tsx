@@ -41,9 +41,9 @@ type TimelineEntry = {
 };
 
 const MOTION_PROMPTS: Record<MotionLevel, string> = {
+  high: "dynamic motion, dramatic camera movement",
   low: "subtle motion, gentle camera drift",
   medium: "moderate motion, smooth camera movement",
-  high: "dynamic motion, dramatic camera movement",
 };
 
 /** 供视频阶段复用的运动提示词后缀。 */
@@ -58,20 +58,20 @@ export function motionPromptSuffix(motion: MotionLevel | undefined): string {
  * 合成方案导出（JSON）作为管线的最终产物。
  */
 export function FinalComposer({
+  onComposeFilm,
+  onRendered,
+  onShotsChange,
+  rendered,
   shots,
   title,
-  onShotsChange,
-  onRendered,
-  rendered,
-  onComposeFilm,
 }: Props) {
   const [playing, setPlaying] = React.useState(false);
   const [currentIdx, setCurrentIdx] = React.useState(0);
   const imageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const timeline: Array<TimelineEntry> = shots.map((shot) => ({
-    shot,
     duration: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
+    shot,
   }));
 
   const clipsDone = timeline.filter((entry) => entry.shot.clipUrl).length;
@@ -135,24 +135,24 @@ export function FinalComposer({
 
   function exportPlan() {
     const plan = {
-      project: title,
       exportedAt: new Date().toISOString(),
+      project: title,
       totalShots: timeline.length,
       /* 「按一位小数写数」走`~/lib/number-format`（规范 16 §16.2.4.54）。 */
-      totalDurationSec: Number(fixed(totalDuration, 1) ?? "0"),
       timeline: timeline.map((entry, i) => ({
-        order: i + 1,
-        shotId: entry.shot.id,
-        scene: entry.shot.sceneHeading,
-        shotType: entry.shot.shotType,
-        prompt: entry.shot.prompt,
-        imageUrl: entry.shot.imageUrl ?? null,
         clipUrl: entry.shot.clipUrl ?? null,
-        durationSec: entry.duration,
-        motion: entry.shot.motion ?? "medium",
-        transition: entry.shot.transition ?? "cut",
         dialogue: entry.shot.dialogue ?? "",
+        durationSec: entry.duration,
+        imageUrl: entry.shot.imageUrl ?? null,
+        motion: entry.shot.motion ?? "medium",
+        order: i + 1,
+        prompt: entry.shot.prompt,
+        scene: entry.shot.sceneHeading,
+        shotId: entry.shot.id,
+        shotType: entry.shot.shotType,
+        transition: entry.shot.transition ?? "cut",
       })),
+      totalDurationSec: Number(fixed(totalDuration, 1) ?? "0"),
     };
     downloadJson(plan, `${title || "composition"}-合成清单.json`);
     onRendered();

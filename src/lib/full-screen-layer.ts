@@ -228,7 +228,7 @@ export function anchoredOverlayBoundary(
   /* 让位量不得超出视口本身：极端窄高（比标题行还矮的窗口）下宁可退化成整视口，
    * 也不要给出负高度 —— 负高度的边界会让定位引擎算出一串无意义的偏移。 */
   const top = clamp(titleBarPx, 0, viewport.height);
-  return { x: 0, y: top, width: viewport.width, height: viewport.height - top };
+  return { height: viewport.height - top, width: viewport.width, x: 0, y: top };
 }
 
 /**

@@ -9,7 +9,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { warnMock } = vi.hoisted(() => ({ warnMock: vi.fn() }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { warn: warnMock, info: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: warnMock },
 }));
 
 import { resolveExecutorClaim } from "./executor-mode";

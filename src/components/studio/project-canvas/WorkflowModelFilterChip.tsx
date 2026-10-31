@@ -11,7 +11,7 @@ type WorkflowModelFilterChipProps = {
   value: string;
 };
 
-export function WorkflowModelFilterChip({ value, tags, onChange }: WorkflowModelFilterChipProps) {
+export function WorkflowModelFilterChip({ onChange, tags, value }: WorkflowModelFilterChipProps) {
   const label = value === "all" ? "全部模型" : value;
 
   return (
@@ -21,16 +21,16 @@ export function WorkflowModelFilterChip({ value, tags, onChange }: WorkflowModel
       emptyHint="标签库为空，去工作流库「管理模型」添加"
       items={[
         {
-          value: "all",
           label: "全部模型",
           prefix: <span className="bg-accent size-1.5 rounded-full" />,
+          value: "all",
         },
         ...tags.map((tag) => ({
-          value: tag.name,
           label: tag.name,
-          title: tag.name,
           prefix: <span className="bg-accent-soft size-1.5 rounded-full" />,
           suffix: <span className="text-ink-muted text-4xs tabular-nums">{tag.count}</span>,
+          title: tag.name,
+          value: tag.name,
         })),
       ]}
       onSelect={onChange}

@@ -40,10 +40,10 @@ function EditorCrashFallback({ error, onClose }: { error: Error | null; onClose:
 }
 
 export function WorkflowCanvasEditor({
-  workflowId,
-  open,
   onClose,
   onSave,
+  open,
+  workflowId,
 }: {
   onClose: () => void;
   onSave?: () => void;

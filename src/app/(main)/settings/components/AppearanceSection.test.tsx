@@ -24,8 +24,8 @@ afterEach(cleanup);
 /** 本分区只消费 `theme` / `setTheme` 两个字段，其余字段与本节无关。 */
 function controller(theme: "light" | "dark", setTheme = vi.fn()): ReadySettingsPageController {
   return /* SAFETY: 类型断言已复核 */ {
-    theme,
     setTheme,
+    theme,
   } as unknown as ReadySettingsPageController;
 }
 

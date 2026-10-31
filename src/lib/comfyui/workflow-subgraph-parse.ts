@@ -87,12 +87,12 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
           : [];
     return {
       id,
-      name: typeof rec.name === "string" ? rec.name : "",
-      type: typeof rec.type === "string" ? rec.type : "*",
-      localized: typeof rec.localized_name === "string" ? rec.localized_name : undefined,
       label: typeof rec.label === "string" ? rec.label : undefined,
-      pos,
       linkIds: linkIdsRaw.map((n) => Number(n) || 0).filter((n) => n > 0),
+      localized: typeof rec.localized_name === "string" ? rec.localized_name : undefined,
+      name: typeof rec.name === "string" ? rec.name : "",
+      pos,
+      type: typeof rec.type === "string" ? rec.type : "*",
     };
   };
   for (const p of rawSubInputs) {
@@ -100,7 +100,7 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
     if (np) {
       boundaryPins.inputs.push(np);
       for (const lid of np.linkIds) {
-        pinIdByLinkId[lid] = { pinId: np.id, kind: "input" };
+        pinIdByLinkId[lid] = { kind: "input", pinId: np.id };
       }
     }
   }
@@ -109,7 +109,7 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
     if (np) {
       boundaryPins.outputs.push(np);
       for (const lid of np.linkIds) {
-        pinIdByLinkId[lid] = { pinId: np.id, kind: "output" };
+        pinIdByLinkId[lid] = { kind: "output", pinId: np.id };
       }
     }
   }
@@ -159,11 +159,11 @@ export function buildBoundaryLinks(
       continue;
     }
     boundaryLinks.push({
-      linkId,
-      kind: info.kind,
-      pinId: pinInfo.pinId,
       innerNodeId: info.innerNodeId,
       innerSlotName,
+      kind: info.kind,
+      linkId,
+      pinId: pinInfo.pinId,
     });
   }
   return boundaryLinks;
@@ -201,10 +201,10 @@ export function reportDroppedBoundaryLinks(
       continue;
     }
     dropped.push({
-      linkId,
-      pinId: pinInfo.pinId,
       innerNodeId: info.innerNodeId,
       innerSlot: info.innerSlot,
+      linkId,
+      pinId: pinInfo.pinId,
     });
   }
   if (dropped.length === 0) {
@@ -287,8 +287,6 @@ export function extractSubgraphAnnotations(
         Array.isArray(rec.bounding) && rec.bounding.length >= 4 ? rec.bounding : [0, 0, 0, 0];
 
       groups.push({
-        id: toStringValue(rec.id ?? `g-${idx}`),
-        title: typeof rec.title === "string" ? rec.title : "",
         bounding: [
           Number(bounds[0]) || 0,
           Number(bounds[1]) || 0,
@@ -296,6 +294,8 @@ export function extractSubgraphAnnotations(
           Number(bounds[3]) || 0,
         ],
         color: typeof rec.color === "string" ? rec.color : "#3b3b3b",
+        id: toStringValue(rec.id ?? `g-${idx}`),
+        title: typeof rec.title === "string" ? rec.title : "",
       });
     });
   }
@@ -320,12 +320,12 @@ export function extractSubgraphAnnotations(
     const text = typeof wv === "string" ? wv : toStringValue(wv ?? "");
     const title = typeof n.title === "string" ? n.title : "";
     notes.push({
+      color: typeof n.color === "string" ? n.color : "#3a3a3a",
       id: String(n.id),
-      title,
-      text,
       pos: [Number(pos[0]) || 0, Number(pos[1]) || 0],
       size: [Number(size[0]) || 220, Number(size[1]) || 120],
-      color: typeof n.color === "string" ? n.color : "#3a3a3a",
+      text,
+      title,
     });
   }
 

@@ -59,11 +59,11 @@ export async function POST(request: Request) {
   try {
     const content = typeof body.content === "string" ? body.content : "";
     if (content.length === 0) {
-      return NextResponse.json({ ok: false, error: "empty" }, { status: 400 });
+      return NextResponse.json({ error: "empty", ok: false }, { status: 400 });
     }
     if (content.length > MAX_EXPORT_CHARS) {
       return NextResponse.json(
-        { ok: false, error: "too-large", limit: MAX_EXPORT_CHARS },
+        { error: "too-large", limit: MAX_EXPORT_CHARS, ok: false },
         { status: 413 },
       );
     }
@@ -85,8 +85,8 @@ export async function POST(request: Request) {
       /** 绝对路径：用户要能在文件管理器里直接找到它。 */
       path: file,
       /** 相对 log/ 的路径：面板空间窄，展示这一截即可。 */
-      relativePath: toDisplayPath(file, LOG_ROOT),
       bytes: Buffer.byteLength(content, "utf-8"),
+      relativePath: toDisplayPath(file, LOG_ROOT),
     });
   } catch (error) {
     return NextResponse.json(apiErrorBody(error, "导出日志失败", { ok: false }), { status: 500 });

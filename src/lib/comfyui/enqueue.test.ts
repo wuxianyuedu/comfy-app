@@ -20,8 +20,8 @@ import type { TaskWriteOutcome } from "../core/repository-task-impl";
 vi.mock("~/lib/db", () => ({ db: {} }));
 vi.mock("../core/repository", () => ({
   taskRepository: {
-    findStatusAndPromptById: vi.fn(async () => null),
     cancel: vi.fn(async () => undefined),
+    findStatusAndPromptById: vi.fn(async () => null),
   },
 }));
 vi.mock("./client", () => ({
@@ -29,7 +29,7 @@ vi.mock("./client", () => ({
   resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
 }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock("./lifecycle", () => ({
   isComfyStarting: vi.fn().mockReturnValue(false),
@@ -48,8 +48,8 @@ const cli = await import("./executor-cli");
 describe("configureEnqueue 接缝", () => {
   it("接受 Partial<EnqueueDeps>、两次调用是合并语义", () => {
     const fakeRepo = {
-      findStatusAndPromptById: async () => null,
       cancel: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
+      findStatusAndPromptById: async () => null,
     };
     expect(() => mod.configureEnqueue({ taskRepo: fakeRepo })).not.toThrow();
     // 再来一次空 Partial：合法、只是没覆盖任何东西。
@@ -84,13 +84,13 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     const { cancelOutcome = "written", inFlight = false } = options;
     const taskId = `cancel-${(seq += 1)}`;
     const repo = {
-      findStatusAndPromptById: vi.fn(async () => row),
       cancel: vi.fn(async () => cancelOutcome),
+      findStatusAndPromptById: vi.fn(async () => row),
       replaceLogs: vi.fn(async () => undefined),
       replaceRawCli: vi.fn(async () => undefined),
     };
     mod.configureEnqueue({ taskRepo: repo });
-    runnerState.configureRunner({ taskRepo: repo, log: runnerLog });
+    runnerState.configureRunner({ log: runnerLog, taskRepo: repo });
     vi.mocked(client.interrupt).mockReset().mockResolvedValue(undefined);
     const kill = vi.fn();
     if (inFlight) {
@@ -98,15 +98,15 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     } else {
       cli.cliProcs.delete(taskId);
     }
-    return { taskId, repo, kill };
+    return { kill, repo, taskId };
   }
 
   const logged = (taskId: string, needle: string): boolean =>
     mod.getLogs(taskId).some((entry) => String(entry.msg).includes(needle));
 
   it("本进程正在执行它：杀掉子进程并请求 ComfyUI 中断当前这一轮", async () => {
-    const { taskId, repo, kill } = setup(
-      { status: "RUNNING", promptId: "p-a" },
+    const { kill, repo, taskId } = setup(
+      { promptId: "p-a", status: "RUNNING" },
       { inFlight: true },
     );
 
@@ -120,7 +120,7 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
 
   it("本进程没在执行它（排队中 / 归另一宿主）：不发全局中断，状态照收", async () => {
     // 跨进程共享实例下的常见形态：行是 host 名下在跑的，Next 手里没有句柄。
-    const { taskId, repo } = setup({ status: "RUNNING", promptId: "p-b" });
+    const { repo, taskId } = setup({ promptId: "p-b", status: "RUNNING" });
 
     await mod.cancelTask(taskId);
 
@@ -130,7 +130,7 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
   });
 
   it("中断请求失败：取消仍然落库，并告诉用户这一轮还会跑完", async () => {
-    const { taskId, repo } = setup({ status: "RUNNING", promptId: "p-d" }, { inFlight: true });
+    const { repo, taskId } = setup({ promptId: "p-d", status: "RUNNING" }, { inFlight: true });
     vi.mocked(client.interrupt).mockRejectedValue(new Error("ECONNREFUSED"));
 
     await mod.cancelTask(taskId);
@@ -140,8 +140,8 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
   });
 
   it("行已是终态：不改写终态、不发全局中断，只清本进程记账", async () => {
-    const { taskId, repo } = setup(
-      { status: "SUCCEEDED", promptId: "p-e" },
+    const { repo, taskId } = setup(
+      { promptId: "p-e", status: "SUCCEEDED" },
       {
         cancelOutcome: "skipped-terminal",
       },

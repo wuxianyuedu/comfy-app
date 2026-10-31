@@ -71,8 +71,8 @@ type Payload = {
 async function get(query: string): Promise<{ data: Payload; status: number }> {
   const res = await GET(new Request(`http://localhost/api/logs/sessions?${query}`));
   return {
-    status: res.status,
     data: /* SAFETY: 类型断言已复核 */ (await res.json()) as Payload,
+    status: res.status,
   };
 }
 
@@ -103,34 +103,34 @@ function makePack(
   fs.writeFileSync(
     path.join(dir, "run.json"),
     JSON.stringify({
+      crashed: opts.crashed === true,
       runId: name.slice(name.lastIndexOf("-") + 1),
       startedAt: (opts.startedAt ?? new Date(2026, 8, 30, 19, 36, 12)).toISOString(),
-      crashed: opts.crashed === true,
     }),
     "utf8",
   );
 }
 
 beforeEach(() => {
-  fs.rmSync(path.join(logRoot, "current"), { recursive: true, force: true });
-  fs.rmSync(runsDir, { recursive: true, force: true });
+  fs.rmSync(path.join(logRoot, "current"), { force: true, recursive: true });
+  fs.rmSync(runsDir, { force: true, recursive: true });
   fs.mkdirSync(servicesDir, { recursive: true });
 });
 
 afterAll(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(tmp, { force: true, recursive: true });
 });
 
 describe("来源与空态的明确出口", () => {
   it("来源不在表里 → 400（给出原因，而不是空列表）", async () => {
-    const { status, data } = await get("source=不存在的来源");
+    const { data, status } = await get("source=不存在的来源");
     expect(status).toBe(400);
     expect(data.error).toContain("unknown source");
     expect(data.sessions).toEqual([]);
   });
 
   it("一份都没有（这个服务从没启动过）→ 200 空载荷（界面显示空态，不是报错）", async () => {
-    const { status, data } = await get("source=comfyui-runtime");
+    const { data, status } = await get("source=comfyui-runtime");
     expect(status).toBe(200);
     expect(data.sessions).toEqual([]);
     expect(data.selectedId).toBeNull();
@@ -384,16 +384,16 @@ describe("跨包：列表含历史包里的份，正文按包取", () => {
   });
 
   it("`runs/` 还不存在（从没正常退出过）→ 只有本次运行，不是错误", async () => {
-    fs.rmSync(runsDir, { recursive: true, force: true });
+    fs.rmSync(runsDir, { force: true, recursive: true });
     makeFile("comfyui-runtime-20261005-093612.log", "本次\n");
 
-    const { status, data } = await get("source=comfyui-runtime");
+    const { data, status } = await get("source=comfyui-runtime");
     expect(status).toBe(200);
     expect(data.sessions.map((s) => s.id)).toEqual(["comfyui-runtime-20261005-093612.log"]);
   });
 
   it("本次运行的份已经被归档清空 → 列表全是历史包（退化也要能看）", async () => {
-    fs.rmSync(servicesDir, { recursive: true, force: true });
+    fs.rmSync(servicesDir, { force: true, recursive: true });
     makePack("2026-10-04_140000-bbbbbb", {
       "comfyui-runtime-20261004-140000.log": "上一包\n",
     });
@@ -413,7 +413,7 @@ describe("跨包：列表含历史包里的份，正文按包取", () => {
       "a/b/c.log",
       "2026-10-04_140000-bbbbbb/",
     ]) {
-      const { status, data } = await get(
+      const { data, status } = await get(
         `source=comfyui-runtime&session=${encodeURIComponent(dirty)}`,
       );
       expect(status).toBe(200);

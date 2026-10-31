@@ -137,13 +137,13 @@ export function useQueueMonitor(): QueueMonitorController {
     }
     const remainingMs = estimateRemainingMs(queue.elapsedMs ?? 0, task.progress);
     return {
+      elapsedText: runningElapsedText(queue.elapsedMs),
       id: task.taskId,
-      workflowName: task.workflowName ?? "（未知工作流）",
       modelText: task.model ?? "未能从本次工作流里识别",
       nodeText: task.nodeType ?? "尚未回报节点",
-      elapsedText: runningElapsedText(queue.elapsedMs),
-      remainingText: remainingText(remainingMs),
       progressPct: task.progress,
+      remainingText: remainingText(remainingMs),
+      workflowName: task.workflowName ?? "（未知工作流）",
     };
   }, [queue.elapsedMs, queue.running]);
 
@@ -151,8 +151,8 @@ export function useQueueMonitor(): QueueMonitorController {
     async (id: string, label: string) => {
       await action.run(id, async () => {
         await runAsyncAction(() => cancelTask(id), {
-          report,
           failureText: `取消「${label}」失败，请稍后重试`,
+          report,
           successText: "已发送取消请求",
         });
         /* 失败也要刷新：用户可能已在别处把它取消了，界面不该继续显示排队中。 */
@@ -171,8 +171,8 @@ export function useQueueMonitor(): QueueMonitorController {
          * `comfyappUrl` 丢掉，于是报的是一句与事实无关的成功。 */
         const result = await revealTaskFolder(row.id);
         await runAsyncAction(async () => result, {
-          report,
           failureText: "未能打开输出目录，可在任务详情里复制文件路径",
+          report,
         });
       });
     },
@@ -186,8 +186,8 @@ export function useQueueMonitor(): QueueMonitorController {
          * 而不是被 try 当成成功。 */
         const copied = await copyText(reprintText(row));
         await runAsyncAction(async () => copied, {
-          report,
           failureText: "复制失败，请检查是否允许访问剪贴板",
+          report,
           successText: "后端没有重试接口，已复制本次提交内容 —— 回画布改完参数再投一次",
         });
       });
@@ -197,24 +197,24 @@ export function useQueueMonitor(): QueueMonitorController {
 
   return {
     online: queue.online,
-    running,
-    runningRows: buckets.running,
     queued,
     recent: recentWithin(buckets.recent),
+    running,
+    runningRows: buckets.running,
     /* 离线时 `/api/comfy/queue` 读不到、两个计数恒为 0，而列表明明排着队 ——
      * 退回「库里在跑 + 排队」的行数，别让「待执行 0」和下面的列表自相矛盾。 */
+    cancel,
+    closeLog: () => setLogRow(null),
+    copyForReprint,
+    isBusy: (id: string) => action.isBusy(id),
+    loadError: listQ.isError ? "读不到任务记录，后端可能刚重启" : null,
+    loading: listQ.isPending,
+    logRow,
+    openFolder,
+    openLog: (task) => setLogRow(task),
+    refresh: () => void listQ.refetch(),
     waitingCount: queue.online
       ? queue.queued + queue.comfy.pending
       : buckets.running.length + queued.length,
-    loading: listQ.isPending,
-    loadError: listQ.isError ? "读不到任务记录，后端可能刚重启" : null,
-    logRow,
-    isBusy: (id: string) => action.isBusy(id),
-    refresh: () => void listQ.refetch(),
-    cancel,
-    openFolder,
-    copyForReprint,
-    openLog: (task) => setLogRow(task),
-    closeLog: () => setLogRow(null),
   };
 }

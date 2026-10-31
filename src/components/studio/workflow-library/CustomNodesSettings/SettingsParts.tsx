@@ -19,10 +19,10 @@ import { toPct } from "~/lib/progress";
  * 把名字 + 类型章放在卡片内部；我们镜像这套几何，
  * 好让每个端口行一眼读出它属于节点哪一侧。 */
 export function PortRow({
-  side,
   color,
-  type,
   name,
+  side,
+  type,
 }: {
   color: string;
   name: string;
@@ -38,13 +38,13 @@ export function PortRow({
     <div className={`flex min-w-0 items-center gap-1 ${isOut ? "flex-row-reverse" : ""}`}>
       <span
         className="inline-block shrink-0 rounded-full"
-        style={{ width: 7, height: 7, background: dotColor }}
+        style={{ background: dotColor, height: 7, width: 7 }}
       />
       <span
         className="rounded px-1 text-[7.5px] leading-tight font-bold uppercase"
         style={{
-          color,
           border: `1px solid ${color}66`,
+          color,
           letterSpacing: 0.4,
         }}
       >
@@ -100,7 +100,7 @@ function widgetValueToText(v: unknown): string {
   return "";
 }
 
-export function WidgetValueChip({ widget, value }: { value: unknown; widget: string | null }) {
+export function WidgetValueChip({ value, widget }: { value: unknown; widget: string | null }) {
   if (widget === "toggle") {
     const on = value === true || value === "true" || value === "True";
     return (
@@ -225,10 +225,10 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
  * 「nodes」页签 render 原样提出。两个滚动 ref 属于主组件的
  * 自动滚动 effect，原样透传。 */
 export function ParseConsole({
-  logs,
-  parsing,
-  logsRef,
   consoleRef,
+  logs,
+  logsRef,
+  parsing,
 }: {
   consoleRef: RefObject<HTMLDivElement | null>;
   logs: Array<{ level: string; msg: string }>;

@@ -27,82 +27,82 @@ import type * as ComfyEmbedModule from "~/lib/comfy/comfy-embed";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const {
-  spawnMock,
-  probeMock,
+  clearAutoStartFailureMock,
+  clearManualStopMock,
+  describeInstanceMock,
+  ensureReadyMock,
   fsState,
   getSettingsMock,
   getSettingsSyncMock,
-  saveSettingsMock,
-  clearManualStopMock,
-  clearAutoStartFailureMock,
-  ensureReadyMock,
-  statusMock,
   openComfyMock,
-  stopComfyMock,
-  describeInstanceMock,
+  probeMock,
   resolveStorageMock,
+  saveSettingsMock,
+  spawnMock,
+  statusMock,
+  stopComfyMock,
+  studioEnsureMock,
+  studioOpenMock,
   studioProbeMock,
   studioStartingMock,
-  studioEnsureMock,
   studioStopMock,
-  studioOpenMock,
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   /** 让「取检出根」那一次 `realpath` 抛错的开关（探针在每次调用开头读它）。 */
+  clearAutoStartFailureMock: vi.fn<() => void>(),
+  clearManualStopMock: vi.fn<() => void>(),
+  describeInstanceMock: vi.fn<() => { kind: string }>(() => ({
+    kind: "portable",
+  })),
+  ensureReadyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
+    detail: "已就绪",
+    ok: true,
+  })),
   fsState: { failRoot: false },
+  getSettingsMock: vi.fn<() => Promise<Record<string, unknown>>>(async () => ({
+    comfyuiPath: "",
+    comfyuiPort: 8188,
+  })),
+  getSettingsSyncMock: vi.fn<() => Record<string, unknown>>(() => ({
+    comfyuiAutoStart: true,
+    comfyuiPath: "C:/ComfyUI",
+    comfyuiPort: 8188,
+  })),
+  openComfyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
+    detail: "已打开",
+    ok: true,
+  })),
   probeMock: vi.fn<() => Promise<{ embeddable: boolean; reason: string }>>(async () => ({
     embeddable: true,
     reason: "ok",
   })),
-  getSettingsMock: vi.fn<() => Promise<Record<string, unknown>>>(async () => ({
-    comfyuiPort: 8188,
-    comfyuiPath: "",
-  })),
-  getSettingsSyncMock: vi.fn<() => Record<string, unknown>>(() => ({
-    comfyuiPort: 8188,
-    comfyuiPath: "C:/ComfyUI",
-    comfyuiAutoStart: true,
-  })),
   saveSettingsMock: vi.fn<(partial: Record<string, unknown>) => Promise<Record<string, unknown>>>(
     async (partial) => ({ comfyuiPort: 8188, ...partial }),
   ),
-  clearManualStopMock: vi.fn<() => void>(),
-  clearAutoStartFailureMock: vi.fn<() => void>(),
-  ensureReadyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
-    ok: true,
-    detail: "已就绪",
-  })),
   statusMock: vi.fn<() => Promise<Record<string, unknown>>>(async () => ({
-    up: true,
     base: "http://127.0.0.1:8188",
-    starting: false,
-    probing: false,
-    stopping: false,
     port: null,
+    probing: false,
+    starting: false,
+    stopping: false,
+    up: true,
     via: "external",
-  })),
-  openComfyMock: vi.fn<() => Promise<{ detail: string; ok: boolean }>>(async () => ({
-    ok: true,
-    detail: "已打开",
   })),
   stopComfyMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
     ok: true,
   })),
-  describeInstanceMock: vi.fn<() => { kind: string }>(() => ({
-    kind: "portable",
-  })),
   /* 存储目录读盘在 `desktop-storage-paths.server` 里（它自己有用例），这里只判
    * 「用配置路径调它、非桌面如实返回 null」这条接线。 */
   resolveStorageMock: vi.fn<(dir: string) => Promise<unknown>>(async () => null),
-  studioProbeMock: vi.fn<(port: number) => Promise<boolean>>(async () => true),
-  studioStartingMock: vi.fn<() => boolean>(() => false),
   studioEnsureMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
     ok: true,
   })),
-  studioStopMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
+  studioOpenMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
     ok: true,
   })),
-  studioOpenMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
+  studioProbeMock: vi.fn<(port: number) => Promise<boolean>>(async () => true),
+  studioStartingMock: vi.fn<() => boolean>(() => false),
+  studioStopMock: vi.fn<() => Promise<{ ok: boolean }>>(async () => ({
     ok: true,
   })),
 }));
@@ -155,12 +155,12 @@ vi.mock("~/lib/comfyui/desktop-storage-paths.server", () => ({
   resolveDesktopStoragePaths: resolveStorageMock,
 }));
 vi.mock("~/lib/drizzle-studio/lifecycle", () => ({
+  DRIZZLE_STUDIO_DEFAULT_PORT: 3210,
   ensureDrizzleStudioUp: studioEnsureMock,
   isDrizzleStudioStarting: studioStartingMock,
   openDrizzleStudio: studioOpenMock,
   probeDrizzleStudio: studioProbeMock,
   stopDrizzleStudio: studioStopMock,
-  DRIZZLE_STUDIO_DEFAULT_PORT: 3210,
 }));
 vi.mock("~/lib/comfy/comfy-embed", async (importOriginal) => ({
   ...(await importOriginal<typeof ComfyEmbedModule>()),
@@ -180,11 +180,11 @@ function installFakeChild() {
   const handlers: Record<string, Array<(...a: Array<unknown>) => void>> = {};
   spawnMock.mockImplementation(() => {
     const handle = {
+      kill: vi.fn(),
       on: (ev: string, cb: (...a: Array<unknown>) => void) => {
         (handlers[ev] ??= []).push(cb);
       },
       unref: vi.fn(),
-      kill: vi.fn(),
     };
     setTimeout(() => {
       for (const cb of handlers.spawn ?? []) {
@@ -200,11 +200,11 @@ beforeEach(() => {
   fsState.failRoot = false;
   installFakeChild();
   tdb.$reset();
-  getSettingsMock.mockResolvedValue({ comfyuiPort: 8188, comfyuiPath: "" });
+  getSettingsMock.mockResolvedValue({ comfyuiPath: "", comfyuiPort: 8188 });
   getSettingsSyncMock.mockReturnValue({
-    comfyuiPort: 8188,
-    comfyuiPath: "C:/ComfyUI",
     comfyuiAutoStart: true,
+    comfyuiPath: "C:/ComfyUI",
+    comfyuiPort: 8188,
   });
   saveSettingsMock.mockImplementation(async (partial) => ({
     comfyuiPort: 8188,
@@ -212,12 +212,12 @@ beforeEach(() => {
   }));
   probeMock.mockResolvedValue({ embeddable: true, reason: "ok" });
   statusMock.mockResolvedValue({
-    up: true,
     base: "http://127.0.0.1:8188",
-    starting: false,
-    probing: false,
-    stopping: false,
     port: null,
+    probing: false,
+    starting: false,
+    stopping: false,
+    up: true,
     via: "external",
   });
   studioProbeMock.mockResolvedValue(true);
@@ -362,12 +362,12 @@ describe("setting 的状态读与进程动作", () => {
   it("comfyStatus：结论来自 getComfyUiStatus，端口在探测无值时回落到设置项", async () => {
     const res = await createCaller(makeCtx()).comfyStatus();
     expect(res).toMatchObject({
-      up: true,
-      base: "http://127.0.0.1:8188",
-      port: 8188,
-      via: "external",
       autoStart: true,
+      base: "http://127.0.0.1:8188",
       path: "C:/ComfyUI",
+      port: 8188,
+      up: true,
+      via: "external",
     });
   });
 
@@ -387,8 +387,8 @@ describe("setting 的状态读与进程动作", () => {
       timeoutMs: 60_000,
     });
     expect(ensureReadyMock).toHaveBeenCalledWith({
-      timeoutMs: 60_000,
       manual: true,
+      timeoutMs: 60_000,
     });
     expect(res).toMatchObject({ ok: true });
   });
@@ -396,8 +396,8 @@ describe("setting 的状态读与进程动作", () => {
   it("comfyStart 不给 timeoutMs 时透传 undefined（不设硬超时是有意口径）", async () => {
     await createCaller(makeCtx()).comfyStart({});
     expect(ensureReadyMock).toHaveBeenCalledWith({
-      timeoutMs: undefined,
       manual: true,
+      timeoutMs: undefined,
     });
   });
 
@@ -419,7 +419,7 @@ describe("setting 的状态读与进程动作", () => {
     studioProbeMock.mockRejectedValueOnce(new Error("EACCES"));
     studioStartingMock.mockReturnValue(true);
     const res = await createCaller(makeCtx()).dbStudioStatus();
-    expect(res).toEqual({ up: false, port: 3210, starting: true });
+    expect(res).toEqual({ port: 3210, starting: true, up: false });
   });
 });
 

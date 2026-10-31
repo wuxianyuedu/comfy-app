@@ -68,8 +68,8 @@ function optionCountsText(counts: LogLevelCounts): string {
  */
 function CountColumn({
   label,
-  value,
   tone,
+  value,
 }: {
   label: string;
   tone: "muted" | "warn" | "error";
@@ -186,9 +186,9 @@ const ORIGIN_TEXT: Record<LogOriginFilter, string> = {
  * - **候选列表**才是「切换之前先看行情」的地方：每个来源一行，行内四列数字。
  */
 function OriginSelect({
-  value,
   countsByOrigin,
   onChange,
+  value,
 }: {
   countsByOrigin: Record<LogOriginFilter, LogLevelCounts>;
   onChange: (next: LogOriginFilter) => void;

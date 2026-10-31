@@ -13,10 +13,10 @@ import {
 
 function makeRow(overrides: Partial<WorkflowRow> = {}): WorkflowRow {
   return {
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
     id: "wf-1",
     name: "demo",
     taskType: "t2i",
-    createdAt: new Date("2026-08-01T00:00:00.000Z"),
     ...overrides,
   };
 }
@@ -29,12 +29,12 @@ describe("deriveLocalRootsHint 空列表原因", () => {
 
   it("全部根都不可访问 → 列出路径并提示核对安装路径", () => {
     const hint = deriveLocalRootsHint([
-      { absPath: "D:/Comfy/workflows", exists: false, count: 0 },
+      { absPath: "D:/Comfy/workflows", count: 0, exists: false },
       {
         absPath: "D:/Comfy/ComfyUI/workflows",
-        exists: false,
         count: 0,
         error: "无法访问",
+        exists: false,
       },
     ]);
     expect(hint).toContain("不可访问");
@@ -43,23 +43,19 @@ describe("deriveLocalRootsHint 空列表原因", () => {
 
   it("根在但一个工作流文件都没有 → 指出目录里没有文件", () => {
     expect(
-      deriveLocalRootsHint([
-        { absPath: "D:/Comfy/workflows", exists: true, count: 0 },
-      ]),
+      deriveLocalRootsHint([{ absPath: "D:/Comfy/workflows", count: 0, exists: true }]),
     ).toContain("没有工作流文件");
   });
 
   it("根可用且扫到文件 → 不算「因为目录有问题」，返回 null 走默认空态文案", () => {
     expect(
-      deriveLocalRootsHint([
-        { absPath: "D:/Comfy/workflows", exists: true, count: 7 },
-      ]),
+      deriveLocalRootsHint([{ absPath: "D:/Comfy/workflows", count: 7, exists: true }]),
     ).toBeNull();
     // 多个根里只要有一个可用并扫到文件，也不归因到目录
     expect(
       deriveLocalRootsHint([
-        { absPath: "D:/a", exists: false, count: 0 },
-        { absPath: "D:/b", exists: true, count: 3 },
+        { absPath: "D:/a", count: 0, exists: false },
+        { absPath: "D:/b", count: 3, exists: true },
       ]),
     ).toBeNull();
   });
@@ -74,9 +70,10 @@ describe("deriveFormatFlags 格式标志推导", () => {
   });
 
   it("RAW 原件缺失时不可执行", () => {
-    expect(
-      deriveFormatFlags(makeRow({ hasRaw: false, usable: false })),
-    ).toEqual({ hasRaw: false, usable: false });
+    expect(deriveFormatFlags(makeRow({ hasRaw: false, usable: false }))).toEqual({
+      hasRaw: false,
+      usable: false,
+    });
   });
 
   it("服务端没给 usable 时按 hasRaw 回填", () => {
@@ -101,32 +98,34 @@ describe("deriveFormatFlags 格式标志推导", () => {
 describe("deriveSyncFlags 手动同步标志聚合", () => {
   it("在线行(无磁盘信息)为干净且不可同步", () => {
     expect(deriveSyncFlags(makeRow())).toEqual({
+      canResync: false,
       dirty: false,
       missing: false,
-      canResync: false,
     });
   });
 
   it("磁盘文件有更新(diskDirty)时 dirty 且可 resync", () => {
     expect(deriveSyncFlags(makeRow({ diskDirty: true }))).toEqual({
+      canResync: true,
       dirty: true,
       missing: false,
-      canResync: true,
     });
   });
 
   it("磁盘文件丢失(diskMissing)时标记 missing 但不可 resync", () => {
     expect(deriveSyncFlags(makeRow({ diskMissing: true }))).toEqual({
+      canResync: false,
       dirty: false,
       missing: true,
-      canResync: false,
     });
   });
 
   it("同时 dirty 与 missing 时 canResync 跟随 dirty", () => {
-    expect(
-      deriveSyncFlags(makeRow({ diskDirty: true, diskMissing: true })),
-    ).toEqual({ dirty: true, missing: true, canResync: true });
+    expect(deriveSyncFlags(makeRow({ diskDirty: true, diskMissing: true }))).toEqual({
+      canResync: true,
+      dirty: true,
+      missing: true,
+    });
   });
 
   it("diskDirty 为 undefined 等 falsy 值时视为 false", () => {

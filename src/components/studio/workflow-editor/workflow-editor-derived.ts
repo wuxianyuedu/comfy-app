@@ -34,11 +34,11 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
     for (const rn of detail?.rawNodes ?? []) {
       if (rn?.id) {
         m[rn.id] = {
-          widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
-          outputs: Array.isArray(rn.outputs) ? rn.outputs : [],
           flags: rn.flags && typeof rn.flags === "object" ? rn.flags : {},
-          properties: rn.properties && typeof rn.properties === "object" ? rn.properties : {},
           mode: typeof rn.mode === "number" ? rn.mode : 0,
+          outputs: Array.isArray(rn.outputs) ? rn.outputs : [],
+          properties: rn.properties && typeof rn.properties === "object" ? rn.properties : {},
+          widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
         };
       }
     }
@@ -65,8 +65,8 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
       }
       return {
         ...detail,
-        nodes: detail.rawView.nodes,
         graph: detail.rawView.graph,
+        nodes: detail.rawView.nodes,
         positions: { ...(detail.rawView.positions ?? {}), ...overrides },
       };
     }
@@ -84,5 +84,5 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
     return inferSourceOutNames(scopeDetail, nodesById, rawMetaById);
   }, [scopeDetail, rawMetaById]);
 
-  return { rawMetaById, scopeDetail, outSlotNameById };
+  return { outSlotNameById, rawMetaById, scopeDetail };
 }

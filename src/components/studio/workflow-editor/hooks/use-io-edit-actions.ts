@@ -11,21 +11,16 @@ import { useCallback } from "react";
 import type { useIOEditApi } from "../WorkflowStores";
 import type { WorkflowIOParam } from "../../workflow-types";
 
-export function useIoEditActions(params: {
-  ioApi: ReturnType<typeof useIOEditApi>;
-}) {
+export function useIoEditActions(params: { ioApi: ReturnType<typeof useIOEditApi> }) {
   const { ioApi } = params;
   const setWorkflowIO = useCallback(
     (
       updater:
         | Record<string, WorkflowIOParam>
-        | ((
-            prev: Record<string, WorkflowIOParam>,
-          ) => Record<string, WorkflowIOParam>),
+        | ((prev: Record<string, WorkflowIOParam>) => Record<string, WorkflowIOParam>),
     ) => {
       ioApi.setState((state) => ({
-        workflowIO:
-          typeof updater === "function" ? updater(state.workflowIO) : updater,
+        workflowIO: typeof updater === "function" ? updater(state.workflowIO) : updater,
       }));
     },
     [ioApi],
@@ -34,10 +29,8 @@ export function useIoEditActions(params: {
     (v: boolean | ((prev: boolean) => boolean)) =>
       ioApi
         .getState()
-        .setIoPreviewOpen(
-          typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v,
-        ),
+        .setIoPreviewOpen(typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v),
     [ioApi],
   );
-  return { setWorkflowIO, setIoPreviewOpen };
+  return { setIoPreviewOpen, setWorkflowIO };
 }

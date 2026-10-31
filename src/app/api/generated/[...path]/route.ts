@@ -46,8 +46,8 @@ import { requireRequestUser } from "~/server/auth/request-user";
  *  ⚠️ `Cache-Control` 必须是 `private`：加了归属判定之后再标 `public`，
  *  等于允许共享缓存把 A 的产物回给 B —— 那会让上面那道闸只剩形式。 */
 const SHARED_HEADERS = /* SAFETY: type assertion reviewed */ {
-  "Cache-Control": "private, max-age=31536000, immutable",
   "Accept-Ranges": "bytes",
+  "Cache-Control": "private, max-age=31536000, immutable",
 } as const;
 
 export const runtime = "nodejs";
@@ -110,11 +110,11 @@ export async function GET(
   const range = resolveByteRange(req.headers.get("range"), size);
   if (range.kind === "unsatisfiable") {
     return new Response(null, {
-      status: 416,
       headers: {
         "Content-Range": contentRangeHeader(null, size),
         ...SHARED_HEADERS,
       },
+      status: 416,
     });
   }
   const window = range.kind === "partial" ? range.window : null;
@@ -141,7 +141,7 @@ export async function GET(
       if (bytesRead !== buf.length) {
         buf = buf.subarray(0, bytesRead);
         if (window) {
-          effectiveWindow = { start, endInclusive: start + bytesRead - 1 };
+          effectiveWindow = { endInclusive: start + bytesRead - 1, start };
         }
       }
     } finally {
@@ -159,7 +159,7 @@ export async function GET(
   });
   if (effectiveWindow) {
     headers.set("Content-Range", contentRangeHeader(effectiveWindow, size));
-    return new Response(new Uint8Array(buf), { status: 206, headers });
+    return new Response(new Uint8Array(buf), { headers, status: 206 });
   }
   return new Response(new Uint8Array(buf), { headers });
 }

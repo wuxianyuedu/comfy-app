@@ -117,11 +117,11 @@ async function recordDisconnect(
   if (stopped.current) {
     return;
   }
-  const { title, body } = describeAppServiceDisconnect(
+  const { body, title } = describeAppServiceDisconnect(
     at,
     record === null ? null : describeAppServiceExit(record),
   );
-  push({ kind: "offline", title, body, runId, time: at });
+  push({ body, kind: "offline", runId, time: at, title });
 }
 
 /** 启动/恢复那条：先把原因读回来，再连同时间一起写成一条完整消息。 */
@@ -142,23 +142,23 @@ async function recordStart(
     probe.record !== null && isPreviousRunExit(probe.record, probe.currentRunId)
       ? probe.record
       : null;
-  const { title, body } = describeAppServiceStart({
+  const { body, title } = describeAppServiceStart({
     at: event.at,
-    offlineAt: event.offlineAt,
     exitAt: record === null ? null : Date.parse(record.at) || null,
     notice: record === null ? null : describeAppServiceExit(record),
+    offlineAt: event.offlineAt,
     /* 停表那一段随事件走（判据在纯函数层决定「多长才值得标一行」）。 */
     unprobedMs: event.unprobedMs,
   });
   /* 带上**事件时刻**而不是让 store 记 push 时刻：这条要先把原因读回来，push 天然
    * 比事件晚一个往返，而「断开 → 恢复」的先后必须由事情发生的顺序决定。 */
-  push({ kind: "restart", title, body, runId, time: event.at });
+  push({ body, kind: "restart", runId, time: event.at, title });
 }
 
 export function useAppServiceMessageLog({
-  state,
-  processIsNew,
   currentRunId,
+  processIsNew,
+  state,
   unprobedMs,
 }: AppServiceMessageLogInput): void {
   /* 边沿判据的游标放 ref：它只参与判定、不驱动渲染，而它必须**跨渲染存活**——
@@ -187,7 +187,7 @@ export function useAppServiceMessageLog({
   useEffect(() => {
     const { cursor, event } = deriveAppServiceEvent(
       cursorRef.current,
-      { state, processIsNew, unprobedMs },
+      { processIsNew, state, unprobedMs },
       Date.now(),
     );
     cursorRef.current = cursor;
@@ -208,8 +208,8 @@ export function useAppServiceMessageLog({
     if (event.type === "route-stale") {
       /* 服务还在应答，runId 是**当前这一次**的（端口答得了 404 就答得了它）——
        * 与断开那条相反，不是刻意为之，是事实本来就不同。 */
-      const { title, body } = describeAppServiceRouteStale(event.at);
-      push({ kind: "offline", title, body, runId: currentRunId });
+      const { body, title } = describeAppServiceRouteStale(event.at);
+      push({ body, kind: "offline", runId: currentRunId, title });
       return;
     }
     void recordStart(event, stoppedRef, currentRunId);

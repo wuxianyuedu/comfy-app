@@ -65,7 +65,7 @@ const mockRouter = t.router({
           message: behavior.syncError,
         });
       }
-      return { ok: true, count: behavior.models.length };
+      return { count: behavior.models.length, ok: true };
     }),
   }),
 });
@@ -73,27 +73,27 @@ const mockRouter = t.router({
 const server = setupTrpcServer(mockRouter);
 
 const ONE: Row = {
+  createdAt: "2026-01-01T00:00:00.000Z",
+  fileName: "dreamshaper-xl.safetensors",
+  fileSize: 5120,
   id: "m1",
+  isAvailable: true,
   name: "dreamshaper-xl",
   type: "checkpoints",
-  fileName: "dreamshaper-xl.safetensors",
-  isAvailable: true,
-  fileSize: 5120,
-  createdAt: "2026-01-01T00:00:00.000Z",
 };
 const TWO: Row = {
   ...ONE,
+  fileName: "detail.safetensors",
   id: "m2",
   name: "Detail Tweaker",
   type: "loras",
-  fileName: "detail.safetensors",
 };
 const THREE: Row = {
   ...ONE,
+  fileName: "anime.safetensors",
   id: "m3",
   name: "Anime Style",
   type: "loras",
-  fileName: "anime.safetensors",
 };
 
 /**
@@ -118,9 +118,9 @@ function makeWrapper() {
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children，tRPC 的 ProviderProps 要求它带在 props 上
       createElement(TRPCProvider, {
-        trpcClient: client,
-        queryClient: qc,
         children,
+        queryClient: qc,
+        trpcClient: client,
       }),
     );
   };
@@ -156,7 +156,7 @@ describe("useModelLibrary", () => {
    * 且当时打开的整个视图每秒被重渲染上千次（ISSUE #1803）。 */
   it("重渲染不复发静默同步：sync 只在挂载时调一次", async () => {
     behavior = { models: [ONE] };
-    const { result, rerender } = renderHook(() => useModelLibrary(), {
+    const { rerender, result } = renderHook(() => useModelLibrary(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.loading).toBe(false);
@@ -281,7 +281,7 @@ describe("useModelLibrary 卸载后不再 setState", () => {
           await gate;
           return { models: [ONE] };
         }),
-        sync: t.procedure.mutation(() => ({ ok: true, count: 1 })),
+        sync: t.procedure.mutation(() => ({ count: 1, ok: true })),
       }),
     });
     server.use(

@@ -78,7 +78,7 @@ export type SimpleKeyHandlerOptions = {
 export function simpleKeyHandler(
   keys: ReadonlyArray<string>,
   action: SimpleKeyAction,
-  { preventDefault = true, ignoreRepeat = true }: SimpleKeyHandlerOptions = {},
+  { ignoreRepeat = true, preventDefault = true }: SimpleKeyHandlerOptions = {},
 ): { onKeyDown: (event: SimpleKeyEvent) => void } {
   /* 归一表在构造时算一次：调用点在 JSX 里，每次渲染重建一份太浪费。 */
   const normalized = new Set(keys.map(normalizeKeyName));

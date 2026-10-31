@@ -50,8 +50,8 @@ export type UseSettingsDbStudio = {
 };
 
 export function useSettingsDbStudio({
-  statusQueriesEnabled,
   showFlash,
+  statusQueriesEnabled,
 }: {
   /** 整页提示条通道，来自主 hook 的 useFlashLatch。 */
   showFlash: ActionReport;
@@ -61,8 +61,8 @@ export function useSettingsDbStudio({
   const trpc = useTRPC();
   const statusQ = useQuery(
     trpc.setting.dbStudioStatus.queryOptions(undefined, {
-      refetchInterval: 15_000,
       enabled: statusQueriesEnabled,
+      refetchInterval: 15_000,
     }),
   );
   const startM = useMutation(trpc.setting.dbStudioStart.mutationOptions());
@@ -81,7 +81,7 @@ export function useSettingsDbStudio({
           await statusQ.refetch();
           return result;
         },
-        { report: showFlash, failureText: "启动 Drizzle Studio 失败" },
+        { failureText: "启动 Drizzle Studio 失败", report: showFlash },
       );
     } finally {
       setStarting(false);
@@ -97,7 +97,7 @@ export function useSettingsDbStudio({
           await statusQ.refetch();
           return result;
         },
-        { report: showFlash, failureText: "关闭 Drizzle Studio 失败" },
+        { failureText: "关闭 Drizzle Studio 失败", report: showFlash },
       );
     } finally {
       setStopping(false);
@@ -105,8 +105,8 @@ export function useSettingsDbStudio({
   }, [stopM, statusQ, showFlash]);
 
   const openDbStudioAction = useExternalAction({
-    target: "browser",
     report: showFlash,
+    target: "browser",
   });
   const openDbStudio = useCallback(async () => {
     await openDbStudioAction.run(() => openM.mutateAsync());
@@ -114,25 +114,25 @@ export function useSettingsDbStudio({
 
   const logActive = starting || !!statusQ.data?.starting;
   const log = useRuntimeLogSource({
-    source: "drizzle-studio-runtime",
     active: logActive,
+    source: "drizzle-studio-runtime",
   });
 
   const raw = statusQ.data;
   return {
+    dbStudioLog: { ...log, active: logActive },
+    dbStudioOpening: openDbStudioAction.busy,
+    dbStudioStarting: starting,
     dbStudioStatus: raw
       ? {
-          up: !!raw.up,
-          starting: !!raw.starting,
           port: raw.port ?? 4983,
+          starting: !!raw.starting,
+          up: !!raw.up,
         }
       : null,
-    dbStudioStarting: starting,
     dbStudioStopping: stopping,
-    dbStudioOpening: openDbStudioAction.busy,
-    dbStudioLog: { ...log, active: logActive },
+    openDbStudio,
     startDbStudio,
     stopDbStudio,
-    openDbStudio,
   };
 }

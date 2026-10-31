@@ -23,7 +23,7 @@ export function useModelOverview() {
 
   return deriveModelOverview({
     folders: query.data?.folders,
-    loading: query.isLoading,
     isError: query.isError,
+    loading: query.isLoading,
   });
 }

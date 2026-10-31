@@ -54,19 +54,19 @@ export type WorkflowPersistenceArgs = {
  * 工作流编辑器的布局快照 / 重置 / 保存 / 拖拽落盘逻辑。
  */
 export function useWorkflowPersistence({
-  workflowId,
   detail,
-  setDetail,
-  setNodes,
-  paramMap,
-  workflowIO,
   fitToContent,
-  savePatch,
-  onSave,
-  setSaving,
-  setError,
-  reloadView,
   hostNodeId = "",
+  onSave,
+  paramMap,
+  reloadView,
+  savePatch,
+  setDetail,
+  setError,
+  setNodes,
+  setSaving,
+  workflowId,
+  workflowIO,
 }: WorkflowPersistenceArgs) {
   const toast = useToast();
   /* 「本视图该管哪些键」的唯一判据。
@@ -197,11 +197,11 @@ export function useWorkflowPersistence({
            * 工作流界面，不再 onClose 退出 —— 用户通常还要继续调整），失败是
            * **行内错误块**（保存失败时往往要重试或去改配置，需要一个留着不走的
            * 出口）。通道差异由 `report` 表达，文案归一由出口负责。 */
+          failureText: "保存失败",
           report: ((kind, detail) =>
             kind === "ok"
               ? toast.success("已保存", "画布修改与 IO 配置已落库，可继续编辑")
               : setError(detail)) satisfies ActionReport,
-          failureText: "保存失败",
         },
       );
     } finally {
@@ -294,7 +294,7 @@ export function useWorkflowPersistence({
          *  链路也用它）。不拼前缀就会出现两个各写各的键：子图里的拖拽落到
          *  `1670`、顶层链路只认 `4:1670`，两边的布局互相看不见 —— 下钻回来
          *  时那个裸键还会被当成「已保存坐标」把真正的原始位置盖掉。 */
-        const nodeId = runtimeNodeId({ nodeId: node.id, hostNodeId });
+        const nodeId = runtimeNodeId({ hostNodeId, nodeId: node.id });
         setDetail((prev) =>
           prev
             ? {
@@ -309,8 +309,8 @@ export function useWorkflowPersistence({
         savePatch.mutate(
           {
             id: workflowId,
-            positions: { [nodeId]: [x, y] },
             mergePositions: true,
+            positions: { [nodeId]: [x, y] },
           },
           { onError: reportPositionSaveFailure },
         );
@@ -319,5 +319,5 @@ export function useWorkflowPersistence({
     [detail, setDetail, workflowId, savePatch, hostNodeId, reportPositionSaveFailure],
   );
 
-  return { resetLayout, handleSave, onNodeDragStop };
+  return { handleSave, onNodeDragStop, resetLayout };
 }

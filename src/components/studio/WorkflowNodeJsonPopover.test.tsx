@@ -31,17 +31,17 @@ afterEach(cleanup);
 
 const REQUEST: NodeJsonViewerRequest = {
   anchorRect: {
+    bottom: 316,
+    height: 16,
+    left: 120,
+    right: 160,
+    top: 300,
+    width: 40,
     x: 120,
     y: 300,
-    left: 120,
-    top: 300,
-    right: 160,
-    bottom: 316,
-    width: 40,
-    height: 16,
   },
-  nodeId: "41",
   kind: "node",
+  nodeId: "41",
 };
 
 /** 最小可用的 JSON 数据源：只喂 `class_type`，够渲染标题与正文。 */

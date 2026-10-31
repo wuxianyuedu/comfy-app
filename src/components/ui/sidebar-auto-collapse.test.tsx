@@ -35,15 +35,15 @@ function setViewport(width: number): void {
 beforeEach(() => {
   listeners.clear();
   window.matchMedia = /* SAFETY: 类型断言已复核 */ ((query: string) => ({
+    addEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
+      listeners.add(/* SAFETY: 类型断言已复核 */ cb as () => void);
+    },
     get matches() {
       const max = /max-width:\s*(\d+)px/.exec(query)?.[1];
       return max === undefined ? false : window.innerWidth <= Number(max);
     },
     media: query,
     onchange: null,
-    addEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
-      listeners.add(/* SAFETY: 类型断言已复核 */ cb as () => void);
-    },
     removeEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
       listeners.delete(/* SAFETY: 类型断言已复核 */ cb as () => void);
     },
@@ -54,7 +54,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 function Probe() {
-  const { state, collapsedByAuto, toggleSidebar } = useSidebar();
+  const { collapsedByAuto, state, toggleSidebar } = useSidebar();
   return (
     <div>
       <span data-testid="state">{state}</span>

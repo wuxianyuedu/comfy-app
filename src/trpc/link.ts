@@ -28,13 +28,13 @@ export function trpcHttpLink(options: {
   const url = options.origin === undefined ? getTrpcEndpoint() : getTrpcEndpointFor(options.origin);
 
   const http = httpBatchStreamLink({
-    transformer: SuperJSON,
-    url,
     headers: () => {
       const headers = new Headers();
       headers.set("x-trpc-source", options.source);
       return headers;
     },
+    transformer: SuperJSON,
+    url,
   });
 
   if (!options.withLogger) {

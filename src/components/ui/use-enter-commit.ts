@@ -80,8 +80,8 @@ export type EnterCommitHandlers = {
 export function isCommitKey(
   event: Pick<EnterCommitKeyEvent, "key" | "shiftKey" | "nativeEvent">,
   {
-    ignoreIme = true,
     excludeShift = true,
+    ignoreIme = true,
   }: Pick<EnterCommitOptions, "ignoreIme" | "excludeShift"> = {},
 ): boolean {
   if (event.key !== "Enter") {
@@ -118,14 +118,14 @@ export function isCommitKey(
  * 不必为一个 `ref` 破坏 `react-hooks/refs`（渲染期不许读 `ref.current`）。
  */
 export function enterCommit({
-  onCommit,
-  onCancel,
-  ignoreIme = true,
   excludeShift = true,
+  ignoreIme = true,
+  onCancel,
+  onCommit,
 }: EnterCommitOptions): EnterCommitHandlers {
   return {
     onKeyDown: (event) => {
-      if (isCommitKey(event, { ignoreIme, excludeShift })) {
+      if (isCommitKey(event, { excludeShift, ignoreIme })) {
         /* `preventDefault` **不能省**：输入框在 `<form>` 里时，Enter 会触发
          * 隐式 submit（「回车新增标签」连带提交整页）。此前 5 处没写，
          * 没出事只是因为它们恰好不在 form 里。 */

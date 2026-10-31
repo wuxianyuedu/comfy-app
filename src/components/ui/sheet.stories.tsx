@@ -30,8 +30,8 @@ import {
  * 4. **`showCloseButton`** 与 dialog 同款语义：自绘 header 时传 `false`。
  */
 const meta = {
-  title: "UI/Sheet",
   component: Sheet,
+  title: "UI/Sheet",
 } satisfies Meta<typeof Sheet>;
 
 export default meta;

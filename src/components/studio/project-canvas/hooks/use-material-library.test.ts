@@ -13,26 +13,26 @@ import {
 import { useMaterialLibrary } from "./use-material-library";
 
 vi.mock("~/lib/media/materials-client", () => ({
+  deleteMaterial: vi.fn(),
   fetchMaterials: vi.fn(),
   uploadMaterial: vi.fn(),
-  deleteMaterial: vi.fn(),
 }));
 
 const mockedList = vi.mocked(fetchMaterials);
 const mockedUpload = vi.mocked(uploadMaterial);
 const mockedDelete = vi.mocked(deleteMaterial);
 
-const folders = [{ id: "ref", name: "参考素材", count: 1 }];
+const folders = [{ count: 1, id: "ref", name: "参考素材" }];
 const item: MaterialItem = {
-  id: "p-1/ref/a.png",
-  name: "a.png",
   folder: "ref",
   folderName: "参考素材",
+  id: "p-1/ref/a.png",
   kind: "image",
-  url: "/u/a.png",
+  name: "a.png",
+  scope: "p-1",
   size: 2048,
   updatedAt: "2026-01-01T00:00:00.000Z",
-  scope: "p-1",
+  url: "/u/a.png",
 };
 
 beforeEach(() => {
@@ -113,9 +113,9 @@ describe("useMaterialLibrary", () => {
 
     const file = new File(["x"], "a.png", { type: "image/png" });
     const files = /* SAFETY: 类型断言已复核 */ {
-      length: 1,
       0: file,
       item: (i: number) => (i === 0 ? file : null),
+      length: 1,
     } as unknown as FileList;
     await act(async () => {
       await result.current.upload(files);
@@ -137,9 +137,9 @@ describe("useMaterialLibrary", () => {
     const a = new File(["a"], "a.png");
     const b = new File(["b"], "b.png");
     const files = /* SAFETY: 类型断言已复核 */ {
-      length: 2,
       0: a,
       1: b,
+      length: 2,
     } as unknown as FileList;
     await act(async () => {
       await result.current.upload(files);
@@ -157,8 +157,8 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
     const file = new File(["x"], "a.png");
     const files = /* SAFETY: 类型断言已复核 */ {
-      length: 1,
       0: file,
+      length: 1,
     } as unknown as FileList;
     await act(async () => {
       await result.current.upload(files);
@@ -174,8 +174,8 @@ describe("useMaterialLibrary", () => {
 
     const file = new File(["x"], "a.png");
     const files = /* SAFETY: 类型断言已复核 */ {
-      length: 1,
       0: file,
+      length: 1,
     } as unknown as FileList;
     await act(async () => {
       await result.current.upload(files);
@@ -226,13 +226,13 @@ describe("useMaterialLibrary", () => {
     mockedList.mockResolvedValue({ folders, items: [item] });
     const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
     await expect.poll(() => result.current.loading).toBe(false);
-    expect(result.current.breadcrumbSegments).toEqual([{ label: "全部", key: null }]);
+    expect(result.current.breadcrumbSegments).toEqual([{ key: null, label: "全部" }]);
 
     act(() => result.current.enterFolder("ref"));
     await expect.poll(() => result.current.folder).toBe("ref");
     expect(result.current.breadcrumbSegments).toEqual([
-      { label: "全部", key: null },
-      { label: "参考素材", key: "ref" },
+      { key: null, label: "全部" },
+      { key: "ref", label: "参考素材" },
     ]);
 
     act(() => result.current.setSearch("a"));

@@ -23,9 +23,7 @@ import type { RawNodeInput, RawSubgraphDef } from "./raw";
 function makeSub(extra: Record<string, unknown> = {}): RawSubgraphDef {
   return {
     id: "e0940f57-80b2-480e-8a38-36968dc1763d",
-    name: "WAN22 I2V",
-    inputs: [{ name: "value_1", label: "Seed", linkIds: [7] }],
-    outputs: [],
+    inputs: [{ label: "Seed", linkIds: [7], name: "value_1" }],
     links: [
       {
         id: 7,
@@ -36,23 +34,25 @@ function makeSub(extra: Record<string, unknown> = {}): RawSubgraphDef {
         type: "INT",
       },
     ],
+    name: "WAN22 I2V",
     nodes: [
       {
         id: 1670,
-        type: "PrimitiveInt",
         inputs: [
           {
-            name: "value",
             idx: 0,
+            link: 7,
+            name: "value",
             type: "INT",
             widget: { name: "value" },
-            link: 7,
           },
         ],
-        outputs: [{ name: "INT", links: [] }],
+        outputs: [{ links: [], name: "INT" }],
+        type: "PrimitiveInt",
         widgets_values: [42],
       },
     ],
+    outputs: [],
     ...extra,
   };
 }
@@ -66,7 +66,7 @@ describe("buildSubgraphGraph — 子图暴露口的作者名", () => {
   });
 
   it("没有作者名（wrapper 未命名）时不产出条目", () => {
-    const sub = makeSub({ inputs: [{ name: "value_1", linkIds: [7] }] });
+    const sub = makeSub({ inputs: [{ linkIds: [7], name: "value_1" }] });
     const { linkById } = parseSubgraphLinks(sub);
     expect(buildSubgraphGraph(sub, linkById).proxyAuthorLabels).toEqual({});
   });
@@ -77,8 +77,8 @@ describe("buildSubgraphGraph — 子图暴露口的作者名", () => {
   it("多个节点共用同一槽位名时各记各的作者名，不互相覆盖", () => {
     const sub = makeSub({
       inputs: [
-        { name: "value_1", label: "Seed", linkIds: [7] },
-        { name: "value_3", label: "FPS", linkIds: [8] },
+        { label: "Seed", linkIds: [7], name: "value_1" },
+        { label: "FPS", linkIds: [8], name: "value_3" },
       ],
       links: [
         {
@@ -101,32 +101,32 @@ describe("buildSubgraphGraph — 子图暴露口的作者名", () => {
       nodes: [
         {
           id: 1670,
-          type: "PrimitiveInt",
           inputs: [
             {
-              name: "value",
               idx: 0,
+              link: 7,
+              name: "value",
               type: "INT",
               widget: { name: "value" },
-              link: 7,
             },
           ],
-          outputs: [{ name: "INT", links: [] }],
+          outputs: [{ links: [], name: "INT" }],
+          type: "PrimitiveInt",
           widgets_values: [42],
         },
         {
           id: 1669,
-          type: "PrimitiveFloat",
           inputs: [
             {
-              name: "value",
               idx: 0,
+              link: 8,
+              name: "value",
               type: "FLOAT",
               widget: { name: "value" },
-              link: 8,
             },
           ],
-          outputs: [{ name: "FLOAT", links: [] }],
+          outputs: [{ links: [], name: "FLOAT" }],
+          type: "PrimitiveFloat",
           widgets_values: [16],
         },
       ],
@@ -139,7 +139,7 @@ describe("buildSubgraphGraph — 子图暴露口的作者名", () => {
 
   it("哨兵边指向的槽位名找不到时静默跳过（不产出脏键）", () => {
     const sub = makeSub({
-      nodes: [{ id: 1670, type: "PrimitiveInt", inputs: [], outputs: [] }],
+      nodes: [{ id: 1670, inputs: [], outputs: [], type: "PrimitiveInt" }],
     });
     const { linkById } = parseSubgraphLinks(sub);
     expect(buildSubgraphGraph(sub, linkById).proxyAuthorLabels).toEqual({});
@@ -156,18 +156,18 @@ describe("buildSubgraphGraph — 节点作者标题", () => {
       nodes: [
         {
           id: 1670,
-          type: "PrimitiveInt",
-          title: "Seed",
           inputs: [
             {
-              name: "value",
               idx: 0,
+              link: null,
+              name: "value",
               type: "INT",
               widget: { name: "value" },
-              link: null,
             },
           ],
-          outputs: [{ name: "INT", links: [] }],
+          outputs: [{ links: [], name: "INT" }],
+          title: "Seed",
+          type: "PrimitiveInt",
           widgets_values: [42],
         },
       ],
@@ -203,8 +203,8 @@ describe("extractSubgraphAnnotations — 宿主链坐标", () => {
 
   it("读得回 `宿主:内部` 拼接键的拖拽覆盖", () => {
     const sub = subWith([
-      { id: 1670, type: "KSampler", pos: [100, 100] },
-      { id: 1671, type: "KSampler", pos: [300, 100] },
+      { id: 1670, pos: [100, 100], type: "KSampler" },
+      { id: 1671, pos: [300, 100], type: "KSampler" },
     ]);
     const ann = extractSubgraphAnnotations(
       sub,
@@ -218,31 +218,31 @@ describe("extractSubgraphAnnotations — 宿主链坐标", () => {
   });
 
   it("没有宿主链时仍认裸键（老数据 / 顶层口径）", () => {
-    const sub = subWith([{ id: 1670, type: "KSampler", pos: [100, 100] }]);
+    const sub = subWith([{ id: 1670, pos: [100, 100], type: "KSampler" }]);
     const ann = extractSubgraphAnnotations(sub, { "1670": [1000, 1000] });
     expect(ann.positions).toEqual({ "1670": [1000, 1000] });
   });
 
   it("不带前缀的旧裸键在有宿主链时也读得到（历史数据兼容）", () => {
-    const sub = subWith([{ id: 1670, type: "KSampler", pos: [100, 100] }]);
+    const sub = subWith([{ id: 1670, pos: [100, 100], type: "KSampler" }]);
     const ann = extractSubgraphAnnotations(sub, { "1670": [500, 500] }, "4");
     expect(ann.positions).toEqual({ "1670": [500, 500] });
   });
 
   it("更深一层的键不属于本视图，退回原始坐标", () => {
-    const sub = subWith([{ id: 1670, type: "KSampler", pos: [100, 100] }]);
+    const sub = subWith([{ id: 1670, pos: [100, 100], type: "KSampler" }]);
     const ann = extractSubgraphAnnotations(sub, { "4:5:1670": [900, 900] }, "4");
     expect(ann.positions).toEqual({ "1670": [100, 100] });
   });
 
   it("别的子图的键不会串进来", () => {
-    const sub = subWith([{ id: 1670, type: "KSampler", pos: [100, 100] }]);
+    const sub = subWith([{ id: 1670, pos: [100, 100], type: "KSampler" }]);
     const ann = extractSubgraphAnnotations(sub, { "9:1670": [900, 900] }, "4");
     expect(ann.positions).toEqual({ "1670": [100, 100] });
   });
 
   it("拖到原点的覆盖算数，不被原始坐标盖回", () => {
-    const sub = subWith([{ id: 1670, type: "KSampler", pos: [100, 100] }]);
+    const sub = subWith([{ id: 1670, pos: [100, 100], type: "KSampler" }]);
     const ann = extractSubgraphAnnotations(sub, { "4:1670": [0, 0] }, "4");
     expect(ann.positions).toEqual({ "1670": [0, 0] });
   });
@@ -283,25 +283,23 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
     for (let index = 0; index <= Math.max(seedAt, 2); index++) {
       if (index === seedAt) {
         slots.push({
-          name: "seed",
           idx: opts.seedIdx,
+          link: 7,
+          name: "seed",
           type: "INT",
           widget: { name: "seed" },
-          link: 7,
         });
       } else if (index === 0) {
-        slots.push({ name: "model", idx: 0, type: "MODEL" });
+        slots.push({ idx: 0, name: "model", type: "MODEL" });
       } else if (index === 1) {
-        slots.push({ name: "negative", idx: 1, type: "CONDITIONING" });
+        slots.push({ idx: 1, name: "negative", type: "CONDITIONING" });
       } else {
-        slots.push({ name: `extra_${index}`, idx: index, type: "FLOAT" });
+        slots.push({ idx: index, name: `extra_${index}`, type: "FLOAT" });
       }
     }
     return {
       id: "e0940f57-80b2-480e-8a38-36968dc1763d",
-      name: "WAN22 I2V",
-      inputs: [{ id: "pin-1", name: "value_1", label: "Seed", linkIds: [7] }],
-      outputs: [],
+      inputs: [{ id: "pin-1", label: "Seed", linkIds: [7], name: "value_1" }],
       links: [
         {
           id: 7,
@@ -312,21 +310,23 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
           type: "INT",
         },
       ],
+      name: "WAN22 I2V",
       nodes: [
         {
           id: 5277,
-          type: "KSampler",
           inputs: slots,
-          outputs: [{ name: "LATENT", links: [] }],
+          outputs: [{ links: [], name: "LATENT" }],
+          type: "KSampler",
           widgets_values: [123, "randomize"],
         },
       ],
+      outputs: [],
     };
   }
 
   /** 走一遍「服务端解析 → 客户端组装 handle id」的完整链路。 */
   function resolveTargetHandle(sub: RawSubgraphDef): string | null {
-    const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(sub);
+    const { boundaryLinkInfoById, linkById } = parseSubgraphLinks(sub);
     const sg = buildSubgraphGraph(sub, linkById, boundarySlotsByNode(boundaryLinkInfoById));
     const { pinIdByLinkId } = parseSubgraphPins(sub);
     const links = buildBoundaryLinks(
@@ -341,7 +341,7 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
   }
 
   it("target_slot 落在 inputs[] 下标空间时解析到 seed", () => {
-    expect(resolveTargetHandle(makeConsumerSub({ targetSlot: 2, seedIdx: 2 }))).toBe("seed");
+    expect(resolveTargetHandle(makeConsumerSub({ seedIdx: 2, targetSlot: 2 }))).toBe("seed");
   });
 
   it("target_slot 落在控件序号空间时同样解析到 seed", () => {
@@ -350,9 +350,9 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
      * `inputs[6]`。修复前按 inputs[] 下标查会落空 → handle 退化成 `"in"`，
      * 正是 ISSUE 里那条 `e-bb-5277-in`。 */
     const sub = makeConsumerSub({
-      targetSlot: 6,
-      seedIdx: 2,
       seedArrayIndex: 6,
+      seedIdx: 2,
+      targetSlot: 6,
     });
     expect(resolveTargetHandle(sub)).toBe("seed");
   });
@@ -360,19 +360,19 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
   it("控件槽 idx 从 0 连续编号（跳过纯连接口）时不串到 model", () => {
     /* 有的导出路径给 widget 槽写 `idx: 1`（> 前面纯连接口的数量）——照抄 idx
      * 会把线锚到 model 那一行，值落错端口。哨兵边口径不受 idx 影响。 */
-    expect(resolveTargetHandle(makeConsumerSub({ targetSlot: 2, seedIdx: 1 }))).toBe("seed");
+    expect(resolveTargetHandle(makeConsumerSub({ seedIdx: 1, targetSlot: 2 }))).toBe("seed");
   });
 
   it("哨兵边指向不存在的槽位时不产出边（不再落成字面量 in）", () => {
-    expect(resolveTargetHandle(makeConsumerSub({ targetSlot: 9, seedIdx: 2 }))).toBeNull();
+    expect(resolveTargetHandle(makeConsumerSub({ seedIdx: 2, targetSlot: 9 }))).toBeNull();
   });
 
   it("边界落点与控件值取的是同一行（seed 拿到哨兵边的控件值）", () => {
-    const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(
-      makeConsumerSub({ targetSlot: 5, seedIdx: 2 }),
+    const { boundaryLinkInfoById, linkById } = parseSubgraphLinks(
+      makeConsumerSub({ seedIdx: 2, targetSlot: 5 }),
     );
     const sg = buildSubgraphGraph(
-      makeConsumerSub({ targetSlot: 5, seedIdx: 2 }),
+      makeConsumerSub({ seedIdx: 2, targetSlot: 5 }),
       linkById,
       boundarySlotsByNode(boundaryLinkInfoById),
     );
@@ -380,24 +380,24 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
   });
 
   it("被丢掉的边界连线会点名上报（不是静默跳过）", () => {
-    const sub = makeConsumerSub({ targetSlot: 9, seedIdx: 2 });
+    const sub = makeConsumerSub({ seedIdx: 2, targetSlot: 9 });
     const { boundaryLinkInfoById } = parseSubgraphLinks(sub);
     const { pinIdByLinkId } = parseSubgraphPins(sub);
     const dropped = reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, []);
-    expect(dropped).toEqual([{ linkId: 7, pinId: "pin-1", innerNodeId: "5277", innerSlot: 9 }]);
+    expect(dropped).toEqual([{ innerNodeId: "5277", innerSlot: 9, linkId: 7, pinId: "pin-1" }]);
   });
 
   it("正常产出的边不算「被丢掉」", () => {
-    const sub = makeConsumerSub({ targetSlot: 2, seedIdx: 2 });
+    const sub = makeConsumerSub({ seedIdx: 2, targetSlot: 2 });
     const { boundaryLinkInfoById } = parseSubgraphLinks(sub);
     const { pinIdByLinkId } = parseSubgraphPins(sub);
     const produced = [
       {
-        linkId: 7,
-        kind: /* SAFETY: 类型断言已复核 */ "input" as const,
-        pinId: "pin-1",
         innerNodeId: "5277",
         innerSlotName: "seed",
+        kind: /* SAFETY: 类型断言已复核 */ "input" as const,
+        linkId: 7,
+        pinId: "pin-1",
       },
     ];
     expect(reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, produced)).toEqual(

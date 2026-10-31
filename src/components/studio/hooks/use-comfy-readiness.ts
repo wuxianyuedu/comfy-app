@@ -51,24 +51,24 @@ function toBar(used: number | undefined, total: number | undefined): StatBar | n
   /* 「已用 / 总量 → 百分比」走 `~/lib/progress` 的 `toPct`（同一条口径的另一
    * 处落点）；`null` 在上面的守卫里已排除，这里落回 0 只为类型收窄。 */
   return {
-    used,
-    total,
     pct: toPct(used, total) ?? 0,
+    total,
+    used,
   };
 }
 
 export function useComfyReadiness(): ComfyStatusViewModel {
-  const { stats, online, stale } = useComfyStats();
+  const { online, stale, stats } = useComfyStats();
   const hasStats = online && stats !== null;
 
   return {
-    stats,
-    online,
-    stale,
     connecting: online && !hasStats,
     cudaVram: hasStats ? toBar(stats?.vramUsed, stats?.vramTotal) : null,
-    smiVram: hasStats ? toBar(stats?.smiVramUsed, stats?.smiVramTotal) : null,
-    ram: hasStats ? toBar(stats?.ramUsed, stats?.ramTotal) : null,
     degradedNote: online ? null : DEGRADED_NOTE,
+    online,
+    ram: hasStats ? toBar(stats?.ramUsed, stats?.ramTotal) : null,
+    smiVram: hasStats ? toBar(stats?.smiVramUsed, stats?.smiVramTotal) : null,
+    stale,
+    stats,
   };
 }

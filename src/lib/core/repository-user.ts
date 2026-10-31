@@ -141,15 +141,15 @@ export class LlmConfigRepository {
       const rows = await exec
         .insert(llmConfig)
         .values({
-          id: "singleton",
-          provider: input.provider ?? "local",
-          baseUrl: input.baseUrl ?? OLLAMA_DEFAULT_BASE_URL,
-          model: input.model ?? "",
-          extraModels: extraModelsJson,
           apiKey: enc.apiKey ?? null,
+          baseUrl: input.baseUrl ?? OLLAMA_DEFAULT_BASE_URL,
+          extraModels: extraModelsJson,
+          id: "singleton",
+          maxTokens: input.maxTokens ?? 2048,
+          model: input.model ?? "",
+          provider: input.provider ?? "local",
           temperature: input.temperature ?? 0.7,
           temperatureByTask: taskJson,
-          maxTokens: input.maxTokens ?? 2048,
         })
         .returning();
       return decryptRow(firstRowRequired(rows, "LLM 配置写入"));
@@ -249,10 +249,10 @@ async function syncRemoteModels(
           ? null
           : encryptLlmKey(e.apiKey.trim());
     cleaned.push({
-      name,
-      baseUrl: e.baseUrl?.trim() ? e.baseUrl.trim() : null,
       apiKey,
+      baseUrl: e.baseUrl?.trim() ? e.baseUrl.trim() : null,
       kind: e.kind ?? "chat",
+      name,
     });
   }
   const removed = rows.filter((r) => !seen.has(r.name));
@@ -273,22 +273,22 @@ async function syncRemoteModels(
       .insert(remoteModel)
       .values(
         cleaned.map((e) => ({
-          name: e.name,
-          baseUrl: e.baseUrl,
           apiKey: e.apiKey,
+          baseUrl: e.baseUrl,
           kind: e.kind,
+          name: e.name,
           workshopAdapters: adaptersByName.get(e.name) ?? null,
         })),
       )
       .onConflictDoUpdate({
-        target: remoteModel.name,
         set: {
-          baseUrl: sql`excluded.baseUrl`,
           apiKey: sql`excluded.apiKey`,
+          baseUrl: sql`excluded.baseUrl`,
           kind: sql`excluded.kind`,
-          workshopAdapters: sql`excluded.workshopAdapters`,
           updatedAt: new Date(),
+          workshopAdapters: sql`excluded.workshopAdapters`,
         },
+        target: remoteModel.name,
       });
   }
 }
@@ -356,8 +356,8 @@ export class RemoteModelRepository {
     await db
       .update(remoteModel)
       .set({
-        workshopAdapters: JSON.stringify(adapters),
         updatedAt: new Date(),
+        workshopAdapters: JSON.stringify(adapters),
       })
       .where(eq(remoteModel.id, row.id));
     return adapters;

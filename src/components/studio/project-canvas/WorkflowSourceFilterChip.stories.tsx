@@ -17,12 +17,12 @@ import { WorkflowSourceFilterChip } from "~/components/studio/project-canvas/Wor
 const OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "local", "online"] as const;
 
 const meta = {
-  title: "Studio/WorkflowSourceFilterChip",
-  component: WorkflowSourceFilterChip,
-  args: { value: "all", onChange: () => undefined },
+  args: { onChange: () => undefined, value: "all" },
   argTypes: {
     value: { control: { type: "select" }, options: OPTIONS },
   },
+  component: WorkflowSourceFilterChip,
+  title: "Studio/WorkflowSourceFilterChip",
 } satisfies Meta<typeof WorkflowSourceFilterChip>;
 
 export default meta;

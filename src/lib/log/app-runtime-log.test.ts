@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  fs.rmSync(tmpDir, { force: true, recursive: true });
 });
 
 describe("app-runtime-log 行格式", () => {

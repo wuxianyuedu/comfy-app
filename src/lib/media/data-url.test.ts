@@ -75,19 +75,19 @@ describe("toBase64 / toDataUrl", () => {
 describe("parseDataUrl", () => {
   it("取出 MIME 与 base64 载荷", () => {
     expect(parseDataUrl("data:image/png;base64,AAAA")).toEqual({
-      mime: "image/png",
       base64: "AAAA",
+      mime: "image/png",
     });
     expect(parseDataUrl("data:image/jpeg;charset=utf-8;base64,BBBB")).toEqual({
-      mime: "image/jpeg;charset=utf-8",
       base64: "BBBB",
+      mime: "image/jpeg;charset=utf-8",
     });
   });
 
   it("MIME 缺省时给通用二进制（不假装是图片）", () => {
     expect(parseDataUrl("data:;base64,AAAA")).toEqual({
-      mime: "application/octet-stream",
       base64: "AAAA",
+      mime: "application/octet-stream",
     });
   });
 

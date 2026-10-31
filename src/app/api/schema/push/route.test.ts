@@ -36,7 +36,7 @@ function stubStatusFile(payload: string): void {
 }
 
 function statusJson(phase: string, detail: string | null = null): string {
-  return JSON.stringify({ phase, detail, at: new Date().toISOString() });
+  return JSON.stringify({ at: new Date().toISOString(), detail, phase });
 }
 
 beforeEach(() => {
@@ -105,8 +105,8 @@ describe("POST /api/schema/push", () => {
   it("执行件不在（桌包载荷）→ 404，把 spawnSchemaSync 的原因带出来", async () => {
     stubStatusFile(statusJson("stale"));
     spawnSchemaSync.mockReturnValue({
-      started: false,
       reason: "找不到 scripts/db-sync.mjs",
+      started: false,
     });
     const res = await post();
     expect(res.status).toBe(404);

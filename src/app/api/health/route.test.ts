@@ -37,7 +37,7 @@ vi.mock("~/server/db", () => ({
 }));
 
 vi.mock("~/lib/core/logger", () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+  logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 beforeEach(() => {
@@ -52,7 +52,7 @@ describe("GET /api/health", () => {
     const { GET } = await import("./route");
     const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual(expect.objectContaining({ status: "ok", db: "up" }));
+    await expect(res.json()).resolves.toEqual(expect.objectContaining({ db: "up", status: "ok" }));
   });
 
   it("表还没建时返回 503 + db: empty（旧实现此处回 db: up，漏报整档）", async () => {
@@ -77,7 +77,7 @@ describe("GET /api/health", () => {
     const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
     await expect(res.json()).resolves.toEqual(
-      expect.objectContaining({ status: "error", db: "unknown" }),
+      expect.objectContaining({ db: "unknown", status: "error" }),
     );
   });
 
@@ -92,7 +92,7 @@ describe("GET /api/health", () => {
     const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
     await expect(res.json()).resolves.toEqual(
-      expect.objectContaining({ status: "error", db: "down" }),
+      expect.objectContaining({ db: "down", status: "error" }),
     );
   });
 });

@@ -283,11 +283,11 @@ export async function probeComfyEmbeddable(
     };
   }
   return judgeEmbeddable({
-    base,
-    hostOrigin,
-    xFrameOptions: res.headers.get("x-frame-options"),
-    contentSecurityPolicy: res.headers.get("content-security-policy"),
-    status: res.status,
     allowOrigin: res.headers.get("access-control-allow-origin"),
+    base,
+    contentSecurityPolicy: res.headers.get("content-security-policy"),
+    hostOrigin,
+    status: res.status,
+    xFrameOptions: res.headers.get("x-frame-options"),
   });
 }

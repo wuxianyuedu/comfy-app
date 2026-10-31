@@ -60,16 +60,16 @@ export function useStoryboardExtractFlow(input: {
   styles: Array<StyleRef>;
 }) {
   const {
-    shots,
-    scenes,
     characters,
-    styles,
-    onShotsChange,
-    onCharactersChange,
-    scriptMarkdown,
-    extract,
     config,
+    extract,
+    onCharactersChange,
+    onShotsChange,
     openSettings,
+    scenes,
+    scriptMarkdown,
+    shots,
+    styles,
   } = input;
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
@@ -79,23 +79,23 @@ export function useStoryboardExtractFlow(input: {
   // 常驻，提取中切页签再切回状态不丢，无需模块级缓存。遗留/独立使用(未注入)时
   // 退化为本 hook 局部会话。
   const localExtract = useExtractSession("local", "storyboard");
-  const { session: extractSession, actions: extractActions } = extract ?? {
-    session: localExtract[0],
+  const { actions: extractActions, session: extractSession } = extract ?? {
     actions: localExtract[1],
+    session: localExtract[0],
   };
   const {
-    channelValue: extractChannelValue,
     busy: extractBusy,
-    status: extractStatus,
-    progress: extractProgress,
+    channelValue: extractChannelValue,
     error: extractError,
     log: extractionLog,
+    progress: extractProgress,
+    status: extractStatus,
   } = extractSession;
   const extractChannel = parseChannelOption(extractChannelValue).channel;
   const {
-    patch: setExtractState,
-    appendProgress: setExtractAppendProgress,
     appendLog,
+    appendProgress: setExtractAppendProgress,
+    patch: setExtractState,
     setLog,
   } = extractActions;
   /** 视图层改下拉通道：写回 controller 会话 */
@@ -128,9 +128,9 @@ export function useStoryboardExtractFlow(input: {
     }
     setExtractState({
       busy: true,
+      error: "",
       progress: "",
       status: "正在调用模型提取分镜…",
-      error: "",
     });
     // 新一次提取：重置日志为仅含 init 一条，展示本次输入→输出→结果链路。
     setLog([
@@ -150,11 +150,11 @@ export function useStoryboardExtractFlow(input: {
       );
       const full = await streamChat({
         messages: requestMessages,
-        opts: {
-          provider: channelProvider(extractChannel),
-          model: parseChannelOption(extractChannelValue).model,
-        },
         onToken: (token) => setExtractAppendProgress(token),
+        opts: {
+          model: parseChannelOption(extractChannelValue).model,
+          provider: channelProvider(extractChannel),
+        },
       });
       appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
       const entries = parseExtractedShots(full);
@@ -179,7 +179,7 @@ export function useStoryboardExtractFlow(input: {
 
   /** 外部导入:分镜脚本 markdown 走工具解析器;JSON 支持分镜数组与角色卡文件 */
   async function handleImportFile(file: File) {
-    setExtractState({ busy: true, status: "", error: "" });
+    setExtractState({ busy: true, error: "", status: "" });
     try {
       /* 读取收在唯一出口里（§16.2.4.27）—— 此前两处各写一遍 `file.text()`，
        * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
@@ -227,16 +227,16 @@ export function useStoryboardExtractFlow(input: {
   }
 
   return {
-    extractChannelValue,
-    setExtractChannelValue,
-    extractChannel,
     extractBusy,
-    extractProgress,
-    extractStatus,
+    extractChannel,
+    extractChannelValue,
     extractError,
     extractionLog,
-    hasScript,
+    extractProgress,
+    extractStatus,
     handleExtract,
     handleImportFile,
+    hasScript,
+    setExtractChannelValue,
   };
 }

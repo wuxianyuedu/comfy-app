@@ -27,9 +27,9 @@ function ContextMenuTrigger({ className, ...props }: ContextMenuPrimitive.Trigge
 }
 
 function ContextMenuContent({
-  className,
   align = "start",
   alignOffset = 4,
+  className,
   side = "right",
   sideOffset = 0,
   ...props
@@ -112,9 +112,9 @@ function ContextMenuSub({ ...props }: ContextMenuPrimitive.SubmenuRoot.Props) {
 }
 
 function ContextMenuSubTrigger({
+  children,
   className,
   inset,
-  children,
   ...props
 }: ContextMenuPrimitive.SubmenuTrigger.Props & {
   inset?: boolean;
@@ -147,9 +147,9 @@ function ContextMenuSubContent({ ...props }: React.ComponentProps<typeof Context
 }
 
 function ContextMenuCheckboxItem({
-  className,
-  children,
   checked,
+  children,
+  className,
   inset,
   ...props
 }: ContextMenuPrimitive.CheckboxItem.Props & {
@@ -181,8 +181,8 @@ function ContextMenuRadioGroup({ ...props }: ContextMenuPrimitive.RadioGroup.Pro
 }
 
 function ContextMenuRadioItem({
-  className,
   children,
+  className,
   inset,
   ...props
 }: ContextMenuPrimitive.RadioItem.Props & {

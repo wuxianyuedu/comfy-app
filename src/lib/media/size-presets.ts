@@ -70,7 +70,7 @@ export type SizePresetTable = {
   video: SceneResolutionTable;
 };
 
-const dims = (width: number, height: number): SizeDims => ({ width, height });
+const dims = (width: number, height: number): SizeDims => ({ height, width });
 
 /* ── 默认表 ──
  * 图片场景：AI 出图 / 通用场景，长边约 1024 / 2048 / 3840~4096。
@@ -82,35 +82,35 @@ const DEFAULT_IMAGE_TABLE: SceneResolutionTable = {
     "2k": dims(2048, 2048),
     "4k": dims(3840, 3840),
   },
-  "4:3": {
-    "1k": dims(1024, 768),
-    "2k": dims(2048, 1536),
-    "4k": dims(4096, 3072),
-  },
-  "3:2": {
-    "1k": dims(1024, 683),
-    "2k": dims(2048, 1365),
-    "4k": dims(4096, 2731),
-  },
   "16:9 横屏": {
     "1k": dims(1024, 576),
     "2k": dims(2048, 1152),
     "4k": dims(3840, 2160),
+  },
+  "2:3": {
+    "1k": dims(683, 1024),
+    "2k": dims(1365, 2048),
+    "4k": dims(2731, 4096),
   },
   "21:9 超宽": {
     "1k": dims(1195, 512),
     "2k": dims(2560, 1080),
     "4k": dims(5120, 2160),
   },
+  "3:2": {
+    "1k": dims(1024, 683),
+    "2k": dims(2048, 1365),
+    "4k": dims(4096, 2731),
+  },
   "3:4": {
     "1k": dims(768, 1024),
     "2k": dims(1536, 2048),
     "4k": dims(3072, 4096),
   },
-  "2:3": {
-    "1k": dims(683, 1024),
-    "2k": dims(1365, 2048),
-    "4k": dims(2731, 4096),
+  "4:3": {
+    "1k": dims(1024, 768),
+    "2k": dims(2048, 1536),
+    "4k": dims(4096, 3072),
   },
   "9:16 竖屏": {
     "1k": dims(576, 1024),
@@ -125,35 +125,35 @@ const DEFAULT_VIDEO_TABLE: SceneResolutionTable = {
     "2k": dims(2048, 2048),
     "4k": dims(3840, 3840),
   },
-  "4:3": {
-    "1k": dims(1280, 960),
-    "2k": dims(2048, 1536),
-    "4k": dims(4096, 3072),
-  },
-  "3:2": {
-    "1k": dims(1280, 854),
-    "2k": dims(2560, 1707),
-    "4k": dims(3840, 2560),
-  },
   "16:9 横屏": {
     "1k": dims(1280, 720),
     "2k": dims(2560, 1440),
     "4k": dims(3840, 2160),
+  },
+  "2:3": {
+    "1k": dims(854, 1280),
+    "2k": dims(1707, 2560),
+    "4k": dims(2560, 3840),
   },
   "21:9 超宽": {
     "1k": dims(1280, 540),
     "2k": dims(2560, 1080),
     "4k": dims(5120, 2160),
   },
+  "3:2": {
+    "1k": dims(1280, 854),
+    "2k": dims(2560, 1707),
+    "4k": dims(3840, 2560),
+  },
   "3:4": {
     "1k": dims(960, 1280),
     "2k": dims(1536, 2048),
     "4k": dims(2880, 3840),
   },
-  "2:3": {
-    "1k": dims(854, 1280),
-    "2k": dims(1707, 2560),
-    "4k": dims(2560, 3840),
+  "4:3": {
+    "1k": dims(1280, 960),
+    "2k": dims(2048, 1536),
+    "4k": dims(4096, 3072),
   },
   "9:16 竖屏": {
     "1k": dims(720, 1280),
@@ -305,7 +305,7 @@ export function normalizeAlignMultiple(multiple: number): AlignMultiple {
 export function snapSize(size: SizeDims, multiple: AlignMultiple): SizeDims {
   const snap = (value: number) =>
     clamp(Math.round(value / multiple) * multiple, MIN_SIZE, MAX_SIZE);
-  return { width: snap(size.width), height: snap(size.height) };
+  return { height: snap(size.height), width: snap(size.width) };
 }
 
 /** 百万像素 + 倍数 + 比例 → 宽高（两侧落倍数网格，总像素预算按比例分配）。
@@ -321,7 +321,7 @@ export function megapixelDims(
   const total = (Number.isFinite(megapixels) && megapixels > 0 ? megapixels : 1) * 1_000_000;
   const rawHeight = Math.sqrt(total / safeRatio);
   const rawWidth = total / rawHeight;
-  return snapSize({ width: rawWidth, height: rawHeight }, normalizeAlignMultiple(multiple));
+  return snapSize({ height: rawHeight, width: rawWidth }, normalizeAlignMultiple(multiple));
 }
 
 /** 比例 + 分辨率 → 比例 + 百万像素 + 倍数（两种尺寸类别之间的换算）。
@@ -386,8 +386,8 @@ export const SIZE_CLARITY_PRESETS: [SizeClarityPreset, ...Array<SizeClarityPrese
 
 /** 两个子类在界面上的显示名（分组标题用同一份，避免两处漂移）。 */
 export const CLARITY_SUBGROUP_LABELS: Record<ClarityKind, string> = {
-  resolution: "分辨率",
   megapixel: "百万像素",
+  resolution: "分辨率",
 };
 
 /** 自由百万像素标签解析（`"2.5M"` → 2.5）。
@@ -480,9 +480,9 @@ export type SizeSpec = {
 
 /** 默认尺寸：竖屏 1k（3:4，图片场景表 → 768×1024）。 */
 export const DEFAULT_SIZE_SPEC: SizeSpec = {
-  ratio: "3:4",
   clarity: "1k",
   multiple: DEFAULT_ALIGN_MULTIPLE,
+  ratio: "3:4",
 };
 
 /** 容错：把任意（老草稿 / 外部 JSON / 短比例标签）收窄成合法 `SizeSpec`。
@@ -502,7 +502,7 @@ export function normalizeSizeSpec(
     typeof raw?.multiple === "number"
       ? normalizeAlignMultiple(raw.multiple)
       : DEFAULT_SIZE_SPEC.multiple;
-  return { ratio: ratioLabel, clarity: clarityLabel, multiple };
+  return { clarity: clarityLabel, multiple, ratio: ratioLabel };
 }
 
 /** 比例写法 → 预设 label：预设 label 原样、短标签（"16:9"）落到最接近的预设行、
@@ -566,7 +566,7 @@ export function sizeSpecToWxH(
   scene: SizeScene = "image",
   table: SizePresetTable = DEFAULT_SIZE_PRESET_TABLE,
 ): string {
-  const { width, height } = sizeSpecDims(spec, scene, table);
+  const { height, width } = sizeSpecDims(spec, scene, table);
   return `${width}x${height}`;
 }
 
@@ -674,9 +674,9 @@ export function sizeSpecFromDims(
     return { ...DEFAULT_SIZE_SPEC };
   }
   return {
-    ratio: nearestRatioPreset(width / height).label,
     clarity: clarityLabelOfDims(width, height, scene, table),
-    multiple: alignMultipleOf({ width, height }),
+    multiple: alignMultipleOf({ height, width }),
+    ratio: nearestRatioPreset(width / height).label,
   };
 }
 
@@ -694,7 +694,7 @@ export function parseSizeText(text: unknown): SizeDims | null {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return null;
   }
-  return { width, height };
+  return { height, width };
 }
 
 /** 旧数据（"832x1216" 这类 WxH 字符串 / 草稿 JSON）→ 尺寸表达；识别不出回退默认。

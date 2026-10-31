@@ -20,12 +20,12 @@ describe("copyText", () => {
     });
     const exec = vi.fn().mockReturnValue(true);
     vi.stubGlobal("document", {
+      body: { appendChild: vi.fn(), removeChild: vi.fn() },
       createElement: () => ({
-        style: {},
         select: vi.fn(),
         setAttribute: vi.fn(),
+        style: {},
       }),
-      body: { appendChild: vi.fn(), removeChild: vi.fn() },
       execCommand: exec,
     });
     await expect(copyText("hi")).resolves.toBe(true);
@@ -40,10 +40,10 @@ describe("copyText", () => {
   it("兜底通道自己抛错时也返回 false，不把异常抛给调用方", async () => {
     vi.stubGlobal("navigator", {});
     vi.stubGlobal("document", {
+      body: { appendChild: vi.fn(), removeChild: vi.fn() },
       createElement: () => {
         throw new Error("no dom");
       },
-      body: { appendChild: vi.fn(), removeChild: vi.fn() },
     });
     await expect(copyText("x")).resolves.toBe(false);
   });
@@ -60,15 +60,15 @@ describe("downloadText / downloadJson", () => {
 
   function stubDom() {
     const click = vi.fn();
-    const anchor = { href: "", download: "", click };
+    const anchor = { click, download: "", href: "" };
     const revoke = vi.fn();
     vi.stubGlobal("URL", {
       createObjectURL: vi.fn(() => "blob:mock"),
       revokeObjectURL: revoke,
     });
     vi.stubGlobal("document", {
-      createElement: () => anchor,
       body: { appendChild: vi.fn(), removeChild: vi.fn() },
+      createElement: () => anchor,
     });
     return { anchor, click, revoke };
   }

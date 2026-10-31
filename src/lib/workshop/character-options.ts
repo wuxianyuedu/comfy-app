@@ -10,15 +10,14 @@ export type OptionGroup = {
 /** 服装 · 按年代/类型分组（穷举常见题材服装） */
 export const COSTUME_OPTIONS: Array<OptionGroup> = [
   {
-    title: "中式",
     options: ["唐装", "汉服", "旗袍", "长衫/马褂", "中山装", "新中式服饰", "戏服(戏曲)"],
+    title: "中式",
   },
   {
-    title: "日韩",
     options: ["和服", "浴衣", "JK制服", "校服", "韩服"],
+    title: "日韩",
   },
   {
-    title: "西式/历史",
     options: [
       "西装",
       "燕尾服",
@@ -29,9 +28,9 @@ export const COSTUME_OPTIONS: Array<OptionGroup> = [
       "中世纪铠甲",
       "骑士装",
     ],
+    title: "西式/历史",
   },
   {
-    title: "现代休闲",
     options: [
       "风衣",
       "大衣/呢子外套",
@@ -48,13 +47,13 @@ export const COSTUME_OPTIONS: Array<OptionGroup> = [
       "半身裙",
       "运动服",
     ],
+    title: "现代休闲",
   },
   {
-    title: "职业/功能",
     options: ["白大褂(医生)", "护士服", "警服", "军装", "工装", "厨师服", "飞行服", "运动装备"],
+    title: "职业/功能",
   },
   {
-    title: "奇幻/科幻",
     options: [
       "魔法长袍",
       "精灵装",
@@ -65,17 +64,17 @@ export const COSTUME_OPTIONS: Array<OptionGroup> = [
       "全息霓虹装",
       "机械义体配饰",
     ],
+    title: "奇幻/科幻",
   },
   {
-    title: "特殊服饰",
     options: ["婚纱", "浴袍", "睡衣", "泳装", "斗篷/披风", "围巾大衣", "帽兜外套"],
+    title: "特殊服饰",
   },
 ];
 
 /** 外貌特征 · 分发型/眼眉/脸型/五官/体型/肤发色 穷举 */
 export const APPEARANCE_OPTIONS: Array<OptionGroup> = [
   {
-    title: "发型",
     options: [
       "长发",
       "中长发",
@@ -95,13 +94,13 @@ export const APPEARANCE_OPTIONS: Array<OptionGroup> = [
       "中分",
       "光头",
     ],
+    title: "发型",
   },
   {
-    title: "发色",
     options: ["黑发", "棕发", "金发/黄发", "红发", "银发/白发", "蓝发", "绿发", "渐变发色", "挑染"],
+    title: "发色",
   },
   {
-    title: "眼眉",
     options: [
       "单眼皮",
       "双眼皮",
@@ -116,9 +115,9 @@ export const APPEARANCE_OPTIONS: Array<OptionGroup> = [
       "睫毛长而翘",
       "眼尾上挑",
     ],
+    title: "眼眉",
   },
   {
-    title: "脸型/五官",
     options: [
       "瓜子脸",
       "鹅蛋脸",
@@ -132,17 +131,17 @@ export const APPEARANCE_OPTIONS: Array<OptionGroup> = [
       "厚唇",
       "剑眉星目",
     ],
+    title: "脸型/五官",
   },
   {
-    title: "体型/身高",
     options: ["高挑", "匀称", "纤细/纤瘦", "丰满", "健硕/肌肉", "娇小", "魁梧高大"],
+    title: "体型/身高",
   },
   {
-    title: "肤色",
     options: ["白皙", "自然肤色", "小麦色", "古铜色", "深肤色", "冷白皮", "暖黄皮"],
+    title: "肤色",
   },
   {
-    title: "其他特征",
     options: [
       "清秀",
       "英气",
@@ -155,13 +154,13 @@ export const APPEARANCE_OPTIONS: Array<OptionGroup> = [
       "雀斑",
       "尖耳朵(精灵)",
     ],
+    title: "其他特征",
   },
 ];
 
 /** 性格（写入 personality，作画面 mood 关键词） */
 export const PERSONALITY_OPTIONS: Array<OptionGroup> = [
   {
-    title: "正向",
     options: [
       "冷静",
       "沉稳",
@@ -179,9 +178,9 @@ export const PERSONALITY_OPTIONS: Array<OptionGroup> = [
       "从容",
       "洒脱",
     ],
+    title: "正向",
   },
   {
-    title: "偏负向/中性",
     options: [
       "孤僻",
       "高冷",
@@ -196,13 +195,13 @@ export const PERSONALITY_OPTIONS: Array<OptionGroup> = [
       "桀骜",
       "冷漠",
     ],
+    title: "偏负向/中性",
   },
 ];
 
 /** 气质（写入 personality，作画面氛围关键词） */
 export const TEMPERAMENT_OPTIONS: Array<OptionGroup> = [
   {
-    title: "气质",
     options: [
       "清冷孤傲",
       "温婉",
@@ -223,13 +222,13 @@ export const TEMPERAMENT_OPTIONS: Array<OptionGroup> = [
       "凌厉",
       "亲和",
     ],
+    title: "气质",
   },
 ];
 
 /** 风格标签（写 styleTags，作画面画风关键词） */
 export const STYLE_TAG_OPTIONS: Array<OptionGroup> = [
   {
-    title: "美术/画风",
     options: [
       "皮克斯",
       "厚涂",
@@ -248,9 +247,9 @@ export const STYLE_TAG_OPTIONS: Array<OptionGroup> = [
       "古风",
       "极简扁平",
     ],
+    title: "美术/画风",
   },
   {
-    title: "时代/氛围",
     options: [
       "国风",
       "东方",
@@ -268,6 +267,7 @@ export const STYLE_TAG_OPTIONS: Array<OptionGroup> = [
       "暗黑",
       "梦幻",
     ],
+    title: "时代/氛围",
   },
 ];
 
@@ -281,9 +281,9 @@ export type AttributeOptionSet = {
  * 「id 对不上时」的兜底维度，类型上直接是元素而非 `| undefined`。 */
 /** 组件下拉维度配置：顺序即展示顺序 */
 export const CHARACTER_ATTRIBUTES: [AttributeOptionSet, ...Array<AttributeOptionSet>] = [
-  { id: "costume", label: "服装", groups: COSTUME_OPTIONS },
-  { id: "appearance", label: "外貌特征", groups: APPEARANCE_OPTIONS },
-  { id: "personality", label: "性格", groups: PERSONALITY_OPTIONS },
-  { id: "temperament", label: "气质", groups: TEMPERAMENT_OPTIONS },
-  { id: "styleTags", label: "风格", groups: STYLE_TAG_OPTIONS },
+  { groups: COSTUME_OPTIONS, id: "costume", label: "服装" },
+  { groups: APPEARANCE_OPTIONS, id: "appearance", label: "外貌特征" },
+  { groups: PERSONALITY_OPTIONS, id: "personality", label: "性格" },
+  { groups: TEMPERAMENT_OPTIONS, id: "temperament", label: "气质" },
+  { groups: STYLE_TAG_OPTIONS, id: "styleTags", label: "风格" },
 ];

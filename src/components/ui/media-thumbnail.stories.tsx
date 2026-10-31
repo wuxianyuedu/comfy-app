@@ -36,21 +36,21 @@ function ThumbnailWithSource({ sourceName, ...rest }: StoryArgs) {
 }
 
 const meta = {
-  title: "UI/MediaThumbnail",
-  component: ThumbnailWithSource,
   args: {
-    sourceName: "sample-landscape.svg",
     alt: "样例图",
     className: "h-40 w-64 rounded-lg object-cover",
+    sourceName: "sample-landscape.svg",
   },
   argTypes: {
-    sourceName: sourceNameArgType("media"),
     fallback: {
       control: { type: "select" },
-      options: ["placeholder", "none"],
       description: "失败兜底形态：占位（默认）/ 不渲染；自定义 ReactNode 走 render，不进 Args",
+      options: ["placeholder", "none"],
     },
+    sourceName: sourceNameArgType("media"),
   },
+  component: ThumbnailWithSource,
+  title: "UI/MediaThumbnail",
 } satisfies Meta<StoryArgs>;
 
 export default meta;

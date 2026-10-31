@@ -114,8 +114,8 @@ export function traceStringify(value: unknown): string {
 /** 单行截断（保留头部，尾注原始长度 —— 诊断通道最想知道「被切了多少」）。 */
 function clampLine(text: string): string {
   return clampText(text, {
-    maxLength: TRACE_MAX_LINE,
     annotation: `truncated, 原始 ${text.length} 字符`,
+    maxLength: TRACE_MAX_LINE,
   });
 }
 
@@ -244,8 +244,8 @@ export function historyOutputKeys(
     return [];
   }
   return Object.entries(outputs).map(([nodeId, v]) => ({
-    nodeId,
     keys: v && typeof v === "object" ? Object.keys(/* SAFETY: 类型断言已复核 */ v as object) : [],
+    nodeId,
   }));
 }
 
@@ -279,5 +279,5 @@ export function queueTraceSummary(qd: unknown): {
     queue_pending?: unknown;
     queue_running?: unknown;
   };
-  return { running: pick(o.queue_running), pending: pick(o.queue_pending) };
+  return { pending: pick(o.queue_pending), running: pick(o.queue_running) };
 }

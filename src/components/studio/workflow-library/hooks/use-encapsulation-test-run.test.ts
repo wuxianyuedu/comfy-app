@@ -9,21 +9,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook } from "@testing-library/react";
 
 const watchSettle = {
-  ok: /* SAFETY: 类型断言已复核 */ true as boolean,
   message: /* SAFETY: 类型断言已复核 */ undefined as string | undefined,
+  ok: /* SAFETY: 类型断言已复核 */ true as boolean,
 };
 
 vi.mock("~/lib/workshop/generation-client", () => ({
   buildLibraryWorkflowInput: vi.fn().mockResolvedValue({
     input: { workflow: "wf1" },
-    unmatched: [],
     mode: "t2i",
     modes: ["t2i"],
+    unmatched: [],
     usesFirstFrame: false,
     usesLastFrame: false,
   }),
-  startLocalGenerate: vi.fn().mockResolvedValue("task-test"),
   prepareLocalInputImage: vi.fn().mockResolvedValue("uploaded.png"),
+  startLocalGenerate: vi.fn().mockResolvedValue("task-test"),
   watchTask: vi.fn(
     (
       _id: string,
@@ -33,9 +33,9 @@ vi.mock("~/lib/workshop/generation-client", () => ({
         onSettled: (r: { message?: string; ok: boolean }) => void;
       },
     ) => {
-      h.onLog?.({ t: 1, level: "info", msg: "开始执行" });
+      h.onLog?.({ level: "info", msg: "开始执行", t: 1 });
       h.onOutput?.({ kind: "image", url: "/generated/a.png" });
-      h.onSettled({ ok: watchSettle.ok, message: watchSettle.message });
+      h.onSettled({ message: watchSettle.message, ok: watchSettle.ok });
       return () => undefined;
     },
   ),
@@ -56,9 +56,9 @@ describe("useEncapsulationTestRun", () => {
   it("流程测试把运行登记进共享登记表（带工坊封装来源）并累积日志", async () => {
     const { result } = renderHook(() =>
       useEncapsulationTestRun({
+        mode: "t2i",
         workflowId: "wf1",
         workflowName: "文生图",
-        mode: "t2i",
       }),
     );
     result.current.run({ prompt: "一只猫" });
@@ -75,9 +75,9 @@ describe("useEncapsulationTestRun", () => {
     watchSettle.message = "未找到生成结果";
     const { result } = renderHook(() =>
       useEncapsulationTestRun({
+        mode: "t2i",
         workflowId: "wf1",
         workflowName: "文生图",
-        mode: "t2i",
       }),
     );
     result.current.run({});
@@ -90,9 +90,9 @@ describe("useEncapsulationTestRun", () => {
   it("同一页签重入被挡住（不会并行起两次流程测试）", async () => {
     const { result } = renderHook(() =>
       useEncapsulationTestRun({
+        mode: "t2i",
         workflowId: "wf1",
         workflowName: "文生图",
-        mode: "t2i",
       }),
     );
     result.current.run({});
@@ -105,9 +105,9 @@ describe("useEncapsulationTestRun", () => {
   it("本地图片读成 data URL 再交给准备接口，回传可直接落进工作流的文件名", async () => {
     const { result } = renderHook(() =>
       useEncapsulationTestRun({
+        mode: "I2V",
         workflowId: "wf1",
         workflowName: "图生视频",
-        mode: "I2V",
       }),
     );
     const file = new File(["x"], "cat.png", { type: "image/png" });

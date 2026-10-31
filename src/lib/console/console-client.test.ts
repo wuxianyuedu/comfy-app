@@ -45,61 +45,61 @@ describe("parseConsoleFrame", () => {
   it("认四种帧并窄化字段", () => {
     expect(
       parseConsoleFrame({
-        type: "start",
-        runId: "r1",
         command: "pnpm test",
         cwd: "/x",
+        runId: "r1",
         startedAt: 123,
+        type: "start",
       }),
     ).toEqual({
-      type: "start",
-      runId: "r1",
       command: "pnpm test",
       cwd: "/x",
+      runId: "r1",
       startedAt: 123,
+      type: "start",
     });
-    expect(parseConsoleFrame({ type: "out", stream: "stderr", text: "e" })).toEqual({
-      type: "out",
+    expect(parseConsoleFrame({ stream: "stderr", text: "e", type: "out" })).toEqual({
       stream: "stderr",
       text: "e",
+      type: "out",
     });
     expect(
       parseConsoleFrame({
-        type: "exit",
         code: 1,
-        signal: null,
-        killed: false,
-        truncatedNote: null,
         durationMs: 9,
+        killed: false,
+        signal: null,
+        truncatedNote: null,
+        type: "exit",
       }),
     ).toEqual({
-      type: "exit",
       code: 1,
-      signal: null,
-      killed: false,
-      truncatedNote: null,
       durationMs: 9,
+      killed: false,
+      signal: null,
+      truncatedNote: null,
+      type: "exit",
     });
-    expect(parseConsoleFrame({ type: "error", message: "boom" })).toEqual({
-      type: "error",
+    expect(parseConsoleFrame({ message: "boom", type: "error" })).toEqual({
       message: "boom",
+      type: "error",
     });
   });
 
   it("缺失/错型的字段走有损兜底，不抛（流上不该因为一格坏掉整条断）", () => {
     const exit = parseConsoleFrame({ type: "exit" });
     expect(exit).toEqual({
-      type: "exit",
       code: null,
-      signal: null,
-      killed: false,
-      truncatedNote: null,
       durationMs: 0,
+      killed: false,
+      signal: null,
+      truncatedNote: null,
+      type: "exit",
     });
     // out 缺 text 是**没有可展示内容**的帧：判 null（丢掉），而不是展示 "undefined"。
     expect(parseConsoleFrame({ type: "out" })).toBeNull();
     // start 缺 runId 同理：认不出是哪一次运行。
-    expect(parseConsoleFrame({ type: "start", command: "x" })).toBeNull();
+    expect(parseConsoleFrame({ command: "x", type: "start" })).toBeNull();
   });
 
   it("非对象 / 未知类型 / 缺 type 一律 null", () => {
@@ -115,10 +115,10 @@ describe("consumeSseChunk", () => {
   it("切出完整帧，并把不完整的一帧作为残余返回", () => {
     const frames: Array<unknown> = [];
     const rest = consumeSseChunk(
-      `${frame({ type: "out", text: "a" })}data: {"type":"out","te`,
+      `${frame({ text: "a", type: "out" })}data: {"type":"out","te`,
       (p) => frames.push(p),
     );
-    expect(frames).toEqual([{ type: "out", text: "a" }]);
+    expect(frames).toEqual([{ text: "a", type: "out" }]);
     // 残余原样带回来（**不能丢** —— 丢了就是「最后一行神秘消失」）。
     expect(rest).toBe('data: {"type":"out","te');
   });
@@ -127,25 +127,25 @@ describe("consumeSseChunk", () => {
     const frames: Array<unknown> = [];
     const rest1 = consumeSseChunk('data: {"type":"out","text":"he', (p) => frames.push(p));
     const rest2 = consumeSseChunk(`${rest1}llo"}\n\n`, (p) => frames.push(p));
-    expect(frames).toEqual([{ type: "out", text: "hello" }]);
+    expect(frames).toEqual([{ text: "hello", type: "out" }]);
     expect(rest2).toBe("");
   });
 
   it("一次 chunk 里的多帧按顺序全部回调", () => {
     const frames: Array<unknown> = [];
-    consumeSseChunk(frame({ type: "out", text: "1" }) + frame({ type: "out", text: "2" }), (p) =>
+    consumeSseChunk(frame({ text: "1", type: "out" }) + frame({ text: "2", type: "out" }), (p) =>
       frames.push(p),
     );
     expect(frames).toEqual([
-      { type: "out", text: "1" },
-      { type: "out", text: "2" },
+      { text: "1", type: "out" },
+      { text: "2", type: "out" },
     ]);
   });
 
   it("畸形 JSON 的帧被丢掉，不影响后续帧", () => {
     const frames: Array<unknown> = [];
-    consumeSseChunk(`data: {oops\n\n${frame({ type: "out", text: "ok" })}`, (p) => frames.push(p));
-    expect(frames).toEqual([{ type: "out", text: "ok" }]);
+    consumeSseChunk(`data: {oops\n\n${frame({ text: "ok", type: "out" })}`, (p) => frames.push(p));
+    expect(frames).toEqual([{ text: "ok", type: "out" }]);
   });
 
   it("忽略非 data: 行与空 data 行（SSE 的注释与心跳）", () => {
@@ -177,8 +177,8 @@ describe("runConsoleCommand", () => {
     const restore = stubFetch(
       async () =>
         new Response(JSON.stringify({ error: "已有一条命令在运行：pnpm test" }), {
-          status: 409,
           headers: { "Content-Type": "application/json" },
+          status: 409,
         }),
     );
     const events: Array<unknown> = [];
@@ -208,13 +208,13 @@ describe("runConsoleCommand", () => {
         new Response(
           streamFrom([
             frame({
-              type: "start",
-              runId: "r",
               command: "pnpm test",
               cwd: "/x",
+              runId: "r",
               startedAt: 1,
+              type: "start",
             }),
-            frame({ type: "out", stream: "stdout", text: "hello\n" }),
+            frame({ stream: "stdout", text: "hello\n", type: "out" }),
             // 故意不带结尾的 \n\n：模拟断流时的最后一个半帧。
             'data: {"type":"exit","code":0,"killed":false,"durationMs":5}',
           ]),
@@ -228,20 +228,20 @@ describe("runConsoleCommand", () => {
     expect(outcome).toEqual({ kind: "ok" });
     expect(events).toEqual([
       {
-        type: "start",
-        runId: "r",
         command: "pnpm test",
         cwd: "/x",
+        runId: "r",
         startedAt: 1,
+        type: "start",
       },
-      { type: "out", stream: "stdout", text: "hello\n" },
+      { stream: "stdout", text: "hello\n", type: "out" },
       {
-        type: "exit",
         code: 0,
-        signal: null,
-        killed: false,
-        truncatedNote: null,
         durationMs: 5,
+        killed: false,
+        signal: null,
+        truncatedNote: null,
+        type: "exit",
       },
     ]);
     restore();

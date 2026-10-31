@@ -78,19 +78,19 @@ export function describeSqliteWriteError(error: unknown, fallback = "SQLite 写�
   const head = messages[0] ?? fallback;
   const reason = [
     codes.join(","),
-    ...messages.slice(1).map((m) => clampText(m, { maxLength: 120, marker: "…" })),
+    ...messages.slice(1).map((m) => clampText(m, { marker: "…", maxLength: 120 })),
   ]
     .filter(Boolean)
     .join(" / ");
   if (!reason) {
-    return clampText(head, { maxLength: LOG_DETAIL_MAX, marker: "…" });
+    return clampText(head, { marker: "…", maxLength: LOG_DETAIL_MAX });
   }
   const reasonPart = `（SQLite: ${reason}）`;
   /* 原因自身超预算时先保原因（它更短也更要紧），head 让位到零也要留省略号。 */
   const headBudget = Math.max(0, LOG_DETAIL_MAX - reasonPart.length);
-  return clampText(`${clampText(head, { maxLength: headBudget, marker: "…" })}${reasonPart}`, {
-    maxLength: LOG_DETAIL_MAX,
+  return clampText(`${clampText(head, { marker: "…", maxLength: headBudget })}${reasonPart}`, {
     marker: "…",
+    maxLength: LOG_DETAIL_MAX,
   });
 }
 

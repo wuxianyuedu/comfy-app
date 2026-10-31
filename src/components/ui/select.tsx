@@ -31,9 +31,9 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
 }
 
 function SelectTrigger({
+  children,
   className,
   size = "default",
-  children,
   ...props
 }: SelectPrimitive.Trigger.Props & {
   size?: "sm" | "default";
@@ -57,12 +57,12 @@ function SelectTrigger({
 }
 
 function SelectContent({
-  className,
-  children,
-  side = "bottom",
-  sideOffset = 4,
   align = "center",
   alignOffset = 0,
+  children,
+  className,
+  side = "bottom",
+  sideOffset = 4,
   /* 默认 **false**（不把「已选项」对齐到触发器）：base-ui 的原生默认是 true，
      它让弹层位置随选中项上下移动 —— 选中末尾项时弹层被顶到视口上方、前半截
      出屏。需要「原生 select 观感」（弹层盖住触发器）的调用处显式传 true。
@@ -129,7 +129,7 @@ function SelectLabel({ className, ...props }: SelectPrimitive.GroupLabel.Props) 
   );
 }
 
-function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Props) {
+function SelectItem({ children, className, ...props }: SelectPrimitive.Item.Props) {
   return (
     <SelectPrimitive.Item
       className={cn(

@@ -47,34 +47,34 @@ const NOT_SHELL = "当前不在桌面壳内，无法检测应用更新";
  */
 export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
   if (!isDesktopShell()) {
-    return { ok: false, available: false, detail: NOT_SHELL };
+    return { available: false, detail: NOT_SHELL, ok: false };
   }
   try {
     const { check } = await import("@tauri-apps/plugin-updater");
     const update = await check();
     if (!update) {
       return {
-        ok: true,
         available: false,
         detail: "当前已是最新版本",
+        ok: true,
       };
     }
     return {
-      ok: true,
       available: true,
       detail: `发现新版本 ${update.version}（当前 ${update.currentVersion}）`,
+      ok: true,
       update: {
-        currentVersion: update.currentVersion,
-        version: update.version,
-        date: update.date,
         body: update.body,
+        currentVersion: update.currentVersion,
+        date: update.date,
+        version: update.version,
       },
     };
   } catch (e) {
     return {
-      ok: false,
       available: false,
       detail: `${errorText(e, "检测更新失败")}。请确认已配置更新源与签名公钥。`,
+      ok: false,
     };
   }
 }
@@ -88,13 +88,13 @@ export async function downloadAndInstallUpdate(
   reportProgress?: AppUpdateProgress,
 ): Promise<AppUpdateInstallResult> {
   if (!isDesktopShell()) {
-    return { ok: false, triggered: false, detail: NOT_SHELL };
+    return { detail: NOT_SHELL, ok: false, triggered: false };
   }
   try {
     const { check } = await import("@tauri-apps/plugin-updater");
     const update = await check();
     if (!update) {
-      return { ok: false, triggered: false, detail: "未发现可用更新" };
+      return { detail: "未发现可用更新", ok: false, triggered: false };
     }
     let downloaded = 0;
     let total: number | undefined;
@@ -112,12 +112,12 @@ export async function downloadAndInstallUpdate(
     );
     // Windows 下 install 成功后会退出应用；走到这里说明未自动重启（非 Windows），
     // 成功安装后交由调用方决定是否显式 relaunch。
-    return { ok: true, triggered: true, detail: "更新已安装并重启" };
+    return { detail: "更新已安装并重启", ok: true, triggered: true };
   } catch (e) {
     return {
+      detail: errorText(e, "更新失败"),
       ok: false,
       triggered: false,
-      detail: errorText(e, "更新失败"),
     };
   }
 }
@@ -127,17 +127,17 @@ export async function downloadAndInstallUpdate(
  */
 export async function relaunchApp(): Promise<{ detail: string; ok: boolean }> {
   if (!isDesktopShell()) {
-    return { ok: false, detail: NOT_SHELL };
+    return { detail: NOT_SHELL, ok: false };
   }
   try {
     const { relaunch } = await import("@tauri-apps/plugin-process");
     await relaunch();
     // relaunch 成功即触发进程重启，此调用通常不返回。
-    return { ok: true, detail: "已触发重启" };
+    return { detail: "已触发重启", ok: true };
   } catch (e) {
     return {
-      ok: false,
       detail: errorText(e, "重启失败"),
+      ok: false,
     };
   }
 }

@@ -32,13 +32,13 @@ export type WorkshopDraft = {
 /** 全新空草稿（新项目 / 解析失败时的初值）。 */
 export function emptyWorkshopDraft(): WorkshopDraft {
   return {
-    meta: DEFAULT_META,
-    scriptMarkdown: "",
-    scenes: [],
     characters: [],
+    meta: DEFAULT_META,
+    scenes: [],
+    scriptMarkdown: "",
     shots: [],
-    workflowId: "",
     videoWorkflowId: "",
+    workflowId: "",
   };
 }
 
@@ -59,13 +59,13 @@ function parseDraft(raw: string | null): WorkshopDraft {
   try {
     const draft = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<WorkshopDraft>;
     return {
-      meta: draft.meta ?? DEFAULT_META,
-      scriptMarkdown: typeof draft.scriptMarkdown === "string" ? draft.scriptMarkdown : "",
-      scenes: Array.isArray(draft.scenes) ? draft.scenes : [],
       characters: Array.isArray(draft.characters) ? draft.characters : [],
+      meta: draft.meta ?? DEFAULT_META,
+      scenes: Array.isArray(draft.scenes) ? draft.scenes : [],
+      scriptMarkdown: typeof draft.scriptMarkdown === "string" ? draft.scriptMarkdown : "",
       shots: Array.isArray(draft.shots) ? draft.shots : [],
-      workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
       videoWorkflowId: typeof draft.videoWorkflowId === "string" ? draft.videoWorkflowId : "",
+      workflowId: typeof draft.workflowId === "string" ? draft.workflowId : "",
     };
   } catch {
     return emptyWorkshopDraft();

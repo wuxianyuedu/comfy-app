@@ -76,16 +76,16 @@ const ICON_WARN = <TriangleAlert size={22} strokeWidth={1.8} />;
 const ICON_INFO = <Info size={22} strokeWidth={1.8} />;
 
 export function ConfirmDialog({
-  open,
-  onClose,
-  title,
-  description,
-  confirmLabel = "确认",
   cancelLabel = "取消",
+  confirmLabel = "确认",
   danger = false,
-  pending = false,
-  onConfirm,
+  description,
   icon,
+  onClose,
+  onConfirm,
+  open,
+  pending = false,
+  title,
 }: ConfirmDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
   // 每个实例一个唯一 id —— 写死 "modal-dialog-title" 会在

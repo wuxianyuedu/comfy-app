@@ -19,15 +19,15 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 /* 桩一律用 `vi.fn<(…)=>…>()` 显式声明签名：默认的 `vi.fn()` 推断成 `(...args: never[])`，
  * 于是「给 mock 塞入参」「读 mock.calls[0]」两侧都通不过 tsc（零 any 口径下不许断言绕过）。 */
 const filmRepo = vi.hoisted(() => ({
-  findById: vi.fn<(id: string) => Promise<unknown>>(),
-  markComposing: vi.fn(async (_id: string) => undefined),
-  markFailed: vi.fn(async (_id: string, _detail?: string) => undefined),
-  markCancelled: vi.fn(async (_id: string) => undefined),
-  markDone: vi.fn(async (_id: string, _path: string) => undefined),
-  updateProgress: vi.fn(async (_id: string, _progress: number) => undefined),
-  markGenerating: vi.fn(async (_id: string) => undefined),
-  create: vi.fn<(input: { size: string }) => Promise<{ id: string }>>(),
   appendLog: vi.fn(async (_id: string, _entry: { level: string; msg: string }) => undefined),
+  create: vi.fn<(input: { size: string }) => Promise<{ id: string }>>(),
+  findById: vi.fn<(id: string) => Promise<unknown>>(),
+  markCancelled: vi.fn(async (_id: string) => undefined),
+  markComposing: vi.fn(async (_id: string) => undefined),
+  markDone: vi.fn(async (_id: string, _path: string) => undefined),
+  markFailed: vi.fn(async (_id: string, _detail?: string) => undefined),
+  markGenerating: vi.fn(async (_id: string) => undefined),
+  updateProgress: vi.fn(async (_id: string, _progress: number) => undefined),
   /** 恢复扫描用的按状态查询（5-A）。默认「库里没有未收尾的影片」。 */
   listByStatus: vi.fn<
     (_statuses: ReadonlyArray<string>) => Promise<Array<{ id: string; status: string }>>
@@ -47,11 +47,11 @@ const shotRepo = vi.hoisted(() => ({
   createMany: vi.fn<(filmId: string, shots: Array<CreatedShot>) => Promise<void>>(
     async () => undefined,
   ),
-  listByFilm: vi.fn<() => Promise<Array<unknown>>>(async () => []),
   listActiveWithTask: vi.fn<() => Promise<Array<ShotRow>>>(async () => []),
+  listByFilm: vi.fn<() => Promise<Array<unknown>>>(async () => []),
   markAllActiveFailed: vi.fn(async (_filmId: string) => undefined),
-  markQueued: vi.fn(async (_shotId: string, _taskId: string) => undefined),
   markFailed: vi.fn(async (_shotId: string) => undefined),
+  markQueued: vi.fn(async (_shotId: string, _taskId: string) => undefined),
   updateFromTask: vi.fn(async (_shotId: string, _patch: unknown) => undefined),
 }));
 const taskRepo = vi.hoisted(() => ({
@@ -82,7 +82,7 @@ const createRunTaskMock = vi.hoisted(() =>
       values: { seed?: number } & Record<string, unknown>;
       workflowId: string;
     }) => Promise<{ taskId: string; taskType: string; workflowName: string }>
-  >(async () => ({ taskId: "task-1", workflowName: "wf", taskType: "T2V" })),
+  >(async () => ({ taskId: "task-1", taskType: "T2V", workflowName: "wf" })),
 );
 const synthFirstFrameMock = vi.hoisted(() =>
   vi.fn<(opts: { seed?: number } & Record<string, unknown>) => Promise<string>>(
@@ -105,8 +105,8 @@ vi.mock("~/lib/workshop/workflow-run.server", () => ({
 const cancelTaskMock = vi.hoisted(() => vi.fn(async (_taskId: string) => undefined));
 const enqueueMock = vi.hoisted(() => vi.fn((_payload: unknown) => undefined));
 vi.mock("~/lib/comfyui/enqueue", () => ({
-  enqueue: enqueueMock,
   cancelTask: cancelTaskMock,
+  enqueue: enqueueMock,
 }));
 vi.mock("~/lib/comfyui/firstframe", () => ({
   synthesizeFirstFrame: synthFirstFrameMock,
@@ -117,8 +117,8 @@ vi.mock("~/lib/workshop/script-parser", () => ({
 const llmConfig = vi.hoisted(() => vi.fn(async () => ({})));
 const llmStructured = vi.hoisted(() => vi.fn<() => Promise<Array<unknown>>>(async () => []));
 vi.mock("~/lib/llm/server", () => ({
-  getLLMConfig: llmConfig,
   completeLLMStructured: llmStructured,
+  getLLMConfig: llmConfig,
 }));
 
 /* 首启建表就绪判据：恢复扫描与回收器同一口径（表还没建就整轮跳过）。
@@ -130,9 +130,9 @@ vi.mock("~/lib/db-schema-ready", () => ({ isSchemaReady: schemaReadyMock }));
  * `log/` 写字 —— 规范里明令用例不许那么干）。本文件的判决不需要它的落盘，
  * 只需要「扫描失败时确实 Warn 了一次」可断言。 */
 const loggerMock = vi.hoisted(() => ({
+  error: vi.fn((_msg: string) => undefined),
   info: vi.fn((_msg: string) => undefined),
   warn: vi.fn((_msg: string) => undefined),
-  error: vi.fn((_msg: string) => undefined),
 }));
 vi.mock("~/lib/core/logger", () => ({ logger: loggerMock }));
 
@@ -141,13 +141,13 @@ vi.mock("~/lib/core/logger", () => ({ logger: loggerMock }));
 vi.mock("child_process", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   spawn: vi.fn(() => ({
-    stderr: { on: vi.fn() },
     kill: vi.fn(),
     on: vi.fn((event: string, cb: (code: number) => void) => {
       if (event === "close") {
         queueMicrotask(() => cb(0));
       }
     }),
+    stderr: { on: vi.fn() },
   })),
 }));
 
@@ -220,17 +220,17 @@ describe("startFilm — 自主成片逐镜生成默认带随机种子（走「�
     // 不在测试里跑后台轮询循环（startFilm 本身只挡 GENERATING/COMPOSING）。
     filmRepo.findById.mockResolvedValue({
       id: "f1",
-      userId: "u1",
       status: "CANCELLED",
+      userId: "u1",
     });
     shotRepo.listByFilm.mockResolvedValue([
       {
         id: "s1",
+        negative: null,
         order: 0,
         prompt: "海边日落",
-        negative: null,
         // 不给现成首帧 → 走「先合成一张图、再喂视频」这条双跳出图路径。
-        params: { videoWorkflowId: "wf-v", imageWorkflowId: "wf-i" },
+        params: { imageWorkflowId: "wf-i", videoWorkflowId: "wf-v" },
       },
     ]);
 
@@ -263,13 +263,13 @@ describe("composeFilm — 合成前置条件不满足时必须落 FAILED 且文�
 
   it("没有可用镜头：落 FAILED，且不去调 ffmpeg", async () => {
     filmRepo.findById.mockResolvedValue({
-      id: "f1",
-      status: "GENERATING",
-      size: JSON.stringify({ ratio: "16:9 横屏", clarity: "1k", multiple: 64 }),
+      bgmName: null,
       fps: 16,
       framesPerShot: 49,
+      id: "f1",
+      size: JSON.stringify({ clarity: "1k", multiple: 64, ratio: "16:9 横屏" }),
+      status: "GENERATING",
       subtitleOn: false,
-      bgmName: null,
     });
     shotRepo.listByFilm.mockResolvedValue([]);
 
@@ -283,17 +283,17 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
   it("镜头 params 带工作流库 id 与尺寸表达（不再折算成 WxH 像素串）", async () => {
     filmRepo.create.mockResolvedValue({ id: "f-new" });
     llmStructured.mockResolvedValue([
-      { heading: "场景1", action: "海边", dialogue: "", shotCount: 2 },
+      { action: "海边", dialogue: "", heading: "场景1", shotCount: 2 },
     ]);
 
     const r = await createFilm({
-      userId: "u1",
-      title: "测试片",
-      script: "一个关于月球的故事",
-      framesPerShot: 33,
       fps: 12,
-      videoWorkflowId: "wf-video",
+      framesPerShot: 33,
       imageWorkflowId: "wf-image",
+      script: "一个关于月球的故事",
+      title: "测试片",
+      userId: "u1",
+      videoWorkflowId: "wf-video",
     });
 
     expect(r.id).toBe("f-new");
@@ -323,11 +323,11 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
     const { parseIdeaToScenes } = await import("~/lib/workshop/script-parser");
     vi.mocked(parseIdeaToScenes).mockReturnValue(
       /* SAFETY: 类型断言已复核 */ [
-        { heading: "离线场景", action: "动作", dialogue: "台词", shotCount: 1 },
+        { action: "动作", dialogue: "台词", heading: "离线场景", shotCount: 1 },
       ] as unknown as ReturnType<typeof parseIdeaToScenes>,
     );
 
-    const r = await createFilm({ userId: "u1", title: "离线", script: "剧本" });
+    const r = await createFilm({ script: "剧本", title: "离线", userId: "u1" });
 
     expect(r.shots).toBe(1);
     const [, shots] = shotRepo.createMany.mock.calls[0]!;
@@ -338,15 +338,15 @@ describe("createFilm — 镜头参数与画幅的折算口径", () => {
   it("镜头尺寸沿用成片画幅的尺寸表达（不再折算 WxH / 视频场景表）", async () => {
     filmRepo.create.mockResolvedValue({ id: "f-size" });
     llmStructured.mockResolvedValue([
-      { heading: "场景", action: "动作", dialogue: "", shotCount: 1 },
+      { action: "动作", dialogue: "", heading: "场景", shotCount: 1 },
     ]);
 
-    await createFilm({ userId: "u1", title: "画幅", script: "剧本" });
+    await createFilm({ script: "剧本", title: "画幅", userId: "u1" });
 
     const [, shots] = shotRepo.createMany.mock.calls[0]!;
     const size = shots[0]!.params.size;
     // 成片画幅默认的视频场景 16:9 1k，原样存尺寸表达 —— 像素由工作流派生
-    expect(size).toMatchObject({ ratio: "16:9 横屏", clarity: "1k" });
+    expect(size).toMatchObject({ clarity: "1k", ratio: "16:9 横屏" });
     // 兜底常量是尺寸表达（镜头没带尺寸时用）
     expect(NATIVE_SHOT_VIDEO_SIZE).toMatchObject({ ratio: "16:9 横屏" });
   });
@@ -356,40 +356,40 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
   // 只映射用到的字段即可（id / index / prompt / negativePrompt / sceneHeading）。
   const shot = (over: Record<string, unknown>) =>
     /* SAFETY: 类型断言已复核 */ ({
-      sceneHeading: "",
       negativePrompt: "",
+      sceneHeading: "",
       ...over,
     }) as never;
 
   it("逐条映射镜头、按镜号排序，不触发 LLM 分镜，且落 projectId 关联", async () => {
     filmRepo.create.mockResolvedValue({ id: "film-p1" });
     prodRepo.getForUser.mockResolvedValue({
-      title: "项目片",
-      type: "animation",
       scriptMarkdown: "# 剧本",
       shots: [
         shot({
           id: "shot-2",
           index: 2,
-          prompt: "第二镜",
           negativePrompt: "n2",
+          prompt: "第二镜",
           sceneHeading: "H2",
         }),
         shot({
           id: "shot-1",
           index: 1,
-          prompt: "第一镜",
           negativePrompt: "n1",
+          prompt: "第一镜",
           sceneHeading: "H1",
         }),
       ],
+      title: "项目片",
+      type: "animation",
     });
 
     const r = await createFilmFromProject({
-      userId: "u1",
-      projectId: "proj_1",
-      videoWorkflowId: "wf-video",
       imageWorkflowId: "wf-image",
+      projectId: "proj_1",
+      userId: "u1",
+      videoWorkflowId: "wf-video",
     });
 
     expect(r).toEqual({ id: "film-p1", shots: 2 });
@@ -418,21 +418,21 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
     expect(shots[1]!.shotId).toBe("shot-2");
     // 逐镜 params 与自由建片同一口径
     expect(shots[0]!.params).toMatchObject({
-      videoWorkflowId: "wf-video",
       imageWorkflowId: "wf-image",
+      videoWorkflowId: "wf-video",
     });
   });
 
   it("项目无 production 行或无镜头 → 抛错且不落库", async () => {
     prodRepo.getForUser.mockResolvedValue(null);
     await expect(
-      createFilmFromProject({ userId: "u1", projectId: "proj_missing" }),
+      createFilmFromProject({ projectId: "proj_missing", userId: "u1" }),
     ).rejects.toThrow(/还没有镜头/);
     expect(filmRepo.create).not.toHaveBeenCalled();
     expect(shotRepo.createMany).not.toHaveBeenCalled();
 
     prodRepo.getForUser.mockResolvedValue({ shots: [] });
-    await expect(createFilmFromProject({ userId: "u1", projectId: "proj_empty" })).rejects.toThrow(
+    await expect(createFilmFromProject({ projectId: "proj_empty", userId: "u1" })).rejects.toThrow(
       /还没有镜头/,
     );
     expect(filmRepo.create).not.toHaveBeenCalled();
@@ -442,39 +442,39 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
 describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写（Phase 5 §6.3/§7）", () => {
   it("按 shotId 命中镜头写入 clipUrl/clipStatus，并标 rendered；其余字段与未命中镜头原样保留", async () => {
     prodRepo.getForUser.mockResolvedValue({
-      id: "proj_1",
-      title: "项目片",
-      type: "animation",
-      tone: "轻快",
-      logline: "L",
-      scriptMarkdown: "# 剧本",
-      scenes: [{ id: "sc1" }],
       characters: [{ id: "c1" }],
+      id: "proj_1",
+      logline: "L",
+      progress: { rendered: false, stage: "video" },
+      scenes: [{ id: "sc1" }],
+      scriptMarkdown: "# 剧本",
       shots: [
         { id: "s1", index: 1, prompt: "p1" },
         { id: "s2", index: 2, prompt: "p2" },
       ],
-      progress: { stage: "video", rendered: false },
+      title: "项目片",
+      tone: "轻快",
+      type: "animation",
     });
 
     await syncFilmToProject("u1", "proj_1", [
-      { shotId: "s1", videoPath: "/v/s1.mp4", status: "SUCCEEDED" },
-      { shotId: null, videoPath: "/v/orphan.mp4", status: "SUCCEEDED" }, // 自由建片镜头：无来源，跳过
-      { shotId: "s2", videoPath: null, status: "FAILED" }, // 无产物，clip 不写
+      { shotId: "s1", status: "SUCCEEDED", videoPath: "/v/s1.mp4" },
+      { shotId: null, status: "SUCCEEDED", videoPath: "/v/orphan.mp4" }, // 自由建片镜头：无来源，跳过
+      { shotId: "s2", status: "FAILED", videoPath: null }, // 无产物，clip 不写
     ]);
 
     expect(prodRepo.upsertForUser).toHaveBeenCalledTimes(1);
     const [userId, data] = prodRepo.upsertForUser.mock.calls[0]!;
     expect(userId).toBe("u1");
-    expect(data.progress).toEqual({ stage: "render", rendered: true });
+    expect(data.progress).toEqual({ rendered: true, stage: "render" });
     // s1 命中且带 videoPath → 写 clipUrl + clipStatus done；prompt 等原字段保留
     expect(data.shots).toEqual([
       {
+        clipStatus: "done",
+        clipUrl: "/v/s1.mp4",
         id: "s1",
         index: 1,
         prompt: "p1",
-        clipUrl: "/v/s1.mp4",
-        clipStatus: "done",
       },
       // s2 无 videoPath → 原样，不被 clip 覆盖
       { id: "s2", index: 2, prompt: "p2" },
@@ -486,20 +486,20 @@ describe("syncFilmToProject — 成片合成后逐镜 clip + 完成状态回写�
 
   it("脏 progress（缺字段 / 非法 stage）也规范化后再回写", async () => {
     prodRepo.getForUser.mockResolvedValue({
-      id: "proj_2",
-      title: "T",
-      type: "short_video",
-      tone: "",
-      logline: "",
-      scriptMarkdown: "",
-      scenes: [],
       characters: [],
-      shots: [],
+      id: "proj_2",
+      logline: "",
       progress: {},
+      scenes: [],
+      scriptMarkdown: "",
+      shots: [],
+      title: "T",
+      tone: "",
+      type: "short_video",
     });
     await syncFilmToProject("u1", "proj_2", []);
     const [, data] = prodRepo.upsertForUser.mock.calls[0]!;
-    expect(data.progress).toEqual({ stage: "render", rendered: true });
+    expect(data.progress).toEqual({ rendered: true, stage: "render" });
     expect(data.shots).toEqual([]);
   });
 
@@ -529,7 +529,7 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     shotRepo.listByFilm.mockResolvedValue([]);
 
     const result = await resumeStalledFilms();
-    expect(result).toEqual({ resumed: ["f-gen"], abandoned: [] });
+    expect(result).toEqual({ abandoned: [], resumed: ["f-gen"] });
 
     /* 零镜头 = 「markGenerating 之后、逐镜提交之前」崩的那一格。它只有扫描会捡起来
      * （原先监看只由 startFilm 起，那时 shots 必然非空），所以必须判掉而不是
@@ -548,7 +548,7 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
 
     /* `composeFilm` 一见到 COMPOSING 就早退 ⇒ 不判掉的话，这一格连界面上那个
      * 「重新合成」按钮都点不动（它是唯一出口，却被自己的状态挡住）。 */
-    expect(result).toEqual({ resumed: [], abandoned: ["f-comp"] });
+    expect(result).toEqual({ abandoned: ["f-comp"], resumed: [] });
     expect(filmRepo.markFailed).toHaveBeenCalledWith("f-comp", expect.stringContaining("合成中断"));
     expect(filmRepo.appendLog).toHaveBeenCalledWith(
       "f-comp",
@@ -588,18 +588,18 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
         {
           id: "s0",
           order: 0,
+          progress: 100,
           status: "SUCCEEDED",
           taskId: null,
           videoPath: "/generated/films/_fixture/clip0.mp4",
-          progress: 100,
         },
         {
           id: "s1",
           order: 1,
+          progress: 0,
           status: "FAILED",
           taskId: null,
           videoPath: null,
-          progress: 0,
         },
       ])
       .mockResolvedValueOnce([]);
@@ -628,7 +628,7 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
 
     const result = await resumeStalledFilms();
 
-    expect(result).toEqual({ resumed: [], abandoned: [] });
+    expect(result).toEqual({ abandoned: [], resumed: [] });
     expect(filmRepo.listByStatus).not.toHaveBeenCalled();
     /* 这条扫描是一次性的（回收器每 30s 还会再来一轮，它不会）：跳过之后就得等
      * 下一次重启才有人接片，所以「为什么没接」必须在日志里读得到。 */
@@ -639,8 +639,8 @@ describe("resumeStalledFilms — 重启后不再卡 GENERATING", () => {
     filmRepo.listByStatus.mockRejectedValue(new Error("no such table"));
 
     await expect(resumeStalledFilms()).resolves.toEqual({
-      resumed: [],
       abandoned: [],
+      resumed: [],
     });
     expect(loggerMock.warn).toHaveBeenCalledWith(
       expect.stringContaining("resumeStalledFilms 失败"),

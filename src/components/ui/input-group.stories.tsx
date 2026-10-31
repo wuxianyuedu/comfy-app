@@ -40,9 +40,9 @@ const ALIGNS: Array<InputGroupAddonAlign> = [
 const BUTTON_SIZES: Array<InputGroupButtonSize> = ["xs", "sm", "icon-xs", "icon-sm"];
 
 const meta = {
-  title: "UI/InputGroup",
-  component: InputGroupAddon,
   args: { align: "inline-start" },
+  component: InputGroupAddon,
+  title: "UI/InputGroup",
   /* 两根轴在这个文件里、但住在不同子部件上（`align` 在 `InputGroupAddon`、
      `size` 在 `InputGroupButton`）。`argTypes` 是「哪个清单属于哪个轴」的
      显式链接 —— 判据按**文件里的 cva 轴**核，漏掉一条就是「那一档没人验」。

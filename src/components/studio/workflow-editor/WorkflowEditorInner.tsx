@@ -86,9 +86,9 @@ import {
 /* 外层：创建 3 个 per-instance Zustand store（经 createIOEditStore 等工厂），
  * 再经 <WFStoresProvider> 下发。状态判断逻辑与渲染子树都在这之下。 */
 export function WorkflowEditorInner({
-  workflowId,
   onClose,
   onSave,
+  workflowId,
 }: {
   onClose: () => void;
   onSave?: () => void;
@@ -99,11 +99,11 @@ export function WorkflowEditorInner({
    *（否则触发 react-hooks/refs 规则）。 */
   const [stores] = React.useState<WFStoresHelper>(() => ({
     io: createIOEditStore(workflowId),
-    rgthree: createRgthreeGroupsStore({ workflowId, detail: null }),
+    rgthree: createRgthreeGroupsStore({ detail: null, workflowId }),
     viewer: createNodeJsonViewerStore({
       detail: null,
-      rawMetaById: {},
       positions: null,
+      rawMetaById: {},
       subgraphRawContext: null,
       subgraphStackLength: 0,
     }),
@@ -124,9 +124,9 @@ type WFStoresHelper = {
 /* 内层：全部既有逻辑。经 useIOEditApi/useRgthreeApi/useViewerApi 直读直写
  * store（hook 在 <WFStoresProvider> 之下才合法，故体逻辑用 *Api 访问）。 */
 function WorkflowEditorBody({
-  workflowId,
   onClose,
   onSave,
+  workflowId,
 }: {
   onClose: () => void;
   onSave?: () => void;
@@ -160,10 +160,10 @@ function WorkflowEditorBody({
    *  在 `hydrated` 为真之前一律用默认值渲染，避免 SSR / 首屏在读取完成前
    *  短暂闪出已保存的值。 */
   const {
+    hydrated: canvasSettingsHydrated,
+    reset: resetCanvasSettings,
     settings: canvasSettings,
     update: updateCanvasSetting,
-    reset: resetCanvasSettings,
-    hydrated: canvasSettingsHydrated,
   } = useCanvasSettings();
   /* 画布顶部「📋 查看 JSON」按钮 — 复用 SourceModal。
    *  数据直接从 `detail.graph/rawJson` 读 (缓存里的磁盘已保存版本)，
@@ -171,7 +171,7 @@ function WorkflowEditorBody({
   const [viewJsonOpen, setViewJsonOpen] = useState(false);
   /* IOEditStore 的两个受控出口（预览开关必须走 store 动作的判据
    * 见 use-io-edit-actions 文件头与 workflow-editor-topbar-config）。 */
-  const { setWorkflowIO, setIoPreviewOpen } = useIoEditActions({ ioApi });
+  const { setIoPreviewOpen, setWorkflowIO } = useIoEditActions({ ioApi });
   const [error, setError] = useState("");
   /* 挂载时把磁盘上的自定义节点 manifest 同步进内存注册表一次，
    *  让 <PackageFooter> 能解析每个节点的「类型 → 所属包」映射，
@@ -231,8 +231,8 @@ function WorkflowEditorBody({
    * 详见 use-subgraph-source-modal）。 */
   const sourceModalData = useSubgraphSourceModal({
     detail,
-    subgraphStackLength: subgraphStack.length,
     subgraphRawContext,
+    subgraphStackLength: subgraphStack.length,
   });
 
   const rf = useReactFlow();
@@ -252,20 +252,20 @@ function WorkflowEditorBody({
    * 随后在后台刷新存下来的副本，且不打扰界面。 */
   const { fetchDetail, forceReloadDetail, onEnterSubgraph, onExitSubgraph } =
     useWorkflowDetailLoader({
-      workflowId,
       detail,
       detailRef,
       latestRequestIdRef,
       setDetail,
-      setLoading,
       setError,
+      setLoading,
       setParamMap,
-      setWorkflowIO,
-      setSubgraphStack,
       setRootWorkflowName,
+      setSubgraphError,
       setSubgraphLoading,
       setSubgraphRawContext,
-      setSubgraphError,
+      setSubgraphStack,
+      setWorkflowIO,
+      workflowId,
     });
 
   /* 当前视图的宿主（外层封装）节点 id 链 —— 顶层为空串，下钻后是 `4`（或嵌套
@@ -277,16 +277,16 @@ function WorkflowEditorBody({
   /* 派生管线：raw meta / 按视图范围的详情 / 输出槽位名 / IO 富化数据源 /
    * 图节点；派生结果同时发布进 viewer / rgthree store
    * （详见 use-workflow-graph-derivation）。 */
-  const { scopeDetail, outSlotNameById, ioDetailMap, graphNodes } = useWorkflowGraphDerivation({
+  const { graphNodes, ioDetailMap, outSlotNameById, scopeDetail } = useWorkflowGraphDerivation({
     detail,
-    paramMap,
     onEnterSubgraph,
-    viewHostNodeId,
-    workflowId,
-    viewerApi,
+    paramMap,
     rgthreeApi,
     subgraphRawContext,
     subgraphStackLength: subgraphStack.length,
+    viewerApi,
+    viewHostNodeId,
+    workflowId,
   });
 
   /* ── 对外参数映射：编辑器不碰 ──
@@ -323,10 +323,10 @@ function WorkflowEditorBody({
   /* 视口贴合：自动聚焦的排程 / 收敛 / 「居中」出口收在
    * use-workflow-viewport-fit（聚焦路径的容器尺寸口径判据也随迁到那里）。 */
   const { fitToContent, recenterCanvas } = useWorkflowViewportFit({
-    rf,
     canvasSettings,
     fitKey: detail?.id ?? "__root__",
     nodesCount: nodes.length,
+    rf,
   });
 
   /* 惰性连线交互。画布的 defaultEdgeOptions 把 deletable / reconnectable
@@ -349,19 +349,19 @@ function WorkflowEditorBody({
    * 的自带端口体现；这里只需保证被映射到的端口所在行能拿到 targetHandle
    * （WidgetInputRow 的 withHandle 已按 ioKey 挂 handle，无需额外标记）。 */
 
-  const { resetLayout, handleSave, onNodeDragStop } = useWorkflowPersistence({
-    workflowId,
+  const { handleSave, onNodeDragStop, resetLayout } = useWorkflowPersistence({
     detail,
-    setDetail,
-    setNodes,
-    paramMap,
-    workflowIO,
     fitToContent,
-    savePatch,
-    onSave,
     onClose,
-    setSaving,
+    onSave,
+    paramMap,
+    savePatch,
+    setDetail,
     setError,
+    setNodes,
+    setSaving,
+    workflowId,
+    workflowIO,
     /* 重置布局之后重新拉当前视图：服务端已经把坐标覆盖删掉，重拉拿到的就是
      * 工作流自带的原始布局。 */
     reloadView: () => forceReloadDetail(viewHostNodeId, true),
@@ -372,10 +372,10 @@ function WorkflowEditorBody({
 
   /* IO 预览面板的「模式集合变更」落库（编排细节见 use-io-modes-commit）。 */
   const handleModesChange = useIoModesCommit({
-    ioApi,
     detail,
-    setDetail,
+    ioApi,
     savePatch,
+    setDetail,
     workflowId,
   });
 

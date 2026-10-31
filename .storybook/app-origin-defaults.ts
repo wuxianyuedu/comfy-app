@@ -49,8 +49,8 @@ const FALLBACK_PORT = 3100;
 
 /** 缺省形态：没跑过 `pnpm storybook` 的检出画面上显示的东西。 */
 export const APP_ORIGIN_DEFAULTS: AppOriginOverride = {
-  APP_DEV_PORT: FALLBACK_PORT,
   APP_DEV_ORIGIN: `http://127.0.0.1:${String(FALLBACK_PORT)}`,
+  APP_DEV_PORT: FALLBACK_PORT,
   APP_DEV_PORT_SOURCE: "default",
 };
 

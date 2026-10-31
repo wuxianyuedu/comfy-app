@@ -12,11 +12,11 @@ import type * as FsPromises from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { statMock, rmMock } = vi.hoisted(() => ({
+const { rmMock, statMock } = vi.hoisted(() => ({
+  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(async () => undefined),
   statMock: vi.fn<(path: string) => Promise<unknown>>(async () => {
     throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
   }),
-  rmMock: vi.fn<(path: string, opts?: unknown) => Promise<void>>(async () => undefined),
 }));
 
 vi.mock("~/server/db", async () => {
@@ -28,12 +28,12 @@ vi.mock("~/server/better-auth", () => ({
 }));
 vi.mock("~/lib/core/logger", async (importOriginal) => ({
   ...(await importOriginal<typeof LoggerModule>()),
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock("fs/promises", async (importOriginal) => ({
   ...(await importOriginal<typeof FsPromises>()),
-  stat: statMock,
   rm: rmMock,
+  stat: statMock,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -48,21 +48,21 @@ const createCaller = createCallerFactory(taskRouter);
 const tdb = getTestDb();
 
 const COVER = (id: string, localPath: string, mediaType = "image"): Row => ({
+  height: 512,
   id,
+  isCover: true,
   localPath,
   mediaType,
   seed: "42",
-  width: 512,
-  height: 512,
-  isCover: true,
   sortIndex: 0,
+  width: 512,
 });
 
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
-  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-  seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+  seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+  seedUser(tdb, { email: "b@test.dev", id: "user-b" });
 });
 
 // ───────────────────────────────────── list ─────────────────────────────────────
@@ -75,20 +75,19 @@ describe("task.list", () => {
 
   it("返回封面/进度/checkpoint 投影，mediaType 按封面与 taskType 推断，createdAt 倒序", async () => {
     seedTask(tdb, {
-      id: "task-img",
-      userId: "user-a",
-      type: "TXT2IMG",
-      status: "COMPLETED",
-      params: { checkpoint: "sdxl.safetensors", seed: 42 },
-      images: [COVER("img-1", "/generated/task-img/1.png")],
-      progress: 1,
       createdAt: new Date(2000),
+      id: "task-img",
+      images: [COVER("img-1", "/generated/task-img/1.png")],
+      params: { checkpoint: "sdxl.safetensors", seed: 42 },
+      progress: 1,
+      status: "COMPLETED",
+      type: "TXT2IMG",
+      userId: "user-a",
     });
     seedTask(tdb, {
+      createdAt: new Date(1000),
+      error: null,
       id: "task-video",
-      userId: "user-a",
-      type: "T2V",
-      status: "RUNNING",
       images: [
         {
           ...COVER("img-2", "/generated/task-video/2.mp4", "video"),
@@ -96,8 +95,9 @@ describe("task.list", () => {
           sortIndex: 1,
         },
       ],
-      error: null,
-      createdAt: new Date(1000),
+      status: "RUNNING",
+      type: "T2V",
+      userId: "user-a",
     });
 
     const res = await createCaller(makeCtx()).list({});
@@ -117,8 +117,6 @@ describe("task.list", () => {
      * 「这一行有没有可下载的视频」只有握着产出行数组的服务端答得了。 */
     seedTask(tdb, {
       id: "task-video",
-      userId: "user-a",
-      type: "VIDEO",
       images: [
         COVER("img-1", "/api/generated/task-video/img_0.png"),
         {
@@ -127,12 +125,14 @@ describe("task.list", () => {
           sortIndex: 1,
         },
       ],
+      type: "VIDEO",
+      userId: "user-a",
     });
     seedTask(tdb, {
       id: "task-img",
-      userId: "user-a",
-      type: "TXT2IMG",
       images: [COVER("img-3", "/api/generated/task-img/1.png")],
+      type: "TXT2IMG",
+      userId: "user-a",
     });
 
     const res = await createCaller(makeCtx()).list({});
@@ -145,22 +145,22 @@ describe("task.list", () => {
   });
 
   it("media 过滤只保留对应类型", async () => {
-    seedTask(tdb, { id: "task-img", userId: "user-a", type: "TXT2IMG" });
-    seedTask(tdb, { id: "task-video", userId: "user-a", type: "T2V" });
+    seedTask(tdb, { id: "task-img", type: "TXT2IMG", userId: "user-a" });
+    seedTask(tdb, { id: "task-video", type: "T2V", userId: "user-a" });
     const res = await createCaller(makeCtx()).list({ media: "video" });
     expect(res.tasks.map((t) => t.id)).toEqual(["task-video"]);
   });
 
   it("status 过滤（逗号分隔 → 大写化 in 查询）", async () => {
-    seedTask(tdb, { id: "task-done", userId: "user-a", status: "COMPLETED" });
-    seedTask(tdb, { id: "task-run", userId: "user-a", status: "RUNNING" });
+    seedTask(tdb, { id: "task-done", status: "COMPLETED", userId: "user-a" });
+    seedTask(tdb, { id: "task-run", status: "RUNNING", userId: "user-a" });
     const res = await createCaller(makeCtx()).list({ status: "completed" });
     expect(res.tasks.map((t) => t.id)).toEqual(["task-done"]);
   });
 
   it("projectId 过滤", async () => {
-    seedTask(tdb, { id: "task-in", userId: "user-a", projectId: "proj-1" });
-    seedTask(tdb, { id: "task-out", userId: "user-a", projectId: "proj-2" });
+    seedTask(tdb, { id: "task-in", projectId: "proj-1", userId: "user-a" });
+    seedTask(tdb, { id: "task-out", projectId: "proj-2", userId: "user-a" });
     const res = await createCaller(makeCtx()).list({ projectId: "proj-1" });
     expect(res.tasks.map((t) => t.id)).toEqual(["task-in"]);
   });
@@ -189,8 +189,8 @@ describe("task.detail", () => {
   it("返回自己的任务（含全部产出图）", async () => {
     seedTask(tdb, {
       id: "task-1",
-      userId: "user-a",
       images: [COVER("img-1", "/generated/task-1/1.png")],
+      userId: "user-a",
     });
     const task = await createCaller(makeCtx()).detail({ id: "task-1" });
     expect(task.id).toBe("task-1");
@@ -215,7 +215,7 @@ describe("task.detail", () => {
 
 describe("task.cancel", () => {
   it("置为 CANCELLED 并写 finishedAt", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", status: "RUNNING" });
+    seedTask(tdb, { id: "task-1", status: "RUNNING", userId: "user-a" });
     expect(await createCaller(makeCtx()).cancel({ id: "task-1" })).toEqual({
       ok: true,
     });
@@ -225,9 +225,9 @@ describe("task.cancel", () => {
   });
 
   it("越权:非归属者取消他人任务抛 NOT_FOUND 且任务不受影响", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", status: "RUNNING" });
+    seedTask(tdb, { id: "task-1", status: "RUNNING", userId: "user-a" });
     await expect(
-      createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } })).cancel({
+      createCaller(makeCtx({ user: { email: "b@test.dev", id: "user-b", name: null } })).cancel({
         id: "task-1",
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -241,17 +241,17 @@ describe("task.cancel", () => {
 describe("task.retry", () => {
   const seedFailedTask = () =>
     seedTask(tdb, {
+      execPayload: { nodes: { "1": { class_type: "KSampler" } } },
       id: "task-old",
-      userId: "user-a",
-      type: "TXT2IMG",
-      status: "FAILED",
-      prompt: "一只猫",
       negativePrompt: "低质量",
       params: { checkpoint: "sdxl.safetensors", seed: 42 },
-      workflowName: "sdxl-txt2img",
       projectId: "proj-1",
+      prompt: "一只猫",
       referenceImages: ["ref-a.png"],
-      execPayload: { nodes: { "1": { class_type: "KSampler" } } },
+      status: "FAILED",
+      type: "TXT2IMG",
+      userId: "user-a",
+      workflowName: "sdxl-txt2img",
     });
 
   it("终态任务重跑：按原行字段新建 QUEUED 行（新 id），原行不动", async () => {
@@ -283,7 +283,7 @@ describe("task.retry", () => {
   it("越权:非归属者重跑他人任务抛 NOT_FOUND 且不建新行", async () => {
     seedFailedTask();
     await expect(
-      createCaller(makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } })).retry({
+      createCaller(makeCtx({ user: { email: "b@test.dev", id: "user-b", name: null } })).retry({
         id: "task-old",
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -291,8 +291,8 @@ describe("task.retry", () => {
   });
 
   it("非终态（RUNNING / QUEUED）拒绝重跑，给可行动错误", async () => {
-    seedTask(tdb, { id: "task-run", userId: "user-a", status: "RUNNING" });
-    seedTask(tdb, { id: "task-queued", userId: "user-a", status: "QUEUED" });
+    seedTask(tdb, { id: "task-run", status: "RUNNING", userId: "user-a" });
+    seedTask(tdb, { id: "task-queued", status: "QUEUED", userId: "user-a" });
     await expect(createCaller(makeCtx()).retry({ id: "task-run" })).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
     });
@@ -303,7 +303,7 @@ describe("task.retry", () => {
   });
 
   it("execPayload 为空的历史遗留行拒绝重跑并指路（到创作台重新生成）", async () => {
-    seedTask(tdb, { id: "task-legacy", userId: "user-a", status: "FAILED" });
+    seedTask(tdb, { id: "task-legacy", status: "FAILED", userId: "user-a" });
     await expect(createCaller(makeCtx()).retry({ id: "task-legacy" })).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
     });
@@ -319,16 +319,16 @@ describe("task.workflow", () => {
       id: "task-1",
       userId: "user-a",
       workflowSnapshot: {
-        workflow: { nodes: [] },
-        source: "canvas",
         capturedAt: "t0",
+        source: "canvas",
+        workflow: { nodes: [] },
       },
     });
     const res = await createCaller(makeCtx()).workflow({ id: "task-1" });
     expect(res).toEqual({
-      workflow: { nodes: [] },
-      source: "canvas",
       capturedAt: "t0",
+      source: "canvas",
+      workflow: { nodes: [] },
     });
   });
 
@@ -348,9 +348,9 @@ describe("task.workflow", () => {
     seedTask(tdb, { id: "task-1", userId: "user-a", workflowSnapshot: null });
     const caller = createCaller(makeCtx());
     expect(await caller.workflow({ id: "task-1" })).toEqual({
-      workflow: null,
-      source: null,
       capturedAt: null,
+      source: null,
+      workflow: null,
     });
     await expect(caller.workflow({ id: "nope" })).rejects.toMatchObject({
       code: "NOT_FOUND",
@@ -362,13 +362,13 @@ describe("task.workflow", () => {
       id: "task-b",
       userId: "user-b",
       workflowSnapshot: {
-        workflow: { nodes: [{ type: "KSampler" }] },
-        source: "canvas",
         capturedAt: "t0",
+        source: "canvas",
+        workflow: { nodes: [{ type: "KSampler" }] },
       },
     });
     const caller = createCaller(
-      makeCtx({ user: { id: "user-a", email: "a@test.dev", name: null } }),
+      makeCtx({ user: { email: "a@test.dev", id: "user-a", name: null } }),
     );
     await expect(caller.workflow({ id: "task-b" })).rejects.toMatchObject({
       code: "NOT_FOUND",
@@ -384,14 +384,14 @@ describe("task.workflow", () => {
 
 describe("task.openFolder", () => {
   it("projectId 路径穿越 → FORBIDDEN（目录白名单）", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "../../evil" });
+    seedTask(tdb, { id: "task-1", projectId: "../../evil", userId: "user-a" });
     await expect(createCaller(makeCtx()).openFolder({ id: "task-1" })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });
 
   it("目录不存在 → { opened: false, error: 'directory missing' }", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+    seedTask(tdb, { id: "task-1", projectId: "proj-1", userId: "user-a" });
     const res = await createCaller(makeCtx()).openFolder({ id: "task-1" });
     expect(res.opened).toBe(false);
     expect(res.error).toBe("directory missing");
@@ -399,7 +399,7 @@ describe("task.openFolder", () => {
   });
 
   it("目录存在（stat mock）→ { opened: true, comfyappUrl }", async () => {
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+    seedTask(tdb, { id: "task-1", projectId: "proj-1", userId: "user-a" });
     statMock.mockResolvedValueOnce({ isDirectory: () => true });
     const res = await createCaller(makeCtx()).openFolder({ id: "task-1" });
     expect(res.opened).toBe(true);
@@ -420,15 +420,15 @@ describe("task.delete（rateLimitedProcedure）", () => {
   it("删除自己的任务：产物目录整体删掉、行被移除", async () => {
     seedTask(tdb, {
       id: "task-1",
-      userId: "user-a",
       images: [COVER("img-1", "/api/generated/task-1/1.png")],
+      userId: "user-a",
     });
     expect(await createCaller(makeCtx()).delete({ id: "task-1" })).toEqual({
       ok: true,
     });
     expect(rmMock).toHaveBeenCalledWith(path.resolve(generatedRoot(), "task-1"), {
-      recursive: true,
       force: true,
+      recursive: true,
     });
     expect(tdb.$tables.tasks.find((t) => t.id === "task-1")).toBeUndefined();
   });
@@ -437,11 +437,11 @@ describe("task.delete（rateLimitedProcedure）", () => {
     /* 旧写法在这里只拼 `public/generated/<taskId>`，而 executor-finalize 对
      * 项目任务落的是 `projects/<pid>/<tid>` —— 「在画布里删任务」于是永远删不到
      * 目录，磁盘单调增长，且失败被 .catch 吞掉、日志里一个字都没有。 */
-    seedTask(tdb, { id: "task-1", userId: "user-a", projectId: "proj-1" });
+    seedTask(tdb, { id: "task-1", projectId: "proj-1", userId: "user-a" });
     await createCaller(makeCtx()).delete({ id: "task-1" });
     expect(rmMock).toHaveBeenCalledWith(
       path.resolve(generatedRoot(), "projects", "proj-1", "task-1"),
-      { recursive: true, force: true },
+      { force: true, recursive: true },
     );
   });
 
@@ -482,7 +482,7 @@ describe("task.delete（rateLimitedProcedure）", () => {
   it("限流：同用户 10s 窗口内第 21 次调用 → TOO_MANY_REQUESTS", async () => {
     seedTask(tdb, { id: "task-a", userId: "user-a" });
     const caller = createCaller(
-      makeCtx({ user: { id: "user-b", email: "b@test.dev", name: null } }),
+      makeCtx({ user: { email: "b@test.dev", id: "user-b", name: null } }),
     );
     // 前 20 次：命中 NOT_FOUND 分支（同时消耗限流配额）
     for (let i = 0; i < 20; i++) {
@@ -502,26 +502,26 @@ describe("task.setImageFeedback（人工评分 / 收藏）", () => {
   it("打分 + 收藏 → detail 里可见；null 评分 = 清除", async () => {
     seedTask(tdb, {
       id: "task-fb",
-      userId: "user-a",
-      status: "COMPLETED",
       images: [COVER("img-fb", "/generated/task-fb/1.png")],
       progress: 1,
+      status: "COMPLETED",
+      userId: "user-a",
     });
     const caller = createCaller(makeCtx());
     await caller.setImageFeedback({
-      imageId: "img-fb",
       humanRating: 4,
+      imageId: "img-fb",
       isFavorite: true,
     });
     const detail = await createCaller(makeCtx()).detail({ id: "task-fb" });
     expect(detail?.images[0]).toMatchObject({
-      id: "img-fb",
       humanRating: 4,
+      id: "img-fb",
       isFavorite: true,
     });
     await caller.setImageFeedback({
-      imageId: "img-fb",
       humanRating: null,
+      imageId: "img-fb",
       isFavorite: false,
     });
     const cleared = await createCaller(makeCtx()).detail({ id: "task-fb" });
@@ -534,22 +534,22 @@ describe("task.setImageFeedback（人工评分 / 收藏）", () => {
   it("他人任务的图 / 图不存在 → NOT_FOUND", async () => {
     seedTask(tdb, {
       id: "task-fb-b",
-      userId: "user-b",
-      status: "COMPLETED",
       images: [COVER("img-b", "/generated/x/1.png")],
       progress: 1,
+      status: "COMPLETED",
+      userId: "user-b",
     });
     await expect(
       createCaller(makeCtx()).setImageFeedback({
-        imageId: "img-b",
         humanRating: 3,
+        imageId: "img-b",
         isFavorite: false,
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
       createCaller(makeCtx()).setImageFeedback({
-        imageId: "missing",
         humanRating: 3,
+        imageId: "missing",
         isFavorite: false,
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });

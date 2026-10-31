@@ -42,10 +42,10 @@ describe("parsePyvenvCfg — 解析 venv 的基础解释器线索", () => {
   });
 
   it("空内容 / 无 = 的行不炸，返回全 null", () => {
-    expect(parsePyvenvCfg("")).toEqual({ home: null, executable: null });
+    expect(parsePyvenvCfg("")).toEqual({ executable: null, home: null });
     expect(parsePyvenvCfg("garbage line")).toEqual({
-      home: null,
       executable: null,
+      home: null,
     });
   });
 });
@@ -54,8 +54,8 @@ describe("pythonPathsFromPyvenv — 由 cfg 推出解释器候选", () => {
   it("Windows：executable 直用，home 补 python/pythonw（含 install/ 一层）", () => {
     const list = pythonPathsFromPyvenv(
       {
-        home: "C:\\uv\\cpython-3.12",
         executable: "C:\\uv\\cpython-3.12\\python.exe",
+        home: "C:\\uv\\cpython-3.12",
       },
       "win32",
     );
@@ -65,13 +65,13 @@ describe("pythonPathsFromPyvenv — 由 cfg 推出解释器候选", () => {
   });
 
   it("POSIX：补 bin 下的 python/python3", () => {
-    const list = pythonPathsFromPyvenv({ home: "/opt/py", executable: null }, "linux");
+    const list = pythonPathsFromPyvenv({ executable: null, home: "/opt/py" }, "linux");
     expect(list).toContain(path.join("/opt/py", "python"));
     expect(list).toContain(path.join("/opt/py", "python3"));
   });
 
   it("两者都缺 → 空数组（不凭空造路径）", () => {
-    expect(pythonPathsFromPyvenv({ home: null, executable: null })).toEqual([]);
+    expect(pythonPathsFromPyvenv({ executable: null, home: null })).toEqual([]);
   });
 });
 
@@ -110,8 +110,8 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
     const existsSet = new Set(opts.exists.map((p) => path.normalize(p)));
     return {
       exists: (p: string) => existsSet.has(path.normalize(p)),
-      readFile: (p: string) => opts.files?.[path.normalize(p)] ?? "",
       readdir: (p: string) => opts.dirs?.[path.normalize(p)] ?? [],
+      readFile: (p: string) => opts.files?.[path.normalize(p)] ?? "",
     };
   }
 
@@ -129,9 +129,9 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
     );
 
     const cands = collectComfyPythonCandidates(root, {
-      platform: "win32",
-      homedir: path.resolve("/home/me"),
       env: {},
+      homedir: path.resolve("/home/me"),
+      platform: "win32",
       ...fakeFs({
         exists: [path.join(envRoot, "pyvenv.cfg"), uvExe],
         files: { [path.normalize(path.join(envRoot, "pyvenv.cfg"))]: cfgText },
@@ -148,9 +148,9 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
     const cfgPath = path.join(root, "pyvenv.cfg");
     const ghost = path.resolve("/nope/python.exe");
     const cands = collectComfyPythonCandidates(root, {
-      platform: "linux",
-      homedir: path.resolve("/home/me"),
       env: {},
+      homedir: path.resolve("/home/me"),
+      platform: "linux",
       ...fakeFs({
         exists: [cfgPath],
         files: { [path.normalize(cfgPath)]: `executable = ${ghost}` },
@@ -166,11 +166,10 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
     const e2 = path.join(uvDir, "cpython-3.11.9-linux-x86_64-gnu", "install", "bin", "python3");
 
     const cands = collectComfyPythonCandidates(root, {
-      platform: "linux",
-      homedir: path.resolve("/home/me"),
       env: {},
+      homedir: path.resolve("/home/me"),
+      platform: "linux",
       ...fakeFs({
-        exists: [e1, e2],
         dirs: {
           [path.normalize(uvDir)]: [
             "cpython-3.12.8-linux-x86_64-gnu",
@@ -178,6 +177,7 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
             "not-a-python",
           ],
         },
+        exists: [e1, e2],
       }),
     });
     const exes = cands.map((c) => c.exe);
@@ -193,13 +193,13 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
     // pyvenv.cfg 与 uv 枚举同时指向同一个解释器 → 只保留一条。
     const cfgPath = path.join(root, "pyvenv.cfg");
     const cands = collectComfyPythonCandidates(root, {
-      platform: "linux",
-      homedir: path.resolve("/home/me"),
       env: {},
+      homedir: path.resolve("/home/me"),
+      platform: "linux",
       ...fakeFs({
+        dirs: { [path.normalize(uvDir)]: ["cpython-3.12.0-linux-gnu"] },
         exists: [cfgPath, exe],
         files: { [path.normalize(cfgPath)]: `executable = ${exe}` },
-        dirs: { [path.normalize(uvDir)]: ["cpython-3.12.0-linux-gnu"] },
       }),
     });
     expect(cands.filter((c) => c.exe === exe)).toHaveLength(1);
@@ -207,9 +207,9 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
 
   it("什么都查不到 → 空数组（纯尽力而为，不抛错）", () => {
     const cands = collectComfyPythonCandidates(path.resolve("/comfy/none"), {
-      platform: "win32",
-      homedir: path.resolve("/home/me"),
       env: {},
+      homedir: path.resolve("/home/me"),
+      platform: "win32",
       ...fakeFs({ exists: [] }),
     });
     expect(cands).toEqual([]);

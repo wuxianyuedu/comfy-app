@@ -61,24 +61,24 @@ type KindConfig = { color: string; icon: React.ReactNode; label: string };
 
 const KIND_CONFIG: Record<"canvas" | "generation" | "workflow" | "video", KindConfig> = {
   canvas: {
-    label: "画布",
     color: "#22d3ee",
     icon: <LayoutTemplate size={14} />,
+    label: "画布",
   },
   generation: {
-    label: "生成",
     color: "#a78bfa",
     icon: <ImageIcon size={14} />,
-  },
-  workflow: {
-    label: "工作流",
-    color: "#34d399",
-    icon: <Activity size={14} />,
+    label: "生成",
   },
   video: {
-    label: "视频",
     color: "#fbbf24",
     icon: <Video size={14} />,
+    label: "视频",
+  },
+  workflow: {
+    color: "#34d399",
+    icon: <Activity size={14} />,
+    label: "工作流",
   },
 };
 
@@ -109,8 +109,8 @@ function kindTint(color: string, percent: number): string {
  * 要么再抄一份色表 —— 两条都是 §12.12 的孪生对。
  */
 function ResumeProjectCard({
-  proj,
   onOpen,
+  proj,
 }: {
   onOpen: (proj: RecentProject) => void;
   proj: RecentProject;
@@ -154,9 +154,9 @@ function ResumeProjectCard({
           <span
             className="text-3xs shrink-0 rounded-md px-1.5 py-0.5 font-medium ring-1 ring-inset"
             style={{
-              color: cfg.color,
-              backgroundColor: kindTint(cfg.color, 15),
               [/* SAFETY: 类型断言已复核 */ "--tw-ring-color" as string]: kindTint(cfg.color, 30),
+              backgroundColor: kindTint(cfg.color, 15),
+              color: cfg.color,
             }}
           >
             {cfg.label}
@@ -189,12 +189,12 @@ export type HomePageProps = {
 };
 
 export function HomePage({
-  onNewProject,
-  recentProjects = [],
-  onOpenProject,
-  onOpenCanvasProject,
   onNavigate,
+  onNewProject,
+  onOpenCanvasProject,
+  onOpenProject,
   onShowAllProjects,
+  recentProjects = [],
 }: HomePageProps) {
   /**
    * 打开一个最近项目 —— 一律落到项目主页。
@@ -249,26 +249,24 @@ export function HomePage({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           {
-            id: "canvas",
-            label: "新建画布",
             desc: "自由编排节点工作流",
             icon: <LayoutTemplate size={22} strokeWidth={1.8} />,
+            id: "canvas",
+            label: "新建画布",
           },
           {
-            id: "workshop",
-            label: "全链路工坊",
             desc: "剧本 → 分镜 → 成片",
             icon: <BookOpen size={22} strokeWidth={1.8} />,
+            id: "workshop",
+            label: "全链路工坊",
           },
           {
-            id: "models",
-            label: "模型库",
             desc: "管理 Checkpoint / LoRA",
             icon: <Box size={22} strokeWidth={1.8} />,
+            id: "models",
+            label: "模型库",
           },
           {
-            id: "workflows",
-            label: "工作流库",
             desc: "导入和复用工作流",
             icon: (
               <svg
@@ -286,6 +284,8 @@ export function HomePage({
                 <path d="M10 6.5h4a3 3 0 013 3v4.5" />
               </svg>
             ),
+            id: "workflows",
+            label: "工作流库",
           },
         ].map((card) => (
           <Button
@@ -377,12 +377,12 @@ export function HomePage({
                         <span
                           className="text-3xs shrink-0 rounded-md px-1.5 py-0.5 font-medium ring-1 ring-inset"
                           style={{
-                            color: cfg.color,
-                            backgroundColor: kindTint(cfg.color, 15),
                             [/* SAFETY: 类型断言已复核 */ "--tw-ring-color" as string]: kindTint(
                               cfg.color,
                               30,
                             ),
+                            backgroundColor: kindTint(cfg.color, 15),
+                            color: cfg.color,
                           }}
                         >
                           {cfg.label}

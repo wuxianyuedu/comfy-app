@@ -18,7 +18,7 @@ export function useSubgraphSourceModal(params: {
   } | null;
   subgraphStackLength: number;
 }) {
-  const { detail, subgraphStackLength, subgraphRawContext } = params;
+  const { detail, subgraphRawContext, subgraphStackLength } = params;
   return useMemo<{
     isSubgraph: boolean;
     name: string;
@@ -54,9 +54,9 @@ export function useSubgraphSourceModal(params: {
       );
     })();
     return {
+      isSubgraph: isSubgraphView,
       name: detail.name ?? "工作流",
       source: raw,
-      isSubgraph: isSubgraphView,
     };
   }, [detail, subgraphStackLength, subgraphRawContext]);
 }

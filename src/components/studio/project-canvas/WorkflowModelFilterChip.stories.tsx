@@ -15,19 +15,19 @@ import { WorkflowModelFilterChip } from "~/components/studio/project-canvas/Work
  *     因为节点上那格只有几十像素，用户要看到的是"筛了哪个"。
  */
 const TAGS = [
-  { id: "t1", name: "SDXL", count: 12 },
-  { id: "t2", name: "Flux", count: 7 },
-  { id: "t3", name: "Wan2.2", count: 3 },
+  { count: 12, id: "t1", name: "SDXL" },
+  { count: 7, id: "t2", name: "Flux" },
+  { count: 3, id: "t3", name: "Wan2.2" },
 ];
 
 const meta = {
-  title: "Studio/WorkflowModelFilterChip",
-  component: WorkflowModelFilterChip,
-  args: { value: "all", tags: TAGS, onChange: () => undefined },
+  args: { onChange: () => undefined, tags: TAGS, value: "all" },
   argTypes: {
-    value: { control: { type: "text" } },
     tags: { control: { type: "object" } },
+    value: { control: { type: "text" } },
   },
+  component: WorkflowModelFilterChip,
+  title: "Studio/WorkflowModelFilterChip",
 } satisfies Meta<typeof WorkflowModelFilterChip>;
 
 export default meta;

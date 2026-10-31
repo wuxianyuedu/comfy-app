@@ -42,8 +42,8 @@ export function groupByDate(tasks: Array<TaskItem>): Array<TaskGroup> {
     getOrCreate(bucketMap, dateBucket(task.createdAt), () => []).push(task);
   }
   return Array.from(bucketMap.entries()).map(([key, items]) => ({
-    key,
     items,
+    key,
   }));
 }
 
@@ -64,15 +64,15 @@ export function paginateGroups(
     }
     const sliced = group.items.slice(0, remaining);
     if (sliced.length > 0) {
-      visibleGroups.push({ key: group.key, items: sliced });
+      visibleGroups.push({ items: sliced, key: group.key });
     }
     remaining -= group.items.length;
   }
   const visibleTotal = visibleGroups.reduce((sum, group) => sum + group.items.length, 0);
   return {
+    canLoadMore: visibleTotal < total(groups),
     visibleGroups,
     visibleTotal,
-    canLoadMore: visibleTotal < total(groups),
   };
 }
 
@@ -87,12 +87,12 @@ export function emptyStateText(
 ): { hint: string; title: string } {
   if (filter === "ALL") {
     return {
-      title: "暂无任务记录",
       hint: "在创作台生成内容后，历史记录会显示在这里。",
+      title: "暂无任务记录",
     };
   }
   return {
-    title: `暂无${filterLabel}任务`,
     hint: "切换到「全部」可查看所有任务。",
+    title: `暂无${filterLabel}任务`,
   };
 }

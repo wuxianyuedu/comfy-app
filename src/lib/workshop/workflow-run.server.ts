@@ -55,11 +55,11 @@ export async function createWorkflowRunTask(
   const contracts = await loadModeContracts();
   const contractIds = contracts.find((c) => c.mode === upperToken(mode))?.inputs;
   const { workflowInputs } = buildEncapsulatedInputs({
-    io,
-    paramMap: tpl.paramMap,
-    mode,
-    values: input.values,
     contractIds,
+    io,
+    mode,
+    paramMap: tpl.paramMap,
+    values: input.values,
   });
 
   const params = {
@@ -71,15 +71,15 @@ export async function createWorkflowRunTask(
 
   const executorClaim = resolveExecutorClaim();
   const task = await taskRepository.createQueued({
-    userId: input.userId,
-    type: tpl.taskType,
-    prompt: input.values.prompt ?? "",
-    negativePrompt: input.values.negativePrompt ?? null,
-    params,
-    workflowName: tpl.name,
-    projectId: input.projectId ?? null,
     claimedBy: executorClaim,
     execPayload: tpl.rawJson,
+    negativePrompt: input.values.negativePrompt ?? null,
+    params,
+    projectId: input.projectId ?? null,
+    prompt: input.values.prompt ?? "",
+    type: tpl.taskType,
+    userId: input.userId,
+    workflowName: tpl.name,
   });
 
   /* 执行载荷恒为 RAW 原件 —— comfy-cli 按节点类定义做权威 UI→API 转换 +
@@ -95,5 +95,5 @@ export async function createWorkflowRunTask(
    * `executor-dispatch.ts` 那一条 pull；下面这一次 kick 纯粹是**省掉等节拍**
    * （不推进行内队列），行归对侧时它自然空转、不会双执行。 */
   kickQueue();
-  return { taskId: task.id, workflowName: tpl.name, taskType: tpl.taskType };
+  return { taskId: task.id, taskType: tpl.taskType, workflowName: tpl.name };
 }

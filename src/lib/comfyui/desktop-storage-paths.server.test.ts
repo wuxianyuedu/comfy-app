@@ -66,22 +66,22 @@ describe("resolveDesktopStoragePaths", () => {
     expect(result?.outputDir.path).toBe(path.join(base, "output"));
     expect(result?.sharedModelDirs).toEqual([
       {
-        path: path.join(SHARED_ROOT, "models"),
         exists: false,
+        path: path.join(SHARED_ROOT, "models"),
         source: "comfyui_shared",
       },
     ]);
     expect(result?.sharedInputDirs).toEqual([
       {
-        path: path.join(SHARED_ROOT, "input"),
         exists: false,
+        path: path.join(SHARED_ROOT, "input"),
         source: "comfyui_shared",
       },
     ]);
     expect(result?.sharedOutputDirs).toEqual([
       {
-        path: path.join(SHARED_ROOT, "output"),
         exists: false,
+        path: path.join(SHARED_ROOT, "output"),
         source: "comfyui_shared",
       },
     ]);
@@ -140,19 +140,19 @@ describe("resolveDesktopStoragePaths", () => {
       }),
     );
     expect(result?.modelDir).toEqual({
-      path: path.join(customBase, "models"),
       exists: true,
+      path: path.join(customBase, "models"),
       source: "--base-directory",
     });
     expect(result?.inputDir).toEqual({
-      path: path.join(customBase, "in"),
       exists: false,
+      path: path.join(customBase, "in"),
       source: "--input-directory",
     });
     // 输出目录未被参数覆盖 → 仍跟着 base，且来源为空。
     expect(result?.outputDir).toEqual({
-      path: path.join(customBase, "output"),
       exists: true,
+      path: path.join(customBase, "output"),
       source: null,
     });
   });
@@ -166,8 +166,8 @@ describe("resolveDesktopStoragePaths", () => {
       }),
     );
     expect(result?.modelDir).toEqual({
-      path: path.join(yamlBase, "models"),
       exists: false,
+      path: path.join(yamlBase, "models"),
       source: "extra_model_paths.yaml base_path",
     });
   });
@@ -230,7 +230,6 @@ describe("resolveDesktopStoragePaths", () => {
     const result = await resolveDesktopStoragePaths(
       DESKTOP_ROOT,
       baseDeps({
-        resolveArgs: async () => ["--extra-model-paths-config", configPath],
         readFile: async (target: string) => {
           const t = path.resolve(target);
           if (t === configPath) {
@@ -238,6 +237,7 @@ describe("resolveDesktopStoragePaths", () => {
           }
           return SHARED_YAML;
         },
+        resolveArgs: async () => ["--extra-model-paths-config", configPath],
       }),
     );
     const modelPaths = result?.sharedModelDirs.map((d) => d.path) ?? [];

@@ -64,13 +64,13 @@ import {
 /** 服务端 DTO → 内部草稿（字段完全同构，显式构造避免隐式 cast 告警）。 */
 function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
   return {
-    meta: dto.meta,
-    scriptMarkdown: dto.scriptMarkdown ?? "",
-    scenes: dto.scenes ?? [],
     characters: dto.characters ?? [],
+    meta: dto.meta,
+    scenes: dto.scenes ?? [],
+    scriptMarkdown: dto.scriptMarkdown ?? "",
     shots: dto.shots ?? [],
-    workflowId: "",
     videoWorkflowId: "",
+    workflowId: "",
   };
 }
 
@@ -243,12 +243,12 @@ export function useExtractSession(
   stage?: GenerationLogStage,
 ): [ExtractSession, ExtractSessionActions] {
   const [session, setSession] = React.useState<ExtractSession>(() => ({
-    channelValue: defaultChannel,
     busy: false,
-    status: "",
-    progress: "",
+    channelValue: defaultChannel,
     error: "",
     log: [],
+    progress: "",
+    status: "",
   }));
   const patch = React.useCallback(
     (
@@ -285,7 +285,7 @@ export function useExtractSession(
   const setLog = React.useCallback((entries: Array<ExtractLogEntry>) => {
     setSession((prev) => ({ ...prev, log: entries }));
   }, []);
-  return [session, { patch, appendProgress, appendLog, setLog }];
+  return [session, { appendLog, appendProgress, patch, setLog }];
 }
 
 /** 结构化执行日志保留上限（P2：只追加不裁剪会随长流程无限增长）。 */
@@ -335,20 +335,20 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   // ── 角色定妆照会话（同提取会话：由 controller 常驻，切页签不丢进度；
   //    候选写在角色对象上，随草稿持久化）──
   const [characterPortrait, characterPortraitActions] = useCharacterPortrait({
-    setCharacters,
     projectId: activeProjectId,
+    setCharacters,
   });
 
   /** 当前全部可持久化内容（落盘、切换前保存都用它）。 */
   const currentDraft = React.useCallback(
     (): WorkshopDraft => ({
-      meta,
-      scriptMarkdown,
-      scenes,
       characters,
+      meta,
+      scenes,
+      scriptMarkdown,
       shots,
-      workflowId,
       videoWorkflowId,
+      workflowId,
     }),
     [meta, scriptMarkdown, scenes, characters, shots, workflowId, videoWorkflowId],
   );
@@ -476,7 +476,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
 
   /* 首挂载三路拉取（技能列表 / API 通道 / 工作流库清单）——沉在
    * `./use-workshop-pipeline-effects` 的 `useWorkshopBootstrapData`。 */
-  useWorkshopBootstrapData({ setStyles, setApiChannels, setWorkflowOptions });
+  useWorkshopBootstrapData({ setApiChannels, setStyles, setWorkflowOptions });
 
   /* 提示条不自动消失：写入 notice 的都是错误 / 门禁 / 「未生效」警告，
    * 4 秒自灭曾让失败原因来不及读（规范 10 §10.3.1 的可见出口要求）。
@@ -486,11 +486,11 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    * generateShot）已拆到 `use-workshop-generation` —— 它只服务「跑一次生成」，
    * 混在主管线里会让「草稿与六段状态」和「高频进度回写」每次改动互相碰到。 */
   const generation = useWorkshopGeneration({
-    workflowId,
     characters,
+    notify: setNotice,
     projectId: activeProjectId,
     setShots,
-    notify: setNotice,
+    workflowId,
   });
 
   /* 镜头目标数从场景表派生（每场景至少算 1 镜，与导入时铺占位镜头的口径同源）；
@@ -520,8 +520,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    * 真值决定「直接回写产物 / 重订阅等终态 / 如实按失败收尾」。 */
   useWorkshopTaskRecovery({
     latestDraftRef,
-    setShots,
     setNotice,
+    setShots,
     watchShotTask: generation.watchShotTask,
   });
 
@@ -534,19 +534,19 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    * （写进去就在下一次读时消失），而派生还顺带保证了「数据修好了标记就没了」不会失配。
    * 判据本体在 `~/lib/workshop/draft-integrity`（服务端镜像与本地缓存两扇门共用一份）。 */
   const integrity = React.useMemo(
-    () => auditDraftElements({ scenes, characters, shots }),
+    () => auditDraftElements({ characters, scenes, shots }),
     [scenes, characters, shots],
   );
 
   const viewContext: StageViewContext = React.useMemo(
     () => ({
-      scriptReady,
       characterCount: characters.length,
+      clipDoneCount,
+      imageDoneCount,
       sceneCount: scenes.length,
+      scriptReady,
       shotCount: shots.length,
       shotTarget,
-      imageDoneCount,
-      clipDoneCount,
     }),
     [
       scriptReady,
@@ -565,7 +565,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const progressPct = computeProgressPct(stageRatios);
   const prereq = stagePrereq(tab, viewContext);
   const health = buildHealthSnapshot(stageRatios, viewContext);
-  const { title: stageTitle, desc: stageDesc } = STAGE_TITLES[tab];
+  const { desc: stageDesc, title: stageTitle } = STAGE_TITLES[tab];
   const stageIndex = STAGE_DEFS.findIndex((stage) => stage.id === tab) + 1;
 
   const openScriptEditor = React.useCallback(() => {
@@ -606,63 +606,63 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const markRendered = React.useCallback(() => setRendered(true), []);
 
   return {
-    tab,
-    setTab,
-    stageIndex,
-    stageTitle,
-    stageDesc,
-    stageRatios,
-    progressPct,
-    prereq,
-    health,
-    viewContext,
-    missing,
-
-    meta,
-    setMeta,
-    scriptMarkdown,
-    setScriptMarkdown,
-    scenes,
-    setScenes,
-    characters,
-    setCharacters,
-    shots,
-    setShots,
-    styles,
-    workflowOptions,
-    workflowId,
-    setWorkflowId,
-    videoWorkflowId,
-    setVideoWorkflowId,
+    activeProjectId,
     apiChannels,
-    imageDoneCount,
-    clipDoneCount,
-    rendered,
-
-    generating: generation.generating,
-    shotProgress: generation.shotProgress,
-    isScriptEditorOpen,
-    notice,
-    integrity,
-
+    cancelShotTask,
     characterExtract,
     characterExtractActions,
-    storyboardExtract,
-    storyboardExtractActions,
     characterPortrait,
     characterPortraitActions,
+    characters,
+    clipDoneCount,
+    closeScriptEditor,
+    dismissNotice,
 
     generateShot: generation.generateShot,
-    cancelShotTask,
-    openScriptEditor,
-    closeScriptEditor,
-    saveScriptEditor,
-    openModelAdapters,
-    handleApiChannelsSaved,
-    dismissNotice,
-    showNotice,
-    markRendered,
+    generating: generation.generating,
     goToFilm,
-    activeProjectId,
+    handleApiChannelsSaved,
+    health,
+    imageDoneCount,
+    integrity,
+    isScriptEditorOpen,
+    markRendered,
+    meta,
+    missing,
+    notice,
+    openModelAdapters,
+    openScriptEditor,
+    prereq,
+    progressPct,
+    rendered,
+    saveScriptEditor,
+    scenes,
+    scriptMarkdown,
+
+    setCharacters,
+    setMeta,
+    setScenes,
+    setScriptMarkdown,
+    setShots,
+
+    setTab,
+    setVideoWorkflowId,
+    setWorkflowId,
+    shotProgress: generation.shotProgress,
+    shots,
+    showNotice,
+
+    stageDesc,
+    stageIndex,
+    stageRatios,
+    stageTitle,
+    storyboardExtract,
+    storyboardExtractActions,
+    styles,
+    tab,
+    videoWorkflowId,
+    viewContext,
+    workflowId,
+    workflowOptions,
   };
 }

@@ -23,10 +23,10 @@ export function saveGroupStyle(workflowId: string | undefined, groupId: string, 
 
 /** 切换当前填写范式的分段下拉。 */
 export function StyleSwitcher({
-  style,
+  narrow,
   onChange,
   options,
-  narrow,
+  style,
 }: {
   /** 画布 / 库内的紧凑版式：下拉按内容收窄，不再拽满整行。 */
   narrow?: boolean;
@@ -52,7 +52,7 @@ export function StyleSwitcher({
   );
 }
 
-export function Field({ label, children }: { children: React.ReactNode; label: string }) {
+export function Field({ children, label }: { children: React.ReactNode; label: string }) {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-ink-muted text-3xs">{label}</span>

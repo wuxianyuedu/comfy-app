@@ -15,8 +15,8 @@ export type GenerationLogStage = (typeof GENERATION_LOG_STAGES)[number];
 
 export const GENERATION_LOG_STAGE_LABELS: Record<GenerationLogStage, string> = {
   character: "角色卡",
-  storyboard: "分镜",
   portrait: "定妆照",
+  storyboard: "分镜",
 };
 
 /** 落盘条目（与界面的 ExtractLogEntry / PortraitLogEntry 保持字段兼容：
@@ -65,9 +65,9 @@ export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | 
       ? rec.detail.slice(0, MAX_LOG_DETAIL_CHARS)
       : undefined;
   return {
-    ts: Number.isFinite(ts) ? ts : Date.now(),
     kind: typeof rec.kind === "string" && rec.kind ? rec.kind.slice(0, 24) : "info",
     summary,
+    ts: Number.isFinite(ts) ? ts : Date.now(),
     ...(detail ? { detail } : {}),
   };
 }

@@ -21,8 +21,8 @@ import { ReactFlowProvider } from "@xyflow/react";
 vi.mock("~/trpc/react", () => ({
   useTRPC: () => ({
     workflow: {
-      update: { mutationOptions: (options?: unknown) => options },
       detail: { queryOptions: () => ({ queryKey: ["workflow", "detail"] }) },
+      update: { mutationOptions: (options?: unknown) => options },
     },
   }),
 }));
@@ -31,22 +31,22 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof TanStackQuery>();
   return {
     ...actual,
-    useQuery: () => ({
-      data: undefined,
-      isLoading: false,
-      isFetching: false,
-      isError: false,
-      error: null,
-      refetch: vi.fn(),
-    }),
     useMutation: () => ({
+      isError: false,
+      isIdle: true,
+      isPending: false,
+      isSuccess: false,
       mutate: vi.fn(),
       mutateAsync: vi.fn().mockResolvedValue({}),
-      isPending: false,
-      isIdle: true,
-      isSuccess: false,
-      isError: false,
       reset: vi.fn(),
+    }),
+    useQuery: () => ({
+      data: undefined,
+      error: null,
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: vi.fn(),
     }),
   };
 });

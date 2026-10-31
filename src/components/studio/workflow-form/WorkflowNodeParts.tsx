@@ -44,9 +44,9 @@ export function WorkflowNodeCardShell({
 
 /** 头部：W 图标 + 标题 + 右侧胶囊（画布放节点序号，库内放运行状态）。 */
 export function WorkflowNodeHeader({
+  right,
   title,
   titleTitle,
-  right,
 }: {
   right?: React.ReactNode;
   title: string;
@@ -89,8 +89,8 @@ export function WorkflowNodeDivider() {
  * 所以差异用 `className` 补，实测 `cn()` 认 `bg-<名>` 为同一组、后写的赢。 */
 export function WorkflowNodePill({
   children,
-  title,
   className,
+  title,
 }: {
   children: React.ReactNode;
   className?: string;
@@ -144,11 +144,11 @@ export function WorkflowStaticChip({
  * `w-full` 按钮按内容宽定尺寸。所以没文案时给裸按钮、有文案时才套锚点，两态宽度一致。
  */
 export function WorkflowNodeActionButton({
-  label,
-  disabled = false,
-  onClick,
-  hint,
   corner = "own",
+  disabled = false,
+  hint,
+  label,
+  onClick,
 }: {
   /** `own` = 卡片不裁切，按钮自带下沿圆角；`clipped` = 卡片 `overflow-hidden`，四角交还给卡片。 */
   corner?: "own" | "clipped";
@@ -189,8 +189,8 @@ export function WorkflowNodeActionButton({
  *  传入（端点几何在此维护），库内不传则只渲染 label + type chip。
  *  label 走 ioLabel 组内去重（与画布一致：同 group 同名回退 name）。 */
 export function WorkflowNodeOutputsRow({
-  output,
   inputs,
+  output,
   outputs,
   renderHandle,
 }: {
@@ -204,7 +204,7 @@ export function WorkflowNodeOutputsRow({
   return (
     <div className="relative" key={output.nodeId + ":" + output.name}>
       {renderHandle && output.ioKey
-        ? renderHandle({ id: output.ioKey, dir: "out", type: oType })
+        ? renderHandle({ dir: "out", id: output.ioKey, type: oType })
         : null}
       <div className="flex h-5 items-center justify-end gap-1.5 px-3.5 pt-1.5">
         <span

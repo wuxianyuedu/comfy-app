@@ -104,9 +104,9 @@ export type WorkflowLibraryCanvasProps = {
 /** 节点类型注册表：**模块级常量**（§2.11 —— 内联会在每次 render 重建整棵 DOM）。 */
 const NODE_TYPES = {
   libBackdrop: LibraryBackdropNode,
-  libParams: LibraryParamsNode,
   libHost: LibraryHostNode,
   libOutputs: LibraryOutputsNode,
+  libParams: LibraryParamsNode,
 };
 
 /** 三列的布局位置（模块级常量：吸附目标不随渲染重建）。 */
@@ -115,10 +115,10 @@ const LAYOUT_NODES = buildLibraryNodes(LAYOUT_SIZING);
 /** 边的渲染参数：线本身要能点选（选中后按 ⌫ / Delete 断开，或点「删除选中线」）。
  *  `deletable` 由派生时按 `canWire` 逐边设（只读预览不可删）；这里的默认值只作兜底。 */
 const DEFAULT_EDGE_OPTIONS = /* SAFETY: 类型断言已复核 */ {
-  type: "default",
-  selectable: true,
   deletable: false,
   reconnectable: false,
+  selectable: true,
+  type: "default",
 } as const;
 
 /** 三列在布局里的位置（`resetNodePositions` 的吸附目标）。 */
@@ -147,10 +147,10 @@ function useCanvasBackdropSize(box: ElementBox | null): {
   const viewport = useMemo(
     () =>
       box && box.width > 0 && box.height > 0
-        ? { width: box.width, height: box.height }
+        ? { height: box.height, width: box.width }
         : {
-            width: LAYOUT_SIZING.paramsWidth + LAYOUT_SIZING.hostWidth + LAYOUT_SIZING.outputsWidth,
             height: LAYOUT_SIZING.fillHeight,
+            width: LAYOUT_SIZING.paramsWidth + LAYOUT_SIZING.hostWidth + LAYOUT_SIZING.outputsWidth,
           },
     [box],
   );
@@ -189,22 +189,22 @@ export function WorkflowLibraryCanvas(props: WorkflowLibraryCanvasProps) {
 }
 
 function WorkflowLibraryCanvasInner({
-  io,
-  paramCards,
-  outputCards,
-  entries,
-  contractEntries,
   canWire,
-  selectedEntryId,
-  selectedOutputId,
-  onSelectParam,
-  onSelectOutput,
-  onResetParam,
-  onResetOutput,
+  contractEntries,
+  entries,
+  host,
+  io,
   onConnect,
   onConnectOutput,
   onDeleteWire,
-  host,
+  onResetOutput,
+  onResetParam,
+  onSelectOutput,
+  onSelectParam,
+  outputCards,
+  paramCards,
+  selectedEntryId,
+  selectedOutputId,
 }: WorkflowLibraryCanvasProps) {
   /* 画布容器：量它才知道「铺满」要铺到哪儿（ISSUE #596）。 */
   const containerRef = useRef<HTMLDivElement>(null);
@@ -227,30 +227,30 @@ function WorkflowLibraryCanvasInner({
     () => new Set<string>(),
   );
   const flow = useLibraryWireFlow({
-    io,
-    paramCards,
-    outputWires: outputCards.wires,
-    entries,
-    paramsNode: {
-      cards: paramCards,
-      contractEntries: contractEntries ?? [],
-      canWire,
-      selectedEntryId,
-      onSelect: onSelectParam,
-      onReset: onResetParam,
-    },
-    hostNode: { host },
-    outputsNode: {
-      cards: outputCards,
-      canWire,
-      selectedOutputId,
-      onSelect: onSelectOutput,
-      onReset: onResetOutput,
-    },
-    connect: onConnect,
-    connectOutput: onConnectOutput,
     backdropSize,
     canWire,
+    connect: onConnect,
+    connectOutput: onConnectOutput,
+    entries,
+    hostNode: { host },
+    io,
+    outputsNode: {
+      canWire,
+      cards: outputCards,
+      onReset: onResetOutput,
+      onSelect: onSelectOutput,
+      selectedOutputId,
+    },
+    outputWires: outputCards.wires,
+    paramCards,
+    paramsNode: {
+      canWire,
+      cards: paramCards,
+      contractEntries: contractEntries ?? [],
+      onReset: onResetParam,
+      onSelect: onSelectParam,
+      selectedEntryId,
+    },
     selectedEdgeIds,
   });
 
@@ -352,7 +352,7 @@ function WorkflowLibraryCanvasInner({
         if (!sized || node.width === sized.width) {
           return node;
         }
-        return { ...node, width: sized.width, height: sized.height };
+        return { ...node, height: sized.height, width: sized.width };
       }),
     );
   }, [backdropKey, flow.defaultNodes, setNodes]);

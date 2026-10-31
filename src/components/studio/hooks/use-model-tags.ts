@@ -125,8 +125,8 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
           onChanged?.();
         },
         {
-          report: errors.report(null),
           failureText: "添加失败",
+          report: errors.report(null),
         },
       ),
     );
@@ -158,8 +158,8 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
         {
           /* 失败挂在**被删的那一条**上：用户看到的是「这一行没删掉」，
            * 而不是一块语焉不详的整表错误。 */
-          report: errors.report(name),
           failureText: "删除失败",
+          report: errors.report(name),
         },
       );
     },
@@ -176,8 +176,8 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
       const result = await runAsyncAction(
         async () => {
           const d = await vanillaApi.workflowModel.rename.mutate({
-            oldName,
             newName: trimmed,
+            oldName,
           });
           if (!d.tag) {
             throw new Error("重命名失败");
@@ -191,8 +191,8 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
           onChanged?.();
         },
         {
-          report: errors.report(oldName),
           failureText: "重命名失败",
+          report: errors.report(oldName),
         },
       );
       return result.ok;
@@ -201,13 +201,13 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
   );
 
   return {
-    tags,
-    draft,
-    setDraft,
-    busy: addBusy.busy,
-    errors,
     addTag,
+    busy: addBusy.busy,
     deleteTag,
+    draft,
+    errors,
     renameTag,
+    setDraft,
+    tags,
   };
 }

@@ -147,7 +147,7 @@ export function deriveSyncFlags(row: WorkflowRow): {
 } {
   const dirty = !!row.diskDirty;
   const missing = !!row.diskMissing;
-  return { dirty, missing, canResync: dirty };
+  return { canResync: dirty, dirty, missing };
 }
 
 /** ComfyUI 的默认文件名以 "date_slug" 前缀开头，且只含
@@ -267,9 +267,9 @@ export function countBySource(
 export function countByType(workflows: Array<WorkflowRow>, pending: Array<PendingRow>): TypeCounts {
   const counts: TypeCounts = {
     all: workflows.length + pending.length,
+    audio: 0,
     image: 0,
     video: 0,
-    audio: 0,
   };
   for (const workflow of workflows) {
     const category = categoryOf(workflow);

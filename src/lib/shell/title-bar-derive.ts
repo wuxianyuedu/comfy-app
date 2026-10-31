@@ -43,8 +43,8 @@ export function resolveMaximizeButtonKind(maximized: boolean): "maximize" | "res
 
 /** 窗口按钮的无障碍标签（中英对照的说明，供 aria-label / title）。 */
 export const WINDOW_BUTTON_LABELS: Record<WindowButtonKind, string> = {
-  minimize: "最小化",
-  maximize: "最大化",
-  restore: "向下还原",
   close: "关闭",
+  maximize: "最大化",
+  minimize: "最小化",
+  restore: "向下还原",
 };

@@ -124,19 +124,19 @@ export function useWorkflowLibraryDetail(
 ): WorkflowLibraryDetailController {
   const trpc = useTRPC();
   const {
-    workflow,
     allModelTags = [],
-    onPatchModes,
-    onPatchModelTags,
-    onPatchWorkflowIO,
-    onPatchParamMap,
     isBundleBusy,
     isResyncBusy,
-    onUse,
-    onEdit,
     onDelete,
     onDownload,
+    onEdit,
+    onPatchModelTags,
+    onPatchModes,
+    onPatchParamMap,
+    onPatchWorkflowIO,
     onResync,
+    onUse,
+    workflow,
   } = props;
 
   const [sourceOpen, setSourceOpen] = useState(false);
@@ -179,7 +179,7 @@ export function useWorkflowLibraryDetail(
       if (!workflow) {
         return;
       }
-      setModeOverride({ workflowId: workflow.id, mode });
+      setModeOverride({ mode, workflowId: workflow.id });
     },
     [workflow],
   );
@@ -248,20 +248,16 @@ export function useWorkflowLibraryDetail(
 
   const syncFlags = useMemo(
     () =>
-      workflow ? deriveSyncFlags(workflow) : { dirty: false, missing: false, canResync: false },
+      workflow ? deriveSyncFlags(workflow) : { canResync: false, dirty: false, missing: false },
     [workflow],
   );
 
   const actions = useMemo<WorkflowLibraryDetailActions>(
     () => ({
-      use: () => {
-        if (!workflow) {
-          return;
+      download: () => {
+        if (workflow) {
+          onDownload(workflow.id, workflow.name);
         }
-        onUse(workflow.id, {
-          name: workflow.name,
-          taskType: workflow.taskType,
-        });
       },
       edit: () => {
         if (workflow) {
@@ -273,15 +269,19 @@ export function useWorkflowLibraryDetail(
           onDelete(workflow.id, workflow.name);
         }
       },
-      download: () => {
-        if (workflow) {
-          onDownload(workflow.id, workflow.name);
-        }
-      },
       resync: () => {
         if (workflow) {
           onResync(workflow.id, workflow.name);
         }
+      },
+      use: () => {
+        if (!workflow) {
+          return;
+        }
+        onUse(workflow.id, {
+          name: workflow.name,
+          taskType: workflow.taskType,
+        });
       },
     }),
     [workflow, onUse, onEdit, onDelete, onDownload, onResync],
@@ -289,27 +289,27 @@ export function useWorkflowLibraryDetail(
 
   const metaEditor = useMemo<MetaEditorController>(
     () => ({
+      allModelTags,
+      busy: !!workflow && (isBundleBusy(workflow.id) || isResyncBusy(workflow.id)),
+      defaultMode: workflow?.defaultMode ?? workflow?.taskType ?? "",
+      modelTags: workflow?.modelTags ?? [],
       modes:
         workflow?.modes && workflow.modes.length > 0
           ? workflow.modes
           : workflow
             ? [workflow.taskType]
             : [],
-      defaultMode: workflow?.defaultMode ?? workflow?.taskType ?? "",
-      modelTags: workflow?.modelTags ?? [],
-      allModelTags,
-      busy: !!workflow && (isBundleBusy(workflow.id) || isResyncBusy(workflow.id)),
-      patchModes: async (modes, defaultMode) => {
-        if (!workflow || !onPatchModes) {
-          return;
-        }
-        await onPatchModes(workflow.id, modes, defaultMode);
-      },
       patchModelTags: async (names) => {
         if (!workflow || !onPatchModelTags) {
           return;
         }
         await onPatchModelTags(workflow.id, names);
+      },
+      patchModes: async (modes, defaultMode) => {
+        if (!workflow || !onPatchModes) {
+          return;
+        }
+        await onPatchModes(workflow.id, modes, defaultMode);
       },
       patchParamMap: async (next) => {
         if (!workflow || !onPatchParamMap) {
@@ -353,8 +353,8 @@ export function useWorkflowLibraryDetail(
   const defaultMode = useMemo(
     () =>
       resolveWorkflowMode({
-        modes: workflow?.modes ?? null,
         defaultMode: workflow?.defaultMode ?? null,
+        modes: workflow?.modes ?? null,
         taskType: workflow?.taskType ?? null,
       }),
     [workflow],
@@ -362,29 +362,29 @@ export function useWorkflowLibraryDetail(
   const activeMode = resolveActiveMode(modeOverride, workflow?.id ?? null, defaultMode);
 
   return {
-    workflow,
-    metaEditor,
     activeTab,
+    metaEditor,
     setActiveTab: handleTabChange,
+    workflow,
     /* 画布预览那一份常驻实例该不该挂载：当前工作流被访问过画布页签就挂载
      *  （切回工坊封装也不卸载 —— 卸载会丢表单值 / 运行态，见上面的说明）。 */
-    canvasMounted: !!workflow && canvasVisitedFor === workflow.id,
+    actions,
     activeMode,
-    setActiveMode,
-    sourceOpen,
-    openSource,
-    closeSource,
-    isLoading: isDetailLoading,
-    errorMessage: detailQuery.error?.message,
-    workflowIO,
-    paramMap,
-    sourceData,
-    usable: formatFlags.usable,
-    canResync: syncFlags.canResync,
-    missing: syncFlags.missing,
-    isTechnical: !!workflow && isTechnicalName(workflow.name),
     busyDownload: !!workflow && isBundleBusy(workflow.id),
     busyResync: !!workflow && isResyncBusy(workflow.id),
-    actions,
+    canResync: syncFlags.canResync,
+    canvasMounted: !!workflow && canvasVisitedFor === workflow.id,
+    closeSource,
+    errorMessage: detailQuery.error?.message,
+    isLoading: isDetailLoading,
+    isTechnical: !!workflow && isTechnicalName(workflow.name),
+    missing: syncFlags.missing,
+    openSource,
+    paramMap,
+    setActiveMode,
+    sourceData,
+    sourceOpen,
+    usable: formatFlags.usable,
+    workflowIO,
   };
 }

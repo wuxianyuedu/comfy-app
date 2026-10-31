@@ -21,10 +21,10 @@ import { FormField } from "~/components/ui/form-field";
 
 export function Field({
   label,
-  value,
   onChange,
-  type = "text",
   placeholder,
+  type = "text",
+  value,
 }: {
   label: string;
   onChange: (v: string) => void;

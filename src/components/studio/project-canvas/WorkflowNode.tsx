@@ -102,23 +102,23 @@ const NODE_SEQ_CHIP_TEXT = "text-cyan-700 dark:text-cyan-200";
 // p71-allow:end
 
 export function WorkflowNode({
-  id,
   data: d,
+  id,
+  modelFilter = "all",
+  modelTagLib = [],
+  onFormChange,
+  onGenerate,
+  onModelFilterChange,
+  onModesChange,
+  onSeedModeChange,
+  onSelectWorkflow,
+  onSourceFilterChange,
+  sourceFilter = "all",
   workflowIO,
   workflowIOLoading,
-  workflowListLoading = false,
   workflowList,
+  workflowListLoading = false,
   workflowModes,
-  sourceFilter = "all",
-  modelTagLib = [],
-  modelFilter = "all",
-  onSourceFilterChange,
-  onModelFilterChange,
-  onGenerate,
-  onSelectWorkflow,
-  onFormChange,
-  onSeedModeChange,
-  onModesChange,
 }: WorkflowNodeProps) {
   const meta = NODE_META[d.kind];
 
@@ -275,10 +275,10 @@ export function WorkflowNode({
                   dir="out"
                   id={output.ioKey}
                   style={{
+                    boxShadow: "none",
                     right: -6,
                     top: 14,
                     transform: "translateY(-50%)",
-                    boxShadow: "none",
                   }}
                   type={oType ?? "*"}
                 />

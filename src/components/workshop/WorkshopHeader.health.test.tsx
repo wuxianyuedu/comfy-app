@@ -14,13 +14,13 @@ import { STAGE_DEFS, computeStageRatios, type HealthRow } from "./stage-config";
 function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): Array<HealthRow> {
   const rows = computeStageRatios(
     {
-      scriptReady: true,
       characterCount: 2,
+      clipDoneCount: 6,
+      imageDoneCount: 6,
       sceneCount: 3,
+      scriptReady: true,
       shotCount: 6,
       shotTarget: 6,
-      imageDoneCount: 6,
-      clipDoneCount: 6,
     },
     true,
   );
@@ -31,9 +31,9 @@ function healthOf(overrides: Partial<Record<string, boolean | number>> = {}): Ar
     return {
       id,
       label: id,
-      shortLabel: id.slice(0, 2),
-      ratio,
       pending: ratio < 1,
+      ratio,
+      shortLabel: id.slice(0, 2),
     };
   });
 }
@@ -46,7 +46,7 @@ afterEach(cleanup);
 
 describe("WorkshopHeader 的进度胶囊", () => {
   it("部分完成时说出还差几段、分别是哪几段", () => {
-    renderHeader(healthOf({ script: true, character: true }));
+    renderHeader(healthOf({ character: true, script: true }));
     const chip = screen.getByText(/^还差 \d+ 段：/);
     expect(chip.textContent).toContain("还差 4 段：");
     expect(chip.textContent).toContain("render");
@@ -55,12 +55,12 @@ describe("WorkshopHeader 的进度胶囊", () => {
   it("全完成时不假装还缺东西", () => {
     renderHeader(
       healthOf({
-        script: true,
         character: true,
-        storyboard: true,
-        shots: true,
-        video: true,
         render: true,
+        script: true,
+        shots: true,
+        storyboard: true,
+        video: true,
       }),
     );
     expect(screen.getByText("六段流程已完成")).toBeTruthy();
@@ -77,7 +77,7 @@ describe("WorkshopHeader 的健康度分段条", () => {
   }
 
   it("一段一根条：可见段名走缩略、可访问名走全名；顶栏没有第二处进度视觉", () => {
-    const rows = healthOf({ script: true, character: 0.5 });
+    const rows = healthOf({ character: 0.5, script: true });
     const { container } = renderHeader(rows);
     const tracks = tracksOf(container);
     /* 条数 == 段数 == 快照长度：这一条同时钉住「没有再挂一根总进度条」。
@@ -98,7 +98,7 @@ describe("WorkshopHeader 的健康度分段条", () => {
   });
 
   it("色档只由 ratio 决定：完成段成功色、未完成段品牌色（数据里不带色值）", () => {
-    const rows = healthOf({ script: 1, character: 0.5, storyboard: 0 });
+    const rows = healthOf({ character: 0.5, script: 1, storyboard: 0 });
     const { container } = renderHeader(rows);
     const fills = fillsOf(container);
     expect(fills).toHaveLength(STAGE_DEFS.length);

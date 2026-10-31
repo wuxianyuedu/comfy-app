@@ -36,9 +36,9 @@ import {
 /** 底色取 `*-soft` 档、字色取 `*-strong` 档（都是两态 token，调用点不必
  *  再手写 `dark:`）：与 `ui/badge.tsx` 的 tone 表同一套「浅底 + 深字」配方。 */
 const CATEGORY_STYLES: Record<WorkflowCategory, { bg: string; text: string }> = {
+  audio: { bg: "bg-warning-soft", text: "text-warning-strong" },
   image: { bg: "bg-primary-soft", text: "text-primary-strong" },
   video: { bg: "bg-info/10", text: "text-info-strong" },
-  audio: { bg: "bg-warning-soft", text: "text-warning-strong" },
 };
 
 /** `variant="outline"` 会带一条 `border-border`；chip 两档**不想要边框**

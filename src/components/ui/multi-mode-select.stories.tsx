@@ -29,9 +29,9 @@ import { MultiModeSelect } from "~/components/ui/multi-mode-select";
  * - 把「默认模式」取消勾选再保存 → 默认回退到剩余项之首。
  */
 const meta = {
-  title: "UI/MultiModeSelect",
+  args: { defaultMode: "T2I", modes: ["T2I"], onChange: () => void 0 },
   component: MultiModeSelect,
-  args: { modes: ["T2I"], defaultMode: "T2I", onChange: () => void 0 },
+  title: "UI/MultiModeSelect",
 } satisfies Meta<typeof MultiModeSelect>;
 
 export default meta;
@@ -40,10 +40,10 @@ type Story = StoryObj<typeof meta>;
 
 /** 受控包装：chip 的 `modes` / `defaultMode` 住在调用处（工作流卡片）。 */
 function Demo({
-  initialModes,
-  initialDefault,
   disabled,
   hideExtraBadge,
+  initialDefault,
+  initialModes,
 }: {
   disabled?: boolean;
   hideExtraBadge?: boolean;
@@ -68,7 +68,7 @@ function Demo({
         />
       </div>
       <pre className="rounded-lg border p-3 font-mono text-xs">
-        {JSON.stringify({ modes, defaultMode }, null, 2)}
+        {JSON.stringify({ defaultMode, modes }, null, 2)}
       </pre>
       <p className="text-ink-muted text-xs">
         点开 chip：勾几个再点「取消」，上面这块不会变（草稿被丢弃）； 点「保存」才会提交。

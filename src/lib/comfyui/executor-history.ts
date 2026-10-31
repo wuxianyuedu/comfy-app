@@ -55,8 +55,8 @@ export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryE
       if (entry && (entry.outputs || entry.status?.status_str)) {
         /* 拿到结果也原样记一份：成功路径同样需要「ComfyUI 回了什么」的现场。 */
         trace("history", taskTraceIdForPrompt(promptId), `history 命中（第 ${i + 1} 轮）`, {
-          promptId,
           entry,
+          promptId,
         });
         return entry;
       }
@@ -65,7 +65,7 @@ export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryE
           "history",
           taskTraceIdForPrompt(promptId),
           `history 有条目但 outputs/status 一直为空（第 ${i + 1} 轮），不再干等`,
-          { promptId, entry },
+          { entry, promptId },
         );
         return entry;
       }
@@ -82,9 +82,9 @@ export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryE
     taskId,
     `history 拉取失败（重试 ${HISTORY_RETRIES} 轮，promptId=${promptId || "(空)"}）`,
     {
-      promptId,
-      lastRaw,
       lastError: lastErr instanceof Error ? lastErr.message : lastErr,
+      lastRaw,
+      promptId,
     },
   );
   await traceComfyQueue(taskId);

@@ -50,8 +50,8 @@ function readAppOriginEnv(): Record<string, string> {
     /* SAFETY: 类型断言已复核 */
     const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
     parsed = parseOverride({
-      APP_DEV_PORT: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT] ?? raw.APP_DEV_PORT,
       APP_DEV_ORIGIN: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_ORIGIN] ?? raw.APP_DEV_ORIGIN,
+      APP_DEV_PORT: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT] ?? raw.APP_DEV_PORT,
       APP_DEV_PORT_SOURCE: raw[APP_ORIGIN_ENV_KEYS.APP_DEV_PORT_SOURCE] ?? raw.APP_DEV_PORT_SOURCE,
     });
   } catch {
@@ -59,8 +59,8 @@ function readAppOriginEnv(): Record<string, string> {
   }
   const value = parsed ?? APP_ORIGIN_DEFAULTS;
   return {
-    [APP_ORIGIN_ENV_KEYS.APP_DEV_PORT]: String(value.APP_DEV_PORT),
     [APP_ORIGIN_ENV_KEYS.APP_DEV_ORIGIN]: value.APP_DEV_ORIGIN,
+    [APP_ORIGIN_ENV_KEYS.APP_DEV_PORT]: String(value.APP_DEV_PORT),
     [APP_ORIGIN_ENV_KEYS.APP_DEV_PORT_SOURCE]: value.APP_DEV_PORT_SOURCE,
   };
 }
@@ -69,7 +69,6 @@ const config: StorybookConfig = {
   stories: ["../src/**/*.mdx", "../src/**/*.stories.@(ts|tsx)"],
   /* `env` 是 Storybook 的编译期常量注入口：这里的值会被内联进浏览器 bundle，
      所以 `preview.tsx` 读 `process.env[SB_APP_DEV_*]` 拿得到（见上面那段说明）。 */
-  env: (existing) => ({ ...existing, ...readAppOriginEnv() }),
   addons: [
     // 交互测试与 a11y 面板（a11y 的**自动化执行者**在 `tests/a11y-axe-stories.test.ts`，台账 E6；
     // 这个面板是人现场看某一棵树用的，两者不是同一件事）
@@ -79,6 +78,7 @@ const config: StorybookConfig = {
     // 自动生成组件文档页（ArgsTable / 源码面板）
     "@storybook/addon-docs",
   ],
+  env: (existing) => ({ ...existing, ...readAppOriginEnv() }),
   framework: {
     name: "@storybook/nextjs",
     options: {},
@@ -94,15 +94,15 @@ const config: StorybookConfig = {
    * `/storybook-assets/` 前缀下）。
    *
    * 静态产物落仓库根的 storybook-static/（已 gitignore），不进 next build 的图。 */
+  core: {
+    // 关掉遥测：本仓库有明确的数据外发红线（见 next.config.js 的 Sentry 注释）
+    disableTelemetry: true,
+  },
   staticDirs: ["../public", { from: "../.storybook/assets", to: "/storybook-assets" }],
   typescript: {
     // 类型正确性由仓库的 `tsc --noEmit` 统一保证，故事文件也在 tsconfig 的
     // include 里 —— 这里不重复做一次 react-docgen 的宽松检查。
     reactDocgen: false,
-  },
-  core: {
-    // 关掉遥测：本仓库有明确的数据外发红线（见 next.config.js 的 Sentry 注释）
-    disableTelemetry: true,
   },
 };
 

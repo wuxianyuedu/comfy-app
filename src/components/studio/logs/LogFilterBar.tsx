@@ -30,9 +30,9 @@ import type { LogFilter, LogLevelCounts } from "./log-store";
 const LEVEL_LABEL_STYLES: Record<LogFilter, string> = {
   all: "text-ink-bright",
   debug: "text-ink-muted hover:text-ink",
+  error: "text-danger-strong hover:opacity-80",
   info: "text-info-strong hover:opacity-80",
   warn: "text-warning-strong hover:opacity-80",
-  error: "text-danger-strong hover:opacity-80",
 };
 
 export const FILTER_LABELS: Array<{ label: string; value: LogFilter }> = [

@@ -25,8 +25,8 @@ import { workflowParamMapInputSchema } from "~/lib/workflow/workflow-param-map";
 
 /** 一个「对外参数 → 节点端口」的取值项（画布与工坊两条通路共用同一个落点）。 */
 const workflowInputSchema = z.object({
-  nodeId: z.string(),
   name: z.string(),
+  nodeId: z.string(),
   value: z.unknown().optional(),
 });
 
@@ -42,11 +42,11 @@ export const generateInputSchema = z.object({
   /** 工作流库工作流 id（内置模板已移除，这里是唯一的工作流来源）。 */
   workflow: z.string().min(1, "缺少要执行的工作流"),
   /** 提示词 / 反向提示词：供历史列表与任务标题（参数真值走 workflowInputs）。 */
-  prompt: z.string().max(2000).optional(),
   negative: z.string().max(2000).optional(),
+  prompt: z.string().max(2000).optional(),
   /** 参考图 / 首末帧文件名（已在 ComfyUI input 目录）。 */
-  inputImage: z.string().optional(),
   firstFrame: z.string().optional(),
+  inputImage: z.string().optional(),
   lastFrame: z.string().optional(),
   /** 视频时长：帧数（按秒表达的口由 workflowInputs 里的 duration 落下）。 */
   frames: z.number().int().min(1).max(1000).optional(),
@@ -54,11 +54,11 @@ export const generateInputSchema = z.object({
    * 库里真实落的是按模式归拢的三层结构（`source.mode:<模式>`），别在这里退化成
    * `z.record(z.string(), z.string())` —— 那表达不了这层结构（见该模块文件头）。 */
   paramMap: workflowParamMapInputSchema,
-  workflowInputs: z.array(workflowInputSchema).optional(),
   projectId: z.string().optional(),
+  workflowInputs: z.array(workflowInputSchema).optional(),
   /** 工坊镜头号：只作归属，不参与执行（执行载荷与它无关）。 */
-  shotId: z.string().optional(),
   referenceImages: z.array(z.string()).optional(),
+  shotId: z.string().optional(),
   /** 来源任务（#2483 FR-QA-09）：重绘 / 放大指回原任务，只作追溯展示。 */
   parentId: z.string().optional(),
 });
@@ -94,13 +94,13 @@ export type GenerateInputResult =
 export function parseGenerateInput(raw: unknown): GenerateInputResult {
   const parsed = generateInputSchema.safeParse(raw);
   if (parsed.success) {
-    return { ok: true, input: parsed.data };
+    return { input: parsed.data, ok: true };
   }
   const where = parsed.error.issues
     .map((issue) => `${issue.path.join(".") || "入参"}：${issue.message}`)
     .join("；");
   return {
-    ok: false,
     message: `这份请求的入参与当前形状不符（${where}），这次没有发出去；请重新配置参数后再生成。`,
+    ok: false,
   };
 }

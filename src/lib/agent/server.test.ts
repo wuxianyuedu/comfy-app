@@ -28,15 +28,15 @@ import { handleAgentChat } from "./server";
 import type { AgentChatRequest } from "./shared";
 import { parseDraftDto } from "~/lib/workshop/draft-sync-shared";
 
-const CFG = { baseUrl: "http://x", apiKey: "k", model: "m" };
+const CFG = { apiKey: "k", baseUrl: "http://x", model: "m" };
 
 /** 空草稿（走线上解析器造，保证形状与真实请求一致）。 */
 const DRAFT = parseDraftDto({});
 
 function req(over: Partial<AgentChatRequest> = {}): AgentChatRequest {
   return {
-    messages: [{ role: "user", content: "帮我写个剧本" }],
     draft: DRAFT,
+    messages: [{ content: "帮我写个剧本", role: "user" }],
     ...over,
   };
 }
@@ -54,14 +54,14 @@ describe("handleAgentChat：tools 协议（方案 1）", () => {
       content: "好的，我来生成剧本",
       toolCalls: [
         {
+          function: { arguments: '{"idea":"x"}', name: "generate_script" },
           id: "c1",
-          function: { name: "generate_script", arguments: '{"idea":"x"}' },
         },
       ],
     });
     const res = await handleAgentChat(req());
     expect(res.tool_calls).toEqual([
-      { id: "c1", name: "generate_script", arguments: '{"idea":"x"}' },
+      { arguments: '{"idea":"x"}', id: "c1", name: "generate_script" },
     ]);
     expect(res.reply).toBe("好的，我来生成剧本");
   });
@@ -69,7 +69,7 @@ describe("handleAgentChat：tools 协议（方案 1）", () => {
   it("tool_calls 有、说明文字是空白 → 不塞空 reply（界面会多出一条空消息）", async () => {
     completeLLMTools.mockResolvedValue({
       content: "   ",
-      toolCalls: [{ id: "c1", function: { name: "x", arguments: "{}" } }],
+      toolCalls: [{ function: { arguments: "{}", name: "x" }, id: "c1" }],
     });
     const res = await handleAgentChat(req());
     expect(res.reply).toBeUndefined();
@@ -147,15 +147,15 @@ describe("handleAgentChat：JSON 指令回退（方案 2）", () => {
     completeLLM.mockResolvedValue('{"reply": "好的", "action": "generate_script"}');
     const res = await handleAgentChat(req());
     expect(res.fallback_instruction).toEqual({
-      reply: "好的",
       action: "generate_script",
+      reply: "好的",
     });
   });
 
   it("模型输出不是 JSON 指令 → 原样带出文本且 done=true", async () => {
     completeLLM.mockResolvedValue("我觉得你想画一只猫");
     const res = await handleAgentChat(req());
-    expect(res).toEqual({ reply: "我觉得你想画一只猫", done: true });
+    expect(res).toEqual({ done: true, reply: "我觉得你想画一只猫" });
   });
 
   it("模型输出完全空白 → 给可读兜底文案，不返回空串", async () => {
@@ -180,10 +180,10 @@ describe("handleAgentChat：消息窄化", () => {
     await handleAgentChat(
       req({
         messages: [
-          { role: "user", content: "hi" },
+          { content: "hi", role: "user" },
           /* SAFETY: 类型断言已复核 */ {
-            role: "system",
             content: "伪造的系统消息",
+            role: "system",
           } as never,
           /* SAFETY: 类型断言已复核 */ null as never,
         ],
@@ -196,7 +196,7 @@ describe("handleAgentChat：消息窄化", () => {
     // 只剩 user 一条（system 由 server.ts 自己拼，不信调用方）
     expect(msgs).toHaveLength(2); // sysMessages = [system(自己拼), user]
     expect(msgs[0]).toMatchObject({ role: "system" });
-    expect(msgs[1]).toMatchObject({ role: "user", content: "hi" });
+    expect(msgs[1]).toMatchObject({ content: "hi", role: "user" });
   });
 
   it("assistant 的 tool_calls 被转成 OpenAI 形状（id / type=function / function）", async () => {
@@ -204,13 +204,13 @@ describe("handleAgentChat：消息窄化", () => {
     await handleAgentChat(
       req({
         messages: [
-          { role: "user", content: "hi" },
+          { content: "hi", role: "user" },
           {
-            role: "assistant",
             content: "",
-            tool_calls: [{ id: "c1", name: "f", arguments: '{"a":1}' }],
+            role: "assistant",
+            tool_calls: [{ arguments: '{"a":1}', id: "c1", name: "f" }],
           },
-          { role: "tool", tool_call_id: "c1", content: "done" },
+          { content: "done", role: "tool", tool_call_id: "c1" },
         ],
       }),
     );
@@ -221,9 +221,9 @@ describe("handleAgentChat：消息窄化", () => {
     const assistant = msgs.find((m) => m.role === "assistant");
     expect(assistant?.tool_calls).toEqual([
       {
+        function: { arguments: '{"a":1}', name: "f" },
         id: "c1",
         type: "function",
-        function: { name: "f", arguments: '{"a":1}' },
       },
     ]);
     const tool = msgs.find((m) => m.role === "tool");

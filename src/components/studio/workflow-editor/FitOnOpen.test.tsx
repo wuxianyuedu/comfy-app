@@ -30,9 +30,9 @@ async function flushFrame() {
 /** 最小复刻 WorkflowEditorInner 的聚焦 effect 形状：
  *  依赖里有会随节点整批同步而抖动的 nodeCount。 */
 function FitHarness({
+  applied,
   graphKey,
   nodeCount,
-  applied,
 }: {
   applied: Array<string>;
   graphKey: string;

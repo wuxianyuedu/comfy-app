@@ -67,9 +67,9 @@ function parseCharactersFromJson(text: string): Array<{
       .map((item) => {
         const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
         return {
-          name: typeof rec.name === "string" ? rec.name : "",
           appearance: typeof rec.appearance === "string" ? rec.appearance : "",
           costume: typeof rec.costume === "string" ? rec.costume : "",
+          name: typeof rec.name === "string" ? rec.name : "",
           personality: typeof rec.personality === "string" ? rec.personality : "",
         };
       })
@@ -117,17 +117,17 @@ function parseShotsFromJson(text: string): Array<{
       .map((item) => {
         const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
         return {
+          characterNames: Array.isArray(rec.characterNames)
+            ? /* SAFETY: 类型断言已复核 */ (rec.characterNames as Array<unknown>).map(String)
+            : [],
+          description: typeof rec.description === "string" ? rec.description : "",
           sceneHeading:
             typeof rec.sceneHeading === "string"
               ? rec.sceneHeading
               : typeof rec.heading === "string"
                 ? rec.heading
                 : "",
-          description: typeof rec.description === "string" ? rec.description : "",
           shotType: normalizeShotType(rec.shotType),
-          characterNames: Array.isArray(rec.characterNames)
-            ? /* SAFETY: 类型断言已复核 */ (rec.characterNames as Array<unknown>).map(String)
-            : [],
         };
       })
       .filter((s) => s.sceneHeading.trim() !== "" || s.description.trim() !== "");
@@ -149,21 +149,21 @@ export function resolveAgentTool(
     case "get_project_state": {
       const draft = hd.getDraft();
       return {
-        toolName: name,
-        summary: "查看项目当前状态",
         argSummary,
         execute: async () => ({
+          detail: JSON.stringify({
+            characterCount: draft.characters.length,
+            clipDone: draft.shots.filter((s) => !!s.clipUrl).length,
+            hasScript: !!draft.scriptMarkdown,
+            imageDone: draft.shots.filter((s) => !!s.imageUrl).length,
+            meta: draft.meta,
+            shotCount: draft.shots.length,
+          }),
           ok: true,
           summary: `项目「${draft.meta.title}」：剧本${draft.scriptMarkdown ? "已就绪" : "待生成"}，角色卡 ${draft.characters.length} 个，镜头 ${draft.shots.length} 个（图 ${draft.shots.filter((s) => !!s.imageUrl).length} / 视频 ${draft.shots.filter((s) => !!s.clipUrl).length}）。`,
-          detail: JSON.stringify({
-            meta: draft.meta,
-            hasScript: !!draft.scriptMarkdown,
-            characterCount: draft.characters.length,
-            shotCount: draft.shots.length,
-            imageDone: draft.shots.filter((s) => !!s.imageUrl).length,
-            clipDone: draft.shots.filter((s) => !!s.clipUrl).length,
-          }),
         }),
+        summary: "查看项目当前状态",
+        toolName: name,
       };
     }
 
@@ -187,13 +187,13 @@ export function resolveAgentTool(
       }
       const keys = Object.keys(patch).join("、") || "(无字段)";
       return {
-        toolName: name,
-        summary: `更新项目元信息：${argSummary}`,
         argSummary,
         execute: async () => {
           hd.setMeta(patch);
           return { ok: true, summary: `已更新项目信息（${keys}）` };
         },
+        summary: `更新项目元信息：${argSummary}`,
+        toolName: name,
       };
     }
 
@@ -206,8 +206,6 @@ export function resolveAgentTool(
           ? String(rawIdea)
           : "";
       return {
-        toolName: name,
-        summary: `生成剧本（创意：${clampText(idea, { maxLength: SUMMARY_MAX })}）`,
         argSummary,
         execute: async () => {
           const meta = hd.getMeta();
@@ -230,6 +228,8 @@ export function resolveAgentTool(
             summary: `已生成剧本（${markdown.length} 字符）`,
           };
         },
+        summary: `生成剧本（创意：${clampText(idea, { maxLength: SUMMARY_MAX })}）`,
+        toolName: name,
       };
     }
 
@@ -238,8 +238,6 @@ export function resolveAgentTool(
       const instruction = typeof args.instruction === "string" ? args.instruction : "";
       const currentScript = hd.getScriptMarkdown();
       return {
-        toolName: name,
-        summary: `修改剧本：${clampText(instruction, { maxLength: SUMMARY_MAX })}`,
         argSummary,
         execute: async () => {
           if (!currentScript.trim()) {
@@ -249,13 +247,13 @@ export function resolveAgentTool(
           const full = await streamChat({
             messages: [
               {
-                role: "system",
                 content: `你是专业影视编剧。用户有已写好的剧本，需要你根据要求修改并输出完整修改后的剧本 Markdown。
 要求：直接输出修改后的完整剧本全文（含所有场景），不要解释或前言。
 现有剧本：
 ${currentScript.slice(0, 8000)}`,
+                role: "system",
               },
-              { role: "user", content: instruction },
+              { content: instruction, role: "user" },
             ],
           });
           const markdown = full.trim();
@@ -268,13 +266,13 @@ ${currentScript.slice(0, 8000)}`,
             summary: `已更新剧本（${markdown.length} 字符）`,
           };
         },
+        summary: `修改剧本：${clampText(instruction, { maxLength: SUMMARY_MAX })}`,
+        toolName: name,
       };
     }
 
     case "extract_characters": {
       return {
-        toolName: name,
-        summary: "从剧本提取角色",
         argSummary,
         execute: async () => {
           const script = hd.getScriptMarkdown();
@@ -285,15 +283,15 @@ ${currentScript.slice(0, 8000)}`,
           const full = await streamChat({
             messages: [
               {
-                role: "system",
                 content: `从下面的剧本中提取所有主要角色，输出严格 JSON 数组，不要多余文字。
 每个元素格式：
 {"name": "角色名", "appearance": "外貌特征", "costume": "服装", "personality": "性格关键词"}
 
 剧本：
 ${script.slice(0, 8000)}`,
+                role: "system",
               },
-              { role: "user", content: "提取角色" },
+              { content: "提取角色", role: "user" },
             ],
           });
           const chars = parseCharactersFromJson(full);
@@ -307,17 +305,17 @@ ${script.slice(0, 8000)}`,
           // （与 add_character 一致），否则写进 draft 的是残缺角色卡。
           const { workshopUid } = await import("~/lib/workshop/script-parser");
           const created = newOnes.map((c) => ({
-            id: workshopUid("char"),
-            name: c.name,
             ageGender: "",
             appearance: c.appearance ?? "",
             costume: c.costume ?? "",
-            personality: c.personality ?? "",
-            temperament: "",
-            styleTags: [],
-            positivePrompt: "",
+            id: workshopUid("char"),
+            name: c.name,
             negativePrompt: "",
             params: {},
+            personality: c.personality ?? "",
+            positivePrompt: "",
+            styleTags: [],
+            temperament: "",
           }));
           hd.setCharacters([...existing, ...created]);
           return {
@@ -325,6 +323,8 @@ ${script.slice(0, 8000)}`,
             summary: `已提取 ${created.length} 个角色（当前共 ${existing.length + created.length} 个）`,
           };
         },
+        summary: "从剧本提取角色",
+        toolName: name,
       };
     }
 
@@ -333,8 +333,6 @@ ${script.slice(0, 8000)}`,
       const charName = typeof args.name === "string" ? args.name : "";
       const desc = typeof args.description === "string" ? args.description : "";
       return {
-        toolName: name,
-        summary: `添加角色「${charName}」`,
         argSummary,
         execute: async () => {
           if (!charName.trim()) {
@@ -352,28 +350,28 @@ ${script.slice(0, 8000)}`,
           const parsed = parseCharacterFull(full);
           const { workshopUid } = await import("~/lib/workshop/script-parser");
           const character = {
-            id: workshopUid("char"),
-            name: charName,
             ageGender: "",
             appearance: parsed?.appearance ?? "",
             costume: parsed?.costume ?? "",
-            personality: parsed?.personality ?? "",
-            temperament: "",
-            styleTags: [],
-            positivePrompt: "",
+            id: workshopUid("char"),
+            name: charName,
             negativePrompt: "",
             params: {},
+            personality: parsed?.personality ?? "",
+            positivePrompt: "",
+            styleTags: [],
+            temperament: "",
           };
           hd.setCharacters([...existing, character]);
           return { ok: true, summary: `已添加角色「${charName}」` };
         },
+        summary: `添加角色「${charName}」`,
+        toolName: name,
       };
     }
 
     case "plan_storyboard": {
       return {
-        toolName: name,
-        summary: "规划分镜",
         argSummary,
         execute: async () => {
           const script = hd.getScriptMarkdown();
@@ -385,7 +383,6 @@ ${script.slice(0, 8000)}`,
           const full = await streamChat({
             messages: [
               {
-                role: "system",
                 content: `你是分镜师。根据剧本生成分镜镜头序列，输出严格 JSON 数组，不要多余文字。
 每个元素：
 {"sceneHeading": "场景标题", "description": "画面描述", "shotType": "wide/medium/close 等", "characterNames": ["角色名"]}
@@ -395,8 +392,9 @@ ${script.slice(0, 6000)}
 
 可用角色：
 ${chars.map((c) => c.name).join("、") || "(无)"}`,
+                role: "system",
               },
-              { role: "user", content: "生成分镜" },
+              { content: "生成分镜", role: "user" },
             ],
           });
           const shots = parseShotsFromJson(full);
@@ -406,41 +404,41 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
           const existing = hd.getShots();
           const { workshopUid } = await import("~/lib/workshop/script-parser");
           const mapped = shots.map((s) => ({
+            characterIds: [],
+            description: s.description,
             id: workshopUid("shot"),
             index: 0,
-            sceneId: "",
-            sceneHeading: s.sceneHeading,
-            shotType: s.shotType,
-            description: s.description,
-            characterIds: [],
-            prompt: s.description,
             negativePrompt: "",
             params: {},
+            prompt: s.description,
+            sceneHeading: s.sceneHeading,
+            sceneId: "",
+            shotType: s.shotType,
             status: /* SAFETY: 类型断言已复核 */ "idle" as const,
           }));
           hd.setShots([...existing, ...mapped]);
           return { ok: true, summary: `已生成 ${mapped.length} 个分镜镜头` };
         },
+        summary: "规划分镜",
+        toolName: name,
       };
     }
 
     case "generate_shot_images": {
       return {
-        toolName: name,
-        summary: "生成镜头图片",
         argSummary,
         execute: async () => ({
+          detail: "Agent MVP 暂不直接触发 ComfyUI 生图，请使用页面上的生图按钮",
           ok: false,
           summary: "生图需在「镜头生图」页手动触发",
-          detail: "Agent MVP 暂不直接触发 ComfyUI 生图，请使用页面上的生图按钮",
         }),
+        summary: "生成镜头图片",
+        toolName: name,
       };
     }
 
     case "render_film": {
       return {
-        toolName: name,
-        summary: "用项目镜头一键成片（逐镜视频 + 合成）",
         argSummary,
         execute: async () => {
           if (!hd.renderFilm) {
@@ -450,20 +448,22 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
             };
           }
           const r = await hd.renderFilm();
-          return { ok: r.ok, summary: r.summary, detail: r.detail };
+          return { detail: r.detail, ok: r.ok, summary: r.summary };
         },
+        summary: "用项目镜头一键成片（逐镜视频 + 合成）",
+        toolName: name,
       };
     }
 
     default:
       return {
-        toolName: name,
-        summary: `未知工具：${name}`,
         argSummary,
         execute: async () => ({
           ok: false,
           summary: `未知工具「${name}」`,
         }),
+        summary: `未知工具：${name}`,
+        toolName: name,
       };
   }
 }

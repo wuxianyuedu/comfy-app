@@ -129,23 +129,23 @@ export function useLLMConfig(): LLMConfigController {
       }
     }
     return {
-      split: { local, remote, remoteImage: remoteImageNames },
       config: {
         ...cfg,
-        provider: effectiveProvider,
         extraModels: toModelNames(cfg.extraModels),
         hasApiKey: !!cfg.hasApiKey,
+        provider: effectiveProvider,
       },
+      split: { local, remote, remoteImage: remoteImageNames },
     };
   }, [configQ.data]);
 
   return {
     config,
-    localModels: split.local,
-    remoteModels: split.remote,
-    remoteImageModels: split.remoteImage,
     loading: configQ.isLoading,
+    localModels: split.local,
     refresh,
+    remoteImageModels: split.remoteImage,
+    remoteModels: split.remote,
   };
 }
 
@@ -177,13 +177,13 @@ export function useLLMConfigSave(): LLMConfigSaveController {
         hasApiKey: !!cfg.hasApiKey,
         // 与 useLLMConfig 同口径：本机 ollama 误存成「远端」时，保存后的
         // 视图配置也要按生效提供方展示，否则徽标/页脚闪回「远端」。
-        provider: effectiveProviderType(cfg.provider, cfg.baseUrl, !!cfg.hasApiKey),
         extraModels: toModelNames(rawExtra),
+        provider: effectiveProviderType(cfg.provider, cfg.baseUrl, !!cfg.hasApiKey),
         temperatureByTask: cfg.temperatureByTask ?? undefined,
       };
     },
     [saveCfg, saveBusy],
   );
 
-  return { saving: saveBusy.busy, save };
+  return { save, saving: saveBusy.busy };
 }

@@ -48,14 +48,11 @@ const CANVAS_COMMON: Array<RenderChainModule> = [
 
 /** 按 kind 追加的渲染链路（不含公共链路） */
 const KIND_CHAIN: Record<NodeKind, Array<RenderChainModule>> = {
-  workflow: [
+  agent: [
+    { file: "src/lib/agent/agentic.ts", label: "agentic" },
     {
-      file: "src/components/studio/project-canvas/WorkflowNode.tsx",
-      label: "WorkflowNode",
-    },
-    {
-      file: "src/components/studio/shared/workflow-io.ts",
-      label: "workflow-io",
+      file: "src/lib/project-canvas/canvas-helpers.ts",
+      label: "canvas-helpers",
     },
   ],
   image: [
@@ -68,30 +65,7 @@ const KIND_CHAIN: Record<NodeKind, Array<RenderChainModule>> = {
       label: "canvas-helpers",
     },
   ],
-  video: [
-    {
-      file: "src/components/studio/project-canvas/ImageGenerationPanel.tsx",
-      label: "ImageGenerationPanel",
-    },
-    {
-      file: "src/lib/project-canvas/canvas-helpers.ts",
-      label: "canvas-helpers",
-    },
-  ],
-  script: [
-    {
-      file: "src/lib/project-canvas/canvas-helpers.ts",
-      label: "canvas-helpers",
-    },
-  ],
-  agent: [
-    { file: "src/lib/agent/agentic.ts", label: "agentic" },
-    {
-      file: "src/lib/project-canvas/canvas-helpers.ts",
-      label: "canvas-helpers",
-    },
-  ],
-  text: [
+  movie: [
     {
       file: "src/components/studio/project-canvas/ContentAssetNode.tsx",
       label: "ContentAssetNode",
@@ -103,10 +77,36 @@ const KIND_CHAIN: Record<NodeKind, Array<RenderChainModule>> = {
       label: "ContentAssetNode",
     },
   ],
-  movie: [
+  script: [
+    {
+      file: "src/lib/project-canvas/canvas-helpers.ts",
+      label: "canvas-helpers",
+    },
+  ],
+  text: [
     {
       file: "src/components/studio/project-canvas/ContentAssetNode.tsx",
       label: "ContentAssetNode",
+    },
+  ],
+  video: [
+    {
+      file: "src/components/studio/project-canvas/ImageGenerationPanel.tsx",
+      label: "ImageGenerationPanel",
+    },
+    {
+      file: "src/lib/project-canvas/canvas-helpers.ts",
+      label: "canvas-helpers",
+    },
+  ],
+  workflow: [
+    {
+      file: "src/components/studio/project-canvas/WorkflowNode.tsx",
+      label: "WorkflowNode",
+    },
+    {
+      file: "src/components/studio/shared/workflow-io.ts",
+      label: "workflow-io",
     },
   ],
 };

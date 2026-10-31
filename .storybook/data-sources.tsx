@@ -91,56 +91,56 @@ export const STORYBOOK_ASSET_BASE = "/storybook-assets";
 function buildComfyPrompt(): Record<string, unknown> {
   const prompt: Record<string, unknown> = {
     3: {
+      _meta: { title: "K采样器" },
       class_type: "KSampler",
       inputs: {
-        seed: 486_920_135_724_881,
-        steps: 24,
         cfg: 7.5,
+        denoise: 1,
+        latent_image: ["5", 0],
+        model: ["4", 0],
+        negative: ["7", 0],
+        positive: ["6", 0],
         sampler_name: "dpmpp_2m",
         scheduler: "karras",
-        denoise: 1,
-        model: ["4", 0],
-        positive: ["6", 0],
-        negative: ["7", 0],
-        latent_image: ["5", 0],
+        seed: 486_920_135_724_881,
+        steps: 24,
       },
-      _meta: { title: "K采样器" },
     },
     4: {
+      _meta: { title: "加载检查点" },
       class_type: "CheckpointLoaderSimple",
       inputs: { ckpt_name: "sd_xl_base_1.0.safetensors" },
-      _meta: { title: "加载检查点" },
     },
     5: {
-      class_type: "EmptyLatentImage",
-      inputs: { width: 1024, height: 1024, batch_size: 1 },
       _meta: { title: "空Latent" },
+      class_type: "EmptyLatentImage",
+      inputs: { batch_size: 1, height: 1024, width: 1024 },
     },
     6: {
+      _meta: { title: "正向提示词" },
       class_type: "CLIPTextEncode",
       inputs: {
-        text: "masterpiece, best quality, a lone lighthouse on a basalt cliff, storm swell breaking below, volumetric fog, low key lighting, 35mm, shallow depth of field",
         clip: ["4", 1],
+        text: "masterpiece, best quality, a lone lighthouse on a basalt cliff, storm swell breaking below, volumetric fog, low key lighting, 35mm, shallow depth of field",
       },
-      _meta: { title: "正向提示词" },
     },
     7: {
+      _meta: { title: "负向提示词" },
       class_type: "CLIPTextEncode",
       inputs: {
-        text: "watermark, text, extra fingers, blurry",
         clip: ["4", 1],
+        text: "watermark, text, extra fingers, blurry",
       },
-      _meta: { title: "负向提示词" },
     },
     8: {
+      _meta: { title: "VAE解码" },
       class_type: "VAEDecode",
       inputs: { samples: ["3", 0], vae: ["4", 2] },
-      _meta: { title: "VAE解码" },
     },
     9: {
+      _meta: { title: "保存图像" },
       class_type: "SaveImage",
       inputs: { filename_prefix: "ComfyUI", images: ["8", 0] },
-      _meta: { title: "保存图像" },
     },
   };
   /* 再铺一批 ControlNet 与 LoRA 节点：真实工作流里这一层最占篇幅（几十上百个
@@ -148,16 +148,16 @@ function buildComfyPrompt(): Record<string, unknown> {
      的 `collapseObjectsAfterLength` 就是为它写的。 */
   for (let i = 10; i < 62; i += 1) {
     prompt[String(i)] = {
+      _meta: { title: `第 ${String(i)} 号封装节点` },
       class_type: i % 3 === 0 ? "LoraLoader" : "ControlNetApplyAdvanced",
       inputs: {
-        strength: Number((0.35 + (i % 7) * 0.09).toFixed(2)),
-        start_percent: 0,
         end_percent: 0.8,
-        positive: ["6", 0],
-        negative: ["7", 0],
         lora_name: `style_pack_${String(i % 5)}.safetensors`,
+        negative: ["7", 0],
+        positive: ["6", 0],
+        start_percent: 0,
+        strength: Number((0.35 + (i % 7) * 0.09).toFixed(2)),
       },
-      _meta: { title: `第 ${String(i)} 号封装节点` },
     };
   }
   return prompt;
@@ -183,23 +183,23 @@ const JSON_SOURCES: Readonly<Record<string, unknown>> = {
   "comfy-prompt": buildComfyPrompt(),
   /** 工作流 API 的列出返回（`workflow.list` 的真实投影）。 */
   "workflow-list": {
+    total: 2,
     workflows: [
       {
         id: "wf_8f2a1c",
         name: "角色一致性 · 三视图",
-        typeCategory: "image",
         nodeCount: 27,
+        typeCategory: "image",
         updatedAt: "2026-09-21T08:14:02.000Z",
       },
       {
         id: "wf_0b77e4",
         name: "首帧 → 逐镜生成",
-        typeCategory: "video",
         nodeCount: 41,
+        typeCategory: "video",
         updatedAt: "2026-09-19T13:02:55.000Z",
       },
     ],
-    total: 2,
   },
 };
 
@@ -231,7 +231,6 @@ export type MediaSourceName = (typeof MEDIA_SOURCE_NAMES)[number];
 export const DATA_SOURCES: Record<ValueSourceKind, ValueSource<unknown>> = {
   json: {
     about: "真实形状的 ComfyUI / tRPC 报文（键名、嵌套深度、字符串长度按真报文给）",
-    names: JSON_SOURCE_NAMES,
     load: (name) => {
       const found = JSON_SOURCES[name];
       if (found === undefined) {
@@ -241,12 +240,12 @@ export const DATA_SOURCES: Record<ValueSourceKind, ValueSource<unknown>> = {
       }
       return found;
     },
+    names: JSON_SOURCE_NAMES,
   },
   media: {
     about:
       "`.storybook/assets/` 下的真图片文件（工作台自己的 staticDirs 提供）。" +
       "`missing.png` 故意不存在 —— 那是「加载失败落兜底」那条分支的现场",
-    names: MEDIA_SOURCE_NAMES,
     load: (name) => {
       /* SAFETY: 类型断言已复核 */
       if (!(MEDIA_SOURCE_NAMES as ReadonlyArray<string>).includes(name)) {
@@ -256,6 +255,7 @@ export const DATA_SOURCES: Record<ValueSourceKind, ValueSource<unknown>> = {
       }
       return `${STORYBOOK_ASSET_BASE}/${name}`;
     },
+    names: MEDIA_SOURCE_NAMES,
   },
 };
 
@@ -283,8 +283,8 @@ export function resolveSource(kind: ValueSourceKind, name: string): unknown {
 /** `argTypes` 里那一条数据源旋钮的声明（下拉选项取自注册表，不手抄）。 */
 export function sourceNameArgType(kind: ValueSourceKind) {
   return {
-    description: DATA_SOURCES[kind].about,
     control: { type: "select" as const },
+    description: DATA_SOURCES[kind].about,
     options: [...DATA_SOURCES[kind].names],
   };
 }
@@ -368,15 +368,15 @@ export { APP_DEV_ORIGIN, APP_DEV_PORT, APP_DEV_PORT_SOURCE, DEFAULT_APP_ORIGIN }
  */
 export function appOriginChoices(
   dev: AppOrigin = {
-    APP_DEV_PORT: APP_DEV_PORT,
     APP_DEV_ORIGIN: APP_DEV_ORIGIN,
+    APP_DEV_PORT: APP_DEV_PORT,
     APP_DEV_PORT_SOURCE: APP_DEV_PORT_SOURCE,
   },
 ): Record<string, string> {
   return {
     [`本检出 ${String(dev.APP_DEV_PORT)}（${dev.APP_DEV_PORT_SOURCE}）`]: dev.APP_DEV_ORIGIN,
-    "静态链兜底 3100": "http://127.0.0.1:3100",
     "回落候选 +1": `http://127.0.0.1:${String(dev.APP_DEV_PORT + 1)}`,
+    "静态链兜底 3100": "http://127.0.0.1:3100",
   };
 }
 
@@ -394,14 +394,14 @@ export function StorybookTrpcProvider({
   const [bundle] = React.useState(() => {
     const queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, refetchOnWindowFocus: false },
         mutations: { retry: false },
+        queries: { refetchOnWindowFocus: false, retry: false },
       },
     });
     const client = createTrpcClient({
-      links: trpcHttpLink({ source: "nextjs-react", origin, withLogger: true }),
+      links: trpcHttpLink({ origin, source: "nextjs-react", withLogger: true }),
     });
-    return { queryClient, client };
+    return { client, queryClient };
   });
 
   return (

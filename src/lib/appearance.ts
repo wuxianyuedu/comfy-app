@@ -58,8 +58,8 @@ export type AppearancePrefs = {
 
 /** 默认值 = `globals.css` 里 `--radius` / `--font-scale` 的基数（两者必须同批改）。 */
 export const DEFAULT_APPEARANCE: AppearancePrefs = {
-  radius: "md",
   fontScale: "100",
+  radius: "md",
 };
 
 function stepValue(steps: Array<AppearanceStep>, id: string, fallbackId: string): string {
@@ -96,7 +96,7 @@ export function parseAppearance(raw: string | null | undefined): AppearancePrefs
   ) {
     return { ...DEFAULT_APPEARANCE };
   }
-  return { radius: record.radius, fontScale: record.fontScale };
+  return { fontScale: record.fontScale, radius: record.radius };
 }
 
 export function serializeAppearance(prefs: AppearancePrefs): string {
@@ -106,8 +106,8 @@ export function serializeAppearance(prefs: AppearancePrefs): string {
 /** 本偏好要写进 CSS 的变量集合（纯数据，便于单测）。 */
 export function appearanceVars(prefs: AppearancePrefs): Record<string, string> {
   return {
-    "--radius": stepValue(RADIUS_STEPS, prefs.radius, DEFAULT_APPEARANCE.radius),
     "--font-scale": stepValue(FONT_SCALE_STEPS, prefs.fontScale, DEFAULT_APPEARANCE.fontScale),
+    "--radius": stepValue(RADIUS_STEPS, prefs.radius, DEFAULT_APPEARANCE.radius),
   };
 }
 

@@ -18,8 +18,8 @@ function ResizablePanel({ ...props }: ResizablePrimitive.PanelProps) {
 }
 
 function ResizableHandle({
-  withHandle,
   className,
+  withHandle,
   ...props
 }: ResizablePrimitive.SeparatorProps & {
   withHandle?: boolean;

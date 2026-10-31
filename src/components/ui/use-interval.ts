@@ -87,11 +87,11 @@ function reportPollError(err: unknown): void {
 export function useInterval(
   run: () => unknown,
   {
-    ms,
     immediate = true,
+    ms,
+    onError = reportPollError,
     pauseWhenHidden = true,
     pauseWhenUnfocused,
-    onError = reportPollError,
   }: UseIntervalOptions,
 ): void {
   const runRef = useRef(run);
@@ -113,11 +113,11 @@ export function useInterval(
        桌面壳失焦也暂停」的判据只能有一处：非 React 的持有者（如系统指标 store）
        也要用它，各写一份一定会漂。这里只负责把它接到组件生命周期上。 */
     return startPollTimer(() => runRef.current(), {
-      ms,
       immediate,
+      ms,
+      onError: (err: unknown) => onErrorRef.current(err),
       pauseWhenHidden,
       pauseWhenUnfocused,
-      onError: (err: unknown) => onErrorRef.current(err),
     });
   }, [ms, immediate, pauseWhenHidden, pauseWhenUnfocused]);
 }

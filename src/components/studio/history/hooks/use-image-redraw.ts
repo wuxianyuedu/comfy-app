@@ -101,19 +101,19 @@ export function useImageRedraw(
             const originalName = await deps.prepareImage(originalImageUrl);
             const maskName = mode === "inpaint" && mask ? await deps.prepareImage(mask) : null;
             const taskId = await deps.submit({
-              workflow: selectedTemplateId,
+              parentId: initial.parentId,
+              projectId: initial.projectId ?? undefined,
               prompt: prompt.trim() || undefined,
               referenceImages:
                 mode === "inpaint" && maskName ? [originalName, maskName] : [originalName],
-              projectId: initial.projectId ?? undefined,
-              parentId: initial.parentId,
+              workflow: selectedTemplateId,
             });
             newTaskId = taskId;
-            return { ok: true, detail: taskId };
+            return { detail: taskId, ok: true };
           },
           {
-            report: deps.report,
             failureText: mode === "inpaint" ? "局部重绘提交失败" : "放大提交失败",
+            report: deps.report,
             successText: (r) =>
               `已提交${mode === "inpaint" ? "局部重绘" : "放大"}：新任务 ${r.detail}`,
           },
@@ -129,19 +129,19 @@ export function useImageRedraw(
   );
 
   return {
-    mode,
-    setMode,
-    templates,
-    templatesLoading,
-    selectedTemplateId,
-    selectTemplate: setSelectedTemplateId,
-    prompt,
-    setPrompt,
-    mask,
-    setMask,
-    ensureTemplates,
     busy,
+    ensureTemplates,
+    mask,
+    mode,
+    prompt,
     resultTaskId,
     run,
+    selectedTemplateId,
+    selectTemplate: setSelectedTemplateId,
+    setMask,
+    setMode,
+    setPrompt,
+    templates,
+    templatesLoading,
   };
 }

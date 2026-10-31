@@ -8,8 +8,8 @@ import { Spinner } from "~/components/ui/spinner";
  * 组件本身的变体。
  */
 const meta = {
-  title: "UI/Spinner",
   component: Spinner,
+  title: "UI/Spinner",
 } satisfies Meta<typeof Spinner>;
 
 export default meta;

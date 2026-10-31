@@ -4,7 +4,7 @@ import { Progress as ProgressPrimitive } from "@base-ui/react/progress";
 
 import { cn } from "~/lib/utils";
 
-function Progress({ className, children, value, ...props }: ProgressPrimitive.Root.Props) {
+function Progress({ children, className, value, ...props }: ProgressPrimitive.Root.Props) {
   return (
     <ProgressPrimitive.Root
       className={cn("flex flex-wrap gap-3", className)}

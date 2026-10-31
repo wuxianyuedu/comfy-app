@@ -13,19 +13,19 @@ import { MAX_COMMAND_CHARS } from "./console-limits";
 describe("parseConsoleLine", () => {
   it("按空格拆成 file + args，不经过 shell", () => {
     expect(parseConsoleLine("pnpm exec tsc --noEmit")).toEqual({
-      ok: true,
-      file: "pnpm",
       args: ["exec", "tsc", "--noEmit"],
       display: "pnpm exec tsc --noEmit",
+      file: "pnpm",
+      ok: true,
     });
   });
 
   it("支持单/双引号把空格留在同一个参数里", () => {
     expect(parseConsoleLine(`echo "a b" 'c d'`)).toEqual({
-      ok: true,
-      file: "echo",
       args: ["a b", "c d"],
       display: "echo a b c d",
+      file: "echo",
+      ok: true,
     });
   });
 

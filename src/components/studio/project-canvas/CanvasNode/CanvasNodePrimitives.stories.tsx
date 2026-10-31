@@ -34,16 +34,16 @@ const STATUSES = /* SAFETY: 类型断言已复核 */ Object.keys(STATUS_LABEL) a
 const KINDS = /* SAFETY: 类型断言已复核 */ Object.keys(NODE_META) as Array<NodeKind>;
 
 const meta = {
-  title: "Studio/CanvasNodePrimitives",
-  component: StatusBadge,
   args: { status: "running" },
   argTypes: {
     status: {
       control: { type: "select" },
-      options: STATUSES,
       description: "画布节点的生命周期状态（canvas-types 的四档）",
+      options: STATUSES,
     },
   },
+  component: StatusBadge,
+  title: "Studio/CanvasNodePrimitives",
 } satisfies Meta<typeof StatusBadge>;
 
 export default meta;

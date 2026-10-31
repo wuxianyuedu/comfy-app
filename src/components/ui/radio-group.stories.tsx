@@ -14,8 +14,8 @@ import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
  * 不是把 Label 包在外面 —— 与 `Checkbox` 那套（可以包）不同。
  */
 const meta = {
-  title: "UI/RadioGroup",
   component: RadioGroup,
+  title: "UI/RadioGroup",
 } satisfies Meta<typeof RadioGroup>;
 
 export default meta;

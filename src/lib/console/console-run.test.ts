@@ -17,11 +17,11 @@ async function runOnce(
   const events: Array<ConsoleEvent> = [];
   const result = await runner.run(
     {
-      runId: "test-run",
-      command: [file, ...args].join(" "),
-      file,
       args,
+      command: [file, ...args].join(" "),
       cwd: process.cwd(),
+      file,
+      runId: "test-run",
       timeoutMs,
     },
     (event) => events.push(event),
@@ -69,7 +69,7 @@ describe("createConsoleRunner", () => {
   });
 
   it("非零退出码如实透出（界面据此判成败）", async () => {
-    const { result, events } = await runOnce(process.execPath, ["-e", "process.exit(3)"]);
+    const { events, result } = await runOnce(process.execPath, ["-e", "process.exit(3)"]);
     expect(result.exitCode).toBe(3);
     const last = events[events.length - 1];
     expect(last?.type === "exit" && last.code).toBe(3);
@@ -81,11 +81,11 @@ describe("createConsoleRunner", () => {
     expect(runner.busy()).toBeNull();
     const done = runner.run(
       {
-        runId: "slow",
-        command: "node -e sleep",
-        file: process.execPath,
         args: ["-e", "setTimeout(()=>{},3000)"],
+        command: "node -e sleep",
         cwd: process.cwd(),
+        file: process.execPath,
+        runId: "slow",
         timeoutMs: 20_000,
       },
       () => undefined,
@@ -106,11 +106,11 @@ describe("createConsoleRunner", () => {
     const events: Array<ConsoleEvent> = [];
     const done = runner.run(
       {
-        runId: "cancel-me",
-        command: "sleep",
-        file: process.execPath,
         args: ["-e", "setTimeout(()=>{},60000)"],
+        command: "sleep",
         cwd: process.cwd(),
+        file: process.execPath,
+        runId: "cancel-me",
         timeoutMs: 20_000,
       },
       (event) => events.push(event),
@@ -138,11 +138,11 @@ describe("createConsoleRunner", () => {
     let grandchildPid = 0;
     const done = runner.run(
       {
-        runId: "tree",
-        command: "tree",
-        file: process.execPath,
         args: ["-e", childScript],
+        command: "tree",
         cwd: process.cwd(),
+        file: process.execPath,
+        runId: "tree",
         timeoutMs: 20_000,
       },
       (event) => {
@@ -158,9 +158,9 @@ describe("createConsoleRunner", () => {
     /* 等孙进程的 PID 从 stdout 里出来（最多 5s）。 */
     await expect
       .poll(() => grandchildPid, {
-        timeout: 5000,
         interval: 100,
         message: "父进程始终没把孙进程 PID 打到 stdout",
+        timeout: 5000,
       })
       .toBeGreaterThan(0);
     expect(isAlive(grandchildPid)).toBe(true);
@@ -170,9 +170,9 @@ describe("createConsoleRunner", () => {
      * 失败时这句话打出的是那个还活着的 PID —— 孤儿本身。 */
     await expect
       .poll(() => isAlive(grandchildPid), {
-        timeout: 4000,
         interval: 100,
         message: `孙进程未被回收（残留 PID 见下）`,
+        timeout: 4000,
       })
       .toBe(false);
   }, 30_000);
@@ -183,11 +183,11 @@ describe("createConsoleRunner", () => {
     // 生成 ~500KB：远超 MAX_OUTPUT_CHARS(200k)
     const result = await runner.run(
       {
-        runId: "big",
-        command: "big",
-        file: process.execPath,
         args: ["-e", "process.stdout.write('x'.repeat(500000))"],
+        command: "big",
         cwd: process.cwd(),
+        file: process.execPath,
+        runId: "big",
         timeoutMs: 20_000,
       },
       (event) => events.push(event),
@@ -204,11 +204,11 @@ describe("createConsoleRunner", () => {
     const events: Array<ConsoleEvent> = [];
     const result = await runner.run(
       {
-        runId: "timeout",
-        command: "timeout",
-        file: process.execPath,
         args: ["-e", "setTimeout(()=>{},60000)"],
+        command: "timeout",
         cwd: process.cwd(),
+        file: process.execPath,
+        runId: "timeout",
         // 下限被夹到 1s，用例只等一秒。
         timeoutMs: 1000,
       },
@@ -223,11 +223,11 @@ describe("createConsoleRunner", () => {
     const events: Array<ConsoleEvent> = [];
     const result = await runner.run(
       {
-        runId: "enoent",
-        command: "definitely-not-a-real-binary-xyz",
-        file: "definitely-not-a-real-binary-xyz",
         args: [],
+        command: "definitely-not-a-real-binary-xyz",
         cwd: process.cwd(),
+        file: "definitely-not-a-real-binary-xyz",
+        runId: "enoent",
         timeoutMs: 5000,
       },
       (event) => events.push(event),
@@ -267,11 +267,11 @@ describe("输出的上限边界（精确撞上限的那一轮）", () => {
     const exactEvents: Array<ConsoleEvent> = [];
     await exact.run(
       {
-        runId: "exact",
-        command: "exact",
-        file: process.execPath,
         args: ["-e", `process.stdout.write('y'.repeat(${MAX_OUTPUT_CHARS}))`],
+        command: "exact",
         cwd: process.cwd(),
+        file: process.execPath,
+        runId: "exact",
         timeoutMs: 20_000,
       },
       (event) => exactEvents.push(event),
@@ -283,9 +283,9 @@ describe("输出的上限边界（精确撞上限的那一轮）", () => {
     const overEvents: Array<ConsoleEvent> = [];
     await over.run(
       {
-        runId: "over",
         command: "over",
         file: process.execPath,
+        runId: "over",
         /* 分两次写：第一次正好填满上限，第二次才撞上 `remaining <= 0`。
          * 一次写完只走「单 chunk 超剩余量」那条分支 —— 两条分支的文案不同，
          * 判据必须分别钉（这正是「上限之后还有输出」的真实形态）。 */
@@ -315,12 +315,12 @@ describe("resetConsoleSlotForTest", () => {
     resetConsoleSlotForTest();
     const first = consoleSlot();
     recordConsoleHistory(first, {
-      runId: "a",
       command: "x",
-      exitCode: 0,
-      killed: false,
       durationMs: 1,
+      exitCode: 0,
       finishedAt: Date.now(),
+      killed: false,
+      runId: "a",
     });
     expect(consoleSlot().history).toHaveLength(1);
     resetConsoleSlotForTest();

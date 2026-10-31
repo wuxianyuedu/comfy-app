@@ -19,7 +19,7 @@ import {
   ZOOM_STEP,
 } from "./use-image-zoom";
 
-const LANDSCAPE = { width: 1600, height: 1200 };
+const LANDSCAPE = { height: 1200, width: 1600 };
 
 type ProbeProps = {
   natural: { height: number; width: number } | null;
@@ -30,18 +30,18 @@ type ProbeProps = {
 
 const INITIAL: ProbeProps = {
   natural: LANDSCAPE,
-  viewportWidth: 800,
   viewportHeight: 600,
+  viewportWidth: 800,
 };
 
 function renderZoom(initial: ProbeProps = INITIAL) {
   return renderHook(
-    ({ natural, viewportWidth, viewportHeight, padding = 0 }: ProbeProps) =>
+    ({ natural, padding = 0, viewportHeight, viewportWidth }: ProbeProps) =>
       useImageZoom({
         naturalSize: natural,
-        viewportWidth,
-        viewportHeight,
         padding,
+        viewportHeight,
+        viewportWidth,
       }),
     { initialProps: initial },
   );
@@ -58,9 +58,9 @@ describe("适应窗口", () => {
 
   it("**不放大超过 100%**：视口比图大时按原尺寸显示", () => {
     const { result } = renderZoom({
-      natural: { width: 100, height: 80 },
-      viewportWidth: 800,
+      natural: { height: 80, width: 100 },
       viewportHeight: 600,
+      viewportWidth: 800,
     });
     expect(result.current.fitScale).toBe(1);
     expect(result.current.percent).toBe(100);
@@ -73,8 +73,8 @@ describe("适应窗口", () => {
   });
 
   it("视口变化后重新折算", () => {
-    const { result, rerender } = renderZoom();
-    rerender({ ...INITIAL, viewportWidth: 400, viewportHeight: 300 });
+    const { rerender, result } = renderZoom();
+    rerender({ ...INITIAL, viewportHeight: 300, viewportWidth: 400 });
     expect(result.current.fitScale).toBeCloseTo(0.25);
   });
 
@@ -86,8 +86,8 @@ describe("适应窗口", () => {
 
     const noViewport = renderZoom({
       ...INITIAL,
-      viewportWidth: null,
       viewportHeight: null,
+      viewportWidth: null,
     });
     expect(noViewport.result.current.fitScale).toBeNull();
     expect(noViewport.result.current.scale).toBe(1);
@@ -97,8 +97,8 @@ describe("适应窗口", () => {
   it("视口被扣成 0 或负数时也给 100%（不产生负倍数）", () => {
     const zero = renderZoom({
       ...INITIAL,
-      viewportWidth: 0,
       viewportHeight: 0,
+      viewportWidth: 0,
     });
     expect(zero.result.current.fitScale).toBeNull();
     expect(zero.result.current.scale).toBe(1);

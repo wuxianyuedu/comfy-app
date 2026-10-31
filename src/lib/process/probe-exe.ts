@@ -142,8 +142,8 @@ export function probeExecutable(
 ): ProbeOutcome {
   const probe = spawn(candidate, args, {
     stdio: "ignore",
-    windowsHide: true,
     timeout: timeoutMs,
+    windowsHide: true,
   });
   /* 撞上探针自己的 `timeout`：`error.code` 是 `ETIMEDOUT`。**必须单列**，它是
    * 「这一次没量到」，而不是「这个命令起不来」（§13.6.4 那条口径）。 */
@@ -155,20 +155,20 @@ export function probeExecutable(
     // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const code: string = errno || "UNKNOWN";
     if (code === "ETIMEDOUT") {
-      return { ok: false, failure: { kind: "timeout", timeoutMs } };
+      return { failure: { kind: "timeout", timeoutMs }, ok: false };
     }
-    return { ok: false, failure: { kind: "spawn-error", code } };
+    return { failure: { code, kind: "spawn-error" }, ok: false };
   }
   /* 起来了 ⇒ 认退出码：`status === 0` 才算可用。`status === null`（被信号干掉、或压根
    * 没等到状态）与退非零一样 —— **都不是「它可用」的证据**。 */
   if (probe.status === 0) {
-    return { ok: true, failure: null };
+    return { failure: null, ok: true };
   }
   /* 两个字段的 `?? null` 是**同一件事的两半**（`spawnSync` 的类型写着可空）：一条
    * 「起了但没等到状态」的读数要被如实交出去，而不是被读成「退 0」。 */
   const status = probe.status ?? null;
   const signal = probe.signal ?? null;
-  return { ok: false, failure: { kind: "nonzero-exit", status, signal } };
+  return { failure: { kind: "nonzero-exit", signal, status }, ok: false };
 }
 
 /** `firstRunnable()` 的入参（候选表 + 每个候选要喂的参数 + 探测预算）。 */
@@ -292,7 +292,7 @@ export function firstRunnable(
     if (outcome.ok) {
       return { hit: candidate, missed, timeouts };
     }
-    const failure = outcome.failure ?? { kind: "spawn-error", code: "UNKNOWN" };
+    const failure = outcome.failure ?? { code: "UNKNOWN", kind: "spawn-error" };
     (failure.kind === "timeout" ? timeouts : missed).push({
       candidate,
       failure,

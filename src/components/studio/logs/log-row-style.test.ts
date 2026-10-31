@@ -39,10 +39,10 @@ function renderRows(): { inRow: Text; outside: Text } {
 /** 「用户框了某段文本」的最小选区视图。 */
 function selectionOn(node: Node | null, collapsed = false): SelectionLike {
   return {
-    rangeCount: node ? 1 : 0,
     anchorNode: node,
     focusNode: node,
     isCollapsed: collapsed,
+    rangeCount: node ? 1 : 0,
   };
 }
 
@@ -72,10 +72,10 @@ describe("selectionInsideLogs 选区是否落在日志正文里", () => {
     expect(selectionInsideLogs(null)).toBe(false);
     expect(
       selectionInsideLogs({
-        rangeCount: 0,
         anchorNode: null,
         focusNode: null,
         isCollapsed: false,
+        rangeCount: 0,
       }),
     ).toBe(false);
   });

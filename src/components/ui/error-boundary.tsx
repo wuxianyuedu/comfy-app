@@ -22,12 +22,12 @@ export class ErrorBoundary extends React.Component<
   { error: Error | null; hasError: boolean }
 > {
   state: { error: Error | null; hasError: boolean } = {
-    hasError: false,
     error: null,
+    hasError: false,
   };
 
   static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
+    return { error, hasError: true };
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
@@ -59,7 +59,7 @@ export class ErrorBoundary extends React.Component<
           <p className="text-danger-strong text-sm font-semibold">组件渲染出错</p>
           <button
             className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
-            onClick={() => this.setState({ hasError: false, error: null })}
+            onClick={() => this.setState({ error: null, hasError: false })}
             type="button"
           >
             重试

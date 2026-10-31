@@ -98,10 +98,10 @@ export function statusButtonClass(extra = ""): string {
  * 实心会让每个新加的动作都自动变成主按钮，而「哪个是主要动作」是调用处的判断。
  */
 export function StatusButton({
-  onClick,
-  disabled,
   children,
   className,
+  disabled,
+  onClick,
   variant = "primary",
 }: {
   children: React.ReactNode;

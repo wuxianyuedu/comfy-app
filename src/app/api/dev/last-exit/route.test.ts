@@ -47,12 +47,12 @@ describe("GET /api/dev/last-exit", () => {
     process.env.COMFYAPP_RUN_ID = "run-new";
     writeRecord({
       at: "t",
-      kind: "dev-server",
       code: 1,
-      signal: null,
-      reason: "x",
+      kind: "dev-server",
       port: 3100,
+      reason: "x",
       runId: "run-old",
+      signal: null,
     });
     const data = await get();
     expect(data.currentRunId).toBe("run-new");
@@ -86,7 +86,7 @@ describe("GET /api/dev/last-exit", () => {
 
   it("拿不到 COMFYAPP_RUN_ID 时 currentRunId 为 null（不编一个值）", async () => {
     delete process.env.COMFYAPP_RUN_ID;
-    writeRecord({ at: "t", reason: "x", kind: "dev-server" });
+    writeRecord({ at: "t", kind: "dev-server", reason: "x" });
     expect((await get()).currentRunId).toBeNull();
   });
 });

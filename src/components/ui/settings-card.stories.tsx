@@ -19,9 +19,9 @@ import { SettingsCard } from "~/components/ui/settings-card";
  * 所以 story 要验的是「设置页那一段长什么样」，不是「它跟 Card 有什么不同」。
  */
 const meta = {
-  title: "UI/SettingsCard",
+  args: { children: null, title: "存储目录" },
   component: SettingsCard,
-  args: { title: "存储目录", children: null },
+  title: "UI/SettingsCard",
 } satisfies Meta<typeof SettingsCard>;
 
 export default meta;

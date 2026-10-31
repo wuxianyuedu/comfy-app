@@ -16,8 +16,8 @@ import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pi
 import { createProject, getActiveId } from "~/lib/project-canvas/canvas-store";
 
 vi.mock("~/lib/workshop/character-portrait-client", () => ({
-  generateWorkflowPortrait: vi.fn(),
   generateRemotePortrait: vi.fn(),
+  generateWorkflowPortrait: vi.fn(),
   importPortraitFile: vi.fn(),
 }));
 
@@ -30,13 +30,13 @@ beforeEach(() => {
     const url = requestUrl(input);
     if (url.includes("/api/workshop/draft")) {
       return new Response(JSON.stringify({ drafts: [], exists: false }), {
-        status: 200,
         headers: { "Content-Type": "application/json" },
+        status: 200,
       });
     }
-    return new Response(JSON.stringify({ skills: [], models: [] }), {
-      status: 200,
+    return new Response(JSON.stringify({ models: [], skills: [] }), {
       headers: { "Content-Type": "application/json" },
+      status: 200,
     });
   });
 });

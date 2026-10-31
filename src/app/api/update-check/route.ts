@@ -125,15 +125,15 @@ export async function GET() {
   const currentBaseline = baseline;
   const groups = [
     {
+      hint: "需重启应用（dev server）才生效",
       key: "restart",
       label: "重启生效",
-      hint: "需重启应用（dev server）才生效",
       ...diffGroup(RESTART_ROOTS, currentBaseline?.restart),
     },
     {
+      hint: "需重编壳后重启才生效（cargo build --release --features custom-protocol）",
       key: "recompile",
       label: "重编壳生效",
-      hint: "需重编壳后重启才生效（cargo build --release --features custom-protocol）",
       ...diffGroup(RECOMPILE_ROOTS, currentBaseline?.recompile),
     },
   ];

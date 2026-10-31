@@ -157,13 +157,13 @@ function parseCharacterEntry(raw: string): ParsedCharacterDraft | null {
   }
   rest = rest.replace(/^[\s\-—–:：.。、,，]+/, "").trim();
   return {
-    name,
     ageGender,
     appearance: rest,
     costume: "",
+    name,
     personality: "",
-    temperament: "",
     styleTags: [],
+    temperament: "",
   };
 }
 
@@ -308,10 +308,10 @@ export function parseShotDrafts(
   if (!hasHeading) {
     cur = {
       heading: "未命名场景",
-      location: "",
-      time: "",
       items: [],
       leadingDialogue: [],
+      location: "",
+      time: "",
     };
     blocks.push(cur);
   }
@@ -323,10 +323,10 @@ export function parseShotDrafts(
       const lt = extractLocationTime(h.marker, h.tail);
       cur = {
         heading: h.heading,
-        location: lt.location,
-        time: lt.time,
         items: [],
         leadingDialogue: [],
+        location: lt.location,
+        time: lt.time,
       };
       blocks.push(cur);
       continue;
@@ -364,16 +364,16 @@ export function parseShotDrafts(
       const own = i === 0 ? [...b.leadingDialogue, ...item.dialogue] : item.dialogue;
       const dialogue = own.join("\n");
       drafts.push({
-        sceneHeading: b.heading,
-        location: b.location,
-        time: b.time,
-        description: item.description,
-        dialogue,
         characterNames: matchCharacterNames(
           `${item.description}\n${dialogue}`,
           knownCharacterNames,
         ),
+        description: item.description,
+        dialogue,
         firstInScene: i === 0,
+        location: b.location,
+        sceneHeading: b.heading,
+        time: b.time,
       });
     });
   }
@@ -383,11 +383,11 @@ export function parseShotDrafts(
 /** 工具解析草稿 → 写入用条目(场景首镜默认远景,其余中景,与既有模板拆分一致) */
 export function draftToShotEntry(draft: ParsedShotDraft): ShotEntry {
   return {
+    characterNames: draft.characterNames,
+    description: draft.description,
+    dialogue: draft.dialogue,
     sceneHeading: draft.sceneHeading,
     shotType: draft.firstInScene ? "wide" : "medium",
-    description: draft.description,
-    characterNames: draft.characterNames,
-    dialogue: draft.dialogue,
   };
 }
 
@@ -405,10 +405,10 @@ export const EXTRACT_CHARACTERS_SYSTEM = `你是剧本分析师。用户给出�
 
 export function buildExtractCharactersMessages(script: string): Array<LLMMessage> {
   return [
-    { role: "system", content: EXTRACT_CHARACTERS_SYSTEM },
+    { content: EXTRACT_CHARACTERS_SYSTEM, role: "system" },
     {
-      role: "user",
       content: `剧本全文:\n${script.slice(0, SCRIPT_SLICE_LIMIT)}`,
+      role: "user",
     },
   ];
 }
@@ -424,10 +424,10 @@ export function buildExtractShotsMessages(
 ): Array<LLMMessage> {
   const names = characterNames.filter((n) => n.trim()).join("、");
   return [
-    { role: "system", content: EXTRACT_SHOTS_SYSTEM },
+    { content: EXTRACT_SHOTS_SYSTEM, role: "system" },
     {
-      role: "user",
       content: `已有角色名单(优先使用这些名字):${names || "(无)"}\n\n剧本全文:\n${script.slice(0, SCRIPT_SLICE_LIMIT)}`,
+      role: "user",
     },
   ];
 }
@@ -452,13 +452,13 @@ export function parseExtractedCharacters(text: string): Array<ParsedCharacterDra
       ? rawTags.filter((t): t is string => typeof t === "string")
       : [];
     out.push({
-      name,
       ageGender: asStr(item.ageGender),
       appearance: asStr(item.appearance),
       costume: asStr(item.costume),
+      name,
       personality: asStr(item.personality),
-      temperament: asStr(item.temperament),
       styleTags,
+      temperament: asStr(item.temperament),
     });
   }
   return out;
@@ -487,11 +487,11 @@ export function parseExtractedShots(text: string): Array<ShotEntry> {
       ? rawNames.filter((n): n is string => typeof n === "string")
       : [];
     out.push({
+      characterNames,
+      description,
+      dialogue: asStr(item.dialogue),
       sceneHeading,
       shotType,
-      description,
-      characterNames,
-      dialogue: asStr(item.dialogue),
     });
   }
   return out;
@@ -537,15 +537,15 @@ export function parseImportedCharacterCards(raw: string): Array<ParsedCharacterD
       : [];
     const skillSlug = asStr(item.skillSlug).trim();
     out.push({
-      name,
       ageGender: asStr(item.ageGender),
       appearance: asStr(item.appearance),
       costume: asStr(item.costume),
-      personality: asStr(item.personality),
-      temperament: asStr(item.temperament),
-      styleTags,
-      skillSlug: skillSlug || undefined,
+      name,
       params: isRecord(item.params) ? item.params : undefined,
+      personality: asStr(item.personality),
+      skillSlug: skillSlug || undefined,
+      styleTags,
+      temperament: asStr(item.temperament),
     });
   }
   if (out.length === 0) {
@@ -579,18 +579,18 @@ export function mergeCharacterDrafts(
     }
     seen.add(name);
     const character: Character = {
-      id: workshopUid("char"),
-      name,
       ageGender: draft.ageGender,
       appearance: draft.appearance,
       costume: draft.costume,
-      personality: draft.personality,
-      temperament: draft.temperament,
-      styleTags: [...draft.styleTags],
-      skillSlug: draft.skillSlug,
-      positivePrompt: "",
+      id: workshopUid("char"),
+      name,
       negativePrompt: "",
       params: {},
+      personality: draft.personality,
+      positivePrompt: "",
+      skillSlug: draft.skillSlug,
+      styleTags: [...draft.styleTags],
+      temperament: draft.temperament,
     };
     const style = styles.find((st) => st.slug === character.skillSlug) ?? styles[0];
     character.positivePrompt = buildCharacterPrompt(character, style);
@@ -604,7 +604,7 @@ export function mergeCharacterDrafts(
     list.push(character);
     added += 1;
   }
-  return { list, added, skipped };
+  return { added, list, skipped };
 }
 
 /** 按标题匹配既有场景:先精确匹配,再做双向包含匹配 */
@@ -633,27 +633,27 @@ export function buildShotsFromEntries(
     const linked = characters.filter((c) => c.name && names.includes(c.name));
     const heading = entry.sceneHeading.trim() || (scene?.heading ?? "") || "未命名场景";
     const shot: Shot = {
+      characterIds: linked.map((c) => c.id),
+      description: entry.description,
+      dialogue: entry.dialogue || undefined,
       id: workshopUid("shot"),
       index: startIndex + i + 1,
-      sceneId: scene?.id ?? "",
-      sceneHeading: heading,
-      shotType: entry.shotType,
-      description: entry.description,
-      characterIds: linked.map((c) => c.id),
-      prompt: "",
       negativePrompt: "",
       params: {},
+      prompt: "",
+      sceneHeading: heading,
+      sceneId: scene?.id ?? "",
+      shotType: entry.shotType,
       status: "idle",
-      dialogue: entry.dialogue || undefined,
     };
     const prompt = buildShotPrompt(shot, scene, linked, undefined);
     const negativePrompt = buildShotNegative(linked, undefined);
     const params = mergeParams(undefined, undefined);
     shots.push({
       ...shot,
-      prompt,
       negativePrompt,
       params: { ...shot.params, ...params },
+      prompt,
     });
   });
   return shots;

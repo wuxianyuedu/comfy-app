@@ -89,10 +89,10 @@ export function productionShotsToShotList(shots: Array<unknown>): Array<ShotList
     const duration =
       typeof raw.duration === "number" ? `${fixed(raw.duration, 1)}s` : EMPTY_PLACEHOLDER;
     list.push({
-      id: raw.id,
-      name,
       duration,
+      id: raw.id,
       mode: raw.imageUrl ? "img2video" : "txt2img",
+      name,
       status: shotStatusToFilmStatus(raw.status),
       thumbnailUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : undefined,
     });
@@ -141,85 +141,85 @@ export function formatShotDuration(seconds: number): string {
  *（`FilmStudio` 的 `selectedShot`），类型上直接是元素而非 `| undefined`。 */
 export const MOCK_SHOTS: [ShotListItem, ...Array<ShotListItem>] = [
   {
-    id: "shot-1",
-    name: "开场 · 城市全景",
     duration: "00:03.2",
+    id: "shot-1",
     mode: "txt2img",
-    status: "SUCCEEDED",
+    name: "开场 · 城市全景",
     selected: true,
+    status: "SUCCEEDED",
   },
   {
-    id: "shot-2",
-    name: "人物特写 · 走向镜头",
     duration: "00:05.0",
+    id: "shot-2",
     mode: "img2video",
+    name: "人物特写 · 走向镜头",
     status: "RUNNING",
   },
   {
-    id: "shot-3",
-    name: "转场 · 溶解过渡",
     duration: "00:01.5",
+    id: "shot-3",
     mode: "transition",
+    name: "转场 · 溶解过渡",
     status: "IDLE",
   },
 ];
 
 export const VIDEO_CLIPS: Array<TimelineClip> = [
   {
+    colorClass: "from-primary-600 to-primary-500",
     id: "vc-1",
     label: "开场全景",
-    width: 180,
-    colorClass: "from-primary-600 to-primary-500",
     textColorClass: "text-primary-soft",
+    width: 180,
   },
   {
+    colorClass: "from-warning to-destructive",
     id: "vc-2",
     label: "人物特写",
-    width: 220,
-    colorClass: "from-warning to-destructive",
     textColorClass: "text-warning-soft",
+    width: 220,
   },
 ];
 
 /* ── 纯展示映射表 ── */
 
 export const MODE_LABELS: Record<ShotMode, string> = {
-  txt2img: "文生图首帧",
   img2video: "图生视频",
   transition: "自动转场",
+  txt2img: "文生图首帧",
 };
 
 export const STATUS_BADGE: Record<ShotStatus, { bg: string; label: string; text: string }> = {
-  IDLE: { bg: "bg-subtle", text: "text-ink-fainter", label: "待处理" },
+  FAILED: {
+    bg: "bg-destructive/15",
+    label: "失败",
+    text: "text-destructive",
+  },
+  IDLE: { bg: "bg-subtle", label: "待处理", text: "text-ink-fainter" },
   QUEUED: {
     bg: "bg-info/15",
-    text: "text-info-strong",
     label: "排队中",
+    text: "text-info-strong",
   },
   RUNNING: {
     bg: "bg-primary/15",
-    text: "text-primary-strong",
     label: "生成中",
+    text: "text-primary-strong",
   },
   SUCCEEDED: {
     bg: "bg-success/15",
-    text: "text-success-strong",
     label: "完成",
-  },
-  FAILED: {
-    bg: "bg-destructive/15",
-    text: "text-destructive",
-    label: "失败",
+    text: "text-success-strong",
   },
 };
 
 export const STAGE_LABEL: Record<FilmStatus, string> = {
-  PARSING: "分镜解析中",
-  GENERATING: "逐镜生成视频中",
+  CANCELLED: "已取消",
   COMPOSING: "合成完整影片中",
   DONE: "影片已完成",
   FAILED: "生成失败",
-  CANCELLED: "已取消",
+  GENERATING: "逐镜生成视频中",
+  PARSING: "分镜解析中",
 };
 
 /** 成片是否仍在推进（决定进度条与「取消」按钮的显隐）。 */

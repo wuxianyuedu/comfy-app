@@ -33,6 +33,10 @@ import {
  *  Raw 节点没有 `inputs[]` 时（老导出 / 被裁过的节点）只能按槽位序号查这张表
  *  拿名字；有 `inputs[]` 时一律以节点自带的名字为准。 */
 const FALLBACK_FULL: Record<string, Array<string>> = {
+  CheckpointLoaderSimple: ["ckpt_name"],
+  CLIPTextEncode: ["clip", "text"],
+  DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
+  EmptyLatentImage: ["width", "height", "batch_size"],
   KSampler: [
     "model",
     "positive",
@@ -60,18 +64,14 @@ const FALLBACK_FULL: Record<string, Array<string>> = {
     "end_at_step",
     "return_with_leftover_noise",
   ],
-  CLIPTextEncode: ["clip", "text"],
-  CheckpointLoaderSimple: ["ckpt_name"],
+  LoadImage: ["image"],
   LoraLoader: ["model", "clip", "lora_name", "strength_model", "strength_clip"],
   LoraLoaderModelOnly: ["model", "lora_name", "strength_model"],
-  EmptyLatentImage: ["width", "height", "batch_size"],
-  VAEEncode: ["pixels", "vae"],
-  VAEDecode: ["samples", "vae"],
   SaveImage: ["images", "filename_prefix"],
-  LoadImage: ["image"],
-  VAELoader: ["vae_name"],
   UNETLoader: ["unet_name", "weight_dtype"],
-  DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
+  VAEDecode: ["samples", "vae"],
+  VAEEncode: ["pixels", "vae"],
+  VAELoader: ["vae_name"],
 };
 
 type NodeInputSlot = {
@@ -132,15 +132,15 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
           continue;
         }
         slots.push({
+          link: inp.link == null ? null : Number(inp.link),
           name: inp.name,
           type: typeof inp.type === "string" ? inp.type : undefined,
-          link: inp.link == null ? null : Number(inp.link),
         });
       }
     } else {
       const order = FALLBACK_FULL[type] ?? [];
       for (const name of order) {
-        slots.push({ name, link: null });
+        slots.push({ link: null, name });
       }
       for (const l of raw.links ?? []) {
         if (!Array.isArray(l) || l.length < 5) {
@@ -162,14 +162,14 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
 
     byId.set(id, {
       id,
-      type,
-      mode: Number(n.mode ?? NODE_MODE_ALWAYS),
-      virtual: isVirtualNodeType(type),
-      raw: n,
       inputs: slots,
+      mode: Number(n.mode ?? NODE_MODE_ALWAYS),
       outputTypes: Array.isArray(n.outputs)
         ? n.outputs.map((output) => (output && typeof output.type === "string" ? output.type : ""))
         : [],
+      raw: n,
+      type,
+      virtual: isVirtualNodeType(type),
     });
   }
   return byId;

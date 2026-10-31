@@ -48,9 +48,9 @@ export const TOP_BAR_BUTTON_BASE = "shrink-0 whitespace-nowrap leading-none";
  * 这里，视图里不再出现任何尺寸响应式类。
  */
 const DENSITY_CLASS: Record<TopBarDensity, string> = {
-  regular: "gap-1.5 px-4 py-2 text-sm",
   compact:
     `gap-1 px-2.5 py-1.5 text-xs ${TOP_BAR_DENSITY_BREAKPOINT}:gap-1.5 ${TOP_BAR_DENSITY_BREAKPOINT}:px-4 ${TOP_BAR_DENSITY_BREAKPOINT}:py-2 ${TOP_BAR_DENSITY_BREAKPOINT}:text-sm`.trim(),
+  regular: "gap-1.5 px-4 py-2 text-sm",
 };
 
 /**
@@ -79,8 +79,8 @@ const BUTTON_PRIMITIVE_OVERRIDE = "h-auto px-0 rounded-none bg-transparent";
 
 /** 顶栏右侧按钮组：`gap-2` -> `gap-1.5`，与按钮内边距同向收缩。 */
 const GROUP_GAP_CLASS: Record<TopBarDensity, string> = {
-  regular: "gap-2",
   compact: `gap-1.5 ${TOP_BAR_DENSITY_BREAKPOINT}:gap-2`,
+  regular: "gap-2",
 };
 
 /**
@@ -90,11 +90,7 @@ const GROUP_GAP_CLASS: Record<TopBarDensity, string> = {
  * @param density        顶栏密度（常规 / 紧凑）
  * @param extra          该按钮自己的补充类（如 `disabled:opacity-40`）
  */
-export function topBarButtonClass(
-  tone: TopBarTone,
-  density: TopBarDensity,
-  extra = "",
-): string {
+export function topBarButtonClass(tone: TopBarTone, density: TopBarDensity, extra = ""): string {
   return [
     TOP_BAR_BUTTON_BASE,
     BUTTON_PRIMITIVE_OVERRIDE,
@@ -170,8 +166,7 @@ const TOP_BAR_TONE_CLASS: Record<TopBarTone, string> = {
   solid:
     "rounded-lg bg-primary-500 font-semibold text-primary-foreground transition-colors hover:bg-primary-600",
   /* 无底色的次级入口（调试开关）。 */
-  ghost:
-    "text-ink-soft hover:text-ink rounded-md font-medium transition-colors",
+  ghost: "text-ink-soft hover:text-ink rounded-md font-medium transition-colors",
   /* 「编辑 IO」激活态：警告色高亮。 */
   ioOn: "rounded-lg border border-warning/60 bg-warning/20 font-semibold text-warning-strong transition-colors hover:bg-warning/30",
   /* 「预览 IO」激活态：信息色高亮。 */

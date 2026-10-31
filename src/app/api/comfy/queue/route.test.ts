@@ -29,10 +29,10 @@ describe("GET /api/comfy/queue", () => {
       queued: 3,
       running: [
         {
-          taskId: "t-1",
-          workflow: "z-image",
           model: "dreamshaper",
           progress: 0.4,
+          taskId: "t-1",
+          workflow: "z-image",
         },
       ],
     };

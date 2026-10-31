@@ -17,43 +17,43 @@ import { trace as traceMock } from "./trace";
 // `../core/repository` 是 server-only 链的下游——三个都 mock 掉，避免加载本
 // 模块时经它们拽出真 pino / better-sqlite3 / ComfyUI HTTP。
 vi.mock("~/lib/core/logger", () => ({
-  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock("../core/repository", () => ({
   taskRepository: {
-    updateProgress: vi.fn(async () => true),
-    markRunning: vi.fn(async () => true),
-    findStatusAndPromptById: vi.fn(async () => null),
     cancel: vi.fn(async () => undefined),
-    listStaleUnownedQueued: vi.fn(async () => []),
-    listStaleRunning: vi.fn(async () => []),
+    createImages: vi.fn(async () => []),
     finalizeFailure: vi.fn(async () => undefined),
     finalizeFromReaper: vi.fn(async () => undefined),
     finalizeSuccess: vi.fn(async () => undefined),
-    createImages: vi.fn(async () => []),
+    findStatusAndPromptById: vi.fn(async () => null),
+    listStaleRunning: vi.fn(async () => []),
+    listStaleUnownedQueued: vi.fn(async () => []),
+    markRunning: vi.fn(async () => true),
     replaceLogs: vi.fn(async () => undefined),
+    updateProgress: vi.fn(async () => true),
   },
 }));
 vi.mock("./client", () => ({
-  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
   interrupt: vi.fn(async () => undefined),
+  resolveComfyBase: vi.fn(async () => "http://127.0.0.1:8188"),
 }));
 vi.mock("./lifecycle", () => ({
-  isComfyStarting: vi.fn().mockReturnValue(false),
+  COMFYUI_AUTOSTART_TIMEOUT_MS: 420_000,
   ensureComfyUiReady: vi.fn(async () => ({ ok: true })),
   isComfyAutoStartSuppressed: vi.fn().mockReturnValue(false),
-  COMFYUI_AUTOSTART_TIMEOUT_MS: 420_000,
+  isComfyStarting: vi.fn().mockReturnValue(false),
 }));
 // ②那一组会逐帧 trace（WS 原文落 `log/comfyui/comfyui-trace.log`）。用例不许往仓库
 // 的 log/ 里写字（规范硬规则 4 + §4 的日志布局），所以整条 trace 通道在本文件里咽掉。
 vi.mock("./trace", () => ({
-  trace: vi.fn(),
   configureTraceLogPath: vi.fn(),
-  traceStringify: (v: unknown) => String(v),
-  historyTraceSummary: vi.fn(() => ""),
   historyOutputKeys: vi.fn(() => []),
+  historyTraceSummary: vi.fn(() => ""),
   queueTraceSummary: vi.fn(() => ({})),
+  trace: vi.fn(),
   TRACE_MAX_LINE: 2000,
+  traceStringify: (v: unknown) => String(v),
 }));
 
 const mod = await import("./executor-ws");
@@ -108,8 +108,8 @@ describe("进度帧认节点类名（ISSUE #1202）", () => {
     s.executedWorkflow.set("t-1", graph);
     await mod.handleMessage(
       JSON.stringify({
+        data: { max: 20, node: nodeId, prompt_id: "p-1", value: 5 },
         type: "progress",
-        data: { prompt_id: "p-1", node: nodeId, value: 5, max: 20 },
       }),
     );
     return calls;
@@ -123,11 +123,11 @@ describe("进度帧认节点类名（ISSUE #1202）", () => {
     expect(taskId).toBe("t-1");
     expect(pct).toBe(25);
     expect(node).toMatchObject({
-      id: "3",
-      value: 5,
-      max: 20,
       classType: "KSampler",
+      id: "3",
       label: "采样去噪",
+      max: 20,
+      value: 5,
     });
   });
 
@@ -144,14 +144,14 @@ describe("进度帧认节点类名（ISSUE #1202）", () => {
     const calls = await feedProgress({ nodes: [{ id: 9, type: "KSampler" }] });
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]![2]).toEqual({ id: "3", value: 5, max: 20 });
+    expect(calls[0]![2]).toEqual({ id: "3", max: 20, value: 5 });
   });
 
   it("还没有图（提交前就来帧）也不丢进度", async () => {
     const calls = await feedProgress(undefined);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]![2]).toEqual({ id: "3", value: 5, max: 20 });
+    expect(calls[0]![2]).toEqual({ id: "3", max: 20, value: 5 });
   });
 
   it("`executing` 记下的那一格也来自同一份图（决定日志是「▶ LoraLoader → ✔ LoraLoader」还是两个未知节点）", async () => {
@@ -161,15 +161,15 @@ describe("进度帧认节点类名（ISSUE #1202）", () => {
 
     await mod.handleMessage(
       JSON.stringify({
+        data: { node: 12, prompt_id: "p-2", status: "running" },
         type: "executing",
-        data: { prompt_id: "p-2", node: 12, status: "running" },
       }),
     );
 
     // 完成行（`executing` 且 node 为 null 时补的那条 "✔ …"）读的就是这一格。
     expect(s.lastNodeByTask.get("t-2")).toMatchObject({
-      node: "12",
       classType: "LoraLoader",
+      node: "12",
     });
   });
 });
@@ -191,14 +191,14 @@ describe("不带 prompt_id 的帧也要留证（ISSUE #1315）", () => {
     vi.mocked(traceMock).mockClear();
 
     const frame = (type: string) =>
-      mod.handleMessage(JSON.stringify({ type, data: { probe: { exec_info: [] } } }));
+      mod.handleMessage(JSON.stringify({ data: { probe: { exec_info: [] } }, type }));
 
     await frame("p1315-first");
     expect(traceCalls()).toHaveLength(1);
     expect(traceCalls()[0]?.[1]).toBeNull();
     expect(traceCalls()[0]?.[3]).toEqual({
-      type: "p1315-first",
       dataKeys: ["probe"],
+      type: "p1315-first",
     });
 
     // 同类型再来一帧：必须不再落盘（这就是「逐帧落盘会刷成噪声」那条预算）。
@@ -215,7 +215,7 @@ describe("不带 prompt_id 的帧也要留证（ISSUE #1315）", () => {
   it("类型数到上限后停止留证（这个集合不许无界增长）", async () => {
     vi.mocked(traceMock).mockClear();
     for (let i = 0; i < 40; i++) {
-      await mod.handleMessage(JSON.stringify({ type: `p1315-cap-${i}`, data: { x: 1 } }));
+      await mod.handleMessage(JSON.stringify({ data: { x: 1 }, type: `p1315-cap-${i}` }));
     }
     // 前面那条用例已经占掉两个类型，这里再灌 40 种 ⇒ 只补到上限 32。
     expect(traceCalls()).toHaveLength(30);

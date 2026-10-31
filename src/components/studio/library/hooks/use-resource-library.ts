@@ -58,5 +58,5 @@ export function useResourceLibrary(): ResourceLibraryController {
 
   const totalCount = library.folders.reduce((sum, folder) => sum + folder.count, 0);
 
-  return { library, projectId, totalCount, setScope };
+  return { library, projectId, setScope, totalCount };
 }

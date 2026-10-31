@@ -24,17 +24,17 @@ import { cn } from "~/lib/utils";
 export type StatusDotState = "up" | "busy" | "probing" | "down";
 
 const STATE_CLASS: Record<StatusDotState, string> = {
-  up: "bg-success",
   busy: "bg-warning",
-  probing: "bg-info",
   down: "bg-destructive",
+  probing: "bg-info",
+  up: "bg-success",
 };
 
 export function StatusDot({
-  state,
-  sizeClass = "size-2",
-  pulse = false,
   className,
+  pulse = false,
+  sizeClass = "size-2",
+  state,
 }: {
   className?: string;
   /** 持续进行中（如日志「跟随中」）时加脉冲动画。 */

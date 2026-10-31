@@ -147,7 +147,7 @@ export function useSettingsOllama({
               "Ollama 启动超时：进程可能未成功运行，请确认已安装 Ollama 并可手动执行 ollama serve",
             );
           },
-          { report: showFlash, failureText: "启动 Ollama 失败" },
+          { failureText: "启动 Ollama 失败", report: showFlash },
         );
       } finally {
         setStarting(false);
@@ -167,8 +167,8 @@ export function useSettingsOllama({
      * 所以探测不进 `action` —— 它在 finally 的语义上，不在成功分支上。 */
     try {
       await runAsyncAction(() => stopOllamaClient(), {
-        report: showFlash,
         failureText: "关闭 Ollama 失败",
+        report: showFlash,
         successText: "Ollama 已关闭",
       });
     } finally {
@@ -183,18 +183,18 @@ export function useSettingsOllama({
 
   const logActive = starting || status === "starting";
   const log = useRuntimeLogSource({
-    source: "ollama-runtime",
     active: logActive,
+    source: "ollama-runtime",
     /* Ollama 落盘的是 logrus 纯文本（无 ANSI 码），按 level= 语义上色 */
     parse: parseOllamaLogText,
   });
 
   return {
-    ollamaStatus: status,
+    ollamaLog: { ...log, active: logActive },
     ollamaModels: models,
     ollamaStarting: starting,
+    ollamaStatus: status,
     ollamaStopping: stopping,
-    ollamaLog: { ...log, active: logActive },
     startOllama,
     stopOllama,
   };

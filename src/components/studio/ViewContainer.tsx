@@ -35,10 +35,10 @@ import { cn } from "~/lib/utils";
 export type DocumentWidth = "narrow" | "medium" | "wide" | "full";
 
 const WIDTH_CLASS: Record<DocumentWidth, string> = {
-  narrow: "max-w-narrow",
-  medium: "max-w-medium",
-  wide: "max-w-wide",
   full: "max-w-none",
+  medium: "max-w-medium",
+  narrow: "max-w-narrow",
+  wide: "max-w-wide",
 };
 
 /**
@@ -52,9 +52,9 @@ const WIDTH_CLASS: Record<DocumentWidth, string> = {
  * `<main>`（规范 06 §语义标签），再套一个会破坏地标导航。
  */
 function ViewFrame({
-  kind,
-  className,
   children,
+  className,
+  kind,
 }: {
   children: ReactNode;
   className?: string;
@@ -83,10 +83,10 @@ function ViewFrame({
  * 再套进另一个滚动容器里。
  */
 export function DocumentFrame({
-  width = "wide",
-  className,
   backdrop,
   children,
+  className,
+  width = "wide",
 }: {
   backdrop?: ReactNode;
   children: ReactNode;
@@ -119,8 +119,8 @@ export function DocumentFrame({
  * 这两颗 token，两份背景并存时谁生效取决于样式表顺序。所以这里干脆不写。
  */
 export function WorkspaceFrame({
-  className,
   children,
+  className,
 }: {
   children: ReactNode;
   className?: string;

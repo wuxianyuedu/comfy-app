@@ -53,13 +53,13 @@ export async function generateWorkflowPortrait(
   const url = await new Promise<string>((resolve, reject) => {
     let imageUrl = "";
     watchTask(taskId, {
-      onProgress: (pct) => handlers.onProgress?.(pct),
       onLog: (entry) => handlers.onLog?.(entry),
       onOutput: (output: SavedOutput) => {
         if (output.kind !== "video" && !imageUrl) {
           imageUrl = output.url;
         }
       },
+      onProgress: (pct) => handlers.onProgress?.(pct),
       onSettled: (result) => {
         if (!result.ok) {
           reject(new Error(result.message ?? "定妆照生成失败"));
@@ -124,8 +124,8 @@ export async function generateRemotePortrait(
   },
 ): Promise<string> {
   const url = await apiGenerateImage({
-    prompt: req.prompt,
     negative: req.negative,
+    prompt: req.prompt,
     size: sizeSpecToWxH(req.size),
     ...(opts.model ? { model: opts.model } : {}),
     mode: "T2I",

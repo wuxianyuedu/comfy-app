@@ -26,55 +26,55 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 /** 一个「比例 + 分辨率 / 像素量 + 倍数 / 宽高」都齐的分辨率选择器。 */
 const io: WorkflowIOMap = {
   "5::widget::aspect_ratio": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "aspect_ratio",
-    type: "COMBO",
     defaultValue: "16:9",
+    direction: "input",
+    kind: "widget",
+    name: "aspect_ratio",
+    nodeId: "5",
     options: ["16:9", "4:3", "1:1"],
-  },
-  "5::widget::resolution": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "resolution",
     type: "COMBO",
-    defaultValue: "1k",
-    options: ["1k", "2k", "4k"],
-  },
-  "5::widget::megapixels": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "megapixels",
-    type: "FLOAT",
-    defaultValue: 1,
-  },
-  "5::widget::multiple": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "multiple",
-    type: "INT",
-    defaultValue: 64,
-    options: ["8", "16", "32", "64"],
-  },
-  "5::widget::width": {
-    direction: "input",
-    kind: "widget",
-    nodeId: "5",
-    name: "width",
-    type: "INT",
-    defaultValue: 1024,
   },
   "5::widget::height": {
+    defaultValue: 576,
     direction: "input",
     kind: "widget",
-    nodeId: "5",
     name: "height",
+    nodeId: "5",
     type: "INT",
-    defaultValue: 576,
+  },
+  "5::widget::megapixels": {
+    defaultValue: 1,
+    direction: "input",
+    kind: "widget",
+    name: "megapixels",
+    nodeId: "5",
+    type: "FLOAT",
+  },
+  "5::widget::multiple": {
+    defaultValue: 64,
+    direction: "input",
+    kind: "widget",
+    name: "multiple",
+    nodeId: "5",
+    options: ["8", "16", "32", "64"],
+    type: "INT",
+  },
+  "5::widget::resolution": {
+    defaultValue: "1k",
+    direction: "input",
+    kind: "widget",
+    name: "resolution",
+    nodeId: "5",
+    options: ["1k", "2k", "4k"],
+    type: "COMBO",
+  },
+  "5::widget::width": {
+    defaultValue: 1024,
+    direction: "input",
+    kind: "widget",
+    name: "width",
+    nodeId: "5",
+    type: "INT",
   },
 };
 
@@ -94,8 +94,8 @@ describe("isSizeDetermined — 定得出宽高才算配置完成", () => {
   it("宽 + 高：两个子口都连上才算", () => {
     expect(
       isSizeDetermined({
-        "size-width": "5::widget::width",
         "size-height": "5::widget::height",
+        "size-width": "5::widget::width",
       }),
     ).toBe(true);
     /* 只连宽度解不出高度 —— 不算配置完成（工坊那边跑不起来）。 */
@@ -128,22 +128,20 @@ describe("isSizeDetermined — 定得出宽高才算配置完成", () => {
   });
 
   it("比例单独连上：解不出宽高", () => {
-    expect(isSizeDetermined({ "size-aspect": "5::widget::aspect_ratio" })).toBe(
-      false,
-    );
+    expect(isSizeDetermined({ "size-aspect": "5::widget::aspect_ratio" })).toBe(false);
   });
 });
 
 describe("尺寸子口派值 — 形状由子口身份给出", () => {
   it("分辨率档：按场景表反解档位，并在端口自己的候选里择一", () => {
     const { inputs } = applyParamMapping({
-      io,
       entries: sizeEntries(),
+      io,
       mapping: {
         manualByMode: { T2I: { "size-resolution": "5::widget::resolution" } },
       },
-      values: { size: "1280x720" },
       mode: "T2I",
+      values: { size: "1280x720" },
     });
     /* 图片场景 16:9 1k 长边 1024；1280×720 更接近 1k 那一档，且该档在候选里。 */
     expect(inputs.find((item) => item.name === "resolution")?.value).toBe("1k");
@@ -154,20 +152,20 @@ describe("尺寸子口派值 — 形状由子口身份给出", () => {
       "5::widget::resolution": {
         direction: "input",
         kind: "widget",
-        nodeId: "5",
         name: "resolution",
-        type: "COMBO",
+        nodeId: "5",
         options: ["4k"],
+        type: "COMBO",
       },
     };
     const { inputs, unmatched } = applyParamMapping({
-      io: narrow,
       entries: buildParamEntries(narrow, undefined, { mode: "T2I" }),
+      io: narrow,
       mapping: {
         manualByMode: { T2I: { "size-resolution": "5::widget::resolution" } },
       },
-      values: { size: "1280x720" },
       mode: "T2I",
+      values: { size: "1280x720" },
     });
     expect(unmatched).toContain("size-resolution");
     expect(inputs.find((item) => item.name === "resolution")).toBeUndefined();
@@ -175,13 +173,13 @@ describe("尺寸子口派值 — 形状由子口身份给出", () => {
 
   it("倍数：由宽高反推能整除两侧的候选", () => {
     const { inputs } = applyParamMapping({
-      io,
       entries: sizeEntries(),
+      io,
       mapping: {
         manualByMode: { T2I: { "size-multiple": "5::widget::multiple" } },
       },
-      values: { size: "1920x1080" },
       mode: "T2I",
+      values: { size: "1920x1080" },
     });
     /* 由宽高反推能整除两侧的那个倍数，并在端口自己的候选里择一（候选是字符串）。 */
     const value = inputs.find((item) => item.name === "multiple")?.value;
@@ -194,10 +192,10 @@ describe("工坊运行闸门 — 尺寸定不出宽高就不许跑", () => {
   it("只连了比例：ready=false，且缺的清单里点名「尺寸」", () => {
     const status = deriveEncapsulationStatus({
       io,
+      mode: "T2I",
       paramMap: {
         source: { "mode:T2I": { "size-aspect": "5::widget::aspect_ratio" } },
       },
-      mode: "T2I",
       /* 只把「尺寸」列为必备口：这条测的就是尺寸那一条判据（默认必备口是提示词）。 */
       requiredInputs: ["size"],
     });
@@ -210,6 +208,7 @@ describe("工坊运行闸门 — 尺寸定不出宽高就不许跑", () => {
   it("比例 + 分辨率档：ready=true", () => {
     const status = deriveEncapsulationStatus({
       io,
+      mode: "T2I",
       paramMap: {
         source: {
           "mode:T2I": {
@@ -218,12 +217,9 @@ describe("工坊运行闸门 — 尺寸定不出宽高就不许跑", () => {
           },
         },
       },
-      mode: "T2I",
       requiredInputs: ["size"],
     });
-    expect(
-      status.entries.find((entry) => entry.id === "size")!.targetIoKey,
-    ).toBeTruthy();
+    expect(status.entries.find((entry) => entry.id === "size")!.targetIoKey).toBeTruthy();
     expect(status.ready).toBe(true);
   });
 });

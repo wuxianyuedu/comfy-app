@@ -18,15 +18,15 @@ import {
   type FitBoundsNode,
 } from "./subgraph-viewport";
 
-const FALLBACK = { width: 240, height: 80 };
-const CONTAINER = { width: 1200, height: 700 };
+const FALLBACK = { height: 80, width: 240 };
+const CONTAINER = { height: 700, width: 1200 };
 
 /** 造一个「未测量」的节点（首帧 / 被视口裁剪）。 */
 function unmeasured(x: number, y: number, w: number, h: number): FitBoundsNode {
   return {
+    measured: { height: 0, width: 0 },
     position: { x, y },
-    measured: { width: 0, height: 0 },
-    style: { width: w, height: h },
+    style: { height: h, width: w },
   };
 }
 
@@ -42,58 +42,58 @@ describe("normalizeBounds", () => {
     );
 
     // 真实内容范围：x 600→1670，y 2000→2680
-    expect(bounds).toEqual({ minX: 600, maxX: 1670, minY: 2000, maxY: 2680 });
+    expect(bounds).toEqual({ maxX: 1670, maxY: 2680, minX: 600, minY: 2000 });
   });
 
   it("实测尺寸优先于声明尺寸", () => {
     const bounds = normalizeBounds(
       [
         {
+          measured: { height: 100, width: 300 },
           position: { x: 0, y: 0 },
-          measured: { width: 300, height: 100 },
-          style: { width: 1, height: 1 },
+          style: { height: 1, width: 1 },
         },
       ],
       FALLBACK,
     );
 
-    expect(bounds).toEqual({ minX: 0, maxX: 300, minY: 0, maxY: 100 });
+    expect(bounds).toEqual({ maxX: 300, maxY: 100, minX: 0, minY: 0 });
   });
 
   it("折叠态节点 measured 只剩标题条时用声明尺寸兜底", () => {
     const collapsed: FitBoundsNode = {
+      measured: { height: 0, width: 0 },
       position: { x: 0, y: 0 },
-      measured: { width: 0, height: 0 },
-      style: { width: 400, height: 300 },
+      style: { height: 300, width: 400 },
     };
 
     expect(normalizeBounds([collapsed], FALLBACK)).toEqual({
-      minX: 0,
       maxX: 400,
-      minY: 0,
       maxY: 300,
+      minX: 0,
+      minY: 0,
     });
   });
 
   it("既无实测也无声明 → 用兜底尺寸，不塌成点", () => {
     const bounds = normalizeBounds([{ position: { x: 500, y: 500 } }], FALLBACK);
 
-    expect(bounds).toEqual({ minX: 500, maxX: 740, minY: 500, maxY: 580 });
+    expect(bounds).toEqual({ maxX: 740, maxY: 580, minX: 500, minY: 500 });
   });
 
   it("尺寸可为带单位的字符串（React Flow 的 style 口径）", () => {
     const bounds = normalizeBounds(
-      [{ position: { x: 0, y: 0 }, style: { width: "210", height: "90" } }],
+      [{ position: { x: 0, y: 0 }, style: { height: "90", width: "210" } }],
       FALLBACK,
     );
 
-    expect(bounds).toEqual({ minX: 0, maxX: 210, minY: 0, maxY: 90 });
+    expect(bounds).toEqual({ maxX: 210, maxY: 90, minX: 0, minY: 0 });
   });
 
   it("没有节点 / 坐标非有限值 → null（由调用方走 fitView 兜底）", () => {
     expect(normalizeBounds([], FALLBACK)).toBeNull();
     expect(
-      normalizeBounds([{ position: { x: NaN, y: 0 }, style: { width: 10, height: 10 } }], FALLBACK),
+      normalizeBounds([{ position: { x: NaN, y: 0 }, style: { height: 10, width: 10 } }], FALLBACK),
     ).toBeNull();
   });
 });
@@ -101,7 +101,7 @@ describe("normalizeBounds", () => {
 describe("computeFitViewport", () => {
   it("把包围盒中心放到容器中心，并留出边距", () => {
     const viewport = computeFitViewport(
-      { minX: 600, maxX: 1670, minY: 2000, maxY: 2520 },
+      { maxX: 1670, maxY: 2520, minX: 600, minY: 2000 },
       CONTAINER,
     )!;
 
@@ -127,17 +127,17 @@ describe("computeFitViewport", () => {
   });
 
   it("小图不放到超过上限，宽图不缩到低于下限", () => {
-    const tiny = computeFitViewport({ minX: 0, maxX: 100, minY: 0, maxY: 50 }, CONTAINER)!;
+    const tiny = computeFitViewport({ maxX: 100, maxY: 50, minX: 0, minY: 0 }, CONTAINER)!;
     expect(tiny.zoom).toBe(DEFAULT_MAX_FIT_ZOOM);
 
-    const huge = computeFitViewport({ minX: 0, maxX: 9000, minY: 0, maxY: 6000 }, CONTAINER)!;
+    const huge = computeFitViewport({ maxX: 9000, maxY: 6000, minX: 0, minY: 0 }, CONTAINER)!;
     expect(huge.zoom).toBe(DEFAULT_MIN_FIT_ZOOM);
   });
 
   it("容器尺寸为 0（未布局）时用兜底尺寸，不产生 Infinity / NaN", () => {
     const viewport = computeFitViewport(
-      { minX: 0, maxX: 1000, minY: 0, maxY: 1000 },
-      { width: 0, height: 0 },
+      { maxX: 1000, maxY: 1000, minX: 0, minY: 0 },
+      { height: 0, width: 0 },
     )!;
 
     expect(Number.isFinite(viewport.x)).toBe(true);
@@ -153,8 +153,8 @@ describe("computeFitViewport", () => {
    * 写死的 0.35 下限会让 6700px 宽的图在 1295px 视口里仍有一大半在视野外 ——
    * 用户打开后还得自己滚轮缩小。 */
   it("显式传入缩放区间时覆盖默认下限：宽图按画布自己的 minZoom 缩到装得下", () => {
-    const wide = { minX: 0, maxX: 6700, minY: 0, maxY: 4000 };
-    const container = { width: 1295, height: 772 };
+    const wide = { maxX: 6700, maxY: 4000, minX: 0, minY: 0 };
+    const container = { height: 772, width: 1295 };
 
     /* 默认（不传区间）：被 0.35 的下限挡住，装不下整张图。 */
     const byDefault = computeFitViewport(wide, container)!;
@@ -163,8 +163,8 @@ describe("computeFitViewport", () => {
 
     /* 传画布自己的区间（minZoom 0.15）：整张图连留白一起落在容器内。 */
     const fitted = computeFitViewport(wide, container, {
-      minZoom: 0.15,
       maxZoom: 2,
+      minZoom: 0.15,
     })!;
     expect(fitted.zoom).toBeLessThan(DEFAULT_MIN_FIT_ZOOM);
     expect(fitted.zoom * (wide.maxX - wide.minX)).toBeLessThanOrEqual(container.width);
@@ -178,15 +178,15 @@ describe("computeFitViewport", () => {
 });
 
 describe("createFitSettleStepper", () => {
-  const OPTIONS = { fallbackSize: FALLBACK, settleRounds: 3, maxAttempts: 24 };
+  const OPTIONS = { fallbackSize: FALLBACK, maxAttempts: 24, settleRounds: 3 };
 
   it("节点分批测量时继续推进，直到范围不再扩大", () => {
     /* 第一帧只量到局部（上一个视图留下的视口），随后整图陆续量到。 */
     const frames: Array<Array<FitBoundsNode>> = [
-      [{ position: { x: 0, y: 0 }, measured: { width: 200, height: 100 } }],
+      [{ measured: { height: 100, width: 200 }, position: { x: 0, y: 0 } }],
       [
-        { position: { x: 0, y: 0 }, measured: { width: 200, height: 100 } },
-        { position: { x: 3000, y: 0 }, measured: { width: 200, height: 100 } },
+        { measured: { height: 100, width: 200 }, position: { x: 0, y: 0 } },
+        { measured: { height: 100, width: 200 }, position: { x: 3000, y: 0 } },
       ],
     ];
     const stepper = createFitSettleStepper(OPTIONS);
@@ -199,7 +199,7 @@ describe("createFitSettleStepper", () => {
      * 本实现的职责是把这次步进**继续下去**，直到范围稳定。 */
     const first = stepper.next(sample);
     expect(first.done).toBe(false);
-    expect(first.bounds).toEqual({ minX: 0, maxX: 200, minY: 0, maxY: 100 });
+    expect(first.bounds).toEqual({ maxX: 200, maxY: 100, minX: 0, minY: 0 });
 
     // 第二帧范围变大（0→3200），仍未收敛
     index = 1;
@@ -220,26 +220,26 @@ describe("createFitSettleStepper", () => {
 
     const first = stepper.next(() => nodes);
     expect(first.bounds).toEqual({
-      minX: 1000,
       maxX: 1670,
-      minY: 2000,
       maxY: 2520,
+      minX: 1000,
+      minY: 2000,
     });
   });
 
   it("一直量不到任何节点时保留上一帧的范围，并在护栏内收手", () => {
     const stepper = createFitSettleStepper({ ...OPTIONS, maxAttempts: 4 });
-    stepper.next(() => [{ position: { x: 10, y: 10 }, style: { width: 100, height: 100 } }]);
+    stepper.next(() => [{ position: { x: 10, y: 10 }, style: { height: 100, width: 100 } }]);
 
     let done = false;
     let rounds = 0;
     while (!done) {
       const result = stepper.next(() => []);
       expect(result.bounds).toEqual({
-        minX: 10,
         maxX: 110,
-        minY: 10,
         maxY: 110,
+        minX: 10,
+        minY: 10,
       });
       done = result.done;
       rounds += 1;

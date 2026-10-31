@@ -27,8 +27,8 @@ import { sceneEntries, type SceneName } from "../../../../.storybook/store-sourc
  * 字段（行高估算正是按 `message` 文本折行算的）。
  */
 const meta = {
-  title: "Studio/Logs/VirtualLogList",
   component: VirtualLogList,
+  title: "Studio/Logs/VirtualLogList",
 } satisfies Meta<typeof VirtualLogList>;
 
 export default meta;
@@ -42,8 +42,8 @@ type Story = StoryObj<typeof VirtualLogListHarness>;
  * 让容器自然撑开等于关掉虚拟化、把这一组要看的窗口计算整块跳过。
  */
 function VirtualLogListHarness({
-  scene = "longTimeline",
   following = true,
+  scene = "longTimeline",
   wrap = true,
 }: {
   following?: boolean;

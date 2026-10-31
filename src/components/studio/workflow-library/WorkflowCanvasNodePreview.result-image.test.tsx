@@ -19,23 +19,23 @@ vi.mock("~/components/workshop/mode-contract/hooks/use-mode-contracts", () => ({
  *  订阅者会无限重渲染。 */
 const mockSnapshot = { runs: [] };
 const mockDoneRun = {
+  resultUrl: "blob://fake-result.png",
+  source: "canvas-node",
+  startedAt: 1,
+  status: /* SAFETY: 类型断言已复核 */ "done" as const,
   taskId: "task-done",
+  taskType: "t2i",
   workflowId: "wf-1",
   workflowName: "测试工作流",
-  taskType: "t2i",
-  startedAt: 1,
-  source: "canvas-node",
-  status: /* SAFETY: 类型断言已复核 */ "done" as const,
-  resultUrl: "blob://fake-result.png",
 };
 vi.mock("~/lib/workflow/workflow-run-store", () => ({
   appendWorkflowRunLog: vi.fn(),
+  failWorkflowRun: vi.fn(),
   getWorkflowRunStoreSnapshot: () => mockSnapshot,
   latestRunForWorkflow: () => mockDoneRun,
   patchWorkflowRun: vi.fn(),
   registerWorkflowRun: vi.fn(),
   subscribeWorkflowRunStore: () => () => undefined,
-  failWorkflowRun: vi.fn(),
 }));
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
@@ -56,13 +56,13 @@ afterEach(cleanup);
 /** 只有一个可改数值参数的工作流。 */
 const io: WorkflowIOMap = {
   "7::widget::steps": {
+    defaultValue: 20,
     direction: "input",
     kind: "widget",
-    nodeId: "7",
-    name: "steps",
     label: "步数",
+    name: "steps",
+    nodeId: "7",
     type: "INT",
-    defaultValue: 20,
   },
 };
 

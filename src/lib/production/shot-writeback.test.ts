@@ -28,16 +28,16 @@ const pushDraftMock = vi.mocked(pushServerDraft);
 
 function shotA(over: Partial<Shot> = {}): Shot {
   return {
+    characterIds: [],
+    description: "",
     id: "a",
     index: 1,
-    sceneId: "s1",
-    sceneHeading: "",
-    shotType: "medium",
-    description: "",
-    characterIds: [],
-    prompt: "p",
     negativePrompt: "n",
     params: {},
+    prompt: "p",
+    sceneHeading: "",
+    sceneId: "s1",
+    shotType: "medium",
     status: "idle",
     ...over,
   };
@@ -65,16 +65,16 @@ describe("recordCanvasShotGeneration", () => {
     seedDraftWithShotA();
     fetchProdMock.mockResolvedValue(null);
     await recordCanvasShotGeneration("proj_1", "a", {
+      imageUrl: "/x.png",
       status: "done",
       taskId: "t9",
-      imageUrl: "/x.png",
     });
     const back = readWorkshopDraft("proj_1");
     expect(back.shots[0]).toMatchObject({
       id: "a",
+      imageUrl: "/x.png",
       status: "done",
       taskId: "t9",
-      imageUrl: "/x.png",
     });
     expect(pushDraftMock).toHaveBeenCalledTimes(1);
     // production 镜像无该行 → 不推
@@ -83,40 +83,40 @@ describe("recordCanvasShotGeneration", () => {
 
   it("production 命中镜头 → 读改写并保留 progress", async () => {
     fetchProdMock.mockResolvedValue({
-      title: "T",
-      type: "drama",
-      tone: "轻",
-      logline: "L",
-      scriptMarkdown: "#",
-      scenes: [],
       characters: [],
+      logline: "L",
+      progress: { rendered: false, stage: "shots" },
+      scenes: [],
+      scriptMarkdown: "#",
       shots: [shotA()],
-      progress: { stage: "shots", rendered: false },
+      title: "T",
+      tone: "轻",
+      type: "drama",
     });
     await recordCanvasShotGeneration("proj_1", "a", {
-      status: "done",
       imageUrl: "/y.png",
+      status: "done",
     });
     expect(pushProdMock).toHaveBeenCalledTimes(1);
     const [projectId, payload] = pushProdMock.mock.calls[0]!;
     expect(projectId).toBe("proj_1");
-    expect(payload.progress).toEqual({ stage: "shots", rendered: false });
+    expect(payload.progress).toEqual({ rendered: false, stage: "shots" });
     expect(payload.shots).toEqual([
-      expect.objectContaining({ id: "a", status: "done", imageUrl: "/y.png" }),
+      expect.objectContaining({ id: "a", imageUrl: "/y.png", status: "done" }),
     ]);
   });
 
   it("两侧都没有该镜头 → 不落任何写", async () => {
     fetchProdMock.mockResolvedValue({
-      title: "T",
-      type: "",
-      tone: "",
-      logline: "",
-      scriptMarkdown: "",
-      scenes: [],
       characters: [],
+      logline: "",
+      progress: { rendered: false, stage: "script" },
+      scenes: [],
+      scriptMarkdown: "",
       shots: [shotA({ id: "other" })],
-      progress: { stage: "script", rendered: false },
+      title: "T",
+      tone: "",
+      type: "",
     });
     await recordCanvasShotGeneration("proj_1", "a", { status: "done" });
     expect(pushDraftMock).not.toHaveBeenCalled();
@@ -128,13 +128,13 @@ describe("recordCanvasShotGeneration", () => {
     fetchProdMock.mockRejectedValue(new Error("network down"));
     await expect(
       recordCanvasShotGeneration("proj_1", "a", {
-        status: "done",
         imageUrl: "/z.png",
+        status: "done",
       }),
     ).resolves.toBeUndefined();
     expect(readWorkshopDraft("proj_1").shots[0]).toMatchObject({
-      status: "done",
       imageUrl: "/z.png",
+      status: "done",
     });
     expect(pushProdMock).not.toHaveBeenCalled();
   });
@@ -148,10 +148,10 @@ describe("requestShotRedo", () => {
       shots: [
         /* SAFETY: 类型断言已复核 */ {
           ...shotA(),
-          imageUrl: "/x.png",
           clipUrl: "/y.mp4",
-          status: "done",
+          imageUrl: "/x.png",
           rev: 0,
+          status: "done",
         } as never,
       ],
     });
@@ -167,30 +167,30 @@ describe("requestShotRedo", () => {
   it("命中镜头：草稿与 production 都清产出 + 状态 idle + rev 自增", async () => {
     seedDraftWithDoneShotA();
     fetchProdMock.mockResolvedValue({
-      title: "T",
-      type: "",
-      tone: "",
-      logline: "",
-      scriptMarkdown: "",
-      scenes: [],
       characters: [],
+      logline: "",
+      progress: { rendered: false, stage: "render" },
+      scenes: [],
+      scriptMarkdown: "",
       shots: [
         {
+          clipUrl: "/y.mp4",
           id: "a",
           imageUrl: "/x.png",
-          clipUrl: "/y.mp4",
-          status: "done",
           rev: 0,
+          status: "done",
         },
       ],
-      progress: { stage: "render", rendered: false },
+      title: "T",
+      tone: "",
+      type: "",
     });
 
     await requestShotRedo("proj_1", "a");
 
     const drafted = /* SAFETY: 类型断言已复核 */ readWorkshopDraft("proj_1")
       .shots[0] as unknown as Record<string, unknown>;
-    expect(drafted).toMatchObject({ status: "idle", rev: 1 });
+    expect(drafted).toMatchObject({ rev: 1, status: "idle" });
     expect(drafted.imageUrl).toBeUndefined();
     expect(pushDraftMock).toHaveBeenCalledTimes(1);
 
@@ -200,13 +200,13 @@ describe("requestShotRedo", () => {
       payload.shots as Array<Record<string, unknown>>
     )[0]!;
     expect(pushed).toMatchObject({
-      status: "idle",
       clipStatus: "idle",
       rev: 1,
+      status: "idle",
     });
     expect(pushed.imageUrl).toBeUndefined();
     // 非镜头字段保留
-    expect(payload.progress).toEqual({ stage: "render", rendered: false });
+    expect(payload.progress).toEqual({ rendered: false, stage: "render" });
   });
 
   it("两侧都没有该镜头 → 不落任何写", async () => {
@@ -215,15 +215,15 @@ describe("requestShotRedo", () => {
       shots: [{ ...shotA(), id: "other" }],
     });
     fetchProdMock.mockResolvedValue({
-      title: "T",
-      type: "",
-      tone: "",
-      logline: "",
-      scriptMarkdown: "",
-      scenes: [],
       characters: [],
+      logline: "",
+      progress: { rendered: false, stage: "script" },
+      scenes: [],
+      scriptMarkdown: "",
       shots: [{ id: "other" }],
-      progress: { stage: "script", rendered: false },
+      title: "T",
+      tone: "",
+      type: "",
     });
     await requestShotRedo("proj_1", "a");
     expect(pushDraftMock).not.toHaveBeenCalled();

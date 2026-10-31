@@ -39,13 +39,8 @@ export type ReviewRubricKind = "script" | "character" | "shot" | "shotImage";
 
 /** 剧本 rubric：结构完整、具象可拍、基调一致、节奏张力（#2478 剧本评审闭环的判据面）。 */
 const SCRIPT_RUBRIC: ReviewRubric = {
-  kind: "script",
-  version: "script-v1",
   dimensions: [
     {
-      key: "structure",
-      label: "结构完整",
-      description: "开头-发展-高潮是否齐全，场景交代是否清楚",
       anchors: {
         1: "结构残缺或无法分辨场景边界",
         2: "有明显结构但缺关键环节（如有发展无高潮）",
@@ -53,11 +48,11 @@ const SCRIPT_RUBRIC: ReviewRubric = {
         4: "结构完整、推进自然，小瑕疵不影响理解",
         5: "结构严谨，起承转合有力且服务于主题",
       },
+      description: "开头-发展-高潮是否齐全，场景交代是否清楚",
+      key: "structure",
+      label: "结构完整",
     },
     {
-      key: "concreteness",
-      label: "具象可拍",
-      description: "动作与画面是否具体（Δ 行能直接拍），还是空泛套话",
       anchors: {
         1: "几乎全是抽象概述，没有可执行的画面",
         2: "多数段落空泛，仅个别处具象",
@@ -65,11 +60,11 @@ const SCRIPT_RUBRIC: ReviewRubric = {
         4: "绝大多数动作具体可拍，个别处略含混",
         5: "全部动作与画面具象、可直接进入分镜",
       },
+      description: "动作与画面是否具体（Δ 行能直接拍），还是空泛套话",
+      key: "concreteness",
+      label: "具象可拍",
     },
     {
-      key: "consistency",
-      label: "基调一致",
-      description: "是否贴合项目类型 / 基调 / 梗概，不自相矛盾",
       anchors: {
         1: "与类型 / 基调明显相悖或前后矛盾",
         2: "多处偏离设定，梗概承诺的内容缺失",
@@ -77,11 +72,11 @@ const SCRIPT_RUBRIC: ReviewRubric = {
         4: "贴合项目意图，仅细节处有轻微出入",
         5: "全程贴合类型 / 基调 / 梗概，无矛盾",
       },
+      description: "是否贴合项目类型 / 基调 / 梗概，不自相矛盾",
+      key: "consistency",
+      label: "基调一致",
     },
     {
-      key: "dialogue",
-      label: "台词质量",
-      description: "台词是否口语、有信息量、区分人物",
       anchors: {
         1: "台词空洞、机械或功能性缺失",
         2: "多数台词套话，人物口吻不可分辨",
@@ -89,19 +84,19 @@ const SCRIPT_RUBRIC: ReviewRubric = {
         4: "台词自然、有信息量，小段生硬",
         5: "台词精炼有戏，各角色声口分明",
       },
+      description: "台词是否口语、有信息量、区分人物",
+      key: "dialogue",
+      label: "台词质量",
     },
   ],
+  kind: "script",
+  version: "script-v1",
 };
 
 /** 角色卡 rubric：外貌服装具象可绘、性格可用于画面、贴合项目。 */
 const CHARACTER_RUBRIC: ReviewRubric = {
-  kind: "character",
-  version: "character-v1",
   dimensions: [
     {
-      key: "visual",
-      label: "外貌具象",
-      description: "外貌是否具体到可作画（发型 / 五官 / 体型 / 肤色）",
       anchors: {
         1: "只有抽象形容（如「帅气」），无法作画",
         2: "有一两个具体特征，主体仍空泛",
@@ -109,11 +104,11 @@ const CHARACTER_RUBRIC: ReviewRubric = {
         4: "外貌充分具体，可直接出角色设计",
         5: "外貌精确且自洽，含辨识度细节",
       },
+      description: "外貌是否具体到可作画（发型 / 五官 / 体型 / 肤色）",
+      key: "visual",
+      label: "外貌具象",
     },
     {
-      key: "costume",
-      label: "服装明确",
-      description: "服装是否有颜色 / 材质 / 款式等可绘信息",
       anchors: {
         1: "缺服装或仅「便装」一类空词",
         2: "服装类型有但缺颜色 / 材质",
@@ -121,11 +116,11 @@ const CHARACTER_RUBRIC: ReviewRubric = {
         4: "服装信息充分可绘，个别细节待补",
         5: "服装完整精确，与角色身份呼应",
       },
+      description: "服装是否有颜色 / 材质 / 款式等可绘信息",
+      key: "costume",
+      label: "服装明确",
     },
     {
-      key: "consistency",
-      label: "贴合项目",
-      description: "与项目类型 / 基调 / 剧本设定是否一致",
       anchors: {
         1: "与项目世界明显冲突",
         2: "多处不合设定",
@@ -133,19 +128,19 @@ const CHARACTER_RUBRIC: ReviewRubric = {
         4: "贴合设定，细节略有出入",
         5: "完全贴合且补足了设定气质",
       },
+      description: "与项目类型 / 基调 / 剧本设定是否一致",
+      key: "consistency",
+      label: "贴合项目",
     },
   ],
+  kind: "character",
+  version: "character-v1",
 };
 
 /** 分镜镜头 rubric：主体动作明确、与剧本衔接、景别有效、提示词可出图。 */
 const SHOT_RUBRIC: ReviewRubric = {
-  kind: "shot",
-  version: "shot-v1",
   dimensions: [
     {
-      key: "subject",
-      label: "主体明确",
-      description: "画面主体与动作是否明确（谁、在做什么）",
       anchors: {
         1: "看不出主体或动作",
         2: "主体或动作有一项含混",
@@ -153,11 +148,11 @@ const SHOT_RUBRIC: ReviewRubric = {
         4: "主体、动作、构图意图都清楚",
         5: "主体动作鲜明，画面张力可直接出图",
       },
+      description: "画面主体与动作是否明确（谁、在做什么）",
+      key: "subject",
+      label: "主体明确",
     },
     {
-      key: "consistency",
-      label: "衔接剧本",
-      description: "与所在场景 / 剧本内容是否一致（人物、地点、情绪）",
       anchors: {
         1: "与剧本场景明显不符",
         2: "人物 / 地点等关键要素错位",
@@ -165,11 +160,11 @@ const SHOT_RUBRIC: ReviewRubric = {
         4: "衔接良好，轻微出入不影响叙事",
         5: "严丝合缝地承接剧本节拍",
       },
+      description: "与所在场景 / 剧本内容是否一致（人物、地点、情绪）",
+      key: "consistency",
+      label: "衔接剧本",
     },
     {
-      key: "promptability",
-      label: "可出图",
-      description: "提示词是否具象、无冲突，文生图能出对画面",
       anchors: {
         1: "提示词缺失或自相矛盾",
         2: "提示词过短 / 过泛，出图必然跑偏",
@@ -177,21 +172,21 @@ const SHOT_RUBRIC: ReviewRubric = {
         4: "提示词充分具象，可直接生成",
         5: "提示词精准完整，预期出图即分镜意图",
       },
+      description: "提示词是否具象、无冲突，文生图能出对画面",
+      key: "promptability",
+      label: "可出图",
     },
   ],
+  kind: "shot",
+  version: "shot-v1",
 };
 
 /** 生图 rubric（P8-2 视觉评审）：看图打分 —— 与提示词对齐 / 角色一致性 / 构图景别 / 画面瑕疵。
  *  与文本镜头 rubric（subject/consistency/promptability）是两套：文本评「提示词写得好不好」，
  *  视觉评「图本身对不对题、有没有崩」。两者都挂镜头，但维度不同、各打各的分。 */
 const SHOT_IMAGE_RUBRIC: ReviewRubric = {
-  kind: "shotImage",
-  version: "shotImage-v1",
   dimensions: [
     {
-      key: "promptAlignment",
-      label: "与提示词对齐",
-      description: "画面是否还原了镜头提示词的主体、动作、风格与关键元素",
       anchors: {
         1: "画面与提示词完全无关或大量缺失主体",
         2: "主体在但关键元素（风格/动作/服饰）明显偏离",
@@ -199,11 +194,11 @@ const SHOT_IMAGE_RUBRIC: ReviewRubric = {
         4: "高度还原提示词，仅极细微差异",
         5: "完全贴合提示词，主体动作风格俱在",
       },
+      description: "画面是否还原了镜头提示词的主体、动作、风格与关键元素",
+      key: "promptAlignment",
+      label: "与提示词对齐",
     },
     {
-      key: "characterConsistency",
-      label: "角色一致性",
-      description: "出镜角色是否与该角色的生效定妆照一致（外貌/服装/发色等）",
       anchors: {
         1: "角色与定妆照毫无关联或张冠李戴",
         2: "能认出角色但外貌/服装有明显错位",
@@ -211,11 +206,11 @@ const SHOT_IMAGE_RUBRIC: ReviewRubric = {
         4: "与定妆照一致，仅光影/姿态差异",
         5: "严格一致，定妆照可认作同一人",
       },
+      description: "出镜角色是否与该角色的生效定妆照一致（外貌/服装/发色等）",
+      key: "characterConsistency",
+      label: "角色一致性",
     },
     {
-      key: "composition",
-      label: "构图景别",
-      description: "景别（特写/中景/全景等）与镜头设定是否相符、构图是否合格",
       anchors: {
         1: "景别完全不符或构图崩坏（主体出框/比例失调）",
         2: "景别有偏差或构图明显失衡",
@@ -223,11 +218,11 @@ const SHOT_IMAGE_RUBRIC: ReviewRubric = {
         4: "景别符合、构图舒适",
         5: "景别精准、构图专业",
       },
+      description: "景别（特写/中景/全景等）与镜头设定是否相符、构图是否合格",
+      key: "composition",
+      label: "构图景别",
     },
     {
-      key: "artifacts",
-      label: "画面瑕疵",
-      description: "是否有崩坏：手部/肢体畸形、多余肢体、文字水印、模糊噪点",
       anchors: {
         1: "严重崩坏（多手多脚/肢体扭曲/满屏水印）",
         2: "明显瑕疵（手畸/肢体断裂/可读水印）",
@@ -235,14 +230,19 @@ const SHOT_IMAGE_RUBRIC: ReviewRubric = {
         4: "基本干净，极难察觉的小瑕疵",
         5: "无崩坏，画面干净",
       },
+      description: "是否有崩坏：手部/肢体畸形、多余肢体、文字水印、模糊噪点",
+      key: "artifacts",
+      label: "画面瑕疵",
     },
   ],
+  kind: "shotImage",
+  version: "shotImage-v1",
 };
 
 /** 全部 rubric（按 kind 取用；新增评审对象在这里登记）。 */
 export const REVIEW_RUBRICS: Record<ReviewRubricKind, ReviewRubric> = {
-  script: SCRIPT_RUBRIC,
   character: CHARACTER_RUBRIC,
+  script: SCRIPT_RUBRIC,
   shot: SHOT_RUBRIC,
   shotImage: SHOT_IMAGE_RUBRIC,
 };

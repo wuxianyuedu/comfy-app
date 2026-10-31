@@ -21,18 +21,18 @@ afterEach(cleanup);
  */
 const apiChannels: ApiChannelsView = {
   image: {
-    configured: true,
     baseUrl: "https://api.example.com",
-    path: "/images/generations",
-    model: "",
+    configured: true,
     hasApiKey: true,
+    model: "",
+    path: "/images/generations",
   },
   video: {
-    configured: false,
     baseUrl: "",
-    path: "",
-    model: "",
+    configured: false,
     hasApiKey: false,
+    model: "",
+    path: "",
   },
 };
 

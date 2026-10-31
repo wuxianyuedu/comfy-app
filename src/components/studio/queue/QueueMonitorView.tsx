@@ -158,8 +158,8 @@ export function QueueMonitorView({
                     onClick={() =>
                       c.openLog({
                         id: running.id,
-                        workflowName: running.workflowName,
                         status: "RUNNING",
+                        workflowName: running.workflowName,
                       })
                     }
                     size="xs"
@@ -199,10 +199,10 @@ export function QueueMonitorView({
                         className="h-auto gap-1"
                         onClick={() =>
                           c.openLog({
-                            id: row.id,
-                            workflowName: row.workflowName,
-                            status: row.status,
                             error: row.error,
+                            id: row.id,
+                            status: row.status,
+                            workflowName: row.workflowName,
                           })
                         }
                         size="xs"
@@ -240,7 +240,7 @@ export function QueueMonitorView({
             </SectionHeading>
             {c.queued.length > 0 ? (
               <ol className="border-border bg-card overflow-hidden rounded-2xl border">
-                {c.queued.map(({ row, position }) => (
+                {c.queued.map(({ position, row }) => (
                   <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
                     <QueueRowLine
                       busy={c.isBusy(row.id)}

@@ -12,7 +12,7 @@ import { timeAgo } from "~/lib/time-format";
 import type { QueueRow } from "./queue-monitor-config";
 
 /** 分区标题（h2）。图标是装饰，读屏靠文字本身。 */
-export function SectionHeading({ id, children }: { children: ReactNode; id: string }) {
+export function SectionHeading({ children, id }: { children: ReactNode; id: string }) {
   return (
     <h2
       className="text-ink-soft mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide"
@@ -25,7 +25,7 @@ export function SectionHeading({ id, children }: { children: ReactNode; id: stri
 }
 
 /** 一条度量：上标签下数值。数值是「算出来的字符串」，空值不假装是 0。 */
-export function Field({ label, children }: { children: string; label: string }) {
+export function Field({ children, label }: { children: string; label: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-ink-fainter text-2xs truncate">{label}</dt>
@@ -51,13 +51,13 @@ export function Field({ label, children }: { children: string; label: string }) 
  * 本行不自己比 id。
  */
 export function QueueRowLine({
-  row,
-  leading,
   busy,
+  leading,
   onCancel,
   onCopy,
   onOpenFolder,
   onOpenLog,
+  row,
 }: {
   busy: boolean;
   leading?: string;

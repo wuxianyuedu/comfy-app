@@ -22,9 +22,9 @@ type NativeSelectSize = NonNullable<React.ComponentProps<typeof NativeSelect>["s
 const SIZES: Array<NativeSelectSize> = ["sm", "default"];
 
 const meta = {
-  title: "UI/NativeSelect",
-  component: NativeSelect,
   args: { "aria-label": "输出格式" },
+  component: NativeSelect,
+  title: "UI/NativeSelect",
 } satisfies Meta<typeof NativeSelect>;
 
 export default meta;

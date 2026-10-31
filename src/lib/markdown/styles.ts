@@ -39,6 +39,14 @@ function m(v: string): string {
 export const MARKDOWN_ELEMENT_STYLES: Readonly<Record<string, StyleRule>> = {
   /* 标题字号随层级递减。**层级不下移**：便签标题栏与剧本外层标题各自有语义，
    * 再整体减一档会让 markdown 自己的 `#` 没有落点（`h1` 在域内允许出现）。 */
+  a: {
+    style:
+      "color:var(--color-md-link);text-decoration:underline;" +
+      "text-decoration-thickness:1px;text-underline-offset:2px;",
+    /* 外链新开页签：桌面壳里不能夺走当前窗口；`noreferrer` 同时挡住 `Referer`
+     *  与 `window.opener` 回指。 */
+    extra: ' target="_blank" rel="noreferrer"',
+  },
   h1: {
     style: `font-weight:700;${m("8px 0 4px")}font-size:18px;color:var(--color-ink-bright);`,
   },
@@ -58,14 +66,6 @@ export const MARKDOWN_ELEMENT_STYLES: Readonly<Record<string, StyleRule>> = {
     style: `font-weight:700;${m("8px 0 4px")}font-size:11px;color:var(--color-ink-bright);`,
   },
   p: { style: `${m("4px 0")}line-height:1.5;` },
-  a: {
-    style:
-      "color:var(--color-md-link);text-decoration:underline;" +
-      "text-decoration-thickness:1px;text-underline-offset:2px;",
-    /* 外链新开页签：桌面壳里不能夺走当前窗口；`noreferrer` 同时挡住 `Referer`
-     *  与 `window.opener` 回指。 */
-    extra: ' target="_blank" rel="noreferrer"',
-  },
   /* 代码块：底色比行内代码更重，整体可横向滚动（长行不撑破便签）。 */
   pre: {
     style:
@@ -75,24 +75,28 @@ export const MARKDOWN_ELEMENT_STYLES: Readonly<Record<string, StyleRule>> = {
   },
   /* `pre` 里的 `code` 不再叠底色与边框（否则代码块里出现「框里的框」）——
    *  `styles.ts` 之后没有别的样式层，这条差异只能在这里按标签本身表达。 */
-  code: {
-    style:
-      `background:var(--color-md-inline-code-bg);border:1px solid var(--color-md-border);` +
-      `padding:0 3px;border-radius:3px;font-size:10px;${MONO}`,
-  },
   blockquote: {
     style:
       "border-left:3px solid var(--color-md-quote-border);padding:2px 0 2px 8px;" +
       `${m("6px 0")}color:var(--color-ink-soft);`,
   },
-  ul: { style: `${m("4px 0 4px 18px")}padding:0;list-style-type:disc;` },
-  ol: { style: `${m("4px 0 4px 18px")}padding:0;list-style-type:decimal;` },
-  li: { style: m("2px 0") },
+  code: {
+    style:
+      `background:var(--color-md-inline-code-bg);border:1px solid var(--color-md-border);` +
+      `padding:0 3px;border-radius:3px;font-size:10px;${MONO}`,
+  },
   hr: {
     style: `border:none;border-top:1px solid var(--color-md-border);${m("8px 0")}`,
   },
+  li: { style: m("2px 0") },
+  ol: { style: `${m("4px 0 4px 18px")}padding:0;list-style-type:decimal;` },
   table: {
     style: `border-collapse:collapse;${m("6px 0")}width:100%;font-size:11px;line-height:1.45;`,
+  },
+  td: {
+    style:
+      "padding:4px 8px;border:1px solid var(--color-md-border);" +
+      "color:var(--color-ink-subtle);text-align:left;vertical-align:top;",
   },
   th: {
     style:
@@ -100,11 +104,7 @@ export const MARKDOWN_ELEMENT_STYLES: Readonly<Record<string, StyleRule>> = {
       "background:var(--color-md-inline-code-bg);font-weight:600;" +
       "color:var(--color-ink-bright);text-align:left;vertical-align:top;",
   },
-  td: {
-    style:
-      "padding:4px 8px;border:1px solid var(--color-md-border);" +
-      "color:var(--color-ink-subtle);text-align:left;vertical-align:top;",
-  },
+  ul: { style: `${m("4px 0 4px 18px")}padding:0;list-style-type:disc;` },
   /* 图片：便签宽度有限，超宽图按容器收窄，不撑破布局。 */
   img: { style: "max-width:100%;height:auto;vertical-align:middle;" },
   /* 任务列表的勾选框：`disabled` 由 marked 自己带上，这里只压尺寸与基线对齐。 */
@@ -112,21 +112,21 @@ export const MARKDOWN_ELEMENT_STYLES: Readonly<Record<string, StyleRule>> = {
   /* 以下都是「放行但不加工」的行内元素：上表的形状已经够了，单独列出来是为了
    *  让「这些标签被允许」有一个可读的落点（而不是只存在于消毒白名单里）。
    *  省略 `style` 而不是写 `style: ""` —— 见 `StyleRule.style` 的注释。 */
+  b: {},
   br: {},
   del: {},
-  s: {},
   em: {},
-  strong: {},
-  b: {},
   i: {},
-  u: {},
-  mark: {},
-  sub: {},
-  sup: {},
-  small: { style: "font-size:0.85em;" },
   kbd: {
     style: `${MONO}font-size:0.9em;border:1px solid var(--color-md-border);border-radius:3px;padding:0 3px;`,
   },
+  mark: {},
+  s: {},
+  small: { style: "font-size:0.85em;" },
+  strong: {},
+  sub: {},
+  sup: {},
+  u: {},
   /* 折叠块（markdown 里写的原始 `<details>`）：只留语义，不加装饰。 */
   details: { style: m("4px 0") },
   summary: { style: "cursor:pointer;font-weight:600;" },

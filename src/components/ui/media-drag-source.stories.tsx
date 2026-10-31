@@ -39,10 +39,10 @@ import { artifactUrl } from "~/lib/media/output-layout";
  * 并且 `draggable` 属性为真。
  */
 const meta = {
-  title: "UI/MediaDragSource",
+  args: { kind: "image", url: null },
   component: MediaDragCard,
-  args: { url: null, kind: "image" },
   render: (args) => <MediaDragCard {...args} />,
+  title: "UI/MediaDragSource",
 } satisfies Meta<typeof MediaDragCard>;
 
 export default meta;
@@ -51,9 +51,9 @@ type Story = StoryObj<typeof meta>;
 
 /** 一张真能拖的卡：`{...mediaDragSourceProps({...})}` 整份摊开。 */
 function MediaDragCard({
-  url,
-  kind,
   canDrag = true,
+  kind,
+  url,
 }: {
   canDrag?: boolean;
   kind: MediaDragPayload["mediaType"];
@@ -62,11 +62,11 @@ function MediaDragCard({
   return (
     <div
       {...mediaDragSourceProps({
-        url,
-        kind,
         canDrag,
         className:
           "flex h-32 w-48 flex-col items-center justify-center gap-1 rounded-lg border bg-surface-2 p-3 text-center",
+        kind,
+        url,
       })}
     >
       <span className="text-sm font-medium">
@@ -81,24 +81,24 @@ function MediaDragCard({
 /** 可拖（有 url）：`cursor-grab`，且 `draggable` 为真。 */
 export const Draggable: Story = {
   args: {
-    url: artifactUrl(["ComfyUI_00042_.png"]),
     kind: "image",
+    url: artifactUrl(["ComfyUI_00042_.png"]),
   },
 };
 
 /** 不可拖（没有 url）：出口自己判掉 `draggable`，也**不带**抓取光标
  *  —— 「可拖才有光标」这条就是收掉的第三件事。 */
 export const NotDraggableWithoutUrl: Story = {
-  args: { url: null, kind: "image" },
+  args: { kind: "image", url: null },
 };
 
 /** 调用处自己的判据：`canDrag` 与出口的判据是**都要过**（不覆盖）。
  *  这一档演示「有 url 但调用处说不能拖」（如没有封面、正在上传）。 */
 export const NotDraggableByCanDrag: Story = {
   args: {
-    url: artifactUrl(["ComfyUI_00042_.png"]),
-    kind: "image",
     canDrag: false,
+    kind: "image",
+    url: artifactUrl(["ComfyUI_00042_.png"]),
   },
 };
 
@@ -130,9 +130,9 @@ export const MediaTypes: Story = {
 export const PayloadContract: Story = {
   render: () => {
     const payload: MediaDragPayload = {
-      url: artifactUrl(["ComfyUI_00042_.png"]),
       displayName: "ComfyUI_00042_.png",
       mediaType: "image",
+      url: artifactUrl(["ComfyUI_00042_.png"]),
     };
     return (
       <div className="flex w-xl flex-col gap-2 rounded-lg border p-3">

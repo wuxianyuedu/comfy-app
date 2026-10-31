@@ -83,8 +83,8 @@ describe("模式契约口 id 值域", () => {
 
   it("契约口渲染成工坊控件：第 2 张参考图标成「参考图 2」，仍是图片控件", () => {
     const entries = contractToStatusEntries({
-      mode: "I2I",
       inputs: ["prompt", "size", "reference-image", "reference-image-2"],
+      mode: "I2I",
       output: "image",
     });
     expect(entries.map((e) => e.control)).toEqual(["text", "size", "image", "image"]);
@@ -108,15 +108,15 @@ describe("模式契约的「尺寸」口与统一尺寸口径一致", () => {
     /* 用户口径：需要「比例 + 百万像素 + 倍数」的工作流直接收这三个值；
      *  远端接口的请求体字段名由这三行各自映射。 */
     const rows = adapterInputsFromContract({
-      mode: "T2I",
       inputs: ["prompt", "size"],
+      mode: "T2I",
       output: "image",
     });
     expect(rows).toEqual([
-      { type: "prompt", field: "prompt" },
-      { type: "aspect-ratio", field: "aspect_ratio" },
-      { type: "megapixels", field: "megapixels" },
-      { type: "multiple", field: "multiple" },
+      { field: "prompt", type: "prompt" },
+      { field: "aspect_ratio", type: "aspect-ratio" },
+      { field: "megapixels", type: "megapixels" },
+      { field: "multiple", type: "multiple" },
     ]);
   });
 
@@ -141,7 +141,7 @@ describe("modeContractEntries：两个页签共读的那一份契约口清单", 
 
   it("用户改过的模式按注册表列口，但展示名仍取统一那一份", () => {
     const stored = parseModeContracts([
-      { mode: "T2I", inputs: ["prompt", "reference-image-2"], output: "image" },
+      { inputs: ["prompt", "reference-image-2"], mode: "T2I", output: "image" },
     ]);
     const entries = modeContractEntries("t2i", stored);
     expect(entries.map((e) => e.id)).toEqual(["prompt", "reference-image-2"]);
@@ -149,7 +149,7 @@ describe("modeContractEntries：两个页签共读的那一份契约口清单", 
   });
 
   it("模式大小写不敏感（注册表按大写存）", () => {
-    const stored = parseModeContracts([{ mode: "T2I", inputs: ["prompt"], output: "image" }]);
+    const stored = parseModeContracts([{ inputs: ["prompt"], mode: "T2I", output: "image" }]);
     expect(modeContractEntries("t2i", stored).map((e) => e.id)).toEqual(["prompt"]);
   });
 });
@@ -177,20 +177,20 @@ describe("自定义口：id 形状与序号", () => {
 
 describe("自定义口：往返与归一化", () => {
   const contract = {
-    mode: "T2I",
+    customInputs: [
+      {
+        id: /* SAFETY: 类型断言已复核 */ "custom-text-1" as ModeContractInputId,
+        kind: /* SAFETY: 类型断言已复核 */ "text" as const,
+        label: "水彩风格",
+      },
+    ],
     inputs: /* SAFETY: 类型断言已复核 */ [
       "prompt",
       "custom-text-1",
       "size",
     ] as Array<ModeContractInputId>,
+    mode: "T2I",
     output: /* SAFETY: 类型断言已复核 */ "image" as const,
-    customInputs: [
-      {
-        id: /* SAFETY: 类型断言已复核 */ "custom-text-1" as ModeContractInputId,
-        label: "水彩风格",
-        kind: /* SAFETY: 类型断言已复核 */ "text" as const,
-      },
-    ],
   };
 
   it("定义与口一起往返（不丢名字 / 不丢类型）", () => {
@@ -200,7 +200,7 @@ describe("自定义口：往返与归一化", () => {
 
   it("没有定义的自定义口被丢弃（下游读不出名字与类型）", () => {
     const round = parseModeContracts([
-      { mode: "T2I", inputs: ["prompt", "custom-text-9"], output: "image" },
+      { inputs: ["prompt", "custom-text-9"], mode: "T2I", output: "image" },
     ]);
     expect(round.map((c) => c.inputs)).toEqual([["prompt"]]);
   });
@@ -208,10 +208,10 @@ describe("自定义口：往返与归一化", () => {
   it("空名的定义被丢弃，连带它的口", () => {
     const round = parseModeContracts([
       {
-        mode: "T2I",
+        customInputs: [{ id: "custom-text-1", kind: "text", label: "  " }],
         inputs: ["prompt", "custom-text-1"],
+        mode: "T2I",
         output: "image",
-        customInputs: [{ id: "custom-text-1", label: "  ", kind: "text" }],
       },
     ]);
     expect(round.map((c) => c.inputs)).toEqual([["prompt"]]);
@@ -221,10 +221,10 @@ describe("自定义口：往返与归一化", () => {
   it("类型以 id 里编的为准（kind 字段被改写成别的也不会走散）", () => {
     const round = parseModeContracts([
       {
-        mode: "T2I",
+        customInputs: [{ id: "custom-image-1", kind: "text", label: "风格图" }],
         inputs: ["custom-image-1"],
+        mode: "T2I",
         output: "image",
-        customInputs: [{ id: "custom-image-1", label: "风格图", kind: "text" }],
       },
     ]);
     expect(round[0]?.customInputs?.[0]?.kind).toBe("image");
@@ -239,13 +239,13 @@ describe("自定义口：往返与归一化", () => {
     expect(modeContractInputIdLabel("custom-text-1")).toBe("自定义参数");
     expect(
       contractToStatusEntries({
-        mode: "T2I",
-        inputs: ["custom-image-1", "custom-number-2"],
-        output: "image",
         customInputs: [
-          { id: "custom-image-1", label: "风格图", kind: "image" },
-          { id: "custom-number-2", label: "强度", kind: "number" },
+          { id: "custom-image-1", kind: "image", label: "风格图" },
+          { id: "custom-number-2", kind: "number", label: "强度" },
         ],
+        inputs: ["custom-image-1", "custom-number-2"],
+        mode: "T2I",
+        output: "image",
       }).map((e) => e.control),
     ).toEqual(["image", "number"]);
   });

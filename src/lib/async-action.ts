@@ -122,14 +122,14 @@ function text(value: string | (() => string)): string {
  */
 export function toActionResult(raw: RawActionResult, fallbackDetail: string): ActionResult {
   if (raw === true) {
-    return { ok: true, detail: fallbackDetail };
+    return { detail: fallbackDetail, ok: true };
   }
   if (raw === false) {
-    return { ok: false, detail: fallbackDetail };
+    return { detail: fallbackDetail, ok: false };
   }
   if (raw === null || raw === undefined) {
     /* `void` 返回值：tRPC 这类「不抛就是成功」的端点。 */
-    return { ok: true, detail: fallbackDetail };
+    return { detail: fallbackDetail, ok: true };
   }
   /* 普通对象（业务返回值）按「不抛即成功」读；只有真的带了 `ok` /
    * `triggered` 字段时才按信封判 —— 与 `void` 同口径。 */
@@ -141,7 +141,7 @@ export function toActionResult(raw: RawActionResult, fallbackDetail: string): Ac
   };
   const ok = envelope.ok ?? envelope.triggered ?? true;
   const detail = envelope.detail ?? envelope.error ?? fallbackDetail;
-  return { ok, detail };
+  return { detail, ok };
 }
 
 /**
@@ -174,19 +174,19 @@ export function toActionResult(raw: RawActionResult, fallbackDetail: string): Ac
  */
 export async function runAsyncAction(
   action: () => Promise<RawActionResult>,
-  { report, failureText, successText, readResultEnvelope = true }: RunAsyncActionOptions,
+  { failureText, readResultEnvelope = true, report, successText }: RunAsyncActionOptions,
 ): Promise<ActionResult> {
   try {
     const raw = await action();
     if (!readResultEnvelope) {
       const detail =
         typeof successText === "function"
-          ? successText({ ok: true, detail: "" })
+          ? successText({ detail: "", ok: true })
           : (successText ?? "");
       if (detail) {
         report("ok", detail);
       }
-      return { ok: true, detail };
+      return { detail, ok: true };
     }
     /* 信封的成功判据在这里读一次：`{ok:false}` / `{triggered:false}`
      * 这类「不抛但也没做成」的返回，收口前有的被读成功、有的被读失败。 */
@@ -201,17 +201,17 @@ export async function runAsyncAction(
       if (detail) {
         report("ok", detail);
       }
-      return { ok: true, detail: detail ?? "" };
+      return { detail: detail ?? "", ok: true };
     }
     /* 服务端给了 `detail` / `error` 就用它（它比标题更能说明原因），
      * 没给才回落标题。与 `toActionResult` 的兜底同源。 */
     const detail = result.detail || text(failureText);
     report("err", detail);
-    return { ok: false, detail };
+    return { detail, ok: false };
   } catch (error) {
     const detail = errorMessage(error, text(failureText));
     report("err", detail);
-    return { ok: false, detail };
+    return { detail, ok: false };
   }
 }
 

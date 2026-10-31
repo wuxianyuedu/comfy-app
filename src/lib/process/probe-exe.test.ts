@@ -32,8 +32,8 @@ describe("probeExecutable：真起一次进程，三条出口分开答", () => {
   it("能起的进程答 ok（不喂任何与业务有关的参数）", () => {
     // `process.execPath` 在任何宿主上都一定起得来；`-e ""` 是空语句、退 0。
     expect(probeExecutable(process.execPath, ["-e", ""])).toEqual({
-      ok: true,
       failure: null,
+      ok: true,
     });
   });
 
@@ -63,8 +63,8 @@ describe("probeExecutable：真起一次进程，三条出口分开答", () => {
     if (process.platform === "win32") {
       expect(got.failure).toMatchObject({
         kind: "nonzero-exit",
-        status: 1,
         signal: null,
+        status: 1,
       });
       expect(said).toContain("exit 1");
       /* 这一句才是本格的要点：话术**不许**在拿不到信号时编一个出来 ——
@@ -74,8 +74,8 @@ describe("probeExecutable：真起一次进程，三条出口分开答", () => {
     }
     expect(got.failure).toMatchObject({
       kind: "nonzero-exit",
-      status: null,
       signal: "SIGKILL",
+      status: null,
     });
     expect(said).toContain("SIGKILL");
   });
@@ -94,7 +94,7 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
   const probeOnly =
     (wanted: string, failure: ProbeOutcome["failure"] = null) =>
     (candidate: string): ProbeOutcome =>
-      candidate === wanted ? { ok: true, failure: null } : { ok: false, failure };
+      candidate === wanted ? { failure: null, ok: true } : { failure, ok: false };
 
   it("命中第一个能跑的，且不把后面的候选算成「试过」", () => {
     const got = firstRunnable(["powershell", "pwsh"], () => [], probeOnly("pwsh"));
@@ -110,7 +110,7 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
       (candidate) => (candidate === "py" ? ["-3", "-c", "x"] : ["-c", "x"]),
       (candidate, args) => {
         seen.push([candidate, args]);
-        return { ok: false, failure: { kind: "spawn-error", code: "ENOENT" } };
+        return { failure: { code: "ENOENT", kind: "spawn-error" }, ok: false };
       },
     );
     expect(seen).toEqual([
@@ -125,10 +125,10 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
       () => [],
       (candidate) =>
         candidate === "a"
-          ? { ok: false, failure: { kind: "timeout", timeoutMs: 30 } }
+          ? { failure: { kind: "timeout", timeoutMs: 30 }, ok: false }
           : {
+              failure: { kind: "nonzero-exit", signal: null, status: 2 },
               ok: false,
-              failure: { kind: "nonzero-exit", status: 2, signal: null },
             },
     );
     expect(got.hit).toBeNull();
@@ -139,8 +139,8 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
 
 describe("话术：下一个要排障的人得从这一行读出「哪一个候选、什么原因」", () => {
   it("三条出口各说各的（别糊成一句「不可用」）", () => {
-    expect(describeProbeFailure({ kind: "spawn-error", code: "ENOENT" })).toContain("ENOENT");
-    expect(describeProbeFailure({ kind: "nonzero-exit", status: 2, signal: null })).toContain(
+    expect(describeProbeFailure({ code: "ENOENT", kind: "spawn-error" })).toContain("ENOENT");
+    expect(describeProbeFailure({ kind: "nonzero-exit", signal: null, status: 2 })).toContain(
       "exit 2",
     );
     expect(describeProbeFailure({ kind: "timeout", timeoutMs: 20000 })).toContain("没量到");
@@ -151,7 +151,7 @@ describe("话术：下一个要排障的人得从这一行读出「哪一个候�
       [
         {
           candidate: "powershell",
-          failure: { kind: "nonzero-exit", status: 2, signal: null },
+          failure: { kind: "nonzero-exit", signal: null, status: 2 },
         },
       ],
       [{ candidate: "pwsh", failure: { kind: "timeout", timeoutMs: 20000 } }],
@@ -171,12 +171,12 @@ describe("话术：下一个要排障的人得从这一行读出「哪一个候�
      * 直接喂进来**不会报错**，只会把名字打成 `undefined`，而那正好是本判据要治的
      * 那种失效（一句带原因但指不到候选的话）。摊平这一步因此有名字、有判据。 */
     const flat = toProbedCandidates([
-      { command: "python3", failure: { kind: "spawn-error", code: "ENOENT" } },
+      { command: "python3", failure: { code: "ENOENT", kind: "spawn-error" } },
     ]);
     expect(flat).toEqual([
       {
         candidate: "python3",
-        failure: { kind: "spawn-error", code: "ENOENT" },
+        failure: { code: "ENOENT", kind: "spawn-error" },
       },
     ]);
     expect(describeProbeMisses(flat)).not.toContain("undefined");
@@ -190,19 +190,19 @@ describe("边界：没有码的那种形态也不许编一个数出来充数", (
      * （与 `executable-resolve.ts` 的 `probe` 同一个理由）。 */
     const fake = /* SAFETY: 类型断言已复核 */ (() => ({
       error: new Error("boom"),
-      status: null,
       signal: null,
+      status: null,
     })) as unknown as typeof spawnSync;
     const got = probeExecutable("whatever", [], 1000, fake);
     expect(got.ok).toBe(false);
-    expect(got.failure).toEqual({ kind: "spawn-error", code: "UNKNOWN" });
+    expect(got.failure).toEqual({ code: "UNKNOWN", kind: "spawn-error" });
   });
 
   it("既没信号也没退出码 ⇒ 话术说「没有读数」，不说 exit 0", () => {
     const text = describeProbeFailure({
       kind: "nonzero-exit",
-      status: null,
       signal: null,
+      status: null,
     });
     expect(text).toContain("没有读数");
     expect(text).not.toContain("exit 0");
@@ -213,8 +213,8 @@ describe("边界：没有码的那种形态也不许编一个数出来充数", (
      * 就**永远没有执行者** —— 而它正是「自己退的 vs 被别人杀的」分得开的那一半（ISSUE #2403）。 */
     const text = describeProbeFailure({
       kind: "nonzero-exit",
-      status: null,
       signal: "SIGKILL",
+      status: null,
     });
     expect(text).toContain("被信号 SIGKILL 结束");
     expect(text).not.toContain("exit");
@@ -229,13 +229,13 @@ describe("两条 `??` 兜底是判据的一部分，不是排版", () => {
      * 下一步、又把「没有读数」说成了「有个值」。 */
     for (const failure of [
       {
-        kind: /* SAFETY: 类型断言已复核 */ "spawn-error" as const,
         code: "UNKNOWN",
+        kind: /* SAFETY: 类型断言已复核 */ "spawn-error" as const,
       },
       {
         kind: /* SAFETY: 类型断言已复核 */ "nonzero-exit" as const,
-        status: null,
         signal: null,
+        status: null,
       },
     ]) {
       expect(describeProbeFailure(failure)).not.toContain("undefined");
@@ -263,12 +263,12 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
   it("命中就返回候选名（调用点拿它当 `skipIf(!x)` 的守卫）", () => {
     const got = firstRunnableOrEmpty({
       candidates: ["a", "b"],
-      probeArgs: () => [],
       label: "X",
       probe: (candidate) =>
         candidate === "b"
-          ? { ok: true, failure: null }
-          : { ok: false, failure: { kind: "spawn-error", code: "ENOENT" } },
+          ? { failure: null, ok: true }
+          : { failure: { code: "ENOENT", kind: "spawn-error" }, ok: false },
+      probeArgs: () => [],
     });
     expect(got).toBe("b");
     // 命中时**不打**那行读数：一行「跳过」都没有，却印一句「跳过」，比不印更误导。
@@ -282,8 +282,8 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     expect(
       firstRunnableOrEmpty({
         candidates: ["comfyapp-no-such-command-2316"],
-        probeArgs: () => ["--version"],
         label: "假解释器",
+        probeArgs: () => ["--version"],
       }),
     ).toBe("");
     expect(lines.join("\n")).toContain("起不来");
@@ -296,8 +296,8 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     expect(
       firstRunnableOrEmpty({
         candidates: ["comfyapp-no-such-command-2316"],
-        probeArgs: () => ["--version"],
         label: "假解释器",
+        probeArgs: () => ["--version"],
       }),
     ).toBe("");
   });
@@ -308,15 +308,15 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
      * 候选名、以及「起来了但退非零」这个具体形态，两件都要出现。 */
     const got = firstRunnableOrEmpty({
       candidates: ["powershell", "pwsh"],
-      probeArgs: () => [],
       label: "PowerShell",
       probe: (candidate) =>
         candidate === "pwsh"
           ? {
+              failure: { kind: "nonzero-exit", signal: null, status: 2 },
               ok: false,
-              failure: { kind: "nonzero-exit", status: 2, signal: null },
             }
-          : { ok: false, failure: { kind: "spawn-error", code: "ENOENT" } },
+          : { failure: { code: "ENOENT", kind: "spawn-error" }, ok: false },
+      probeArgs: () => [],
     });
     expect(got).toBe("");
     const text = lines.join("\n");
@@ -335,8 +335,8 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
     const reported: Array<string> = [];
     firstRunnableOrEmpty({
       candidates: ["comfyapp-no-such-command-2316"],
-      probeArgs: () => ["--version"],
       label: "假解释器",
+      probeArgs: () => ["--version"],
       report: (line) => reported.push(line),
     });
     expect(reported.join("\n")).toContain("起不来");
@@ -365,8 +365,8 @@ describe("谁都没注入时：读数落进缺省空转（ISSUE #2408）", () =>
     expect(
       firstRunnableOrEmpty({
         candidates: ["comfyapp-no-such-command-2408"],
-        probeArgs: () => ["--version"],
         label: "假解释器",
+        probeArgs: () => ["--version"],
         report: (line) => reported.push(line),
       }),
     ).toBe("");
@@ -382,8 +382,8 @@ describe("谁都没注入时：读数落进缺省空转（ISSUE #2408）", () =>
     expect(() =>
       firstRunnableOrEmpty({
         candidates: ["comfyapp-no-such-command-2408"],
-        probeArgs: () => ["--version"],
         label: "假解释器",
+        probeArgs: () => ["--version"],
       }),
     ).not.toThrow();
   });

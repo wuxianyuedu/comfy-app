@@ -19,11 +19,11 @@ import { HeaderHelp } from "~/components/ui/header-help";
  * 不在本组件的 props 里。
  */
 const meta = {
-  title: "UI/HeaderHelp",
-  component: HeaderHelp,
   args: {
     text: "所有生成任务与执行日志，按时间倒序排列。",
   },
+  component: HeaderHelp,
+  title: "UI/HeaderHelp",
 } satisfies Meta<typeof HeaderHelp>;
 
 export default meta;

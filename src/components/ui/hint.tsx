@@ -74,7 +74,7 @@ function isEmptyLabel(label: ReactNode): boolean {
   return label === undefined || label === null || label === "" || label === false;
 }
 
-function Hint({ label, side = "top", accessibleName = false, wrap = false, children }: HintProps) {
+function Hint({ accessibleName = false, children, label, side = "top", wrap = false }: HintProps) {
   const empty = isEmptyLabel(label);
   /* 补名只在「字符串文案 + 子元素没写 aria-label」时做：富文本 label 当名字
    * 会被读屏器整段念成长串，而已有 aria-label 是调用处更精确的判断。 */

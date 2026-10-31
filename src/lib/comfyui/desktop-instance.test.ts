@@ -13,9 +13,7 @@ import {
 
 describe("parseInstanceId", () => {
   it("读取单行实例 ID，去空白", () => {
-    expect(parseInstanceId("  inst-1782874099613\n")).toBe(
-      "inst-1782874099613",
-    );
+    expect(parseInstanceId("  inst-1782874099613\n")).toBe("inst-1782874099613");
   });
   it("空内容返回 null", () => {
     expect(parseInstanceId("  \n")).toBeNull();
@@ -51,9 +49,7 @@ describe("findInstallationById", () => {
 
 describe("launchArgsToHeadless", () => {
   it("抽取 --port（空格写法）并保留其余参数", () => {
-    const r = launchArgsToHeadless(
-      "--enable-manager --port 8191 --listen 0.0.0.0",
-    );
+    const r = launchArgsToHeadless("--enable-manager --port 8191 --listen 0.0.0.0");
     expect(r.port).toBe(8191);
     expect(r.args).toContain("--enable-manager");
     expect(r.args).toContain("--listen");
@@ -89,9 +85,9 @@ describe("parseDesktopLaunchArgs", () => {
     const raw = JSON.stringify({
       installations: [
         {
+          envVars: { PYTHONUTF8: "1" },
           id: "inst-1",
           launchArgs: "--port 8233",
-          envVars: { PYTHONUTF8: "1" },
         },
       ],
     });
@@ -124,10 +120,10 @@ describe("splitArgTokens", () => {
 describe("resolveEffectiveLaunch", () => {
   it("便携版沿用设置端口与 extraArgs", async () => {
     const r = await resolveEffectiveLaunch({
+      classify: () => ({ instanceIdFile: null, kind: "portable" }),
+      comfyuiExtraArgs: "--enable-manager --x",
       comfyuiPath: "C:/portable",
       comfyuiPort: 8300,
-      comfyuiExtraArgs: "--enable-manager --x",
-      classify: () => ({ kind: "portable", instanceIdFile: null }),
     });
     expect(r.port).toBe(8300);
     expect(r.extraArgs).toEqual(["--enable-manager", "--x"]);
@@ -136,17 +132,17 @@ describe("resolveEffectiveLaunch", () => {
 
   it("桌面实例读元数据映射端口与参数", async () => {
     const r = await resolveEffectiveLaunch({
+      classify: () => ({
+        instanceIdFile: "C:/desktop/.comfyui-desktop-2",
+        kind: "desktop",
+      }),
+      comfyuiExtraArgs: "--ignored",
       comfyuiPath: "C:/desktop",
       comfyuiPort: 9999, // 桌面忽略手填端口
-      comfyuiExtraArgs: "--ignored",
-      classify: () => ({
-        kind: "desktop",
-        instanceIdFile: "C:/desktop/.comfyui-desktop-2",
-      }),
       resolveDesktop: async () => ({
-        port: 8311,
         args: ["--enable-manager"],
         envVars: { PYTHONUTF8: "1" },
+        port: 8311,
       }),
     });
     expect(r.port).toBe(8311);
@@ -156,13 +152,13 @@ describe("resolveEffectiveLaunch", () => {
 
   it("桌面实例元数据缺失 → 回落默认端口、忽略手填", async () => {
     const r = await resolveEffectiveLaunch({
+      classify: () => ({
+        instanceIdFile: "C:/desktop/.comfyui-desktop-2",
+        kind: "desktop",
+      }),
+      comfyuiExtraArgs: "--ignored",
       comfyuiPath: "C:/desktop",
       comfyuiPort: 9999,
-      comfyuiExtraArgs: "--ignored",
-      classify: () => ({
-        kind: "desktop",
-        instanceIdFile: "C:/desktop/.comfyui-desktop-2",
-      }),
       resolveDesktop: async () => null,
     });
     expect(r.port).toBe(0); // 0 → 调用方按默认 8188
@@ -171,10 +167,10 @@ describe("resolveEffectiveLaunch", () => {
 
   it("桌面实例无 ID 文件（仅布局）→ 视为便携逻辑走设置项", async () => {
     const r = await resolveEffectiveLaunch({
+      classify: () => ({ instanceIdFile: null, kind: "desktop" }),
+      comfyuiExtraArgs: "--keep",
       comfyuiPath: "C:/desktop-layout",
       comfyuiPort: 8400,
-      comfyuiExtraArgs: "--keep",
-      classify: () => ({ kind: "desktop", instanceIdFile: null }),
     });
     expect(r.port).toBe(8400);
     expect(r.extraArgs).toEqual(["--keep"]);

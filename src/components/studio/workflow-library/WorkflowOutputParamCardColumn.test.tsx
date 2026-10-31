@@ -23,12 +23,12 @@ afterEach(cleanup);
 const outputs: Array<WorkflowIOEntry & { ioKey: string }> = [
   {
     direction: "output",
-    kind: "output",
-    nodeId: "9",
-    name: "images",
-    label: "images",
-    type: "IMAGE",
     ioKey: "9::output::IMAGE",
+    kind: "output",
+    label: "images",
+    name: "images",
+    nodeId: "9",
+    type: "IMAGE",
   },
 ];
 
@@ -134,7 +134,7 @@ describe("WorkflowOutputParamCardColumn", () => {
      *  锚点必须是唯一的 ioKey —— 用名字当锚点会在两个口同名时撞车，线量不到
      *  handleBounds 就整条不画（用户口径：「images 和对外输出参数之间无法连线」，
      *  ISSUE #355）。 */
-    const nameless = [{ ...outputs[0]!, name: "   ", ioKey: "9::output::EMPTY" }];
+    const nameless = [{ ...outputs[0]!, ioKey: "9::output::EMPTY", name: "   " }];
     const { container } = render(
       <WorkflowOutputParamCardColumn
         endpoint={(port) => <span data-endpoint-handle={port.handleId} />}

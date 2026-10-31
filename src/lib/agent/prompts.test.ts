@@ -39,15 +39,15 @@ describe("parseJsonInstruction", () => {
 describe("formatDraftContext", () => {
   it("格式化项目快照供模型阅读", () => {
     const ctx = formatDraftContext({
-      meta: {
-        title: "海边故事",
-        type: "short_video",
-        tone: "温暖治愈",
-        logline: "重逢",
-      },
-      scriptMarkdown: "## 场景1",
-      scenes: [],
       characters: [],
+      meta: {
+        logline: "重逢",
+        title: "海边故事",
+        tone: "温暖治愈",
+        type: "short_video",
+      },
+      scenes: [],
+      scriptMarkdown: "## 场景1",
       shots: [],
     });
     expect(ctx).toContain("海边故事");

@@ -14,11 +14,11 @@
 import { type Shot } from "~/lib/workshop/types";
 
 export const SHOT_STATUS_LABEL: Record<Shot["status"], string> = {
+  done: "已完成",
+  failed: "失败",
   idle: "待生成",
   queued: "排队中",
   running: "生成中",
-  done: "已完成",
-  failed: "失败",
   stale: "待更新",
 };
 
@@ -28,11 +28,11 @@ export const SHOT_STATUS_LABEL: Record<Shot["status"], string> = {
  * 「进行中」不给颜色而给一个走动的条 —— 进度还没回报时上色，等于宣称它快了。
  */
 export const SHOT_STATUS_BAR_CLASS: Record<Shot["status"], string> = {
+  done: "bg-success",
+  failed: "bg-destructive",
   idle: "bg-elevated",
   queued: "bg-elevated",
   running: "bg-info",
-  done: "bg-success",
-  failed: "bg-destructive",
   stale: "bg-warning",
 };
 
@@ -45,8 +45,8 @@ export type ShotFrameView = {
 
 export function shotFrameView(status: Shot["status"]): ShotFrameView {
   return {
-    status,
-    label: SHOT_STATUS_LABEL[status],
     barClass: SHOT_STATUS_BAR_CLASS[status],
+    label: SHOT_STATUS_LABEL[status],
+    status,
   };
 }

@@ -25,21 +25,21 @@ import { errorMessage } from "~/lib/error-message";
 import { beginStaleRun } from "~/lib/stale-run";
 
 const EXT_TO_LANG: Record<string, string> = {
-  ".ts": "typescript",
-  ".tsx": "tsx",
-  ".js": "javascript",
-  ".jsx": "jsx",
-  ".mjs": "javascript",
   ".cjs": "javascript",
   ".css": "css",
-  ".scss": "scss",
+  ".html": "html",
+  ".js": "javascript",
   ".json": "json",
+  ".jsx": "jsx",
   ".md": "markdown",
   ".mdx": "markdown",
+  ".mjs": "javascript",
+  ".scss": "scss",
+  ".ts": "typescript",
+  ".tsx": "tsx",
+  ".txt": "plaintext",
   ".yaml": "yaml",
   ".yml": "yaml",
-  ".html": "html",
-  ".txt": "plaintext",
 };
 
 export function extToLanguage(filePath: string): string {
@@ -76,7 +76,6 @@ function getHighlighter(): Promise<ShikiHighlighter> {
       }) => Promise<ShikiHighlighter>;
     };
     return shiki.createHighlighter({
-      themes: ["one-dark-pro", "github-light"],
       langs: [
         "typescript",
         "tsx",
@@ -90,6 +89,7 @@ function getHighlighter(): Promise<ShikiHighlighter> {
         "html",
         "plaintext",
       ],
+      themes: ["one-dark-pro", "github-light"],
     });
   })();
   return highlighterPromise;

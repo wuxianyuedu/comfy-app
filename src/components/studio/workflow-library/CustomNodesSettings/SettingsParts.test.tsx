@@ -16,43 +16,43 @@ afterEach(cleanup);
 
 const SUMMARY: NonNullable<SettingsResp["summary"]> = {
   generatedAt: null,
-  totalNodes: 42,
-  packages: [],
   missingPaths: [],
+  packages: [],
   parseErrors: [],
   sources: [],
+  totalNodes: 42,
 };
 
 const PROGRESS: ParseProgress = {
-  phase: "",
-  done: 0,
-  total: 0,
   discovered: 0,
-  parent: "",
+  done: 0,
   msg: "",
+  parent: "",
+  phase: "",
+  total: 0,
 };
 
 function pkg(status: "ok" | "missing" | "error" | "empty", name: string) {
   return {
-    path: `C:/ComfyUI/custom_nodes/${name}`,
-    name,
-    exists: true,
-    status,
-    nodeCount: 0,
-    nodeTypes: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
     errors: /* SAFETY: 类型断言已复核 */ [] as Array<{
       error: string;
       file: string;
     }>,
+    exists: true,
+    name,
+    nodeCount: 0,
+    nodeTypes: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    path: `C:/ComfyUI/custom_nodes/${name}`,
+    status,
   };
 }
 
 const REPORT: ParseReport = {
-  generatedAt: "2026-08-29T10:00:00Z",
-  totalNodes: 12,
-  pathCount: 3,
   errorCount: 0,
+  generatedAt: "2026-08-29T10:00:00Z",
   packages: [],
+  pathCount: 3,
+  totalNodes: 12,
 };
 
 describe("PortRow", () => {
@@ -142,11 +142,11 @@ describe("ParseProgressBanner", () => {
       <ParseProgressBanner
         progress={{
           ...PROGRESS,
-          phase: "hash",
           done: 3,
-          total: 8,
-          parent: "C:\\ComfyUI\\custom_nodes\\ipadapter_plus",
           msg: "hashing packages…",
+          parent: "C:\\ComfyUI\\custom_nodes\\ipadapter_plus",
+          phase: "hash",
+          total: 8,
         }}
       />,
     );
@@ -168,9 +168,9 @@ describe("ParseProgressBanner", () => {
       <ParseProgressBanner
         progress={{
           ...PROGRESS,
-          phase: "scan",
           discovered: 5,
           parent: "C:/ComfyUI/custom_nodes",
+          phase: "scan",
         }}
       />,
     );
@@ -195,8 +195,6 @@ describe("ReportCards", () => {
   it("渲染「最近解析结果」头部统计与每个包卡片(状态徽标 / 路径 / 节点数 / 类型 chips / 错误)", () => {
     const report: ParseReport = {
       ...REPORT,
-      totalNodes: 30,
-      pathCount: 3,
       errorCount: 1,
       packages: [
         {
@@ -206,10 +204,12 @@ describe("ReportCards", () => {
         },
         {
           ...pkg("error", "broken_pkg"),
+          errors: [{ error: "boom", file: "foo.py" }],
           nodeCount: 4,
-          errors: [{ file: "foo.py", error: "boom" }],
         },
       ],
+      pathCount: 3,
+      totalNodes: 30,
     };
     render(<ReportCards report={report} />);
 
@@ -265,8 +265,8 @@ describe("ReportCards", () => {
   it("mode=subset(增量解析)时头部改为「增量 +N」而非目录统计", () => {
     const subset: ParseReport = {
       ...REPORT,
-      mode: "subset",
       addedNodes: 4,
+      mode: "subset",
     };
     render(<ReportCards report={subset} />);
     expect(screen.getByText("增量 +4")).toBeInTheDocument();

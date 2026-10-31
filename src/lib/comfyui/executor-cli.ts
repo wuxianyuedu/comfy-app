@@ -156,7 +156,7 @@ export async function executeViaComfyCli(job: Job) {
   const taskRepository = await resolveTaskRepo();
   const resolveComfyBase = await resolveBaseFn();
   const s = state();
-  const { taskId, rawJson, prompt, overrides } = job;
+  const { overrides, prompt, rawJson, taskId } = job;
   /* RAW 原件走 UI→API 转换；没有 rawJson 就是 API 图，直接提交。 */
   const isRaw = rawJson != null;
   /* RAW 路径的入口行：让用户在日志面板上直接看出「任务正由哪条路径处理」。
@@ -298,8 +298,8 @@ export async function executeViaComfyCli(job: Job) {
   log(taskId, "info", `  ${py} ${args.join(" ")}`);
   /* ISSUE #216：把完整命令行写进 trace，便于在支持现场原样复现。 */
   trace("cli", taskId, "启动 comfy-cli", {
-    bin: py,
     args,
+    bin: py,
     host,
     port,
     workflowFile: tmpFile,
@@ -340,14 +340,14 @@ export async function executeViaComfyCli(job: Job) {
      * 判据见 `tests/comfy-cli-python-utf8.test.ts`。 */
     env: {
       ...process.env,
-      DO_NOT_TRACK: "1",
       COMFY_CLI_NO_TELEMETRY: "1",
+      DO_NOT_TRACK: "1",
+      PYTHONIOENCODING: "utf-8",
       PYTHONUNBUFFERED: "1",
       PYTHONUTF8: "1",
-      PYTHONIOENCODING: "utf-8",
     },
-    windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
   cliProcs.set(taskId, child);
   log(taskId, "info", `comfy-cli 进程已启动（pid=${child.pid ?? "?"}，等待 stdout…）`);
@@ -373,9 +373,6 @@ export async function executeViaComfyCli(job: Job) {
    * 这些回调此前是内联闭包（合计约 240 行），捕获 promptId / patched /
    * settled，只能起真进程验证（ISSUE #570 第 5 项）。 */
   const finish = createCliFinisher({
-    taskId,
-    log,
-    patched,
     complete: (id, pid) =>
       fireAndForget(complete(id, pid), (e) =>
         cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `complete(${id}) 收口异常`)}`),
@@ -384,6 +381,9 @@ export async function executeViaComfyCli(job: Job) {
       fireAndForget(fail(id, pid, detail, ves), (e) =>
         cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${id}) 收口异常`)}`),
       ),
+    log,
+    patched,
+    promptId: () => promptId,
     settle: () => {
       if (settled) {
         return false;
@@ -393,16 +393,29 @@ export async function executeViaComfyCli(job: Job) {
       cliProcs.delete(taskId);
       return true;
     },
-    promptId: () => promptId,
+    taskId,
   });
 
   child.stdout?.setEncoding("utf-8");
   const stdoutParser = createCliEnvelopeParser({
-    taskId,
-    log,
-    rawCli: appendRawCli,
-    patched,
     finish,
+    log,
+    onProgress: (
+      progress: number,
+      node?: {
+        classType?: string;
+        id: string;
+        label?: string;
+        max: number;
+        value: number;
+      },
+    ) => {
+      /* 进度同样落库（P3 §5 ADR §13-3C D1/D3）：SSE 已单源化走 DB，cli 路径
+       *  的进度事件此前只发进程内 emitter——host 模式下界面全程 0% 的根因。
+       *  CAS 语义在 updateProgress 内部（终态行不再改写），这里 fire-and-forget，
+       *  形态对齐上方 onPromptId 的 markRunning 调用。 */
+      void taskRepository.updateProgress(taskId, progress, node).catch(() => undefined);
+    },
     onPromptId: (id: string) => {
       promptId = id;
       s.promptToTask.set(id, taskId);
@@ -420,22 +433,9 @@ export async function executeViaComfyCli(job: Job) {
         })
         .catch(() => undefined);
     },
-    onProgress: (
-      progress: number,
-      node?: {
-        classType?: string;
-        id: string;
-        label?: string;
-        max: number;
-        value: number;
-      },
-    ) => {
-      /* 进度同样落库（P3 §5 ADR §13-3C D1/D3）：SSE 已单源化走 DB，cli 路径
-       *  的进度事件此前只发进程内 emitter——host 模式下界面全程 0% 的根因。
-       *  CAS 语义在 updateProgress 内部（终态行不再改写），这里 fire-and-forget，
-       *  形态对齐上方 onPromptId 的 markRunning 调用。 */
-      void taskRepository.updateProgress(taskId, progress, node).catch(() => undefined);
-    },
+    patched,
+    rawCli: appendRawCli,
+    taskId,
   });
   child.stdout?.on("data", stdoutParser.sink);
 
@@ -444,7 +444,7 @@ export async function executeViaComfyCli(job: Job) {
   // DeprecationWarning 噪声不占额度、计数后由 close 汇总，避免把真正的
   // 错误堆栈挤出面板。单行截断放宽到 400 字符（traceback 的路径很长）。
   // stderrSink.raw() 始终完整累积，close 时的 tail 汇总不受行数上限影响。
-  const stderrSink = createCliStderrSink({ taskId, log, rawCli: appendRawCli });
+  const stderrSink = createCliStderrSink({ log, rawCli: appendRawCli, taskId });
   child.stderr?.setEncoding("utf-8");
   child.stderr?.on("data", stderrSink.sink);
 
@@ -467,9 +467,9 @@ export async function executeViaComfyCli(job: Job) {
     /* 未收到 envelope 的退出是「结果丢失」的头号嫌疑路径：完整 stderr +
      * 未消费的 stdout 尾部一次性落 trace（面板仍是精简的 12 行）。 */
     trace("cli", taskId, `进程退出 code=${code}（未收到 envelope）`, {
+      promptId,
       stderr: stderrSink.raw(),
       stdoutLeftover: stdoutParser.leftover(),
-      promptId,
     });
     log(taskId, "error", `comfy-cli 进程已退出（code=${code}），未收到 envelope 事件`);
     fireAndForget(

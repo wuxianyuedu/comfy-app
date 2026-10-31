@@ -25,13 +25,13 @@ export function persistGenerationLogs(
   if (entries.length === 0) {
     return;
   }
-  const payload = JSON.stringify({ stage, entries });
+  const payload = JSON.stringify({ entries, stage });
   try {
     void fetch(LOGS_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: payload,
+      headers: { "Content-Type": "application/json" },
       keepalive: true,
+      method: "POST",
     }).catch(() => {
       /* 落盘失败不影响生成流程 */
     });
@@ -47,7 +47,7 @@ export async function fetchGenerationLogs(
 ): Promise<Array<PersistableGenerationLog>> {
   let res: Response;
   try {
-    res = await fetch(withQuery(LOGS_ENDPOINT, { stage, limit: limit || undefined }));
+    res = await fetch(withQuery(LOGS_ENDPOINT, { limit: limit || undefined, stage }));
   } catch {
     return [];
   }

@@ -4,11 +4,7 @@ import { withThemeByClassName } from "@storybook/addon-themes";
 /* 相对 import 一律**带文件后缀**，不写 `./x` —— 理由见 `main.ts` 那段说明。
    本文件由 webpack 打进浏览器 bundle（不吃 Node 那条 loader 的 deprecation），
    但仍按同一条口径写：`.storybook/**` 只有一种写法，判据也只有一条。 */
-import {
-  appOriginChoices,
-  withAppProviders,
-  withTrpcApp,
-} from "./data-sources.tsx";
+import { appOriginChoices, withAppProviders, withTrpcApp } from "./data-sources.tsx";
 import { withMessageScene } from "./message-center-sources.tsx";
 import { withStoreScene } from "./store-sources.tsx";
 import { withWorkflowRunScene } from "./workflow-run-sources.tsx";
@@ -30,8 +26,8 @@ import "../src/app/globals.css";
  * 再叠一个会多出一条不同的 class 写入路径。
  */
 const withTheme: Decorator = withThemeByClassName({
-  themes: { dark: "dark", light: "" },
   defaultTheme: "dark",
+  themes: { dark: "dark", light: "" },
 });
 
 /**
@@ -52,15 +48,13 @@ const preview: Preview = {
     [APP_ORIGIN]: {
       description: "真 tRPC 链路指向的应用 origin（应用没起也能看降级形态）",
       toolbar: {
-        icon: "link",
-        title: "应用 origin",
-        items: Object.entries(appOriginChoices(appOrigin)).map(
-          ([title, value]) => ({
-            title: `${title}（${value}）`,
-            value,
-          }),
-        ),
         dynamicTitle: true,
+        icon: "link",
+        items: Object.entries(appOriginChoices(appOrigin)).map(([title, value]) => ({
+          title: `${title}（${value}）`,
+          value,
+        })),
+        title: "应用 origin",
       },
     },
   },
@@ -94,16 +88,16 @@ const preview: Preview = {
   parameters: {
     /* 本检出的解析链端口 + 来源：注入层（`data-sources.tsx` 的 `DEFAULT_APP_ORIGIN`）
        读这里，而不是 import 那份生成件 —— 生成件不入库，不该进类型程序。 */
+    a11y: {
+      // a11y 违规在测试运行器里报错；在画布上只提示，不打断浏览
+      test: "todo",
+    },
     appOrigin,
     controls: {
       matchers: {
         color: /(background|color)$/i,
         date: /Date$/i,
       },
-    },
-    a11y: {
-      // a11y 违规在测试运行器里报错；在画布上只提示，不打断浏览
-      test: "todo",
     },
   },
 };

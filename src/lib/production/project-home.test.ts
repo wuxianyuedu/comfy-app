@@ -12,26 +12,22 @@ import type { ProductionRunView } from "./run-types";
 
 function view(over: Partial<ProductionRunView> = {}): ProductionRunView {
   return {
+    characterCount: 0,
+    filmRendered: false,
     hasScript: false,
     scriptDigest: "",
-    characterCount: 0,
     shots: [],
-    filmRendered: false,
     ...over,
   };
 }
 
 /** 造 n 个镜头，前 imageDone 个有图、前 clipDone 个有片段。 */
-function shots(
-  n: number,
-  imageDone = 0,
-  clipDone = 0,
-): ProductionRunView["shots"] {
+function shots(n: number, imageDone = 0, clipDone = 0): ProductionRunView["shots"] {
   return Array.from({ length: n }, (_, index) => ({
+    hasClip: index < clipDone,
+    hasImage: index < imageDone,
     id: `s${index + 1}`,
     rev: 0,
-    hasImage: index < imageDone,
-    hasClip: index < clipDone,
   }));
 }
 
@@ -64,43 +60,43 @@ describe("deriveProjectOverview", () => {
   });
 
   it("有角色 → 角色阶段完成，计数带单位", () => {
-    const o = overview({ hasScript: true, characterCount: 3 });
+    const o = overview({ characterCount: 3, hasScript: true });
     expect(o.characterCount).toBe(3);
     expect(o.stages.find((row) => row.id === "character")).toMatchObject({
-      done: true,
       detail: "3 个",
+      done: true,
     });
   });
 
   it("零镜头时「镜头生图 / 视频生成」不算完成，也不报 0/0", () => {
-    const o = overview({ hasScript: true, characterCount: 1 });
+    const o = overview({ characterCount: 1, hasScript: true });
     expect(o.stages.find((row) => row.id === "shots")).toMatchObject({
-      done: false,
       detail: "",
+      done: false,
     });
     expect(o.stages.find((row) => row.id === "video")).toMatchObject({
-      done: false,
       detail: "",
+      done: false,
     });
   });
 
   it("图未齐 → 镜头生图未完成；齐了才完成（计数口径为「已出图 / 总数」）", () => {
     const partial = overview({
-      hasScript: true,
       characterCount: 1,
+      hasScript: true,
       shots: shots(4, 3),
     });
     expect(partial.imageDoneCount).toBe(3);
     expect(partial.shotCount).toBe(4);
     expect(partial.stages.find((row) => row.id === "shots")).toMatchObject({
-      done: false,
       detail: "3/4 镜",
+      done: false,
     });
     expect(partial.nextStage).toBe("shots");
 
     const full = overview({
-      hasScript: true,
       characterCount: 1,
+      hasScript: true,
       shots: shots(4, 4),
     });
     expect(full.stages.find((row) => row.id === "shots")?.done).toBe(true);
@@ -110,12 +106,12 @@ describe("deriveProjectOverview", () => {
   it("片段齐 + 已出片 → 全部完成", () => {
     const o = deriveProjectOverview(
       view({
-        hasScript: true,
         characterCount: 2,
-        shots: shots(3, 3, 3),
         filmRendered: true,
+        hasScript: true,
+        shots: shots(3, 3, 3),
       }),
-      { stage: "render", rendered: true },
+      { rendered: true, stage: "render" },
     );
     expect(o.doneCount).toBe(6);
     expect(o.progressPct).toBe(100);
@@ -125,19 +121,19 @@ describe("deriveProjectOverview", () => {
 
   it("游标落在已完成阶段时不让它抢「当前」（全部完成时不会出现两个状态）", () => {
     const o = deriveProjectOverview(view({ hasScript: true }), {
-      stage: "script",
       rendered: false,
+      stage: "script",
     });
     expect(o.stages.find((row) => row.id === "script")).toMatchObject({
-      done: true,
       current: false,
+      done: true,
     });
   });
 
   it("游标落在未完成阶段上 → 该阶段即「当前」", () => {
     const o = deriveProjectOverview(view({ hasScript: true }), {
-      stage: "storyboard",
       rendered: false,
+      stage: "storyboard",
     });
     expect(o.stages.find((row) => row.id === "storyboard")?.current).toBe(true);
   });
@@ -152,9 +148,7 @@ describe("deriveProjectOverview", () => {
 
 describe("overviewHeadline", () => {
   it("未完成时报「下一步：X」", () => {
-    expect(overviewHeadline(overview({ hasScript: true }))).toBe(
-      "下一步：角色卡",
-    );
+    expect(overviewHeadline(overview({ hasScript: true }))).toBe("下一步：角色卡");
   });
 
   it("空项目报「下一步：剧本」（阶段表是常量，不需要「还没有开始」这条分支）", () => {

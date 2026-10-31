@@ -57,13 +57,12 @@ type AdviceRule = {
 const ADVICE_RULES: Array<AdviceRule> = [
   {
     // 执行链的 Python 解释器找不到（桌包不随包 Python / comfy-cli，ISSUE #1239）
-    pattern: /未找到 comfy-cli|comfy[-_]cli.{0,24}(python|解释器)|COMFY_CLI_PYTHON/i,
     advice: () =>
       "执行链找不到 comfy-cli 的 Python 解释器。桌包不随包 Python：请自备一个装好 comfy-cli 的 Python，再到「设置 → 创作后端 → comfy-cli 解释器」填它的绝对路径（开发检出也可以直接建 `python-venv/comfy-cli`），然后点「重试」。",
+    pattern: /未找到 comfy-cli|comfy[-_]cli.{0,24}(python|解释器)|COMFY_CLI_PYTHON/i,
   },
   {
     // wrapper 子图 / ComfyUI 子图未安装（必须优先于通用的「模型缺失」）
-    pattern: /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
     advice: (e) => {
       const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(e);
       if (!uuid || !/not found|not installed/i.test(e)) {
@@ -71,36 +70,37 @@ const ADVICE_RULES: Array<AdviceRule> = [
       }
       return `wrapper 子图（${uuid[0].slice(0, 8)}…）找不到。自定义工作流依赖的节点未在 ComfyUI 端安装；请确认 wrapper 在源工作流里声明了相同的自定义节点包，或回退到「无 wrapper」的 flat form 模板。`;
     },
+    pattern: /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
   },
   {
-    pattern: /out of memory|oom|cuda out|tried to allocate|显存不足|内存不足/i,
     advice: () =>
       "显存或内存不足。把工作流拆成更小的批次、关闭其他正在跑的任务、降低分辨率，或减少 ControlNet / LoRA 的层数后重试。",
+    pattern: /out of memory|oom|cuda out|tried to allocate|显存不足|内存不足/i,
   },
   {
-    pattern:
-      /checkpoint.*not.*found|cannot find.*model|model.*not.*exists|fileNotFoundError.*safetensors|missing.*\.safetensors|ckpt/i,
     advice: () =>
       "指定的模型文件不存在。请在 ComfyUI 的 `models/checkpoints/` 放入该 `.safetensors`（或 `.ckpt`），或在节点参数下拉里换一个已下载的模型。",
+    pattern:
+      /checkpoint.*not.*found|cannot find.*model|model.*not.*exists|fileNotFoundError.*safetensors|missing.*\.safetensors|ckpt/i,
   },
   {
-    pattern:
-      /valueerror|indexerror|keyerror|prompthelperror|input type mismatch|got.*expected|类型不匹配/i,
     advice: () =>
       "节点参数类型不匹配。常见原因是把类型不符的连线接到了强类型输入端口；请检查报错节点的输入端口与上游产出的数据形状。",
+    pattern:
+      /valueerror|indexerror|keyerror|prompthelperror|input type mismatch|got.*expected|类型不匹配/i,
   },
   {
-    pattern: /timeout|timed out|connection.*refused|econnrefused|econnreset|fetch failed|network/i,
     advice: () =>
       "连接被拒绝或超时。请确认本机 ComfyUI 进程还在运行、端口没有被防火墙拦截，并且它最近没有在加载大模型（实际端口见「设置 → 创作后端」）。",
+    pattern: /timeout|timed out|connection.*refused|econnrefused|econnreset|fetch failed|network/i,
   },
   {
-    pattern: /server_busy|503|429|queue/i,
     advice: () => "服务端正忙或队列已满。可以稍候重试，或在 ComfyUI 里清空队列 / 重启服务后重试。",
+    pattern: /server_busy|503|429|queue/i,
   },
   {
-    pattern: /prompt.*empty|empty.*prompt|null|undefined|提示词/i,
     advice: () => "提示词为空或包含非法字符。请补全提示词后重试。",
+    pattern: /prompt.*empty|empty.*prompt|null|undefined|提示词/i,
   },
 ];
 

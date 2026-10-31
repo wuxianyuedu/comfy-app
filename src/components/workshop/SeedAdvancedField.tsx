@@ -20,7 +20,7 @@ export type SeedAdvancedFieldProps = {
   value: string;
 };
 
-export function SeedAdvancedField({ value, onChange, disabled }: SeedAdvancedFieldProps) {
+export function SeedAdvancedField({ disabled, onChange, value }: SeedAdvancedFieldProps) {
   return (
     <Disclosure
       className="px-1 py-0.5"

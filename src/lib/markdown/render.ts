@@ -44,9 +44,9 @@ import { applyElementStyles } from "./styles";
  *   异步解析会把「渲染」变成一次状态机。
  */
 const MARKED_OPTIONS = /* SAFETY: 类型断言已复核 */ {
-  gfm: true,
-  breaks: false,
   async: false,
+  breaks: false,
+  gfm: true,
 } as const;
 
 /** 把一段 markdown 文本渲染成已消毒、已套样式的 HTML 片段。 */

@@ -81,10 +81,10 @@ export function placeCanvasNode(opts: {
   const position =
     opts.flowPosition ?? opts.flow.screenToFlowPosition(opts.point ?? viewportCenter());
   const node: CanvasNodeType = {
-    id: opts.id ?? makeNodeId(),
-    type: "canvasNode",
-    position,
     data: opts.data,
+    id: opts.id ?? makeNodeId(),
+    position,
+    type: "canvasNode",
   };
   return /* SAFETY: 类型断言已复核 */ [...opts.nodes, node] as Array<CanvasNodeType>;
 }
@@ -100,7 +100,7 @@ export function makeFitViewScheduler(
 ): (padding?: number) => void {
   return (padding = 0.25) => {
     afterNextPaint(() => {
-      fitView({ padding, duration: 300 });
+      fitView({ duration: 300, padding });
     });
   };
 }
@@ -119,7 +119,7 @@ export function applyPropagationToNodes(
     srcData: CanvasNodeData;
   },
 ): Array<CanvasNodeType> {
-  const { srcData: src, outEdges, importedFile } = opts;
+  const { importedFile, outEdges, srcData: src } = opts;
 
   return nodes.map((node) => {
     if (node.id === sourceId) {
@@ -151,8 +151,8 @@ export function applyPropagationToNodes(
           ...node,
           data: {
             ...td,
-            workflowInputs: { ...(td.workflowInputs ?? {}), [key]: stored },
             upstreamId: sourceId,
+            workflowInputs: { ...(td.workflowInputs ?? {}), [key]: stored },
           },
         };
       }
@@ -174,10 +174,10 @@ export function applyPropagationToNodes(
           ...node,
           data: {
             ...td,
-            mediaPath: incoming,
             mediaName: src.resultPath
               ? lastSegments(String(src.resultPath), 1) || undefined
               : td.mediaName,
+            mediaPath: incoming,
             upstreamId: sourceId,
           },
         };

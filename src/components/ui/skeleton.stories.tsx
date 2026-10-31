@@ -7,9 +7,9 @@ import { Skeleton } from "~/components/ui/skeleton";
  * 形态全由调用处给的尺寸类决定，所以这里铺的是**用法**而不是枚举。
  */
 const meta = {
-  title: "UI/Skeleton",
-  component: Skeleton,
   args: { className: "h-4 w-48" },
+  component: Skeleton,
+  title: "UI/Skeleton",
 } satisfies Meta<typeof Skeleton>;
 
 export default meta;

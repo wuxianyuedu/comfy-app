@@ -86,13 +86,13 @@ const MAX_PACKS = 20;
 /** 空载荷（与 `current` 同口径：不给 404/500，界面据此显示空态而不是报错）。 */
 function emptyPayload(error?: string): LogSessionsPayload & { error?: string } {
   return {
-    sessions: [],
-    selectedId: null,
     content: "",
-    truncated: false,
-    windowed: false,
+    selectedId: null,
+    sessions: [],
     size: 0,
     total: 0,
+    truncated: false,
+    windowed: false,
     ...(error ? { error } : {}),
   };
 }
@@ -119,7 +119,7 @@ async function readTail(
     const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
     size = stat.size;
   } catch {
-    return { text: "", windowed: false, size: 0 };
+    return { size: 0, text: "", windowed: false };
   }
   /* 尾部窗口的起点：`size - maxBytes` 夹回 `[0, size]`（文件比窗口还小 → 从头
    * 读整份）。夹的法子走 `~/lib/clamp` 的唯一出口，不在这里写 `Math.max` ——
@@ -128,7 +128,7 @@ async function readTail(
   const start = clamp(size - maxBytes, 0, size);
   const length = size - start;
   if (length <= 0) {
-    return { text: "", windowed: false, size };
+    return { size, text: "", windowed: false };
   }
   const buf = Buffer.alloc(length);
   const handle = await fs.promises.open(/*turbopackIgnore: true*/ file, "r");
@@ -139,15 +139,15 @@ async function readTail(
   }
   const raw = buf.toString("utf8");
   if (start === 0) {
-    return { text: raw, windowed: false, size };
+    return { size, text: raw, windowed: false };
   }
   /* 窗口推后了起点：窗口里那个半行不属于本次返回的内容，丢掉它。
    * 只剩一行且它本身就是半行时给空串（而不是把半个 JSON 一样的乱码给出去）。 */
   const firstBreak = raw.indexOf("\n");
   return {
+    size,
     text: firstBreak >= 0 ? raw.slice(firstBreak + 1) : "",
     windowed: true,
-    size,
   };
 }
 
@@ -162,7 +162,7 @@ function toPackFile(entry: RuntimeLogFileEntry): PackLogFile {
   return {
     name: entry.name,
     startedAt: entry.startedAt,
-    title: runtimeLogFileLabel(parsed ?? { source: "", startedAt: null, ordinal: 1 }),
+    title: runtimeLogFileLabel(parsed ?? { ordinal: 1, source: "", startedAt: null }),
   };
 }
 
@@ -208,11 +208,11 @@ export async function GET(request: Request) {
      * 交给 `exportDiagnostics()` 是同一手法。 */
     const root = path.dirname(LOG_ROOT);
     const { packs, total: archivedTotal } = await scanRunPacks({
-      runsDir: runsDir(root),
-      sourceDir: LOG_DIRS.services,
-      runJsonName: LOG_LAYOUT.runJson,
       maxPacks: MAX_PACKS,
+      runJsonName: LOG_LAYOUT.runJson,
+      runsDir: runsDir(root),
       source: /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
+      sourceDir: LOG_DIRS.services,
     });
 
     /* 分组、顺序、文案全在纯判据那一层：端点只把两边的数据递进去，不自己拼列表
@@ -246,14 +246,14 @@ export async function GET(request: Request) {
       return NextResponse.json(emptyPayload());
     }
 
-    const { text, windowed, size } = await readTail(file, MAX_TEXT_BYTES);
+    const { size, text, windowed } = await readTail(file, MAX_TEXT_BYTES);
     return NextResponse.json({
-      sessions,
-      selectedId: selected.id,
       content: text,
+      selectedId: selected.id,
+      sessions,
+      size,
       truncated: windowed,
       windowed,
-      size,
       /* 一共几份（不受 MAX_FILES 影响）：界面据此说明「更早的启动不在列表里」，
        * 而不是让用户以为「这个来源只启动过这些次」—— 跨包之后这个数只会更大。 */
       total,

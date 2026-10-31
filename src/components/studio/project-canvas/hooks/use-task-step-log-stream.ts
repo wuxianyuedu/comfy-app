@@ -62,7 +62,7 @@ function withFailureLogLine(
   if (last?.level === "error" && typeof last.msg === "string" && last.msg.includes(reason)) {
     return prev;
   }
-  return [...prev, { t: now, level: "error", msg: text, client: true }];
+  return [...prev, { client: true, level: "error", msg: text, t: now }];
 }
 
 /** 把上面那条日志行同时写进（跨卸载存活的）缓存与 state。 */
@@ -73,10 +73,10 @@ function appendFailureLogLine(
 ): void {
   const t = Date.now();
   appendStepLog(taskId, {
-    t,
+    client: true,
     level: "error",
     msg: `✗ 生成失败：${reason}`,
-    client: true,
+    t,
   });
   setLogs((prev) => withFailureLogLine(prev, reason, t));
 }
@@ -190,9 +190,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           }
           if (msg.workflowName || msg.status) {
             patchStepLogMeta(tid, {
-              workflowName: typeof msg.workflowName === "string" ? msg.workflowName : undefined,
-              status: typeof msg.status === "string" ? msg.status : undefined,
               nodeId: getNodeIdByTaskId(tid) ?? undefined,
+              status: typeof msg.status === "string" ? msg.status : undefined,
+              workflowName: typeof msg.workflowName === "string" ? msg.workflowName : undefined,
             });
           }
         } else if (msg.type === "done" || msg.type === "error") {
@@ -265,9 +265,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           return tailWindowAppend(
             prev,
             {
-              t: now,
               level: "warn",
               msg: "⏳ 已 20s 无新日志，任务可能卡住（详见后端 runner 日志）",
+              t: now,
             },
             MAX_LOGS_PER_TASK,
           );
@@ -275,7 +275,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
         lastActivityRef.current = now;
       }
     },
-    { ms: taskId ? 10000 : null, immediate: false },
+    { immediate: false, ms: taskId ? 10000 : null },
   );
 
   const clear = () => {
@@ -291,13 +291,13 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
   };
 
   return {
-    logs,
-    validationErrors,
-    status,
-    progress,
-    error,
-    connected,
-    setError,
     clear,
+    connected,
+    error,
+    logs,
+    progress,
+    setError,
+    status,
+    validationErrors,
   };
 }

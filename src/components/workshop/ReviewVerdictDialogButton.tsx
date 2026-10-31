@@ -26,8 +26,8 @@ import { reviewScoreMean, type ReviewVerdict } from "~/lib/production/review-typ
 
 /** 一条判定里的维度分数条：key 有注入的人读名用名，没有（模型自造维度）就原样展示。 */
 function ScoreBars({
-  verdict,
   labels,
+  verdict,
 }: {
   labels: ReadonlyMap<string, string>;
   verdict: ReviewVerdict;
@@ -116,16 +116,16 @@ export type ReviewVerdictDialogButtonProps = {
 const EMPTY_LABELS: ReadonlyMap<string, string> = new Map();
 
 export function ReviewVerdictDialogButton({
-  label,
-  title,
-  description,
   busyText,
   controller,
+  description,
   dimensionLabels = EMPTY_LABELS,
   footerExtra,
+  label,
+  title,
 }: ReviewVerdictDialogButtonProps) {
   const [open, setOpen] = useState(false);
-  const { verdict, history, busy, error } = controller;
+  const { busy, error, history, verdict } = controller;
   const mean = verdict ? reviewScoreMean(verdict) : null;
 
   /* 打开即评审一次 —— 评审对象可能刚被改过（人手改 / AI 改写），旧判定不作数。 */

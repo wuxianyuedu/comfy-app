@@ -68,9 +68,9 @@ describe("runWithConcurrency", () => {
          *「缺了哪一条、多了哪一条」，而两条 `toContain` 只会说「没找到 4」。 */
         () => [...processed].sort((a, b) => a - b),
         {
-          timeout: 2000,
           interval: 20,
           message: "短路后其余队列没有跑完（下面是实际处理过的条目）",
+          timeout: 2000,
         },
       )
       .toContain(4);

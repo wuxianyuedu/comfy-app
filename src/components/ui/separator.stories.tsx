@@ -19,8 +19,8 @@ type SeparatorOrientation = NonNullable<React.ComponentProps<typeof Separator>["
 const ORIENTATIONS: Array<SeparatorOrientation> = ["horizontal", "vertical"];
 
 const meta = {
-  title: "UI/Separator",
   component: Separator,
+  title: "UI/Separator",
 } satisfies Meta<typeof Separator>;
 
 export default meta;

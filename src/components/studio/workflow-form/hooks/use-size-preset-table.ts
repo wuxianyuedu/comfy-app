@@ -53,5 +53,5 @@ export function useSizePresetTable(): SizePresetTableController {
 
   const isModified = useCallback((scene: SizeScene) => sceneIsModified(scene, table), [table]);
 
-  return { table, setDims, resetScene, isModified };
+  return { isModified, resetScene, setDims, table };
 }

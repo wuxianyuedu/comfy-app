@@ -47,10 +47,7 @@ describe("groupMessagesByRun", () => {
   });
 
   it("当前这一次启动的那一组被标出来，面板据此高亮", () => {
-    const groups = groupMessagesByRun(
-      [msg("m4", "b2b2b2"), msg("m1", "a1a1a1")],
-      "b2b2b2",
-    );
+    const groups = groupMessagesByRun([msg("m4", "b2b2b2"), msg("m1", "a1a1a1")], "b2b2b2");
 
     expect(groups.map((g) => g.isCurrent)).toEqual([true, false]);
     expect(groups[0]!.label).toBe("本次启动");
@@ -62,19 +59,12 @@ describe("groupMessagesByRun", () => {
       "c3c3c3",
     );
 
-    expect(groups.map((g) => g.label)).toEqual([
-      "本次启动",
-      "上一次启动",
-      "更早的启动",
-    ]);
+    expect(groups.map((g) => g.label)).toEqual(["本次启动", "上一次启动", "更早的启动"]);
   });
 
   it("当前这次还没有任何消息时，最新的一组就是「上一次启动」", () => {
     /* 常见现场：刚启动起来还没出过事，面板上只有上一次留下的记录。 */
-    const groups = groupMessagesByRun(
-      [msg("m3", "a1a1a1", 0), msg("m1", "old001", 3)],
-      "b2b2b2",
-    );
+    const groups = groupMessagesByRun([msg("m3", "a1a1a1", 0), msg("m1", "old001", 3)], "b2b2b2");
 
     expect(groups.map((g) => g.isCurrent)).toEqual([false, false]);
     expect(groups.map((g) => g.label)).toEqual(["上一次启动", "更早的启动"]);
@@ -119,12 +109,12 @@ describe("groupMessagesByRun", () => {
      * 它对「消息记录」只要求 id / runId / time 三个字段；这一点由泛型签名保证，
      * 这里钉住「多带字段、带方法的对象也能分组」。 */
     const extra = Object.assign(msg("m1", "a1a1a1"), {
-      title: "应用服务已断开",
       body: "…",
-      read: false,
       describe() {
         return "x";
       },
+      read: false,
+      title: "应用服务已断开",
     });
     const groups = groupMessagesByRun([extra], "a1a1a1");
     expect(groups[0]!.messages[0]).toBe(extra);

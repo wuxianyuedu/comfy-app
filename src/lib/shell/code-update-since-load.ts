@@ -110,12 +110,12 @@ export type BuildIdProbe = {
 /** 读一次构建标识；任何失败都退化为全 null，绝不抛出、绝不阻塞交互。 */
 export async function fetchBuildId(): Promise<BuildIdProbe> {
   const empty: BuildIdProbe = {
-    buildId: null,
     bootId: null,
-    restartReason: null,
-    restartDetail: null,
+    buildId: null,
     depsStale: null,
     depsState: null,
+    restartDetail: null,
+    restartReason: null,
   };
   try {
     const res = await fetch(BUILD_ID_ENDPOINT, {
@@ -134,14 +134,14 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
       restartReason?: unknown;
     };
     return {
-      buildId: typeof data.buildId === "string" && data.buildId ? data.buildId : null,
       bootId: typeof data.bootId === "string" && data.bootId ? data.bootId : null,
-      restartReason:
-        typeof data.restartReason === "string" && data.restartReason ? data.restartReason : null,
-      restartDetail:
-        typeof data.restartDetail === "string" && data.restartDetail ? data.restartDetail : null,
+      buildId: typeof data.buildId === "string" && data.buildId ? data.buildId : null,
       depsStale: typeof data.depsStale === "boolean" ? data.depsStale : null,
       depsState: asDepsFreshnessState(data.depsState),
+      restartDetail:
+        typeof data.restartDetail === "string" && data.restartDetail ? data.restartDetail : null,
+      restartReason:
+        typeof data.restartReason === "string" && data.restartReason ? data.restartReason : null,
     };
   } catch {
     return empty;

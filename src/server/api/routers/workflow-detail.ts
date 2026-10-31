@@ -26,7 +26,7 @@ export const workflowDetailProcedures = {
    * rawJson 重新导入、COMBO 解析、rawView、
    * positions / groups / notes / rawNodes、来源追踪、30 秒服务端缓存）。 */
   detailFull: authedProcedure
-    .input(z.object({ id: z.string(), bust: z.boolean().optional() }))
+    .input(z.object({ bust: z.boolean().optional(), id: z.string() }))
     .query(async ({ ctx, input }) => {
       return buildWorkflowDetailFull(ctx.user.id, input.id, {
         bust: input.bust,

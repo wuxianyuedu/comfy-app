@@ -40,27 +40,27 @@ import { useHotkey } from "~/components/ui/use-hotkey";
  * `Record<string, …>` + 运行时 `?? KIND_META.info!` 兜底，配色表漏一档就静默
  * 退化成 info 那一档）。 */
 const KIND_META: Record<MessageKind, { icon: typeof Bell; ring: string; tint: string }> = {
-  update: {
-    icon: RefreshCw,
-    tint: "text-primary-strong bg-primary/15",
-    ring: "border-primary/25",
-  },
   restart: {
     icon: RotateCcw,
-    tint: "text-warning-strong bg-warning/15",
     ring: "border-warning/25",
+    tint: "text-warning-strong bg-warning/15",
+  },
+  update: {
+    icon: RefreshCw,
+    ring: "border-primary/25",
+    tint: "text-primary-strong bg-primary/15",
   },
   /* 应用服务断开：与「运行中 / 已重启」那几档不同色——它不是一次恢复动作，
    * 是「现在这件事就是坏的」，红色与底部状态栏那一格同调。 */
-  offline: {
-    icon: WifiOff,
-    tint: "text-destructive-strong bg-destructive/15",
-    ring: "border-destructive/25",
-  },
   info: {
     icon: Bell,
-    tint: "text-info-strong bg-info/15",
     ring: "border-info/25",
+    tint: "text-info-strong bg-info/15",
+  },
+  offline: {
+    icon: WifiOff,
+    ring: "border-destructive/25",
+    tint: "text-destructive-strong bg-destructive/15",
   },
 };
 

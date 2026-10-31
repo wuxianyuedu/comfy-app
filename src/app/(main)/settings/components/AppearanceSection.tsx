@@ -81,19 +81,19 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
           /* SAFETY: 类型断言已复核 */ (
             [
               {
-                value: "dark",
-                label: "深色",
-                Icon: Moon,
                 hint: "适合低光环境",
+                Icon: Moon,
+                label: "深色",
+                value: "dark",
               },
               {
-                value: "light",
-                label: "浅色",
-                Icon: Sun,
                 hint: "明亮、高对比",
+                Icon: Sun,
+                label: "浅色",
+                value: "light",
               },
             ] as const
-          ).map(({ value, label, Icon, hint }) => (
+          ).map(({ hint, Icon, label, value }) => (
             <RadioGroupItem
               key={value}
               /* 主题卡是「整卡可点」的选项，不是动作按钮：基元的尺寸/高度/内边距/
@@ -149,11 +149,11 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
 
 /** 一横向的可选档位（沿用主题那排的 radiogroup 语义，只是尺寸收紧）。 */
 function StepRow({
-  label,
   hint,
+  label,
+  onChange,
   steps,
   value,
-  onChange,
 }: {
   hint: string;
   label: string;

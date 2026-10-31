@@ -42,20 +42,20 @@ type HistoryPanelProps = {
   projectId?: string | null;
 };
 
-export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
+export function HistoryPanel({ onClose, onUse, projectId }: HistoryPanelProps) {
   const {
-    tasks,
-    loading,
-    error,
-    scope,
-    filter,
-    display,
     activeCount,
+    display,
+    error,
+    filter,
     globalCount,
-    setScope,
-    setFilter,
-    setDisplay,
+    loading,
     refresh,
+    scope,
+    setDisplay,
+    setFilter,
+    setScope,
+    tasks,
   } = useHistoryPanel({ projectId });
 
   return (
@@ -208,11 +208,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                 <div
                   key={task.id}
                   {...mediaDragSourceProps({
-                    url: task.cover,
-                    kind: task.mediaType,
                     canDrag: isDraggableCover(task),
                     className:
                       "group border-border-strong bg-subtle relative overflow-hidden rounded-lg border",
+                    kind: task.mediaType,
+                    url: task.cover,
                   })}
                 >
                   <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
@@ -244,8 +244,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/60 hover:text-white"
                         onClick={() =>
                           onUse({
-                            id: task.id,
                             cover,
+                            id: task.id,
                             mediaType: task.mediaType,
                           })
                         }
@@ -271,11 +271,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                 <div
                   key={task.id}
                   {...mediaDragSourceProps({
-                    url: task.cover,
-                    kind: task.mediaType,
                     canDrag: isDraggableCover(task),
                     className:
                       "hover:bg-subtle group flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors",
+                    kind: task.mediaType,
+                    url: task.cover,
                   })}
                 >
                   {/* 缩略图 / 类型占位 */}
@@ -322,8 +322,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                           className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
                           onClick={() =>
                             onUse({
-                              id: task.id,
                               cover,
+                              id: task.id,
                               mediaType: task.mediaType,
                             })
                           }

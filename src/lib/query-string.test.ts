@@ -27,7 +27,7 @@ describe("buildQueryString", () => {
   });
 
   it("空串默认省略（空串与「不传」在服务端是同一个意思）", () => {
-    expect(buildQueryString({ q: "", folder: "docs" })).toBe("folder=docs");
+    expect(buildQueryString({ folder: "docs", q: "" })).toBe("folder=docs");
   });
 
   it("keepEmpty 让空串留下那个键（服务端把空串当一次有效输入时用）", () => {
@@ -43,12 +43,8 @@ describe("buildQueryString", () => {
   });
 
   it("值一律编码（# / & / 中文 / 空格都不能裸奔）", () => {
-    expect(buildQueryString({ filename: "sub#dir&x.png" })).toBe(
-      "filename=sub%23dir%26x.png",
-    );
-    expect(buildQueryString({ q: "角色 参考" })).toBe(
-      "q=%E8%A7%92%E8%89%B2%20%E5%8F%82%E8%80%83",
-    );
+    expect(buildQueryString({ filename: "sub#dir&x.png" })).toBe("filename=sub%23dir%26x.png");
+    expect(buildQueryString({ q: "角色 参考" })).toBe("q=%E8%A7%92%E8%89%B2%20%E5%8F%82%E8%80%83");
   });
 
   it("键也被编码（键来自调用处给的常量时不该漏）", () => {
@@ -71,9 +67,7 @@ describe("buildQueryString", () => {
 
 describe("withQuery", () => {
   it("有参数时带 ?，没有参数时原样返回路径", () => {
-    expect(withQuery("/api/images", { type: "input" })).toBe(
-      "/api/images?type=input",
-    );
+    expect(withQuery("/api/images", { type: "input" })).toBe("/api/images?type=input");
     /* 收口前手拼的落点在这里有三套写法，其中一套无条件带 `?` ——
      * 于是「一个参数都没有」时会请求 `/api/x?`。 */
     expect(withQuery("/api/workshop/draft", {})).toBe("/api/workshop/draft");

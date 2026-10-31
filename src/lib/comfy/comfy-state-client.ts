@@ -61,10 +61,10 @@ function parseChange(raw: unknown): ComfyStateChange | null {
     return null;
   }
   return {
-    seq: o.seq,
     at: o.at,
-    kind: /* SAFETY: 类型断言已复核 */ o.kind as ComfyStateChange["kind"],
     detail: o.detail,
+    kind: /* SAFETY: 类型断言已复核 */ o.kind as ComfyStateChange["kind"],
+    seq: o.seq,
   };
 }
 
@@ -129,8 +129,8 @@ function start(): void {
       return 0;
     },
     {
-      ms: () => 0,
       immediate: true,
+      ms: () => 0,
       /* 本文件在 `src/lib`，那里不许直接 `console.*`（`tests/single-logger-channel`
        * 硬闸）。而这条通道**本来就不需要日志**：`pollOnce` 把网络错误与坏帧都
        * 吞成「这一轮没有变化」——能走到这里的只剩编程错误，而下一次 HTTP 请求

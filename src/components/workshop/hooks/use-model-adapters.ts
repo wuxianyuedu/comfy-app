@@ -78,7 +78,7 @@ export function useModelAdapters(): ModelAdaptersController {
       if (!name || kind === "chat") {
         continue;
       } // 文本模型不参与工坊生图/视频
-      out.push({ name, kind, baseUrl });
+      out.push({ baseUrl, kind, name });
     }
     return out;
   }, [configQ.data]);
@@ -123,8 +123,8 @@ export function useModelAdapters(): ModelAdaptersController {
           : [
               ...prev,
               {
-                mode,
                 endpointPath: defaultEndpointPathForMode(mode),
+                mode,
                 // 默认输入清单来自**生效的模式契约**（本机覆盖里有就用它，
                 // 否则按成品配置现算）—— 统一口在这里先定义、适配器只做翻译。
                 inputs: adapterInputsFromContract(
@@ -146,8 +146,8 @@ export function useModelAdapters(): ModelAdaptersController {
     try {
       const data = await saveBusy.run(() =>
         saveMutation.mutateAsync({
-          name: selectedModel,
           adapters: draft,
+          name: selectedModel,
         }),
       );
       setDraft(parseRemoteModeAdapters(data.adapters));
@@ -164,16 +164,16 @@ export function useModelAdapters(): ModelAdaptersController {
   }, [selectedModel, draft, saveMutation, saveBusy]);
 
   return {
-    candidates,
-    loading: configQ.isLoading,
-    modeContracts,
-    draft,
-    setDraft,
-    selectModel,
-    selectedModel,
     addMode,
+    candidates,
+    draft,
+    loading: configQ.isLoading,
+    message,
+    modeContracts,
     save,
     saving: saveBusy.busy,
-    message,
+    selectedModel,
+    selectModel,
+    setDraft,
   };
 }

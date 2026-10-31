@@ -29,11 +29,11 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
   const meta = asRecord(obj.meta) ?? {};
   return {
     meta: {
-      title: typeof meta.title === "string" ? meta.title : "",
-      type: isProjectType(meta.type) ? meta.type : "short_video",
-      tone: typeof meta.tone === "string" ? meta.tone : "",
       logline: typeof meta.logline === "string" ? meta.logline : "",
       scriptMarkdown: typeof meta.scriptMarkdown === "string" ? meta.scriptMarkdown : undefined,
+      title: typeof meta.title === "string" ? meta.title : "",
+      tone: typeof meta.tone === "string" ? meta.tone : "",
+      type: isProjectType(meta.type) ? meta.type : "short_video",
     },
     scriptMarkdown: typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
     /* SAFETY: 类型断言已复核 */

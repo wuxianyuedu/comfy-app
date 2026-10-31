@@ -17,18 +17,17 @@ import { SelectMenu } from "~/components/ui/select-menu";
  * 这里看的是**形态**：它们拼在一起时的间距与层级对不对。
  */
 const meta = {
-  title: "UI/FormField",
-  component: FormField,
   args: {
-    label: "工作流名称",
     id: "wf-name",
+    label: "工作流名称",
     required: false,
   },
   argTypes: {
-    label: { control: { type: "text" } },
-    hint: { control: { type: "text" } },
     error: { control: { type: "text" } },
+    hint: { control: { type: "text" } },
+    label: { control: { type: "text" } },
   },
+  component: FormField,
   render: (args) => (
     <div className="w-96">
       <FormField {...args}>
@@ -36,6 +35,7 @@ const meta = {
       </FormField>
     </div>
   ),
+  title: "UI/FormField",
 } satisfies Meta<typeof FormField>;
 
 export default meta;
@@ -72,9 +72,9 @@ export const NonInputControl: Story = {
           <SelectMenu
             aria-label="输出规格"
             labels={{
-              "512": "512 × 512",
               "1024": "1024 × 1024",
               "2048": "2048 × 2048",
+              "512": "512 × 512",
             }}
             onChange={() => undefined}
             options={["512", "1024", "2048"]}
@@ -93,9 +93,9 @@ export const NonInputControl: Story = {
  */
 export const LabelOnly: Story = {
   args: {
-    label: "节点级覆盖",
     hint: "这一行的取值不会写回模板。",
     id: undefined,
+    label: "节点级覆盖",
   },
   render: (args) => (
     <div className="w-96 border-l-2 border-dashed pl-3">

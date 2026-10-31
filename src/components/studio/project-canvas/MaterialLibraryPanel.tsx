@@ -40,25 +40,25 @@ type MaterialLibraryPanelProps = {
  * 状态与网络在 hooks/use-material-library.ts + lib/materials-client.ts，
  * 本文件只渲染 + 上抛事件；对外 props 与导出名保持不变，消费方零改动。
  */
-export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibraryPanelProps) {
+export function MaterialLibraryPanel({ onClose, onUse, projectId }: MaterialLibraryPanelProps) {
   const c = useMaterialLibrary({ projectId });
   /* 显示密度（网格/列表）是纯视觉偏好，与业务数据无关，留在视图层。 */
   const [display, setDisplay] = useState<DisplayMode>("grid");
   const {
-    scope,
-    folder,
-    search,
-    folders,
-    uploading,
-    error,
-    searching,
-    showItems,
     breadcrumbSegments,
+    enterFolder,
+    error,
+    folder,
+    folders,
+    refresh,
+    scope,
+    search,
+    searching,
     setScope,
     setSearch,
-    enterFolder,
+    showItems,
     upload,
-    refresh,
+    uploading,
   } = c;
   /* 素材上传选择器：多选、无类型限制（素材库也收音频/视频）。 */
   const uploadPicker = useFilePicker({

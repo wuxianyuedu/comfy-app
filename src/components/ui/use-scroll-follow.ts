@@ -90,10 +90,10 @@ export const NEAR_BOTTOM_PX = 32;
  */
 export function useScrollFollow({
   containerRef: ref,
-  watch,
-  thresholdPx = NEAR_BOTTOM_PX,
   following: controlled,
   onFollowingChange,
+  thresholdPx = NEAR_BOTTOM_PX,
+  watch,
 }: UseScrollFollowOptions): ScrollFollow {
   const [internal, setInternal] = useState(true);
   const following = controlled ?? internal;
@@ -156,5 +156,5 @@ export function useScrollFollow({
     setFollowing(true);
   }, [ref, setFollowing]);
 
-  return { onScroll, following, jumpToLatest };
+  return { following, jumpToLatest, onScroll };
 }

@@ -78,8 +78,8 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
     } else {
       const p = (async () => {
         const data: { modelTagLib: Array<TagLibItem>; wfList: Array<WfListItem> } = {
-          wfList: [],
           modelTagLib: [],
+          wfList: [],
         };
         const [wfRes, tagRes] = await Promise.allSettled([
           vanillaApi.workflow.list.query({}),
@@ -181,7 +181,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           const modes = dbModes.length > 0 ? dbModes : inferredMode ? [inferredMode] : [];
           const defaultMode =
             dbDefault && modes.includes(dbDefault) ? dbDefault : (modes[0] ?? null);
-          setWfModes({ modes, defaultMode });
+          setWfModes({ defaultMode, modes });
         })
         .catch(() => {
           if (alive) {
@@ -263,12 +263,12 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
         seededFor.current = null;
         setWfModes(null);
         patch({
-          workflowId: undefined,
-          workflowName: undefined,
-          workflowTaskType: undefined,
-          workflowInputs: {},
           paramMap: undefined,
+          workflowId: undefined,
+          workflowInputs: {},
+          workflowName: undefined,
           workflowSinkId: undefined,
+          workflowTaskType: undefined,
         });
       }
     }, 0);
@@ -280,18 +280,18 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
   }, [modelFilter, sourceFilter, wfList, d.kind, d.workflowId]);
 
   return {
-    wfList,
-    wfListLoading,
-    modelTagLib,
     modelFilter,
+    modelTagLib,
+    seededFor,
     setModelFilter,
-    wfIO,
-    wfIOLoading,
-    wfParamMap,
-    wfModes,
+    setSourceFilter,
     setWfModes,
     sourceFilter,
-    setSourceFilter,
-    seededFor,
+    wfIO,
+    wfIOLoading,
+    wfList,
+    wfListLoading,
+    wfModes,
+    wfParamMap,
   };
 }

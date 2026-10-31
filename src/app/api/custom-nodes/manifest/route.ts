@@ -67,10 +67,10 @@ export async function GET(): Promise<Response> {
   }
 
   return new NextResponse(read.text, {
-    status: 200,
     headers: {
-      "Content-Type": "application/json",
       "Cache-Control": "private, no-store",
+      "Content-Type": "application/json",
     },
+    status: 200,
   });
 }

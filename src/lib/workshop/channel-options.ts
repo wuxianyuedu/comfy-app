@@ -32,9 +32,9 @@ export function resolveChannelSelection(
 ): { model: string; provider: LLMProviderType } {
   if (value) {
     const parsed = parseChannelOption(value);
-    return { provider: parsed.channel, model: parsed.model };
+    return { model: parsed.model, provider: parsed.channel };
   }
-  return { provider: config?.provider ?? "local", model: config?.model ?? "" };
+  return { model: config?.model ?? "", provider: config?.provider ?? "local" };
 }
 
 /** 生成类下拉的展示值：未手动选择时跟随全局配置，保证选中态与生效模型一致。 */

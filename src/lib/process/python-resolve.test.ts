@@ -32,7 +32,7 @@ beforeEach(() => {
 });
 
 afterAll(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.rmSync(tmp, { force: true, recursive: true });
 });
 
 /** 造一个「形态上能被 Node 起」的候选（POSIX 要执行位；Windows 上 X_OK 恒通过）。 */
@@ -177,9 +177,9 @@ describe("findPython：把「每个候选为什么没选中」一起交出去", 
     const dir = freshDir();
     writeCandidate(path.join(dir, "python"));
     const got = findPython({
+      candidates: ["python3", "python"],
       env: { PATH: dir },
       platform: "linux",
-      candidates: ["python3", "python"],
       probe: probeOnly("python"),
     });
     expect(got.hit?.command).toBe("python");
@@ -190,9 +190,9 @@ describe("findPython：把「每个候选为什么没选中」一起交出去", 
   it("一个都不可用时 hit 为 null，而每个候选都留下一条「试过」", () => {
     const dir = freshDir();
     const got = findPython({
+      candidates: ["python3", "python"],
       env: { PATH: dir },
       platform: "linux",
-      candidates: ["python3", "python"],
       probe: probeOnly(""),
     });
     expect(got.hit).toBeNull();

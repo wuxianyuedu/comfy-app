@@ -51,9 +51,9 @@ afterEach(() => {
 
 function signal(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    seq: 1,
     at: 1_000,
     reason: "异常退出（exit 1）",
+    seq: 1,
     userStopped: false,
     ...over,
   };
@@ -87,7 +87,7 @@ describe("subscribeComfyCrashes", () => {
     const onCrash = vi.fn();
     subscribeComfyCrashes(onCrash);
     last.emitRaw("{ 不是 JSON");
-    last.emit({ seq: "1", at: 0, reason: "x" }); // seq 不是数字
+    last.emit({ at: 0, reason: "x", seq: "1" }); // seq 不是数字
     last.emit(signal({ seq: 3 }));
     expect(onCrash).toHaveBeenCalledTimes(1);
   });

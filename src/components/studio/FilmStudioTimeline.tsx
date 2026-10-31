@@ -8,7 +8,7 @@ type FilmStudioTimelineProps = {
   playheadPos: number;
 };
 
-export function FilmStudioTimeline({ playheadPos, bgmName }: FilmStudioTimelineProps) {
+export function FilmStudioTimeline({ bgmName, playheadPos }: FilmStudioTimelineProps) {
   return (
     <div className="border-border-subtle bg-panel-deep mt-auto rounded-xl border p-3">
       {/* Time ruler */}
@@ -25,9 +25,9 @@ export function FilmStudioTimeline({ playheadPos, bgmName }: FilmStudioTimelineP
         <div
           className="z-base pointer-events-none absolute bottom-0 w-0.5 bg-red-400/80"
           style={{
+            height: "100%",
             left: `${Math.min(playheadPos, 600)}px`,
             top: 0,
-            height: "100%",
           }}
         >
           <div className="absolute -top-1 left-[-7px] h-2.5 w-4 rounded-sm bg-red-400/80" />

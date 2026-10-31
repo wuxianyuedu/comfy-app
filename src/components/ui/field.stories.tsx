@@ -35,12 +35,12 @@ const ORIENTATIONS: Array<FieldOrientation> = ["vertical", "horizontal", "respon
 const LEGEND_VARIANTS: Array<FieldLegendVariant> = ["legend", "label"];
 
 const meta = {
-  title: "UI/Field",
-  component: Field,
   args: { orientation: "vertical" },
   argTypes: {
     orientation: { control: { type: "select" }, options: ORIENTATIONS },
   },
+  component: Field,
+  title: "UI/Field",
 } satisfies Meta<typeof Field>;
 
 export default meta;

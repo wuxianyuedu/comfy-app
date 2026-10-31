@@ -38,43 +38,43 @@ vi.mock("~/trpc/vanilla", () => {
  * 让 clientY<10 = 之前、>=10 = 之后 如实生效。 */
 beforeEach(() => {
   Element.prototype.getBoundingClientRect = () => ({
-    top: 0,
-    left: 0,
-    width: 200,
-    height: 20,
     bottom: 20,
+    height: 20,
+    left: 0,
     right: 200,
+    toJSON: () => ({}),
+    top: 0,
+    width: 200,
     x: 0,
     y: 0,
-    toJSON: () => ({}),
   });
 });
 
 /** 服务端富化后的条目形状：封装槽位 `value_1` 的作者名在 label/slotLabel 上。 */
 function wrapperSeedEntry(): WorkflowIOParam {
   return {
+    defaultValue: -944756323327396,
     direction: "input",
     kind: "widget",
-    nodeId: "1512",
-    name: "value_1",
     label: "Seed",
-    type: "INT",
-    defaultValue: -944756323327396,
+    name: "value_1",
+    nodeId: "1512",
     nodeTitle: "Checkpoint settings",
     slotLabel: "Seed",
+    type: "INT",
   };
 }
 
 function boolEntry(): WorkflowIOParam {
   return {
+    defaultValue: true,
     direction: "input",
     kind: "widget",
-    nodeId: "1512",
-    name: "value",
     label: "WAN22: True = I2V | False = FLF2V",
-    type: "BOOLEAN",
-    defaultValue: true,
+    name: "value",
+    nodeId: "1512",
     nodeTitle: "Checkpoint settings",
+    type: "BOOLEAN",
   };
 }
 
@@ -83,11 +83,11 @@ function makeStores(io: IOMap): WFStores {
   ioStore.setState({ workflowIO: io });
   return {
     io: ioStore,
-    rgthree: createRgthreeGroupsStore({ workflowId: "wf-349", detail: null }),
+    rgthree: createRgthreeGroupsStore({ detail: null, workflowId: "wf-349" }),
     viewer: createNodeJsonViewerStore({
       detail: null,
-      rawMetaById: {},
       positions: null,
+      rawMetaById: {},
       subgraphRawContext: null,
       subgraphStackLength: 0,
     }),
@@ -114,10 +114,10 @@ function nativeDrag(target: Element, type: string, ioKey: string, clientY = 5): 
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, "dataTransfer", {
     value: {
-      setData: () => undefined,
-      getData: () => ioKey,
-      effectAllowed: "move",
       dropEffect: "move",
+      effectAllowed: "move",
+      getData: () => ioKey,
+      setData: () => undefined,
     },
   });
   Object.defineProperty(event, "clientY", { value: clientY });
@@ -178,50 +178,50 @@ function renderPanel(io: IOMap) {
         />
       </WFStoresProvider>,
     );
-  return { stores, refresh };
+  return { refresh, stores };
 }
 
 /** 三行同组条目（同一节点上的三个参数），初始序号 1/2/3。 */
 function threeRows(): IOMap {
   return {
-    "1::widget::first": { ...boolEntry(), name: "first", displayOrder: 1 },
-    "1::widget::second": { ...boolEntry(), name: "second", displayOrder: 2 },
-    "1::widget::third": { ...boolEntry(), name: "third", displayOrder: 3 },
+    "1::widget::first": { ...boolEntry(), displayOrder: 1, name: "first" },
+    "1::widget::second": { ...boolEntry(), displayOrder: 2, name: "second" },
+    "1::widget::third": { ...boolEntry(), displayOrder: 3, name: "third" },
   };
 }
 
 describe("WorkflowIOPreviewPanel — 拖拽调整参数顺序（ISSUE #349）", () => {
   it("往右拖一格即真的换位（不是原地不动）", () => {
     const io = threeRows();
-    const { stores, refresh } = renderPanel(io);
+    const { refresh, stores } = renderPanel(io);
 
     dragOnto("1::widget::first", "1::widget::second", true);
     act(refresh);
 
     expect(orderOf(stores.io.getState().workflowIO)).toEqual({
-      "1::widget::second": 1,
       "1::widget::first": 2,
+      "1::widget::second": 1,
       "1::widget::third": 3,
     });
   });
 
   it("往左拖一格即真的换位", () => {
     const io = threeRows();
-    const { stores, refresh } = renderPanel(io);
+    const { refresh, stores } = renderPanel(io);
 
     dragOnto("1::widget::third", "1::widget::second");
     act(refresh);
 
     expect(orderOf(stores.io.getState().workflowIO)).toEqual({
       "1::widget::first": 1,
-      "1::widget::third": 2,
       "1::widget::second": 3,
+      "1::widget::third": 2,
     });
   });
 
   it("从行内子元素起手也认得出被拖的是哪一行", () => {
     const io = threeRows();
-    const { stores, refresh } = renderPanel(io);
+    const { refresh, stores } = renderPanel(io);
 
     /* 起手落在行内的非编辑子元素（<span>，不是行本身、也不是被禁拖的
      * <button>/输入框/下拉）——来源键只能靠起手现场 closest 认，正是本用例要守的路径。
@@ -234,15 +234,15 @@ describe("WorkflowIOPreviewPanel — 拖拽调整参数顺序（ISSUE #349）", 
     act(refresh);
 
     expect(orderOf(stores.io.getState().workflowIO)).toEqual({
+      "1::widget::first": 3,
       "1::widget::second": 1,
       "1::widget::third": 2,
-      "1::widget::first": 3,
     });
   });
 
   it("拖回自己身上不动数据", () => {
     const io = threeRows();
-    const { stores, refresh } = renderPanel(io);
+    const { refresh, stores } = renderPanel(io);
 
     dragOnto("1::widget::second", "1::widget::second");
     act(refresh);
@@ -258,8 +258,8 @@ describe("WorkflowIOPreviewPanel — 拖拽调整参数顺序（ISSUE #349）", 
 describe("WorkflowIOPreviewPanel — seed 行取名（ISSUE #349）", () => {
   it("写入某个模式的 seed 行为后，行名仍是作者命名而不是槽位别名 value_1", async () => {
     const io: IOMap = {
-      "1512::widget::value_1": wrapperSeedEntry(),
       "1512::widget::value": boolEntry(),
+      "1512::widget::value_1": wrapperSeedEntry(),
     };
     /* onModesChange / onClose 是必填回调：本用例不触发它们，给空实现。 */
     const noop = () => undefined;

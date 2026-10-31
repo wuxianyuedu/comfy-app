@@ -212,5 +212,5 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     };
   }
 
-  return { graph: out, removed, droppedInputs };
+  return { droppedInputs, graph: out, removed };
 }

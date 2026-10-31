@@ -123,14 +123,14 @@ export function useExpansionSet(
 
   return useMemo(
     () => ({
-      map,
-      isExpanded,
-      hasKey,
-      toggle,
-      set,
-      seedDefaults,
-      replace,
       collapseAll,
+      hasKey,
+      isExpanded,
+      map,
+      replace,
+      seedDefaults,
+      set,
+      toggle,
     }),
     [map, isExpanded, hasKey, toggle, set, seedDefaults, replace, collapseAll],
   );

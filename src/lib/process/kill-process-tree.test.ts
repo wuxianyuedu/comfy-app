@@ -33,7 +33,7 @@ import {
  * 「孤儿没被收走」的现场恰恰是「剩下哪几个 PID」，那正是要打的东西。
  */
 async function waitFor(check: () => boolean, timeoutMs = 4000, stepMs = 50): Promise<void> {
-  await expect.poll(check, { timeout: timeoutMs, interval: stepMs }).toBe(true);
+  await expect.poll(check, { interval: stepMs, timeout: timeoutMs }).toBe(true);
 }
 
 function isAlive(pid: number): boolean {
@@ -141,7 +141,7 @@ posixOnly("readPgid（组长归属由 OS 回答）", () => {
     /* 收尾挂到 `onTestFinished`：断言失败提前抛出时也照样回收，
      * 不会因为一条红用例在机器上留下一小时的 `sleep 300`。 */
     onTestFinished(async () => {
-      await killProcessTree({ pid, force: true });
+      await killProcessTree({ force: true, pid });
     });
   });
 
@@ -163,7 +163,7 @@ posixOnly("killProcessTree POSIX 行为", () => {
     const pid = child.pid!;
     child.unref();
     onTestFinished(async () => {
-      await killProcessTree({ pid, force: true, detached: true });
+      await killProcessTree({ detached: true, force: true, pid });
     });
     /* 等两个 sleep 真的挂上来（`wait` 让 sh 保持存活），再去数树。 */
     await expect
@@ -174,7 +174,7 @@ posixOnly("killProcessTree POSIX 行为", () => {
     expect(all.length).toBeGreaterThanOrEqual(3); // sh + 两个 sleep
     expect(pgidOf(pid)).toBe(pid);
 
-    const r = await killProcessTree({ pid, detached: true });
+    const r = await killProcessTree({ detached: true, pid });
     expect(r.ok).toBe(true);
     expect(r.via).toContain("进程组");
 
@@ -182,9 +182,9 @@ posixOnly("killProcessTree POSIX 行为", () => {
     // 失败时这句话打出的是「还活着的那几个」，就是残留清单本身。
     await expect
       .poll(() => all.filter((p) => isAlive(p)), {
-        timeout: 4000,
         interval: 50,
         message: "进程组回收后仍有残留（下面列出的就是孤儿）",
+        timeout: 4000,
       })
       .toEqual([]);
   });
@@ -200,7 +200,7 @@ posixOnly("killProcessTree POSIX 行为", () => {
     const own = pgidOf(process.pid);
     expect(pgidOf(pid)).toBe(own); // 前提成立：同组
 
-    const r = await killProcessTree({ pid, detached: false });
+    const r = await killProcessTree({ detached: false, pid });
     expect(r.ok).toBe(true);
     // 必须走单杀兜底分支并标明「禁杀组」，绝不能是 `kill -SIGTERM -<pgid>`
     expect(r.via).toContain("单进程兜底");
@@ -216,7 +216,7 @@ posixOnly("killProcessTree POSIX 行为", () => {
     const child = spawn("sh", ["-c", "sleep 300 & wait"], { stdio: "ignore" });
     const pid = child.pid!;
     await expect.poll(() => pgidOf(pid), { timeout: 4000 }).toBe(pgidOf(process.pid));
-    const r = await killProcessTree({ pid, detached: true });
+    const r = await killProcessTree({ detached: true, pid });
     expect(r.via).toContain("禁杀组");
     await expect.poll(() => isAlive(pid)).toBe(false);
   });
@@ -225,7 +225,7 @@ posixOnly("killProcessTree POSIX 行为", () => {
     const child = spawn("true", [], { stdio: "ignore" });
     const pid = child.pid!;
     await expect.poll(() => isAlive(pid), { timeout: 4000 }).toBe(false);
-    const r = await killProcessTree({ pid, detached: false });
+    const r = await killProcessTree({ detached: false, pid });
     expect(r.ok).toBe(false);
   });
 
@@ -237,13 +237,13 @@ posixOnly("killProcessTree POSIX 行为", () => {
     const pid = child.pid!;
     child.unref();
     onTestFinished(() => {
-      killProcessTreeSync({ pid, force: true, detached: true });
+      killProcessTreeSync({ detached: true, force: true, pid });
     });
     await expect
       .poll(() => descendantPids(pid).length, { timeout: 4000 })
       .toBeGreaterThanOrEqual(2);
     const all = [pid, ...descendantPids(pid)];
-    const r = killProcessTreeSync({ pid, detached: true });
+    const r = killProcessTreeSync({ detached: true, pid });
     expect(r.via).toContain("进程组");
     await expect.poll(() => all.filter((p) => isAlive(p))).toEqual([]);
   });
@@ -252,7 +252,7 @@ posixOnly("killProcessTree POSIX 行为", () => {
     const child = spawn("sleep", ["300"], { stdio: "ignore" });
     const pid = child.pid!;
     await expect.poll(() => pgidOf(pid), { timeout: 4000 }).not.toBeNull();
-    const r = killProcessTreeSync({ pid, detached: false });
+    const r = killProcessTreeSync({ detached: false, pid });
     expect(r.via).toContain("禁杀组");
     await expect.poll(() => isAlive(pid)).toBe(false);
   });

@@ -11,11 +11,11 @@ afterEach(cleanup);
 
 function view(over: Partial<ProductionRunView> = {}): ProductionRunView {
   return {
+    characterCount: 0,
+    filmRendered: false,
     hasScript: false,
     scriptDigest: "",
-    characterCount: 0,
     shots: [],
-    filmRendered: false,
     ...over,
   };
 }
@@ -51,13 +51,13 @@ describe("ProjectHomeStatus", () => {
         loading={false}
         onNavigate={vi.fn()}
         overview={overview({
-          hasScript: true,
           characterCount: 2,
+          hasScript: true,
           shots: Array.from({ length: 3 }, (_, index) => ({
+            hasClip: false,
+            hasImage: index < 2,
             id: `s${index}`,
             rev: 0,
-            hasImage: index < 2,
-            hasClip: false,
           })),
         })}
       />,

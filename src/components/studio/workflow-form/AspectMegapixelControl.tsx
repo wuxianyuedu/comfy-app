@@ -73,10 +73,10 @@ function buildAspectOptions(
   return source.map((value) => {
     const known = ASPECT_RATIO_LABEL_PRESETS.find((preset) => preset.value === value);
     if (known) {
-      return { value, label: known.label, ratio: known.ratio };
+      return { label: known.label, ratio: known.ratio, value };
     }
     const ratio = parseRatioFromLabel(value);
-    return { value, label: shortRatioLabel(value), ratio: ratio ?? 1 };
+    return { label: shortRatioLabel(value), ratio: ratio ?? 1, value };
   });
 }
 
@@ -92,7 +92,7 @@ function buildClarityOptions(input: {
   multiple: AlignMultiple;
   subgroup: string;
 }> {
-  const { scene, activeRatio, table, currentMultiple } = input;
+  const { activeRatio, currentMultiple, scene, table } = input;
   const rows: Array<{
     label: string;
     megapixels: number;
@@ -103,17 +103,17 @@ function buildClarityOptions(input: {
     const size = resolutionDims(scene, activeRatio, tier, table);
     rows.push({
       label: tier,
-      subgroup: CLARITY_SUBGROUP_OF_KIND.resolution,
       megapixels: megapixelsOf(size),
       multiple: alignMultipleOf(size),
+      subgroup: CLARITY_SUBGROUP_OF_KIND.resolution,
     });
   }
   for (const tier of MEGAPIXEL_TIERS) {
     rows.push({
       label: `${tier}M`,
-      subgroup: CLARITY_SUBGROUP_OF_KIND.megapixel,
       megapixels: tier,
       multiple: currentMultiple,
+      subgroup: CLARITY_SUBGROUP_OF_KIND.megapixel,
     });
   }
   return rows;
@@ -125,7 +125,7 @@ function buildMultipleOptions(input: {
   currentMultiple: AlignMultiple;
   multiple: EnrichedWidget | undefined;
 }): Array<{ label: string; value: number }> {
-  const { multiple, currentMultiple } = input;
+  const { currentMultiple, multiple } = input;
   const source =
     multiple && Array.isArray(multiple.options) && multiple.options.length > 0
       ? multiple.options
@@ -135,19 +135,19 @@ function buildMultipleOptions(input: {
     parsed.push(currentMultiple);
     parsed.sort((a, b) => a - b);
   }
-  return parsed.map((n) => ({ value: n, label: String(n) }));
+  return parsed.map((n) => ({ label: String(n), value: n }));
 }
 
 export function AspectMegapixelControl({
-  group,
-  values,
-  setMany,
   disabled,
+  group,
+  mode,
   narrow,
   onRequiredChange,
-  mode,
-  visibilityMode,
   onVisibilityChange,
+  setMany,
+  values,
+  visibilityMode,
 }: {
   disabled?: boolean;
   group: AspectMegaGroup;
@@ -235,7 +235,7 @@ export function AspectMegapixelControl({
   }, [multiple, values]);
 
   const clarityOptions = useMemo(
-    () => buildClarityOptions({ scene, activeRatio, table, currentMultiple }),
+    () => buildClarityOptions({ activeRatio, currentMultiple, scene, table }),
     [scene, activeRatio, table, currentMultiple],
   );
 
@@ -252,7 +252,7 @@ export function AspectMegapixelControl({
   }, [clarityOptions, currentMp]);
 
   const multipleOptions = useMemo(
-    () => buildMultipleOptions({ multiple, currentMultiple }),
+    () => buildMultipleOptions({ currentMultiple, multiple }),
     [multiple, currentMultiple],
   );
 
@@ -276,23 +276,18 @@ export function AspectMegapixelControl({
     () => [
       {
         label: "比例",
-        value: activeAspect?.value ?? "",
+        onChange: (value) => apply(value, currentMp),
         options: aspectOptions.map((option) => ({
-          value: option.value,
           label: option.label,
           render: <RatioIcon ratio={option.ratio} />,
+          value: option.value,
         })),
-        onChange: (value) => apply(value, currentMp),
+        value: activeAspect?.value ?? "",
       },
       {
         label: "像素",
         value: mpLabel,
         /* 两个子类各占一行：分辨率（1k/2k/4k，按场景表换算）与百万像素（1M/2M/4M）。 */
-        options: clarityOptions.map((option) => ({
-          value: option.label,
-          label: option.label,
-          subgroup: option.subgroup,
-        })),
         onChange: (label) => {
           const preset = clarityOptions.find((item) => item.label === label);
           if (!preset) {
@@ -301,6 +296,11 @@ export function AspectMegapixelControl({
           /* 分辨率档：唯一解地换算成「百万像素 + 倍数」；百万像素档保持不变。 */
           apply(aspectValue, preset.megapixels, preset.multiple);
         },
+        options: clarityOptions.map((option) => ({
+          label: option.label,
+          subgroup: option.subgroup,
+          value: option.label,
+        })),
         /* 百万像素在端口上是 FLOAT（连续量），档位只是常用值 —— 档位之外再给一个
          * 能填任意值的步进器（挨着「百万像素」那一行渲染）。 */
         extra: (
@@ -315,11 +315,6 @@ export function AspectMegapixelControl({
         ? [
             {
               label: "倍数",
-              value: multipleLabel,
-              options: multipleOptions.map((option) => ({
-                value: String(option.value),
-                label: option.label,
-              })),
               onChange: (label: string) => {
                 const hit = multipleOptions.find((option) => option.label === label);
                 if (!hit) {
@@ -327,6 +322,11 @@ export function AspectMegapixelControl({
                 }
                 apply(aspectValue, currentMp, hit.value);
               },
+              options: multipleOptions.map((option) => ({
+                label: option.label,
+                value: String(option.value),
+              })),
+              value: multipleLabel,
             } satisfies SegmentSection<string>,
           ]
         : []),

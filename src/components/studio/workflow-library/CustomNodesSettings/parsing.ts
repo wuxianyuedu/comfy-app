@@ -45,18 +45,18 @@ export function deriveRowState(sub: DiscoveredSubpkg, saved: SummaryPkg | undefi
   if (!savedHash || !sub.contentHash) {
     // 两边都没有哈希信息 —— 仅当已保存侧 status==='ok' 时才当作已加载
     if (saved.status === "ok") {
-      return { kind: "loaded", savedHash: "", nodeCount: saved.nodeCount };
+      return { kind: "loaded", nodeCount: saved.nodeCount, savedHash: "" };
     }
     return { kind: "unimported" };
   }
   if (savedHash === sub.contentHash) {
-    return { kind: "loaded", savedHash, nodeCount: saved.nodeCount };
+    return { kind: "loaded", nodeCount: saved.nodeCount, savedHash };
   }
   return {
+    diskHash: sub.contentHash,
     kind: "outdated",
     savedHash,
     savedNodeCount: saved.nodeCount,
-    diskHash: sub.contentHash,
   };
 }
 

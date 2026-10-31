@@ -27,18 +27,18 @@ function controller(
   overrides: Partial<ReadySettingsPageController> = {},
 ): ReadySettingsPageController {
   return /* SAFETY: 类型断言已复核 */ {
-    backups: [],
-    pendingRestore: null,
-    backupListLoading: false,
     backupBusy: false,
-    restoreBusy: false,
+    backupListLoading: false,
+    backups: [],
     createBackupNow: vi.fn(async () => undefined),
+    pendingRestore: null,
+    restoreBusy: false,
     restoreFrom: vi.fn(async () => undefined),
     ...overrides,
   } as unknown as ReadySettingsPageController;
 }
 
-const oneBackup = [{ name: "db-backup-20261010-120000.sqlite", size: 8192, at: 0 }];
+const oneBackup = [{ at: 0, name: "db-backup-20261010-120000.sqlite", size: 8192 }];
 
 describe("备份清单", () => {
   it("还没有备份时给出「立即备份」这条路，而不是一片空白", () => {
@@ -91,8 +91,8 @@ describe("恢复是两步，界面必须说清", () => {
         c={controller({
           backups: oneBackup,
           pendingRestore: {
-            file: "db-backup-20261010-120000.sqlite",
             at: new Date().toISOString(),
+            file: "db-backup-20261010-120000.sqlite",
           },
         })}
       />,

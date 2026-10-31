@@ -16,10 +16,10 @@ import { EmptyCanvasHint } from "~/components/studio/project-canvas/EmptyCanvasH
  * 当画布替代品，否则它会跑到页面角落（那是这些 story 唯一需要额外提供的东西）。
  */
 const meta = {
-  title: "Studio/EmptyCanvasHint",
-  component: EmptyCanvasHint,
   args: { loading: false },
   argTypes: { loading: { control: { type: "boolean" } } },
+  component: EmptyCanvasHint,
+  title: "Studio/EmptyCanvasHint",
 } satisfies Meta<typeof EmptyCanvasHint>;
 
 export default meta;

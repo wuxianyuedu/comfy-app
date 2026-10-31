@@ -40,17 +40,17 @@ export async function collectComfyQueueStatus(): Promise<ComfyQueueStatus> {
     taskRepository.countQueuedForStatusBar(),
   ]);
   if (comfy !== null) {
-    return { online: true, comfy, running, queued };
+    return { comfy, online: true, queued, running };
   }
   /* HTTP 没读到：回落「进程在不在」。comfy 计数置 0 的含义是「这一拍没读到
    * ComfyUI 自己的口径」，不是「队列空了」——本应用的排队数（`queued`）来自库，
    * 不受影响。 */
   const snap = await getComfyRuntimeSnapshot();
   return {
+    comfy: { pending: 0, running: 0 },
     online: snap.running,
-    comfy: { running: 0, pending: 0 },
-    running,
     queued,
+    running,
   };
 }
 
@@ -85,9 +85,9 @@ async function describeRunning(): Promise<ComfyRunningTask | null> {
      * 只有 `execPayload` 是执行侧一定会写的，`workflowSnapshot` 要到成功收口才落，
      * 而这一格要的正是「现在在跑的这个用的什么模型」。 */
     model: primaryModelName(row.execPayload),
-    startedAt,
-    progress: row.progress,
     nodeType: typeof node?.classType === "string" ? node.classType : null,
+    progress: row.progress,
+    startedAt,
   };
 }
 
@@ -102,6 +102,6 @@ async function describeComfy(): Promise<{
   }
   /* 解析只走 `queueTraceSummary` 一处（reaper 的对账用的是同一份）——`/queue`
    * 的条目形态随版本变，两处各解一遍必然分叉。 */
-  const { running, pending } = queueTraceSummary(raw);
-  return { running: running.length, pending: pending.length };
+  const { pending, running } = queueTraceSummary(raw);
+  return { pending: pending.length, running: running.length };
 }

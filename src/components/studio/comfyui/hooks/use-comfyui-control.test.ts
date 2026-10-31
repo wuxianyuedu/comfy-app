@@ -39,19 +39,19 @@ import { useComfyuiControl } from "./use-comfyui-control";
  * `ToastProvider` 的 context hook，而这里 renderHook 只包 tRPC —— 于是把它
  * 换成一对记账函数。断言的是「报了没有、报的哪一句」，与真 toast 的渲染无关
  * （那由 ToastProvider 自己的用例覆盖）。 */
-const { toastSuccessMock, toastErrorMock } = vi.hoisted(() => ({
-  toastSuccessMock: vi.fn<(title: string, description?: string) => void>(),
+const { toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn<(title: string, description?: string) => void>(),
+  toastSuccessMock: vi.fn<(title: string, description?: string) => void>(),
 }));
 vi.mock("~/components/studio/ToastProvider", () => ({
   useToast: () => ({
-    success: toastSuccessMock,
+    dismiss: vi.fn(),
     error: toastErrorMock,
     info: vi.fn(),
     loading: vi.fn(),
+    success: toastSuccessMock,
     toast: vi.fn(),
     update: vi.fn(),
-    dismiss: vi.fn(),
   }),
 }));
 
@@ -77,7 +77,7 @@ vi.mock("~/lib/log/log-file-client", () => {
   /* fetchLogSessions 复刻真实实现（走全局 fetch，由 MSW 拦截返回会话正文）。
    * 不引用 importOriginal：真实实现只是对端点的一次 fetch，这里等价转发。 */
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
-    sessionLogRequests.push({ source, session: sessionId ?? null });
+    sessionLogRequests.push({ session: sessionId ?? null, source });
     const query = new URLSearchParams({ source });
     if (sessionId) {
       query.set("session", sessionId);
@@ -131,23 +131,15 @@ const mockRouter = t.router({
     comfyStatus: t.procedure.query(async () => {
       comfyStatusCalls += 1;
       return {
-        up: behavior.comfyBase != null,
         base: behavior.comfyBase ?? null,
         starting: false,
+        up: behavior.comfyBase != null,
         /* 库里已保存的路径：启动动作按它拉起，视图把它写在页上（ISSUE #1900
          * 那条「改了路径没保存」的可见解）。 */
         path: behavior.comfyPath ?? "D:\\ComfyUI",
       };
     }),
     /* 安装形态与运行态**分开取**（fs-only，与首屏配置同批）：这里给一份便携版默认。 */
-    comfyInstance: t.procedure.query(
-      () =>
-        behavior.comfyInstance ?? {
-          pathConfigured: true,
-          instanceType: /* SAFETY: 类型断言已复核 */ "portable" as const,
-          desktopManaged: false,
-        },
-    ),
     comfyEmbeddable: t.procedure.query(
       () =>
         behavior.comfyEmbeddable ?? {
@@ -155,20 +147,28 @@ const mockRouter = t.router({
           reason: "ComfyUI 已开启 CORS",
         },
     ),
-    comfyStart: t.procedure.mutation(() => behavior.comfyStart ?? { ok: true, detail: "已启动" }),
-    comfyStop: t.procedure.mutation(() => ({
-      ok: true,
-      detail: "已关闭",
-    })),
+    comfyInstance: t.procedure.query(
+      () =>
+        behavior.comfyInstance ?? {
+          desktopManaged: false,
+          instanceType: /* SAFETY: 类型断言已复核 */ "portable" as const,
+          pathConfigured: true,
+        },
+    ),
     comfyOpen: t.procedure.mutation(() => {
       comfyOpenCalls += 1;
       return (
         behavior.comfyOpen ?? {
-          ok: true,
           detail: "已用系统默认浏览器打开 ComfyUI",
+          ok: true,
         }
       );
     }),
+    comfyStart: t.procedure.mutation(() => behavior.comfyStart ?? { detail: "已启动", ok: true }),
+    comfyStop: t.procedure.mutation(() => ({
+      detail: "已关闭",
+      ok: true,
+    })),
   }),
 });
 
@@ -190,9 +190,9 @@ function makeWrapper(queryClient?: QueryClient) {
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
       createElement(TRPCProvider, {
-        trpcClient: client,
-        queryClient: qc,
         children,
+        queryClient: qc,
+        trpcClient: client,
       }),
     );
   };
@@ -219,11 +219,11 @@ function mockSessionsFor(
 ): void {
   const sessions = payload.sessions ?? [
     {
-      id: "0",
-      title: "11-05 09:36:12 · 本次运行",
-      startedAt: null,
-      scope: /* SAFETY: 类型断言已复核 */ "current" as const,
       crashed: false,
+      id: "0",
+      scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+      startedAt: null,
+      title: "11-05 09:36:12 · 本次运行",
     },
   ];
   server.use(
@@ -235,11 +235,11 @@ function mockSessionsFor(
       return HttpResponse.json({
         sessions,
         /* 契约：`sessions` 新→旧，缺省选中第一项（最新那一份）。 */
-        selectedId: sessions[0]?.id ?? null,
         content: payload.content,
+        selectedId: sessions[0]?.id ?? null,
+        size: payload.content.length,
         truncated: payload.truncated ?? false,
         windowed: payload.windowed ?? false,
-        size: payload.content.length,
       });
     }),
   );
@@ -259,12 +259,12 @@ beforeEach(() => {
   server.use(
     http.get("*/api/logs/sessions", () =>
       HttpResponse.json({
-        sessions: [],
-        selectedId: null,
         content: "",
+        selectedId: null,
+        sessions: [],
+        size: 0,
         truncated: false,
         windowed: false,
-        size: 0,
       }),
     ),
     /* 「运行态变了」那条长轮询通道：默认永远回 204（没有变化）。不装 handler
@@ -338,7 +338,7 @@ describe("useComfyuiControl", () => {
   });
 
   it("ComfyUI 启动：后端返回 detail 直接进提示条", async () => {
-    behavior = { comfyStart: { ok: false, detail: "未找到 main.py" } };
+    behavior = { comfyStart: { detail: "未找到 main.py", ok: false } };
     const { result } = renderHook(() => useComfyuiControl(), {
       wrapper: makeWrapper(),
     });
@@ -373,18 +373,18 @@ describe("useComfyuiControl", () => {
     /* 契约：新→旧（第一项是最新那一份）。 */
     const sessions = [
       {
-        id: "40",
-        title: "11-05 09:36:12 · 本次运行",
-        startedAt: null,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
+        id: "40",
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        startedAt: null,
+        title: "11-05 09:36:12 · 本次运行",
       },
       {
-        id: "12",
-        title: "11-05 09:30:00 · 本次运行",
-        startedAt: null,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
+        id: "12",
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        startedAt: null,
+        title: "11-05 09:30:00 · 本次运行",
       },
     ];
     server.use(
@@ -392,12 +392,12 @@ describe("useComfyuiControl", () => {
         const url = new URL(request.url);
         const session = url.searchParams.get("session");
         return HttpResponse.json({
-          sessions,
-          selectedId: session ?? "40",
           content: session === "12" ? "第一次启动的输出" : "第二次启动的输出",
+          selectedId: session ?? "40",
+          sessions,
+          size: 8192,
           truncated: session === "12",
           windowed: true,
-          size: 8192,
         });
       }),
     );
@@ -416,8 +416,8 @@ describe("useComfyuiControl", () => {
     expect(result.current.log.truncated).toBe(true);
     expect(result.current.log.windowed).toBe(true);
     expect(sessionLogRequests).toContainEqual({
-      source: "comfyui-runtime",
       session: "12",
+      source: "comfyui-runtime",
     });
   });
 
@@ -426,11 +426,11 @@ describe("useComfyuiControl", () => {
     /* 会话列表可变：先只有一次启动，随后模拟新一次启动写入横幅。 */
     let sessions = [
       {
-        id: "12",
-        title: "11-05 09:30:00 · 本次运行",
-        startedAt: 1_000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
+        id: "12",
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        startedAt: 1_000,
+        title: "11-05 09:30:00 · 本次运行",
       },
     ];
     server.use(
@@ -441,12 +441,12 @@ describe("useComfyuiControl", () => {
         const latestId = sessions[0]!.id;
         const selectedId = sessions.some((s) => s.id === session) ? session : latestId;
         return HttpResponse.json({
-          sessions,
-          selectedId,
           content: selectedId === "12" ? "第一次启动的输出" : "第二次启动的输出",
+          selectedId,
+          sessions,
+          size: 128,
           truncated: false,
           windowed: false,
-          size: 128,
         });
       }),
     );
@@ -459,18 +459,18 @@ describe("useComfyuiControl", () => {
     /* 新→旧：新一轮启动排在**最上面**（与真实端点同序）。 */
     sessions = [
       {
-        id: "40",
-        title: "11-05 09:36:12 · 本次运行",
-        startedAt: 2_000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
+        id: "40",
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        startedAt: 2_000,
+        title: "11-05 09:36:12 · 本次运行",
       },
       {
-        id: "12",
-        title: "11-05 09:30:00 · 本次运行",
-        startedAt: 1_000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
+        id: "12",
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        startedAt: 1_000,
+        title: "11-05 09:30:00 · 本次运行",
       },
     ];
     await act(async () => {
@@ -479,8 +479,8 @@ describe("useComfyuiControl", () => {
     await expect.poll(() => result.current.log.text).toBe("第二次启动的输出");
     expect(result.current.log.sessionId).toBe("40");
     expect(sessionLogRequests).toContainEqual({
-      source: "comfyui-runtime",
       session: "40",
+      source: "comfyui-runtime",
     });
   });
 
@@ -490,18 +490,18 @@ describe("useComfyuiControl", () => {
     const archived = "2026-10-04_140000-bbbbbb/comfyui-runtime-20261004-140000.log";
     const sessions = [
       {
-        id: "comfyui-runtime-20261005-093612.log",
-        title: "10-05 09:36:12 · 本次运行",
-        startedAt: 2_000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
+        id: "comfyui-runtime-20261005-093612.log",
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        startedAt: 2_000,
+        title: "10-05 09:36:12 · 本次运行",
       },
       {
-        id: archived,
-        title: "10-04 14:00:00 · 正常退出 · bbbbbb",
-        startedAt: 1_000,
-        scope: /* SAFETY: 类型断言已复核 */ "runs" as const,
         crashed: false,
+        id: archived,
+        scope: /* SAFETY: 类型断言已复核 */ "runs" as const,
+        startedAt: 1_000,
+        title: "10-04 14:00:00 · 正常退出 · bbbbbb",
       },
     ];
     server.use(
@@ -510,12 +510,12 @@ describe("useComfyuiControl", () => {
         const session = url.searchParams.get("session");
         const selectedId = sessions.some((s) => s.id === session) ? session! : sessions[0]!.id;
         return HttpResponse.json({
-          sessions,
-          selectedId,
           content: selectedId === archived ? "上一包的内容" : "本次运行的内容",
+          selectedId,
+          sessions,
+          size: 64,
           truncated: false,
           windowed: false,
-          size: 64,
         });
       }),
     );
@@ -531,8 +531,8 @@ describe("useComfyuiControl", () => {
     expect(result.current.log.sessionId).toBe(archived);
     /* id 原样回传（没有被拆成文件名、也没有被拼上路径） */
     expect(sessionLogRequests).toContainEqual({
-      source: "comfyui-runtime",
       session: archived,
+      source: "comfyui-runtime",
     });
   });
 
@@ -540,18 +540,18 @@ describe("useComfyuiControl", () => {
     /* 契约：新→旧（第一项是最新那一份）。 */
     const sessions = [
       {
-        id: "40",
-        title: "11-05 09:36:12 · 本次运行",
-        startedAt: 2_000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
+        id: "40",
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        startedAt: 2_000,
+        title: "11-05 09:36:12 · 本次运行",
       },
       {
-        id: "12",
-        title: "11-05 09:30:00 · 本次运行",
-        startedAt: 1_000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
         crashed: false,
+        id: "12",
+        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        startedAt: 1_000,
+        title: "11-05 09:30:00 · 本次运行",
       },
     ];
     server.use(
@@ -559,12 +559,12 @@ describe("useComfyuiControl", () => {
         const url = new URL(request.url);
         const session = url.searchParams.get("session");
         return HttpResponse.json({
-          sessions,
-          selectedId: sessions.some((s) => s.id === session) ? session : "40",
           content: session === "12" ? "第一次启动的输出" : "第二次启动的输出",
+          selectedId: sessions.some((s) => s.id === session) ? session : "40",
+          sessions,
+          size: 128,
           truncated: false,
           windowed: false,
-          size: 128,
         });
       }),
     );
@@ -594,8 +594,8 @@ describe("useComfyuiControl", () => {
   describe("打开查看 ComfyUI — 页签形态（ISSUE #310）", () => {
     beforeEach(() => {
       useShellTabs.setState({
-        tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
         activeTabId: MAIN_TAB_ID,
+        tabs: [{ closable: false, id: MAIN_TAB_ID, label: "主应用", url: null }],
       });
     });
 
@@ -668,8 +668,8 @@ describe("useComfyuiControl", () => {
     beforeEach(() => {
       isDesktopShellMock.mockReturnValue(false); // 非桌面壳 = 浏览器
       useShellTabs.setState({
-        tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
         activeTabId: MAIN_TAB_ID,
+        tabs: [{ closable: false, id: MAIN_TAB_ID, label: "主应用", url: null }],
       });
     });
     afterEach(() => {
@@ -726,8 +726,8 @@ describe("useComfyuiControl", () => {
   describe("在浏览器打开 ComfyUI — 与页签并列的出口", () => {
     beforeEach(() => {
       useShellTabs.setState({
-        tabs: [{ id: MAIN_TAB_ID, label: "主应用", url: null, closable: false }],
         activeTabId: MAIN_TAB_ID,
+        tabs: [{ closable: false, id: MAIN_TAB_ID, label: "主应用", url: null }],
       });
     });
 
@@ -752,8 +752,8 @@ describe("useComfyuiControl", () => {
     it("未运行 → 原样回报服务端的可行动提示（err），且不开页签", async () => {
       behavior.comfyBase = null;
       behavior.comfyOpen = {
-        ok: false,
         detail: "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",
+        ok: false,
       };
       const { result } = renderHook(() => useComfyuiControl(), {
         wrapper: makeWrapper(),
@@ -772,8 +772,8 @@ describe("useComfyuiControl", () => {
     it("打开失败（浏览器命令不可用）→ err 提示，不误报成功", async () => {
       behavior.comfyBase = "http://127.0.0.1:8188";
       behavior.comfyOpen = {
-        ok: false,
         detail: "打开系统浏览器失败：spawn cmd.exe ENOENT",
+        ok: false,
       };
       const { result } = renderHook(() => useComfyuiControl(), {
         wrapper: makeWrapper(),

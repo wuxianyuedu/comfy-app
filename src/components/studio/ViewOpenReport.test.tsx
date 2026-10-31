@@ -19,7 +19,7 @@ const { postAppRuntimeLogMock, runtimeLogCalls } = vi.hoisted(() => {
   }> = [];
   return {
     postAppRuntimeLogMock: vi.fn((ns: string, level: string, msg: string, fields?: unknown) => {
-      calls.push({ ns, level, msg, fields });
+      calls.push({ fields, level, msg, ns });
       return Promise.resolve();
     }),
     runtimeLogCalls: calls,
@@ -57,10 +57,10 @@ describe("界面打开耗时写进 app-runtime 日志", () => {
   it("内容挂载时按「打开时刻」算出耗时，写一条带 durationMs 的日志", () => {
     renderReport("settings", 500);
     expect(runtimeLogCalls).toContainEqual({
-      ns: "app",
+      fields: { durationMs: 400, view: "settings" },
       level: "info",
       msg: "界面打开：设置 耗时 400ms",
-      fields: { view: "settings", durationMs: 400 },
+      ns: "app",
     });
   });
 

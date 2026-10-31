@@ -48,7 +48,7 @@ vi.mock("~/lib/core/logger", async (importOriginal) => {
   const actual: Record<string, unknown> = await importOriginal();
   return {
     ...actual,
-    logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
   };
 });
 
@@ -68,12 +68,12 @@ import { makeCtx } from "../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(
   createTRPCRouter({
-    whoami: publicProcedure.query(({ ctx }) => ({ user: ctx.user })),
     authedWhoami: authedProcedure.query(({ ctx }) => ({ user: ctx.user })),
     sensitive: rateLimitedProcedure.query(({ ctx }) => ({
       ok: true,
       userId: ctx.user.id,
     })),
+    whoami: publicProcedure.query(({ ctx }) => ({ user: ctx.user })),
   }),
 );
 
@@ -97,7 +97,7 @@ describe("createTRPCContext 会话注入边界", () => {
   });
 
   it("会话命中已有用户 → ctx.user 取库中用户，不重复建号", async () => {
-    seedUser(tdb, { id: "u-exist", email: "has@test.dev", name: "已有" });
+    seedUser(tdb, { email: "has@test.dev", id: "u-exist", name: "已有" });
     getSessionMock.mockResolvedValue({
       user: { email: "has@test.dev", name: "已有" },
     });
@@ -160,7 +160,7 @@ describe("rateLimitedProcedure 限流分支", () => {
       expect(checkRateLimit("rl-u")).toBe(true);
     }
     // 第 21 次经真实中间件 → 被拒
-    const caller = createCaller(makeCtx({ user: { id: "rl-u", email: "rl@test.dev", name: "R" } }));
+    const caller = createCaller(makeCtx({ user: { email: "rl@test.dev", id: "rl-u", name: "R" } }));
     await expect(caller.sensitive()).rejects.toMatchObject({
       code: "TOO_MANY_REQUESTS",
     });
@@ -171,8 +171,8 @@ describe("rateLimitedProcedure 限流分支", () => {
     for (let i = 0; i < 20; i++) {
       checkRateLimit("rl-a");
     }
-    const callerA = createCaller(makeCtx({ user: { id: "rl-a", email: "a@t.dev", name: "A" } }));
-    const callerB = createCaller(makeCtx({ user: { id: "rl-b", email: "b@t.dev", name: "B" } }));
+    const callerA = createCaller(makeCtx({ user: { email: "a@t.dev", id: "rl-a", name: "A" } }));
+    const callerB = createCaller(makeCtx({ user: { email: "b@t.dev", id: "rl-b", name: "B" } }));
     await expect(callerA.sensitive()).rejects.toMatchObject({
       code: "TOO_MANY_REQUESTS",
     });

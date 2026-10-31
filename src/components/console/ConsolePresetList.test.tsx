@@ -48,7 +48,7 @@ describe("ConsolePresetList", () => {
   it("跑着命令时所有条目都禁用（不让用户以为点了会插队）", async () => {
     const user = userEvent.setup();
     const onFill = vi.fn();
-    renderList({ onFill, disabled: true });
+    renderList({ disabled: true, onFill });
     await user.click(screen.getByTestId("console-preset-typecheck"));
     expect(onFill).not.toHaveBeenCalled();
   });

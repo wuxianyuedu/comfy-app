@@ -49,17 +49,17 @@ const dateNull = customType<{ data: Date | null; driverData: string | null }>({
 export { user };
 
 export const session = sqliteTable("session", {
-  id: text("id").primaryKey(),
-  expiresAt: dateNotNull("expiresAt").notNull(),
-  token: text("token").notNull().unique(),
   createdAt: dateNotNull("createdAt")
     .notNull()
     .$defaultFn(() => new Date()),
+  expiresAt: dateNotNull("expiresAt").notNull(),
+  id: text("id").primaryKey(),
+  ipAddress: text("ipAddress"),
+  token: text("token").notNull().unique(),
   updatedAt: dateNotNull("updatedAt")
     .notNull()
     .$defaultFn(() => new Date())
     .$onUpdate(() => new Date()),
-  ipAddress: text("ipAddress"),
   userAgent: text("userAgent"),
   userId: text("userId")
     .notNull()
@@ -67,59 +67,59 @@ export const session = sqliteTable("session", {
 });
 
 export const account = sqliteTable("account", {
-  id: text("id").primaryKey(),
+  accessToken: text("accessToken"),
+  accessTokenExpiresAt: dateNull("accessTokenExpiresAt"),
   accountId: text("accountId").notNull(),
-  providerId: text("providerId").notNull(),
+  createdAt: dateNotNull("createdAt")
+    .notNull()
+    .$defaultFn(() => new Date()),
+  id: text("id").primaryKey(),
+  idToken: text("idToken"),
   issuer: text("issuer"),
+  password: text("password"),
+  providerId: text("providerId").notNull(),
+  refreshToken: text("refreshToken"),
+  refreshTokenExpiresAt: dateNull("refreshTokenExpiresAt"),
+  scope: text("scope"),
+  updatedAt: dateNotNull("updatedAt")
+    .notNull()
+    .$defaultFn(() => new Date())
+    .$onUpdate(() => new Date()),
   userId: text("userId")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  accessToken: text("accessToken"),
-  refreshToken: text("refreshToken"),
-  idToken: text("idToken"),
-  accessTokenExpiresAt: dateNull("accessTokenExpiresAt"),
-  refreshTokenExpiresAt: dateNull("refreshTokenExpiresAt"),
-  scope: text("scope"),
-  password: text("password"),
-  createdAt: dateNotNull("createdAt")
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: dateNotNull("updatedAt")
-    .notNull()
-    .$defaultFn(() => new Date())
-    .$onUpdate(() => new Date()),
 });
 
 export const verification = sqliteTable("verification", {
-  id: text("id").primaryKey(),
-  identifier: text("identifier").notNull(),
-  value: text("value").notNull(),
-  expiresAt: dateNotNull("expiresAt").notNull(),
   createdAt: dateNotNull("createdAt")
     .notNull()
     .$defaultFn(() => new Date()),
+  expiresAt: dateNotNull("expiresAt").notNull(),
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
   updatedAt: dateNotNull("updatedAt")
     .notNull()
     .$defaultFn(() => new Date())
     .$onUpdate(() => new Date()),
+  value: text("value").notNull(),
 });
 
 // ── 业务表 ───────────────────────────────────────────────────────
 export const post = sqliteTable(
   "post",
   {
-    id: cuid(),
-    name: text("name").notNull(),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    createdById: text("createdById")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    id: cuid(),
+    name: text("name").notNull(),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
-    createdById: text("createdById")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
   },
   (t) => [index("post_name_idx").on(t.name)],
 );
@@ -127,20 +127,20 @@ export const post = sqliteTable(
 export const project = sqliteTable(
   "project",
   {
-    id: text("id").primaryKey(), // 复用客户端 proj_* id
-    userId: text("userId")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    nodes: text("nodes", { mode: "json" }).notNull().default("[]"),
-    edges: text("edges", { mode: "json" }).notNull().default("[]"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    edges: text("edges", { mode: "json" }).notNull().default("[]"),
+    id: text("id").primaryKey(), // 复用客户端 proj_* id
+    name: text("name").notNull(),
+    nodes: text("nodes", { mode: "json" }).notNull().default("[]"),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
   },
   (t) => [index("project_user_updated_idx").on(t.userId, t.updatedAt)],
 );
@@ -148,23 +148,21 @@ export const project = sqliteTable(
 export const model = sqliteTable(
   "model",
   {
-    id: cuid(),
-    name: text("name").notNull(),
-    type: text("type").notNull(),
-    fileName: text("fileName").notNull(),
-    folder: text("folder"),
-    subfolder: text("subfolder"),
     baseModel: text("baseModel"),
-    coverUrl: text("coverUrl"),
-    description: text("description"),
     category: text("category"),
-    isAvailable: integer("isAvailable", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    source: text("source").notNull().default("LOCAL"),
+    coverUrl: text("coverUrl"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    description: text("description"),
+    fileName: text("fileName").notNull(),
+    folder: text("folder"),
+    id: cuid(),
+    isAvailable: integer("isAvailable", { mode: "boolean" }).notNull().default(false),
+    name: text("name").notNull(),
+    source: text("source").notNull().default("LOCAL"),
+    subfolder: text("subfolder"),
+    type: text("type").notNull(),
   },
   (t) => [
     uniqueIndex("model_file_folder_uniq").on(t.fileName, t.folder),
@@ -177,19 +175,19 @@ export const model = sqliteTable(
 export const userModelConfig = sqliteTable(
   "userModelConfig",
   {
-    id: cuid(),
-    userId: text("userId")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    folder: text("folder").notNull(),
-    label: text("label"),
-    type: text("type").notNull(),
-    types: text("types").notNull().default("[]"),
-    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-    isCustom: integer("isCustom", { mode: "boolean" }).notNull().default(false),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    folder: text("folder").notNull(),
+    id: cuid(),
+    isCustom: integer("isCustom", { mode: "boolean" }).notNull().default(false),
+    label: text("label"),
+    type: text("type").notNull(),
+    types: text("types").notNull().default("[]"),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
   },
   (t) => [
     uniqueIndex("umc_user_folder_uniq").on(t.userId, t.folder),
@@ -200,16 +198,16 @@ export const userModelConfig = sqliteTable(
 export const favorite = sqliteTable(
   "favorite",
   {
-    id: cuid(),
-    userId: text("userId")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    modelId: text("modelId")
-      .notNull()
-      .references(() => model.id, { onDelete: "cascade" }),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    id: cuid(),
+    modelId: text("modelId")
+      .notNull()
+      .references(() => model.id, { onDelete: "cascade" }),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
   },
   (t) => [uniqueIndex("fav_user_model_uniq").on(t.userId, t.modelId)],
 );
@@ -218,16 +216,16 @@ export const task = sqliteTable(
   "task",
   {
     id: cuid(),
+    negativePrompt: text("negativePrompt"),
+    params: text("params", { mode: "json" }).notNull(),
+    projectId: text("projectId"),
+    prompt: text("prompt").notNull(),
+    type: text("type").notNull(),
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    type: text("type").notNull(),
-    prompt: text("prompt").notNull(),
-    negativePrompt: text("negativePrompt"),
-    params: text("params", { mode: "json" }).notNull(),
     workflowName: text("workflowName").notNull(),
     workflowSnapshot: text("workflowSnapshot", { mode: "json" }),
-    projectId: text("projectId"),
     /**
      * 工坊镜头号：这条任务是为「哪一镜」跑的。只有按镜生成（工坊镜头生图）才有值，
      * 手动/画布节点级生成为 NULL。
@@ -236,16 +234,16 @@ export const task = sqliteTable(
      * 名称的猜测都会把归属写错，而错一次的代价是健康度条从此长期报一个假数。
      * 因此读侧的口径是「NULL = 归属未知」，**不等于**「这一镜没出过图」。
      */
-    shotId: text("shotId"),
     referenceImages: text("referenceImages", { mode: "json" }),
+    shotId: text("shotId"),
     /** 来源任务（#2483 · FR-QA-09）：重绘 / 放大等「带修改的重跑」指回原任务。
      *  只作追溯展示（产物面板「来源任务」），不参与执行；常规提交为 NULL。 */
-    parentId: text("parentId"),
-    status: text("status").notNull().default("QUEUED"),
-    promptId: text("promptId"),
-    progress: integer("progress").notNull().default(0),
-    resultImages: text("resultImages", { mode: "json" }),
     logs: text("logs", { mode: "json" }),
+    parentId: text("parentId"),
+    progress: integer("progress").notNull().default(0),
+    promptId: text("promptId"),
+    resultImages: text("resultImages", { mode: "json" }),
+    status: text("status").notNull().default("QUEUED"),
     /** comfy-cli 的**完整原始输出**（不截断，P3 §5 ADR §14 D1 的 4-B2）。
      *  面板里的 `[comfy-cli 原始]`/`stdout`/`stderr` 行出于防刷屏做过单行与行数
      *  截断，「查看完整输出」那个入口需要的是被截掉的完整 JSON 与整段 traceback。
@@ -254,13 +252,13 @@ export const task = sqliteTable(
      *  写入时机：执行侧收口时整包落一次（成功与失败两条都写，形态与 `replaceLogs`
      *  同族：只带归属守卫、不带终态守卫，尾随输出不该被挡掉）。行数上限由写入侧
      *  `RAW_CLI_MAX_LINES` 兜着，本列不会无界增长。 */
-    rawCli: text("rawCli", { mode: "json" }),
-    error: text("error"),
-    validationErrors: text("validationErrors"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    error: text("error"),
     finishedAt: dateNull("finishedAt"),
+    rawCli: text("rawCli", { mode: "json" }),
+    validationErrors: text("validationErrors"),
     /** 执行归属（P3 §5 ADR §6 的 inline/host 互斥列）：'inline' | 'host'，
      *  NULL 归 inline（历史行与未带归属的建行）。写入时机在提交侧（tRPC generate
      *  按 COMFY_EXECUTOR 写值），领取侧见 `repository-task-impl.ts` 的
@@ -308,24 +306,22 @@ export const task = sqliteTable(
 export const taskImage = sqliteTable(
   "taskImage",
   {
+    height: integer("height"),
     id: cuid(),
-    taskId: text("taskId")
-      .notNull()
-      .references(() => task.id, { onDelete: "cascade" }),
+    isCover: integer("isCover", { mode: "boolean" }).notNull().default(false),
     localPath: text("localPath").notNull(),
     mediaType: text("mediaType").notNull().default("image"),
     seed: text("seed"),
-    width: integer("width"),
-    height: integer("height"),
-    isCover: integer("isCover", { mode: "boolean" }).notNull().default(false),
     sortIndex: integer("sortIndex").notNull().default(0),
+    taskId: text("taskId")
+      .notNull()
+      .references(() => task.id, { onDelete: "cascade" }),
+    width: integer("width"),
     /** 人工评分 0~5（#2480，人判「这张好 / 这张废」的落点）；null = 还没评过。 */
     humanRating: integer("humanRating"),
     /** 人工收藏（#2480）：「优秀样本进 few-shot」沉淀机制的输入（与模型库的
      *  `favorite` 表无关——那张表挂 user↔model，这张列挂产物本身）。 */
-    isFavorite: integer("isFavorite", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    isFavorite: integer("isFavorite", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [
     // 每次 task.list / history 带 includeImages 都按 taskId IN(...) 回表；
@@ -337,24 +333,24 @@ export const taskImage = sqliteTable(
 export const workflowTemplate = sqliteTable(
   "workflowTemplate",
   {
-    id: cuid(),
-    userId: text("userId")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    taskType: text("taskType").notNull().default("TXT2IMG"),
-    modes: text("modes").notNull().default("[]"),
-    defaultMode: text("defaultMode"),
-    paramMap: text("paramMap", { mode: "json" }),
-    workflowIO: text("workflowIO", { mode: "json" }),
-    rawJson: text("rawJson", { mode: "json" }),
-    positions: text("positions", { mode: "json" }),
-    sourcePath: text("sourcePath"),
-    sourceChecksum: text("sourceChecksum"),
-    sourceMtime: integer("sourceMtime"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    defaultMode: text("defaultMode"),
+    id: cuid(),
+    modes: text("modes").notNull().default("[]"),
+    name: text("name").notNull(),
+    paramMap: text("paramMap", { mode: "json" }),
+    positions: text("positions", { mode: "json" }),
+    rawJson: text("rawJson", { mode: "json" }),
+    sourceChecksum: text("sourceChecksum"),
+    sourceMtime: integer("sourceMtime"),
+    sourcePath: text("sourcePath"),
+    taskType: text("taskType").notNull().default("TXT2IMG"),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workflowIO: text("workflowIO", { mode: "json" }),
   },
   (t) => [
     index("wt_user_idx").on(t.userId),
@@ -367,14 +363,14 @@ export const workflowTemplate = sqliteTable(
 export const workflowModelTag = sqliteTable(
   "workflowModelTag",
   {
-    id: cuid(),
-    userId: text("userId")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    id: cuid(),
+    name: text("name").notNull(),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
   },
   (t) => [
     uniqueIndex("wmt_user_name_uniq").on(t.userId, t.name),
@@ -402,17 +398,17 @@ export const workflowModelTagToWorkflowTemplate = sqliteTable(
 );
 
 export const llmConfig = sqliteTable("llmConfig", {
-  id: text("id").primaryKey(), // "singleton"
-  provider: text("provider").notNull().default("local"),
   baseUrl: text("baseUrl").notNull().default(OLLAMA_DEFAULT_BASE_URL),
+  id: text("id").primaryKey(), // "singleton"
   model: text("model").notNull().default(""),
+  provider: text("provider").notNull().default("local"),
   /** 本地 Ollama 候选模型名（JSON，纯名字字符串数组）：设置页可勾选多个，
    *  供工坊本地组切换使用。本地模型不持有 apiKey；远端独立模型见 remoteModel 表。 */
-  extraModels: text("extraModels", { mode: "json" }),
   apiKey: text("apiKey"),
+  extraModels: text("extraModels", { mode: "json" }),
+  maxTokens: integer("maxTokens").notNull().default(2048),
   temperature: real("temperature").notNull().default(0.7),
   temperatureByTask: text("temperatureByTask", { mode: "json" }),
-  maxTokens: integer("maxTokens").notNull().default(2048),
   updatedAt: dateNotNull("updatedAt")
     .notNull()
     .$defaultFn(() => new Date())
@@ -438,7 +434,6 @@ export const remoteModel = sqliteTable(
     kind: text("kind").notNull().default("chat"),
     /** 工坊按模式的输入/输出适配器（JSON 数组字符串；RemoteModeAdapter[]）。
      *  配置后工坊按该模型在对应模式下的字段映射发起请求，替代统一猜测。 */
-    workshopAdapters: text("workshopAdapters"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
@@ -446,6 +441,7 @@ export const remoteModel = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
+    workshopAdapters: text("workshopAdapters"),
   },
   (t) => [
     uniqueIndex("remoteModel_name_uniq").on(t.name),
@@ -456,26 +452,24 @@ export const remoteModel = sqliteTable(
 export const skill = sqliteTable(
   "skill",
   {
-    id: cuid(),
-    name: text("name").notNull(),
-    slug: text("slug").notNull().unique(),
-    description: text("description").notNull(),
-    icon: text("icon").notNull().default("✨"),
     category: text("category").notNull().default("style"),
-    promptTemplate: text("promptTemplate").notNull(),
-    negativePrompt: text("negativePrompt"),
-    defaultParams: text("defaultParams", { mode: "json" }),
-    recommendedModel: text("recommendedModel"),
-    tags: text("tags").default("[]"),
     coverUrl: text("coverUrl"),
-    isBuiltIn: integer("isBuiltIn", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    sortOrder: integer("sortOrder").notNull().default(0),
-    isActive: integer("isActive", { mode: "boolean" }).notNull().default(true),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    defaultParams: text("defaultParams", { mode: "json" }),
+    description: text("description").notNull(),
+    icon: text("icon").notNull().default("✨"),
+    id: cuid(),
+    isActive: integer("isActive", { mode: "boolean" }).notNull().default(true),
+    isBuiltIn: integer("isBuiltIn", { mode: "boolean" }).notNull().default(false),
+    name: text("name").notNull(),
+    negativePrompt: text("negativePrompt"),
+    promptTemplate: text("promptTemplate").notNull(),
+    recommendedModel: text("recommendedModel"),
+    slug: text("slug").notNull().unique(),
+    sortOrder: integer("sortOrder").notNull().default(0),
+    tags: text("tags").default("[]"),
   },
   (t) => [
     index("skill_cat_idx").on(t.category),
@@ -493,26 +487,24 @@ export const filmProject = sqliteTable(
       .references(() => user.id, { onDelete: "cascade" }),
     /** 关联的统一项目 id（proj_*）。Phase 5：成片挂到统一项目下，
      *  可从该项目的 `production.shots` 直接建片（而非自建剧本再平行分镜）。 */
-    projectId: text("projectId"),
-    title: text("title").notNull(),
-    script: text("script").notNull(),
-    type: text("type").notNull().default("short_video"),
-    styleSlug: text("styleSlug"),
-    size: text("size").notNull().default("1280x720"),
-    fps: integer("fps").notNull().default(16),
-    framesPerShot: integer("framesPerShot").notNull().default(49),
-    subtitleOn: integer("subtitleOn", { mode: "boolean" })
-      .notNull()
-      .default(true),
     bgmName: text("bgmName"),
-    status: text("status").notNull().default("PARSING"),
-    progress: integer("progress").notNull().default(0),
-    finalVideo: text("finalVideo"),
-    logs: text("logs", { mode: "json" }),
-    error: text("error"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    error: text("error"),
+    finalVideo: text("finalVideo"),
+    fps: integer("fps").notNull().default(16),
+    framesPerShot: integer("framesPerShot").notNull().default(49),
+    logs: text("logs", { mode: "json" }),
+    progress: integer("progress").notNull().default(0),
+    projectId: text("projectId"),
+    script: text("script").notNull(),
+    size: text("size").notNull().default("1280x720"),
+    status: text("status").notNull().default("PARSING"),
+    styleSlug: text("styleSlug"),
+    subtitleOn: integer("subtitleOn", { mode: "boolean" }).notNull().default(true),
+    title: text("title").notNull(),
+    type: text("type").notNull().default("short_video"),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
@@ -527,30 +519,30 @@ export const filmProject = sqliteTable(
 export const filmShot = sqliteTable(
   "filmShot",
   {
-    id: cuid(),
     filmId: text("filmId")
       .notNull()
       .references(() => filmProject.id, { onDelete: "cascade" }),
+    id: cuid(),
     /** 关联的统一镜头 id（production.shots[].id）。Phase 5：成片逐镜生成结果按它
      *  回写统一项目对应 Shot 的视频态（clipUrl / clipStatus）。自由建片时为 null。 */
-    shotId: text("shotId"),
-    order: integer("order").notNull(),
-    heading: text("heading"),
-    prompt: text("prompt").notNull(),
-    negative: text("negative"),
-    params: text("params", { mode: "json" }),
-    taskId: text("taskId"),
-    status: text("status").notNull().default("IDLE"),
-    progress: integer("progress").notNull().default(0),
-    videoPath: text("videoPath"),
-    duration: real("duration"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    duration: real("duration"),
+    heading: text("heading"),
+    negative: text("negative"),
+    order: integer("order").notNull(),
+    params: text("params", { mode: "json" }),
+    progress: integer("progress").notNull().default(0),
+    prompt: text("prompt").notNull(),
+    shotId: text("shotId"),
+    status: text("status").notNull().default("IDLE"),
+    taskId: text("taskId"),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
+    videoPath: text("videoPath"),
   },
   (t) => [index("film_shot_film_order_idx").on(t.filmId, t.order)],
 );
@@ -558,14 +550,14 @@ export const filmShot = sqliteTable(
 export const auditLog = sqliteTable(
   "auditLog",
   {
-    id: cuid(),
-    event: text("event").notNull(),
-    userId: text("userId"),
-    ip: text("ip"),
-    meta: text("meta"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    event: text("event").notNull(),
+    id: cuid(),
+    ip: text("ip"),
+    meta: text("meta"),
+    userId: text("userId"),
   },
   (t) => [
     index("audit_event_idx").on(t.event),
@@ -579,27 +571,27 @@ export const auditLog = sqliteTable(
 export const workshopSession = sqliteTable(
   "workshopSession",
   {
+    characters: text("characters", { mode: "json" }).notNull().default("[]"),
     id: text("id")
       .$defaultFn(() => createId())
       .primaryKey(),
-    userId: text("userId"),
-    title: text("title").notNull().default("未命名工坊项目"),
-    type: text("type").notNull().default("short_video"),
-    tone: text("tone").notNull().default(""),
-    logline: text("logline").notNull().default(""),
     idea: text("idea").notNull().default(""),
-    scriptMarkdown: text("scriptMarkdown").notNull().default(""),
+    logline: text("logline").notNull().default(""),
     scenes: text("scenes", { mode: "json" }).notNull().default("[]"),
-    characters: text("characters", { mode: "json" }).notNull().default("[]"),
+    scriptMarkdown: text("scriptMarkdown").notNull().default(""),
     shots: text("shots", { mode: "json" }).notNull().default("[]"),
     stage: text("stage").notNull().default("script"),
+    title: text("title").notNull().default("未命名工坊项目"),
+    tone: text("tone").notNull().default(""),
+    type: text("type").notNull().default("short_video"),
+    userId: text("userId"),
     /** 绑定的界面项目（#2482）：proj_* 即 production.id。非空 = 会话与界面共享
      *  同一份真值（权威读在 production，会话内容列退化为写时镜像）；
      *  NULL = 桥之前的遗留会话，首次写时桥接（写时建/绑项目）。 */
-    projectId: text("projectId"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    projectId: text("projectId"),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
@@ -619,23 +611,23 @@ export const workshopSession = sqliteTable(
 export const workshopDraft = sqliteTable(
   "workshopDraft",
   {
-    id: text("id").primaryKey(), // = 前端项目 id（wsp_*），应用启动后稳定不变
-    userId: text("userId"),
-    title: text("title").notNull().default("未命名工坊项目"),
-    type: text("type").notNull().default("short_video"),
-    tone: text("tone").notNull().default(""),
-    logline: text("logline").notNull().default(""),
-    scriptMarkdown: text("scriptMarkdown").notNull().default(""),
-    scenes: text("scenes", { mode: "json" }).notNull().default("[]"),
     characters: text("characters", { mode: "json" }).notNull().default("[]"),
-    shots: text("shots", { mode: "json" }).notNull().default("[]"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    id: text("id").primaryKey(), // = 前端项目 id（wsp_*），应用启动后稳定不变
+    logline: text("logline").notNull().default(""),
+    scenes: text("scenes", { mode: "json" }).notNull().default("[]"),
+    scriptMarkdown: text("scriptMarkdown").notNull().default(""),
+    shots: text("shots", { mode: "json" }).notNull().default("[]"),
+    title: text("title").notNull().default("未命名工坊项目"),
+    tone: text("tone").notNull().default(""),
+    type: text("type").notNull().default("short_video"),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())
       .$onUpdate(() => new Date()),
+    userId: text("userId"),
   },
   (t) => [index("workshop_draft_user_updated_idx").on(t.userId, t.updatedAt)],
 );
@@ -648,18 +640,18 @@ export const workshopDraft = sqliteTable(
 export const production = sqliteTable(
   "production",
   {
+    characters: text("characters", { mode: "json" }).notNull().default("[]"),
     id: text("id").primaryKey(), // = project.id（proj_*）
+    logline: text("logline").notNull().default(""),
+    scenes: text("scenes", { mode: "json" }).notNull().default("[]"),
+    scriptMarkdown: text("scriptMarkdown").notNull().default(""),
+    shots: text("shots", { mode: "json" }).notNull().default("[]"),
+    title: text("title").notNull().default("未命名项目"),
+    tone: text("tone").notNull().default(""),
+    type: text("type").notNull().default("short_video"),
     userId: text("userId")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    title: text("title").notNull().default("未命名项目"),
-    type: text("type").notNull().default("short_video"),
-    tone: text("tone").notNull().default(""),
-    logline: text("logline").notNull().default(""),
-    scriptMarkdown: text("scriptMarkdown").notNull().default(""),
-    scenes: text("scenes", { mode: "json" }).notNull().default("[]"),
-    characters: text("characters", { mode: "json" }).notNull().default("[]"),
-    shots: text("shots", { mode: "json" }).notNull().default("[]"),
     /** 完成状态（阶段游标 + rendered 等），两侧一致展示的唯一来源（Phase 3d）。 */
     progress: text("progress", { mode: "json" }).notNull().default("{}"),
     /** AI 自主执行 run 的协调状态（审批粒度 / 生命周期 / 每镜已处理 rev 快照，Phase 6）。
@@ -669,12 +661,10 @@ export const production = sqliteTable(
      *  形状 `{ review, reviewHistory }`，归一在 `~/lib/production/review-types` 的
      *  `normalizeScriptReviewState`；写入口是 `server/agent/review.ts` 的 `reviewScript`
      *  （经 `patchContent` 的 `scriptReview`）。工坊自动保存不碰这列（字段所有权同 run）。 */
-    scriptReview: text("scriptReview", { mode: "json" })
-      .notNull()
-      .default("{}"),
     createdAt: dateNotNull("createdAt")
       .notNull()
       .$defaultFn(() => new Date()),
+    scriptReview: text("scriptReview", { mode: "json" }).notNull().default("{}"),
     updatedAt: dateNotNull("updatedAt")
       .notNull()
       .$defaultFn(() => new Date())

@@ -56,7 +56,7 @@ export type EnsureFacts = {
  */
 export function decideEnsureLaunch(facts: EnsureFacts): EnsureDecision {
   if (facts.upBase) {
-    return { kind: "already-up", base: facts.upBase };
+    return { base: facts.upBase, kind: "already-up" };
   }
   if (!facts.manual && facts.manualStop) {
     return { kind: "skip-manual-stop" };
@@ -246,8 +246,8 @@ export function decideStop(facts: StopFacts): StopDecision {
   if (facts.pid) {
     return {
       kind: "kill",
-      pid: facts.pid,
       kindLabel: facts.hasChild ? "bound 子进程" : "按配置路径定位到的进程",
+      pid: facts.pid,
     };
   }
   return facts.stillUp ? { kind: "foreign-running" } : { kind: "not-running" };
@@ -301,10 +301,10 @@ export function decideStopOutcome(probeResults: Array<string | null>): {
   const stillUp = probeResults[probeResults.length - 1] !== null;
   return stillUp
     ? {
-        ok: false,
         detail: "关闭命令已发送，但 ComfyUI 仍在响应，请手动确认进程已退出",
+        ok: false,
       }
-    : { ok: true, detail: "ComfyUI 已关闭" };
+    : { detail: "ComfyUI 已关闭", ok: true };
 }
 
 /* ── 内嵌放行参数（embed clearance）────────────────────────────────────
@@ -413,19 +413,19 @@ export type ComfyStatusVerdict = {
 
 /** 两份事实 → 一条状态结论（纯组装，无 IO、无全局状态）。 */
 export function deriveComfyUiStatus(facts: ComfyStatusFacts): ComfyStatusVerdict {
-  const { starting, stopping, probe, snap } = facts;
+  const { probe, snap, starting, stopping } = facts;
   const fallbackPid = facts.fallbackPid;
 
   // 1) HTTP 通了：能立刻用（base 用探测到的真实地址，可能带端口偏移）。
   if (probe) {
     return {
-      up: true,
       base: probe,
-      starting,
-      stopping,
-      probing: false,
       pid: snap.pid ?? fallbackPid,
       port: snap.port ?? null,
+      probing: false,
+      starting,
+      stopping,
+      up: true,
       via: snap.via,
     };
   }
@@ -434,13 +434,13 @@ export function deriveComfyUiStatus(facts: ComfyStatusFacts): ComfyStatusVerdict
   const port = snap.port ?? null;
   if (snap.running && port) {
     return {
-      up: true,
       base: comfyUiBaseUrl(port),
-      starting,
-      stopping,
-      probing: false,
       pid: snap.pid ?? undefined,
       port,
+      probing: false,
+      starting,
+      stopping,
+      up: true,
       via: snap.via,
     };
   }
@@ -448,13 +448,13 @@ export function deriveComfyUiStatus(facts: ComfyStatusFacts): ComfyStatusVerdict
   // 3) 进程活着但端口还没绑定：正在启动（不是「未运行」）。
   if (snap.running) {
     return {
-      up: false,
       base: null,
-      starting: true,
-      stopping,
-      probing: false,
       pid: snap.pid ?? undefined,
       port: null,
+      probing: false,
+      starting: true,
+      stopping,
+      up: false,
       via: snap.via,
     };
   }
@@ -470,13 +470,13 @@ export function deriveComfyUiStatus(facts: ComfyStatusFacts): ComfyStatusVerdict
    */
   const startingNow = starting || facts.startingWindow;
   return {
-    up: false,
     base: null,
-    starting: startingNow,
-    stopping,
-    probing: !startingNow && !facts.notRunningHeld && (!snap.didQueryProcTable || snap.unverified),
     pid: fallbackPid,
     port: null,
+    probing: !startingNow && !facts.notRunningHeld && (!snap.didQueryProcTable || snap.unverified),
+    starting: startingNow,
+    stopping,
+    up: false,
     via: null,
   };
 }

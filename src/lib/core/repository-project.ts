@@ -32,11 +32,11 @@ export class ProjectRepository extends DrizzleRepository<Project> {
       const rows = await db
         .insert(project)
         .values({
+          edges: data.edges ?? "[]",
           id: data.id,
-          userId,
           name: data.name,
           nodes: data.nodes ?? "[]",
-          edges: data.edges ?? "[]",
+          userId,
         })
         .returning();
       return firstRowRequired(rows, "项目插入");
@@ -44,9 +44,9 @@ export class ProjectRepository extends DrizzleRepository<Project> {
     const rows = await db
       .update(project)
       .set({
+        edges: data.edges ?? "[]",
         name: data.name,
         nodes: data.nodes ?? "[]",
-        edges: data.edges ?? "[]",
         updatedAt: new Date(),
       })
       .where(eq(project.id, data.id))

@@ -23,8 +23,8 @@ import {
  * `hidden="until-found"` 那一路（浏览器页内查找会自动展开命中内容）。
  */
 const meta = {
-  title: "UI/Accordion",
   component: Accordion,
+  title: "UI/Accordion",
 } satisfies Meta<typeof Accordion>;
 
 export default meta;

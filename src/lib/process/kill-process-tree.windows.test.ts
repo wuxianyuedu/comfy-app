@@ -57,7 +57,7 @@ function tempDir(): string {
 afterEach(() => {
   delete process.env.COMFYAPP_TASKKILL;
   for (const dir of dirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { force: true, recursive: true });
   }
 });
 
@@ -78,7 +78,7 @@ async function readArgs(logFile: string, timeoutMs = 3000): Promise<string> {
     }
   };
   try {
-    await expect.poll(() => readOnce().length > 0, { timeout: timeoutMs, interval: 25 }).toBe(true);
+    await expect.poll(() => readOnce().length > 0, { interval: 25, timeout: timeoutMs }).toBe(true);
   } catch {
     /* 超时：交给调用点断言（读到的就是空串）。 */
   }
@@ -134,8 +134,8 @@ describe("Windows 分支真跑（注入同名可执行文件）", () => {
       const { exe, logFile } = fakeTaskkill(dir);
       process.env.COMFYAPP_TASKKILL = exe;
       const result = await killProcessTreeWith(
-        { pid: 1, mode: "image" },
-        { windows: true, image: "ollama.exe" },
+        { mode: "image", pid: 1 },
+        { image: "ollama.exe", windows: true },
       );
       expect(result.via).toContain("/IM ollama.exe /T /F");
       expect(await readArgs(logFile)).toBe("/IM ollama.exe /T /F");
@@ -160,8 +160,8 @@ describe("Windows 命令行在两端都判得到", () => {
   it("mode:image 用的是调用方给的映像名，**不许把 pid 塞进 /IM**", async () => {
     process.env.COMFYAPP_TASKKILL = process.execPath;
     const result = await killProcessTreeWith(
-      { pid: 1, mode: "image" },
-      { windows: true, image: "ollama.exe" },
+      { mode: "image", pid: 1 },
+      { image: "ollama.exe", windows: true },
     );
     /* `/IM 1` 会去杀一个名字恰好叫「1」的映像：静默杀不到、也可能杀错。 */
     expect(result.via).toContain("/IM ollama.exe /T /F");

@@ -49,7 +49,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
       name: session.user.name ?? null,
       password: "oauth-not-used",
     });
-    user = { id: dbUser.id, email: dbUser.email, name: dbUser.name ?? null };
+    user = { email: dbUser.email, id: dbUser.id, name: dbUser.name ?? null };
   }
 
   return {
@@ -64,12 +64,11 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
  * 2. INITIALIZATION
  */
 const t = initTRPC.context<typeof createTRPCContext>().create({
-  transformer: superjson,
-  errorFormatter({ shape, error, path }) {
+  errorFormatter({ error, path, shape }) {
     // 生产级可观测性：所有 tRPC 错误落结构化日志
     if (error.code !== "UNAUTHORIZED" && error.code !== "FORBIDDEN") {
       logger.warn(
-        { code: error.code, path, name: error.name, message: error.message },
+        { code: error.code, message: error.message, name: error.name, path },
         "trpc_error",
       );
     }
@@ -81,6 +80,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
       },
     };
   },
+  transformer: superjson,
 });
 
 export const createCallerFactory = t.createCallerFactory;
@@ -154,7 +154,7 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
   try {
     const result = await next();
     const durationMs = Date.now() - start;
-    logger.debug({ path, durationMs, type }, "trpc_timing");
+    logger.debug({ durationMs, path, type }, "trpc_timing");
     // 仅当调用明显变慢（预期外的慢）才在面板给一条 warn，正常调用不打扰用户。
     if (durationMs >= SLOW_QUERY_THRESHOLD_MS) {
       const text = recordSlowQuery(path, durationMs, type);
@@ -165,11 +165,11 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
     return result;
   } catch (cause) {
     const durationMs = Date.now() - start;
-    logger.debug({ path, durationMs, type }, "trpc_timing");
+    logger.debug({ durationMs, path, type }, "trpc_timing");
     // 调用抛错 = 出问题：在面板可见通道记一条 error，便于用户当场定位。
     trpcRuntimeLog.error(`${path} 失败 ${durationMs}ms`, {
-      type,
       error: cause instanceof Error ? cause.message : String(cause),
+      type,
     });
     throw cause;
   }

@@ -90,7 +90,7 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
       }
     }
   }
-  return { images, videos, audios, others, texts };
+  return { audios, images, others, texts, videos };
 }
 
 /**
@@ -154,7 +154,7 @@ function readSamplerNode(
       : typeof seedRaw === "string" && seedRaw.trim() !== "" && Number.isFinite(Number(seedRaw))
         ? Number(seedRaw)
         : undefined;
-  const out: SamplerRuntime = { nodeId, classType };
+  const out: SamplerRuntime = { classType, nodeId };
   if (typeof seed === "number" && Number.isFinite(seed)) {
     out.seed = seed;
   }

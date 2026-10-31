@@ -22,8 +22,8 @@ import {
 import type { Shot } from "~/lib/workshop/types";
 
 vi.mock("~/lib/workshop/character-portrait-client", () => ({
-  generateWorkflowPortrait: vi.fn(),
   generateRemotePortrait: vi.fn(),
+  generateWorkflowPortrait: vi.fn(),
   importPortraitFile: vi.fn(),
 }));
 
@@ -37,28 +37,28 @@ vi.mock("~/lib/workshop/generation-client", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
     ...actual,
-    watchTask: watchTaskMock,
-    fetchTaskSnapshot: fetchTaskSnapshotMock,
-    startLocalGenerate: vi.fn(),
-    cancelLocalTask: vi.fn(),
     buildLibraryWorkflowInput: vi.fn(),
+    cancelLocalTask: vi.fn(),
     fetchApiChannels: vi.fn(async () => null),
+    fetchTaskSnapshot: fetchTaskSnapshotMock,
     fetchWorkshopWorkflows: vi.fn(async () => []),
+    startLocalGenerate: vi.fn(),
+    watchTask: watchTaskMock,
   };
 });
 
 function makeShot(patch: Partial<Shot> = {}): Shot {
   return {
+    characterIds: [],
+    description: "",
     id: "shot-1",
     index: 1,
-    sceneId: "scene-1",
-    sceneHeading: "场景1 · 清晨",
-    shotType: "medium",
-    description: "",
-    characterIds: [],
-    prompt: "a cat, cinematic",
     negativePrompt: "",
     params: {},
+    prompt: "a cat, cinematic",
+    sceneHeading: "场景1 · 清晨",
+    sceneId: "scene-1",
+    shotType: "medium",
     status: "idle",
     ...patch,
   };
@@ -69,14 +69,14 @@ function seedDraft(projectId: string, shots: Array<Shot>) {
   localStorage.setItem(
     `comfyapp.workshop.draft.${projectId}.v1`,
     JSON.stringify({
-      v: 1,
-      meta: { title: "恢复测试", type: "short_video", tone: "", logline: "" },
-      scriptMarkdown: "",
-      scenes: [],
       characters: [],
+      meta: { logline: "", title: "恢复测试", tone: "", type: "short_video" },
+      scenes: [],
+      scriptMarkdown: "",
       shots,
-      workflowId: "wf-1",
+      v: 1,
       videoWorkflowId: "",
+      workflowId: "wf-1",
     }),
   );
 }
@@ -84,10 +84,10 @@ function seedDraft(projectId: string, shots: Array<Shot>) {
 /** 一次封装结果的桩（buildLibraryWorkflowInput 的返回形状）。 */
 function buildResult(patch: Partial<LibraryWorkflowBuildResult> = {}): LibraryWorkflowBuildResult {
   return {
-    input: { workflow: "wf-1", prompt: "a cat" },
-    unmatched: [],
+    input: { prompt: "a cat", workflow: "wf-1" },
     mode: null,
     modes: [],
+    unmatched: [],
     usesFirstFrame: false,
     usesLastFrame: false,
     ...patch,
@@ -101,9 +101,9 @@ beforeEach(() => {
   vi.mocked(cancelLocalTask).mockReset();
   globalThis.fetch = vi.fn(
     async () =>
-      new Response(JSON.stringify({ skills: [], models: [] }), {
-        status: 200,
+      new Response(JSON.stringify({ models: [], skills: [] }), {
         headers: { "Content-Type": "application/json" },
+        status: 200,
       }),
   );
 });
@@ -118,8 +118,8 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ status: "running", taskId: "task-ok" })]);
     fetchTaskSnapshotMock.mockResolvedValue({
+      outputs: [{ kind: "image", url: "/api/generated/task-ok/1.png" }],
       status: "SUCCEEDED",
-      outputs: [{ url: "/api/generated/task-ok/1.png", kind: "image" }],
     });
 
     const { result } = renderHook(() => useWorkshopPipeline());
@@ -128,8 +128,8 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     });
 
     expect(result.current.shots[0]).toMatchObject({
-      status: "done",
       imageUrl: "/api/generated/task-ok/1.png",
+      status: "done",
     });
     /* 成功终态的 SSE 重订阅拿不到产物（done 帧只随 live 流下发），不该走它。 */
     expect(watchTaskMock).not.toHaveBeenCalled();
@@ -139,8 +139,8 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ status: "running", taskId: "task-empty" })]);
     fetchTaskSnapshotMock.mockResolvedValue({
-      status: "SUCCEEDED",
       outputs: [],
+      status: "SUCCEEDED",
     });
 
     const { result } = renderHook(() => useWorkshopPipeline());
@@ -156,9 +156,9 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ status: "running", taskId: "task-bad" })]);
     fetchTaskSnapshotMock.mockResolvedValue({
-      status: "FAILED",
       error: "显存不足",
       outputs: [],
+      status: "FAILED",
     });
 
     const { result } = renderHook(() => useWorkshopPipeline());
@@ -186,7 +186,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
   it("任务仍在跑：重订阅 SSE，落定后回写终态", async () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ status: "running", taskId: "task-live" })]);
-    fetchTaskSnapshotMock.mockResolvedValue({ status: "RUNNING", outputs: [] });
+    fetchTaskSnapshotMock.mockResolvedValue({ outputs: [], status: "RUNNING" });
     let settle!: (r: { message?: string; ok: boolean }) => void;
     watchTaskMock.mockImplementation(
       (_taskId: string, h: { onSettled: (r: { message?: string; ok: boolean }) => void }) => {
@@ -230,8 +230,8 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     /* 然后恢复结果才到达 —— 归属核对（taskId 已换）必须拦下这次回写。 */
     await act(async () => {
       resolveSnapshot({
+        outputs: [{ kind: "image", url: "/api/generated/old.png" }],
         status: "SUCCEEDED",
-        outputs: [{ url: "/api/generated/old.png", kind: "image" }],
       });
     });
 
@@ -243,15 +243,15 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const project = createProject();
     seedDraft(project.id, [
       makeShot({
-        status: "done",
-        imageUrl: "/api/generated/shot.png",
         clipStatus: "running",
         clipTaskId: "clip-ok",
+        imageUrl: "/api/generated/shot.png",
+        status: "done",
       }),
     ]);
     fetchTaskSnapshotMock.mockResolvedValue({
+      outputs: [{ kind: "video", url: "/api/generated/clip-ok/1.mp4" }],
       status: "SUCCEEDED",
-      outputs: [{ url: "/api/generated/clip-ok/1.mp4", kind: "video" }],
     });
 
     const { result } = renderHook(() => useWorkshopPipeline());
@@ -270,8 +270,8 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ clipStatus: "running", clipTaskId: "clip-noout" })]);
     fetchTaskSnapshotMock.mockResolvedValue({
+      outputs: [{ kind: "image", url: "/api/generated/x.png" }],
       status: "SUCCEEDED",
-      outputs: [{ url: "/api/generated/x.png", kind: "image" }],
     });
 
     const { result } = renderHook(() => useWorkshopPipeline());
@@ -287,7 +287,7 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
   it("刷新恢复（视频）：片段任务仍在跑 → 重订阅 SSE，落定回写 clipStatus", async () => {
     const project = createProject();
     seedDraft(project.id, [makeShot({ clipStatus: "running", clipTaskId: "clip-live" })]);
-    fetchTaskSnapshotMock.mockResolvedValue({ status: "RUNNING", outputs: [] });
+    fetchTaskSnapshotMock.mockResolvedValue({ outputs: [], status: "RUNNING" });
     watchTaskMock.mockImplementation((_taskId, h) => {
       h.onSettled({ ok: true });
       return () => undefined;
@@ -321,8 +321,8 @@ describe("useWorkshopPipeline 刷新后失联任务恢复", () => {
     });
     await act(async () => {
       resolveSnapshot({
+        outputs: [{ kind: "video", url: "/api/generated/old.mp4" }],
         status: "SUCCEEDED",
-        outputs: [{ url: "/api/generated/old.mp4", kind: "video" }],
       });
     });
 
@@ -417,8 +417,8 @@ describe("useWorkshopPipeline cancelShotTask", () => {
     /* SSE 收到 CANCELLED 终态：不是故障，文案不报「生成失败」。 */
     await act(async () => {
       watchTaskMock.mock.calls[0]![1].onSettled({
-        ok: false,
         message: "任务 CANCELLED",
+        ok: false,
       });
       await pending;
     });

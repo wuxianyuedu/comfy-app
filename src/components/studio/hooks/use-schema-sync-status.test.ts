@@ -23,7 +23,7 @@ function notice(
   detail: string | null = null,
   canPush = false,
 ): ReturnType<typeof schemaSyncNotice> {
-  const status: SchemaSyncStatus = { phase, detail, canPush };
+  const status: SchemaSyncStatus = { canPush, detail, phase };
   return schemaSyncNotice(status);
 }
 

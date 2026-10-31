@@ -13,10 +13,10 @@ import { CanvasSettingsButton } from "~/components/studio/canvas/CanvasSettingsB
  * 两处的定位类要一起改。
  */
 const meta = {
-  title: "Studio/CanvasSettingsButton",
-  component: CanvasSettingsButton,
   args: { hasOverrides: false, onClick: () => undefined },
   argTypes: { hasOverrides: { control: { type: "boolean" } } },
+  component: CanvasSettingsButton,
+  title: "Studio/CanvasSettingsButton",
 } satisfies Meta<typeof CanvasSettingsButton>;
 
 export default meta;
@@ -55,20 +55,13 @@ export const BothStates: Story = {
   render: () => (
     <div className="flex gap-6">
       <div className="flex flex-col gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          hasOverrides = false
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">hasOverrides = false</span>
         <CanvasShell>
-          <CanvasSettingsButton
-            hasOverrides={false}
-            onClick={() => undefined}
-          />
+          <CanvasSettingsButton hasOverrides={false} onClick={() => undefined} />
         </CanvasShell>
       </div>
       <div className="flex flex-col gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          hasOverrides = true
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">hasOverrides = true</span>
         <CanvasShell>
           <CanvasSettingsButton hasOverrides onClick={() => undefined} />
         </CanvasShell>

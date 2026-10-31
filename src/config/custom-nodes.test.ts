@@ -28,17 +28,17 @@ import {
 const TWO_NODES = {
   nodes: {
     "ComfyMath.Add": {
+      category: "ComfyMath",
       classType: "ComfyMath.Add",
       displayName: "加法",
-      category: "ComfyMath",
-      package: "ComfyMath",
-      inputs: [{ name: "a", type: "INT", required: true }],
+      inputs: [{ name: "a", required: true, type: "INT" }],
       outputs: [{ name: "SUM", type: "INT" }],
+      package: "ComfyMath",
     },
     "DaSiWa.Foo": {
+      category: "DaSiWa-Nodes/Sub",
       classType: "DaSiWa.Foo",
       displayName: "测试节点",
-      category: "DaSiWa-Nodes/Sub",
     },
   },
 };
@@ -119,9 +119,9 @@ describe("灌入成功：表 + 状态 + 广播三件一起对齐", () => {
     expect(Object.keys(CUSTOM_NODE_TYPES)).toEqual(["ComfyMath.Add", "DaSiWa.Foo"]);
     expect(isCustomNode("ComfyMath.Add")).toBe(true);
     expect(getCustomNodesRegistryState()).toMatchObject({
-      loaded: true,
       count: 2,
       detail: null,
+      loaded: true,
     });
     expect(getCustomNodesRegistryVersion()).toBe(before + 1);
     expect(broadcasts).toBe(1);
@@ -254,19 +254,19 @@ describe("清单里的形状边角（灌入侧的三条回落）", () => {
   it("分类色命中 / 整条为 null 跳过 / 没有端口的节点 / 带控件的端口", async () => {
     fetchReturns(200, {
       nodes: {
-        "P.Load": { classType: "P.Load", category: "loaders" },
         "P.Broken": null,
+        "P.Load": { category: "loaders", classType: "P.Load" },
         "P.NoPorts": { classType: "P.NoPorts" },
         "P.Widget": {
           classType: "P.Widget",
           displayName: "控件节点",
           inputs: [
             {
+              default: "a",
               name: "mode",
+              options: ["a", "b"],
               type: "COMBO",
               widget: "COMBO",
-              options: ["a", "b"],
-              default: "a",
             },
             { name: "steps", type: "INT" },
           ],
@@ -301,13 +301,13 @@ describe("清单里的形状边角（灌入侧的三条回落）", () => {
           classType: "P.Known",
           displayName: "认得出的控件",
           inputs: [
-            { name: "a", type: "STRING", widget: "string", default: "x" },
-            { name: "b", type: "INT", widget: "number", default: 3 },
-            { name: "c", type: "COMBO", widget: "select", options: ["l", "s"] },
-            { name: "d", type: "BOOLEAN", widget: "toggle", default: true },
+            { default: "x", name: "a", type: "STRING", widget: "string" },
+            { default: 3, name: "b", type: "INT", widget: "number" },
+            { name: "c", options: ["l", "s"], type: "COMBO", widget: "select" },
+            { default: true, name: "d", type: "BOOLEAN", widget: "toggle" },
             { name: "e", type: "IMAGE", widget: "image" },
             { name: "f", type: "LATENT", widget: "latent" },
-            { name: "g", type: "STRING", widget: "text", default: "长文本" },
+            { default: "长文本", name: "g", type: "STRING", widget: "text" },
           ],
           outputs: [{ name: "OUT", type: "IMAGE" }],
         },
@@ -354,8 +354,8 @@ describe("清单里的形状边角（灌入侧的三条回落）", () => {
           classType: "P.Unknown",
           displayName: "认不出的控件",
           inputs: [
-            { name: "weird", type: "STRING", widget: "slider", default: 5 },
-            { name: "empty", type: "STRING", widget: "", default: 1 },
+            { default: 5, name: "weird", type: "STRING", widget: "slider" },
+            { default: 1, name: "empty", type: "STRING", widget: "" },
             { name: "notastring", type: "STRING", widget: 42 },
           ],
           outputs: [{ name: "OUT", type: "IMAGE" }],
@@ -384,8 +384,8 @@ describe("清单里的形状边角（灌入侧的三条回落）", () => {
     fetchReturns(200, { packages: { ComfyMath: {} } });
     await expect(refreshCustomNodes()).resolves.toBe(0);
     expect(getCustomNodesRegistryState()).toMatchObject({
-      loaded: true,
       count: 0,
+      loaded: true,
     });
     expect(errors).not.toHaveBeenCalled();
   });

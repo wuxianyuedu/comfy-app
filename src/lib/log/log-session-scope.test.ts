@@ -34,7 +34,7 @@ describe("fileMtimeMs", () => {
   });
 
   afterEach(() => {
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dir, { force: true, recursive: true });
   });
 
   it("返回文件修改时间（毫秒）", async () => {

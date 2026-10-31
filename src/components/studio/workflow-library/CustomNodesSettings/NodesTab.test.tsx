@@ -14,58 +14,55 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { NodesTab } from "./NodesTab";
 import type { CustomNodesSettingsController } from "./hooks/use-custom-nodes-settings";
 import type { ParentBlock } from "./hooks/use-custom-nodes-settings";
-import type {
-  DiscoveredSubpkg,
-  SummaryPkg,
-} from "~/lib/comfyui/custom-nodes-stream";
+import type { DiscoveredSubpkg, SummaryPkg } from "~/lib/comfyui/custom-nodes-stream";
 
 const PKG_PATH = "D:/Comfy/custom_nodes/BigPack";
 
 function makeSaved(n: number): SummaryPkg {
   return {
+    contentHash: "a".repeat(64),
+    errors: [],
+    generatedAt: "2026-10-27T10:00:00.000Z",
     name: "BigPack",
-    path: PKG_PATH,
-    status: "ok",
     nodeCount: n,
     nodeTypes: Array.from({ length: n }, (_, i) => `Node_${i}`),
-    errors: [],
-    contentHash: "a".repeat(64),
     parsedAt: "2026-10-27T10:00:00.000Z",
     parsedFileCount: 3,
-    generatedAt: "2026-10-27T10:00:00.000Z",
+    path: PKG_PATH,
+    status: "ok",
   };
 }
 
 function makeBlock(n: number): ParentBlock {
   const sub: DiscoveredSubpkg = {
-    path: PKG_PATH,
-    name: "BigPack",
-    parent: "D:/Comfy/custom_nodes",
-    exists: true,
-    isLeaf: true,
-    fileCount: 5,
-    packageFileCount: 3,
-    sizeBytes: 1024,
     contentHash: "a".repeat(64),
+    exists: true,
+    fileCount: 5,
+    isLeaf: true,
+    name: "BigPack",
+    packageFileCount: 3,
+    parent: "D:/Comfy/custom_nodes",
+    path: PKG_PATH,
+    sizeBytes: 1024,
     status: "ok",
   };
   return {
+    cnt: {
+      empty: 0,
+      error: 0,
+      loaded: 1,
+      missing: 0,
+      outdated: 0,
+      unimported: 0,
+    },
     parent: "D:/Comfy/custom_nodes",
     subs: [
       {
-        sub,
         saved: makeSaved(n),
-        state: { kind: "loaded", savedHash: "a".repeat(64), nodeCount: n },
+        state: { kind: "loaded", nodeCount: n, savedHash: "a".repeat(64) },
+        sub,
       },
     ],
-    cnt: {
-      loaded: 1,
-      outdated: 0,
-      unimported: 0,
-      error: 0,
-      missing: 0,
-      empty: 0,
-    },
     total: 1,
   };
 }
@@ -73,64 +70,64 @@ function makeBlock(n: number): ParentBlock {
 function makeCtrl(block: ParentBlock): CustomNodesSettingsController {
   const manifestByNode: CustomNodesSettingsController["manifestByNode"] = {};
   return {
-    open: true,
-    setOpen: vi.fn(),
-    savedPaths: ["D:/Comfy/custom_nodes"],
-    saveErr: null,
+    byPath: {},
+    consoleRef: { current: null },
+    discoveredByParent: {},
     loading: false,
-    progress: {
-      phase: "",
-      done: 0,
-      total: 0,
-      discovered: 0,
-      parent: "",
-      msg: "",
+    logs: [],
+    logsRef: { current: null },
+    manifestByNode,
+    nodeCardExpansion: {
+      collapseAll: vi.fn(),
+      hasKey: () => false,
+      isExpanded: () => false,
+      map: {},
+      replace: vi.fn(),
+      seedDefaults: vi.fn(),
+      set: vi.fn(),
+      toggle: vi.fn(),
+    },
+    nodeListExpansion: {
+      collapseAll: vi.fn(),
+      hasKey: () => true,
+      isExpanded: (k) => k === PKG_PATH,
+      map: {},
+      replace: vi.fn(),
+      seedDefaults: vi.fn(),
+      set: vi.fn(),
+      toggle: vi.fn(),
+    },
+    onParseAll: async () => undefined,
+    onParseAllParent: async () => undefined,
+    onParseSingle: async () => undefined,
+    open: true,
+    parentBlocks: [block],
+    parentExpansion: {
+      collapseAll: vi.fn(),
+      hasKey: () => true,
+      isExpanded: (k) => k === block.parent,
+      map: {},
+      replace: vi.fn(),
+      seedDefaults: vi.fn(),
+      set: vi.fn(),
+      toggle: vi.fn(),
     },
     parsing: false,
     perPkgParsing: {},
+    progress: {
+      discovered: 0,
+      done: 0,
+      msg: "",
+      parent: "",
+      phase: "",
+      total: 0,
+    },
     report: null,
+    savedPaths: ["D:/Comfy/custom_nodes"],
+    saveErr: null,
+    setOpen: vi.fn(),
     summary: null,
-    discoveredByParent: {},
-    byPath: {},
-    parentExpansion: {
-      map: {},
-      isExpanded: (k) => k === block.parent,
-      hasKey: () => true,
-      toggle: vi.fn(),
-      set: vi.fn(),
-      seedDefaults: vi.fn(),
-      replace: vi.fn(),
-      collapseAll: vi.fn(),
-    },
-    logs: [],
-    consoleRef: { current: null },
-    logsRef: { current: null },
-    manifestByNode,
-    nodeListExpansion: {
-      map: {},
-      isExpanded: (k) => k === PKG_PATH,
-      hasKey: () => true,
-      toggle: vi.fn(),
-      set: vi.fn(),
-      seedDefaults: vi.fn(),
-      replace: vi.fn(),
-      collapseAll: vi.fn(),
-    },
-    nodeCardExpansion: {
-      map: {},
-      isExpanded: () => false,
-      hasKey: () => false,
-      toggle: vi.fn(),
-      set: vi.fn(),
-      seedDefaults: vi.fn(),
-      replace: vi.fn(),
-      collapseAll: vi.fn(),
-    },
-    onParseAll: async () => undefined,
-    onParseSingle: async () => undefined,
-    onParseAllParent: async () => undefined,
-    parentBlocks: [block],
-    totalAcrossParents: { loaded: 1, outdated: 0, unimported: 0, total: 1 },
+    totalAcrossParents: { loaded: 1, outdated: 0, total: 1, unimported: 0 },
   };
 }
 

@@ -18,12 +18,12 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("../core/repository", () => ({ taskRepository: {} }));
 vi.mock("./client", () => ({ resolveComfyBase: vi.fn() }));
 vi.mock("./runner-state", () => ({
-  state: () => ({}),
   log: vi.fn(),
+  state: () => ({}),
 }));
 vi.mock("./executor-finalize", () => ({ complete: vi.fn(), fail: vi.fn() }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+  logger: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 describe("cliProcs — 进程级单例（HMR 安全）", () => {

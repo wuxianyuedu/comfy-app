@@ -54,7 +54,7 @@ export type SqliteBusyRetryOptions = {
  */
 export async function runWithSqliteBusyRetry<T>(
   op: () => Promise<T>,
-  { policy, onBusy, onGiveUp }: SqliteBusyRetryOptions,
+  { onBusy, onGiveUp, policy }: SqliteBusyRetryOptions,
 ): Promise<T> {
   const { maxAttempts, ...backoff } = policy;
   for (let attempt = 0; ; attempt++) {

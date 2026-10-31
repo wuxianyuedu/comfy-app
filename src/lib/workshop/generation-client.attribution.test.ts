@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import { withGenerationAttribution } from "./generation-client";
 
-const base = { workflow: "wf-1", prompt: "a cat" };
+const base = { prompt: "a cat", workflow: "wf-1" };
 
 describe("withGenerationAttribution", () => {
   it("有项目与镜头时两个字段都带上", () => {
@@ -36,9 +36,7 @@ describe("withGenerationAttribution", () => {
 
   it("不修改入参对象（调用方还拿着它做别的判断）", () => {
     const frozen = Object.freeze(base);
-    expect(() =>
-      withGenerationAttribution(frozen, { shotId: "s1" }),
-    ).not.toThrow();
+    expect(() => withGenerationAttribution(frozen, { shotId: "s1" })).not.toThrow();
     expect("shotId" in base).toBe(false);
   });
 });

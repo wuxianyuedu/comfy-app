@@ -12,8 +12,8 @@ const SAVED_FLASH_MS = 8000;
 
 /* 「未亮起」的空载荷：模块级常量，身份稳定（见 `useFlashLatch`）。 */
 const EMPTY_SAVED: { failed: boolean; savedPath: string | null } = {
-  savedPath: null,
   failed: false,
+  savedPath: null,
 };
 
 /**
@@ -37,7 +37,7 @@ export function DiagnosticsButton() {
   /* 与 `SaveExportButton` 同款：成功回执与失败标记必须**同生共死**，两个独立
    * 定时器在时长一改就会漂移，留下自相矛盾的画面（见 `useFlashLatch`）。 */
   const saved = useFlashLatch(SAVED_FLASH_MS, EMPTY_SAVED);
-  const { savedPath, failed } = saved.value;
+  const { failed, savedPath } = saved.value;
 
   const onPackage = () => {
     void saveDiagnostics().then((result) => {
@@ -45,8 +45,8 @@ export function DiagnosticsButton() {
       // 不用非空断言把「同一件事」说两遍（§18 的空值口径）。
       const relativePath = result.ok ? (result.relativePath ?? null) : null;
       saved.flash({
-        savedPath: relativePath,
         failed: relativePath === null,
+        savedPath: relativePath,
       });
     });
   };

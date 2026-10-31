@@ -13,27 +13,27 @@ import type { Character } from "~/lib/workshop/types";
 
 vi.mock("~/components/workshop/LLMContext", () => ({
   useLLM: () => ({
-    config: {
-      provider: "local",
-      baseUrl: "http://localhost:11434",
-      model: "llama3",
-      temperature: 0.7,
-      maxTokens: 2048,
-      hasApiKey: false,
-    },
-    localModels: ["llama3"],
-    remoteModels: [],
-    loading: false,
-    settingsOpen: false,
-    openSettings: vi.fn(),
     closeSettings: vi.fn(),
+    config: {
+      baseUrl: "http://localhost:11434",
+      hasApiKey: false,
+      maxTokens: 2048,
+      model: "llama3",
+      provider: "local",
+      temperature: 0.7,
+    },
+    loading: false,
+    localModels: ["llama3"],
+    openSettings: vi.fn(),
     refresh: vi.fn(),
+    remoteModels: [],
+    settingsOpen: false,
   }),
 }));
 
 vi.mock("~/lib/llm/browser", () => ({
   streamChat: vi.fn(async () => {
-    return JSON.stringify([{ name: "小满", appearance: "短黑发,清秀,白色连衣裙" }]);
+    return JSON.stringify([{ appearance: "短黑发,清秀,白色连衣裙", name: "小满" }]);
   }),
 }));
 

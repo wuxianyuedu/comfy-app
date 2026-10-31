@@ -130,15 +130,15 @@ type SettingsShellProps = {
 );
 
 export function SettingsShell({
-  section,
-  onSelect,
-  className = "h-[calc(100vh-var(--toolbar-height,48px))]",
-  title,
   banner,
+  className = "h-[calc(100vh-var(--toolbar-height,48px))]",
+  fallback,
   jumpSection,
   onJumpApplied,
-  fallback,
+  onSelect,
+  section,
   sections,
+  title,
 }: SettingsShellProps) {
   /** 滚动容器：分区节挂在它里面，观察器也以它为 root。 */
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -146,10 +146,10 @@ export function SettingsShell({
      「目录的顺序」与「正文的顺序」必须是同一个，否则按目录往下读会跳节。 */
   const sectionIds = useMemo(() => SETTINGS_SCROLL_ORDER, []);
   const { registerSection, scrollToSection } = useSectionScrollSpy({
-    containerRef: scrollRef,
-    sectionIds,
     activeId: section,
+    containerRef: scrollRef,
     onActiveChange: onSelect,
+    sectionIds,
   });
 
   const handleSelect = useCallback(
@@ -284,8 +284,8 @@ function SettingsSectionHeading({ section }: { section: Section }) {
  * 由 `SettingsShell.test.tsx` 拦下（它按 id 集合双向比对，不按字面量）。
  */
 function SettingsSectionNav({
-  section,
   onSelect,
+  section,
 }: {
   onSelect: (section: Section) => void;
   section: Section;

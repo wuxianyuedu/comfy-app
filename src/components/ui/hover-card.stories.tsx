@@ -18,8 +18,8 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "~/components/ui/h
  * ⚠️ 要**悬停**触发项才出现，而且要停一会儿（有 delay）。
  */
 const meta = {
-  title: "UI/HoverCard",
   component: HoverCard,
+  title: "UI/HoverCard",
 } satisfies Meta<typeof HoverCard>;
 
 export default meta;

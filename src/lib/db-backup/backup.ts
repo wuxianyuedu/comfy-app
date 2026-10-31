@@ -49,8 +49,8 @@ export type BackupEntry = {
 /** 备份目录里认得出的那批，新→旧。用户自己丢进来的文件不在其中。 */
 export function listBackupEntries(root: string): Array<BackupEntry> {
   return listBackups(root).map((entry: BackupEntry) => ({
+    at: entry.at,
     name: entry.name,
     size: entry.size,
-    at: entry.at,
   }));
 }

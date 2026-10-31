@@ -56,20 +56,20 @@ export type ScriptReviewOutcome = {
 };
 
 const KIND_LABEL: Record<ReviewKind, string> = {
-  shot: "分镜镜头",
   character: "角色卡",
+  shot: "分镜镜头",
 };
 
 /** 模型评审输出：`issues` / `suggestion` 容忍缺省（部分模型会漏字段）；
  *  `scores` 是维度评分（FR-QA-07，rubric 在提示词里给了锚点才要求）——模型漏给时
  *  仍是有效判定（scores 缺省 undefined = 未评分），单维度畸形分由归一层夹取。 */
 const VERDICT_SCHEMA = z.object({
-  pass: z.boolean(),
   issues: z.array(z.string()).default([]),
-  suggestion: z.string().default(""),
+  pass: z.boolean(),
   scores: z
-    .record(z.string(), z.object({ score: z.number(), note: z.string().default("") }))
+    .record(z.string(), z.object({ note: z.string().default(""), score: z.number() }))
     .optional(),
+  suggestion: z.string().default(""),
 });
 
 /** reprompt 输出：改进后的镜头提示词。 */
@@ -88,11 +88,11 @@ function str(rec: Record<string, unknown>, key: string): string {
 /** 创作上下文（判一致性用）：项目元信息 + 剧本节选（裁长防超窗）。 */
 function reviewContext(row: Production): ContentReviewContext {
   return {
-    title: row.title,
-    type: row.type,
-    tone: row.tone,
     logline: row.logline,
     scriptExcerpt: row.scriptMarkdown.slice(0, SCRIPT_EXCERPT_MAX),
+    title: row.title,
+    tone: row.tone,
+    type: row.type,
   };
 }
 
@@ -183,10 +183,10 @@ export async function reviewContent(
   );
   // scores 畸形分夹取复用归一层；rubricVersion 记「打分那一刻的量表版本」。
   const verdict = normalizeReviewVerdict({
-    pass: raw.pass,
     issues: raw.issues,
-    suggestion: raw.suggestion,
+    pass: raw.pass,
     scoredAt: nowIso(),
+    suggestion: raw.suggestion,
     ...(raw.scores ? { scores: raw.scores } : {}),
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
@@ -245,21 +245,21 @@ async function scoreShotImage(
     cfg,
     buildShotImageReviewMessages(
       {
+        characterNames,
         imageUrl,
         portraitUrls,
         prompt: str(rec, "prompt") || str(rec, "description"),
         shotType: str(rec, "shotType"),
-        characterNames,
       },
       rubric ? renderRubricForPrompt(rubric) : undefined,
     ),
     VERDICT_SCHEMA,
   );
   const verdict = normalizeReviewVerdict({
-    pass: raw.pass,
     issues: raw.issues,
-    suggestion: raw.suggestion,
+    pass: raw.pass,
     scoredAt: nowIso(),
+    suggestion: raw.suggestion,
     ...(raw.scores ? { scores: raw.scores } : {}),
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
@@ -347,11 +347,11 @@ export async function autoselectShotImage(
     }
     const image = task.images.find((i) => i.isCover) ?? task.images[0];
     if (!image) {
-      candidates.push({ taskId, imageUrl: null, verdict: null });
+      candidates.push({ imageUrl: null, taskId, verdict: null });
       continue;
     }
     const verdict = await scoreShotImage(row, rec, image.localPath);
-    candidates.push({ taskId, imageUrl: image.localPath, verdict });
+    candidates.push({ imageUrl: image.localPath, taskId, verdict });
   }
   // 判定与图地址在同一步收窄（predicate），后续消费点不再需要非空断言。
   const scored = candidates.filter(
@@ -374,10 +374,10 @@ export async function autoselectShotImage(
     shots: nextShots,
   });
   return {
-    winnerTaskId: winner.taskId,
-    winnerImageUrl: winner.imageUrl,
-    winnerVerdict: winner.verdict,
     candidates,
+    winnerImageUrl: winner.imageUrl,
+    winnerTaskId: winner.taskId,
+    winnerVerdict: winner.verdict,
   };
 }
 
@@ -408,10 +408,10 @@ export async function reviewScript(
     VERDICT_SCHEMA,
   );
   const verdict = normalizeReviewVerdict({
-    pass: raw.pass,
     issues: raw.issues,
-    suggestion: raw.suggestion,
+    pass: raw.pass,
     scoredAt: nowIso(),
+    suggestion: raw.suggestion,
     ...(raw.scores ? { scores: raw.scores } : {}),
     ...(rubric ? { rubricVersion: rubric.version } : {}),
   });
@@ -424,8 +424,8 @@ export async function reviewScript(
     scriptReview: next,
   });
   return {
-    verdict,
     history: [...next.history, next.review ?? verdict],
+    verdict,
   };
 }
 
@@ -453,8 +453,8 @@ export async function reviseScript(userId: string, projectId: string): Promise<s
         row.scriptMarkdown.slice(0, SCRIPT_REVIEW_MAX),
         {
           issues: state.review.issues,
-          suggestion: state.review.suggestion,
           lowScores: weakScoreEntries(state.review),
+          suggestion: state.review.suggestion,
         },
         { ...reviewContext(row), scriptExcerpt: "" },
       ),

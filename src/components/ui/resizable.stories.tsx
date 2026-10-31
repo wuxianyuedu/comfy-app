@@ -14,8 +14,8 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "~/componen
  * 拖拽 / 折叠 / 键盘调整归底座，story 不重复验那部分。
  */
 const meta = {
-  title: "UI/Resizable",
   component: ResizablePanelGroup,
+  title: "UI/Resizable",
 } satisfies Meta<typeof ResizablePanelGroup>;
 
 export default meta;

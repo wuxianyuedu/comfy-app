@@ -26,11 +26,11 @@ import { useCallback, useLayoutEffect, useRef } from "react";
  *   - 保留滚动条抑制（webkit + firefox + ms）。
  */
 export function AutoResizeTextarea({
-  value,
-  placeholder,
-  onChange,
-  minHeight = 28,
   maxHeight = 120,
+  minHeight = 28,
+  onChange,
+  placeholder,
+  value,
 }: {
   maxHeight?: number;
   minHeight?: number;
@@ -64,15 +64,15 @@ export function AutoResizeTextarea({
       ref={ref}
       rows={1}
       style={{
-        fontFamily: "var(--font-sans)",
         boxSizing: "border-box",
-        minHeight,
+        fontFamily: "var(--font-sans)",
         maxHeight,
-        overflowX: "hidden",
-        overflowWrap: "anywhere",
-        wordBreak: "break-word",
-        scrollbarWidth: "none",
+        minHeight,
         msOverflowStyle: "none",
+        overflowWrap: "anywhere",
+        overflowX: "hidden",
+        scrollbarWidth: "none",
+        wordBreak: "break-word",
       }}
       value={value}
     />

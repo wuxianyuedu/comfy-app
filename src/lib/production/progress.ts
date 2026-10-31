@@ -33,8 +33,8 @@ export type ProductionProgress = {
 };
 
 export const DEFAULT_PRODUCTION_PROGRESS: ProductionProgress = {
-  stage: "script",
   rendered: false,
+  stage: "script",
 };
 
 /** 未知值（production 表的 progress JSON 列）→ 规范化的 ProductionProgress。
@@ -44,7 +44,7 @@ export function normalizeProductionProgress(raw: unknown): ProductionProgress {
     return { ...DEFAULT_PRODUCTION_PROGRESS };
   }
   return {
-    stage: isProductionStage(raw.stage) ? raw.stage : "script",
     rendered: raw.rendered === true,
+    stage: isProductionStage(raw.stage) ? raw.stage : "script",
   };
 }

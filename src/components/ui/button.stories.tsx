@@ -46,13 +46,13 @@ const SIZES: Array<ButtonSize> = [
 ];
 
 const meta = {
-  title: "UI/Button",
-  component: Button,
   args: { children: "按钮" },
   argTypes: {
-    variant: { control: "select", options: VARIANTS },
     size: { control: "select", options: SIZES },
+    variant: { control: "select", options: VARIANTS },
   },
+  component: Button,
+  title: "UI/Button",
 } satisfies Meta<typeof Button>;
 
 export default meta;

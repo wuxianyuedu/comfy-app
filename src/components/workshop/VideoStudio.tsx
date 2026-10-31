@@ -58,22 +58,22 @@ function noop(): void {
  * 异步任务）。结果写回 Shot.clipUrl，供成片合成。
  */
 export function VideoStudio({
+  apiChannels,
+  onCancelShot,
+  onNextStage,
+  onNotice,
+  onOpenModelAdapters,
+  onPrevStage,
+  onShotsChange,
+  projectId,
   shots,
   workflowId,
-  projectId,
-  apiChannels,
-  onOpenModelAdapters,
-  onShotsChange,
-  onNotice,
-  onCancelShot,
-  onPrevStage,
-  onNextStage,
 }: Props) {
   const [channel, setChannel] = React.useState<Channel>("local");
   const [fps, setFps] = React.useState(16);
   /* 多镜头同时在跑时的**按条目**进度表（节流 + 同值短路 + 卸载守卫都收在
    * 出口里，规范 16 §16.2.4.68）。此前这一行在两个文件里逐字相同。 */
-  const { progress, report: reportProgress, flush: flushProgress } = useThrottledProgressMap();
+  const { flush: flushProgress, progress, report: reportProgress } = useThrottledProgressMap();
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   /* 批处理的忙碌位走唯一出口（规范 16 §16.2.4.71）：复位此前写在循环之后，
    * 循环里抛错就永远停在「批处理中」。 */
@@ -111,13 +111,13 @@ export function VideoStudio({
     return withTimeoutResult(
       new Promise<void>((resolve) => {
         close = watchTask(taskId, {
-          onProgress: (p) => reportProgress(shotId, p),
           onOutput: (out) => {
             // 优先取视频输出；非图片的额外产出（gif / 其他）照样落地。
             if (out.kind !== "image") {
               patchShot(shotId, { clipUrl: out.url });
             }
           },
+          onProgress: (p) => reportProgress(shotId, p),
           onSettled: (r) => {
             /* 落定即写终值：节流窗口会在边界上丢掉最后一次读数，
              * 进度条停在 97% 而任务已完成的现场就是这么来的。 */
@@ -189,8 +189,8 @@ export function VideoStudio({
          *（封装口径暴露 提示词 / 尺寸 / 首帧 / 时长，其余走工作流默认值）。
          * 见 generateClip 入口的门禁。 */
         const built = await buildLibraryWorkflowInput(workflowId, {
-          prompt,
           negativePrompt: shot.negativePrompt || undefined,
+          prompt,
           ...(inputImage ? { firstFrame: inputImage } : {}),
           ...(typeof shot.duration === "number" && shot.duration > 0
             ? { duration: shot.duration }
@@ -214,11 +214,11 @@ export function VideoStudio({
         await runLocalTask(shot.id, taskId);
       } else {
         const submit = await apiSubmitVideo({
-          prompt,
-          negative: shot.negativePrompt || undefined,
-          image: shot.imageUrl,
-          frames,
           fps,
+          frames,
+          image: shot.imageUrl,
+          negative: shot.negativePrompt || undefined,
+          prompt,
         });
         if (submit.url) {
           patchShot(shot.id, { clipStatus: "done", clipUrl: submit.url });

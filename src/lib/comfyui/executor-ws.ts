@@ -280,7 +280,7 @@ function noteUnownedFrame(type: string, dataKeys: Array<string>): void {
     return;
   }
   unownedFrameTypes.add(type);
-  trace("ws", null, "WS 帧不带 prompt_id（跳过归属）", { type, dataKeys });
+  trace("ws", null, "WS 帧不带 prompt_id（跳过归属）", { dataKeys, type });
 }
 
 /**
@@ -327,11 +327,11 @@ export async function handleMessage(raw: string) {
   const taskId = s.promptToTask.get(promptId);
   if (!taskId) {
     /* 无归属任务的 ComfyUI 帧（例如别处提交的 prompt）——只落 trace，不进面板。 */
-    trace("ws", null, "WS 消息无归属任务", { promptId, message: msg });
+    trace("ws", null, "WS 消息无归属任务", { message: msg, promptId });
     return;
   }
   /* ISSUE #216：本任务所有 WS 帧原文落 trace；面板侧仍只显示解析后的事件行。 */
-  trace("ws", taskId, "WS 消息", { promptId, message: msg });
+  trace("ws", taskId, "WS 消息", { message: msg, promptId });
 
   const signal = comfyProtocol.classify(message);
 
@@ -354,8 +354,8 @@ export async function handleMessage(raw: string) {
      * 就能补上它的完成行 —— 于是日志从孤零零一行 "▶ KSampler"，变成
      * "▶ KSampler → ✔ KSampler" 的成对时间线。 */
     s.lastNodeByTask.set(taskId, {
-      node: nodeId,
       classType: classType ?? "",
+      node: nodeId,
       t: Date.now(),
     });
     log(taskId, "info", `▶ 节点 [${nodeId}] ${nodeLabel(classType)}（${classType ?? "?"}）`);
@@ -399,8 +399,8 @@ export async function handleMessage(raw: string) {
       const classType = classTypeForNode(s.executedWorkflow.get(taskId), nodeId);
       node = {
         id: nodeId,
-        value,
         max,
+        value,
         /* `classType` 与 `label` 都存（P3 §5 ADR §14 D1 的 4-B2）：`label` 是给
          * 画布看的中文标签，而状态栏那一格历史上显示的是**类名**（此前只活在内存
          * 的 `lastNodeByTask` 里，host 执行时 Next 读不到）。类名跟着快照一起落库，
@@ -437,7 +437,7 @@ export async function handleMessage(raw: string) {
   } else if (signal === "error") {
     /* ISSUE #216：WS 错误信号此前只取 exception_message 一个字段，节点定位 /
      *  traceback 全丢。原文进 trace，面板给可见出口。 */
-    trace("ws", taskId, "ComfyUI 报执行错误（WS）", { promptId, data });
+    trace("ws", taskId, "ComfyUI 报执行错误（WS）", { data, promptId });
     log(
       taskId,
       "error",

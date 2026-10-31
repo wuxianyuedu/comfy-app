@@ -18,12 +18,12 @@ const STATUSES = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 const meta = {
-  title: "UI/StatusBadge",
-  component: StatusBadge,
   args: { status: "RUNNING" },
   argTypes: {
     status: { control: "select", options: STATUSES },
   },
+  component: StatusBadge,
+  title: "UI/StatusBadge",
 } satisfies Meta<typeof StatusBadge>;
 
 export default meta;

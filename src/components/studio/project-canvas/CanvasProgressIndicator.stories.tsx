@@ -23,15 +23,15 @@ import { PRODUCTION_STAGES, normalizeProductionProgress } from "~/lib/production
  * 容器 —— 否则那件 `absolute` 会跑到画布外面去，看不到它真实的样子。
  */
 const meta = {
-  title: "Studio/CanvasProgressIndicator",
-  component: CanvasProgressIndicator,
-  args: { progress: { stage: "shots", rendered: false } },
+  args: { progress: { rendered: false, stage: "shots" } },
   argTypes: {
     progress: {
       control: { type: "object" },
       description: "阶段游标 + 是否已合成（持久来源的投影）",
     },
   },
+  component: CanvasProgressIndicator,
+  title: "Studio/CanvasProgressIndicator",
 } satisfies Meta<typeof CanvasProgressIndicator>;
 
 export default meta;
@@ -51,10 +51,10 @@ export const EachStage: Story = {
       {PRODUCTION_STAGES.map((stage) => (
         <div className="flex flex-col gap-1" key={stage}>
           <span className="text-ink-muted font-mono text-[11px]">
-            stage = {stage} · {stageProgressPct({ stage, rendered: false })}%
+            stage = {stage} · {stageProgressPct({ rendered: false, stage })}%
           </span>
           <div className="relative h-20">
-            <CanvasProgressIndicator progress={{ stage, rendered: false }} />
+            <CanvasProgressIndicator progress={{ rendered: false, stage }} />
           </div>
         </div>
       ))}
@@ -69,7 +69,7 @@ export const EachStage: Story = {
  * 「已合成」那句文案与 100% 都验不到。
  */
 export const Rendered: Story = {
-  args: { progress: { stage: "video", rendered: true } },
+  args: { progress: { rendered: true, stage: "video" } },
 };
 
 /**

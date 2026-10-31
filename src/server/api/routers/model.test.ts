@@ -15,16 +15,16 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { scan, comfy } = vi.hoisted(() => ({
-  scan: {
-    syncModels: vi.fn(async (_userId: string) => 7),
-    modelCountsByFolder: vi.fn(async () => ({ checkpoints: 3 })),
-  },
+const { comfy, scan } = vi.hoisted(() => ({
   comfy: {
+    comfyBase: vi.fn(() => "http://127.0.0.1:8188"),
     listModelFolders: vi.fn(
       async () => /* SAFETY: 类型断言已复核 */ ["vae", "checkpoints"] as Array<string>,
     ),
-    comfyBase: vi.fn(() => "http://127.0.0.1:8188"),
+  },
+  scan: {
+    modelCountsByFolder: vi.fn(async () => ({ checkpoints: 3 })),
+    syncModels: vi.fn(async (_userId: string) => 7),
   },
 }));
 
@@ -36,15 +36,15 @@ vi.mock("~/server/better-auth", () => ({
   auth: { api: { getSession: vi.fn(async () => null) } },
 }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock("~/lib/models", () => ({
-  syncModels: scan.syncModels,
   modelCountsByFolder: scan.modelCountsByFolder,
+  syncModels: scan.syncModels,
 }));
 vi.mock("~/lib/comfyui/client", () => ({
-  listModelFolders: comfy.listModelFolders,
   comfyBase: comfy.comfyBase,
+  listModelFolders: comfy.listModelFolders,
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
@@ -68,8 +68,8 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
 beforeEach(() => {
   tdb.$reset();
   vi.clearAllMocks();
-  seedUser(tdb, { id: "user-a", email: "a@test.dev" });
-  seedUser(tdb, { id: "user-b", email: "b@test.dev" });
+  seedUser(tdb, { email: "a@test.dev", id: "user-a" });
+  seedUser(tdb, { email: "b@test.dev", id: "user-b" });
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => new Response("", { status: 200 })),
@@ -78,7 +78,7 @@ beforeEach(() => {
 
 describe("model.configSave / configDelete —— 写侧只动自己那行", () => {
   it("启用目录时带的是会话用户，不是写死的 id", async () => {
-    await caller().configSave({ folder: "checkpoints", enabled: true });
+    await caller().configSave({ enabled: true, folder: "checkpoints" });
     const rows = await userModelConfigRepository.listByUser("user-a");
     expect(rows.map((r) => r.folder)).toEqual(["checkpoints"]);
     expect(await userModelConfigRepository.listByUser("user-b")).toHaveLength(0);
@@ -94,12 +94,12 @@ describe("model.configSave / configDelete —— 写侧只动自己那行", () =
 
   it("enabled=false 走删除分支，而不是写一行 disabled", async () => {
     await userModelConfigRepository.addOrEnable("user-a", "vae", null);
-    await caller().configSave({ folder: "vae", enabled: false });
+    await caller().configSave({ enabled: false, folder: "vae" });
     expect(await userModelConfigRepository.listByUser("user-a")).toHaveLength(0);
   });
 
   it("folder 传空串 → BAD_REQUEST（min(1) 挡住，不落库）", async () => {
-    expect(await codeOf(caller().configSave({ folder: "", enabled: true }))).toBe("BAD_REQUEST");
+    expect(await codeOf(caller().configSave({ enabled: true, folder: "" }))).toBe("BAD_REQUEST");
     expect(await userModelConfigRepository.listByUser("user-a")).toHaveLength(0);
   });
 });
@@ -155,8 +155,8 @@ describe("model.list / sync —— 上下文与透传", () => {
     const list = vi
       .spyOn(modelRepository, "list")
       .mockResolvedValue(/* SAFETY: 类型断言已复核 */ [] as never);
-    await caller().list({ type: "checkpoints", q: "sd" });
-    expect(list).toHaveBeenCalledWith({ type: "checkpoints", q: "sd" });
+    await caller().list({ q: "sd", type: "checkpoints" });
+    expect(list).toHaveBeenCalledWith({ q: "sd", type: "checkpoints" });
     await caller().list();
     expect(list.mock.lastCall?.[0]).toEqual({});
     list.mockRestore();

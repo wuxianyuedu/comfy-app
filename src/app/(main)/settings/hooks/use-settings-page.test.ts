@@ -66,7 +66,7 @@ const { postAppRuntimeLogMock, runtimeLogCalls, sessionLogRequests } = vi.hoiste
   return {
     postAppRuntimeLogMock: vi.fn(
       (ns: string, level: string, msg: string, fields?: unknown): Promise<void> => {
-        calls.push({ ns, level, msg, fields });
+        calls.push({ fields, level, msg, ns });
         return Promise.resolve();
       },
     ),
@@ -95,7 +95,7 @@ vi.mock("~/lib/log/log-file-client", () => {
     },
   );
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
-    sessionLogRequests.push({ source, session: sessionId ?? null });
+    sessionLogRequests.push({ session: sessionId ?? null, source });
     const query = new URLSearchParams({ source });
     if (sessionId) {
       query.set("session", sessionId);
@@ -116,25 +116,25 @@ const probeMock = vi.mocked(probeOllama);
 const startMock = vi.mocked(startOllama);
 
 const SETTINGS: Settings = {
-  comfyuiPath: "D:/ComfyUI",
-  comfyuiExtraArgs: "",
+  autoSyncLocalWorkflow: false,
   comfyCliPython: "",
   comfyuiAutoStart: true,
+  comfyuiExtraArgs: "",
+  comfyuiPath: "D:/ComfyUI",
   comfyuiPort: 0,
   exitKillComfyui: true,
   exitKillOllama: true,
-  autoSyncLocalWorkflow: false,
 };
 
 const LLM: LlmConfig = {
-  provider: "local",
-  baseUrl: "http://localhost:11434/v1",
-  model: "qwen3:14b",
-  localCandidates: [],
-  extraModels: [],
-  temperature: 0.7,
-  maxTokens: 2048,
   apiKey: null,
+  baseUrl: "http://localhost:11434/v1",
+  extraModels: [],
+  localCandidates: [],
+  maxTokens: 2048,
+  model: "qwen3:14b",
+  provider: "local",
+  temperature: 0.7,
 };
 
 type Behavior = {
@@ -174,6 +174,26 @@ let comfyStatusCalls = 0;
 
 const t = createTestTRPC();
 const mockRouter = t.router({
+  llm: t.router({
+    configGet: t.procedure.query(() => {
+      if (behavior.llmError) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: behavior.llmError,
+        });
+      }
+      return { config: behavior.llm ?? LLM };
+    }),
+    configSave: t.procedure.mutation(() => {
+      if (behavior.saveLlmError) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: behavior.saveLlmError,
+        });
+      }
+      return { config: behavior.llm ?? LLM };
+    }),
+  }),
   setting: t.router({
     get: t.procedure.query(() => {
       if (behavior.settingsError) {
@@ -203,9 +223,9 @@ const mockRouter = t.router({
         await neverSettle();
       }
       return {
-        up: behavior.comfyBase != null,
         base: behavior.comfyBase ?? null,
         starting: false,
+        up: behavior.comfyBase != null,
       };
     }),
     /* 安装形态与运行态**分开取**（fs-only，与首屏配置同批）：这里给一份便携版默认。
@@ -213,13 +233,21 @@ const mockRouter = t.router({
     comfyInstance: t.procedure.query(
       () =>
         behavior.comfyInstance ?? {
-          pathConfigured: true,
-          instanceType: /* SAFETY: 类型断言已复核 */ "portable" as const,
           desktopManaged: false,
+          instanceType: /* SAFETY: 类型断言已复核 */ "portable" as const,
+          pathConfigured: true,
         },
     ),
     /* Drizzle Studio：分区拉起的 status 查询与动作，均需有 mock handler，
      * 否则 onUnhandledFrame:error 会让渲染整个 hook 的用例全挂 */
+    dbStudioOpen: t.procedure.mutation(() => ({
+      detail: "已打开",
+      ok: true,
+    })),
+    dbStudioStart: t.procedure.mutation(() => ({
+      detail: "已启动",
+      ok: true,
+    })),
     dbStudioStatus: t.procedure.query(() => {
       if (behavior.dbStudioStatusError) {
         throw new TRPCError({
@@ -228,47 +256,19 @@ const mockRouter = t.router({
         });
       }
       return {
-        up: behavior.dbStudioUp ?? false,
-        starting: false,
         port: 4983,
+        starting: false,
+        up: behavior.dbStudioUp ?? false,
       };
     }),
-    dbStudioStart: t.procedure.mutation(() => ({
-      ok: true,
-      detail: "已启动",
-    })),
     dbStudioStop: t.procedure.mutation(() => ({
-      ok: true,
       detail: "已关闭",
-    })),
-    dbStudioOpen: t.procedure.mutation(() => ({
       ok: true,
-      detail: "已打开",
     })),
     openExternal: t.procedure.mutation(() => ({
-      ok: true,
       detail: "已用系统默认浏览器打开",
+      ok: true,
     })),
-  }),
-  llm: t.router({
-    configGet: t.procedure.query(() => {
-      if (behavior.llmError) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: behavior.llmError,
-        });
-      }
-      return { config: behavior.llm ?? LLM };
-    }),
-    configSave: t.procedure.mutation(() => {
-      if (behavior.saveLlmError) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: behavior.saveLlmError,
-        });
-      }
-      return { config: behavior.llm ?? LLM };
-    }),
   }),
 });
 
@@ -290,9 +290,9 @@ function makeWrapper(queryClient?: QueryClient) {
       { client: qc },
       // eslint-disable-next-line react/no-children-prop -- createElement 的第三参即 children
       createElement(TRPCProvider, {
-        trpcClient: client,
-        queryClient: qc,
         children,
+        queryClient: qc,
+        trpcClient: client,
       }),
     );
   };
@@ -315,7 +315,7 @@ beforeEach(() => {
   /* 默认「Ollama 运行中」：不设默认值时 vi.fn() 返回 undefined，探测回调会在
    * 上一个用例卸载后跑到，产生「Cannot read properties of undefined」的
    * unhandled rejection（表现为用例绿但文件红）。 */
-  probeMock.mockResolvedValue({ up: true, models: [] });
+  probeMock.mockResolvedValue({ models: [], up: true });
   startMock.mockResolvedValue(undefined);
   /* /api/logs/sessions 默认 handler：设置页挂载就会为三段「启动日志」各取一次
    * 会话 + 正文，没有 handler 会以 onUnhandledFrame:error 报 unhandled
@@ -323,12 +323,12 @@ beforeEach(() => {
   server.use(
     http.get("*/api/logs/sessions", () =>
       HttpResponse.json({
-        sessions: [],
-        selectedId: null,
         content: "",
+        selectedId: null,
+        sessions: [],
+        size: 0,
         truncated: false,
         windowed: false,
-        size: 0,
       }),
     ),
     /* 「运行态变了」那条长轮询通道。设置页自 ISSUE #1900 起**不再订阅**它
@@ -416,8 +416,8 @@ describe("useSettingsPage", () => {
   it("关闭再打开命中缓存后，草稿仍会被播种（不落到未就绪降级）", async () => {
     const qc = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, staleTime: 0, gcTime: 60_000 },
         mutations: { retry: false },
+        queries: { gcTime: 60_000, retry: false, staleTime: 0 },
       },
     });
     // 第一次打开：查询完成并播种
@@ -442,8 +442,8 @@ describe("useSettingsPage", () => {
 
   it("本地 provider 时探测 Ollama；切到远端后不再探测", async () => {
     probeMock.mockResolvedValue({
+      models: [{ modified_at: "", name: "qwen3:14b", size: 1 }],
       up: true,
-      models: [{ name: "qwen3:14b", size: 1, modified_at: "" }],
     });
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
@@ -485,7 +485,7 @@ describe("useSettingsPage", () => {
     probeMock
       .mockResolvedValueOnce({ up: false })
       .mockResolvedValueOnce({ up: false })
-      .mockResolvedValue({ up: true, models: [] });
+      .mockResolvedValue({ models: [], up: true });
     /* **一个用例一把时钟**：换时钟必须在挂载之前。旧形状是「先用真实时钟
      * `expect.poll` 等首探落定 → 再 `useFakeTimers()`」，那中间挂载链（查询 + 首探 +
      * react-query 的调度）还挂在真实时钟上，要多久由机器给多少墙钟 —— 而 `testTimeout` 有上界：
@@ -549,7 +549,7 @@ describe("useSettingsPage", () => {
       expect(result.current.ollamaStarting).toBe(true);
 
       // 第 3 轮起探测 up → 状态行一次性落到 up
-      probeMock.mockResolvedValue({ up: true, models: [] });
+      probeMock.mockResolvedValue({ models: [], up: true });
       await vi.advanceTimersByTimeAsync(5_000);
       await act(async () => {
         await starting;
@@ -742,8 +742,8 @@ describe("useSettingsPage", () => {
 
     act(() => result.current.setTaskTemperature("chat", "0.9"));
     expect(result.current.drafts?.llm.temperatureByTask).toEqual({
-      code: 0.1,
       chat: 0.9,
+      code: 0.1,
     });
 
     // 清空 = 删 key，而不是留下 undefined（否则「已覆盖」徽标一直亮）
@@ -832,9 +832,9 @@ describe("useSettingsPage", () => {
 
     await act(async () => {
       await result.current.addRemoteModel({
-        name: "gpt-4o",
-        baseUrl: "https://api.example.com/v1",
         apiKey: "sk-1",
+        baseUrl: "https://api.example.com/v1",
+        name: "gpt-4o",
       });
     });
     const entry = result.current.remoteModelList.find((e) => e.name === "gpt-4o");
@@ -924,13 +924,13 @@ describe("useSettingsPage", () => {
     await expect.poll(() => result.current.drafts).not.toBeNull();
 
     await act(async () => {
-      await result.current.addRemoteModel({ name: "gpt-4o", apiKey: "sk-1" });
+      await result.current.addRemoteModel({ apiKey: "sk-1", name: "gpt-4o" });
     });
     let out: { error?: string; ok: boolean } = { ok: false };
     await act(async () => {
       out = await result.current.updateRemoteModel("gpt-4o", {
-        name: "gpt-4o-2024",
         baseUrl: "https://api.example.com/v1",
+        name: "gpt-4o-2024",
       });
     });
     expect(out.ok).toBe(true);
@@ -983,7 +983,7 @@ describe("useSettingsPage", () => {
     const entryOf = (name: string) => result.current.remoteModelList.find((e) => e.name === name);
 
     await act(async () => {
-      await result.current.addRemoteModel({ name: "m1", apiKey: "sk-old" });
+      await result.current.addRemoteModel({ apiKey: "sk-old", name: "m1" });
     });
     expect(entryOf("m1")?.apiKey).toBe("sk-old");
 
@@ -1025,9 +1025,9 @@ describe("useSettingsPage", () => {
     // 加入与生效模型同名的条目后，改名时同步生效模型字段
     await act(async () => {
       out = await result.current.addRemoteModel({
-        name: "qwen3:14b",
-        baseUrl: "https://api.example.com/v1",
         apiKey: "sk-main",
+        baseUrl: "https://api.example.com/v1",
+        name: "qwen3:14b",
       });
     });
     expect(out.ok).toBe(true);

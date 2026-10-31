@@ -89,11 +89,11 @@ export type WorkshopParamRow = {
 /** 契约口 id → params 顶层键的别名。工坊对外值落库时用的是 generate 入参名，
  *  与契约口 id 不完全同名（first-frame ↔ firstFrame、duration ↔ frames…）。 */
 const PORT_TO_PARAM_KEYS: Record<string, ReadonlyArray<string>> = {
-  prompt: ["prompt"],
-  negative: ["negative"],
+  duration: ["duration", "frames"],
   "first-frame": ["firstFrame"],
   "last-frame": ["lastFrame"],
-  duration: ["duration", "frames"],
+  negative: ["negative"],
+  prompt: ["prompt"],
   "reference-image": ["inputImage", "image"],
 };
 
@@ -237,14 +237,14 @@ export function deriveWorkflowParams(
     value: unknown;
   }>(detail).map((input, index) => ({
     id: `${input.nodeId ?? "?"}:${input.name}:${index}`,
-    name: input.name,
     label: resolveParamLabel(input, io),
+    name: input.name,
     value: input.value,
   }));
   const topLevelEntries = Object.entries(params).filter(([key]) => key !== "workflowInputs");
   return {
+    hasAny: rows.length > 0 || topLevelEntries.length > 0,
     rows,
     topLevelEntries,
-    hasAny: rows.length > 0 || topLevelEntries.length > 0,
   };
 }

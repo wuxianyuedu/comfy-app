@@ -29,12 +29,12 @@ describe("size-preset-store", () => {
     const store = await loadStore();
     const table = store.getSizePresetTable();
     expect(cell(table, "image", "16:9 横屏", "1k")).toEqual({
-      width: 1024,
       height: 576,
+      width: 1024,
     });
     expect(cell(table, "video", "16:9 横屏", "1k")).toEqual({
-      width: 1280,
       height: 720,
+      width: 1280,
     });
   });
 
@@ -44,27 +44,27 @@ describe("size-preset-store", () => {
     const unsubscribe = store.subscribeSizePresetTable(listener);
 
     store.setSizePresetDims("image", "16:9 横屏", "1k", {
-      width: 1280,
       height: 720,
+      width: 1280,
     });
 
     expect(cell(store.getSizePresetTable(), "image", "16:9 横屏", "1k")).toEqual({
-      width: 1280,
       height: 720,
+      width: 1280,
     });
     expect(listener).toHaveBeenCalledTimes(1);
     const persisted = /* SAFETY: 类型断言已复核 */ JSON.parse(
       window.localStorage.getItem(SIZE_PRESET_STORAGE_KEY) ?? "null",
     ) as { image?: Record<string, Record<string, unknown>> } | null;
     expect(persisted?.image?.["16:9 横屏"]?.["1k"]).toEqual({
-      width: 1280,
       height: 720,
+      width: 1280,
     });
 
     unsubscribe();
     store.setSizePresetDims("image", "16:9 横屏", "1k", {
-      width: 1024,
       height: 576,
+      width: 1024,
     });
     expect(listener).toHaveBeenCalledTimes(1);
   });
@@ -72,23 +72,23 @@ describe("size-preset-store", () => {
   it("恢复默认只影响当前场景", async () => {
     const store = await loadStore();
     store.setSizePresetDims("image", "1:1 正方", "2k", {
-      width: 1024,
       height: 1024,
+      width: 1024,
     });
     store.setSizePresetDims("video", "1:1 正方", "2k", {
-      width: 1024,
       height: 1024,
+      width: 1024,
     });
 
     store.resetSizePresetScene("image");
 
     expect(cell(store.getSizePresetTable(), "image", "1:1 正方", "2k")).toEqual({
-      width: 2048,
       height: 2048,
+      width: 2048,
     });
     expect(cell(store.getSizePresetTable(), "video", "1:1 正方", "2k")).toEqual({
-      width: 1024,
       height: 1024,
+      width: 1024,
     });
   });
 
@@ -98,8 +98,8 @@ describe("size-preset-store", () => {
       JSON.stringify({
         image: {
           "1:1 正方": {
-            "1k": { width: -1, height: 0 },
-            "2k": { width: 4096, height: 4096 },
+            "1k": { height: 0, width: -1 },
+            "2k": { height: 4096, width: 4096 },
           },
         },
         video: "not-an-object",
@@ -109,20 +109,20 @@ describe("size-preset-store", () => {
     const table = store.getSizePresetTable();
 
     expect(cell(table, "image", "1:1 正方", "1k")).toEqual({
-      width: 1024,
       height: 1024,
+      width: 1024,
     });
     expect(cell(table, "image", "1:1 正方", "2k")).toEqual({
-      width: 4096,
       height: 4096,
+      width: 4096,
     });
     expect(cell(table, "image", "1:1 正方", "4k")).toEqual({
-      width: 3840,
       height: 3840,
+      width: 3840,
     });
     expect(cell(table, "video", "16:9 横屏", "1k")).toEqual({
-      width: 1280,
       height: 720,
+      width: 1280,
     });
   });
 
@@ -130,8 +130,8 @@ describe("size-preset-store", () => {
     window.localStorage.setItem(SIZE_PRESET_STORAGE_KEY, "{ not json");
     const store = await loadStore();
     expect(cell(store.getSizePresetTable(), "image", "1:1 正方", "1k")).toEqual({
-      width: 1024,
       height: 1024,
+      width: 1024,
     });
   });
 });

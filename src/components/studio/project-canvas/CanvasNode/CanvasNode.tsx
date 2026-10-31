@@ -35,12 +35,12 @@ import { ErrorPanel } from "./ErrorPanel";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 
 export const CanvasNode = React.memo(function CanvasNode({
-  id,
   data,
+  id,
   selected,
 }: NodeProps<CanvasNodeType>) {
   const d = data;
-  const { setNodes, getNode, setEdges, fitView, screenToFlowPosition } = useReactFlow();
+  const { fitView, getNode, screenToFlowPosition, setEdges, setNodes } = useReactFlow();
   const meta = NODE_META[d.kind];
 
   /* 镜头节点生成落定 → 回写对应 Shot（Phase 3c-2b，见 hook 注释）。 */
@@ -72,62 +72,62 @@ export const CanvasNode = React.memo(function CanvasNode({
     if (!d.shotId) {
       return;
     }
-    patch({ status: "idle", resultPath: undefined, error: undefined });
+    patch({ error: undefined, resultPath: undefined, status: "idle" });
     void requestShotRedo(getActiveId() ?? "", d.shotId);
   }, [d.shotId, patch]);
 
-  const focusNode = () => fitView({ nodes: [{ id }], duration: 300, padding: 0.2, maxZoom: 1.2 });
+  const focusNode = () => fitView({ duration: 300, maxZoom: 1.2, nodes: [{ id }], padding: 0.2 });
 
   /* 文件上传管线：生成器图片输入、内容载体媒体选择器与
    * 拖放用的选取 / 上传处理器。隐藏 input 由管线自己持有并渲染
    * （`ImageInput` /`MediaInput`）。 */
-  const { ImageInput, pickFile, MediaInput, pickMedia, onUploadFile } = useFileUpload({ patch });
+  const { ImageInput, MediaInput, onUploadFile, pickFile, pickMedia } = useFileUpload({ patch });
 
   /* 共享工作流列表 + 动态 IO 表 + 模式 / 来源筛选 + 播种。 */
   const {
-    wfList,
-    wfListLoading,
-    modelTagLib,
     modelFilter,
+    modelTagLib,
+    seededFor,
     setModelFilter,
-    wfIO,
-    wfIOLoading,
-    wfParamMap,
-    wfModes,
+    setSourceFilter,
     setWfModes,
     sourceFilter,
-    setSourceFilter,
-    seededFor,
+    wfIO,
+    wfIOLoading,
+    wfList,
+    wfListLoading,
+    wfModes,
+    wfParamMap,
   } = useWorkflowIo({ d, patch });
 
   /* 多模式保存：乐观更新 + 失败回滚都在这个 hook 里（视图零 IO）。 */
   const { saveModes } = useWorkflowModes({
-    workflowId: d.workflowId,
     modes: wfModes,
-    setModes: setWfModes,
     onFailed: (reason) => patch({ error: reason, status: "error" }),
+    setModes: setWfModes,
+    workflowId: d.workflowId,
   });
 
   /* 任务运行逻辑：挂载时对账 + runGenerate + 错误面板重试。 */
   /* 运行期与编辑器取同一个生效模式：`defaultMode → modes[0] → taskType`。
    * 运行期表单按这个模式解析默认值与落点，落库的键也是`source.mode:<模式>`。 */
   const wfMode = resolveWorkflowMode({
-    modes: wfModes?.modes,
     defaultMode: wfModes?.defaultMode,
+    modes: wfModes?.modes,
     taskType: d.workflowTaskType ?? null,
   });
 
-  const { runGenerate, retryGenerate } = useGenerate({
-    id,
+  const { retryGenerate, runGenerate } = useGenerate({
     d,
-    patch,
-    wfIO,
-    wfParamMap,
-    wfMode,
-    setNodes,
-    setEdges,
     getNode,
+    id,
+    patch,
     screenToFlowPosition,
+    setEdges,
+    setNodes,
+    wfIO,
+    wfMode,
+    wfParamMap,
   });
 
   /* ── 按 kind 渲染 body ── */
@@ -169,16 +169,16 @@ export const CanvasNode = React.memo(function CanvasNode({
           id="output"
           position={Position.Right}
           style={{
+            background: outStyle.gradient,
+            border: `1.5px solid ${outStyle.color}`,
+            borderRadius: 9999,
+            boxShadow: `0 0 10px ${outStyle.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
+            height: 10,
             position: "absolute",
             right: -5,
             top: "50%",
             transform: "translateY(-50%)",
             width: 10,
-            height: 10,
-            background: outStyle.gradient,
-            border: `1.5px solid ${outStyle.color}`,
-            boxShadow: `0 0 10px ${outStyle.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
-            borderRadius: 9999,
           }}
           type="source"
         />
@@ -210,16 +210,16 @@ export const CanvasNode = React.memo(function CanvasNode({
             id="inputImage"
             position={Position.Left}
             style={{
-              position: "absolute",
+              background: PORT_STYLE.image.gradient,
+              border: `1.5px solid ${PORT_STYLE.image.color}`,
+              borderRadius: 9999,
+              boxShadow: `0 0 10px ${PORT_STYLE.image.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
+              height: 10,
               left: -5,
+              position: "absolute",
               top: "50%",
               transform: "translateY(-50%)",
               width: 10,
-              height: 10,
-              background: PORT_STYLE.image.gradient,
-              border: `1.5px solid ${PORT_STYLE.image.color}`,
-              boxShadow: `0 0 10px ${PORT_STYLE.image.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
-              borderRadius: 9999,
             }}
             type="target"
           />
@@ -228,16 +228,16 @@ export const CanvasNode = React.memo(function CanvasNode({
             id="output"
             position={Position.Right}
             style={{
+              background: outStyle.gradient,
+              border: `1.5px solid ${outStyle.color}`,
+              borderRadius: 9999,
+              boxShadow: `0 0 10px ${outStyle.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
+              height: 10,
               position: "absolute",
               right: -5,
               top: "50%",
               transform: "translateY(-50%)",
               width: 10,
-              height: 10,
-              background: outStyle.gradient,
-              border: `1.5px solid ${outStyle.color}`,
-              boxShadow: `0 0 10px ${outStyle.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
-              borderRadius: 9999,
             }}
             type="source"
           />
@@ -292,10 +292,10 @@ export const CanvasNode = React.memo(function CanvasNode({
       style={
         selected
           ? {
-              outline: "2px solid var(--color-primary)",
-              outlineOffset: "4px",
               boxShadow:
                 "0 0 0 1px color-mix(in srgb, var(--color-primary) 50%, transparent), 0 4px 24px color-mix(in srgb, var(--color-primary) 30%, transparent)",
+              outline: "2px solid var(--color-primary)",
+              outlineOffset: "4px",
             }
           : {
               boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
@@ -322,7 +322,7 @@ export const CanvasNode = React.memo(function CanvasNode({
           onFormChange={(next) => patch({ workflowInputs: next })}
           onGenerate={runGenerate}
           onModelFilterChange={setModelFilter}
-          onModesChange={(modes, defaultMode) => saveModes({ modes, defaultMode })}
+          onModesChange={(modes, defaultMode) => saveModes({ defaultMode, modes })}
           onPatch={patch}
           onSeedModeChange={(ioKey, mode) =>
             patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
@@ -331,12 +331,12 @@ export const CanvasNode = React.memo(function CanvasNode({
             const wf = wfList.find((item) => item.id === workflowId);
             seededFor.current = null;
             patch({
-              workflowId: workflowId || undefined,
-              workflowName: wf?.name,
-              workflowTaskType: wf?.taskType,
-              workflowInputs: {},
               paramMap: undefined,
+              workflowId: workflowId || undefined,
+              workflowInputs: {},
+              workflowName: wf?.name,
               workflowSinkId: undefined,
+              workflowTaskType: wf?.taskType,
             });
           }}
           onSourceFilterChange={setSourceFilter}

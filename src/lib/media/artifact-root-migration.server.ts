@@ -52,7 +52,7 @@ function moveEntry(
   } catch (e) {
     const code = typeof e === "object" && e !== null && "code" in e ? String(e.code) : "UNKNOWN";
     // 两个宿主同时起（Next 与执行器宿主）时这条会撞上：先动的那个已经把名字搬走了
-    return code === "ENOENT" ? { kind: "already-gone" } : { kind: "blocked", code };
+    return code === "ENOENT" ? { kind: "already-gone" } : { code, kind: "blocked" };
   }
 }
 
@@ -66,10 +66,10 @@ export function migrateLegacyArtifactRoot(
   const legacy = legacyGeneratedRoot(cwd);
   const target = generatedRoot(cwd);
   const report: ArtifactRootMigrationReport = {
-    status: "nothing-to-do",
+    blocked: [],
     moved: [],
     skipped: [],
-    blocked: [],
+    status: "nothing-to-do",
   };
 
   let entries: Array<string>;
@@ -96,7 +96,7 @@ export function migrateLegacyArtifactRoot(
       if (outcome.kind === "moved") {
         report.moved.push(name);
       } else if (outcome.kind === "blocked") {
-        report.blocked.push({ name, code: outcome.code });
+        report.blocked.push({ code: outcome.code, name });
       }
     }
   }

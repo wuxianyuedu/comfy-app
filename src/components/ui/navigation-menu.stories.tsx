@@ -23,8 +23,8 @@ import {
  * 会在展开时 `rotate-180`。
  */
 const meta = {
-  title: "UI/NavigationMenu",
   component: NavigationMenu,
+  title: "UI/NavigationMenu",
 } satisfies Meta<typeof NavigationMenu>;
 
 export default meta;

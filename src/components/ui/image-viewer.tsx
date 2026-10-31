@@ -70,7 +70,7 @@ export type ImageViewerProps = {
 /**
  * 受控的图片查看器。渲染时 `src` 必须有值 —— 需要「关着」的调用处传 `null`。
  */
-export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps) {
+export function ImageViewer({ alt = "", label, onClose, src }: ImageViewerProps) {
   /* 已解码图片的尺寸与它对应的地址：地址换了旧尺寸立刻失效（否则新图会先按
    * 上一张的尺寸渲染一帧，尺寸差得远时肉眼可见地跳一下）。 */
   const [loaded, setLoaded] = useState<{
@@ -107,9 +107,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
    * 因此是矩形的纯函数，收敛到「无滚动条」这个不动点。 */
   const zoom = useImageZoom({
     naturalSize: natural,
-    viewportWidth: box ? box.width : null,
-    viewportHeight: box ? box.height : null,
     padding: VIEWPORT_PADDING,
+    viewportHeight: box ? box.height : null,
+    viewportWidth: box ? box.width : null,
   });
   const naturalWidth = natural?.width ?? null;
   const naturalHeight = natural?.height ?? null;
@@ -155,8 +155,8 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
       /* 光标下的**内容坐标**保持不变：新滚动位置 = 该内容坐标 × 缩放比 − 光标在视口里的偏移。 */
       const ratio = next / current;
       pendingScrollRef.current = {
-        scale: next,
         left: (el.scrollLeft + offsetX) * ratio - offsetX,
+        scale: next,
         top: (el.scrollTop + offsetY) * ratio - offsetY,
       };
       scaleRef.current = next;
@@ -208,13 +208,13 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
       return;
     }
     dragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      scrollLeft: el.scrollLeft,
-      scrollTop: el.scrollTop,
       dx: 0,
       dy: 0,
+      pointerId: event.pointerId,
+      scrollLeft: el.scrollLeft,
+      scrollTop: el.scrollTop,
+      startX: event.clientX,
+      startY: event.clientY,
     };
     /* 拖拽期间把内层提为合成层（松手即撤），免得每帧重新栅格化整张图。 */
     if (innerRef.current) {
@@ -278,8 +278,8 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   const mediaStyle =
     naturalWidth !== null && naturalHeight !== null
       ? {
-          width: Math.round(naturalWidth * zoom.scale),
           height: Math.round(naturalHeight * zoom.scale),
+          width: Math.round(naturalWidth * zoom.scale),
         }
       : undefined;
   const mediaClass =
@@ -407,7 +407,7 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
                 onLoad={(media) => {
                   const size = readNaturalSize(media);
                   if (size) {
-                    setLoaded({ src, size });
+                    setLoaded({ size, src });
                   }
                 }}
                 src={src}
@@ -467,11 +467,11 @@ export type ViewableImageProps = {
  * 查看器（键盘可达 —— 缩略图是按钮，回车 / 空格同样能打开）。
  */
 export function ViewableImage({
-  src,
   alt = "",
   className,
-  label,
   fallback,
+  label,
+  src,
   title = "点击查看大图",
 }: ViewableImageProps) {
   const [open, setOpen] = useState(false);

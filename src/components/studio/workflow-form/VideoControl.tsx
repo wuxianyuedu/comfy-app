@@ -29,12 +29,12 @@ import {
 import { VideoField } from "./VideoField";
 
 function VideoControl({
-  group,
-  values,
-  set,
-  workflowId,
   disabled,
+  group,
   narrow,
+  set,
+  values,
+  workflowId,
 }: {
   disabled?: boolean;
   group: VideoGroup;
@@ -53,13 +53,13 @@ function VideoControl({
 
   const entries: Array<{ entry: EnrichedWidget; role: VideoRole }> = [];
   if (group.length) {
-    entries.push({ role: "length", entry: group.length });
+    entries.push({ entry: group.length, role: "length" });
   }
   if (group.aspect) {
-    entries.push({ role: "aspect", entry: group.aspect });
+    entries.push({ entry: group.aspect, role: "aspect" });
   }
   if (group.quality) {
-    entries.push({ role: "quality", entry: group.quality });
+    entries.push({ entry: group.quality, role: "quality" });
   }
 
   if (style === "split") {
@@ -69,13 +69,13 @@ function VideoControl({
           narrow={narrow}
           onChange={onStyle}
           options={[
-            { value: "split", label: "分别填写" },
-            { value: "preset", label: "时长 + 画质 + 比例" },
+            { label: "分别填写", value: "split" },
+            { label: "时长 + 画质 + 比例", value: "preset" },
           ]}
           style={style}
         />
         <div className="grid grid-cols-1 gap-2">
-          {entries.map(({ role, entry }) => (
+          {entries.map(({ entry, role }) => (
             <VideoField
               disabled={disabled}
               entry={entry}
@@ -92,24 +92,24 @@ function VideoControl({
   }
 
   // Preset paradigm → one unified multi-section popover (参考图风格).
-  const sections: Array<SegmentSection<string>> = entries.map(({ role, entry }) => {
+  const sections: Array<SegmentSection<string>> = entries.map(({ entry, role }) => {
     const cur = values[entry.ioKey];
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;
       const value = Number(cur ?? entry.defaultValue ?? DEFAULT_VIDEO_DURATION_PRESET.value);
       return {
         label: "时长",
-        value: videoDurationLabel(value),
-        options: presets.map((preset) => ({
-          value: preset.label,
-          label: preset.label,
-        })),
         onChange: (lbl: string) => {
           const preset = presets.find((item) => item.label === lbl);
           if (preset) {
             set(entry.ioKey, preset.value);
           }
         },
+        options: presets.map((preset) => ({
+          label: preset.label,
+          value: preset.label,
+        })),
+        value: videoDurationLabel(value),
       };
     }
     if (role === "quality") {
@@ -117,17 +117,17 @@ function VideoControl({
       const value = Number(cur ?? entry.defaultValue ?? DEFAULT_VIDEO_QUALITY_PRESET.value);
       return {
         label: "画质",
-        value: videoQualityLabel(value),
-        options: presets.map((preset) => ({
-          value: preset.label,
-          label: preset.label,
-        })),
         onChange: (lbl: string) => {
           const preset = presets.find((item) => item.label === lbl);
           if (preset) {
             set(entry.ioKey, preset.value);
           }
         },
+        options: presets.map((preset) => ({
+          label: preset.label,
+          value: preset.label,
+        })),
+        value: videoQualityLabel(value),
       };
     }
     /* role ==="aspect" —— COMBO 比例用自己的选项，否则用
@@ -137,27 +137,27 @@ function VideoControl({
       const val = typeof cur === "string" && opts.includes(cur) ? cur : (opts.at(0) ?? "");
       return {
         label: "比例",
-        value: val,
-        options: opts.map((option) => ({ value: option, label: option })),
         onChange: (option: string) => set(entry.ioKey, option),
+        options: opts.map((option) => ({ label: option, value: option })),
+        value: val,
       };
     }
     const presets = DIM_RATIO_PRESETS;
     const value = Number(cur ?? entry.defaultValue ?? DEFAULT_DIM_RATIO_PRESET.ratio);
     return {
       label: "比例",
-      value: videoAspectLabel(value),
-      options: presets.map((preset) => ({
-        value: preset.label,
-        label: shortRatioLabel(preset.label),
-        render: <RatioIcon ratio={preset.ratio} />,
-      })),
       onChange: (lbl: string) => {
         const preset = presets.find((item) => item.label === lbl);
         if (preset) {
           set(entry.ioKey, preset.ratio);
         }
       },
+      options: presets.map((preset) => ({
+        label: shortRatioLabel(preset.label),
+        render: <RatioIcon ratio={preset.ratio} />,
+        value: preset.label,
+      })),
+      value: videoAspectLabel(value),
     };
   });
 
@@ -169,8 +169,8 @@ function VideoControl({
         narrow={narrow}
         onChange={onStyle}
         options={[
-          { value: "split", label: "分别填写" },
-          { value: "preset", label: "时长 + 画质 + 比例" },
+          { label: "分别填写", value: "split" },
+          { label: "时长 + 画质 + 比例", value: "preset" },
         ]}
         style={style}
       />

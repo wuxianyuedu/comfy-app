@@ -44,10 +44,10 @@ import { Button } from "~/components/ui/button";
 import { shotSizeSummary, type ShotSizeState } from "./shot-size-config";
 
 export function ShotSizePicker({
-  value,
-  onChange,
   disabled,
+  onChange,
   scene = "image",
+  value,
 }: {
   disabled?: boolean;
   onChange: (next: ShotSizeState) => void;
@@ -71,24 +71,24 @@ export function ShotSizePicker({
     const list: Array<SegmentSection<string>> = [
       {
         label: "比例",
-        value: state.ratio,
+        onChange: (ratio) => onChange({ ...state, ratio }),
         options: SIZE_RATIO_PRESETS.map((preset) => ({
-          value: preset.label,
           label: shortRatioLabel(preset.label),
           render: <RatioIcon ratio={preset.ratio} />,
+          value: preset.label,
         })),
-        onChange: (ratio) => onChange({ ...state, ratio }),
+        value: state.ratio,
       },
       {
         label: "像素",
         value: state.clarity,
         /* 子类分组：「分辨率」（查场景表）与「百万像素」（总像素预算）各一行。 */
+        onChange: (clarity) => onChange({ ...state, clarity }),
         options: SIZE_CLARITY_PRESETS.map((preset) => ({
-          value: preset.label,
           label: preset.label,
           subgroup: CLARITY_SUBGROUP_LABELS[preset.kind],
+          value: preset.label,
         })),
-        onChange: (clarity) => onChange({ ...state, clarity }),
         /* 百万像素是连续量：档位之外再给一个能填任意值的步进器（挨着它的选项
          *  渲染，属于「百万像素」这一组）。写出去的 label 与档位同形（"2.5M"），
          *  所以换算 / 摘要 / 下发都不需要为「自由值」多认一种形状。 */
@@ -105,16 +105,16 @@ export function ShotSizePicker({
     if (clarityKind === "megapixel") {
       list.push({
         label: "倍数",
-        value: String(state.multiple),
-        options: ALIGN_MULTIPLE_OPTIONS.map((option) => ({
-          value: String(option),
-          label: String(option),
-        })),
         onChange: (multiple) =>
           onChange({
             ...state,
             multiple: normalizeAlignMultiple(Number(multiple)),
           }),
+        options: ALIGN_MULTIPLE_OPTIONS.map((option) => ({
+          label: String(option),
+          value: String(option),
+        })),
+        value: String(state.multiple),
       });
     }
     return list;

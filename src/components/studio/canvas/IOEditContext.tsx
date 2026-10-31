@@ -58,11 +58,11 @@ export function useIOEditContext() {
   return {
     ioEditMode,
     ioPreviewOpen,
-    workflowIO,
-    toggleIO,
-    setIOLabel,
-    toggleIORequired,
     reorderIO,
+    setIOLabel,
+    toggleIO,
+    toggleIORequired,
+    workflowIO,
   };
 }
 export type IOEditContextValue = ReturnType<typeof useIOEditContext>;
@@ -115,7 +115,7 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
 }
 
 /** rgthree Power Lora Loader — 每行参数暴露的勾选（输入→左；输出→右）。 */
-export function IoCheckbox({ ioRef, io }: { io: IOEditContextValue; ioRef: IoRef }) {
+export function IoCheckbox({ io, ioRef }: { io: IOEditContextValue; ioRef: IoRef }) {
   const key = `${ioRef.nodeId}::${ioRef.kind}::${ioRef.name}`;
   const checked = !!io.workflowIO[key];
   const isOut = ioRef.direction === "output";
@@ -128,13 +128,13 @@ export function IoCheckbox({ ioRef, io }: { io: IOEditContextValue; ioRef: IoRef
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
       style={{
-        width: 13,
+        accentColor: checked ? "#fbbf24" : "#a1a1aa",
+        cursor: "pointer",
+        flex: "0 0 auto",
         height: 13,
         marginLeft: isOut ? 6 : 0,
         marginRight: 6,
-        flex: "0 0 auto",
-        accentColor: checked ? "#fbbf24" : "#a1a1aa",
-        cursor: "pointer",
+        width: 13,
       }}
       title={checked ? `已暴露为工作流${dirLabel}` : `点击将其暴露为工作流${dirLabel}`}
     />

@@ -30,16 +30,14 @@ export async function GET() {
    * `scripts/db-sync.mjs`（那里没有 drizzle-kit，跑了也没用，见
    * standalone-private-inputs.mjs 的白名单），状态栏据这个能力位回落成
    * 「跑 pnpm db:push」的纯提示，而不是一个点了必然 404 的按钮。 */
-  const canPush = fs.existsSync(
-    path.join(process.cwd(), "scripts", "db-sync.mjs"),
-  );
+  const canPush = fs.existsSync(path.join(process.cwd(), "scripts", "db-sync.mjs"));
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
     if (isRecord(parsed)) {
-      return NextResponse.json({ ok: true, canPush, ...parsed });
+      return NextResponse.json({ canPush, ok: true, ...parsed });
     }
-    return NextResponse.json({ ok: false, phase: "unknown", canPush });
+    return NextResponse.json({ canPush, ok: false, phase: "unknown" });
   } catch {
-    return NextResponse.json({ ok: false, phase: "unknown", canPush });
+    return NextResponse.json({ canPush, ok: false, phase: "unknown" });
   }
 }

@@ -8,8 +8,8 @@ import { ChevronDownIcon } from "lucide-react";
 
 function NavigationMenu({
   align = "start",
-  className,
   children,
+  className,
   ...props
 }: NavigationMenuPrimitive.Root.Props & Pick<NavigationMenuPrimitive.Positioner.Props, "align">) {
   return (
@@ -58,8 +58,8 @@ const navigationMenuTriggerStyle = cva(
 );
 
 function NavigationMenuTrigger({
-  className,
   children,
+  className,
   ...props
 }: NavigationMenuPrimitive.Trigger.Props) {
   return (
@@ -91,11 +91,11 @@ function NavigationMenuContent({ className, ...props }: NavigationMenuPrimitive.
 }
 
 function NavigationMenuPositioner({
+  align = "start",
+  alignOffset = 0,
   className,
   side = "bottom",
   sideOffset = 8,
-  align = "start",
-  alignOffset = 0,
   ...props
 }: NavigationMenuPrimitive.Positioner.Props) {
   /* 浮层可用区域：视口减去应用级标题行（壳态）—— 见 `useOverlayBoundary`。 */

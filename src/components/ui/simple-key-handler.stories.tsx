@@ -33,7 +33,7 @@ type SimpleKeyHandlerProps = {
 type Story = StoryObj<typeof meta>;
 
 /** 把回显做进 render：交互结果在画布上直接看得见。 */
-function Demo({ keys, ignoreRepeat, preventDefault }: SimpleKeyHandlerProps) {
+function Demo({ ignoreRepeat, keys, preventDefault }: SimpleKeyHandlerProps) {
   const [log, setLog] = useState("（还没按键）");
   const hit = useState(0);
   return (
@@ -79,7 +79,7 @@ export const SingleKey: LooseStory = {
 
 /** 关掉 `ignoreRepeat`：按住不放会**连续**触发（与默认那一档对比着看）。 */
 export const AllowRepeat: LooseStory = {
-  args: { keys: ["Space"], ignoreRepeat: false },
+  args: { ignoreRepeat: false, keys: ["Space"] },
   render: (args) => <Demo {...args} />,
 };
 

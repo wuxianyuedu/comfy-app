@@ -29,7 +29,7 @@ afterEach(() => {
   while (tempDirs.length) {
     const dir = tempDirs.pop();
     if (dir) {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { force: true, recursive: true });
     }
   }
 });
@@ -173,7 +173,7 @@ describe("isShellFallbackStatus", () => {
       phase: "dev-server-starting",
       progress: 0.4,
     };
-    const orchestratorError = { phase: "error", error: true };
+    const orchestratorError = { error: true, phase: "error" };
     const orchestratorReady = { phase: "ready", ready: true };
     expect(isShellFallbackStatus(orchestratorStarting)).toBe(false);
     expect(isShellFallbackStatus(orchestratorError)).toBe(false);

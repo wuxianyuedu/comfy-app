@@ -36,8 +36,8 @@ export type TaskGalleryImage = {
  */
 export const taskImageRowSchema = z.object({
   id: z.string().nullish(),
-  localPath: z.string(),
   isCover: z.boolean().nullish(),
+  localPath: z.string(),
 });
 
 /**
@@ -54,8 +54,8 @@ export function parseTaskImageRows(rows: ReadonlyArray<unknown>): Array<TaskGall
     .filter((parsed) => parsed.success)
     .map((parsed) => ({
       id: parsed.data.id ?? "",
-      localPath: parsed.data.localPath,
       isCover: parsed.data.isCover ?? false,
+      localPath: parsed.data.localPath,
     }));
 }
 

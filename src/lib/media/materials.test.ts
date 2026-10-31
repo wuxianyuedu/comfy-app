@@ -35,11 +35,11 @@ import { generatedRoot, materialsRoot } from "~/lib/media/output-paths";
 
 /** 归属三态的桩：`materialScopeOwnership` 只问「这一格属于谁」。
  *  真库 + 真 Drizzle 那一路由 `/api/materials` 的用例判（同一条判决不测两遍）。 */
-const { owners, findById } = vi.hoisted(() => {
+const { findById, owners } = vi.hoisted(() => {
   const owners = new Map<string, string>();
   return {
-    owners,
     findById: async (scope: string) => (owners.has(scope) ? { userId: owners.get(scope)! } : null),
+    owners,
   };
 });
 vi.mock("~/lib/core/repository-project", () => ({
@@ -82,7 +82,7 @@ function put(
 
 afterAll(() => {
   cwdSpy.mockRestore();
-  fs.rmSync(BASE, { recursive: true, force: true });
+  fs.rmSync(BASE, { force: true, recursive: true });
 });
 
 describe("sanitizeScope —— scope 是目录名，不是路径片段", () => {
@@ -170,9 +170,9 @@ describe("listFolderItems —— 目录里的每一项都要过形状与 stat �
     expect(items.map((i) => i.name)).toEqual(["new.png", "old.png"]);
     // 稳定 id 与浏览器可吃的地址都由判据层给（删除时原样回传即可）
     expect(items[0]).toMatchObject({
-      id: `${scope}/ref/new.png`,
       folder: "ref",
       folderName: "参考素材",
+      id: `${scope}/ref/new.png`,
       kind: "image",
       url: `/api/generated/materials/${scope}/ref/new.png`,
     });

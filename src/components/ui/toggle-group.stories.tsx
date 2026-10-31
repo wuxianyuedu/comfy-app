@@ -26,19 +26,19 @@ const SIZES: Array<ToggleGroupSize> = ["default", "sm", "lg"];
 const ORIENTATIONS: Array<ToggleGroupOrientation> = ["horizontal", "vertical"];
 
 const meta = {
-  title: "UI/ToggleGroup",
-  component: ToggleGroup,
   args: {
-    variant: "default",
-    size: "default",
     orientation: "horizontal",
+    size: "default",
     spacing: 2,
+    variant: "default",
   },
   argTypes: {
-    variant: { control: "select", options: VARIANTS },
-    size: { control: "select", options: SIZES },
     orientation: { control: "select", options: ORIENTATIONS },
+    size: { control: "select", options: SIZES },
+    variant: { control: "select", options: VARIANTS },
   },
+  component: ToggleGroup,
+  title: "UI/ToggleGroup",
 } satisfies Meta<typeof ToggleGroup>;
 
 export default meta;

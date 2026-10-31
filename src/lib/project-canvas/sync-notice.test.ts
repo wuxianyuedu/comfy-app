@@ -25,7 +25,7 @@ import {
 function trpcError(code: string, message: string): unknown {
   return Object.assign(new Error(message), {
     data: { code },
-    shape: { message, code },
+    shape: { code, message },
   });
 }
 

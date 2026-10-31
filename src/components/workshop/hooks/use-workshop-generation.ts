@@ -60,11 +60,11 @@ export type WorkshopGenerationApi = {
 };
 
 export function useWorkshopGeneration({
-  workflowId,
   characters,
+  notify,
   projectId,
   setShots,
-  notify,
+  workflowId,
 }: WorkshopGenerationDeps): WorkshopGenerationApi {
   /** 在途生成链的条数（不是布尔）：批量并发下同刻可能有两条链在跑，
    *  布尔会被先结束的那条提前复位。对外仍表现为 generating = 条数 > 0。 */
@@ -97,8 +97,8 @@ export function useWorkshopGeneration({
         notify(`${refs.failedCount} 张定妆照参考图上传失败，本次生成未使用它们`);
       }
       const { input, unmatched } = await buildLibraryWorkflowInput(workflowId, {
-        prompt: shot.prompt,
         negativePrompt: shot.negativePrompt || undefined,
+        prompt: shot.prompt,
         size: sizeSpec,
         ...(refs.files.length > 0 ? { referenceImages: refs.files } : {}),
       });
@@ -132,6 +132,14 @@ export function useWorkshopGeneration({
       return withTimeoutResult(
         new Promise<void>((resolve) => {
           close = watchTask(taskId, {
+            onOutput: (out) => {
+              /* 生图只要图片产物、视频只要视频产物（另一种是别的阶段的）。 */
+              const wanted = target === "video" ? out.kind !== "image" : out.kind !== "video";
+              if (!wanted) {
+                return;
+              }
+              patchIfOwned(target === "video" ? { clipUrl: out.url } : { imageUrl: out.url });
+            },
             onProgress: (pct, node) => {
               /* 高频回调：按条目独立节流（规范 16 §16.2.4.68）。这条的值是
                * 「百分比 + 当前节点名」的复合体，故只用闸门、不用 hook。 */
@@ -145,14 +153,6 @@ export function useWorkshopGeneration({
                   ...(node?.label ? { label: node.label } : {}),
                 },
               }));
-            },
-            onOutput: (out) => {
-              /* 生图只要图片产物、视频只要视频产物（另一种是别的阶段的）。 */
-              const wanted = target === "video" ? out.kind !== "image" : out.kind !== "video";
-              if (!wanted) {
-                return;
-              }
-              patchIfOwned(target === "video" ? { clipUrl: out.url } : { imageUrl: out.url });
             },
             onSettled: (result) => {
               setShotProgress((prev) => {
@@ -243,9 +243,9 @@ export function useWorkshopGeneration({
     [workflowId, projectId, buildShotInput, notify, setShots, watchShotTask],
   );
   return {
+    generateShot,
     generating: generatingDepth > 0,
     shotProgress,
-    generateShot,
     watchShotTask,
   };
 }

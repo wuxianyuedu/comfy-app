@@ -50,9 +50,9 @@ async function scanLogFiles(dir: string, base: string): Promise<Array<LogFileInf
       const stat = await fs.promises.stat(full);
       return [
         {
+          mtimeMs: stat.mtimeMs,
           name: entry.name,
           relativePath: toDisplayPath(rel),
-          mtimeMs: stat.mtimeMs,
           size: stat.size,
         },
       ];

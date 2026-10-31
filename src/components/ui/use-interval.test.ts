@@ -64,7 +64,7 @@ describe("useInterval", () => {
 
   it("immediate=false 时不立刻跑，等第一个间隔", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: 1000, immediate: false }));
+    renderHook(() => useInterval(run, { immediate: false, ms: 1000 }));
     expect(run).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -77,16 +77,11 @@ describe("useInterval", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {
       void 0;
     });
-    renderHook(() =>
-      useInterval(() => Promise.reject(new Error("poll boom")), { ms: 1000 }),
-    );
+    renderHook(() => useInterval(() => Promise.reject(new Error("poll boom")), { ms: 1000 }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(spy).toHaveBeenCalledWith(
-      "[use-interval] 轮询动作抛错",
-      expect.any(Error),
-    );
+    expect(spy).toHaveBeenCalledWith("[use-interval] 轮询动作抛错", expect.any(Error));
     spy.mockRestore();
   });
 
@@ -99,10 +94,7 @@ describe("useInterval", () => {
         pauseWhenUnfocused: false,
       }),
     );
-    expect(addSpy).not.toHaveBeenCalledWith(
-      "visibilitychange",
-      expect.anything(),
-    );
+    expect(addSpy).not.toHaveBeenCalledWith("visibilitychange", expect.anything());
     addSpy.mockRestore();
   });
 
@@ -164,9 +156,7 @@ describe("useInterval", () => {
     expect(run, "后台不该继续跑").toHaveBeenCalledTimes(1);
 
     act(() => setVisibility("visible"));
-    expect(run, "回前台应立即补跑一次，不等下一个间隔").toHaveBeenCalledTimes(
-      2,
-    );
+    expect(run, "回前台应立即补跑一次，不等下一个间隔").toHaveBeenCalledTimes(2);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);

@@ -28,9 +28,9 @@ import { ErrorBoundary } from "~/components/ui/error-boundary";
  *    与调它 —— 生产里接日志 / 埋点。
  */
 const meta = {
-  title: "UI/ErrorBoundary",
-  component: ErrorBoundary,
   args: { children: null, fallback: "降级 UI" },
+  component: ErrorBoundary,
+  title: "UI/ErrorBoundary",
 } satisfies Meta<typeof ErrorBoundary>;
 
 export default meta;

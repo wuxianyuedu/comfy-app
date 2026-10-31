@@ -9,18 +9,18 @@ import type { ValidationError } from "~/lib/comfyui/validation";
  * 容器里长什么样」，不是组件自己的变体。
  */
 const ERRORS: Array<ValidationError> = [
-  { nodeId: "10", classType: "KSampler", field: "cfg", message: "不是数字" },
-  { nodeId: "10", classType: "KSampler", field: "steps", message: "超出范围" },
-  { nodeId: "23", classType: "CLIPTextEncode", field: "text", message: "为空" },
+  { classType: "KSampler", field: "cfg", message: "不是数字", nodeId: "10" },
+  { classType: "KSampler", field: "steps", message: "超出范围", nodeId: "10" },
+  { classType: "CLIPTextEncode", field: "text", message: "为空", nodeId: "23" },
 ];
 
 const meta = {
-  title: "UI/ValidationErrorList",
-  component: ValidationErrorList,
   args: { errors: ERRORS },
   argTypes: {
     errors: { control: false },
   },
+  component: ValidationErrorList,
+  title: "UI/ValidationErrorList",
 } satisfies Meta<typeof ValidationErrorList>;
 
 export default meta;
@@ -53,7 +53,7 @@ export const InHistoryCard: Story = {
  */
 export const WithoutClassType: Story = {
   args: {
-    errors: [{ nodeId: "7", classType: "", field: "seed", message: "必须是整数" }],
+    errors: [{ classType: "", field: "seed", message: "必须是整数", nodeId: "7" }],
   },
 };
 

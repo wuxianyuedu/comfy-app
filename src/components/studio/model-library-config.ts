@@ -94,7 +94,7 @@ export function splitFolders(
 ): { available: Array<FolderConfigRow>; enabled: Array<FolderConfigRow> } {
   const matched = filterFolders(folders, q);
   return {
-    enabled: matched.filter((row) => row.enabled),
     available: matched.filter((row) => !row.enabled),
+    enabled: matched.filter((row) => row.enabled),
   };
 }

@@ -94,11 +94,11 @@ const MINIMAP_COLOR_BY_KIND = new Map(
  * 不操作也在逐帧 paint（DevTools Paint flashing 可见满屏闪烁），与工作流编辑器
  * 画布（同为 animated:false）口径统一。type/stroke 维持原值，不改渲染形状。 */
 const DEFAULT_EDGE_OPTIONS = {
-  type: "smoothstep",
   animated: false,
   deletable: false,
   reconnectable: false,
   style: { stroke: "url(#canvas-edge-gradient)", strokeWidth: 2.5 },
+  type: "smoothstep",
 };
 
 const PRO_OPTIONS = { hideAttribution: true };
@@ -124,7 +124,7 @@ function materializeProductionShots(
       .map((n) => /* SAFETY: 类型断言已复核 */ (n.data as { shotId?: string } | undefined)?.shotId)
       .filter((id): id is string => Boolean(id)),
   );
-  const { patches, newShotIds } = planShotSync(shots, existingShotIds);
+  const { newShotIds, patches } = planShotSync(shots, existingShotIds);
   let result = applyShotPatches(nodes, patches);
   const byId = new Map(shots.map((s) => [s.id, s]));
   for (const sid of newShotIds) {
@@ -133,9 +133,9 @@ function materializeProductionShots(
       continue;
     }
     result = placeCanvasNode({
-      nodes: result,
-      flow: { screenToFlowPosition },
       data: { ...defaultData("image"), ...shotToNodePatch(shot) },
+      flow: { screenToFlowPosition },
+      nodes: result,
     });
   }
   return result;
@@ -152,10 +152,10 @@ type ProjectCanvasProps = {
 
 /* ── 内层画布（必须在 ReactFlowProvider 里） ── */
 function CanvasInner({
-  seedNew,
+  onConsumePending,
   onConsumeSeed,
   pendingWorkflow,
-  onConsumePending,
+  seedNew,
 }: ProjectCanvasProps) {
   const toast = useToast();
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNodeType>([]);
@@ -175,7 +175,7 @@ function CanvasInner({
    * 编辑器共享（同一个 localStorage key）。 */
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const rf = useReactFlow();
-  const { screenToFlowPosition, fitView } = rf;
+  const { fitView, screenToFlowPosition } = rf;
   /* MiniMap → 主视口单击跳转。
    *  与下面 <MiniMap pannable zoomable onClick={onMiniMapJump} /> 配对。 */
   const onMiniMapJump = useMiniMapJump(rf);
@@ -201,21 +201,21 @@ function CanvasInner({
    *  Phase 2b：画布不再有自建项目管理（切换 / 新建 / 重命名 / 删除统一在首页），
    *  故 useProjectManager 与项目切换器一并移除，这里只保留自动持久化。 ── */
   useProjectPersistence({
-    projectId,
-    nodes,
     edges,
-    projectName,
     loaded: !hydrating,
+    nodes,
+    projectId,
+    projectName,
   });
 
   /* 连线分派 / 媒体拖拽落地（抽离，行为与之前完全一致）。 */
   const { onConnect, onEdgeClick } = useCanvasConnections({
-    nodesRef,
     edgesRef,
-    setNodes,
+    nodesRef,
     setEdges,
+    setNodes,
   });
-  const { placeMediaNode, onCanvasDragOver, onCanvasDrop } = useCanvasDrop({
+  const { onCanvasDragOver, onCanvasDrop, placeMediaNode } = useCanvasDrop({
     screenToFlowPosition,
     setNodes,
   });
@@ -287,14 +287,14 @@ function CanvasInner({
         /* 落点四步走唯一出口（规范 16 §16.2.4.38）：这里没有落点信息，
          * 由出口的 `viewportCenter()` 给视口中心。 */
         nextNodes = placeCanvasNode({
-          nodes: baseNodes,
-          flow: { screenToFlowPosition },
           data: {
             ...defaultData("workflow"),
             workflowId: pendingWorkflow.id,
             workflowName: pendingWorkflow.name,
             workflowTaskType: pendingWorkflow.taskType,
           },
+          flow: { screenToFlowPosition },
+          nodes: baseNodes,
         });
         onConsumePending?.();
       }
@@ -330,11 +330,11 @@ function CanvasInner({
   }, []);
 
   /* 右键菜单 + 落子的一簇回调（抽到 useCanvasMenu，CanvasInner 只留编排，§12.13）。 */
-  const { onPaneContextMenu, createNode, createTestWorkflowNode, onNodeClick } = useCanvasMenu({
+  const { createNode, createTestWorkflowNode, onNodeClick, onPaneContextMenu } = useCanvasMenu({
     menu,
+    screenToFlowPosition,
     setMenu,
     setNodes,
-    screenToFlowPosition,
   });
 
   const clearCanvas = useCallback(() => {
@@ -353,7 +353,7 @@ function CanvasInner({
   }, [setNodes, setEdges]);
 
   const exportJson = useCallback(() => {
-    downloadJson({ nodes, edges }, `${projectName || "comfy-canvas"}.json`);
+    downloadJson({ edges, nodes }, `${projectName || "comfy-canvas"}.json`);
   }, [nodes, edges, projectName]);
 
   return (
@@ -394,7 +394,7 @@ function CanvasInner({
         proOptions={PRO_OPTIONS}
       >
         {/* 渐变描边定义（粉彩 6 色 → 端口/连线渐变） */}
-        <svg aria-hidden style={{ position: "absolute", width: 0, height: 0 }}>
+        <svg aria-hidden style={{ height: 0, position: "absolute", width: 0 }}>
           <defs>
             <linearGradient id="canvas-edge-gradient" x1="0%" x2="100%" y1="0%" y2="0%">
               {/* 四档色相取自 `--color-edge-flow-*`（与工作流编辑器同一套
@@ -426,8 +426,8 @@ function CanvasInner({
           onClick={onMiniMapJump}
           pannable
           style={{
-            width: 200,
             height: 140,
+            width: 200,
           }}
           zoomable
         />
@@ -437,7 +437,7 @@ function CanvasInner({
       <CanvasToolbar
         onClear={clearCanvas}
         onExport={exportJson}
-        onFitView={() => fitView({ padding: 0.2, duration: 400 })}
+        onFitView={() => fitView({ duration: 400, padding: 0.2 })}
       />
 
       {/* 生产进度（与工坊共读 production 行的 progress 一份，Phase 4b / §7）——
@@ -493,9 +493,9 @@ function CanvasInner({
               onClose={() => setActivePanel(null)}
               onUse={(item) =>
                 placeMediaNode({
-                  url: item.url,
                   displayName: item.name,
                   mediaType: item.kind,
+                  url: item.url,
                 })
               }
               projectId={projectId}
@@ -506,9 +506,9 @@ function CanvasInner({
               onClose={() => setActivePanel(null)}
               onUse={(template) =>
                 placeMediaNode({
-                  url: template.cover,
                   displayName: lastSegments(template.cover, 1) || template.id.slice(0, 12),
                   mediaType: template.mediaType,
+                  url: template.cover,
                 })
               }
               projectId={projectId}

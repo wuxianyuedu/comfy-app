@@ -38,7 +38,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   for (const dir of tmpDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { force: true, recursive: true });
   }
 });
 
@@ -91,10 +91,6 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
     writeFileSync(file, '{"checkpoint":"a.safetensors"}', "utf-8");
     let reads = 0;
     const memo = createSettingsFileMemo(file, {
-      read: (f) => {
-        reads += 1;
-        return readFileSyncSync(f, "utf-8");
-      },
       fingerprint: (f) => {
         try {
           const st = statSync(f);
@@ -102,6 +98,10 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
         } catch {
           return null;
         }
+      },
+      read: (f) => {
+        reads += 1;
+        return readFileSyncSync(f, "utf-8");
       },
       write: async (f, content) => writeFileSync(f, content, "utf-8"),
     });
@@ -119,11 +119,11 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
     const file = path.join(dir, "workshop-comfy-settings.json");
     let reads = 0;
     const memo = createSettingsFileMemo(file, {
+      fingerprint: () => null,
       read: (f) => {
         reads += 1;
         return readFileSyncSync(f, "utf-8");
       },
-      fingerprint: () => null,
       write: async (f, content) => writeFileSync(f, content, "utf-8"),
     });
     await memo.save({ checkpoint: "a.safetensors" });

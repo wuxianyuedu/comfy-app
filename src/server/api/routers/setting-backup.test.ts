@@ -67,7 +67,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.chdir(realCwd);
-  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(root, { force: true, recursive: true });
 });
 
 describe("setting.backupCreate", () => {

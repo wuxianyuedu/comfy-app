@@ -45,10 +45,10 @@ describe("checkAppUpdate", () => {
     withShell(true);
     vi.doMock("@tauri-apps/plugin-updater", () => ({
       check: vi.fn().mockResolvedValue({
-        version: "1.2.0",
+        body: "修复若干问题",
         currentVersion: "1.0.0",
         date: "2026-09-01",
-        body: "修复若干问题",
+        version: "1.2.0",
       }),
     }));
     const mod = await import("./app-update-client");
@@ -86,8 +86,8 @@ describe("downloadAndInstallUpdate", () => {
     withShell(true);
     const updateObj = {
       downloadAndInstall: vi.fn(async (cb: (e: unknown) => void) => {
-        cb({ event: "Started", data: { contentLength: 100 } });
-        cb({ event: "Progress", data: { chunkLength: 30 } });
+        cb({ data: { contentLength: 100 }, event: "Started" });
+        cb({ data: { chunkLength: 30 }, event: "Progress" });
         cb({ event: "Finished" });
       }),
     };

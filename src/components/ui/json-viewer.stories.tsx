@@ -57,25 +57,25 @@ function JsonViewerWithSource({ sourceName, ...rest }: StoryArgs) {
 }
 
 const meta = {
-  title: "UI/JsonViewer",
+  args: {
+    initialCollapsedDepth: 1,
+    sourceName: "comfy-prompt",
+    title: "JSON",
+  },
+  argTypes: {
+    initialCollapsedDepth: {
+      control: { type: "number" },
+      description: "首屏折叠档位：0 = 全展开；>=1 时项数超过 `30 + N*40` 的容器折成 `…`",
+    },
+    sourceName: sourceNameArgType("json"),
+  },
   component: JsonViewerWithSource,
   parameters: {
     /* `layout: fullscreen`：本组件是 `h-full` 的弹性布局，塞进默认的居中内边距
        容器里量不到真实高度（`bodyRef` 那个滚动区会塌成 0）。 */
     layout: "fullscreen",
   },
-  args: {
-    sourceName: "comfy-prompt",
-    title: "JSON",
-    initialCollapsedDepth: 1,
-  },
-  argTypes: {
-    sourceName: sourceNameArgType("json"),
-    initialCollapsedDepth: {
-      control: { type: "number" },
-      description: "首屏折叠档位：0 = 全展开；>=1 时项数超过 `30 + N*40` 的容器折成 `…`",
-    },
-  },
+  title: "UI/JsonViewer",
 } satisfies Meta<StoryArgs>;
 
 export default meta;

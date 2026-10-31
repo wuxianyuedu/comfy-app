@@ -37,30 +37,30 @@ export function isStage(v: unknown): v is PipelineStageId {
 /** 纯函数：内存状态 → 可写行（不含 id / 时间戳），便于单测。 */
 export function stateToRow(state: WorkshopSessionState): Partial<WorkshopSessionInsert> {
   return {
-    idea: state.idea,
-    title: state.meta.title,
-    type: state.meta.type,
-    tone: state.meta.tone,
-    logline: state.meta.logline,
-    scriptMarkdown: state.meta.scriptMarkdown ?? "",
-    scenes: state.scenes,
     characters: state.characters,
+    idea: state.idea,
+    logline: state.meta.logline,
+    scenes: state.scenes,
+    scriptMarkdown: state.meta.scriptMarkdown ?? "",
     shots: state.shots,
     stage: isStage(state.stage) ? state.stage : "script",
+    title: state.meta.title,
+    tone: state.meta.tone,
+    type: state.meta.type,
   };
 }
 
 /** 纯函数：状态 → production 内容面（桥写的字段集；idea / stage 不在其中）。 */
 function contentOf(state: WorkshopSessionState): SessionContent {
   return {
-    title: state.meta.title,
-    type: state.meta.type,
-    tone: state.meta.tone,
-    logline: state.meta.logline,
-    scriptMarkdown: state.meta.scriptMarkdown ?? "",
-    scenes: state.scenes,
     characters: state.characters,
+    logline: state.meta.logline,
+    scenes: state.scenes,
+    scriptMarkdown: state.meta.scriptMarkdown ?? "",
     shots: state.shots,
+    title: state.meta.title,
+    tone: state.meta.tone,
+    type: state.meta.type,
   };
 }
 
@@ -71,16 +71,16 @@ function applyContentToState(
 ): WorkshopSessionState {
   return {
     ...state,
+    characters: content.characters,
     meta: {
       ...state.meta,
-      title: content.title,
-      type: /* SAFETY: 类型断言已复核 */ (content.type as ProjectMeta["type"]) ?? state.meta.type,
-      tone: content.tone,
       logline: content.logline,
       scriptMarkdown: content.scriptMarkdown,
+      title: content.title,
+      tone: content.tone,
+      type: /* SAFETY: 类型断言已复核 */ (content.type as ProjectMeta["type"]) ?? state.meta.type,
     },
     scenes: content.scenes,
-    characters: content.characters,
     shots: content.shots,
   };
 }
@@ -90,40 +90,40 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
   return {
     idea: row.idea,
     meta: {
-      title: row.title,
-      type: /* SAFETY: 类型断言已复核 */ (row.type as ProjectMeta["type"]) ?? "short_video",
-      tone: row.tone,
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,
+      title: row.title,
+      tone: row.tone,
+      type: /* SAFETY: 类型断言已复核 */ (row.type as ProjectMeta["type"]) ?? "short_video",
     },
     /* SAFETY: 类型断言已复核 */
     scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
     /* SAFETY: 类型断言已复核 */
     characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
     /* SAFETY: 类型断言已复核 */
+    projectId: row.projectId ?? null,
     shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
     stage: isStage(row.stage) ? row.stage : "script",
-    projectId: row.projectId ?? null,
   };
 }
 
 function summarize(row: WorkshopSession): WorkshopSessionSummary {
   return {
-    id: row.id,
-    userId: row.userId,
-    projectId: row.projectId ?? null,
-    title: row.title,
-    type: row.type,
-    tone: row.tone,
-    logline: row.logline,
-    stage: isStage(row.stage) ? row.stage : "script",
-    ideaLength: (row.idea ?? "").length,
-    scriptLength: (row.scriptMarkdown ?? "").length,
-    sceneCount: Array.isArray(row.scenes) ? row.scenes.length : 0,
     characterCount: Array.isArray(row.characters) ? row.characters.length : 0,
-    shotCount: Array.isArray(row.shots) ? row.shots.length : 0,
     createdAt: row.createdAt.toISOString(),
+    id: row.id,
+    ideaLength: (row.idea ?? "").length,
+    logline: row.logline,
+    projectId: row.projectId ?? null,
+    sceneCount: Array.isArray(row.scenes) ? row.scenes.length : 0,
+    scriptLength: (row.scriptMarkdown ?? "").length,
+    shotCount: Array.isArray(row.shots) ? row.shots.length : 0,
+    stage: isStage(row.stage) ? row.stage : "script",
+    title: row.title,
+    tone: row.tone,
+    type: row.type,
     updatedAt: row.updatedAt.toISOString(),
+    userId: row.userId,
   };
 }
 
@@ -151,13 +151,13 @@ export async function createSession(input: CreateSessionInput = {}): Promise<str
   );
   const insert: WorkshopSessionInsert = {
     id,
-    userId: input.userId ?? null,
+    idea: input.idea ?? "",
+    logline: input.logline ?? "",
     projectId,
     title: input.title ?? "未命名工坊项目",
-    type: input.type ?? "short_video",
     tone: input.tone ?? "",
-    logline: input.logline ?? "",
-    idea: input.idea ?? "",
+    type: input.type ?? "short_video",
+    userId: input.userId ?? null,
   };
   await workshopDb.insert(workshopSession).values(insert);
   return id;

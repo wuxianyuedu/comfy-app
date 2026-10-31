@@ -48,9 +48,9 @@ export type UsageTestResult = {
 
 export async function testModelUsage(input: UsageTestInput): Promise<UsageTestResult> {
   const res = await fetch("/api/llm/test-usage", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
   });
   const json = /* SAFETY: 类型断言已复核 */ (await res.json().catch(() => ({}))) as Record<
     string,
@@ -76,15 +76,15 @@ function parseUsageTestResult(res: Response, json: Record<string, unknown>): Usa
     return typeof v === "string" ? v : undefined;
   };
   return {
-    ok: json.ok === true,
-    detail: str("detail") ?? `请求失败 (${res.status})`,
     chatText: str("chatText"),
-    imageUrl: str("imageUrl"),
-    videoUrl: str("videoUrl"),
-    taskId: str("taskId"),
-    pending: json.pending === true,
+    detail: str("detail") ?? `请求失败 (${res.status})`,
     elapsedMs: typeof json.elapsedMs === "number" ? json.elapsedMs : undefined,
+    imageUrl: str("imageUrl"),
+    ok: json.ok === true,
+    pending: json.pending === true,
     savedPath: str("savedPath"),
+    taskId: str("taskId"),
+    videoUrl: str("videoUrl"),
   };
 }
 
@@ -92,9 +92,9 @@ function parseUsageTestResult(res: Response, json: Record<string, unknown>): Usa
  *  否则仍 pending 返回，供调用方继续提供「继续等待」入口。 */
 export async function queryUsageTask(input: UsageTaskQueryInput): Promise<UsageTestResult> {
   const res = await fetch("/api/llm/test-usage/query", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
   });
   const json = /* SAFETY: 类型断言已复核 */ (await res.json().catch(() => ({}))) as Record<
     string,

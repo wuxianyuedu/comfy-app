@@ -66,8 +66,8 @@ export type UseCodeUpdateWatchArgs = {
 };
 
 export function useCodeUpdateWatch({
-  onDevServerRestart,
   onDepsStale,
+  onDevServerRestart,
 }: UseCodeUpdateWatchArgs = {}): void {
   /* 页面加载时的构建标识（首探所得）、最近一次已知标识、最近一次已知 bootId，
    * 都用 ref：它们只参与判定，不驱动渲染。 */
@@ -127,7 +127,7 @@ export function useCodeUpdateWatch({
   }, []);
 
   const probe = useCallback(async () => {
-    const { buildId, bootId, restartReason, restartDetail, depsStale, depsState } =
+    const { bootId, buildId, depsStale, depsState, restartDetail, restartReason } =
       await fetchBuildId();
     if (stoppedRef.current) {
       return;

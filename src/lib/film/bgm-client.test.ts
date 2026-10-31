@@ -8,9 +8,9 @@ type FetchMock = Mock<typeof fetch>;
 /** 造一个带 JSON 体的 Response；非法 JSON 走 reject */
 function jsonRes(status: number, body: unknown): Response {
   return /* SAFETY: 类型断言已复核 */ {
+    json: async () => body,
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
   } as unknown as Response;
 }
 
@@ -61,11 +61,11 @@ describe("uploadBgm", () => {
       "fetch",
       vi.fn<typeof fetch>().mockResolvedValue(
         /* SAFETY: 类型断言已复核 */ {
-          ok: false,
-          status: 502,
           json: async () => {
             throw new SyntaxError("Unexpected token <");
           },
+          ok: false,
+          status: 502,
         } as unknown as Response,
       ),
     );

@@ -70,10 +70,10 @@ export type ShellTabsState = {
 };
 
 const MAIN_TAB: ShellTab = {
+  closable: false,
   id: MAIN_TAB_ID,
   label: "主应用",
   url: null,
-  closable: false,
 };
 
 function resolveTabId(tab: Omit<ShellTab, "id"> & { id?: string }): string {
@@ -88,43 +88,9 @@ function resolveTabId(tab: Omit<ShellTab, "id"> & { id?: string }): string {
 }
 
 export const useShellTabs = create<ShellTabsState>((set) => ({
-  tabs: [MAIN_TAB],
-  activeTabId: MAIN_TAB_ID,
-
-  openTab: (tab) =>
-    set((state) => {
-      const id = resolveTabId(tab);
-      const existing = state.tabs.find((t) => t.id === id);
-      if (existing) {
-        // 已存在：仅激活 + 必要时刷新标题/地址/说明。
-        return {
-          tabs: state.tabs.map((t) =>
-            t.id === id
-              ? {
-                  ...t,
-                  label: tab.label ?? t.label,
-                  url: tab.url ?? t.url,
-                  blockedReason: tab.blockedReason ?? null,
-                  blockedUrl: tab.blockedUrl ?? null,
-                }
-              : t,
-          ),
-          activeTabId: id,
-        };
-      }
-      const next: ShellTab = {
-        id,
-        label: tab.label,
-        url: tab.url,
-        closable: tab.closable,
-        blockedReason: tab.blockedReason ?? null,
-        blockedUrl: tab.blockedUrl ?? null,
-      };
-      return { tabs: [...state.tabs, next], activeTabId: id };
-    }),
-
   activateTab: (id) =>
     set((state) => (state.tabs.some((t) => t.id === id) ? { activeTabId: id } : state)),
+  activeTabId: MAIN_TAB_ID,
 
   closeTab: (id) =>
     set((state) => {
@@ -141,8 +107,42 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
         state.activeTabId === id
           ? (tabs[Math.max(0, idx - 1)]?.id ?? tabs[0]?.id ?? MAIN_TAB_ID)
           : state.activeTabId;
-      return { tabs, activeTabId };
+      return { activeTabId, tabs };
     }),
+
+  openTab: (tab) =>
+    set((state) => {
+      const id = resolveTabId(tab);
+      const existing = state.tabs.find((t) => t.id === id);
+      if (existing) {
+        // 已存在：仅激活 + 必要时刷新标题/地址/说明。
+        return {
+          activeTabId: id,
+          tabs: state.tabs.map((t) =>
+            t.id === id
+              ? {
+                  ...t,
+                  blockedReason: tab.blockedReason ?? null,
+                  blockedUrl: tab.blockedUrl ?? null,
+                  label: tab.label ?? t.label,
+                  url: tab.url ?? t.url,
+                }
+              : t,
+          ),
+        };
+      }
+      const next: ShellTab = {
+        blockedReason: tab.blockedReason ?? null,
+        blockedUrl: tab.blockedUrl ?? null,
+        closable: tab.closable,
+        id,
+        label: tab.label,
+        url: tab.url,
+      };
+      return { activeTabId: id, tabs: [...state.tabs, next] };
+    }),
+
+  tabs: [MAIN_TAB],
 
   updateTab: (id, patch) =>
     set((state) => ({

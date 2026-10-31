@@ -104,23 +104,23 @@ const PROJECT_SWITCHED_NOTICE =
 /** 界面日志条目 → 落盘条目（字段名不同：`text` 在磁盘上是 `summary`）。
  *  界面内新增一条日志与落盘必须同一处映射，否则两条通道会各自漂移。 */
 function toPersistable(entry: PortraitLogEntry) {
-  return { ts: entry.ts, kind: entry.level, summary: entry.text };
+  return { kind: entry.level, summary: entry.text, ts: entry.ts };
 }
 
 function initialSession(): PortraitSession {
   return {
-    focusCharacterId: "",
     busy: false,
-    importing: false,
     channel: "local",
-    remoteModel: "",
-    localWorkflowId: "",
-    size: DEFAULT_SHOT_SIZE,
-    progress: null,
-    modelLabel: "",
-    status: "",
     error: "",
+    focusCharacterId: "",
+    importing: false,
+    localWorkflowId: "",
     log: [],
+    modelLabel: "",
+    progress: null,
+    remoteModel: "",
+    size: DEFAULT_SHOT_SIZE,
+    status: "",
   };
 }
 
@@ -129,7 +129,7 @@ export function useCharacterPortrait(opts: {
   projectId: string;
   setCharacters: React.Dispatch<React.SetStateAction<Array<Character>>>;
 }): [PortraitSession, PortraitSessionActions] {
-  const { setCharacters, projectId } = opts;
+  const { projectId, setCharacters } = opts;
   const [session, setSession] = React.useState<PortraitSession>(initialSession);
   /* 定妆照进度的节流闸门（`~/components/ui/use-throttled-progress`）。 */
   const progressGate = React.useRef(createThrottleGate());
@@ -150,7 +150,7 @@ export function useCharacterPortrait(opts: {
 
   /** 门禁 / 校验失败的统一出口：清掉上一轮的成功文案，给出可行动的原因。 */
   const fail = React.useCallback((message: string) => {
-    setSession((prev) => ({ ...prev, status: "", error: message }));
+    setSession((prev) => ({ ...prev, error: message, status: "" }));
   }, []);
 
   /** 更新用户选择。顺带清掉错误提示：门禁类错误（「还没选模型」）在用户补齐
@@ -268,15 +268,15 @@ export function useCharacterPortrait(opts: {
           focusCharacterId: character.id,
           /* 远端是一次性请求、不提供进度：这一路用 null 表示「不确定」，
            *  别拿 0 冒充「刚开始」。 */
-          progress: channel === "remote" ? null : 0,
-          modelLabel,
-          status: "",
           error: "",
           log: [startLog],
+          modelLabel,
+          progress: channel === "remote" ? null : 0,
+          status: "",
         }));
         const req: PortraitRequest = {
-          prompt,
           negative: character.negativePrompt || undefined,
+          prompt,
           /* 尺寸表达原样带过去：三条通道各自要的形状由网络层现算。 */
           size: session.size,
         };
@@ -286,6 +286,12 @@ export function useCharacterPortrait(opts: {
             req,
             { workflowId: localWorkflowId },
             {
+              onLog: (entry) => {
+                if (entry.level === "progress") {
+                  return;
+                }
+                appendLog(makePortraitLog(entry.level === "error" ? "error" : "info", entry.msg));
+              },
               onProgress: (pct) => {
                 /* 高频回调：节流判据与别处同源（规范 16 §16.2.4.68）；
                  * 「焦点还是不是这个角色」是本域的判据，留在调用处。 */
@@ -296,22 +302,16 @@ export function useCharacterPortrait(opts: {
                   prev.focusCharacterId === character.id ? { ...prev, progress: pct } : prev,
                 );
               },
-              onLog: (entry) => {
-                if (entry.level === "progress") {
-                  return;
-                }
-                appendLog(makePortraitLog(entry.level === "error" ? "error" : "info", entry.msg));
-              },
             },
           );
           const attached = writeBackCandidate(
             character.id,
             {
-              url,
               source: "local",
+              url,
               ...(localLabel ? { model: localLabel } : {}),
-              taskId,
               createdAt: Date.now(),
+              taskId,
             },
             originProjectId,
           );
@@ -326,15 +326,15 @@ export function useCharacterPortrait(opts: {
           appendLog(makePortraitLog("success", `定妆照生成完成（任务 ${taskId.slice(0, 12)}…）`));
         } else {
           const url = await generateRemotePortrait(req, {
-            projectId,
             name: `${label}-定妆照-${Date.now()}`,
+            projectId,
             ...(remoteModel ? { model: remoteModel } : {}),
           });
           const attached = writeBackCandidate(
             character.id,
             {
-              url,
               source: "remote",
+              url,
               ...(remoteModel ? { model: remoteModel } : {}),
               createdAt: Date.now(),
             },
@@ -390,15 +390,15 @@ export function useCharacterPortrait(opts: {
         const originProjectId = projectId;
         setSession((prev) => ({
           ...prev,
-          importing: true,
-          focusCharacterId: character.id,
-          status: "",
           error: "",
+          focusCharacterId: character.id,
+          importing: true,
+          status: "",
         }));
         const url = await importPortraitFile(file, { projectId });
         const attached = writeBackCandidate(
           character.id,
-          { url, source: "import", createdAt: Date.now() },
+          { createdAt: Date.now(), source: "import", url },
           originProjectId,
         );
         if (!attached) {
@@ -422,5 +422,5 @@ export function useCharacterPortrait(opts: {
     [taskLock, projectId, writeBackCandidate, appendLog, fail],
   );
 
-  return [session, { patch, appendLog, generate, importFile, select, remove }];
+  return [session, { appendLog, generate, importFile, patch, remove, select }];
 }

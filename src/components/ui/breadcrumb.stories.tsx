@@ -23,8 +23,8 @@ import {
  *    但可以换成任意节点（这里换成 `/`）。
  */
 const meta = {
-  title: "UI/Breadcrumb",
   component: Breadcrumb,
+  title: "UI/Breadcrumb",
 } satisfies Meta<typeof Breadcrumb>;
 
 export default meta;

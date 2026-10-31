@@ -19,10 +19,10 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { spawnMock, openSyncMock, closeSyncMock, warnMock, spawned } = vi.hoisted(() => ({
-  spawnMock: vi.fn(),
-  openSyncMock: vi.fn<(file: string, flags: string) => number>(() => 42),
+const { closeSyncMock, openSyncMock, spawned, spawnMock, warnMock } = vi.hoisted(() => ({
   closeSyncMock: vi.fn<(fd: number) => void>(),
+  openSyncMock: vi.fn<(file: string, flags: string) => number>(() => 42),
+  spawnMock: vi.fn(),
   warnMock: vi.fn<(message: string) => void>(),
   /** 每次 `spawn` 产出的假句柄，按调用顺序记录（用例从尾部拿）。 */
   spawned: /* SAFETY: 类型断言已复核 */ [] as Array<EmitterChild>,
@@ -36,9 +36,9 @@ type EmitterChild = EventEmitter & {
 };
 
 vi.mock("child_process", () => ({ spawn: spawnMock }));
-vi.mock("fs", () => ({ openSync: openSyncMock, closeSync: closeSyncMock }));
+vi.mock("fs", () => ({ closeSync: closeSyncMock, openSync: openSyncMock }));
 vi.mock("~/lib/core/logger", () => ({
-  logger: { warn: warnMock, info: () => undefined },
+  logger: { info: () => undefined, warn: warnMock },
 }));
 
 import {
@@ -68,9 +68,9 @@ function hostileThrow(value: string): never {
 function fakeChild(): EmitterChild {
   const child = Object.assign(new EventEmitter(), {
     pid: 4321,
-    unref: vi.fn<() => void>(),
-    stdout: new EventEmitter(),
     stderr: new EventEmitter(),
+    stdout: new EventEmitter(),
+    unref: vi.fn<() => void>(),
   });
   return child;
 }
@@ -189,8 +189,8 @@ describe("decodePowerShellOutput", () => {
 describe("spawnManaged —— bound（挂在应用进程树里）", () => {
   it("bound 是一次普通 spawn：stdio 留管道、退出时随整树被带走", () => {
     const opts: ManagedSpawnOptions = {
-      command: "node",
       args: ["scripts/dev.mjs"],
+      command: "node",
       mode: "bound",
     };
     const res = spawnManaged(opts);
@@ -209,11 +209,11 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
 
   it("windowsHide 只在 bound 透传，缺省是 false", () => {
     spawnManaged({
-      command: "node",
       args: [],
-      mode: "bound",
+      command: "node",
       cwd: "C:/work",
       env: callerEnv,
+      mode: "bound",
     });
     const [, , first] = lastSpawn();
     expect(first.windowsHide).toBe(false);
@@ -223,8 +223,8 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
     expect(first.env).toBe(callerEnv);
 
     spawnManaged({
-      command: "node",
       args: [],
+      command: "node",
       mode: "bound",
       windowsHide: true,
     });
@@ -235,7 +235,7 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
     spawnMock.mockImplementationOnce(() => {
       throw new Error("spawn node ENOENT");
     });
-    const res = spawnManaged({ command: "node", args: [], mode: "bound" });
+    const res = spawnManaged({ args: [], command: "node", mode: "bound" });
     expect(res.child).toBeUndefined();
     expect(res.error).toBe("spawn node ENOENT");
   });
@@ -245,7 +245,7 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
      * 抛过纯字符串 —— 每一格都要单独判，否则「这一路的失败有没有话可说」
      * 就只被其中一条测到。 */
     spawnMock.mockImplementationOnce(() => hostileThrow("纯字符串"));
-    expect(spawnManaged({ command: "x", args: [], mode: "bound" }).error).toBe("纯字符串");
+    expect(spawnManaged({ args: [], command: "x", mode: "bound" }).error).toBe("纯字符串");
   });
 
   it("其余三条拉起路径同样把非 Error 的抛错收成一句话", () => {
@@ -260,31 +260,31 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
         platform: POSIX,
         run: () =>
           spawnManaged({
-            command: "x",
             args: [],
+            command: "x",
             mode: "keepAlive",
             platform: POSIX,
           }).error,
       },
       {
         name: "Windows 壳 CLI 中介",
-        shellExe: "C:/app/comfyapp.exe",
         platform: WINDOWS,
         run: () =>
           spawnManaged({
-            command: "x",
             args: [],
+            command: "x",
             mode: "keepAlive",
             platform: WINDOWS,
           }).error,
+        shellExe: "C:/app/comfyapp.exe",
       },
       {
         name: "Windows powershell 中介",
         platform: WINDOWS,
         run: () =>
           spawnManaged({
-            command: "x",
             args: [],
+            command: "x",
             mode: "keepAlive",
             platform: WINDOWS,
           }).error,
@@ -309,11 +309,11 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
   it("detached:true 后立刻 unref，且默认 stdio 全 ignore（没有可读管道这回事）", () => {
     {
       const res = spawnManaged({
-        command: "node",
         args: ["server.js"],
-        mode: "keepAlive",
+        command: "node",
         cwd: "/srv",
         env: callerEnv,
+        mode: "keepAlive",
         platform: POSIX,
       });
       expect(res.error).toBeUndefined();
@@ -332,12 +332,12 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
   it("给了成对的重定向文件 → fd 交给 stdio，**父侧副本用完即关**（两个都关）", () => {
     {
       spawnManaged({
-        command: "node",
         args: [],
+        command: "node",
         mode: "keepAlive",
-        redirectStdoutFile: "/log/out.txt",
-        redirectStderrFile: "/log/err.txt",
         platform: POSIX,
+        redirectStderrFile: "/log/err.txt",
+        redirectStdoutFile: "/log/out.txt",
       });
       expect(openSyncMock.mock.calls).toEqual([
         ["/log/out.txt", "w"],
@@ -353,11 +353,11 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
 
   it("只给一个文件时**一个都不开**：半套重定向会把 undefined 塞进 stdio", () => {
     spawnManaged({
-      command: "node",
       args: [],
+      command: "node",
       mode: "keepAlive",
-      redirectStdoutFile: "/log/out.txt",
       platform: POSIX,
+      redirectStdoutFile: "/log/out.txt",
     });
     expect(openSyncMock).not.toHaveBeenCalled();
     expect(lastSpawn()[2].stdio).toEqual(["ignore", "ignore", "ignore"]);
@@ -370,12 +370,12 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
     });
     {
       const res = spawnManaged({
-        command: "node",
         args: [],
+        command: "node",
         mode: "keepAlive",
-        redirectStdoutFile: "/log/out.txt",
-        redirectStderrFile: "/log/err.txt",
         platform: POSIX,
+        redirectStderrFile: "/log/err.txt",
+        redirectStdoutFile: "/log/out.txt",
       });
       expect(res.error).toContain("EACCES");
       expect(spawnMock).not.toHaveBeenCalled();
@@ -389,8 +389,8 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
     });
     {
       const res = spawnManaged({
-        command: "x",
         args: [],
+        command: "x",
         mode: "keepAlive",
         platform: POSIX,
       });
@@ -405,12 +405,12 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
     });
     {
       const res = spawnManaged({
-        command: "x",
         args: [],
+        command: "x",
         mode: "keepAlive",
-        redirectStdoutFile: "/log/out.txt",
-        redirectStderrFile: "/log/err.txt",
         platform: POSIX,
+        redirectStderrFile: "/log/err.txt",
+        redirectStdoutFile: "/log/out.txt",
       });
       expect(res.error).toBe("fork failed");
       expect(closeSyncMock.mock.calls.map((call) => call[0])).toEqual([42, 42]);
@@ -422,8 +422,8 @@ describe("spawnManaged —— keepAlive / Windows（两条中介形态）", () =
   /** Windows 分支的入口判据是这两个环境变量，用例逐个给出。 */
   function windowsOptions(overrides: Partial<ManagedSpawnOptions> = {}): ManagedSpawnOptions {
     return {
-      command: "C:/ComfyUI/python.exe",
       args: ["main.py", "--port 8188"],
+      command: "C:/ComfyUI/python.exe",
       mode: "keepAlive",
       platform: WINDOWS,
       ...overrides,
@@ -435,8 +435,8 @@ describe("spawnManaged —— keepAlive / Windows（两条中介形态）", () =
     const res = spawnManaged(
       windowsOptions({
         cwd: "C:/work dir",
-        redirectStdoutFile: "C:/log/o.txt",
         redirectStderrFile: "C:/log/e.txt",
+        redirectStdoutFile: "C:/log/o.txt",
       }),
     );
     expect(res.error).toBeUndefined();
@@ -502,8 +502,8 @@ describe("spawnManaged —— keepAlive / Windows（两条中介形态）", () =
     spawnManaged(
       windowsOptions({
         cwd: "C:/work dir",
-        redirectStdoutFile: "C:/log/o.txt",
         redirectStderrFile: "C:/log/e.txt",
+        redirectStdoutFile: "C:/log/o.txt",
       }),
     );
     expect(lastSpawn()[1][3]).toBe(
@@ -589,9 +589,9 @@ describe("waitForDetachMediator —— 中介的退出码与 stderr", () => {
   it("没有 stderr 管道（stdio 全 ignore）时不崩，照样回退出码", async () => {
     const bare = Object.assign(new EventEmitter(), {
       pid: 1,
-      unref: vi.fn<() => void>(),
-      stdout: null,
       stderr: null,
+      stdout: null,
+      unref: vi.fn<() => void>(),
     });
     const p = waitForDetachMediator(bare, 1000);
     bare.emit("exit", 3);
@@ -615,12 +615,12 @@ describe("加载期注入的日志出口：探测读数真的走唯一通道（I
      * 这一格要判的是**读数往哪儿流**，不是真去探一台机器。 */
     firstRunnableOrEmpty({
       candidates: ["comfyapp-no-such-command-2408"],
-      probeArgs: () => ["--version"],
       label: "假解释器",
       probe: () => ({
+        failure: { code: "ENOENT", kind: "spawn-error" },
         ok: false,
-        failure: { kind: "spawn-error", code: "ENOENT" },
       }),
+      probeArgs: () => ["--version"],
       report: () => undefined,
     });
     expect(warnMock).toHaveBeenCalled();

@@ -18,13 +18,13 @@ type ChipShape = NonNullable<React.ComponentProps<typeof SelectChip>["shape"]>;
 const SHAPES: Array<ChipShape> = ["pill", "segment", "compact", "dashed"];
 
 const meta = {
-  title: "UI/SelectChip",
-  component: SelectChip,
   args: { children: "文生图", selected: false, shape: "pill" },
   argTypes: {
-    shape: { control: "select", options: SHAPES },
     selected: { control: "boolean" },
+    shape: { control: "select", options: SHAPES },
   },
+  component: SelectChip,
+  title: "UI/SelectChip",
 } satisfies Meta<typeof SelectChip>;
 
 export default meta;

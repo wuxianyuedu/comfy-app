@@ -34,20 +34,20 @@ export type ConsoleOutputProps = {
 };
 
 export function ConsoleOutput({
+  emptyHint,
   output,
   running,
-  emptyHint,
+  stopped,
   verdict,
   verdictOk,
-  stopped,
 }: ConsoleOutputProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   /* 贴底走全库唯一实现（`ui/use-scroll-follow`，规范 16 §16.2.4.24）：
    * 「用户往上滚会不会被拽回去」此前四个面板各判各的，这里不再写第五份。 */
   const follow = useScrollFollow({
     containerRef: scrollerRef,
-    watch: output,
     following: true,
+    watch: output,
   });
 
   return (

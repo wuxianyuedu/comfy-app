@@ -54,18 +54,18 @@ export async function openComfyTab(base: string, hostOrigin: string): Promise<Op
 
   if (verdict.embeddable) {
     return {
-      target: "embed",
-      embedUrl: base,
-      detail: `已在页签中打开 ComfyUI（${base}）`,
       base,
+      detail: `已在页签中打开 ComfyUI（${base}）`,
+      embedUrl: base,
+      target: "embed",
     };
   }
 
   // 不可嵌也留在页签内：页签本身照常打开，只是内容换成可读的说明。
   return {
-    target: "blocked",
-    embedUrl: null,
-    detail: `ComfyUI 未放行跨源内嵌（${verdict.reason}）`,
     base,
+    detail: `ComfyUI 未放行跨源内嵌（${verdict.reason}）`,
+    embedUrl: null,
+    target: "blocked",
   };
 }

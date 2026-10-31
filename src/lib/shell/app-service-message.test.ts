@@ -24,9 +24,9 @@ const T0 = Date.parse("2026-10-12T14:00:00");
 const T1 = T0 + 125_000;
 
 const exitNotice = {
-  why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
   action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
   detail: "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+  why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
 };
 
 /** 推进一拍的便捷写法：吃上一拍的游标，回下一拍的游标与事件。
@@ -47,15 +47,15 @@ function step(
 
 /** 「已经探到、且这份进程是新的」——冷启动之后最常见的那一拍。 */
 const RUNNING_NEW = /* SAFETY: 类型断言已复核 */ {
-  state: "online",
   processIsNew: true,
+  state: "online",
 } as const;
 
 describe("deriveAppServiceEvent 边沿判据", () => {
   it("首帧不产出任何事件（还没探通过，谈不上断开或启动）", () => {
     const { event } = step(
       initialAppServiceCursor(),
-      { state: "starting", processIsNew: false },
+      { processIsNew: false, state: "starting" },
       T0,
     );
     expect(event).toBeNull();
@@ -64,9 +64,9 @@ describe("deriveAppServiceEvent 边沿判据", () => {
   it("冷启动：首探拿到「新的进程」即记一条启动", () => {
     const { event } = step(initialAppServiceCursor(), RUNNING_NEW, T0 + 800);
     expect(event).toEqual({
-      type: "start",
       at: T0 + 800,
       offlineAt: null,
+      type: "start",
       unprobedMs: 0,
     });
   });
@@ -74,32 +74,32 @@ describe("deriveAppServiceEvent 边沿判据", () => {
   it("online → offline：记一条断开，游标记住断开时刻", () => {
     const first = step(initialAppServiceCursor(), RUNNING_NEW, T0);
     expect(first.cursor.offlineAt).toBeNull();
-    const second = step(first.cursor, { state: "offline", processIsNew: true }, T1);
-    expect(second.event).toEqual({ type: "disconnect", at: T1 });
+    const second = step(first.cursor, { processIsNew: true, state: "offline" }, T1);
+    expect(second.event).toEqual({ at: T1, type: "disconnect" });
     expect(second.cursor.offlineAt).toBe(T1);
   });
 
   it("持续 offline 逐拍不再发消息（否则每 2 秒一条）", () => {
     const first = step(initialAppServiceCursor(), RUNNING_NEW, T0);
-    const off = step(first.cursor, { state: "offline", processIsNew: true }, T1);
+    const off = step(first.cursor, { processIsNew: true, state: "offline" }, T1);
     expect(off.event?.type).toBe("disconnect");
-    const again = step(off.cursor, { state: "offline", processIsNew: true }, T1 + 2000);
+    const again = step(off.cursor, { processIsNew: true, state: "offline" }, T1 + 2000);
     expect(again.event).toBeNull();
-    const still = step(again.cursor, { state: "offline", processIsNew: true }, T1 + 4000);
+    const still = step(again.cursor, { processIsNew: true, state: "offline" }, T1 + 4000);
     expect(still.event).toBeNull();
   });
 
   it("进程换新后恢复：记一条恢复，并带上断开的时刻与本次启动时刻", () => {
     let cursor = step(initialAppServiceCursor(), RUNNING_NEW, T0).cursor;
-    cursor = step(cursor, { state: "offline", processIsNew: true }, T1).cursor;
+    cursor = step(cursor, { processIsNew: true, state: "offline" }, T1).cursor;
     /* 「进程是新的」由真→假→真：重启之后要重新判一次，否则上一拍已经为真，
      * 边沿不会成立。 */
-    cursor = step(cursor, { state: "offline", processIsNew: false }, T1 + 2000).cursor;
+    cursor = step(cursor, { processIsNew: false, state: "offline" }, T1 + 2000).cursor;
     const up = step(cursor, RUNNING_NEW, T1 + 3000);
     expect(up.event).toEqual({
-      type: "start",
       at: T1 + 3000,
       offlineAt: T1,
+      type: "start",
       unprobedMs: 0,
     });
     /* 这一次启动已经收尾了那条断开，不该再留着等第二条消息。 */
@@ -114,12 +114,12 @@ describe("deriveAppServiceEvent 边沿判据", () => {
 
   it("同一进程内断了又通：恢复也记一条，且只记一次", () => {
     let cursor = step(initialAppServiceCursor(), RUNNING_NEW, T0).cursor;
-    cursor = step(cursor, { state: "offline", processIsNew: true }, T1).cursor;
+    cursor = step(cursor, { processIsNew: true, state: "offline" }, T1).cursor;
     const back = step(cursor, RUNNING_NEW, T1 + 2000);
     expect(back.event).toEqual({
-      type: "start",
       at: T1 + 2000,
       offlineAt: T1,
+      type: "start",
       unprobedMs: 0,
     });
     expect(back.cursor.offlineAt).toBeNull();
@@ -130,7 +130,7 @@ describe("deriveAppServiceEvent 边沿判据", () => {
   it("「还没探通」期间反复探测不产生任何事件", () => {
     let cursor = initialAppServiceCursor();
     for (const t of [T0, T0 + 2000, T0 + 4000]) {
-      const r = step(cursor, { state: "starting", processIsNew: false }, t);
+      const r = step(cursor, { processIsNew: false, state: "starting" }, t);
       expect(r.event).toBeNull();
       cursor = r.cursor;
     }
@@ -138,7 +138,7 @@ describe("deriveAppServiceEvent 边沿判据", () => {
 
   it("游标是纯值：传入的对象不被就地改写", () => {
     const cursor = initialAppServiceCursor();
-    step(cursor, { state: "offline", processIsNew: false }, T0);
+    step(cursor, { processIsNew: false, state: "offline" }, T0);
     expect(cursor.offlineAt).toBeNull();
     expect(cursor.state).toBe("starting");
     expect(cursor.processIsNew).toBe(false);
@@ -149,14 +149,14 @@ describe("路由表不完整（stale）的边沿与文案", () => {
   it("进入 stale 那一拍记一条 route-stale，持续期间不重复记", () => {
     const first = deriveAppServiceEvent(
       initialAppServiceCursor(),
-      { state: "stale", processIsNew: false, unprobedMs: 0 },
+      { processIsNew: false, state: "stale", unprobedMs: 0 },
       1_000,
     );
-    expect(first.event).toEqual({ type: "route-stale", at: 1_000 });
+    expect(first.event).toEqual({ at: 1_000, type: "route-stale" });
     /* 下一拍仍是 stale：边沿不成立，不再记一条（否则每 2 秒刷一条）。 */
     const second = deriveAppServiceEvent(
       first.cursor,
-      { state: "stale", processIsNew: false, unprobedMs: 0 },
+      { processIsNew: false, state: "stale", unprobedMs: 0 },
       3_000,
     );
     expect(second.event).toBeNull();
@@ -165,21 +165,21 @@ describe("路由表不完整（stale）的边沿与文案", () => {
   it("stale 不冒充断开：游标里不写下 offlineAt，转回 online 也不报「已恢复」", () => {
     const stale = deriveAppServiceEvent(
       initialAppServiceCursor(),
-      { state: "stale", processIsNew: false, unprobedMs: 0 },
+      { processIsNew: false, state: "stale", unprobedMs: 0 },
       1_000,
     );
     expect(stale.cursor.offlineAt).toBeNull();
     /* 路由修好后转 online：这是一次「服务一直都在」，不该报恢复。 */
     const back = deriveAppServiceEvent(
       stale.cursor,
-      { state: "online", processIsNew: false, unprobedMs: 0 },
+      { processIsNew: false, state: "online", unprobedMs: 0 },
       5_000,
     );
     expect(back.event).toBeNull();
   });
 
   it("文案说清「服务在应答、坏的是路由表」并给出两步出口", () => {
-    const { title, body } = describeAppServiceRouteStale(1_000);
+    const { body, title } = describeAppServiceRouteStale(1_000);
     expect(title).toBe("应用服务路由异常");
     /* 「页面还能打开」这一句是这条消息存在的理由：它正是用户容易以为「再等等
        就好」的地方，必须显式点出来，并紧跟「重启应用」这个出口。 */
@@ -227,9 +227,9 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
   it("恢复：时刻 + 持续时长 + 为什么 + 建议，四件都给全", () => {
     const m = describeAppServiceStart({
       at: T1 + 3000,
-      offlineAt: T1,
       exitAt: T1,
       notice: exitNotice,
+      offlineAt: T1,
       unprobedMs: 0,
     });
     expect(m.title).toBe("应用服务已恢复");
@@ -244,9 +244,9 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
   it("读得到上一份进程的结束记录 → 标题是「已重启」，不冒充首次启动", () => {
     const m = describeAppServiceStart({
       at: T0 + 800,
-      offlineAt: null,
       exitAt: T0,
       notice: exitNotice,
+      offlineAt: null,
       unprobedMs: 0,
     });
     expect(m.title).toBe("应用服务已重启");
@@ -258,9 +258,9 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
   it("冷启动且读不到记录：说清「本次运行还没有服务结束过」，不编一个成因", () => {
     const m = describeAppServiceStart({
       at: T0,
-      offlineAt: null,
       exitAt: null,
       notice: null,
+      offlineAt: null,
       unprobedMs: 0,
     });
     expect(m.title).toBe("应用服务已启动");
@@ -277,9 +277,9 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
     for (const offlineAt of [null, T0]) {
       const m = describeAppServiceStart({
         at: T0 + 3000,
-        offlineAt,
         exitAt: null,
         notice: null,
+        offlineAt,
         unprobedMs: 0,
       });
       expect(m.body).not.toContain("pnpm dev");
@@ -292,9 +292,9 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
   it("退出时刻读不出来时仍讲清原因（不因为缺一个字段就少讲一半）", () => {
     const m = describeAppServiceStart({
       at: T0,
-      offlineAt: null,
       exitAt: null,
       notice: exitNotice,
+      offlineAt: null,
       unprobedMs: 0,
     });
     expect(m.title).toBe("应用服务已重启");
@@ -305,9 +305,9 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
   it("断开时长算不出来（时钟漂移）时不写「持续 -N 秒」", () => {
     const m = describeAppServiceStart({
       at: T0,
-      offlineAt: T1,
       exitAt: null,
       notice: null,
+      offlineAt: T1,
       unprobedMs: 0,
     });
     expect(m.body).not.toContain("持续");
@@ -318,23 +318,23 @@ describe("describeAppServiceStart 启动/恢复文案", () => {
     const titles = [
       describeAppServiceStart({
         at: T0,
-        offlineAt: T1,
         exitAt: null,
         notice: null,
+        offlineAt: T1,
         unprobedMs: 0,
       }).title,
       describeAppServiceStart({
         at: T0,
-        offlineAt: null,
         exitAt: null,
         notice: exitNotice,
+        offlineAt: null,
         unprobedMs: 0,
       }).title,
       describeAppServiceStart({
         at: T0,
-        offlineAt: null,
         exitAt: null,
         notice: null,
+        offlineAt: null,
         unprobedMs: 0,
       }).title,
     ];
@@ -352,9 +352,9 @@ describe("停表那一段的如实标注（A）", () => {
   it("停表超过阈值（≥10 秒）：时长照给，另加一行说清那一段没有探测", () => {
     const m = describeAppServiceStart({
       at: T1,
-      offlineAt: T0,
       exitAt: null,
       notice: null,
+      offlineAt: T0,
       unprobedMs: 60_000,
     });
     // 时长仍是两个时刻之差（**不减掉**停表那一段）。
@@ -368,9 +368,9 @@ describe("停表那一段的如实标注（A）", () => {
   it("停表低于阈值（<10 秒）：不加那行（定时器迟到 / 单拍超时都在这以内）", () => {
     const m = describeAppServiceStart({
       at: T1,
-      offlineAt: T0,
       exitAt: null,
       notice: null,
+      offlineAt: T0,
       unprobedMs: 9_999,
     });
     expect(m.body).toContain("持续 2 分 05 秒");
@@ -380,9 +380,9 @@ describe("停表那一段的如实标注（A）", () => {
   it("冷启动（本次会话没见过断开）：没有「断开 → 恢复」这一段，也就无从标注", () => {
     const m = describeAppServiceStart({
       at: T0,
-      offlineAt: null,
       exitAt: null,
       notice: null,
+      offlineAt: null,
       /* 首拍本就没有上一拍可参照（`probeGapMs` 首拍回 0）；这里给定非零也只是
        * 验证「走了非恢复那一支时这行不会冒出来」。 */
       unprobedMs: 60_000,

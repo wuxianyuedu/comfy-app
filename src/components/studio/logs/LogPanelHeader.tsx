@@ -35,21 +35,21 @@ export function LogPanelHeader(input: {
   wrap: boolean;
 }) {
   const {
-    originCounts,
-    countsByOrigin,
-    origin,
-    setOrigin,
-    wrap,
-    setWrap,
-    copyFailed,
-    copyDone,
-    copyAllAction,
-    scopeLabel,
-    total,
-    download,
     clear,
+    copyAllAction,
+    copyDone,
+    copyFailed,
+    countsByOrigin,
+    download,
+    origin,
+    originCounts,
     panel,
+    scopeLabel,
     setIsOpen,
+    setOrigin,
+    setWrap,
+    total,
+    wrap,
   } = input;
 
   return (

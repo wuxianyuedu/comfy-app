@@ -16,25 +16,25 @@ afterEach(cleanup);
  * 现在整排交给 `ui/select-chip`。这里钉单选语义 + 选中档四层俱在 + 悬停回钉。
  */
 const stepLogs: Array<StepLogEntry> = [
-  { t: 1, level: "info", msg: "开始" },
-  { t: 2, level: "error", msg: "炸了" },
+  { level: "info", msg: "开始", t: 1 },
+  { level: "error", msg: "炸了", t: 2 },
 ];
 
 vi.mock("./activeTask", () => ({ useActiveTaskId: () => "task-1" }));
 vi.mock("./hooks/use-task-step-log-stream", () => ({
   useTaskStepLogStream: () => ({
-    logs: stepLogs,
-    validationErrors: null,
-    status: null,
-    progress: 0,
-    error: null,
-    connected: false,
-    setError: vi.fn(),
     clear: vi.fn(),
+    connected: false,
+    error: null,
+    logs: stepLogs,
+    progress: 0,
+    setError: vi.fn(),
+    status: null,
+    validationErrors: null,
   }),
 }));
 vi.mock("./hooks/use-cancel-task", () => ({
-  useCancelTask: () => ({ cancelling: false, cancel: vi.fn() }),
+  useCancelTask: () => ({ cancel: vi.fn(), cancelling: false }),
 }));
 vi.mock("../canvas/hooks/use-canvas-settings", () => ({
   useCanvasSettings: () => ({ settings: { debugMode: true } }),

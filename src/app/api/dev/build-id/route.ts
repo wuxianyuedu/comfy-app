@@ -75,12 +75,12 @@ export async function GET() {
   const deps = readDepsFreshness();
   return NextResponse.json(
     {
-      buildId,
       bootId,
-      restartReason,
-      restartDetail,
+      buildId,
       depsStale: deps?.stale ?? null,
       depsState: deps?.state ?? null,
+      restartDetail,
+      restartReason,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

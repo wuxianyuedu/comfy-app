@@ -107,21 +107,21 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    *     * 服务端那一趟现在也会为自定义封装节点防御性地盖章）。
    *     * 与 WorkflowNode 的拆分器一致，把每个暴露的 widget 槽都归进 WIDGET 区，
    *     * LABEL | VALUE 行才能渲染成内联 widget。 */
-  const { connInputs, widgetInputs, cleanedOutputs } = useMemo(() => {
+  const { cleanedOutputs, connInputs, widgetInputs } = useMemo(() => {
     const cleanedInputs = (data.inputs ?? [])
       .map((inp) => ({ inp, label: exposedName(inp) }))
       .filter(({ label }) => label.trim().length > 0);
     const cleanedOutputs = (data.outputs ?? [])
       .map((out) => ({
-        out,
         display:
           sanitizeComboLabel(out.label) || sanitizeComboLabel(out.localized) || out.name || "",
+        out,
       }))
       .filter(({ display }) => display.trim().length > 0);
     return {
+      cleanedOutputs,
       connInputs: cleanedInputs.filter(({ inp }) => !inp.widget && !inp.isConnection),
       widgetInputs: cleanedInputs.filter(({ inp }) => !!inp.widget || inp.isConnection === true),
-      cleanedOutputs,
     };
   }, [data.inputs, data.outputs]);
 
@@ -229,11 +229,11 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
             gridTemplateColumns: "max-content minmax(64px, 1fr)",
             /* STRING 堆叠行的轨道给 `1fr`：定尺寸节点上吸收剩余高度，
              *  textarea 继续铺满；其余行轨道按内容收紧。 */
+            alignContent: "start",
+            columnGap: 8,
             gridTemplateRows: widgetInputs
               .map(({ inp }) => (stackedStringRow(inp) ? "minmax(0, 1fr)" : "max-content"))
               .join(" "),
-            columnGap: 8,
-            alignContent: "start",
           }}
         >
           {widgetInputs.map(({ inp, label }, i) =>

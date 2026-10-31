@@ -13,9 +13,9 @@ import { SectionLabel } from "~/components/ui/section-label";
  * 那是 11–10px 那一档，混进来正是这一批要治的漂移。
  */
 const meta = {
-  title: "UI/SectionLabel",
-  component: SectionLabel,
   args: { children: "选择要配置的模式" },
+  component: SectionLabel,
+  title: "UI/SectionLabel",
 } satisfies Meta<typeof SectionLabel>;
 
 export default meta;

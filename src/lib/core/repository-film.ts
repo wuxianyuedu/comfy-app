@@ -34,12 +34,12 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   async listByUser(userId: string): Promise<Array<FilmSummary>> {
     const rows = await db
       .select({
-        id: filmProject.id,
-        title: filmProject.title,
-        status: filmProject.status,
-        progress: filmProject.progress,
-        finalVideo: filmProject.finalVideo,
         createdAt: filmProject.createdAt,
+        finalVideo: filmProject.finalVideo,
+        id: filmProject.id,
+        progress: filmProject.progress,
+        status: filmProject.status,
+        title: filmProject.title,
         /* `count(列)` 而不是 `count(*)`：这里是与 filmShot 的 LEFT JOIN，
          * 一个镜头都没有的成片那一行里 filmShot 侧全是 NULL ——
          * `COUNT(*)` 会把它数成 1，于是**没生成过任何镜头的成片显示「1 镜」**。
@@ -96,18 +96,18 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     const rows = await db
       .insert(filmProject)
       .values({
-        userId: input.userId,
-        projectId: input.projectId ?? null,
-        title: input.title,
-        script: input.script,
-        type: input.type,
-        styleSlug: input.styleSlug ?? null,
-        size: input.size,
+        bgmName: input.bgmName ?? null,
         fps: input.fps,
         framesPerShot: input.framesPerShot,
-        subtitleOn: input.subtitleOn,
-        bgmName: input.bgmName ?? null,
+        projectId: input.projectId ?? null,
+        script: input.script,
+        size: input.size,
         status: "PARSING",
+        styleSlug: input.styleSlug ?? null,
+        subtitleOn: input.subtitleOn,
+        title: input.title,
+        type: input.type,
+        userId: input.userId,
       })
       .returning();
     return firstRowRequired(rows, "切片项目插入");
@@ -156,7 +156,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   async markGenerating(id: string): Promise<void> {
     await db
       .update(filmProject)
-      .set({ status: "GENERATING", progress: 0, error: null })
+      .set({ error: null, progress: 0, status: "GENERATING" })
       .where(eq(filmProject.id, id));
   }
 
@@ -165,27 +165,27 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   }
 
   async markFailed(id: string, error: string): Promise<void> {
-    await db.update(filmProject).set({ status: "FAILED", error }).where(eq(filmProject.id, id));
+    await db.update(filmProject).set({ error, status: "FAILED" }).where(eq(filmProject.id, id));
   }
 
   async markComposing(id: string): Promise<void> {
     await db
       .update(filmProject)
-      .set({ status: "COMPOSING", progress: 90, error: null })
+      .set({ error: null, progress: 90, status: "COMPOSING" })
       .where(eq(filmProject.id, id));
   }
 
   async markDone(id: string, finalVideo: string): Promise<void> {
     await db
       .update(filmProject)
-      .set({ status: "DONE", progress: 100, finalVideo, error: null })
+      .set({ error: null, finalVideo, progress: 100, status: "DONE" })
       .where(eq(filmProject.id, id));
   }
 
   async markCancelled(id: string): Promise<void> {
     await db
       .update(filmProject)
-      .set({ status: "CANCELLED", error: "已取消" })
+      .set({ error: "已取消", status: "CANCELLED" })
       .where(eq(filmProject.id, id));
   }
 }
@@ -206,13 +206,13 @@ export class FilmShotRepository {
     await db.insert(filmShot).values(
       shots.map((shot) => ({
         filmId,
-        shotId: shot.shotId ?? null,
-        order: shot.order,
         heading: shot.heading ?? null,
-        prompt: shot.prompt,
         negative: shot.negative ?? null,
-        status: "IDLE",
+        order: shot.order,
         params: shot.params,
+        prompt: shot.prompt,
+        shotId: shot.shotId ?? null,
+        status: "IDLE",
       })),
     );
   }
@@ -247,7 +247,7 @@ export class FilmShotRepository {
   async markQueued(shotId: string, taskId: string): Promise<void> {
     await db
       .update(filmShot)
-      .set({ taskId, status: "QUEUED", progress: 0 })
+      .set({ progress: 0, status: "QUEUED", taskId })
       .where(eq(filmShot.id, shotId));
   }
 
@@ -267,10 +267,10 @@ export class FilmShotRepository {
     await db
       .update(filmShot)
       .set({
-        status: data.status,
-        progress: data.progress,
-        videoPath: data.videoPath ?? undefined,
         duration: data.duration ?? null,
+        progress: data.progress,
+        status: data.status,
+        videoPath: data.videoPath ?? undefined,
       })
       .where(eq(filmShot.id, shotId));
   }

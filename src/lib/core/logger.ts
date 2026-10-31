@@ -152,7 +152,7 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
             // 先过密钥形状守卫：这条通道不经 pino redact（另一条写入路径），
             // 且字段名无法穷举 —— 只认「值长啥样」（见 redactSecretShaped）。
             const entry = renderServerLogEntry(args, ns);
-            mirrorLog.error(entry.msg, { ns: entry.ns, level: "error" });
+            mirrorLog.error(entry.msg, { level: "error", ns: entry.ns });
           } catch {
             /* 镜像失败绝不影响日志主流程 */
           }
@@ -175,7 +175,7 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
   // 本地开发：pino-pretty 美化。
   return pino({
     ...base,
-    transport: { target: "pino-pretty", options: { colorize: true } },
+    transport: { options: { colorize: true }, target: "pino-pretty" },
   });
 }
 
@@ -326,11 +326,11 @@ function wrap(inner: PinoLogger): Logger {
   const ns = typeof binding === "string" ? binding : "";
   const next = (childNs: string) => wrap(inner.child({ ns: ns ? `${ns}:${childNs}` : childNs }));
   return {
+    child: next,
     debug: (msg, fields) => inner.debug(fields ?? {}, msg),
+    error: (msg, fields) => inner.error(fields ?? {}, msg),
     info: (msg, fields) => inner.info(fields ?? {}, msg),
     warn: (msg, fields) => inner.warn(fields ?? {}, msg),
-    error: (msg, fields) => inner.error(fields ?? {}, msg),
-    child: next,
   };
 }
 

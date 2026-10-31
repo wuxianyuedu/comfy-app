@@ -67,7 +67,7 @@ export type ClampOptions = {
  * 「标记占掉自己的额度」—— `maxLength` 是**返回值**的上限，不是正文本数的上限。
  */
 export function clampText(text: string, opts: ClampOptions): string {
-  const { maxLength, direction = "head", marker, annotation } = opts;
+  const { annotation, direction = "head", marker, maxLength } = opts;
   if (maxLength <= 0) {
     return "";
   }

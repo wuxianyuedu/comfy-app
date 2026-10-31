@@ -43,12 +43,12 @@ export function ScriptReviewButton({ onScriptRevised }: ScriptReviewButtonProps)
     <ReviewVerdictDialogButton
       busyText={review.revising ? "正在按意见改写…" : "正在评审…"}
       controller={{
-        verdict: review.verdict,
-        history: review.history,
         busy: review.reviewing || review.revising,
         error: review.error,
+        history: review.history,
         review: () => review.review(),
         revise: () => review.revise(),
+        verdict: review.verdict,
       }}
       description="由 AI 按评分量表给这份剧本打分；不合格可「按意见改写」定向打磨，旧版自动留档。"
       dimensionLabels={dimensionLabels}

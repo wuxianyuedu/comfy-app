@@ -28,44 +28,44 @@ import type { EnrichedWidget } from "~/components/studio/workflow-io-groups";
  * 所以下面的 pin 名都写成真机上会出现的（`width` / `height` / `aspect` / `megapixels`）。
  */
 const pin = (over: Partial<EnrichedWidget> & { ioKey: string }): EnrichedWidget => ({
+  control: "int",
   direction: "input",
   kind: "widget",
-  nodeId: "5",
   name: over.ioKey.split(":")[1] ?? "width",
-  control: "int",
+  nodeId: "5",
   ...over,
 });
 
 const WIDTH = pin({
   ioKey: "5:width",
   label: "宽度",
-  type: "INT",
   required: true,
+  type: "INT",
 });
 const HEIGHT = pin({
   ioKey: "5:height",
   label: "高度",
-  type: "INT",
   required: false,
+  type: "INT",
 });
 
 /** 一个带模式覆盖层的 pin：`turbo` 下变必填、`draft` 下隐藏。 */
 const STEPS = pin({
   ioKey: "3:steps",
-  nodeId: "3",
   label: "步数",
-  type: "INT",
+  modeOverrides: { draft: { visible: false }, turbo: { required: true } },
+  nodeId: "3",
   required: false,
-  modeOverrides: { turbo: { required: true }, draft: { visible: false } },
+  type: "INT",
 });
 
 const meta = {
-  title: "Studio/DimensionControlParts",
-  component: RequiredChips,
   args: {
-    pins: [WIDTH, HEIGHT],
     onRequiredChange: () => undefined,
+    pins: [WIDTH, HEIGHT],
   },
+  component: RequiredChips,
+  title: "Studio/DimensionControlParts",
 } satisfies Meta<typeof RequiredChips>;
 
 export default meta;
@@ -78,8 +78,8 @@ export const RequiredOnly: Story = {};
 /** 必填 + 显隐：追加 👁 / 👁‍🗨（`visibilityMode` 给了才渲染那一档）。 */
 export const RequiredAndVisibility: Story = {
   args: {
-    visibilityMode: "turbo",
     onVisibilityChange: () => undefined,
+    visibilityMode: "turbo",
   },
 };
 

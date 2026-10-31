@@ -28,11 +28,11 @@ function key(
   } = {},
 ) {
   return /* SAFETY: 类型断言已复核 */ {
-    key: k,
+    altKey: mods.alt ?? false,
     ctrlKey: mods.ctrl ?? false,
+    key: k,
     metaKey: mods.meta ?? false,
     shiftKey: mods.shift ?? false,
-    altKey: mods.alt ?? false,
   } as KeyboardEvent;
 }
 
@@ -80,8 +80,8 @@ describe("mod 是跨平台的（这条正是原来两处 mac 上死的根因）"
   });
 
   it("显式 ctrl 时与平台无关（刻意只在 Ctrl 上成立）", () => {
-    expect(matchesHotkey(key("l", { ctrl: true }), { key: "l", ctrl: true }, true)).toBe(true);
-    expect(matchesHotkey(key("l", { meta: true }), { key: "l", ctrl: true }, true)).toBe(false);
+    expect(matchesHotkey(key("l", { ctrl: true }), { ctrl: true, key: "l" }, true)).toBe(true);
+    expect(matchesHotkey(key("l", { meta: true }), { ctrl: true, key: "l" }, true)).toBe(false);
   });
 });
 
@@ -108,9 +108,9 @@ describe("未声明的修饰键必须没按（否则单键会互相吞）", () =
 /* ── 注册 / 清理 / 过滤的行为层 ───────────────────────────── */
 
 function Probe({
-  onHit,
   enabled = true,
   filterInput = true,
+  onHit,
   spec = /* SAFETY: 类型断言已复核 */ { key: "l", mod: true } as const,
 }: {
   enabled?: boolean;
@@ -126,14 +126,14 @@ describe("注册与清理", () => {
   it("命中时回调一次", () => {
     const onHit = vi.fn();
     render(<Probe onHit={onHit} />);
-    fireEvent.keyDown(window, { key: "l", ctrlKey: true });
+    fireEvent.keyDown(window, { ctrlKey: true, key: "l" });
     expect(onHit).toHaveBeenCalledTimes(1);
   });
 
   it("enabled 为 false 时**不注册**（而不是注册了再 early return）", () => {
     const onHit = vi.fn();
     render(<Probe enabled={false} onHit={onHit} />);
-    fireEvent.keyDown(window, { key: "l", ctrlKey: true });
+    fireEvent.keyDown(window, { ctrlKey: true, key: "l" });
     expect(onHit).not.toHaveBeenCalled();
   });
 
@@ -141,7 +141,7 @@ describe("注册与清理", () => {
     const onHit = vi.fn();
     const { unmount } = render(<Probe onHit={onHit} />);
     unmount();
-    fireEvent.keyDown(window, { key: "l", ctrlKey: true });
+    fireEvent.keyDown(window, { ctrlKey: true, key: "l" });
     expect(onHit).not.toHaveBeenCalled();
   });
 
@@ -149,9 +149,9 @@ describe("注册与清理", () => {
     const onHit = vi.fn();
     render(<Probe onHit={onHit} />);
     const event = new KeyboardEvent("keydown", {
-      key: "l",
-      ctrlKey: true,
       cancelable: true,
+      ctrlKey: true,
+      key: "l",
     });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
@@ -162,21 +162,21 @@ describe("input 过滤（json-viewer 那处的缺陷）", () => {
   it("默认跳过可编辑元素（在别的输入框里不该被抢）", () => {
     const onHit = vi.fn();
     const { getByTestId } = render(<Probe onHit={onHit} />);
-    fireEvent.keyDown(getByTestId("field"), { key: "l", ctrlKey: true });
+    fireEvent.keyDown(getByTestId("field"), { ctrlKey: true, key: "l" });
     expect(onHit).not.toHaveBeenCalled();
   });
 
   it("filterInput: false 时输入框里也命中（全屏编辑器就是要这样）", () => {
     const onHit = vi.fn();
     const { getByTestId } = render(<Probe filterInput={false} onHit={onHit} />);
-    fireEvent.keyDown(getByTestId("field"), { key: "l", ctrlKey: true });
+    fireEvent.keyDown(getByTestId("field"), { ctrlKey: true, key: "l" });
     expect(onHit).toHaveBeenCalledTimes(1);
   });
 
   it("焦点在非可编辑元素上时照常命中", () => {
     const onHit = vi.fn();
     render(<Probe onHit={onHit} />);
-    fireEvent.keyDown(document.body, { key: "l", ctrlKey: true });
+    fireEvent.keyDown(document.body, { ctrlKey: true, key: "l" });
     expect(onHit).toHaveBeenCalledTimes(1);
   });
 });
@@ -186,7 +186,7 @@ describe("target 与平台探测的边界", () => {
     const onHit = vi.fn();
     render(<Probe onHit={onHit} />);
     /* `Probe` 用默认 target（window）；这里补一个显式 target 的落点。 */
-    fireEvent.keyDown(window, { key: "l", ctrlKey: true });
+    fireEvent.keyDown(window, { ctrlKey: true, key: "l" });
     expect(onHit).toHaveBeenCalledTimes(1);
   });
 
@@ -195,19 +195,19 @@ describe("target 与平台探测的边界", () => {
     const onHit = vi.fn();
     const origNavigator = globalThis.navigator;
     Object.defineProperty(globalThis, "navigator", {
-      value: { platform: "MacIntel" },
       configurable: true,
+      value: { platform: "MacIntel" },
     });
     try {
       render(<Probe onHit={onHit} />);
-      fireEvent.keyDown(window, { key: "l", ctrlKey: true });
+      fireEvent.keyDown(window, { ctrlKey: true, key: "l" });
       expect(onHit).not.toHaveBeenCalled();
       fireEvent.keyDown(window, { key: "l", metaKey: true });
       expect(onHit).toHaveBeenCalledTimes(1);
     } finally {
       Object.defineProperty(globalThis, "navigator", {
-        value: origNavigator,
         configurable: true,
+        value: origNavigator,
       });
     }
   });
@@ -215,18 +215,18 @@ describe("target 与平台探测的边界", () => {
   it("navigator 不可用时按非 mac 处理（不抛错）", () => {
     const origNavigator = globalThis.navigator;
     Object.defineProperty(globalThis, "navigator", {
-      value: undefined,
       configurable: true,
+      value: undefined,
     });
     try {
       const onHit = vi.fn();
       render(<Probe onHit={onHit} />);
-      fireEvent.keyDown(window, { key: "l", ctrlKey: true });
+      fireEvent.keyDown(window, { ctrlKey: true, key: "l" });
       expect(onHit).toHaveBeenCalledTimes(1);
     } finally {
       Object.defineProperty(globalThis, "navigator", {
-        value: origNavigator,
         configurable: true,
+        value: origNavigator,
       });
     }
   });
@@ -236,9 +236,9 @@ describe("回调身份变化不重建监听", () => {
   it("父组件每轮渲染传新函数，按住一次也只在每次按下时触发一次", () => {
     const hits: Array<string> = [];
     const { rerender } = render(<Probe onHit={() => hits.push("a")} />);
-    fireEvent.keyDown(window, { key: "l", ctrlKey: true });
+    fireEvent.keyDown(window, { ctrlKey: true, key: "l" });
     rerender(<Probe onHit={() => hits.push("b")} />);
-    fireEvent.keyDown(window, { key: "l", ctrlKey: true });
+    fireEvent.keyDown(window, { ctrlKey: true, key: "l" });
     /* 两次按下各触发一次（没有因为重建监听而重复触发）。 */
     expect(hits).toEqual(["a", "b"]);
   });

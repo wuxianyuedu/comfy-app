@@ -46,15 +46,15 @@ export type DevServerStatusViewModel = {
 
 export function useDevServerStatus(): DevServerStatusViewModel {
   const {
-    restarting,
-    processIsNew,
-    lastRestartAt,
+    currentRunId,
+    everOnline,
     lastExit,
     lastExitAt,
+    lastRestartAt,
+    processIsNew,
     reachable,
+    restarting,
     routeTableStale,
-    everOnline,
-    currentRunId,
     unprobedMs,
   } = useDevServerLiveness();
   const derived = deriveDevServerStatus({
@@ -62,17 +62,17 @@ export function useDevServerStatus(): DevServerStatusViewModel {
     routeTableStale,
     /* 喂「抗抖动后」的可达性（`probeOk` 是单拍事实，冷编译超时那种抖动会在
      * 这里被滤掉），见 use-dev-server-liveness 的 OFFLINE_CONFIRM_FAILURES。 */
+    lastExit,
+    lastRestartAt,
     reachable,
     restarted: restarting,
-    lastRestartAt,
-    lastExit,
   });
   return {
     ...derived,
-    lastRestartAt,
-    lastExitAt,
-    processIsNew,
     currentRunId,
+    lastExitAt,
+    lastRestartAt,
+    processIsNew,
     unprobedMs,
   };
 }

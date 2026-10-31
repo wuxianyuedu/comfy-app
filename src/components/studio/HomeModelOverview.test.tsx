@@ -22,14 +22,14 @@ afterEach(() => {
 
 function state(over: Partial<ModelOverviewState> = {}): ModelOverviewState {
   return {
-    groups: [
-      { folder: "checkpoints", label: "Checkpoint", count: 34 },
-      { folder: "loras", label: "LoRA", count: 12 },
-    ],
-    total: 46,
     emptyFolderCount: 0,
-    loading: false,
     error: null,
+    groups: [
+      { count: 34, folder: "checkpoints", label: "Checkpoint" },
+      { count: 12, folder: "loras", label: "LoRA" },
+    ],
+    loading: false,
+    total: 46,
     ...over,
   };
 }
@@ -49,9 +49,9 @@ describe("HomeModelOverview", () => {
     overviewMock.mockReturnValue(
       state({
         groups: Array.from({ length: 7 }, (_, i) => ({
+          count: 10 - i,
           folder: `f${i}`,
           label: `F${i}`,
-          count: 10 - i,
         })),
         total: 60,
       }),
@@ -70,19 +70,15 @@ describe("HomeModelOverview", () => {
 
   it("加载中给骨架，不写「读不到」也不写「没有模型」", () => {
     overviewMock.mockReturnValue(
-      state({ groups: [], total: 0, emptyFolderCount: 0, loading: true }),
+      state({ emptyFolderCount: 0, groups: [], loading: true, total: 0 }),
     );
     const { container } = render(<HomeModelOverview />);
-    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(
-      3,
-    );
+    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(3);
     expect(screen.queryByText(/读不到|还没有同步到/)).toBeNull();
   });
 
   it("取数失败给一句说明，并保留去模型库这个出口（用户还能自己去重试）", () => {
-    overviewMock.mockReturnValue(
-      state({ groups: [], total: 0, error: "模型计数暂时读不到" }),
-    );
+    overviewMock.mockReturnValue(state({ error: "模型计数暂时读不到", groups: [], total: 0 }));
     render(<HomeModelOverview />);
     expect(screen.getByText("模型计数暂时读不到")).toBeTruthy();
     expect(screen.getByRole("link", { name: "去模型库" })).toBeTruthy();

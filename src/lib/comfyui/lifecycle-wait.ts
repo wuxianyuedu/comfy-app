@@ -84,16 +84,16 @@ export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<Wa
     const dead = await opts.isDead();
     if (dead !== null) {
       opts.onDead?.(dead);
-      return { ok: false, base: null, detail: dead };
+      return { base: null, detail: dead, ok: false };
     }
 
     const base = await opts.probe();
     if (base !== null) {
       opts.onReady?.(base);
       return {
-        ok: true,
         base,
         detail: opts.readyDetail ?? "ComfyUI 已启动并就绪",
+        ok: true,
       };
     }
 
@@ -102,7 +102,7 @@ export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<Wa
     }
     await sleep(interval);
   }
-  return { ok: false, base: null, detail: opts.timeoutDetail };
+  return { base: null, detail: opts.timeoutDetail, ok: false };
 }
 
 /* ── 事件回调（可测的具名纯函数）────────────────────────────────────── */

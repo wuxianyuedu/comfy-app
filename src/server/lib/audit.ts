@@ -33,15 +33,15 @@ export async function audit(
   const ip = ctx.headers.get("x-forwarded-for") ?? "unknown";
   const userId = ctx.session?.user?.id ?? null;
 
-  logger.warn({ event, userId, ip, ...meta }, "audit");
+  logger.warn({ event, ip, userId, ...meta }, "audit");
 
   await db
     .insert(auditLog)
     .values({
       event,
-      userId,
       ip,
       meta: JSON.stringify(meta),
+      userId,
     })
     .catch((err) => {
       // 审计失败不能影响主流程，只记日志

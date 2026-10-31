@@ -142,8 +142,8 @@ export function copyFailureText(target?: string): string {
  * 用 ref 判重入是同一个坑（`setState` 是异步的，同一次事件循环里读不到刚写的值）。
  */
 export function useCopyFeedback({
-  onSuccess,
   onFailure,
+  onSuccess,
 }: UseCopyFeedbackOptions = {}): CopyController {
   /* 反馈回调常常是行内箭头函数（每次渲染换引用）。用 ref 持有最新的一份 ——
    * 否则 `copy` 每次渲染都要重建，而它会被塞进 `useCallback` / effect 依赖里。
@@ -155,9 +155,9 @@ export function useCopyFeedback({
   const handlersRef = useRef<{
     failure?: CopyFeedback | "silent";
     success?: CopyFeedback;
-  }>({ success: onSuccess, failure: onFailure });
+  }>({ failure: onFailure, success: onSuccess });
   useEffect(() => {
-    handlersRef.current = { success: onSuccess, failure: onFailure };
+    handlersRef.current = { failure: onFailure, success: onSuccess };
   }, [onSuccess, onFailure]);
 
   /* 重入判重：同步可见，不等 React 提交 —— 判据收在唯一出口里

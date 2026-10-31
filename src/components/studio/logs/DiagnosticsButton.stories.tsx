@@ -23,9 +23,9 @@ import { DiagnosticsButton } from "~/components/studio/logs/DiagnosticsButton";
  * —— 那正是它在真机上大多数时候的样子。
  */
 const meta = {
-  title: "Studio/Logs/DiagnosticsButton",
   component: DiagnosticsButton,
   parameters: { storeScene: "mixed" },
+  title: "Studio/Logs/DiagnosticsButton",
 } satisfies Meta<typeof DiagnosticsButton>;
 
 export default meta;

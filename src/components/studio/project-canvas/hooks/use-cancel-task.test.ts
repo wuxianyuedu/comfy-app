@@ -25,9 +25,7 @@ describe("useCancelTask", () => {
   it("成功：调用一次 /cancel，cancelling 复位，不触发失败回调", async () => {
     mockedCancel.mockResolvedValue(undefined);
     const onFailed = vi.fn();
-    const { result } = renderHook(() =>
-      useCancelTask({ taskId: "t-1", onFailed }),
-    );
+    const { result } = renderHook(() => useCancelTask({ onFailed, taskId: "t-1" }));
 
     await act(async () => {
       await result.current.cancel();
@@ -41,9 +39,7 @@ describe("useCancelTask", () => {
   it("失败：错误文案带上前缀，cancelling 复位（失败路径必须有可见出口）", async () => {
     mockedCancel.mockRejectedValue(new Error("任务已完成"));
     const onFailed = vi.fn();
-    const { result } = renderHook(() =>
-      useCancelTask({ taskId: "t-1", onFailed }),
-    );
+    const { result } = renderHook(() => useCancelTask({ onFailed, taskId: "t-1" }));
 
     await act(async () => {
       await result.current.cancel();
@@ -56,9 +52,7 @@ describe("useCancelTask", () => {
   it("失败但抛值非 Error：走兜底文案，不渲染 [object Object]", async () => {
     mockedCancel.mockRejectedValue({ code: 500 });
     const onFailed = vi.fn();
-    const { result } = renderHook(() =>
-      useCancelTask({ taskId: "t-1", onFailed }),
-    );
+    const { result } = renderHook(() => useCancelTask({ onFailed, taskId: "t-1" }));
 
     await act(async () => {
       await result.current.cancel();
@@ -70,9 +64,7 @@ describe("useCancelTask", () => {
   it('空 message 的 Error 也走兜底（new Error("") 不该渲染空白提示条）', async () => {
     mockedCancel.mockRejectedValue(new Error(""));
     const onFailed = vi.fn();
-    const { result } = renderHook(() =>
-      useCancelTask({ taskId: "t-1", onFailed }),
-    );
+    const { result } = renderHook(() => useCancelTask({ onFailed, taskId: "t-1" }));
 
     await act(async () => {
       await result.current.cancel();
@@ -83,9 +75,7 @@ describe("useCancelTask", () => {
 
   it("taskId 缺失：不发请求，但明确告知用户（不静默吞掉点击）", async () => {
     const onFailed = vi.fn();
-    const { result } = renderHook(() =>
-      useCancelTask({ taskId: null, onFailed }),
-    );
+    const { result } = renderHook(() => useCancelTask({ onFailed, taskId: null }));
 
     await act(async () => {
       await result.current.cancel();
@@ -99,9 +89,8 @@ describe("useCancelTask", () => {
   it("异步回调里读到的是最新 taskId（ref 持有，不是闭包快照）", async () => {
     mockedCancel.mockResolvedValue(undefined);
     const onFailed = vi.fn();
-    const { result, rerender } = renderHook(
-      ({ taskId }: { taskId: string | null }) =>
-        useCancelTask({ taskId, onFailed }),
+    const { rerender, result } = renderHook(
+      ({ taskId }: { taskId: string | null }) => useCancelTask({ onFailed, taskId }),
       { initialProps: { taskId: "t-old" } },
     );
 
@@ -122,9 +111,7 @@ describe("useCancelTask", () => {
         }),
     );
     const onFailed = vi.fn();
-    const { result } = renderHook(() =>
-      useCancelTask({ taskId: "t-1", onFailed }),
-    );
+    const { result } = renderHook(() => useCancelTask({ onFailed, taskId: "t-1" }));
 
     let pending!: Promise<void>;
     await act(async () => {

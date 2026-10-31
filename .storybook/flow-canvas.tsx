@@ -115,25 +115,25 @@ export const CANVAS_SCENES = {
    */
   twoNodes: {
     about: "两张业务节点 + 一条连线（端点几何与节点序号的真实现场）",
-    nodes: [
-      {
-        id: "1",
-        position: { x: 40, y: 60 },
-        data: { label: "加载检查点" },
-      },
-      {
-        id: "2",
-        position: { x: 480, y: 240 },
-        data: { label: "K采样器" },
-      },
-    ],
     edges: [
       {
         id: "e1-2",
         source: "1",
-        target: "2",
         sourceHandle: "out:model",
+        target: "2",
         targetHandle: "model",
+      },
+    ],
+    nodes: [
+      {
+        data: { label: "加载检查点" },
+        id: "1",
+        position: { x: 40, y: 60 },
+      },
+      {
+        data: { label: "K采样器" },
+        id: "2",
+        position: { x: 480, y: 240 },
       },
     ],
     viewport: { x: 0, y: 0, zoom: 1 },
@@ -150,34 +150,34 @@ export const CANVAS_SCENES = {
    */
   fanOut: {
     about: "一个源节点扇出三条连线到三个目标（多端点几何 + 连线路径分叉）",
-    nodes: [
-      { id: "1", position: { x: 40, y: 160 }, data: { label: "加载检查点" } },
-      { id: "2", position: { x: 480, y: -60 }, data: { label: "K采样器" } },
-      { id: "3", position: { x: 480, y: 160 }, data: { label: "VAE 解码" } },
-      { id: "4", position: { x: 480, y: 380 }, data: { label: "保存图像" } },
-    ],
     edges: [
       {
         id: "e1-2",
         source: "1",
-        target: "2",
         sourceHandle: "out:model",
+        target: "2",
         targetHandle: "model",
       },
       {
         id: "e1-3",
         source: "1",
-        target: "3",
         sourceHandle: "out:vae",
+        target: "3",
         targetHandle: "vae",
       },
       {
         id: "e1-4",
         source: "1",
-        target: "4",
         sourceHandle: "out:clip",
+        target: "4",
         targetHandle: "clip",
       },
+    ],
+    nodes: [
+      { data: { label: "加载检查点" }, id: "1", position: { x: 40, y: 160 } },
+      { data: { label: "K采样器" }, id: "2", position: { x: 480, y: -60 } },
+      { data: { label: "VAE 解码" }, id: "3", position: { x: 480, y: 160 } },
+      { data: { label: "保存图像" }, id: "4", position: { x: 480, y: 380 } },
     ],
     viewport: { x: 60, y: 150, zoom: 0.72 },
   },
@@ -190,35 +190,35 @@ export const CANVAS_SCENES = {
    */
   mixedKinds: {
     about: "八种业务节点混排（端点类型色与节点类型章并排的分辨率）",
-    nodes: [
-      { id: "1", position: { x: 20, y: 20 }, data: { label: "生图" } },
-      { id: "2", position: { x: 410, y: 20 }, data: { label: "生视频" } },
-      { id: "3", position: { x: 800, y: 20 }, data: { label: "生成剧本" } },
-      { id: "4", position: { x: 20, y: 320 }, data: { label: "Agent 模式" } },
-      {
-        id: "5",
-        position: { x: 410, y: 320 },
-        data: { label: "自定义工作流" },
-      },
-      { id: "6", position: { x: 800, y: 320 }, data: { label: "文本" } },
-      { id: "7", position: { x: 20, y: 620 }, data: { label: "图片" } },
-      { id: "8", position: { x: 410, y: 620 }, data: { label: "视频" } },
-    ],
     edges: [
       {
         id: "e1-2",
         source: "1",
-        target: "2",
         sourceHandle: "out:images",
+        target: "2",
         targetHandle: "images",
       },
       {
         id: "e3-4",
         source: "3",
-        target: "4",
         sourceHandle: "out:text",
+        target: "4",
         targetHandle: "text",
       },
+    ],
+    nodes: [
+      { data: { label: "生图" }, id: "1", position: { x: 20, y: 20 } },
+      { data: { label: "生视频" }, id: "2", position: { x: 410, y: 20 } },
+      { data: { label: "生成剧本" }, id: "3", position: { x: 800, y: 20 } },
+      { data: { label: "Agent 模式" }, id: "4", position: { x: 20, y: 320 } },
+      {
+        data: { label: "自定义工作流" },
+        id: "5",
+        position: { x: 410, y: 320 },
+      },
+      { data: { label: "文本" }, id: "6", position: { x: 800, y: 320 } },
+      { data: { label: "图片" }, id: "7", position: { x: 20, y: 620 } },
+      { data: { label: "视频" }, id: "8", position: { x: 410, y: 620 } },
     ],
     viewport: { x: 0, y: 0, zoom: 0.6 },
   },
@@ -231,15 +231,15 @@ export const CANVAS_SCENES = {
    */
   dense: {
     about: "36 张节点铺满画布（标尺步长与网格间距在满负载下现算）",
-    pinZoom: true,
     nodes: Array.from({ length: 36 }, (_, index) => ({
+      data: { label: `节点 ${index + 1}` },
       id: String(index + 1),
       position: {
         x: (index % 6) * 260 + 20,
         y: Math.floor(index / 6) * 190 + 20,
       },
-      data: { label: `节点 ${index + 1}` },
     })),
+    pinZoom: true,
     /* 这一档摆的是**装饰层**（网格 / 标尺 / 缩放条）在满负载下的样子，
        消费方 `WorkflowCanvasDecorations.stories.tsx` **不传 `nodeTypes`** ——
        节点走 React Flow 的默认外观，身上没有业务端口。所以这里刻意**不放边**：
@@ -251,15 +251,15 @@ export const CANVAS_SCENES = {
   /** 放大档：端点圆点、类型章、网格线在主参考线尺度上的那一档。 */
   zoomedIn: {
     about: "放大到 1.4 倍（细网格与端点圆点的像素尺度都变了）",
-    pinZoom: true,
+    edges: [],
     nodes: [
       {
+        data: { label: "空Latent" },
         id: "1",
         position: { x: 60, y: 80 },
-        data: { label: "空Latent" },
       },
     ],
-    edges: [],
+    pinZoom: true,
     viewport: { x: -40, y: -60, zoom: 1.4 },
   },
   /**
@@ -270,15 +270,15 @@ export const CANVAS_SCENES = {
    */
   zoomedOut: {
     about: "缩到 0.25（细网格已淡出，但底色必须还在）",
-    pinZoom: true,
+    edges: [],
     nodes: [
       {
+        data: { label: "保存图像" },
         id: "1",
         position: { x: 0, y: 0 },
-        data: { label: "保存图像" },
       },
     ],
-    edges: [],
+    pinZoom: true,
     viewport: { x: 600, y: 300, zoom: 0.25 },
   },
 } satisfies Record<string, CanvasScene>;
@@ -326,8 +326,8 @@ export function canvasScene(name: string): CanvasScene {
 /** Args 面板里那条「画布场景」旋钮（选项取自注册表）。 */
 export function canvasSceneArgType() {
   return {
-    description: "摆上真画布的节点 / 连线 / 视口（由注入层按真类型摆）",
     control: { type: "select" as const },
+    description: "摆上真画布的节点 / 连线 / 视口（由注入层按真类型摆）",
     options: CANVAS_SCENE_NAMES,
   };
 }
@@ -355,10 +355,10 @@ export function canvasSceneArgType() {
  * 那些档要看的就是那个缩放，不是「内容装得下」。
  */
 export function StorybookFlowCanvas({
-  scene,
-  nodeTypes,
-  fit = false,
   children,
+  fit = false,
+  nodeTypes,
+  scene,
 }: {
   children?: ReactNode;
   /**
@@ -395,8 +395,8 @@ export function StorybookFlowCanvas({
                 fitViewOptions: { padding: FIT_VIEW_PADDING },
               }
             : {
-                viewport: scene.viewport,
                 onViewportChange: () => undefined,
+                viewport: scene.viewport,
               })}
           elementsSelectable={false}
           nodesConnectable={false}

@@ -24,18 +24,18 @@ type Channel = "local" | "api";
 
 /* ── 通道切换（本地 ComfyUI / 配置的 API）+ 放行提示 ── */
 export function ChannelSwitch({
-  channel,
-  onChannelChange,
   apiChannels,
   apiReady,
-  workflowSelected,
-  fps,
-  onFpsChange,
   batchRunning,
-  pendingCount,
+  channel,
+  fps,
+  onChannelChange,
+  onFpsChange,
   onGenerateBatch,
   onNextStage,
   onOpenModelAdapters,
+  pendingCount,
+  workflowSelected,
 }: {
   apiChannels: ApiChannelsView | null;
   apiReady: boolean;
@@ -157,15 +157,15 @@ const CLIP_STATUS_LABEL = {
 
 /* ── 单个镜头行：首帧、提示词、时长 / 运动控件、生成 ── */
 export function ShotCard({
-  shot,
-  progress,
-  error,
-  channel,
   apiReady,
+  channel,
+  error,
   fps,
-  onPatch,
-  onGenerate,
   onCancel,
+  onGenerate,
+  onPatch,
+  progress,
+  shot,
 }: {
   apiReady: boolean;
   channel: Channel;

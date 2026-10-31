@@ -22,8 +22,8 @@ import userEvent from "@testing-library/user-event";
 import { enterCommit, isCommitKey } from "./use-enter-commit";
 
 /** 造一个合成事件形状（`isCommitKey` 只读这三个字段）。 */
-function ev(key: string, { shiftKey = false, isComposing = false, keyCode = 0 } = {}) {
-  return { key, shiftKey, nativeEvent: { isComposing, keyCode } };
+function ev(key: string, { isComposing = false, keyCode = 0, shiftKey = false } = {}) {
+  return { key, nativeEvent: { isComposing, keyCode }, shiftKey };
 }
 
 /** 键事件的最小形状（`onKeyDown` 用）—— 只多一个 `currentTarget` 与
@@ -31,9 +31,9 @@ function ev(key: string, { shiftKey = false, isComposing = false, keyCode = 0 } 
 function keyEvent(
   key: string,
   {
-    shiftKey = false,
     isComposing = false,
     preventDefault = vi.fn(),
+    shiftKey = false,
   }: {
     isComposing?: boolean;
     preventDefault?: () => void;
@@ -41,7 +41,7 @@ function keyEvent(
   } = {},
 ) {
   return {
-    ...ev(key, { shiftKey, isComposing }),
+    ...ev(key, { isComposing, shiftKey }),
     currentTarget: { blur: vi.fn() },
     preventDefault,
   };
@@ -81,7 +81,7 @@ describe("enterCommit 的 onKeyDown", () => {
     const onCommit = vi.fn();
     const onCancel = vi.fn();
     const preventDefault = vi.fn();
-    enterCommit({ onCommit, onCancel }).onKeyDown(keyEvent("Escape", { preventDefault }));
+    enterCommit({ onCancel, onCommit }).onKeyDown(keyEvent("Escape", { preventDefault }));
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onCommit).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
@@ -107,7 +107,7 @@ describe("接在真实输入框上（属性包可用）", () => {
     const onCommit = vi.fn();
     const onCancel = vi.fn();
     render(
-      <input aria-label="改名" defaultValue="草稿" {...enterCommit({ onCommit, onCancel })} />,
+      <input aria-label="改名" defaultValue="草稿" {...enterCommit({ onCancel, onCommit })} />,
     );
     const input = screen.getByLabelText("改名");
     input.focus();

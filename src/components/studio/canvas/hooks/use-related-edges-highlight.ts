@@ -153,8 +153,8 @@ export function useRelatedEdgesHighlight(
                 source: edge.source ?? null,
                 target: edge.target ?? null,
               },
-              resolveNodeId,
               isSelected,
+              resolveNodeId,
             });
 
         const previous = readEdgeFocusRole(edge);
@@ -186,8 +186,8 @@ export function useRelatedEdgesHighlight(
           ...edge,
           data: {
             ...rest,
-            [EDGE_FOCUS_DATA_KEY]: role,
             [EDGE_FOCUS_ACTIVE_KEY]: true,
+            [EDGE_FOCUS_DATA_KEY]: role,
           },
         };
       });
@@ -200,9 +200,9 @@ export function useRelatedEdgesHighlight(
     }
     const { nodes } = resolvePortFocusRoles({
       connections: state.edges,
-      selectedIds,
       resolveSourceId: resolveNodeId,
       resolveTargetId: resolveNodeId,
+      selectedIds,
     });
     setNodes((currentNodes) => {
       let changed = false;
@@ -249,8 +249,8 @@ export function useRelatedEdgesHighlight(
           ...node,
           data: {
             ...rest,
-            [NODE_PORT_FOCUS_DATA_KEY]: nextTable,
             [NODE_PORT_FOCUS_ACTIVE_KEY]: true,
+            [NODE_PORT_FOCUS_DATA_KEY]: nextTable,
           },
         };
       });

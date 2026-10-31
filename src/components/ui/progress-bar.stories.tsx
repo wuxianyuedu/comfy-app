@@ -10,12 +10,12 @@ import { ProgressBar } from "~/components/ui/progress-bar";
  * 所以下面按「谁消费它」分组，而不是按数值档分组。
  */
 const meta = {
-  title: "UI/ProgressBar",
-  component: ProgressBar,
-  args: { value: 42, label: "正在解析节点包" },
+  args: { label: "正在解析节点包", value: 42 },
   argTypes: {
-    value: { control: { type: "range", min: 0, max: 100 } },
+    value: { control: { max: 100, min: 0, type: "range" } },
   },
+  component: ProgressBar,
+  title: "UI/ProgressBar",
 } satisfies Meta<typeof ProgressBar>;
 
 export default meta;

@@ -19,10 +19,10 @@ vi.mock("~/lib/comfyui/queue-status.server", () => ({
 import { subscribeQueueChanged, resetQueueChangedSignalForTest } from "./queue-signal.server";
 
 const SAME = {
+  comfy: { pending: 0, running: 0 },
   online: true,
-  comfy: { running: 0, pending: 0 },
-  running: null,
   queued: 0,
+  running: null,
 };
 
 beforeEach(() => {

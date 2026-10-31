@@ -55,12 +55,12 @@ export type WorkflowRunLogModalProps = {
 const RUN_LOG_WIDTH = modalWidth("w-5xl");
 
 export function WorkflowRunLogModal({
-  workflowId,
-  source,
-  viewTaskId,
+  onClose,
   onViewTaskIdChange,
   open,
-  onClose,
+  source,
+  viewTaskId,
+  workflowId,
 }: WorkflowRunLogModalProps) {
   const snapshot = useSyncExternalStoreShim();
   /* 「查看完整输出」弹窗：拉取 comfy-cli 未经截断的完整原文（JSON 折叠高亮）。 */
@@ -103,9 +103,9 @@ export function WorkflowRunLogModal({
   /* 加宽档与它的记忆收在`~/components/ui/wide-panel`（规范 16 §16.2.4.18）。 */
   const panel = useWidePanel("wflib-run-log", RUN_LOG_WIDTH);
   /* 弹窗取消按钮复用画布同款 hook（视图零 IO）。 */
-  const { cancelling, cancel } = useCancelTask({
-    taskId: viewTaskId,
+  const { cancel, cancelling } = useCancelTask({
     onFailed: () => undefined,
+    taskId: viewTaskId,
   });
 
   if (!open) {

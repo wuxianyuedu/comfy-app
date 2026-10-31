@@ -20,10 +20,10 @@ type IoEndpointsSectionProps = {
 /* 宽版「I/O 端点」段 (非 compact，CreatePanel / IO-edit 预览)：wire inputs
  *  (蓝色 chip) + outputs (绿色 chip)，带 SectionHeader 分段头。 */
 export function IoEndpointsSection({
-  wireInputs,
   inputs,
   outputs,
   showOutputs,
+  wireInputs,
 }: IoEndpointsSectionProps) {
   return (
     <>

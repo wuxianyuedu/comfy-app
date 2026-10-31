@@ -31,7 +31,7 @@ export type CommandPaletteProps = {
  * （避免两套事实来源）。后面要加「打开设置 / 搜项目」等，往 `CommandGroup`
  * 里加一组即可，不必动侧栏。
  */
-export function CommandPalette({ open, onOpenChange, onSelect }: CommandPaletteProps) {
+export function CommandPalette({ onOpenChange, onSelect, open }: CommandPaletteProps) {
   return (
     <CommandDialog
       description="搜索视图或命令…"

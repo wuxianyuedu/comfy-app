@@ -48,9 +48,9 @@ export function useComfyStats(): ComfyStatsController {
   );
   const refresh = useCallback(() => refreshComfyStats(), []);
   return {
-    stats: snapshot.stats,
     online: snapshot.online,
-    stale: snapshot.online && snapshot.stale,
     refresh,
+    stale: snapshot.online && snapshot.stale,
+    stats: snapshot.stats,
   };
 }

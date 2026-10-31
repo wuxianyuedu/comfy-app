@@ -66,20 +66,20 @@ export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | n
   switch (status.phase) {
     case "syncing":
       return {
-        tone: "info",
+        actionable: false,
+        refreshable: false,
         text: "数据库同步中…",
         title:
           "启动时发现库结构与当前 schema 不一致，正在后台同步（只自动应用建表 / 建索引 / 加列这类不丢数据的变更）",
-        refreshable: false,
-        actionable: false,
+        tone: "info",
       };
     case "synced":
       return {
-        tone: "ok",
+        actionable: false,
+        refreshable: true,
         text: "数据库已同步 · 点此刷新",
         title: "数据库结构已同步到当前版本，点击刷新页面",
-        refreshable: true,
-        actionable: false,
+        tone: "ok",
       };
     case "missing":
     case "stale": {
@@ -94,7 +94,8 @@ export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | n
       /* 有执行件 → 给「立即同步」入口（文案不必再复述命令）；没有（桌包）
        * → 维持原样，只给命令让人到终端跑。 */
       return {
-        tone: "error",
+        actionable: status.canPush,
+        refreshable: false,
         text: status.canPush
           ? missing
             ? "数据库表还没建"
@@ -103,8 +104,7 @@ export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | n
             ? "数据库表还没建 · 跑 pnpm db:push"
             : "数据库结构过期 · 跑 pnpm db:push",
         title,
-        refreshable: false,
-        actionable: status.canPush,
+        tone: "error",
       };
     }
     default:
@@ -168,9 +168,9 @@ function writeAck(value: string): void {
 export function useSchemaSyncStatus(): SchemaSyncStatus {
   /* 初值 unknown（= 不显示），SSR 与客户端首帧一致，避免 hydration 不匹配。 */
   const [status, setStatus] = useState<SchemaSyncStatus>({
-    phase: "unknown",
-    detail: null,
     canPush: false,
+    detail: null,
+    phase: "unknown",
   });
   const stoppedRef = useRef(false);
   /* 当前相位 + 「是否已探到过一次真实读数」：驱动轮询频率（稳定后降速，而不是
@@ -204,7 +204,7 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
       if (phase === "synced") {
         if (!isFresh(at) || readAck() === at) {
           phaseRef.current = "unknown";
-          setStatus({ phase: "unknown", detail: null, canPush: false });
+          setStatus({ canPush: false, detail: null, phase: "unknown" });
           return;
         }
         writeAck(at);
@@ -212,9 +212,9 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
 
       phaseRef.current = phase;
       setStatus({
-        phase,
-        detail: typeof record.detail === "string" ? record.detail : null,
         canPush: record.canPush === true,
+        detail: typeof record.detail === "string" ? record.detail : null,
+        phase,
       });
     } catch {
       /* 探测失败不动状态：瞬时断网不该把「正在同步」抹掉（与 dev server 存活

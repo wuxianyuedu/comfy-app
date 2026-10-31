@@ -427,8 +427,8 @@ export async function uploadImage(
   form.append("image", new Blob([new Uint8Array(buffer)]), filename);
   form.append("type", type);
   const res = await fetch(`${base}/api/upload/image`, {
-    method: "POST",
     body: form,
+    method: "POST",
     // 上传参考图/大文件到本地 ComfyUI，给足余量，只挡病态挂死。
     signal: AbortSignal.timeout(120_000),
   });
@@ -528,15 +528,15 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     // 返回 null，不影响 ComfyUI 主数据与在线状态。
     const smi = await queryNvidiaVram();
     return {
-      online: true,
       gpuName: dev?.name ?? (dev?.type === "cpu" ? "CPU" : undefined),
-      vramUsed,
+      online: true,
+      ramTotal,
+      ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
+      smiVramTotal: smi?.totalMiB != null ? smi.totalMiB * 1024 * 1024 : undefined,
+      smiVramUsed: smi?.usedMiB != null ? smi.usedMiB * 1024 * 1024 : undefined,
       vramFree,
       vramTotal,
-      smiVramUsed: smi?.usedMiB != null ? smi.usedMiB * 1024 * 1024 : undefined,
-      smiVramTotal: smi?.totalMiB != null ? smi.totalMiB * 1024 * 1024 : undefined,
-      ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
-      ramTotal,
+      vramUsed,
     };
   } catch {
     return null;

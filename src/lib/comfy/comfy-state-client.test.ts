@@ -27,8 +27,8 @@ function stubFetch(answers: Array<{ body?: unknown; status: number }>): () => nu
         return new Response(null, { status: 204 });
       }
       return new Response(JSON.stringify(answer.body), {
-        status: answer.status,
         headers: { "Content-Type": "application/json" },
+        status: answer.status,
       });
     }),
   );
@@ -46,10 +46,10 @@ async function settle(times = 1): Promise<void> {
 
 function change(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    seq: 1,
     at: 1_000,
-    kind: "ready",
     detail: "ComfyUI 已就绪",
+    kind: "ready",
+    seq: 1,
     ...over,
   };
 }
@@ -89,7 +89,7 @@ describe("subscribeComfyStateChanges", () => {
   });
 
   it("拿到变化 → 通知订阅者，且下一轮带上新的 since", async () => {
-    stubFetch([{ status: 200, body: change() }, { status: 204 }]);
+    stubFetch([{ body: change(), status: 200 }, { status: 204 }]);
     const seen: Array<number> = [];
     const off = subscribeComfyStateChanges((c) => seen.push(c.seq));
     await settle(2);
@@ -99,7 +99,7 @@ describe("subscribeComfyStateChanges", () => {
   });
 
   it("同一个 seq 再发一遍不再通知（重连补发不算新事件）", async () => {
-    stubFetch([{ status: 200, body: change() }, { status: 200, body: change() }, { status: 204 }]);
+    stubFetch([{ body: change(), status: 200 }, { body: change(), status: 200 }, { status: 204 }]);
     const seen: Array<number> = [];
     const off = subscribeComfyStateChanges((c) => seen.push(c.seq));
     await settle(3);
@@ -108,7 +108,7 @@ describe("subscribeComfyStateChanges", () => {
   });
 
   it("坏帧不把链拖死：解析不了就继续下一轮", async () => {
-    stubFetch([{ status: 200, body: { nope: true } }, { status: 204 }]);
+    stubFetch([{ body: { nope: true }, status: 200 }, { status: 204 }]);
     const seen: Array<number> = [];
     const off = subscribeComfyStateChanges((c) => seen.push(c.seq));
     await settle(3);
@@ -142,7 +142,7 @@ describe("subscribeComfyStateChanges", () => {
   });
 
   it("多个订阅者共用一条链（同一次变化人人有份）", async () => {
-    stubFetch([{ status: 200, body: change() }, { status: 204 }]);
+    stubFetch([{ body: change(), status: 200 }, { status: 204 }]);
     const a: Array<number> = [];
     const b: Array<number> = [];
     const offA = subscribeComfyStateChanges((c) => a.push(c.seq));

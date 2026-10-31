@@ -194,7 +194,7 @@ function touchAndEvict<V>(map: Map<string, V>, taskId: string, value: V, maxTask
 export function log(taskId: string, level: LogEntry["level"], msg: string): LogEntry {
   const store = state();
 
-  const entry: LogEntry = { t: Date.now(), level, msg, src: callerLoc() };
+  const entry: LogEntry = { level, msg, src: callerLoc(), t: Date.now() };
 
   const arr = store.logs.get(taskId) ?? [];
 
@@ -519,8 +519,8 @@ async function resolveDeps(): Promise<RunnerDeps> {
   const taskRepo: RunnerDeps["taskRepo"] =
     cur.taskRepo ?? (await import("../core/repository")).taskRepository;
   const log: RunnerDeps["log"] = cur.log ?? (await import("~/lib/core/logger")).logger;
-  deps = { taskRepo, log };
-  return { taskRepo, log };
+  deps = { log, taskRepo };
+  return { log, taskRepo };
 }
 
 export async function persistLogs(taskId: string) {

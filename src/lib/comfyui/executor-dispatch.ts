@@ -94,11 +94,11 @@ async function resolveDispatch(): Promise<{
   repo: DispatchRepo;
 } | null> {
   if (repoOverride && ownerOverride) {
-    return { repo: repoOverride, owner: ownerOverride };
+    return { owner: ownerOverride, repo: repoOverride };
   }
   try {
     const { taskRepository } = await import("../core/repository");
-    return { repo: taskRepository, owner: ownerOverride ?? "inline" };
+    return { owner: ownerOverride ?? "inline", repo: taskRepository };
   } catch (err) {
     if (!warnedUnconfigured) {
       warnedUnconfigured = true;
@@ -157,7 +157,7 @@ export async function claimAndDispatchOnce(options?: {
   if (!resolved) {
     return null;
   }
-  const { repo, owner } = resolved;
+  const { owner, repo } = resolved;
 
   if (!options?.skipReadyGate && s.ws?.readyState !== WebSocket.OPEN) {
     // 就绪前不领行；顺手把拉起 ComfyUI 的触发点带起来（原来挂在入队动作上）。
@@ -215,11 +215,11 @@ export async function claimAndDispatchOnce(options?: {
   }
 
   const job: Job = {
-    taskId,
-    workflowName: row.workflowName,
-    rawJson: row.execPayload,
     overrides: /* SAFETY: 类型断言已复核 */ (row.params as { workflowInputs?: Job["overrides"] })
       ?.workflowInputs,
+    rawJson: row.execPayload,
+    taskId,
+    workflowName: row.workflowName,
   };
 
   /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一

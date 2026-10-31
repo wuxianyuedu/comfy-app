@@ -47,7 +47,7 @@ export async function GET() {
     record = null;
   }
   return NextResponse.json(
-    { record, currentRunId: getServerRunId() },
+    { currentRunId: getServerRunId(), record },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -49,10 +49,10 @@ export const taskRouter = createTRPCRouter({
     .input(
       z
         .object({
-          take: z.number().int().min(1).max(200).optional().default(60),
-          projectId: z.string().optional(),
           media: z.enum(["image", "video", "audio"]).optional(),
+          projectId: z.string().optional(),
           status: z.string().optional(),
+          take: z.number().int().min(1).max(200).optional().default(60),
         })
         .default({ take: 60 }),
     )
@@ -73,11 +73,11 @@ export const taskRouter = createTRPCRouter({
 
       const scanOnce = async (skip: number) => {
         const tasks = await taskRepository.listByUser(ctx.user.id, {
+          includeImages: true,
           projectId: input.projectId ?? undefined,
-          take: PAGE,
           skip,
           statusList: statusList ?? undefined,
-          includeImages: true,
+          take: PAGE,
         });
         return tasks.map((task) => {
           const p = /* SAFETY: 类型断言已复核 */ (task.params ?? {}) as Record<string, unknown>;
@@ -94,19 +94,19 @@ export const taskRouter = createTRPCRouter({
             task.images.find((image) => isVideo(image.localPath) || image.mediaType === "video")
               ?.localPath ?? null;
           return {
-            id: task.id,
-            type: task.type,
-            workflowName: task.workflowName,
-            status: task.status,
-            prompt: task.prompt,
-            createdAt: task.createdAt,
-            cover,
             checkpoint,
-            mediaType: inferMediaType(cover, coverMediaType, task.type),
-            videoPath,
-            projectId: task.projectId ?? null,
-            progress: task.progress,
+            cover,
+            createdAt: task.createdAt,
             error: task.error ?? null,
+            id: task.id,
+            mediaType: inferMediaType(cover, coverMediaType, task.type),
+            progress: task.progress,
+            projectId: task.projectId ?? null,
+            prompt: task.prompt,
+            status: task.status,
+            type: task.type,
+            videoPath,
+            workflowName: task.workflowName,
           };
         });
       };
@@ -192,18 +192,18 @@ export const taskRouter = createTRPCRouter({
       });
     }
     const created = await taskRepository.createQueued({
-      userId: ctx.user.id,
-      type: original.type,
-      prompt: original.prompt,
-      negativePrompt: original.negativePrompt,
-      params: original.params,
-      workflowName: original.workflowName,
-      projectId: original.projectId,
-      shotId: original.shotId,
-      referenceImages: original.referenceImages ?? undefined,
-      workflowSnapshot: original.workflowSnapshot ?? undefined,
       claimedBy: resolveExecutorClaim(),
       execPayload: original.execPayload,
+      negativePrompt: original.negativePrompt,
+      params: original.params,
+      projectId: original.projectId,
+      prompt: original.prompt,
+      referenceImages: original.referenceImages ?? undefined,
+      shotId: original.shotId,
+      type: original.type,
+      userId: ctx.user.id,
+      workflowName: original.workflowName,
+      workflowSnapshot: original.workflowSnapshot ?? undefined,
     });
     /* 与 generate 同一口径：只写行，kick 只是省掉等派发节拍（ADR §14 D1）。 */
     kickQueue();
@@ -239,12 +239,12 @@ export const taskRouter = createTRPCRouter({
         exists = false;
       }
       if (!exists) {
-        return { opened: false, error: "directory missing", absolutePath: dir };
+        return { absolutePath: dir, error: "directory missing", opened: false };
       }
       return {
-        opened: true,
         absolutePath: dir,
         comfyappUrl: "comfyapp://open?path=" + encodeURIComponent(dir),
+        opened: true,
       };
     }),
 
@@ -264,9 +264,9 @@ export const taskRouter = createTRPCRouter({
       workflow?: unknown;
     } | null;
     return {
-      workflow: snap?.workflow ?? null,
-      source: snap?.source ?? null,
       capturedAt: snap?.capturedAt ?? null,
+      source: snap?.source ?? null,
+      workflow: snap?.workflow ?? null,
     };
   }),
 
@@ -298,7 +298,7 @@ export const taskRouter = createTRPCRouter({
         );
       } else {
         fsPromises
-          .rm(dir, { recursive: true, force: true })
+          .rm(dir, { force: true, recursive: true })
           .catch((e: unknown) =>
             logger.warn(
               `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(e, String(e))}`,
@@ -317,8 +317,8 @@ export const taskRouter = createTRPCRouter({
   setImageFeedback: authedProcedure
     .input(
       z.object({
-        imageId: z.string().min(1),
         humanRating: z.number().int().min(0).max(5).nullable(),
+        imageId: z.string().min(1),
         isFavorite: z.boolean(),
       }),
     )

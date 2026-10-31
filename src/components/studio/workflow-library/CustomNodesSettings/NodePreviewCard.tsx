@@ -24,8 +24,8 @@ import { Button } from "~/components/ui/button";
 /* ──────────────────────────────────────────────────────────────────────── */
 export function NodePreviewCard({
   data,
-  fallbackName,
   expanded,
+  fallbackName,
   onToggle,
 }: {
   data: ManifestNodeRaw | undefined;
@@ -64,9 +64,9 @@ export function NodePreviewCard({
         className="hover:text-ink-bright flex w-full items-center justify-start gap-2 rounded-none px-2.5 text-left outline-none hover:bg-transparent"
         onClick={onToggle}
         style={{
-          height: 28,
           background: color,
           color: "#fff",
+          height: 28,
         }}
         variant="ghost"
       >
@@ -117,7 +117,7 @@ export function NodePreviewCard({
         <div className="px-2.5 pt-1.5 pb-2">
           {/* 区 1 —— 类型端口（输入在左，输出在右） */}
           {(typed.length > 0 || outputs.length > 0) && (
-            <div className="mb-1.5 grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+            <div className="mb-1.5 grid" style={{ gap: 4, gridTemplateColumns: "1fr 1fr" }}>
               <div className="flex flex-col gap-0.75">
                 {typed.map((i, idx) => (
                   <PortRow color={color} key={`ti-${idx}`} name={i.name} side="in" type={i.type} />
@@ -148,10 +148,10 @@ export function NodePreviewCard({
                   <span
                     className="inline-block shrink-0 rounded-full"
                     style={{
-                      width: 6,
-                      height: 6,
                       background: color,
+                      height: 6,
                       opacity: 0.7,
+                      width: 6,
                     }}
                   />
                   <span className="text-ink-soft min-w-0 flex-1 truncate" title={widget.name}>

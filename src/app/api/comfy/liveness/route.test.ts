@@ -29,7 +29,7 @@ import { GET } from "./route";
 beforeEach(() => {
   snapshot.mockReset();
   subscribers.length = 0;
-  snapshot.mockReturnValue({ seq: 0, last: null });
+  snapshot.mockReturnValue({ last: null, seq: 0 });
 });
 
 /** 读一帧（一次 `read()` 拿到的就是当前已入队的那一片）。 */
@@ -51,19 +51,19 @@ describe("GET /api/comfy/liveness", () => {
 
   it("连上即补发当前快照：崩溃之后才连上来的客户端也能立刻知道", async () => {
     const seen = {
-      seq: 7,
       at: 1_000,
       reason: "异常退出（exit 1）",
+      seq: 7,
       userStopped: false,
     };
-    snapshot.mockReturnValue({ seq: 7, last: seen });
+    snapshot.mockReturnValue({ last: seen, seq: 7 });
     const res = await GET();
     expect(await readOnce(res)).toBe(`data: ${JSON.stringify(seen)}\n\n`);
     await res.body!.cancel();
   });
 
   it("seq 为 0 时不补发假事件（「无事发生」不该被下游当成一次崩溃）", async () => {
-    snapshot.mockReturnValue({ seq: 0, last: null });
+    snapshot.mockReturnValue({ last: null, seq: 0 });
     const res = await GET();
     const reader = res.body!.getReader();
     /* 没有任何帧可读 —— `read()` 会一直挂着。用「已有订阅者」当「流已起来」的
@@ -78,9 +78,9 @@ describe("GET /api/comfy/liveness", () => {
     await expect.poll(() => subscribers.length).toBe(1);
     const reader = res.body!.getReader();
     const signal = {
-      seq: 1,
       at: 2_000,
       reason: "被信号终止（SIGKILL）",
+      seq: 1,
       userStopped: false,
     };
     subscribers[0]!(signal);

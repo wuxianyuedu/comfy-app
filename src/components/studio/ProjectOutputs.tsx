@@ -31,9 +31,9 @@ import {
 /** 单张产出卡（从 `outputs.map` 里原样提出 —— 虚拟化只改「哪几行在场」，
  * 不改卡本身的任何形态/行为）。 */
 function OutputCard({
-  output,
   active,
   onSelect,
+  output,
 }: {
   active: boolean;
   onSelect: (id: string) => void;
@@ -116,9 +116,9 @@ function OutputCard({
  * （§12.12 / 硬规则 20）。
  */
 function VirtualizedOutputGrid({
+  onSelect,
   outputs,
   selectedId,
-  onSelect,
 }: {
   onSelect: (id: string) => void;
   outputs: Array<ProjectOutputItem>;
@@ -150,7 +150,7 @@ function VirtualizedOutputGrid({
   const rows = useMemo(() => {
     const out: Array<{ items: Array<ProjectOutputItem>; start: number }> = [];
     for (let i = 0; i < outputs.length; i += cols) {
-      out.push({ start: i, items: outputs.slice(i, i + cols) });
+      out.push({ items: outputs.slice(i, i + cols), start: i });
     }
     return out;
   }, [outputs, cols]);
@@ -161,10 +161,10 @@ function VirtualizedOutputGrid({
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: rows.length,
-    getScrollElement: () => scrollEl,
     estimateSize: () => rowH + GAP,
-    overscan: 3,
     gap: GAP,
+    getScrollElement: () => scrollEl,
+    overscan: 3,
     scrollMargin,
   });
   /* 量测未就绪（挂载首帧 / ResizeObserver 不可用的 jsdom）⇒ 全量渲染兜底 ——
@@ -180,8 +180,8 @@ function VirtualizedOutputGrid({
         role="list"
         style={{
           display: "grid",
-          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
           gap: GAP,
+          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
         }}
       >
         {outputs.map((output) => (
@@ -202,8 +202,8 @@ function VirtualizedOutputGrid({
       ref={setListEl}
       role="list"
       style={{
-        position: "relative",
         height: virtualizer.getTotalSize(),
+        position: "relative",
         width: "100%",
       }}
     >
@@ -218,14 +218,14 @@ function VirtualizedOutputGrid({
             key={vi.key}
             ref={virtualizer.measureElement}
             style={{
+              display: "grid",
+              gap: GAP,
+              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+              left: 0,
               position: "absolute",
               top: 0,
-              left: 0,
-              width: "100%",
-              display: "grid",
-              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-              gap: GAP,
               transform: `translateY(${vi.start}px)`,
+              width: "100%",
             }}
           >
             {row.items.map((output) => (
@@ -271,7 +271,7 @@ export function ProjectOutputs() {
     return subscribeAppEvent("comfyapp:canvas-store-changed", sync);
   }, [refreshProjects]);
 
-  const { outputs, loading, refetch: refetchOutputs } = useProjectOutputs(projectId);
+  const { loading, outputs, refetch: refetchOutputs } = useProjectOutputs(projectId);
 
   const activeProject = useMemo(
     () => projects.find((project) => project.id === projectId) ?? null,
@@ -300,27 +300,27 @@ export function ProjectOutputs() {
     }
     return JSON.stringify(
       {
-        id: selected.id,
-        workflowName: selected.workflowName,
-        type: selected.type,
-        status: selected.status,
-        prompt: selected.prompt,
-        negativePrompt: selected.negativePrompt,
-        seed: selected.seed,
-        size: selected.size,
-        sampler: selected.sampler,
-        steps: selected.steps,
         cfg: selected.cfg,
         checkpoint: selected.checkpoint,
-        referenceImages: selected.referenceImages,
         createdAt: selected.createdAt,
         files: selected.images.map((image) => ({
+          height: image.height,
           localPath: image.localPath,
           mediaType: image.mediaType,
           seed: image.seed,
           width: image.width,
-          height: image.height,
         })),
+        id: selected.id,
+        negativePrompt: selected.negativePrompt,
+        prompt: selected.prompt,
+        referenceImages: selected.referenceImages,
+        sampler: selected.sampler,
+        seed: selected.seed,
+        size: selected.size,
+        status: selected.status,
+        steps: selected.steps,
+        type: selected.type,
+        workflowName: selected.workflowName,
         /* 相对应用根的落点，形状来自布局那一处（组件里抄字面量 = 搬一次根就说错话）。 */
         savePath: projectId ? artifactDirDisplay(selected.id, projectId) : "",
       },
@@ -333,11 +333,11 @@ export function ProjectOutputs() {
    * 此前这里`if (!ok) return;` 把失败整个吞掉，按钮一动不动，用户以为成了。 */
   const [copyFailed, setCopyFailed] = useState(false);
   const copy = useCopyFeedback({
+    onFailure: () => setCopyFailed(true),
     onSuccess: () => {
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
   });
   const handleCopy = useCallback(() => {
     if (!metaJson) {

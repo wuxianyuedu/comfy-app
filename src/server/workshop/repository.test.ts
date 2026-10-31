@@ -9,21 +9,21 @@ import { isStage, rowToState, stateToRow } from "./repository";
 
 describe("workshop repository 映射", () => {
   const row: WorkshopSession = {
-    id: "s1",
-    userId: null,
-    title: "标题",
-    type: "short_video",
-    tone: "温暖",
-    logline: "梗概",
-    idea: "灵感",
-    scriptMarkdown: "# 剧本",
-    scenes: [],
     characters: [],
+    createdAt: new Date("2026-01-01"),
+    id: "s1",
+    idea: "灵感",
+    logline: "梗概",
+    projectId: null,
+    scenes: [],
+    scriptMarkdown: "# 剧本",
     shots: [],
     stage: "script",
-    projectId: null,
-    createdAt: new Date("2026-01-01"),
+    title: "标题",
+    tone: "温暖",
+    type: "short_video",
     updatedAt: new Date("2026-01-02"),
+    userId: null,
   };
 
   it("rowToState 还原元信息与大字段", () => {

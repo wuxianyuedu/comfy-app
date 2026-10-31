@@ -28,31 +28,31 @@ afterEach(() => {
 function controller(
   over: Partial<ReadySettingsPageController["drafts"]["settings"]> = {},
   instance: ReadySettingsPageController["comfyInstance"] = {
-    pathConfigured: true,
-    instanceType: "portable",
     desktopManaged: false,
+    instanceType: "portable",
+    pathConfigured: true,
   },
 ): ReadySettingsPageController {
   return /* SAFETY: 类型断言已复核 */ {
     comfyDefaultPort: 8188,
     comfyInstance: instance,
     comfyStorage: null,
-    saving: false,
-    savePrefs: vi.fn(async () => undefined),
-    patchSettings: vi.fn(),
     drafts: {
       settings: {
-        comfyuiPath: "D:/ComfyUI",
-        comfyuiExtraArgs: "",
+        autoSyncLocalWorkflow: false,
         comfyCliPython: "",
         comfyuiAutoStart: true,
+        comfyuiExtraArgs: "",
+        comfyuiPath: "D:/ComfyUI",
         comfyuiPort: 0,
         exitKillComfyui: true,
         exitKillOllama: true,
-        autoSyncLocalWorkflow: false,
         ...over,
       },
     },
+    patchSettings: vi.fn(),
+    savePrefs: vi.fn(async () => undefined),
+    saving: false,
   } as unknown as ReadySettingsPageController;
 }
 
@@ -100,7 +100,7 @@ describe("ComfyuiSection（只配置路径）", () => {
       <ComfyuiSection
         c={controller(
           { comfyuiPath: "" },
-          { pathConfigured: false, instanceType: null, desktopManaged: false },
+          { desktopManaged: false, instanceType: null, pathConfigured: false },
         )}
       />,
     );

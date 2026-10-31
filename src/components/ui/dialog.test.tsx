@@ -38,35 +38,35 @@ beforeEach(() => {
   /* base-ui 的浮层要用 matchMedia，jsdom 不给。与 `sheet.test.tsx` 同款兜底。 */
   if (!window.matchMedia) {
     window.matchMedia = (query: string): MediaQueryList => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener() {
-        void 0;
-      },
-      removeListener() {
-        void 0;
-      },
       addEventListener() {
         void 0;
       },
-      removeEventListener() {
+      addListener() {
         void 0;
       },
       dispatchEvent() {
         return false;
+      },
+      matches: false,
+      media: query,
+      onchange: null,
+      removeEventListener() {
+        void 0;
+      },
+      removeListener() {
+        void 0;
       },
     });
   }
 });
 
 function Demo({
-  showCloseButton,
-  showOverlay,
-  popupClassName,
   className,
   onOpenChange,
   open,
+  popupClassName,
+  showCloseButton,
+  showOverlay,
 }: {
   className?: string;
   onOpenChange?: (open: boolean) => void;

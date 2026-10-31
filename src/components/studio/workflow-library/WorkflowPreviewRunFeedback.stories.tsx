@@ -22,19 +22,19 @@ import type { Phase } from "~/components/studio/workflow-library/hooks/use-gener
  * —— 所以下面给了「有提示」与「无提示」两档，那条提示是它可以修掉的事故形状。
  */
 const PHASES: Record<string, Phase> = {
-  idle: { kind: "idle" },
-  starting: { kind: "starting" },
-  running: {
-    kind: "running",
-    pct: 42,
-    node: { id: "3", label: "K采样器", value: 3, max: 8 },
-  },
-  runningNoNode: { kind: "running", pct: 17 },
-  done: { kind: "done", imageUrl: "/storybook-assets/sample-landscape.svg" },
+  done: { imageUrl: "/storybook-assets/sample-landscape.svg", kind: "done" },
   failed: {
     kind: "failed",
     message: "缺参：模型文件 sd_xl_base_1.0.safetensors 不在本机",
   },
+  idle: { kind: "idle" },
+  running: {
+    kind: "running",
+    node: { id: "3", label: "K采样器", max: 8, value: 3 },
+    pct: 42,
+  },
+  runningNoNode: { kind: "running", pct: 17 },
+  starting: { kind: "starting" },
 };
 
 /**
@@ -51,11 +51,11 @@ const MATRIX_ROWS: ReadonlyArray<readonly [string, Phase]> = [
     "running",
     {
       kind: "running",
+      node: { id: "3", label: "K采样器", max: 8, value: 3 },
       pct: 42,
-      node: { id: "3", label: "K采样器", value: 3, max: 8 },
     },
   ],
-  ["done", { kind: "done", imageUrl: "/storybook-assets/sample-landscape.svg" }],
+  ["done", { imageUrl: "/storybook-assets/sample-landscape.svg", kind: "done" }],
   [
     "failed",
     {
@@ -66,24 +66,24 @@ const MATRIX_ROWS: ReadonlyArray<readonly [string, Phase]> = [
 ];
 
 const meta = {
-  title: "Studio/WorkflowPreviewRunFeedback",
-  component: WorkflowPreviewRunFeedback,
   args: {
-    phase: PHASES.running,
-    pct: 42,
-    nodeLabel: "K采样器",
-    resultUrl: null,
-    workflowName: "角色一致性 · 三视图",
-    viewMode: "use",
-    running: true,
     missingLabels: [],
-    uploadNotice: null,
+    nodeLabel: "K采样器",
     onDismissUploadNotice: () => undefined,
+    pct: 42,
+    phase: PHASES.running,
+    resultUrl: null,
+    running: true,
+    uploadNotice: null,
+    viewMode: "use",
+    workflowName: "角色一致性 · 三视图",
   },
   argTypes: {
-    viewMode: { control: { type: "select" }, options: ["edit", "use"] },
     running: { control: { type: "boolean" } },
+    viewMode: { control: { type: "select" }, options: ["edit", "use"] },
   },
+  component: WorkflowPreviewRunFeedback,
+  title: "Studio/WorkflowPreviewRunFeedback",
 } satisfies Meta<typeof WorkflowPreviewRunFeedback>;
 
 export default meta;
@@ -95,28 +95,28 @@ export const Running: Story = {};
 
 /** 执行中但没有节点名：退化成「正在执行工作流」整体进度，不显示步数。 */
 export const RunningWithoutNodeLabel: Story = {
-  args: { phase: PHASES.runningNoNode, nodeLabel: null, pct: 17 },
+  args: { nodeLabel: null, pct: 17, phase: PHASES.runningNoNode },
 };
 
 /** 完成：结果图挂在反馈条里（只有 use 模式会走到这条）。 */
 export const Done: Story = {
   args: {
-    phase: PHASES.done,
-    pct: 100,
-    running: false,
     nodeLabel: null,
+    pct: 100,
+    phase: PHASES.done,
     resultUrl: "/storybook-assets/sample-landscape.svg",
+    running: false,
   },
 };
 
 /** 失败：原因文案 + 缺参清单（两个出口都在这一档）。 */
 export const Failed: Story = {
   args: {
-    phase: PHASES.failed,
-    pct: 0,
-    running: false,
-    nodeLabel: null,
     missingLabels: ["模型文件 sd_xl_base_1.0.safetensors", "输入图 input.png"],
+    nodeLabel: null,
+    pct: 0,
+    phase: PHASES.failed,
+    running: false,
   },
 };
 

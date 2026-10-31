@@ -45,14 +45,14 @@ describe("historyTraceSummary — 把 /history 结论抽成「有没有结果、
     const v = historyTraceSummary("p1", {
       p1: {
         outputs: { "9": { images: [{ filename: "a.png" }] } },
-        status: { status_str: "success", completed: true },
+        status: { completed: true, status_str: "success" },
       },
     });
     expect(v).toEqual({
+      completed: true,
       found: true,
       outputNodeCount: 1,
       statusStr: "success",
-      completed: true,
     });
   });
 
@@ -61,11 +61,11 @@ describe("historyTraceSummary — 把 /history 结论抽成「有没有结果、
       p1: {
         outputs: {},
         status: {
-          status_str: "error",
           messages: [
             ["execution_start", {}],
             ["execution_error", { exception_message: "CUDA OOM" }],
           ],
+          status_str: "error",
         },
       },
     });
@@ -80,14 +80,14 @@ describe("historyOutputKeys — 「跑完了，输出去哪了」", () => {
       historyOutputKeys(
         {
           p1: {
-            outputs: { "3": { images: [] }, "7": { text: "x", gifs: [] } },
+            outputs: { "3": { images: [] }, "7": { gifs: [], text: "x" } },
           },
         },
         "p1",
       ),
     ).toEqual([
-      { nodeId: "3", keys: ["images"] },
-      { nodeId: "7", keys: ["text", "gifs"] },
+      { keys: ["images"], nodeId: "3" },
+      { keys: ["text", "gifs"], nodeId: "7" },
     ]);
   });
 
@@ -101,18 +101,18 @@ describe("queueTraceSummary — 失败收口时回答「任务其实还在跑吗
   it("拆出 running / pending 的 prompt_id", () => {
     expect(
       queueTraceSummary({
-        queue_running: [[1, "r1", {}]],
         queue_pending: [
           [2, "p1", {}],
           [3, "p2", {}],
         ],
+        queue_running: [[1, "r1", {}]],
       }),
-    ).toEqual({ running: ["r1"], pending: ["p1", "p2"] });
+    ).toEqual({ pending: ["p1", "p2"], running: ["r1"] });
   });
 
   it("空队列与非预期结构都归零", () => {
-    expect(queueTraceSummary({})).toEqual({ running: [], pending: [] });
-    expect(queueTraceSummary(null)).toEqual({ running: [], pending: [] });
+    expect(queueTraceSummary({})).toEqual({ pending: [], running: [] });
+    expect(queueTraceSummary(null)).toEqual({ pending: [], running: [] });
   });
 });
 
@@ -120,16 +120,11 @@ describe("trace 落盘前过值形状守卫（与 pino 镜像共用一份实现�
   it("原始回执里的 PEM / JWT / 高熵串被擦成 [Redacted]", () => {
     // trace 直写文件、不经 pino，因此脱敏必须在写入边界自己做一次。
     // 这里断言的是「写入前的那次变换」（trace() 本身会真实写盘，测试不触发它）。
-    const pem =
-      "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----";
+    const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----";
     const jwt =
       "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r_wW1gFWFOEjXk";
-    expect(traceStringify(redactSecretShaped({ err: pem }))).toContain(
-      "[Redacted]",
-    );
-    expect(traceStringify(redactSecretShaped({ header: jwt }))).toContain(
-      "[Redacted]",
-    );
+    expect(traceStringify(redactSecretShaped({ err: pem }))).toContain("[Redacted]");
+    expect(traceStringify(redactSecretShaped({ header: jwt }))).toContain("[Redacted]");
   });
 
   it("正常回执（stdout chunk / prompt_id / 文件名）原样保留", () => {
@@ -165,14 +160,12 @@ describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
       expect(existsSync(file)).toBe(true);
       const content = readFileSync(file, "utf-8");
       // 行格式：`[本地时间戳] [INFO] [trace] <channel> [<taskId>] <text>[ metaText]\n`
-      expect(content).toMatch(
-        /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] /,
-      );
+      expect(content).toMatch(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\] /);
       expect(content).toContain("[INFO] [trace] cli [t-1] hello 世界");
       expect(content).toContain('"extra":"meta"');
       expect(content.endsWith("\n")).toBe(true);
     } finally {
-      rmSync(tmp, { recursive: true, force: true });
+      rmSync(tmp, { force: true, recursive: true });
     }
   });
 
@@ -193,7 +186,7 @@ describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
       expect(b).toContain("second");
       expect(b).not.toContain("first");
     } finally {
-      rmSync(tmp, { recursive: true, force: true });
+      rmSync(tmp, { force: true, recursive: true });
     }
   });
 
@@ -213,7 +206,7 @@ describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
       // 不抛、不 crash——契约就是「写不进去就静默」。
       expect(() => trace("http", "t-skip", "should not throw")).not.toThrow();
     } finally {
-      rmSync(tmp, { recursive: true, force: true });
+      rmSync(tmp, { force: true, recursive: true });
     }
   });
 });

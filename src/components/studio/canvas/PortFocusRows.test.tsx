@@ -29,11 +29,11 @@ afterEach(cleanup);
  *  - `model`：纯连接行（TOP PINS），target Handle id = 端口名；
  *  - `seed` ：widget 行（参数行），target Handle id = 端口名。 */
 const RAW_INPUTS = [
-  { name: "model", type: "MODEL", isConnection: true },
+  { isConnection: true, name: "model", type: "MODEL" },
   {
+    isConnection: false,
     name: "seed",
     type: "INT",
-    isConnection: false,
     widget: { name: "seed" },
     widgetValue: 42,
   },
@@ -41,13 +41,13 @@ const RAW_INPUTS = [
 
 function nodeData(overrides: Partial<WorkflowNodeData> = {}): WorkflowNodeData {
   return {
-    nodeId: "9",
-    classType: "KSampler",
-    title: "主采样器",
-    inputs: {},
     assignedRole: null,
+    classType: "KSampler",
+    inputs: {},
     inputSources: {},
+    nodeId: "9",
     rawInputs: RAW_INPUTS,
+    title: "主采样器",
     ...overrides,
   };
 }
@@ -57,11 +57,11 @@ function nodeData(overrides: Partial<WorkflowNodeData> = {}): WorkflowNodeData {
 function makeStores(): WFStores {
   return {
     io: createIOEditStore("wf-test"),
-    rgthree: createRgthreeGroupsStore({ workflowId: "wf-test", detail: null }),
+    rgthree: createRgthreeGroupsStore({ detail: null, workflowId: "wf-test" }),
     viewer: createNodeJsonViewerStore({
       detail: null,
-      rawMetaById: {},
       positions: null,
+      rawMetaById: {},
       subgraphRawContext: null,
       subgraphStackLength: 0,
     }),

@@ -46,7 +46,7 @@ export type RuntimeLogBoxProps = {
   log: RuntimeLogController;
 };
 
-export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLogBoxProps) {
+export function RuntimeLogBox({ className, emptyHint, fileName, log }: RuntimeLogBoxProps) {
   const [fullscreen, setFullscreen] = useState(false);
   /* 滚动跟随是纯视觉偏好，留在视图层（三个分区此前各持一份，现已合并）。 */
   const [follow, setFollow] = useState(true);
@@ -136,12 +136,12 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
  * 会话下拉 → 恢复自动滚动 → 刷新 → 调用方给的尾部按钮（全屏 / 退出全屏）。
  */
 function LogToolbar({
-  variant,
-  title,
-  log,
   follow,
+  log,
   onFollowChange,
+  title,
   trailing,
+  variant,
 }: {
   follow: boolean;
   log: RuntimeLogController;
@@ -221,11 +221,11 @@ function LogToolbar({
  * 判据还不一样。跟随态由父级持有并传下来：小窗口与全屏是**同一份**跟随态，
  * 两个实例不能各判各的（切进去时应仍是「已暂停」）。 */
 function LogBody({
-  log,
-  follow,
-  onFollowChange,
-  emptyHint,
   className,
+  emptyHint,
+  follow,
+  log,
+  onFollowChange,
 }: {
   className: string;
   emptyHint: ReactNode;
@@ -236,9 +236,9 @@ function LogBody({
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const scroller = useScrollFollow({
     containerRef: scrollerRef,
-    watch: log.text,
     following: follow,
     onFollowingChange: onFollowChange,
+    watch: log.text,
   });
 
   return (

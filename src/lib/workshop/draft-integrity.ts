@@ -64,8 +64,8 @@ export type DraftElementIssue = {
  *  （`Tab` 定义在 `components/workshop/stage-config`），lib 反向 import 视图层
  *  违反硬规则 22；映射留在视图那一侧（`DraftIntegrityHint` 的 `KIND_TAB`）。 */
 export const DRAFT_ELEMENT_NOUN: Record<DraftElementKind, string> = {
-  scene: "场景",
   character: "角色",
+  scene: "场景",
   shot: "镜头",
 };
 
@@ -100,28 +100,7 @@ type ElementCheck = {
  * 不进这张表（那会把「需要修复」变成对无关紧要字段的挑刺，用户很快就不信这条提示）。
  */
 const CHECKS: Record<DraftElementKind, ElementCheck> = {
-  scene: {
-    idOf: (source) => stringField(source, "id"),
-    fields: [
-      {
-        key: "id",
-        ok: (value) => typeof value === "string" && value.length > 0,
-        reason: "缺 id：镜头按场景找归属（`shot.sceneId`）会全部落空",
-      },
-      {
-        key: "heading",
-        ok: (value) => typeof value === "string",
-        reason: "场景标题不是文本：分镜表与卡片标题都会显示成空",
-      },
-      {
-        key: "shotCount",
-        ok: (value) => typeof value === "number" && Number.isFinite(value),
-        reason: "建议镜头数不是数字：「还差几镜」的缺口算不出来",
-      },
-    ],
-  },
   character: {
-    idOf: (source) => stringField(source, "id"),
     fields: [
       {
         key: "id",
@@ -141,9 +120,29 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
         reason: "推荐参数不是对象：读到哪一项都会是 undefined",
       },
     ],
+    idOf: (source) => stringField(source, "id"),
+  },
+  scene: {
+    fields: [
+      {
+        key: "id",
+        ok: (value) => typeof value === "string" && value.length > 0,
+        reason: "缺 id：镜头按场景找归属（`shot.sceneId`）会全部落空",
+      },
+      {
+        key: "heading",
+        ok: (value) => typeof value === "string",
+        reason: "场景标题不是文本：分镜表与卡片标题都会显示成空",
+      },
+      {
+        key: "shotCount",
+        ok: (value) => typeof value === "number" && Number.isFinite(value),
+        reason: "建议镜头数不是数字：「还差几镜」的缺口算不出来",
+      },
+    ],
+    idOf: (source) => stringField(source, "id"),
   },
   shot: {
-    idOf: (source) => stringField(source, "id"),
     fields: [
       {
         key: "id",
@@ -173,6 +172,7 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
         reason: "状态不在已知取值里：完成度计数会把它算错一边",
       },
     ],
+    idOf: (source) => stringField(source, "id"),
   },
 };
 
@@ -183,11 +183,11 @@ function auditOne(kind: DraftElementKind, index: number, value: unknown): Array<
   if (notAnObject(value)) {
     return [
       {
-        kind,
-        index,
-        id: null,
-        label: `${noun} #${String(index + 1)}`,
         field: null,
+        id: null,
+        index,
+        kind,
+        label: `${noun} #${String(index + 1)}`,
         reason: "整条不是对象：既渲染不了，也回写不了",
       },
     ];
@@ -201,11 +201,11 @@ function auditOne(kind: DraftElementKind, index: number, value: unknown): Array<
       continue;
     }
     issues.push({
-      kind,
-      index,
-      id,
-      label,
       field: field.key,
+      id,
+      index,
+      kind,
+      label,
       reason: field.reason,
     });
   }
@@ -236,16 +236,16 @@ export function countAffectedElements(
   issues: ReadonlyArray<DraftElementIssue>,
 ): Record<DraftElementKind, number> {
   const byKind: Record<DraftElementKind, Set<number>> = {
-    scene: new Set(),
     character: new Set(),
+    scene: new Set(),
     shot: new Set(),
   };
   for (const issue of issues) {
     byKind[issue.kind].add(issue.index);
   }
   return {
-    scene: byKind.scene.size,
     character: byKind.character.size,
+    scene: byKind.scene.size,
     shot: byKind.shot.size,
   };
 }

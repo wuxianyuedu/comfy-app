@@ -191,14 +191,14 @@ export function waitForDetachMediator(
  *    pid 为中介进程 PID 而非目标，调用方不要依赖；就绪与否请用外部探测。
  */
 export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
-  const { command, args, mode } = opts;
+  const { args, command, mode } = opts;
   if (mode === "bound") {
     try {
       const child = spawn(command, args, {
         cwd: opts.cwd,
         env: opts.env,
-        windowsHide: opts.windowsHide ?? false,
         stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: opts.windowsHide ?? false,
       });
       return { child };
     } catch (e) {
@@ -238,8 +238,8 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
       }
       const child = spawn(command, args, {
         cwd: opts.cwd,
-        env: opts.env,
         detached: true,
+        env: opts.env,
         stdio,
       });
       child.unref();
@@ -277,8 +277,8 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     try {
       // 不传 env：与下面的 powershell 中介同语义（继承本进程环境，目标再由它继承）。
       const mediator = spawn(shellExe, cliArgs, {
-        windowsHide: true,
         stdio: ["ignore", "ignore", "pipe"],
+        windowsHide: true,
       });
       mediator.unref();
       return { child: mediator };
@@ -314,8 +314,8 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     ` -WindowStyle Hidden${redirectArg}${cwdArg}; exit`;
   try {
     const mediator = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps], {
-      windowsHide: true,
       stdio: ["ignore", "ignore", "pipe"],
+      windowsHide: true,
     });
     mediator.unref();
     // 中介是立即退出的 powershell；返回它仅供调用方持有引用，pid 不代表目标。

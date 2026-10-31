@@ -8,7 +8,7 @@ const noop = () => undefined;
 
 describe("splitDomProps", () => {
   it("私有字段进 own、其余进 rest", () => {
-    const props = { value: 3, onChange: noop, id: "a", title: "t" };
+    const props = { id: "a", onChange: noop, title: "t", value: 3 };
     const { own, rest } = splitDomProps(props, PRIVATE);
     expect(own.value).toBe(3);
     expect(own.onChange).toBe(noop);
@@ -16,7 +16,7 @@ describe("splitDomProps", () => {
   });
 
   it("rest 里不含任何私有键（透传给 DOM 的那一份是干净的）", () => {
-    const props = { type: "range", value: 1, min: 0, onChange: noop };
+    const props = { min: 0, onChange: noop, type: "range", value: 1 };
     const { rest } = splitDomProps(props, PRIVATE);
     expect(Object.keys(rest)).toEqual(["min"]);
   });
@@ -29,15 +29,15 @@ describe("splitDomProps", () => {
   });
 
   it("只搬不改写：不合并 className、不给默认值", () => {
-    const props = { type: "range", className: "x" };
+    const props = { className: "x", type: "range" };
     const { rest } = splitDomProps(props, PRIVATE);
     expect(rest.className).toBe("x");
   });
 
   it("不改动入参对象", () => {
-    const props = { type: "range", id: "a" };
+    const props = { id: "a", type: "range" };
     splitDomProps(props, PRIVATE);
-    expect(props).toEqual({ type: "range", id: "a" });
+    expect(props).toEqual({ id: "a", type: "range" });
   });
 
   it("空 keys 时 rest 是全部、own 为空", () => {

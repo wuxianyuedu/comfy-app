@@ -143,8 +143,8 @@ export function createConsoleRunner(): ConsoleRunner {
   const busy = () =>
     current
       ? {
-          runId: current.runId,
           command: current.command,
+          runId: current.runId,
           startedAt: current.startedAt,
         }
       : null;
@@ -167,15 +167,15 @@ export function createConsoleRunner(): ConsoleRunner {
     const invocation = resolveCommandInvocation(opts.file, opts.args);
 
     onEvent({
-      type: "start",
-      runId: opts.runId,
       command: opts.command,
+      runId: opts.runId,
+      type: "start",
       /* `file` / `args` 报**真正要起的那一份**：`.ps1` 形态时它是 PowerShell 宿主
        * 加 `-File` 参数，而不是用户敲的那个名字 —— 这是「到底跑的是谁」的唯一答案，
        * 排障时才能看出「为什么多了一层」。 */
-      file: invocation.command,
       args: invocation.args,
       cwd: opts.cwd,
+      file: invocation.command,
       startedAt,
     });
 
@@ -187,8 +187,6 @@ export function createConsoleRunner(): ConsoleRunner {
          * 把整组收走。Windows 上 `detached` 会另开控制台窗口，所以必须按平台
          * 取 —— 判据用 `process.platform` 而不是本模块自己发明一套。 */
         detached: process.platform !== "win32",
-        windowsHide: true,
-        stdio: ["ignore", "pipe", "pipe"],
         env: {
           ...process.env,
           /* 子进程也吃 UTF-8：中文 Windows 的 ANSI 代码页是 GBK，`tsc` /
@@ -198,27 +196,29 @@ export function createConsoleRunner(): ConsoleRunner {
           PYTHONIOENCODING: "utf-8",
           PYTHONUTF8: "1",
         },
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
       });
     } catch (e) {
       onEvent({
-        type: "error",
         message: startFailureMessage(opts.file, invocation, e),
+        type: "error",
       });
       return {
-        runId: opts.runId,
         command: opts.command,
+        durationMs: Date.now() - startedAt,
         exitCode: null,
         killed: false,
-        durationMs: Date.now() - startedAt,
+        runId: opts.runId,
       };
     }
 
     current = {
-      runId: opts.runId,
-      command: opts.command,
-      startedAt,
       child,
+      command: opts.command,
       killed: false,
+      runId: opts.runId,
+      startedAt,
     };
 
     /* 输出累积到上限后停止转发，但**不掐进程**：命令自己跑完比看日志更重要
@@ -235,28 +235,28 @@ export function createConsoleRunner(): ConsoleRunner {
       if (remaining <= 0) {
         truncated = true;
         onEvent({
-          type: "out",
           stream: "stderr",
           text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行，可在下方「完整输出」文件里看尾部）\n`,
+          type: "out",
         });
         return;
       }
       if (text.length > remaining) {
-        onEvent({ type: "out", stream, text: text.slice(0, remaining) });
+        onEvent({ stream, text: text.slice(0, remaining), type: "out" });
         emitted += remaining;
         truncated = true;
         /* 单个 chunk 就撞上限时必须补一句说明：否则用户看到的是「输出到一半
          * 戛然而止」，而 exit 帧那句 `truncatedNote` 只有界面读得懂字段名的人
          * 才看得见（硬规则 4：失败/降级路径要有**用户可见**的出口）。 */
         onEvent({
-          type: "out",
           stream: "stderr",
           text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行）\n`,
+          type: "out",
         });
         return;
       }
       emitted += text.length;
-      onEvent({ type: "out", stream, text });
+      onEvent({ stream, text, type: "out" });
     };
 
     child.stdout?.on("data", forward("stdout"));
@@ -269,17 +269,17 @@ export function createConsoleRunner(): ConsoleRunner {
         }
         current.killed = true;
         onEvent({
-          type: "out",
           stream: "stderr",
           text: `\n… 命令超过 ${Math.round(opts.timeoutMs / 1000)}s 上限，正在回收整棵进程树\n`,
+          type: "out",
         });
         fireAndForget(terminate(child), (e) => {
           /* 回收失败不改变「已经判它超时」这个事实，但必须留痕：孤儿进程会
            * 继续占着端口与日志文件，而用户以为命令已经结束（硬规则 3）。 */
           onEvent({
-            type: "out",
             stream: "stderr",
             text: `\n… 回收超时命令的进程树失败：${errorText(e, "回收失败", "未知错误")}\n`,
+            type: "out",
           });
         });
       },
@@ -296,8 +296,8 @@ export function createConsoleRunner(): ConsoleRunner {
     }>((resolve) => {
       child.once("error", (e) => {
         onEvent({
-          type: "error",
           message: startFailureMessage(opts.file, invocation, e),
+          type: "error",
         });
         resolve({ code: null, signal: null });
       });
@@ -309,19 +309,19 @@ export function createConsoleRunner(): ConsoleRunner {
 
     const durationMs = Date.now() - startedAt;
     onEvent({
-      type: "exit",
       code: exit.code,
-      signal: exit.signal,
-      killed,
-      truncatedNote: truncated ? `输出超过 ${MAX_OUTPUT_CHARS} 字符已截断` : null,
       durationMs,
+      killed,
+      signal: exit.signal,
+      truncatedNote: truncated ? `输出超过 ${MAX_OUTPUT_CHARS} 字符已截断` : null,
+      type: "exit",
     });
     return {
-      runId: opts.runId,
       command: opts.command,
+      durationMs,
       exitCode: exit.code,
       killed,
-      durationMs,
+      runId: opts.runId,
     };
   }
 
@@ -337,7 +337,7 @@ export function createConsoleRunner(): ConsoleRunner {
     return true;
   }
 
-  return { busy, run, cancel };
+  return { busy, cancel, run };
 }
 
 /**
@@ -356,8 +356,8 @@ async function terminate(child: ReturnType<typeof spawn>): Promise<void> {
     return;
   }
   await killProcessTree({
-    pid,
     detached: process.platform !== "win32",
     force: true,
+    pid,
   });
 }

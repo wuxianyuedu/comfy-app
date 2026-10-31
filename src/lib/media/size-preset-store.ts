@@ -63,10 +63,10 @@ function mergeScene(fallback: SceneResolutionTable, raw: unknown): SceneResoluti
           : undefined;
       row[tier] = isValidDims(candidate)
         ? {
-            width: Math.round(candidate.width),
             height: Math.round(candidate.height),
+            width: Math.round(candidate.width),
           }
-        : { ...(fallbackRow?.[tier] ?? { width: 1024, height: 1024 }) };
+        : { ...(fallbackRow?.[tier] ?? { height: 1024, width: 1024 }) };
     }
     out[preset.label] = row;
   }
@@ -135,7 +135,7 @@ export function setSizePresetDims(
     ...snapshot[scene],
     [ratioLabel]: {
       ...row,
-      [tier]: { width: size.width, height: size.height },
+      [tier]: { height: size.height, width: size.width },
     },
   };
   commit(scene === "image" ? { ...snapshot, image: nextScene } : { ...snapshot, video: nextScene });

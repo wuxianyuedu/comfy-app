@@ -156,7 +156,7 @@ export function parseDataUrl(value: string): ParsedDataUrl | null {
     return null;
   }
   const mime = meta.slice(0, -";base64".length);
-  return { mime: mime || "application/octet-stream", base64 };
+  return { base64, mime: mime || "application/octet-stream" };
 }
 
 /**

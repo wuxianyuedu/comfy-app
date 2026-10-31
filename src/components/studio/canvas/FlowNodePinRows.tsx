@@ -31,9 +31,9 @@ type FlowNodePinRowsProps = {
 export function FlowNodePinRows({
   data,
   io,
+  outputs,
   rawMeta,
   uniqueConnEntries,
-  outputs,
 }: FlowNodePinRowsProps) {
   /* 选中节点时端口行跟着连线一起变：有连线落到的那一行提亮、端口圆点放大，
    *  没有连线落到的行压暗。级别由 `useRelatedEdgesHighlight` 写在本节点 data 上
@@ -45,12 +45,12 @@ export function FlowNodePinRows({
   const toneOf = (...handles: Array<string | undefined>): PortRowTone => {
     const roles = handles.map((handle) => readPortFocusRole(nodeData, handle));
     for (const role of roles) {
-      const tone = resolvePortRowTone({ role, hasSelection: true });
+      const tone = resolvePortRowTone({ hasSelection: true, role });
       if (tone === "focused" || tone === "related") {
         return tone;
       }
     }
-    return resolvePortRowTone({ role: "none", hasSelection: portFocusActive });
+    return resolvePortRowTone({ hasSelection: portFocusActive, role: "none" });
   };
   return (
     <div
@@ -113,12 +113,12 @@ export function FlowNodePinRows({
                   isConnectable
                   position={Position.Left}
                   style={{
-                    left: 5,
                     background: inCol,
+                    left: 5,
                     /* 相关行的端口放大 + 光晕增强：线是接到这一颗点上的。 */
-                    width: tone.dotSize,
-                    height: tone.dotSize,
                     boxShadow: portDotGlow(inCol, tone.dotGlowStrong),
+                    height: tone.dotSize,
+                    width: tone.dotSize,
                   }}
                   title={`${inName} (${inType})`}
                   type="target"
@@ -130,11 +130,11 @@ export function FlowNodePinRows({
                   <IoCheckbox
                     io={io}
                     ioRef={{
-                      nodeId: data.nodeId,
-                      hostNodeId: data.hostNodeId,
-                      name: inName ?? "",
-                      kind: "param",
                       direction: "input",
+                      hostNodeId: data.hostNodeId,
+                      kind: "param",
+                      name: inName ?? "",
+                      nodeId: data.nodeId,
                     }}
                   />
                 )}
@@ -180,19 +180,19 @@ export function FlowNodePinRows({
                   isConnectable={false}
                   position={Position.Right}
                   style={{
-                    right: 5,
                     background: outCol,
                     boxShadow: `0 0 6px ${outCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
+                    right: 5,
                     ...(io?.ioEditMode
                       ? {
                           /* IO 编辑模式下端点整体缩到几乎不可见（不误导作者去连
                            * 输出口），提亮档只放大 1px 保持「这是同一个锚点」。 */
-                          width: tone.dotSize === 12 ? 5 : 4,
                           height: tone.dotSize === 12 ? 5 : 4,
                           opacity: 0.35,
                           right: 0,
+                          width: tone.dotSize === 12 ? 5 : 4,
                         }
-                      : { width: tone.dotSize, height: tone.dotSize }),
+                      : { height: tone.dotSize, width: tone.dotSize }),
                   }}
                   title={`${outDisplay} (${outType})`}
                   type="source"

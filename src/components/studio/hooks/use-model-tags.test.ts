@@ -13,9 +13,9 @@ import { type TagItem, mergeTagSnapshots, useModelTags } from "./use-model-tags"
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     workflowModel: {
-      list: { query: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
+      list: { query: vi.fn() },
       rename: { mutate: vi.fn() },
     },
   },
@@ -26,15 +26,15 @@ const mockOf = (fn: unknown) => /* SAFETY: 类型断言已复核 */ fn as Mock;
 
 const vanilla = {
   workflowModel: {
-    list: { query: mockOf(vanillaApi.workflowModel.list.query) },
     create: { mutate: mockOf(vanillaApi.workflowModel.create.mutate) },
     delete: { mutate: mockOf(vanillaApi.workflowModel.delete.mutate) },
+    list: { query: mockOf(vanillaApi.workflowModel.list.query) },
     rename: { mutate: mockOf(vanillaApi.workflowModel.rename.mutate) },
   },
 };
 
 function tag(name: string, count = 0): TagItem {
-  return { id: `id-${name}`, name, count };
+  return { count, id: `id-${name}`, name };
 }
 
 const SERVER_TAGS = [tag("z-image", 2), tag("wan2.2", 1)];
@@ -44,8 +44,8 @@ beforeEach(() => {
   vanilla.workflowModel.list.query.mockResolvedValue({ tags: SERVER_TAGS });
   vanilla.workflowModel.create.mutate.mockResolvedValue({ tag: tag("new") });
   vanilla.workflowModel.delete.mutate.mockResolvedValue({
-    ok: true,
     deleted: true,
+    ok: true,
   });
   vanilla.workflowModel.rename.mutate.mockResolvedValue({
     tag: tag("renamed"),
@@ -77,7 +77,7 @@ describe("useModelTags", () => {
 
   it("父组件递来含新标签的快照时并入，但不覆盖本地更新的计数", () => {
     const initial = [tag("z-image", 1)];
-    const { result, rerender } = renderHook(({ tags }) => useModelTags({ initialTags: tags }), {
+    const { rerender, result } = renderHook(({ tags }) => useModelTags({ initialTags: tags }), {
       initialProps: { tags: initial },
     });
     rerender({ tags: [tag("z-image", 99), tag("wan2.2", 1)] });
@@ -180,8 +180,8 @@ describe("useModelTags", () => {
     });
     expect(ok).toBe(true);
     expect(vanilla.workflowModel.rename.mutate).toHaveBeenCalledWith({
-      oldName: "z-image",
       newName: "z-image-turbo",
+      oldName: "z-image",
     });
     expect(onChanged).toHaveBeenCalled();
     // 刷新回包把列表覆盖成服务端形态，断言的是「请求已发出 + 无错误」

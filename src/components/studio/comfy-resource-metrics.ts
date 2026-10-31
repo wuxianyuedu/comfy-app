@@ -70,7 +70,7 @@ export function selectVisibleResourceMetrics(
   for (const descriptor of RESOURCE_METRICS) {
     const bar = view[descriptor.key];
     if (bar) {
-      out.push({ descriptor, bar });
+      out.push({ bar, descriptor });
     }
   }
   return out;

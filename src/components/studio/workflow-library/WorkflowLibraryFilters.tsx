@@ -44,9 +44,9 @@ const SOURCE_LABELS: Record<SourceFilter, string> = {
 const TYPE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "image", "video", "audio"] as const;
 const TYPE_LABELS: Record<TypeFilter, string> = {
   all: "全部类型",
+  audio: "音频",
   image: "图像",
   video: "视频",
-  audio: "音频",
 };
 
 /** 计数徽标（ SelectMenu 的 labels 支持 ReactNode）。 */
@@ -69,16 +69,16 @@ function CountBadge({ count }: { count: number }) {
 const TRIGGER_CLS = "w-auto min-w-28 shrink-0 gap-x-1 rounded-full px-3 py-1 text-xs";
 
 export function WorkflowLibraryFilters({
-  sourceFilter,
-  onSourceFilterChange,
-  sourceCounts,
-  typeFilter,
-  onTypeFilterChange,
-  typeCounts,
   modelFilter,
-  onModelFilterChange,
   modelTags,
   onManageModels,
+  onModelFilterChange,
+  onSourceFilterChange,
+  onTypeFilterChange,
+  sourceCounts,
+  sourceFilter,
+  typeCounts,
+  typeFilter,
 }: WorkflowLibraryFiltersProps) {
   return (
     <div className="flex flex-nowrap items-center gap-2" data-testid="workflow-library-filter-row">

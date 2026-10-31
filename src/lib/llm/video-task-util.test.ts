@@ -38,7 +38,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.cwd = () => originalCwd;
-  rmSync(sandbox, { recursive: true, force: true });
+  rmSync(sandbox, { force: true, recursive: true });
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -158,8 +158,8 @@ describe("pollRemoteVideoTask", () => {
     const fetchMock = vi.fn<typeof fetch>(
       async () =>
         new Response(JSON.stringify({ url: "https://cdn.example/out.mp4" }), {
-          status: 200,
           headers: { "content-type": "application/json" },
+          status: 200,
         }),
     );
     vi.stubGlobal("fetch", fetchMock);

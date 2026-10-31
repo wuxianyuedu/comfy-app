@@ -70,7 +70,7 @@ export function buildTimelineIndex(entries: ReadonlyArray<LogEntry>): TimelineIn
       sameArrival.set(near, entry);
     }
   }
-  return { seen, sameArrival };
+  return { sameArrival, seen };
 }
 
 /**
@@ -178,7 +178,7 @@ export function mergeTimeline(current: Array<LogEntry>, fresh: Array<LogEntry>):
   if (fresh.length === 0) {
     return current;
   }
-  const { logs, index } = mergeTimelineIndexed(current, fresh, indexOfTimeline(current));
+  const { index, logs } = mergeTimelineIndexed(current, fresh, indexOfTimeline(current));
   /* 合并产出的是新数组：把索引挂在它名下，下一轮就不必再建一次表。 */
   if (logs !== current) {
     rememberTimelineIndex(logs, index);
@@ -192,9 +192,9 @@ export function mergeTimelineIndexed(
   index: TimelineIndex,
 ): { index: TimelineIndex; logs: Array<LogEntry> } {
   if (fresh.length === 0) {
-    return { logs: current, index };
+    return { index, logs: current };
   }
-  const { seen, sameArrival } = index;
+  const { sameArrival, seen } = index;
   const added: Array<LogEntry> = [];
   let changed = false;
   for (const entry of fresh) {
@@ -217,14 +217,14 @@ export function mergeTimelineIndexed(
     added.push(entry);
   }
   if (added.length === 0) {
-    return { logs: changed ? current.slice() : current, index };
+    return { index, logs: changed ? current.slice() : current };
   }
   const merged =
     current.length === 0 || changed
       ? [...current.map((e) => ({ ...e })), ...added]
       : [...current, ...added];
   merged.sort((a, b) => (a.time !== b.time ? a.time - b.time : a.seq - b.seq));
-  return { logs: merged, index };
+  return { index, logs: merged };
 }
 
 /** 同一秒内的副本判据：时刻取整到秒 + 级别 + 正文（`entryKey` 的毫秒容忍版）。 */

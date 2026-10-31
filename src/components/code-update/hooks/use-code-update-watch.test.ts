@@ -43,12 +43,12 @@ function probe(
   } = {},
 ): Probe {
   return {
-    buildId,
     bootId: opts.bootId ?? null,
-    restartReason: opts.restartReason ?? null,
-    restartDetail: opts.restartDetail ?? null,
+    buildId,
     depsStale: opts.depsStale ?? null,
     depsState: opts.depsState ?? null,
+    restartDetail: opts.restartDetail ?? null,
+    restartReason: opts.restartReason ?? null,
   };
 }
 
@@ -141,8 +141,8 @@ describe("useCodeUpdateWatch", () => {
     probeMock.mockReturnValueOnce(probe("b1", { bootId: "boot-A" })).mockReturnValueOnce(
       probe("b2", {
         bootId: "boot-B",
-        restartReason: "route-404-heal",
         restartDetail: detail,
+        restartReason: "route-404-heal",
       }),
     );
 

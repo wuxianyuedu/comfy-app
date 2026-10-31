@@ -76,8 +76,8 @@ export function friendlyError(raw: unknown): string {
     try {
       const json = JSON.stringify(raw, null, 2);
       return clampText(json, {
-        maxLength: TASK_ERROR_MAX,
         marker: "\n…(truncated)",
+        maxLength: TASK_ERROR_MAX,
       });
     } catch {
       return "[unserializable error]";

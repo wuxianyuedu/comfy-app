@@ -125,8 +125,8 @@ function revealCommand(target: string, isDir: boolean): { args: Array<string>; c
     if (isDir) {
       /* 目录：`explorer "<目录>"` 直接打开进入，让用户看到里面的产物。 */
       return {
-        cmd: process.env.ComSpec ?? "cmd.exe",
         args: ["/c", "start", "", "explorer", target],
+        cmd: process.env.ComSpec ?? "cmd.exe",
       };
     }
     /* 文件：`explorer /select,"<路径>"` 在它所在文件夹里选中它。
@@ -134,19 +134,19 @@ function revealCommand(target: string, isDir: boolean): { args: Array<string>; c
      * 自成一体的（它把 `/select,` 与路径当成一个整体解析），拆成两个参数时
      * 含空格的路径会被截断，表现为「打开了资源管理器但没选中任何东西」。 */
     return {
-      cmd: process.env.ComSpec ?? "cmd.exe",
       args: ["/c", "start", "", "explorer", `/select,"${target}"`],
+      cmd: process.env.ComSpec ?? "cmd.exe",
     };
   }
   if (platform === "darwin") {
     /* 目录：`open "<目录>"` 直接进入；文件：`open -R` 在 Finder 里选中。 */
-    return isDir ? { cmd: "open", args: [target] } : { cmd: "open", args: ["-R", target] };
+    return isDir ? { args: [target], cmd: "open" } : { args: ["-R", target], cmd: "open" };
   }
   /* Linux：没有统一的「选中」协议（各文件管理器自定义）。目录直接打开；
    * 文件打开它的**父目录**而不是文件本身 —— 点一个日志文件的意图是「到它那儿
    * 去」，用编辑器打开它不是。 */
   const dir = isDir ? target : path.dirname(target);
-  return { cmd: "xdg-open", args: [dir] };
+  return { args: [dir], cmd: "xdg-open" };
 }
 
 /**
@@ -168,8 +168,8 @@ export async function revealPathInFileManager(
      * —— 而分开说也不该：把「界外」这个结论回给请求方，等于把本机的目录结构当
      * 探测接口。给的是同一句可行动的说明（怎么都不行时用户能做什么）。 */
     return {
-      ok: false,
       detail: `找不到可在文件管理器里打开的路径（本机不存在，或不在本项目检出目录内）：${candidate.trim() || "(空)"}`,
+      ok: false,
       revealed: candidate.trim(),
     };
   }
@@ -177,7 +177,7 @@ export async function revealPathInFileManager(
    * 「存不存在」，不答「是不是目录」，所以这里用一次 stat 补判据。stat 失败
    * （理论上 probe 已答存在，不该发生）按文件处理 —— 退回原来的「选中」语义。 */
   const isDir = statSync(target, { throwIfNoEntry: false })?.isDirectory() ?? false;
-  const { cmd, args } = revealCommand(target, isDir);
+  const { args, cmd } = revealCommand(target, isDir);
   try {
     await new Promise<void>((resolve, reject) => {
       /* 不走 shell：Node 按数组直接构造命令行，含空格的路径原样送达，不经 cmd
@@ -195,14 +195,14 @@ export async function revealPathInFileManager(
       });
     });
     return {
-      ok: true,
       detail: `已在文件管理器里定位：${target}`,
+      ok: true,
       revealed: target,
     };
   } catch (error) {
     return {
-      ok: false,
       detail: `${errorText(error, "打开文件管理器失败")}。可手动打开：${target}`,
+      ok: false,
       revealed: target,
     };
   }

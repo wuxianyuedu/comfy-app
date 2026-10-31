@@ -16,13 +16,13 @@ import type { TaskItem } from "./history-types";
 afterEach(cleanup);
 
 const task: TaskItem = {
+  cover: null,
+  createdAt: new Date().toISOString(),
   id: "t-1",
+  prompt: "一只猫",
+  status: "SUCCEEDED",
   type: "txt2img",
   workflowName: "测试工作流",
-  status: "SUCCEEDED",
-  prompt: "一只猫",
-  createdAt: new Date().toISOString(),
-  cover: null,
 };
 
 function renderCard(overrides: Partial<Parameters<typeof HistoryTaskCard>[0]> = {}) {

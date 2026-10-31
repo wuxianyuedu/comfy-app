@@ -98,8 +98,8 @@ export function createSanitizeConfig(): SanitizeConfig {
     USE_PROFILES: { html: true },
     /* 复制成可变数组：DOMPurify 会就地规整传入的清单，传共享的 `readonly` 数组
      *  会让第一次调用顺手改掉模块级常量。 */
-    FORBID_TAGS: [...FORBIDDEN_TAGS],
     FORBID_ATTR: [...FORBIDDEN_ATTRS],
+    FORBID_TAGS: [...FORBIDDEN_TAGS],
   };
 }
 

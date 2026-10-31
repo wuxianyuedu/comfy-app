@@ -57,17 +57,17 @@ export type VirtualLogListProps<T> = {
 };
 
 export function VirtualLogList<T>({
-  entries,
-  getMessage,
-  getId,
-  renderRow,
-  wrap = true,
-  following: controlled,
-  onFollowingChange,
-  watch,
-  topSlot,
-  emptySlot,
   className,
+  emptySlot,
+  entries,
+  following: controlled,
+  getId,
+  getMessage,
+  onFollowingChange,
+  renderRow,
+  topSlot,
+  watch,
+  wrap = true,
 }: VirtualLogListProps<T>) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [boxRef, box] = useElementBox();
@@ -97,8 +97,8 @@ export function VirtualLogList<T>({
     () =>
       layoutRows(
         entries.map((entry) => ({
-          message: getMessage(entry),
           id: getId?.(entry),
+          message: getMessage(entry),
         })),
         wrap,
         wrap ? viewport.width : 0,
@@ -110,13 +110,13 @@ export function VirtualLogList<T>({
   /* 视口量不到（jsdom / 首帧之前）就**整页渲染**：虚拟化是优化，不该让内容看不见。 */
   const rowWindow = useMemo(() => {
     if (viewport.height <= 0) {
-      return { start: 0, end: entries.length, entries };
+      return { end: entries.length, entries, start: 0 };
     }
     const range = visibleRange(rows, scrollTop, viewport.height);
     return {
-      start: range.start,
       end: range.end,
       entries: entries.slice(range.start, range.end),
+      start: range.start,
     };
   }, [rows, scrollTop, viewport.height, entries]);
 

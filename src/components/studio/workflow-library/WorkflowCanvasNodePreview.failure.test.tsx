@@ -48,13 +48,13 @@ afterEach(cleanup);
 /** 只有一个可改数值参数的工作流：运行失败后用户改它，失败态应被清空。 */
 const io: WorkflowIOMap = {
   "7::widget::steps": {
+    defaultValue: 20,
     direction: "input",
     kind: "widget",
-    nodeId: "7",
-    name: "steps",
     label: "步数",
+    name: "steps",
+    nodeId: "7",
     type: "INT",
-    defaultValue: 20,
   },
 };
 

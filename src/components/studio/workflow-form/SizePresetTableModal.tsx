@@ -40,16 +40,16 @@ const TABLE_MIN = 64;
 const TABLE_MAX = 8192;
 
 export function SizePresetTableModal({
+  onClose,
   scene: initialScene = "image",
   title = "尺寸表",
-  onClose,
 }: {
   onClose: () => void;
   /** 打开时选中的场景页签（当前控件正用的场景）。 */
   scene?: SizeScene;
   title?: string;
 }) {
-  const { table, setDims, resetScene, isModified } = useSizePresetTable();
+  const { isModified, resetScene, setDims, table } = useSizePresetTable();
   const [scene, setScene] = useState<SizeScene>(initialScene);
 
   const handleChange = useCallback(
@@ -121,8 +121,8 @@ export function SizePresetTableModal({
                   <TableCell className="text-ink-bright pr-2">{preset.label}</TableCell>
                   {RESOLUTION_TIERS.map((tier) => {
                     const dims = table[scene]?.[preset.label]?.[tier] ?? {
-                      width: 1024,
                       height: 1024,
+                      width: 1024,
                     };
                     return (
                       <TableCell className="pr-2" key={tier}>
@@ -133,8 +133,8 @@ export function SizePresetTableModal({
                             min={TABLE_MIN}
                             onChange={(width) =>
                               handleChange(preset.label, tier, {
-                                width,
                                 height: dims.height,
+                                width,
                               })
                             }
                             step={8}
@@ -147,8 +147,8 @@ export function SizePresetTableModal({
                             min={TABLE_MIN}
                             onChange={(height) =>
                               handleChange(preset.label, tier, {
-                                width: dims.width,
                                 height,
+                                width: dims.width,
                               })
                             }
                             step={8}

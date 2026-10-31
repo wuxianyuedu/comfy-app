@@ -29,14 +29,14 @@ import { FullScreenDialog } from "~/components/ui/fullscreen-dialog";
  * 受控：`open` / `onOpenChange` 住在调用处。
  */
 const meta = {
-  title: "UI/FullScreenDialog",
-  component: FullScreenDialog,
   args: {
-    open: false,
-    onOpenChange: () => void 0,
-    label: "全屏视图",
     children: null,
+    label: "全屏视图",
+    onOpenChange: () => void 0,
+    open: false,
   },
+  component: FullScreenDialog,
+  title: "UI/FullScreenDialog",
 } satisfies Meta<typeof FullScreenDialog>;
 
 export default meta;

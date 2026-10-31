@@ -18,28 +18,28 @@ export function WorkflowLibraryDetailView({
   controller: WorkflowLibraryDetailController;
 }) {
   const {
-    workflow,
-    metaEditor,
-    activeTab,
-    setActiveTab,
-    canvasMounted,
+    actions,
     activeMode,
-    setActiveMode,
-    sourceOpen,
-    openSource,
-    closeSource,
-    isLoading,
-    errorMessage,
-    workflowIO,
-    paramMap,
-    sourceData,
-    usable,
-    canResync,
-    missing,
-    isTechnical,
+    activeTab,
     busyDownload,
     busyResync,
-    actions,
+    canResync,
+    canvasMounted,
+    closeSource,
+    errorMessage,
+    isLoading,
+    isTechnical,
+    metaEditor,
+    missing,
+    openSource,
+    paramMap,
+    setActiveMode,
+    setActiveTab,
+    sourceData,
+    sourceOpen,
+    usable,
+    workflow,
+    workflowIO,
   } = controller;
 
   if (!workflow) {
@@ -112,8 +112,8 @@ export function WorkflowLibraryDetailView({
               activeMode={activeMode}
               isLoading={isLoading}
               meta={{
-                modes: metaEditor.modes,
                 defaultMode: metaEditor.defaultMode,
+                modes: metaEditor.modes,
                 /* 画布卡片上的模式下拉**同时**改当前模式与默认模式（既有口径：
                  *  在这一排选模式 = 选默认模式，落库）。封装页签的切换器只改当前
                  *  模式（见其自身说明）。 */
@@ -145,8 +145,8 @@ export function WorkflowLibraryDetailView({
                 activeMode={activeMode}
                 isLoading={isLoading}
                 meta={{
-                  modes: metaEditor.modes,
                   defaultMode: metaEditor.defaultMode,
+                  modes: metaEditor.modes,
                   onModeChange: (code) => {
                     setActiveMode(code);
                     void metaEditor.patchModes(metaEditor.modes, code);

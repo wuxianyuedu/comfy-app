@@ -157,7 +157,7 @@ export function resolveDropTarget(
       continue;
     }
     if (!hit || rect.height < hit.height) {
-      hit = { ioKey: candidate.ioKey, height: rect.height };
+      hit = { height: rect.height, ioKey: candidate.ioKey };
     }
   }
   return hit?.ioKey ?? null;

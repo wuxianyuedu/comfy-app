@@ -40,7 +40,7 @@ describe("useThrottledProgress（单值）", () => {
   });
 
   it("同值不写（不触发重渲染）", () => {
-    const { result, rerender } = renderHook(() => useThrottledProgress(0));
+    const { rerender, result } = renderHook(() => useThrottledProgress(0));
     act(() => result.current.report(3));
     const before = result.current.value;
     act(() => {

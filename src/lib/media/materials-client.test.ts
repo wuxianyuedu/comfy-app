@@ -7,9 +7,9 @@ import { deleteMaterial, fetchMaterials, uploadMaterial } from "./materials-clie
 
 function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 400): Response {
   return /* SAFETY: 类型断言已复核 */ {
+    json: async () => body,
     ok,
     status,
-    json: async () => body,
   } as unknown as Response;
 }
 
@@ -20,22 +20,22 @@ function callArgs(fetchMock: ReturnType<typeof vi.fn>): {
 } {
   const first = fetchMock.mock.calls[0] ?? [];
   return {
-    url: String(first[0] ?? ""),
     init: /* SAFETY: 类型断言已复核 */ first[1] as RequestInit | undefined,
+    url: String(first[0] ?? ""),
   };
 }
 
 function item(over: Record<string, unknown> = {}) {
   return {
-    id: "scope/ref/a.png",
-    name: "a.png",
     folder: "ref",
     folderName: "参考素材",
+    id: "scope/ref/a.png",
     kind: "image",
-    url: "/api/generated/materials/scope/ref/a.png",
+    name: "a.png",
+    scope: "scope",
     size: 1024,
     updatedAt: "2026-01-01T00:00:00.000Z",
-    scope: "scope",
+    url: "/api/generated/materials/scope/ref/a.png",
     ...over,
   };
 }
@@ -51,14 +51,14 @@ describe("fetchMaterials", () => {
   it("返回收窄后的 folders 与 items", async () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({
-        folders: [{ id: "ref", name: "参考素材", count: 1 }],
+        folders: [{ count: 1, id: "ref", name: "参考素材" }],
         items: [item()],
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await fetchMaterials({ scope: "project", projectId: "p-1" });
-    expect(res.folders).toEqual([{ id: "ref", name: "参考素材", count: 1 }]);
+    const res = await fetchMaterials({ projectId: "p-1", scope: "project" });
+    expect(res.folders).toEqual([{ count: 1, id: "ref", name: "参考素材" }]);
     expect(res.items).toHaveLength(1);
 
     const { url } = callArgs(fetchMock);
@@ -70,7 +70,7 @@ describe("fetchMaterials", () => {
   it("搜索优先于 folder：有 q 时不带 folder 参数", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ folders: [], items: [] }));
     vi.stubGlobal("fetch", fetchMock);
-    await fetchMaterials({ scope: "cross", folder: "ref", q: "角色" });
+    await fetchMaterials({ folder: "ref", q: "角色", scope: "cross" });
     const { url } = callArgs(fetchMock);
     expect(url).toContain("q=");
     expect(url).not.toContain("folder=ref");
@@ -111,11 +111,11 @@ describe("fetchMaterials", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
-        ok: false,
-        status: 500,
         json: async () => {
           throw new Error("not json");
         },
+        ok: false,
+        status: 500,
       })),
     );
     await expect(fetchMaterials({ scope: "project" })).rejects.toThrow("请求失败 (500)");
@@ -163,7 +163,7 @@ describe("deleteMaterial", () => {
     const fetchMock = vi.fn(async () => jsonResponse({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
     await deleteMaterial("scope/ref/a b.png");
-    const { url, init } = callArgs(fetchMock);
+    const { init, url } = callArgs(fetchMock);
     expect(url).toContain(encodeURIComponent("scope/ref/a b.png"));
     expect(init?.method).toBe("DELETE");
   });

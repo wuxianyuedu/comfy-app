@@ -38,11 +38,11 @@ vi.setConfig({ testTimeout: 20_000 });
 function makeEntry(index: number, overrides: Partial<LogEntry> = {}): LogEntry {
   return {
     id: `e-${index}`,
-    seq: index + 1,
-    time: 1_700_000_000_000 + index * 1_000,
     level: "info",
     message: `事件 ${index}`,
+    seq: index + 1,
     source: "system",
+    time: 1_700_000_000_000 + index * 1_000,
     ...overrides,
   };
 }
@@ -63,51 +63,51 @@ function seed(count: number) {
 function useSmallPage(size = 200) {
   act(() =>
     useLogStore.setState((state) => ({
-      pageSize: size,
       header: { ...state.header, pageSize: size },
+      pageSize: size,
     })),
   );
 }
 
 beforeEach(() => {
-  const empty = { all: 0, debug: 0, info: 0, warn: 0, error: 0 };
+  const empty = { all: 0, debug: 0, error: 0, info: 0, warn: 0 };
   useLogStore.setState({
-    logs: [],
-    filteredLogs: [],
-    filter: "all",
-    origin: "all",
-    search: "",
-    isOpen: true,
     counts: empty,
     countsByOrigin: computeOriginCounts([]),
+    filter: "all",
+    filteredLogs: [],
+    isOpen: true,
+    logs: [],
+    origin: "all",
+    search: "",
     /* 面板订阅的是 `header` 切片，它必须与上面几项**同时**复位：只重置
      * `filteredLogs` / `origin` 而留着上个用例的切片，面板会继续渲染旧快照，
      * 于是「切了来源却像没切」。 */
-    header: {
-      filteredLogs: [],
-      filter: "all",
-      origin: "all",
-      search: "",
-      isOpen: true,
-      counts: empty,
-      countsByOrigin: computeOriginCounts([]),
-      page: 1,
-      pageSize: LOG_PAGE_SIZE,
-      bootId: null,
-      autoScroll: true,
-      anchorId: null,
-      viewBaselineAfter: 0,
-    },
-    sessionStart: null,
-    page: 1,
-    revision: 0,
-    viewRevision: 0,
-    viewSeenIds: new Set<string>(),
+    anchorId: null,
+    autoScroll: true,
     followBaseline: 0,
     followResetAt: 0,
-    autoScroll: true,
-    anchorId: null,
+    header: {
+      anchorId: null,
+      autoScroll: true,
+      bootId: null,
+      counts: empty,
+      countsByOrigin: computeOriginCounts([]),
+      filter: "all",
+      filteredLogs: [],
+      isOpen: true,
+      origin: "all",
+      page: 1,
+      pageSize: LOG_PAGE_SIZE,
+      search: "",
+      viewBaselineAfter: 0,
+    },
+    page: 1,
+    revision: 0,
+    sessionStart: null,
     viewBaselineAfter: 0,
+    viewRevision: 0,
+    viewSeenIds: new Set<string>(),
   });
 });
 
@@ -738,8 +738,8 @@ describe("LogPanel 日志面板", () => {
       useLogStore
         .getState()
         .appendFileLogs([
-          makeEntry(1, { origin: "app-runtime", message: "要复制的运行日志" }),
-          makeEntry(2, { origin: "dev", message: "不该被复制的启动日志" }),
+          makeEntry(1, { message: "要复制的运行日志", origin: "app-runtime" }),
+          makeEntry(2, { message: "不该被复制的启动日志", origin: "dev" }),
         ]),
     );
     render(<LogPanel />);
@@ -757,13 +757,13 @@ describe("LogPanel 日志面板", () => {
      * 什么都没有（ISSUE #609 第 3 条）。这里断言接线——点一下会把当前筛选的
      * 文本 POST 给导出端点，并把服务端回的路径显示出来。 */
     const fetchMock = vi.fn(async () => ({
-      ok: true,
       json: async () => ({
+        bytes: 42,
         ok: true,
         path: "F:\\proj\\log\\exports\\logs-all-20260101-100000.txt",
         relativePath: "exports/logs-all-20260101-100000.txt",
-        bytes: 42,
       }),
+      ok: true,
     }));
     vi.stubGlobal("fetch", fetchMock);
     try {
@@ -797,13 +797,13 @@ describe("LogPanel 日志面板", () => {
      *                  与环境信息在面板上根本看不到）。
      * 这里断言后者走的是它自己的端点、且不需要带 body（服务端自己找现场）。 */
     const fetchMock = vi.fn(async () => ({
-      ok: true,
       json: async () => ({
+        bytes: 1024,
         ok: true,
         path: "F:\\proj\\log\\exports\\diagnostics-20260101-100000-a1b2c3.zip",
         relativePath: "exports/diagnostics-20260101-100000-a1b2c3.zip",
-        bytes: 1024,
       }),
+      ok: true,
     }));
     vi.stubGlobal("fetch", fetchMock);
     try {

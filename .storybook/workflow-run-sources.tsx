@@ -121,17 +121,17 @@ export const WORKFLOW_RUN_SCENES = {
   /** 默认：一次成功的就地运行 —— 各档级别齐全，进度条走到 100。 */
   completed: {
     about: "一次成功的就地运行（提交 → 排队 → 三段采样 → 落盘 → ✓ 完成）",
-    workflowName: "角色三视图 · 就地运行",
     progress: 100,
     steps: SUBMIT_STEPS,
+    workflowName: "角色三视图 · 就地运行",
   },
   /** 失败：横幅（`errorMessage`）+ 时间线里那条 error 行**成对**出现。 */
   failed: {
     about: "一次失败的运行（顶部横幅与时间线里的 error 行成对）",
-    workflowName: "角色三视图 · 就地运行",
-    progress: 62,
     failWith: "OOM（显存不足）：请在设置里降低分辨率后重试",
+    progress: 62,
     steps: FAILING_STEPS,
+    workflowName: "角色三视图 · 就地运行",
   },
   /**
    * 340 条：`MAX_LOGS`（300）**之下**的「一页装不完」现场
@@ -139,25 +139,25 @@ export const WORKFLOW_RUN_SCENES = {
    */
   longTask: {
     about: "340 条步骤日志（一页装不完，底栏与截尾口真正被走到）",
-    workflowName: "批量出图 · 12 张",
     progress: 88,
     steps: LONG_STEPS,
+    workflowName: "批量出图 · 12 张",
   },
   /** 只有警告与错误：级别筛选页签上其余几档计数为 0 的那一档。 */
   warnings: {
     about: "只有警告与错误（级别筛选页签上其余几档计数为 0）",
-    workflowName: "角色三视图 · 就地运行",
     steps: [
       { level: "warn", msg: "[comfyui] 队列等待 9.8s，远超本机均值" },
       { level: "warn", msg: "[comfyui] 显存占用 11.8/12.0 GB，接近上限" },
       { level: "error", msg: "[comfyui] 执行失败：OOM（显存不足）" },
     ],
+    workflowName: "角色三视图 · 就地运行",
   },
   /** 登记了运行但一条日志都还没来：`emptySlot` 那一档（不是「没画出来」）。 */
   empty: {
     about: "登记了运行但还没收到任何日志（空态占位的那一档）",
-    workflowName: "角色三视图 · 就地运行",
     steps: [],
+    workflowName: "角色三视图 · 就地运行",
   },
   /**
    * 上面的键就是**全部**合法的场景名：写成字面量对象（不加 `Record<string, …>`
@@ -199,9 +199,9 @@ const STEP_MS = 1400;
 export function runSceneLogs(name: string, baseMs: number): Array<TaskLogEntry> {
   const scene = requireScene(name);
   return scene.steps.map((step, index) => ({
-    t: baseMs + index * STEP_MS,
     level: step.level,
     msg: step.msg,
+    t: baseMs + index * STEP_MS,
     ...(step.src === undefined ? {} : { src: step.src }),
   }));
 }
@@ -245,13 +245,13 @@ function seedScene(name: string): void {
      与真机一致（见 `runSceneLogs()` 的说明）。 */
   const baseMs = Date.now() - scene.steps.length * STEP_MS;
   registerWorkflowRun({
+    source: "canvas-node",
+    startedAt: baseMs,
+    status: "running",
     taskId: SCENE_TASK_ID,
+    taskType: "generate",
     workflowId: "wf_story_0001",
     workflowName: scene.workflowName,
-    taskType: "generate",
-    startedAt: baseMs,
-    source: "canvas-node",
-    status: "running",
   });
   for (const entry of runSceneLogs(name, baseMs)) {
     appendWorkflowRunLog(SCENE_TASK_ID, entry);

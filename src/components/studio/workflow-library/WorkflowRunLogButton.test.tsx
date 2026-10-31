@@ -11,12 +11,12 @@ afterEach(() => {
 
 function run(over: Partial<Parameters<typeof registerWorkflowRun>[0]> = {}) {
   registerWorkflowRun({
-    taskId: "t1",
-    workflowId: "wf1",
-    workflowName: "文生图",
-    taskType: "t2i",
     startedAt: 1,
     status: "running",
+    taskId: "t1",
+    taskType: "t2i",
+    workflowId: "wf1",
+    workflowName: "文生图",
     ...over,
   });
 }
@@ -40,8 +40,8 @@ describe("WorkflowRunLogButton", () => {
   it("两边的运行共用同一扇门：登记表里有谁在跑都看得到", () => {
     /* 运行时序互不干扰（ISSUE #611）：登记表同时容纳两边的任务，日志入口
      * 按工作流过一遍就能看到 —— 不会「一个在跑、另一个的执行日志点不出来」。 */
-    run({ taskId: "canvas", source: "canvas-node" });
-    run({ taskId: "test", startedAt: 2, source: "encapsulation-test" });
+    run({ source: "canvas-node", taskId: "canvas" });
+    run({ source: "encapsulation-test", startedAt: 2, taskId: "test" });
     render(<WorkflowRunLogButton onOpen={() => undefined} taskId="test" workflowId="wf1" />);
     expect(screen.getByTestId("wflib-log-open")).toBeTruthy();
   });

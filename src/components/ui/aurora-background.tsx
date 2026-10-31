@@ -82,15 +82,15 @@ export function AuroraBackground({ className = "" }: { className?: string }) {
  * 极光晕会当场失色且无任何报错。把名字写全 = 这个文件自己就把 token 保住了。
  */
 const AURORA_TONE_VAR: Record<"violet" | "cyan" | "magenta", string> = {
-  violet: "var(--color-aurora-violet)",
   cyan: "var(--color-aurora-cyan)",
   magenta: "var(--color-aurora-magenta)",
+  violet: "var(--color-aurora-violet)",
 };
 
 export function AuroraGlow({
-  tone,
   alpha,
   className = "",
+  tone,
 }: {
   /** 光晕中心的不透明度（0~1），只影响这一层。 */
   alpha: number;

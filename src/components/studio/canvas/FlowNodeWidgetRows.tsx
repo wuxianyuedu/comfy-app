@@ -22,10 +22,10 @@ type FlowNodeWidgetRowsProps = {
 
 export function FlowNodeWidgetRows({
   data,
+  hasSize,
   io,
   rawMeta,
   visibleWidgetEntries,
-  hasSize,
 }: FlowNodeWidgetRowsProps) {
   /* 选中节点时端口行跟着连线一起变（判据与连线同源，见 FlowNodePinRows）：
    *  有连线落到的那一行提亮、端点放大，没有落到的行压暗。级别由
@@ -71,8 +71,8 @@ export function FlowNodeWidgetRows({
         const tone =
           PORT_ROW_TONES[
             resolvePortRowTone({
-              role: readPortFocusRole(nodeData, k),
               hasSelection: portFocusActive,
+              role: readPortFocusRole(nodeData, k),
             })
           ];
 
@@ -102,15 +102,15 @@ export function FlowNodeWidgetRows({
               isConnectable
               position={Position.Left}
               style={{
-                left: 5,
                 background: typeCol,
+                left: 5,
                 opacity: isConn || isBoundary ? 1 : 0,
                 /* 相关行的端点放大 + 光晕增强（无连线的行端点仍完全透明）。 */
-                width: tone.dotSize,
-                height: tone.dotSize,
+                borderColor: isConn || isBoundary ? "var(--color-canvas)" : "transparent",
                 boxShadow:
                   isConn || isBoundary ? portDotGlow(typeCol, tone.dotGlowStrong) : undefined,
-                borderColor: isConn || isBoundary ? "var(--color-canvas)" : "transparent",
+                height: tone.dotSize,
+                width: tone.dotSize,
               }}
               title={`${k} (${inputType})`}
               type="target"
@@ -124,11 +124,11 @@ export function FlowNodeWidgetRows({
                   <IoCheckbox
                     io={io}
                     ioRef={{
-                      nodeId: data.nodeId,
-                      hostNodeId: data.hostNodeId,
-                      name: k,
-                      kind: "widget",
                       direction: "input",
+                      hostNodeId: data.hostNodeId,
+                      kind: "widget",
+                      name: k,
+                      nodeId: data.nodeId,
                     }}
                   />
                 )}
@@ -157,23 +157,23 @@ export function FlowNodeWidgetRows({
                   <IoCheckbox
                     io={io}
                     ioRef={{
-                      nodeId: data.nodeId,
-                      hostNodeId: data.hostNodeId,
-                      name: k,
-                      kind: "widget",
                       direction: "input",
+                      hostNodeId: data.hostNodeId,
+                      kind: "widget",
+                      name: k,
+                      nodeId: data.nodeId,
                     }}
                   />
                 )}
                 <span
                   className="text-2xs min-w-0 shrink text-left wrap-break-word whitespace-normal"
                   style={{
-                    flex: "0 1 auto",
                     color: tone.background
                       ? tone.labelColor
                       : isConn
                         ? "var(--color-ink-strong)"
                         : "var(--color-ink-subtle)",
+                    flex: "0 1 auto",
                     fontWeight: tone.labelWeight,
                   }}
                   title={k}
@@ -190,8 +190,8 @@ export function FlowNodeWidgetRows({
                 <span
                   className="text-2xs min-w-0 truncate text-left tabular-nums"
                   style={{
-                    flex: "1 1 0",
                     color: valueCellColor(v, isConn),
+                    flex: "1 1 0",
                   }}
                   title={String(v)}
                 >

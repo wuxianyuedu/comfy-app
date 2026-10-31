@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { force: true, recursive: true });
   resetLocalWorkflowChecksumCache();
 });
 
@@ -130,9 +130,7 @@ describe("scanLocalWorkflowChecksums 的 mtime+size 记忆", () => {
 
   it("未配置根目录 / 目录不存在时返回空数组，不抛错", async () => {
     expect(await scanLocalWorkflowChecksums([])).toEqual([]);
-    expect(
-      await scanLocalWorkflowChecksums([path.join(dir, "missing")]),
-    ).toEqual([]);
+    expect(await scanLocalWorkflowChecksums([path.join(dir, "missing")])).toEqual([]);
   });
 });
 
@@ -144,15 +142,11 @@ describe("scanLocalWorkflowRoots 只读不写", () => {
     fs.mkdirSync(path.join(dir, "sub"));
     write(path.join("sub", "c.json"), "{}");
 
-    const { roots, allFiles } = await scanLocalWorkflowRoots([dir], {
+    const { allFiles, roots } = await scanLocalWorkflowRoots([dir], {
       recursive: true,
     });
     expect(roots).toHaveLength(1);
     expect(roots[0]!.exists).toBe(true);
-    expect(allFiles.map((f) => f.name).sort()).toEqual([
-      "a.workflow",
-      "b.json",
-      "c.json",
-    ]);
+    expect(allFiles.map((f) => f.name).sort()).toEqual(["a.workflow", "b.json", "c.json"]);
   });
 });

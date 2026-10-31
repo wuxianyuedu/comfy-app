@@ -23,12 +23,12 @@ describe("extraction-log 纯函数", () => {
   it("formatRequestMessages 按 role 分段展示并支持超长截断", () => {
     const messages = [
       {
-        role: /* SAFETY: 类型断言已复核 */ "system" as const,
         content: "你是分镜师",
+        role: /* SAFETY: 类型断言已复核 */ "system" as const,
       },
       {
-        role: /* SAFETY: 类型断言已复核 */ "user" as const,
         content: "剧本全文:\n场景1 小满出门",
+        role: /* SAFETY: 类型断言已复核 */ "user" as const,
       },
     ];
     const text = formatRequestMessages(messages);
@@ -41,8 +41,8 @@ describe("extraction-log 纯函数", () => {
     const longContent = "x".repeat(6000);
     const truncated = formatRequestMessages([
       {
-        role: /* SAFETY: 类型断言已复核 */ "user" as const,
         content: longContent,
+        role: /* SAFETY: 类型断言已复核 */ "user" as const,
       },
     ]);
     expect(truncated).toContain("已截断");
@@ -51,10 +51,10 @@ describe("extraction-log 纯函数", () => {
 
   it("ExtractLogEntry 结构可被消费者直接构造（无运行时依赖）", () => {
     const manual: ExtractLogEntry = {
-      ts: new Date().toISOString(),
+      detail: "…",
       kind: "result",
       summary: "已提取 3 个角色",
-      detail: "…",
+      ts: new Date().toISOString(),
     };
     expect(manual.kind).toBe("result");
     expect(manual.summary).toBe("已提取 3 个角色");

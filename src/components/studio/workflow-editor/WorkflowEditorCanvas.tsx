@@ -76,7 +76,6 @@ const ROLE_COLOR_BY_KEY = new Map(PORT_ROLES.map((r) => [r.key, r.color]));
  * （父层 onEdgeClick）才翻成可交互，普通边保持惰性、把预算留给拖拽/平移/缩放。
  * stroke 用 `--color-edge-default` token（紫，与端口/类别色系一致），不写死 rgba。 */
 const DEFAULT_EDGE_OPTIONS = {
-  type: "default",
   animated: false,
   deletable: false,
   reconnectable: false,
@@ -84,6 +83,7 @@ const DEFAULT_EDGE_OPTIONS = {
     stroke: "var(--color-edge-default)",
     strokeWidth: 2.5,
   },
+  type: "default",
 };
 
 export type WorkflowEditorCanvasProps = {
@@ -114,20 +114,20 @@ export type WorkflowEditorCanvasProps = {
 };
 
 export function WorkflowEditorCanvas({
-  nodes,
-  edges,
-  onNodesChange,
-  onEdgesChange,
-  onNodeDragStop,
   canvasSettings,
   canvasSettingsHydrated,
+  edges,
+  isValidConnection,
+  nodes,
+  onConnect,
+  onEdgeClick,
+  onEdgesChange,
+  onEdgesDelete,
   onMiniMapJump,
+  onNodeDragStop,
+  onNodesChange,
   onOpenSettings,
   onRecenter,
-  onEdgeClick,
-  onConnect,
-  isValidConnection,
-  onEdgesDelete,
   setEdges,
   setNodes,
 }: WorkflowEditorCanvasProps) {
@@ -160,7 +160,7 @@ export function WorkflowEditorCanvas({
         console.warn(`[React Flow] ${message}`);
         return;
       }
-      const { nodeLookup, edgeLookup } = store.getState();
+      const { edgeLookup, nodeLookup } = store.getState();
       const edge = edgeLookup.get(id);
       const mounted = new Set<string>();
       nodeLookup.forEach((internal, nodeId) => {

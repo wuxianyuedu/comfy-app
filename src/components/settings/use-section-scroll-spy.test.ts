@@ -56,9 +56,9 @@ class FakeIntersectionObserver {
       entries.map(
         (e) =>
           /* SAFETY: 类型断言已复核 */ ({
-            target: e.target,
-            isIntersecting: e.isIntersecting,
             intersectionRatio: e.isIntersecting ? 1 : 0,
+            isIntersecting: e.isIntersecting,
+            target: e.target,
           }) as unknown as IntersectionObserverEntry,
       ),
       /* SAFETY: 类型断言已复核 */ this as unknown as IntersectionObserver,
@@ -97,10 +97,10 @@ describe("useSectionScrollSpy", () => {
     const onActiveChange = vi.fn();
     const { result } = renderHook(() =>
       useSectionScrollSpy({
-        containerRef: ref,
-        sectionIds: IDS,
         activeId: "a",
+        containerRef: ref,
         onActiveChange,
+        sectionIds: IDS,
       }),
     );
 
@@ -121,15 +121,15 @@ describe("useSectionScrollSpy", () => {
     /* a、b 都进入了 —— 取文档顺序里最后一个（b）。 */
     act(() => {
       observer.emit([
-        { target: nodes.get("a")!, isIntersecting: true },
-        { target: nodes.get("b")!, isIntersecting: true },
+        { isIntersecting: true, target: nodes.get("a")! },
+        { isIntersecting: true, target: nodes.get("b")! },
       ]);
     });
     expect(onActiveChange).toHaveBeenCalledWith("b");
 
     /* 再进入 c —— 当前项推到 c。 */
     act(() => {
-      observer.emit([{ target: nodes.get("c")!, isIntersecting: true }]);
+      observer.emit([{ isIntersecting: true, target: nodes.get("c")! }]);
     });
     expect(onActiveChange).toHaveBeenLastCalledWith("c");
   });
@@ -141,10 +141,10 @@ describe("useSectionScrollSpy", () => {
     const onActiveChange = vi.fn();
     const { result } = renderHook(() =>
       useSectionScrollSpy({
-        containerRef: ref,
-        sectionIds: IDS,
         activeId: "b",
+        containerRef: ref,
         onActiveChange,
+        sectionIds: IDS,
       }),
     );
     act(() => {
@@ -155,8 +155,8 @@ describe("useSectionScrollSpy", () => {
 
     act(() => {
       FakeIntersectionObserver.last!.emit([
-        { target: nodes.get("a")!, isIntersecting: false },
-        { target: nodes.get("b")!, isIntersecting: false },
+        { isIntersecting: false, target: nodes.get("a")! },
+        { isIntersecting: false, target: nodes.get("b")! },
       ]);
     });
     expect(onActiveChange).not.toHaveBeenCalled();
@@ -171,10 +171,10 @@ describe("useSectionScrollSpy", () => {
     const onActiveChange = vi.fn();
     const { result } = renderHook(() =>
       useSectionScrollSpy({
-        containerRef: ref,
-        sectionIds: IDS,
         activeId: "a",
+        containerRef: ref,
         onActiveChange,
+        sectionIds: IDS,
       }),
     );
     act(() => {
@@ -200,10 +200,10 @@ describe("useSectionScrollSpy", () => {
     const onActiveChange = vi.fn();
     const { result } = renderHook(() =>
       useSectionScrollSpy({
-        containerRef: ref,
-        sectionIds: IDS,
         activeId: "a",
+        containerRef: ref,
         onActiveChange,
+        sectionIds: IDS,
       }),
     );
     act(() => {

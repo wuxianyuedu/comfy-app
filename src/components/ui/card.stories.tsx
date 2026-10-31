@@ -30,8 +30,8 @@ type CardSize = NonNullable<React.ComponentProps<typeof Card>["size"]>;
 const SIZES: Array<CardSize> = ["default", "sm"];
 
 const meta = {
-  title: "UI/Card",
   component: Card,
+  title: "UI/Card",
 } satisfies Meta<typeof Card>;
 
 export default meta;

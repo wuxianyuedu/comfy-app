@@ -51,45 +51,39 @@ describe("clampText", () => {
     /* 日志会话这类「最新的在最后」的内容必须保留尾部 —— 保留头部截出来的
      * 全是无关的上古内容。两者在界面上看不出差别，只有这里能钉住。 */
     /* 13 字符、上限 10、标记占 1 → 正文 9 → 保留最后 9 个。 */
-    expect(
-      clampText("0123456789abc", { maxLength: 10, direction: "tail" }),
-    ).toBe("…456789abc");
+    expect(clampText("0123456789abc", { direction: "tail", maxLength: 10 })).toBe("…456789abc");
   });
 
   it('marker: "" 表示不标记（保留既有行为）', () => {
     /* 用于「截断后仍是完整单元」的场景（如按行取整）。 */
-    expect(clampText("0123456789abc", { maxLength: 10, marker: "" })).toBe(
-      "0123456789",
-    );
+    expect(clampText("0123456789abc", { marker: "", maxLength: 10 })).toBe("0123456789");
   });
 
   it("annotation 拼成 `…(内容)`，供诊断通道带上「被切了多少」", () => {
     /* 不超上限时原样返回（标记只在**截断**时出现）。 */
     expect(
       clampText("0123456789abc", {
-        maxLength: 30,
         annotation: "truncated, 原始 13 字符",
+        maxLength: 30,
       }),
     ).toBe("0123456789abc");
     /* 超上限时标记带上原始长度 —— 诊断通道最想知道的那一个数。
      * 正文额度 = maxLength - 标记长度 = 14 - 12 = 2。 */
     const long = "0123456789abcdefghij"; // 20 字符
     const out = clampText(long, {
-      maxLength: 14,
       annotation: "truncated",
+      maxLength: 14,
     });
     expect(out).toBe("01…(truncated)");
     expect(out.length).toBeLessThanOrEqual(14);
     /* 带原始长度的那一大串：标记更长，正文额度相应变短。 */
     const out2 = clampText(long, {
-      maxLength: 30,
       annotation: "truncated, 原始 20 字符",
+      maxLength: 30,
     });
     expect(out2.endsWith("…(truncated, 原始 20 字符)")).toBe(false);
     /* maxLength 大于正文时**不截断**，annotation 自然不出现。 */
-    expect(clampText("短", { maxLength: 30, annotation: "truncated" })).toBe(
-      "短",
-    );
+    expect(clampText("短", { annotation: "truncated", maxLength: 30 })).toBe("短");
   });
 
   it("病态输入不返回更长的串", () => {
@@ -98,8 +92,8 @@ describe("clampText", () => {
     expect(clampText("abc", { maxLength: -3 })).toBe("");
     /* 标记比上限还长：不留标记，只裁到上限。 */
     const out = clampText("abcdefgh", {
-      maxLength: 2,
       marker: "非常长的省略标记非常长的省略标记",
+      maxLength: 2,
     });
     expect(out.length).toBeLessThanOrEqual(2);
   });

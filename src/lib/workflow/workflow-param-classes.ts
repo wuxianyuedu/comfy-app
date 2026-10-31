@@ -125,21 +125,21 @@ export function nodeIdOfIoKey(ioKey: string): string {
  *  （对外聚合为「尺寸」之后它们不该出现在任何**对外**清单里，卡片上出现时
  *  说明这条口子还没被契约收编）。 */
 const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
-  prompt: exposedParamDisplayLabel("prompt"),
-  negative: exposedParamDisplayLabel("negative"),
-  size: exposedParamDisplayLabel("size"),
-  "size-width": "宽度",
-  "size-height": "高度",
-  "size-aspect": "宽高比",
-  "size-megapixels": "像素量",
-  "size-resolution": "分辨率档",
-  "size-multiple": "倍数",
-  "reference-image": exposedParamDisplayLabel("reference-image"),
+  duration: exposedParamDisplayLabel("duration"),
   "first-frame": exposedParamDisplayLabel("first-frame"),
   "last-frame": exposedParamDisplayLabel("last-frame"),
-  duration: exposedParamDisplayLabel("duration"),
-  seed: exposedParamDisplayLabel("seed"),
+  negative: exposedParamDisplayLabel("negative"),
   other: "参数",
+  prompt: exposedParamDisplayLabel("prompt"),
+  "reference-image": exposedParamDisplayLabel("reference-image"),
+  seed: exposedParamDisplayLabel("seed"),
+  size: exposedParamDisplayLabel("size"),
+  "size-aspect": "宽高比",
+  "size-height": "高度",
+  "size-megapixels": "像素量",
+  "size-multiple": "倍数",
+  "size-resolution": "分辨率档",
+  "size-width": "宽度",
 };
 
 /** 某个尺寸子口的显示名（`尺寸 · 宽高比`）。
@@ -211,21 +211,21 @@ export function pinFamily(e: WorkflowIOEntry | null | undefined): PinFamily | nu
  *  `size` 是**聚合值**（对外只报一个「尺寸」，映射层摊成六个子口）—— 它和六个
  *  子口一样只吃数值行；`other` 是工作流内部参数，不接受任何端口。 */
 export const CLASS_FAMILY: Record<ParamClass, PinFamily | null> = {
-  prompt: "text",
-  negative: "text",
-  size: "number",
-  "size-width": "number",
-  "size-height": "number",
-  "size-aspect": "number",
-  "size-megapixels": "number",
-  "size-resolution": "number",
-  "size-multiple": "number",
-  "reference-image": "image",
+  duration: "number",
   "first-frame": "image",
   "last-frame": "image",
-  duration: "number",
-  seed: "number",
+  negative: "text",
   other: null,
+  prompt: "text",
+  "reference-image": "image",
+  seed: "number",
+  size: "number",
+  "size-aspect": "number",
+  "size-height": "number",
+  "size-megapixels": "number",
+  "size-multiple": "number",
+  "size-resolution": "number",
+  "size-width": "number",
 };
 
 /** 某个对外参数类接受的端口族（`null` = 不接受任何端口）。 */
@@ -376,12 +376,12 @@ const NUMERIC_PORT_TYPES = /* SAFETY: 类型断言已复核 */ ["INT", "FLOAT", 
  *
  *  类型未知（缺省 / `*`）的端口一律放行：拿不到事实时不替作者做决定。 */
 const SIZE_SUB_SPEC: Record<string, { accepts: ReadonlyArray<string>; display: string }> = {
-  "size-width": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
-  "size-height": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
-  "size-megapixels": { display: "FLOAT", accepts: NUMERIC_PORT_TYPES },
-  "size-resolution": { display: "INT", accepts: NUMERIC_PORT_TYPES },
-  "size-multiple": { display: "INT", accepts: NUMERIC_PORT_TYPES },
-  "size-aspect": { display: "COMBO", accepts: ["COMBO"] },
+  "size-aspect": { accepts: ["COMBO"], display: "COMBO" },
+  "size-height": { accepts: NUMERIC_PORT_TYPES, display: "FLOAT" },
+  "size-megapixels": { accepts: NUMERIC_PORT_TYPES, display: "FLOAT" },
+  "size-multiple": { accepts: NUMERIC_PORT_TYPES, display: "INT" },
+  "size-resolution": { accepts: NUMERIC_PORT_TYPES, display: "INT" },
+  "size-width": { accepts: NUMERIC_PORT_TYPES, display: "FLOAT" },
 };
 
 /** 尺寸子口展示的类型（见 `SIZE_SUB_SPEC`）—— 不论有没有落点都是它。 */
@@ -397,9 +397,9 @@ function acceptedPinTypesFor(cls: ParamClass): ReadonlyArray<string> | undefined
 /** 一个对外口**自己的**类型（按它接受的端口族给）—— 未连线时卡片上显示它，
  *  不显示 `*`，也不随落点变。尺寸六子口另有形态表（见 `sizeSubTypeDisplay`）。 */
 const FAMILY_TYPE: Record<PinFamily, string> = {
-  text: "STRING",
   image: "IMAGE",
   number: "NUMBER",
+  text: "STRING",
 };
 
 /** 一个对外口自己的类型展示名：尺寸子口按**形态**固定（见 `SIZE_SUB_SPEC`），
@@ -447,12 +447,12 @@ export function paramOutputPorts(
       /* 类型**只看这个口自己**（按族 / 按尺寸形态），连没连线都一样 —— 见
        *  `ParamOutputPort.type` 的说明。落点那一行的声明类型另存 `targetType`，
        *  只在行 title 里露面。 */
-      type: classPinType(entry.cls),
-      targetType: rawTarget ? portTypeDisplay(rawTarget.type) : undefined,
-      connected: !!target,
-      ioKey: target ?? "",
-      handleId: entry.id,
       active: !!target,
+      connected: !!target,
+      handleId: entry.id,
+      ioKey: target ?? "",
+      targetType: rawTarget ? portTypeDisplay(rawTarget.type) : undefined,
+      type: classPinType(entry.cls),
     },
   ];
 }
@@ -476,5 +476,5 @@ export function wiredTargetsForEntry(args: {
   target: string | null | undefined;
 }): Array<{ active: boolean; ioKey: string }> {
   /* 只报作者连上的那一条 —— 候选圆点由 `paramOutputPorts` 照给，两件事分开。 */
-  return args.target ? [{ ioKey: args.target, active: true }] : [];
+  return args.target ? [{ active: true, ioKey: args.target }] : [];
 }

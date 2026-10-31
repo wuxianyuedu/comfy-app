@@ -50,23 +50,23 @@ export function LogPanelFooter(input: {
   totalPages: number;
 }) {
   const {
-    safePage,
-    totalPages,
+    bootId,
+    droppedTotal,
+    filter,
+    jumpToLatest,
+    newLogCount,
+    origin,
     pageSize,
+    safePage,
+    search,
+    setFilter,
+    setOrigin,
+    setPage,
+    setSearch,
+    shouldPin,
     total,
     totalAll,
-    search,
-    droppedTotal,
-    bootId,
-    shouldPin,
-    newLogCount,
-    jumpToLatest,
-    setPage,
-    origin,
-    setOrigin,
-    filter,
-    setFilter,
-    setSearch,
+    totalPages,
   } = input;
 
   return (

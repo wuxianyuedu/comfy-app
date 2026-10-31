@@ -26,7 +26,7 @@ export function useComfyStateEvents(input: {
   /** 是否订阅。false = 立刻退订（首屏未就绪 / 正在执行会自己 refetch 的动作）。 */
   paused: boolean;
 }): void {
-  const { paused, onChange } = input;
+  const { onChange, paused } = input;
   /* 回调走 ref：它每次渲染都是新的箭头函数（内联在调用点），进依赖数组会让
    * 「订阅 → 退订 → 再订阅」在每次渲染重放一遍 —— 而那条链的**开**是「发一轮
    * 长轮询」、**关**是「拆掉在途请求」，反复重放的表现是请求风暴与服务端连上

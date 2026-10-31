@@ -29,28 +29,28 @@ type WorkflowImportPanelProps = {
   state: ImportState;
 };
 
-export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImportPanelProps) {
+export function WorkflowImportPanel({ onClose, onImport, state }: WorkflowImportPanelProps) {
   const {
-    importName,
-    setImportName,
-    importModes,
-    setImportModes,
-    importDefaultMode,
-    setImportDefaultMode,
-    importJson,
-    setImportJson,
-    importing,
-    importErr,
-    importWarn,
-    showHelpTip,
-    setShowHelpTip,
     dropErr,
     handlePickedFile,
-    panelDragActive,
-    onPanelDragOver,
+    importDefaultMode,
+    importErr,
+    importing,
+    importJson,
+    importModes,
+    importName,
+    importWarn,
     onPanelDragEnter,
     onPanelDragLeave,
+    onPanelDragOver,
     onPanelDrop,
+    panelDragActive,
+    setImportDefaultMode,
+    setImportJson,
+    setImportModes,
+    setImportName,
+    setShowHelpTip,
+    showHelpTip,
   } = state;
 
   /* 「选择文件」入口：隐藏 input 的持有与触发收进`ui/file-picker`
@@ -59,8 +59,8 @@ export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImport
   const pickerProps = useMemo(() => ({ "aria-label": "选择工作流 JSON 文件" }), []);
   const importPicker = useFilePicker({
     accept: ".json,.workflow,application/json",
-    onPick: (file) => void handlePickedFile(file),
     inputProps: pickerProps,
+    onPick: (file) => void handlePickedFile(file),
   });
 
   return (

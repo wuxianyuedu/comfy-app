@@ -162,22 +162,22 @@ export type RunnerState = {
  *  对外（见 §13-3C 的 SSE 单源化），跨宿主不可能靠一个进程内的 EventEmitter。 */
 export function createEmptyState(): RunnerState {
   return {
-    ws: null,
-    pendingDispatch: new Set(),
     connecting: false,
-    promptToTask: new Map(),
-    logs: new Map(),
-    queuedEntries: new Map(),
-    rawCli: new Map(),
+    executedWorkflow: new Map(),
+    finalized: new Set(),
     lastLogPct: new Map(),
     lastNodeByTask: new Map(),
-    startedAt: new Map(),
-    settled: new Set(),
-    finalized: new Set(),
-    timers: new Map(),
+    logs: new Map(),
+    pendingDispatch: new Set(),
+    promptToTask: new Map(),
+    queuedEntries: new Map(),
+    rawCli: new Map(),
     reconnectAttempts: 0,
+    settled: new Set(),
+    startedAt: new Map(),
+    timers: new Map(),
+    ws: null,
     wsPathIndex: 0,
-    executedWorkflow: new Map(),
     wsWaitLogged: new Set(),
   };
 }

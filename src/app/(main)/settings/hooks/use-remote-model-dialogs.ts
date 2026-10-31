@@ -86,15 +86,15 @@ const usageTestDrafts = new Map<string, UsageTestDialogSnapshot>();
 function rememberUsageTestDraft(state: UsageTestDialogState): void {
   const key = usageTestDraftKey(state.kind, state.entry.name);
   usageTestDrafts.set(key, {
+    apiKey: state.apiKey,
+    baseUrl: state.baseUrl,
+    fields: state.fields.map((f) => ({ ...f })),
     kind: state.kind,
     name: state.entry.name,
-    baseUrl: state.baseUrl,
     path: state.path,
-    apiKey: state.apiKey,
     prompt: state.prompt,
-    size: state.size,
-    fields: state.fields.map((f) => ({ ...f })),
     result: state.result,
+    size: state.size,
   });
 }
 
@@ -174,10 +174,10 @@ export type RemoteModelDialogs = {
 export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteModelDialogs {
   const [dialog, setDialog] = useState<ModelDialog>(null);
   const [addForm, setAddForm] = useState<ModelDialogForm>({
-    baseUrl: "",
     apiKey: "",
-    model: "",
+    baseUrl: "",
     kind: "chat",
+    model: "",
   });
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const testBusy = useBusyAction();
@@ -206,7 +206,7 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
 
   function openAddDialog(kind: RemoteModelKind = "chat") {
     setDialog({ mode: "add" });
-    setAddForm({ baseUrl: "", apiKey: "", model: "", kind });
+    setAddForm({ apiKey: "", baseUrl: "", kind, model: "" });
     setClearKey(false);
     setTestMsg(null);
     setSuggestions([]);
@@ -215,12 +215,12 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
   }
 
   function openEditDialog(entry: RemoteModelEntry) {
-    setDialog({ mode: "edit", original: entry.name, entry });
+    setDialog({ entry, mode: "edit", original: entry.name });
     setAddForm({
-      baseUrl: entry.baseUrl ?? "",
       apiKey: "",
-      model: entry.name,
+      baseUrl: entry.baseUrl ?? "",
       kind: entry.kind ?? "chat",
+      model: entry.name,
     });
     setClearKey(false);
     setTestMsg(null);
@@ -241,8 +241,8 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
       const savedKey = dialog?.mode === "edit" ? dialog.entry.apiKey : undefined;
       const typedKey = addForm.apiKey.trim();
       const out = await c.probeRemote({
-        baseUrl: addForm.baseUrl.trim() || undefined,
         apiKey: typedKey ? typedKey : (savedKey ?? undefined),
+        baseUrl: addForm.baseUrl.trim() || undefined,
         model: addForm.model.trim() || undefined,
       });
       setTestMsg({ kind: out.ok ? "ok" : "err", text: out.detail });
@@ -259,22 +259,22 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
     if (rowProbe?.running && rowProbe.name === entry.name) {
       return;
     }
-    setRowProbe({ name: entry.name, running: true, msg: null });
+    setRowProbe({ msg: null, name: entry.name, running: true });
     try {
       const out = await c.probeRemote({
-        baseUrl: entry.baseUrl ?? undefined,
         apiKey: entry.apiKey ?? undefined,
+        baseUrl: entry.baseUrl ?? undefined,
       });
       setRowProbe({
+        msg: { kind: out.ok ? "ok" : "err", text: out.detail },
         name: entry.name,
         running: false,
-        msg: { kind: out.ok ? "ok" : "err", text: out.detail },
       });
     } catch {
       setRowProbe({
+        msg: { kind: "err", text: "连接测试失败，请检查接口地址与网络" },
         name: entry.name,
         running: false,
-        msg: { kind: "err", text: "连接测试失败，请检查接口地址与网络" },
       });
     }
   }
@@ -308,11 +308,11 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
      * 关闭后重开时恢复，而不是回到默认预填——内容不因关闭而丢。 */
     const prev = restoreUsageTestDraft(kind, entry.name);
     setUsageTest({
-      kind,
-      entry,
-      baseUrl: prev?.baseUrl ?? base,
-      path: prev?.path ?? path,
       apiKey: prev?.apiKey ?? "",
+      baseUrl: prev?.baseUrl ?? base,
+      entry,
+      kind,
+      path: prev?.path ?? path,
       prompt: prev?.prompt ?? preset.prompt,
       size: prev?.size ?? "",
       /* 视频接口普遍必填 mode（如 Agnes：text / keyframe / reference）。
@@ -325,9 +325,9 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
             ? defaultVideoFields()
             : [],
       /* 关闭再重开不延续「运行中」——从草稿恢复的是已填内容 + 最近一次结果 */
-      running: false,
       querying: false,
       result: prev?.result ?? null,
+      running: false,
     });
   }
 
@@ -343,17 +343,17 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
     if (!usageTest || usageTest.running) {
       return;
     }
-    setUsageTest({ ...usageTest, running: true, result: null });
+    setUsageTest({ ...usageTest, result: null, running: true });
     /* 弹窗留空 → 用草稿条目里的密钥（未保存的条目也有）：
      * 只靠服务端按名字查已保存配置，会漏掉「加了条目还没点保存」的情况，
      * 表现为 401 未提供令牌。（空串显式回落，不能用 ?? —— ?? 不处理空串） */
     const typedKey = usageTest.apiKey.trim();
     const out = await c.testModelUsage({
+      apiKey: typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
+      baseUrl: usageTest.baseUrl.trim(),
       kind: usageTest.kind,
       name: usageTest.entry.name,
-      baseUrl: usageTest.baseUrl.trim(),
       path: usageTest.path.trim(),
-      apiKey: typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
       prompt: usageTest.prompt,
       size: usageTest.size.trim() || undefined,
       /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON）；
@@ -361,7 +361,7 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
       extraJson: usageFieldsToJson(editor.usageFieldsToSend(usageTest)) || undefined,
     });
     setUsageTest((prev) =>
-      prev ? { ...prev, running: false, querying: false, result: out } : prev,
+      prev ? { ...prev, querying: false, result: out, running: false } : prev,
     );
   }
 
@@ -378,10 +378,10 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
     setUsageTest({ ...usageTest, querying: true });
     const typedKey = usageTest.apiKey.trim();
     const out = await c.queryUsageTask({
-      name: usageTest.entry.name,
-      baseUrl: usageTest.baseUrl.trim(),
-      path: usageTest.path.trim(),
       apiKey: typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
+      baseUrl: usageTest.baseUrl.trim(),
+      name: usageTest.entry.name,
+      path: usageTest.path.trim(),
       taskId,
     });
     setUsageTest((prev) => (prev ? { ...prev, querying: false, result: out } : prev));
@@ -437,29 +437,29 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
   }
 
   return {
-    dialog,
-    closeDialog,
-    addForm,
-    setAddForm,
-    fieldErrors,
     addError,
+    addForm,
     clearKey,
-    setClearKey,
-    testing: testBusy.busy,
-    testMsg,
-    suggestions,
-    submitDialog,
+    closeDialog,
+    closeUsageTest,
+    continueUsageWait,
+    dialog,
+    fieldErrors,
     openAddDialog,
     openEditDialog,
-    testConnection,
+    openUsageTest,
+    patchUsageTest,
     rowProbe,
     runEntryConnectionTest,
-    usageTest,
-    openUsageTest,
-    closeUsageTest,
-    patchUsageTest,
     runUsageTest,
-    continueUsageWait,
+    setAddForm,
+    setClearKey,
+    submitDialog,
+    suggestions,
+    testConnection,
+    testing: testBusy.busy,
+    testMsg,
+    usageTest,
     ...editor,
   };
 }

@@ -38,16 +38,16 @@ export type ContextMenuItem = {
 };
 
 const DEFAULT_CONTEXT_MENU: Array<ContextMenuItem> = [
-  { id: "upload", label: "上传", icon: <MenuIconUpload /> },
-  { id: "text-node", label: "添加文本节点", icon: <MenuIconText /> },
-  { id: "image-node", label: "添加图片节点", icon: <MenuIconImage /> },
-  { id: "video-node", label: "添加视频节点", icon: <MenuIconVideo /> },
-  { id: "audio-node", label: "添加音频节点", icon: <MenuIconAudio /> },
-  { id: "agent-node", label: "添加 Agent 节点", icon: <MenuIconAgent /> },
-  { id: "divider-1", label: "", divider: true },
-  { id: "plugins", label: "插件库", icon: <MenuIconPlugin /> },
-  { id: "fit-view", label: "适应屏幕", icon: <MenuIconFit /> },
-  { id: "paste", label: "粘贴", icon: <MenuIconPaste /> },
+  { icon: <MenuIconUpload />, id: "upload", label: "上传" },
+  { icon: <MenuIconText />, id: "text-node", label: "添加文本节点" },
+  { icon: <MenuIconImage />, id: "image-node", label: "添加图片节点" },
+  { icon: <MenuIconVideo />, id: "video-node", label: "添加视频节点" },
+  { icon: <MenuIconAudio />, id: "audio-node", label: "添加音频节点" },
+  { icon: <MenuIconAgent />, id: "agent-node", label: "添加 Agent 节点" },
+  { divider: true, id: "divider-1", label: "" },
+  { icon: <MenuIconPlugin />, id: "plugins", label: "插件库" },
+  { icon: <MenuIconFit />, id: "fit-view", label: "适应屏幕" },
+  { icon: <MenuIconPaste />, id: "paste", label: "粘贴" },
 ];
 
 export type CanvasAreaProps = {
@@ -74,15 +74,15 @@ export type CanvasAreaProps = {
 
 export function CanvasArea({
   children,
-  contextItems = DEFAULT_CONTEXT_MENU,
-  onContextAction,
-  zoom = 100,
-  onZoomChange,
-  toolbarExtra,
-  showMinimap = true,
-  minimapVisible = false,
-  onMinimapToggle,
   className = "",
+  contextItems = DEFAULT_CONTEXT_MENU,
+  minimapVisible = false,
+  onContextAction,
+  onMinimapToggle,
+  onZoomChange,
+  showMinimap = true,
+  toolbarExtra,
+  zoom = 100,
 }: CanvasAreaProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -224,10 +224,10 @@ export function CanvasArea({
 /* ── Sub-components ─────────────────────────────────── */
 
 function ToolbarButton({
-  children,
-  onClick,
-  hint,
   active = false,
+  children,
+  hint,
+  onClick,
 }: {
   active?: boolean;
   children: React.ReactNode;

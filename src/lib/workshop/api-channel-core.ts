@@ -88,9 +88,9 @@ export function sanitizeChannel(raw: unknown, fallback: ApiChannelStored): ApiCh
   return {
     baseUrl,
     // 路径必须是根相对，拼接 `${baseUrl}${path}` 才能保持格式正确。
-    path: reqPath.startsWith("/") ? reqPath : `/${reqPath}`,
-    model: (str("model") ?? fallback.model).trim(),
     apiKey: str("apiKey") ?? fallback.apiKey,
+    model: (str("model") ?? fallback.model).trim(),
+    path: reqPath.startsWith("/") ? reqPath : `/${reqPath}`,
   };
 }
 
@@ -100,16 +100,16 @@ export type EnvLike = Record<string, string | undefined>;
 export function defaultChannelsFromEnv(env: EnvLike = process.env): WorkshopApiSettings {
   return {
     image: {
-      baseUrl: env.WORKSHOP_API_IMAGE_BASE ?? "",
-      path: "/images/generations",
-      model: env.WORKSHOP_API_IMAGE_MODEL ?? "",
       apiKey: env.WORKSHOP_API_IMAGE_KEY ?? "",
+      baseUrl: env.WORKSHOP_API_IMAGE_BASE ?? "",
+      model: env.WORKSHOP_API_IMAGE_MODEL ?? "",
+      path: "/images/generations",
     },
     video: {
-      baseUrl: env.WORKSHOP_API_VIDEO_BASE ?? "",
-      path: "/videos/generations",
-      model: env.WORKSHOP_API_VIDEO_MODEL ?? "",
       apiKey: env.WORKSHOP_API_VIDEO_KEY ?? "",
+      baseUrl: env.WORKSHOP_API_VIDEO_BASE ?? "",
+      model: env.WORKSHOP_API_VIDEO_MODEL ?? "",
+      path: "/videos/generations",
     },
   };
 }
@@ -128,11 +128,11 @@ export function normalizeSettings(
 /** 掩码视图（apiKey 只留 hasApiKey 布尔，永不离开服务端）。 */
 export function maskChannels(settings: WorkshopApiSettings): ApiChannelsView {
   const view = (c: ApiChannelStored) => ({
-    configured: c.baseUrl.length > 0,
     baseUrl: c.baseUrl,
-    path: c.path,
-    model: c.model,
+    configured: c.baseUrl.length > 0,
     hasApiKey: c.apiKey.length > 0,
+    model: c.model,
+    path: c.path,
   });
   return { image: view(settings.image), video: view(settings.video) };
 }
@@ -165,8 +165,8 @@ const defaultJsonReader: UpstreamJsonReader = (res) =>
 /** 上游返回非 2xx 时统一的错误文案（截断响应体，避免把整页 HTML 灌进日志）。 */
 function upstreamError(label: string, status: number, payload: unknown): Error {
   const detail = clampText(JSON.stringify(payload), {
-    maxLength: INLINE_SNIPPET_MAX,
     marker: "",
+    maxLength: INLINE_SNIPPET_MAX,
   });
   return new Error(`${label} (${status}): ${detail}`);
 }
@@ -194,24 +194,24 @@ function pickStringByPath(payload: unknown, fieldPath?: string): string | null {
 function defaultImageBody(req: ApiImageRequest, model: string): Record<string, unknown> {
   return {
     model: model === "" ? undefined : model,
-    prompt: req.prompt,
-    negative_prompt: req.negative === "" ? undefined : req.negative,
-    size: req.size === "" ? undefined : req.size,
     n: 1,
+    negative_prompt: req.negative === "" ? undefined : req.negative,
+    prompt: req.prompt,
     response_format: "url",
+    size: req.size === "" ? undefined : req.size,
   };
 }
 
 /** 视频提交请求体（同步 / 异步上游共用；image 双写兼容两种命名）。 */
 function videoBody(req: ApiVideoSubmitRequest, model: string): Record<string, unknown> {
   return {
-    model: model === "" ? undefined : model,
-    prompt: req.prompt,
-    negative_prompt: req.negative === "" ? undefined : req.negative,
-    image_url: req.imageDataUrl,
-    image: req.imageDataUrl,
-    frames: req.frames,
     fps: req.fps,
+    frames: req.frames,
+    image: req.imageDataUrl,
+    image_url: req.imageDataUrl,
+    model: model === "" ? undefined : model,
+    negative_prompt: req.negative === "" ? undefined : req.negative,
+    prompt: req.prompt,
   };
 }
 
@@ -239,8 +239,8 @@ export async function callImageGeneration(
   options: ApiChannelFetchOptions = {},
 ): Promise<string> {
   const target = resolveTarget(req, channel) ?? {
-    endpoint: endpointFor(channel),
     apiKey: channel.apiKey,
+    endpoint: endpointFor(channel),
     model: channel.model,
   };
   if (!target.endpoint || target.endpoint === "/images/generations") {
@@ -251,14 +251,14 @@ export async function callImageGeneration(
   let res: Response;
   try {
     res = await fetch(target.endpoint, {
-      method: "POST",
+      body: JSON.stringify(options.bodyOverride ?? defaultImageBody(req, target.model)),
       headers: target.apiKey
         ? {
-            "Content-Type": "application/json",
             Authorization: `Bearer ${target.apiKey}`,
+            "Content-Type": "application/json",
           }
         : { "Content-Type": "application/json" },
-      body: JSON.stringify(options.bodyOverride ?? defaultImageBody(req, target.model)),
+      method: "POST",
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (e) {
@@ -290,9 +290,9 @@ export async function callVideoSubmit(
   let res: Response;
   try {
     res = await fetch(endpointFor(channel), {
-      method: "POST",
-      headers: headersFor(channel),
       body: JSON.stringify(videoBody(req, channel.model)),
+      headers: headersFor(channel),
+      method: "POST",
       signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
     });
   } catch (e) {
@@ -325,8 +325,8 @@ export async function callVideoPoll(
   let res: Response;
   try {
     res = await fetch(pollEndpointFor(channel.baseUrl, remoteTaskId), {
-      method: "GET",
       headers: headersFor(channel),
+      method: "GET",
       signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
     });
   } catch (e) {
@@ -338,7 +338,7 @@ export async function callVideoPoll(
   }
   const mediaUrl = extractMediaUrl(payload);
   if (mediaUrl) {
-    return { url: mediaUrl, pending: false };
+    return { pending: false, url: mediaUrl };
   }
   return { pending: true };
 }

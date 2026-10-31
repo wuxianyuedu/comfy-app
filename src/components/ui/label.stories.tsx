@@ -14,9 +14,9 @@ import { Label } from "~/components/ui/label";
  *    「状态来源」，不是子元素）。
  */
 const meta = {
-  title: "UI/Label",
-  component: Label,
   args: { children: "模型名称" },
+  component: Label,
+  title: "UI/Label",
 } satisfies Meta<typeof Label>;
 
 export default meta;

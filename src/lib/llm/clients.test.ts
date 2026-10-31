@@ -28,7 +28,7 @@ function callAt(n = 0): { init: RequestInit; url: string } {
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
   const url = typeof arg === "string" ? arg : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
-  return { url, init: call[1] ?? {} };
+  return { init: call[1] ?? {}, url };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
@@ -48,9 +48,9 @@ function sentHeaders(n = 0): Record<string, string> {
 /** 一次性响应替身（`json()` / `text()` 都可用）。 */
 function jsonResponse(body: unknown, status = 200): Response {
   return /* SAFETY: 类型断言已复核 */ {
+    json: async () => body,
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response;
 }
@@ -75,12 +75,12 @@ describe("ollama-client", () => {
   it("探测成功：返回模型清单（探测带超时信号）", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
-        models: [{ name: "llama3", size: 1, modified_at: "2024-01-01" }],
+        models: [{ modified_at: "2024-01-01", name: "llama3", size: 1 }],
       }),
     );
     await expect(probeOllama("http://127.0.0.1:11434/v1")).resolves.toEqual({
+      models: [{ modified_at: "2024-01-01", name: "llama3", size: 1 }],
       up: true,
-      models: [{ name: "llama3", size: 1, modified_at: "2024-01-01" }],
     });
     expect(callAt().init.signal).toBeInstanceOf(AbortSignal);
   });
@@ -89,8 +89,8 @@ describe("ollama-client", () => {
     for (const body of [{}, { models: "x" }]) {
       fetchMock.mockResolvedValue(jsonResponse(body));
       await expect(probeOllama("http://x/v1")).resolves.toEqual({
-        up: true,
         models: [],
+        up: true,
       });
     }
   });
@@ -98,11 +98,11 @@ describe("ollama-client", () => {
   it("2xx 却是非 JSON（端口上跑的是别的服务）→ 按未运行处理，而不是「0 个模型」", async () => {
     fetchMock.mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
-        ok: true,
-        status: 200,
         json: async () => {
           throw new Error("not json");
         },
+        ok: true,
+        status: 200,
       } as unknown as Response,
     );
     await expect(probeOllama("http://x/v1")).resolves.toEqual({ up: false });
@@ -128,11 +128,11 @@ describe("ollama-client", () => {
     // 响应体不是 JSON / 没有 error → 用兜底中文文案
     fetchMock.mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
-        ok: false,
-        status: 500,
         json: async () => {
           throw new Error("x");
         },
+        ok: false,
+        status: 500,
       } as unknown as Response,
     );
     await expect(startOllama()).rejects.toThrow(/请确认已安装 Ollama/);
@@ -155,21 +155,21 @@ describe("model-catalog-client", () => {
   it("成功：只保留非空字符串模型名", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
-        ok: true,
-        models: ["a", "", "   ", 1, null, "b"],
         detail: "共 2 个",
+        models: ["a", "", "   ", 1, null, "b"],
+        ok: true,
       }),
     );
     await expect(fetchLocalModels()).resolves.toEqual({
-      ok: true,
-      models: ["a", "b"],
       detail: "共 2 个",
+      models: ["a", "b"],
+      ok: true,
     });
     expect(fetchMock.mock.calls[0]![0]).toBe("/api/llm/models?provider=local");
   });
 
   it("远端探测带 model 参数（工坊按所选条目解析独立连接参数）", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true, models: [] }));
+    fetchMock.mockResolvedValue(jsonResponse({ models: [], ok: true }));
     await fetchRemoteModels("远端 甲/1");
     expect(fetchMock.mock.calls[0]![0]).toBe(
       `/api/llm/models?provider=remote&model=${encodeURIComponent("远端 甲/1")}`,
@@ -180,46 +180,46 @@ describe("model-catalog-client", () => {
   });
 
   it("ok 不是 true、models 不是数组 → 降级为空清单 + HTTP 文案", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: "yes", models: "x" }, 500));
+    fetchMock.mockResolvedValue(jsonResponse({ models: "x", ok: "yes" }, 500));
     await expect(fetchLocalModels()).resolves.toEqual({
-      ok: false,
-      models: [],
       detail: "请求失败 (500)",
+      models: [],
+      ok: false,
     });
   });
 
   it("响应体不是 JSON → 仍给 HTTP 文案（页面不该因探测而报错）", async () => {
     fetchMock.mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
-        ok: false,
-        status: 502,
         json: async () => {
           throw new Error("html");
         },
+        ok: false,
+        status: 502,
       } as unknown as Response,
     );
     await expect(fetchLocalModels()).resolves.toEqual({
-      ok: false,
-      models: [],
       detail: "请求失败 (502)",
+      models: [],
+      ok: false,
     });
   });
 
   it("网络抛错 → ok:false + errorMessage 翻译成人话（不再是原始消息）", async () => {
     fetchMock.mockRejectedValue(new Error("The operation was aborted"));
     await expect(fetchLocalModels()).resolves.toEqual({
-      ok: false,
-      models: [],
       detail: "请求超时或被中断，请稍候重试",
+      models: [],
+      ok: false,
     });
   });
 
   it("抛出非 Error 时给中文兜底文案", async () => {
     fetchMock.mockRejectedValue("boom");
     await expect(fetchLocalModels()).resolves.toEqual({
-      ok: false,
-      models: [],
       detail: "网络请求失败",
+      models: [],
+      ok: false,
     });
   });
 });
@@ -228,9 +228,9 @@ describe("model-catalog-client", () => {
 
 describe("usage-test-client", () => {
   const INPUT = {
+    baseUrl: "https://x/v1",
     kind: /* SAFETY: 类型断言已复核 */ "chat" as const,
     name: "entry",
-    baseUrl: "https://x/v1",
     path: "/chat/completions",
     prompt: "hi",
   };
@@ -238,27 +238,27 @@ describe("usage-test-client", () => {
   it("成功结果逐字段归一化（chat/image/video 三态字段都在）", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
-        ok: true,
-        detail: "用了 1.2s",
         chatText: "你好",
-        imageUrl: "https://i/1.png",
-        videoUrl: "https://v/1.mp4",
-        taskId: "t1",
-        pending: true,
+        detail: "用了 1.2s",
         elapsedMs: 1234,
+        imageUrl: "https://i/1.png",
+        ok: true,
+        pending: true,
         savedPath: "/tmp/x",
+        taskId: "t1",
+        videoUrl: "https://v/1.mp4",
       }),
     );
     await expect(testModelUsage(INPUT)).resolves.toEqual({
-      ok: true,
-      detail: "用了 1.2s",
       chatText: "你好",
-      imageUrl: "https://i/1.png",
-      videoUrl: "https://v/1.mp4",
-      taskId: "t1",
-      pending: true,
+      detail: "用了 1.2s",
       elapsedMs: 1234,
+      imageUrl: "https://i/1.png",
+      ok: true,
+      pending: true,
       savedPath: "/tmp/x",
+      taskId: "t1",
+      videoUrl: "https://v/1.mp4",
     });
 
     expect(callAt().url).toBe("/api/llm/test-usage");
@@ -270,57 +270,57 @@ describe("usage-test-client", () => {
   it("字段类型不对一律丢弃（不把 number 当字符串透传给界面）", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
-        ok: "true",
-        detail: 42,
         chatText: null,
+        detail: 42,
         elapsedMs: "1234",
+        ok: "true",
         pending: 1,
       }),
     );
     await expect(testModelUsage(INPUT)).resolves.toEqual({
-      ok: false,
-      detail: "请求失败 (200)",
       chatText: undefined,
-      imageUrl: undefined,
-      videoUrl: undefined,
-      taskId: undefined,
-      pending: false,
+      detail: "请求失败 (200)",
       elapsedMs: undefined,
+      imageUrl: undefined,
+      ok: false,
+      pending: false,
       savedPath: undefined,
+      taskId: undefined,
+      videoUrl: undefined,
     });
   });
 
   it("响应体不可解析 → 落到「请求失败 (status)」而不是抛错", async () => {
     fetchMock.mockResolvedValue(
       /* SAFETY: 类型断言已复核 */ {
-        ok: false,
-        status: 500,
         json: async () => {
           throw new Error("html");
         },
+        ok: false,
+        status: 500,
       } as unknown as Response,
     );
     await expect(testModelUsage(INPUT)).resolves.toMatchObject({
-      ok: false,
       detail: "请求失败 (500)",
+      ok: false,
     });
   });
 
   it("queryUsageTask 打的是查询端点，且只带查询入参（不含 prompt —— 不重复提交）", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true, detail: "还在跑" }));
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "还在跑", ok: true }));
     const out = await queryUsageTask({
-      name: "entry",
       baseUrl: "https://x/v1",
+      name: "entry",
       path: "/videos",
       taskId: "t1",
     });
-    expect(out).toMatchObject({ ok: true, detail: "还在跑" });
+    expect(out).toMatchObject({ detail: "还在跑", ok: true });
 
     expect(callAt().url).toBe("/api/llm/test-usage/query");
     const body = sentBody();
     expect(body).toEqual({
-      name: "entry",
       baseUrl: "https://x/v1",
+      name: "entry",
       path: "/videos",
       taskId: "t1",
     });
@@ -337,7 +337,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
   );
 
   afterEach(async () => {
-    await fs.rm(tmpRoot, { recursive: true, force: true });
+    await fs.rm(tmpRoot, { force: true, recursive: true });
   });
 
   it("远端 URL：下载并落到 temp/usage-test/<模型名>/，扩展名随 URL", async () => {
@@ -345,9 +345,9 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
     try {
       fetchMock.mockResolvedValue(
         /* SAFETY: 类型断言已复核 */ {
+          arrayBuffer: async () => new TextEncoder().encode("binary").buffer,
           ok: true,
           status: 200,
-          arrayBuffer: async () => new TextEncoder().encode("binary").buffer,
         } as unknown as Response,
       );
 
@@ -381,18 +381,18 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
     try {
       fetchMock.mockResolvedValue(
         /* SAFETY: 类型断言已复核 */ {
+          arrayBuffer: async () => new ArrayBuffer(0),
           ok: false,
           status: 404,
-          arrayBuffer: async () => new ArrayBuffer(0),
         } as unknown as Response,
       );
       await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
 
       fetchMock.mockResolvedValue(
         /* SAFETY: 类型断言已复核 */ {
+          arrayBuffer: async () => new ArrayBuffer(0),
           ok: true,
           status: 200,
-          arrayBuffer: async () => new ArrayBuffer(0),
         } as unknown as Response,
       );
       await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();

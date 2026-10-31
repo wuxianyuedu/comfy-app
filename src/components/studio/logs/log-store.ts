@@ -67,11 +67,11 @@ export * from "./log-analysis";
 function welcomeEntry(): LogEntry {
   return {
     id: nextId(),
-    seq: nextSeq(),
-    time: Date.now(),
     level: "info",
     message: "日志面板已启用。按 Ctrl+Shift+L 或点击状态栏日志按钮打开/关闭。",
+    seq: nextSeq(),
     source: "system",
+    time: Date.now(),
   };
 }
 
@@ -298,21 +298,21 @@ function capTimeline(logs: Array<LogEntry>): {
   logs: Array<LogEntry>;
 } {
   if (logs.length <= LOG_STORE_MAX) {
-    return { logs, dropped: 0 };
+    return { dropped: 0, logs };
   }
   const cut = logs.length - LOG_STORE_MAX;
   const droppedEntries = logs.slice(0, cut);
   const kept = logs.slice(cut);
   trimTimelineIndex(indexOfTimeline(logs), droppedEntries);
   rememberTimelineIndex(kept, indexOfTimeline(logs));
-  return { logs: kept, dropped: cut };
+  return { dropped: cut, logs: kept };
 }
 
 function derive(logs: Array<LogEntry>, search: string, revision: number) {
   return {
-    logs,
     counts: computeCounts(logs, search),
     countsByOrigin: computeOriginCounts(logs, search),
+    logs,
     revision,
   };
 }
@@ -320,15 +320,15 @@ function derive(logs: Array<LogEntry>, search: string, revision: number) {
 /** 从当前状态里摘出视图那几项（`applyView` 的入参形状）。 */
 function viewOf(state: LogStoreState): LogPanelView {
   return {
+    anchorId: state.anchorId,
+    autoScroll: state.autoScroll,
+    bootId: state.bootId,
     filter: state.filter,
-    origin: state.origin,
-    search: state.search,
     isOpen: state.isOpen,
+    origin: state.origin,
     page: state.page,
     pageSize: state.pageSize,
-    bootId: state.bootId,
-    autoScroll: state.autoScroll,
-    anchorId: state.anchorId,
+    search: state.search,
     viewBaselineAfter: state.viewBaselineAfter,
   };
 }
@@ -376,61 +376,24 @@ function applyView(derived: ReturnType<typeof derive>, view: LogPanelView) {
     ...view,
     filteredLogs,
     header: {
-      filteredLogs,
-      filter: view.filter,
-      origin: view.origin,
-      search: view.search,
-      isOpen: view.isOpen,
+      anchorId: view.anchorId,
+      autoScroll: view.autoScroll,
+      bootId: view.bootId,
       counts: derived.counts,
       countsByOrigin: derived.countsByOrigin,
+      filter: view.filter,
+      filteredLogs,
+      isOpen: view.isOpen,
+      origin: view.origin,
       page: view.page,
       pageSize: view.pageSize,
-      bootId: view.bootId,
-      autoScroll: view.autoScroll,
-      anchorId: view.anchorId,
+      search: view.search,
       viewBaselineAfter: view.viewBaselineAfter,
     },
   };
 }
 
 export const useLogStore = create<LogStoreState>((set, get) => ({
-  logs: typeof window === "undefined" ? [] : [welcomeEntry()],
-  droppedTotal: 0,
-  filteredLogs: [],
-  filter: "all",
-  origin: "all",
-  search: "",
-  isOpen: false,
-  counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
-  countsByOrigin: computeOriginCounts([]),
-  header: {
-    filteredLogs: [],
-    filter: "all",
-    origin: "all",
-    search: "",
-    isOpen: false,
-    counts: { all: 0, debug: 0, info: 0, warn: 0, error: 0 },
-    countsByOrigin: computeOriginCounts([]),
-    page: 1,
-    pageSize: LOG_PAGE_SIZE,
-    bootId: null,
-    autoScroll: true,
-    anchorId: null,
-    viewBaselineAfter: 0,
-  },
-  page: 1,
-  pageSize: LOG_PAGE_SIZE,
-  autoScroll: true,
-  sessionStart: null,
-  bootId: null,
-  revision: 0,
-  viewRevision: 0,
-  viewSeenIds: new Set<string>(),
-  viewBaselineAfter: 0,
-  followBaseline: 0,
-  followResetAt: 0,
-  anchorId: null,
-
   addEntry: (entry) =>
     set((state) => {
       const full: LogEntry = {
@@ -451,7 +414,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         droppedTotal: state.droppedTotal + capped.dropped,
       };
     }),
-
+  anchorId: null,
   appendFileLogs: (entries) =>
     set((state) => {
       const fresh = dropStaleEntries(entries, state.sessionStart);
@@ -482,6 +445,43 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         droppedTotal: state.droppedTotal + capped.dropped,
       };
     }),
+  autoScroll: true,
+  bootId: null,
+  counts: { all: 0, debug: 0, error: 0, info: 0, warn: 0 },
+  countsByOrigin: computeOriginCounts([]),
+  droppedTotal: 0,
+  filter: "all",
+  filteredLogs: [],
+  followBaseline: 0,
+  followResetAt: 0,
+  header: {
+    anchorId: null,
+    autoScroll: true,
+    bootId: null,
+    counts: { all: 0, debug: 0, error: 0, info: 0, warn: 0 },
+    countsByOrigin: computeOriginCounts([]),
+    filter: "all",
+    filteredLogs: [],
+    isOpen: false,
+    origin: "all",
+    page: 1,
+    pageSize: LOG_PAGE_SIZE,
+    search: "",
+    viewBaselineAfter: 0,
+  },
+  isOpen: false,
+  logs: typeof window === "undefined" ? [] : [welcomeEntry()],
+  origin: "all",
+  page: 1,
+  pageSize: LOG_PAGE_SIZE,
+  revision: 0,
+  search: "",
+  sessionStart: null,
+  viewBaselineAfter: 0,
+
+  viewRevision: 0,
+
+  viewSeenIds: new Set<string>(),
 
   /* 会话起点到达得比首次轮询晚时，时间线里可能已经混进了上次运行的行：
    * 一次性收拢到底。应用运行中的 mtime 不会后移，因此这是幂等操作。 */
@@ -518,11 +518,11 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
                 // 视图入参取自写入前的 state，切片里的 bootId 在这里显式补齐
                 { ...viewOf(state), bootId, page: 1 },
               ),
+              anchorId: null,
+              followResetAt: Date.now(),
+              viewBaselineAfter: 0,
               viewRevision: state.revision + 1,
               viewSeenIds: new Set<string>(),
-              viewBaselineAfter: 0,
-              followResetAt: Date.now(),
-              anchorId: null,
             }
           : { header: { ...state.header, bootId } }),
       };
@@ -541,11 +541,11 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         ...applyView(derived, next),
         /* 过滤条件变了 = 用户看到的这一段也变了：水位换成切完之后的那一段，
          * 新到的行仍留在水位之外，页脚的「有 N 条新的日志」因此不会凭空归零。 */
-        viewSeenIds: currentWatermark(state),
         viewRevision: state.revision,
+        viewSeenIds: currentWatermark(state),
         /* 切筛选 / 搜索都会把页码拉回第 1 页 → 窗口就是最新一段，基线归零。 */
-        viewBaselineAfter: 0,
         followResetAt: 0,
+        viewBaselineAfter: 0,
         ...anchorOf(state),
       };
     }),
@@ -558,28 +558,28 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         ...applyView(derived, next),
         /* 过滤条件变了 = 用户看到的这一段也变了：水位换成切完之后的那一段，
          * 新到的行仍留在水位之外，页脚的「有 N 条新的日志」因此不会凭空归零。 */
-        viewSeenIds: currentWatermark(state),
         viewRevision: state.revision,
+        viewSeenIds: currentWatermark(state),
         /* 切筛选 / 搜索都会把页码拉回第 1 页 → 窗口就是最新一段，基线归零。 */
-        viewBaselineAfter: 0,
         followResetAt: 0,
+        viewBaselineAfter: 0,
         ...anchorOf(state),
       };
     }),
 
   setSearch: (s) =>
     set((state) => {
-      const next = { ...viewOf(state), search: s, page: 1 };
+      const next = { ...viewOf(state), page: 1, search: s };
       const derived = derive(state.logs, next.search, state.revision);
       return {
         ...applyView(derived, next),
         /* 过滤条件变了 = 用户看到的这一段也变了：水位换成切完之后的那一段，
          * 新到的行仍留在水位之外，页脚的「有 N 条新的日志」因此不会凭空归零。 */
-        viewSeenIds: currentWatermark(state),
         viewRevision: state.revision,
+        viewSeenIds: currentWatermark(state),
         /* 切筛选 / 搜索都会把页码拉回第 1 页 → 窗口就是最新一段，基线归零。 */
-        viewBaselineAfter: 0,
         followResetAt: 0,
+        viewBaselineAfter: 0,
         ...anchorOf(state),
       };
     }),
@@ -597,17 +597,17 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       const nextPage = Math.max(1, page);
       const seen = currentWatermark(state);
       return {
-        page: nextPage,
         header: { ...state.header, page: nextPage },
-        viewSeenIds: seen,
+        page: nextPage,
         viewRevision: state.revision,
+        viewSeenIds: seen,
         /* 「已翻过去的历史」= 第 1 页之外、压在这一页上面的那些条数。
          * 第 1 页恒为 0（窗口就是最新一段，其后本来就没有东西），否则用户一停下
          * 就会被报「有 200 条新的日志」——而那 200 条是他自己刚翻过去的。 */
-        viewBaselineAfter:
-          nextPage === 1 ? 0 : countAfterPage(state.filteredLogs.length, nextPage, state.pageSize),
         followBaseline: Math.max(0, state.filteredLogs.length - 1),
         followResetAt: 0,
+        viewBaselineAfter:
+          nextPage === 1 ? 0 : countAfterPage(state.filteredLogs.length, nextPage, state.pageSize),
         ...anchorOf(state),
       };
     }),
@@ -627,9 +627,9 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
        * 从他看的位置往下排。 */
       ...(follow
         ? {
+            followBaseline: followBaselineOf(state),
             followResetAt: Date.now(),
             viewBaselineAfter: 0,
-            followBaseline: followBaselineOf(state),
             ...anchorOf(state),
           }
         : {}),
@@ -637,40 +637,6 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
     })),
 
   /** 用户显式要求「回到最新」：解绑贴底基线，此后贴底一路追到最新。 */
-  jumpToLatest: () =>
-    set((state) => ({
-      followResetAt: Date.now(),
-      autoScroll: true,
-      followBaseline: followBaselineOf(state),
-      ...anchorOf(state),
-      header: { ...state.header, autoScroll: true, page: 1 },
-      page: 1,
-    })),
-  setIsOpen: (open) =>
-    set((state) => ({
-      isOpen: open,
-      header: { ...state.header, isOpen: open },
-    })),
-  toggleOpen: () =>
-    set((state) => {
-      const isOpen = !state.isOpen;
-      /* 打开面板 = 用户此刻看到的是「最新的那一段」：水位与贴底基线一起取到当前，
-       * 后续新到的行才算「新的」。面板开着不动时两者都不随新日志前进，这正是
-       * 「内容不要自己动」的实现（ISSUE #262 复审）。 */
-      return {
-        isOpen,
-        header: { ...state.header, isOpen },
-        ...(isOpen
-          ? {
-              viewSeenIds: currentWatermark(state),
-              followBaseline: followBaselineOf(state),
-              followResetAt: 0,
-              ...anchorOf(state),
-            }
-          : {}),
-      };
-    }),
-
   clear: () =>
     set((state) => {
       const view = { ...viewOf(state), page: 1 };
@@ -679,12 +645,46 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         /* 清空后不再有「已读 / 未读」可言：水位里保留的那些 id 已经不在时间线上，
          * 下次新日志直接按「没取过水位」处理（水位为空即按「当前看到的全部」处理），贴底基线同时解绑，
          * 此后贴底直接追到最新。 */
-        viewRevision: state.revision + 1,
-        viewSeenIds: new Set<string>(),
-        viewBaselineAfter: 0,
-        followResetAt: Date.now(),
         anchorId: null,
         droppedTotal: 0,
+        followResetAt: Date.now(),
+        viewBaselineAfter: 0,
+        viewRevision: state.revision + 1,
+        viewSeenIds: new Set<string>(),
+      };
+    }),
+  jumpToLatest: () =>
+    set((state) => ({
+      autoScroll: true,
+      followBaseline: followBaselineOf(state),
+      followResetAt: Date.now(),
+      ...anchorOf(state),
+      header: { ...state.header, autoScroll: true, page: 1 },
+      page: 1,
+    })),
+  setIsOpen: (open) =>
+    set((state) => ({
+      header: { ...state.header, isOpen: open },
+      isOpen: open,
+    })),
+
+  toggleOpen: () =>
+    set((state) => {
+      const isOpen = !state.isOpen;
+      /* 打开面板 = 用户此刻看到的是「最新的那一段」：水位与贴底基线一起取到当前，
+       * 后续新到的行才算「新的」。面板开着不动时两者都不随新日志前进，这正是
+       * 「内容不要自己动」的实现（ISSUE #262 复审）。 */
+      return {
+        header: { ...state.header, isOpen },
+        isOpen,
+        ...(isOpen
+          ? {
+              followBaseline: followBaselineOf(state),
+              followResetAt: 0,
+              viewSeenIds: currentWatermark(state),
+              ...anchorOf(state),
+            }
+          : {}),
       };
     }),
 
@@ -698,8 +698,8 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
    * 只是不受分页窗口限制——「全部日志」指的是一整类，不是一页。 */
   copyAll: () => copyLogText(formatForClipboard(get().filteredLogs)),
   download: () => downloadLogText(formatForClipboard(get().filteredLogs)),
-  saveExport: (label) => saveLogExport(label, formatForClipboard(get().filteredLogs)),
   saveDiagnostics: () => saveDiagnosticsPackage(),
+  saveExport: (label) => saveLogExport(label, formatForClipboard(get().filteredLogs)),
 }));
 
 /* ── 分类开关联动：设置页关掉某类日志后，面板实时隐藏对应行 ───────

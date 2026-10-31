@@ -13,17 +13,17 @@ import type { Character } from "./types";
 
 function makeCharacter(id: string, portraitUrl?: string): Character {
   return {
-    id,
-    name: `角色${id}`,
     ageGender: "",
     appearance: "",
     costume: "",
-    personality: "",
-    temperament: "",
-    styleTags: [],
-    positivePrompt: "a cat",
+    id,
+    name: `角色${id}`,
     negativePrompt: "",
     params: {},
+    personality: "",
+    positivePrompt: "a cat",
+    styleTags: [],
+    temperament: "",
     ...(portraitUrl ? { portraitUrl } : {}),
   };
 }
@@ -66,7 +66,7 @@ describe("preparePortraitReferences", () => {
     ];
     const mock = mockPrepare("t1");
 
-    const { files, failedCount } = await preparePortraitReferences(characters, ["c3", "c2", "c1"]);
+    const { failedCount, files } = await preparePortraitReferences(characters, ["c3", "c2", "c1"]);
 
     // 出场序（c3 在前），不是角色表序；文件名与 URL 绑定可判序。
     expect(files).toEqual(["up-t1-b.png", "up-t1-a.png"]);
@@ -76,7 +76,7 @@ describe("preparePortraitReferences", () => {
 
   it("没有角色选定妆照：空数组且不发任何请求", async () => {
     const mock = mockPrepare("t2");
-    const { files, failedCount } = await preparePortraitReferences(
+    const { failedCount, files } = await preparePortraitReferences(
       [makeCharacter("c1"), makeCharacter("c2")],
       ["c1", "c2"],
     );
@@ -92,7 +92,7 @@ describe("preparePortraitReferences", () => {
     ];
     mockPrepare("t3", new Set(["/api/generated/t3/a.png"]));
 
-    const { files, failedCount } = await preparePortraitReferences(characters, ["c1", "c2"]);
+    const { failedCount, files } = await preparePortraitReferences(characters, ["c1", "c2"]);
 
     expect(files).toEqual(["up-t3-b.png"]);
     expect(failedCount).toBe(1);

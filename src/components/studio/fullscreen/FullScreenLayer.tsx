@@ -37,12 +37,12 @@ type FullScreenLayerProps = {
 
 /** 全屏视图的根容器：铺满标题行下方的内容区，不盖住页签。 */
 export function FullScreenLayer({
-  zClass,
+  "aria-label": ariaLabel,
+  "aria-modal": ariaModal,
+  children,
   className,
   role,
-  "aria-modal": ariaModal,
-  "aria-label": ariaLabel,
-  children,
+  zClass,
 }: FullScreenLayerProps) {
   return (
     <div

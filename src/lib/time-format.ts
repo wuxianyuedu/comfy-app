@@ -60,8 +60,8 @@ export function timeAgo(value: string | number, opts: RelativeTimeOptions = {}):
 }
 
 const CLOCK_FORMAT: Intl.DateTimeFormatOptions = {
-  hour12: false,
   hour: "2-digit",
+  hour12: false,
   minute: "2-digit",
   second: "2-digit",
 };

@@ -36,10 +36,10 @@ import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
  * 而这里本来就有正当写法 —— 造一个真组件即可。
  */
 const meta = {
-  title: "UI/WidePanel",
-  component: WidePanelDemo,
   args: { base: "w-80", defaultWide: false },
+  component: WidePanelDemo,
   render: (args) => <WidePanelDemo {...args} />,
+  title: "UI/WidePanel",
 } satisfies Meta<typeof WidePanelDemo>;
 
 export default meta;
@@ -47,18 +47,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** 最小承载：建一个 `panel`，把触发钮与宽度档都摊出来。 */
-function WidePanelDemo({
-  base,
-  defaultWide = false,
-}: {
-  base: string;
-  defaultWide?: boolean;
-}) {
-  const panel = useWidePanel(
-    "storybook-wide-panel-demo",
-    modalWidth(base),
-    defaultWide,
-  );
+function WidePanelDemo({ base, defaultWide = false }: { base: string; defaultWide?: boolean }) {
+  const panel = useWidePanel("storybook-wide-panel-demo", modalWidth(base), defaultWide);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
@@ -86,11 +76,7 @@ export const BothStates: Story = {
 
 function BothStatesDemo() {
   const narrow = useWidePanel("storybook-wide-demo-narrow", modalWidth("w-80"));
-  const wide = useWidePanel(
-    "storybook-wide-demo-wide",
-    modalWidth("w-80"),
-    true,
-  );
+  const wide = useWidePanel("storybook-wide-demo-wide", modalWidth("w-80"), true);
   return (
     <div className="flex items-center gap-6">
       <div className="flex flex-col items-center gap-2">

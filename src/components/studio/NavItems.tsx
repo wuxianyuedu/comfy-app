@@ -116,22 +116,22 @@ export type NavItem = {
 
 /** 侧栏项统一使用的图标描边 + 尺寸。 */
 const ICON_PROPS = {
-  width: 22,
-  height: 22,
-  viewBox: "0 0 24 24",
   fill: "none",
+  height: 22,
   stroke: "currentColor",
-  strokeWidth: 1.8,
   strokeLinecap: /* SAFETY: 类型断言已复核 */ "round" as const,
   strokeLinejoin: /* SAFETY: 类型断言已复核 */ "round" as const,
+  strokeWidth: 1.8,
+  viewBox: "0 0 24 24",
+  width: 22,
 };
 
 /** 侧栏底部「项目」分组入口（不作为顶部项，也不作为项目页签）。 */
 export const PROJECTS_ENTRY: NavItem = {
-  id: "works",
-  label: "项目",
   enabled: true,
   icon: <Folder size={22} strokeWidth={1.8} />,
+  id: "works",
+  label: "项目",
 };
 
 /**
@@ -140,20 +140,20 @@ export const PROJECTS_ENTRY: NavItem = {
  */
 export const NAV_ITEMS: Array<NavItem> = [
   {
+    icon: <Home size={22} strokeWidth={1.8} />,
     id: "home",
     label: "首页",
-    icon: <Home size={22} strokeWidth={1.8} />,
   },
   {
+    icon: <Box size={22} strokeWidth={1.8} />,
     id: "models",
     label: "模型",
-    icon: <Box size={22} strokeWidth={1.8} />,
   },
   {
-    id: "history",
-    label: "历史",
     enabled: true,
     icon: <History size={22} strokeWidth={1.8} />,
+    id: "history",
+    label: "历史",
   },
   {
     id: "queue",
@@ -174,10 +174,10 @@ export const NAV_ITEMS: Array<NavItem> = [
        归**全局项**而不是项目页签：它管的是本机后端进程，与「当前是哪个画布项目」
        无关；也不需要 `transient` —— 与队列同族（都在看「机器现在在干什么」），
        切走再切回来该保留滚动位置与全屏日志态。 */
-    id: "comfyui",
-    label: "ComfyUI",
     enabled: true,
     icon: <Server size={22} strokeWidth={1.8} />,
+    id: "comfyui",
+    label: "ComfyUI",
   },
   {
     /* 设置：与历史 / 队列 / 控制台同形的**视图**，不是浮层。
@@ -186,19 +186,17 @@ export const NAV_ITEMS: Array<NavItem> = [
      * 设置一边看别处。改成视图后，入口、高亮、可关性都和别的视图同一套契约。
      * 仍归**全局项**而不是项目页签：它读写的是应用级配置（模型目录、Ollama、
      * 数据库、后端路径），与「当前是哪个画布项目」无关。 */
+    enabled: true,
+    icon: <Settings size={22} strokeWidth={1.8} />,
     id: "settings",
     label: "设置",
-    enabled: true,
-    transient: true,
     sidebarHidden: true,
-    icon: <Settings size={22} strokeWidth={1.8} />,
+    transient: true,
   },
   {
     /* 名字从「流程」改成「工作流库」（ISSUE #1847）：主页那张功能卡一直写的是
        「工作流库」，而导航这一项却写「流程」—— 同一件事两个名字，用户点进去还要
        再认一次。主页卡的用词才是它真正的名字，这里对齐它。 */
-    id: "workflows",
-    label: "工作流库",
     enabled: true,
     icon: (
       <svg {...ICON_PROPS}>
@@ -207,26 +205,28 @@ export const NAV_ITEMS: Array<NavItem> = [
         <path d="M10 6.5h4a3 3 0 013 3v4.5" />
       </svg>
     ),
+    id: "workflows",
+    label: "工作流库",
   },
   {
     /* 模型适配：与「工作流库」相邻而不是与「模型」相邻 —— 契约口清单是工作流库配落点的
        依据、适配器是远端模型的字段映射，两件事都服务工作流这条链路。图标仍与「模型」
        那项（`Box`）刻意不同：一个管模型库本身，一个管远端接口的字段映射。
        它此前是侧栏的「全局浮层入口」（点开弹窗、不改视图），现在是视图页签。 */
+    enabled: true,
+    icon: <Cable size={22} strokeWidth={1.8} />,
     id: "model-adapters",
     label: "模型适配",
-    enabled: true,
     transient: true,
-    icon: <Cable size={22} strokeWidth={1.8} />,
   },
   {
     /* 模式契约：与工作流库页头那枚「模式契约」按钮同图标 —— 同一件事在两处出现时
        认得出是同一件。那枚按钮现在也切到这一页，不再开弹窗。 */
+    enabled: true,
+    icon: <Puzzle size={22} strokeWidth={1.8} />,
     id: "mode-contract",
     label: "模式契约",
-    enabled: true,
     transient: true,
-    icon: <Puzzle size={22} strokeWidth={1.8} />,
   },
   {
     /* 控制台（ISSUE #1327）：跑质量门禁 / db:push / git 查询这类「本来要另开一个
@@ -234,27 +234,24 @@ export const NAV_ITEMS: Array<NavItem> = [
      * 跑一条 `pnpm test` 是分钟级的事，用户在等待时还要能切去画布看一眼、回来接着看输出；
      * 弹窗一关就断连回收命令，那正是「不敢长时间跑」的来源。
      * 仍放**全局项**而不是项目页签：它跑的是仓库级脚本，与「当前是哪个画布项目」无关。 */
-    id: "console",
-    label: "控制台",
     enabled: true,
     icon: <Terminal size={22} strokeWidth={1.8} />,
+    id: "console",
+    label: "控制台",
   },
   {
     /* 项目主页放在页签第一位：它是进入项目后的落点（此前直接落画布，
      * 而画布承载不了「这个项目做到哪了」这类项目级问题）。图标用 `Home`
      * 与全局「首页」同形 —— 两个 home 语义层级不同（应用级 / 项目级），
      * 靠所在分组区分，换一个陌生图标反而更难认。 */
+    enabled: true,
+    icon: <Home size={22} strokeWidth={1.8} />,
     id: "project",
     label: "主页",
-    enabled: true,
     projectScoped: true,
-    icon: <Home size={22} strokeWidth={1.8} />,
   },
   {
-    id: "canvas",
-    label: "画布",
     enabled: true,
-    projectScoped: true,
     icon: (
       <svg {...ICON_PROPS}>
         <rect height="18" rx="2" width="18" x="3" y="3" />
@@ -262,31 +259,34 @@ export const NAV_ITEMS: Array<NavItem> = [
         <circle cx="15" cy="15" r="2" />
       </svg>
     ),
+    id: "canvas",
+    label: "画布",
+    projectScoped: true,
   },
   {
+    icon: <BookOpen size={22} strokeWidth={1.8} />,
     id: "workshop",
     label: "工坊",
     projectScoped: true,
-    icon: <BookOpen size={22} strokeWidth={1.8} />,
   },
   {
+    icon: <FolderOpen size={22} strokeWidth={1.8} />,
     id: "library",
     label: "资源库",
     projectScoped: true,
-    icon: <FolderOpen size={22} strokeWidth={1.8} />,
   },
   {
+    enabled: true,
+    icon: <ImageIcon size={22} strokeWidth={1.8} />,
     id: "outputs",
     label: "产出",
-    enabled: true,
     projectScoped: true,
-    icon: <ImageIcon size={22} strokeWidth={1.8} />,
   },
   {
+    icon: <Film size={22} strokeWidth={1.8} />,
     id: "film",
     label: "成片",
     projectScoped: true,
-    icon: <Film size={22} strokeWidth={1.8} />,
   },
   PROJECTS_ENTRY,
 ];

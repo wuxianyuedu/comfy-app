@@ -18,8 +18,8 @@ function detailWith(
   rawNodes: WorkflowDetail["rawNodes"],
 ): WorkflowDetail {
   return /* SAFETY: 类型断言已复核 */ {
-    nodes,
     graph,
+    nodes,
     rawNodes,
   } as unknown as WorkflowDetail;
 }
@@ -82,22 +82,22 @@ describe("buildEdges sourceHandle", () => {
     const detail = detailWith(
       /* SAFETY: 类型断言已复核 */ [
         {
-          id: "94",
-          type: "CustomNoOutputs",
           class_type: "CustomNoOutputs",
+          id: "94",
           inputs: {},
+          type: "CustomNoOutputs",
         },
         {
-          id: "76",
-          type: "EmptyLatentImage",
           class_type: "EmptyLatentImage",
+          id: "76",
           inputs: {},
+          type: "EmptyLatentImage",
         },
       ] as unknown as WorkflowDetail["nodes"],
       {
         "76": {
           class_type: "EmptyLatentImage",
-          inputs: { width_1: ["94", 0], height_1: ["94", 1] },
+          inputs: { height_1: ["94", 1], width_1: ["94", 0] },
         },
       },
       [],
@@ -110,8 +110,8 @@ describe("buildEdges sourceHandle", () => {
   it("有静态输出表的源节点仍 pin 到精确 handle", () => {
     const detail = detailWith(
       /* SAFETY: 类型断言已复核 */ [
-        { id: "10", type: "KSampler", class_type: "KSampler", inputs: {} },
-        { id: "20", type: "VAEDecode", class_type: "VAEDecode", inputs: {} },
+        { class_type: "KSampler", id: "10", inputs: {}, type: "KSampler" },
+        { class_type: "VAEDecode", id: "20", inputs: {}, type: "VAEDecode" },
       ] as unknown as WorkflowDetail["nodes"],
       { "20": { class_type: "VAEDecode", inputs: { samples: ["10", 0] } } },
       [],
@@ -124,16 +124,16 @@ describe("buildEdges sourceHandle", () => {
     const detail = detailWith(
       /* SAFETY: 类型断言已复核 */ [
         {
-          id: "30",
-          type: "ResolutionSelector",
           class_type: "ResolutionSelector",
+          id: "30",
           inputs: {},
+          type: "ResolutionSelector",
         },
         {
-          id: "40",
-          type: "EmptyLatentImage",
           class_type: "EmptyLatentImage",
+          id: "40",
           inputs: {},
+          type: "EmptyLatentImage",
         },
       ] as unknown as WorkflowDetail["nodes"],
       {
@@ -142,8 +142,8 @@ describe("buildEdges sourceHandle", () => {
       /* SAFETY: 类型断言已复核 */ [
         {
           id: "30",
-          widgets_values: [],
           outputs: [{ name: "WIDTH", type: "INT" }],
+          widgets_values: [],
         },
       ] as unknown as WorkflowDetail["rawNodes"],
     );

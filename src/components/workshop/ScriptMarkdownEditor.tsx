@@ -28,20 +28,20 @@ type HistoryFrame = {
 const MAX_HISTORY = 50;
 
 export function ScriptMarkdownEditor({
-  title = "编辑剧本",
-  value,
+  onCancel,
   onChange,
   onSave,
-  onCancel,
+  title = "编辑剧本",
+  value,
 }: ScriptMarkdownEditorProps) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const [showPreview, setShowPreview] = React.useState(false);
   const [history, setHistory] = React.useState<Array<HistoryFrame>>([
-    { value, selectionStart: value.length, selectionEnd: value.length },
+    { selectionEnd: value.length, selectionStart: value.length, value },
   ]);
   const [historyIndex, setHistoryIndex] = React.useState(0);
   const historyLockRef = React.useRef(false);
-  const selectionRef = React.useRef({ start: value.length, end: value.length });
+  const selectionRef = React.useRef({ end: value.length, start: value.length });
   // 记录编辑器最近一次自己发出的内容,用于区分「外部赋值(导入/回填)」与「内部编辑」。
   const lastEmittedRef = React.useRef<string | null>(null);
   // 归一化后的新历史基线:effect 中不直接 setState(react-hooks/set-state-in-effect),
@@ -86,18 +86,18 @@ export function ScriptMarkdownEditor({
       pendingHistoryBaseRef.current = null;
       setHistory([
         {
-          value: pendingBase,
-          selectionStart: pendingBase.length,
           selectionEnd: pendingBase.length,
+          selectionStart: pendingBase.length,
+          value: pendingBase,
         },
-        { value: nextValue, selectionStart: start, selectionEnd: end },
+        { selectionEnd: end, selectionStart: start, value: nextValue },
       ]);
       setHistoryIndex(1);
       return;
     }
     setHistory((prev) => {
       const sliced = prev.slice(0, historyIndex + 1);
-      const next = [...sliced, { value: nextValue, selectionStart: start, selectionEnd: end }];
+      const next = [...sliced, { selectionEnd: end, selectionStart: start, value: nextValue }];
       if (next.length > MAX_HISTORY) {
         next.shift();
       }
@@ -134,11 +134,11 @@ export function ScriptMarkdownEditor({
   function getSelection(): { end: number; start: number; text: string } {
     const el = textareaRef.current;
     if (!el) {
-      return { start: value.length, end: value.length, text: "" };
+      return { end: value.length, start: value.length, text: "" };
     }
     return {
-      start: el.selectionStart,
       end: el.selectionEnd,
+      start: el.selectionStart,
       text: value.slice(el.selectionStart, el.selectionEnd),
     };
   }
@@ -148,7 +148,7 @@ export function ScriptMarkdownEditor({
     if (!el) {
       return;
     }
-    const { start, end } = getSelection();
+    const { end, start } = getSelection();
     const nextValue = value.slice(0, start) + replacement + value.slice(end);
     const nextStart = start + (cursorOffset ?? replacement.length);
     const nextEnd = selectionLength === undefined ? nextStart : nextStart + selectionLength;
@@ -171,7 +171,7 @@ export function ScriptMarkdownEditor({
     if (!el) {
       return;
     }
-    const { start, end } = getSelection();
+    const { end, start } = getSelection();
     const lineStart = getLineStart(value, start);
     const lineEnd = getLineEnd(value, end);
     const selectedLines = value.slice(lineStart, lineEnd);
@@ -205,7 +205,7 @@ export function ScriptMarkdownEditor({
     if (!el) {
       return;
     }
-    const { start, end } = getSelection();
+    const { end, start } = getSelection();
     const lineStart = getLineStart(value, start);
     const lineEnd = getLineEnd(value, end);
     const selectedLines = value.slice(lineStart, lineEnd);
@@ -262,8 +262,8 @@ export function ScriptMarkdownEditor({
         return;
       }
       el.scrollTo({
-        top: centerLineScrollTop(line, lineHeight, el.clientHeight),
         behavior: "smooth",
+        top: centerLineScrollTop(line, lineHeight, el.clientHeight),
       });
     }, 0);
   }
@@ -338,7 +338,7 @@ export function ScriptMarkdownEditor({
           getSelection={getSelection}
           onChange={(next, start, end) => {
             emitChange(next);
-            selectionRef.current = { start, end };
+            selectionRef.current = { end, start };
             pushHistory(next, start, end);
           }}
           previewHtml={previewHtml}

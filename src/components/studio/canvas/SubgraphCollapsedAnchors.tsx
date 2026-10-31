@@ -19,10 +19,10 @@ type SubgraphCollapsedAnchorsProps = {
 };
 
 export function SubgraphCollapsedAnchors({
-  connInputs,
-  outputs,
   connectedInputs,
   connectedOutputs,
+  connInputs,
+  outputs,
 }: SubgraphCollapsedAnchorsProps) {
   const wiredInputs = connInputs.filter(({ inp }) => connectedInputs?.has(inp.name));
   const wiredOutputs = outputs.filter(({ out }) => connectedOutputs?.has(out.name));
@@ -40,20 +40,20 @@ export function SubgraphCollapsedAnchors({
       )}
       <CollapsedPortHandles
         items={wiredInputs.map(({ inp, label }, idx) => ({
+          color: portColor(inp.type ?? "*"),
+          id: inp.name,
           key: `collapsed-sub-in-${inp.name}-${idx}`,
           side: /* SAFETY: 类型断言已复核 */ "left" as const,
-          id: inp.name,
           title: `${label} (${inp.type})`,
-          color: portColor(inp.type ?? "*"),
         }))}
       />
       <CollapsedPortHandles
-        items={wiredOutputs.map(({ out, display }, idx) => ({
+        items={wiredOutputs.map(({ display, out }, idx) => ({
+          color: portColor(out.type ?? "*"),
+          id: `out:${out.name}`,
           key: `collapsed-sub-out-${out.name}-${idx}`,
           side: /* SAFETY: 类型断言已复核 */ "right" as const,
-          id: `out:${out.name}`,
           title: `${display} (${out.type})`,
-          color: portColor(out.type ?? "*"),
         }))}
       />
     </>

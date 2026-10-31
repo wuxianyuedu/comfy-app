@@ -72,8 +72,8 @@ export const THROTTLE_MIN_CORES = 1;
  */
 export const CPU_LIMIT_LABELS: Record<CpuLimitMode, string> = {
   off: "不限制（出图全速）",
-  yield: "出图让路（前台优先）",
   throttle: `限核（最多 ${THROTTLE_CPU_RATIO * 100}% 的核）`,
+  yield: "出图让路（前台优先）",
 };
 
 /** 档位的取值校验（设置项从 JSON 读进来时是 `unknown`）。 */
@@ -158,9 +158,9 @@ export function cpuLimitCommands(input: {
   pid: number;
   platform: NodeJS.Platform;
 }): { affinity: CpuLimitCommand | null; priority: CpuLimitCommand | null } {
-  const { mode, platform, pid } = input;
+  const { mode, pid, platform } = input;
   if (mode === "off") {
-    return { priority: null, affinity: null };
+    return { affinity: null, priority: null };
   }
 
   const win = platform === "win32";
@@ -172,7 +172,6 @@ export function cpuLimitCommands(input: {
    * -Command 链路上会变形」的现场），照抄同一形态免得后人以为可以简化。 */
   const priority: CpuLimitCommand = win
     ? {
-        command: "powershell.exe",
         args: [
           "-NoProfile",
           "-NonInteractive",
@@ -180,16 +179,17 @@ export function cpuLimitCommands(input: {
           `Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' -ErrorAction SilentlyContinue | ` +
             `ForEach-Object { $_.Priority = ${WINDOWS_BELOW_NORMAL}; $_.Put() | Out-Null }`,
         ],
+        command: "powershell.exe",
         describe: `Windows 进程优先级调到 ${WINDOWS_BELOW_NORMAL}（让路给前台）`,
       }
     : {
-        command: "renice",
         args: ["-n", String(POSIX_NICE_INCREMENT), "-p", String(pid)],
+        command: "renice",
         describe: `nice +${POSIX_NICE_INCREMENT}（让路给前台）`,
       };
 
   if (mode === "yield") {
-    return { priority, affinity: null };
+    return { affinity: null, priority };
   }
 
   /* 限核档：亲和性那一半。Windows 用 WMI 的 `ProcessorAffinity`，
@@ -197,7 +197,6 @@ export function cpuLimitCommands(input: {
   const cores = throttleCores(input.cpuCount);
   const affinity: CpuLimitCommand = win
     ? {
-        command: "powershell.exe",
         args: [
           "-NoProfile",
           "-NonInteractive",
@@ -205,13 +204,14 @@ export function cpuLimitCommands(input: {
           `Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' -ErrorAction SilentlyContinue | ` +
             `ForEach-Object { $_.ProcessorAffinity = ${(1n << BigInt(cores)) - 1n}; $_.Put() | Out-Null }`,
         ],
+        command: "powershell.exe",
         describe: `Windows 处理器亲和性限到 ${cores} 个核`,
       }
     : {
-        command: "taskset",
         args: ["-cp", `0-${cores - 1}`, String(pid)],
+        command: "taskset",
         describe: `taskset 限到 ${cores} 个核`,
       };
 
-  return { priority, affinity };
+  return { affinity, priority };
 }

@@ -46,7 +46,7 @@ beforeAll(() => {
 beforeEach(() => {
   tdb.$reset();
   userId = `u-${Math.random().toString(36).slice(2, 8)}`;
-  seedUser(tdb, { id: userId, email: `${userId}@x.io` });
+  seedUser(tdb, { email: `${userId}@x.io`, id: userId });
 });
 
 /** 建一行任务。`extra` 里的字段直接落到 task 表（比 seedTask 少了类型限制）。 */
@@ -55,12 +55,12 @@ async function seed(extra: Record<string, unknown> = {}): Promise<string> {
   await /* SAFETY: 类型断言已复核 */ (tdb as unknown as TaskRepoDb).insert(task).values(
     /* SAFETY: 类型断言已复核 */ {
       id,
-      userId,
-      type: "TXT2IMG",
-      prompt: "p",
       params: {},
-      workflowName: "w",
+      prompt: "p",
       status: "QUEUED",
+      type: "TXT2IMG",
+      userId,
+      workflowName: "w",
       ...extra,
     } as never,
   );
@@ -85,10 +85,10 @@ function claimedMs(id: string): number | null {
 describe("findExecutionMeta", () => {
   it("命中时返回 projectId / params / prompt / negativePrompt / workflowName / referenceImages / createdAt 七列", async () => {
     const id = await seed({
-      projectId: "proj-1",
-      negativePrompt: "neg",
-      referenceImages: ["a.png"],
       createdAt: new Date("2026-01-02T03:04:05Z"),
+      negativePrompt: "neg",
+      projectId: "proj-1",
+      referenceImages: ["a.png"],
     });
     const meta = await impl.findExecutionMeta(id);
     expect(meta).not.toBeNull();
@@ -120,7 +120,7 @@ describe("updateProgress（compare-and-set：终态行不改写）", () => {
 
   it("三种终态（SUCCEEDED / FAILED / CANCELLED）都返 false、行不变（迟到进度帧被丢弃）", async () => {
     for (const status of ["SUCCEEDED", "FAILED", "CANCELLED"]) {
-      const id = await seed({ status, progress: 88 });
+      const id = await seed({ progress: 88, status });
       expect(await impl.updateProgress(id, 50), `status=${status}`).toBe(false);
       expect(readRow(id)?.progress).toBe(88);
     }
@@ -128,7 +128,7 @@ describe("updateProgress（compare-and-set：终态行不改写）", () => {
 
   it("node 快照随进度落 progressNode 列；帧无节点信息时不覆写（3-C D1）", async () => {
     const id = await seed({ status: "QUEUED" });
-    const node = { id: "76", value: 3, max: 20, label: "KSampler" };
+    const node = { id: "76", label: "KSampler", max: 20, value: 3 };
     expect(await impl.updateProgress(id, 30, node)).toBe(true);
     expect(readRow(id)?.progressNode).toEqual(node);
     // 下一帧没带节点：progress 更新、progressNode 保留上一个（标签不闪没）
@@ -140,11 +140,11 @@ describe("updateProgress（compare-and-set：终态行不改写）", () => {
   it("progressNode 原样存 classType（4-B2：画布读 label、状态栏读类名）", async () => {
     const id = await seed({ status: "QUEUED" });
     const node = {
-      id: "76",
-      value: 3,
-      max: 20,
       classType: "KSampler",
+      id: "76",
       label: "采样器",
+      max: 20,
+      value: 3,
     };
     expect(await impl.updateProgress(id, 30, node)).toBe(true);
     expect(readRow(id)?.progressNode).toEqual(node);
@@ -152,13 +152,13 @@ describe("updateProgress（compare-and-set：终态行不改写）", () => {
 
   it("第一条进度帧把 claimedAt 从 NULL 定格，后续帧不刷新（4-B2 的耗时基准）", async () => {
     const id = await seed({ status: "QUEUED" });
-    await impl.updateProgress(id, 10, { id: "1", value: 1, max: 10 });
+    await impl.updateProgress(id, 10, { id: "1", max: 10, value: 1 });
     expect(claimedMs(id)).not.toBeNull();
     const first = claimedMs(id);
 
     // sleep-ok: 必须走真挂钟：要让 createdAt 与 claimedAt 之间拉开真实的时间差，假定时器冻住被测逻辑。
     await new Promise((resolve) => setTimeout(resolve, 5));
-    await impl.updateProgress(id, 20, { id: "2", value: 2, max: 10 });
+    await impl.updateProgress(id, 20, { id: "2", max: 10, value: 2 });
     /* COALESCE 而不是无条件覆写：进度帧每几秒一发，跟着刷就等于「已运行」永远
      * 接近零。 */
     expect(claimedMs(id)).toBe(first);
@@ -175,7 +175,7 @@ describe("markRunning（同族 compare-and-set）", () => {
   });
 
   it("终态行不被打回 RUNNING", async () => {
-    const id = await seed({ status: "SUCCEEDED", promptId: "orig" });
+    const id = await seed({ promptId: "orig", status: "SUCCEEDED" });
     expect(await impl.markRunning(id, "late")).toBe(false);
     expect(readRow(id)?.promptId).toBe("orig");
   });
@@ -186,7 +186,7 @@ describe("markRunning（同族 compare-and-set）", () => {
     expect(claimedMs(id)).not.toBeNull();
 
     const other = await seed({ status: "QUEUED" });
-    await impl.updateProgress(other, 10, { id: "1", value: 1, max: 10 });
+    await impl.updateProgress(other, 10, { id: "1", max: 10, value: 1 });
     const fromProgress = claimedMs(other);
     // sleep-ok: 必须走真挂钟：要让「进度帧定格的时间」与「markRunning 那一刻」拉开真实差值，假定时器冻住被测逻辑。
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -202,8 +202,8 @@ describe("finalizeSuccess", () => {
   it("写 SUCCEEDED + progress=100 + finishedAt + resultImages + params", async () => {
     const id = await seed({ status: "RUNNING" });
     await impl.finalizeSuccess(id, {
-      resultImages: [{ path: "a.png" }],
       params: { seed: 1 },
+      resultImages: [{ path: "a.png" }],
     });
     const row = readRow(id);
     expect(row?.status).toBe("SUCCEEDED");
@@ -217,13 +217,13 @@ describe("finalizeSuccess", () => {
       status: "RUNNING",
       workflowSnapshot: { keep: true },
     });
-    await impl.finalizeSuccess(id, { resultImages: [], params: {} });
+    await impl.finalizeSuccess(id, { params: {}, resultImages: [] });
     expect(readRow(id)?.workflowSnapshot).toEqual({ keep: true });
 
     const id2 = await seed({ status: "RUNNING" });
     await impl.finalizeSuccess(id2, {
-      resultImages: [],
       params: {},
+      resultImages: [],
       workflowSnapshot: { fresh: 1 },
     });
     expect(readRow(id2)?.workflowSnapshot).toEqual({ fresh: 1 });
@@ -282,10 +282,10 @@ describe("finalizeFromReaper", () => {
 
 describe("findStatusAndPromptById", () => {
   it("只取两列，返回 { status, promptId }", async () => {
-    const id = await seed({ status: "RUNNING", promptId: "p-1" });
+    const id = await seed({ promptId: "p-1", status: "RUNNING" });
     expect(await impl.findStatusAndPromptById(id)).toEqual({
-      status: "RUNNING",
       promptId: "p-1",
+      status: "RUNNING",
     });
   });
 
@@ -297,8 +297,8 @@ describe("findStatusAndPromptById", () => {
 describe("replaceLogs（swallow 语义：写失败不抛，面板视图仍在）", () => {
   it("正常路径写入 logs 列", async () => {
     const id = await seed({});
-    await impl.replaceLogs(id, [{ t: 1, level: "info", msg: "hi" }]);
-    expect(readRow(id)?.logs).toEqual([{ t: 1, level: "info", msg: "hi" }]);
+    await impl.replaceLogs(id, [{ level: "info", msg: "hi", t: 1 }]);
+    expect(readRow(id)?.logs).toEqual([{ level: "info", msg: "hi", t: 1 }]);
   });
 
   it("未知 id 也不抛（.catch(→undefined) 咽下）", async () => {
@@ -315,10 +315,10 @@ describe("listStaleUnownedQueued（reaper 的死信扫描：5 条件 AND，ISSUE
 
   it("命中：QUEUED + finishedAt=null + createdAt<cutoff + promptId=null + 无主归属", async () => {
     const id = await seed({
-      status: "QUEUED",
+      claimedBy: unowned,
       createdAt: oldDate,
       promptId: null,
-      claimedBy: unowned,
+      status: "QUEUED",
     });
     const got = await impl.listStaleUnownedQueued(cutoff, 10);
     expect(got.map((r) => r.id)).toContain(id);
@@ -334,9 +334,9 @@ describe("listStaleUnownedQueued（reaper 的死信扫描：5 条件 AND，ISSUE
   ];
   it.for(broken)("破一条：%s", async ([, extra]) => {
     await seed({
-      status: "QUEUED",
-      createdAt: oldDate,
       claimedBy: unowned,
+      createdAt: oldDate,
+      status: "QUEUED",
       ...extra,
     });
     expect(await impl.listStaleUnownedQueued(cutoff, 10)).toHaveLength(0);
@@ -348,9 +348,9 @@ describe("listStaleUnownedQueued（reaper 的死信扫描：5 条件 AND，ISSUE
    *  boot 诊断 `hostShardQueued=1` 与 1.4s 后的 FAILED 说的就是同一行（ISSUE #1204）。
    *  这一条同时钉住 `ownedBy()` 的 NULL 归 inline 语义不许漂。 */
   it("正常归属（NULL / 'inline' / 'host'）的 aged QUEUED 行一律不返", async () => {
-    await seed({ status: "QUEUED", createdAt: oldDate });
-    await seed({ status: "QUEUED", createdAt: oldDate, claimedBy: "inline" });
-    await seed({ status: "QUEUED", createdAt: oldDate, claimedBy: "host" });
+    await seed({ createdAt: oldDate, status: "QUEUED" });
+    await seed({ claimedBy: "inline", createdAt: oldDate, status: "QUEUED" });
+    await seed({ claimedBy: "host", createdAt: oldDate, status: "QUEUED" });
     expect(await impl.listStaleUnownedQueued(cutoff, 10)).toHaveLength(0);
   });
 });
@@ -360,9 +360,9 @@ describe("listStaleRunning（reaper 扫 RUNNING 孤儿：状态/时限/归属三
 
   it("命中：RUNNING + finishedAt=null + createdAt<cutoff + promptId 非空", async () => {
     const id = await seed({
-      status: "RUNNING",
       createdAt: oldDate,
       promptId: "pid-1",
+      status: "RUNNING",
     });
     const got = await impl.listStaleRunning(cutoff, 10);
     expect(got.map((r) => r.id)).toContain(id);
@@ -370,30 +370,30 @@ describe("listStaleRunning（reaper 扫 RUNNING 孤儿：状态/时限/归属三
 
   it("无 promptId 的 RUNNING 行也交出来（ISSUE #1184：以前这条条件把它挡成回收黑洞）", async () => {
     const id = await seed({
-      status: "RUNNING",
       createdAt: oldDate,
       promptId: null,
+      status: "RUNNING",
     });
     expect((await impl.listStaleRunning(cutoff, 10)).map((r) => r.id)).toContain(id);
   });
 
   it("归属分片（Phase 3-B0）：RUNNING 片同样按 claimedBy 切，与领取谓词同一条判据", async () => {
     const hostOrphan = await seed({
-      status: "RUNNING",
+      claimedBy: "host",
       createdAt: oldDate,
       promptId: "pid-h",
-      claimedBy: "host",
+      status: "RUNNING",
     });
     const inlineOrphan = await seed({
-      status: "RUNNING",
+      claimedBy: "inline",
       createdAt: oldDate,
       promptId: "pid-i",
-      claimedBy: "inline",
+      status: "RUNNING",
     });
     const nullOrphan = await seed({
-      status: "RUNNING",
       createdAt: oldDate,
       promptId: "pid-n",
+      status: "RUNNING",
     });
     expect((await impl.listStaleRunning(cutoff, 10, "host")).map((r) => r.id)).toEqual([
       hostOrphan,
@@ -409,20 +409,20 @@ describe("createImages", () => {
     const id = await seed({});
     await impl.createImages(id, [
       {
-        localPath: "a.png",
-        sortIndex: 0,
         isCover: true,
+        localPath: "a.png",
         mediaType: "image",
         seed: "42",
+        sortIndex: 0,
       },
       {
-        localPath: "b.mp4",
-        sortIndex: 1,
+        height: 512,
         isCover: false,
+        localPath: "b.mp4",
         mediaType: "video",
         seed: null,
+        sortIndex: 1,
         width: 1024,
-        height: 512,
       },
     ]);
     const imgs = /* SAFETY: 类型断言已复核 */ (
@@ -432,16 +432,16 @@ describe("createImages", () => {
     const first = imgs.find((r) => r.localPath === "a.png");
     const second = imgs.find((r) => r.localPath === "b.mp4");
     expect(first).toMatchObject({
+      height: null,
       isCover: 1,
       seed: "42",
       width: null,
-      height: null,
     });
     expect(second).toMatchObject({
+      height: 512,
       isCover: 0,
       seed: null,
       width: 1024,
-      height: 512,
     });
   });
 });
@@ -471,8 +471,8 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
     const claimed = await impl.claimNextQueued("host", 10);
     expect(claimed).toEqual([hostId]);
     expect(readRow(hostId)).toMatchObject({
-      status: "RUNNING",
       claimedBy: "host",
+      status: "RUNNING",
     });
     expect(readRow(inlineId)?.status).toBe("QUEUED");
     expect(readRow(nullId)?.status).toBe("QUEUED");
@@ -484,12 +484,12 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
     // FIFO：createdAt 升序（inline 行早于 NULL 行）
     expect(claimed).toEqual([inlineId, nullId]);
     expect(readRow(inlineId)).toMatchObject({
-      status: "RUNNING",
       claimedBy: "inline",
+      status: "RUNNING",
     });
     expect(readRow(nullId)).toMatchObject({
-      status: "RUNNING",
       claimedBy: "inline",
+      status: "RUNNING",
     });
     expect(readRow(hostId)?.status).toBe("QUEUED");
   });
@@ -503,8 +503,8 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
   });
 
   it("非 QUEUED 行不参与领取（RUNNING / SUCCEEDED 各一行都不被碰）", async () => {
-    await seed({ status: "RUNNING", claimedBy: "host" });
-    await seed({ status: "SUCCEEDED", claimedBy: "host" });
+    await seed({ claimedBy: "host", status: "RUNNING" });
+    await seed({ claimedBy: "host", status: "SUCCEEDED" });
     expect(await impl.claimNextQueued("host", 10)).toHaveLength(0);
   });
 
@@ -513,8 +513,8 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
     // inline 面对「只有 host 行」的队列表：空手而归，且不碰别人的行
     expect(await impl.claimNextQueued("inline", 10)).toEqual([]);
     expect(readRow(hostId)).toMatchObject({
-      status: "QUEUED",
       claimedBy: "host",
+      status: "QUEUED",
     });
     // 同一行随后可被正主领走
     expect(await impl.claimNextQueued("host", 10)).toEqual([hostId]);
@@ -522,7 +522,7 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
 
   it("领取把 claimedAt 写成当前时刻，且**不复用**上一轮的时刻（4-B2）", async () => {
     const staleAt = new Date(Date.now() - 60_000);
-    const id = await seed({ claimedBy: "host", claimedAt: staleAt });
+    const id = await seed({ claimedAt: staleAt, claimedBy: "host" });
 
     expect(await hostImpl.claimNextQueued("host", 1)).toEqual([id]);
 
@@ -540,7 +540,7 @@ describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
     const id = await seed({
       claimedBy: "host",
       execPayload: { nodes: [{ id: "1", type: "KSampler" }] },
-      params: { workflowInputs: [{ nodeId: "1", name: "text", value: "x" }] },
+      params: { workflowInputs: [{ name: "text", nodeId: "1", value: "x" }] },
     });
     // findExecJob 是 host 领取后重建 Job 的读，所以走 host 那片（带归属条件后，
     // 用 inline 实例读会正确地被挡成 null，见下方 §14 D4 那一组）。
@@ -550,7 +550,7 @@ describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
       nodes: /* SAFETY: 类型断言已复核 */ [{ id: "1", type: "KSampler" }] as Array<unknown>,
     });
     expect(job?.params).toMatchObject({
-      workflowInputs: [{ nodeId: "1", name: "text", value: "x" }],
+      workflowInputs: [{ name: "text", nodeId: "1", value: "x" }],
     });
   });
 
@@ -572,9 +572,9 @@ describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
 describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4）", () => {
   it("取消之后迟到的失败收口落不进去（CANCELLED 不再被覆盖成 FAILED）", async () => {
     const id = await seed({
-      status: "RUNNING",
       claimedBy: "inline",
       promptId: "p-1",
+      status: "RUNNING",
     });
     expect(await impl.cancel(id)).toBe("written");
     expect(await impl.finalizeFailure(id, "comfy-cli 异常退出（code=null）")).toBe(
@@ -584,56 +584,56 @@ describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4�
   });
 
   it("对已经结束的任务点取消不翻状态（SUCCEEDED 保持 SUCCEEDED）", async () => {
-    const id = await seed({ status: "SUCCEEDED", claimedBy: "inline" });
+    const id = await seed({ claimedBy: "inline", status: "SUCCEEDED" });
     expect(await impl.cancel(id)).toBe("skipped-terminal");
     expect(readRow(id)?.status).toBe("SUCCEEDED");
   });
 
   it("成功收口之后失败收口落不进去，且返回值说清是谁赢了", async () => {
-    const id = await seed({ status: "RUNNING", claimedBy: "inline" });
-    expect(await impl.finalizeSuccess(id, { resultImages: [], params: {} })).toBe("written");
+    const id = await seed({ claimedBy: "inline", status: "RUNNING" });
+    expect(await impl.finalizeSuccess(id, { params: {}, resultImages: [] })).toBe("written");
     expect(await impl.finalizeFailure(id, "后到的原因")).toBe("skipped-terminal");
     expect(readRow(id)?.status).toBe("SUCCEEDED");
   });
 
   it("inline 实例改不动 host 名下的行，原因回 skipped-not-owned", async () => {
     const id = await seed({
-      status: "RUNNING",
       claimedBy: "host",
       promptId: "p-2",
+      status: "RUNNING",
     });
-    expect(await impl.finalizeSuccess(id, { resultImages: [], params: {} })).toBe(
+    expect(await impl.finalizeSuccess(id, { params: {}, resultImages: [] })).toBe(
       "skipped-not-owned",
     );
     expect(await impl.updateProgress(id, 55)).toBe(false);
     expect(await impl.markRunning(id, "p-3")).toBe(false);
-    expect(readRow(id)).toMatchObject({ status: "RUNNING", claimedBy: "host" });
+    expect(readRow(id)).toMatchObject({ claimedBy: "host", status: "RUNNING" });
   });
 
   it("host 实例对自己那片照常落库", async () => {
-    const id = await seed({ status: "RUNNING", claimedBy: "host" });
+    const id = await seed({ claimedBy: "host", status: "RUNNING" });
     expect(await hostImpl.finalizeFailure(id, "真的失败")).toBe("written");
     expect(readRow(id)?.status).toBe("FAILED");
   });
 
   it("cancel 是唯一免归属的写：Next 侧实例能取消 host 名下的行", async () => {
     const id = await seed({
-      status: "RUNNING",
       claimedBy: "host",
       promptId: "p-4",
+      status: "RUNNING",
     });
     expect(await impl.cancel(id)).toBe("written");
     expect(readRow(id)?.status).toBe("CANCELLED");
   });
 
   it("replaceLogs 带归属守卫、不带终态守卫（收口后的尾随日志不许被抹掉）", async () => {
-    const hostRow = await seed({ status: "RUNNING", claimedBy: "host" });
+    const hostRow = await seed({ claimedBy: "host", status: "RUNNING" });
     await impl.replaceLogs(hostRow, [{ level: "info", message: "越片写入" }]);
     expect(readRow(hostRow)?.logs).not.toEqual([{ level: "info", message: "越片写入" }]);
     await hostImpl.replaceLogs(hostRow, [{ level: "info", message: "归我" }]);
     expect(readRow(hostRow)?.logs).toEqual([{ level: "info", message: "归我" }]);
 
-    const done = await seed({ status: "SUCCEEDED", claimedBy: "inline" });
+    const done = await seed({ claimedBy: "inline", status: "SUCCEEDED" });
     await impl.replaceLogs(done, [{ level: "info", message: "收口之后的尾行" }]);
     expect(readRow(done)?.logs).toEqual([{ level: "info", message: "收口之后的尾行" }]);
   });
@@ -652,7 +652,7 @@ describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4�
   it("reaper 的 repo 实例与 configureReaper 的 owner 不同源时收口被挡下", async () => {
     // 两处的 owner 必须同源（host 脚本里就是同一个 hostRepo 实例）；不同源时
     // 表现是「判了却没落库」，守卫返回的原因就是排障的唯一线索。
-    const id = await seed({ status: "RUNNING", claimedBy: "host" });
+    const id = await seed({ claimedBy: "host", status: "RUNNING" });
     expect(await impl.finalizeFromReaper(id, "FAILED", "对账判失败")).toBe("skipped-not-owned");
     expect(readRow(id)?.status).toBe("RUNNING");
   });

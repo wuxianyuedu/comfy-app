@@ -23,8 +23,8 @@ import { tabKey, type ViewTab } from "~/components/studio/workspace-tabs";
  *  · **一整屏只有一条 `<main>`**：外壳的 `SidebarInset` 是它，视图容器不再套。
  */
 const meta = {
-  title: "Studio/AppShell",
   component: AppShell,
+  title: "Studio/AppShell",
 } satisfies Meta<typeof AppShell>;
 
 export default meta;
@@ -43,9 +43,9 @@ type Story = StoryObj<typeof ShellHarness>;
  *（理由见 `.storybook/screen-frame.tsx` 的第一条口径）。
  */
 function ShellHarness({
+  children = <WorksGallery />,
   extraProjects,
   withTabs = false,
-  children = <WorksGallery />,
 }: {
   /** 壳里装的那一屏（默认给真视图 `WorksGallery`）。 */
   children?: React.ReactNode;
@@ -53,16 +53,16 @@ function ShellHarness({
   withTabs?: boolean;
 }) {
   const projects = useSeededProjects({
-    primary: projectScene("namedProject"),
     extraNames: extraProjects,
+    primary: projectScene("namedProject"),
   });
   const activeProject = projects[0];
   const tabs: Array<ViewTab> = [
-    { key: tabKey("works", null), view: "works", projectId: null },
+    { key: tabKey("works", null), projectId: null, view: "works" },
     {
       key: tabKey("canvas", activeProject?.id ?? null),
-      view: "canvas",
       projectId: activeProject?.id ?? null,
+      view: "canvas",
     },
   ];
   const activeTab = tabs[0];
