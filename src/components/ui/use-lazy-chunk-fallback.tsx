@@ -41,7 +41,7 @@ function ChunkReloadFallback({
         这一块的前端文件没有加载上（开发服务器刚重建过就会这样），
         重新加载一次即可，当前内容不会丢。
       </p>
-      <Button type="button" variant="outline" size="sm" onClick={onReload}>
+      <Button onClick={onReload} size="sm" type="button" variant="outline">
         重新加载页面
       </Button>
     </div>
@@ -57,9 +57,7 @@ function ChunkReloadFallback({
  * **只对分块失败接管**：其它异常返回 `null`（= 不接管，见 `ErrorBoundary` 的
  * `fallback` 契约），退回它自己的默认降级 UI —— 业务错误不该被说成「文件没加载上」。
  */
-export function useLazyChunkFallback(
-  label: string,
-): (error: Error | null) => React.ReactNode {
+export function useLazyChunkFallback(label: string): (error: Error | null) => React.ReactNode {
   const onReload = React.useCallback(() => {
     window.location.reload();
   }, []);

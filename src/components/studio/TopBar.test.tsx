@@ -51,7 +51,7 @@ vi.mock("next-themes", () => ({ useTheme: () => themeMock }));
 function renderTopBar(active: Parameters<typeof TopBar>[0]["active"]) {
   return render(
     <SidebarProvider>
-      <TopBar active={active} onOpenSettings={vi.fn()} onOpenSearch={vi.fn()} />
+      <TopBar active={active} onOpenSearch={vi.fn()} onOpenSettings={vi.fn()} />
     </SidebarProvider>,
   );
 }
@@ -102,11 +102,7 @@ describe("TopBar", () => {
     const onOpenSearch = vi.fn();
     render(
       <SidebarProvider>
-        <TopBar
-          active="home"
-          onOpenSettings={vi.fn()}
-          onOpenSearch={onOpenSearch}
-        />
+        <TopBar active="home" onOpenSearch={onOpenSearch} onOpenSettings={vi.fn()} />
       </SidebarProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "全局搜索" }));
@@ -148,13 +144,13 @@ describe("AppShell 侧栏头部", () => {
     render(
       <AppShell
         active="home"
-        onSelect={vi.fn()}
-        onOpenSettings={vi.fn()}
-        projects={[]}
         activeProjectId={null}
-        onOpenProject={vi.fn()}
-        onShowAllProjects={vi.fn()}
         onNewProject={vi.fn()}
+        onOpenProject={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onSelect={vi.fn()}
+        onShowAllProjects={vi.fn()}
+        projects={[]}
       >
         <div />
       </AppShell>,

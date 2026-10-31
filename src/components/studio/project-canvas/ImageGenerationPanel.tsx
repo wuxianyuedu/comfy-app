@@ -293,11 +293,11 @@ export function ImageGenerationPanel({
       {kind !== "picture" && d.resultPath ? (
         <ResultCard
           kind={kind}
-          name={d.workflowName}
-          status={d.status}
-          path={d.resultPath}
           mediaType={d.resultMediaType}
+          name={d.workflowName}
           onReplace={onReplaceResult ?? (() => undefined)}
+          path={d.resultPath}
+          status={d.status}
         />
       ) : null}
 
@@ -305,13 +305,13 @@ export function ImageGenerationPanel({
       <Field label="类型">
         {typeOptions.length ? (
           <SelectMenu
-            value={typeKnown ? d.mode : ""}
-            onChange={selectType}
-            options={typeOptions.map((typeOption) => typeOption.code)}
             labels={Object.fromEntries(
               typeOptions.map((typeOption) => [typeOption.code, typeOption.label]),
             )}
+            onChange={selectType}
+            options={typeOptions.map((typeOption) => typeOption.code)}
             placeholder="选择类型"
+            value={typeKnown ? d.mode : ""}
           />
         ) : (
           <div className="text-ink-muted text-2xs">暂无可用工作流类型</div>
@@ -326,9 +326,6 @@ export function ImageGenerationPanel({
           <Field label="模型">
             {modelTagOptions.length ? (
               <SelectMenu
-                value={genTag}
-                onChange={selectModelTag}
-                options={["", ...modelTagOptions.map((modelTagOption) => modelTagOption.name)]}
                 labels={{
                   "": <span className="text-ink-muted">全部模型</span>,
                   ...Object.fromEntries(
@@ -338,7 +335,10 @@ export function ImageGenerationPanel({
                     ]),
                   ),
                 }}
+                onChange={selectModelTag}
+                options={["", ...modelTagOptions.map((modelTagOption) => modelTagOption.name)]}
                 placeholder="选择模型"
+                value={genTag}
               />
             ) : (
               <div className="text-ink-muted text-2xs">
@@ -351,13 +351,13 @@ export function ImageGenerationPanel({
           <Field label="工作流">
             {workflowOptions.length ? (
               <SelectMenu
-                value={d.workflowId ?? ""}
-                onChange={selectWorkflow}
-                options={workflowOptions.map((workflowOption) => workflowOption.id)}
                 labels={Object.fromEntries(
                   workflowOptions.map((workflowOption) => [workflowOption.id, workflowOption.name]),
                 )}
+                onChange={selectWorkflow}
+                options={workflowOptions.map((workflowOption) => workflowOption.id)}
                 placeholder="选择工作流"
+                value={d.workflowId ?? ""}
               />
             ) : (
               <div className="text-ink-muted text-2xs">
@@ -373,24 +373,24 @@ export function ImageGenerationPanel({
       {d.workflowId ? (
         <>
           <DynamicWorkflowForm
+            compact
             io={wfIO ?? undefined}
             loading={wfIOLoading}
-            values={d.workflowInputs ?? {}}
             onChange={(next) => patch({ workflowInputs: next })}
-            compact
-            showOutputs={false}
-            workflowId={d.workflowId}
-            seedModes={d.seedModes}
             onSeedModeChange={(ioKey, mode) =>
               patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
             }
+            seedModes={d.seedModes}
+            showOutputs={false}
+            values={d.workflowInputs ?? {}}
+            workflowId={d.workflowId}
           />
           <div className="flex items-center justify-center gap-2">
             <Button
-              variant="primary-solid"
               className={btnCls + " h-auto px-6"}
               disabled={d.status === "running" || cancelling}
               onClick={onGenerate}
+              variant="primary-solid"
             >
               {d.status === "running"
                 ? "生成中…"
@@ -410,10 +410,10 @@ export function ImageGenerationPanel({
             {d.status === "running" && d.taskId ? (
               <Hint label="强制终止当前任务并释放活动槽位" wrap>
                 <Button
-                  variant="outline"
-                  onClick={onCancel}
-                  disabled={cancelling}
                   className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 text-2xs h-auto rounded border px-2.5 py-1"
+                  disabled={cancelling}
+                  onClick={onCancel}
+                  variant="outline"
                 >
                   {cancelling ? "× 取消中…" : "× 强制取消"}
                 </Button>
@@ -427,9 +427,9 @@ export function ImageGenerationPanel({
         </>
       ) : (
         <Button
-          variant="primary-solid"
           className={btnCls + " mx-auto block h-auto w-auto px-6 opacity-40"}
           disabled
+          variant="primary-solid"
         >
           请先选择工作流
         </Button>

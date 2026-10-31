@@ -44,20 +44,17 @@ describe("Disclosure", () => {
         <p>内容</p>
       </Disclosure>,
     );
-    expect(screen.getByRole("button", { name: /已展开/ })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(screen.getByRole("button", { name: /已展开/ })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("受控：open / onOpenChange 由调用处持有（外部状态驱动）", () => {
     let opened: boolean | null = null;
     render(
       <Disclosure
-        open={false}
         onOpenChange={(next) => {
           opened = next;
         }}
+        open={false}
         trigger="受控开关"
       >
         <p>内容</p>
@@ -90,9 +87,7 @@ describe("Disclosure", () => {
         <p>内容</p>
       </Disclosure>,
     );
-    const markers = container.querySelectorAll(
-      '[data-slot="disclosure-marker"]',
-    );
+    const markers = container.querySelectorAll('[data-slot="disclosure-marker"]');
     expect(markers.length).toBe(2);
   });
 
@@ -102,9 +97,7 @@ describe("Disclosure", () => {
         <p>内容</p>
       </Disclosure>,
     );
-    expect(
-      container.querySelectorAll('[data-slot="disclosure-marker"]').length,
-    ).toBe(0);
+    expect(container.querySelectorAll('[data-slot="disclosure-marker"]').length).toBe(0);
   });
 
   it("disabled 时点不动，也不改 aria-expanded", () => {
@@ -137,9 +130,7 @@ describe("Disclosure", () => {
     );
     expect(screen.getByRole("button", { name: "重试" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /完整错误/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /完整错误/ })).toBeInTheDocument();
     /* 关键：两个并列动作**不在**折叠触发按钮内部 —— 否则点它们会一并折叠，
      * 且 `<button>` 套 `<button>` 是非法 HTML（这正是自绘那份绕不过去的坑）。 */
     const trigger = screen.getByRole("button", { name: /完整错误/ });
@@ -149,8 +140,8 @@ describe("Disclosure", () => {
   it("同排的排布在 Root 上（rootClassName），面板不随内容收缩", () => {
     const { container } = render(
       <Disclosure
-        rootClassName="mt-3 flex flex-wrap items-center gap-2"
         panelClassName="basis-full"
+        rootClassName="mt-3 flex flex-wrap items-center gap-2"
         trigger="完整错误"
       >
         <p>详情</p>
@@ -161,9 +152,7 @@ describe("Disclosure", () => {
      * 就是这样排的）。 */
     const root = container.querySelector('[data-slot="disclosure"]');
     expect(root?.className).toContain("flex");
-    expect(
-      root?.querySelector('[data-slot="disclosure-trigger"]'),
-    ).not.toBeNull();
+    expect(root?.querySelector('[data-slot="disclosure-trigger"]')).not.toBeNull();
     /* 面板是「独占一行」的那块：Root 是 flex 行时它靠 `basis-full` 换行，
      * 基类 `w-full` 保证它不被内容宽度挤窄。 */
     const panel = container.querySelector('[data-slot="disclosure-panel"]');

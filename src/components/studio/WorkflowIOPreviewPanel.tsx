@@ -222,21 +222,21 @@ export function WorkflowIoPreviewPanel({
           {hasModeOverrides && (
             <Hint label={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}>
               <Button
-                variant="outline"
-                size="xs"
-                onClick={resetActiveModeOverrides}
                 className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs h-auto rounded-md px-1.5 py-0.5"
+                onClick={resetActiveModeOverrides}
+                size="xs"
+                variant="outline"
               >
                 恢复默认
               </Button>
             </Hint>
           )}
-          <Hint label="关闭预览" accessibleName>
+          <Hint accessibleName label="关闭预览">
             <Button
-              variant="outline"
-              size="icon-xs"
-              onClick={onClose}
               className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs rounded-md"
+              onClick={onClose}
+              size="icon-xs"
+              variant="outline"
             >
               ✕
             </Button>
@@ -246,27 +246,27 @@ export function WorkflowIoPreviewPanel({
         {/* ── 模式页签：来自工作流 modes（与库「类型」同源）＋右侧模式管理 ── */}
         <div className="border-border-strong flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-1.5">
           {modes.map((code) => (
-            <span key={code} className="flex shrink-0 items-center gap-0.5">
+            <span className="flex shrink-0 items-center gap-0.5" key={code}>
               <Hint label={code}>
                 <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => setActiveMode(code)}
                   className={`${tabClass(effectiveMode === code)} h-auto`}
+                  onClick={() => setActiveMode(code)}
+                  size="xs"
+                  variant="ghost"
                 >
                   {modeLabel(code)}
                 </Button>
               </Hint>
               {modes.length > 1 && (
-                <Hint label={`从工作流模式中移除「${modeLabel(code)}」`} accessibleName>
+                <Hint accessibleName label={`从工作流模式中移除「${modeLabel(code)}」`}>
                   <Button
-                    variant="ghost"
-                    size="icon-xs"
+                    className="text-ink-muted hover:text-danger-strong text-3xs rounded"
                     onClick={() => {
                       const next = modes.filter((m) => m !== code);
                       onModesChange(next, next[0] ?? "");
                     }}
-                    className="text-ink-muted hover:text-danger-strong text-3xs rounded"
+                    size="icon-xs"
+                    variant="ghost"
                   >
                     ×
                   </Button>
@@ -276,9 +276,9 @@ export function WorkflowIoPreviewPanel({
           ))}
           <span className="ml-auto shrink-0">
             <MultiModeSelect
-              modes={modes}
               defaultMode={defaultMode ?? modes[0] ?? ""}
               hideExtraBadge
+              modes={modes}
               onChange={onModesChange}
             />
           </span>
@@ -299,24 +299,24 @@ export function WorkflowIoPreviewPanel({
           ) : (
             <div className={effectiveMode ? "" : "pointer-events-none opacity-50"}>
               <DynamicWorkflowForm
-                io={previewIO}
-                values={defaultInputValues(previewIO, effectiveMode)}
-                onChange={handleFormChange}
-                mode={effectiveMode}
                 compact
-                showOutputs
-                showHiddenInMode
-                seedModes={seedModes}
-                onSeedModeChange={setSeedModeForMode}
+                emptyHint={null}
+                io={previewIO}
+                mode={effectiveMode}
+                onChange={handleFormChange}
                 onLabelChange={setIOLabel}
-                /* 必填 / 可选 toggle：按当前模式写覆盖（modes[mode].required）。 */
-                onRequiredChange={setRequiredForMode}
-                /* 每行 👁：该参数在当前模式下是否可见（按模式分别保留）。 */
-                visibilityMode={effectiveMode}
-                onVisibilityChange={toggleModeVisibility}
                 /* drag-to-reorder：仅编辑态的 IO 预览暴露。 */
                 onReorder={reorderIO}
-                emptyHint={null}
+                /* 必填 / 可选 toggle：按当前模式写覆盖（modes[mode].required）。 */
+                onRequiredChange={setRequiredForMode}
+                onSeedModeChange={setSeedModeForMode}
+                onVisibilityChange={toggleModeVisibility}
+                seedModes={seedModes}
+                showHiddenInMode
+                showOutputs
+                values={defaultInputValues(previewIO, effectiveMode)}
+                /* 每行 👁：该参数在当前模式下是否可见（按模式分别保留）。 */
+                visibilityMode={effectiveMode}
               />
             </div>
           )}

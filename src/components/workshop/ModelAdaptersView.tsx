@@ -98,7 +98,11 @@ function InputMappingRow({
   return (
     <div className="flex items-center gap-2">
       <SelectMenu
-        value={row.type}
+        aria-label={`${modeLabel(mode)} 第 ${index + 1} 行统一输入类型`}
+        className="w-52 shrink-0 text-xs"
+        labels={Object.fromEntries(
+          WORKSHOP_INPUT_TYPES.map((t) => [t.type, `${workshopInputLabel(t.type)}（${t.type}）`]),
+        )}
         onChange={(value) =>
           onChange({
             type: /* SAFETY: 类型断言已复核 */ value as WorkshopInputType,
@@ -106,28 +110,24 @@ function InputMappingRow({
           })
         }
         options={WORKSHOP_INPUT_TYPES.map((t) => t.type)}
-        labels={Object.fromEntries(
-          WORKSHOP_INPUT_TYPES.map((t) => [t.type, `${workshopInputLabel(t.type)}（${t.type}）`]),
-        )}
-        aria-label={`${modeLabel(mode)} 第 ${index + 1} 行统一输入类型`}
-        className="w-52 shrink-0 text-xs"
+        value={row.type}
       />
       <span aria-hidden className="text-muted-foreground/50 shrink-0 text-xs">
         →
       </span>
       <input
-        value={row.field}
-        onChange={(event) => onChange({ type: row.type, field: event.target.value })}
-        placeholder="请求体字段名"
         aria-label={`${modeLabel(mode)} 第 ${index + 1} 行的请求体字段名`}
         className="border-border bg-bg focus:border-primary min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
+        onChange={(event) => onChange({ type: row.type, field: event.target.value })}
+        placeholder="请求体字段名"
+        value={row.field}
       />
       <Button
-        variant="ghost"
-        size="icon-sm"
         aria-label={`删除第 ${index + 1} 行输入映射`}
-        onClick={onRemove}
         className="text-muted-foreground/60 hover:text-danger-strong shrink-0 hover:bg-transparent"
+        onClick={onRemove}
+        size="icon-sm"
+        variant="ghost"
       >
         ✕
       </Button>
@@ -166,8 +166,8 @@ export function ModelAdaptersView() {
      这里再画一枚就是两个入口做同一件事（弹窗时代才需要自绘，那时没有页签）。 */
   return (
     <DocumentFrame
-      width="wide"
       className="flex flex-col gap-6 px-4 pt-4 pb-8 sm:px-8 sm:pt-5 sm:pb-12"
+      width="wide"
     >
       {/* 页头走 `ui/page-header`（规范 03 §3.10 / 16 §16.2.4.73）。屏名已经由页签给出，
           按 ISSUE #1693 那一档收：不传可见 `title`（屏名退成 `sr-only`，读屏仍按标题
@@ -187,12 +187,12 @@ export function ModelAdaptersView() {
             回来为它配置各模式的输入输出。
           </p>
         ) : (
-          <div role="radiogroup" aria-label="选择远端模型" className="flex flex-wrap gap-2">
+          <div aria-label="选择远端模型" className="flex flex-wrap gap-2" role="radiogroup">
             {candidates.map((c) => (
               <SelectChip
                 key={c.name}
-                selected={selectedModel === c.name}
                 onClick={() => selectModel(c.name)}
+                selected={selectedModel === c.name}
                 shape="pill"
               >
                 {c.name}
@@ -218,27 +218,27 @@ export function ModelAdaptersView() {
             <div className="flex flex-wrap items-center gap-2">
               {draft.map((a) => (
                 <span
-                  key={a.mode}
                   className="border-border text-ink/80 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs"
+                  key={a.mode}
                 >
                   {modeLabel(a.mode)}
                   <Button
-                    variant="ghost"
-                    size="icon-xs"
                     aria-label={`移除模式 ${modeLabel(a.mode)}`}
-                    onClick={() => setDraft((prev) => prev.filter((x) => x.mode !== a.mode))}
                     className="text-muted-foreground/60 hover:text-danger-strong hover:bg-transparent"
+                    onClick={() => setDraft((prev) => prev.filter((x) => x.mode !== a.mode))}
+                    size="icon-xs"
+                    variant="ghost"
                   >
                     ✕
                   </Button>
                 </span>
               ))}
               <SelectChip
-                shape="dashed"
-                selected={false}
                 aria-expanded={addModeOpen}
-                onClick={() => setAddModeOpen((v) => !v)}
                 className="px-3 py-1 text-xs"
+                onClick={() => setAddModeOpen((v) => !v)}
+                selected={false}
+                shape="dashed"
               >
                 ＋ 添加模式
               </SelectChip>
@@ -259,12 +259,12 @@ export function ModelAdaptersView() {
                         {modes.map((t) => (
                           <SelectChip
                             key={t.code}
-                            shape="compact"
-                            selected={false}
                             onClick={() => {
                               addMode(t.code);
                               setAddModeOpen(false);
                             }}
+                            selected={false}
+                            shape="compact"
                             title={t.code}
                           >
                             {t.label}
@@ -280,7 +280,7 @@ export function ModelAdaptersView() {
 
           {/* 每个已配置模式的适配器编辑 */}
           {draft.map((a) => (
-            <section key={a.mode} className="border-border bg-surface rounded-xl border p-4">
+            <section className="border-border bg-surface rounded-xl border p-4" key={a.mode}>
               <div className="border-border mb-3 flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
                 <h4 className="text-ink text-sm font-semibold">
                   {modeLabel(a.mode)}
@@ -297,21 +297,21 @@ export function ModelAdaptersView() {
               </div>
 
               <FormField
-                label={<FieldLabelRow label="端点路径" id="拼在模型 Base URL 后" />}
                 id={`adapter-endpoint-${a.mode}`}
+                label={<FieldLabelRow id="拼在模型 Base URL 后" label="端点路径" />}
                 labelClassName="mb-1.5"
               >
                 {(a11y) => (
                   <input
                     {...a11y}
-                    value={a.endpointPath}
+                    className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
                     onChange={(event) =>
                       updateAdapter(a.mode, (x) => ({
                         ...x,
                         endpointPath: event.target.value,
                       }))
                     }
-                    className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
+                    value={a.endpointPath}
                   />
                 )}
               </FormField>
@@ -323,10 +323,9 @@ export function ModelAdaptersView() {
                 <div className="flex flex-col gap-2">
                   {a.inputs.map((row, i) => (
                     <InputMappingRow
+                      index={i}
                       key={`${a.mode}-${row.type}-${i}`}
                       mode={a.mode}
-                      row={row}
-                      index={i}
                       onChange={(next) =>
                         updateAdapter(a.mode, (x) => ({
                           ...x,
@@ -339,11 +338,10 @@ export function ModelAdaptersView() {
                           inputs: x.inputs.filter((_, j) => j !== i),
                         }))
                       }
+                      row={row}
                     />
                   ))}
                   <SelectChip
-                    shape="dashed"
-                    selected={false}
                     className="self-start px-2.5 py-1 text-xs"
                     onClick={() =>
                       updateAdapter(a.mode, (x) => {
@@ -357,6 +355,8 @@ export function ModelAdaptersView() {
                         };
                       })
                     }
+                    selected={false}
+                    shape="dashed"
                   >
                     ＋ 添加输入映射
                   </SelectChip>
@@ -364,17 +364,17 @@ export function ModelAdaptersView() {
               </div>
 
               <FormField
-                label={
-                  <FieldLabelRow label="产物字段路径" id="响应 JSON 内，如 url / data.0.url" />
-                }
-                id={`adapter-output-${a.mode}`}
                 hint="留空走通用提取。"
+                id={`adapter-output-${a.mode}`}
+                label={
+                  <FieldLabelRow id="响应 JSON 内，如 url / data.0.url" label="产物字段路径" />
+                }
                 labelClassName="mt-4 mb-1.5"
               >
                 {(a11y) => (
                   <input
                     {...a11y}
-                    value={a.outputField}
+                    className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
                     onChange={(event) =>
                       updateAdapter(a.mode, (x) => ({
                         ...x,
@@ -382,7 +382,7 @@ export function ModelAdaptersView() {
                       }))
                     }
                     placeholder="url"
-                    className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
+                    value={a.outputField}
                   />
                 )}
               </FormField>
@@ -411,10 +411,10 @@ export function ModelAdaptersView() {
       {selectedModel && (
         <div className="flex items-center justify-end">
           <Button
-            variant="primary-solid"
-            onClick={() => void save()}
-            disabled={saving}
             className="h-auto px-4 py-2"
+            disabled={saving}
+            onClick={() => void save()}
+            variant="primary-solid"
           >
             {saving ? "保存中…" : "保存适配器"}
           </Button>

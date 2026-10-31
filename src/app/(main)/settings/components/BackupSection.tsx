@@ -44,11 +44,11 @@ function BackupRow({
         {size === null ? "" : ` · ${size}`}
       </span>
       <Button
-        variant={pending ? "primary-solid" : "outline"}
-        size="xs"
+        className="h-auto shrink-0 rounded px-2 py-0.5 text-xs"
         disabled={disabled || pending}
         onClick={() => onRestore(entry.name)}
-        className="h-auto shrink-0 rounded px-2 py-0.5 text-xs"
+        size="xs"
+        variant={pending ? "primary-solid" : "outline"}
       >
         {pending ? "已登记" : "用这一份恢复"}
       </Button>
@@ -88,9 +88,9 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
         </p>
         <div className="flex items-center gap-3">
           <StatusButton
+            disabled={c.backupBusy || c.restoreBusy}
             onClick={() => void c.createBackupNow()}
             variant="primary-solid"
-            disabled={c.backupBusy || c.restoreBusy}
           >
             {c.backupBusy ? "备份中…" : "立即备份"}
           </StatusButton>
@@ -132,11 +132,11 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
           <div className="flex flex-col gap-2">
             {c.backups.map((entry) => (
               <BackupRow
-                key={entry.name}
-                entry={entry}
-                pending={c.pendingRestore?.file === entry.name}
                 disabled={c.restoreBusy || c.backupBusy}
+                entry={entry}
+                key={entry.name}
                 onRestore={setConfirming}
+                pending={c.pendingRestore?.file === entry.name}
               />
             ))}
           </div>
@@ -151,22 +151,22 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
             </p>
             <div className="flex gap-2">
               <Button
-                variant="destructive"
-                size="xs"
                 className="h-auto rounded px-3 py-1 text-xs"
                 onClick={() => {
                   const name = confirming;
                   setConfirming(null);
                   void c.restoreFrom(name);
                 }}
+                size="xs"
+                variant="destructive"
               >
                 确认登记
               </Button>
               <Button
-                variant="outline"
-                size="xs"
                 className="h-auto rounded px-3 py-1 text-xs"
                 onClick={() => setConfirming(null)}
+                size="xs"
+                variant="outline"
               >
                 取消
               </Button>

@@ -678,11 +678,11 @@ function NodeJsonViewerPortal({ store }: { store: StoreApi<NodeJsonViewerStore> 
   }
   return (
     <NodeJsonPopover
-      key={`${viewer.nodeId}-${viewer.kind}`}
-      request={viewer}
       getJson={getNodeJson}
       getView={getNodeView}
+      key={`${viewer.nodeId}-${viewer.kind}`}
       onDismiss={dismiss}
+      request={viewer}
     />
   );
 }

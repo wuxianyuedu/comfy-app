@@ -38,16 +38,11 @@ export function ShellFullPage({
   const useTitleBar = useTitleBarTabsActive();
   return (
     <div
+      className={cn("bg-canvas text-ink flex h-dvh flex-col overflow-hidden", className)}
       data-shell={useTitleBar ? "" : undefined}
-      className={cn(
-        "bg-canvas text-ink flex h-dvh flex-col overflow-hidden",
-        className,
-      )}
     >
       {useTitleBar ? <WindowTitleBar /> : null}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {children}
-      </div>
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
     </div>
   );
 }

@@ -51,15 +51,15 @@ export function WindowTitleBar() {
       {/* `data-slot="title-bar"` 与 `TitleBarTabs` 一致：e2e 按它断言
           「应用顶部这条 chrome 在不在」（overlay-boundary.spec.ts）。 */}
       <div
-        data-slot="title-bar"
-        data-no-drag
         className={cn(
           TITLE_BAR_HEIGHT_CLASS,
           TITLE_BAR_CHROME_CLASS,
           "border-border-subtle bg-panel flex shrink-0 items-stretch border-b select-none",
         )}
-        onPointerDown={drag.onPointerDown}
+        data-no-drag
+        data-slot="title-bar"
         onDoubleClick={drag.onDoubleClick}
+        onPointerDown={drag.onPointerDown}
       >
         {/* 拖拽空白区：没有页签可放，它在按钮左侧占满余量（按钮自带
             data-no-drag，落在它上面的点击不会被拖拽吞掉）。
@@ -68,7 +68,7 @@ export function WindowTitleBar() {
             条漏了它，于是在 404 / 错误页这类整屏页上三个窗口按钮整排落在左上角，
             与别的页面（以及系统标题栏）相反；按钮本身还在、也点得动，所以门禁与
             用例都判不出来（ISSUE #1918）。 */}
-        <div className="min-w-2 flex-1" aria-hidden />
+        <div aria-hidden className="min-w-2 flex-1" />
         <WindowControls maximized={maximized} onMaximizedChange={setMaximized} />
       </div>
     </TooltipProvider>

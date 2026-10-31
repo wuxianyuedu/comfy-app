@@ -7,7 +7,7 @@ afterEach(cleanup);
 
 function renderPair() {
   render(
-    <ToggleGroup value={["b"]} multiple={false} aria-label="测试分段控件">
+    <ToggleGroup aria-label="测试分段控件" multiple={false} value={["b"]}>
       <ToggleGroupItem value="a">甲</ToggleGroupItem>
       <ToggleGroupItem value="b">乙</ToggleGroupItem>
     </ToggleGroup>,

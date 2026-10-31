@@ -16,27 +16,8 @@ export function WorkflowModelFilterChip({ value, tags, onChange }: WorkflowModel
 
   return (
     <OptionListPopover
-      value={value}
-      onSelect={onChange}
-      triggerTitle={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
       align="start"
       contentClassName="w-72"
-      triggerClassName="border-accent/35 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs"
-      trigger={
-        <>
-          <span
-            className={`size-1.5 shrink-0 rounded-full ${
-              value === "all" ? "bg-accent" : "bg-accent-soft"
-            }`}
-          />
-          <span
-            className="text-accent-soft max-w-20 truncate font-semibold"
-            style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
-          >
-            {label}
-          </span>
-        </>
-      }
       emptyHint="标签库为空，去工作流库「管理模型」添加"
       items={[
         {
@@ -52,6 +33,25 @@ export function WorkflowModelFilterChip({ value, tags, onChange }: WorkflowModel
           suffix: <span className="text-ink-muted text-4xs tabular-nums">{tag.count}</span>,
         })),
       ]}
+      onSelect={onChange}
+      trigger={
+        <>
+          <span
+            className={`size-1.5 shrink-0 rounded-full ${
+              value === "all" ? "bg-accent" : "bg-accent-soft"
+            }`}
+          />
+          <span
+            className="text-accent-soft max-w-20 truncate font-semibold"
+            style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
+          >
+            {label}
+          </span>
+        </>
+      }
+      triggerClassName="border-accent/35 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs"
+      triggerTitle={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
+      value={value}
     />
   );
 }

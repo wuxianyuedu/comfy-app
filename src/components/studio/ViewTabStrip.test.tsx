@@ -19,11 +19,11 @@ function strip(over: Partial<Parameters<typeof ViewTabStrip>[0]> = {}) {
   const state = openViewTab(openViewTab(initialWorkspaceTabs(), "queue", null), "workshop", "p1");
   return render(
     <ViewTabStrip
-      tabs={state.tabs}
       activeKey={state.activeKey}
-      projectNameOf={(id) => (id === "p1" ? "雾中来信" : null)}
-      onSelect={vi.fn()}
       onClose={vi.fn()}
+      onSelect={vi.fn()}
+      projectNameOf={(id) => (id === "p1" ? "雾中来信" : null)}
+      tabs={state.tabs}
       {...over}
     />,
   );
@@ -97,10 +97,10 @@ describe("ViewTabStrip", () => {
     const state = initialWorkspaceTabs();
     render(
       <ViewTabStrip
-        tabs={state.tabs}
         activeKey={state.activeKey}
-        onSelect={vi.fn()}
         onClose={vi.fn()}
+        onSelect={vi.fn()}
+        tabs={state.tabs}
       />,
     );
     const tab = screen.getByRole("tab");

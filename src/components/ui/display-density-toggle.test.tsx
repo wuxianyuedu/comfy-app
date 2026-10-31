@@ -20,7 +20,7 @@ afterEach(cleanup);
 
 function renderToggle(value: "grid" | "list") {
   const onChange = vi.fn();
-  render(<DisplayDensityToggle value={value} onChange={onChange} />);
+  render(<DisplayDensityToggle onChange={onChange} value={value} />);
   return { onChange };
 }
 
@@ -34,10 +34,7 @@ describe("DisplayDensityToggle", () => {
     for (const radio of radios) {
       expect(radio).not.toHaveAttribute("aria-pressed");
     }
-    expect(screen.getByRole("radio", { name: "网格视图" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    expect(screen.getByRole("radio", { name: "网格视图" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "列表视图" })).toHaveAttribute(
       "aria-checked",
       "false",
@@ -45,13 +42,8 @@ describe("DisplayDensityToggle", () => {
   });
 
   it("两枚的选中态由 value 一处驱动（只有一枚为真）", () => {
-    const { rerender } = render(
-      <DisplayDensityToggle value="list" onChange={() => undefined} />,
-    );
-    expect(screen.getByRole("radio", { name: "列表视图" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    const { rerender } = render(<DisplayDensityToggle onChange={() => undefined} value="list" />);
+    expect(screen.getByRole("radio", { name: "列表视图" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "网格视图" })).toHaveAttribute(
       "aria-checked",
       "false",
@@ -59,11 +51,8 @@ describe("DisplayDensityToggle", () => {
 
     /* 换一档后两枚跟着对调 —— 旧实现里 `active` 与可见底色是两份各自算的，
      * 很容易只改一半。 */
-    rerender(<DisplayDensityToggle value="grid" onChange={() => undefined} />);
-    expect(screen.getByRole("radio", { name: "网格视图" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    rerender(<DisplayDensityToggle onChange={() => undefined} value="grid" />);
+    expect(screen.getByRole("radio", { name: "网格视图" })).toHaveAttribute("aria-checked", "true");
     expect(screen.getByRole("radio", { name: "列表视图" })).toHaveAttribute(
       "aria-checked",
       "false",

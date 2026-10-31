@@ -77,7 +77,7 @@ export const Default: Story = {
       </InputGroupAddon>
       <InputGroupInput placeholder="搜索工作流…" />
       <InputGroupAddon align="inline-end">
-        <InputGroupButton size="icon-xs" aria-label="清除">
+        <InputGroupButton aria-label="清除" size="icon-xs">
           <X />
         </InputGroupButton>
       </InputGroupAddon>
@@ -92,7 +92,7 @@ export const Aligns: Story = {
   render: () => (
     <div className="flex w-md flex-col gap-6">
       {ALIGNS.map((align) => (
-        <div key={align} className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" key={align}>
           <span className="text-ink-muted font-mono text-[11px]">align={align}</span>
           <InputGroup>
             <InputGroupAddon align={align}>
@@ -115,10 +115,10 @@ export const BlockLayout: Story = {
       <InputGroupAddon align="block-start">
         <InputGroupText>系统提示词</InputGroupText>
       </InputGroupAddon>
-      <InputGroupTextarea placeholder="写在这里…" className="min-h-24" rows={4} />
+      <InputGroupTextarea className="min-h-24" placeholder="写在这里…" rows={4} />
       <InputGroupAddon align="block-end">
         <InputGroupText>支持多行，⌘↵ 提交</InputGroupText>
-        <InputGroupButton size="icon-sm" aria-label="提交" className="ml-auto">
+        <InputGroupButton aria-label="提交" className="ml-auto" size="icon-sm">
           <Send />
         </InputGroupButton>
       </InputGroupAddon>
@@ -132,13 +132,13 @@ export const ButtonSizes: Story = {
   render: () => (
     <div className="flex w-md flex-col gap-4">
       {BUTTON_SIZES.map((size) => (
-        <div key={size} className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" key={size}>
           <span className="text-ink-muted font-mono text-[11px]">InputGroupButton size={size}</span>
           <InputGroup>
             <InputGroupInput placeholder="按钮 size 在这条里" />
             <InputGroupAddon align="inline-end">
               {size.startsWith("icon") ? (
-                <InputGroupButton size={size} aria-label={size}>
+                <InputGroupButton aria-label={size} size={size}>
                   <X />
                 </InputGroupButton>
               ) : (
@@ -168,13 +168,13 @@ export const States: Story = {
         <InputGroupAddon>
           <InputGroupText>禁用</InputGroupText>
         </InputGroupAddon>
-        <InputGroupInput placeholder="整组一起变灰" disabled />
+        <InputGroupInput disabled placeholder="整组一起变灰" />
       </InputGroup>
       <InputGroup>
         <InputGroupAddon>
           <InputGroupText>错误</InputGroupText>
         </InputGroupAddon>
-        <InputGroupInput placeholder="子元素带 aria-invalid 时整组上色" aria-invalid />
+        <InputGroupInput aria-invalid placeholder="子元素带 aria-invalid 时整组上色" />
       </InputGroup>
     </div>
   ),

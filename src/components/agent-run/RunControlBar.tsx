@@ -97,12 +97,12 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
       {/* 执行日志：引擎每步一条（最新在上），让「AI 跑到哪、产出了什么」在应用内可见。 */}
       {run.log.length > 0 && (
         <ul
-          className="border-border-subtle bg-canvas/50 flex max-h-32 flex-col gap-0.5 overflow-y-auto rounded-md border px-2.5 py-1.5"
           aria-label="执行日志"
+          className="border-border-subtle bg-canvas/50 flex max-h-32 flex-col gap-0.5 overflow-y-auto rounded-md border px-2.5 py-1.5"
         >
           {[...run.log].reverse().map((step) => (
-            <li key={step.ts} className="text-ink-fainter text-2xs flex items-baseline gap-1.5">
-              <span className={step.ok ? "text-success-strong" : "text-destructive"} aria-hidden>
+            <li className="text-ink-fainter text-2xs flex items-baseline gap-1.5" key={step.ts}>
+              <span aria-hidden className={step.ok ? "text-success-strong" : "text-destructive"}>
                 {step.ok ? "✓" : "✗"}
               </span>
               <span className="text-ink-faintest shrink-0 tabular-nums">
@@ -120,19 +120,19 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
         run.status === "cancelled") && (
         <div className="flex flex-wrap items-end gap-2">
           <Textarea
-            value={c.goal}
-            onChange={textHandler(c.setGoal)}
-            rows={2}
-            placeholder="想拍什么？一句话创意即可（留空则用项目标题）"
             className="border-border bg-subtle text-ink-field max-w-md min-w-55 flex-1 resize-none text-xs"
+            onChange={textHandler(c.setGoal)}
+            placeholder="想拍什么？一句话创意即可（留空则用项目标题）"
+            rows={2}
+            value={c.goal}
           />
           <FieldLabel className="text-2xs flex flex-col gap-1">
             <span className="text-ink-faint">确认粒度</span>
             <SelectMenu
-              value={c.approvalMode}
+              labels={Object.fromEntries(APPROVAL_OPTIONS.map((o) => [o.value, o.label]))}
               onChange={(v) => c.setApprovalMode(/* SAFETY: 类型断言已复核 */ v as ApprovalMode)}
               options={APPROVAL_OPTIONS.map((o) => o.value)}
-              labels={Object.fromEntries(APPROVAL_OPTIONS.map((o) => [o.value, o.label]))}
+              value={c.approvalMode}
             />
           </FieldLabel>
           <FieldLabel className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs">
@@ -143,11 +143,11 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             <span>生图后自动评审</span>
           </FieldLabel>
           <Button
-            type="button"
-            size="sm"
-            onClick={() => void c.start()}
-            disabled={busy}
             className="h-9"
+            disabled={busy}
+            onClick={() => void c.start()}
+            size="sm"
+            type="button"
           >
             {run.status === "idle" ? "启动" : "重新开始"}
           </Button>
@@ -157,20 +157,20 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
       {run.status === "running" && (
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => void c.pause()}
             disabled={busy}
+            onClick={() => void c.pause()}
+            size="sm"
+            type="button"
+            variant="outline"
           >
             暂停
           </Button>
           <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => void c.cancel()}
             disabled={busy}
+            onClick={() => void c.cancel()}
+            size="sm"
+            type="button"
+            variant="ghost"
           >
             取消
           </Button>
@@ -179,24 +179,24 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
 
       {run.status === "awaiting_approval" && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" onClick={() => void c.approve()} disabled={busy}>
+          <Button disabled={busy} onClick={() => void c.approve()} size="sm" type="button">
             确认，继续
           </Button>
           <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => void c.pause()}
             disabled={busy}
+            onClick={() => void c.pause()}
+            size="sm"
+            type="button"
+            variant="outline"
           >
             暂停
           </Button>
           <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => void c.cancel()}
             disabled={busy}
+            onClick={() => void c.cancel()}
+            size="sm"
+            type="button"
+            variant="ghost"
           >
             取消
           </Button>
@@ -205,15 +205,15 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
 
       {run.status === "paused" && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" onClick={() => void c.resume()} disabled={busy}>
+          <Button disabled={busy} onClick={() => void c.resume()} size="sm" type="button">
             继续
           </Button>
           <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => void c.cancel()}
             disabled={busy}
+            onClick={() => void c.cancel()}
+            size="sm"
+            type="button"
+            variant="ghost"
           >
             取消
           </Button>

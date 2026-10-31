@@ -48,13 +48,13 @@ function Demo(props: { body: string; label: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button onClick={() => setOpen(true)} variant="outline">
         打开全屏视图
       </Button>
-      <FullScreenDialog open={open} onOpenChange={setOpen} label={props.label} className="bg-bg">
+      <FullScreenDialog className="bg-bg" label={props.label} onOpenChange={setOpen} open={open}>
         <div className="flex items-center justify-between border-b p-3">
           <span className="text-sm font-medium">{props.label}</span>
-          <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          <Button onClick={() => setOpen(false)} size="sm" variant="ghost">
             退出全屏
           </Button>
         </div>
@@ -69,8 +69,8 @@ function Demo(props: { body: string; label: string }) {
 export const Default: Story = {
   render: () => (
     <Demo
-      label="运行日志"
       body="这个面板铺满标题行下方，但不铺到窗口底部 —— 底部那条状态栏不会被压住。"
+      label="运行日志"
     />
   ),
 };
@@ -82,8 +82,8 @@ export const PointerDismissDisabled: Story = {
   render: () => (
     <div className="flex flex-col items-start gap-2">
       <Demo
-        label="全屏（点外面不关）"
         body="试着点面板外面看看：不会关。用「退出全屏」按钮或 Esc。"
+        label="全屏（点外面不关）"
       />
       <p className="text-ink-muted text-xs">
         这也是本件与 ui/dialog 最容易被误当成「同一个东西」的一处差别。
@@ -97,8 +97,8 @@ export const PointerDismissDisabled: Story = {
 export const CustomZ: Story = {
   render: () => (
     <Demo
-      label="更高的层级（z-110）"
       body="调用处可以抬高层级 —— 但要记得浮层刻度里没有裸数字（规范 16 §16.2.5）。"
+      label="更高的层级（z-110）"
     />
   ),
 };

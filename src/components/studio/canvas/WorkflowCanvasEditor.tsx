@@ -19,8 +19,8 @@ import { zClass } from "~/lib/shell/overlay-z";
 function EditorCrashFallback({ error, onClose }: { error: Error | null; onClose: () => void }) {
   return (
     <FullScreenLayer
-      zClass={zClass("modal")}
       className="bg-canvas flex items-center justify-center"
+      zClass={zClass("modal")}
     >
       <div className="border-destructive/25 bg-destructive/5 w-[min(560px,90vw)] rounded-2xl border p-6">
         <p className="text-destructive text-sm font-semibold">编辑器渲染出错</p>
@@ -28,9 +28,9 @@ function EditorCrashFallback({ error, onClose }: { error: Error | null; onClose:
           {error?.message ?? "未知错误（详见控制台 componentStack）"}
         </p>
         <Button
-          variant="secondary"
-          onClick={onClose}
           className="bg-subtle text-ink-bright hover:bg-surface-2 mt-4 h-auto rounded-lg px-4 py-2"
+          onClick={onClose}
+          variant="secondary"
         >
           返回工作流库
         </Button>
@@ -62,7 +62,7 @@ export function WorkflowCanvasEditor({
       }}
     >
       <ReactFlowProvider>
-        <WorkflowEditorInner workflowId={workflowId} onClose={onClose} onSave={onSave} />
+        <WorkflowEditorInner onClose={onClose} onSave={onSave} workflowId={workflowId} />
       </ReactFlowProvider>
     </ErrorBoundary>
   );

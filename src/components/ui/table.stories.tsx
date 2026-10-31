@@ -154,7 +154,7 @@ export const Empty: Story = {
       </TableHeader>
       <TableBody>
         <TableRow>
-          <TableCell colSpan={2} className="text-ink-muted py-8 text-center">
+          <TableCell className="text-ink-muted py-8 text-center" colSpan={2}>
             这个工作流没有声明对外参数
           </TableCell>
         </TableRow>

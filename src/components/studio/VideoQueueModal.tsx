@@ -93,12 +93,12 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
   /* 关闭语义交给`ui/dialog`：此前这里**既没有点遮罩关闭、也没有 Esc** ——
  只能用右上角的 ✕ 关掉，键盘用户尤其难退出。 */
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label="视频生成队列"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName="max-w-3xl"
+        showCloseButton={false}
       >
         <div
           className={`bg-node border-border-strong flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/20 dark:shadow-black/50`}
@@ -108,15 +108,15 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
             <div className="flex items-center gap-3">
               <h3 className="u-title">视频生成队列</h3>
               {runningCount > 0 && (
-                <Badge tone="warning" size="pill-md">
+                <Badge size="pill-md" tone="warning">
                   {runningCount} 个进行中
                 </Badge>
               )}
               <Hint label="刷新">
                 <Button
-                  variant="link"
-                  onClick={loadTasks}
                   className="text-ink-muted hover:text-primary text-2xs h-auto p-0"
+                  onClick={loadTasks}
+                  variant="link"
                 >
                   ↻ 刷新
                 </Button>
@@ -124,11 +124,11 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
             </div>
             <div className="flex items-center gap-2">
               <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={onClose}
-                className="text-ink-muted hover:text-ink-soft"
                 aria-label="关闭"
+                className="text-ink-muted hover:text-ink-soft"
+                onClick={onClose}
+                size="icon-sm"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={16} />
               </Button>
@@ -149,18 +149,18 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                   const meta = statusMetaFor(task.status);
                   return (
                     <div
-                      key={task.id}
                       className="border-border-strong bg-subtle flex items-center gap-3 rounded-xl border p-3"
+                      key={task.id}
                     >
                       <div className="bg-canvas-deep flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
                         {task.video ? (
                           <MediaThumbnail
-                            src={task.video}
                             alt={`V${String(index + 1).padStart(2, "0")}`}
                             className="h-full w-full object-cover"
+                            src={task.video}
                           />
                         ) : (
-                          <Icon name="film" size={18} className="text-ink-muted" />
+                          <Icon className="text-ink-muted" name="film" size={18} />
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -190,18 +190,18 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
                         <Button
-                          variant="outline"
-                          size="xs"
-                          onClick={() => onOpenTask?.(task.id)}
                           className="border-border-strong text-ink-soft hover:bg-subtle h-auto rounded-md px-2.5 py-1"
+                          onClick={() => onOpenTask?.(task.id)}
+                          size="xs"
+                          variant="outline"
                         >
                           详情
                         </Button>
                         {task.video && (
                           <a
-                            href={task.video}
-                            download
                             className="bg-primary/20 text-primary-strong hover:bg-primary/30 text-2xs rounded-md px-2.5 py-1 transition-colors"
+                            download
+                            href={task.video}
                           >
                             下载
                           </a>

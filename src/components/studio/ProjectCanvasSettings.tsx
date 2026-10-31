@@ -38,8 +38,8 @@ function ToggleRow({
 }) {
   return (
     <FieldLabel
-      title={tooltip}
       className="border-border-strong bg-subtle hover:border-border-strong flex cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2.5 transition-colors"
+      title={tooltip}
     >
       <span className="flex min-w-0 flex-col">
         <span className="text-ink-bright text-[12.5px] font-medium">{label}</span>
@@ -48,7 +48,7 @@ function ToggleRow({
       {/* 开关走 ui/switch（规范 16 §16.2.3）：此前这里自绘了一个
           「圆角底 + 绝对定位圆点」的开关，与 CanvasSettingsPanel 的另一份
           同形实现各自维护 —— 开关是**状态控件**，样式改动应当只发生在一处。 */}
-      <Switch checked={value} onCheckedChange={onChange} className="shrink-0" />
+      <Switch checked={value} className="shrink-0" onCheckedChange={onChange} />
     </FieldLabel>
   );
 }
@@ -65,12 +65,12 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
   /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
      标题行此前是本文件手写的一份，`ui/sheet` 里还有一份同源实现。 */
   return (
-    <Sheet open onOpenChange={(next) => !next && onClose()}>
+    <Sheet onOpenChange={(next) => !next && onClose()} open>
       <SheetContent
-        side="right"
-        showCloseButton={false}
-        className="bg-panel border-border-strong text-ink-bright w-85 gap-0 border-l sm:max-w-85"
         aria-label="项目画布设置"
+        className="bg-panel border-border-strong text-ink-bright w-85 gap-0 border-l sm:max-w-85"
+        showCloseButton={false}
+        side="right"
       >
         <SheetTitle className="sr-only">项目画布设置</SheetTitle>
         {/* Header */}
@@ -84,11 +84,11 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
             </span>
           </div>
           <Button
-            variant="outline"
-            size="icon-xs"
-            onClick={onClose}
             aria-label="关闭"
             className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs rounded-md"
+            onClick={onClose}
+            size="icon-xs"
+            variant="outline"
           >
             ✕
           </Button>
@@ -104,19 +104,19 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
             「日志面板」在画布右上角显示执行日志入口按钮，点击以弹窗形式查看实时执行日志。两者相互独立。
           </p>
           <ToggleRow
-            label="渲染链路标签"
             hint="节点卡片底部显示代码模块，点击查看源码"
-            value={debugMode}
+            label="渲染链路标签"
             onChange={toggleDebugMode}
             tooltip="开启后每个节点卡片底部叠加显示渲染链路模块标签（如 workflow-node.tsx / CanvasNode.tsx），点击标签弹出对应源码"
+            value={debugMode}
           />
           <div className="h-2" />
           <ToggleRow
-            label="日志面板"
             hint="弹窗形式查看执行日志 + file:line 调用位置"
-            value={logPanelMode}
+            label="日志面板"
             onChange={setLogPanelMode}
             tooltip="开启后在画布右上角显示『执行日志』入口按钮，点击以弹窗形式查看实时执行日志，并在每条日志后标注调用代码位置（file:line）"
+            value={logPanelMode}
           />
         </div>
 
@@ -134,11 +134,11 @@ export function ProjectSettingsButton({ onClick }: { onClick: () => void }) {
   return (
     <Hint label="项目画布设置">
       <Button
-        variant="outline"
-        onClick={onClick}
         aria-label="项目画布设置"
-        data-testid="project-canvas-settings-button"
         className="border-border-strong bg-panel text-ink-soft hover:text-ink-bright z-canvas-ui pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1.5 text-[11.5px] font-medium tracking-tight shadow-lg select-none hover:border-white/25"
+        data-testid="project-canvas-settings-button"
+        onClick={onClick}
+        variant="outline"
       >
         <span aria-hidden className="mr-1 align-baseline text-[12.5px]">
           ⚙

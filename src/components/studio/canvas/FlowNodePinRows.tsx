@@ -93,12 +93,12 @@ export function FlowNodePinRows({
 
         return (
           <div
-            // key 同时含两个名字，好让数字槽端口（"1"、"2" …）
-            // 不在数组里撞车。
-            key={`pinrow-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
             className="text-2xs relative flex h-5.5 items-center pr-5 pl-5"
             data-pin-input={inName}
             data-pin-output={outName}
+            // key 同时含两个名字，好让数字槽端口（"1"、"2" …）
+            // 不在数组里撞车。
+            key={`pinrow-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
             /* 相关行提亮背景：线加粗了、落到的那一行也跟着亮，视线从线落到行上。
                  无关行压暗是**整行**的（含标签与端口），由 style.opacity 统一施加。 */
             style={{ background: tone.background, opacity: tone.opacity }}
@@ -106,13 +106,12 @@ export function FlowNodePinRows({
             {inEntry && (
               <>
                 <Handle
-                  type="target"
-                  position={Position.Left}
+                  className="border-port-surface! size-2.5! rounded-full! border!"
                   id={inName}
                   /* 可连接：编辑器里「对外参数节点」的线要落到这一行（端口）。
                    * 连上 / 断开都由映射层负责，工作流图本身不因此改动。 */
                   isConnectable
-                  className="border-port-surface! size-2.5! rounded-full! border!"
+                  position={Position.Left}
                   style={{
                     left: 5,
                     background: inCol,
@@ -122,6 +121,7 @@ export function FlowNodePinRows({
                     boxShadow: portDotGlow(inCol, tone.dotGlowStrong),
                   }}
                   title={`${inName} (${inType})`}
+                  type="target"
                 />
                 {/* 顶部针脚区**未连线**输入的 IO 复选框 ——
                  * 已连线的槽位取值来自上游，把它
@@ -175,11 +175,10 @@ export function FlowNodePinRows({
                  * 模式下圆点缩到几乎不可见（只留一点色晕锚点），作者看不到可
                  * 拖的端口，线却照样画得出来。 */}
                 <Handle
-                  type="source"
-                  position={Position.Right}
+                  className="border-port-surface! rounded-full! border!"
                   id={`out:${outName}`}
                   isConnectable={false}
-                  className="border-port-surface! rounded-full! border!"
+                  position={Position.Right}
                   style={{
                     right: 5,
                     background: outCol,
@@ -196,6 +195,7 @@ export function FlowNodePinRows({
                       : { width: tone.dotSize, height: tone.dotSize }),
                   }}
                   title={`${outDisplay} (${outType})`}
+                  type="source"
                 />
               </>
             )}

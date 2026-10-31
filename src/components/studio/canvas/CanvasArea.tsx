@@ -112,9 +112,9 @@ export function CanvasArea({
 
   return (
     <div
-      ref={containerRef}
       className={`bg-canvas relative flex h-full w-full overflow-hidden ${className}`}
       onContextMenu={handleContextMenu}
+      ref={containerRef}
     >
       {/* Canvas content */}
       {children}
@@ -127,13 +127,9 @@ export function CanvasArea({
         >
           {contextItems.map((item) =>
             item.divider ? (
-              <div key={item.id} className="bg-border-strong my-1 h-px" />
+              <div className="bg-border-strong my-1 h-px" key={item.id} />
             ) : (
               <Button
-                key={item.id}
-                variant={item.danger ? "danger" : "ghost"}
-                disabled={item.disabled}
-                onClick={() => handleAction(item.id)}
                 className={`flex h-auto w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-normal ${
                   item.disabled
                     ? "text-ink-fainter cursor-not-allowed"
@@ -141,6 +137,10 @@ export function CanvasArea({
                       ? "hover:bg-danger/10 text-danger-strong"
                       : "text-ink-strong hover:bg-subtle"
                 }`}
+                disabled={item.disabled}
+                key={item.id}
+                onClick={() => handleAction(item.id)}
+                variant={item.danger ? "danger" : "ghost"}
               >
                 <span className="text-ink-fainter shrink-0">{item.icon}</span>
                 {item.label}
@@ -154,7 +154,7 @@ export function CanvasArea({
       <div className="z-canvas-ui absolute bottom-3 left-1/2 -translate-x-1/2">
         <div className="border-border-strong bg-panel flex items-center gap-0.5 rounded-xl border px-1.5 py-1 shadow-lg shadow-black/10">
           {/* 发送 / 运行按钮 */}
-          <ToolbarButton hint="执行" onClick={() => onContextAction?.("run")} active>
+          <ToolbarButton active hint="执行" onClick={() => onContextAction?.("run")}>
             <ArrowRight size={14} strokeWidth={2.5} />
           </ToolbarButton>
 
@@ -205,13 +205,13 @@ export function CanvasArea({
       {/* ── Minimap 开关（左下角） ── */}
       {showMinimap && (
         <Button
-          variant="outline"
-          onClick={() => onMinimapToggle?.(!minimapVisible)}
           className={`z-canvas-ui absolute bottom-3 left-3 flex h-8 gap-1.5 rounded-lg px-2.5 ${
             minimapVisible
               ? "text-ink-strong border-primary-500/30 bg-primary-500/10"
               : "border-border-strong bg-panel text-ink-fainter hover:text-ink-strong"
           }`}
+          onClick={() => onMinimapToggle?.(!minimapVisible)}
+          variant="outline"
         >
           <LayoutGrid data-icon="inline-start" size={12} />
           小地图
@@ -235,16 +235,16 @@ function ToolbarButton({
   onClick?: () => void;
 }) {
   return (
-    <Hint label={hint} accessibleName>
+    <Hint accessibleName label={hint}>
       <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={onClick}
         className={`rounded-lg text-xs ${
           active
             ? "bg-primary/12 text-ink-bright hover:bg-primary/18"
             : "text-ink-muted hover:bg-subtle hover:text-ink-strong"
         }`}
+        onClick={onClick}
+        size="icon-sm"
+        variant="ghost"
       >
         {children}
       </Button>

@@ -14,10 +14,10 @@ export function CanvasRecenterButton({ onClick }: { onClick: () => void }) {
   return (
     <Hint label="回到有节点的位置（只移动视口，不改动节点布局）">
       <Button
-        variant="outline"
-        onClick={onClick}
         aria-label="重新居中"
         className="bg-panel border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-3 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg select-none"
+        onClick={onClick}
+        variant="outline"
       >
         <span aria-hidden className="mr-1 align-baseline text-xs">
           🎯

@@ -108,12 +108,12 @@ export function DetailBody({
               画布样式预览（与项目画布节点一致，可直接运行调试）
             </span>
             <Button
-              variant="primary"
-              size="xs"
-              onClick={onEdit}
               className="text-2xs h-auto gap-1 rounded-md px-2 py-1"
+              onClick={onEdit}
+              size="xs"
+              variant="primary"
             >
-              <Maximize2 data-icon="inline-start" className="size-3" />
+              <Maximize2 className="size-3" data-icon="inline-start" />
               在编辑器中打开
             </Button>
           </div>
@@ -131,25 +131,25 @@ export function DetailBody({
                   边界、把整个工作流库打成错误页。 */}
               <ErrorBoundary fallback={chunkFallback}>
                 <LazyWorkflowCanvasNodePreview
+                  /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
+                   * 作为「未切过时的初值」与卡片上的默认标记。 */
+                  defaultMode={activeMode ?? meta?.defaultMode}
                   key={workflow.id}
-                  workflowId={workflow.id}
-                  workflowName={workflow.name}
-                  taskType={workflow.taskType}
-                  workflowIO={workflowIO}
+                  modes={meta?.modes}
+                  onModeChange={(code) => {
+                    meta?.onModeChange(code);
+                  }}
+                  onPatchParamMap={onPatchParamMap}
+                  onSeedModeChange={onSeedModeChange}
                   paramMap={paramMap}
+                  taskType={workflow.taskType}
                   usable={usable}
                   /* 页签即视图模式：「实际使用」页签可生成、可看结果，
                    * 「编辑对外参数」页签是参数落点编辑画布。 */
                   viewMode={tab === "use" ? "use" : "edit"}
-                  modes={meta?.modes}
-                  /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
-                   * 作为「未切过时的初值」与卡片上的默认标记。 */
-                  defaultMode={activeMode ?? meta?.defaultMode}
-                  onModeChange={(code) => {
-                    meta?.onModeChange(code);
-                  }}
-                  onSeedModeChange={onSeedModeChange}
-                  onPatchParamMap={onPatchParamMap}
+                  workflowId={workflow.id}
+                  workflowIO={workflowIO}
+                  workflowName={workflow.name}
                 />
               </ErrorBoundary>
             </div>
@@ -159,11 +159,8 @@ export function DetailBody({
 
       {tab === "params" && (
         <WorkshopEncapsulationPanel
-          key={workflow.id}
-          workflowId={workflow.id}
           displayName={workflow.modelTags?.[0] ?? workflow.name}
-          workflowIO={workflowIO}
-          paramMap={paramMap}
+          key={workflow.id}
           /* 模式取详情层的当前模式（与画布节点页签同一份），并通过
            * `onModeChange` 让用户在本页直接换模式跑流程测试 —— 多模式工作流
            * 以前在这里只能测默认模式（ISSUE #720 第 3 条）。 */
@@ -172,6 +169,9 @@ export function DetailBody({
            * （`metaEditor.modes`：缺省回退 [taskType]，兼容旧行）。 */
           modes={meta?.modes ?? []}
           onModeChange={onActiveModeChange}
+          paramMap={paramMap}
+          workflowId={workflow.id}
+          workflowIO={workflowIO}
         />
       )}
 
@@ -184,8 +184,8 @@ export function DetailBody({
             {sourceData?.source != null ? (
               <LazyJsonViewer
                 data={sourceData.source}
-                title="工作流(RAW)格式"
                 initialCollapsedDepth={2}
+                title="工作流(RAW)格式"
               />
             ) : (
               <p className="text-ink-fainter px-4 py-10 text-center text-xs">暂无源文件数据</p>

@@ -48,17 +48,13 @@ function fmtTime(t: number): string {
 
 /** 单条日志行。`memo` 生效的前提是 `log` 引用稳定 —— 追加日志时缓存做的是
  *  `[...prev.logs, entry]`，已有条目的引用不变，因此只有新行会真正渲染。 */
-export const StepLogRow = memo(function StepLogRow({
-  log,
-}: {
-  log: StepLogEntry;
-}) {
+export const StepLogRow = memo(function StepLogRow({ log }: { log: StepLogEntry }) {
   const isClient = log.client === true;
   return (
     <div
-      data-testid="log-line"
-      data-level={log.level}
       className="border-border-subtle hover:bg-subtle/60 flex items-start gap-2.5 border-b px-4 py-1 font-mono text-sm leading-snug"
+      data-level={log.level}
+      data-testid="log-line"
     >
       <span className="text-ink-muted shrink-0">{fmtTime(log.t)}</span>
       <span

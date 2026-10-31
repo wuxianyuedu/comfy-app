@@ -185,17 +185,25 @@ export function WorkflowEditorCanvas({
 
   return (
     <ReactFlow
-      nodes={nodes}
+      defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
       edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeDragStop={onNodeDragStop}
-      onEdgeClick={onEdgeClick}
-      onConnect={onConnect}
-      isValidConnection={isValidConnection}
-      onEdgesDelete={onEdgesDelete}
-      nodeTypes={workflowNodeTypes}
       edgeTypes={workflowEdgeTypes}
+      isValidConnection={isValidConnection}
+      maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
+      /* 这里**故意不设** `fitView` —— 初始视口由上面
+       *  的 useEffect 自己驱动，好让
+       *  我们能强制最小缩放 0.35。没有这个下限，
+       *  DaSiWa Wan 2.2 模板（130 节点，包围盒约 7000 px 宽）
+       *  会 fitView 到约 0.15x，每个备注都读不清。
+       *  fitViewOptions={{ padding: 0.3 }}
+       *  → 见上面的 useEffect；紧凑的 0.10 + 0.35 缩放下限。 */
+      minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
+      nodes={nodes}
+      nodeTypes={workflowNodeTypes}
+      onConnect={onConnect}
+      onEdgeClick={onEdgeClick}
+      onEdgesChange={onEdgesChange}
+      onEdgesDelete={onEdgesDelete}
       /* 过滤视口裁剪造成的 error#008 假告警（ISSUE #374）—— 见 handleError。 */
       onError={handleError}
       /* 商业级性能 —— 只挂载与视口
@@ -209,16 +217,8 @@ export function WorkflowEditorCanvas({
        *（最小缩放下限 0.35）—— 裁剪用的是每个节点首次绘制后
        *  的实测尺寸，所以初始 fit 不受影响。 */
       onlyRenderVisibleElements
-      /* 这里**故意不设** `fitView` —— 初始视口由上面
-       *  的 useEffect 自己驱动，好让
-       *  我们能强制最小缩放 0.35。没有这个下限，
-       *  DaSiWa Wan 2.2 模板（130 节点，包围盒约 7000 px 宽）
-       *  会 fitView 到约 0.15x，每个备注都读不清。
-       *  fitViewOptions={{ padding: 0.3 }}
-       *  → 见上面的 useEffect；紧凑的 0.10 + 0.35 缩放下限。 */
-      minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
-      maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
-      defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+      onNodeDragStop={onNodeDragStop}
+      onNodesChange={onNodesChange}
       proOptions={{ hideAttribution: true }}
     >
       {/* 网格底纹 —— 20px 小格，每 10 格一条更重的线。
@@ -228,8 +228,8 @@ export function WorkflowEditorCanvas({
        *  坐标 X / Y。见 <CanvasRulers>。 */}
       <CanvasRulers settings={canvasSettings} />
       <ZoomIndicator
-        minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
         maxZoom={canvasSettingsHydrated ? canvasSettings.maxZoom : 2}
+        minZoom={canvasSettingsHydrated ? canvasSettings.minZoom : 0.15}
       />
       {/* 齿轮按钮打开右侧画布设置面板
        *  （网格透明度、标尺开关等）。它与缩放指示器
@@ -247,15 +247,15 @@ export function WorkflowEditorCanvas({
       <Controls showInteractive={false} />
       {canvasSettings.showMiniMap && (
         <MiniMap
-          pannable
-          zoomable
           ariaLabel="小地图：拖动或点击切换主画布焦点"
-          onClick={onMiniMapJump}
-          nodeColor={miniMapNodeColor}
           /* maskColor 是「小地图里非视口区域」的遮罩：必须跟随主题。
              写死 rgba(0,0,0,0.78) 时 Light 下整张缩略图被压成一块黑，
              与浅色画布割裂。改为引用 token——浅色用浅遮罩、深色保持近黑。 */
           maskColor="var(--color-canvas-minimap-mask)"
+          nodeColor={miniMapNodeColor}
+          onClick={onMiniMapJump}
+          pannable
+          zoomable
         />
       )}
     </ReactFlow>

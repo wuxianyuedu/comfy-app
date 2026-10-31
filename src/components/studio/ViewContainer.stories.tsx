@@ -57,8 +57,8 @@ function Body({ rows = 24 }: { rows?: number }) {
     <div className="flex flex-col gap-2 p-4">
       {Array.from({ length: rows }, (_, i) => (
         <div
-          key={i}
           className="bg-surface border-border text-ink-soft rounded-lg border px-3 py-2 text-xs"
+          key={i}
         >
           第 {String(i + 1)} 行 —— 内容要高过容器，滚动条才会出现
         </div>
@@ -128,12 +128,12 @@ export const DocumentWithBackdrop: Story = {
   render: (args) => (
     <Shell>
       <DocumentFrame
-        width={args.width}
         backdrop={
           <div className="bg-primary/10 pointer-events-none absolute inset-0 grid place-items-center">
             <span className="text-primary-strong text-xs">铺底（不随内容滚动）</span>
           </div>
         }
+        width={args.width}
       >
         <Body rows={8} />
       </DocumentFrame>

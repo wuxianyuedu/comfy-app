@@ -164,6 +164,8 @@ export function VirtualLogList<T>({
 
   return (
     <div
+      className={`custom-scrollbar flex-1 overflow-y-auto ${className ?? ""}`}
+      onScroll={onScroll}
       ref={(el) => {
         containerRef.current = el;
         boxRef(el);
@@ -171,8 +173,6 @@ export function VirtualLogList<T>({
          * 数变化、进而改变滚动范围，这里在外部系统通知里同步，不靠 effect setState。 */
         setScrollTop(el?.scrollTop ?? 0);
       }}
-      onScroll={onScroll}
-      className={`custom-scrollbar flex-1 overflow-y-auto ${className ?? ""}`}
     >
       {topSlot}
       {entries.length === 0 ? (
@@ -180,12 +180,12 @@ export function VirtualLogList<T>({
       ) : (
         /* 外层撑出估算总高（滚动条长度与真实内容一致），内层 `translateY` 到当前
          * 窗口起点——只挂视口内的几十行。 */
-        <div style={{ height: `${scrollHeight}px` }} className="relative w-full">
+        <div className="relative w-full" style={{ height: `${scrollHeight}px` }}>
           <div
+            className="absolute top-0 left-0 w-full"
             style={{
               transform: `translateY(${rows[rowWindow.start]?.start ?? 0}px)`,
             }}
-            className="absolute top-0 left-0 w-full"
           >
             {rowWindow.entries.map((entry, offset) => {
               const index = rowWindow.start + offset;

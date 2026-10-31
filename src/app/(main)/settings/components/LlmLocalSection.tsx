@@ -12,10 +12,7 @@
 
 import { useState } from "react";
 
-import {
-  TEMPERATURE_TASKS,
-  type ReadySettingsPageController,
-} from "../hooks/use-settings-page";
+import { TEMPERATURE_TASKS, type ReadySettingsPageController } from "../hooks/use-settings-page";
 import type { TaskType } from "~/lib/llm/types";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { Badge } from "~/components/ui/badge";
@@ -42,9 +39,7 @@ import { RuntimeLogBox } from "~/components/studio/logs/RuntimeLogBox";
 export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
   /* 本地 Ollama 下任务温度是主配置区，默认展开。 */
   const [showTaskTemps, setShowTaskTemps] = useState(true);
-  const [taskTempEdits, setTaskTempEdits] = useState<
-    Partial<Record<TaskType, string>>
-  >({});
+  const [taskTempEdits, setTaskTempEdits] = useState<Partial<Record<TaskType, string>>>({});
   const setTaskEdit = (task: TaskType, raw: string) =>
     setTaskTempEdits((prev) => ({ ...prev, [task]: raw }));
   const clearTaskEdit = (task: TaskType) =>
@@ -59,9 +54,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"
-        value={c.drafts.llm.baseUrl}
         onChange={(value) => c.patchLlm({ baseUrl: value })}
         placeholder={OLLAMA_DEFAULT_BASE_URL}
+        value={c.drafts.llm.baseUrl}
       />
 
       {/* Ollama 状态行 */}
@@ -71,9 +66,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         {c.ollamaStatus === "checking" && (
           <>
             <Spinner className="size-3.5" />
-            <span className={`text-muted-foreground ${STATUS_TEXT_CLASS}`}>
-              检测 Ollama 服务…
-            </span>
+            <span className={`text-muted-foreground ${STATUS_TEXT_CLASS}`}>检测 Ollama 服务…</span>
           </>
         )}
         {c.ollamaStatus === "starting" && (
@@ -91,12 +84,12 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
               Ollama 运行中（{c.ollamaModels.length} 个模型可用）
             </span>
             <StatusButton
+              className="ml-auto"
+              disabled={c.ollamaStopping}
               onClick={() => void c.stopOllama()}
               /* 运行中 → 「关闭」是这一态的主行动，实心。与 ComfyUI /
                  Drizzle Studio 两条状态行同一口径。 */
               variant="primary-solid"
-              disabled={c.ollamaStopping}
-              className="ml-auto"
             >
               {c.ollamaStopping ? "关闭中…" : "关闭 Ollama"}
             </StatusButton>
@@ -105,14 +98,12 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         {c.ollamaStatus === "down" && (
           <>
             <StatusDot state="down" />
-            <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>
-              Ollama 未运行
-            </span>
+            <span className={`text-ink/80 ${STATUS_TEXT_CLASS}`}>Ollama 未运行</span>
             <StatusButton
+              className="ml-auto"
+              disabled={c.ollamaStarting}
               onClick={() => void c.startOllama()}
               variant="primary-solid"
-              disabled={c.ollamaStarting}
-              className="ml-auto"
             >
               {c.ollamaStarting ? "启动中…" : "启动 Ollama"}
             </StatusButton>
@@ -124,26 +115,26 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
  让「启动中…」不再是黑盒（同 ComfyUI / Drizzle Studio 的用户
  可见出口）。下拉按「每次启动」切换、可全屏，见 RuntimeLogBox。 */}
       <RuntimeLogBox
-        fileName="ollama-runtime.log"
-        log={c.ollamaLog}
         emptyHint={
           <>
             暂无日志 —— 点「启动 Ollama」后这里会实时输出拉起过程（spawn
             参数、启动输出与退出状态）；也可点「刷新」查看 最近一次运行日志。
           </>
         }
+        fileName="ollama-runtime.log"
+        log={c.ollamaLog}
       />
 
       {/* Model area — 探测到模型时用下拉 + 候选多选；否则退化为手填 */}
       {c.ollamaStatus === "up" && c.ollamaModels.length > 0 ? (
         <div className="mb-3">
-          <FormField label="当前模型" id="ollama-current-model">
+          <FormField id="ollama-current-model" label="当前模型">
             {(a11y) => (
               <SelectMenu
-                value={c.drafts.llm.model}
+                fullWidth
                 onChange={(model: string) => c.patchLlm({ model })}
                 options={c.ollamaModels.map((m) => m.name)}
-                fullWidth
+                value={c.drafts.llm.model}
                 {...a11y}
               />
             )}
@@ -151,7 +142,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
           {c.ollamaModels.length > 1 && (
             <>
               {/* 多选组：没有单一控件，标签行 + 下方候选按钮组。 */}
-              <FormField label="工坊候选模型（可多选）" className="mt-3" />
+              <FormField className="mt-3" label="工坊候选模型（可多选）" />
               <div className="flex flex-wrap gap-2">
                 {c.ollamaModels.map((model) => {
                   const checked =
@@ -159,16 +150,16 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     c.drafts.llm.localCandidates.includes(model.name);
                   return (
                     <Toggle
+                      className="h-auto rounded-lg border px-2.5 py-1 text-xs"
                       key={model.name}
-                      size="sm"
-                      pressed={checked}
                       onPressedChange={() => c.toggleExtraModel(model.name)}
+                      pressed={checked}
+                      size="sm"
                       title={
                         model.name === c.drafts.llm.model
                           ? "当前模型（始终可用）"
                           : "勾选后工坊各阶段可直接切换"
                       }
-                      className="h-auto rounded-lg border px-2.5 py-1 text-xs"
                     >
                       {checked ? "✓" : ""}
                       {model.name}
@@ -182,22 +173,22 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       ) : (
         <Field
           label="模型"
-          value={c.drafts.llm.model}
           onChange={(value) => c.patchLlm({ model: value })}
           placeholder="请填写要使用的模型名，如 qwen3:14b"
+          value={c.drafts.llm.model}
         />
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-3">
         <Field
           label="全局默认温度"
-          value={String(c.drafts.llm.temperature)}
           onChange={(value) => c.patchLlm({ temperature: Number(value) || 0 })}
+          value={String(c.drafts.llm.temperature)}
         />
         <Field
           label="最大 Token"
-          value={String(c.drafts.llm.maxTokens)}
           onChange={(value) => c.patchLlm({ maxTokens: Number(value) || 0 })}
+          value={String(c.drafts.llm.maxTokens)}
         />
       </div>
 
@@ -209,10 +200,10 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
  在左、marker 在右 —— 用`flex-row-reverse` 把 marker 换到右侧，
  标题自身以`flex-1` 撑开，于是两端对齐的观感不变。 */}
         <Disclosure
-          open={showTaskTemps}
-          onOpenChange={setShowTaskTemps}
-          marker="caret"
           className="text-ink/80 hover:text-ink mb-3 flex-row-reverse items-center justify-between text-sm font-medium"
+          marker="caret"
+          onOpenChange={setShowTaskTemps}
+          open={showTaskTemps}
           panelClassName="flex-col gap-3"
           trigger={
             <span className="flex-1 text-left">
@@ -228,24 +219,21 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
               const override = c.drafts.llm.temperatureByTask?.[key];
               const isOverridden = override !== undefined && override !== null;
               const shown =
-                taskTempEdits[key] ??
-                String(isOverridden ? override : meta.defaultTemperature);
+                taskTempEdits[key] ?? String(isOverridden ? override : meta.defaultTemperature);
               return (
                 <div
-                  key={key}
                   className="border-border/50 bg-surface-1 flex items-center gap-3 rounded-lg border px-3 py-2.5"
+                  key={key}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-ink text-sm font-medium">
-                        {meta.label}
-                      </span>
+                      <span className="text-ink text-sm font-medium">{meta.label}</span>
                       {isOverridden ? (
-                        <Badge tone="primary" size="pill-sm">
+                        <Badge size="pill-sm" tone="primary">
                           已覆盖
                         </Badge>
                       ) : (
-                        <Badge tone="success" size="pill-sm">
+                        <Badge size="pill-sm" tone="success">
                           推荐
                         </Badge>
                       )}
@@ -255,32 +243,32 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     </p>
                   </div>
                   {isOverridden && (
-                    <Hint label="恢复推荐默认" accessibleName>
+                    <Hint accessibleName label="恢复推荐默认">
                       <Button
-                        variant="outline"
-                        size="xs"
+                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
                         onClick={() => {
                           clearTaskEdit(key);
                           c.setTaskTemperature(key, "");
                         }}
-                        className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
+                        size="xs"
+                        variant="outline"
                       >
                         ↺
                       </Button>
                     </Hint>
                   )}
                   <Input
-                    type="number"
-                    step={0.05}
-                    min={0}
+                    className="border-border bg-surface-2 text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-24 rounded-lg px-2 py-1.5 text-right text-sm"
                     max={2}
-                    value={shown}
+                    min={0}
+                    onBlur={() => clearTaskEdit(key)}
                     onChange={(event) => {
                       setTaskEdit(key, event.target.value);
                       c.setTaskTemperature(key, event.target.value);
                     }}
-                    onBlur={() => clearTaskEdit(key)}
-                    className="border-border bg-surface-2 text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-24 rounded-lg px-2 py-1.5 text-right text-sm"
+                    step={0.05}
+                    type="number"
+                    value={shown}
                   />
                 </div>
               );
@@ -289,11 +277,7 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
         </Disclosure>
       </div>
 
-      <StatusButton
-        onClick={() => void c.saveLlm()}
-        variant="primary-solid"
-        disabled={c.saving}
-      >
+      <StatusButton disabled={c.saving} onClick={() => void c.saveLlm()} variant="primary-solid">
         保存 LLM 配置
       </StatusButton>
     </SettingsCard>

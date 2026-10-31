@@ -71,17 +71,17 @@ function FitHarness({
 describe("打开子图时的自动聚焦调度", () => {
   it("rAF 被 cleanup 取消后仍会重排 —— 切进子图一定下发一次视口", async () => {
     const applied: Array<string> = [];
-    const { rerender } = render(<FitHarness graphKey="__root__" nodeCount={3} applied={applied} />);
+    const { rerender } = render(<FitHarness applied={applied} graphKey="__root__" nodeCount={3} />);
     await flushFrame();
     expect(applied).toEqual(["__root__"]);
 
     /* ① 下钻切到子图：排下一帧 rAF（此刻还没触发）。 */
     await act(async () => {
-      rerender(<FitHarness graphKey="4#subgraph:uid" nodeCount={3} applied={applied} />);
+      rerender(<FitHarness applied={applied} graphKey="4#subgraph:uid" nodeCount={3} />);
     });
     /* ② 同一个 macrotask 内节点整批同步：聚焦 effect 重跑，cleanup 取消 ① 的 rAF。 */
     await act(async () => {
-      rerender(<FitHarness graphKey="4#subgraph:uid" nodeCount={90} applied={applied} />);
+      rerender(<FitHarness applied={applied} graphKey="4#subgraph:uid" nodeCount={90} />);
     });
     await flushFrame();
 
@@ -91,13 +91,13 @@ describe("打开子图时的自动聚焦调度", () => {
 
   it("同一份图只抢一次视角（下发后不再重复下发）", async () => {
     const applied: Array<string> = [];
-    const { rerender } = render(<FitHarness graphKey="g1" nodeCount={5} applied={applied} />);
+    const { rerender } = render(<FitHarness applied={applied} graphKey="g1" nodeCount={5} />);
     await flushFrame();
     expect(applied).toHaveLength(1);
 
     /* 用户增删节点：effect 重跑，但这份图已聚焦过，不得再抢视角。 */
     await act(async () => {
-      rerender(<FitHarness graphKey="g1" nodeCount={9} applied={applied} />);
+      rerender(<FitHarness applied={applied} graphKey="g1" nodeCount={9} />);
     });
     await flushFrame();
     expect(applied).toHaveLength(1);
@@ -105,11 +105,11 @@ describe("打开子图时的自动聚焦调度", () => {
 
   it("切到另一份图（子图 → 返回上一级）会重新聚焦", async () => {
     const applied: Array<string> = [];
-    const { rerender } = render(<FitHarness graphKey="g-sub" nodeCount={5} applied={applied} />);
+    const { rerender } = render(<FitHarness applied={applied} graphKey="g-sub" nodeCount={5} />);
     await flushFrame();
 
     await act(async () => {
-      rerender(<FitHarness graphKey="__root__" nodeCount={12} applied={applied} />);
+      rerender(<FitHarness applied={applied} graphKey="__root__" nodeCount={12} />);
     });
     await flushFrame();
     expect(applied).toEqual(["g-sub", "__root__"]);

@@ -143,7 +143,7 @@ export function ErrorPanel({
   return (
     <div className="nodrag nopan border-destructive/30 bg-destructive/6 text-2xs border-t px-3 py-2">
       <div className="flex items-start gap-1.5">
-        <Icon name="alert" size={12} className="text-danger-strong mt-px shrink-0" />
+        <Icon className="text-danger-strong mt-px shrink-0" name="alert" size={12} />
         <div className="min-w-0 flex-1">
           {/* 头部行：状态徽标 + 工作流名 + 动作 */}
           <div className="flex items-center justify-between gap-1.5">
@@ -179,21 +179,21 @@ export function ErrorPanel({
               {Boolean(errorContext?.request) && taskId && (
                 <Hint label="用相同参数重跑一次">
                   <Button
-                    variant="outline"
+                    className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
                     onClick={() => {
                       void onRetry(errorContext?.request);
                     }}
-                    className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
+                    variant="outline"
                   >
                     ↻ 重试
                   </Button>
                 </Hint>
               )}
-              <Hint label={errExpanded ? "收起错误详情" : "展开错误详情"} accessibleName>
+              <Hint accessibleName label={errExpanded ? "收起错误详情" : "展开错误详情"}>
                 <Button
-                  variant="outline"
-                  onClick={() => setErrExpanded((value) => !value)}
                   className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
+                  onClick={() => setErrExpanded((value) => !value)}
+                  variant="outline"
                 >
                   {errExpanded ? "▲" : "▼"}
                 </Button>
@@ -206,7 +206,7 @@ export function ErrorPanel({
                 }
               >
                 <Button
-                  variant="outline"
+                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
                   onClick={() => {
                     copyDetail(
                       JSON.stringify(
@@ -226,7 +226,7 @@ export function ErrorPanel({
                       ),
                     );
                   }}
-                  className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
+                  variant="outline"
                 >
                   {detailCopyFailed ? "复制失败" : "⧉"}
                 </Button>
@@ -264,8 +264,8 @@ export function ErrorPanel({
                     节点配置校验（{(validationErrors ?? []).length} 项）
                   </div>
                   <ValidationErrorList
-                    errors={validationErrors}
                     className="text-danger-strong/80"
+                    errors={validationErrors}
                   />
                 </div>
               )}
@@ -277,9 +277,9 @@ export function ErrorPanel({
                       <span className="text-danger-strong/60">taskId</span>
                       <Hint label="点击复制 taskId">
                         <Button
-                          variant="ghost"
-                          onClick={() => copyTaskId(taskId)}
                           className="nodrag nopan text-danger-strong/90 hover:text-danger-strong h-auto min-w-0 truncate p-0 text-left font-mono font-normal hover:bg-transparent"
+                          onClick={() => copyTaskId(taskId)}
+                          variant="ghost"
                         >
                           {taskId}
                         </Button>
@@ -298,8 +298,8 @@ export function ErrorPanel({
               {/* 2) 自动建议 — 正则推断的纠错提示 */}
               {errorSuggestion && (
                 <Alert
-                  variant="warning"
                   className="text-3xs block rounded px-2 py-1 leading-relaxed"
+                  variant="warning"
                 >
                   <span className="mr-1 font-semibold">建议</span>
                   {errorSuggestion}
@@ -309,9 +309,9 @@ export function ErrorPanel({
               {/* 3) 请求参数快照 */}
               {errorContext?.request ? (
                 <Disclosure
+                  className="text-danger-strong text-3xs hover:brightness-110"
                   defaultOpen
                   marker="caret"
-                  className="text-danger-strong text-3xs hover:brightness-110"
                   panelClassName="text-3xs"
                   trigger="请求参数"
                 >
@@ -325,9 +325,9 @@ export function ErrorPanel({
 
               {/* 4) 原始错误详情（保持旧版的 <pre> 风格） */}
               <Disclosure
+                className="text-danger-strong text-3xs hover:brightness-110"
                 defaultOpen
                 marker="caret"
-                className="text-danger-strong text-3xs hover:brightness-110"
                 panelClassName="text-3xs"
                 trigger="原始错误"
               >

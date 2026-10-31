@@ -28,10 +28,7 @@ export const Vertical: Story = {
     <ScrollArea {...args} className="h-40 w-64 rounded-lg border">
       <div className="flex flex-col gap-2 p-3">
         {Array.from({ length: 20 }, (_, index) => (
-          <div
-            key={index}
-            className="bg-surface-2 rounded-md px-2 py-1 font-mono text-xs"
-          >
+          <div className="bg-surface-2 rounded-md px-2 py-1 font-mono text-xs" key={index}>
             节点 #{index + 1} · KSampler
           </div>
         ))}
@@ -49,8 +46,8 @@ export const BothAxes: Story = {
       <div className="flex w-160 flex-col gap-2 p-3">
         {Array.from({ length: 12 }, (_, index) => (
           <div
-            key={index}
             className="bg-surface-2 rounded-md px-2 py-1 font-mono text-xs whitespace-nowrap"
+            key={index}
           >
             {`{ "3": { class_type: "KSampler", inputs: { steps: ${String(index + 10)} } } }`}
           </div>
@@ -68,10 +65,7 @@ export const NoOverflow: Story = {
     <ScrollArea {...args} className="h-40 w-64 rounded-lg border">
       <div className="flex flex-col gap-2 p-3">
         {Array.from({ length: 3 }, (_, index) => (
-          <div
-            key={index}
-            className="bg-surface-2 rounded-md px-2 py-1 font-mono text-xs"
-          >
+          <div className="bg-surface-2 rounded-md px-2 py-1 font-mono text-xs" key={index}>
             节点 #{index + 1}
           </div>
         ))}

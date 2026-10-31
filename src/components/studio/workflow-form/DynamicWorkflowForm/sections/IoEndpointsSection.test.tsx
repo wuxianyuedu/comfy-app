@@ -22,8 +22,7 @@ function wireInput(
 
 /** 输出端点只要求 WorkflowIOEntry + ioKey。 */
 function output(
-  over: Partial<WorkflowIOEntry> &
-    Pick<WorkflowIOEntry, "name"> & { ioKey: string },
+  over: Partial<WorkflowIOEntry> & Pick<WorkflowIOEntry, "name"> & { ioKey: string },
 ): WorkflowIOEntry & { ioKey: string } {
   return {
     direction: "output",
@@ -36,22 +35,13 @@ function output(
 
 /** SectionHeader 的 count 圆标文本(分段头内唯一的 font-mono span)。 */
 function headerCount(): string {
-  const count = screen
-    .getByText("I/O 端点")
-    .parentElement?.querySelector("span.font-mono");
+  const count = screen.getByText("I/O 端点").parentElement?.querySelector("span.font-mono");
   return count?.textContent ?? "";
 }
 
 describe("IoEndpointsSection", () => {
   it("空态:仅渲染分段头且 count 为 0,无 chip、无「输出端点」", () => {
-    render(
-      <IoEndpointsSection
-        wireInputs={[]}
-        inputs={[]}
-        outputs={[]}
-        showOutputs
-      />,
-    );
+    render(<IoEndpointsSection inputs={[]} outputs={[]} showOutputs wireInputs={[]} />);
     expect(screen.getByText("I/O 端点")).toBeInTheDocument();
     expect(headerCount()).toBe("0");
     expect(screen.queryByText("输出端点")).not.toBeInTheDocument();
@@ -61,15 +51,6 @@ describe("IoEndpointsSection", () => {
   it("渲染 wire 输入 chip:label + 原始类型 + 「仅可通过连线输入」title", () => {
     render(
       <IoEndpointsSection
-        wireInputs={[
-          wireInput({
-            ioKey: "10::param::positive",
-            name: "positive",
-            label: "正向提示",
-            type: "CONDITIONING",
-            nodeTitle: "K采样器",
-          }),
-        ]}
         inputs={[
           wireInput({
             ioKey: "10::param::positive",
@@ -79,14 +60,21 @@ describe("IoEndpointsSection", () => {
         ]}
         outputs={[]}
         showOutputs={false}
+        wireInputs={[
+          wireInput({
+            ioKey: "10::param::positive",
+            name: "positive",
+            label: "正向提示",
+            type: "CONDITIONING",
+            nodeTitle: "K采样器",
+          }),
+        ]}
       />,
     );
     expect(headerCount()).toBe("1");
     expect(screen.getByText("正向提示")).toBeInTheDocument();
     expect(screen.getByText("CONDITIONING")).toBeInTheDocument();
-    expect(
-      screen.getByTitle("K采样器 · positive · 仅可通过连线输入"),
-    ).toBeInTheDocument();
+    expect(screen.getByTitle("K采样器 · positive · 仅可通过连线输入")).toBeInTheDocument();
   });
 
   it("ioLabel 冲突回退:多个 entry 共用同一 label 时改用 name 区分", () => {
@@ -94,10 +82,10 @@ describe("IoEndpointsSection", () => {
     const w2 = wireInput({ ioKey: "b", name: "outputImage", label: "图像" });
     render(
       <IoEndpointsSection
-        wireInputs={[w1, w2]}
         inputs={[w1, w2]}
         outputs={[]}
         showOutputs={false}
+        wireInputs={[w1, w2]}
       />,
     );
     // label 相同 → 都回退为各自的 name,而不是重复显示「图像」
@@ -109,12 +97,10 @@ describe("IoEndpointsSection", () => {
   it("showOutputs=false 时 outputs 不渲染,且 count 不包含 outputs", () => {
     render(
       <IoEndpointsSection
-        wireInputs={[wireInput({ ioKey: "a", name: "model" })]}
         inputs={[wireInput({ ioKey: "a", name: "model" })]}
-        outputs={[
-          output({ ioKey: "o1", name: "IMAGE_FINAL", label: "最终图像" }),
-        ]}
+        outputs={[output({ ioKey: "o1", name: "IMAGE_FINAL", label: "最终图像" })]}
         showOutputs={false}
+        wireInputs={[wireInput({ ioKey: "a", name: "model" })]}
       />,
     );
     expect(headerCount()).toBe("1");
@@ -125,7 +111,6 @@ describe("IoEndpointsSection", () => {
   it("showOutputs=true 时渲染「输出端点」与 output chip(类型经 normalizeTypeChip)", () => {
     render(
       <IoEndpointsSection
-        wireInputs={[]}
         inputs={[]}
         outputs={[
           output({
@@ -136,6 +121,7 @@ describe("IoEndpointsSection", () => {
           }),
         ]}
         showOutputs
+        wireInputs={[]}
       />,
     );
     expect(headerCount()).toBe("1");
@@ -151,10 +137,10 @@ describe("IoEndpointsSection", () => {
   it("自定义输出类型原样展示(type 是什么就显示什么)", () => {
     render(
       <IoEndpointsSection
-        wireInputs={[]}
         inputs={[]}
         outputs={[output({ ioKey: "o1", name: "latent_out", type: "LATENT" })]}
         showOutputs
+        wireInputs={[]}
       />,
     );
     /* LATENT / IMAGEUPLOAD 这类不在常用白名单里的类型也必须如实打印——
@@ -165,6 +151,9 @@ describe("IoEndpointsSection", () => {
   it("IMAGEUPLOAD 上传位 chip 如实展示 IMAGEUPLOAD", () => {
     render(
       <IoEndpointsSection
+        inputs={[]}
+        outputs={[]}
+        showOutputs={false}
         wireInputs={[
           wireInput({
             ioKey: "23::widget::upload",
@@ -175,9 +164,6 @@ describe("IoEndpointsSection", () => {
             kind: "widget",
           }),
         ]}
-        inputs={[]}
-        outputs={[]}
-        showOutputs={false}
       />,
     );
     expect(screen.getByText("IMAGEUPLOAD")).toBeInTheDocument();
@@ -186,10 +172,10 @@ describe("IoEndpointsSection", () => {
   it("同时有 wire 输入与 outputs 且 showOutputs 时渲染两者间的分隔线", () => {
     const { container } = render(
       <IoEndpointsSection
-        wireInputs={[wireInput({ ioKey: "a", name: "model" })]}
         inputs={[wireInput({ ioKey: "a", name: "model" })]}
         outputs={[output({ ioKey: "o1", name: "IMAGE_FINAL" })]}
         showOutputs
+        wireInputs={[wireInput({ ioKey: "a", name: "model" })]}
       />,
     );
     expect(headerCount()).toBe("2");

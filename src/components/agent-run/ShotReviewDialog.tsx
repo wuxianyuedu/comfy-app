@@ -81,7 +81,7 @@ export function ShotReviewDialog({
   }, [open, projectId]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>镜头评审 · {shot.name}</DialogTitle>
@@ -141,18 +141,18 @@ export function ShotReviewDialog({
         </div>
 
         <HumanVerdictRow
-          verdict={review.humanVerdict}
           disabled={busy}
-          onSubmit={(pass, note) => review.submitVerdict(shot.id, pass, note)}
           onRatingChange={(rating) => review.setRating(shot.id, rating)}
+          onSubmit={(pass, note) => review.submitVerdict(shot.id, pass, note)}
+          verdict={review.humanVerdict}
         />
 
         <DialogFooter className="gap-2">
           <Button
-            variant="outline"
-            size="sm"
             disabled={busy}
             onClick={() => void review.review(shot.id)}
+            size="sm"
+            variant="outline"
           >
             重新评审
           </Button>
@@ -160,18 +160,18 @@ export function ShotReviewDialog({
           {verdict && !verdict.pass && (
             <>
               <Button
-                variant="outline"
-                size="sm"
                 disabled={busy}
                 onClick={() => void review.regenerate(shot.id, "gacha")}
+                size="sm"
+                variant="outline"
               >
                 {regenerating ? "处理中…" : "抽卡重生成"}
               </Button>
               <Button
-                variant="primary"
-                size="sm"
                 disabled={busy}
                 onClick={() => void review.regenerate(shot.id, "reprompt")}
+                size="sm"
+                variant="primary"
               >
                 {regenerating ? "处理中…" : "改提示词重生成"}
               </Button>

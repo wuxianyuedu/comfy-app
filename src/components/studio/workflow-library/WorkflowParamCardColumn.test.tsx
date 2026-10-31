@@ -67,7 +67,7 @@ function wiredFor(list: Array<{ id: string; pins: Array<{ ioKey: string; name: s
 describe("WorkflowParamCardColumn", () => {
   it("每个对外参数一张卡片（尺寸的六行形态合成一张），卡片头是它的名字", () => {
     const { container } = render(
-      <WorkflowParamCardColumn entries={entries} resolved={wiredFor(entries)} io={io} />,
+      <WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />,
     );
     for (const entry of entries) {
       /* 尺寸：六行形态共用一张卡（`param-node-size`），下面单独断言。 */
@@ -100,7 +100,6 @@ describe("WorkflowParamCardColumn", () => {
     ];
     render(
       <WorkflowParamCardColumn
-        entries={withLabels}
         contractEntries={[
           { id: withLabels[0]!.id, label: "提示词" },
           {
@@ -108,8 +107,9 @@ describe("WorkflowParamCardColumn", () => {
             label: "尺寸（比例 + 分辨率 / (百万像素 + 倍数)）",
           },
         ]}
-        resolved={wiredFor(withLabels)}
+        entries={withLabels}
         io={io}
+        resolved={wiredFor(withLabels)}
       />,
     );
     /* 标题与端口行都用契约口清单的展示名；工作流里那个名字一处都不出现。 */
@@ -125,7 +125,7 @@ describe("WorkflowParamCardColumn", () => {
      * 说的是同一件事（那一行已经写出落点名，还贴着端点圆点）。单端口条目因此
      * 不再在行尾重复标注 —— 只留端口自己的类型。 */
     const { container } = render(
-      <WorkflowParamCardColumn entries={entries} resolved={wiredFor(entries)} io={io} />,
+      <WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />,
     );
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
     const card = container.querySelector(`[data-testid="param-node-${promptCard.id}"]`)!;
@@ -140,7 +140,7 @@ describe("WorkflowParamCardColumn", () => {
   });
 
   it("端口行显示对外参数自己的名字，落点 pin 名只在 title 里可查", () => {
-    render(<WorkflowParamCardColumn entries={entries} resolved={wiredFor(entries)} io={io} />);
+    render(<WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />);
     /* 尺寸合成一张卡：行 = 形态（「尺寸 · 高度」）；ComfyUI 内部的 pin 名
      * （`height`）不落在行文字上，只作为「落到哪一行」的提示留在 title。 */
     const row = screen.getByTestId("param-node-out-size-1");
@@ -150,7 +150,7 @@ describe("WorkflowParamCardColumn", () => {
   });
 
   it("卡片带**有类型**的输出端口（提示词 → STRING）—— ISSUE #355 复审", () => {
-    render(<WorkflowParamCardColumn entries={entries} resolved={wiredFor(entries)} io={io} />);
+    render(<WorkflowParamCardColumn entries={entries} io={io} resolved={wiredFor(entries)} />);
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
     expect(screen.getByTestId(`param-node-out-type-${promptCard.id}-0`).textContent).toBe("STRING");
     /* 尺寸合成一张卡后，类型**恒为该形态自己的类型**、不随落点变（用户口径：
@@ -166,12 +166,12 @@ describe("WorkflowParamCardColumn", () => {
      * 卡片列只把槽位让出来。 */
     const { container } = render(
       <WorkflowParamCardColumn
-        entries={entries}
-        resolved={wiredFor(entries)}
-        io={io}
         endpoint={(port) => (
-          <span data-testid="probe-endpoint" data-endpoint-handle={port.handleId} />
+          <span data-endpoint-handle={port.handleId} data-testid="probe-endpoint" />
         )}
+        entries={entries}
+        io={io}
+        resolved={wiredFor(entries)}
       />,
     );
     const promptCard = entries.find((entry) => entry.cls === "prompt")!;
@@ -210,10 +210,10 @@ describe("WorkflowParamCardColumn", () => {
     const dupEntries = buildParamEntries(dupIo, undefined, { mode: "T2I" });
     const { container } = render(
       <WorkflowParamCardColumn
-        entries={dupEntries}
-        resolved={{}}
-        io={dupIo}
         endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
+        entries={dupEntries}
+        io={dupIo}
+        resolved={{}}
       />,
     );
     for (const cardId of ["prompt", "negative"]) {
@@ -231,12 +231,12 @@ describe("WorkflowParamCardColumn", () => {
      * 每行一颗圆点：作者拖哪一行，哪一个形态就落到他松手的那一行上。 */
     const { container } = render(
       <WorkflowParamCardColumn
-        entries={entries}
-        resolved={{}}
-        io={io}
         endpoint={(port, index) => (
           <span data-node-handle={port.handleId} data-node-index={index} />
         )}
+        entries={entries}
+        io={io}
+        resolved={{}}
       />,
     );
     for (const form of SIZE_SUB_IDS) {
@@ -248,7 +248,7 @@ describe("WorkflowParamCardColumn", () => {
   });
 
   it("库里没有对外参数时不渲染卡片列", () => {
-    const { container } = render(<WorkflowParamCardColumn entries={[]} resolved={{}} io={io} />);
+    const { container } = render(<WorkflowParamCardColumn entries={[]} io={io} resolved={{}} />);
     expect(container.querySelector('[data-testid="workflow-param-card-column"]')).toBeNull();
   });
 });

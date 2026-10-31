@@ -49,14 +49,14 @@ type Story = StoryObj<typeof meta>;
  *  —— 这是 base-ui 的口径（与 Radix 那种「传字符串就单选」不同）。 */
 export const SingleSelect: Story = {
   render: (args) => (
-    <ToggleGroup {...args} defaultValue={["left"]} aria-label="对齐方式">
-      <ToggleGroupItem value="left" aria-label="左对齐">
+    <ToggleGroup {...args} aria-label="对齐方式" defaultValue={["left"]}>
+      <ToggleGroupItem aria-label="左对齐" value="left">
         <AlignLeft />
       </ToggleGroupItem>
-      <ToggleGroupItem value="center" aria-label="居中">
+      <ToggleGroupItem aria-label="居中" value="center">
         <AlignCenter />
       </ToggleGroupItem>
-      <ToggleGroupItem value="right" aria-label="右对齐">
+      <ToggleGroupItem aria-label="右对齐" value="right">
         <AlignRight />
       </ToggleGroupItem>
     </ToggleGroup>
@@ -67,11 +67,11 @@ export const SingleSelect: Story = {
  *  与上一档的**唯一差别就是这个布尔**（`value` 两档都是数组）。 */
 export const MultiSelect: Story = {
   render: (args) => (
-    <ToggleGroup {...args} multiple defaultValue={["bold"]} aria-label="文字样式">
-      <ToggleGroupItem value="bold" aria-label="加粗">
+    <ToggleGroup {...args} aria-label="文字样式" defaultValue={["bold"]} multiple>
+      <ToggleGroupItem aria-label="加粗" value="bold">
         <Bold />
       </ToggleGroupItem>
-      <ToggleGroupItem value="italic" aria-label="斜体">
+      <ToggleGroupItem aria-label="斜体" value="italic">
         <Italic />
       </ToggleGroupItem>
     </ToggleGroup>
@@ -84,15 +84,15 @@ export const VariantsAndSizes: Story = {
   render: (args) => (
     <div className="flex flex-col gap-4">
       {VARIANTS.map((variant) => (
-        <div key={variant} className="flex items-center gap-4">
+        <div className="flex items-center gap-4" key={variant}>
           {SIZES.map((size) => (
             <ToggleGroup
               {...args}
-              key={size}
-              variant={variant}
-              size={size}
-              defaultValue={["a"]}
               aria-label={`${variant} / ${size}`}
+              defaultValue={["a"]}
+              key={size}
+              size={size}
+              variant={variant}
             >
               <ToggleGroupItem value="a">{variant}</ToggleGroupItem>
               <ToggleGroupItem value="b">{size}</ToggleGroupItem>
@@ -111,11 +111,11 @@ export const Orientations: Story = {
       {ORIENTATIONS.map((orientation) => (
         <ToggleGroup
           {...args}
+          aria-label={`朝向 ${orientation}`}
+          defaultValue={["a"]}
           key={orientation}
           orientation={orientation}
           variant="outline"
-          defaultValue={["a"]}
-          aria-label={`朝向 ${orientation}`}
         >
           <ToggleGroupItem value="a">上</ToggleGroupItem>
           <ToggleGroupItem value="b">中</ToggleGroupItem>
@@ -134,11 +134,11 @@ export const Spacing: Story = {
       {[2, 0].map((spacing) => (
         <ToggleGroup
           {...args}
+          aria-label={`spacing=${String(spacing)}`}
+          defaultValue={["left"]}
           key={spacing}
           spacing={spacing}
           variant="outline"
-          defaultValue={["left"]}
-          aria-label={`spacing=${String(spacing)}`}
         >
           <ToggleGroupItem value="left">左侧</ToggleGroupItem>
           <ToggleGroupItem value="right">右侧</ToggleGroupItem>

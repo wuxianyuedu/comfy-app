@@ -37,8 +37,8 @@ export function FilmStudioShotListPanel({
           <span className="text-ink-fainter text-2xs">{listShots.length} 镜头</span>
         </div>
         {!isProjectSource && (
-          <Hint label="新增镜头" accessibleName>
-            <Button variant="primary" size="icon-xs" onClick={onAddShot} className="rounded-md">
+          <Hint accessibleName label="新增镜头">
+            <Button className="rounded-md" onClick={onAddShot} size="icon-xs" variant="primary">
               +
             </Button>
           </Hint>
@@ -52,23 +52,23 @@ export function FilmStudioShotListPanel({
           const isSelected = shot.id === selectedShotId;
           return (
             <div
-              key={shot.id}
               className={`flex items-center gap-1 rounded-xl border transition-all ${
                 isSelected
                   ? "border-primary-500/40 bg-primary-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
                   : "bg-card hover:border-border border-transparent"
               }`}
+              key={shot.id}
             >
               <Button
-                variant="ghost"
-                onClick={() => onSelectShot(shot.id)}
                 className="group flex h-auto min-w-0 flex-1 items-center gap-3 rounded-xl p-2.5 text-left font-normal"
+                onClick={() => onSelectShot(shot.id)}
+                variant="ghost"
               >
                 {/* Thumbnail：项目镜头有产出图则显缩略图，否则占位 */}
                 {shot.thumbnailUrl ? (
                   <MediaThumbnail
-                    src={shot.thumbnailUrl}
                     className="h-12 w-14 shrink-0 rounded-md object-cover"
+                    src={shot.thumbnailUrl}
                   />
                 ) : (
                   <div
@@ -107,22 +107,22 @@ export function FilmStudioShotListPanel({
               {/* 项目镜头才给「退回让 AI 重做」入口（与画布镜头节点同源 requestShotRedo）。 */}
               {isProjectSource && (
                 <>
-                  <Hint label="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）" accessibleName>
+                  <Hint accessibleName label="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）">
                     <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => onReviewShot(shot)}
                       className="text-ink-soft hover:bg-primary/15 shrink-0"
+                      onClick={() => onReviewShot(shot)}
+                      size="icon-xs"
+                      variant="ghost"
                     >
                       <ClipboardCheck data-icon="inline-start" />
                     </Button>
                   </Hint>
-                  <Hint label="退回让 AI 重做这一镜" accessibleName>
+                  <Hint accessibleName label="退回让 AI 重做这一镜">
                     <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => void c.redoShot(shot.id)}
                       className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
+                      onClick={() => void c.redoShot(shot.id)}
+                      size="icon-xs"
+                      variant="ghost"
                     >
                       ↺
                     </Button>

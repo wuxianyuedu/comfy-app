@@ -143,7 +143,7 @@ describe("DocumentFrame（文档型）", () => {
        而是**未定义行为**。因此约定：宽度只从 `width` 档位进来，className 里不许再写
        `max-w-*`。这条约定由 `tests/project-view-container.test.ts` 逐文件判住。 */
     const { container } = render(
-      <DocumentFrame width="narrow" className="max-w-[50rem]">
+      <DocumentFrame className="max-w-[50rem]" width="narrow">
         <p>内容</p>
       </DocumentFrame>,
     );
@@ -159,7 +159,7 @@ describe("DocumentFrame（文档型）", () => {
 
   it("铺底是外框的直接子节点、排在滚动层之前", () => {
     const { container } = render(
-      <DocumentFrame backdrop={<div data-testid="bd" aria-hidden />}>
+      <DocumentFrame backdrop={<div aria-hidden data-testid="bd" />}>
         <p>内容</p>
       </DocumentFrame>,
     );

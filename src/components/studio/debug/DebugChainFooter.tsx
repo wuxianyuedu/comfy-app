@@ -180,10 +180,10 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
            *  照旧，`ghost` 变体的底色/文字色由它接管（§16.2.4.2 第 5 条）。 */
           <Hint key={module.file} label={`${module.file}（点击查看源码）`}>
             <Button
-              variant="ghost"
+              className="h-auto gap-0 px-0 font-normal hover:bg-transparent"
               onClick={(event) => pillClick(event, module)}
               style={PILL_STYLE}
-              className="h-auto gap-0 px-0 font-normal hover:bg-transparent"
+              variant="ghost"
             >
               {module.label}
             </Button>
@@ -199,6 +199,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
           `stopPropagation` / `preventDefault` **守卫**，不是交互。 */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- 三个都是守卫，不是交互 */}
       <div
+        onDragStart={(event) => event.preventDefault()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
         style={{
           display: "flex",
           flexDirection: "column",
@@ -207,22 +210,19 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
           borderTop: "1px solid var(--color-border-subtle)",
           background: "var(--color-canvas-deep)",
         }}
-        onPointerDown={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onDragStart={(event) => event.preventDefault()}
       >
         {renderGroup("画布级", canvasModules)}
         {renderGroup("节点级", nodeModules)}
       </div>
 
-      <Dialog open={openFile !== null} onOpenChange={(next) => !next && closeModal()}>
+      <Dialog onOpenChange={(next) => !next && closeModal()} open={openFile !== null}>
         <DialogContent
-          showCloseButton={false}
           className="border-border-strong bg-panel w-[min(860px,92vw)] gap-0 p-0"
-          popupClassName={`flex ${OVERLAY_MAX_HEIGHT} flex-col overflow-hidden rounded-2xl`}
+          onMouseDown={(event) => event.stopPropagation()}
           // 调试弹窗挂在 ReactFlow 节点内，需阻断指针事件冒泡以免触发节点拖拽。
           onPointerDown={(event) => event.stopPropagation()}
-          onMouseDown={(event) => event.stopPropagation()}
+          popupClassName={`flex ${OVERLAY_MAX_HEIGHT} flex-col overflow-hidden rounded-2xl`}
+          showCloseButton={false}
         >
           <DialogTitle className="sr-only">源码查看</DialogTitle>
           <DialogDescription className="sr-only">
@@ -243,46 +243,46 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
             <div className="flex shrink-0 items-center gap-1.5">
               <Hint label="在 Visual Studio Code 中打开该文件（需已安装 VSCode）" wrap>
                 <Button
-                  variant="info"
-                  size="xs"
-                  onClick={() => source && openInVscode(source.absolutePath)}
-                  disabled={!source}
                   className="h-auto rounded-md px-2.5 py-1"
+                  disabled={!source}
+                  onClick={() => source && openInVscode(source.absolutePath)}
+                  size="xs"
+                  variant="info"
                 >
                   在 VSCode 打开
                 </Button>
               </Hint>
               <Hint label={copyFailed ? copyFailureText() : "复制完整相对路径"}>
                 <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => onCopyText(viewedFile)}
                   className={`h-auto rounded-md px-2.5 py-1 ${
                     copyFailed
                       ? "border-destructive/40 text-danger-strong"
                       : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
                   }`}
+                  onClick={() => onCopyText(viewedFile)}
+                  size="xs"
+                  variant="outline"
                 >
                   {copyFailed ? "复制失败" : copyOutcome.on ? "已复制" : "复制路径"}
                 </Button>
               </Hint>
               <Hint label={copyFailed ? copyFailureText() : "复制全部源码"} wrap>
                 <Button
-                  variant="warning"
-                  size="xs"
-                  onClick={() => source && onCopyText(source.content)}
-                  disabled={!source}
                   className="h-auto rounded-md px-2.5 py-1"
+                  disabled={!source}
+                  onClick={() => source && onCopyText(source.content)}
+                  size="xs"
+                  variant="warning"
                 >
                   {copyFailed ? "复制失败" : copyOutcome.on ? "已复制" : "复制代码"}
                 </Button>
               </Hint>
               <Button
-                variant="outline"
-                size="icon-xs"
-                onClick={closeModal}
                 aria-label="关闭"
                 className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright rounded-md"
+                onClick={closeModal}
+                size="icon-xs"
+                variant="outline"
               >
                 ✕
               </Button>
@@ -290,7 +290,7 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
           </div>
           {/* 内容区 */}
           <div className="bg-canvas-deep min-h-0 flex-1 overflow-auto p-0">
-            {sourceBusy.busy && <PageLoading label="正在读取源码…" className="py-10 text-xs" />}
+            {sourceBusy.busy && <PageLoading className="py-10 text-xs" label="正在读取源码…" />}
             {!sourceBusy.busy && loadError && (
               <div className="text-destructive px-4 py-6 text-xs">读取失败：{loadError}</div>
             )}
@@ -303,8 +303,8 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
                 {/* key=openFile：切换查看的文件时强制重挂载 CodeBlock，
                         避免复用旧实例的 html/error 状态闪现上一份源码。 */}
                 <CodeBlock
-                  key={viewedFile}
                   code={source.content}
+                  key={viewedFile}
                   language={extToLanguage(viewedFile)}
                 />
               </div>

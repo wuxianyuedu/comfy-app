@@ -72,8 +72,8 @@ export function StatusBadge({
 }) {
   const tone: StatusTone = STATUS_TONE[status.toUpperCase()] ?? "neutral";
   return (
-    <Badge tone={tone} className={className}>
-      {dot && <span className="size-1.5 shrink-0 rounded-full bg-current opacity-80" aria-hidden />}
+    <Badge className={className} tone={tone}>
+      {dot && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current opacity-80" />}
       {label ?? status}
     </Badge>
   );

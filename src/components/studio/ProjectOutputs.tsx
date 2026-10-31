@@ -43,22 +43,22 @@ function OutputCard({
   const isVideoOut = c?.mediaType === "video";
   return (
     <Button
-      variant="ghost"
-      onClick={() => onSelect(output.id)}
       className={`group relative h-auto overflow-hidden rounded-2xl border text-left font-normal transition-all hover:shadow-lg hover:shadow-black/6 dark:shadow-black/30 ${
         active
           ? "border-primary-500/70 ring-primary-500/40 ring-1"
           : "border-border-strong hover:border-ink-fainter"
       } bg-subtle`}
+      onClick={() => onSelect(output.id)}
+      variant="ghost"
     >
       <div className="bg-canvas-deep relative aspect-square w-full">
         {c ? (
           <MediaThumbnail
-            src={c.localPath}
             alt=""
-            className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
             autoPlay
+            className="h-full w-full object-cover transition-transform group-hover:scale-[1.03]"
             loop
+            src={c.localPath}
           />
         ) : (
           <div className="text-ink-fainter grid h-full place-items-center text-xs">
@@ -68,7 +68,7 @@ function OutputCard({
 
         {isVideoOut && (
           <span className="ring-border-strong bg-primary/90 absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full ring-2">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="white" aria-hidden>
+            <svg aria-hidden fill="white" height="24" viewBox="0 0 24 24" width="24">
               <path d="M6 4 L16 10 L6 16 Z" />
             </svg>
           </span>
@@ -79,10 +79,10 @@ function OutputCard({
           </span>
         )}
         <StatusBadge
-          status={output.status}
-          label={taskStatusLabel(output.status)}
-          dot={false}
           className="text-2xs absolute top-2 left-2 px-2 py-0.5"
+          dot={false}
+          label={taskStatusLabel(output.status)}
+          status={output.status}
         />
       </div>
       <div className="p-3">
@@ -175,9 +175,9 @@ function VirtualizedOutputGrid({
   if (!measured) {
     return (
       <div
+        aria-label="项目产出"
         ref={setListEl}
         role="list"
-        aria-label="项目产出"
         style={{
           display: "grid",
           gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
@@ -186,10 +186,10 @@ function VirtualizedOutputGrid({
       >
         {outputs.map((output) => (
           <OutputCard
-            key={output.id}
-            output={output}
             active={selectedId === output.id}
+            key={output.id}
             onSelect={onSelect}
+            output={output}
           />
         ))}
       </div>
@@ -198,9 +198,9 @@ function VirtualizedOutputGrid({
 
   return (
     <div
+      aria-label="项目产出"
       ref={setListEl}
       role="list"
-      aria-label="项目产出"
       style={{
         position: "relative",
         height: virtualizer.getTotalSize(),
@@ -214,8 +214,8 @@ function VirtualizedOutputGrid({
         }
         return (
           <div
-            key={vi.key}
             data-index={vi.index}
+            key={vi.key}
             ref={virtualizer.measureElement}
             style={{
               position: "absolute",
@@ -230,10 +230,10 @@ function VirtualizedOutputGrid({
           >
             {row.items.map((output) => (
               <OutputCard
-                key={output.id}
-                output={output}
                 active={selectedId === output.id}
+                key={output.id}
                 onSelect={onSelect}
+                output={output}
               />
             ))}
           </div>
@@ -356,9 +356,9 @@ export function ProjectOutputs() {
   if (!projectId) {
     return (
       <DocumentFrame
-        width="medium"
-        className="grid min-h-[60vh] place-items-center px-6 text-center"
         backdrop={<AuroraBackground />}
+        className="grid min-h-[60vh] place-items-center px-6 text-center"
+        width="medium"
       >
         <div>
           <p className="text-ink-soft text-lg font-medium">还没有打开任何画布项目</p>
@@ -372,51 +372,51 @@ export function ProjectOutputs() {
 
   return (
     <DocumentFrame
-      width="medium"
-      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       backdrop={<AuroraBackground />}
+      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
+      width="medium"
     >
       {/* ── Header ──
           这一屏的标题是**项目名**（数据），不是屏名 —— 所以走 `title` 而不是在
           旁边再挂一个「产出」（屏名已经在页签上了，重复一遍是 ISSUE #1423 那族
           「一屏两名」）。数量徽标 + 项目切换器同理进 `extra` / `actions`。 */}
       <PageHeader
-        className="mb-5"
-        title={activeProject?.name ?? "未命名项目"}
-        extra={
-          <Badge tone="primary" size="pill-md" className="mt-1">
-            {outputs.length} 个产出
-          </Badge>
-        }
         actions={
           <>
             <SelectMenu
-              value={projectId}
+              labels={Object.fromEntries(projects.map((p) => [p.id, p.name ?? "未命名项目"]))}
               onChange={setProjectId}
               options={projects.map((p) => p.id)}
-              labels={Object.fromEntries(projects.map((p) => [p.id, p.name ?? "未命名项目"]))}
+              value={projectId}
             />
             <Button
-              variant="outline"
-              size="sm"
-              onClick={refetchOutputs}
               className="border-border-strong text-ink-muted hover:text-ink h-auto rounded-lg px-3 py-2"
+              onClick={refetchOutputs}
+              size="sm"
+              variant="outline"
             >
               ↻ 刷新
             </Button>
           </>
         }
+        className="mb-5"
+        extra={
+          <Badge className="mt-1" size="pill-md" tone="primary">
+            {outputs.length} 个产出
+          </Badge>
+        }
+        title={activeProject?.name ?? "未命名项目"}
       />
 
       {/* ── Cover banner ── */}
       <div className="border-primary/20 relative mb-6 h-45 overflow-hidden rounded-2xl border">
         {cover ? (
           <MediaThumbnail
-            src={cover.localPath}
             alt=""
-            className="h-full w-full object-cover"
             autoPlay
+            className="h-full w-full object-cover"
             loop
+            src={cover.localPath}
           />
         ) : (
           <div className="text-ink-muted from-primary/10 to-accent/20 grid h-full place-items-center bg-linear-to-br text-sm">
@@ -439,22 +439,22 @@ export function ProjectOutputs() {
         <p className="text-ink-muted text-sm">加载中…</p>
       ) : outputs.length === 0 ? (
         <EmptyState
-          title="还没有产出"
           description="在画布里跑一次生成，结果会自动归档到本项目目录。"
           minHeightClass="min-h-70"
+          title="还没有产出"
         />
       ) : (
-        <VirtualizedOutputGrid outputs={outputs} selectedId={selectedId} onSelect={setSelectedId} />
+        <VirtualizedOutputGrid onSelect={setSelectedId} outputs={outputs} selectedId={selectedId} />
       )}
 
       <ProjectOutputsMetadataSheet
-        selected={selected}
-        projectId={projectId}
         copyFailed={copyFailed}
         copySucceeded={copied.on}
+        onClose={() => setSelectedId(null)}
         onCopy={handleCopy}
         onExport={handleExport}
-        onClose={() => setSelectedId(null)}
+        projectId={projectId}
+        selected={selected}
       />
     </DocumentFrame>
   );

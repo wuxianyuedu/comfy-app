@@ -41,8 +41,8 @@ export function RgthreeFastGroupsBypasserBody({
         const bypass = ctx.getBypass(group.id);
         return (
           <div
-            key={group.id}
             className="group text-2xs relative flex h-5.5 items-center gap-1.5 pr-2 pl-2"
+            key={group.id}
           >
             <span
               className={`text-2xs min-w-0 shrink truncate text-left ${
@@ -70,15 +70,14 @@ export function RgthreeFastGroupsBypasserBody({
              *  外观逐条留在 `style` 里（§16.2.4.2 第 9 条：验收标准是渲染结果不变）。
              *  指针事件照旧拦截，好让 ReactFlow 的拖拽处理器看不到这次点击。 */}
             <Toggle
-              pressed={bypass}
-              onPressedChange={() => ctx.setBypass(group.id, !bypass)}
-              title={bypass ? "点击取消旁路" : "点击旁路此 group"}
-              onPointerDown={(event) => event.stopPropagation()}
-              onMouseDown={(event) => event.stopPropagation()}
               /* 覆盖串要在 `variant` 之后由 `cn()` 合并 —— tailwind-merge 同一属性
                * 后面的类赢，所以底色 / 圆角 / 内边距 / 悬停底都由这里接管
                *（§16.2.4.2 第 5 条：基元默认值「成套 + 讲顺序」地覆盖）。 */
               className="border-0 bg-transparent p-0 hover:bg-transparent"
+              onMouseDown={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPressedChange={() => ctx.setBypass(group.id, !bypass)}
+              pressed={bypass}
               style={{
                 marginLeft: 6,
                 width: 26,
@@ -91,6 +90,7 @@ export function RgthreeFastGroupsBypasserBody({
                 flex: "0 0 auto",
                 transition: "background 120ms",
               }}
+              title={bypass ? "点击取消旁路" : "点击旁路此 group"}
             >
               <span
                 style={{
@@ -219,8 +219,8 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
           const clipStr = isObj ? fmtStrength(rec?.clip_strength ?? rec?.clip_str) : undefined;
           return (
             <div
-              key={`pll-r-${index}`}
               className="text-2xs flex items-center gap-2 rounded px-1.5 py-0.75"
+              key={`pll-r-${index}`}
               style={{ background: "var(--color-subtle)" }}
             >
               <span

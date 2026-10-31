@@ -46,7 +46,7 @@ describe("Button 语义变体", () => {
 
   it("渲染时语义变体生效（default 之外确实换了底色）", () => {
     render(
-      <Button variant="danger" data-testid="b">
+      <Button data-testid="b" variant="danger">
         删除
       </Button>,
     );

@@ -96,8 +96,8 @@ export function TreeChildren({
 }) {
   return (
     <div
-      data-slot="tree-children"
       className={cn("mt-1 py-1", indentClass(depth), railClassName, className)}
+      data-slot="tree-children"
     >
       {children}
     </div>
@@ -133,7 +133,7 @@ export function TreeRow({
     <div data-slot="tree-row">
       {row}
       {children != null && (
-        <TreeChildren depth={depth} railClassName={railClassName} className={childrenClassName}>
+        <TreeChildren className={childrenClassName} depth={depth} railClassName={railClassName}>
           {children}
         </TreeChildren>
       )}

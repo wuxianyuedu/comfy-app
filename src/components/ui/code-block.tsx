@@ -126,7 +126,7 @@ function PlainCodeBlock({ code }: { code: string }) {
   return (
     <div className="cb-code-block">
       {lines.map((line, index) => (
-        <div key={`line-${index}`} className="cb-line">
+        <div className="cb-line" key={`line-${index}`}>
           <span className="cb-ln">{index + 1}</span>
           <span className="cb-code">{line.length > 0 ? line : " "}</span>
         </div>
@@ -228,7 +228,7 @@ export function CodeBlock({ code, language }: { code: string; language: string }
   return (
     <div className="cb-code-block">
       {tokens.map((line, lineIndex) => (
-        <div key={lineIndex} className="cb-line">
+        <div className="cb-line" key={lineIndex}>
           <span className="cb-ln">{lineIndex + 1}</span>
           <span className="cb-code">
             {line.length === 0

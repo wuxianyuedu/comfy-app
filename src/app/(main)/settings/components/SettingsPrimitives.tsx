@@ -47,15 +47,15 @@ export function Field({
    * 决定高度、`bg-surface-2` 深色底、`border-border` 与本页其它控件同色系、
    * `text-ink` / `placeholder:text-muted-foreground/60` 走项目色板。 */
   return (
-    <FormField label={label} className="mb-3">
+    <FormField className="mb-3" label={label}>
       {(a11y) => (
         <Input
           {...a11y}
+          className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
+          onChange={textHandler(onChange)}
+          placeholder={placeholder}
           type={type}
           value={value}
-          placeholder={placeholder}
-          onChange={textHandler(onChange)}
-          className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
         />
       )}
     </FormField>
@@ -69,7 +69,6 @@ export function Field({
 export function FieldImagePreview({ src }: { src: string }) {
   return (
     <MediaThumbnail
-      src={src}
       alt="字段图片预览"
       className="border-border/60 max-h-24 w-fit rounded-md border"
       fallback={
@@ -77,6 +76,7 @@ export function FieldImagePreview({ src }: { src: string }) {
           该地址无法作为图片预览（可能被防盗链、需登录，或非图片地址）。点击行内「链接」替换，或用「上传」选本地图片。
         </p>
       }
+      src={src}
     />
   );
 }

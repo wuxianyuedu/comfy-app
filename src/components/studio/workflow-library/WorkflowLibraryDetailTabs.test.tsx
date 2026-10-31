@@ -13,10 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import {
-  DEFAULT_DETAIL_TAB,
-  DETAIL_TABS,
-} from "./workflow-library-detail-config";
+import { DEFAULT_DETAIL_TAB, DETAIL_TABS } from "./workflow-library-detail-config";
 
 afterEach(cleanup);
 
@@ -27,19 +24,19 @@ const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 function TabHarness({ onValueChange }: { onValueChange?: () => void }) {
   return (
     <Tabs
-      value={DEFAULT_DETAIL_TAB}
-      onValueChange={() => onValueChange?.()}
       className="min-h-0 flex-1 gap-0"
+      onValueChange={() => onValueChange?.()}
+      value={DEFAULT_DETAIL_TAB}
     >
       <TabsList
-        variant="line"
         className="border-border-subtle h-auto w-full justify-start gap-1 rounded-none border-b px-4"
+        variant="line"
       >
         {DETAIL_TABS.map((tab) => (
           <TabsTrigger
+            className="detail-tab-trigger h-auto flex-none rounded-none px-3 py-2.5 text-xs font-medium"
             key={tab.key}
             value={tab.key}
-            className="detail-tab-trigger h-auto flex-none rounded-none px-3 py-2.5 text-xs font-medium"
           >
             {tab.label}
           </TabsTrigger>
@@ -58,9 +55,7 @@ describe("详情面板页签走 ui/tabs", () => {
   it("全部页签都渲染成 role=tab，标签沿用 DETAIL_TABS", () => {
     render(<TabHarness />);
     const tabs = screen.getAllByRole("tab");
-    expect(tabs.map((tab) => tab.textContent)).toEqual(
-      DETAIL_TABS.map((tab) => tab.label),
-    );
+    expect(tabs.map((tab) => tab.textContent)).toEqual(DETAIL_TABS.map((tab) => tab.label));
   });
 
   it("同一时刻只挂载当前页签的面板", () => {
@@ -94,16 +89,11 @@ describe("详情面板页签走 ui/tabs", () => {
   });
 
   it("TabButton 已从 DetailControls 删除（不留平行实现）", () => {
-    expect(read("sections/DetailControls.tsx")).not.toMatch(
-      /export function TabButton/,
-    );
+    expect(read("sections/DetailControls.tsx")).not.toMatch(/export function TabButton/);
   });
 
   it("选中指示条的颜色只有一个出口（token 渐变，不写死调色板）", () => {
-    const css = readFileSync(
-      path.resolve(ROOT, "../../../app/globals.css"),
-      "utf8",
-    );
+    const css = readFileSync(path.resolve(ROOT, "../../../app/globals.css"), "utf8");
     const block = /\.detail-tab-trigger::after \{[\s\S]*?\}/.exec(css);
     expect(block).not.toBeNull();
     expect(block?.[0]).toMatch(/var\(--color-primary\)/);

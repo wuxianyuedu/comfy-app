@@ -83,7 +83,6 @@ function RhfFormSample({ defaultName, defaultPort }: StoryArgs) {
         <FormField
           control={form.control}
           name="port"
-          rules={{ validate: validatePort }}
           render={({ field }) => (
             <FormItem>
               <FormLabel>应用端口</FormLabel>
@@ -93,6 +92,7 @@ function RhfFormSample({ defaultName, defaultPort }: StoryArgs) {
               <FormMessage />
             </FormItem>
           )}
+          rules={{ validate: validatePort }}
         />
       </form>
     </Form>
@@ -120,7 +120,6 @@ function InvalidFormSample() {
         <FormField
           control={form.control}
           name="name"
-          rules={{ required: "名称不能为空" }}
           render={({ field }) => (
             <FormItem>
               <FormLabel>工作流名称</FormLabel>
@@ -130,11 +129,11 @@ function InvalidFormSample() {
               <FormMessage />
             </FormItem>
           )}
+          rules={{ required: "名称不能为空" }}
         />
         <FormField
           control={form.control}
           name="port"
-          rules={{ validate: validatePort }}
           render={({ field }) => (
             <FormItem>
               <FormLabel>应用端口</FormLabel>
@@ -145,8 +144,9 @@ function InvalidFormSample() {
               <FormMessage />
             </FormItem>
           )}
+          rules={{ validate: validatePort }}
         />
-        <Button type="submit" className="w-fit">
+        <Button className="w-fit" type="submit">
           提交
         </Button>
       </form>

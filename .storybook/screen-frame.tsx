@@ -309,13 +309,13 @@ export function StorybookScreenFrame({
     <div className="bg-bg h-[720px] w-full overflow-hidden">
       <AppShell
         active={activeView}
-        onSelect={() => undefined}
-        onOpenSettings={() => undefined}
-        projects={sidebarProjects}
         activeProjectId={activeProjectId}
-        onOpenProject={() => undefined}
-        onShowAllProjects={() => undefined}
         onNewProject={() => undefined}
+        onOpenProject={() => undefined}
+        onOpenSettings={() => undefined}
+        onSelect={() => undefined}
+        onShowAllProjects={() => undefined}
+        projects={sidebarProjects}
       >
         {children ?? <WorksGallery />}
       </AppShell>

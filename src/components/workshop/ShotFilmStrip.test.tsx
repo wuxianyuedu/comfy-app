@@ -45,15 +45,11 @@ describe("ShotFilmStrip", () => {
       shot({ index: 3, id: "c" }),
     ];
     const onJump = vi.fn<(shot: Shot) => void>();
-    render(<ShotFilmStrip shots={shots} onJump={onJump} />);
-    expect(screen.getAllByRole("button", { name: /^跳到镜头/ })).toHaveLength(
-      3,
-    );
+    render(<ShotFilmStrip onJump={onJump} shots={shots} />);
+    expect(screen.getAllByRole("button", { name: /^跳到镜头/ })).toHaveLength(3);
     /* 按可访问名点，不按下标取元素：下标访问在严格模式下是 `T | undefined`，
        而且帧序一旦变了，按下标的用例只会静默点错，不会报「少了一帧」。 */
-    fireEvent.click(
-      screen.getByRole("button", { name: "跳到镜头 02 · 海边·日 · 待生成" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "跳到镜头 02 · 海边·日 · 待生成" }));
     expect(onJump).toHaveBeenCalledTimes(1);
     expect(onJump.mock.calls[0]?.[0].id).toBe("b");
   });
@@ -61,10 +57,8 @@ describe("ShotFilmStrip", () => {
   it("可访问名同时给出镜号、场景与状态（读屏不必看图也知道是哪一镜）", () => {
     render(
       <ShotFilmStrip
-        shots={[
-          shot({ index: 5, sceneHeading: "废弃工厂·夜", status: "failed" }),
-        ]}
         onJump={vi.fn()}
+        shots={[shot({ index: 5, sceneHeading: "废弃工厂·夜", status: "failed" })]}
       />,
     );
     expect(
@@ -75,28 +69,26 @@ describe("ShotFilmStrip", () => {
   });
 
   it("还没有成图的帧显示镜号本身，不留一个说不出话的灰块", () => {
-    render(<ShotFilmStrip shots={[shot({ index: 7 })]} onJump={vi.fn()} />);
+    render(<ShotFilmStrip onJump={vi.fn()} shots={[shot({ index: 7 })]} />);
     expect(screen.getByText("07")).toBeTruthy();
   });
 
   it("有封面的帧渲染封面，并把镜号以角标留在图上", () => {
     const { container } = render(
       <ShotFilmStrip
-        shots={[shot({ index: 3, imageUrl: "/api/outputs/x/3.png" })]}
         onJump={vi.fn()}
+        shots={[shot({ index: 3, imageUrl: "/api/outputs/x/3.png" })]}
       />,
     );
-    expect(
-      container.querySelector('img[src="/api/outputs/x/3.png"]'),
-    ).toBeTruthy();
+    expect(container.querySelector('img[src="/api/outputs/x/3.png"]')).toBeTruthy();
     expect(screen.getByText("03")).toBeTruthy();
   });
 
   it("标题行给出成图计数；有失败时点名失败数，没有就不提", () => {
     const { rerender } = render(
       <ShotFilmStrip
-        shots={[shot({ index: 1, status: "done" }), shot({ index: 2 })]}
         onJump={vi.fn()}
+        shots={[shot({ index: 1, status: "done" }), shot({ index: 2 })]}
       />,
     );
     expect(screen.getByText("1/2 镜成图")).toBeTruthy();
@@ -104,11 +96,8 @@ describe("ShotFilmStrip", () => {
 
     rerender(
       <ShotFilmStrip
-        shots={[
-          shot({ index: 1, status: "done" }),
-          shot({ index: 2, status: "failed" }),
-        ]}
         onJump={vi.fn()}
+        shots={[shot({ index: 1, status: "done" }), shot({ index: 2, status: "failed" })]}
       />,
     );
     expect(screen.getByText(/1 镜失败/)).toBeTruthy();
@@ -117,8 +106,8 @@ describe("ShotFilmStrip", () => {
   it("没有「当前镜头」这个概念，就不挂选中态（否则读屏会念出界面里不存在的事实）", () => {
     render(
       <ShotFilmStrip
-        shots={[shot({ index: 1, status: "done" }), shot({ index: 2 })]}
         onJump={vi.fn()}
+        shots={[shot({ index: 1, status: "done" }), shot({ index: 2 })]}
       />,
     );
     expect(screen.queryAllByRole("option")).toHaveLength(0);
@@ -130,7 +119,7 @@ describe("ShotFilmStrip", () => {
   });
 
   it("零镜头时整条不渲染（空带子比没有带子更误导）", () => {
-    const { container } = render(<ShotFilmStrip shots={[]} onJump={vi.fn()} />);
+    const { container } = render(<ShotFilmStrip onJump={vi.fn()} shots={[]} />);
     expect(container.innerHTML).toBe("");
   });
 });

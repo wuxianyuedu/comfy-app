@@ -51,9 +51,9 @@ export function SlotOutlet({ className }: { className?: string }) {
   /* `ref` 回调而不是 `useEffect` 读 ref：节点挂上/卸下都走它，且不在渲染期读 DOM。 */
   return (
     <div
-      ref={ctx?.setNode}
-      data-slot="slot-outlet"
       className={cn("flex min-w-0 items-center", className)}
+      data-slot="slot-outlet"
+      ref={ctx?.setNode}
     />
   );
 }

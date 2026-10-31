@@ -23,13 +23,13 @@ describe("ConfirmDialog 卡片不得带遮罩定位", () => {
   it("打开后没有元素携带 overlay 定位 class，标题/描述可见", () => {
     render(
       <ConfirmDialog
-        open
+        confirmLabel="同步"
+        danger
+        description={"数据库结构过期\n\n这批变更含「会丢数据」的语句。"}
         onClose={vi.fn()}
         onConfirm={vi.fn()}
-        danger
+        open
         title="立即执行数据库同步？"
-        confirmLabel="同步"
-        description={"数据库结构过期\n\n这批变更含「会丢数据」的语句。"}
       />,
     );
 
@@ -41,16 +41,13 @@ describe("ConfirmDialog 卡片不得带遮罩定位", () => {
        Backdrop，落在卡片上就会和基元的居中定位打架 →「空黑框」回归。
        （卡片内部的渐变装饰条用 `absolute inset-x-0`，是合法的局部定位，
        不在本判据范围内。） */
-    const popup = document.querySelector<HTMLElement>(
-      '[data-slot="dialog-content"]',
-    );
+    const popup = document.querySelector<HTMLElement>('[data-slot="dialog-content"]');
     expect(popup).toBeTruthy();
     const popupClass = popup!.className;
     for (const mark of OVERLAY_POSITION_MARKS) {
-      expect(
-        popupClass.split(/\s+/),
-        `弹窗卡片不该带遮罩定位 class「${mark}」`,
-      ).not.toContain(mark);
+      expect(popupClass.split(/\s+/), `弹窗卡片不该带遮罩定位 class「${mark}」`).not.toContain(
+        mark,
+      );
     }
 
     /* 危险确认按钮仍然渲染（弹窗不只是个壳）。 */

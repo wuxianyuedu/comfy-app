@@ -84,7 +84,7 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
   return (
     <header className="border-border-subtle bg-canvas z-base flex h-12 shrink-0 items-center gap-2 border-b px-3">
       <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
+      <Separator className="data-[orientation=vertical]:h-4" orientation="vertical" />
       <span className="text-ink-strong min-w-0 truncate text-sm font-medium" title={label}>
         {label}
       </span>
@@ -100,11 +100,11 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
         <ViewActionsHost />
         <Hint label="全局搜索（⌘K）">
           <Button
-            variant="ghost"
-            size="sm"
-            onClick={onOpenSearch}
-            className="gap-1.5"
             aria-label="全局搜索"
+            className="gap-1.5"
+            onClick={onOpenSearch}
+            size="sm"
+            variant="ghost"
           >
             <Search data-icon="inline-start" size={16} />
             <span className="hidden md:inline">搜索</span>
@@ -115,11 +115,11 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
           </Button>
         </Hint>
         <Hint label="切换深浅色">
-          <Button variant="ghost" size="icon-sm" onClick={toggleTheme} aria-label="切换深浅色">
+          <Button aria-label="切换深浅色" onClick={toggleTheme} size="icon-sm" variant="ghost">
             {/* 两枚都渲染、靠 `dark:` 决定可见性：`resolvedTheme` 在服务端与首帧是
                 undefined，按它条件渲染会让按钮在 hydration 后跳一下。 */}
-            <Sun data-icon="inline-start" size={16} className="dark:hidden" />
-            <Moon data-icon="inline-start" size={16} className="hidden dark:block" />
+            <Sun className="dark:hidden" data-icon="inline-start" size={16} />
+            <Moon className="hidden dark:block" data-icon="inline-start" size={16} />
           </Button>
         </Hint>
         <MessageCenterButton />
@@ -136,7 +136,7 @@ export function TopBar({ active, onOpenSettings, onOpenSearch }: TopBarProps) {
           <Hint label="应用菜单">
             <DropdownMenuTrigger
               render={
-                <Button variant="ghost" size="icon-sm" aria-label="应用菜单">
+                <Button aria-label="应用菜单" size="icon-sm" variant="ghost">
                   <ChevronDown data-icon="inline-start" />
                 </Button>
               }

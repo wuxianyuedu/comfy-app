@@ -202,26 +202,26 @@ export function SelectMenu({
 
   return (
     <SelectPrimitive.Root
-      /* base-ui Select 的 value 允许 null 表示「未选」；空串不当 null 处理，
-       * 显式转 null 让 placeholder 正常显示（与旧实现的行为一致：`value=""`
-       * 时 trigger 显示 placeholder）。 */
-      value={value || null}
+      disabled={disabled}
+      onOpenChange={(next) => onOpenChange?.(next)}
       onValueChange={(next) => {
         if (typeof next === "string") {
           onChange(next);
         }
       }}
-      onOpenChange={(next) => onOpenChange?.(next)}
-      disabled={disabled}
+      /* base-ui Select 的 value 允许 null 表示「未选」；空串不当 null 处理，
+       * 显式转 null 让 placeholder 正常显示（与旧实现的行为一致：`value=""`
+       * 时 trigger 显示 placeholder）。 */
+      value={value || null}
     >
       <SelectPrimitive.Trigger
-        id={id}
-        aria-label={ariaLabel}
-        aria-labelledby={ariaLabelledby}
         aria-describedby={ariaDescribedby}
         aria-invalid={ariaInvalid}
-        title={title}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledby}
         className={cn(TRIGGER_BASE, fullWidth && "w-full", className)}
+        id={id}
+        title={title}
       >
         <SelectPrimitive.Value className="flex min-w-0 flex-1 items-center truncate">
           {display}
@@ -238,7 +238,6 @@ export function SelectMenu({
       <SelectPrimitive.Portal>
         <SelectPrimitive.Positioner
           align="start"
-          sideOffset={4}
           /* base-ui Select 的 `alignItemWithTrigger` **默认为 true**：弹层会把
              「已选项」对齐到触发器上，于是弹层位置随选中项上下移动 —— 选中末尾项
              时弹层被顶到视口上方、前半截出屏（用户实测）。显式关掉后弹层恒从
@@ -246,17 +245,18 @@ export function SelectMenu({
           alignItemWithTrigger={false}
           className="z-popup isolate outline-none"
           collisionBoundary={boundary ?? undefined}
+          sideOffset={4}
         >
           <SelectPrimitive.Popup
-            data-align-trigger={false}
             className={cn(CONTENT_BASE)}
+            data-align-trigger={false}
             style={{
               width: `min(${effectiveMinWidth}px, 92vw)`,
             }}
           >
             <SelectPrimitive.List className={LIST_BASE}>
               {options.map((opt) => (
-                <SelectPrimitive.Item key={opt} value={opt} className={ITEM_BASE}>
+                <SelectPrimitive.Item className={ITEM_BASE} key={opt} value={opt}>
                   <SelectPrimitive.ItemText>{labels?.[opt] ?? opt}</SelectPrimitive.ItemText>
                 </SelectPrimitive.Item>
               ))}

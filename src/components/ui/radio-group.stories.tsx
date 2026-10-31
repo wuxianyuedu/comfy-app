@@ -25,14 +25,14 @@ type Story = StoryObj<typeof meta>;
 /** 真实落点：输出格式三选一。 */
 export const Default: Story = {
   render: (args) => (
-    <RadioGroup {...args} defaultValue="png" className="gap-3">
+    <RadioGroup {...args} className="gap-3" defaultValue="png">
       {[
         ["png", "PNG（无损，体积大）"],
         ["jpg", "JPG（有损，体积小）"],
         ["webp", "WebP（兼顾两者）"],
       ].map(([value, label]) => (
-        <div key={value} className="flex items-center gap-2">
-          <RadioGroupItem value={value} id={`format-${value}`} />
+        <div className="flex items-center gap-2" key={value}>
+          <RadioGroupItem id={`format-${value}`} value={value} />
           <Label htmlFor={`format-${value}`}>{label}</Label>
         </div>
       ))}
@@ -45,23 +45,23 @@ export const Default: Story = {
 export const States: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
-      <RadioGroup defaultValue="b" className="gap-3">
+      <RadioGroup className="gap-3" defaultValue="b">
         <div className="flex items-center gap-2">
-          <RadioGroupItem value="a" id="state-a" />
+          <RadioGroupItem id="state-a" value="a" />
           <Label htmlFor="state-a">未选中</Label>
         </div>
         <div className="flex items-center gap-2">
-          <RadioGroupItem value="b" id="state-b" />
+          <RadioGroupItem id="state-b" value="b" />
           <Label htmlFor="state-b">已选中</Label>
         </div>
         <div className="flex items-center gap-2">
-          <RadioGroupItem value="c" id="state-c" disabled />
+          <RadioGroupItem disabled id="state-c" value="c" />
           <Label htmlFor="state-c">单项禁用</Label>
         </div>
       </RadioGroup>
-      <RadioGroup defaultValue="x" disabled className="gap-3">
+      <RadioGroup className="gap-3" defaultValue="x" disabled>
         <div className="flex items-center gap-2">
-          <RadioGroupItem value="x" id="group-disabled-x" />
+          <RadioGroupItem id="group-disabled-x" value="x" />
           <Label htmlFor="group-disabled-x">整组禁用</Label>
         </div>
       </RadioGroup>
@@ -73,13 +73,9 @@ export const States: Story = {
  *  否则组里的项没有可访问名，读屏器只会念「单选按钮」。 */
 export const WithoutLabel: Story = {
   render: () => (
-    <RadioGroup defaultValue="1" className="flex-row gap-3">
+    <RadioGroup className="flex-row gap-3" defaultValue="1">
       {["1", "2", "3"].map((value) => (
-        <RadioGroupItem
-          key={value}
-          value={value}
-          aria-label={`选项 ${value}`}
-        />
+        <RadioGroupItem aria-label={`选项 ${value}`} key={value} value={value} />
       ))}
     </RadioGroup>
   ),

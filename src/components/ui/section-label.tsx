@@ -34,8 +34,8 @@ export interface SectionLabelProps {
 export function SectionLabel({ children, hint, className }: SectionLabelProps) {
   return (
     <div
-      data-slot="section-label"
       className={cn("mb-2 flex flex-wrap items-baseline gap-x-2", className)}
+      data-slot="section-label"
     >
       <h4 className="text-ink text-sm font-semibold">{children}</h4>
       {hint && <span className="text-muted-foreground text-xs">{hint}</span>}

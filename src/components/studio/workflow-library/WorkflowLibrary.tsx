@@ -4,11 +4,7 @@ import dynamic from "next/dynamic";
 
 import { Button } from "~/components/ui/button";
 import { PageLoading } from "~/components/ui/page-loading";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "~/components/ui/resizable";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { ModelTagManager } from "../ModelTagManager";
 import { WorkspaceFrame } from "../ViewContainer";
 import { DeleteWorkflowModal } from "../DeleteWorkflowModal";
@@ -24,10 +20,7 @@ import { useWorkflowLibrary } from "./hooks/use-workflow-library";
  * 重编译编辑器图。
  */
 const WorkflowCanvasEditor = dynamic(
-  () =>
-    import("../canvas/WorkflowCanvasEditor").then(
-      (mod) => mod.WorkflowCanvasEditor,
-    ),
+  () => import("../canvas/WorkflowCanvasEditor").then((mod) => mod.WorkflowCanvasEditor),
   {
     ssr: false,
     /* 分块还没到时的过渡屏 —— 与编辑器自己的加载态同一口径（ISSUE #1691 第 3 条）：
@@ -68,34 +61,34 @@ export function WorkflowLibrary({
   return (
     <WorkspaceFrame>
       <WorkflowLibraryHeader
-        onToggleImport={c.toggleImport}
-        sourceFilter={c.sourceFilter}
-        onSourceFilterChange={c.setSourceFilter}
-        sourceCounts={c.sourceCounts}
-        typeFilter={c.typeFilter}
-        onTypeFilterChange={c.setTypeFilter}
-        typeCounts={c.typeCounts}
         modelFilter={c.modelFilter}
-        onModelFilterChange={c.setModelFilter}
         modelTags={c.modelTags}
         onManageModels={() => c.setShowModelManager(true)}
+        onModelFilterChange={c.setModelFilter}
+        onSourceFilterChange={c.setSourceFilter}
+        onToggleImport={c.toggleImport}
+        onTypeFilterChange={c.setTypeFilter}
+        sourceCounts={c.sourceCounts}
+        sourceFilter={c.sourceFilter}
+        typeCounts={c.typeCounts}
+        typeFilter={c.typeFilter}
       />
 
       {c.showImport && (
         <WorkflowImportPanel
-          state={c.importState}
           onClose={c.closeImport}
           onImport={c.importState.handleImport}
+          state={c.importState}
         />
       )}
 
       <DeleteWorkflowModal
-        pendingDelete={c.pendingDelete}
         deleting={c.deleting}
+        onCancel={c.cancelDelete}
         onConfirm={(id) => {
           void c.confirmDelete(id);
         }}
-        onCancel={c.cancelDelete}
+        pendingDelete={c.pendingDelete}
       />
 
       {/* 动作失败提示：只有用户点「重试」才消失（§17.5.4），
@@ -105,10 +98,10 @@ export function WorkflowLibrary({
           <span className="font-semibold">⚠</span>
           <span className="min-w-0 flex-1">{c.actionError}</span>
           <Button
-            variant="danger"
-            size="xs"
-            onClick={c.refresh}
             className="text-2xs h-auto shrink-0 rounded-md px-2 py-0.5"
+            onClick={c.refresh}
+            size="xs"
+            variant="danger"
           >
             重试
           </Button>
@@ -122,32 +115,32 @@ export function WorkflowLibrary({
         </div>
       )}
 
-      <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
+      <ResizablePanelGroup className="min-h-0 flex-1" orientation="horizontal">
         {/* react-resizable-panels v4：数值 = 像素、字符串 = 百分比。这里必须用
          * 字符串百分比，否则 v4 把 24/16/45 当像素，列表被夹到 45px（issue #981）。 */}
-        <ResizablePanel defaultSize="24" minSize="16" maxSize="45">
+        <ResizablePanel defaultSize="24" maxSize="45" minSize="16">
           <WorkflowLibraryList
-            workflows={c.workflows}
-            pendingRows={c.pendingRows}
-            selectedId={c.selectedId}
-            search={c.search}
-            onSearchChange={c.setSearch}
-            onSelect={c.setSelectedId}
+            /* 拖入 JSON 导入：整片列表侧栏就是投放区（与导入面板同一漏斗）。 */
+            dragActive={c.importState.listDragActive}
+            fileErr={c.importState.dropErr}
+            loading={c.loading}
+            localRootsHint={c.localRootsHint}
+            onDragEnter={c.importState.onListDragEnter}
+            onDragLeave={c.importState.onListDragLeave}
+            onDragOver={c.importState.onListDragOver}
+            onDrop={c.importState.onListDrop}
             onLoadPending={(pending) => {
               void c.handleLoadPending(pending);
             }}
-            loading={c.loading}
-            stalled={c.loadStalled}
             onRefresh={c.refresh}
-            localRootsHint={c.localRootsHint}
-            /* 拖入 JSON 导入：整片列表侧栏就是投放区（与导入面板同一漏斗）。 */
-            dragActive={c.importState.listDragActive}
-            onDragOver={c.importState.onListDragOver}
-            onDragEnter={c.importState.onListDragEnter}
-            onDragLeave={c.importState.onListDragLeave}
-            onDrop={c.importState.onListDrop}
-            fileErr={c.importState.dropErr}
+            onSearchChange={c.setSearch}
+            onSelect={c.setSelectedId}
             pendingLoading={c.pendingLoading}
+            pendingRows={c.pendingRows}
+            search={c.search}
+            selectedId={c.selectedId}
+            stalled={c.loadStalled}
+            workflows={c.workflows}
           />
         </ResizablePanel>
         <ResizableHandle withHandle />
@@ -158,23 +151,23 @@ export function WorkflowLibrary({
             ——用户在小屏上「看不到最右侧的内容」就是这个成因。 */}
           <div className="h-full min-w-0 overflow-hidden">
             <WorkflowLibraryDetail
-              workflow={c.selectedRow}
               allModelTags={c.modelTags}
-              onPatchModes={c.patchModes}
-              onPatchModelTags={c.patchModelTags}
-              onPatchWorkflowIO={c.patchWorkflowIO}
-              onPatchParamMap={c.patchParamMap}
-              onUse={c.handleUse}
-              onEdit={c.handleEdit}
+              isBundleBusy={c.isBundleBusy}
+              isResyncBusy={c.isResyncBusy}
               onDelete={c.handleDeleteClick}
               onDownload={(id, name) => {
                 void c.handleDownload(id, name);
               }}
+              onEdit={c.handleEdit}
+              onPatchModelTags={c.patchModelTags}
+              onPatchModes={c.patchModes}
+              onPatchParamMap={c.patchParamMap}
+              onPatchWorkflowIO={c.patchWorkflowIO}
               onResync={(id, name) => {
                 void c.handleResync(id, name);
               }}
-              isBundleBusy={c.isBundleBusy}
-              isResyncBusy={c.isResyncBusy}
+              onUse={c.handleUse}
+              workflow={c.selectedRow}
             />
           </div>
         </ResizablePanel>
@@ -187,10 +180,10 @@ export function WorkflowLibrary({
        *  按需挂载之后，这一步不发生任何下载；用户点「编辑」时才付这一次代价。 */}
       {c.editingId && (
         <WorkflowCanvasEditor
-          workflowId={c.editingId}
-          open
           onClose={c.handleEditorClose}
           onSave={c.load}
+          open
+          workflowId={c.editingId}
         />
       )}
 

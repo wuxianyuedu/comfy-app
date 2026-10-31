@@ -22,12 +22,8 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
   const versionLine = (
     <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
       当前版本：
-      <span className="text-ink tabular-nums">
-        {c.appUpdate.currentVersion ?? "尚未读取"}
-      </span>
-      {!c.appUpdate.currentVersion
-        ? "（点「检测更新」后由本机应用信息读取）"
-        : ""}
+      <span className="text-ink tabular-nums">{c.appUpdate.currentVersion ?? "尚未读取"}</span>
+      {!c.appUpdate.currentVersion ? "（点「检测更新」后由本机应用信息读取）" : ""}
     </p>
   );
 
@@ -36,14 +32,12 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
       {versionLine}
       {!c.appUpdate.inShell ? (
         <p className="text-muted-foreground text-xs leading-relaxed">
-          当前运行在浏览器 / 开发模式，非桌面壳内，无法检测应用更新。
-          请使用打包后的桌面版。
+          当前运行在浏览器 / 开发模式，非桌面壳内，无法检测应用更新。 请使用打包后的桌面版。
         </p>
       ) : (
         <>
           <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
-            检测 ComfyAPP 应用是否有新版本，需要时可下载并自动安装更新。
-            更新源与签名公钥由{" "}
+            检测 ComfyAPP 应用是否有新版本，需要时可下载并自动安装更新。 更新源与签名公钥由{" "}
             <code className="text-ink/80">src-tauri/tauri.conf.json</code> 的{" "}
             <code className="text-ink/80">plugins.updater</code> 配置；
             未配置更新源时「检测更新」会提示未配置。
@@ -61,11 +55,11 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
           )}
           <div className="flex flex-wrap items-center gap-3">
             <StatusButton
+              disabled={c.appUpdate.busy !== "idle"}
               onClick={() => void c.checkAppUpdate()}
               /* 卡片的**主行动**：缺省档是软底，「保存 / 检测 / 立即备份」这一族
                  显式提为实心（缺省不实心是有意的，见 service-status-row 的 StatusButton 注释）。 */
               variant="primary-solid"
-              disabled={c.appUpdate.busy !== "idle"}
             >
               {c.appUpdate.busy === "checking" ? (
                 <Spinner className="text-primary-foreground size-3.5" />
@@ -75,9 +69,9 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
             </StatusButton>
             {c.appUpdate.available && (
               <StatusButton
-                variant="success-solid"
-                onClick={() => void c.installAppUpdate()}
                 disabled={c.appUpdate.busy !== "idle"}
+                onClick={() => void c.installAppUpdate()}
+                variant="success-solid"
               >
                 {c.appUpdate.busy === "installing" ? (
                   <Spinner className="text-primary-foreground size-3.5" />
@@ -87,10 +81,10 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
               </StatusButton>
             )}
             <Button
-              variant="outline"
-              onClick={() => void c.relaunchApp()}
-              disabled={c.appUpdate.busy !== "idle"}
               className="text-muted-foreground hover:text-ink h-auto rounded-lg px-4 py-2 font-semibold"
+              disabled={c.appUpdate.busy !== "idle"}
+              onClick={() => void c.relaunchApp()}
+              variant="outline"
             >
               重启应用
             </Button>
@@ -109,9 +103,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
                         ? Math.min(
                             100,
                             Math.round(
-                              (c.appUpdate.progress.downloaded /
-                                c.appUpdate.progress.total) *
-                                100,
+                              (c.appUpdate.progress.downloaded / c.appUpdate.progress.total) * 100,
                             ),
                           )
                         : 40) - 100

@@ -46,7 +46,7 @@ function sectionsStub() {
 }
 
 function renderShell(section: Section = "llmLocal", onSelect = vi.fn()) {
-  render(<SettingsShell section={section} onSelect={onSelect} sections={sectionsStub()} />);
+  render(<SettingsShell onSelect={onSelect} section={section} sections={sectionsStub()} />);
   return onSelect;
 }
 
@@ -54,8 +54,8 @@ function renderShell(section: Section = "llmLocal", onSelect = vi.fn()) {
 function renderShellWithTitle(title: string | undefined) {
   render(
     <SettingsShell
-      section="llmLocal"
       onSelect={vi.fn()}
+      section="llmLocal"
       sections={sectionsStub()}
       {...(title === undefined ? {} : { title })}
     />,
@@ -164,10 +164,10 @@ describe("SettingsShell", () => {
     const onJumpApplied = vi.fn();
     render(
       <SettingsShell
-        section="comfyui"
-        onSelect={vi.fn()}
         jumpSection="comfyui"
         onJumpApplied={onJumpApplied}
+        onSelect={vi.fn()}
+        section="comfyui"
         sections={sectionsStub()}
       />,
     );
@@ -190,11 +190,11 @@ describe("SettingsShell", () => {
     const onJumpApplied = vi.fn();
     render(
       <SettingsShell
-        section="comfyui"
-        onSelect={vi.fn()}
         fallback={<p>正在读取设置…</p>}
         jumpSection="comfyui"
         onJumpApplied={onJumpApplied}
+        onSelect={vi.fn()}
+        section="comfyui"
       />,
     );
     /* 加载 / 失败壳里没有锚点 ⇒ 载荷先留着，等就绪外壳挂上后再落。 */
@@ -228,7 +228,7 @@ describe("SettingsShell", () => {
   });
 
   it("给 fallback 时不渲染分区列表（三态占位只出现一次）", () => {
-    render(<SettingsShell section="llmLocal" onSelect={vi.fn()} fallback={<p>正在读取设置…</p>} />);
+    render(<SettingsShell fallback={<p>正在读取设置…</p>} onSelect={vi.fn()} section="llmLocal" />);
     /* 导航仍在（外壳这一层照常渲染），右侧换成整块占位 ——
      * 「铺 9 份同样的占位」正是这一条要挡的形态。 */
     expect(nav()).toBeTruthy();

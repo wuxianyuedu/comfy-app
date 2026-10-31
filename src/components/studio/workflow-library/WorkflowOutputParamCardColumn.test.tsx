@@ -62,10 +62,10 @@ describe("WorkflowOutputParamCardColumn", () => {
   it("端点在卡片**左**缘（线从宿主输出行进来），handle id 是输出的 ioKey", () => {
     const { container } = render(
       <WorkflowOutputParamCardColumn
-        outputs={outputs}
         endpoint={(port) => (
-          <span data-testid="probe-endpoint" data-endpoint-handle={port.handleId} />
+          <span data-endpoint-handle={port.handleId} data-testid="probe-endpoint" />
         )}
+        outputs={outputs}
       />,
     );
     const dot = container.querySelector('[data-endpoint-handle="9::output::IMAGE"]')!;
@@ -84,12 +84,12 @@ describe("WorkflowOutputParamCardColumn", () => {
   it("可拖 + 作者改过：端点槽位在，「恢复默认」可用", () => {
     render(
       <WorkflowOutputParamCardColumn
-        outputs={outputs}
-        resolved={{ "9::output::IMAGE": "9::output::IMAGE" }}
         canWire
+        endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
         isManual={() => true}
         onReset={() => undefined}
-        endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
+        outputs={outputs}
+        resolved={{ "9::output::IMAGE": "9::output::IMAGE" }}
       />,
     );
     expect(screen.getByTestId("param-node-reset-9::output::IMAGE").hasAttribute("disabled")).toBe(
@@ -100,10 +100,10 @@ describe("WorkflowOutputParamCardColumn", () => {
   it("没改过时「恢复默认」不可用（点了不会有变化）", () => {
     render(
       <WorkflowOutputParamCardColumn
-        outputs={outputs}
         canWire
         isManual={() => false}
         onReset={() => undefined}
+        outputs={outputs}
       />,
     );
     expect(screen.getByTestId("param-node-reset-9::output::IMAGE").hasAttribute("disabled")).toBe(
@@ -121,9 +121,9 @@ describe("WorkflowOutputParamCardColumn", () => {
      *  source / target 类型 —— 由 `WorkflowLibraryCanvasNodes` 注入（ISSUE #529）。 */
     const { container } = render(
       <WorkflowOutputParamCardColumn
-        outputs={outputs}
         canWire
         endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
+        outputs={outputs}
       />,
     );
     expect(container.querySelector('[data-endpoint-handle="9::output::IMAGE"]')).toBeTruthy();
@@ -137,8 +137,8 @@ describe("WorkflowOutputParamCardColumn", () => {
     const nameless = [{ ...outputs[0]!, name: "   ", ioKey: "9::output::EMPTY" }];
     const { container } = render(
       <WorkflowOutputParamCardColumn
-        outputs={nameless}
         endpoint={(port) => <span data-endpoint-handle={port.handleId} />}
+        outputs={nameless}
       />,
     );
     const dot = container.querySelector("[data-endpoint-handle]")!;

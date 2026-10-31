@@ -34,10 +34,10 @@ export interface CommandPaletteProps {
 export function CommandPalette({ open, onOpenChange, onSelect }: CommandPaletteProps) {
   return (
     <CommandDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="全局命令"
       description="搜索视图或命令…"
+      onOpenChange={onOpenChange}
+      open={open}
+      title="全局命令"
     >
       <CommandInput placeholder="搜索视图或命令…" />
       <CommandList>
@@ -48,11 +48,11 @@ export function CommandPalette({ open, onOpenChange, onSelect }: CommandPaletteP
             .map((item) => (
               <CommandItem
                 key={item.id}
-                value={`${item.label} ${item.id}`}
                 onSelect={() => {
                   onSelect(item.id);
                   onOpenChange(false);
                 }}
+                value={`${item.label} ${item.id}`}
               >
                 {item.icon}
                 <span>{item.label}</span>

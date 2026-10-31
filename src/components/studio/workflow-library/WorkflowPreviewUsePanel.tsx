@@ -69,11 +69,11 @@ export function WorkflowPreviewUsePanel({
         <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
           <span className="text-ink min-w-0 truncate text-sm font-semibold">{workflowName}</span>
           <WorkflowRunLogButton
-            workflowId={workflowId}
-            source="canvas-node"
-            taskId={logViewTaskId}
             alwaysVisible
             onOpen={onOpenLog}
+            source="canvas-node"
+            taskId={logViewTaskId}
+            workflowId={workflowId}
           />
           {/* 多模式工作流在这儿也要能换模式：两个页签读的是**同一个**
               生效模式（详情层持有），而 use 模式此前只把它当纯文本打出来
@@ -82,39 +82,39 @@ export function WorkflowPreviewUsePanel({
               的同一个下拉逐字一致，免得同一件事在两处长得不一样。 */}
           {modes && modes.length > 1 && onModeChange ? (
             <SelectMenu
-              value={effectiveMode ?? taskType}
-              onChange={onModeChange}
-              options={modes}
-              labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
-              popoverMinWidth={150}
               autoFitFromOptions={false}
               className="border-border-strong! text-2xs shrink-0 bg-transparent!"
+              labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
+              onChange={onModeChange}
+              options={modes}
+              popoverMinWidth={150}
+              value={effectiveMode ?? taskType}
             />
           ) : (
             <span className="text-ink-faint shrink-0 text-xs">{effectiveModeLabel}</span>
           )}
         </div>
         <DynamicWorkflowForm
-          io={workflowIO ?? undefined}
-          values={values}
-          onChange={onValuesChange}
-          showOutputs={false}
           compact
+          io={workflowIO ?? undefined}
           mode={effectiveMode}
-          seedModes={seedModes}
+          onChange={onValuesChange}
           onSeedModeChange={onSeedModeChange}
-          workflowId={workflowId}
-          onUploadProgress={onUploadNotice}
           onUploadError={onUploadNotice}
+          onUploadProgress={onUploadNotice}
+          seedModes={seedModes}
+          showOutputs={false}
+          values={values}
+          workflowId={workflowId}
         />
         <div className="mt-4">
           <WorkflowNodeActionButton
-            label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
             disabled={!canRun}
-            onClick={run}
             hint={
               missingLabels.length > 0 ? `必填参数未填：${missingLabels.join("、")}` : undefined
             }
+            label={running ? `生成中 ${pct}%` : "▶ 用此工作流生成"}
+            onClick={run}
           />
         </div>
       </div>

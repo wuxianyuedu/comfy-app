@@ -43,20 +43,20 @@ describe("ProgressBar 的确定态", () => {
   });
 
   it("标签与百分比同排；showValue=false 时不显示百分比", () => {
-    const { container, rerender } = render(<ProgressBar value={30} label="正在生成" />);
+    const { container, rerender } = render(<ProgressBar label="正在生成" value={30} />);
     expect(container.textContent).toContain("正在生成");
     expect(container.textContent).toContain("30%");
 
-    rerender(<ProgressBar value={30} label="正在生成" showValue={false} />);
+    rerender(<ProgressBar label="正在生成" showValue={false} value={30} />);
     expect(container.textContent).toContain("正在生成");
     expect(container.textContent).not.toContain("30%");
   });
 
   it("minVisible 只抬非零值：0% 就是空条", () => {
-    const { container, rerender } = render(<ProgressBar value={0} minVisible={4} />);
+    const { container, rerender } = render(<ProgressBar minVisible={4} value={0} />);
     const fill = () => container.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')!;
     expect(fill().style.transform).toBe("translateX(-100%)");
-    rerender(<ProgressBar value={1} minVisible={4} />);
+    rerender(<ProgressBar minVisible={4} value={1} />);
     expect(fill().style.transform).toBe("translateX(-96%)");
   });
 
@@ -69,7 +69,7 @@ describe("ProgressBar 的确定态", () => {
 
 describe("ProgressBar 的不确定态（value === null）", () => {
   it("渲染滑动条纹，而不是 0% 空条", () => {
-    const { container } = render(<ProgressBar value={null} label="正在扫描" />);
+    const { container } = render(<ProgressBar label="正在扫描" value={null} />);
     expect(container.querySelector('[data-slot="progress-bar-indeterminate"]')).not.toBeNull();
     expect(container.querySelector('[data-slot="progress-bar-fill"]')).toBeNull();
   });
@@ -82,7 +82,7 @@ describe("ProgressBar 的不确定态（value === null）", () => {
   });
 
   it("不确定态不显示百分比文字", () => {
-    const { container } = render(<ProgressBar value={null} label="扫描中" />);
+    const { container } = render(<ProgressBar label="扫描中" value={null} />);
     expect(container.textContent).toContain("扫描中");
     expect(container.textContent).not.toContain("%");
   });
@@ -101,7 +101,7 @@ describe("ProgressBar 的可访问名（条上没字的那种用法）", () => {
   }
 
   it("给了 ariaLabel 就挂在 ARIA 宿主上，与数值同处一个元素", () => {
-    const { container } = render(<ProgressBar value={100} ariaLabel="剧本" showValue={false} />);
+    const { container } = render(<ProgressBar ariaLabel="剧本" showValue={false} value={100} />);
     const track = trackOf(container);
     expect(track.getAttribute("aria-label")).toBe("剧本");
     expect(track.getAttribute("role")).toBe("progressbar");
@@ -109,7 +109,7 @@ describe("ProgressBar 的可访问名（条上没字的那种用法）", () => {
   });
 
   it("不传时不写 aria-label 属性（既有消费点的 DOM 一字不变）", () => {
-    const { container } = render(<ProgressBar value={40} label="项目总进度" />);
+    const { container } = render(<ProgressBar label="项目总进度" value={40} />);
     expect(trackOf(container).hasAttribute("aria-label")).toBe(false);
   });
 });
@@ -118,9 +118,9 @@ describe("ProgressBar 的外观可覆盖而不重画轨道", () => {
   it("fillClassName 落在填充上，trackClassName 落在视觉轨道上", () => {
     const { container } = render(
       <ProgressBar
-        value={50}
-        trackClassName="bg-elevated h-1"
         fillClassName="bg-linear-to-r from-violet-500"
+        trackClassName="bg-elevated h-1"
+        value={50}
       />,
     );
     /* PR-3 起 progress-bar 分两层：

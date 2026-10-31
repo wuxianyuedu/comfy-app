@@ -62,10 +62,10 @@ export const Default: Story = {
           <ItemDescription>27 个节点 · 昨天更新</ItemDescription>
         </ItemContent>
         <ItemActions>
-          <Button size="icon-sm" variant="ghost" aria-label="运行">
+          <Button aria-label="运行" size="icon-sm" variant="ghost">
             <Play />
           </Button>
-          <Button size="icon-sm" variant="ghost" aria-label="删除">
+          <Button aria-label="删除" size="icon-sm" variant="ghost">
             <Trash2 />
           </Button>
         </ItemActions>
@@ -90,7 +90,7 @@ export const Variants: Story = {
   render: () => (
     <div className="flex w-120 flex-col gap-3">
       {VARIANTS.map((variant) => (
-        <Item key={variant} variant={variant} size="default">
+        <Item key={variant} size="default" variant={variant}>
           <ItemContent>
             <ItemTitle>variant={variant}</ItemTitle>
             <ItemDescription>底色与边框是这三档唯一的差别</ItemDescription>

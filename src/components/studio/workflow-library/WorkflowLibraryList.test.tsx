@@ -22,10 +22,10 @@ function row(over: Partial<WorkflowRow> = {}): WorkflowRow {
 function renderList(props: Partial<Parameters<typeof WorkflowLibraryList>[0]>) {
   return render(
     <WorkflowLibraryList
-      workflows={[]}
-      search=""
       onSearchChange={() => undefined}
       onSelect={() => undefined}
+      search=""
+      workflows={[]}
       {...props}
     />,
   );
@@ -52,9 +52,7 @@ describe("WorkflowLibraryList 三态区分", () => {
     renderList({});
 
     expect(screen.getByText("还没有工作流")).toBeInTheDocument();
-    expect(
-      screen.getByText(/导入工作流|配置本地工作流目录/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/导入工作流|配置本地工作流目录/)).toBeInTheDocument();
   });
 
   it("搜索无结果：空态改为「未找到匹配的工作流」，并提示清空搜索", () => {
@@ -129,9 +127,7 @@ describe("列表侧栏的拖入导入提示", () => {
   it("文件读取失败：把原因显示在列表上", () => {
     renderList({ fileErr: "JSON 解析失败：不是合法的工作流 JSON" });
 
-    expect(
-      screen.getByText(/JSON 解析失败：不是合法的工作流 JSON/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/JSON 解析失败：不是合法的工作流 JSON/)).toBeInTheDocument();
   });
 });
 

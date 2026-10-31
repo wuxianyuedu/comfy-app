@@ -70,11 +70,11 @@ function TitleBarTab({
   return (
     /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 键等价物是下面那行 `{...simpleKeyHandler(["Space", "Enter"], …)}`（§16.2.4.57）—— 规则认不出属性展开。 */
     <div
-      role="tab"
       aria-selected={active}
-      tabIndex={0}
       data-no-drag
       onClick={() => onActivate(tab.id)}
+      role="tab"
+      tabIndex={0}
       /* 与 `ShellTabs` 同款：键判据走 `~/components/ui/simple-key-handler`
        *（规范 16 §16.2.4.57）—— 两种渲染形态的页签对「哪个键激活」共用
        *  同一个判据，不再各写一遍。 */
@@ -88,15 +88,15 @@ function TitleBarTab({
       <span className="truncate">{tab.label}</span>
       {tab.closable && (
         <Button
-          variant="ghost"
-          size="icon-xs"
           aria-label={`关闭 ${tab.label}`}
+          className="text-ink-fainter hover:bg-subtle hover:text-ink-strong rounded"
           data-no-drag
           onClick={(e) => {
             e.stopPropagation();
             onClose(tab.id);
           }}
-          className="text-ink-fainter hover:bg-subtle hover:text-ink-strong rounded"
+          size="icon-xs"
+          variant="ghost"
         >
           <X data-icon="inline-start" size={13} />
         </Button>
@@ -137,39 +137,39 @@ export function TitleBarTabs({
 
   return (
     <div
+      className={`flex ${TITLE_BAR_HEIGHT_CLASS} ${TITLE_BAR_CHROME_CLASS} border-border-subtle bg-panel shrink-0 items-stretch border-b select-none`}
       /* `data-slot="title-bar"` 是「应用顶部这条 chrome 在不在」的机器可读标记：
        * `TitleBarTabs` 与精简标题行 `WindowTitleBar` 共用它，e2e 按它断言锚定
        * 浮层的让位对象确实在（气泡被标题行吃掉半个身子那件事，见
        * `~/lib/full-screen-layer` 的「锚定浮层」一节）。 */
       data-slot="title-bar"
-      className={`flex ${TITLE_BAR_HEIGHT_CLASS} ${TITLE_BAR_CHROME_CLASS} border-border-subtle bg-panel shrink-0 items-stretch border-b select-none`}
-      onPointerDown={drag.onPointerDown}
       onDoubleClick={drag.onDoubleClick}
+      onPointerDown={drag.onPointerDown}
     >
       {/* 页签区：与标题行同一横条。视图页签在前（它们代表主应用那一格），
           iframe 页签在后；两组共用同一份 ViewTabStrip / TitleBarTab 形态。 */}
       <div className="flex min-w-0 items-stretch overflow-x-auto">
         {hasViewTabs ? (
           <ViewTabStrip
-            inTitleBar
-            tabs={viewTabs}
             activeKey={activeViewKey ?? ""}
-            projectNameOf={projectNameOf}
-            onSelect={(key) => onSelectViewTab?.(key)}
+            inTitleBar
             onClose={(key) => onCloseViewTab?.(key)}
-            openableViews={openableViews}
             onOpenView={onOpenView}
+            onSelect={(key) => onSelectViewTab?.(key)}
+            openableViews={openableViews}
+            projectNameOf={projectNameOf}
+            tabs={viewTabs}
           />
         ) : null}
         {shellTabs.length > 0 ? (
-          <div role="tablist" aria-label="应用页签" className="flex items-stretch">
+          <div aria-label="应用页签" className="flex items-stretch" role="tablist">
             {shellTabs.map((tab) => (
               <TitleBarTab
-                key={tab.id}
-                tab={tab}
                 active={tab.id === activeTabId}
+                key={tab.id}
                 onActivate={onActivate}
                 onClose={onClose}
+                tab={tab}
               />
             ))}
           </div>
@@ -177,7 +177,7 @@ export function TitleBarTabs({
       </div>
 
       {/* 拖拽空白区：撑满剩余宽度 */}
-      <div className="min-w-2 flex-1" aria-hidden />
+      <div aria-hidden className="min-w-2 flex-1" />
 
       {/* 窗口按钮：接管原生标题栏的三个动作（共享实现见 ./WindowControls） */}
       <WindowControls maximized={maximized} onMaximizedChange={setMaximized} />

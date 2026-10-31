@@ -23,14 +23,14 @@ const OPTIONS = ["qwen_image_2_1", "z-Anime", "z-Image"];
 function renderMenu(value = "qwen_image_2_1") {
   render(
     <SelectMenu
-      value={value}
-      onChange={vi.fn()}
-      options={OPTIONS}
       labels={{
         qwen_image_2_1: "qwen_image_2_1",
         "z-Anime": "z-Anime",
         "z-Image": "z-Image",
       }}
+      onChange={vi.fn()}
+      options={OPTIONS}
+      value={value}
     />,
   );
 }

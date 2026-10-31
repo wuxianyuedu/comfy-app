@@ -135,28 +135,28 @@ export function MultiSegmentPopover({
         disabled={disabled}
         render={
           <Button
-            variant="ghost"
             /* h-auto 覆盖基元写死的 h-8；`hover:bg-*` 交给基元的 ghost，
                其余边框 / 底色沿用本控件原来的形态。 */
             className="nodrag nopan border-primary/35 bg-canvas-deep text-ink-bright hover:bg-canvas-deep hover:border-primary/70 focus-visible:border-primary/70 h-auto w-full justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs"
+            variant="ghost"
           />
         }
       >
         <span className="min-w-0 flex-1 truncate">{triggerContent}</span>
-        <ChevronDown size={10} className="text-ink-muted shrink-0" />
+        <ChevronDown className="text-ink-muted shrink-0" size={10} />
       </PopoverTrigger>
       <PopoverContent
         align={align === "right" ? "end" : "start"}
-        sideOffset={6}
         /* 面板自身滚动：段数与选项数都不固定，给高度封顶。
            `p-3` 是该面板原来的内距，`gap-0` 抵消基元默认的 `gap-2.5`。 */
         className="bg-panel ring-border-strong max-h-[min(60vh,460px)] w-[min(92vw,360px)] gap-0 overflow-y-auto rounded-xl p-3 shadow-2xl ring-1 shadow-black/10"
+        sideOffset={6}
       >
         {sections.map((section, i) => (
           <Section
+            first={i === 0}
             key={section.label + ":" + (section.value ?? "")}
             section={section}
-            first={i === 0}
           />
         ))}
         {footer ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
@@ -208,7 +208,7 @@ const Section = React.memo(function Section({
           那一个)回传给 onChange。multiple={false} 时数组长度恒 ≤1,
           `vals[0]` 就是唯一/最新值。 */}
       <ToggleGroup
-        value={[section.value]}
+        className={SECTION_GROUP_CLASS}
         multiple={false}
         onValueChange={(vals) => {
           const next = vals[0];
@@ -216,10 +216,10 @@ const Section = React.memo(function Section({
             section.onChange(next);
           }
         }}
-        className={SECTION_GROUP_CLASS}
+        value={[section.value]}
       >
         {grouped.map((group, gi) => (
-          <div key={group.key} className={gi > 0 ? "mt-2" : ""}>
+          <div className={gi > 0 ? "mt-2" : ""} key={group.key}>
             {group.label && (
               <div className="text-ink-icon text-4xs mb-1 tracking-wider uppercase">
                 {group.label}
@@ -228,9 +228,9 @@ const Section = React.memo(function Section({
             <div className="flex flex-wrap items-center gap-1.5">
               {group.options.map((opt) => (
                 <ToggleGroupItem
+                  className={ITEM_CLASS}
                   key={String(opt.value)}
                   value={String(opt.value)}
-                  className={ITEM_CLASS}
                 >
                   {opt.render}
                   <span>{opt.label}</span>

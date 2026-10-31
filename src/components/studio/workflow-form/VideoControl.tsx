@@ -66,24 +66,24 @@ function VideoControl({
     return (
       <div className={narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}>
         <StyleSwitcher
-          style={style}
-          onChange={onStyle}
           narrow={narrow}
+          onChange={onStyle}
           options={[
             { value: "split", label: "分别填写" },
             { value: "preset", label: "时长 + 画质 + 比例" },
           ]}
+          style={style}
         />
         <div className="grid grid-cols-1 gap-2">
           {entries.map(({ role, entry }) => (
             <VideoField
-              key={entry.ioKey}
-              role={role}
-              entry={entry}
-              preset={false}
-              values={values}
-              set={set}
               disabled={disabled}
+              entry={entry}
+              key={entry.ioKey}
+              preset={false}
+              role={role}
+              set={set}
+              values={values}
             />
           ))}
         </div>
@@ -166,19 +166,19 @@ function VideoControl({
   return (
     <div className={narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}>
       <StyleSwitcher
-        style={style}
-        onChange={onStyle}
         narrow={narrow}
+        onChange={onStyle}
         options={[
           { value: "split", label: "分别填写" },
           { value: "preset", label: "时长 + 画质 + 比例" },
         ]}
+        style={style}
       />
       <div className={narrow ? "w-42 max-w-full" : undefined}>
         <MultiSegmentPopover
-          triggerContent={summary}
           ariaLabel="选择时长、画质与比例"
           sections={sections}
+          triggerContent={summary}
         />
       </div>
     </div>

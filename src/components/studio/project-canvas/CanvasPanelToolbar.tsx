@@ -51,10 +51,8 @@ export function CanvasPanelToolbar({ active, onSelect, floating = true }: Canvas
       {items.map((item) => {
         const isActive = active === item.id;
         return (
-          <Hint label={item.label} key={item.id}>
+          <Hint key={item.id} label={item.label}>
             <Button
-              variant="ghost"
-              onClick={() => onSelect(isActive ? null : item.id)}
               /* 选中档**钉住悬停值**（`hover:bg-primary/20` / `hover:text-primary-strong`）：
                  `ghost` 变体自带 `hover:bg-muted hover:text-foreground`，而选中
                  分支原本没写 `hover:` —— 划过**当前打开**的那一枚时悬停档胜出，
@@ -67,6 +65,8 @@ export function CanvasPanelToolbar({ active, onSelect, floating = true }: Canvas
                   ? "bg-primary/20 text-primary-strong hover:bg-primary/20 hover:text-primary-strong shadow-primary/10 ring-primary/25 shadow-sm ring-1"
                   : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
               }`}
+              onClick={() => onSelect(isActive ? null : item.id)}
+              variant="ghost"
             >
               {item.icon}
               {/* Tooltip —— 悬停或激活时显示在按钮右侧 */}

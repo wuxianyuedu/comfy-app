@@ -62,7 +62,7 @@ export function ExitReminder({
     // 文案本身是给读屏与「CSS 规则没命中」两种情况用的兜底 —— 后者不会发生
     // （`:has()` 在 Chromium 111+ 一定支持），但 `display:none` 的元素仍会被
     // 读屏的虚拟光标读到，写清楚总比留空好。
-    <p data-exit-reminder="" role="status" className={className}>
+    <p className={className} data-exit-reminder="" role="status">
       {children}
     </p>
   );

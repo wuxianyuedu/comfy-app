@@ -47,10 +47,10 @@ function VideoField({
     return (
       <Field label={label}>
         <SelectMenu
-          value={val}
-          options={opts}
           disabled={disabled}
           onChange={(value) => set(entry.ioKey, value)}
+          options={opts}
+          value={val}
         />
       </Field>
     );
@@ -67,8 +67,6 @@ function VideoField({
       return (
         <Field label={label}>
           <SelectMenu
-            value={val}
-            options={presets.map((preset) => preset.label)}
             disabled={disabled}
             onChange={(value) => {
               const preset = presets.find((item) => item.label === value);
@@ -76,6 +74,8 @@ function VideoField({
                 set(entry.ioKey, preset.value);
               }
             }}
+            options={presets.map((preset) => preset.label)}
+            value={val}
           />
         </Field>
       );
@@ -88,8 +88,6 @@ function VideoField({
       return (
         <Field label={label}>
           <SelectMenu
-            value={val}
-            options={presets.map((preset) => preset.label)}
             disabled={disabled}
             onChange={(value) => {
               const preset = presets.find((item) => item.label === value);
@@ -97,6 +95,8 @@ function VideoField({
                 set(entry.ioKey, preset.value);
               }
             }}
+            options={presets.map((preset) => preset.label)}
+            value={val}
           />
         </Field>
       );
@@ -111,8 +111,6 @@ function VideoField({
       return (
         <Field label={label}>
           <SelectMenu
-            value={val}
-            options={presets.map((preset) => preset.label)}
             disabled={disabled}
             onChange={(value) => {
               const preset = presets.find((item) => item.label === value);
@@ -120,6 +118,8 @@ function VideoField({
                 set(entry.ioKey, preset.ratio);
               }
             }}
+            options={presets.map((preset) => preset.label)}
+            value={val}
           />
         </Field>
       );
@@ -133,13 +133,13 @@ function VideoField({
     return (
       <Field label={label}>
         <NumberField
-          value={value}
-          min={bounds.min}
-          max={bounds.max}
-          step={bounds.step}
           decimalPlaces={bounds.decimalPlaces}
           disabled={disabled}
+          max={bounds.max}
+          min={bounds.min}
           onChange={(nextValue) => set(entry.ioKey, nextValue)}
+          step={bounds.step}
+          value={value}
         />
       </Field>
     );
@@ -149,11 +149,11 @@ function VideoField({
   return (
     <Field label={label}>
       <input
-        value={str}
-        disabled={disabled}
         aria-label={label}
         className="nodrag nopan bg-canvas-deep text-ink-soft focus:ring-primary/40 text-2xs w-full rounded-md px-2.5 py-2 outline-none focus:ring-1"
+        disabled={disabled}
         onChange={textHandler((value) => set(entry.ioKey, value))}
+        value={str}
       />
     </Field>
   );

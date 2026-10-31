@@ -53,35 +53,35 @@ export function FlowNodeHeader({
        *  朝**下**（点击收起）。 */}
       <Hint label={isCollapsed ? "展开" : "折叠"}>
         <Button
-          variant="ghost"
-          size="icon-xs"
-
           aria-label={isCollapsed ? "展开节点" : "折叠节点"}
+          className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
+
           onClick={(event) => {
             event.stopPropagation();
             onToggleCollapsed();
           }}
           onMouseDown={(event) => event.stopPropagation()}
-          className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
+          size="icon-xs"
           style={{ pointerEvents: "auto" }}
+          variant="ghost"
         >
           <svg
             data-icon="inline-start"
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
             fill="none"
+            height="10"
             style={{
               transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
               transition: "transform 120ms ease",
             }}
+            viewBox="0 0 10 10"
+            width="10"
           >
             <path
               d="M3.5 2 L7 5 L3.5 8"
               stroke="currentColor"
-              strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
+              strokeWidth="1.5"
             />
           </svg>
         </Button>

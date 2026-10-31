@@ -12,10 +12,7 @@
  */
 
 import { Switch } from "~/components/ui/switch";
-import {
-  LOG_CATEGORY_FILTERS,
-  type LogCategoryFilter,
-} from "~/components/studio/logs/log-types";
+import { LOG_CATEGORY_FILTERS, type LogCategoryFilter } from "~/components/studio/logs/log-types";
 import { useLogCategoryStore } from "~/components/studio/logs/log-category-store";
 import { ORIGIN_TEXT } from "~/components/studio/logs/LogPanelOriginSelect";
 
@@ -49,23 +46,21 @@ export function LogCategorySection() {
           const on = enabled[category] !== false;
           return (
             <li
-              key={category}
               className="border-border/60 flex items-start justify-between gap-4 rounded-lg border px-3 py-2.5"
+              key={category}
             >
               <div className="min-w-0">
-                <div className="text-ink/90 text-sm font-medium">
-                  {ORIGIN_TEXT[category]}
-                </div>
+                <div className="text-ink/90 text-sm font-medium">{ORIGIN_TEXT[category]}</div>
                 <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
                   {CATEGORY_HINT[category]}
                 </p>
               </div>
               <Switch
-                size="sm"
-                checked={on}
-                onCheckedChange={(checked) => setEnabled(category, checked)}
                 aria-label={`${ORIGIN_TEXT[category]}日志显示开关`}
+                checked={on}
                 className="mt-1 shrink-0"
+                onCheckedChange={(checked) => setEnabled(category, checked)}
+                size="sm"
               />
             </li>
           );

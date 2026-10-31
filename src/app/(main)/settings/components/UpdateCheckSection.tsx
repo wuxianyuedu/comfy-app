@@ -43,46 +43,36 @@ export function UpdateCheckSection() {
       <p className="text-muted-foreground mb-4 text-xs leading-relaxed">
         桌面壳开着时，本地源码由 dev server 自动热更（无需提示）。仅当
         <strong className="text-ink/80">改完当前窗口不生效、得重启</strong>
-        的文件（Rust 源码 / tauri.conf.json / splash.html —— 需重编壳； .env /
-        pnpm 配置 / package.json —— 需重启应用）在运行期被改动时， 应用内 toast
-        提示。按 Ctrl+Shift+U 可随时手动检测一次。
+        的文件（Rust 源码 / tauri.conf.json / splash.html —— 需重编壳； .env / pnpm 配置 /
+        package.json —— 需重启应用）在运行期被改动时， 应用内 toast 提示。按 Ctrl+Shift+U
+        可随时手动检测一次。
       </p>
       <div className="mb-3 flex items-center gap-2">
         <Checkbox
-          id="local-update-check-enabled"
           checked={updateCheckEnabled}
-          onCheckedChange={(next) =>
-            useUpdateCheckStore.getState().setEnabled(next === true)
-          }
+          id="local-update-check-enabled"
+          onCheckedChange={(next) => useUpdateCheckStore.getState().setEnabled(next === true)}
         />
-        <FieldLabel
-          htmlFor="local-update-check-enabled"
-          className="text-ink/80 text-sm"
-        >
+        <FieldLabel className="text-ink/80 text-sm" htmlFor="local-update-check-enabled">
           开启运行期「本地更新需重启」检测
         </FieldLabel>
       </div>
       <div className="border-border bg-surface-1 mb-3 flex flex-wrap items-center gap-3 rounded-lg border px-3 py-2 text-sm">
         <Button
-          variant="link"
-          onClick={() => void handleManualCheck()}
           className="text-primary h-auto items-center gap-1.5 p-0 font-medium"
           disabled={checking}
+          onClick={() => void handleManualCheck()}
+          variant="link"
         >
           {checking ? (
             <Spinner className="size-3.5" />
           ) : (
-            <ArrowLeft
-              data-icon="inline-start"
-              size={14}
-              className="rotate-90"
-            />
+            <ArrowLeft className="rotate-90" data-icon="inline-start" size={14} />
           )}
           立即检测本地更新
         </Button>
         <span className="text-muted-foreground text-xs">
-          {manualStatus ??
-            (dirty ? "存在需重启的改动" : "未检测到需重启的改动")}
+          {manualStatus ?? (dirty ? "存在需重启的改动" : "未检测到需重启的改动")}
         </span>
       </div>
     </SettingsCard>

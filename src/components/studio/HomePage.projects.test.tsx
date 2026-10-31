@@ -63,9 +63,7 @@ describe("HomePage 项目区", () => {
       />,
     );
     /* 大卡的可访问名是「继续编辑 X」，小卡是普通按钮 —— 两条都在页面上。 */
-    expect(
-      screen.getByRole("button", { name: "继续编辑 第一条" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "继续编辑 第一条" })).toBeTruthy();
     expect(screen.getAllByText("第二条").length).toBe(1);
     /* 第一条不能再以栅格小卡的身份出现第二次。 */
     expect(screen.getAllByText("第一条")).toHaveLength(1);
@@ -76,6 +74,8 @@ describe("HomePage 项目区", () => {
     const onOpenProject = vi.fn();
     render(
       <HomePage
+        onOpenCanvasProject={onOpenCanvasProject}
+        onOpenProject={onOpenProject}
         recentProjects={[
           /* 第一条进大卡、第二条进栅格 —— 栅格里**必须**也放一条画布项目：
              只有它能暴露「栅格绕过共用规则、自己又写一遍三元式」。实测把
@@ -85,13 +85,9 @@ describe("HomePage 项目区", () => {
           project({ id: "c2", name: "画布栅格那条", kind: "canvas" }),
           project({ id: "g1", name: "生成那条", kind: "generation" }),
         ]}
-        onOpenCanvasProject={onOpenCanvasProject}
-        onOpenProject={onOpenProject}
       />,
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: "继续编辑 画布大卡那条" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "继续编辑 画布大卡那条" }));
     expect(onOpenCanvasProject).toHaveBeenCalledWith("c1");
 
     /* 栅格里的画布项目：必须走同一个入口。 */
@@ -111,12 +107,8 @@ describe("HomePage 项目区", () => {
   });
 
   it("只有一条项目时：大卡在，栅格不重复它（只剩新建入口）", () => {
-    render(
-      <HomePage recentProjects={[project({ id: "only", name: "唯一那条" })]} />,
-    );
-    expect(
-      screen.getByRole("button", { name: "继续编辑 唯一那条" }),
-    ).toBeTruthy();
+    render(<HomePage recentProjects={[project({ id: "only", name: "唯一那条" })]} />);
+    expect(screen.getByRole("button", { name: "继续编辑 唯一那条" })).toBeTruthy();
     expect(screen.getAllByText("唯一那条")).toHaveLength(1);
   });
 });
@@ -128,10 +120,8 @@ describe("首页背景（极光光斑已撤）", () => {
      糊成一块粉，而首页正是浅色态最常落的屏。 */
   it("首页不再渲染任何径向渐变光斑", () => {
     const { container } = render(<HomePage recentProjects={[]} />);
-    const withRadial = Array.from(
-      container.querySelectorAll<HTMLElement>("div[style]"),
-    ).filter((el) =>
-      (el.getAttribute("style") ?? "").includes("radial-gradient"),
+    const withRadial = Array.from(container.querySelectorAll<HTMLElement>("div[style]")).filter(
+      (el) => (el.getAttribute("style") ?? "").includes("radial-gradient"),
     );
     expect(withRadial.map((el) => el.getAttribute("class"))).toEqual([]);
   });

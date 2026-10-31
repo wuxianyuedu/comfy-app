@@ -78,13 +78,9 @@ export function RangeSlider({
 }: RangeSliderProps) {
   return (
     <Slider
-      /* base-ui Slider 的 value 是数组（多把手）；单把手用长度 1 的数组，
-       * 这也是 shadcn wrapper 里 `_values.length` 判据用来渲染 Thumb 数量
-       * 的根据——不能传裸 number，否则走 `[min, max]` 兜底变双把手。 */
-      value={[value]}
-      min={min}
+      className={className}
       max={max}
-      step={step}
+      min={min}
       onValueChange={(v: number | ReadonlyArray<number>) => {
         /* shadcn 官方 `<Slider>` 的 wrapper 不转发 base-ui Slider 的 `Value`
          * 泛型,onValueChange 回调参数在 TS 侧被推成 `any`——这里显式标
@@ -106,7 +102,11 @@ export function RangeSlider({
           onChange(n);
         }
       }}
-      className={className}
+      step={step}
+      /* base-ui Slider 的 value 是数组（多把手）；单把手用长度 1 的数组，
+       * 这也是 shadcn wrapper 里 `_values.length` 判据用来渲染 Thumb 数量
+       * 的根据——不能传裸 number，否则走 `[min, max]` 兜底变双把手。 */
+      value={[value]}
       {...rest}
     />
   );

@@ -70,11 +70,11 @@ export const LoadingVersusEmpty: Story = {
     <div className="flex min-h-64 items-start gap-6">
       <div className="flex flex-col items-start gap-1.5">
         <span className="text-ink-muted font-mono text-[11px]">loading = true</span>
-        <WorkflowPickChip value="" options={[]} onSelect={() => undefined} loading />
+        <WorkflowPickChip loading onSelect={() => undefined} options={[]} value="" />
       </div>
       <div className="flex flex-col items-start gap-1.5">
         <span className="text-ink-muted font-mono text-[11px]">loading = false · options = []</span>
-        <WorkflowPickChip value="" options={[]} onSelect={() => undefined} />
+        <WorkflowPickChip onSelect={() => undefined} options={[]} value="" />
       </div>
     </div>
   ),

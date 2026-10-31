@@ -115,10 +115,10 @@ function ControlledDemo() {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button onClick={() => setOpen(true)} variant="outline">
         受控打开（右侧）
       </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
+      <Sheet onOpenChange={setOpen} open={open}>
         <SheetContent>
           <SheetHeader>
             <SheetTitle>受控抽屉</SheetTitle>

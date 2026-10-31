@@ -28,10 +28,7 @@ import { CpuLimitPicker } from "./CpuLimitPicker";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
 
 /** 安装形态 → 设置页徽标文案。 */
-const INSTANCE_KIND_LABEL: Record<
-  "desktop" | "portable" | "venv" | "unknown",
-  string
-> = {
+const INSTANCE_KIND_LABEL: Record<"desktop" | "portable" | "venv" | "unknown", string> = {
   desktop: "桌面版（ComfyUI Desktop）",
   portable: "便携版",
   venv: "venv",
@@ -48,29 +45,27 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
     <SettingsCard title="创作后端（ComfyUI）">
       <Field
         label="ComfyUI 路径（源码根或桌面版实例根）"
-        value={c.drafts.settings.comfyuiPath}
         onChange={(value) => c.patchSettings({ comfyuiPath: value })}
         placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI2"
+        value={c.drafts.settings.comfyuiPath}
       />
       <p className="text-muted-foreground -mt-2 mb-3 text-xs">
         桌面版（ComfyUI Desktop）请直接配置实例根目录（含 ComfyUI/ 子目录与
-        standalone-env/），便携版配置含 main.py 的源码根。自动识别
-        python_embeded / standalone-env / .venv
-        解释器，多个环境并存时优先选用装了依赖（torch）的那个。
+        standalone-env/），便携版配置含 main.py 的源码根。自动识别 python_embeded / standalone-env /
+        .venv 解释器，多个环境并存时优先选用装了依赖（torch）的那个。
         {c.comfyInstance?.pathConfigured
           ? "已配置——这里只管路径；启动 / 关闭与启动日志在侧栏「ComfyUI」页。"
           : "未配置——ComfyUI 未运行时任务会失败，侧栏「ComfyUI」页也启动不了它。"}
       </p>
       <Field
         label="comfy-cli 解释器（Python 绝对路径）"
-        value={c.drafts.settings.comfyCliPython}
         onChange={(value) => c.patchSettings({ comfyCliPython: value })}
         placeholder="例如 D:\\tools\\python-venv\\comfy-cli\\Scripts\\python.exe"
+        value={c.drafts.settings.comfyCliPython}
       />
       <p className="text-muted-foreground -mt-2 mb-3 text-xs">
         任务是通过 comfy-cli 提交给 ComfyUI 的，需要一个装好 comfy-cli 的 Python
-        解释器。桌面版不随包
-        Python：请自备后把解释器的绝对路径填在这里；留空则退回 项目目录下的
+        解释器。桌面版不随包 Python：请自备后把解释器的绝对路径填在这里；留空则退回 项目目录下的
         python-venv/comfy-cli（开发检出的默认落点）。
         {c.drafts.settings.comfyCliPython.trim()
           ? "已配置——执行链会用这个解释器。"
@@ -81,9 +76,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           <span className="text-muted-foreground">安装形态</span>
           <span
             className={`text-2xs inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
-              desktopManaged
-                ? "bg-primary/15 text-primary"
-                : "bg-subtle text-ink/70"
+              desktopManaged ? "bg-primary/15 text-primary" : "bg-subtle text-ink/70"
             }`}
           >
             {INSTANCE_KIND_LABEL[instanceType]}
@@ -99,28 +92,24 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         <>
           <Field
             label="ComfyUI 端口"
-            value={
-              c.drafts.settings.comfyuiPort > 0
-                ? String(c.drafts.settings.comfyuiPort)
-                : ""
-            }
             onChange={(value) =>
               c.patchSettings({
                 comfyuiPort: Math.max(0, Number(value) || 0),
               })
             }
             placeholder={`留空使用默认 ${c.comfyDefaultPort}`}
+            value={c.drafts.settings.comfyuiPort > 0 ? String(c.drafts.settings.comfyuiPort) : ""}
           />
           <p className="text-muted-foreground -mt-2 mb-3 text-xs">
-            填了别的端口，启动时会自动传 --port。这里填的是默认端口：实例已经
-            由别的方式（Comfy Desktop、你自己的终端）跑起来时，应用会直接按
+            填了别的端口，启动时会自动传 --port。这里填的是默认端口：实例已经 由别的方式（Comfy
+            Desktop、你自己的终端）跑起来时，应用会直接按
             实例进程实际监听的端口连——端口不一致也不需要改这里。
           </p>
           <Field
             label="ComfyUI 启动参数（可选）"
-            value={c.drafts.settings.comfyuiExtraArgs}
             onChange={(value) => c.patchSettings({ comfyuiExtraArgs: value })}
             placeholder="例如 --input-directory D:\\ComfyUI-Shared\\input"
+            value={c.drafts.settings.comfyuiExtraArgs}
           />
         </>
       )}
@@ -135,28 +124,21 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
       {desktopManaged && <ComfyuiStoragePaths storage={c.comfyStorage} />}
       <div className="mb-4 flex items-center gap-2">
         <Checkbox
-          id="comfyui-autostart"
           checked={c.drafts.settings.comfyuiAutoStart ?? true}
-          onCheckedChange={(next) =>
-            c.patchSettings({ comfyuiAutoStart: next === true })
-          }
+          id="comfyui-autostart"
+          onCheckedChange={(next) => c.patchSettings({ comfyuiAutoStart: next === true })}
         />
-        <FieldLabel htmlFor="comfyui-autostart" className="text-ink/80 text-sm">
+        <FieldLabel className="text-ink/80 text-sm" htmlFor="comfyui-autostart">
           提交任务时 ComfyUI 未运行则自动启动
         </FieldLabel>
       </div>
       <div className="mb-4 flex items-center gap-2">
         <Checkbox
-          id="auto-sync-local-workflow"
           checked={c.drafts.settings.autoSyncLocalWorkflow ?? false}
-          onCheckedChange={(next) =>
-            c.patchSettings({ autoSyncLocalWorkflow: next === true })
-          }
+          id="auto-sync-local-workflow"
+          onCheckedChange={(next) => c.patchSettings({ autoSyncLocalWorkflow: next === true })}
         />
-        <FieldLabel
-          htmlFor="auto-sync-local-workflow"
-          className="text-ink/80 text-sm"
-        >
+        <FieldLabel className="text-ink/80 text-sm" htmlFor="auto-sync-local-workflow">
           查看本地文件工作流时自动同步最新内容
         </FieldLabel>
       </div>
@@ -171,26 +153,20 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           （用户按老位置找「启动 ComfyUI」时会先看到这句，而不是以为功能没了）。 */}
       <div className="border-border bg-surface-1 mb-4 rounded-lg border px-3 py-2">
         <p className="text-ink-muted text-xs leading-relaxed">
-          路径配好并保存之后，到侧栏的「ComfyUI」页启动它 ——
-          那里有运行状态、启动 / 关闭、打开查看，以及每一次启动的日志。
+          路径配好并保存之后，到侧栏的「ComfyUI」页启动它 —— 那里有运行状态、启动 /
+          关闭、打开查看，以及每一次启动的日志。
         </p>
         <Button
-          variant="outline"
-          size="xs"
-          onClick={() =>
-            emitAppEvent("workspace:navigate", { view: "comfyui" })
-          }
           className="border-border text-ink-muted hover:text-ink mt-2 h-auto gap-1 rounded-lg px-2.5 py-1"
+          onClick={() => emitAppEvent("workspace:navigate", { view: "comfyui" })}
+          size="xs"
+          variant="outline"
         >
           去启动与查看日志
-          <ArrowRight data-icon="inline-end" className="size-3" aria-hidden />
+          <ArrowRight aria-hidden className="size-3" data-icon="inline-end" />
         </Button>
       </div>
-      <StatusButton
-        onClick={() => void c.savePrefs()}
-        variant="primary-solid"
-        disabled={c.saving}
-      >
+      <StatusButton disabled={c.saving} onClick={() => void c.savePrefs()} variant="primary-solid">
         保存偏好
       </StatusButton>
     </SettingsCard>

@@ -33,27 +33,27 @@ interface CanvasContextMenuProps {
 
 export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasContextMenuProps) {
   return (
-    <DropdownMenu open onOpenChange={(open) => !open && onClose()}>
+    <DropdownMenu onOpenChange={(open) => !open && onClose()} open>
       {/* 零尺寸定位锚点：菜单开在右键那个点上，而不是某个可见控件旁边。 */}
       <DropdownMenuTrigger
         aria-hidden
-        tabIndex={-1}
         className="pointer-events-none fixed size-0"
         style={{ left: x, top: y }}
+        tabIndex={-1}
       />
       <DropdownMenuContent
-        side="bottom"
         align="start"
-        sideOffset={0}
         /* 锚点是零尺寸，`w-(--anchor-width)` 会算成 0，这里给回原来的固定宽。 */
         className="border-border-strong bg-panel w-52 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 dark:shadow-black/60"
+        side="bottom"
+        sideOffset={0}
       >
         {/* ── 测试节点（纯视觉，对齐 Ardot 稿）── */}
         <DropdownMenuGroup>
           <DropdownMenuItem
+            className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 border-primary/30 flex items-center gap-2 rounded-lg border bg-linear-to-r px-2 py-1.5 text-left text-xs"
             data-canvas-node-kind="workflow-ardot"
             onClick={onPickTest}
-            className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 border-primary/30 flex items-center gap-2 rounded-lg border bg-linear-to-r px-2 py-1.5 text-left text-xs"
           >
             <span
               className="text-3xs flex size-5 items-center justify-center rounded-md font-bold text-white"
@@ -81,12 +81,12 @@ export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasC
               const meta = NODE_META[kind];
               return (
                 <DropdownMenuItem
-                  key={kind}
-                  data-canvas-node-kind={kind}
-                  onClick={() => onPick(kind)}
                   className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+                  data-canvas-node-kind={kind}
+                  key={kind}
+                  onClick={() => onPick(kind)}
                 >
-                  <Icon name={meta.icon} size={15} className="text-primary-strong" />
+                  <Icon className="text-primary-strong" name={meta.icon} size={15} />
                   <span className="flex flex-col">
                     <span className="font-medium">{meta.label}</span>
                     <span className="text-ink-muted text-3xs">{meta.desc}</span>

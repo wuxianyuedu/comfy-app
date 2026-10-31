@@ -74,7 +74,7 @@ function PortRow({ portId, dir, type }: { dir: "in" | "out"; portId: string; typ
         </span>
         <span className="text-ink-fainter font-mono text-[10px]">{dir}</span>
       </div>
-      <PortHandle id={portId} dir={dir} type={type} />
+      <PortHandle dir={dir} id={portId} type={type} />
     </div>
   );
 }
@@ -173,7 +173,7 @@ function PortDemoNode() {
         KSampler（真画布 · node id 可读）
       </div>
       {rows.map((row) => (
-        <div key={row.id} className="relative">
+        <div className="relative" key={row.id}>
           <div className="flex h-9 items-center justify-between px-3.5">
             <span
               className="font-mono text-[11px]"
@@ -183,7 +183,7 @@ function PortDemoNode() {
             </span>
             <span className="text-ink-fainter font-mono text-[10px]">{row.dir}</span>
           </div>
-          <PortHandle id={row.id} dir={row.dir} type={row.type} />
+          <PortHandle dir={row.dir} id={row.id} type={row.type} />
         </div>
       ))}
     </div>
@@ -201,9 +201,9 @@ export const InCanvas: Story = {
   render: () => (
     <div className="flex flex-wrap gap-6 p-4">
       <StorybookFlowCanvas
-        scene={withNodeType(canvasScene("twoNodes"), "story")}
-        nodeTypes={NODE_TYPES}
         fit
+        nodeTypes={NODE_TYPES}
+        scene={withNodeType(canvasScene("twoNodes"), "story")}
       />
     </div>
   ),
@@ -228,7 +228,7 @@ export const OutsideCanvas: Story = {
         style={{ border: `1px solid ${DARK_PALETTE_BASE.borderFallback}` }}
       >
         {PORT_ROWS.map((row) => (
-          <PortRow key={row.id} portId={row.id} dir={row.dir} type={row.type} />
+          <PortRow dir={row.dir} key={row.id} portId={row.id} type={row.type} />
         ))}
       </div>
     </div>
@@ -240,9 +240,9 @@ export const Single: Story = {
   render: () => (
     <div className="flex flex-wrap items-start gap-4 p-4">
       {PORT_ROWS.map((row) => (
-        <div key={row.id} className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-1" key={row.id}>
           <div className="w-45">
-            <PortRow portId={row.id} dir={row.dir} type={row.type} />
+            <PortRow dir={row.dir} portId={row.id} type={row.type} />
           </div>
           <span className="text-ink-muted text-2xs font-mono">
             {row.dir} · {row.type ?? "STRING"}
@@ -263,9 +263,9 @@ export const FanOutCanvas: Story = {
   render: () => (
     <div className="flex flex-wrap gap-6 p-4">
       <StorybookFlowCanvas
-        scene={withNodeType(canvasScene("fanOut"), "story")}
-        nodeTypes={NODE_TYPES}
         fit
+        nodeTypes={NODE_TYPES}
+        scene={withNodeType(canvasScene("fanOut"), "story")}
       />
     </div>
   ),
@@ -281,9 +281,9 @@ export const MixedKindsCanvas: Story = {
   render: () => (
     <div className="flex flex-wrap gap-6 p-4">
       <StorybookFlowCanvas
-        scene={withNodeType(canvasScene("mixedKinds"), "story")}
-        nodeTypes={NODE_TYPES}
         fit
+        nodeTypes={NODE_TYPES}
+        scene={withNodeType(canvasScene("mixedKinds"), "story")}
       />
     </div>
   ),

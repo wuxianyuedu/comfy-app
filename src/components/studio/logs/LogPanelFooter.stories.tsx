@@ -2,10 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { LogPanelFooter } from "~/components/studio/logs/LogPanelFooter";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
-import {
-  LOG_PAGE_SIZE,
-  LOG_STORE_MAX,
-} from "~/components/studio/logs/log-store";
+import { LOG_PAGE_SIZE, LOG_STORE_MAX } from "~/components/studio/logs/log-store";
 import { tailPages } from "~/lib/page-window";
 import { logSceneArgType } from "../../../../.storybook/store-sources";
 
@@ -45,16 +42,8 @@ function FooterHarness({ withPage = false }: { withPage?: boolean }) {
   /* 与 `LogPanel` 里那几行**同一个 selector**（面板读 `header` 切片，
      `bootId` / `droppedTotal` 是它旁边两个独立 selector）——
      没有「story 版口径」。 */
-  const {
-    filteredLogs,
-    pageSize,
-    counts,
-    origin,
-    filter,
-    search,
-    bootId,
-    autoScroll,
-  } = useLogPanel((state) => state.header);
+  const { filteredLogs, pageSize, counts, origin, filter, search, bootId, autoScroll } =
+    useLogPanel((state) => state.header);
   const droppedTotal = useLogPanel((state) => state.droppedTotal);
   const setOrigin = useLogPanel((state) => state.setOrigin);
   const setFilter = useLogPanel((state) => state.setFilter);
@@ -74,23 +63,23 @@ function FooterHarness({ withPage = false }: { withPage?: boolean }) {
   return (
     <div className="bg-canvas-deep border-border-strong w-240 max-w-full overflow-hidden rounded-md border">
       <LogPanelFooter
-        safePage={safePage}
-        totalPages={totalPages}
+        bootId={bootId}
+        droppedTotal={droppedTotal}
+        filter={filter}
+        jumpToLatest={() => undefined}
+        newLogCount={0}
+        origin={origin}
         pageSize={pageSize}
+        safePage={safePage}
+        search={search}
+        setFilter={setFilter}
+        setOrigin={setOrigin}
+        setPage={setPage}
+        setSearch={setSearch}
+        shouldPin={autoScroll}
         total={filteredLogs.length}
         totalAll={counts.all}
-        search={search}
-        droppedTotal={droppedTotal}
-        bootId={bootId}
-        shouldPin={autoScroll}
-        newLogCount={0}
-        jumpToLatest={() => undefined}
-        setPage={setPage}
-        origin={origin}
-        setOrigin={setOrigin}
-        filter={filter}
-        setFilter={setFilter}
-        setSearch={setSearch}
+        totalPages={totalPages}
       />
     </div>
   );

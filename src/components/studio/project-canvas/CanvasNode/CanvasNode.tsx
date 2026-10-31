@@ -139,18 +139,18 @@ export const CanvasNode = React.memo(function CanvasNode({
      * 三步级联 + 参数表单 + 生成 CTA。 */
     body = (
       <ImageGenerationPanel
-        kind={d.kind}
         d={d}
-        patch={patch}
-        wfList={wfList}
+        kind={d.kind}
         modelTagLib={modelTagLib}
-        wfIO={wfIO}
-        wfIOLoading={wfIOLoading}
-        wfListLoading={wfListLoading}
-        seededFor={seededFor}
-        setWfModes={setWfModes}
         onGenerate={runGenerate}
         onReplaceResult={() => pickFile("inputImage")}
+        patch={patch}
+        seededFor={seededFor}
+        setWfModes={setWfModes}
+        wfIO={wfIO}
+        wfIOLoading={wfIOLoading}
+        wfList={wfList}
+        wfListLoading={wfListLoading}
       />
     );
   } else if (d.kind === "text" || d.kind === "movie") {
@@ -166,9 +166,8 @@ export const CanvasNode = React.memo(function CanvasNode({
         {/* 右侧 source Handle — 与 picture 左输入 Handle 同 parent
          * 同 top:50%，自然共 Y；对 text 用 condition（橙）/ movie 用 image（绿）。*/}
         <Handle
-          type="source"
-          position={Position.Right}
           id="output"
+          position={Position.Right}
           style={{
             position: "absolute",
             right: -5,
@@ -181,15 +180,16 @@ export const CanvasNode = React.memo(function CanvasNode({
             boxShadow: `0 0 10px ${outStyle.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
             borderRadius: 9999,
           }}
+          type="source"
         />
         <ContentAssetBody
-          kind={d.kind}
           data={d}
+          kind={d.kind}
           onPatch={patch}
           onPickMedia={pickMedia}
           onUploadFile={onUploadFile}
-          status={d.status}
           progress={d.progress}
+          status={d.status}
         />
       </div>
     );
@@ -207,9 +207,8 @@ export const CanvasNode = React.memo(function CanvasNode({
           {/* 左侧 IMAGE input Handle — 上游工作流 outputs 连入自动接收生成图，
            * 也可作为本节点生成时的参考/底图（runGenerate 透传 d.inputImage）。 */}
           <Handle
-            type="target"
-            position={Position.Left}
             id="inputImage"
+            position={Position.Left}
             style={{
               position: "absolute",
               left: -5,
@@ -222,12 +221,12 @@ export const CanvasNode = React.memo(function CanvasNode({
               boxShadow: `0 0 10px ${PORT_STYLE.image.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
               borderRadius: 9999,
             }}
+            type="target"
           />
           {/* 右侧 source Handle：生成结果（或上传图）作为下游 inputImage 源。*/}
           <Handle
-            type="source"
-            position={Position.Right}
             id="output"
+            position={Position.Right}
             style={{
               position: "absolute",
               right: -5,
@@ -240,31 +239,32 @@ export const CanvasNode = React.memo(function CanvasNode({
               boxShadow: `0 0 10px ${outStyle.glow}, 0 0 0 1px rgba(255,255,255,0.08)`,
               borderRadius: 9999,
             }}
+            type="source"
           />
           <ContentAssetBody
-            kind="picture"
             data={d}
+            kind="picture"
             onPatch={patch}
             onPickMedia={pickMedia}
             onUploadFile={onUploadFile}
-            status={d.status}
             progress={d.progress}
+            status={d.status}
           />
         </div>
         {selected && (
           <div className="border-border-strong border-t pt-2">
             <ImageGenerationPanel
-              kind="picture"
               d={d}
-              patch={patch}
-              wfList={wfList}
+              kind="picture"
               modelTagLib={modelTagLib}
-              wfIO={wfIO}
-              wfIOLoading={wfIOLoading}
-              wfListLoading={wfListLoading}
+              onGenerate={runGenerate}
+              patch={patch}
               seededFor={seededFor}
               setWfModes={setWfModes}
-              onGenerate={runGenerate}
+              wfIO={wfIO}
+              wfIOLoading={wfIOLoading}
+              wfList={wfList}
+              wfListLoading={wfListLoading}
             />
           </div>
         )}
@@ -315,20 +315,18 @@ export const CanvasNode = React.memo(function CanvasNode({
        * 暗色面板 #0B0B10/radius10/border #26262E/padding14，与头部间距 14。 */}
       {d.kind === "workflow" ? (
         <WorkflowNode
-          id={id}
           data={d}
-          workflowIO={wfIO}
-          workflowIOLoading={wfIOLoading}
-          workflowListLoading={wfListLoading}
-          workflowList={wfList}
-          workflowModes={wfModes}
-          sourceFilter={sourceFilter}
-          modelTagLib={modelTagLib}
+          id={id}
           modelFilter={modelFilter}
-          onPatch={patch}
-          onSourceFilterChange={setSourceFilter}
-          onModelFilterChange={setModelFilter}
+          modelTagLib={modelTagLib}
+          onFormChange={(next) => patch({ workflowInputs: next })}
           onGenerate={runGenerate}
+          onModelFilterChange={setModelFilter}
+          onModesChange={(modes, defaultMode) => saveModes({ modes, defaultMode })}
+          onPatch={patch}
+          onSeedModeChange={(ioKey, mode) =>
+            patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
+          }
           onSelectWorkflow={(workflowId) => {
             const wf = wfList.find((item) => item.id === workflowId);
             seededFor.current = null;
@@ -341,11 +339,13 @@ export const CanvasNode = React.memo(function CanvasNode({
               workflowSinkId: undefined,
             });
           }}
-          onFormChange={(next) => patch({ workflowInputs: next })}
-          onSeedModeChange={(ioKey, mode) =>
-            patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
-          }
-          onModesChange={(modes, defaultMode) => saveModes({ modes, defaultMode })}
+          onSourceFilterChange={setSourceFilter}
+          sourceFilter={sourceFilter}
+          workflowIO={wfIO}
+          workflowIOLoading={wfIOLoading}
+          workflowList={wfList}
+          workflowListLoading={wfListLoading}
+          workflowModes={wfModes}
         />
       ) : (
         <>
@@ -359,12 +359,12 @@ export const CanvasNode = React.memo(function CanvasNode({
               <div className="flex shrink-0 items-center gap-1.5">
                 <StatusDot status={d.status} />
                 <StatusBadge status={d.status} />
-                <Hint label="删除节点" accessibleName>
+                <Hint accessibleName label="删除节点">
                   <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={deleteSelf}
                     className="text-ink-muted hover:text-destructive ml-1 h-auto p-0 hover:bg-transparent"
+                    onClick={deleteSelf}
+                    size="icon-xs"
+                    variant="ghost"
                   >
                     <Icon data-icon="inline-start" name="close" size={14} />
                   </Button>
@@ -378,17 +378,17 @@ export const CanvasNode = React.memo(function CanvasNode({
       {/* 可折叠错误面板 —— 状态 / 推导 / JSX 都在 ErrorPanel；
        * 节点没有可见错误时它自己渲染 null。 */}
       <ErrorPanel
-        nodeId={id}
-        kind={d.kind}
-        status={d.status}
         error={d.error}
-        errorStatus={d.errorStatus}
         errorContext={d.errorContext}
-        validationErrors={d.validationErrors}
+        errorStatus={d.errorStatus}
+        kind={d.kind}
+        nodeId={id}
+        onRetry={retryGenerate}
+        status={d.status}
         taskId={d.taskId}
+        validationErrors={d.validationErrors}
         workflowId={d.workflowId}
         workflowName={d.workflowName}
-        onRetry={retryGenerate}
       />
       <ImageInput />
       {/* 内容载体上传输入 —— 同时接受图片与视频 */}

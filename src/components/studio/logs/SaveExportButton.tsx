@@ -63,13 +63,13 @@ export function SaveExportButton({
     <span className="flex items-center gap-1">
       <Hint label={`保存当前筛选的全部日志到本机 log/exports/（${scopeLabel} · ${total} 条）`}>
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={onSave}
           aria-label="保存当前筛选的全部日志到本地文件"
           className={`hover:bg-subtle hover:text-ink rounded-md ${
             failed ? "text-danger-strong" : "text-ink-muted"
           }`}
+          onClick={onSave}
+          size="icon"
+          variant="ghost"
         >
           <HardDriveDownload size={16} />
         </Button>

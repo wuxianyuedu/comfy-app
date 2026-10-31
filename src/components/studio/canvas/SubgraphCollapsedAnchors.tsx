@@ -33,10 +33,10 @@ export function SubgraphCollapsedAnchors({
   return (
     <>
       {wiredInputs.length > 0 && (
-        <CollapsedAnchorCylinder side="left" count={wiredInputs.length} anchor={anchor} />
+        <CollapsedAnchorCylinder anchor={anchor} count={wiredInputs.length} side="left" />
       )}
       {outputs.length > 0 && (
-        <CollapsedAnchorCylinder side="right" count={outputs.length} anchor={anchor} />
+        <CollapsedAnchorCylinder anchor={anchor} count={outputs.length} side="right" />
       )}
       <CollapsedPortHandles
         items={wiredInputs.map(({ inp, label }, idx) => ({

@@ -70,7 +70,7 @@ export const MediaVariants: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
       {MEDIA_VARIANTS.map((variant) => (
-        <Empty key={variant} className="w-md">
+        <Empty className="w-md" key={variant}>
           <EmptyHeader>
             <EmptyMedia variant={variant}>
               <ImageOff />

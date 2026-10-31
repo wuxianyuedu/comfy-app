@@ -21,11 +21,11 @@ const SOURCE = readFileSync(path.resolve(__dirname, "CanvasContextMenu.tsx"), "u
 function renderMenu(over: Partial<Parameters<typeof CanvasContextMenu>[0]> = {}) {
   return render(
     <CanvasContextMenu
-      x={40}
-      y={50}
+      onClose={() => undefined}
       onPick={() => undefined}
       onPickTest={() => undefined}
-      onClose={() => undefined}
+      x={40}
+      y={50}
       {...over}
     />,
   );

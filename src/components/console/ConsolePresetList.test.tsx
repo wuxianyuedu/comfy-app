@@ -9,15 +9,10 @@ import { ConsolePresetList } from "./ConsolePresetList";
 
 afterEach(cleanup);
 
-function renderList(
-  props: Partial<Parameters<typeof ConsolePresetList>[0]> = {},
-) {
+function renderList(props: Partial<Parameters<typeof ConsolePresetList>[0]> = {}) {
   return render(
     <TooltipProvider delay={0}>
-      <ConsolePresetList
-        onFill={props.onFill ?? vi.fn()}
-        disabled={props.disabled ?? false}
-      />
+      <ConsolePresetList disabled={props.disabled ?? false} onFill={props.onFill ?? vi.fn()} />
     </TooltipProvider>,
   );
 }
@@ -63,9 +58,7 @@ describe("ConsolePresetList", () => {
     renderList();
     /* 「一键质量门禁」的说明小字在 240px 的侧栏里必然被 `truncate` 掉，
        而此前浮层只回显命令，用户悬停也读不到「跑的是哪个脚本」。 */
-    const preset = CONSOLE_PRESETS.flatMap((g) => g.items).find(
-      (i) => i.id === "check-all",
-    )!;
+    const preset = CONSOLE_PRESETS.flatMap((g) => g.items).find((i) => i.id === "check-all")!;
     await user.hover(screen.getByTestId("console-preset-check-all"));
     const box = popup();
     expect(box).not.toBeNull();
@@ -106,9 +99,8 @@ describe("ConsolePresetList · 按分组折叠", () => {
   /** 某条预设所在的面板；`null` = 这一组还没渲染出面板。 */
   function panelOf(itemId: string): HTMLElement | null {
     return (
-      screen
-        .getByTestId(`console-preset-${itemId}`)
-        .closest('[data-slot="disclosure-panel"]') ?? null
+      screen.getByTestId(`console-preset-${itemId}`).closest('[data-slot="disclosure-panel"]') ??
+      null
     );
   }
 
@@ -121,10 +113,7 @@ describe("ConsolePresetList · 按分组折叠", () => {
       expect(head.textContent).toContain(group.label);
       expect(head.textContent).toContain(group.hint);
       for (const item of group.items) {
-        expect(
-          panelOf(item.id)?.hasAttribute("hidden"),
-          `${group.id} 默认该是折起的`,
-        ).toBe(true);
+        expect(panelOf(item.id)?.hasAttribute("hidden"), `${group.id} 默认该是折起的`).toBe(true);
       }
     }
   });
@@ -185,9 +174,7 @@ describe("ConsolePresetList · 按分组折叠", () => {
   it("分组头上给出条数（折起时也知道这一组有几条）", () => {
     renderList();
     for (const group of CONSOLE_PRESETS) {
-      const disclosure = groupTrigger(group.id).closest(
-        '[data-slot="disclosure"]',
-      );
+      const disclosure = groupTrigger(group.id).closest('[data-slot="disclosure"]');
       expect(disclosure?.textContent).toContain(String(group.items.length));
     }
   });

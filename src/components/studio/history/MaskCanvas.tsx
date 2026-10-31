@@ -75,14 +75,12 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
   return (
     <div className="flex flex-col gap-2">
       <canvas
-        ref={canvasRef}
-        width={288}
-        height={288}
         aria-label="重绘蒙版画布（白色为要重绘的区域）"
         className={
           "border-border-strong bg-panel-deep touch-none rounded-lg border " +
           (disabled ? "opacity-50" : "cursor-crosshair")
         }
+        height={288}
         onPointerDown={(e) => {
           if (disabled) {
             return;
@@ -114,29 +112,29 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
             onChange(canvas.toDataURL("image/png"));
           }
         }}
+        ref={canvasRef}
+        width={288}
       />
       <div className="flex items-center gap-2">
         <span className="text-ink-faint text-2xs">画笔</span>
         {BRUSH_SIZES.map((size) => (
           <Button
+            aria-label={`${size} 像素画笔`}
+            className="text-2xs h-6 px-2"
+            disabled={disabled}
             key={size}
+            onClick={() => setBrush(size)}
+            size="sm"
             type="button"
             variant={brush === size ? "secondary" : "ghost"}
-            size="sm"
-            disabled={disabled}
-            aria-label={`${size} 像素画笔`}
-            onClick={() => setBrush(size)}
-            className="text-2xs h-6 px-2"
           >
             {size}
           </Button>
         ))}
         <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
           aria-label="清空蒙版"
+          className="text-2xs h-6 px-2"
+          disabled={disabled}
           onClick={() => {
             const canvas = canvasRef.current;
             if (!canvas) {
@@ -145,7 +143,9 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
             paintBase(canvas);
             onChange(null);
           }}
-          className="text-2xs h-6 px-2"
+          size="sm"
+          type="button"
+          variant="ghost"
         >
           清空
         </Button>
