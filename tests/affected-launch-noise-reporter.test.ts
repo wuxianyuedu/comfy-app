@@ -121,8 +121,8 @@ describe("spawnVitest end-to-end —— 真起 node 验证过滤写入", () => {
       ].join("\n"),
     );
 
-    const out: string[] = [];
-    const err: string[] = [];
+    const out: Array<string> = [];
+    const err: Array<string> = [];
     vi.spyOn(process.stdout, "write").mockImplementation((c) => {
       out.push(String(c));
       return true;

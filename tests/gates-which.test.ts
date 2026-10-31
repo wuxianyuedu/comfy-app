@@ -142,15 +142,15 @@ type FakeResult = { status: number | null; stderr?: string; stdout?: string; };
  * `affectedTests` 的 JSDoc 写的是 `typeof spawnSync`，而它的重载与 `stdio` 联合类型
  * 套不进一个手写假件 —— 这里显式过一道 cast，并保证假件的参数形状与真实调用同形。
  */
-function fakeSpawn(impl: (args: string[], opts: { input?: string }) => FakeResult) {
-  const fn = (_cmd: string, args: string[], opts: { input?: string }): FakeResult =>
+function fakeSpawn(impl: (args: Array<string>, opts: { input?: string }) => FakeResult) {
+  const fn = (_cmd: string, args: Array<string>, opts: { input?: string }): FakeResult =>
     impl(args, opts);
   return /* SAFETY: 只用 affectedTests 实际读的字段（status/stdout/stderr），与 spawnSync 的重载等价于此形状 */ fn as unknown as typeof spawnSync;
 }
 
 describe("gates:which —— 用例那一半不重算 import 图", () => {
   test("起 `affected-tests.mjs --changed-stdin --json`，清单走 stdin 不拼 argv", () => {
-    let seenArgs: string[] = [];
+    let seenArgs: Array<string> = [];
     let seenInput = "";
     const got = affectedTests(["a.ts", "b/c.ts"], {
       spawn: fakeSpawn((args, opts) => {
