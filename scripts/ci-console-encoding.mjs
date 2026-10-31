@@ -129,8 +129,8 @@ export function readConsoleEncoding(ports) {
   }
   /* 取**第一处**数字 = 第一行那个控制台代码页；`chcp` 排最后，故取最后一行当原文。
    * ACP 单独带标签，免得与 `chcp` 那行里的数字撞车。 */
-  const codePage = Number(/(\d{3,5})/.exec(out)?.[1] ?? NaN);
-  const acp = Number(/ACP=(\d{3,5})/.exec(out)?.[1] ?? NaN);
+  const codePage = Number(/(\d{3,5})/.exec(out)?.[1] ?? Number.NaN);
+  const acp = Number(/ACP=(\d{3,5})/.exec(out)?.[1] ?? Number.NaN);
   return {
     codePage: Number.isFinite(codePage) ? codePage : null,
     chcpRaw: out.split("\n").pop()?.trim() ?? null,
@@ -165,7 +165,7 @@ export function applyConsoleEncoding({ runImpl, platform = process.platform } = 
     `[Text.UTF8Encoding]::new($false); ` +
     `[Console]::OutputEncoding.CodePage`;
   const r = run("powershell", ["-NoProfile", "-NonInteractive", "-Command", script]);
-  const after = Number(/(\d{3,5})/.exec(r.out ?? "")?.[1] ?? NaN);
+  const after = Number(/(\d{3,5})/.exec(r.out ?? "")?.[1] ?? Number.NaN);
   if (after === UTF8_CODE_PAGE) {
     return {
       applied: true,

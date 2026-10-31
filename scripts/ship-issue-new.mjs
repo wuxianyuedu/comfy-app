@@ -353,7 +353,7 @@ export function runNewIssue({
     "-v",
   ]);
   const d = got && got.json && typeof got.json === "object" ? got.json.data : null;
-  const number = Number(d && typeof d === "object" ? (d.number ?? d?.issue?.number) : NaN);
+  const number = Number(d && typeof d === "object" ? (d.number ?? d?.issue?.number) : Number.NaN);
   if (!Number.isInteger(number) || number <= 0) {
     log(
       "[ship] 建单的回执里没有可用的单号 ⇒ 不念「已建成」。" +
