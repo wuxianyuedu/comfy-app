@@ -366,7 +366,9 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     inspectCharacterEpisodes: (cid) => setInspectedCharacterId(cid),
     clearInspectedCharacter: () => setInspectedCharacterId(null),
     batchGenerateSeason: (workflowId) => {
-      if (!seasonId) return;
+      if (!seasonId) {
+        return;
+      }
       batchGenerateMut.mutate({ seasonId, workflowId });
     },
     promoteFromProduction: (pid) => promoteMut.mutate({ projectId: pid }),

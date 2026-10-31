@@ -73,7 +73,9 @@ describe("planSeparatedLaunches", () => {
 describe("runChunk 透传 filterLine 到两遍 spawn", () => {
   let dir: string | undefined;
   afterEach(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
     dir = undefined;
   });
 
