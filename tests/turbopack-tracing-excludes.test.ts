@@ -24,7 +24,7 @@
  *   ② 关键目录清单齐全（删项 = 这份意图被静悄悄抹掉，且没有任何提示）；
  *   ③ 没有用 `turbopack.ignoreIssue` 遮这条告警（那是关信号而非修问题）。
  */
-import { readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -163,8 +163,6 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
  * 反向验证：构造一个不含 `.next/standalone` 的工作目录，本组必须**全跳过且
  * 0 失败**（而不是 ENOENT）；构造一个含 `src/*.test.ts` 的假产物，必须报出它。
  */
-import { existsSync, lstatSync, readdirSync } from "node:fs";
-
 function standaloneDir(): string {
   return join(process.cwd(), ".next", "standalone");
 }
