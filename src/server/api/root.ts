@@ -11,6 +11,7 @@ import { workflowModelRouter } from "~/server/api/routers/workflow-model";
 import { generateRouter } from "~/server/api/routers/generate";
 import { runRouter } from "~/server/api/routers/run";
 import { seriesRouter } from "~/server/api/routers/series";
+import { seriesGenerationRouter } from "~/server/api/routers/series-generation";
 
 /**
  * 这是服务端的主路由。
@@ -42,6 +43,7 @@ export const appRouter = createTRPCRouter({
   generate: generateRouter,
   run: runRouter,
   series: seriesRouter,
+  seriesGeneration: seriesGenerationRouter,
 });
 
 // 对外导出 API 的类型定义
