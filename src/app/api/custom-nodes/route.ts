@@ -134,14 +134,18 @@ function readManifestSummary() {
   if (stamp && manifestSummaryCache?.stamp === stamp) {
     return manifestSummaryCache.summary;
   }
-  if (!fs.existsSync(MANIFEST)) return null;
+  if (!fs.existsSync(MANIFEST)) {
+    return null;
+  }
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(MANIFEST, "utf-8"));
     /* 清单体必须是「JSON 对象」，数组不算：`isRecord` 认数组，于是一份被写坏的清单
      * （`[]`）会被读成「解析过了，但一个节点都没有」—— 而界面把这两种当两件事：
      * 前者该提示「清单坏了」，后者是正常冷启动（台账 E9 记的就是这一族「不同因同形」）。
      * 标量 JSON 在原 `m.packages` 处会抛 TypeError → catch → null；守卫把该行为显式化。 */
-    if (!isPlainRecord(parsed)) return null;
+    if (!isPlainRecord(parsed)) {
+      return null;
+    }
     const m = parsed;
     const pkgs: Array<ManifestPackageSummary> = [];
     const pmap: Record<string, unknown> = isPlainRecord(m.packages) ? m.packages : {};
@@ -171,7 +175,9 @@ function readManifestSummary() {
       sources,
     };
     // stat 失败（极罕见）时 stamp 为 null：返回结果但不缓存。
-    if (stamp !== null) manifestSummaryCache = { stamp, summary };
+    if (stamp !== null) {
+      manifestSummaryCache = { stamp, summary };
+    }
     return summary;
   } catch {
     return null;
@@ -182,7 +188,9 @@ function readManifestSummary() {
  * 两侧都解析成绝对路径，再统一转小写并归一化分隔符，
  * 避免 Windows 的卷大小写（\?\… 这类前缀）造成对不上。 */
 function pathKey(p: string): string {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   try {
     return normalizeSlashes(path.resolve(p)).toLowerCase();
   } catch {
@@ -196,7 +204,9 @@ function pathKey(p: string): string {
 function buildPathMap(
   summary: ReturnType<typeof readManifestSummary>,
 ): Record<string, ManifestPackageSummary> {
-  if (!summary) return {};
+  if (!summary) {
+    return {};
+  }
   const out: Record<string, ManifestPackageSummary> = {};
   for (const p of summary.packages) {
     out[pathKey(p.path)] = p;
@@ -218,7 +228,9 @@ function rememberDiscover(key: string, result: Array<DiscoveredSubpkg>): void {
   discoverCache.set(key, { at: Date.now(), result });
   while (discoverCache.size > DISCOVER_CACHE_MAX) {
     const oldest = discoverCache.keys().next().value;
-    if (oldest === undefined) break;
+    if (oldest === undefined) {
+      break;
+    }
     discoverCache.delete(oldest);
   }
 }
@@ -269,7 +281,9 @@ function spawnCapture(command: string, args: Array<string>): Promise<string | nu
 async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<unknown>> {
   const key = parentDirs.join("|");
   const cached = discoverCache.get(key);
-  if (cached && Date.now() - cached.at < 5000) return cached.result;
+  if (cached && Date.now() - cached.at < 5000) {
+    return cached.result;
+  }
   // spawn 的 args 需要 string[];原 any 同样把原始值直接交给 Node(非字符串由 Node 校验报错),
   // 断言只为恢复静态类型,不改运行时取值。
   const args = [
@@ -284,7 +298,9 @@ async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<un
    * 而 Windows 上的第一候选也不是 `python3`。见 `~/lib/process/python-run`。 */
   for (const attempt of pythonAttempts(args)) {
     const stdout = await spawnCapture(attempt.command, attempt.args);
-    if (stdout === null) continue;
+    if (stdout === null) {
+      continue;
+    }
     try {
       const parsed: unknown = JSON.parse(stdout);
       const pkgs = /* SAFETY: 类型断言已复核 */ (
@@ -381,7 +397,9 @@ function runDiscoverStreaming(
           // 其它 key=value（discovered、done、total）用来驱动进度条填充，
           // 这样界面不必去解析中文文本。
           const m = /^PROGRESS::(scan|hash)\|(.*)$/.exec(line);
-          if (!m) return;
+          if (!m) {
+            return;
+          }
           const phase = /* SAFETY: 类型断言已复核 */ m[1] as "scan" | "hash";
           const rest = m[2]!;
           // 取出 msg=...（若其中含 `|` 也没关系：我们把它之后
@@ -399,9 +417,13 @@ function runDiscoverStreaming(
           while ((kv = kvRegex.exec(rest)) !== null) {
             const n = parseInt(kv[2]!, 10);
             const k = kv[1]!;
-            if (k === "discovered") fields.discovered = n;
-            else if (k === "done") fields.done = n;
-            else if (k === "total") fields.total = n;
+            if (k === "discovered") {
+              fields.discovered = n;
+            } else if (k === "done") {
+              fields.done = n;
+            } else if (k === "total") {
+              fields.total = n;
+            }
           }
           send({ type: "progress", parent, ...fields });
         } else if (line.startsWith("{")) {
@@ -424,7 +446,9 @@ function runDiscoverStreaming(
       });
 
       cp.on("error", (e: NodeJS.ErrnoException) => {
-        if (handedOff || resolved) return;
+        if (handedOff || resolved) {
+          return;
+        }
         /* 退避**不写数字边界**：链的长度就是边界，越界由 `attempts.at(i)` 兜住。
          * 写成 `length - 1` 会让最后一个候选永远轮不到，那句「未找到 Python 解释器」
          * 因此不可达 —— 真机没装 Python 的表现就退化成「0 个节点、一句原因都没有」。 */
@@ -447,7 +471,9 @@ function runDiscoverStreaming(
       });
 
       cp.on("close", (code) => {
-        if (resolved || handedOff) return;
+        if (resolved || handedOff) {
+          return;
+        }
         /* 与上面 `error` 那一支**同因**（内核里就是同一条判据）：127 是「命令不存在」在
          * Windows 上的另一形状，它必须与 ENOENT 给出同一句原因，而不是悄悄回一个空列表。 */
         if (isInterpreterMiss({ exitCode: code })) {
@@ -490,10 +516,18 @@ function runDiscoverStreaming(
 /* 校验外部进程参数：拒绝 flag 形态（前缀 -）、空/超长、含 shell/元字符，
  * 防客户端把 `--out=...` 之类伪装成包名注入到 spawn argv。 */
 function safeSpawnArg(token: unknown): string | null {
-  if (typeof token !== "string") return null;
-  if (token.length === 0 || token.length > 8192) return null;
-  if (token.startsWith("-")) return null;
-  if (/[\0'"$;`&|<>(){}=]/.test(token)) return null;
+  if (typeof token !== "string") {
+    return null;
+  }
+  if (token.length === 0 || token.length > 8192) {
+    return null;
+  }
+  if (token.startsWith("-")) {
+    return null;
+  }
+  if (/[\0'"$;`&|<>(){}=]/.test(token)) {
+    return null;
+  }
   return token;
 }
 
@@ -555,14 +589,18 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
         });
 
         cp.on("error", (e: NodeJS.ErrnoException) => {
-          if (handedOff || closed) return;
+          if (handedOff || closed) {
+            return;
+          }
           if (isInterpreterMiss({ errno: e.code })) {
             handedOff = true;
             i += 1;
             tryRun();
             return;
           }
-          if (closed) return;
+          if (closed) {
+            return;
+          }
           closed = true;
           send({
             type: "log",
@@ -592,7 +630,9 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
         pipeLogs(cp.stderr, "error");
 
         cp.on("close", (code) => {
-          if (closed || handedOff) return;
+          if (closed || handedOff) {
+            return;
+          }
           /* 这一处有两个顺序要紧：
            *   · 退避**不写数字边界**（与上面 `error` 那一支同一条判据、同一个理由）；
            *   · 收尾标志只能在「本次真要收尾」这一支里置 —— 压在退避判断之前，
@@ -607,7 +647,9 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
           closed = true;
           let report: unknown = null;
           try {
-            if (fs.existsSync(REPORT)) report = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
+            if (fs.existsSync(REPORT)) {
+              report = JSON.parse(fs.readFileSync(REPORT, "utf-8"));
+            }
           } catch {
             report = null;
           }
@@ -684,7 +726,9 @@ async function buildGetResponse(): Promise<Response> {
     const discoveredByParent: Record<string, Array<unknown>> = {};
     /* `allCached` 已逐个查过缓存，这里的 `?? []` 只是让类型与判据同一处
      * 落地（真出现空说明 `allCached` 那次判定与本次读取之间缓存被清了）。 */
-    for (const p of paths) discoveredByParent[p] = discoverCache.get(p)?.result ?? [];
+    for (const p of paths) {
+      discoveredByParent[p] = discoverCache.get(p)?.result ?? [];
+    }
     return NextResponse.json({
       settings,
       summary,
@@ -754,7 +798,9 @@ export async function POST(req: NextRequest) {
    * 于是同一个坏请求在这里走到「action 不认识」分支、在别的路由回一句
    * 「请求格式错误」，用户看到的原因完全不同。 */
   const rec = await readJsonRecord(req);
-  if (isErrorResponse(rec)) return rec;
+  if (isErrorResponse(rec)) {
+    return rec;
+  }
   const action: unknown = rec.action;
 
   if (action === "saveSettings") {

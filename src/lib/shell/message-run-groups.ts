@@ -117,7 +117,9 @@ export function groupMessagesByRun<T extends RunScopedMessage>(
         : seenNonCurrent
           ? LABEL_EARLIER
           : LABEL_PREVIOUS;
-    if (!d.isCurrent) seenNonCurrent = true;
+    if (!d.isCurrent) {
+      seenNonCurrent = true;
+    }
     return {
       runId: d.runId,
       label,

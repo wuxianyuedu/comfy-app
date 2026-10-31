@@ -39,19 +39,26 @@ function pythonEnvKeys(rel: string): { name: string; keys: Array<string> } {
   let m: RegExpExecArray | null;
   while ((m = head.exec(src))) {
     const start = src.indexOf("{", m.index);
-    if (start < 0) continue;
+    if (start < 0) {
+      continue;
+    }
     let depth = 0;
     let i = start;
     for (; i < src.length; i++) {
-      if (src[i] === "{") depth++;
-      else if (src[i] === "}") {
+      if (src[i] === "{") {
+        depth++;
+      } else if (src[i] === "}") {
         depth--;
-        if (depth === 0) break;
+        if (depth === 0) {
+          break;
+        }
       }
     }
     const body = src.slice(start + 1, i);
     const keys = [...body.matchAll(/([A-Z][A-Z0-9_]*)\s*:/g)].map((k) => k[1]!);
-    if (keys.some((k) => k.startsWith("PYTHON"))) found.push({ name: m[1]!, keys });
+    if (keys.some((k) => k.startsWith("PYTHON"))) {
+      found.push({ name: m[1]!, keys });
+    }
   }
   expect(
     found.length,

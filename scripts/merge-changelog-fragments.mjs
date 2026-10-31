@@ -39,14 +39,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const FRAGMENT_DIR = path.join(ROOT, "changelog.d");
 const CHANGELOG = path.join(ROOT, "CHANGELOG.md");
 /** Keep a Changelog 的固定段落顺序 —— 并入时按它重排,不按文件名字母序。 */
-const SECTIONS = [
-  "Added",
-  "Changed",
-  "Deprecated",
-  "Removed",
-  "Fixed",
-  "Security",
-];
+const SECTIONS = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"];
 const IGNORED_FILES = new Set(["README.md"]);
 
 const args = process.argv.slice(2);
@@ -75,7 +68,9 @@ if (anchorIdx >= 0 && !anchorRevArg) {
 
 /** 读取所有碎片,按段落聚合(段落内保持文件名字典序,保证输出稳定可复现)。 */
 function readFragments() {
-  if (!fs.existsSync(FRAGMENT_DIR)) return [];
+  if (!fs.existsSync(FRAGMENT_DIR)) {
+    return [];
+  }
   const files = fs
     .readdirSync(FRAGMENT_DIR)
     .filter((n) => n.endsWith(".md") && !IGNORED_FILES.has(n))
@@ -85,7 +80,9 @@ function readFragments() {
     const text = fs.readFileSync(path.join(FRAGMENT_DIR, name), "utf8");
     const lines = text.split("\n").map((l) => l.trimEnd());
     const first = lines.find((l) => l.trim() !== "");
-    if (first === undefined) continue;
+    if (first === undefined) {
+      continue;
+    }
     const section = first.replace(/^#{1,6}\s*/, "").trim();
     if (!SECTIONS.includes(section)) {
       console.error(
@@ -98,7 +95,9 @@ function readFragments() {
       .slice(lines.indexOf(first) + 1)
       .join("\n")
       .trim();
-    if (!body) continue;
+    if (!body) {
+      continue;
+    }
     out.push({ name, section, body });
   }
   return out;
@@ -159,13 +158,19 @@ function pendingSections(lines) {
   const out = [];
   let inFence = false;
   lines.forEach((line, i) => {
-    if (/^\s*```/.test(line)) inFence = !inFence;
-    if (inFence) return;
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+    }
+    if (inFence) {
+      return;
+    }
     const m = /^##\s+(.+?)\s*$/.exec(line);
     /* 解构 + 真值判据：`m[1]` 是 `string | undefined`，而 `isPendingTitle(…)` 要的
      * 是 `string` —— 在这里收掉，比在下面两处（判据与 `out.push`）各写一遍强。 */
     const [, title] = m ?? [];
-    if (!title || !isPendingTitle(title)) return;
+    if (!title || !isPendingTitle(title)) {
+      return;
+    }
     /* 锚只认段落开头几行 —— 认成「段落里任意一行有 `<!-- since:`」会让正文里一句
      * **讨论锚本身**的话被当成本段落的锚。 */
     let rev = null;
@@ -240,7 +245,9 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
 
   const start = target.start;
   let end = lines.findIndex((l, i) => i > start && /^##\s/.test(l));
-  if (end < 0) end = lines.length;
+  if (end < 0) {
+    end = lines.length;
+  }
 
   /* 解析该待发段落的各段落,与碎片合并(同一段落:现有在前,碎片在后)。 */
   /** 段落 → 该段落已有的行。 */
@@ -251,7 +258,9 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
    * @param {string} section @returns {string[]} */
   const listOf = (section) => {
     const existing = bucket.get(section);
-    if (existing) return existing;
+    if (existing) {
+      return existing;
+    }
     /** @type {string[]} */
     const created = [];
     bucket.set(section, created);
@@ -266,23 +275,26 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
       listOf(current);
       continue;
     }
-    if (current) listOf(current).push(line);
+    if (current) {
+      listOf(current).push(line);
+    }
   }
   for (const f of fragments) {
     listOf(f.section).push("", f.body);
   }
 
   const rebuilt = [];
-  for (const section of [
-    ...SECTIONS,
-    ...[...bucket.keys()].filter((s) => !SECTIONS.includes(s)),
-  ]) {
-    if (!bucket.has(section)) continue;
+  for (const section of [...SECTIONS, ...[...bucket.keys()].filter((s) => !SECTIONS.includes(s))]) {
+    if (!bucket.has(section)) {
+      continue;
+    }
     const body = listOf(section)
       .join("\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim();
-    if (!body) continue;
+    if (!body) {
+      continue;
+    }
     rebuilt.push("", `### ${section}`, "", body);
   }
 
@@ -293,22 +305,15 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
   /* 锚刷成「本轮条目里最早的那一个」,并保留原来那句 slug(它是**这一段从哪儿开始**的
    * 那句话);本来就没锚的段落顺手补一句 —— 并入的人手上正好有这个事实。 */
   const refreshed = target.rev !== anchorRev;
-  const slug =
-    target.slug ??
-    `并入 ${fragments.length} 个碎片,最早的一条来自 ${anchorRev}`;
+  const slug = target.slug ?? `并入 ${fragments.length} 个碎片,最早的一条来自 ${anchorRev}`;
   const anchorLine = `<!-- since: ${anchorRev} — ${slug} -->`;
 
   /* 旧锚不留第二行(锚是「这一段从哪儿开始」的唯一一句话),所以整段重建而不是
    * 往里插一行 —— 重建时顺带把段落内的多空行压掉,与原来那份的行为一致。 */
   return {
-    text: [
-      ...lines.slice(0, start),
-      heading,
-      anchorLine,
-      ...rebuilt,
-      "",
-      ...lines.slice(end),
-    ].join("\n"),
+    text: [...lines.slice(0, start), heading, anchorLine, ...rebuilt, "", ...lines.slice(end)].join(
+      "\n",
+    ),
     target: target.title,
     refreshed,
     anchor: anchorRev,
@@ -397,15 +402,21 @@ if (checkOnly) {
     `[merge-changelog] --check:将并入「## ${merged.target}」、锚 → ${anchorRev}` +
       `${merged.refreshed ? "(变了)" : "(未变)"};未改动任何文件。`,
   );
-  if (asJson) process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+  if (asJson) {
+    process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+  }
   process.exit(0);
 }
 fs.writeFileSync(CHANGELOG, merged.text);
-for (const f of fragments) fs.rmSync(path.join(FRAGMENT_DIR, f.name));
+for (const f of fragments) {
+  fs.rmSync(path.join(FRAGMENT_DIR, f.name));
+}
 console.log(
   `[merge-changelog] ✓ 已并入「## ${merged.target}」` +
     `${releaseVersion ? ` 并定版 ${releaseVersion}` : ""},` +
     `锚 → ${anchorRev}${merged.refreshed ? "" : "(未变)"},` +
     `删除 ${fragments.length} 个碎片。`,
 );
-if (asJson) process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+if (asJson) {
+  process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+}

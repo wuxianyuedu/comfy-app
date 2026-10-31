@@ -84,9 +84,15 @@ function localTimestamp(): string {
 
 /** 把任意值转成可读文本（对齐规范 07 §7.10：Error 取 stack，循环引用兜底）。 */
 export function traceStringify(value: unknown): string {
-  if (value == null) return "null";
-  if (typeof value === "string") return value;
-  if (value instanceof Error) return `${value.name}: ${value.message}\n${value.stack ?? ""}`;
+  if (value == null) {
+    return "null";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value instanceof Error) {
+    return `${value.name}: ${value.message}\n${value.stack ?? ""}`;
+  }
   if (typeof value === "object") {
     try {
       return JSON.stringify(value, null, 2);
@@ -95,8 +101,12 @@ export function traceStringify(value: unknown): string {
       return `[unserializable ${Object.prototype.toString.call(value)}]`;
     }
   }
-  if (typeof value === "symbol") return Symbol.prototype.toString.call(value);
-  if (typeof value === "function") return `[function ${value.name || "anonymous"}]`;
+  if (typeof value === "symbol") {
+    return Symbol.prototype.toString.call(value);
+  }
+  if (typeof value === "function") {
+    return `[function ${value.name || "anonymous"}]`;
+  }
   /* 此处 value 已是 string/number/boolean/bigint（其余分支均已 return）。 */
   return `${/* SAFETY: 类型断言已复核 */ value as string | number | boolean | bigint}`;
 }
@@ -124,7 +134,9 @@ export function trace(
     // 动态 import 尚未落地 / 纯 Node 未 configure → 静默 skip。
     // 与「trace 是诊断通道、绝不因写入失败崩业务」的原契约一致。
     const tracePath = traceLogPathRef;
-    if (!tracePath) return;
+    if (!tracePath) {
+      return;
+    }
     const dir = path.dirname(tracePath);
     if (!fs.existsSync(/*turbopackIgnore: true*/ dir)) {
       fs.mkdirSync(/*turbopackIgnore: true*/ dir, { recursive: true });
@@ -190,7 +202,9 @@ export function historyTraceSummary(
   let executionError: string | undefined;
   if (Array.isArray(messages)) {
     for (const msg of messages) {
-      if (!Array.isArray(msg) || msg[0] !== "execution_error") continue;
+      if (!Array.isArray(msg) || msg[0] !== "execution_error") {
+        continue;
+      }
       const payload = /* SAFETY: 类型断言已复核 */ msg[1] as
         | Record<string, unknown>
         | null
@@ -228,7 +242,9 @@ export function historyOutputKeys(
       ? /* SAFETY: 类型断言已复核 */ (hist[promptId] as Record<string, unknown> | undefined)
       : undefined;
   const outputs = entry?.outputs;
-  if (!outputs || typeof outputs !== "object") return [];
+  if (!outputs || typeof outputs !== "object") {
+    return [];
+  }
   return Object.entries(outputs).map(([nodeId, v]) => ({
     nodeId,
     keys: v && typeof v === "object" ? Object.keys(/* SAFETY: 类型断言已复核 */ v as object) : [],
@@ -243,14 +259,20 @@ export function queueTraceSummary(qd: unknown): {
   /* ComfyUI /queue 的条目是 `[number, prompt_id, prompt, extra, outputs]` 元组；
    *  也曾出现过 `{prompt_id}` 对象形态（第三方构建），两种都认。 */
   const pick = (v: unknown): Array<string> => {
-    if (!nonEmptyArray(v)) return [];
+    if (!nonEmptyArray(v)) {
+      return [];
+    }
     const ids: Array<string> = [];
     for (const it of /* SAFETY: 类型断言已复核 */ v as Array<unknown>) {
       if (Array.isArray(it)) {
-        if (typeof it[1] === "string" && it[1]) ids.push(it[1]);
+        if (typeof it[1] === "string" && it[1]) {
+          ids.push(it[1]);
+        }
       } else if (it && typeof it === "object") {
         const id = /* SAFETY: 类型断言已复核 */ (it as { prompt_id?: unknown }).prompt_id;
-        if (typeof id === "string" && id) ids.push(id);
+        if (typeof id === "string" && id) {
+          ids.push(id);
+        }
       }
     }
     return ids;

@@ -71,15 +71,21 @@ export function libraryEdgeOwner(
   edgeId: string,
 ): { namespace: "param" | "output"; entryId: string; handleId: string } | null {
   const parts = edgeId.split(":");
-  if (parts.length < 3 || parts[0] !== LIB_EDGE_PREFIX) return null;
+  if (parts.length < 3 || parts[0] !== LIB_EDGE_PREFIX) {
+    return null;
+  }
   const namespace = parts[1];
-  if (namespace !== "param" && namespace !== "output") return null;
+  if (namespace !== "param" && namespace !== "output") {
+    return null;
+  }
   /* 条目 id 本身可能含 `:`（契约口 `reference-image-1` 不含，但历史键
    *  `<节点 id>|<分类>` 与自定义口可能含）—— 只切前两段，剩下的一整段里
    *  再按 `?` 分出「条目 id」与「handle id」（两者都可能含 `:`）。 */
   const rest = parts.slice(2).join(":");
   const sep = rest.indexOf("?");
-  if (sep < 0) return null;
+  if (sep < 0) {
+    return null;
+  }
   return {
     namespace,
     entryId: rest.slice(0, sep),

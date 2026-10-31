@@ -3,11 +3,7 @@
 import { Hint } from "~/components/ui/hint";
 import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
-import {
-  NODE_META,
-  type CanvasNodeData,
-  type NodeKind,
-} from "~/lib/project-canvas/canvas-types";
+import { NODE_META, type CanvasNodeData, type NodeKind } from "~/lib/project-canvas/canvas-types";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { isVideo as isVideoSource } from "~/lib/media/media-kind";
@@ -41,8 +37,7 @@ export function ResultCard({
 
   /* 业务事实（节点类型 / 产出元数据）与文件事实（扩展名）分层判断：扩展名那份
    * 判据收敛在 `media-kind.ts`（ISSUE #571），视图层不再自带第四份正则。 */
-  const isVideo =
-    kind === "video" || mediaType === "video" || isVideoSource(path);
+  const isVideo = kind === "video" || mediaType === "video" || isVideoSource(path);
   const src = path?.startsWith("/") ? path : path ? `/${path}` : undefined;
   const meta = NODE_META[kind];
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串名视为无输出，需用 || 回退到 meta.label
@@ -81,12 +76,7 @@ export function ResultCard({
               variant="ghost"
               className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-normal"
             >
-              <Icon
-                data-icon="inline-start"
-                name="pen"
-                size={11}
-                className="mr-1"
-              />
+              <Icon data-icon="inline-start" name="pen" size={11} className="mr-1" />
               编辑
             </Button>
           </Hint>
@@ -94,16 +84,13 @@ export function ResultCard({
             <Button
               variant="ghost"
               onClick={() => {
-                if (text) copyResult(text);
+                if (text) {
+                  copyResult(text);
+                }
               }}
               className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-normal"
             >
-              <Icon
-                data-icon="inline-start"
-                name="download"
-                size={11}
-                className="mr-1"
-              />
+              <Icon data-icon="inline-start" name="download" size={11} className="mr-1" />
               下载
             </Button>
           </Hint>
@@ -138,11 +125,7 @@ export function ResultCard({
       </div>
       <div className="from-subtle to-canvas-deep relative flex aspect-video items-center justify-center bg-linear-to-br">
         {!src ? (
-          <Icon
-            name={isVideo ? "film" : "image"}
-            size={32}
-            className="text-ink-fainter"
-          />
+          <Icon name={isVideo ? "film" : "image"} size={32} className="text-ink-fainter" />
         ) : isVideo ? (
           <MediaThumbnail
             src={src}
@@ -157,11 +140,7 @@ export function ResultCard({
             className="max-h-56 w-full object-contain"
           />
         ) : (
-          <MediaThumbnail
-            src={src}
-            alt="result"
-            className="max-h-56 w-full object-contain"
-          />
+          <MediaThumbnail src={src} alt="result" className="max-h-56 w-full object-contain" />
         )}
       </div>
       <div className="border-border-strong flex items-center justify-center border-t py-2">

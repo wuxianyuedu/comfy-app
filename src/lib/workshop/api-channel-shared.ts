@@ -54,23 +54,33 @@ const MAX_URL_LENGTH = 2048;
  * 各家特有的信封结构），而不必硬编码每种形状。
  */
 export function findStringUnderKeys(value: unknown, keys: Array<string>, depth = 0): string | null {
-  if (depth > MAX_EXTRACT_DEPTH) return null;
+  if (depth > MAX_EXTRACT_DEPTH) {
+    return null;
+  }
   if (Array.isArray(value)) {
     for (const item of value) {
       const hit = findStringUnderKeys(item, keys, depth + 1);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
     return null;
   }
-  if (!isRecord(value)) return null;
+  if (!isRecord(value)) {
+    return null;
+  }
   for (const key of keys) {
     const v: unknown = value[key];
-    if (typeof v === "string" && v.length > 0 && v.length <= MAX_URL_LENGTH) return v;
+    if (typeof v === "string" && v.length > 0 && v.length <= MAX_URL_LENGTH) {
+      return v;
+    }
   }
   for (const v of Object.values(value)) {
     if (isRecord(v) || Array.isArray(v)) {
       const hit = findStringUnderKeys(v, keys, depth + 1);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
   }
   return null;
@@ -115,17 +125,25 @@ export function extractRemoteTaskId(payload: unknown): string | null {
 /* 取出 base64 媒体载荷并包装成 data URL；取不到则为 null。 */
 export function extractBase64DataUrl(payload: unknown, mime = "image/png"): string | null {
   const b64 = findStringUnderKeys(payload, B64_KEYS, 2);
-  if (!b64) return null;
+  if (!b64) {
+    return null;
+  }
   /* 有些上游直接内联一个 data URL。 */
-  if (isDataUrl(b64)) return b64;
+  if (isDataUrl(b64)) {
+    return b64;
+  }
   /* 「怎么拼 data URL」只有一处定义（`~/lib/media/data-url`，规范 16 §16.2.4.56）。 */
   return wrapBase64(b64, mime);
 }
 
 /* 按文件路径 / URL 的扩展名猜媒体类型（SSE 输出里两种都有）。 */
 export function guessMediaKind(pathOrUrl: string): "image" | "video" | "other" {
-  if (/\.(mp4|webm|mov|mkv|avi|gif)(\?.*)?$/i.test(pathOrUrl)) return "video";
-  if (/\.(png|jpe?g|webp|bmp|avif)(\?.*)?$/i.test(pathOrUrl)) return "image";
+  if (/\.(mp4|webm|mov|mkv|avi|gif)(\?.*)?$/i.test(pathOrUrl)) {
+    return "video";
+  }
+  if (/\.(png|jpe?g|webp|bmp|avif)(\?.*)?$/i.test(pathOrUrl)) {
+    return "image";
+  }
   return "other";
 }
 
@@ -148,9 +166,13 @@ export function extractSavedOutputs(value: unknown): Array<SavedOutput> {
       out.push({ url: entry, kind: guessMediaKind(entry) });
       continue;
     }
-    if (!isRecord(entry)) continue;
+    if (!isRecord(entry)) {
+      continue;
+    }
     const rawPath: unknown = entry.localPath ?? entry.url ?? entry.path;
-    if (typeof rawPath !== "string" || rawPath.length === 0) continue;
+    if (typeof rawPath !== "string" || rawPath.length === 0) {
+      continue;
+    }
     const rawKind: unknown = entry.mediaType ?? entry.type;
     const kind =
       rawKind === "video" || rawKind === "image" || rawKind === "other"
@@ -172,7 +194,11 @@ export function resolveImagesGenerationsEndpoint(baseUrl: string): string {
   const base = String(baseUrl ?? "")
     .trim()
     .replace(/\/+$/, "");
-  if (/\/images\/generations$/i.test(base)) return base;
-  if (/\/images$/i.test(base)) return `${base}/generations`;
+  if (/\/images\/generations$/i.test(base)) {
+    return base;
+  }
+  if (/\/images$/i.test(base)) {
+    return `${base}/generations`;
+  }
   return `${base}/images/generations`;
 }

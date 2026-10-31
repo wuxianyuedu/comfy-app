@@ -25,17 +25,10 @@
  */
 
 import { TooltipProvider } from "~/components/ui/tooltip";
-import {
-  TITLE_BAR_CHROME_CLASS,
-  TITLE_BAR_HEIGHT_CLASS,
-} from "~/lib/full-screen-layer";
+import { TITLE_BAR_CHROME_CLASS, TITLE_BAR_HEIGHT_CLASS } from "~/lib/full-screen-layer";
 import { cn } from "~/lib/utils";
 
-import {
-  useTitleBarDrag,
-  useWindowMaximized,
-  WindowControls,
-} from "./WindowControls";
+import { useTitleBarDrag, useWindowMaximized, WindowControls } from "./WindowControls";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
 
 /**
@@ -49,7 +42,9 @@ export function WindowTitleBar() {
   const [maximized, setMaximized] = useWindowMaximized();
   const drag = useTitleBarDrag(setMaximized);
 
-  if (!useTitleBar) return null;
+  if (!useTitleBar) {
+    return null;
+  }
 
   return (
     <TooltipProvider>
@@ -74,10 +69,7 @@ export function WindowTitleBar() {
             与别的页面（以及系统标题栏）相反；按钮本身还在、也点得动，所以门禁与
             用例都判不出来（ISSUE #1918）。 */}
         <div className="min-w-2 flex-1" aria-hidden />
-        <WindowControls
-          maximized={maximized}
-          onMaximizedChange={setMaximized}
-        />
+        <WindowControls maximized={maximized} onMaximizedChange={setMaximized} />
       </div>
     </TooltipProvider>
   );

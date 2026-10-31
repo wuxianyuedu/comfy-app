@@ -24,7 +24,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
+  if (isErrorResponse(body)) {
+    return body;
+  }
 
   const rawMessages = Array.isArray(body.messages)
     ? /* SAFETY: 类型断言已复核 */ (body.messages as Array<Record<string, unknown>>)

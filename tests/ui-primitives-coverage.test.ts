@@ -103,7 +103,9 @@ function collectImports(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "__snapshots__" || entry.name === "__tests__") continue;
+      if (entry.name === "__snapshots__" || entry.name === "__tests__") {
+        continue;
+      }
       collectImports(full, out);
     } else if (
       (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) &&
@@ -242,9 +244,15 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     let refs = 0;
     for (const abs of collectImports(SRC)) {
       const rel = relative(SRC, abs).split(sep).join("/");
-      if (rel.includes(".test.")) continue;
-      if (abs === join(SRC, spec.replace("~/", "") + ".ts")) continue;
-      if (readFileSync(abs, "utf8").includes(`"${spec}"`)) refs++;
+      if (rel.includes(".test.")) {
+        continue;
+      }
+      if (abs === join(SRC, spec.replace("~/", "") + ".ts")) {
+        continue;
+      }
+      if (readFileSync(abs, "utf8").includes(`"${spec}"`)) {
+        refs++;
+      }
     }
     expect(refs, `${spec} 没有任何业务引用（收口等于没做）`).toBeGreaterThan(0);
   });
@@ -269,9 +277,15 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     let refs = 0;
     for (const abs of collectImports(SRC)) {
       const rel = relative(SRC, abs).split(sep).join("/");
-      if (rel.startsWith("components/ui/")) continue;
-      if (rel.includes(".test.")) continue;
-      if (readFileSync(abs, "utf8").includes('"~/components/ui/file-picker"')) refs++;
+      if (rel.startsWith("components/ui/")) {
+        continue;
+      }
+      if (rel.includes(".test.")) {
+        continue;
+      }
+      if (readFileSync(abs, "utf8").includes('"~/components/ui/file-picker"')) {
+        refs++;
+      }
     }
     expect(refs, "file-picker 的业务引用少于 3 处（收口可能被回退）").toBeGreaterThanOrEqual(3);
   });
@@ -487,10 +501,16 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
     let refs = 0;
     const self = join(SRC, `${rel}.${ext}`);
     for (const abs of collectImports(SRC)) {
-      if (abs === self) continue;
+      if (abs === self) {
+        continue;
+      }
       const absRel = relative(SRC, abs).split(sep).join("/");
-      if (absRel.includes(".test.") || absRel.startsWith("tests/")) continue;
-      if (readFileSync(abs, "utf8").includes(`"${spec}"`)) refs++;
+      if (absRel.includes(".test.") || absRel.startsWith("tests/")) {
+        continue;
+      }
+      if (readFileSync(abs, "utf8").includes(`"${spec}"`)) {
+        refs++;
+      }
     }
     expect(refs, `${spec} 的业务引用少于 ${min} 处（收口可能被回退）`).toBeGreaterThanOrEqual(min);
   });

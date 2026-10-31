@@ -81,7 +81,9 @@ const LIST_ITEM_RE = /^\s*-\s*(.+)$/;
 function stripScalar(raw: string): string {
   let value = raw.trim();
   const commentAt = value.search(/\s#/);
-  if (commentAt >= 0) value = value.slice(0, commentAt).trim();
+  if (commentAt >= 0) {
+    value = value.slice(0, commentAt).trim();
+  }
   if (
     value.length >= 2 &&
     ((value.startsWith('"') && value.endsWith('"')) ||
@@ -111,7 +113,9 @@ function slotHead(entry: string): string {
   const segments = normalizeSlashes(entry)
     .split("/")
     .filter((part) => part.length > 0);
-  if (segments.length === 0) return "";
+  if (segments.length === 0) {
+    return "";
+  }
   return isAbsoluteLike(entry) ? (segments[segments.length - 1] ?? "") : (segments[0] ?? "");
 }
 
@@ -123,8 +127,12 @@ function slotHead(entry: string): string {
  */
 export function classifyStorageSlot(entry: string): StorageSlot {
   const head = slotHead(entry).toLowerCase();
-  if (head === "input") return "input";
-  if (head === "output") return "output";
+  if (head === "input") {
+    return "input";
+  }
+  if (head === "output") {
+    return "output";
+  }
   return "models";
 }
 
@@ -160,7 +168,9 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
 
     const indent = line.length - line.trimStart().length;
 
@@ -168,7 +178,9 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
      * 判断，避免把块内纯文本行误当新字段。 */
     if (blockKey !== null && indent > blockIndent) {
       const value = stripScalar(trimmed);
-      if (value && current) current.paths.push(value);
+      if (value && current) {
+        current.paths.push(value);
+      }
       continue;
     }
     blockKey = null;
@@ -176,27 +188,37 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
     if (indent === 0) {
       const match = TOP_KEY_RE.exec(trimmed);
       flush();
-      if (!match) continue;
+      if (!match) {
+        continue;
+      }
       const key = match[1] ?? "";
       const value = stripScalar(match[2] ?? "");
       if (value) {
         // 顶层标量：ComfyUI 只认 `base_path` 一种（覆盖主 base 目录）。
-        if (key === "base_path") result.basePath = value;
+        if (key === "base_path") {
+          result.basePath = value;
+        }
         continue;
       }
       current = { key, basePath: "", paths: [] };
       continue;
     }
 
-    if (!current) continue;
+    if (!current) {
+      continue;
+    }
     const item = LIST_ITEM_RE.exec(line);
     if (item && awaitingPathItems) {
       const value = stripScalar(item[1] ?? "");
-      if (value) current.paths.push(value);
+      if (value) {
+        current.paths.push(value);
+      }
       continue;
     }
     const field = FIELD_RE.exec(line);
-    if (!field) continue;
+    if (!field) {
+      continue;
+    }
     const name = field[1] ?? "";
     const rawFieldValue = (field[2] ?? "").trim();
     /* 块标量指示符（`|` / `>`）：`text_encoders: |`、`clip_vision: |-` 等。
@@ -205,8 +227,9 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
     const isBlockScalar = /^[|>]/.test(rawFieldValue);
     const value = stripScalar(rawFieldValue);
     awaitingPathItems = name === "paths" && !value && !isBlockScalar;
-    if (name === "base_path") current.basePath = value;
-    else if (name === "is_default") {
+    if (name === "base_path") {
+      current.basePath = value;
+    } else if (name === "is_default") {
       /* 布尔标记，无目录含义，忽略。 */
     } else if (name === "paths" && value && !isBlockScalar) {
       current.paths.push(...parseInlineList(value));
@@ -252,15 +275,21 @@ export function parseStorageDirArgs(args: ReadonlyArray<string>): StorageDirOver
     const eq = token.indexOf("=");
     const flag = eq >= 0 ? token.slice(0, eq) : token;
     const field = OVERRIDE_FLAG_TO_FIELD[flag.toLowerCase()];
-    if (!field) continue;
+    if (!field) {
+      continue;
+    }
     const inlineValue = eq >= 0 ? stripScalar(token.slice(eq + 1)) : "";
     const next = args[i + 1] ?? "";
     // 下一个 token 是另一个 flag 时说明这个目录参数没给值：把它当路径会得到
     // 「D: --listen」这种根本不存在的目录，而真值只能来自 launchArgs 本身。
     const value = inlineValue || (next.startsWith("-") ? "" : stripScalar(next));
-    if (!value) continue;
+    if (!value) {
+      continue;
+    }
     overrides[field] = value;
-    if (!inlineValue) i++;
+    if (!inlineValue) {
+      i++;
+    }
   }
   return overrides;
 }
@@ -278,7 +307,9 @@ export function parseExtraModelPathsConfigArgs(args: ReadonlyArray<string>): Arr
     const token = args[i] ?? "";
     const eq = token.indexOf("=");
     const flag = eq >= 0 ? token.slice(0, eq) : token;
-    if (flag.toLowerCase() !== "--extra-model-paths-config") continue;
+    if (flag.toLowerCase() !== "--extra-model-paths-config") {
+      continue;
+    }
     const inline = eq >= 0 ? stripScalar(token.slice(eq + 1)) : "";
     if (inline) {
       out.push(inline);
@@ -287,7 +318,9 @@ export function parseExtraModelPathsConfigArgs(args: ReadonlyArray<string>): Arr
     // nargs='+'：收集后续非 flag 的 token。
     for (let j = i + 1; j < args.length; j++) {
       const t = args[j] ?? "";
-      if (t.startsWith("-")) break;
+      if (t.startsWith("-")) {
+        break;
+      }
       out.push(stripScalar(t));
       i = j;
     }

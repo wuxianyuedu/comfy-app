@@ -143,7 +143,9 @@ export function friendlyNodeTitle(
   rawTitle?: string | null,
   lang: "zh" | "en" = "zh",
 ): string {
-  if (!classType) return rawTitle ?? "";
+  if (!classType) {
+    return rawTitle ?? "";
+  }
   // (1) 作者自己填的标题优先 —— 那是为了与同 classType 的兄弟节点区分而特意写的。
   // 不调换这个顺序的话，静态表（例如 SaveImage 对应「保存图像」）
   // 会悄悄盖掉用户自定义的名字（例如 "Save Z-Anime Upscaled"），
@@ -153,7 +155,9 @@ export function friendlyNodeTitle(
   }
 
   const entry = NODE_TITLES[classType];
-  if (entry) return lang === "zh" ? entry.zh : entry.en;
+  if (entry) {
+    return lang === "zh" ? entry.zh : entry.en;
+  }
 
   // 以 UUID 形式命名的扩展显示节点
   if (/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) {
@@ -166,10 +170,7 @@ export function friendlyNodeTitle(
 
 /* "FooBarBaz" → "Foo Bar Baz"，并保留尾部的括号后缀 "(rgthree)"。
  * 静态表与 rawTitle 都不适用时，用它作为最后兜底的显示名。 */
-export function prettifyClassType(
-  classType: string,
-  lang: "zh" | "en" = "zh",
-): string {
+export function prettifyClassType(classType: string, lang: "zh" | "en" = "zh"): string {
   // 去掉尾部的库名括号后缀，例如 "(rgthree)" 或 "(advanced)"
   const parenMatch = /\s*\(([^)]+)\)\s*$/.exec(classType);
   let name = classType;
@@ -184,7 +185,9 @@ export function prettifyClassType(
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
     .replace(/_+/g, " ")
     .trim();
-  if (lang === "en") return suffix ? `${spaced} (${suffix})` : spaced;
+  if (lang === "en") {
+    return suffix ? `${spaced} (${suffix})` : spaced;
+  }
   // 中文模式：英文原样保留，但留着 (rgthree) 后缀以标明来源
   return suffix ? `${spaced}（${suffix}）` : spaced;
 }
@@ -244,6 +247,8 @@ const INPUT_LABELS: Record<string, string> = {
   sigmas: "sigmas",
 };
 export function friendlyInputName(name: string): string {
-  if (!name) return "";
+  if (!name) {
+    return "";
+  }
   return INPUT_LABELS[name] ?? name;
 }

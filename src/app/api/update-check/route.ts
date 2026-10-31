@@ -34,7 +34,9 @@ type FileFingerprint = string;
 function fingerprintOf(abs: string): FileFingerprint | null {
   try {
     const st = fs.statSync(...tracingIgnoreArgs(), abs);
-    if (!st.isFile()) return null;
+    if (!st.isFile()) {
+      return null;
+    }
     return `${Math.trunc(st.mtimeMs)}:${st.size}`;
   } catch {
     return null;
@@ -53,7 +55,9 @@ function walkFiles(dirAbs: string, out: Array<string> = []): Array<string> {
   }
   for (const e of entries) {
     if (e.isDirectory()) {
-      if (SKIP_DIRS.has(e.name)) continue;
+      if (SKIP_DIRS.has(e.name)) {
+        continue;
+      }
       walkFiles(path.join(dirAbs, e.name), out);
     } else if (e.isFile()) {
       out.push(path.join(dirAbs, e.name));
@@ -99,14 +103,20 @@ function diffGroup(
 ): { dirty: boolean; files: Array<string> } {
   const current = collectGroup(roots);
   // 还没有基线：记录当前态作为以后比对参照，本轮视为「无变化」。
-  if (!base) return { dirty: false, files: [] };
+  if (!base) {
+    return { dirty: false, files: [] };
+  }
   const files: Array<string> = [];
   for (const [rel, fp] of current) {
-    if (base.get(rel) !== fp) files.push(rel);
+    if (base.get(rel) !== fp) {
+      files.push(rel);
+    }
   }
   // 基线里存在、本次已被删除的文件也纳入
   for (const rel of base.keys()) {
-    if (!current.has(rel)) files.push(rel);
+    if (!current.has(rel)) {
+      files.push(rel);
+    }
   }
   return { dirty: files.length > 0, files: files.sort() };
 }

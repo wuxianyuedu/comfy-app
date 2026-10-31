@@ -56,7 +56,9 @@ describe("退避链：顺序与启动参数都取自那份判据", () => {
   it("脚本参数原样透到每个候选之后（内核不改写调用点给的 argv）", () => {
     const args = ["-u", "x.py", "--paths", "a,b"];
     for (const attempt of pythonAttempts(args, "win32")) {
-      if (attempt.command === "py") continue;
+      if (attempt.command === "py") {
+        continue;
+      }
       expect(attempt.args).toEqual(args);
     }
   });
@@ -107,10 +109,14 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
         },
       } as NodeJS.ReadableStream,
       push: (chunk: string) => {
-        for (const cb of cbs.data ?? []) cb(Buffer.from(chunk));
+        for (const cb of cbs.data ?? []) {
+          cb(Buffer.from(chunk));
+        }
       },
       end: () => {
-        for (const cb of cbs.end ?? []) cb(undefined);
+        for (const cb of cbs.end ?? []) {
+          cb(undefined);
+        }
       },
     };
   }
@@ -152,7 +158,9 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
       } as unknown as NodeJS.ReadableStream,
       (l) => lines.push(l),
     );
-    for (const cb of cbs) cb("一行\n");
+    for (const cb of cbs) {
+      cb("一行\n");
+    }
     expect(lines).toEqual(["一行"]);
   });
 

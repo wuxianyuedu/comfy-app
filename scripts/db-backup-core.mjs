@@ -56,8 +56,7 @@ const BACKUP_PREFIX = "db-backup-";
 const STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
 
 /** 名字形态：`db-backup-<时刻>[-<第几次>].sqlite`。 */
-const BACKUP_FILE_RE =
-  /^db-backup-(\d{4}\d{2}\d{2}-\d{2}\d{2}\d{2})(?:-(\d+))?\.sqlite$/;
+const BACKUP_FILE_RE = /^db-backup-(\d{4}\d{2}\d{2}-\d{2}\d{2}\d{2})(?:-(\d+))?\.sqlite$/;
 
 /** 一次备份落点的绝对目录。
  *  @param {string} root 应用根
@@ -108,10 +107,14 @@ export function backupFileName(at, ordinal = 1) {
  */
 export function parseBackupFileName(name) {
   const m = BACKUP_FILE_RE.exec(name);
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const [, stampText, ordinalText] = m;
   const sm = STAMP_RE.exec(stampText ?? "");
-  if (!sm) return null;
+  if (!sm) {
+    return null;
+  }
   const [, y, mo, d, h, mi, s] = sm;
   const startedAt = new Date(
     Number(y),
@@ -146,14 +149,19 @@ export function selectBackupsToPrune(names, keep = BACKUP_KEEP, protect = []) {
   const known = [];
   for (const name of names) {
     const parsed = parseBackupFileName(name);
-    if (parsed !== null) known.push({ name, parsed });
+    if (parsed !== null) {
+      known.push({ name, parsed });
+    }
   }
   known.sort((a, b) => {
     const at = a.parsed.startedAt ?? 0;
     const bt = b.parsed.startedAt ?? 0;
-    if (at !== bt) return bt - at;
-    if (a.parsed.ordinal !== b.parsed.ordinal)
+    if (at !== bt) {
+      return bt - at;
+    }
+    if (a.parsed.ordinal !== b.parsed.ordinal) {
       return b.parsed.ordinal - a.parsed.ordinal;
+    }
     return b.name.localeCompare(a.name);
   });
   /** 被保护的名字**不占保留份数**：它不是「最近 N 份」里的一份，是必须留着的。 */
@@ -184,7 +192,9 @@ export function listBackups(root) {
   const entries = [];
   for (const name of names) {
     const parsed = parseBackupFileName(name);
-    if (parsed === null) continue;
+    if (parsed === null) {
+      continue;
+    }
     const file = path.join(dir, name);
     let size;
     try {
@@ -224,12 +234,7 @@ export function listBackups(root) {
  * @returns {BackupResult}
  */
 export function createBackup(root, options = {}) {
-  const {
-    databaseUrl,
-    now = new Date(),
-    keep = BACKUP_KEEP,
-    protect = [],
-  } = options;
+  const { databaseUrl, now = new Date(), keep = BACKUP_KEEP, protect = [] } = options;
   const source = resolveSqlitePath(root, databaseUrl);
   if (!fs.existsSync(source)) {
     return { ok: false, reason: "数据库文件还不存在，没有什么可备份的" };
@@ -244,11 +249,15 @@ export function createBackup(root, options = {}) {
     let ordinal = 1;
     for (;;) {
       target = path.join(dir, backupFileName(now, ordinal));
-      if (!fs.existsSync(target)) break;
+      if (!fs.existsSync(target)) {
+        break;
+      }
       ordinal += 1;
     }
     tmp = `${target}.partial`;
-    if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+    if (fs.existsSync(tmp)) {
+      fs.unlinkSync(tmp);
+    }
   } catch (error) {
     return { ok: false, reason: `备份目录不可写：${messageOf(error)}` };
   }
@@ -320,16 +329,18 @@ export function verifyBackupFile(file) {
     const row = db.prepare("PRAGMA integrity_check").get();
     /* `integrity_check` 正常时回**一行 `ok`**；有损坏时回一行行的问题描述。 */
     const verdict = String(row?.integrity_check ?? "");
-    if (verdict !== "ok")
+    if (verdict !== "ok") {
       return { ok: false, reason: `integrity_check 回「${verdict}」` };
+    }
     const count = db
       .prepare(
         "SELECT count(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
       )
       .get();
     const tables = Number(count?.c ?? 0);
-    if (tables === 0)
+    if (tables === 0) {
       return { ok: false, reason: "产物里一张表都没有（空壳，不是快照）" };
+    }
     return { ok: true, size, tables };
   } catch (error) {
     return { ok: false, reason: `查询失败（${messageOf(error)}）` };
@@ -375,7 +386,9 @@ export function pruneBackups(root, keep = BACKUP_KEEP, onFail, protect = []) {
  *  @param {string} file */
 function cleanup(file) {
   try {
-    if (file && fs.existsSync(file)) fs.unlinkSync(file);
+    if (file && fs.existsSync(file)) {
+      fs.unlinkSync(file);
+    }
   } catch {
     /* 留着一个 `.partial` 比抛错好：它名字里就有「不完整」，下一次备份会覆盖它 */
   }
@@ -460,7 +473,9 @@ export function readRestoreRequest(root) {
   try {
     const parsed = JSON.parse(fs.readFileSync(restoreMarkerPath(root), "utf8"));
     const name = parsed && typeof parsed.file === "string" ? parsed.file : null;
-    if (name === null || parseBackupFileName(name) === null) return null;
+    if (name === null || parseBackupFileName(name) === null) {
+      return null;
+    }
     return {
       file: name,
       at: typeof parsed.at === "string" ? parsed.at : null,
@@ -495,7 +510,9 @@ export function readRestoreRequest(root) {
  */
 export function applyPendingRestore(root, options = {}) {
   const request = readRestoreRequest(root);
-  if (request === null) return { status: "nothing-to-do" };
+  if (request === null) {
+    return { status: "nothing-to-do" };
+  }
 
   const from = request.file;
   const source = path.join(backupDir(root), from);
@@ -539,7 +556,9 @@ export function applyPendingRestore(root, options = {}) {
      * malformed`（`guide-database-backup.md` §3.2 记录过这个现场）。 */
     for (const side of [`${dbFile}-wal`, `${dbFile}-shm`]) {
       try {
-        if (fs.existsSync(side)) fs.unlinkSync(side);
+        if (fs.existsSync(side)) {
+          fs.unlinkSync(side);
+        }
       } catch (error) {
         return {
           status: "failed",
@@ -655,6 +674,8 @@ export function applyPendingRestoreAtBoot(root, options = {}) {
     };
   }
   const notice = restoreNotice(result);
-  for (const line of notice?.lines ?? []) write(`[db-backup] ${line}\n`);
+  for (const line of notice?.lines ?? []) {
+    write(`[db-backup] ${line}\n`);
+  }
   return result;
 }

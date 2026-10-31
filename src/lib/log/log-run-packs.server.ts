@@ -73,7 +73,9 @@ async function readPackMeta(
 /** `run.json` 的 `startedAt`（ISO 串）→ 毫秒；缺失 / 读不出给 null。 */
 function startedAtMs(meta: Record<string, unknown> | null): number | null {
   const raw = meta?.startedAt;
-  if (typeof raw !== "string") return null;
+  if (typeof raw !== "string") {
+    return null;
+  }
   const ms = new Date(raw).getTime();
   return Number.isFinite(ms) ? ms : null;
 }
@@ -99,13 +101,17 @@ async function listPackSourceFiles(
   }
   const out: Array<PackLogFile> = [];
   for (const name of names) {
-    if (!name.endsWith(".log")) continue;
+    if (!name.endsWith(".log")) {
+      continue;
+    }
     if (name === legacyRuntimeLogFileName(source)) {
       out.push({ name, startedAt: null, title: formatFileTime(null) });
       continue;
     }
     const parsed = parseRuntimeLogFileName(name);
-    if (parsed?.source !== source) continue;
+    if (parsed?.source !== source) {
+      continue;
+    }
     out.push({
       name,
       startedAt: parsed.startedAt,
@@ -153,7 +159,9 @@ export async function scanRunPacks(options: ScanRunPacksOptions): Promise<{
   for (const name of sortPackNames(names)) {
     const dir = path.join(/*turbopackIgnore: true*/ runsDir, name);
     const files = await listPackSourceFiles(dir, sourceDir, source);
-    if (files.length === 0) continue;
+    if (files.length === 0) {
+      continue;
+    }
     total += files.length;
     const meta = await readPackMeta(dir, runJsonName);
     packs.push({

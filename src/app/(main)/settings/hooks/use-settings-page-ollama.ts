@@ -80,7 +80,9 @@ export function useSettingsOllama({
   /** 静默探测：不发「检测中」、不与其他探测互相覆盖状态。 */
   const probeOllamaSilent = useCallback(async (baseUrl: string) => {
     const result = await probeOllamaClient(baseUrl);
-    if (startingRef.current || stoppingRef.current) return;
+    if (startingRef.current || stoppingRef.current) {
+      return;
+    }
     if (result.up) {
       setModels(result.models);
       setStatus("up");
@@ -93,7 +95,9 @@ export function useSettingsOllama({
   /** 探测并把结果落到状态行。启动流程内部轮询禁用此函数（见 probeOllamaSilent）。 */
   const probeOllama = useCallback(
     async (baseUrl: string) => {
-      if (startingRef.current || stoppingRef.current) return;
+      if (startingRef.current || stoppingRef.current) {
+        return;
+      }
       setStatus("checking");
       await probeOllamaSilent(baseUrl);
     },
@@ -151,7 +155,9 @@ export function useSettingsOllama({
       }
     })();
     // 超时 / 失败后兜底探一次，让状态行和进程的真实情况对齐
-    if (!result.ok && llmBaseUrl) await probeOllamaSilent(llmBaseUrl);
+    if (!result.ok && llmBaseUrl) {
+      await probeOllamaSilent(llmBaseUrl);
+    }
   }, [llmBaseUrl, probeOllamaSilent, showFlash]);
 
   const stopOllama = useCallback(async () => {
@@ -170,7 +176,9 @@ export function useSettingsOllama({
       stoppingRef.current = false;
     }
     // 停止后重新探测，状态行回到「未运行」
-    if (llmBaseUrl) await probeOllama(llmBaseUrl);
+    if (llmBaseUrl) {
+      await probeOllama(llmBaseUrl);
+    }
   }, [llmBaseUrl, probeOllama, showFlash]);
 
   const logActive = starting || status === "starting";

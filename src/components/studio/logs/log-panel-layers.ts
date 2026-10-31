@@ -69,7 +69,9 @@ export function isPopupLayerAboveOverlay(popupZ: number): boolean {
  */
 export function parseZClass(className: string): number | null {
   const match = /(?:^|\s)z-(\d+)(?:\s|$)/.exec(className);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const value = Number(match[1]);
   return Number.isFinite(value) ? value : null;
 }

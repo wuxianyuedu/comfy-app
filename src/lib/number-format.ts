@@ -44,7 +44,9 @@
 import { clampInt } from "~/lib/clamp";
 
 export function fixed(value: number, digits: number): string | null {
-  if (!Number.isFinite(value)) return null;
+  if (!Number.isFinite(value)) {
+    return null;
+  }
   const clamped = clampInt(digits, 0, 20, { mode: "trunc" });
   return value.toFixed(clamped);
 }
@@ -68,9 +70,13 @@ export function fixed(value: number, digits: number): string | null {
  */
 export function trimmed(value: number, digits: number): string | null {
   const text = fixed(value, digits);
-  if (text === null) return null;
+  if (text === null) {
+    return null;
+  }
   /* 只剥**小数点之后**的零 —— `100` 不能变成 `1`。 */
-  if (!text.includes(".")) return text;
+  if (!text.includes(".")) {
+    return text;
+  }
   const stripped = text.replace(/\.?0+$/, "");
   /* `"-0.00"` 剥完尾零会剩下 `"-0"` —— 这是一个**没有任何信息**的负零，
    * 显示出来会让用户以为「这个值小于 0」（它其实是被舍成 0 的
@@ -88,8 +94,12 @@ export function trimmed(value: number, digits: number): string | null {
  * `NaN` → `null`（与 `fixed` / `trimmed` 同口径）。
  */
 export function trimFixed(value: number, digits: number): string | null {
-  if (!Number.isFinite(value)) return null;
-  if (Number.isInteger(value)) return String(value);
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  if (Number.isInteger(value)) {
+    return String(value);
+  }
   return trimmed(value, digits);
 }
 

@@ -29,7 +29,9 @@ function tmpRoot(): string {
 }
 
 afterEach(() => {
-  while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
+  while (dirs.length) {
+    rmSync(dirs.pop()!, { recursive: true, force: true });
+  }
 });
 
 function read(root: string): Record<string, unknown> {

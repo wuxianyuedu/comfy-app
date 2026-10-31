@@ -132,12 +132,16 @@ export function useLibraryWireFlow({
   const dropHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
-      if (dropHintTimerRef.current) clearTimeout(dropHintTimerRef.current);
+      if (dropHintTimerRef.current) {
+        clearTimeout(dropHintTimerRef.current);
+      }
     };
   }, []);
   const showHint = useCallback((message: string) => {
     setDropHint(message);
-    if (dropHintTimerRef.current) clearTimeout(dropHintTimerRef.current);
+    if (dropHintTimerRef.current) {
+      clearTimeout(dropHintTimerRef.current);
+    }
     dropHintTimerRef.current = setTimeout(() => setDropHint(null), 4000);
   }, []);
 
@@ -197,7 +201,9 @@ export function useLibraryWireFlow({
   const onConnect = useCallback(
     (connection: Connection) => {
       const { source, target, sourceHandle, targetHandle } = connection;
-      if (!sourceHandle || !targetHandle) return;
+      if (!sourceHandle || !targetHandle) {
+        return;
+      }
       /* 左列卡片起手：handle id 就是**条目 id**（落库键），落点取另一端（宿主行的
        *  ioKey）；右列输出卡的 handle id 就是输出口的 ioKey，同样是落库键。 */
       if (source === LIB_NODE_PARAMS && target === LIB_NODE_HOST) {
@@ -225,7 +231,9 @@ export function useLibraryWireFlow({
     (_event, connectionState) => {
       /* `FinalConnectionState` 与 `NoConnection` 的并集：没拖过线时
        *  `fromNode === null`，据此早退（此时也不该有任何提示）。 */
-      if (!connectionState.fromNode) return;
+      if (!connectionState.fromNode) {
+        return;
+      }
       if (connectionState.isValid === null) {
         showHint("松手时不在任何端口上（对准那一行 / 卡片再松手）");
         return;
@@ -467,7 +475,9 @@ function connectionFromDrop(state: {
   toHandle?: DropHandle;
 }): LibraryConnection | null {
   const { fromHandle: from, toHandle: to } = state;
-  if (!from?.nodeId || !to?.nodeId) return null;
+  if (!from?.nodeId || !to?.nodeId) {
+    return null;
+  }
   const fromIsTarget = from.type === "target";
   return {
     source: fromIsTarget ? to.nodeId : from.nodeId,
@@ -492,7 +502,7 @@ export function deriveLibraryEdges(
 ): Array<Edge> {
   const sel = selectedIds ?? new Set<string>();
   const out: Array<Edge> = [];
-  for (const wire of inputWires)
+  for (const wire of inputWires) {
     out.push(
       buildInputEdge(
         wire,
@@ -500,7 +510,8 @@ export function deriveLibraryEdges(
         sel.has(libraryEdgeId("param", wire.entryId, wire.handleId)),
       ),
     );
-  for (const wire of outputWires)
+  }
+  for (const wire of outputWires) {
     out.push(
       buildOutputEdge(
         wire,
@@ -508,6 +519,7 @@ export function deriveLibraryEdges(
         sel.has(libraryEdgeId("output", wire.entryId, wire.handleId)),
       ),
     );
+  }
   return out;
 }
 

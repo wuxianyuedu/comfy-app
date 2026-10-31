@@ -32,7 +32,9 @@ async function scanLogFiles(dir: string, base: string): Promise<Array<LogFileInf
   try {
     entries = await fs.promises.readdir(dir, { withFileTypes: true });
   } catch (error) {
-    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
     throw error;
   }
   const perEntry = await Promise.all(
@@ -42,7 +44,9 @@ async function scanLogFiles(dir: string, base: string): Promise<Array<LogFileInf
       if (entry.isDirectory()) {
         return scanLogFiles(full, rel);
       }
-      if (!entry.isFile() || !entry.name.endsWith(".log")) return [];
+      if (!entry.isFile() || !entry.name.endsWith(".log")) {
+        return [];
+      }
       const stat = await fs.promises.stat(full);
       return [
         {

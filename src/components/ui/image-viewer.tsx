@@ -135,15 +135,21 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
 
   useEffect(() => {
     const el = scrollerRef.current;
-    if (!el || naturalWidth === null || naturalHeight === null) return;
+    if (!el || naturalWidth === null || naturalHeight === null) {
+      return;
+    }
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       const current = scaleRef.current;
       const next = clampNext(current, event.deltaY < 0);
-      if (next === current) return;
+      if (next === current) {
+        return;
+      }
       const rect = readElementBox(el);
-      if (!rect) return;
+      if (!rect) {
+        return;
+      }
       const offsetX = event.clientX - rect.left;
       const offsetY = event.clientY - rect.top;
       /* 光标下的**内容坐标**保持不变：新滚动位置 = 该内容坐标 × 缩放比 − 光标在视口里的偏移。 */
@@ -164,7 +170,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   useEffect(() => {
     const el = scrollerRef.current;
     const pending = pendingScrollRef.current;
-    if (!el || pending?.scale !== zoom.scale) return;
+    if (!el || pending?.scale !== zoom.scale) {
+      return;
+    }
     pendingScrollRef.current = null;
     el.scrollLeft = pending.left;
     el.scrollTop = pending.top;
@@ -196,7 +204,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const el = scrollerRef.current;
-    if (event.button !== 0 || !el) return;
+    if (event.button !== 0 || !el) {
+      return;
+    }
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -207,7 +217,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
       dy: 0,
     };
     /* 拖拽期间把内层提为合成层（松手即撤），免得每帧重新栅格化整张图。 */
-    if (innerRef.current) innerRef.current.style.willChange = "transform";
+    if (innerRef.current) {
+      innerRef.current.style.willChange = "transform";
+    }
     if (typeof el.setPointerCapture === "function") {
       el.setPointerCapture(event.pointerId);
     }
@@ -215,15 +227,21 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
-    if (!drag) return;
+    if (!drag) {
+      return;
+    }
     drag.dx = event.clientX - drag.startX;
     drag.dy = event.clientY - drag.startY;
-    if (panFrameRef.current) return;
+    if (panFrameRef.current) {
+      return;
+    }
     panFrameRef.current = onNextFrame(() => {
       panFrameRef.current = null;
       const inner = innerRef.current;
       const current = dragRef.current;
-      if (!inner || !current) return;
+      if (!inner || !current) {
+        return;
+      }
       inner.style.transform = `translate3d(${current.dx}px, ${current.dy}px, 0)`;
     });
   };
@@ -250,7 +268,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   /* 卸载时撤掉可能还排着的那一帧（弹窗在拖拽中被关掉）。 */
   useEffect(() => () => panFrameRef.current?.(), []);
 
-  if (!src) return null;
+  if (!src) {
+    return null;
+  }
 
   const title = firstText(label, alt) ?? "图片查看";
   /* 尺寸未知（解码中）时先按「不超过可视区」显示，读到自然尺寸再切成像素尺寸
@@ -388,7 +408,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
                 draggable={false}
                 onLoad={(media) => {
                   const size = readNaturalSize(media);
-                  if (size) setLoaded({ src, size });
+                  if (size) {
+                    setLoaded({ src, size });
+                  }
                 }}
               />
             </div>
@@ -453,7 +475,9 @@ export function ViewableImage({
   title = "点击查看大图",
 }: ViewableImageProps) {
   const [open, setOpen] = useState(false);
-  if (!src) return null;
+  if (!src) {
+    return null;
+  }
   const name = firstText(label, alt);
   return (
     <>

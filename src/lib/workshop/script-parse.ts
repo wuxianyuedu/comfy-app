@@ -96,10 +96,14 @@ export function parseCharacterEntries(markdown: string): Array<ParsedCharacterDr
   const byName = new Map<string, ParsedCharacterDraft>();
   for (const line of markdown.split(/\r?\n/)) {
     const m = CHARACTER_LINE_RE.exec(line.trim());
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     for (const seg of (m[1] ?? "").split(ENTRY_SPLIT_RE)) {
       const draft = parseCharacterEntry(seg);
-      if (!draft) continue;
+      if (!draft) {
+        continue;
+      }
       const prev = byName.get(draft.name);
       if (!prev) {
         byName.set(draft.name, draft);
@@ -117,7 +121,9 @@ function parseCharacterEntry(raw: string): ParsedCharacterDraft | null {
     .trim()
     .replace(/^[-*•·]\s*/, "")
     .replace(/^\d{1,2}[.、)]\s*/, "");
-  if (!seg) return null;
+  if (!seg) {
+    return null;
+  }
 
   let name;
   let ageGender = "";
@@ -146,7 +152,9 @@ function parseCharacterEntry(raw: string): ParsedCharacterDraft | null {
     .trim()
     .replace(/[-—–:：.。]+$/, "")
     .trim();
-  if (!name || name.length > 20) return null;
+  if (!name || name.length > 20) {
+    return null;
+  }
   rest = rest.replace(/^[\s\-—–:：.。、,，]+/, "").trim();
   return {
     name,
@@ -164,7 +172,9 @@ export function matchCharacterNames(text: string, names: Array<string>): Array<s
   const out = new Set<string>();
   for (const raw of names) {
     const name = raw.trim();
-    if (name && text.includes(name)) out.add(name);
+    if (name && text.includes(name)) {
+      out.add(name);
+    }
   }
   return [...out];
 }
@@ -194,7 +204,9 @@ export function matchSceneHeading(line: string): SceneHeadingInfo | null {
     .trim()
     .replace(/^#{1,6}\s*/, "")
     .replace(/^[-*•]\s*/, "");
-  if (!s) return null;
+  if (!s) {
+    return null;
+  }
 
   // A:「编号-编号」+ (场景关键词 | 内/外标记) + 尾部
   const a =
@@ -232,7 +244,9 @@ const TIME_WORDS_RE =
 /** 从场景标题尾部提取地点/时间:优先「地点(时间)」括号,其次时间词扫描 */
 function extractLocationTime(marker: string, tailRaw: string): { location: string; time: string } {
   const tail = tailRaw.trim();
-  if (!tail) return { location: normalizeLocation(marker, ""), time: "" };
+  if (!tail) {
+    return { location: normalizeLocation(marker, ""), time: "" };
+  }
 
   const paren = /[(（]([^()（）]*)[)）]\s*$/.exec(tail);
   if (paren) {
@@ -258,7 +272,9 @@ function extractLocationTime(marker: string, tailRaw: string): { location: strin
 
 function normalizeLocation(marker: string, loc: string): string {
   const l = loc.trim();
-  if (!marker) return l;
+  if (!marker) {
+    return l;
+  }
   return l ? `${marker}·${l}` : marker;
 }
 
@@ -315,7 +331,9 @@ export function parseShotDrafts(
       blocks.push(cur);
       continue;
     }
-    if (!cur) continue;
+    if (!cur) {
+      continue;
+    }
     const am = ACTION_LINE_RE.exec(s);
     if (am) {
       cur.items.push({ description: (am[1] ?? "").trim(), dialogue: [] });
@@ -324,16 +342,23 @@ export function parseShotDrafts(
     const dm = DIALOGUE_LINE_RE.exec(s);
     if (dm) {
       const text = (dm[2] ?? "").trim();
-      if (!text) continue;
+      if (!text) {
+        continue;
+      }
       const last = cur.items[cur.items.length - 1];
-      if (last) last.dialogue.push(text);
-      else cur.leadingDialogue.push(text);
+      if (last) {
+        last.dialogue.push(text);
+      } else {
+        cur.leadingDialogue.push(text);
+      }
     }
   }
 
   const drafts: Array<ParsedShotDraft> = [];
   for (const b of blocks) {
-    if (b.items.length === 0 && b.leadingDialogue.length === 0) continue;
+    if (b.items.length === 0 && b.leadingDialogue.length === 0) {
+      continue;
+    }
     const items = b.items.length > 0 ? b.items : [{ description: "", dialogue: b.leadingDialogue }];
     items.forEach((item, i) => {
       const own = i === 0 ? [...b.leadingDialogue, ...item.dialogue] : item.dialogue;
@@ -415,9 +440,13 @@ export function parseExtractedCharacters(text: string): Array<ParsedCharacterDra
   const arr = extractJsonArray(text);
   const out: Array<ParsedCharacterDraft> = [];
   for (const item of arr) {
-    if (!isRecord(item)) continue;
+    if (!isRecord(item)) {
+      continue;
+    }
     const name = asStr(item.name).trim();
-    if (!name) continue;
+    if (!name) {
+      continue;
+    }
     const rawTags: unknown = item.styleTags;
     const styleTags = Array.isArray(rawTags)
       ? rawTags.filter((t): t is string => typeof t === "string")
@@ -444,10 +473,14 @@ export function parseExtractedShots(text: string): Array<ShotEntry> {
   const arr = extractJsonArray(text);
   const out: Array<ShotEntry> = [];
   for (const item of arr) {
-    if (!isRecord(item)) continue;
+    if (!isRecord(item)) {
+      continue;
+    }
     const sceneHeading = asStr(item.sceneHeading).trim();
     const description = asStr(item.description).trim();
-    if (!sceneHeading && !description) continue;
+    if (!sceneHeading && !description) {
+      continue;
+    }
     const shotType = normalizeShotType(item.shotType);
     const rawNames: unknown = item.characterNames;
     const characterNames = Array.isArray(rawNames)
@@ -491,9 +524,13 @@ export function parseImportedCharacterCards(raw: string): Array<ParsedCharacterD
   }
   const out: Array<ParsedCharacterDraft> = [];
   for (const item of items) {
-    if (!isRecord(item)) continue;
+    if (!isRecord(item)) {
+      continue;
+    }
     const name = asStr(item.name).trim();
-    if (!name) continue;
+    if (!name) {
+      continue;
+    }
     const rawTags: unknown = item.styleTags;
     const styleTags = Array.isArray(rawTags)
       ? rawTags.filter((t): t is string => typeof t === "string")
@@ -533,7 +570,9 @@ export function mergeCharacterDrafts(
   let skipped = 0;
   for (const draft of drafts) {
     const name = draft.name.trim();
-    if (!name) continue;
+    if (!name) {
+      continue;
+    }
     if (seen.has(name)) {
       skipped += 1;
       continue;
@@ -556,8 +595,12 @@ export function mergeCharacterDrafts(
     const style = styles.find((st) => st.slug === character.skillSlug) ?? styles[0];
     character.positivePrompt = buildCharacterPrompt(character, style);
     character.negativePrompt = buildCharacterNegative(character, style);
-    if (style?.defaultParams) character.params = { ...style.defaultParams };
-    if (draft.params) character.params = { ...character.params, ...draft.params };
+    if (style?.defaultParams) {
+      character.params = { ...style.defaultParams };
+    }
+    if (draft.params) {
+      character.params = { ...character.params, ...draft.params };
+    }
     list.push(character);
     added += 1;
   }
@@ -567,7 +610,9 @@ export function mergeCharacterDrafts(
 /** 按标题匹配既有场景:先精确匹配,再做双向包含匹配 */
 export function matchSceneByHeading(heading: string, scenes: Array<Scene>): Scene | undefined {
   const h = heading.trim();
-  if (!h) return undefined;
+  if (!h) {
+    return undefined;
+  }
   return (
     scenes.find((sc) => sc.heading === h) ??
     scenes.find((sc) => sc.heading && (sc.heading.includes(h) || h.includes(sc.heading)))

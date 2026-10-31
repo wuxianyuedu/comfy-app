@@ -108,7 +108,9 @@ export function useItemAction(keys?: ReadonlyArray<string>): ItemAction {
     async <T>(id: ItemActionScope, action: () => Promise<T>): Promise<T | undefined> => {
       const key = scopeKey(id);
       /* 同一条重复点：直接忽略（不发第二次请求，也不动忙标记）。 */
-      if (runningRef.current.has(key)) return undefined;
+      if (runningRef.current.has(key)) {
+        return undefined;
+      }
       runningRef.current.add(key);
       setBusyId(id);
       try {

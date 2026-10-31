@@ -36,11 +36,7 @@ import process from "node:process";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import { pnpmCli } from "./ci-install-deps.mjs";
 import { withBuildCacheSlot } from "./ci-build-cache-slot.mjs";
-import {
-  abortedAdvice,
-  classifyOutcome,
-  runPnpmSync,
-} from "./launcher-core/shell.mjs";
+import { abortedAdvice, classifyOutcome, runPnpmSync } from "./launcher-core/shell.mjs";
 import {
   freshnessTrack,
   gitUser,
@@ -101,7 +97,9 @@ export function main(argv) {
   const dryRun = argv.includes("--dry-run");
   for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
     const parsed = parseLedgerFlag(argv, flag);
-    if (parsed.mode === "run") continue;
+    if (parsed.mode === "run") {
+      continue;
+    }
     if (parsed.reason === null) {
       process.stderr.write(
         `[artifact-run] ✗ 理由（"${String(argv[argv.indexOf(flag) + 1] ?? "").trim()}"）` +
@@ -126,9 +124,7 @@ export function main(argv) {
   const extra = argv.filter((a) => a !== "--dry-run");
   const run = planRun(extra);
   if (dryRun) {
-    process.stdout.write(
-      `[artifact-run] ${run.label} → pnpm ${run.args.join(" ")}\n`,
-    );
+    process.stdout.write(`[artifact-run] ${run.label} → pnpm ${run.args.join(" ")}\n`);
     process.stdout.write(
       `[artifact-run] 记账文件：${TRACK.ledger}（键 \`${TRACK.key}\`，跑法 \`${TRACK.run}\`）\n`,
     );
@@ -189,28 +185,19 @@ export function main(argv) {
     kind: "artifact",
     who: gitUser(TRACK.key),
   });
-  process.stdout.write(
-    `[artifact-run] ✓ 产物级护栏通过\n[artifact-run] ${note}\n`,
-  );
+  process.stdout.write(`[artifact-run] ✓ 产物级护栏通过\n[artifact-run] ${note}\n`);
   /* 把这一档的账回写到机器自有分支 `ci/freshness-ledger`（ISSUE #2247）。
    * 仅在 `.cnb.yml` 每日档置了 `FRESHNESS_LEDGER_PUSH=1` 时真正推，否则 no-op；
    * 回写失败只提示、不影响跑法结论。 */
   const freshPush = pushFreshnessLedger({ root: ROOT, kinds: ["artifact"] });
   if (freshPush.pushed) {
-    process.stdout.write(
-      "[artifact-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n",
-    );
+    process.stdout.write("[artifact-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n");
   } else if (freshPush.reason && freshPush.reason !== "opt-out") {
-    process.stdout.write(
-      `[artifact-run] （新鲜度账回写未执行：${freshPush.reason}）\n`,
-    );
+    process.stdout.write(`[artifact-run] （新鲜度账回写未执行：${freshPush.reason}）\n`);
   }
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main(process.argv.slice(2)));
 }

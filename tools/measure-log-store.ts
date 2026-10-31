@@ -120,7 +120,9 @@ function pollRound(): void {
 /** 解析侧的开销：轮询回来的文本要先过 parseFileLogs，它不该被忽略。 */
 function parseCost(): void {
   const lines: Array<string> = [];
-  for (let i = 0; i < 300; i += 1) lines.push(sampleLine(i));
+  for (let i = 0; i < 300; i += 1) {
+    lines.push(sampleLine(i));
+  }
   const text = lines.join("\n");
   const cost = medianMs(() => void parseFileLogs(text), runs);
   console.log("\n【解析】parseFileLogs（300 行转录文本）");

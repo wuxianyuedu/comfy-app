@@ -47,10 +47,15 @@ function sourceFiles(): Array<string> {
   const out: Array<string> = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".")) continue;
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
       const abs = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(abs);
-      else out.push(path.relative(ROOT, abs).split(path.sep).join("/"));
+      if (entry.isDirectory()) {
+        walk(abs);
+      } else {
+        out.push(path.relative(ROOT, abs).split(path.sep).join("/"));
+      }
     }
   };
   walk(path.join(ROOT, "src"));

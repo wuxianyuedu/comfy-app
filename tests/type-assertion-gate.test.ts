@@ -40,7 +40,9 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   mkdirSync(path.join(root, "scripts"), { recursive: true });
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
   copyGateDeps(path.join(root, "scripts", path.basename(SCRIPT)));
-  if (!("tsconfig.json" in files)) writeFileSync(path.join(root, "tsconfig.json"), TS_CONFIG);
+  if (!("tsconfig.json" in files)) {
+    writeFileSync(path.join(root, "tsconfig.json"), TS_CONFIG);
+  }
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(root, rel);
     mkdirSync(path.dirname(abs), { recursive: true });

@@ -48,7 +48,9 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
            * 出口给 `null`，而不是 `{0, 0}` 那种会让下游算出 `Infinity` 的值。 */
           onLoad={(media) => {
             const size = readNaturalSize(media);
-            if (size) setSize(size);
+            if (size) {
+              setSize(size);
+            }
           }}
         />
       </div>

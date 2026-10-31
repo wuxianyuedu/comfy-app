@@ -41,16 +41,12 @@ function RatingStars({
             data-icon="inline-start"
             size={14}
             className={
-              value !== null && star <= value
-                ? "fill-warning text-warning"
-                : "text-ink-faintest"
+              value !== null && star <= value ? "fill-warning text-warning" : "text-ink-faintest"
             }
           />
         </Button>
       ))}
-      {value !== null && (
-        <span className="text-ink-faintest text-2xs">{value} / 5</span>
-      )}
+      {value !== null && <span className="text-ink-faintest text-2xs">{value} / 5</span>}
     </div>
   );
 }
@@ -94,8 +90,7 @@ export function HumanVerdictRow({
   }
 
   // 反馈通道（~/lib/async-action 的形状）：成功清掉行内错误块，失败落一句话。
-  const report: ActionReport = (kind, detail) =>
-    setError(kind === "err" ? detail : "");
+  const report: ActionReport = (kind, detail) => setError(kind === "err" ? detail : "");
 
   const submit = (pass: boolean) =>
     busy.run(async () => {
@@ -105,19 +100,25 @@ export function HumanVerdictRow({
         failureText: "裁决失败",
         readResultEnvelope: false,
       });
-      if (result.ok) setNote("");
+      if (result.ok) {
+        setNote("");
+      }
     });
 
   const pickRating = async (value: number | null) => {
     const prev = localRating;
     setLocalRating(value);
-    if (!onRatingChange) return;
+    if (!onRatingChange) {
+      return;
+    }
     const result = await runAsyncAction(() => onRatingChange(value), {
       report,
       failureText: "评分失败",
       readResultEnvelope: false,
     });
-    if (!result.ok) setLocalRating(prev);
+    if (!result.ok) {
+      setLocalRating(prev);
+    }
   };
 
   return (

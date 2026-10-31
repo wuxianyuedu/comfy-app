@@ -79,7 +79,9 @@ export class ModelRepository extends DrizzleRepository<Model> {
       baseModel: string;
     }>,
   ): Promise<void> {
-    if (!inputs.length) return;
+    if (!inputs.length) {
+      return;
+    }
     for (let start = 0; start < inputs.length; start += UPSERT_CHUNK) {
       const chunk = inputs.slice(start, start + UPSERT_CHUNK);
       await db
@@ -108,7 +110,9 @@ export class ModelRepository extends DrizzleRepository<Model> {
   }
 
   async listAvailableFileNamesByFolders(folders: Array<string>): Promise<Array<string>> {
-    if (!folders.length) return [];
+    if (!folders.length) {
+      return [];
+    }
     const rows = await db
       .select({ fileName: model.fileName })
       .from(model)
@@ -124,7 +128,11 @@ export class ModelRepository extends DrizzleRepository<Model> {
       .where(eq(model.isAvailable, true))
       .groupBy(model.folder);
     const out: Record<string, number> = {};
-    for (const r of rows) if (r.folder) out[r.folder] = Number(r.count);
+    for (const r of rows) {
+      if (r.folder) {
+        out[r.folder] = Number(r.count);
+      }
+    }
     return out;
   }
 }

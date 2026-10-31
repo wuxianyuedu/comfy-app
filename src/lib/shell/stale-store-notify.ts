@@ -39,9 +39,7 @@ let codeUpdatedSinceLoad = false;
  *  而 `set[A-Z]*` 的命名会撞上「函数式 updater 纯净性」守卫的判定口径（见
  *  `scripts/check-react-updater-purity.cjs`）——注册回调是立即生效的副作用，
  *  不该看起来像个 state setter。 */
-export function registerStaleStoreDeliver(
-  next: StaleStoreDeliver | null,
-): void {
+export function registerStaleStoreDeliver(next: StaleStoreDeliver | null): void {
   deliver = next;
 }
 
@@ -75,15 +73,17 @@ export function hasCodeUpdatedSinceLoad(): boolean {
  * 当结论会误导用户。返回值表示本次是否**真的送达**（未送达时为 false），
  * 便于调用点/测试断言去重行为。
  */
-export function reportStaleStoreAction(
-  reason: StaleStoreReason = "missing-store-action",
-): boolean {
+export function reportStaleStoreAction(reason: StaleStoreReason = "missing-store-action"): boolean {
   const notification = deriveStaleStoreNotification({
     codeUpdatedSinceLoad,
     reason,
   });
-  if (!notification) return false;
-  if (notified) return false;
+  if (!notification) {
+    return false;
+  }
+  if (notified) {
+    return false;
+  }
   notified = true;
   deliver?.(notification);
   return true;

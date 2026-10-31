@@ -35,11 +35,21 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
     const rows = await workshopDb.select().from(llmConfig).limit(1);
     const row = rows[0];
     if (row) {
-      if (row.baseUrl) cfg.baseUrl = row.baseUrl;
-      if (row.model) cfg.model = row.model;
-      if (row.apiKey) cfg.apiKey = decryptLlmKey(row.apiKey);
-      if (row.temperature != null) cfg.temperature = row.temperature;
-      if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
+      if (row.baseUrl) {
+        cfg.baseUrl = row.baseUrl;
+      }
+      if (row.model) {
+        cfg.model = row.model;
+      }
+      if (row.apiKey) {
+        cfg.apiKey = decryptLlmKey(row.apiKey);
+      }
+      if (row.temperature != null) {
+        cfg.temperature = row.temperature;
+      }
+      if (row.maxTokens != null) {
+        cfg.maxTokens = row.maxTokens;
+      }
     }
   } catch {
     // 表不存在 / 连接异常 → 使用 env 默认
@@ -49,7 +59,9 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
 
 function headersFor(cfg: WorkshopLLMConfig): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.apiKey) h.Authorization = `Bearer ${cfg.apiKey}`;
+  if (cfg.apiKey) {
+    h.Authorization = `Bearer ${cfg.apiKey}`;
+  }
   return h;
 }
 

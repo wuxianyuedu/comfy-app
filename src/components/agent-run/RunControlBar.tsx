@@ -66,7 +66,9 @@ const APPROVAL_OPTIONS: Array<{ value: ApprovalMode; label: string }> = [
 /** 日志时间戳 → 本地时分秒；解析失败给空串。 */
 function formatStepTime(ts: string): string {
   const d = new Date(ts);
-  if (Number.isNaN(d.getTime())) return "";
+  if (Number.isNaN(d.getTime())) {
+    return "";
+  }
   return formatClock(d);
 }
 
@@ -76,7 +78,9 @@ export function RunControlBar() {
 
 /** 纯展示部分（单独导出便于按状态直接单测，不必跑真实 hook）。 */
 export function RunControlBarView({ c }: { c: AgentRunController }) {
-  if (!c.projectId) return null;
+  if (!c.projectId) {
+    return null;
+  }
   const { run } = c;
   const busy = c.busy;
 

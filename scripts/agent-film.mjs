@@ -98,16 +98,21 @@ export function parseArgs(argv) {
         opts.unknown = [...(opts.unknown ?? []), a];
     }
   }
-  if (!["auto", "stage", "shot"].includes(opts.approval))
+  if (!["auto", "stage", "shot"].includes(opts.approval)) {
     opts.approval = "auto";
+  }
   return opts;
 }
 
 /** @param {FilmCliOpts} opts @returns {string[]} 错误信息（空=通过） */
 export function validateArgs(opts) {
   const errors = [];
-  if (!opts.project) errors.push("缺少 --project <proj_..>");
-  if (!opts.idea) errors.push('缺少 --idea "<一句话创意>"');
+  if (!opts.project) {
+    errors.push("缺少 --project <proj_..>");
+  }
+  if (!opts.idea) {
+    errors.push('缺少 --idea "<一句话创意>"');
+  }
   return errors;
 }
 
@@ -119,9 +124,15 @@ export function buildStartCall(opts) {
     goal: opts.idea,
     approvalMode: opts.approval,
   };
-  if (opts.imageWorkflowId) json.imageWorkflowId = opts.imageWorkflowId;
-  if (opts.videoWorkflowId) json.videoWorkflowId = opts.videoWorkflowId;
-  if (opts.autoReview) json.autoReview = true;
+  if (opts.imageWorkflowId) {
+    json.imageWorkflowId = opts.imageWorkflowId;
+  }
+  if (opts.videoWorkflowId) {
+    json.videoWorkflowId = opts.videoWorkflowId;
+  }
+  if (opts.autoReview) {
+    json.autoReview = true;
+  }
   return {
     method: "POST",
     url: `${opts.url.replace(/\/$/, "")}/api/trpc/run.start`,
@@ -131,9 +142,7 @@ export function buildStartCall(opts) {
 
 /** @param {Pick<FilmCliOpts,"url"|"project">} opts @returns {HttpCall} */
 export function buildStatusCall(opts) {
-  const input = encodeURIComponent(
-    JSON.stringify({ json: { projectId: opts.project } }),
-  );
+  const input = encodeURIComponent(JSON.stringify({ json: { projectId: opts.project } }));
   return {
     method: "GET",
     url: `${opts.url.replace(/\/$/, "")}/api/trpc/run.status?input=${input}`,
@@ -142,11 +151,11 @@ export function buildStatusCall(opts) {
 
 /** 从 superjson 的 tRPC 回包里取 .result.data.json（无信封原样返回）。 @param {unknown} payload @returns {RunSnapshot} */
 export function parseSuperjsonEnvelope(payload) {
-  const obj = /** @type {{ result?: { data?: { json?: RunSnapshot } } }} */ (
-    payload
-  );
+  const obj = /** @type {{ result?: { data?: { json?: RunSnapshot } } }} */ (payload);
   const data = obj?.result?.data;
-  if (data && typeof data === "object" && "json" in data) return data.json;
+  if (data && typeof data === "object" && "json" in data) {
+    return data.json;
+  }
   return (data ?? payload) || {};
 }
 
@@ -185,17 +194,15 @@ function describeAction(action) {
  * @returns {Promise<{ snapshot:RunSnapshot; timedOut:boolean; polls:number }>}
  */
 export async function driveFilmRun(opts, deps) {
-  const {
-    request,
-    doSleep = (/** @type {number} */ ms) => sleep(ms),
-    log = () => {},
-  } = deps;
+  const { request, doSleep = (/** @type {number} */ ms) => sleep(ms), log = () => {} } = deps;
   /** 已打印过的日志时间戳，避免每次轮询重复输出。 */
   const seen = new Set();
   /** 打印 snapshot.run.log 里新增的执行日志条目（引擎每步一条；run.log 缺失时安全跳过）。 */
   const flushLog = (snap) => {
     for (const step of snap?.run?.log ?? []) {
-      if (!step || seen.has(step.ts)) continue;
+      if (!step || seen.has(step.ts)) {
+        continue;
+      }
       seen.add(step.ts);
       log(`  ${step.ok ? "✓" : "✗"} [${step.kind}] ${step.detail}`);
     }
@@ -207,7 +214,9 @@ export async function driveFilmRun(opts, deps) {
   const deadline = Date.now() + opts.timeoutMs;
   let polls = 0;
   while (snapshot?.run?.status === "running") {
-    if (Date.now() > deadline) return { snapshot, timedOut: true, polls };
+    if (Date.now() > deadline) {
+      return { snapshot, timedOut: true, polls };
+    }
     await doSleep(opts.pollMs);
     polls++;
     snapshot = parseSuperjsonEnvelope(await request(buildStatusCall(opts)));
@@ -237,11 +246,8 @@ export async function main(argv = process.argv.slice(2)) {
   }
   if (opts.dryRun) {
     process.stdout.write(
-      JSON.stringify(
-        { start: buildStartCall(opts), status: buildStatusCall(opts) },
-        null,
-        2,
-      ) + "\n",
+      JSON.stringify({ start: buildStartCall(opts), status: buildStatusCall(opts) }, null, 2) +
+        "\n",
     );
     return 0;
   }
@@ -253,7 +259,9 @@ export async function main(argv = process.argv.slice(2)) {
       ...(call.body ? { body: JSON.stringify(call.body) } : {}),
     });
     const text = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+    }
     return text ? JSON.parse(text) : null;
   };
   const log = (/** @type {string} */ line) => process.stdout.write(line + "\n");
@@ -262,11 +270,11 @@ export async function main(argv = process.argv.slice(2)) {
       request,
       log,
     });
-    if (opts.json) process.stdout.write(JSON.stringify(snapshot) + "\n");
-    else
-      log(
-        timedOut ? `超时（${polls} 次轮询）` : `结束：${formatStep(snapshot)}`,
-      );
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(snapshot) + "\n");
+    } else {
+      log(timedOut ? `超时（${polls} 次轮询）` : `结束：${formatStep(snapshot)}`);
+    }
     const status = snapshot?.run?.status;
     return status === "failed" || timedOut ? 1 : 0;
   } catch (e) {
@@ -276,9 +284,6 @@ export async function main(argv = process.argv.slice(2)) {
   }
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exitCode = await main();
 }

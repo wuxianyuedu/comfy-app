@@ -44,19 +44,18 @@ export interface SourceModalProps {
   onClose: () => void;
 }
 
-export function SourceModal({
-  data,
-  loading,
-  error,
-  onClose,
-}: SourceModalProps) {
+export function SourceModal({ data, loading, error, onClose }: SourceModalProps) {
   const activeText = useMemo(() => {
-    if (data?.source == null) return "";
+    if (data?.source == null) {
+      return "";
+    }
     return JSON.stringify(data.source, null, 2);
   }, [data]);
 
   const downloadCurrent = () => {
-    if (!data || !activeText) return;
+    if (!data || !activeText) {
+      return;
+    }
     downloadText(activeText, `${data.name}.json`);
   };
 
@@ -129,9 +128,7 @@ export function SourceModal({
             ) : error ? (
               <p className="text-destructive px-5 py-3 text-sm">{error}</p>
             ) : data?.source == null ? (
-              <p className="text-ink-muted px-5 py-3 text-sm">
-                没有可显示的数据
-              </p>
+              <p className="text-ink-muted px-5 py-3 text-sm">没有可显示的数据</p>
             ) : (
               <LazyJsonViewer
                 key="source"
@@ -145,8 +142,7 @@ export function SourceModal({
           {/* Footer */}
           <div className="border-border-strong border-t px-5 py-2.5">
             <p className="text-ink-muted text-xs">
-              下载 = 导出当前 JSON · ⌘/Ctrl+F 在视图内搜索 · 点击 chevron
-              折叠/展开
+              下载 = 导出当前 JSON · ⌘/Ctrl+F 在视图内搜索 · 点击 chevron 折叠/展开
             </p>
           </div>
         </div>

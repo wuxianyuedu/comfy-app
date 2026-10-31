@@ -65,16 +65,22 @@ export async function saveMediaToLocalTemp(
        * 收口前这里是 `url.split(",")[1] ?? ""` —— 缺逗号时写成**空串**，
        * 于是写一个 0 字节文件冒充产物（调用方拿到非 null 路径）。 */
       const base64 = base64PayloadOf(url);
-      if (base64 === null) throw new Error("data URL 格式无效");
+      if (base64 === null) {
+        throw new Error("data URL 格式无效");
+      }
       await fs.writeFile(dest, Buffer.from(base64, "base64"));
     } else {
       const res = await fetch(url, {
         signal: AbortSignal.timeout(120_000),
         headers: { Accept: "*/*" },
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length === 0) throw new Error("空文件");
+      if (buf.length === 0) {
+        throw new Error("空文件");
+      }
       await fs.writeFile(dest, buf);
     }
     return dest;
@@ -107,7 +113,9 @@ export async function pollRemoteVideoTask(
         const pollPayload: unknown = await pollRes.json().catch(() => null);
         if (pollRes.ok) {
           const url = extractMediaUrl(pollPayload);
-          if (url) return url;
+          if (url) {
+            return url;
+          }
         }
       } catch {
         // 单个地址 / 单次轮询失败不终止 —— 换下一个地址或等下一轮

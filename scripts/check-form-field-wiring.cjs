@@ -72,7 +72,10 @@ const SCAN_DIRS = ["src"];
 /* `--staged`（钩子用）＝ 输入面跳过，口径见 §13.5.8.2。
  * 短路点在 `require("typescript")` 之前 —— 那一步 ≈180ms，放后面就白跳过。 */
 if (STAGED && !REPORT_ONLY && !SHOULD_UPDATE) {
-  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[form-field-wiring]" });
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({
+    roots: SCAN_DIRS,
+    tag: "[form-field-wiring]",
+  });
 }
 
 const ts = require("typescript");
@@ -99,7 +102,9 @@ function walk(dir) {
   for (const e of entries) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === ".next") continue;
+      if (e.name === "node_modules" || e.name === ".next") {
+        continue;
+      }
       out.push(...walk(p));
     } else if (FILE_RE.test(e.name)) {
       out.push(p);
@@ -140,16 +145,13 @@ function scanTree(sf) {
       node.openingElement.tagName.text === TARGET
     ) {
       const attrs = node.openingElement.attributes.properties;
-      const labelAttr = attrs.find(
-        (a) => ts.isJsxAttribute(a) && a.name.text === "label",
-      );
+      const labelAttr = attrs.find((a) => ts.isJsxAttribute(a) && a.name.text === "label");
       // `label` 不给、或给成 `null`（`FormField` 只在 `label != null` 时渲染标签行）
       // ⇒ 没有箭头可悬空，不是站点。
       const init = labelAttr && labelAttr.initializer;
       /* `label={null}` / `label={undefined}` 也不渲染标签行 —— 属性的
        * `initializer` 是 `JsxExpression`，字面量在它的 `.expression` 里。 */
-      const bound =
-        init && ts.isJsxExpression(init) ? init.expression : init;
+      const bound = init && ts.isJsxExpression(init) ? init.expression : init;
       const literalNull =
         Boolean(bound) &&
         (bound.kind === ts.SyntaxKind.NullKeyword ||
@@ -166,9 +168,7 @@ function scanTree(sf) {
           const pos = sf.getLineAndCharacterOfPosition(node.getStart(sf));
           /* 取第一个「开标签」的可读名字：`JsxElement` 与 `JsxSelfClosingElement`
            * 都有 `openingElement`，`JsxExpression` 没有 —— 先判类型再取。 */
-          const first = kids.find(
-            (c) => ts.isJsxElement(c) || ts.isJsxSelfClosingElement(c),
-          );
+          const first = kids.find((c) => ts.isJsxElement(c) || ts.isJsxSelfClosingElement(c));
           let tag = "";
           if (first && first.openingElement) {
             tag = first.openingElement.tagName.getText(sf);
@@ -204,10 +204,14 @@ function collect(parsed) {
   const sites = new Map();
   for (const abs of SCAN_DIRS.flatMap((d) => walk(path.join(ROOT, d)))) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    if (FIXTURE_SKIP.has(rel)) continue;
+    if (FIXTURE_SKIP.has(rel)) {
+      continue;
+    }
     const shared = parsed && parsed.get(abs);
     const hit = shared ? scanTree(shared) : scanFile(abs);
-    if (hit.length) sites.set(rel, hit);
+    if (hit.length) {
+      sites.set(rel, hit);
+    }
   }
   return sites;
 }
@@ -241,7 +245,9 @@ function main(parsed) {
       return 1;
     }
     const files = {};
-    for (const [rel, list] of [...sites.entries()].sort()) files[rel] = list.length;
+    for (const [rel, list] of [...sites.entries()].sort()) {
+      files[rel] = list.length;
+    }
     fs.writeFileSync(BASELINE, `${JSON.stringify({ total, files }, null, 2)}\n`);
     console.log(`[form-field-wiring] 基线已收紧到 ${total} 处（${BASELINE}）。`);
     return 0;
@@ -267,11 +273,11 @@ function main(parsed) {
         "\n  DOM 里不存在的 id，点标签不聚焦、控件没有可访问名。\n" +
         "\n" +
         "\n  // ❌ plain children：id 谁都没拿到，箭头悬空" +
-        "\n  <FormField label=\"镜头名称\">" +
+        '\n  <FormField label="镜头名称">' +
         "\n    <input value={v} onChange={…} />" +
         "\n  </FormField>" +
         "\n  // ✅ render-prop：a11y 落到控件上" +
-        "\n  <FormField label=\"镜头名称\">" +
+        '\n  <FormField label="镜头名称">' +
         "\n    {(field) => <input {...field} value={v} onChange={…} />}" +
         "\n  </FormField>" +
         "\n" +
@@ -300,9 +306,7 @@ function main(parsed) {
 
   console.log(`[form-field-wiring] OK —— ${total} 处 ≤ 基线 ${base.total} 处。`);
   if (total < base.total) {
-    console.log(
-      `  比基线还少了 ${base.total - total} 处：跑 \`--update\` 把基线收紧。`,
-    );
+    console.log(`  比基线还少了 ${base.total - total} 处：跑 \`--update\` 把基线收紧。`);
   }
   return 0;
 }
@@ -310,4 +314,6 @@ function main(parsed) {
 /* 自测（`tests/form-field-wiring-gate.test.ts`）钉的是**站点识别口径**。 */
 module.exports = { scanSource, scanTree, scanFile, collect, main, FIXTURE_SKIP, TARGET };
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

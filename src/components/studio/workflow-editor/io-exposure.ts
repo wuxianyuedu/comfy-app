@@ -80,9 +80,13 @@ export function enrichFromViewNodes(
 ): Record<string, WorkflowIOEntry> {
   const out: Record<string, WorkflowIOEntry> = {};
   for (const node of nodes ?? []) {
-    if (!node?.id) continue;
+    if (!node?.id) {
+      continue;
+    }
     for (const input of node.raw_inputs ?? []) {
-      if (!input?.name) continue;
+      if (!input?.name) {
+        continue;
+      }
       const label =
         sanitizeComboLabel(input.label) || sanitizeComboLabel(input.localized) || input.name;
       const value = input.defaultValue ?? input.widgetValue;

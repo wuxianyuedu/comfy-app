@@ -108,7 +108,9 @@ export interface WorkflowParamCardProps {
 function rowTitle(port: ParamOutputPort, side: "right" | "left"): string {
   const which = side === "left" ? "输入端口" : "输出端口";
   const head = `${which} ${port.display ?? port.name} · ${port.type}`;
-  if (!port.ioKey) return head;
+  if (!port.ioKey) {
+    return head;
+  }
   const target =
     port.targetType && port.targetType !== port.type
       ? `${port.ioKey}（声明 ${port.targetType}）`

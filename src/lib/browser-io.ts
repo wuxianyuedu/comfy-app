@@ -25,7 +25,9 @@
  * `http://` 非安全上下文里还能工作的通道。
  */
 export async function copyText(text: string): Promise<boolean> {
-  if (typeof navigator === "undefined") return false;
+  if (typeof navigator === "undefined") {
+    return false;
+  }
   try {
     if (navigator.clipboard) {
       await navigator.clipboard.writeText(text);
@@ -34,7 +36,9 @@ export async function copyText(text: string): Promise<boolean> {
   } catch {
     /* 继续走兜底 */
   }
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined") {
+    return false;
+  }
   try {
     const ta = document.createElement("textarea");
     ta.value = text;
@@ -68,7 +72,9 @@ export function downloadText(
   filename: string,
   type = "application/json;charset=utf-8",
 ): void {
-  if (typeof document === "undefined" || typeof URL === "undefined") return;
+  if (typeof document === "undefined" || typeof URL === "undefined") {
+    return;
+  }
   const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

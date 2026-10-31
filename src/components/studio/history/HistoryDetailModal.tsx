@@ -70,7 +70,9 @@ export function HistoryDetailModal({
   const redrawReport: ActionReport = (kind, detail) =>
     kind === "ok" ? toast.success(detail) : toast.error(detail);
 
-  if (!detailId) return null;
+  if (!detailId) {
+    return null;
+  }
   // 局部 const 让闭包 / IIFE 内的空值窄化在 TS 中稳定成立。
   const current = detail;
   /* 按来源分块：工坊发起的任务多摆一块「工坊参数」（工坊对外值），工作流直接
@@ -121,7 +123,9 @@ export function HistoryDetailModal({
                   size="xs"
                   disabled={!current?.id || actions.openFolderBusy}
                   onClick={() => {
-                    if (!current?.id) return;
+                    if (!current?.id) {
+                      return;
+                    }
                     void actions.openFolder(current.id);
                   }}
                   className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto gap-1.5 rounded-md px-2.5 py-1"
@@ -203,7 +207,9 @@ export function HistoryDetailModal({
                       size="xs"
                       disabled={actions.downloading}
                       onClick={() => {
-                        if (!current?.id) return;
+                        if (!current?.id) {
+                          return;
+                        }
                         void actions.downloadWorkflow(current.id);
                       }}
                       className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto rounded-md px-2.5 py-1"

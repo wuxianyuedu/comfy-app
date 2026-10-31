@@ -71,7 +71,9 @@ describe("测试库的表结构与 schema.ts 同步", () => {
     let checkedTables = 0;
 
     for (const table of Object.values(schema)) {
-      if (!(table instanceof Table)) continue;
+      if (!(table instanceof Table)) {
+        continue;
+      }
       const name = tableNameOf(table);
       const columns = Object.keys(getTableColumns(/* SAFETY: 类型断言已复核 */ table as never));
       const present = await columnsOf(name);

@@ -157,9 +157,11 @@ function captureOutput() {
     warn: console.warn,
     error: console.error,
   };
-  const make = () => (...args) => {
-    lines.push(args.map((a) => (typeof a === "string" ? a : String(a))).join(" "));
-  };
+  const make =
+    () =>
+    (...args) => {
+      lines.push(args.map((a) => (typeof a === "string" ? a : String(a))).join(" "));
+    };
   console.log = make();
   console.warn = make();
   console.error = make();
@@ -210,8 +212,11 @@ function runGate(gate, parsed) {
   try {
     const returned = mod.main(parsed);
     // 有的判据 `main()` 返回数字、有的靠 `process.exit`（上面接住了）。
-    if (typeof returned === "number") code = returned;
-    else if (exit.code !== null) code = exit.code;
+    if (typeof returned === "number") {
+      code = returned;
+    } else if (exit.code !== null) {
+      code = exit.code;
+    }
   } catch (error) {
     if (error && error.__gateExit) {
       code = exit.code === null ? 0 : exit.code;
@@ -265,7 +270,9 @@ function main() {
   const staged = argv.includes("--staged");
 
   if (argv.includes("--list")) {
-    for (const g of GATES) console.log(`${g.tag} ${g.script} ${g.what}`);
+    for (const g of GATES) {
+      console.log(`${g.tag} ${g.script} ${g.what}`);
+    }
     return 0;
   }
 
@@ -302,12 +309,12 @@ function main() {
   const failed = results.filter((r) => r.code !== 0);
 
   for (const g of skipped) {
-    console.log(
-      `${g.tag} ✓ 本次提交未触及扫描面（[${g.roots.join(", ")}] 没有命中），跳过。`,
-    );
+    console.log(`${g.tag} ✓ 本次提交未触及扫描面（[${g.roots.join(", ")}] 没有命中），跳过。`);
   }
   for (const r of results) {
-    for (const line of r.lines) console.log(line);
+    for (const line of r.lines) {
+      console.log(line);
+    }
   }
 
   if (failed.length === 0) {
@@ -358,4 +365,6 @@ function touches(files, roots) {
   return files.some((f) => isUnderAny(f, roots));
 }
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

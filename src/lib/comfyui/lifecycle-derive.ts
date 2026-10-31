@@ -55,10 +55,18 @@ export interface EnsureFacts {
  *   4. 未开自动启动 / 未配路径 → 给可行动的提示（不是无声返回）。
  */
 export function decideEnsureLaunch(facts: EnsureFacts): EnsureDecision {
-  if (facts.upBase) return { kind: "already-up", base: facts.upBase };
-  if (!facts.manual && facts.manualStop) return { kind: "skip-manual-stop" };
-  if (!facts.autoStart) return { kind: "skip-autostart-off" };
-  if (!facts.comfyuiPath) return { kind: "skip-no-path" };
+  if (facts.upBase) {
+    return { kind: "already-up", base: facts.upBase };
+  }
+  if (!facts.manual && facts.manualStop) {
+    return { kind: "skip-manual-stop" };
+  }
+  if (!facts.autoStart) {
+    return { kind: "skip-autostart-off" };
+  }
+  if (!facts.comfyuiPath) {
+    return { kind: "skip-no-path" };
+  }
   return { kind: "launch" };
 }
 
@@ -264,7 +272,9 @@ export function isWithinWindow(facts: {
   nowMs: number;
   windowMs: number;
 }): boolean {
-  if (facts.at === undefined) return false;
+  if (facts.at === undefined) {
+    return false;
+  }
   return facts.nowMs - facts.at < facts.windowMs;
 }
 
@@ -274,7 +284,9 @@ export function isWithinStoppingWindow(facts: {
   nowMs: number;
   windowMs: number;
 }): boolean {
-  if (facts.stoppingAt === undefined) return false;
+  if (facts.stoppingAt === undefined) {
+    return false;
+  }
   return facts.nowMs - facts.stoppingAt < facts.windowMs;
 }
 
@@ -339,7 +351,9 @@ export function hasEmbedClearanceFlag(args: Array<string>): boolean {
  * @returns 追加了开关的新数组；已有则不重复注入（原数组原样返回新副本）
  */
 export function withEmbedClearanceFlag(args: Array<string>): Array<string> {
-  if (hasEmbedClearanceFlag(args)) return [...args];
+  if (hasEmbedClearanceFlag(args)) {
+    return [...args];
+  }
   return [...args, COMFY_EMBED_FLAG];
 }
 

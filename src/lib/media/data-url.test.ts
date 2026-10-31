@@ -25,15 +25,11 @@ describe("isDataUrl / isInlineMedia", () => {
 
 describe("toBase64 / toDataUrl", () => {
   it("字节编成 base64", () => {
-    expect(toBase64(new Uint8Array([104, 101, 108, 108, 111]))).toBe(
-      "aGVsbG8=",
-    );
+    expect(toBase64(new Uint8Array([104, 101, 108, 108, 111]))).toBe("aGVsbG8=");
   });
 
   it("拼成 data URL 时前缀与分隔符只有一处拼法", () => {
-    expect(toDataUrl(new Uint8Array([104, 101]), "image/webp")).toBe(
-      "data:image/webp;base64,aGU=",
-    );
+    expect(toDataUrl(new Uint8Array([104, 101]), "image/webp")).toBe("data:image/webp;base64,aGU=");
   });
 
   it("已有的 base64 载荷直接包前缀（上游回 b64_json 那一档）", () => {
@@ -61,7 +57,9 @@ describe("toBase64 / toDataUrl", () => {
 
     it("分块 btoa 编码结果与 Buffer 一致", () => {
       const bytes = new Uint8Array(200_000);
-      for (let i = 0; i < bytes.length; i += 1) bytes[i] = i % 251;
+      for (let i = 0; i < bytes.length; i += 1) {
+        bytes[i] = i % 251;
+      }
       const expected = toBase64(bytes);
       vi.stubGlobal("Buffer", undefined);
       expect(toBase64(bytes)).toBe(expected);

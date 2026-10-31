@@ -103,7 +103,9 @@ function collectFiles() {
     skipHiddenDirs: true,
   })) {
     const rel = path.relative(ROOT, file);
-    if (SRC_TEST_RE.test(rel)) files.push(file);
+    if (SRC_TEST_RE.test(rel)) {
+      files.push(file);
+    }
   }
   return files;
 }
@@ -120,13 +122,19 @@ function collectFiles() {
  */
 function scanFile(abs, isBad) {
   const raw = readForScan(abs);
-  if (raw === null) return [];
+  if (raw === null) {
+    return [];
+  }
   const hits = [];
   const lines = raw.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     for (const ch of lines[i]) {
-      if (ch.codePointAt(0) < 0x80) continue;
-      if (!isBad(ch)) continue;
+      if (ch.codePointAt(0) < 0x80) {
+        continue;
+      }
+      if (!isBad(ch)) {
+        continue;
+      }
       hits.push({ line: i + 1, ch });
     }
   }
@@ -146,14 +154,22 @@ async function main() {
 
   /** 「不可编码 **且** 没登记」才算命中。 */
   const isBad = (ch) => {
-    if (GLYPH_KEPT.has(ch)) return false;
-    if (GLYPH_DROPPED.has(ch)) return false;
-    if (GLYPH_REPLACEMENTS.has(ch)) return false;
+    if (GLYPH_KEPT.has(ch)) {
+      return false;
+    }
+    if (GLYPH_DROPPED.has(ch)) {
+      return false;
+    }
+    if (GLYPH_REPLACEMENTS.has(ch)) {
+      return false;
+    }
     /* **emoji 不要求逐个登记**：它们有**通用兜底**（写成 `\uXXXX`，纯 ASCII，
      * 信息不丢）。逐个登记会让表随 emoji 家族一起涨 —— 而 CP936 的四字节区
      * 本来就不收这一段，于是每一个 emoji 都是「坏的」，那张表会长成一张
      * emoji 名录。口径是：**表收的是「有专门写法」的字符**，emoji 走通用兜底。 */
-    if (ch.codePointAt(0) >= 0x1f000) return false;
+    if (ch.codePointAt(0) >= 0x1f000) {
+      return false;
+    }
     return !isCp936Encodable(ch);
   };
 
@@ -162,7 +178,9 @@ async function main() {
   for (const abs of collectFiles()) {
     scanned++;
     const hits = scanFile(abs, isBad);
-    if (!hits.length) continue;
+    if (!hits.length) {
+      continue;
+    }
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
     /* 同一个文件里同一个字符只报一次（带处数）—— 报告要能读完。 */
     const byChar = new Map();
@@ -182,10 +200,7 @@ async function main() {
 
   /* 判决行的形状只有一处出处：`scripts/ci-log.mjs`（ISSUE #2506）。 */
   if (!problems.length) {
-    gatePass(
-      "CP936 字形登记",
-      `扫描面 ${scanned} 个文件：没有「编不出来且没登记」的字符`,
-    );
+    gatePass("CP936 字形登记", `扫描面 ${scanned} 个文件：没有「编不出来且没登记」的字符`);
     return 0;
   }
 

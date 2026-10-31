@@ -143,12 +143,18 @@ export function WorkflowNode({
    * 叠加模型筛选 — chip4 选中的标签名必须命中工作流的 modelTags。 */
   const filteredList = workflowList
     .filter((workflowList) => {
-      if (sourceFilter === "all") return true;
-      if (sourceFilter === "local") return Boolean(workflowList.sourcePath);
+      if (sourceFilter === "all") {
+        return true;
+      }
+      if (sourceFilter === "local") {
+        return Boolean(workflowList.sourcePath);
+      }
       return !workflowList.sourcePath;
     })
     .filter((workflow) => {
-      if (modelFilter === "all") return true;
+      if (modelFilter === "all") {
+        return true;
+      }
       const tags = workflow.modelTags ?? [];
       return tags.includes(modelFilter);
     });

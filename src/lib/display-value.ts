@@ -39,11 +39,21 @@ export const EMPTY_PLACEHOLDER = "—";
  */
 export function displayValue(value: unknown, options: { fallback?: string } = {}): string {
   const fallback = options.fallback ?? EMPTY_PLACEHOLDER;
-  if (value === undefined || value === null) return fallback;
-  if (typeof value === "string") return value === "" ? fallback : value;
-  if (typeof value === "number") return Number.isNaN(value) ? fallback : String(value);
-  if (typeof value === "bigint") return value.toString();
-  if (typeof value === "boolean") return value ? "true" : "false";
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  if (typeof value === "string") {
+    return value === "" ? fallback : value;
+  }
+  if (typeof value === "number") {
+    return Number.isNaN(value) ? fallback : String(value);
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
   /* 其余（symbol / function / 对象数组）交给它们的自有 `toString` —— 与
    * `String(value)` 运行时一致（显式收窄以满足 no-base-to-string）。 */
   return /* SAFETY: 类型断言已复核 */ (value as { toString(): string }).toString();
@@ -58,8 +68,14 @@ export function displayValue(value: unknown, options: { fallback?: string } = {}
  * 而本次收口的意义正是「占位符只有一处定义」。
  */
 export function nonEmpty(value: unknown): string | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value === "string") return value === "" ? null : value;
-  if (typeof value === "number" && Number.isNaN(value)) return null;
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value === "" ? null : value;
+  }
+  if (typeof value === "number" && Number.isNaN(value)) {
+    return null;
+  }
   return displayValue(value);
 }

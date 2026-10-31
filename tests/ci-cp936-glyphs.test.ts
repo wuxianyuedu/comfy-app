@@ -26,8 +26,12 @@ import {
   normalizeCp936Glyphs,
 } from "../scripts/ci-cp936-glyphs.mjs";
 
+import { normalizeControlFlow } from "./helpers/source-shape";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
-const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
+/* 读源断言的是**控制流**（谁先谁后、有没有这道守卫），不是括号形态：先过归一化，
+ * oxlint `curly` 给单语句体补 `{}` 就不会把这些断言打成「形状变了」。 */
+const read = (rel: string) => normalizeControlFlow(readFileSync(path.join(ROOT, rel), "utf8"), rel);
 
 describe("字形归一化：等义替换", () => {
   it("绿色通过标记换成 CP936 里有的字形（这一格最要紧）", () => {
@@ -61,10 +65,9 @@ describe("字形归一化：等义替换", () => {
   it("替代物**全部**落在 CP936 里 —— 否则替换完还要再被吃一次", () => {
     for (const [from, to] of GLYPH_REPLACEMENTS) {
       for (const ch of to) {
-        expect(
-          isCp936Encodable(ch),
-          `${from} 的替代写法里有 CP936 编不出来的字符：${ch}`,
-        ).toBe(true);
+        expect(isCp936Encodable(ch), `${from} 的替代写法里有 CP936 编不出来的字符：${ch}`).toBe(
+          true,
+        );
       }
     }
   });
@@ -127,7 +130,9 @@ describe("字形归一化：幂等与读数", () => {
     const line = describeGlyphReplacements(out.replaced);
     expect(line.length).toBeGreaterThan(0);
     for (const ch of line) {
-      if (ch.codePointAt(0)! < 0x80) continue;
+      if (ch.codePointAt(0)! < 0x80) {
+        continue;
+      }
       expect(
         isCp936Encodable(ch),
         `读数里有 CP936 编不出来的字符：${ch}（U+${(ch.codePointAt(0) ?? 0)
@@ -226,7 +231,10 @@ describe("转码外壳：接上了归一化", () => {
     expect(source).toContain("describeGlyphReplacements");
     const guards = source.match(/if \(said !== ""\)/g) ?? [];
     expect(guards.length, "两处调用点各要有一个「空串就不发」").toBe(2);
-    const summaryAt = source.indexOf('describeGlyphReplacements(\n');
+    /* 收尾那条调用的**两种形态**都认：参数只有一个且短时格式化器会把它收成一行，
+     * 而这里读的已经是归一化后的文本。钉住的是「收尾那处也走 describeGlyphReplacements」
+     * 这层结构，不是换行在哪 —— 只认 `(\n` 会随格式化器的排版飘。 */
+    const summaryAt = source.indexOf("describeGlyphReplacements([");
     expect(summaryAt, "认不出收尾那条调用；它的形状变了要同批改这里").toBeGreaterThan(-1);
     const summaryChunk = source.slice(summaryAt, summaryAt + 320);
     expect(summaryChunk).toContain("write(summary");

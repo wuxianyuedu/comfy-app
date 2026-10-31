@@ -158,8 +158,12 @@ const HEAL_PAIR_KINDS: ReadonlyArray<MessageKind> = ["offline", "restart"];
 function dropHealPairFromCenter(now: number): void {
   const store = useMessageCenterStore.getState();
   for (const message of store.messages) {
-    if (!HEAL_PAIR_KINDS.includes(message.kind)) continue;
-    if (now - message.time > SELF_HEAL_MERGE_WINDOW_MS) continue;
+    if (!HEAL_PAIR_KINDS.includes(message.kind)) {
+      continue;
+    }
+    if (now - message.time > SELF_HEAL_MERGE_WINDOW_MS) {
+      continue;
+    }
     store.remove(message.id);
   }
 }
@@ -171,7 +175,9 @@ export function CodeUpdateWatcher() {
     onDevServerRestart: (reason, detail) => {
       /* 只对启动器发起的自愈做合并（见文件头）；用户手动重启那一族没有 reason，
        * 它的「断开 → 恢复」是要留的记录。 */
-      if (reason !== null) dropHealPairFromCenter(Date.now());
+      if (reason !== null) {
+        dropHealPairFromCenter(Date.now());
+      }
       const { title, body } = describeDevServerRestart(reason, detail);
       toast.info(title, `${body}（可到消息中心查看）`, 8000);
       useMessageCenterStore.getState().push({

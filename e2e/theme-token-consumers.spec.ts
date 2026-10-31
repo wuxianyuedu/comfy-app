@@ -203,8 +203,12 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       const bad: Array<string> = [];
       for (const name of CONSUMED_TOKENS) {
         const v = await readToken(page, name);
-        if (!v.raw) bad.push(`${label} ${name} 声明值为空（被 shake 或名字不对）`);
-        if (!v.fill.startsWith("rgb")) bad.push(`${label} ${name} fill 未解析：${v.fill}`);
+        if (!v.raw) {
+          bad.push(`${label} ${name} 声明值为空（被 shake 或名字不对）`);
+        }
+        if (!v.fill.startsWith("rgb")) {
+          bad.push(`${label} ${name} fill 未解析：${v.fill}`);
+        }
       }
       expect(bad, `${label}档有 token 解析失败`).toEqual([]);
     }
@@ -408,8 +412,11 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
               } catch {
                 continue;
               }
-              for (const r of Array.from(rules ?? []))
-                if (r.cssText?.includes("--xy-background-pattern-color-props")) n++;
+              for (const r of Array.from(rules ?? [])) {
+                if (r.cssText?.includes("--xy-background-pattern-color-props")) {
+                  n++;
+                }
+              }
             }
             return n;
           }),
@@ -463,7 +470,9 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
     const inBothScopes = await page.evaluate((e) => {
       const read = (hostClass: string): string => {
         const host = document.createElement("div");
-        if (hostClass) host.className = hostClass;
+        if (hostClass) {
+          host.className = hostClass;
+        }
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute(
           "style",
@@ -484,7 +493,9 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       `[二次代入负控制] 内层 token 缺失 → 裸作用域 stroke=${inBothScopes.detached} / .react-flow 内 stroke=${inBothScopes.inReactFlow}（两种都无声）`,
     );
     for (const [scope, stroke] of Object.entries(inBothScopes)) {
-      if (stroke === "none") continue; // 线消失：同样是「没画出我们的色相」
+      if (stroke === "none") {
+        continue;
+      } // 线消失：同样是「没画出我们的色相」
       const c = parseColor(stroke);
       expect(
         [Math.round(c.r), Math.round(c.g), Math.round(c.b)],

@@ -72,8 +72,12 @@ afterEach(() => {
 });
 
 afterAll(() => {
-  if (original !== undefined) process.env[EXECUTOR_ENV_KEY] = original;
-  for (const dir of tmpDirs) fs.rmSync(dir, { force: true, recursive: true });
+  if (original !== undefined) {
+    process.env[EXECUTOR_ENV_KEY] = original;
+  }
+  for (const dir of tmpDirs) {
+    fs.rmSync(dir, { force: true, recursive: true });
+  }
 });
 
 describe("两侧对同一组向量给出同一判决", () => {

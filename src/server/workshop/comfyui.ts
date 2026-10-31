@@ -72,7 +72,9 @@ export function createSettingsFileMemo(file: string, io: SettingsFileIo = realSe
   return {
     load(): ComfySettings {
       const fp = io.fingerprint(file);
-      if (cache && fp === fingerprint) return cache;
+      if (cache && fp === fingerprint) {
+        return cache;
+      }
       let parsed: ComfySettings;
       try {
         parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(io.read(file)) as ComfySettings;
@@ -126,7 +128,9 @@ function isNetworkFailure(e: unknown): boolean {
 /** 网络层失败时复位 base 缓存再把错误抛出去（重新探测交给下一次调用的
  * `resolveComfyBase` —— 本模块的调用链里它是每个提交 / 上传动作的第一跳）。 */
 function guardNetworkFailure(e: unknown): never {
-  if (isNetworkFailure(e)) resetWorkshopComfyBase();
+  if (isNetworkFailure(e)) {
+    resetWorkshopComfyBase();
+  }
   throw e;
 }
 
@@ -137,7 +141,9 @@ function guardNetworkFailure(e: unknown): never {
  * 分叉：同一实例一边判活、这边判死。本模块是纯 Node 宿主（MCP），probe.ts
  * 是零依赖叶子（只有 fetch + 地址拼接），import 安全。 */
 export async function resolveComfyBase(): Promise<string> {
-  if (resolvedBase) return resolvedBase;
+  if (resolvedBase) {
+    return resolvedBase;
+  }
   const raw = process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
   let host;
   let port;
@@ -196,7 +202,9 @@ export async function getComfyHistory(promptId: string): Promise<Record<string, 
     const res = await fetch(`${base}/api/history/${promptId}`, {
       signal: AbortSignal.timeout(30_000),
     });
-    if (!res.ok) throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
+    if (!res.ok) {
+      throw new Error(`ComfyUI /api/history 失败 (${res.status})`);
+    }
     return /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>;
   } catch (e) {
     guardNetworkFailure(e);
@@ -217,7 +225,9 @@ export async function getComfyView(
     const res = await fetch(url.toString(), {
       signal: AbortSignal.timeout(60_000),
     });
-    if (!res.ok) throw new Error(`ComfyUI /api/view 失败 (${res.status})`);
+    if (!res.ok) {
+      throw new Error(`ComfyUI /api/view 失败 (${res.status})`);
+    }
     return Buffer.from(await res.arrayBuffer());
   } catch (e) {
     guardNetworkFailure(e);
@@ -235,12 +245,15 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
       body: form,
       signal: AbortSignal.timeout(30_000),
     });
-    if (!res.ok)
+    if (!res.ok) {
       throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       name?: string;
     };
-    if (!data.name) throw new Error("ComfyUI 上传未返回文件名");
+    if (!data.name) {
+      throw new Error("ComfyUI 上传未返回文件名");
+    }
     return data.name;
   } catch (e) {
     guardNetworkFailure(e);
@@ -266,11 +279,15 @@ export async function fetchToBuffer(ref: string): Promise<Buffer> {
      * `indexOf` 给 `-1`，`slice(0)` 会把**整个 data URL** 当 base64
      * 交给 `Buffer.from`（它跳过非法字符）→ 静默解出垃圾字节。 */
     const base64 = base64PayloadOf(ref);
-    if (base64 === null) throw new Error("参考图 data URL 格式无效");
+    if (base64 === null) {
+      throw new Error("参考图 data URL 格式无效");
+    }
     return Buffer.from(base64, "base64");
   }
   const res = await fetch(ref, { signal: AbortSignal.timeout(30_000) });
-  if (!res.ok) throw new Error(`获取参考图失败 (${res.status})`);
+  if (!res.ok) {
+    throw new Error(`获取参考图失败 (${res.status})`);
+  }
   return Buffer.from(await res.arrayBuffer());
 }
 
@@ -372,7 +389,9 @@ export async function runComfyWorkflow(
 ): Promise<ComfyRunResult> {
   const posted = await postComfyPrompt(workflow);
   const promptId = posted.prompt_id;
-  if (!promptId) throw new Error(`ComfyUI 未返回 prompt_id：${JSON.stringify(posted)}`);
+  if (!promptId) {
+    throw new Error(`ComfyUI 未返回 prompt_id：${JSON.stringify(posted)}`);
+  }
 
   const deadline = Date.now() + 10 * 60_000;
   let history: Record<string, unknown> = {};
@@ -383,7 +402,9 @@ export async function runComfyWorkflow(
       | undefined;
     const done = entry?.status?.completed === true || entry?.status?.status_str === "success";
     const failed = entry?.status?.status_str === "error";
-    if (done || failed) break;
+    if (done || failed) {
+      break;
+    }
     await sleep(1500);
   }
 
@@ -408,7 +429,9 @@ export async function runComfyWorkflow(
       files.push(`file://${outPath}`);
     }
   }
-  if (files.length === 0) throw new Error("ComfyUI 任务完成但没有输出文件");
+  if (files.length === 0) {
+    throw new Error("ComfyUI 任务完成但没有输出文件");
+  }
   return { files };
 }
 

@@ -52,10 +52,14 @@ export type RunConsoleOutcome =
 
 /** 把一帧 `data:` 载荷收窄成事件；认不出的形状返回 null（静默丢，不猜）。 */
 export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
-  if (!isRecord(payload)) return null;
+  if (!isRecord(payload)) {
+    return null;
+  }
   switch (payload.type) {
     case "start":
-      if (typeof payload.runId !== "string") return null;
+      if (typeof payload.runId !== "string") {
+        return null;
+      }
       return {
         type: "start",
         runId: payload.runId,
@@ -64,7 +68,9 @@ export function parseConsoleFrame(payload: unknown): ConsoleClientEvent | null {
         startedAt: typeof payload.startedAt === "number" ? payload.startedAt : Date.now(),
       };
     case "out": {
-      if (typeof payload.text !== "string") return null;
+      if (typeof payload.text !== "string") {
+        return null;
+      }
       return {
         type: "out",
         stream: payload.stream === "stderr" ? "stderr" : "stdout",
@@ -101,13 +107,19 @@ export function consumeSseChunk(buffer: string, onFrame: (payload: unknown) => v
   let rest = buffer;
   for (;;) {
     const idx = rest.indexOf("\n\n");
-    if (idx < 0) return rest;
+    if (idx < 0) {
+      return rest;
+    }
     const frame = rest.slice(0, idx);
     rest = rest.slice(idx + 2);
     for (const line of frame.split("\n")) {
-      if (!line.startsWith("data:")) continue;
+      if (!line.startsWith("data:")) {
+        continue;
+      }
       const body = line.slice("data:".length).trim();
-      if (!body) continue;
+      if (!body) {
+        continue;
+      }
       try {
         onFrame(/* SAFETY: 类型断言已复核 */ JSON.parse(body) as unknown);
       } catch {
@@ -142,7 +154,9 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
       cache: "no-store",
     });
   } catch (e) {
-    if (isAbortError(e)) return { kind: "aborted" };
+    if (isAbortError(e)) {
+      return { kind: "aborted" };
+    }
     /* 走全库唯一的错误文案出口（`~/lib/error-message`）：它会把浏览器抛的
      * `Failed to fetch` / `NetworkError` 翻成「网络请求失败，请检查应用服务
      * 是否正在运行」。**不要**原样透传 —— ISSUE #1327 的现场截图里，面板结论条
@@ -154,7 +168,9 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
     const reason = readApiError(await readJsonBody(res)) ?? `服务端拒绝执行（HTTP ${res.status}）`;
     return { kind: "rejected", reason };
   }
-  if (!res.body) return { kind: "failed", reason: "服务端没有返回输出流" };
+  if (!res.body) {
+    return { kind: "failed", reason: "服务端没有返回输出流" };
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -162,11 +178,15 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
   try {
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       buffer += decoder.decode(value, { stream: true });
       buffer = consumeSseChunk(buffer, (payload) => {
         const event = parseConsoleFrame(payload);
-        if (event) opts.onEvent(event);
+        if (event) {
+          opts.onEvent(event);
+        }
       });
     }
     // 冲刷不完整帧：服务端正常关闭时不会留半帧，但断流时会 —— 丢了它等于
@@ -175,12 +195,16 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
     if (buffer.trim()) {
       consumeSseChunk(`${buffer}\n\n`, (payload) => {
         const event = parseConsoleFrame(payload);
-        if (event) opts.onEvent(event);
+        if (event) {
+          opts.onEvent(event);
+        }
       });
     }
     return { kind: "ok" };
   } catch (e) {
-    if (isAbortError(e)) return { kind: "aborted" };
+    if (isAbortError(e)) {
+      return { kind: "aborted" };
+    }
     // 同上：读流中途断掉（服务重启 / 连接被掐）同样是网络层故障，不该把浏览器原文甩出来。
     return { kind: "failed", reason: errorMessage(e, "读取输出流失败") };
   }
@@ -193,6 +217,8 @@ export async function runConsoleCommand(opts: RunConsoleOptions): Promise<RunCon
  * 超出从**头部**裁（尾部才是结论 —— 与「日志看尾巴」同一判据）。
  */
 export function clampOutput(text: string): string {
-  if (text.length <= MAX_OUTPUT_CHARS) return text;
+  if (text.length <= MAX_OUTPUT_CHARS) {
+    return text;
+  }
   return `…（更早的输出已裁剪）\n${text.slice(text.length - MAX_OUTPUT_CHARS)}`;
 }

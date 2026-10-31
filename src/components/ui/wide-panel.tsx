@@ -42,7 +42,9 @@ const WIDE_PANELS = new Map<string, boolean>();
 const WIDE_LISTENERS = new Set<() => void>();
 
 function notify() {
-  for (const l of WIDE_LISTENERS) l();
+  for (const l of WIDE_LISTENERS) {
+    l();
+  }
 }
 
 function storageKey(id: string): string {
@@ -53,7 +55,9 @@ function storageKey(id: string): string {
 function readWide(id: string, fallback: boolean): boolean {
   /* 先看内存（同会话内的 `setItem` 立即生效，不依赖 storage 事件的时机）。 */
   const cached = WIDE_PANELS.get(id);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    return cached;
+  }
   /* 配额满 / 隐私模式 / storage 被禁用：本会话仍然生效，只是丢了记忆。
    * 「能不能用 storage」与「读失败怎么办」收在 `~/lib/browser-storage`
    *（§16.2.4.28）。 */
@@ -124,10 +128,7 @@ export function useWidePanel(
     [id],
   );
 
-  const toggle = useCallback(
-    () => set(!readWide(id, defaultWide)),
-    [id, defaultWide, set],
-  );
+  const toggle = useCallback(() => set(!readWide(id, defaultWide)), [id, defaultWide, set]);
 
   return {
     wide,
@@ -148,13 +149,7 @@ export function useWidePanel(
  * 外观（尺寸、圆角、hover）仍由调用处经 `className` 给 —— 与
  * §16.2.4.2 第 9 条一致：验收标准是渲染结果不变。
  */
-export function WidePanelToggle({
-  panel,
-  className,
-}: {
-  panel: WidePanel;
-  className?: string;
-}) {
+export function WidePanelToggle({ panel, className }: { panel: WidePanel; className?: string }) {
   return (
     <Button
       variant="ghost"

@@ -101,10 +101,14 @@ const WorkflowIOMapSchema = z.record(z.string(), WorkflowIOEntrySchema);
  *  回退只在新键缺失时生效，不覆盖已经用新键落库的数据。 */
 export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
   const parsed = WorkflowIOMapSchema.safeParse(value);
-  if (!parsed.success) return {};
+  if (!parsed.success) {
+    return {};
+  }
   const data = parsed.data;
   for (const entry of Object.values(data)) {
-    if (!entry || typeof entry !== "object") continue;
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
     const rec = /* SAFETY: 类型断言已复核 */ entry as Record<string, unknown>;
     /* 旧键先删掉、再按需落新键：留着它等于让同一份覆盖层以两个名字在本列里
      * 往返 —— 下游读哪个都能读通，于是「谁是权威」永远说不清（而 `.loose()`
@@ -128,8 +132,12 @@ export function isVisibleInMode(
   entry: { modeOverrides?: Record<string, WorkflowIOModeOverride> } | undefined | null,
   mode?: string | null,
 ): boolean {
-  if (!entry || typeof entry !== "object") return true;
-  if (!mode) return true;
+  if (!entry || typeof entry !== "object") {
+    return true;
+  }
+  if (!mode) {
+    return true;
+  }
   return entry.modeOverrides?.[mode]?.visible ?? true;
 }
 
@@ -148,7 +156,9 @@ export function isVisibleInMode(
 export function resolveEntryDefault(entry: WorkflowIOEntry, mode?: string | null): unknown {
   if (mode) {
     const modeDefault = entry.modeOverrides?.[mode]?.defaultValue;
-    if (modeDefault !== undefined && modeDefault !== null) return modeDefault;
+    if (modeDefault !== undefined && modeDefault !== null) {
+      return modeDefault;
+    }
   }
   return entry.defaultValue;
 }
@@ -162,10 +172,14 @@ export function resolveEntryRequired(
   entry: WorkflowIOEntry | undefined | null,
   mode?: string | null,
 ): boolean | undefined {
-  if (!entry || typeof entry !== "object") return undefined;
+  if (!entry || typeof entry !== "object") {
+    return undefined;
+  }
   if (mode) {
     const modeRequired = entry.modeOverrides?.[mode]?.required;
-    if (modeRequired !== undefined) return modeRequired;
+    if (modeRequired !== undefined) {
+      return modeRequired;
+    }
   }
   return entry.required;
 }
@@ -178,10 +192,14 @@ export function resolveEntrySeedMode(
   entry: WorkflowIOEntry | undefined | null,
   mode?: string | null,
 ): string | undefined {
-  if (!entry || typeof entry !== "object") return undefined;
+  if (!entry || typeof entry !== "object") {
+    return undefined;
+  }
   if (mode) {
     const modeSeed = entry.modeOverrides?.[mode]?.seedMode;
-    if (modeSeed !== undefined) return modeSeed;
+    if (modeSeed !== undefined) {
+      return modeSeed;
+    }
   }
   return entry.seedMode;
 }
@@ -190,9 +208,13 @@ export function resolveEntrySeedMode(
 export function collectModeCodes(io: WorkflowIOMap | null | undefined): Array<string> {
   const seen = new Set<string>();
   for (const entry of Object.values(io ?? {})) {
-    if (!entry || typeof entry !== "object") continue;
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
     for (const code of Object.keys(entry.modeOverrides ?? {})) {
-      if (code) seen.add(code);
+      if (code) {
+        seen.add(code);
+      }
     }
   }
   return [...seen];

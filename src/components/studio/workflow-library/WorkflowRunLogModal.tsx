@@ -14,13 +14,7 @@
  * `logs/TaskLogTimeline`（队列页执行日志弹窗同款），本文件只保留头部与外壳。
  */
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FileText, X } from "lucide-react";
 import {
   getWorkflowRunStoreSnapshot,
@@ -41,10 +35,7 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { modalWidth } from "~/components/ui/dialog-width";
 import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
-import {
-  TaskLogEmptyHint,
-  TaskLogTimeline,
-} from "~/components/studio/logs/TaskLogTimeline";
+import { TaskLogEmptyHint, TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
 
 export interface WorkflowRunLogModalProps {
   /** 所属工作流：日志只展示当前工作流的运行（切换工作流独立显示）。 */
@@ -78,9 +69,7 @@ export function WorkflowRunLogModal({
    * 传入 source 时进一步按来源过滤（画布节点 / 工坊封装各自只看自己的）。 */
   const runs = useMemo(
     () =>
-      snapshot.runs.filter(
-        (r) => r.workflowId === workflowId && (!source || r.source === source),
-      ),
+      snapshot.runs.filter((r) => r.workflowId === workflowId && (!source || r.source === source)),
     [snapshot.runs, workflowId, source],
   );
 
@@ -94,7 +83,9 @@ export function WorkflowRunLogModal({
       openedRef.current = false;
       return;
     }
-    if (openedRef.current) return;
+    if (openedRef.current) {
+      return;
+    }
     openedRef.current = true;
     const active = runs.find((r) => r.status === "running" || !r.status);
     const target = active ?? runs[0];
@@ -104,8 +95,7 @@ export function WorkflowRunLogModal({
   }, [open, runs, viewTaskId, onViewTaskIdChange]);
 
   const run: WorkflowRunMeta | null = useMemo(
-    () =>
-      viewTaskId ? (runs.find((r) => r.taskId === viewTaskId) ?? null) : null,
+    () => (viewTaskId ? (runs.find((r) => r.taskId === viewTaskId) ?? null) : null),
     [viewTaskId, runs],
   );
   const logs = run?.logs ?? [];
@@ -118,13 +108,14 @@ export function WorkflowRunLogModal({
     onFailed: () => undefined,
   });
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const status = run?.status ?? "running";
   /* 文案在这里，配色走`ui/status-badge` 的同一份状态 → 语义 token 映射
    *（规范 16 §16.2.4.5）。 */
-  const statusLabel =
-    status === "done" ? "完成" : status === "failed" ? "失败" : `运行中`;
+  const statusLabel = status === "done" ? "完成" : status === "failed" ? "失败" : `运行中`;
 
   const onCancel = () => {
     void cancel();
@@ -148,9 +139,7 @@ export function WorkflowRunLogModal({
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
               <FileText size={16} className="text-primary-strong shrink-0" />
-              <span className="text-ink truncate text-[15px] font-semibold">
-                执行日志
-              </span>
+              <span className="text-ink truncate text-[15px] font-semibold">执行日志</span>
               {run && (
                 <span
                   className="text-ink-muted text-2xs max-w-55 truncate"
@@ -197,11 +186,7 @@ export function WorkflowRunLogModal({
                     runs.map((r) => [
                       r.taskId,
                       `${r.workflowName} · ${
-                        r.status === "done"
-                          ? "完成"
-                          : r.status === "failed"
-                            ? "失败"
-                            : "运行中"
+                        r.status === "done" ? "完成" : r.status === "failed" ? "失败" : "运行中"
                       }`,
                     ]),
                   )}
@@ -209,10 +194,7 @@ export function WorkflowRunLogModal({
                   className="text-2xs max-w-50"
                 />
               )}
-              <Hint
-                label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）"
-                wrap
-              >
+              <Hint label="查看 comfy-cli 完整输出（未经截断、可格式化 JSON）" wrap>
                 <Button
                   variant="ghost"
                   onClick={() => setRawOpen(true)}
@@ -248,16 +230,12 @@ export function WorkflowRunLogModal({
             topSlot={
               run?.errorMessage ? (
                 <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
-                  <div className="wrap-break-word whitespace-pre-wrap">
-                    {run.errorMessage}
-                  </div>
+                  <div className="wrap-break-word whitespace-pre-wrap">{run.errorMessage}</div>
                 </div>
               ) : null
             }
             emptySlot={
-              <TaskLogEmptyHint
-                message={run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
-              />
+              <TaskLogEmptyHint message={run ? "等待日志…" : "运行生成后此处会显示执行步骤日志"} />
             }
           />
         </div>

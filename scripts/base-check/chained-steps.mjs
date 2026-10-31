@@ -49,9 +49,7 @@ import path from "node:path";
  * 这个形状现算「有哪些成员」，好与 `.on-demand-duties.json` 的登记**双向**核对
  * （新增一条却忘了登记 ⇒ 当场红）。改这个形状要同批改那一边。
  */
-export const CHAINED_STEPS = [
-  { script: "scripts/check-commit-claims.mjs" },
-];
+export const CHAINED_STEPS = [{ script: "scripts/check-commit-claims.mjs" }];
 
 /**
  * 把这一族展开成 `resolveMergeBatch` 的 `{argv, label, baseSide}` 条目。
@@ -67,14 +65,16 @@ export const CHAINED_STEPS = [
  */
 export function chainedSteps({ root, resolveBaseRef, git }) {
   const ref = resolveBaseRef();
-  if (!ref) return [];
+  if (!ref) {
+    return [];
+  }
   const range = `${ref}..HEAD`;
   /* 没有待并提交 ⇒ 这一族无事可问：给空，不造一条恒绿的假行。 */
   const count = git(["rev-list", "--count", range]);
-  if (!count.ok || Number(count.stdout) === 0) return [];
-  return CHAINED_STEPS.filter((s) =>
-    fs.existsSync(path.join(root, s.script)),
-  ).map((s) => ({
+  if (!count.ok || Number(count.stdout) === 0) {
+    return [];
+  }
+  return CHAINED_STEPS.filter((s) => fs.existsSync(path.join(root, s.script))).map((s) => ({
     argv: ["node", s.script, "--range", range],
     label: `提交信息里的声明 ⇄ 事实（${range}）`,
     baseSide: false,

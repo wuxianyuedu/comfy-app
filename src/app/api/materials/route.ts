@@ -86,7 +86,9 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 export async function GET(req: NextRequest) {
   const user = await requireRequestUser();
-  if (!user) return unauthorizedResponse();
+  if (!user) {
+    return unauthorizedResponse();
+  }
   try {
     const url = new URL(req.url);
     const projectId = sanitizeScope(url.searchParams.get("projectId"));
@@ -113,7 +115,9 @@ export async function GET(req: NextRequest) {
     if (q) {
       // 搜索优先于 folder：跨所有分类找名字匹配的
       const pool: Array<MaterialItem> = [];
-      for (const f of MATERIAL_FOLDERS) pool.push(...(byFolder.get(f.id) ?? []));
+      for (const f of MATERIAL_FOLDERS) {
+        pool.push(...(byFolder.get(f.id) ?? []));
+      }
       items = pool.filter((it) => matchesNeedle(q, it.name));
     } else if (folder) {
       if (!isValidFolder(folder)) {
@@ -140,11 +144,15 @@ export async function GET(req: NextRequest) {
 /** 上传素材。multipart/form-data: file, projectId, folder, shared? */
 export async function POST(req: NextRequest) {
   const user = await requireRequestUser();
-  if (!user) return unauthorizedResponse();
+  if (!user) {
+    return unauthorizedResponse();
+  }
   try {
     const form = await req.formData();
     const file = /* SAFETY: 类型断言已复核 */ form.get("file") as File | null;
-    if (!file) return NextResponse.json({ error: "未收到文件" }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ error: "未收到文件" }, { status: 400 });
+    }
 
     if (!ALLOWED_MIME.has(file.type)) {
       return NextResponse.json(
@@ -182,10 +190,14 @@ export async function POST(req: NextRequest) {
     }
 
     const safeName = sanitizeFileName(file.name);
-    if (!safeName) return NextResponse.json({ error: "文件名不合法" }, { status: 400 });
+    if (!safeName) {
+      return NextResponse.json({ error: "文件名不合法" }, { status: 400 });
+    }
 
     const dir = folderDir(scope, folder);
-    if (!dir) return NextResponse.json({ error: "路径不合法" }, { status: 400 });
+    if (!dir) {
+      return NextResponse.json({ error: "路径不合法" }, { status: 400 });
+    }
     await fs.mkdir(dir, { recursive: true });
 
     // 重名不覆盖：追加 -1 / -2 …，避免用户误丢文件
@@ -225,11 +237,15 @@ export async function POST(req: NextRequest) {
 /** 删除素材。?id=scope/folder/name（GET 返回的 item.id 原样回传）。 */
 export async function DELETE(req: NextRequest) {
   const user = await requireRequestUser();
-  if (!user) return unauthorizedResponse();
+  if (!user) {
+    return unauthorizedResponse();
+  }
   try {
     const url = new URL(req.url);
     const id = url.searchParams.get("id")?.trim();
-    if (!id) return NextResponse.json({ error: "缺少 id" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "缺少 id" }, { status: 400 });
+    }
 
     const parts = id.split("/");
     if (parts.length !== 3) {
@@ -248,7 +264,9 @@ export async function DELETE(req: NextRequest) {
     }
 
     const dir = folderDir(scope, folder);
-    if (!dir) return NextResponse.json({ error: "路径不合法" }, { status: 400 });
+    if (!dir) {
+      return NextResponse.json({ error: "路径不合法" }, { status: 400 });
+    }
 
     const target = path.join(dir, name);
     // 再确认一次目标仍在该分类目录内（双保险）

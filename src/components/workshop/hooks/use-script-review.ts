@@ -41,7 +41,9 @@ export function useScriptReview(
   }, []);
 
   const review = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     guardRef.current.dispose();
     const guard = beginStaleRun();
     guardRef.current = guard;
@@ -62,7 +64,9 @@ export function useScriptReview(
   }, [projectId, reviewBusy]);
 
   const revise = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     guardRef.current.dispose();
     const guard = beginStaleRun();
     guardRef.current = guard;

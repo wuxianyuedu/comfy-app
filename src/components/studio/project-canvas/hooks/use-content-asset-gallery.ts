@@ -55,7 +55,9 @@ export function useContentAssetGallery({
   const images = gallery.key === ctxKey ? gallery.images : null;
 
   useEffect(() => {
-    if (!taskId || !enabled) return;
+    if (!taskId || !enabled) {
+      return;
+    }
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换任务 / 关掉开关会重开一轮，
      * 旧轮次的图集一律不落地（否则会短暂显示上一个任务的图）。 */
     const guard = beginStaleRun();

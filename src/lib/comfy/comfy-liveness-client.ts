@@ -21,7 +21,9 @@ import type { ComfyLivenessSignal } from "~/lib/comfyui/liveness-signal";
 
 /** 帧形状收窄：SSE 载荷是外部输入，逐字段判型，不做类型断言。 */
 function parseSignal(raw: unknown): ComfyLivenessSignal | null {
-  if (typeof raw !== "object" || raw === null) return null;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
   const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   if (
     typeof o.seq !== "number" ||
@@ -59,12 +61,18 @@ const listeners = new Set<Listener>();
 
 function deliver(signal: ComfyLivenessSignal): void {
   const seen = st.seenSeq ?? 0;
-  if (signal.seq <= seen) return;
+  if (signal.seq <= seen) {
+    return;
+  }
   st.seenSeq = signal.seq;
   /* 用户主动关闭不是崩溃：不派发脉冲。客户端不必为「我们自己让它退的」再探一次
    * 证明它没了 —— 那个结论调用方本来就有（它点了关闭）。 */
-  if (signal.userStopped) return;
-  for (const l of listeners) l(signal);
+  if (signal.userStopped) {
+    return;
+  }
+  for (const l of listeners) {
+    l(signal);
+  }
 }
 
 /** 建立订阅（幂等：多次调用共用一条 EventSource）。返回退订函数。 */
@@ -73,19 +81,27 @@ export function subscribeComfyCrashes(listener: Listener): () => void {
   ensureConnected();
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0) disconnect();
+    if (listeners.size === 0) {
+      disconnect();
+    }
   };
 }
 
 function ensureConnected(): void {
-  if (st.es) return;
-  if (typeof EventSource === "undefined") return;
+  if (st.es) {
+    return;
+  }
+  if (typeof EventSource === "undefined") {
+    return;
+  }
   try {
     const es = new EventSource("/api/comfy/liveness");
     es.onmessage = (ev: MessageEvent<string>) => {
       try {
         const signal = parseSignal(JSON.parse(ev.data));
-        if (signal !== null) deliver(signal);
+        if (signal !== null) {
+          deliver(signal);
+        }
       } catch {
         /* 坏帧不影响后续：一条解析不了的载荷不该把整条订阅拖死。 */
       }

@@ -51,13 +51,17 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
    *  通过展开保留。RAW 视图下已在 `detail.positions` 镜像的 raw-id 拖拽覆盖
    *  会叠加在最上层，使 RAW 视图的手动拖拽无需重新拉取即生效。 */
   const scopeDetail: WorkflowDetail | null = useMemo(() => {
-    if (!detail) return null;
+    if (!detail) {
+      return null;
+    }
     if (detail.rawView) {
       const rawIds = new Set(detail.rawView.nodes.map((node) => node.id));
       const overrides: Record<string, [number, number]> = {};
       const dp = detail.positions ?? {};
       for (const [k, position] of Object.entries(dp)) {
-        if (position && rawIds.has(k)) overrides[k] = position;
+        if (position && rawIds.has(k)) {
+          overrides[k] = position;
+        }
       }
       return {
         ...detail,
@@ -70,9 +74,13 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
   }, [detail]);
 
   const outSlotNameById: Record<string, Array<string>> = useMemo(() => {
-    if (!scopeDetail) return {};
+    if (!scopeDetail) {
+      return {};
+    }
     const nodesById: Record<string, ComfyGraphNode> = {};
-    for (const n of scopeDetail.nodes) nodesById[n.id] = n;
+    for (const n of scopeDetail.nodes) {
+      nodesById[n.id] = n;
+    }
     return inferSourceOutNames(scopeDetail, nodesById, rawMetaById);
   }, [scopeDetail, rawMetaById]);
 

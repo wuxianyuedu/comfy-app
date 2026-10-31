@@ -4,10 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { clamp } from "~/lib/clamp";
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
-import {
-  useViewportSize,
-  type ViewportSize,
-} from "~/components/ui/use-viewport-size";
+import { useViewportSize, type ViewportSize } from "~/components/ui/use-viewport-size";
 
 /**
  * useDraggablePosition —— 「让一个悬浮元素可以被拖着摆到任意位置」的**唯一实现**。
@@ -121,14 +118,8 @@ function clampOffset(
   /* `right` 的可取上限 = 视口宽 − 元素宽 − 两边留白；下限就是留白本身
    * （元素贴住右边）。`Math.max` 兜住「元素比视口还宽」这一档：那时上限
    * 会小于下限，`clamp` 的区间被写反 —— 取留白让它靠左显示，至少读得到。 */
-  const maxRight = Math.max(
-    DRAG_EDGE_GAP_PX,
-    viewport.width - box.width - DRAG_EDGE_GAP_PX,
-  );
-  const maxBottom = Math.max(
-    DRAG_EDGE_GAP_PX,
-    viewport.height - box.height - DRAG_EDGE_GAP_PX,
-  );
+  const maxRight = Math.max(DRAG_EDGE_GAP_PX, viewport.width - box.width - DRAG_EDGE_GAP_PX);
+  const maxBottom = Math.max(DRAG_EDGE_GAP_PX, viewport.height - box.height - DRAG_EDGE_GAP_PX);
   return {
     right: clamp(offset.right, DRAG_EDGE_GAP_PX, maxRight),
     bottom: clamp(offset.bottom, DRAG_EDGE_GAP_PX, maxBottom),
@@ -217,9 +208,13 @@ export function useDraggablePosition<T extends HTMLElement>({
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLElement>) => {
       /* 只接主键：右键 / 中键留给上下文菜单与原生的中键行为。 */
-      if (event.button !== 0) return;
+      if (event.button !== 0) {
+        return;
+      }
       const dragged = element;
-      if (!dragged || offset === null) return;
+      if (!dragged || offset === null) {
+        return;
+      }
 
       dragRef.current = {
         pointerId: event.pointerId,
@@ -231,18 +226,24 @@ export function useDraggablePosition<T extends HTMLElement>({
 
       const onMove = (moveEvent: PointerEvent) => {
         const drag = dragRef.current;
-        if (drag?.pointerId !== moveEvent.pointerId) return;
+        if (drag?.pointerId !== moveEvent.pointerId) {
+          return;
+        }
         const dx = moveEvent.clientX - drag.startX;
         const dy = moveEvent.clientY - drag.startY;
         if (!drag.moved) {
-          if (Math.hypot(dx, dy) < DRAG_SLOP_PX) return;
+          if (Math.hypot(dx, dy) < DRAG_SLOP_PX) {
+            return;
+          }
           drag.moved = true;
           setDragging(true);
         }
         /* 指针右移 = 离右边更近 → `right` 变小，所以是减 `dx`；
          * 下移同理减 `dy`。夹取每一帧都做，元素不会跟出视口。 */
         const nextViewport = viewportRef.current;
-        if (nextViewport === null) return;
+        if (nextViewport === null) {
+          return;
+        }
         setManual(
           clampOffset(
             {
@@ -261,7 +262,9 @@ export function useDraggablePosition<T extends HTMLElement>({
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
         window.removeEventListener("pointercancel", onUp);
-        if (drag?.pointerId !== upEvent.pointerId) return;
+        if (drag?.pointerId !== upEvent.pointerId) {
+          return;
+        }
         setDragging(false);
         if (!drag.moved) {
           /* 位移没超阈值 = 点击：交回调用处（打开浮层 / 收起面板）。 */
@@ -271,7 +274,9 @@ export function useDraggablePosition<T extends HTMLElement>({
         /* 真的拖过：把新落点记住。写失败（隐私模式 / 配额满）静默 ——
          * 记忆是增强不是功能，本次会话内拖到哪仍然在哪。 */
         setManual((current) => {
-          if (current !== null) writeStorageJson(storageKey, current);
+          if (current !== null) {
+            writeStorageJson(storageKey, current);
+          }
           return current;
         });
       };

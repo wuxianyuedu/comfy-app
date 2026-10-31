@@ -120,7 +120,9 @@ export function resolveCiWorkers({ env = process.env } = {}) {
   const { cores, source, note } = resolveCores(env);
   const derived = workersForCores(cores);
   const raw = String(env.COMFY_CI_MAX_WORKERS ?? "").trim();
-  if (raw === "") return { workers: derived, cores, source, note };
+  if (raw === "") {
+    return { workers: derived, cores, source, note };
+  }
   const override = Number(raw);
   if (!Number.isInteger(override) || override < MIN_WORKERS) {
     return {

@@ -25,7 +25,9 @@ const noopUnlisten: UnlistenFn = () => {
 
 /** 拖动窗口（自定义标题栏按住拖动区时调用）。非壳环境空操作。 */
 export async function startWindowDrag(): Promise<void> {
-  if (!isDesktopShell()) return;
+  if (!isDesktopShell()) {
+    return;
+  }
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     await getCurrentWindow().startDragging();
@@ -36,7 +38,9 @@ export async function startWindowDrag(): Promise<void> {
 
 /** 最小化窗口。返回是否真正执行（非壳环境为 false）。 */
 export async function minimizeWindow(): Promise<boolean> {
-  if (!isDesktopShell()) return false;
+  if (!isDesktopShell()) {
+    return false;
+  }
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     await getCurrentWindow().minimize();
@@ -48,7 +52,9 @@ export async function minimizeWindow(): Promise<boolean> {
 
 /** 在「最大化」与「还原」之间切换，返回切换后的最大化状态（非壳环境 null）。 */
 export async function toggleMaximizeWindow(): Promise<boolean | null> {
-  if (!isDesktopShell()) return null;
+  if (!isDesktopShell()) {
+    return null;
+  }
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     const win = getCurrentWindow();
@@ -61,7 +67,9 @@ export async function toggleMaximizeWindow(): Promise<boolean | null> {
 
 /** 关闭窗口。返回是否真正执行。 */
 export async function closeWindow(): Promise<boolean> {
-  if (!isDesktopShell()) return false;
+  if (!isDesktopShell()) {
+    return false;
+  }
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     await getCurrentWindow().close();
@@ -73,7 +81,9 @@ export async function closeWindow(): Promise<boolean> {
 
 /** 读当前窗口是否最大化（非壳环境 false）。 */
 export async function isWindowMaximized(): Promise<boolean> {
-  if (!isDesktopShell()) return false;
+  if (!isDesktopShell()) {
+    return false;
+  }
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     return await getCurrentWindow().isMaximized();
@@ -86,10 +96,10 @@ export async function isWindowMaximized(): Promise<boolean> {
  * 订阅窗口尺寸变化以同步「最大化 / 还原」按钮图标。
  * 非壳环境返回空取消函数（调用方无需分支判断）。
  */
-export async function onWindowResized(
-  handler: (maximized: boolean) => void,
-): Promise<UnlistenFn> {
-  if (!isDesktopShell()) return noopUnlisten;
+export async function onWindowResized(handler: (maximized: boolean) => void): Promise<UnlistenFn> {
+  if (!isDesktopShell()) {
+    return noopUnlisten;
+  }
   try {
     const { getCurrentWindow } = await import("@tauri-apps/api/window");
     return await getCurrentWindow().onResized(() => {

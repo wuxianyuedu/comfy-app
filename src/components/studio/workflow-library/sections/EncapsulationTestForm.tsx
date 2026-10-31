@@ -122,7 +122,9 @@ export function EncapsulationTestForm({
           },
           {
             report: (kind, detail) => {
-              if (kind === "err") setError(detail);
+              if (kind === "err") {
+                setError(detail);
+              }
             },
             failureText: "上传失败",
           },

@@ -52,7 +52,9 @@ function tmpDir(tag: string): string {
 }
 
 afterEach(() => {
-  for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of made.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 一份与生产同形状的 plan，但 dll 的哈希按夹具内容现算 —— 让「哈希认不过」这条能被测到。 */
@@ -84,7 +86,9 @@ function fakeCacheTree(
   const plan = fixturePlan(dllContent);
   const root = path.join(tauriRoot, NSIS_PLAN.cacheRel);
   for (const rel of plan.required) {
-    if (opts.drop?.includes(rel)) continue;
+    if (opts.drop?.includes(rel)) {
+      continue;
+    }
     const abs = path.join(root, ...rel.split("/"));
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, rel === plan.dllRel ? dllContent : `内容:${rel}`);

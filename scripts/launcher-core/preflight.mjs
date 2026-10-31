@@ -14,12 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-import {
-  orchestratePnpm,
-  packageManagerVersion,
-  preparePnpm,
-  probePnpm,
-} from "./corepack.mjs";
+import { orchestratePnpm, packageManagerVersion, preparePnpm, probePnpm } from "./corepack.mjs";
 import { checkNodeModules } from "./worktree.mjs";
 import { appRuntimeLogFileName, currentDirOf, localTimestamp } from "./log.mjs";
 
@@ -42,7 +37,9 @@ import { appRuntimeLogFileName, currentDirOf, localTimestamp } from "./log.mjs";
  *  @param {string} [root] @returns {string | null} 失败原因（null = 通过） */
 export function runToolchainGate(ctx, root = process.cwd()) {
   const pnpm = orchestratePnpm({ root });
-  if (pnpm.repaired) ctx.log(`pnpm 已自动修复：${pnpm.tip}`, "OK");
+  if (pnpm.repaired) {
+    ctx.log(`pnpm 已自动修复：${pnpm.tip}`, "OK");
+  }
   if (!pnpm.probe.ok) {
     ctx.setPnpmTip(pnpm.tip);
     return pnpm.tip ?? "pnpm 不可用";
@@ -69,9 +66,13 @@ export function runToolchainGate(ctx, root = process.cwd()) {
  *  @param {string} [root] @returns {{ version: string, expected: string, tip: string | null } | null} */
 export function reconcilePnpmVersion(ctx, root = process.cwd()) {
   const expected = packageManagerVersion(root);
-  if (!expected) return null;
+  if (!expected) {
+    return null;
+  }
   const probe = probePnpm({ root });
-  if (!probe.ok) return null; // 门禁已就「不可用」给过提示，这里不再叠一句
+  if (!probe.ok) {
+    return null;
+  } // 门禁已就「不可用」给过提示，这里不再叠一句
   const actual = probe.version ?? "";
   if (actual.replace(/^v/, "") === expected.replace(/^v/, "")) {
     ctx.log(`pnpm 版本匹配：${actual}（packageManager: pnpm@${expected}）`, "OK");
@@ -86,10 +87,7 @@ export function reconcilePnpmVersion(ctx, root = process.cwd()) {
     ctx.log(`corepack 已自动切换 pnpm 至 ${now}`, "OK");
     return { version: now, expected, tip: null };
   }
-  ctx.log(
-    `corepack 对齐未生效（${prepare.description}，当前 ${now || "未知"}）`,
-    "WARN",
-  );
+  ctx.log(`corepack 对齐未生效（${prepare.description}，当前 ${now || "未知"}）`, "WARN");
   return {
     version: actual,
     expected,
@@ -135,7 +133,9 @@ export function shellStaleWarning(shellExe, root = process.cwd()) {
       newest = Math.max(newest, stat.mtimeMs);
     }
   }
-  if (newest <= exeTime) return null;
+  if (newest <= exeTime) {
+    return null;
+  }
   return (
     `正在运行旧版桌面壳（编译于 ${localTimestamp(new Date(exeTime)).slice(5, 16)}，源码此后有改动），` +
     "界面可能不是最新逻辑；建议重编：cd src-tauri && cargo build --release --features custom-protocol"
@@ -155,8 +155,11 @@ function walkFiles(dir) {
   }
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...walkFiles(full));
-    else out.push(full);
+    if (entry.isDirectory()) {
+      out.push(...walkFiles(full));
+    } else {
+      out.push(full);
+    }
   }
   return out;
 }

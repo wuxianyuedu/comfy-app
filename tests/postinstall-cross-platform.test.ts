@@ -38,7 +38,9 @@ const postinstall = pkg.scripts.postinstall ?? "";
 
 const tmpDirs: Array<string> = [];
 afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tmpDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 造一个最小「检出」：把入口脚本与它的定位前提放进去（入口按自身位置找仓库根）。 */

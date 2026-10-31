@@ -124,7 +124,9 @@ export function emitAppEvent<K extends AppEventName>(
   name: K,
   ...payload: AppEvents[K] extends undefined ? [] : [AppEvents[K]]
 ): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
   const detail = payload[0];
   window.dispatchEvent(detail === undefined ? new Event(name) : new CustomEvent(name, { detail }));
 }
@@ -157,7 +159,9 @@ export function subscribeAppEvent<K extends AppEventName>(
   name: K,
   handler: (payload: AppEvents[K]) => void,
 ): () => void {
-  if (typeof window === "undefined") return noop;
+  if (typeof window === "undefined") {
+    return noop;
+  }
   const listener = (event: Event) => {
     handler(
       /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (event as CustomEvent)

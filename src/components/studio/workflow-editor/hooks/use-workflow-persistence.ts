@@ -84,10 +84,16 @@ export function useWorkflowPersistence({
       /* 导轨不属于任何数据节点：顶层视图的导轨是顶层布局的一部分，属于本层
        *  （返回 false = 一并清掉）；子图视图里的导轨属于外层画布，不能顺手
        *  抹掉（返回 true = 保留）。 */
-      if (key.startsWith("grp:bpin:")) return hostNodeId !== "";
-      if (!hostNodeId) return key.includes(":");
+      if (key.startsWith("grp:bpin:")) {
+        return hostNodeId !== "";
+      }
+      if (!hostNodeId) {
+        return key.includes(":");
+      }
       const prefix = `${hostNodeId}:`;
-      if (!key.startsWith(prefix)) return true;
+      if (!key.startsWith(prefix)) {
+        return true;
+      }
       const inner = key.slice(prefix.length);
       return inner.includes(":");
     },
@@ -96,7 +102,9 @@ export function useWorkflowPersistence({
   /* 把当前视图的节点位置恢复成工作流自带的原始布局（用户口语里的
    *  「重置位置」）。语义 = 清除本视图所有被改动过的坐标，见下方实现说明。 */
   const resetLayout = useCallback(() => {
-    if (!detail) return;
+    if (!detail) {
+      return;
+    }
     /* 「重置布局」= 清除本视图所有被改动过的位置，回到工作流自带的原始布局。
      *
      * 不能靠「把进入时的快照写回去」：客户端拿到的 `detail.positions` 是
@@ -110,12 +118,18 @@ export function useWorkflowPersistence({
      * 位置」一致。本地的旧坐标同样要剔除，否则在重新拉取落到之前，画布还是
      * 旧的覆盖值。 */
     setDetail((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const cur = prev.positions ?? null;
-      if (cur === null) return prev;
+      if (cur === null) {
+        return prev;
+      }
       const kept: Record<string, [number, number]> = {};
       for (const [key, pos] of Object.entries(cur)) {
-        if (isForeignViewKey(key)) kept[key] = pos;
+        if (isForeignViewKey(key)) {
+          kept[key] = pos;
+        }
       }
       return { ...prev, positions: Object.keys(kept).length > 0 ? kept : null };
     });
@@ -229,7 +243,9 @@ export function useWorkflowPersistence({
        *（例如用户在加载中关掉了编辑器）；那种情况下没地方
        * 写新位置。静默返回 —— 下次打开时画布会带着
        * 已落盘的状态重新挂载。 */
-      if (!detail) return;
+      if (!detail) {
+        return;
+      }
       const x = Math.round(node.position.x);
       /* 锚点反转：wfNode / wfSubgraph 卡片会在卡片体**上方**画一条
        *  30px 标题栏，所以 React Flow 的 `position.y` 是**卡片**（标题栏）顶点，

@@ -61,8 +61,12 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
     /* 刷新前先确认菜单里**只有全局项** —— 否则下面「刷新后还在」可能只是因为
      * 它从一开始就不依赖 active-id，判据就失去意义。 */
     const before = await openViewMenuItems(page);
-    for (const label of GLOBAL_VIEWS) expect(before).toContain(label);
-    for (const label of PROJECT_VIEWS) expect(before).not.toContain(label);
+    for (const label of GLOBAL_VIEWS) {
+      expect(before).toContain(label);
+    }
+    for (const label of PROJECT_VIEWS) {
+      expect(before).not.toContain(label);
+    }
 
     /* 用户动作：新建画布项目。 */
     await page.getByRole("button", { name: "新建画布项目" }).click();
@@ -70,7 +74,9 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
 
     /* 界面已经把他带进项目了 —— 六个项目页签出现在菜单里。 */
     const entered = await openViewMenuItems(page);
-    for (const label of PROJECT_VIEWS) expect(entered).toContain(label);
+    for (const label of PROJECT_VIEWS) {
+      expect(entered).toContain(label);
+    }
 
     /* 刷新。缺陷就在这一步：active-id 被挂载时的清扫清掉，下面这六个消失。 */
     await page.reload();
@@ -85,7 +91,9 @@ test.describe("新建项目后的上下文在刷新后仍成立 @critical", () =
     await expect(page.getByRole("tab", { name: /^主页/ })).toBeVisible();
 
     const afterReload = await openViewMenuItems(page);
-    for (const label of PROJECT_VIEWS) expect(afterReload).toContain(label);
+    for (const label of PROJECT_VIEWS) {
+      expect(afterReload).toContain(label);
+    }
   });
 
   test("刷新后 active-id 与项目索引都还在（缺陷的另一半：别只在界面上兜住）", async ({ page }) => {

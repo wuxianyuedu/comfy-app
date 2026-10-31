@@ -47,13 +47,15 @@ export interface NaturalSize {
  * 图片读 `natural*`、视频读 `video*`，两者都读不到才判空 —— 这样调用处
  * 不必先判「这是图还是视频」（`MediaThumbnail` 的 `onLoad` 两种元素都给）。
  */
-export function readNaturalSize(
-  element: NaturalSizeSource | null | undefined,
-): NaturalSize | null {
-  if (!element) return null;
+export function readNaturalSize(element: NaturalSizeSource | null | undefined): NaturalSize | null {
+  if (!element) {
+    return null;
+  }
   const width = element.naturalWidth ?? element.videoWidth ?? 0;
   const height = element.naturalHeight ?? element.videoHeight ?? 0;
-  if (!isPositiveFinite(width) || !isPositiveFinite(height)) return null;
+  if (!isPositiveFinite(width) || !isPositiveFinite(height)) {
+    return null;
+  }
   return { width, height };
 }
 
@@ -67,9 +69,7 @@ function isPositiveFinite(value: number): boolean {
  * 返回 `null` 而不是 `NaN` / `Infinity`：调用处做「按比例定高」这类计算时，
  * 那两个值的可见后果是**容器塌成 0 高或被撑到无穷**，而不是一句可解释的失败。
  */
-export function naturalAspectRatio(
-  element: NaturalSizeSource | null | undefined,
-): number | null {
+export function naturalAspectRatio(element: NaturalSizeSource | null | undefined): number | null {
   const size = readNaturalSize(element);
   return size ? size.width / size.height : null;
 }
@@ -81,9 +81,7 @@ export function naturalAspectRatio(
  * 前者该保持占位盒、后者该走横图分支。压成布尔会让「还没加载完」
  * 被当成横图渲染一次，图片到位后再跳一次（列表滚动时的抖动来源之一）。
  */
-export function isPortraitMedia(
-  element: NaturalSizeSource | null | undefined,
-): boolean | null {
+export function isPortraitMedia(element: NaturalSizeSource | null | undefined): boolean | null {
   const size = readNaturalSize(element);
   return size ? size.height > size.width : null;
 }
@@ -94,9 +92,7 @@ export function isPortraitMedia(
  * 用 `×`（U+00D7）而不是 `x`：这是标记里手写的那一个字符，各处必须一致 ——
  * 收口前预览用的是 `×`、另一处用的是 `x`，并排看像两种数据。
  */
-export function formatNaturalSize(
-  element: NaturalSizeSource | null | undefined,
-): string | null {
+export function formatNaturalSize(element: NaturalSizeSource | null | undefined): string | null {
   const size = readNaturalSize(element);
   return size ? `${size.width} × ${size.height}` : null;
 }

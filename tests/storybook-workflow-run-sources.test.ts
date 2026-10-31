@@ -36,14 +36,7 @@ import { stripComments } from "./helpers/strip-comments";
 const ROOT = resolve(".");
 const SOURCES = join(ROOT, ".storybook", "workflow-run-sources.tsx");
 const PREVIEW = join(ROOT, ".storybook", "preview.tsx");
-const STORY = join(
-  ROOT,
-  "src",
-  "components",
-  "studio",
-  "logs",
-  "TaskLogTimeline.stories.tsx",
-);
+const STORY = join(ROOT, "src", "components", "studio", "logs", "TaskLogTimeline.stories.tsx");
 
 const sources = readFileSync(SOURCES, "utf8");
 const sourcesCode = stripComments(sources);
@@ -72,14 +65,19 @@ function callsIn(code: string, name: string): boolean {
     /* 取该标识符所在**行**的起点，看这一行是不是 import / export-from 声明。 */
     const lineStart = code.lastIndexOf("\n", m.index) + 1;
     const line = code.slice(lineStart, code.indexOf("\n", m.index));
-    if (/^\s*import\b/.test(line)) continue;
+    if (/^\s*import\b/.test(line)) {
+      continue;
+    }
     /* 括号配对走完即算「真调用」（不要求实参非空 —— 零参调用也是调用）。 */
     let depth = 0;
     for (let i = m.index + m[0].length - 1; i < code.length; i += 1) {
-      if (code[i] === "(") depth += 1;
-      else if (code[i] === ")") {
+      if (code[i] === "(") {
+        depth += 1;
+      } else if (code[i] === ")") {
         depth -= 1;
-        if (depth === 0) return true;
+        if (depth === 0) {
+          return true;
+        }
       }
     }
   }
@@ -146,10 +144,9 @@ describe("Storybook 工作流运行注入层的契约（ISSUE #1381）", () => {
     expect(start, "preview.tsx 里找不到 decorators 数组").toBeGreaterThan(-1);
     const end = preview.indexOf("]", start);
     const chain = preview.slice(start, end + 1);
-    expect(
-      chain,
-      "少挂 withWorkflowRunScene = parameters.runScene 没人读，时间线空着",
-    ).toContain("withWorkflowRunScene");
+    expect(chain, "少挂 withWorkflowRunScene = parameters.runScene 没人读，时间线空着").toContain(
+      "withWorkflowRunScene",
+    );
   });
 
   it("story 接真组件，且日志经 store 读而不是直接拿数组", () => {
@@ -166,13 +163,16 @@ describe("Storybook 工作流运行注入层的契约（ISSUE #1381）", () => {
        从调用点到配对闭括号之间必须真的出现那两个标识符。 */
     const code = stripComments(story);
     const callStart = code.indexOf("useSyncExternalStore(");
-    expect(callStart, "story 里找不到 useSyncExternalStore( 调用 —— 改写法了？").toBeGreaterThan(-1);
+    expect(callStart, "story 里找不到 useSyncExternalStore( 调用 —— 改写法了？").toBeGreaterThan(
+      -1,
+    );
     /* 括号配对取到这次调用的实参串（第三个参数是服务端快照，同一个函数）。 */
     let depth = 0;
     let callEnd = -1;
     for (let i = code.indexOf("(", callStart); i < code.length; i += 1) {
-      if (code[i] === "(") depth += 1;
-      else if (code[i] === ")") {
+      if (code[i] === "(") {
+        depth += 1;
+      } else if (code[i] === ")") {
         depth -= 1;
         if (depth === 0) {
           callEnd = i;
@@ -185,13 +185,11 @@ describe("Storybook 工作流运行注入层的契约（ISSUE #1381）", () => {
     /* 用**标识符边界**匹配，不用 `toContain` —— 后者是子串匹配，把调用点改名成
        `subscribeWorkflowRunStoreX` 之后 `toContain("subscribeWorkflowRunStore")`
        照样成立（这是本判据的第二个变异，实测漏过去过）。 */
-    expect(
-      args,
-      "三元组的订阅函数要是 store 自己的 subscribeWorkflowRunStore",
-    ).toMatch(/\bsubscribeWorkflowRunStore\b/);
-    expect(
-      args,
-      "三元组的快照函数要是 store 自己的 getWorkflowRunStoreSnapshot",
-    ).toMatch(/\bgetWorkflowRunStoreSnapshot\b/);
+    expect(args, "三元组的订阅函数要是 store 自己的 subscribeWorkflowRunStore").toMatch(
+      /\bsubscribeWorkflowRunStore\b/,
+    );
+    expect(args, "三元组的快照函数要是 store 自己的 getWorkflowRunStoreSnapshot").toMatch(
+      /\bgetWorkflowRunStoreSnapshot\b/,
+    );
   });
 });

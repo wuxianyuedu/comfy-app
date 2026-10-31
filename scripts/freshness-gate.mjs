@@ -77,18 +77,16 @@ const ROOT = path.resolve(HERE, "..");
  * @param {"pr" | "master"} [subject] 本次判决的主体（`COMFY_CI_SUBJECT`；未设置取 `"pr"`）
  * @returns {Record<string, unknown>}
  */
-export function readFreshnessLedger(
-  kind = "e2e",
-  root = ROOT,
-  subject = contextSubject(),
-) {
+export function readFreshnessLedger(kind = "e2e", root = ROOT, subject = contextSubject()) {
   // ISSUE #2247：平台每日跑绿的账只落在机器自有分支 `ci/freshness-ledger`，
   // 工作树那份是最后一次本地跑（可能已在自己分支、带未合并改动），与机器跑的不一定是
   // 同一份。故**机器账权威**：机器分支有这份账就以它为准，缺失才回退工作树。
   const track = freshnessTrack(kind);
   if (subject === "master") {
     const machine = readBranchLedger({ root, rel: track.ledger });
-    if (machine && Object.keys(machine).length > 0) return machine;
+    if (machine && Object.keys(machine).length > 0) {
+      return machine;
+    }
   }
   return readFreshnessLedgerAt(root, track.ledger);
 }
@@ -160,9 +158,7 @@ export function runGate({
    * 只给天数时「今天 08:45 跑过」与「今天 23:50 才跑过」在账面上同形（ISSUE #1979）。
    * 拆成 `at` / `age` 两栏给出去，是因为**消费方要的东西不同**：人要读拼好的那一句，
    * 而机器（`--ledger` 的补栏、用例）要得出「这一条到底有没有时刻」。 */
-  const ages = required.map(
-    (p) => `${p}：${freshnessReading(ledger[p], now) ?? "无记录"}`,
-  );
+  const ages = required.map((p) => `${p}：${freshnessReading(ledger[p], now) ?? "无记录"}`);
   const stamps = required.map((p) => freshnessStamp(ledger[p]));
   /* `who` / `how` 一并带出去（ISSUE #1979）：账存在的全部意义是
    * 「谁、什么时候、按哪条命令复核的」，此前输出只打第三栏的半句 ——
@@ -170,9 +166,7 @@ export function runGate({
   const records = required.map((p) => {
     const entry = ledger[p];
     const rec =
-      entry && typeof entry === "object"
-        ? /** @type {Record<string, unknown>} */ (entry)
-        : {};
+      entry && typeof entry === "object" ? /** @type {Record<string, unknown>} */ (entry) : {};
     return {
       key: p,
       who: String(rec.who ?? "").trim(),
@@ -218,7 +212,9 @@ export function runGate({
  * @returns {Date | null}
  */
 export function dirtySinceToday(track, now = new Date()) {
-  if (!track.dirty || track.dirty.length === 0) return null;
+  if (!track.dirty || track.dirty.length === 0) {
+    return null;
+  }
   /* 取证面 = **今天的提交 ∪ 待提交的那一批**。
    *
    * 只问 `git log` 时这条判据跑在**提交之前**：一笔改了 `tests/` 的提交在钩子里被判成
@@ -245,8 +241,12 @@ export function dirtySinceToday(track, now = new Date()) {
 export function combineEvidence(committed, stagedHit, now) {
   // 问不出来时**不新增结论**（也不撤销已有的）：把「问不出」当成「没动过」是 §9.2 第 3 条
   // 禁的静默失败，反过来凭空造一个时刻又会把「今天其实没人动它」误判成必须跑。
-  if (stagedHit === null) return committed;
-  if (stagedHit && committed === null) return now;
+  if (stagedHit === null) {
+    return committed;
+  }
+  if (stagedHit && committed === null) {
+    return now;
+  }
   // 已有更早的提交时保留更早的那个：结论更严格，且「先跑后改」那条边界仍按真实时刻比。
   return committed;
 }
@@ -261,16 +261,13 @@ export function combineEvidence(committed, stagedHit, now) {
 function stagedTouchesTrack(track) {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
-  const res = spawnSync(
-    "git",
-    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-    },
-  );
-  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+  const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string") {
     return null;
+  }
   return stagedDirtiesTrack(track, res.stdout.split("\n"));
 }
 
@@ -287,9 +284,7 @@ function stagedTouchesTrack(track) {
  * @returns {boolean}
  */
 export function stagedDirtiesTrack(track, rawLines) {
-  const paths = rawLines
-    .map((line) => line.trim().replace(/\\/g, "/"))
-    .filter(Boolean);
+  const paths = rawLines.map((line) => line.trim().replace(/\\/g, "/")).filter(Boolean);
   return dirtiesTrack(track, paths);
 }
 
@@ -325,8 +320,9 @@ function committedSinceMidnight(track, now) {
     ],
     { cwd: ROOT, encoding: "utf8" },
   );
-  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string") {
     return null;
+  }
   /* 两栏都显式标类型：它们在闭包 `flush()` 里被赋值，TS 的控制流分析看不进去 ——
    * 不标的话会被收窄成初值 `null`，下面每次比较都报「隐式 any」。 */
   /** @type {Date | null} */
@@ -337,20 +333,25 @@ function committedSinceMidnight(track, now) {
   const flush = () => {
     if (hit && stamp) {
       const at = new Date(stamp);
-      if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest))
+      if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest)) {
         earliest = at;
+      }
     }
     hit = false;
   };
   for (const line of res.stdout.split("\n")) {
     const trimmed = line.trim();
-    if (!trimmed) continue;
+    if (!trimmed) {
+      continue;
+    }
     if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
       flush();
       stamp = trimmed;
       continue;
     }
-    if (dirtiesTrack(track, [trimmed.replace(/\\/g, "/")])) hit = true;
+    if (dirtiesTrack(track, [trimmed.replace(/\\/g, "/")])) {
+      hit = true;
+    }
   }
   flush();
   return earliest;
@@ -394,8 +395,7 @@ function main() {
         `[freshness] ${track.label}：${reading}\n` +
           result.records
             .map(
-              (r) =>
-                `            ${r.key}：who=${r.who || "(未写)"}；how=${r.how || "(未写)"}\n`,
+              (r) => `            ${r.key}：who=${r.who || "(未写)"}；how=${r.how || "(未写)"}\n`,
             )
             .join("") +
           owed,
@@ -440,10 +440,6 @@ function main() {
   return failed;
 }
 
-if (
-  process.argv[1] &&
-  fs.realpathSync(process.argv[1]) ===
-    fs.realpathSync(import.meta.filename)
-) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(import.meta.filename)) {
   process.exit(main());
 }

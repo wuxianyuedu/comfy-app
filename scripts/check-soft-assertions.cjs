@@ -49,11 +49,7 @@
  * 退出码 0 = 通过，1 = 阻断。
  */
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -94,8 +90,11 @@ function maskNonCode(src) {
     const next = src[i + 1];
 
     if (mode === "line") {
-      if (ch === "\n") mode = "code";
-      else out[i] = " ";
+      if (ch === "\n") {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -106,7 +105,9 @@ function maskNonCode(src) {
         i += 2;
         mode = "code";
       } else {
-        if (ch !== "\n") out[i] = " ";
+        if (ch !== "\n") {
+          out[i] = " ";
+        }
         i += 1;
       }
       continue;
@@ -115,7 +116,9 @@ function maskNonCode(src) {
       const quote = mode === "sq" ? "'" : '"';
       if (ch === "\\") {
         out[i] = " ";
-        if (i + 1 < out.length) out[i + 1] = " ";
+        if (i + 1 < out.length) {
+          out[i + 1] = " ";
+        }
         i += 2;
         continue;
       }
@@ -138,7 +141,9 @@ function maskNonCode(src) {
     if (mode === "tmpl") {
       if (ch === "\\") {
         out[i] = " ";
-        if (i + 1 < out.length) out[i + 1] = " ";
+        if (i + 1 < out.length) {
+          out[i + 1] = " ";
+        }
         i += 2;
         continue;
       }
@@ -159,7 +164,9 @@ function maskNonCode(src) {
                这里只为了把 `}` 数对）。 */
             i += 1;
             while (i < src.length && src[i] !== "`") {
-              if (src[i] === "\\") i += 1;
+              if (src[i] === "\\") {
+                i += 1;
+              }
               out[i] = " ";
               i += 1;
             }
@@ -167,15 +174,22 @@ function maskNonCode(src) {
             i += 1;
             continue;
           }
-          if (src[i] === "{") depth += 1;
-          else if (src[i] === "}") depth -= 1;
-          if (depth === 0) break;
+          if (src[i] === "{") {
+            depth += 1;
+          } else if (src[i] === "}") {
+            depth -= 1;
+          }
+          if (depth === 0) {
+            break;
+          }
           i += 1;
         }
         i += 1; // 收尾的 }
         continue;
       }
-      if (ch !== "\n") out[i] = " ";
+      if (ch !== "\n") {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -223,7 +237,11 @@ const BATCH_KEYWORD_RE =
 /** 第几行（1 起）：数到某个字符偏移为止的换行数。 */
 function lineOf(src, index) {
   let n = 1;
-  for (let i = 0; i < index; i++) if (src[i] === "\n") n += 1;
+  for (let i = 0; i < index; i++) {
+    if (src[i] === "\n") {
+      n += 1;
+    }
+  }
   return n;
 }
 
@@ -253,9 +271,13 @@ function isInLoop(lines, siteIndex) {
 
   for (let i = siteIndex - 1; i >= 0; i--) {
     const line = lines[i];
-    if (line.trim() === "") continue;
+    if (line.trim() === "") {
+      continue;
+    }
     const ind = indentOf(line);
-    if (ind >= innerIndent) continue;
+    if (ind >= innerIndent) {
+      continue;
+    }
 
     /* 折行语句的**收尾行**（`]) {` / `) {` / `});` / `,\n  ；` 这类以闭合符
        开头的行）不是新的一帧，它是上面那条语句的一部分 —— 遇到它时别把
@@ -263,7 +285,9 @@ function isInLoop(lines, siteIndex) {
        `]) {` 同为 2 格缩进）会被「缩进不小于 innerIndent」跳过，
        于是折行的循环头整条漏判（首版实测就是这条）。 */
     const stripped = line.trimStart();
-    if (/^[)\]}]/.test(stripped)) continue;
+    if (/^[)\]}]/.test(stripped)) {
+      continue;
+    }
 
     /* 这一行是「包着我的帧」的开头。它的**表头**可能折行（
        `for (const n of [\n  1,\n  2,\n]) {` 里关键字与 `{` 隔了三行），
@@ -278,13 +302,21 @@ function isInLoop(lines, siteIndex) {
     if (!/\{\s*$/.test(line.trimEnd())) {
       for (let j = i + 1; j < siteIndex; j++) {
         const l = lines[j];
-        if (l.trim() === "") continue;
-        if (indentOf(l) <= ind) break;
+        if (l.trim() === "") {
+          continue;
+        }
+        if (indentOf(l) <= ind) {
+          break;
+        }
         continuation.push(l);
-        if (/\{\s*$/.test(l.trimEnd())) break;
+        if (/\{\s*$/.test(l.trimEnd())) {
+          break;
+        }
       }
     }
-    if (BATCH_KEYWORD_RE.test(continuation.join("\n"))) return true;
+    if (BATCH_KEYWORD_RE.test(continuation.join("\n"))) {
+      return true;
+    }
 
     innerIndent = ind;
   }
@@ -306,7 +338,9 @@ function scanFile(abs) {
   const raw = readForScan(abs);
   /* `null` = 这一轮没读到（文件在「列目录 → 读内容」之间消失）。口径与「只降级
      ENOENT、不许静默」都在 `gate-scan-read.cjs`，这里不重述。 */
-  if (raw === null) return null;
+  if (raw === null) {
+    return null;
+  }
   const masked = maskNonCode(raw);
   const lines = masked.split("\n");
   const sites = [];
@@ -339,7 +373,9 @@ function main() {
     }
     for (const site of sites) {
       total += 1;
-      if (!site.inBatch) offenders.push({ rel, line: site.line });
+      if (!site.inBatch) {
+        offenders.push({ rel, line: site.line });
+      }
     }
   }
   /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」，而 `total` 会因此偏小。 */
@@ -353,10 +389,11 @@ function main() {
   console.error(
     (REPORT_ONLY
       ? `[soft] 盘点：${offenders.length} 处待办（--report 不判失败）`
-      : `[ERROR] 有 ${offenders.length} 处 expect.soft 落在循环体之外`) +
-      "：\n",
+      : `[ERROR] 有 ${offenders.length} 处 expect.soft 落在循环体之外`) + "：\n",
   );
-  for (const o of offenders) console.error(`  · ${o.rel}:${o.line}`);
+  for (const o of offenders) {
+    console.error(`  · ${o.rel}:${o.line}`);
+  }
   console.error(
     "\n`expect.soft` 唯一的用途是「一张清单逐项判、一项失败不影响下一项」。" +
       "\n落在循环体之外的软断言，实测会把真正的原因吞掉：" +
@@ -374,6 +411,8 @@ function main() {
 
 /* 只有作为脚本运行才执行并定退出码；被 `require` 时（判据自测要进程内调
    `scanFile`）不许把宿主进程一起带走。 */
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}
 
 module.exports = { scanFile };

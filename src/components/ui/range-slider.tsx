@@ -102,7 +102,9 @@ export function RangeSlider({
          * `typeof n === "number"` 再兜底 narrow。单把手场景 v 恒为长度
          * 1 的数组、不会拿到 undefined;判据只是把 TS 契约钉严。 */
         const n = typeof v === "number" ? v : v[0];
-        if (typeof n === "number") onChange(n);
+        if (typeof n === "number") {
+          onChange(n);
+        }
       }}
       className={className}
       {...rest}

@@ -228,7 +228,9 @@ export function createConsoleRunner(): ConsoleRunner {
     let truncated = false;
     const forward = (stream: "stdout" | "stderr") => (chunk: Buffer | string) => {
       const text = String(chunk);
-      if (truncated) return;
+      if (truncated) {
+        return;
+      }
       const remaining = MAX_OUTPUT_CHARS - emitted;
       if (remaining <= 0) {
         truncated = true;
@@ -262,7 +264,9 @@ export function createConsoleRunner(): ConsoleRunner {
 
     const guard = setTimeout(
       () => {
-        if (current?.runId !== opts.runId) return;
+        if (current?.runId !== opts.runId) {
+          return;
+        }
         current.killed = true;
         onEvent({
           type: "out",
@@ -322,7 +326,9 @@ export function createConsoleRunner(): ConsoleRunner {
   }
 
   async function cancel(): Promise<boolean> {
-    if (!current) return false;
+    if (!current) {
+      return false;
+    }
     current.killed = true;
     const child = current.child;
     // 不在这里 `current = null`：`run()` 的 close 回调还要读 `killed` 才能把
@@ -346,7 +352,9 @@ export function createConsoleRunner(): ConsoleRunner {
  */
 async function terminate(child: ReturnType<typeof spawn>): Promise<void> {
   const pid = child.pid;
-  if (!pid) return;
+  if (!pid) {
+    return;
+  }
   await killProcessTree({
     pid,
     detached: process.platform !== "win32",

@@ -99,7 +99,9 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
      * throw 也一样（这正是用它替代手写 try/finally 的那个收益）。 */
     const original = Object.getOwnPropertyDescriptor(process, "platform");
     const restore = () => {
-      if (original) Object.defineProperty(process, "platform", original);
+      if (original) {
+        Object.defineProperty(process, "platform", original);
+      }
     };
     const becomes = (value: NodeJS.Platform) => {
       Object.defineProperty(process, "platform", {

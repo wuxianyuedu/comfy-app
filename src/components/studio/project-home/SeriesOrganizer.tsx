@@ -160,7 +160,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               className="h-8"
               disabled={c.seasons === undefined}
               onClick={() => {
-                if (!c.seriesId) return;
+                if (!c.seriesId) {
+                  return;
+                }
                 c.createSeason(c.seriesId, newSeason.trim());
                 setNewSeason("");
               }}
@@ -225,7 +227,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               className="h-8"
               disabled={c.episodes === undefined}
               onClick={() => {
-                if (!c.seasonId) return;
+                if (!c.seasonId) {
+                  return;
+                }
                 c.createEpisode(c.seasonId, newEpisode.trim());
                 setNewEpisode("");
               }}
@@ -238,7 +242,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               variant="primary-solid"
               className="mt-1 h-8"
               onClick={() => {
-                if (c.episodeId) c.assignCurrentProject(c.episodeId);
+                if (c.episodeId) {
+                  c.assignCurrentProject(c.episodeId);
+                }
               }}
             >
               把当前项目归入此集

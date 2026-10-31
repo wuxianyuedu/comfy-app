@@ -71,9 +71,13 @@ export function useLogPanelPin(input: {
       appliedRef.current = -1;
       return;
     }
-    if (safePage !== 1 || !autoScroll) return;
+    if (safePage !== 1 || !autoScroll) {
+      return;
+    }
     const el = bodyRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
 
     /* 用户点过「回到最新」→ 不再受基线约束，一路追到最新一页的底部。 */
     if (followResetAt > 0) {
@@ -81,7 +85,9 @@ export function useLogPanelPin(input: {
     }
     /* **正在框选就什么都别做**：拖动过程中浏览器会随滚动改锚点，滚动会打断框选
      * ——这正是「刚选中就被刷新弄没」的最后一环（前两环在 store：贴底基线）。 */
-    if (selectionInsideLogs(currentSelection())) return;
+    if (selectionInsideLogs(currentSelection())) {
+      return;
+    }
 
     /* 目标行 + 「用户有没有接管滚动」的判据都在 `log-virtual` 的 `pinPlan`：
      * 用户自己滚到别处（例如滚到底看最新）时返回 `null`，本轮不动他的位置。 */
@@ -92,7 +98,9 @@ export function useLogPanelPin(input: {
       scrollTop: el.scrollTop,
       appliedTop: appliedTopRef.current,
     });
-    if (targetIndex === null) return;
+    if (targetIndex === null) {
+      return;
+    }
     /* 贴到目标行的下边缘（减去一个视口高）：位置一律取自**位置表**
      * `rows[targetIndex]`，那是 `translateY` 与滚动条共用的同一份口径。
      *
@@ -106,7 +114,9 @@ export function useLogPanelPin(input: {
      * 位置」两套坐标）。`rows[targetIndex]` 与 `pageLogs` 同源同长；真取不到就
      * 什么都不做，绝不能乱滚。 */
     const row = rows[targetIndex];
-    if (!row) return;
+    if (!row) {
+      return;
+    }
     const next = pinScrollTop({ start: row.start, size: row.size }, el.clientHeight);
     el.scrollTop = next;
     appliedTopRef.current = next;
@@ -115,7 +125,9 @@ export function useLogPanelPin(input: {
 
   const onScroll = useCallback(() => {
     const el = bodyRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     /* 滚动位置是**渲染输入**（决定窗口取哪一段），因此进 state 而不是只留 ref：
      * 只读 ref 会出现「滚了但不重渲染、内容不更新」。 */
     setScrollTop(el.scrollTop);

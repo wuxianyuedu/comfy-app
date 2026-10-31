@@ -49,7 +49,9 @@ const PACK_NAME_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})-([0-9a-f]+)
  */
 export function packNameToMs(name: string): number | null {
   const m = PACK_NAME_RE.exec(name);
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const value = new Date(
     Number(m[1]),
     Number(m[2]) - 1,
@@ -69,14 +71,20 @@ export function packScopedId(packName: string, fileName: string): string {
 /** 解析归档份 id（不是这个形态时返回 null —— `current/` 的份就是裸文件名）。 */
 export function parsePackScopedId(id: string): { packName: string; fileName: string } | null {
   const at = id.indexOf(PACK_SEP);
-  if (at <= 0) return null;
+  if (at <= 0) {
+    return null;
+  }
   const packName = id.slice(0, at);
   const fileName = id.slice(at + 1);
   /* 包名必须是**真实存在过的**包名形态：`dev-launcher.log` 这类裸文件名里也
    * 可能有 `/`？不会（文件名不含路径分隔符），但客户端缓存过一个畸形 id 时
    * 这里必须能判出来并回落，而不是拿它去拼路径。 */
-  if (!PACK_NAME_RE.test(packName) || fileName.length === 0) return null;
-  if (fileName.includes(PACK_SEP)) return null;
+  if (!PACK_NAME_RE.test(packName) || fileName.length === 0) {
+    return null;
+  }
+  if (fileName.includes(PACK_SEP)) {
+    return null;
+  }
   return { packName, fileName };
 }
 
@@ -206,7 +214,9 @@ function exitText(crashed: boolean): string {
  * 会让 `runtime-log-file` 依赖「包」这个概念，而它本该对包一无所知。
  */
 export function formatFileTime(startedAt: number | null): string {
-  if (startedAt === null) return "更早的日志";
+  if (startedAt === null) {
+    return "更早的日志";
+  }
   return `${formatShortDate(startedAt)} ${formatClock(startedAt)}`;
 }
 

@@ -160,7 +160,9 @@ describe("档位 → 命令形态（两种平台各断言一次，避免「按�
           cpuCount: 4,
         });
         for (const cmd of [priority, affinity]) {
-          if (cmd) expect(cmd.describe.length).toBeGreaterThan(0);
+          if (cmd) {
+            expect(cmd.describe.length).toBeGreaterThan(0);
+          }
         }
       }
     }

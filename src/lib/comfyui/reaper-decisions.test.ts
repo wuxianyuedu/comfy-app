@@ -103,7 +103,9 @@ function resetRunnerState() {
    * 非零退出（用例层面却全绿）。ISSUE #489。
    * 原实现这里写的是 `void persistLogs;` —— 只是「引用一下别删 import」，
    * 一个什么都没做的语句，所以定时器一直在跑。 */
-  for (const taskId of persistTasks()) cancelPersistLogs(taskId);
+  for (const taskId of persistTasks()) {
+    cancelPersistLogs(taskId);
+  }
 }
 
 /* 两条 sweeper 由宿主显式起的循环每 30s 跑一次（ADR §14 D3）。
@@ -149,7 +151,9 @@ afterEach(() => {
   /* 用例**结束后**也要清一遍：本组里有用例会刻意排一个防抖（验证取消生效），
    * 只在 beforeEach 清会让它在「本用例结束后、下一个 beforeEach 之前」的窗口里
    * 触发，打到已撤销的 mock 上。timer 是游离的，两头都要掐。 */
-  for (const taskId of persistTasks()) cancelPersistLogs(taskId);
+  for (const taskId of persistTasks()) {
+    cancelPersistLogs(taskId);
+  }
   vi.restoreAllMocks();
 });
 
@@ -378,11 +382,15 @@ describe("RUNNING reaper 判决矩阵", () => {
       vi.fn(async (url: string) => {
         call += 1;
         if (String(url).includes("/history/")) {
-          if (!routes.history) throw new Error("network down");
+          if (!routes.history) {
+            throw new Error("network down");
+          }
           return routes.history;
         }
         if (String(url).includes("/queue")) {
-          if (!routes.queue) throw new Error("network down");
+          if (!routes.queue) {
+            throw new Error("network down");
+          }
           return routes.queue;
         }
         throw new Error(`unexpected fetch: ${url} (call ${call})`);

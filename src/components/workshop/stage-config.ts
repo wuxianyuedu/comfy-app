@@ -86,8 +86,12 @@ export function stageSubtitle(
   ratios: StageRatios,
   ctx: StageViewContext,
 ): string {
-  if (id === current) return "进行中";
-  if (ratios[id] >= 1) return "已完成";
+  if (id === current) {
+    return "进行中";
+  }
+  if (ratios[id] >= 1) {
+    return "已完成";
+  }
   switch (id) {
     case "character":
       return ctx.characterCount > 0 ? `已建 ${ctx.characterCount} 个` : "待开始";

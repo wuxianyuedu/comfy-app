@@ -12,12 +12,7 @@ import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import {
-  FRESHNESS_TRACKS,
-  contextSubject,
-  freshnessTrack,
-  gitUser,
-} from "./freshness-ledger.mjs";
+import { FRESHNESS_TRACKS, contextSubject, freshnessTrack, gitUser } from "./freshness-ledger.mjs";
 
 /** 新鲜度账回写去的机器自有分支（ISSUE #2247）。不推 `master`、更不推作者的源分支。 */
 export const FRESHNESS_LEDGER_BRANCH = "ci/freshness-ledger";
@@ -33,21 +28,17 @@ export const FRESHNESS_LEDGER_BRANCH = "ci/freshness-ledger";
  * @returns {Record<string, unknown> | null}
  */
 export function readBranchLedger({ root, rel, branch }) {
-  const ref =
-    branch || process.env.FRESHNESS_LEDGER_BRANCH || FRESHNESS_LEDGER_BRANCH;
+  const ref = branch || process.env.FRESHNESS_LEDGER_BRANCH || FRESHNESS_LEDGER_BRANCH;
   const res = spawnSync("git", ["show", `${ref}:${rel}`], {
     cwd: root,
     encoding: "utf8",
   });
-  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string") {
     return null;
+  }
   try {
     const parsed = JSON.parse(res.stdout);
-    if (
-      parsed === null ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
     return parsed;
@@ -109,9 +100,7 @@ export function pushFreshnessLedger({ root, kinds, run }) {
   // 因为「每日档」与「单跑口」同名 stage 正文须逐字相同（tests/no-platform-ci-config.test.ts 钉死），
   // 写在 stage 里会让 daily 与 oneshot 正文分叉、破坏判据。
   const platformUser =
-    process.env.CNB_BUILD_USER_NICKNAME ||
-    process.env.CNB_COMMITTER ||
-    process.env.CNB_BUILD_USER;
+    process.env.CNB_BUILD_USER_NICKNAME || process.env.CNB_COMMITTER || process.env.CNB_BUILD_USER;
   if (!platformUser) {
     return { pushed: false, reason: "not-platform" };
   }
@@ -128,42 +117,37 @@ export function pushFreshnessLedger({ root, kinds, run }) {
    * `isDailyDispatch()` 同一口径（换时刻不打红它）。 */
   const event = String(process.env.CNB_EVENT ?? "");
   const dailyEvent =
-    event.startsWith("crontab:") ||
-    event === "web_trigger_daily" ||
-    event === "api_trigger_daily";
+    event.startsWith("crontab:") || event === "web_trigger_daily" || event === "api_trigger_daily";
   if (contextSubject() !== "master" || !dailyEvent) {
     return { pushed: false, reason: "not-master-subject" };
   }
   const branch = process.env.FRESHNESS_LEDGER_BRANCH || FRESHNESS_LEDGER_BRANCH;
-  const allRels = [
-    ...new Set(Object.values(FRESHNESS_TRACKS).map((t) => t.ledger)),
-  ];
+  const allRels = [...new Set(Object.values(FRESHNESS_TRACKS).map((t) => t.ledger))];
   const freshRels = new Set(kinds.map((k) => freshnessTrack(k).ledger));
   /* 把分支上「另外两档」的最新副本取回工作树，避免只推自己那份把别的覆盖掉。
    * 取不回（分支上还没有 / 路径不存在）就留工作树原样，下一拍再补。 */
   for (const rel of allRels) {
-    if (freshRels.has(rel)) continue;
+    if (freshRels.has(rel)) {
+      continue;
+    }
     const fromBranch = readBranchLedger({ root, rel, branch });
     if (fromBranch) {
       try {
-        writeFileSync(
-          path.join(root, rel),
-          `${JSON.stringify(fromBranch, null, 2)}\n`,
-          "utf8",
-        );
+        writeFileSync(path.join(root, rel), `${JSON.stringify(fromBranch, null, 2)}\n`, "utf8");
       } catch {
         /* 忽略：下一拍再补 */
       }
     }
   }
   /* 拉取分支最新（拿到前面 stage 已推的账），让本次提交基于它、避免互相覆盖。 */
-  const git =
-    run ?? ((args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }));
+  const git = run ?? ((args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }));
   /* 「撤回」只在这之后有意义：`add` 一旦成功，索引里就留下了这两三份账本，
    * 而失败的那一步把整跑后面所有格的输入面换成了它们（ISSUE #2344）。 */
   const unstage = () => {
     const res = git(["reset", "-q", "--", ...allRels]);
-    if (res && res.status === 0) return "";
+    if (res && res.status === 0) {
+      return "";
+    }
     return (
       "；⚠ 撤回暂存也失败了 ⇒ **索引仍然是脏的**，同一跑后面按暂存区判的那几条" +
       `读的是这一格留下的面（撤回的 git 原文：${gitTail(res)}）`
@@ -196,12 +180,7 @@ export function pushFreshnessLedger({ root, kinds, run }) {
       reason: `commit-failed —— git 原文：${gitTail(commitRes)}${unstage()}`,
     };
   }
-  const pushRes = git([
-    "push",
-    "--force-with-lease",
-    "origin",
-    `HEAD:refs/heads/${branch}`,
-  ]);
+  const pushRes = git(["push", "--force-with-lease", "origin", `HEAD:refs/heads/${branch}`]);
   if (pushRes.status !== 0) {
     /* 提交已经落地 ⇒ 索引是干净的，这里**不许**再撤回（撤了就把已经成功的提交
      * 的改动重新 stage 成「待提交」，那是第二次错）。原因照旧要带原文。 */

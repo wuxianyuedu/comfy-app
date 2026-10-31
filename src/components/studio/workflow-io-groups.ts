@@ -165,7 +165,9 @@ export const DEFAULT_DIM_CLARITY_PRESET: DimClarityPreset = DIM_CLARITY_PRESETS[
  *  填的 2.5 悄悄变回 1k（界面上还显示着 2.5M）。 */
 export function clarityPresetFor(label: string): DimClarityPreset {
   const known = DIM_CLARITY_PRESETS.find((preset) => preset.label === label);
-  if (known) return known;
+  if (known) {
+    return known;
+  }
   const megapixels = parseMegapixelLabel(label);
   return megapixels === null
     ? DEFAULT_DIM_CLARITY_PRESET
@@ -213,10 +215,14 @@ export const MEGAPIXEL_VALUE_PRESETS: Array<{ label: string; value: number }> = 
  *  字符串里没有可识别的比例时返回 null。 */
 export function parseRatioFromLabel(value: string): number | null {
   const match = /(\d+(?:\.\d+)?)\s*[:x×]\s*(\d+(?:\.\d+)?)/.exec(value);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const w = Number(match[1]);
   const h = Number(match[2]);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return null;
+  }
   return w / h;
 }
 
@@ -309,7 +315,9 @@ export function inferDimensionGroup(widgets: Array<EnrichedWidget>): DimensionGr
   /* 解构 + 明确守卫：`[0]` 与「数组非空」是同一个判据，写两遍就得多一个 `!`。 */
   const [width, height] = [widthWidgets[0], heightWidgets[0]];
   if (width && height) {
-    if (width.ioKey === height.ioKey) return null;
+    if (width.ioKey === height.ioKey) {
+      return null;
+    }
     return {
       kind: "dimension",
       groupId: `dim:${width.ioKey}|${height.ioKey}`,
@@ -325,7 +333,9 @@ export function inferDimensionGroup(widgets: Array<EnrichedWidget>): DimensionGr
   const mpWidgets = widgets.filter(isDimMegapixels);
   const [aspect, megapixels] = [aspectWidgets[0], mpWidgets[0]];
   if (aspect && megapixels) {
-    if (aspect.ioKey === megapixels.ioKey) return null;
+    if (aspect.ioKey === megapixels.ioKey) {
+      return null;
+    }
     /* 倍数（可选伴随）：存在时并入组合 popover 的第三段。 */
     const multiple = widgets.find(
       (w) => w.ioKey !== aspect.ioKey && w.ioKey !== megapixels.ioKey && isDimMultiple(w),
@@ -348,10 +358,14 @@ export function inferVideoGroup(widgets: Array<EnrichedWidget>): VideoGroup | nu
   const asp = widgets.filter(isVideoAspect);
   const quality = widgets.filter(isVideoQuality);
   const [length] = len;
-  if (!length) return null;
+  if (!length) {
+    return null;
+  }
   const [aspect] = asp;
   const [qualityFirst] = quality;
-  if (!aspect && !qualityFirst) return null;
+  if (!aspect && !qualityFirst) {
+    return null;
+  }
   return {
     kind: "video",
     groupId: `video:${length.ioKey}|${aspect?.ioKey ?? ""}|${qualityFirst?.ioKey ?? ""}`,
@@ -375,19 +389,35 @@ export function inferGroups(widgets: Array<EnrichedWidget>): {
    *  而不是假定一定存在 `width`/`height`。 */
   const dimKeys = new Set<string>();
   if (dimension) {
-    if (dimension.width) dimKeys.add(dimension.width.ioKey);
-    if (dimension.height) dimKeys.add(dimension.height.ioKey);
-    if (dimension.aspect) dimKeys.add(dimension.aspect.ioKey);
-    if (dimension.megapixels) dimKeys.add(dimension.megapixels.ioKey);
-    if (dimension.multiple) dimKeys.add(dimension.multiple.ioKey);
+    if (dimension.width) {
+      dimKeys.add(dimension.width.ioKey);
+    }
+    if (dimension.height) {
+      dimKeys.add(dimension.height.ioKey);
+    }
+    if (dimension.aspect) {
+      dimKeys.add(dimension.aspect.ioKey);
+    }
+    if (dimension.megapixels) {
+      dimKeys.add(dimension.megapixels.ioKey);
+    }
+    if (dimension.multiple) {
+      dimKeys.add(dimension.multiple.ioKey);
+    }
   }
   const rest = widgets.filter((widget) => !dimKeys.has(widget.ioKey));
   const video = inferVideoGroup(rest);
   const groupedKeys = new Set<string>(dimKeys);
   if (video) {
-    if (video.length) groupedKeys.add(video.length.ioKey);
-    if (video.aspect) groupedKeys.add(video.aspect.ioKey);
-    if (video.quality) groupedKeys.add(video.quality.ioKey);
+    if (video.length) {
+      groupedKeys.add(video.length.ioKey);
+    }
+    if (video.aspect) {
+      groupedKeys.add(video.aspect.ioKey);
+    }
+    if (video.quality) {
+      groupedKeys.add(video.quality.ioKey);
+    }
   }
   return { dimension, video, groupedKeys };
 }

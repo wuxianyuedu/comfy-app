@@ -81,7 +81,9 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
   const removed: Array<string> = [];
   for (const [id, n] of Object.entries(input ?? {})) {
     const rec = asRecord(n);
-    if (!rec) continue;
+    if (!rec) {
+      continue;
+    }
     const meta = asRecord(rec._meta) ?? {};
     graph[id] = {
       classType: /* SAFETY: 类型断言已复核 */ rec.class_type as string,
@@ -102,17 +104,27 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
 
   /** 沿着被剔除的节点向上游走，直到落到一个真正会执行的节点。 */
   function walk(originId: string, originSlot: number, depth: number): ResolvedOrigin | null {
-    if (depth > 64) return null; // 环保护
+    if (depth > 64) {
+      return null;
+    } // 环保护
     const node = graph[originId];
-    if (!node) return null;
-    if (!inactive.has(originId)) return { kind: "link", value: [originId, originSlot] };
+    if (!node) {
+      return null;
+    }
+    if (!inactive.has(originId)) {
+      return { kind: "link", value: [originId, originSlot] };
+    }
 
     const meta = node.meta;
     // 静音节点不透传：下游这一路直接断掉（与 ComfyUI 行为一致）。
-    if (Number(meta.mode ?? NODE_MODE_ALWAYS) === NODE_MODE_NEVER) return null;
+    if (Number(meta.mode ?? NODE_MODE_ALWAYS) === NODE_MODE_NEVER) {
+      return null;
+    }
     // PrimitiveNode：把字面量直接内联给下游。
     const literal = meta.value;
-    if (literal !== undefined) return { kind: "value", value: literal };
+    if (literal !== undefined) {
+      return { kind: "value", value: literal };
+    }
 
     const orderRaw = meta.inputOrder;
     const order: Array<string> = Array.isArray(orderRaw)
@@ -134,7 +146,9 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
       seen.add(sameSlot);
     }
     for (const nm of order) {
-      if (seen.has(nm)) continue;
+      if (seen.has(nm)) {
+        continue;
+      }
       candidates.push(nm);
       seen.add(nm);
     }
@@ -142,11 +156,18 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     for (const nm of candidates) {
       const value = node.inputs[nm];
 
-      if (!isLinkRef(value, graph)) continue;
+      if (!isLinkRef(value, graph)) {
+        continue;
+      }
 
       const typeOfNm = types[nm];
-      if (wanted && typeof typeOfNm === "string" && typeOfNm.toUpperCase() !== wanted.toUpperCase())
+      if (
+        wanted &&
+        typeof typeOfNm === "string" &&
+        typeOfNm.toUpperCase() !== wanted.toUpperCase()
+      ) {
         continue;
+      }
 
       return walk(String(value[0]), Number(value[1]), depth + 1);
     }

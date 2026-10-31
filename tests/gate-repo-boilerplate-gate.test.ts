@@ -42,7 +42,9 @@ const roots: Array<string> = [];
 afterEach(() => {
   while (roots.length) {
     const r = roots.pop();
-    if (r) rmSync(r, { recursive: true, force: true });
+    if (r) {
+      rmSync(r, { recursive: true, force: true });
+    }
   }
 });
 

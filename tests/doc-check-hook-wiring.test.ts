@@ -119,9 +119,13 @@ function dailyStages(): Array<{ name: string; stage: string | null }> {
  */
 function platformExecutor(stageName: string) {
   const stage = stageBlock(readFileSync(join(REPO_ROOT, ".cnb.yml"), "utf8"), stageName);
-  if (stage !== null) return { where: "stage", command: stage };
+  if (stage !== null) {
+    return { where: "stage", command: stage };
+  }
   const gate = HEAVY_GATES.find((g) => g.name === stageName);
-  if (!gate) return null;
+  if (!gate) {
+    return null;
+  }
   /* 聚合档这一支**必须核「这一格真会跑它」**（2026-10-22 加）。
    *
    * 原来这里只要「条目表里有这个名字」就算数 —— 而那张表只是**登记面**，这一格跑的是
@@ -130,7 +134,9 @@ function platformExecutor(stageName: string) {
    * 全绿。⇒ 「表上有」不等于「有人跑」，这一支现在按钩子的步骤行认。 */
   const hook = readFileSync(HOOK, "utf8");
   const step = hookGateSteps(hook).find((s) => s.cmd === gate.argv.join(" "));
-  if (!step) return null;
+  if (!step) {
+    return null;
+  }
   return { where: "重档静态判据", command: step.cmd };
 }
 
@@ -145,10 +151,14 @@ const GATE_CHECKLIST_DOC = join(REPO_ROOT, "docs", "standards", "13-提交与-co
 function readChecklistCommands() {
   const text = readFileSync(GATE_CHECKLIST_DOC, "utf8");
   const start = text.indexOf("本地提交前必须通过");
-  if (start < 0) return new Set();
+  if (start < 0) {
+    return new Set();
+  }
   const rest = text.slice(start);
   const close = rest.indexOf("```");
-  if (close < 0) return new Set();
+  if (close < 0) {
+    return new Set();
+  }
   return new Set(
     rest
       .slice(0, close)
@@ -798,7 +808,9 @@ describe("第二梯队全库扫描的输入面跳过接进 D 组（ISSUE #1747 �
       const tsAt = lines.findIndex(
         (l) => !/^\s*(\/\/|\*|\/\*)/.test(l) && /require\(\s*"typescript"\s*\)/.test(l),
       );
-      if (tsAt === -1) continue; // 该步不加载 typescript
+      if (tsAt === -1) {
+        continue;
+      } // 该步不加载 typescript
       expect(
         skipAt,
         `${script} 的 --staged 短路在第 ${skipAt + 1} 行、` +
@@ -842,7 +854,9 @@ describe("被聚合档接管的 6 条 AST 判据（ISSUE #1747 续，第四笔�
       const tsAt = lines.findIndex(
         (l) => !/^\s*(\/\/|\*|\/\*)/.test(l) && /require\(\s*"typescript"\s*\)/.test(l),
       );
-      if (tsAt === -1) return; // 该步不加载 typescript
+      if (tsAt === -1) {
+        return;
+      } // 该步不加载 typescript
       expect(
         skipAt,
         `${script} 的短路在第 ${skipAt + 1} 行、require("typescript") 在第 ${tsAt + 1} 行`,

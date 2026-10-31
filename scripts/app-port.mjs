@@ -72,9 +72,7 @@ export function fnv1a32(text) {
 
 /** @param {string} root @returns {number} 3200..3999 区间内的稳定端口 */
 export function derivePortFromPath(root) {
-  return (
-    DERIVED_PORT_BASE + (fnv1a32(normalizeRootForPort(root)) % DERIVED_PORT_SPAN)
-  );
+  return DERIVED_PORT_BASE + (fnv1a32(normalizeRootForPort(root)) % DERIVED_PORT_SPAN);
 }
 
 /**
@@ -90,7 +88,9 @@ export function readEnvFileValue(content, key) {
   const line = String(content)
     .split(/\r?\n/)
     .find((l) => new RegExp(`^\\s*${key}\\s*=`).test(l));
-  if (!line) return null;
+  if (!line) {
+    return null;
+  }
   // 去掉行尾注释：只有前导 `#`（前面有空白）才算注释，`abc#def` 里的 `#` 是值的一部分。
   const raw = (line.split("=", 2)[1] ?? "").split(/\s+#/)[0] ?? "";
   const value = raw.trim();
@@ -125,9 +125,13 @@ export function readEnvFileValue(content, key) {
  * @returns {number | null}
  */
 export function parseDotEnvPortValue(value) {
-  if (value === null) return null;
+  if (value === null) {
+    return null;
+  }
   const trimmed = value.trim();
-  if (!/^\+?[0-9]+$/.test(trimmed)) return null;
+  if (!/^\+?[0-9]+$/.test(trimmed)) {
+    return null;
+  }
   const port = Number.parseInt(trimmed, 10);
   return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
 }
@@ -137,7 +141,9 @@ export function parseDotEnvPortValue(value) {
 export function readEnvPort(root) {
   let raw;
   const file = path.join(root, ".env");
-  if (!existsSync(file)) return null;
+  if (!existsSync(file)) {
+    return null;
+  }
   try {
     raw = readFileSync(file, "utf8");
   } catch {
@@ -171,7 +177,9 @@ export function resolveRepoRoot() {
  *  @param {string} root @returns {number} */
 export function resolveAppPort(root) {
   const fromEnv = readEnvPort(root);
-  if (fromEnv !== null) return fromEnv;
+  if (fromEnv !== null) {
+    return fromEnv;
+  }
   try {
     return derivePortFromPath(root);
   } catch {
@@ -189,7 +197,9 @@ export function resolveAppPort(root) {
  * @param {string} root @returns {{ port: number, source: "env" | "derived" | "fallback" }} */
 export function resolveAppPortWithSource(root) {
   const fromEnv = readEnvPort(root);
-  if (fromEnv !== null) return { port: fromEnv, source: "env" };
+  if (fromEnv !== null) {
+    return { port: fromEnv, source: "env" };
+  }
   try {
     return { port: derivePortFromPath(root), source: "derived" };
   } catch {

@@ -140,7 +140,9 @@ export function WorkflowCanvasNodePreview({
     () =>
       missing.map((ioKey) => {
         const entry = workflowIO?.[ioKey];
-        if (!entry) return ioKey;
+        if (!entry) {
+          return ioKey;
+        }
         const fromInputs = inputs.find((input) => input.ioKey === ioKey);
         return fromInputs?.label ?? fromInputs?.name ?? ioKey;
       }),
@@ -153,7 +155,9 @@ export function WorkflowCanvasNodePreview({
     const map: Record<string, string> = {};
     for (const [ioKey, entry] of Object.entries(workflowIO ?? {})) {
       const resolved = resolveEntrySeedMode(entry, effectiveMode);
-      if (resolved) map[ioKey] = resolved;
+      if (resolved) {
+        map[ioKey] = resolved;
+      }
     }
     return map;
   }, [workflowIO, effectiveMode]);
@@ -285,7 +289,9 @@ export function WorkflowCanvasNodePreview({
 
   /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
   function run() {
-    if (!canRun) return;
+    if (!canRun) {
+      return;
+    }
     startRun({
       workflowId,
       workflowName,
@@ -327,11 +333,15 @@ export function WorkflowCanvasNodePreview({
           selectedOutputId={selectedOutputId}
           onSelectParam={(id) => {
             setSelectedParamId(id);
-            if (id) setSelectedOutputId(null);
+            if (id) {
+              setSelectedOutputId(null);
+            }
           }}
           onSelectOutput={(id) => {
             setSelectedOutputId(id);
-            if (id) setSelectedParamId(null);
+            if (id) {
+              setSelectedParamId(null);
+            }
           }}
           onResetParam={(id) => {
             wiring.resetMany(sizeGroupIds(id));
@@ -342,8 +352,11 @@ export function WorkflowCanvasNodePreview({
           onDeleteWire={
             effectiveMode && onPatchParamMap
               ? (namespace, entryId) => {
-                  if (namespace === "param") wiring.disconnect(entryId);
-                  else outputWiring.disconnect(entryId);
+                  if (namespace === "param") {
+                    wiring.disconnect(entryId);
+                  } else {
+                    outputWiring.disconnect(entryId);
+                  }
                 }
               : undefined
           }

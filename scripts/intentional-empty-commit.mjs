@@ -41,13 +41,12 @@ export const EMPTY_COMMIT_ENV = "COMFY_INTENTIONAL_EMPTY_COMMIT";
  *   `applies` = 按「刻意空提交」办；`note` = 成立时要打印的那句话；
  *   `voidNote` = 旗标与索引不一致时要打印的那句话（作废并照正常档判）。
  */
-export function intentionalEmptyCommit({
-  env = process.env,
-  stagedCount,
-}) {
+export function intentionalEmptyCommit({ env = process.env, stagedCount }) {
   const raw = env[EMPTY_COMMIT_ENV];
   const set = raw !== undefined && String(raw).trim() !== "";
-  if (!set) return { applies: false, note: null, voidNote: null };
+  if (!set) {
+    return { applies: false, note: null, voidNote: null };
+  }
   if (stagedCount > 0) {
     return {
       applies: false,

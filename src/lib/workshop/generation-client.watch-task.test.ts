@@ -53,7 +53,9 @@ function startWatch(partial: Partial<TaskWatchHandlers> = {}) {
   };
   watchTask("t-host-1", handlers);
   const es = instances[0];
-  if (!es) throw new Error("watchTask 未建立 EventSource");
+  if (!es) {
+    throw new Error("watchTask 未建立 EventSource");
+  }
   return { es, handlers };
 }
 

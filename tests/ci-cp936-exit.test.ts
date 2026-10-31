@@ -253,7 +253,9 @@ describe("CP936 出口：编排与退出码", () => {
     const handlers: Record<string, (a?: unknown, b?: unknown) => void> = {};
     const stream = {
       on: (ev: string, fn: (d: unknown) => void) => {
-        if (ev === "data") fn(out);
+        if (ev === "data") {
+          fn(out);
+        }
         return stream;
       },
     };
@@ -286,7 +288,9 @@ describe("CP936 出口：编排与退出码", () => {
         return this;
       },
       on(ev: string, fn: (d: unknown) => void) {
-        if (ev === "data") fn(out);
+        if (ev === "data") {
+          fn(out);
+        }
         return this;
       },
     });
@@ -991,7 +995,9 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
       const s = {
         setEncoding: () => s,
         on: (ev: string, fn: (d: unknown) => void) => {
-          if (ev === "data") dataHandlers.push(fn);
+          if (ev === "data") {
+            dataHandlers.push(fn);
+          }
           return s;
         },
       };
@@ -1001,7 +1007,9 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
       stdout: mkStream(),
       stderr: mkStream(),
       on: (ev: string, fn: (arg: unknown) => void) => {
-        if (ev === "close") closeHandlers.push(fn);
+        if (ev === "close") {
+          closeHandlers.push(fn);
+        }
         return undefined;
       },
       /* 只喂 **stdout** 那条（`dataHandlers[0]`）：两条流各注册一次，随手全都喂

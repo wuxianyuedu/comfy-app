@@ -69,8 +69,12 @@ export interface EncapsulationStatus {
 /** 契约口 → 工坊控件形态（没有生效契约时的回落路径；自定义口一律来自契约，
  *  所以这里只处理预制口）。 */
 function controlFor(id: string): EncapsulationControl {
-  if (id === "size") return "size";
-  if (id === "duration") return "duration";
+  if (id === "size") {
+    return "size";
+  }
+  if (id === "duration") {
+    return "duration";
+  }
   if (id.startsWith("reference-image") || id === "first-frame" || id === "last-frame") {
     return "image";
   }
@@ -88,7 +92,9 @@ function controlFor(id: string): EncapsulationControl {
  *  **自定义口是唯一的例外**：预制口的措辞有统一出处，自定义口没有 —— 它的名字
  *  只存在契约里，按「类」取会张冠李戴（把 `custom-text-1` 显示成「提示词」）。 */
 function displayLabel(id: string, contractLabel?: string): string {
-  if (exposedCustomKindOf(id) && contractLabel) return contractLabel;
+  if (exposedCustomKindOf(id) && contractLabel) {
+    return contractLabel;
+  }
   return exposedParamDisplayLabel(id);
 }
 
@@ -153,7 +159,9 @@ export function deriveEncapsulationStatus(args: {
   const sizeSubTarget = (): string | null => {
     for (const id of SIZE_SUB_IDS) {
       const hit = sizeWired[id];
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
     return null;
   };

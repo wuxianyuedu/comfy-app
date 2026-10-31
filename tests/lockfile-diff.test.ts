@@ -54,7 +54,9 @@ function importerEntry(body: string, name: string): string {
   const found = new RegExp(`^ {6}${name}:\\n^ {8}specifier: .*\\n^ {8}version: .*$`, "m").exec(
     body,
   );
-  if (!found) throw new Error(`lockfile 根 importer 里没有 ${name} 条目`);
+  if (!found) {
+    throw new Error(`lockfile 根 importer 里没有 ${name} 条目`);
+  }
   return found[0];
 }
 
@@ -86,7 +88,9 @@ describe("stripBundledSection（pnpm 自举段必须剔除，否则差异报告�
     // 比对时报出「packages 新增 15 项 / snapshots 删除 1248 项」，而 SHA256 明明相等 →
     // 门禁说「一致」、明细说「天翻地覆」，用户被互相矛盾的两句话夹在中间。
     const installed = join(ROOT, "node_modules", ".pnpm", "lock.yaml");
-    if (!existsSync(installed)) return;
+    if (!existsSync(installed)) {
+      return;
+    }
     const installedText = readFileSync(installed, "utf8");
     expect(installedText).not.toContain("\n---\n"); // 前提：这份确实只有正文
     expect(stripBundledSection(LOCK)).toContain("zod"); // 断言不是在比两份空文件

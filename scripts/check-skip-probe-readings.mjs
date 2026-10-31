@@ -41,12 +41,7 @@
 import path from "node:path";
 import process from "node:process";
 
-import {
-  dirExists,
-  readForScan,
-  vanishedNote,
-  walkForScan,
-} from "./gate-scan-read.cjs";
+import { dirExists, readForScan, vanishedNote, walkForScan } from "./gate-scan-read.cjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 /** 扫描面：与 `vitest.config.ts` 的 `include` 同口径（`src/**` + `tests/**`）。 */
@@ -64,8 +59,12 @@ const READING_RE = /\bdescribeProbeMisses\(/;
  * @returns {{ok: boolean, problems: string[]}} 判决
  */
 export function judgeSkipProbeReadings(rel, src) {
-  if (!PROBE_SITE_RE.test(src)) return { ok: true, problems: [] };
-  if (READING_RE.test(src)) return { ok: true, problems: [] };
+  if (!PROBE_SITE_RE.test(src)) {
+    return { ok: true, problems: [] };
+  }
+  if (READING_RE.test(src)) {
+    return { ok: true, problems: [] };
+  }
   return {
     ok: false,
     problems: [
@@ -76,10 +75,7 @@ export function judgeSkipProbeReadings(rel, src) {
   };
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const reportOnly = new Set(process.argv.slice(2)).has("--report");
   const problems = [];
   let sites = 0;
@@ -98,7 +94,9 @@ if (
         continue;
       }
       const rel = path.relative(ROOT, abs).replaceAll("\\", "/");
-      if (PROBE_SITE_RE.test(src)) sites += 1;
+      if (PROBE_SITE_RE.test(src)) {
+        sites += 1;
+      }
       problems.push(...judgeSkipProbeReadings(rel, src).problems);
     }
   }
@@ -115,12 +113,15 @@ if (
    * 另一条流 —— 混着用会让「有没有拦住」与「拦下了什么」落在两个地方。 */
   if (problems.length > 0) {
     console.log("[skip-probe-readings] ✗");
-    for (const p of problems) console.log(`  ✗ ${p}`);
-    if (!reportOnly) process.exitCode = 1;
+    for (const p of problems) {
+      console.log(`  ✗ ${p}`);
+    }
+    if (!reportOnly) {
+      process.exitCode = 1;
+    }
   } else {
     console.log(
-      `  [ok] ${sites} 个「这台机器上有没有」的探测站点都带着逐候选读数` +
-        vanishedNote(vanished),
+      `  [ok] ${sites} 个「这台机器上有没有」的探测站点都带着逐候选读数` + vanishedNote(vanished),
     );
   }
 }

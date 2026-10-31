@@ -75,14 +75,18 @@ const POPUP_MARK = '[data-slot="select-content"]';
 function openPopup(): HTMLElement {
   fireEvent.click(screen.getByRole("combobox"));
   const el = document.querySelector<HTMLElement>(POPUP_MARK);
-  if (!el) throw new Error("点开后没有渲染出弹层");
+  if (!el) {
+    throw new Error("点开后没有渲染出弹层");
+  }
   return el;
 }
 
 /** 弹层的外层 = base-ui 的 Positioner（层级与碰撞边界都住在这一层）。 */
 function positionerOf(popup: HTMLElement): HTMLElement {
   const positioner = popup.parentElement;
-  if (!positioner) throw new Error("弹层没有定位层祖先 —— Portal 结构变了？");
+  if (!positioner) {
+    throw new Error("弹层没有定位层祖先 —— Portal 结构变了？");
+  }
   return positioner;
 }
 

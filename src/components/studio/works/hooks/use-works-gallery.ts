@@ -97,12 +97,16 @@ export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGall
   }, []);
 
   const cancelDelete = useCallback(() => {
-    if (deleting) return;
+    if (deleting) {
+      return;
+    }
     setPendingDeleteId(null);
   }, [deleting]);
 
   const confirmDelete = useCallback(async (): Promise<string | null> => {
-    if (!pendingDeleteId) return null;
+    if (!pendingDeleteId) {
+      return null;
+    }
     const target = projects.find((project) => project.id === pendingDeleteId);
     const id = pendingDeleteId;
     setDeleting(true);

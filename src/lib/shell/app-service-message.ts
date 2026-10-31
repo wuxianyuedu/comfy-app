@@ -185,13 +185,19 @@ export const UNPROBED_ANNOTATE_MS = 10_000;
 export function formatOfflineSpan(offlineAt: number, at: number): string | null {
   const ms = at - offlineAt;
   /* 时钟漂移 / 跨机器写入的记录会算出负数：负时长说成「持续 -3 秒」比说没有更糟。 */
-  if (!Number.isFinite(ms) || ms < 0) return null;
+  if (!Number.isFinite(ms) || ms < 0) {
+    return null;
+  }
   const totalSeconds = Math.floor(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours} 小时 ${pad2(minutes)} 分 ${pad2(seconds)} 秒`;
-  if (minutes > 0) return `${minutes} 分 ${pad2(seconds)} 秒`;
+  if (hours > 0) {
+    return `${hours} 小时 ${pad2(minutes)} 分 ${pad2(seconds)} 秒`;
+  }
+  if (minutes > 0) {
+    return `${minutes} 分 ${pad2(seconds)} 秒`;
+  }
   return `${seconds} 秒`;
 }
 

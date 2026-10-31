@@ -78,8 +78,12 @@ export function timeAgo(iso: string): string {
 /** 卡片主标题：优先提示词摘要，退回工作流名，最后退回任务 id 短码。 */
 export function titleOf(task: HistoryTaskRow): string {
   const p = task.prompt?.trim();
-  if (p) return clampText(p, { maxLength: PROMPT_TITLE_MAX });
-  if (task.workflowName) return task.workflowName;
+  if (p) {
+    return clampText(p, { maxLength: PROMPT_TITLE_MAX });
+  }
+  if (task.workflowName) {
+    return task.workflowName;
+  }
   return task.id.slice(0, 12);
 }
 

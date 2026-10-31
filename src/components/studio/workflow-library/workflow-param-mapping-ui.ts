@@ -63,7 +63,9 @@ export interface ParamClassStyle {
 
 /** 取分类的展示名与配色（未知分类回落到「参数」）。 */
 export function paramClassStyle(cls: string): ParamClassStyle {
-  if (cls === "output") return PARAM_OUTPUT_STYLE;
+  if (cls === "output") {
+    return PARAM_OUTPUT_STYLE;
+  }
   const key = /* SAFETY: 类型断言已复核 */ cls as ParamClass;
   return {
     label: PARAM_CLASS_LABEL[key] ?? PARAM_CLASS_LABEL.other,

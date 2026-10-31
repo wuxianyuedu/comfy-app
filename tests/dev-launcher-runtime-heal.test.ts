@@ -60,7 +60,9 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
       probeHealth: async () => "route-404",
       threshold: 2,
     });
-    for (let i = 0; i < 5; i += 1) await watch.tick();
+    for (let i = 0; i < 5; i += 1) {
+      await watch.tick();
+    }
     expect(onHeal).not.toHaveBeenCalled();
     expect(watch.stats().failures).toBe(0);
     expect(watch.stats().armed).toBe(false);
@@ -88,7 +90,9 @@ describe("createRuntimeRouteWatch：只认「页面 200 且接口 404」这一�
         probeHealth: async () => state,
         threshold: 2,
       });
-      for (let i = 0; i < 5; i += 1) await watch.tick();
+      for (let i = 0; i < 5; i += 1) {
+        await watch.tick();
+      }
       expect(onHeal).not.toHaveBeenCalled();
       expect(watch.stats().failures).toBe(0);
       watch.stop();
@@ -196,10 +200,10 @@ describe("懒归因：拿不到起点就直接退化，绝不跑 git", () => {
     const root = process.cwd();
     const head = readGitHead(root);
     // 极少数非 git 环境（无 git 可执行）：跳过这条，不假装有结论。
-    if (head === null) return;
-    expect(describeRuntimeHealCause(root, head)).toBe(
-      "未检测到代码改动，属偶发失效",
-    );
+    if (head === null) {
+      return;
+    }
+    expect(describeRuntimeHealCause(root, head)).toBe("未检测到代码改动，属偶发失效");
   });
 });
 
@@ -224,7 +228,7 @@ describe("接线形状：探测挂在就绪之后，自愈动作完整且可归�
     expect(launcherSrc).toContain("armedInitially: true");
     expect(launcherSrc).toMatch(/classifyProbe\(\{ port, host: args\.host \}\)/);
     // 归因只在决定自愈那一刻懒跑（这是 run() 内的调用点）。
-    expect(launcherSrc).toContain('describeRuntimeHealCause(ROOT, headAtBoot)');
+    expect(launcherSrc).toContain("describeRuntimeHealCause(ROOT, headAtBoot)");
     expect(launcherSrc).toContain('restartDevForReason("route-404-heal", detail)');
   });
 

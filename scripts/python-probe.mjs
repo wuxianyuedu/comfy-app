@@ -45,16 +45,11 @@ import {
   findPython as findAcrossCandidates,
   resolvePython,
 } from "../src/lib/process/python-resolve.ts";
-import {
-  describeProbeMisses,
-  toProbedCandidates,
-} from "../src/lib/process/probe-exe.ts";
+import { describeProbeMisses, toProbedCandidates } from "../src/lib/process/probe-exe.ts";
 
 /** 与 `ci-toolchain-python.mjs` 的 `PY_CANDIDATES` 同口径（那里是唯一出处）。 */
 const CANDIDATES =
-  process.platform === "win32"
-    ? ["python", "py", "python3"]
-    : ["python3", "python"];
+  process.platform === "win32" ? ["python", "py", "python3"] : ["python3", "python"];
 /** 裸 `py` 是「列出已装版本」并退非零，必须带 `-3`。 */
 const PROBE_ARGS = /** @type {Record<string, string[]>} */ ({
   py: ["-3", "--version"],
@@ -72,11 +67,7 @@ const PROBE_ARGS = /** @type {Record<string, string[]>} */ ({
  *          find?: (options: object) => {hit: object | null, missed: {command: string, failure: unknown}[]}}} [io]
  * @returns {string[]} 要逐行打印的内容
  */
-export function probeLines({
-  run,
-  resolve = resolvePython,
-  find = findAcrossCandidates,
-} = {}) {
+export function probeLines({ run, resolve = resolvePython, find = findAcrossCandidates } = {}) {
   const lines = [`running: node ${process.version} on ${process.platform}`];
   const usable = [];
   for (const name of CANDIDATES) {
@@ -115,9 +106,7 @@ export function probeLines({
   lines.push("resolvePython（手工扫 PATH × PATHEXT）:");
   const res = resolve({});
   if (res) {
-    lines.push(
-      `ok   ${res.command} ${res.args.join(" ")}  →  ${res.path}`.trim(),
-    );
+    lines.push(`ok   ${res.command} ${res.args.join(" ")}  →  ${res.path}`.trim());
   } else {
     /* 逐候选的**读数**（`findPython` 的 `missed`）：一句「手工扫不到 / 起不来」在这个
      * 脚本里等于没说话 —— 它存在的意义正是「两条链的结论摆在一起，人一眼分得出是哪一边
@@ -132,9 +121,7 @@ export function probeLines({
       /* `missed` 的 `failure` 是 `ProbeFailure`（`python-resolve.ts` 的类型），而本文件
        * 是 `.mjs`、没有类型可写 —— 摊平那一步在 `probe-exe.ts` 里，这里只转交。 */
       lines.push(
-        `     逐候选：${describeProbeMisses(
-          toProbedCandidates(/** @type {any} */ (missed)),
-        )}`,
+        `     逐候选：${describeProbeMisses(toProbedCandidates(/** @type {any} */ (missed)))}`,
       );
     }
     lines.push(
@@ -148,10 +135,9 @@ export function probeLines({
 /* 判「是不是直接执行」的写法与 `ci-toolchain-selfcheck.mjs` 同一条理由：
  * 拼 `file://${path.resolve(argv[1])}` 在 Windows 上恒不相等，于是本脚本**一行都不打**
  * 就退 0 —— 而它存在的意义正是「缺件时把论据打出来」。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
-  for (const line of probeLines()) console.log(line);
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
+  for (const line of probeLines()) {
+    console.log(line);
+  }
   process.exit(0);
 }

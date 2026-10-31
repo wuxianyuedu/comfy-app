@@ -74,7 +74,9 @@ export function useModelFolderConfig(): ModelFolderConfigController {
      * 永远进不来，列表拉不下来时既不报错、也不改连接状态，于是「没拿到答案」被显示成
      * 「已连接 + 一个目录都没有」两条假结论。成败要看返回值，不能等异常。 */
     const result = await configQ.refetch();
-    if (result.isError) setErr(errorMessage(result.error, "网络错误"));
+    if (result.isError) {
+      setErr(errorMessage(result.error, "网络错误"));
+    }
     setLoading(false);
   }, [configQ]);
 
@@ -119,7 +121,9 @@ export function useModelFolderConfig(): ModelFolderConfigController {
        * 出口负责「失败文案走 `errorMessage`」这一半（规范 16 §16.2.4.30）。 */
       await runAsyncAction(fn, {
         report: (kind, detail) => {
-          if (kind === "err") setErr(detail);
+          if (kind === "err") {
+            setErr(detail);
+          }
         },
         failureText: "网络错误",
       });
@@ -146,7 +150,9 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     await scanBusy.run(() =>
       runAsyncAction(() => syncMut.mutateAsync(), {
         report: (kind, detail) => {
-          if (kind === "err") setErr(detail);
+          if (kind === "err") {
+            setErr(detail);
+          }
         },
         failureText: "扫描失败",
       }),

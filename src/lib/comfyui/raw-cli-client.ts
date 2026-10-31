@@ -13,7 +13,9 @@ export async function fetchRawCli(taskId: string): Promise<Array<string>> {
     const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/raw-cli`, {
       cache: "no-store",
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      return [];
+    }
     const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Partial<RawCliResponse>;
     return Array.isArray(data.lines) ? data.lines : [];
   } catch {

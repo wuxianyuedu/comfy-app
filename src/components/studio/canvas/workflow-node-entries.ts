@@ -35,7 +35,9 @@ export interface FlowNodeEntries {
 export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   const rawMeta: Record<string, RawInputMeta> = useMemo(() => {
     const out: Record<string, RawInputMeta> = {};
-    for (const r of data.rawInputs ?? []) out[r.name] = r;
+    for (const r of data.rawInputs ?? []) {
+      out[r.name] = r;
+    }
     return out;
   }, [data.rawInputs]);
 
@@ -59,7 +61,9 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
       });
     }
     const fromGraph = Object.entries(data.inputs ?? {});
-    if (fromGraph.length > 0) return fromGraph;
+    if (fromGraph.length > 0) {
+      return fromGraph;
+    }
     return [];
   }, [data.inputs, data.rawInputs]);
 
@@ -94,7 +98,9 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   // 这类自定义节点输出存活下来）→ 空列表。
   const outputs: Array<[string, string]> = useMemo(() => {
     const staticOuts = Object.entries(inferOutputTypeAll(data.classType));
-    if (staticOuts.length > 0) return staticOuts;
+    if (staticOuts.length > 0) {
+      return staticOuts;
+    }
     if (data.rawOutputs && data.rawOutputs.length > 0) {
       return data.rawOutputs.map(
         (rawOutput) =>

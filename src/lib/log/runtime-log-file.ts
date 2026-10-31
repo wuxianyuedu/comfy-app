@@ -94,10 +94,14 @@ export interface RuntimeLogFileName {
  */
 export function parseRuntimeLogFileName(name: string): RuntimeLogFileName | null {
   const m = FILE_RE.exec(name);
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const [, source, stampText, ordinalText] = m;
   const sm = STAMP_RE.exec(stampText ?? "");
-  if (!source || !sm) return null;
+  if (!source || !sm) {
+    return null;
+  }
   const [, y, mo, d, h, mi, s] = sm;
   const startedAt = new Date(
     Number(y),
@@ -142,7 +146,9 @@ const LAUNCH_STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
  */
 export function parseLaunchStamp(value: string | undefined): Date | null {
   const m = value ? LAUNCH_STAMP_RE.exec(value) : null;
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const [, y, mo, d, h, mi, s] = m;
   const at = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s));
   return Number.isFinite(at.getTime()) ? at : null;
@@ -207,7 +213,9 @@ function ordinalOf(name: string): number {
  * 被重启了三次），把运行包的「退出形态」借过来会给出错误暗示。
  */
 export function runtimeLogFileLabel(file: RuntimeLogFileName): string {
-  if (file.startedAt === null) return "更早的日志";
+  if (file.startedAt === null) {
+    return "更早的日志";
+  }
   const d = new Date(file.startedAt);
   const p = (n: number) => String(n).padStart(2, "0");
   return (

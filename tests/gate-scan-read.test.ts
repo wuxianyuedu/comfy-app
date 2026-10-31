@@ -255,12 +255,15 @@ function enumeratesRepoRoot(src: string): boolean {
   if (
     /\b(readdir\w*|walk\w*|collect\w*)\s*\(\s*"\."\s*[,)]/.test(src) ||
     /\)\s*\(\s*"\."\s*\)/.test(src)
-  )
+  ) {
     return true;
+  }
   /* ② `path.join(ROOT)` / `path.join(ROOT, "")` —— 不带子目录名即仓库根本身。
      ⚠️ 刻意**不**认 `path.join(ROOT, <变量>)`：那是各处遍历的通用骨架（`SCAN_DIR`
      的值在另一个常量里），按它判会把 22 份扫 `src/` 的判据全扫进来。 */
-  if (/path\.join\(\s*ROOT\s*(,\s*""\s*)?\)/.test(src)) return true;
+  if (/path\.join\(\s*ROOT\s*(,\s*""\s*)?\)/.test(src)) {
+    return true;
+  }
   return false;
 }
 

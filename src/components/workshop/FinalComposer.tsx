@@ -80,7 +80,9 @@ export function FinalComposer({
 
   React.useEffect(() => {
     return () => {
-      if (imageTimerRef.current) clearTimeout(imageTimerRef.current);
+      if (imageTimerRef.current) {
+        clearTimeout(imageTimerRef.current);
+      }
     };
   }, []);
 
@@ -105,8 +107,12 @@ export function FinalComposer({
   }
 
   function startPlayback() {
-    if (timeline.length === 0) return;
-    if (imageTimerRef.current) clearTimeout(imageTimerRef.current);
+    if (timeline.length === 0) {
+      return;
+    }
+    if (imageTimerRef.current) {
+      clearTimeout(imageTimerRef.current);
+    }
     const first = timeline[0];
     setCurrentIdx(0);
     setPlaying(true);

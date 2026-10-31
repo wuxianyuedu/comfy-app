@@ -93,9 +93,15 @@ function num(raw) {
  */
 function isLooser(entry, from, to) {
   const s = entry.strictness || "larger-is-looser";
-  if (s === "larger-is-looser") return to > from;
-  if (s === "larger-is-stricter") return to < from;
-  if (s === "smaller-is-looser") return to < from;
+  if (s === "larger-is-looser") {
+    return to > from;
+  }
+  if (s === "larger-is-stricter") {
+    return to < from;
+  }
+  if (s === "smaller-is-looser") {
+    return to < from;
+  }
   return false;
 }
 
@@ -137,7 +143,9 @@ function analyze({
    */
   const sourceValue = (file, name) => {
     const text = readSource(file);
-    if (text === null) return { missing: "文件不存在" };
+    if (text === null) {
+      return { missing: "文件不存在" };
+    }
     /* 前缀取上面那一条 `CONST_HEAD` —— 扫面与定点取值必须是同一把尺子，否则会出现
        「这份文件被扫到了，但账上那条按老形状找不到」这种自相矛盾的红。 */
     const re = new RegExp(
@@ -145,14 +153,10 @@ function analyze({
       "m",
     );
     const raw = re.exec(text)?.[1];
-    return raw === undefined
-      ? { missing: "源码里找不到该常量声明" }
-      : { value: num(raw) };
+    return raw === undefined ? { missing: "源码里找不到该常量声明" } : { value: num(raw) };
   };
 
-  const located = entries.filter(
-    (e) => sourceValue(e.file, e.const).value !== undefined,
-  );
+  const located = entries.filter((e) => sourceValue(e.file, e.const).value !== undefined);
 
   // 自证：提取本身要真的抓到东西（正则写漂 ⇒ 两侧都空集 ⇒ 恒绿）。
   if (entries.length < minEntries) {
@@ -171,12 +175,12 @@ function analyze({
   for (const e of entries) {
     const got = sourceValue(e.file, e.const);
     if (got.value === undefined) {
-      problems.push(
-        `${e.file} :: ${e.const} —— ${got.missing}（账上记的是 ${e.value}）`,
-      );
+      problems.push(`${e.file} :: ${e.const} —— ${got.missing}（账上记的是 ${e.value}）`);
       continue;
     }
-    if (got.value === e.value) continue;
+    if (got.value === e.value) {
+      continue;
+    }
     const line = `${e.file} :: ${e.const} 源码 ${got.value} ≠ 账 ${e.value}${e.unit ? `（${e.unit}）` : ""}`;
     if (e.kind === "report") {
       notes.push(`${line} —— 这一条是 report（不是松紧量），只报不拦`);
@@ -195,9 +199,13 @@ function analyze({
   /** @type {Map<string, Array<{at: string, value: number}>>} */
   const groups = new Map();
   for (const e of entries) {
-    if (!e.group) continue;
+    if (!e.group) {
+      continue;
+    }
     const got = sourceValue(e.file, e.const);
-    if (got.value === undefined) continue;
+    if (got.value === undefined) {
+      continue;
+    }
     const list = groups.get(e.group) ?? [];
     list.push({ at: `${e.file}::${e.const}`, value: got.value });
     groups.set(e.group, list);
@@ -215,19 +223,17 @@ function analyze({
   // 3) 未入账的顶层数值 —— 输入面是**磁盘上的判据文件**，不是账上点名的那些
   //    （ISSUE #2188：从账里推面 ⇒ 整份没进账的文件根本不进循环）。
   const ledgerFiles = [...new Set(entries.map((e) => e.file))];
-  const filesToScan = [
-    ...new Set([...(scanFiles ?? ledgerFiles), ...ledgerFiles]),
-  ];
+  const filesToScan = [...new Set([...(scanFiles ?? ledgerFiles), ...ledgerFiles])];
   for (const f of filesToScan) {
     const text = readSource(f);
-    if (text === null) continue;
-    const names = [...text.matchAll(CONST_DECL)].map(
-      (m) => /** @type {string} */ (m[1]),
-    );
-    if (names.length === 0) continue;
-    const inLedger = new Set(
-      entries.filter((e) => e.file === f).map((e) => e.const),
-    );
+    if (text === null) {
+      continue;
+    }
+    const names = [...text.matchAll(CONST_DECL)].map((m) => /** @type {string} */ (m[1]));
+    if (names.length === 0) {
+      continue;
+    }
+    const inLedger = new Set(entries.filter((e) => e.file === f).map((e) => e.const));
     /* 整份没进账 ⇒ 这一格里它一个字都不被判。单列一句而不是并入下面那条：
        话术要点名「这份文件从没被这本账看过」，否则读者只会以为自己漏登记了一个数。
        只报数名、不报数值 —— 数值在账里才对读者可见。 */
@@ -254,11 +260,14 @@ function analyze({
   if (masterEntries) {
     for (const e of entries) {
       const prev = masterEntries.get(`${e.file}#${e.const}`);
-      if (!prev || e.kind === "report" || e.value === prev.value) continue;
-      if (!isLooser(e, prev.value, e.value)) continue;
+      if (!prev || e.kind === "report" || e.value === prev.value) {
+        continue;
+      }
+      if (!isLooser(e, prev.value, e.value)) {
+        continue;
+      }
       const signed =
-        Number(e.movedFrom) === prev.value &&
-        /^#\d{2,}$/.test(String(e.movedIssue || ""));
+        Number(e.movedFrom) === prev.value && /^#\d{2,}$/.test(String(e.movedIssue || ""));
       if (!signed) {
         problems.push(
           `${e.file}#${e.const} 相对主干是**放宽**（${prev.value} → ${e.value}），` +
@@ -269,9 +278,7 @@ function analyze({
       }
     }
   } else {
-    notes.push(
-      "主干上还没有这本账 ⇒ 「相对主干放宽要签字」那一判本轮无从比较（不是「已通过」）。",
-    );
+    notes.push("主干上还没有这本账 ⇒ 「相对主干放宽要签字」那一判本轮无从比较（不是「已通过」）。");
   }
 
   return { problems, notes };
@@ -325,9 +332,7 @@ function scanJudgeFiles() {
 }
 
 function readLedger() {
-  return JSON.parse(
-    fs.readFileSync(path.join(__dirname, ".gate-thresholds.json"), "utf8"),
-  ).entries;
+  return JSON.parse(fs.readFileSync(path.join(__dirname, ".gate-thresholds.json"), "utf8")).entries;
 }
 
 /**
@@ -348,7 +353,9 @@ function masterLedger() {
     const list = JSON.parse(out).entries ?? [];
     /** @type {Map<string, GateThreshold>} */
     const map = new Map();
-    for (const e of list) map.set(`${e.file}#${e.const}`, e);
+    for (const e of list) {
+      map.set(`${e.file}#${e.const}`, e);
+    }
     return map;
   } catch {
     return null;
@@ -380,11 +387,12 @@ function main(argv = process.argv.slice(2)) {
     masterEntries: masterLedger(),
     scanFiles: scanJudgeFiles(),
   });
-  for (const n of notes) process.stdout.write(`[gate-thresholds] ⚠ ${n}\n`);
+  for (const n of notes) {
+    process.stdout.write(`[gate-thresholds] ⚠ ${n}\n`);
+  }
   if (AS_JSON) {
     process.stdout.write(
-      JSON.stringify({ entries: entries.length, problems, notes }, null, 2) +
-        "\n",
+      JSON.stringify({ entries: entries.length, problems, notes }, null, 2) + "\n",
     );
     return problems.length && !REPORT_ONLY ? 1 : 0;
   }
@@ -394,10 +402,10 @@ function main(argv = process.argv.slice(2)) {
     );
     return 0;
   }
-  process.stdout.write(
-    `[gate-thresholds] ✗ ${problems.length} 处判据自身的数值与账不一致：\n`,
-  );
-  for (const p of problems) process.stdout.write(`  · ${p}\n`);
+  process.stdout.write(`[gate-thresholds] ✗ ${problems.length} 处判据自身的数值与账不一致：\n`);
+  for (const p of problems) {
+    process.stdout.write(`  · ${p}\n`);
+  }
   process.stdout.write(
     `\n账：${LEDGER_REL}（方向逐条记 —— threshold 阻断阈值、floor 防静默失效的地板、report 只报不拦）\n`,
   );
@@ -406,4 +414,6 @@ function main(argv = process.argv.slice(2)) {
 
 module.exports = { analyze, isLooser, num, main, MIN_ENTRIES };
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

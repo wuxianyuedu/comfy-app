@@ -204,7 +204,9 @@ export async function reimportFromSource(tpl: {
     const err = /* SAFETY: 类型断言已复核 */ e as {
       code?: string;
     } | null;
-    if (err?.code === "ENOENT") return { missing: true };
+    if (err?.code === "ENOENT") {
+      return { missing: true };
+    }
     return { missing: true };
   }
 

@@ -36,10 +36,7 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 import { fixed } from "~/lib/number-format";
 import type { ReadySettingsPageController } from "../hooks/use-settings-page";
-import type {
-  RemoteModelDialogs,
-  UsageTestDialogState,
-} from "../hooks/use-remote-model-dialogs";
+import type { RemoteModelDialogs, UsageTestDialogState } from "../hooks/use-remote-model-dialogs";
 
 const USAGE_TEST_KIND_LABELS: Record<UsageTestKind, string> = {
   chat: "文本",
@@ -74,9 +71,7 @@ export function UsageTestDialog({
           className={`border-border bg-surface ${OVERLAY_MAX_HEIGHT} w-full max-w-md overflow-y-auto rounded-2xl border p-5 shadow-2xl`}
         >
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="u-title">
-              实际调用测试 · {USAGE_TEST_KIND_LABELS[usageTest.kind]}
-            </h3>
+            <h3 className="u-title">实际调用测试 · {USAGE_TEST_KIND_LABELS[usageTest.kind]}</h3>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -96,9 +91,7 @@ export function UsageTestDialog({
               <Textarea
                 {...a11y}
                 value={usageTest.prompt}
-                onChange={(event) =>
-                  d.patchUsageTest({ prompt: event.target.value })
-                }
+                onChange={(event) => d.patchUsageTest({ prompt: event.target.value })}
                 rows={2}
                 className="border-border text-ink bg-surface-2 resize-y"
               />
@@ -113,9 +106,7 @@ export function UsageTestDialog({
                     {...a11y}
                     type="text"
                     value={usageTest.size}
-                    onChange={(event) =>
-                      d.patchUsageTest({ size: event.target.value })
-                    }
+                    onChange={(event) => d.patchUsageTest({ size: event.target.value })}
                     placeholder="1024x1024"
                     className="border-border text-ink bg-surface-2"
                   />
@@ -126,19 +117,13 @@ export function UsageTestDialog({
 
           {usageTest.kind === "video" && (
             <>
-              <FormField
-                label="尺寸（可选，留空 = 不传）"
-                id="usage-test-size"
-                className="mb-3"
-              >
+              <FormField label="尺寸（可选，留空 = 不传）" id="usage-test-size" className="mb-3">
                 {(a11y) => (
                   <Input
                     {...a11y}
                     type="text"
                     value={usageTest.size}
-                    onChange={(event) =>
-                      d.patchUsageTest({ size: event.target.value })
-                    }
+                    onChange={(event) => d.patchUsageTest({ size: event.target.value })}
                     placeholder="如 720P（Agnes Flash 固定值）或 1280x704"
                     className="border-border text-ink bg-surface-2"
                   />
@@ -155,41 +140,30 @@ export function UsageTestDialog({
             label="请求体额外字段"
             hint={
               <>
-                每个字段用「字段名 + 值」两格填，替代原先手填整段 JSON；值可为
-                文本 / 数字 /
-                图片（点「上传」选本地图片，或点「链接」直接粘贴公网图片地址）。
-                数值自动按数字 / 布尔解析（如 seed 填 42 即数字）。
+                每个字段用「字段名 + 值」两格填，替代原先手填整段 JSON；值可为 文本 / 数字 /
+                图片（点「上传」选本地图片，或点「链接」直接粘贴公网图片地址）。 数值自动按数字 /
+                布尔解析（如 seed 填 42 即数字）。
                 {usageTest.kind !== "chat" && <> ⚠ {MEDIA_URL_NOTICE}</>}
               </>
             }
             className="mb-2"
           />
 
-          {usageTest.kind === "video" && (
-            <UsageVideoModeQuickPick d={d} usageTest={usageTest} />
-          )}
+          {usageTest.kind === "video" && <UsageVideoModeQuickPick d={d} usageTest={usageTest} />}
 
           <UsageFieldEditor d={d} usageTest={usageTest} />
 
           {(usageTest.kind === "image" || usageTest.kind === "video") && (
             <div className="mb-3">
               <p className="text-muted-foreground text-2xs mb-1.5">
-                固定名称字段可一键添加，无需手输拼错 （images / first_frame /
-                seed 等）：
+                固定名称字段可一键添加，无需手输拼错 （images / first_frame / seed 等）：
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {USAGE_FIELD_PRESETS.map((preset) => {
-                  const already = hasUsageFieldKey(
-                    usageTest.fields,
-                    preset.key,
-                  );
+                  const already = hasUsageFieldKey(usageTest.fields, preset.key);
                   return (
                     <Hint
-                      label={
-                        already
-                          ? `已有 ${preset.key} 字段行，直接改那行即可`
-                          : preset.hint
-                      }
+                      label={already ? `已有 ${preset.key} 字段行，直接改那行即可` : preset.hint}
                       key={preset.key}
                     >
                       <Button
@@ -233,12 +207,7 @@ export function UsageTestDialog({
           )}
 
           {usageTest.result && !usageTest.running && (
-            <UsageTestResultPanel
-              c={c}
-              d={d}
-              usageTest={usageTest}
-              result={usageTest.result}
-            />
+            <UsageTestResultPanel c={c} d={d} usageTest={usageTest} result={usageTest.result} />
           )}
 
           <div className="mt-4 flex justify-end gap-2">
@@ -251,18 +220,10 @@ export function UsageTestDialog({
             </Button>
             <Button
               onClick={() => void d.runUsageTest()}
-              disabled={
-                usageTest.running ||
-                usageTest.querying ||
-                !usageTest.prompt.trim()
-              }
+              disabled={usageTest.running || usageTest.querying || !usageTest.prompt.trim()}
               className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
             >
-              {usageTest.querying
-                ? "等待中…"
-                : usageTest.running
-                  ? "调用中…"
-                  : "执行测试"}
+              {usageTest.querying ? "等待中…" : usageTest.running ? "调用中…" : "执行测试"}
             </Button>
           </div>
         </div>
@@ -285,39 +246,35 @@ function UsageVideoModeQuickPick({
   const trimmedModeValue = modeValue?.trim();
   const modeValueIsBroken = modeValue != null && isModeValueBroken(modeValue);
   const modeToggleValue =
-    trimmedModeValue &&
-    !modeValueIsBroken &&
-    VIDEO_MODE_PRESETS.some((p) => p === trimmedModeValue)
+    trimmedModeValue && !modeValueIsBroken && VIDEO_MODE_PRESETS.some((p) => p === trimmedModeValue)
       ? [trimmedModeValue]
       : [];
   return (
     <>
       <div className="mb-2">
-        <p className="text-ink/70 mb-1 text-xs font-medium">
-          mode 快捷选择（仍可手改任意值）
-        </p>
+        <p className="text-ink/70 mb-1 text-xs font-medium">mode 快捷选择（仍可手改任意值）</p>
         <ToggleGroup
           multiple={false}
           value={modeToggleValue}
           onValueChange={(vals) => {
             const next = vals[0];
-            if (typeof next === "string") d.setVideoMode(next);
+            if (typeof next === "string") {
+              d.setVideoMode(next);
+            }
           }}
           aria-label="视频 mode 快捷选择"
           className="flex-wrap gap-1.5"
         >
           {VIDEO_MODE_PRESETS.map((m) => (
-            <ToggleGroupItem
-              key={m}
-              value={m}
-              className="text-2xs h-auto rounded-full px-2.5 py-1"
-            >
+            <ToggleGroupItem key={m} value={m} className="text-2xs h-auto rounded-full px-2.5 py-1">
               {m}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
         {usageTest.fields.map((f) => {
-          if (f.key !== "mode") return null;
+          if (f.key !== "mode") {
+            return null;
+          }
           const hint = VIDEO_MODE_HINT[f.value.trim()];
           return hint ? (
             <p key="mode-hint" className="text-muted-foreground text-2xs mt-1">
@@ -326,7 +283,9 @@ function UsageVideoModeQuickPick({
           ) : null;
         })}
         {usageTest.fields.map((f) => {
-          if (f.key !== "mode" || !isModeValueBroken(f.value)) return null;
+          if (f.key !== "mode" || !isModeValueBroken(f.value)) {
+            return null;
+          }
           const i = usageTest.fields.indexOf(f);
           return (
             <div
@@ -334,9 +293,9 @@ function UsageVideoModeQuickPick({
               className="border-warning/60 bg-warning/5 text-warning-strong text-2xs mt-1 rounded-lg border border-dashed px-2 py-1.5"
             >
               <p>
-                ⚠ mode 的值被图片/链接覆盖了——这正是「reference 选中消失」和 400
-                invalid mode 的原因。点下方按钮把图搬到 images
-                行，或直接把输入框改回 text / keyframe / reference。
+                ⚠ mode 的值被图片/链接覆盖了——这正是「reference 选中消失」和 400 invalid mode
+                的原因。点下方按钮把图搬到 images 行，或直接把输入框改回 text / keyframe /
+                reference。
               </p>
               {isPreviewableUrl(f.value) && (
                 <Button
@@ -373,8 +332,7 @@ function UsageFieldEditor({
     <>
       {usageTest.fields.length === 0 && (
         <p className="text-muted-foreground border-border text-2xs mb-2 rounded-lg border border-dashed px-3 py-3 text-center">
-          还没有额外字段。点下方「添加字段」可按需补 seed / duration /
-          first_frame 等。
+          还没有额外字段。点下方「添加字段」可按需补 seed / duration / first_frame 等。
         </p>
       )}
 
@@ -393,18 +351,14 @@ function UsageFieldEditor({
                 <Input
                   type="text"
                   value={f.key}
-                  onChange={(event) =>
-                    d.patchField(i, { key: event.target.value })
-                  }
+                  onChange={(event) => d.patchField(i, { key: event.target.value })}
                   placeholder="字段名（如 seed / first_frame）"
                   className="border-border text-ink bg-surface-2 w-2/5 min-w-0 font-mono text-xs"
                 />
                 <Input
                   type="text"
                   value={f.value}
-                  onChange={(event) =>
-                    d.patchField(i, { value: event.target.value })
-                  }
+                  onChange={(event) => d.patchField(i, { value: event.target.value })}
                   placeholder={
                     f.key === "mode"
                       ? "模式名：text / keyframe / reference（图片请添加 images 行）"
@@ -429,19 +383,18 @@ function UsageFieldEditor({
                     onPick={(file) => void d.pickFieldImage(i, file)}
                   />
                 )}
-                {!(usageTest.kind === "video" && isMediaField(f.key)) &&
-                  f.key !== "mode" && (
-                    <Hint label="填入公网图片地址占位，直接改成你的图片 URL 即可">
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => d.patchField(i, { value: "https://" })}
-                        className="text-muted-foreground hover:text-ink text-2xs h-auto shrink-0 rounded-lg px-2"
-                      >
-                        链接
-                      </Button>
-                    </Hint>
-                  )}
+                {!(usageTest.kind === "video" && isMediaField(f.key)) && f.key !== "mode" && (
+                  <Hint label="填入公网图片地址占位，直接改成你的图片 URL 即可">
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={() => d.patchField(i, { value: "https://" })}
+                      className="text-muted-foreground hover:text-ink text-2xs h-auto shrink-0 rounded-lg px-2"
+                    >
+                      链接
+                    </Button>
+                  </Hint>
+                )}
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -490,8 +443,7 @@ function UsageTestResultPanel({
           <>
             <p className="bg-success/10 text-success-strong mb-2 rounded-lg px-3 py-2 text-xs">
               {result.detail}
-              {result.elapsedMs != null &&
-                ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
+              {result.elapsedMs != null && ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
             </p>
             {result.chatText && (
               <p className="border-border/50 bg-surface-1 max-h-40 overflow-y-auto rounded-lg border p-3 text-xs whitespace-pre-wrap">
@@ -528,12 +480,9 @@ function UsageTestResultPanel({
             {result.pending && result.taskId && !usageTest.querying && (
               <div className="bg-warning/10 text-warning-strong mt-2 rounded-lg px-3 py-2 text-xs">
                 <p className="font-medium">
-                  ⏳ 视频仍在生成中（不是失败），已提交到提供方，
-                  生成通常需数十秒到几分钟。
+                  ⏳ 视频仍在生成中（不是失败），已提交到提供方， 生成通常需数十秒到几分钟。
                 </p>
-                <p className="text-muted-foreground mt-1 break-all">
-                  任务 ID：{result.taskId}
-                </p>
+                <p className="text-muted-foreground mt-1 break-all">任务 ID：{result.taskId}</p>
                 <Button
                   variant="warning-solid"
                   onClick={() => void d.continueUsageWait()}
@@ -562,13 +511,7 @@ function UsageTestResultPanel({
 /** 单行的「上传图片」入口：外观是 `label` 样式的按钮，内部是
  *  隐藏 input —— 此前这里用 `<label>` 包住 `<input type=file>` 让浏览器
  *  隐式关联，写法与全库另外 8 个落点都不同。现在统一走 `ui/file-picker`。 */
-function FieldImageButton({
-  hint,
-  onPick,
-}: {
-  hint: string;
-  onPick: (file: File) => void;
-}) {
+function FieldImageButton({ hint, onPick }: { hint: string; onPick: (file: File) => void }) {
   const picker = useFilePicker({
     accept: "image/png,image/jpeg,image/webp,image/gif",
     onPick: (file) => onPick(file),

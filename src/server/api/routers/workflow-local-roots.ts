@@ -83,7 +83,9 @@ interface LocalPendingRow {
 
 /* 按 `localWorkflows.pathKey` 的同一口径归一化绝对路径。 */
 function pathKey(p: string): string {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   try {
     return normalizeSlashes(path.resolve(p).toLowerCase()).replace(/\/+$/, "");
   } catch {
@@ -96,16 +98,24 @@ function findRootFor(
   filePath: string,
   roots: Array<{ rawPath: string; absPath: string }>,
 ): string | undefined {
-  if (!filePath || roots.length === 0) return undefined;
+  if (!filePath || roots.length === 0) {
+    return undefined;
+  }
   const target = pathKey(filePath);
-  if (!target) return undefined;
+  if (!target) {
+    return undefined;
+  }
   let best: { len: number; raw: string } | undefined;
   for (const r of roots) {
     const rk = pathKey(r.absPath);
-    if (!rk) continue;
+    if (!rk) {
+      continue;
+    }
     const exact = target === rk;
     const child = target.startsWith(rk + "/");
-    if (!exact && !child) continue;
+    if (!exact && !child) {
+      continue;
+    }
     if (!best || rk.length > best.len) {
       best = { len: rk.length, raw: r.rawPath };
     }

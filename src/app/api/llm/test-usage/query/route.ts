@@ -28,21 +28,25 @@ export const dynamic = "force-dynamic";
  * 失败一律 200 + `{ ok:false, detail }`，前端按 detail 展示降级文案。
  */
 export async function POST(req: NextRequest) {
-  if (!(await requireRequestUser())) return unauthorizedResponse();
+  if (!(await requireRequestUser())) {
+    return unauthorizedResponse();
+  }
 
   /* 读 body / 取条目名 / 解析连接参数与提交路由同一份实现（§12.12）。 */
   const prologue = await readUsageTestPrologue(req);
-  if (!prologue.ok)
+  if (!prologue.ok) {
     return NextResponse.json({ ok: false, detail: prologue.detail });
+  }
   const { name, rec, up } = prologue;
   const model = name; // 条目名即模型参数值（与提交路由一致）
   const taskId = strField(rec, "taskId");
 
-  if (!taskId)
+  if (!taskId) {
     return NextResponse.json({
       ok: false,
       detail: "缺少任务 ID，无法继续查询",
     });
+  }
 
   const startedAt = Date.now();
   try {

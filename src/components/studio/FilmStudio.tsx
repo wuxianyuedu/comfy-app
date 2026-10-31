@@ -168,7 +168,9 @@ export function FilmStudio() {
         <ShotReviewDialog
           open
           onOpenChange={(next) => {
-            if (!next) setReviewShot(null);
+            if (!next) {
+              setReviewShot(null);
+            }
           }}
           projectId={c.activeProjectId}
           shot={{ id: reviewShot.id, name: reviewShot.name }}

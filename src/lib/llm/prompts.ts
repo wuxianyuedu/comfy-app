@@ -13,12 +13,24 @@ import { extractJson, extractJsonArray } from "./parse";
 // ─────────────────────────────────────────────────────────────
 /** 将未知值安全转字符串：字符串原样返回，对象 JSON 序列化，避免 [object Object]。 */
 function asText(v: unknown, fallback = ""): string {
-  if (typeof v === "string") return v;
-  if (v === undefined || v === null) return fallback;
-  if (typeof v === "object") return JSON.stringify(v) ?? fallback;
-  if (typeof v === "function") return v.name || fallback;
-  if (typeof v === "symbol" || typeof v === "bigint") return v.toString();
-  if (typeof v === "number" || typeof v === "boolean") return `${v}`;
+  if (typeof v === "string") {
+    return v;
+  }
+  if (v === undefined || v === null) {
+    return fallback;
+  }
+  if (typeof v === "object") {
+    return JSON.stringify(v) ?? fallback;
+  }
+  if (typeof v === "function") {
+    return v.name || fallback;
+  }
+  if (typeof v === "symbol" || typeof v === "bigint") {
+    return v.toString();
+  }
+  if (typeof v === "number" || typeof v === "boolean") {
+    return `${v}`;
+  }
   return fallback;
 }
 
@@ -207,7 +219,9 @@ export const REVIEW_SYSTEM = `你是严格的 AI 生成内容质检评审。用�
  * 避免跨域耦合——与 `RepromptFeedback` 同一口径）。
  */
 export function scoringAddendum(rubricText: string): string {
-  if (!rubricText.trim()) return "";
+  if (!rubricText.trim()) {
+    return "";
+  }
   return `
 
 另外，按下面的评分量表（rubric）逐维度打分：scores 的键必须用维度 key，每个维度给 1~5 分与一句打分依据。分数与 pass 相互独立——低分但勉强可用仍可 pass=true，每档按锚点描述对号入座。

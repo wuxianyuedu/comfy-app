@@ -35,18 +35,20 @@ export interface ComfyQueueNotice {
   title: string;
 }
 
-export function comfyQueueNotice(
-  view: ComfyQueueView,
-): ComfyQueueNotice | null {
+export function comfyQueueNotice(view: ComfyQueueView): ComfyQueueNotice | null {
   /* ComfyUI 离线时不占位：状态栏已有「ComfyUI 未运行，显存/内存暂不可用」那条
    * 降级提示，同一件事报两遍只会让那一行更吵。 */
-  if (!view.online) return null;
+  if (!view.online) {
+    return null;
+  }
 
   const waiting = view.queued + view.comfy.pending;
 
   if (view.running === null) {
     /* 没在跑但有排队：只报队列（应用刚提交、ComfyUI 还在预热的那一小段）。 */
-    if (waiting === 0) return null;
+    if (waiting === 0) {
+      return null;
+    }
     return {
       text: `排队 ${waiting}`,
       title: `ComfyUI 队列里有 ${waiting} 个任务待执行`,
@@ -57,20 +59,13 @@ export function comfyQueueNotice(
   const head = [elapsed, view.running.workflowName, view.running.model].filter(
     (part): part is string => typeof part === "string" && part !== "",
   );
-  const text =
-    waiting > 0
-      ? `▶ ${head.join(" · ")}（排队 ${waiting}）`
-      : `▶ ${head.join(" · ")}`;
+  const text = waiting > 0 ? `▶ ${head.join(" · ")}（排队 ${waiting}）` : `▶ ${head.join(" · ")}`;
 
   const title = [
     `正在执行：${view.running.workflowName ?? "（未知工作流）"}`,
-    view.running.model === null
-      ? "模型：未能从本次工作流里识别"
-      : `模型：${view.running.model}`,
+    view.running.model === null ? "模型：未能从本次工作流里识别" : `模型：${view.running.model}`,
     `已运行：${elapsed}　进度：${view.running.progress}%`,
-    view.running.nodeType === null
-      ? null
-      : `当前节点：${view.running.nodeType}`,
+    view.running.nodeType === null ? null : `当前节点：${view.running.nodeType}`,
     `ComfyUI 队列：运行 ${view.comfy.running} · 排队 ${view.comfy.pending}　本应用排队：${view.queued}`,
   ].filter((line): line is string => line !== null);
 

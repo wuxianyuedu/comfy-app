@@ -45,7 +45,9 @@ declare global {
 const st: QueueSignalGlobal = (globalThis.__comfyQueueSignal_v1 ??= {});
 
 async function tick(): Promise<void> {
-  if (st.inflight) return;
+  if (st.inflight) {
+    return;
+  }
   st.inflight = true;
   try {
     const status: ComfyQueueStatus = await collectComfyQueueStatus();
@@ -73,7 +75,9 @@ async function tick(): Promise<void> {
 }
 
 function ensureTimer(): void {
-  if (st.timer !== null && st.timer !== undefined) return;
+  if (st.timer !== null && st.timer !== undefined) {
+    return;
+  }
   st.timer = setInterval(() => {
     // tick 内部已吞掉 `collectComfyQueueStatus` 的瞬时抖动（见 tick 的 catch），
     // 这里 fireAndForget 的 onError 实际不触发；用收口形态取代散落的 `void tick()`。
@@ -96,7 +100,9 @@ export function subscribeQueueChanged(listener: Listener): () => void {
   ensureTimer();
   return () => {
     listeners.delete(subscription);
-    if (listeners.size === 0) stopTimer();
+    if (listeners.size === 0) {
+      stopTimer();
+    }
   };
 }
 

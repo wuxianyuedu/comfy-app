@@ -87,10 +87,10 @@ export function ensureStorybookAssets(outDir) {
   for (const image of IMAGES) {
     const target = path.join(outDir, image.file);
     const svg = figure(image.width, image.height, image.label);
-    const current = fs.existsSync(target)
-      ? fs.readFileSync(target, "utf8")
-      : null;
-    if (current !== svg) fs.writeFileSync(target, svg, "utf8");
+    const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null;
+    if (current !== svg) {
+      fs.writeFileSync(target, svg, "utf8");
+    }
     written.push(target);
   }
   return written;
@@ -145,9 +145,9 @@ export function writeStorybookAppOrigin(repoRoot, outFile) {
   };
   const body = `${JSON.stringify(payload, null, 2)}\n`;
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
-  const current = fs.existsSync(outFile)
-    ? fs.readFileSync(outFile, "utf8")
-    : null;
-  if (current !== body) fs.writeFileSync(outFile, body, "utf8");
+  const current = fs.existsSync(outFile) ? fs.readFileSync(outFile, "utf8") : null;
+  if (current !== body) {
+    fs.writeFileSync(outFile, body, "utf8");
+  }
   return { origin, source };
 }

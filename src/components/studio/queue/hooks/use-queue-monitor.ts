@@ -132,7 +132,9 @@ export function useQueueMonitor(): QueueMonitorController {
 
   const running = useMemo<RunningCardView | null>(() => {
     const task = queue.running;
-    if (task === null) return null;
+    if (task === null) {
+      return null;
+    }
     const remainingMs = estimateRemainingMs(queue.elapsedMs ?? 0, task.progress);
     return {
       id: task.taskId,

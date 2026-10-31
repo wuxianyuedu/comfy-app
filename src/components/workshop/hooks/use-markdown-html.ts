@@ -37,15 +37,15 @@ export function useMarkdownHtml(text: string): string {
   });
 
   useEffect(() => {
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      return;
+    }
     const guard = beginStaleRun();
     void (async () => {
       const { loadMarkdownRenderer } = await import("~/lib/markdown");
       const { markdownToHtml } = await loadMarkdownRenderer();
       /* 加载期间 `text` 可能已经变了（用户接着编辑剧本）—— 旧轮次的结果不落地。 */
-      guard.commit(() =>
-        setRendered({ from: text, html: markdownToHtml(text) }),
-      );
+      guard.commit(() => setRendered({ from: text, html: markdownToHtml(text) }));
     })();
     return () => guard.dispose();
   }, [text]);

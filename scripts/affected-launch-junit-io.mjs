@@ -12,11 +12,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import {
-  C_MANIFEST_NAME,
-  cFileXmlName,
-  failingSuiteTextsFromJunit,
-} from "./precommit-timing.mjs";
+import { C_MANIFEST_NAME, cFileXmlName, failingSuiteTextsFromJunit } from "./precommit-timing.mjs";
 
 /**
  * 组 C 的**分文件耗时**读数出口（vitest 的 junit reporter）。
@@ -47,13 +43,10 @@ import {
  * @returns {string[]} 追加给 vitest 的参数；`dir` 为空时**回空数组**（= 今天的形状不变，
  *   人自己跑 `node scripts/run-affected-tests.mjs --full` 时没有 `$LOGD`，不该被塞读数）
  */
-export function junitReportArgs(
-  dir,
-  chunkId,
-  attempt,
-  { withDefaultReporter = true } = {},
-) {
-  if (!dir) return [];
+export function junitReportArgs(dir, chunkId, attempt, { withDefaultReporter = true } = {}) {
+  if (!dir) {
+    return [];
+  }
   return [
     ...(withDefaultReporter ? ["--reporter=default"] : []),
     "--reporter=junit",
@@ -74,13 +67,11 @@ export function junitReportArgs(
  * @returns {boolean} 是否落盘成功
  */
 export function writeFilesManifest(dir, files) {
-  if (!dir) return false;
+  if (!dir) {
+    return false;
+  }
   try {
-    writeFileSync(
-      path.join(dir, C_MANIFEST_NAME),
-      `${files.join("\n")}\n`,
-      "utf8",
-    );
+    writeFileSync(path.join(dir, C_MANIFEST_NAME), `${files.join("\n")}\n`, "utf8");
     return true;
   } catch {
     return false;
@@ -100,7 +91,9 @@ export function writeFilesManifest(dir, files) {
  */
 export function readRetrySuiteFailures(input) {
   const dir = input.junitDir ?? "";
-  if (!dir) return [];
+  if (!dir) {
+    return [];
+  }
   const read = input.read ?? readFileSync;
   let xml;
   try {

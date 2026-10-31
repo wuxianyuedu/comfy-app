@@ -50,11 +50,7 @@ import path from "node:path";
  * `./ci-toolchain-python.mjs` —— 拆出去是按 §12.6 R5 的取向：本文件涨到 900 行以上，
  * 而那份是**机制**、本文件是**编排与打印**。两边的界线：本文件回答「这台机器够不够跑
  * 门禁链」，那份回答「哪个解释器能跑、弄不到时怎么弄到手」。 */
-import {
-  findPython,
-  installPython,
-  pythonForensics,
-} from "./ci-toolchain-python.mjs";
+import { findPython, installPython, pythonForensics } from "./ci-toolchain-python.mjs";
 /* 浏览器那一层（落点 / 复验 / 装）在 `./ci-toolchain-browser.mjs` —— 拆出去的边界与
  * `ci-toolchain-python.mjs` 相同：本文件回答「这台机器够不够跑门禁链」，
  * 那份回答「浏览器在不在、弄不到时怎么弄到手」。两件注入面（`find` / `exec`）
@@ -73,13 +69,7 @@ import {
 /* pnpm 那一层（PATH 读法 / 候选形态 / 可用性判 / 取证）在 `./ci-toolchain-pnpm.mjs` ——
  * 拆出去的边界与 `ci-toolchain-python.mjs` 相同：本文件回答「这台机器够不够跑门禁链」，
  * 那份回答「pnpm 在哪、探不到时现场长什么样」。拆的边界按职责不按长度（§12.6 R5）。 */
-import {
-  findPnpm,
-  isFileOnDisk,
-  pnpmForensics,
-  pnpmPathValue,
-} from "./ci-toolchain-pnpm.mjs";
-
+import { findPnpm, isFileOnDisk, pnpmForensics, pnpmPathValue } from "./ci-toolchain-pnpm.mjs";
 
 /**
  * `engines.node` 的区间 —— `package.json` 里今天写的是 **`>=26.12.1`**
@@ -98,10 +88,9 @@ import {
  * `tests/ci-toolchain-selfcheck.test.ts` 的「与 package.json 的 engines.node 对账」
  * （改了一侧另一侧会红，别把用例改成「反正过」）。
  */
-const NODE_ENGINES =
-  /** @type {Array<{min: number[], max: number[] | null}>} */ ([
-    { min: [26, 12, 1], max: null },
-  ]);
+const NODE_ENGINES = /** @type {Array<{min: number[], max: number[] | null}>} */ ([
+  { min: [26, 12, 1], max: null },
+]);
 
 /**
  * 版本三元组比大小（`a < b` 为负）。
@@ -113,7 +102,9 @@ function cmpVersion(a, b) {
   for (let i = 0; i < 3; i += 1) {
     const x = a[i] ?? 0;
     const y = b[i] ?? 0;
-    if (x !== y) return x - y;
+    if (x !== y) {
+      return x - y;
+    }
   }
   return 0;
 }
@@ -171,7 +162,9 @@ function section(title) {
  */
 export function parseVersion(text) {
   const m = /(\d+)\.(\d+)\.(\d+)/.exec(text ?? "");
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   return {
     major: Number(m[1] ?? 0),
     minor: Number(m[2] ?? 0),
@@ -190,8 +183,7 @@ export function parseVersion(text) {
 export function nodeAllowed(v) {
   const trip = [v.major, v.minor, v.patch];
   return NODE_ENGINES.some(
-    ({ min, max }) =>
-      cmpVersion(trip, min) >= 0 && (max === null || cmpVersion(trip, max) < 0),
+    ({ min, max }) => cmpVersion(trip, min) >= 0 && (max === null || cmpVersion(trip, max) < 0),
   );
 }
 
@@ -207,8 +199,12 @@ export function nodeAllowed(v) {
  */
 function installAndReverify() {
   const attempt = installPython();
-  for (const line of attempt.attempts ?? []) console.log(`  · ${line}`);
-  if (attempt.path) console.log(`（${attempt.channel} 通道报了路径，复验中）`);
+  for (const line of attempt.attempts ?? []) {
+    console.log(`  · ${line}`);
+  }
+  if (attempt.path) {
+    console.log(`（${attempt.channel} 通道报了路径，复验中）`);
+  }
   const python = findPython();
   if (python && attempt.channel) {
     notes.push(`Python 由 ${attempt.channel} 通道当场装上`);
@@ -238,12 +234,12 @@ export function pythonOnly() {
     python = installAndReverify();
   }
   if (python) {
-    console.log(
-      `python : ${python.path ?? python.command} ${python.version}`.trim(),
-    );
+    console.log(`python : ${python.path ?? python.command} ${python.version}`.trim());
     return 0;
   }
-  for (const line of pythonForensics()) console.log(line);
+  for (const line of pythonForensics()) {
+    console.log(line);
+  }
   console.error(
     "\n这一档要用的解释器不在：假 comfy-cli 是一个 Python 包，主链路的两条 " +
       "@critical 用例会各报一遍「执行器收口失败」，而报错不指向这一行。" +
@@ -310,7 +306,9 @@ export function cargoForensics({
        * 拿宿主的语义去比会把 Windows 那一格读成两个候选 —— 而那个结论只在 Windows 上
        * 才成立，这正是「在错误的平台上判出一条看起来像真的读数」。 */
       const key = platform === "win32" ? candidate.toLowerCase() : candidate;
-      if (seen.has(key) || !isFile(candidate)) continue;
+      if (seen.has(key) || !isFile(candidate)) {
+        continue;
+      }
       seen.add(key);
       hits.push(candidate);
     }
@@ -348,7 +346,9 @@ export function rustOnly() {
     /* 「没装」与「这个执行账号看不见」在那一句里逐字同形（#2549 的现场：服务账号
      * 的 PATH 上没有 `G:\.cargo\bin`，而同一份脚本在开发者会话里是绿的）⇒ 先把
      * 这一格**看见了什么**摆出来，再去说下一动作那一句红话。 */
-    for (const line of cargoForensics()) console.log(line);
+    for (const line of cargoForensics()) {
+      console.log(line);
+    }
     console.error(
       "\n打桌包那一档要有 cargo（`pnpm tauri build` 的编译段就是它）。这一跑不装任何东西：" +
         "壳工具链不是 pnpm 依赖，装它走 rustup，而它落在哪个账号的 PATH 上，" +
@@ -357,17 +357,19 @@ export function rustOnly() {
     return 1;
   }
   const rustc = run("rustc", ["--version"]);
-  console.log(
-    rustc.out || "(rustc 不可用 —— cargo 在而 rustc 不在，工具链是残缺的)",
-  );
+  console.log(rustc.out || "(rustc 不可用 —— cargo 在而 rustc 不在，工具链是残缺的)");
   return rustc.ok ? 0 : 1;
 }
 
 export function main() {
   /* 只答 Python 那一格（`.cnb.yml` 里 E2E 之前那一步用它）。 */
-  if (process.argv.includes("--python-only")) return pythonOnly();
+  if (process.argv.includes("--python-only")) {
+    return pythonOnly();
+  }
   /* 只答「打桌面成品包那一档要用的 Rust 工具链在不在」（ISSUE #2503）。 */
-  if (process.argv.includes("--rust-only")) return rustOnly();
+  if (process.argv.includes("--rust-only")) {
+    return rustOnly();
+  }
   /* 只答「Playwright 要用的浏览器在不在」（同一条链上更后面的那一格，见下）。 */
   if (process.argv.includes("--playwright-only")) {
     /* 两件注入面是本文件本来就有的判据与起进程那一步 —— 那份模块自己不 import
@@ -394,7 +396,9 @@ export function main() {
   section("git");
   const git = run("git", ["-v"]);
   console.log(git.out || "(git 不可用)");
-  if (!git.ok) problems.push("git 不可用 —— 它是自托管机的基本依赖");
+  if (!git.ok) {
+    problems.push("git 不可用 —— 它是自托管机的基本依赖");
+  }
 
   section("node");
   const node = run("node", ["-v"]);
@@ -403,9 +407,7 @@ export function main() {
   if (!node.ok || !v) {
     problems.push("node 不可用");
   } else if (!nodeAllowed(v)) {
-    problems.push(
-      `node ${node.out} 不在 engines.node 范围内（^22.22.2 || ^24.15.0 || >=26.0.0）`,
-    );
+    problems.push(`node ${node.out} 不在 engines.node 范围内（^22.22.2 || ^24.15.0 || >=26.0.0）`);
   }
 
   section("pnpm");
@@ -418,8 +420,9 @@ export function main() {
     for (const line of pnpmForensics({
       tried: pnpm.tried,
       hostFound: pnpm.hostFound,
-    }))
+    })) {
       console.log(line);
+    }
     problems.push(
       "pnpm 不可用 —— 本仓门禁全走 pnpm（AGENTS 硬规则 1 禁 npm）。" +
         "探的是 PATH × 扩展名候选（含 .ps1 与同目录回退），不是裸起一个名字；" +
@@ -434,19 +437,17 @@ export function main() {
     notes: /** @type {string[]} */ (/** @type {unknown} */ (notes)),
   });
   if (!python) {
-    console.log(
-      "未发现可用解释器，按序尝试三条安装通道（winget → scoop → 官方 embed 包）",
-    );
+    console.log("未发现可用解释器，按序尝试三条安装通道（winget → scoop → 官方 embed 包）");
     python = installAndReverify();
   }
   if (python) {
-    console.log(
-      `python : ${python.path ?? python.command} ${python.version}`.trim(),
-    );
+    console.log(`python : ${python.path ?? python.command} ${python.version}`.trim());
   } else {
     /* 判定「真没装」之前，先把**这个执行账号看见了什么**摆出来 —— 这一跑就是取证现场。
      * 「装过但账号看不见」与「真的没装」在日志里逐字同形，处置却相反。 */
-    for (const line of pythonForensics()) console.log(line);
+    for (const line of pythonForensics()) {
+      console.log(line);
+    }
     problems.push(
       "宿主机上没有可用的 Python（试过 " +
         "python / py / python3" +
@@ -460,14 +461,16 @@ export function main() {
     );
   }
 
-  for (const note of notes) console.log(`（${note}）`);
+  for (const note of notes) {
+    console.log(`（${note}）`);
+  }
 
   if (problems.length > 0) {
     console.error("\n工具链自证未通过：");
-    for (const p of problems) console.error(`  ✗ ${p}`);
-    console.error(
-      "\n清单与背景见 docs/standards/13-提交与-code-review.md §13.5.3.5。",
-    );
+    for (const p of problems) {
+      console.error(`  ✗ ${p}`);
+    }
+    console.error("\n清单与背景见 docs/standards/13-提交与-code-review.md §13.5.3.5。");
     process.exit(1);
   }
   console.log("\n工具链自证通过 ✓");
@@ -517,9 +520,6 @@ export {
   runPlaywrightInstall,
 };
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }

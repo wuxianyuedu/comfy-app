@@ -64,7 +64,9 @@ export function useSettingsAppUpdate(): UseSettingsAppUpdate {
   const checkAppUpdate = useCallback(async () => {
     /* 重入判据走唯一出口（规范 16 §16.2.4.69）：读 `busy` 是同一次事件循环里
      * 判不出的（`setBusy` 是异步落状态的）。 */
-    if (!lock.tryEnter()) return;
+    if (!lock.tryEnter()) {
+      return;
+    }
     setBusy("checking");
     setMessage(null);
     const result = await checkAppUpdateClient();
@@ -77,7 +79,9 @@ export function useSettingsAppUpdate(): UseSettingsAppUpdate {
   }, [lock]);
 
   const installAppUpdate = useCallback(async () => {
-    if (!lock.tryEnter()) return;
+    if (!lock.tryEnter()) {
+      return;
+    }
     setBusy("installing");
     setMessage(null);
     setProgress({ downloaded: 0 });

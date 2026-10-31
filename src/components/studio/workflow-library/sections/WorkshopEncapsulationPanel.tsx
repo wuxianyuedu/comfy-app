@@ -158,7 +158,9 @@ export function WorkshopEncapsulationPanel({
   /* 表单交上来的就是**工坊对外值**本身（口子清单 = 该模式的契约口，见
    *`EncapsulationTestForm`），这里不再做第二道字段过滤。 */
   const runTest = (values: WorkshopExposedValues) => {
-    if (test.running || !status.ready) return;
+    if (test.running || !status.ready) {
+      return;
+    }
     test.run(values);
   };
 

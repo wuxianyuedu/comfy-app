@@ -31,7 +31,9 @@ const TRANSIENT_LOCK_CODES = ["SQLITE_BUSY", "SQLITE_LOCKED", "SQLITE_PROTOCOL"]
 const TRANSIENT_LOCK_PHRASES = ["database is locked", "database table is locked"];
 
 function fieldOf(value: unknown, key: "code" | "message" | "name"): string {
-  if (typeof value !== "object" || value === null) return "";
+  if (typeof value !== "object" || value === null) {
+    return "";
+  }
   const raw = /* SAFETY: 类型断言已复核 */ (value as Record<string, unknown>)[key];
   return typeof raw === "string" ? raw : "";
 }
@@ -43,9 +45,13 @@ function collect(error: unknown): { codes: Array<string>; messages: Array<string
   let node: unknown = error;
   for (let depth = 0; depth < CAUSE_CHAIN_LIMIT && node != null; depth++) {
     const code = fieldOf(node, "code");
-    if (code && !codes.includes(code)) codes.push(code);
+    if (code && !codes.includes(code)) {
+      codes.push(code);
+    }
     const message = fieldOf(node, "message");
-    if (message && !messages.includes(message)) messages.push(message);
+    if (message && !messages.includes(message)) {
+      messages.push(message);
+    }
     node =
       typeof node === "object"
         ? /* SAFETY: 类型断言已复核 */ (node as { cause?: unknown }).cause
@@ -76,7 +82,9 @@ export function describeSqliteWriteError(error: unknown, fallback = "SQLite 写�
   ]
     .filter(Boolean)
     .join(" / ");
-  if (!reason) return clampText(head, { maxLength: LOG_DETAIL_MAX, marker: "…" });
+  if (!reason) {
+    return clampText(head, { maxLength: LOG_DETAIL_MAX, marker: "…" });
+  }
   const reasonPart = `（SQLite: ${reason}）`;
   /* 原因自身超预算时先保原因（它更短也更要紧），head 让位到零也要留省略号。 */
   const headBudget = Math.max(0, LOG_DETAIL_MAX - reasonPart.length);
@@ -96,7 +104,9 @@ export function describeSqliteWriteError(error: unknown, fallback = "SQLite 写�
  */
 export function isSqliteFailure(error: unknown): boolean {
   const { codes, messages } = collect(error);
-  if (codes.length > 0) return true;
+  if (codes.length > 0) {
+    return true;
+  }
   return messages.some(
     (m) =>
       /^Failed query:/i.test(m) ||
@@ -132,7 +142,9 @@ export function sqliteAwareErrorText(
   action: string,
   fallback = "未知错误",
 ): string {
-  if (!isSqliteFailure(error)) return errorText(error, action, fallback);
+  if (!isSqliteFailure(error)) {
+    return errorText(error, action, fallback);
+  }
   const detail = describeSqliteWriteError(error, fallback);
   /* 描述里已经带上了「（SQLite: …）」就用它自己那份；否则补那句明说的尾巴。
    * 两种情况都不动 action 前缀 —— 同一块面板上「哪个动作失败了」永远要在。 */

@@ -21,9 +21,7 @@ export interface CharacterReviewController {
   reset: () => void;
 }
 
-export function useCharacterReview(
-  projectId: string,
-): CharacterReviewController {
+export function useCharacterReview(projectId: string): CharacterReviewController {
   const [verdict, setVerdict] = useState<ReviewVerdict | null>(null);
   const [error, setError] = useState("");
   const reviewBusy = useBusyAction();
@@ -36,7 +34,9 @@ export function useCharacterReview(
 
   const review = useCallback(
     async (characterId: string) => {
-      if (!projectId) return;
+      if (!projectId) {
+        return;
+      }
       guardRef.current.dispose();
       const guard = beginStaleRun();
       guardRef.current = guard;

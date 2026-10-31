@@ -66,7 +66,9 @@ function noProcess(extra: Partial<InstanceQuery> = {}): InstanceQuery {
  */
 export async function queryInstanceByPath(comfyuiPath: string): Promise<InstanceQuery> {
   const root = comfyuiPath?.trim();
-  if (!root) return noProcess();
+  if (!root) {
+    return noProcess();
+  }
 
   let unverified = false;
   const plan = resolveComfyLaunchPlan(root);
@@ -77,7 +79,9 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
     if (lookup.pid) {
       return withPort(lookup.pid, "process", "配置路径的实例");
     }
-    if (lookup.failed) unverified = true;
+    if (lookup.failed) {
+      unverified = true;
+    }
   }
 
   // ② 启动器形态：Comfy Desktop 由 standalone-env（uv）起，命令行里没有
@@ -117,8 +121,12 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
     const lookup = lookups[i];
     // `Promise.all` 与 `Array.map` 都保长度，理论上这两行取不到 undefined；
     // `noUncheckedIndexedAccess` 下用空值守卫取代 `!`，判据与窄化在同一行落地。
-    if (!candidate || !lookup) continue;
-    if (lookup.failed) unverified = true;
+    if (!candidate || !lookup) {
+      continue;
+    }
+    if (lookup.failed) {
+      unverified = true;
+    }
     if (lookup.pid) {
       return withPort(lookup.pid, candidate.source, candidate.via);
     }
@@ -155,6 +163,8 @@ export function baseForLocalPort(port: number | null): string | null {
   if (port == null || !Number.isInteger(port) || port <= 0 || port > 65535) {
     return null;
   }
-  if (process.env.COMFYUI_BASE) return null;
+  if (process.env.COMFYUI_BASE) {
+    return null;
+  }
   return comfyUiBaseUrl(port);
 }

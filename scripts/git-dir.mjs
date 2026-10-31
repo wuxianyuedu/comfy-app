@@ -83,7 +83,9 @@ export function resolveGitDir(cwd = process.cwd()) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   });
-  if (r.status !== 0) return null;
+  if (r.status !== 0) {
+    return null;
+  }
   const dir = String(r.stdout ?? "").trim();
   return dir || null;
 }
@@ -105,6 +107,8 @@ export function resolveGitDir(cwd = process.cwd()) {
  */
 export function gitScratchPath(root, name, resolve = resolveGitDir) {
   const gitDir = resolve(root);
-  if (!gitDir) return null;
+  if (!gitDir) {
+    return null;
+  }
   return path.join(gitDir, name);
 }

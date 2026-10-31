@@ -163,7 +163,9 @@ export function matchDocReading(changed) {
       actionOnly.push(entry);
       continue;
     }
-    if (files.some((f) => hits(entry, f))) matched.push(entry);
+    if (files.some((f) => hits(entry, f))) {
+      matched.push(entry);
+    }
   }
   return { matched, actionOnly };
 }

@@ -53,7 +53,9 @@ function withFailureLogLine(
   reason: string,
   now: number,
 ): Array<StepLogEntry> {
-  if (!reason) return prev;
+  if (!reason) {
+    return prev;
+  }
   const text = `✗ 生成失败：${reason}`;
   const last = prev[prev.length - 1];
   /* 末行已是同因错误（服务端自己写过 ✗ 生成失败）→ 不重复追加。 */
@@ -109,7 +111,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
 
   // 被查看任务一变化就重新从缓存播种。
   useEffect(() => {
-    if (!taskId) return;
+    if (!taskId) {
+      return;
+    }
     if (loadedForRef.current !== taskId) {
       loadedForRef.current = taskId;
       const cached = loadStepLogPanelState(taskId);
@@ -154,7 +158,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           const entry = /* SAFETY: 类型断言已复核 */ msg.entry as StepLogEntry;
           appendStepLog(tid, entry);
           setLogs((prev) => {
-            if (prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)) return prev;
+            if (prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)) {
+              return prev;
+            }
             return tailWindowAppend(prev, entry, MAX_LOGS_PER_TASK);
           });
         } else if (msg.type === "state") {
@@ -166,9 +172,13 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           if (typeof msg.status === "string" && msg.status) {
             const st = String(msg.status);
             const pct = Number(msg.progress ?? 0);
-            if (lastStatusRef.current !== st) lastStatusRef.current = st;
+            if (lastStatusRef.current !== st) {
+              lastStatusRef.current = st;
+            }
             setStatus(st);
-            if (Number.isFinite(pct)) setProgress(pct);
+            if (Number.isFinite(pct)) {
+              setProgress(pct);
+            }
             if (typeof msg.error === "string") {
               setError(msg.error);
               /* 失败原因同时补一条 error 日志行：横幅只在顶部显示，用户
@@ -196,7 +206,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
            * 因此这里改为：终态帧只作为**触发器**，去向 DB 要权威结论；DB
            * 读不到时才退回帧内信息。 */
           const fallback = msg.type === "error" ? "FAILED" : "SUCCEEDED";
-          if (typeof msg.error === "string") setError(msg.error);
+          if (typeof msg.error === "string") {
+            setError(msg.error);
+          }
           es.close();
           esRef.current = null;
           void (async () => {
@@ -205,7 +217,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             const finalStatus = snap.status;
             const finalError = snap.error;
             const st = finalStatus ?? fallback;
-            if (lastStatusRef.current !== st) lastStatusRef.current = st;
+            if (lastStatusRef.current !== st) {
+              lastStatusRef.current = st;
+            }
             setStatus(st);
             const reason = finalError ?? (typeof msg.error === "string" ? msg.error : null);
             if (reason && isTerminalFailureTaskStatus(st)) {
@@ -245,8 +259,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             typeof last.msg === "string" &&
             last.msg.includes("无新日志") &&
             now - last.t < 5000
-          )
+          ) {
             return prev;
+          }
           return tailWindowAppend(
             prev,
             {
@@ -264,7 +279,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
   );
 
   const clear = () => {
-    if (taskId) clearStepLogPanelState(taskId);
+    if (taskId) {
+      clearStepLogPanelState(taskId);
+    }
     setLogs([]);
     setValidationErrors(null);
     setStatus(null);

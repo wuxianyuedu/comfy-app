@@ -101,7 +101,9 @@ export async function upsertDraft(
   if (existing) {
     // update 分支：只改内容列（id / 时间戳不动），Partial 即可。
     const patch = draftToRow(draft);
-    if (userId !== null) patch.userId = userId;
+    if (userId !== null) {
+      patch.userId = userId;
+    }
     await workshopDb.update(workshopDraft).set(patch).where(eq(workshopDraft.id, id));
     return;
   }

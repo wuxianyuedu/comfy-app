@@ -144,35 +144,57 @@ export function defaultEndpointPathForMode(mode: string): string {
 /** 模式的产物类别。 */
 export function outputKindForMode(mode: string): "image" | "video" | "audio" {
   const def = getWorkflowType(mode);
-  if (def?.category === "video") return "video";
-  if (def?.category === "audio") return "audio";
-  if (isVideoMode(mode)) return "video";
+  if (def?.category === "video") {
+    return "video";
+  }
+  if (def?.category === "audio") {
+    return "audio";
+  }
+  if (isVideoMode(mode)) {
+    return "video";
+  }
   return "image";
 }
 
 /** 归一化适配器数组（丢弃非法项：无模式 / 无字段映射）。 */
 export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: Array<RemoteModeAdapter> = [];
   const seen = new Set<string>();
   for (const item of raw) {
-    if (typeof item !== "object" || item === null) continue;
+    if (typeof item !== "object" || item === null) {
+      continue;
+    }
     const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
     const mode = upperToken(rec.mode);
-    if (!mode || seen.has(mode)) continue;
+    if (!mode || seen.has(mode)) {
+      continue;
+    }
     const inputs: Array<{ type: WorkshopInputType; field: string }> = [];
     if (Array.isArray(rec.inputs)) {
       for (const row of rec.inputs) {
-        if (typeof row !== "object" || row === null) continue;
+        if (typeof row !== "object" || row === null) {
+          continue;
+        }
         const r = /* SAFETY: 类型断言已复核 */ row as Record<string, unknown>;
-        if (!isWorkshopInputType(r.type)) continue;
+        if (!isWorkshopInputType(r.type)) {
+          continue;
+        }
         const field = typeof r.field === "string" ? r.field.trim() : "";
-        if (!field) continue;
-        if (inputs.some((i) => i.type === r.type)) continue;
+        if (!field) {
+          continue;
+        }
+        if (inputs.some((i) => i.type === r.type)) {
+          continue;
+        }
         inputs.push({ type: r.type, field });
       }
     }
-    if (inputs.length === 0) continue;
+    if (inputs.length === 0) {
+      continue;
+    }
     seen.add(mode);
     const endpointPath =
       typeof rec.endpointPath === "string" && rec.endpointPath.trim() !== ""
@@ -191,17 +213,25 @@ export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> 
 
 /** 从响应 JSON 里按点路径取产物字段（支持 a.b.0.c）；取不到返回 null。 */
 export function readFieldPath(payload: unknown, path: string): unknown {
-  if (!path) return null;
+  if (!path) {
+    return null;
+  }
   let cur: unknown = payload;
   for (const seg of path.split(".")) {
-    if (cur === null || cur === undefined) return null;
+    if (cur === null || cur === undefined) {
+      return null;
+    }
     if (Array.isArray(cur)) {
       const idx = Number(seg);
-      if (!Number.isInteger(idx) || idx < 0) return null;
+      if (!Number.isInteger(idx) || idx < 0) {
+        return null;
+      }
       cur = cur[idx];
       continue;
     }
-    if (typeof cur !== "object") return null;
+    if (typeof cur !== "object") {
+      return null;
+    }
     cur = /* SAFETY: 类型断言已复核 */ (cur as Record<string, unknown>)[seg];
   }
   return cur;
@@ -304,9 +334,15 @@ export function isCustomContractInputId(v: unknown): v is ModeContractInputId {
 }
 
 export function isModeContractInputId(v: unknown): v is ModeContractInputId {
-  if (typeof v !== "string") return false;
-  if (isModeContractInputType(v)) return true;
-  if (/^reference-image-\d+$/.test(v)) return true;
+  if (typeof v !== "string") {
+    return false;
+  }
+  if (isModeContractInputType(v)) {
+    return true;
+  }
+  if (/^reference-image-\d+$/.test(v)) {
+    return true;
+  }
   return isCustomContractInputId(v);
 }
 
@@ -320,7 +356,9 @@ export function nextCustomInputId(
   let max = 0;
   for (const id of inputs) {
     const matched = /^custom-[a-z]+-(\d+)$/.exec(id);
-    if (matched) max = Math.max(max, Number(matched[1]));
+    if (matched) {
+      max = Math.max(max, Number(matched[1]));
+    }
   }
   return `custom-${kind}-${max + 1}`;
 }
@@ -336,9 +374,13 @@ export function moveContractInput(
   delta: number,
 ): Array<ModeContractInputId> {
   const from = inputs.indexOf(id);
-  if (from < 0) return [...inputs];
+  if (from < 0) {
+    return [...inputs];
+  }
   const to = from + delta;
-  if (to < 0 || to >= inputs.length) return [...inputs];
+  if (to < 0 || to >= inputs.length) {
+    return [...inputs];
+  }
   // filter 摘掉 `from` 位置那一项（保留其余原序），再按 `to` 插回。
   // 与「splice(from, 1) + splice(to, 0, moved)」语义等价，但不需要
   // `moved!` 去遮 noUncheckedIndexedAccess 下 splice 返回数组索引的 undefined。
@@ -375,7 +417,9 @@ export function nextReferenceImageId(
   let max = 0;
   for (const id of inputs) {
     const slot = id === "reference-image" ? 1 : referenceImageSlotIndex(id);
-    if (slot > max) max = slot;
+    if (slot > max) {
+      max = slot;
+    }
   }
   return max === 0 ? "reference-image" : `reference-image-${max + 1}`;
 }
@@ -525,14 +569,20 @@ export const ALL_CONTRACT_MODES: ReadonlyArray<string> = [
  *  历史教训：这里用 isModeContractInputType（基础 6 口）时，内置默认契约里带序号的
  *  参考图口会被**静默丢掉**，用户存完再读回来就少一口。 */
 export function parseModeContracts(raw: unknown): Array<ModeContract> {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: Array<ModeContract> = [];
   const seen = new Set<string>();
   for (const item of raw) {
-    if (typeof item !== "object" || item === null) continue;
+    if (typeof item !== "object" || item === null) {
+      continue;
+    }
     const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
     const mode = upperToken(rec.mode);
-    if (!mode || seen.has(mode)) continue;
+    if (!mode || seen.has(mode)) {
+      continue;
+    }
     /* 自定义口定义先解析：`inputs` 里的自定义口要靠它才能留下 —— 没有定义的口
      *  下游读不出名字与类型，列出来只会是一张无名卡片。 */
     const customInputs = parseCustomInputs(rec.customInputs);
@@ -542,7 +592,9 @@ export function parseModeContracts(raw: unknown): Array<ModeContract> {
         isModeContractInputId(i) &&
         (customInputKindOf(i) === null || customInputs.some((def) => def.id === i)),
     );
-    if (inputs.length === 0) continue;
+    if (inputs.length === 0) {
+      continue;
+    }
     /* 必备口：只收契约里真的存在的口（`required` 缺失 = 没配过 → 存 undefined，
      *  由 `requiredInputsFor` 回落内置默认）。 */
     const required = Array.isArray(rec.required)
@@ -573,16 +625,24 @@ export function parseModeContracts(raw: unknown): Array<ModeContract> {
  *  类型以 **id 里编的那个**为准：`kind` 字段只是落库后便于人读的冗余，被篡改时
  *  不能让它与 id 走散 —— 走散就等于控件形态与端口族各认一个类型。 */
 function parseCustomInputs(raw: unknown): Array<ModeContractCustomInput> {
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const out: Array<ModeContractCustomInput> = [];
   for (const item of raw) {
-    if (typeof item !== "object" || item === null) continue;
+    if (typeof item !== "object" || item === null) {
+      continue;
+    }
     const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
     const id = typeof rec.id === "string" ? rec.id : "";
     const label = typeof rec.label === "string" ? rec.label.trim() : "";
     const kind = customInputKindOf(id);
-    if (!kind || !label || !isCustomContractInputId(id)) continue;
-    if (out.some((def) => def.id === id)) continue;
+    if (!kind || !label || !isCustomContractInputId(id)) {
+      continue;
+    }
+    if (out.some((def) => def.id === id)) {
+      continue;
+    }
     out.push({ id, label, kind });
   }
   return out;
@@ -608,10 +668,18 @@ function contractControlFor(
   customInputs?: ReadonlyArray<ModeContractCustomInput>,
 ): ContractEntryDisplay["control"] {
   const custom = customInputs?.find((item) => item.id === id);
-  if (custom) return custom.kind;
-  if (id === "size") return "size";
-  if (id === "duration") return "duration";
-  if (id === "prompt" || id === "negative") return "text";
+  if (custom) {
+    return custom.kind;
+  }
+  if (id === "size") {
+    return "size";
+  }
+  if (id === "duration") {
+    return "duration";
+  }
+  if (id === "prompt" || id === "negative") {
+    return "text";
+  }
   return "image";
 }
 
@@ -624,7 +692,9 @@ export function modeContractEntries(
 ): Array<ContractEntryDisplay> {
   const code = upperToken(mode);
   const stored = storedContracts?.find((c) => c.mode === code);
-  if (stored) return contractToStatusEntries(stored);
+  if (stored) {
+    return contractToStatusEntries(stored);
+  }
   return exposedParamsForMode(mode).map((def) => ({
     id: def.id,
     label: def.label,
@@ -693,7 +763,9 @@ export function adapterInputsFromContract(
     // 带序号的参考图口 (`reference-image-${n}`) 与自定义口 (`custom-${k}-${n}`)
     // 由本地工作流侧连线声明落点，不进这张表；判据用 isModeContractInputType
     // 精确挑出「字面量预制口」这一族。
-    if (!isModeContractInputType(id)) continue;
+    if (!isModeContractInputType(id)) {
+      continue;
+    }
     out.push(...CONTRACT_INPUT_TO_ADAPTER[id]);
   }
   return out;

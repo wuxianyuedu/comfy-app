@@ -31,8 +31,7 @@
 const fs = require("node:fs");
 
 /** tsc 的一行报错：路径（可能带引号）+ (行,列) + error TS#### + 消息。 */
-const ERROR_LINE =
-  /(?:^|[\s(])("([^"]+)"|([^\s(]+))\((\d+),(\d+)\):\s+error\s+TS(\d+)/g;
+const ERROR_LINE = /(?:^|[\s(])("([^"]+)"|([^\s(]+))\((\d+),(\d+)\):\s+error\s+TS(\d+)/g;
 
 /** 归一化路径分隔符：tsc 在 Windows 上给反斜杠，日志里也可能出现绝对路径。 */
 function toPosix(p) {
@@ -67,7 +66,9 @@ function classifyTscErrors(text) {
   for (const m of String(text).matchAll(ERROR_LINE)) {
     total += 1;
     const file = m[3] ?? m[2] ?? "";
-    if (file) files.push(file);
+    if (file) {
+      files.push(file);
+    }
   }
   const artifact = files.filter(isArtifact);
   return {
@@ -75,8 +76,7 @@ function classifyTscErrors(text) {
     files,
     artifactFiles: artifact,
     codeFiles: files.filter((f) => !isArtifact(f)),
-    artifactOnly:
-      total > 0 && files.length > 0 && artifact.length === files.length,
+    artifactOnly: total > 0 && files.length > 0 && artifact.length === files.length,
   };
 }
 
@@ -142,19 +142,20 @@ function main() {
   const fileIdx = argv.indexOf("--file");
   let text;
   try {
-    text = fs.readFileSync(
-      fileIdx >= 0 && argv[fileIdx + 1] ? argv[fileIdx + 1] : 0,
-      "utf8",
-    );
+    text = fs.readFileSync(fileIdx >= 0 && argv[fileIdx + 1] ? argv[fileIdx + 1] : 0, "utf8");
   } catch {
     /* 读不到就安静退出：本脚本永远是附属信息，不该制造第二种失败形态。 */
     return 0;
   }
   const verdict = classifyTscErrors(text);
-  if (verdict.artifactOnly) process.stdout.write(buildHint(verdict) + "\n");
+  if (verdict.artifactOnly) {
+    process.stdout.write(buildHint(verdict) + "\n");
+  }
   return 0;
 }
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}
 
 module.exports = { classifyTscErrors, buildHint, isArtifact };

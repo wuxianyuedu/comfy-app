@@ -185,7 +185,9 @@ describe("formatReadout：三档措辞各自代表不同的事实", () => {
     // 族那一行是「两空格 + 族名 + 空白 + 结论」；探针行是四空格，别混进来。
     const groupLines = lines.filter((l) => /^ {2}\S+\s{2,}/.test(l));
     expect(groupLines.length).toBeGreaterThan(4);
-    for (const line of groupLines) expect(line).toContain("获授权");
+    for (const line of groupLines) {
+      expect(line).toContain("获授权");
+    }
     expect(lines.filter((l) => l.includes("→ 缺 ")).length).toBe(0);
   });
 

@@ -106,7 +106,9 @@ describe("useSectionScrollSpy", () => {
 
     /* 挂 `ref` 回调（真实调用处是 React 的 `ref` 属性，这里手动调）。 */
     act(() => {
-      for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
+      for (const id of IDS) {
+        result.current.registerSection(id)(nodes.get(id)!);
+      }
     });
 
     const observer = FakeIntersectionObserver.last!;
@@ -146,7 +148,9 @@ describe("useSectionScrollSpy", () => {
       }),
     );
     act(() => {
-      for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
+      for (const id of IDS) {
+        result.current.registerSection(id)(nodes.get(id)!);
+      }
     });
 
     act(() => {
@@ -174,7 +178,9 @@ describe("useSectionScrollSpy", () => {
       }),
     );
     act(() => {
-      for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
+      for (const id of IDS) {
+        result.current.registerSection(id)(nodes.get(id)!);
+      }
     });
 
     act(() => {
@@ -201,7 +207,9 @@ describe("useSectionScrollSpy", () => {
       }),
     );
     act(() => {
-      for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
+      for (const id of IDS) {
+        result.current.registerSection(id)(nodes.get(id)!);
+      }
     });
 
     act(() => {

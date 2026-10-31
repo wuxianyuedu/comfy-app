@@ -54,7 +54,9 @@ function fake(opts: {
     if (args[0] === "issues" && args[1] === "get-issue") {
       const number = args[args.indexOf("--number") + 1] ?? "";
       const body = opts.bodies?.[number];
-      if (body === undefined) return ok("不是 JSON");
+      if (body === undefined) {
+        return ok("不是 JSON");
+      }
       return ok(json({ body }));
     }
     if (args[0] === "pulls" && args[1] === "list-pulls") {

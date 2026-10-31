@@ -66,7 +66,9 @@ export function RequiredChips({
 }) {
   const live = pins.filter((pin): pin is EnrichedWidget => !!pin);
   const showAny = !!onRequiredChange || (!!onVisibilityChange && !!visibilityMode);
-  if (!showAny || live.length === 0) return null;
+  if (!showAny || live.length === 0) {
+    return null;
+  }
   return (
     <div className="flex flex-wrap items-center justify-end gap-1 pt-1">
       {live.map((pin) => {

@@ -13,7 +13,9 @@
  * @returns {string}
  */
 export function shortVersion(v) {
-  if (!v) return "(无)";
+  if (!v) {
+    return "(无)";
+  }
   const m = /^([^\s(]+)/.exec(v);
   const [, head = v] = m ?? [];
   return head;
@@ -36,7 +38,9 @@ function entryLabel(key) {
  */
 function cap(list, max, render) {
   const shown = list.slice(0, max).map(render);
-  if (list.length > max) shown.push(`  ... 另有 ${list.length - max} 项，见上方完整输出/日志`);
+  if (list.length > max) {
+    shown.push(`  ... 另有 ${list.length - max} 项，见上方完整输出/日志`);
+  }
   return shown;
 }
 
@@ -83,16 +87,24 @@ export function renderLockDiff(diff, opts = {}) {
     ["overrides（版本强制覆盖）", diff.overrides],
   ];
   for (const [label, d] of flatSections) {
-    for (const it of d.added) lines.push(`  [配置] ${label} 新增: ${it.key} = ${it.value}`);
-    for (const it of d.removed) lines.push(`  [配置] ${label} 删除: ${it.key}（原 ${it.value}）`);
-    for (const it of d.changed) lines.push(`  [配置] ${label} 变更: ${it.key}: ${it.from} -> ${it.to}`);
+    for (const it of d.added) {
+      lines.push(`  [配置] ${label} 新增: ${it.key} = ${it.value}`);
+    }
+    for (const it of d.removed) {
+      lines.push(`  [配置] ${label} 删除: ${it.key}（原 ${it.value}）`);
+    }
+    for (const it of d.changed) {
+      lines.push(`  [配置] ${label} 变更: ${it.key}: ${it.from} -> ${it.to}`);
+    }
   }
 
   /* 键与值一起取（`Object.entries`）：`diff.importers[importer]` 那种按下标取，
    * 在 `noUncheckedIndexedAccess` 之下每次都「可能 undefined」，而这里明明是从
    * `Object.keys` 拿到的键 —— 那是类型读不出来的事实，换成 entries 就是同一段代码、
    * 不需要造一条不可能的兜底分支。 */
-  if (Object.keys(diff.importers).length) lines.push("  [直接依赖]");
+  if (Object.keys(diff.importers).length) {
+    lines.push("  [直接依赖]");
+  }
   for (const [importer, groups] of Object.entries(diff.importers)) {
     for (const [group, g] of Object.entries(groups)) {
       const label = GROUP_LABELS[group] || group;
@@ -103,20 +115,27 @@ export function renderLockDiff(diff, opts = {}) {
        * 可选 —— 这里按类型走 `?.`，落不到的那一格退成 `"*"` / `(无)`，与现行为同形
        * （原来那两句 `it.value.specifier` 在这一格真为 undefined 时是抛 TypeError，
        * 而它构造上不可达）。 */
-      for (const it of g.added)
+      for (const it of g.added) {
         rows.push(
           `+ ${it.name}  ${it.value?.specifier || "*"} -> ${shortVersion(it.value?.version)}`,
         );
-      for (const it of g.removed)
+      }
+      for (const it of g.removed) {
         rows.push(
           `- ${it.name}  ${it.value?.specifier || "*"} -> ${shortVersion(it.value?.version)}`,
         );
+      }
       for (const it of g.changed) {
-        const spec = it.fromSpecifier === it.specifier ? it.specifier : `${it.fromSpecifier} -> ${it.specifier}`;
+        const spec =
+          it.fromSpecifier === it.specifier
+            ? it.specifier
+            : `${it.fromSpecifier} -> ${it.specifier}`;
         rows.push(`~ ${it.name}  ${spec}：${shortVersion(it.from)} -> ${shortVersion(it.to)}`);
       }
       lines.push(`    ${label}（${importer}）共 ${rows.length} 项变化:`);
-      for (const r of cap(rows, max, (x) => x)) lines.push(`      ${r}`);
+      for (const r of cap(rows, max, (x) => x)) {
+        lines.push(`      ${r}`);
+      }
     }
   }
 
@@ -129,17 +148,23 @@ export function renderLockDiff(diff, opts = {}) {
     ["解析结果 snapshots", diff.snapshots],
   ];
   for (const [label, d] of entrySections) {
-    if (!d.added.length && !d.removed.length) continue;
+    if (!d.added.length && !d.removed.length) {
+      continue;
+    }
     lines.push(`  [${label}] 新增 ${d.added.length} 项 / 删除 ${d.removed.length} 项`);
-    for (const k of cap(d.added, max, (x) => `+ ${entryLabel(x)}`)) lines.push(`      ${k}`);
-    for (const k of cap(d.removed, max, (x) => `- ${entryLabel(x)}`)) lines.push(`      ${k}`);
+    for (const k of cap(d.added, max, (x) => `+ ${entryLabel(x)}`)) {
+      lines.push(`      ${k}`);
+    }
+    for (const k of cap(d.removed, max, (x) => `- ${entryLabel(x)}`)) {
+      lines.push(`      ${k}`);
+    }
   }
 
   const dup = [...(diff.duplicates?.old || []), ...(diff.duplicates?.new || [])];
   if (dup.length) {
     lines.push(
       `  [注意] lockfile 里出现重复段落：${[...new Set(dup)].join(" / ")} —— ` +
-        `常见于合并冲突或 install 被中断，建议删除 lockfile 后重新 pnpm install 生成。`
+        `常见于合并冲突或 install 被中断，建议删除 lockfile 后重新 pnpm install 生成。`,
     );
   }
 
@@ -154,7 +179,9 @@ export function renderLockDiff(diff, opts = {}) {
  */
 export function renderDriftReport(diff, opts = {}) {
   const lines = [];
-  lines.push("依赖与 lockfile 不一致，差异如下（仓库 pnpm-lock.yaml 与最近一次安装时的 lockfile 对比）：");
+  lines.push(
+    "依赖与 lockfile 不一致，差异如下（仓库 pnpm-lock.yaml 与最近一次安装时的 lockfile 对比）：",
+  );
   lines.push("");
   const body = renderLockDiff(diff, opts);
   if (!body.length) {

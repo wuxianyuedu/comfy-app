@@ -45,7 +45,9 @@ export function checkRateLimit(key: string, max = 20, windowMs = 10_000): boolea
   if (buckets.size > MAX_BUCKETS) {
     for (const [k, v] of buckets) {
       v.timestamps = v.timestamps.filter((timestamp) => now - timestamp < windowMs);
-      if (v.timestamps.length === 0) buckets.delete(k);
+      if (v.timestamps.length === 0) {
+        buckets.delete(k);
+      }
     }
   }
 

@@ -14,7 +14,6 @@
 /* 引擎 helper 按本片实际用量解构（core no-unused-vars 守着）；跨片搬规则时同步增删。 */
 const { stripCommentsCached, countNonContainment } = require("./ui-primitives-engine.cjs");
 
-
 module.exports = {
   P38: {
     label:
@@ -22,7 +21,9 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过。 */
-      if (/use-element-box/.test(t2)) return 0;
+      if (/use-element-box/.test(t2)) {
+        return 0;
+      }
       let hits = 0;
       /* ① 两个 rect 相减 / 相加（面板内偏移、相对定位）。 */
       const rectDiff =
@@ -32,15 +33,12 @@ module.exports = {
       const lineHeight = /scrollHeight\s*[/]|[)]\s*[/]\s*\w*[Ll]ines?\.length/g;
       hits += (t2.match(lineHeight) || []).length;
       /* ③ 用 `clientHeight` / `clientWidth` 算落点（除以 2、加偏移）。 */
-      const viewportMath =
-        /client(?:Height|Width)\s*[/]\s*2\b|client(?:Height|Width)\s*[+-]\s*\w/g;
+      const viewportMath = /client(?:Height|Width)\s*[/]\s*2\b|client(?:Height|Width)\s*[+-]\s*\w/g;
       hits += (t2.match(viewportMath) || []).length;
       /* ④ 自己接线量测：`new ResizeObserver(` **且**手写等值判断落状态。 */
       if (
         /new\s+ResizeObserver\s*\(/.test(t2) &&
-        /prev\.(?:width|height|client\w+|scroll\w+)\s*===\s*(?:next|rect|box|el|element)\b/.test(
-          t2,
-        )
+        /prev\.(?:width|height|client\w+|scroll\w+)\s*===\s*(?:next|rect|box|el|element)\b/.test(t2)
       ) {
         hits += 1;
       }
@@ -70,20 +68,18 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过。 */
-      if (/from\s+"~\/lib\/next-frame"/.test(t2)) return 0;
+      if (/from\s+"~\/lib\/next-frame"/.test(t2)) {
+        return 0;
+      }
       let hits = 0;
-      const re =
-        /(?:window\.)?requestAnimationFrame\s*\(\s*\(?\s*(\w+)?\s*\)?\s*=>/g;
+      const re = /(?:window\.)?requestAnimationFrame\s*\(\s*\(?\s*(\w+)?\s*\)?\s*=>/g;
       let m;
       while ((m = re.exec(t2)) !== null) {
         const param = m[1];
         /* 帧循环：回调体内再次 rAF（`step` / `tick` 这类自递归采样器）。
          * 取回调体前 900 字符，够跨过循环里的收敛判断与视口下发。 */
         const body = t2.slice(m.index, m.index + 900);
-        if (
-          param &&
-          new RegExp(`requestAnimationFrame\\s*\\(\\s*${param}\\b`).test(body)
-        ) {
+        if (param && new RegExp(`requestAnimationFrame\\s*\\(\\s*${param}\\b`).test(body)) {
           continue;
         }
         /* 双 rAF（`rAF(() => rAF(cb))`）同样计入 —— 它是同一件事的另一档。 */
@@ -122,7 +118,9 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过；出口自身的实现文件也跳过。 */
-      if (/use-copy-feedback/.test(t2)) return 0;
+      if (/use-copy-feedback/.test(t2)) {
+        return 0;
+      }
       if (t2.includes("~/lib/browser-io")) {
         /* 允许「只是 import 了 copyText 但没调」的情形 —— 计数靠下面的调用。 */
       }
@@ -131,12 +129,10 @@ module.exports = {
       const re = /\bcopy(?:Text|LogText)\s*\(/g;
       let m;
       while ((m = re.exec(t2)) !== null) {
-        const line = t2.slice(
-          Math.max(0, t2.lastIndexOf("\n", m.index)),
-          m.index,
-        );
-        if (line.includes("import") || line.includes("export function"))
+        const line = t2.slice(Math.max(0, t2.lastIndexOf("\n", m.index)), m.index);
+        if (line.includes("import") || line.includes("export function")) {
           continue;
+        }
         hits += 1;
       }
       return hits;
@@ -169,15 +165,14 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 出口自身的实现文件跳过。 */
-      if (/server\/lib\/request-body/.test(t2)) return 0;
+      if (/server\/lib\/request-body/.test(t2)) {
+        return 0;
+      }
       let hits = 0;
       /* ① 自己定义 `isRecord`（9 处里 8 处是逐字相同的实现）。 */
       hits += (t2.match(/function\s+isRecord\s*\(/g) || []).length;
       /* ② 入参收窄三步：`req.json()` + 400 信封。 */
-      if (
-        /(?:req|request)\.json\s*\(/.test(t2) &&
-        /NextResponse\.json\(\s*\{[^}]*error/.test(t2)
-      ) {
+      if (/(?:req|request)\.json\s*\(/.test(t2) && /NextResponse\.json\(\s*\{[^}]*error/.test(t2)) {
         hits += 1;
       }
       return hits;
@@ -225,7 +220,9 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（与 P39/P40 同款：换用出口即自动合规）。 */
-      if (/\berrorText\s*\(/.test(t2)) return 0;
+      if (/\berrorText\s*\(/.test(t2)) {
+        return 0;
+      }
       let hits = 0;
       /* ① 「…：」紧跟 ② 错误取值动作。冒号可为全角或半角（+ 空格）。 */
       const re = /[：:]\s*\+?\s*\$?\{?/g;
@@ -238,8 +235,9 @@ module.exports = {
          * 与「读取不出来」这类）。`无法读取文件：` 是这条账里的真实落点，
          * 只认「失败」会把那一处整个漏掉 —— 而漏掉的那一半恰恰是最常见的一档。 */
         const before = t2.slice(Math.max(0, m.index - 40), m.index);
-        if (!/(失败|异常|错误|出错|无法|不能|未找到|不存在)/.test(before))
+        if (!/(失败|异常|错误|出错|无法|不能|未找到|不存在)/.test(before)) {
           continue;
+        }
         const after = t2.slice(m.index, m.index + 60);
         if (
           /errorMessage\s*\(/.test(after) ||
@@ -275,7 +273,9 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/\bcopyFailureText\s*\(/.test(t2)) return 0;
+      if (/\bcopyFailureText\s*\(/.test(t2)) {
+        return 0;
+      }
       return (t2.match(/剪贴板不可用/g) || []).length;
     },
   },
@@ -297,12 +297,13 @@ module.exports = {
    * 出口：`~/lib/text-clamp` 的 `clampText`（上限走具名常量，见该模块）。
    */
   P44: {
-    label:
-      "视图 / 逻辑 / 服务端里自写文本截断（应使用 ~/lib/text-clamp 的 clampText）",
+    label: "视图 / 逻辑 / 服务端里自写文本截断（应使用 ~/lib/text-clamp 的 clampText）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/\bclampText\s*\(/.test(t2)) return 0;
+      if (/\bclampText\s*\(/.test(t2)) {
+        return 0;
+      }
       return (
         t2.match(
           /\.(?:slice|substring)\(0, *(?:2[4-9]|[3-9][0-9]|[0-9]{3,})\)[^;\n]{0,40}(?:…|truncated)/g,
@@ -326,11 +327,12 @@ module.exports = {
    * 出口：`~/lib/retry-policy` 的 `backoffDelayMs` + 具名策略。
    */
   P45: {
-    label:
-      "视图 / 逻辑 / 服务端里自写指数退避算术（应使用 ~/lib/retry-policy 的 backoffDelayMs）",
+    label: "视图 / 逻辑 / 服务端里自写指数退避算术（应使用 ~/lib/retry-policy 的 backoffDelayMs）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      if (/\bbackoffDelayMs\s*\(/.test(t2)) return 0;
+      if (/\bbackoffDelayMs\s*\(/.test(t2)) {
+        return 0;
+      }
       return (t2.match(/\* *2 *\*\*|Math\.pow\( *2 *,/g) || []).length;
     },
   },
@@ -348,12 +350,12 @@ module.exports = {
    * `formatLocalStamp` / `formatCompactStamp`。
    */
   P46: {
-    label:
-      "视图 / 逻辑 / 服务端里手拼日期串（应使用 ~/lib/time-format 的 formatDate 家族）",
+    label: "视图 / 逻辑 / 服务端里手拼日期串（应使用 ~/lib/time-format 的 formatDate 家族）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      if (/\bformat(?:Date|ShortDate|LocalStamp|CompactStamp)\s*\(/.test(t2))
+      if (/\bformat(?:Date|ShortDate|LocalStamp|CompactStamp)\s*\(/.test(t2)) {
         return 0;
+      }
       return (t2.match(/getFullYear\(\)\}-/g) || []).length;
     },
   },
@@ -371,23 +373,16 @@ module.exports = {
    * `extOfPath` / `stemOfPath` / `contentTypeForPath`。
    */
   P47: {
-    label:
-      "视图 / 逻辑 / 服务端里自写「扩展名 ⇄ MIME」映射表（应使用 ~/lib/media/mime-ext）",
+    label: "视图 / 逻辑 / 服务端里自写「扩展名 ⇄ MIME」映射表（应使用 ~/lib/media/mime-ext）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (
-        /\b(?:mimeForExt|extForMime|extOfPath|stemOfPath|contentTypeForPath)\s*\(/.test(
-          t2,
-        )
-      )
+      if (/\b(?:mimeForExt|extForMime|extOfPath|stemOfPath|contentTypeForPath)\s*\(/.test(t2)) {
         return 0;
-      const mimeToExt =
-        t2.match(/"\w[\w.+-]*\/[-\w.]+"\s*:\s*"[a-z0-9]{2,5}"/g) || [];
+      }
+      const mimeToExt = t2.match(/"\w[\w.+-]*\/[-\w.]+"\s*:\s*"[a-z0-9]{2,5}"/g) || [];
       const extToMime =
-        t2.match(
-          /"\.?[a-z0-9]{2,5}"\s*:\s*"(?:image|video|audio)\/[-\w.+]+/g,
-        ) || [];
+        t2.match(/"\.?[a-z0-9]{2,5}"\s*:\s*"(?:image|video|audio)\/[-\w.+]+/g) || [];
       return mimeToExt.length + extToMime.length;
     },
   },
@@ -419,7 +414,9 @@ module.exports = {
       "视图 / 逻辑 / 服务端里自写「unknown 当宽松对象视图」（应使用 ~/lib/is-record 的 isRecord / asRecord）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      if (/from "~\/lib\/is-record"/.test(t2)) return 0;
+      if (/from "~\/lib\/is-record"/.test(t2)) {
+        return 0;
+      }
       /* 锚**转成视图**的形态：`typeof X === "object" && X !== null` 之后
        * 紧跟 `as Record<string, unknown>`。**不**数「收窄后取一个字段」
        * （`typeof e === "object" && e !== null && "message" in e`）与
@@ -450,7 +447,9 @@ module.exports = {
       "视图 / 逻辑 / 服务端里自写文件名安全化（应使用 ~/lib/safe-name 的 safeFileNameSegment / safeDisplayName）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      if (/\b(?:safeFileNameSegment|safeDisplayName)\s*\(/.test(t2)) return 0;
+      if (/\b(?:safeFileNameSegment|safeDisplayName)\s*\(/.test(t2)) {
+        return 0;
+      }
       return (t2.match(/replace\(\/\[\^[^\]]*\]\+?\/g, *"_"\)/g) || []).length;
     },
   },
@@ -470,12 +469,13 @@ module.exports = {
    * `alphaText`。
    */
   P50: {
-    label:
-      "视图 / 逻辑 / 服务端里自写数字精度格式化（应使用 ~/lib/number-format）",
+    label: "视图 / 逻辑 / 服务端里自写数字精度格式化（应使用 ~/lib/number-format）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/lib\/number-format"/.test(t2)) return 0;
+      if (/from "~\/lib\/number-format"/.test(t2)) {
+        return 0;
+      }
       return (t2.match(/\.toFixed\(/g) || []).length;
     },
   },
@@ -497,17 +497,15 @@ module.exports = {
    * `union` / `compareText`。
    */
   P51: {
-    label:
-      "视图 / 逻辑 / 服务端里自写去重合并 / 区域设置排序（应使用 ~/lib/ordered-set）",
+    label: "视图 / 逻辑 / 服务端里自写去重合并 / 区域设置排序（应使用 ~/lib/ordered-set）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/lib\/ordered-set"/.test(t2)) return 0;
-      return (
-        t2.match(
-          /\.sort\(\s*\(\s*\w+\s*,\s*\w+\s*\)\s*=>[^;\n]{0,80}localeCompare\(/g,
-        ) || []
-      ).length;
+      if (/from "~\/lib\/ordered-set"/.test(t2)) {
+        return 0;
+      }
+      return (t2.match(/\.sort\(\s*\(\s*\w+\s*,\s*\w+\s*\)\s*=>[^;\n]{0,80}localeCompare\(/g) || [])
+        .length;
     },
   },
 
@@ -541,12 +539,13 @@ module.exports = {
    * `base64PayloadOf` 七个（见规范 §16.2.4.56）。
    */
   P52: {
-    label:
-      "视图 / 逻辑 / 服务端里自拼或自切 data URL（应使用 ~/lib/media/data-url）",
+    label: "视图 / 逻辑 / 服务端里自拼或自切 data URL（应使用 ~/lib/media/data-url）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/lib\/media\/data-url"/.test(t2)) return 0;
+      if (/from "~\/lib\/media\/data-url"/.test(t2)) {
+        return 0;
+      }
       const writes = t2.match(/data:\$\{[^}]{0,40}\};base64,\$\{/g) || [];
       const cuts = t2.match(/indexOf\(","\)/g) || [];
       /* ③ 两个条件同时成立才计：`split(",")` 与 `data:` 前缀同现
@@ -601,11 +600,7 @@ module.exports = {
        *  那个 `key` 已经脱离了「事件对象」这个名字，机器判不出它是事件字段
        *  还是数据字段。与 P37「忙碌位」、P30「错误位」同款：
        *  按名字判的部分只判能判的那一半，剩下的一半由 Review 兜。 */
-      return (
-        t2.match(
-          /\b(?:e|ev|evt|event|[A-Za-z]+Event)\.key\s*[!=]==?\s*["'`]/g,
-        ) || []
-      ).length;
+      return (t2.match(/\b(?:e|ev|evt|event|[A-Za-z]+Event)\.key\s*[!=]==?\s*["'`]/g) || []).length;
     },
   },
 
@@ -647,12 +642,13 @@ module.exports = {
    * 出口：`~/lib/case-token` 的 `toKebabCase` / `toCamelCase`。
    */
   P55: {
-    label:
-      "自写驼峰 ⇄ kebab 换算（应使用 ~/lib/case-token 的 toKebabCase / toCamelCase）",
+    label: "自写驼峰 ⇄ kebab 换算（应使用 ~/lib/case-token 的 toKebabCase / toCamelCase）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/lib\/case-token"/.test(t2)) return 0;
+      if (/from "~\/lib\/case-token"/.test(t2)) {
+        return 0;
+      }
       return (t2.match(/replace\(\/\[A-Z\]\/g[^;\n]{0,60}\$\{/g) || []).length;
     },
   },
@@ -682,7 +678,9 @@ module.exports = {
       "视图 / 逻辑 / 服务端里手工把路径变成展示文本（应使用 ~/lib/path-display 的 toDisplayPath / lastSegments / normalizeSlashes）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      if (/from "~\/lib\/path-display"/.test(t2)) return 0;
+      if (/from "~\/lib\/path-display"/.test(t2)) {
+        return 0;
+      }
       /* `path.relative` 有**两种用途**：展示（本条账）与**包含判据**
        *（`const rel = path.relative(root, p); if (rel.startsWith("..") || …)`
        *  是判断「这个路径在不在 root 里」的标准写法 —— 那不是展示）。
@@ -696,10 +694,8 @@ module.exports = {
       const tail =
         (t2.match(/\.split\(\/\[[^\]\n]*\]\/\)\.pop\(\)/g) || []).length +
         (t2.match(/\.split\("\/"\)\.pop\(\)/g) || []).length;
-      const slashes = (t2.match(/\.replace\(\/\\\\\/g,\s*"\/"\)/g) || [])
-        .length;
-      const sepJoin = (t2.match(/\.split\(path\.sep\)\.join\("\/"\)/g) || [])
-        .length;
+      const slashes = (t2.match(/\.replace\(\/\\\\\/g,\s*"\/"\)/g) || []).length;
+      const sepJoin = (t2.match(/\.split\(path\.sep\)\.join\("\/"\)/g) || []).length;
       return relative + tail + slashes + sepJoin;
     },
   },
@@ -727,24 +723,19 @@ module.exports = {
       "自写「剔掉私有 prop 再透传」的剔除表（应使用 ~/lib/dom-props 的 OmitOwnProps / splitDomProps）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      if (/from "~\/lib\/dom-props"/.test(t2)) return 0;
+      if (/from "~\/lib\/dom-props"/.test(t2)) {
+        return 0;
+      }
       /* 形态：`Omit<` 的基类型是**底层元素 / 组件的属性集**，且第二个参数是
        * 字符串字面量键（`"a" | "b"` 或跨行的 `| "c"`）。 */
       const base =
         "(?:React\\.)?(?:ComponentProps|HTMLAttributes|InputHTMLAttributes|ImgHTMLAttributes|VideoHTMLAttributes|ButtonHTMLAttributes|AnchorHTMLAttributes|LabelHTMLAttributes|TextareaHTMLAttributes)|LucideProps|[A-Za-z]*Primitive\\.[A-Za-z.]+Props|typeof\\s+\\w+";
-      const oneLine = new RegExp(
-        "\\bOmit\\s*<\\s*(?:" + base + ')[^;]{0,200}?,\\s*"[^"]+"',
-        "g",
-      );
+      const oneLine = new RegExp("\\bOmit\\s*<\\s*(?:" + base + ')[^;]{0,200}?,\\s*"[^"]+"', "g");
       const multiLine = new RegExp(
-        "\\bOmit\\s*<[^;]{0,200}?(?:" +
-          base +
-          ')[^;]{0,300}?\\n\\s*\\|[^;]{0,200}?"[^"]+"',
+        "\\bOmit\\s*<[^;]{0,200}?(?:" + base + ')[^;]{0,300}?\\n\\s*\\|[^;]{0,200}?"[^"]+"',
         "g",
       );
-      return (
-        (t2.match(oneLine) || []).length + (t2.match(multiLine) || []).length
-      );
+      return (t2.match(oneLine) || []).length + (t2.match(multiLine) || []).length;
     },
   },
 
@@ -779,11 +770,15 @@ module.exports = {
       "自写「给异步结果加超时」的定时器样板（应使用 ~/lib/with-timeout 的 withTimeout / withTimeoutResult）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      if (/from "~\/lib\/with-timeout"/.test(t2)) return 0;
+      if (/from "~\/lib\/with-timeout"/.test(t2)) {
+        return 0;
+      }
       /* 「必须清掉」是本条账的一半：有 `setTimeout` 却没有 `clearTimeout` 的文件
        * 是**另一种**形态（该等一个窗口就等完，没有别的路径能先赢 ——
        * `external-open.detectFolderHelper` 就是这一种），不属于本条。 */
-      if (!/\bclearTimeout\s*\(/.test(t2)) return 0;
+      if (!/\bclearTimeout\s*\(/.test(t2)) {
+        return 0;
+      }
       const races = /\bsetTimeout\s*\(/.test(t2)
         ? (t2.match(/\bPromise\.race\s*\(/g) || []).length
         : 0;
@@ -795,19 +790,14 @@ module.exports = {
       /* `[\s\S]` 而非 `[^;]`：回调体里常有 `;`（`cp.kill("SIGKILL");` 后面
        * 才是 `resolve(…)`），用 `[^;]` 会把那一档**静默漏掉**（漏掉的又恰好是
        * 更完整的那个写法 —— 与 P13/P52「更差的写法也要数」同一课）。 */
-      const settles = (
-        t2.match(
-          /\bsettimeout\s*\([\s\S]{0,200}?\b(?:resolve|reject)\s*\(/gi,
-        ) || []
-      ).length;
+      const settles = (t2.match(/\bsettimeout\s*\([\s\S]{0,200}?\b(?:resolve|reject)\s*\(/gi) || [])
+        .length;
       /* ③ 定时器回调里调一个**本地的结算助手**（`finish(` / `settle(` / `done(`）——
        * `waitForDetachMediator` 就是这样写的：它把「这一轮结束」收成 `finish()`
        *（内部判重入 + resolve），定时器到点调它。只看 `resolve(` 会漏掉这一档。
        * 这几个名字在本仓库的语义是「本轮到此为止」。 */
       const settledByHelper = (
-        t2.match(
-          /\bsetTimeout\s*\([\s\S]{0,200}?\b(?:finish|settle|done)\s*\(/gi,
-        ) || []
+        t2.match(/\bsetTimeout\s*\([\s\S]{0,200}?\b(?:finish|settle|done)\s*\(/gi) || []
       ).length;
       return races + settles + settledByHelper;
     },

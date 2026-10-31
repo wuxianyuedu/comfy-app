@@ -98,7 +98,9 @@ export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropA
   const onCanvasDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       const raw = e.dataTransfer.getData(MEDIA_DRAG_MIME);
-      if (!raw) return; // 非本应用拖拽（如外部文件），忽略
+      if (!raw) {
+        return;
+      } // 非本应用拖拽（如外部文件），忽略
       e.preventDefault();
       let payload: MediaDropPayload;
       try {

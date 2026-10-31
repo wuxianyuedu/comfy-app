@@ -72,7 +72,9 @@ export function useGenerate({
    *  上合法地在跑）。 */
   const taskIdForReconcile = typeof d.taskId === "string" ? d.taskId : "";
   useEffect(() => {
-    if (d.status !== "running" || !taskIdForReconcile) return;
+    if (d.status !== "running" || !taskIdForReconcile) {
+      return;
+    }
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：节点卸载 / 换任务时，
      * 对账结论（patch）一律不落地。 */
     const guard = beginStaleRun();
@@ -81,7 +83,9 @@ export function useGenerate({
         const t = await vanillaApi.task.detail.query({
           id: taskIdForReconcile,
         });
-        if (!t?.status) return;
+        if (!t?.status) {
+          return;
+        }
         if (t.status === "RUNNING") {
           // 在另一个 runner 上合法地仍在运行 —— 节点保持原样。
           return;

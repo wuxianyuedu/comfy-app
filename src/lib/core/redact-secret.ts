@@ -45,7 +45,9 @@ const ENTROPY_MIN = 3.5;
 
 function shannonEntropy(value: string): number {
   const freq = new Map<string, number>();
-  for (const ch of value) freq.set(ch, (freq.get(ch) ?? 0) + 1);
+  for (const ch of value) {
+    freq.set(ch, (freq.get(ch) ?? 0) + 1);
+  }
   let bits = 0;
   for (const n of freq.values()) {
     const p = n / value.length;
@@ -56,12 +58,18 @@ function shannonEntropy(value: string): number {
 
 /** 这一小段文本是否「长得像密钥」。 */
 function isSecretShaped(text: string): boolean {
-  if (PEM_BLOCK_RE.test(text)) return true;
+  if (PEM_BLOCK_RE.test(text)) {
+    return true;
+  }
   PEM_BLOCK_RE.lastIndex = 0;
-  if (JWT_RE.test(text)) return true;
+  if (JWT_RE.test(text)) {
+    return true;
+  }
   JWT_RE.lastIndex = 0;
   for (const m of text.matchAll(HIGH_ENTROPY_CANDIDATE)) {
-    if (/[0-9]/.test(m[0]) && shannonEntropy(m[0]) >= ENTROPY_MIN) return true;
+    if (/[0-9]/.test(m[0]) && shannonEntropy(m[0]) >= ENTROPY_MIN) {
+      return true;
+    }
   }
   return false;
 }
@@ -79,9 +87,13 @@ export function redactSecretShaped(
   depth = 0,
   seen = new WeakSet<object>(),
 ): unknown {
-  if (depth > 6) return value;
+  if (depth > 6) {
+    return value;
+  }
   if (typeof value === "string") {
-    if (!isSecretShaped(value)) return value;
+    if (!isSecretShaped(value)) {
+      return value;
+    }
     return value
       .replace(PEM_BLOCK_RE, "[Redacted]")
       .replace(JWT_RE, "[Redacted]")
@@ -89,12 +101,18 @@ export function redactSecretShaped(
         /[0-9]/.test(m) && shannonEntropy(m) >= ENTROPY_MIN ? "[Redacted]" : m,
       );
   }
-  if (value === null || typeof value !== "object") return value;
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
   // Error（含其子类）：原样返回，保住 message / stack 的形状（pino 的
   // stdSerializers 也依赖它）。错误消息里即便真带密钥，也由值形状这一层
   // 在 message 字符串上就地擦除——但**不能**在这里改成普通对象。
-  if (value instanceof Error) return value;
-  if (seen.has(value)) return "[Circular]";
+  if (value instanceof Error) {
+    return value;
+  }
+  if (seen.has(value)) {
+    return "[Circular]";
+  }
   seen.add(value);
   if (Array.isArray(value)) {
     return value.map((v) => redactSecretShaped(v, depth + 1, seen));

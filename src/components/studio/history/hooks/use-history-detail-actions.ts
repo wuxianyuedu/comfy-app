@@ -26,8 +26,7 @@ function toastReport(toast: {
   success: (t: string, d?: string) => unknown;
   error: (t: string, d?: string) => unknown;
 }): ActionReport {
-  return (kind, detail) =>
-    kind === "ok" ? toast.success(detail) : toast.error(detail);
+  return (kind, detail) => (kind === "ok" ? toast.success(detail) : toast.error(detail));
 }
 
 /** comfyapp:// 协议未接管的引导状态：为 null 表示尚未发起过导航。 */
@@ -62,13 +61,9 @@ export interface HistoryDetailActionsDeps {
   fetchWorkflow: (id: string) => Promise<{ workflow?: unknown } | null>;
 }
 
-export function useHistoryDetailActions(
-  deps: HistoryDetailActionsDeps,
-): HistoryDetailActions {
+export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): HistoryDetailActions {
   const toast = useToast();
-  const [folderPopover, setFolderPopover] = useState<FolderPopover | null>(
-    null,
-  );
+  const [folderPopover, setFolderPopover] = useState<FolderPopover | null>(null);
   /* 两个忙碌位走唯一出口（规范 16 §16.2.4.71）：`downloading` 的复位此前
    * 写在动作之后，`runAsyncAction` 之外的任意一行抛错就永远停在「下载中」。 */
   const openFolderAction = useBusyAction();
@@ -99,9 +94,7 @@ export function useHistoryDetailActions(
             helperMissing: false,
           });
           const helper = detectFolderHelper(() =>
-            setFolderPopover((prev) =>
-              prev ? { ...prev, helperMissing: false } : prev,
-            ),
+            setFolderPopover((prev) => (prev ? { ...prev, helperMissing: false } : prev)),
           );
           window.location.href = result.comfyappUrl;
           const state = await helper.settle();
@@ -112,10 +105,7 @@ export function useHistoryDetailActions(
             });
           }
         } else if (result.error === "directory missing") {
-          toast.error(
-            "该任务尚未生成文件目录",
-            result.absolutePath ?? undefined,
-          );
+          toast.error("该任务尚未生成文件目录", result.absolutePath ?? undefined);
         } else {
           /* 服务端没给具体原因（`result.error` 是别的值 / 缺席）——
            * 出口的失败文案就是这一句。 */
@@ -141,12 +131,13 @@ export function useHistoryDetailActions(
   /* 路径复制走 toast 通道（这一族动作的既有表现层选择）。反馈形态是调用处
    * 的事，但**成败两条都要有出口**归出口管（规范 16 §16.2.4.43）。 */
   const copyPathFeedback = useCopyFeedback({
-    onSuccess: () =>
-      toast.success("路径已复制", "粘贴到资源管理器地址栏（Alt+D）即可跳转"),
+    onSuccess: () => toast.success("路径已复制", "粘贴到资源管理器地址栏（Alt+D）即可跳转"),
     onFailure: () => toast.error("复制失败", "请手动选择路径复制"),
   });
   const copyPath = useCallback(() => {
-    if (!folderPopover) return;
+    if (!folderPopover) {
+      return;
+    }
     copyPathFeedback(folderPopover.path);
   }, [folderPopover, copyPathFeedback]);
 
@@ -158,7 +149,9 @@ export function useHistoryDetailActions(
         runAsyncAction(
           async () => {
             const result = await deps.fetchWorkflow(taskId);
-            if (!result?.workflow) return false;
+            if (!result?.workflow) {
+              return false;
+            }
             downloadJson(result.workflow, "workflow.json");
             return true;
           },

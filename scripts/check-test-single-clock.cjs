@@ -61,11 +61,7 @@
  */
 const path = require("node:path");
 const { maskNonCode } = require("./check-test-concurrency.cjs");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -107,7 +103,11 @@ const g = (src) => new RegExp(src, "g");
 
 function lineOf(text, index) {
   let line = 1;
-  for (let i = 0; i < index; i++) if (text[i] === "\n") line++;
+  for (let i = 0; i < index; i++) {
+    if (text[i] === "\n") {
+      line++;
+    }
+  }
   return line;
 }
 
@@ -122,10 +122,13 @@ function matchParen(masked, openIndex) {
   let depth = 0;
   for (let i = openIndex; i < masked.length; i++) {
     const c = masked[i];
-    if (c === "(") depth += 1;
-    else if (c === ")") {
+    if (c === "(") {
+      depth += 1;
+    } else if (c === ")") {
       depth -= 1;
-      if (depth === 0) return i;
+      if (depth === 0) {
+        return i;
+      }
     }
   }
   return -1;
@@ -145,13 +148,19 @@ function testBodies(masked) {
   while ((m = re.exec(masked))) {
     const open = m.index + m[0].lastIndexOf("(");
     const first = matchParen(masked, open);
-    if (first < 0) continue;
+    if (first < 0) {
+      continue;
+    }
     let end = first;
     let after = first + 1;
-    while (after < masked.length && /\s/.test(masked[after])) after += 1;
+    while (after < masked.length && /\s/.test(masked[after])) {
+      after += 1;
+    }
     if (masked[after] === "(") {
       const second = matchParen(masked, after);
-      if (second > 0) end = second;
+      if (second > 0) {
+        end = second;
+      }
     }
     bodies.push({ start: open, end });
     re.lastIndex = end;
@@ -167,7 +176,9 @@ function describeScopes(masked) {
   while ((m = re.exec(masked))) {
     const open = m.index + m[0].lastIndexOf("(");
     const end = matchParen(masked, open);
-    if (end > 0) out.push({ start: open, end });
+    if (end > 0) {
+      out.push({ start: open, end });
+    }
   }
   return out;
 }
@@ -176,8 +187,12 @@ function describeScopes(masked) {
 function innermostScope(scopes, index, total) {
   let best = null;
   for (const s of scopes) {
-    if (index <= s.start || index >= s.end) continue;
-    if (!best || s.end - s.start < best.end - best.start) best = s;
+    if (index <= s.start || index >= s.end) {
+      continue;
+    }
+    if (!best || s.end - s.start < best.end - best.start) {
+      best = s;
+    }
   }
   return best ?? { start: 0, end: total };
 }
@@ -195,7 +210,9 @@ function allIn(masked, range, src) {
   const re = g(src);
   const out = [];
   let m;
-  while ((m = re.exec(scoped))) out.push(range.start + m.index);
+  while ((m = re.exec(scoped))) {
+    out.push(range.start + m.index);
+  }
   return out;
 }
 
@@ -209,11 +226,7 @@ function allIn(masked, range, src) {
  */
 function fakeWindows(masked) {
   const ons = allIn(masked, { start: 0, end: masked.length - 1 }, FAKE_ON_SRC);
-  const offs = allIn(
-    masked,
-    { start: 0, end: masked.length - 1 },
-    FAKE_OFF_SRC,
-  );
+  const offs = allIn(masked, { start: 0, end: masked.length - 1 }, FAKE_OFF_SRC);
   return ons.map((on) => {
     const off = offs.find((o) => o > on);
     return { start: on, end: off ?? masked.length - 1 };
@@ -244,19 +257,22 @@ function scanFile(abs, raw) {
       note,
     };
   };
-  const bodyOf = (index) =>
-    bodies.find((b) => index > b.start && index < b.end);
+  const bodyOf = (index) => bodies.find((b) => index > b.start && index < b.end);
 
   /* ── 规则 A：同一用例体内，墙钟等待早于换假时钟 ── */
   for (const body of bodies) {
     const fakeAt = firstIn(masked, body, FAKE_ON_SRC);
-    if (fakeAt < 0) continue;
+    if (fakeAt < 0) {
+      continue;
+    }
     for (const [src, name] of [
       [POLL_SRC, "expect.poll"],
       [WAIT_FOR_SRC, "await waitFor"],
     ]) {
       const waitAt = firstIn(masked, body, src);
-      if (waitAt < 0 || waitAt > fakeAt) continue;
+      if (waitAt < 0 || waitAt > fakeAt) {
+        continue;
+      }
       hits.push(
         site(
           waitAt,
@@ -272,7 +288,9 @@ function scanFile(abs, raw) {
     const windowBody = bodyOf(w.start);
     if (windowBody) {
       for (const index of allIn(masked, w, POLL_SRC)) {
-        if (!bodyOf(index)) continue;
+        if (!bodyOf(index)) {
+          continue;
+        }
         hits.push(
           site(
             index,
@@ -285,19 +303,11 @@ function scanFile(abs, raw) {
     }
     const scope = innermostScope(scopes, w.start, masked.length);
     for (const body of bodies) {
-      if (body.start < scope.start || body.end > scope.end) continue;
-      for (const index of allIn(
-        masked,
-        { start: body.start, end: body.end },
-        POLL_SRC,
-      )) {
-        if (
-          firstIn(
-            masked,
-            { start: body.start, end: index - 1 },
-            FAKE_OFF_SRC,
-          ) >= 0
-        ) {
+      if (body.start < scope.start || body.end > scope.end) {
+        continue;
+      }
+      for (const index of allIn(masked, { start: body.start, end: body.end }, POLL_SRC)) {
+        if (firstIn(masked, { start: body.start, end: index - 1 }, FAKE_OFF_SRC) >= 0) {
           continue;
         }
         hits.push(
@@ -328,7 +338,9 @@ for (const dir of SCAN_DIRS) {
     }
     scanned += 1;
     const hits = scanFile(abs, raw);
-    if (hits.length) violations.set(rel, hits);
+    if (hits.length) {
+      violations.set(rel, hits);
+    }
   }
 }
 
@@ -336,9 +348,7 @@ for (const dir of SCAN_DIRS) {
 function printViolations() {
   for (const [rel, hits] of [...violations.entries()].sort()) {
     for (const h of hits.sort((a, b) => a.line - b.line)) {
-      console.log(
-        `  ✗ ${rel}:${h.line}（规则 ${h.rule}）${h.text}\n      ↳ ${h.note}`,
-      );
+      console.log(`  ✗ ${rel}:${h.line}（规则 ${h.rule}）${h.text}\n      ↳ ${h.note}`);
     }
   }
 }
@@ -346,11 +356,15 @@ function printViolations() {
 const totalHits = [...violations.values()].reduce((n, v) => n + v.length, 0);
 
 if (REPORT_ONLY) {
-  if (totalHits) printViolations();
+  if (totalHits) {
+    printViolations();
+  }
   console.log(
     `[single-clock] --report：扫描 ${scanned} 份用例文件，越界 ${totalHits} 处（不判失败）`,
   );
-  if (vanished.length) console.log(vanishedNote(vanished));
+  if (vanished.length) {
+    console.log(vanishedNote(vanished));
+  }
   process.exit(0);
 }
 
@@ -368,14 +382,16 @@ if (totalHits > 0) {
       "  或者整条都用真实时钟。别抬超时、也别给 `expect.poll` 加预算 —— §11.13 明写预算是\n" +
       "  给真进程留的余量，不是给慢用例兜底。",
   );
-  if (vanished.length) console.error(vanishedNote(vanished));
+  if (vanished.length) {
+    console.error(vanishedNote(vanished));
+  }
   process.exit(1);
 }
 
-console.log(
-  `[single-clock] OK —— 扫描 ${scanned} 份用例文件：一个用例一把时钟，越界 0 处。`,
-);
-if (vanished.length) console.log(vanishedNote(vanished));
+console.log(`[single-clock] OK —— 扫描 ${scanned} 份用例文件：一个用例一把时钟，越界 0 处。`);
+if (vanished.length) {
+  console.log(vanishedNote(vanished));
+}
 
 module.exports = {
   scanFile,

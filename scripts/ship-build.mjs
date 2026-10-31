@@ -18,13 +18,7 @@
  */
 
 /** build 的终态集合（其余一律当「还没完」）。 */
-const TERMINAL = new Set([
-  "success",
-  "failed",
-  "error",
-  "cancelled",
-  "canceled",
-]);
+const TERMINAL = new Set(["success", "failed", "error", "cancelled", "canceled"]);
 /** build 里「在跑 / 排队」的形态。 */
 const RUNNING = new Set(["running", "pending", "queued", "waiting", "created"]);
 
@@ -39,16 +33,21 @@ const RUNNING = new Set(["running", "pending", "queued", "waiting", "created"]);
  * @returns {{state:"green"|"red"|"running"|"unknown",raw:string|null}} 判决用的中间态
  */
 export function readBuildVerdict(json) {
-  const raw =
-    json && json.data && typeof json.data.status === "string"
-      ? json.data.status
-      : null;
+  const raw = json && json.data && typeof json.data.status === "string" ? json.data.status : null;
   // ⚠️ 这里**故意不看** `json.status`：那是 HTTP 信封（200 只说明「问到了」）。
-  if (raw === null) return { state: "unknown", raw: null };
+  if (raw === null) {
+    return { state: "unknown", raw: null };
+  }
   const low = raw.toLowerCase();
-  if (low === "success") return { state: "green", raw };
-  if (TERMINAL.has(low)) return { state: "red", raw };
-  if (RUNNING.has(low)) return { state: "running", raw };
+  if (low === "success") {
+    return { state: "green", raw };
+  }
+  if (TERMINAL.has(low)) {
+    return { state: "red", raw };
+  }
+  if (RUNNING.has(low)) {
+    return { state: "running", raw };
+  }
   return { state: "unknown", raw };
 }
 
@@ -64,7 +63,9 @@ export function readBuildVerdict(json) {
  * @returns {{sn:string,createTime:string} | null} 命中的 build（多条取最新）
  */
 export function pickBuildForSha(builds, sha) {
-  if (!Array.isArray(builds) || !sha) return null;
+  if (!Array.isArray(builds) || !sha) {
+    return null;
+  }
   /** @type {{sn:string,createTime:string}[]} */
   const hit = [];
   for (const b of builds) {
@@ -78,7 +79,9 @@ export function pickBuildForSha(builds, sha) {
       hit.push({ sn: b.sn, createTime: String(b.createTime || "") });
     }
   }
-  if (hit.length === 0) return null;
+  if (hit.length === 0) {
+    return null;
+  }
   hit.sort((x, y) => y.createTime.localeCompare(x.createTime));
   return hit[0] ?? null;
 }
@@ -112,8 +115,7 @@ export function buildSignature(json, sn = "") {
       : [];
   const total = entries.length;
   const done = entries.filter(
-    (p) =>
-      p && typeof p.status === "string" && !RUNNING.has(p.status.toLowerCase()),
+    (p) => p && typeof p.status === "string" && !RUNNING.has(p.status.toLowerCase()),
   ).length;
   /* stage 级：把每条 pipeline 的 `stages[]` 汇起来数完成格。缺 `stages`（外部形状不完整）
    * 时按 0 计，签名照样稳定可比 —— 这里不替平台补一个「大概在进行」的形状。
@@ -147,7 +149,11 @@ export function buildSignature(json, sn = "") {
  */
 export function asArray(json) {
   const d = json && json.data;
-  if (Array.isArray(d)) return d;
-  if (d && Array.isArray(d.data)) return d.data;
+  if (Array.isArray(d)) {
+    return d;
+  }
+  if (d && Array.isArray(d.data)) {
+    return d.data;
+  }
   return null;
 }

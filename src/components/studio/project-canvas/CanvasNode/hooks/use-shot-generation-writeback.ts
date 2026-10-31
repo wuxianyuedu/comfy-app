@@ -20,13 +20,21 @@ export function useShotGenerationWriteback(d: CanvasNodeData): void {
   const taskId = d.taskId;
 
   useEffect(() => {
-    if (!shotId) return;
+    if (!shotId) {
+      return;
+    }
     // 只回写终态：running / idle 属于中间态，落库无意义且会与工坊写入面抢字段。
-    if (status !== "done" && status !== "error") return;
+    if (status !== "done" && status !== "error") {
+      return;
+    }
     const projectId = getActiveId();
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     const key = `${shotId}|${status}|${resultPath ?? ""}|${taskId ?? ""}`;
-    if (key === lastKeyRef.current) return;
+    if (key === lastKeyRef.current) {
+      return;
+    }
     lastKeyRef.current = key;
     void recordCanvasShotGeneration(
       projectId,

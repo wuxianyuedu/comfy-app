@@ -44,8 +44,9 @@ const GROUP_CALL = /^run_group ([A-Z0-9]+) "([^"]*)"/gm;
  */
 function groupLabels(hookText) {
   const labels = new Map();
-  for (const [, id, desc] of hookText.matchAll(GROUP_CALL))
+  for (const [, id, desc] of hookText.matchAll(GROUP_CALL)) {
     labels.set(id, desc);
+  }
   return labels;
 }
 
@@ -89,12 +90,8 @@ function summaryLines({ ran, skipped, moved, labels }) {
   /* 只有**被档位跳过的**才进这句 —— 挪去平台的那一组不算「降档」，它单独念一句
    * （旧形态把 C 混在「组 A B C D」里，读起来像「下一台机器上还会跑」）。 */
   if (skipped.length > 0) {
-    out.push(
-      `[pre-commit] ⚠ 本次提交本地**没跑**：${skipped.map(name).join("、")}`,
-    );
-    out.push(
-      "[pre-commit] ⚠ 上面那句不是「已通过」——它等价于「这次没测行为面」（与 §13.6.2 那个",
-    );
+    out.push(`[pre-commit] ⚠ 本次提交本地**没跑**：${skipped.map(name).join("、")}`);
+    out.push("[pre-commit] ⚠ 上面那句不是「已通过」——它等价于「这次没测行为面」（与 §13.6.2 那个");
     out.push(
       "[pre-commit] ⚠   inconclusive 同一口径）。兜底两层：推送那一跳跑复算（check:premerge",
     );

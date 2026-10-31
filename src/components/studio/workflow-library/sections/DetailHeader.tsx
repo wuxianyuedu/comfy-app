@@ -4,14 +4,7 @@
 // 纯展示；「导入画布」与右上角按钮同款式。
 
 import { useState } from "react";
-import {
-  Download,
-  Edit3,
-  FileJson,
-  Plus,
-  RefreshCw,
-  Trash2,
-} from "lucide-react";
+import { Download, Edit3, FileJson, Plus, RefreshCw, Trash2 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
@@ -107,7 +100,9 @@ export function DetailHeader({
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    if (modes.length > 1) setShowAllModes((value) => !value);
+                    if (modes.length > 1) {
+                      setShowAllModes((value) => !value);
+                    }
                   }}
                   disabled={modes.length <= 1}
                   className={`h-auto gap-0 p-0 disabled:opacity-100 ${
@@ -181,11 +176,7 @@ export function DetailHeader({
             onClick={onUse}
             icon={<Plus className="size-3.5" />}
             label="导入画布"
-            title={
-              usable
-                ? "把该工作流导入项目画布"
-                : "当前工作流没有工作流(RAW)原件，无法生成"
-            }
+            title={usable ? "把该工作流导入项目画布" : "当前工作流没有工作流(RAW)原件，无法生成"}
             disabled={!usable}
           />
           {/* 模型标签绑定：与导入画布同款描边样式，点开多选管理 */}
@@ -200,11 +191,7 @@ export function DetailHeader({
             <ActionButton
               onClick={onResync}
               icon={
-                busyResync ? (
-                  <Spinner className="size-3.5" />
-                ) : (
-                  <RefreshCw className="size-3.5" />
-                )
+                busyResync ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />
               }
               label={busyResync ? "同步中" : "同步"}
               disabled={busyResync}

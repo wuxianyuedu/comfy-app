@@ -39,7 +39,9 @@ function renderWithHost(actions: React.ReactNode, active = true) {
     </ViewActionsProvider>,
   );
   const host = container.querySelector('[data-slot="slot-outlet"]');
-  if (!host) throw new Error("没渲染出动作槽宿主");
+  if (!host) {
+    throw new Error("没渲染出动作槽宿主");
+  }
   return { container, host };
 }
 
@@ -48,9 +50,7 @@ describe("视图动作槽", () => {
     const { container, host } = renderWithHost(<button>刷新</button>);
     expect(host.textContent).toContain("刷新");
     /* 屏内那一条**不许**留着 —— 留着就等于那一行空气还在（正是本笔要治的）。 */
-    expect(
-      container.querySelector('[data-slot="view-actions-inline"]'),
-    ).toBeNull();
+    expect(container.querySelector('[data-slot="view-actions-inline"]')).toBeNull();
   });
 
   it("没有宿主时就地渲染，形状是「右对齐 + 下边距」（/models 与一切不挂壳的路径）", () => {
@@ -62,7 +62,9 @@ describe("视图动作槽", () => {
       </ViewActionsProvider>,
     );
     const inline = container.querySelector('[data-slot="view-actions-inline"]');
-    if (!inline) throw new Error("没有宿主时应在原地渲染");
+    if (!inline) {
+      throw new Error("没有宿主时应在原地渲染");
+    }
     expect(inline.className).toContain("justify-end");
     expect(inline.className).toContain("mb-6");
     expect(screen.getByRole("button", { name: "刷新" })).toBeTruthy();

@@ -25,15 +25,13 @@ const PROBE_TIMEOUT_MS = 6000;
  * 展示降级文案而不是让整页报错。
  */
 export async function GET(req: NextRequest) {
-  if (!(await requireRequestUser())) return unauthorizedResponse();
+  if (!(await requireRequestUser())) {
+    return unauthorizedResponse();
+  }
 
-  const provider =
-    req.nextUrl.searchParams.get("provider") === "remote" ? "remote" : "local";
+  const provider = req.nextUrl.searchParams.get("provider") === "remote" ? "remote" : "local";
   const rawModel = req.nextUrl.searchParams.get("model");
-  const model =
-    typeof rawModel === "string" && rawModel.trim() !== ""
-      ? rawModel.trim()
-      : "";
+  const model = typeof rawModel === "string" && rawModel.trim() !== "" ? rawModel.trim() : "";
   // 仅远端探测按所选模型解析独立连接参数；本地候选没有独立 baseUrl，传 model
   // 反而可能误命中同名的远端条目，故本地一律不带 model。
   const cfg = await getLLMConfig({
@@ -73,11 +71,7 @@ export async function GET(req: NextRequest) {
           const rawList = isRecord(parsed) ? parsed.models : undefined;
           const models = Array.isArray(rawList)
             ? rawList
-                .map((m) =>
-                  isRecord(m) && typeof m.name === "string"
-                    ? m.name.trim()
-                    : "",
-                )
+                .map((m) => (isRecord(m) && typeof m.name === "string" ? m.name.trim() : ""))
                 .filter((n) => n !== "")
             : [];
           return NextResponse.json({
@@ -105,13 +99,13 @@ export async function GET(req: NextRequest) {
     }
     const parsed: unknown = await res.json();
     // OpenAI 兼容 /models → { data: [{ id }] }；Ollama /api/tags → { models: [{ name }] }
-    const rawList = isRecord(parsed)
-      ? (parsed.data ?? parsed.models)
-      : undefined;
+    const rawList = isRecord(parsed) ? (parsed.data ?? parsed.models) : undefined;
     const models = Array.isArray(rawList)
       ? rawList
           .map((m) => {
-            if (typeof m === "string") return m.trim();
+            if (typeof m === "string") {
+              return m.trim();
+            }
             if (isRecord(m)) {
               const id: unknown = m.id ?? m.name;
               return typeof id === "string" ? id.trim() : "";

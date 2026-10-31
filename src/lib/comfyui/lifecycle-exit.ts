@@ -188,13 +188,17 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   let missCount = 0;
 
   const stop = () => {
-    if (stopped) return;
+    if (stopped) {
+      return;
+    }
     stopped = true;
     clearTimer(handle);
   };
 
   const tick = async () => {
-    if (stopped) return;
+    if (stopped) {
+      return;
+    }
     /* 主动关闭：监督器的职责到此为止，不报「莫名退出」（那条退出记录由关闭
      * 路径自己落）。 */
     if (deps.isStopped()) {
@@ -202,20 +206,28 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       return;
     }
     const lookup = await deps.findPid().catch(() => ({ pid: null, failed: true }));
-    if (stopped) return;
+    if (stopped) {
+      return;
+    }
 
     /* 查询失败（PowerShell 超时 / 命令起不来）：证据不足，**不能**当作「进程消失」。
      * findPidForMainPyDetailed 把「真的查不到」与「查询本身失败」分开；机器忙
      * （ComfyUI 出图）时进程表查询经常超时，把失败误判成死亡会让用户看到假的
      * 「进程消失」（保活进程其实还活着）。这一轮既不计入 miss、也不复位已见标记。 */
-    if (lookup.failed) return;
+    if (lookup.failed) {
+      return;
+    }
 
     if (lookup.pid === null) {
       /* 还没第一次见到它 → 可能是「拉起失败」而不是「退出」：那种情况启动等待
        * 循环会自己报错，这里不抢答。 */
-      if (startedAt === null) return;
+      if (startedAt === null) {
+        return;
+      }
       missCount += 1;
-      if (missCount < missThreshold) return;
+      if (missCount < missThreshold) {
+        return;
+      }
       stop();
       deps.onExit({
         pid: seenPid,
@@ -276,13 +288,17 @@ export function describeStaleSession(
 ): string | null {
   /* `mark?.exited !== null` 同时覆盖「没有标记」（undefined ≠ null）与「已结束」
    * 两种该闭嘴的情况。 */
-  if (mark?.exited !== null) return null;
+  if (mark?.exited !== null) {
+    return null;
+  }
   /* 保活模式：ComfyUI 本来就要跨过应用退出活着，正常关应用时也不会有人给它补
    * `exited` —— 于是「有开始没结束」是**常态**，与「应用/系统先没了」在这条判据
    * 上无法区分。只有当上次那个实例**现在确实不在了**才说明它是真没了，那才值得
    * 提示；还活着 = 保活移交，闭嘴（否则每次重启都会误报一次「强制关机 / 任务
    * 管理器结束进程」）。 */
-  if (mark.mode === "keepAlive" && comfyUp) return null;
+  if (mark.mode === "keepAlive" && comfyUp) {
+    return null;
+  }
   return (
     `上一次 ComfyUI 会话（pid=${mark.pid ?? "未知"}，${mark.mode} 模式）` +
     `开始于 ${mark.startedAt}，却没有退出记录 —— 说明应用或系统在它之前就结束了` +
@@ -304,7 +320,9 @@ export function describeStaleSession(
  */
 function readTailLines(filePath: string, maxLines = 40, maxLineLen = 600): Array<string> {
   try {
-    if (!fs.existsSync(filePath)) return [];
+    if (!fs.existsSync(filePath)) {
+      return [];
+    }
     const buf = fs.readFileSync(filePath);
     const text =
       buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe
@@ -360,9 +378,13 @@ export function reportKeepAliveExit(opts: {
   ];
   let headerWritten = false;
   for (const [kind, file] of tailFiles) {
-    if (!file) continue;
+    if (!file) {
+      continue;
+    }
     const tail = readTailLines(file);
-    if (tail.length === 0) continue;
+    if (tail.length === 0) {
+      continue;
+    }
     if (!headerWritten) {
       opts.appendRuntimeLog(
         "[exit] ComfyUI 最后输出（崩溃 / 退出原因通常在此；完整内容见对应的 comfyui-keepalive-*.log）：",

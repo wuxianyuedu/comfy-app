@@ -34,8 +34,7 @@ import { useWorksGallery } from "./works/hooks/use-works-gallery";
  * 类内容"的视觉身份,不是状态、也不是 info(信息态)——两者会互相消解。
  * §3.6.1 例外块。 */
 // p71-allow:start 视频/作品类别装饰色——与素材库"视频"标签同族,不是状态语义
-const WORKS_CATEGORY_ICON_BG =
-  "bg-cyan-400/12 text-cyan-700 dark:text-cyan-400";
+const WORKS_CATEGORY_ICON_BG = "bg-cyan-400/12 text-cyan-700 dark:text-cyan-400";
 // p71-allow:end
 
 /* 「这一行从哪来」的界面上那半句。`both` 不给值（正常行不标）。 */
@@ -61,10 +60,7 @@ export interface WorksGalleryProps {
   onOpenCanvasProject?: (id: string) => void;
 }
 
-export function WorksGallery({
-  onOpenTask,
-  onOpenCanvasProject,
-}: WorksGalleryProps) {
+export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryProps) {
   const toast = useToast();
   const controller = useWorksGallery(onOpenCanvasProject);
   const {
@@ -130,17 +126,13 @@ export function WorksGallery({
       />
 
       {loading ? (
-        <p className="text-ink-muted py-10 text-center text-sm">
-          正在读取项目列表…
-        </p>
+        <p className="text-ink-muted py-10 text-center text-sm">正在读取项目列表…</p>
       ) : projects.length > 0 ? (
         <section className="mb-10">
           <div className="mb-4 flex items-baseline justify-between">
             <h2 className="text-ink-strong text-sm font-semibold">
               画布项目{" "}
-              <span className="text-ink-fainter ml-1 text-xs font-normal">
-                ({projects.length})
-              </span>
+              <span className="text-ink-fainter ml-1 text-xs font-normal">({projects.length})</span>
             </h2>
             <span className="text-ink-fainter text-2xs">可继续编辑</span>
           </div>
@@ -192,8 +184,7 @@ export function WorksGallery({
                         {bodySummary(nodeCount, edgeCount)}
                       </p>
                       <p className="text-ink-fainter text-2xs mt-0.5">
-                        {timeAgo(project.updatedAt, { suffix: "修改" }) ??
-                          "刚刚修改"}
+                        {timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改"}
                       </p>
                     </div>
                   </Button>
@@ -270,11 +261,7 @@ export function WorksGallery({
         open={pendingDelete !== null}
         onClose={cancelDelete}
         danger
-        title={
-          pendingDelete?.origin === "server"
-            ? "删除服务端上的这条项目？"
-            : "删除此画布项目？"
-        }
+        title={pendingDelete?.origin === "server" ? "删除服务端上的这条项目？" : "删除此画布项目？"}
         description={
           pendingDelete
             ? pendingDelete.origin === "server"
@@ -289,7 +276,9 @@ export function WorksGallery({
         pending={deleting}
         onConfirm={() => {
           void confirmDelete().then((name) => {
-            if (name) toast.success(`已删除项目「${name}」`);
+            if (name) {
+              toast.success(`已删除项目「${name}」`);
+            }
           });
         }}
       />

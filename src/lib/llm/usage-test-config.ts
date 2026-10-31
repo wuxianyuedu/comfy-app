@@ -137,7 +137,9 @@ export function usageFieldsToJson(fields: Array<UsageField>): string {
   for (const f of fields) {
     const key = f.key.trim();
     const value = f.value.trim();
-    if (!key || value === "") continue;
+    if (!key || value === "") {
+      continue;
+    }
     let parsed: unknown;
     let isLiteral = false;
     try {
@@ -174,14 +176,18 @@ export function usageFieldsToJson(fields: Array<UsageField>): string {
  *  「是 URL 就尝试」，交由 <img onError> 兜底优雅降级。 */
 export function isPreviewableUrl(value: string): boolean {
   const v = value.trim();
-  if (!v) return false;
+  if (!v) {
+    return false;
+  }
   return /^data:image\//i.test(v) || /^https?:\/\//i.test(v);
 }
 
 /** 判断某行值是否可当作图片预览（data:image 或 http(s) 图片地址）。 */
 export function looksLikeImage(value: string): boolean {
   const v = value.trim();
-  if (!v) return false;
+  if (!v) {
+    return false;
+  }
   return (
     /^data:image\//i.test(v) || /^(https?:\/\/).+\.(png|jpe?g|webp|gif|avif|bmp)([?#].*)?$/i.test(v)
   );
@@ -238,7 +244,9 @@ export function mediaExtensionFromUrl(url: string, fallback: "png" | "mp4"): str
     const m = /^data:image\/([a-zA-Z0-9.+-]+)/.exec(u);
     if (m?.[1]) {
       const ext = m[1].toLowerCase().replace("jpeg", "jpg").replace("svg+xml", "svg");
-      if (/^[a-z0-9]{1,8}$/.test(ext)) return ext;
+      if (/^[a-z0-9]{1,8}$/.test(ext)) {
+        return ext;
+      }
     }
     return fallback;
   }
@@ -247,7 +255,9 @@ export function mediaExtensionFromUrl(url: string, fallback: "png" | "mp4"): str
     const dot = pathPart.lastIndexOf(".");
     if (dot >= 0 && dot < pathPart.length - 1) {
       const ext = pathPart.slice(dot + 1).toLowerCase();
-      if (/^[a-z0-9]{1,8}$/.test(ext)) return ext;
+      if (/^[a-z0-9]{1,8}$/.test(ext)) {
+        return ext;
+      }
     }
   }
   return fallback;
