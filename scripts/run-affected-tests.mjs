@@ -120,6 +120,7 @@
  */
 
 import { planSeparatedLaunches, resolveAffectedSegment } from "./affected-launch-segments.mjs";
+import { mergeTimingLedger, orderByKnownDuration, readTimingLedger } from "./affected-launch-duration-order.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 /* 「受影响用例」门在 CI 里的良性 stderr 噪音屏蔽（按行判定，见文件头）：本文件只负责
  * 在起 vitest 前解析开关、在两遍 spawn 都把 `isNoiseLine` 透传下去。 */
@@ -243,6 +244,8 @@ const PER_FILE_RERUN_MAX = 8;
 
 async function main(argv) {
   const dryRun = argv.includes("--dry-run");
+  /* 把本跑的逐份用时并进入库台账（人为跑；CI 不自动写 —— 平台工作区的改动进不了库）。 */
+  const updateTiming = argv.includes("--update-timing");
   /* ── 显式全量档（`--full`）───────────────────────────────────────────────
    * 这一档**不是**增量解析的兜底，是它的**反面**：增量档把筛出来的清单当位置参数
    * 交给 vitest，而这里由调用方**按名字**点名要全部（`vitest run` 不带位置参数即
@@ -344,6 +347,9 @@ async function main(argv) {
     /* 固定清单与受影响用例**分开分块**：固定清单（含最吵的 a11y 故事测试）先跑、受影响用例
      * 后跑，噪音被收进固定清单那一段里隔离，受影响用例的失败落在日志尾部（平台保留尾部）。
      * 段开关下 `segFiles` 本来就只剩一段，这里天然产出该段的块。 */
+    /* 重块排前（ISSUE #2863 的 ③）：按入库耗时台账降序（known 前排、未知垫后保持原序）。
+     * 台账是启发式不是判决 —— 过期只损失排序最优性，不影响任何判定（见该模块文件头）。 */
+    segFiles = orderByKnownDuration(segFiles, readTimingLedger(process.cwd()));
     chunks = planSeparatedLaunches(segFiles);
   } catch (e) {
     process.stderr.write(`[affected-launch] ${e instanceof Error ? e.message : String(e)}\n`);
@@ -445,6 +451,14 @@ async function main(argv) {
    * 恰恰最需要「这次等了多久、哪几块没被校验过」（同上面 scopeAdvice 那条
    * 「真红时更该看到这个数」—— 放在 return 之后就是永不打字的死账）。 */
   const flush = () => {
+    if (updateTiming && junitDir) {
+      const ok = mergeTimingLedger(process.cwd(), junitReadings());
+      process.stderr.write(
+        ok
+          ? "[affected-launch] 逐份用时已并进入库台账（scripts/.test-file-timing.json）—— 提交它，下次排块就按这次的实测耗时来\n"
+          : "[affected-launch] 台账没落盘（无读数或写失败）—— 排序退化为原序，不阻断\n",
+      );
+    }
     /* 逐份用时（`fileTimingReport`）：从这一跑写出的 junit 里读回来。它必须是**收尾**
      * 那一段 —— 读数在第一遍跑完才存在，而「打了哪些用例」那张清单要早于起 vitest
      * （起之前根本没有用时）。两份放在同一屏的两端是刻意的：清单回答「跑了什么」，

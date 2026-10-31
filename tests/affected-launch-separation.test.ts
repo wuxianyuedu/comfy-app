@@ -8,6 +8,7 @@
  * 段开关（ISSUE #2845）把两段升级成两个 CI stage：`resolveAffectedSegment` 那一组钉它的
  * 取值面 —— 不设=both（逐字旧行为）、认不出=invalid（不许静默吞成 both）。
  */
+import fs from "node:fs";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -16,6 +17,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 import { planSeparatedLaunches, resolveAffectedSegment } from "../scripts/affected-launch-segments.mjs";
 import { runChunk } from "../scripts/run-affected-tests.mjs";
+import {
+  mergeTimingLedger,
+  orderByKnownDuration,
+  readTimingLedger,
+} from "../scripts/affected-launch-duration-order.mjs";
 import { isNoiseLine } from "../scripts/affected-launch-noise-reporter.mjs";
 
 describe("planSeparatedLaunches 的固定段分块帽（ISSUE #2863）", () => {
@@ -44,6 +50,56 @@ describe("planSeparatedLaunches 的固定段分块帽（ISSUE #2863）", () => {
     const plan = planSeparatedLaunches(synth);
     expect(plan).toHaveLength(1);
     expect(plan[0]?.kind).toBe("affected");
+  });
+});
+
+describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
+  it("known 按毫秒降序排前，unknown 保持原相对顺序垫后", () => {
+    const ledger = new Map([
+      ["tests/a.test.ts", 100],
+      ["tests/b.test.ts", 500],
+      ["tests/c.test.ts", 250],
+    ]);
+    expect(orderByKnownDuration(
+      ["tests/x.test.ts", "tests/a.test.ts", "tests/y.test.ts", "tests/b.test.ts", "tests/c.test.ts"],
+      ledger,
+    )).toEqual(["tests/b.test.ts", "tests/c.test.ts", "tests/a.test.ts", "tests/x.test.ts", "tests/y.test.ts"]);
+  });
+
+  it("空台账（冷启动）⇒ 原序返回，不 throw", () => {
+    const files = ["tests/b.test.ts", "tests/a.test.ts"];
+    expect(orderByKnownDuration(files, new Map())).toEqual(files);
+  });
+
+  it("台账读写闭环：不在账的键新增、同名覆盖、本跑没跑的保留、坏文件从空建起", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "timing-"));
+    try {
+      expect(mergeTimingLedger(dir, [])).toBe(false); // 空读数不落盘
+      fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "scripts", ".test-file-timing.json"),
+        JSON.stringify({ generatedAt: "old", files: { "tests/old.test.ts": 999, "tests/a.test.ts": 5 } }),
+      );
+      expect(mergeTimingLedger(dir, [
+        { name: "tests/a.test.ts", ms: 7.4 },
+        { name: "tests/new.test.ts", ms: 0.2 },
+        { name: "tests/broken.test.ts", ms: Number.NaN },
+      ])).toBe(true);
+      const j = /* SAFETY: 类型断言已复核 */ JSON.parse(
+        fs.readFileSync(path.join(dir, "scripts", ".test-file-timing.json"), "utf8"),
+      ) as { files: Record<string, number> };
+      expect(j.files["tests/a.test.ts"]).toBe(7); // 覆盖 + 取整
+      expect(j.files["tests/new.test.ts"]).toBe(0);
+      expect(j.files["tests/old.test.ts"]).toBe(999); // 保留
+      expect(j.files["tests/broken.test.ts"]).toBeUndefined(); // 脏读数不进账
+      // 回读面与排序面同一个源
+      expect(orderByKnownDuration(["tests/a.test.ts", "tests/old.test.ts"], readTimingLedger(dir))).toEqual([
+        "tests/old.test.ts",
+        "tests/a.test.ts",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
