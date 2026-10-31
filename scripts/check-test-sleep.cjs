@@ -308,7 +308,7 @@ function scanFile(abs) {
     const rawLine = raw.split("\n")[line - 1] ?? "";
     sites.push({
       line,
-      text: rawLine.trim().replace(/\s+/g, " ").slice(0, 100),
+      text: rawLine.trim().replaceAll(/\s+/g, " ").slice(0, 100),
       exempt: nearbySleepOk(raw, start),
     });
   }

@@ -37,7 +37,7 @@ function fixLiteralForms() {
   const files = [];
   (function walk(dir) {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      const p = path.join(dir, e.name).replace(/\\/g, "/");
+      const p = path.join(dir, e.name).replaceAll("\\", "/");
       if (e.isDirectory()) {
         walk(p);
       } else if (/\.(tsx?|mjs|cjs|js)$/.test(e.name)) {
@@ -47,14 +47,14 @@ function fixLiteralForms() {
   })("src");
   let n = 0;
   for (const f of files) {
-    const file = f.replace(/\\/g, "/");
+    const file = f.replaceAll("\\", "/");
     if (!fs.existsSync(file)) {
       continue;
     }
     const src = fs.readFileSync(file, "utf8");
     let out = src;
     // studio/undefined → 按导入符号映射
-    out = out.replace(
+    out = out.replaceAll(
       /import \{ ([^}]+) \} from "@\/components\/studio\/undefined";/g,
       (m, sym) => {
         const target = SYMBOL_MAP[sym.trim()];
@@ -87,7 +87,7 @@ function fixDynamicUndefined() {
     return 0;
   }
   const src = fs.readFileSync(f, "utf8");
-  const out = src.replace(
+  const out = src.replaceAll(
     /import\("@\/components\/studio\/undefined"\)\.then\(\(mod\) => mod\.(\w+)\)/g,
     (m, sym) => 'import("@/components/studio/' + sym + '").then((mod) => mod.' + sym + ")",
   );

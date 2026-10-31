@@ -41,7 +41,7 @@ const SERVER_SUFFIX = ".server.ts";
  * @returns {string}
  */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 /** 抽出模块的 import 列表（值导入与 type-only 分开标注）。
@@ -58,7 +58,7 @@ function parseImports(src) {
     /* 两个捕获组都是正则要求成立的（`from` 与引号内说明符都在模式里），
      * 解构默认值只是把这件事写给类型检查器 —— 不是运行期分支。 */
     const [, clause = "", spec = ""] = m;
-    out.push({ clause: clause.replace(/\s+/g, " ").trim(), spec });
+    out.push({ clause: clause.replaceAll(/\s+/g, " ").trim(), spec });
   }
   const bareRe = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
   while ((m = bareRe.exec(src))) {

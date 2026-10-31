@@ -95,8 +95,8 @@ function requireVersion(text: string) {
  */
 function norm(p: string): string {
   return p
-    .replace(/\\/g, "/")
-    .replace(/\/{2,}/g, "/")
+    .replaceAll("\\", "/")
+    .replaceAll(/\/{2,}/g, "/")
     .toLowerCase();
 }
 
@@ -284,7 +284,7 @@ describe("工具链自证：engines.node 的区间", () => {
  */
 describe("工具链自证：Rust 那一格的取证（#2549）", () => {
   /** 把 `path.join` 的盘符形态归一化（Windows 上 join 出 `\`，posix 上出 `/`）。 */
-  const norm = (s: string) => s.replace(/\\/g, "/").toLowerCase();
+  const norm = (s: string) => s.replaceAll("\\", "/").toLowerCase();
 
   it("`CARGO_HOME` 在却在 PATH 上找不到 ⇒ 直说「代理在盘上、缺的是 PATH」", () => {
     const home = path.join("/G", ".cargo");
@@ -392,15 +392,15 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
        * 判「是不是 D: 盘的 Users 根」按**归一后的正斜杠形态**，不写字面量：
        * 脚本用平台的 `path.join` 拼，POSIX 宿主上会得到 `D:\/Users` 这种混种形态，
        * 写死会漂（这是判据自身的可移植性，不是被测逻辑的形态）。 */
-      listDirs: (p) => (/^d:\/+users\/?$/i.test(p.replace(/\\/g, "/")) ? ["D:\\Users\\yuedu"] : []),
+      listDirs: (p) => (/^d:\/+users\/?$/i.test(p.replaceAll("\\", "/")) ? ["D:\\Users\\yuedu"] : []),
     });
     /* 一律按**归一后的正斜杠形态**断言落点身份 —— 脚本用平台 `path.join` 拼，
      * POSIX 宿主上会出现 `D:\/...` 这类混种分隔符；判的是「探了哪个落点」，
      * 不是「分隔符长什么样」。 */
     const norm = (x: string) =>
       x
-        .replace(/\\/g, "/")
-        .replace(/\/{2,}/g, "/")
+        .replaceAll("\\", "/")
+        .replaceAll(/\/{2,}/g, "/")
         .toLowerCase();
     const set = new Set(probed.map(norm));
     // 标准落点仍在（不能为了新形态把既有的四个丢了）。
@@ -989,7 +989,7 @@ describe("工具链自证：浏览器安装的命令行（ISSUE #1961）", () =>
     const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-browser.mjs"), "utf8");
     for (const pkg of BROWSER_PACKAGES) {
       expect(src, `复验找的形状与 BROWSER_PACKAGES 对不上：${pkg}`).toContain(
-        pkg.replace(/-/g, "_"),
+        pkg.replaceAll("-", "_"),
       );
     }
   });
@@ -1229,7 +1229,7 @@ describe("工具链自证：pnpm 那一格（ISSUE #1961）", () => {
     /* `findPnpm()` 用宿主（POSIX）的 `path.join` 拼候选，分隔符会是 `/`；
      * 而这里判的是 Windows 的**形态**。把两侧的分隔符归一，判据才不依赖宿主 ——
      * 与上面那条「大小写按 NTFS 不敏感处理」是同一条理由。 */
-    const norm = (p: string) => p.replace(/[\\/]+/g, "\\").toLowerCase();
+    const norm = (p: string) => p.replaceAll(/[\\/]+/g, "\\").toLowerCase();
     const onDisk = new Set(
       [nodeDir + String.raw`\pnpm`, nodeDir + String.raw`\pnpm.ps1`, hostExe].map(norm),
     );

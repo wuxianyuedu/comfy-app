@@ -27,7 +27,7 @@ const BASE = join(ROOT, "src", "lib", "core", "repository-base.ts");
 /** 去掉块注释与整行 `//` 注释，避免把说明性 import 当成真实依赖。 */
 function stripComments(src: string): string {
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
     .split("\n")
     .filter((line) => !/^\s*\/\//.test(line))
     .join("\n");

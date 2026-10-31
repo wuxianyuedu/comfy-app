@@ -60,10 +60,10 @@ function readCnb(): string {
 function unquote(raw: string): string {
   const t = raw.trim();
   if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) {
-    return t.slice(1, -1).replace(/\\\\/g, "\\").replace(/\\"/g, '"');
+    return t.slice(1, -1).replaceAll("\\\\", "\\").replaceAll("\\\"", '"');
   }
   if (t.length >= 2 && t.startsWith("'") && t.endsWith("'")) {
-    return t.slice(1, -1).replace(/''/g, "'");
+    return t.slice(1, -1).replaceAll("''", "'");
   }
   return t;
 }
@@ -156,7 +156,7 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
       if (!m) {
         continue;
       }
-      const indent = m[1]!.replace(/\t/g, "    ").length;
+      const indent = m[1]!.replaceAll("	", "    ").length;
       /* 流水线级 = 第 4 列；格级 = 第 6 列（`  - name:` ⇒ `    env:` ⇒ `      KEY:`）。 */
       if (indent !== 4) {
         offLevel.push(line.trim());

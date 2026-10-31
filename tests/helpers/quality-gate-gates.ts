@@ -40,9 +40,9 @@ export interface GateEntry {
  */
 function stripForParsing(src: string): string {
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/[^\n]*/g, "")
-    .replace(/^\s*#[^\n]*$/gm, "");
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/\/\/[^\n]*/g, "")
+    .replaceAll(/^\s*#[^\n]*$/gm, "");
 }
 
 /**
@@ -122,7 +122,7 @@ export function gateByEntry(gates: Array<GateEntry>, scriptName: string): GateEn
   // 而那会被读成「这一档没登记」，与实际相反。
   const hits = gates.filter((g) =>
     g.args.some((a) => {
-      const norm = a.replace(/\\/g, "/");
+      const norm = a.replaceAll("\\", "/");
       return norm === scriptName || norm.endsWith(`/${scriptName}`);
     }),
   );

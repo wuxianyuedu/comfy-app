@@ -24,7 +24,7 @@
  * 而那条判据的失败文案写的就是「它不满足你的形状就**给它加一个模式**，别再抄一份」。
  */
 export function stripComments(src: string, opts: { trailing?: boolean } = {}): string {
-  const stripped = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  const stripped = src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^[ \t]*\/\/.*$/gm, "");
   if (opts.trailing !== true) {
     return stripped;
   }

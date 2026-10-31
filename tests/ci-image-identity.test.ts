@@ -359,7 +359,7 @@ describe("容器格：哪几格进容器是**决定**，不是随手写的（ISS
      * （那几段注释正是在解释「为什么这里不写它」）。 */
     const text = read(".cnb.yml");
     const override = /^[ \t]*PLAYWRIGHT_BROWSERS_PATH:[ \t]*(.*)$/m.exec(text);
-    const value = (override?.[1] ?? "").trim().replace(/^["']|["']$/g, "");
+    const value = (override?.[1] ?? "").trim().replaceAll(/^["']|["']$/g, "");
     expect(
       value,
       "`.cnb.yml` 里 `PLAYWRIGHT_BROWSERS_PATH` 指向了容器那个路径 —— " +

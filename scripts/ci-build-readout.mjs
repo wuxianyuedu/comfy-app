@@ -148,7 +148,7 @@ export function normalizeStageContent(content) {
     : typeof content === "string"
       ? content
       : "";
-  return raw.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "").replace(/\r\n?/g, "\n");
+  return raw.replaceAll(/\u001b\[[0-9;]*[A-Za-z]/g, "").replaceAll(/\r\n?/g, "\n");
 }
 
 /**

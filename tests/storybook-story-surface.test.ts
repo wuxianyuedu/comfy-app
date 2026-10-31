@@ -162,8 +162,8 @@ export const Default: Story = {};
     /* 三份故事各自 import 同目录的 `a` / `b` / `c` 组件：`GOOD_STORY` 里的名字
        一起换掉，否则三份都指向 `./thing`，接真组件那条会先红。 */
     const storyFor = (name: string, title: string) =>
-      GOOD_STORY.replace(/thing/g, name)
-        .replace(/Thing/g, name.toUpperCase())
+      GOOD_STORY.replaceAll("thing", name)
+        .replaceAll("Thing", name.toUpperCase())
         .replace('title: "UI/' + name.toUpperCase() + '"', `title: "${title}"`);
     writeFileSync(join(dir, "a.stories.tsx"), storyFor("a", "UI/A"));
     writeFileSync(join(dir, "b.stories.tsx"), storyFor("b", "UI/B"));
@@ -215,7 +215,7 @@ export const Probe = ({ label }: ProbeProps) => <div>{label}</div>;
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    writeFileSync(storyFile, GOOD_STORY.replace(/thing/g, "probe").replace("Thing", "Probe"));
+    writeFileSync(storyFile, GOOD_STORY.replaceAll("thing", "probe").replace("Thing", "Probe"));
     const surface = storySurface(parseSource(storyFile, GOOD_STORY));
     expect(missingRequiredArgs(storyFile, surface.args)).toEqual([]);
   });
@@ -354,7 +354,7 @@ export const Default: Story = {};
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    writeFileSync(storyFile, GOOD_STORY.replace(/thing/g, "probe"));
+    writeFileSync(storyFile, GOOD_STORY.replaceAll("thing", "probe"));
     expect(missingRequiredArgs(storyFile, new Set(["label"]))).toEqual([]);
   });
 

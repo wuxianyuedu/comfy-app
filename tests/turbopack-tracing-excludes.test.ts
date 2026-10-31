@@ -249,7 +249,7 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
   );
   // 去掉注释再扫描：反面写法的说明本身会命中下面的正则（自指），
   // 而注释里的示例不构成真实调用
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/.*$/gm, "");
 
   it("listFiles 的调用必须挂在「产物存在」判据之下，不得裸调", () => {
     const bareCalls = code.match(/=\s*listFiles\(/g) ?? [];

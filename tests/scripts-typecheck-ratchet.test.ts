@@ -265,7 +265,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
   function walkMjs(dir: string, out: Array<string>): Array<string> {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, e.name);
-      const rel = abs.slice(REPO_ROOT.length + 1).replace(/\\/g, "/");
+      const rel = abs.slice(REPO_ROOT.length + 1).replaceAll("\\", "/");
       if (e.isDirectory()) {
         if (e.name.startsWith(".")) {
           continue;

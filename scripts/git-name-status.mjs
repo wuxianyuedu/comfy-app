@@ -14,7 +14,7 @@ import { parseDiffEntries } from "./launcher-core/sync-attribution.mjs";
 /** 仓库相对路径的规范形态：去空白、反斜杠转正斜杠。 */
 /** @param {string} raw @returns {string} */
 export function normalizeRel(raw) {
-  return String(raw).trim().replace(/\\/g, "/");
+  return String(raw).trim().replaceAll("\\", "/");
 }
 
 /**

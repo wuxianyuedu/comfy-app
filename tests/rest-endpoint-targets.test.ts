@@ -229,7 +229,7 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
   const files = collectTs(path.join(process.cwd(), "src"))
     .filter((f) => !/\.test\.tsx?$/.test(f))
     .map((f) => ({
-      file: path.relative(process.cwd(), f).replace(/\\/g, "/"),
+      file: path.relative(process.cwd(), f).replaceAll("\\", "/"),
       text: stripComments(readFileSync(f, "utf8")),
     }));
   const found = files.flatMap(({ file, text }) =>

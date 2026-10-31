@@ -149,9 +149,9 @@ export function buildLabel({ sha, buildId, now = new Date() } = {}) {
   const id = String(buildId ?? "").trim();
   const tail =
     id && !id.includes("(")
-      ? `b${id.replace(/[^0-9A-Za-z._-]/g, "-")}`
-      : now.toISOString().replace(/[-:]/g, "").replace(/\..+$/, "").replace("T", "t");
-  return `${head}-${tail}`.replace(/[^0-9A-Za-z._-]/g, "-");
+      ? `b${id.replaceAll(/[^0-9A-Za-z._-]/g, "-")}`
+      : now.toISOString().replaceAll(/[-:]/g, "").replace(/\..+$/, "").replace("T", "t");
+  return `${head}-${tail}`.replaceAll(/[^0-9A-Za-z._-]/g, "-");
 }
 
 /**

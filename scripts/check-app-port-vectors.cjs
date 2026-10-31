@@ -278,7 +278,7 @@ async function main() {
   // ── ① Node 侧真跑 ──
   try {
     const mod = await import(
-      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replace(/\\/g, "/")
+      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")
     );
     for (const v of vectors) {
       const norm = mod.normalizeRootForPort(v.input);
@@ -307,7 +307,7 @@ async function main() {
   }
   try {
     const mod = await import(
-      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replace(/\\/g, "/")
+      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")
     );
     for (const v of envVectors) {
       // 判定走生产同一条出口 `parseDotEnvPortValue`，**不在门禁里另抄一份**

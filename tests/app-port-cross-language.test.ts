@@ -162,7 +162,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     // 若某侧把 F:\\… 交给 path.resolve / abspath，在 POSIX 上会拼上 cwd，
     // 规范化结果就不再是 f:/… —— 这条检查 normalized 字段本身的形状。
     for (const v of fixture.vectors) {
-      if (/^[a-zA-Z]:/.test(v.input.replace(/\\/g, "/"))) {
+      if (/^[a-zA-Z]:/.test(v.input.replaceAll("\\", "/"))) {
         expect(v.normalized).toMatch(/^[a-z]:\//);
         expect(v.normalized).not.toContain(ROOT.toLowerCase());
       }

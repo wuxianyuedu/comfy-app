@@ -50,7 +50,7 @@ const PATH_RE =
  * 字符串里的 `#` 与 URL 不参与本判据，所以宁可少剥也不误剥代码。
  */
 export function stripComments(text: string): string {
-  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\\])\/\/[^\n]*/g, "$1");
+  return text.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/(^|[^:\\])\/\/[^\n]*/g, "$1");
 }
 
 /** 一份源码里作为字符串字面量出现的仓库路径（已去重）。 */

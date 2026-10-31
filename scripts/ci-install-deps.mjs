@@ -152,7 +152,7 @@ export function changedFiles(run) {
     }
     const files = out.stdout
       .split(/\r?\n/)
-      .map((line) => line.trim().replace(/\\/g, "/"))
+      .map((line) => line.trim().replaceAll("\\", "/"))
       .filter(Boolean);
     if (files.length > 0) {
       return files;

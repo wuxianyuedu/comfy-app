@@ -259,7 +259,7 @@ function sectionInTree(commit, num) {
     return { ok: false, files: [] };
   }
   /* 标题形态：`#… 13.6.3 ` —— 号后面必须是空白，免得 `13.6.30` 命中 `13.6.3`。 */
-  const re = new RegExp(`^#+\\s+${num.replace(/\./g, "\\.")}\\s`, "m");
+  const re = new RegExp(`^#+\\s+${num.replaceAll(".", "\\.")}\\s`, "m");
   const hits = [];
   for (const f of docs) {
     const body = git(["show", `${commit}:${f}`]);

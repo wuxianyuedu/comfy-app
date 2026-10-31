@@ -104,7 +104,7 @@ describe("① 存量为零：视图层没有现拼对象 / 现造新数组的 st
     // ⚠️ 判据必须容忍**换行**：真实代码里 `useMessageCenterStore((s) =>\n
     // s.messages.filter(...))` 是常见写法，只按单行匹配会整片漏掉
     // （实测：单行版对注入的反模式毫无反应）。所以先把源码压成单行再匹配。
-    const oneLine = (code: string) => code.replace(/\s+/g, " ");
+    const oneLine = (code: string) => code.replaceAll(/\s+/g, " ");
     const objLiteral = new RegExp(
       `\\b(?:${names})\\s*\\(\\s*\\(?[A-Za-z_$][\\w$]*\\)?\\s*=>\\s*[({[]`,
     );

@@ -52,7 +52,7 @@ const SCAN_DIRS = ["src/lib", "src/server"];
 
 /** 去掉注释，避免把注释里提到的 `console.log` 误判成调用。 */
 function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^[ \t]*\/\/.*$/gm, "");
 }
 
 /**

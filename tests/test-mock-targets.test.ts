@@ -49,7 +49,7 @@ function candidates(withoutExt: string): Array<string> {
  * `http://` 这类协议头。
  */
 function stripComments(text: string): string {
-  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  return text.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
 /** 递归收集 `*.test.ts(x)`（跳过 node_modules 与点目录）。 */

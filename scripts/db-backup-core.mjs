@@ -267,7 +267,7 @@ export function createBackup(root, options = {}) {
      * 绑定参数（旧版本甚至只收字面量）。路径里的单引号因此必须转义 ——
      * 不转义时 Windows 用户名含 `'` 一类会让整条语句语法错误，而报错指向的是
      * VACUUM 而不是「你的目录名」。（转义用 SQL 标准写法：`''`。） */
-    const literal = tmp.replace(/'/g, "''");
+    const literal = tmp.replaceAll("'", "''");
     const db = new DatabaseSync(source, { readOnly: false, open: true });
     try {
       db.exec(`VACUUM INTO '${literal}'`);

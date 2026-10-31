@@ -70,7 +70,7 @@ function diagnoseStatePath(root, sn, resolve) {
   if (!dir || !sn) {
     return null;
   }
-  return path.join(dir, `${sn.replace(/[^\w.-]/g, "_")}.json`);
+  return path.join(dir, `${sn.replaceAll(/[^\w.-]/g, "_")}.json`);
 }
 
 /**

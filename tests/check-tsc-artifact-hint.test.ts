@@ -81,7 +81,7 @@ describe("tsc 生成物报错的点破（#1182）", () => {
     const v = classifyTscErrors(REAL_ARTIFACT_OUTPUT_WIN);
     expect(v.total).toBe(2);
     expect(v.artifactOnly).toBe(true);
-    expect([...new Set(v.artifactFiles.map((f) => f.replace(/\\/g, "/")))]).toEqual([
+    expect([...new Set(v.artifactFiles.map((f) => f.replaceAll("\\", "/")))]).toEqual([
       ".next/dev/types/validator.ts",
     ]);
   });

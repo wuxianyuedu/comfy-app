@@ -666,7 +666,7 @@ export function browserDirName(target, fallbackRevision = undefined) {
      * —— 宁可让调用方看到「自取没成」。 */
     return "";
   }
-  return `${BROWSER_PACKAGE_NAME.replace(/-/g, "_")}-${revision}`;
+  return `${BROWSER_PACKAGE_NAME.replaceAll("-", "_")}-${revision}`;
 }
 
 /**

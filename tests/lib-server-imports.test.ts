@@ -88,7 +88,7 @@ function walk(dir: string, out: Array<string> = []): Array<string> {
 /** 去掉块注释与「整行以 // 开头」的行注释，避免把说明性路径误判成依赖。 */
 function stripComments(src: string): string {
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
     .split("\n")
     .filter((line) => !/^\s*\/\//.test(line))
     .join("\n");

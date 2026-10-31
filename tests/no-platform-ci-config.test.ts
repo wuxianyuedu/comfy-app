@@ -578,7 +578,7 @@ export function crontabEvents(
     /* 顶层分支键：顶格、以 `:` 结尾（`master:` / `"dev/*":` / `$:`）。 */
     const top = /^([^\s#][^:]*):\s*$/.exec(line);
     if (top?.[1] !== undefined && !top[1].includes(":")) {
-      branch = top[1].replace(/^["']|["']$/g, "").trim();
+      branch = top[1].replaceAll(/^["']|["']$/g, "").trim();
       continue;
     }
     /* 事件键：两格缩进、带引号。**只有**引号形态能被平台当成 crontab 事件 ——
@@ -738,7 +738,7 @@ export function pipelineStageNames(text: string, pipelineName: string): Array<st
  */
 export function anchorStageNames(text: string, anchor: string): Array<string> {
   const lines = text.split("\n");
-  const escaped = anchor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = anchor.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const def = new RegExp(`^\\.[^:]*:[ \\t]*&${escaped}[ \\t]*$`);
   let start = -1;
   for (let i = 0; i < lines.length; i += 1) {
@@ -777,7 +777,7 @@ export function anchorStageNames(text: string, anchor: string): Array<string> {
  * @param name stage 名
  */
 export function stageKeptAsComment(text: string, name: string): boolean {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`^[ \t]*#+[ \t]*-[ \t]+name:[ \t]*${escaped}[ \t]*$`, "m").test(text);
 }
 
@@ -1047,7 +1047,7 @@ const LOCK_KEY_ALLOWED_VARS = /* SAFETY: 类型断言已复核 */ ["CNB_PULL_REQ
  * @returns 平台算出来的锁键
  */
 export function resolveLockKey(template: string, vars: Record<string, string | undefined>): string {
-  return template.replace(/\$\{?([A-Za-z0-9_]+)\}?/g, (_whole, name: string) => vars[name] ?? "");
+  return template.replaceAll(/\$\{?([A-Za-z0-9_]+)\}?/g, (_whole, name: string) => vars[name] ?? "");
 }
 
 /** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, cancel-in-progress 原文 }`（`null` = 没写）。 */
@@ -1120,7 +1120,7 @@ export function pipelineLockAssignments(text: string): Array<{
     }
     const eventKey = /^ {2}(\S.*):[ \t]*$/.exec(raw);
     if (eventKey?.[1] !== undefined) {
-      event = eventKey[1].replace(/^"|"$/g, "").trim();
+      event = eventKey[1].replaceAll(/^"|"$/g, "").trim();
       continue;
     }
     /* 新的一项从**它自己的 `name:`** 起 —— 「判定换了一条流水线」认的是 `name:`，
@@ -1337,8 +1337,8 @@ export function missingAnchors(
   root: string = ROOT,
 ): Array<string> {
   const text = readFileSync(path.join(root, file), "utf8");
-  const flat = text.replace(/\r\n/g, "\n").replace(/\n/g, "");
-  return needles.filter((needle) => !flat.includes(needle.replace(/\n/g, "")));
+  const flat = text.replaceAll("\r\n", "\n").replaceAll("\n", "");
+  return needles.filter((needle) => !flat.includes(needle.replaceAll("\n", "")));
 }
 
 /**
