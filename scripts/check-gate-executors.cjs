@@ -612,6 +612,6 @@ console.log(
     `判定型有执行者 ${report.judgeWithExecutor.length}、` +
     `按需召唤 ${report.judgeOrphaned.length}、` +
     `入口级登记 ${Object.keys(ledger.entrypoints).length} 份 ${entryAudit.forms} 形、` +
-    `报告型自称在跑 0 ✓` +
-    vanishedNote(vanishedTests),
+    `报告型自称在跑 0 ✓${
+    vanishedNote(vanishedTests)}`,
 );

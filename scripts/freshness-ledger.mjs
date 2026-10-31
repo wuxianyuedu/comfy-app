@@ -421,14 +421,14 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
     return null;
   }
   if ((track.dirty ?? []).length === 0) {
-    return `今天还没有自证 —— 上一次跑绿在 "${at.toISOString()}"，不是今天。` + how;
+    return `今天还没有自证 —— 上一次跑绿在 "${at.toISOString()}"，不是今天。${how}`;
   }
   if (since) {
     return (
       `今天的提交动过这一档的输入面（${track.dirty.join(" / ")}），而它还没有自证 —— ` +
-      `上一次跑绿在 "${at.toISOString()}"，早于当天的第一次改动。` +
-      how +
-      (track.dirtyHow ? `\n              若这次改动确实不吃这一档：\`${track.dirtyHow}\`。` : "")
+      `上一次跑绿在 "${at.toISOString()}"，早于当天的第一次改动。${
+      how
+      }${track.dirtyHow ? `\n              若这次改动确实不吃这一档：\`${track.dirtyHow}\`。` : ""}`
     );
   }
   const days = Math.floor((now.getTime() - at.getTime()) / 86_400_000);
@@ -437,9 +437,9 @@ export function freshnessVerdict({ track, at, now, dirtySince }) {
   }
   return (
     `已经 ${days} 天没有自证（上一次跑绿在 "${at.toISOString()}"），` +
-    `超过了 ${Math.round(track.graceMs / 86_400_000)} 天的宽限。` +
-    how +
-    (track.dirtyHow ? `\n              若近期改动确实不吃这一档：\`${track.dirtyHow}\`。` : "")
+    `超过了 ${Math.round(track.graceMs / 86_400_000)} 天的宽限。${
+    how
+    }${track.dirtyHow ? `\n              若近期改动确实不吃这一档：\`${track.dirtyHow}\`。` : ""}`
   );
 }
 
@@ -511,10 +511,10 @@ export function checkFreshnessLedger(
       const value = String(rec[field] ?? "").trim();
       if (value.length < min) {
         problems.push(
-          `${track.label}（${key}）的新鲜度记录里 ${field} 没写清（"${value}"）—— ` +
-            (field === "how"
+          `${track.label}（${key}）的新鲜度记录里 ${field} 没写清（"${value}"）—— ${
+            field === "how"
               ? "这一栏要写**能照着重跑的那条命令**（写「稍后」「已复核」等于没写）。"
-              : "这一栏是这条账存在的全部意义：谁、什么时候、按哪条命令复核的。"),
+              : "这一栏是这条账存在的全部意义：谁、什么时候、按哪条命令复核的。"}`,
         );
       }
     }
@@ -625,12 +625,11 @@ export function checkFreshnessLedger(
           const stale = freshnessVerdict({ track, at: at2, now, dirtySince });
           if (stale) {
             problems.push(
-              `${track.label}（${key}）${stale}` +
-                (waiver
+              `${track.label}（${key}）${stale}${waiver
                   ? `\n        （上一条是${waiver === "dirtyReason" ? "「不吃这一档」" : "豁免"}、写在 "${at}" —— ` +
                     `上面那句里的日期是**那次回答的时刻**，不是跑绿的凭证。` +
                     `豁免只替它写在的那一天作证；过了当天，这一档回到自己的口径上判。）`
-                  : ""),
+                  : ""}`,
             );
           }
         }

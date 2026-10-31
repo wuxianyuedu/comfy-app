@@ -1024,8 +1024,8 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
 
     expect(
       offenders,
-      "这些文件自己在拼 pnpm 可执行名（Windows 上会选中 Node 起不来的批处理形态）：\n" +
-        offenders.map((o) => `  · ${o}`).join("\n"),
+      `这些文件自己在拼 pnpm 可执行名（Windows 上会选中 Node 起不来的批处理形态）：\n${
+        offenders.map((o) => `  · ${o}`).join("\n")}`,
     ).toEqual([]);
   });
 
@@ -1076,7 +1076,7 @@ describe("pnpm 探测的记忆化（一次启动只探一次）", () => {
   function makeCountingPnpm(dirName: string, body: string) {
     const dir = path.join(tmp, dirName);
     fs.mkdirSync(dir, { recursive: true });
-    const counter = path.join(tmp, dirName + "-calls.txt");
+    const counter = path.join(tmp, `${dirName}-calls.txt`);
     const script = path.join(dir, "pnpm");
     // 逐行拼装，避免源码里出现跨行的字符串字面量。
     const lines = ["#!/bin/sh", `echo x >> "${counter}"`, body, ""];

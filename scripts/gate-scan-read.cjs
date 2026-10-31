@@ -285,7 +285,7 @@ function readStagedPaths(root = process.cwd()) {
  * @returns {boolean}
  */
 function isUnderAny(rel, roots) {
-  return roots.some((dir) => rel === dir || rel.startsWith(dir + "/"));
+  return roots.some((dir) => rel === dir || rel.startsWith(`${dir}/`));
 }
 
 /**

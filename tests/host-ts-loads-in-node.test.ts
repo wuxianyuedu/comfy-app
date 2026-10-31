@@ -93,13 +93,13 @@ describe("跨宿主地基层模块在真 Node 里加载得起来", () => {
         continue;
       }
       failures.push(
-        `${rel}\n` +
+        `${rel}\n${
           r.message
             .split("\n")
             .slice(0, 3)
             .map((l) => `      ${l}`)
-            .join("\n") +
-          `\n      ⇒ 它由 .mjs 宿主直接加载（平台侧 \`node scripts/e2e-run.mjs\`），` +
+            .join("\n")
+          }\n      ⇒ 它由 .mjs 宿主直接加载（平台侧 \`node scripts/e2e-run.mjs\`），` +
           `这一跳崩在「E2E 关键流程」的加载期；\n` +
           `        常见成因：误加了 \`import "server-only"\`（入口就是一句 throw）、` +
           `顶层读库未过 \`isSchemaReady()\`、\n` +

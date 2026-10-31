@@ -123,8 +123,8 @@ export function composeEscalation({ account, streak, why }) {
   const stale =
     account.stale.kind === "unknown"
       ? "- 陈旧度：**读不出**（判据的归因行里没有可解析的那一段）"
-      : `- 陈旧度：基线 \`${account.stale.rev ?? "(按日期归因)"}\` 其后**${account.stale.n} 次提交**` +
-        (account.stale.kind === "source-commits" ? "（src/ 侧主干提交）" : "");
+      : `- 陈旧度：基线 \`${account.stale.rev ?? "(按日期归因)"}\` 其后**${account.stale.n} 次提交**${
+        account.stale.kind === "source-commits" ? "（src/ 侧主干提交）" : ""}`;
   const streakLine =
     streak.days === "unknown"
       ? `- 连续：**读不出**（${streak.note}）`

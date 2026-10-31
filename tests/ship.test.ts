@@ -565,7 +565,7 @@ describe("classifyPushFailure：push 失败按原话分型，不固定猜 premer
   it("两类特征同时在场 ⇒ 仍判 remote（钩子放行后传输被拒，终止原因是远端）", () => {
     const got = classifyPushFailure(
       "",
-      "[pre-push] ✓ 合并前复算全绿\n" + REMOTE_404_STDERR,
+      `[pre-push] ✓ 合并前复算全绿\n${REMOTE_404_STDERR}`,
     );
     expect(got.kind).toBe("remote");
   });

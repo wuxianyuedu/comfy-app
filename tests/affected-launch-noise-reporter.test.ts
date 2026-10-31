@@ -114,10 +114,10 @@ describe("spawnVitest end-to-end —— 真起 node 验证过滤写入", () => {
     writeFileSync(
       entry,
       [
-        `process.stdout.write(${JSON.stringify(BENIGN[6] + "\n")});`,
-        `process.stdout.write(${JSON.stringify(REAL[0] + "\n")});`,
-        `process.stderr.write(${JSON.stringify(BENIGN[8] + "\n")});`,
-        `process.stderr.write(${JSON.stringify(REAL[3] + "\n")});`,
+        `process.stdout.write(${JSON.stringify(`${BENIGN[6]}\n`)});`,
+        `process.stdout.write(${JSON.stringify(`${REAL[0]}\n`)});`,
+        `process.stderr.write(${JSON.stringify(`${BENIGN[8]}\n`)});`,
+        `process.stderr.write(${JSON.stringify(`${REAL[3]}\n`)});`,
       ].join("\n"),
     );
 

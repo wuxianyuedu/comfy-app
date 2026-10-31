@@ -382,29 +382,29 @@ function main() {
   const note = vanishedNote(vanished);
 
   if (offenders.length === 0) {
-    console.log(`[soft] OK —— ${total} 处 expect.soft 全在循环体里。` + note);
+    console.log(`[soft] OK —— ${total} 处 expect.soft 全在循环体里。${note}`);
     return 0;
   }
 
   console.error(
-    (REPORT_ONLY
+    `${REPORT_ONLY
       ? `[soft] 盘点：${offenders.length} 处待办（--report 不判失败）`
-      : `[ERROR] 有 ${offenders.length} 处 expect.soft 落在循环体之外`) + "：\n",
+      : `[ERROR] 有 ${offenders.length} 处 expect.soft 落在循环体之外`}：\n`,
   );
   for (const o of offenders) {
     console.error(`  · ${o.rel}:${o.line}`);
   }
   console.error(
-    "\n`expect.soft` 唯一的用途是「一张清单逐项判、一项失败不影响下一项」。" +
-      "\n落在循环体之外的软断言，实测会把真正的原因吞掉：" +
-      "\n  软断言失败 → 下一行照跑 → 依赖前提的语句抛 TypeError，" +
-      "\n  报告里只剩那条 TypeError，软断言那句「真正的原因」一个字都不留。" +
-      "\n修法二选一：" +
-      "\n  · 顺序依赖 → 改回硬断言 `expect(...)`（它至少报得出真正的原因）；" +
-      "\n  · 本来就是一张清单 → 写成 `for (const x of LIST) expect.soft(...)`。" +
-      "\n列清单：`node scripts/check-soft-assertions.cjs --report`" +
-      "\n口径见 docs/standards/11-测试与可观测性.md §11.18。" +
-      note,
+    `\n\`expect.soft\` 唯一的用途是「一张清单逐项判、一项失败不影响下一项」。` +
+      `\n落在循环体之外的软断言，实测会把真正的原因吞掉：` +
+      `\n  软断言失败 → 下一行照跑 → 依赖前提的语句抛 TypeError，` +
+      `\n  报告里只剩那条 TypeError，软断言那句「真正的原因」一个字都不留。` +
+      `\n修法二选一：` +
+      `\n  · 顺序依赖 → 改回硬断言 \`expect(...)\`（它至少报得出真正的原因）；` +
+      `\n  · 本来就是一张清单 → 写成 \`for (const x of LIST) expect.soft(...)\`。` +
+      `\n列清单：\`node scripts/check-soft-assertions.cjs --report\`` +
+      `\n口径见 docs/standards/11-测试与可观测性.md §11.18。${
+      note}`,
   );
   return REPORT_ONLY ? 0 : 1;
 }

@@ -224,13 +224,13 @@ function globToRegExp(glob) {
         continue;
       }
       out +=
-        "(?:" +
+        `(?:${
         glob
           .slice(i + 1, close)
           .split(",")
           .map(escapeRe)
-          .join("|") +
-        ")";
+          .join("|")
+        })`;
       i = close;
     } else if (c === "/") {
       out += "/";
@@ -238,7 +238,7 @@ function globToRegExp(glob) {
       out += escapeRe(c);
     }
   }
-  return new RegExp(out + "$");
+  return new RegExp(`${out}$`);
 }
 
 const IGNORE_RES = IGNORE_GLOBS.map(globToRegExp);

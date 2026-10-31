@@ -278,7 +278,7 @@ async function main() {
   // ── ① Node 侧真跑 ──
   try {
     const mod = await import(
-      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")
+      `file://${path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")}`
     );
     for (const v of vectors) {
       const norm = mod.normalizeRootForPort(v.input);
@@ -307,7 +307,7 @@ async function main() {
   }
   try {
     const mod = await import(
-      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")
+      `file://${path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")}`
     );
     for (const v of envVectors) {
       // 判定走生产同一条出口 `parseDotEnvPortValue`，**不在门禁里另抄一份**
@@ -415,7 +415,7 @@ function report() {
      * 已经复跑过一次是这一步的前提（见 main 里那趟 Python 二次取证），不是给人留的作业。 */
     console.log("[app-port-vectors] 通过，但**未完全取证**（放行）：");
     for (const u of unverified) {
-      console.log("  - [未校验] " + u);
+      console.log(`  - [未校验] ${u}`);
     }
     console.log("");
     console.log("  这一趟仍然判了的：Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用。");
@@ -424,10 +424,10 @@ function report() {
   }
   console.error("[app-port-vectors] 四语言端口推导一致性失败：");
   for (const p of problems) {
-    console.error("  - " + p);
+    console.error(`  - ${p}`);
   }
   for (const u of unverified) {
-    console.error("  - [未校验·附带] " + u);
+    console.error(`  - [未校验·附带] ${u}`);
   }
   console.error("");
   console.error("  规范：docs/standards/launch-and-build.md §1.1（推导算法是跨语言约定，");
@@ -440,7 +440,7 @@ function report() {
  * 任何 `require` 这份文件的用例都会现场跑一次四侧取证并可能 `process.exit`。 */
 if (require.main === module) {
   main().catch((error) => {
-    console.error("[app-port-vectors] 检查脚本异常：" + (error && error.message));
+    console.error(`[app-port-vectors] 检查脚本异常：${error && error.message}`);
     process.exit(1);
   });
 }

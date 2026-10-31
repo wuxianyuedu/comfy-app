@@ -276,8 +276,7 @@ export function withBuildCacheSlot(run, io = {}) {
   });
   log(`[构建缓存槽] 槽根来源：${resolved.from}`);
   log(
-    `[构建缓存槽] 面 ${(face ?? "取不到").slice(0, 12)}·结论 ${plan.action}` +
-      (plan.path ? `·槽 ${plan.path}` : ""),
+    `[构建缓存槽] 面 ${(face ?? "取不到").slice(0, 12)}·结论 ${plan.action}${plan.path ? `·槽 ${plan.path}` : ""}`,
   );
   log(`[构建缓存槽]   ${plan.why}`);
 

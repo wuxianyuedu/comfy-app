@@ -211,14 +211,14 @@ export function pythonEvidence({
     .split(platform === "win32" ? ";" : ":")
     .filter(Boolean);
   lines.push(
-    `[e2e]     env 里的 PATH：${pathEntries.length} 条` +
-      (pathEntries.length === 0
+    `[e2e]     env 里的 PATH：${pathEntries.length} 条${
+      pathEntries.length === 0
         ? `（键写成 ${
             Object.keys(env)
               .filter((k) => k.toLowerCase() === "path")
               .join(" / ") || "一个都没有"
           }）`
-        : ""),
+        : ""}`,
   );
   for (const name of pythonCandidates(platform)) {
     const args = pythonProbeArgs(name, ["--version"]);

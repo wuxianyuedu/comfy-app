@@ -524,7 +524,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
-            content: lines.join("\n") + "\n",
+            content: `${lines.join("\n")}\n`,
             size: 1_000_000,
             offset: 0,
             sessionStart: start,
@@ -724,7 +724,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
-            content: lines.join("\n") + "\n",
+            content: `${lines.join("\n")}\n`,
             size: 10_000_000,
             offset: 0,
             sessionStart: start,
@@ -798,7 +798,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
-            content: lines.join("\n") + "\n",
+            content: `${lines.join("\n")}\n`,
             size: 1_000_000,
             offset: 0,
             sessionStart: start,

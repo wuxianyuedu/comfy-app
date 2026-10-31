@@ -190,8 +190,8 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
         lines[scriptAt + (isBlock ? 1 : 0)] ?? "";
       expect(
         firstStatement,
-        `锚点 ${anchor} 的第一格在打中文之前没钉 [Console]::OutputEncoding：` +
-          firstStatement.trim().slice(0, 90),
+        `锚点 ${anchor} 的第一格在打中文之前没钉 [Console]::OutputEncoding：${
+          firstStatement.trim().slice(0, 90)}`,
       ).toContain("[Console]::OutputEncoding");
     }
   });

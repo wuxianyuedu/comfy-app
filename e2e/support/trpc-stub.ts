@@ -82,7 +82,7 @@ export function trpcJsonlBody(results: Array<unknown>): string {
     chunkId += 3;
   });
 
-  return [line(head), ...lines].join("\n") + "\n";
+  return `${[line(head), ...lines].join("\n")}\n`;
 }
 
 /**

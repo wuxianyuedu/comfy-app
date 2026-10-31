@@ -276,26 +276,26 @@ function main() {
     );
     for (const [rel, sites] of [...violations.entries()].sort()) {
       console.error(
-        `  · ${rel}: ${sites.length} 处\n` +
+        `  · ${rel}: ${sites.length} 处\n${
           sites
             .slice(0, 8)
             .map((s) => `      ${s.line}: ${s.text}`)
-            .join("\n") +
-          (sites.length > 8 ? `\n      …另有 ${sites.length - 8} 处` : ""),
+            .join("\n")
+          }${sites.length > 8 ? `\n      …另有 ${sites.length - 8} 处` : ""}`,
       );
     }
     console.error(
-      "\n口径见 docs/standards/11-测试与可观测性.md §11.14.3。" + vanishedNote(vanished),
+      `\n口径见 docs/standards/11-测试与可观测性.md §11.14.3。${vanishedNote(vanished)}`,
     );
     return 1;
   }
 
   console.log(
     `[test-waitfor] OK —— 越界 0 处 / 正当 ${legitTotal} 处` +
-      `（等 DOM ${legit.dom} + 假定时器窗口 ${legit["fake-timer"]}）。` +
+      `（等 DOM ${legit.dom} + 假定时器窗口 ${legit["fake-timer"]}）。${
       /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
          目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-      vanishedNote(vanished),
+      vanishedNote(vanished)}`,
   );
   return 0;
 }

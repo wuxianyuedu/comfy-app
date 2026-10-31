@@ -481,10 +481,10 @@ export function mergeAndVerify(ctx) {
   }
   if (buildState !== "green") {
     log(
-      "[ship] 拒绝合并：CI 不是绿的（当前是 " +
-        buildState +
-        (buildState === "cancelled" ? " = 那一跑被取消，没有结论" : "") +
-        "）。",
+      `[ship] 拒绝合并：CI 不是绿的（当前是 ${
+        buildState
+        }${buildState === "cancelled" ? " = 那一跑被取消，没有结论" : ""
+        }）。`,
     );
     return CODE.RED;
   }

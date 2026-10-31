@@ -153,10 +153,9 @@ export async function pollUntilTerminal(ctx) {
         const first = outcome.cancelled[0];
         const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
         log(
-          `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"}` +
-            " 被终止 ⇒ 下面那几格根本没跑" +
-            (skipped.length > 0 ? `（${skipped.join("、")}）` : "") +
-            "，这一跑没有 CI 结论",
+          `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"} 被终止 ⇒ 下面那几格根本没跑${
+            skipped.length > 0 ? `（${skipped.join("、")}）` : ""
+            }，这一跑没有 CI 结论`,
         );
         /* 「被谁顶掉的」是这一档唯一能让人**不去**查产物的那句话（ISSUE #2406）：
          * 原话与抢锁那一跑都来自平台，本仓一个字不代写。 */

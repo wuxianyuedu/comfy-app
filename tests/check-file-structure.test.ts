@@ -416,7 +416,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     };
 
     it("内嵌 NUL 字节被阻断", () => {
-      writeSrc("a.ts", 'export const SENTINEL = "' + NUL + "CODE0" + NUL + '";\n');
+      writeSrc("a.ts", `export const SENTINEL = "${NUL}CODE0${NUL}";\n`);
       const { code, output } = run();
       expect(code).toBe(1);
       expect(output).toContain("R12");
@@ -792,13 +792,13 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
   // stdout，正文会与 `CODE=` 挤在同一行，断言被日志粘住而失衡。
   // KILLED 计数用 `$global:`（Assert-ShellNotRunning 有自己的作用域，`$script:` 改不到）。
   const assertShellScript = (procsJson: string, opts: { parent?: string } = {}): string =>
-    guardScript(procsJson, opts)
+    `${guardScript(procsJson, opts)
       .replace(
         "function Log { param([string]$Msg) Write-Output $Msg }",
         "function Log { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
       )
-      .replace("$global:KILLED_PIDS = @()", "$global:KILLED = 0\n$global:KILLED_PIDS = @()") +
-    `
+      .replace("$global:KILLED_PIDS = @()", "$global:KILLED = 0\n$global:KILLED_PIDS = @()")
+    }
 $code = Assert-ShellNotRunning -ProjectRoot $root -Purpose "构建 release 壳"
 Write-Output ("CODE=" + $code)
 Write-Output ("KILLED=" + $global:KILLED)

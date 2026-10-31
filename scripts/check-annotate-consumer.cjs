@@ -297,38 +297,38 @@ function main() {
 
   if (sites.length === 0) {
     console.log(
-      "[annotate] OK —— 0 处 `ctx.annotate` 站点" +
-        `（本判据是纯闸门：对象是「下一次有人挂注释」；台账在场，${consumers.length} 条登记）。` +
-        note,
+      `[annotate] OK —— 0 处 \`ctx.annotate\` 站点` +
+        `（本判据是纯闸门：对象是「下一次有人挂注释」；台账在场，${consumers.length} 条登记）。${
+        note}`,
     );
     return 0;
   }
 
   if (consumers === null || consumers.length === 0) {
     console.error(
-      (REPORT_ONLY
+      `${REPORT_ONLY
         ? `[annotate] 盘点：${sites.length} 处站点、无消费方登记（--report 不判失败）`
-        : `[ERROR] 有 ${sites.length} 处 \`ctx.annotate\` 站点，但 ${LEDGER} 里没有消费方`) +
-        "：\n",
+        : `[ERROR] 有 ${sites.length} 处 \`ctx.annotate\` 站点，但 ${LEDGER} 里没有消费方`
+        }：\n`,
     );
     for (const s of sites) {
       console.error(`  · ${s.rel}:${s.line}`);
     }
     console.error(
-      "\n`annotate` 写下的注释**只有失败时**在 text reporter 里可见，`--reporter=json`\n" +
-        "的产物里一个字都没有（实测逐键核过），唯一的读数通道是 programmatic API\n" +
-        "`createVitest()` 的 `task.annotations()` —— 而门禁链跑 vitest 用的是 CLI spawn。\n" +
-        "所以「挂一把没人读的注释」比不写更坏：它让人以为这件事有人管。\n" +
+      `\n\`annotate\` 写下的注释**只有失败时**在 text reporter 里可见，\`--reporter=json\`\n` +
+        `的产物里一个字都没有（实测逐键核过），唯一的读数通道是 programmatic API\n` +
+        `\`createVitest()\` 的 \`task.annotations()\` —— 而门禁链跑 vitest 用的是 CLI spawn。\n` +
+        `所以「挂一把没人读的注释」比不写更坏：它让人以为这件事有人管。\n` +
         `修法二选一：\n  · 登记消费方：在 ${LEDGER} 的 \`consumers\` 里写明谁读、怎么读；\n` +
-        "  · 或者不写这条注释 —— 当前没有消费方时它只是装饰。\n" +
-        "口径见 docs/standards/11-测试与可观测性.md §11.21。" +
-        note,
+        `  · 或者不写这条注释 —— 当前没有消费方时它只是装饰。\n` +
+        `口径见 docs/standards/11-测试与可观测性.md §11.21。${
+        note}`,
     );
     return REPORT_ONLY ? 0 : 1;
   }
 
   console.log(
-    `[annotate] OK —— ${sites.length} 处注解站点，消费方 ${consumers.length} 条登记。` + note,
+    `[annotate] OK —— ${sites.length} 处注解站点，消费方 ${consumers.length} 条登记。${note}`,
   );
   return 0;
 }

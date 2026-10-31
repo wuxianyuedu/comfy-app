@@ -486,7 +486,7 @@ checkReadmeEntryList();
 if (problems.length > 0) {
   console.error("[ps1-consistency] 违规：");
   for (const p of problems) {
-    console.error("  - " + p);
+    console.error(`  - ${p}`);
   }
   console.error("");
   console.error(

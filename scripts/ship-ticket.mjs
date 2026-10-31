@@ -376,14 +376,14 @@ export function issueAuthoring({
   if (!name) {
     const where = path.join(root || ".", ".env");
     lines.push(
-      "[ship] 提单留痕是空的 ⇒ 这一格会留空。名字本来有取值链（`dev-handle.mjs`：人填的 → " +
-        "`CNB_NPC_NAME` / `CNB_TOKEN_USER_NAME` → `git config user.name` → `cnb`），走到这里说明" +
+      `[ship] 提单留痕是空的 ⇒ 这一格会留空。名字本来有取值链（\`dev-handle.mjs\`：人填的 → ` +
+        `\`CNB_NPC_NAME\` / \`CNB_TOKEN_USER_NAME\` → \`git config user.name\` → \`cnb\`），走到这里说明` +
         `调用方显式给了空值；要人填就写**这一份检出**的 \`${where}\` 里那一行 ` +
         `\`${DEV_HANDLE_ENV_KEY}="<短名>"\`（整行不在时先跑 \`pnpm env:init\`，` +
-        "它会把一个确定的名字落进去，而不是留个空值）。" +
-        (platform === "win32"
+        `它会把一个确定的名字落进去，而不是留个空值）。${
+        platform === "win32"
           ? "Windows 开发者按规范要求配这一格。"
-          : `当前宿主：${platform || "未告知"}。`),
+          : `当前宿主：${platform || "未告知"}。`}`,
     );
   }
   if (showExits) {
@@ -467,13 +467,12 @@ export function whoamiLines({ handle = null, source = null, root = "", slug = nu
   const repo = slug || "<组织>/<仓库>";
   const from = String(source ?? "").trim();
   const lines = [
-    `[ship] 本检出的平台留痕：${name || "未配"}` +
-      (name ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）` : "") +
-      (isExplicitSource(from)
+    `[ship] 本检出的平台留痕：${name || "未配"}${name ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）` : ""
+      }${isExplicitSource(from)
         ? `（你填的：${from === ".env" ? "这一份检出的 `.env`" : "进程环境"}）`
         : from
           ? `（**取的**：${from} ⇒ 换台机器 / 换会话会变；要固定就在 \`${path.join(root || ".", ".env")}\` 填一行）`
-          : `（取自 ${DEV_HANDLE_ENV_KEY}：进程环境优先，其次这一份检出的 \`.env\`）`),
+          : `（取自 ${DEV_HANDLE_ENV_KEY}：进程环境优先，其次这一份检出的 \`.env\`）`}`,
   ];
   if (!name) {
     lines.push(

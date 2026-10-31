@@ -251,7 +251,7 @@ export async function main(deps = {}) {
   const opt = parseArgs(deps.args ?? process.argv.slice(2));
   if (opt.reap && !opt.dryRun) {
     const root = deps.root ?? process.cwd();
-    const log = deps.log ?? ((s) => process.stdout.write(s + "\n"));
+    const log = deps.log ?? ((s) => process.stdout.write(`${s}\n`));
     const run = deps.run ?? makeRunner(root);
     const before = code;
     code = combineShipCodes([
@@ -313,7 +313,7 @@ async function runFlow(deps, tmpFiles) {
   /** cnb 在不在：**真起一次** `--version` 看退码。不按「PATH 里有没有那个名字」判 ——
    *  在 Windows 垫片上「找得到」与「起得来」是两件事（见 `ship-exec.mjs` 的 `cnbSpawn`）。 */
   const probeCnb = deps.probeCnb ?? (() => run("cnb", ["--version"]).status === 0);
-  const log = deps.log ?? ((s) => process.stdout.write(s + "\n"));
+  const log = deps.log ?? ((s) => process.stdout.write(`${s}\n`));
   const sleep = deps.sleep ?? ((ms) => new Promise((res) => setTimeout(res, ms)));
   const now = deps.now ?? (() => Date.now());
   const opt = parseArgs(deps.args ?? process.argv.slice(2));

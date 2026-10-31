@@ -261,13 +261,13 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const errors = validateArgs(opts);
   if (errors.length) {
-    process.stderr.write(errors.join("\n") + "\n\n" + HELP);
+    process.stderr.write(`${errors.join("\n")}\n\n${HELP}`);
     return 2;
   }
   if (opts.dryRun) {
     process.stdout.write(
-      JSON.stringify({ start: buildStartCall(opts), status: buildStatusCall(opts) }, null, 2) +
-        "\n",
+      `${JSON.stringify({ start: buildStartCall(opts), status: buildStatusCall(opts) }, null, 2)
+        }\n`,
     );
     return 0;
   }
@@ -284,14 +284,14 @@ export async function main(argv = process.argv.slice(2)) {
     }
     return text ? JSON.parse(text) : null;
   };
-  const log = (/** @type {string} */ line) => process.stdout.write(line + "\n");
+  const log = (/** @type {string} */ line) => process.stdout.write(`${line}\n`);
   try {
     const { snapshot, timedOut, polls } = await driveFilmRun(opts, {
       request,
       log,
     });
     if (opts.json) {
-      process.stdout.write(JSON.stringify(snapshot) + "\n");
+      process.stdout.write(`${JSON.stringify(snapshot)}\n`);
     } else {
       log(timedOut ? `超时（${polls} 次轮询）` : `结束：${formatStep(snapshot)}`);
     }

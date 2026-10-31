@@ -144,7 +144,7 @@ export function specCandidates(spec, fromFile) {
   if (clean === "~" || clean === "@") {
     base = "src";
   } else if (clean.startsWith("~/") || clean.startsWith("@/")) {
-    base = "src/" + clean.slice(2);
+    base = `src/${clean.slice(2)}`;
   } else if (clean.startsWith("./") || clean.startsWith("../")) {
     const fromDir = fromFile ? path.posix.dirname(fromFile) : ".";
     base = path.posix.normalize(path.posix.join(fromDir, clean));
@@ -402,8 +402,8 @@ export function resolveAffectedTests({
       // 否则 `x.tsx` 会拼成 `x.tsx.test.ts` 这种查无此文件的名字。
       const stem = rel.replace(/\.(ts|tsx|mts|js|jsx|mjs)$/, "");
       if (stem !== rel) {
-        add(stem + ".test.ts", "兄弟测试");
-        add(stem + ".test.tsx", "兄弟测试");
+        add(`${stem}.test.ts`, "兄弟测试");
+        add(`${stem}.test.tsx`, "兄弟测试");
       }
     }
     // 快照文件按其宿主测试算。
@@ -767,7 +767,7 @@ export function wideFallbackNote(note, count) {
 function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--fixed-only")) {
-    process.stdout.write(FIXED_STRUCTURAL_TESTS.join(" ") + "\n");
+    process.stdout.write(`${FIXED_STRUCTURAL_TESTS.join(" ")}\n`);
     return 0;
   }
   /* `--attribute`：只回答「这次的受影响面里，每一份是被哪个改动文件拉进来的」，
@@ -783,9 +783,9 @@ function main() {
     }
     const graph = buildImportedBy(new Set([...inputs.sourceFiles, ...inputs.testFiles]), readText);
     process.stdout.write(
-      JSON.stringify(
+      `${JSON.stringify(
         attributeAffected(changed, graph, inputs.testFiles, inputs.sourceFiles, inputs.tracked),
-      ) + "\n",
+      )}\n`,
     );
     return 0;
   }
@@ -845,8 +845,8 @@ function main() {
   const tests = res.tests.length > 0 ? res.tests : [...FIXED_STRUCTURAL_TESTS];
   process.stdout.write(
     argv.includes("--json")
-      ? JSON.stringify({ ...res, tests }, null, 2) + "\n"
-      : tests.join(" ") + "\n",
+      ? `${JSON.stringify({ ...res, tests }, null, 2)}\n`
+      : `${tests.join(" ")}\n`,
   );
   return 0;
 }

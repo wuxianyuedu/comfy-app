@@ -51,11 +51,11 @@ export function fileListReport(files, input) {
   const shown = files.slice(0, max);
   return (
     `[affected-launch] 本次清单：${total} 份用例（reporter 是 dot ⇒ 这 ${shown.length} 行是\n` +
-    "  **这一跑跑了哪些**的唯一出处；不 quiet 时由默认 reporter 逐文件打，故此处不打）：\n" +
-    shown.map((f) => `    · ${f}\n`).join("") +
-    (total > shown.length
+    `  **这一跑跑了哪些**的唯一出处；不 quiet 时由默认 reporter 逐文件打，故此处不打）：\n${
+    shown.map((f) => `    · ${f}\n`).join("")
+    }${total > shown.length
       ? `  ……另有 ${total - shown.length} 份未列出（日志预算；要完整清单就本地跑\n` +
         "    `node scripts/affected-tests.mjs` 或看 vitest 自己的默认 reporter）\n"
-      : "")
+      : ""}`
   );
 }

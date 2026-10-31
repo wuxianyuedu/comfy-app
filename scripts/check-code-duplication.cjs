@@ -120,7 +120,7 @@ const relOf = (p) =>
   p
     .split(path.sep)
     .join("/")
-    .replace(ROOT.split(path.sep).join("/") + "/", "");
+    .replace(`${ROOT.split(path.sep).join("/")}/`, "");
 
 /* ── 采集 ────────────────────────────────────────────────── */
 

@@ -275,12 +275,12 @@ test("历史形状原样回放：`try { … } finally { vi.useRealTimers() }` �
     "  });\n";
   repo.write(
     "src/a/history.test.ts",
-    'import { renderHook } from "@testing-library/react";\n' +
-      'import { describe, expect, it, vi } from "vitest";\n' +
-      'describe("useSettingsPage", () => {\n' +
-      body("拉起后轮询到就绪") +
-      body("轮询期间状态行停在 starting") +
-      "});\n",
+    `import { renderHook } from "@testing-library/react";\n` +
+      `import { describe, expect, it, vi } from "vitest";\n` +
+      `describe("useSettingsPage", () => {\n${
+      body("拉起后轮询到就绪")
+      }${body("轮询期间状态行停在 starting")
+      }});\n`,
   );
   const { code, output } = repo.run();
   expect(code, output).toBe(1);

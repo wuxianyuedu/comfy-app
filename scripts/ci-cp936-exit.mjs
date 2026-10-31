@@ -471,10 +471,10 @@ export function formatSpawnFailure({ err, command, realCommand, cwd }) {
   const where = cwd ? `（当前目录 ${cwd}）` : "";
   const lines = [
     `[cp936-exit] 起不了这条命令：${command}${where}`,
-    `  失败码 ${code} —— ` +
-      (code === "ENOENT"
+    `  失败码 ${code} —— ${
+      code === "ENOENT"
         ? "盘上没有这个文件（名字 / 入参对不上？）"
-        : "文件在、但起不来（形态不对？见 resolveCommandInvocation）"),
+        : "文件在、但起不来（形态不对？见 resolveCommandInvocation）"}`,
   ];
   /* 解析口交回的那一份只在**解析真的发生过**时才有意义：路径原样交出去时
    * `realCommand` 就是原文，再打一遍只是噪音。 */
@@ -729,12 +729,12 @@ export function runWithCp936Exit(
        * `module.exports` 的 shim 还是真的可执行文件，看路径就看得出）、以及
        * 调用方自己写的那份原文（相对路径与绝对路径在这里长得一样，分不开）。 */
       emit(
-        formatSpawnFailure({
+        `${formatSpawnFailure({
           err,
           command,
           realCommand,
           cwd: process.cwd(),
-        }) + "\n",
+        })}\n`,
       );
       settle(127);
     });

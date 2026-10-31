@@ -135,9 +135,9 @@ afterEach(() => {
   }
   expect(
     touched,
-    "探针不该写真实工作树（ISSUE #2665）：下面这些真实入库文件在本文件跑的过程中被改过 —— " +
-      "写探针要落在克隆里（`REPO_ROOT`），不是 `REAL_ROOT`。\n  " +
-      touched.join("\n  "),
+    `探针不该写真实工作树（ISSUE #2665）：下面这些真实入库文件在本文件跑的过程中被改过 —— ` +
+      `写探针要落在克隆里（\`REPO_ROOT\`），不是 \`REAL_ROOT\`。\n  ${
+      touched.join("\n  ")}`,
   ).toEqual([]);
 });
 

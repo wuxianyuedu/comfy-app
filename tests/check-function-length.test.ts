@@ -106,11 +106,11 @@ describe("check-function-length.cjs（函数长度门禁）", () => {
      * 括号，函数尾会找错，这个用例就会漏报。 */
     const body = Array.from(
       { length: 450 },
-      (_, i) => "  const s" + i + ' = "} { ) ( " + String(' + i + ") + ' ) }';",
+      (_, i) => `  const s${i} = "} { ) ( " + String(${i}) + ' ) }';`,
     ).join("\n");
     repo.write(
       rel,
-      "export function braces(x: number) {\n" + body + "\n  return x;\n}\n",
+      `export function braces(x: number) {\n${body}\n  return x;\n}\n`,
     );
     const { output } = repo.run(["--report"]);
     // 括号在字符串里被忽略 → 仍应认出这个函数

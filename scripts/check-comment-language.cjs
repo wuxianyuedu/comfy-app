@@ -396,7 +396,7 @@ async function main() {
   if (REPORT_ONLY) {
     const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     console.log(
-      `扫描 ${scanned} 个代码文件:疑似英文注释 ${total} 行,分布在 ${rows.length} 个文件` + note,
+      `扫描 ${scanned} 个代码文件:疑似英文注释 ${total} 行,分布在 ${rows.length} 个文件${note}`,
     );
     for (const [rel, n] of rows) {
       console.log(`  ${String(n).padStart(5)}  ${rel}`);
@@ -409,7 +409,7 @@ async function main() {
    * 而清零后的棘轮只剩两个无事可做的动作 + 一条「手改 JSON 就能把新违规登记成
    * 已知存量」的通道 —— 硬闸类本来没有那个中间态（§13.6.2 的两类对照）。 */
   if (total === 0) {
-    console.log(`✓ 无英文注释（§12.4.6;扫描 ${scanned} 个文件）` + note);
+    console.log(`✓ 无英文注释（§12.4.6;扫描 ${scanned} 个文件）${note}`);
     return;
   }
 
@@ -421,11 +421,11 @@ async function main() {
     console.error(`    ${String(n).padStart(5)}  ${rel}`);
   }
   console.error(
-    "\n修法:把注释改成中文（专有名词 / 命令 / 路径 / 错误原文保留英文）。" +
-      "\n  确实必须写英文的构建期模块 → 登记进 docs/reference-facts.md 的" +
-      "\n  `comment.language.asciiOnly` 一行（规范 launch-and-build §9.6）。" +
-      "\n  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。" +
-      note,
+    `\n修法:把注释改成中文（专有名词 / 命令 / 路径 / 错误原文保留英文）。` +
+      `\n  确实必须写英文的构建期模块 → 登记进 docs/reference-facts.md 的` +
+      `\n  \`comment.language.asciiOnly\` 一行（规范 launch-and-build §9.6）。` +
+      `\n  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。${
+      note}`,
   );
   process.exit(1);
 }

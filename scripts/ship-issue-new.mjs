@@ -329,9 +329,9 @@ export function runNewIssue({
   if (dryRun) {
     log(
       `[ship] --dry-run：将创建「${plan.title}」（正文 ${bodyFile}，长度 ${read.text.length} 字，` +
-        `优先级 ${plan.priority ?? "平台默认"}）` +
-        (label ? `，再按 ${label}，最后 get-issue 回读` : "，不回读标签（未配留痕）") +
-        "；一条都没写。",
+        `优先级 ${plan.priority ?? "平台默认"}）${
+        label ? `，再按 ${label}，最后 get-issue 回读` : "，不回读标签（未配留痕）"
+        }；一条都没写。`,
     );
     return CODE.GREEN;
   }
@@ -406,12 +406,11 @@ export function runNewIssue({
   }
   if (label && landed) {
     log(
-      `[ship] ✓ 留痕已补：${label}` +
-        (explicitHandle || isExplicitSource(handleSource)
+      `[ship] ✓ 留痕已补：${label}${explicitHandle || isExplicitSource(handleSource)
           ? "（你填的）。"
           : handleSource
             ? `（短名取自 ${handleSource}，换机器会变；要固定就在 .env 里填一行 \`COMFYAPP_DEV_HANDLE\`。）`
-            : "。"),
+            : "。"}`,
     );
   } else if (label) {
     log(

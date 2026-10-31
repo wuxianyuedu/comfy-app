@@ -203,11 +203,11 @@ describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1
     }
     expect(
       offenders,
-      "拼出来的 file:// 串在 Windows 上恒不等于 import.meta.url（三斜杠 vs 两斜杠、" +
-        "正斜杠 vs 反斜杠），那会让守卫里的 main() 一次都不跑、**退出码恒 0 且零输出**" +
-        "—— 是「这一步没跑」被读成了「这一步过了」。改用两侧都过 path.resolve 的比较" +
-        "（或 pathToFileURL(…).href）。命中：\n" +
-        offenders.map((o) => `  · ${o}`).join("\n"),
+      `拼出来的 file:// 串在 Windows 上恒不等于 import.meta.url（三斜杠 vs 两斜杠、` +
+        `正斜杠 vs 反斜杠），那会让守卫里的 main() 一次都不跑、**退出码恒 0 且零输出**` +
+        `—— 是「这一步没跑」被读成了「这一步过了」。改用两侧都过 path.resolve 的比较` +
+        `（或 pathToFileURL(…).href）。命中：\n${
+        offenders.map((o) => `  · ${o}`).join("\n")}`,
     ).toEqual([]);
   });
 

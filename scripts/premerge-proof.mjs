@@ -471,9 +471,9 @@ export function runFromStdin(stdinText) {
 
   if (blocking.length > 0) {
     process.stderr.write(
-      `[pre-push] ✗ 合并前复算红了，本次 push 不放行：\n` +
-        blocking.map((l) => `      · ${l}\n`).join("") +
-        `  这条分支现在合进 master 会把红一起带过去 —— 先修（\`yours\`），或按 §13.6.2 ` +
+      `[pre-push] ✗ 合并前复算红了，本次 push 不放行：\n${
+        blocking.map((l) => `      · ${l}\n`).join("")
+        }  这条分支现在合进 master 会把红一起带过去 —— 先修（\`yours\`），或按 §13.6.2 ` +
         `复算归属；别用 \`git push --no-verify\` 换一条干净历史（硬规则 7 同一口径）。\n`,
     );
     return 1;
@@ -488,9 +488,9 @@ export function runFromStdin(stdinText) {
     baselineRed: baselineOnly,
   });
   process.stderr.write(
-    `[pre-push] ⚠ 本分支没有引入新的红，但 master 上已有 ${baselineOnly.length} 条：\n` +
-      baselineOnly.map((l) => `      · ${l}\n`).join("") +
-      `  那是别线的账（就地收掉，或按 §11.12 登记 KNOWN_FAILED_FILES），不该由这条 push ` +
+    `[pre-push] ⚠ 本分支没有引入新的红，但 master 上已有 ${baselineOnly.length} 条：\n${
+      baselineOnly.map((l) => `      · ${l}\n`).join("")
+      }  那是别线的账（就地收掉，或按 §11.12 登记 KNOWN_FAILED_FILES），不该由这条 push ` +
       `承担，所以放行；已随证明记下，下一次复算还会念。\n`,
   );
   return 0;

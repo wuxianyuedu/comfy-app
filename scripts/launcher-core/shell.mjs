@@ -312,13 +312,13 @@ export function runPnpmSync(
   const unsafe = hostUnsafeArgs(args, invocation.viaHost);
   if (unsafe.length > 0) {
     const message =
-      "参数里有 `--x=…:…` 这种形态，而这一跳走的是 PowerShell 宿主" +
-      `（${invocation.command}）：\n` +
-      unsafe.map((a) => `      · ${a}`).join("\n") +
-      "\n  PS 的 `-File` 会在第一个冒号处把一个参数切成两个（实测），于是被切剩的那半截会" +
-      "变成程序的**位置参数** —— 表现是「什么都没匹配上」，不是「路径写错了」。\n" +
-      "  出路：值里不要出现冒号（文件落点改成仓库内的相对路径，见 scripts/full-suite-run.mjs" +
-      " 的 toTransportSafePath）。";
+      `参数里有 \`--x=…:…\` 这种形态，而这一跳走的是 PowerShell 宿主` +
+      `（${invocation.command}）：\n${
+      unsafe.map((a) => `      · ${a}`).join("\n")
+      }\n  PS 的 \`-File\` 会在第一个冒号处把一个参数切成两个（实测），于是被切剩的那半截会` +
+      `变成程序的**位置参数** —— 表现是「什么都没匹配上」，不是「路径写错了」。\n` +
+      `  出路：值里不要出现冒号（文件落点改成仓库内的相对路径，见 scripts/full-suite-run.mjs` +
+      ` 的 toTransportSafePath）。`;
     return {
       ok: false,
       stdout: "",

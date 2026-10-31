@@ -121,7 +121,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
     }
   } else {
     console.log(
-      `  [ok] ${sites} 个「这台机器上有没有」的探测站点都带着逐候选读数` + vanishedNote(vanished),
+      `  [ok] ${sites} 个「这台机器上有没有」的探测站点都带着逐候选读数${vanishedNote(vanished)}`,
     );
   }
 }

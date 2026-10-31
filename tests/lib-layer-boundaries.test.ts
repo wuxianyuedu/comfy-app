@@ -109,8 +109,8 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
     walk(join(root, "src", "lib"));
     expect(
       hits,
-      "src/lib 不得 import 视图层（需要共享的类型请下沉到 src/lib 下的类型模块，规范 §18.3）：\n" +
-        hits.map((h) => `  ✗ ${h}`).join("\n"),
+      `src/lib 不得 import 视图层（需要共享的类型请下沉到 src/lib 下的类型模块，规范 §18.3）：\n${
+        hits.map((h) => `  ✗ ${h}`).join("\n")}`,
     ).toEqual([]);
   });
 });
