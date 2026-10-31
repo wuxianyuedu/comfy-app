@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { filterSpawnOutput } from "../scripts/affected-launch-spawn.mjs";
 import {
+  FIXTURE_NOISE_PATTERN,
   NOISE_PATTERN,
   filterNoiseText,
   isNoiseLine,
@@ -162,4 +163,65 @@ describe("filterSpawnOutput 纯函数（超时 / 装载指纹不被吞）", () =
 // 顺手锁一下 NOISE_PATTERN 是合法正则（避免误写字符类把整张清单判成空、噪音被读成干净）。
 it("NOISE_PATTERN 是合法正则", () => {
   expect(() => new RegExp(NOISE_PATTERN)).not.toThrow();
+});
+
+/* ── 第二批（ISSUE #2844）：夹具 spawn 的 git / 探针 / 设计内失败 / storybook 警告块 ──
+ * 逐字取自 build cnb-hkh-1k68d3ms7（2026-10-31 15:20）的平台日志 —— 与第一批不同源：
+ * 这批走 stdout（夹具自己 spawn 的子进程与探针抬头），不是被测源码的 stderr 错误。 */
+describe("FIXTURE_NOISE_PATTERN —— 夹具 / 探针输出的良性形态", () => {
+  const FIXTURE_BENIGN = [
+    // git autocrlf 传输警告（夹具 spawn git 必漏）
+    "warning: in the working copy of 'src/a.ts', LF will be replaced by CRLF the next time Git touches it",
+    "warning: in the working copy of 'scripts/x.mjs', LF will be replaced by CRLF the next time Git touches it",
+    // `git worktree add` 的进度行
+    "Preparing worktree (detached HEAD 33d47fe)",
+    // 负向用例按设计造的 git 失败（junit 保全量，见判据文件头的交换说明）
+    "fatal: not a git repository (or any of the parent directories): .git",
+    // e2e-run 设计内失败抬头 + 它的箭头注解
+    "[e2e-run/test] × 起不了 Playwright（G:\\runner\\…\\no-such-playwright-runner）：失败码 ENOENT —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）",
+    "          ↑ 这条是**判据按设计造的失败**（负向用例要的正是这个出口），不是这一跑起不来。",
+    // ci-env-probe 的裸段名抬头（×6；只收裸行，带内容的行是真读数）
+    "[ports]",
+    "[python]",
+    "[schema]",
+    "[browser]",
+    // ci-install-deps 判据被夹具 exercise 时的原话
+    "[ci-install-deps] 安装：node_modules 不在或不完整（全新 clone / 被清过 —— 平台侧每一次都是这种形态）",
+    "[ci-install-deps] √ 跳过安装：依赖面（pnpm-lock.yaml / package.json / pnpm-workspace.yaml / next.config.js）一项都没碰，且 node_modules 就是照这一份装的",
+    "[ci-install-deps] 安装：依赖面被碰过：pnpm-lock.yaml",
+    // storybook extensionless 警告块（触发行 / 框线行 / 超链接包装）
+    "▲  One or more extensionless imports detected: \"./app-origin-defaults\" in",
+    "│  file",
+    "│  \"G:\\runner\\…\\.storybook\\main.ts\".",
+    "│  For more information on how to resolve the issue:",
+    "]8;;https://storybook.js.org/docs/faq#extensionless-imports-in-storybookmaints-and-required-ts-extensionshttps://storybook.js.org/docs/faq#extensionless-imports-in-st...]8;;",
+    // 孤立 x 行（两次构建都在场、源未定位 —— 按观察形态收，见判据文件头）
+    "x",
+  ];
+
+  it("第二批良性形态一律判 true（逐字对照两次实构建）", () => {
+    for (const line of FIXTURE_BENIGN) {
+      expect(isNoiseLine(line), `这一行应判噪音：${line.slice(0, 60)}`).toBe(true);
+    }
+  });
+
+  it("反向：带内容的探针行是真读数，不因段名前缀被误删（裸行限定）", () => {
+    for (const real of [
+      "[ports] :3000 已被占用（pid 1234）—— 真读数，必须留下",
+      "[python] CPython 3.12.1 —— 真读数，必须留下",
+      "xx",
+      "AssertionError: expected 3 to be 4",
+    ]) {
+      expect(isNoiseLine(real), `这一行必须留下：${real.slice(0, 50)}`).toBe(false);
+    }
+  });
+
+  it("FIXTURE_NOISE_PATTERN 是合法正则", () => {
+    expect(() => new RegExp(FIXTURE_NOISE_PATTERN)).not.toThrow();
+  });
+
+  it("两张清单合流：isNoiseLine 对两族各认各的", () => {
+    expect(isNoiseLine("Error: connect ECONNREFUSED ::1:3000")).toBe(true); // 第一批
+    expect(isNoiseLine("[ports]")).toBe(true); // 第二批
+  });
 });
