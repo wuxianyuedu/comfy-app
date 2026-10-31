@@ -175,7 +175,7 @@ function findCycles(graph) {
     onStack.add(start);
 
     while (work.length) {
-      const frame = work[work.length - 1];
+      const frame = work.at(-1);
       const [node, i] = frame;
       const neighbors = graph.get(node) || [];
       if (i < neighbors.length) {
@@ -196,7 +196,7 @@ function findCycles(graph) {
       // 邻居访问完:回填 low,必要时弹分量
       work.pop();
       if (work.length) {
-        const parent = work[work.length - 1][0];
+        const parent = work.at(-1)[0];
         low.set(parent, Math.min(low.get(parent), low.get(node)));
       }
       if (low.get(node) === index.get(node)) {

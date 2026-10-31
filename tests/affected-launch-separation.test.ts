@@ -30,7 +30,7 @@ describe("planSeparatedLaunches", () => {
   it("固定清单先跑、受影响用例后跑", () => {
     const plan = planSeparatedLaunches([FIXED_STRUCTURAL_TESTS[0]!, "src/lib/__x__/a.test.ts"]);
     expect(plan[0]!.kind).toBe("fixed");
-    expect(plan[plan.length - 1]!.kind).toBe("affected");
+    expect(plan.at(-1)!.kind).toBe("affected");
   });
 
   it("全是被固定清单覆盖的文件时，只有 fixed 段", () => {

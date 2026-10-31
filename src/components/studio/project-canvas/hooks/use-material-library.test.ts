@@ -90,7 +90,7 @@ describe("useMaterialLibrary", () => {
     await expect
       .poll(() => mockedList)
       .toHaveBeenLastCalledWith(expect.objectContaining({ q: "角色" }));
-    const lastCall = mockedList.mock.calls[mockedList.mock.calls.length - 1]?.[0];
+    const lastCall = mockedList.mock.calls.at(-1)?.[0];
     // 搜索优先于 folder：folder 不参与查询（客户端置 null）
     expect(lastCall?.folder).toBeNull();
     expect(result.current.searching).toBe(true);

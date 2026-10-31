@@ -994,7 +994,7 @@ describe("LogPanel 日志面板", () => {
       expect(scroller.scrollTop).toBe(expected);
       /* 窗口也真的跟着走到了页尾。 */
       const nodes = document.querySelectorAll("[data-log-index]");
-      const lastIndex = Number(nodes[nodes.length - 1]!.getAttribute("data-log-index"));
+      const lastIndex = Number(Array.from(nodes).at(-1)!.getAttribute("data-log-index"));
       expect(lastIndex).toBe(199);
     } finally {
       if (heights) {

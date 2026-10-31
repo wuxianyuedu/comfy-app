@@ -154,7 +154,7 @@ describe("workflow-run-store", () => {
     expect(meta?.status).toBe("failed");
     expect(meta?.errorMessage).toBe("未找到生成结果");
     const logs = meta?.logs ?? [];
-    const last = logs[logs.length - 1];
+    const last = logs.at(-1);
     expect(last?.level).toBe("error");
     expect(last?.msg).toContain("未找到生成结果");
   });
@@ -352,7 +352,7 @@ describe("workflow-run-store", () => {
     });
     const last = () => {
       const logs = getWorkflowRun("t1")?.logs;
-      return logs?.[logs.length - 1];
+      return logs?.at(-1);
     };
     for (let i = 0; i < 300; i += 1) {
       appendWorkflowRunLog("t1", { t: i, level: "info", msg: `行 ${i}` });

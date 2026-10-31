@@ -43,7 +43,7 @@ function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
     /* 剥掉**全局旗标**那一对（`-c core.quotePath=false`，ISSUE #2272）：它是 git 的
      * 全局配置，不属于「这条 diff 是什么形状」⇒ 键要按形状算。 */
     const shape = args[0] === "-c" ? args.slice(2) : args;
-    const key = shape[0] === "diff" ? `diff ${shape[shape.length - 1] ?? ""}` : (shape[0] ?? "");
+    const key = shape[0] === "diff" ? `diff ${shape.at(-1) ?? ""}` : (shape[0] ?? "");
     const hit = handlers[key] ?? handlers[shape[0] ?? ""];
     if (!hit) {
       return { ok: false, stdout: "" };

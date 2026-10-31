@@ -176,7 +176,7 @@ describe("FinalComposer 逐镜编辑", () => {
     const patches = vi
       .mocked(onShotsChange)
       .mock.calls.map((call) => /* SAFETY: 类型断言已复核 */ (call[0] as Array<Shot>)[0]!.duration);
-    expect(patches[patches.length - 1]).toBe(20);
+    expect(patches.at(-1)).toBe(20);
   });
 
   it("清空时长按缺省 4 处理（NaN 兜底）", async () => {
@@ -188,6 +188,6 @@ describe("FinalComposer 逐镜编辑", () => {
     const patches = vi
       .mocked(onShotsChange)
       .mock.calls.map((call) => /* SAFETY: 类型断言已复核 */ (call[0] as Array<Shot>)[0]!.duration);
-    expect(patches[patches.length - 1]).toBe(4);
+    expect(patches.at(-1)).toBe(4);
   });
 });

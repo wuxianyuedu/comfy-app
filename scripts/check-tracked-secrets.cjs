@@ -195,7 +195,7 @@ function scanUnit(entries) {
   const out = [];
   for (const hit of scanText(joined)) {
     let acc = 0;
-    let line = entries[entries.length - 1]?.line ?? 0;
+    let line = entries.at(-1)?.line ?? 0;
     for (const e of entries) {
       if (hit.offset < acc + e.text.length + 1) {
         line = e.line;

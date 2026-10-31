@@ -264,7 +264,7 @@ function maskNonCode(src) {
     }
 
     /* code 态 —— 但可能正处在一层插值里，要数花括号 */
-    const inInterp = stack[stack.length - 1] === "interp";
+    const inInterp = stack.at(-1) === "interp";
     if (inInterp) {
       if (ch === "{") {
         braceDepth += 1;

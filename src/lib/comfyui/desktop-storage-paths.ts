@@ -116,7 +116,7 @@ function slotHead(entry: string): string {
   if (segments.length === 0) {
     return "";
   }
-  return isAbsoluteLike(entry) ? (segments[segments.length - 1] ?? "") : (segments[0] ?? "");
+  return isAbsoluteLike(entry) ? (segments.at(-1) ?? "") : (segments[0] ?? "");
 }
 
 /**

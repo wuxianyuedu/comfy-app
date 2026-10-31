@@ -57,7 +57,7 @@ describe("createConsoleRunner", () => {
     expect(textOf(events, "stdout")).toContain("out-中文");
     expect(textOf(events, "stderr")).toContain("err-中文");
     // 退出帧在最后，且带着用时。
-    const last = events[events.length - 1];
+    const last = events.at(-1);
     expect(last?.type).toBe("exit");
     if (last?.type !== "exit") {
       return;
@@ -71,7 +71,7 @@ describe("createConsoleRunner", () => {
   it("非零退出码如实透出（界面据此判成败）", async () => {
     const { result, events } = await runOnce(process.execPath, ["-e", "process.exit(3)"]);
     expect(result.exitCode).toBe(3);
-    const last = events[events.length - 1];
+    const last = events.at(-1);
     expect(last?.type === "exit" && last.code).toBe(3);
     expect(result.killed).toBe(false);
   });
@@ -120,7 +120,7 @@ describe("createConsoleRunner", () => {
     expect(await runner.cancel()).toBe(true);
     const result = await done;
     expect(result.killed).toBe(true);
-    const last = events[events.length - 1];
+    const last = events.at(-1);
     expect(last?.type === "exit" && last.killed).toBe(true);
   });
 
@@ -194,7 +194,7 @@ describe("createConsoleRunner", () => {
     );
     // 命令本身仍然成功退出（截断只影响转发，不掐进程）。
     expect(result.exitCode).toBe(0);
-    const last = events[events.length - 1];
+    const last = events.at(-1);
     expect(last?.type === "exit" && last.truncatedNote).toBeTruthy();
     expect(textOf(events)).toContain("输出已达");
   }, 30_000);

@@ -298,7 +298,7 @@ export function decideStopOutcome(probeResults: Array<string | null>): {
   detail: string;
   ok: boolean;
 } {
-  const stillUp = probeResults[probeResults.length - 1] !== null;
+  const stillUp = probeResults.at(-1) !== null;
   return stillUp
     ? {
         ok: false,
