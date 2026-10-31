@@ -72,7 +72,7 @@ function writeLines(n: number, startIndex = 0): void {
     const idx = startIndex + i;
     return `[2026-09-11 15:${String(Math.floor(idx / 60) % 60).padStart(2, "0")}:${String(idx % 60).padStart(2, "0")}.123] [INFO] [task] 任务里程碑 ${idx}`;
   });
-  fs.appendFileSync(logFile, lines.join("\n") + "\n", "utf8");
+  fs.appendFileSync(logFile, `${lines.join("\n")}\n`, "utf8");
 }
 
 async function read(source: string, offset = 0) {

@@ -217,8 +217,9 @@ export async function executeViaComfyCli(job: Job) {
       log(
         taskId,
         "info",
-        `执行前跳过 ${prep.removed.length} 个禁用/纯前端节点` +
-          (prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : ""),
+        `执行前跳过 ${prep.removed.length} 个禁用/纯前端节点${
+          prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : ""
+        }`,
       );
     }
     patched = prep.graph;

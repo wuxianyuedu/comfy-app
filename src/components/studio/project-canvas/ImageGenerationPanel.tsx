@@ -361,7 +361,7 @@ export function ImageGenerationPanel({
               />
             ) : (
               <div className="text-ink-muted text-2xs">
-                {wfListLoading ? "加载中…" : genTag ? "模型「" + genTag + "」下" : ""}
+                {wfListLoading ? "加载中…" : genTag ? `模型「${genTag}」下` : ""}
                 {wfListLoading ? "" : "暂无该类型工作流"}
               </div>
             )}
@@ -387,7 +387,7 @@ export function ImageGenerationPanel({
           />
           <div className="flex items-center justify-center gap-2">
             <Button
-              className={btnCls + " h-auto px-6"}
+              className={`${btnCls} h-auto px-6`}
               disabled={d.status === "running" || cancelling}
               onClick={onGenerate}
               variant="primary-solid"
@@ -427,7 +427,7 @@ export function ImageGenerationPanel({
         </>
       ) : (
         <Button
-          className={btnCls + " mx-auto block h-auto w-auto px-6 opacity-40"}
+          className={`${btnCls} mx-auto block h-auto w-auto px-6 opacity-40`}
           disabled
           variant="primary-solid"
         >

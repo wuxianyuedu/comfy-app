@@ -1314,7 +1314,7 @@ describe("壳写的启动会话标记在面板里的形态（ISSUE #1364）", ()
     // 判据的写法侧那一半（三份共用一个 `stamped`）在 `shell_launch.rs` 的单测里。
     const perSource = /* SAFETY: 类型断言已复核 */ (
       ["shell-launch", "shell", "launcher"] as const
-    ).map((origin) => parseFileLogs(MARKER_LINE + "\n", undefined, origin));
+    ).map((origin) => parseFileLogs(`${MARKER_LINE}\n`, undefined, origin));
     expect(perSource.every((e) => e.length === 1)).toBe(true);
     const merged = dedupeByIdentity(perSource.flat());
     expect(merged).toHaveLength(1);

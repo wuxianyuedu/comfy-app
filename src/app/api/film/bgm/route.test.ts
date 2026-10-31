@@ -38,7 +38,7 @@ vi.mock("~/server/auth/request-user", () => ({
 import { POST } from "./route";
 import { filmBgmRoot, generatedRoot } from "~/lib/media/output-paths";
 
-const TMP = path.resolve(path.sep + "bgm-test-root");
+const TMP = path.resolve(`${path.sep}bgm-test-root`);
 const cwdSpy = vi.spyOn(process, "cwd");
 
 beforeEach(() => {

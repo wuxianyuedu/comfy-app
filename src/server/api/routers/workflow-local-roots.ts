@@ -45,7 +45,7 @@ function getLocalWorkflowRoots(): Array<string> {
 
 /* 给「磁盘上有、但还没导入过」的文件生成的稳定、确定的占位 id。 */
 function pendingId(absPath: string): string {
-  return "pending-" + hash("sha1", absPath, "hex").slice(0, 12);
+  return `pending-${hash("sha1", absPath, "hex").slice(0, 12)}`;
 }
 
 /* 追加到 `list` 里的「本地待导入」占位行的形状。
@@ -112,7 +112,7 @@ function findRootFor(
       continue;
     }
     const exact = target === rk;
-    const child = target.startsWith(rk + "/");
+    const child = target.startsWith(`${rk}/`);
     if (!exact && !child) {
       continue;
     }
@@ -150,7 +150,7 @@ function isWithinAllowedLocalWorkflowRoot(absPath: string): boolean {
   const key = normalizePathKey(absPath);
   return getAllowedLocalWorkflowRoots().some((root) => {
     const rk = normalizePathKey(root);
-    return key === rk || key.startsWith(rk + "/");
+    return key === rk || key.startsWith(`${rk}/`);
   });
 }
 

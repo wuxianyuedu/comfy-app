@@ -234,16 +234,15 @@ export function describeAppServiceDisconnect(
   if (notice) {
     return {
       title: "应用服务已断开",
-      body: head + `原因：${notice.why}。${notice.detail}。\n` + `建议：${notice.action}。`,
+      body: `${head}原因：${notice.why}。${notice.detail}。\n` + `建议：${notice.action}。`,
     };
   }
   return {
     title: "应用服务已断开",
     body:
-      head +
-      "这一刻读不到结束原因（记录由进程结束那一刻的旁证人写入 run/app-service-exit.json，" +
-      "浏览器环境没有壳这条存活通道时读不到它，也可能是这一次断开根本没留下记录）。" +
-      "服务恢复后会作为「应用服务已恢复」再记一条，能拿到的原因与建议都在那条里。",
+      `${head}这一刻读不到结束原因（记录由进程结束那一刻的旁证人写入 run/app-service-exit.json，` +
+      `浏览器环境没有壳这条存活通道时读不到它，也可能是这一次断开根本没留下记录）。` +
+      `服务恢复后会作为「应用服务已恢复」再记一条，能拿到的原因与建议都在那条里。`,
   };
 }
 
@@ -308,9 +307,9 @@ export function describeAppServiceStart(input: AppServiceStartInput): AppService
   const lines: Array<string> = [];
   if (recovered) {
     lines.push(
-      `${formatClock(offlineAt)} 断开，${formatClock(at)} 恢复` +
-        (span === null ? "" : `，持续 ${span}`) +
-        "。",
+      `${formatClock(offlineAt)} 断开，${formatClock(at)} 恢复${
+        span === null ? "" : `，持续 ${span}`
+      }。`,
     );
     /* 探活停表那一段**如实标注**而不是从时长里减掉（手验现场：窗口失焦两分多钟，
      * 恢复消息把「没人在问」的那整段算成了断开时长，看起来像服务真的死了两分多
@@ -334,8 +333,9 @@ export function describeAppServiceStart(input: AppServiceStartInput): AppService
   if (notice) {
     const exitedAt = exitAt === null ? null : formatClock(exitAt);
     lines.push(
-      (exitedAt === null ? "上一次它是怎么结束的：" : `上一次它在 ${exitedAt} 结束：`) +
-        `${notice.why}。${notice.detail}。`,
+      `${
+        exitedAt === null ? "上一次它是怎么结束的：" : `上一次它在 ${exitedAt} 结束：`
+      }${notice.why}。${notice.detail}。`,
     );
     lines.push(`建议：${notice.action}。`);
   } else {

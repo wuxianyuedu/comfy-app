@@ -61,7 +61,7 @@ export function toDisplayPath(raw: string | null | undefined, base?: string | nu
   if (s === b) {
     return "";
   }
-  if (s.startsWith(b + "/")) {
+  if (s.startsWith(`${b}/`)) {
     return s.slice(b.length + 1);
   }
   return s;

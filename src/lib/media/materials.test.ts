@@ -122,7 +122,7 @@ describe("sanitizeFileName —— 先剥目录成分，再换掉有特殊含义�
 
   it("有特殊含义的字符换成下划线而不是整条拒掉，超长才不可用", () => {
     expect(sanitizeFileName('a<b>c:d"e|f?g*h.png')).toBe("a_b_c_d_e_f_g_h.png");
-    expect(sanitizeFileName("x".repeat(201) + ".png")).toBeNull();
+    expect(sanitizeFileName(`${"x".repeat(201)}.png`)).toBeNull();
   });
 });
 

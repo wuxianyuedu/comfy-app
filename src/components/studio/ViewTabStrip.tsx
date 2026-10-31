@@ -103,12 +103,13 @@ export function ViewTabStrip({
                  共用同一套语言 —— 原来标题行里给的是 `bg-canvas/70`，暗色下比
                  标题行的底还暗，肉眼读不出「哪张是当前页」。
                  基串带 `relative`：工具类的色条是伪元素，要有定位祖先。 */
-              "relative flex max-w-56 min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors select-none " +
-              (active
-                ? "u-tab-active"
-                : inTitleBar
-                  ? "text-ink-muted hover:bg-canvas/40"
-                  : "text-ink-muted hover:bg-surface-2")
+              `relative flex max-w-56 min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors select-none ${
+                active
+                  ? "u-tab-active"
+                  : inTitleBar
+                    ? "text-ink-muted hover:bg-canvas/40"
+                    : "text-ink-muted hover:bg-surface-2"
+              }`
             }
           >
             <span className="min-w-0 truncate">{label}</span>

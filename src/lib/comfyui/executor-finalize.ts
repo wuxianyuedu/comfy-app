@@ -232,8 +232,9 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     log(
       taskId,
       "info",
-      "输出节点明细：\n" +
-        outputKeys.map((o) => `  · 节点 ${o.nodeId} → ${o.keys.join(", ") || "(空)"}`).join("\n"),
+      `输出节点明细：\n${outputKeys
+        .map((o) => `  · 节点 ${o.nodeId} → ${o.keys.join(", ") || "(空)"}`)
+        .join("\n")}`,
     );
   }
 

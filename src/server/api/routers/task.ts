@@ -244,7 +244,7 @@ export const taskRouter = createTRPCRouter({
       return {
         opened: true,
         absolutePath: dir,
-        comfyappUrl: "comfyapp://open?path=" + encodeURIComponent(dir),
+        comfyappUrl: `comfyapp://open?path=${encodeURIComponent(dir)}`,
       };
     }),
 

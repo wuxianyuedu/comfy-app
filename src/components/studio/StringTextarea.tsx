@@ -24,17 +24,16 @@ export function StringTextarea({
       // 先置 `auto`，好让浏览器能在取值变化后算出新的
       // scrollHeight。
       ta.style.height = "auto";
-      ta.style.height = ta.scrollHeight + "px";
+      ta.style.height = `${ta.scrollHeight}px`;
     }
     // hasSize：高度归 flex 链所有（父级的 `flex-1` +
     // `min-h-0`）；不动 textarea 的内联样式，让 CSS 胜出。
   }, [value, hasSize]);
   return (
     <Textarea
-      className={
-        "border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal text-2xs block w-full resize-none rounded border px-2 py-1.5 leading-snug focus-visible:ring-0" +
-        (mono ? " font-mono" : "")
-      }
+      className={`border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal text-2xs block w-full resize-none rounded border px-2 py-1.5 leading-snug focus-visible:ring-0${
+        mono ? " font-mono" : ""
+      }`}
       onFocus={(event) => event.currentTarget.blur()}
       readOnly
       ref={ref}

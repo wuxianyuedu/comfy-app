@@ -208,9 +208,9 @@ export function NodeJsonPopover({
             borderRadius: 12,
             background: "var(--color-bg)",
             border: `1px solid ${accentAlpha(33)}`,
-            boxShadow:
-              "0 20px 48px var(--color-shadow-strong), 0 0 0 1px var(--color-border-subtle) inset, 0 0 24px " +
-              accentAlpha(20),
+            boxShadow: `0 20px 48px var(--color-shadow-strong), 0 0 0 1px var(--color-border-subtle) inset, 0 0 24px ${accentAlpha(
+              20,
+            )}`,
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
