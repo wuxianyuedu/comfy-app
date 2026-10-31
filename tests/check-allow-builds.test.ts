@@ -292,7 +292,7 @@ function readChecklistCommands(): Set<string> {
       .slice(0, close)
       .split("\n")
       .filter((line) => line.startsWith("✅ "))
-      .map((line) => (line.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim()),
+      .map((line) => (line.slice(2).split(/ +# /)[0] ?? "").replaceAll(/\s+/g, " ").trim()),
   );
 }
 

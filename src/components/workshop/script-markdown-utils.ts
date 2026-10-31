@@ -12,7 +12,7 @@ export type OutlineItem = {
  * 4. 标题 / 列表 / 引用 / 分隔线等行的内容不做改写,其余内容原样保留;
  * 5. 围栏代码块(``` 或 ~~~)内部不做任何处理,避免破坏代码内容。 */
 export function normalizeMarkdown(source: string): string {
-  const lines = source.replace(/\r\n?/g, "\n").split("\n");
+  const lines = source.replaceAll(/\r\n?/g, "\n").split("\n");
   const result: Array<string> = [];
   let inFence = false;
   let fenceMarker = "";

@@ -79,7 +79,7 @@ function toPosix(p) {
 
 /** 去掉注释,避免把注释里提到的 import 当成真实依赖。 */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 /**

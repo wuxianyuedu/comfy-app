@@ -222,7 +222,7 @@ export function runAudit({ cwd = ROOT, runner = runPnpmSync, fixtureFile = null 
     // 这不属于「网络抖动」，静默跳过会让判据整条失效，所以判红。
     return {
       kind: "broken",
-      detail: `audit 的输出不是 JSON：${text.slice(0, 160).replace(/\s+/g, " ")}`,
+      detail: `audit 的输出不是 JSON：${text.slice(0, 160).replaceAll(/\s+/g, " ")}`,
     };
   }
 }

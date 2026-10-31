@@ -130,7 +130,7 @@ export function compareVersions(a, b) {
 export function parseRange(range) {
   /* 真实世界里 `>= 10`（操作符后带空格）与 `>=22.12.0 <23.0.0`（一档内并排）都在，
    * 先把操作符后面的空格吃掉，否则 `>=` 与 `10` 会被拆成两个比较符、整条读不懂。 */
-  const normalized = String(range ?? "").replace(/(\^|>=|<=|>|<|=)\s+/g, "$1");
+  const normalized = String(range ?? "").replaceAll(/(\^|>=|<=|>|<|=)\s+/g, "$1");
   const alternatives = normalized
     .split("||")
     .map((s) => s.trim())

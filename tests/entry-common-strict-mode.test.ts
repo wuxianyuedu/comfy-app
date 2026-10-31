@@ -72,7 +72,7 @@ function declarationText(text: string, name: string): string {
 
 /** 一个函数（不含注释）里引用的 `$变量` 集合。 */
 function referencedVars(body: string): Set<string> {
-  const code = body.replace(/<#[\s\S]*?#>/g, "").replace(/(?<![:"'])#.*$/gm, "");
+  const code = body.replaceAll(/<#[\s\S]*?#>/g, "").replaceAll(/(?<![:"'])#.*$/gm, "");
   const vars = new Set<string>();
   for (const m of code.matchAll(/\$([A-Za-z_]\w*)/g)) {
     vars.add(m[1]!);

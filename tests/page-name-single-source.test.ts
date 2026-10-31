@@ -106,7 +106,7 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
       /* 判据：把全名剥掉短名与分隔符之后还剩多少实质内容。
          剩下 0 字 = 纯粹的第二套说法（「队列」vs「队列与运行」的「与运行」是
          4 个字，不是 0 —— 所以下面还要单独判「短名是全名的前缀」这一族）。 */
-      const stripped = extra.replace(item.label, "").replace(/[·・\-—\s]/g, "");
+      const stripped = extra.replace(item.label, "").replaceAll(/[·・\-—\s]/g, "");
       if (stripped.length > 0 && extra.startsWith(item.label)) {
         offenders.push(`${item.id}: label「${item.label}」/ viewLabel「${extra}」`);
       }

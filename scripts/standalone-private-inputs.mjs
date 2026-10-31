@@ -386,7 +386,7 @@ export const STANDALONE_ALLOWED_TOPLEVEL = [
  */
 function isProductPathAllowed(allowedToplevel, relPosix) {
   const rel = String(relPosix ?? "")
-    .replace(/\\/g, "/")
+    .replaceAll("\\", "/")
     .replace(/^\.?\//, "");
   if (rel === "") {
     return true;

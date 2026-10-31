@@ -310,7 +310,7 @@ function blockCloneLever(volume, caps, drive) {
   if (volume.devDrive !== "yes") {
     actions.push({
       label: "把该卷按 Dev Drive 格式化（破坏性：会清空该卷，先备份）",
-      command: `Format-Volume -DriveLetter ${drive.replace(/[:\\]/g, "")} -DevDrive`,
+      command: `Format-Volume -DriveLetter ${drive.replaceAll(/[:\\]/g, "")} -DevDrive`,
       scope: "admin",
     });
   }
@@ -372,7 +372,7 @@ function defenderLever(volume, defender) {
       actions: [
         {
           label: "把这块卷标为受信任（管理员）",
-          command: `fsutil devdrv trust ${drive.replace(/[:\\]/g, "")}:`,
+          command: `fsutil devdrv trust ${drive.replaceAll(/[:\\]/g, "")}:`,
           scope: "admin",
         },
       ],
@@ -391,7 +391,7 @@ function defenderLever(volume, defender) {
       actions: [
         {
           label: "用管理员查一下信任状态（只读）",
-          command: `fsutil devdrv query ${drive.replace(/[:\\]/g, "")}:`,
+          command: `fsutil devdrv query ${drive.replaceAll(/[:\\]/g, "")}:`,
           scope: "admin",
         },
       ],

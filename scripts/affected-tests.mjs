@@ -538,7 +538,7 @@ export function resolveAffectedTests({
 export function attributeAffected(changedPaths, graph, testFiles, sourceFiles, tracked = null) {
   const out = [];
   for (const raw of changedPaths) {
-    const rel = String(raw).trim().replace(/\\/g, "/");
+    const rel = String(raw).trim().replaceAll("\\", "/");
     if (!rel) {
       continue;
     }

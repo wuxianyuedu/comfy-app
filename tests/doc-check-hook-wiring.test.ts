@@ -164,7 +164,7 @@ function readChecklistCommands() {
       .slice(0, close)
       .split("\n")
       .filter((l) => l.startsWith("✅ "))
-      .map((l) => (l.slice(2).split(/ +# /)[0] ?? "").replace(/\s+/g, " ").trim()),
+      .map((l) => (l.slice(2).split(/ +# /)[0] ?? "").replaceAll(/\s+/g, " ").trim()),
   );
 }
 

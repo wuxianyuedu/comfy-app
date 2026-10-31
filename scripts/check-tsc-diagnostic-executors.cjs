@@ -169,7 +169,7 @@ function isDeclarationLine(line) {
  * @returns {string}
  */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^[ \t]*\/\/.*$/gm, "");
 }
 
 /**
@@ -225,7 +225,7 @@ function scanDeclarationSites() {
     }
     const n = countDeclarationSites(src);
     if (n > 0) {
-      counts.set(path.relative(ROOT, full).replace(/\\/g, "/"), n);
+      counts.set(path.relative(ROOT, full).replaceAll("\\", "/"), n);
     }
   }
   return counts;
@@ -383,7 +383,7 @@ if (entries) {
         problems.push(`「${e.name}」的 verifiedSurfaces 里 ${face} 重复了`);
       }
       seenFace.add(face);
-      if (!new RegExp(`\\b${face.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(readerSrc)) {
+      if (!new RegExp(`\\b${face.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(readerSrc)) {
         problems.push(
           `「${e.name}」声称核过的面 \`${face}\` 在 ${e.reader} 里找不到 —— ` +
             "台账的这句话与事实脱钩之后，它只会让人以为有人在守",

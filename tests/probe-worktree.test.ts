@@ -98,7 +98,7 @@ describe("createProbeTree —— 一次性克隆带进工作树的脏，且不�
     /* 比较一律用**规范化后的完整路径**：`git worktree list` 在 Windows 上打的是
      * `G:/Temp/...` 形，而 Node 给的是反斜杠形。也不要拿 "tree" 这种子串去认 ——
      * 夹具路径本身就叫 `…-gate-XXXX`，那一句会恒真（本文件第一版就是这么写的）。 */
-    const asGitPath = (p: string): string => p.replace(/\\/g, "/");
+    const asGitPath = (p: string): string => p.replaceAll("\\", "/");
     const listed = worktreeLines(fixture.repo.dir);
     expect(listed).toContain(asGitPath(dir));
     tree.dispose();

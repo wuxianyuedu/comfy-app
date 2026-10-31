@@ -111,7 +111,7 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
  * 带空格的形状 —— 本文件也在扫描面里，写全一枚就多一条死规则，这条判据对自己同样生效）。
  */
 function unescapeSelector(part: string): string {
-  return part.trim().replace(/\\(.)/g, "$1").replace(/^\./, "");
+  return part.trim().replaceAll(/\\(.)/g, "$1").replace(/^\./, "");
 }
 
 /**
@@ -174,7 +174,7 @@ function placeholderCandidates(candidates: Iterable<string>): Set<string> {
 
 /** 文件归属用**带边界**的匹配，别拿子串：短属性名是那枚长候选名的子串，会被算成它的出处。 */
 function spelledIn(text: string, candidate: string): boolean {
-  const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = candidate.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|[^\\w-])${escaped}(?![\\w-])`).test(text);
 }
 

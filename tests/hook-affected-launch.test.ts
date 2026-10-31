@@ -217,7 +217,7 @@ describe("受影响用例的启动器", () => {
     const entry = resolveVitestEntry();
     expect(entry.endsWith("vitest.mjs")).toBe(true);
     // pnpm 布局下真身在 `.pnpm/vitest@<ver>…/node_modules/vitest/`，顶层是链接。
-    expect(entry.replace(/\\/g, "/")).toContain("/vitest/");
+    expect(entry.replaceAll("\\", "/")).toContain("/vitest/");
   });
 
   it("启动器不经 shell 层：spawn 的是 node 自己，且没有 shell:true", () => {

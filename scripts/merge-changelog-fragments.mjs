@@ -290,7 +290,7 @@ function mergeInto(changelogText, fragments, version, anchorRev) {
     }
     const body = listOf(section)
       .join("\n")
-      .replace(/\n{3,}/g, "\n\n")
+      .replaceAll(/\n{3,}/g, "\n\n")
       .trim();
     if (!body) {
       continue;

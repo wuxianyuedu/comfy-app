@@ -32,9 +32,9 @@ function collectImports(src: string): Array<string> {
   for (const m of src.matchAll(/^import\s[^\n]+?;/gm)) {
     out.push(m[0]);
   }
-  const noSingle = src.replace(/^import\s[^\n]+?;/gm, "");
+  const noSingle = src.replaceAll(/^import\s[^\n]+?;/gm, "");
   for (const m of noSingle.matchAll(/import\s[\s\S]*?from\s+["'][^"']+["'];/gm)) {
-    out.push(m[0].replace(/\s+/g, " ").trim());
+    out.push(m[0].replaceAll(/\s+/g, " ").trim());
   }
   return out;
 }
@@ -107,11 +107,11 @@ describe("ComfyUI reaper 启动路径（ADR §14 D3：宿主显式起、模块�
      * 剥字符串是必须的 —— 本判据的报错文案正是一个字符串字面量。 */
     const strip = (src: string): string =>
       src
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/^[ \t]*\/\/.*$/gm, "")
-        .replace(/"(?:[^"\\]|\\.)*"/g, '""')
-        .replace(/'(?:[^'\\]|\\.)*'/g, "''")
-        .replace(/`(?:[^`\\]|\\.)*`/g, "``");
+        .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+        .replaceAll(/^[ \t]*\/\/.*$/gm, "")
+        .replaceAll(/"(?:[^"\\]|\\.)*"/g, '""')
+        .replaceAll(/'(?:[^'\\]|\\.)*'/g, "''")
+        .replaceAll(/`(?:[^`\\]|\\.)*`/g, "``");
     /* 两种真调用形态都算：成员调用（`m.startReaper()`）与解构后直呼
      * （`const { stopReaper } = …; stopReaper()`）。注释里的同形文本靠上面
      * `stripComments()` 挡掉 —— **不能**只认成员调用：解构那一形态正当存在，

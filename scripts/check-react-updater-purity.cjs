@@ -128,8 +128,8 @@ function collect(parsed) {
   // 扫描根既支持相对仓库根(默认 src/),也支持绝对路径(测试把 fixtures 放 tmp)。
   const absBase = path.isAbsolute(SCAN_DIR) ? SCAN_DIR : path.join(ROOT, SCAN_DIR);
   const relBase = path.isAbsolute(SCAN_DIR)
-    ? SCAN_DIR.replace(/\//g, "/")
-    : SCAN_DIR.replace(/^\/+/, "").replace(/\//g, "/");
+    ? SCAN_DIR.replaceAll("/", "/")
+    : SCAN_DIR.replace(/^\/+/, "").replaceAll("/", "/");
   const files = walk(absBase, relBase);
   for (const rel of files) {
     const shared = parsed && parsed.get(rel);

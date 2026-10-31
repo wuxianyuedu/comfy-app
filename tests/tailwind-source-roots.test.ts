@@ -200,7 +200,7 @@ describe("源扫描根是显式名单", () => {
       "除了应用本体之外一棵根都没有 —— 下面那格「摘根必须丢样式」会对着空名单假绿",
     ).toBeGreaterThan(0);
 
-    const unescape = (s: string) => s.replace(/\\(.)/g, "$1").replace(/^\./, "");
+    const unescape = (s: string) => s.replaceAll(/\\(.)/g, "$1").replace(/^\./, "");
     for (const rel of extras) {
       const onlyThisRoot = [...withRoots].filter((s) => !base.has(s));
       expect(
@@ -229,7 +229,7 @@ describe("源扫描根是显式名单", () => {
     /* 这一格是「.storybook 为什么必须在根里」的**正面**表述：上面那格判的是差集，
      * 而把一棵根从声明与登记里同时摘掉时差集会一起消失 —— 那一格就没人可依了。
      * 所以这里不看名单，只看「这些面写了哪些数值型任意值」与「产物里有没有它们」。 */
-    const unescape = (s: string) => s.replace(/\\(.)/g, "$1").replace(/^\./, "");
+    const unescape = (s: string) => s.replaceAll(/\\(.)/g, "$1").replace(/^\./, "");
     const inProduct = new Set([...selectorParts(rootsCss)].map((s) => unescape(s)));
     for (const surface of MUST_BE_SCANNED) {
       const text = textUnder(path.join(ROOT, surface.dir));

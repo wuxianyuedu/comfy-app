@@ -451,7 +451,7 @@ describe("affected-tests：与仓库现状的漂移守卫", () => {
     const tracked = ["src", "tests", "scripts", "tools"].flatMap((dir) =>
       fs
         .readdirSync(path.join(ROOT, dir), { recursive: true })
-        .map((p) => `${dir}/${String(p).replace(/\\/g, "/")}`),
+        .map((p) => `${dir}/${String(p).replaceAll("\\", "/")}`),
     );
     const testFiles = tracked.filter(isTestPath);
     const sourceFiles = tracked.filter(isSourcePath);

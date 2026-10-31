@@ -49,7 +49,7 @@ const BANNED_EDITOR_MODULES = [
 
 /** 去掉块注释与行注释，避免文档里提到旧机制时误伤断言。 */
 function stripComments(code: string): string {
-  return code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  return code.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
 }
 
 function readEditor(file: string): string {

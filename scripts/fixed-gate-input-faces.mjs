@@ -272,8 +272,8 @@ export const INPUT_FACES = [
  * @returns {boolean}
  */
 export function faceMatches(file, pattern) {
-  const f = String(file).replace(/\\/g, "/");
-  const p = String(pattern).replace(/\\/g, "/");
+  const f = String(file).replaceAll("\\", "/");
+  const p = String(pattern).replaceAll("\\", "/");
   if (p === "" || p === "**" || p === "*") {
     return false;
   }
@@ -286,7 +286,7 @@ export function faceMatches(file, pattern) {
   const re = new RegExp(
     `^${p
       .split("*")
-      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .map((part) => part.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&"))
       .join("[^/]*")}$`,
   );
   return re.test(f);

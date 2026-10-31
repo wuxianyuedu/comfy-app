@@ -51,11 +51,11 @@ export function normalizeRootForPort(root) {
   // 在 POSIX 上 path.isAbsolute 认不出它们，必须显式判据，否则会被当相对路径
   // 拼上 cwd —— 这正是上面描述的失真来源。盘符判据本体写作 /^[a-z]:\//i
   //（ASCII 盘符不区分大小写，无需再列 A-Z），UNC 另判前导双反斜杠。
-  const isWindowsDrive = /^[a-z]:\//i.test(raw.replace(/\\/g, "/"));
+  const isWindowsDrive = /^[a-z]:\//i.test(raw.replaceAll("\\", "/"));
   const isUnc = raw.startsWith("\\\\");
   const absolute = isWindowsDrive || isUnc || path.isAbsolute(raw);
   const resolved = absolute ? raw : path.resolve(raw);
-  return resolved.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
+  return resolved.replaceAll("\\", "/").toLowerCase().replace(/\/+$/, "");
 }
 
 /** FNV-1a 32 位哈希，输入按 UTF-8 字节处理（与各语言实现按字节对齐）。

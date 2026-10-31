@@ -15,30 +15,30 @@ for (const file of process.argv.slice(2)) {
   const before = fs.readFileSync(file, "utf8");
   let count = 0;
   const after = before
-    .replace(/\/\[0\.(\d+)\]/g, (_, digits) => {
+    .replaceAll(/\/\[0\.(\d+)\]/g, (_, digits) => {
       count++;
       return "/" + String(parseFloat("0." + digits) * 100);
     })
-    .replace(/bg-gradient-to-([a-z]+)/g, (_, dir) => {
+    .replaceAll(/bg-gradient-to-([a-z]+)/g, (_, dir) => {
       count++;
       return "bg-linear-to-" + dir;
     })
-    .replace(/-\[var\(--([a-zA-Z0-9-]+)\)\]/g, (_, v) => {
+    .replaceAll(/-\[var\(--([a-zA-Z0-9-]+)\)\]/g, (_, v) => {
       count++;
       return "-(--" + v + ")";
     })
-    .replace(
+    .replaceAll(
       /(^|[\s"'`])(-[a-z][a-z0-9]*)-\[([0-9][^\]]*)\]/g,
       (_m, pre, util, value) => {
         count++;
         return pre + util.slice(1) + "-[-" + value + "]";
       },
     )
-    .replace(/\bz-\[(\d+)\]/g, (_, n) => {
+    .replaceAll(/\bz-\[(\d+)\]/g, (_, n) => {
       count++;
       return "z-" + n;
     })
-    .replace(/\bbreak-words\b/g, () => {
+    .replaceAll(/\bbreak-words\b/g, () => {
       count++;
       return "wrap-break-word";
     });

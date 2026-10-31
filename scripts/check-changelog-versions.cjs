@@ -161,7 +161,7 @@ function parseSections(text) {
 function issuesIn(body) {
   const set = new Set();
   for (const line of body) {
-    const stripped = line.replace(/<!--[\s\S]*?-->/g, "");
+    const stripped = line.replaceAll(/<!--[\s\S]*?-->/g, "");
     for (const m of stripped.matchAll(ISSUE_RE)) {
       set.add(m[1]);
     }

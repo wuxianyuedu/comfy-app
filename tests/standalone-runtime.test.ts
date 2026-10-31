@@ -582,7 +582,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
 
 describe("装配、打包配置与产物判据三者同形", () => {
   it("tauri.conf.json 声明的 resources 落点 == 壳拼的载荷根", () => {
-    const conf = read("src-tauri/tauri.conf.json").replace(/\s+/g, "");
+    const conf = read("src-tauri/tauri.conf.json").replaceAll(/\s+/g, "");
     expect(conf).toContain('"resources":["static/"]');
     const shell = read("src-tauri/src/lib.rs");
     expect(shell).toContain('let app_root = res_dir.join("static");');
@@ -606,7 +606,7 @@ describe("装配、打包配置与产物判据三者同形", () => {
     // 「这不是载荷」与「真要桌包请跑 build-standalone」。
     expect(script).toContain("build-standalone.ps1");
     // resources 声明一旦挪走，这条补齐步就成了死代码：两侧同形。
-    expect(read("src-tauri/tauri.conf.json").replace(/\s+/g, "")).toContain(
+    expect(read("src-tauri/tauri.conf.json").replaceAll(/\s+/g, "")).toContain(
       '"resources":["static/"]',
     );
   });

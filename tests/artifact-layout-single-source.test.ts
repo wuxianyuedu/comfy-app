@@ -103,7 +103,7 @@ function allowedRootSegments(ps1: string): Array<string> | null {
 
 describe("产物布局单一出处（台账 A8 第二段）", () => {
   const files = collectSource(path.join(process.cwd(), "src")).map((f) => ({
-    rel: path.relative(process.cwd(), f).replace(/\\/g, "/"),
+    rel: path.relative(process.cwd(), f).replaceAll("\\", "/"),
     text: readFileSync(f, "utf8"),
   }));
   const scanned = files.filter((f) => f.rel !== ROOT_OF_TRUTH);

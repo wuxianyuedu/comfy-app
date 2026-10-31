@@ -155,7 +155,7 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
       if (e.isDirectory()) {
         out.push(...tsFiles(abs));
       } else if (e.isFile() && e.name.endsWith(".ts")) {
-        out.push(abs.slice(REPO_ROOT.length + 1).replace(/\\/g, "/"));
+        out.push(abs.slice(REPO_ROOT.length + 1).replaceAll("\\", "/"));
       }
     }
     return out;

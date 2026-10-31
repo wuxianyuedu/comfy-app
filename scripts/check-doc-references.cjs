@@ -136,7 +136,7 @@ function checkScopeCoverage() {
 }
 
 function bareValueOccurs(text, value) {
-  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(?<![\\w.-])${escaped}(?![\\w.-])`, "g").test(text);
 }
 
@@ -662,7 +662,7 @@ function checkAgentsMdSectionAnchors() {
         continue;
       }
       const content = readTarget(target.path);
-      const escaped = full.replace(/\./g, "\\.");
+      const escaped = full.replaceAll(".", "\\.");
       const anchorRe = new RegExp(`^#{1,6}\\s+(?:§)?${escaped}(?:\\s|[^\\d]|$)`, "m");
       if (!anchorRe.test(content)) {
         reported.add(dedupKey);

@@ -62,7 +62,7 @@ const tmpDirs: Array<string> = [];
  * 现在找不到键就**当场抛**并写明找的是哪个键 —— 依赖可以升，夹具不许悄悄变成空转。
  */
 function driftOneOverride(real: string, key: string): string {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = key.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const hit = new RegExp(`^  ${escaped}: (\\S+)$`, "m").exec(real);
   if (!hit?.[1]) {
     throw new Error(

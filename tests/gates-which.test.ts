@@ -236,7 +236,7 @@ function agentsTableRows() {
     if ((cells[0] ?? "") === "范围") {
       continue;
     } // 表头
-    if (/^-+$/.test((cells[1] ?? "").replace(/\s/g, ""))) {
+    if (/^-+$/.test((cells[1] ?? "").replaceAll(/\s/g, ""))) {
       continue;
     } // 分隔行
     /* 表里有一行的范围名带括注（`跨平台动作（新增/删除 …）`），数据里没有 —— 归一后再比。 */
