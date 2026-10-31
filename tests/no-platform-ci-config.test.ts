@@ -625,11 +625,19 @@ function executableScriptLines(text: string, name: string): Array<string> {
  * push 那一档接槽的全部依据就是「它清单里没有构建格」（ISSUE #2851），所以这句话必须有
  * 执行者：往那份清单里加一格构建的人，要当场被这一条拦住，而不是等那一跑 13.8s 就死、
  * 后面整片 `skipped` 那天再来查为什么。
+ *
+ * ⚠️ `tauri build` 这一枚是 ISSUE #2883 补的：桌包那一档的构建是**经 tauri CLI 间接触发**的
+ * —— `打包·桌面成品构建` 那一格真正执行的是 `pnpm tauri build`，而"它调起 `build-desktop.mjs`"
+ * 这件事写在 `src-tauri/tauri.conf.json` 的 `beforeBuildCommand` 里，以及 `.cnb.yml` 那一格的
+ * **注释**里。注释不在这一族的输入面上（`executableScriptLines()` 明写「丢掉空行与 shell 注释」），
+ * 所以旧的三枚标记判现役桌包档会给**假阴性**「没有构建格」—— 而这张表一旦被拿去判断跑的档
+ * 接不接槽（#2853 期望 1 要做的正是这个动作），那个假阴性就直接把这条安全前提摘掉。
  */
 const BUILD_CONSUMER_MARKERS: Array<string> = [
   "ci-daily-build.mjs",
   "build-desktop.mjs",
   "next build",
+  "tauri build",
 ];
 
 /** 从「格名 → 该格真正执行的命令行」里挑出含构建消费者的那几格（名字原样回，红时指得出人）。 */
@@ -2662,6 +2670,22 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       stageBlock(text, "打包·桌面成品构建"),
       "打包那一格必须点既有的执行者 `pnpm tauri build`（本单只补发布那一格，不抄第二份打桌包脚本）",
     )?.toContain("pnpm tauri build");
+    /* 由上面那一行直接推出来的那条安全前提（ISSUE #2883 把它变成判据，#2853 的期望 1 曾想反过来）：
+     * 这一档**有**会真构建的格子 ⇒ 它的安装格**不许**接依赖缓存槽。接槽形态下 `node_modules` 是
+     * 指向项目根之外的 junction，而 Turbopack 对这一条有硬要求（#2081 那次 13.8s 就死 + 后面整片
+     * `skipped`）—— 与每日档、`单跑构建` 档同一口径。谁要接，先证明 #2521 的
+     * `experimental.turbopackAdditionalRoots` 在**这一档**上跑得通，不是照别的档推。 */
+    const packageInstall = stageBlock(text, "打包·安装依赖");
+    expect(
+      packageInstall,
+      "`.cnb.yml` 里找不到「打包·安装依赖」那一格 —— 找不到就先断言找不到，" +
+        "否则下面那条「不许出现 `COMFY_CI_SLOT`」会退成一句恒真的空判",
+    ).toBeTruthy();
+    expect(
+      packageInstall ?? "",
+      "「打包·安装依赖」出现了 `COMFY_CI_SLOT` —— 桌包这一档后面有真构建格（`pnpm tauri build` → " +
+        "`build-desktop.mjs` → `pnpm build`），接槽会撞 #2081 那一形；要接得先验 #2521 的门",
+    ).not.toContain("COMFY_CI_SLOT");
 
     /* 工具预置那一格（ISSUE #2525）：它在不在、点的是谁、以及**排在真打包之前**。
      * 顺序是判据的一部分 —— 预置跑在 `pnpm tauri build` 之后等于没有：那一格的
@@ -2952,8 +2976,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("「这一档有没有构建格」那张表不是空转：正例点得出格名，现役写法不误伤", () => {
-    /* 正例：构建那一跳以三种形态出现过（专用入口 / `pnpm build` 的字面 / 桌包脚本），
-     * 每一种都要被认出来 —— 认不出来的那张表，等于给 push 档留了一条「加了构建格而没人红」的门。 */
+    /* 正例：构建那一跳以几种形态出现过（专用入口 / `pnpm build` 的字面 / 直接点 `build-desktop.mjs`
+     * / **经 tauri 间接触发**），每一种都要被认出来 —— 认不出来的那张表，等于给接槽的那条安全
+     * 前提留了一扇「加了构建格而没人红」的门。
+     * ⚠️ 第四例（ISSUE #2883）原先写的是理想形态 `node tools/build/build-desktop.mjs --release`，
+     * 而现役配置那一行是 `pnpm tauri build`（`build-desktop.mjs` 的名字在 `tauri.conf.json` 的
+     * `beforeBuildCommand` 里，也在 `.cnb.yml` 那一格的**注释**里 —— 两者都不在这一族的输入面上）。
+     * 用例于是绿着，而它对现役配置的回答是假的：**正例必须长得像事实**。 */
     expect(
       stagesWithBuildConsumer(
         new Map([
@@ -2967,6 +2996,33 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       stagesWithBuildConsumer(new Map([["桌包", ["node tools/build/build-desktop.mjs --release"]]])),
     ).toEqual(["桌包"]);
+    expect(
+      stagesWithBuildConsumer(
+        new Map([
+          [
+            "打包·桌面成品构建",
+            ["node scripts/ci-cp936-exit.mjs -- pnpm tauri build"],
+          ],
+        ]),
+      ),
+      "经 tauri 间接触发的那一形没被认出来 —— 桌包档会被这张表判成「没有构建格」，" +
+        "而它那一格真的在跑 `build-desktop.mjs` → `pnpm build`（`src-tauri/tauri.conf.json` 的 " +
+        "`beforeBuildCommand`）⇒ 拿这张表去判断跑的档接不接槽，就会给出摘掉安全前提的答案",
+    ).toEqual(["打包·桌面成品构建"]);
+    /* 对**现役配置**判一次，而不是只对夹具判一次（这一句才是上面那枚标记的执行者）：
+     * 桌包那一档必须被认成"有构建格"。取不到格名 ⇒ 先断言取到了，否则下面那条会退成恒真的空判。 */
+    const configText = readRegisteredConfig();
+    const packageStages = pipelineStageNames(configText, "桌面成品包");
+    expect(
+      packageStages.length,
+      "解析不出「桌面成品包」那条流水线的 stage 名单 —— 下面那条判据就没有对象了",
+    ).toBeGreaterThan(0);
+    expect(
+      stagesWithBuildConsumer(
+        new Map(packageStages.map((n) => [n, executableScriptLines(configText, n)])),
+      ),
+      "桌包那一档里按现役配置认不出构建格 —— 那张表的量程又比它自称的小了一圈（#2883）",
+    ).toContain("打包·桌面成品构建");
     /* 反例：现役 push 清单里那几格的样子（安装 / typedoc / 文档对账 / 读 git 的脚本）。
      * 其中 `安装依赖` 那一行含 `ci-install-deps.mjs` —— 名字里带 "install"，别把它读成构建。 */
     expect(
