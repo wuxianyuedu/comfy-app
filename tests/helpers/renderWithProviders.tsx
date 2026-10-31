@@ -45,7 +45,7 @@ export function createTestQueryClient(): QueryClient {
   return new QueryClient(config);
 }
 
-export interface ProvidersOptions {
+export type ProvidersOptions = {
   queryClient?: QueryClient;
   /** 包在 QueryClient/trpc 之外的自定义 Provider（如 ToastProvider）。 */
   wrapper?: React.ComponentType<{ children: React.ReactNode }>;

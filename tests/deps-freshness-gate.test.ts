@@ -65,7 +65,7 @@ const LOCK_REMOTE = [
 ].join("\n");
 
 /** `--json` 输出的形状（判据自己定义的契约，用例按它断言）。 */
-interface FreshnessReport {
+type FreshnessReport = {
   code: number;
   /** 环境不可信（拿不到 git 状态）—— ① ② 都没判，结论不成立。 */
   envBroken: boolean;

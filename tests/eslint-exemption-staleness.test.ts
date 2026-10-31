@@ -22,17 +22,17 @@ const REAL_ROOT = path.resolve(__dirname, "..");
 const SCRIPT = path.join(REAL_ROOT, "scripts", "check-eslint-exemptions.cjs");
 
 /** `verify` 的最小形状（本文件只喂它自己造的读数，不依赖 eslint 的消息类型）。 */
-interface FakeMessage {
+type FakeMessage = {
   fatal?: boolean;
   message?: string;
   ruleId?: string | null;
 }
-interface FakeLinter {
+type FakeLinter = {
   verify: (code: string, config: unknown, opts: { filename: string }) => Array<FakeMessage>;
 }
 
 /** 判据的导出面（与 `scripts/check-eslint-exemptions.cjs` 的 `module.exports` 对齐）。 */
-interface JudgeModule {
+type JudgeModule = {
   FILE_LEVEL_EXEMPTIONS: Array<{ removalCriterion: string; ruleId: string; }>;
   isGlobEntry: (entry: string) => boolean;
   judge: (input: JudgeInput) => {
@@ -63,7 +63,7 @@ interface JudgeModule {
   };
 }
 
-interface JudgeInput {
+type JudgeInput = {
   entries: Array<string>;
   failed: Array<{ file: string; why: string }>;
   mentionedAnywhere: boolean;

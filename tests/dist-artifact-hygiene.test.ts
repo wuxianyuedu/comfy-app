@@ -272,7 +272,7 @@ describe("开发期文件与内部门禁脚本的白名单剔除", () => {
  * **RegExp 对象本身**与**真函数**，比对与调用才作数。
  * 该脚本在 `require.main !== module` 时不会 `process.exit`（见文件尾的守卫）。
  */
-interface CheckerExports {
+type CheckerExports = {
   ALLOWED_SRC_FILES: Array<string>;
   allowedTopLevelFor: (label: string) => Array<string>;
   checkDir: (dir: string, label: string) => boolean;

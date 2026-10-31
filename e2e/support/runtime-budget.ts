@@ -82,7 +82,7 @@ export const ROUNDS = 12;
 export const DISCARD_ROUNDS = 4;
 
 /** 一次导航的读数（毫秒，相对 `navigationStart`）。 */
-export interface NavigationSample {
+export type NavigationSample = {
   /** `paint` 时序里 `first-contentful-paint` 的 `startTime`。 */
   firstContentfulPaint: number;
   /** `navigation` 时序的 `loadEventEnd`。 */

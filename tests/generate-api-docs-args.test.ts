@@ -23,7 +23,7 @@ const REAL_ROOT = path.resolve(__dirname, "..");
 const SCRIPT = path.join(REAL_ROOT, "scripts", "generate-api-docs.mjs");
 
 /** `execFileSync` 非零退出时抛的那件（node 的类型里没有具名导出的形状，就地声明）。 */
-interface SpawnedFailure {
+type SpawnedFailure = {
   message?: string;
   status?: number | null;
   stderr?: string;

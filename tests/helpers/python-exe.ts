@@ -31,7 +31,7 @@ import { execFileSync } from "node:child_process";
 import { pythonCandidates, pythonProbeArgs } from "../../src/lib/process/python-candidates";
 
 /** 一次可用的 Python 调用：`command` + 必须前置的参数。 */
-export interface PythonInvocation {
+export type PythonInvocation = {
   /** 可执行文件名（落在 PATH 上）。 */
   command: string;
   /** 必须前置的参数（`py` 启动器是 `-3`；其余为空）。 */

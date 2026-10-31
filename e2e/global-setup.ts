@@ -56,7 +56,7 @@ import {
 } from "./support/fake-comfyui-endpoint.mjs";
 
 /** 一次探针的观测结果。 */
-export interface FakeSlotObservation {
+export type FakeSlotObservation = {
   /** 连不上时的原因，仅供日志。 */
   error?: string;
   /** 200 时的响应体（解析不出 JSON 时是 null）。 */

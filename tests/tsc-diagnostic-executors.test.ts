@@ -28,7 +28,7 @@ const REAL_READERS = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync
   carriers: Array<{ id: string; reader: string }>;
 };
 
-interface Entry {
+type Entry = {
   baseline: Record<string, number>;
   executor: { kind: string; label?: string; test?: string; };
   id: string;
@@ -40,7 +40,7 @@ interface Entry {
   /** 条目声称**执行者逐条核过**的面（选填；写了就要核，见判据的 ①′）。 */
   verifiedSurfaces?: Array<string>;
 }
-interface Ledger {
+type Ledger = {
   entries: Array<Entry>;
 }
 
