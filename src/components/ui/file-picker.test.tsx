@@ -21,14 +21,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 afterEach(cleanup);
 
 import { FilePicker, FilePickerButton, useFilePicker, type FilePickerHandle } from "./file-picker";
+import { fakeFileList } from "../../../tests/helpers/fake-file-list";
 
 /** 把文件塞进 input 的 `files` 并派发 `change`（jsdom 不允许直接赋值）。 */
 function pick(input: HTMLInputElement, ...files: Array<File>) {
-  const list = /* SAFETY: 类型断言已复核 */ {
-    ...files,
-    length: files.length,
-    item: (i: number) => files[i],
-  } as unknown as FileList;
+  const list = fakeFileList(...files);
   Object.defineProperty(input, "files", { value: list, configurable: true });
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
@@ -65,10 +62,7 @@ describe("FilePicker", () => {
     expect(onPick).toHaveBeenCalledTimes(1);
     const call = /* SAFETY: 类型断言已复核 */ onPick.mock.calls[0] as [File, FileList];
     expect(call[0]).toBe(A);
-    /* 夹具是类数组（`{...files, length, item}`），没有 `Symbol.iterator`，不能直接展开。 */
-    expect(call[1].length).toBe(2);
-    expect(call[1][0]).toBe(A);
-    expect(call[1][1]).toBe(B);
+    expect([...call[1]]).toEqual([A, B]);
   });
 
   it("**选完复位 value**：不清时连选同一个文件不会触发 change", () => {
