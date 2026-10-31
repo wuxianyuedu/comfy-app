@@ -215,7 +215,7 @@ export function pickNodeVersion(index, floor) {
 
 /** 把一段字面量转成「按字面匹配」的正则片段（`.cjs`/`.mjs` 里同名实现的同一手法）。 */
 export function escapedRegExp(/** @type {string} */ name) {
-  return String(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(name).replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -751,7 +751,7 @@ export function main({
   }
   if (tar) {
     const buf = buildTarStream({ root });
-    const file = path.join(root, `comfyapp-ci-${plan.tag.replace(/[:/]/g, "-")}.tar`);
+    const file = path.join(root, `comfyapp-ci-${plan.tag.replaceAll(/[:/]/g, "-")}.tar`);
     writeFileSync(file, buf);
     out.tarDigest = tarballDigest(buf);
     log(

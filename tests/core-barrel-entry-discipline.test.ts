@@ -39,7 +39,7 @@ const INDEX = join(ROOT, "src", "lib", "core", "index.ts");
 /** 去掉块注释与整行 `//` 注释，避免把注释里的示例当真实语句。 */
 function stripComments(src: string): string {
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
     .split("\n")
     .filter((line) => !/^\s*\/\//.test(line))
     .join("\n");

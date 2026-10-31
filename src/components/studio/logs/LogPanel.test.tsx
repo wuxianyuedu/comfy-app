@@ -273,7 +273,7 @@ describe("LogPanel 日志面板", () => {
     /* 收缩面板本来就窄：这里报一遍每个来源多少条，只是把宽度再挤掉一块，
      * 而左侧级别按钮上已经写着同样的数字（用户反馈第 4 条）。 */
     const trigger = document.querySelector('[data-slot="select-trigger"]');
-    const label = trigger?.textContent?.replace(/[\s\u25b2\u25bc\u200b]/g, "") ?? "";
+    const label = trigger?.textContent?.replaceAll(/[\s\u25b2\u25bc\u200b]/g, "") ?? "";
     /* 扳机上只有这一项的名字——「（按条去重）」是它的一部分，不是数字：
      * 来源下拉的候选里有六个「各数各的那一份」的分项，而「全部来源」是**日志
      * 条数**，不带上这个限定语就会被读成「那六个加起来」（见 ORIGIN_TEXT）。 */

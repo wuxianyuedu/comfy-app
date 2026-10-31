@@ -122,7 +122,7 @@ const ROOT = path.resolve(__dirname, "../../..");
 
 /** 剥块注释再判：说明文字里提到 `bg-canvas` 不算有人这么写。 */
 function codeOf(rel: string): string {
-  return readFileSync(path.join(ROOT, rel), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  return readFileSync(path.join(ROOT, rel), "utf8").replaceAll(/\/\*[\s\S]*?\*\//g, "");
 }
 
 describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", () => {

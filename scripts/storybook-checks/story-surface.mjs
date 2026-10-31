@@ -125,7 +125,7 @@ export function metaObjectOf(source) {
          `component` 有而 `title` 缺的那一份由「缺 title」那条判据点名。 */
       const keys = inner.properties
         .filter((p) => ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p))
-        .map((p) => p.name.getText(source).replace(/^["']|["']$/g, ""));
+        .map((p) => p.name.getText(source).replaceAll(/^["']|["']$/g, ""));
       return keys.includes("title") || keys.includes("component") ? inner : null;
     };
     if (ts.isExportAssignment(node) && !node.isExportEquals) {
@@ -159,7 +159,7 @@ function resolveSpecifier(spec, fromDir, repoRoot) {
   if (base === null) {
     return null;
   }
-  const withSlash = base.replace(/\\/g, "/");
+  const withSlash = base.replaceAll("\\", "/");
   /* 说明符通常不带扩展名，比对的是**文件**：按 `.tsx` / `.ts` 试出真实存在的那份。 */
   for (const ext of ["", ".tsx", ".ts"]) {
     if (fs.existsSync(withSlash + ext)) {
@@ -244,7 +244,7 @@ export function storySurface(source) {
 /** `"title"` / `title` 归一成不带引号的形态。
  *  @param {string} text @returns {string} */
 function propName(text) {
-  return text.replace(/^["']|["']$/g, "");
+  return text.replaceAll(/^["']|["']$/g, "");
 }
 
 /**

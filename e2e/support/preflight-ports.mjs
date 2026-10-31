@@ -211,7 +211,7 @@ export const FAKE_SERVER_SCRIPT = "e2e/support/fake-comfyui-server.mjs";
  */
 export function isFakeServerCmdline(cmdline) {
   const text = String(cmdline ?? "")
-    .replace(/\\/g, "/")
+    .replaceAll("\\", "/")
     .toLowerCase();
   return text.includes(FAKE_SERVER_SCRIPT.toLowerCase());
 }

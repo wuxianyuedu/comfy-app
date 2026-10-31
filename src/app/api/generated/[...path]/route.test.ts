@@ -68,7 +68,7 @@ const artifactRoot = normalize(generatedRootOf(ROOT));
 
 /** 把平台分隔符统一成正斜杠再比 —— 断言的是语义，不是 path.sep 的形状。 */
 function normalize(p: string): string {
-  return p.replace(/\\/g, "/");
+  return p.replaceAll("\\", "/");
 }
 
 function paramsOf(path: Array<string> | undefined) {

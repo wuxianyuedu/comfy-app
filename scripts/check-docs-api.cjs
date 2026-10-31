@@ -110,7 +110,7 @@ const CLOSURE_LEAVES = [
 
 /** 把一个路径变成「逐字匹配它自己」的正则（点号等元字符要转义）。 */
 function exactPathRe(p) {
-  return new RegExp(`^${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+  return new RegExp(`^${p.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
 }
 
 /**
@@ -319,7 +319,7 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
     problems.push("产物里没有任何模块页（modules/ 下没有 .html）—— 这份 API 文档没有内容");
   }
 
-  const needles = [root, root.replace(/\\/g, "/")].filter((n) => n !== "");
+  const needles = [root, root.replaceAll("\\", "/")].filter((n) => n !== "");
   for (const [rel, abs] of files) {
     let text;
     try {
@@ -359,7 +359,7 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
  * @returns {{problems: string[]}}
  */
 function judgeTypedocTail(log) {
-  const cleanLog = (log ?? "").replace(/\x1b\[[0-9;]*m/g, "");
+  const cleanLog = (log ?? "").replaceAll(/\x1b\[[0-9;]*m/g, "");
   const summary = /Found (\d+) errors and (\d+) warnings/.exec(cleanLog);
   const generated = /\[info\] html generated/.test(cleanLog);
   if (summary) {

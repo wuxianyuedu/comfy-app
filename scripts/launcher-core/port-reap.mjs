@@ -220,7 +220,7 @@ export async function processCommandLine(pid) {
  *  @param {string} cmdline @param {string} [root] @returns {boolean} */
 export function isAppDevServerCmdline(cmdline, root = process.cwd()) {
   /** @param {string} value */
-  const norm = (value) => value.replace(/\\/g, "/").toLowerCase();
+  const norm = (value) => value.replaceAll("\\", "/").toLowerCase();
   const text = norm(cmdline);
   const base = norm(root).replace(/\/+$/, "");
   if (!text || !base || !text.includes(base)) {

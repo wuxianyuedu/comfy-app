@@ -380,7 +380,7 @@ export function parseStageIfModify(text) {
       if (inline && !inline.startsWith("#")) {
         // 单行标量形态（`ifModify: "src/**"`）—— 去掉可能有的引号。
         mode = null;
-        out.set(current, [inline.replace(/^["']|["']$/g, "")]);
+        out.set(current, [inline.replaceAll(/^["']|["']$/g, "")]);
       } else {
         // 列表形态，后续 6 空格缩进的 `- glob` 属于它。
         mode = "list";
@@ -391,7 +391,7 @@ export function parseStageIfModify(text) {
     if (mode === "list") {
       const li = /^ {6}-\s+(\S.*?)\s*$/.exec(raw);
       if (li?.[1] !== undefined) {
-        out.get(current)?.push(li[1].replace(/^["']|["']$/g, ""));
+        out.get(current)?.push(li[1].replaceAll(/^["']|["']$/g, ""));
         continue;
       }
       /* 非列表项的行 = 这一段结束了（下一键 / 缩进变化 / 注释）。注释行不算结束 ——
@@ -521,7 +521,7 @@ const { matchesAny } = createRequire(import.meta.url)("./vitest-projects.cjs");
  *   找不到 = 这条判据**没有**收窄面（那是不许收窄的形态：全仓不变量 / 前提类）
  */
 export function narrowingEntryForScript(script) {
-  const s = String(script ?? "").replace(/\\/g, "/");
+  const s = String(script ?? "").replaceAll("\\", "/");
   if (s === "") {
     return null;
   }
@@ -550,7 +550,7 @@ export function faceTouched(entry, files) {
   if (list.length === 0) {
     return true;
   }
-  return list.some((f) => matchesAny(String(f ?? "").replace(/\\/g, "/"), globs));
+  return list.some((f) => matchesAny(String(f ?? "").replaceAll("\\", "/"), globs));
 }
 
 /* 「是不是被直接执行」按 Node 自己的口径判 —— 这条踩过（ISSUE #1961 最后一格：

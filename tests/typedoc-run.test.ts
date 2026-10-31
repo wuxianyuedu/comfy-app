@@ -203,8 +203,8 @@ describe("resolveTypedocEntry", () => {
     expect(entry).toBeTruthy();
     /* ISSUE #2445：起的是包真身（`typedoc/bin/typedoc`），不是 `node_modules/.bin`
      * 下的垫片 —— 垫片要 shell 层（DEP0190），真身用 `process.execPath` 直起。 */
-    expect(entry!.replace(/\\/g, "/")).toContain("typedoc/bin/typedoc");
-    expect(entry!.replace(/\\/g, "/")).not.toContain(".bin/");
+    expect(entry!.replaceAll("\\", "/")).toContain("typedoc/bin/typedoc");
+    expect(entry!.replaceAll("\\", "/")).not.toContain(".bin/");
     expect(resolveTypedocEntry(tempDir("typedoc-run-bare-"))).toBeNull();
   });
 });

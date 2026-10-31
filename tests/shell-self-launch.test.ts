@@ -42,9 +42,9 @@ function read(rel: string): string {
 /** 剥掉注释：注释里解释「为什么不是那种写法」不该被判据当成实现。 */
 function stripComments(source: string, lineComments = true): string {
   const noBlock = source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*<!--[\s\S]*?-->/gm, "");
-  return lineComments ? noBlock.replace(/^[ \t]*\/\/.*$/gm, "") : noBlock;
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/^\s*<!--[\s\S]*?-->/gm, "");
+  return lineComments ? noBlock.replaceAll(/^[ \t]*\/\/.*$/gm, "") : noBlock;
 }
 
 /**

@@ -224,7 +224,7 @@ function flipsWithoutExecutor(flips) {
 }
 
 function escapeRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -605,7 +605,7 @@ function main() {
       violations.push({
         kind: "棘轮归类表点名了一份没有任何脚本写回去的基线",
         where: RATCHET_TEST,
-        detail: `${script.replace(/^\(基线 |\)$/g, "")} —— 该行的归属已不存在，删掉或改指新落点`,
+        detail: `${script.replaceAll(/^\(基线 |\)$/g, "")} —— 该行的归属已不存在，删掉或改指新落点`,
       });
       continue;
     }

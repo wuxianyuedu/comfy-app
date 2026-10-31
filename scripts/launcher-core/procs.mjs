@@ -248,7 +248,7 @@ export async function pidBelongsToRoot(pid, root) {
     return false;
   }
   /** @param {string} value */
-  const norm = (value) => value.replace(/\\/g, "/").toLowerCase();
+  const norm = (value) => value.replaceAll("\\", "/").toLowerCase();
   return norm(cwd).includes(norm(root));
 }
 

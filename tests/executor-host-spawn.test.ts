@@ -84,8 +84,8 @@ function readScript(rel: string): string {
 function topLevelCallAt(source: string, name: string): number {
   // 先剥块注释与行注释，避免注释里的示例写法被当成真实调用。
   const stripped = source
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-    .replace(/\/\/[^\n]*/g, "");
+    .replaceAll(/\/\*[\s\S]*?\*\//g, (m) => m.replaceAll(/[^\n]/g, " "))
+    .replaceAll(/\/\/[^\n]*/g, "");
   const re = new RegExp(`^[ \t]*${name}\\(`, "m");
   const hit = re.exec(stripped);
   return hit ? hit.index + hit[0].indexOf(name) : -1;

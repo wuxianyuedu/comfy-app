@@ -50,7 +50,7 @@ describe("仓储取用只有一个入口（ISSUE #568）", () => {
     for (const file of walk(SRC)) {
       const rel = relative(ROOT, file).split("\\").join("/");
       // 注释里说明「为什么没有容器」是允许的（判据只认代码）：整块注释先剥掉。
-      const src = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      const src = readFileSync(file, "utf8").replaceAll(/\/\*[\s\S]*?\*\//g, "");
       const code = src
         .split("\n")
         .filter((line) => !/^[ \t]*(\/\/|\*)/.test(line))

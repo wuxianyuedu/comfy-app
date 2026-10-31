@@ -220,7 +220,7 @@ function executorSources() {
     }
     if (/\b(execFileSync|execFile|spawnSync|spawn)\s*\(/.test(src)) {
       testSources.push({
-        rel: path.relative(ROOT, full).replace(/\\/g, "/"),
+        rel: path.relative(ROOT, full).replaceAll("\\", "/"),
         text: src,
       });
     }

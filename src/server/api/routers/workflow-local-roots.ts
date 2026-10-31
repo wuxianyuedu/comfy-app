@@ -125,9 +125,9 @@ function findRootFor(
 
 function normalizePathKey(p: string): string {
   try {
-    return path.resolve(p).replace(/\\/g, "/").toLowerCase();
+    return path.resolve(p).replaceAll("\\", "/").toLowerCase();
   } catch {
-    return p.replace(/\\/g, "/").toLowerCase();
+    return p.replaceAll("\\", "/").toLowerCase();
   }
 }
 

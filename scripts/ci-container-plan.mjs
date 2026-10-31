@@ -145,7 +145,7 @@ export function runnerShape(text) {
         body
           .slice(2)
           .trim()
-          .replace(/^["']|["']$/g, ""),
+          .replaceAll(/^["']|["']$/g, ""),
       );
       continue;
     }
@@ -245,7 +245,7 @@ export function containerStages(text) {
         current.image = body
           .slice("image:".length)
           .trim()
-          .replace(/^["']|["']$/g, "");
+          .replaceAll(/^["']|["']$/g, "");
       }
       continue;
     }
@@ -255,7 +255,7 @@ export function containerStages(text) {
         body
           .slice(2)
           .trim()
-          .replace(/^["']|["']$/g, ""),
+          .replaceAll(/^["']|["']$/g, ""),
       );
     }
   }
@@ -275,7 +275,7 @@ export function containerStages(text) {
 export function parseVolume(spec) {
   const text = String(spec)
     .trim()
-    .replace(/^["']|["']$/g, "");
+    .replaceAll(/^["']|["']$/g, "");
   const at = text.indexOf(":");
   if (at <= 0 || at === text.length - 1) {
     return null;
@@ -321,7 +321,7 @@ export function stageLevelImages(text) {
     const value = body
       .slice("image:".length)
       .trim()
-      .replace(/^["']|["']$/g, "");
+      .replaceAll(/^["']|["']$/g, "");
     /* 只认 stage 项自己那一层（更深的是 Job 的 `image:`，那是**对**的那一层）。 */
     if (value !== "" && indent === stage.indent + 2) {
       out.push({ name: stage.name, image: value });

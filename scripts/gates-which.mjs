@@ -92,7 +92,7 @@ export function parseArgs(argv) {
  */
 export function scriptOf(argv) {
   for (const raw of argv) {
-    const token = String(raw ?? "").replace(/\\/g, "/");
+    const token = String(raw ?? "").replaceAll("\\", "/");
     const m = /(?:^|\/)scripts\/([^/]+\.(?:mjs|cjs))$/.exec(token);
     if (m?.[1]) {
       return `scripts/${m[1]}`;
@@ -366,7 +366,7 @@ export function main(argv = process.argv.slice(2)) {
     return 2;
   }
   const files = [...new Set([...face.files, ...face.renamedFrom])]
-    .map((f) => String(f).replace(/\\/g, "/"))
+    .map((f) => String(f).replaceAll("\\", "/"))
     .filter(Boolean);
   if (files.length === 0) {
     process.stderr.write(

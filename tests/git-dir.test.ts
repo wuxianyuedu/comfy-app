@@ -63,7 +63,7 @@ function mustGitDir(cwd: string): string {
  * 判据要在它跑得到的那种宿主上自证，而不是共用一个数）。
  */
 function norm(p: string | null): string {
-  const slashed = String(p ?? "").replace(/\\/g, "/");
+  const slashed = String(p ?? "").replaceAll("\\", "/");
   return process.platform === "win32" ? slashed.toLowerCase() : slashed;
 }
 

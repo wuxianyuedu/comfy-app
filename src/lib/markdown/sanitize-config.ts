@@ -111,7 +111,7 @@ export function createSanitizeConfig(): SanitizeConfig {
  */
 export function isAllowedUrl(value: string): boolean {
   const normalized = value
-    .replace(/[\t\n\r]/g, "")
+    .replaceAll(/[\t\n\r]/g, "")
     .trimStart()
     .toLowerCase();
   const schemeEnd = normalized.indexOf(":");

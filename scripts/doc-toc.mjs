@@ -139,7 +139,7 @@ export function sectionRange(headings, index, totalLines) {
 export function resolveDoc(name) {
   const raw = String(name ?? "")
     .trim()
-    .replace(/\\/g, "/")
+    .replaceAll("\\", "/")
     .replace(/^\.\//, "");
   if (raw === "") {
     return { ok: false, reason: "缺少文档名（例：`pnpm doc:toc 13`）" };
@@ -156,7 +156,7 @@ export function resolveDoc(name) {
   }
 
   const asMirror = docs.find(
-    (d) => generatedPathFor(d.src).replace(/\\/g, "/").replace(/\.md$/i, "") === bare,
+    (d) => generatedPathFor(d.src).replaceAll("\\", "/").replace(/\.md$/i, "") === bare,
   );
   if (asMirror) {
     return { ok: true, src: asMirror.src, rendered: true };
@@ -294,7 +294,7 @@ function main(argv) {
     resolved.rendered || argv.includes("--rendered") || argv.includes("--mirror");
   /* 输出与 `Read` 参数一律用正斜杠：`generatedPathFor` 走 `path.join`，Windows 上给的是
    * 反斜杠 —— 读数要能原样粘进 `Read(offset=…)` 的说明里，两套分隔符只会制造一次改写。 */
-  const rel = (wantRendered ? generatedPathFor(resolved.src) : resolved.src).replace(/\\/g, "/");
+  const rel = (wantRendered ? generatedPathFor(resolved.src) : resolved.src).replaceAll("\\", "/");
   let text;
   try {
     text = fs.readFileSync(path.join(ROOT, rel), "utf8");

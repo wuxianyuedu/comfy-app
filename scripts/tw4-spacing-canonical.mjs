@@ -209,8 +209,8 @@ function rewriteStringContent(content, changes) {
   // 多行模板串的换行缩进原样保留（只压空格/制表符），并去掉收尾后的首尾空白。
   return pieces
     .join("")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/^[ \t]+|[ \t]+$/g, "");
+    .replaceAll(/[ \t]{2,}/g, " ")
+    .replaceAll(/^[ \t]+|[ \t]+$/g, "");
 }
 
 /** @param {string} text @param {Change[]} changes */

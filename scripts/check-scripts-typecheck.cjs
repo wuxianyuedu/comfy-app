@@ -177,9 +177,9 @@ function trackedMjs(root) {
   /* 比 realpath：Windows 上盘符大小写与 8.3 形态都会让字符串不同而目录相同。 */
   const same = (p) => {
     try {
-      return fs.realpathSync(p).replace(/\\/g, "/").toLowerCase();
+      return fs.realpathSync(p).replaceAll("\\", "/").toLowerCase();
     } catch {
-      return path.resolve(p).replace(/\\/g, "/").toLowerCase();
+      return path.resolve(p).replaceAll("\\", "/").toLowerCase();
     }
   };
   if (same(String(top.stdout).trim()) !== same(root)) {
@@ -374,7 +374,7 @@ function parseOutput(output) {
       continue;
     }
     /* `--listFiles` 报的是绝对路径；其余散文行（比如 next 插件的提示）忽略并计数。 */
-    if (path.isAbsolute(line.replace(/^"|"$/g, ""))) {
+    if (path.isAbsolute(line.replaceAll(/^"|"$/g, ""))) {
       listed.push(line);
     } else {
       unparsed += 1;

@@ -334,7 +334,7 @@ function readTsconfigInclude() {
   } catch (e) {
     throw new Error(`读不到 tsconfig.json：${e.message}`, { cause: e });
   }
-  const stripped = blankJsonComments(raw).replace(/,(\s*[}\]])/g, "$1");
+  const stripped = blankJsonComments(raw).replaceAll(/,(\s*[}\]])/g, "$1");
   let json;
   try {
     json = JSON.parse(stripped);
@@ -384,12 +384,12 @@ function includeEntryToRegExp(entry) {
       const alts = norm
         .slice(i + 1, end)
         .split(",")
-        .map((s) => s.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        .map((s) => s.trim().replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&"));
       re += `(?:${alts.join("|")})`;
       i = end;
       continue;
     }
-    re += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    re += ch.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
   return new RegExp(`^${re}$`);
 }

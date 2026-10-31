@@ -65,7 +65,7 @@ function bannerFor(docRel) {
 // 移除编辑文档里特有的「占位符约定」引用块：生成文档已显示真实值，该段无意义。
 // 匹配以 "> **占位符约定**：" 开头、到空行结束的连续引用行。
 function stripPlaceholderNote(text) {
-  return text.replace(/(?:\n)?> \*\*占位符约定\*\*：[^\n]*(?:\n> [^\n]*)*\n+(?=\n|> |#|$)/g, "\n");
+  return text.replaceAll(/(?:\n)?> \*\*占位符约定\*\*：[^\n]*(?:\n> [^\n]*)*\n+(?=\n|> |#|$)/g, "\n");
 }
 
 function buildPlaceholderMap() {
@@ -110,7 +110,7 @@ function renderDocContent(docRel, map) {
 
 /** 换行先归一到 LF 再比对：这条判据问的是「内容是否一致」，行尾由 .gitattributes 与 §13.7 管。 */
 function normalizeEol(text) {
-  return text.replace(/\r\n/g, "\n");
+  return text.replaceAll("\r\n", "\n");
 }
 
 /**

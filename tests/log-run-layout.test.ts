@@ -483,7 +483,7 @@ describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", ()
    * 而那正是本仓库要求写的东西（§12.4.2 禁止的是日期/编号式的历史流水，不是
    * 「为什么改」）。 */
   function code(name: string): string {
-    return name.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    return name.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/.*$/gm, "");
   }
 
   it("log-paths 里不再有那四个固定名常量（一次启动一份，没有单一文件可指）", () => {

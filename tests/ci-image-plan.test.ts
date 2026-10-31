@@ -346,7 +346,7 @@ describe("tarball：权限位、符号链接、可复现", () => {
      * 「链的是同目录上层的 `a.txt`」，不是某一种转写形状。 */
     expect(firstField(linkLine ?? "")).toMatch(/^l/);
     const target = (linkLine ?? "").split(" -> ")[1] ?? "";
-    expect(target.replaceAll("\\", "/").replace(/\/{2,}/g, "/")).toBe("../a.txt");
+    expect(target.replaceAll("\\", "/").replaceAll(/\/{2,}/g, "/")).toBe("../a.txt");
   });
 
   it("不穿符号链接（链接的目标不被打成第二份内容）", () => {

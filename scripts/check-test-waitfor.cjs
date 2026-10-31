@@ -202,7 +202,7 @@ function scanFile(abs) {
     const rawLine = raw.split("\n")[line - 1] ?? "";
     sites.push({
       line,
-      text: rawLine.trim().replace(/\s+/g, " ").slice(0, 110),
+      text: rawLine.trim().replaceAll(/\s+/g, " ").slice(0, 110),
       legit: dom ? "dom" : fake ? "fake-timer" : null,
       dom,
       fake,
