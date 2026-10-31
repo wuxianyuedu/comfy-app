@@ -211,9 +211,9 @@ function anchorLineOf(section) {
 let text = null;
 try {
   text = fs.readFileSync(CHANGELOG, "utf8");
-} catch (err) {
+} catch (error) {
   problems.push(
-    `读不到 CHANGELOG.md:${err.message} —— 本判据的对象就是它,读不到时判失败,` +
+    `读不到 CHANGELOG.md:${error.message} —— 本判据的对象就是它,读不到时判失败,` +
       `不按「没有段落要查」放过(§11.23.3 同款)`,
   );
 }

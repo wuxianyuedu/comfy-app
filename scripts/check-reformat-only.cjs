@@ -70,9 +70,9 @@ async function loadShell() {
   }
   try {
     ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
-  } catch (e) {
+  } catch (error) {
     console.error(
-      `[reformat] 无法加载 pnpm 形态判据模块（scripts/launcher-core/shell.mjs）：${e.message}`,
+      `[reformat] 无法加载 pnpm 形态判据模块（scripts/launcher-core/shell.mjs）：${error.message}`,
     );
     process.exit(2);
   }

@@ -166,8 +166,8 @@ function readBaseline() {
   }
   try {
     return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-  } catch (e) {
-    console.error(`[void-floats] 基线文件损坏: ${e.message}`);
+  } catch (error) {
+    console.error(`[void-floats] 基线文件损坏: ${error.message}`);
     process.exit(1);
   }
 }

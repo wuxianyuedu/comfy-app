@@ -271,7 +271,9 @@ describe("接线在位：复跑真的会发生，出口真的分两条", () => {
   });
 
   it("catch 里按形态分流：超时返回 timeout 态，真失败返回带 problems 的 answered 态", () => {
-    expect(SCRIPT_SOURCE).toMatch(/if \(isTimeoutLike\(e\)\) return \{ state: "timeout"/);
+    /* 判的是「catch 里按形态分流、超时走 timeout 态」，不判 catch 绑定的名字：
+     * 改名（unicorn/catch-error-name 那类）与这条语义无关，钉死名字会让它假红。 */
+    expect(SCRIPT_SOURCE).toMatch(/if \(isTimeoutLike\(\w+\)\) return \{ state: "timeout"/);
     expect(SCRIPT_SOURCE).toMatch(/problems: \[\s*\n?\s*`Python 侧自检失败：/);
   });
 

@@ -356,10 +356,10 @@ let anchorRev = anchorRevArg;
 if (anchorRev === null) {
   try {
     anchorRev = headRev();
-  } catch (err) {
+  } catch (error) {
     console.error(
       `[merge-changelog] 取不到当前 HEAD(${
-        err instanceof Error ? err.message : String(err)
+        error instanceof Error ? error.message : String(error)
       })—— 并入必须知道「这一轮条目里` +
         `最早的是哪个提交」,请用 --anchor <commit> 显式给出(裸目录 / tarball 解包的检出)`,
     );

@@ -160,8 +160,8 @@ function main() {
   let childEnv;
   try {
     childEnv = buildStandaloneRuntimeEnv({ appRoot: APP_ROOT, port });
-  } catch (err) {
-    fail(`cannot assemble runtime env: ${err?.message ?? err}`);
+  } catch (error) {
+    fail(`cannot assemble runtime env: ${error?.message ?? error}`);
   }
   // 首启建表：桌包既没有 pnpm 也没有 drizzle-kit（那是构建依赖），库里一张表都没有时
   // 应用随包的 DDL（§构建期由 build-desktop.mjs 现生成，只含结构）。不先做这一步，
@@ -174,8 +174,8 @@ function main() {
         ? `schema bootstrap tables=${schema.tablesBefore}->${schema.tablesAfter}`
         : `schema ready tables=${schema.tablesAfter}`,
     );
-  } catch (err) {
-    fail(`schema bootstrap failed: ${err?.message ?? err}`);
+  } catch (error) {
+    fail(`schema bootstrap failed: ${error?.message ?? error}`);
   }
   const stamp = runStamp();
   const { stdoutFile, stderrFile } = openServerLogFiles(stamp);

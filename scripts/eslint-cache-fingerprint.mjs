@@ -150,8 +150,8 @@ export function runFingerprint({ root = ROOT, log = () => {}, check = false } = 
         fs.rmSync(cacheDir, { recursive: true, force: true });
         removed = true;
       }
-    } catch (err) {
-      log(`[eslint-cache] 删缓存目录失败，跳过：${String(err)}`);
+    } catch (error) {
+      log(`[eslint-cache] 删缓存目录失败，跳过：${String(error)}`);
     }
     // 指纹要在**这一轮依赖树**上落盘：这就是下一次 install 的比对基线。
     try {
@@ -163,8 +163,8 @@ export function runFingerprint({ root = ROOT, log = () => {}, check = false } = 
         `${JSON.stringify(current, null, 2)}\n`,
         "utf8",
       );
-    } catch (err) {
-      log(`[eslint-cache] 写指纹失败，下次会重新判「变了」：${String(err)}`);
+    } catch (error) {
+      log(`[eslint-cache] 写指纹失败，下次会重新判「变了」：${String(error)}`);
     }
   }
 

@@ -462,8 +462,8 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((err) => {
-    console.error(`${TAG} ✗ 判据自身异常：`, err);
+  main().catch((error) => {
+    console.error(`${TAG} ✗ 判据自身异常：`, error);
     process.exit(1);
   });
 }

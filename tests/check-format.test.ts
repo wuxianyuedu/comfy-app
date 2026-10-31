@@ -323,12 +323,12 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
         encoding: "utf8",
         env: gitSandboxEnv(),
       }).trim();
-    } catch (e) {
-      const err = e as { message: string; stderr?: string };
+    } catch (error) {
+      const err = error as { message: string; stderr?: string };
       /* 空串 stderr 也算「没拿到那句话」（git 走 stdout-only 失败形态时就是这样），
        * 所以这里判的是「有没有内容」而不是「是不是 undefined」—— 用 `??` 会把空串端出去。 */
       const why = err.stderr && err.stderr.trim() !== "" ? err.stderr : err.message;
-      throw new Error(`git ${args.join(" ")} 失败：${why}`, { cause: e });
+      throw new Error(`git ${args.join(" ")} 失败：${why}`, { cause: error });
     }
   }
 

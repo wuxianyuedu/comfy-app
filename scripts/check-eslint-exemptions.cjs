@@ -163,16 +163,16 @@ function scanViolations({ files, ruleId, root, readFile, makeLinter }) {
     let code;
     try {
       code = read(path.join(root, rel));
-    } catch (e) {
-      const err = /** @type {NodeJS.ErrnoException} */ (e);
+    } catch (error) {
+      const err = /** @type {NodeJS.ErrnoException} */ (error);
       failed.push({ file: rel, why: `读不到（${err.code ?? err.message}）` });
       continue;
     }
     let messages;
     try {
       messages = linter.verify(code, config, { filename: rel });
-    } catch (e) {
-      failed.push({ file: rel, why: `verify 抛错：${String(e).split("\n")[0]}` });
+    } catch (error) {
+      failed.push({ file: rel, why: `verify 抛错：${String(error).split("\n")[0]}` });
       continue;
     }
     /* `verify` 不抛错但给回 fatal 的两种（解析失败 / 内联配置注释报错）也不算判过。 */
@@ -323,10 +323,10 @@ async function main() {
   let config;
   try {
     config = /** @type {ConfigBlock[]} */ (await loadEslintConfig());
-  } catch (e) {
+  } catch (error) {
     console.error(
       `${TAG} ✗ 取不到 ${ESLINT_CONFIG_REL} 的求值结果 ⇒ 没结论（不是「台账是干净的」）：`,
-      String(e).split("\n")[0],
+      String(error).split("\n")[0],
     );
     return 2;
   }

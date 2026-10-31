@@ -236,7 +236,7 @@ export async function fetchFact(ctx, subPath, extra = {}) {
       bodyLen: body.length,
       ms: Date.now() - t0,
     };
-  } catch (err) {
+  } catch (error) {
     /* 网络层失败只记**错误码**（`ENOTFOUND` / `TimeoutError` 那类），
      * 不记 message —— message 里可能带 URL，而 URL 里有仓库名（那没问题），
      * 但把它拼进读数只会让读的人去查一个不存在的「格式问题」。 */
@@ -244,7 +244,7 @@ export async function fetchFact(ctx, subPath, extra = {}) {
       ok: false,
       status: -1,
       body: "",
-      error: String(/** @type {any} */ (err)?.name ?? err),
+      error: String(/** @type {any} */ (error)?.name ?? error),
       bodyLen: 0,
       ms: Date.now() - t0,
     };

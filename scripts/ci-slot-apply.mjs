@@ -263,9 +263,9 @@ export function acquireSlotLock(io) {
   try {
     fs.writeFileSync(file, stamp, { flag: "wx" });
     return { acquired: true, why: "拿到写锁", release };
-  } catch (err) {
-    if (errCode(err) !== "EEXIST") {
-      return { acquired: false, why: `锁建不起来（${errCode(err)}）`, release };
+  } catch (error) {
+    if (errCode(error) !== "EEXIST") {
+      return { acquired: false, why: `锁建不起来（${errCode(error)}）`, release };
     }
   }
   let held = Number.NaN;
@@ -281,8 +281,8 @@ export function acquireSlotLock(io) {
   try {
     fs.writeFileSync(file, stamp);
     return { acquired: true, why: "接管一把过期的锁", release };
-  } catch (err) {
-    return { acquired: false, why: `接管失败（${errCode(err)}）`, release };
+  } catch (error) {
+    return { acquired: false, why: `接管失败（${errCode(error)}）`, release };
   }
 }
 
@@ -342,8 +342,8 @@ export function statfsFreeBytes(target) {
       const info = fs.statfsSync(dir);
       const bytes = info.bsize * info.bavail;
       return Number.isFinite(bytes) ? bytes : null;
-    } catch (err) {
-      const code = errCode(err);
+    } catch (error) {
+      const code = errCode(error);
       if (code !== "ENOENT" && code !== "ENOTDIR") {
         return null;
       }

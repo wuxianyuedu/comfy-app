@@ -219,8 +219,8 @@ export function linkBuildCache(io) {
       link,
       process.platform === "win32" ? "junction" : "dir",
     );
-  } catch (err) {
-    return { ...noop, why: `建链接失败（${errCode(err)}）⇒ 不接槽` };
+  } catch (error) {
+    return { ...noop, why: `建链接失败（${errCode(error)}）⇒ 不接槽` };
   }
   return {
     linked: true,

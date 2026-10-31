@@ -108,9 +108,9 @@ async function runWithLedger(ledger: Ledger, args: Array<string> = []) {
     encoding: "utf8",
   }).then(
     (r) => ({ ok: true, output: r.stdout + r.stderr }),
-    (e: { code?: number; stderr?: string; stdout?: string; }) => ({
-      ok: (e.code ?? 1) === 0,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+    (error: { code?: number; stderr?: string; stdout?: string; }) => ({
+      ok: (error.code ?? 1) === 0,
+      output: `${error.stdout ?? ""}${error.stderr ?? ""}`,
     }),
   );
 }
