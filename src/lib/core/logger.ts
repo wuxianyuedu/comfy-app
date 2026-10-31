@@ -86,14 +86,6 @@ export interface PinoLoggerOptions {
   /** 覆盖日志级别；缺省读 `LOG_LEVEL`，再回退 info。 */
   level?: string;
   /**
-   * 绑定的命名空间（pino 的 `bindings.ns`）。
-   *
-   * 核心层入口**不带 `server-only`**（它被纯 Node 宿主与 Next 服务端同时加载），
-   * 它不能把命名空间塞进 `every log call` 的对象里，否则同一条日志的字段形状
-   * 会随调用方漂移。绑定一次、处处带上，是 pino 的标准做法（`log.child({ ns })`）。
-   */
-  ns?: string;
-  /**
    * 覆盖 ERROR 镜像的落盘目标（app-runtime 通道）。
    *
    * 默认走全局 `appRuntimeLog`（真实 `log/services/app-runtime.log`）。
@@ -102,6 +94,14 @@ export interface PinoLoggerOptions {
    * 并写入 6 行，其中含被断言的「密钥原文」标记行）。
    */
   mirror?: { error(msg: string, fields?: Record<string, unknown>): void };
+  /**
+   * 绑定的命名空间（pino 的 `bindings.ns`）。
+   *
+   * 核心层入口**不带 `server-only`**（它被纯 Node 宿主与 Next 服务端同时加载），
+   * 它不能把命名空间塞进 `every log call` 的对象里，否则同一条日志的字段形状
+   * 会随调用方漂移。绑定一次、处处带上，是 pino 的标准做法（`log.child({ ns })`）。
+   */
+  ns?: string;
 }
 
 /**
@@ -308,12 +308,12 @@ function renderFieldKeyList(payload?: Record<string, unknown>): string {
  * （各 repository、workshop 生成日志等）无需改动。
  */
 export interface Logger {
-  debug(msg: string, fields?: Record<string, unknown>): void;
-  info(msg: string, fields?: Record<string, unknown>): void;
-  warn(msg: string, fields?: Record<string, unknown>): void;
-  error(msg: string, fields?: Record<string, unknown>): void;
   /** 派生子日志器，命名空间拼接为 `parent:child`。 */
   child(ns: string): Logger;
+  debug(msg: string, fields?: Record<string, unknown>): void;
+  error(msg: string, fields?: Record<string, unknown>): void;
+  info(msg: string, fields?: Record<string, unknown>): void;
+  warn(msg: string, fields?: Record<string, unknown>): void;
 }
 
 /** 绑定名放在 `ns` 字段（pino 的 `bindings` 会带上它，便于采集端按命名空间过滤）。 */

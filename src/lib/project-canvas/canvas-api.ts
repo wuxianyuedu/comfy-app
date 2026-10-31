@@ -162,13 +162,13 @@ export interface TaskResult {
  * 底层后端的错误信息，好让界面给出有意义的解释，
  * 而不是一句通用的「生成失败或无结果」。 */
 export interface TaskFailure {
-  taskId: string;
-  status: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT";
   /** 后端 / ComfyUI 的原始错误信息，已解码成纯文本。 */
   error: string;
   /** 原始请求载荷的快照（任务行 `params` 列），
    *  好让错误界面把「发了什么」和「哪里失败了」并排展示。 */
   params?: unknown;
+  status: "FAILED" | "CANCELLED" | "ERROR" | "TIMEOUT";
+  taskId: string;
   /** 结构化的 ComfyUI /prompt 校验错误（摊平后的 `node_errors`），
    *  好让界面渲染出精确到字段的列表，而不是去解析 `error` 里那句英文摘要。 */
   validationErrors?: Array<ValidationError>;

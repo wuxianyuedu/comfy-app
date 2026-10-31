@@ -25,21 +25,8 @@ const NODE_TITLE_ANCHOR: Record<string, number> = {
 };
 
 export interface WorkflowPersistenceArgs {
-  workflowId: string;
   detail: WorkflowDetail | null;
-  setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
-  setNodes: Dispatch<SetStateAction<Array<Node>>>;
-  paramMap: Record<string, unknown>;
-  workflowIO: Record<string, WorkflowIOParam>;
   fitToContent: () => void;
-  savePatch: WorkflowSaver;
-  onSave?: () => void;
-  onClose: () => void;
-  setSaving: Dispatch<SetStateAction<boolean>>;
-  setError: Dispatch<SetStateAction<string>>;
-  /** 重置布局后重新拉当前视图的数据：服务端已删掉本视图的坐标覆盖，
-   *  重新取到的就是工作流自带的原始布局。 */
-  reloadView?: () => void;
   /** 当前视图的宿主链路（顶层为空串，下钻一层是 `4`，再下钻是 `4:5`）。
    *  子图内部的节点 id 是**裸内部 id**（`1670`），而服务端 `positions` 列里
    *  同一批节点存的是**拼接键**（`4:1670`，见 `extractPositions` 里
@@ -48,6 +35,19 @@ export interface WorkflowPersistenceArgs {
    *  「原始坐标」把真实位置盖掉 —— 这正是「改过位置的节点重置后回不到原始
    *  布局、再改一次却回归到一个错误位置」的来源。 */
   hostNodeId?: string;
+  onClose: () => void;
+  onSave?: () => void;
+  paramMap: Record<string, unknown>;
+  /** 重置布局后重新拉当前视图的数据：服务端已删掉本视图的坐标覆盖，
+   *  重新取到的就是工作流自带的原始布局。 */
+  reloadView?: () => void;
+  savePatch: WorkflowSaver;
+  setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
+  setError: Dispatch<SetStateAction<string>>;
+  setNodes: Dispatch<SetStateAction<Array<Node>>>;
+  setSaving: Dispatch<SetStateAction<boolean>>;
+  workflowId: string;
+  workflowIO: Record<string, WorkflowIOParam>;
 }
 
 /**

@@ -69,9 +69,9 @@ const GREEN_STAGES = [
 
 /** 平台一份 stage 记录里我们要造的那几栏。 */
 interface StageFixture {
+  duration: number;
   name: string;
   status: string;
-  duration: number;
 }
 
 /**

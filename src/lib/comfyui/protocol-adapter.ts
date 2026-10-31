@@ -34,7 +34,6 @@
 
 /** ComfyUI WS 消息的最小结构视图（原始载荷是 `any`）。 */
 export interface ComfyWsMessage {
-  type?: string;
   data?: {
     [k: string]: unknown;
     exception_message?: unknown;
@@ -43,6 +42,7 @@ export interface ComfyWsMessage {
     prompt_id?: unknown;
     value?: unknown;
   };
+  type?: string;
 }
 
 /** 执行器会响应的统一信号类别。 */

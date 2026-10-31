@@ -61,39 +61,39 @@ export const DRAG_EDGE_GAP_PX = 8;
 
 /** 元素在视口内的落点（左上角坐标 + 自身尺寸）。 */
 export interface DraggableBox {
+  height: number;
+  width: number;
   x: number;
   y: number;
-  width: number;
-  height: number;
 }
 
 /** 持久化的位置：距视口右 / 下的偏移（跟角走，不跟绝对坐标走）。 */
 export interface DraggableOffset {
-  right: number;
   bottom: number;
+  right: number;
 }
 
 export interface UseDraggablePositionOptions {
-  /** `localStorage` 键名（含自己的版本策略，例如 `comfyapp:agent-fab:v1`）。 */
-  storageKey: string;
   /** 没存过 / 读失败 / 落点已失效时用的默认偏移。 */
   defaultOffset: DraggableOffset;
   /** 用户真的点了（位移没超阈值）时的回调。 */
   onClick?: () => void;
+  /** `localStorage` 键名（含自己的版本策略，例如 `comfyapp:agent-fab:v1`）。 */
+  storageKey: string;
 }
 
 export interface DraggablePositionController<T extends HTMLElement> {
-  /** 当前位置；`null` = 还没量到（首帧之前不渲染，避免闪一下再跳位）。 */
-  offset: DraggableOffset | null;
   /** 是否正在拖动 —— 调用处据此关掉「悬停提示」这类会打架的浮层。 */
   dragging: boolean;
+  /** 挂在被拖元素上的 ref 回调 —— **必须挂上**：本 hook 靠它知道元素什么时候
+   *  进的 DOM，「取回记住的位置」与「按真实尺寸夹取」都在那之后才成立。 */
+  elementCallbackRef: (el: T | null) => void;
   /** 挂到被拖元素上的指针事件。 */
   handleProps: {
     onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
   };
-  /** 挂在被拖元素上的 ref 回调 —— **必须挂上**：本 hook 靠它知道元素什么时候
-   *  进的 DOM，「取回记住的位置」与「按真实尺寸夹取」都在那之后才成立。 */
-  elementCallbackRef: (el: T | null) => void;
+  /** 当前位置；`null` = 还没量到（首帧之前不渲染，避免闪一下再跳位）。 */
+  offset: DraggableOffset | null;
 }
 
 /* 元素尺寸与视口尺寸都从现场量，不缓存 —— 悬浮元素会随内容换行改变高度

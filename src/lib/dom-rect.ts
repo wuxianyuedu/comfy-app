@@ -46,22 +46,22 @@
 
 /** 一个元素的盒子（相对视口的矩形 + 内容尺寸）。 */
 export interface ElementBox {
-  /** 视口坐标系里的位置与尺寸（`getBoundingClientRect` 的读数）。 */
-  left: number;
-  top: number;
-  right: number;
   bottom: number;
-  width: number;
-  height: number;
+  clientHeight: number;
   /** **布局尺寸**（`clientWidth` / `clientHeight`，不含滚动条、取整）。 */
   clientWidth: number;
-  clientHeight: number;
-  /** **内容尺寸**（`scrollWidth` / `scrollHeight`，含溢出部分）。 */
-  scrollWidth: number;
-  scrollHeight: number;
+  height: number;
+  /** 视口坐标系里的位置与尺寸（`getBoundingClientRect` 的读数）。 */
+  left: number;
   /** 相对**视口**的滚动偏移（`window.scrollX/Y`），用于换算绝对位置。 */
   pageX: number;
   pageY: number;
+  right: number;
+  scrollHeight: number;
+  /** **内容尺寸**（`scrollWidth` / `scrollHeight`，含溢出部分）。 */
+  scrollWidth: number;
+  top: number;
+  width: number;
 }
 
 const EMPTY_RECT: DOMRect = {
@@ -204,14 +204,14 @@ export function centerLineScrollTop(
 
 /** base-ui 虚拟锚点需要的矩形形状（`getBoundingClientRect` 的返回形状子集）。 */
 export interface AnchorRect {
+  bottom: number;
+  height: number;
+  left: number;
+  right: number;
+  top: number;
+  width: number;
   x: number;
   y: number;
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
 }
 
 /**

@@ -34,35 +34,35 @@ import { readFileAsDataUrl } from "~/lib/file-io";
 import type { WorkshopExposedValues } from "~/lib/workshop/workflow-encapsulation";
 
 export interface EncapsulationTestRunArgs {
-  workflowId: string;
-  /** 展示名（工坊下拉 / 徽标用的那个）。 */
-  workflowName: string;
-  /** 生效模式码（登记与日志标注用；缺省 null）。 */
-  mode?: string | null;
   /** 该模式**生效的契约口清单**（含作者自定义的口）。
    *
    *  组载荷要按它认口：不传就等于只认内置契约，作者给自定义口填的值落不下去
    *  （会进 `unmatched`，不静默丢）。调用方请用 memo 稳住引用。 */
   contractIds?: ReadonlyArray<string>;
+  /** 生效模式码（登记与日志标注用；缺省 null）。 */
+  mode?: string | null;
+  workflowId: string;
+  /** 展示名（工坊下拉 / 徽标用的那个）。 */
+  workflowName: string;
 }
 
 export interface EncapsulationTestRunController {
-  /** 本页签是否正在跑一次流程测试。 */
-  running: boolean;
-  /** 0–100（无进度帧时为 0）。 */
-  progress: number;
   /** 失败原因（每次都重置）。 */
   error: string;
+  /** 0–100（无进度帧时为 0）。 */
+  progress: number;
   /** 最近一次运行的产物 URL（成功时）。 */
   resultUrl: string | null;
-  /** 最近一次登记的 taskId（日志弹窗按它定位）。 */
-  taskId: string | null;
   /** 跑一次流程测试（已跑/未就绪时为空操作）。
    *
    *  收的是**工坊对外值**本身：表单摆出来的口就是契约口清单，值直接交给
    *  `buildLibraryWorkflowInput` 落点，中间不再有「只认提示词 / 负向 / 尺寸」
    *  的第二份字段白名单（那份白名单会让表单多出的口静默丢掉）。 */
   run: (values: WorkshopExposedValues) => void;
+  /** 本页签是否正在跑一次流程测试。 */
+  running: boolean;
+  /** 最近一次登记的 taskId（日志弹窗按它定位）。 */
+  taskId: string | null;
   /** 把用户选的本地图片送进 ComfyUI 输入目录，返回可直接落进工作流的文件名。
    *  读文件与上传都在这一层（§17.2 第②层），视图只拿结果字符串。 */
   uploadImage: (file: File) => Promise<string>;

@@ -32,8 +32,8 @@ import { appendFilmLog } from "./film-log";
 export interface FilmShotClip {
   /** 关联的统一镜头 id（production.shots[].id）；自由建片的镜头为 null（跳过）。 */
   shotId: string | null;
-  videoPath: string | null;
   status: ShotStatus;
+  videoPath: string | null;
 }
 
 /** 把「从项目建的片」合成完成后的结果，回写进来源统一项目：

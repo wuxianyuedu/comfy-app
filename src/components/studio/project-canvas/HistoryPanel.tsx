@@ -36,10 +36,10 @@ function KindIcon({ kind }: { kind: TaskMediaType }) {
 
 interface HistoryPanelProps {
   onClose: () => void;
-  /** 当前画布项目 id；有值时默认只看本项目记录。 */
-  projectId?: string | null;
   /** 把历史产出投放到画布（由 ProjectCanvas 实现建节点）。 */
   onUse?: (task: { cover: string; id: string; mediaType: TaskMediaType }) => void;
+  /** 当前画布项目 id；有值时默认只看本项目记录。 */
+  projectId?: string | null;
 }
 
 export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {

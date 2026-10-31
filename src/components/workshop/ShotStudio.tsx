@@ -48,24 +48,24 @@ import { IndexDot } from "~/components/workshop/IndexDot";
 import { paramString } from "~/lib/workshop/param-coerce";
 
 interface Props {
-  shots: Array<Shot>;
-  scenes: Array<Scene>;
-  characters: Array<Character>;
-  styles: Array<StyleRef>;
-  /** 选定的工作流库工作流 id：本地通道的唯一可执行来源（内置模板已移除）。 */
-  workflowId: string;
-  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
-  projectId: string;
   /** 掩码后的 API 通道配置；图片通道的放行判据来自这里。 */
   apiChannels: ApiChannelsView | null;
-  onOpenModelAdapters: () => void;
-  /** 镜头列表所有者（WorkshopPipeline setShots）—— 欢迎函数式补丁。 */
-  onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>;
-  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
-  onNotice: (message: string) => void;
+  characters: Array<Character>;
   /** 取消一个进行中的本机任务（控制器统一出口）。 */
   onCancelShot: (shot: Shot) => void;
   onNextStage: () => void;
+  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
+  onNotice: (message: string) => void;
+  onOpenModelAdapters: () => void;
+  /** 镜头列表所有者（WorkshopPipeline setShots）—— 欢迎函数式补丁。 */
+  onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>;
+  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
+  projectId: string;
+  scenes: Array<Scene>;
+  shots: Array<Shot>;
+  styles: Array<StyleRef>;
+  /** 选定的工作流库工作流 id：本地通道的唯一可执行来源（内置模板已移除）。 */
+  workflowId: string;
 }
 
 type Channel = "local" | "api";
@@ -515,25 +515,25 @@ function StatusBadge({ status }: { status: Shot["status"] }) {
  *  从 ShotStudio 主体拆出（规范 §12.13 函数长度）：主组件只留编排与工具行，
  *  「一条镜头长什么样」收在这里。 */
 interface ShotCardRowProps {
-  shot: Shot;
-  /** 本条目的实时进度（0~100）。 */
-  progress: number;
-  /** 本条目的失败原因；undefined = 无错误。 */
-  error: string | undefined;
+  apiReady: boolean;
   /** 全表在跑的条目数（>0 且本条在跑时显示百分比 / 排队中）。 */
   busyCount: number;
   channel: Channel;
-  workflowId: string;
-  apiReady: boolean;
-  onGenerate: (shot: Shot) => void;
-  /** 抽卡优选（仅本地通道有任务行可评）：连发 N 张后服务端选最优。 */
-  onGacha: (shot: Shot, count: number) => void;
+  /** 本条目的失败原因；undefined = 无错误。 */
+  error: string | undefined;
   /** 本条抽卡进行中（按钮禁用 + 文案）。 */
   gachaBusy: boolean;
   /** 取消本条进行中的本机任务（有 taskId 才显示按钮）。 */
   onCancel: (shot: Shot) => void;
+  /** 抽卡优选（仅本地通道有任务行可评）：连发 N 张后服务端选最优。 */
+  onGacha: (shot: Shot, count: number) => void;
+  onGenerate: (shot: Shot) => void;
   /** 提示词被手改：父层记入 editedRef（自动预填不再覆盖）并写回镜头。 */
   onPromptChange: (id: string, prompt: string) => void;
+  /** 本条目的实时进度（0~100）。 */
+  progress: number;
+  shot: Shot;
+  workflowId: string;
 }
 
 function ShotCardRow({

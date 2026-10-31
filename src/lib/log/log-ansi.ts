@@ -11,9 +11,9 @@
 
 /** 一段带样式的日志文本。text 为原文（不含转义序列）。 */
 export interface AnsiSegment {
-  text: string;
   /** 活动样式（前景/背景/字重等可同时生效）；空 = 默认样式 */
   styles?: Array<AnsiStyleKey>;
+  text: string;
 }
 
 export type AnsiStyleKey =
@@ -231,12 +231,12 @@ function composeStyles(state: {
 }
 
 interface SgrState {
+  bg?: AnsiStyleKey;
   bold: boolean;
   dim: boolean;
+  fg?: AnsiStyleKey;
   italic: boolean;
   underline: boolean;
-  fg?: AnsiStyleKey;
-  bg?: AnsiStyleKey;
 }
 
 function applySgr(codes: string, set: (state: SgrState) => void, get: () => SgrState): void {

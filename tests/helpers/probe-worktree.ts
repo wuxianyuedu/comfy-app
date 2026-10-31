@@ -49,17 +49,17 @@ import { tmpdir } from "node:os";
 
 /** 一份一次性克隆：`dir` 是它的工作树根，`dispose()` 注销它。 */
 export interface ProbeTree {
-  dir: string;
   /** 覆盖进克隆的那些相对路径（带状态前缀）。出问题第一个该看的就是这份清单。 */
   carried: Array<string>;
+  dir: string;
   dispose: () => void;
 }
 
 /** `git status --porcelain=v1 -z` 的一条记录。 */
 interface StatusEntry {
+  path: string;
   /** 两格状态码（`??` = 未跟踪） */
   xy: string;
-  path: string;
 }
 
 /**

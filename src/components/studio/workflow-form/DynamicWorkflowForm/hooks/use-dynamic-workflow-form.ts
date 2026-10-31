@@ -42,55 +42,55 @@ const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition =>
  *  刻意没有 onDragLeave：指针在同一行的子元素间移动时它同样会触发，据此清除
  *  高亮会频闪 —— 高亮统一由 dragover / drop / dragend 收敛。 */
 export interface RowDragHandlers {
-  onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
-  onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
-  onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
   onDragEnd: () => void;
+  onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
+  onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
 }
 
 export interface DynamicWorkflowFormController {
-  /** 当前值表（keyed by ioKey）—— 调用方持有，这里只读透传。 */
-  values: Record<string, unknown>;
-  /** 整表写入口：GroupedControls 这类批量写入的组件直接用它，`set` 是它的
-   *  单键快捷方式。 */
-  onChange: (next: Record<string, unknown>) => void;
-  /** 全量输入（wire + widget），按 displayOrder 稳定排序。 */
-  inputs: Array<EnrichedWidget>;
-  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
-  wireInputs: Array<EnrichedWidget>;
-  widgetInputs: Array<EnrichedWidget>;
-  groups: ReturnType<typeof inferGroups>;
-  /** 端口行：wire inputs + 数值 widget（已分组的 pin 除外）。 */
-  portEntries: Array<EnrichedWidget>;
-  /** 可编辑参数行：非数值 widget（已分组的 pin 除外）。 */
-  widgetSectionEntries: Array<EnrichedWidget>;
-  /** 没有任何输入/输出端点 —— 视图据此渲染空态提示。 */
-  isEmpty: boolean;
-  uploading: boolean;
-  uploadTarget: string | null;
-  /** 隐藏图片选择 input 的挂载点（`ui/file-picker`）。 */
-  FileInput: ComponentType;
-  pickFile: (ioKey: string) => void;
-  /** 用户刚选过这张图时的本地预览地址（data URL）；没有则 undefined，
-   *  由控件回退到按值算出的 ComfyUI 代理地址。让「选完就能看到」不依赖 ComfyUI。 */
-  localPreviewUrl: (ioKey: string) => string | undefined;
-  /** 上传失败的可读原因（未运行 / 启动超时…）；下一次选择文件时清空。
-   *  视图据此在表单内渲染提示条——上传位本身没有错误区。 */
-  uploadError: string | null;
+  /** 端口行被拿起时回传本 controller —— 端口行自身不持有拖拽状态。 */
+  beginPortDrag: (ioKey: string) => void;
   dismissUploadError: () => void;
-  /** 上传是异步的（读文件 + 调接口），但 `<input type=file>` 的 onChange 只
-   *  要求 void 返回 —— 调用方不需要 await，失败在这里转成 uploadError。 */
-  set: (ioKey: string, value: unknown) => void;
+  draggingKey: string | null;
   /** 未开启重排（调用方未传 onReorder）时为 null。 */
   dragHandlers: RowDragHandlers | null;
-  draggingKey: string | null;
   dragOverKey: string | null;
   /** 指示线画在 `dragOverKey` 那一行的上缘还是下缘 —— 与 reorderIO 收到的
    *  `position` 同源，指示线永远画在实际插入位置。 */
   dropPosition: WorkflowIODropPosition;
-  /** 端口行被拿起时回传本 controller —— 端口行自身不持有拖拽状态。 */
-  beginPortDrag: (ioKey: string) => void;
   endDrag: () => void;
+  /** 隐藏图片选择 input 的挂载点（`ui/file-picker`）。 */
+  FileInput: ComponentType;
+  groups: ReturnType<typeof inferGroups>;
+  /** 全量输入（wire + widget），按 displayOrder 稳定排序。 */
+  inputs: Array<EnrichedWidget>;
+  /** 没有任何输入/输出端点 —— 视图据此渲染空态提示。 */
+  isEmpty: boolean;
+  /** 用户刚选过这张图时的本地预览地址（data URL）；没有则 undefined，
+   *  由控件回退到按值算出的 ComfyUI 代理地址。让「选完就能看到」不依赖 ComfyUI。 */
+  localPreviewUrl: (ioKey: string) => string | undefined;
+  /** 整表写入口：GroupedControls 这类批量写入的组件直接用它，`set` 是它的
+   *  单键快捷方式。 */
+  onChange: (next: Record<string, unknown>) => void;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  pickFile: (ioKey: string) => void;
+  /** 端口行：wire inputs + 数值 widget（已分组的 pin 除外）。 */
+  portEntries: Array<EnrichedWidget>;
+  /** 上传是异步的（读文件 + 调接口），但 `<input type=file>` 的 onChange 只
+   *  要求 void 返回 —— 调用方不需要 await，失败在这里转成 uploadError。 */
+  set: (ioKey: string, value: unknown) => void;
+  /** 上传失败的可读原因（未运行 / 启动超时…）；下一次选择文件时清空。
+   *  视图据此在表单内渲染提示条——上传位本身没有错误区。 */
+  uploadError: string | null;
+  uploading: boolean;
+  uploadTarget: string | null;
+  /** 当前值表（keyed by ioKey）—— 调用方持有，这里只读透传。 */
+  values: Record<string, unknown>;
+  widgetInputs: Array<EnrichedWidget>;
+  /** 可编辑参数行：非数值 widget（已分组的 pin 除外）。 */
+  widgetSectionEntries: Array<EnrichedWidget>;
+  wireInputs: Array<EnrichedWidget>;
 }
 
 export function useDynamicWorkflowForm(

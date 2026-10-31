@@ -70,6 +70,7 @@ import { defaultData, type CanvasNodeType, type NodeKind } from "~/lib/project-c
 export interface ProjectScene {
   /** 这个场景解决什么（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
+  readonly edges?: ReadonlyArray<Edge>;
   readonly name: string;
   /**
    * 摆在画布上的节点（可选）。给了它就是「打开一个**有内容**的项目」那一档：
@@ -81,7 +82,6 @@ export interface ProjectScene {
    * 退化成另一种形态。
    */
   readonly nodes?: ReadonlyArray<CanvasNodeType>;
-  readonly edges?: ReadonlyArray<Edge>;
 }
 
 /**

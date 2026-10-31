@@ -13,18 +13,18 @@ import { FormField } from "~/components/ui/form-field";
 import { SelectChip } from "~/components/ui/select-chip";
 
 interface LLMContextValue {
+  closeSettings: () => void;
   config: LLMConfigView | null;
+  loading: boolean;
   /** 静态配置下的本地候选模型名（工坊下拉「本地」组读它，不实时探测）。 */
   localModels: Array<string>;
-  /** 静态配置下的远端独立模型名（工坊下拉「远端」组读它，不实时探测）。 */
-  remoteModels: Array<string>;
+  openSettings: () => void;
+  refresh: () => void;
   /** 静态配置下的远端生图模型名（kind=image，定妆照远端通道挑选用）。 */
   remoteImageModels: Array<string>;
-  loading: boolean;
+  /** 静态配置下的远端独立模型名（工坊下拉「远端」组读它，不实时探测）。 */
+  remoteModels: Array<string>;
   settingsOpen: boolean;
-  openSettings: () => void;
-  closeSettings: () => void;
-  refresh: () => void;
 }
 
 const LLMContext = React.createContext<LLMContextValue | null>(null);

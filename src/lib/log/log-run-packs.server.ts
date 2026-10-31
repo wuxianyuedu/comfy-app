@@ -42,16 +42,16 @@ import {
 
 /** 列包时的参数（路径与文件名从布局常量来，不在本模块写死）。 */
 export interface ScanRunPacksOptions {
-  /** `runs/` 的绝对路径。 */
-  runsDir: string;
-  /** 该来源在包内的相对目录（如 `services`）。 */
-  sourceDir: string;
-  /** `run.json` 的文件名（从 `run.mjs` 的 `LOG_LAYOUT.runJson` 来）。 */
-  runJsonName: string;
   /** 最多列几个包（更老的翻不到，列出来只是噪声）。 */
   maxPacks: number;
+  /** `run.json` 的文件名（从 `run.mjs` 的 `LOG_LAYOUT.runJson` 来）。 */
+  runJsonName: string;
+  /** `runs/` 的绝对路径。 */
+  runsDir: string;
   /** 要列哪个来源的份。 */
   source: RuntimeLogSource;
+  /** 该来源在包内的相对目录（如 `services`）。 */
+  sourceDir: string;
 }
 
 /** 读一个包目录的 `run.json`（无 / 坏 → null，不让一个坏包把整个列表带崩）。 */

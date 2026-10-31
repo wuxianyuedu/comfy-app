@@ -200,10 +200,10 @@ export function blocksTitleBar(className: string): boolean {
 
 /** 视口矩形（`getBoundingClientRect` 的坐标系，原点在视口左上角）。 */
 export interface ViewportRect {
+  height: number;
+  width: number;
   x: number;
   y: number;
-  width: number;
-  height: number;
 }
 
 /**

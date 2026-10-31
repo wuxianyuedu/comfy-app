@@ -75,8 +75,6 @@ import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
 export type CopyFeedback = (ok: boolean) => void;
 
 export interface UseCopyFeedbackOptions {
-  /** 成功之后的反馈（不给 = 成功静默，是有意为之的常见选择）。 */
-  onSuccess?: CopyFeedback;
   /**
    * 失败之后的反馈。
    *
@@ -85,6 +83,8 @@ export interface UseCopyFeedbackOptions {
    * - 不给 → 与 `"silent"` 同样静默，但**读起来像忘了写** —— 新增落点请显式选一个。
    */
   onFailure?: CopyFeedback | "silent";
+  /** 成功之后的反馈（不给 = 成功静默，是有意为之的常见选择）。 */
+  onSuccess?: CopyFeedback;
 }
 
 /**

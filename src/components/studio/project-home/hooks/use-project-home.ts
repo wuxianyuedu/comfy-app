@@ -35,14 +35,14 @@ import { beginStaleRun } from "~/lib/stale-run";
 const ACTIVE_REFRESH_MS = 5000;
 
 export interface ProjectHomeController {
-  /** 活跃项目 id（无项目为空串）。 */
-  projectId: string;
-  /** 项目状态总览（未取到前是空项目的形状，不是 null —— 视图不必判两遍）。 */
-  overview: ProjectOverview;
   /** 顶栏那一句（「下一步：镜头生图」这类）。 */
   headline: string;
   /** 首次取数完成前为真（视图据此显示加载态而不是「还没开始」）。 */
   loading: boolean;
+  /** 项目状态总览（未取到前是空项目的形状，不是 null —— 视图不必判两遍）。 */
+  overview: ProjectOverview;
+  /** 活跃项目 id（无项目为空串）。 */
+  projectId: string;
   /** 主动重取一次（评审 / 退回某镜后刷新用，也挂在 run 跑动时）。 */
   refresh: () => Promise<void>;
   /** AI 自主成片的控制器（与工坊 / 画布同一份 run）。 */

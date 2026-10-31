@@ -15,12 +15,12 @@ export type ExtractLogKind =
   | "error"; // 执行失败 / 解析失败
 
 export interface ExtractLogEntry {
-  ts: string; // ISO 时间戳
+  /** 需要多行展示的正文（输入消息 / 输出原文），可省略。 */
+  detail?: string;
   kind: ExtractLogKind;
   /** 人类可读的单行摘要（如「调用模型 remote::gpt-4o」）。 */
   summary: string;
-  /** 需要多行展示的正文（输入消息 / 输出原文），可省略。 */
-  detail?: string;
+  ts: string; // ISO 时间戳
 }
 
 /** 空日志。 */

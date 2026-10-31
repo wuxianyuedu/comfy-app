@@ -71,18 +71,18 @@ const FILTER_LABELS: Array<{ label: string; value: Level | "all" }> = [
 ];
 
 export interface TaskLogTimelineProps {
-  /** 全量日志（组件内部按「保留最近 300 条」截尾）。 */
-  logs: Array<TaskLogEntry>;
-  /** 默认行渲染器的 testid（如 `wflib-modal-log-line`）；自定义 `renderRow` 时忽略。 */
-  rowTestId?: string;
-  /** 列表顶部插的内容（错误摘要卡等），滚动跟随的判定把它算在内。 */
-  topSlot?: ReactNode;
   /** 无日志时的占位（各消费方知道自己该说什么）。 */
   emptySlot?: ReactNode;
   /** 列表底色档：跟随各弹窗的面板色（默认透明）。 */
   listClassName?: string;
+  /** 全量日志（组件内部按「保留最近 300 条」截尾）。 */
+  logs: Array<TaskLogEntry>;
   /** 覆盖默认行渲染器（如画布的 StepLogRow）；不传用标准行。 */
   renderRow?: (log: TaskLogEntry) => ReactNode;
+  /** 默认行渲染器的 testid（如 `wflib-modal-log-line`）；自定义 `renderRow` 时忽略。 */
+  rowTestId?: string;
+  /** 列表顶部插的内容（错误摘要卡等），滚动跟随的判定把它算在内。 */
+  topSlot?: ReactNode;
 }
 
 /** 弹窗里的行数是一处界面预算，不是「倒数 300 条」这段算式各写一遍 ——

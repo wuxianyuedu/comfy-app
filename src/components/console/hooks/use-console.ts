@@ -34,35 +34,39 @@ import { fixed } from "~/lib/number-format";
 /** 一条**已跑过**的命令（本次会话的历史；只在内存里）。 */
 export interface ConsoleHistoryItem {
   command: string;
+  durationMs: number;
+  ok: boolean;
   /** 结果文案（判据在控制器，视图不重算）。 */
   verdict: string;
-  ok: boolean;
-  durationMs: number;
 }
 
 export type ConsolePhase = "idle" | "running" | "done" | "stopped";
 
 export interface ConsoleController {
-  /** 输入框内容（受控）。 */
-  command: string;
-  setCommand: (next: string) => void;
-  phase: ConsolePhase;
-  /** 输出正文（stdout 与 stderr 合并按到达顺序，与真实终端一致）。 */
-  output: string;
-  /** 正在跑的那条命令；null = 没有在跑。 */
-  runningCommand: string | null;
-  /** 跑完那条的退出码；null = 没拿到（起不来 / 被掐）。 */
-  exitCode: number | null;
-  /** 结论摘要（一行，直接渲染）。 */
-  verdict: string;
-  /** 结论是否为「成功」（决定颜色）。 */
-  verdictOk: boolean;
-  /** 本次会话跑过的命令（新的在前）。 */
-  history: Array<ConsoleHistoryItem>;
   /** 命令是否可提交（非空 + 没在跑 + 不超长）。 */
   canRun: boolean;
+  /** 清空输出与结论（保留历史）。 */
+  clear: () => void;
+  /** 输入框内容（受控）。 */
+  command: string;
+  /** 跑完那条的退出码；null = 没拿到（起不来 / 被掐）。 */
+  exitCode: number | null;
+  /** 填入一条命令（**不直接跑**：用户还能改参数）。 */
+  fill: (command: string) => void;
+  /** 本次会话跑过的命令（新的在前）。 */
+  history: Array<ConsoleHistoryItem>;
   /** 输入框的字符上限（与路由同一常量，界面与服务端不会各说各话）。 */
   maxCommandChars: number;
+  /** 输出正文（stdout 与 stderr 合并按到达顺序，与真实终端一致）。 */
+  output: string;
+  phase: ConsolePhase;
+  /** 提交当前输入框里的命令。 */
+  run: () => void;
+  /** 正在跑的那条命令；null = 没有在跑。 */
+  runningCommand: string | null;
+  setCommand: (next: string) => void;
+  /** 停止正在跑的命令（杀整棵树）。 */
+  stop: () => void;
   /**
    * 「这行里有会被误当成 shell 语法的东西」的提示；null = 没有。
    *
@@ -71,14 +75,10 @@ export interface ConsoleController {
    * （`shellSyntaxWarning` 的文件头记了实测量到的现象）。
    */
   syntaxWarning: string | null;
-  /** 提交当前输入框里的命令。 */
-  run: () => void;
-  /** 停止正在跑的命令（杀整棵树）。 */
-  stop: () => void;
-  /** 清空输出与结论（保留历史）。 */
-  clear: () => void;
-  /** 填入一条命令（**不直接跑**：用户还能改参数）。 */
-  fill: (command: string) => void;
+  /** 结论摘要（一行，直接渲染）。 */
+  verdict: string;
+  /** 结论是否为「成功」（决定颜色）。 */
+  verdictOk: boolean;
 }
 
 /** 用时的人话（<1s 给毫秒、<60s 给秒、再往上给分秒）。

@@ -12,57 +12,62 @@
  */
 
 export interface PkgReport {
-  path: string;
-  name: string;
+  errors: Array<{ error: string; file: string }>;
   exists: boolean;
-  status: "ok" | "missing" | "error" | "empty";
+  name: string;
   nodeCount: number;
   nodeTypes: Array<string>;
-  errors: Array<{ error: string; file: string }>;
+  path: string;
+  status: "ok" | "missing" | "error" | "empty";
 }
 
 export interface ParseReport {
-  generatedAt: string;
-  totalNodes: number;
-  pathCount: number;
-  errorCount: number;
-  packages: Array<PkgReport>;
-  parseErrors?: Array<{ error: string; file: string }>;
-  /** 增量解析报告携带的模式标记（全量报告缺省为 undefined）。 */
-  mode?: "subset" | "full";
   /** 增量解析时新增节点数（全量报告缺省为 undefined）。 */
   addedNodes?: number;
+  errorCount: number;
+  generatedAt: string;
+  /** 增量解析报告携带的模式标记（全量报告缺省为 undefined）。 */
+  mode?: "subset" | "full";
+  packages: Array<PkgReport>;
+  parseErrors?: Array<{ error: string; file: string }>;
+  pathCount: number;
+  totalNodes: number;
 }
 
 export interface DiscoveredSubpkg {
-  path: string;
-  name: string;
-  parent: string;
-  exists: boolean;
-  isLeaf: boolean;
-  fileCount: number;
-  packageFileCount: number;
-  sizeBytes: number;
   contentHash: string;
+  exists: boolean;
+  fileCount: number;
+  isLeaf: boolean;
+  name: string;
+  packageFileCount: number;
+  parent: string;
+  path: string;
+  sizeBytes: number;
   status: "ok" | "missing" | "empty";
 }
 
 /** 清单里一个包的摘要（服务端产出、前端与 SSE 共用）。generatedAt 允许 null
  *  （清单里旧条目可能没有时间戳）。 */
 export interface SummaryPkg {
+  contentHash?: string;
+  errors: Array<unknown>;
+  generatedAt?: string | null;
   name: string;
-  path: string;
-  status: string;
   nodeCount: number;
   nodeTypes: Array<string>;
-  errors: Array<unknown>;
-  contentHash?: string;
   parsedAt?: string | null;
   parsedFileCount?: number;
-  generatedAt?: string | null;
+  path: string;
+  status: string;
 }
 
 export interface SettingsResp {
+  /** 归一化绝对路径（正斜杠、小写）→ 已加载的 SummaryPkg，让 UI 能把发现的
+   *  子包与清单对齐，并用 contentHash 识别「已加载但已过期」。 */
+  byPath: Record<string, SummaryPkg>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
+  lastReport: ParseReport | null;
   settings: { localWorkflowPaths: Array<string>; paths: Array<string> };
   summary: {
     generatedAt: string | null;
@@ -72,11 +77,6 @@ export interface SettingsResp {
     sources: Array<string>;
     totalNodes: number;
   } | null;
-  lastReport: ParseReport | null;
-  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
-  /** 归一化绝对路径（正斜杠、小写）→ 已加载的 SummaryPkg，让 UI 能把发现的
-   *  子包与清单对齐，并用 contentHash 识别「已加载但已过期」。 */
-  byPath: Record<string, SummaryPkg>;
 }
 
 /** 设置/探测流的一行 ndjson 事件（`/api/custom-nodes` 探测端点发出）。按 `type`

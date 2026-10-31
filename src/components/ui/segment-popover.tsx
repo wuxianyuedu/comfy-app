@@ -66,10 +66,16 @@ export function shortRatioLabel(label: string): string {
 
 /** 多段式面板里的一个分组。 */
 export interface SegmentSection<T extends string = string> {
+  /** 可选：渲染在本分组**所有子分组之后**的自由控件。
+   *
+   *  给「不是从几个选项里挑一个、而是直接给一个值」的连续量控件留的位置
+   *  （百万像素步进器：档位之外还要能填 2.5）。它属于这个分组（挨着它的选项
+   *  渲染），但形状不是 `options`，所以不走 `options`。 */
+  extra?: React.ReactNode;
   /** 分组标题（大写展示，如「比例」）。 */
   label: string;
-  /** 当前选中的选项值（必须是 `options.value` 之一）。 */
-  value: T;
+  /** 用户在本分组中改选其他选项时调用。 */
+  onChange: (value: T) => void;
   /** 本分组的可选项。 */
   options: Array<{
     label: string;
@@ -80,14 +86,8 @@ export interface SegmentSection<T extends string = string> {
     subgroup?: string;
     value: T;
   }>;
-  /** 用户在本分组中改选其他选项时调用。 */
-  onChange: (value: T) => void;
-  /** 可选：渲染在本分组**所有子分组之后**的自由控件。
-   *
-   *  给「不是从几个选项里挑一个、而是直接给一个值」的连续量控件留的位置
-   *  （百万像素步进器：档位之外还要能填 2.5）。它属于这个分组（挨着它的选项
-   *  渲染），但形状不是 `options`，所以不走 `options`。 */
-  extra?: React.ReactNode;
+  /** 当前选中的选项值（必须是 `options.value` 之一）。 */
+  value: T;
 }
 
 /** 段内 ToggleGroup 的排布：跨子分组共享一个 `value`（互斥），

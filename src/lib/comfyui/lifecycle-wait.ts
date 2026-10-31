@@ -30,30 +30,30 @@ export type ComfyProbe = () => Promise<string | null>;
 export type ComfyDeadCheck = () => Promise<boolean>;
 
 export interface WaitForComfyReadyOpts {
-  /** 探测一次是否就绪。 */
-  probe: ComfyProbe;
-  /** 判死探测；返回非 null 表示「已判死」，其值为可行动的失败文案。 */
-  isDead: () => Promise<string | null>;
-  /** 每次轮询前的早退理由；返回非 null 立即结束（用户手动关闭 / 子进程消失）。 */
-  earlyExit?: () => { base: null; detail: string; ok: false } | null;
   /** 硬超时绝对时间戳（null = 不设硬超时，一直等）。 */
   deadline: number | null;
-  /** 超时未就绪时的可行动文案（**唯一一处**，两条路径共用）。 */
-  timeoutDetail: string;
+  /** 每次轮询前的早退理由；返回非 null 立即结束（用户手动关闭 / 子进程消失）。 */
+  earlyExit?: () => { base: null; detail: string; ok: false } | null;
   /** 轮询间隔（默认 2000ms，与既有行为一致）。 */
   intervalMs?: number;
-  /** 就绪时返回的 detail 文案（默认「ComfyUI 已启动并就绪」）。 */
-  readyDetail?: string;
-  /** 就绪时进入日志（成功文案由调用方决定，如「保活」后缀）。 */
-  onReady?: (base: string) => void;
+  /** 判死探测；返回非 null 表示「已判死」，其值为可行动的失败文案。 */
+  isDead: () => Promise<string | null>;
   /** 判死时进入日志。 */
   onDead?: (detail: string) => void;
+  /** 就绪时进入日志（成功文案由调用方决定，如「保活」后缀）。 */
+  onReady?: (base: string) => void;
+  /** 探测一次是否就绪。 */
+  probe: ComfyProbe;
+  /** 就绪时返回的 detail 文案（默认「ComfyUI 已启动并就绪」）。 */
+  readyDetail?: string;
+  /** 超时未就绪时的可行动文案（**唯一一处**，两条路径共用）。 */
+  timeoutDetail: string;
 }
 
 export interface WaitReadyResult {
-  ok: boolean;
   base: string | null;
   detail: string;
+  ok: boolean;
 }
 
 /**
@@ -110,10 +110,10 @@ export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<Wa
 export interface OutputSinkDeps {
   /** 把一行原文追加进运行日志（带 `[out]` / `[err]` 前缀）。 */
   appendRuntimeLog: (line: string) => void;
-  /** 留底一行（供进程秒退时提取可行动报错）。 */
-  pushRecent: (text: string) => void;
   /** 单行截断上限（默认 500，与既有行为一致）。 */
   maxLineChars?: number;
+  /** 留底一行（供进程秒退时提取可行动报错）。 */
+  pushRecent: (text: string) => void;
 }
 
 /**
@@ -167,24 +167,24 @@ export function createRecentOutputLedger(maxLines = 60): RecentOutputLedger {
 }
 
 export interface ChildExitDeps {
+  /** 写运行日志（`[exit] ...` 那两行落这里，与 `[out]/[err]` 同一个文件，
+   *  这样「它退出前最后说了什么」与「为什么退出」挨在一起）。 */
+  appendRuntimeLog: (line: string) => void;
+  /** 清掉宿主持有的子进程句柄（仅当仍是同一个 child 时）。 */
+  clearChild: () => void;
+  /** 退出事实里只有宿主知道的那几样（pid / 存活时长 / 是否用户主动关 / 模式）。 */
+  context: () => Pick<ComfyExitFacts, "pid" | "uptimeMs" | "stopRequested" | "mode">;
+  /** 进入应用日志（pino）。 */
+  log: (msg: string) => void;
+  /** 把这次退出记进「上一次会话」标记文件（供下次启动对账：
+   *  应用自己也一起没了的那种情况，只能靠它反推）。 */
+  onExitReport?: (report: ComfyExitReport) => void;
   /** 这次的进程叫什么（`ComfyUI` / `Drizzle Studio`）。
    *
    * 横幅与进 pino 那行**都由它拼**，不在原语里写死主语：Studio 复用同一套退出
    * 原语（ISSUE #570 第 6 项），而原语里的句子此前固定说「ComfyUI 进程退出」，
    * 于是 Studio 的崩溃被记在了 ComfyUI 名下（ISSUE #2435）。 */
   subject: string;
-  /** 写运行日志（`[exit] ...` 那两行落这里，与 `[out]/[err]` 同一个文件，
-   *  这样「它退出前最后说了什么」与「为什么退出」挨在一起）。 */
-  appendRuntimeLog: (line: string) => void;
-  /** 进入应用日志（pino）。 */
-  log: (msg: string) => void;
-  /** 清掉宿主持有的子进程句柄（仅当仍是同一个 child 时）。 */
-  clearChild: () => void;
-  /** 把这次退出记进「上一次会话」标记文件（供下次启动对账：
-   *  应用自己也一起没了的那种情况，只能靠它反推）。 */
-  onExitReport?: (report: ComfyExitReport) => void;
-  /** 退出事实里只有宿主知道的那几样（pid / 存活时长 / 是否用户主动关 / 模式）。 */
-  context: () => Pick<ComfyExitFacts, "pid" | "uptimeMs" | "stopRequested" | "mode">;
 }
 
 /**

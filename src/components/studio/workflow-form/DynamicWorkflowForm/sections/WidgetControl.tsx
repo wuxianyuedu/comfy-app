@@ -4,11 +4,7 @@
 // 纯展示：值由外部传入，变更通过 onValueChange 上抛。compact 走画布节点的
 // 压缩尺寸，宽版走 CreatePanel / IO-edit 预览的尺寸。
 
-import {
-  isInputFilled,
-  numericBounds,
-  type EnrichedWidget,
-} from "~/components/studio/workflow-io";
+import { isInputFilled, numericBounds, type EnrichedWidget } from "~/components/studio/workflow-io";
 import {
   AutoResizeTextarea,
   isSeedLike,
@@ -23,20 +19,20 @@ import { mediaPreviewUrl, mediaReferenceFilename } from "~/lib/media/media-url";
 import { inputCls } from "../constants";
 
 interface WidgetControlProps {
+  compact: boolean;
+  disabled: boolean;
   entry: EnrichedWidget;
   /** 行标签 —— 参与 placeholder（输入 / 选择 / 上传 + 必填后缀）。 */
   label: string;
-  value: unknown;
-  compact: boolean;
-  disabled: boolean;
-  /** 该行正在上传（image 行显示「上传中…」）。 */
-  uploading: boolean;
-  seedMode?: string;
+  onPickFile: () => void;
   onSeedModeChange?: (mode: string) => void;
   onValueChange: (value: unknown) => void;
-  onPickFile: () => void;
   /** 用户刚选过这张图时的本地预览地址（data URL）；有则优先于按值算的 ComfyUI 代理地址。 */
   previewSrc?: string;
+  seedMode?: string;
+  /** 该行正在上传（image 行显示「上传中…」）。 */
+  uploading: boolean;
+  value: unknown;
 }
 
 export function WidgetControl({
@@ -87,11 +83,7 @@ export function WidgetControl({
       return (
         <input
           className={`${inputCls} ${compact ? "" : "mt-1"} ${missingRequired ? "border-destructive/50" : ""}`}
-          value={
-            typeof value === "string" || typeof value === "number"
-              ? String(value)
-              : ""
-          }
+          value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
           disabled={disabled}
           aria-label={`${label}${requiredHint}`}
           placeholder={`输入 ${label}${requiredHint}`}
@@ -108,13 +100,7 @@ export function WidgetControl({
       const randomSeed = isSeed && seedMode === "random";
       const stepper = (
         <NumberField
-          value={
-            randomSeed
-              ? -1
-              : typeof value === "number"
-                ? value
-                : Number(value) || bounds.min
-          }
+          value={randomSeed ? -1 : typeof value === "number" ? value : Number(value) || bounds.min}
           onChange={onValueChange}
           min={bounds.min}
           max={bounds.max}
@@ -124,10 +110,7 @@ export function WidgetControl({
         />
       );
       const seedButton = isSeed ? (
-        <SeedModeButton
-          mode={seedMode}
-          onPick={(mode) => onSeedModeChange?.(mode)}
-        />
+        <SeedModeButton mode={seedMode} onPick={(mode) => onSeedModeChange?.(mode)} />
       ) : null;
 
       if (compact) {

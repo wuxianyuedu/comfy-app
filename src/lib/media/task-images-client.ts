@@ -23,8 +23,8 @@ import { vanillaApi } from "~/trpc/vanilla";
 
 export interface TaskGalleryImage {
   id: string;
-  localPath: string;
   isCover: boolean;
+  localPath: string;
 }
 
 /**

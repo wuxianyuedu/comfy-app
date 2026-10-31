@@ -8,25 +8,21 @@ import { ExternalLink } from "lucide-react";
 import { mixHex, NODE_TITLE_H } from "../workflow-utils";
 import { useCssColorToken } from "../hooks/use-css-color-token";
 import { Button } from "~/components/ui/button";
-import {
-  IoCheckbox,
-  NodeIdChip,
-  type IOEditContextValue,
-} from "./IOEditContext";
+import { IoCheckbox, NodeIdChip, type IOEditContextValue } from "./IOEditContext";
 import { Hint } from "~/components/ui/hint";
 
 export interface SubgraphHeaderProps {
-  title: string;
-  nodeId: string;
   accent: string;
-  isCollapsed: boolean;
-  onToggle: () => void;
-  onEnter?: () => void;
   io?: IOEditContextValue;
+  isCollapsed: boolean;
+  nodeId: string;
+  onEnter?: () => void;
+  onToggle: () => void;
   /** First output entry used by the per-node output checkbox（只带端口身份：
    *  显示名不进库，由富化链一处给）。Pass null when the subgraph exposes no
    *  outputs. */
   outputRef?: { name: string } | null;
+  title: string;
 }
 
 export function SubgraphHeader({
@@ -148,11 +144,7 @@ export function SubgraphHeader({
              *  以标记下钻是子图的*主要*动作。 */
             className="text-primary-strong hover:bg-primary/30 text-3xs ml-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded transition-colors hover:text-white"
           >
-            <ExternalLink
-              data-icon="inline-start"
-              size={12}
-              strokeWidth={2.5}
-            />
+            <ExternalLink data-icon="inline-start" size={12} strokeWidth={2.5} />
           </Button>
         </Hint>
       )}

@@ -26,13 +26,8 @@ import {
 import { Hint } from "~/components/ui/hint";
 
 export interface WorkflowEditorTopBarProps {
-  onClose: () => void;
   detail: WorkflowDetail;
-  rootWorkflowName: string;
-  subgraphStack: Array<{ name: string; nodeId: string; uid: string }>;
-  setSubgraphStack: React.Dispatch<
-    React.SetStateAction<Array<{ name: string; nodeId: string; uid: string }>>
-  >;
+  error: string;
   fetchDetail: (opts?: {
     bust?: boolean;
     /** 目标层级的宿主链（`4` / `4:5`），子图坐标按它拼键读回。 */
@@ -40,18 +35,23 @@ export interface WorkflowEditorTopBarProps {
     parentTitle?: string;
     subgraphUid?: string;
   }) => Promise<void>;
-  onExitSubgraph: () => void;
   /** 强制重载当前视图：必须带上本视图的宿主链，否则子图里拖过的坐标
    *  会因为读错命名空间而全部丢失。`silent` 用于重置布局这类主动重拉，
    *  不把画布打成 loading。 */
   forceReloadDetail: (hostNodeId?: string, silent?: boolean) => void;
-  setViewJsonOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  handleSave: () => void;
+  onClose: () => void;
+  onExitSubgraph: () => void;
   resetLayout: () => void;
+  rootWorkflowName: string;
+  saving: boolean;
+  setSubgraphStack: React.Dispatch<
+    React.SetStateAction<Array<{ name: string; nodeId: string; uid: string }>>
+  >;
+  setViewJsonOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  subgraphStack: Array<{ name: string; nodeId: string; uid: string }>;
   /** 当前视图的宿主链（顶层为空串，下钻后 `4` / `4:5`）。 */
   viewHostNodeId: string;
-  handleSave: () => void;
-  saving: boolean;
-  error: string;
 }
 
 export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({

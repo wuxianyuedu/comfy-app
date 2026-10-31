@@ -3,15 +3,12 @@
 import { VIDEO_CLIPS } from "./film-studio-config";
 
 interface FilmStudioTimelineProps {
+  bgmName: string | null;
   /** 播放头位置（px from timeline left）。 */
   playheadPos: number;
-  bgmName: string | null;
 }
 
-export function FilmStudioTimeline({
-  playheadPos,
-  bgmName,
-}: FilmStudioTimelineProps) {
+export function FilmStudioTimeline({ playheadPos, bgmName }: FilmStudioTimelineProps) {
   return (
     <div className="border-border-subtle bg-panel-deep mt-auto rounded-xl border p-3">
       {/* Time ruler */}
@@ -47,9 +44,7 @@ export function FilmStudioTimeline({
                 className={`flex h-8 items-center rounded-md bg-linear-to-r ${clip.colorClass} px-2.5 shadow-sm`}
                 style={{ width: `${clip.width}px` }}
               >
-                <span
-                  className={`text-3xs font-semibold ${clip.textColorClass}`}
-                >
+                <span className={`text-3xs font-semibold ${clip.textColorClass}`}>
                   {clip.label}
                 </span>
               </div>
@@ -59,9 +54,7 @@ export function FilmStudioTimeline({
 
         {/* Subtitle track */}
         <div className="flex h-9 items-center gap-2 rounded-md px-2">
-          <span className="text-ink-fainter text-3xs w-12 shrink-0">
-            字幕轨
-          </span>
+          <span className="text-ink-fainter text-3xs w-12 shrink-0">字幕轨</span>
           <div
             className="bg-success/15 ring-success/25 flex h-6 flex-1 items-center rounded px-2.5 ring-1 ring-inset"
             style={{ width: "280px" }}

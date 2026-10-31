@@ -78,20 +78,20 @@ export function boundarySlotsByNode(
 }
 
 export interface SubgraphLinkEntry {
-  src: string;
   slot: number;
-  type: string;
+  src: string;
   targetId: string;
   targetSlot: number;
+  type: string;
 }
 
 export interface BoundaryLinkInfo {
-  kind: "input" | "output";
-  pinId: string;
   /** 内部节点侧：输出边界连线当源、输入边界连线当目标。 */
   innerNodeId: string;
   innerSlot: number;
   innerSlotName?: string;
+  kind: "input" | "output";
+  pinId: string;
 }
 
 /**
@@ -165,10 +165,10 @@ export function parseSubgraphLinks(sub: RawSubgraphDef): {
 
 /** 一个输入槽位在「槽位下标」与「raw 数组位置」两套坐标系里的落点。 */
 interface InputSlotRef {
-  /** 槽位下标 —— `names[slot]` 读到的就是它的槽位名。 */
-  slot: number;
   /** 该槽位在原始 `inputs[]` 里的位置。 */
   index: number;
+  /** 槽位下标 —— `names[slot]` 读到的就是它的槽位名。 */
+  slot: number;
 }
 
 /** 把 raw 节点的 `inputs[]` 解析成「槽位下标 → 槽位」。
@@ -268,21 +268,17 @@ export function parseSubgraphSlots(
 }
 
 export interface SubgraphGraphResult {
-  graph: Record<string, ApiWorkflowNode>;
-  rawInputsById: Record<string, Array<RawInputEntry>>;
-  rawOutputsById: Record<string, Array<RawOutputEntry>>;
-  rawNodeMeta: Array<RawNodeMeta>;
-  sizeById: Record<string, [number, number]>;
-  nodes: Array<DetailNodeView>;
-  inputEndpointNodes: Set<string>;
-  outputEndpointNodes: Set<string>;
   boundaryInputByNode: Record<string, { name: string; type: string; value: unknown }>;
   boundaryOutputByNode: Record<string, { name: string; type: string }>;
-  connectsToByNode: Record<string, string>;
   connectsFromByNode: Record<string, string>;
+  connectsToByNode: Record<string, string>;
+  graph: Record<string, ApiWorkflowNode>;
+  inputEndpointNodes: Set<string>;
   /** 每个节点的槽位名查找表（位置下标 → 槽位名），
    *  交给调用方拼 boundaryLinks。 */
   inputNameByNodeSlot: Record<string, Array<string>>;
+  nodes: Array<DetailNodeView>;
+  outputEndpointNodes: Set<string>;
   outputNameByNodeSlot: Record<string, Array<string>>;
   /** 子图暴露口 → 作者写在**外层 wrapper** 上的业务名（`label`）。
    *
@@ -299,6 +295,10 @@ export interface SubgraphGraphResult {
    *  记账会被后写的暴露口覆盖 —— 于是 `Seed` 节点显示成最后一个 `FPS` 的口名
    *  （ISSUE #394）。 */
   proxyAuthorLabels: Record<string, string>;
+  rawInputsById: Record<string, Array<RawInputEntry>>;
+  rawNodeMeta: Array<RawNodeMeta>;
+  rawOutputsById: Record<string, Array<RawOutputEntry>>;
+  sizeById: Record<string, [number, number]>;
 }
 
 /**

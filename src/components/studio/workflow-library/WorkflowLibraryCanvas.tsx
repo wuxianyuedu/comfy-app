@@ -75,30 +75,30 @@ import { gridLineColor } from "../canvas/workflow-canvas-grid";
 const LIBRARY_GRID_LINE_ALPHA = 0.14;
 
 export interface WorkflowLibraryCanvasProps {
-  io: WorkflowIOMap | null;
-  paramCards: LibraryParamCards;
-  outputCards: LibraryOutputCards;
-  /** 契约条目表 —— 闸门（`isValidConnection`）按它判类型。 */
-  entries: ReadonlyArray<ParamEntry>;
+  /** 是否允许连线（有模式 + 上层给了落库回调）。 */
+  canWire: boolean;
   /** 契约口清单（`modeContractEntries`）—— 卡片头按它取名，与「工坊封装」
    *  页签同一份（ISSUE #596）。缺省时卡片头退回条目自带的 label。 */
   contractEntries?: ReadonlyArray<{ id: string; label: string }>;
-  /** 是否允许连线（有模式 + 上层给了落库回调）。 */
-  canWire: boolean;
-  selectedEntryId: string | null;
-  selectedOutputId: string | null;
-  onSelectParam: (entryId: string | null) => void;
-  onSelectOutput: (ioKey: string | null) => void;
-  onResetParam: (entryId: string) => void;
-  onResetOutput: (ioKey: string) => void;
+  /** 契约条目表 —— 闸门（`isValidConnection`）按它判类型。 */
+  entries: ReadonlyArray<ParamEntry>;
+  /** 宿主运行卡片（含表单与生成按钮）。 */
+  host: React.ReactNode;
+  io: WorkflowIOMap | null;
   onConnect?: (entryId: string, ioKey: string) => void;
   onConnectOutput?: (outputIoKey: string, targetIoKey: string) => void;
   /** 删除一条映射线：点选某条线后按 Delete 或点「删除选中线」时调用。
    *  由父层落到 `disconnect`（断开该 entryId / 输出 ioKey 的映射），从而只删
    *  这一条线，而不用卡片头 ↺ 把整张卡（尺寸卡是六条形态线）一起清掉。 */
   onDeleteWire?: (namespace: "param" | "output", entryId: string) => void;
-  /** 宿主运行卡片（含表单与生成按钮）。 */
-  host: React.ReactNode;
+  onResetOutput: (ioKey: string) => void;
+  onResetParam: (entryId: string) => void;
+  onSelectOutput: (ioKey: string | null) => void;
+  onSelectParam: (entryId: string | null) => void;
+  outputCards: LibraryOutputCards;
+  paramCards: LibraryParamCards;
+  selectedEntryId: string | null;
+  selectedOutputId: string | null;
 }
 
 /** 节点类型注册表：**模块级常量**（§2.11 —— 内联会在每次 render 重建整棵 DOM）。 */

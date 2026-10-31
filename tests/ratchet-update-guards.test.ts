@@ -42,7 +42,6 @@ import { expectActionableRefusal, ACTIONABLE_REFUSAL } from "./helpers/ratchet-r
 
 /** 一条棘轮的完整描述：脚本、基线落点、夹具输入、以及「怎么再加一条违规」。 */
 interface Ratchet {
-  script: string;
   /** 基线相对**工作区根**的路径（脚本落 scripts/ 时它落在 scripts/ 下）。 */
   baseline: string;
   /** 脚本在工作区里的落点（与 `createGateRepo` 同义，这里显式写出来便于核对基线路径）。 */
@@ -56,6 +55,7 @@ interface Ratchet {
    * 而那判的是「我没把判定档打开」，不是棘轮。
    */
   judgeArgs?: Array<string>;
+  script: string;
   /**
    * 这条棘轮的单次预算（毫秒）。
    *

@@ -57,12 +57,12 @@ const PILL_STYLE: CSSProperties = {
 };
 
 interface SourcePayload {
-  file: string;
   /** 绝对路径（正斜杠盘符格式），供 vscode://file/ 协议打开 */
   absolutePath: string;
   content: string;
-  size: number;
+  file: string;
   modifiedAt: string;
+  size: number;
 }
 
 export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule> }) {

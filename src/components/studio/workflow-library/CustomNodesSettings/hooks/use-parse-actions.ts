@@ -18,14 +18,14 @@ import type { DiscoveredSubpkg } from "../types";
 
 /** 这三个入口读/写的那些东西（由主 hook 原样传下来）。 */
 export interface ParseActionsDeps {
-  savedPaths: Array<string>;
+  clearPerPkgParsing: (pkgPath: string) => void;
   discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
   parseBusy: ReturnType<typeof useBusyAction>;
-  setError: (msg: string | null) => void;
-  setReport: (report: null) => void;
-  setPerPkgParsing: Dispatch<SetStateAction<Record<string, boolean>>>;
   runParse: (packages?: Array<string>) => Promise<void>;
-  clearPerPkgParsing: (pkgPath: string) => void;
+  savedPaths: Array<string>;
+  setError: (msg: string | null) => void;
+  setPerPkgParsing: Dispatch<SetStateAction<Record<string, boolean>>>;
+  setReport: (report: null) => void;
 }
 
 export function createParseActions({

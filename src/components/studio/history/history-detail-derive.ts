@@ -110,8 +110,8 @@ const SIZE_PIN_NAMES = new Set([
 ]);
 
 interface RawWorkflowInput {
-  nodeId?: string;
   name: string;
+  nodeId?: string;
   value: unknown;
 }
 
@@ -165,10 +165,10 @@ export function deriveWorkshopParams(
 /** 一行「工作流参数」（下发给工作流的 IO 端口）。 */
 export interface WorkflowParamRow {
   id: string;
-  /** 原始 pin 名（`workflowInputs[].name`）。 */
-  name: string;
   /** 展示名：工作流 IO 的作者标签，查不到时回退 `name`。 */
   label: string;
+  /** 原始 pin 名（`workflowInputs[].name`）。 */
+  name: string;
   value: unknown;
 }
 

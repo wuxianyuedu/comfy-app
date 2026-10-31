@@ -33,20 +33,20 @@ import {
 } from "~/components/studio/logs/use-runtime-log-source";
 
 export interface DbStudioStatus {
-  up: boolean;
-  starting: boolean;
   port: number;
+  starting: boolean;
+  up: boolean;
 }
 
 export interface UseSettingsDbStudio {
-  dbStudioStatus: DbStudioStatus | null;
-  dbStudioStarting: boolean;
-  dbStudioStopping: boolean;
-  dbStudioOpening: boolean;
   dbStudioLog: RuntimeLogController & { active: boolean };
+  dbStudioOpening: boolean;
+  dbStudioStarting: boolean;
+  dbStudioStatus: DbStudioStatus | null;
+  dbStudioStopping: boolean;
+  openDbStudio: () => Promise<void>;
   startDbStudio: () => Promise<void>;
   stopDbStudio: () => Promise<void>;
-  openDbStudio: () => Promise<void>;
 }
 
 export function useSettingsDbStudio({

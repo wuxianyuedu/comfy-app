@@ -26,9 +26,9 @@ import { cn } from "~/lib/utils";
  */
 export interface SectionLabelProps {
   children: ReactNode;
+  className?: string;
   /** 标题右侧的补充口径（整句中文说明，落 12px）。不传就不渲染。 */
   hint?: ReactNode;
-  className?: string;
 }
 
 export function SectionLabel({ children, hint, className }: SectionLabelProps) {

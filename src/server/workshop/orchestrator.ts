@@ -244,9 +244,9 @@ export async function setStoryboard(id: string, shots: Array<Shot>) {
 // ── 阶段 4：生图 ───────────────────────────────────────────────
 
 export interface GenerateImageInput {
-  shotId?: string;
-  characterId?: string;
   channel?: "api" | "comfyui";
+  characterId?: string;
+  shotId?: string;
   /** 尺寸表达（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见 `lib/size-presets`）。
    *  缺省各通道按自己的默认档走。调用方（MCP）若仍按老口径给 "1024x1024"，
    *  由边界用 `toSizeSpec` 归一。 */
@@ -306,12 +306,12 @@ export async function generateImage(id: string, input: GenerateImageInput) {
 // ── 阶段 5：生视频 ─────────────────────────────────────────────
 
 export interface SubmitVideoInput {
-  shotId: string;
   channel?: "api" | "comfyui";
-  prompt?: string;
-  negative?: string;
-  frames?: number;
   fps?: number;
+  frames?: number;
+  negative?: string;
+  prompt?: string;
+  shotId: string;
   useFirstFrame?: boolean;
 }
 
@@ -392,9 +392,9 @@ export interface ComposeFinalInput {
 }
 
 export interface ComposeFinalResult {
+  outputPath?: string;
   plan: CompositionPlan;
   planPath: string;
-  outputPath?: string;
   renderNote?: string;
 }
 

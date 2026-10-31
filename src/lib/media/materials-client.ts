@@ -9,24 +9,24 @@ import { isRecord } from "~/lib/is-record";
 
 /** 分类（文件夹）摘要，含该分类素材条数。 */
 export interface MaterialFolder {
+  count: number;
   id: string;
   name: string;
-  count: number;
 }
 
 export type MaterialKind = "image" | "video" | "audio" | "doc";
 
 /** 单个素材条目。 */
 export interface MaterialItem {
-  id: string;
-  name: string;
   folder: string;
   folderName: string;
+  id: string;
   kind: MaterialKind;
-  url: string;
+  name: string;
+  scope: string;
   size: number;
   updatedAt: string;
-  scope: string;
+  url: string;
 }
 
 /** GET /api/materials 的响应。 */
@@ -37,14 +37,14 @@ export interface MaterialListResult {
 
 /** 列表查询参数。 */
 export interface MaterialListQuery {
-  /** 画布项目 id；为空则只看共享素材。 */
-  projectId?: string | null;
-  /** project = 本项目 + 共享；cross = 跨项目聚合。 */
-  scope: "project" | "cross";
   /** 进入的分类；未传（且无搜索）时只返回分类计数。 */
   folder?: string | null;
+  /** 画布项目 id；为空则只看共享素材。 */
+  projectId?: string | null;
   /** 搜索关键字，优先于 folder。 */
   q?: string;
+  /** project = 本项目 + 共享；cross = 跨项目聚合。 */
+  scope: "project" | "cross";
 }
 
 const ENDPOINT = "/api/materials";

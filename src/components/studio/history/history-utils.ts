@@ -13,16 +13,16 @@ export function timeAgo(iso: string): string {
 }
 
 export interface StatusStyle {
-  label: string;
-  pillCls: string;
   // 左缘 3px accent（Tailwind border-l-4 系列）
   accentCls: string;
   // 整卡边框（失败/进行中/排队中加深）
   cardBorderCls: string;
-  isActive: boolean;
-  showProgress: boolean;
   // 失败错误转修复建议
   failureSuggestion?: (err?: string | null) => string;
+  isActive: boolean;
+  label: string;
+  pillCls: string;
+  showProgress: boolean;
 }
 
 /** 任务状态 → pill / 左缘 accent / 卡边框样式（**状态语义**，全部走语义 token）。

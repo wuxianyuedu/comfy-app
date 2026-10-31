@@ -191,18 +191,18 @@ export async function canWriteMaterialScope(userId: string, scope: string): Prom
 /* ── 读取 ── */
 
 export interface MaterialItem {
-  /** 稳定 id：`scope/folder/name`，前端删除时原样回传即可。 */
-  id: string;
-  name: string;
   folder: string;
   folderName: string;
+  /** 稳定 id：`scope/folder/name`，前端删除时原样回传即可。 */
+  id: string;
   kind: MaterialKind;
-  /** 浏览器可直接消费的 URL（走 /api/generated 读盘）。 */
-  url: string;
-  size: number;
-  updatedAt: string;
+  name: string;
   /** 所属 scope：项目 id 或 SHARED_SCOPE。 */
   scope: string;
+  size: number;
+  updatedAt: string;
+  /** 浏览器可直接消费的 URL（走 /api/generated 读盘）。 */
+  url: string;
 }
 
 /** 列出单个 scope/folder 下的素材。目录不存在时返回空数组（不是错误）。 */

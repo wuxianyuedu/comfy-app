@@ -12,12 +12,12 @@ import {
 import { globalNavItems, projectTabs, type WorkspaceView } from "./NavItems";
 
 export interface CommandPaletteProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   /** 当前视图（保留入参：以后按视图给命令排序 / 高亮用，与侧栏同一份数据源）。 */
   active: WorkspaceView;
+  onOpenChange: (open: boolean) => void;
   /** 选中某条命令时回调（这里用来切换视图）。 */
   onSelect: (view: WorkspaceView) => void;
+  open: boolean;
 }
 
 /**
@@ -31,11 +31,7 @@ export interface CommandPaletteProps {
  * （避免两套事实来源）。后面要加「打开设置 / 搜项目」等，往 `CommandGroup`
  * 里加一组即可，不必动侧栏。
  */
-export function CommandPalette({
-  open,
-  onOpenChange,
-  onSelect,
-}: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, onSelect }: CommandPaletteProps) {
   return (
     <CommandDialog
       open={open}

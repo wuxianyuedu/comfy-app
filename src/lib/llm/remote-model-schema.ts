@@ -70,14 +70,14 @@ export const remoteModelEntrySchema = z.object({
  *     不是草稿字段能算出来的事。
  */
 export interface RemoteModelDraftEntry {
-  name: string;
-  baseUrl?: string | null;
   /** `undefined` = 这次不给意见（保留库里既有），不是「清空」。 */
   apiKey?: string;
-  /** `null` 只在编辑侧有意义：清掉用途这一档（草稿桥接出来的一定是具体值）。 */
-  kind?: RemoteModelKind | null;
+  baseUrl?: string | null;
   /** 仅编辑侧有意义：清掉这条的独立密钥。 */
   clearApiKey?: boolean;
+  /** `null` 只在编辑侧有意义：清掉用途这一档（草稿桥接出来的一定是具体值）。 */
+  kind?: RemoteModelKind | null;
+  name: string;
 }
 
 export function remoteModelEntryFromDraft(draft: RemoteModelFieldValues): RemoteModelDraftEntry {

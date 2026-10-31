@@ -261,12 +261,6 @@ export interface GateRunResult {
    * 既不许被读成「判据红了」，也不许被读成「这个形状放行了」（§13.6.4）。
    */
   ran: boolean;
-  /** 原样退出码（`null` = 被信号杀或没起来）。 */
-  status: number | null;
-  /** spawn 层的错误原文（取 `error.message` 头 80 字符；`error.code` 在类型上并不存在）。 */
-  spawnError: string | null;
-  /** 结束它的信号名（win32 上一般为 `null` —— 那一平台上终止不产生信号退出码）。 */
-  signal: string | null;
   /**
    * 两条流**分开**的原值。
    *
@@ -277,6 +271,12 @@ export interface GateRunResult {
    * 那条既有约定（全仓门禁自测都挂在那上面）。
    */
   raw: { stderr: string; stdout: string; };
+  /** 结束它的信号名（win32 上一般为 `null` —— 那一平台上终止不产生信号退出码）。 */
+  signal: string | null;
+  /** spawn 层的错误原文（取 `error.message` 头 80 字符；`error.code` 在类型上并不存在）。 */
+  spawnError: string | null;
+  /** 原样退出码（`null` = 被信号杀或没起来）。 */
+  status: number | null;
 }
 
 /**
@@ -299,12 +299,38 @@ export function expectGateRan(r: GateRunResult): void {
 
 /** 一个临时的「门禁工作区」：`dir` 是它，`write` 往里放文件，`run` 在里面跑那个脚本。 */
 export interface GateRepo {
+  /** 造一次提交（`add -A` + commit）—— 上手身份与禁签名在本夹具里已配好。 */
+  commit: (message: string) => void;
   /** 临时仓库根的绝对路径（脚本的 `cwd`）。 */
   dir: string;
-  /** 在工作区里写一个文件（自动建父目录），`rel` 是仓库相对路径。 */
-  write: (rel: string, content: string) => void;
+  /** 工作区里这个路径在不在（判「`--update` 到底有没有落盘」用，不必 `read` 再 catch）。 */
+  exists: (rel: string) => boolean;
+  /**
+   * 在工作区里跑一次 `git`（`cwd` 已指向它）。
+   *
+   * 为什么放在这里：分支守卫 / 格式棘轮这两份判据的**被测输入是 git 状态本身**
+   * （HEAD 父提交数、基线是否被跟踪），所以夹具必须能造提交历史。收住这一层，
+   * 各处的 `git(["config", "commit.gpgsign", "false"])` 这类「不配就会被宿主
+   * 全局配置坑到」的前置就不会被漏抄。
+   */
+  git: (...args: Array<string>) => void;
+  /**
+   * 把一个**已安装依赖**放进工作区（建目录 + 最小 `package.json`）。
+   *
+   * 为什么不能拿 `mkdir` 顶替：临时工作区在 `os.tmpdir()` 下面 —— 它的**祖先目录**
+   * （`/tmp`、`<系统临时目录>`）里可能有任意项目的 `node_modules`，而 Node 的模块解析
+   * 是**一路向上找**的，于是「探针说这个包解析得到」可能是从**工作区外**捡来的
+   * （§12.16 同款：判据的输入边界没封住时，它给出的是环境噪声而不是被测结论）。
+   * 装上 `package.json` 之后这个目录就是一个完整的包根，`require.resolve` 不再上溯。
+   *
+   * 造「声明了却解析不到」那一档时，**不要**把要缺的那一个也装进来 ——
+   * 少了它就是缺件。
+   */
+  installDep: (name: string, version?: string) => void;
   /** 往工作区里建一个空目录（脚本按目录存在与否决定扫不扫时用）。 */
   mkdir: (rel: string) => void;
+  /** 从工作区里读回一个文件（判据会就地改文件时用）。 */
+  read: (rel: string) => string;
   /** 删掉工作区里的一个文件/目录（造「文件不在」那一档用）。 */
   remove: (rel: string) => void;
   /**
@@ -319,54 +345,11 @@ export interface GateRepo {
     args?: Array<string>,
     overrides?: { env?: Record<string, string | undefined> },
   ) => GateRunResult;
-  /** 从工作区里读回一个文件（判据会就地改文件时用）。 */
-  read: (rel: string) => string;
-  /** 工作区里这个路径在不在（判「`--update` 到底有没有落盘」用，不必 `read` 再 catch）。 */
-  exists: (rel: string) => boolean;
-  /**
-   * 把一个**已安装依赖**放进工作区（建目录 + 最小 `package.json`）。
-   *
-   * 为什么不能拿 `mkdir` 顶替：临时工作区在 `os.tmpdir()` 下面 —— 它的**祖先目录**
-   * （`/tmp`、`<系统临时目录>`）里可能有任意项目的 `node_modules`，而 Node 的模块解析
-   * 是**一路向上找**的，于是「探针说这个包解析得到」可能是从**工作区外**捡来的
-   * （§12.16 同款：判据的输入边界没封住时，它给出的是环境噪声而不是被测结论）。
-   * 装上 `package.json` 之后这个目录就是一个完整的包根，`require.resolve` 不再上溯。
-   *
-   * 造「声明了却解析不到」那一档时，**不要**把要缺的那一个也装进来 ——
-   * 少了它就是缺件。
-   */
-  installDep: (name: string, version?: string) => void;
-  /**
-   * 在工作区里跑一次 `git`（`cwd` 已指向它）。
-   *
-   * 为什么放在这里：分支守卫 / 格式棘轮这两份判据的**被测输入是 git 状态本身**
-   * （HEAD 父提交数、基线是否被跟踪），所以夹具必须能造提交历史。收住这一层，
-   * 各处的 `git(["config", "commit.gpgsign", "false"])` 这类「不配就会被宿主
-   * 全局配置坑到」的前置就不会被漏抄。
-   */
-  git: (...args: Array<string>) => void;
-  /** 造一次提交（`add -A` + commit）—— 上手身份与禁签名在本夹具里已配好。 */
-  commit: (message: string) => void;
+  /** 在工作区里写一个文件（自动建父目录），`rel` 是仓库相对路径。 */
+  write: (rel: string, content: string) => void;
 }
 
 export interface GateRepoOptions {
-  /** `scripts/` 下那份判据脚本的文件名（如 `check-void-floats.cjs`）。 */
-  script: string;
-  /** 脚本在工作区里的落点：`"scripts"`（默认为此）或 `"root"`。 */
-  dir?: "scripts" | "root";
-  /** 预先建好的空目录（被扫目录）。 */
-  dirs?: Array<string>;
-  /** `mkdtempSync` 的前缀；默认由脚本名推出来（去掉 `check-` 与扩展名）。 */
-  workdir?: string;
-  /**
-   * 工作区里预先放好的文件（相对路径 → 内容）。
-   *
-   * 为什么需要：门禁脚本有的会 `await import("./doc-facts.cjs")` 去读文档事实、
-   * 有的要读 `docs/` 下那一行白名单 —— 这些是**脚本真的依赖的输入**，
-   * 由调用点声明比每处自己 `beforeEach` 里手动写更不容易漏（漏了的表现是
-   * 脚本 exit 2、看起来像门禁坏了）。
-   */
-  files?: Record<string, string>;
   /**
    * 从源码仓库再拷贝进来的路径（`from` 是相对仓库根，`to` 是工作区相对路径；
    * 目录会递归拷）。`.cjs` / `.mjs` 这类**同级动态导入**的模块只能这么来。
@@ -376,14 +359,10 @@ export interface GateRepoOptions {
    * 现在由 `placeSources()` 一处收口：**一条路径只写一次**，后到的那条不许覆盖。
    */
   copy?: Array<{ from: string; to: string }>;
-  /**
-   * 就绪之后再补一步 —— 需要 `git init` 的工作区（分支守卫 / 格式棘轮）用。
-   *
-   * 为什么收在这一层而不是各自 `beforeEach`：这两份的共同点是「先把临时仓库
-   * `git init` 好、配上身份与 `gpgsign=false`」—— 抄第二遍时最容易漏的是
-   * `commit.gpgsign=false`（宿主全局开了签名时 commit 直接失败，报错指不到夹具）。
-   */
-  setup?: (repo: GateRepo) => void;
+  /** 脚本在工作区里的落点：`"scripts"`（默认为此）或 `"root"`。 */
+  dir?: "scripts" | "root";
+  /** 预先建好的空目录（被扫目录）。 */
+  dirs?: Array<string>;
   /**
    * 跑脚本时追加的环境变量。
    *
@@ -393,6 +372,27 @@ export interface GateRepoOptions {
    * 每处自己拼 `env` 更不容易漏（漏了的表现是脚本 exit 2，看起来像门禁坏了）。
    */
   env?: Record<string, string>;
+  /**
+   * 工作区里预先放好的文件（相对路径 → 内容）。
+   *
+   * 为什么需要：门禁脚本有的会 `await import("./doc-facts.cjs")` 去读文档事实、
+   * 有的要读 `docs/` 下那一行白名单 —— 这些是**脚本真的依赖的输入**，
+   * 由调用点声明比每处自己 `beforeEach` 里手动写更不容易漏（漏了的表现是
+   * 脚本 exit 2、看起来像门禁坏了）。
+   */
+  files?: Record<string, string>;
+  /** `scripts/` 下那份判据脚本的文件名（如 `check-void-floats.cjs`）。 */
+  script: string;
+  /**
+   * 就绪之后再补一步 —— 需要 `git init` 的工作区（分支守卫 / 格式棘轮）用。
+   *
+   * 为什么收在这一层而不是各自 `beforeEach`：这两份的共同点是「先把临时仓库
+   * `git init` 好、配上身份与 `gpgsign=false`」—— 抄第二遍时最容易漏的是
+   * `commit.gpgsign=false`（宿主全局开了签名时 commit 直接失败，报错指不到夹具）。
+   */
+  setup?: (repo: GateRepo) => void;
+  /** `mkdtempSync` 的前缀；默认由脚本名推出来（去掉 `check-` 与扩展名）。 */
+  workdir?: string;
 }
 
 /**
@@ -605,8 +605,8 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
  * 比在文档里写「记得 rmSync」可靠。
  */
 export interface GateRepoHandle {
-  repo: GateRepo;
   dispose: () => void;
+  repo: GateRepo;
 }
 
 /**

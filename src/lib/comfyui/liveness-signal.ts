@@ -30,12 +30,12 @@ import type { ComfyExitReport } from "./lifecycle-exit";
 
 /** 一次「进程退出」事件。 */
 export interface ComfyLivenessSignal {
-  /** 单调纪元：每记一次退出 +1。客户端据此判「这是不是我没见过的那一次」。 */
-  seq: number;
   /** 记录时刻（毫秒）。 */
   at: number;
   /** 退出原因摘要（`describeComfyExit` 的一句话结论），供提示文案用。 */
   reason: string;
+  /** 单调纪元：每记一次退出 +1。客户端据此判「这是不是我没见过的那一次」。 */
+  seq: number;
   /** 退出是否由用户主动关闭触发。**主动关闭不是崩溃** —— 客户端据此跳过
    *  「崩溃复核」那一条（我们自己让它退的，不需要再探一次证明它没了）。 */
   userStopped: boolean;
@@ -43,8 +43,8 @@ export interface ComfyLivenessSignal {
 
 /** 此刻的信号快照（无订阅者时也要能读 —— 客户端首次连上就得知道现状）。 */
 export interface ComfyLivenessSnapshot {
-  seq: number;
   last: ComfyLivenessSignal | null;
+  seq: number;
 }
 
 export type Listener = (signal: ComfyLivenessSignal) => void;

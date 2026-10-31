@@ -78,12 +78,12 @@ import {
 import { useMessageCenterStore, type NewMessage } from "../message-center-store";
 
 export interface AppServiceMessageLogInput {
-  /** 应用服务四态（`~/lib/shell/dev-server-status` 的判据结果）。 */
-  state: DevServerState;
-  /** 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；刷新不算）。 */
-  processIsNew: boolean;
   /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
   currentRunId: string | null;
+  /** 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；刷新不算）。 */
+  processIsNew: boolean;
+  /** 应用服务四态（`~/lib/shell/dev-server-status` 的判据结果）。 */
+  state: DevServerState;
   /**
    * 最后一拍之前**没人在探测**的那一段（毫秒，0 = 紧接上一拍）。
    *

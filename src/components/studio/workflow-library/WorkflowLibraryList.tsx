@@ -22,34 +22,34 @@ import { StatusDot } from "~/components/ui/status-dot";
 import { ListBadge } from "~/components/ui/list-badge";
 
 interface WorkflowLibraryListProps {
-  workflows: Array<WorkflowRow>;
-  pendingRows?: Array<PendingRow>;
-  selectedId?: string | null;
-  search: string;
-  onSearchChange: (value: string) => void;
-  onSelect: (id: string) => void;
-  onLoadPending?: (pending: PendingRow) => void;
-  /** 列表仍在拉取中；此时「一条都没有」不代表「没有工作流」。 */
-  loading?: boolean;
-  /** 拉取超过预期时长仍未返回（服务在响应但查询没回来）。 */
-  stalled?: boolean;
-  /** 重试拉取（超时提示里的动作）。 */
-  onRefresh?: () => void;
-  /** 本地工作流目录侧的可读原因（没解析到根 / 根不可访问 / 目录里没有文件）；
-   * 非空时用它替换默认空态文案，说明「为什么是空」。 */
-  localRootsHint?: string | null;
   /** 拖入 JSON 导入：整片列表侧栏就是投放区，这里接管高亮与投放事件
    * （与导入面板共用同一个文件漏斗，见 useWorkflowImport）。 */
   dragActive?: boolean;
-  onDragOver?: DragEventHandler<HTMLDivElement>;
-  onDragEnter?: DragEventHandler<HTMLDivElement>;
-  onDragLeave?: DragEventHandler<HTMLDivElement>;
-  onDrop?: DragEventHandler<HTMLDivElement>;
   /** 文件入口（拖入）失败的可读原因。 */
   fileErr?: string | null;
+  /** 列表仍在拉取中；此时「一条都没有」不代表「没有工作流」。 */
+  loading?: boolean;
+  /** 本地工作流目录侧的可读原因（没解析到根 / 根不可访问 / 目录里没有文件）；
+   * 非空时用它替换默认空态文案，说明「为什么是空」。 */
+  localRootsHint?: string | null;
+  onDragEnter?: DragEventHandler<HTMLDivElement>;
+  onDragLeave?: DragEventHandler<HTMLDivElement>;
+  onDragOver?: DragEventHandler<HTMLDivElement>;
+  onDrop?: DragEventHandler<HTMLDivElement>;
+  onLoadPending?: (pending: PendingRow) => void;
+  /** 重试拉取（超时提示里的动作）。 */
+  onRefresh?: () => void;
+  onSearchChange: (value: string) => void;
+  onSelect: (id: string) => void;
   /** 单个待载入项的「载入中」标志（按 id 查表）：载入按钮据此禁用并改文案，
    * 避免重复点击把同一份磁盘文件重复载入。 */
   pendingLoading?: Record<string, boolean>;
+  pendingRows?: Array<PendingRow>;
+  search: string;
+  selectedId?: string | null;
+  /** 拉取超过预期时长仍未返回（服务在响应但查询没回来）。 */
+  stalled?: boolean;
+  workflows: Array<WorkflowRow>;
 }
 
 /**

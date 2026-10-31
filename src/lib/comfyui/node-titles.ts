@@ -12,8 +12,8 @@
  */
 
 interface NodeTitleEntry {
-  zh: string;
   en: string;
+  zh: string;
 }
 
 /* ComfyUI 核心内置节点（简体中文界面的叫法）。

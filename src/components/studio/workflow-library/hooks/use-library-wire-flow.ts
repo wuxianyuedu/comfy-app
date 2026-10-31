@@ -56,26 +56,26 @@ export const LIB_NODE_TYPES = /* SAFETY: 类型断言已复核 */ {
 export type LibraryDropHint = string | null;
 
 export interface LibraryWireFlowArgs {
-  io: WorkflowIOMap | null | undefined;
-  /** 输入侧卡片派生（entries / resolved / ownersByPin / wires…）。 */
-  paramCards: LibraryParamCards;
-  /** 输出侧的连线（宿主输出行 → 右列卡片）。 */
-  outputWires: ReadonlyArray<ParamCardWire>;
-  /** 契约条目表（闸门判「这个口接受什么类型的端口」，与自动落点同一份）。 */
-  entries: ReadonlyArray<ParamEntry>;
-  /** 三列节点的渲染内容（`LibraryNodeContent` 的三段，见画布的说明）。 */
-  paramsNode: LibraryNodeContent["params"];
-  hostNode: LibraryNodeContent["host"];
-  outputsNode: LibraryNodeContent["outputs"];
-  /** 输入侧落点写入（`use-param-wiring.connect`）。 */
-  connect?: (entryId: string, ioKey: string) => void;
-  /** 输出侧取值行写入。 */
-  connectOutput?: (outputIoKey: string, targetIoKey: string) => void;
   /** 背景板尺寸（画布量到容器尺寸后给出；不传用兜底值，见 `buildLibraryNodes`）。 */
   backdropSize?: { height: number; width: number };
   /** 是否允许编辑（有模式 + 上层给了落库回调）。为 false 时连线不可单独点选 /
    *  删除（只读预览，避免误删）。与画布的 `canWire` 同源。 */
   canWire?: boolean;
+  /** 输入侧落点写入（`use-param-wiring.connect`）。 */
+  connect?: (entryId: string, ioKey: string) => void;
+  /** 输出侧取值行写入。 */
+  connectOutput?: (outputIoKey: string, targetIoKey: string) => void;
+  /** 契约条目表（闸门判「这个口接受什么类型的端口」，与自动落点同一份）。 */
+  entries: ReadonlyArray<ParamEntry>;
+  hostNode: LibraryNodeContent["host"];
+  io: WorkflowIOMap | null | undefined;
+  outputsNode: LibraryNodeContent["outputs"];
+  /** 输出侧的连线（宿主输出行 → 右列卡片）。 */
+  outputWires: ReadonlyArray<ParamCardWire>;
+  /** 输入侧卡片派生（entries / resolved / ownersByPin / wires…）。 */
+  paramCards: LibraryParamCards;
+  /** 三列节点的渲染内容（`LibraryNodeContent` 的三段，见画布的说明）。 */
+  paramsNode: LibraryNodeContent["params"];
   /** 画布上当前点选中的边 id 集合（来自 `onEdgeClick`）。命中即注入高亮描边。 */
   selectedEdgeIds?: ReadonlySet<string>;
 }
@@ -85,16 +85,16 @@ export interface LibraryWireFlowArgs {
  *  `envelopeHeight` 与 `fillHeight` 是**两个不同的高度**，见
  *  `LibraryNodeSizing` 的说明：前者是卡片列的首帧声明高度，后者是背景板高度。 */
 export interface LayoutSizing {
-  paramsWidth: number;
-  outputsWidth: number;
-  hostWidth: number;
   columnGap: number;
-  originX: number;
-  originY: number;
   /** 宿主节点的首帧声明高度（真实高度由内容撑开，见 `buildLibraryNodes`）。 */
   envelopeHeight: number;
   /** 背景板高度（面板可视高度与卡片列高度取大，见 `backdropSize`）。 */
   fillHeight: number;
+  hostWidth: number;
+  originX: number;
+  originY: number;
+  outputsWidth: number;
+  paramsWidth: number;
 }
 
 export const LAYOUT_SIZING: LayoutSizing = /* SAFETY: 类型断言已复核 */ {
@@ -404,8 +404,8 @@ export type LibraryConnection = Pick<
 
 /** 闸门需要的上下文：IO 表（端口分类） + 契约条目表。 */
 export interface LibraryGateContext {
-  io: WorkflowIOMap | null | undefined;
   entries: ReadonlyArray<ParamEntry>;
+  io: WorkflowIOMap | null | undefined;
 }
 
 /** 库内连线的**类型闸门**（纯函数，可单测）。

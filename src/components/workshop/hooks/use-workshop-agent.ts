@@ -19,12 +19,12 @@ export type { AgentToolHandlers };
 
 /** 一条工具执行记录（Agent 浮层「工作过程」面板的展示数据）。 */
 export interface AgentToolRun {
-  id: string;
-  toolName: string;
-  status: "running" | "done" | "error";
-  summary: string;
   argSummary: string;
   detail?: string;
+  id: string;
+  status: "running" | "done" | "error";
+  summary: string;
+  toolName: string;
 }
 
 /** Agent 一帧对话消息（用户 / 助手 / 工具记录）。 */
@@ -37,17 +37,17 @@ export type WorkshopAgentToolHandlers = AgentToolHandlers;
 
 /** Agent hook 返回给视图的 controller。 */
 export interface WorkshopAgentController {
-  open: boolean;
-  messages: Array<AgentPanelMessage>;
-  input: string;
   busy: boolean;
-  error: string;
-  toolRuns: Array<AgentToolRun>;
-  openAgent: () => void;
-  closeAgent: () => void;
-  setInput: (value: string) => void;
-  send: () => Promise<void>;
   clearToolRuns: () => void;
+  closeAgent: () => void;
+  error: string;
+  input: string;
+  messages: Array<AgentPanelMessage>;
+  open: boolean;
+  openAgent: () => void;
+  send: () => Promise<void>;
+  setInput: (value: string) => void;
+  toolRuns: Array<AgentToolRun>;
 }
 
 /* 对话条目与工具运行记录的 id 走全库唯一出口（规范 16 §16.2.4.36）——

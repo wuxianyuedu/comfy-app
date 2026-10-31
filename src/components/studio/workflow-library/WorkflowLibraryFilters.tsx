@@ -16,22 +16,22 @@ import { SelectMenu } from "~/components/ui/select-menu";
 import type { SourceFilter, TypeFilter } from "./workflow-library-config";
 
 export interface ModelTagCount {
+  count: number;
   id: string;
   name: string;
-  count: number;
 }
 
 interface WorkflowLibraryFiltersProps {
-  sourceFilter: SourceFilter;
-  onSourceFilterChange: (v: SourceFilter) => void;
-  sourceCounts: { all: number; local: number; online: number };
-  typeFilter: TypeFilter;
-  onTypeFilterChange: (v: TypeFilter) => void;
-  typeCounts: { all: number; audio: number; image: number; video: number };
   modelFilter: string;
-  onModelFilterChange: (v: string) => void;
   modelTags: Array<ModelTagCount>;
   onManageModels: () => void;
+  onModelFilterChange: (v: string) => void;
+  onSourceFilterChange: (v: SourceFilter) => void;
+  onTypeFilterChange: (v: TypeFilter) => void;
+  sourceCounts: { all: number; local: number; online: number };
+  sourceFilter: SourceFilter;
+  typeCounts: { all: number; audio: number; image: number; video: number };
+  typeFilter: TypeFilter;
 }
 
 const SOURCE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "local", "online"] as const;

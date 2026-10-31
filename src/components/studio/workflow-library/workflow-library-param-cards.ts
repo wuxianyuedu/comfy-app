@@ -43,16 +43,14 @@ export interface LibraryParamCards {
   io: WorkflowIOMap | null;
   /** 该对外参数在当前模式下是否被作者改过（决定卡片头 ↺ 的可用性）。 */
   isManual: (entryId: string) => boolean;
-  /** 当前模式下「条目 → 目标 ioKey」的生效落点（**只来自作者画的线**）。 */
-  resolved: Record<string, string | null>;
+  /** 对外**输出**参数在当前模式下的落点（输出口 ioKey → 取值的那一行 ioKey）。
+   *  卡片与连线都要读这一份：与 `resolved` 对输入侧的作用对称。 */
+  outputResolved?: Record<string, string | null>;
   /** 每个被落到的一行（ioKey）→ 落到它的对外参数名，按条目顺序取第一个。
    *  宿主卡片的参数行据此在行尾标出「这一行属于哪个对外参数」。 */
   ownersByPin: Record<string, string>;
-  /** 卡片圆点端点 → 宿主行 的只读连线（卡片列右侧的小圆点与宿主卡片上被落
-   *  到的那一行之间）。连线一律是作者画的那条（库里不给「猜出来的」线），
-   *  与编辑器画布同一套语义 —— 库里不画线的话，圆点就只是一颗装饰点，
-   *  读者答不出它连到哪。 */
-  wires: Array<ParamCardWire>;
+  /** 当前模式下「条目 → 目标 ioKey」的生效落点（**只来自作者画的线**）。 */
+  resolved: Record<string, string | null>;
   /** **真的画出了线**的那些卡片圆点（`<条目 id>?<handle id>`）。
    *
    *  与 `wires` 同一份事实的另一面：视图据此判断「这颗圆点该不该画成已连接」
@@ -60,25 +58,27 @@ export interface LibraryParamCards {
    *  上色，带线的圆点看着反而是断的（用户口径：「这里连线断开了是什么原因」，
    *  ISSUE #355）。 */
   wiredDotKeys: Set<string>;
-  /** 对外**输出**参数在当前模式下的落点（输出口 ioKey → 取值的那一行 ioKey）。
-   *  卡片与连线都要读这一份：与 `resolved` 对输入侧的作用对称。 */
-  outputResolved?: Record<string, string | null>;
+  /** 卡片圆点端点 → 宿主行 的只读连线（卡片列右侧的小圆点与宿主卡片上被落
+   *  到的那一行之间）。连线一律是作者画的那条（库里不给「猜出来的」线），
+   *  与编辑器画布同一套语义 —— 库里不画线的话，圆点就只是一颗装饰点，
+   *  读者答不出它连到哪。 */
+  wires: Array<ParamCardWire>;
 }
 
 /** 库内一条只读映射连线。 */
 export interface ParamCardWire {
   entryId: string;
-  targetIoKey: string;
+  /** 被连的端口落在**组合控件**上（宽/高、比例/像素这类没有独立行的端口），
+   *  端点锚在整块控件上，线指向那一格。 */
+  grouped: boolean;
+  /** 被连的**输出端口 handle id** —— 一个对外参数可能有多颗圆点（每个候选
+   *  一颗），线必须从被落到的那一颗出发。 */
+  handleId: string;
   /** 线的两端在哪一侧（见 `WorkflowParamWires` 的 `ParamWireKind`）：
    *  缺省 = 输入侧（卡片 → 宿主参数行），`"hostToParam"` = 输出侧
    *  （宿主输出行 → 对外输出参数卡片）。 */
   kind?: "paramToHost" | "hostToParam";
-  /** 被连的**输出端口 handle id** —— 一个对外参数可能有多颗圆点（每个候选
-   *  一颗），线必须从被落到的那一颗出发。 */
-  handleId: string;
-  /** 被连的端口落在**组合控件**上（宽/高、比例/像素这类没有独立行的端口），
-   *  端点锚在整块控件上，线指向那一格。 */
-  grouped: boolean;
+  targetIoKey: string;
 }
 
 /** 从 workflowIO + paramMap 派生库内画布所需的归属数据。
@@ -180,14 +180,14 @@ export function deriveLibraryParamCards(args: {
  *  画布上不再拿一条虚线表示「这是默认线」—— 未连过就是没有线。 */
 /** 对外**输出**参数卡片列与它的连线（`deriveLibraryOutputCards` 的产物）。 */
 export interface LibraryOutputCards {
-  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
-  wires: Array<ParamCardWire>;
-  /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 断开）。 */
-  resolved: Record<string, string | null>;
   /** 某个输出口在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual: (ioKey: string) => boolean;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 断开）。 */
+  resolved: Record<string, string | null>;
   /** 某个输出口是否存在任何取值来源（宿主那一行真的画得出来）。 */
   wired: boolean;
+  wires: Array<ParamCardWire>;
 }
 
 export function deriveLibraryOutputCards(args: {

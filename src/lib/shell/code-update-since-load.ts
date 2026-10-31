@@ -22,10 +22,10 @@ export const BUILD_ID_ENDPOINT = "/api/dev/build-id";
 export const BUILD_ID_TIMEOUT_MS = 2500;
 
 export interface CodeUpdateSignal {
-  /** 页面加载后模块被替换过（热更新 / 实时重载）。 */
-  updatedSinceLoad: boolean;
   /** 页面加载时的构建标识就已经落后于当前构建。 */
   pageOlderThanBuild: boolean;
+  /** 页面加载后模块被替换过（热更新 / 实时重载）。 */
+  updatedSinceLoad: boolean;
 }
 
 /** 是否应认定「本会话跑过一段代码更新」。 */
@@ -93,18 +93,18 @@ export type DepsFreshnessState =
 
 /** 构建标识的读取结果：字段为 null = 这一次没读到（服务端未就绪 / 接口不可达）。 */
 export interface BuildIdProbe {
-  buildId: string | null;
   /** 进程启动标识；单独解析出来用于区分「重启」与「仅源码变」。 */
   bootId: string | null;
-  /** 启动器自愈重启 dev server 时注入的原因（如 route-404-heal）；无则 null。 */
-  restartReason: string | null;
-  /** 启动器给的「为什么重启」人话短句（懒归因的产物）；无则 null。 */
-  restartDetail: string | null;
+  buildId: string | null;
   /** 依赖面是否陈旧（需要「停服务 + `pnpm install`」）。**无法判定为 null**，
    *  与 `false`（判定为新鲜）是不同事实，消费方据此决定提示与否。 */
   depsStale: boolean | null;
   /** 依赖面陈旧的形态（供文案分流）；无法判定为 null。 */
   depsState: DepsFreshnessState | null;
+  /** 启动器给的「为什么重启」人话短句（懒归因的产物）；无则 null。 */
+  restartDetail: string | null;
+  /** 启动器自愈重启 dev server 时注入的原因（如 route-404-heal）；无则 null。 */
+  restartReason: string | null;
 }
 
 /** 读一次构建标识；任何失败都退化为全 null，绝不抛出、绝不阻塞交互。 */

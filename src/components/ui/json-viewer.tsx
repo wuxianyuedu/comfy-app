@@ -282,14 +282,14 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
 // ─── 外层组件 ──────────────────────────────────────────────────────────────
 export interface JsonViewerProps {
   data: unknown;
-  /** Toolbar 副标题 (默认 "JSON") */
-  title?: string;
   /** 首屏折叠口径（阈值由下方 `collapseObjectsAfterLength` 决定）：
    *   - 0   → 全部展开（不折叠任何容器）
    *   - >=1 → 项数超过 `30 + N*40` 的 object/array 首屏折成 `…`，
    *           N 越大阈值越宽松（dense 场景下更紧凑）
    * 默认 1。 */
   initialCollapsedDepth?: number;
+  /** Toolbar 副标题 (默认 "JSON") */
+  title?: string;
 }
 
 export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: JsonViewerProps) {

@@ -56,8 +56,8 @@ export const WAIT_FIRST_SAMPLE_NOTE = "已连接，占用数据首帧读取中";
 
 /** 一档的完整渲染输入：描述符 + 已算好的读数。 */
 export interface VisibleResourceMetric {
-  descriptor: ResourceMetricDescriptor;
   bar: NonNullable<ComfyStatusViewModel[ResourceMetricKey]>;
+  descriptor: ResourceMetricDescriptor;
 }
 /**
  * 只留下有读数的档。判据收在这里，两个消费点不再各写一遍 `smiVram && (...)`，

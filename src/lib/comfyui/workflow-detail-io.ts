@@ -29,62 +29,62 @@ import { type RawInputEntry, type RawNodeMeta } from "~/lib/comfyui/workflow-det
 import { type WorkflowIOModeOverride } from "~/lib/workflow/workflow-io-types";
 
 export interface WorkflowIORawEntry {
+  /** 富化出来的控件默认值（图内 widget 当前值）。同 type，可作兜底基线。 */
+  defaultValue?: unknown;
   direction: "input" | "output";
-  kind: string;
-  nodeId: string;
-  name: string;
-  label?: string;
   displayOrder?: number;
   /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，与 `nodeId`
    *  （内部节点 id）一起在运行期拼成 comfy-cli 展开后的 `host:inner` 形式。
    *  顶层勾选的条目没有本字段，PATCH / GET 原样往返。 */
   hostNodeId?: string;
-  /** IO 编辑里切换的「运行时强校验」标记 —— GET 重建时必须透传，
-   *  否则保存后重开编辑器会退回可选（历史 bug）。 */
-  required?: boolean;
-  /** seed 类参数的「控件后行为」（fixed/increment/decrement/random）。 */
-  seedMode?: string;
+  kind: string;
+  label?: string;
   /** 多模式覆盖层（各模式的默认值与可见性），PATCH 原样落库。
    *  类型与客户端 WorkflowIOModeOverride 同源（workflow-io-types）——
    *  两端的 workflowIO 载荷经 tRPC 直传，必须逐字段兼容。键名 `modeOverrides`
    *  与 `WorkflowTemplate.modes`（工作流级模式清单）区分；旧数据仍是 `modes`
    *  键，读取处统一回退归一。 */
   modeOverrides?: Record<string, WorkflowIOModeOverride>;
+  name: string;
+  nodeId: string;
+  /** COMBO 候选列表（来自 object_info）。离线保存时可能缺失，留空由表单回落文本。 */
+  options?: Array<string>;
+  /** IO 编辑里切换的「运行时强校验」标记 —— GET 重建时必须透传，
+   *  否则保存后重开编辑器会退回可选（历史 bug）。 */
+  required?: boolean;
+  /** seed 类参数的「控件后行为」（fixed/increment/decrement/random）。 */
+  seedMode?: string;
   /** 富化后的 ComfyUI 类型（`INT` / `FLOAT` / `STRING` / `COMBO` …）。
    *  勾选时通常没有，由 GET 的 `enrichWorkflowIO` 现算；但若保存时已被富化
    *  （router 的 `persistEnrichedWorkflowIO` 或 client 持久化的富化 map 带真值），
    *  这里留底，`enrichWorkflowIO` 把它当兜底基线 —— 见 fix 4：类型固化，
    *  不再每次 GET 都依赖 object_info 重算，ComfyUI 离线重开也不退化成纯文本。 */
   type?: string;
-  /** 富化出来的控件默认值（图内 widget 当前值）。同 type，可作兜底基线。 */
-  defaultValue?: unknown;
-  /** COMBO 候选列表（来自 object_info）。离线保存时可能缺失，留空由表单回落文本。 */
-  options?: Array<string>;
 }
 
 export interface WorkflowIOEnrichParams {
-  workflowIORaw: Record<string, WorkflowIORawEntry>;
-  rawInputsById: Record<string, Array<RawInputEntry>>;
-  /** 子工作流内部节点的输入元数据（`buildInnerNodeInputs`）。
-   *  勾选点落在子图内层视图时，落库 `nodeId` 指向内部节点，顶层 `rawInputsById`
-   *  里没有它 —— 没有这份兜底表，类型退化成 `*`、显示名退化成 pin 名
-   *  （ISSUE #349）。缺省（无子图）时行为与旧版逐值等价。 */
-  innerInputsById?: Record<string, Array<RawInputEntry>>;
-  rawNodeMeta: Array<RawNodeMeta>;
-  graph: Record<string, unknown>;
-  nodeTitleById: Record<string, string>;
-  nodeTypeById: Record<string, string>;
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
   ) => Promise<Array<string> | undefined>;
   comboOptionsForFieldName: (field: string) => Promise<Array<string> | undefined>;
+  graph: Record<string, unknown>;
+  /** 子工作流内部节点的输入元数据（`buildInnerNodeInputs`）。
+   *  勾选点落在子图内层视图时，落库 `nodeId` 指向内部节点，顶层 `rawInputsById`
+   *  里没有它 —— 没有这份兜底表，类型退化成 `*`、显示名退化成 pin 名
+   *  （ISSUE #349）。缺省（无子图）时行为与旧版逐值等价。 */
+  innerInputsById?: Record<string, Array<RawInputEntry>>;
   /** 某 class 某字段是否声明了 `{"multiline": true}`（object_info 的类型事实）。
    *  查不到返回 `undefined` —— 判定退到「值很长」这条数据判据，不猜名字。 */
   multilineForClassField: (
     classType: string | undefined,
     field: string,
   ) => Promise<boolean | undefined>;
+  nodeTitleById: Record<string, string>;
+  nodeTypeById: Record<string, string>;
+  rawInputsById: Record<string, Array<RawInputEntry>>;
+  rawNodeMeta: Array<RawNodeMeta>;
+  workflowIORaw: Record<string, WorkflowIORawEntry>;
 }
 
 /** 从 "16:9 (Widescreen)" / "16:9" 抽宽高比；抽不出返回 null。 */
@@ -132,38 +132,38 @@ function reconcileOptionValue(value: unknown, options: Array<string> | undefined
 }
 
 export interface WorkflowIOEntry {
-  direction: "input" | "output";
-  kind: string;
-  nodeId: string;
-  name: string;
-  label?: string;
-  type: string;
   defaultValue?: unknown;
-  nodeTitle?: string;
-  multiline?: boolean;
-  /** COMBO 候选项列表（unet_name / clip_name …），由 /api/object_info 解析得到。
-   *  非 COMBO 引脚、或 ComfyUI 连不上时为空 —— 消费方回落到纯文本控件。 */
-  options?: Array<string>;
+  direction: "input" | "output";
   displayOrder?: number;
-  /** IO 编辑里切换的「运行时强校验」标记 —— PATCH 原样落库，GET 透传。 */
-  required?: boolean;
-  /** seed 类参数的「控件后行为」（fixed/increment/decrement/random）。 */
-  seedMode?: string;
+  /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，运行期据它把
+   *  `nodeId`（内部节点）还原成 comfy-cli 展开后的 `host:inner` 拼接 id。 */
+  hostNodeId?: string;
+  kind: string;
+  label?: string;
   /** 多模式覆盖层（各模式的默认值与可见性）。GET 重建时经存量清洗：
    *  非法 defaultValue 对齐服务器候选表或被丢弃。类型与客户端
    *  WorkflowIOModeOverride 同源（workflow-io-types），两端的
    *  workflowIO 载荷经 tRPC 直传，必须逐字段兼容。键名 `modeOverrides`
    *  与 `WorkflowTemplate.modes`（工作流级模式清单）区分。 */
   modeOverrides?: Record<string, WorkflowIOModeOverride>;
-  /** 宿主（外层封装）节点 id —— 勾选点在子工作流内部时写入，运行期据它把
-   *  `nodeId`（内部节点）还原成 comfy-cli 展开后的 `host:inner` 拼接 id。 */
-  hostNodeId?: string;
+  multiline?: boolean;
+  name: string;
+  nodeId: string;
+  nodeTitle?: string;
+  /** COMBO 候选项列表（unet_name / clip_name …），由 /api/object_info 解析得到。
+   *  非 COMBO 引脚、或 ComfyUI 连不上时为空 —— 消费方回落到纯文本控件。 */
+  options?: Array<string>;
+  /** IO 编辑里切换的「运行时强校验」标记 —— PATCH 原样落库，GET 透传。 */
+  required?: boolean;
+  /** seed 类参数的「控件后行为」（fixed/increment/decrement/random）。 */
+  seedMode?: string;
   /** 本层槽位上**作者写的**业务名（`label`，且与槽位名不同才有值）。
    *
    *  随条目下发的**事实字段**：富化链把它排在 `localized` 之后（通用翻译会
    *  盖住它），所以显示名算不到它；但消费方想要「作者在本层槽位上写的名字」
    *  时，只有这里有。 */
   slotLabel?: string;
+  type: string;
 }
 /** 保存 IO 映射时把类型 / 默认值**固化**进库（fix 4 的根治）。
  *

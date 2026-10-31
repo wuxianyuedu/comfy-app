@@ -54,14 +54,14 @@ const DEFAULT_TEST_DURATION = 5;
 const UNWIRED_HINT = "未连到端口，用工作流默认值";
 
 interface EncapsulationTestFormProps {
+  canRun: boolean;
   /** 该模式的契约口清单（`status.entries`：含落点 / 必备信息，但**不过滤**）。 */
   entries: Array<EncapsulationEntryStatus>;
+  onRun: (values: WorkshopExposedValues) => void;
+  runDisabledReason?: string;
+  running: boolean;
   /** 尺寸表口径（随模式：生图 / 视频）。 */
   scene: SizeScene;
-  running: boolean;
-  canRun: boolean;
-  runDisabledReason?: string;
-  onRun: (values: WorkshopExposedValues) => void;
   /** 上传本地图片到 ComfyUI 输入目录，返回文件名（IO 在 hooks 层）。 */
   uploadImage: (file: File) => Promise<string>;
 }

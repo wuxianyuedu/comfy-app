@@ -36,17 +36,17 @@ export type {
 
 export interface BoundaryPin {
   id: string;
-  name: string;
-  type: string;
-  /** ComfyUI 的 i18n 标签（简体中文等）。对代理 pin 来说通常就等于
-   *  `type` / `name` —— 为完整性保留。 */
-  localized?: string;
   /** 作者在节点编辑器里设的业务标签（如 `FRAMES`、`IMAGE_FINAL`、
    *  `MODEL_HIGH_1st`）。渲染时优先用它，内层 IO 栏杆才能与父卡片上的
    *  输出条显示同一个名字。 */
   label?: string;
-  pos: [number, number];
   linkIds: Array<number>;
+  /** ComfyUI 的 i18n 标签（简体中文等）。对代理 pin 来说通常就等于
+   *  `type` / `name` —— 为完整性保留。 */
+  localized?: string;
+  name: string;
+  pos: [number, number];
+  type: string;
 }
 
 /**
@@ -121,11 +121,11 @@ export function parseSubgraphPins(sub: RawSubgraphDef): {
  *  （客户端据此从 pin 的 handle 向内部节点对应的输入/输出 handle
  *  画一条 React Flow 边）。 */
 export interface BoundaryLink {
-  linkId: number;
-  kind: "input" | "output";
-  pinId: string;
   innerNodeId: string;
   innerSlotName: string;
+  kind: "input" | "output";
+  linkId: number;
+  pinId: string;
 }
 
 /**

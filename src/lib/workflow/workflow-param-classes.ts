@@ -83,11 +83,7 @@ export const SIZE_SUB_IDS: ReadonlyArray<ParamClass> = SIZE_CLASSES;
  *  `id` 是契约内的稳定键（`prompt` / `size` / `first-frame`…），**不含工作流
  *  信息** —— 同一个「提示词」在所有工作流里都是同一个键，落点由映射表决定。 */
 export interface ParamEntry {
-  /** 契约内的稳定键（`ExposedParamClass` 或带序号的参考图口）。 */
-  id: string;
-  /** 该口子落到的端口所属节点（旧聚类路径带；契约路径由候选端口派生，
-   *  见 `hostNodeId`）。 */
-  nodeId: string;
+  cls: ParamClass;
   /** 承载这个对外参数的**宿主节点 id** —— 库内映射线的宿主端与连线的合法性判定
    *  都以它为准。
    *
@@ -97,10 +93,14 @@ export interface ParamEntry {
    *  宿主 id 从候选端口派生（落点所在节点优先，其次首个候选），是同一份事实的
    *  最近可用近似。 */
   hostNodeId: string;
-  nodeTitle: string;
-  cls: ParamClass;
+  /** 契约内的稳定键（`ExposedParamClass` 或带序号的参考图口）。 */
+  id: string;
   /** 展示名：契约里的统一名（与具体工作流无关）。 */
   label: string;
+  /** 该口子落到的端口所属节点（旧聚类路径带；契约路径由候选端口派生，
+   *  见 `hostNodeId`）。 */
+  nodeId: string;
+  nodeTitle: string;
   /** 该契约口子在当前工作流里的候选端口（ioKey 保持 workflowIO 的原始键）。
    *  作者从这些候选里拖一条线选中一个作为落点。 */
   pins: Array<{ defaultValue: unknown; ioKey: string; name: string; type: string }>;
@@ -322,8 +322,10 @@ export function isSizeDetermined(resolved: Record<string, string | null | undefi
 
 /** 单条输出端口的展示形态（纯数据，视图只负责画）。 */
 export interface ParamOutputPort {
-  /** 端口自身的名字（落到哪个 pin）。 */
-  name: string;
+  /** 是否为**当前生效落点**（作者连上的那一颗；未连线时全为 false）。 */
+  active: boolean;
+  /** 是否已经落到了工作流里真实存在的端口。 */
+  connected: boolean;
   /** 卡片行上**显示**的名字；缺省 = `name`。
    *
    *  对外**输入**卡片给的是这个对外参数自己的名字（「提示词」「尺寸」）：
@@ -332,6 +334,18 @@ export interface ParamOutputPort {
    *  ComfyUI 里看到的对不上，也会随工作流改版漂移。落点仍在 `name` / `title`
    *  里可查（`ioKey`）。对外**输出**卡片不给（那里端口名就是作者要看的名字）。 */
   display?: string;
+  /** React Flow 的 handle id —— 连线的起点标识，**库内 = 条目 id**（一卡一颗点，
+   *  同一画布节点内天然唯一）；画布宿主行那一侧的 handle 才是 ioKey。 */
+  handleId: string;
+  /** 落点（工作流内部键 `<nodeId>::<kind>::<name>`）；`""` = 还没落到任何行。 */
+  ioKey: string;
+  /** 端口自身的名字（落到哪个 pin）。 */
+  name: string;
+  /** 落点那一行的声明类型（未连线 / 落点已不存在时不给）。
+   *
+   *  芯片不显示它 —— 只用来在行 title 里补一句「落到的那一行其实是 IMAGEUPLOAD」，
+   *  免得「类型不同」这件事在界面上彻底查不到。 */
+  targetType?: string;
   /** **这个对外口自己的**声明类型（大写，如 STRING / IMAGE / COMBO）。
    *
    *  **恒不随落点变**：卡片上的芯片说的是「这个口对外是什么」，不是「它现在落到
@@ -340,20 +354,6 @@ export interface ParamOutputPort {
    *  的装载口就显示成 IMAGEUPLOAD，松手又变回 IMAGE，读起来像口子自己换了类型。
    *  落点那一行的类型仍在（`targetType`，行 title 里可查）。*/
   type: string;
-  /** 落点那一行的声明类型（未连线 / 落点已不存在时不给）。
-   *
-   *  芯片不显示它 —— 只用来在行 title 里补一句「落到的那一行其实是 IMAGEUPLOAD」，
-   *  免得「类型不同」这件事在界面上彻底查不到。 */
-  targetType?: string;
-  /** 是否已经落到了工作流里真实存在的端口。 */
-  connected: boolean;
-  /** 落点（工作流内部键 `<nodeId>::<kind>::<name>`）；`""` = 还没落到任何行。 */
-  ioKey: string;
-  /** React Flow 的 handle id —— 连线的起点标识，**库内 = 条目 id**（一卡一颗点，
-   *  同一画布节点内天然唯一）；画布宿主行那一侧的 handle 才是 ioKey。 */
-  handleId: string;
-  /** 是否为**当前生效落点**（作者连上的那一颗；未连线时全为 false）。 */
-  active: boolean;
 }
 
 /** 一枚标签/端口的类型展示名：声明类型原样大写，缺省 `*`。 */

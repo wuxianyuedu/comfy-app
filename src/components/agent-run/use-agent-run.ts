@@ -33,23 +33,23 @@ import { beginStaleRun } from "~/lib/stale-run";
 const RUN_POLL_MS = 2500;
 
 export interface AgentRunController {
-  projectId: string;
-  run: ProductionRun;
   action: RunAction;
-  busy: boolean;
-  error: string;
-  goal: string;
-  setGoal: (value: string) => void;
   approvalMode: ApprovalMode;
-  setApprovalMode: (value: ApprovalMode) => void;
+  approve: () => Promise<void>;
   /** 生图后自动逐镜评审、不合格自动抽卡重生成（有界重试）。 */
   autoReview: boolean;
-  setAutoReview: (value: boolean) => void;
-  start: () => Promise<void>;
-  pause: () => Promise<void>;
-  resume: () => Promise<void>;
-  approve: () => Promise<void>;
+  busy: boolean;
   cancel: () => Promise<void>;
+  error: string;
+  goal: string;
+  pause: () => Promise<void>;
+  projectId: string;
+  resume: () => Promise<void>;
+  run: ProductionRun;
+  setApprovalMode: (value: ApprovalMode) => void;
+  setAutoReview: (value: boolean) => void;
+  setGoal: (value: string) => void;
+  start: () => Promise<void>;
 }
 
 export function useAgentRun(): AgentRunController {

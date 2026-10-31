@@ -40,6 +40,13 @@ export interface DevServerStatusInput {
   /** 本次会话是否曾成功探测到进程标识。 */
   everOnline: boolean;
   /**
+   * 上一次应用服务为什么结束（进程死的那一刻由启动编排落盘、服务恢复应答后读回，
+   * 见 `~/lib/shell/app-service-exit`）。null = 没有原因可讲。
+   */
+  lastExit?: AppServiceExitNotice | null;
+  /** 最近一次真正重启的时刻。 */
+  lastRestartAt: number | null;
+  /**
    * 应用服务此刻**能不能应答**（抗抖动后的事实，见
    * `use-dev-server-liveness` 的 `OFFLINE_CONFIRM_FAILURES`）。
    *
@@ -56,28 +63,19 @@ export interface DevServerStatusInput {
    * （见 `use-dev-server-liveness` 的 `routeTableStale`）。
    */
   routeTableStale?: boolean;
-  /** 最近一次真正重启的时刻。 */
-  lastRestartAt: number | null;
-  /**
-   * 上一次应用服务为什么结束（进程死的那一刻由启动编排落盘、服务恢复应答后读回，
-   * 见 `~/lib/shell/app-service-exit`）。null = 没有原因可讲。
-   */
-  lastExit?: AppServiceExitNotice | null;
 }
 
 export interface DevServerStatus {
-  state: DevServerState;
-  /** 状态栏可读文案（短，供右下角窄位展示）。 */
-  label: string;
-  /** 悬停 `title`：一句话说明含义与此刻能做什么。 */
-  title: string;
   /** 上一次结束的原因与动作；没有可讲的原因时为 null（视图据此决定要不要开口）。 */
   exitNotice: AppServiceExitNotice | null;
+  /** 状态栏可读文案（短，供右下角窄位展示）。 */
+  label: string;
+  state: DevServerState;
+  /** 悬停 `title`：一句话说明含义与此刻能做什么。 */
+  title: string;
 }
 
-export function deriveDevServerStatus(
-  input: DevServerStatusInput,
-): DevServerStatus {
+export function deriveDevServerStatus(input: DevServerStatusInput): DevServerStatus {
   const { everOnline, reachable, restarted, lastRestartAt } = input;
   const exitNotice = input.lastExit ?? null;
 
@@ -122,8 +120,7 @@ export function deriveDevServerStatus(
   }
 
   if (restarted) {
-    const at =
-      lastRestartAt === null ? "" : `（${formatClock(lastRestartAt)}）`;
+    const at = lastRestartAt === null ? "" : `（${formatClock(lastRestartAt)}）`;
     /* 重启的原因就在这里：`lastExit` 说的是**上一份**进程怎么结束的，而
      * 「刚重启」描述的正是那件事的后果。两句合起来才是一条完整的话——
      * 过去只有后果（「已重启」），用户仍不知道是崩溃还是被顶掉。 */

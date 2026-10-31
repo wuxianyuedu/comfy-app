@@ -78,10 +78,6 @@ import {
 export interface MessageScene {
   /** 这个场景解决什么、真机上什么时候会出现（故事读者看这一段才知道在看什么）。 */
   readonly about: string;
-  /** 面板是否打开（`false` 时 `MessageCenterPanel` 不渲染）。 */
-  readonly open: boolean;
-  /** 这一档要 push 的那几条 —— 每条都由**生产方**给出，不在这里手抄文案。 */
-  readonly produced: ReadonlyArray<ProducedMessage>;
   /**
    * push 完之后是否调一次真 action `markAllRead()`。
    *
@@ -91,6 +87,10 @@ export interface MessageScene {
    * **末态**、验不到那个动作本身（「点了没反应」是这类动作最常见的失效形态）。
    */
   readonly markAllRead?: true;
+  /** 面板是否打开（`false` 时 `MessageCenterPanel` 不渲染）。 */
+  readonly open: boolean;
+  /** 这一档要 push 的那几条 —— 每条都由**生产方**给出，不在这里手抄文案。 */
+  readonly produced: ReadonlyArray<ProducedMessage>;
 }
 
 /**

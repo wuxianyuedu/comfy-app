@@ -28,31 +28,31 @@ export type MutateAsyncLike<TInput, TOutput> = {
 };
 
 export interface UseWorkflowActionsArgs {
-  setDeleting: (v: boolean) => void;
-  setPendingDelete: (v: { id: string; name: string } | null) => void;
-  setActionError: (v: string) => void;
-  /** 「哪一条在下载 / 在同步」的执行态由 `~/components/ui/use-item-action` 给
-   *  （规范 16 §16.2.4.40）—— 这里只拿它的 `run`（忙标记 + 同步判重入一次给全）。 */
-  runBundle: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
-  runResync: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
-  setPendingLoading: (fn: (s: Record<string, boolean>) => Record<string, boolean>) => void;
-  setWorkflows: (fn: (prev: Array<WorkflowRow>) => Array<WorkflowRow>) => void;
-  load: () => Promise<void> | void;
-  updateMut: MutateAsyncLike<
-    RouterInputs["workflow"]["update"],
-    RouterOutputs["workflow"]["update"]
+  createMut: MutateAsyncLike<
+    RouterInputs["workflow"]["create"],
+    RouterOutputs["workflow"]["create"]
   >;
   deleteMut: MutateAsyncLike<
     RouterInputs["workflow"]["delete"],
     RouterOutputs["workflow"]["delete"]
   >;
+  load: () => Promise<void> | void;
   resyncMut: MutateAsyncLike<
     RouterInputs["workflow"]["resync"],
     RouterOutputs["workflow"]["resync"]
   >;
-  createMut: MutateAsyncLike<
-    RouterInputs["workflow"]["create"],
-    RouterOutputs["workflow"]["create"]
+  /** 「哪一条在下载 / 在同步」的执行态由 `~/components/ui/use-item-action` 给
+   *  （规范 16 §16.2.4.40）—— 这里只拿它的 `run`（忙标记 + 同步判重入一次给全）。 */
+  runBundle: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
+  runResync: <T>(id: string, action: () => Promise<T>) => Promise<T | undefined>;
+  setActionError: (v: string) => void;
+  setDeleting: (v: boolean) => void;
+  setPendingDelete: (v: { id: string; name: string } | null) => void;
+  setPendingLoading: (fn: (s: Record<string, boolean>) => Record<string, boolean>) => void;
+  setWorkflows: (fn: (prev: Array<WorkflowRow>) => Array<WorkflowRow>) => void;
+  updateMut: MutateAsyncLike<
+    RouterInputs["workflow"]["update"],
+    RouterOutputs["workflow"]["update"]
   >;
 }
 

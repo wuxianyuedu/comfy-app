@@ -9,12 +9,12 @@ import { PIN_ACCENT } from "../constants";
 import { Separator } from "~/components/ui/separator";
 
 interface IoEndpointsSectionProps {
-  /** Wire-only inputs (必须连线) — rendered as read-only chips. */
-  wireInputs: Array<EnrichedWidget>;
   /** 全部已富化输入；传给 ioLabel() 做冲突感知标签。 */
   inputs: Array<EnrichedWidget>;
   outputs: Array<WorkflowIOEntry & { ioKey: string }>;
   showOutputs: boolean;
+  /** Wire-only inputs (必须连线) — rendered as read-only chips. */
+  wireInputs: Array<EnrichedWidget>;
 }
 
 /* 宽版「I/O 端点」段 (非 compact，CreatePanel / IO-edit 预览)：wire inputs

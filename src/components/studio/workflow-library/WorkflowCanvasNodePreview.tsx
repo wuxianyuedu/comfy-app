@@ -52,27 +52,27 @@ import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
 
 interface Props {
-  workflowId: string;
-  workflowName: string;
-  taskType: string;
-  workflowIO: WorkflowIOMap | null;
-  /** 模板 paramMap（含 `source.mode:<模式>` 的对外参数落点）。 */
-  paramMap?: Record<string, unknown>;
-  usable: boolean;
+  defaultMode?: string;
   /** 多模式工作流：提供时第二行右侧的类型 chip 变成模式切换下拉。 */
   modes?: Array<string>;
-  defaultMode?: string;
   onModeChange?: (code: string) => void;
-  /** seed 类参数「控件后行为」的持久化回调（与 IO 编辑一致）。 */
-  onSeedModeChange?: (ioKey: string, mode: string) => void;
   /** 对外参数落点的持久化回调（库里拖圆点改落点，写回
    *  `paramMap.source.mode:<模式>`）。不传时卡片列只呈现当前落点、不可拖。 */
   onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
+  /** seed 类参数「控件后行为」的持久化回调（与 IO 编辑一致）。 */
+  onSeedModeChange?: (ioKey: string, mode: string) => void;
+  /** 模板 paramMap（含 `source.mode:<模式>` 的对外参数落点）。 */
+  paramMap?: Record<string, unknown>;
+  taskType: string;
+  usable: boolean;
   /** 视图模式（受控，顶层页签持有）：
    *  "edit" = 编辑对外参数（参数连线画布，禁止执行生成）
    *  "use"  = 实际使用（简化视图，可生成、可看结果）
    *  缺省按 "edit"（首个页签；测试等只读消费方无需关心视图模式）。 */
   viewMode?: "edit" | "use";
+  workflowId: string;
+  workflowIO: WorkflowIOMap | null;
+  workflowName: string;
 }
 
 /* 相位 → 状态胶囊文案（running 的百分比是动态的，查表只覆盖静态四种）。 */

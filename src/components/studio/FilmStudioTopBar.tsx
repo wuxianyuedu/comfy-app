@@ -9,9 +9,9 @@ import type { FilmStudioController } from "./hooks/use-film-studio";
 interface FilmStudioTopBarProps {
   c: FilmStudioController;
   isPlaying: boolean;
+  onRedo: () => void;
   onTogglePlay: () => void;
   onUndo: () => void;
-  onRedo: () => void;
 }
 
 export function FilmStudioTopBar({
@@ -95,22 +95,15 @@ export function FilmStudioTopBar({
       <Button
         variant="primary"
         size="sm"
-        onClick={() =>
-          void (c.shotSource === "project" ? c.createFromProject() : c.create())
-        }
+        onClick={() => void (c.shotSource === "project" ? c.createFromProject() : c.create())}
         disabled={
           c.loading ||
           !c.videoWorkflowId ||
-          (c.shotSource === "project" &&
-            (!c.activeProjectId || c.projectShotCount === 0))
+          (c.shotSource === "project" && (!c.activeProjectId || c.projectShotCount === 0))
         }
         className="bg-subtle h-auto gap-1.5 rounded-lg px-3.5 py-1.5 font-semibold"
       >
-        {c.loading
-          ? "启动中…"
-          : c.shotSource === "project"
-            ? "用项目镜头成片"
-            : "导出成片"}
+        {c.loading ? "启动中…" : c.shotSource === "project" ? "用项目镜头成片" : "导出成片"}
       </Button>
 
       {/* 取消按钮（运行中时） */}

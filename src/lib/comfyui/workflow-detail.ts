@@ -74,21 +74,21 @@ export type WorkflowDetailIOEntry = IOParamSlot & Omit<WorkflowIOEntry, "directi
 
 /** ComfyUI group frames 的下发形状（镜像客户端 WorkflowGroup，bypass 恒写入）。 */
 export interface WorkflowDetailGroup {
+  bounding: [number, number, number, number];
+  bypass: boolean;
+  color: string;
   id: string;
   title: string;
-  bounding: [number, number, number, number];
-  color: string;
-  bypass: boolean;
 }
 
 /** Note / MarkdownNote 注记的下发形状（镜像客户端 WorkflowNote）。 */
 export interface WorkflowDetailNote {
+  color: string;
   id: string;
-  title: string;
-  text: string;
   pos: [number, number];
   size: [number, number];
-  color: string;
+  text: string;
+  title: string;
 }
 
 /** 详情转换所需的行类型（整行，含 `rawJson` / `positions` 两个大字段）。
@@ -103,47 +103,47 @@ type WorkflowDetailTemplateRow = NonNullable<
  *  有些字段只出现在子图变体上。
  *  subgraph variant. */
 export interface WorkflowDetailFull {
-  id: string;
-  name: string;
-  taskType: string;
   /** 该工作流可运行的全部模式码（从 JSON 字符串列解析）。
    *  子图变体不带这个字段。改名 `availableModes` 以与 `WorkflowIOParam.modeOverrides`
    *  （按模式码的覆盖层）区分 —— 两者同名 `modes` 是历史命名地雷。 */
   availableModes?: Array<string>;
-  defaultMode?: string | null;
-  graph: Record<string, ApiWorkflowNode>;
-  /** 导入时的原始 RAW（UI 格式）JSON。 */
-  rawJson?: unknown;
-  nodes: Array<DetailNodeView>;
-  /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
-  rawView?: RawViewPacket | null;
-  /** `paramMap` JSON 列。形状的唯一出处是 `WorkflowParamMap` —— 这里声明成
-   *  「一层 key → string」曾与运行时不符（库里是按模式归拢的三层结构），且没有
-   *  任何消费点按它读（`buildWorkflowDetailJson` 此前靠 `as` 洗白）。 */
-  paramMap: WorkflowParamMap;
-  workflowIO: Record<string, WorkflowDetailIOEntry>;
-  positions: Record<string, [number, number]> | null;
-  groups: Array<WorkflowDetailGroup>;
-  notes: Array<WorkflowDetailNote>;
-  rawNodes: Array<RawNodeMeta>;
-  format: string;
-  hasRaw?: boolean;
-  usable?: boolean;
-  sourcePath?: string | null;
-  sourceOutdated?: boolean;
-  sourceMissing?: boolean;
-  source?: "local" | "online";
-  /** 子图变体：顶层工作流的 id。 */
-  parentId?: string;
-  /** 子图变体：请求的子图 UUID。 */
-  subgraphUid?: string;
+  /** 子图变体：哨兵连线 ↔ pin/槽位 的配对。 */
+  boundaryLinks?: Array<BoundaryLink>;
   /** 子图变体：边界 pin 实体。 */
   boundaryPins?: {
     inputs: Array<BoundaryPin>;
     outputs: Array<BoundaryPin>;
   };
-  /** 子图变体：哨兵连线 ↔ pin/槽位 的配对。 */
-  boundaryLinks?: Array<BoundaryLink>;
+  defaultMode?: string | null;
+  format: string;
+  graph: Record<string, ApiWorkflowNode>;
+  groups: Array<WorkflowDetailGroup>;
+  hasRaw?: boolean;
+  id: string;
+  name: string;
+  nodes: Array<DetailNodeView>;
+  notes: Array<WorkflowDetailNote>;
+  /** `paramMap` JSON 列。形状的唯一出处是 `WorkflowParamMap` —— 这里声明成
+   *  「一层 key → string」曾与运行时不符（库里是按模式归拢的三层结构），且没有
+   *  任何消费点按它读（`buildWorkflowDetailJson` 此前靠 `as` 洗白）。 */
+  paramMap: WorkflowParamMap;
+  /** 子图变体：顶层工作流的 id。 */
+  parentId?: string;
+  positions: Record<string, [number, number]> | null;
+  /** 导入时的原始 RAW（UI 格式）JSON。 */
+  rawJson?: unknown;
+  rawNodes: Array<RawNodeMeta>;
+  /** 从 rawJson 重新推导出的 RAW 视图包（nodes / positions / graph）。 */
+  rawView?: RawViewPacket | null;
+  source?: "local" | "online";
+  sourceMissing?: boolean;
+  sourceOutdated?: boolean;
+  sourcePath?: string | null;
+  /** 子图变体：请求的子图 UUID。 */
+  subgraphUid?: string;
+  taskType: string;
+  usable?: boolean;
+  workflowIO: Record<string, WorkflowDetailIOEntry>;
 }
 
 /** 把已读出的工作流行转换成下发给客户端的序列化 JSON。

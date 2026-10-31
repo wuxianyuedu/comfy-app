@@ -12,19 +12,19 @@ import { ProgressBar } from "~/components/ui/progress-bar";
 import type { Phase } from "./hooks/use-generation-runner";
 
 interface Props {
-  phase: Phase;
-  pct: number;
+  missingLabels: Array<string>;
   /** 正在执行的节点名（SSE 帧里带的 label；没有时显示工作流整体进度）。 */
   nodeLabel: string | null;
+  onDismissUploadNotice: () => void;
+  pct: number;
+  phase: Phase;
   resultUrl: string | null;
-  workflowName: string;
-  viewMode: "edit" | "use";
   running: boolean;
-  missingLabels: Array<string>;
   /** 素材上传的可见出口：ComfyUI 未运行 / 正在启动 / 启动超时都落在这里。
    *  上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）。 */
   uploadNotice: string | null;
-  onDismissUploadNotice: () => void;
+  viewMode: "edit" | "use";
+  workflowName: string;
 }
 
 export function WorkflowPreviewRunFeedback({

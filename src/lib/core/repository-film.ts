@@ -17,13 +17,13 @@ import { firstRowRequired } from "./repository-row";
 const LOGS_MAX = 500;
 
 export interface FilmSummary {
-  id: string;
-  title: string;
-  status: string;
-  progress: number;
-  finalVideo: string | null;
-  shotCount: number;
   createdAt: Date;
+  finalVideo: string | null;
+  id: string;
+  progress: number;
+  shotCount: number;
+  status: string;
+  title: string;
 }
 
 export class FilmRepository extends DrizzleRepository<FilmProject> {

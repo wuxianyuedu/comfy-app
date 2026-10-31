@@ -108,14 +108,14 @@ export const CUSTOM_NODE_PACKAGE: Record<string, string> = {};
  * 而台账 E9 记的「刷新看着没生效」正是被这一格糊住的。
  */
 export interface CustomNodesRegistryState {
-  /** 每次**成功**灌入 +1：订阅方拿它当「该重渲染了」的凭据。 */
-  version: number;
   /** 当前表里的自定义节点类型数。 */
   count: number;
-  /** 最近一次刷新是否真的拿到了清单。 */
-  loaded: boolean;
   /** `loaded: false` 时给用户看的那句话；`loaded: true` 时为 null。 */
   detail: string | null;
+  /** 最近一次刷新是否真的拿到了清单。 */
+  loaded: boolean;
+  /** 每次**成功**灌入 +1：订阅方拿它当「该重渲染了」的凭据。 */
+  version: number;
 }
 
 let registryState: CustomNodesRegistryState = {
@@ -196,32 +196,32 @@ interface RawManifest {
 }
 
 interface ManifestInput {
-  name: string;
-  type: string;
-  widget?: string | null;
-  options?: Array<string> | null;
   /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
   default?: unknown;
+  name: string;
+  options?: Array<string> | null;
   required?: boolean;
+  type: string;
+  widget?: string | null;
 }
 
 interface ManifestNode {
-  classType: string;
-  displayName?: string;
   category?: string;
-  outputNode?: boolean;
+  classType: string;
+  description?: string | null;
+  displayName?: string;
   frontend_only?: boolean;
   function?: string | null;
-  description?: string | null;
   inputs?: Array<ManifestInput>;
+  outputNode?: boolean;
   outputs?: Array<{ name: string; type: string }>;
-  /** 磁盘上的源文件（仅供参考）。 */
-  source?: string;
   /** 来源包目录名（例如 "ComfyMath"、"DaSiWa-Nodes"）。
    *  由解析器从包顶层的 __init__ 目录取出，
    *  并单独存进 CUSTOM_NODE_PACKAGE，好让画布左下角页脚不必重新解析 manifest
    *  就能查到它。 */
   package?: string;
+  /** 磁盘上的源文件（仅供参考）。 */
+  source?: string;
 }
 
 function buildInto(
@@ -303,12 +303,11 @@ export function isCustomNode(classType: string): boolean {
  * 自定义节点设置面板直接用它，于是在注册表尚未构建时（例如刚解析完、还没有
  * 任何消费方调用 `refreshCustomNodes`）也能渲染小预览卡。 */
 export interface ManifestNodeRaw {
-  classType: string;
-  displayName?: string;
   category?: string;
-  outputNode?: boolean;
-  function?: string | null;
+  classType: string;
   description?: string | null;
+  displayName?: string;
+  function?: string | null;
   inputs?: Array<{
     /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
     default?: unknown;
@@ -318,9 +317,10 @@ export interface ManifestNodeRaw {
     type: string;
     widget?: string | null;
   }>;
+  outputNode?: boolean;
   outputs?: Array<{ name: string; type: string }>;
-  source?: string;
   package?: string;
+  source?: string;
 }
 
 /* 直接从磁盘取原始 manifest。manifest 缺失或为空（例如还没解析过）时返回 null。

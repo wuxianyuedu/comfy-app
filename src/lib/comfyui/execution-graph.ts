@@ -46,11 +46,11 @@ export function isVirtualNodeType(type: string): boolean {
 }
 
 export interface ExecutionPrep {
+  /** 因上游被静音而彻底断链、只能丢弃的入参数量 */
+  droppedInputs: number;
   graph: Record<string, ApiWorkflowNode>;
   /** 被剔除的节点 id（bypass / 静音 / 纯前端节点） */
   removed: Array<string>;
-  /** 因上游被静音而彻底断链、只能丢弃的入参数量 */
-  droppedInputs: number;
 }
 
 /** 判断一个 input 值是否为连线引用 `[nodeId, slot]`（且目标节点真实存在）。 */

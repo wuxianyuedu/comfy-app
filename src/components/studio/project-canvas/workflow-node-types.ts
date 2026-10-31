@@ -20,6 +20,6 @@ export type WorkflowSourceFilter = "all" | "local" | "online";
 
 /** 当前工作流的 modes 配置（来自 /api/workflows/[id]）。 */
 export interface WorkflowModesState {
-  modes: Array<string>;
   defaultMode: string | null;
+  modes: Array<string>;
 }

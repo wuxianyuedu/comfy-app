@@ -53,8 +53,8 @@ describe("matchesNeedle", () => {
 });
 
 interface Group {
-  title: string;
   options: Array<string>;
+  title: string;
 }
 
 const GROUPS: Array<Group> = [

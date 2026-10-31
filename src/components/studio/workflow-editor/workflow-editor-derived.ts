@@ -16,9 +16,9 @@ export type RawNodeMeta = {
 };
 
 export interface WorkflowDerivedData {
+  outSlotNameById: Record<string, Array<string>>;
   rawMetaById: Record<string, RawNodeMeta>;
   scopeDetail: WorkflowDetail | null;
-  outSlotNameById: Record<string, Array<string>>;
 }
 
 /**

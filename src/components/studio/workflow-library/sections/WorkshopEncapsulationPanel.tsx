@@ -50,11 +50,8 @@ const LazyWorkflowRunLogModal = React.lazy(() =>
 );
 
 interface WorkshopEncapsulationPanelProps {
-  workflowId: string;
   /** 工坊下拉/徽标展示名（模型标签优先；仅用于文案）。 */
   displayName: string;
-  workflowIO: WorkflowIOMap | null;
-  paramMap: Record<string, unknown> | null;
   /** 当前模式（详情层持有，与「画布节点」页签同一份）。 */
   mode: string | null | undefined;
   /** 该工作流可跑的模式码（多于一个时渲染模式下拉）。 */
@@ -63,6 +60,9 @@ interface WorkshopEncapsulationPanelProps {
    * 模式跑一次流程测试 —— 文生图 / 图生图两条链路的封装口往往不同，只看默认
    * 模式测不出另一条能不能用。 */
   onModeChange?: (mode: string) => void;
+  paramMap: Record<string, unknown> | null;
+  workflowId: string;
+  workflowIO: WorkflowIOMap | null;
 }
 
 /** 契约口状态徽标的形态（配色表；文案由`entryStateBadge` 按缺口给）。

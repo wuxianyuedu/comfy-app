@@ -12,18 +12,18 @@ import type { ProductionRun } from "~/lib/production/run-types";
 
 /** 写一条生产数据（按 proj_* upsert）的入参；JSON 列传对象，Drizzle 负责序列化。 */
 export interface ProductionInput {
-  id: string;
-  title?: string;
-  type?: string;
-  tone?: string;
-  logline?: string;
-  scriptMarkdown?: string;
-  scenes?: unknown;
   characters?: unknown;
-  shots?: unknown;
+  id: string;
+  logline?: string;
   progress?: unknown;
+  scenes?: unknown;
+  scriptMarkdown?: string;
   /** 剧本评审位（FR-QA-07）：形状见 `~/lib/production/review-types` 的 ScriptReviewState。 */
   scriptReview?: unknown;
+  shots?: unknown;
+  title?: string;
+  tone?: string;
+  type?: string;
 }
 
 export class ProductionRepository extends DrizzleRepository<Production> {

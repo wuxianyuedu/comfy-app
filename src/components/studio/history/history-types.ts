@@ -3,20 +3,20 @@ import type { ValidationError } from "~/lib/comfyui/validation";
 import { type RouterOutputs } from "~/trpc/react";
 
 export interface TaskItem {
+  cover: string | null;
+  coverIsCover?: boolean;
+  createdAt: string;
+  error?: string | null;
   id: string;
-  type: string;
-  workflowName: string;
-  status: string;
-  prompt: string;
   negativePrompt?: string | null;
   params?: Record<string, unknown> | null;
-  error?: string | null;
+  prompt: string;
+  status: string;
+  type: string;
   /** 结构化的 ComfyUI /prompt 校验错误，
    *  在 FAILED 任务上存在，好让卡片显示逐字段清单。 */
   validationErrors?: Array<ValidationError> | null;
-  createdAt: string;
-  cover: string | null;
-  coverIsCover?: boolean;
+  workflowName: string;
 }
 
 export type FilterKey = "ALL" | "SUCCEEDED" | "RUNNING" | "FAILED" | "CANCELLED" | "QUEUED";

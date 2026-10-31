@@ -72,25 +72,25 @@ export type EnrichedWidget = WorkflowIOEntry & {
 };
 
 export interface DimensionGroup {
-  kind: "dimension";
-  groupId: string;
-  /** 常规的 W/H 成对项 —— 渲染「比例 + 清晰度」选择器。 */
-  width?: EnrichedWidget;
-  height?: EnrichedWidget;
   /** ResolutionSelector 风格的成对项 —— 渲染「比例 + 像素」快捷选择器，
    *  直接写进那两个暴露出来的 widget。 */
   aspect?: EnrichedWidget;
+  groupId: string;
+  height?: EnrichedWidget;
+  kind: "dimension";
   megapixels?: EnrichedWidget;
   /** 倍数（upscale multiple）—— 存在时并入「比例 + 像素」popover 的
    *  第三段，而不是散落成独立数字框。 */
   multiple?: EnrichedWidget;
+  /** 常规的 W/H 成对项 —— 渲染「比例 + 清晰度」选择器。 */
+  width?: EnrichedWidget;
 }
 
 export interface VideoGroup {
-  kind: "video";
-  groupId: string;
-  length?: EnrichedWidget;
   aspect?: EnrichedWidget;
+  groupId: string;
+  kind: "video";
+  length?: EnrichedWidget;
   quality?: EnrichedWidget;
 }
 

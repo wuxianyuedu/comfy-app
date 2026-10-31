@@ -137,11 +137,11 @@ const RUNNING_TICK_CAP = 5;
  *  无论热重载多少次，每个进程里只有一个回收器。 */
 interface ReaperGlobal {
   handle: ReturnType<typeof setInterval> | null;
-  reaping: Set<string>;
   /** 「这一轮见到 RUNNING 且无 promptId」的登记处，下一轮仍在才判孤儿（见
    *  `reapStaleRunningTasks` 的两轮观察）。全局名从 v1 升到 v2：HMR 期间残留的
    *  旧对象没有这个字段，`??=` 不会补，判据会静默失效。 */
   noPromptSeen: Set<string>;
+  reaping: Set<string>;
 }
 
 declare global {

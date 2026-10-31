@@ -29,34 +29,34 @@ import { compareText, uniqueBy } from "~/lib/ordered-set";
 export interface LocalWorkflowFile {
   /** 绝对、归一化后的文件系统路径（小写 + 正斜杠，便于 Windows 盘符比较）。 */
   absPath: string;
+  mtimeMs: number;
   /** 仅文件名（在待处理卡片上用作友好的默认值）。 */
   name: string;
   /** 扫描器看到的**原始**路径字符串（保留下来，让 UI 显示的就是用户当初输入的
    *  内容，而不是重新解析后的版本）。 */
   rawPath: string;
-  size: number;
-  mtimeMs: number;
-  /** 这个文件来自哪个配置好的 LOCAL_WORKFLOWS_PATH 根目录。
-   *  API 层据此给每一行盖上 `sourceRoot`，客户端才能按前缀匹配。
-   *  值等于该根目录的 `rawPath`（逐字，与用户在对话框里输入的一致）。 */
-  rootRawPath: string;
   /** 解析后的绝对根路径（输入本身就是绝对路径时等于 `rawPath`；
    *  相对路径按 CWD 解析）。API 层用它对各工作流的 `sourcePath`
    *  做**忽略大小写**的前缀检查。 */
   rootAbsPath: string;
+  /** 这个文件来自哪个配置好的 LOCAL_WORKFLOWS_PATH 根目录。
+   *  API 层据此给每一行盖上 `sourceRoot`，客户端才能按前缀匹配。
+   *  值等于该根目录的 `rawPath`（逐字，与用户在对话框里输入的一致）。 */
+  rootRawPath: string;
+  size: number;
 }
 
 export interface ScannedRoot {
-  /** 配置的根目录（逐字），用于显示。 */
-  rawPath: string;
   /** 归一化后的绝对路径；用户本来就输入绝对路径时等于 `rawPath`。
    *  用于 Windows 上忽略大小写的比较。 */
   absPath: string;
+  error?: string;
   exists: boolean;
   /** 逐文件的扫描结果。根目录不存在、或里面没有 `.json` / `.workflow` 时为空。
    *  **从不**抛错 —— 扫描失败经 `error`（可选字符串）上报。 */
   files: Array<LocalWorkflowFile>;
-  error?: string;
+  /** 配置的根目录（逐字），用于显示。 */
+  rawPath: string;
 }
 
 /** 与服务端其余部分用同一种方式归一化绝对路径：反斜杠 → 正斜杠、转小写。

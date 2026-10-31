@@ -40,7 +40,8 @@ import { paramClassStyle } from "./workflow-param-mapping-ui";
 const CARD_WIDTH = 220;
 
 export interface WorkflowParamCardColumnProps {
-  entries: ReadonlyArray<ParamEntry>;
+  /** 是否允许连线：库里也允许（拖圆点改落点）—— 没有模式时不给（写入无归属）。 */
+  canWire?: boolean;
   /** 契约口清单（`modeContractEntries` / `exposedParamsForMode` 的产物）。
    *
    *  卡片头必须与「工坊封装」页签说同一句话（ISSUE #596：同一页面的两个页签，
@@ -50,19 +51,18 @@ export interface WorkflowParamCardColumnProps {
    *
    *  形状只要求 id + label（消费方不必 import 契约模块的类型）。 */
   contractEntries?: ReadonlyArray<{ id: string; label: string }>;
-  /** 当前模式下「条目 → 目标 ioKey」的生效落点。 */
-  resolved: Record<string, string | null>;
+  /** 端点槽位：消费方注入 `<Handle>` 或只读圆点。 */
+  endpoint?: (port: ParamOutputPort, index: number) => ReactNode;
+  entries: ReadonlyArray<ParamEntry>;
   io: WorkflowIOMap | null;
-  /** 是否允许连线：库里也允许（拖圆点改落点）—— 没有模式时不给（写入无归属）。 */
-  canWire?: boolean;
-  /** 作者手里正选中的条目（线被点选 / 卡片被点）。 */
-  selectedEntryId?: string | null;
-  onSelect?: (entryId: string | null) => void;
   /** 该对外参数在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual?: (entryId: string) => boolean;
   onReset?: (entryId: string) => void;
-  /** 端点槽位：消费方注入 `<Handle>` 或只读圆点。 */
-  endpoint?: (port: ParamOutputPort, index: number) => ReactNode;
+  onSelect?: (entryId: string | null) => void;
+  /** 当前模式下「条目 → 目标 ioKey」的生效落点。 */
+  resolved: Record<string, string | null>;
+  /** 作者手里正选中的条目（线被点选 / 卡片被点）。 */
+  selectedEntryId?: string | null;
 }
 
 export function WorkflowParamCardColumn({

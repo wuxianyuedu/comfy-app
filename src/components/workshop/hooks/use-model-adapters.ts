@@ -21,27 +21,27 @@ import { useTRPC } from "~/trpc/react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 
 export interface AdapterCandidate {
-  name: string;
-  kind: "image" | "video" | "chat";
   baseUrl: string | null;
+  kind: "image" | "video" | "chat";
+  name: string;
 }
 
 export interface ModelAdaptersController {
-  /** 可配置适配器的远端模型（kind=image / video）。 */
-  candidates: Array<AdapterCandidate>;
-  loading: boolean;
-  /** 模式契约注册表（每种模式的统一输入 / 输出）。 */
-  modeContracts: ReturnType<typeof useModeContracts>;
-  /** 当前选中模型的适配器草稿（选中变化时自动播种）。 */
-  draft: Array<RemoteModeAdapter>;
-  setDraft: React.Dispatch<React.SetStateAction<Array<RemoteModeAdapter>>>;
-  selectModel: (name: string) => void;
-  selectedModel: string;
   /** 给选中模型追加一个模式的适配器草稿（预填该模式的默认输入清单）。 */
   addMode: (mode: string) => void;
+  /** 可配置适配器的远端模型（kind=image / video）。 */
+  candidates: Array<AdapterCandidate>;
+  /** 当前选中模型的适配器草稿（选中变化时自动播种）。 */
+  draft: Array<RemoteModeAdapter>;
+  loading: boolean;
+  message: { kind: "ok" | "err"; text: string } | null;
+  /** 模式契约注册表（每种模式的统一输入 / 输出）。 */
+  modeContracts: ReturnType<typeof useModeContracts>;
   save: () => Promise<void>;
   saving: boolean;
-  message: { kind: "ok" | "err"; text: string } | null;
+  selectedModel: string;
+  selectModel: (name: string) => void;
+  setDraft: React.Dispatch<React.SetStateAction<Array<RemoteModeAdapter>>>;
 }
 
 export function useModelAdapters(): ModelAdaptersController {

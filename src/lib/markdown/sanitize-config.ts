@@ -87,9 +87,9 @@ export const ALLOWED_URL_SCHEMES: ReadonlyArray<string> = [
 
 /** 消毒配置：喂给 `DOMPurify.sanitize` 的第三个参数。 */
 export interface SanitizeConfig {
-  USE_PROFILES: { html: true };
-  FORBID_TAGS: Array<string>;
   FORBID_ATTR: Array<string>;
+  FORBID_TAGS: Array<string>;
+  USE_PROFILES: { html: true };
 }
 
 /** 配置的**唯一出口**。调用方不要就地拼一份自己的。 */

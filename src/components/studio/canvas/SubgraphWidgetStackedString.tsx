@@ -31,13 +31,13 @@ export const stackedStringRow = (inp: RawInputMeta): boolean => {
 };
 
 interface SubgraphWidgetStackedStringProps {
-  inp: RawInputMeta;
-  label: string;
-  io: IOEditContextValue | null;
-  nodeId: string;
-  hostNodeId?: string;
   /** 定尺寸节点（导入配置带显式尺寸）时 textarea 接入 flex 链填满剩余高度。 */
   hasSize: boolean;
+  hostNodeId?: string;
+  inp: RawInputMeta;
+  io: IOEditContextValue | null;
+  label: string;
+  nodeId: string;
 }
 
 export function SubgraphWidgetStackedString({
@@ -79,9 +79,7 @@ export function SubgraphWidgetStackedString({
              *  理由与 WorkflowNode 内联分支相同。 */
             className="text-2xs shrink-0 text-left wrap-break-word whitespace-normal"
             style={{
-              color: isConn
-                ? "var(--color-ink-strong)"
-                : "var(--color-ink-subtle)",
+              color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
             }}
             title={label}
           >

@@ -57,10 +57,10 @@ export function allocateRuntimeLogFile(source: RuntimeLogSource, dir: string, at
 
 /** 一份 runtime 日志文件的描述（面板下拉的一项）。 */
 export interface RuntimeLogFileEntry {
-  /** 文件名（也是下拉的 value）。 */
-  name: string;
   /** 绝对路径。 */
   file: string;
+  /** 文件名（也是下拉的 value）。 */
+  name: string;
   /** 启动时刻（毫秒）；旧固定名为 null（它没有时刻）。 */
   startedAt: number | null;
 }

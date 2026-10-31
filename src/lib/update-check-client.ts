@@ -5,20 +5,20 @@
  */
 
 export interface UpdateGroup {
-  key: "restart" | "recompile";
-  label: string;
-  hint: string;
+  dirty: boolean;
   /** 相对仓库根的文件路径（改动或删除） */
   files: Array<string>;
-  dirty: boolean;
+  hint: string;
+  key: "restart" | "recompile";
+  label: string;
 }
 
 export interface UpdateCheckPayload {
-  ok: boolean;
   /** 基线是否已建立；首轮请求前为 false（前端应跳过，不做任何提示） */
   armed: boolean;
   dirty: boolean;
   groups: Array<UpdateGroup>;
+  ok: boolean;
 }
 
 const EMPTY: UpdateCheckPayload = {

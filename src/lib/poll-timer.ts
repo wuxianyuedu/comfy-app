@@ -26,6 +26,8 @@ import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 
 /** 启动一条轮询；返回停止函数。 */
 export interface PollTimerOptions {
+  /** 启动时是否立即先跑一次（默认 true）。 */
+  immediate?: boolean;
   /** 间隔毫秒数；`null` / `0` 表示不跑。
    *
    *  也可以给一个**函数**：每次跑完都重新问一次「下一拍等多久」。这是
@@ -43,12 +45,6 @@ export interface PollTimerOptions {
    *  就马上再问一次）。两者**不可混为一谈**：把 `null` 当 `0` 会成为忙等
    *  （实测一秒空转上万次）。 */
   ms: number | null | (() => number | null);
-  /** 启动时是否立即先跑一次（默认 true）。 */
-  immediate?: boolean;
-  /** 页面不可见时是否暂停（默认 true），回前台立即补跑一次。 */
-  pauseWhenHidden?: boolean;
-  /** 窗口失焦时是否也暂停；缺省跟随 `isDesktopShell()`。 */
-  pauseWhenUnfocused?: boolean;
   /**
    * 轮询动作抛错时的通道，**必填**：本文件在 `src/lib`，那里不许直接 `console.*`
    * 写日志（判据 `tests/single-logger-channel.test.ts`「日志实现只有一处」）。
@@ -57,6 +53,10 @@ export interface PollTimerOptions {
    * 日志通道。
    */
   onError: (err: unknown) => void;
+  /** 页面不可见时是否暂停（默认 true），回前台立即补跑一次。 */
+  pauseWhenHidden?: boolean;
+  /** 窗口失焦时是否也暂停；缺省跟随 `isDesktopShell()`。 */
+  pauseWhenUnfocused?: boolean;
 }
 
 /**

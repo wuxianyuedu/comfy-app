@@ -70,23 +70,7 @@ export interface MediaThumbnailProps extends OmitOwnProps<
   React.ImgHTMLAttributes<HTMLImageElement> & React.VideoHTMLAttributes<HTMLVideoElement>,
   (typeof OWN_PROPS)[number]
 > {
-  src?: string | null;
   alt?: string;
-  className?: string;
-  autoPlay?: boolean;
-  muted?: boolean;
-  loop?: boolean;
-  /** 加载成功时回调，拿到底层媒体元素。
-   *
-   *  要**自然尺寸 / 宽高比**的调用处别在这里自己读 `naturalWidth` / `videoWidth`
-   *  —— 那些读数的口径收在 `~/lib/media/natural-size` 的 `readNaturalSize`
-   *  / `naturalAspectRatio` / `isPortraitMedia`（规范 16 §16.2.4.31）：
-   *  两组读数、0 值三态、`×` 的写法都只有一处定义。 */
-  onLoad?: (media: HTMLImageElement | HTMLVideoElement) => void;
-  /** 加载失败时回调（如上报 / 记日志）；兜底渲染由 `fallback` 决定。 */
-  onLoadError?: (src: string) => void;
-  /** 失败兜底形态，见 `MediaFallback`。默认 `"placeholder"`。 */
-  fallback?: MediaFallback;
   /**
    * 强制按图片 / 视频渲染，覆盖按 `src` 后缀的推断。
    *
@@ -96,6 +80,22 @@ export interface MediaThumbnailProps extends OmitOwnProps<
    * 调用处已经知道的答案。
    */
   as?: "image" | "video";
+  autoPlay?: boolean;
+  className?: string;
+  /** 失败兜底形态，见 `MediaFallback`。默认 `"placeholder"`。 */
+  fallback?: MediaFallback;
+  loop?: boolean;
+  muted?: boolean;
+  /** 加载成功时回调，拿到底层媒体元素。
+   *
+   *  要**自然尺寸 / 宽高比**的调用处别在这里自己读 `naturalWidth` / `videoWidth`
+   *  —— 那些读数的口径收在 `~/lib/media/natural-size` 的 `readNaturalSize`
+   *  / `naturalAspectRatio` / `isPortraitMedia`（规范 16 §16.2.4.31）：
+   *  两组读数、0 值三态、`×` 的写法都只有一处定义。 */
+  onLoad?: (media: HTMLImageElement | HTMLVideoElement) => void;
+  /** 加载失败时回调（如上报 / 记日志）；兜底渲染由 `fallback` 决定。 */
+  onLoadError?: (src: string) => void;
+  src?: string | null;
 }
 
 /**

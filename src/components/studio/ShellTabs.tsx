@@ -43,25 +43,25 @@ import { type WorkspaceView } from "./NavItems";
 import { Button } from "~/components/ui/button";
 
 interface ShellTabsProps {
+  /** 当前视图页签 key。 */
+  activeViewKey?: string;
   /** 主应用页签的内容（即 workspace 整套界面）。 */
   children: React.ReactNode;
+  /** 关闭某个视图页签。 */
+  onCloseViewTab?: (key: string) => void;
+  /** 从「+」菜单里选了一个视图。 */
+  onOpenView?: (view: WorkspaceView) => void;
+  /** 选中某个视图页签。 */
+  onSelectViewTab?: (key: string) => void;
+  /** 「+」菜单里可打开的视图（页面知识，见 ViewTabStrip）。 */
+  openableViews?: Array<OpenableView>;
+  /** 项目 id → 项目名（页签标题用「工坊·雾中来信」区分同视图多页）。 */
+  projectNameOf?: (projectId: string | null) => string | null | undefined;
   /**
    * 视图页签（首页 / 模型 / 工坊·项目名 …）。不传时本组件行为与从前一致：
    * 只渲染 iframe 页签，主应用是唯一的「主应用」页签。
    */
   viewTabs?: Array<ViewTab>;
-  /** 当前视图页签 key。 */
-  activeViewKey?: string;
-  /** 项目 id → 项目名（页签标题用「工坊·雾中来信」区分同视图多页）。 */
-  projectNameOf?: (projectId: string | null) => string | null | undefined;
-  /** 选中某个视图页签。 */
-  onSelectViewTab?: (key: string) => void;
-  /** 关闭某个视图页签。 */
-  onCloseViewTab?: (key: string) => void;
-  /** 「+」菜单里可打开的视图（页面知识，见 ViewTabStrip）。 */
-  openableViews?: Array<OpenableView>;
-  /** 从「+」菜单里选了一个视图。 */
-  onOpenView?: (view: WorkspaceView) => void;
 }
 
 /**

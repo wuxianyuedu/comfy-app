@@ -16,9 +16,9 @@ type ScreenToFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlo
 
 interface UseCanvasMenuArgs {
   menu: { x: number; y: number } | null;
+  screenToFlowPosition: ScreenToFlowFn;
   setMenu: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
   setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
-  screenToFlowPosition: ScreenToFlowFn;
 }
 
 export function useCanvasMenu({

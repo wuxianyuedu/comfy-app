@@ -118,11 +118,11 @@ export const DROP_TOLERANCE = 12;
 
 /** 只保留矩形需要的最小字段（DOMRect 之外也便于单测传普通对象）。 */
 export interface DOMRectLike {
-  left: number;
-  top: number;
-  right: number;
   bottom: number;
   height: number;
+  left: number;
+  right: number;
+  top: number;
 }
 
 /** 拖线落点解析：一次拖拽在某个位置松开时，命中的宿主落点 ioKey（`null` = 没落上）。

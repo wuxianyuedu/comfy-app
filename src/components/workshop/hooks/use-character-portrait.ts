@@ -46,55 +46,55 @@ export type PortraitSessionPatch = Partial<
 /** 单次生成的覆盖项：调用方算好的「本次用哪个模型」，不传则回落到会话里的当前选择。
  *  `localLabel` 只进展示文案（工作流库里的模型名），不参与请求组装。 */
 export interface PortraitGenerateOverrides {
-  /** 本次使用的设置页「远端模型」名（远端通道）。 */
-  remoteModel?: string;
-  /** 本次使用的工作流库工作流 id（本地通道）。 */
-  localWorkflowId?: string;
   /** 本地通道的展示标签（工作流库里的模型名）。 */
   localLabel?: string;
+  /** 本次使用的工作流库工作流 id（本地通道）。 */
+  localWorkflowId?: string;
+  /** 本次使用的设置页「远端模型」名（远端通道）。 */
+  remoteModel?: string;
 }
 
 export interface PortraitSession {
+  /** 是否正在生成（同一时刻只跑一个任务） */
+  busy: boolean;
+  channel: PortraitChannel;
+  /** 本次会话的失败原因（可行动文案）；空串 = 当前没有失败 */
+  error: string;
   /** 会话消息（状态 / 错误 / 日志 / 进度）归属的角色 id；空串 = 还没发起过。
    *  跑完之后继续保留，好让发起的那张角色卡还能看到自己的结果与日志。 */
   focusCharacterId: string;
-  /** 是否正在生成（同一时刻只跑一个任务） */
-  busy: boolean;
   /** 是否正在导入图片 */
   importing: boolean;
-  channel: PortraitChannel;
-  /** 远端通道使用的模型名（设置页「远端模型」kind=image 的条目；空串 = 未选） */
-  remoteModel: string;
   /** 本地通道使用的工作流（工作流库中已配置对外参数的条目）—— 本地通道的
    *  唯一可执行来源（内置模板已移除），空串 = 未选。 */
   localWorkflowId: string;
-  /** 定妆照尺寸（复用镜头生图的比例 / 像素 / 对齐三段选择） */
-  size: ShotSizeState;
+  log: Array<PortraitLogEntry>;
+  /** 本次生成实际调用的「通道 · 模型」标签，用于进度与结果文案 */
+  modelLabel: string;
   /** 本机任务的完成度 0~100；`null` = 该通道不提供进度（远端为一次性请求）。
    *  不要把「不知道」写成 0：视图对两者的渲染不同（0 是刚起步，null 是不确定）。 */
   progress: number | null;
-  /** 本次生成实际调用的「通道 · 模型」标签，用于进度与结果文案 */
-  modelLabel: string;
+  /** 远端通道使用的模型名（设置页「远端模型」kind=image 的条目；空串 = 未选） */
+  remoteModel: string;
+  /** 定妆照尺寸（复用镜头生图的比例 / 像素 / 对齐三段选择） */
+  size: ShotSizeState;
   /** 成功 / 结果提示文案（与 error 互斥展示） */
   status: string;
-  /** 本次会话的失败原因（可行动文案）；空串 = 当前没有失败 */
-  error: string;
-  log: Array<PortraitLogEntry>;
 }
 
 export interface PortraitSessionActions {
-  /** 更新用户选择（通道 / 尺寸 / 模型）。顺带清掉已不成立的错误提示。 */
-  patch: (p: PortraitSessionPatch) => void;
   appendLog: (entry: PortraitLogEntry) => void;
   /** 按角色提示词生成一张定妆照，结果作为新候选并入该角色。
    *  overrides：本次使用的通道模型（不传则用会话里的当前选择）。 */
   generate: (character: Character, overrides?: PortraitGenerateOverrides) => Promise<void>;
   /** 外部导入一张现成定妆照（写进素材库「角色」分类） */
   importFile: (character: Character, file: File) => Promise<void>;
-  /** 把候选里的一张定为定妆照（后续分镜图的参考图） */
-  select: (characterId: string, url: string) => void;
+  /** 更新用户选择（通道 / 尺寸 / 模型）。顺带清掉已不成立的错误提示。 */
+  patch: (p: PortraitSessionPatch) => void;
   /** 删除一张候选 */
   remove: (characterId: string, url: string) => void;
+  /** 把候选里的一张定为定妆照（后续分镜图的参考图） */
+  select: (characterId: string, url: string) => void;
 }
 
 /** 生成 / 导入期间项目被换掉时的归属提示（见 `writeBackCandidate`）。 */

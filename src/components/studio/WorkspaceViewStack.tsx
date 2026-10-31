@@ -159,38 +159,38 @@ const ProjectCanvas = lazyView("canvas", () =>
 
 /** 页面侧交给视图栈的全部接线 —— 每一屏要用什么都在这里，栈自己不取数。 */
 export interface WorkspaceViewStackProps {
-  /** 打开的页签（顺序即叠放顺序；`ViewTab.key` 当 React key 与锚点）。 */
-  tabs: Array<ViewTab>;
   /** 当前页签 key。 */
   activeKey: string;
-  /** 当前页签对应的**视图**（同一视图两个页签算同一屏）—— 打开耗时按它归属。 */
-  activeView: WorkspaceView;
   /** 活跃项目 id —— 项目类视图与「项目优先闸门」判据。 */
   activeProjectId: string | null;
-  /** 最近项目（项目主页取名字用）。 */
-  recentProjects: Array<RecentProject>;
-  /** 项目页签无活跃项目时，闸门的两个出口。 */
-  onEnterProject: () => void;
-  onExitProject: () => void;
-  onNewProject: () => void;
-  onOpenProject: (id: string) => void;
-  onOpenCanvasProject: (id: string) => void;
-  /** 项目视图内部的跳转（项目主页的四张卡）。 */
-  onNavigate: (view: WorkspaceView) => void;
-  /** 首页入口卡的跳转 —— 与 `onNavigate` 分开：首页把「再点首页」当空操作。 */
-  onHomeNavigate: (view: WorkspaceView) => void;
-  onShowAllProjects: () => void;
-  /** 队列屏的离线出口：切到侧栏「ComfyUI」页。 */
-  onOpenComfyui: () => void;
-  onUseWorkflow: (id: string, meta?: { name: string; taskType: string }) => void;
+  /** 当前页签对应的**视图**（同一视图两个页签算同一屏）—— 打开耗时按它归属。 */
+  activeView: WorkspaceView;
   /** 画布：开一个新命名项目 / 消费这两枚一次性载荷。 */
   canvasSeedNew: boolean;
   onConsumeCanvasSeed: () => void;
-  pendingCanvasWorkflow: { id: string; name: string; taskType: string } | null;
   onConsumePendingWorkflow: () => void;
+  onConsumeSettingsSection: () => void;
+  /** 项目页签无活跃项目时，闸门的两个出口。 */
+  onEnterProject: () => void;
+  onExitProject: () => void;
+  /** 首页入口卡的跳转 —— 与 `onNavigate` 分开：首页把「再点首页」当空操作。 */
+  onHomeNavigate: (view: WorkspaceView) => void;
+  /** 项目视图内部的跳转（项目主页的四张卡）。 */
+  onNavigate: (view: WorkspaceView) => void;
+  onNewProject: () => void;
+  onOpenCanvasProject: (id: string) => void;
+  /** 队列屏的离线出口：切到侧栏「ComfyUI」页。 */
+  onOpenComfyui: () => void;
+  onOpenProject: (id: string) => void;
+  onShowAllProjects: () => void;
+  onUseWorkflow: (id: string, meta?: { name: string; taskType: string }) => void;
+  pendingCanvasWorkflow: { id: string; name: string; taskType: string } | null;
+  /** 最近项目（项目主页取名字用）。 */
+  recentProjects: Array<RecentProject>;
   /** 设置：跳转时指定的目标分区（一次性载荷，交给设置视图落定后消费）。 */
   settingsSection: string | null;
-  onConsumeSettingsSection: () => void;
+  /** 打开的页签（顺序即叠放顺序；`ViewTab.key` 当 React key 与锚点）。 */
+  tabs: Array<ViewTab>;
 }
 
 export function WorkspaceViewStack({

@@ -19,10 +19,10 @@ import { execFile } from "node:child_process";
 
 /** nvidia-smi 内存查询的一条结果（MiB → 调用方换算字节）。 */
 export interface NvidiaSmiMem {
-  /** 已用（MB） */
-  usedMiB: number;
   /** 总量（MB） */
   totalMiB: number;
+  /** 已用（MB） */
+  usedMiB: number;
 }
 
 /** 解析 `nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits`

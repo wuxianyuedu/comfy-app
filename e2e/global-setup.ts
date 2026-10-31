@@ -57,12 +57,12 @@ import {
 
 /** 一次探针的观测结果。 */
 export interface FakeSlotObservation {
-  /** HTTP 状态码；连不上（服务不在）是 **0**，不是错误。 */
-  status: number;
-  /** 200 时的响应体（解析不出 JSON 时是 null）。 */
-  payload?: unknown;
   /** 连不上时的原因，仅供日志。 */
   error?: string;
+  /** 200 时的响应体（解析不出 JSON 时是 null）。 */
+  payload?: unknown;
+  /** HTTP 状态码；连不上（服务不在）是 **0**，不是错误。 */
+  status: number;
 }
 
 /**

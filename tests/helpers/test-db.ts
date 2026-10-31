@@ -243,24 +243,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (e
 `;
 
 export interface TestTables {
-  users: Array<Row>;
-  projects: Array<Row>;
-  workflowTemplates: Array<Row>;
-  workflowModelTags: Array<Row>;
-  tasks: Array<Row>;
-  taskImages: Array<Row>;
   llmConfig: Array<Row>;
-  posts: Array<Row>;
   models: Array<Row>;
+  posts: Array<Row>;
+  projects: Array<Row>;
   remoteModels: Array<Row>;
+  taskImages: Array<Row>;
+  tasks: Array<Row>;
+  users: Array<Row>;
+  workflowModelTags: Array<Row>;
+  workflowTemplates: Array<Row>;
 }
 
 export interface TestDb {
+  [key: string]: unknown;
   $reset(): void;
-  $tables: TestTables;
   /** 本条用例经过宿主的 SQL 顺序（`$reset()` 清空）。判「读有没有落在事务内」用它。 */
   $sqlTrace: Array<string>;
-  [key: string]: unknown;
+  $tables: TestTables;
 }
 
 let currentSqlite: Database.Database | null = null;
@@ -579,21 +579,21 @@ export function seedUser(
 }
 
 export interface SeedWorkflowTemplateInput {
+  createdAt?: Date;
+  defaultMode?: string | null;
   id?: string;
-  userId: string;
+  modelTags?: Array<{ id: string; name: string; userId: string }>;
+  modes?: string | null;
   name?: string;
-  taskType?: string;
-  rawJson?: unknown;
   paramMap?: unknown;
   positions?: unknown;
-  workflowIO?: unknown;
-  modes?: string | null;
-  defaultMode?: string | null;
-  sourcePath?: string | null;
+  rawJson?: unknown;
   sourceChecksum?: string | null;
   sourceMtime?: number | null;
-  modelTags?: Array<{ id: string; name: string; userId: string }>;
-  createdAt?: Date;
+  sourcePath?: string | null;
+  taskType?: string;
+  userId: string;
+  workflowIO?: unknown;
 }
 
 export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateInput): Row {
@@ -638,26 +638,26 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
 }
 
 export interface SeedTaskInput {
-  id?: string;
-  userId: string;
-  type?: string;
-  status?: string;
-  prompt?: string;
-  negativePrompt?: string | null;
-  params?: unknown;
-  workflowName?: string;
-  projectId?: string | null;
-  images?: Array<Row>;
-  workflowSnapshot?: unknown;
-  referenceImages?: unknown;
-  /** 来源任务（重绘 / 放大的追溯用例用）。 */
-  parentId?: string | null;
+  createdAt?: Date;
+  error?: string | null;
   /** 提交时刻的 RAW 执行载荷（task.retry 用例要区分「有载荷可原样重跑」与
    *  「execPayload 为空的历史遗留行」两态）。 */
   execPayload?: unknown;
+  id?: string;
+  images?: Array<Row>;
+  negativePrompt?: string | null;
+  params?: unknown;
+  /** 来源任务（重绘 / 放大的追溯用例用）。 */
+  parentId?: string | null;
   progress?: number;
-  error?: string | null;
-  createdAt?: Date;
+  projectId?: string | null;
+  prompt?: string;
+  referenceImages?: unknown;
+  status?: string;
+  type?: string;
+  userId: string;
+  workflowName?: string;
+  workflowSnapshot?: unknown;
 }
 
 export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
@@ -795,12 +795,12 @@ export function seedFilm(
 }
 
 export interface SeedRemoteModelInput {
-  id?: string;
-  name: string;
-  baseUrl?: string | null;
   /** 明文密钥；helper 内部按 schema 约定加密后再落库（与运行时写入同形）。 */
   apiKey?: string | null;
+  baseUrl?: string | null;
+  id?: string;
   kind?: string;
+  name: string;
   workshopAdapters?: unknown;
 }
 

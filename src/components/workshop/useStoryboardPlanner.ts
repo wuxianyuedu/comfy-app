@@ -32,22 +32,22 @@ import { useStoryboardExtractFlow } from "./useStoryboardExtractFlow";
 export type ShotProgress = Record<string, { label?: string; pct: number }>;
 
 export interface Props {
-  scenes: Array<Scene>;
   characters: Array<Character>;
-  styles: Array<StyleRef>;
-  shots: Array<Shot>;
-  onShotsChange: (s: Array<Shot>) => void;
-  onGenerate: (shot: Shot) => Promise<void>;
-  generating: boolean;
-  /** 镜头节点上的实时生成进度（running 时在节点内渲染进度条） */
-  progressByShot?: ShotProgress;
-  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
-  scriptMarkdown?: string;
-  /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
-  onCharactersChange?: (c: Array<Character>) => void;
   /** 分镜「从剧本提取」会话(busy/progress/日志)已收归 controller，经 props 注入；
    *  未注入(遗留/独立使用)时退化为本 hook 局部会话。 */
   extract?: { actions: ExtractSessionActions; session: ExtractSession };
+  generating: boolean;
+  /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
+  onCharactersChange?: (c: Array<Character>) => void;
+  onGenerate: (shot: Shot) => Promise<void>;
+  onShotsChange: (s: Array<Shot>) => void;
+  /** 镜头节点上的实时生成进度（running 时在节点内渲染进度条） */
+  progressByShot?: ShotProgress;
+  scenes: Array<Scene>;
+  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
+  scriptMarkdown?: string;
+  shots: Array<Shot>;
+  styles: Array<StyleRef>;
 }
 
 /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */

@@ -17,9 +17,9 @@ import { countPendingStages } from "~/components/workshop/stage-config";
 import type { HealthRow } from "~/components/workshop/stage-config";
 
 interface WorkshopHeaderProps {
-  title: string;
-  progressPct: number;
   health: Array<HealthRow>;
+  progressPct: number;
+  title: string;
 }
 
 export function WorkshopHeader({ title, progressPct, health }: WorkshopHeaderProps) {

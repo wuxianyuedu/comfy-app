@@ -38,15 +38,15 @@ import { useWidePanel, WidePanelToggle } from "~/components/ui/wide-panel";
 import { TaskLogEmptyHint, TaskLogTimeline } from "~/components/studio/logs/TaskLogTimeline";
 
 export interface WorkflowRunLogModalProps {
-  /** 所属工作流：日志只展示当前工作流的运行（切换工作流独立显示）。 */
-  workflowId: string;
+  onClose: () => void;
+  onViewTaskIdChange: (taskId: string | null) => void;
+  open: boolean;
   /** 可选：只看某个来源的运行（画布节点 / 工坊封装各自独立入口时传入）。 */
   source?: WorkflowRunSource;
   /** 当前要查看的运行（受控：节点卡片点击时上抛）。 */
   viewTaskId: string | null;
-  onViewTaskIdChange: (taskId: string | null) => void;
-  open: boolean;
-  onClose: () => void;
+  /** 所属工作流：日志只展示当前工作流的运行（切换工作流独立显示）。 */
+  workflowId: string;
 }
 
 /* 弹窗宽度档：默认 5xl（行是「时刻 + 级别 + 正文」，与执行日志同密度）；

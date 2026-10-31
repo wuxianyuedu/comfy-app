@@ -73,20 +73,20 @@ function WorkshopWorkflowSelect({
 }
 
 interface WorkshopAsideProps {
+  apiChannels: ApiChannelsView | null;
+  characterCount: number;
+  clipDoneCount: number;
+  imageDoneCount: number;
   missing: Array<MissingItem>;
-  /** 工作流库里的可选工作流（ISSUE #145）：本地通道的唯一可执行来源。
-   * 按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
-  workflowOptions: Array<WorkshopWorkflowOption>;
-  workflowId: string;
+  onGoScript: () => void;
+  onVideoWorkflowChange: (value: string) => void;
   onWorkflowChange: (value: string) => void;
   /** 视频通道选定的工作流 id。 */
   videoWorkflowId: string;
-  onVideoWorkflowChange: (value: string) => void;
-  apiChannels: ApiChannelsView | null;
-  characterCount: number;
-  imageDoneCount: number;
-  clipDoneCount: number;
-  onGoScript: () => void;
+  workflowId: string;
+  /** 工作流库里的可选工作流（ISSUE #145）：本地通道的唯一可执行来源。
+   * 按内容类别分栏：面板只列出当前阶段对应的那一栏。 */
+  workflowOptions: Array<WorkshopWorkflowOption>;
 }
 
 export function WorkshopAside({

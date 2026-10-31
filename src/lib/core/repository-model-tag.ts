@@ -16,9 +16,9 @@ import { firstRowOfExisting, firstRowRequired } from "./repository-row";
 import { eq, and, asc, count, inArray, exists, sql, type SQL } from "drizzle-orm";
 
 export interface WorkflowModelTagView {
+  count: number;
   id: string;
   name: string;
-  count: number;
 }
 
 export class WorkflowModelTagRepository extends DrizzleRepository<WorkflowModelTag> {

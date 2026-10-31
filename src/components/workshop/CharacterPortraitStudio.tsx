@@ -34,13 +34,13 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 
 /** 定妆照区块需要的全部上下文：会话（controller 常驻）+ 生成通道配置。 */
 export interface CharacterPortraitContext {
-  session: PortraitSession;
   actions: PortraitSessionActions;
   /** API 直连通道的脱敏配置（远端通道的门禁） */
   apiChannels: ApiChannelsView | null;
+  onOpenModelAdapters: () => void;
+  session: PortraitSession;
   /** 工作流库可选项（本地通道按模型标签挑选已封装的生图工作流）。 */
   workflows: Array<WorkshopWorkflowOption>;
-  onOpenModelAdapters: () => void;
 }
 
 interface Props {

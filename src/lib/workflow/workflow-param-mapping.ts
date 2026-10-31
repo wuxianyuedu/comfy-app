@@ -268,10 +268,10 @@ export const MODE_KEY_PREFIX = "mode:";
 export type ParamMappingByMode = Record<string, Record<string, string | null>>;
 
 export interface ParamMapping {
-  /** 作者画的线，按模式分开（`{ [mode]: { [entryId]: ioKey | null } }`）。 */
-  manualByMode?: ParamMappingByMode;
   /** 作者改过的「对外参数名」（ioKey → 名字）。 */
   labels?: Record<string, string>;
+  /** 作者画的线，按模式分开（`{ [mode]: { [entryId]: ioKey | null } }`）。 */
+  manualByMode?: ParamMappingByMode;
 }
 
 /** 解析某一模式下生效的「对外参数 id → 目标 ioKey」表。
@@ -529,8 +529,8 @@ export function buildSourceOverrides(
 }
 
 export interface MappedInput {
-  nodeId: string;
   name: string;
+  nodeId: string;
   value: unknown;
 }
 

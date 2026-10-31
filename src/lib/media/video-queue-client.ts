@@ -50,12 +50,12 @@ export type VideoTaskRow = z.infer<typeof videoTaskRowSchema>;
 
 /** 视图消费的行（只留它真会读的几样）。 */
 export interface VideoTask {
-  id: string;
-  status: string;
-  prompt: string;
-  workflowName: string;
-  video: string | null;
   error: string | null;
+  id: string;
+  prompt: string;
+  status: string;
+  video: string | null;
+  workflowName: string;
 }
 
 /**

@@ -26,14 +26,14 @@ export const HOME_VIEW: WorkspaceView = "home";
 export interface ViewTab {
   /** 页签身份：(视图, 项目) 二元组的稳定编码。 */
   key: string;
-  view: WorkspaceView;
   /** 全局视图（首页 / 模型 / 队列…）为 null。 */
   projectId: string | null;
+  view: WorkspaceView;
 }
 
 export interface WorkspaceTabsState {
-  tabs: Array<ViewTab>;
   activeKey: string;
+  tabs: Array<ViewTab>;
 }
 
 /** 页签身份的唯一编码处 —— 别在调用点各拼一遍分隔符。 */

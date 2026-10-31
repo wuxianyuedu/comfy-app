@@ -16,12 +16,12 @@ export type WorkflowPickOption = {
 };
 
 interface WorkflowPickChipProps {
-  value: string;
-  options: Array<WorkflowPickOption>;
-  onSelect: (id: string) => void;
   emptyHint?: string;
   /** 列表仍在加载时显示"加载中"，避免把加载态误渲染成空态。 */
   loading?: boolean;
+  onSelect: (id: string) => void;
+  options: Array<WorkflowPickOption>;
+  value: string;
 }
 
 export function WorkflowPickChip({

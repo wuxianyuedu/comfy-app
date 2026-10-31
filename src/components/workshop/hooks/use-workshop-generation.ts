@@ -32,10 +32,10 @@ import type { Character, Shot } from "~/lib/workshop/types";
 export type ShotProgressMap = Record<string, { label?: string; pct: number }>;
 
 export interface WorkshopGenerationDeps {
-  /** 本地链路的唯一可执行来源（空串 = 未选工作流）。 */
-  workflowId: string;
   /** 角色卡表：镜头相关角色选了定妆照时，按它取参考图下发（流程 §4）。 */
   characters: Array<Character>;
+  /** 需要引起用户注意的失败/阻断文案通道（由主管线决定怎么渲染，不用 alert）。 */
+  notify: (message: string | null) => void;
   /**
    * 当前项目 id（空串 = 还没有活跃项目）。与镜头号一起写进任务行，让「这一镜出过图吗」
    * 能由数据库回答，而不是只信草稿里那个 `imageUrl` 字符串。
@@ -46,14 +46,14 @@ export interface WorkshopGenerationDeps {
   projectId: string;
   /** 回写目标镜头的 status / taskId / imageUrl —— 镜头数据仍归主管线持有。 */
   setShots: React.Dispatch<React.SetStateAction<Array<Shot>>>;
-  /** 需要引起用户注意的失败/阻断文案通道（由主管线决定怎么渲染，不用 alert）。 */
-  notify: (message: string | null) => void;
+  /** 本地链路的唯一可执行来源（空串 = 未选工作流）。 */
+  workflowId: string;
 }
 
 export interface WorkshopGenerationApi {
+  generateShot: (shot: Shot) => Promise<void>;
   generating: boolean;
   shotProgress: ShotProgressMap;
-  generateShot: (shot: Shot) => Promise<void>;
   /** 观察一个本地任务直到落定，结果回写对应镜头（生图 / 视频共用）。
    *  主管线的「恢复失联任务」也走它 —— 重挂载后要有人重新订阅那条 SSE。 */
   watchShotTask: (shotId: string, taskId: string, target?: "image" | "video") => Promise<void>;

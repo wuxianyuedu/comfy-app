@@ -24,14 +24,14 @@ export { COMFY_STATS_POLL_MS };
 export type { ComfyStatsPayload };
 
 export interface ComfyStatsController {
-  /** 最近一次读到的指标；尚未返回时为 null */
-  stats: ComfyStatsPayload | null;
   /** ComfyUI 是否在线（online 且最近一次成功） */
   online: boolean;
-  /** 数据陈旧：处于迟滞容忍期、显示的是上一次好数据（不闪离线，但需弱化提示） */
-  stale: boolean;
   /** 主动触发一次刷新（如页面回前台） */
   refresh: () => Promise<void>;
+  /** 数据陈旧：处于迟滞容忍期、显示的是上一次好数据（不闪离线，但需弱化提示） */
+  stale: boolean;
+  /** 最近一次读到的指标；尚未返回时为 null */
+  stats: ComfyStatsPayload | null;
 }
 
 /**

@@ -55,16 +55,29 @@ import { reportStaleStoreAction } from "~/lib/shell/stale-store-notify";
  *  个画布 state 解耦。 */
 export interface IOEditState {
   ioEditMode: boolean;
-  workflowIO: Record<string, WorkflowIOParam>;
   ioPreviewOpen: boolean;
+  workflowIO: Record<string, WorkflowIOParam>;
   /** 本地勾选态里的作者重命名（`label`）只由 `setIOLabel` 写入；勾选 / 取消
    *  勾选不再抄画布的显示名进库，因此这里没有「既不是作者命名、又要保留」的
    *  中间态，也不需要任何机器名判定。 */
 }
 export interface IOEditActions {
+  /** 批量摘掉所有 IO 条目上给定模式码的覆盖层（modes[mode]）。
+   *  模式从工作流 `modes` 列移除后，条目里的覆盖必须跟着清掉，否则这些
+   *  无主覆盖会一直跟着 workflowIO 落库往返（页签栏不再显示，纯脏数据）。
+   *  返回清理后的 workflowIO 映射；没有任何覆盖命中时返回 null，调用方
+   *  据此决定是否需要把清理结果落库。 */
+  purgeModeOverrides: (codes: Array<string>) => Record<string, WorkflowIOParam> | null;
+  reorderIO: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
   /** 开关 IO 编辑模式。关闭时**一并关掉 IO 预览**（见下一条的耦合说明）；
    *  打开时不动预览。 */
   setIoEditMode: (on: boolean) => void;
+  setIOLabel: (key: string, label: string) => void;
+  /** 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
+   *  `patch` 为 null 表示删除该模式的覆盖（回到「通用默认值 + 默认可见」）。
+   *  与 setIOLabel / toggleIORequired 同路径持久化：下一次 PATCH 整体
+   *  workflowIO 时一起落库，无需改表。 */
+  setIOModeOverride: (key: string, mode: string, patch: WorkflowIOModeOverride | null) => void;
   /** 开关 IO 预览面板。关闭时**一并退出 IO 编辑模式**：面板已经在画面上消失，
    *  节点卡片上再留着勾选框，作者手上就只剩一个「看不到结果、只看到选择器」的
    *  半截状态。打开时**一并进入编辑模式**，让勾选框与面板同时可用。
@@ -73,23 +86,10 @@ export interface IOEditActions {
    *  画布按钮都只调这一个动作，谁都不许绕过（源码级守卫见
    *  `workflow-editor-topbar-config.test.ts`）。 */
   setIoPreviewOpen: (open: boolean) => void;
-  toggleIO: (ref: IoRef) => void;
-  setIOLabel: (key: string, label: string) => void;
-  toggleIORequired: (key: string) => void;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。 */
   setIOSeedMode: (key: string, mode: string) => void;
-  reorderIO: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
-  /** 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
-   *  `patch` 为 null 表示删除该模式的覆盖（回到「通用默认值 + 默认可见」）。
-   *  与 setIOLabel / toggleIORequired 同路径持久化：下一次 PATCH 整体
-   *  workflowIO 时一起落库，无需改表。 */
-  setIOModeOverride: (key: string, mode: string, patch: WorkflowIOModeOverride | null) => void;
-  /** 批量摘掉所有 IO 条目上给定模式码的覆盖层（modes[mode]）。
-   *  模式从工作流 `modes` 列移除后，条目里的覆盖必须跟着清掉，否则这些
-   *  无主覆盖会一直跟着 workflowIO 落库往返（页签栏不再显示，纯脏数据）。
-   *  返回清理后的 workflowIO 映射；没有任何覆盖命中时返回 null，调用方
-   *  据此决定是否需要把清理结果落库。 */
-  purgeModeOverrides: (codes: Array<string>) => Record<string, WorkflowIOParam> | null;
+  toggleIO: (ref: IoRef) => void;
+  toggleIORequired: (key: string) => void;
 }
 export type IOEditStore = IOEditState & IOEditActions;
 
@@ -428,11 +428,11 @@ export const selectIoPreviewOpen = (s: IOEditStore) => s.ioPreviewOpen;
  *  直到一次成功的 PATCH + detail refetch 调和。工厂参数携带 workflowId +
  *  detail（读 groups 的 fallback）。 */
 export interface RgthreeGroupsState {
-  /** 乐观 overrides（groupId → bypass），优先于 detail.groups[].bypass。 */
-  overrides: Record<string, boolean>;
   /** 运行时同步进来的有效 detail / workflowId —— getBypass 每次从 get() 读，确切
    *  detail 到达（而非首次 factory 的 null）后仍反射最新 groups。 */
   detail: WorkflowDetail | null;
+  /** 乐观 overrides（groupId → bypass），优先于 detail.groups[].bypass。 */
+  overrides: Record<string, boolean>;
   workflowId: string;
 }
 export interface RgthreeGroupsActions {
@@ -505,10 +505,10 @@ export interface NodeJsonViewerState {
   viewer: NodeJsonViewerRequest | null;
 }
 export interface NodeJsonViewerActions {
+  dismiss: () => void;
   getNodeJson: NodeJsonViewerContextValue["getNodeJson"];
   getNodeView: NodeJsonViewerContextValue["getNodeView"];
   requestShow: NodeJsonViewerContextValue["requestShow"];
-  dismiss: () => void;
 }
 export type NodeJsonViewerStore = NodeJsonViewerState &
   NodeJsonViewerActions &
@@ -525,8 +525,8 @@ export type NodeJsonViewerStoreParams = {
  * 由 Provider 在 params 变化时同步，确保 drill-in 子图视图仍反射最新 detail。 */
 export interface NodeJsonViewerLookup {
   detail: WorkflowDetail | null;
-  rawMetaById: Record<string, RawMetaEntry>;
   positions: Record<string, [number, number]> | null;
+  rawMetaById: Record<string, RawMetaEntry>;
   subgraphRawContext: { parentRawJson: unknown; subUid: string } | null;
   subgraphStackLength: number;
 }

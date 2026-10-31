@@ -40,8 +40,8 @@ function settingsFileFingerprint(file: string): string | null {
 
 /** settings 文件 IO 的注入面（真实形状；用例换临时目录）。 */
 export interface SettingsFileIo {
-  read(file: string): string;
   fingerprint(file: string): string | null;
+  read(file: string): string;
   write(file: string, content: string): Promise<void>;
 }
 
@@ -172,8 +172,8 @@ function comfyBase(): string {
 }
 
 export interface ComfyPromptResult {
-  prompt_id?: string;
   error?: string;
+  prompt_id?: string;
 }
 
 export async function postComfyPrompt(prompt: unknown): Promise<ComfyPromptResult> {

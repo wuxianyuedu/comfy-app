@@ -31,12 +31,12 @@ export interface StaleStoreSignalInput {
 
 /** 陈旧实例提示的收敛结果：该不该告知、告知什么。 */
 export interface StaleStoreNotification {
-  /** 一句话标题（toast / 消息中心列表行）。 */
-  title: string;
-  /** 概要（toast 第二行，短）。 */
-  summary: string;
   /** 正文（消息中心全屏可读，含「怎么办」）。 */
   body: string;
+  /** 概要（toast 第二行，短）。 */
+  summary: string;
+  /** 一句话标题（toast / 消息中心列表行）。 */
+  title: string;
 }
 
 /** 陈旧实例的**唯一**解法：重载一次，让运行图重新对齐当前源码。 */

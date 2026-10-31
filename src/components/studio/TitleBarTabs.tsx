@@ -36,23 +36,23 @@ import { Button } from "~/components/ui/button";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 interface TitleBarTabsProps {
-  tabs: Array<ShellTab>;
   activeTabId: string;
+  activeViewKey?: string;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
+  onCloseViewTab?: (key: string) => void;
+  onOpenView?: (view: WorkspaceView) => void;
+  onSelectViewTab?: (key: string) => void;
+  /** 「+」菜单里可打开的视图（由 ShellTabs 透传）。 */
+  openableViews?: Array<OpenableView>;
+  projectNameOf?: (projectId: string | null) => string | null | undefined;
+  tabs: Array<ShellTab>;
   /**
    * 视图页签。传了就用它们**取代**「主应用」那一个伪页签：同一条标题行横条里并列
    * 「应用内视图」与「iframe 外部页面」，不再另起第二条（#1324 决策 ④(a)）。
    * 不传时行为与从前一致。
    */
   viewTabs?: Array<ViewTab>;
-  activeViewKey?: string;
-  projectNameOf?: (projectId: string | null) => string | null | undefined;
-  onSelectViewTab?: (key: string) => void;
-  onCloseViewTab?: (key: string) => void;
-  /** 「+」菜单里可打开的视图（由 ShellTabs 透传）。 */
-  openableViews?: Array<OpenableView>;
-  onOpenView?: (view: WorkspaceView) => void;
 }
 
 /** 单个页签：标题 + 可选关闭按钮（点击不触发拖拽，见 data-no-drag）。 */
