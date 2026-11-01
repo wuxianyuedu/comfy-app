@@ -100,7 +100,10 @@ export const PS7_ONLY_SYNTAX = [
  * 扫的**只有** `script: |` 块：`env:` 的值不经过 shell，`name:` / `timeout:` 更不是
  * 代码。判过了头等于把这条判据变成噪音。
  *
- * @param {string} text `.cnb.yml` 原文
+ * `text` 按**可缺**写：它读的是磁盘上的配置文件，读失败时调用方会传 `undefined` /
+ * 空串进来 —— 这一层是「读不到 = 干净」那条兜底（下面 `String(text ?? "")`）。
+ *
+ * @param {string | null | undefined} text `.cnb.yml` 原文
  * @returns {string[]} 人读的违规行（含行号与替代写法）；空数组 = 干净
  */
 export function ps7OnlySyntaxIn(text) {
@@ -164,7 +167,7 @@ export const PYTHON_MIN_TEXT = `${PYTHON_MIN_VERSION[0]}.${PYTHON_MIN_VERSION[1]
 /**
  * 版本三元组比大小（`a < b` 为负）；解析不出时回 `null`（**不猜**）。
  *
- * @param {string} text 形如 `Python 3.12.2` 的输出
+ * @param {string | null | undefined} text 形如 `Python 3.12.2` 的输出（探测失败时是 undefined）
  * @returns {number[] | null}
  */
 export function parseVersionTriple(text) {
@@ -174,6 +177,9 @@ export function parseVersionTriple(text) {
   if (!m) {
     return null;
   }
+  /* `m[2]` / `m[3]` 是可缺分组（`(?:…)?`）—— 它们的 `undefined` 是真的，
+   * 这一行的 `?? 0` 就是「缺的那几段按 0 算」那条口径。规则不建模正则分组，按 §5.10 的 C 格留注释。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 可选分组在类型上是 string|undefined，规则不建模
   return [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)];
 }
 
@@ -236,7 +242,7 @@ export function readTextFile(file) {
  * 任意文本）与 `env:` 子映射，一次匹配很容易多吃或少吃 —— `stageBlock()` 的头注记过
  * 同一格。
  *
- * @param {string} text `.cnb.yml` 原文
+ * @param {string | null | undefined} text `.cnb.yml` 原文
  * @param {string} name stage 名
  * @returns {string | null} 找不到回 `null`（调用方据此只记读数，不判红）
  */
@@ -307,7 +313,7 @@ export function stageBlockIn(text, name) {
  * `env:` 里的同名键缩进更深，不会被算进来。判据面仍在
  * `tests/ci-image-identity.test.ts`（允许的名单逐格点名），这里只负责「红在便宜的位置」。
  *
- * @param {string} text `.cnb.yml` 原文
+ * @param {string | null | undefined} text `.cnb.yml` 原文
  * @returns {string[]} 带 `image:` 的 stage 名
  */
 export function stagesWithImage(text) {
@@ -400,7 +406,7 @@ function run(cmd, args) {
  * ⚠️ **只对绝对路径动手**：相对路径建出来的是「作业目录下的一个子目录」，
  * 那与「临时根」的语义不符（而配置里写相对路径本身就该由人改）。
  *
- * @param {string} dir
+ * @param {string | null | undefined} dir 调用方从 env / CLI 读来的路径，缺就是缺
  * @returns {{ok: boolean, created: boolean, why: string}}
  */
 export function ensureDir(dir) {
@@ -484,9 +490,9 @@ export function envProbe({
     const bad = ps7OnlySyntaxIn(configText);
     if (bad.length > 0) {
       problems.push(
-        `\`.cnb.yml\` 里有宿主的 Windows PowerShell（5.1）认不了的语法面：\n${
-          bad.map((l) => `      ${l}`).join("\n")
-          }\n      —— 它们**不会在解析期报错**，只会在跑到那一步时整段炸。` +
+        `\`.cnb.yml\` 里有宿主的 Windows PowerShell（5.1）认不了的语法面：\n${bad
+          .map((l) => `      ${l}`)
+          .join("\n")}\n      —— 它们**不会在解析期报错**，只会在跑到那一步时整段炸。` +
           `宿主是节点上的默认 powershell（pwsh 7 才认 \`?.\` / \`??\`）。`,
       );
     } else {
@@ -527,6 +533,8 @@ export function envProbe({
   }
   if (python) {
     const floor = pythonVersionMeetsFloor(python.version);
+    /* `python.path` 来自探测结果（可能只有 command、没有 path），`floor.triple` 来自
+     * `parseVersionTriple` 的 `number[] | null` —— 两处判空都是「不知道」那一支。 */
     if (floor.triple === null) {
       notes.push(
         `解释器 ${python.path ?? python.command} 的版本号解析不出（原文：` +
@@ -575,10 +583,7 @@ export function envProbe({
    * 「这一跑的日志能不能读」不该靠人去猜。 */
   const encoding = readEncodingImpl();
   const encodingOk = codePageIsUtf8(encoding.codePage);
-  const acp =
-    encoding.ansiCodePage === null || encoding.ansiCodePage === undefined
-      ? "没量到"
-      : `${encoding.ansiCodePage}`;
+  const acp = encoding.ansiCodePage === null ? "没量到" : `${encoding.ansiCodePage}`;
   /* 「给不给下一动作」按读数分三档：**已经对了就不给**（否则话术自相矛盾 —— 一边说
    * 对齐、一边叫人去改），没量到也不给（不知道的东西不该配动作）。 */
   const codes =
@@ -593,9 +598,11 @@ export function envProbe({
     notes.push(`${codes}${notTheSwitch}`);
   } else {
     notes.push(
-      `${codes}；chcp 读数 ${encoding.chcpRaw ?? "没量到"}${encodingOk
+      `${codes}；chcp 读数 ${encoding.chcpRaw ?? "没量到"}${
+        encodingOk
           ? notTheSwitch
-          : `\n      下一动作：让流水线第一步先跑 \`node scripts/ci-console-encoding.mjs --apply\`（「工具链自证」的第一步就是它）。${notTheSwitch}`}`,
+          : `\n      下一动作：让流水线第一步先跑 \`node scripts/ci-console-encoding.mjs --apply\`（「工具链自证」的第一步就是它）。${notTheSwitch}`
+      }`,
     );
   }
 
@@ -654,9 +661,7 @@ export function envProbe({
     if (already.ok) {
       notes.push(
         `浏览器落点上已经有那一件（${already.out}）—— ` +
-          `\`${
-          BROWSER_INSTALL_STAGE
-          }\` 会走「已装，跳过下载」，这一格不依赖网络`,
+          `\`${BROWSER_INSTALL_STAGE}\` 会走「已装，跳过下载」，这一格不依赖网络`,
       );
     } else {
       /* 配置里那一步会用的根（读不到那条配置 / 那个键时退回「按本步 env」的老口径
@@ -682,6 +687,9 @@ export function envProbe({
       );
       const reachable = verdicts.filter((v) => v.ok);
       for (const v of verdicts) {
+        /* `root` 在类型上必填（`playwrightReachabilityVerdicts` 的返回形状），但它是
+         * 注入面 `probeUrlOf` 的产物 —— 那一步的兜底仍在，按 §5.10 的 C 格留注释。 */
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 注入面 probeUrlOf 的产物，root 缺时退回 url
         notes.push(`下载根探测：${v.root ?? v.url} → ${v.verdict}`);
       }
       if (reachable.length === 0) {
@@ -702,9 +710,7 @@ export function envProbe({
       } else {
         notes.push(
           `浏览器落点是空的，而${configuredHost ? "配置里那个根" : "下载根"}有 ${reachable.length}/${verdicts.length} 条真取回了字节` +
-            `（\`${
-            BROWSER_INSTALL_STAGE
-            }\` 那一步应该装得成）`,
+            `（\`${BROWSER_INSTALL_STAGE}\` 那一步应该装得成）`,
         );
       }
       if (configuredHost) {
@@ -720,9 +726,7 @@ export function envProbe({
      * 但它要留一条读数，否则这一步会看起来像「浏览器那一格没在判」。 */
     notes.push(
       `浏览器前提探测本身出错：${/** @type {Error} */ (error).message} —— ` +
-        `本步不据此判红（那一格仍归 \`${
-        BROWSER_INSTALL_STAGE
-        }\`）`,
+        `本步不据此判红（那一格仍归 \`${BROWSER_INSTALL_STAGE}\`）`,
     );
   }
 
@@ -744,8 +748,9 @@ export function envProbe({
     const ensured = ensureDir(tempRoot);
     if (ensured.ok) {
       notes.push(
-        `临时根 ${tempRoot}${ensured.created ? "（原先不存在，这一格刚补出来）" : "（已在）"
-          }·TMP=${env.TMP ?? "(未设)"}`,
+        `临时根 ${tempRoot}${
+          ensured.created ? "（原先不存在，这一格刚补出来）" : "（已在）"
+        }·TMP=${env.TMP ?? "(未设)"}`,
       );
     } else {
       problems.push(

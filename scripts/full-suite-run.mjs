@@ -147,6 +147,7 @@ export function planRun(
       /* 停用台账：逐条一个旗标，与 `run-affected-tests.mjs` 的 `excludeArgs` 同一个形状
        * （拼成一个参数会让「剔了哪几条」在命令行上读不出来，而这一档的全部可见性就在
        * 那一行读数上）。空数组 ⇒ 一个字都不加。 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- `exclude` 是可选入参（`= []` 只兜了 undefined），显式传 null 时这条路仍要成立
       ...(exclude ?? []).filter(Boolean).flatMap((rel) => ["--exclude", rel]),
       ...extra,
     ],
@@ -266,12 +267,14 @@ export function coverageGate(argv, env = process.env) {
  * ③ 没有读数时打的是「没有」而不是「0 份」—— 这一跑被预算砍在收尾之前时，两者
  *    在日志里必须长得不一样（拿不到测量 ≠ 测量结果是 0，§13.6.4.1 同一条）。
  *
- * @param {string} xmlText junit XML 全文；读不到时调用方给空串
+ * @param {string | null | undefined} xmlText junit XML 全文；读不到时调用方给空串 / undefined
+ *   —— 这一档的整套「读不到就少说一条」口径都建立在这层兜底上。
  * @param {{limit?: number, file?: string, diag?: {foundElsewhere?: boolean, actualPath?: string, exists?: boolean, size?: number, mtime?: string|null, dirIsLink?: boolean, realDir?: string}}} [opts]
  * @returns {string[]}
  */
 export function suiteRanking(xmlText, { limit = 10, file = "", diag } = {}) {
   const where = file ? `（落点 ${file}）` : "";
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- xmlText 在类型上必填，但调用方读不到文件时给的就是空串/undefined
   const entries = parseJunitXml(String(xmlText ?? ""));
   if (entries.length === 0) {
     return junitMissingLine("分文件耗时", file, diag);
@@ -312,14 +315,16 @@ export function suiteRanking(xmlText, { limit = 10, file = "", diag } = {}) {
  * 形状按 vitest 5.0.3 的实际输出定，两条已知边界写在下面 {@link suitePhaseTax} 的话术里
  * （自闭合的 `<testsuite/>` 不配对、以及「Σ文件总时长 ≠ 墙钟」那笔差额归谁）。
  *
- * @param {string} xml junit XML 全文
+ * @param {string | null | undefined} xml junit XML 全文（读不到时是空串 / undefined）
  * @returns {{name: string, totalMs: number, testsMs: number, cases: number}[]}
  */
 export function parseJunitPhaseCosts(xml) {
   /** @type {{name: string, totalMs: number, testsMs: number, cases: number}[]} */
   const out = [];
   for (const m of String(xml ?? "").matchAll(/<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g)) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- RegExpExecArray 的分组可缺，规则读成非空
     const attrs = m[1] ?? "";
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
     const body = m[2] ?? "";
     const name = /\bname="([^"]*)"/.exec(attrs)?.[1];
     const total = /\btime="([^"]*)"/.exec(attrs)?.[1];
@@ -362,12 +367,13 @@ export function parseJunitPhaseCosts(xml) {
  * ② **税可能为负**。junit 的用例时长是各自测的，一条用例在 `afterEach` 里等到的东西
  * 可能同时被算进两份数里；出现负数就照实打，不夹到 0（夹了就是拿形状掩盖机制）。
  *
- * @param {string} xmlText junit XML 全文；读不到时调用方给空串
+ * @param {string | null | undefined} xmlText junit XML 全文；读不到时调用方给空串 / undefined
  * @param {{limit?: number, file?: string, wallMs?: number | null, diag?: {foundElsewhere?: boolean, actualPath?: string, exists?: boolean, size?: number, mtime?: string|null, dirIsLink?: boolean, realDir?: string}}} [opts]
  * @returns {string[]}
  */
 export function suitePhaseTax(xmlText, { limit = 10, file = "", wallMs = null, diag } = {}) {
   const where = file ? `（落点 ${file}）` : "";
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上（这一档的调用方读不到 junit 时给空串）
   const entries = parseJunitPhaseCosts(String(xmlText ?? ""));
   if (entries.length === 0) {
     return junitMissingLine("装载税", file, diag);
@@ -418,6 +424,7 @@ export function suitePhaseTax(xmlText, { limit = 10, file = "", wallMs = null, d
  * @returns {boolean}
  */
 export function shouldRecord({ exitCode, dryRun, extra = [], exclude = [] }) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同 `excludeArgs`：可选入参显式传 null 时这条路仍要成立
   if ((exclude ?? []).length > 0) {
     return false;
   }
@@ -734,6 +741,9 @@ async function main(argv) {
             command: cli,
             timeoutMs: RERUN_TIMEOUT_MS,
           });
+          /* `runPnpmSync` 的 `stdout` / `stderr` 在起不来时是空串（它自己兜过），
+           * 但本处是**注入面**（用例会换掉 `runPnpmSync`）—— 这层 `??` 仍在。 */
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- 注入面的出参形状不由本文件保证
           const out = `${String(res2.stdout ?? "")}\n${String(res2.stderr ?? "")}`;
           return {
             status: res2.status ?? 1,

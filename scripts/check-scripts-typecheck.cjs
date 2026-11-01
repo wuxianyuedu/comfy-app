@@ -187,6 +187,9 @@ function trackedMjs(root) {
     cwd: root,
     encoding: "utf8",
   });
+  /* `stdout` 是 `spawnSync` 出参：git 起不来时实测是 `undefined`（`@types/node` 按泛型
+   * 声明非空）。本文件自己就是「取不到 ≠ 没有」的执行者，这处 `??` 是那道防线。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- `spawnSync` 起不来时 stdout 实测 undefined（@types/node 按泛型声明非空）
   if (top.status !== 0 || !String(top.stdout ?? "").trim()) {
     return null;
   }
@@ -210,6 +213,7 @@ function trackedMjs(root) {
     return null;
   }
   return new Set(
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：`ls-files` 起不来时 stdout 是 undefined
     String(listed.stdout ?? "")
       .split("\0")
       .filter(Boolean)
@@ -300,9 +304,9 @@ function faceProblems(cfg, ran, face = cfg.ok ? cfg.mjs : []) {
   const { missed } = diskFace(cfg.mjs, cfg.excludes);
   if (missed.length) {
     problems.push(
-      `判决面漏了这些 .mjs（盘上有、配置没收到）：\n${
-        missed.map((f) => `    · ${f}`).join("\n")
-        }\n  要么 ${CONFIG_REL} 的 include 被改窄了，要么它落进了一个新的 exclude 条目`,
+      `判决面漏了这些 .mjs（盘上有、配置没收到）：\n${missed
+        .map((f) => `    · ${f}`)
+        .join("\n")}\n  要么 ${CONFIG_REL} 的 include 被改窄了，要么它落进了一个新的 exclude 条目`,
     );
   }
   if (ran.listed.length) {
@@ -312,12 +316,10 @@ function faceProblems(cfg, ran, face = cfg.ok ? cfg.mjs : []) {
     const notRun = face.filter((f) => !listed.has(f));
     if (notRun.length) {
       problems.push(
-        `配置声称在判、tsc 却没报回来这些文件（⇒ 这一跑不可信）：\n${
-          notRun
-            .slice(0, 10)
-            .map((f) => `    · ${f}`)
-            .join("\n")
-          }${notRun.length > 10 ? `\n    · …共 ${notRun.length} 份` : ""}`,
+        `配置声称在判、tsc 却没报回来这些文件（⇒ 这一跑不可信）：\n${notRun
+          .slice(0, 10)
+          .map((f) => `    · ${f}`)
+          .join("\n")}${notRun.length > 10 ? `\n    · …共 ${notRun.length} 份` : ""}`,
       );
     }
   }
@@ -348,6 +350,9 @@ function runTsc() {
   if (r.error) {
     return { ok: false, reason: `tsc 没跑起来：${r.error.message}` };
   }
+  /* 同理：tsc 没跑起来 / 被掐断时 `stdout` / `stderr` 是 `undefined`，而这处正是要
+   * 把「一行都没有」判成 `ok: false`（空输出不构成绿）的地方。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：tsc 没跑起来时两个出参都是 undefined
   const output = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   if (!output.trim()) {
     return {
@@ -525,7 +530,9 @@ function main(io = {}) {
   try {
     ts = require("typescript");
   } catch (error) {
-    console.error(`${TAG} ✗ 取不到 typescript（判决面对账要用它自己的 glob 引擎）：${error.message}`);
+    console.error(
+      `${TAG} ✗ 取不到 typescript（判决面对账要用它自己的 glob 引擎）：${error.message}`,
+    );
     return 2;
   }
 
@@ -551,8 +558,7 @@ function main(io = {}) {
   if (untracked.length) {
     console.log(
       `${TAG} 面外未入库 ${untracked.length} 份（磁盘上有、git 清单里没有 ⇒ 不进账、` +
-        `它们的红也不记账，但逐景点名）：\n${
-        untracked.map((f) => `    · ${f}`).join("\n")}`,
+        `它们的红也不记账，但逐景点名）：\n${untracked.map((f) => `    · ${f}`).join("\n")}`,
     );
   }
 
@@ -676,8 +682,9 @@ function main(io = {}) {
     }
     if (grows.length) {
       console.error(
-        `${TAG} ✗ 拒绝 --update：棘轮只许降。下面这些格子比基线**多**（不是总量比较——\n${TAG}   总量降了也可能夹带一份新文件的红，那正是要拦的方向）：\n${grows.join("\n")
-          }\n${TAG}   先把它改掉，再跑 --update 把基线收紧到当前实测；确属判据变更（现为 ${TAG}   ruleVersion=${RULE_VERSION}）才先改脚本里的常数，再跑 --update。`,
+        `${TAG} ✗ 拒绝 --update：棘轮只许降。下面这些格子比基线**多**（不是总量比较——\n${TAG}   总量降了也可能夹带一份新文件的红，那正是要拦的方向）：\n${grows.join(
+          "\n",
+        )}\n${TAG}   先把它改掉，再跑 --update 把基线收紧到当前实测；确属判据变更（现为 ${TAG}   ruleVersion=${RULE_VERSION}）才先改脚本里的常数，再跑 --update。`,
       );
       return 1;
     }
@@ -714,9 +721,9 @@ function main(io = {}) {
   }
   if (grows.length) {
     console.error(
-      `${TAG} ✗ 脚本档新增类型错误 / 死代码（ISSUE #2524 / 规范 §13.5.14）：\n${
-        grows.join("\n")
-        }\n${TAG}   这一档的面是全量 \`**/*.mjs\`，**新写的脚本零容忍**（基线里没有的格子就是新增）。\n${TAG}   修法是把它写干净（补 JSDoc 类型 / 加守卫 / 删死声明），**不许用 \`--update\`** 把\n${TAG}   新增的格子登记成「已知」；确实改不动的，请单独立单、在评审里写清理由，\n${TAG}   再由那张单决定怎么处理，而不是在这里抬账。`,
+      `${TAG} ✗ 脚本档新增类型错误 / 死代码（ISSUE #2524 / 规范 §13.5.14）：\n${grows.join(
+        "\n",
+      )}\n${TAG}   这一档的面是全量 \`**/*.mjs\`，**新写的脚本零容忍**（基线里没有的格子就是新增）。\n${TAG}   修法是把它写干净（补 JSDoc 类型 / 加守卫 / 删死声明），**不许用 \`--update\`** 把\n${TAG}   新增的格子登记成「已知」；确实改不动的，请单独立单、在评审里写清理由，\n${TAG}   再由那张单决定怎么处理，而不是在这里抬账。`,
     );
     return 1;
   }
@@ -724,6 +731,7 @@ function main(io = {}) {
   const dropped = [];
   for (const [rel, codes] of Object.entries(baseline.files ?? {})) {
     for (const [code, base] of Object.entries(codes)) {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- `cur.files` 是本跑现算的稀疏表，没报过的格就是缺；规则不建模
       const n = cur.files?.[rel]?.[code] ?? 0;
       if (n < base) {
         dropped.push(`  ${rel} ${code}: ${base} → ${n}`);
@@ -732,9 +740,9 @@ function main(io = {}) {
   }
   if (dropped.length && !masked.length) {
     console.log(
-      `${TAG} 检测到 ${dropped.length} 格下降，请收紧基线：\n  ${
-        dropped.join("\n  ")
-        }\n  执行 node scripts/check-scripts-typecheck.cjs --update`,
+      `${TAG} 检测到 ${dropped.length} 格下降，请收紧基线：\n  ${dropped.join(
+        "\n  ",
+      )}\n  执行 node scripts/check-scripts-typecheck.cjs --update`,
     );
   }
   if (masked.length) {

@@ -25,12 +25,16 @@ import { cleanGitEnv, git, HOOK, resolveMergeBaseRef, ROOT } from "./git-ref.mjs
  *
  * 标签匹配**必须唯一** —— 命中 0 条或多条都判失败并列出候选，别猜。
  *
+ * `input` 按**可缺**写：它直接来自 `process.argv`，`resolveGateCommand([])` 是一次
+ * 合法调用（「什么都没给」要回一句话，不是崩）。索引访问的可空是
+ * `noUncheckedIndexedAccess` 那一层，规则没建模 —— 这处判空按 §5.10 的 C 格留注释。
+ *
  * @param {string[]} input
  * @param {string} [hookPath]
  * @returns {{ok: true, label: string, argv: string[]} | {ok: false, error: string}}
  */
 export function resolveGateCommand(input, hookPath = HOOK) {
-  const first = input[0];
+  const first = /** @type {string | undefined} */ (input[0]);
   if (first === undefined) {
     return { ok: false, error: "没有给门禁命令（用法见脚本头）" };
   }
@@ -396,7 +400,11 @@ export function tokenize(line) {
 /**
  * 把一次 spawn 结果归一成 `{ code, output }`（同 `tests/helpers/gate-repo.ts` 的口径）。
  *
- * @param {import("node:child_process").SpawnSyncReturns<string>} r
+ * `r` 按**可缺**写：这是 `spawnSync` 的出参，起不来（ENOENT / 超时）时 `stdout` /
+ * `stderr` 实测是 `undefined`（`@types/node` 按泛型声明非空），而本函数正是要把那个形态
+ * 归一成 `code: 127` / 空输出 —— 标成必填等于替运行时担保。
+ *
+ * @param {{error?: {message?: string} | null, status?: number | null, stdout?: string | null, stderr?: string | null}} r
  * @returns {{code: number, output: string}}
  */
 export function normalizeRun(r) {
@@ -444,11 +452,16 @@ export function commandTargetState(argv, cwd) {
  *     而那条路带引号规则与注入面）。判据只能有一份，所以这里复用。
  *   · `node` —— 用 `process.execPath`，避免复核环境里 PATH 上是另一套 Node。
  *
+ * 空 argv 是一次合法调用（回 `null` = 127 那一档），而解构出来的 `cmd` 在
+ * `noUncheckedIndexedAccess` 下就是 `string | undefined` —— 规则没建模那一层，这处判空
+ * 按 §5.10 的 C 格留注释。
+ *
  * @param {string[]} argv
  * @returns {{command: string, args: string[]} | null} null = PATH 上找不到（127 那一档）
  */
 function resolveGateInvocation(argv) {
   const [cmd, ...rest] = argv;
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 空 argv 时解构出的 cmd 是 undefined，规则没建模 noUncheckedIndexedAccess
   if (cmd === undefined) {
     return null;
   }

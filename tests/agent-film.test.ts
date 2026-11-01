@@ -111,7 +111,7 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
       opts({ project: "p", idea: "i", pollMs: 1, timeoutMs: 1000 }),
       { request, doSleep: noopSleep },
     );
-    expect(snapshot.run?.status).toBe("done");
+    expect(snapshot?.run?.status).toBe("done");
     expect(timedOut).toBe(false);
     expect(polls).toBeGreaterThanOrEqual(1);
   });
@@ -122,7 +122,7 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
       opts({ project: "p", idea: "i", pollMs: 1, timeoutMs: 1000 }),
       { request, doSleep: noopSleep },
     );
-    expect(snapshot.run?.status).toBe("failed");
+    expect(snapshot?.run?.status).toBe("failed");
     expect(polls).toBe(0);
   });
 

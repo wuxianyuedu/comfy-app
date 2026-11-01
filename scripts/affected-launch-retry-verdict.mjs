@@ -36,8 +36,9 @@ import {
 /**
  * 第 2 遍的读数按文件分开。
  *
- * @param {{files: string[], readSuites?: {name: string, body: string}[]}} input
+ * @param {{files: string[], readSuites?: Array<{name?: string, body?: string}>}} input
  *  `files` 是这次复跑的清单，`readSuites` 是那一次的 junit 失败 suite（带各自文本）。
+ *  形状按**可缺**声明：它由 `failingSuiteTextsFromJunit` 从 XML 里正则取，取不到就不填。
  * @returns {{kind: "unverified" | "unattributed" | "hard-fail", timedOut: string[], hardFail: string[], unknown: string[]}}
  *   `timedOut` / `hardFail` / `unknown` 只在**判得出来**时填；`kind` 是结论档位。
  */
@@ -48,8 +49,8 @@ export function classifyRetry(input) {
   const bodyByName = new Map();
   for (const s of readSuites) {
     // 同一份文件出现多个失败 suite 时把文本并起来：指纹只要出现一次就够。
-    const prev = bodyByName.get(s.name) ?? "";
-    bodyByName.set(s.name, `${prev}\n${s.body ?? ""}`);
+    const prev = bodyByName.get(s.name ?? "") ?? "";
+    bodyByName.set(s.name ?? "", `${prev}\n${s.body ?? ""}`);
   }
   /** @type {string[]} */
   const timedOut = [];

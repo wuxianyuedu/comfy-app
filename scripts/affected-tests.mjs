@@ -73,7 +73,9 @@ const SELF = import.meta.filename;
 const ROOT = path.resolve(HERE, "..");
 
 /** @typedef {{test: (rel: string) => boolean, why: string}} WideTrigger */
-/** @typedef {{mode: "subset" | "all", tests: string[], reasons: Record<string, string>}} Resolution */
+/* `reasons` 的值按 `| undefined` 声明：它是给**读的人**看的说明（`__note` / `__skipped` 那些），
+ * 索引访问在 `noUncheckedIndexedAccess` 下就是 `string | undefined`，标成必填等于替运行时担保。 */
+/** @typedef {{mode: "subset" | "all", tests: string[], reasons: Record<string, string | undefined>}} Resolution */
 
 const WIDE_REASON = {
   config: "全局测试配置（预算 / include / setupFiles）",
@@ -217,7 +219,9 @@ export function specifiersOf(text, fromFile) {
       continue;
     }
     /* `m[1]` 在类型上仍是 `string | undefined`（TS 不认「正则里的必需分组在 matchAll 里
-     * 必定存在」）—— 这处 `??` 是给 tsc 看的，不是给运行时看的，删了会撞脚本档类型检查（§13.5.14）。 */
+     * 必定存在」）—— 这处 `??` 是给 tsc 看的，不是给运行时看的，删了会撞脚本档类型检查（§13.5.14）。
+     * 同一行的字面量索引就是 `noUncheckedIndexedAccess` 那一层，规则没建模，按 §5.10 的 C 格留注释。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上一行：`m[1]` 是必需分组，运行时非 undefined，这处 `??` 只服务于 tsc
     for (const cand of specCandidates(m[1] ?? "", fromFile)) {
       out.add(cand);
     }
@@ -327,7 +331,7 @@ export function resolveAffectedTests({
   graph,
   tracked = null,
 }) {
-  /** @type {Record<string, string>} */
+  /** @type {Record<string, string | undefined>} */
   const reasons = {};
   const picked = new Set();
   /**
@@ -814,8 +818,10 @@ function main() {
 
   const extra = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t));
   if (res.mode === "all") {
-    /* `reasons` 是 `Record<string, string>`，索引访问在 `noUncheckedIndexedAccess` 下是
-     * `string | undefined` —— 同样是给 tsc 看的；`mode === "all"` 这一支一定带着 `__note`。 */
+    /* `reasons` 按 `Record<string, string | undefined>` 声明（索引访问在 `noUncheckedIndexedAccess`
+     * 下就是 `| undefined`）。这一支实测确实带着 `__note` —— 所以这处 `??` 同时是给 tsc 看的
+     * 与给规则看的：规则那一侧不建模索引访问，按 §5.10 的 C 格留在原地。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- `reasons` 的索引在 noUncheckedIndexedAccess 下可 undefined，规则没建模索引访问
     process.stderr.write(wideFallbackNote(res.reasons.__note ?? "见 --json", res.tests.length));
   } else {
     /* 「固定 N」必须是**这次真跑到的**固定条数，不是清单长度 —— 开了输入面之后两者

@@ -44,7 +44,12 @@ export const APP_PORT_ENV_KEY = "COMFYAPP_PORT";
  *
  * 末尾分隔符一并去掉（`/workspace/` 与 `/workspace` 必须是同一端口）。
  *
- * @param {string} root @returns {string} 规范化后的检出路径（小写、正斜杠、无尾斜杠） */
+ * `root` 按**可空**声明：这条链有四份实现（本文件 / `app_port.py` / `check-app-port-vectors.ps1` /
+ * `src-tauri/src/single_instance.rs`）共用一份向量表，`check-app-port-vectors.cjs` 是拿
+ * 向量**直接**喂进来的 —— 向量来自 JSON，缺字段就是 `undefined`，而 `String(undefined)`
+ * 会静默变成字符串 "undefined"、算出一个看着合法的端口。这处 `??` 就是那道防线。
+ *
+ * @param {string|null|undefined} root @returns {string} 规范化后的检出路径（小写、正斜杠、无尾斜杠） */
 export function normalizeRootForPort(root) {
   const raw = String(root ?? "");
   // Windows 盘符绝对路径（F:\ 或 F:/）与 UNC 路径（\\server\share）：

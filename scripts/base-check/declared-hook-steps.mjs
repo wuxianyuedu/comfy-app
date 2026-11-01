@@ -128,8 +128,11 @@ export const DECLARED_STEPS = [...DECLARED_D0_STEPS, ...D_STEPS];
 /**
  * 注册表 ⇄ 钩子步骤的双向对账。
  *
- * @param {Array<{label: string}>} hookSteps `readHookSteps()` 的原样输出
- * @param {Set<string>} localTier `localTierLabels()` 的原样输出（D0 块的现算结果）
+ * 两个形参都按**运行时防护**写：本模块是「注册表 ⇄ 钩子」的判据，喂进来的东西
+ * 来自解析器与钩子文本，形状没被编译器保证过 —— 缺字段就跳过而不是拿去 set.has(undefined)。
+ *
+ * @param {Array<{label?: string} | null | undefined>} hookSteps `readHookSteps()` 的原样输出
+ * @param {Set<string> | null | undefined} localTier `localTierLabels()` 的原样输出（D0 块的现算结果）
  * @returns {string[]} 逐条不一致的话术；空数组 = 注册表与钩子说的是同一件事
  */
 export function registryProblems(hookSteps, localTier) {
@@ -189,10 +192,7 @@ export function registryProblems(hookSteps, localTier) {
     }
   }
   const head = labels.slice(0, DECLARED_D0_STEPS.length);
-  if (
-    head.length !== DECLARED_D0_STEPS.length ||
-    head.some((l, i) => l !== DECLARED_D0_STEPS[i])
-  ) {
+  if (head.length !== DECLARED_D0_STEPS.length || head.some((l, i) => l !== DECLARED_D0_STEPS[i])) {
     problems.push(
       `钩子开头的 ${DECLARED_D0_STEPS.length} 条步骤与注册表的 D0 名单不是同一批 —— ` +
         "D0 是「串行跑完再进其余档」那一档，顺序与成员一起才算这条边界",

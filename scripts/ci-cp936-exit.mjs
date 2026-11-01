@@ -303,8 +303,10 @@ export function parseInvocation(argv) {
   }
   const rest = argv.slice(sep + 1);
   /* `--` 后面第一个不是 `undefined`（上面刚判过 `sep` 不在末尾），这里是给
-   * 「参数类型是 `string | undefined`」那件事一个显式收口。 */
+   * 「参数类型是 `string | undefined`」那件事一个显式收口。
+   * 那一层可空来自 `noUncheckedIndexedAccess`，规则没建模 —— 按 §5.10 的 C 格留注释。 */
   const [command, ...args] = rest;
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 索引访问在 noUncheckedIndexedAccess 下是 string | undefined，规则没建模
   return { command: command ?? null, args, usage };
 }
 
@@ -474,7 +476,8 @@ export function formatSpawnFailure({ err, command, realCommand, cwd }) {
     `  失败码 ${code} —— ${
       code === "ENOENT"
         ? "盘上没有这个文件（名字 / 入参对不上？）"
-        : "文件在、但起不来（形态不对？见 resolveCommandInvocation）"}`,
+        : "文件在、但起不来（形态不对？见 resolveCommandInvocation）"
+    }`,
   ];
   /* 解析口交回的那一份只在**解析真的发生过**时才有意义：路径原样交出去时
    * `realCommand` 就是原文，再打一遍只是噪音。 */
@@ -523,6 +526,10 @@ export function exitCodeFromTermination(code, signal) {
  * **退出码是这条 Promise 的唯一值**：入口里那句 `process.exit(code)` 是本文件唯一把
  * 结论转出去的地方（下游 stage 靠它判红绿）。
  *
+ * `resolve` 的出参按**可缺**声明：它是**注入面**，用例会拿故意坏掉的形状喂进来
+ * （下面那段校验就是为这些写的：`undefined` 悄悄流下去只会变成 `spawn(undefined, …)`
+ * 的 `ERR_INVALID_ARG_TYPE`）。按「一定是好形状」声明会让那段校验被判成多余条件。
+ *
  * @param {string[]} argv
  * @param {{platform?: NodeJS.Platform,
  *          env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
@@ -531,7 +538,7 @@ export function exitCodeFromTermination(code, signal) {
  *          resolve?: (cmd: string, args: string[], options?: {
  *            platform?: NodeJS.Platform,
  *            env?: NodeJS.ProcessEnv | Record<string, string | undefined>,
- *          }) => {command: string, args: string[], resolved: boolean},
+ *          }) => {command?: string, args?: string[], resolved?: boolean} | null | undefined,
  *          out?: (chunk: string) => void}} [ports]
  * @returns {Promise<number>} 该转出去的退出码
  */

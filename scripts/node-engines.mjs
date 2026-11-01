@@ -75,7 +75,10 @@ const COMPARATOR_RE = /^(\^|>=|<=|>|<|=)?\s*(\d+(?:\.\d+){0,2})$/;
 
 /**
  * 严格三段版本；pre-release 与更松的形状一律拒解（见模块头）。
- * @param {string} raw
+ * `raw` 按**可缺**写：它读的是 `package.json` / `engines` / 运行时版本号那几处外部值，
+ * 缺一栏就是「读不懂 ⇒ 没跑起来」那一支（`?? ""` 之后正则不命中，回 `null`）。
+ *
+ * @param {string | null | undefined} raw
  * @returns {Triple | null}
  */
 function parseVersion(raw) {
@@ -89,7 +92,7 @@ function parseVersion(raw) {
 
 /**
  * 只给主次的补成 `.0`，便于与三元组比较。
- * @param {string} raw
+ * @param {string | null | undefined} raw
  * @returns {Triple | null}
  */
 function parseBound(raw) {
@@ -123,7 +126,10 @@ export function compareVersions(a, b) {
 /**
  * 把一段 semver 范围解析成「区间的并集」。
  *
- * @param {string} range 形如 `^22.22.2 || ^24.15.0 || >=26.0.0`
+ * `range` 按**可缺**写：它来自 `package.json` 的 `engines` / 依赖的 `engines` 字段，
+ * 缺这一栏就是「读不懂 ⇒ 没跑起来」那一支。
+ *
+ * @param {string | null | undefined} range 形如 `^22.22.2 || ^24.15.0 || >=26.0.0`
  * @returns {Interval[] | null} 解析不动给 `null` —— **不是**空数组：
  *   空数组会被调用方读成「谁都不满足」，而 `null` 读成「这条判据没跑起来」。
  */
@@ -185,8 +191,14 @@ export function parseRange(range) {
       if (!m) {
         return null;
       }
+      /* `m[1]` 是可缺分组（操作符可以省），`m[2]` 在「只写了操作符」那一支上是
+       * undefined —— 两处的 `??` / `if (!rawVersion)` 都是真的，规则不建模正则分组。 */
+      /* `m[1]` 是可选分组（操作符可省），运行时**真的**可能是 undefined；规则侧把
+       * `RegExpExecArray` 的索引读成非空（连 `.ts` 里也一样，实测过），按 §5.10 的 C 格落账。 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 可选分组可缺，规则把 RegExpExecArray 索引读成非空
       const op = m[1] ?? "=";
       const rawVersion = m[2];
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：`m[2]` 可缺
       if (!rawVersion) {
         return null;
       }
@@ -210,10 +222,18 @@ export function parseRange(range) {
       } else if (op === "<") {
         lowerUpper(v, false);
       } else {
+        /* `=X.Y.Z` 与「操作符缺省」都走这里。**不写 `op === "="` 那一支**：
+         * `COMPARATOR_RE` 已经把取值集定死，那个比较在类型上恒真（实测被判 no-overlap），
+         * 而它的语义与这里的兜底完全一致。 */
         raiseLower(v, true);
         lowerUpper(v, true);
       }
     }
+    /* 走到这里 `lower` 已被 `raiseLower` 赋过值（每个合法比较符都调它），所以这一句
+     * 在规则眼里恒假 —— 但它守的是「只有上界的区间」那一种形状（`parseRange` 明确
+     * 不接受它，回 null 而不是拼一个下界为空的区间）。判空的必要性在**契约**上，
+     * 按 §5.10 的 C 格留注释。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 只有上界的区间要落 null，这条判空守的是契约不是当前流程
     if (lower === null) {
       return null;
     }
@@ -225,8 +245,8 @@ export function parseRange(range) {
 /**
  * 某个版本是否落在范围的并集里。
  *
- * @param {string} version 形如 `24.20.0`（也接受 `v24.20.0`）
- * @param {string | Interval[]} range 范围字符串，或已解析好的区间数组
+ * @param {string | null | undefined} version 形如 `24.20.0`（也接受 `v24.20.0`）
+ * @param {string | Interval[] | null | undefined} range 范围字符串，或已解析好的区间数组
  * @returns {boolean | null} `null` = 读不懂（调用方转成「没跑起来」）
  */
 export function satisfies(version, range) {
@@ -433,7 +453,9 @@ export function checkDeclaredFloor({ root, declared, floors }) {
  * 「最近」而不是「最高」：Node 20.9 的人该听到 22.22.2，不是直接跳到 26 ——
  * 建议越贴近现状，越可能被真的执行。
  *
- * @param {{version: string, range: string, floors?: DependencyFloor[]}} input
+ * @param {{version: string | null | undefined, range: string | null | undefined, floors?: DependencyFloor[]}} input
+ *   两个字段都来自外部（`package.json` 的 `engines`、运行时版本）—— 读不到就落 `unparsable`，
+ *   那正是本函数要回答的三态之一。
  */
 export function describeNodeAgainstFloor({ version, range, floors }) {
   const ok = satisfies(version, range);
@@ -447,7 +469,9 @@ export function describeNodeAgainstFloor({ version, range, floors }) {
     kind: ok ? "ok" : "outside",
     version: clean,
     range,
-    recommend: ok ? null : recommendFrom(range, parsed),
+    /* 走到这里 `range` 已被 `satisfies` 判成读得懂（`ok !== null`），所以这一处的
+     * `?? ""` 是类型收口 —— 与上面 `parseRange` 的可缺声明配套。 */
+    recommend: ok ? null : recommendFrom(range ?? "", parsed),
     violated: (floors ?? []).filter((f) => satisfies(version, f.range) === false).map((f) => f.pkg),
   };
 }
@@ -466,7 +490,9 @@ function recommendFrom(range, currentVersion) {
     .map((iv) => iv.lower)
     .filter((lower) => compareVersions(lower, currentVersion) > 0)
     .sort((a, b) => compareVersions(a, b));
-  const first = above[0];
+  /* 索引访问在 `noUncheckedIndexedAccess` 下是 `Triple | undefined`（`above` 可以为空），
+   * 规则没建模那一层 —— 这处判空是真的。 */
+  const first = /** @type {Triple | undefined} */ (above[0]);
   return first ? first.join(".") : null;
 }
 

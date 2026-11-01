@@ -848,6 +848,13 @@ function walk(dir, wanted) {
  * 「命令在」不等于「是可用解释器」：Microsoft Store 的占位别名 `python.exe` 在盘上、
  * `--version` 退非零 —— 那正是本步骤存在的理由（自证要回答的是「门禁要的那个解释器
  * 在不在」，不是「盘上有没有一个叫 python 的文件」）。所以要真起一次进程判退出码。
+ *
+ * `path` 目前恒为 `null`（探名字不探盘上路径），但它在**形状上**是 `string | null`：
+ * 调用方按「有 path 就打 path、没有就打 command」写（`ci-env-probe.mjs` 那几处
+ * `python.path ?? python.command`）。把这个字段收成 `null` 字面量类型，
+ * 那几处兜底就会被读成恒真 —— 所以这里补一条显式返回类型。
+ *
+ * @returns {{command: string, path: string | null, version: string} | null}
  */
 export function findPython({
   run: runCmd = run,

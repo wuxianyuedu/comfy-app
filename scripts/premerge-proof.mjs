@@ -331,7 +331,9 @@ export function decideBaseAttribution(attribution) {
  *
  * @typedef {object} PremergeReport
  * @property {number} [code]
- * @property {Array<{key?: string, label?: string, code?: number}>} [segments]
+ * `segments` 的条目按**可缺**写：这是 `premerge-check --json` 的 `JSON.parse` 产物
+ * （下面 `s?.key` / `s?.code` 那一族兜底就是为「某一段只报了一半」写的）。
+ * @property {Array<{key?: string, label?: string, code?: number} | null | undefined>} [segments]
  */
 
 /**
@@ -368,6 +370,8 @@ function runQuiet(script, args) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
   });
+  /* `r.stdout` 是 `spawnSync` 出参：子进程起不来时实测 undefined（`@types/node` 按泛型
+   * 声明非空）。这里 `?? ""` 的语义是「没读到输出」—— 与 `status` 那一格同一件事。 */
   return {
     status: typeof r.status === "number" ? r.status : 2,
     stdout: r.stdout ?? "",
@@ -473,9 +477,9 @@ export function runFromStdin(stdinText) {
 
   if (blocking.length > 0) {
     process.stderr.write(
-      `[pre-push] ✗ 合并前复算红了，本次 push 不放行：\n${
-        blocking.map((l) => `      · ${l}\n`).join("")
-        }  这条分支现在合进 master 会把红一起带过去 —— 先修（\`yours\`），或按 §13.6.2 ` +
+      `[pre-push] ✗ 合并前复算红了，本次 push 不放行：\n${blocking
+        .map((l) => `      · ${l}\n`)
+        .join("")}  这条分支现在合进 master 会把红一起带过去 —— 先修（\`yours\`），或按 §13.6.2 ` +
         `复算归属；别用 \`git push --no-verify\` 换一条干净历史（硬规则 7 同一口径）。\n`,
     );
     return 1;
@@ -490,9 +494,9 @@ export function runFromStdin(stdinText) {
     baselineRed: baselineOnly,
   });
   process.stderr.write(
-    `[pre-push] ⚠ 本分支没有引入新的红，但 master 上已有 ${baselineOnly.length} 条：\n${
-      baselineOnly.map((l) => `      · ${l}\n`).join("")
-      }  那是别线的账（就地收掉，或按 §11.12 登记 KNOWN_FAILED_FILES），不该由这条 push ` +
+    `[pre-push] ⚠ 本分支没有引入新的红，但 master 上已有 ${baselineOnly.length} 条：\n${baselineOnly
+      .map((l) => `      · ${l}\n`)
+      .join("")}  那是别线的账（就地收掉，或按 §11.12 登记 KNOWN_FAILED_FILES），不该由这条 push ` +
       `承担，所以放行；已随证明记下，下一次复算还会念。\n`,
   );
   return 0;

@@ -213,7 +213,10 @@ export function bandLine(line, { enabled = true, color } = {}) {
 /**
  * 一行里第一个认得出的标签决定了这一行的色带颜色（认不出 ⇒ `null`）。
  *
- * @param {string} line 原文（**未上色**）
+ * `line` 按**可缺**写：渲染层的调用方会把日志里的任意东西（`undefined` / `null` /
+ * 非字符串）送进来，这一层是最后一道兜底 —— 标成必填等于替调用方担保。
+ *
+ * @param {string | null | undefined} line 原文（**未上色**）
  * @returns {string | null}
  */
 export function tagColorOf(line) {
@@ -233,7 +236,7 @@ export function tagColorOf(line) {
  * （过程读数、中间进度、`[docs-api] 命中输入面 3 个文件`），从前整片同一种灰。
  * 现在它们的标签带色、结论行按三态带色，读者不必逐字读就知道这一行是什么。
  *
- * @param {string} line
+ * @param {string | null | undefined} line
  * @param {boolean} [enabled]
  * @returns {string}
  */
@@ -269,7 +272,7 @@ function paintByState(text, state) {
 /**
  * 这一行是哪一态？（认不出 ⇒ `null`）
  *
- * @param {string} line
+ * @param {string | null | undefined} line
  * @returns {State | null}
  */
 export function stateOfLine(line) {
@@ -316,7 +319,9 @@ export function stateOfLine(line) {
  *   · **没判也逐条点名**：跳过**不是**判过。它不出现在红名单里，也绝不可以被折叠进
  *     「判过」那一格里数掉 —— 那正是 ISSUE #2506 要治的病在汇总层的最后一站。
  *
- * @param {{ok?: string[], skip?: string[], red?: string[]}} tally 三态各自的对象名
+ * `tally` 与其中每一条名字都按**可缺**写：调用方拼出来的汇总表本来就可能是 `{}` /
+ * 半截的（`x ?? ""` 过滤掉空名字那一半就是为这个写的），这一层是最后一道兜底。
+ * @param {{ok?: Array<string | null | undefined>, skip?: Array<string | null | undefined>, red?: Array<string | null | undefined>} | null | undefined} tally 三态各自的对象名
  * @param {{enabled?: boolean}} [options]
  * @returns {{line: string, color: string}}  `color` = 这一块该用的色带色（供调用方沿用）
  */
@@ -374,7 +379,7 @@ export function looksSkipped(detail) {
  * 一眼能看出「哪一行是判决、哪几行是证据」。空项与纯空白行丢掉 —— 它们是排版
  * 噪声，而红的那一屏最怕噪声。
  *
- * @param {Array<string | number>} items
+ * @param {Array<string | number | null | undefined> | null | undefined} items
  * @param {number} [width] 缩进格数
  * @returns {string[]}
  */
@@ -395,7 +400,7 @@ export function indentItems(items, width = 4) {
  * @param {string} [verdict.subject] 对象 / 范围（例如「src/**」），可省
  * @param {string} [verdict.detail] 绿那一档的读数，或 skip 那一档的原因
  * @param {string} [verdict.hint] 红的下一动作（可多行，逐行缩进）
- * @param {Array<string | number>} [verdict.items] 红的逐条证据
+ * @param {Array<string | number | null | undefined>} [verdict.items] 红的逐条证据（渲染层兜底）
  * @param {number} [verdict.max] 证据最多打几条（超出写「另有 N 条」）
  * @returns {string[]} 要打印的行（第一行是判决本身）
  */
@@ -467,13 +472,14 @@ export function gateSkip(gate, why, options = {}) {
  * 打一条判出问题的判决。
  *
  * @param {string} gate 判据名
- * @param {Array<string | number>} items 逐条事实（文件:行 / 名字 / 读数）
+ * @param {Array<string | number | null | undefined>} items 逐条事实（文件:行 / 名字 / 读数）
  * @param {{subject?: string, detail?: string, hint?: string, max?: number, out?: (line: string) => void}} [options]
  * @returns {"red" | "ok"} `ok` = 清单是空的 ⇒ 一条都没打（见下面那段）
  */
 export function gateFail(gate, items, options = {}) {
   /* 没有证据就不打判决：反过来就是屏幕上出现一条「命中 0 条」的红，读的人第一动作
    * 是去找那 0 条在哪。调用点该做的是「先判，再打」。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- `items` 进了函数体之后规则读成非空（调用点已判过），这处兜底是给「直接调用 gateFail(null)」那条路的
   if ((items ?? []).filter((x) => String(x ?? "").trim()).length === 0) {
     return "ok";
   }
@@ -513,7 +519,7 @@ export function summarize(items) {
  * `color` 是给「不是判决、却要跟着判决走」的那一行留的：合计行自己不带三态前缀，
  * 但在红的那一跑里它必须读成红。给了它就整行按它着色，认标签那一步不再参与。
  *
- * @param {string} line
+ * @param {string | null | undefined} line
  * @param {{enabled?: boolean, color?: string, band?: boolean}} [options]
  *   `enabled` 省略 ⇒ 按 `colorEnabled()` 判；`band` 省略 ⇒ 与 `enabled` 同值。
  * @returns {string}

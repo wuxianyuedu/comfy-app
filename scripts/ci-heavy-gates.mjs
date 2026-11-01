@@ -256,7 +256,7 @@ export function heavyGateArgv(argv, deps = {}) {
  * 后面的参数与包装器都不是。取错了就会拿包装器的名字去查表 ⇒ 查不到 ⇒ 永不收窄
  * （那个方向是安全的，但白费一次收窄的机会）。
  *
- * @param {readonly string[]} argv
+ * @param {readonly string[] | null | undefined} argv
  * @returns {string | null}
  */
 export function judgmentScriptOf(argv) {
@@ -283,8 +283,11 @@ export function judgmentScriptOf(argv) {
  *   ③ **跳过的必须被点名**：跳过的那几条**不计入「绿」**，单独一档逐条念出来
  *      （`main()` 里那一段）。静默跳过与静默放行是同一族病。
  *
- * @param {{label: string, argv: readonly string[]}} step 钩子那一步
- * @param {{files: readonly string[]} | null} changed 改动面；`null` = 不知道
+ * `step` 与 `changed` 都按**可缺**写：两个都来自钩子文本与 `git diff` 的解析结果，
+ * 缺字段就是「不知道 ⇒ 不跳过」那一支（这个方向是安全的，但必须写得出来）。
+ *
+ * @param {{label?: string, argv?: readonly string[]} | null | undefined} step 钩子那一步
+ * @param {{files?: readonly string[]} | null | undefined} changed 改动面；`null` = 不知道
  * @returns {{skip: false} | {skip: true, stage: string, globs: readonly string[], script: string}}
  */
 export function narrowingDecision(step, changed) {
@@ -377,6 +380,7 @@ export function runHeavyGates(io = {}) {
      * 这一条把「有没有判决面」从**逐条核对**变成**机械判据**：任何一条判据将来
      * 在这个形态下丢掉判决面，账面上就再也混不进「绿」里。
      */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- `r.output` 是注入面（用例会喂 null），规则读不到
     if (r.code === 0 && String(r.output ?? "").trim() === "") {
       notJudged.push({
         label: step.label,
@@ -395,6 +399,7 @@ export function runHeavyGates(io = {}) {
        * 与 `notJudged` 分开：那一档是「一个字都没说」，这一档是「说了，说的是没判」。
        * 判法共用 `scripts/ci-log.mjs` 的 `looksSkipped()`（同一张说法表），
        * 并在打印时与判据自己的输出**并排**念出来。 */
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
       noJudgement: r.code === 0 && looksSkipped(String(r.output ?? "").trim()),
     });
   }
@@ -415,7 +420,7 @@ const CONCLUSION_MAX = 90;
  * 还有口径说明）。一行判决的价值就在于「一条一眼」，所以超长时截断并显式写
  * 「又 N 字」—— 省略必须被读出来，这是一整条链上反复的规矩。
  *
- * @param {string} line
+ * @param {string | null | undefined} line
  * @returns {string}
  */
 export function compact(line) {
@@ -643,7 +648,7 @@ export function main(io = {}) {
   /* 「按面未触及」与「判据自己说没判」都是 `skip` 一档（判过 / 没判 / 红三态里
    * 中间那一档）：它们**都不是**「判过了」，也**都不是**「判出失败」。
    * 名字必须念出来 —— 静默跳过与静默放行是同一族病（ISSUE #2255 / #2256）。 */
-  const noJudgement = runs.filter((r) => r.noJudgement && r !== undefined);
+  const noJudgement = runs.filter((r) => r.noJudgement);
   const green = runs.filter((r) => r.code === 0 && !noJudgement.includes(r));
 
   if (argv.includes("--json")) {

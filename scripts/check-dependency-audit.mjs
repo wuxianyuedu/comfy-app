@@ -100,7 +100,10 @@ export function advisoryKey(advisory) {
  * `paths` 取引入链的**前两条**各截断到 4 段就够指认了 —— 实测 `brace-expansion`
  * 一条有 100 条路径、`fast-uri` 有 20 条，整份打出来没人读，等于没给定位。
  *
- * @param {{advisories?: Record<string, any>}} audit
+ * `audit` 与 `entries` 都来自**外部 JSON**（`pnpm audit --json` 的对象 / 基线文件），
+ * 缺字段就是 `undefined`；两处 `?.` 是「这份 JSON 没有这一栏」的出口，不是多余条件。
+ *
+ * @param {{advisories?: Record<string, any>} | null | undefined} audit
  */
 export function collectBlocked(audit) {
   const advisories = audit?.advisories ?? {};
@@ -126,7 +129,8 @@ export function collectBlocked(audit) {
 
 /** 三级稳定序：严重级降序 → 包名升序 → advisory id 升序。 */
 function compareBlocked(a, b) {
-  const bySeverity = BLOCKED_SEVERITIES.indexOf(b.severity) - BLOCKED_SEVERITIES.indexOf(a.severity);
+  const bySeverity =
+    BLOCKED_SEVERITIES.indexOf(b.severity) - BLOCKED_SEVERITIES.indexOf(a.severity);
   if (bySeverity !== 0) {
     return bySeverity;
   }
@@ -168,7 +172,7 @@ function dedupe(list) {
  * 与基线对账。
  *
  * @param {Array<{key: string, severity: string, module: string}>} blocked 本轮命中
- * @param {{ruleVersion?: number, entries?: Array<{key: string, reason?: string}>}} baseline
+ * @param {{ruleVersion?: number, entries?: Array<{key: string, reason?: string}>} | null | undefined} baseline
  *   `ruleVersion` 由 `main()` 自己比对（对不上就要求重记），本函数只读 `entries`，
  *   但类型上得带着它 —— 否则调用点原样传整份基线文件会被 excess-property 判成多余字段。
  */
@@ -197,7 +201,11 @@ export function diffAgainstBaseline(blocked, baseline) {
  *   · `{kind:"unreachable"}`     —— 命令起来了但没给出 JSON：按离线/registry 抖动处理
  *   · `{kind:"broken"}`          —— pnpm 压根没起来：判据自身坏了，必须判红
  *
- * @param {{cwd?: string, runner?: typeof runPnpmSync, fixtureFile?: string|null}} [options]
+ * `runner` 是本文件**声明**的注入点（契约测试可以给一份只回 `{stdout: …}` 的假 runner），
+ * 所以它的出参不能按 `runPnpmSync` 的完整形状声明 —— `String(result.stdout ?? "")` 那一处
+ * 的 `??` 是给假 runner 与「起不来」两个形态用的。
+ *
+ * @param {{cwd?: string, runner?: (args: string[], options: {cwd?: string, timeoutMs?: number}) => {stdout?: string|null, stderr?: string|null, status?: number|null, error?: {code?: string}|null, command?: string, args?: string[]}, fixtureFile?: string|null}} [options]
  *   `fixtureFile` 是**只给契约测试**的口：判据要能对着固定的 registry 形状跑，而不是
  *   把外部世界当测试依赖（否则这盏灯会随上游 advisory 变化自己变红，红就不可归因）。
  */

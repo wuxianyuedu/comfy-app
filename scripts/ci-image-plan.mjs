@@ -146,15 +146,23 @@ export const PYTHON_TOOLING = ["comfy-cli", "aiohttp"];
  * 认不出的形态直接给出那句原文，而不是退回一个缺省值 —— 一个悄悄生效的缺省版本
  * 会让镜像与 `engines.node` 各走各的，而两者都在盘上、谁也没报错。
  *
- * @param {string} range
+ * `range` 按**可缺**写：它来自 `package.json` 的 `engines.node`，缺这一栏就是
+ * 「认不出下限 ⇒ 当场抛」那一支（本函数刻意不退回猜出来的版本）。
+ *
+ * @param {string | null | undefined} range
  * @returns {{major: number, minor: number, patch: number}}
  */
 export function nodeFloor(range) {
   const floors = [
     ...String(range ?? "").matchAll(/\^(\d+)\.(\d+)\.(\d+)|>=(\d+)\.(\d+)\.(\d+)/g),
   ].map((m) => ({
+    /* 两条分支各占三个分组，取到的那一支之外全是 undefined —— 这些 `??` 是真的；
+     * 规则把 `RegExpExecArray` 的索引读成非空（实测连 `.ts` 也一样），按 §5.10 的 C 格落账。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则分组可缺，规则读成非空
     major: Number(m[1] ?? m[4]),
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
     minor: Number(m[2] ?? m[5]),
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
     patch: Number(m[3] ?? m[6]),
   }));
   if (floors.length === 0) {
@@ -174,7 +182,7 @@ export function nodeFloor(range) {
  * 只看 `linux-x64` 这个产物：镜像是 Linux 的，而「这个版本有没有我们下得下来的产物」
  * 在别的平台上没有意义（`browsers.json` 与小版本号那一族教训同源）。
  *
- * @param {{version: string, files?: string[]}[]} index
+ * @param {Array<{version?: string, files?: string[]} | null | undefined> | null | undefined} index
  * @param {{major: number, minor: number, patch: number}} floor
  * @returns {string}
  */
@@ -182,15 +190,22 @@ export function pickNodeVersion(index, floor) {
   /** @type {{version: string, parts: [number, number, number]}[]} */
   const parsed = [];
   for (const entry of index ?? []) {
+    if (!entry) {
+      continue;
+    }
     if (!(entry.files ?? []).includes("linux-x64")) {
       continue;
     }
-    const m = /^v(\d+)\.(\d+)\.(\d+)$/.exec(entry.version);
+    const version = entry.version;
+    if (typeof version !== "string") {
+      continue;
+    }
+    const m = /^v(\d+)\.(\d+)\.(\d+)$/.exec(version);
     if (!m) {
       continue;
     }
     parsed.push({
-      version: entry.version,
+      version,
       parts: [Number(m[1]), Number(m[2]), Number(m[3])],
     });
   }
@@ -234,8 +249,8 @@ export function escapedRegExp(/** @type {string} */ name) {
  *     `version:`」会在 `packages:` 那一段先命中别的包 —— 于是版本读成了别人的，
  *     而日志两边都像成功（这是 `drizzle-kit` 与 `drizzle-orm` 那一对最容易长出来的形态）。
  *
- * @param {string} lockText
- * @param {string[]} names
+ * @param {string | null | undefined} lockText 入库的 `pnpm-lock.yaml` 原文（读不到时是 undefined）
+ * @param {string[]} names 要取版本的工具包名
  * @returns {Record<string, string>}
  */
 export function toolingVersionsFromLock(lockText, names) {
@@ -266,9 +281,9 @@ export function toolingVersionsFromLock(lockText, names) {
      * 拼出来的 `( +)` 变成 `( ?)`、捕获组随之错位 —— 那一档的表现是「有的包读得到、
      * 有的读不到」，而两种在日志里都像「本仓没有这个依赖」（实测踩过）。 */
     const re = new RegExp(
-      `^( +)['"]?${
-        escapedRegExp(name)
-        }${String.raw`['"]?:\s*\n(?:\1\s+.*\n)*?\1\s+version:\s*([^\s(]+)`}`,
+      `^( +)['"]?${escapedRegExp(
+        name,
+      )}${String.raw`['"]?:\s*\n(?:\1\s+.*\n)*?\1\s+version:\s*([^\s(]+)`}`,
       "m",
     );
     const m = re.exec(text);
@@ -291,9 +306,13 @@ export function toolingVersionsFromLock(lockText, names) {
  * @returns {{tag: string, dockerfile: string, build: string, cp: string, verify: string}}
  */
 export function imagePlan({ nodeVersion, pnpmVersion, tag = IMAGE_TAG, appDir = APP_DIR }) {
+  /* 两个入参是 CLI / 调用方给的版本号，缺就是缺 —— 本函数刻意「形状不认就抛」，
+   * 不退回一个猜出来的值（与 `nodeFloor` 同一条口径）。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 入参可缺，规则读不到
   if (!/^v\d+\.\d+\.\d+$/.test(nodeVersion ?? "")) {
     throw new Error(`node 版本要带 v 的精确号（拿到的是 ${JSON.stringify(nodeVersion)}）`);
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
   if (!/^\d+\.\d+\.\d+/.test(pnpmVersion ?? "")) {
     throw new Error(`pnpm 版本形状不认（拿到的是 ${JSON.stringify(pnpmVersion)}）`);
   }
@@ -450,7 +469,7 @@ export function dockerfileHint() {
  * 而慢的那部分恰好是「人以为已经省掉」的那部分。判据只能看**文本里的顺序**（本文件
  * 不跑 docker），但那就是这件事的全部形状。
  *
- * @param {string} dockerfile
+ * @param {string | null | undefined} dockerfile
  * @returns {{ok: boolean, problems: string[]}}
  */
 export function imagePlanLayersAreOrdered(dockerfile) {
@@ -683,7 +702,7 @@ export function diskFacts({
  *
  * 人问的第一个问题永远是「这包多大、我要传多久」—— 而答案是**量出来的**，不是估的。
  *
- * @param {number} bytes
+ * @param {number | null | undefined} bytes
  */
 export function formatBytes(bytes) {
   const units = ["B", "KiB", "MiB", "GiB"];
@@ -724,7 +743,7 @@ export function main({
     throw new Error(
       `没有拿到精确的 Node 补丁号 —— 用 --node-version vX.Y.Z 给一个，` +
         `或加 --online 让它从 ${
-        NODE_INDEX_URL
+          NODE_INDEX_URL
         } 现取（fetchNodePlan）。别让这里退回一个猜出来的版本。`,
     );
   }
@@ -738,8 +757,9 @@ export function main({
   const layers = imagePlanLayersAreOrdered(plan.dockerfile);
   if (!layers.ok) {
     throw new Error(
-      `生成的 Dockerfile 层序不对（那是这个文件要买的东西被退回去的形态，它不会报错、只会慢）：\n  - ${
-        layers.problems.join("\n  - ")}`,
+      `生成的 Dockerfile 层序不对（那是这个文件要买的东西被退回去的形态，它不会报错、只会慢）：\n  - ${layers.problems.join(
+        "\n  - ",
+      )}`,
     );
   }
   /** @type {{dockerfile: string, plan: ReturnType<typeof imagePlan>, tarDigest?: string}} */

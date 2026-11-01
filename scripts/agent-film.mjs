@@ -30,7 +30,14 @@ export const DEFAULT_URL = "http://127.0.0.1:3000";
  *   help?:boolean; unknown?:string[];
  * }} FilmCliOpts
  * @typedef {{ method:"POST"|"GET"; url:string; body?:{ json:Record<string,unknown> } }} HttpCall
- * @typedef {{ run?:{ status?:string }; action?:{ kind?:string; shotIds?:string[] } }} RunSnapshot
+ * 后端回包是**运行时数据**（tRPC `run.status`），缺字段、`log` 不是数组都发生过，
+ * 所以整份按可缺声明：读的时候才需要 `?.`，标成必填会把这层防御判成多余条件。
+ *
+ * @typedef {{ status?:string; log?:Array<{ ts?:number; ok?:boolean; kind?:string; detail?:string }> }} RunState
+ * @typedef {{
+ *   run?: RunState | null;
+ *   action?: { kind?:string; shotIds?:string[] } | null;
+ * } | null} RunSnapshot
  */
 
 /** @param {string[]} argv @returns {FilmCliOpts} */
@@ -163,7 +170,10 @@ export function buildStatusCall(opts) {
 
 /** 从 superjson 的 tRPC 回包里取 .result.data.json（无信封原样返回）。 @param {unknown} payload @returns {RunSnapshot} */
 export function parseSuperjsonEnvelope(payload) {
-  const obj = /** @type {{ result?: { data?: { json?: RunSnapshot } } }} */ (payload);
+  const obj = /** @type {{ result?: { data?: { json?: RunSnapshot } } } | null | undefined } */ (
+    payload
+  );
+  // `payload` 是 fetch 回来 JSON.parse 的运行时值：缺 `result` / 缺 `data` 都正常。
   const data = obj?.result?.data;
   if (data && typeof data === "object" && "json" in data) {
     return data.json;
@@ -174,6 +184,7 @@ export function parseSuperjsonEnvelope(payload) {
 
 /** 人读一行进度文本。 @param {RunSnapshot} snapshot @returns {string} */
 export function formatStep(snapshot) {
+  // 回包可能整个是 null（非 JSON 响应）/ 是 `{}`（信封里没有 json 键），两条都走到这里。
   const status = snapshot?.run?.status ?? "unknown";
   return `status=${status} 下一步=${describeAction(snapshot?.action)}`;
 }
@@ -267,8 +278,11 @@ export async function main(argv = process.argv.slice(2)) {
   }
   if (opts.dryRun) {
     process.stdout.write(
-      `${JSON.stringify({ start: buildStartCall(opts), status: buildStatusCall(opts) }, null, 2)
-        }\n`,
+      `${JSON.stringify(
+        { start: buildStartCall(opts), status: buildStatusCall(opts) },
+        null,
+        2,
+      )}\n`,
     );
     return 0;
   }

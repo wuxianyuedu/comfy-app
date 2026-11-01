@@ -283,13 +283,19 @@ const HEADER_LINE_RE = /^\*\*\[评论人：[^\]\n]*\]\*\*$/;
  * @returns {string} 以一行署名开头、且署名只出现一次的正文
  */
 export function withCommentHeader(body, handle) {
+  /* `body` 按可缺写：单子正文与评论都可能是空的（`--body-file` 给了一份空文件），
+   * 那时这一格仍要回一句带表头的话，不是崩。 */
+  /* 空 body 是合法调用（`--body-file` 给了一份空文件），`String(undefined)` 会得到
+   * 字符串 "undefined" —— 这处兜底按 §5.10 的 C 格留注释。 */
   const lines = String(body ?? "").split(/\r?\n/);
   let i = 0;
   /** @type {string | undefined} */
   let kept;
   while (i < lines.length) {
-    const line = lines[i];
-    const trimmed = String(line ?? "").trim();
+    /* `line` 在 `noUncheckedIndexedAccess` 下是 `string | undefined`（`i < length` 已经
+     * 保证它在界内，但规则不看那个条件）—— 这处 `??` 按 §5.10 的 C 格留注释。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 索引访问的可空规则没建模
+    const trimmed = String(lines[i] ?? "").trim();
     if (trimmed === "") {
       i += 1;
       continue;
@@ -321,6 +327,8 @@ export function withCommentHeader(body, handle) {
  * @returns {"缺" | "不在首行" | "重复" | "正常"}
  */
 export function headerShape(body) {
+  /* 空 body 是合法调用（`--body-file` 给了一份空文件），`String(undefined)` 会得到
+   * 字符串 "undefined" —— 这处兜底按 §5.10 的 C 格留注释。 */
   const lines = String(body ?? "").split(/\r?\n/);
   const heads = lines.filter((l) => HEADER_LINE_RE.test(String(l).trim()));
   if (heads.length === 0) {
@@ -379,9 +387,10 @@ export function issueAuthoring({
         `调用方显式给了空值；要人填就写**这一份检出**的 \`${where}\` 里那一行 ` +
         `\`${DEV_HANDLE_ENV_KEY}="<短名>"\`（整行不在时先跑 \`pnpm env:init\`，` +
         `它会把一个确定的名字落进去，而不是留个空值）。${
-        platform === "win32"
-          ? "Windows 开发者按规范要求配这一格。"
-          : `当前宿主：${platform || "未告知"}。`}`,
+          platform === "win32"
+            ? "Windows 开发者按规范要求配这一格。"
+            : `当前宿主：${platform || "未告知"}。`
+        }`,
     );
   }
   if (showExits) {
@@ -417,12 +426,17 @@ const ITEM_SHAPES = [
  * 这里只报各形态的条数，**不判「处置了几条」**：机器读不出「某一条做完没有」，
  * 那是人写在评论与 PR 里的判断。这一行是读数，一次也不参与退码（与「单子身份」同档）。
  *
+ * `shapes` 按 `Record<string, number | undefined>` 读：键来自 `ITEM_SHAPES` 那份表，
+ * 而索引访问在 `noUncheckedIndexedAccess` 下就是 `| undefined` —— 那几处 `?? 0` 是
+ * 「这一形态一条都没有」的出口，不是多余条件。
+ *
  * @param {string} body 单子正文原样
  * @returns {{headings: number, unchecked: number, checked: number, ordered: number, total: number}}
  */
 export function issueItemShapes(body) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同 `withCommentHeader`：空 body 合法，规则读不到
   const text = String(body ?? "");
-  /** @type {Record<string, number>} */
+  /** @type {Record<string, number | undefined>} */
   const shapes = {};
   for (const [key, re] of ITEM_SHAPES) {
     shapes[key] = (text.match(re) ?? []).length;
@@ -465,12 +479,15 @@ export function whoamiLines({ handle = null, source = null, root = "", slug = nu
   const repo = slug ?? "<组织>/<仓库>";
   const from = String(source ?? "").trim();
   const lines = [
-    `[ship] 本检出的平台留痕：${name || "未配"}${name ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）` : ""
-      }${isExplicitSource(from)
+    `[ship] 本检出的平台留痕：${name || "未配"}${
+      name ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）` : ""
+    }${
+      isExplicitSource(from)
         ? `（你填的：${from === ".env" ? "这一份检出的 `.env`" : "进程环境"}）`
         : from
           ? `（**取的**：${from} ⇒ 换台机器 / 换会话会变；要固定就在 \`${path.join(root || ".", ".env")}\` 填一行）`
-          : `（取自 ${DEV_HANDLE_ENV_KEY}：进程环境优先，其次这一份检出的 \`.env\`）`}`,
+          : `（取自 ${DEV_HANDLE_ENV_KEY}：进程环境优先，其次这一份检出的 \`.env\`）`
+    }`,
   ];
   if (!name) {
     lines.push(

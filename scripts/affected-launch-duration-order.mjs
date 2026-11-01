@@ -72,11 +72,16 @@ export function orderByKnownDuration(files, ledger) {
  * 本跑没跑到的文件**保留**（它们的旧耗时仍是有效的排序依据，删掉只会让排序变瞎）。
  *
  * @param {string} root 仓库根
- * @param {{name: string, ms: number}[]} readings junit 读回的逐份用时
+ * `readings` 是 junit 解析的**运行时**产物：脏读数（缺 name、ms 是 NaN / 负数）会真的出现
+ * —— 所以形参按「可缺」声明，下面的过滤就是为它们写的，不是多余条件。
+ * `readings` 本身也可能为空 / 缺失（`--update-timing` 拿到空 junit）。
+ * @param {Array<{name?: string, ms?: number} | null | undefined> | null | undefined} readings junit 读回的逐份用时
  * @returns {boolean} 是否落了盘（读数为空 / 写失败 ⇒ false，调用方照旧收尾，不阻断）
  */
 export function mergeTimingLedger(root, readings) {
-  const usable = (readings ?? []).filter((r) => r && r.name && Number.isFinite(r.ms) && r.ms >= 0);
+  const usable = (readings ?? []).filter(
+    (r) => r?.name && Number.isFinite(r.ms) && Number(r.ms) >= 0,
+  );
   if (usable.length === 0) {
     return false;
   }

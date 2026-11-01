@@ -68,9 +68,13 @@ export function changedFromEnv() {
  * 各自拉进来多少份」。抄一份命令行形状就会在某一次改动里漂开（多一个旗标、少一层
  * encoding），而漂开的表现是那一格静默回到「拿不到归因」。
  *
+ * `stdout` / `stderr` 按**可空**声明：`@types/node` 的 `spawnSync` 重载把它们写成非空
+ * （`T`），而 ENOENT / 超时（本函数最关心的两个形态）实测就是 `undefined`。
+ * 替运行时担保会让下游每一处 `??` 都变成「多余条件」——那是把防御读成噪音。
+ *
  * @param {string[]} extra 子进程要额外带的旗标（如 `--attribute`）
  * @param {string[]} changed 改动面清单
- * @returns {{status: number|null, stdout: string, stderr: string, error?: Error}}
+ * @returns {{status: number|null, stdout: string|null|undefined, stderr: string|null|undefined, error?: Error|null}}
  */
 export function spawnAffected(extra, changed) {
   return spawnSync(
@@ -99,11 +103,7 @@ export function spawnAffected(extra, changed) {
  * @param {{status?: number|null, error?: {code?: string, message?: string}|null, changedCount?: number}} input
  * @returns {string}
  */
-export function describeListFailure({
-  status = null,
-  error = null,
-  changedCount = 0,
-} = {}) {
+export function describeListFailure({ status = null, error = null, changedCount = 0 } = {}) {
   const why = error
     ? `子进程起不来（${`${error.code ?? ""} ${error.message ?? ""}`.trim()}）`
     : `退出码 ${status ?? "信号"}`;
@@ -112,6 +112,10 @@ export function describeListFailure({
 
 /**
  * 调 `affected-tests.mjs` 拿清单（它的 stdout 只有空格分隔的路径一行）。
+ *
+ * 两处 `??` 都是运行时防御，不是多余的：`spawnSync` 起不来（ENOENT / 超时）时
+ * `stdout` / `stderr` 实测就是 `undefined`，而 `@types/node` 按泛型把它们声明成非空
+ * —— 这里正是要把那个「起不来」的形态读出来，所以形状只能按可缺写。
  *
  * @returns {string[]} 该跑的用例文件
  */

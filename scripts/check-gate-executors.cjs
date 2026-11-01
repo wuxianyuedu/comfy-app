@@ -267,14 +267,24 @@ function claimsPreCommit(src) {
 /* ── 台账 ────────────────────────────────────────────────────── */
 
 /**
- * @returns {{onDemand: Record<string, {why: string, who: string}>, entrypoints: Record<string, Array<{flags: string[], judges: string, executors: string[]}>>}}
+ * 条目字段按**可缺**声明：这份 JSON 是**入库的手写台账**，缺一栏就是一句判红的话
+ * （「那一形没写它判的是什么」/「一个执行者都没写」），不是崩溃点。
+ *
+ * @returns {{onDemand: Record<string, {why: string, who: string}>, entrypoints: Record<string, Array<{flags?: string[], judges?: string, executors?: string[]}> | null | undefined> | null | undefined>}}
  */
 function readLedger() {
   if (!fs.existsSync(LEDGER)) {
     return { onDemand: {}, entrypoints: {} };
   }
+  /* `parsed` 是手写 JSON 的 `JSON.parse` 产物（无 schema），下面两处 `?? {}` 是「这份台账
+   * 还没有那一半」的出口，不是多余条件。 */
   const parsed = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
-  return { onDemand: parsed.onDemand ?? {}, entrypoints: parsed.entrypoints ?? {} };
+  return {
+    onDemand: parsed.onDemand ?? {},
+    entrypoints: /** @type {ReturnType<typeof readLedger>["entrypoints"]} */ (
+      parsed.entrypoints ?? {}
+    ),
+  };
 }
 
 /**
@@ -347,7 +357,7 @@ function checkEntrypoints(entrypoints, names) {
     return cache.get(rel);
   };
   let forms = 0;
-  for (const [script, entries] of Object.entries(entrypoints)) {
+  for (const [script, entries] of Object.entries(entrypoints ?? {})) {
     if (!names.includes(script)) {
       problems.push(
         `入口台账登记了「${script}」，但 scripts/ 下没有这个判据脚本 —— ` +
@@ -390,6 +400,10 @@ function checkEntrypoints(entrypoints, names) {
      *     当年收的是「无旗标 vs 带旗标」，把不变量写成了特例，带旗标形之间还开着）。
      * ⚠️ 别把它实现成「一行只能命中一形」的全局分配 —— 一条命令确实可能同时是
      * 两个**不同脚本**的执行者，那样改会把这条判据变成容易误报的那一类。 */
+    /* 注记这几个 `?.` 是给规则的：`entries` 的条目数组来自手写 JSON（`readLedger()` 原样
+     * 返回 `JSON.parse` 的产物），`flags` / `judges` / `executors` 三个字段可缺 —— 缺一栏
+     * 正是下面三句判红要说的事。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 手写台账的条目字段可缺（缺一栏就是下面那句判红要说的事），规则不建模
     const declaredFlags = new Set(entries.flatMap((e) => (Array.isArray(e?.flags) ? e.flags : [])));
     /* 登记时就拒掉「两形旗标有包含关系（含相等）」：允许它存在，等于让「超集那一行同时证两形」
      * 是错还是有意在规范里没有答案 —— 上面那条排除也就没有拦头。
@@ -426,15 +440,19 @@ function checkEntrypoints(entrypoints, names) {
     }
     for (const entry of entries) {
       forms += 1;
-      const flags = Array.isArray(entry?.flags) ? entry.flags : [];
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 手写台账的条目字段可缺，规则不建模
+      const flags = entry && Array.isArray(entry.flags) ? entry.flags : [];
       const label = flags.length > 0 ? flags.join(" ") : "(无旗标)";
-      if (typeof entry?.judges !== "string" || entry.judges.trim() === "") {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
+      const judges = entry ? entry.judges : undefined;
+      if (typeof judges !== "string" || judges.trim() === "") {
         problems.push(
           `「${script}」那一形（${label}）没写「它判的是什么」—— 入口登记的全部价值` +
             `就在「这两形判的不是同一件事」那句，空着等于没登记`,
         );
       }
-      const executors = Array.isArray(entry?.executors) ? entry.executors : [];
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上
+      const executors = entry && Array.isArray(entry.executors) ? entry.executors : [];
       if (executors.length === 0) {
         problems.push(`「${script}」那一形（${label}）一个执行者都没写`);
         continue;
@@ -612,6 +630,5 @@ console.log(
     `判定型有执行者 ${report.judgeWithExecutor.length}、` +
     `按需召唤 ${report.judgeOrphaned.length}、` +
     `入口级登记 ${Object.keys(ledger.entrypoints).length} 份 ${entryAudit.forms} 形、` +
-    `报告型自称在跑 0 ✓${
-    vanishedNote(vanishedTests)}`,
+    `报告型自称在跑 0 ✓${vanishedNote(vanishedTests)}`,
 );

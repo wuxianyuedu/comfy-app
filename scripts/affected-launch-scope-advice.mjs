@@ -38,7 +38,10 @@ import { fmtSec } from "./affected-launch-rerun-report.mjs";
 /**
  * 调 `affected-tests.mjs --attribute` 拿「每个改动文件各自影响多少份」。
  *
- * @returns {Array<{file: string, affected: number}>}
+ * 出参形状按**可缺**写：它来自子进程的 `JSON.parse`（`spawnSync` 的 `stdout` 在
+ * ENOENT / 超时下是 `undefined`），不是本地构造的值 —— 标成必填等于替运行时担保。
+ *
+ * @returns {Array<{file?: string, affected?: number}>}
  */
 export function collectAttribute() {
   const res = spawnAffected(["--attribute"], changedFromEnv());
@@ -49,10 +52,14 @@ export function collectAttribute() {
     return [];
   }
   try {
+    /* `res.stdout` 是 `spawnSync` 出参，起不来时实测是 `undefined`（`@types/node` 按泛型
+     * 声明成非空）—— 这处 `??` 是给运行时用的，不是给编译器用的。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- `spawnSync` 起不来时 stdout 实测为 undefined，`@types/node` 按泛型声明成非空
     const parsed = JSON.parse(String(res.stdout ?? "[]"));
     if (!Array.isArray(parsed)) {
       throw new Error("不是数组");
     }
+    /** @type {Array<{file?: string, affected?: number}>} */
     return parsed;
   } catch {
     process.stderr.write("[affected-launch] 改动面归因输出读不懂（仅影响下面那条建议）\n");
@@ -94,20 +101,30 @@ export const SCOPE_ADVICE_MIN = 60;
  * 这件事在真红时**更需要**被看到 —— 放在收尾打印的话，一条真断言红就会把它截断掉
  * （实测踩到过：探针触发 `check-dead-exports` 真红，整段建议一次都没印）。
  *
- * @param {{total: number, fixed: number, affected: number, elapsedMs?: number, top: {file: string, affected: number}[]}} input
+ * @param {{total: number, fixed: number, affected: number, elapsedMs?: number, top: Array<{file?: string, affected?: number}>}} input
+ *  `top` 来自 `collectAttribute()`（spawn 出去的那条链，拿到多少算多少）：条目里的
+ *  `file` / `affected` 按**可缺**声明 —— 那是 `JSON.parse` 的产物，不是本地构造的值。
  * @returns {string} 要打到 stderr 的正文
  */
 export function scopeAdvice(input) {
   const { total, fixed, affected, elapsedMs, top } = input;
-  const biggest = top[0];
+  /* 注记是给规则的：索引访问在它那里拿不到 `T | undefined`（`noUncheckedIndexedAccess` 那层
+   * 没建模 —— 实测 `const b = top[0]; return b ? 1 : 0` 被判「恒真」，tsc 判 `b` 可 undefined）。
+   * 可空本身是真的：`collectAttribute()` 归因失败时回的就是空数组。
+   * 判空写成 `if` 而不是三元：三元的那个位置同时也被规则读成条件，注记救不到。 */
+  const biggest = /** @type {{file?: string, affected?: number} | undefined} */ (top[0]);
   /** 去掉最大的那一刀之后还剩多少（估算，见上面那条不可加的口径）。 */
-  const rest = biggest ? affected - biggest.affected : affected;
+  let rest = affected;
+  if (biggest) {
+    rest = affected - (biggest.affected ?? 0);
+  }
   const lines = [
     `[affected-launch] 改动面这件事：本次 ${total} 份用例（固定 ${fixed} + 受影响 ${affected}）${
       elapsedMs === undefined
         ? "。"
         : `，这一档实测墙钟 ${fmtSec(elapsedMs)}` +
-          " —— 「不改代码」那一档（只加一个 changelog 碎片）约 28s。"}`,
+          " —— 「不改代码」那一档（只加一个 changelog 碎片）约 28s。"
+    }`,
     "  受影响面是按**反向 import 闭包**算的，所以一个被广泛 import 的文件会把面撑得很大；",
     "  这件事与「这次改动本身难不难」无关 —— 它是**代价**，不是判据，本行不阻断提交。",
   ];

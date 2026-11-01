@@ -258,8 +258,10 @@ export function rerunFileList({ gate, files, readSuites, isTimeout }) {
  * 这一格**不改任何结论档、不碰任何预算数**：它只决定「被放过去测量的那 n 份是谁」。
  *
  * @param {{files: string[], count: number,
- *   readSuites?: {name: string, body: string}[],
+ *   readSuites?: Array<{name?: string, body?: string}>,
  *   isTimeout?: (text: string) => boolean}} args
+ *   `readSuites` 的条目按**可缺**声明：它由 `failingSuiteTextsFromJunit` 从 XML 里正则取，
+ *   取不到 `name` 的 suite 就不进这张表 —— 标成必填等于替解析器担保。
  *   `isTimeout` 默认取 `isTimeoutShaped`（由调用点注入，本文件不复制第二份指纹清单）
  * @returns {string[]} 挑出来的文件（`count` ≤ 0 ⇒ 空；`count ≥ 份数` ⇒ 原样）
  */
@@ -275,8 +277,9 @@ export function probeFiles({ files, count, readSuites = [], isTimeout = () => tr
   /** @type {Map<string, string>} */
   const bodyByName = new Map();
   for (const s of readSuites) {
-    const prev = bodyByName.get(s.name) ?? "";
-    bodyByName.set(s.name, `${prev}\n${s.body ?? ""}`);
+    const name = s.name ?? "";
+    const prev = bodyByName.get(name) ?? "";
+    bodyByName.set(name, `${prev}\n${s.body ?? ""}`);
   }
   /** 0 = 不带指纹（最该先量）；1 = 带指纹 / 查不到自己 */
   /** @param {string} file */
@@ -463,10 +466,11 @@ export function gateRerunByWallClock({ budget, firstPassMs, retryFiles, nowMs = 
     note: gate.ok
       ? ""
       : `[affected-launch] ${
-        broke
-          ? "墙钟已经用完"
-          : `墙钟买不起**整块**串行复跑（剩余 ${fmt(remainingMs ?? 0)} < 估计 ${fmt(estimateMs)}）`
-        }${broke ? "" : "，而**逐文件补跑**也一份都买不起"
+          broke
+            ? "墙钟已经用完"
+            : `墙钟买不起**整块**串行复跑（剩余 ${fmt(remainingMs ?? 0)} < 估计 ${fmt(estimateMs)}）`
+        }${
+          broke ? "" : "，而**逐文件补跑**也一份都买不起"
         } ⇒\n  第 2 遍不开。这不是红，也不是绿 ⇒ 按**未判定**收（退 2，ISSUE #2364）。\n`,
   };
 }
@@ -494,9 +498,9 @@ export function wallClockSkipReport({ remainingMs, estimateMs, files }) {
     `  所以这句话之前本应先量过一份（见 \`budgetAllows\` 的 \`probeFiles\`）。\n` +
     `  这不是红，也不是绿，也不是「未校验」：未校验是**两次测量都只给超时指纹**，\n` +
     `  而这里连第二次测量都没有发生 ⇒ 按**未判定**收（退 2，规范 §13.6.4）。\n` +
-    `  下面这 ${files.length} 份文件这次没有结论：\n${
-    files.map((f) => `    · ${f}\n`).join("")
-    }  下一动作：机器空下来时把那几份单独串行跑一次 ——\n` +
+    `  下面这 ${files.length} 份文件这次没有结论：\n${files
+      .map((f) => `    · ${f}\n`)
+      .join("")}  下一动作：机器空下来时把那几份单独串行跑一次 ——\n` +
     `    pnpm exec vitest run --no-file-parallelism <那几份路径>\n` +
     `  ⚠️ **不要**抬 \`testTimeout\` / \`hookTimeout\`，也不要 --no-verify：\n` +
     `     本件的整个前提就是「争用不是预算不够」（§11.13）；界在这里，是为了让\n` +

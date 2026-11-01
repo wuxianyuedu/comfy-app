@@ -141,13 +141,20 @@ export function latestDailyDispatch(builds) {
  * 逐格详情里平台写的那条流水线名（**不自己拆 `pipelinesStatus`**：那份归一在
  * `ci-build-classify.mjs` 里唯一实现，拆第二遍就是 §12.12 的孪生）。
  *
+ * `pipeline.name` 在类型上是必填（`classifyBuildOutcome` 已经把它兜成 `String(... ?? "")`），
+ * 但这份 `detail` 本身是平台 JSON、过了 `classifyBuildOutcome` 之后形状由那边保证 ——
+ * 这处 `?.` 与 `??` 属于「认不出就走空名」的兜底，按 §5.10 的 C 格留注释。
+ *
  * @param {any} detail `get-build-status -v` 那份 JSON
  * @returns {string[]} 流水线名（按平台给的顺序，空名剔除）
  */
 function pipelineNamesOf(detail) {
-  return classifyBuildOutcome(detail)
-    .pipelines.map((p) => String(p?.name ?? "").trim())
-    .filter((n) => n !== "");
+  return (
+    classifyBuildOutcome(detail)
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- classifyBuildOutcome 的返回形状由它自己兜，这处的兜底是给「认不出」那一支的
+      .pipelines.map((p) => String(p?.name ?? "").trim())
+      .filter((n) => n !== "")
+  );
 }
 
 /**
@@ -173,7 +180,11 @@ function pipelineNamesOf(detail) {
  * 三跑够捞到本档最近那一次；真不够（某档加密到一天多条）时这里落的是「没结论」而不是
  * 「缺勤」—— 那正是「我没取到」不许被念成「它没跑」的同一格（#2392）。
  *
- * @param {{builds: any[], details?: Array<{sn: string, json: any}>, lanes?: readonly string[]}} input
+ * `details` 与 `lanes` 的条目按**可缺**写：两个都来自平台 JSON / CLI 参数，缺字段就是
+ * `undefined` —— 下面那些 `?? ""` / `l ?? ""` 是被判据（#2392「我没取到」不许念成
+ * 「它没跑」）逼出来的，不是多余条件。
+ *
+ * @param {{builds: any[], details?: Array<{sn?: string, json?: any} | null | undefined>, lanes?: ReadonlyArray<string | null | undefined>}} input
  *   候选 + 逐格详情 + 这一档的流水线名名单（缺省取 `DAILY_LANE_PIPELINES`，那是 frozen 的，
  *   所以这一栏写 `readonly string[]` 而不是 `string[]`）
  * @returns {{found: true, build: any, outcome: ReturnType<typeof classifyBuildOutcome>,
