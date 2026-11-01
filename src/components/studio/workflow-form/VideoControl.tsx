@@ -92,7 +92,7 @@ function VideoControl({
   }
 
   // Preset paradigm → one unified multi-section popover (参考图风格).
-  const sections: Array<SegmentSection<string>> = entries.map(({ role, entry }) => {
+  const sections: Array<SegmentSection> = entries.map(({ role, entry }) => {
     const cur = values[entry.ioKey];
     if (role === "length") {
       const presets = VIDEO_DURATION_PRESETS;

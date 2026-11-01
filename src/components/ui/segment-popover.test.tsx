@@ -20,7 +20,7 @@ import { MultiSegmentPopover, type SegmentSection } from "./segment-popover";
 
 afterEach(cleanup);
 
-function ratioSection(onChange: (value: string) => void = vi.fn()): SegmentSection<string> {
+function ratioSection(onChange: (value: string) => void = vi.fn()): SegmentSection {
   return {
     label: "比例",
     value: "16:9",
