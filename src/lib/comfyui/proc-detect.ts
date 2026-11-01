@@ -99,24 +99,23 @@ export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLooku
       }
       const pid = Number.parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
       return { pid: Number.isNaN(pid) ? null : pid, failed: false };
-    } else {
-      // POSIX：ps 输出包含 main.py 的行 → 提取 PID
-      const { ok, out } = await execFilePTried("ps", ["-eo", "pid,args"]);
-      if (!ok) {
-        return { pid: null, failed: true };
-      }
-      for (const line of out.split("\n")) {
-        const ll = line.toLowerCase();
-        if (ll.includes(normalized)) {
-          const pidStr = line.trim().split(/\s+/)[0];
-          const pid = Number.parseInt(pidStr ?? "", 10);
-          if (!Number.isNaN(pid)) {
-            return { pid, failed: false };
-          }
+    }
+    // POSIX：ps 输出包含 main.py 的行 → 提取 PID
+    const { ok, out } = await execFilePTried("ps", ["-eo", "pid,args"]);
+    if (!ok) {
+      return { pid: null, failed: true };
+    }
+    for (const line of out.split("\n")) {
+      const ll = line.toLowerCase();
+      if (ll.includes(normalized)) {
+        const pidStr = line.trim().split(/\s+/)[0];
+        const pid = Number.parseInt(pidStr ?? "", 10);
+        if (!Number.isNaN(pid)) {
+          return { pid, failed: false };
         }
       }
-      return { pid: null, failed: false };
     }
+    return { pid: null, failed: false };
   } catch {
     return { pid: null, failed: true };
   }
@@ -257,23 +256,22 @@ export async function findPidListeningPort(pid: number): Promise<number | null> 
         return null;
       }
       return parseNetstatListeningPort(out, pid);
-    } else {
-      // POSIX：纯 Node 内建读取监听端口，**不依赖 lsof**。
-      //
-      // 历史实现是 `lsof -Pan -p <pid> -iTCP -sTCP:LISTEN`，但 lsof 在不少
-      // 发行版（含本项目 CI 用的精简镜像）默认不装；静默吞错的版本会把 ENOENT
-      // 变成空串 → 函数返回 null，正是规范 §9.2 第 3 条禁止的「静默失败」。
-      // 文档 §9.1 也曾声称「不依赖 lsof」，但代码实际就是 lsof —— 文档与实现
-      // 互相打架（本次一并纠正）。
-      //
-      // 改用内核接口（零外部依赖）：
-      //   ① /proc/net/tcp（+ tcp6）里 state=0A 的项 = LISTEN，字段 2 是
-      //      `地址:端口`（端口为 4 位大写十六进制），字段 10 是 socket inode；
-      //   ② /proc/<pid>/fd/* 里指向 `socket:[<inode>]` 的链接 → 该 pid 持有的
-      //      socket inode 集合；
-      //   ③ 两者取交集即「该 pid 正在监听的端口」。
-      return findListeningPortViaProc(pid);
     }
+    // POSIX：纯 Node 内建读取监听端口，**不依赖 lsof**。
+    //
+    // 历史实现是 `lsof -Pan -p <pid> -iTCP -sTCP:LISTEN`，但 lsof 在不少
+    // 发行版（含本项目 CI 用的精简镜像）默认不装；静默吞错的版本会把 ENOENT
+    // 变成空串 → 函数返回 null，正是规范 §9.2 第 3 条禁止的「静默失败」。
+    // 文档 §9.1 也曾声称「不依赖 lsof」，但代码实际就是 lsof —— 文档与实现
+    // 互相打架（本次一并纠正）。
+    //
+    // 改用内核接口（零外部依赖）：
+    //   ① /proc/net/tcp（+ tcp6）里 state=0A 的项 = LISTEN，字段 2 是
+    //      `地址:端口`（端口为 4 位大写十六进制），字段 10 是 socket inode；
+    //   ② /proc/<pid>/fd/* 里指向 `socket:[<inode>]` 的链接 → 该 pid 持有的
+    //      socket inode 集合；
+    //   ③ 两者取交集即「该 pid 正在监听的端口」。
+    return findListeningPortViaProc(pid);
   } catch {
     return null;
   }
