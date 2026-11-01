@@ -135,6 +135,7 @@ function childProcessImports(src) {
   /** @type {Set<string>} */
   const names = new Set();
   for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']node:child_process["']/g)) {
+    /* 类型上 `m[1]` 是 `string | undefined`（TS 不认必需分组），运行时必定是 string。 */
     for (const part of (m[1] ?? "").split(",")) {
       const name = (part.trim().split(/\s+as\s+/)[0] ?? "").trim();
       if (name) {
@@ -221,9 +222,12 @@ function maskStringContents(text) {
       continue;
     }
     if (ch === "\\") {
-      const next = text[i + 1];
-      out += ch + (next === undefined ? "" : next === "\n" ? "\n" : " ");
-      if (next !== undefined) {
+      /* `text[i + 1]` 的静态类型是 `string`（`noUncheckedIndexedAccess` 不看字符串索引），
+       * 而**串尾的孤立反斜杠**确实没有下一个字符 —— 这里按真值判，不按 `undefined` 判：
+       * 空字符与「没有下一个字符」在下面的归约里给出同一个结果（都折成 ""）。 */
+      const next = /** @type {string | undefined} */ (text[i + 1]);
+      out += ch + (next ? (next === "\n" ? "\n" : " ") : "");
+      if (next) {
         i += 1;
       }
       continue;
@@ -274,7 +278,7 @@ export function findShellOptionsIn(src, rel = "(inline)") {
    * 局部函数 / 注入端口同名不算。 */
   const cpNames = childProcessImports(src);
   for (const call of src.matchAll(new RegExp(SPAWN_CALLEE_SOURCE, "g"))) {
-    const open = (call.index ?? 0) + call[0].length - 1;
+    const open = call.index + call[0].length - 1;
     const spans = argumentSpans(src, open);
     if (spans === null) {
       continue;
@@ -300,10 +304,10 @@ export function findShellOptionsIn(src, rel = "(inline)") {
       for (const m of masked.matchAll(new RegExp(SHELL_OPTION_RE.source, "g"))) {
         /* 深度 1 = 选项对象的顶层键。嵌套对象里的同名键不是 spawn 的选项不判；
          * 深度 0 是字面量之前（不可能命中，留着当防御）。 */
-        if (depthAt(masked, m.index ?? 0) !== 1) {
+        if (depthAt(masked, m.index) !== 1) {
           continue;
         }
-        const line = lineOf(span.start + (m.index ?? 0));
+        const line = lineOf(span.start + m.index);
         offenders.add(`${rel}:${line}: ${(lines[line - 1] ?? "").trim()}`);
       }
     }
@@ -315,7 +319,7 @@ export function findShellOptionsIn(src, rel = "(inline)") {
     if (!cpNames.has(fn)) {
       continue;
     }
-    const line = lineOf(call.index ?? 0);
+    const line = lineOf(call.index);
     offenders.add(
       `${rel}:${line}: ${(lines[line - 1] ?? "").trim()} ` +
         `（exec/execSync 天然走 shell，等同 shell:true —— 改用 spawn 直起命令）`,

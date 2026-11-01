@@ -152,7 +152,7 @@ function scanText(text) {
   const hits = [];
   for (const shape of PREFIX_SHAPES) {
     for (const m of text.matchAll(shape.re)) {
-      hits.push({ shape: shape.name, offset: m.index ?? 0 });
+      hits.push({ shape: shape.name, offset: m.index });
     }
   }
   for (const m of text.matchAll(ASSIGNMENT_RE)) {
@@ -165,7 +165,7 @@ function scanText(text) {
     }
     hits.push({
       shape: "赋值式凭据（键名含 SECRET / TOKEN / KEY / PASSWORD）",
-      offset: m.index ?? 0,
+      offset: m.index,
     });
   }
   for (const m of text.matchAll(URL_CREDENTIAL_RE)) {
@@ -178,7 +178,7 @@ function scanText(text) {
     if (PLACEHOLDER_PASS_RE.test(pass) || TEMPLATE_VALUE_RE.test(pass)) {
       continue;
     }
-    hits.push({ shape: "URL 内嵌凭据", offset: m.index ?? 0 });
+    hits.push({ shape: "URL 内嵌凭据", offset: m.index });
   }
   return hits;
 }

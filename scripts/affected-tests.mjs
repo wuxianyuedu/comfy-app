@@ -201,7 +201,9 @@ export function specifiersOf(text, fromFile) {
   const code = stripComments(text);
   for (const re of [MOCK_RE, EXPORT_NS_RE]) {
     for (const m of code.matchAll(re)) {
-      for (const cand of specCandidates(m[1], fromFile)) {
+      /* `m[1]` 在类型上仍是 `string | undefined`（TS 不认「正则里的必需分组在 matchAll 里
+     * 必定存在」）—— 这处 `??` 是给 tsc 看的，不是给运行时看的，删了会撞脚本档类型检查（§13.5.14）。 */
+    for (const cand of specCandidates(m[1] ?? "", fromFile)) {
         out.add(cand);
       }
     }
@@ -210,10 +212,12 @@ export function specifiersOf(text, fromFile) {
    * 所以「同一段在剥完注释的文本里变成空白」= 它落在注释里。代码里的动态
    * `import("…")` 扫描器已经报过，字符串里的同形文本则原样保留、不会命中这一条。 */
   for (const m of text.matchAll(TYPE_IMPORT_RE)) {
-    const idx = m.index ?? 0;
+    const idx = m.index;
     if (code.slice(idx, idx + m[0].length).trim() !== "") {
       continue;
     }
+    /* `m[1]` 在类型上仍是 `string | undefined`（TS 不认「正则里的必需分组在 matchAll 里
+     * 必定存在」）—— 这处 `??` 是给 tsc 看的，不是给运行时看的，删了会撞脚本档类型检查（§13.5.14）。 */
     for (const cand of specCandidates(m[1] ?? "", fromFile)) {
       out.add(cand);
     }
@@ -253,7 +257,7 @@ export function buildImportedBy(nodes, readText) {
   const codeTexts = new Map();
   for (const from of nodes) {
     const text = readText(from);
-    if (text === null || text === undefined) {
+    if (text === null) {
       continue;
     }
     if (isTestPath(from)) {
@@ -810,6 +814,8 @@ function main() {
 
   const extra = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t));
   if (res.mode === "all") {
+    /* `reasons` 是 `Record<string, string>`，索引访问在 `noUncheckedIndexedAccess` 下是
+     * `string | undefined` —— 同样是给 tsc 看的；`mode === "all"` 这一支一定带着 `__note`。 */
     process.stderr.write(wideFallbackNote(res.reasons.__note ?? "见 --json", res.tests.length));
   } else {
     /* 「固定 N」必须是**这次真跑到的**固定条数，不是清单长度 —— 开了输入面之后两者
