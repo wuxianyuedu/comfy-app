@@ -20,6 +20,8 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { stripComments } from "./helpers/strip-comments";
+
 const ROOT = path.resolve(__dirname, "..");
 
 /** 扫描范围：只有这三层里有人在写「先剥注释再正则」的门禁。 */
@@ -177,5 +179,83 @@ describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
     }
     // 台账不许有重复条目（重复会让「少一份就红」这条判决变得不可预期）
     expect(new Set(LEDGER).size).toBe(LEDGER.length);
+  });
+
+  /**
+   * ISSUE #2925 的两种失效形状各钉一格。它们都不是"写法好不好看"的问题：
+   * 甲让**真代码**从判据眼前消失（落在里面的 `not.toMatch` 恒真 = 假绿），
+   * 乙让**真注释**留下来被当代码判（反向断言红在文档上）。
+   * 旧实现中甲（`/* … *\/` 那段不跟引号状态），本仓修甲的中间版本中乙
+   * （正则字面量里一个落单的 `'` 把字符串状态传染到后面几十行）—— 两向都要有钉子，
+   * 否则下一次"修得像了"仍然没人拦。
+   */
+  it("字符串里的块注释起点不许吃掉真代码；正则里的落单引号不许放过真注释", () => {
+    const GLOB_INPUT = [
+      'const PATTERNS = ["**/*.log", "**/archive/*.md"];',
+      "const keepMe = spawnSync(command, args, { shell: false });",
+      "cleanup(PATTERNS);",
+    ].join("\n");
+    const globbed = stripComments(GLOB_INPUT);
+    // glob 串里那个 `/*` 不是注释起点 ⇒ 它后面两行真代码都还在
+    expect(globbed).toContain("**/*.log");
+    expect(globbed).toContain("keepMe");
+    expect(globbed).toContain("cleanup(PATTERNS)");
+
+    const REGEX_INPUT = [
+      'const RE = /["\']/gm;',
+      '/* 这一段是注释，里面写着 spawnSync("pnpm", {shell:true}) */',
+      "const realCode = pnpmInvocation(args);",
+    ].join("\n");
+    // 反向自证：被禁形状**真在**原文里，否则下面那两条 not 什么都没判
+    expect(REGEX_INPUT).toMatch(/shell:true/);
+    const afterRegex = stripComments(REGEX_INPUT);
+    expect(afterRegex).toContain("realCode");
+    expect(afterRegex).not.toMatch(/shell:true/);
+    expect(afterRegex).not.toContain("这一段是注释");
+  });
+
+  /**
+   * 同一格钉在**真对象**上（夹具只能证明机制，证不落在这几份文件上）。
+   * 名单就是判据密集的接收者：`standalone-private-inputs.mjs` 一份就有 9 份用例读它，
+   * `dev-launcher.mjs` 与 `build-desktop.mjs` 是「起进程不许经 shell 层」那一族的判点。
+   * 取法与 #2925 立案时的探针同一份：只数"那一行本身不含 `/*` 也不含 `//`、
+   * 也不是注释续行（`*` 起头）"的消失行 —— 那种行只可能是被**别人的**注释吃掉的。
+   */
+  it("真文件上剥注释不许丢代码（#2925 的落点）", () => {
+    const receivers = [
+      "scripts/dev-launcher.mjs",
+      "scripts/build-desktop.mjs",
+      "scripts/standalone-private-inputs.mjs",
+      "scripts/run-affected-tests.mjs",
+      "scripts/affected-launch-spawn.mjs",
+      "src-tauri/src/lib.rs",
+      "src/instrumentation.ts",
+    ];
+    expect(receivers.length, "接收者名单为空 ⇒ 这一格什么都不判").toBeGreaterThan(0);
+    for (const rel of receivers) {
+      const raw = readFileSync(path.join(ROOT, rel), "utf8");
+      const kept = new Set(
+        stripComments(raw, { trailing: true })
+          .split("\n")
+          .map((line) => line.trim()),
+      );
+      const lost = raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(
+          (t) =>
+            t !== "" &&
+            !t.startsWith("*") &&
+            !t.startsWith("//") &&
+            !t.includes("/*") &&
+            !t.includes("//") &&
+            !kept.has(t),
+        );
+      expect(
+        lost,
+        `${rel}：剥完有 ${lost.length} 行真代码整行消失（#2925 那一形，反向断言会在看不见它的情况下绿）。` +
+          `首行：${String(lost[0]).slice(0, 70)}`,
+      ).toEqual([]);
+    }
   });
 });
