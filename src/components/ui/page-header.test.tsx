@@ -118,7 +118,7 @@ describe("PageHeader（屏级页头）", () => {
     /* 正文里没有常驻的那一行 —— 这正是 ISSUE #1693 要的「说明的直接显示也去掉」。 */
     expect(container.querySelectorAll("p")).toHaveLength(0);
     const trigger = screen.getByRole("button", { name: "说明" });
-    expect(trigger.getAttribute("data-slot")).toBe("tooltip-trigger");
+    expect(trigger.dataset.slot).toBe("tooltip-trigger");
   });
 
   it("`description` 常驻优先：同时传时不渲染悬浮按钮（同一句话不说两遍）", () => {

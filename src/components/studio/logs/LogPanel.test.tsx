@@ -139,8 +139,8 @@ afterEach(async () => {
     .querySelectorAll('[data-slot="select-content"], [data-slot="select-backdrop"]')
     .forEach((node) => node.remove());
   document
-    .querySelectorAll("[data-base-ui-inert]")
-    .forEach((node) => node.removeAttribute("data-base-ui-inert"));
+    .querySelectorAll<HTMLElement>("[data-base-ui-inert]")
+    .forEach((node) => delete node.dataset.baseUiInert);
   document.body.innerHTML = "";
 });
 
@@ -624,9 +624,9 @@ describe("LogPanel 日志面板", () => {
      * 真实浏览器里「撞到底部也不翻上去」由 §7.22 的现场复核兜底
      * （jsdom 不做布局，量不出坐标）。 */
     const positioner = document.querySelector('[data-slot="select-content"]')!.parentElement!;
-    expect(positioner.getAttribute("data-side")).toBe("bottom");
+    expect(positioner.dataset.side).toBe("bottom");
     expect(
-      document.querySelector('[data-slot="select-content"]')!.getAttribute("data-align-trigger"),
+      document.querySelector<HTMLElement>('[data-slot="select-content"]')!.dataset.alignTrigger,
     ).toBe("false");
   });
 
@@ -918,7 +918,7 @@ describe("LogPanel 日志面板", () => {
       render(<LogPanel />);
       const rowCount = () => document.querySelectorAll("[data-log-index]").length;
       const firstIndex = () =>
-        Number(document.querySelector("[data-log-index]")!.getAttribute("data-log-index"));
+        Number(document.querySelector<HTMLElement>("[data-log-index]")!.dataset.logIndex);
 
       /* 一页 200 行，视口 600px（单行取 `LOG_ROW_SINGLE`）只装得下二十来行 +
        * overscan。这里不写像素数：那个常量从 27 改到 28 时，抄下来的数字就是
@@ -993,8 +993,8 @@ describe("LogPanel 日志面板", () => {
       const expected = 200 * LOG_ROW_SINGLE - 600;
       expect(scroller.scrollTop).toBe(expected);
       /* 窗口也真的跟着走到了页尾。 */
-      const nodes = document.querySelectorAll("[data-log-index]");
-      const lastIndex = Number([...nodes].at(-1)!.getAttribute("data-log-index"));
+      const nodes = document.querySelectorAll<HTMLElement>("[data-log-index]");
+      const lastIndex = Number([...nodes].at(-1)!.dataset.logIndex);
       expect(lastIndex).toBe(199);
     } finally {
       if (heights) {

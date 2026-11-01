@@ -66,7 +66,7 @@ function renderNav(
 describe("模式导航的树形结构（ISSUE #1870）", () => {
   it("渲染出全部模式，且不重复（按 code 集合双向比对）", () => {
     renderNav();
-    const rendered = screen.getAllByRole("radio").map((el) => el.getAttribute("data-mode"));
+    const rendered = screen.getAllByRole("radio").map((el) => el.dataset.mode);
     expect(new Set(rendered)).toEqual(new Set(CONTRACT_MODES.map((t) => t.code)));
     expect(rendered.length).toBe(CONTRACT_MODES.length);
   });
@@ -91,7 +91,7 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     const active = screen
       .getAllByRole("radio")
       .filter((el) => el.getAttribute("aria-checked") === "true");
-    expect(active.map((el) => el.getAttribute("data-mode"))).toEqual([first.code]);
+    expect(active.map((el) => el.dataset.mode)).toEqual([first.code]);
   });
 
   it("点一个模式把它的 code 上抛（不自己改选中态）", async () => {
@@ -114,7 +114,7 @@ describe("模式导航的树形结构（ISSUE #1870）", () => {
     renderNav(null, (code) => code === only.code);
     const badges = screen.getAllByText("已改");
     expect(badges.length).toBe(1);
-    expect(badges[0]!.closest("[data-mode]")?.getAttribute("data-mode")).toBe(only.code);
+    expect(badges[0]!.closest<HTMLElement>("[data-mode]")?.dataset.mode).toBe(only.code);
   });
 });
 

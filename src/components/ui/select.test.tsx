@@ -116,13 +116,13 @@ describe("ui/select 的定位层", () => {
   it(`alignItemWithTrigger 默认 false（弹层不把已选项对齐到触发器）`, () => {
     render(<Demo />);
     const popup = openPopup();
-    expect(popup.getAttribute("data-align-trigger")).toBe("false");
+    expect(popup.dataset.alignTrigger).toBe("false");
   });
 
   it(`显式要「原生 select 观感」时标记跟着变 true，动画同时被关掉`, () => {
     render(<Demo alignItemWithTrigger />);
     const popup = openPopup();
-    expect(popup.getAttribute("data-align-trigger")).toBe("true");
+    expect(popup.dataset.alignTrigger).toBe("true");
     /* 对齐到触发器时不能再播缩放动画，否则弹层会「从触发器长出去」；
        这条靠 `data-[align-trigger=true]:animate-none` 命中，属性必须在串里。 */
     expect(popup.className).toContain("data-[align-trigger=true]:animate-none");
@@ -172,7 +172,7 @@ describe("ui/select 的选择回路", () => {
   it(`size="sm" 把档位写在 data-size 上（高度与圆角靠它命中）`, () => {
     render(<Demo size="sm" />);
     const trigger = screen.getByRole("combobox");
-    expect(trigger.getAttribute("data-size")).toBe("sm");
-    expect(trigger.getAttribute("data-slot")).toBe("select-trigger");
+    expect(trigger.dataset.size).toBe("sm");
+    expect(trigger.dataset.slot).toBe("select-trigger");
   });
 });

@@ -95,8 +95,8 @@ function makeStores(io: IOMap): WFStores {
 }
 
 function seedRowLabel(): string | null {
-  for (const row of document.querySelectorAll("[data-io-key]")) {
-    if (row.getAttribute("data-io-key") !== "1512::widget::value_1") {
+  for (const row of document.querySelectorAll<HTMLElement>("[data-io-key]")) {
+    if (row.dataset.ioKey !== "1512::widget::value_1") {
       continue;
     }
     return row.querySelector("span.flex-1")?.textContent ?? null;

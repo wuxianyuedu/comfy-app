@@ -157,9 +157,9 @@ function ensureHighlightCss() {
 /** 删除掉之前注入的命中标记 — 重新扫描前先清干净 */
 function clearPreviousHighlights(body: HTMLElement) {
   // 1. 移除 active hit / passive hit 的行级 data 标记
-  body.querySelectorAll(".json-view--pair[data-jv-hit]").forEach((el) => {
-    el.removeAttribute("data-jv-hit");
-    el.removeAttribute("data-jv-active-hit");
+  body.querySelectorAll<HTMLElement>(".json-view--pair[data-jv-hit]").forEach((el) => {
+    delete el.dataset.jvHit;
+    delete el.dataset.jvActiveHit;
   });
   // 2. 把注入的 <mark class="jv-hit-sub"> 还原成 textNode
   body.querySelectorAll("mark.jv-hit-sub").forEach((mark) => {

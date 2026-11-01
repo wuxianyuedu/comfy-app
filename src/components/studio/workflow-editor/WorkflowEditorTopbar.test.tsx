@@ -79,7 +79,7 @@ describe("顶栏按钮全部走 ui/button 基元（ISSUE #672 P1）", () => {
        * `tooltip-trigger`（见 `ui/hint` 的说明）。它仍是同一个 `buttonVariants`
        * 实例渲染出来的 —— 所以这里改判**基元自己的类**在不在，而不是只认
        * `data-slot="button"`，否则「加了悬停提示」会被误读成「退回手写 button」。 */
-      const slot = b.getAttribute("data-slot");
+      const slot = b.dataset.slot;
       if (slot === "button") {
         continue;
       }
