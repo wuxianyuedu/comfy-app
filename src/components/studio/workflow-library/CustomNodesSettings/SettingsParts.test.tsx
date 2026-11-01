@@ -79,7 +79,7 @@ describe("PortRow", () => {
 
 describe("WidgetValueChip", () => {
   it('toggle:truthy 值渲染 ✓(含字符串 "true"/"True")', () => {
-    const { rerender } = render(<WidgetValueChip value={true} widget="toggle" />);
+    const { rerender } = render(<WidgetValueChip value widget="toggle" />);
     expect(screen.getByText("✓")).toBeInTheDocument();
     rerender(<WidgetValueChip value="True" widget="toggle" />);
     expect(screen.getByText("✓")).toBeInTheDocument();
