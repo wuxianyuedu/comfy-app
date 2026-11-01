@@ -70,6 +70,8 @@ import {
 } from "./base-check.mjs";
 import { localTierLabels } from "./base-check/hook-steps.mjs";
 import { renderVerdict } from "./ci-log.mjs";
+import { formatTimingSummary, recordTimingLedger } from "./premerge-timing.mjs";
+import { performance } from "node:perf_hooks";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -411,6 +413,10 @@ function main(argv) {
    * 循环外声明，因为段序是 `base` 在前 —— 后面的段要能读它。 */
   const ranInBase = new Set();
 
+  /* 逐格计时（ISSUE #2832）：收集器喂给 baseCheckMany 的 onTiming + 两个脚本段的墙钟，
+   * 收尾一次性落台账并念 top-5 —— 记账失败不影响任何退出码（§13.5.8.3 口径）。 */
+  const gateTimings = [];
+  let ledgerRef = "n/a";
   for (const [key, seg] of wanted) {
     /* `seg` 的联合类型由 `SEGMENTS` 的 JSDoc 给出；两处用法各自收窄（见下）。 */
     if (seg.kind === "base") {
@@ -470,12 +476,14 @@ function main(argv) {
        * 「干净」这个结论，把它折成 0 等于让一次超时假红**放行**一次合并。它的
        * 归属与下一步由 `base-check` 自己的报告说清（本入口只拿退出码）。 */
 
+      ledgerRef = ref;
       const captured = captureStdout(() =>
         baseCheckMany({
           commands,
           ref,
           keep: false,
           json: false,
+          onTiming: (label, ms) => gateTimings.push({ label, ms }),
         }),
       );
       const summary = lastSummary(captured.output);
@@ -518,7 +526,9 @@ function main(argv) {
              *    早就存在、早就被审过的一笔）。 */
             [`${anchor.baseline}..HEAD`]
           : ["HEAD", "--baseline", anchor.baseline];
+      const t0 = performance.now();
       const r = runScript(script, args);
+      gateTimings.push({ label: `段:${seg.label}`, ms: performance.now() - t0 });
       results.push({ key, label: seg.label, code: r.code, output: r.output });
       continue;
     }
@@ -545,12 +555,14 @@ function main(argv) {
        * 一笔、也永远绿 —— 判的是「最新那笔」(#2070 之前的老形态)，而不是这一批。
        * 所以锚点**由本文件算、按显式区间交给它**：区间端点与 `HEAD` 在同一份对象库，
        * 不依赖它自己能不能读到环境。 */
+      const t0 = performance.now();
       const r = runScript(
         "check-commit-claims.mjs",
         [`${anchor.baseline}..HEAD`],
         { CNB_PULL_REQUEST_TARGET_SHA: anchor.baseline },
         process.cwd(),
       );
+      gateTimings.push({ label: "段:提交信息声明 ⇄ 树事实", ms: performance.now() - t0 });
       results.push({
         key,
         label: "提交信息里的机械可核声明 ⇄ 树事实（§11.23.5）",
@@ -567,6 +579,18 @@ function main(argv) {
     results.push({ key, label: seg.label, code: r.code, output: r.output });
   }
 
+  const timingOk = recordTimingLedger({
+    at: new Date().toISOString(),
+    ref: ledgerRef,
+    entries: gateTimings,
+  });
+  if (timingOk) {
+    process.stderr.write(formatTimingSummary(gateTimings));
+  } else {
+    process.stderr.write(
+      "[premerge-timing] 台账没落盘（无读数或写失败）—— 只影响记账，不影响结论\n",
+    );
+  }
   const total = combineCodes(results.map((r) => r.code));
 
   if (json) {
