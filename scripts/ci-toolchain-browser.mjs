@@ -380,15 +380,15 @@ export function playwrightInstallHints(out, facts = {}) {
     ...(urls.length > 0
       ? urls.map((u) => `  超时的地址: ${u}`)
       : ["  （没有摘到 'Request to … timed out' 那一行，见上面的原文）"]),
-    ...(observed !== null
+    ...(observed === null
       ? [
+          "  超时值没有从输出里摘到（Playwright 换了话术 / 输出被截断）——",
+          "  别按缺省的 30s 去读这一跑：`.cnb.yml` 给过的值以它为准。",
+        ]
+      : [
           `  这一次生效的套接字超时是 ${observed}ms（Playwright 的 ` +
             "`NET_DEFAULT_TIMEOUT` 缺省 30000ms）——",
           "  它只关「多久放弃」，不是「这个地址不通」的结论：大包在慢链路上会被它按时掐断。",
-        ]
-      : [
-          "  超时值没有从输出里摘到（Playwright 换了话术 / 输出被截断）——",
-          "  别按缺省的 30s 去读这一跑：`.cnb.yml` 给过的值以它为准。",
         ]),
     ...hintActions({
       sameFamily,
@@ -409,7 +409,7 @@ export function playwrightInstallHints(out, facts = {}) {
  * 在 Playwright 里（`+(PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT || "0") ||
  * NET_DEFAULT_TIMEOUT`），本仓不重实现它 —— 这里只拿它当那条线的位置。
  */
-export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30000;
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
 
 /**
  * 「这一跑里已经做过的动作」—— {@link playwrightInstallHints} 的话术据此分岔。

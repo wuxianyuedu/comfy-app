@@ -48,7 +48,7 @@ const rel = (p) =>
   p
     .split(path.sep)
     .join("/")
-    .replace(ROOT.split(path.sep).join("/") + "/", "");
+    .replace(`${ROOT.split(path.sep).join("/")}/`, "");
 
 /** 指标作用域：视图层（组件 + 路由页面）。Route Handler 是服务端入口，不计。 */
 const RATCHET_DIRS = ["src/components", "src/app"];
@@ -212,7 +212,7 @@ const hintLines = Object.entries(now.hints).map(([r, c]) => `  ${r}（内联 asy
 /* 判决行只有一处出处（`scripts/ci-log.mjs`，ISSUE #2506）。提示行留在判决**之前** ——
  * 它讲的是「不计入的那些」，排在红之后会被读成「也是这次要修的东西」。 */
 if (hintLines.length) {
-  console.log("[ui-logic] 内联 async 处理器（仅提示，不计入）：\n" + hintLines.join("\n"));
+  console.log(`[ui-logic] 内联 async 处理器（仅提示，不计入）：\n${hintLines.join("\n")}`);
 }
 
 if (problems.length) {

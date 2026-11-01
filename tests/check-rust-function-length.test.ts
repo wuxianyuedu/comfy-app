@@ -112,7 +112,7 @@ describe("check-rust-function-length.cjs（Rust 函数长度门禁）", () => {
       { length: 150 },
       (_, i) => `  let _a${i} = ${i};`,
     ).join("\n");
-    repo.write(rel, noise + `fn after_tricky() {\n${body}\n}\n`);
+    repo.write(rel, `${noise}fn after_tricky() {\n${body}\n}\n`);
     const { output } = repo.run(["--report"]);
     // 前面的噪声括号被忽略 → 仍应认出后面的函数
     expect(output).toContain("src-tauri/src/tricky.rs");

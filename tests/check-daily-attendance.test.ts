@@ -35,14 +35,17 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
   CODE,
+  DAILY_LANE_PIPELINES,
   DEFAULT_WINDOW_HOURS,
   FETCH_MAX_PAGES,
   FETCH_PAGE_SIZE,
+  dailyDispatches,
   fetchBuildsCoveringWindow,
   isDailyDispatch,
   judgeAttendance,
   latestDailyDispatch,
   main,
+  pickDailySubject,
   readOffline,
 } from "../scripts/check-daily-attendance.mjs";
 
@@ -51,24 +54,24 @@ const SCRIPT = path.join(ROOT, "scripts/check-daily-attendance.mjs");
 
 /** 2026-10-23 00:00 那一跑的真形状（第一次 `0 0` 派发，11 格全 success）。 */
 const GREEN_STAGES = [
-  { name: "Prepare", status: "success", duration: 31547 },
-  { name: "每日工具链自证", status: "success", duration: 13324 },
-  { name: "每日安装依赖", status: "success", duration: 256363 },
+  { name: "Prepare", status: "success", duration: 31_547 },
+  { name: "每日工具链自证", status: "success", duration: 13_324 },
+  { name: "每日安装依赖", status: "success", duration: 256_363 },
   { name: "每日 Python 可用性", status: "success", duration: 3550 },
   { name: "每日 Python 探针读数", status: "success", duration: 4177 },
-  { name: "每日同步数据库表结构", status: "success", duration: 20448 },
-  { name: "每日生产构建", status: "success", duration: 128856 },
-  { name: "每日 ESLint 零警告", status: "success", duration: 333521 },
+  { name: "每日同步数据库表结构", status: "success", duration: 20_448 },
+  { name: "每日生产构建", status: "success", duration: 128_856 },
+  { name: "每日 ESLint 零警告", status: "success", duration: 333_521 },
   { name: "每日浏览器安装", status: "success", duration: 2771 },
-  { name: "每日全量E2E", status: "success", duration: 100865 },
-  { name: "每日单元测试", status: "success", duration: 658594 },
+  { name: "每日全量E2E", status: "success", duration: 100_865 },
+  { name: "每日单元测试", status: "success", duration: 658_594 },
   { name: "BeforeEnd", status: "success", duration: 4 },
   { name: "DebugDetection", status: "skipped", duration: 0 },
   { name: "End", status: "success", duration: 83 },
 ];
 
 /** 平台一份 stage 记录里我们要造的那几栏。 */
-interface StageFixture {
+type StageFixture = {
   duration: number;
   name: string;
   status: string;
@@ -87,6 +90,7 @@ function detail(
   createTime: string,
   stages: Array<StageFixture>,
   pipelineStatus = "success",
+  pipelineName = "每日生产构建",
 ) {
   let seq = 0;
   const withIds = stages.map((s: StageFixture) => {
@@ -107,7 +111,7 @@ function detail(
         pipelinesStatus: {
           [`${sn}-001`]: {
             id: `${sn}-001`,
-            name: "每日生产构建",
+            name: pipelineName,
             status: pipelineStatus,
             labels: [{ key: "cpus", value: ["16"] }],
             stages: withIds,
@@ -158,8 +162,8 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
 
   it("被取消那一跑落在「没结论」而不是「红」（#2114 那条锁退化的形状）", () => {
     const stages = [
-      { name: "Prepare", status: "success", duration: 29083 },
-      { name: "单跑构建·安装依赖", status: "success", duration: 214977 },
+      { name: "Prepare", status: "success", duration: 29_083 },
+      { name: "单跑构建·安装依赖", status: "success", duration: 214_977 },
       { name: "单跑构建·同步数据库表结构", status: "cancel", duration: 86 },
       { name: "单跑构建·生产构建", status: "skipped", duration: 0 },
       { name: "BeforeEnd", status: "success", duration: 3 },
@@ -244,6 +248,167 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
       listed("pr", "pull_request", "2026-10-23T01:00:00.000Z"),
     ]) as { sn: string } | null;
     expect(picked?.sn).toBe("new");
+  });
+});
+
+/* ── 档身份那一格（ISSUE #2873）───────────────────────────────────────────────
+ *
+ * 为什么这一组单独存在：`isDailyDispatch` 按 `crontab:` **前缀**认候选是刻意的（小时会漂），
+ * 而本仓从 #2503 / #2611 起有**两条**定时档 —— `crontab: 0 1 * * *` 是每日那一跑、
+ * `crontab: 0 3 * * *` 是桌面成品包。只按前缀挑「最近一次」，别档的死法就会被念成这一档的
+ * 缺勤。现场（2026-10-31 本机原样读数）：桌包 `cnb-uuu-1k672u3j6` 整条只跑到平台 `Prepare`
+ * （`runner … not connected`），旧那一版念出的是「最近一次每日派发：cnb-uuu… · 事件
+ * `crontab: 0 3 * * *` · 真失败 Prepare」，把五格 `打包·*` 一起算给了每日档。
+ * 认法取平台自己写的流水线名（与 `ci-daily-failure-issue.mjs` 的 `--lane` 同一条，#2595）。
+ */
+describe("daily-attendance：两条定时档交错时，判的是每日那一档", () => {
+  /** 桌包那一档 10-30 那跑的真形状（Prepare 即败，后面五格整片 skipped）。 */
+  const PACKAGE_STAGES = [
+    { name: "Prepare", status: "error", duration: 285 },
+    { name: "打包·安装依赖", status: "skipped", duration: 0 },
+    { name: "打包·桌面成品构建", status: "skipped", duration: 0 },
+  ];
+
+  it("最近一条是别档（桌包 Prepare 即败）、其后一条是本档绿的 ⇒ 出勤，并点名让开的那条", () => {
+    const got = judgeAttendance({
+      builds: [
+        listed("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, "error"),
+        listed("cnb-hk7-1k5i5euak", "crontab: 0 1 * * *", "2026-10-22T14:00:17.000Z"),
+      ],
+      details: [
+        detail(
+          "cnb-uuu-1k672u3j6",
+          "crontab: 0 3 * * *",
+          RECENT,
+          PACKAGE_STAGES,
+          "error",
+          "桌面成品包",
+        ),
+        detail("cnb-hk7-1k5i5euak", "crontab: 0 1 * * *", "2026-10-22T14:00:17.000Z", GREEN_STAGES),
+      ],
+      now: NOW,
+    });
+    /* 这一条就是今天那一份读数的反面：旧写法在这里落「缺勤 + 真失败 Prepare」。 */
+    expect(got.code, got.headline).toBe(CODE.PRESENT);
+    expect(got.sn).toBe("cnb-hk7-1k5i5euak");
+    expect(got.headline).toContain("出勤 ✓");
+    const text = got.evidence.join("\n");
+    expect(text).toContain("每日那一档最近一次派发");
+    expect(text).toContain("流水线 每日生产构建");
+    /* 让开的别档必须**看得见**：只 continue 掉就等于「窗口里明明有两条定时派发，
+     * 读数里却只有一条」—— 那一格差距只能靠读代码补，等于没有读数。 */
+    expect(text).toContain("不属于这一档");
+    expect(text).toContain("cnb-uuu-1k672u3j6 → 桌面成品包");
+    /* 别档的格名不许被算进本档的结论里（那正是现场那句「真失败 Prepare」的来源）。 */
+    expect(text).not.toContain("打包·安装依赖");
+  });
+
+  it("窗口内只有别档的定时派发 ⇒ 缺勤，说的是「没有一条属于这一档」而不是「没有派发」", () => {
+    const got = judgeAttendance({
+      builds: [listed("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, "error")],
+      details: [
+        detail(
+          "cnb-uuu-1k672u3j6",
+          "crontab: 0 3 * * *",
+          RECENT,
+          PACKAGE_STAGES,
+          "error",
+          "桌面成品包",
+        ),
+      ],
+      now: NOW,
+    });
+    expect(got.code, got.headline).toBe(CODE.ABSENT);
+    expect(got.headline).toContain("没有一条属于每日那一档");
+    /* 两种「没有」是不同的下一动作，话术里要分得开：这一条是「这一档没跑」，
+     * 而不是「一次定时都没发生过」（后者会让人去查 runner）。 */
+    expect(got.headline).not.toContain("一次每日类派发都没有");
+    expect(got.headline).toContain("桌面成品包");
+    expect(got.sn).toBeNull();
+  });
+
+  it("定时候选取不到逐格详情 ⇒ 没结论（认不出是哪一档 ≠ 不是这一档）", () => {
+    const got = judgeAttendance({
+      builds: [listed("cnb-uuid", "crontab: 0 3 * * *", RECENT, "error")],
+      details: [],
+      now: NOW,
+    });
+    /* 列表那份**没有流水线名**（只有 `pipelines[]` 的 id/status，实测），所以这里
+     * 根本无从断言它是别档 —— 落 1 就是替平台编一句「它没跑」。 */
+    expect(got.code, got.headline).toBe(CODE.NO_VERDICT);
+    expect(got.headline).toContain("未校验");
+    expect(got.headline).toContain("取不到逐格读数");
+    expect(got.headline).toContain("认不出 ≠ 不是这一档");
+  });
+
+  it("每日那一档的三个触发口都算本档（定时 / 手点 / API）", () => {
+    const rows = [
+      detail("cnb-a", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, "success", "每日生产构建"),
+      detail("cnb-b", "web_trigger_daily", RECENT, GREEN_STAGES, "success", "每日档（手动触发）"),
+      detail("cnb-c", "api_trigger_daily", RECENT, GREEN_STAGES, "success", "每日档（API 触发）"),
+    ];
+    for (const row of rows) {
+      const got = judgeAttendance({
+        builds: [listed(row.sn, row.json.data.event, row.json.data.createTime)],
+        details: [row],
+        now: NOW,
+      });
+      expect(got.code, got.headline).toBe(CODE.PRESENT);
+      expect(got.sn).toBe(row.sn);
+    }
+    /* 名单本身就是这三个（配置里跑 `*daily_gates` 的三个触发口）；对账由
+     * `tests/no-platform-ci-config.test.ts` 判，这里只钉住「名单不是只有一条」。 */
+    expect(DAILY_LANE_PIPELINES).toHaveLength(3);
+  });
+
+  it("过滤用的是名单而不是硬编码那一条：把桌包名注进去，同一次派发就成了本档", () => {
+    /* 反向对照。少了它，「按档挑」与「写死只认每日生产构建」在断言里一模一样 ——
+     * 而前者才是这一格的口径（加一档时改名单，不改判决）。 */
+    const builds = [listed("cnb-uuu-1k672u3j6", "crontab: 0 3 * * *", RECENT, "error")];
+    const details = [
+      detail(
+        "cnb-uuu-1k672u3j6",
+        "crontab: 0 3 * * *",
+        RECENT,
+        PACKAGE_STAGES,
+        "error",
+        "桌面成品包",
+      ),
+    ];
+    const asOwn = pickDailySubject({ builds, details, lanes: ["桌面成品包"] });
+    /* `found` 是那一族的判别式：两支的形状不同，`build` 只在 `found: true` 那一支上有意义，
+     * 而它是 `any`（平台列表原样）—— 直接点 `.sn` 会被 lint 判成不安全成员访问，
+     * 这里要的是「挑到了哪一跑」这句话，所以显式收窄成 `{ sn }` 再读。 */
+    expect(asOwn.found).toBe(true);
+    expect(asOwn.found ? (asOwn.build as { sn: string }).sn : "").toBe("cnb-uuu-1k672u3j6");
+    const asDaily = pickDailySubject({ builds, details });
+    expect(asDaily.found).toBe(false);
+    /* `strays` 两支都有，所以它不需要判别就能读 —— 这一句才是「让开了而不是没收到」。 */
+    expect(asDaily.strays).toHaveLength(1);
+    /* 候选那一层（只按事件）仍然收得到它 —— 这一句钉的是「撤掉的是判决面那一步，
+     * 不是将候选整个收窄」：否则 #2873 会被读成「桌包那档不再算定时类派发」。 */
+    expect(dailyDispatches(builds).map((b: { sn: string }) => b.sn)).toEqual([
+      "cnb-uuu-1k672u3j6",
+    ]);
+  });
+
+  it("平台没给流水线名时不让它当本档（空名不凑形状）", () => {
+    const nameless = detail(
+      "cnb-x9",
+      "crontab: 0 1 * * *",
+      RECENT,
+      GREEN_STAGES,
+      "success",
+      "   ",
+    );
+    const got = pickDailySubject({
+      builds: [listed("cnb-x9", "crontab: 0 1 * * *", RECENT)],
+      details: [nameless],
+    });
+    /* 名字空白 ⇒ `pipelineNamesOf` 剔掉它，于是名单对不上、它落进 strays 而不是「本档」。
+     * 判据宁可念「没有一条属于本档」，也不替平台补一个它没写的归属。 */
+    expect(got.found).toBe(false);
+    expect(got.strays.map((s) => s.sn)).toEqual(["cnb-x9"]);
   });
 });
 

@@ -22,7 +22,7 @@ import { describe, expect, it } from "vitest";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const code = (rel: string): string => stripComments(readFileSync(path.join(ROOT, rel), "utf-8"));
+const code = (rel: string): string => stripComments(readFileSync(path.join(ROOT, rel), "utf8"));
 
 /** 全仓（src + scripts）里出现 `startDispatchLoop(` **调用**的文件。 */
 function loopCallSites(): Array<string> {
@@ -98,7 +98,7 @@ describe("只有一条 pull：内存队列不再长回来", () => {
 
   it("调度层文件已删除、barrel 不再导出出队函数", () => {
     expect(() =>
-      readFileSync(path.join(ROOT, "src/lib/comfyui/executor-scheduler.ts"), "utf-8"),
+      readFileSync(path.join(ROOT, "src/lib/comfyui/executor-scheduler.ts"), "utf8"),
     ).toThrow();
     const barrel = code("src/lib/comfyui/executor.ts");
     expect(barrel).not.toMatch(/processQueue/);

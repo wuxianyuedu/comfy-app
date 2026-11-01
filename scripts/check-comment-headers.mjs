@@ -143,7 +143,7 @@ export function collectShapes(ctx) {
  * @returns {number} 0 / 1 / 2
  */
 export function main(deps = {}) {
-  const log = deps.log ?? ((/** @type {string} */ s) => process.stdout.write(s + "\n"));
+  const log = deps.log ?? ((/** @type {string} */ s) => process.stdout.write(`${s}\n`));
   const run = deps.run ?? makeRunner(process.cwd());
   const slug = deps.slug ?? parseSlug(run("git", ["remote", "get-url", "origin"]).stdout);
   if (!slug) {
@@ -178,11 +178,11 @@ export function main(deps = {}) {
     }
     const unreadable = tally["读不到"] ?? 0;
     log(
-      `[header-audit] 样本 ${rows.length} 条：` +
+      `[header-audit] 样本 ${rows.length} 条：${
         SHADES.filter((s) => (tally[s] ?? 0) > 0)
           .map((s) => `${s} ${tally[s]}`)
-          .join(" · ") +
-        (unreadable > 0 ? "（「读不到」不判成「缺」，也不因此变红）" : ""),
+          .join(" · ")
+        }${unreadable > 0 ? "（「读不到」不判成「缺」，也不因此变红）" : ""}`,
     );
   }
   return bad.some((r) => r.shape !== "读不到") ? CODE.RED : CODE.GREEN;

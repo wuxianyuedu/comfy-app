@@ -20,7 +20,9 @@ type Ctx = { db: Db; user: { id: string } };
 async function assertSeasonOwner(ctx: Ctx, id: string) {
   const rows = await ctx.db.select().from(season).where(eq(season.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "季不存在" });
+  if (!row) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "季不存在" });
+  }
   const sr = await ctx.db.select().from(series).where(eq(series.id, row.seriesId)).limit(1);
   const owner = sr[0];
   if (owner?.userId !== ctx.user.id) {
@@ -58,14 +60,14 @@ export const seriesGenerationRouter = createTRPCRouter({
         .orderBy(asc(episode.episodeNumber));
 
       const rows: Array<{
+        done: number;
         episodeId: string;
         episodeNumber: number;
+        failed: number;
+        pending: number;
+        running: number;
         title: string;
         total: number;
-        done: number;
-        failed: number;
-        running: number;
-        pending: number;
       }> = [];
 
       for (const ep of eps) {
@@ -90,15 +92,22 @@ export const seriesGenerationRouter = createTRPCRouter({
               .where(and(eq(task.projectId, ep.projectId), inArray(task.shotId, shotIds)));
             const statusByShot = new Map<string, string>();
             for (const t of tasks) {
-              if (!t.shotId) continue;
+              if (!t.shotId) {
+                continue;
+              }
               statusByShot.set(t.shotId, bestStatus(statusByShot.get(t.shotId), t.status));
             }
             for (const sid of shotIds) {
               const st = statusByShot.get(sid);
-              if (st === "SUCCEEDED") done++;
-              else if (st === "RUNNING") running++;
-              else if (st === "FAILED") failed++;
-              else pending++;
+              if (st === "SUCCEEDED") {
+                done++;
+              } else if (st === "RUNNING") {
+                running++;
+              } else if (st === "FAILED") {
+                failed++;
+              } else {
+                pending++;
+              }
             }
           }
         }
@@ -130,20 +139,22 @@ export const seriesGenerationRouter = createTRPCRouter({
         .select({ id: episode.id, projectId: episode.projectId })
         .from(episode)
         .where(eq(episode.seasonId, input.seasonId));
-      const projectIds = Array.from(
-        new Set(
+      const projectIds = [
+        ...new Set(
           eps
             .map((e) => e.projectId)
             .filter((p): p is string => typeof p === "string" && p.length > 0),
         ),
-      );
+      ];
       const existing = await ctx.db
         .select({ projectId: task.projectId, shotId: task.shotId, status: task.status })
         .from(task)
         .where(inArray(task.projectId, projectIds));
       const occupied = new Set<string>();
       for (const t of existing) {
-        if (!t.projectId || !t.shotId) continue;
+        if (!t.projectId || !t.shotId) {
+          continue;
+        }
         if (t.status === "SUCCEEDED" || t.status === "QUEUED" || t.status === "RUNNING") {
           occupied.add(`${t.projectId}:${t.shotId}`);
         }
@@ -156,14 +167,18 @@ export const seriesGenerationRouter = createTRPCRouter({
       let enqueued = 0;
       let skipped = 0;
       for (const ep of eps) {
-        if (!ep.projectId) continue;
+        if (!ep.projectId) {
+          continue;
+        }
         const prod = await ctx.db.query.production.findFirst({
           where: eq(production.id, ep.projectId),
         });
         const shots = Array.isArray(prod?.shots) ? (prod?.shots as Array<{ id?: string }>) : [];
         for (const s of shots) {
           const sid = s.id;
-          if (!sid) continue;
+          if (!sid) {
+            continue;
+          }
           const key = `${ep.projectId}:${sid}`;
           if (occupied.has(key)) {
             skipped++;
@@ -187,7 +202,9 @@ export const seriesGenerationRouter = createTRPCRouter({
           enqueued++;
         }
       }
-      if (enqueued > 0) kickQueue();
+      if (enqueued > 0) {
+        kickQueue();
+      }
       return { enqueued, skipped };
     }),
 });

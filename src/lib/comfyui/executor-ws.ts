@@ -34,13 +34,12 @@ import { comfyProtocol, type ComfyWsMessage } from "./protocol-adapter";
 import { state, log, claimSettle, CLIENT_ID, JOB_TIMEOUT_MS, WS_PATHS } from "./runner-state";
 import { WS_RECONNECT, backoffDelayMs } from "../retry-policy";
 import { complete, fail } from "./executor-finalize";
-import { announceToQueuedTasks } from "./executor-continuation";
+import { announceToQueuedTasks, kickQueue } from "./executor-continuation";
 import {
   COMFYUI_AUTOSTART_TIMEOUT_MS,
   ensureComfyUiReady,
   isComfyAutoStartSuppressed,
 } from "./lifecycle";
-import { kickQueue } from "./executor-continuation";
 import { fetchHistoryEntry, traceComfyQueue, type ComfyHistoryEntry } from "./executor-history";
 import { trace } from "./trace";
 import { classTypeForNode, nodeLabel } from "./graph-node-class";

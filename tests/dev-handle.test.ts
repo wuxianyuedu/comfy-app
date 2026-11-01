@@ -183,9 +183,9 @@ describe("readDevHandleWithSource：ship 念的那一格与取值链同源", () 
 describe("链接 worktree 的 .env 回落（ISSUE #2833）", () => {
   let mainRoot: string;
   let wtRoot: string;
-  const made: string[] = [];
+  const made: Array<string> = [];
 
-  function git(cwd: string, args: string[]): void {
+  function git(cwd: string, args: Array<string>): void {
     const r = spawnSync("git", args, { cwd, encoding: "utf8" });
     if (r.status !== 0) {
       throw new Error(`git ${args.join(" ")} 失败：${r.stderr}`);
@@ -194,7 +194,7 @@ describe("链接 worktree 的 .env 回落（ISSUE #2833）", () => {
 
   beforeEach(() => {
     mainRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dev-handle-main-"));
-    wtRoot = path.join(mainRoot, "..", path.basename(mainRoot) + "-wt");
+    wtRoot = path.join(mainRoot, "..", `${path.basename(mainRoot)}-wt`);
     made.push(mainRoot, wtRoot);
     git(mainRoot, ["init", "-q"]);
     git(mainRoot, ["config", "user.email", "t@example.test"]);

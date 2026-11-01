@@ -119,7 +119,7 @@ function main() {
   if (configText === null || found < EXPECTED_TIERS) {
     console.error(
       `${TAG} [ERROR] 解析 \`vitest.config.ts\` 的 \`projects\` 失败` +
-        `（读到 ${configText === null ? "0 份配置" : found + " 个档"}，期望 ${EXPECTED_TIERS}）。\n` +
+        `（读到 ${configText === null ? "0 份配置" : `${found} 个档`}，期望 ${EXPECTED_TIERS}）。\n` +
         `${TAG}   本判据的收集面就是那两个档的 \`include\` / \`exclude\`；\n` +
         `${TAG}   配置形状改了就要同批改这里 —— 静默退回「没有档」等于这条判据消失。`,
     );

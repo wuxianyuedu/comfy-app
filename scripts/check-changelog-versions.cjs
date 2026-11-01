@@ -211,9 +211,9 @@ function anchorLineOf(section) {
 let text = null;
 try {
   text = fs.readFileSync(CHANGELOG, "utf8");
-} catch (err) {
+} catch (error) {
   problems.push(
-    `读不到 CHANGELOG.md:${err.message} —— 本判据的对象就是它,读不到时判失败,` +
+    `读不到 CHANGELOG.md:${error.message} —— 本判据的对象就是它,读不到时判失败,` +
       `不按「没有段落要查」放过(§11.23.3 同款)`,
   );
 }
@@ -319,7 +319,7 @@ if (text !== null) {
 
 if (REPORT_ONLY) {
   process.stdout.write(
-    `待发段落的来源锚(${report.length} 行):\n` + report.map((l) => "  " + l).join("\n") + "\n",
+    `待发段落的来源锚(${report.length} 行):\n${report.map((l) => `  ${l}`).join("\n")}\n`,
   );
   process.exit(0);
 }
@@ -327,7 +327,7 @@ if (REPORT_ONLY) {
 if (problems.length > 0) {
   console.error(`[changelog-versions] ${problems.length} 处问题(规范 §13.10.6):\n`);
   for (const p of problems) {
-    console.error("  ✗ " + p);
+    console.error(`  ✗ ${p}`);
   }
   console.error(`\n待发段落与锚的写法见 docs/standards/13-提交与-code-review.md §13.10.6。`);
   process.exit(1);

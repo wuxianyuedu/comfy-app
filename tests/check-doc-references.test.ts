@@ -74,8 +74,8 @@ function runCheck(): { code: number; output: string } {
       stdio: ["ignore", "pipe", "pipe"],
     });
     return { code: 0, output };
-  } catch (err) {
-    const e = /* SAFETY: 类型断言已复核 */ err as {
+  } catch (error) {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -122,10 +122,10 @@ afterEach(() => {
     let now: Buffer | null;
     try {
       now = existsSync(abs) ? readFileSync(abs) : null;
-    } catch (e) {
+    } catch (error) {
       /* 读不到也当成「被动过」交上去报：这里没有「静默跳过」那一档 —— 跳一次，
        * 这道网就在不判任何东西而账面照样绿。 */
-      touched.push(`${abs} → 读当前内容失败：${String(e instanceof Error ? e.message : e)}`);
+      touched.push(`${abs} → 读当前内容失败：${String(error instanceof Error ? error.message : error)}`);
       continue;
     }
     const same = now === null || want === null ? now === want : now.equals(want);
@@ -135,9 +135,9 @@ afterEach(() => {
   }
   expect(
     touched,
-    "探针不该写真实工作树（ISSUE #2665）：下面这些真实入库文件在本文件跑的过程中被改过 —— " +
-      "写探针要落在克隆里（`REPO_ROOT`），不是 `REAL_ROOT`。\n  " +
-      touched.join("\n  "),
+    `探针不该写真实工作树（ISSUE #2665）：下面这些真实入库文件在本文件跑的过程中被改过 —— ` +
+      `写探针要落在克隆里（\`REPO_ROOT\`），不是 \`REAL_ROOT\`。\n  ${
+      touched.join("\n  ")}`,
   ).toEqual([]);
 });
 
@@ -162,8 +162,8 @@ function writeText(abs: string, text: string): void {
         return;
       }
       lastError = "写回后读回的内容与预期不一致";
-    } catch (err) {
-      lastError = /* SAFETY: 类型断言已复核 */ (err as Error).message;
+    } catch (error) {
+      lastError = /* SAFETY: 类型断言已复核 */ (error as Error).message;
     }
   }
   throw new Error(
@@ -204,7 +204,7 @@ async function gateDocs(): Promise<Array<string>> {
  */
 function isCalledInMain(script: string, call: string): boolean {
   const mainBody = script.slice(script.indexOf("function main()"));
-  const escaped = call.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = call.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(`^[ \\t]*${escaped};$`, "m").test(mainBody);
 }
 
@@ -1086,8 +1086,8 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
         },
       });
       return { code: 0, output };
-    } catch (err) {
-      const e = /* SAFETY: 类型断言已复核 */ err as {
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as {
         status?: number;
         stderr?: string;
         stdout?: string;
@@ -1208,8 +1208,8 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
         },
       });
       return { code: 0, output };
-    } catch (err) {
-      const e = /* SAFETY: 类型断言已复核 */ err as {
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as {
         status?: number;
         stderr?: string;
         stdout?: string;

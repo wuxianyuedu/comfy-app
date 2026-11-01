@@ -130,7 +130,7 @@ const STANDARDS_DIR = "docs/standards";
  * 语序 A 里 `§` 与关键词之间的窗口；语序 B 同理（保留 → `§`）。
  */
 const SECTION_CONNECTOR =
-  "(?:[\\s/、与和及]|§\\s*[0-9]+(?:\\.[0-9]+)*|两|三|四|各|一|处|节|章|条|插记|照旧|原文|该|这|那|的|新增|master)";
+  String.raw`(?:[\s/、与和及]|§\s*[0-9]+(?:\.[0-9]+)*|两|三|四|各|一|处|节|章|条|插记|照旧|原文|该|这|那|的|新增|master)`;
 
 /** 语序 A：`§<号>` …（连接物）… `保留` / `不出现`。 */
 const SECTION_KEEP_AFTER_RE = new RegExp(
@@ -259,7 +259,7 @@ function sectionInTree(commit, num) {
     return { ok: false, files: [] };
   }
   /* 标题形态：`#… 13.6.3 ` —— 号后面必须是空白，免得 `13.6.30` 命中 `13.6.3`。 */
-  const re = new RegExp(`^#+\\s+${num.replaceAll(".", "\\.")}\\s`, "m");
+  const re = new RegExp(`^#+\\s+${num.replaceAll(".", String.raw`\.`)}\\s`, "m");
   const hits = [];
   for (const f of docs) {
     const body = git(["show", `${commit}:${f}`]);
@@ -746,14 +746,14 @@ function main(argv) {
 
   if (contradicted.length > 0) {
     process.stderr.write(
-      `[commit-claims] ${contradicted.length} 处声明与事实矛盾（规范 §11.23）：\n` +
+      `[commit-claims] ${contradicted.length} 处声明与事实矛盾（规范 §11.23）：\n${
         contradicted
           .map(
             ({ a, r }) =>
               `  · ${a.commit.slice(0, 8)}：${r.detail}\n     原句：${r.claim.raw.trim()}`,
           )
-          .join("\n") +
-        "\n",
+          .join("\n")
+        }\n`,
     );
     return 1;
   }

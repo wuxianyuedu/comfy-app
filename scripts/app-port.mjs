@@ -52,7 +52,7 @@ export function normalizeRootForPort(root) {
   // 拼上 cwd —— 这正是上面描述的失真来源。盘符判据本体写作 /^[a-z]:\//i
   //（ASCII 盘符不区分大小写，无需再列 A-Z），UNC 另判前导双反斜杠。
   const isWindowsDrive = /^[a-z]:\//i.test(raw.replaceAll("\\", "/"));
-  const isUnc = raw.startsWith("\\\\");
+  const isUnc = raw.startsWith(String.raw`\\`);
   const absolute = isWindowsDrive || isUnc || path.isAbsolute(raw);
   const resolved = absolute ? raw : path.resolve(raw);
   return resolved.replaceAll("\\", "/").toLowerCase().replace(/\/+$/, "");
@@ -62,10 +62,10 @@ export function normalizeRootForPort(root) {
  *  @param {string} text @returns {number} */
 export function fnv1a32(text) {
   const bytes = new TextEncoder().encode(text);
-  let h = 0x811c9dc5;
+  let h = 0x81_1c_9d_c5;
   for (const b of bytes) {
     h ^= b;
-    h = Math.imul(h, 0x01000193) >>> 0;
+    h = Math.imul(h, 0x01_00_01_93) >>> 0;
   }
   return h >>> 0;
 }
@@ -133,7 +133,7 @@ export function parseDotEnvPortValue(value) {
     return null;
   }
   const port = Number.parseInt(trimmed, 10);
-  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+  return Number.isInteger(port) && port >= 1 && port <= 65_535 ? port : null;
 }
 
 /** 读 `.env` 的 `COMFYAPP_PORT`；未配置 / 非法 / 文件缺失时返回 null。

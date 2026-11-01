@@ -410,17 +410,17 @@ function main() {
   if (problems.length === 0) {
     console.log(
       `[concurrency] OK —— ${concurrentSites} 处并发站点 / ${concurrentFiles.length} 份文件，` +
-        "隔离声明齐全、无 `expect.poll` 冲突。" +
+        `隔离声明齐全、无 \`expect.poll\` 冲突。${
         /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。 */
-        vanishedNote(vanished),
+        vanishedNote(vanished)}`,
     );
     return 0;
   }
 
   console.error(
-    (REPORT_ONLY
+    `${REPORT_ONLY
       ? `[concurrency] 盘点：${problems.length} 处待办（--report 不判失败）`
-      : `[ERROR] 有 ${problems.length} 处并发档用法不合口径`) + "：\n",
+      : `[ERROR] 有 ${problems.length} 处并发档用法不合口径`}：\n`,
   );
   for (const p of problems) {
     console.error(`  · ${p}\n`);

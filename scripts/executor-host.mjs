@@ -60,7 +60,7 @@ const argv = process.argv.slice(2);
 const runOnce = argv.includes("--once");
 const claimOnce = argv.includes("--claim-once");
 const intervalArg = argv.find((a) => a.startsWith("--interval="));
-const intervalMs = intervalArg ? Number.parseInt(intervalArg.split("=")[1] ?? "", 10) : 5_000;
+const intervalMs = intervalArg ? Number.parseInt(intervalArg.split("=")[1] ?? "", 10) : 5000;
 
 /** 日志路径：默认落 `log/current/services/executor-host.log`（追加不轮转，与
  *  `comfyui-runtime.log` 同族；current/ 的语义见规范 §4 —— 退出时整目录归档）。
@@ -93,11 +93,11 @@ function writeLine(msg) {
     // 「grep runId 一把梭」要求**每个通道**都写这一列，靠各进程自己生成就散了。
     const runId = process.env.COMFYAPP_RUN_ID;
     const tag = runId ? `[${runId}][executor-host] ` : "[executor-host] ";
-    fs.appendFileSync(logPath, `[${localStamp()}] [INFO] ${tag}${msg}\n`, "utf-8");
-  } catch (err) {
+    fs.appendFileSync(logPath, `[${localStamp()}] [INFO] ${tag}${msg}\n`, "utf8");
+  } catch (error) {
     // 日志写不进不能拖崩主循环；stderr 一行 + 继续跑。
     process.stderr.write(
-      `[executor-host] 写日志失败（忽略）：${err instanceof Error ? err.message : String(err)}\n`,
+      `[executor-host] 写日志失败（忽略）：${error instanceof Error ? error.message : String(error)}\n`,
     );
   }
 }
@@ -130,7 +130,7 @@ function resolveDatabaseUrl() {
   try {
     const envPath = path.join(ROOT, ".env");
     if (fs.existsSync(envPath)) {
-      const parsed = parseEnvFile(fs.readFileSync(envPath, "utf-8"));
+      const parsed = parseEnvFile(fs.readFileSync(envPath, "utf8"));
       const fromFile = parsed.get("DATABASE_URL");
       if (fromFile) {
         return fromFile;
@@ -174,7 +174,7 @@ let hostRuntime = null;
 
 /** 领取节拍（ms）。与 inline 的「点一次跑一个」语义对齐：每 tick `take=1`，
  *  串行的深队列由 dispatch 的槽位判据（MAX_CONCURRENCY）管，这里不一次领一串。 */
-const CLAIM_TICK_MS = Number.parseInt(process.env.COMFYAPP_HOST_CLAIM_TICK_MS ?? "", 10) || 2_000;
+const CLAIM_TICK_MS = Number.parseInt(process.env.COMFYAPP_HOST_CLAIM_TICK_MS ?? "", 10) || 2000;
 
 /** 领一行并投递执行 + 取消收尾（P3 §5 ADR §14 D1 第二刀之后）：
  *  领取与提交的全部判据都在 `src/lib/comfyui/executor-dispatch.ts`（与 Next 侧
@@ -237,11 +237,11 @@ async function reconcileCancelled(runtime) {
       let interruptState = "sent";
       try {
         await runtime.interrupt();
-      } catch (err) {
+      } catch (error) {
         /* 同一个文件里另一处 catch（`claim-tick 异常` 那一句）用的就是这条判据，
          * 这一处漏了 —— `err` 是 `unknown`，`err?.message` 在类型上根本不存在
          * （TS2339），而不是「运行时会给出 message」。同形补齐，不改话术。 */
-        interruptState = `failed:${err instanceof Error ? err.message : String(err)}`;
+        interruptState = `failed:${error instanceof Error ? error.message : String(error)}`;
       }
       writeLine(`cancel-reaped taskId=${taskId} interrupt=${interruptState}`);
     } catch {
@@ -349,8 +349,8 @@ if (unknownExecutor) {
 if (runtimeMode) {
   try {
     await bootRuntime();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     writeLine(`runtime boot FAILED（注入链未通即退出，不退化成心跳假活）：${msg}`);
     process.stderr.write(`[executor-host] 运行时注入链失败，退出 1：${msg}\n`);
     process.exit(1);
@@ -369,8 +369,8 @@ if (claimOnce) {
     /* `--claim-once` 验的是「领取 + 载荷重建」这几步机械动作，就绪门控在没有真
      * ComfyUI 的机器上永远过不去，所以这里显式跳过它（常驻循环与 kick 都不跳）。 */
     await claimTickOnce({ skipReadyGate: true });
-  } catch (err) {
-    writeLine(`claim-tick FAILED：${err instanceof Error ? err.message : String(err)}`);
+  } catch (error) {
+    writeLine(`claim-tick FAILED：${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
   process.exit(0);
@@ -386,7 +386,7 @@ const hb = setInterval(
   () => {
     writeLine(`heartbeat bootId=${bootId}`);
   },
-  Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5_000,
+  Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 5000,
 );
 
 /* 领取主循环（3-B1）：host 形态每 CLAIM_TICK_MS 领一行（无行可领时只是一个
@@ -396,8 +396,8 @@ const hb = setInterval(
 let claimHandle = null;
 if (runtimeMode) {
   claimHandle = setInterval(() => {
-    claimTickOnce().catch((err) => {
-      writeLine(`claim-tick 异常（下轮重试）：${err instanceof Error ? err.message : String(err)}`);
+    claimTickOnce().catch((error) => {
+      writeLine(`claim-tick 异常（下轮重试）：${error instanceof Error ? error.message : String(error)}`);
     });
   }, CLAIM_TICK_MS);
 }

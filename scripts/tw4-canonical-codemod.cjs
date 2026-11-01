@@ -17,26 +17,26 @@ for (const file of process.argv.slice(2)) {
   const after = before
     .replaceAll(/\/\[0\.(\d+)\]/g, (_, digits) => {
       count++;
-      return "/" + String(parseFloat("0." + digits) * 100);
+      return `/${String(Number.parseFloat(`0.${digits}`) * 100)}`;
     })
     .replaceAll(/bg-gradient-to-([a-z]+)/g, (_, dir) => {
       count++;
-      return "bg-linear-to-" + dir;
+      return `bg-linear-to-${dir}`;
     })
     .replaceAll(/-\[var\(--([a-zA-Z0-9-]+)\)\]/g, (_, v) => {
       count++;
-      return "-(--" + v + ")";
+      return `-(--${v})`;
     })
     .replaceAll(
       /(^|[\s"'`])(-[a-z][a-z0-9]*)-\[([0-9][^\]]*)\]/g,
       (_m, pre, util, value) => {
         count++;
-        return pre + util.slice(1) + "-[-" + value + "]";
+        return `${pre}${util.slice(1)}-[-${value}]`;
       },
     )
     .replaceAll(/\bz-\[(\d+)\]/g, (_, n) => {
       count++;
-      return "z-" + n;
+      return `z-${n}`;
     })
     .replaceAll(/\bbreak-words\b/g, () => {
       count++;

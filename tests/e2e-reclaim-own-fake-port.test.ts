@@ -47,7 +47,7 @@ const FOREIGN_CMDLINE = "node some-other-service.js";
 describe("替身端口占位者的识别：命令行那一半", () => {
   it("反斜杠与大小写都认（Windows 上是 `node e2e\\support\\…`）", () => {
     expect(isFakeServerCmdline(OUR_CMDLINE)).toBe(true);
-    expect(isFakeServerCmdline("node e2e\\support\\fake-comfyui-server.mjs")).toBe(true);
+    expect(isFakeServerCmdline(String.raw`node e2e\support\fake-comfyui-server.mjs`)).toBe(true);
     expect(isFakeServerCmdline("NODE E2E/SUPPORT/FAKE-COMFYUI-SERVER.MJS")).toBe(true);
     expect(isFakeServerCmdline(FOREIGN_CMDLINE)).toBe(false);
     expect(isFakeServerCmdline("")).toBe(false);
@@ -94,14 +94,14 @@ describe("收的方式与边界", () => {
   it("端口空着 ⇒ 一条进程都不起、也不回收", async () => {
     const listeningPids = vi.fn(async () => []);
     const reap = vi.fn(async () => ({ ok: true }));
-    const result = await reclaimOwnFakePort(18188, { listeningPids, reap });
+    const result = await reclaimOwnFakePort(18_188, { listeningPids, reap });
     expect(result).toEqual({ reclaimed: [], foreign: [], free: true });
     expect(reap).not.toHaveBeenCalled();
   });
 
   it("两条证据都齐 ⇒ 交出那个 PID 回收（**整棵树**走仓里唯一出口）", async () => {
     const reap = vi.fn(async () => ({ ok: true }));
-    const result = await reclaimOwnFakePort(18188, {
+    const result = await reclaimOwnFakePort(18_188, {
       listeningPids: async () => [4242],
       readCmdlines: async (pids) => new Map(pids.map((p) => [p, OUR_CMDLINE])),
       answersFake: async () => true,
@@ -125,7 +125,7 @@ describe("收的方式与边界", () => {
 
   it("认不出的占位者 ⇒ **一个都不收**，但如实报出来是哪几个", async () => {
     const reap = vi.fn(async () => ({ ok: true }));
-    const result = await reclaimOwnFakePort(18188, {
+    const result = await reclaimOwnFakePort(18_188, {
       listeningPids: async () => [7],
       readCmdlines: async (pids) => new Map(pids.map((p) => [p, FOREIGN_CMDLINE])),
       answersFake: async () => true,
@@ -137,7 +137,7 @@ describe("收的方式与边界", () => {
 
   it("命令行走形之后才付那次 `/system_stats` 探测（不相关的占位者不必被 fetch）", async () => {
     const answersFake = vi.fn(async () => true);
-    await reclaimOwnFakePort(18188, {
+    await reclaimOwnFakePort(18_188, {
       listeningPids: async () => [1, 2],
       readCmdlines: async () =>
         new Map([
@@ -241,7 +241,7 @@ describe("应用端口占位者的识别：两条证据缺一不可", () => {
     expect(isAppDevServerCmdline(OUR_APP, ROOT)).toBe(true);
     expect(isAppDevServerCmdline("node /repo/scripts/dev.mjs", ROOT)).toBe(true);
     /* 反斜杠形态在 Windows 上是常见的。 */
-    expect(isAppDevServerCmdline("node F:\\repo\\scripts\\start.mjs", "F:/repo")).toBe(true);
+    expect(isAppDevServerCmdline(String.raw`node F:\repo\scripts\start.mjs`, "F:/repo")).toBe(true);
   });
 
   it("**别的检出**的应用服务 ⇒ 不收（命令行里的检出根不是我们的，§1.4）", () => {

@@ -114,7 +114,7 @@ export function toErrorEnvelope(err: AppError): {
     error: {
       code: err.code,
       message: err.message,
-      ...(err.details !== undefined ? { details: err.details } : {}),
+      ...(err.details === undefined ? {} : { details: err.details }),
     },
   };
 }

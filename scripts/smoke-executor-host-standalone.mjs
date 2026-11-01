@@ -32,8 +32,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
-import { builtinModules } from "node:module";
-import { createRequire } from "node:module";
+import { builtinModules, createRequire } from "node:module";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_TARGET = path.join(ROOT, ".next", "standalone");

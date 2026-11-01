@@ -54,9 +54,9 @@ import {
 export function stageLogPlan(slug, sn, stageRef) {
   const target = sn || "<sn>";
   return [
-    "cnb build get-build-logs --repo " +
-      slug +
-      " -v（未点名构建号时，按 HEAD 的 sha 在 pull_request 构建里归属）",
+    `cnb build get-build-logs --repo ${
+      slug
+      } -v（未点名构建号时，按 HEAD 的 sha 在 pull_request 构建里归属）`,
     `cnb build get-build-status --repo ${slug} --sn ${target} -v（按格名反查 stageId 用的就是这份逐格读数）`,
     `cnb build get-build-stage --repo ${slug} --sn ${target} --pipelineId <pipelineId> --stageId <stageId> -v（只取「${stageRef}」那一格）`,
   ];

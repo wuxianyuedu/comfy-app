@@ -47,13 +47,18 @@
  *     动作：修你自己的代码，别去动基线。
  *   · `current-green` —— 你的检出上已经不红了 ⇒ 没什么可复算的（已修 / 判据只在
  *     特定输入面触发）。
- *   · `inconclusive`  —— 命令在其中一侧**没跑起来** ⇒ 不构成证据。两条入口：
+ *   · `inconclusive`  —— 命令在其中一侧**没跑起来 / 没跑出结论** ⇒ 不构成证据。三条入口：
  *     ① 退出码 127（找不到模块 / 命令）；② **一条用例都没收集到**（`DID_NOT_RUN_SIGNATURES`，
  *     ISSUE #1652）：基线那一侧因依赖解析失败时，退出码是 1（vitest 收集失败 / Node 的
  *     `MODULE_NOT_FOUND`）—— 与「判据跑了且红」逐字同形，只读退出码必然读成
  *     `baseline-red`。最典型的成因是那条判据只存在**本检出未提交的改动**里：基线的
  *     worktree 是一个干净的上游快照，看不到工作区的未提交文件（这是正确语义，不是缺陷
- *     —— 本判据要复算的就是「干净的线上基线」）。两种入口都**不许**读成「别线的红」。
+ *     —— 本判据要复算的就是「干净的线上基线」）；③ **退出码 2**（ISSUE #2791）：判据
+ *     跑了，但它按本仓三态口径自己答「这一跳没有结论」（前提不成立 / 取不到读数），
+ *     而它自己的输出里通常逐字写着「不算绿也不算红」—— 过去 2 与 1 在代码层面逐字同权，
+ *     于是这一格被报成 `baseline-red`，下一动作被指到「就地修或登记 `KNOWN_FAILED_FILES`」，
+ *     而事实是什么都没判。三种入口都**不许**读成「别线的红」；③ 的下一动作还与 ①② 不同
+ *     （①② 是"让命令能跑起来"，③ 是"清掉它点名的那个前置再复算"）。
  *   · `load-flake`    —— **两侧都红、且两侧的输出都是超时形态** ⇒ 高度疑似
  *     「机器太满」而不是代码（ISSUE #1641）。它既不是别线的红、也不是你的红，
  *     是这一刻机器的红 ⇒ **不照 `baseline-red` 的动作走**（那会把一次调度抖动
@@ -64,7 +69,7 @@
  *
  *     current-green > inconclusive > yours > load-flake > baseline-red
  *
- * 即：绿压过一切；「没跑起来」压过一切红（127 与「一条用例都没收集到」都算）。
+ * 即：绿压过一切；「没跑出结论」压过一切红（127、「一条用例都没收集到」与退 **2** 都算）。
  *
  * ── 第三条入口：Windows 上的 `pnpm exec …` 形态（ISSUE #1652 顺带）──────
  *
@@ -185,9 +190,9 @@ export function baseCheck({ argv, label, ref, keep = false, json = false }) {
  *
  * 四种情形（`summary` 逐字对应）：
  *   · 全部绿 ⇒ `base-green`（上游基线干净，这一批没有要复算的事实）；
- *   · 任一条**没跑起来**（127）⇒ `inconclusive`，且**整批**不构成证据 ——
- *     127 与「跑了且红」在退出码上同形（Node 的 `MODULE_NOT_FOUND` 也是 1），
- *     拿它当「别线的红」是把人往错方向送；
+ *   · 任一条**没跑出结论**（127 / 退 2 / 一条用例都没收集到）⇒ `inconclusive`，且**整批**
+ *     不构成证据 —— 127 与「跑了且红」在退出码上同形（Node 的 `MODULE_NOT_FOUND` 也是 1），
+ *     而退 **2** 与退 1 只差一个码位（ISSUE #2791）：拿它们当「别线的红」是把人往错方向送；
  *   · 有红、且红的那些在基线上**同样命中** ⇒ `baseline-red`（别线的红，逐条列出）；
  *   · 有红、但基线上绿 ⇒ `yours`（本检出的红）。
  *
@@ -413,9 +418,13 @@ export function unlinkDependencies(link) {
 /**
  * 判决是 `inconclusive` 时，**是哪一侧、哪一种形态**（报告用它点名）。
  *
- * 单独成函数而不是从 `runState` 反推：那句话要说的是「127」与「一条用例都没收集到」
- * 的区分，而后者只在**输出**里看得见 —— 报告里给出的是「哪一侧说什么」，不是又一个
- * 需要人去解读的退出码。
+ * 单独成函数而不是从 `runState` 反推：那句话要说的是「127」「一条用例都没收集到」
+ * 与「退 2（判据自己说没有结论）」三种形态的区分，而后两种只在**输出**与**码位**上
+ * 看得见 —— 报告里给出的是「哪一侧说什么」，不是又一个需要人去解读的退出码。
+ *
+ * ⚠️ 第三种（退 2）的下一动作与前两种**不同**：前两种要「让命令真能跑起来」，
+ * 第三种是命令跑起来了、但它声明前提不成立 ⇒ 去清它点名的那个前置再复算。
+ * 混在一起报，读的人会去修一条没坏的命令（ISSUE #2791）。
  *
  * @param {{cur: number, curOutput?: string, base: {code: number, output?: string} | null, baseOutput?: string}} input
  * @returns {string}
@@ -424,6 +433,8 @@ export function didNotRunSide({ cur, curOutput, base, baseOutput }) {
   const sides = [];
   if (cur === 127) {
     sides.push("本检出：127（找不到模块 / 命令）");
+  } else if (cur === 2) {
+    sides.push("本检出：退 2（判据自己声明这一跳没有结论，不是红）");
   } else if (isDidNotRunShaped(curOutput)) {
     sides.push("本检出：一条用例都没收集到");
   }
@@ -433,6 +444,8 @@ export function didNotRunSide({ cur, curOutput, base, baseOutput }) {
   const baseText = base ? String(base.output ?? "") : String(baseOutput ?? "");
   if (baseCode === 127) {
     sides.push("基线：127（找不到模块 / 命令）");
+  } else if (baseCode === 2) {
+    sides.push("基线：退 2（判据自己声明这一跳没有结论，不是红）");
   } else if (baseCode !== null && baseCode !== 0 && isDidNotRunShaped(baseText)) {
     sides.push("基线：一条用例都没收集到");
   }
@@ -568,7 +581,7 @@ function reportMany(result, { json, shape = "batch" }) {
         }）\n`,
     );
     if (only.didNotRun) {
-      process.stdout.write(`[base-check] 没跑起来：${only.didNotRun}\n`);
+      process.stdout.write(`[base-check] 没跑出结论：${only.didNotRun}\n`);
     }
     if (only.baseOutputTail) {
       process.stdout.write(`[base-check] 基线那次输出的末尾：\n`);
@@ -600,10 +613,11 @@ function reportMany(result, { json, shape = "batch" }) {
         r.baseCode === null ? "未跑" : r.baseCode
       }）\n`,
     );
-    /* 「没跑起来」的两种形态在退出码上同形，只有输出里的指纹分得开 —— 而这一行
-     * 决定了人是去修代码还是去查环境（ISSUE #1652）。 */
+    /* 「没跑出结论」的三种形态在退出码上同形（127 / 收集不到 / 判据自己退 2），
+     * 只有码位与输出里的指纹分得开 —— 而这一行决定了人是去修代码、去查环境，
+     * 还是去清它点名的那个前置（ISSUE #1652 与 #2791）。 */
     if (r.didNotRun) {
-      process.stdout.write(`      ↳ 没跑起来：${r.didNotRun}\n`);
+      process.stdout.write(`      ↳ 没跑出结论：${r.didNotRun}\n`);
     }
   }
   process.stdout.write(`[base-check] 结论：${summary}\n`);

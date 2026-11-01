@@ -216,10 +216,10 @@ function gatesSection(changed) {
         `；重档 ${cls.heavy} 条（本地默认不跑）`,
     );
     lines.push(
-      `      - 本次碰到收窄面、会跑：${cls.hit.length} 条` +
-        (cls.hit.length > 0
+      `      - 本次碰到收窄面、会跑：${cls.hit.length} 条${
+        cls.hit.length > 0
           ? `\n          ${cls.hit.map((x) => `${x.label}（${x.script}）`).join("\n          ")}`
-          : "（改动面一条都没碰到登记过的收窄面）"),
+          : "（改动面一条都没碰到登记过的收窄面）"}`,
     );
     if (cls.skippable.length > 0) {
       lines.push(`      - 按收窄面可跳过：${names(cls.skippable)}`);
@@ -243,10 +243,10 @@ function gatesSection(changed) {
   const willSkip = platform.filter((p) => !p.run).map((p) => p.name);
   lines.push(
     `  · 平台 ifModify 收窄（ci-incremental-gates 的 ${platform.length} 条登记）：` +
-      `会跑 ${willRun.length} 条；可跳过 ${willSkip.length} 条` +
-      (willSkip.length > 0
+      `会跑 ${willRun.length} 条；可跳过 ${willSkip.length} 条${
+      willSkip.length > 0
         ? `\n      会跑：${willRun.join(" / ") || "无"}\n      可跳过：${willSkip.join(" / ")}`
-        : ""),
+        : ""}`,
   );
   return { lines, ok: cls.totalSteps > 0 };
 }
@@ -306,13 +306,13 @@ function docsSection(changed) {
   }
   for (const entry of matched) {
     lines.push(
-      `  · ${entry.scope} → ${entry.doc} ${entry.spec}` + (entry.when ? `（${entry.when}）` : ""),
+      `  · ${entry.scope} → ${entry.doc} ${entry.spec}${entry.when ? `（${entry.when}）` : ""}`,
     );
   }
   if (actionOnly.length > 0) {
     lines.push(
-      "  · 按**动作**判断、路径匹配不出来的（自己对照）：" +
-        actionOnly.map((e) => `${e.scope}（${e.when}）→ ${e.doc} ${e.spec}`).join("；"),
+      `  · 按**动作**判断、路径匹配不出来的（自己对照）：${
+        actionOnly.map((e) => `${e.scope}（${e.when}）→ ${e.doc} ${e.spec}`).join("；")}`,
     );
   }
   return lines;
@@ -343,7 +343,9 @@ export function main(argv = process.argv.slice(2)) {
 
   /** @type {{ok: true, files: string[], renamedFrom: string[], via: string} | {ok: false, reason: string}} */
   let face;
-  if (changed !== null) {
+  if (changed === null) {
+    face = resolveChangedFiles();
+  } else {
     if (changed.length === 0) {
       process.stderr.write(
         `${TAG} \`--changed\` 后面没有路径 —— 这不是「改动面为空」，是没有给名单（退 2）\n`,
@@ -356,8 +358,6 @@ export function main(argv = process.argv.slice(2)) {
       renamedFrom: [],
       via: "--changed（显式名单；改名旧侧由调用方一并给出）",
     };
-  } else {
-    face = resolveChangedFiles();
   }
   if (!face.ok) {
     process.stderr.write(

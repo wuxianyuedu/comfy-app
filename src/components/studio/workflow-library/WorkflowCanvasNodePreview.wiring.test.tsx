@@ -308,7 +308,7 @@ describe("画布铺满：背景板（ISSUE #596）", () => {
 
   it("背景板垫在三列之下，不遮挡卡片（DOM 顺序在前的那个先画）", () => {
     const { container } = renderPreview({});
-    const nodes = Array.from(container.querySelectorAll(".react-flow__node")).map((el) =>
+    const nodes = [...container.querySelectorAll(".react-flow__node")].map((el) =>
       el.getAttribute("data-id"),
     );
     const backdropIndex = nodes.indexOf("lib:backdrop");

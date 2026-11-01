@@ -268,15 +268,15 @@ function main() {
   const { tiers, found, environments: envOfTier, configText } = projectGlobs();
   if (found < 2) {
     console.error(
-      "[ERROR] 解析 `vitest.config.ts` 的 `projects` 失败（拿到 " +
-        found +
-        " 个档，期望 2）。\n" +
-        (configText === null
+      `[ERROR] 解析 \`vitest.config.ts\` 的 \`projects\` 失败（拿到 ${
+        found
+        } 个档，期望 2）。\n${
+        configText === null
           ? "        连 `vitest.config.ts` 都没读到 —— 那本身就是要判失败的故障，\n" +
             "        不许当「配置里没有 projects」处理。\n"
-          : "") +
-        "        本判据依赖那两个 project 的 `include` / `exclude` glob；\n" +
-        "        配置形状改了就要同批改这里 —— 静默退回「没有目录档」等于这条判据消失。",
+          : ""
+        }        本判据依赖那两个 project 的 \`include\` / \`exclude\` glob；\n` +
+        `        配置形状改了就要同批改这里 —— 静默退回「没有目录档」等于这条判据消失。`,
     );
     return 1;
   }
@@ -413,36 +413,36 @@ function main() {
   }
 
   if (all.length === 0) {
-    if (!REPORT_ONLY) {
-      console.log(
-        `[test-env] OK —— ${files.length} 份用例：无环境早退，无目录档矛盾，无冗余文件头。` + note,
-      );
+    if (REPORT_ONLY) {
+      console.log(`[test-env] 盘点：${files.length} 份用例，无问题。${note}`);
     } else {
-      console.log(`[test-env] 盘点：${files.length} 份用例，无问题。` + note);
+      console.log(
+        `[test-env] OK —— ${files.length} 份用例：无环境早退，无目录档矛盾，无冗余文件头。${note}`,
+      );
     }
     return 0;
   }
 
   console.error(
-    (REPORT_ONLY
+    `${REPORT_ONLY
       ? `[test-env] 盘点：${all.length} 处待办（--report 不判失败）`
-      : `[ERROR] 用例的环境档有 ${all.length} 处问题`) + "：\n",
+      : `[ERROR] 用例的环境档有 ${all.length} 处问题`}：\n`,
   );
   for (const p of all) {
-    console.error(`  · ${p.rel}${p.line ? ":" + p.line : ""}  [${p.kind}]`);
+    console.error(`  · ${p.rel}${p.line ? `:${p.line}` : ""}  [${p.kind}]`);
     console.error(`      ${p.detail}`);
   }
   console.error(
-    "\n修法：" +
-      "\n  · 「环境早退」：别把结论挂在环境的一个全局默认值上。要覆盖 SSR / 无 window 分支，\n" +
-      '    就**把条件造出来**：`vi.stubGlobal("window", undefined)` + 断言（配 `afterEach(vi.unstubAllGlobals)`）。\n' +
-      "    仓里现成样板：src/lib/app-events.test.ts 的「无 `window` 时订阅给一个空操作…」那条。\n" +
-      "  · 「目录档与文件头矛盾」：两者必有一处过时 —— 要么用例挪错了目录，要么文件头该改。\n" +
-      "    别只改一边凑绿：那正是这条判据要照出来的改动。\n" +
-      "  · 「冗余文件头」：删掉这一行 `// @vitest-environment …` 即可（目录档已给出同结论）。\n" +
-      "    列清单：`node scripts/check-test-environment.cjs --report`。\n" +
-      "  口径见 docs/standards/11-测试与可观测性.md §11.17。" +
-      note,
+    `\n修法：` +
+      `\n  · 「环境早退」：别把结论挂在环境的一个全局默认值上。要覆盖 SSR / 无 window 分支，\n` +
+      `    就**把条件造出来**：\`vi.stubGlobal("window", undefined)\` + 断言（配 \`afterEach(vi.unstubAllGlobals)\`）。\n` +
+      `    仓里现成样板：src/lib/app-events.test.ts 的「无 \`window\` 时订阅给一个空操作…」那条。\n` +
+      `  · 「目录档与文件头矛盾」：两者必有一处过时 —— 要么用例挪错了目录，要么文件头该改。\n` +
+      `    别只改一边凑绿：那正是这条判据要照出来的改动。\n` +
+      `  · 「冗余文件头」：删掉这一行 \`// @vitest-environment …\` 即可（目录档已给出同结论）。\n` +
+      `    列清单：\`node scripts/check-test-environment.cjs --report\`。\n` +
+      `  口径见 docs/standards/11-测试与可观测性.md §11.17。${
+      note}`,
   );
   return REPORT_ONLY ? 0 : 1;
 }

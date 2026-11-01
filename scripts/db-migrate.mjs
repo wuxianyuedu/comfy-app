@@ -176,9 +176,8 @@ if (files.length === 0) {
 const beforeTables = countUserTables();
 const beforeApplied = appliedMigrations();
 process.stdout.write(
-  `[db:migrate] 应用 ${files.length} 份迁移 → ${dbPath}` +
-    (beforeTables > 0 ? `（当前 ${beforeTables} 张用户表）` : "（库还不存在 / 是空的）") +
-    "\n",
+  `[db:migrate] 应用 ${files.length} 份迁移 → ${dbPath}${beforeTables > 0 ? `（当前 ${beforeTables} 张用户表）` : "（库还不存在 / 是空的）"
+    }\n`,
 );
 
 /* ── ② 跑迁移 ────────────────────────────────────────────────────────────

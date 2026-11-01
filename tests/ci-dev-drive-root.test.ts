@@ -60,7 +60,7 @@ function readCnb(): string {
 function unquote(raw: string): string {
   const t = raw.trim();
   if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) {
-    return t.slice(1, -1).replaceAll("\\\\", "\\").replaceAll("\\\"", '"');
+    return t.slice(1, -1).replaceAll(String.raw`\\`, "\\").replaceAll(String.raw`\"`, '"');
   }
   if (t.length >= 2 && t.startsWith("'") && t.endsWith("'")) {
     return t.slice(1, -1).replaceAll("''", "'");
@@ -225,29 +225,29 @@ describe("落点推导：装与判同源，且「装了却探不到」说得出�
       playwrightBrowsersRoot({
         platform: "win32",
         env: {
-          PLAYWRIGHT_BROWSERS_PATH: "G:\\pw",
-          LOCALAPPDATA: "C:\\Users\\ci\\AppData\\Local",
+          PLAYWRIGHT_BROWSERS_PATH: String.raw`G:\pw`,
+          LOCALAPPDATA: String.raw`C:\Users\ci\AppData\Local`,
         },
       }),
-    ).toBe("G:\\pw");
+    ).toBe(String.raw`G:\pw`);
     const withOverride = playwrightRootCandidates({
       platform: "win32",
       env: {
-        PLAYWRIGHT_BROWSERS_PATH: "G:\\pw",
-        LOCALAPPDATA: "C:\\Users\\ci\\AppData\\Local",
+        PLAYWRIGHT_BROWSERS_PATH: String.raw`G:\pw`,
+        LOCALAPPDATA: String.raw`C:\Users\ci\AppData\Local`,
       },
     });
-    expect(withOverride.primary).toBe("G:\\pw");
+    expect(withOverride.primary).toBe(String.raw`G:\pw`);
     expect(withOverride.fallback).toBe(
       platformDefaultBrowsersRoot({
         platform: "win32",
-        env: { LOCALAPPDATA: "C:\\Users\\ci\\AppData\\Local" },
+        env: { LOCALAPPDATA: String.raw`C:\Users\ci\AppData\Local` },
       }),
     );
     /* 没有覆盖时两者是同一个根 ⇒ 第二个候选根不存在（不必多问一遍盘）。 */
     const plain = playwrightRootCandidates({
       platform: "win32",
-      env: { LOCALAPPDATA: "C:\\Users\\ci\\AppData\\Local" },
+      env: { LOCALAPPDATA: String.raw`C:\Users\ci\AppData\Local` },
     });
     expect(plain.fallback).toBeNull();
   });

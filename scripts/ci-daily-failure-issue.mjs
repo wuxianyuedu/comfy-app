@@ -244,7 +244,7 @@ export const LANE_STAGES = /** @type {Record<string, string[]>} */ ({
  */
 export function laneStages(lane) {
   const key = String(lane ?? "").trim();
-  return key === "" ? [] : (LANE_STAGES[key] ?? []).slice();
+  return key === "" ? [] : [...LANE_STAGES[key] ?? []];
 }
 
 /**
@@ -438,7 +438,7 @@ export function main(io = {}) {
     return code;
   };
 
-  const slug = io.slug !== undefined ? io.slug : resolveRepoSlug(run);
+  const slug = io.slug === undefined ? resolveRepoSlug(run) : io.slug;
   if (!slug) {
     log("[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。");
     return finish(CODE.NO_FACT, "推不出仓库 slug");
@@ -629,9 +629,9 @@ export function main(io = {}) {
     });
     if (willWrite) {
       log(
-        `[daily-failure-issue] ${offline ? "离线档" : "--dry-run"}：「${s.stage}」` +
-          (s.number ? `→ 在 #${s.number} 下追加一条读数（不新建）` : `→ 新建一张：${title}`) +
-          ` · 正文 ${body.length} 字 · 优先级 ${AUTO_PRIORITY} · 一条都没写`,
+        `[daily-failure-issue] ${offline ? "离线档" : "--dry-run"}：「${s.stage}」${
+          s.number ? `→ 在 #${s.number} 下追加一条读数（不新建）` : `→ 新建一张：${title}`
+          } · 正文 ${body.length} 字 · 优先级 ${AUTO_PRIORITY} · 一条都没写`,
       );
       continue;
     }

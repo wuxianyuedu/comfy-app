@@ -104,7 +104,7 @@ describe("档位：跳过必须被说出来", () => {
 
   it("四组重档仍然以 run_group 形态在场（A/B/C/D 一条都没被搬走）", () => {
     for (const id of ["A", "B", "C", "D"]) {
-      expect(hookText).toMatch(new RegExp("^run_group " + id + " ", "m"));
+      expect(hookText).toMatch(new RegExp(`^run_group ${id} `, "m"));
     }
   });
 

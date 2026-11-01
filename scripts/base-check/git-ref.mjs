@@ -150,11 +150,11 @@ export function resolveAttributionRef(cwd = ROOT) {
        * 本分支领先主干一笔常规提交 —— 那时 upstream 不含的是你自己的改动。这一行要说的是
        * 可比的那件事：复算对照的是**主干上有没有**，不是「我上次推过什么」。 */
       why:
-        `基线取的是主干 \`${trunk}\`（本分支的 upstream 是` +
-        (upstream && upstream !== trunk
+        `基线取的是主干 \`${trunk}\`（本分支的 upstream 是${
+        upstream && upstream !== trunk
           ? ` \`${upstream}\`，两者不同 —— 判「这红是不是本来就有的」要比主干上有没有，` +
             "不是比上次推过什么）"
-          : "，本次不按它取）"),
+          : "，本次不按它取）"}`,
     };
   }
   const ref = upstream ?? trunk;
@@ -219,12 +219,12 @@ export function git(args, cwd = ROOT) {
       stdout: String(r.stdout ?? "").trim(),
       stderr: String(r.stderr ?? "").trim(),
     };
-  } catch (err) {
+  } catch (error) {
     return {
       ok: false,
       status: -1,
       stdout: "",
-      stderr: String(err instanceof Error ? err.message : err),
+      stderr: String(error instanceof Error ? error.message : error),
     };
   }
 }

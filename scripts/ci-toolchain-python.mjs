@@ -141,7 +141,7 @@ function pathDrives(env) {
  * @returns {string[]}
  */
 function userRoots(env) {
-  const roots = new Set(["C:\\Users"]);
+  const roots = new Set([String.raw`C:\Users`]);
   for (const drive of pathDrives(env)) {
     roots.add(path.join(drive, "Users"));
   }
@@ -581,11 +581,11 @@ function viaEmbed({ env, existing, mkdir, download, unzip, cwd }) {
     mkdir(root);
     download(url, zip);
     unzip(zip, root);
-  } catch (e) {
+  } catch (error) {
     return {
       path: null,
       channel: "embed",
-      reason: `embed 包下载/解压失败：${e instanceof Error ? e.message : String(e)}`,
+      reason: `embed 包下载/解压失败：${error instanceof Error ? error.message : String(error)}`,
     };
   }
   return existing(exe)

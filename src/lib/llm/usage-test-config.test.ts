@@ -13,14 +13,14 @@ import {
   videoModeMissingHint,
   isModeValueBroken,
   isPreviewableUrl,
+  usageTestDraftKey,
+  mediaExtensionFromUrl,
+  mediaDefaultExt,
 } from "./usage-test-config";
 
 describe("usageFieldsToJson", () => {
   it("把字段行转成合法 JSON 对象字符串", () => {
-    const json = usageFieldsToJson([
-      makeUsageField("mode", "text"),
-      makeUsageField("seed", "42"),
-    ]);
+    const json = usageFieldsToJson([makeUsageField("mode", "text"), makeUsageField("seed", "42")]);
     expect(JSON.parse(json)).toEqual({ mode: "text", seed: 42 });
   });
 
@@ -51,9 +51,7 @@ describe("usageFieldsToJson", () => {
   });
 
   it("跳过空白 key 或空白 value，全空则返回空串", () => {
-    expect(
-      usageFieldsToJson([makeUsageField("", "x"), makeUsageField("a", "  ")]),
-    ).toBe("");
+    expect(usageFieldsToJson([makeUsageField("", "x"), makeUsageField("a", "  ")])).toBe("");
   });
 });
 
@@ -66,9 +64,7 @@ describe("isPreviewableUrl", () => {
         "https://ts1.tc.mm.bing.net/th/id/R-C.df954332469ba562a496acc5c1e778a6?rik=0&pid=ImgRaw",
       ),
     ).toBe(true);
-    expect(isPreviewableUrl("https://cdn.example.com/signed/id12345")).toBe(
-      true,
-    );
+    expect(isPreviewableUrl("https://cdn.example.com/signed/id12345")).toBe(true);
     expect(isPreviewableUrl("https://cdn.example.com/ff.png")).toBe(true);
     expect(isPreviewableUrl("data:image/png;base64,AAAA")).toBe(true);
     expect(isPreviewableUrl("data:image/webp;base64,xx")).toBe(true);
@@ -143,9 +139,7 @@ describe("videoModeMissingHint", () => {
 describe("videoModeHidesMedia / isMediaField", () => {
   it("mode=text 时隐藏媒体字段，其它 mode 不隐藏", () => {
     expect(videoModeHidesMedia([makeUsageField("mode", "text")])).toBe(true);
-    expect(videoModeHidesMedia([makeUsageField("mode", "keyframe")])).toBe(
-      false,
-    );
+    expect(videoModeHidesMedia([makeUsageField("mode", "keyframe")])).toBe(false);
     expect(videoModeHidesMedia([])).toBe(false);
   });
 
@@ -166,14 +160,10 @@ describe("videoModeHidesMedia / isMediaField", () => {
 describe("isModeValueBroken / rescue 场景", () => {
   it("mode 被图片 URL / data URL / 空值覆盖时判定为损坏", () => {
     expect(isModeValueBroken("")).toBe(true);
-    expect(
-      isModeValueBroken(
-        "https://cnb.cool/moon-read/comfy-app-t3/-/imgs/issues/xxx.png",
-      ),
-    ).toBe(true);
-    expect(
-      isModeValueBroken("data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="),
-    ).toBe(true);
+    expect(isModeValueBroken("https://cnb.cool/moon-read/comfy-app-t3/-/imgs/issues/xxx.png")).toBe(
+      true,
+    );
+    expect(isModeValueBroken("data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==")).toBe(true);
     expect(isModeValueBroken("   ")).toBe(true);
   });
 
@@ -193,9 +183,7 @@ describe("isModeValueBroken / rescue 场景", () => {
 
 describe("数组媒体字段（images / audios）", () => {
   it("单张裸 URL 自动包成数组，避免服务端期望 []string 却收到 string", () => {
-    const json = usageFieldsToJson([
-      makeUsageField("images", "https://cdn.example.com/a.png"),
-    ]);
+    const json = usageFieldsToJson([makeUsageField("images", "https://cdn.example.com/a.png")]);
     expect(JSON.parse(json)).toEqual({
       images: ["https://cdn.example.com/a.png"],
     });
@@ -203,10 +191,7 @@ describe("数组媒体字段（images / audios）", () => {
 
   it("多张裸 URL 用逗号分隔自动拆成数组", () => {
     const json = usageFieldsToJson([
-      makeUsageField(
-        "images",
-        "https://a.example/1.png, https://b.example/2.jpg",
-      ),
+      makeUsageField("images", "https://a.example/1.png, https://b.example/2.jpg"),
     ]);
     expect(JSON.parse(json)).toEqual({
       images: ["https://a.example/1.png", "https://b.example/2.jpg"],
@@ -214,27 +199,21 @@ describe("数组媒体字段（images / audios）", () => {
   });
 
   it("带引号的单个字符串（合法 JSON）也包成数组", () => {
-    const json = usageFieldsToJson([
-      makeUsageField("images", '"https://cdn.example.com/a.png"'),
-    ]);
+    const json = usageFieldsToJson([makeUsageField("images", '"https://cdn.example.com/a.png"')]);
     expect(JSON.parse(json)).toEqual({
       images: ["https://cdn.example.com/a.png"],
     });
   });
 
   it("已是 JSON 数组时原样保留（不重复包裹）", () => {
-    const json = usageFieldsToJson([
-      makeUsageField("audios", '["https://a.example/1.mp3"]'),
-    ]);
+    const json = usageFieldsToJson([makeUsageField("audios", '["https://a.example/1.mp3"]')]);
     expect(JSON.parse(json)).toEqual({
       audios: ["https://a.example/1.mp3"],
     });
   });
 
   it("非数组字段不受影响（first_frame 仍是单个字符串）", () => {
-    const json = usageFieldsToJson([
-      makeUsageField("first_frame", "https://example.com/a.png"),
-    ]);
+    const json = usageFieldsToJson([makeUsageField("first_frame", "https://example.com/a.png")]);
     expect(JSON.parse(json)).toEqual({
       first_frame: "https://example.com/a.png",
     });
@@ -258,26 +237,11 @@ describe("USAGE_FIELD_PRESETS / hasUsageFieldKey", () => {
   });
 
   it("hasUsageFieldKey 命中同名已存在的字段行（含首尾空白）", () => {
-    expect(hasUsageFieldKey([makeUsageField("mode", "text")], "mode")).toBe(
-      true,
-    );
-    expect(
-      hasUsageFieldKey(
-        [makeUsageField(" images ", "https://a/x.png")],
-        "images",
-      ),
-    ).toBe(true);
-    expect(hasUsageFieldKey([makeUsageField("mode", "text")], "images")).toBe(
-      false,
-    );
+    expect(hasUsageFieldKey([makeUsageField("mode", "text")], "mode")).toBe(true);
+    expect(hasUsageFieldKey([makeUsageField(" images ", "https://a/x.png")], "images")).toBe(true);
+    expect(hasUsageFieldKey([makeUsageField("mode", "text")], "images")).toBe(false);
   });
 });
-
-import {
-  usageTestDraftKey,
-  mediaExtensionFromUrl,
-  mediaDefaultExt,
-} from "./usage-test-config";
 
 describe("usageTestDraftKey", () => {
   it("把 kind 与条目名拼成稳定键", () => {
@@ -289,18 +253,12 @@ describe("usageTestDraftKey", () => {
 describe("mediaExtensionFromUrl", () => {
   it("http(s) 地址取路径扩展名", () => {
     expect(mediaExtensionFromUrl("https://x.com/a/out.png", "mp4")).toBe("png");
-    expect(mediaExtensionFromUrl("https://x.com/v.mp4?token=1", "png")).toBe(
-      "mp4",
-    );
+    expect(mediaExtensionFromUrl("https://x.com/v.mp4?token=1", "png")).toBe("mp4");
     expect(mediaExtensionFromUrl("https://x.com/out", "mp4")).toBe("mp4");
   });
   it("data:image 按 mime 取扩展名", () => {
-    expect(mediaExtensionFromUrl("data:image/jpeg;base64,xx", "png")).toBe(
-      "jpg",
-    );
-    expect(mediaExtensionFromUrl("data:image/webp;base64,xx", "png")).toBe(
-      "webp",
-    );
+    expect(mediaExtensionFromUrl("data:image/jpeg;base64,xx", "png")).toBe("jpg");
+    expect(mediaExtensionFromUrl("data:image/webp;base64,xx", "png")).toBe("webp");
   });
   it("无法识别时回落到默认扩展名", () => {
     expect(mediaExtensionFromUrl("", "png")).toBe("png");
@@ -325,9 +283,7 @@ describe("buildVideoPollUrls", () => {
       "task_123",
     );
     expect(rest).toBe("https://api.example.com/v1/videos/task_123");
-    expect(agnes).toBe(
-      "https://api.example.com/agnesapi?video_id=task_123&model_name=vid-x",
-    );
+    expect(agnes).toBe("https://api.example.com/agnesapi?video_id=task_123&model_name=vid-x");
   });
 
   it("对已有查询参数 / 特殊字符的任务 ID 做 URL 编码（agnes 形状）", () => {
@@ -338,9 +294,7 @@ describe("buildVideoPollUrls", () => {
       "id with space",
     );
     expect(rest).toBe("https://h.example/v1/videos/id with space");
-    expect(agnes).toContain(
-      "video_id=id%20with%20space&model_name=m%26y%3Dmodel",
-    );
+    expect(agnes).toContain("video_id=id%20with%20space&model_name=m%26y%3Dmodel");
   });
 
   it("baseUrl 尾斜杠与 path 首斜杠不产生双斜杠", () => {

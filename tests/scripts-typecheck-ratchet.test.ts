@@ -15,9 +15,8 @@
  * `scripts/.scripts-typecheck-baseline.json`，也不动任何入库文件）。
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdtempSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { mkdtempSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -81,8 +80,8 @@ function runCheck(args: Array<string>, root = fixture): { code: number; output: 
       env: { ...process.env, COMFY_SCRIPTS_TYPECHECK_ROOT: root },
     });
     return { code: 0, output };
-  } catch (err) {
-    const e = /* SAFETY: 类型断言已复核 */ err as {
+  } catch (error) {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -297,15 +296,15 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
           .split("\0")
           .filter(Boolean),
       );
-    } catch (e) {
-      return `；git 清单取不到，定位不了是哪几份：${/* SAFETY: 类型断言已复核 */ (e as Error).message}`;
+    } catch (error) {
+      return `；git 清单取不到，定位不了是哪几份：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`;
     }
     const stray = face.map((p) => String(p).replaceAll("\\", "/")).filter((p) => !tracked.has(p));
     return (
-      `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）` +
-      (stray.length > 0
+      `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）${
+      stray.length > 0
         ? `：${stray.slice(0, 10).join(", ")} —— 修法是把它归进 exclude 或删掉，不是往账上记`
-        : ` —— 差的全是入库文件 ⇒ 有人新加了脚本没记账，修法是把账记上`)
+        : ` —— 差的全是入库文件 ⇒ 有人新加了脚本没记账，修法是把账记上`}`
     );
   }
 
@@ -399,12 +398,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
      * 长得一模一样，只有拿配置原值对才分得开。 */
     expect(
       baseline.face,
-      `配置展开 ${face.length} 份，账上写 ${baseline.face}` +
-        /* 只给两个数不够用（ISSUE #2572 的现场：本地面 211 = 入库的 `.mjs` 全量，
-         * 平台同一份代码展开成 212）。**差一份**读不出是「谁新加了一份没记账」还是
-         * 「磁盘上多了一份没入库的产物」，而这两者的修法相反 —— 所以红了要当场把
-         * 「面里有、git 清单里没有」的那几份点名（判据一个字不变，只补指路）。 */
-        (baseline.face === face.length ? "" : driftReading(face)),
+      `配置展开 ${face.length} 份，账上写 ${baseline.face}${baseline.face === face.length ? "" : driftReading(face)}`,
     ).toBe(face.length);
     const summed = Object.values(baseline.files).reduce(
       (acc, codes) => acc + Object.values(codes).reduce((a, b) => a + b, 0),

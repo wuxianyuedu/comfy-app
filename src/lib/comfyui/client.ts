@@ -25,8 +25,7 @@
 
 import { clamp } from "~/lib/clamp";
 import { getSettingsSync } from "../app-settings/app-settings.server";
-import { COMFYUI_DEFAULT_PORT } from "../endpoints";
-import { comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
+import { COMFYUI_DEFAULT_PORT, comfyUiBaseUrl, LOOPBACK_HOST } from "../endpoints";
 import { baseForLocalPort, queryInstanceByPath } from "./instance-port";
 import { probeBaseOnce, probeComfyAtPort } from "./probe";
 import { queryNvidiaVram } from "./gpu-vram";
@@ -533,8 +532,8 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
       vramUsed,
       vramFree,
       vramTotal,
-      smiVramUsed: smi?.usedMiB != null ? smi.usedMiB * 1024 * 1024 : undefined,
-      smiVramTotal: smi?.totalMiB != null ? smi.totalMiB * 1024 * 1024 : undefined,
+      smiVramUsed: smi?.usedMiB == null ? undefined : smi.usedMiB * 1024 * 1024,
+      smiVramTotal: smi?.totalMiB == null ? undefined : smi.totalMiB * 1024 * 1024,
       ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
       ramTotal,
     };

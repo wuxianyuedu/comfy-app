@@ -269,7 +269,7 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
       return null;
     }
     const hd = /* SAFETY: 类型断言已复核 */ (await h.json()) as Record<string, unknown> | null;
-    return !!hd && Object.prototype.hasOwnProperty.call(hd, hintPromptId);
+    return !!hd && Object.hasOwn(hd, hintPromptId);
   } catch {
     /* 网络错误 / 超时：证据不足。 */
     return null;
@@ -521,12 +521,12 @@ export async function reapStaleRunningTasks(): Promise<void> {
               } catch {
                 /* 队列探测失败 —— 落到「未知」分支 */
               }
-              if (!inQueue) {
-                verdict = "failed";
-                reason = `dev server 重启后无人在监控，ComfyUI /history 与 /queue 均无此 prompt (${t.promptId}) — 请重新执行`;
-              } else {
+              if (inQueue) {
                 verdict = "unknown";
                 reason = `ComfyUI /history 无条目但 /queue 仍在排队 — 下次重试`;
+              } else {
+                verdict = "failed";
+                reason = `dev server 重启后无人在监控，ComfyUI /history 与 /queue 均无此 prompt (${t.promptId}) — 请重新执行`;
               }
             }
           } else if (r.status === 404) {

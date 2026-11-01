@@ -136,7 +136,7 @@ function checkScopeCoverage() {
 }
 
 function bareValueOccurs(text, value) {
-  const escaped = value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(`(?<![\\w.-])${escaped}(?![\\w.-])`, "g").test(text);
 }
 
@@ -206,8 +206,8 @@ function checkVerify(text, docPath, f) {
         );
       }
     }
-  } catch (e) {
-    problems.push(`[${docPath}] 无法核对 ${f.key}（${e.message}）`);
+  } catch (error) {
+    problems.push(`[${docPath}] 无法核对 ${f.key}（${error.message}）`);
   }
 }
 
@@ -351,8 +351,8 @@ function checkDoc(docPath) {
       let realValue;
       try {
         realValue = f.extract();
-      } catch (e) {
-        problems.push(`[${docPath}] 无法提取 ${f.key}（${e.message}）`);
+      } catch (error) {
+        problems.push(`[${docPath}] 无法提取 ${f.key}（${error.message}）`);
         continue;
       }
       const vals = Array.isArray(realValue) ? realValue : [realValue];
@@ -662,7 +662,7 @@ function checkAgentsMdSectionAnchors() {
         continue;
       }
       const content = readTarget(target.path);
-      const escaped = full.replaceAll(".", "\\.");
+      const escaped = full.replaceAll(".", String.raw`\.`);
       const anchorRe = new RegExp(`^#{1,6}\\s+(?:§)?${escaped}(?:\\s|[^\\d]|$)`, "m");
       if (!anchorRe.test(content)) {
         reported.add(dedupKey);
@@ -698,7 +698,7 @@ function main() {
   if (problems.length > 0) {
     console.error("\n[doc:check] 发现文档引用一致性问题：\n");
     for (const p of problems) {
-      console.error("  ✗ " + p);
+      console.error(`  ✗ ${p}`);
     }
     console.error(`\n共 ${problems.length} 项。请对照 docs/reference-facts.md 更新文档。`);
     process.exit(1);

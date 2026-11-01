@@ -111,6 +111,11 @@ import {
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
 import { rerunReport, unverifiedReport } from "../scripts/affected-launch-rerun-report.mjs";
 import { groupShBody, withoutCommentLines } from "./helpers/hook-groups";
+/* 反向断言必须先剥注释再判（ISSUE #2660）：不剥的话「源码里不许出现 X」在 X 被挪进
+ * 一句解释「为什么别这么写」的注释时**静默通过** —— 那是假绿，比误红更贵。
+ * 唯一实现是这个 helper（`tests/strip-comments-single-source.test.ts` 判着别抄第二份），
+ * `trailing: true` 连行尾注释一起去（它头注点名的就是 `// 别写 shell: true` 这一形）。 */
+import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const HOOK_PATH = ".githooks/pre-commit";
@@ -176,13 +181,13 @@ describe("受影响用例的启动器", () => {
     const files = syntheticFiles(400);
     /* 用一个**故意小**的预算来逼出多块：判据要的是「分块策略不丢用例」这条性质，
      * 而不是「400 条恰好会超真实的 24000」那种会随模板长度腐烂的算术。 */
-    const chunks = planLaunches(files, 4_000);
+    const chunks = planLaunches(files, 4000);
     const flattened = chunks.flat();
     expect(flattened).toEqual(files);
     expect(flattened).toHaveLength(files.length);
     expect(chunks.length).toBeGreaterThan(1);
     for (const chunk of chunks) {
-      expect(chunk.join(" ").length).toBeLessThanOrEqual(4_000);
+      expect(chunk.join(" ").length).toBeLessThanOrEqual(4000);
     }
   });
 
@@ -199,13 +204,13 @@ describe("受影响用例的启动器", () => {
      * cmd.exe 的 8191 却仍在 node 直起的预算内。按同样的规模合成一份，必须是一整块。 */
     const files = syntheticFiles(229);
     const joined = files.join(" ");
-    expect(joined.length).toBeGreaterThan(8_191);
+    expect(joined.length).toBeGreaterThan(8191);
     expect(joined.length).toBeLessThanOrEqual(SAFE_ARGV_BUDGET);
     expect(planLaunches(files, SAFE_ARGV_BUDGET)).toHaveLength(1);
   });
 
   it("单条路径就超预算时点名红，不静默丢掉它", () => {
-    const tooLong = ["src/" + "a".repeat(SAFE_ARGV_BUDGET) + ".test.ts"];
+    const tooLong = [`src/${"a".repeat(SAFE_ARGV_BUDGET)}.test.ts`];
     expect(() => planLaunches(tooLong, SAFE_ARGV_BUDGET)).toThrow(/单个路径就超过命令行长预算/);
   });
 
@@ -221,13 +226,34 @@ describe("受影响用例的启动器", () => {
   });
 
   it("启动器不经 shell 层：spawn 的是 node 自己，且没有 shell:true", () => {
-    const src = readFileSync(LAUNCHER_PATH, "utf8");
-    expect(src).toContain("spawnSync(");
-    expect(src).toContain("process.execPath");
-    expect(src).not.toMatch(/shell:\s*true/);
-    // 反向：不许退回「把清单交给 pnpm/exec 的 cmd shim」那一条链。
-    expect(src).not.toMatch(/pnpm\s+exec\s+vitest/);
-    expect(src).not.toMatch(/npx\s+vitest/);
+    /* 两处都读，且都剥注释（ISSUE #2660 当场照出来的一件事）：`spawnSync(` 在
+     * `scripts/run-affected-tests.mjs` 里如今**只剩第 18 行那句机制说明**（真身早已随
+     * 「起进程」那一层拆到 `scripts/affected-launch-spawn.mjs:147`），所以原来那条
+     * `toContain("spawnSync(")` 是绿在一段注释上的 —— 更坏的是三条**反向**断言读的也是
+     * 那份已经不 spawn 的文件：今天有人在起进程那一层写 `shell: true`，这一格一个字都不会红。
+     * 剥注释解决「注释里提过也算」，读对文件解决「扫错了对象」，两样都要。 */
+    const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
+    const spawnLayer = stripComments(readFileSync(SPAWN_LAYER_PATH, "utf8"), { trailing: true });
+    expect(
+      src.length,
+      "剥完注释的启动器不能是空文 —— 空串会让下面所有反向断言恒真（假绿的极型）",
+    ).toBeGreaterThan(0);
+    expect(spawnLayer.length, "起进程那一层不能读成空文（同上）").toBeGreaterThan(0);
+    /* 正向钉在**真起进程的那一层**：入口那一份只剩注释里提过，它不再是这件事的证据。 */
+    expect(spawnLayer).toContain("spawnSync(");
+    expect(spawnLayer).toContain("process.execPath");
+    /* 反向两份都钉：入口与起进程层都不许出现这三种形态。 */
+    for (const [label, text] of [
+      ["入口", src],
+      ["起进程那一层", spawnLayer],
+    ] as const) {
+      expect(text, `${label}：不许经 shell 层起进程`).not.toMatch(/shell:\s*true/);
+      // 反向：不许退回「把清单交给 pnpm/exec 的 cmd shim」那一条链。
+      expect(text, `${label}：不许退回 pnpm exec 那条 cmd shim`).not.toMatch(
+        /pnpm\s+exec\s+vitest/,
+      );
+      expect(text, `${label}：不许用 npx（AGENTS 硬规则 1）`).not.toMatch(/npx\s+vitest/);
+    }
   });
 
   it("钩子的 C 组走这个入口，且不再把清单直接拼成 `pnpm exec vitest run $files`", () => {
@@ -287,7 +313,14 @@ describe("受影响用例的启动器", () => {
  * 4. 复跑**只一次**，且复跑的结果就是该块的结果。
  */
 describe("受影响用例的启动器 —— 负载自适应（超时形态自动隔离复跑）", () => {
-  const src = readFileSync(LAUNCHER_PATH, "utf8");
+  /* 整档反向断言剥注释判（#2660 同上一条的理由）：这一族里「不许出现抬预算的形态」
+   * 是最容易被一句解释性注释假绿掉的。正向那几条（串行旗标在场等）也一并吃剥完的文本 ——
+   * 它们判的是**代码**里真接着这一步，注释里提一句不算接。 */
+  const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
+  expect(
+    src.length,
+    "剥完注释的启动器源码不能是空文 —— 这一整个 describe 的反向断言都会恒过",
+  ).toBeGreaterThan(0);
 
   it("超时形态的判别式认得本仓库见到过的每一种原文", () => {
     for (const text of [
@@ -1003,7 +1036,7 @@ describe("受影响用例的启动器 —— 收尾的等待与复跑账", () =>
   });
 
   it("真红那一格在账里也是**阻断**，不许被前面两格的「放行」语气盖掉", () => {
-    const text = rerunReport([{ outcome: "real-red", waitedMs: 5_000, settled: true }], BUDGET);
+    const text = rerunReport([{ outcome: "real-red", waitedMs: 5000, settled: true }], BUDGET);
     expect(text).toContain("真红 1 块");
     expect(text).toContain("等待累计 5.0s");
   });
@@ -1078,7 +1111,10 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
   });
 
   it("覆盖值真的进了 vitest 的命令行（不是只解析不接线）", () => {
-    const src = readFileSync(LAUNCHER_PATH, "utf8");
+    /* 这一对是「正向钉接线 + 反向钉旧写法」。反向那条在原文上判会被一句注释假绿
+     * （#2660），所以两条都吃剥过注释的文本；落空要判，不判就等于没判。 */
+    const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
+    expect(src.length, "剥完注释不能是空文（否则反向断言恒过）").toBeGreaterThan(0);
     expect(src).toMatch(/--maxWorkers=\$\{workers\}/);
     expect(src).not.toMatch(/--maxWorkers=\$\{MAX_WORKERS\}/);
   });
@@ -1097,7 +1133,14 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
  *   · 「谁都没筛过」的意外空集**仍然阻断** —— 两者绝不许在退出码上同形。
  */
 describe("受影响用例的启动器 —— 显式全量档（--full）", () => {
-  const src = readFileSync(LAUNCHER_PATH, "utf8");
+  /* 整档反向断言（`--full` 不许去写全量新鲜度账那一条）剥注释判：那一族的字面量
+   * 太容易出现在解释性注释里，原文上判会**两头都错**（注释里有 → 假红；被挪进注释 →
+   * 假绿）。见 ISSUE #2660。 */
+  const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
+  expect(
+    src.length,
+    "剥完注释的启动器不能是空文 —— 这个 describe 里那条反向断言会恒过",
+  ).toBeGreaterThan(0);
 
   it("`--full --dry-run` 走**另一条**分支：真跑一次，输出里没有增量清单的读数", () => {
     /* 按**行为**判，不按源码文本判：文本判据在 `const full = false && argv.includes("--full")`
@@ -1353,7 +1396,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return TIMEOUT;
           },
-          settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 9_999 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.1, waitedMs: 9999 }),
           stageBudget: { deadline: Date.now() - 1, budgetMs: 1 },
           onAttempt: (r) => outcomes.push(r.outcome),
         }),
@@ -1448,7 +1491,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return calls.length === 1 ? TIMEOUT : GREEN;
           },
-          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_000 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1000 }),
           stageBudget: wallClockBudget({
             startMs: Date.now(),
             budgetMs: 60 * 60 * 1000,
@@ -1521,7 +1564,7 @@ describe("隔离复跑的复跑面（只重跑失败的那几份）", () => {
             calls.push(args.filter((a) => a.endsWith(".test.ts")));
             return calls.length === 1 ? TIMEOUT : GREEN;
           },
-          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1_200 }),
+          settle: () => Promise.resolve({ settled: true, load: 0.2, waitedMs: 1200 }),
           onUnverified: (files: Array<string>) => unverified.push([...files]),
         }),
       );
@@ -2262,11 +2305,11 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
   });
 
   it("逐文件补跑的份数：没界=全部，界已过=0，没单价=先拿一份的单价", () => {
-    expect(affordablePerFileCount({ perFileMs: 3_000, pending: 5 })).toBe(5);
+    expect(affordablePerFileCount({ perFileMs: 3000, pending: 5 })).toBe(5);
     expect(
       affordablePerFileCount({
         budget: { deadline: 10_000 },
-        perFileMs: 3_000,
+        perFileMs: 3000,
         pending: 5,
         nowMs: 10_000,
       }),
@@ -2357,8 +2400,8 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
     expect(second).toContain("--no-file-parallelism");
     expect(second).not.toContain("已确认");
     const perFile = perFileBudgetStopReport({
-      remainingMs: 1_200,
-      perFileMs: 4_000,
+      remainingMs: 1200,
+      perFileMs: 4000,
       left: 2,
     });
     expect(perFile).toContain("一次都没被测量过");
@@ -2383,10 +2426,10 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
 
   it("起界那份给的是「整次一份」的截止时刻，不是每块一份", () => {
     const b = wallClockBudget({
-      startMs: 1_000,
+      startMs: 1000,
       budgetMs: STAGE_WALL_CLOCK_MS,
     });
-    expect(b.deadline).toBe(1_000 + STAGE_WALL_CLOCK_MS);
+    expect(b.deadline).toBe(1000 + STAGE_WALL_CLOCK_MS);
     expect(b.budgetMs).toBe(STAGE_WALL_CLOCK_MS);
   });
 });
@@ -2430,8 +2473,8 @@ describe("墙钟判点：第一遍自己开不开得起（PR #2760 的现场）"
     const budget = { deadline: STAGE_WALL_CLOCK_MS, budgetMs: STAGE_WALL_CLOCK_MS };
     for (const input of [
       { budget, files: 808, perFileMs: 0, nowMs: 0 },
-      { budget, files: 0, perFileMs: 1_000, nowMs: 0 },
-      { budget: null, files: 808, perFileMs: 1_000, nowMs: 0 },
+      { budget, files: 0, perFileMs: 1000, nowMs: 0 },
+      { budget: null, files: 808, perFileMs: 1000, nowMs: 0 },
     ]) {
       const got = gateFirstPassByWallClock(input);
       expect(got.ok, JSON.stringify(input)).toBe(true);
@@ -2443,7 +2486,7 @@ describe("墙钟判点：第一遍自己开不开得起（PR #2760 的现场）"
     const got = gateFirstPassByWallClock({
       budget: { deadline: MIN, budgetMs: STAGE_WALL_CLOCK_MS },
       files: 100,
-      perFileMs: 5_000,
+      perFileMs: 5000,
       nowMs: 0,
     });
     expect(got.ok).toBe(false);

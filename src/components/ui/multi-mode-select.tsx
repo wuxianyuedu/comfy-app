@@ -144,7 +144,7 @@ export function MultiModeSelect({
   }, []);
 
   const handleSave = useCallback(() => {
-    const arr = Array.from(draft);
+    const arr = [...draft];
     // 默认模式取弹窗内的草稿；草稿被取消勾选时回退到第一个选中项，
     // 保证 defaultMode ⊆ modes 的约束成立。
     const def = arr.includes(draftDefault) ? draftDefault : (arr[0] ?? "");

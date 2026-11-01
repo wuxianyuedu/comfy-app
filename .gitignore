@@ -64,6 +64,11 @@ build_log*.txt
 /public/generated/
 /temp/
 /temp/comfy-cli/
+# 全量单测分文件耗时读数的 junit 落点（ISSUE #2697）：仓库内、非链接、不入库。
+# 原先放 node_modules/.cache/，但 CI 节点 node_modules 是缓存槽链接，vitest 按自己的
+# config.root 写、父进程按 path.join(ROOT,…) 读，两边解析出的物理文件不一致
+# （日志同屏 L815 写、L830 读不到）。移到这份普通目录规避；它不是 .git 内容。
+.comfy-ci/
 
 # API 文档产物（typedoc，2600+ 份 HTML/JS，ISSUE #2231）
 # 它**不再进 git**。理由不是「产物太大」，而是「进库就得有人守它」：产物面一旦入库，

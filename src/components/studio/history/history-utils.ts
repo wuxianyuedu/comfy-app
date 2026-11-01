@@ -2,8 +2,7 @@ import { useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { adviseWithFallback } from "~/lib/comfyui/error-advice";
-import { timeAgo as timeAgoImpl } from "~/lib/time-format";
-import { formatDate } from "~/lib/time-format";
+import { timeAgo as timeAgoImpl, formatDate } from "~/lib/time-format";
 
 import type { TaskItem } from "./history-types";
 

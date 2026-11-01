@@ -2,31 +2,31 @@
  * lock-diff.mjs 的类型声明（实现是 .mjs，供 TS 侧 import 时拿到类型）。
  * 只声明对外 API；JSDoc 的完整语义见 lock-diff.mjs。
  */
-export interface DepEntry {
+export type DepEntry = {
   specifier: string;
   version: string;
 }
 
-export interface LockSection {
+export type LockSection = {
   keys: Map<string, Array<string>>;
   raw: Array<string>;
 }
 
-export interface ParsedLockfile {
+export type ParsedLockfile = {
   duplicates: Array<string>;
   importer: Map<string, Map<string, Map<string, DepEntry>>>;
   lockfileVersion: string;
   sections: Map<string, LockSection>;
 }
 
-export interface FieldChange {
+export type FieldChange = {
   from?: string;
   key: string;
   to?: string;
   value?: string;
 }
 
-export interface DepChange {
+export type DepChange = {
   from?: string;
   fromSpecifier?: string;
   name: string;
@@ -35,24 +35,24 @@ export interface DepChange {
   value?: DepEntry;
 }
 
-export interface FlatDiff {
+export type FlatDiff = {
   added: Array<FieldChange>;
   changed: Array<FieldChange>;
   removed: Array<FieldChange>;
 }
 
-export interface GroupDiff {
+export type GroupDiff = {
   added: Array<DepChange>;
   changed: Array<DepChange>;
   removed: Array<DepChange>;
 }
 
-export interface EntryDiff {
+export type EntryDiff = {
   added: Array<string>;
   removed: Array<string>;
 }
 
-export interface LockDiff {
+export type LockDiff = {
   duplicates: { new: Array<string>; old: Array<string>; };
   importers: Record<string, Record<string, GroupDiff>>;
   lockfileVersion: string;

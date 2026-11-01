@@ -158,17 +158,19 @@ describe("planSeparatedLaunches", () => {
 describe("runChunk 透传 filterLine 到两遍 spawn", () => {
   let dir: string | undefined;
   afterEach(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
     dir = undefined;
   });
 
   /** 与 `spawnVitest(entry, args, options)` 的形状对齐（scripts/affected-launch-spawn.mjs）。 */
-  type SpawnOpts = { timeoutMs?: number; filterLine?: (line: string) => boolean };
+  type SpawnOpts = { filterLine?: (line: string) => boolean; timeoutMs?: number };
   type SpawnFn = (
     entry: string,
-    args: string[],
+    args: Array<string>,
     opts?: SpawnOpts,
-  ) => { status: number | null; output: string; signal?: string | null };
+  ) => { output: string; signal?: string | null; status: number | null };
   const baseDeps = (spawn: SpawnFn) => ({
     entry: "vitest.mjs",
     workers: 2,
@@ -182,9 +184,9 @@ describe("runChunk 透传 filterLine 到两遍 spawn", () => {
 
   it("首遍 status 0：把 filterLine 透传给 spawn 的第三参数，且不复跑", async () => {
     dir = mkdtempSync(path.join(tmpdir(), "sep-"));
-    const calls: { args: string[]; opts?: SpawnOpts }[] = [];
+    const calls: Array<{ args: Array<string>; opts?: SpawnOpts }> = [];
     const code = await runChunk([FIXED_STRUCTURAL_TESTS[0]!], {
-      ...baseDeps((_entry: string, args: string[], opts?: SpawnOpts) => {
+      ...baseDeps((_entry: string, args: Array<string>, opts?: SpawnOpts) => {
         calls.push({ args, opts });
         return { status: 0, output: "" };
       }),
@@ -197,9 +199,9 @@ describe("runChunk 透传 filterLine 到两遍 spawn", () => {
 
   it("filterLine 不给时第三参数里没有 filterLine（与改动前逐字一致）", async () => {
     dir = mkdtempSync(path.join(tmpdir(), "sep-"));
-    const calls: { args: string[]; opts?: SpawnOpts }[] = [];
+    const calls: Array<{ args: Array<string>; opts?: SpawnOpts }> = [];
     const code = await runChunk([FIXED_STRUCTURAL_TESTS[0]!], {
-      ...baseDeps((_entry: string, args: string[], opts?: SpawnOpts) => {
+      ...baseDeps((_entry: string, args: Array<string>, opts?: SpawnOpts) => {
         calls.push({ args, opts });
         return { status: 0, output: "" };
       }),

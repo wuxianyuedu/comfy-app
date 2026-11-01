@@ -121,7 +121,7 @@ export function resolveBaseRef(deps = {}) {
   }
   /* ② 非 PR 事件 / 手工触发：退回「要并进去的那条」的 merge-base。 */
   const remoteRef =
-    deps.fallbackRef !== undefined ? deps.fallbackRef : resolveMergeBaseRef(deps.cwd ?? ROOT);
+    deps.fallbackRef === undefined ? resolveMergeBaseRef(deps.cwd ?? ROOT) : deps.fallbackRef;
   if (!remoteRef) {
     return {
       ok: false,

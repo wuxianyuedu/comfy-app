@@ -136,13 +136,13 @@ export function rebuildLinkInPlace(abs, linkText) {
     rmSync(abs);
     renameSync(tmp, abs);
     return { ok: true, error: "" };
-  } catch (e) {
+  } catch (error) {
     try {
       rmSync(tmp, { force: true });
     } catch {
       /* 临时名都没建起来，没什么要收 */
     }
-    return { ok: false, error: describeError(e) };
+    return { ok: false, error: describeError(error) };
   }
 }
 
@@ -200,7 +200,7 @@ export function siblingVariantInstalled(nodeModules, linkText) {
     return false;
   }
   for (const name of names) {
-    if (!name.startsWith(base + "+")) {
+    if (!name.startsWith(`${base}+`)) {
       continue;
     }
     /* 目录名形如 `<base>+<其它变体>@<ver>` —— 实体路径里用的是**那一支的**变体名，
@@ -270,13 +270,13 @@ export function repairUnfollowableLinks(dir, deps = {}) {
     let linkText;
     try {
       linkText = readText(abs);
-    } catch (e) {
+    } catch (error_) {
       broken.push({
         rel,
         linkText: "",
         target: "",
         targetExists: false,
-        error: `readlink 失败：${describeError(e)}`,
+        error: `readlink 失败：${describeError(error_)}`,
         variantDead: false,
       });
       continue;
@@ -341,8 +341,8 @@ export function runLinkRepair(nodeModules, deps = {}) {
   const blocking = broken.filter((b) => !b.variantDead);
   const variantDead = broken.filter((b) => b.variantDead);
   const lines = [
-    `[standalone-links] 扫描 ${scanned} 条符号链接` +
-      (repaired > 0 ? `，重建其中不可跟随的 ${repaired} 条` : "，全部可跟随"),
+    `[standalone-links] 扫描 ${scanned} 条符号链接${
+      repaired > 0 ? `，重建其中不可跟随的 ${repaired} 条` : "，全部可跟随"}`,
   ];
   if (variantDead.length > 0) {
     lines.push(

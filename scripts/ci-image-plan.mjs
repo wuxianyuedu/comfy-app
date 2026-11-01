@@ -215,7 +215,7 @@ export function pickNodeVersion(index, floor) {
 
 /** 把一段字面量转成「按字面匹配」的正则片段（`.cjs`/`.mjs` 里同名实现的同一手法）。 */
 export function escapedRegExp(/** @type {string} */ name) {
-  return String(name).replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(name).replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**
@@ -266,9 +266,9 @@ export function toolingVersionsFromLock(lockText, names) {
      * 拼出来的 `( +)` 变成 `( ?)`、捕获组随之错位 —— 那一档的表现是「有的包读得到、
      * 有的读不到」，而两种在日志里都像「本仓没有这个依赖」（实测踩过）。 */
     const re = new RegExp(
-      "^( +)['\"]?" +
-        escapedRegExp(name) +
-        "['\"]?:\\s*\\n(?:\\1\\s+.*\\n)*?\\1\\s+version:\\s*([^\\s(]+)",
+      `^( +)['"]?${
+        escapedRegExp(name)
+        }${String.raw`['"]?:\s*\n(?:\1\s+.*\n)*?\1\s+version:\s*([^\s(]+)`}`,
       "m",
     );
     const m = re.exec(text);
@@ -352,7 +352,7 @@ export function imagePlan({ nodeVersion, pnpmVersion, tag = IMAGE_TAG, appDir = 
   ];
   return {
     tag: image,
-    dockerfile: lines.join("\n") + "\n",
+    dockerfile: `${lines.join("\n")}\n`,
     /* `-f -` 而不是 `-f <(...)`：进程替换是 POSIX shell 的语法，PowerShell 里
      * `-f <(...)` 会被当成一个叫 `<` 的文件、报「The system cannot find the file
      * specified」—— 那条红读起来像「脚本没产出文件」，实际是这两句根本不是同一件事。
@@ -376,7 +376,7 @@ export function selfCheckRunLines() {
   const parts = IMAGE_CHECKS.map((c) =>
     c.kind === "command" ? `${c.name} ${c.arg}` : `test -x ${c.arg}`,
   );
-  return ["RUN " + parts.join(" \\\n && ")];
+  return [`RUN ${parts.join(" \\\n && ")}`];
 }
 
 /**
@@ -608,7 +608,7 @@ export function tarHeader(
     /** @type {number} */ length,
   ) => {
     /* `length - 1` 位八进制 + 尾随 NUL：ustar 的数值字段是「定宽、右补零、以 NUL 收尾」。 */
-    put(value.toString(8).padStart(length - 1, "0") + "\0", offset, length);
+    put(`${value.toString(8).padStart(length - 1, "0")}\0`, offset, length);
   };
   put(name.slice(0, 100), 0, 100);
   num(mode, 100, 8);
@@ -625,7 +625,7 @@ export function tarHeader(
   for (const byte of head) {
     sum += byte;
   }
-  put(sum.toString(8).padStart(6, "0") + "\0 ", 148, 8);
+  put(`${sum.toString(8).padStart(6, "0")}\0 `, 148, 8);
   return head;
 }
 
@@ -647,7 +647,7 @@ function pad512(/** @type {Buffer} */ content) {
  * @param {Buffer} buf
  */
 export function tarballDigest(buf) {
-  return "sha256:" + crypto.hash("sha256", buf, "hex");
+  return `sha256:${crypto.hash("sha256", buf, "hex")}`;
 }
 
 /* ────────────────────────── 生成与打印 ────────────────────────── */
@@ -722,10 +722,10 @@ export function main({
 } = {}) {
   if (!nodeVersion) {
     throw new Error(
-      "没有拿到精确的 Node 补丁号 —— 用 --node-version vX.Y.Z 给一个，" +
-        "或加 --online 让它从 " +
-        NODE_INDEX_URL +
-        " 现取（fetchNodePlan）。别让这里退回一个猜出来的版本。",
+      `没有拿到精确的 Node 补丁号 —— 用 --node-version vX.Y.Z 给一个，` +
+        `或加 --online 让它从 ${
+        NODE_INDEX_URL
+        } 现取（fetchNodePlan）。别让这里退回一个猜出来的版本。`,
     );
   }
   const plan = imagePlan({ nodeVersion, pnpmVersion: facts.pnpmVersion });
@@ -738,8 +738,8 @@ export function main({
   const layers = imagePlanLayersAreOrdered(plan.dockerfile);
   if (!layers.ok) {
     throw new Error(
-      "生成的 Dockerfile 层序不对（那是这个文件要买的东西被退回去的形态，它不会报错、只会慢）：\n  - " +
-        layers.problems.join("\n  - "),
+      `生成的 Dockerfile 层序不对（那是这个文件要买的东西被退回去的形态，它不会报错、只会慢）：\n  - ${
+        layers.problems.join("\n  - ")}`,
     );
   }
   /** @type {{dockerfile: string, plan: ReturnType<typeof imagePlan>, tarDigest?: string}} */

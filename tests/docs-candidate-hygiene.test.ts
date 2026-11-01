@@ -174,7 +174,7 @@ function placeholderCandidates(candidates: Iterable<string>): Set<string> {
 
 /** 文件归属用**带边界**的匹配，别拿子串：短属性名是那枚长候选名的子串，会被算成它的出处。 */
 function spelledIn(text: string, candidate: string): boolean {
-  const escaped = candidate.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = candidate.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(`(^|[^\\w-])${escaped}(?![\\w-])`).test(text);
 }
 
@@ -229,13 +229,13 @@ describe("正文与用例不许成为死规则的唯一出处", () => {
     }
     expect(
       offenders,
-      "这些 arbitrary 候选名只有正文/用例在供给 ⇒ 每次构建多一条没人用的规则。" +
-        "改法：方括号内侧各留一个空格（读者看到的仍是同一个类名，扫描器读不出候选名）；" +
-        "确实是逐字示例或检索式的，登记进本文件的 REGISTERED 并写理由：\n" +
+      `这些 arbitrary 候选名只有正文/用例在供给 ⇒ 每次构建多一条没人用的规则。` +
+        `改法：方括号内侧各留一个空格（读者看到的仍是同一个类名，扫描器读不出候选名）；` +
+        `确实是逐字示例或检索式的，登记进本文件的 REGISTERED 并写理由：\n${
         offenders
           .sort()
           .map((o) => `  ${o}`)
-          .join("\n"),
+          .join("\n")}`,
     ).toEqual([]);
   });
 
@@ -253,10 +253,10 @@ describe("正文与用例不许成为死规则的唯一出处", () => {
     const hits = [...placeholderCandidates(placeholders)].sort();
     expect(
       hits,
-      "这些候选名的方括号值不是任何一段 CSS 取值 —— 它是「拿 N / … / <数字> 当占位符」的" +
-        "说明性写法，被扫描面读到就进产物、且永远不会有人用。改法与上一条同：" +
-        "内侧留空格，或直接用文字描述那一枚的形状：\n" +
-        hits.map((h) => `  ${h}`).join("\n"),
+      `这些候选名的方括号值不是任何一段 CSS 取值 —— 它是「拿 N / … / <数字> 当占位符」的` +
+        `说明性写法，被扫描面读到就进产物、且永远不会有人用。改法与上一条同：` +
+        `内侧留空格，或直接用文字描述那一枚的形状：\n${
+        hits.map((h) => `  ${h}`).join("\n")}`,
     ).toEqual([]);
   });
 });

@@ -47,7 +47,7 @@ const SCROLL_HEIGHT = 2000;
 const CLIENT_HEIGHT = 300;
 
 /** 页面脚本在 jsdom 里暴露出来的那几件事（本组用例的读法，不是实现）。 */
-interface SplashInternals {
+type SplashInternals = {
   renderLog: (text: string) => void;
 }
 

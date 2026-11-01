@@ -83,7 +83,7 @@ export type ManagedSpawnOptions = {
 
 /** 把单个参数安全地包进 PowerShell 单引号（' 转义为 ''）。 */
 export function escapePwshSingle(s: string): string {
-  return `'${s.replace(/'/g, "''")}'`;
+  return `'${s.replaceAll("'", "''")}'`;
 }
 
 /**
@@ -92,7 +92,7 @@ export function escapePwshSingle(s: string): string {
  * 含空格的参数必须由元素自带引号才不会被拆分。
  */
 function toStartProcessElement(arg: string): string {
-  return escapePwshSingle(`"${arg.replace(/"/g, String.raw`\"`)}"`);
+  return escapePwshSingle(`"${arg.replaceAll('"', String.raw`\"`)}"`);
 }
 
 /**

@@ -91,8 +91,8 @@ function run(args: Array<string> = [], baseline: string = headBaseline()) {
       env: gitSandboxEnv({ CNB_PULL_REQUEST_TARGET_SHA: baseline }),
     });
     return { code: 0, output };
-  } catch (err) {
-    const e = /* SAFETY: 类型断言已复核 */ err as {
+  } catch (error) {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
       status?: number;
       stderr?: string;
       stdout?: string;

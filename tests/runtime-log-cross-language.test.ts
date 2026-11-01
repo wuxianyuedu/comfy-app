@@ -19,8 +19,7 @@ import {
   appRuntimeLogFileName,
   runtimeStamp,
 } from "../scripts/launcher-core/log.mjs";
-import { runtimeLogFileName } from "../src/lib/log/runtime-log-file";
-import { LAUNCH_STAMP_ENV } from "../src/lib/log/runtime-log-file";
+import { runtimeLogFileName, LAUNCH_STAMP_ENV } from "../src/lib/log/runtime-log-file";
 import { launcherChainSource } from "./helpers/launcher-source";
 
 const ROOT = process.cwd();

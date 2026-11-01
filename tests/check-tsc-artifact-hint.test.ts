@@ -96,8 +96,8 @@ describe("tsc 生成物报错的点破（#1182）", () => {
 
   it("掺了一个真实源码文件的错 → **不**给生成物提示（不能让人忽略真错）", () => {
     const v = classifyTscErrors(
-      REAL_ARTIFACT_OUTPUT +
-        "src/lib/comfyui/executor-ws.ts(12,3): error TS2304: Cannot find name 'foo'.\n",
+      `${REAL_ARTIFACT_OUTPUT
+        }src/lib/comfyui/executor-ws.ts(12,3): error TS2304: Cannot find name 'foo'.\n`,
     );
     expect(v.total).toBe(3);
     expect(v.artifactOnly).toBe(false);
@@ -118,7 +118,7 @@ describe("tsc 生成物报错的点破（#1182）", () => {
 
   it("绝对路径里带 /.next/ 也算生成物（tsc 有时给全路径）", () => {
     expect(isArtifact("/home/u/proj/.next/dev/types/routes.d.ts")).toBe(true);
-    expect(isArtifact("F:\\proj\\.next\\dev\\types\\validator.ts")).toBe(true);
+    expect(isArtifact(String.raw`F:\proj\.next\dev\types\validator.ts`)).toBe(true);
     // `.nextify/` 这种目录名不算 —— 判据认的是那一个目录段。
     expect(isArtifact("src/.nextify/thinger.ts")).toBe(false);
     expect(isArtifact("src/app/page.ts")).toBe(false);
@@ -126,7 +126,7 @@ describe("tsc 生成物报错的点破（#1182）", () => {
 
   it("组件的现生成件也算（ISSUE #1409 同族：`.storybook/generated/`）", () => {
     expect(isArtifact(".storybook/generated/app-origin.ts")).toBe(true);
-    expect(isArtifact("F:\\proj\\.storybook\\generated\\app-origin.json")).toBe(true);
+    expect(isArtifact(String.raw`F:\proj\.storybook\generated\app-origin.json`)).toBe(true);
     // 同族的另两处**不算**：注入层与主配置是源码（它们报错就是真错，别被点破成生成物）。
     expect(isArtifact(".storybook/data-sources.tsx")).toBe(false);
     expect(isArtifact(".storybook/main.ts")).toBe(false);

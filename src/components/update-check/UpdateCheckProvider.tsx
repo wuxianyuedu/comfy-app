@@ -100,10 +100,10 @@ export function UpdateCheckProvider() {
         return;
       }
       const { dirty, groups } = useUpdateCheckStore.getState();
-      if (!dirty) {
-        toast.info(MANUAL_SHORTCUT, "本地文件无需重启的改动。");
-      } else {
+      if (dirty) {
         toast.info(MANUAL_SHORTCUT, `检测到需重启的改动：${summaryOf(groups)}`);
+      } else {
+        toast.info(MANUAL_SHORTCUT, "本地文件无需重启的改动。");
       }
     })();
   }, [checkNow, toast]);

@@ -36,7 +36,7 @@ const LIST_HOOK = "src/components/studio/workflow-library/hooks/use-workflow-lib
 const ROUTE = "src/server/api/routers/workflow-list.ts";
 
 function readSource(rel: string): string {
-  return stripComments(readFileSync(path.join(ROOT, rel), "utf-8"));
+  return stripComments(readFileSync(path.join(ROOT, rel), "utf8"));
 }
 
 /* ── ① 类型层：视图声明必须接得住服务端行（编译期判据）──

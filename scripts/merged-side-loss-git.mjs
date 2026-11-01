@@ -82,7 +82,7 @@ export function resolveBlobs(run, specs) {
     return out;
   }
 
-  const raw = run(["cat-file", "--batch-check"], uniq.join("\n") + "\n");
+  const raw = run(["cat-file", "--batch-check"], `${uniq.join("\n")}\n`);
   if (raw === null) {
     return null;
   }

@@ -46,8 +46,8 @@ function scanner(files: Record<string, string>) {
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };
-    } catch (err) {
-      const e = /* SAFETY: 类型断言已复核 */ err as { stderr?: string; stdout?: string; };
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
       return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
     }
   };

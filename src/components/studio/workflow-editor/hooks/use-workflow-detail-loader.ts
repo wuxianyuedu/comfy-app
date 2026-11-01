@@ -407,11 +407,7 @@ export function useWorkflowDetailLoader({
     const next = current.slice(0, -1);
     updateStack(next);
     const parent = next.at(-1);
-    if (!parent) {
-      setTimeout(() => {
-        void fetchDetail();
-      }, 0);
-    } else {
+    if (parent) {
       /* 回到上一层同样带上它自己的宿主链：上一层若是子图内部视图，坐标也存成
        *  `宿主:内部`，不带前缀会退回原始坐标。 */
       setTimeout(() => {
@@ -420,6 +416,10 @@ export function useWorkflowDetailLoader({
           parentTitle: parent.name,
           hostNodeId: parent.nodeId,
         });
+      }, 0);
+    } else {
+      setTimeout(() => {
+        void fetchDetail();
       }, 0);
     }
   }, [fetchDetail, updateStack, setSubgraphLoading]);

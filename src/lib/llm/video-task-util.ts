@@ -37,7 +37,7 @@ function localTempRoot(): string {
 /** 模型名 → 目录名：剥分隔符 / .. 与文件系统特殊字符，避免路径穿越。 */
 function safeModelDir(name: string): string {
   const s = lastSegments(name.trim(), 1);
-  const cleaned = s.replaceAll(/[\x00-\x1f<>:"|?*]/g, "_").slice(0, 80);
+  const cleaned = s.replaceAll(/[\u0000-\u001f<>:"|?*]/g, "_").slice(0, 80);
   return cleaned || "unnamed";
 }
 

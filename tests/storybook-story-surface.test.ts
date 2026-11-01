@@ -164,7 +164,7 @@ export const Default: Story = {};
     const storyFor = (name: string, title: string) =>
       GOOD_STORY.replaceAll("thing", name)
         .replaceAll("Thing", name.toUpperCase())
-        .replace('title: "UI/' + name.toUpperCase() + '"', `title: "${title}"`);
+        .replace(`title: "UI/${name.toUpperCase()}"`, `title: "${title}"`);
     writeFileSync(join(dir, "a.stories.tsx"), storyFor("a", "UI/A"));
     writeFileSync(join(dir, "b.stories.tsx"), storyFor("b", "UI/B"));
     /* 第三份写的是另一套前缀 —— 多数是 `UI/`，它就是那个偏离项。 */

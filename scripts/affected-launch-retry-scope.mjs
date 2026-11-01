@@ -46,10 +46,10 @@ export function retryScope(input) {
   let xml;
   try {
     xml = read(cFileXmlName(junitDir, chunkId, 1), "utf8");
-  } catch (e) {
+  } catch (error) {
     /* 只取 `code` 那一格：错误对象在本仓的类型口径下不是 `any`，而这一档要说出口的
      * 只有「为什么退回整块」，栈与消息都归不进那一行。 */
-    const code = /** @type {{code?: string}} */ (e).code ?? String(e);
+    const code = /** @type {{code?: string}} */ (error).code ?? String(error);
     return {
       files: chunk,
       why: `第 1 遍的 junit 读数取不到（${code}）⇒ 整块复跑`,

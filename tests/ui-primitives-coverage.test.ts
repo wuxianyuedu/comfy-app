@@ -140,7 +140,7 @@ function businessSources(): Array<{ rel: string; text: string }> {
 
 /** 业务侧引用 `~/components/ui/<name>` 的文件数（不含 ui/ 内部互相引用）。 */
 function consumerCount(name: string): number {
-  const pattern = new RegExp(`from\\s+["']~/components/ui/${name.replaceAll(/[-]/g, "\\-")}["']`);
+  const pattern = new RegExp(`from\\s+["']~/components/ui/${name.replaceAll(/[-]/g, String.raw`\-`)}["']`);
   return businessSources().filter((f) => pattern.test(f.text)).length;
 }
 
@@ -231,7 +231,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       ["~/lib/with-timeout", ["withTimeout", "withTimeoutResult", "TimeoutError"]],
     ] as const,
   )("%s 是「按形态收口」的出口，且已被业务引用", ([spec, exports]) => {
-    const mod = readFileSync(join(SRC, spec.replace("~/", "").replaceAll("/", sep) + ".ts"), "utf8");
+    const mod = readFileSync(join(SRC, `${spec.replace("~/", "").replaceAll("/", sep)}.ts`), "utf8");
     for (const name of exports) {
       /* 导出形式：`export function` / `export const` / `export type` /
        * `export class`——出口可以是值也可以是类型（`OmitOwnProps` 是类型、
@@ -247,7 +247,7 @@ describe("UI 基元被业务用起来（规范 16 §16.2.4）", () => {
       if (rel.includes(".test.")) {
         continue;
       }
-      if (abs === join(SRC, spec.replace("~/", "") + ".ts")) {
+      if (abs === join(SRC, `${spec.replace("~/", "")}.ts`)) {
         continue;
       }
       if (readFileSync(abs, "utf8").includes(`"${spec}"`)) {

@@ -225,7 +225,7 @@ export async function fetchFact(ctx, subPath, extra = {}) {
         ...(extra.body ? { "Content-Type": "application/json" } : {}),
       },
       ...(extra.body ? { body: extra.body } : {}),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(15_000),
     });
     const body = await res.text();
     return {
@@ -236,7 +236,7 @@ export async function fetchFact(ctx, subPath, extra = {}) {
       bodyLen: body.length,
       ms: Date.now() - t0,
     };
-  } catch (err) {
+  } catch (error) {
     /* 网络层失败只记**错误码**（`ENOTFOUND` / `TimeoutError` 那类），
      * 不记 message —— message 里可能带 URL，而 URL 里有仓库名（那没问题），
      * 但把它拼进读数只会让读的人去查一个不存在的「格式问题」。 */
@@ -244,7 +244,7 @@ export async function fetchFact(ctx, subPath, extra = {}) {
       ok: false,
       status: -1,
       body: "",
-      error: String(/** @type {any} */ (err)?.name ?? err),
+      error: String(/** @type {any} */ (error)?.name ?? error),
       bodyLen: 0,
       ms: Date.now() - t0,
     };
@@ -510,12 +510,12 @@ export function formatReadout(rows, ctx) {
     .slice(0, 3);
   const totalMs = rows.reduce((sum, r) => sum + (r.ms ?? 0), 0);
   lines.push(
-    `耗时：${rows.length} 条探针合计 ${totalMs}ms` +
-      (slowest.length
+    `耗时：${rows.length} 条探针合计 ${totalMs}ms${
+      slowest.length
         ? `，最慢的 ${slowest.length} 条 ${slowest
             .map((r) => `${r.path}=${r.ms}ms`)
             .join(" · ")}`
-        : ""),
+        : ""}`,
   );
   lines.push(
     "读数不做判据：这一格量的是平台怎么给权限，红了不构成任何结论（恒退 0）。" +

@@ -174,7 +174,7 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ci-deps-"));
     for (const f of ["pnpm-lock.yaml", "package.json", "pnpm-workspace.yaml", "next.config.js"]) {
-      fs.writeFileSync(path.join(tmp, f), "# " + f + "\n");
+      fs.writeFileSync(path.join(tmp, f), `# ${f}\n`);
     }
     /* `package.json` 是真 JSON：键面要解析它才能摘 `scripts`（ISSUE #2489）。 */
     fs.writeFileSync(
@@ -344,7 +344,7 @@ describe("main：装 / 跳过两条出口的退出码", () => {
 function makeInstalledRoot(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ci-deps-skip-"));
   for (const f of ["pnpm-lock.yaml", "package.json", "pnpm-workspace.yaml", "next.config.js"]) {
-    fs.writeFileSync(path.join(root, f), "# " + f + "\n");
+    fs.writeFileSync(path.join(root, f), `# ${f}\n`);
   }
   /* `package.json` 要是真 JSON：键面会解析它来摘 `scripts`（ISSUE #2489）。 */
   fs.writeFileSync(

@@ -436,7 +436,7 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
  */
 describe("复合档 —— 三态前缀带颜色区分（ISSUE #2748）", () => {
   it("注入 io.log ⇒ 拿到的仍是干净行，即便 FORCE_COLOR 开着", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     main({
       cwd: ROOT,
       argv: ["--only=判据自身"],
@@ -460,7 +460,7 @@ describe("复合档 —— 三态前缀带颜色区分（ISSUE #2748）", () => 
    * 那正是平台那一档的拓扑，而这枚旗标就是为它开的（ISSUE #2755）。两条共识旗标都
    * 从环境里摘掉，否则开发机上恰好有 `FORCE_COLOR` 时这条会**为错误的理由**通过。
    */
-  function runHeavyChild(extraArgs: string[]) {
+  function runHeavyChild(extraArgs: Array<string>) {
     const env: NodeJS.ProcessEnv = { ...process.env, COMFYAPP_CI_COLOR: "1" };
     delete env.NO_COLOR;
     delete env.FORCE_COLOR;

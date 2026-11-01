@@ -24,7 +24,7 @@
  *   ② 关键目录清单齐全（删项 = 这份意图被静悄悄抹掉，且没有任何提示）；
  *   ③ 没有用 `turbopack.ignoreIssue` 遮这条告警（那是关信号而非修问题）。
  */
-import { readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -163,8 +163,6 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
  * 反向验证：构造一个不含 `.next/standalone` 的工作目录，本组必须**全跳过且
  * 0 失败**（而不是 ENOENT）；构造一个含 `src/*.test.ts` 的假产物，必须报出它。
  */
-import { existsSync, lstatSync, readdirSync } from "node:fs";
-
 function standaloneDir(): string {
   return join(process.cwd(), ".next", "standalone");
 }
@@ -266,7 +264,7 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
 
   it("存在判据与调用在同一条件表达式里（缺失时整组不执行、不报错）", () => {
     // 用 RegExp 构造避免本断言的字面量自身命中下面的 bareCalls 匹配
-    expect(code).toMatch(new RegExp("standaloneExists\\s*\\?\\s*listFiles\\("));
+    expect(code).toMatch(new RegExp(String.raw`standaloneExists\s*\?\s*listFiles\(`));
   });
 });
 

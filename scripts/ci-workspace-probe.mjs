@@ -238,10 +238,10 @@ export function fmtAge(ageS) {
   if (n < 3600) {
     return `${Math.round(n / 60)}m`;
   }
-  if (n < 86400) {
+  if (n < 86_400) {
     return `${Math.round(n / 3600)}h`;
   }
-  return `${Math.round(n / 86400)}d`;
+  return `${Math.round(n / 86_400)}d`;
 }
 
 /**
@@ -531,8 +531,8 @@ export function workspaceProbeLines(io = {}) {
     history = readLedger(file, fsLike);
     const kept = writeLedger(file, entry, fsLike);
     ledgerNote = `（账本 ${kept} 条）`;
-  } catch (err) {
-    ledgerNote = `（账本写不进去：${err && /** @type {Error} */ (err).message} —— 只打磁盘侧读数）`;
+  } catch (error) {
+    ledgerNote = `（账本写不进去：${error && /** @type {Error} */ (error).message} —— 只打磁盘侧读数）`;
   }
   lines.push("");
   lines.push(`== 跨构建对照 ${ledgerNote}==`);

@@ -114,8 +114,8 @@ function readVersion(src) {
   let text;
   try {
     text = fs.readFileSync(path.join(ROOT, src.file), "utf8");
-  } catch (e) {
-    return { error: `读不到 ${src.file}（${e.code || e.message}）` };
+  } catch (error) {
+    return { error: `读不到 ${src.file}（${error.code || error.message}）` };
   }
   const value = src.extract(text);
   if (value == null) {
@@ -168,13 +168,13 @@ function main() {
 
   if (problems.length) {
     process.stderr.write(
-      `[app-version] ✗ 版本号三处必须同步（ISSUE #1611 阶段三 D7）：\n      · ` +
-        problems.join("\n      · ") +
-        `\n        ${SOURCES.map((s) => s.file).join(" / ")} 三处都写、且逐字相等。` +
-        "\n        为什么不是「改一处就够」：tauri.conf.json 的版本在**编译期**内嵌进壳，" +
-        "\n        也是 tauri-plugin-updater 判「更新新旧」的基准 —— 只升 package.json 时，" +
-        "\n        安装包与更新判定还停在旧版本，用户会看到「已是最新」。" +
-        "\n        规范：docs/standards/launch-and-build.md §7.1.1\n",
+      `[app-version] ✗ 版本号三处必须同步（ISSUE #1611 阶段三 D7）：\n      · ${
+        problems.join("\n      · ")
+        }\n        ${SOURCES.map((s) => s.file).join(" / ")} 三处都写、且逐字相等。` +
+        `\n        为什么不是「改一处就够」：tauri.conf.json 的版本在**编译期**内嵌进壳，` +
+        `\n        也是 tauri-plugin-updater 判「更新新旧」的基准 —— 只升 package.json 时，` +
+        `\n        安装包与更新判定还停在旧版本，用户会看到「已是最新」。` +
+        `\n        规范：docs/standards/launch-and-build.md §7.1.1\n`,
     );
     return 1;
   }

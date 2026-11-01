@@ -110,7 +110,7 @@ const CLOSURE_LEAVES = [
 
 /** 把一个路径变成「逐字匹配它自己」的正则（点号等元字符要转义）。 */
 function exactPathRe(p) {
-  return new RegExp(`^${p.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+  return new RegExp(`^${p.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}$`);
 }
 
 /**
@@ -359,7 +359,7 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
  * @returns {{problems: string[]}}
  */
 function judgeTypedocTail(log) {
-  const cleanLog = (log ?? "").replaceAll(/\x1b\[[0-9;]*m/g, "");
+  const cleanLog = (log ?? "").replaceAll(/\u001b\[[0-9;]*m/g, "");
   const summary = /Found (\d+) errors and (\d+) warnings/.exec(cleanLog);
   const generated = /\[info\] html generated/.test(cleanLog);
   if (summary) {
@@ -462,8 +462,8 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((err) => {
-    console.error(`${TAG} ✗ 判据自身异常：`, err);
+  main().catch((error) => {
+    console.error(`${TAG} ✗ 判据自身异常：`, error);
     process.exit(1);
   });
 }

@@ -52,8 +52,8 @@ function runInRepo(args: Array<string> = []): { code: number; output: string } {
       stdio: ["ignore", "pipe", "pipe"],
     });
     return { code: 0, output };
-  } catch (err) {
-    const e = /* SAFETY: 类型断言已复核 */ err as {
+  } catch (error) {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -72,9 +72,9 @@ function runInRepo(args: Array<string> = []): { code: number; output: string } {
  */
 function seedFactsDoc(repo: GateRepo, modules: Array<string>): void {
   const row =
-    `| \`comment.language.asciiOnly\` | ` +
-    modules.map((m) => `\`${m}\``).join("、") +
-    ` | 白名单 | 本行 | 解析本行 |`;
+    `| \`comment.language.asciiOnly\` | ${
+    modules.map((m) => `\`${m}\``).join("、")
+    } | 白名单 | 本行 | 解析本行 |`;
   repo.write("docs/reference-facts.md", `# refs\n\n${row}\n`);
 }
 

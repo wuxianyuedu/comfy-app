@@ -624,7 +624,7 @@ export function mergeRefreshedDefaults(
   for (const key of Object.keys(fresh)) {
     /* 基线里没有的键 = 新暴露的 pin（作者刚勾选），按「未覆盖」处理，
      * 直接采用默认值，否则它会以 undefined 留在表单里。 */
-    const inBaseline = Object.prototype.hasOwnProperty.call(baseline, key);
+    const inBaseline = Object.hasOwn(baseline, key);
     const untouched = !inBaseline || (key in current && current[key] === baseline[key]);
     out[key] = untouched ? fresh[key] : current[key];
     if (out[key] !== current[key]) {
@@ -666,7 +666,7 @@ export function toWorkflowInputsPayload(
     payload.push({
       nodeId: runtimeNodeId(entry),
       name: entry.name,
-      value: value,
+      value,
     });
   }
   return payload;

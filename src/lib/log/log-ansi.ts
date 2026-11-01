@@ -74,7 +74,7 @@ const BG: Record<number, AnsiStyleKey> = {
 };
 
 /** 非 SGR 的转义序列：光标移动、清屏、窗口标题等，渲染无意义直接丢弃。 */
-const NON_SGR_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[?[0-9;]*[A-HJKSTfhlmsu]/g;
+const NON_SGR_RE = /\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?|\u001b\[?[0-9;]*[A-HJKSTfhlmsu]/g;
 
 /* ── 「剥掉 SGR / 问有没有 SGR」的唯一出口 ───────────────────────────
  *
@@ -94,7 +94,7 @@ const NON_SGR_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[?[0-9;]*[A-HJKSTfhl
  */
 
 /** 完整 SGR 序列（含转义符）。带 `g`：`replace` 要一次剥干净。 */
-const SGR_RE = /\x1b\[([0-9;:]*)m/g;
+const SGR_RE = /\u001b\[([0-9;:]*)m/g;
 
 /**
  * 残缺颜色码：转义符丢失、只剩 `[90m` / `[0m` 这类尾巴。
@@ -124,7 +124,7 @@ export function hasSgr(text: string): boolean {
  * 只想要「严格 SGR」时显式写 `false`。
  */
 export function stripSgr(text: string, { includePartial = true } = {}): string {
-  const withoutFull = text.replaceAll(/\x1b\[[0-9;:]*m/g, "");
+  const withoutFull = text.replaceAll(/\u001b\[[0-9;:]*m/g, "");
   return includePartial ? withoutFull.replaceAll(PARTIAL_SGR_RE, "") : withoutFull;
 }
 
@@ -140,7 +140,7 @@ export function stripSgr(text: string, { includePartial = true } = {}): string {
 export function stripAnsi(text: string): string {
   return text
     .replaceAll(NON_SGR_RE, "")
-    .replaceAll(/\x1b\[[0-9;:]*m/g, "")
+    .replaceAll(/\u001b\[[0-9;:]*m/g, "")
     .replaceAll("\r", "");
 }
 

@@ -240,8 +240,8 @@ function readLedger() {
   let json;
   try {
     json = JSON.parse(fs.readFileSync(abs, "utf8"));
-  } catch (e) {
-    throw new Error(`解析 ${LEDGER} 失败：${e.message}`, { cause: e });
+  } catch (error) {
+    throw new Error(`解析 ${LEDGER} 失败：${error.message}`, { cause: error });
   }
   if (!Array.isArray(json?.consumers)) {
     throw new Error(`${LEDGER} 的 \`consumers\` 不是数组（形状不在预期内）`);
@@ -294,46 +294,46 @@ function main() {
   let consumers;
   try {
     consumers = readLedger();
-  } catch (e) {
-    console.error(`[ERROR] ${e.message}`);
+  } catch (error) {
+    console.error(`[ERROR] ${error.message}`);
     return 1;
   }
 
   if (sites.length === 0) {
     console.log(
-      "[task-meta] OK —— 0 处 `task.meta` 站点" +
-        `（本判据是纯闸门：对象是「下一次有人往报告里塞事实」；台账在场，${consumers.length} 条登记）。` +
-        note,
+      `[task-meta] OK —— 0 处 \`task.meta\` 站点` +
+        `（本判据是纯闸门：对象是「下一次有人往报告里塞事实」；台账在场，${consumers.length} 条登记）。${
+        note}`,
     );
     return 0;
   }
 
   if (consumers === null || consumers.length === 0) {
     console.error(
-      (REPORT_ONLY
+      `${REPORT_ONLY
         ? `[task-meta] 盘点：${sites.length} 处站点、无消费方登记（--report 不判失败）`
-        : `[ERROR] 有 ${sites.length} 处 \`task.meta\` 站点，但 ${LEDGER} 里没有消费方`) + "：\n",
+        : `[ERROR] 有 ${sites.length} 处 \`task.meta\` 站点，但 ${LEDGER} 里没有消费方`}：\n`,
     );
     for (const s of sites) {
       console.error(`  · ${s.rel}:${s.line}`);
     }
     console.error(
-      "\n`task.meta` 是**唯一**能从 CLI 那侧读到的通道（实测自定义键原样落进\n" +
-        "`--reporter=json` 的报告、绿的用例也带），但门禁链跑 vitest 的参数里\n" +
-        "**没有** `--reporter=json`、没有 `--outputFile` —— 也就是说：\n" +
-        "写了 `ctx.task.meta.x = …` 而没有人带那两个参数去跑，这些数据落进**空气**，\n" +
-        "一个字都不会被任何人看见，而表面上代码写得像「已经登记了」。\n" +
+      `\n\`task.meta\` 是**唯一**能从 CLI 那侧读到的通道（实测自定义键原样落进\n` +
+        `\`--reporter=json\` 的报告、绿的用例也带），但门禁链跑 vitest 的参数里\n` +
+        `**没有** \`--reporter=json\`、没有 \`--outputFile\` —— 也就是说：\n` +
+        `写了 \`ctx.task.meta.x = …\` 而没有人带那两个参数去跑，这些数据落进**空气**，\n` +
+        `一个字都不会被任何人看见，而表面上代码写得像「已经登记了」。\n` +
         `修法二选一：\n  · 登记消费方：在 ${LEDGER} 的 \`consumers\` 里写明谁读、怎么读；\n` +
-        "  · 或者不写这条元数据 —— 当前没有消费方时它只是写着好看的字段。\n" +
-        "口径见 docs/standards/11-测试与可观测性.md §11.22。" +
-        note,
+        `  · 或者不写这条元数据 —— 当前没有消费方时它只是写着好看的字段。\n` +
+        `口径见 docs/standards/11-测试与可观测性.md §11.22。${
+        note}`,
     );
     return REPORT_ONLY ? 0 : 1;
   }
 
   console.log(
-    `[task-meta] OK —— ${sites.length} 处 \`task.meta\` 站点，消费方 ${consumers.length} 条登记。` +
-      note,
+    `[task-meta] OK —— ${sites.length} 处 \`task.meta\` 站点，消费方 ${consumers.length} 条登记。${
+      note}`,
   );
   return 0;
 }

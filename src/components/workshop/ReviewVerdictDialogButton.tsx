@@ -163,9 +163,7 @@ export function ReviewVerdictDialogButton({
               <p className="text-ink-fainter text-sm">{busyText}</p>
             ) : error ? (
               <p className="text-destructive text-sm">{error}</p>
-            ) : !verdict ? (
-              <p className="text-ink-fainter text-sm">尚无评审结果，点「重新评审」开始。</p>
-            ) : (
+            ) : verdict ? (
               <>
                 <div className="flex items-center gap-2">
                   <span
@@ -201,6 +199,8 @@ export function ReviewVerdictDialogButton({
                 )}
                 {history && <HistoryCurve history={history} />}
               </>
+            ) : (
+              <p className="text-ink-fainter text-sm">尚无评审结果，点「重新评审」开始。</p>
             )}
           </div>
 

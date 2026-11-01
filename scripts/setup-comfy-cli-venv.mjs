@@ -66,7 +66,7 @@ function writeLog(level, message) {
   const ts = new Date().toTimeString().slice(0, 8);
   try {
     mkdirSync(LogDir, { recursive: true });
-    appendFileSync(LogFile, `[${ts}] [${level}] ${message}\n`, "utf-8");
+    appendFileSync(LogFile, `[${ts}] [${level}] ${message}\n`, "utf8");
   } catch {
     /* 日志写入失败不影响主流程 */
   }
@@ -90,7 +90,7 @@ function writeStatus(phase, message, { done = false, failed = false } = {}) {
         error: failed,
         updated_at: new Date().toISOString(),
       }),
-      "utf-8",
+      "utf8",
     );
   } catch {
     /* 状态写入失败不影响主流程 */
@@ -203,7 +203,7 @@ function compareVersions(left, right) {
 
 function readUpgradeState() {
   try {
-    return JSON.parse(readFileSync(UpgradeStateFile, "utf-8"));
+    return JSON.parse(readFileSync(UpgradeStateFile, "utf8"));
   } catch {
     return null;
   }
@@ -224,7 +224,7 @@ function saveUpgradeState(installed, latest) {
         installed,
         latest,
       }),
-      "utf-8",
+      "utf8",
     );
   } catch {
     /* 节流状态写失败不影响主流程 */
@@ -248,7 +248,7 @@ function upgradeCheckDue(force) {
   if (Number.isNaN(last)) {
     return true;
   }
-  return Date.now() - last >= UpgradeCheckIntervalHours * 3600_000;
+  return Date.now() - last >= UpgradeCheckIntervalHours * 3_600_000;
 }
 
 /** 在 PATH 上找可用的基础 Python（python / python3 / py 启动器）。 */

@@ -400,11 +400,11 @@ function main(argv = process.argv.slice(2), deps = {}) {
       scanned = byFile.size;
       inputs = [...byFile.entries()].map(([file, rows]) => ({ file, rows }));
     }
-  } catch (e) {
+  } catch (error) {
     // git 取不到清单（不在检出里 / git 不可用）⇒ 这一格没有结论，不圆成「没命中」。
     write(
       `[tracked-secrets] ${STAGED ? "`git diff --cached`" : "`git ls-files`"} 取不到输入面：` +
-        `${e instanceof Error ? e.message : String(e)} ⇒ 不构成结论（不是「没命中」）。\n`,
+        `${error instanceof Error ? error.message : String(error)} ⇒ 不构成结论（不是「没命中」）。\n`,
     );
     return 2;
   }
@@ -419,10 +419,10 @@ function main(argv = process.argv.slice(2), deps = {}) {
     write(
       `[tracked-secrets] ✓ ${ALL ? "全仓被跟踪文本" : "本次暂存的新增行"}（${scanned} ${
         ALL ? "份文件" : "个文件"
-      }）没有凭据形状。` +
-        (unreadable.length > 0
+      }）没有凭据形状。${
+        unreadable.length > 0
           ? ` 另有 ${unreadable.length} 份读不到 ⇒ 它们**不在**这一格的分母里。\n`
-          : "\n"),
+          : "\n"}`,
     );
     return 0;
   }
@@ -433,7 +433,7 @@ function main(argv = process.argv.slice(2), deps = {}) {
   for (const h of found) {
     write(`  · ${h.file}:${h.line} —— ${h.shape}\n`);
   }
-  write(HOW_TO_FIX + "\n");
+  write(`${HOW_TO_FIX}\n`);
   return 1;
 }
 

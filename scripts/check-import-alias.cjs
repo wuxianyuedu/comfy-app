@@ -91,7 +91,7 @@ function scanFile(abs, rel) {
         }
         seen.add(spec);
         problems.push(
-          rel + ":" + (i + 1) + " 别名用 @/ 而非 ~/ → " + spec + "\n    → " + line.trim(),
+          `${rel}:${i + 1} 别名用 @/ 而非 ~/ → ${spec}\n    → ${line.trim()}`,
         );
       }
     }
@@ -123,7 +123,7 @@ for (const dir of SCAN_DIRS) {
 }
 
 if (problems.length) {
-  console.error("[alias] 违反「统一用 ~ 前缀」(规范 §12.2 / §16.2):\n  " + problems.join("\n  "));
+  console.error(`[alias] 违反「统一用 ~ 前缀」(规范 §12.2 / §16.2):\n  ${problems.join("\n  ")}`);
   console.error(
     "把 `@/…` 改成 `~/…` 即可。`@/*` 只是脚手架留下的 paths 历史项,仍可编译但非本仓库约定;" +
       "`shadcn add` 生成的组件默认写 `@/`,新增后须顺手改(§16.3)。",

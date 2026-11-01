@@ -166,8 +166,8 @@ function readBaseline() {
   }
   try {
     return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-  } catch (e) {
-    console.error(`[void-floats] 基线文件损坏: ${e.message}`);
+  } catch (error) {
+    console.error(`[void-floats] 基线文件损坏: ${error.message}`);
     process.exit(1);
   }
 }
@@ -180,7 +180,7 @@ function writeBaseline(files, total) {
     total,
     files,
   };
-  fs.writeFileSync(BASELINE, JSON.stringify(payload, null, 2) + "\n");
+  fs.writeFileSync(BASELINE, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
 function main(parsed) {
@@ -250,13 +250,13 @@ function main(parsed) {
   }
   if (problems.length > 0) {
     console.error(
-      "[void-floats] src/lib 里新增 `void someFn(...)` 语句(§18 lib 规范 + 类型安全审查 src/lib H-6):\n" +
-        problems.join("\n") +
-        "\n  默认修法:改用 `fireAndForget(someFn(), (e) => { /* 明确失败通道 */ })` ——\n" +
-        "  见 src/lib/async-action.ts。若被调函数**内部已经 catch**、这里就是刻意悬空,\n" +
-        "  也请在评审里说明这一点再 `--update` 收紧基线,不要悄悄写下。\n" +
-        "  `void fetch(...)` / `void someFn().catch(...)` 这类形态不在本判据内,\n" +
-        "  但同样是 fire-and-forget —— 优先迁到 fireAndForget。",
+      `[void-floats] src/lib 里新增 \`void someFn(...)\` 语句(§18 lib 规范 + 类型安全审查 src/lib H-6):\n${
+        problems.join("\n")
+        }\n  默认修法:改用 \`fireAndForget(someFn(), (e) => { /* 明确失败通道 */ })\` ——\n` +
+        `  见 src/lib/async-action.ts。若被调函数**内部已经 catch**、这里就是刻意悬空,\n` +
+        `  也请在评审里说明这一点再 \`--update\` 收紧基线,不要悄悄写下。\n` +
+        `  \`void fetch(...)\` / \`void someFn().catch(...)\` 这类形态不在本判据内,\n` +
+        `  但同样是 fire-and-forget —— 优先迁到 fireAndForget。`,
     );
     process.exit(1);
   }
@@ -266,14 +266,14 @@ function main(parsed) {
     .filter(([, cur, base]) => cur < base);
   if (dropped.length > 0) {
     const msg =
-      `[void-floats] 检测到 ${dropped.length} 个文件下降,请收紧基线:\n  ` +
-      dropped.map(([rel, cur, base]) => `${rel}: ${base} → ${cur}`).join("\n  ") +
-      "\n  执行 node scripts/check-void-floats.cjs --update";
+      `[void-floats] 检测到 ${dropped.length} 个文件下降,请收紧基线:\n  ${
+      dropped.map(([rel, cur, base]) => `${rel}: ${base} → ${cur}`).join("\n  ")
+      }\n  执行 node scripts/check-void-floats.cjs --update`;
     if (STRICT) {
       console.error(msg);
       process.exit(1);
     }
-    console.log(msg + " (当前非 --strict,仅提示)");
+    console.log(`${msg} (当前非 --strict,仅提示)`);
   }
   console.log(`[void-floats] src/lib \`void someFn()\` 总数 ${total}(基线 ${baseline.total})`);
   console.log("[void-floats] OK");

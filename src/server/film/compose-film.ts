@@ -277,11 +277,11 @@ export async function composeFilm(id: string) {
           ],
           tmpDir,
         );
-        if (mres.code !== 0) {
+        if (mres.code === 0) {
+          await appendFilmLog(id, "success", "已混入背景音乐");
+        } else {
           await appendFilmLog(id, "warn", "BGM 混音失败，使用无配乐版本");
           await fs.copyFile(concatPath, finalPath);
-        } else {
-          await appendFilmLog(id, "success", "已混入背景音乐");
         }
       } else {
         await fs.copyFile(concatPath, finalPath);

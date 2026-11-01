@@ -23,7 +23,7 @@ const REAL_ROOT = path.resolve(__dirname, "..");
 const SCRIPT = path.join(REAL_ROOT, "scripts", "generate-api-docs.mjs");
 
 /** `execFileSync` 非零退出时抛的那件（node 的类型里没有具名导出的形状，就地声明）。 */
-interface SpawnedFailure {
+type SpawnedFailure = {
   message?: string;
   status?: number | null;
   stderr?: string;
@@ -31,19 +31,19 @@ interface SpawnedFailure {
 }
 
 /** 跑一次入口并交出三件原值（非零退出时 `execFileSync` 会抛，那里带着 stdout/stderr）。 */
-function runBin(args: string[]) {
+function runBin(args: Array<string>) {
   try {
     const out = execFileSync(process.execPath, [SCRIPT, ...args], {
       encoding: "utf8",
       cwd: REAL_ROOT,
     });
     return { status: 0, stdout: out, stderr: "" };
-  } catch (e) {
+  } catch (error) {
     /* SAFETY: `execFileSync` 非零退出抛的就是「子进程结果 + Error」那一件，
      * node 的公开类型里没有具名形状（`ExecFileSyncException` 不存在），
      * 所以这里按实测字段声明：status / stdout / stderr / message 四个都在抛件上，
      * 读法只有 `?? 空值` 的兜底，没有别的假设。 */
-    const err = e as SpawnedFailure;
+    const err = error as SpawnedFailure;
     return {
       status: err.status ?? -1,
       stdout: err.stdout ?? "",

@@ -156,14 +156,14 @@ describe("`.mjs` 入口 → `src/**` 的 Node ESM 路径：相对说明符必须
     const offenders = extensionlessTsSpecifiers();
     expect(
       offenders,
-      "以下模块由 `.mjs` 入口经 Node ESM（类型擦除）直接加载，却用了无后缀的相对" +
-        "说明符 —— Node 不猜扩展名，整条 stage 会在**加载期** `ERR_MODULE_NOT_FOUND`" +
-        "退 1（ISSUE #1959 第七跑实测 897ms 崩在 `E2E 关键流程`）：\n" +
+      `以下模块由 \`.mjs\` 入口经 Node ESM（类型擦除）直接加载，却用了无后缀的相对` +
+        `说明符 —— Node 不猜扩展名，整条 stage 会在**加载期** \`ERR_MODULE_NOT_FOUND\`` +
+        `退 1（ISSUE #1959 第七跑实测 897ms 崩在 \`E2E 关键流程\`）：\n${
         offenders
           .map((o) => `  ✗ ${o.file}：import "…${o.spec}" → 改成 "${o.spec}.ts"`)
-          .join("\n") +
-        "\n（`tsc` / eslint / vitest 走的是打包器解析，三条**都会**放过无后缀形态 ——" +
-        "所以只有这条按 Node 口径走的判据照得出来。）",
+          .join("\n")
+        }\n（\`tsc\` / eslint / vitest 走的是打包器解析，三条**都会**放过无后缀形态 ——` +
+        `所以只有这条按 Node 口径走的判据照得出来。）`,
     ).toEqual([]);
   });
 

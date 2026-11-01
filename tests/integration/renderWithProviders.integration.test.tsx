@@ -25,7 +25,7 @@ import { createTestTRPC, testTrpcEndpoint } from "../helpers/test-trpc";
 import { createTestQueryClient } from "../helpers/renderWithProviders";
 
 /* ---------- 可控 behavior ---------- */
-interface Behavior {
+type Behavior = {
   delayMs?: number;
   listError?: string;
   tags: Array<string>;

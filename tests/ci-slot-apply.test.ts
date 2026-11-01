@@ -534,7 +534,7 @@ describe("LRU 与作业侧补写", () => {
     fs.mkdirSync(path.join(slot, "node_modules"), { recursive: true });
     fs.writeFileSync(path.join(slot, FINGERPRINT_FILE), `${key}\n`);
     fs.rmSync(path.join(job, "node_modules"), { recursive: true, force: true });
-    const used = 1234567890;
+    const used = 1_234_567_890;
     applySlot({
       cwd: job,
       env: { [SLOT_ENABLED_ENV]: "1", COMFY_CI_CACHE_ROOT: cache },

@@ -161,7 +161,7 @@ describe("三格的判定与档位", () => {
     expect(mergedText).toContain("出处·ok");
     expect(mergedText).not.toContain("不是同一份"); // 旧的假前提话术不许回潮
     expect(mergedText).toContain("父提交 2 个");
-    expect(mergedText).toContain("树 " + shape.tree.slice(0, 12));
+    expect(mergedText).toContain(`树 ${shape.tree.slice(0, 12)}`);
     const stale = provenanceVerdict({
       ...base,
       declared: sha,

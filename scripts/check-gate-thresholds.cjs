@@ -59,7 +59,7 @@ const MIN_ENTRIES = 15;
  * （ISSUE #2236：本仓自己就先撞上过一次 —— 新常量先写成 `export const`，账一个字都没念它，
  * 改成非导出才进得了面）。
  */
-const CONST_HEAD = "^(?:export\\s+)?const\\s+";
+const CONST_HEAD = String.raw`^(?:export\s+)?const\s+`;
 
 /**
  * 顶层具名数值常量：`const NAME = 123;` / `export const NAME = 0.75;` / `10_000`。
@@ -188,10 +188,10 @@ function analyze({
     }
     const looser = isLooser(e, e.value, got.value);
     problems.push(
-      `${line} ⇒ 源码与账不同步。这次是**${looser ? "变松（放宽判据）" : "变严"}**：` +
-        (looser
+      `${line} ⇒ 源码与账不同步。这次是**${looser ? "变松（放宽判据）" : "变严"}**：${
+        looser
           ? `要放宽就把账一起改成 ${got.value} 并写 movedFrom / movedIssue —— 让它在 diff 里显形，而不是只动源码`
-          : "收紧也要同批改账，否则下一次有人「顺手复原」就没人看得出来"),
+          : "收紧也要同批改账，否则下一次有人「顺手复原」就没人看得出来"}`,
     );
   }
 
@@ -271,9 +271,9 @@ function analyze({
       if (!signed) {
         problems.push(
           `${e.file}#${e.const} 相对主干是**放宽**（${prev.value} → ${e.value}），` +
-            '但账上没有签字 —— 写 "movedFrom": ' +
-            prev.value +
-            ', "movedIssue": "#<issue号>" 再来（放宽判据要有一份说清为什么的单子，不是改个数字）。',
+            `但账上没有签字 —— 写 "movedFrom": ${
+            prev.value
+            }, "movedIssue": "#<issue号>" 再来（放宽判据要有一份说清为什么的单子，不是改个数字）。`,
         );
       }
     }
@@ -375,9 +375,9 @@ function main(argv = process.argv.slice(2)) {
   let entries;
   try {
     entries = readLedger();
-  } catch (e) {
+  } catch (error) {
     process.stdout.write(
-      `[gate-thresholds] 账解析失败：${e instanceof Error ? e.message : String(e)} ⇒ 不构成结论\n`,
+      `[gate-thresholds] 账解析失败：${error instanceof Error ? error.message : String(error)} ⇒ 不构成结论\n`,
     );
     return 2;
   }
@@ -392,7 +392,7 @@ function main(argv = process.argv.slice(2)) {
   }
   if (AS_JSON) {
     process.stdout.write(
-      JSON.stringify({ entries: entries.length, problems, notes }, null, 2) + "\n",
+      `${JSON.stringify({ entries: entries.length, problems, notes }, null, 2)}\n`,
     );
     return problems.length && !REPORT_ONLY ? 1 : 0;
   }

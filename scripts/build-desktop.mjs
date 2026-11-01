@@ -578,9 +578,9 @@ if (totalMB / 1024 > MAX_STATIC_GB) {
     .slice(0, 8);
   fail(
     `static 体积 ${(totalMB / 1024).toFixed(2)}GB 超过护栏阈值 ${MAX_STATIC_GB}GB，` +
-      "说明 Next standalone file tracing 再次失控。Top 目录: " +
-      top.map((t) => `${t.name}=${t.mb.toFixed(0)}MB`).join(", ") +
-      "。请检查 next.config.js 的 outputFileTracingExcludes 是否覆盖了新的大目录。",
+      `说明 Next standalone file tracing 再次失控。Top 目录: ${
+      top.map((t) => `${t.name}=${t.mb.toFixed(0)}MB`).join(", ")
+      }。请检查 next.config.js 的 outputFileTracingExcludes 是否覆盖了新的大目录。`,
   );
 }
 console.log(

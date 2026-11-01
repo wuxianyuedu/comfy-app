@@ -274,8 +274,8 @@ for (const { file, changes } of touched) {
   }
 }
 console.log(
-  `\n${shouldWrite ? "已改写" : "待改写"} ${total} 处（${touched.length} 个文件）` +
-    (shouldWrite ? "" : "；加 --write 落盘"),
+  `\n${shouldWrite ? "已改写" : "待改写"} ${total} 处（${touched.length} 个文件）${
+    shouldWrite ? "" : "；加 --write 落盘"}`,
 );
 
 /* ── 判定档（--check）：候选数须为 0 ────────────────────────────────────

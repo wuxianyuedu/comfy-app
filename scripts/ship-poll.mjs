@@ -122,36 +122,7 @@ export async function pollUntilTerminal(ctx) {
     const picked = pickBuildForSha(builds, newSha);
     /** 这一眼的状态 JSON；没解析到 build 时为 null（签名照样成立）。 */
     let statusJson = null;
-    if (!picked) {
-      log(`[ship] 按 sha ${short(newSha)} 还没解析到 build（平台可能尚未开跑）…`);
-      /* ISSUE #2645：CI「没起」与「红了」在读数上长得像，而真因常在**冲突**——
-       * `mergeable_state=conflict` 的 PR 平台不派生构建，干等只会烧预算。顺带读一眼
-       * PR 的 `mergeable_state` / `blocked_on`，把人从「再等等 / 换分支名」那条冤枉路
-       * 上拽回来。只念一次（`announcedPrState`），且没给 `number` 时不发这一问。 */
-      if (number && !announcedPrState) {
-        announcedPrState = true;
-        const pr = cnbJson(run, [
-          "pulls",
-          "get-pull",
-          "--repo",
-          slug,
-          "--number",
-          String(number),
-          "-v",
-        ]);
-        const pv = pr ? readPullVerdict(pr.json) : null;
-        if (pv) {
-          log(
-            `[ship] PR #${number}：mergeable_state=${pv.mergeableState} blocked_on=${pv.blockedOn || "(无)"}`,
-          );
-          if (pv.mergeableState === "conflict") {
-            log(
-              "[ship]   ⚠️ 冲突的 PR 平台不派生 CI —— 先 `git fetch` + 合上游解冲突、推新 sha，别干等。",
-            );
-          }
-        }
-      }
-    } else {
+    if (picked) {
       buildSn = picked.sn;
       const st = cnbJson(run, [
         "build",
@@ -182,10 +153,9 @@ export async function pollUntilTerminal(ctx) {
         const first = outcome.cancelled[0];
         const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
         log(
-          `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"}` +
-            " 被终止 ⇒ 下面那几格根本没跑" +
-            (skipped.length > 0 ? `（${skipped.join("、")}）` : "") +
-            "，这一跑没有 CI 结论",
+          `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"} 被终止 ⇒ 下面那几格根本没跑${
+            skipped.length > 0 ? `（${skipped.join("、")}）` : ""
+            }，这一跑没有 CI 结论`,
         );
         /* 「被谁顶掉的」是这一档唯一能让人**不去**查产物的那句话（ISSUE #2406）：
          * 原话与抢锁那一跑都来自平台，本仓一个字不代写。 */
@@ -200,6 +170,35 @@ export async function pollUntilTerminal(ctx) {
       }
       if (v.state !== "running" && v.state !== "unknown") {
         break;
+      }
+    } else {
+      log(`[ship] 按 sha ${short(newSha)} 还没解析到 build（平台可能尚未开跑）…`);
+      /* ISSUE #2645：CI「没起」与「红了」在读数上长得像，而真因常在**冲突**——
+       * `mergeable_state=conflict` 的 PR 平台不派生构建，干等只会烧预算。顺带读一眼
+       * PR 的 `mergeable_state` / `blocked_on`，把人从「再等等 / 换分支名」那条冤枉路
+       * 上拽回来。只念一次（`announcedPrState`），且没给 `number` 时不发这一问。 */
+      if (number && !announcedPrState) {
+        announcedPrState = true;
+        const pr = cnbJson(run, [
+          "pulls",
+          "get-pull",
+          "--repo",
+          slug,
+          "--number",
+          String(number),
+          "-v",
+        ]);
+        const pv = pr ? readPullVerdict(pr.json) : null;
+        if (pv) {
+          log(
+            `[ship] PR #${number}：mergeable_state=${pv.mergeableState} blocked_on=${pv.blockedOn || "(无)"}`,
+          );
+          if (pv.mergeableState === "conflict") {
+            log(
+              "[ship]   ⚠️ 冲突的 PR 平台不派生 CI —— 先 `git fetch` + 合上游解冲突、推新 sha，别干等。",
+            );
+          }
+        }
       }
     }
     const sig = buildSignature(statusJson, picked ? picked.sn : "");
@@ -246,7 +245,7 @@ export async function pollUntilTerminal(ctx) {
       buildState = "unknown";
       break;
     }
-    await sleep(20000);
+    await sleep(20_000);
   }
   return { buildState, buildSn, stop: null };
 }

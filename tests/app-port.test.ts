@@ -24,19 +24,19 @@ import {
  */
 describe("app-port 端口解析", () => {
   it("路径规范化：反斜杠转正斜杠 + 转小写 + resolve", () => {
-    expect(normalizeRootForPort("F:\\AI\\Other\\comfy-app-t3-branch")).toBe(
+    expect(normalizeRootForPort(String.raw`F:\AI\Other\comfy-app-t3-branch`)).toBe(
       "f:/ai/other/comfy-app-t3-branch",
     );
   });
 
   it("FNV-1a 32 位对固定输入给出稳定向量（跨语言一致性锚点）", () => {
-    expect(fnv1a32("f:/ai/other/comfy-app-t3-branch")).toBe(0x97ecb3a9);
+    expect(fnv1a32("f:/ai/other/comfy-app-t3-branch")).toBe(0x97_ec_b3_a9);
   });
 
   it("按检出路径推导的端口落在 3200..3999，且同路径恒定、异路径可分", () => {
-    const a = derivePortFromPath("F:\\AI\\Other\\comfy-app-t3-branch");
+    const a = derivePortFromPath(String.raw`F:\AI\Other\comfy-app-t3-branch`);
     const again = derivePortFromPath("F:/AI/Other/comfy-app-t3-branch");
-    const b = derivePortFromPath("F:\\AI\\Other\\comfy-app-t3-branch2");
+    const b = derivePortFromPath(String.raw`F:\AI\Other\comfy-app-t3-branch2`);
     expect(a).toBe(3305);
     expect(again).toBe(a); // 同一检出（分隔符/大小写差异）必须同一端口
     expect(b).not.toBe(a);
@@ -68,7 +68,7 @@ describe("app-port 端口解析", () => {
     // 回归锁：历史实现无条件 path.resolve()，而它的语义是「相对 cwd 解析」——
     // 在 Linux 上 path.resolve("F:\\AI\\...") 会得到 /workspace/f:/ai/...，
     // 同一检出在不同 cwd / 不同平台推出不同端口，「同一检出恒定同端口」失效。
-    const win = "F:\\AI\\Other\\comfy-app-t3-branch";
+    const win = String.raw`F:\AI\Other\comfy-app-t3-branch`;
     const cwd = process.cwd();
     try {
       process.chdir(os.tmpdir());
@@ -143,7 +143,7 @@ describe("app-port 端口解析", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "app-port-prefix-"));
     try {
       for (const bad of ["3100abc", "3100.5", "0x0C4C", "3100abc3100"]) {
-        fs.writeFileSync(tmp + "/.env", `COMFYAPP_PORT=${bad}\n`, "utf8");
+        fs.writeFileSync(`${tmp}/.env`, `COMFYAPP_PORT=${bad}\n`, "utf8");
         expect(readEnvPort(tmp), `COMFYAPP_PORT=${bad}`).toBeNull();
         // 「未配置」的落点是退回路径推导，不是兜底 3100 —— 否则多检出会撞同一个端口。
         expect(resolveAppPort(tmp)).toBe(derivePortFromPath(tmp));
@@ -151,11 +151,11 @@ describe("app-port 端口解析", () => {
       // 前导 `+` 必须**收**：Rust / PowerShell / Python 三侧都认（ISSUE #1941）。
       // 这一格以前 Node 侧也是 null —— 不收就是新的一处四侧分叉。
       for (const ok of ["+3100", "  +3100  ", "  3100  "]) {
-        fs.writeFileSync(tmp + "/.env", `COMFYAPP_PORT=${ok}\n`, "utf8");
+        fs.writeFileSync(`${tmp}/.env`, `COMFYAPP_PORT=${ok}\n`, "utf8");
         expect(readEnvPort(tmp), `COMFYAPP_PORT=${ok}`).toBe(3100);
       }
       // Unicode 数字位不算：只有 Python 的 `int()` 会收，另三侧都不收。
-      fs.writeFileSync(tmp + "/.env", "COMFYAPP_PORT=\u0663\u0661\u0660\u0660\n", "utf8");
+      fs.writeFileSync(`${tmp}/.env`, "COMFYAPP_PORT=\u0663\u0661\u0660\u0660\n", "utf8");
       expect(readEnvPort(tmp)).toBeNull();
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
@@ -298,7 +298,7 @@ describe("parseDotEnvPortValue：整串是十进制整数才算端口（四侧�
 
   it("落点 1..=65535，越界按未配置", () => {
     expect(parseDotEnvPortValue("1")).toBe(1);
-    expect(parseDotEnvPortValue("65535")).toBe(65535);
+    expect(parseDotEnvPortValue("65535")).toBe(65_535);
     expect(parseDotEnvPortValue("0")).toBeNull();
     expect(parseDotEnvPortValue("-1")).toBeNull();
     expect(parseDotEnvPortValue("65536")).toBeNull();

@@ -12,12 +12,8 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 import { NodesTab } from "./NodesTab";
-import type { CustomNodesSettingsController } from "./hooks/use-custom-nodes-settings";
-import type { ParentBlock } from "./hooks/use-custom-nodes-settings";
-import type {
-  DiscoveredSubpkg,
-  SummaryPkg,
-} from "~/lib/comfyui/custom-nodes-stream";
+import type { CustomNodesSettingsController, ParentBlock } from "./hooks/use-custom-nodes-settings";
+import type { DiscoveredSubpkg, SummaryPkg } from "~/lib/comfyui/custom-nodes-stream";
 
 const PKG_PATH = "D:/Comfy/custom_nodes/BigPack";
 

@@ -104,9 +104,7 @@ export function ShotReviewDialog({
             <p className="text-ink-fainter text-sm">正在评审…</p>
           ) : error ? (
             <p className="text-destructive text-sm">{error}</p>
-          ) : !verdict ? (
-            <p className="text-ink-fainter text-sm">尚无评审结果，点「重新评审」开始。</p>
-          ) : (
+          ) : verdict ? (
             <>
               <div className="flex items-center gap-2">
                 <span
@@ -137,6 +135,8 @@ export function ShotReviewDialog({
                 <p className="text-ink-fainter text-sm">建议：{verdict.suggestion}</p>
               )}
             </>
+          ) : (
+            <p className="text-ink-fainter text-sm">尚无评审结果，点「重新评审」开始。</p>
           )}
         </div>
 

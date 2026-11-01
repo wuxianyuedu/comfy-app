@@ -215,13 +215,13 @@ for (const dir of SCAN_DIRS) {
 
 if (notes.length) {
   console.log(
-    "[title-bar] 同文件已出现 top-title-bar（常量拼接的让位不在此静态扫描内，需人工确认）：\n  " +
-      notes.join("\n  "),
+    `[title-bar] 同文件已出现 top-title-bar（常量拼接的让位不在此静态扫描内，需人工确认）：\n  ${
+      notes.join("\n  ")}`,
   );
 }
 
 if (problems.length) {
-  console.error("[title-bar] 违规(阻断提交):\n  " + problems.join("\n  "));
+  console.error(`[title-bar] 违规(阻断提交):\n  ${problems.join("\n  ")}`);
   console.error("背景与修法见 docs/standards/launch-and-build.md §5「页签/窗口按钮被浮层盖住」条");
   process.exit(1);
 }

@@ -197,7 +197,7 @@ function toPosix(p) {
 }
 
 function escapeRe(s) {
-  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /** 把 glob 转成正则(支持 `**` / `*` / `?` / `{a,b}`):不引依赖,口径可控。 */
@@ -220,17 +220,17 @@ function globToRegExp(glob) {
     } else if (c === "{") {
       const close = glob.indexOf("}", i);
       if (close < 0) {
-        out += "\\{";
+        out += String.raw`\{`;
         continue;
       }
       out +=
-        "(?:" +
+        `(?:${
         glob
           .slice(i + 1, close)
           .split(",")
           .map(escapeRe)
-          .join("|") +
-        ")";
+          .join("|")
+        })`;
       i = close;
     } else if (c === "/") {
       out += "/";
@@ -238,7 +238,7 @@ function globToRegExp(glob) {
       out += escapeRe(c);
     }
   }
-  return new RegExp(out + "$");
+  return new RegExp(`${out}$`);
 }
 
 const IGNORE_RES = IGNORE_GLOBS.map(globToRegExp);

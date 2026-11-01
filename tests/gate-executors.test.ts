@@ -399,7 +399,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
 
   test("两形都真有那行命令 ⇒ 不报入口问题（计数那一行由真仓库那条验）", ({ repo }) => {
     withProbe(repo);
-    repo.write(".githooks/pre-commit", '  run "窄档" node scripts/' + PROBE + " --staged\n");
+    repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write("package.json", JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }));
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -428,7 +428,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
 
   test("登记的某一形在执行者里没有那行命令 ⇒ 红并点名那一形", ({ repo }) => {
     withProbe(repo);
-    repo.write(".githooks/pre-commit", '  run "窄档" node scripts/' + PROBE + " --staged\n");
+    repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write("package.json", JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }));
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -456,7 +456,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("「无旗标那一形」不许被带旗标的那行冒充（塌成的另一种写法）", ({ repo }) => {
     withProbe(repo);
     // 唯一的一行调用带着 --staged：窄档确实有人跑，宽档（无旗标）没有。
-    repo.write(".githooks/pre-commit", '  run "窄档" node scripts/' + PROBE + " --staged\n");
+    repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write(
       "scripts/.gate-executor-ledger.json",
       ledgerWith({
@@ -641,7 +641,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   };
 
   test("钩子里只有超集行 ⇒ 子集那一形红并点名（今天不红的那一格）", ({ repo }) => {
-    twoFlagForms(repo, '  run "超集档" node scripts/' + PROBE + " --staged --json\n");
+    twoFlagForms(repo, `  run "超集档" node scripts/${PROBE} --staged --json\n`);
     const { output } = repo.run();
     expect(output).toContain("登记了那一形（--staged）");
     /* 反向那一半：超集那一形确实有行，不该跟着报 —— 只报「没被认出来的那一形」，
@@ -650,7 +650,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   });
 
   test("钩子里只有子集行 ⇒ 超集那一形仍然红（这条今天就对，别改坏）", ({ repo }) => {
-    twoFlagForms(repo, '  run "窄档" node scripts/' + PROBE + " --staged\n");
+    twoFlagForms(repo, `  run "窄档" node scripts/${PROBE} --staged\n`);
     const { output } = repo.run();
     expect(output).toContain("登记了那一形（--staged --json）");
     expect(output).not.toContain("登记了那一形（--staged）");
@@ -659,12 +659,12 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("两行都在 ⇒ 两形各自被认成自己那一形", ({ repo }) => {
     twoFlagForms(
       repo,
-      '  run "窄档" node scripts/' +
-        PROBE +
-        " --staged\n" +
-        '  run "窄档出 JSON" node scripts/' +
-        PROBE +
-        " --staged --json\n",
+      `  run "窄档" node scripts/${
+        PROBE
+        } --staged\n` +
+        `  run "窄档出 JSON" node scripts/${
+        PROBE
+        } --staged --json\n`,
     );
     expect(repo.run().output).not.toContain("登记了那一形");
   });
@@ -675,14 +675,14 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(
       ".githooks/pre-commit",
-      '  run "窄档" node scripts/' +
-        PROBE +
-        " --staged\n" +
+      `  run "窄档" node scripts/${
+        PROBE
+        } --staged\n` +
         /* 无旗标那一形也要真有一行 —— 少了它，下面那句「不算包含关系」会被一条
          * 「(无旗标) 那一形没有执行者」的红淹掉，而那条红是本例的**正确答案**。 */
-        '  run "整档" node scripts/' +
-        PROBE +
-        "\n",
+        `  run "整档" node scripts/${
+        PROBE
+        }\n`,
     );
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -712,12 +712,12 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(
       ".githooks/pre-commit",
-      '  run "a" node scripts/' +
-        PROBE +
-        " --staged\n" +
-        '  run "b" node scripts/' +
-        PROBE +
-        " --staged --json\n",
+      `  run "a" node scripts/${
+        PROBE
+        } --staged\n` +
+        `  run "b" node scripts/${
+        PROBE
+        } --staged --json\n`,
     );
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -775,14 +775,14 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
       repo.write(`scripts/${reportProbe}`, body);
       repo.write(
         ".githooks/pre-commit",
-        '  run "报告" node scripts/' +
-          reportProbe +
-          " --staged\n" +
+        `  run "报告" node scripts/${
+          reportProbe
+          } --staged\n` +
           /* 两形都得有一行 —— 不然「没有执行者」那条红会先响，本例要判的那条
            * （它根本不是判定型）就被盖在下面。 */
-          '  run "报告出 JSON" node scripts/' +
-          reportProbe +
-          " --json\n",
+          `  run "报告出 JSON" node scripts/${
+          reportProbe
+          } --json\n`,
       );
       repo.write(
         "scripts/.gate-executor-ledger.json",

@@ -407,10 +407,10 @@ export function fetchBuildList(run, slug, event, limit, opts = {}) {
             return ` · ${inner}`;
           })()
         : "";
-      const why = !res
-        ? "命令没起来或输出不是 JSON（`cnb` 不可用 / 非 JSON 输出）"
-        : `退码 ${res.code}${res.stderr.trim() ? ` · stderr: ${res.stderr.trim().split("\n")[0]}` : ""}` +
-          ` · 信封里认不出列表${shape}`;
+      const why = res
+        ? `退码 ${res.code}${res.stderr.trim() ? ` · stderr: ${res.stderr.trim().split("\n")[0]}` : ""}` +
+          ` · 信封里认不出列表${shape}`
+        : "命令没起来或输出不是 JSON（`cnb` 不可用 / 非 JSON 输出）";
       opts.log(`[build-readout] 构建列表取不到：${why}`);
     }
     return null;

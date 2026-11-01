@@ -99,10 +99,10 @@ describe("跨宿主 import 的扩展名形态（ISSUE #1961）", () => {
     }
     expect(
       offenders,
-      "跨宿主的那条链上出现了「清单外的依赖」或「不带 .ts 的说明符」——\n" +
-        "前者会让 `.mjs` 宿主加载到一半 `ERR_MODULE_NOT_FOUND`（tsc / vitest 都照不出来），\n" +
-        "后者在 Node 的 ESM 解析器下必然找不到文件（它不补扩展名）：\n" +
-        offenders.map((o) => `  ✗ ${o}`).join("\n"),
+      `跨宿主的那条链上出现了「清单外的依赖」或「不带 .ts 的说明符」——\n` +
+        `前者会让 \`.mjs\` 宿主加载到一半 \`ERR_MODULE_NOT_FOUND\`（tsc / vitest 都照不出来），\n` +
+        `后者在 Node 的 ESM 解析器下必然找不到文件（它不补扩展名）：\n${
+        offenders.map((o) => `  ✗ ${o}`).join("\n")}`,
     ).toEqual([]);
   });
 

@@ -19,7 +19,7 @@
  */
 
 /** 一条门禁在某一侧的形状。 */
-export interface GateEntry {
+export type GateEntry = {
   /** 入口脚本体现在 `args` 里出现的那些路径（`../scripts/x.mjs` 形态，未归一化）。 */
   args: Array<string>;
   /** 门禁名（两侧应当一致）。 */

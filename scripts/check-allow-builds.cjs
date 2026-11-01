@@ -279,12 +279,7 @@ let scanned = 0;
 let unread = 0;
 const bearing = [];
 
-if (!dirExists(WORKSPACE_FILE)) {
-  problems.push(
-    `读不到 pnpm-workspace.yaml（${path.relative(ROOT, WORKSPACE_FILE)}）。` +
-      `本判据的名单在那一份文件里 —— 它不在，判据就没有输入，跳过等于报绿。`,
-  );
-} else {
+if (dirExists(WORKSPACE_FILE)) {
   const workspaceText = readForScan(WORKSPACE_FILE);
   if (workspaceText === null) {
     problems.push("pnpm-workspace.yaml 在扫描期间消失了，重新跑一次即可。");
@@ -298,13 +293,7 @@ if (!dirExists(WORKSPACE_FILE)) {
       );
     }
 
-    if (!dirExists(PNPM_DIR)) {
-      problems.push(
-        `读不到 ${path.relative(ROOT, PNPM_DIR)} —— 依赖还没装（不是「本机装不了」，` +
-          "见 AGENTS 硬规则 26）。先跑 `pnpm install --frozen-lockfile` 再提交，" +
-          "否则这一步没有输入可判。",
-      );
-    } else {
+    if (dirExists(PNPM_DIR)) {
       const collected = collectInstalledPackages();
       unread += collected.vanished;
       const seenNames = new Set();
@@ -336,8 +325,19 @@ if (!dirExists(WORKSPACE_FILE)) {
             `    或 false（不需要，并写一句为什么）—— 两种都算回答过，漏答才是问题。`,
         );
       }
+    } else {
+      problems.push(
+        `读不到 ${path.relative(ROOT, PNPM_DIR)} —— 依赖还没装（不是「本机装不了」，` +
+          "见 AGENTS 硬规则 26）。先跑 `pnpm install --frozen-lockfile` 再提交，" +
+          "否则这一步没有输入可判。",
+      );
     }
   }
+} else {
+  problems.push(
+    `读不到 pnpm-workspace.yaml（${path.relative(ROOT, WORKSPACE_FILE)}）。` +
+      `本判据的名单在那一份文件里 —— 它不在，判据就没有输入，跳过等于报绿。`,
+  );
 }
 
 if (problems.length > 0) {

@@ -81,12 +81,13 @@ import {
   readPullVerdict,
   resolveUpstream,
 } from "../scripts/ship-core.mjs";
-import { runPushStage } from "../scripts/ship-local.mjs";
+import { runPushStage, runRerunCiStage } from "../scripts/ship-local.mjs";
 /* 旗标层单独一份（ISSUE #2491）：这一族的用例读的是「命令行长什么样」，不是「执行者给了什么读数」。 */
 import { parseArgs, parseIssueNumberToken } from "../scripts/ship-args.mjs";
 import { buildPullBody, capDiffstat, PULL_BODY_LIMIT } from "../scripts/ship-pull-body.mjs";
 import {
   claimNumbersFromTitle,
+  closeIssues,
   decideCloseIssue,
   fetchPullMergeProof,
   findMergedPullProofs,
@@ -118,14 +119,12 @@ import {
 } from "../scripts/ship-claim.mjs";
 import { cleanBranch, createOrReusePull, reportVerdict } from "../scripts/ship-platform.mjs";
 import { pollUntilTerminal } from "../scripts/ship-poll.mjs";
-import { closeIssues } from "../scripts/ship-close.mjs";
 import { readIssueBody, runAppendIssueComment, runIssueComment } from "../scripts/ship-issue-new.mjs";
 import { sameCommentBody, stripTrailingNewline } from "../scripts/ship-comment.mjs";
 import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/ship-reap.mjs";
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
 import { DIAGNOSE_STALL_MINUTES, stallReadout } from "../scripts/ship-diagnose.mjs";
 import { main } from "../scripts/ship.mjs";
-import { runRerunCiStage } from "../scripts/ship-local.mjs";
 import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
 
 /** 真机取到的一份 `cnb build get-build-status -v` 的形状（信封 + data 各有一个 status）。 */
@@ -566,7 +565,7 @@ describe("classifyPushFailure：push 失败按原话分型，不固定猜 premer
   it("两类特征同时在场 ⇒ 仍判 remote（钩子放行后传输被拒，终止原因是远端）", () => {
     const got = classifyPushFailure(
       "",
-      "[pre-push] ✓ 合并前复算全绿\n" + REMOTE_404_STDERR,
+      `[pre-push] ✓ 合并前复算全绿\n${REMOTE_404_STDERR}`,
     );
     expect(got.kind).toBe("remote");
   });
@@ -585,7 +584,7 @@ describe("classifyPushFailure：push 失败按原话分型，不固定猜 premer
   });
 
   it("接线判据：runPushStage 真把分型话术念出来（不再固定说 premerge）", () => {
-    const logs: string[] = [];
+    const logs: Array<string> = [];
     let pushed = 0;
     const ctx = {
       up: { remote: "origin" },
@@ -3534,10 +3533,10 @@ describe("parseSlug：https 与 ssh 两种 origin 都要认", () => {
  * 从第一次跑起就没工作过，报的还是一个听起来正当的理由。
  */
 describe("looksNewlineMangled：`pnpm run` 把 argv 里的换行改写成字面量这一格", () => {
-  it("认「没有真换行 + 带字面量 \\n」这一形，其余一律不拦", () => {
+  it(String.raw`认「没有真换行 + 带字面量 \n」这一形，其余一律不拦`, () => {
     // 实测形状：`pnpm ship --message "一行<换行>二行"` 到 node 手里成了一条
     // `一行\n二行`（真换行没了）；`pnpm exec node` 那条路径则保留真换行。
-    expect(looksNewlineMangled("标题\\n\\n正文一段\\n正文二段")).toBe(true);
+    expect(looksNewlineMangled(String.raw`标题\n\n正文一段\n正文二段`)).toBe(true);
     /* 真换行在 ⇒ 不是改写产物（`--message-file` 读出来的、`pnpm exec` 传进来的都是这形）。 */
     expect(looksNewlineMangled("标题\n\n正文")).toBe(false);
     // 普通单行不受影响 —— 判据必须只认那一形，别顺手多拦。
@@ -4149,7 +4148,7 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       readPullCreateError({
         status: 400,
         data: {
-          errcode: 2000003,
+          errcode: 2_000_003,
           errmsg: "body length exceeded the limit 65,535",
         },
       }),
@@ -5897,7 +5896,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       run,
       log: (s: string) => heard.push(s),
       probeCnb: () => true,
-      args: ["--message=标题\\n\\n正文一段\\n正文二段"],
+      args: [String.raw`--message=标题\n\n正文一段\n正文二段`],
     });
     const all = heard.join("\n");
     expect(code).toBe(CODE.RED);

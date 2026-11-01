@@ -265,7 +265,7 @@ export async function runEnsureLaunch(input: {
       PYTHONIOENCODING: "utf8",
       PYTHONUTF8: "1",
     },
-    deadline: input.timeoutMs != null ? Date.now() + input.timeoutMs : null,
+    deadline: input.timeoutMs == null ? null : Date.now() + input.timeoutMs,
     timeoutDetail: `ComfyUI 启动超过 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/services/comfyui-runtime.log`,
     cpuLimitMode: resolveCpuLimitMode({
       mode: settings.comfyuiCpuLimit,
@@ -321,7 +321,7 @@ export async function waitForExistingInstanceReady(input: {
   const { host, settings, note } = input;
   let goneStreak = 0;
   const result = await waitForComfyReady({
-    deadline: input.timeoutMs != null ? Date.now() + input.timeoutMs : null,
+    deadline: input.timeoutMs == null ? null : Date.now() + input.timeoutMs,
     timeoutDetail: `已有 ComfyUI 实例持续未响应（等待 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 后放弃）；可能正忙或已卡死，详见 log/services/comfyui-runtime.log`,
     readyDetail: "ComfyUI 已就绪（接管已在运行的实例）",
     onReady: (base) => note(`ComfyUI 已就绪（接管）：${base}`),
@@ -365,7 +365,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
   // 保活：脱离进程树。没有直连 stdio/exit，但把 stdout/stderr 重定向到
   // 按次命名的文件里，等待循环会增量跟随进 comfyui-runtime.log ——
   // 保活模式下「启动日志」面板不再空白，完整输出也留得下文件。
-  const kaStamp = host.localTimestamp().replace(/[: ]/g, "-");
+  const kaStamp = host.localTimestamp().replaceAll(/[: ]/g, "-");
   const kaOutLog = path.join(SERVICES_LOG_DIR, `comfyui-keepalive-${kaStamp}.out.log`);
   const kaErrLog = path.join(SERVICES_LOG_DIR, `comfyui-keepalive-${kaStamp}.err.log`);
   /* 判死时从本次的重定向日志全文里识别根因：keepAlive 没有直连 stdio，进程
@@ -843,7 +843,7 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
         : null,
     probe: () => probeChildReady(child),
     /* 子进程句柄被清掉（= 进程已退出）→ 用留底给出可行动的报错。 */
-    isDead: async () => (st.child !== child ? buildEarlyExitDetail(ledger.lines) : null),
+    isDead: async () => (st.child === child ? null : buildEarlyExitDetail(ledger.lines)),
   });
   if (!result.ok) {
     note(result.detail);

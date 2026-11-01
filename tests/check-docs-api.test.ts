@@ -189,8 +189,8 @@ describe("judgeProduct：骨架齐全 + 可移植（ISSUE #2231 的新判据）"
   it("产物里烤进本机绝对路径 ⇒ 报出来（两种分隔符形态都查）", () => {
     /* 这条不是洁癖：这份副本是要给人读的，而 typedoc 的源码链接 / 搜索索引 /
      * 面包屑里只要有一处烤进了本机路径，读者点开的就不是同一个东西。 */
-    const win = productFixture({ "modules/leak.html": "<p>C:\\repo\\src\\lib\\x.ts</p>" });
-    expect(judgeProduct(win, "C:\\repo", {}).problems.join("\n")).toContain("本机绝对路径");
+    const win = productFixture({ "modules/leak.html": String.raw`<p>C:\repo\src\lib\x.ts</p>` });
+    expect(judgeProduct(win, String.raw`C:\repo`, {}).problems.join("\n")).toContain("本机绝对路径");
     const posix = productFixture({ "modules/leak.html": "<p>/repo/src/lib/x.ts</p>" });
     expect(judgeProduct(posix, "/repo", {}).problems.join("\n")).toContain("本机绝对路径");
   });
@@ -215,8 +215,8 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
-    } catch (err) {
-      const e = /* SAFETY: 类型断言已复核 */ err as { status?: number; stderr?: string };
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as { status?: number; stderr?: string };
       code = e.status ?? -1;
       out = `${e.stderr ?? ""}`;
     }
@@ -234,7 +234,7 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
 describe("judgeTypedocTail：typedoc 收尾日志的结论判读（#2444）", () => {
   it("总结行报了 errors / warnings ⇒ 红，且红话里带数", () => {
     const log =
-      "\x1b[93m[warning]\x1b[0m 某个死链\n" + "[warning] Found 0 errors and 61 warnings\n";
+      "\u001b[93m[warning]\u001b[0m 某个死链\n" + "[warning] Found 0 errors and 61 warnings\n";
     const got = judgeTypedocTail(log);
     expect(got.problems).toHaveLength(1);
     expect(got.problems[0]).toContain("0 errors / 61 warnings");
@@ -245,7 +245,7 @@ describe("judgeTypedocTail：typedoc 收尾日志的结论判读（#2444）", ()
   });
 
   it("总结行缺席但 html generated 在场 ⇒ 绿（0 warning 时不打总结行）", () => {
-    const log = "\x1b[96m[info]\x1b[0m html generated at ./docs/api\n";
+    const log = "\u001b[96m[info]\u001b[0m html generated at ./docs/api\n";
     expect(judgeTypedocTail(log).problems).toEqual([]);
   });
 

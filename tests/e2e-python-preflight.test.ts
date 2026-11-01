@@ -41,13 +41,13 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
       platform: "win32",
       resolve: () => ({
         command: "python",
-        path: "C:\\Py\\python.exe",
+        path: String.raw`C:\Py\python.exe`,
         args: [],
       }),
       which: (name) => `C:\\Python312\\${name}.exe`,
     });
     expect(ready.verdict).toBe("ready");
-    expect(ready.interpreter).toBe("C:\\Python312\\python.exe");
+    expect(ready.interpreter).toBe(String.raw`C:\Python312\python.exe`);
     // 话术里要报出「用了哪一个」——缺件时那行是唯一的排障线索，绿的时候同理。
     expect(ready.detail).toContain("python");
   });
@@ -57,13 +57,13 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
       platform: "win32",
       resolve: () => ({
         command: "py",
-        path: "C:\\Windows\\py.exe",
+        path: String.raw`C:\Windows\py.exe`,
         args: ["-3"],
       }),
-      which: () => "C:\\Windows\\py.exe",
+      which: () => String.raw`C:\Windows\py.exe`,
     });
     expect(ready.detail).toContain("-3");
-    expect(ready.interpreter).toBe("C:\\Windows\\py.exe");
+    expect(ready.interpreter).toBe(String.raw`C:\Windows\py.exe`);
   });
 
   it("`which` 解析不到时退回 `resolvePython` 给的那一条（不编一条不存在的路径）", () => {
@@ -85,12 +85,12 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
       platform: "win32",
       resolve: () => ({
         command: "py",
-        path: "C:\\Windows\\py.exe",
+        path: String.raw`C:\Windows\py.exe`,
         args: ["-3"],
       }),
       which: (name, options) => {
         calls.push({ name, args: options?.probeArgs ?? [] });
-        return "C:\\Windows\\py.exe";
+        return String.raw`C:\Windows\py.exe`;
       },
     });
     expect(ready.verdict).toBe("ready");

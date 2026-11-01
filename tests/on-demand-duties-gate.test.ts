@@ -16,8 +16,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe } from "./helpers/gate-repo";
-import { defineGateRepo } from "./helpers/gate-repo";
+import { describe, defineGateRepo } from "./helpers/gate-repo";
 
 /* `test` 与 `expect` 都由夹具给出（`test` 带 `repo`；`expect` 是它转发的那一份，
  * 这样断言的实现与夹具同源）；`describe` 不随 `extend` 变，从夹具模块取。 */
@@ -51,7 +50,7 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 索引里一行的形状（夹具按它造）。 */
-interface DutyRow {
+type DutyRow = {
   executor: string;
   fact: { gate?: string; key?: string; kind: string; script?: string };
   id: string;

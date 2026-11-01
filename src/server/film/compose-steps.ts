@@ -14,7 +14,7 @@ import { artifactDiskPath, generatedRoot } from "~/lib/media/output-paths";
 
 /** ffmpeg 滤镜表达式里的字符转义（单引号与冒号）。 */
 function escapeFilter(s: string): string {
-  return s.replace(/'/g, String.raw`\'`).replace(/:/g, String.raw`\:`);
+  return s.replaceAll("'", String.raw`\'`).replaceAll(":", String.raw`\:`);
 }
 
 /** 单个镜头归一化到统一画幅 / 帧率并首尾淡入淡出的 `vf` 滤镜串。
@@ -58,7 +58,7 @@ export function buildNormalizeArgs(opts: {
 }): Array<string> {
   const { clip, vf, dur, out, srtPath } = opts;
   const vfWithSub =
-    srtPath !== null ? `${vf},subtitles='${escapeFilter(normalizeSlashes(srtPath))}'` : vf;
+    srtPath === null ? vf : `${vf},subtitles='${escapeFilter(normalizeSlashes(srtPath))}'`;
   return [
     "-y",
     "-i",

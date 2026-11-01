@@ -97,7 +97,7 @@ function argValue(key) {
     if (argv[i] === key) {
       return argv[i + 1] || "";
     }
-    if (argv[i].startsWith(key + "=")) {
+    if (argv[i].startsWith(`${key}=`)) {
       return argv[i].slice(key.length + 1);
     }
   }
@@ -133,7 +133,7 @@ function evaluate() {
       branch,
       parents,
       merge,
-      reason: "本次是合并提交(PR 合并),允许落在 " + PROTECTED_BRANCH,
+      reason: `本次是合并提交(PR 合并),允许落在 ${PROTECTED_BRANCH}`,
     };
   }
   return {
@@ -141,7 +141,7 @@ function evaluate() {
     branch,
     parents,
     merge,
-    reason: "在 " + PROTECTED_BRANCH + " 上直接提交",
+    reason: `在 ${PROTECTED_BRANCH} 上直接提交`,
   };
 }
 
@@ -179,7 +179,7 @@ function evaluatePr(targetBranch) {
   const target = targetBranch || PROTECTED_BRANCH;
 
   /** 目标分支的引用:优先 `origin/<target>`(容器里只有这一份),再退回本地同名分支。 */
-  const targetRef = ["origin/" + target, target].find((ref) =>
+  const targetRef = [`origin/${target}`, target].find((ref) =>
     git(["rev-parse", "--verify", "--quiet", ref]),
   );
 
@@ -192,16 +192,16 @@ function judgePrByAhead(target, targetRef, ctx) {
     return {
       ...ctx,
       blocked: false,
-      reason: "本地取不到目标分支 " + target + "(浅克隆 / 单分支检出),无法判定(保守放行)",
+      reason: `本地取不到目标分支 ${target}(浅克隆 / 单分支检出),无法判定(保守放行)`,
     };
   }
-  const aheadRaw = git(["rev-list", "--count", targetRef + "..HEAD"]);
+  const aheadRaw = git(["rev-list", "--count", `${targetRef}..HEAD`]);
   const ahead = Number.parseInt(aheadRaw, 10);
   if (!Number.isFinite(ahead)) {
     return {
       ...ctx,
       blocked: false,
-      reason: "无法计算 " + targetRef + "..HEAD 的提交数(保守放行)",
+      reason: `无法计算 ${targetRef}..HEAD 的提交数(保守放行)`,
     };
   }
   if (ahead > 0) {
@@ -209,30 +209,30 @@ function judgePrByAhead(target, targetRef, ctx) {
       ...ctx,
       blocked: false,
       ahead,
-      reason: "源分支有 " + ahead + " 个提交不在 " + target + " 上(正常 PR)",
+      reason: `源分支有 ${ahead} 个提交不在 ${target} 上(正常 PR)`,
     };
   }
   return {
     ...ctx,
     blocked: true,
     ahead,
-    reason: "源分支没有任何超出 " + target + " 的提交 —— 源分支就是 " + target,
+    reason: `源分支没有任何超出 ${target} 的提交 —— 源分支就是 ${target}`,
   };
 }
 
 /** 阻断时打印人类可读的出口(怎么改),不只报错。 */
 function printBlockedTip(branch) {
   console.error("");
-  console.error("[branch-guard] 阻断:检测到直接向 " + branch + " 分支提交(规范 13.6)。");
-  console.error("[branch-guard] " + branch + " 只接受「分支开发 → PR → 评审 → 合并」的变更。");
+  console.error(`[branch-guard] 阻断:检测到直接向 ${branch} 分支提交(规范 13.6)。`);
+  console.error(`[branch-guard] ${branch} 只接受「分支开发 → PR → 评审 → 合并」的变更。`);
   console.error("[branch-guard] 正确做法:");
   console.error("[branch-guard]   git checkout -b feat/<简短描述>     # 新建工作分支");
   console.error("[branch-guard]   git commit                           # 在新分支上提交");
   console.error("[branch-guard]   git push origin HEAD                # 推送并创建 PR");
-  console.error("[branch-guard] 已经提交在 " + branch + " 上(尚未 push)时,把提交搬走再推:");
+  console.error(`[branch-guard] 已经提交在 ${branch} 上(尚未 push)时,把提交搬走再推:`);
   console.error("[branch-guard]   git branch feat/<简短描述>           # 用当前提交建分支");
   console.error(
-    "[branch-guard]   git reset --hard origin/" + branch + " # " + branch + " 回退到远端状态",
+    `[branch-guard]   git reset --hard origin/${branch} # ${branch} 回退到远端状态`,
   );
   console.error("[branch-guard]   git checkout feat/<简短描述>         # 继续开发");
   console.error(
@@ -274,7 +274,7 @@ function evaluateLanding() {
       blocked: false,
       parents,
       mode: "merge commit",
-      reason: "HEAD 有 " + parents + " 个父提交(PR 合并提交)",
+      reason: `HEAD 有 ${parents} 个父提交(PR 合并提交)`,
     };
   }
 
@@ -287,7 +287,7 @@ function evaluateLanding() {
       blocked: false,
       parents,
       mode: "squash/rebase",
-      reason: "HEAD 是单父提交,但提交信息带 PR 关联(" + prRef[0].trim() + "),认定为 PR 合并",
+      reason: `HEAD 是单父提交,但提交信息带 PR 关联(${prRef[0].trim()}),认定为 PR 合并`,
     };
   }
 
@@ -308,12 +308,12 @@ function main() {
 
   if (statusOnly) {
     console.log(
-      "[branch-guard] 当前分支 " +
-        (result.branch || "(detached)") +
-        ",父提交数 " +
-        result.parents +
-        " → " +
-        result.reason,
+      `[branch-guard] 当前分支 ${
+        result.branch || "(detached)"
+        },父提交数 ${
+        result.parents
+        } → ${
+        result.reason}`,
     );
     return;
   }
@@ -324,27 +324,27 @@ function main() {
     const target = argValue("--target") || PROTECTED_BRANCH;
     const pr = evaluatePr(target);
     console.log(
-      "[branch-guard] v" +
-        GUARD_VERSION +
-        " PR 源分支复核:HEAD 分支 " +
-        (pr.branch || "(detached)") +
-        ",父提交数 " +
-        pr.parents +
-        ",目标分支 " +
-        target,
+      `[branch-guard] v${
+        GUARD_VERSION
+        } PR 源分支复核:HEAD 分支 ${
+        pr.branch || "(detached)"
+        },父提交数 ${
+        pr.parents
+        },目标分支 ${
+        target}`,
     );
     if (pr.blocked) {
       console.error("");
-      console.error("[branch-guard] 阻断:" + pr.reason + "(规范 13.6)。");
+      console.error(`[branch-guard] 阻断:${pr.reason}(规范 13.6)。`);
       console.error(
-        "[branch-guard] " + PROTECTED_BRANCH + " 只接受「分支开发 → PR → 评审 → 合并」的变更。",
+        `[branch-guard] ${PROTECTED_BRANCH} 只接受「分支开发 → PR → 评审 → 合并」的变更。`,
       );
       console.error("[branch-guard] 把改动放到一条特性分支上再开 PR:");
       console.error("[branch-guard]   git checkout -b feat/<简短描述>     # 新建工作分支");
       console.error("[branch-guard]   git push origin HEAD                # 推送并创建 PR");
       process.exit(1);
     }
-    console.log("[branch-guard] OK(" + pr.reason + ")");
+    console.log(`[branch-guard] OK(${pr.reason})`);
     return;
   }
 
@@ -352,19 +352,19 @@ function main() {
     // push 事件复核:判据见 evaluateLanding()。先按分支分流,不在受保护分支上时
     // 这条判据无从命中,不该误报。
     if (result.branch !== PROTECTED_BRANCH) {
-      console.log("[branch-guard] OK(不在 " + PROTECTED_BRANCH + " 上,push 复核不适用)");
+      console.log(`[branch-guard] OK(不在 ${PROTECTED_BRANCH} 上,push 复核不适用)`);
       return;
     }
     const landing = evaluateLanding();
     console.log(
-      "[branch-guard] v" +
-        GUARD_VERSION +
-        " push 复核:HEAD 父提交数 " +
-        landing.parents +
-        ",合并方式 " +
-        landing.mode,
+      `[branch-guard] v${
+        GUARD_VERSION
+        } push 复核:HEAD 父提交数 ${
+        landing.parents
+        },合并方式 ${
+        landing.mode}`,
     );
-    console.log("[branch-guard] OK(" + landing.reason + ")");
+    console.log(`[branch-guard] OK(${landing.reason})`);
     return;
   }
 
@@ -372,7 +372,7 @@ function main() {
     printBlockedTip(result.branch);
     process.exit(1);
   }
-  console.log("[branch-guard] OK(" + result.reason + ")");
+  console.log(`[branch-guard] OK(${result.reason})`);
 }
 
 module.exports = { evaluate, currentBranch, parentCount, PROTECTED_BRANCH };

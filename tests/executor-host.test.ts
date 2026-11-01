@@ -75,7 +75,7 @@ function runHost(args: Array<string>, logPath: string) {
 async function waitFor(
   predicate: () => boolean,
   message = "条件未在预算内成立",
-  timeoutMs = 5_000,
+  timeoutMs = 5000,
 ): Promise<void> {
   await expect.poll(predicate, { timeout: timeoutMs, message }).toBe(true);
 }
@@ -86,7 +86,7 @@ describe("scripts/executor-host.mjs 骨架", () => {
     const logPath = path.join(tmp, "sub", "exec.log");
     const { code, stderr } = await runHost(["--once"], logPath);
     expect(code, `stderr: ${stderr}`).toBe(0);
-    const text = fs.readFileSync(logPath, "utf-8");
+    const text = fs.readFileSync(logPath, "utf8");
     expect(text).toMatch(/\[executor-host\] boot pid=\d+ bootId=[0-9a-z]+/);
     expect(text).toContain("--once 模式：boot 完成、立即退出 0");
     // 时间戳形态与 app-runtime.log 一致（本地毫秒）：`[YYYY-MM-DD HH:MM:SS.mmm]`
@@ -109,14 +109,14 @@ describe("scripts/executor-host.mjs 骨架", () => {
     });
     try {
       await waitFor(
-        () => fs.existsSync(logPath) && fs.readFileSync(logPath, "utf-8").includes("heartbeat"),
+        () => fs.existsSync(logPath) && fs.readFileSync(logPath, "utf8").includes("heartbeat"),
         "executor-host 应该打出至少一次 heartbeat",
       );
       child.kill("SIGTERM");
       const exitCode = await new Promise<number | null>((resolve) => {
         child.on("exit", (c) => resolve(c));
       });
-      const text = fs.readFileSync(logPath, "utf-8");
+      const text = fs.readFileSync(logPath, "utf8");
       expect(text).toContain("boot pid=");
       expect(text).toContain("heartbeat bootId=");
       if (process.platform === "win32") {
@@ -137,7 +137,7 @@ describe("scripts/executor-host.mjs 骨架", () => {
   it("未设 COMFYAPP_HOST_LOG 时默认路径写到 `log/current/services/`（不做写入、只测路径拼装）", async () => {
     // 骨架阶段不测「真的落到仓库 log/」——那条测试会污染仓库；直接读源码
     // 断默认分支即可（保持脚本文件与规范 §4「current/ 分区」契约一致）。
-    const src = fs.readFileSync(HOST_SCRIPT, "utf-8");
+    const src = fs.readFileSync(HOST_SCRIPT, "utf8");
     expect(src).toMatch(
       /COMFYAPP_HOST_LOG[\s\S]*?"log",\s*"current",\s*"services",\s*"executor-host\.log"/,
     );
@@ -219,7 +219,7 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
       });
       child.on("exit", (c) => resolve({ code: c, stderr: err }));
     });
-    const text = fs.readFileSync(logPath, "utf-8");
+    const text = fs.readFileSync(logPath, "utf8");
     expect(code, `stderr: ${stderr}\nlog:\n${text}`).toBe(0);
     expect(text).toContain("mode=runtime");
     expect(text).toContain("runtime inject-ok");
@@ -249,7 +249,7 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
       child.on("exit", (c) => resolve({ code: c }));
     });
     expect(code).toBe(1);
-    expect(fs.readFileSync(logPath, "utf-8")).toContain("runtime boot FAILED");
+    expect(fs.readFileSync(logPath, "utf8")).toContain("runtime boot FAILED");
   }, 90_000);
 
   /** 用指定 args/env 跑一次 host 子进程，回 exit code（stderr 一并带回防哑）。 */
@@ -282,7 +282,7 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
       { COMFY_EXECUTOR: "host", DATABASE_URL: `file:${dbPath}` },
       logPath,
     );
-    const text = fs.readFileSync(logPath, "utf-8");
+    const text = fs.readFileSync(logPath, "utf8");
     expect(code, `stderr: ${stderr}\nlog:\n${text}`).toBe(0);
     expect(text).toContain("claim-dispatched taskId=host-job-1");
     const claimed = readTaskRow(dbPath, "host-job-1");
@@ -297,6 +297,6 @@ describe("scripts/executor-host.mjs 运行时注入链（Phase 3-B0/3-B1）", ()
     const logPath = path.join(tmp, "claim-skel.log");
     const { code } = await runHostWith(["--claim-once"], { COMFY_EXECUTOR: "inline" }, logPath);
     expect(code).toBe(1);
-    expect(fs.readFileSync(logPath, "utf-8")).toContain("--claim-once 需要 COMFY_EXECUTOR=host");
+    expect(fs.readFileSync(logPath, "utf8")).toContain("--claim-once 需要 COMFY_EXECUTOR=host");
   }, 60_000);
 });

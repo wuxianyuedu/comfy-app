@@ -104,11 +104,11 @@ export type SpawnArgsFacts = {
 export function buildSpawnArgs(facts: SpawnArgsFacts): Array<string> {
   const port =
     facts.effectivePort && facts.effectivePort > 0 ? facts.effectivePort : facts.defaultPort;
-  const args = [
-    ...facts.baseArgs,
-    ...(port !== facts.defaultPort ? ["--port", String(port)] : []),
-    ...facts.extraArgs,
-  ];
+  const args = [...facts.baseArgs];
+  if (port !== facts.defaultPort) {
+    args.push("--port", String(port));
+  }
+  args.push(...facts.extraArgs);
   /* 无条件补上内嵌放行开关（幂等）：应用把 ComfyUI 内嵌进同一窗口的页签，
    * 而两者不同源——未开 CORS 时 ComfyUI 的 origin-only 中间件会对跨源
    * 请求直接 403，页签里就是一片空白（见本文件 embed clearance 一节）。

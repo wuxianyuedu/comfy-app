@@ -31,8 +31,8 @@ function run(args: Array<string> = []) {
       timeout: 120_000,
     });
     return { code: 0, output };
-  } catch (err) {
-    const e = /* SAFETY: 类型断言已复核 */ err as {
+  } catch (error) {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -76,7 +76,7 @@ describe("gates:which —— 认得出钩子步骤跑的是哪份脚本", () => 
     expect(scriptOf(["node", "scripts/affected-tests.mjs", "--json"])).toBe(
       "scripts/affected-tests.mjs",
     );
-    expect(scriptOf(["node", "G:\\repo\\scripts\\check-format.cjs", "--staged"])).toBe(
+    expect(scriptOf(["node", String.raw`G:\repo\scripts\check-format.cjs`, "--staged"])).toBe(
       "scripts/check-format.cjs",
     );
   });
@@ -142,15 +142,15 @@ type FakeResult = { status: number | null; stderr?: string; stdout?: string; };
  * `affectedTests` 的 JSDoc 写的是 `typeof spawnSync`，而它的重载与 `stdio` 联合类型
  * 套不进一个手写假件 —— 这里显式过一道 cast，并保证假件的参数形状与真实调用同形。
  */
-function fakeSpawn(impl: (args: string[], opts: { input?: string }) => FakeResult) {
-  const fn = (_cmd: string, args: string[], opts: { input?: string }): FakeResult =>
+function fakeSpawn(impl: (args: Array<string>, opts: { input?: string }) => FakeResult) {
+  const fn = (_cmd: string, args: Array<string>, opts: { input?: string }): FakeResult =>
     impl(args, opts);
   return /* SAFETY: 只用 affectedTests 实际读的字段（status/stdout/stderr），与 spawnSync 的重载等价于此形状 */ fn as unknown as typeof spawnSync;
 }
 
 describe("gates:which —— 用例那一半不重算 import 图", () => {
   test("起 `affected-tests.mjs --changed-stdin --json`，清单走 stdin 不拼 argv", () => {
-    let seenArgs: string[] = [];
+    let seenArgs: Array<string> = [];
     let seenInput = "";
     const got = affectedTests(["a.ts", "b/c.ts"], {
       spawn: fakeSpawn((args, opts) => {
@@ -195,7 +195,7 @@ describe("gates:which —— 规范匹配（机器可读副本）", () => {
   });
 
   test("反斜杠路径先归一（Windows 上 git 给的可能是 `\\`）", () => {
-    const { matched } = matchDocReading(["src\\lib\\comfyui\\lifecycle.ts"]);
+    const { matched } = matchDocReading([String.raw`src\lib\comfyui\lifecycle.ts`]);
     expect(matched.map((e) => e.scope)).toContain("ComfyUI 生命周期");
   });
 

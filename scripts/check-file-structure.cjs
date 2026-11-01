@@ -125,14 +125,14 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     return;
   }
   for (const e of libEntries) {
-    const rel = LIB + "/" + e.name;
+    const rel = `${LIB}/${e.name}`;
     if (e.isDirectory()) {
       if (!DOMAINS.includes(e.name)) {
         problems.push(
-          "R14 src/lib 子域目录未登记:" +
-            rel +
-            "。新增域须同时登记到 scripts/check-file-structure.cjs 的 DOMAINS," +
-            "并在 vitest.config.ts 按实测值设覆盖率门槛(规范 §18.6 / §12.5.3)",
+          `R14 src/lib 子域目录未登记:${
+            rel
+            }。新增域须同时登记到 scripts/check-file-structure.cjs 的 DOMAINS,` +
+            `并在 vitest.config.ts 按实测值设覆盖率门槛(规范 §18.6 / §12.5.3)`,
         );
       }
       continue;
@@ -146,10 +146,10 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       continue;
     }
     problems.push(
-      "R13 src/lib 根目录模块必须有子域目录:" +
-        rel +
-        "。根目录只放顶层单例(DOMAIN_EXEMPT);分类到对应子域,或" +
-        "「新增域 + 登记 DOMAINS + 设覆盖率门槛」——后者是设计决定,见规范 §12.5.3",
+      `R13 src/lib 根目录模块必须有子域目录:${
+        rel
+        }。根目录只放顶层单例(DOMAIN_EXEMPT);分类到对应子域,或` +
+        `「新增域 + 登记 DOMAINS + 设覆盖率门槛」——后者是设计决定,见规范 §12.5.3`,
     );
   }
 })();
@@ -176,7 +176,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     const isUiDir = rel.startsWith("src/components/ui/");
     const base = e.name.replace(/\.(tsx?|mjs|cjs|js)$/, "").replace(/\.test$/, "");
     if (/\d{8}_\d{6}/.test(e.name)) {
-      problems.push("R3 时间戳备份文件:" + rel);
+      problems.push(`R3 时间戳备份文件:${rel}`);
     }
     /* R11 的位置判据:Next 约定文件只允许出现在 src/ 根。放进 app/ 或更深
      * 的目录 Next 不会加载 —— 文件在、代理不在,构建期毫无提示。
@@ -184,9 +184,9 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
      * 用的),不清这一下会把 `src/proxy.test.ts` 判成「约定文件放错位置」——
      * 测试文件既不会被 Next 加载,也就无从「静默丢失」。 */
     if ((base === "proxy" || base === "middleware") && !/\.test\.(tsx?|mjs|cjs|js)$/.test(e.name)) {
-      const canonical = "src/" + base + ".ts";
+      const canonical = `src/${base}.ts`;
       if (rel !== canonical) {
-        problems.push("R11 Next 约定文件位置错:" + rel + "(须在 " + canonical + ")");
+        problems.push(`R11 Next 约定文件位置错:${rel}(须在 ${canonical})`);
       }
     }
     /* 文件级读取同样走容错版:条目在「列到名字」与「读内容」之间被删时返回 null,
@@ -198,7 +198,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     } else if (
       /^\/\* eslint-disable @typescript-eslint\/no-explicit-any/.test(head.split("\n")[0] || "")
     ) {
-      problems.push("R6 文件级 no-explicit-any 禁用头(战役已清零,禁止回流):" + rel);
+      problems.push(`R6 文件级 no-explicit-any 禁用头(战役已清零,禁止回流):${rel}`);
     }
     if (/\.(tsx|mjs|cjs|js)$/.test(e.name) && rel.startsWith("src/")) {
       if (e.name.endsWith(".tsx")) {
@@ -213,18 +213,18 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
         if (isUiDir) {
           // shadcn 约定:kebab-case,禁止大写开头
           if (/^[A-Z]/.test(base)) {
-            problems.push("R1(ui) 组件文件须 kebab-case:" + rel);
+            problems.push(`R1(ui) 组件文件须 kebab-case:${rel}`);
           }
         } else if (!reserved && !/^[A-Z]/.test(base)) {
-          problems.push("R1 组件文件须 PascalCase:" + rel);
+          problems.push(`R1 组件文件须 PascalCase:${rel}`);
         }
         if (rel.startsWith("src/lib/")) {
-          problems.push("R4 lib 下禁止 .tsx:" + rel);
+          problems.push(`R4 lib 下禁止 .tsx:${rel}`);
         }
       } else if (e.name.endsWith(".ts") && !e.name.endsWith(".d.ts")) {
         // ui/ 下 .ts 模块同样须 kebab-case(shadcn 约定)
         if (/^[A-Z]/.test(base) && !R2_EXEMPT.has(rel)) {
-          problems.push("R2 模块文件须 kebab-case:" + rel);
+          problems.push(`R2 模块文件须 kebab-case:${rel}`);
         }
       }
     }
@@ -292,7 +292,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       continue;
     }
     if (FORBIDDEN_SCRIPT_EXT.test(e.name)) {
-      problems.push("R7 Windows 入口须 .ps1(禁用 .bat/.cmd/.vbs):" + rel);
+      problems.push(`R7 Windows 入口须 .ps1(禁用 .bat/.cmd/.vbs):${rel}`);
       continue;
     }
     if (!e.name.toLowerCase().endsWith(".ps1")) {
@@ -313,7 +313,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     }
     // 无 BOM:只有含非 ASCII 字符(中文提示)的脚本才会被 PS5.1 按 GBK 误解码
     if (NON_ASCII.test(buf.toString("utf8"))) {
-      problems.push("R8 含中文的 .ps1 须以 UTF-8 BOM 保存(否则 PS5.1 按 GBK 解码):" + rel);
+      problems.push(`R8 含中文的 .ps1 须以 UTF-8 BOM 保存(否则 PS5.1 按 GBK 解码):${rel}`);
     }
   }
 })(".");
@@ -334,13 +334,13 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     const lower = e.name.toLowerCase();
     if (lower.endsWith(".ps1")) {
       problems.push(
-        "R9 根目录禁止 .ps1 双击入口(请放进 tools/<分类>/,启动类放 tools/start/):" + e.name,
+        `R9 根目录禁止 .ps1 双击入口(请放进 tools/<分类>/,启动类放 tools/start/):${e.name}`,
       );
       continue;
     }
     if (GIT_TRANSIENT_ROOT_FILES.has(lower)) {
       problems.push(
-        "R9 根目录禁止 git 临时状态文件(它归 .git/,写成文件只说明 -F 用完没删):" + e.name,
+        `R9 根目录禁止 git 临时状态文件(它归 .git/,写成文件只说明 -F 用完没删):${e.name}`,
       );
     }
   }
@@ -442,7 +442,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       }
       for (const hit of found) {
         problems.push(
-          "R10 注释禁止历史流水(日期 / 编号 / 批次号归 git):" + rel + ":" + (i + 1) + " → " + hit,
+          `R10 注释禁止历史流水(日期 / 编号 / 批次号归 git):${rel}:${i + 1} → ${hit}`,
         );
       }
     });
@@ -461,11 +461,11 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
   const legacyPath = "src/middleware.ts";
   if (!fs.existsSync(proxyPath)) {
     problems.push(
-      "R11 缺少 Next 16 代理约定文件:" + proxyPath + "(middleware 已废弃,勿删除本文件)",
+      `R11 缺少 Next 16 代理约定文件:${proxyPath}(middleware 已废弃,勿删除本文件)`,
     );
   }
   if (fs.existsSync(legacyPath)) {
-    problems.push("R11 middleware 约定名已废弃(Next 16):" + legacyPath + " → 改名为 src/proxy.ts");
+    problems.push(`R11 middleware 约定名已废弃(Next 16):${legacyPath} → 改名为 src/proxy.ts`);
   }
 })();
 
@@ -488,8 +488,8 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     return code >= 0x80 && code <= 0x9f;
   }
   function describe(code) {
-    const hex = "U+00" + code.toString(16).toUpperCase().padStart(2, "0");
-    return code === 0 ? hex + " (NUL)" : hex;
+    const hex = `U+00${code.toString(16).toUpperCase().padStart(2, "0")}`;
+    return code === 0 ? `${hex} (NUL)` : hex;
   }
   const files = [];
   (function walkControl(dir) {
@@ -526,13 +526,13 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       }
       for (const hit of hits) {
         problems.push(
-          "R12 源码禁止内嵌控制字符(" +
-            rel +
-            ":" +
-            (i + 1) +
-            " → " +
-            hit +
-            ")。改可打印哨兵,见规范 §12.11;若确需 NUL 请显式写成转义 `\\u0000`",
+          `R12 源码禁止内嵌控制字符(${
+            rel
+            }:${
+            i + 1
+            } → ${
+            hit
+            })。改可打印哨兵,见规范 §12.11;若确需 NUL 请显式写成转义 \`\\u0000\``,
         );
       }
     });
@@ -546,7 +546,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
 // (改名 / 挪目录就看不见 = 假绿;同 `check-infra-file-size.cjs` 的口径)。
 for (const [f, n] of Object.entries(oversizedFiles).sort((a, b) => b[1] - a[1])) {
   problems.push(
-    "R5 超限文件(" + f + " → " + n + " 行,阈值 " + SPLIT_HINT_LINES + ")。拆分(规范 §12.6 R5)",
+    `R5 超限文件(${f} → ${n} 行,阈值 ${SPLIT_HINT_LINES})。拆分(规范 §12.6 R5)`,
   );
 }
 
@@ -569,7 +569,7 @@ function vanishedLine(count) {
  * 且「跳过」与「判过」在屏幕上也分不开。 */
 /* 消失数两条出口都要给：只在绿那一行给，等于「判据报红时覆盖范围不可见」——
  * 而那恰恰是最需要读数的时刻（报红的这一轮到底看全了没有）。 */
-gateFail("文件结构硬规则", problems.concat(vanishedLine(vanished)), {
+gateFail("文件结构硬规则", [...problems, ...vanishedLine(vanished)], {
   subject: "R1-R12",
   hint:
     "规范见 docs/standards/12-代码组织与文件结构.md §12.6 / §12.8 / §12.11，\n" +
@@ -579,6 +579,6 @@ if (problems.length) {
   process.exit(1);
 }
 
-gatePass("文件结构硬规则", "R1-R12 全过" + vanishedNote(vanished), {
+gatePass("文件结构硬规则", `R1-R12 全过${vanishedNote(vanished)}`, {
   subject: "R1-R12",
 });

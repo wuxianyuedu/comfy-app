@@ -127,11 +127,11 @@ function probeCommand(cmd, args) {
   try {
     execFileSync(cmd, args, { stdio: "pipe", timeout: PROBE_TIMEOUT_MS });
     return "ok";
-  } catch (e) {
-    if (isTimeoutLike(e)) {
+  } catch (error) {
+    if (isTimeoutLike(error)) {
       return "timeout";
     }
-    if (e && (e.code === NOT_FOUND || e.code === NO_EXEC)) {
+    if (error && (error.code === NOT_FOUND || error.code === NO_EXEC)) {
       return "missing";
     }
     return "present-but-nonzero";
@@ -196,14 +196,14 @@ function measurePythonOnce(pyChecker) {
       python,
       problems: out.includes("OK") ? [] : [`Python 侧自检未通过：${out.trim()}`],
     };
-  } catch (e) {
-    if (isTimeoutLike(e)) {
+  } catch (error) {
+    if (isTimeoutLike(error)) {
       return { state: "timeout", python, problems: [] };
     }
     return {
       state: "answered",
       python,
-      problems: [`Python 侧自检失败：${(e.stdout || e.message || "").toString().trim()}`],
+      problems: [`Python 侧自检失败：${(error.stdout || error.message || "").toString().trim()}`],
     };
   }
 }
@@ -259,8 +259,8 @@ async function main() {
   let fixture;
   try {
     fixture = JSON.parse(fs.readFileSync(path.join(ROOT, REL_VECTORS), "utf8"));
-  } catch (e) {
-    problems.push(`共享向量不可读（${REL_VECTORS}）：${e.message}`);
+  } catch (error) {
+    problems.push(`共享向量不可读（${REL_VECTORS}）：${error.message}`);
     report();
     return;
   }
@@ -278,7 +278,7 @@ async function main() {
   // ── ① Node 侧真跑 ──
   try {
     const mod = await import(
-      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")
+      `file://${path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")}`
     );
     for (const v of vectors) {
       const norm = mod.normalizeRootForPort(v.input);
@@ -292,8 +292,8 @@ async function main() {
         problems.push(`Node 端口 ${JSON.stringify(v.input)} 与向量不符`);
       }
     }
-  } catch (e) {
-    problems.push(`Node 侧实现不可导入：${e.message}`);
+  } catch (error) {
+    problems.push(`Node 侧实现不可导入：${error.message}`);
   }
 
   // ── ①′ `.env` 单值解析（ISSUE #821）──
@@ -307,7 +307,7 @@ async function main() {
   }
   try {
     const mod = await import(
-      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")
+      `file://${path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")}`
     );
     for (const v of envVectors) {
       // 判定走生产同一条出口 `parseDotEnvPortValue`，**不在门禁里另抄一份**
@@ -322,15 +322,13 @@ async function main() {
         );
       }
     }
-  } catch (e) {
-    problems.push(`Node 侧 .env 解析不可导入：${e.message}`);
+  } catch (error) {
+    problems.push(`Node 侧 .env 解析不可导入：${error.message}`);
   }
 
   // ── ② Python 侧取证（两遍，形态说话）──
   const pyChecker = "scripts/check-app-port-vectors.py";
-  if (!fs.existsSync(path.join(ROOT, pyChecker))) {
-    problems.push(`缺少 Python 侧自检脚本：${pyChecker}`);
-  } else {
+  if (fs.existsSync(path.join(ROOT, pyChecker))) {
     const first = measurePythonOnce(pyChecker);
     let second = null;
     if (first.state === "timeout") {
@@ -346,19 +344,21 @@ async function main() {
     for (const note of verdict.unverified) {
       unverified.push(note);
     }
+  } else {
+    problems.push(`缺少 Python 侧自检脚本：${pyChecker}`);
   }
 
   // ── ③ Rust / PowerShell 侧锁引用（无法在此环境执行）──
   const rust = readIfExists("src-tauri/src/single_instance.rs");
-  if (!rust) {
-    problems.push("缺少 Rust 侧实现：src-tauri/src/single_instance.rs");
-  } else {
+  if (rust) {
     if (!rust.includes("fn normalize_root_for_port")) {
       problems.push("Rust 侧 normalize_root_for_port 缺失（端口推导实现被删？）");
     }
     if (!rust.includes("app-port-vectors.json")) {
       problems.push("Rust 侧测试未引用共享向量 app-port-vectors.json（四侧一致失效）");
     }
+  } else {
+    problems.push("缺少 Rust 侧实现：src-tauri/src/single_instance.rs");
   }
 
   // Rust 侧：`.env` 解析必须与 resolve 出口同源（否则壳又会按路径推导去等另一个端口）
@@ -415,7 +415,7 @@ function report() {
      * 已经复跑过一次是这一步的前提（见 main 里那趟 Python 二次取证），不是给人留的作业。 */
     console.log("[app-port-vectors] 通过，但**未完全取证**（放行）：");
     for (const u of unverified) {
-      console.log("  - [未校验] " + u);
+      console.log(`  - [未校验] ${u}`);
     }
     console.log("");
     console.log("  这一趟仍然判了的：Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用。");
@@ -424,10 +424,10 @@ function report() {
   }
   console.error("[app-port-vectors] 四语言端口推导一致性失败：");
   for (const p of problems) {
-    console.error("  - " + p);
+    console.error(`  - ${p}`);
   }
   for (const u of unverified) {
-    console.error("  - [未校验·附带] " + u);
+    console.error(`  - [未校验·附带] ${u}`);
   }
   console.error("");
   console.error("  规范：docs/standards/launch-and-build.md §1.1（推导算法是跨语言约定，");
@@ -439,8 +439,8 @@ function report() {
  * （`tests/app-port-vectors-timeout-classification.test.ts`）。少了这道守卫，
  * 任何 `require` 这份文件的用例都会现场跑一次四侧取证并可能 `process.exit`。 */
 if (require.main === module) {
-  main().catch((e) => {
-    console.error("[app-port-vectors] 检查脚本异常：" + (e && e.message));
+  main().catch((error) => {
+    console.error(`[app-port-vectors] 检查脚本异常：${error && error.message}`);
     process.exit(1);
   });
 }

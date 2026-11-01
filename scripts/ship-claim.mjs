@@ -411,11 +411,11 @@ function runClaim(ctx) {
       ...(haveParticipant ? [] : [`打上 ${participant}`]),
     ];
     log(
-      `[ship] --dry-run：` +
-        (planned.length === 0
+      `[ship] --dry-run：${
+        planned.length === 0
           ? `#${number} 已在 ${label} 与 ${participant} 名下 ⇒ 只会补一条「已接单」评论`
-          : `#${number} 将 ${planned.join("、")}，再评论「开发者 ${handle} 已接单，正在开发中。」`) +
-        "；一条都没写。",
+          : `#${number} 将 ${planned.join("、")}，再评论「开发者 ${handle} 已接单，正在开发中。」`
+        }；一条都没写。`,
     );
     return CODE.GREEN;
   }
@@ -565,8 +565,8 @@ function runClaims(ctx) {
     }
   }
   log(
-    `[ship] 你领取中的单子（${label} · state=open）：${rows.length} 张` +
-      (truncated ? `（只看了前 ${pages * pageSize} 张，分页到顶）` : ""),
+    `[ship] 你领取中的单子（${label} · state=open）：${rows.length} 张${
+      truncated ? `（只看了前 ${pages * pageSize} 张，分页到顶）` : ""}`,
   );
   if (rows.length === 0) {
     log("[ship] 没有你领取中的单子。");
@@ -713,8 +713,8 @@ export function runIssueAction(ctx) {
   const wantsNewIssue = opt.newIssue != null || newIssueBad.length > 0;
   const wantsComment = opt.comment != null || commentBad.length > 0;
   const wanted = [
-    opt.claim != null ? "--claim" : null,
-    opt.release != null ? "--release" : null,
+    opt.claim == null ? null : "--claim",
+    opt.release == null ? null : "--release",
     opt.claims ? "--claims" : null,
     wantsNewIssue ? "--new-issue" : null,
     wantsComment ? "--comment" : null,
@@ -731,9 +731,9 @@ export function runIssueAction(ctx) {
     opt.closeIssue ? "--close-issue" : null,
     opt.cleanBranch ? "--clean-branch" : null,
     opt.branch ? "--branch" : null,
-    opt.message != null ? "--message" : null,
-    opt.messageFile != null ? "--message-file" : null,
-    opt.title != null ? "--title" : null,
+    opt.message == null ? null : "--message",
+    opt.messageFile == null ? null : "--message-file",
+    opt.title == null ? null : "--title",
     opt.adds.length > 0 ? "--add" : null,
     opt.only ? "--only" : null,
   ].filter(Boolean);

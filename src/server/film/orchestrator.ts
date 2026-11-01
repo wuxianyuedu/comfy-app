@@ -19,7 +19,7 @@ import {
 import { productionRepository } from "~/lib/core/repository-production";
 import { logger } from "~/lib/core/logger";
 import { isSchemaReady } from "~/lib/db-schema-ready";
-import type { Shot } from "~/lib/workshop/types";
+import type { Shot, ProjectType } from "~/lib/workshop/types";
 import { cancelTask } from "~/lib/comfyui/enqueue";
 import { synthesizeFirstFrame } from "~/lib/comfyui/firstframe";
 import { randomSeed } from "~/lib/comfyui/random-seed";
@@ -28,7 +28,6 @@ import { parseIdeaToScenes } from "~/lib/workshop/script-parser";
 import { FILM_COMPOSE_SIZE, NATIVE_SHOT_VIDEO_SIZE } from "~/lib/film/film-size";
 import { z } from "zod";
 import { getLLMConfig, completeLLMStructured } from "~/lib/llm/server";
-import type { ProjectType } from "~/lib/workshop/types";
 import { errorText } from "~/lib/error-message";
 /* 镜头尺寸表达 → 像素的折算在读载荷时还要用（合成那半段搬到 compose-film.ts 了）。 */
 import { toSizeSpec } from "~/lib/media/size-presets";

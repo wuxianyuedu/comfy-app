@@ -186,7 +186,15 @@ export function FinalComposer({
           片段 {clipsDone}/{timeline.length}
         </span>
         <div className="ml-auto flex gap-2">
-          {!playing ? (
+          {playing ? (
+            <Button
+              className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-4 py-2 font-semibold"
+              onClick={stopPlayback}
+              variant="secondary"
+            >
+              停止
+            </Button>
+          ) : (
             <Button
               className="h-auto rounded-xl px-4 py-2 font-semibold"
               disabled={clipsDone === 0 && timeline.every((entry) => !entry.shot.imageUrl)}
@@ -195,14 +203,6 @@ export function FinalComposer({
             >
               <Icon className="mr-1" data-icon="inline-start" name="play" size={13} />
               串播预览
-            </Button>
-          ) : (
-            <Button
-              className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-4 py-2 font-semibold"
-              onClick={stopPlayback}
-              variant="secondary"
-            >
-              停止
             </Button>
           )}
           <Button
@@ -237,7 +237,7 @@ export function FinalComposer({
         <div className="border-border bg-surface rounded-2xl border p-4">
           <div className="text-muted-foreground text-2xs mb-2 flex items-center justify-between">
             <span>
-              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /{""}
+              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /
               {String(timeline.length).padStart(2, "0")}
             </span>
             <span>{current.shot.sceneHeading}</span>

@@ -251,7 +251,7 @@ const NOT_STARTED_RE =
  * ⚠️ `code` 单独**不构成判决** —— 「判出越界」与「根本没跑起来」退的是同一个 1，
  * 断言前先过 `expectGateRan()`，看 `ran` / `status` / `spawnError` / `signal`。
  */
-export interface GateRunResult {
+export type GateRunResult = {
   /** 退出码（`status` 取不到时兜 `1` —— **所以它单独不能当判决**，看 `ran`）。 */
   code: number;
   /** 跑成功时是 stdout；失败时是两条流合并（#2287：失败时哪一条有内容没人知道）。 */
@@ -298,7 +298,7 @@ export function expectGateRan(r: GateRunResult): void {
 }
 
 /** 一个临时的「门禁工作区」：`dir` 是它，`write` 往里放文件，`run` 在里面跑那个脚本。 */
-export interface GateRepo {
+export type GateRepo = {
   /** 造一次提交（`add -A` + commit）—— 上手身份与禁签名在本夹具里已配好。 */
   commit: (message: string) => void;
   /** 临时仓库根的绝对路径（脚本的 `cwd`）。 */
@@ -340,16 +340,21 @@ export interface GateRepo {
    * （用来造「沙箱里既没有接缝、也没有 node_modules」那一档 —— 见 `check-format`
    * 的 fail-closed 用例）。这不是顺手开的口子：判据脚本的**环境本身就是被测输入**，
    * 只给一个固定 env 就等于让「没设这个变量」那一档永远测不到。
+   *
+   * `cwd` 是给**「同一个脚本在另一种检出形态里跑」**那一档用的（ISSUE #2785）：
+   * 有些判据的根取的是 `process.cwd()`，而链接工作树与主检出的差别正好长在
+   * 「那个根下面的 `.git` 是目录还是文件」上 —— 不换 cwd 就永远演不出那一形，
+   * 脚本路径留在夹具里（它不需要出现在工作树里，`ROOT` 看的是 cwd）。
    */
   run: (
     args?: Array<string>,
-    overrides?: { env?: Record<string, string | undefined> },
+    overrides?: { cwd?: string; env?: Record<string, string | undefined> },
   ) => GateRunResult;
   /** 在工作区里写一个文件（自动建父目录），`rel` 是仓库相对路径。 */
   write: (rel: string, content: string) => void;
 }
 
-export interface GateRepoOptions {
+export type GateRepoOptions = {
   /**
    * 从源码仓库再拷贝进来的路径（`from` 是相对仓库根，`to` 是工作区相对路径；
    * 目录会递归拷）。`.cjs` / `.mjs` 这类**同级动态导入**的模块只能这么来。
@@ -561,7 +566,7 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
        * `code` / `output` 两格的**值与形状逐字保持原样**（成功 ⇒ stdout；失败 ⇒ 两流合并，
        * 退出码兜 `1`）—— 这上面挂着全仓门禁自测的断言，改它的读法就是改所有门禁自测。 */
       const res = spawnSync(process.execPath, [abs(scriptRel), ...args], {
-        cwd: root,
+        cwd: overrides?.cwd ?? root,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         env: callEnv,
@@ -604,7 +609,7 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
  * 不在 vitest 的 fixture 生命周期里，临时目录没人清 —— 让「收尾」是返回值的一部分，
  * 比在文档里写「记得 rmSync」可靠。
  */
-export interface GateRepoHandle {
+export type GateRepoHandle = {
   dispose: () => void;
   repo: GateRepo;
 }

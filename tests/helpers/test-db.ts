@@ -242,7 +242,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS episode_project_uniq ON episode (projectId);
 CREATE UNIQUE INDEX IF NOT EXISTS episode_character_uniq ON episode_character (episodeId, characterId);
 `;
 
-export interface TestTables {
+export type TestTables = {
   llmConfig: Array<Row>;
   models: Array<Row>;
   posts: Array<Row>;
@@ -255,7 +255,7 @@ export interface TestTables {
   workflowTemplates: Array<Row>;
 }
 
-export interface TestDb {
+export type TestDb = {
   [key: string]: unknown;
   $reset(): void;
   /** 本条用例经过宿主的 SQL 顺序（`$reset()` 清空）。判「读有没有落在事务内」用它。 */
@@ -430,15 +430,18 @@ function sqliteProxyHost(client: Database.Database) {
     const stmt = client.prepare(sql);
     const bound = params ?? [];
     switch (method) {
-      case "get":
+      case "get": {
         return Promise.resolve({ rows: stmt.raw().get(...bound) });
-      case "run":
+      }
+      case "run": {
         stmt.run(...bound);
         return Promise.resolve({ rows: [] });
+      }
       case "values":
       case "all":
-      default:
+      default: {
         return Promise.resolve({ rows: stmt.raw().all(...bound) });
+      }
     }
   };
 }
@@ -578,7 +581,7 @@ export function seedUser(
   return getRow("user", input.id);
 }
 
-export interface SeedWorkflowTemplateInput {
+export type SeedWorkflowTemplateInput = {
   createdAt?: Date;
   defaultMode?: string | null;
   id?: string;
@@ -637,7 +640,7 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
   return getRow("workflowTemplate", id);
 }
 
-export interface SeedTaskInput {
+export type SeedTaskInput = {
   createdAt?: Date;
   error?: string | null;
   /** 提交时刻的 RAW 执行载荷（task.retry 用例要区分「有载荷可原样重跑」与
@@ -794,7 +797,7 @@ export function seedFilm(
   return getRow("filmProject", id);
 }
 
-export interface SeedRemoteModelInput {
+export type SeedRemoteModelInput = {
   /** 明文密钥；helper 内部按 schema 约定加密后再落库（与运行时写入同形）。 */
   apiKey?: string | null;
   baseUrl?: string | null;

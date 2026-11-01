@@ -287,8 +287,8 @@ describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {
     const hits = report.libOnlyReachable;
     expect(
       hits,
-      `以下模块声明为「只能服务端用」却仍被纯模块可达：\n` +
-        hits.map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`).join("\n"),
+      `以下模块声明为「只能服务端用」却仍被纯模块可达：\n${
+        hits.map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`).join("\n")}`,
     ).toEqual([]);
   });
 
@@ -297,8 +297,8 @@ describe("src/lib 的 Node-only 声明（规范 §18.4）", () => {
     expect(
       hits,
       `以下模块被 \`"use client"\` 入口静态引用且顶层 import 了 Node 内建 —— ` +
-        `Turbopack 会以 "does not support external modules" 让整页 500：\n` +
-        hits.map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`).join("\n"),
+        `Turbopack 会以 "does not support external modules" 让整页 500：\n${
+        hits.map((h) => `  ✗ ${h.module}\n      引用链：${h.chain.join(" -> ")}`).join("\n")}`,
     ).toEqual([]);
   });
 

@@ -419,8 +419,8 @@ describe("真历史（本仓库）", () => {
           timeout: 120_000,
           stdio: ["ignore", "pipe", "pipe"],
         });
-      } catch (err) {
-        const e = /* SAFETY: 类型断言已复核 */ err as {
+      } catch (error) {
+        const e = /* SAFETY: 类型断言已复核 */ error as {
           status?: number;
           stderr?: string;
           stdout?: string;

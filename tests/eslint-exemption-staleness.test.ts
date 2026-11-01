@@ -22,55 +22,55 @@ const REAL_ROOT = path.resolve(__dirname, "..");
 const SCRIPT = path.join(REAL_ROOT, "scripts", "check-eslint-exemptions.cjs");
 
 /** `verify` 的最小形状（本文件只喂它自己造的读数，不依赖 eslint 的消息类型）。 */
-interface FakeMessage {
+type FakeMessage = {
   fatal?: boolean;
   message?: string;
   ruleId?: string | null;
 }
-interface FakeLinter {
-  verify: (code: string, config: unknown, opts: { filename: string }) => FakeMessage[];
+type FakeLinter = {
+  verify: (code: string, config: unknown, opts: { filename: string }) => Array<FakeMessage>;
 }
 
 /** 判据的导出面（与 `scripts/check-eslint-exemptions.cjs` 的 `module.exports` 对齐）。 */
-interface JudgeModule {
-  FILE_LEVEL_EXEMPTIONS: { removalCriterion: string; ruleId: string; }[];
+type JudgeModule = {
+  FILE_LEVEL_EXEMPTIONS: Array<{ removalCriterion: string; ruleId: string; }>;
   isGlobEntry: (entry: string) => boolean;
   judge: (input: JudgeInput) => {
     entries: number;
-    failed: { file: string; why: string }[];
+    failed: Array<{ file: string; why: string }>;
     removalCriterion: string;
     ruleId: string;
     scanned: number;
-    stale: string[];
+    stale: Array<string>;
     state: "pass" | "stale" | "inconclusive";
-    unresolvable: string[];
+    unresolvable: Array<string>;
     violating: number;
   };
   readFileLevelExemptions: (
-    config: { files?: string | string[]; rules?: Record<string, unknown> }[],
+    config: Array<{ files?: string | Array<string>; rules?: Record<string, unknown> }>,
     ruleId: string,
-  ) => { entries: string[]; mentionedAnywhere: boolean };
+  ) => { entries: Array<string>; mentionedAnywhere: boolean };
   scanViolations: (p: {
-    files: string[];
+    files: Array<string>;
     makeLinter?: () => FakeLinter;
     readFile?: (absPath: string) => string;
     root: string;
     ruleId: string;
   }) => {
-    failed: { file: string; why: string }[];
+    failed: Array<{ file: string; why: string }>;
     scanned: number;
-    violating: string[];
+    violating: Array<string>;
   };
 }
 
-interface JudgeInput {
-  entries: string[];
-  failed: { file: string; why: string }[];
+type JudgeInput = {
+  entries: Array<string>;
+  failed: Array<{ file: string; why: string }>;
   mentionedAnywhere: boolean;
   removalCriterion: string;
   ruleId: string;
   scanned: number;
-  violating: string[];
+  violating: Array<string>;
 }
 
 /* 与 `tests/helpers/a11y-effective-config.ts` 同一形状：`.cjs` 判据用 `createRequire` 拿，
@@ -99,7 +99,7 @@ function input(over: Partial<JudgeInput> = {}) {
     removalCriterion: CRITERION,
     entries,
     violating: [...entries],
-    failed: [] as { file: string; why: string }[],
+    failed: [] as Array<{ file: string; why: string }>,
     scanned: entries.length,
     mentionedAnywhere: true,
     ...over,

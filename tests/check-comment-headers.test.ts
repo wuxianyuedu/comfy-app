@@ -77,7 +77,9 @@ function fake(opts: {
     if (args[0] === "pulls" && args[1] === "get-pull") {
       const number = args[args.indexOf("--number") + 1] ?? "";
       const body = opts.prBodies?.[number];
-      if (body === undefined) return ok("不是 JSON");
+      if (body === undefined) {
+        return ok("不是 JSON");
+      }
       return ok(json({ body }));
     }
     return ok("");

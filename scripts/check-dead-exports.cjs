@@ -394,7 +394,7 @@ function main() {
   if (REPORT_ONLY) {
     gatePass(
       "零消费导出",
-      `扫描 ${checkedFiles} 个模块：零消费导出 ${dead.length} 个（只出清单）` + note,
+      `扫描 ${checkedFiles} 个模块：零消费导出 ${dead.length} 个（只出清单）${note}`,
       {
         subject: "地基层",
       },
@@ -412,15 +412,15 @@ function main() {
       subject: "地基层",
       detail: `${dead.length} 个零消费导出`,
       hint:
-        "修法：① 真的要用 → 接线到消费方；② 确认是死代码 → 删掉（§12.15 第二条：留着的理由\n" +
-        "必须写得出「谁在什么时候用它」，「以后可能会用」不是理由）。\n" +
-        "本判据是硬闸（无基线、无 --update）：零消费导出的存量已清零，新增即阻断。" +
-        note,
+        `修法：① 真的要用 → 接线到消费方；② 确认是死代码 → 删掉（§12.15 第二条：留着的理由\n` +
+        `必须写得出「谁在什么时候用它」，「以后可能会用」不是理由）。\n` +
+        `本判据是硬闸（无基线、无 --update）：零消费导出的存量已清零，新增即阻断。${
+        note}`,
     });
     process.exit(1);
   }
 
-  gatePass("零消费导出", `扫描 ${checkedFiles} 个模块：命中 0 条` + note, {
+  gatePass("零消费导出", `扫描 ${checkedFiles} 个模块：命中 0 条${note}`, {
     subject: "地基层",
   });
 }

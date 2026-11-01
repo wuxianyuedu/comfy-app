@@ -80,8 +80,8 @@ type Fixture = {
 };
 
 const DEFAULT_HOOK =
-  Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join("") +
-  '  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n';
+  `${Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join("")
+  }  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n`;
 const DEFAULT_FIXED_LIST =
   'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/fixed.test.ts",\n];\n';
 const DEFAULT_PKG = JSON.stringify({

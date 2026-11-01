@@ -331,16 +331,16 @@ function readTsconfigInclude() {
   let raw;
   try {
     raw = fs.readFileSync(abs, "utf8");
-  } catch (e) {
-    throw new Error(`读不到 tsconfig.json：${e.message}`, { cause: e });
+  } catch (error) {
+    throw new Error(`读不到 tsconfig.json：${error.message}`, { cause: error });
   }
   const stripped = blankJsonComments(raw).replaceAll(/,(\s*[}\]])/g, "$1");
   let json;
   try {
     json = JSON.parse(stripped);
-  } catch (e) {
-    throw new Error(`解析 tsconfig.json 失败（挖注释后仍不是合法 JSON）：${e.message}`, {
-      cause: e,
+  } catch (error) {
+    throw new Error(`解析 tsconfig.json 失败（挖注释后仍不是合法 JSON）：${error.message}`, {
+      cause: error,
     });
   }
   if (!Array.isArray(json?.include)) {
@@ -384,12 +384,12 @@ function includeEntryToRegExp(entry) {
       const alts = norm
         .slice(i + 1, end)
         .split(",")
-        .map((s) => s.trim().replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+        .map((s) => s.trim().replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`));
       re += `(?:${alts.join("|")})`;
       i = end;
       continue;
     }
-    re += ch.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    re += ch.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   }
   return new RegExp(`^${re}$`);
 }
@@ -411,9 +411,9 @@ function main() {
   let include;
   try {
     include = readTsconfigInclude();
-  } catch (e) {
+  } catch (error) {
     console.error(
-      `[ERROR] 类型层断言判据**自己**没能解析出 tsconfig 的 include：${e.message}\n` +
+      `[ERROR] 类型层断言判据**自己**没能解析出 tsconfig 的 include：${error.message}\n` +
         "判据解析失败一律判失败 —— 静默退回「没有 include」会让本判据空转、照样报 OK\n" +
         "（§11.20 的判据③，与 §11.18.3 首版那个 `include: []` 却退 0 的 bug 同族）。",
     );
@@ -427,8 +427,8 @@ function main() {
   let includeRes;
   try {
     includeRes = include.map(includeEntryToRegExp);
-  } catch (e) {
-    console.error(`[ERROR] 解析 tsconfig 的 include 条目失败：${e.message}`);
+  } catch (error) {
+    console.error(`[ERROR] 解析 tsconfig 的 include 条目失败：${error.message}`);
     return 1;
   }
 
@@ -468,38 +468,38 @@ function main() {
 
   if (totalSites === 0) {
     console.log(
-      "[type-assertion] OK —— 0 处 expectTypeOf/assertType 站点（本判据是纯闸门：对象是「下一次有人加类型层断言」）。" +
-        vanishedNote(vanished),
+      `[type-assertion] OK —— 0 处 expectTypeOf/assertType 站点（本判据是纯闸门：对象是「下一次有人加类型层断言」）。${
+        vanishedNote(vanished)}`,
     );
     return 0;
   }
 
   if (offenders.length === 0) {
     console.log(
-      `[type-assertion] OK —— ${totalSites} 处类型层断言，全部落在 tsconfig 的 include 面里（执行者 = \`tsc --noEmit\`）。` +
-        vanishedNote(vanished),
+      `[type-assertion] OK —— ${totalSites} 处类型层断言，全部落在 tsconfig 的 include 面里（执行者 = \`tsc --noEmit\`）。${
+        vanishedNote(vanished)}`,
     );
     return 0;
   }
 
   console.error(
-    (REPORT_ONLY
+    `${REPORT_ONLY
       ? `[type-assertion] 盘点：${offenders.length} 处无执行者（--report 不判失败）`
-      : `[ERROR] 有 ${offenders.length} 处类型层断言**没有执行者**`) + "：\n",
+      : `[ERROR] 有 ${offenders.length} 处类型层断言**没有执行者**`}：\n`,
   );
   for (const o of offenders) {
     console.error(`  · ${o.rel}:${o.line} —— ${o.why}`);
   }
   console.error(
-    "\n`expectTypeOf` / `assertType` 在 vitest 里**没有牙**：错的断言照样报绿" +
-      "\n（实测 vitest 5.0.3：`expectTypeOf<string>().toEqualTypeOf<number>()` → Tests 1 passed）。" +
-      "\n它们唯一的执行者是 `tsc --noEmit`，而 tsc 只按 `tsconfig.json` 的 include 面收文件 ——" +
-      "\n所以站点一旦落到 include 面之外，全仓的断言会**同时变成装饰品，且没有任何一处报错**。" +
-      "\n修法二选一：" +
-      "\n  · 把该文件放回 include 面（通常是 `**/*.ts` 已经覆盖的 src/ 或 tests/）；" +
-      "\n  · 确实是只给 tsc 看的类型用例 → 命名成 `.test-d.ts` 并确认仍落在 include 面里。" +
-      "\n口径见 docs/standards/11-测试与可观测性.md §11.20。" +
-      vanishedNote(vanished),
+    `\n\`expectTypeOf\` / \`assertType\` 在 vitest 里**没有牙**：错的断言照样报绿` +
+      `\n（实测 vitest 5.0.3：\`expectTypeOf<string>().toEqualTypeOf<number>()\` → Tests 1 passed）。` +
+      `\n它们唯一的执行者是 \`tsc --noEmit\`，而 tsc 只按 \`tsconfig.json\` 的 include 面收文件 ——` +
+      `\n所以站点一旦落到 include 面之外，全仓的断言会**同时变成装饰品，且没有任何一处报错**。` +
+      `\n修法二选一：` +
+      `\n  · 把该文件放回 include 面（通常是 \`**/*.ts\` 已经覆盖的 src/ 或 tests/）；` +
+      `\n  · 确实是只给 tsc 看的类型用例 → 命名成 \`.test-d.ts\` 并确认仍落在 include 面里。` +
+      `\n口径见 docs/standards/11-测试与可观测性.md §11.20。${
+      vanishedNote(vanished)}`,
   );
   return REPORT_ONLY ? 0 : 1;
 }

@@ -274,7 +274,7 @@ export async function enrichWorkflowIO(
         if (!dict) {
           continue;
         }
-        if (Object.prototype.hasOwnProperty.call(dict, full)) {
+        if (Object.hasOwn(dict, full)) {
           return full;
         }
       }
@@ -373,9 +373,9 @@ export async function enrichWorkflowIO(
           ri.label !== undefined && ri.label !== ri.name ? ri.label : undefined;
         const candidateSlotLabel =
           f?.label ??
-          (f?.localized !== ri.name ? f?.localized : undefined) ??
+          (f?.localized === ri.name ? undefined : f?.localized) ??
           authorSlotLabel ??
-          (f?.field !== ri.name ? f?.field : undefined);
+          (f?.field === ri.name ? undefined : f?.field);
         if (candidateSlotLabel !== undefined && candidateSlotLabel !== ri.name) {
           slotLabel = candidateSlotLabel;
         }
@@ -507,7 +507,7 @@ export async function enrichWorkflowIO(
       name: v.name,
       label: label ?? v.name,
       type,
-      ...(defaultValue !== undefined ? { defaultValue } : {}),
+      ...(defaultValue === undefined ? {} : { defaultValue }),
       ...(options ? { options } : {}),
       nodeTitle: nodeTitleById[canonicalNodeId] ?? nodeTitleById[String(v.nodeId)],
       /* 多行 = 节点自己声明的 `("STRING", {"multiline": true})`（查 object_info），
@@ -535,17 +535,17 @@ export async function enrichWorkflowIO(
        *  落库），GET 重建必须原样透传 —— 此前 required 被丢掉，导致
        *  「改成必填 → 保存 → 重开又变回可选」。modeOverrides 走存量清洗，且旧
        *  数据 `modes` 键已在上文归一进 `modeOverridesSource`。 */
-      ...(v.required !== undefined ? { required: v.required } : {}),
-      ...(v.seedMode !== undefined ? { seedMode: v.seedMode } : {}),
-      ...(modeOverridesSource !== undefined
-        ? { modeOverrides: cleanedModes ?? modeOverridesSource }
-        : {}),
+      ...(v.required === undefined ? {} : { required: v.required }),
+      ...(v.seedMode === undefined ? {} : { seedMode: v.seedMode }),
+      ...(modeOverridesSource === undefined
+        ? {}
+        : { modeOverrides: cleanedModes ?? modeOverridesSource }),
       /* 宿主（外层封装）节点 id 纯透传 —— 它只在「下钻到子图内部」勾选时写入，
        *  运行期靠它把内部节点 id 还原成 comfy-cli 展开后的 `host:inner`。 */
-      ...(v.hostNodeId !== undefined ? { hostNodeId: v.hostNodeId } : {}),
+      ...(v.hostNodeId === undefined ? {} : { hostNodeId: v.hostNodeId }),
       /* 本层作者名：只在真的与槽位名不同时下发，避免给「label 就是 pin 名」
        *  的普通节点塞一份无信息量的副本。 */
-      ...(slotLabel !== undefined ? { slotLabel } : {}),
+      ...(slotLabel === undefined ? {} : { slotLabel }),
     };
   }
 

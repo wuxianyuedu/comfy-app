@@ -102,7 +102,7 @@ const SHELL_OPTION_RE = /\bshell\s*:(?!\s*(?:false\b|null\b|undefined\b))/;
  * 那一格是 `re.exec(...)` 与 `cp.spawn(...)`，前者是正则、后者是本判据刻意不追的
  * 成员调用形态（见文件头「收窄的代价」）。 */
 const SPAWN_CALLEE_SOURCE =
-  "(?<![\\w$.])(?:spawnSync|spawn|execFileSync|execFile|exec|fork)\\s*\\(";
+  String.raw`(?<![\w$.])(?:spawnSync|spawn|execFileSync|execFile|exec|fork)\s*\(`;
 
 /* `exec` / `execSync` **天然走 shell**（没有 `shell: false` 这一说）—— 这正是
  * ISSUE #2562 的盲区：它们的调用点里**一个 `shell` 字样都不会出现**，按字面量扫描
@@ -389,7 +389,7 @@ export function findShellOptions(root = ROOT) {
  * `--root` 供阳性对照（canary）：在临时树里放一个已知违例，确认本脚本退出码非 0。 */
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   const rootFlag = process.argv.indexOf("--root");
-  const scanRoot = rootFlag !== -1 ? process.argv[rootFlag + 1] : ROOT;
+  const scanRoot = rootFlag === -1 ? ROOT : process.argv[rootFlag + 1];
   const offenders = findShellOptions(scanRoot);
   if (offenders.length > 0) {
     process.stderr.write(
@@ -407,6 +407,6 @@ if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.me
   if (process.argv.includes("--json")) {
     process.stdout.write(JSON.stringify({ ok: true, offenders }));
   } else {
-    process.stdout.write(msg + "\n");
+    process.stdout.write(`${msg}\n`);
   }
 }

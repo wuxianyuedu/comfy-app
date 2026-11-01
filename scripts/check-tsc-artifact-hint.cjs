@@ -115,12 +115,12 @@ function buildHint(v) {
     ...unique.map((f) => `    POSIX:    rm -f ${f}`),
     ...(hasNext
       ? [
-          "    整目录形态：rm -rf .next/dev/types   (Windows: Remove-Item -Recurse -Force .next\\dev\\types)",
+          String.raw`    整目录形态：rm -rf .next/dev/types   (Windows: Remove-Item -Recurse -Force .next\dev\types)`,
         ]
       : []),
     ...(hasStorybook
       ? [
-          "    整目录形态：rm -rf .storybook/generated   (Windows: Remove-Item -Recurse -Force .storybook\\generated)",
+          String.raw`    整目录形态：rm -rf .storybook/generated   (Windows: Remove-Item -Recurse -Force .storybook\generated)`,
         ]
       : []),
     "  删完直接重跑提交即可；起一次 dev / build / `pnpm storybook` 会把那份生成物重写回来。",
@@ -149,7 +149,7 @@ function main() {
   }
   const verdict = classifyTscErrors(text);
   if (verdict.artifactOnly) {
-    process.stdout.write(buildHint(verdict) + "\n");
+    process.stdout.write(`${buildHint(verdict)}\n`);
   }
   return 0;
 }

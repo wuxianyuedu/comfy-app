@@ -133,7 +133,9 @@ export function resolveMaxWorkers(raw, fallback) {
  * @returns {string}
  */
 export function filterSpawnOutput(stdout, stderr, filterLine) {
-  if (!filterLine) return `${stdout ?? ""}${stderr ?? ""}`;
+  if (!filterLine) {
+    return `${stdout ?? ""}${stderr ?? ""}`;
+  }
   const keep = (s) =>
     String(s ?? "")
       .split("\n")
@@ -156,16 +158,20 @@ export function spawnVitest(entry, args, options = {}) {
    * 本函数体出现 stdio 加 inherit 的直通写法，注释里也不行），所以这里用
    * 内联分支而不是包一层闭包把它藏没。`output`（超时 / 装载指纹的取数面）同样用过滤后的版本，
    * 由 `filterSpawnOutput` 算（噪音清单里不含任何指纹，过滤不会吞掉判决文本）。 */
-  if (!filterLine) {
-    process.stdout.write(res.stdout ?? "");
-    process.stderr.write(res.stderr ?? "");
-  } else {
+  if (filterLine) {
     for (const line of String(res.stdout ?? "").split("\n")) {
-      if (!filterLine(line)) process.stdout.write(line + "\n");
+      if (!filterLine(line)) {
+        process.stdout.write(`${line}\n`);
+      }
     }
     for (const line of String(res.stderr ?? "").split("\n")) {
-      if (!filterLine(line)) process.stderr.write(line + "\n");
+      if (!filterLine(line)) {
+        process.stderr.write(`${line}\n`);
+      }
     }
+  } else {
+    process.stdout.write(res.stdout ?? "");
+    process.stderr.write(res.stderr ?? "");
   }
   const output = filterSpawnOutput(res.stdout, res.stderr, filterLine);
   /* `ETIMEDOUT` 是 `spawnSync` 掐断自己子进程时给出的 `error.code` —— 它是**没跑完**的

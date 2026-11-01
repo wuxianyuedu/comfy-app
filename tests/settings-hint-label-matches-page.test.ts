@@ -47,7 +47,7 @@ describe("解释器提示指向的设置页位置", () => {
      * 这里让它以「抓不到路径形态」红出来，而不是把 null 传下去。 */
     const advice =
       adviseOnError(
-        "未找到 comfy-cli Python 解释器：C:\\Users\\x\\python.exe",
+        String.raw`未找到 comfy-cli Python 解释器：C:\Users\x\python.exe`,
       ) ?? "";
     const pointer = pointerOf(advice);
     expect(

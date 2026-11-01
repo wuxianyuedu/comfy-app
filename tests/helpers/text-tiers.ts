@@ -62,7 +62,7 @@ function toPx(value: string, unit: string): number {
   return unit === "rem" ? n * 16 : n;
 }
 
-export interface TextTiers {
+export type TextTiers = {
   /** 渲染 px → 档名（多个档同名值时保留第一个，仅用于报错话术）。 */
   byPx: Map<number, string>;
   /**

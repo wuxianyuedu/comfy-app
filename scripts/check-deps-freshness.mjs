@@ -603,20 +603,7 @@ export function runFreshnessCheck(root, opts = {}) {
       "         ② （基线依赖 ⇄ 远端）这一层没有待同步的对象：远端那份依赖面就在这次合并里。",
       "         合并落地之后 ② 走 `--is-ancestor` 那条路径（见 scripts/check-deps-freshness.mjs 的 forkPoint）。",
     );
-  } else if (!remoteChecked) {
-    /* 「找的是哪条引用」要说实话：一个都没找到时 `rev` 只是兜底常量，
-     * 报它的名字会让人以为判据比过一条并不存在的 `origin/master`。 */
-    const revLabel =
-      opts.rev || resolvedRev
-        ? `本次找的是 \`${rev}\`（由 \`refs/remotes/**\` 里以 \`/master\` 结尾的引用现算）。`
-        : "本次在 `refs/remotes/**` 里没找到任何以 `/master` 结尾的引用。";
-    lines.push(
-      "[未校验] 没有可用的远端引用 / 拿不到分叉点 / 它没有取证时间（没 fetch 过 / 浅克隆 / 无远端）。",
-      `         ${revLabel} 远端名不假定叫 origin。`,
-      "         本次**没有**核对远端是否改过依赖 —— 这一行不许被读成「远端就是最新」。",
-      "         要核对就先执行 git fetch（判据自身不做网络请求）。",
-    );
-  } else {
+  } else if (remoteChecked) {
     const age = remoteAgeMs ?? 0;
     const hours = Math.round(age / (60 * 60 * 1000));
     const graceDays = REMOTE_REF_GRACE_MS / (24 * 60 * 60 * 1000);
@@ -630,6 +617,19 @@ export function runFreshnessCheck(root, opts = {}) {
         `         \`${rev}\` 已在本地历史里（不领先于 HEAD）⇒ ② 判过：没有待同步的远端依赖改动。`,
       );
     }
+  } else {
+    /* 「找的是哪条引用」要说实话：一个都没找到时 `rev` 只是兜底常量，
+     * 报它的名字会让人以为判据比过一条并不存在的 `origin/master`。 */
+    const revLabel =
+      opts.rev || resolvedRev
+        ? `本次找的是 \`${rev}\`（由 \`refs/remotes/**\` 里以 \`/master\` 结尾的引用现算）。`
+        : "本次在 `refs/remotes/**` 里没找到任何以 `/master` 结尾的引用。";
+    lines.push(
+      "[未校验] 没有可用的远端引用 / 拿不到分叉点 / 它没有取证时间（没 fetch 过 / 浅克隆 / 无远端）。",
+      `         ${revLabel} 远端名不假定叫 origin。`,
+      "         本次**没有**核对远端是否改过依赖 —— 这一行不许被读成「远端就是最新」。",
+      "         要核对就先执行 git fetch（判据自身不做网络请求）。",
+    );
   }
 
   if (remoteDrifts.length) {
@@ -714,7 +714,7 @@ function main() {
   });
   if (process.argv.includes("--json")) {
     process.stdout.write(
-      JSON.stringify(
+      `${JSON.stringify(
         {
           code: result.code,
           remoteChecked: result.remoteChecked,
@@ -735,7 +735,7 @@ function main() {
         },
         null,
         2,
-      ) + "\n",
+      )}\n`,
     );
     return result.code;
   }

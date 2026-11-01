@@ -56,7 +56,7 @@ import {
 } from "./support/fake-comfyui-endpoint.mjs";
 
 /** 一次探针的观测结果。 */
-export interface FakeSlotObservation {
+export type FakeSlotObservation = {
   /** 连不上时的原因，仅供日志。 */
   error?: string;
   /** 200 时的响应体（解析不出 JSON 时是 null）。 */
@@ -106,9 +106,9 @@ export async function probeFakeComfySlot(
       /* 应答不是 JSON：形状两边都不像，交给 classifyFakeSlot 判 unknown */
     }
     return { status: res.status, payload };
-  } catch (err) {
-    const text = err instanceof Error ? err.message : String(err);
-    return connectionRefused(err)
+  } catch (error) {
+    const text = error instanceof Error ? error.message : String(error);
+    return connectionRefused(error)
       ? /* 连不上 = 端口空着（替身待起）；这是**最常见**的一格，不进 unknown。 */
         { status: 0, error: text }
       : /* 不是「没人」而是「没等到」：归 unknown，让判据拦下并说清。

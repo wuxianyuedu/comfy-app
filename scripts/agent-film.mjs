@@ -53,21 +53,26 @@ export function parseArgs(argv) {
     const a = argv[i];
     const next = () => argv[++i] ?? "";
     switch (a) {
-      case "--url":
+      case "--url": {
         opts.url = next();
         break;
-      case "--project":
+      }
+      case "--project": {
         opts.project = next();
         break;
-      case "--idea":
+      }
+      case "--idea": {
         opts.idea = next();
         break;
-      case "--image-workflow":
+      }
+      case "--image-workflow": {
         opts.imageWorkflowId = next();
         break;
-      case "--video-workflow":
+      }
+      case "--video-workflow": {
         opts.videoWorkflowId = next();
         break;
+      }
       case "--approval": {
         const v = next();
         opts.approval = ["auto", "stage", "shot"].includes(v)
@@ -75,27 +80,34 @@ export function parseArgs(argv) {
           : "auto";
         break;
       }
-      case "--auto-review":
+      case "--auto-review": {
         opts.autoReview = true;
         break;
-      case "--poll":
+      }
+      case "--poll": {
         opts.pollMs = Number(next()) || opts.pollMs;
         break;
-      case "--timeout":
+      }
+      case "--timeout": {
         opts.timeoutMs = Number(next()) || opts.timeoutMs;
         break;
-      case "--dry-run":
+      }
+      case "--dry-run": {
         opts.dryRun = true;
         break;
-      case "--json":
+      }
+      case "--json": {
         opts.json = true;
         break;
+      }
       case "--help":
-      case "-h":
+      case "-h": {
         opts.help = true;
         break;
-      default:
+      }
+      default: {
         opts.unknown = [...(opts.unknown ?? []), a];
+      }
     }
   }
   if (!["auto", "stage", "shot"].includes(opts.approval)) {
@@ -168,22 +180,30 @@ export function formatStep(snapshot) {
 /** @param {RunSnapshot["action"]} action @returns {string} */
 function describeAction(action) {
   switch (action?.kind) {
-    case "generate_script":
+    case "generate_script": {
       return "生成剧本";
-    case "extract_characters":
+    }
+    case "extract_characters": {
       return "提取角色";
-    case "plan_storyboard":
+    }
+    case "plan_storyboard": {
       return "规划分镜";
-    case "render_images":
+    }
+    case "render_images": {
       return `逐镜生图(${action.shotIds?.length ?? 0})`;
-    case "render_film":
+    }
+    case "render_film": {
       return "生成视频并合成成片";
-    case "await_approval":
+    }
+    case "await_approval": {
       return "等待确认";
-    case "done":
+    }
+    case "done": {
       return "已完成";
-    default:
+    }
+    default: {
       return "空闲";
+    }
   }
 }
 
@@ -241,13 +261,13 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const errors = validateArgs(opts);
   if (errors.length) {
-    process.stderr.write(errors.join("\n") + "\n\n" + HELP);
+    process.stderr.write(`${errors.join("\n")}\n\n${HELP}`);
     return 2;
   }
   if (opts.dryRun) {
     process.stdout.write(
-      JSON.stringify({ start: buildStartCall(opts), status: buildStatusCall(opts) }, null, 2) +
-        "\n",
+      `${JSON.stringify({ start: buildStartCall(opts), status: buildStatusCall(opts) }, null, 2)
+        }\n`,
     );
     return 0;
   }
@@ -264,21 +284,21 @@ export async function main(argv = process.argv.slice(2)) {
     }
     return text ? JSON.parse(text) : null;
   };
-  const log = (/** @type {string} */ line) => process.stdout.write(line + "\n");
+  const log = (/** @type {string} */ line) => process.stdout.write(`${line}\n`);
   try {
     const { snapshot, timedOut, polls } = await driveFilmRun(opts, {
       request,
       log,
     });
     if (opts.json) {
-      process.stdout.write(JSON.stringify(snapshot) + "\n");
+      process.stdout.write(`${JSON.stringify(snapshot)}\n`);
     } else {
       log(timedOut ? `超时（${polls} 次轮询）` : `结束：${formatStep(snapshot)}`);
     }
     const status = snapshot?.run?.status;
     return status === "failed" || timedOut ? 1 : 0;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     process.stderr.write(`agent-film 失败：${msg}\n`);
     return 1;
   }

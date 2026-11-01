@@ -51,7 +51,7 @@ const DEFINITION_MARK = "func" + "tion stripComments(";
  * （不吃 `://` 那一处），语义是安全的。所以判决是「有这个形状 **且** 没有任何护栏」——
  * 第一版我只查子串，就把那两份安全的误报进来了（误报一片时应当精确化判据，而不是放宽基线）。
  */
-const NAIVE_MARK = "\\/\\/" + "[^\\n]*/g";
+const NAIVE_MARK = String.raw`\/\/` + String.raw`[^\n]*/g`;
 /** 护栏的特征串（`(^` 开头的锚/排除组）。同样拆开写，避免本文件自匹配。 */
 const GUARD_MARK = "(" + "^";
 

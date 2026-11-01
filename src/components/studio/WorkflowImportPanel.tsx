@@ -149,7 +149,6 @@ export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImport
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-ink-muted text-xs">
           把 ComfyUI 导出的 <code className="font-mono">.json</code>
-          {""}
           拖到面板任意位置，或
         </span>
         <Button

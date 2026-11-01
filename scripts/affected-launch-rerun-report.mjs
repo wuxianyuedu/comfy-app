@@ -35,12 +35,12 @@ export function fmtSec(ms) {
 export function unverifiedReport(files) {
   return (
     `[affected-launch] **未校验**：${files.length} 份用例在隔离复跑之后仍然只是\n` +
-    "  「机器太满、给不出可信读数」—— 这一档**既不是绿也不是红**，本次提交放行，\n" +
-    "  但下面这些文件这次没有被验证过：\n" +
-    files.map((f) => `    · ${f}\n`).join("") +
-    "  机器空下来后请自己复验一次：\n" +
-    "    node scripts/run-affected-tests.mjs --full\n" +
-    "  （或直接跑 vitest 入口、带上 `--no-file-parallelism` 与那几份文件。）\n"
+    `  「机器太满、给不出可信读数」—— 这一档**既不是绿也不是红**，本次提交放行，\n` +
+    `  但下面这些文件这次没有被验证过：\n${
+    files.map((f) => `    · ${f}\n`).join("")
+    }  机器空下来后请自己复验一次：\n` +
+    `    node scripts/run-affected-tests.mjs --full\n` +
+    `  （或直接跑 vitest 入口、带上 \`--no-file-parallelism\` 与那几份文件。）\n`
   );
 }
 
@@ -95,37 +95,37 @@ export function rerunReport(attempts, budget) {
   const waitedMs = reran.reduce((a, r) => a + (r.waitedMs ?? 0), 0);
   const noSettle = reran.filter((r) => r.settled === false).length;
   return (
-    "[affected-launch] 本次的等待与复跑账：\n" +
+    `[affected-launch] 本次的等待与复跑账：\n` +
     `  共 ${attempts.length} 块：第 1 遍直接绿 ${count("first-green")} 块，` +
     `红而不带超时指纹（真红，一次都不复跑）${count("red-no-fingerprint")} 块，` +
     `带指纹复跑 ${reran.length} 块。\n` +
     `  等待累计 ${fmtSec(waitedMs)} / 预算 ${fmtSec(budget.budgetMs)}` +
     `（**整次提交一份**，不是每块一份）；没等到回落 ${noSettle} 块` +
-    "（等待只是优化，不改变结论）。\n" +
+    `（等待只是优化，不改变结论）。\n` +
     `  **第 2 遍**的结果：负载假红放行 ${count("rerun-green")} 块、` +
     `**未校验**（每份都只是超时形态）${count("rerun-unverified")} 块、` +
     `**未判定**（有份拿不到自己的读数）${count("rerun-unattributed")} 块、` +
-    `真红 ${count("real-red")} 块` +
+    `真红 ${count("real-red")} 块${
     /* 「装载阶段就炸」那一档与上面四档**不同源**：它没有被复跑过，也没有第 2 遍的读数
      * —— 它说的是「第一遍就没跑起来」。所以它单独念，且只在真的发生时出现
      * （判据同 `gitDiff` 那条：没有的事不占一行）。 */
-    (launchFailed > 0 ? `；第 1 遍就没跑起来（装载 / 运行时级错误，退 2）${launchFailed} 块` : "") +
-    ".\n" +
+    launchFailed > 0 ? `；第 1 遍就没跑起来（装载 / 运行时级错误，退 2）${launchFailed} 块` : ""
+    }.\n${
     /* 墙钟那一格同理：只在真的跳过时占一行 —— 它是「连第二次测量都没发生」的证据，
      * 平时恒为 0，写进每一份账会让读者对 0 脱敏。 */
-    (skipped > 0
+    skipped > 0
       ? `  **墙钟**：第 2 遍因预算不够**根本没开** ${skipped} 块` +
         "（那是未判定，退 2 —— 连第二次测量都没有发生，不许读成「测过了、都只是超时」）。\n"
-      : "") +
+      : ""
     /* 比上面那一格更彻底的一档：**第一遍**就被掐断（`budget-killed`）。它与
      * `budget-skipped` 不同源 —— 后者是「没开第 2 遍」，这里是「第 1 遍没跑完」，
      * 连一份读数都没有。只在真的发生时占一行（判据同上），措辞不许含糊成「跑完了」。 */
-    (killed > 0
+    }${killed > 0
       ? `  **墙钟**：第 1 遍自己就被掐断 ${killed} 块` +
         "（连一遍都没跑完 ⇒ 未判定，退 2：任何一条断言都没有给出结论）。\n"
-      : "") +
-    "  ⚠️ 「放行」不等于「通过」：前者是同一批用例在更隔离条件下重测的结果；" +
-    "「未校验」是这次**没测到**（已逐条点名哪几份）；" +
-    "「未判定」比它更弱 —— 连「每份都只是超时」都没确认到，退 2（ISSUE #2225）。\n"
+      : ""
+    }  ⚠️ 「放行」不等于「通过」：前者是同一批用例在更隔离条件下重测的结果；` +
+    `「未校验」是这次**没测到**（已逐条点名哪几份）；` +
+    `「未判定」比它更弱 —— 连「每份都只是超时」都没确认到，退 2（ISSUE #2225）。\n`
   );
 }

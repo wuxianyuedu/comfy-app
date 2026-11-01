@@ -144,22 +144,22 @@ describe("pre-commit 耗时账：记账与读账", () => {
     expect(view.code).toBe(0);
     expect(readLedger(view)).toHaveLength(1);
     const record = firstRun(view);
-    expect(record.totalMs).toBe(69400);
+    expect(record.totalMs).toBe(69_400);
     expect(record.stagedFiles).toBe(3);
     expect(record.groups).toEqual([
       { name: "A", ms: 3500 },
-      { name: "C", ms: 23400 },
+      { name: "C", ms: 23_400 },
     ]);
     expect(record.steps).toEqual([{ name: "文件结构硬规则", ms: 820 }]);
   });
 
   it("多条追加、不打乱前面的（账本的价值全在多次之间的比较）", () => {
     const repo = makeRepo();
-    for (const total of [10000, 20000, 30000]) {
+    for (const total of [10_000, 20_000, 30_000]) {
       run(["record", "--total-ms", String(total), "--exit", "0"], repo);
     }
     const runs = readLedger(run(["--json"], repo));
-    expect(runs.map((r) => r.totalMs)).toEqual([10000, 20000, 30000]);
+    expect(runs.map((r) => r.totalMs)).toEqual([10_000, 20_000, 30_000]);
   });
 
   it("解析不出的耗时读数被丢掉并计数，但整条记录仍然落盘", () => {
@@ -201,7 +201,7 @@ describe("pre-commit 耗时账：记账与读账", () => {
 
   it("报告里有中位数、各组、逐步骤（人看的那一档不能只是原始 dump）", () => {
     const repo = makeRepo();
-    for (const total of [20000, 40000]) {
+    for (const total of [20_000, 40_000]) {
       run(
         [
           "record",

@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { filterSpawnOutput } from "../scripts/affected-launch-spawn.mjs";
+import { filterSpawnOutput, spawnVitest } from "../scripts/affected-launch-spawn.mjs";
 import {
   FIXTURE_NOISE_PATTERN,
   NOISE_PATTERN,
@@ -19,7 +19,6 @@ import {
   isNoiseLine,
   resolveNoiseFilter,
 } from "../scripts/affected-launch-noise-reporter.mjs";
-import { spawnVitest } from "../scripts/affected-launch-spawn.mjs";
 
 /** 用户 2026-10-31 报上来的、来自受影响用例门的真实噪音行（逐字取自 CI 日志）。 */
 const BENIGN = [
@@ -79,8 +78,12 @@ describe("filterNoiseText —— 按行抠掉噪音", () => {
     const out = filterNoiseText(text).split("\n");
     expect(out).toContain("前面一句真信息");
     expect(out).toContain("后面一句真信息");
-    for (const noisy of REAL) expect(out).toContain(noisy);
-    for (const noisy of BENIGN) expect(out).not.toContain(noisy);
+    for (const noisy of REAL) {
+      expect(out).toContain(noisy);
+    }
+    for (const noisy of BENIGN) {
+      expect(out).not.toContain(noisy);
+    }
   });
 });
 
@@ -104,7 +107,9 @@ describe("resolveNoiseFilter —— 只认 1 / true", () => {
 describe("spawnVitest end-to-end —— 真起 node 验证过滤写入", () => {
   let dir: string | undefined;
   afterEach(() => {
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
     dir = undefined;
     vi.restoreAllMocks();
   });
@@ -115,15 +120,15 @@ describe("spawnVitest end-to-end —— 真起 node 验证过滤写入", () => {
     writeFileSync(
       entry,
       [
-        `process.stdout.write(${JSON.stringify(BENIGN[6] + "\n")});`,
-        `process.stdout.write(${JSON.stringify(REAL[0] + "\n")});`,
-        `process.stderr.write(${JSON.stringify(BENIGN[8] + "\n")});`,
-        `process.stderr.write(${JSON.stringify(REAL[3] + "\n")});`,
+        `process.stdout.write(${JSON.stringify(`${BENIGN[6]}\n`)});`,
+        `process.stdout.write(${JSON.stringify(`${REAL[0]}\n`)});`,
+        `process.stderr.write(${JSON.stringify(`${BENIGN[8]}\n`)});`,
+        `process.stderr.write(${JSON.stringify(`${REAL[3]}\n`)});`,
       ].join("\n"),
     );
 
-    const out: string[] = [];
-    const err: string[] = [];
+    const out: Array<string> = [];
+    const err: Array<string> = [];
     vi.spyOn(process.stdout, "write").mockImplementation((c) => {
       out.push(String(c));
       return true;
@@ -178,7 +183,7 @@ describe("FIXTURE_NOISE_PATTERN —— 夹具 / 探针输出的良性形态", ()
     // 负向用例按设计造的 git 失败（junit 保全量，见判据文件头的交换说明）
     "fatal: not a git repository (or any of the parent directories): .git",
     // e2e-run 设计内失败抬头 + 它的箭头注解
-    "[e2e-run/test] × 起不了 Playwright（G:\\runner\\…\\no-such-playwright-runner）：失败码 ENOENT —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）",
+    String.raw`[e2e-run/test] × 起不了 Playwright（G:\runner\…\no-such-playwright-runner）：失败码 ENOENT —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）`,
     "          ↑ 这条是**判据按设计造的失败**（负向用例要的正是这个出口），不是这一跑起不来。",
     // ci-env-probe 的裸段名抬头（×6；只收裸行，带内容的行是真读数）
     "[ports]",
@@ -192,7 +197,7 @@ describe("FIXTURE_NOISE_PATTERN —— 夹具 / 探针输出的良性形态", ()
     // storybook extensionless 警告块（触发行 / 框线行 / 超链接包装）
     "▲  One or more extensionless imports detected: \"./app-origin-defaults\" in",
     "│  file",
-    "│  \"G:\\runner\\…\\.storybook\\main.ts\".",
+    String.raw`│  "G:\runner\…\.storybook\main.ts".`,
     "│  For more information on how to resolve the issue:",
     "]8;;https://storybook.js.org/docs/faq#extensionless-imports-in-storybookmaints-and-required-ts-extensionshttps://storybook.js.org/docs/faq#extensionless-imports-in-st...]8;;",
     // 孤立 x 行（两次构建都在场、源未定位 —— 按观察形态收，见判据文件头）

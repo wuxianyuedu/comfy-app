@@ -58,17 +58,17 @@ const CANCELLED_BUILD = {
         id: "cnb-lm1-1k5h1otqt-001",
         name: "单跑生产构建（API 触发）",
         status: "cancel",
-        duration: 244230,
+        duration: 244_230,
         stages: [
           {
             status: "success",
-            duration: 29083,
+            duration: 29_083,
             name: "Prepare",
             id: "prepare",
           },
           {
             status: "success",
-            duration: 214977,
+            duration: 214_977,
             name: "单跑构建·安装依赖",
             id: "stage-0",
           },
@@ -116,25 +116,25 @@ const FAILED_BUILD = {
         stages: [
           {
             status: "success",
-            duration: 26686,
+            duration: 26_686,
             name: "Prepare",
             id: "prepare",
           },
           {
             status: "success",
-            duration: 197327,
+            duration: 197_327,
             name: "单跑构建·安装依赖",
             id: "stage-0",
           },
           {
             status: "success",
-            duration: 12676,
+            duration: 12_676,
             name: "单跑构建·同步数据库表结构",
             id: "stage-1",
           },
           {
             status: "error",
-            duration: 100418,
+            duration: 100_418,
             name: "单跑构建·生产构建",
             id: "stage-2",
           },
@@ -739,7 +739,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
     status: 200,
     data: {
       status: "error",
-      duration: 100418,
+      duration: 100_418,
       error: "",
       content: [
         "RUN v5.0.3",
@@ -972,7 +972,7 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
  */
 
 /** `get-build-status -v` 的 `data` 那一段（用例只用到 `pipelinesStatus[*].stages[]`）。 */
-interface BuildJson {
+type BuildJson = {
   data: {
     pipelinesStatus: Record<
       string,
@@ -983,7 +983,7 @@ interface BuildJson {
 }
 
 /** 一格（`error` 那一栏只有 `get-build-stage -v` 才给，`get-build-status` 里没有）。 */
-interface StageJson {
+type StageJson = {
   duration?: number;
   error?: string;
   id?: string;
@@ -1015,9 +1015,9 @@ const KILLED_AT_PREPARE = {
         id: "cnb-9qi-1k5qojle1-001",
         name: "master 合并复核",
         status: "cancel",
-        duration: 12855,
+        duration: 12_855,
         stages: [
-          { status: "error", duration: 12856, name: "Prepare", id: "prepare" },
+          { status: "error", duration: 12_856, name: "Prepare", id: "prepare" },
           {
             status: "skipped",
             duration: 0,
@@ -1047,13 +1047,13 @@ const KILLED_AT_PREPARE = {
 const KILLED_AT_PREPARE_STAGE = {
   status: 200,
   data: {
-    duration: 12856,
+    duration: 12_856,
     content: ["…", "Pipeline prepare error: …"],
-    endTime: 1792973342893,
+    endTime: 1_792_973_342_893,
     error: LOCK_TERMINATED_MESSAGE,
     status: "error",
     name: "Prepare",
-    startTime: 1792973330037,
+    startTime: 1_792_973_330_037,
     id: "prepare",
   },
 };
@@ -1071,13 +1071,13 @@ const REAL_FAILURE = {
         stages: [
           {
             status: "success",
-            duration: 30000,
+            duration: 30_000,
             name: "Prepare",
             id: "prepare",
           },
           {
             status: "error",
-            duration: 239752,
+            duration: 239_752,
             name: "受影响用例",
             id: "stage-9",
             error: "任务执行失败，返回码：1, signal: -1",
@@ -1209,7 +1209,7 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
     ) as BuildJson;
     expect(prepareStage(enriched)).toEqual({
       status: "error",
-      duration: 12856,
+      duration: 12_856,
       name: "Prepare",
       id: "prepare",
     });

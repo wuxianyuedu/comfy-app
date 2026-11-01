@@ -76,12 +76,12 @@ export function branchLandingRows(
     const isMerged = rec ? rec.is_merged === true : null;
     /** @type {LandingVerdict} */
     let verdict;
-    if (!rec) {
+    if (rec) {
+      verdict = isMerged ? "landed" : "not-merged";
+    } else {
       /* 窗口取满还没有 ⇒ 「这条分支没提过 PR」是**正面事实**；
        * 没取满 ⇒ 只能说没取到。两种必须在账上长得不一样。 */
       verdict = meta.windowComplete ? "not-merged" : "no-pull-in-window";
-    } else {
-      verdict = isMerged ? "landed" : "not-merged";
     }
     return {
       name: b.name,
@@ -272,7 +272,7 @@ export function runBranches(ctx) {
   const candidates = trunk ? refs.branches.filter((b) => b.name !== trunk) : refs.branches;
   if (trunk && refs.branches.length !== candidates.length) {
     log(
-      `[ship] 已排除主干 \`${trunk}\`${rawTrunk !== trunk ? `（基线原值是 \`${rawTrunk}\`）` : ""}——它不是待删项。`,
+      `[ship] 已排除主干 \`${trunk}\`${rawTrunk === trunk ? "" : `（基线原值是 \`${rawTrunk}\`）`}——它不是待删项。`,
     );
   }
   if (candidates.length === 0) {
@@ -298,19 +298,18 @@ export function runBranches(ctx) {
   for (const r of rows) {
     const pr = r.pr ? `#${r.pr}` : "无 PR";
     log(
-      `  ${r.verdict.padEnd(18)} ${VERDICT_TEXT[r.verdict]} · ${r.name}` +
-        ` · ${pr} is_merged=${r.isMerged === null ? "?" : String(r.isMerged)}` +
-        ` merged_by=${r.mergedBy ? "有" : "无"} 远端=${r.remote ? "在" : "无"}` +
-        (r.current ? " · ← 当前分支" : "") +
-        ` (sha ${r.sha.slice(0, 8)})`,
+      `  ${r.verdict.padEnd(18)} ${VERDICT_TEXT[r.verdict]} · ${r.name} · ${pr} is_merged=${r.isMerged === null ? "?" : String(r.isMerged)}` +
+        ` merged_by=${r.mergedBy ? "有" : "无"} 远端=${r.remote ? "在" : "无"}${
+        r.current ? " · ← 当前分支" : ""
+        } (sha ${r.sha.slice(0, 8)})`,
     );
   }
   log(
-    `[ship] 取数覆盖：翻了 ${fetched.pages} 页 / ${fetched.pulls.length} 条 PR` +
-      (fetched.oldest !== null ? ` · 最老 #${fetched.oldest}` : "") +
-      (fetched.windowComplete
+    `[ship] 取数覆盖：翻了 ${fetched.pages} 页 / ${fetched.pulls.length} 条 PR${
+      fetched.oldest === null ? "" : ` · 最老 #${fetched.oldest}`
+      }${fetched.windowComplete
         ? " · 窗口取满"
-        : ` · **没取满**${fetched.note ? ` —— ${fetched.note}` : ""}`),
+        : ` · **没取满**${fetched.note ? ` —— ${fetched.note}` : ""}`}`,
   );
   const landed = rows.filter((r) => r.verdict === "landed" && !r.current);
   const open = rows.filter((r) => r.verdict === "not-merged");

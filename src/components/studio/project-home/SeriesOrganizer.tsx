@@ -201,7 +201,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 />
                 {(() => {
                   const p = progressById.get(e.id);
-                  if (!p) return null;
+                  if (!p) {
+                    return null;
+                  }
                   return (
                     <span className="text-ink-faint text-xs whitespace-nowrap">
                       {p.total === 0
@@ -272,8 +274,8 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               <div className="flex items-center gap-2">
                 <NativeSelect
                   className="flex-1"
-                  value={genWorkflow}
                   onChange={(e) => setGenWorkflow(e.target.value)}
+                  value={genWorkflow}
                 >
                   <NativeSelectOption value="">选择工作流…</NativeSelectOption>
                   {(c.workflows ?? []).map((w) => (
@@ -283,12 +285,14 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                   ))}
                 </NativeSelect>
                 <Button
-                  variant="primary-solid"
                   className="h-8"
                   disabled={!genWorkflow || c.batchGenerating}
                   onClick={() => {
-                    if (genWorkflow) c.batchGenerateSeason(genWorkflow);
+                    if (genWorkflow) {
+                      c.batchGenerateSeason(genWorkflow);
+                    }
                   }}
+                  variant="primary-solid"
                 >
                   {c.batchGenerating ? "提交中…" : "整季生成"}
                 </Button>

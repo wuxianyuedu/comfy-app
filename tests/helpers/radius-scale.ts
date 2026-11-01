@@ -11,12 +11,12 @@
  */
 
 /** 一颗派生式：`渲染值 = 基数 × coef + offset`。 */
-export interface RadiusDerivation {
+export type RadiusDerivation = {
   coef: number;
   offset: number;
 }
 
-export interface RadiusScale {
+export type RadiusScale = {
   /** `:root` 里那颗基数，换算成 px（只认 rem/px 两种形态）。 */
   basePx: number;
   /** 档位名（`--radius-sm` … 含 `--radius-node`）→ 派生式。 */

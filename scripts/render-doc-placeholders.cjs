@@ -77,8 +77,8 @@ function buildPlaceholderMap() {
     let realValue;
     try {
       realValue = f.extract();
-    } catch (e) {
-      throw new Error(`无法提取 ${f.key}（${e.message}）`, { cause: e });
+    } catch (error) {
+      throw new Error(`无法提取 ${f.key}（${error.message}）`, { cause: error });
     }
     const vals = Array.isArray(realValue) ? realValue : [realValue];
     for (const v of vals) {
@@ -158,11 +158,11 @@ function writeAll(onlyList) {
   }
 
   console.log(
-    `[doc:render] ✓ 已生成 ${generated} 份原文文档到 ${GENERATED_DOCS_DIR}/` +
-      (targets.length < SCOPED_DOCS.length
+    `[doc:render] ✓ 已生成 ${generated} 份原文文档到 ${GENERATED_DOCS_DIR}/${
+      targets.length < SCOPED_DOCS.length
         ? `（--only：全量是 ${SCOPED_DOCS.length} 份，这一批只写了 ${targets.length} 份）`
-        : "") +
-      "。",
+        : ""
+      }。`,
   );
   return generated;
 }

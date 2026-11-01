@@ -131,12 +131,14 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
     expect(guard, "解不出 wantAdvice 的判定").toBeGreaterThan(-1);
     expect(attr, "解不出 collectAttribute 的调用点").toBeGreaterThan(-1);
     expect(guard, "判定必须在归因之前 —— 否则小面上白付一次图构建").toBeLessThan(attr);
-    // 判定读的是**已经拿到**的清单（`affectedCount` 由 `files` 算出来），不是新起一次 git。
+    // 判定读的是**已经拿到**的清单（`affectedCount` 由上一段解析出的清单算出来），
+    // 不是新起一次 git；那份清单的变量名随改动面拆过一次（#2905），所以只钉
+    // 「从某个已有数组的 filter 结果来」这个形态。
     expect(src).toContain("const wantAdvice = affectedCount >= SCOPE_ADVICE_MIN;");
     expect(
       src,
-      "affectedCount 必须从已经拿到的 files 算出来 —— 另起一次 git 就是白付",
-    ).toMatch(/const affectedCount = files\.filter/);
+      "affectedCount 必须从已经拿到的清单算出来 —— 另起一次 git 就是白付",
+    ).toMatch(/const affectedCount = \w+\.filter\(/);
   });
 
   it("它**不改变退出码**（代价不是结论）—— 打印点自己不许 return", () => {
@@ -161,9 +163,10 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
      *
      * 判法：建议的调用点必须**早于**第一处 `runChunk(` 的调用。 */
     const advice = src.indexOf("scopeAdvice({");
-    // 锚点取**增量档**那一处（`runChunk(chunk, …)`）—— `--full` 档里也有一处
+    // 锚点取**增量档**那一处（`await runChunk(<清单>, …)`）—— `--full` 档里也有一处
     // `runChunk([])`，用「第一处」会把锚点落到那个档上，判据就守错了对象。
-    const firstRun = src.indexOf("await runChunk(chunk,");
+    // 实参名随改动面拆过一次（#2905），所以按「await runChunk( 且实参不是空数组」取。
+    const firstRun = src.search(/await runChunk\((?!\[\])/);
     expect(advice).toBeGreaterThan(-1);
     expect(firstRun, "解不出增量档 runChunk 的调用点").toBeGreaterThan(-1);
     expect(advice, "建议被放到了跑完之后 —— 真红会把它截断").toBeLessThan(firstRun);

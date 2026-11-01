@@ -624,7 +624,7 @@ export function parseModeContracts(raw: unknown): Array<ModeContract> {
       mode,
       inputs,
       output,
-      ...(required !== undefined ? { required } : {}),
+      ...(required === undefined ? {} : { required }),
       ...(usedCustomInputs.length > 0 ? { customInputs: usedCustomInputs } : {}),
     });
   }

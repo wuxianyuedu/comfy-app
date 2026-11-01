@@ -145,7 +145,7 @@ export function buildInnerNodeInputs(
           name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
           localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
-          type: typeof inp.type === "string" ? inp.type : inp.link != null ? "*" : "STRING",
+          type: typeof inp.type === "string" ? inp.type : inp.link == null ? "STRING" : "*",
           isConnection: inp.link != null,
         };
         if (widgetName) {

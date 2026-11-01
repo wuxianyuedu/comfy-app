@@ -396,7 +396,7 @@ export function gateFirstPassByWallClock({ budget, files, perFileMs, nowMs = Dat
     return { ok: true, remainingMs, estimateMs, note: "" };
   }
   /** @param {number} ms */
-  const fmt = (ms) => `${(Number(ms) / 60000).toFixed(1)}分钟`;
+  const fmt = (ms) => `${(Number(ms) / 60_000).toFixed(1)}分钟`;
   return {
     ok: false,
     remainingMs,
@@ -462,12 +462,12 @@ export function gateRerunByWallClock({ budget, firstPassMs, retryFiles, nowMs = 
     ...gate,
     note: gate.ok
       ? ""
-      : "[affected-launch] " +
-        (broke
+      : `[affected-launch] ${
+        broke
           ? "墙钟已经用完"
-          : `墙钟买不起**整块**串行复跑（剩余 ${fmt(remainingMs ?? 0)} < 估计 ${fmt(estimateMs)}）`) +
-        (broke ? "" : "，而**逐文件补跑**也一份都买不起") +
-        " ⇒\n  第 2 遍不开。这不是红，也不是绿 ⇒ 按**未判定**收（退 2，ISSUE #2364）。\n",
+          : `墙钟买不起**整块**串行复跑（剩余 ${fmt(remainingMs ?? 0)} < 估计 ${fmt(estimateMs)}）`
+        }${broke ? "" : "，而**逐文件补跑**也一份都买不起"
+        } ⇒\n  第 2 遍不开。这不是红，也不是绿 ⇒ 按**未判定**收（退 2，ISSUE #2364）。\n`,
   };
 }
 
@@ -483,23 +483,23 @@ export function gateRerunByWallClock({ budget, firstPassMs, retryFiles, nowMs = 
  */
 export function wallClockSkipReport({ remainingMs, estimateMs, files }) {
   /** @param {number} ms */
-  const fmt = (ms) => `${(Number(ms) / 60000).toFixed(1)} 分钟`;
+  const fmt = (ms) => `${(Number(ms) / 60_000).toFixed(1)} 分钟`;
   return (
-    "[affected-launch] ⚠ **这一格的墙钟预算用完了 ⇒ 第 2 遍不开。**\n" +
+    `[affected-launch] ⚠ **这一格的墙钟预算用完了 ⇒ 第 2 遍不开。**\n` +
     `  剩余 ${remainingMs === null ? "(没设界)" : fmt(remainingMs)}、` +
     `估计要 ${fmt(estimateMs)}（串行复跑按第 1 遍墙钟 ×${SERIAL_RERUN_FACTOR} 估 —— ` +
-    "实测串行那一遍比并行那一遍更慢，所以不按比例算）。\n" +
-    "  连**逐文件补跑**也买不起（那一档的单价还不知道时放一份过去，这里连那一份都没有）：\n" +
-    "  逐文件补跑只跑失败的那几份、一份一个退出码，它比整块串行便宜得多 ——\n" +
-    "  所以这句话之前本应先量过一份（见 `budgetAllows` 的 `probeFiles`）。\n" +
-    "  这不是红，也不是绿，也不是「未校验」：未校验是**两次测量都只给超时指纹**，\n" +
-    "  而这里连第二次测量都没有发生 ⇒ 按**未判定**收（退 2，规范 §13.6.4）。\n" +
-    `  下面这 ${files.length} 份文件这次没有结论：\n` +
-    files.map((f) => `    · ${f}\n`).join("") +
-    "  下一动作：机器空下来时把那几份单独串行跑一次 ——\n" +
-    "    pnpm exec vitest run --no-file-parallelism <那几份路径>\n" +
-    "  ⚠️ **不要**抬 `testTimeout` / `hookTimeout`，也不要 --no-verify：\n" +
-    "     本件的整个前提就是「争用不是预算不够」（§11.13）；界在这里，是为了让\n" +
-    "     这一格在被平台掐掉之前**先把话说完**。\n"
+    `实测串行那一遍比并行那一遍更慢，所以不按比例算）。\n` +
+    `  连**逐文件补跑**也买不起（那一档的单价还不知道时放一份过去，这里连那一份都没有）：\n` +
+    `  逐文件补跑只跑失败的那几份、一份一个退出码，它比整块串行便宜得多 ——\n` +
+    `  所以这句话之前本应先量过一份（见 \`budgetAllows\` 的 \`probeFiles\`）。\n` +
+    `  这不是红，也不是绿，也不是「未校验」：未校验是**两次测量都只给超时指纹**，\n` +
+    `  而这里连第二次测量都没有发生 ⇒ 按**未判定**收（退 2，规范 §13.6.4）。\n` +
+    `  下面这 ${files.length} 份文件这次没有结论：\n${
+    files.map((f) => `    · ${f}\n`).join("")
+    }  下一动作：机器空下来时把那几份单独串行跑一次 ——\n` +
+    `    pnpm exec vitest run --no-file-parallelism <那几份路径>\n` +
+    `  ⚠️ **不要**抬 \`testTimeout\` / \`hookTimeout\`，也不要 --no-verify：\n` +
+    `     本件的整个前提就是「争用不是预算不够」（§11.13）；界在这里，是为了让\n` +
+    `     这一格在被平台掐掉之前**先把话说完**。\n`
   );
 }

@@ -71,9 +71,13 @@ export function planSeparatedLaunches(files, opts = {}) {
       }
     }
   } else {
-    for (const chunk of planLaunches(fixed)) out.push({ kind: "fixed", files: chunk });
+    for (const chunk of planLaunches(fixed)) {
+      out.push({ kind: "fixed", files: chunk });
+    }
   }
-  for (const chunk of planLaunches(affected)) out.push({ kind: "affected", files: chunk });
+  for (const chunk of planLaunches(affected)) {
+    out.push({ kind: "affected", files: chunk });
+  }
   return out;
 }
 

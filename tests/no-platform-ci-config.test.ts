@@ -55,6 +55,7 @@ import { ONESHOT_TARGETS, oneshotGates, oneshotPairs } from "../scripts/ci-onesh
 /* 预算这一格的判据要拿**脚本自己那份预算**当基准，而不是在测试里再抄一个常数：
  * 抄一份的话「改了脚本预算、忘了改配置」两种漂移里只会看见一种。 */
 import { FULL_SUITE_TIMEOUT_MS } from "../scripts/full-suite-run.mjs";
+import { DAILY_LANE_PIPELINES } from "../scripts/check-daily-attendance.mjs";
 import { FRESHNESS_TRACKS } from "../scripts/freshness-ledger.mjs";
 import { describe, expect, it } from "vitest";
 
@@ -396,10 +397,10 @@ const PR_MOVED_TO_DAILY: Array<[string, string, string, string]> = [
  * 三条门槛（确定性 / 快 / 本地可复现）仍只在规范 §13.5.30 由人判，本账不碰。
  */
 type GateTier = "PR" | "push" | "daily" | "retired";
-interface LedgerEntry {
+type LedgerEntry = {
   name: string;
-  tier: GateTier;
   note?: string;
+  tier: GateTier;
 }
 const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   // ── PR 档（COMFYAPP_CI_GATES）──
@@ -624,11 +625,19 @@ function executableScriptLines(text: string, name: string): Array<string> {
  * push 那一档接槽的全部依据就是「它清单里没有构建格」（ISSUE #2851），所以这句话必须有
  * 执行者：往那份清单里加一格构建的人，要当场被这一条拦住，而不是等那一跑 13.8s 就死、
  * 后面整片 `skipped` 那天再来查为什么。
+ *
+ * ⚠️ `tauri build` 这一枚是 ISSUE #2883 补的：桌包那一档的构建是**经 tauri CLI 间接触发**的
+ * —— `打包·桌面成品构建` 那一格真正执行的是 `pnpm tauri build`，而"它调起 `build-desktop.mjs`"
+ * 这件事写在 `src-tauri/tauri.conf.json` 的 `beforeBuildCommand` 里，以及 `.cnb.yml` 那一格的
+ * **注释**里。注释不在这一族的输入面上（`executableScriptLines()` 明写「丢掉空行与 shell 注释」），
+ * 所以旧的三枚标记判现役桌包档会给**假阴性**「没有构建格」—— 而这张表一旦被拿去判断跑的档
+ * 接不接槽（#2853 期望 1 要做的正是这个动作），那个假阴性就直接把这条安全前提摘掉。
  */
 const BUILD_CONSUMER_MARKERS: Array<string> = [
   "ci-daily-build.mjs",
   "build-desktop.mjs",
   "next build",
+  "tauri build",
 ];
 
 /** 从「格名 → 该格真正执行的命令行」里挑出含构建消费者的那几格（名字原样回，红时指得出人）。 */
@@ -897,7 +906,7 @@ export function pipelineStageNames(text: string, pipelineName: string): Array<st
  */
 export function anchorStageNames(text: string, anchor: string): Array<string> {
   const lines = text.split("\n");
-  const escaped = anchor.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = anchor.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   const def = new RegExp(`^\\.[^:]*:[ \\t]*&${escaped}[ \\t]*$`);
   let start = -1;
   for (let i = 0; i < lines.length; i += 1) {
@@ -936,7 +945,7 @@ export function anchorStageNames(text: string, anchor: string): Array<string> {
  * @param name stage 名
  */
 export function stageKeptAsComment(text: string, name: string): boolean {
-  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = name.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(`^[ \t]*#+[ \t]*-[ \t]+name:[ \t]*${escaped}[ \t]*$`, "m").test(text);
 }
 
@@ -1778,6 +1787,47 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toMatch(/^ {2}- reg: \^\S+\$[ 	]*$/m);
   });
 
+  /**
+   * 出勤判据认的那份流水线名 ⇄ 配置里真正跑 `*daily_gates` 的那些流水线（ISSUE #2873）。
+   *
+   * 为什么这一对要双向核对：`check-daily-attendance.mjs` 的 `DAILY_LANE_PIPELINES` 是它
+   * **认档**用的唯一名单（事件名前缀不够 —— 01:00 与 03:00 两条定时档共享 `crontab:` 前缀，
+   * 实测把桌包档死在平台 `Prepare` 念成了每日档的缺勤）。名单漂了两种方向都静默：
+   *   · 配置改了流水线名而名单没跟 ⇒ 判据从此「窗口内没有一条属于本档」，念成**永远缺勤**；
+   *   · 名单里留着一个已经不存在的名字 ⇒ 它照旧"认得出"，而那一档其实早就没了，
+   *     于是**永远出勤**。两种都不会让别的判据红。
+   * 比的是「跑哪份清单」（`stagesRef`），不是「挂在哪个事件名 / 几点」—— 后者是本文件反复
+   * 拒绝的那一类写法（小时在 10-22 一天内换过两次）。
+   */
+  it("每日出勤判据认的流水线名，就是配置里跑 `*daily_gates` 的那几条（不多不少）", () => {
+    const rows = pipelineLockAssignments(readRegisteredConfig());
+    const dailyNames = rows.filter((r) => r.stagesRef === "*daily_gates").map((r) => r.name);
+    expect(dailyNames.length, "配置里一条跑 `*daily_gates` 的流水线都没解析出来").toBeGreaterThan(0);
+    expect(
+      [...DAILY_LANE_PIPELINES].sort(),
+      "`DAILY_LANE_PIPELINES` 与 `.cnb.yml` 里跑 `*daily_gates` 的流水线名不是一张表 —— " +
+        "配置那侧改了名（或加了一个触发口）而名单没跟，出勤判据就会静默变成恒缺勤或恒出勤",
+    ).toEqual(dailyNames.sort());
+
+    /* 另一定时档必须在名单**之外**：这是 #2873 的那条实质。取「跑的不是 `*daily_gates`
+     * 的定时类流水线」而不是取某个具体名字，所以桌包改天再拆一条出来也在这条的量程里。 */
+    const cronRows = rows.filter((r) => r.event.startsWith("crontab:"));
+    expect(
+      cronRows.length,
+      "配置里只解析出一条定时流水线 —— 这条判据就没有对象了（第二条定时档就是 #2873 的由来）",
+    ).toBeGreaterThanOrEqual(2);
+    const otherCron = cronRows.filter((r) => r.stagesRef !== "*daily_gates");
+    expect(otherCron.length, "定时类里没有「不跑每日清单」的那一条，判据的空转形态").toBeGreaterThan(
+      0,
+    );
+    for (const r of otherCron) {
+      expect(
+        DAILY_LANE_PIPELINES,
+        `定时档「${r.name}」（事件 ${r.event}）被算进了每日出勤的名单 —— 两档会互相替对方作证`,
+      ).not.toContain(r.name);
+    }
+  });
+
   it("规范正文确实写着这次的决策反转（反向锚点）", () => {
     const drifted: Array<string> = [];
     for (const { file, mustContain } of DOC_ANCHORS) {
@@ -1873,10 +1923,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     for (const prerequisite of ["每日浏览器安装", "每日生产构建"]) {
       expect(
         daily.indexOf(prerequisite),
-        `「${prerequisite}」必须排在「每日全量E2E」之前 —— ` +
-          (prerequisite === "每日生产构建"
+        `「${prerequisite}」必须排在「每日全量E2E」之前 —— ${
+          prerequisite === "每日生产构建"
             ? "这一格的 webServer 起的是 `pnpm start`，产物来自它"
-            : "缺件时整档会以「每条都报同一个 launch 失败」的形态红"),
+            : "缺件时整档会以「每条都报同一个 launch 失败」的形态红"}`,
       ).toBeLessThan(e2eAt);
     }
     /* 产物前提要**写在配置里**，不能只靠顺序推断：这一格显式声明 `COMFY_E2E_SERVER: start`。
@@ -2517,7 +2567,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     const events = crontabEvents(text);
     expect(
       events.length,
-      '`.cnb.yml` 里的 `"crontab: …"` 事件键应恰好两条：每日那 12 格 + 桌包那一档' +
+      '`.cnb.yml` 里的 `"crontab: …"` 事件键应恰好两条：每日那一档 + 桌包那一档' +
         "（ISSUE #2503 要求它**独立成档**，既不进 `.daily-gates` 那张表，也不与每日档共用一把锁）。" +
         "少一条 = 生产构建又只剩 PR 那一条，或桌包档被并进了每日档；多一条 = 有第二条没人认领的定时任务",
     ).toBe(2);
@@ -2590,8 +2640,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("桌包那一档独立成档：自己的清单 + 自己的锁 + 两个触发口同一份（ISSUE #2503）", () => {
-    /* 业主口径是「不与现有那 12 格混在 `.daily-gates` 那张表里」。这句话在配置里落成
-     * 三件各自会静默失效的事实：
+    /* 业主口径的实质是「桌包独立一条，不要并进每日那张 `*daily_gates` 表里」——
+     * 他原话里带着当时的条数，**那个数不在这里记账**（#2878 那一族的同一口径：
+     * 条数写进注释/话术而判据不读它，漂了谁都不会红；要数就问 `.daily-gates` 锚点 ⇄
+     * `COMFYAPP_CI_DAILY_GATES` 那两份，见规范 §13.5.17）。
+     * 这句话在配置里落成三件各自会静默失效的事实：
      *   ① 清单是**另一张锚点** —— 并进 `.daily-gates` 之后每日那一跑会多背一次 cargo 编译；
      *   ② 锁是**另一把** —— 共用 `*lock_daily` 会让「手点一次桌包」把当日那一跑的某一格
      *      掐停（#2114 记的那条死因换了个方向复发）；
@@ -2617,6 +2670,22 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       stageBlock(text, "打包·桌面成品构建"),
       "打包那一格必须点既有的执行者 `pnpm tauri build`（本单只补发布那一格，不抄第二份打桌包脚本）",
     )?.toContain("pnpm tauri build");
+    /* 由上面那一行直接推出来的那条安全前提（ISSUE #2883 把它变成判据，#2853 的期望 1 曾想反过来）：
+     * 这一档**有**会真构建的格子 ⇒ 它的安装格**不许**接依赖缓存槽。接槽形态下 `node_modules` 是
+     * 指向项目根之外的 junction，而 Turbopack 对这一条有硬要求（#2081 那次 13.8s 就死 + 后面整片
+     * `skipped`）—— 与每日档、`单跑构建` 档同一口径。谁要接，先证明 #2521 的
+     * `experimental.turbopackAdditionalRoots` 在**这一档**上跑得通，不是照别的档推。 */
+    const packageInstall = stageBlock(text, "打包·安装依赖");
+    expect(
+      packageInstall,
+      "`.cnb.yml` 里找不到「打包·安装依赖」那一格 —— 找不到就先断言找不到，" +
+        "否则下面那条「不许出现 `COMFY_CI_SLOT`」会退成一句恒真的空判",
+    ).toBeTruthy();
+    expect(
+      packageInstall ?? "",
+      "「打包·安装依赖」出现了 `COMFY_CI_SLOT` —— 桌包这一档后面有真构建格（`pnpm tauri build` → " +
+        "`build-desktop.mjs` → `pnpm build`），接槽会撞 #2081 那一形；要接得先验 #2521 的门",
+    ).not.toContain("COMFY_CI_SLOT");
 
     /* 工具预置那一格（ISSUE #2525）：它在不在、点的是谁、以及**排在真打包之前**。
      * 顺序是判据的一部分 —— 预置跑在 `pnpm tauri build` 之后等于没有：那一格的
@@ -2907,8 +2976,13 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   });
 
   it("「这一档有没有构建格」那张表不是空转：正例点得出格名，现役写法不误伤", () => {
-    /* 正例：构建那一跳以三种形态出现过（专用入口 / `pnpm build` 的字面 / 桌包脚本），
-     * 每一种都要被认出来 —— 认不出来的那张表，等于给 push 档留了一条「加了构建格而没人红」的门。 */
+    /* 正例：构建那一跳以几种形态出现过（专用入口 / `pnpm build` 的字面 / 直接点 `build-desktop.mjs`
+     * / **经 tauri 间接触发**），每一种都要被认出来 —— 认不出来的那张表，等于给接槽的那条安全
+     * 前提留了一扇「加了构建格而没人红」的门。
+     * ⚠️ 第四例（ISSUE #2883）原先写的是理想形态 `node tools/build/build-desktop.mjs --release`，
+     * 而现役配置那一行是 `pnpm tauri build`（`build-desktop.mjs` 的名字在 `tauri.conf.json` 的
+     * `beforeBuildCommand` 里，也在 `.cnb.yml` 那一格的**注释**里 —— 两者都不在这一族的输入面上）。
+     * 用例于是绿着，而它对现役配置的回答是假的：**正例必须长得像事实**。 */
     expect(
       stagesWithBuildConsumer(
         new Map([
@@ -2922,6 +2996,33 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       stagesWithBuildConsumer(new Map([["桌包", ["node tools/build/build-desktop.mjs --release"]]])),
     ).toEqual(["桌包"]);
+    expect(
+      stagesWithBuildConsumer(
+        new Map([
+          [
+            "打包·桌面成品构建",
+            ["node scripts/ci-cp936-exit.mjs -- pnpm tauri build"],
+          ],
+        ]),
+      ),
+      "经 tauri 间接触发的那一形没被认出来 —— 桌包档会被这张表判成「没有构建格」，" +
+        "而它那一格真的在跑 `build-desktop.mjs` → `pnpm build`（`src-tauri/tauri.conf.json` 的 " +
+        "`beforeBuildCommand`）⇒ 拿这张表去判断跑的档接不接槽，就会给出摘掉安全前提的答案",
+    ).toEqual(["打包·桌面成品构建"]);
+    /* 对**现役配置**判一次，而不是只对夹具判一次（这一句才是上面那枚标记的执行者）：
+     * 桌包那一档必须被认成"有构建格"。取不到格名 ⇒ 先断言取到了，否则下面那条会退成恒真的空判。 */
+    const configText = readRegisteredConfig();
+    const packageStages = pipelineStageNames(configText, "桌面成品包");
+    expect(
+      packageStages.length,
+      "解析不出「桌面成品包」那条流水线的 stage 名单 —— 下面那条判据就没有对象了",
+    ).toBeGreaterThan(0);
+    expect(
+      stagesWithBuildConsumer(
+        new Map(packageStages.map((n) => [n, executableScriptLines(configText, n)])),
+      ),
+      "桌包那一档里按现役配置认不出构建格 —— 那张表的量程又比它自称的小了一圈（#2883）",
+    ).toContain("打包·桌面成品构建");
     /* 反例：现役 push 清单里那几格的样子（安装 / typedoc / 文档对账 / 读 git 的脚本）。
      * 其中 `安装依赖` 那一行含 `ci-install-deps.mjs` —— 名字里带 "install"，别把它读成构建。 */
     expect(
@@ -3350,19 +3451,94 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
     }
   });
 
-  it("每个单跑格的正文与它对应的每日格逐字相同（副本不许漂）", () => {
+  it("每个单跑格的正文与它对应的真身格逐字相同（副本不许漂）", () => {
     const text = readRegisteredConfig();
     for (const target of ONESHOT_TARGETS) {
       for (const pair of oneshotPairs(target)) {
+        /* 真身默认是每日那一格；写了 `source` 的那一行跟着它登记的真身（目前只有
+         * `单跑单测·安装依赖` → push 的 `安装依赖`，理由整段写在注册表头注里，#2853）。
+         * 这里**不放宽比较面** —— 比的仍是同一个 `stageBody`（script / env / timeout），
+         * 换的只是"与谁相同"。 */
+        const sourceName = pair.source ?? pair.daily;
         const oneshotBody = stageBody(text, pair.oneshot);
-        const dailyBody = stageBody(text, pair.daily);
+        const dailyBody = stageBody(text, sourceName);
         expect(oneshotBody, `${pair.oneshot} 在配置里找不到那一项`).not.toBeNull();
-        expect(dailyBody, `${pair.daily} 在配置里找不到那一项`).not.toBeNull();
+        expect(dailyBody, `${sourceName} 在配置里找不到那一项`).not.toBeNull();
         expect(
           oneshotBody,
-          `${pair.oneshot} 的正文与 ${pair.daily} 不再逐字相同 —— 这就是「同一份脚本长在两条流水线上各漂一份」（ISSUE #2081 那一族）`,
+          `${pair.oneshot} 的正文与 ${sourceName} 不再逐字相同 —— 这就是「同一份脚本长在两条流水线上各漂一份」（ISSUE #2081 那一族）`,
         ).toBe(dailyBody);
       }
+    }
+  });
+
+  /**
+   * 接槽与构建消费者的那条线，**双向**都要有执行者（ISSUE #2853 / #2883 / #2851）：
+   *
+   *  · 一个方向是安全前提：置了 `COMFY_CI_SLOT` 的安装格，它所在那条档后面**不许**有会真构建的
+   *    格子（接槽把 `node_modules` 接成指向项目根之外的 junction，Turbopack 对此有硬要求 ——
+   *    #2081 那次 13.8s 就死 + 后面整片 `skipped`）；
+   *  · 另一个方向是防静默回退：注册表里指了 `source` 为接槽那一族的那些格，**必须真的**带着那枚
+   *    env —— 否则"按判据它该接"与"配置里它接了"两句话可以各自漂（摘掉那一行不会有任何一格红）。
+   *
+   * ⚠️ 这里刻意**不**判反过来的那一句（「没有构建格的档就必须接槽」）：`单跑E2E` 就是那条
+   * 不成立的逆命题 —— 它清单里没有构建消费者，但它后面那格带 `COMFY_E2E_SERVER: start`
+   * 而这一档没有构建格，`.next` 从哪来这件事没有读数（#2853 期望 2）。把"没判"写成"必须"
+   * 就是拿配置在场抵一次没跑过的前提。
+   */
+  it("接槽开关与构建消费者两两对得上：置了的必须有没构建的格，注册表认了的必须真置着", () => {
+    const text = readRegisteredConfig();
+    /** 每档：流水线名 → 它那一格的安装格名（名字逐字取自身配置，不做拼接）。 */
+    const laneInstall = [
+      { pipeline: "质量门禁", install: "Install dependencies" },
+      { pipeline: "master 合并复核", install: "安装依赖" },
+      { pipeline: "每日生产构建", install: "每日安装依赖" },
+      { pipeline: "桌面成品包", install: "打包·安装依赖" },
+      { pipeline: "单跑生产构建（手动触发）", install: "单跑构建·安装依赖" },
+      { pipeline: "单跑全量E2E（手动触发）", install: "单跑E2E·安装依赖" },
+      { pipeline: "单跑全量单测（手动触发）", install: "单跑单测·安装依赖" },
+    ];
+    /* 「这一格接了槽」认的是**那枚开关被置成 1**，不是"正文里出现过这个名字"：
+     * 判据 `ci-install-deps.mjs` 读的是 `COMFY_CI_SLOT === "1"`，所以把键改名
+     * （`COMFY_CI_SLOT_MUTATED: "1"`）或置成 `0` 都等于**没接**—— 用 `includes("COMFY_CI_SLOT")`
+     * 去认，改名那一形会同时骗过这里两个方向（安全侧假装"接了"、防回退侧假装"真接了"）。
+     * 单/双引号都认（env 值在 YAML 里两种写法等价），其余一律算"没接"。 */
+    const slotOn = (body: string): boolean => /COMFY_CI_SLOT:\s*["']1["']/.test(body);
+    for (const row of laneInstall) {
+      const stages = pipelineStageNames(text, row.pipeline);
+      expect(
+        stages.length,
+        `${row.pipeline} 那条流水线解析不出 stage —— 判据在这里没有对象`,
+      ).toBeGreaterThan(0);
+      const withBuild = stagesWithBuildConsumer(
+        new Map(stages.map((n) => [n, executableScriptLines(text, n)])),
+      );
+      if (slotOn(stageBody(text, row.install) ?? "")) {
+        expect(
+          withBuild,
+          `${row.pipeline} 的「${row.install}」把 \`COMFY_CI_SLOT\` 置成 1，而这一档后面有会真构建的格子` +
+            `（${withBuild.join(" / ")}）—— 接槽形态下 Turbopack 会拒那条链（#2081 那一形）`,
+        ).toEqual([]);
+      }
+    }
+    /* 注册表指了 `source` 的那些格：它们跟着的是**接槽那一族**，就必须真把那枚开关置成 1。 */
+    const followingSlotFamily = ONESHOT_TARGETS.flatMap((t) =>
+      (Array.isArray(t.prereqs) ? t.prereqs : [])
+        .filter((p) => typeof p?.source === "string" && p.source !== "")
+        .map((p) => p.oneshot),
+    );
+    expect(
+      followingSlotFamily.length,
+      "注册表里没有一格登记 `source` —— 上面那段因果就没有对象了（注册表被改回去而这里没跟上）",
+    ).toBeGreaterThan(0);
+    for (const name of followingSlotFamily) {
+      const body = stageBody(text, name) ?? "";
+      expect(
+        slotOn(body),
+        `「${name}」在注册表里跟着接槽那一族（source 指向置着开关的那一格），配置里却没把 ` +
+          '`COMFY_CI_SLOT` 置成 1 —— 摘掉那一行不会有任何别处红，所以这一句要在这里红。' +
+          `（该格正文：\n${body}）`,
+      ).toBe(true);
     }
   });
 

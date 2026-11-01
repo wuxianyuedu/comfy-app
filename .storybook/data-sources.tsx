@@ -368,9 +368,9 @@ export { APP_DEV_ORIGIN, APP_DEV_PORT, APP_DEV_PORT_SOURCE, DEFAULT_APP_ORIGIN }
  */
 export function appOriginChoices(
   dev: AppOrigin = {
-    APP_DEV_PORT: APP_DEV_PORT,
-    APP_DEV_ORIGIN: APP_DEV_ORIGIN,
-    APP_DEV_PORT_SOURCE: APP_DEV_PORT_SOURCE,
+    APP_DEV_PORT,
+    APP_DEV_ORIGIN,
+    APP_DEV_PORT_SOURCE,
   },
 ): Record<string, string> {
   return {

@@ -159,10 +159,10 @@ export function appendRun({ gitDir, record }) {
   try {
     fs.appendFileSync(file, `${JSON.stringify(record)}\n`, "utf8");
     return { ok: true };
-  } catch (err) {
+  } catch (error) {
     return {
       ok: false,
-      reason: err instanceof Error ? err.message : String(err),
+      reason: error instanceof Error ? error.message : String(error),
     };
   }
 }
@@ -528,8 +528,7 @@ export function formatReport(runs, opts = {}) {
     lines.push(`  D 组各步（中位数，前 ${Math.min(10, ranked.length)} 名）：`);
     for (const step of ranked.slice(0, 10)) {
       lines.push(
-        `    ${secs(step.ms).padStart(7)}  ${step.name}` +
-          (step.n < shown.length ? `（${step.n}/${shown.length} 次有记录）` : ""),
+        `    ${secs(step.ms).padStart(7)}  ${step.name}${step.n < shown.length ? `（${step.n}/${shown.length} 次有记录）` : ""}`,
       );
     }
   }
@@ -562,15 +561,14 @@ export function formatReport(runs, opts = {}) {
     lines.push("");
     lines.push(
       `  组 C 各文件（中位数，前 ${Math.min(10, ranked.length)} 名；` +
-        `共 ${ranked.length} 份有读数` +
-        (expected > 0 ? ` / 清单 ${expected} 份` : "") +
-        (missing > 0 ? `，缺 ${missing} 份**没有读数 —— 不是 0 秒**` : "") +
-        "）：",
+        `共 ${ranked.length} 份有读数${
+        expected > 0 ? ` / 清单 ${expected} 份` : ""
+        }${missing > 0 ? `，缺 ${missing} 份**没有读数 —— 不是 0 秒**` : ""
+        }）：`,
     );
     for (const f of ranked.slice(0, 10)) {
       lines.push(
-        `    ${secs(f.ms).padStart(7)}  ${f.name}` +
-          (f.n < shown.length ? `（${f.n}/${shown.length} 次有记录）` : ""),
+        `    ${secs(f.ms).padStart(7)}  ${f.name}${f.n < shown.length ? `（${f.n}/${shown.length} 次有记录）` : ""}`,
       );
     }
     if (cGroup) {
@@ -679,18 +677,17 @@ export function recordRun(argv, cwd = process.cwd()) {
     return 0;
   }
   process.stdout.write(
-    `[precommit-timing] 已记录本次耗时：总 ${secs(record.totalMs)}` +
-      `（${groups.length} 组 / ${steps.length} 步` +
-      (cRead.files.length > 0 ? ` / 组 C 分文件 ${cRead.files.length} 份` : "") +
-      "）\n" +
-      (cRead.missing > 0
+    `[precommit-timing] 已记录本次耗时：总 ${secs(record.totalMs)}（${groups.length} 组 / ${steps.length} 步${
+      cRead.files.length > 0 ? ` / 组 C 分文件 ${cRead.files.length} 份` : ""
+      }）\n${
+      cRead.missing > 0
         ? `[precommit-timing] 组 C 清单 ${cRead.expected} 份里有 ${cRead.missing} 份没给出读数` +
           "（加载即炸 / 被跳过 / reporter 没记上）—— 它们**不是 0 秒**，别按 0 算进砍线\n"
-        : "") +
-      (cRead.dropped > 0
+        : ""
+      }${cRead.dropped > 0
         ? `[precommit-timing] 有 ${cRead.dropped} 个 junit 读数解析不出，已跳过\n`
-        : "") +
-      (dropped > 0 ? `[precommit-timing] 有 ${dropped} 条耗时读数解析不出，已跳过\n` : ""),
+        : ""
+      }${dropped > 0 ? `[precommit-timing] 有 ${dropped} 条耗时读数解析不出，已跳过\n` : ""}`,
   );
   return 0;
 }

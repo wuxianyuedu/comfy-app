@@ -47,7 +47,7 @@ type FetchFn = (
 const ok = (payload: unknown = []): string => JSON.stringify(payload);
 const denied = (scope: string): string =>
   JSON.stringify({
-    errcode: 10023,
+    errcode: 10_023,
     errmsg: `The token's authorization scope does not match this request. Missing required scopes: ${scope}`,
   });
 const notFound = (): string => JSON.stringify({ errcode: 404, errmsg: "not found" });
@@ -101,7 +101,7 @@ describe("classifyReply：三句话的判据顺序", () => {
     expect(classifyReply("", { status: 0 }).why).toContain("没有响应正文");
     expect(classifyReply("<html>", { status: 502 }).why).toContain("既没有信封");
     expect(
-      classifyReply(JSON.stringify({ errcode: 10023, errmsg: "scope mismatch" }), { status: 403 })
+      classifyReply(JSON.stringify({ errcode: 10_023, errmsg: "scope mismatch" }), { status: 403 })
         .why,
     ).toContain("403");
   });

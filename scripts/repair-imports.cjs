@@ -63,9 +63,9 @@ function fixLiteralForms() {
         }
         const rel = path.posix.relative(
           path.posix.dirname(file),
-          "src/components/studio/" + target,
+          `src/components/studio/${target}`,
         );
-        return "import { " + sym + ' } from "' + (rel.startsWith(".") ? rel : "./" + rel) + '";';
+        return `import { ${sym} } from "${rel.startsWith(".") ? rel : `./${rel}`}";`;
       },
     );
     // @// 畸形 → @/components/studio/
@@ -89,7 +89,7 @@ function fixDynamicUndefined() {
   const src = fs.readFileSync(f, "utf8");
   const out = src.replaceAll(
     /import\("@\/components\/studio\/undefined"\)\.then\(\(mod\) => mod\.(\w+)\)/g,
-    (m, sym) => 'import("@/components/studio/' + sym + '").then((mod) => mod.' + sym + ")",
+    (m, sym) => `import("@/components/studio/${sym}").then((mod) => mod.${sym})`,
   );
   if (out !== src) {
     if (apply) {
@@ -104,7 +104,7 @@ function parseAndFixDepth() {
   let out;
   try {
     const res = runPnpmSync(["exec", "tsc", "--noEmit"], {
-      cwd: __dirname + "/..",
+      cwd: `${__dirname}/..`,
       timeoutMs: 900_000,
     });
     // 「命令没起来」不再塌成空 stdout：本脚本靠 tsc 的输出定位断链，
@@ -113,8 +113,8 @@ function parseAndFixDepth() {
       throw new Error(`起 pnpm 失败（${res.error.code ?? "UNKNOWN"}）：${res.error.message}`);
     }
     out = res.stdout;
-  } catch (e) {
-    out = String(e.stdout || "");
+  } catch (error) {
+    out = String(error.stdout || "");
   }
   const errs = [
     ...out.matchAll(/^(.+?)\((\d+),\d+\): error TS2307: Cannot find module '([^']+)'/gm),
@@ -164,7 +164,7 @@ function parseAndFixDepth() {
           : path.posix.normalize(path.posix.join(curDir, cand));
         if (exists(abs)) {
           if (cand !== mod) {
-            lines[idx] = lines[idx].split('"' + mod + '"').join('"' + cand + '"');
+            lines[idx] = lines[idx].split(`"${mod}"`).join(`"${cand}"`);
             touched = true;
           }
           break;

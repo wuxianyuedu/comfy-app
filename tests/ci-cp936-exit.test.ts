@@ -74,7 +74,7 @@ describe("CP936 出口：转码计划（本仓唯一能判「字节是 936 编�
 
   it("脚本按**参数给的那个**代码页取编码器（不是写死的第二个数字）", () => {
     expect(encodeCp936Plan().script).toContain("GetEncoding(936)");
-    expect(encodeCp936Plan(65001).script).toContain("GetEncoding(65001)");
+    expect(encodeCp936Plan(65_001).script).toContain("GetEncoding(65001)");
   });
 
   it("写的是**原始字节**：绕过控制台对象 + 从 stdin 读 + 显式 Flush", () => {
@@ -572,7 +572,7 @@ describe("CP936 出口：编排与退出码", () => {
     await runWithCp936Exit(["--", "some-thing", "x"], {
       platform: "win32",
       resolve: () => ({
-        command: "C:\\tools\\some-thing.EXE",
+        command: String.raw`C:\tools\some-thing.EXE`,
         args: ["x"],
         resolved: true,
       }),
@@ -585,7 +585,7 @@ describe("CP936 出口：编排与退出码", () => {
       out: () => undefined,
     });
     /* 起的是**解析出来的绝对路径**，不是调用方写的那个名字。 */
-    expect(seen[0]).toEqual({ cmd: "C:\\tools\\some-thing.EXE", args: ["x"] });
+    expect(seen[0]).toEqual({ cmd: String.raw`C:\tools\some-thing.EXE`, args: ["x"] });
   });
 
   it("**路径不进 PATH 查找**：`node_modules/.bin/tsc` 不是名字，别拿 PATH 去问它", () => {
@@ -625,7 +625,7 @@ describe("CP936 出口：编排与退出码", () => {
   it("Windows 的反斜杠路径同判「是路径」（两种分隔符都认）", () => {
     /* `.cnb.yml` 现在的写法是正斜杠，但 Windows 上两种分隔符都得认 ——
      * 只认 `/` 的判据在下一次有人写成 `\` 时就会把一条合法命令送去问 PATH。 */
-    const resolved = resolveShellInvocation("node_modules\\.bin\\tsc", ["--noEmit"]);
+    const resolved = resolveShellInvocation(String.raw`node_modules\.bin\tsc`, ["--noEmit"]);
     expect(resolved.resolved).toBe(true);
     expect(path.isAbsolute(resolved.command)).toBe(true);
   });
@@ -830,10 +830,10 @@ describe("CP936 出口：编排与退出码", () => {
     const withResolved = formatSpawnFailure({
       err: Object.assign(new Error("x"), { code: "ENOENT" }),
       command: "pnpm",
-      realCommand: "C:\\tools\\pnpm.EXE",
+      realCommand: String.raw`C:\tools\pnpm.EXE`,
       cwd: "/root/comfy-app-t3",
     });
-    expect(withResolved).toContain("C:\\tools\\pnpm.EXE");
+    expect(withResolved).toContain(String.raw`C:\tools\pnpm.EXE`);
     expect(enoent).not.toContain("通过解析口起的");
   });
 

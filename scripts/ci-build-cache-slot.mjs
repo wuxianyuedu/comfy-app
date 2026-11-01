@@ -219,8 +219,8 @@ export function linkBuildCache(io) {
       link,
       process.platform === "win32" ? "junction" : "dir",
     );
-  } catch (err) {
-    return { ...noop, why: `建链接失败（${errCode(err)}）⇒ 不接槽` };
+  } catch (error) {
+    return { ...noop, why: `建链接失败（${errCode(error)}）⇒ 不接槽` };
   }
   return {
     linked: true,
@@ -276,8 +276,7 @@ export function withBuildCacheSlot(run, io = {}) {
   });
   log(`[构建缓存槽] 槽根来源：${resolved.from}`);
   log(
-    `[构建缓存槽] 面 ${(face ?? "取不到").slice(0, 12)}·结论 ${plan.action}` +
-      (plan.path ? `·槽 ${plan.path}` : ""),
+    `[构建缓存槽] 面 ${(face ?? "取不到").slice(0, 12)}·结论 ${plan.action}${plan.path ? `·槽 ${plan.path}` : ""}`,
   );
   log(`[构建缓存槽]   ${plan.why}`);
 

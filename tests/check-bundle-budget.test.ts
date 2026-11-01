@@ -191,7 +191,7 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
     /* 只把已有的一个 chunk 变大：文件数不变，落进「gzip 总量上升」那一档。 */
-    chunk(repo, "0800.js", `/* ${"g".repeat(20000)} */\n`);
+    chunk(repo, "0800.js", `/* ${"g".repeat(20_000)} */\n`);
 
     const blocked = repo.run(enforce());
     expect(blocked.code, blocked.output).toBe(1);
@@ -413,7 +413,7 @@ describe("check-bundle-budget.cjs（开发期暂撤两条总量判据，ISSUE #2
     expect(repo.run(["--update"]).code).toBe(0);
     /* 新增一个 chunk（文件数 +1）且让内容比基线里任何一块都大（gzip 总量上升）——
      * 两条被暂撤的判据**同时**命中，正是 #2634 现场那种形态。 */
-    chunk(repo, "99-growth.js", `/* ${"x".repeat(40000)} */\n`);
+    chunk(repo, "99-growth.js", `/* ${"x".repeat(40_000)} */\n`);
   };
 
   test("默认档：同一份超限读数退 0，判决行走 **stdout** 明写今天没判", ({ repo }) => {
@@ -466,7 +466,7 @@ describe("check-bundle-budget.cjs（开发期暂撤两条总量判据，ISSUE #2
   test("--update 的拒涨棘轮一条没动（暂撤不延伸到基线那一本账）", ({ repo }) => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
-    chunk(repo, "99-growth.js", `/* ${"y".repeat(40000)} */\n`);
+    chunk(repo, "99-growth.js", `/* ${"y".repeat(40_000)} */\n`);
     /* 抬高基线仍要显式 `--allow-increase` —— 这一档与总量判据无关，撤档不该顺手放开它。 */
     const refused = repo.run(["--update"]);
     expect(refused.code, refused.output).toBe(1);

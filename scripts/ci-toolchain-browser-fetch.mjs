@@ -84,7 +84,7 @@ import { inflateRawSync } from "node:zlib";
 export const FETCH_CHUNK_BYTES = 4 * 1024 * 1024;
 
 /** 单片默认的**空闲**超时（毫秒）。它只关「多久放弃这一片」，不改「走不走得完」。 */
-export const FETCH_CHUNK_TIMEOUT_MS = 30000;
+export const FETCH_CHUNK_TIMEOUT_MS = 30_000;
 
 /** 单片默认重试几次（**只重试这一片**，已落盘的部分不重下）。 */
 export const FETCH_CHUNK_RETRIES = 3;
@@ -104,7 +104,7 @@ export const FETCH_MIN_CHUNK_BYTES = 16 * 1024;
  * 「片长降到下限后一片也走不完」时无限重试。114 MiB 按 16 KiB 一片约 7300 片，
  * 所以上限取 16k 时**留有退到下限仍能走完**的余量（1 GiB 的包也够）。
  */
-export const FETCH_MAX_CHUNKS = 16384;
+export const FETCH_MAX_CHUNKS = 16_384;
 
 /**
  * 把 `url` **分片**拉到 `dest`，已存在且长度对得上就直接算完成（可重入）。
@@ -314,12 +314,12 @@ export function fetchRangeToFile(url, dest, offset, size, timeoutMs, { probeOnly
     writeFileSync(dest, part, { flag: "a" });
     rmSync(scratch, { force: true });
     return { bytes: part.length, total, out };
-  } catch (e) {
+  } catch (error) {
     rmSync(scratch, { force: true });
     return {
       bytes: -1,
       total: null,
-      out: `接片失败：${e instanceof Error ? e.message : String(e)}`,
+      out: `接片失败：${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }
@@ -530,8 +530,8 @@ export function extractZipTo(zip, dir) {
   let buf;
   try {
     buf = readFileSync(zip);
-  } catch (e) {
-    return `zip 读不出来：${e instanceof Error ? e.message : String(e)}`;
+  } catch (error) {
+    return `zip 读不出来：${error instanceof Error ? error.message : String(error)}`;
   }
   const entries = readCentralDirectory(buf);
   if (typeof entries === "string") {
@@ -553,8 +553,8 @@ export function extractZipTo(zip, dir) {
       data = e.stored
         ? buf.subarray(e.dataOffset, e.dataOffset + e.compressedSize)
         : inflateRawSync(buf.subarray(e.dataOffset, e.dataOffset + e.compressedSize));
-    } catch (err) {
-      return `解压 ${e.name} 失败：${err instanceof Error ? err.message : String(err)}`;
+    } catch (error) {
+      return `解压 ${e.name} 失败：${error instanceof Error ? error.message : String(error)}`;
     }
     mkdirSync(path.dirname(target), { recursive: true });
     writeFileSync(target, data);
@@ -583,8 +583,8 @@ export function extractZipTo(zip, dir) {
 function readCentralDirectory(buf) {
   /* EOCD 在文件尾、后面最多 64 KiB 的注释（规格允许）。 */
   let eocd = -1;
-  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i -= 1) {
-    if (buf.readUInt32LE(i) === 0x06054b50) {
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65_535); i -= 1) {
+    if (buf.readUInt32LE(i) === 0x06_05_4b_50) {
       eocd = i;
       break;
     }
@@ -596,7 +596,7 @@ function readCentralDirectory(buf) {
   let p = buf.readUInt32LE(eocd + 16);
   const out = [];
   for (let n = 0; n < count; n += 1) {
-    if (p + 46 > buf.length || buf.readUInt32LE(p) !== 0x02014b50) {
+    if (p + 46 > buf.length || buf.readUInt32LE(p) !== 0x02_01_4b_50) {
       return `central directory 第 ${n} 条读不动`;
     }
     const madeBy = buf.readUInt16LE(p + 4);
@@ -613,7 +613,7 @@ function readCentralDirectory(buf) {
     const name = buf.toString("utf8", p + 46, p + 46 + nameLen);
     /* local header 的长度能变（`extra` 与 central directory 那份不一样），
      * 所以数据偏移必须**现读 local header**而不是照抄 central 的 extra 长度。 */
-    if (localOffset + 30 > buf.length || buf.readUInt32LE(localOffset) !== 0x04034b50) {
+    if (localOffset + 30 > buf.length || buf.readUInt32LE(localOffset) !== 0x04_03_4b_50) {
       return `${name} 的 local header 读不动`;
     }
     const lName = buf.readUInt16LE(localOffset + 26);

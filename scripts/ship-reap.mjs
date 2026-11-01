@@ -138,9 +138,9 @@ export async function reapCheckoutInstances({ root, log, run, read = readAppInst
   let live;
   try {
     live = await read(root);
-  } catch (e) {
+  } catch (error) {
     log(
-      `[ship] 归属判据没跑起来（${e instanceof Error ? e.message : String(e)}）` +
+      `[ship] 归属判据没跑起来（${error instanceof Error ? error.message : String(error)}）` +
         " ⇒ 这一格落「没跑起来」，既不判已回收、也不判有残留",
     );
     return CODE.NOT_RUN;
@@ -166,11 +166,11 @@ export async function reapCheckoutInstances({ root, log, run, read = readAppInst
     for (const line of out.split("\n").filter(Boolean)) {
       log(`[ship]   ${pid}：${line}`);
     }
-    if (r.status !== 0) {
+    if (r.status === 0) {
+      codes.push(CODE.GREEN);
+    } else {
       log(`[ship]   ${pid}：回收入口退 ${r.status} ⇒ 这一格是红的（不假定它收掉了）`);
       codes.push(CODE.RED);
-    } else {
-      codes.push(CODE.GREEN);
     }
   }
 
@@ -178,9 +178,9 @@ export async function reapCheckoutInstances({ root, log, run, read = readAppInst
   let after;
   try {
     after = await read(root);
-  } catch (e) {
+  } catch (error) {
     log(
-      `[ship] 回读归属判据没跑起来（${e instanceof Error ? e.message : String(e)}）` +
+      `[ship] 回读归属判据没跑起来（${error instanceof Error ? error.message : String(error)}）` +
         " ⇒ 不记「已回收」，这一格落「没跑起来」（收令发出去了，落没落不知道）",
     );
     return CODE.NOT_RUN;

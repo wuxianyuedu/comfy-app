@@ -46,7 +46,7 @@ export async function generateWorkflowPortrait(
    *  不再下发 "WxH" 兼容字段。 */
   const { input } = await buildLibraryWorkflowInput(opts.workflowId, {
     prompt: req.prompt,
-    ...(req.negative !== undefined ? { negativePrompt: req.negative } : {}),
+    ...(req.negative === undefined ? {} : { negativePrompt: req.negative }),
     size: req.size,
   });
   const taskId = await startLocalGenerate(input);

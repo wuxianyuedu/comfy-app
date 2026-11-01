@@ -284,9 +284,9 @@ function faceProblems(cfg, ran, face = cfg.ok ? cfg.mjs : []) {
   const { missed } = diskFace(cfg.mjs, cfg.excludes);
   if (missed.length) {
     problems.push(
-      `判决面漏了这些 .mjs（盘上有、配置没收到）：\n` +
-        missed.map((f) => `    · ${f}`).join("\n") +
-        `\n  要么 ${CONFIG_REL} 的 include 被改窄了，要么它落进了一个新的 exclude 条目`,
+      `判决面漏了这些 .mjs（盘上有、配置没收到）：\n${
+        missed.map((f) => `    · ${f}`).join("\n")
+        }\n  要么 ${CONFIG_REL} 的 include 被改窄了，要么它落进了一个新的 exclude 条目`,
     );
   }
   if (ran.listed.length) {
@@ -296,12 +296,12 @@ function faceProblems(cfg, ran, face = cfg.ok ? cfg.mjs : []) {
     const notRun = face.filter((f) => !listed.has(f));
     if (notRun.length) {
       problems.push(
-        `配置声称在判、tsc 却没报回来这些文件（⇒ 这一跑不可信）：\n` +
+        `配置声称在判、tsc 却没报回来这些文件（⇒ 这一跑不可信）：\n${
           notRun
             .slice(0, 10)
             .map((f) => `    · ${f}`)
-            .join("\n") +
-          (notRun.length > 10 ? `\n    · …共 ${notRun.length} 份` : ""),
+            .join("\n")
+          }${notRun.length > 10 ? `\n    · …共 ${notRun.length} 份` : ""}`,
       );
     }
   }
@@ -409,8 +409,8 @@ function readBaseline() {
   }
   try {
     return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-  } catch (e) {
-    return { __broken: `基线文件不是合法 JSON：${e.message}` };
+  } catch (error) {
+    return { __broken: `基线文件不是合法 JSON：${error.message}` };
   }
 }
 
@@ -468,8 +468,8 @@ function main(io = {}) {
   let ts;
   try {
     ts = require("typescript");
-  } catch (e) {
-    console.error(`${TAG} ✗ 取不到 typescript（判决面对账要用它自己的 glob 引擎）：${e.message}`);
+  } catch (error) {
+    console.error(`${TAG} ✗ 取不到 typescript（判决面对账要用它自己的 glob 引擎）：${error.message}`);
     return 2;
   }
 
@@ -495,8 +495,8 @@ function main(io = {}) {
   if (untracked.length) {
     console.log(
       `${TAG} 面外未入库 ${untracked.length} 份（磁盘上有、git 清单里没有 ⇒ 不进账、` +
-        `它们的红也不记账，但逐景点名）：\n` +
-        untracked.map((f) => `    · ${f}`).join("\n"),
+        `它们的红也不记账，但逐景点名）：\n${
+        untracked.map((f) => `    · ${f}`).join("\n")}`,
     );
   }
 
@@ -518,7 +518,7 @@ function main(io = {}) {
 
   const problems = faceProblems(cfg, { listed }, face);
   if (problems.length) {
-    console.error(`${TAG} ✗ 判决面不自证：\n  ` + problems.join("\n  "));
+    console.error(`${TAG} ✗ 判决面不自证：\n  ${problems.join("\n  ")}`);
     return 1;
   }
   if (noRun) {
@@ -620,11 +620,8 @@ function main(io = {}) {
     }
     if (grows.length) {
       console.error(
-        `${TAG} ✗ 拒绝 --update：棘轮只许降。下面这些格子比基线**多**（不是总量比较——\n` +
-          `${TAG}   总量降了也可能夹带一份新文件的红，那正是要拦的方向）：\n` +
-          grows.join("\n") +
-          `\n${TAG}   先把它改掉，再跑 --update 把基线收紧到当前实测；确属判据变更（现为 ` +
-          `${TAG}   ruleVersion=${RULE_VERSION}）才先改脚本里的常数，再跑 --update。`,
+        `${TAG} ✗ 拒绝 --update：棘轮只许降。下面这些格子比基线**多**（不是总量比较——\n${TAG}   总量降了也可能夹带一份新文件的红，那正是要拦的方向）：\n${grows.join("\n")
+          }\n${TAG}   先把它改掉，再跑 --update 把基线收紧到当前实测；确属判据变更（现为 ${TAG}   ruleVersion=${RULE_VERSION}）才先改脚本里的常数，再跑 --update。`,
       );
       return 1;
     }
@@ -660,12 +657,9 @@ function main(io = {}) {
   }
   if (grows.length) {
     console.error(
-      `${TAG} ✗ 脚本档新增类型错误 / 死代码（ISSUE #2524 / 规范 §13.5.14）：\n` +
-        grows.join("\n") +
-        `\n${TAG}   这一档的面是全量 \`**/*.mjs\`，**新写的脚本零容忍**（基线里没有的格子就是新增）。\n` +
-        `${TAG}   修法是把它写干净（补 JSDoc 类型 / 加守卫 / 删死声明），**不许用 \`--update\`** 把\n` +
-        `${TAG}   新增的格子登记成「已知」；确实改不动的，请单独立单、在评审里写清理由，\n` +
-        `${TAG}   再由那张单决定怎么处理，而不是在这里抬账。`,
+      `${TAG} ✗ 脚本档新增类型错误 / 死代码（ISSUE #2524 / 规范 §13.5.14）：\n${
+        grows.join("\n")
+        }\n${TAG}   这一档的面是全量 \`**/*.mjs\`，**新写的脚本零容忍**（基线里没有的格子就是新增）。\n${TAG}   修法是把它写干净（补 JSDoc 类型 / 加守卫 / 删死声明），**不许用 \`--update\`** 把\n${TAG}   新增的格子登记成「已知」；确实改不动的，请单独立单、在评审里写清理由，\n${TAG}   再由那张单决定怎么处理，而不是在这里抬账。`,
     );
     return 1;
   }
@@ -681,9 +675,9 @@ function main(io = {}) {
   }
   if (dropped.length && !masked.length) {
     console.log(
-      `${TAG} 检测到 ${dropped.length} 格下降，请收紧基线：\n  ` +
-        dropped.join("\n  ") +
-        `\n  执行 node scripts/check-scripts-typecheck.cjs --update`,
+      `${TAG} 检测到 ${dropped.length} 格下降，请收紧基线：\n  ${
+        dropped.join("\n  ")
+        }\n  执行 node scripts/check-scripts-typecheck.cjs --update`,
     );
   }
   if (masked.length) {

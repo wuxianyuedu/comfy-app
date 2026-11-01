@@ -86,11 +86,11 @@ if (entry === null) {
   process.stderr.write(
     inManifest
       ? `[ci-run-tool] 解析不到垫片「${name}」指向的包真身入口 —— ` +
-          "仓内声明了这个依赖但 `.bin` 里没有垫片：要么没装（先 `pnpm install`，" +
-          "别当成「本机跑不了」），要么 pnpm 换了垫片的写法。" +
-          "自查：`node scripts/package-bin-entry.mjs --by-name " +
-          name +
-          "`\n"
+          `仓内声明了这个依赖但 \`.bin\` 里没有垫片：要么没装（先 \`pnpm install\`，` +
+          `别当成「本机跑不了」），要么 pnpm 换了垫片的写法。` +
+          `自查：\`node scripts/package-bin-entry.mjs --by-name ${
+          name
+          }\`\n`
       : `[ci-run-tool] 「${name}」不在仓内 \`node_modules/.bin\` 的面里 —— ` +
           "本入口只管仓内垫片；全局 CLI（cnb 那一族）走 `scripts/ship-exec.mjs` 的 " +
           "`pnpmInvocation(args, { name })`（实测经 PowerShell 宿主起得来），" +

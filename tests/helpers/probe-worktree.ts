@@ -48,7 +48,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 /** 一份一次性克隆：`dir` 是它的工作树根，`dispose()` 注销它。 */
-export interface ProbeTree {
+export type ProbeTree = {
   /** 覆盖进克隆的那些相对路径（带状态前缀）。出问题第一个该看的就是这份清单。 */
   carried: Array<string>;
   dir: string;
@@ -56,7 +56,7 @@ export interface ProbeTree {
 }
 
 /** `git status --porcelain=v1 -z` 的一条记录。 */
-interface StatusEntry {
+type StatusEntry = {
   path: string;
   /** 两格状态码（`??` = 未跟踪） */
   xy: string;
@@ -120,7 +120,7 @@ function git(cwd: string, args: Array<string>): string {
  * 把磁盘弄坏去测，那不可重复 —— 而这一格恰恰是本次改动里最容易悄悄漏掉的一条
  * （现场：第一版的 `sep` 写错，拷贝那一步当场抛，登记就留在了仓库上）。
  */
-export interface ProbeTreeIo {
+export type ProbeTreeIo = {
   copyFile: (src: string, dst: string) => void;
 }
 
@@ -152,14 +152,14 @@ export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): Pro
   const dir = join(parent, "tree");
   try {
     git(realRoot, ["worktree", "add", "--detach", dir, "HEAD"]);
-  } catch (e) {
+  } catch (error) {
     rmSync(parent, { recursive: true, force: true });
     throw new Error(
-      `建一次性工作树克隆失败 —— 本件**不退回真实树**（那等于把隔离关掉而账面照样绿）：` +
-        String(e instanceof Error ? e.message : e),
+      `建一次性工作树克隆失败 —— 本件**不退回真实树**（那等于把隔离关掉而账面照样绿）：${
+        String(error instanceof Error ? error.message : error)}`,
       /* cause 留着：这一句要说的是「不退回」这件事，而**为什么**建不出来是 git 的原文，
        * 少了 cause 排查的人只能去手跑一次 worktree add。 */
-      { cause: e },
+      { cause: error },
     );
   }
   const carried: Array<string> = [];
@@ -170,7 +170,7 @@ export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): Pro
    * 拷贝那一步当场抛 ⇒ 一条登记留在了临时目录上。 */
   try {
     carryWorkingTreeChanges(realRoot, dir, carried, io);
-  } catch (e) {
+  } catch (error) {
     try {
       git(realRoot, ["worktree", "remove", "--force", dir]);
     } catch {
@@ -178,12 +178,12 @@ export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): Pro
        * 但要把这条留在哪说清楚，否则人只能自己 `git worktree list` 去撞。 */
       rmSync(parent, { recursive: true, force: true });
       throw new Error(
-        `${String(e instanceof Error ? e.message : e)}` +
+        `${String(error instanceof Error ? error.message : error)}` +
           ` —— 且克隆注销失败，需要手工执行：git worktree remove --force ${dir}`,
       );
     }
     rmSync(parent, { recursive: true, force: true });
-    throw e;
+    throw error;
   }
   return {
     dir,

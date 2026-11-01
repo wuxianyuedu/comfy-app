@@ -343,10 +343,10 @@ const bySection = fragments.reduce(
   /** @type {Record<string, string[]>} */ ({}),
 );
 console.log(
-  `[merge-changelog] 待并入 ${fragments.length} 个碎片:` +
+  `[merge-changelog] 待并入 ${fragments.length} 个碎片:${
     Object.entries(bySection)
       .map(([s, ns]) => `\n  ${s}: ${ns.join(", ")}`)
-      .join(""),
+      .join("")}`,
 );
 
 /* 锚:**本轮条目里最早的那个提交**。显式给的优先,否则取当前 HEAD —— 碎片是随那次
@@ -356,10 +356,10 @@ let anchorRev = anchorRevArg;
 if (anchorRev === null) {
   try {
     anchorRev = headRev();
-  } catch (err) {
+  } catch (error) {
     console.error(
       `[merge-changelog] 取不到当前 HEAD(${
-        err instanceof Error ? err.message : String(err)
+        error instanceof Error ? error.message : String(error)
       })—— 并入必须知道「这一轮条目里` +
         `最早的是哪个提交」,请用 --anchor <commit> 显式给出(裸目录 / tarball 解包的检出)`,
     );

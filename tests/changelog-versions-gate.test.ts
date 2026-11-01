@@ -18,8 +18,7 @@
  */
 import { execFileSync } from "node:child_process";
 
-import { defineGateRepo } from "./helpers/gate-repo";
-import { describe } from "./helpers/gate-repo";
+import { defineGateRepo, describe } from "./helpers/gate-repo";
 
 /* 判据靠 `__dirname/..` 定位仓库根，脚本必须落在 `scripts/` 下；
  * `CHANGELOG.md` 是它的唯一输入，每个工作区自己造一份。
@@ -176,7 +175,7 @@ describe("changelog-versions —— 跨锚分裂（本条判据的主判据）",
         "# 更新日志",
         "",
         "## [Unreleased]",
-        "<!-- since: " + headSha(repo) + " — 第一批 -->",
+        `<!-- since: ${headSha(repo)} — 第一批 -->`,
         "",
         "### Added",
         "",

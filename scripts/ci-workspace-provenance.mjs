@@ -224,9 +224,9 @@ export function provenanceVerdict(input) {
   if (offenders.length > 0) {
     red = true;
     lines.push(
-      `写脏·红 ${offenders.length} 处 tracked 改动不在登记过的写者名单里：` +
-        offenders.slice(0, 10).join(", ") +
-        (offenders.length > 10 ? ` …另 ${offenders.length - 10} 处` : ""),
+      `写脏·红 ${offenders.length} 处 tracked 改动不在登记过的写者名单里：${
+        offenders.slice(0, 10).join(", ")
+        }${offenders.length > 10 ? ` …另 ${offenders.length - 10} 处` : ""}`,
     );
     lines.push(
       `  允许名单（派生自 AUTOFIX_DUTIES 的 outputs）：${prefixes.join(", ") || "（空）"}`,

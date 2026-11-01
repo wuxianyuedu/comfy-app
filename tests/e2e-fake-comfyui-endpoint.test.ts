@@ -67,8 +67,8 @@ function readText(rel: string): string {
 const REAL_PAYLOAD = {
   system: {
     os: "win32",
-    ram_total: 34204610560,
-    ram_free: 7156305920,
+    ram_total: 34_204_610_560,
+    ram_free: 7_156_305_920,
     comfyui_version: "0.37.0",
   },
   devices: [],
@@ -111,7 +111,7 @@ describe("替身与真件分居两个端口（ISSUE #1756 的修复取向）", (
     /* 「换端口」是 `describeSlotConflict` 给出的出口①。它必须真的生效，且是
      * **一处生效、处处生效** —— 应用连的地址与替身监听的地址不能各说一套。 */
     const env = envWith({ [FAKE_COMFY_PORT_ENV_KEY]: "18999" });
-    expect(resolveFakeComfyuiPort(env)).toBe(18999);
+    expect(resolveFakeComfyuiPort(env)).toBe(18_999);
     expect(fakeComfyuiBaseUrl({ env })).toBe(`http://${FAKE_COMFYUI_HOST}:18999`);
     expect(fakeComfyuiStatsUrl({ env })).toBe(`http://${FAKE_COMFYUI_HOST}:18999/system_stats`);
     expect(fakeComfyuiEnv({ env })).toEqual({

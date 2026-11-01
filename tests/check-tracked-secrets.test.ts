@@ -29,7 +29,7 @@ const FAKE_AKIA = "AKIA" + "I5JOEXAMPLEKEY4X";
 const FAKE_SLACK = "xoxb-" + "7f2A9bQeRtY1uIoPaSdFgH";
 const FAKE_AIZA = "AIza" + "SyA1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6q";
 const FAKE_SK = "sk-" + "aB3xY9zQ2wErT6uIoPaS8dF1";
-const FAKE_PEM_BODY = "MIIEpAIBAAKC" + "a".repeat(64);
+const FAKE_PEM_BODY = `MIIEpAIBAAKC${"a".repeat(64)}`;
 const FAKE_ASSIGN_VALUE = "aB3-" + "xY9zQ2wErT6uIoPaS8dF";
 const FAKE_BEARER = "Bearer " + "MDk2RElTabcdef01234567" + "89";
 const FAKE_URL_PASS = "Sup3r" + "Secret99";
@@ -56,7 +56,7 @@ describe("前缀锚定类：出现即红（不看熵）", () => {
     expect(
       shapesOf("const PEM_BLOCK_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;"),
     ).toEqual([]);
-    expect(shapesOf("re: /\\bghp_[0-9A-Za-z]{36,}\\b/g")).toEqual([]);
+    expect(shapesOf(String.raw`re: /\bghp_[0-9A-Za-z]{36,}\b/g`)).toEqual([]);
   });
 });
 
