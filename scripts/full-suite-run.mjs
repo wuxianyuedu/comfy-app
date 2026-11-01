@@ -605,8 +605,13 @@ async function main(argv) {
      * 真要在意的是「别拿上一轮冒充这一轮」，所以下面打印时把落点一起打出来。 */
   }
   /* 停用台账（ISSUE #2948）：平台这一档里暂不执行的三条（业主口径「先临时关掉，
-   * 后面再开」）在这里剔掉 —— 名字留在固定清单里，本地钩子照跑，剔的只是这一跑的
-   * 收集面。剔了就不记账（`planRun` 的 `exclude` 一节），并把这个缺口说在明处。 */
+   * 后面再开」）在这里剔掉 —— 名字留在固定清单里，剔的只是这一跑的收集面。
+   * ⚠️ 别把这句读成「本地钩子照跑」（ISSUE #2957 就是来堵它的）：固定清单的本地执行者是
+   * 组 C，而它在 `.githooks/pre-commit` 的 `run_group()` 里对 `C` 写 `.skip` 后 `return 0`
+   * （2026-10-20 撤的，`COMFY_HEAVY_GATES=1` 也换不回来）。⇒ 停用期间这三条用例文件
+   * 没有自动执行者，事实由台账的 `executorsNow: []` 明写、由
+   * `tests/suspended-gate-tests.test.ts` 与钩子对账。剔了就不记账（`planRun` 的
+   * `exclude` 一节），并把这个缺口说在明处。 */
   const suspended = [...suspendedNames()];
   process.stderr.write(suspendedReading(suspended));
   if (suspended.length > 0) {

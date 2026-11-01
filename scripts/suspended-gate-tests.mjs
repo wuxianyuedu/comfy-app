@@ -16,11 +16,19 @@
  * ## 三条规矩（与 `.cnb.yml` 的「停用 ≠ 删除」同一口径）
  *
  * 1. **名字留在清单里**，只是不再进 vitest 的位置参数 —— 台账是第二份名单，不是删改。
- * 2. **本地钩子不许跟着停**：`affected-tests.mjs` 的 C 组跑的是同一份清单，这里过滤的
- *    只是**平台那两格（fixed 段 / 全量档）**。判据要是连本地一起关，那就是「没人跑了」，
- *    而平台读数只说明「这一格今天不算它」，不说明这批判据可以不存在。
- * 3. **每一条都要说清「谁还在跑它」**：`localExecutor` 为空的条目在平台两格上就是
- *    零执行者，那不该被这一层放行。
+ * 2. **只过滤平台那两格（`fixed` 段 / 每日全量档）**，清单与判据本体一个字都不改。
+ *    但**不要把它读成"本地还有一层兜底"**（ISSUE #2957 就是来堵这句的）：固定清单的本地
+ *    执行者一直是钩子的组 C，而组 C 自 2026-10-20 起在 `run_group()` 里对 `C` 写 `.skip`
+ *    直接 `return 0`（AGENTS 硬规则 7：`COMFY_HEAVY_GATES=1` 也换不回来）。
+ *    ⇒ 停用期间这三条用例文件的自动执行者集合是**空**，代价由 `executorsNow: []` 明写，
+ *      不由任何一句"本地照跑"承担。判据**本体**（`eslint` / `base-check.mjs` /
+ *      `check-bundle-budget.cjs`）仍在各自的门禁里跑，那是另一件事，写在 `guardNote`。
+ * 3. **每一条都要写清「停用期间还剩谁在跑这条用例文件」**（`executorsNow`）：
+ *    这个字段**不是自述**，它由 `tests/suspended-gate-tests.test.ts` 与钩子的机器事实对账 ——
+ *    组 C 的本地执行者自 2026-10-20 撤了（`.githooks/pre-commit` 的 `run_group()` 对 `C`
+ *    写 `.skip` 后 `return 0`，`COMFY_HEAVY_GATES=1` 也换不回来），所以「本地钩子组 C」
+ *    **不能**被写成执行者：那样一句会把「这三条此刻一个自动执行者都没有」读成"还有一层兜底"。
+ *    允许写空数组 —— 空就是空，读数里会照实说"只剩人工"。
  */
 
 /**
@@ -40,7 +48,10 @@
  *
  * 恢复动作：从这份表里删掉那一行 —— 清单本身一个字都不用改。
  *
- * @type {ReadonlyArray<SuspendedTest & { localExecutor: string }>}
+ * `executorsNow` = 停用期间**这条用例文件**还剩哪些自动执行面（空数组就是空）；
+ * `guardNote` = 判据**本体**此刻仍在哪儿跑（两件事不许混写，见文件头规矩 2）。
+ *
+ * @type {ReadonlyArray<SuspendedTest & { executorsNow: ReadonlyArray<string>, guardNote: string }>}
  */
 export const SUSPENDED_GATE_TESTS = [
   {
@@ -49,7 +60,11 @@ export const SUSPENDED_GATE_TESTS = [
     why:
       "635.3s（平台实测，`scripts/.test-file-timing.json` 里入库读数是 238.5s）：它是 eslint 档位的" +
       "阳性对照，每次真起一次 eslint 冷启动（#2862 记过这一档的冷启动代价）",
-    localExecutor: "本地钩子组 C（`affected-tests.mjs` 的固定清单，不经本台账过滤）",
+    executorsNow: [],
+    guardNote:
+      "判据本体（eslint 那一批）仍在推送那一跳的 `check:premerge` 与平台档里跑；" +
+      "停的是这条**阳性对照** —— 停用期间 eslint 档位合并行为没人验证，只剩人工 " +
+      "`pnpm exec vitest run tests/eslint-gate-canary.test.ts`",
     resume: "等 #2862 的冷启动代价降下来，或这一格的墙钟预算重新有富余",
   },
   {
@@ -58,7 +73,10 @@ export const SUSPENDED_GATE_TESTS = [
     why:
       "209.0s（平台实测，入库读数 103.7s）：在临时工作区里真起 `base-check.mjs` 复算五态，" +
       "每条用例一次子进程",
-    localExecutor: "本地钩子组 C；绕过门槛时人自己跑 `node scripts/base-check.mjs`（判据本体仍在）",
+    executorsNow: [],
+    guardNote:
+      "判据本体 `node scripts/base-check.mjs` 是人随时可跑的只读入口（归因仍可用）；" +
+      "停的是它自己的四态用例 —— 停用期间它回归不了，改坏了没人拦",
     resume: "等复算链不再逐条起子进程，或这一格墙钟预算有富余",
   },
   {
@@ -67,7 +85,10 @@ export const SUSPENDED_GATE_TESTS = [
     why:
       "174.0s（平台实测，入库读数 247.2s）：把判据当黑盒跑在临时工作区里，`--update` / 拒绝话术" +
       "每一格一次真跑",
-    localExecutor: "本地钩子组 C；产物层另有 `pnpm build` 收尾那一次真跑判据",
+    executorsNow: [],
+    guardNote:
+      "判据本体仍在 `pnpm build` 收尾与 `pnpm check:bundle` 两处真跑；停的是它的**自检用例**" +
+      "（体积棘轮会不会阻断、是不是空转，停用期间没人验）",
     resume: "等这一格墙钟预算有富余（这一批三条一起恢复）",
   },
 ];
@@ -109,7 +130,7 @@ export function withoutSuspended(files, ledger = SUSPENDED_GATE_TESTS) {
  * 「这一格今天少跑了三条」与「这三条根本不在清单里」在日志里逐字同形。
  *
  * @param {string[]} dropped 本次被剔除的用例
- * @param {ReadonlyArray<SuspendedTest & {localExecutor?: string}>} [ledger]
+ * @param {ReadonlyArray<SuspendedTest & {executorsNow?: ReadonlyArray<string>, guardNote?: string}>} [ledger]
  * @returns {string} 末尾带换行；没有剔除项时返回空串
  */
 export function suspendedReading(dropped, ledger = SUSPENDED_GATE_TESTS) {
@@ -122,12 +143,19 @@ export function suspendedReading(dropped, ledger = SUSPENDED_GATE_TESTS) {
     if (!one) {
       return `  · ${rel}（台账里没有这一条 —— 清单与报名对不上，先补登记）`;
     }
-    const local = one.localExecutor ? `；本地执行者：${one.localExecutor}` : "";
-    return `  · ${rel}（ISSUE #${one.issue}：${one.why}${local}；恢复：${one.resume}）`;
+    const now = one.executorsNow ?? [];
+    /* 这一句必须说实话（ISSUE #2957）：固定清单的本地执行者是钩子的组 C，而它已被撤，
+     * 所以"本地钩子照跑"是不存在的兜底。空就念「无自动执行者」，不许圆场。 */
+    const exec =
+      now.length > 0
+        ? `自动执行者：${now.join(" / ")}`
+        : "自动执行者：**无**（本地组 C 已撤、平台两格与每日全量都剔）⇒ 只剩人工";
+    const guard = one.guardNote ? `；${one.guardNote}` : "";
+    return `  · ${rel}（ISSUE #${one.issue}：${one.why}）\n      ${exec}${guard}\n      恢复：${one.resume}`;
   });
   return (
     `[suspended] 本格按台账暂不执行 ${dropped.length} 条固定清单用例` +
-    "（本地钩子照跑，不是「这批判据没了」）：\n" +
+    "（名字仍在固定清单里，不是「这批判据没了」；但也不许把它读成「本地还有一层」）：\n" +
     `${lines.join("\n")}\n`
   );
 }
