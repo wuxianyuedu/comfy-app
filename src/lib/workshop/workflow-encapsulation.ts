@@ -253,7 +253,9 @@ function toContractValues(args: {
   /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色的绑定值，落到作者连的
    *  「lora-name」/「lora-strength」口上；没连 → unmatched 如实提示，
    *  工作流用其图内 LoRA 配置。 */
-  if (values.loraName !== undefined) out["lora-name"] = values.loraName;
+  if (values.loraName !== undefined) {
+    out["lora-name"] = values.loraName;
+  }
   if (values.loraStrength !== undefined) {
     out["lora-strength"] = values.loraStrength;
   }
