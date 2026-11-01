@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { collectDataSlots } from "./helpers/data-slots";
+
 const SRC_ROOT = fileURLToPath(new URL("../src", import.meta.url));
 const CSS_PATH = fileURLToPath(new URL("../src/app/globals.css", import.meta.url));
 const css = readFileSync(CSS_PATH, "utf8");

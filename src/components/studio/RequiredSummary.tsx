@@ -1,6 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import { resolveEntryRequired, type WorkflowIOMap } from "~/components/studio/workflow-io";
+
 export function RequiredSummary({
   io,
   mode,
