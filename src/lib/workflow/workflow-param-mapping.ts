@@ -447,11 +447,11 @@ export function clearModeWiring(
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
 ): ParamMapping {
-  const manualByMode = { ...(mapping?.manualByMode ?? {}) };
+  const manualByMode = { ...mapping?.manualByMode };
   if (mode) {
     delete manualByMode[mode];
   }
-  return { manualByMode, labels: { ...(mapping?.labels ?? {}) } };
+  return { manualByMode, labels: { ...mapping?.labels } };
 }
 
 /** 映射落点（`resolved` 的值，= ioKey）→ 画布渲染侧那条端口的 **React Flow

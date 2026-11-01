@@ -310,7 +310,7 @@ export function withExposedValue(
   next: string | number,
 ): WorkshopExposedValues {
   if (exposedCustomKindOf(id)) {
-    return { ...values, custom: { ...(values.custom ?? {}), [id]: next } };
+    return { ...values, custom: { ...values.custom, [id]: next } };
   }
   const text = typeof next === "string" ? next : String(next);
   if (id === "prompt") {

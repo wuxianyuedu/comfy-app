@@ -378,7 +378,7 @@ export function ImageGenerationPanel({
             loading={wfIOLoading}
             onChange={(next) => patch({ workflowInputs: next })}
             onSeedModeChange={(ioKey, mode) =>
-              patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
+              patch({ seedModes: { ...d.seedModes, [ioKey]: mode } })
             }
             seedModes={d.seedModes}
             showOutputs={false}

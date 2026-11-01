@@ -76,8 +76,8 @@ if (entry === null) {
   try {
     const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
     const deps = {
-      ...(manifest.dependencies ?? {}),
-      ...(manifest.devDependencies ?? {}),
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
     };
     inManifest = Object.hasOwn(deps, name);
   } catch {
