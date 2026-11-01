@@ -52,6 +52,13 @@ export type ParamClass =
   | "duration"
   /** 采样种子（INT）：作者连到工作流的 seed / noise_seed 端口才可指定。 */
   | "seed"
+  /** 角色 LoRA（文本）：作者把这一口连到工作流 LoraLoader 的 lora_name 端口，
+   *  工坊才能按角色注入 LoRA（FR-QA-02③）；**没连这一口的工作流不受影响**
+   *  —— 用其图内的 LoRA 配置。LoRA 文件名取模型库 loras 目录。 */
+  | "lora-name"
+  /** 角色 LoRA 强度（FLOAT）：与 lora-name 同源（LoraLoader 的 strength widget），
+   *  缺省 1.0；只连 lora-name 不连强度时用工作流图内的强度值。 */
+  | "lora-strength"
   | "other";
 
 /** 统一「尺寸」在契约里的落点形态 —— 一个对外参数可以落在其中任一类端口上。 */
@@ -139,6 +146,8 @@ const CLASS_FALLBACK_LABEL: Record<ParamClass, string> = {
   "last-frame": exposedParamDisplayLabel("last-frame"),
   duration: exposedParamDisplayLabel("duration"),
   seed: exposedParamDisplayLabel("seed"),
+  "lora-name": exposedParamDisplayLabel("lora-name"),
+  "lora-strength": exposedParamDisplayLabel("lora-strength"),
   other: "参数",
 };
 
@@ -225,6 +234,8 @@ export const CLASS_FAMILY: Record<ParamClass, PinFamily | null> = {
   "last-frame": "image",
   duration: "number",
   seed: "number",
+  "lora-name": "text",
+  "lora-strength": "number",
   other: null,
 };
 

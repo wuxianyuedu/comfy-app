@@ -66,6 +66,13 @@ export type WorkshopExposedValues = {
   frames?: number;
   /** 视频：尾帧文件名（首尾帧工作流用）。 */
   lastFrame?: string;
+  /** 角色 LoRA 文件名（模型库 loras 目录）。落在作者连到「lora-name」口、
+   *  指向 LoraLoader 的 lora_name 端口的落点上；没连的工作流用其图内 LoRA
+   *  配置（FR-QA-02③ · #2622）。 */
+  loraName?: string;
+  /** 角色 LoRA 强度（缺省 1.0 由工作流图内值兜底；只连 lora-name 不连强度时
+   *  本值不生效）。 */
+  loraStrength?: number;
   negativePrompt?: string;
   prompt?: string;
   /** 参考图文件名（已上传到 ComfyUI 输入目录）。
@@ -241,6 +248,14 @@ function toContractValues(args: {
    *  作者没连这一口 → applyParamMapping 如实报进 unmatched，工作流用其图内 seed。 */
   if (values.seed !== undefined) {
     out.seed = values.seed;
+  }
+
+  /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色的绑定值，落到作者连的
+   *  「lora-name」/「lora-strength」口上；没连 → unmatched 如实提示，
+   *  工作流用其图内 LoRA 配置。 */
+  if (values.loraName !== undefined) out["lora-name"] = values.loraName;
+  if (values.loraStrength !== undefined) {
+    out["lora-strength"] = values.loraStrength;
   }
 
   /* 自定义口：值已经是「契约口 id → 值」的形状，原样并入 —— 这些 id 只在生效

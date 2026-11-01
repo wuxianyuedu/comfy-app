@@ -267,6 +267,13 @@ export const characterInputSchema = z
     /** 已选定的定妆照（portraits 里的一张），后续分镜图以此作为参考图。 */
     portraitUrl: z.string().optional(),
     params: z.unknown().optional().transform(paramsObject), // 推荐生成参数
+    /** 绑定的 LoRA 文件名（模型库 loras 目录，#2622 FR-QA-02③）。提交时取
+     *  出场角色里第一个绑定，落到工作流「lora-name」契约口（LoraLoader 的
+     *  lora_name）；没绑或工作流没连该口 → 用工作流图内 LoRA 配置。 */
+    loraName: z.string().optional(),
+    /** LoRA 强度（0~2，缺省 1 由工作流图内值兜底；只连 lora-name 不连
+     *  lora-strength 口时本值不生效）。 */
+    loraStrength: z.number().optional(),
   })
   .transform((character) => ({
     ...character,

@@ -57,7 +57,7 @@
 | **AI 的用法** | MCP `workshop_extract_characters` / `workshop_set_characters`；自主 run 的 `extract_characters`（**当前只生成角色文本，不出定妆照**） |
 | **质量验收口径** | ① 每个角色有且仅有一张**生效定妆照**（`portraitUrl`），缺锚定时下游生图给出可见提示；② 同一角色在**不同镜头**里被引用时，`characterIds` 一致且参考图同源（换镜头不该换脸）；③ 角色卡改动后重跑生图，结果图必须变化（证明角色卡真的进了提示词） |
 | **当前状态** | 已上线（角色卡 + 定妆照上传 `FR-WP-06`）；**一致性只到「参考图」这一层** |
-| **已知缺口** | 无「角色 ↔ LoRA / 模型」绑定（LoRA 只能由所选工作流内部承载）；无跨集角色库（`FR-SR-03`）；AI 自主链路不产定妆照；**视觉一致性评审未实现**（`src/server/agent/review.ts` 只评审文本，等后续多模态能力；由 `FR-QA-07` 承接，#2479） |
+| **已知缺口** | ~~无「角色 ↔ LoRA / 模型」绑定~~ 已落地（`FR-QA-02`③ · #2622：角色卡绑定经标准契约口落到作者连线的 LoraLoader 端口）；无跨集角色库（`FR-SR-03`）；AI 自主链路不产定妆照；**视觉一致性评审未实现**（`src/server/agent/review.ts` 只评审文本，等后续多模态能力；由 `FR-QA-07` 承接，#2479） |
 | **代码落点** | `src/lib/workshop/types.ts`（`Character`）；`src/components/workshop/WorkshopStageBody.tsx`；参考图上传与注入 `src/lib/workshop/generation-client.ts` |
 
 ---

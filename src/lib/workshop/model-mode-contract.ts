@@ -45,6 +45,8 @@ export const WORKSHOP_INPUT_TYPES = /* SAFETY: 类型断言已复核 */ [
   { type: "lineart", label: "线稿图" },
   { type: "edge", label: "边缘图" },
   { type: "seed", label: "种子" },
+  { type: "lora-model", label: "角色 LoRA" },
+  { type: "lora-weight", label: "LoRA 强度" },
 ] as const;
 
 export type WorkshopInputType = (typeof WORKSHOP_INPUT_TYPES)[number]["type"];
@@ -275,6 +277,14 @@ export const MODE_CONTRACT_INPUT_TYPES = /* SAFETY: 类型断言已复核 */ [
    * 这里不同步认它的话，契约一旦走归一化 / 保存链路，seed 口会被静默过滤掉
    *（isModeContractInputId 判 false），编辑器里也看不到这一口。 */
   { type: "seed", label: EXPOSED_PARAM_DISPLAY_LABEL.seed },
+  /* 角色 LoRA 口（FR-QA-02③ · #2622）同款内置：exposedParamsForMode 对每个
+   * 模式都产它，这里不同步认的话保存链路会静默过滤（isModeContractInputId
+   * 判 false），编辑器里也看不到。 */
+  { type: "lora-name", label: EXPOSED_PARAM_DISPLAY_LABEL["lora-name"] },
+  {
+    type: "lora-strength",
+    label: EXPOSED_PARAM_DISPLAY_LABEL["lora-strength"],
+  },
   {
     type: "reference-image",
     label: EXPOSED_PARAM_DISPLAY_LABEL["reference-image"],
@@ -764,6 +774,11 @@ const CONTRACT_INPUT_TO_ADAPTER: Record<
    * 那一族）。是否真的下发由适配器的 inputs 行决定 —— 这里只保证「契约 →
    * 适配器」的桥接层不缺行（本表存在的意义就是不让新预制口在这里静默漏）。 */
   seed: [{ type: "seed", field: "seed" }],
+  /* 角色 LoRA（FR-QA-02③ · #2622）：本地通道走「lora-name」契约口；
+   * 远端接口暂无标准 lora 字段 —— 桥接行在此保证不缺（本表的意义），
+   * 实际下发由适配器的 inputs 行决定（现无适配器声明它 → 远端不生效）。 */
+  "lora-name": [{ type: "lora-model", field: "lora" }],
+  "lora-strength": [{ type: "lora-weight", field: "lora_strength" }],
 };
 
 export function adapterInputsFromContract(
