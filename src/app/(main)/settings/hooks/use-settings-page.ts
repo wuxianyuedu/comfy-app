@@ -44,6 +44,7 @@ import type {
 /* 分区白名单是**值**（不是类型），`export *` 不会把它带进本文件作用域，
  * 跳转落点的收敛要用到它，所以单独再值导入一条。 */
 import { SETTINGS_SECTIONS } from "./use-settings-page-types";
+
 export * from "./use-settings-page-types";
 
 /** 提示条停留时长。 */

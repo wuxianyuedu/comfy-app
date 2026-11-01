@@ -134,6 +134,7 @@ function targetTriple() {
 //   表现为 resource path binaries/node-x86_64-unknown-linux-gnu 不存在
 // 而壳侧再写死 `node.exe`，即使编过也找不到 sidecar。两处必须同一个判据。
 import { sidecarFileName } from "./sidecar-name.mjs";
+
 export { sidecarFileName };
 
 /** 报错并终止 —— 返回类型必须是 `never`，不是「不返回」的语义描述：
