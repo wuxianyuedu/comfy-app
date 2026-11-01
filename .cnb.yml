@@ -219,6 +219,22 @@
     BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
     # 避免 corepack 在非交互环境下为拉取 pnpm 版本而等待输入。
     CI: "true"
+    # ── 判据预算（vitest 的 testTimeout / hookTimeout）临时放宽 ×2（ISSUE #2959）──
+    #
+    # 业主口径（#2948 / #2959）：「把 CI 里测试的超时时长临时改长，避免负载红」。
+    # 它与 §11.13 / §13.6.4 那两条「不许抬预算」直接对撞，所以这一行只买一件事：
+    # **共享节点上并发跑时，一条用例不再因为「等子进程」而被判成 30s 超时**。
+    #
+    # 为什么只抬这一层（`.cnb.yml` 的 `timeout: 45m` 那几格、`full-suite-run.mjs` 的
+    # 墙钟、Playwright 的 60s 一律不动）：那几处是「卡死多久有人知道」的护栏。
+    # 实测它们本来就不承重（`受影响用例` 声明 45m，同一跑掐在 54.0 分钟），
+    # 把它们改长买不到任何东西，只会把唯一的早期信号一起拆掉。
+    #
+    # ⚠️ **这一行就是「临时」这两个字的全部承重**：删掉它 = 恢复原状
+    # （`vitest.config.ts` 的缺省乘数是 1，不设这个键时算出来的数就是 30_000 / 45_000）。
+    # 别改成 3 以上 —— 上限就在那边，超了会落回 1 并在日志里说一句。
+    # 生效时 vitest 启动会打一行 `[vitest] 判据预算临时放宽 ×2：…`，日志里读得出来。
+    COMFY_TEST_TIMEOUT_SCALE: "2"
     # 覆盖率 reporter 的安静档（ISSUE #1959）：`vitest` 的 `text` reporter 会把报告里
     # **每一个文件**打一行，450+ 行的表本身就有 ~90KB，而平台对单次构建日志的硬上限是
     # 102400 字节 —— 超了就只留一句 `The log length exceeds the limit(102400)`、
