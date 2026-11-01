@@ -113,6 +113,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { performance } from "node:perf_hooks";
 
 /* git 与 ref 层、钩子解析层、判决层各自拆成同目录模块（ISSUE #1811 拆 R5
  * 超限文件）：主文件只留编排与 CLI。下面**只 import 编排层真正用到的**，
@@ -196,16 +197,21 @@ export function baseCheck({ argv, label, ref, keep = false, json = false }) {
  *   · 有红、且红的那些在基线上**同样命中** ⇒ `baseline-red`（别线的红，逐条列出）；
  *   · 有红、但基线上绿 ⇒ `yours`（本检出的红）。
  *
- * @param {{commands: Array<{argv: string[], label: string, baseSide?: boolean}>, ref: string, keep?: boolean, json?: boolean, shape?: "single" | "batch"}} input
+ *   `onTiming` 是**可选的逐格计时回调**（ISSUE #2832）：本检出每条门、快照建树、快照侧每条门
+ *   各回调一次（`label` 带「本检出:/快照:」前缀区分两侧，快照建树单独一格）。只记账、
+ *   不参与任何判决 —— 不给就是没有这一格，行为与改动前逐字一致。
+ * @param {{commands: Array<{argv: string[], label: string, baseSide?: boolean}>, ref: string, keep?: boolean, json?: boolean, shape?: "single" | "batch", onTiming?: (label: string, ms: number) => void}} input
  * @returns {number} 退出码（0 = 事实已复算；1 = 复算过程失败）
  */
-export function baseCheckMany({ commands, ref, keep = false, json = false, shape = "batch" }) {
+export function baseCheckMany({ commands, ref, keep = false, json = false, shape = "batch", onTiming = undefined }) {
   /* 本检出那一侧：**先跑、先收**（不建 worktree 就能判掉的情形不付这笔 —— 同
    * `baseCheck` 的旧口径）。 */
   /** @type {Array<{code: number, output: string}>} */
   const current = [];
   for (const c of commands) {
+    const t0 = performance.now();
     current.push(runGate(c.argv, ROOT));
+    onTiming?.(`本检出:${c.label}`, performance.now() - t0);
   }
   if (current.every((r) => r.code === 0)) {
     return reportMany(
@@ -237,6 +243,7 @@ export function baseCheckMany({ commands, ref, keep = false, json = false, shape
     // **建一次、失败了换一个目录再建一次**：这一层在并发跑门禁时是环境噪声的受害者
     // （实测 `.git/index: index file open failed: Not a directory`，见 `GIT_ENV_DENY`
     // 那段）。两次都失败才是真失败 —— 不许把它读成「复算不出结论」。
+    const snapshotT0 = performance.now();
     for (let attempt = 0; attempt < 2 && !worktreePath; attempt++) {
       const candidate = fs.mkdtempSync(path.join(os.tmpdir(), "comfy-base-check-"));
       attempts.push(candidate);
@@ -269,13 +276,18 @@ export function baseCheckMany({ commands, ref, keep = false, json = false, shape
      * 刻意**不**用 `cp`：那是把依赖树整份复制（本仓库实测 GB 量级），而它每次
      * 复算都要付一遍。 */
     dependencyLink = linkDependencies(ROOT, worktreePath);
+    onTiming?.("快照建树(worktree add + 链依赖)", performance.now() - snapshotT0);
     const commit = git(["rev-parse", "--short", "HEAD"], worktreePath).stdout;
     const rows = [];
     for (const [i, c] of commands.entries()) {
       const cur = current[i]?.code ?? 127;
       /* `baseSide: false` ⇒ **不在快照上跑**（理由见 `CHAINED_STEPS` 那条注释）：
        * 它的 `baseCode` 记 `null`（= 未跑），判决只看本检出那一侧。 */
+      const baseT0 = performance.now();
       const base = c.baseSide === false ? null : runGate(c.argv, worktreePath);
+      if (base !== null) {
+        onTiming?.(`快照:${c.label}`, performance.now() - baseT0);
+      }
       /* 两侧的输出都要传给 `judge`：`load-flake` 那一档看的正是「两边是不是**都**
        * 超时形态」—— 本检出那一次的输出原本只在 `current` 里躺着、判完就丢，
        * 于是这一档在 `--base` 这一批里判不出来（ISSUE #1641）。 */
