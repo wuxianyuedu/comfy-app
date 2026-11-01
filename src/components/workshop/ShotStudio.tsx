@@ -287,22 +287,21 @@ export function ShotStudio({
         patchShot(shot.id, { taskId, status: "running" });
         await runLocalTask(shot.id, taskId);
         return taskId;
-      } else {
-        const url = await apiGenerateImage({
-          prompt: shot.prompt,
-          negative: shot.negativePrompt || undefined,
-          size:
-            shot.params.size !== undefined && shot.params.size !== ""
-              ? paramString(shot.params.size, shotSizeToParam(shotSize))
-              : shotSizeToParam(shotSize),
-          mode: "T2I",
-          /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
-           * （透传"1k" 这类档位名对远端没有意义）。 */
-          ...shotSizeToRelay(shotSize),
-        });
-        patchShot(shot.id, { status: "done", imageUrl: url });
-        return null;
       }
+      const url = await apiGenerateImage({
+        prompt: shot.prompt,
+        negative: shot.negativePrompt || undefined,
+        size:
+          shot.params.size !== undefined && shot.params.size !== ""
+            ? paramString(shot.params.size, shotSizeToParam(shotSize))
+            : shotSizeToParam(shotSize),
+        mode: "T2I",
+        /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
+         * （透传"1k" 这类档位名对远端没有意义）。 */
+        ...shotSizeToRelay(shotSize),
+      });
+      patchShot(shot.id, { status: "done", imageUrl: url });
+      return null;
     } catch (error: unknown) {
       patchShot(shot.id, { status: "failed" });
       setShotError(shot.id, errorMessage(error, "生成失败"));
