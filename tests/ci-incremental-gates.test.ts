@@ -360,8 +360,9 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     expect(gate?.script).toBe("scripts/check-format.cjs");
     /* `["src/**", ".storybook/**"]` 是那两棵树的写法；顺序不判（两棵树之间没有语义）。 */
     expect([...(gate?.globs ?? [])].sort()).toEqual([".storybook/**", "src/**"]);
+    /* SAFETY: 类型断言已复核 */
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fmt = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
+    const fmt = require("../scripts/check-format.cjs") as {
       IGNORE_GLOBS: ReadonlyArray<string>;
       isScanned: (rel: string) => boolean;
     };

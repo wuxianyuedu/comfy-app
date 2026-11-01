@@ -46,7 +46,8 @@ const ROOT_WORKERS = resolveCiWorkers().workers;
  * 共享项 ⇒ 期望值。**这就是「一处定义」的那张表**：
  * 新增一项根级共享项时，同批加在这里（否则第 4 条会红 —— 那正是它的用意）。
  */
-const SHARED_EXPECTATIONS = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+const SHARED_EXPECTATIONS = {
   setupFiles: ["tests/setup.ts"],
   globals: false,
   /* 判据预算不写死：生效值由 `vitest.config.ts` 的 `resolveTimeoutBudget()` 按
@@ -97,7 +98,8 @@ const EXPECTED_PROJECTS = ["happy-dom", "node"];
  * 都随之整档变化）。§11.17.1.2「同一件事只该有一个来源」的另一面：
  * 两个字段各自说自己的话，就不许拿一个去顶另一个。
  */
-const EXPECTED_TIER_ENVIRONMENTS = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+const EXPECTED_TIER_ENVIRONMENTS = {
   node: "node",
   "happy-dom": "happy-dom",
 } as const;
@@ -118,10 +120,12 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
   it("**每一档**都拿到了共享项（失效形态是一档落后，所以逐档判）", async () => {
     const vitest = await resolvedVitest();
     for (const project of vitest.projects) {
-      const cfg = /* SAFETY: 类型断言已复核 */ project.config as unknown as Record<string, unknown>;
+      /* SAFETY: 类型断言已复核 */
+      const cfg = project.config as unknown as Record<string, unknown>;
       const prefix = `[${project.name}]`;
       // setupFiles 在解析后是**绝对路径**，所以比形状（落在仓库根之下、名字对）。
-      const setupFiles = /* SAFETY: 类型断言已复核 */ cfg.setupFiles as Array<string>;
+      /* SAFETY: 类型断言已复核 */
+      const setupFiles = cfg.setupFiles as Array<string>;
       /* 比较前归一分隔符：`path.relative()` 在 win32 上给出 `tests\setup.ts`，而期望
          值按配置源码写成 POSIX 形式 —— 不归一的话这条判据在每台 Windows 上都红，
          且红的原因与它要判的事（共享项有没有落到每一档）毫无关系。 */
@@ -171,9 +175,8 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
 
   it("根 `test` 上没有「只对某档有意义」的项，project 里不再重复声明共享项", async () => {
     // 这一条判**配置文本**（解析后看不出「它写在哪一层」），用 TS 模块直接读默认导出。
-    const mod = /* SAFETY: 类型断言已复核 */ (await import(
-      path.join(ROOT, "vitest.config.ts")
-    )) as {
+    /* SAFETY: 类型断言已复核 */
+    const mod = (await import(path.join(ROOT, "vitest.config.ts"))) as {
       default: { test: Record<string, unknown> };
     };
     const rootTest = mod.default.test;
@@ -195,7 +198,8 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       expect(declared, `共享项 \`${key}\` 该声明在根 \`test\` 上`).toContain(key);
     }
 
-    const projects = /* SAFETY: 类型断言已复核 */ rootTest.projects as Array<{
+    /* SAFETY: 类型断言已复核 */
+    const projects = rootTest.projects as Array<{
       test: Record<string, unknown> & { name?: string };
     }>;
     for (const entry of projects) {
@@ -249,7 +253,8 @@ describe("判据预算的临时乘数（ISSUE #2959）", () => {
     const vitest = await resolvedVitest();
     const expected = resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE);
     for (const project of vitest.projects) {
-      const cfg = /* SAFETY: 类型断言已复核 */ project.config as unknown as Record<string, unknown>;
+      /* SAFETY: 类型断言已复核 */
+      const cfg = project.config as unknown as Record<string, unknown>;
       expect(cfg.testTimeout, `[${project.name}]`).toBe(expected.testTimeout);
       expect(cfg.hookTimeout, `[${project.name}]`).toBe(expected.hookTimeout);
     }

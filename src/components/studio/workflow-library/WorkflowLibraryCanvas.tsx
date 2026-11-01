@@ -114,7 +114,8 @@ const LAYOUT_NODES = buildLibraryNodes(LAYOUT_SIZING);
 
 /** 边的渲染参数：线本身要能点选（选中后按 ⌫ / Delete 断开，或点「删除选中线」）。
  *  `deletable` 由派生时按 `canWire` 逐边设（只读预览不可删）；这里的默认值只作兜底。 */
-const DEFAULT_EDGE_OPTIONS = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+const DEFAULT_EDGE_OPTIONS = {
   type: "default",
   selectable: true,
   deletable: false,

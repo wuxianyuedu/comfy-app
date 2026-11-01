@@ -38,9 +38,8 @@ export function getWorkshopApiSettingsSync(): WorkshopApiSettings {
   }
   let stored: Partial<WorkshopApiSettings> = {};
   try {
-    stored = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      readFileSync(FILE, "utf8"),
-    ) as Partial<WorkshopApiSettings>;
+    /* SAFETY: 类型断言已复核 */
+    stored = JSON.parse(readFileSync(FILE, "utf8")) as Partial<WorkshopApiSettings>;
   } catch {
     // 缺失/损坏 → 默认
   }

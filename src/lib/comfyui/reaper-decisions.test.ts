@@ -60,7 +60,8 @@ function comfyStartingMock(): MockedFn {
 /** 取第 n 次调用的参数（mock.calls 元素被推断为 any[]，集中在一处断言并
  *  转成 unknown[]，避免在调用点重复 no-unsafe-assignment）。 */
 function callArgsOf(fn: MockedFn, index = 0): Array<unknown> {
-  return /* SAFETY: 类型断言已复核 */ (fn.mock.calls[index] as Array<unknown> | undefined) ?? [];
+  /* SAFETY: 类型断言已复核 */
+  return (fn.mock.calls[index] as Array<unknown> | undefined) ?? [];
 }
 
 /** 取本任务在 runner 状态里的日志行（reaper 写的判决说明）。 */

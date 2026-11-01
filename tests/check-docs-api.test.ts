@@ -218,9 +218,10 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
         stdio: ["ignore", "pipe", "pipe"],
       });
     } catch (error) {
-      const e = /* SAFETY: 类型断言已复核 */ error as { status?: number; stderr?: string };
+      /* SAFETY: 类型断言已复核 */
+      const e = error as { status?: number; stderr?: string };
       code = e.status ?? -1;
-      out = `${e.stderr ?? ""}`;
+      out = e.stderr ?? "";
     }
     expect(code).toBe(1);
     expect(out).toContain("--autofix");

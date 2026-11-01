@@ -74,7 +74,8 @@ function applyContentToState(
     meta: {
       ...state.meta,
       title: content.title,
-      type: /* SAFETY: 类型断言已复核 */ (content.type as ProjectMeta["type"]) ?? state.meta.type,
+      /* SAFETY: 类型断言已复核 */
+      type: (content.type as ProjectMeta["type"]) ?? state.meta.type,
       tone: content.tone,
       logline: content.logline,
       scriptMarkdown: content.scriptMarkdown,
@@ -91,7 +92,8 @@ export function rowToState(row: WorkshopSession): WorkshopSessionState {
     idea: row.idea,
     meta: {
       title: row.title,
-      type: /* SAFETY: 类型断言已复核 */ (row.type as ProjectMeta["type"]) ?? "short_video",
+      /* SAFETY: 类型断言已复核 */
+      type: (row.type as ProjectMeta["type"]) ?? "short_video",
       tone: row.tone,
       logline: row.logline,
       scriptMarkdown: row.scriptMarkdown,

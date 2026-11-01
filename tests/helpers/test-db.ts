@@ -321,7 +321,8 @@ function allRows(table: string): Array<Row> {
   if (!currentSqlite) {
     throw new Error("test db 未初始化");
   }
-  return /* SAFETY: 类型断言已复核 */ (
+  /* SAFETY: 类型断言已复核 */
+  return (
     currentSqlite.prepare(`SELECT * FROM "${table}"`).all() as Array<Record<string, unknown>>
   ).map((r) => parseRow(table, r));
 }
@@ -342,9 +343,10 @@ function getRow(table: string, id: string): Row {
   if (!currentSqlite) {
     throw new Error("test db 未初始化");
   }
-  const raw = /* SAFETY: 类型断言已复核 */ currentSqlite
-    .prepare(`SELECT * FROM "${table}" WHERE id = ?`)
-    .get(id) as Record<string, unknown> | undefined;
+  /* SAFETY: 类型断言已复核 */
+  const raw = currentSqlite.prepare(`SELECT * FROM "${table}" WHERE id = ?`).get(id) as
+    | Record<string, unknown>
+    | undefined;
   if (!raw) {
     throw new Error(`row not found: ${table} ${id}`);
   }
@@ -465,7 +467,8 @@ export function createTestDb(): TestDb {
 
   const workflowTemplatesWithTags = (): Array<Row> => {
     const rows = allRows("workflowTemplate");
-    const tagRows = /* SAFETY: 类型断言已复核 */ sqlite
+    /* SAFETY: 类型断言已复核 */
+    const tagRows = sqlite
       .prepare(
         `SELECT wm.workflowModelTag AS tagId, wm.workflowTemplate AS wtId, t.name AS name, t.userId AS userId
          FROM workflowModelTag_workflowTemplate wm
@@ -485,7 +488,8 @@ export function createTestDb(): TestDb {
     }
     return rows.map((row) => ({
       ...row,
-      modelTags: byWt.get(/* SAFETY: 类型断言已复核 */ row.id as string) ?? [],
+      /* SAFETY: 类型断言已复核 */
+      modelTags: byWt.get(row.id as string) ?? [],
     }));
   };
 
@@ -533,7 +537,8 @@ export function createTestDb(): TestDb {
   };
 
   // 把 $reset / $tables 挂到 drizzle 实例上，供测试与 vi.mock 共用同一对象
-  const api = /* SAFETY: 类型断言已复核 */ Object.assign(db, {
+  /* SAFETY: 类型断言已复核 */
+  const api = Object.assign(db, {
     $reset: reset,
     $tables: tables,
     $sqlTrace: sqlTrace,

@@ -137,9 +137,8 @@ describe("applyReview", () => {
       { id: "a", prompt: "p" },
       { id: "b", name: "角色" },
     ];
-    const out = /* SAFETY: 类型断言已复核 */ applyReview(entities, "b", verdict) as Array<
-      Record<string, unknown>
-    >;
+    /* SAFETY: 类型断言已复核 */
+    const out = applyReview(entities, "b", verdict) as Array<Record<string, unknown>>;
     expect(out[0]).toBe(entities[0]);
     expect(out[1]).not.toBe(entities[1]);
     expect(out[1]!.review).toEqual(verdict);
@@ -169,16 +168,16 @@ describe("applyReview", () => {
       scoredAt: "t2",
       scores: { 画面: { score: 4, note: "好了" } },
     };
-    const out = /* SAFETY: 类型断言已复核 */ applyReview(
-      applyReview([{ id: "a" }], "a", first),
-      "a",
-      second,
-    ) as Array<Record<string, unknown>>;
+    /* SAFETY: 类型断言已复核 */
+    const out = applyReview(applyReview([{ id: "a" }], "a", first), "a", second) as Array<
+      Record<string, unknown>
+    >;
     expect(out[0]?.review).toEqual(second);
     // history 只存「本轮之前」的判定；曲线 = [...reviewHistory, review]（旧→新）
     expect(out[0]?.reviewHistory).toEqual([first]);
     expect([
-      .../* SAFETY: 类型断言已复核 */ (out[0]?.reviewHistory as Array<ReviewVerdict>),
+      /* SAFETY: 类型断言已复核 */
+      ...(out[0]?.reviewHistory as Array<ReviewVerdict>),
       second,
     ]).toEqual([first, second]);
   });
@@ -194,16 +193,15 @@ describe("applyReview", () => {
     for (let i = 0; i < 12; i++) {
       chain = applyReview(chain, "a", { ...verdict, scoredAt: `t${i}` });
     }
-    const history = /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
-      chain[0] as Record<string, unknown>
-    ).reviewHistory as Array<ReviewVerdict>;
+    /* SAFETY: 类型断言已复核 */
+    /* SAFETY: 类型断言已复核 */
+    const history = (chain[0] as Record<string, unknown>).reviewHistory as Array<ReviewVerdict>;
     expect(history).toHaveLength(9); // REVIEW_HISTORY_LIMIT
     expect(history[0]?.scoredAt).toBe("t2"); // 最早的 2 轮被裁掉
-    expect(/* SAFETY: 类型断言已复核 */ (chain[0] as Record<string, unknown>).review).toMatchObject(
-      {
-        scoredAt: "t11",
-      },
-    );
+    /* SAFETY: 类型断言已复核 */
+    expect((chain[0] as Record<string, unknown>).review).toMatchObject({
+      scoredAt: "t11",
+    });
   });
 });
 
@@ -217,7 +215,8 @@ describe("applyImageReview / getRecordImageReview（P8-2 视觉评审写回）",
   };
 
   it("写回 shot.imageReview，不污染 shot.review（两者独立）", () => {
-    const out = /* SAFETY: 类型断言已复核 */ applyImageReview(
+    /* SAFETY: 类型断言已复核 */
+    const out = applyImageReview(
       [
         {
           id: "a",
@@ -370,9 +369,8 @@ describe("人工裁决 / 人评分（#2480）", () => {
         imageReview: { pass: true, issues: [], suggestion: "", scoredAt: "y" },
       },
     ];
-    const out = /* SAFETY: 类型断言已复核 */ applyHumanVerdict(entities, "a", verdict) as Array<
-      Record<string, unknown>
-    >;
+    /* SAFETY: 类型断言已复核 */
+    const out = applyHumanVerdict(entities, "a", verdict) as Array<Record<string, unknown>>;
     expect(out[0]?.humanVerdict).toEqual(verdict);
     // AI 的两套判定原样保留
     expect(out[0]?.review).toMatchObject({ pass: true });

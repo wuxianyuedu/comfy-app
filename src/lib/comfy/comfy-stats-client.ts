@@ -40,7 +40,8 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
         ramTotal: 0,
       };
     }
-    return /* SAFETY: 类型断言已复核 */ (await res.json()) as ComfyStatsPayload;
+    /* SAFETY: 类型断言已复核 */
+    return (await res.json()) as ComfyStatsPayload;
   } catch {
     return {
       online: false,

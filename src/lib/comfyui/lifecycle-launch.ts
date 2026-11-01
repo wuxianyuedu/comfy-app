@@ -193,7 +193,7 @@ async function resolveAndApplyCpuLimitForKeepAlive(input: {
       /* 查询本身抛错（极罕见）：当作这一轮没查到，下一轮再试。 */
       continue;
     }
-    if (!pid) {
+    if (pid === null) {
       continue;
     }
     applyCpuLimitAsync({ pid, mode: input.mode, note: input.note });
@@ -282,7 +282,7 @@ export async function runEnsureLaunch(input: {
   const result = keepAlive
     ? await launchKeepAliveMode(host, ctx)
     : await launchBoundMode(host, ctx);
-  if (!result.ok && result.portConflict) {
+  if (!result.ok && result.portConflict === true) {
     /* 端口被占：占着端口的极可能就是另一个 ComfyUI 实例（上一会话的保活移交 /
      * 外部启动）。与其把「启动失败」甩给排队任务，不如转去等那个实例就绪 ——
      * 就绪判定与接管复用同一条路径。只转一次：再失败就如实回报。 */
@@ -333,7 +333,7 @@ export async function waitForExistingInstanceReady(input: {
       note(detail);
     },
     earlyExit: () =>
-      host.st.stopRequested
+      host.st.stopRequested === true
         ? {
             ok: false,
             base: null,
@@ -404,7 +404,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     redirectStdoutFile: kaOutLog,
     redirectStderrFile: kaErrLog,
   });
-  if (!launched.child || launched.error) {
+  if (launched.child === undefined || launched.error !== undefined) {
     const detail = `启动 ComfyUI 失败：${launched.error ?? "未知错误"}`;
     note(detail);
     return { ok: false, base: null, detail };
@@ -526,7 +526,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
       note(detail);
     },
     earlyExit: () => {
-      if (st.stopRequested) {
+      if (st.stopRequested === true) {
         return {
           ok: false,
           base: null,
@@ -571,7 +571,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
       if (lookup.failed) {
         return null;
       }
-      if (lookup.pid) {
+      if (lookup.pid !== null) {
         everSeenProcess = true;
         missCount = 0;
         return null;
@@ -588,7 +588,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
       /* 识别出的根因（pip/uv 缺失、缺依赖）拼进文案：让失败直接说「该动哪个
        * 环境」，而不是只留一句「进程未出现」让人翻日志。识别不出就回落固定文案。 */
       const diag = diagnoseFromRedirectLogs();
-      return diag ? `${head}${diag}。${common}` : `${head}${common}`;
+      return diag !== null ? `${head}${diag}。${common}` : `${head}${common}`;
     },
   });
   if (!result.ok) {
@@ -851,7 +851,7 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
     /* 用户点了「关闭 ComfyUI」→ 退出循环（child 也会随之消失）。放在
      * child 判断之前，避免把主动关闭误报成「进程启动后立即退出」。 */
     earlyExit: () =>
-      st.stopRequested
+      st.stopRequested === true
         ? { ok: false, base: null, detail: "已手动关闭 ComfyUI，停止等待启动" }
         : null,
     probe: () => probeChildReady(child),
@@ -872,8 +872,9 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
  */
 export async function probeChildReady(child: ReturnType<typeof spawn>): Promise<string | null> {
   const childPid = child.pid;
-  const listenPort = childPid ? await findPidListeningPort(childPid) : null;
-  if (!listenPort) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  const listenPort = childPid != null ? await findPidListeningPort(childPid) : null;
+  if (listenPort === null) {
     return null;
   }
   const base = comfyUiBaseUrl(listenPort);

@@ -161,14 +161,16 @@ describe("CP936 出口：写字节（只读、失败不抛）", () => {
      * `Buffer.from(input, encoding)`），所以判据只能在「值传下去」这一层设。 */
     /* 两种写法都不是编码名 —— 查表就是查不到。 */
     expect(Buffer.isEncoding("buffer")).toBe(false);
-    expect(Buffer.isEncoding(/* SAFETY: 类型断言已复核 */ Buffer as never)).toBe(false);
+    /* SAFETY: 类型断言已复核 */
+    expect(Buffer.isEncoding(Buffer as never)).toBe(false);
     /* 而且**两条都在真 `spawnSync` 上炸**（子进程有输出时才走 `Buffer.from`，
      * 所以探针必须真的打一行字 —— 写 `-e "0"` 是炸不出来的）。 */
     for (const bad of ["buffer", Buffer]) {
       expect(() =>
         spawnSync(process.execPath, ["-e", 'process.stdout.write("hi")'], {
           input: "x",
-          encoding: /* SAFETY: 类型断言已复核 */ bad as never,
+          /* SAFETY: 类型断言已复核 */
+          encoding: bad as never,
         }),
       ).toThrow(/ERR_UNKNOWN_ENCODING|Unknown encoding/);
     }
@@ -181,8 +183,10 @@ describe("CP936 出口：写字节（只读、失败不抛）", () => {
     const calls: Array<{ cmd: string; encoding: unknown; input: unknown }> = [];
     writeCp936("中文一二三", {
       platform: "win32",
-      spawnImpl: /* SAFETY: 类型断言已复核 */ ((cmd: string, _args: Array<string>, opts: never) => {
-        const o = /* SAFETY: 类型断言已复核 */ opts as { encoding: unknown; input: unknown };
+      /* SAFETY: 类型断言已复核 */
+      spawnImpl: ((cmd: string, _args: Array<string>, opts: never) => {
+        /* SAFETY: 类型断言已复核 */
+        const o = opts as { encoding: unknown; input: unknown };
         calls.push({ cmd, encoding: o.encoding, input: o.input });
         return { status: 0 };
       }) as never,
@@ -308,7 +312,8 @@ describe("CP936 出口：编排与退出码", () => {
       /* 这几格判的是输出通道；解析口注入「原样放行」那一档，免得答案取决于 */
       /* 跑它的那个进程的 PATH（现场 cnb-1d9-1k59h8hsv：CI 账号没有 Git 的 echo）。 */
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => {
         queueMicrotask(() => handlers.close?.(0));
         return child;
       }) as never,
@@ -324,7 +329,8 @@ describe("CP936 出口：编排与退出码", () => {
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "linux",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => {
         queueMicrotask(() => child.emitClose());
         return child;
       }) as never,
@@ -354,7 +360,8 @@ describe("CP936 出口：编排与退出码", () => {
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "linux",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => closeWith(child)) as never,
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => closeWith(child)) as never,
       write: () => ({ ok: false }),
       out: (chunk) => printed.push(chunk),
     });
@@ -376,7 +383,8 @@ describe("CP936 出口：编排与退出码", () => {
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "linux",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => closeWith(child)) as never,
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => closeWith(child)) as never,
       write: () => ({ ok: false }),
       out: (chunk) => printed.push(chunk),
     });
@@ -393,7 +401,8 @@ describe("CP936 出口：编排与退出码", () => {
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "linux",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => closeWith(child)) as never,
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => closeWith(child)) as never,
       write: () => ({ ok: false }),
       out: (chunk) => printed.push(chunk),
     });
@@ -412,7 +421,8 @@ describe("CP936 出口：编排与退出码", () => {
     const code = await runWithCp936Exit(["--", "做点事"], {
       platform: "win32",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => closeWith(child)) as never,
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => closeWith(child)) as never,
       write: (text: string) => {
         written.push(text);
         return { ok: true };
@@ -437,11 +447,8 @@ describe("CP936 出口：编排与退出码", () => {
       {
         platform: "linux",
         resolve: passthroughResolve,
-        spawnProc: /* SAFETY: 类型断言已复核 */ ((
-          cmd: string,
-          args: Array<string>,
-          opts: never,
-        ) => {
+        /* SAFETY: 类型断言已复核 */
+        spawnProc: ((cmd: string, args: Array<string>, opts: never) => {
           handle = spawn(cmd, args, opts);
           setTimeout(() => handle?.kill("SIGTERM"), 300);
           return handle;
@@ -475,7 +482,8 @@ describe("CP936 出口：编排与退出码", () => {
       /* 这几格判的是输出通道；解析口注入「原样放行」那一档，免得答案取决于 */
       /* 跑它的那个进程的 PATH（现场 cnb-1d9-1k59h8hsv：CI 账号没有 Git 的 echo）。 */
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => {
         queueMicrotask(() => child.emitClose());
         return child;
       }) as never,
@@ -492,7 +500,8 @@ describe("CP936 出口：编排与退出码", () => {
       /* 这几格判的是输出通道；解析口注入「原样放行」那一档，免得答案取决于 */
       /* 跑它的那个进程的 PATH（现场 cnb-1d9-1k59h8hsv：CI 账号没有 Git 的 echo）。 */
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => {
         queueMicrotask(() => child.emitClose());
         return child;
       }) as never,
@@ -512,7 +521,8 @@ describe("CP936 出口：编排与退出码", () => {
       /* 这几格判的是输出通道；解析口注入「原样放行」那一档，免得答案取决于 */
       /* 跑它的那个进程的 PATH（现场 cnb-1d9-1k59h8hsv：CI 账号没有 Git 的 echo）。 */
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => {
         queueMicrotask(() => child.emitClose());
         return child;
       }) as never,
@@ -545,7 +555,8 @@ describe("CP936 出口：编排与退出码", () => {
         ],
         resolved: true,
       }),
-      spawnProc: /* SAFETY: 类型断言已复核 */ ((cmd: string, args: Array<string>) => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: ((cmd: string, args: Array<string>) => {
         seen.push({ cmd, args });
         queueMicrotask(() => child.emitClose());
         return child;
@@ -578,7 +589,8 @@ describe("CP936 出口：编排与退出码", () => {
         args: ["x"],
         resolved: true,
       }),
-      spawnProc: /* SAFETY: 类型断言已复核 */ ((cmd: string, args: Array<string>) => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: ((cmd: string, args: Array<string>) => {
         seen.push({ cmd, args });
         queueMicrotask(() => child.emitClose());
         return child;
@@ -715,7 +727,8 @@ describe("CP936 出口：编排与退出码", () => {
        * 会把它们改成「判这台机器有没有一个叫 echo 的无扩展名文件」）。
        * 补齐之后这一格的答案只由**注入进去的那张 PATH** 决定，换宿主不换结论。 */
       env: { PATH: dir, PATHEXT: ".COM;.EXE;.BAT;.CMD" },
-      spawnProc: /* SAFETY: 类型断言已复核 */ ((cmd: string) => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: ((cmd: string) => {
         seen.push(cmd);
         queueMicrotask(() => handlers.close?.(0));
         return child;
@@ -748,7 +761,8 @@ describe("CP936 出口：编排与退出码", () => {
         args: ["x"],
         resolved: false,
       }),
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => {
         spawned = true;
         queueMicrotask(() => child.emitClose());
         return child;
@@ -777,7 +791,8 @@ describe("CP936 出口：编排与退出码", () => {
     };
     const code = await runWithCp936Exit(["--", "不存在的命令"], {
       platform: "win32",
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => {
         queueMicrotask(() => handlers.error?.(new Error("ENOENT")));
         return child;
       }) as never,
@@ -878,11 +893,8 @@ describe("CP936 出口：编排与退出码", () => {
     const calls: Array<{ stdio: unknown }> = [];
     writeCp936("中文一二三", {
       platform: "win32",
-      spawnImpl: /* SAFETY: 类型断言已复核 */ ((
-        _cmd: string,
-        _args: Array<string>,
-        opts: never,
-      ) => {
+      /* SAFETY: 类型断言已复核 */
+      spawnImpl: ((_cmd: string, _args: Array<string>, opts: never) => {
         calls.push({ stdio: /* SAFETY: 类型断言已复核 */ (opts as { stdio: unknown }).stdio });
         return { status: 0 };
       }) as never,
@@ -907,13 +919,11 @@ describe("CP936 出口：编排与退出码", () => {
     const calls: Array<{ timeout: unknown }> = [];
     writeCp936("中文一二三", {
       platform: "win32",
-      spawnImpl: /* SAFETY: 类型断言已复核 */ ((
-        _cmd: string,
-        _args: Array<string>,
-        opts: never,
-      ) => {
+      /* SAFETY: 类型断言已复核 */
+      spawnImpl: ((_cmd: string, _args: Array<string>, opts: never) => {
         calls.push({
-          timeout: /* SAFETY: 类型断言已复核 */ (opts as { timeout: unknown }).timeout,
+          /* SAFETY: 类型断言已复核 */
+          timeout: (opts as { timeout: unknown }).timeout,
         });
         return { status: 0 };
       }) as never,
@@ -931,11 +941,13 @@ describe("CP936 出口：编排与退出码", () => {
     await runWithCp936Exit(["--", "echo"], {
       platform: "win32",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => {
         queueMicrotask(() => child.emitClose());
         return child;
       }) as never,
-      write: /* SAFETY: 类型断言已复核 */ ((_text: string, opts: { stdio?: unknown }) => {
+      /* SAFETY: 类型断言已复核 */
+      write: ((_text: string, opts: { stdio?: unknown }) => {
         seen.push(opts?.stdio);
         return { ok: true };
       }) as never,
@@ -1059,7 +1071,8 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "linux",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => child) as never,
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => child) as never,
       out: (chunk) => printed.push(chunk),
     });
     child.push("第一行\n");
@@ -1076,7 +1089,8 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "linux",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => child) as never,
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => child) as never,
       out: (chunk) => printed.push(chunk),
     });
     child.push("完整的一行\n半个");
@@ -1093,7 +1107,8 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "linux",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => child) as never,
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => child) as never,
       out: (chunk) => printed.push(chunk),
     });
     child.push("有换行的一行\n没有换行的尾巴");
@@ -1110,8 +1125,10 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "win32",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => child) as never,
-      write: /* SAFETY: 类型断言已复核 */ ((text: string, opts: { stdio?: unknown }) => {
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => child) as never,
+      /* SAFETY: 类型断言已复核 */
+      write: ((text: string, opts: { stdio?: unknown }) => {
         seen.push({ text, stdio: opts?.stdio });
         return { ok: true };
       }) as never,
@@ -1138,7 +1155,8 @@ describe("CP936 出口：**边到边发**（第六跑 —— 长跑 stage 的日
     const done = runWithCp936Exit(["--", "长跑"], {
       platform: "win32",
       resolve: passthroughResolve,
-      spawnProc: /* SAFETY: 类型断言已复核 */ (() => child) as never,
+      /* SAFETY: 类型断言已复核 */
+      spawnProc: (() => child) as never,
       write: () => ({ ok: false }),
       out: (chunk) => printed.push(chunk),
     });

@@ -60,7 +60,8 @@ describe("fetchRunStatus", () => {
 
   it("脏 run 回包 → 归一", async () => {
     statusQuery.mockResolvedValue({
-      run: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      run: {
         status: "乱",
         approvalMode: "stage",
       } as never,
@@ -75,7 +76,8 @@ describe("fetchRunStatus", () => {
 describe("run 控制动作", () => {
   it("start 透传入参 + 回快照", async () => {
     startMutate.mockResolvedValue({
-      run: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      run: {
         status: "running",
         approvalMode: "auto",
       } as never,
@@ -93,12 +95,14 @@ describe("run 控制动作", () => {
 
   it("pause / resume / approve / cancel 各调对应 mutation 并回快照", async () => {
     const snap = {
-      run: /* SAFETY: 类型断言已复核 */ { status: "paused" } as never,
+      /* SAFETY: 类型断言已复核 */
+      run: { status: "paused" } as never,
       action: { kind: /* SAFETY: 类型断言已复核 */ "idle" as const },
     };
     pauseMutate.mockResolvedValue(snap);
     resumeMutate.mockResolvedValue({
-      run: /* SAFETY: 类型断言已复核 */ { status: "running" } as never,
+      /* SAFETY: 类型断言已复核 */
+      run: { status: "running" } as never,
       action: snap.action,
     });
     approveMutate.mockResolvedValue(snap);

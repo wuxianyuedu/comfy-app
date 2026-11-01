@@ -188,7 +188,8 @@ describe("边界：没有码的那种形态也不许编一个数出来充数", (
     /* `spawnSync` 不填 `error.code` 的形态在真机上没有稳定的造法，而**这一格的判据
      * 必须被走到**：把它读成「没有错误」就会让一条失败被报成可用。所以留一个注入点
      * （与 `executable-resolve.ts` 的 `probe` 同一个理由）。 */
-    const fake = /* SAFETY: 类型断言已复核 */ (() => ({
+    /* SAFETY: 类型断言已复核 */
+    const fake = (() => ({
       error: new Error("boom"),
       status: null,
       signal: null,
@@ -229,11 +230,13 @@ describe("两条 `??` 兜底是判据的一部分，不是排版", () => {
      * 下一步、又把「没有读数」说成了「有个值」。 */
     for (const failure of [
       {
-        kind: /* SAFETY: 类型断言已复核 */ "spawn-error" as const,
+        /* SAFETY: 类型断言已复核 */
+        kind: "spawn-error" as const,
         code: "UNKNOWN",
       },
       {
-        kind: /* SAFETY: 类型断言已复核 */ "nonzero-exit" as const,
+        /* SAFETY: 类型断言已复核 */
+        kind: "nonzero-exit" as const,
         status: null,
         signal: null,
       },

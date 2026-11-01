@@ -169,6 +169,8 @@ import {
  * 重试本身就成了消耗，直到那一格被平台掐掉、连「未判定」都说不出（ISSUE #2364）。 */
 import {
   affordablePerFileCount,
+  firstPassLimit,
+  fmtMinutes,
   gateFirstPassByWallClock,
   gateRerunByWallClock,
   perFileBudgetStopReport,
@@ -181,7 +183,12 @@ import {
 /* 收尾那两份账与「毫秒→秒」的格式住在**话术层**：本文件是机制层（清单 / 分块 / 起进程 /
  * 判超时指纹 / 定不退不退），那三段只把已经定完的结论排成给人读的账。拆开的理由不是「长」
  * 而是 §12.6 R5 那句 —— 读不动的那一层的失效形态是「判据恒绿」，不是报错。 */
-import { fmtSec, rerunReport, unverifiedReport } from "./affected-launch-rerun-report.mjs";
+import {
+  firstPassKilledReport,
+  fmtSec,
+  rerunReport,
+  unverifiedReport,
+} from "./affected-launch-rerun-report.mjs";
 /* 日志预算那一格（reporter 选哪个）住在自己那份文件里 —— 与话术层、复跑面同一刀，
  * 理由写在那份文件头：机制层再塞第六件事就越过 900 行硬闸，而越闸的形态不是报错，
  * 是「那一层读不动了」（§12.6 R5）。判据一个字没改，换的只是它住哪儿。 */
@@ -432,7 +439,7 @@ async function main(argv) {
    * （实测 8 块 ⇒ 约 31 分钟，ISSUE #1747 的现场）。用一个可在多块之间共享的
    * `deadline` 表示 —— 第一块等掉的时间，后面的块不会重新拿到一份。 */
   const waitBudget = { deadline: Date.now() + RETRY_BUDGET_MS };
-  /* 跑也要有界：整次一份、跨块共享，与上面那份等待预算同形状（只管开不开下一遍）。 */
+  /* 跑那一侧的界（`stageBudget`）：整次一份、跨块共享，也是第一遍那条 `timeout` 的唯一来源。 */
   const wallClock = resolveWallClockMs(process.env.COMFY_AFFECTED_WALL_CLOCK_MS);
   if (wallClock.note) {
     process.stderr.write(`[affected-launch] ${wallClock.note}\n`);
@@ -621,17 +628,14 @@ export async function runChunk(chunk, deps) {
    *   · 这一条答「就算估错了，也不许把整格跑成零读数」—— 第一块起就有，且不需要单价。
    * 两者都落在「没判」这一档（退 2），不是红也不是绿（§13.6.2）。 */
   const firstPassTimeoutMs = remainingWallClockMs(deps.stageBudget);
-  /* `ResidualReserveMs`：给掐断之后的收尾（日志回吐、记账、`BeforeEnd`）留出的余量 ——
-   * 不留的话「掐断」与「收尾」会撞在同一个 deadline 上，那一屏又只剩半句。 */
-  const FIRST_PASS_TIMEOUT_RESERVE_MS = 30_000;
+  /* 这一遍**真正拿到手**的上界。收尾余量与下界都归 `firstPassLimit()` 一处算，掐断那一屏
+   * 念的就是这同一个值 —— 此前两处各算一遍，念出来的数比真实掐点还大。 */
+  const firstPassLimitMs = firstPassLimit(firstPassTimeoutMs);
   /* 第三参数 `firstPassOptions` 带的是第一遍的 `timeout`（真实现见 `spawnVitest` 的
    * `options.timeoutMs`）。它单独一个变量，是为了让**实参数组本身**仍留在
    * `spawn(entry, [ … ])` 那个形状里 —— `tests/hook-affected-launch.test.ts` 按那个形状
    * 提取「传给 vitest 的实参」，把 options 折进数组里会让那条判据静默取不到调用点。 */
-  const firstPassBase =
-    firstPassTimeoutMs === null
-      ? undefined
-      : { timeoutMs: Math.max(1, firstPassTimeoutMs - FIRST_PASS_TIMEOUT_RESERVE_MS) };
+  const firstPassBase = firstPassLimitMs === null ? undefined : { timeoutMs: firstPassLimitMs };
   /* 噪音屏蔽（`COMFY_AFFECTED_NOISE_FILTER=1`）：把 `filterLine` 透传给首遍 spawn 的第三
    * 参数。它落在 `spawn(entry, [ … ])` 的实参数组**之后**，不改那个数组的形状
    * （`tests/hook-affected-launch.test.ts` 按那个形状提取「传给 vitest 的实参」）。 */
@@ -656,11 +660,7 @@ export async function runChunk(chunk, deps) {
   /* 被自己那一刀掐断（而不是被平台掐）：这是一份**可读**的收场，而不是空屏。 */
   if (res.timedOut) {
     process.stderr.write(
-      "[affected-launch] 第 1 遍**没跑完**：墙钟预算用尽，本块 " +
-        `${chunk.length} 个用例被中途掐断（剩余预算 ${Math.round((firstPassTimeoutMs ?? 0) / 60_000)} 分钟）\n` +
-        "  ⇒ 按**未判定**收（退 2）：这不是红，也不是绿 —— 这一遍没有任何一条断言给出结论。\n" +
-        "  下一动作：把改动拆开（规范 §13.5.8.1），或按名字要全量 " +
-        "`node scripts/run-affected-tests.mjs --full`。\n",
+      firstPassKilledReport({ files: chunk.length, fmtMinutes, limitMs: firstPassLimitMs }),
     );
     report({ outcome: "budget-killed" });
     return 2;
@@ -678,9 +678,7 @@ export async function runChunk(chunk, deps) {
   const firstPass = classifyFirstPass(res);
   process.stderr.write(
     firstPass.kind === "red"
-      ? `${firstPass.note}` +
-          `  （入口 ${entry}，本块 ${chunk.length} 个用例，命令行约 ` +
-          `${chunk.join(" ").length} 字符）\n`
+      ? `${firstPass.note}  （入口 ${entry}，本块 ${chunk.length} 个用例，命令行约 ${chunk.join(" ").length} 字符）\n`
       : firstPass.note,
   );
   if (firstPass.kind === "launch-failed") {

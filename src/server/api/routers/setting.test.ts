@@ -292,7 +292,8 @@ describe("setting.openExternal —— 交给系统浏览器之前的协议闸（
       url: "https://example.com/out.mp4",
     });
     expect(res.ok).toBe(true);
-    const args = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0]?.[1] as Array<string>;
+    /* SAFETY: 类型断言已复核 */
+    const args = spawnMock.mock.calls[0]?.[1] as Array<string>;
     expect(args.at(-1)).toBe("https://example.com/out.mp4");
   });
 

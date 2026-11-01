@@ -145,7 +145,7 @@ async function probePort(_host: string, port: number): Promise<boolean> {
  * 依次试：配置端口 → +1 … 到 +PROBE_RANGE。结果缓存到进程生命周期结束。
  */
 export async function resolveComfyBase(): Promise<string> {
-  if (_resolvedBase) {
+  if (_resolvedBase !== null) {
     return _resolvedBase;
   }
 
@@ -187,7 +187,7 @@ export async function resolveComfyBase(): Promise<string> {
     const found = await queryInstanceByPath(comfyuiPath);
     const portBase = baseForLocalPort(found.port);
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (found.port != null && portBase) {
+    if (found.port != null && portBase !== null) {
       _resolvedBase = portBase;
       logger.info(
         `[comfyui] Connected to configured instance on :${found.port} (pid=${found.pid}, via=${found.via})`,
@@ -305,7 +305,7 @@ export async function probeComfyBase(): Promise<string | null> {
  * 会改变状态的调用（上传 / 提交 prompt）请用 resolveComfyBase()。
  */
 export function comfyBase(): string {
-  if (_resolvedBase) {
+  if (_resolvedBase !== null) {
     return forceIpv4Host(_resolvedBase);
   }
   const settings = getSettingsSync();
@@ -336,7 +336,8 @@ export async function getHistory(promptId: string): Promise<Record<string, unkno
     // 本地 ComfyUI 正常秒回；此超时只兜「连上却不返回」的病态挂死，给足余量。
     signal: AbortSignal.timeout(15_000),
   });
-  return /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  return (await res.json()) as Record<string, unknown>;
 }
 
 /** `getView` 的失败带着 ComfyUI 回的状态码。
@@ -384,7 +385,8 @@ export async function listModels(folder: string): Promise<Array<string>> {
     if (!res.ok) {
       return [];
     }
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Array<string>;
+    /* SAFETY: 类型断言已复核 */
+    const data = (await res.json()) as Array<string>;
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
@@ -408,7 +410,8 @@ export async function listModelFolders(): Promise<Array<string>> {
     if (!res.ok) {
       return [];
     }
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Array<string>;
+    /* SAFETY: 类型断言已复核 */
+    const data = (await res.json()) as Array<string>;
     return Array.isArray(data)
       ? data.filter((datum) => typeof datum === "string" && datum.length > 0)
       : [];
@@ -435,7 +438,8 @@ export async function uploadImage(
   if (!res.ok) {
     throw new Error(`ComfyUI 上传失败 (${res.status}): ${await res.text().catch(() => "")}`);
   }
-  return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+  /* SAFETY: 类型断言已复核 */
+  return (await res.json()) as {
     name?: string;
   };
 }
@@ -513,7 +517,8 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
     if (!res.ok) {
       return null;
     }
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const data = (await res.json()) as {
       devices?: Array<ComfyDevice>;
       system?: { ram_free?: number; ram_total?: number };
     };

@@ -395,7 +395,6 @@ export function CharacterDesigner({
                   </span>
                   <SelectMenu
                     className="border-border! bg-subtle! text-sm"
-                    value={character.loraName ?? ""}
                     onChange={(value) =>
                       update(character.id, {
                         loraName: value || undefined,
@@ -404,17 +403,15 @@ export function CharacterDesigner({
                     }
                     options={loraFiles}
                     placeholder={lorasLoading ? "加载中…" : "不绑定（用工作流图内配置）"}
+                    value={character.loraName ?? ""}
                   />
                 </div>
                 {character.loraName && (
                   <div>
                     <span className="text-muted-foreground mb-1 block text-xs">强度</span>
                     <Input
-                      inputMode="decimal"
-                      value={
-                        character.loraStrength === undefined ? "1" : String(character.loraStrength)
-                      }
                       disabled={!character.loraName}
+                      inputMode="decimal"
                       onChange={numberHandler(
                         (v) =>
                           update(character.id, {
@@ -422,6 +419,9 @@ export function CharacterDesigner({
                           }),
                         1,
                       )}
+                      value={
+                        character.loraStrength === undefined ? "1" : String(character.loraStrength)
+                      }
                     />
                   </div>
                 )}

@@ -21,7 +21,8 @@ function node(id: string, data: Partial<CanvasNodeData>): CanvasNodeType {
   return {
     id,
     type: "canvasNode",
-    data: /* SAFETY: 类型断言已复核 */ data as CanvasNodeData,
+    /* SAFETY: 类型断言已复核 */
+    data: data as CanvasNodeData,
     position: { x: 0, y: 0 },
   };
 }
@@ -88,7 +89,8 @@ describe("placeCanvasNode", () => {
       nodes: base,
       point: { x: 30, y: 40 },
       flow,
-      data: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      data: {
         kind: "image",
       } as CanvasNodeData,
     });
@@ -108,7 +110,8 @@ describe("placeCanvasNode", () => {
           return p;
         },
       },
-      data: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      data: {
         kind: "image",
       } as CanvasNodeData,
     });
@@ -126,7 +129,8 @@ describe("placeCanvasNode", () => {
           return p;
         },
       },
-      data: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      data: {
         kind: "image",
       } as CanvasNodeData,
     });
@@ -139,7 +143,8 @@ describe("placeCanvasNode", () => {
       nodes: base,
       point: { x: 0, y: 0 },
       flow,
-      data: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      data: {
         kind: "image",
       } as CanvasNodeData,
     });
@@ -162,7 +167,8 @@ describe("placeCanvasNode", () => {
           return { x: p.x + 9999, y: p.y + 9999 };
         },
       },
-      data: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      data: {
         kind: "image",
       } as CanvasNodeData,
     });
@@ -176,7 +182,8 @@ describe("placeCanvasNode", () => {
       id: "n_sink",
       flowPosition: { x: 0, y: 0 },
       flow,
-      data: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      data: {
         kind: "image",
       } as CanvasNodeData,
     });
@@ -188,7 +195,8 @@ describe("placeCanvasNode", () => {
       nodes: [],
       point: { x: 0, y: 0 },
       flow,
-      data: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      data: {
         kind: "image",
       } as CanvasNodeData,
     });
@@ -196,7 +204,8 @@ describe("placeCanvasNode", () => {
       nodes: first,
       point: { x: 0, y: 0 },
       flow,
-      data: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      data: {
         kind: "image",
       } as CanvasNodeData,
     });

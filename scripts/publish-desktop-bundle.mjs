@@ -352,8 +352,9 @@ export function main(io = {}) {
     log,
   );
   log(
-    `[发布] 计划：落 ${target}·留 ${plan.keep} 份·本轮后删 ` +
-      `${rotation.dropDirs.map((d) => d.name).join(", ") || "（无）"}`,
+    `[发布] 计划：落 ${target}·留 ${plan.keep} 份·本轮后删 ${
+      rotation.dropDirs.map((d) => d.name).join(", ") || "（无）"
+    }`,
   );
   if (plan.dryRun) {
     log("[发布] --dry-run：不落盘。");
@@ -394,8 +395,9 @@ export function main(io = {}) {
       log(`[发布] 轮转删 ${drop.name}`);
     } catch (error) {
       log(
-        `[发布] 轮转删不掉 ${drop.name}（不阻断本次发布）：` +
-          `${error instanceof Error ? error.message : String(error)}`,
+        `[发布] 轮转删不掉 ${drop.name}（不阻断本次发布）：${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
   }

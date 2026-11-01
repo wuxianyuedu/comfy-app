@@ -156,7 +156,7 @@ export function parseExtraModelPathsYaml(text: string): ExtraModelPathsFile {
   /* 收尾一个块：没有 basePath 的条目无法定位目录，没有 paths 的条目什么都
    * 不并入 —— 两者都按 ComfyUI 的行为跳过，留在结果里只会让界面多出空行。 */
   const flush = () => {
-    if (current?.basePath && current.paths.length > 0) {
+    if (current !== null && current.basePath !== "" && current.paths.length > 0) {
       result.entries.push(current);
     }
     current = null;

@@ -126,7 +126,7 @@ function checkScopeCoverage() {
     walk(absDir);
   }
   for (const [rel, reason] of Object.entries(SCOPED_DOC_EXEMPTIONS)) {
-    if (!reason || !reason.trim()) {
+    if (!reason?.trim()) {
       problems.push(`校验范围守卫：豁免名单条目 ${rel} 没有写理由（豁免必须可核验）`);
     }
     if (!exists(rel)) {
@@ -331,7 +331,7 @@ function shouldApplyFactToDoc(f, docPath) {
   if (f.onlyDocs && !f.onlyDocs.includes(docPath) && !(f.otherDocs ?? []).includes(docPath)) {
     return false;
   }
-  if (f.excludeDocs && f.excludeDocs.includes(docPath)) {
+  if (f.excludeDocs?.includes(docPath)) {
     return false;
   }
   return true;

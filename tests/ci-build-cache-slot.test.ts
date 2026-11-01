@@ -273,8 +273,11 @@ describe("withBuildCacheSlot：开关关着时与「没有这个机制」逐字�
 });
 
 describe("槽根：与依赖面那套槽同源、不同目录", () => {
-  const store = "G:\\.pnpm-store\\v11\\";
-  const run = () => ({ status: 0, stdout: store });
+  /* store 要落在**本机上真实存在的那块卷**上：`path.parse` 认的是宿主平台，
+   * 拿 `G:\` 这种盘符当输入时，Linux 宿主解析不出卷根（`root` 是空串）⇒ 推导那一侧
+   * 只是照实答「问不出 store」。这里钉的是「两份槽同卷不同目录」，与盘符叫什么无关。 */
+  const store = path.join(path.parse(ROOT).root, ".pnpm-store", "v11");
+  const run = () => ({ status: 0, stdout: `${store}\\n` });
 
   it("两者同卷、不同目录（混在一个根下时依赖面那侧的淘汰会删掉这边在用的目录）", () => {
     const deps = resolveCacheRoot({ cwd: ROOT, env: {}, run });

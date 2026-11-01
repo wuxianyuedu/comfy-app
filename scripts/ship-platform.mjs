@@ -542,8 +542,8 @@ export function mergeAndVerify(ctx) {
     "-v",
   ]);
   /** @type {{merged?:boolean,sha?:string} | null} */
-  const mergeData = mg && mg.json ? (mg.json.data ?? null) : null;
-  if (!mergeData || mergeData.merged !== true) {
+  const mergeData = mg?.json ? (mg.json.data ?? null) : null;
+  if (mergeData?.merged !== true) {
     log("[ship] 合并调用没给出 merged:true ⇒ 不假定它成功了，去平台上核对。");
     return CODE.RED;
   }

@@ -60,7 +60,8 @@ describe("GET /api/health", () => {
     const { GET } = await import("./route");
     const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       db: string;
       hint: string;
       status: string;
@@ -148,7 +149,8 @@ describe("GET /api/health 跨域面（D5）", () => {
   it("503 的 hint 不含内部文档路径（响应体不给仓库文档当出口）", async () => {
     probeSchemaSync.mockReturnValue("missing");
     const { GET } = await import("./route");
-    const body = /* SAFETY: 类型断言已复核 */ (await (await GET(new Request(url))).json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await (await GET(new Request(url))).json()) as {
       hint: string;
     };
     expect(body.hint).not.toContain("docs/");

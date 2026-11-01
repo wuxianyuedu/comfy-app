@@ -144,7 +144,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 /** 本基元的**私有字段**（自己接管，不透传给底层图标组件）——
  *  类型侧与运行时侧共用这一份表（`~/lib/dom-props`）。 */
-const OWN_PROPS = /* SAFETY: 类型断言已复核 */ ["name", "size", "className"] as const;
+/* SAFETY: 类型断言已复核 */
+const OWN_PROPS = ["name", "size", "className"] as const;
 
 export type IconProps = {
   /** 额外类名（透传给底层的 lucide 组件）。 */

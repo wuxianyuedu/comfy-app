@@ -21,10 +21,14 @@ const { dirEntries, fileStats, disk, userMock } = vi.hoisted(() => ({
   dirEntries: new Map<string, { names?: Array<string>; subdirs?: Array<string> }>(),
   fileStats: new Map<string, { mtime: Date; size: number }>(),
   disk: {
-    reads: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
-    mkdir: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
-    writeFile: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
-    unlink: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    reads: [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    mkdir: [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    writeFile: [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    unlink: [] as Array<string>,
   },
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
 }));
@@ -90,7 +94,8 @@ const nameOf = (id: string) => id.split("/").pop() ?? id;
 
 /** handler 只要 `req.url` 与 `formData()`，用真 Request 顶替 NextRequest。 */
 function reqOf(url: string, init?: RequestInit): NextRequest {
-  return /* SAFETY: 类型断言已复核 */ new Request(url, init) as unknown as NextRequest;
+  /* SAFETY: 类型断言已复核 */
+  return new Request(url, init) as unknown as NextRequest;
 }
 
 function put(scope: string, folder: string, name: string): void {
@@ -169,23 +174,26 @@ describe("GET /api/materials —— 读侧归属", () => {
   it("本项目 + 共享区", async () => {
     const res = await GET(reqOf(urlOf("?projectId=proj-a&folder=ref")));
     expect(res.status).toBe(200);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       items: Array<{ id: string }>;
     };
     expect(body.items.map((i) => nameOf(i.id))).toEqual(["mine.png", "shared.png"]);
   });
 
   it("别人的项目 → 与「没素材」同形（不给探测项目 id 用）", async () => {
-    const body = /* SAFETY: 类型断言已复核 */ (await (
-      await GET(reqOf(urlOf("?projectId=proj-b&folder=ref")))
-    ).json()) as { items: Array<{ id: string }> };
+    /* SAFETY: 类型断言已复核 */
+    const body = (await (await GET(reqOf(urlOf("?projectId=proj-b&folder=ref")))).json()) as {
+      items: Array<{ id: string }>;
+    };
     expect(body.items.map((i) => nameOf(i.id))).toEqual(["shared.png"]);
   });
 
   it("cross 不再枚举全库目录（别人项目里的文件一条都不出现）", async () => {
-    const body = /* SAFETY: 类型断言已复核 */ (await (
-      await GET(reqOf(urlOf("?scope=cross&folder=ref")))
-    ).json()) as { items: Array<{ scope: string }> };
+    /* SAFETY: 类型断言已复核 */
+    const body = (await (await GET(reqOf(urlOf("?scope=cross&folder=ref")))).json()) as {
+      items: Array<{ scope: string }>;
+    };
     expect(body.items.map((i) => i.scope)).not.toContain("proj-b");
   });
 
@@ -196,7 +204,8 @@ describe("GET /api/materials —— 读侧归属", () => {
     dirEntries.delete(ROOT);
     const res = await GET(reqOf(urlOf("?scope=cross&folder=ref")));
     expect(res.status).toBe(200);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       folders: Array<unknown>;
       items: Array<{ scope: string }>;
     };
@@ -212,9 +221,10 @@ describe("GET /api/materials —— 读侧归属", () => {
 
   it("库里没有的项目目录仍可写可见（画布镜像是尽力而为，别把正常流程堵死）", async () => {
     put("proj-fresh", "ref", "fresh.png");
-    const body = /* SAFETY: 类型断言已复核 */ (await (
-      await GET(reqOf(urlOf("?projectId=proj-fresh&folder=ref")))
-    ).json()) as { items: Array<{ id: string }> };
+    /* SAFETY: 类型断言已复核 */
+    const body = (await (await GET(reqOf(urlOf("?projectId=proj-fresh&folder=ref")))).json()) as {
+      items: Array<{ id: string }>;
+    };
     expect(body.items.map((i) => nameOf(i.id))).toContain("fresh.png");
   });
 });

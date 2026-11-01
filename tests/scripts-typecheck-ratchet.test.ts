@@ -8,7 +8,10 @@
  *      **两套独立算法**对账（用例自己走盘 ⇄ 判据用 TS 的 glob 引擎展开）；
  *   ② **存量只降不升**：新增格子红、`--update` 拒涨且**不改写基线**、下降只提示；
  *   ③ **被截断的一跑不许冒充结论**：tsc 报完语法层的错就不做语义检查（实测），
- *      那一跑必须红，且**不许**照它重写基线（那等于把棘轮清空）。
+ *      那一跑必须红，且**不许**照它重写基线（那等于把棘轮清空）；
+ *   ④ **账本只有一本账**：`(文件, TS 码)` 与总数之外没有第三个字段 —— 尤其是那句
+ *      「判了多少份」，它曾经是 `face` 这个手写副本、漂一次就红一次无关的人
+ *      （2026-11-01 一天修了 8 次），现在由判据从 `git ls-files` 现算（ISSUE #2984）。
  *
  * 现场全部落在**临时夹具仓库**里（口径同 `tests/check-doc-references.test.ts` 的
  * `DOC_RENDER_ROOT`，ISSUE #2415：**判据的用例不写真仓库** —— 本文件一次也不动
@@ -120,9 +123,8 @@ function write(rel: string, body: string): string {
   return abs;
 }
 
-/** 账本的形状（判据写出去的那一份，读侧只认这三格）。 */
+/** 账本的形状（判据写出去的那一份，读侧只认这两格 —— `face` 已不再是字段）。 */
 type Ledger = {
-  face: number;
   files: Record<string, Record<string, number>>;
   total: number;
 };
@@ -233,30 +235,28 @@ describe("脚本档棘轮 —— 只降不升", () => {
     rmSync(join(fixture, "scripts", "newborn.mjs"), { force: true });
   });
 
-  it("新增一份**干净**的入库脚本 ⇒ 账自己跟上面（不再留一个人手要跟的数）", () => {
-    /* ISSUE #2944 的现场：判据 ✓ 而这一格红，两处读数相反，红全落在下一个无关的人身上。
-     * 面的份数是**构成**（判了多少份），不是存量 —— 干净脚本入库时一个格子都不涨，
-     * 于是 `face` 成了唯一会漂的数。它现在由判据自己对（`alignFace()`）。 */
-    const before = readFixtureBaseline();
+  it("新增一份**干净**的入库脚本 ⇒ 绿、账本一个字节不动（面是现算的，不落盘）", () => {
+    /* ISSUE #2984 的现场：上一版的 `face` 是手写副本，干净脚本入库时它不动 ⇒ 判据与用例
+     * 各自自洽、互相红；改成「判据自己对齐并写回」之后又多出一处判定（判定档写、用例判
+     * 不许写），两种跑法轮流红。现在的口径是**账本里没有这个数**：份数每次现算，
+     * 于是「干净脚本入库」这件事在账面上**零痕迹**，而存量仍是 0 处。 */
+    const before = readFileSync(baselinePath(), "utf8");
     write(join("scripts", "cleaner.mjs"), "export const d = 4;\n");
     const { code, output } = runCheck([]);
     expect(code, output).toBe(0);
-    expect(output).toContain("判决面扩张");
-    expect(readFixtureBaseline().face).toBe(before.face + 1);
-    /* 棘轮那一半一个字节都不许跟着动：面是构成，`files` / `total` 才是存量。 */
-    expect(readFixtureBaseline().files).toEqual(before.files);
-    expect(readFixtureBaseline().total).toBe(before.total);
-    /* 第二跑必须是「已对齐」的静默：它会写回账，不写就会每次都念一遍。 */
-    const again = runCheck([]);
-    expect(again.code, again.output).toBe(0);
-    expect(again.output).not.toContain("判决面扩张");
+    expect(output).toContain("入库的 3 份");
+    expect(output).toContain("✓ 判决面 3 份 / 存量 1 处");
+    /* 判定档**不写**任何文件：写回只发生在 `--update` 那一条路上。 */
+    expect(readFileSync(baselinePath(), "utf8")).toBe(before);
     rmSync(join(fixture, "scripts", "cleaner.mjs"), { force: true });
-    commitFixture();
-    /* 复原：删了那份脚本 ⇒ 面收缩也会自己跟回去（向下对齐同样是「面」的事）。 */
+    /* 反向同理：删了那份脚本，面跟着缩回 2 份，账本照样不动。
+     * （`runCheck()` 起判据前会同步一次夹具的入库清单：面只认 `git ls-files` 那一份，
+     * 不先同步的话量到的是「磁盘 2 份、清单 3 份」—— 那一跑也是绿，但判的是另一件事。） */
     const shrunk = runCheck([]);
     expect(shrunk.code, shrunk.output).toBe(0);
-    expect(shrunk.output).toContain("判决面收缩");
-    expect(readFixtureBaseline().face).toBe(before.face);
+    expect(shrunk.output).toContain("入库的 2 份");
+    expect(shrunk.output).not.toContain("面外未入库");
+    expect(readFileSync(baselinePath(), "utf8")).toBe(before);
   });
 
   it("已有格子上涨 ⇒ 红；`--update` 同样拒，且**一个字节都不写回基线**", () => {
@@ -278,26 +278,6 @@ describe("脚本档棘轮 —— 只降不升", () => {
     /* 这条是关键：拒涨如果只「拒判」不「拒写」，账本会被上涨那一跑悄悄改掉。 */
     expect(readFileSync(baselinePath(), "utf8")).toBe(before);
     write(join("scripts", "dirty.mjs"), "const dead = 1;\nexport const b = 2;\n");
-  });
-
-  it("删掉一份入库脚本 ⇒ 面收缩也自己跟回去（两个方向都不留人手要跟的数）", () => {
-    /* 面变小有两条路：删脚本（合法，账跟着收）与 include 被改窄（故障，上面那格判）。
-     * 两种在总数上长得一样 —— #2944 之后这一格的读数是**自动对齐**：删了脚本账自己跟
-     * 回去并念一句；改窄 include 由「判决面漏了这些 .mjs」那一格拦下，面一并记到新的
-     * 读数上（面是构成，不是棘轮 —— 棘轮是 `files` / `total`）。 */
-    rmSync(join(fixture, "scripts", "clean.mjs"), { force: true });
-    commitFixture();
-    const shrunk = runCheck([]);
-    expect(shrunk.code, shrunk.output).toBe(0);
-    expect(shrunk.output).toContain("判决面收缩");
-    expect(readFixtureBaseline().face).toBe(1);
-    /* 第二跑静默：账已对齐，再念一遍就成了天天响的提示。 */
-    expect(runCheck([]).output).not.toContain("判决面收缩");
-    /* `write()` 自己接夹具根（它内部 `join(fixture, rel)`）—— 这里只给相对路径。 */
-    write(join("scripts", "clean.mjs"), "export const a = 1;\n");
-    commitFixture();
-    expect(runCheck([]).code).toBe(0);
-    expect(readFixtureBaseline().face).toBe(2);
   });
 
   it("下降只提示、不拦（别把「修好了」判成红），且提示指路 `--update`", () => {
@@ -349,9 +329,10 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
   }
 
   /**
-   * 「面里有、git 清单里没有」的那几份 —— 只在数不上时才算（正常绿跑不付这次 git 调用）。
+   * 「面里有、git 清单里没有」的那几份 —— 只在账本读数与实跑对不上时才算
+   * （正常绿跑不付这次 git 调用）。
    *
-   * 为什么需要它：只给「账上 210 / 展开 212」两个数时，读的人分不出这是
+   * 为什么需要它：只给「账上 X 处 / 实跑 Y 处」两个数时，读的人分不出这是
    * 「谁新加了一份没记账」还是「磁盘上多了一份没入库的产物」—— 而这两者的修法相反
    * （前者记账、后者归到 exclude 或删掉）。ISSUE #2572 撞的就是第二种形态。
    */
@@ -374,7 +355,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     return `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）${
       stray.length > 0
         ? `：${stray.slice(0, 10).join(", ")} —— 修法是把它归进 exclude 或删掉，不是往账上记`
-        : ` —— 差的全是入库文件 ⇒ 有人新加了脚本没记账，修法是把账记上`
+        : ` —— 差的全是入库文件 ⇒ 有人新加了脚本，它的格子要先入账（跑 --update 之前先把它写干净）`
     }`;
   }
 
@@ -413,7 +394,12 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     expect(scratch.test(`tests/${prefix}151192-1793363720066/x.mjs`)).toBe(false);
   });
 
-  it("账本里的 `face` 与 `total` 与配置展开同数（面与账不许两份口径）", () => {
+  it("账本里没有「判了多少份」那一格（面是现算的，不是记账记出来的）", () => {
+    /* ISSUE #2984：`face` 曾经是这份账的第三个字段 —— 一张「tsconfig 展开出多少份」的
+     * 手写副本。它在由人手跟的那些天里漂一次就红一次**下一个无关的人**（2026-11-01
+     * 一天修了 8 次），改成判据自己对齐之后又变成「判定档写文件」，与「判定档只读」
+     * 的那一半轮流红。现在的口径最简：份数每次现算（判据自己的 `trackedMjs()` +
+     * `splitTrackedFace()`），账本里**不存在**这个数，于是不存在「两份口径」。 */
     const judge = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
       "../scripts/check-scripts-typecheck.cjs",
     ) as {
@@ -439,7 +425,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     const ts = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)("typescript") as unknown;
     const cfg = judge.configFace(ts);
     expect(cfg.ok, "reason" in cfg ? cfg.reason : "").toBe(true);
-    /* 面取**判据自己那一份求交结果**（ISSUE #2681）：账上记的是「这份提交里有多少脚本」，
+    /* 面取**判据自己那一份求交结果**：账本记的是「这份提交里有多少脚本」，
      * 用例若拿未筛的磁盘展开去比，就把刚修掉的那条耦合又请回来了 ——
      * 平台上任何一份落在工作区的未入库产物都会让它红一次，而且指不出是谁。 */
     const { face, untracked } = judge.splitTrackedFace(cfg.mjs ?? [], judge.trackedMjs(REPO_ROOT));
@@ -455,7 +441,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       return;
     }
     const scratch = new RegExp(`^scripts/${prefix}[^/]*/`);
-    const strays = untracked.filter((p) => !scratch.test(String(p)));
+    const strays = untracked.filter((p) => !scratch.test(p));
     if (strays.length !== untracked.length) {
       console.log(
         `[scripts-typecheck-ratchet] 面外 ${untracked.length} 份里 ${untracked.length - strays.length} 份是同跑的 eslint canary 临时样本（由它自己 finally 清理）⇒ 不计入下面那条`,
@@ -467,18 +453,19 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     ).toEqual([]);
     const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
-    ) as { face: number; files: Record<string, Record<string, number>>; total: number };
-    /* 面收了、账没跟着记（或反过来）都会在这一格现形 —— 那两种形态在账面读数上
-     * 长得一模一样，只有拿配置原值对才分得开。 */
+    ) as { files: Record<string, Record<string, number>>; total: number };
     expect(
-      baseline.face,
-      `配置展开 ${face.length} 份，账上写 ${baseline.face}${baseline.face === face.length ? "" : driftReading(face)}`,
-    ).toBe(face.length);
+      Object.keys(baseline).sort(),
+      `账本多出了字段 —— 这一档只认「(文件, TS 码) 的处数」与总数两件事；` +
+        `「判了多少份」由判据现算（trackedMjs + splitTrackedFace），写成字段就又是一份会漂的手写副本`,
+    ).toEqual(["files", "generatedAt", "note", "ruleVersion", "total"]);
     const summed = Object.values(baseline.files).reduce(
       (acc, codes) => acc + Object.values(codes).reduce((a, b) => a + b, 0),
       0,
     );
-    expect(summed).toBe(baseline.total);
+    expect(summed, `账上的逐格合计与 total=${baseline.total} 对不上${driftReading(face)}`).toBe(
+      baseline.total,
+    );
     /* 独立枚举：盘上每一份非点目录的 `.mjs` 都必须在面里（exclude 那些由配置自己说）。
      * 这里**刻意用未筛的 `cfg.mjs`** —— 这一问判的是「include 有没有被改窄」，
      * 是配置的事；未入库的产物由上面那条 `untracked` 单独点名，两问不混。 */

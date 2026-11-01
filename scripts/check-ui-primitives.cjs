@@ -709,7 +709,7 @@ function main() {
   for (const [rel, counts] of Object.entries(ratchetOnly(now))) {
     const b = baseFiles[rel];
     for (const [id, n] of Object.entries(counts)) {
-      if (!b || b[id] === undefined) {
+      if (b?.[id] === undefined) {
         problems.push(`新增 ${id}（${RULES[id].label}）→ ${rel}（${n} 处）`);
       } else if (n > b[id]) {
         problems.push(`${id} 上升 ${b[id]} → ${n} → ${rel}（${RULES[id].label}）`);
@@ -721,7 +721,7 @@ function main() {
   for (const [rel, b] of Object.entries(baseFiles)) {
     const cur = now[rel];
     for (const [id, n] of Object.entries(b)) {
-      if (!cur || cur[id] === undefined) {
+      if (cur?.[id] === undefined) {
         dropped.push(`${id} ${n} → 0：${rel}`);
       }
     }

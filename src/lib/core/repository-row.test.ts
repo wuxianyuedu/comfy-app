@@ -42,7 +42,8 @@ describe("firstRowRequired —— 写入路径取首行", () => {
     /* 写入路径**不该**被报成 404：「没有行」在这里是我方 bug，不是用户请求错了。
      * 用 `NotFoundError` 会让前端把它当「资源不存在」渲染，从而把内部故障藏起来。 */
     expect(err).not.toBeInstanceOf(NotFoundError);
-    expect(/* SAFETY: 类型断言已复核 */ (err as AppError).httpStatus).toBe(500);
+    /* SAFETY: 类型断言已复核 */
+    expect((err as AppError).httpStatus).toBe(500);
   });
 
   it("错误话术里带得上主语（否则读日志的人不知道是哪条 SQL）", () => {
@@ -74,7 +75,8 @@ describe("firstRowOfExisting —— 按 id 更新取首行", () => {
     /* 它同时是 AppError 的子类（归一化与信封共用同一条路）—— 这一条钉的是
      * 「换成 NotFoundError 不等于脱离错误契约」。 */
     expect(err).toBeInstanceOf(AppError);
-    expect(/* SAFETY: 类型断言已复核 */ (err as AppError).httpStatus).toBe(404);
+    /* SAFETY: 类型断言已复核 */
+    expect((err as AppError).httpStatus).toBe(404);
   });
 
   it("错误话术里带得上主语与 id", () => {
@@ -88,7 +90,8 @@ describe("两者的分工（同一份输入、两条判决）", () => {
       try {
         firstRowRequired([], "x");
       } catch (error) {
-        return /* SAFETY: 类型断言已复核 */ error as AppError;
+        /* SAFETY: 类型断言已复核 */
+        return error as AppError;
       }
       return null;
     })();
@@ -96,7 +99,8 @@ describe("两者的分工（同一份输入、两条判决）", () => {
       try {
         firstRowOfExisting([], "x");
       } catch (error) {
-        return /* SAFETY: 类型断言已复核 */ error as AppError;
+        /* SAFETY: 类型断言已复核 */
+        return error as AppError;
       }
       return null;
     })();

@@ -104,7 +104,8 @@ export function readNavigationSample(page: Page): Promise<{
   loadEventEnd: number | null;
 }> {
   return page.evaluate(() => {
-    const nav = /* SAFETY: 类型断言已复核 */ performance.getEntriesByType("navigation")[0] as
+    /* SAFETY: 类型断言已复核 */
+    const nav = performance.getEntriesByType("navigation")[0] as
       | PerformanceNavigationTiming
       | undefined;
     const fcp = performance.getEntriesByName("first-contentful-paint")[0];
@@ -142,7 +143,8 @@ export function steadyMin(
   if (kept.some((v) => v === null || !Number.isFinite(v))) {
     return null;
   }
-  return Math.min(.../* SAFETY: 类型断言已复核 */ (kept as Array<number>));
+  /* SAFETY: 类型断言已复核 */
+  return Math.min(...(kept as Array<number>));
 }
 
 /**

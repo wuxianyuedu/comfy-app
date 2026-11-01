@@ -26,5 +26,6 @@ export async function fetchDebugSource(file: string): Promise<DebugSourcePayload
   if (!res.ok) {
     throw new Error(readApiError(body) ?? `HTTP ${res.status}`);
   }
-  return /* SAFETY: 类型断言已复核 */ body as DebugSourcePayload;
+  /* SAFETY: 类型断言已复核 */
+  return body as DebugSourcePayload;
 }

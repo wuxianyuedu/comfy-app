@@ -382,7 +382,7 @@ export function reportKeepAliveExit(opts: {
   ];
   let headerWritten = false;
   for (const [kind, file] of tailFiles) {
-    if (!file) {
+    if (file === undefined) {
       continue;
     }
     const tail = readTailLines(file);

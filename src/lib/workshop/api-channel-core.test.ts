@@ -44,16 +44,15 @@ function stubFetch(impl: (url: string, init?: RequestInit) => unknown) {
 function bodyOf(mock: ReturnType<typeof stubFetch>, call = 0): Record<string, unknown> {
   const init: RequestInit | undefined = mock.mock.calls[call]?.[1];
   const raw: unknown = init?.body;
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
-    string,
-    unknown
-  >;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<string, unknown>;
 }
 
 /** 取第 n 次 fetch 调用的请求头。 */
 function headersOf(mock: ReturnType<typeof stubFetch>, call = 0): Record<string, string> {
   const init: RequestInit | undefined = mock.mock.calls[call]?.[1];
-  return /* SAFETY: 类型断言已复核 */ (init?.headers ?? {}) as Record<string, string>;
+  /* SAFETY: 类型断言已复核 */
+  return (init?.headers ?? {}) as Record<string, string>;
 }
 
 /** 上游响应桩：按上面的 mock 签名给回 Response 形状。 */
@@ -104,8 +103,10 @@ describe("defaultChannelsFromEnv / normalizeSettings", () => {
     const defaults = defaultChannelsFromEnv({});
     const merged = normalizeSettings(
       {
-        image: /* SAFETY: 类型断言已复核 */ "not-an-object" as never,
-        video: /* SAFETY: 类型断言已复核 */ { baseUrl: 123 } as never,
+        /* SAFETY: 类型断言已复核 */
+        image: "not-an-object" as never,
+        /* SAFETY: 类型断言已复核 */
+        video: { baseUrl: 123 } as never,
       },
       defaults,
     );

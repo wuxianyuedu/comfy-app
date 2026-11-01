@@ -37,7 +37,7 @@ function loadConfig(root) {
   try {
     return fs.readFileSync(path.join(root, CONFIG_REL), "utf8");
   } catch (error) {
-    if (error && error.code === "ENOENT") {
+    if (error?.code === "ENOENT") {
       return null;
     }
     throw error;

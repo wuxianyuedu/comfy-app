@@ -18,7 +18,8 @@
  */
 
 /** 本仓库用到的具名键（`event.key` 的 W3C 口径字面量）。 */
-export const KEY = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+export const KEY = {
   Enter: "Enter",
   Escape: "Escape",
   Tab: "Tab",

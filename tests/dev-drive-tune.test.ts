@@ -495,7 +495,8 @@ describe("报告与计数", () => {
     const report = makeReport();
     report.levers = buildLevers(report);
     report.summary = summarizeLevers(report.levers);
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(report)) as {
+    /* SAFETY: 类型断言已复核 */
+    const parsed = JSON.parse(JSON.stringify(report)) as {
       levers: Array<unknown>;
     };
     expect(Array.isArray(parsed.levers)).toBe(true);

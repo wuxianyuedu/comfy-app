@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
   const size = strField(rec, "size");
   const extraJson = strField(rec, "extraJson");
 
-  if (!(/* SAFETY: 类型断言已复核 */ (USAGE_TEST_KINDS as ReadonlyArray<string>).includes(kind))) {
+  /* SAFETY: 类型断言已复核 */
+  if (!(USAGE_TEST_KINDS as ReadonlyArray<string>).includes(kind)) {
     return NextResponse.json({
       ok: false,
       detail: `未知用途：${kind || "(空)"}`,

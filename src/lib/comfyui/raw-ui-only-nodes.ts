@@ -38,7 +38,8 @@ function strField(o: unknown, key: string): string | undefined {
   if (o == null || typeof o !== "object") {
     return undefined;
   }
-  const v = /* SAFETY: 类型断言已复核 */ (o as Record<string, unknown>)[key];
+  /* SAFETY: 类型断言已复核 */
+  const v = (o as Record<string, unknown>)[key];
   return typeof v === "string" ? v : undefined;
 }
 
@@ -60,11 +61,12 @@ function pickOutUiOnlyNodes(nodes: Array<unknown>): {
       kept.push(n);
       continue;
     }
-    const node = /* SAFETY: 类型断言已复核 */ n as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const node = n as Record<string, unknown>;
     /* 两种导出形态都认：ComfyUI 新导出走 `type`，部分路径（子图 wrapper）走
      * `class_type`（与 `executor-cli` 里读节点类型同口径）。 */
     const type = strField(node, "type") ?? strField(node, "class_type");
-    if (type && UI_ONLY_NODE_TYPES.has(type)) {
+    if (type !== undefined && type !== "" && UI_ONLY_NODE_TYPES.has(type)) {
       const rawId = node.id;
       if (typeof rawId === "string" || typeof rawId === "number") {
         removedIds.add(String(rawId));
@@ -94,7 +96,8 @@ function dropLinksTo(container: Record<string, unknown>, removedIds: Set<string>
     }
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (link != null && typeof link === "object") {
-      const l = /* SAFETY: 类型断言已复核 */ link as Record<string, unknown>;
+      /* SAFETY: 类型断言已复核 */
+      const l = link as Record<string, unknown>;
       return !removedIds.has(idOf(l.origin_id)) && !removedIds.has(idOf(l.target_id));
     }
     return true;
@@ -143,7 +146,8 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
     if (sub == null || typeof sub !== "object") {
       continue;
     }
-    const def = /* SAFETY: 类型断言已复核 */ sub as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const def = sub as Record<string, unknown>;
     if (!Array.isArray(def.nodes)) {
       continue;
     }

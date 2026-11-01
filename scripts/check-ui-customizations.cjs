@@ -87,7 +87,7 @@ function hasHeaderMarker(text) {
  * 只认 §16.8 到下一个 `## ` 之间的表格第一列 —— 别的章节(§16.2.4 那些台账)
  * 里也常有 `` `xxx.tsx` `` 形式的文件名,不圈范围就会把它们当成登记。
  * @param {string} markdown 文档全文
- * @returns {Set<string>} 文件名(如 `button.tsx`)
+ * @returns {Set<string> | null} 文件名(如 `button.tsx`)；`null` = 找不到台账小节
  */
 function parseLedger(markdown) {
   const lines = markdown.split("\n");
@@ -127,7 +127,7 @@ function parseLedger(markdown) {
 /**
  * 双向差集。
  * @param {Set<string>} marked 带标记的文件名
- * @param {Set<string>} ledger 台账登记的文件名
+ * @param {Set<string>} ledger 台账登记的文件名（`parseLedger` 找不到小节时回 `null`）
  * @returns {{ unregistered: string[], unmarked: string[] }}
  */
 function compareLedger(marked, ledger) {
@@ -146,14 +146,21 @@ function main() {
     console.error(`\n[ui-customizations] ✗ 台账文档不存在:${LEDGER_DOC}\n`);
     process.exit(1);
   }
-  const ledger = parseLedger(fs.readFileSync(docPath, "utf8"));
-  if (ledger === null) {
+  /* `parseLedger` 回 `Set<string> | null`（`null` = 台账小节被改名/删了）：这条判空是
+   * 那条失败路径的唯一入口，**不能**因为规则说它「恒真」就删掉 —— 之前漏写的 `| null`
+   * 只存在于 JSDoc 里，`tsc` 与规则看到的都是它。 */
+  const parsed = parseLedger(fs.readFileSync(docPath, "utf8"));
+  if (parsed === null) {
     console.error(
       `\n[ui-customizations] ✗ 在 ${LEDGER_DOC} 里找不到台账小节「${LEDGER_HEADING}」` +
         ` —— 小节标题被改名了?判据与文档必须同源(§16.8)。\n`,
     );
     process.exit(1);
   }
+
+  /* 判完那个 `null` 才改名叫台账：`parseLedger` 的 `Set<string> | null` 收窄之后
+   * 就是下文两处消费的形状。 */
+  const ledger = parsed;
 
   const files = listUiFiles();
   const marked = new Set();

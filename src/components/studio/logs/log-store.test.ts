@@ -200,7 +200,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       warn: 1,
       error: 1,
     });
-    for (const origin of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const origin of [
       "dev",
       "launcher",
       "shell-launch",
@@ -264,7 +265,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       makeEntry({ source: "system", level: "warn" }), // 全局未捕获错误
     ];
     const table = computeOriginCounts(logs);
-    const buckets = /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    const buckets = [
       "dev",
       "launcher",
       "shell-launch",
@@ -278,7 +280,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     expect(sum).toBe(table.all.all);
     expect(sum).toBe(logs.length);
     /* 逐级别也同样守恒（否则「全部」下的警告数与各分类加起来对不上）。 */
-    for (const level of /* SAFETY: 类型断言已复核 */ ["debug", "info", "warn", "error"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const level of ["debug", "info", "warn", "error"] as const) {
       const perLevel = buckets.reduce((acc, key) => acc + table[key][level], 0);
       expect(perLevel).toBe(table.all[level]);
     }
@@ -295,7 +298,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
   it("同一条日志被多路读到：全部来源算一条，逐来源各算一份（守恒只在来源内成立）", () => {
     const dup = {
       time: 1_700_000_000_000,
-      level: /* SAFETY: 类型断言已复核 */ "info" as const,
+      /* SAFETY: 类型断言已复核 */
+      level: "info" as const,
       message: "同一行",
     };
     const table = computeOriginCounts([
@@ -309,17 +313,14 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     /* 「全部来源」= 两条不同的日志（副本不重复算）。 */
     expect(table.all.all).toBe(2);
     /* 逐来源 = 那份文件里的行数：切到「启动器」确实会看到那一行。 */
-    for (const origin of /* SAFETY: 类型断言已复核 */ [
-      "dev",
-      "launcher",
-      "shell",
-      "shell-launch",
-    ] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const origin of ["dev", "launcher", "shell", "shell-launch"] as const) {
       expect(table[origin].all).toBe(1);
     }
     expect(table.app.all).toBe(1);
     /* 逐来源**内部**守恒仍然成立（该来源的四个级别之和 = 该来源的总数）。 */
-    for (const origin of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const origin of [
       "dev",
       "launcher",
       "shell-launch",
@@ -337,7 +338,8 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
   it("「全部来源」与逐来源同口径落到「切过去有几行」上（筛选结果与计数对齐）", () => {
     const dup = {
       time: 1_700_000_000_000,
-      level: /* SAFETY: 类型断言已复核 */ "warn" as const,
+      /* SAFETY: 类型断言已复核 */
+      level: "warn" as const,
       message: "同一行",
     };
     const logs = [makeEntry({ ...dup, origin: "launcher" }), makeEntry({ ...dup, origin: "dev" })];
@@ -643,8 +645,10 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
       message: `full-${i}`,
       time: 1_700_000_000_000 + i,
       seq: baseSeq + 1 + i,
-      level: /* SAFETY: 类型断言已复核 */ "info" as const,
-      source: /* SAFETY: 类型断言已复核 */ "system" as const,
+      /* SAFETY: 类型断言已复核 */
+      level: "info" as const,
+      /* SAFETY: 类型断言已复核 */
+      source: "system" as const,
     }));
     seq = baseSeq + 2000;
     /* 直接 setState 灌时间线时 `filteredLogs` 不会跟着派生，而 setPage 的水位
@@ -1312,9 +1316,10 @@ describe("壳写的启动会话标记在面板里的形态（ISSUE #1364）", ()
     // 面板把三路合进同一条时间线，去重键是「时刻 + 级别 + 正文」——三份各自盖
     // 一个「此刻」就会被读成三条，用户看到的就是「这条标记有很多条」（ISSUE #1364）。
     // 判据的写法侧那一半（三份共用一个 `stamped`）在 `shell_launch.rs` 的单测里。
-    const perSource = /* SAFETY: 类型断言已复核 */ (
-      ["shell-launch", "shell", "launcher"] as const
-    ).map((origin) => parseFileLogs(`${MARKER_LINE}\n`, undefined, origin));
+    /* SAFETY: 类型断言已复核 */
+    const perSource = (["shell-launch", "shell", "launcher"] as const).map((origin) =>
+      parseFileLogs(`${MARKER_LINE}\n`, undefined, origin),
+    );
     expect(perSource.every((e) => e.length === 1)).toBe(true);
     const merged = dedupeByIdentity(perSource.flat());
     expect(merged).toHaveLength(1);

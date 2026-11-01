@@ -286,7 +286,8 @@ export function CanvasRulers({
   // 每条可见的主竖线的世界 X → 屏幕 X。
   const xLabels = useMemo(() => {
     if (zoom <= 0.01 || !width) {
-      return /* SAFETY: 类型断言已复核 */ [] as Array<{
+      /* SAFETY: 类型断言已复核 */
+      return [] as Array<{
         screen: number;
         world: number;
       }>;
@@ -307,7 +308,8 @@ export function CanvasRulers({
   // 每条可见的主横线的世界 Y → 屏幕 Y。
   const yLabels = useMemo(() => {
     if (zoom <= 0.01 || !height) {
-      return /* SAFETY: 类型断言已复核 */ [] as Array<{
+      /* SAFETY: 类型断言已复核 */
+      return [] as Array<{
         screen: number;
         world: number;
       }>;

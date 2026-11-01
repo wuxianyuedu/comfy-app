@@ -29,6 +29,17 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { echoCommandLine } from "./command-echo.mjs";
+
+/**
+ * `spawnSync` 出参里本文件用到的两个字段。
+ *
+ * `stdout` / `stderr` 必须声明成 `string | undefined`：命令起不来（ENOENT）或被墙钟砍掉
+ * （ETIMEDOUT）时它们**实测就是 `undefined`**，而 `@types/node` 按 `encoding` 把它们
+ * 写成了 `string` —— 那些 `?? ""` 是给运行时兜的（§5.10 第①格），不是多余的。
+ * `error` 是 `spawnSync` 自带的解释器错误（libuv 填 `code`），起不来时只在它上面。
+ * @typedef {{ status?: number | null, stdout?: string, stderr?: string,
+ *             error?: NodeJS.ErrnoException }} SpawnOutput
+ */
 import { commandInvocation, whichCommand } from "./shell.mjs";
 
 /** 探测选项（`env` / `platform` 可注入，单测与「模拟另一平台」都靠它）。 */
@@ -173,15 +184,17 @@ export function probeCommand(
   // 工具链探测也回显：`pnpm -v` 失败时提示里会写「命令起不来 / 版本号取不到」，
   // 而「探测的到底是哪个候选、经没经宿主」只有这一行能说清（ISSUE #576）。
   echoCommandLine(command, [...prefixArgs, ...args]);
-  const probe = spawnSync(command, [...prefixArgs, ...args], {
-    cwd: root,
-    env: spawnEnv,
-    encoding: "utf8",
-    timeout: PROBE_TIMEOUT_MS,
-    windowsHide: true,
-  });
-  /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
-  const error = /** @type {NodeJS.ErrnoException | undefined} */ (probe.error);
+  const probe = /** @type {SpawnOutput} */ (
+    spawnSync(command, [...prefixArgs, ...args], {
+      cwd: root,
+      env: spawnEnv,
+      encoding: "utf8",
+      timeout: PROBE_TIMEOUT_MS,
+      windowsHide: true,
+    })
+  );
+  // `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。
+  const error = probe.error;
   if (error?.code) {
     return failed(
       command,
@@ -198,6 +211,7 @@ export function probeCommand(
   if (!version) {
     return failed(command, "no-version", firstLines(output), probe.status ?? null);
   }
+  // 走到这里 `error` 已在上面那支被挡掉 ⇒ status 必有值；`?? 0` 是给类型看的（第③格）。
   return {
     ok: true,
     command,
@@ -284,14 +298,16 @@ export function preparePnpm({
   clearPnpmProbeCache();
   // 重建动作会联网下载，耗时以分钟计：先回显再执行，用户才知道这几分钟在跑什么。
   echoCommandLine(command, [...prefixArgs, "prepare", `pnpm@${version}`, "--activate"]);
-  const result = spawnSync(command, [...prefixArgs, "prepare", `pnpm@${version}`, "--activate"], {
-    cwd: root,
-    env: spawnEnv,
-    encoding: "utf8",
-    timeout: PREPARE_TIMEOUT_MS,
-    windowsHide: true,
-  });
-  const error = /** @type {NodeJS.ErrnoException | undefined} */ (result.error);
+  const result = /** @type {SpawnOutput} */ (
+    spawnSync(command, [...prefixArgs, "prepare", `pnpm@${version}`, "--activate"], {
+      cwd: root,
+      env: spawnEnv,
+      encoding: "utf8",
+      timeout: PREPARE_TIMEOUT_MS,
+      windowsHide: true,
+    })
+  );
+  const error = result.error;
   if (error?.code) {
     return { ran: true, ok: false, description: `corepack 起不来（${error.code}）` };
   }

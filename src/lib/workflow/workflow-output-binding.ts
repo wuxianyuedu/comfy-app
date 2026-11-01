@@ -72,15 +72,13 @@ function manualMapForMode(
   if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) {
     return {};
   }
-  const ns = /* SAFETY: 类型断言已复核 */ (paramMap as Record<string, unknown>)[
-    OUTPUT_BINDING_NAMESPACE
-  ];
+  /* SAFETY: 类型断言已复核 */
+  const ns = (paramMap as Record<string, unknown>)[OUTPUT_BINDING_NAMESPACE];
   if (!ns || typeof ns !== "object" || Array.isArray(ns)) {
     return {};
   }
-  const table = /* SAFETY: 类型断言已复核 */ (ns as Record<string, unknown>)[
-    `${MODE_KEY_PREFIX}${mode}`
-  ];
+  /* SAFETY: 类型断言已复核 */
+  const table = (ns as Record<string, unknown>)[`${MODE_KEY_PREFIX}${mode}`];
   if (!table || typeof table !== "object" || Array.isArray(table)) {
     return {};
   }

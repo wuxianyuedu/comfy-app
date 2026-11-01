@@ -713,7 +713,7 @@ export function writeFreshness({ root, kind, who, key, how }) {
     key: writeKey,
     verifiedAt: new Date().toISOString(),
     who,
-    how: how && how.trim() ? how.trim() : track.run,
+    how: how?.trim() ? how.trim() : track.run,
     trackedBy: kind,
   });
   try {

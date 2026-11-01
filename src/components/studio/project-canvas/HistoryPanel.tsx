@@ -111,11 +111,13 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           >
             {[
               {
-                id: /* SAFETY: 类型断言已复核 */ "project" as HistoryScope,
+                /* SAFETY: 类型断言已复核 */
+                id: "project" as HistoryScope,
                 label: "本项目",
               },
               {
-                id: /* SAFETY: 类型断言已复核 */ "all" as HistoryScope,
+                /* SAFETY: 类型断言已复核 */
+                id: "all" as HistoryScope,
                 label: "全部",
               },
             ].map((scopeItem) => (

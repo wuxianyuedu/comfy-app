@@ -32,7 +32,8 @@ function run(args: Array<string> = []) {
     });
     return { code: 0, output };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as {
+    /* SAFETY: 类型断言已复核 */
+    const e = error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -145,7 +146,8 @@ type FakeResult = { status: number | null; stderr?: string; stdout?: string };
 function fakeSpawn(impl: (args: Array<string>, opts: { input?: string }) => FakeResult) {
   const fn = (_cmd: string, args: Array<string>, opts: { input?: string }): FakeResult =>
     impl(args, opts);
-  return /* SAFETY: 只用 affectedTests 实际读的字段（status/stdout/stderr），与 spawnSync 的重载等价于此形状 */ fn as unknown as typeof spawnSync;
+  /* SAFETY: 只用 affectedTests 实际读的字段（status/stdout/stderr），与 spawnSync 的重载等价于此形状 */
+  return fn as unknown as typeof spawnSync;
 }
 
 describe("gates:which —— 用例那一半不重算 import 图", () => {

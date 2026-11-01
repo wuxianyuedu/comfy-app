@@ -66,7 +66,8 @@ import { EmptyCanvasHint } from "./project-canvas/EmptyCanvasHint";
  *  - workflowArdot    ：纯视觉测试节点（无运行时，对齐 Ardot 稿 714503087315759），
  *                       由右键菜单的「测试自定义工作流」项创建
  */
-const nodeTypes = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+const nodeTypes = {
   canvasNode: CanvasNode,
   workflowArdot: WorkflowNodeArdot,
 } as const;
@@ -74,7 +75,8 @@ const nodeTypes = /* SAFETY: 类型断言已复核 */ {
 /* 边渲染注册表：`default` 承接 `defaultEdgeOptions.type = "smoothstep"` 落到
  * 本画布的全部连线（React Flow 对未注册的类型走内置渲染，注册后交给组件，
  * 组件内部仍用 getSmoothStepPath 画出同一条曲线，只额外叠加选中态样式）。 */
-const edgeTypes = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+const edgeTypes = {
   default: ProjectEdge,
 } as const;
 
@@ -105,6 +107,13 @@ const PRO_OPTIONS = { hideAttribution: true };
 
 type PlaceFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlowPosition"];
 
+/** 节点上的镜头 id（非镜头节点没有 `data.shotId`）。 */
+function shotIdOfNode(n: CanvasNodeType): string | undefined {
+  /* SAFETY: 类型断言已复核 */
+  const data = n.data as { shotId?: string } | undefined;
+  return data?.shotId;
+}
+
 /** 把 production.shots 物化 / 合并进画布节点（Phase 3c-2a，幂等）。
  *  已有镜头节点（data.shotId 命中）合并补丁，缺失的新建；非镜头节点原样保留。
  *  独立于 CanvasInner，避免其超过函数长度棘轮（§12.13）。 */
@@ -120,9 +129,7 @@ function materializeProductionShots(
     return nodes;
   }
   const existingShotIds = new Set(
-    nodes
-      .map((n) => /* SAFETY: 类型断言已复核 */ (n.data as { shotId?: string } | undefined)?.shotId)
-      .filter((id): id is string => Boolean(id)),
+    nodes.map(shotIdOfNode).filter((id): id is string => Boolean(id)),
   );
   const { patches, newShotIds } = planShotSync(shots, existingShotIds);
   let result = applyShotPatches(nodes, patches);
@@ -226,9 +233,8 @@ function CanvasInner({
   useRelatedEdgesHighlight(setEdges, {
     /* 节点表的 setter 声明的是 CanvasNodeType[]，而这里只改节点 data 上的端口
      *  关注字段（结构上仍是同一批节点）—— 收窄成 Node[] 会挡在类型门口。 */
-    setNodes: /* SAFETY: 类型断言已复核 */ setNodes as unknown as (
-      updater: (nodes: Array<FlowNode>) => Array<FlowNode>,
-    ) => void,
+    /* SAFETY: 类型断言已复核 */
+    setNodes: setNodes as unknown as (updater: (nodes: Array<FlowNode>) => Array<FlowNode>) => void,
   });
 
   /* 双 rAF fitView：等 ReactFlow 完成本轮布局后再 fit，
@@ -326,7 +332,8 @@ function CanvasInner({
    *（类别色是静态的），所以拖节点时 MiniMap 不会因为回调
    * 换了引用而重新渲染。 */
   const miniMapNodeColor = useCallback((node: { data?: unknown }) => {
-    const kind = /* SAFETY: 类型断言已复核 */ (node.data as CanvasNodeData | undefined)?.kind;
+    /* SAFETY: 类型断言已复核 */
+    const kind = (node.data as CanvasNodeData | undefined)?.kind;
     return (kind ? MINIMAP_COLOR_BY_KIND.get(kind) : undefined) ?? "#6B7280";
   }, []);
 

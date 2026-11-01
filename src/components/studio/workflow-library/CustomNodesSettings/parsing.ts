@@ -32,9 +32,8 @@ export function deriveRowState(sub: DiscoveredSubpkg, saved: SummaryPkg | undefi
     return { kind: "unimported" };
   }
   if (saved.status === "error") {
-    const firstErr = /* SAFETY: 类型断言已复核 */ (saved.errors ?? [])[0] as
-      | { error?: unknown }
-      | undefined;
+    /* SAFETY: 类型断言已复核 */
+    const firstErr = (saved.errors ?? [])[0] as { error?: unknown } | undefined;
     const reason = typeof firstErr?.error === "string" ? firstErr.error : "解析出错";
     return { kind: "error", reason };
   }

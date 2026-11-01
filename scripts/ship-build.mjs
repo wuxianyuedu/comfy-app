@@ -33,7 +33,7 @@ const RUNNING = new Set(["running", "pending", "queued", "waiting", "created"]);
  * @returns {{state:"green"|"red"|"running"|"unknown",raw:string|null}} 判决用的中间态
  */
 export function readBuildVerdict(json) {
-  const raw = json && json.data && typeof json.data.status === "string" ? json.data.status : null;
+  const raw = json?.data && typeof json.data.status === "string" ? json.data.status : null;
   // ⚠️ 这里**故意不看** `json.status`：那是 HTTP 信封（200 只说明「问到了」）。
   if (raw === null) {
     return { state: "unknown", raw: null };
@@ -107,10 +107,10 @@ export function pickBuildForSha(builds, sha) {
  * @returns {string} 形如 `cnb-xxx-yyy/success/1-1+12/33`；没解析到 build 时形如 `(未解析到 build)/?/0-0+0/0`
  */
 export function buildSignature(json, sn = "") {
-  const d = (json && json.data) ?? null;
+  const d = (json?.data) ?? null;
   const status = d && typeof d.status === "string" ? d.status : "(取不到 data)";
   const entries =
-    d && d.pipelinesStatus && typeof d.pipelinesStatus === "object"
+    d?.pipelinesStatus && typeof d.pipelinesStatus === "object"
       ? Object.values(d.pipelinesStatus)
       : [];
   const total = entries.length;
@@ -148,7 +148,7 @@ export function buildSignature(json, sn = "") {
  * @returns {any[] | null} 列表或 null
  */
 export function asArray(json) {
-  const d = json && json.data;
+  const d = json?.data;
   if (Array.isArray(d)) {
     return d;
   }

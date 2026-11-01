@@ -124,7 +124,8 @@ describe("运行时读数口径（steadyMin / 弃前 N 轮）", () => {
  */
 describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
   const REPO_ROOT = process.cwd();
-  const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
+  /* SAFETY: 类型断言已复核 */
+  const baseline = JSON.parse(
     readFileSync(join(REPO_ROOT, "scripts/.runtime-budget-baseline.json"), "utf8"),
   ) as {
     metric: {
@@ -144,7 +145,8 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
      * 判据因此要覆盖**两个平台**——只核一个等于放任另一个漂。 */
     const byPlatform = baseline.metric.byPlatform;
     expect(byPlatform, "基线里要有 byPlatform（按平台各自校准）").toBeDefined();
-    for (const platform of /* SAFETY: 类型断言已复核 */ ["posix", "win32"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const platform of ["posix", "win32"] as const) {
       const inBaseline = byPlatform?.[platform];
       expect(inBaseline, `基线里缺 ${platform} 档`).toBeDefined();
       for (const [label, re] of /* SAFETY: 类型断言已复核 */ [
@@ -176,7 +178,8 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
   });
 
   it("两个平台的读数与倍数都是正数（JSON 里被写成 0 会让判据恒绿）", () => {
-    for (const platform of /* SAFETY: 类型断言已复核 */ ["posix", "win32"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const platform of ["posix", "win32"] as const) {
       const m = baseline.metric.byPlatform?.[platform];
       expect(m, `基线里缺 ${platform} 档`).toBeDefined();
       expect(m?.loadEventEnd).toBeGreaterThan(0);
@@ -204,9 +207,8 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
     const { resolveE2eWorkers } = await import("../playwright.config");
     // 不是本仓默认的 8（`vitest.config.ts` 那一档），也不是「不设」—— 是那个显式的档。
     // 2 是 #1834 的 win32 实测档：4 仍有 3 条 goto 卡 60s，单 worker 独跑同屏 14.8s。
-    expect(resolveE2eWorkers(/* SAFETY: 类型断言已复核 */ {} as unknown as NodeJS.ProcessEnv)).toBe(
-      2,
-    );
+    /* SAFETY: 类型断言已复核 */
+    expect(resolveE2eWorkers({} as unknown as NodeJS.ProcessEnv)).toBe(2);
   });
 
   it("已构建（CI 或 PNPM_START）⇒ 同样收敛（#1998：15 worker 跑成 36 分钟）", async () => {
@@ -216,7 +218,8 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
      * worker」的问题。`cnb-m0t-1k54oljem`（PR #1998）：生产构建那一档没写这个键 ⇒
      * Playwright 按 `cpus - 1` 铺开 15 个 ⇒ `E2E 关键流程` 跑到 36 分钟被墙钟 kill。 */
     expect(
-      resolveE2eWorkers(/* SAFETY: 类型断言已复核 */ { CI: "1" } as unknown as NodeJS.ProcessEnv),
+      /* SAFETY: 类型断言已复核 */
+      resolveE2eWorkers({ CI: "1" } as unknown as NodeJS.ProcessEnv),
     ).toBe(2);
     expect(
       resolveE2eWorkers(
@@ -237,7 +240,8 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
     expect(resolveLocalCpus(env("abc"))).toBeGreaterThanOrEqual(1);
     expect(resolveE2eWorkers(env("abc"))).toBeGreaterThanOrEqual(1);
     expect(
-      resolveE2eWorkers(/* SAFETY: 类型断言已复核 */ {} as unknown as NodeJS.ProcessEnv, 0),
+      /* SAFETY: 类型断言已复核 */
+      resolveE2eWorkers({} as unknown as NodeJS.ProcessEnv, 0),
     ).toBe(2);
   });
 
@@ -291,7 +295,8 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
         resolveServerMode: (env: NodeJS.ProcessEnv) => { start: boolean };
       };
     /* ② + ①：四组环境，两份实现逐组对账。 */
-    for (const env of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const env of [
       { COMFY_E2E_SERVER: "dev" },
       { COMFY_E2E_SERVER: "start" },
       { COMFY_E2E_SERVER: "dev", CI: "1", PNPM_START: "1" },
@@ -302,7 +307,8 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
       const command = resolveWebServerCommand(
         /* SAFETY: 类型断言已复核 */ env as unknown as NodeJS.ProcessEnv,
       );
-      const mode = resolveServerMode(/* SAFETY: 类型断言已复核 */ env as NodeJS.ProcessEnv);
+      /* SAFETY: 类型断言已复核 */
+      const mode = resolveServerMode(env as NodeJS.ProcessEnv);
       expect(command, JSON.stringify(env)).toBe(
         mode.start ? E2E_SERVER_COMMANDS.start : E2E_SERVER_COMMANDS.dev,
       );

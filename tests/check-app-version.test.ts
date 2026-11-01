@@ -131,9 +131,10 @@ describe("产品版本号三处同步（D7）", () => {
   });
 
   test("④ `package.json` 有 `check:app-version` 入口（判据有执行者）", () => {
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"),
-    ) as { scripts: Record<string, string> };
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
     expect(pkg.scripts["check:app-version"]).toBe("node scripts/check-app-version.cjs");
   });
 

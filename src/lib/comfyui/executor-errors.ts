@@ -41,7 +41,8 @@ export function friendlyError(raw: unknown): string {
     return parts.length ? parts.join("\n") : "";
   }
   if (typeof raw === "object") {
-    const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const o = raw as Record<string, unknown>;
     // 按优先级取：先 ComfyUI 自己的规范字段，再取通用异常形状
     //（Error.message / details / reason 这类通用形状）。
     const candidates: Array<keyof typeof o> = [
@@ -64,7 +65,8 @@ export function friendlyError(raw: unknown): string {
     //（例如 `{ data: { exception_message: "..." } }`）。
     for (const k of ["data", "exception", "exception_payload"]) {
       const inner = o[k];
-      if (inner && typeof inner === "object") {
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      if (inner != null && typeof inner === "object") {
         const innerText = friendlyError(inner);
         if (innerText.trim()) {
           return innerText;

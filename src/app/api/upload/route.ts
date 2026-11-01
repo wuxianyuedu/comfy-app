@@ -29,7 +29,8 @@ export async function POST(req: NextRequest) {
   }
 
   const form = await req.formData();
-  const file = /* SAFETY: 类型断言已复核 */ form.get("image") as File | null;
+  /* SAFETY: 类型断言已复核 */
+  const file = form.get("image") as File | null;
   if (!file) {
     return NextResponse.json({ error: "未收到文件" }, { status: 400 });
   }

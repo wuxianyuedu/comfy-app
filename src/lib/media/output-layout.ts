@@ -15,10 +15,8 @@
 export const ARTIFACT_ROOT_DIR = "generated";
 
 /** 历史落点的两段（只给一次性搬迁用；界面向用户说话时**不许**用它）。 */
-export const LEGACY_ARTIFACT_ROOT_DIRS = /* SAFETY: 类型断言已复核 */ [
-  "public",
-  ARTIFACT_ROOT_DIR,
-] as const;
+/* SAFETY: 类型断言已复核 */
+export const LEGACY_ARTIFACT_ROOT_DIRS = ["public", ARTIFACT_ROOT_DIR] as const;
 
 /** 画布项目任务的子层名。 */
 export const PROJECTS_SUBDIR = "projects";

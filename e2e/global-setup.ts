@@ -131,11 +131,13 @@ function connectionRefused(err: unknown): boolean {
     return false;
   }
   /* 预算耗尽（含手动 abort）一律**不算**「空着」—— 它回答不了那个问题。 */
-  const name = /* SAFETY: 类型断言已复核 */ (err as { name?: unknown }).name;
+  /* SAFETY: 类型断言已复核 */
+  const name = (err as { name?: unknown }).name;
   if (name === "TimeoutError" || name === "AbortError") {
     return false;
   }
-  const code = /* SAFETY: 类型断言已复核 */ (err as { cause?: { code?: unknown } }).cause?.code;
+  /* SAFETY: 类型断言已复核 */
+  const code = (err as { cause?: { code?: unknown } }).cause?.code;
   if (typeof code === "string") {
     return ["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH"].includes(code);
   }

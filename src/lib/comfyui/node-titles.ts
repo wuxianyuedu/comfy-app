@@ -150,7 +150,8 @@ export function friendlyNodeTitle(
   // 不调换这个顺序的话，静态表（例如 SaveImage 对应「保存图像」）
   // 会悄悄盖掉用户自定义的名字（例如 "Save Z-Anime Upscaled"），
   // 用户的意图在画布上就看不出来了。
-  if (rawTitle?.trim() && rawTitle.trim() !== classType) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (rawTitle != null && rawTitle.trim() !== "" && rawTitle.trim() !== classType) {
     return rawTitle.trim();
   }
 

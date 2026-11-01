@@ -105,7 +105,7 @@ function readForScan(abs) {
     return fs.readFileSync(abs, "utf8");
   } catch (error) {
     /* 消失不是判据要判的形态：一个已经不存在的文件里没有站点可言。 */
-    if (error && error.code === "ENOENT") {
+    if (error?.code === "ENOENT") {
       return null;
     }
     throw error;
@@ -125,7 +125,7 @@ function readBytesForScan(abs) {
   try {
     return fs.readFileSync(abs);
   } catch (error) {
-    if (error && error.code === "ENOENT") {
+    if (error?.code === "ENOENT") {
       return null;
     }
     throw error;
@@ -146,7 +146,7 @@ function readdirForScan(dir) {
   try {
     return fs.readdirSync(dir, { withFileTypes: true });
   } catch (error) {
-    if (error && error.code === "ENOENT") {
+    if (error?.code === "ENOENT") {
       return null;
     }
     throw error;

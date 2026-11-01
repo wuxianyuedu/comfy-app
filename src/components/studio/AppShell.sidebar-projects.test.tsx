@@ -76,7 +76,8 @@ function projectGroup(): HTMLElement {
   const btn = screen.getByRole("button", { name: "查看全部" });
   const group = btn.closest('[data-slot="sidebar-group"]');
   expect(group).not.toBeNull();
-  return /* SAFETY: 类型断言已复核 */ group as HTMLElement;
+  /* SAFETY: 类型断言已复核 */
+  return group as HTMLElement;
 }
 
 describe("侧栏「项目」分组的缩略态", () => {

@@ -96,6 +96,37 @@ export function remainingWallClockMs(budget, nowMs = Date.now()) {
 }
 
 /**
+ * 掐断之后的收尾余量（毫秒）：日志回吐、记账、`BeforeEnd` 都要在这之后发生。
+ *
+ * 不留的话「掐断」与「收尾」会撞在同一个 deadline 上，那一屏又只剩半句（#2760 的现场）。
+ */
+export const FIRST_PASS_TIMEOUT_RESERVE_MS = 30_000;
+
+/**
+ * 第一遍**真正提交给 vitest 的上界**。下界取 1：`timeout: 0` 在 `spawnSync` 里等于不设界。
+ * @param {number | null | undefined} remainingMs 此刻还剩多少（`null` = 没设界）
+ * @returns {number | null}
+ */
+export function firstPassLimit(remainingMs) {
+  if (remainingMs === null || remainingMs === undefined) {
+    return null;
+  }
+  return Math.max(1, remainingMs - FIRST_PASS_TIMEOUT_RESERVE_MS);
+}
+
+/**
+ * 「还剩多少」的读数写法（分钟），掐断那一屏与收尾账共用一档。
+ * @param {number | null} ms `null` = 没设界（不许念成 0 分钟）
+ * @returns {string}
+ */
+export function fmtMinutes(ms) {
+  if (ms === null) {
+    return "(没设界)";
+  }
+  return `${(ms / 60_000).toFixed(1)} 分钟`;
+}
+
+/**
  * 第 2 遍（串行复跑）的成本估计。
  *
  * @param {number} firstPassMs 第 1 遍那一遍的真实墙钟

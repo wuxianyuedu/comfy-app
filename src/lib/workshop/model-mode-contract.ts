@@ -28,7 +28,8 @@ import { getWorkflowType } from "~/lib/workflow/workflow-types";
  *
  *  「尺寸」在契约层是一个口（`size`），到这里按接口请求体细分为三行：
  *  宽高比 / 百万像素 / 倍数 —— 与尺寸选择器的两类表达同一口径。 */
-export const WORKSHOP_INPUT_TYPES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const WORKSHOP_INPUT_TYPES = [
   { type: "prompt", label: "提示词" },
   { type: "negative", label: "负向提示词" },
   { type: "aspect-ratio", label: "宽高比" },
@@ -180,7 +181,8 @@ export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> 
     if (typeof item !== "object" || item === null) {
       continue;
     }
-    const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const rec = item as Record<string, unknown>;
     const mode = upperToken(rec.mode);
     if (!mode || seen.has(mode)) {
       continue;
@@ -191,7 +193,8 @@ export function parseRemoteModeAdapters(raw: unknown): Array<RemoteModeAdapter> 
         if (typeof row !== "object" || row === null) {
           continue;
         }
-        const r = /* SAFETY: 类型断言已复核 */ row as Record<string, unknown>;
+        /* SAFETY: 类型断言已复核 */
+        const r = row as Record<string, unknown>;
         if (!isWorkshopInputType(r.type)) {
           continue;
         }
@@ -245,7 +248,8 @@ export function readFieldPath(payload: unknown, path: string): unknown {
     if (typeof cur !== "object") {
       return null;
     }
-    cur = /* SAFETY: 类型断言已复核 */ (cur as Record<string, unknown>)[seg];
+    /* SAFETY: 类型断言已复核 */
+    cur = (cur as Record<string, unknown>)[seg];
   }
   return cur;
 }
@@ -268,7 +272,8 @@ export function readFieldPath(payload: unknown, path: string): unknown {
  *  —— 契约口清单会在三处露面（本编辑器、工作流库「工坊封装」、工作流库「画布
  *  节点」的卡片列），各写一份字符串必然漂移（ISSUE #596：「尺寸」在一处带括号、
  *  另一处不带，读起来像两个口）。这里的 type 只做「契约 id → 展示名」的取值。 */
-export const MODE_CONTRACT_INPUT_TYPES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const MODE_CONTRACT_INPUT_TYPES = [
   { type: "prompt", label: EXPOSED_PARAM_DISPLAY_LABEL.prompt },
   { type: "negative", label: EXPOSED_PARAM_DISPLAY_LABEL.negative },
   { type: "size", label: EXPOSED_PARAM_DISPLAY_LABEL.size },
@@ -519,7 +524,8 @@ export function requiredInputsFor(contract: {
  *  `exposedParamsForMode` 派生一次，别处不再抄一份。 */
 export function derivedModeContract(mode: string): ModeContract {
   const inputs = exposedParamsForMode(mode).map(
-    (d) => /* SAFETY: 类型断言已复核 */ d.id as ModeContractInputId,
+    /* SAFETY: 类型断言已复核 */
+    (d) => d.id as ModeContractInputId,
   );
   return {
     mode: upperToken(mode),
@@ -599,7 +605,8 @@ export function parseModeContracts(raw: unknown): Array<ModeContract> {
     if (typeof item !== "object" || item === null) {
       continue;
     }
-    const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const rec = item as Record<string, unknown>;
     const mode = upperToken(rec.mode);
     if (!mode || seen.has(mode)) {
       continue;
@@ -654,7 +661,8 @@ function parseCustomInputs(raw: unknown): Array<ModeContractCustomInput> {
     if (typeof item !== "object" || item === null) {
       continue;
     }
-    const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const rec = item as Record<string, unknown>;
     const id = typeof rec.id === "string" ? rec.id : "";
     const label = typeof rec.label === "string" ? rec.label.trim() : "";
     const kind = customInputKindOf(id);

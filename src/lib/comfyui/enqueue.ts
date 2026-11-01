@@ -116,7 +116,7 @@ export async function cancelTask(taskId: string) {
   if (!isTerminal(task.status) && !claimFinalize(taskId)) {
     log(taskId, "warn", "任务终态已落库，取消请求不再改写终态");
 
-    if (task.promptId) {
+    if (task.promptId !== null) {
       store.promptToTask.delete(task.promptId);
     }
 
@@ -169,7 +169,7 @@ export async function cancelTask(taskId: string) {
     log(taskId, "warn", `取消未改写终态（${outcome}），仅清理本进程记账`);
   }
 
-  if (task.promptId) {
+  if (task.promptId !== null) {
     store.promptToTask.delete(task.promptId);
   }
 

@@ -25,7 +25,8 @@ import type {
 } from "./types";
 
 const ENV_DEFAULTS: LLMConfig = {
-  provider: /* SAFETY: 类型断言已复核 */ (process.env.LLM_PROVIDER as LLMProviderType) || "local",
+  /* SAFETY: 类型断言已复核 */
+  provider: (process.env.LLM_PROVIDER as LLMProviderType) || "local",
   baseUrl: process.env.LLM_BASE_URL ?? OLLAMA_DEFAULT_BASE_URL,
   model: process.env.LLM_MODEL ?? "",
   extraModels: null,
@@ -52,7 +53,8 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
     const row = await llmConfigRepository.findSingleton();
     if (row) {
       if (row.provider) {
-        cfg.provider = /* SAFETY: 类型断言已复核 */ row.provider as LLMProviderType;
+        /* SAFETY: 类型断言已复核 */
+        cfg.provider = row.provider as LLMProviderType;
       }
       if (row.baseUrl) {
         cfg.baseUrl = row.baseUrl;
@@ -71,7 +73,8 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         name: r.name,
         baseUrl: r.baseUrl,
         apiKey: r.apiKey,
-        kind: /* SAFETY: 类型断言已复核 */ (r.kind as RemoteModelKind) ?? null,
+        /* SAFETY: 类型断言已复核 */
+        kind: (r.kind as RemoteModelKind) ?? null,
       }));
       // 合并两来源：本地候选名 + 远端表条目。`split.remoteEntries` 在列里不该再
       // 出现（写入侧只落字符串），仍一并合并是因为**读侧不假设写入侧守规矩**——
@@ -81,7 +84,8 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
           name: n,
           baseUrl: null,
           apiKey: null,
-          kind: /* SAFETY: 类型断言已复核 */ null as RemoteModelKind | null,
+          /* SAFETY: 类型断言已复核 */
+          kind: null as RemoteModelKind | null,
         })),
         ...remoteEntries,
         ...split.remoteEntries,
@@ -94,12 +98,11 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         cfg.temperature = row.temperature;
       }
       // temperatureByTask 是 json 列，读出来是 unknown —— 形状由 resolveTaskTemperature 消费，
-      const raw = /* SAFETY: 类型断言已复核 */ row as Record<string, unknown>;
+      /* SAFETY: 类型断言已复核 */
+      const raw = row as Record<string, unknown>;
       if (raw.temperatureByTask) {
-        cfg.temperatureByTask = /* SAFETY: 类型断言已复核 */ raw.temperatureByTask as Record<
-          TaskType,
-          number
-        >;
+        /* SAFETY: 类型断言已复核 */
+        cfg.temperatureByTask = raw.temperatureByTask as Record<TaskType, number>;
       }
       // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (row.maxTokens != null) {
@@ -167,7 +170,8 @@ export async function getConfigForClient() {
       name: r.name,
       baseUrl: r.baseUrl,
       apiKey: r.apiKey,
-      kind: /* SAFETY: 类型断言已复核 */ (r.kind as RemoteModelKind) ?? null,
+      /* SAFETY: 类型断言已复核 */
+      kind: (r.kind as RemoteModelKind) ?? null,
     }));
     // 读取层兜底归并：`remoteModel` 表里若存着指向本机回环、且不带 apiKey 的条目，
     // 那是「本地 ollama 被错存成了远端」，折回本地候选字符串下发 —— 工坊下拉与设置页
@@ -180,7 +184,8 @@ export async function getConfigForClient() {
     extra = [...folded.localNames, ...folded.remoteEntries];
   }
   const cfgSafe = { ...cfg };
-  delete (/* SAFETY: 类型断言已复核 */ (cfgSafe as Partial<LLMConfig>).apiKey);
+  /* SAFETY: 类型断言已复核 */
+  delete (cfgSafe as Partial<LLMConfig>).apiKey;
   const extraSafe = extra.map((e) =>
     typeof e === "object" && e !== null ? maskRemoteEntryForClient(e) : e,
   );
@@ -223,7 +228,8 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   if (!(e instanceof TypeError)) {
     return errorMessage(e, "网络请求失败");
   }
-  const cause = /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause;
+  /* SAFETY: 类型断言已复核 */
+  const cause = (e as { cause?: unknown }).cause;
   const causeMsg =
     cause instanceof Error
       ? String(cause.message)
@@ -371,7 +377,8 @@ export async function completeLLM(cfg: LLMConfig, messages: Array<LLMMessage>): 
     stream: false,
   });
 
-  const json = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+  /* SAFETY: 类型断言已复核 */
+  const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
   return json.choices?.[0]?.message?.content ?? "";
@@ -424,7 +431,8 @@ export async function streamLLM(
         continue;
       }
       try {
-        const json = /* SAFETY: 类型断言已复核 */ JSON.parse(data) as {
+        /* SAFETY: 类型断言已复核 */
+        const json = JSON.parse(data) as {
           choices?: Array<{ delta?: { content?: string } }>;
         };
         const token: string = json.choices?.[0]?.delta?.content ?? "";
@@ -460,7 +468,8 @@ export async function completeLLMStructured<T>(
     response_format: { type: "json_object" },
   });
 
-  const json = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+  /* SAFETY: 类型断言已复核 */
+  const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
   const content = json.choices?.[0]?.message?.content ?? "{}";
@@ -503,7 +512,8 @@ export async function completeLLMTools(
     tools,
   });
 
-  const json = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+  /* SAFETY: 类型断言已复核 */
+  const json = (await res.json()) as {
     choices?: Array<{
       message?: {
         content?: string | null;
@@ -528,7 +538,8 @@ export async function completeLLMTools(
     return [
       {
         id: call.id,
-        type: /* SAFETY: 类型断言已复核 */ "function" as const,
+        /* SAFETY: 类型断言已复核 */
+        type: "function" as const,
         function: { name: fn.name, arguments: fn.arguments },
       },
     ];

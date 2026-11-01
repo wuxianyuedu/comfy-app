@@ -115,14 +115,16 @@ describe("落点与根", () => {
     });
     expect(explicit.root).toBe("G:/tools-mirror");
 
-    const run = () => ({ status: 0, stdout: "G:\\.pnpm-store\\v11\n" });
+    /* store 落在**本机真实存在的卷根**上（`path.parse` 认宿主平台，盘符写死会解析不出卷根）。 */
+    const volumeRoot = path.parse(ROOT).root;
+    const run = () => ({ status: 0, stdout: path.join(volumeRoot, ".pnpm-store", "v11") });
     const pkgName = String(
       /* SAFETY: 类型断言已复核 */ (
         JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { name?: string }
       ).name,
     ).toLowerCase();
     expect(resolveToolRoot({ cwd: ROOT, env: {}, run }).root).toBe(
-      path.join("G:\\", "ci-tools", pkgName),
+      path.join(volumeRoot, "ci-tools", pkgName),
     );
     /* 不许住在两份槽根之下：那边的淘汰器按 TTL 删键位，而这一份删了今天就没包。 */
     const roots = {
@@ -165,7 +167,8 @@ describe("--seed", () => {
     const lines: Array<string> = [];
     const log = (line: string) => lines.push(line);
     expect(seed({ cacheDir: la, mirror, dryRun: false, log, plan })).toBe(0);
-    const manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const manifest = JSON.parse(
       fs.readFileSync(path.join(mirror, TOOLS_MANIFEST_FILE), "utf8"),
     ) as { files: Array<{ path: string; sha256: string }>; version: string };
     expect(manifest.version).toBe(plan.version);

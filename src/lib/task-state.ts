@@ -17,11 +17,8 @@
  */
 
 /** 任务的全部终态：到达其中任一状态后，结果不再改变。 */
-export const TERMINAL_TASK_STATUSES = /* SAFETY: 类型断言已复核 */ [
-  "SUCCEEDED",
-  "FAILED",
-  "CANCELLED",
-] as const;
+/* SAFETY: 类型断言已复核 */
+export const TERMINAL_TASK_STATUSES = ["SUCCEEDED", "FAILED", "CANCELLED"] as const;
 
 export type TerminalTaskStatus = (typeof TERMINAL_TASK_STATUSES)[number];
 
@@ -52,7 +49,8 @@ export function isActiveTaskStatus(status: string | null | undefined): boolean {
  *
  * 本模块只放判据与这张表、不做 IO，客户端与服务端都能引（理由见文件头）。
  */
-export const TASK_STATUS_LABELS = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+export const TASK_STATUS_LABELS = {
   QUEUED: "排队中",
   RUNNING: "生成中",
   SUCCEEDED: "已完成",

@@ -40,15 +40,18 @@ export const SIZE_RATIO_PRESETS: [SizeRatioPreset, ...Array<SizeRatioPreset>] = 
 ];
 
 /** 分辨率档位（长边口径）。 */
-export const RESOLUTION_TIERS = /* SAFETY: 类型断言已复核 */ ["1k", "2k", "4k"] as const;
+/* SAFETY: 类型断言已复核 */
+export const RESOLUTION_TIERS = ["1k", "2k", "4k"] as const;
 export type ResolutionTier = (typeof RESOLUTION_TIERS)[number];
 
 /** 百万像素档位（总像素，单位 M）。 */
-export const MEGAPIXEL_TIERS = /* SAFETY: 类型断言已复核 */ [1, 2, 4] as const;
+/* SAFETY: 类型断言已复核 */
+export const MEGAPIXEL_TIERS = [1, 2, 4] as const;
 export type MegapixelTier = (typeof MEGAPIXEL_TIERS)[number];
 
 /** 宽高对齐倍数候选：宽高都要落在这个网格上。 */
-export const ALIGN_MULTIPLE_OPTIONS = /* SAFETY: 类型断言已复核 */ [8, 16, 32, 64] as const;
+/* SAFETY: 类型断言已复核 */
+export const ALIGN_MULTIPLE_OPTIONS = [8, 16, 32, 64] as const;
 export type AlignMultiple = (typeof ALIGN_MULTIPLE_OPTIONS)[number];
 export const DEFAULT_ALIGN_MULTIPLE: AlignMultiple = 64;
 
@@ -373,12 +376,14 @@ export const SIZE_CLARITY_PRESETS: [SizeClarityPreset, ...Array<SizeClarityPrese
     tier: RESOLUTION_TIERS[0],
   },
   ...RESOLUTION_TIERS.slice(1).map((tier) => ({
-    kind: /* SAFETY: 类型断言已复核 */ "resolution" as const,
+    /* SAFETY: 类型断言已复核 */
+    kind: "resolution" as const,
     label: tier,
     tier,
   })),
   ...MEGAPIXEL_TIERS.map((tier) => ({
-    kind: /* SAFETY: 类型断言已复核 */ "megapixel" as const,
+    /* SAFETY: 类型断言已复核 */
+    kind: "megapixel" as const,
     label: `${tier}M`,
     megapixels: tier,
   })),

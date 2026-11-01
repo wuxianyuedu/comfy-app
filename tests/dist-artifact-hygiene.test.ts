@@ -47,9 +47,10 @@ const checker = readFileSync(
   join(process.cwd(), "scripts", "check-standalone-contents.cjs"),
   "utf8",
 );
-const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-  readFileSync(join(process.cwd(), "package.json"), "utf8"),
-) as { scripts: Record<string, string> };
+/* SAFETY: 类型断言已复核 */
+const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+  scripts: Record<string, string>;
+};
 
 /* ── 白名单判据的两个取样器（供下面的用例共用）────────────────────────── */
 
@@ -289,7 +290,8 @@ type CheckerExports = {
 };
 
 function checkerExports(): CheckerExports {
-  return /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
+  /* SAFETY: 类型断言已复核 */
+  return createRequire(import.meta.url)(
     "../scripts/check-standalone-contents.cjs",
   ) as CheckerExports;
 }
@@ -513,10 +515,8 @@ describe("产物层的形状级剔除（stripForbiddenShapes）", () => {
   it("形状清单与 check-standalone-contents.cjs 的禁忌清单逐字同源", () => {
     // 剔除侧那两张表来自 `.mjs`（无类型声明），解构出来是 `string | RegExp`，
     // 按实际结构标注一次；判据本身读的是 RegExp 本体
-    const stripShapes = /* SAFETY: 类型断言已复核 */ [
-      ...PRIVATE_SHAPES,
-      ...FORBIDDEN_SHAPES,
-    ] as Array<[string, RegExp]>;
+    /* SAFETY: 类型断言已复核 */
+    const stripShapes = [...PRIVATE_SHAPES, ...FORBIDDEN_SHAPES] as Array<[string, RegExp]>;
     for (const [tag, re] of stripShapes) {
       expect(
         forbiddenSourcesFor(tag),

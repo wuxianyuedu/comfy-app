@@ -92,7 +92,7 @@ export function stageLogExcerpt(text, opts = {}) {
   const loose = [];
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    if (!line || !line.trim()) {
+    if (!line?.trim()) {
       continue;
     }
     if (FAILURE_ANCHORS.some((re) => re.test(line))) {

@@ -25,7 +25,8 @@ const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "capture-strea
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
-    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
+    /* SAFETY: 类型断言已复核 */
+    ...(actual as Record<string, unknown>),
     NEXTJS_LOG_DIR: tmp,
     SERVICES_LOG_DIR: tmp,
   };
@@ -81,9 +82,40 @@ async function readCaptureWhenFilled(
 let originalStdoutWrite: typeof process.stdout.write;
 let originalStderrWrite: typeof process.stderr.write;
 
+/** 用例自己写的那些样本文本（`stdout` / `stderr` 分开记）。 */
+const written = { err: [] as Array<string>, out: [] as Array<string> };
+
+/** 一条流换成「只记录、不外发」的桩。 */
+function silentWrite(bucket: Array<string>): typeof process.stdout.write {
+  return (chunk: unknown) => {
+    bucket.push(
+      typeof chunk === "string"
+        ? chunk
+        : Buffer.from(/* SAFETY: 类型断言已复核 */ chunk as Uint8Array).toString("utf8"),
+    );
+    return true;
+  };
+}
+
+/** 两条流换成只记录、不外发的桩：样本里写着 `FATAL: An unexpected Turbopack error occurred`
+ *  与一段 `AggregateError`，一写进真流就进跑批日志、留下没有异常的烂尾栈（且堵在
+ *  「按行屏蔽」之外，规范 §13.6.4.2）。桩接的是包装前的基线流那份，与线上顺序一致。 */
+function muteStreams(): void {
+  process.stdout.write = silentWrite(written.out);
+  process.stderr.write = silentWrite(written.err);
+}
+
+/** 上一次写进两条流的全部样本文本（按写入顺序）。 */
+function writtenText(): string {
+  return [...written.out, ...written.err].join("");
+}
+
 beforeEach(() => {
   originalStdoutWrite = process.stdout.write.bind(process.stdout);
   originalStderrWrite = process.stderr.write.bind(process.stderr);
+  written.out.length = 0;
+  written.err.length = 0;
+  muteStreams();
 });
 
 afterEach(() => {
@@ -131,17 +163,14 @@ describe("installStreamCapture", () => {
   });
 
   it("原输出行为不变（转录是额外落一份，不接管）", async () => {
-    const writes: Array<string> = [];
-    process.stdout.write = (chunk: string | Uint8Array) => {
-      writes.push(String(chunk));
-      return true;
-    };
-
+    /* `beforeEach` 已经把两条流换成了「只记录、不外发」的桩 —— 这一条要验的正是
+     * 「被包装之后，**接线时取自流上的那个 `original`** 仍然被调用过」，也就是
+     * 「转录是额外落一份，不接管」。（换桩的位置从这条用例挪到 `beforeEach`：样本里
+     * 那几行 `FATAL: …` / `AggregateError` 一写进真流就会进跑批日志，见 `muteStreams`。） */
     const mod = await freshInstall();
     process.stdout.write("业务输出");
 
-    // 原实现仍被调用
-    expect(writes.join("")).toContain("业务输出");
+    expect(writtenText()).toContain("业务输出");
     // 同时落了盘（走缓冲，要等到落盘再读）
     expect(await readCaptureWhenFilled(mod.panelCaptureLogPath(), "业务输出")).toContain(
       "业务输出",

@@ -77,10 +77,10 @@ export function pythonPathsFromPyvenv(
 ): Array<string> {
   const names = platform === "win32" ? ["python.exe", "pythonw.exe"] : ["python", "python3"];
   const out: Array<string> = [];
-  if (cfg.executable) {
+  if (cfg.executable !== null) {
     out.push(cfg.executable);
   }
-  if (cfg.home) {
+  if (cfg.home !== null) {
     for (const n of names) {
       out.push(path.join(cfg.home, n));
     }
@@ -240,7 +240,7 @@ export function uvPythonDirs(
 ): Array<string> {
   const dirs: Array<string> = [];
   const add = (d: string | undefined): void => {
-    if (d && !dirs.includes(d)) {
+    if (d !== undefined && d !== "" && !dirs.includes(d)) {
       dirs.push(d);
     }
   };

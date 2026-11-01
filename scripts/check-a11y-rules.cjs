@@ -287,7 +287,7 @@ async function officialRuleMap() {
   const out = new Map();
   for (const [name, rule] of Object.entries(plugin.rules)) {
     out.set(`${PREFIX}${name}`, {
-      deprecated: rule && rule.meta ? rule.meta.deprecated === true : false,
+      deprecated: rule?.meta ? rule.meta.deprecated === true : false,
     });
   }
   return out;
@@ -318,7 +318,7 @@ async function rulesInNeitherConfig() {
     throw new Error("配置里没有 jsx-a11y 插件对象。");
   }
   const mentionedBy = (config) => {
-    const rules = config && config.rules ? config.rules : {};
+    const rules = config?.rules ? config.rules : {};
     return (name) => rules[name] !== undefined;
   };
   const inRecommended = mentionedBy(plugin.configs.recommended);
@@ -481,7 +481,7 @@ async function judge(ledger) {
    * 两条都不满足 = 没有人决定过 —— 与「没登记就关掉一条真判据」同罪。 */
   for (const name of inNeither) {
     const meta = official.get(name);
-    if (meta && meta.deprecated) {
+    if (meta?.deprecated) {
       continue;
     }
     const off = effective[name] === "off";
@@ -521,9 +521,7 @@ async function judge(ledger) {
     }
   }
 
-  const undecidedCount = inNeither.filter(
-    (n) => !((official.get(n) ?? {}).deprecated),
-  ).length;
+  const undecidedCount = inNeither.filter((n) => !official.get(n)?.deprecated).length;
   const onCount = Object.values(effective).filter((v) => v !== "off").length;
   const summary =
     `[a11y-rules] 生效 ${onCount} 条 / 官方 recommended ${Object.keys(recommended).length} 条；` +
@@ -554,9 +552,9 @@ async function main() {
 
   if (problems.length > 0) {
     console.error(
-      `[a11y-rules] jsx-a11y 的规则开关与台账对不上：\n\n  ${
-        problems.join("\n  ")
-        }\n\n口径见 docs/standards/06-无障碍访问-a11y.md §6.12。`,
+      `[a11y-rules] jsx-a11y 的规则开关与台账对不上：\n\n  ${problems.join(
+        "\n  ",
+      )}\n\n口径见 docs/standards/06-无障碍访问-a11y.md §6.12。`,
     );
     return 1;
   }

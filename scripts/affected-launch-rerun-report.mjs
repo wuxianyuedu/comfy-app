@@ -45,6 +45,25 @@ export function unverifiedReport(files) {
 }
 
 /**
+ * `budget-killed` 那一屏：`limitMs` 必须是**真正提交给 vitest 的上界**（差一笔收尾余量）。
+ * @param {{files: number, fmtMinutes: any, limitMs: number | null}} args
+ * @returns {string}
+ */
+export function firstPassKilledReport({ files, fmtMinutes, limitMs }) {
+  return (
+    "[affected-launch] 第 1 遍**没跑完**：墙钟预算用尽，本块 " +
+    `${files} 个用例被中途掐断（这一遍的上界 ${fmtMinutes(limitMs)}）\n` +
+    "  ⇒ 按**未判定**收（退 2）：这不是红，也不是绿 —— 这一遍没有任何一条断言给出结论。\n" +
+    "  下一动作按「装不下的原因」分两档，别一律往「拆小」上归：\n" +
+    "  ① 清单真的太大（几百份量级）⇒ 把改动拆开（规范 §13.5.8.1）；\n" +
+    "  ② 清单只有百来份却是这一跑的并发太低（`--maxWorkers` 由 `ci-load.mjs` 按 CNB_CPUS\n" +
+    "     折算，共享节点上会被压到 1~2）⇒ 那是机器被别的东西占着，拆小买不到任何东西：\n" +
+    "     等空下来重跑，或按名字要全量 `node scripts/run-affected-tests.mjs --full`。\n" +
+    "  ⚠️ 两档都**不许**用 `COMFY_AFFECTED_WALL_CLOCK_MS` 把界调大来「换绿」。\n"
+  );
+}
+
+/**
  * 一次判决链走完之后的**账**：这一次总共等了多久、放行的是第几遍测出来的、
  * 放行时它到底是绿还是「未校验」（纯函数，可被用例逐字钉住）。
  *

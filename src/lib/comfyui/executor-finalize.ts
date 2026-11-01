@@ -125,7 +125,8 @@ function executionErrorMessageOf(msg: unknown): unknown {
     return undefined;
   }
   // Array.isArray 把 unknown 收窄为 any[]，索引取值后立即断言收口。
-  const payload = /* SAFETY: 类型断言已复核 */ msg[1] as Record<string, unknown> | null | undefined;
+  /* SAFETY: 类型断言已复核 */
+  const payload = msg[1] as Record<string, unknown> | null | undefined;
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   return payload != null && typeof payload === "object" ? payload.exception_message : undefined;
 }
@@ -134,7 +135,8 @@ function executionErrorMessageOf(msg: unknown): unknown {
  *  改动范围内）—— 经这里统一收口为 `unknown` 读取；`undefined` 归一为 `null`
  *  与拆分前一致（completeInner 内两者等价）。 */
 function executedWorkflowOf(taskId: string): unknown {
-  const map = /* SAFETY: 类型断言已复核 */ state().executedWorkflow as ReadonlyMap<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const map = state().executedWorkflow as ReadonlyMap<string, unknown>;
   return map.get(taskId) ?? null;
 }
 
@@ -225,7 +227,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     `ComfyUI history 摘要：status=${verdict.statusStr ?? "(无)"} completed=${
       verdict.completed ?? "(无)"
     } 输出节点=${verdict.outputNodeCount}${
-      verdict.executionError ? ` 执行错误=${verdict.executionError}` : ""
+      verdict.executionError !== undefined ? ` 执行错误=${verdict.executionError}` : ""
     }`,
   );
   const outputKeys = historyOutputKeys({ [promptId]: entry }, promptId);
@@ -316,7 +318,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
    * `/api/generated/[...path]` 的白名单只认根内，写出去等于文件永远读不到；
    * 现在它变成一次硬失败（由 complete() 收口成 finalizeFailure，用户看得见）。 */
   const dir = taskOutputDir(taskId, projectId);
-  if (!dir) {
+  if (dir === null) {
     throw new Error(`产物目录越界，已拒绝落盘：taskId=${taskId} projectId=${projectId ?? "(无)"}`);
   }
   await fs.mkdir(dir, { recursive: true });
@@ -380,11 +382,13 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
       ...(actualSeed === undefined ? {} : { seed: actualSeed }),
       ...(runtime.steps === undefined ? {} : { steps: runtime.steps }),
       ...(runtime.cfg === undefined ? {} : { cfg: runtime.cfg }),
-      ...(runtime.sampler_name ? { sampler_name: runtime.sampler_name } : {}),
-      ...(runtime.scheduler ? { scheduler: runtime.scheduler } : {}),
+      ...(runtime.sampler_name === undefined ? {} : { sampler_name: runtime.sampler_name }),
+      ...(runtime.scheduler === undefined ? {} : { scheduler: runtime.scheduler }),
       ...(runtime.denoise === undefined ? {} : { denoise: runtime.denoise }),
-      ...(runtime.samplerClassType ? { sampler_class: runtime.samplerClassType } : {}),
-      ...(runtime.samplerNodeId ? { sampler_node: runtime.samplerNodeId } : {}),
+      ...(runtime.samplerClassType === undefined
+        ? {}
+        : { sampler_class: runtime.samplerClassType }),
+      ...(runtime.samplerNodeId === undefined ? {} : { sampler_node: runtime.samplerNodeId }),
       // 一个工作流可能有多个采样节点：顶层字段只反映主采样器（第一个），完整
       // 逐节点信息随 samplers 数组落库，原始 JSON 因此能展示全部 KSampler。
       ...(runtime.samplers && runtime.samplers.length > 0 ? { samplers: runtime.samplers } : {}),
@@ -490,7 +494,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
    * 通用说明 —— 这只在「上一次服务端生命周期入队、本次重新接管」时才会发生，
    * 极其罕见。 */
   const startedAt = s.startedAt.get(taskId);
-  if (startedAt) {
+  if (startedAt !== undefined) {
     const elapsedSec = Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10);
     log(taskId, "info", `✓ 全部完成（总耗时 ${elapsedSec}s）`);
   }
@@ -548,16 +552,17 @@ export async function finalizeFailure(
   /* 失败分支同样打出总耗时：让用户知道「这个任务其实跑了 Xs 才失败」，而不是
    * 「它一上来就死了」。 */
   const startedAt = s.startedAt.get(taskId);
-  const elapsedSuffix = startedAt
-    ? `（已运行 ${Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10)}s）`
-    : "";
+  const elapsedSuffix =
+    startedAt !== undefined
+      ? `（已运行 ${Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10)}s）`
+      : "";
   log(taskId, "error", `✗ 生成失败：${friendly}${elapsedSuffix}`);
 
   const outcome = await writeTerminal(taskId, "失败收口", () =>
     taskRepository.finalizeFailure(
       taskId,
       friendly,
-      validationErrors?.length ? validationErrors : undefined,
+      validationErrors !== undefined && validationErrors.length > 0 ? validationErrors : undefined,
     ),
   );
   if (outcome !== "written") {

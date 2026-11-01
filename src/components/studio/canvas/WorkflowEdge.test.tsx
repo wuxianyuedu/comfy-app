@@ -20,8 +20,10 @@ function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
     sourceY: 0,
     targetX: 200,
     targetY: 0,
-    sourcePosition: /* SAFETY: 类型断言已复核 */ "right" as Position,
-    targetPosition: /* SAFETY: 类型断言已复核 */ "left" as Position,
+    /* SAFETY: 类型断言已复核 */
+    sourcePosition: "right" as Position,
+    /* SAFETY: 类型断言已复核 */
+    targetPosition: "left" as Position,
     data,
   };
 }

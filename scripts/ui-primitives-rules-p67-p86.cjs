@@ -233,12 +233,10 @@ module.exports = {
         ["<DialogContent", "</DialogContent>", /<DialogTitle\b/],
         ["<SheetContent", "</SheetContent>", /<SheetTitle\b/],
       ]) {
+        /* `indexOf` 找不到回 `-1`，把终止条件写在循环头上而不是 `while (true) { … break }`：
+         * 后者对这个规则来说是「一个永真条件」，读的人要多跳一层才知道循环靠什么停。 */
         let cursor = 0;
-        while (true) {
-          const start = t2.indexOf(open, cursor);
-          if (start === -1) {
-            break;
-          }
+        for (let start = t2.indexOf(open, cursor); start !== -1; start = t2.indexOf(open, cursor)) {
           const end = t2.indexOf(close, start);
           if (end === -1) {
             cursor = start + open.length;

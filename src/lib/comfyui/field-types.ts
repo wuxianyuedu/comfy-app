@@ -16,7 +16,8 @@ export type FieldType =
   | "latent"; // latent size (width x height)
 
 /** `FieldType` 的全集（顺序即声明顺序，便于人工核对）。 */
-export const FIELD_TYPES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const FIELD_TYPES = [
   "text",
   "string",
   "number",

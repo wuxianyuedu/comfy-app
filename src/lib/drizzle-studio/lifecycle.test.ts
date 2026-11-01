@@ -40,7 +40,8 @@ vi.mock("~/lib/shell/open-in-browser", () => ({
  * `runtime-log-pack` 按时刻拼 —— 因此这里 mock 那一个的写入器。
  * 写入的行收集在 `logLines` 里：退出记录「写了谁的名字、给了什么排查建议」
  * 只有读回落盘的那几行才判得了（ISSUE #2435）。 */
-const logLines = vi.hoisted(() => /* SAFETY: 类型断言已复核 */ [] as Array<string>);
+/* SAFETY: 类型断言已复核 */
+const logLines = vi.hoisted(() => [] as Array<string>);
 vi.mock("~/lib/log/runtime-log-pack.server", () => ({
   openRuntimeLogWriter: () => ({
     file: "/tmp/x.log",
@@ -158,7 +159,8 @@ describe("openDrizzleStudio — 未运行时不打开空页面", () => {
 describe("退出记录的归属（ISSUE #2435）", () => {
   /** 假子进程：只给到本模块真会碰到的那几样（pid、两条输出流、事件）。 */
   function fakeChild(pid: number) {
-    const child = /* SAFETY: 类型断言已复核 */ new EventEmitter() as EventEmitter & {
+    /* SAFETY: 类型断言已复核 */
+    const child = new EventEmitter() as EventEmitter & {
       pid: number;
       stderr: EventEmitter;
       stdout: EventEmitter;

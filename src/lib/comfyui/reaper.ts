@@ -246,7 +246,8 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     if (!q.ok) {
       return null;
     }
-    const qd = /* SAFETY: 类型断言已复核 */ (await q.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const qd = (await q.json()) as {
       queue_pending?: Array<{ prompt_id?: string }>;
       queue_running?: Array<{ prompt_id?: string }>;
     } | null;
@@ -257,7 +258,7 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     if (all.length > 0) {
       return true;
     }
-    if (!hintPromptId) {
+    if (hintPromptId === null) {
       return false;
     }
     /* 队列空但有 promptId 线索：只有「最近一条历史确实是本次 prompt」才算
@@ -268,7 +269,8 @@ async function comfyHasActiveWorkflow(hintPromptId: string | null): Promise<bool
     if (!h.ok) {
       return null;
     }
-    const hd = /* SAFETY: 类型断言已复核 */ (await h.json()) as Record<string, unknown> | null;
+    /* SAFETY: 类型断言已复核 */
+    const hd = (await h.json()) as Record<string, unknown> | null;
     return !!hd && Object.hasOwn(hd, hintPromptId);
   } catch {
     /* 网络错误 / 超时：证据不足。 */
@@ -411,7 +413,7 @@ export async function reapStaleRunningTasks(): Promise<void> {
     /* 本轮见到的「RUNNING 且无 promptId」行；循环结束后整体替换登记表。 */
     const noPromptThisRound = new Set<string>();
     for (const t of stale) {
-      if (!t.promptId) {
+      if (t.promptId === null) {
         /* ISSUE #1184：这一族行以前被 SQL 的 `promptId IS NOT NULL` 直接挡在
          * 两条 sweeper 之外 —— 宿主在那段窗口崩溃就永久卡「生成中」。
          * 本进程还认领它（内存队列 / cli 句柄 / 已起步）= 正常执行中，不插手。 */
@@ -475,23 +477,22 @@ export async function reapStaleRunningTasks(): Promise<void> {
         try {
           const r = await fetch(url, { signal: AbortSignal.timeout(5000) });
           if (r.status === 200) {
-            const data = /* SAFETY: 类型断言已复核 */ (await r.json()) as Record<
-              string,
-              unknown
-            > | null;
+            /* SAFETY: 类型断言已复核 */
+            const data = (await r.json()) as Record<string, unknown> | null;
             /* SAFETY: 类型断言已复核 */
             const entry = data && (data[t.promptId] as Record<string, unknown> | undefined);
             if (entry) {
-              const status = /* SAFETY: 类型断言已复核 */ entry.status as
+              /* SAFETY: 类型断言已复核 */
+              const status = entry.status as
                 | {
                     errored?: unknown;
                     executed?: unknown;
                     messages?: unknown;
                   }
                 | undefined;
-              const errMsg = /* SAFETY: 类型断言已复核 */ (
-                entry.error as { message?: string } | undefined
-              )?.message;
+              /* SAFETY: 类型断言已复核 */
+              const errMsg = (entry.error as { message?: string } | undefined)?.message;
+              // oxlint-disable-next-line strict-boolean-expressions -- errored 与 error.message 都是 ComfyUI history 回执里的外部字段，任意真值都按「有错误现场」判，防御外部形态变化
               if (status?.errored || errMsg) {
                 verdict = "failed";
                 reason = `ComfyUI execution_error: ${errMsg ?? "未知原因"} (promptId=${t.promptId})`;
@@ -511,7 +512,8 @@ export async function reapStaleRunningTasks(): Promise<void> {
                   signal: AbortSignal.timeout(3000),
                 });
                 if (q.ok) {
-                  const qd = /* SAFETY: 类型断言已复核 */ (await q.json()) as {
+                  /* SAFETY: 类型断言已复核 */
+                  const qd = (await q.json()) as {
                     queue_pending?: Array<{ prompt_id?: string }>;
                     queue_running?: Array<{ prompt_id?: string }>;
                   } | null;

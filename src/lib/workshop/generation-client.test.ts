@@ -35,7 +35,8 @@ function makeCharacter(id: string, portraitUrl?: string): Character {
 function mockPrepare(prefix: string, failUrls: ReadonlySet<string> = new Set()) {
   const mock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     const raw = typeof init?.body === "string" ? init.body : "{}";
-    const body = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = JSON.parse(raw) as {
       image?: string;
     };
     const image = body.image ?? "";

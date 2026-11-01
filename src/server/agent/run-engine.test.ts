@@ -197,7 +197,8 @@ describe("advanceRunLoop", () => {
     );
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as Array<{
+    /* SAFETY: 类型断言已复核 */
+    const shots = row!.shots as Array<{
       index: number;
       prompt: string;
       rev: number;
@@ -227,14 +228,12 @@ describe("advanceRunLoop", () => {
     const row = await readRow();
     expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
     // 「种子」默认随机：首刷也带一个新的随机 seed（走「种子」对外参数；作者没连种子口则落不下去）。
-    const firstSeed = /* SAFETY: 类型断言已复核 */ (
-      synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }
-    ).seed;
+    /* SAFETY: 类型断言已复核 */
+    const firstSeed = (synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }).seed;
     expect(typeof firstSeed).toBe("number");
     expect(Number.isFinite(firstSeed)).toBe(true);
-    const shot = /* SAFETY: 类型断言已复核 */ (
-      row!.shots as Array<{ imageUrl?: string; status: string }>
-    )[0];
+    /* SAFETY: 类型断言已复核 */
+    const shot = (row!.shots as Array<{ imageUrl?: string; status: string }>)[0];
     expect(shot).toMatchObject({
       status: "done",
       imageUrl: "/api/generated/shot.png",
@@ -265,9 +264,8 @@ describe("advanceRunLoop", () => {
       workflowId: "wf-img",
     });
     // 重出走的是「抽卡」：带一个有限数字 seed（具体值随机，只断类型）
-    const seedArg = /* SAFETY: 类型断言已复核 */ (
-      synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }
-    ).seed;
+    /* SAFETY: 类型断言已复核 */
+    const seedArg = (synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }).seed;
     expect(typeof seedArg).toBe("number");
     expect(Number.isFinite(seedArg)).toBe(true);
   });
@@ -529,7 +527,8 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
     expect(reviewScript).toHaveBeenCalledTimes(1);
     expect(scriptDigestOf(revised)).not.toBe(scriptDigestOf("# 旧剧本"));
     const row = await readRow();
-    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as Array<{
+    /* SAFETY: 类型断言已复核 */
+    const shots = row!.shots as Array<{
       id: string;
       prompt: string;
     }>;

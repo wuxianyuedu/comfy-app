@@ -273,7 +273,7 @@ function collect(parsed) {
     if (EXEMPT_SITES[rel]) {
       continue;
     }
-    const shared = parsed && parsed.get(abs);
+    const shared = parsed?.get(abs);
     const hit = shared ? scanTree(shared) : scanFile(abs);
     if (hit.length) {
       sites.set(rel, hit);
@@ -294,7 +294,7 @@ function collectExempt(parsed) {
     if (!fs.existsSync(abs)) {
       continue;
     }
-    const shared = parsed && parsed.get(abs);
+    const shared = parsed?.get(abs);
     const hit = shared ? scanTree(shared) : scanFile(abs);
     if (hit.length) {
       out.set(rel, { reason, sites: hit });

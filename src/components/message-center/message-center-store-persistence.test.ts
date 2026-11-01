@@ -47,7 +47,8 @@ describe("消息中心持久化：写", () => {
     useMessageCenterStore
       .getState()
       .push({ kind: "offline", title: "应用服务已断开", body: "正文" });
-    const list = /* SAFETY: 类型断言已复核 */ stored() as Array<ReturnType<typeof record>>;
+    /* SAFETY: 类型断言已复核 */
+    const list = stored() as Array<ReturnType<typeof record>>;
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       kind: "offline",

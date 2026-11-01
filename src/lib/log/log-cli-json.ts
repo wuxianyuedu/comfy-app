@@ -30,7 +30,8 @@ export function splitCliLogLine(message: string): { payload: string; tag: CliLog
     return null;
   }
   return {
-    tag: /* SAFETY: 类型断言已复核 */ match[1] as CliLogTag,
+    /* SAFETY: 类型断言已复核 */
+    tag: match[1] as CliLogTag,
     payload: message.slice(match[0].length).trimStart(),
   };
 }

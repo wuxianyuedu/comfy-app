@@ -18,7 +18,8 @@ const meta = {
   /* `component` 是可选的，这里刻意不给：属性包不是组件，连上去只会让人以为它有
      props 面板 —— 画出形态的是 `Demo` 里那个 `role` 元素，Args 也由它接。 */
   args: {
-    keys: /* SAFETY: 类型断言已复核 */ ["Space", "Enter"] as ReadonlyArray<string>,
+    /* SAFETY: 类型断言已复核 */
+    keys: ["Space", "Enter"] as ReadonlyArray<string>,
   },
 } satisfies Meta<SimpleKeyHandlerProps>;
 

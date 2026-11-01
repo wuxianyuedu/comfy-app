@@ -122,7 +122,7 @@ export function decidePremergePush({ candidates, headSha, upstreamSha, proof }) 
   }
   /** @type {string[]} */
   const reasons = [];
-  if (!proof || !proof.verifiedAt) {
+  if (!proof?.verifiedAt) {
     reasons.push("本机还没有过合并前复算的记录");
   } else if (proof.headSha !== headSha) {
     reasons.push(`记录停在 ${shortSha(proof.headSha)}，而本检出现在是 ${shortSha(headSha)}`);
@@ -216,12 +216,11 @@ export function readRevisions(gitDir, cwd = ROOT) {
    * 语义是「这条引用会被 `git fetch` 移动」，而本地 `master` 不会 —— 远端前移、本地没动时拿它
    * 当上游，等于给一份陈旧证明发免检条。所以只收 `<remote>/master` 那种带命名空间的形状。 */
   const ref = resolveMergeBaseRef(cwd);
-  const upstreamRef = ref && ref.includes("/") ? ref : null;
+  const upstreamRef = ref?.includes("/") ? ref : null;
   return {
     headSha: run(["rev-parse", "HEAD"]),
     // `run()` 失败时给空串，这里要的是 null：`||` 把两种空值并成同一个「拿不到」。
-    // 这里刻意保留 ||：run() 失败时给空串，空串与「没有上游」在这里是同一件事。
-    upstreamSha: (upstreamRef && run(["rev-parse", "--verify", "--quiet", upstreamRef])) || null,
+    upstreamSha: (upstreamRef ? run(["rev-parse", "--verify", "--quiet", upstreamRef]) : "") || null,
   };
 }
 

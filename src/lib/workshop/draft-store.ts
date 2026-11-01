@@ -57,7 +57,8 @@ function parseDraft(raw: string | null): WorkshopDraft {
     return emptyWorkshopDraft();
   }
   try {
-    const draft = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<WorkshopDraft>;
+    /* SAFETY: 类型断言已复核 */
+    const draft = JSON.parse(raw) as Partial<WorkshopDraft>;
     return {
       meta: draft.meta ?? DEFAULT_META,
       scriptMarkdown: typeof draft.scriptMarkdown === "string" ? draft.scriptMarkdown : "",

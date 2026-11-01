@@ -70,16 +70,14 @@ function runs(): string {
 
 /** 当前这份 run.json（判据都建立在「它一定写出来了」之上）。 */
 function meta(): RunMeta {
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(
-    fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8"),
-  ) as RunMeta;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8")) as RunMeta;
 }
 
 /** 指定目录下的 run.json（归档包里那份）。 */
 function metaAt(dir: string): RunMeta {
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(
-    fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8"),
-  ) as RunMeta;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8")) as RunMeta;
 }
 
 /** 写一份 current/ 下的日志文件（模拟各写方）。 */

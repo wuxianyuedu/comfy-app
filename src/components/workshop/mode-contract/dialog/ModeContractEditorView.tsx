@@ -218,7 +218,8 @@ function ModeContractDraftPanel({
             audio: "音频（audio）",
           }}
           onChange={(value) =>
-            controller.setOutput(/* SAFETY: 类型断言已复核 */ value as ModeContract["output"])
+            /* SAFETY: 类型断言已复核 */
+            controller.setOutput(value as ModeContract["output"])
           }
           options={["image", "video", "audio"]}
           value={draft.output}

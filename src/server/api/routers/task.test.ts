@@ -175,7 +175,8 @@ describe("task.list", () => {
     });
     await expect(
       caller.list({
-        media: /* SAFETY: 类型断言已复核 */ "doc" as never,
+        /* SAFETY: 类型断言已复核 */
+        media: "doc" as never,
       }),
     ).rejects.toMatchObject({
       code: "BAD_REQUEST",
@@ -194,9 +195,8 @@ describe("task.detail", () => {
     });
     const task = await createCaller(makeCtx()).detail({ id: "task-1" });
     expect(task.id).toBe("task-1");
-    expect(/* SAFETY: 类型断言已复核 */ (task.images as Array<Row>).map((i) => i.id)).toEqual([
-      "img-1",
-    ]);
+    /* SAFETY: 类型断言已复核 */
+    expect((task.images as Array<Row>).map((i) => i.id)).toEqual(["img-1"]);
   });
 
   it("不存在 / 他人任务 → 同一个 NOT_FOUND（不给探测 id 用）", async () => {

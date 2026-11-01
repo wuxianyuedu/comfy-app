@@ -154,8 +154,8 @@ export function useHistoryList(): HistoryListController {
       enabled: !!detailId,
     }),
   );
-  const modeContracts = /* SAFETY: 类型断言已复核 */ (contractsQ.data?.contracts ??
-    null) as ReadonlyArray<ModeContract> | null;
+  /* SAFETY: 类型断言已复核 */
+  const modeContracts = (contractsQ.data?.contracts ?? null) as ReadonlyArray<ModeContract> | null;
 
   const filtered = useMemo(
     () => sortTasks(filterTasks(tasks, filter), sort),

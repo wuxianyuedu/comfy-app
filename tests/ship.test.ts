@@ -1670,8 +1670,10 @@ describe("issueItemShapes：一张单子正文里的条目形态（#2251 —— 
   it("`###` 后面没内容不算小节；空正文与非字符串输入都归零而不是抛", () => {
     expect(issueItemShapes("###   \n### 有内容\n").headings).toBe(1);
     expect(issueItemShapes("").total).toBe(0);
-    expect(issueItemShapes(/* SAFETY: 类型断言已复核 */ undefined as never).total).toBe(0);
-    expect(issueItemShapes(/* SAFETY: 类型断言已复核 */ null as never).total).toBe(0);
+    /* SAFETY: 类型断言已复核 */
+    expect(issueItemShapes(undefined as never).total).toBe(0);
+    /* SAFETY: 类型断言已复核 */
+    expect(issueItemShapes(null as never).total).toBe(0);
   });
 });
 
@@ -4280,7 +4282,8 @@ describe("readFreshnessState：判据原值里三件不同的事必须分开读"
   }
 
   const json = (o: unknown): FakeResult => ({
-    status: Number(/* SAFETY: 类型断言已复核 */ (o as { code?: number }).code ?? 0),
+    /* SAFETY: 类型断言已复核 */
+    status: Number((o as { code?: number }).code ?? 0),
     stdout: JSON.stringify(o),
     stderr: "",
     error: null,

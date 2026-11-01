@@ -130,7 +130,8 @@ describe("useHistoryPanel", () => {
   });
 
   it("本项目有记录时不探测全局（省一次请求）", async () => {
-    mockedFetch.mockResolvedValue(/* SAFETY: 类型断言已复核 */ [row()] as never);
+    /* SAFETY: 类型断言已复核 */
+    mockedFetch.mockResolvedValue([row()] as never);
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.tasks).toHaveLength(1);
     expect(mockedProbe).not.toHaveBeenCalled();
@@ -154,7 +155,8 @@ describe("useHistoryPanel", () => {
       /* SAFETY: 类型断言已复核 */ [row({ status: "SUCCEEDED" })] as never,
     );
     act(() => {
-      const tick = /* SAFETY: 类型断言已复核 */ started[0]?.[0] as () => void;
+      /* SAFETY: 类型断言已复核 */
+      const tick = started[0]?.[0] as () => void;
       tick();
     });
     await expect.poll(() => result.current.activeCount).toBe(0);
@@ -169,7 +171,8 @@ describe("useHistoryPanel", () => {
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.error).toBe("读取历史记录失败");
 
-    mockedFetch.mockResolvedValue(/* SAFETY: 类型断言已复核 */ [row()] as never);
+    /* SAFETY: 类型断言已复核 */
+    mockedFetch.mockResolvedValue([row()] as never);
     act(() => result.current.refresh());
     /* 先等 tasks 落定再断言 error：error 在拉取**开始时**就被清掉，
      * 只等 error 的话可能在数据回来之前就通过（局部绿 / 全量红的时序坑）。 */

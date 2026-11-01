@@ -94,7 +94,8 @@ export function classifyLivenessPhase(facts: LivenessFacts): LivenessPhase {
  */
 
 /** 启动等待：进程在跑、HTTP 未就绪。 */
-export const LIVENESS_STARTING = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+export const LIVENESS_STARTING = {
   /** 前 10s 用 400ms 一探：用户在盯着转圈，越快越好，此时也没别的负载
    *  （ComfyUI 还在 import torch / 加载模型，没有生成请求在排队）。 */
   fastMs: 400,

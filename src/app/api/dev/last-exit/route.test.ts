@@ -36,7 +36,8 @@ function writeRecord(body: unknown): void {
 async function get(): Promise<{ currentRunId: unknown; record: unknown }> {
   const res = await GET();
   expect(res.headers.get("Cache-Control")).toBe("no-store");
-  return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+  /* SAFETY: 类型断言已复核 */
+  return (await res.json()) as {
     currentRunId: unknown;
     record: unknown;
   };

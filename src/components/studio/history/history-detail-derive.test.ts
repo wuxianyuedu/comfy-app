@@ -21,7 +21,8 @@ import type { TaskDetail } from "./history-types";
 
 /** 只造测试关心的字段：TaskDetail 很大，其余字段用 unknown 兜。 */
 function makeDetail(params: unknown, extra: Partial<TaskDetail> = {}): TaskDetail {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     id: "t-1",
     params,
     images: [],
@@ -123,7 +124,8 @@ describe("deriveWorkshopParams", () => {
   });
 
   it("用户改过的模式契约优先于内置默认", () => {
-    const contracts = /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    const contracts = [
       { mode: "T2I", inputs: ["prompt", "size"], output: "image" },
     ] as unknown as Parameters<typeof deriveWorkshopParams>[2];
     const rows = deriveWorkshopParams(makeDetail({ prompt: "x" }), "T2I", contracts, null);

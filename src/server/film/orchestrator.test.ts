@@ -399,10 +399,8 @@ describe("createFilmFromProject — 从统一项目 Shot[] 直接建片（Phase 
     expect(llmStructured).not.toHaveBeenCalled();
 
     // 成片挂上 projectId，标题 / 类型 / 剧本取自项目
-    const created = /* SAFETY: 类型断言已复核 */ filmRepo.create.mock.calls[0]![0] as Record<
-      string,
-      unknown
-    >;
+    /* SAFETY: 类型断言已复核 */
+    const created = filmRepo.create.mock.calls[0]![0] as Record<string, unknown>;
     expect(created.projectId).toBe("proj_1");
     expect(created.title).toBe("项目片");
     expect(created.type).toBe("animation");

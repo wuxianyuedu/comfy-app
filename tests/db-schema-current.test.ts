@@ -136,9 +136,10 @@ function makeDb(file: string, extraSql = ""): void {
 function columnsOf(file: string, table: string): Array<string> {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
-    return /* SAFETY: 类型断言已复核 */ (
-      db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-    ).map((row) => row.name);
+    /* SAFETY: 类型断言已复核 */
+    return (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(
+      (row) => row.name,
+    );
   } finally {
     db.close();
   }
@@ -166,6 +167,26 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+/**
+ * 把 `ensureSchemaCurrent` 的进度回吐**收进数组**，别让它写到 worker 的 stdout。
+ *
+ * 为什么必须收：那几句是**给用户看的启动进度**（「数据库里还没有表，正在按 schema 建表…」/
+ * 「数据库结构与当前 schema 不一致，正在核对…」/「这批变更不涉及丢数据，自动应用…」），
+ * 而 vitest 会把 worker 的 stdout 原样转进跑批日志。平台对超长日志只保留**尾部**，
+ * 被挤掉的正是「哪条红、红在哪一行」。
+ *
+ * 收进来的那份不是丢掉 —— 调用点照样能断言「说了哪一句」，只是不再污染屏幕。
+ */
+function collectForward(): { forward: (chunk: string) => void; lines: Array<string> } {
+  const lines: Array<string> = [];
+  return {
+    forward: (chunk) => {
+      lines.push(chunk);
+    },
+    lines,
+  };
+}
 
 describe("pendingStatements —— 只认 SQL 行", () => {
   it("从 dry-run 输出里取出待执行语句，不把报错堆栈当成语句", async () => {
@@ -257,6 +278,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
     expect(fs.existsSync(dbFile)).toBe(false);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       push: pushStub({
         dryOutput: FRESH_DB_DRY_RUN_OUTPUT,
         applyChanges: createSentinelTable,
@@ -274,6 +296,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
     fs.writeFileSync(dbFile, "");
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       push: pushStub({
         dryOutput: FRESH_DB_DRY_RUN_OUTPUT,
         applyChanges: createSentinelTable,
@@ -288,6 +311,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
     fs.writeFileSync(dbFile, "");
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       push: pushStub({ dryOutput: FRESH_DB_DRY_RUN_OUTPUT }),
     });
     /* 表从来没建起来 —— 说法必须是 missing（「跑 pnpm db:push」），不是 stale。 */
@@ -301,6 +325,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
     const applyChanges = vi.fn();
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       push: pushStub({
         dryOutput: "Error: 什么都认不出来\n",
         applyChanges,
@@ -342,6 +367,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       push: pushStub({ dryOutput: NO_CHANGES_OUTPUT }),
     });
     expect(state.state).toBe("ready");
@@ -354,6 +380,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       push: pushStub({
         dryOutput: DRY_RUN_OUTPUT,
         applyChanges: () => {
@@ -383,6 +410,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     const applyChanges = vi.fn();
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       push: pushStub({
         dryOutput: DRY_RUN_OUTPUT.replace("ADD `color` text;", "DROP COLUMN `color`;"),
         applyChanges,
@@ -403,6 +431,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       push: pushStub({ dryOutput: DRY_RUN_OUTPUT }),
     });
     expect(state.state).toBe("stale");
@@ -456,6 +485,7 @@ describe("ensureSchemaCurrent —— force 路径（状态栏「立即同步」�
     makeDb(dbFile, "db.exec('ALTER TABLE user ADD COLUMN legacy text')");
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       force: true,
       push: forceStub({
         applyChanges: () => {
@@ -484,6 +514,7 @@ describe("ensureSchemaCurrent —— force 路径（状态栏「立即同步」�
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       force: true,
       push: forceStub({ noChanges: true }),
     });
@@ -496,6 +527,7 @@ describe("ensureSchemaCurrent —— force 路径（状态栏「立即同步」�
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
+      forward: collectForward().forward,
       force: true,
       push: forceStub({}),
     });

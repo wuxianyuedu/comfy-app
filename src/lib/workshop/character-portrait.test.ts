@@ -79,7 +79,8 @@ describe("portraitCandidates 读取候选", () => {
     expect(
       portraitCandidates(
         makeCharacter({
-          portraits: /* SAFETY: 类型断言已复核 */ "x" as never,
+          /* SAFETY: 类型断言已复核 */
+          portraits: "x" as never,
         }),
       ),
     ).toEqual([]);

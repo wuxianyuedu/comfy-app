@@ -370,11 +370,15 @@ const schemaSqlPath = join(staticDir, "schema.sql");
     fail("PATH 上找不到可用的 pnpm，无法导出首启建表用的 DDL（先跑 pnpm check:toolchain）。");
   }
   echoCommandLine(invocation.command, invocation.args);
-  const exported = spawnSync(invocation.command, invocation.args, {
-    cwd: root,
-    encoding: "utf8",
-    windowsHide: true,
-  });
+  /* `drizzle-kit` 起不来时 `stdout` / `stderr` 实测是 `undefined`（`@types/node` 按
+   * `encoding` 声明成 `string`）⇒ 下面两处 `?? ""` 是给运行时兜的，不是多余的。 */
+  const exported = /** @type {{ status: number | null, stdout?: string, stderr?: string }} */ (
+    spawnSync(invocation.command, invocation.args, {
+      cwd: root,
+      encoding: "utf8",
+      windowsHide: true,
+    })
+  );
   const sql = (exported.stdout ?? "").trim();
   if (exported.status !== 0 || sql.length === 0) {
     fail(

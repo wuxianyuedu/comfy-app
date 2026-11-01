@@ -63,7 +63,11 @@ export function textHandler<T>(
   // 通过重载决议把 T 锁到 string** 的路径上生效，不再有「非 string T 忘传
   // transform」的漏口。
   const fn: (raw: string) => T =
-    transform ?? ((raw) => /* SAFETY: 类型断言已复核 */ raw as unknown as T);
+    transform ??
+    ((raw) => {
+      /* SAFETY: 类型断言已复核 */
+      return raw as unknown as T;
+    });
   return (event) => {
     onValue(fn(event.target.value));
   };
@@ -120,7 +124,8 @@ export function bindKey<T extends object, K extends keyof T>(
   key: K,
 ): (value: T[K]) => void {
   return (value) => {
-    patch(/* SAFETY: 类型断言已复核 */ { [key]: value } as Pick<T, K>);
+    /* SAFETY: 类型断言已复核 */
+    patch({ [key]: value } as Pick<T, K>);
   };
 }
 

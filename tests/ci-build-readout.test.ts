@@ -1168,7 +1168,8 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
 
   it("非绿非 skipped 的那一格被补上原话，且不改入参（原值要留给比对）", () => {
     const run = stageRun(KILLED_AT_PREPARE_STAGE);
-    const enriched = /* SAFETY: 类型断言已复核 */ enrichStageErrors(
+    /* SAFETY: 类型断言已复核 */
+    const enriched = enrichStageErrors(
       run,
       "org/repo",
       "cnb-9qi-1k5qojle1",
@@ -1201,7 +1202,8 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
   });
 
   it("取不到原话 ⇒ 那一格保持原样（空 ≠ 「没有异常」，分类照状态判）", () => {
-    const enriched = /* SAFETY: 类型断言已复核 */ enrichStageErrors(
+    /* SAFETY: 类型断言已复核 */
+    const enriched = enrichStageErrors(
       stageRun({ data: { code: 204, message: "没有查询到该stage信息。" } }),
       "org/repo",
       "b1",
@@ -1235,7 +1237,8 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
       stderr: "",
       error: null,
     });
-    const enriched = /* SAFETY: 类型断言已复核 */ enrichStageErrors(
+    /* SAFETY: 类型断言已复核 */
+    const enriched = enrichStageErrors(
       run,
       "org/repo",
       "cnb-9qi-1k5qojle1",
@@ -1268,7 +1271,8 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
       stderr: "",
       error: null,
     });
-    const enriched = /* SAFETY: 类型断言已复核 */ enrichStageErrors(
+    /* SAFETY: 类型断言已复核 */
+    const enriched = enrichStageErrors(
       run,
       "org/repo",
       "cnb-ico-1k5r2letb",

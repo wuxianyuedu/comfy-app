@@ -94,11 +94,13 @@ test.describe("统一容器的宽度账 @critical", () => {
 
     const numbers = await page.evaluate(() => {
       const f = document.querySelector('[data-view-container="workspace"]');
-      const scroller = /* SAFETY: 类型断言已复核 */ f?.querySelector(
+      /* SAFETY: 类型断言已复核 */
+      const scroller = f?.querySelector(
         '[class*="overflow-y-auto"]',
       ) as HTMLElement | null;
       const doc = document.scrollingElement ?? document.documentElement;
-      const box = /* SAFETY: 类型断言已复核 */ (f as HTMLElement | null)?.getBoundingClientRect();
+      /* SAFETY: 类型断言已复核 */
+      const box = (f as HTMLElement | null)?.getBoundingClientRect();
       return {
         innerHeight: window.innerHeight,
         frameBottom: box ? Math.round(box.bottom) : -1,

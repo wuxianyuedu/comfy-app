@@ -214,7 +214,8 @@ test.describe("工作区链路 @critical", () => {
        竖条量起来正好是正方形。老写法在最该红的那一刻会绿。 */
     const measure = () =>
       spinner.evaluate((el) => {
-        const style = getComputedStyle(/* SAFETY: 类型断言已复核 */ el as SVGElement);
+        /* SAFETY: 类型断言已复核 */
+        const style = getComputedStyle(el as SVGElement);
         return {
           width: Number.parseFloat(style.width),
           height: Number.parseFloat(style.height),
@@ -240,7 +241,8 @@ test.describe("工作区链路 @critical", () => {
       }
       const previous = parent.style.display;
       parent.style.display = "block";
-      const style = getComputedStyle(/* SAFETY: 类型断言已复核 */ el as SVGElement);
+      /* SAFETY: 类型断言已复核 */
+      const style = getComputedStyle(el as SVGElement);
       const box = {
         width: Number.parseFloat(style.width),
         height: Number.parseFloat(style.height),
@@ -405,9 +407,11 @@ test.describe("应用页签与全屏视图 @critical", () => {
    */
   const centerHitsOwnSubtree = (target: ReturnType<Page["locator"]>) =>
     target.evaluate((el) => {
-      const box = /* SAFETY: 类型断言已复核 */ (el as HTMLElement).getBoundingClientRect();
+      /* SAFETY: 类型断言已复核 */
+      const box = (el as HTMLElement).getBoundingClientRect();
       const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-      return top !== null && /* SAFETY: 类型断言已复核 */ (el as HTMLElement).contains(top);
+      /* SAFETY: 类型断言已复核 */
+      return top !== null && (el as HTMLElement).contains(top);
     });
 
   async function expectStatusBarNotCovered(page: Page) {
@@ -507,11 +511,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         const fmt = (ms: number) => {
           const d = new Date(ms);
           const p = (n: number, l = 2) => String(n).padStart(l, "0");
-          return (
-            `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
-            `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.` +
-            `${p(d.getMilliseconds(), 3)}`
-          );
+          return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
         };
         /* 掺进 2 条警告、3 条错误（取最新的一端，共 450 条仍在上限内）：
          * 级别按钮上的 warn / error 才有非零样本，「警告黄、错误红」才可断言。 */
@@ -821,7 +821,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
         const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         let best: Text | null = null;
         for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-          const text = /* SAFETY: 类型断言已复核 */ n as Text;
+          /* SAFETY: 类型断言已复核 */
+          const text = n as Text;
           if (!best || text.length > best.length) {
             best = text;
           }
@@ -1024,7 +1025,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
         expect(box!.width).toBeGreaterThanOrEqual(56);
 
         const overflow = await button.evaluate((el) => {
-          const nodes = /* SAFETY: 类型断言已复核 */ [el, ...el.children] as Array<HTMLElement>;
+          /* SAFETY: 类型断言已复核 */
+          const nodes = [el, ...el.children] as Array<HTMLElement>;
           return nodes.map((n) => n.scrollWidth - n.clientWidth);
         });
         for (const px of overflow) {
@@ -1048,7 +1050,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
             ctx.fillStyle = color;
             ctx.fillRect(0, 0, 1, 1);
             const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-            return /* SAFETY: 类型断言已复核 */ [r, g, b] as [number, number, number];
+            /* SAFETY: 类型断言已复核 */
+            return [r, g, b] as [number, number, number];
           });
       const [wr, wg, wb] = await rgbOf("警告");
       const [er, eg, eb] = await rgbOf("错误");
@@ -1064,7 +1067,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
         .getByTitle(/^当前来源的警告：/)
         .first()
         .evaluate((el) => {
-          const count = /* SAFETY: 类型断言已复核 */ el.children[1] as HTMLElement;
+          /* SAFETY: 类型断言已复核 */
+          const count = el.children[1] as HTMLElement;
           const canvas = document.createElement("canvas");
           canvas.width = canvas.height = 1;
           const ctx = canvas.getContext("2d")!;

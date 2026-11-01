@@ -84,7 +84,8 @@ export function parseAppearance(raw: string | null | undefined): AppearancePrefs
   if (typeof parsed !== "object" || parsed === null) {
     return { ...DEFAULT_APPEARANCE };
   }
-  const record = /* SAFETY: 类型断言已复核 */ parsed as {
+  /* SAFETY: 类型断言已复核 */
+  const record = parsed as {
     fontScale?: unknown;
     radius?: unknown;
   };

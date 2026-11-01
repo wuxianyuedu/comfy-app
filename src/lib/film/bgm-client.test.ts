@@ -7,7 +7,8 @@ type FetchMock = Mock<typeof fetch>;
 
 /** 造一个带 JSON 体的 Response；非法 JSON 走 reject */
 function jsonRes(status: number, body: unknown): Response {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,

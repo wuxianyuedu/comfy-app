@@ -190,11 +190,11 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
   // 取 setup 节的 cmds（形如 "cmds": "C:\...\python.exe main.py"）。走 JSON.parse
   // 而不是正则：cmds 内嵌的引号是 JSON 转义过的（`\"C:\\uv...\"`），正则抓不准。
   const cmds = extractSetupCmds(raw);
-  if (!cmds) {
+  if (cmds === null) {
     return null;
   }
   const first = /^"([^"]+)"/.exec(cmds)?.[1] ?? cmds.trim().split(/\s+/)[0];
-  if (!first || !/\.exe$|python/i.test(first)) {
+  if (first === undefined || !/\.exe$|python/i.test(first)) {
     return null;
   }
   return first;
@@ -204,7 +204,8 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
 export function extractSetupCmds(raw: string): string | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    const setup = /* SAFETY: 类型断言已复核 */ (parsed as { setup?: { cmds?: unknown } })?.setup;
+    /* SAFETY: 类型断言已复核 */
+    const setup = (parsed as { setup?: { cmds?: unknown } })?.setup;
     const cmds = setup?.cmds;
     return typeof cmds === "string" && cmds.trim() ? cmds : null;
   } catch {
@@ -258,12 +259,12 @@ async function resolvePortFast(
   const guessed =
     alreadyProbedPort === true
       ? Promise.resolve(configuredPort)
-      : probeComfyAtPort(configuredPort).then((base) => (base ? configuredPort : null));
+      : probeComfyAtPort(configuredPort).then((base) => (base !== null ? configuredPort : null));
   const winner = await Promise.race([
     authoritative.then((port) => ({ port })),
     guessed.then((port) => ({ port })),
   ]);
-  if (winner.port) {
+  if (winner.port !== null) {
     return winner.port;
   }
   // 抢跑没结论（配置端口没人应答）→ 仍以权威查询为准。
@@ -275,7 +276,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
 
   // 1) bound 子进程：本进程亲手拉起的，PID 直接可信（无需查进程表）。
   const bound = boundChildPid();
-  if (bound) {
+  if (bound !== null) {
     const port = await resolvePortFast(bound, configuredPortOf(settings));
     return {
       running: true,
@@ -341,7 +342,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   const plan = resolveComfyLaunchPlan(comfyuiPath);
   if (!("error" in plan)) {
     const lookup = await findPidForMainPyDetailed(plan.mainPy);
-    if (lookup.pid) {
+    if (lookup.pid !== null) {
       return {
         running: true,
         pid: lookup.pid,
@@ -362,7 +363,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   const classify = classifyComfyInstall(comfyuiPath);
   const registered = readRegisteredLauncher(classify.instanceRoot ?? comfyuiPath);
   const candidates: Array<{ cmd: string; via: string }> = [];
-  if (registered) {
+  if (registered !== null) {
     candidates.push({ cmd: registered, via: "setup 中登记的启动器" });
   }
   if (!("error" in plan)) {
@@ -401,7 +402,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
     if (lookup.failed) {
       lookupFailed = true;
     }
-    if (lookup.pid) {
+    if (lookup.pid !== null) {
       return {
         running: true,
         pid: lookup.pid,
@@ -451,13 +452,17 @@ export async function getComfyRuntimeSnapshot(
   opts: { force?: boolean } = {},
 ): Promise<ComfyRuntimeSnapshot> {
   const now = Date.now();
-  if (!opts.force && st.cached && !isStale(st.cached.snap, st.cached.at, now)) {
+  if (
+    opts.force !== true &&
+    st.cached !== undefined &&
+    !isStale(st.cached.snap, st.cached.at, now)
+  ) {
     return st.cached.snap;
   }
   /* 在途去重只在**非强制**那一档生效：`st.inflight` 回答的是「上一个问的人问的那件事」，
    * 而它可能是动作之前发出的 —— 用户点了启动、查状态、再点一次刷新，
    * 拿到的仍是启动前那一问（`force` 的口径见函数文档）。 */
-  if (!opts.force && st.inflight) {
+  if (opts.force !== true && st.inflight !== undefined) {
     return st.inflight;
   }
   const task = snapshotOnce()

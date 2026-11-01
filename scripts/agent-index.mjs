@@ -67,20 +67,24 @@ const TOOLS = {
  * @returns {{missing: boolean, code: number | null, stdout: string, stderr: string}}
  */
 export function runTool(cmd, args) {
-  const res =
+  /** `stdout` / `stderr` 实测在 ENOENT 时是 `undefined`（`@types/node` 按 `encoding`
+   *  声明成 `string`）⇒ 这里按实测形状声明，下面两处 `?? ""` 是给运行时兜的。 */
+  const res = /** @type {{ status: number | null, stdout?: string, stderr?: string,
+   *   error?: {code?: string} }} */ (
     process.platform === "win32"
       ? spawnSync("cmd.exe", ["/d", "/s", "/c", cmd, ...args], {
           cwd: ROOT,
           encoding: "utf8",
         })
-      : spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8" });
+      : spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8" })
+  );
   const stdout = res.stdout ?? "";
   const stderr = res.stderr ?? "";
   /* 「命令不在」有两种形状：POSIX 的 spawn ENOENT，与 cmd.exe 回显的
    * 「'x' is not recognized …」。两种都是**没取到读数**，不是「没就绪」。
    * `SpawnSyncReturns.error` 的静态类型是 `Error`，`code` 只在运行期由 libuv 挂上来。 */
   const missing =
-    /** @type {{code?: string} | undefined} */ (res.error)?.code === "ENOENT" ||
+    res.error?.code === "ENOENT" ||
     (process.platform === "win32" &&
       /is not recognized as an internal or external command/i.test(stderr));
   return {

@@ -208,7 +208,8 @@ function readVirtualConsole(scope: unknown): VirtualConsoleLike | null {
   if (typeof scope !== "object" || scope === null) {
     return null;
   }
-  const holder = /* SAFETY: 类型断言已复核 */ scope as {
+  /* SAFETY: 类型断言已复核 */
+  const holder = scope as {
     jsdom?: { virtualConsole?: VirtualConsoleLike };
     window?: { jsdom?: { virtualConsole?: VirtualConsoleLike } };
   };

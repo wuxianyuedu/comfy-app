@@ -40,19 +40,15 @@ export type PortraitSource = "local" | "remote" | "import";
  * （§12.12）：`Shot.status`、`Shot.clipStatus`、`Asset.status` 现在都指向这里，
  * 而写侧契约要按**同一份**枚举校验取值。
  */
-export const SHOT_STATUSES = /* SAFETY: 类型断言已复核 */ [
-  "idle",
-  "queued",
-  "running",
-  "done",
-  "failed",
-  "stale",
-] as const;
+/* SAFETY: 类型断言已复核 */
+export const SHOT_STATUSES = ["idle", "queued", "running", "done", "failed", "stale"] as const;
 export type ShotStatus = (typeof SHOT_STATUSES)[number];
 
-export const MOTION_LEVELS = /* SAFETY: 类型断言已复核 */ ["low", "medium", "high"] as const;
+/* SAFETY: 类型断言已复核 */
+export const MOTION_LEVELS = ["low", "medium", "high"] as const;
 export type MotionLevel = (typeof MOTION_LEVELS)[number];
-export const TRANSITIONS = /* SAFETY: 类型断言已复核 */ ["cut", "dissolve", "fade"] as const;
+/* SAFETY: 类型断言已复核 */
+export const TRANSITIONS = ["cut", "dissolve", "fade"] as const;
 export type Transition = (typeof TRANSITIONS)[number];
 
 export const MOTION_LABELS: Record<MotionLevel, string> = {
@@ -77,7 +73,8 @@ export const TRANSITION_LABELS: Record<Transition, string> = {
  *（`normalizeShotType`）。曾经有一份把这条收窄跳过去写成 `as never`，
  * 表现是「LLM 说什么就存什么」，而类型层完全不知道。
  */
-export const SHOT_TYPES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const SHOT_TYPES = [
   "extreme_wide", // 大远景
   "wide", // 远景
   "full", // 全景
@@ -97,10 +94,10 @@ export const DEFAULT_SHOT_TYPE: ShotType = "medium";
  *  不在清单里的一律回落默认档 —— 不抛错（一条镜头的景别写错不该毁掉整批解析），
  *  但也不放它进类型系统。 */
 export function normalizeShotType(raw: unknown): ShotType {
-  return /* SAFETY: 类型断言已复核 */ (SHOT_TYPES as ReadonlyArray<string>).includes(
-    typeof raw === "string" ? raw : "",
-  )
-    ? /* SAFETY: 类型断言已复核 */ (raw as ShotType)
+  /* SAFETY: 类型断言已复核 */
+  return (SHOT_TYPES as ReadonlyArray<string>).includes(typeof raw === "string" ? raw : "")
+    ? /* SAFETY: 类型断言已复核 */
+      (raw as ShotType)
     : DEFAULT_SHOT_TYPE;
 }
 
@@ -216,9 +213,8 @@ function optionalEnum<const T extends ReadonlyArray<string>>(values: T) {
     .unknown()
     .transform((value) =>
       /* SAFETY: 类型断言已复核 */
-      values.includes(/* SAFETY: 类型断言已复核 */ value as string)
-        ? (value as T[number])
-        : undefined,
+      /* SAFETY: 类型断言已复核 */
+      values.includes(value as string) ? (value as T[number]) : undefined,
     )
     .optional();
 }

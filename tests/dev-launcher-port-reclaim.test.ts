@@ -66,7 +66,8 @@ function verdictFor(
     });
     process.stdout.write(JSON.stringify(result));
   `;
-  return /* SAFETY: 类型断言已复核 */ decidePort(script) as {
+  /* SAFETY: 类型断言已复核 */
+  return decidePort(script) as {
     foreignPids: Array<number>;
     ownership: string;
     ownPids: Array<number>;
@@ -79,7 +80,8 @@ function isApp(cmdline: string): boolean {
     import { isAppDevServerCmdline } from ${LAUNCHER};
     process.stdout.write(JSON.stringify(isAppDevServerCmdline(${JSON.stringify(cmdline)}, ${JSON.stringify(ROOT)})));
   `;
-  return /* SAFETY: 类型断言已复核 */ decidePort(script) as boolean;
+  /* SAFETY: 类型断言已复核 */
+  return decidePort(script) as boolean;
 }
 
 describe("端口残留回收：显式端口 + 应用服务自证（ISSUE #621）", () => {

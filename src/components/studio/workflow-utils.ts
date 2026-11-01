@@ -232,7 +232,8 @@ export function renderWidgetValue(value: unknown): string {
   }
   // 剩余只可能是 bigint / symbol / function —— 均带自有 toString，与
   // String(value) 运行时一致（显式收窄以满足 no-base-to-string）。
-  return /* SAFETY: 类型断言已复核 */ (value as { toString(): string }).toString();
+  /* SAFETY: 类型断言已复核 */
+  return (value as { toString(): string }).toString();
 }
 
 /** 「值单元格」的文字颜色：**未连线**取主档、**已连线**取低一档（值来自上游的信号）。

@@ -86,16 +86,20 @@ describe("常驻根（resolveArtifactRoot）", () => {
     expect(explicit.root).toBe("G:/elsewhere/pkg");
     expect(explicit.from).toContain(ARTIFACT_ROOT_ENV);
 
-    const derived = resolveArtifactRoot({ cwd: ROOT, env: {}, run: storeOn("F:") });
+    /* store 要落在**这一台机器真实存在的卷根**上：`path.parse` 认的是宿主平台，
+     * 写死 `F:` 这种盘符时 Linux 宿主解析不出卷根（`root` 是空串）⇒ 推导照实答「取不到」。 */
+    const volumeRoot = path.parse(ROOT).root;
+    const derived = resolveArtifactRoot({ cwd: ROOT, env: {}, run: storeOn(volumeRoot) });
     /* 目录名取的是**本仓 package.json 的 name**（同依赖槽那一份推导），不写死字面量。 */
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
-    ) as { name?: string };
-    expect(derived.root).toBe(path.join("F:\\", "ci-artifacts", String(pkg.name).toLowerCase()));
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+      name?: string;
+    };
+    expect(derived.root).toBe(path.join(volumeRoot, "ci-artifacts", String(pkg.name).toLowerCase()));
   });
 
   it("成品根不许落在缓存槽的根里（那边按键位淘汰会删掉安装包）", () => {
-    const io = { cwd: ROOT, env: {}, run: storeOn("G:") };
+    const io = { cwd: ROOT, env: {}, run: storeOn(path.parse(ROOT).root) };
     const artifacts = resolveArtifactRoot(io).root ?? "";
     for (const other of [resolveCacheRoot(io).root ?? "", resolveBuildCacheRoot(io).root ?? ""]) {
       expect(artifacts.startsWith(other)).toBe(false);
@@ -190,9 +194,11 @@ describe("发布那一跑（main）", () => {
     const { code } = runPublish({ root });
     expect(code).toBe(0);
     const dir = path.join(root, "r1");
-    const manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8"),
-    ) as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8")) as Record<
+      string,
+      unknown
+    >;
     expect(manifest.label).toBe("r1");
     expect(manifest.sha).toBe("cafe1234567890");
     expect(manifest.keep).toBe(DEFAULT_KEEP);

@@ -49,7 +49,8 @@ describe("configureEnqueue 接缝", () => {
   it("接受 Partial<EnqueueDeps>、两次调用是合并语义", () => {
     const fakeRepo = {
       findStatusAndPromptById: async () => null,
-      cancel: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
+      /* SAFETY: 类型断言已复核 */
+      cancel: async () => "written" as const,
     };
     expect(() => {
       mod.configureEnqueue({ taskRepo: fakeRepo });

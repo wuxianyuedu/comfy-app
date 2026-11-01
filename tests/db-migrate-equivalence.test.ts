@@ -71,7 +71,8 @@ function readShape(file: string): Record<string, TableShape> {
   if (r.status !== 0 || !r.stdout.trim()) {
     throw new Error(`读库结构失败：${r.stderr}`);
   }
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(r.stdout) as Record<string, TableShape>;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(r.stdout) as Record<string, TableShape>;
 }
 
 /**

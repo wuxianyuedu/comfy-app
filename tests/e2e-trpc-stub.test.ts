@@ -49,18 +49,22 @@ async function consume(body: string) {
     /* `superjson.deserialize` 的签名要求 `SuperJSONResult`；这一层的入参在
        tRPC 侧是 `any`，所以显式收一次口，返回 `unknown` 交给下游自己拆。 */
     deserialize: (v: unknown): unknown =>
-      superjson.deserialize<SuperJSONResult>(/* SAFETY: 类型断言已复核 */ v as SuperJSONResult),
+      /* SAFETY: 类型断言已复核 */
+      superjson.deserialize<SuperJSONResult>(v as SuperJSONResult),
     abortController: new AbortController(),
   });
-  return /* SAFETY: 类型断言已复核 */ head as Record<number, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  return head as Record<number, unknown>;
 }
 
 /** 拆开「两层异步值」拿到 `result.data`（协议形状，与客户端同一次拆解）。 */
 async function unwrap(slot: unknown) {
-  const envelope = /* SAFETY: 类型断言已复核 */ (await Promise.resolve(slot)) as {
+  /* SAFETY: 类型断言已复核 */
+  const envelope = (await Promise.resolve(slot)) as {
     result: unknown;
   };
-  const result = /* SAFETY: 类型断言已复核 */ (await Promise.resolve(envelope.result)) as {
+  /* SAFETY: 类型断言已复核 */
+  const result = (await Promise.resolve(envelope.result)) as {
     data: unknown;
   };
   return Promise.resolve(result.data);
@@ -72,13 +76,15 @@ describe("e2e tRPC 桩产出真 JSON Lines 协议", () => {
     expect(lines).toHaveLength(4);
 
     const [firstLine, ...rest] = lines;
-    const head = /* SAFETY: 类型断言已复核 */ JSON.parse(firstLine!) as {
+    /* SAFETY: 类型断言已复核 */
+    const head = JSON.parse(firstLine!) as {
       json: Record<string, unknown>;
     };
     expect(Object.keys(head.json)).toEqual(["0"]);
 
     for (const line of rest) {
-      const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(line) as { json?: unknown };
+      /* SAFETY: 类型断言已复核 */
+      const parsed = JSON.parse(line) as { json?: unknown };
       expect("json" in parsed).toBe(true);
       /* 不能是裸数组：裸行的 `type` 会落空 → 槽位静默变 undefined。 */
       expect(Array.isArray(parsed)).toBe(false);

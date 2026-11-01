@@ -63,7 +63,7 @@ export const MAX_RAW_JSON_LINES = 300;
  * 字段（它是 {code, message, hint, details}），于是 6 条逐字段清单从未渲染。
  */
 export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
-  if (!root || typeof root !== "object") {
+  if (typeof root !== "object" || root === null) {
     return undefined;
   }
   const seen = new WeakSet();
@@ -90,9 +90,11 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
       return ne;
     }
     for (const v of Object.values(node)) {
-      if (v && typeof v === "object") {
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      if (v != null && typeof v === "object") {
         stack.push({
-          node: /* SAFETY: 类型断言已复核 */ v as JsonRecord,
+          /* SAFETY: 类型断言已复核 */
+          node: v as JsonRecord,
           d: d + 1,
         });
       }
@@ -107,7 +109,7 @@ export function extractEnvelopeValidationErrors(
   patched?: Record<string, unknown>,
 ): Array<ValidationError> | undefined {
   const carrier = findNodeErrorsCarrier(env);
-  if (!carrier) {
+  if (carrier === undefined) {
     return undefined;
   }
   return extractValidationErrors(carrier, patched);
@@ -125,7 +127,8 @@ export function envelopeErrorMessage(env: unknown): string {
     if (o == null || typeof o !== "object") {
       return undefined;
     }
-    const v = /* SAFETY: 类型断言已复核 */ (o as JsonRecord)[key];
+    /* SAFETY: 类型断言已复核 */
+    const v = (o as JsonRecord)[key];
     return typeof v === "string" ? v : undefined;
   };
   return str(err, "message") ?? str(err, "hint") ?? "comfy-cli 执行失败";
@@ -144,15 +147,18 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
   if (env == null || typeof env !== "object") {
     return null;
   }
-  const err = /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error;
+  /* SAFETY: 类型断言已复核 */
+  const err = (env as JsonRecord).error;
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (err == null || typeof err !== "object") {
     return null;
   }
-  if (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).code !== "workflow_unknown_nodes") {
+  /* SAFETY: 类型断言已复核 */
+  if ((err as JsonRecord).code !== "workflow_unknown_nodes") {
     return null;
   }
-  const details = /* SAFETY: 类型断言已复核 */ (err as JsonRecord).details;
+  /* SAFETY: 类型断言已复核 */
+  const details = (err as JsonRecord).details;
   const list =
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     details != null && typeof details === "object"
@@ -160,7 +166,8 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
       : undefined;
   if (Array.isArray(list) && list.length > 0) {
     const lines = list.slice(0, 12).map((raw) => {
-      const e = /* SAFETY: 类型断言已复核 */ raw as JsonRecord;
+      /* SAFETY: 类型断言已复核 */
+      const e = raw as JsonRecord;
       const node = typeof e.node_id === "string" ? `节点 ${e.node_id}` : "某节点";
       const field = typeof e.field === "string" ? ` 的「${e.field}」输入` : "";
       const hint =
@@ -177,8 +184,10 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
   }
   const message =
     /* SAFETY: 类型断言已复核 */
-    typeof (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).message) === "string"
-      ? /* SAFETY: 类型断言已复核 */ ((err as JsonRecord).message as string)
+    /* SAFETY: 类型断言已复核 */
+    typeof (err as JsonRecord).message === "string"
+      ? /* SAFETY: 类型断言已复核 */
+        ((err as JsonRecord).message as string)
       : "未知校验错误";
   return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
 }
@@ -241,14 +250,17 @@ export type CliEnvelopeParser = {
  * （`deps.patched`，与 `progress` 帧同一条路，见 ADR §24）。
  */
 function nodeTag(evt: JsonRecord, patched: Record<string, unknown> | undefined): string {
-  const node = /* SAFETY: 类型断言已复核 */ (evt.node ??
+  /* SAFETY: 类型断言已复核 */
+  const node = (evt.node ??
     /* SAFETY: 类型断言已复核 */ (evt.data as JsonRecord | null | undefined)?.node ??
     "?") as string;
   const fromEvent =
     typeof evt.class_type === "string" && evt.class_type ? evt.class_type : undefined;
   const classType =
     fromEvent ?? (node && node !== "?" ? classTypeForNode(patched, node) : undefined);
-  return classType ? ` [${node}] ${nodeLabel(classType)}（${classType}）` : ` [${node}]`;
+  return classType !== undefined
+    ? ` [${node}] ${nodeLabel(classType)}（${classType}）`
+    : ` [${node}]`;
 }
 
 /**
@@ -290,7 +302,7 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
       }
       return;
     }
-    if (!ev || typeof ev !== "object") {
+    if (typeof ev !== "object" || ev === null) {
       doTrace("cli", taskId, "stdout JSON 非对象", { line });
       return;
     }
@@ -311,7 +323,8 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
     }
     /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
     doTrace("cli", taskId, "stdout 事件", { event: ev });
-    dispatchEvent(/* SAFETY: 类型断言已复核 */ ev as JsonRecord);
+    /* SAFETY: 类型断言已复核 */
+    dispatchEvent(ev as JsonRecord);
   };
 
   const dispatchEvent = (evt: JsonRecord): void => {
@@ -366,15 +379,16 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
       /* 类名靠提交那一刻的图认（`deps.patched`），与 WS 帧同一个出口 ——
        * raw 任务的进度历史上就是从这条路上来的，所以状态栏「当前节点」那一格
        * 能不能显示类名，取决于这里（ISSUE #1202）。 */
-      const classType = nodeId ? classTypeForNode(deps.patched, nodeId) : undefined;
+      const classType =
+        nodeId !== undefined && nodeId !== "" ? classTypeForNode(deps.patched, nodeId) : undefined;
       deps.onProgress(
         Math.round((evt.completed / evt.total) * 100),
-        nodeId
+        nodeId !== undefined && nodeId !== ""
           ? {
               id: nodeId,
               value: evt.completed,
               max: evt.total,
-              ...(classType ? { classType, label: nodeLabel(classType) } : {}),
+              ...(classType !== undefined ? { classType, label: nodeLabel(classType) } : {}),
             }
           : undefined,
       );
@@ -521,7 +535,7 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
     const msg = envelopeErrorMessage(env);
     const validationErrors = extractEnvelopeValidationErrors(env, deps.patched);
     let translated: string | null = null;
-    if (validationErrors?.length) {
+    if (validationErrors !== undefined && validationErrors.length > 0) {
       // 与 API 路径一致：把结构化清单汇总成一行，再交给 fail() 让 UI 渲染
       // 成逐字段红框。
       log(taskId, "error", `✗ comfy-cli 报 ${validationErrors.length} 条校验错误（见上方红框）`);
@@ -546,7 +560,7 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
       // object_info）走的是 error.details.errors，本仓库的 node_errors 深搜
       // 拿不到，故特判并翻成中文可操作提示，而不是把裸英文 envelope 丢给用户。
       translated = translateWorkflowUnknownNodesError(env);
-      if (translated) {
+      if (translated !== null) {
         log(taskId, "error", translated);
       } else {
         // 兜底：消息说「validation error」但深搜没找到结构化 node_errors。

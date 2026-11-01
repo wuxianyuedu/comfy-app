@@ -53,7 +53,8 @@ export function useProjectOutputs(projectId: string | null): ProjectOutputsContr
   );
 
   // 服务端 createdAt 是 Date，视图层要字符串做时间轴展示，这里统一收窄。
-  const outputs = /* SAFETY: 类型断言已复核 */ (outputsQ.data?.outputs ?? []).map((output) => ({
+  /* SAFETY: 类型断言已复核 */
+  const outputs = (outputsQ.data?.outputs ?? []).map((output) => ({
     ...output,
     createdAt: String(output.createdAt),
   })) as Array<ProjectOutputItem>;

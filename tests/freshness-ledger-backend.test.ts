@@ -48,7 +48,8 @@ const PRISTINE = snapshotPaths([path.join(ROOT, E2E_REL)]);
  * @returns `e2e` 那一档；账里没有这一档时是 `undefined`
  */
 function e2eTrack(ledger: Record<string, unknown> | null): { verifiedAt?: string } | undefined {
-  return /* SAFETY: 类型断言已复核 */ ledger?.e2e as { verifiedAt?: string } | undefined;
+  /* SAFETY: 类型断言已复核 */
+  return ledger?.e2e as { verifiedAt?: string } | undefined;
 }
 
 function git(args: string): string {

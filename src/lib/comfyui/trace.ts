@@ -135,7 +135,7 @@ export function trace(
     // 动态 import 尚未落地 / 纯 Node 未 configure → 静默 skip。
     // 与「trace 是诊断通道、绝不因写入失败崩业务」的原契约一致。
     const tracePath = traceLogPathRef;
-    if (!tracePath) {
+    if (tracePath === null) {
       return;
     }
     const dir = path.dirname(tracePath);
@@ -196,8 +196,10 @@ export function historyTraceSummary(
   if (!entry) {
     return { found: false, outputNodeCount: 0 };
   }
-  const outputs = /* SAFETY: 类型断言已复核 */ (entry.outputs ?? {}) as Record<string, unknown>;
-  const status = /* SAFETY: 类型断言已复核 */ (entry.status ?? {}) as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const outputs = (entry.outputs ?? {}) as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const status = (entry.status ?? {}) as Record<string, unknown>;
   const messages = status.messages;
   let executionError: string | undefined;
   if (Array.isArray(messages)) {
@@ -205,10 +207,8 @@ export function historyTraceSummary(
       if (!Array.isArray(msg) || msg[0] !== "execution_error") {
         continue;
       }
-      const payload = /* SAFETY: 类型断言已复核 */ msg[1] as
-        | Record<string, unknown>
-        | null
-        | undefined;
+      /* SAFETY: 类型断言已复核 */
+      const payload = msg[1] as Record<string, unknown> | null | undefined;
       const ex =
         payload && typeof payload === "object"
           ? (payload.exception_message ?? payload.message)
@@ -224,7 +224,7 @@ export function historyTraceSummary(
     outputNodeCount: Object.keys(outputs).length,
     ...(typeof status.status_str === "string" ? { statusStr: status.status_str } : {}),
     ...(typeof status.completed === "boolean" ? { completed: status.completed } : {}),
-    ...(executionError ? { executionError } : {}),
+    ...(executionError === undefined ? {} : { executionError }),
   };
 }
 
@@ -241,12 +241,16 @@ export function historyOutputKeys(
     /* SAFETY: 类型断言已复核 */
     hist && promptId ? (hist[promptId] as Record<string, unknown> | undefined) : undefined;
   const outputs = entry?.outputs;
-  if (!outputs || typeof outputs !== "object") {
+  if (typeof outputs !== "object" || outputs === null) {
     return [];
   }
   return Object.entries(outputs).map(([nodeId, v]) => ({
     nodeId,
-    keys: v && typeof v === "object" ? Object.keys(/* SAFETY: 类型断言已复核 */ v as object) : [],
+    keys:
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      v != null && typeof v === "object"
+        ? /* SAFETY: 类型断言已复核 */ Object.keys(v as object)
+        : [],
   }));
 }
 
@@ -262,13 +266,16 @@ export function queueTraceSummary(qd: unknown): {
       return [];
     }
     const ids: Array<string> = [];
-    for (const it of /* SAFETY: 类型断言已复核 */ v as Array<unknown>) {
+    /* SAFETY: 类型断言已复核 */
+    for (const it of v as Array<unknown>) {
       if (Array.isArray(it)) {
         if (typeof it[1] === "string" && it[1]) {
           ids.push(it[1]);
         }
-      } else if (it && typeof it === "object") {
-        const id = /* SAFETY: 类型断言已复核 */ (it as { prompt_id?: unknown }).prompt_id;
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      } else if (it != null && typeof it === "object") {
+        /* SAFETY: 类型断言已复核 */
+        const id = (it as { prompt_id?: unknown }).prompt_id;
         if (typeof id === "string" && id) {
           ids.push(id);
         }
@@ -276,7 +283,8 @@ export function queueTraceSummary(qd: unknown): {
     }
     return ids;
   };
-  const o = /* SAFETY: 类型断言已复核 */ (qd ?? {}) as {
+  /* SAFETY: 类型断言已复核 */
+  const o = (qd ?? {}) as {
     queue_pending?: unknown;
     queue_running?: unknown;
   };

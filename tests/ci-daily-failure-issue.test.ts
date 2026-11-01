@@ -64,7 +64,8 @@ type Verdict = "green" | "failed" | "cancelled" | "running";
  * 这里要的只是「读哪个字段」的形状，不是再写一套判决 —— 一次 `as`，字段全在这。
  */
 type PickedLike = { none?: string; outcome?: { state: string }; sn?: string };
-const asPicked = (p: unknown): PickedLike => /* SAFETY: 类型断言已复核 */ p as PickedLike;
+/* SAFETY: 类型断言已复核 */
+const asPicked = (p: unknown): PickedLike => p as PickedLike;
 
 /** 建单标题（去重键只认格名那一段，构建号 / 事件 / 时刻只给读者看 — ISSUE #2399）。 */
 const titleOf = (stage: string, sn = "sn-t", at = "2026-10-24T11:40:05.000Z") =>

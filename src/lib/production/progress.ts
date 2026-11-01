@@ -8,7 +8,8 @@
 import { isRecord } from "~/lib/is-record";
 
 /** 生产阶段游标的全部取值（与工坊阶段导航一一对应；done 由 rendered=true 表达）。 */
-export const PRODUCTION_STAGES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const PRODUCTION_STAGES = [
   "script",
   "character",
   "storyboard",

@@ -47,17 +47,13 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
         // 服务端配对的 widget 值 —— **每个** widget 型输入都有，
         // 连不连线都在。无论连线与否都显示它。
         if (rawInput.widgetValue !== undefined) {
-          return /* SAFETY: 类型断言已复核 */ [rawInput.name, rawInput.widgetValue] as [
-            string,
-            unknown,
-          ];
+          /* SAFETY: 类型断言已复核 */
+          return [rawInput.name, rawInput.widgetValue] as [string, unknown];
         }
         // 纯连接型输入没有 widget 值 —— 发一个数组，好让
         // conn/widget 分流器把它们当成带 Handle 的连线行。
-        return /* SAFETY: 类型断言已复核 */ [rawInput.name, rawInput.isConnection ? [] : ""] as [
-          string,
-          unknown,
-        ];
+        /* SAFETY: 类型断言已复核 */
+        return [rawInput.name, rawInput.isConnection ? [] : ""] as [string, unknown];
       });
     }
     const fromGraph = Object.entries(data.inputs ?? {});

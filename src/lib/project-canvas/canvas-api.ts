@@ -212,7 +212,8 @@ export async function pollTask(
           return { taskId, localPath: v.localPath, mediaType: v.mediaType };
         }
       }
-      const st = /* SAFETY: 类型断言已复核 */ task?.status as string | undefined;
+      /* SAFETY: 类型断言已复核 */
+      const st = task?.status as string | undefined;
       if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
         /* 防御性归一：`task.error` 在库里是可空文本列，
          * 但历史数据行 / 更早的代码路径（例如 buildPromptError 曾用
@@ -261,5 +262,6 @@ export async function pollTask(
 /* 成功分支的类型守卫 —— 让既有的 `if (result)` 调用点语义不变
  *（填充过的 TaskResult 依旧是真值），同时让失败分支有类型安全。 */
 export function isTaskSuccess(r: TaskResult | TaskFailure): r is TaskResult {
-  return typeof (/* SAFETY: 类型断言已复核 */ (r as TaskResult).localPath) === "string";
+  /* SAFETY: 类型断言已复核 */
+  return typeof (r as TaskResult).localPath === "string";
 }

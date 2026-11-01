@@ -8,14 +8,8 @@ import { StatusBadge } from "~/components/ui/status-badge";
  * 从 props 派生不出这张表，所以这里列的是「每档挑一个代表」，用来在一屏里
  * 看完整套配色 —— 逐状态判定仍以组件内的映射表为准。
  */
-const STATUSES = /* SAFETY: 类型断言已复核 */ [
-  "SUCCEEDED",
-  "RUNNING",
-  "QUEUED",
-  "FAILED",
-  "IDLE",
-  "NOT_A_STATUS",
-] as const;
+/* SAFETY: 类型断言已复核 */
+const STATUSES = ["SUCCEEDED", "RUNNING", "QUEUED", "FAILED", "IDLE", "NOT_A_STATUS"] as const;
 
 const meta = {
   title: "UI/StatusBadge",

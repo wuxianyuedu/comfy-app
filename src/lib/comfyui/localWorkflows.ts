@@ -132,13 +132,15 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   try {
     rootStat = await fs.promises.stat(abs);
   } catch (error) {
-    const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException | undefined)?.code;
+    /* SAFETY: 类型断言已复核 */
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
     if (code === "ENOENT") {
       return { rawPath: rawDir, absPath: abs, exists: false, files: [] };
     }
     // e 为 unknown：`(e as Error)?.message ?? String(e)` 与旧 `e?.message ?? String(e)`
     // 的运行时语义逐字一致（node fs 抛的都是 Error 实例）。
-    const msg = /* SAFETY: 类型断言已复核 */ (error as Error | undefined)?.message ?? String(error);
+    /* SAFETY: 类型断言已复核 */
+    const msg = (error as Error | undefined)?.message ?? String(error);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -216,7 +218,8 @@ async function scanRoot(rawDir: string, recursive: boolean): Promise<ScannedRoot
   try {
     await visit(abs);
   } catch (error) {
-    const msg = /* SAFETY: 类型断言已复核 */ (error as Error | undefined)?.message ?? String(error);
+    /* SAFETY: 类型断言已复核 */
+    const msg = (error as Error | undefined)?.message ?? String(error);
     return {
       rawPath: rawDir,
       absPath: abs,
@@ -239,7 +242,7 @@ export async function scanLocalWorkflowRoots(
   rawPaths: Array<string>,
   opts: { recursive?: boolean } = {},
 ): Promise<{ allFiles: Array<LocalWorkflowFile>; roots: Array<ScannedRoot> }> {
-  const recursive = !!opts.recursive;
+  const recursive = Boolean(opts.recursive);
   const allFiles: Array<LocalWorkflowFile> = [];
   const trimmedPaths = rawPaths.map((raw) => raw.trim()).filter((trimmed) => trimmed.length > 0);
   /* 目录之间并发：同步版是一个目录一个目录地等，总耗时是所有目录之和。 */
@@ -396,7 +399,7 @@ export async function scanLocalWorkflowChecksums(
       const file = allFiles.at(cursor);
       cursor += 1;
 
-      if (!file?.absPath) {
+      if (file === undefined) {
         continue;
       }
 

@@ -128,7 +128,8 @@ async function saveRun(userId: string, projectId: string, run: ProductionRun) {
 
 function projectMeta(row: Production) {
   return {
-    type: /* SAFETY: 类型断言已复核 */ row.type as ProjectType,
+    /* SAFETY: 类型断言已复核 */
+    type: row.type as ProjectType,
     tone: row.tone,
     logline: row.logline,
     title: row.title,
@@ -242,7 +243,8 @@ async function execStoryboard(
       index: i,
       sceneId: "",
       sceneHeading: it.sceneHeading ?? "",
-      shotType: /* SAFETY: 类型断言已复核 */ (it.shotType ?? "medium") as Shot["shotType"],
+      /* SAFETY: 类型断言已复核 */
+      shotType: (it.shotType ?? "medium") as Shot["shotType"],
       description: it.description,
       characterIds: [],
       prompt: it.description,
@@ -436,7 +438,7 @@ async function execReviewShots(
     // 人通过 → 直接定稿（不花 AI 评审的调用）；人否决 → 判不合格走抽卡重出
     // （rev 抬高后旧裁决自然失效，AI 评审兜底接管）。不新鲜 → AI 双裁判。
     const human = shotView?.humanVerdict ?? null;
-    const humanFresh = human !== null && human.rev === rev;
+    const humanFresh = human?.rev === rev;
     let pass: boolean;
     if (humanFresh && human.pass) {
       reviewed[shotId] = rev;

@@ -36,7 +36,8 @@ beforeAll(() => {
  *  要的正是「读一个运行时才存在的键」。（不另存一份 schema→表名的映射——那正是本
  *  用例要防的第二轮子。） */
 function tableNameOf(table: Table): string {
-  return /* SAFETY: 类型断言已复核 */ Reflect.get(table, Symbol.for("drizzle:Name")) as string;
+  /* SAFETY: 类型断言已复核 */
+  return Reflect.get(table, Symbol.for("drizzle:Name")) as string;
 }
 
 /** 读一张表的实际列名。
@@ -52,13 +53,15 @@ function tableNameOf(table: Table): string {
  *    而这一条走的是「无 fields 的原样透传」，拿到的就是宿主给的**位置数组**。
  *    `PRAGMA table_info` 的列序是 `cid, name, type, notnull, dflt_value, pk` ⇒ 名字在 1。 */
 async function columnsOf(name: string): Promise<Array<string> | null> {
-  const session = /* SAFETY: 类型断言已复核 */ tdb as unknown as {
+  /* SAFETY: 类型断言已复核 */
+  const session = tdb as unknown as {
     all(query: ReturnType<typeof sql.raw>): Promise<unknown>;
   };
   try {
-    const rows = /* SAFETY: 类型断言已复核 */ (await session.all(
-      sql.raw(`PRAGMA table_info("${name}")`),
-    )) as Array<Array<unknown>>;
+    /* SAFETY: 类型断言已复核 */
+    const rows = (await session.all(sql.raw(`PRAGMA table_info("${name}")`))) as Array<
+      Array<unknown>
+    >;
     return rows.map((row) => String(row[1]));
   } catch {
     return null;
@@ -75,7 +78,8 @@ describe("测试库的表结构与 schema.ts 同步", () => {
         continue;
       }
       const name = tableNameOf(table);
-      const columns = Object.keys(getTableColumns(/* SAFETY: 类型断言已复核 */ table as never));
+      /* SAFETY: 类型断言已复核 */
+      const columns = Object.keys(getTableColumns(table as never));
       const present = await columnsOf(name);
       if (present === null) {
         offenders.push(`${name}：测试库里没有这张表`);

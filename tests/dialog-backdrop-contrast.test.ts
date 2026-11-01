@@ -44,7 +44,8 @@ function parseColor(value: string): { a: number; rgb: [number, number, number] }
 
 /** WCAG 相对亮度（0~1）。 */
 function luminance([r, g, b]: [number, number, number]): number {
-  const lin = /* SAFETY: 类型断言已复核 */ [r, g, b].map((c) => {
+  /* SAFETY: 类型断言已复核 */
+  const lin = [r, g, b].map((c) => {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   }) as [number, number, number];
@@ -63,9 +64,12 @@ function over(
   src: { a: number; rgb: [number, number, number] },
   bg: [number, number, number],
 ): [number, number, number] {
-  return /* SAFETY: 类型断言已复核 */ src.rgb.map((c, i) =>
-    Math.round(c * src.a + bg[i]! * (1 - src.a)),
-  ) as [number, number, number];
+  /* SAFETY: 类型断言已复核 */
+  return src.rgb.map((c, i) => Math.round(c * src.a + bg[i]! * (1 - src.a))) as [
+    number,
+    number,
+    number,
+  ];
 }
 
 /** 某态下某 token 的解析值；未定义即失败（给出比 `!` 更好的报错）。 */
@@ -83,7 +87,8 @@ function token(t: ThemeTokens, name: string): string {
 const MIN_DIM = 1.35;
 
 /** 弹窗会盖住的常见表面（取最亮的那个做判据，避免挑一个最暗的凑合过）。 */
-const SURFACES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const SURFACES = [
   "--color-bg",
   "--color-canvas",
   "--color-panel",
@@ -111,7 +116,8 @@ describe("模态遮罩在真编译产物里足够可见（ISSUE #1742）", () =>
     /* 取这一态里**最亮**的常见表面：它是最容易「亮着、像能点」的那块，
        遮罩若连它都压不下去，弹窗背后就还是亮的。 */
     const candidates = SURFACES.map(
-      (name) => /* SAFETY: 类型断言已复核 */ [name, parseColor(token(t, name)).rgb] as const,
+      /* SAFETY: 类型断言已复核 */
+      (name) => [name, parseColor(token(t, name)).rgb] as const,
     );
     const [name, bg] = candidates.reduce((a, b) => (luminance(a[1]) >= luminance(b[1]) ? a : b));
 

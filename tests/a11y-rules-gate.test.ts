@@ -63,7 +63,8 @@ const run = promisify(execFile);
 const { judge } = loadJudgeModule();
 
 /** 夹具台账的**形状样本**（落盘在 `tests/fixtures/`、与真台账解耦，见文件头）。 */
-const SAMPLE = /* SAFETY: 类型断言已复核 */ JSON.parse(
+/* SAFETY: 类型断言已复核 */
+const SAMPLE = JSON.parse(
   readFileSync(path.join(REAL_ROOT, "tests", "fixtures", "a11y-rule-ledger.sample.json"), "utf8"),
 ) as {
   dialect: Array<{ decision: string; keeper: string; rule: string; why: string }>;
@@ -80,7 +81,8 @@ const SAMPLE = /* SAFETY: 类型断言已复核 */ JSON.parse(
  * **真台账**（`scripts/.a11y-rule-ledger.json`）—— 只被一条用例碰（下面第 1 条），
  * 用来自查「仓库当前状态本身是绿的」。其余用例一律在 `SAMPLE` 上加减。
  */
-const REAL_LEDGER = /* SAFETY: 类型断言已复核 */ JSON.parse(
+/* SAFETY: 类型断言已复核 */
+const REAL_LEDGER = JSON.parse(
   readFileSync(path.join(REAL_ROOT, "scripts", ".a11y-rule-ledger.json"), "utf8"),
 ) as typeof SAMPLE;
 

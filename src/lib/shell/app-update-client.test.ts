@@ -5,7 +5,8 @@ import { checkAppUpdate, relaunchApp } from "./app-update-client";
 /** 模拟「是否在桌面壳内」：node 测试环境默认无 window（非壳）；
  *  传入 true 时在 globalThis 上打上 Tauri 标记。 */
 function withShell(on: boolean) {
-  const g = /* SAFETY: 类型断言已复核 */ globalThis as unknown as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const g = globalThis as unknown as Record<string, unknown>;
   if (on) {
     g.window = { __TAURI_INTERNALS__: {} };
   } else {
@@ -17,7 +18,8 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   // 清掉测试内 stub 的 window，避免污染其它用例
-  delete (/* SAFETY: 类型断言已复核 */ (globalThis as unknown as Record<string, unknown>).window);
+  /* SAFETY: 类型断言已复核 */
+  delete (globalThis as unknown as Record<string, unknown>).window;
 });
 
 describe("checkAppUpdate", () => {

@@ -54,7 +54,8 @@ describe("FilmStudio", () => {
       expect(screen.getByText(text), `${what}没渲染出来`).toBeInTheDocument();
     }
     // 三个带可访问名的图标按钮（撤/重做/新增镜头）是键盘与读屏器唯一入口。
-    for (const name of /* SAFETY: 类型断言已复核 */ ["撤销", "重做", "新增镜头"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const name of ["撤销", "重做", "新增镜头"] as const) {
       expect(screen.getByLabelText(name)).toBeInTheDocument();
     }
     // 剧本输入框是这一屏的主动作，空态下也该在。

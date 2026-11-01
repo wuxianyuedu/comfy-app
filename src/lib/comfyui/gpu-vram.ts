@@ -34,7 +34,7 @@ export function parseNvidiaSmiOutput(raw: string): NvidiaSmiMem | null {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .find((l) => l.length > 0);
-  if (!line) {
+  if (line === undefined) {
     return null;
   }
   const parts = line.split(",").map((p) => p.trim());

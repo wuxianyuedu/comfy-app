@@ -86,7 +86,7 @@ export function classifyComfyInstall(
 
   // 优先把 root 当实例根：带桌面标记 → desktop。
   const rootMarker = pickDesktopFile(root, exists);
-  if (rootMarker) {
+  if (rootMarker !== null) {
     return {
       kind: "desktop",
       instanceRoot: root,
@@ -97,7 +97,7 @@ export function classifyComfyInstall(
   if (!hasSubMain) {
     const parent = path.dirname(root);
     const parentMarker = pickDesktopFile(parent, exists);
-    if (parentMarker) {
+    if (parentMarker !== null) {
       return {
         kind: "desktop",
         instanceRoot: parent,
@@ -173,6 +173,6 @@ export function describeComfyInstance(
   return {
     pathConfigured: true,
     instanceType: c.kind === "unknown" ? null : c.kind,
-    desktopManaged: c.kind === "desktop" && !!c.instanceIdFile,
+    desktopManaged: c.kind === "desktop" && Boolean(c.instanceIdFile),
   };
 }

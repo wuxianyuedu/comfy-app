@@ -107,7 +107,8 @@ export function useSettingsSave(input: {
         return result.ok
           ? { ok: /* SAFETY: 类型断言已复核 */ true as const }
           : {
-              ok: /* SAFETY: 类型断言已复核 */ false as const,
+              /* SAFETY: 类型断言已复核 */
+              ok: false as const,
               error: result.detail,
             };
       } finally {

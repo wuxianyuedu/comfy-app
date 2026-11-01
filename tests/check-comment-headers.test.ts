@@ -239,7 +239,8 @@ describe("main：三态与点名", () => {
     main({ run, log, slug: "o/r", json: true });
     /* 追一行人类总结会让机器侧 `JSON.parse` 撞「尾部多余内容」，看起来像数据坏了。 */
     expect(heard).toHaveLength(1);
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(heard.join("\n")) as {
+    /* SAFETY: 类型断言已复核 */
+    const parsed = JSON.parse(heard.join("\n")) as {
       rows: Array<{ number: string }>;
       total: number;
     };

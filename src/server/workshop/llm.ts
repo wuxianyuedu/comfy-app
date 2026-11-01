@@ -110,7 +110,8 @@ export async function completeWorkshopLLM(
       `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}` : ""}`,
     );
   }
-  const json = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+  /* SAFETY: 类型断言已复核 */
+  const json = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
   return json.choices?.[0]?.message?.content ?? "";

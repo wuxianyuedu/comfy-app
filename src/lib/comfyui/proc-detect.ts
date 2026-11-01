@@ -166,7 +166,7 @@ export function socketInodesOfPid(pid: number): Set<string> {
     try {
       const target = readlinkSync(`/proc/${pid}/fd/${fd}`);
       const m = /^socket:\[(\d+)\]$/.exec(target);
-      if (m?.[1]) {
+      if (m?.[1] !== undefined) {
         set.add(m[1]);
       }
     } catch {
@@ -201,7 +201,7 @@ export function findListeningPortViaProc(pid: number): number | null {
   }
   for (const inode of owned) {
     const port = listeners.get(inode);
-    if (port) {
+    if (port !== undefined) {
       return port;
     }
   }

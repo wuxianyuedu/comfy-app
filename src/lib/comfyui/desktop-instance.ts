@@ -57,21 +57,27 @@ export function findInstallationById(
   if (Array.isArray(data)) {
     for (const item of data) {
       if (
-        item &&
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+        item != null &&
         typeof item === "object" &&
         /* SAFETY: 类型断言已复核 */ (item as Record<string, unknown>).id === instanceId
       ) {
-        return /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
+        /* SAFETY: 类型断言已复核 */
+        return item as Record<string, unknown>;
       }
     }
     return null;
   }
-  if (data && typeof data === "object") {
-    const obj = /* SAFETY: 类型断言已复核 */ data as Record<string, unknown>;
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (data != null && typeof data === "object") {
+    /* SAFETY: 类型断言已复核 */
+    const obj = data as Record<string, unknown>;
     // 直接键值对应（形如 { "inst-...": {…} }）
     const direct = obj[instanceId];
-    if (direct && typeof direct === "object") {
-      return /* SAFETY: 类型断言已复核 */ direct as Record<string, unknown>;
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    if (direct != null && typeof direct === "object") {
+      /* SAFETY: 类型断言已复核 */
+      return direct as Record<string, unknown>;
     }
     // 深搜：遍历对象/数组，找 id 字段匹配的节点。
     return deepFindById(obj, instanceId);
@@ -94,7 +100,8 @@ function deepFindById(node: unknown, id: string, depth = 0): Record<string, unkn
     return null;
   }
   if (typeof node === "object") {
-    const obj = /* SAFETY: 类型断言已复核 */ node as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const obj = node as Record<string, unknown>;
     if (obj.id === id && typeof obj === "object") {
       return obj;
     }
@@ -196,7 +203,8 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
 /** 从 installations.json 条目里解出 envVars（可能为对象或空）。 */
 function extractEnvVars(entry: Record<string, unknown> | null): Record<string, string> {
   const ev = entry?.envVars;
-  if (ev && typeof ev === "object" && !Array.isArray(ev)) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (ev != null && typeof ev === "object" && !Array.isArray(ev)) {
     const out: Record<string, string> = {};
     for (const [k, v] of Object.entries(
       /* SAFETY: 类型断言已复核 */ ev as Record<string, unknown>,
@@ -251,7 +259,7 @@ export async function resolveDesktopLaunchArgs(
     return null;
   }
   const instanceId = parseInstanceId(idContent);
-  if (!instanceId) {
+  if (instanceId === null) {
     return null;
   }
 
@@ -264,7 +272,7 @@ export async function resolveDesktopLaunchArgs(
           "Comfy Desktop",
         )
       : null);
-  if (!configRoot) {
+  if (configRoot === null || configRoot === "") {
     return null;
   }
   const installsPath = path.join(configRoot, "installations.json");
@@ -317,12 +325,13 @@ export async function resolveEffectiveLaunch(input: {
   const kind = input.classify
     ? input.classify(input.comfyuiPath)
     : classifyLite(input.comfyuiPath, input.exists);
-  const isDesktop = kind.kind === "desktop" && !!kind.instanceIdFile;
+  const isDesktop = kind.kind === "desktop" && Boolean(kind.instanceIdFile);
 
   if (isDesktop) {
-    const meta = kind.instanceIdFile
-      ? await (input.resolveDesktop ?? resolveDesktopLaunchArgs)(kind.instanceIdFile)
-      : null;
+    const meta =
+      kind.instanceIdFile === null
+        ? null
+        : await (input.resolveDesktop ?? resolveDesktopLaunchArgs)(kind.instanceIdFile);
     if (meta) {
       return {
         port: meta.port ?? 0, // 0 → 调用方按 COMFYUI_DEFAULT_PORT 兜底

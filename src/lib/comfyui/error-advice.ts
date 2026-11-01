@@ -149,7 +149,7 @@ export function shouldAutoExpandError(
   if (validationErrorCount > 0) {
     return true;
   }
-  if (!error) {
+  if (error === null || error === undefined || error === "") {
     return false;
   }
   return ERROR_AUTO_EXPAND_RE.test(error);

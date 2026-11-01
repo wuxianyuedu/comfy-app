@@ -169,7 +169,8 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
     return { ...DEFAULT_PRODUCTION_RUN };
   }
   /* SAFETY: 类型断言已复核 */
-  const status = RUN_STATUSES.includes(/* SAFETY: 类型断言已复核 */ obj.status as RunStatus)
+  /* SAFETY: 类型断言已复核 */
+  const status = RUN_STATUSES.includes(obj.status as RunStatus)
     ? (obj.status as RunStatus)
     : "idle";
   /* SAFETY: 类型断言已复核 */

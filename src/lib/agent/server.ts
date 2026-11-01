@@ -33,7 +33,8 @@ function narrowMessages(raw: AgentChatRequest["messages"]): Array<LLMMessage> {
       if (role === "assistant" && Array.isArray(m.tool_calls)) {
         msg.tool_calls = m.tool_calls.map((call) => ({
           id: call.id,
-          type: /* SAFETY: 类型断言已复核 */ "function" as const,
+          /* SAFETY: 类型断言已复核 */
+          type: "function" as const,
           function: {
             name: call.name,
             arguments: call.arguments,
@@ -132,21 +133,25 @@ export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatR
   const validNames = new Set(workshopOpenAITools().map((t) => t.function.name));
   if (hasReply && !hasAction) {
     return {
-      reply: /* SAFETY: 类型断言已复核 */ instruction.reply as string,
+      /* SAFETY: 类型断言已复核 */
+      reply: instruction.reply as string,
     };
   }
-  if (hasAction && validNames.has(/* SAFETY: 类型断言已复核 */ instruction.action as string)) {
+  /* SAFETY: 类型断言已复核 */
+  if (hasAction && validNames.has(instruction.action as string)) {
     return { fallback_instruction: instruction };
   }
   if (instruction.done === true && hasReply) {
     return {
-      reply: /* SAFETY: 类型断言已复核 */ instruction.reply as string,
+      /* SAFETY: 类型断言已复核 */
+      reply: instruction.reply as string,
       done: true,
     };
   }
   if (hasReply) {
     return {
-      reply: /* SAFETY: 类型断言已复核 */ instruction.reply as string,
+      /* SAFETY: 类型断言已复核 */
+      reply: instruction.reply as string,
     };
   }
   return {

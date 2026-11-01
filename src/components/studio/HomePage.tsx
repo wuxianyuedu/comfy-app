@@ -412,11 +412,8 @@ export function HomePage({
               })
             : /* Empty state — placeholder cards */
               [1, 2, 3].map((index) => {
-                const kinds = /* SAFETY: 类型断言已复核 */ [
-                  "canvas",
-                  "generation",
-                  "workflow",
-                ] as const;
+                /* SAFETY: 类型断言已复核 */
+                const kinds = ["canvas", "generation", "workflow"] as const;
                 const cfg = kindConfigOf(kinds[index - 1]);
                 return (
                   <div

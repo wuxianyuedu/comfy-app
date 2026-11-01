@@ -93,39 +93,43 @@ export function extractValidationErrors(
   const isListCarrier =
     Array.isArray(res) &&
     res.some((r: unknown): boolean => {
-      if (!r || typeof r !== "object") {
+      if (typeof r !== "object" || r === null) {
         return false;
       }
-      const rec = /* SAFETY: 类型断言已复核 */ r as Record<string, unknown>;
+      /* SAFETY: 类型断言已复核 */
+      const rec = r as Record<string, unknown>;
       // 这几个字段可能是空字符串，必须用 `||` 判空（`??` 只挡 null/undefined）；
       // eslint 的 prefer-nullish-coalescing 在这里给的是误报，故就地豁免。
       return (
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-        !!(rec.node_id || rec.class_type || rec.input_errors || rec.message)
+        !!(rec.node_id || rec.class_type || rec.input_errors || rec.message) // oxlint-disable-line strict-boolean-expressions -- 字段可能为空串：有意按「任意真值」判，与上面的 `||` 豁免同因
       );
     });
   if (
+    // oxlint-disable-next-line strict-boolean-expressions -- ne 是外部 JSON 的任意值，结构不保证，「有没有内容」按任意真值判
     (!ne || (Array.isArray(ne) ? ne.length === 0 : Object.keys(ne).length === 0)) &&
     isListCarrier
   ) {
     ne = res;
   }
+  // oxlint-disable-next-line strict-boolean-expressions -- 同上：ne 形状来自外部，「没内容」按任意真值判
   if (!ne) {
     return [];
   }
   const out: Array<ValidationError> = [];
+  /* SAFETY: 类型断言已复核 */
   const entries: Array<[string, unknown]> = Array.isArray(ne)
     ? ne.map((item: unknown) => {
-        const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown> | null | undefined;
+        /* SAFETY: 类型断言已复核 */
+        const rec = item as Record<string, unknown> | null | undefined;
         // String(x) 的收窄等价（见本文件底部 toStringValue）：值来自外部 JSON。
-        return /* SAFETY: 类型断言已复核 */ [toStringValue(rec?.node_id ?? "?"), item] as [
-          string,
-          unknown,
-        ];
+        /* SAFETY: 类型断言已复核 */
+        return [toStringValue(rec?.node_id ?? "?"), item] as [string, unknown];
       })
-    : Object.entries(/* SAFETY: 类型断言已复核 */ ne as Record<string, unknown>);
+    : /* SAFETY: 类型断言已复核 */ Object.entries(ne as Record<string, unknown>);
   for (const [nid, err] of entries) {
-    const errRec = /* SAFETY: 类型断言已复核 */ err as Record<string, unknown> | null | undefined;
+    /* SAFETY: 类型断言已复核 */
+    const errRec = err as Record<string, unknown> | null | undefined;
     const graphNode = graph?.[nid];
     const graphClass = asRecord(graphNode)?.class_type;
     const errClass = errRec?.class_type;
@@ -134,24 +138,26 @@ export function extractValidationErrors(
       (typeof graphClass === "string" ? graphClass : undefined) ??
       "";
     const inputErrors = errRec?.input_errors;
-    if (inputErrors && typeof inputErrors === "object") {
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    if (inputErrors != null && typeof inputErrors === "object") {
       for (const [field, v] of Object.entries(
         /* SAFETY: 类型断言已复核 */ inputErrors as Record<string, unknown>,
       )) {
-        const message =
-          typeof v === "string"
-            ? v
-            : /* SAFETY: 类型断言已复核 */ ((v as { message?: string })?.message ??
-                /* SAFETY: 类型断言已复核 */ (v as { details?: string })?.details ??
-                JSON.stringify(v)) ||
-              "配置错误";
+        /* SAFETY: 类型断言已复核 */
+        const fromObject =
+          ((v as { message?: string })?.message ??
+            /* SAFETY: 类型断言已复核 */ (v as { details?: string })?.details ??
+            JSON.stringify(v)) ||
+          "配置错误";
+        const message = typeof v === "string" ? v : fromObject;
         out.push({ nodeId: nid, classType, field, message });
       }
     } else if (typeof errRec?.message === "string") {
       out.push({ nodeId: nid, classType, field: "", message: errRec.message });
     } else if (typeof err === "string") {
       out.push({ nodeId: nid, classType, field: "", message: err });
-    } else if (err && typeof err === "object") {
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    } else if (err != null && typeof err === "object") {
       // 未知的结构化形状 —— 尽力序列化出来，绝不把信息丢掉。
       out.push({
         nodeId: nid,
@@ -170,13 +176,16 @@ export function extractValidationErrors(
 export function parseValidationErrors(
   raw: string | null | undefined,
 ): Array<ValidationError> | null {
-  if (!raw) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (raw == null || raw === "") {
     return null;
   }
   try {
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown;
+    /* SAFETY: 类型断言已复核 */
+    const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
-      return /* SAFETY: 类型断言已复核 */ parsed as Array<ValidationError>;
+      /* SAFETY: 类型断言已复核 */
+      return parsed as Array<ValidationError>;
     }
   } catch {
     /* fall through */
@@ -199,5 +208,6 @@ function toStringValue(v: unknown): string {
   if (v === undefined) {
     return "undefined";
   }
-  return /* SAFETY: 类型断言已复核 */ (v as { toString(): string }).toString();
+  /* SAFETY: 类型断言已复核 */
+  return (v as { toString(): string }).toString();
 }

@@ -201,14 +201,20 @@ function fake(input: {
     follow: (abs: string) => {
       const l = links.find((x) => x.abs === abs);
       if (!l) {
-        return /* SAFETY: 类型断言已复核 */ "broken" as const;
+        /* SAFETY: 类型断言已复核 */
+        return "broken" as const;
       }
       if (nowFollowable.has(abs)) {
-        return /* SAFETY: 类型断言已复核 */ "follow" as const;
+        /* SAFETY: 类型断言已复核 */
+        return "follow" as const;
       }
       return brokenRels.has(l.rel)
-        ? /* SAFETY: 类型断言已复核 */ ("broken" as const)
-        : /* SAFETY: 类型断言已复核 */ ("follow" as const);
+        /* SAFETY: 类型断言已复核 */
+        ? 
+          ("broken" as const)
+        /* SAFETY: 类型断言已复核 */
+        : 
+          ("follow" as const);
     },
     rebuild: (abs: string, linkText: string) => {
       rebuildCalls.push({ abs, linkText });
@@ -356,9 +362,10 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
 describe("接线在位", () => {
   it("这一步挂在 pnpm build 链上，且顺序是 修链接 → 数产物 → 冒烟", () => {
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      readFileSync(path.resolve(__dirname, "../package.json"), "utf8"),
-    ) as { scripts: { build: string } };
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "../package.json"), "utf8")) as {
+      scripts: { build: string };
+    };
     const build = pkg.scripts.build;
     const order = [
       "next build",

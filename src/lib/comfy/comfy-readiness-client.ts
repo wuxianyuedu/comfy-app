@@ -36,7 +36,8 @@ type EnsureBody = {
 /** 从 ensure 响应体里取可读文案：`detail` → `{error}` 字符串 → `{error:{message}}`。 */
 export function readComfyErrorMessage(body: unknown, fallback: string): string {
   if (typeof body === "object" && body !== null) {
-    const rec = /* SAFETY: 类型断言已复核 */ body as EnsureBody;
+    /* SAFETY: 类型断言已复核 */
+    const rec = body as EnsureBody;
     /* `detail` 是这条路由的**业务字段**（「正在启动」的进度描述）而不是错误
      * 文案，所以它优先于错误信封 —— 那不是第二套错误形状。
      * `{error}` 字符串与 `{error:{message}}` 交 `~/lib/api-error` 的唯一读法

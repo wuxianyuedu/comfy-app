@@ -65,22 +65,22 @@ function callAt(n = 0): { init: RequestInit; url: string } {
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
-  const url = typeof arg === "string" ? arg : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
+  /* SAFETY: 类型断言已复核 */
+  const url = typeof arg === "string" ? arg : (arg as Request).url;
   return { url, init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
-    string,
-    unknown
-  >;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<string, unknown>;
 }
 
 /** 一次性响应替身（`json()` / `text()` 都可用）。 */
 function jsonResponse(body: unknown, status = 200): Response {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
@@ -90,7 +90,8 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 /** 构造一个 Request 替身（只用到 `.json()`）。 */
 function reqOf(body: unknown, opts: { throw?: boolean } = {}): Request {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     json: async () => {
       if (opts.throw) {
         throw new Error("bad json");
@@ -236,9 +237,8 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
     });
     const failed = await readUsageTestPrologue(reqOf({ name: "x" }));
     expect(failed.ok).toBe(false);
-    expect(/* SAFETY: 类型断言已复核 */ (failed as { detail: string }).detail).toContain(
-      "接口地址为空",
-    );
+    /* SAFETY: 类型断言已复核 */
+    expect((failed as { detail: string }).detail).toContain("接口地址为空");
   });
 
   it("成功时回 name / 原 body / 解析好的连接参数", async () => {
@@ -252,7 +252,8 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
     });
     // `rec` 是透传的原始 body（类型为 Record<string, unknown>）：用判据取值，
     // 不用 `as` 断言 —— 断言会掩盖「字段名写错」这类失败
-    const rec = /* SAFETY: 类型断言已复核 */ (out as { rec: Record<string, unknown> }).rec;
+    /* SAFETY: 类型断言已复核 */
+    const rec = (out as { rec: Record<string, unknown> }).rec;
     expect(rec.prompt).toBe("hi");
   });
 });
@@ -260,7 +261,8 @@ describe("readUsageTestPrologue（两个路由共用的请求前言）", () => {
 describe("readPayload / httpFailureDetail / parseExtraJson / chatTextFrom", () => {
   it("readPayload：非 JSON 响应体给 null（调用方按状态给文案）", async () => {
     expect(await readPayload(jsonResponse({ a: 1 }))).toEqual({ a: 1 });
-    const html = /* SAFETY: 类型断言已复核 */ {
+    /* SAFETY: 类型断言已复核 */
+    const html = {
       ok: false,
       status: 502,
       json: async () => {
@@ -354,9 +356,8 @@ describe("callChat", () => {
     fetchMock.mockResolvedValue(jsonResponse({ choices: [] }));
     const out = await callChat(UP, "m", "q", {});
     expect(out).toMatchObject({ ok: false });
-    expect(/* SAFETY: 类型断言已复核 */ (out as { detail: string }).detail).toContain(
-      "未解析到回复文本",
-    );
+    /* SAFETY: 类型断言已复核 */
+    expect((out as { detail: string }).detail).toContain("未解析到回复文本");
   });
 
   it("2xx 但响应体不是对象 → 同样归为失败", async () => {
@@ -384,7 +385,8 @@ describe("callImage", () => {
 
     fetchMock.mockResolvedValue(jsonResponse({ data: [{ b64_json: "AAAA" }] }));
     const inline = await callImage(UP, "m", "p", "", {});
-    expect(/* SAFETY: 类型断言已复核 */ (inline as { url: string }).url).toContain("data:image");
+    /* SAFETY: 类型断言已复核 */
+    expect((inline as { url: string }).url).toContain("data:image");
 
     // size 为空串时不塞进请求体（否则上游会按空尺寸参数报错）
     expect(sentBody(1)).not.toHaveProperty("size");
@@ -399,9 +401,8 @@ describe("callImage", () => {
 
     fetchMock.mockResolvedValue(jsonResponse({ data: [] }));
     const out = await callImage(UP, "m", "p", "", {});
-    expect(/* SAFETY: 类型断言已复核 */ (out as { detail: string }).detail).toContain(
-      "未解析到图片 URL",
-    );
+    /* SAFETY: 类型断言已复核 */
+    expect((out as { detail: string }).detail).toContain("未解析到图片 URL");
   });
 });
 
@@ -448,9 +449,8 @@ describe("callVideo（提交 + 内置一轮轮询）", () => {
     fetchMock.mockResolvedValue(jsonResponse({ weird: true }));
     const out = await callVideo(UP, "m", "p", {});
     expect(out).toMatchObject({ status: "error" });
-    expect(/* SAFETY: 类型断言已复核 */ (out as { detail: string }).detail).toContain(
-      "未找到视频 URL 或任务 ID",
-    );
+    /* SAFETY: 类型断言已复核 */
+    expect((out as { detail: string }).detail).toContain("未找到视频 URL 或任务 ID");
   });
 
   it("提交非 2xx → error 带 HTTP 文案", async () => {

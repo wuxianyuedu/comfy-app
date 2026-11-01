@@ -45,12 +45,14 @@ describe("workflow-run-store", () => {
     });
     const a = {
       t: 100,
-      level: /* SAFETY: 类型断言已复核 */ "info" as const,
+      /* SAFETY: 类型断言已复核 */
+      level: "info" as const,
       msg: "开始执行",
     };
     const b = {
       t: 200,
-      level: /* SAFETY: 类型断言已复核 */ "progress" as const,
+      /* SAFETY: 类型断言已复核 */
+      level: "progress" as const,
       msg: "50%",
     };
     appendWorkflowRunLog("t1", a);
@@ -381,7 +383,8 @@ describe("workflow-run-store", () => {
     for (let i = 0; i < 400; i += 1) {
       const entry = {
         t: i,
-        level: /* SAFETY: 类型断言已复核 */ "info" as const,
+        /* SAFETY: 类型断言已复核 */
+        level: "info" as const,
         msg: `行 ${i}`,
       };
       slow = tailWindow([...slow, entry], 300);

@@ -103,7 +103,8 @@ describe("summarizeAppServiceExit", () => {
 
 describe("describeAppServiceExit", () => {
   it("每种成因都给「为什么」与「能做什么」两句", () => {
-    const kinds = /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    const kinds = [
       "dev-server",
       "shell-self-exited",
       "shell-terminated",
@@ -125,11 +126,8 @@ describe("describeAppServiceExit", () => {
   });
 
   it("真故障不许被说成设计内行为", () => {
-    for (const kind of /* SAFETY: 类型断言已复核 */ [
-      "dev-server",
-      "shell-terminated",
-      "sidecar",
-    ] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const kind of ["dev-server", "shell-terminated", "sidecar"] as const) {
       const notice = describeAppServiceExit(rec({ kind }));
       expect(notice.action).not.toContain("设计内");
     }

@@ -82,6 +82,7 @@ export function junitExecutedCount(xml) {
   let tests = 0;
   let skipped = 0;
   let saw = false;
+  /* `xml` 是磁盘上的 junit 产物（外部数据），不是本模块自己拼出来的字符串。 */
   for (const m of String(xml ?? "").matchAll(/<testsuite\b[^>]*>/g)) {
     const tag = m[0];
     const t = /tests="(\d+)"/.exec(tag);

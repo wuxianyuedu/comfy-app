@@ -789,7 +789,8 @@ describe("启动等待期不闪回「未运行」（ISSUE #442）", () => {
       resetComfyUiStatus();
       const { resetComfyRuntimeSnapshot } = await import("./status");
       resetComfyRuntimeSnapshot();
-      vi.mocked(getSettingsSync).mockReturnValue(/* SAFETY: 类型断言已复核 */ settings as never);
+      /* SAFETY: 类型断言已复核 */
+      vi.mocked(getSettingsSync).mockReturnValue(settings as never);
       expect((await ensureComfyUiReady({})).ok).toBe(false);
       /* 自动来源的两条 skip 分支都不该落窗口：窗口是给「拉起 → 就绪」那段
        * 空窗的缓冲，而这些分支连拉起都不做。 */

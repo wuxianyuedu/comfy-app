@@ -288,8 +288,10 @@ function isSamePin(a: WorkflowIOEntry, b: WorkflowIOEntry): boolean {
   if (a === b) {
     return true;
   }
-  const aKey = /* SAFETY: 类型断言已复核 */ (a as { ioKey?: string }).ioKey;
-  const bKey = /* SAFETY: 类型断言已复核 */ (b as { ioKey?: string }).ioKey;
+  /* SAFETY: 类型断言已复核 */
+  const aKey = (a as { ioKey?: string }).ioKey;
+  /* SAFETY: 类型断言已复核 */
+  const bKey = (b as { ioKey?: string }).ioKey;
   if (aKey !== undefined && bKey !== undefined) {
     return aKey === bKey;
   }

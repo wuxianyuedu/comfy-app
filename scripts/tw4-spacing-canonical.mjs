@@ -268,7 +268,7 @@ for (const { file, changes } of touched) {
   for (const { from, to } of changes) {
     pairs.set(from, to);
   }
-  console.log(`${path.relative(ROOT, file)}`);
+  console.log(path.relative(ROOT, file));
   for (const [from, to] of pairs) {
     console.log(`  ${from} → ${to}`);
   }

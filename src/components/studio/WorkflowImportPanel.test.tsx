@@ -18,7 +18,8 @@ const RAW_WF = { nodes: [{ id: 3, type: "KSampler", pos: [10, 20] }] };
 const FILE_LABEL = "选择工作流 JSON 文件";
 
 /** 面板只消费 hook 返回的 state，所以让真 hook 跑起来、只把 mutation 换成假的。 */
-const createMut = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+const createMut = {
   mutateAsync: vi.fn(),
 } as unknown as UseWorkflowImportArgs["createMut"];
 

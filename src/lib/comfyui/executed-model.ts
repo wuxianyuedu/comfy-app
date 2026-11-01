@@ -75,7 +75,8 @@ function scan(
     return null;
   }
 
-  const record = /* SAFETY: 类型断言已复核 */ node as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const record = node as Record<string, unknown>;
   const direct = pick(record);
   if (direct !== null) {
     return direct;
@@ -95,7 +96,8 @@ function apiInput(record: Record<string, unknown>, key: string): string | null {
   if (inputs === null || typeof inputs !== "object") {
     return null;
   }
-  return asFileName(/* SAFETY: 类型断言已复核 */ (inputs as Record<string, unknown>)[key]);
+  /* SAFETY: 类型断言已复核 */
+  return asFileName((inputs as Record<string, unknown>)[key]);
 }
 
 /** UI 格式：节点类型在表里时取 `widgets_values[下标]`。 */

@@ -332,7 +332,8 @@ describe("workflow.detail", () => {
     await expect(caller.detail({ id: "wf-b" })).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
-    await expect(caller.detail(/* SAFETY: 类型断言已复核 */ {} as never)).rejects.toMatchObject({
+    /* SAFETY: 类型断言已复核 */
+    await expect(caller.detail({} as never)).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
   });
@@ -476,7 +477,8 @@ describe("workflow.update", () => {
     const row = tdb.$tables.workflowTemplates.find((r) => r.id === "wf-1")!;
     expect(row.taskType).toBe("T2I"); // normalizeTaskType("t2i") → 规范大写 "T2I"
     expect(row.positions).toEqual({ "5": [0, 0], "1": [1, 2] }); // merge 不清空另一命名空间
-    const rawJson = /* SAFETY: 类型断言已复核 */ row.rawJson as {
+    /* SAFETY: 类型断言已复核 */
+    const rawJson = row.rawJson as {
       nodes: Array<{ pos?: unknown }>;
     };
     expect(rawJson.nodes[0]?.pos).toEqual([1, 2]);

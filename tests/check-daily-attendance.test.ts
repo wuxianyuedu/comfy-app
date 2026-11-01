@@ -242,7 +242,8 @@ describe("daily-attendance：出勤结论跟着读数走", () => {
       expect(isDailyDispatch({ event }), event).toBe(false);
     }
     /* 多条里挑最近的那一条 —— 拿旧的当「上一次」会把缺勤读成出勤。 */
-    const picked = /* SAFETY: 类型断言已复核 */ latestDailyDispatch([
+    /* SAFETY: 类型断言已复核 */
+    const picked = latestDailyDispatch([
       listed("old", "crontab: 0 4 * * *", "2026-10-20T16:00:00.000Z"),
       listed("new", "crontab: 0 0 * * *", RECENT),
       listed("pr", "pull_request", "2026-10-23T01:00:00.000Z"),

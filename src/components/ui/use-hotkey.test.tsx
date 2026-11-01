@@ -27,7 +27,8 @@ function key(
     shift?: boolean;
   } = {},
 ) {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     key: k,
     ctrlKey: mods.ctrl ?? false,
     metaKey: mods.meta ?? false,
@@ -111,7 +112,8 @@ function Probe({
   onHit,
   enabled = true,
   filterInput = true,
-  spec = /* SAFETY: 类型断言已复核 */ { key: "l", mod: true } as const,
+  /* SAFETY: 类型断言已复核 */
+  spec = { key: "l", mod: true } as const,
 }: {
   enabled?: boolean;
   filterInput?: boolean;

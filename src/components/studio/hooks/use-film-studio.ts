@@ -150,7 +150,8 @@ export function useFilmStudio(): FilmStudioController {
       // /api/film/[id] 返回原始 FilmProject 行（status/logs/shots 比本地
       // `Film` 视图类型更宽，shape 由路由固定）；经 unknown 收窄为 UI 视图类型。
       const data = await vanillaApi.film.detail.query({ id });
-      setFilm(/* SAFETY: 类型断言已复核 */ data.film as unknown as Film);
+      /* SAFETY: 类型断言已复核 */
+      setFilm(data.film as unknown as Film);
     } catch {
       /* 拉详情失败静默忽略，下一次轮询会重试 */
     }
@@ -178,7 +179,8 @@ export function useFilmStudio(): FilmStudioController {
               if (typeof raw !== "object" || raw === null) {
                 return [];
               }
-              const wf = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+              /* SAFETY: 类型断言已复核 */
+              const wf = raw as Record<string, unknown>;
               if (typeof wf.id !== "string" || typeof wf.name !== "string") {
                 return [];
               }
@@ -193,10 +195,13 @@ export function useFilmStudio(): FilmStudioController {
             setImageWorkflows(pick("image"));
             setSkills(
               list.map((raw) => {
-                const s = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+                /* SAFETY: 类型断言已复核 */
+                const s = raw as Record<string, unknown>;
                 return {
-                  slug: /* SAFETY: 类型断言已复核 */ s.slug as string,
-                  name: /* SAFETY: 类型断言已复核 */ s.name as string,
+                  /* SAFETY: 类型断言已复核 */
+                  slug: s.slug as string,
+                  /* SAFETY: 类型断言已复核 */
+                  name: s.name as string,
                 };
               }),
             );

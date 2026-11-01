@@ -132,7 +132,7 @@ function collect(parsed) {
     : SCAN_DIR.replace(/^\/+/, "").replaceAll("/", "/");
   const files = walk(absBase, relBase);
   for (const rel of files) {
-    const shared = parsed && parsed.get(rel);
+    const shared = parsed?.get(rel);
     if (shared) {
       problems.push(...scanTree(shared, rel));
       continue;

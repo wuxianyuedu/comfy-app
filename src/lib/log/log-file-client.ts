@@ -76,7 +76,8 @@ export async function fetchFileLogSlice(
   if (!res.ok) {
     return null;
   }
-  return /* SAFETY: 类型断言已复核 */ (await res.json()) as FileLogSlice;
+  /* SAFETY: 类型断言已复核 */
+  return (await res.json()) as FileLogSlice;
 }
 
 /* ── 常驻服务 runtime 日志的「每一次启动」（设置页启动日志）─────────────
@@ -110,7 +111,8 @@ export async function fetchLogSessions(
     if (!res.ok) {
       return null;
     }
-    return /* SAFETY: 类型断言已复核 */ (await res.json()) as LogSessionsPayload;
+    /* SAFETY: 类型断言已复核 */
+    return (await res.json()) as LogSessionsPayload;
   } catch {
     return null;
   }
@@ -152,7 +154,8 @@ export async function saveLogExport(label: string, content: string): Promise<Sav
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label, content }),
     });
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as SavedLogExport;
+    /* SAFETY: 类型断言已复核 */
+    const data = (await res.json()) as SavedLogExport;
     return data;
   } catch (error) {
     return {
@@ -177,7 +180,8 @@ export async function saveLogExport(label: string, content: string): Promise<Sav
 export async function saveDiagnosticsPackage(): Promise<SavedLogExport> {
   try {
     const res = await fetch("/api/logs/diagnostics", { method: "POST" });
-    return /* SAFETY: 类型断言已复核 */ (await res.json()) as SavedLogExport;
+    /* SAFETY: 类型断言已复核 */
+    return (await res.json()) as SavedLogExport;
   } catch (error) {
     return {
       ok: false,

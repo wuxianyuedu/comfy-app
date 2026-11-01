@@ -17,7 +17,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   applySlot,
@@ -103,9 +103,11 @@ describe("槽的输入面与落位", () => {
 
   it("落位时摘掉本仓自己的 scripts，其余逐字节照搬", () => {
     const written = materializeSlotInputs({ jobRoot: job, slot });
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(slot, "package.json"), "utf8"),
-    ) as { dependencies?: Record<string, string>; scripts?: unknown };
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(fs.readFileSync(path.join(slot, "package.json"), "utf8")) as {
+      dependencies?: Record<string, string>;
+      scripts?: unknown;
+    };
     expect(pkg.scripts).toBeUndefined();
     expect(pkg.dependencies).toEqual({ leftpad: "1.0.0" });
     expect(fs.readFileSync(path.join(slot, "pnpm-lock.yaml"), "utf8")).toBe("pnpm-lock.yaml\n");
@@ -119,9 +121,10 @@ describe("槽的输入面与落位", () => {
     expect(pnpmInstallFingerprint(slot)).toBe(pnpmInstallFingerprint(job));
     /* 只往 scripts 加一行：两侧都不动。旧实现（键对原文取哈希）里这一行会换键，
      * 而槽里那份副本逐字不变 —— 白付一次整装（`Done in 3m 41.4s`）。 */
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(job, "package.json"), "utf8"),
-    ) as { scripts: Record<string, string> };
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(fs.readFileSync(path.join(job, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
     pkg.scripts["setup:comfy-cli-venv"] = "node scripts/setup-comfy-cli-venv.mjs";
     fs.writeFileSync(path.join(job, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
     expect(pnpmInstallFingerprint(job)).toBe(key);
@@ -163,8 +166,23 @@ describe("空闲与锁：两条「不够就不做」的闸", () => {
     expect(Math.abs(a - b)).toBeLessThan(Math.max(b * 0.01, 64 * 1024 ** 2));
   });
 
-  it("整条路径都不属于任何存在的卷 ⇒ 给 null（读不到就是读不到，按不够处理）", () => {
-    expect(statfsFreeBytes("Z:/这一台机器上没有这个盘")).toBeNull();
+  it("一路向上都没有可读的卷 ⇒ 给 null（读不到就是读不到，按不够处理）", () => {
+    /* 这一条判的是**量具的兜底**，不是「哪条路径不存在」：`statfsFreeBytes` 沿路径向上
+     * 找最近一个读得动的祖先（槽根建出来之前必然不存在，见上一页），所以「一个不存在的
+     * 路径」通常照样读得到数 —— 只有 `statfs` 对**每一个**祖先都说 ENOENT 时才回 null。
+     * 真盘上造不出那种路径：随便一个不存在的绝对路径都会向上落到 `/` 或某个盘符根。
+     * 于是这里把那台「所有卷都读不到」的机器**替身**出来：`fs.statfsSync` 换成只报
+     * ENOENT 的桩，其余按真实现走。 */
+    const real = fs.statfsSync;
+    const spy = vi.spyOn(fs, "statfsSync").mockImplementation(() => {
+      throw Object.assign(new Error("no such volume"), { code: "ENOENT" });
+    });
+    try {
+      expect(statfsFreeBytes(path.join(cache, "没有这个盘", "再深一层"))).toBeNull();
+    } finally {
+      spy.mockRestore();
+      expect(fs.statfsSync).toBe(real);
+    }
   });
 
   it("低于下限 ⇒ 不建槽，且原因里带两个数（读数要能自查）", () => {

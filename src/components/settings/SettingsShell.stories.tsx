@@ -35,7 +35,8 @@ type Story = StoryObj<typeof SettingsShell>;
 
 /** 每个分区给一段占位正文 —— 只为了让锚点有实体。 */
 function sections(pad: string) {
-  return /* SAFETY: 类型断言已复核 */ Object.fromEntries(
+  /* SAFETY: 类型断言已复核 */
+  return Object.fromEntries(
     SETTINGS_SECTIONS.map((item) => [
       item.id,
       <p className={`text-ink text-sm ${pad}`} key={item.id}>

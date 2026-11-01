@@ -279,8 +279,10 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       for (const dark of [false, true]) {
         await setTheme(page, dark);
         const key = dark
-          ? /* SAFETY: 类型断言已复核 */ ("dark" as const)
-          : /* SAFETY: 类型断言已复核 */ ("light" as const);
+          /* SAFETY: 类型断言已复核 */
+          ? ("dark" as const)
+          /* SAFETY: 类型断言已复核 */
+          : ("light" as const);
         const got = await page.evaluate(
           ({ expr: e, token }) => {
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");

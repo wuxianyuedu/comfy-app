@@ -68,7 +68,8 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
 /* 启动日志「按会话取」的请求记账（来源 + 请求的会话 id）—— 「下拉切过去要
  * 真带上那一次的 id」这条判据靠它。 */
 const { sessionLogRequests } = vi.hoisted(() => ({
-  sessionLogRequests: /* SAFETY: 类型断言已复核 */ [] as Array<{
+  /* SAFETY: 类型断言已复核 */
+  sessionLogRequests: [] as Array<{
     session: string | null;
     source: string;
   }>,
@@ -86,7 +87,8 @@ vi.mock("~/lib/log/log-file-client", () => {
     if (!res.ok) {
       return null;
     }
-    return /* SAFETY: 类型断言已复核 */ (await res.json()) as unknown;
+    /* SAFETY: 类型断言已复核 */
+    return (await res.json()) as unknown;
   });
   return {
     fetchFileLogSlice: vi.fn(async () => null),
@@ -145,7 +147,8 @@ const mockRouter = t.router({
       () =>
         behavior.comfyInstance ?? {
           pathConfigured: true,
-          instanceType: /* SAFETY: 类型断言已复核 */ "portable" as const,
+          /* SAFETY: 类型断言已复核 */
+          instanceType: "portable" as const,
           desktopManaged: false,
         },
     ),
@@ -223,7 +226,8 @@ function mockSessionsFor(
       id: "0",
       title: "11-05 09:36:12 · 本次运行",
       startedAt: null,
-      scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+      /* SAFETY: 类型断言已复核 */
+      scope: "current" as const,
       crashed: false,
     },
   ];
@@ -377,14 +381,16 @@ describe("useComfyuiControl", () => {
         id: "40",
         title: "11-05 09:36:12 · 本次运行",
         startedAt: null,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        /* SAFETY: 类型断言已复核 */
+        scope: "current" as const,
         crashed: false,
       },
       {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
         startedAt: null,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        /* SAFETY: 类型断言已复核 */
+        scope: "current" as const,
         crashed: false,
       },
     ];
@@ -430,7 +436,8 @@ describe("useComfyuiControl", () => {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
         startedAt: 1000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        /* SAFETY: 类型断言已复核 */
+        scope: "current" as const,
         crashed: false,
       },
     ];
@@ -463,14 +470,16 @@ describe("useComfyuiControl", () => {
         id: "40",
         title: "11-05 09:36:12 · 本次运行",
         startedAt: 2000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        /* SAFETY: 类型断言已复核 */
+        scope: "current" as const,
         crashed: false,
       },
       {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
         startedAt: 1000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        /* SAFETY: 类型断言已复核 */
+        scope: "current" as const,
         crashed: false,
       },
     ];
@@ -494,14 +503,16 @@ describe("useComfyuiControl", () => {
         id: "comfyui-runtime-20261005-093612.log",
         title: "10-05 09:36:12 · 本次运行",
         startedAt: 2000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        /* SAFETY: 类型断言已复核 */
+        scope: "current" as const,
         crashed: false,
       },
       {
         id: archived,
         title: "10-04 14:00:00 · 正常退出 · bbbbbb",
         startedAt: 1000,
-        scope: /* SAFETY: 类型断言已复核 */ "runs" as const,
+        /* SAFETY: 类型断言已复核 */
+        scope: "runs" as const,
         crashed: false,
       },
     ];
@@ -544,14 +555,16 @@ describe("useComfyuiControl", () => {
         id: "40",
         title: "11-05 09:36:12 · 本次运行",
         startedAt: 2000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        /* SAFETY: 类型断言已复核 */
+        scope: "current" as const,
         crashed: false,
       },
       {
         id: "12",
         title: "11-05 09:30:00 · 本次运行",
         startedAt: 1000,
-        scope: /* SAFETY: 类型断言已复核 */ "current" as const,
+        /* SAFETY: 类型断言已复核 */
+        scope: "current" as const,
         crashed: false,
       },
     ];

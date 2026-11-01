@@ -68,7 +68,8 @@ export function authBaseUrlConfig(configuredBaseUrl?: string) {
   return {
     allowedHosts: [...AUTH_LOOPBACK_HOST_PATTERNS, ...configuredHost(configuredBaseUrl)],
     fallback: configuredBaseUrl ?? getBaseUrl(),
-    protocol: /* SAFETY: 类型断言已复核 */ "auto" as const,
+    /* SAFETY: 类型断言已复核 */
+    protocol: "auto" as const,
   };
 }
 

@@ -307,8 +307,7 @@ export function lockfileDrift(root) {
   const repoStamp = stampOf(repoLock);
   const modulesStamp = stampOf(modulesLock);
   if (
-    driftCache &&
-    driftCache.repoStamp === repoStamp &&
+    driftCache?.repoStamp === repoStamp &&
     driftCache.modulesStamp === modulesStamp
   ) {
     return driftCache.result;

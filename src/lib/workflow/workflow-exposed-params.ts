@@ -314,7 +314,8 @@ export function referenceImageSlotIndex(id: string): number {
  *
  *  **界面不要用它**：请走 `exposedParamDisplayLabel`。 */
 export function exposedParamLabel(id: string): string {
-  const cls = /* SAFETY: 类型断言已复核 */ id as ExposedParamClass;
+  /* SAFETY: 类型断言已复核 */
+  const cls = id as ExposedParamClass;
   return EXPOSED_PARAM_LABEL[cls] ?? id;
 }
 
@@ -326,7 +327,8 @@ export function exposedClassOf(id: string): ExposedParamClass | null {
     return EXPOSED_CUSTOM_CLASS[custom];
   }
   if (id in EXPOSED_PARAM_LABEL) {
-    return /* SAFETY: 类型断言已复核 */ id as ExposedParamClass;
+    /* SAFETY: 类型断言已复核 */
+    return id as ExposedParamClass;
   }
   if (/^reference-image-\d+$/.test(id)) {
     return "reference-image";

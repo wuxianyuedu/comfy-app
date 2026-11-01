@@ -93,7 +93,8 @@ export function clearLaunchLoadingStub(): void {
   if (typeof window === "undefined") {
     return;
   }
-  const w = /* SAFETY: 类型断言已复核 */ window as unknown as {
+  /* SAFETY: 类型断言已复核 */
+  const w = window as unknown as {
     __comfyappStubTimer?: number;
   };
   if (w.__comfyappStubTimer) {

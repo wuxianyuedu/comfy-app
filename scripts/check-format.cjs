@@ -352,9 +352,13 @@ function oxfmtCheckTargets(entry, targets, subject) {
    * 走 **stdout** 而不是 stderr：夹具把成功那档的 `output` 折成纯 stdout，
    * 打 stderr 这批读数在「判据成功退出」的用例里永远看不见。 */
   if (process.env.COMFYAPP_FORMAT_DEBUG) {
-    const ver = spawnSync(process.execPath, [entry, "--version"], {
-      encoding: "utf8",
-    });
+    /* `stdout` 实测在子进程起不来时是 `undefined`、失败时 `error` 才有值 —— 下面那个
+     * `?? ver.error` 就是为这一支写的（`@types/node` 把它们按 `encoding` 声明成非空）。 */
+    const ver = /** @type {{ stdout?: string, error?: unknown }} */ (
+      spawnSync(process.execPath, [entry, "--version"], {
+        encoding: "utf8",
+      })
+    );
     console.log(
       `[format][debug] ROOT=${ROOT}\n` +
         `[format][debug] oxfmt --version=${JSON.stringify(ver.stdout ?? ver.error)}\n` +

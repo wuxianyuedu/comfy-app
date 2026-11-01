@@ -16,7 +16,8 @@ export async function fetchRawCli(taskId: string): Promise<Array<string>> {
     if (!res.ok) {
       return [];
     }
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as Partial<RawCliResponse>;
+    /* SAFETY: 类型断言已复核 */
+    const data = (await res.json()) as Partial<RawCliResponse>;
     return Array.isArray(data.lines) ? data.lines : [];
   } catch {
     return [];

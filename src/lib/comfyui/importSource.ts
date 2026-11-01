@@ -55,9 +55,8 @@ export async function readLocalFile(absPath: string): Promise<{ mtimeMs: number;
     /* 只取 `code` 判「文件不存在」这一档；文案一律由 `errorText` 产出
      *（它带网络层翻译，`String(e)` 那一路会把非 Error 抛值渲染成
      * `[object Object]`）。 */
-    const err = /* SAFETY: 类型断言已复核 */ (
-      typeof error === "object" && error !== null ? error : {}
-    ) as {
+    /* SAFETY: 类型断言已复核 */
+    const err = (typeof error === "object" && error !== null ? error : {}) as {
       code?: string;
     };
     if (err.code === "ENOENT") {
@@ -92,7 +91,7 @@ export async function parseWorkflowContent(
   } catch {
     throw new Error("JSON 解析失败，请检查文件内容是否为有效的 ComfyUI 工作流 JSON");
   }
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
     throw new Error("不是有效的工作流 JSON（根节点应为对象）");
   }
 
@@ -203,7 +202,8 @@ export async function reimportFromSource(tpl: {
   try {
     stat = await fs.stat(tpl.sourcePath);
   } catch (error: unknown) {
-    const err = /* SAFETY: 类型断言已复核 */ error as {
+    /* SAFETY: 类型断言已复核 */
+    const err = error as {
       code?: string;
     } | null;
     if (err?.code === "ENOENT") {

@@ -187,17 +187,17 @@ describe("自定义口：id 形状与序号", () => {
 describe("自定义口：往返与归一化", () => {
   const contract = {
     mode: "T2I",
-    inputs: /* SAFETY: 类型断言已复核 */ [
-      "prompt",
-      "custom-text-1",
-      "size",
-    ] as Array<ModeContractInputId>,
-    output: /* SAFETY: 类型断言已复核 */ "image" as const,
+    /* SAFETY: 类型断言已复核 */
+    inputs: ["prompt", "custom-text-1", "size"] as Array<ModeContractInputId>,
+    /* SAFETY: 类型断言已复核 */
+    output: "image" as const,
     customInputs: [
       {
-        id: /* SAFETY: 类型断言已复核 */ "custom-text-1" as ModeContractInputId,
+        /* SAFETY: 类型断言已复核 */
+        id: "custom-text-1" as ModeContractInputId,
         label: "水彩风格",
-        kind: /* SAFETY: 类型断言已复核 */ "text" as const,
+        /* SAFETY: 类型断言已复核 */
+        kind: "text" as const,
       },
     ],
   };

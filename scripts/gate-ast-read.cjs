@@ -125,7 +125,7 @@ function parseSources({
     const base = path.join(root, dir);
     for (const abs of walkForScan(base, fileRe)) {
       const name = path.basename(abs);
-      if (skipFileRe && skipFileRe.test(name)) {
+      if (skipFileRe?.test(name)) {
         continue;
       }
       if (name.endsWith(".d.ts")) {

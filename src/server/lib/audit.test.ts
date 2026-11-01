@@ -18,9 +18,8 @@ vi.mock("~/server/db", () => ({
   db: {
     insert: vi.fn(() => ({
       values: () => {
-        const rejectNow = /* SAFETY: 类型断言已复核 */ (
-          globalThis as { __REJECT_INSERT__?: boolean }
-        ).__REJECT_INSERT__;
+        /* SAFETY: 类型断言已复核 */
+        const rejectNow = (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__;
         return rejectNow ? Promise.reject(new Error("db down")) : Promise.resolve();
       },
     })),
@@ -62,9 +61,11 @@ describe("audit 审计日志契约", () => {
     // audit 内部 catch 住错误，不向调用方抛（不阻塞主流程）
     await expect(audit("role_changed", ctx(), { role: "admin" })).resolves.toBeUndefined();
     expect(loggerErrorMock).toHaveBeenCalled();
-    const msg = /* SAFETY: 类型断言已复核 */ loggerErrorMock.mock.calls[0]?.[1] as string;
+    /* SAFETY: 类型断言已复核 */
+    const msg = loggerErrorMock.mock.calls[0]?.[1] as string;
     expect(msg).toBe("audit_write_failed");
-    const fields = /* SAFETY: 类型断言已复核 */ loggerErrorMock.mock.calls[0]?.[0] as {
+    /* SAFETY: 类型断言已复核 */
+    const fields = loggerErrorMock.mock.calls[0]?.[0] as {
       event?: string;
     };
     expect(fields?.event).toBe("role_changed");

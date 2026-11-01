@@ -33,7 +33,8 @@ beforeEach(() => {
 });
 
 function putRequest(body: unknown) {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     nextUrl: new URL("http://localhost/api/production"),
     json: async () => body,
   } as never;
@@ -81,7 +82,8 @@ function getRequest(project: string | null) {
   if (project) {
     url.searchParams.set("project", project);
   }
-  return /* SAFETY: 类型断言已复核 */ { nextUrl: url } as never;
+  /* SAFETY: 类型断言已复核 */
+  return { nextUrl: url } as never;
 }
 
 describe("GET /api/production", () => {
@@ -110,7 +112,8 @@ describe("GET /api/production", () => {
     });
     const res = await GET(getRequest("proj_1"));
     expect(res.status).toBe(200);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       exists: boolean;
       production: { shots: unknown; title: string };
     };

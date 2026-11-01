@@ -43,7 +43,8 @@ const runsDir = path.join(logRoot, "runs");
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
-    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
+    /* SAFETY: 类型断言已复核 */
+    ...(actual as Record<string, unknown>),
     LOG_ROOT: logRoot,
     SERVICES_LOG_DIR: servicesDir,
   };
@@ -72,7 +73,8 @@ async function get(query: string): Promise<{ data: Payload; status: number }> {
   const res = await GET(new Request(`http://localhost/api/logs/sessions?${query}`));
   return {
     status: res.status,
-    data: /* SAFETY: 类型断言已复核 */ (await res.json()) as Payload,
+    /* SAFETY: 类型断言已复核 */
+    data: (await res.json()) as Payload,
   };
 }
 

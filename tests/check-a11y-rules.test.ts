@@ -79,14 +79,16 @@ test("真加载：求值的是仓库根那份 `eslint.config.js`，且只求值�
    * 它**只**作为下面那条话术的读数，不当断言：首次求值的墙钟是机器读数，
    * 不是判据的性质（热检出 3.4s、冷检出 40s+、`.next/` 命中 1.1–1.7s）。 */
   const first = Date.now();
-  const flat = /* SAFETY: 类型断言已复核 */ (await loadEslintConfig()) as Array<{
+  /* SAFETY: 类型断言已复核 */
+  const flat = (await loadEslintConfig()) as Array<{
     rules?: unknown;
   }>;
   const firstMs = Date.now() - first;
 
   // 第二次必须是「同一份」且是常数时间 —— 共进程的全部收益都在这一条上。
   const second = Date.now();
-  const again = /* SAFETY: 类型断言已复核 */ (await loadEslintConfig()) as Array<{
+  /* SAFETY: 类型断言已复核 */
+  const again = (await loadEslintConfig()) as Array<{
     rules?: unknown;
   }>;
   const secondMs = Date.now() - second;
@@ -122,7 +124,8 @@ test(
 );
 
 test("导出面：每个导出都是可调用的（不是「导了没人用」的空壳）", () => {
-  const mod = /* SAFETY: 类型断言已复核 */ loadJudgeModule() as unknown as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const mod = loadJudgeModule() as unknown as Record<string, unknown>;
   const { VERIFIED_SURFACES } = /* SAFETY: 类型断言已复核 */ mod as {
     VERIFIED_SURFACES: Record<string, string>;
   };
@@ -151,9 +154,8 @@ test("失败路径：真加载失败时带给原因冒出去，不吞（更不�
     (error: unknown) => {
       // 抛是可以接受的那一支，但**必须**带原因（裸 throw 等于吞掉根因）。
       expect(error).toBeInstanceOf(Error);
-      expect(String(/* SAFETY: 类型断言已复核 */ (error as Error).message).length).toBeGreaterThan(
-        0,
-      );
+      /* SAFETY: 类型断言已复核 */
+      expect(String((error as Error).message).length).toBeGreaterThan(0);
     },
   );
 });

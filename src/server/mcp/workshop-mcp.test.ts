@@ -26,8 +26,10 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 /** 写侧两个出口把收到的实参留一份，断言直接读它 —— 比去索引 `mock.calls[0][1]`
  * （那条类型上是空元组）更好读，也更接近「服务端到底收到了什么」。 */
 const seen = vi.hoisted(() => ({
-  characters: /* SAFETY: 类型断言已复核 */ [] as Array<unknown>,
-  shots: /* SAFETY: 类型断言已复核 */ [] as Array<unknown>,
+  /* SAFETY: 类型断言已复核 */
+  characters: [] as Array<unknown>,
+  /* SAFETY: 类型断言已复核 */
+  shots: [] as Array<unknown>,
 }));
 
 const orchestrator = vi.hoisted(() => ({
@@ -136,9 +138,8 @@ function resetCalls(): void {
 
 /** MCP 的失败是**结果**（isError）而不是抛异常，取回文本便于断言与排错。 */
 function textOf(result: unknown): string {
-  const content = /* SAFETY: 类型断言已复核 */ (
-    result as { content?: Array<{ text?: string; type: string }> }
-  ).content;
+  /* SAFETY: 类型断言已复核 */
+  const content = (result as { content?: Array<{ text?: string; type: string }> }).content;
   return (content ?? []).map((part) => part.text ?? "").join("\n");
 }
 
@@ -212,7 +213,8 @@ describe("工坊 MCP 工具面", () => {
         ],
       },
     });
-    const shots = /* SAFETY: 类型断言已复核 */ seen.shots as Array<Record<string, unknown>>;
+    /* SAFETY: 类型断言已复核 */
+    const shots = seen.shots as Array<Record<string, unknown>>;
     expect(shots).toEqual([
       expect.objectContaining({
         id: "s1",
@@ -297,12 +299,14 @@ describe("工坊 MCP 工具面", () => {
   /** 最近一次 `generateImage` 收到的第二个实参（服务端侧真正看到的载荷）。 */
   function payloadOf(): { size?: unknown } {
     const calls = orchestrator.generateImage.mock.calls;
-    return /* SAFETY: 类型断言已复核 */ (calls.at(-1) ?? [undefined, {}])[1] as { size?: unknown };
+    /* SAFETY: 类型断言已复核 */
+    return (calls.at(-1) ?? [undefined, {}])[1] as { size?: unknown };
   }
 
   it("get_session 遇到「库里没有这一行」时给的是可读错误，而不是一个 null 载荷", async () => {
     resetCalls();
-    orchestrator.getSession.mockResolvedValueOnce(/* SAFETY: 类型断言已复核 */ null as never);
+    /* SAFETY: 类型断言已复核 */
+    orchestrator.getSession.mockResolvedValueOnce(null as never);
     const result = await client.callTool({
       name: "workshop_get_session",
       arguments: SESSION,

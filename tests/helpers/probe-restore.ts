@@ -58,7 +58,8 @@ export const realProbeIo: ProbeIo = {
         }
         last = "写回后读回的内容与快照不一致";
       } catch (error) {
-        last = /* SAFETY: 类型断言已复核 */ (error as Error).message;
+        /* SAFETY: 类型断言已复核 */
+        last = (error as Error).message;
       }
     }
     throw new Error(`还原写不进去（${WRITE_ATTEMPTS} 次仍失败）：${last}`);

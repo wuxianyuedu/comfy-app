@@ -242,7 +242,8 @@ describe("watchWorkflowRun", () => {
     const captured = vi.mocked(watchTask).mock.calls[0]![1];
     const entry = {
       t: 1,
-      level: /* SAFETY: 类型断言已复核 */ "info" as const,
+      /* SAFETY: 类型断言已复核 */
+      level: "info" as const,
       msg: "开始",
     };
     captured.onLog?.(entry);

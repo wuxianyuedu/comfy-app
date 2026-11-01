@@ -226,8 +226,9 @@ async function writeNarrowTsconfig(): Promise<{
  * 解出的可执行同源）—— 拿到的是**解析后**的清单，`extends` 链也一并展开。
  */
 function repoExclude(): Array<string> {
+  /* SAFETY: 类型断言已复核 */
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ts = /* SAFETY: 类型断言已复核 */ require("typescript") as {
+  const ts = require("typescript") as {
     readConfigFile: (
       file: string,
       read: (p: string) => string | undefined,
@@ -282,10 +283,8 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     try {
       const outFile = path.join(dir, GENERATED_REL);
       writeStorybookAppOrigin(dir, outFile);
-      payload = /* SAFETY: 类型断言已复核 */ JSON.parse(fs.readFileSync(outFile, "utf8")) as Record<
-        string,
-        unknown
-      >;
+      /* SAFETY: 类型断言已复核 */
+      payload = JSON.parse(fs.readFileSync(outFile, "utf8")) as Record<string, unknown>;
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -296,7 +295,8 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     // 类型也要对得上：`APP_DEV_PORT` 不是数字时 reader 会整份回落到缺省值。
     for (const [key, value] of Object.entries(payload)) {
       expect(typeof value, `${key} 的类型与入库缺省值不一致`).toBe(
-        typeof (/* SAFETY: 类型断言已复核 */ (APP_ORIGIN_DEFAULTS as Record<string, unknown>)[key]),
+        /* SAFETY: 类型断言已复核 */
+        typeof (APP_ORIGIN_DEFAULTS as Record<string, unknown>)[key],
       );
     }
   });
@@ -586,7 +586,8 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
   });
 
   it("postinstall 的唯一入口仍然把它补上，且这一步失败只提示", () => {
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(read("package.json")) as {
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(read("package.json")) as {
       scripts?: Record<string, string>;
     };
     // 契约：postinstall 必须逐字是那一条、禁止 `&&`（launcher-core 的
@@ -681,7 +682,8 @@ function moveFileAcrossVolumes(from: string, to: string): void {
   try {
     fs.renameSync(from, to);
   } catch (error) {
-    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code !== "EXDEV") {
+    /* SAFETY: 类型断言已复核 */
+    if ((error as NodeJS.ErrnoException).code !== "EXDEV") {
       throw error;
     }
     fs.copyFileSync(from, to);
@@ -738,7 +740,8 @@ function resolveTscBin(): {
     const pkgJson = path.join(ROOT, "node_modules", pkg, "package.json");
     let bin: string | undefined;
     try {
-      const pkgData = /* SAFETY: 类型断言已复核 */ JSON.parse(fs.readFileSync(pkgJson, "utf8")) as {
+      /* SAFETY: 类型断言已复核 */
+      const pkgData = JSON.parse(fs.readFileSync(pkgJson, "utf8")) as {
         bin?: Record<string, string> | string;
       };
       bin = typeof pkgData.bin === "string" ? pkgData.bin : pkgData.bin?.[binName];
@@ -774,7 +777,8 @@ function resolveTscBin(): {
  *  这两条判据测的是**形状兜底还在**，不是「正在被走到的那条路」。 */
 describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局当判据红", () => {
   const errno = (code: string): NodeJS.ErrnoException => {
-    const e = /* SAFETY: 类型断言已复核 */ new Error(`${code}: simulated`) as NodeJS.ErrnoException;
+    /* SAFETY: 类型断言已复核 */
+    const e = new Error(`${code}: simulated`) as NodeJS.ErrnoException;
     e.code = code;
     return e;
   };
@@ -850,9 +854,8 @@ describe("restoreGeneratedFile：挪不动也必须把开发期输入找回来",
         fs.existsSync(generatedFile),
         "承诺是「一次判据不该把开发期输入弄丢」—— 挪不动时两侧都不许是空的",
       ).toBe(true);
-      const restored = /* SAFETY: 类型断言已复核 */ JSON.parse(
-        fs.readFileSync(generatedFile, "utf8"),
-      ) as {
+      /* SAFETY: 类型断言已复核 */
+      const restored = JSON.parse(fs.readFileSync(generatedFile, "utf8")) as {
         APP_DEV_PORT?: number;
       };
       expect(typeof restored.APP_DEV_PORT).toBe("number");

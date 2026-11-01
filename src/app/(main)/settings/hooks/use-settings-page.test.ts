@@ -87,7 +87,8 @@ vi.mock("~/lib/log/log-file-client", () => {
       if (!res.ok) {
         return null;
       }
-      return /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      /* SAFETY: 类型断言已复核 */
+      return (await res.json()) as {
         content: string;
         offset: number;
         size: number;
@@ -104,7 +105,8 @@ vi.mock("~/lib/log/log-file-client", () => {
     if (!res.ok) {
       return null;
     }
-    return /* SAFETY: 类型断言已复核 */ (await res.json()) as unknown;
+    /* SAFETY: 类型断言已复核 */
+    return (await res.json()) as unknown;
   });
   return {
     fetchFileLogSlice,
@@ -215,7 +217,8 @@ const mockRouter = t.router({
       () =>
         behavior.comfyInstance ?? {
           pathConfigured: true,
-          instanceType: /* SAFETY: 类型断言已复核 */ "portable" as const,
+          /* SAFETY: 类型断言已复核 */
+          instanceType: "portable" as const,
           desktopManaged: false,
         },
     ),
@@ -592,9 +595,10 @@ describe("useSettingsPage", () => {
     expect(result.current.hasError).toBe(true);
     expect(result.current.serveState).toBeNull();
     expect(result.current.errorText).toContain("数据库被锁");
-    const errors = /* SAFETY: 类型断言已复核 */ (
-      runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
-    ).filter((c) => c.level === "error");
+    /* SAFETY: 类型断言已复核 */
+    const errors = (runtimeLogCalls as unknown as Array<{ level: string; msg: string }>).filter(
+      (c) => c.level === "error",
+    );
     expect(errors.length).toBe(1);
     expect(errors[0]?.msg).toContain("数据库被锁");
 
@@ -602,7 +606,8 @@ describe("useSettingsPage", () => {
     await act(async () => {
       result.current.retry();
     });
-    const errorsAfter = /* SAFETY: 类型断言已复核 */ (
+    /* SAFETY: 类型断言已复核 */
+    const errorsAfter = (
       runtimeLogCalls as unknown as Array<{ level: string; msg: string }>
     ).filter((c) => c.level === "error");
     expect(errorsAfter.length).toBe(1);
@@ -683,7 +688,8 @@ describe("useSettingsPage", () => {
       )
       .toBe(true);
 
-    const entry = /* SAFETY: 类型断言已复核 */ (
+    /* SAFETY: 类型断言已复核 */
+    const entry = (
       runtimeLogCalls as unknown as Array<{
         fields?: { query?: string; raw?: string };
         level: string;
@@ -712,7 +718,8 @@ describe("useSettingsPage", () => {
       )
       .toBe(true);
 
-    const entry = /* SAFETY: 类型断言已复核 */ (
+    /* SAFETY: 类型断言已复核 */
+    const entry = (
       runtimeLogCalls as unknown as Array<{
         fields?: { query?: string };
         level: string;

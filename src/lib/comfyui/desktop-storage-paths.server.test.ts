@@ -35,7 +35,8 @@ function baseDeps(overrides: Record<string, unknown> = {}) {
   return {
     exists: existsOf(DESKTOP_DIRS),
     readFile: async () => SHARED_YAML,
-    resolveArgs: async () => /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    resolveArgs: async () => [] as Array<string>,
     ...overrides,
   };
 }

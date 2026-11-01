@@ -109,13 +109,13 @@ export function parseWorkflowIOMap(value: unknown): WorkflowIOMap {
     if (!entry || typeof entry !== "object") {
       continue;
     }
-    const rec = /* SAFETY: 类型断言已复核 */ entry as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const rec = entry as Record<string, unknown>;
     /* 旧键先删掉、再按需落新键：留着它等于让同一份覆盖层以两个名字在本列里
      * 往返 —— 下游读哪个都能读通，于是「谁是权威」永远说不清（而 `.loose()`
      * 会让它一路透传回写库）。 */
-    const legacy = /* SAFETY: 类型断言已复核 */ rec.modes as
-      | Record<string, WorkflowIOModeOverride>
-      | undefined;
+    /* SAFETY: 类型断言已复核 */
+    const legacy = rec.modes as Record<string, WorkflowIOModeOverride> | undefined;
     delete rec.modes;
     if (entry.modeOverrides === undefined && legacy !== undefined) {
       entry.modeOverrides = legacy;

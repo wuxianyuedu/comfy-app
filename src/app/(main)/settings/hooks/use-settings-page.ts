@@ -73,7 +73,8 @@ function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
     if (!raw) {
       return {};
     }
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
+    /* SAFETY: 类型断言已复核 */
+    const parsed = JSON.parse(raw) as {
       llm?: QueryLlmConfig;
       settings?: Settings;
     };

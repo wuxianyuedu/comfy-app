@@ -102,7 +102,8 @@ export function useSettingsBackup({
               throw new Error(result.reason);
             }
             return {
-              ok: /* SAFETY: 类型断言已复核 */ true as const,
+              /* SAFETY: 类型断言已复核 */
+              ok: true as const,
               text: `已登记恢复 ${name} —— **重启应用**后生效（当前进程还连着数据库，不能就地换文件）`,
             };
           },

@@ -106,7 +106,7 @@ describe("镜像身份：digest 只判形态（不判真伪 —— 那要镜像�
 
   it("拼错的 digest 报 malformed —— 拼错的比没有更容易骗人", () => {
     expect(digestVerdict("sha256:abc")).toBe("malformed");
-    expect(digestVerdict(`${"a".repeat(64)}`)).toBe("malformed");
+    expect(digestVerdict("a".repeat(64))).toBe("malformed");
     expect(digestVerdict(`sha246:${"a".repeat(64)}`)).toBe("malformed");
   });
 

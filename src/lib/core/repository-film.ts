@@ -126,7 +126,8 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .from(filmProject)
       .where(eq(filmProject.id, id))
       .limit(1);
-    const arr = /* SAFETY: 类型断言已复核 */ (film[0]?.logs as Array<unknown> | null) ?? [];
+    /* SAFETY: 类型断言已复核 */
+    const arr = (film[0]?.logs as Array<unknown> | null) ?? [];
     arr.push(entry);
     await db
       .update(filmProject)

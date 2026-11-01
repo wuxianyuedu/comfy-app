@@ -55,7 +55,8 @@ function setViewport(width: number, height: number) {
  * 命中不了边界，等于没测。
  */
 function stubRect(this: HTMLElement) {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     width: 40,
     height: 40,
     top: 0,
@@ -190,7 +191,8 @@ describe("useDraggablePosition", () => {
     /* 往左上拖 200/100：右侧更远 → `right` 变大，下侧更远 → `bottom` 变大。 */
     drag(first.controller().handleProps, { x: 900, y: 700 }, { x: 700, y: 600 });
     await expect.poll(() => window.localStorage.getItem(KEY)).not.toBeNull();
-    const saved = /* SAFETY: 类型断言已复核 */ JSON.parse(window.localStorage.getItem(KEY)!) as {
+    /* SAFETY: 类型断言已复核 */
+    const saved = JSON.parse(window.localStorage.getItem(KEY)!) as {
       bottom: number;
       right: number;
     };

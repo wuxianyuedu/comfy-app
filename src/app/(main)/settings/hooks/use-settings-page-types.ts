@@ -278,7 +278,8 @@ export const SETTINGS_SECTIONS: Array<{ id: Section; label: string }> = [
 ];
 
 /** 按任务温度区的任务清单 —— 视图遍历渲染，顺序即渲染顺序。 */
-export const TEMPERATURE_TASKS = /* SAFETY: 类型断言已复核 */ Object.entries(TASK_TYPES) as Array<
+/* SAFETY: 类型断言已复核 */
+export const TEMPERATURE_TASKS = Object.entries(TASK_TYPES) as Array<
   [TaskType, (typeof TASK_TYPES)[TaskType]]
 >;
 

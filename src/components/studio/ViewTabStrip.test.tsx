@@ -45,7 +45,8 @@ describe("viewTabLabel", () => {
   });
 
   it("未知视图原样回显，不套一个最近的标签", () => {
-    expect(viewTabLabel(/* SAFETY: 类型断言已复核 */ "nope" as never)).toBe("nope");
+    /* SAFETY: 类型断言已复核 */
+    expect(viewTabLabel("nope" as never)).toBe("nope");
   });
 });
 

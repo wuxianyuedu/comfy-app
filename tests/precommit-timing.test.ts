@@ -74,7 +74,8 @@ type LedgerRun = {
  * @returns {LedgerRun[]}
  */
 function readLedger(result: { out: string }): Array<LedgerRun> {
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(result.out) as Array<LedgerRun>;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(result.out) as Array<LedgerRun>;
 }
 
 /**

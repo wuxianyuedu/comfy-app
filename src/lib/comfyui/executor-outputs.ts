@@ -36,10 +36,11 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
   const others: Array<CollectedOutputFile> = [];
   const texts: Array<string> = [];
   for (const nodeOut of Object.values(outputs)) {
-    if (!nodeOut || typeof nodeOut !== "object") {
+    if (typeof nodeOut !== "object" || nodeOut === null) {
       continue;
     }
-    const node = /* SAFETY: 类型断言已复核 */ nodeOut as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const node = nodeOut as Record<string, unknown>;
     if (Array.isArray(node.images)) {
       /* SAFETY: 类型断言已复核 */
       images.push(...(node.images as Array<CollectedOutputFile>));
@@ -79,10 +80,11 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
         v.length &&
         v.every(
           (it) =>
-            it &&
+            // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+            it != null &&
             typeof it === "object" &&
-            typeof (/* SAFETY: 类型断言已复核 */ (it as Record<string, unknown>).filename) ===
-              "string",
+            /* SAFETY: 类型断言已复核 */
+            typeof (it as Record<string, unknown>).filename === "string",
         )
       ) {
         /* SAFETY: 类型断言已复核 */
@@ -178,23 +180,25 @@ function readSamplerNode(
 
 export function extractRuntimeParams(entry: unknown): RuntimeParams {
   const out: RuntimeParams = {};
-  const prompt = /* SAFETY: 类型断言已复核 */ (entry as { prompt?: unknown } | null | undefined)
-    ?.prompt;
-  const graphRaw = /* SAFETY: 类型断言已复核 */ (
-    prompt as Record<string, unknown> | null | undefined
-  )?.[2];
-  if (!graphRaw || typeof graphRaw !== "object") {
+  /* SAFETY: 类型断言已复核 */
+  const prompt = (entry as { prompt?: unknown } | null | undefined)?.prompt;
+  /* SAFETY: 类型断言已复核 */
+  const graphRaw = (prompt as Record<string, unknown> | null | undefined)?.[2];
+  if (typeof graphRaw !== "object" || graphRaw === null) {
     return out;
   }
-  const graph = /* SAFETY: 类型断言已复核 */ graphRaw as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const graph = graphRaw as Record<string, unknown>;
   const samplers: Array<SamplerRuntime> = [];
   for (const [nid, nodeRaw] of Object.entries(graph)) {
-    const node = /* SAFETY: 类型断言已复核 */ nodeRaw as Record<string, unknown> | undefined;
+    /* SAFETY: 类型断言已复核 */
+    const node = nodeRaw as Record<string, unknown> | undefined;
     const t = typeof node?.class_type === "string" ? node.class_type : "";
     if (!isSamplerClassType(t)) {
       continue;
     }
-    const inputs = /* SAFETY: 类型断言已复核 */ (node?.inputs ?? {}) as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const inputs = (node?.inputs ?? {}) as Record<string, unknown>;
     samplers.push(readSamplerNode(nid, t, inputs));
   }
   if (samplers.length === 0) {

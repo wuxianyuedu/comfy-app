@@ -160,7 +160,8 @@ export function tailWindowAppend<T>(items: ReadonlyArray<T>, item: T, size: numb
   }
   /* 窗口已满：原数组长度就是上限，`shift` + `push` 后仍恰为 `n` 条，
    * 不必再切片。 */
-  const next = /* SAFETY: 类型断言已复核 */ items as Array<T>;
+  /* SAFETY: 类型断言已复核 */
+  const next = items as Array<T>;
   next.shift();
   next.push(item);
   return next;

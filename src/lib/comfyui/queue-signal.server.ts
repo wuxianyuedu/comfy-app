@@ -45,7 +45,7 @@ declare global {
 const st: QueueSignalGlobal = (globalThis.__comfyQueueSignal_v1 ??= {});
 
 async function tick(): Promise<void> {
-  if (st.inflight) {
+  if (st.inflight === true) {
     return;
   }
   st.inflight = true;

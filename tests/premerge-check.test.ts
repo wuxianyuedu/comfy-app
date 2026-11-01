@@ -92,7 +92,8 @@ function run(args: Array<string> = [], baseline: string = headBaseline()) {
     });
     return { code: 0, output };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as {
+    /* SAFETY: 类型断言已复核 */
+    const e = error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -226,7 +227,8 @@ describe("premerge-check —— 段的筛选", () => {
     const { code, output } = run(["--only=claims", "--json"]);
     expectAnchorMissRead(code, output);
     expect(code).toBe(0);
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(output) as {
+    /* SAFETY: 类型断言已复核 */
+    const parsed = JSON.parse(output) as {
       code: number;
       segments: Array<{ code: number; key: string }>;
     };

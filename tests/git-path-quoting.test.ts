@@ -155,7 +155,8 @@ describe("暂存面：同一台机器上暂存清单也要原样", () => {
 /* ── 静态：读 git 路径的调用必须带守卫（防复发）───────────────────────────────── */
 
 /** 会输出**路径**的 git 旗标（`-z` 那一族天然不加引号，见下）。 */
-const PATH_FLAG_TOKENS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const PATH_FLAG_TOKENS = [
   "--name-only",
   "--name-status",
   "ls-files",

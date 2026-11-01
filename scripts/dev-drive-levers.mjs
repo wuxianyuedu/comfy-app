@@ -74,27 +74,34 @@ import { compareTargets, formatThroughput, thirdPartyEngineUsage } from "./dev-d
  */
 export function buildLevers(report) {
   const levers = [];
-  const volume = report.volume ?? {};
-  const caps = report.capabilities ?? {};
-  const pnpm = report.pnpm ?? {};
-  const git = report.git ?? {};
-  const cache = report.cache ?? {};
-  const drive = volume.root ?? "";
+  /* 这几格**不兜底**：`ProbeReport` 把它们声明成必填，`probeVolume` /
+   * `probeCapabilities` / `probePnpmStore` / `probeGitConfig` / `probeCacheLocations` /
+   * `probeWorkdirs` 永远返回对象或数组（读不到就在字段里写 `null` / 空数组）。
+   * 原来那批 `?? {}` 是恒真的兜底，`?? []` 更是把「探针忘了给这一格」悄悄读成「空的」——
+   * 正是本仓最不想再看见的那种「读不到」与「读到了且是空」的混淆。
+   * 真要兜的是下面两处**可缺**的格（`defender` / `indexMarking` 的类型里明写了默认形态）。 */
+  const volume = report.volume;
+  const caps = report.capabilities;
+  const pnpm = report.pnpm;
+  const git = report.git;
+  const cache = report.cache;
+  const drive = volume.root;
 
   levers.push(pnpmStoreLever(pnpm, report.repo));
-  levers.push(workdirLever(report.workdirs ?? []));
+  levers.push(workdirLever(report.workdirs));
   levers.push(blockCloneLever(volume, caps, drive));
-  levers.push(defenderLever(volume, report.defender ?? { known: false }));
+  /* `bench` 在 `DevDriveReport` 里是 `BenchReport | null`（`--bench` 没跑就是 null）。
+   * `?? null` 保留给「拿一份手工拼的报告喂进来」的调用点 —— 那种报告里它是 `undefined`，
+   * 而 `filtersLever` 的形参只写 `| null`。 */
   levers.push(filtersLever(volume, report.bench ?? null));
-  if (report.bench && report.bench.ran) {
+  if (report.bench?.ran) {
     levers.push(ioBenchLever(report.bench));
   }
-  levers.push(
-    searchIndexLever(
-      drive,
-      report.indexMarking ?? { known: false, sampled: 0, marked: 0, ratio: null },
-    ),
-  );
+  /* 这两格按 `ProbeReport` 的声明是必有（`probeDefender` / `probeIndexMarking` 永远返回
+   * 对象，读不到就在 `known` / `ratio` 里写 false / null）。原来的 `?? { known: false … }`
+   * 是**恒真的兜底**，而那两处判空本来就在 lever 函数里（见 `searchIndexLever`）。 */
+  levers.push(defenderLever(volume, report.defender));
+  levers.push(searchIndexLever(drive, report.indexMarking));
   levers.push(gitIndexLever(git));
   levers.push(cacheLever("temp", "构建期临时目录（TEMP / TMP）", cache.temp, drive));
   levers.push(cacheLever("cargo-home", "Rust 依赖缓存（CARGO_HOME）", cache.cargoHome, drive));
@@ -140,7 +147,8 @@ export function summarizeLevers(levers) {
  * @returns {Lever}
  */
 function pnpmStoreLever(pnpm, repo) {
-  const storePath = pnpm.storePath ?? "";
+  /* `storePath` 在 `PnpmProbe` 里是 `string`（读不到就是空串），兜底恒不成立。 */
+  const storePath = pnpm.storePath;
   if (!storePath) {
     return {
       id: "pnpm-store",
@@ -333,7 +341,7 @@ function blockCloneLever(volume, caps, drive) {
  * @returns {Lever}
  */
 function defenderLever(volume, defender) {
-  const drive = volume.root ?? "";
+  const drive = volume.root;
   if (!drive) {
     return {
       id: "defender",
@@ -353,7 +361,7 @@ function defenderLever(volume, defender) {
     };
   }
   if (volume.devDrive === "yes") {
-    if (/受信任/.test(volume.devDriveLabel ?? "")) {
+    if (/受信任/.test(volume.devDriveLabel)) {
       return {
         id: "defender",
         title: "Defender 实时保护（扫描每个新写入的文件）",
@@ -495,24 +503,9 @@ function filtersLever(volume, bench) {
       actions: [],
     };
   }
-  if (usage.state === "unknown") {
-    return {
-      id: "dev-drive-filters",
-      title: "开发卷上挂的文件系统筛选器（谁能看见这块卷上的文件）",
-      status: "na",
-      detail:
-        `除了 Defender，还挂了第三方筛选器：${thirdParty.join("、")}。` +
-        "它**能看见**这块卷上的文件；但「它有没有在拖慢 I/O」只能靠负载下的实测说话" +
-        "（挂着 ≠ 在扫）—— 本轮没跑实测，或认不出它对应哪个引擎进程，所以不判。",
-      actions: [
-        {
-          label: "跑一次 I/O 实测（含 CPU 归因；会真的写几百 MB 数据，跑完即删）",
-          command: "pnpm dev:drive --bench",
-          scope: "user",
-        },
-      ],
-    };
-  }
+  /* `busy` / `unknown` / `idle` 三支都已各自 return，这里是**词表之外的形态**。
+   * 别再插一层 `else if (usage.state === "idle")`：收窄之后 `tsc` 会当场给 TS2367
+   * （`tsconfig.scripts.json` 是硬闸），而它给得对 —— 那条分支必然成立。 */
   return {
     id: "dev-drive-filters",
     title: "开发卷上挂的文件系统筛选器（谁能看见这块卷上的文件）",
@@ -544,7 +537,7 @@ function ioBenchLever(bench) {
     parts.push(`${target.label}：${formatThroughput(target)}`);
   }
   let verdict = "读数见下。";
-  if (compare && compare.comparable) {
+  if (compare?.comparable) {
     verdict = compare.devFaster
       ? "开发卷在四项上都不慢于参考卷 → 筛选器栈没有形成瓶颈。"
       : "开发卷在某些项上慢于参考卷 → 那几项是真正的开销所在。";
@@ -579,7 +572,8 @@ function searchIndexLever(drive, marking) {
       actions: [],
     };
   }
-  if (marking && marking.known && marking.ratio !== null && marking.ratio >= 0.95) {
+  /* `marking` 由调用点按默认值补全，`known` / `ratio` 在类型里都可缺 —— 判空要留着。 */
+  if (marking.known && marking.ratio !== null && marking.ratio >= 0.95) {
     return {
       id: "search-index",
       title: "Windows Search 索引（后台读盘）",
@@ -676,7 +670,7 @@ function gitIndexLever(git) {
  * @returns {Lever}
  */
 function cacheLever(id, title, entry, drive) {
-  if (!entry || !entry.path) {
+  if (!entry?.path) {
     return {
       id,
       title,

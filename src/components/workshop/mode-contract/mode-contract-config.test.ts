@@ -54,7 +54,8 @@ describe("生效契约（改过的用改过的，未改过的回落内置默认�
     const custom = {
       mode: "T2I",
       inputs: [/* SAFETY: 类型断言已复核 */ "prompt" as const],
-      output: /* SAFETY: 类型断言已复核 */ "image" as const,
+      /* SAFETY: 类型断言已复核 */
+      output: "image" as const,
     };
     const { contract, customized } = effectiveModeContract("t2i", [custom]);
     expect(customized).toBe(true);

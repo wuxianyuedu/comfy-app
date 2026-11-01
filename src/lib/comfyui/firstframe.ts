@@ -47,12 +47,12 @@ export async function synthesizeFirstFrame(opts: {
    * **对同一个输入结论相反**（那侧忘了剥 `api/`，于是永远找不到文件），
    * 两条都是同一份布局的第二次实现，收口见 `~/lib/media/output-paths`。 */
   const abs = artifactDiskPath(localPath);
-  if (!abs) {
+  if (abs === null) {
     throw new Error(`首帧的产物地址不合法：${localPath}`);
   }
   const buf = await fs.readFile(abs);
   const res = await uploadImage(buf, `ff_${taskId}.png`, "input");
-  if (!res.name) {
+  if (res.name === undefined || res.name === "") {
     throw new Error("首帧上传失败");
   }
   return res.name;
@@ -82,7 +82,7 @@ async function waitForImage(taskId: string): Promise<string> {
           mediaType?: string;
         }> | null) ?? [];
       const first = outputs.find((im) => im.mediaType === "image");
-      if (!first?.localPath) {
+      if (first?.localPath === undefined || first.localPath === "") {
         throw new Error("首帧无图像输出");
       }
       return first.localPath;

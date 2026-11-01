@@ -21,7 +21,8 @@ export async function fetchServerDraft(projectId: string): Promise<WorkshopDraft
       data !== null &&
       /* SAFETY: 类型断言已复核 */ (data as { exists?: unknown }).exists === true
     ) {
-      return /* SAFETY: 类型断言已复核 */ (data as { draft: WorkshopDraftDto }).draft;
+      /* SAFETY: 类型断言已复核 */
+      return (data as { draft: WorkshopDraftDto }).draft;
     }
     return null;
   } catch {

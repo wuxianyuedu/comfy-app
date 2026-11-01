@@ -307,11 +307,8 @@ function pathExistsInTree(commit, target) {
  * @returns {{count: number} | null}
  */
 function gateLineCount(target) {
-  const argv = /\.(cjs|mjs|js)$/.test(target) ? ["node", target] : [target];
-  const cmd = argv[0];
-  if (cmd === undefined) {
-    return null;
-  }
+  const cmd = /\.(cjs|mjs|js)$/.test(target) ? "node" : target;
+  const argv = cmd === target ? [target] : [cmd, target];
   try {
     const out = execFileSync(cmd, argv.slice(1), {
       cwd: ROOT,
@@ -457,15 +454,15 @@ export function extractClaims(message, commit) {
       return;
     }
     for (const num of nums) {
-      if (num === undefined) {
-        continue;
-      }
-      const key = `${raw}\u0000${num}\u0000${absent}`;
+      /* `matchAll` 每一格都来自 `SECTION_HEAD_RE` 的那个分组，形状上不会缺；`String()`
+       * 只为让类型收口 —— 拼出来的 key 与任何真章节号都不会撞。 */
+      const target = String(num);
+      const key = `${raw}\u0000${target}\u0000${absent}`;
       if (sectionSeen.has(key)) {
         continue;
       }
       sectionSeen.add(key);
-      claims.push({ kind: "section", raw, target: num, expectAbsent: absent });
+      claims.push({ kind: "section", raw, target, expectAbsent: absent });
     }
   };
   for (const m of body.matchAll(SECTION_KEEP_AFTER_RE)) {
@@ -473,7 +470,9 @@ export function extractClaims(message, commit) {
       continue;
     }
     /* `… 不出现` 是**反向**断言（「那节一次都不出现」），与「保留」不是同一件事。 */
-    pushSection(m[0], m[0], SECTION_ABSENT_HINT.test(m[2] ?? ""));
+    /* `m[2]` 是**可选捕获组**（`照旧保留|保留|不出现` 那一支），`String()` 直接收口，
+     * 不再叠一层 `??`。 */
+    pushSection(m[0], m[0], SECTION_ABSENT_HINT.test(String(m[2])));
   }
   for (const m of body.matchAll(SECTION_KEEP_BEFORE_RE)) {
     if (quoted(m)) {
@@ -487,10 +486,9 @@ export function extractClaims(message, commit) {
     if (quoted(m)) {
       continue;
     }
-    const target = m[1];
-    if (target === undefined) {
-      continue;
-    }
+    /* 第 1 组是必填分组，`PATH_UNTOUCHED_RE` 的形状保证它在场；`String()` 只为让类型收口
+     * （收口出来的值过不了 `pathExistsInTree`，那一支本来也不该判成声明）。 */
+    const target = String(m[1]);
     if (!pathExistsInTree(commit, target)) {
       continue;
     }
@@ -500,10 +498,8 @@ export function extractClaims(message, commit) {
     if (quoted(m)) {
       continue;
     }
-    const target = m[1];
-    if (target === undefined || m[2] === undefined) {
-      continue;
-    }
+    /* 两个分组都是必填的（执行者 + 位数），形状上不会缺；`String()` 只为让类型收口。 */
+    const target = String(m[1]);
     claims.push({ kind: "count", raw: m[0], target, count: Number(m[2]) });
   }
   return claims;
@@ -572,22 +568,22 @@ export function checkClaim(claim, { commit }) {
         }
       : { verdict: "holds", detail: `确实不在该提交的 diff 名单里` };
   }
-  if (claim.kind === "count") {
-    const reading = gateLineCount(claim.target);
-    if (!reading) {
-      return {
-        verdict: "unverifiable",
-        detail: `跑不出「${claim.target}」的读数（脚本不在 / 它自己红了）`,
-      };
-    }
-    return reading.count === claim.count
-      ? { verdict: "holds", detail: `读数是 ${claim.count} 行（声明一致）` }
-      : {
-          verdict: "contradicted",
-          detail: `声明说「${claim.count} 处收到 0」，而「${claim.target}」现在的读数是 ${reading.count} 行`,
-        };
+  /* 走到这里只剩 `count`：`Claim.kind` 的联合类型只有 section / path / count，
+   * 前两种上面已经各自 return —— 再写一层 `if (claim.kind === "count")` 只是把
+   * 「最后一种」写成了「可能还有第四种」。 */
+  const reading = gateLineCount(claim.target);
+  if (!reading) {
+    return {
+      verdict: "unverifiable",
+      detail: `跑不出「${claim.target}」的读数（脚本不在 / 它自己红了）`,
+    };
   }
-  return { verdict: "unverifiable", detail: `未知的声明种类：${claim.kind}` };
+  return reading.count === claim.count
+    ? { verdict: "holds", detail: `读数是 ${claim.count} 行（声明一致）` }
+    : {
+        verdict: "contradicted",
+        detail: `声明说「${claim.count} 处收到 0」，而「${claim.target}」现在的读数是 ${reading.count} 行`,
+      };
 }
 
 /**

@@ -35,7 +35,8 @@ export async function fetchUpdateCheck(): Promise<UpdateCheckPayload> {
     if (!res.ok) {
       return EMPTY;
     }
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as UpdateCheckPayload;
+    /* SAFETY: 类型断言已复核 */
+    const data = (await res.json()) as UpdateCheckPayload;
     return {
       ok: true,
       armed: data.armed === true,

@@ -218,7 +218,7 @@ function runGate(gate, parsed) {
       code = exit.code;
     }
   } catch (error) {
-    if (error && error.__gateExit) {
+    if (error?.__gateExit) {
       code = exit.code ?? 0;
     } else {
       /* 判据自己抛了异常 = 判据没跑成，不能读成「通过」（§13.5.12 那一族）。
@@ -226,7 +226,7 @@ function runGate(gate, parsed) {
       code = 1;
       cap.lines.push(
         // 这里刻意保留 ||：异常可能没有 message（抛的是字符串或空 message），那时要念异常本身。
-        `${gate.tag} 判据抛出异常（这一条没有结论，按红处理）：${(error && error.message) || String(error)}`,
+        `${gate.tag} 判据抛出异常（这一条没有结论，按红处理）：${error?.message || String(error)}`,
       );
     }
   } finally {
@@ -319,14 +319,16 @@ function main() {
   if (failed.length === 0) {
     console.log(
       `[ast-gates] OK —— ${results.length} 条 AST 判据全绿（共享一次解析，${parsed.size / 2} 份文件）${
-        skipped.length ? `，另 ${skipped.length} 条未触及扫描面。` : "。"}`,
+        skipped.length ? `，另 ${skipped.length} 条未触及扫描面。` : "。"
+      }`,
     );
     return 0;
   }
 
   console.error(
-    `\n[ast-gates] ${failed.length}/${results.length} 条判据红：${
-      failed.map((r) => `${r.what}${r.tag}`).join(" · ")}`,
+    `\n[ast-gates] ${failed.length}/${results.length} 条判据红：${failed
+      .map((r) => `${r.what}${r.tag}`)
+      .join(" · ")}`,
   );
   /* 收尾段**逐行都带 `[ast-gates]` 前缀**：这一段是聚合档自己的输出，而 `gateLines()`
    * （`tests/ast-gates-aggregate.test.ts` 的对拍）按前缀识别「哪些行属于聚合档」。

@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { deleteMaterial, fetchMaterials, uploadMaterial } from "./materials-client";
 
 function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 400): Response {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     ok,
     status,
     json: async () => body,
@@ -21,7 +22,8 @@ function callArgs(fetchMock: ReturnType<typeof vi.fn>): {
   const first = fetchMock.mock.calls[0] ?? [];
   return {
     url: String(first[0] ?? ""),
-    init: /* SAFETY: 类型断言已复核 */ first[1] as RequestInit | undefined,
+    /* SAFETY: 类型断言已复核 */
+    init: first[1] as RequestInit | undefined,
   };
 }
 
@@ -131,7 +133,8 @@ describe("uploadMaterial", () => {
       folder: "ref",
       projectId: "p-1",
     });
-    const fd1 = /* SAFETY: 类型断言已复核 */ callArgs(fetchMock).init?.body as FormData;
+    /* SAFETY: 类型断言已复核 */
+    const fd1 = callArgs(fetchMock).init?.body as FormData;
     expect(fd1.get("folder")).toBe("ref");
     expect(fd1.get("projectId")).toBe("p-1");
     expect(fd1.get("shared")).toBeNull();

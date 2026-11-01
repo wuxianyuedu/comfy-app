@@ -85,7 +85,8 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string };
+    /* SAFETY: 类型断言已复核 */
+    const e = error as { stderr?: string; stdout?: string };
     return { ok: false, root, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

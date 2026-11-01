@@ -115,7 +115,7 @@ export async function resolveDesktopStoragePaths(
       ).extraArgs);
 
   const classified = classifyComfyInstall(dir, exists);
-  if (classified.kind !== "desktop" || !classified.instanceRoot) {
+  if (classified.kind !== "desktop" || classified.instanceRoot === null) {
     return null;
   }
 
@@ -126,7 +126,8 @@ export async function resolveDesktopStoragePaths(
     ? parseExtraModelPathsYaml(extra.content)
     : {
         basePath: null,
-        entries: /* SAFETY: 类型断言已复核 */ [] as Array<ExtraModelPathEntry>,
+        /* SAFETY: 类型断言已复核 */
+        entries: [] as Array<ExtraModelPathEntry>,
       };
 
   const launchArgs = await resolveArgs(dir);
@@ -139,7 +140,7 @@ export async function resolveDesktopStoragePaths(
   for (const cfg of configFiles) {
     try {
       const parsed = parseExtraModelPathsYaml(await readFile(cfg, "utf8"));
-      if (parsed.basePath && !configBase) {
+      if (parsed.basePath !== null && configBase === null) {
         configBase = parsed.basePath;
       }
       mergedEntries.push(...parsed.entries);
@@ -160,21 +161,22 @@ export async function resolveDesktopStoragePaths(
   const modelDir: StorageDirInfo = {
     path: path.join(primaryBase, "models"),
     exists: exists(path.join(primaryBase, "models")),
-    source: overrides.baseDir
-      ? "--base-directory"
-      : parsed.basePath
-        ? `${EXTRA_PATHS_FILE} base_path`
-        : null,
+    source:
+      overrides.baseDir === null
+        ? parsed.basePath === null
+          ? null
+          : `${EXTRA_PATHS_FILE} base_path`
+        : "--base-directory",
   };
   const inputDir: StorageDirInfo = {
     path: overrides.inputDir ?? path.join(primaryBase, "input"),
     exists: exists(overrides.inputDir ?? path.join(primaryBase, "input")),
-    source: overrides.inputDir ? "--input-directory" : null,
+    source: overrides.inputDir === null ? null : "--input-directory",
   };
   const outputDir: StorageDirInfo = {
     path: overrides.outputDir ?? path.join(primaryBase, "output"),
     exists: exists(overrides.outputDir ?? path.join(primaryBase, "output")),
-    source: overrides.outputDir ? "--output-directory" : null,
+    source: overrides.outputDir === null ? null : "--output-directory",
   };
 
   /* 共享目录 = yaml 声明的额外目录；与主目录同一条的（yaml 里把 base 写成本

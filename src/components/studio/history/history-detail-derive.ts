@@ -65,7 +65,8 @@ export type TaskOrigin = "workshop" | "workflow";
  * 反面：工作流库的就地运行只带 `workflow` + `workflowInputs`；画布节点运行
  * 再多个 `projectId`。两者都算「工作流直接发起」，只显示工作流参数。
  */
-const WORKSHOP_TOP_LEVEL_KEYS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const WORKSHOP_TOP_LEVEL_KEYS = [
   "prompt",
   "negative",
   "firstFrame",

@@ -275,7 +275,8 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
 
   it("自指面在扫描根里，且真仓在这张面上今天全绿", () => {
     const root = path.resolve(__dirname, "..");
-    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const ledger = JSON.parse(
       readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
     ) as { entries: Array<Entry> };
     /* glob 写错的失效形态是「面为空 ⇒ 整格恒绿」，所以这里按磁盘自己数一遍：
@@ -352,7 +353,8 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
 describe("真仓自证：这本账现在必须与源码一致", () => {
   it("账里每条都能在源码里定位到，且数值相等", () => {
     const root = path.resolve(__dirname, "..");
-    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const ledger = JSON.parse(
       readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
     ) as { entries: Array<Entry> };
     const r = analyze({

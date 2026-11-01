@@ -55,14 +55,8 @@ export function draftHasContent(draft: WorkshopDraftDto): boolean {
   );
 }
 
-const PROJECT_TYPES = /* SAFETY: 类型断言已复核 */ [
-  "short_video",
-  "micro_film",
-  "animation",
-  "ad",
-  "comic",
-  "other",
-] as const;
+/* SAFETY: 类型断言已复核 */
+const PROJECT_TYPES = ["short_video", "micro_film", "animation", "ad", "comic", "other"] as const;
 
 function isProjectType(v: unknown): v is ProjectMeta["type"] {
   return (

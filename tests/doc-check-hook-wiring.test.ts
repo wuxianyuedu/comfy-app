@@ -491,9 +491,8 @@ describe("全库扫描的输入面跳过接进 D 组（ISSUE #1747）", () => {
   it("UI 基元的脚本实现了 --staged 这一档（不是只在钩子里写了个 flag）", () => {
     // 钩子里的 flag 与脚本里的实现是两件事：只写 flag 而脚本不认它，会被解析成
     // 未知参数（多数脚本忽略）⇒ 条件触发**静默失效**，退回无条件全库扫描。
-    const cases = /* SAFETY: 类型断言已复核 */ [
-      ["check-ui-primitives.cjs", UI_PRIMITIVES],
-    ] as const;
+    /* SAFETY: 类型断言已复核 */
+    const cases = [["check-ui-primitives.cjs", UI_PRIMITIVES]] as const;
     for (const [name, file] of cases) {
       const script = readFileSync(file, "utf8");
       expect(

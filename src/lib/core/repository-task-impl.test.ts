@@ -35,10 +35,12 @@ beforeAll(() => {
   tdb = createTestDb();
   // 内存测试库结构上是同一份 drizzle builder，运行时类型名义不同（better-sqlite3
   // vs libsql）；一次性断言、之后所有 impl 方法都用这个 `db`。
-  impl = createTaskRepoImpl(/* SAFETY: 类型断言已复核 */ tdb as unknown as TaskRepoDb, {
+  /* SAFETY: 类型断言已复核 */
+  impl = createTaskRepoImpl(tdb as unknown as TaskRepoDb, {
     owner: "inline",
   });
-  hostImpl = createTaskRepoImpl(/* SAFETY: 类型断言已复核 */ tdb as unknown as TaskRepoDb, {
+  /* SAFETY: 类型断言已复核 */
+  hostImpl = createTaskRepoImpl(tdb as unknown as TaskRepoDb, {
     owner: "host",
   });
 });
@@ -52,7 +54,8 @@ beforeEach(() => {
 /** 建一行任务。`extra` 里的字段直接落到 task 表（比 seedTask 少了类型限制）。 */
 async function seed(extra: Record<string, unknown> = {}): Promise<string> {
   const id = `t-${Math.random().toString(36).slice(2, 10)}`;
-  await /* SAFETY: 类型断言已复核 */ (tdb as unknown as TaskRepoDb).insert(task).values(
+  /* SAFETY: 类型断言已复核 */
+  await (tdb as unknown as TaskRepoDb).insert(task).values(
     /* SAFETY: 类型断言已复核 */ {
       id,
       userId,
@@ -68,9 +71,8 @@ async function seed(extra: Record<string, unknown> = {}): Promise<string> {
 }
 
 function readRow(id: string): Record<string, unknown> | undefined {
-  return /* SAFETY: 类型断言已复核 */ (tdb.$tables.tasks as Array<Record<string, unknown>>).find(
-    (r) => r.id === id,
-  );
+  /* SAFETY: 类型断言已复核 */
+  return (tdb.$tables.tasks as Array<Record<string, unknown>>).find((r) => r.id === id);
 }
 
 /** `claimedAt` 的毫秒值（没写过就是 null）。
@@ -425,9 +427,10 @@ describe("createImages", () => {
         height: 512,
       },
     ]);
-    const imgs = /* SAFETY: 类型断言已复核 */ (
-      tdb.$tables.taskImages as Array<Record<string, unknown>>
-    ).filter((r) => r.taskId === id);
+    /* SAFETY: 类型断言已复核 */
+    const imgs = (tdb.$tables.taskImages as Array<Record<string, unknown>>).filter(
+      (r) => r.taskId === id,
+    );
     expect(imgs).toHaveLength(2);
     const first = imgs.find((r) => r.localPath === "a.png");
     const second = imgs.find((r) => r.localPath === "b.mp4");
@@ -547,7 +550,8 @@ describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
     const job = await hostImpl.findExecJob(id);
     expect(job?.workflowName).toBe("w");
     expect(job?.execPayload).toEqual({
-      nodes: /* SAFETY: 类型断言已复核 */ [{ id: "1", type: "KSampler" }] as Array<unknown>,
+      /* SAFETY: 类型断言已复核 */
+      nodes: [{ id: "1", type: "KSampler" }] as Array<unknown>,
     });
     expect(job?.params).toMatchObject({
       workflowInputs: [{ nodeId: "1", name: "text", value: "x" }],

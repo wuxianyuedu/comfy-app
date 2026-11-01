@@ -304,6 +304,15 @@
     },
     {
       "file": "scripts/affected-launch-wallclock.mjs",
+      "const": "FIRST_PASS_TIMEOUT_RESERVE_MS",
+      "value": 30000,
+      "unit": "毫秒（源码字面写 `30_000`，判据按字面取值）",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "第 1 遍被掐断之后给收尾（日志回吐 / 记账 / BeforeEnd）留的余量。不是判据：它只决定「提交给 vitest 的 timeout」与「还剩多少」之间差多少，两边都由 firstPassLimit() 一处算 —— 此前两处各算一遍，念出来的数比真实掐点还大（cnb-pl9-1k6b45aqm 的 stage-9）。留 0 会让掐断与收尾撞在同一个 deadline 上，那一屏只剩半句。"
+    },
+    {
+      "file": "scripts/affected-launch-wallclock.mjs",
       "const": "PLATFORM_STAGE_KILL_MS",
       "value": 3240000,
       "unit": "毫秒（平台那一刀的名义落点）",

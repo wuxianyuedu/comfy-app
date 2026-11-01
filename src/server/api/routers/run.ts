@@ -86,7 +86,8 @@ export const runRouter = createTRPCRouter({
       if (!row) {
         return {
           run: normalizeProductionRun(null),
-          action: /* SAFETY: 类型断言已复核 */ {
+          /* SAFETY: 类型断言已复核 */
+          action: {
             kind: "idle",
           } as RunAction,
         };
@@ -134,7 +135,8 @@ export const runRouter = createTRPCRouter({
       if (run.status !== "running" && run.status !== "awaiting_approval") {
         return {
           run,
-          action: /* SAFETY: 类型断言已复核 */ {
+          /* SAFETY: 类型断言已复核 */
+          action: {
             kind: "idle",
           } as RunAction,
         };
@@ -154,7 +156,8 @@ export const runRouter = createTRPCRouter({
       if (run.status !== "paused") {
         return {
           run,
-          action: /* SAFETY: 类型断言已复核 */ {
+          /* SAFETY: 类型断言已复核 */
+          action: {
             kind: "idle",
           } as RunAction,
         };
@@ -176,7 +179,8 @@ export const runRouter = createTRPCRouter({
       if (run.status !== "awaiting_approval") {
         return {
           run,
-          action: /* SAFETY: 类型断言已复核 */ {
+          /* SAFETY: 类型断言已复核 */
+          action: {
             kind: "idle",
           } as RunAction,
         };
@@ -333,7 +337,8 @@ export const runRouter = createTRPCRouter({
           message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,
         });
       }
-      const revRaw = /* SAFETY: 类型断言已复核 */ (rec as { rev?: unknown }).rev;
+      /* SAFETY: 类型断言已复核 */
+      const revRaw = (rec as { rev?: unknown }).rev;
       const rev = typeof revRaw === "number" && Number.isFinite(revRaw) ? revRaw : 0;
       const verdict = {
         pass: input.pass,

@@ -29,7 +29,8 @@ const BodySchema = {
     const rawMessages: Array<unknown> = rec.messages;
     const messages: Array<LLMMessage> = rawMessages.map((m: unknown) => {
       // 逐元素断言为最小形状;null/undefined 元素在属性访问处抛 TypeError → 400,与原 any 版一致。
-      const entry = /* SAFETY: 类型断言已复核 */ m as {
+      /* SAFETY: 类型断言已复核 */
+      const entry = m as {
         content?: unknown;
         role?: unknown;
         tool_call_id?: unknown;
@@ -48,7 +49,8 @@ const BodySchema = {
       const base: LLMMessage = { role, content: String(rawContent) };
       // 透传 tool_calls（assistant 消息带）与 tool_call_id（tool 消息带）
       if (role === "assistant" && Array.isArray(entry.tool_calls)) {
-        base.tool_calls = /* SAFETY: 类型断言已复核 */ entry.tool_calls as LLMMessage["tool_calls"];
+        /* SAFETY: 类型断言已复核 */
+        base.tool_calls = entry.tool_calls as LLMMessage["tool_calls"];
       }
       if (role === "tool" && typeof entry.tool_call_id === "string") {
         base.tool_call_id = entry.tool_call_id;
@@ -59,7 +61,8 @@ const BodySchema = {
     // 原 `as any` 透传:非 "local"/"remote" 的值继续透传给 getLLMConfig(按非 remote 处理),
     // 加守卫反而会改变该退化行为,这里只恢复静态类型。
     if (rec.provider) {
-      opts.provider = /* SAFETY: 类型断言已复核 */ rec.provider as LLMProviderType;
+      /* SAFETY: 类型断言已复核 */
+      opts.provider = rec.provider as LLMProviderType;
     }
     if (rec.model) {
       const rawModel: unknown = rec.model;
@@ -72,10 +75,12 @@ const BodySchema = {
       opts.maxTokens = rec.maxTokens;
     }
     if (typeof rec.taskType === "string" && rec.taskType in TASK_TYPES) {
-      opts.taskType = /* SAFETY: 类型断言已复核 */ rec.taskType as TaskType;
+      /* SAFETY: 类型断言已复核 */
+      opts.taskType = rec.taskType as TaskType;
     }
     if (Array.isArray(rec.tools)) {
-      opts.tools = /* SAFETY: 类型断言已复核 */ rec.tools as NonNullable<typeof opts.tools>;
+      /* SAFETY: 类型断言已复核 */
+      opts.tools = rec.tools as NonNullable<typeof opts.tools>;
     }
     return { messages, stream: rec.stream === true, opts };
   },

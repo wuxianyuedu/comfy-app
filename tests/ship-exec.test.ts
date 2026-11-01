@@ -21,7 +21,8 @@ describe("buildSnFromOutput：start-build 的 sn 回读", () => {
     expect(buildSnFromOutput("The token's authorization scope does not match")).toBeNull();
     expect(buildSnFromOutput("")).toBeNull();
     expect(
-      buildSnFromOutput(/* SAFETY: 类型断言已复核 */ undefined as unknown as string),
+      /* SAFETY: 类型断言已复核 */
+      buildSnFromOutput(undefined as unknown as string),
     ).toBeNull();
   });
 

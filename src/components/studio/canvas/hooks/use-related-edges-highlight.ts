@@ -62,7 +62,8 @@ export function readPortFocusRole(
   if (!table || typeof table !== "object") {
     return "none";
   }
-  const role = /* SAFETY: 类型断言已复核 */ (table as Record<string, unknown>)[handle];
+  /* SAFETY: 类型断言已复核 */
+  const role = (table as Record<string, unknown>)[handle];
   return role === "upstream" || role === "downstream" || role === "related" ? role : "none";
 }
 
@@ -121,7 +122,8 @@ export function useRelatedEdgesHighlight(
      * 读渲染期真实节点对象，而不是可能滞后的顶层 nodes 数组。 */
     const selectedIds = new Set<string>();
     state.nodeLookup.forEach((internal, nodeId) => {
-      const userNode = /* SAFETY: 类型断言已复核 */ internal.internals.userNode as Node | undefined;
+      /* SAFETY: 类型断言已复核 */
+      const userNode = internal.internals.userNode as Node | undefined;
       if (userNode?.selected) {
         selectedIds.add(nodeId);
       }
@@ -214,8 +216,10 @@ export function useRelatedEdgesHighlight(
           bucket.downstream.forEach((handle) => (nextTable[handle] = "downstream"));
           bucket.related.forEach((handle) => (nextTable[handle] = "related"));
         }
-        const data = /* SAFETY: 类型断言已复核 */ node.data as Record<string, unknown> | undefined;
-        const previousTable = /* SAFETY: 类型断言已复核 */ data?.[NODE_PORT_FOCUS_DATA_KEY] as
+        /* SAFETY: 类型断言已复核 */
+        const data = node.data as Record<string, unknown> | undefined;
+        /* SAFETY: 类型断言已复核 */
+        const previousTable = data?.[NODE_PORT_FOCUS_DATA_KEY] as
           | Record<string, EdgeFocusRole>
           | undefined;
         /* 没有端口标记且本来就没有字段 → 原样返回，不制造无意义的新对象。 */
@@ -266,9 +270,8 @@ export function useRelatedEdgesHighlight(
       const state = store.getState();
       const ids: Array<string> = [];
       state.nodeLookup.forEach((internal, nodeId) => {
-        const userNode = /* SAFETY: 类型断言已复核 */ internal.internals.userNode as
-          | Node
-          | undefined;
+        /* SAFETY: 类型断言已复核 */
+        const userNode = internal.internals.userNode as Node | undefined;
         if (userNode?.selected) {
           ids.push(nodeId);
         }

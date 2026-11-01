@@ -123,7 +123,8 @@ export function appendStepLog(
     return null;
   }
   const prev = cache.get(taskId) ?? {
-    logs: /* SAFETY: 类型断言已复核 */ [] as Array<StepLogEntry>,
+    /* SAFETY: 类型断言已复核 */
+    logs: [] as Array<StepLogEntry>,
     validationErrors: null,
   };
   // 按 (时间, 消息) 去重 —— 与 ImageGenerationPanel 里的 SSE 去重口径一致。
@@ -163,7 +164,8 @@ export function setStepLogValidationErrors(
     return;
   }
   const prev = cache.get(taskId) ?? {
-    logs: /* SAFETY: 类型断言已复核 */ [] as Array<StepLogEntry>,
+    /* SAFETY: 类型断言已复核 */
+    logs: [] as Array<StepLogEntry>,
     validationErrors: null,
   };
   touch(taskId, { logs: prev.logs, validationErrors: errs });
@@ -181,7 +183,8 @@ export function patchStepLogMeta(
     return;
   }
   const prev = cache.get(taskId) ?? {
-    logs: /* SAFETY: 类型断言已复核 */ [] as Array<StepLogEntry>,
+    /* SAFETY: 类型断言已复核 */
+    logs: [] as Array<StepLogEntry>,
     validationErrors: null,
   };
   touch(taskId, {

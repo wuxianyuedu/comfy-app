@@ -96,7 +96,8 @@ export function readElementBox(
   /* `Element` 的 `clientWidth` 等只在 `HTMLElement` / `Element` 上都有；
    * 用 `typeof` 守卫而不是 `instanceof HTMLElement`：jsdom 与 SSR 的构造器
    * 可能不是同一个（跨 realm 时 `instanceof` 会假阴性）。 */
-  const box = /* SAFETY: 类型断言已复核 */ el as Element & {
+  /* SAFETY: 类型断言已复核 */
+  const box = el as Element & {
     clientHeight?: number;
     clientWidth?: number;
     scrollHeight?: number;
@@ -180,7 +181,8 @@ export function readLineHeight(el: Element | null | undefined, lineCount: number
   if (!el || lineCount <= 0) {
     return null;
   }
-  const scrollHeight = /* SAFETY: 类型断言已复核 */ (el as { scrollHeight?: number }).scrollHeight;
+  /* SAFETY: 类型断言已复核 */
+  const scrollHeight = (el as { scrollHeight?: number }).scrollHeight;
   if (typeof scrollHeight !== "number" || scrollHeight <= 0) {
     return null;
   }

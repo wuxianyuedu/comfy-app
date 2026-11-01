@@ -60,7 +60,8 @@ export type UseMaterialLibraryOptions = {
 /** 把 unknown 抛值捞成中文消息——失败路径始终有可读文案（硬规则）。 */
 function errMsg(e: unknown, fallback: string): string {
   if (typeof e === "object" && e !== null && "message" in e) {
-    const m: unknown = /* SAFETY: 类型断言已复核 */ (e as { message?: unknown }).message;
+    /* SAFETY: 类型断言已复核 */
+    const m: unknown = (e as { message?: unknown }).message;
     if (typeof m === "string") {
       return m;
     }

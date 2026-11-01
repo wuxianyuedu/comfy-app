@@ -138,23 +138,24 @@ export function RgthreePowerLoraLoaderBody({ widgets }: { widgets: Array<unknown
   // 逐 lora 行：过滤掉表头 widget 与空占位。
   // 行的形状取决于包（裸文件名字符串，或一条 widget 记录）。
   type PowerLoraWidget = string | Record<string, unknown>;
-  const loras: Array<PowerLoraWidget> = /* SAFETY: 类型断言已复核 */ (
-    (widgets ?? []) as Array<PowerLoraWidget>
-  ).filter((widget) => {
-    if (widget === null || widget === undefined) {
-      return false;
-    }
-    if (typeof widget !== "object" || Array.isArray(widget)) {
-      return typeof widget === "string" && widget.length > 0; // bare lora filename
-    }
-    if (Object.keys(widget).length === 0) {
-      return false;
-    } // {} placeholder
-    if (widget.type === "PowerLoraLoaderHeaderWidget") {
-      return false;
-    } // header widget
-    return true; // real lora tuple
-  });
+  /* SAFETY: 类型断言已复核 */
+  const loras: Array<PowerLoraWidget> = ((widgets ?? []) as Array<PowerLoraWidget>).filter(
+    (widget) => {
+      if (widget === null || widget === undefined) {
+        return false;
+      }
+      if (typeof widget !== "object" || Array.isArray(widget)) {
+        return typeof widget === "string" && widget.length > 0; // bare lora filename
+      }
+      if (Object.keys(widget).length === 0) {
+        return false;
+      } // {} placeholder
+      if (widget.type === "PowerLoraLoaderHeaderWidget") {
+        return false;
+      } // header widget
+      return true; // real lora tuple
+    },
+  );
 
   return (
     <div className="flex w-full flex-col gap-0.75 px-1 pt-0.5 pb-1">

@@ -71,16 +71,19 @@ const meta = {
   title: "UI/Sidebar",
   component: Sidebar,
   args: { children: null },
-  argTypes: /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  argTypes: {
     variant: {
       control: {
-        type: /* SAFETY: 类型断言已复核 */ "select" as const,
+        /* SAFETY: 类型断言已复核 */
+        type: "select" as const,
       },
       options: MENU_BUTTON_VARIANTS,
     },
     size: {
       control: {
-        type: /* SAFETY: 类型断言已复核 */ "select" as const,
+        /* SAFETY: 类型断言已复核 */
+        type: "select" as const,
       },
       options: MENU_BUTTON_SIZES,
     },

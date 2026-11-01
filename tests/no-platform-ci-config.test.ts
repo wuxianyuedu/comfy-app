@@ -119,7 +119,8 @@ function repoTopLevel(): Array<string> {
  * 两条都是字面量：名单不许泛化成「自带 runner 的都放行」（那等于把判据关掉），
  * 日期不许省（省了它，「临时」就只剩注释里的一句话）。
  */
-const PROBE_PIPELINES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const PROBE_PIPELINES = [
   "api_trigger_probe_a",
   "api_trigger_probe_b",
   "api_trigger_probe_c",
@@ -1200,7 +1201,8 @@ export function pipelineLockKeyTemplate(text: string): string | null {
  * 收成白名单而不是黑名单，是因为这一格的失效形态是「代入了一个看起来对、实际被
  * 平台解析成别的东西的变量」—— 黑名单只能拦住已知的那一个。
  */
-const LOCK_KEY_ALLOWED_VARS = /* SAFETY: 类型断言已复核 */ ["CNB_PULL_REQUEST_IID"] as const;
+/* SAFETY: 类型断言已复核 */
+const LOCK_KEY_ALLOWED_VARS = ["CNB_PULL_REQUEST_IID"] as const;
 
 /**
  * 把 `lock.key` 原文按一次「事件 + 上下文」跑出**平台会算出来的那个 key**。
@@ -2245,7 +2247,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     // ① 代入的变量必须在白名单里 —— `CNB_BRANCH` 正是那个会退化成目标分支的。
     const used = [...template.matchAll(/\$\{?([A-Za-z0-9_]+)\}?/g)].map((m) => m[1] ?? "");
     const stray = used.filter(
-      (name) => !LOCK_KEY_ALLOWED_VARS.includes(/* SAFETY: 类型断言已复核 */ name as never),
+      /* SAFETY: 类型断言已复核 */
+      (name) => !LOCK_KEY_ALLOWED_VARS.includes(name as never),
     );
     expect(
       stray,
@@ -2307,7 +2310,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(new Set(daily.map((r) => r.stagesRef)).size).toBe(1);
     expect(daily.every((r) => r.event !== "pull_request")).toBe(true);
     /* 单跑：同一档的 web 与 api 各引用同一把、且引用同一份 stage 清单。 */
-    for (const suffix of /* SAFETY: 类型断言已复核 */ ["build", "e2e", "unit"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const suffix of ["build", "e2e", "unit"] as const) {
       const same = rows.filter((r) => r.lockRef === `lock_oneshot_${suffix}`);
       expect(same.length, `单跑 ${suffix} 那两条应有一把共用的类锁`).toBe(2);
       expect(new Set(same.map((r) => r.stagesRef)).size).toBe(1);

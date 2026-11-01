@@ -106,7 +106,7 @@ export function resolveRailCollapsed(input: {
   preferredOpen?: boolean;
 }): boolean {
   const { narrow, crossings, choice, preferredOpen = true } = input;
-  if (choice !== null && choice.atCrossing === crossings) {
+  if (choice?.atCrossing === crossings) {
     return !choice.open;
   }
   if (narrow) {

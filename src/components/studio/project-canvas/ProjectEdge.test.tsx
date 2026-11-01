@@ -19,7 +19,8 @@ afterEach(cleanup);
 const GRADIENT_STROKE = "url(#canvas-edge-gradient)";
 
 function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     id: "pe-test",
     source: "1",
     target: "2",

@@ -117,7 +117,8 @@ export function WirePortRows({
       draggable: true,
       onDragStart: (e: React.DragEvent<HTMLDivElement>) => {
         /* 输入框 / 下拉 / 按钮上起手不拖（与 widget 行同守卫）。 */
-        const target = /* SAFETY: 类型断言已复核 */ e.target as HTMLElement | null;
+        /* SAFETY: 类型断言已复核 */
+        const target = e.target as HTMLElement | null;
         if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
           e.preventDefault();
           return;

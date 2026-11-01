@@ -17,7 +17,8 @@ type ExitModule = {
   writeAppServiceExit: (root: string, input: Record<string, unknown>) => boolean;
 };
 
-const mod = /* SAFETY: 类型断言已复核 */ (await import(
+/* SAFETY: 类型断言已复核 */
+const mod = (await import(
   pathToFileURL(join(process.cwd(), "scripts", "app-service-exit.mjs")).href
 )) as unknown as ExitModule;
 
@@ -35,9 +36,11 @@ afterEach(() => {
 });
 
 function read(root: string): Record<string, unknown> {
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(
-    readFileSync(join(root, "run", mod.APP_SERVICE_EXIT_FILE), "utf8"),
-  ) as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(readFileSync(join(root, "run", mod.APP_SERVICE_EXIT_FILE), "utf8")) as Record<
+    string,
+    unknown
+  >;
 }
 
 describe("writeAppServiceExit", () => {

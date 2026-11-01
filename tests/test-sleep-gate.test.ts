@@ -87,7 +87,8 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string };
+    /* SAFETY: 类型断言已复核 */
+    const e = error as { stderr?: string; stdout?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -350,7 +351,8 @@ describe("裸 sleep 门禁：扫描面在枚举途中消失（同族第 5 条）
           removed = true;
           rmSync(dir, { recursive: true, force: true });
         }
-        return /* SAFETY: 类型断言已复核 */ (
+        /* SAFETY: 类型断言已复核 */
+        return (
           realReaddir as (p: typeof dirPath, o: typeof options) => ReturnType<typeof realReaddir>
         )(dirPath, options);
       });

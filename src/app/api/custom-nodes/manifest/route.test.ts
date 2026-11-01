@@ -63,7 +63,8 @@ describe("三相比两相：404 与 500 是两件事", () => {
     readMock.mockReturnValue({ kind: "missing" });
     const res = await GET();
     expect(res.status).toBe(404);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       error: { code: string; message: string };
     };
     expect(body.error.code).toBe("custom_nodes.manifest_missing");
@@ -75,7 +76,8 @@ describe("三相比两相：404 与 500 是两件事", () => {
     readMock.mockReturnValue({ kind: "unreadable", detail: "EISDIR" });
     const res = await GET();
     expect(res.status).toBe(500);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       error: { code: string; message: string };
     };
     expect(body.error.code).toBe("custom_nodes.manifest_unreadable");
@@ -84,11 +86,13 @@ describe("三相比两相：404 与 500 是两件事", () => {
 
   it("两相的码互不相同：客户端按码分档说话，混了就等于没分", async () => {
     readMock.mockReturnValue({ kind: "missing" });
-    const missing = /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const missing = (await (await GET()).json()) as {
       error: { code: string };
     };
     readMock.mockReturnValue({ kind: "unreadable", detail: "EACCES" });
-    const unreadable = /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const unreadable = (await (await GET()).json()) as {
       error: { code: string };
     };
     expect(missing.error.code).not.toBe(unreadable.error.code);

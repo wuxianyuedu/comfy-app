@@ -33,7 +33,8 @@ function controller(
     desktopManaged: false,
   },
 ): ReadySettingsPageController {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     comfyDefaultPort: 8188,
     comfyInstance: instance,
     comfyStorage: null,

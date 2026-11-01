@@ -45,7 +45,8 @@ function run(args: Array<string> = []) {
     });
     return { code: 0, output };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as {
+    /* SAFETY: 类型断言已复核 */
+    const e = error as {
       status?: number;
       stderr?: string;
       stdout?: string;

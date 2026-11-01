@@ -26,7 +26,8 @@ import {
   type FitBoundsNode,
 } from "../subgraph-viewport";
 
-const FIT_FALLBACK_SIZE = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+const FIT_FALLBACK_SIZE = {
   width: 240,
   height: 80,
 } as const;

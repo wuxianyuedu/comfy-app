@@ -63,7 +63,8 @@ const mockedUpload = vi.mocked(uploadBgm);
 
 /* tRPC 的 resolver 类型是 Resolver<...>（不是 vi.Mock），测试里按 Mock 取用。
  * 收敛成一个 helper，避免每处都写一次双重断言。 */
-const mockOf = (fn: unknown) => /* SAFETY: 类型断言已复核 */ fn as Mock;
+/* SAFETY: 类型断言已复核 */
+const mockOf = (fn: unknown) => fn as Mock;
 
 const vanilla = {
   skill: { list: { query: mockOf(vanillaApi.skill.list.query) } },
@@ -93,7 +94,8 @@ function runningFilm(id = "f-1") {
     framesPerShot: 49,
     subtitleOn: true,
     bgmName: null,
-    status: /* SAFETY: 类型断言已复核 */ "GENERATING" as const,
+    /* SAFETY: 类型断言已复核 */
+    status: "GENERATING" as const,
     progress: 10,
     finalVideo: null,
     error: null,

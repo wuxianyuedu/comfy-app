@@ -75,7 +75,8 @@ function runCheck(): { code: number; output: string } {
     });
     return { code: 0, output };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as {
+    /* SAFETY: 类型断言已复核 */
+    const e = error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -164,7 +165,8 @@ function writeText(abs: string, text: string): void {
       }
       lastError = "写回后读回的内容与预期不一致";
     } catch (error) {
-      lastError = /* SAFETY: 类型断言已复核 */ (error as Error).message;
+      /* SAFETY: 类型断言已复核 */
+      lastError = (error as Error).message;
     }
   }
   throw new Error(
@@ -1088,7 +1090,8 @@ describe("doc:render 的自动修档（--check --autofix，ISSUE #1981）", () =
       });
       return { code: 0, output };
     } catch (error) {
-      const e = /* SAFETY: 类型断言已复核 */ error as {
+      /* SAFETY: 类型断言已复核 */
+      const e = error as {
         status?: number;
         stderr?: string;
         stdout?: string;
@@ -1210,7 +1213,8 @@ describe("doc:render 的 scoped 档（--only，ISSUE #2527）", () => {
       });
       return { code: 0, output };
     } catch (error) {
-      const e = /* SAFETY: 类型断言已复核 */ error as {
+      /* SAFETY: 类型断言已复核 */
+      const e = error as {
         status?: number;
         stderr?: string;
         stdout?: string;

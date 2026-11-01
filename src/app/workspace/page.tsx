@@ -134,7 +134,8 @@ export default function WorkspacePage() {
               updatedAt: project.updatedAt
                 ? (timeAgo(project.updatedAt, { suffix: "修改" }) ?? "刚刚修改")
                 : "刚刚",
-              kind: /* SAFETY: 类型断言已复核 */ "canvas" as const,
+              /* SAFETY: 类型断言已复核 */
+              kind: "canvas" as const,
               subtitle: nodeCount > 0 ? `${nodeCount} 节点 · ${edgeCount} 连线` : "空画布",
               thumbnails: [],
             };

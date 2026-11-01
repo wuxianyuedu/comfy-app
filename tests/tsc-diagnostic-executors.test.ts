@@ -23,8 +23,10 @@ const LEDGER = path.join(REAL_ROOT, "scripts", ".tsc-diagnostic-executors.json")
 const READERS = path.join(REAL_ROOT, "scripts", ".declaration-readers.json");
 
 /** 真台账的一份深拷贝（用例里改完必须还原的那份）。 */
-const REAL_LEDGER = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(LEDGER, "utf8")) as Ledger;
-const REAL_READERS = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(READERS, "utf8")) as {
+/* SAFETY: 类型断言已复核 */
+const REAL_LEDGER = JSON.parse(readFileSync(LEDGER, "utf8")) as Ledger;
+/* SAFETY: 类型断言已复核 */
+const REAL_READERS = JSON.parse(readFileSync(READERS, "utf8")) as {
   carriers: Array<{ id: string; reader: string }>;
 };
 
@@ -464,9 +466,10 @@ test("--update 收紧变短的基线 → 退 0 且真的写回台账", ({ repo }
   });
   const { code } = repo.run(["--update"]);
   expect(code).toBe(0);
-  const written = /* SAFETY: 类型断言已复核 */ JSON.parse(
-    repo.read("scripts/.tsc-diagnostic-executors.json"),
-  ) as { entries: Array<{ baseline: Record<string, number> }> };
+  /* SAFETY: 类型断言已复核 */
+  const written = JSON.parse(repo.read("scripts/.tsc-diagnostic-executors.json")) as {
+    entries: Array<{ baseline: Record<string, number> }>;
+  };
   expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(30);
 });
 
@@ -486,9 +489,10 @@ test("--update 遇到基线**上涨**时拒绝写入并退 2", ({ repo }) => {
   expect(code).toBe(2);
   expect(output).toContain("只许降不许升");
   /* 台账必须原样不动 —— 「顺手把上涨记进基线」正是零增量那一档的失效形态。 */
-  const written = /* SAFETY: 类型断言已复核 */ JSON.parse(
-    repo.read("scripts/.tsc-diagnostic-executors.json"),
-  ) as { entries: Array<{ baseline: Record<string, number> }> };
+  /* SAFETY: 类型断言已复核 */
+  const written = JSON.parse(repo.read("scripts/.tsc-diagnostic-executors.json")) as {
+    entries: Array<{ baseline: Record<string, number> }>;
+  };
   expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(57);
 });
 

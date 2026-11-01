@@ -41,8 +41,10 @@ function parseAgentResponse(data: unknown): AgentChatResponse {
         (call) => typeof call.id === "string" && typeof call.name === "string" && call.id !== "",
       )
       .map((call) => ({
-        id: /* SAFETY: 类型断言已复核 */ call.id as string,
-        name: /* SAFETY: 类型断言已复核 */ call.name as string,
+        /* SAFETY: 类型断言已复核 */
+        id: call.id as string,
+        /* SAFETY: 类型断言已复核 */
+        name: call.name as string,
         arguments: typeof call.arguments === "string" ? call.arguments : "{}",
       }));
   }

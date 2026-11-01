@@ -59,7 +59,8 @@ export function ImageRedrawPanel({
         <RadioGroup
           className="flex flex-row gap-4"
           onValueChange={(v) =>
-            controller.setMode(/* SAFETY: 类型断言已复核 */ v as "upscale" | "inpaint")
+            /* SAFETY: 类型断言已复核 */
+            controller.setMode(v as "upscale" | "inpaint")
           }
           value={controller.mode}
         >

@@ -188,7 +188,8 @@ function asMessageRecord(raw: unknown): MessageRecord | null {
   if (typeof raw !== "object" || raw === null) {
     return null;
   }
-  const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const o = raw as Record<string, unknown>;
   if (typeof o.id !== "string" || o.id === "") {
     return null;
   }
@@ -203,13 +204,15 @@ function asMessageRecord(raw: unknown): MessageRecord | null {
   }
   if (
     typeof o.kind !== "string" ||
-    !MESSAGE_KINDS.includes(/* SAFETY: 类型断言已复核 */ o.kind as MessageKind)
+    /* SAFETY: 类型断言已复核 */
+    !MESSAGE_KINDS.includes(o.kind as MessageKind)
   ) {
     return null;
   }
   return {
     id: o.id,
-    kind: /* SAFETY: 类型断言已复核 */ o.kind as MessageKind,
+    /* SAFETY: 类型断言已复核 */
+    kind: o.kind as MessageKind,
     title: o.title,
     body: o.body,
     time: o.time,

@@ -176,8 +176,9 @@ describe("oxfmt 格式判据（硬闸）", () => {
 });
 
 describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
+  /* SAFETY: 类型断言已复核 */
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
+  const mod = require("../scripts/check-format.cjs") as {
     globToRegExp: (glob: string) => RegExp;
     isIgnored: (rel: string) => boolean;
   };

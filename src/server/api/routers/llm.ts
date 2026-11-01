@@ -32,14 +32,8 @@ const adapterSchema = z.object({
 /** 合法的任务类型 key（用于温度覆盖）。与 `TASK_TYPES`（~/lib/llm/types.ts）对齐——
  *  这里是「写入侧」白名单，漏了某个 key 的症状是：设置页能显示该档（读侧遍历
  *  TASK_TYPES）、保存时却被 zod 拒成 BAD_REQUEST。 */
-const taskTypeKeys = /* SAFETY: 类型断言已复核 */ [
-  "txt2img",
-  "img2video",
-  "chat",
-  "code",
-  "creative",
-  "review",
-] as const;
+/* SAFETY: 类型断言已复核 */
+const taskTypeKeys = ["txt2img", "img2video", "chat", "code", "creative", "review"] as const;
 
 /** 候选模型条目：兼容旧纯名字字符串与新对象（远端条目可带独立接口 / 密钥）。
  *  对象那一半的形状**不在这里定义** —— 它与弹窗草稿写回的那一枚条目是同一份

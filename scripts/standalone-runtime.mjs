@@ -219,7 +219,7 @@ function main() {
     // 已经没了而宿主还在提交。两处都只在「还活着」时回收——child 已退出再补一刀，
     // taskkill 报的是「没有找到进程」，于是每条正常退出路径都会在日志里留一行假的
     // reap FAILED（判据与 dev-launcher 的 reapAll 同一形态：exitCode/signalCode 都判）。
-    if (host && host.exitCode === null && host.signalCode === null) {
+    if (host?.exitCode === null && host.signalCode === null) {
       reapTree(host.pid);
     }
     if (server.exitCode === null && server.signalCode === null) {

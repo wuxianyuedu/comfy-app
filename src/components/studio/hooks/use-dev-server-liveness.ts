@@ -221,7 +221,8 @@ async function probeBootId(): Promise<ProbeResult> {
         routeTableStale: res.status === 404,
       };
     }
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const data = (await res.json()) as {
       bootId?: unknown;
       runId?: unknown;
     };

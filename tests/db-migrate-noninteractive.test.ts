@@ -102,9 +102,10 @@ function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: Array<string> = [
 
 describe("pnpm db:migrate 非交互可用", () => {
   it("package.json 的 db:migrate 经 scripts/db-migrate.mjs，而不是裸 drizzle-kit migrate", () => {
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
-    ) as { scripts: Record<string, string> };
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
     // 裸 `drizzle-kit migrate` 在前提不成立时「先建库、再退 1、留空壳」（实测）。
     expect(pkg.scripts["db:migrate"]).toBe("node scripts/db-migrate.mjs");
     expect(pkg.scripts["db:migrate"]).not.toContain("drizzle-kit");
@@ -250,7 +251,8 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
         /* 配置在 **import 时**读环境变量，所以每一档都要重新求值模块，
          * 否则第一档的常量会被 module 缓存带到后面四档去（那是自证式的假绿）。 */
         vi.resetModules();
-        const imported = /* SAFETY: 类型断言已复核 */ (await import("../drizzle.config")) as {
+        /* SAFETY: 类型断言已复核 */
+        const imported = (await import("../drizzle.config")) as {
           default?: { dbCredentials?: { url?: string } };
         };
         const url = imported.default?.dbCredentials?.url;

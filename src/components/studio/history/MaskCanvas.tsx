@@ -7,7 +7,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 
-const BRUSH_SIZES = /* SAFETY: 类型断言已复核 */ [8, 20, 40] as const;
+/* SAFETY: 类型断言已复核 */
+const BRUSH_SIZES = [8, 20, 40] as const;
 
 export type MaskCanvasProps = {
   disabled?: boolean;

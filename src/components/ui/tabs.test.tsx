@@ -80,7 +80,8 @@ describe("ui/tabs 的命名钩子", () => {
        数到 3 会把它误写成「三块常驻」，而面板常驻与否直接影响调用处能不能把
        表单状态放在面板里（卸载即丢）。切换后在位的那块跟着换，见下面那条用例。 */
     expect(panels).toHaveLength(1);
-    const panel = /* SAFETY: 类型断言已复核 */ panels[0] as HTMLElement;
+    /* SAFETY: 类型断言已复核 */
+    const panel = panels[0] as HTMLElement;
     expect(panel.parentElement).toBe(root);
     expect(panel.textContent).toContain("参数区");
   });

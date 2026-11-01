@@ -99,7 +99,7 @@ export async function connect(): Promise<void> {
      * 抛错会让 HTTP 探测一次都发不出去，见 ISSUE #344），改为回落配置地址。
      * 那条回落路径必须在这里补一次真实探测才能判定「能不能用」——否则
      * WS 会拿着一个连不上的地址去建连，自动启动也不再被触发。 */
-    if (!(await probeComfyBase())) {
+    if ((await probeComfyBase()) === null) {
       throw new Error("Configured ComfyUI instance is not reachable");
     }
   } catch {
@@ -166,6 +166,7 @@ export async function connect(): Promise<void> {
     return;
   }
   // await 期间可能已有别的调用建好了连接
+  // oxlint-disable-next-line strict-boolean-expressions -- 类型层把 s.ws 收窄成恒 null，但上面 await 期间并发 connect() 可能已建好连接（竞态见上），这是运行期防御性判空
   if (s.ws) {
     s.connecting = false;
     return;
@@ -197,7 +198,9 @@ export async function connect(): Promise<void> {
     kickQueue();
   });
   ws.on("message", (data) => {
-    fireAndForget(handleMessage(/* SAFETY: 类型断言已复核 */ (data as Buffer).toString()), (e) => {
+    /* SAFETY: 类型断言已复核 */
+    const text = (data as Buffer).toString();
+    fireAndForget(handleMessage(text), (e) => {
       logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`);
     });
   });
@@ -306,15 +309,16 @@ export async function handleMessage(raw: string) {
     trace("ws", null, "WS 消息非合法 JSON", { raw });
     return;
   }
-  if (!msg || typeof msg !== "object") {
+  if (typeof msg !== "object" || msg === null) {
     return;
   }
   // ComfyUI WS 消息的最小结构视图（协议判断委托给 comfyProtocol Adapter）。
-  const message = /* SAFETY: 类型断言已复核 */ msg as ComfyWsMessage;
+  /* SAFETY: 类型断言已复核 */
+  const message = msg as ComfyWsMessage;
   const data = message.data ?? {};
   const promptId: string | undefined =
     typeof data.prompt_id === "string" ? data.prompt_id : undefined;
-  if (!promptId) {
+  if (promptId === undefined || promptId === "") {
     /* #1315 取证的前提：这一跳以前是**静默**的，于是「WS 到底有没有帧进来」在 trace 里
      * 数不出来（其余三个 `trace("ws", …)` 出口都在它之后）。本机第一次数出来的是
      * 一轮 35 条：`status`×4 / `kaytool.resources`×16 / `dasiwa.system_monitor`×15
@@ -330,7 +334,7 @@ export async function handleMessage(raw: string) {
   }
   const s = state();
   const taskId = s.promptToTask.get(promptId);
-  if (!taskId) {
+  if (taskId === undefined) {
     /* 无归属任务的 ComfyUI 帧（例如别处提交的 prompt）——只落 trace，不进面板。 */
     trace("ws", null, "WS 消息无归属任务", { promptId, message: msg });
     return;
@@ -400,7 +404,7 @@ export async function handleMessage(raw: string) {
     const rawNodeId: unknown = data.node;
     const nodeId =
       typeof rawNodeId === "string" || typeof rawNodeId === "number" ? String(rawNodeId) : null;
-    if (nodeId) {
+    if (nodeId !== null && nodeId !== "") {
       const classType = classTypeForNode(s.executedWorkflow.get(taskId), nodeId);
       node = {
         id: nodeId,
@@ -410,7 +414,7 @@ export async function handleMessage(raw: string) {
          * 画布看的中文标签，而状态栏那一格历史上显示的是**类名**（此前只活在内存
          * 的 `lastNodeByTask` 里，host 执行时 Next 读不到）。类名跟着快照一起落库，
          * 两个宿主才是同一份契约；认不出类名时两者都不带。 */
-        ...(classType ? { classType, label: nodeLabel(classType) } : {}),
+        ...(classType !== undefined ? { classType, label: nodeLabel(classType) } : {}),
       };
     }
     /* 进度回写走「只在非终态行生效」的 compare-and-set：本任务若已被

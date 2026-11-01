@@ -9,11 +9,13 @@ import { GET } from "./route";
 async function buildId(): Promise<string> {
   const res = await GET();
   expect(res.headers.get("Cache-Control")).toBe("no-store");
-  const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+  /* SAFETY: 类型断言已复核 */
+  const data = (await res.json()) as {
     buildId?: unknown;
   };
   expect(typeof data.buildId).toBe("string");
-  return /* SAFETY: 类型断言已复核 */ data.buildId as string;
+  /* SAFETY: 类型断言已复核 */
+  return data.buildId as string;
 }
 
 describe("GET /api/dev/build-id", () => {

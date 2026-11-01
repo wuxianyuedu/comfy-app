@@ -88,9 +88,8 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
     /* 表对象上的 `id` 列：子类不传 `idColumn` 时的约定。缺席属**装配错误**
      *  （基类拿到了一张没有 id 的表），在这里显式失败 —— 原来的 `!` 会把
      *  它变成下游某次 SQL 上的莫名报错。 */
-    const implicit = /* SAFETY: 类型断言已复核 */ (
-      this.table as unknown as Record<string, AnySQLiteColumn>
-    ).id;
+    /* SAFETY: 类型断言已复核 */
+    const implicit = (this.table as unknown as Record<string, AnySQLiteColumn>).id;
     if (!implicit) {
       throw new AppError("仓储基类需要一张带 id 列的表（或显式传入 idColumn）");
     }
@@ -99,19 +98,21 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
 
   async findById(id: string): Promise<T | null> {
     const rows = await db.select().from(this.table).where(eq(this.id, id)).limit(1);
-    return /* SAFETY: 类型断言已复核 */ (rows[0] as T) ?? null;
+    /* SAFETY: 类型断言已复核 */
+    return (rows[0] as T) ?? null;
   }
 
   async findAll(): Promise<Array<T>> {
-    return /* SAFETY: 类型断言已复核 */ (await db.select().from(this.table)) as Array<T>;
+    /* SAFETY: 类型断言已复核 */
+    return (await db.select().from(this.table)) as Array<T>;
   }
 
   async create(entity: T): Promise<T> {
-    const rows = await db
-      .insert(this.table)
-      .values(/* SAFETY: 类型断言已复核 */ entity as Record<string, unknown>)
-      .returning();
-    return /* SAFETY: 类型断言已复核 */ rows[0] as T;
+    /* SAFETY: 类型断言已复核 */
+    const values = entity as Record<string, unknown>;
+    const rows = await db.insert(this.table).values(values).returning();
+    /* SAFETY: 类型断言已复核 */
+    return rows[0] as T;
   }
 
   async update(id: string, patch: Partial<T>): Promise<T> {
@@ -119,12 +120,11 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
     if (!existing) {
       throw new NotFoundError(`记录不存在: ${id}`);
     }
-    const rows = await db
-      .update(this.table)
-      .set(/* SAFETY: 类型断言已复核 */ patch as Record<string, unknown>)
-      .where(eq(this.id, id))
-      .returning();
-    return /* SAFETY: 类型断言已复核 */ rows[0] as T;
+    /* SAFETY: 类型断言已复核 */
+    const values = patch as Record<string, unknown>;
+    const rows = await db.update(this.table).set(values).where(eq(this.id, id)).returning();
+    /* SAFETY: 类型断言已复核 */
+    return rows[0] as T;
   }
 
   async delete(id: string): Promise<void> {

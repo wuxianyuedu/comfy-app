@@ -22,10 +22,11 @@ export type ExecutionShapes = {
  *  `nodes` 是 RAW 形态的成立条件：litegraph 存盘一定有它，空数组等于没有节点，
  *  拿去 comfy-cli 只会得到一份空图。 */
 export function hasRawContent(rawJson: unknown): boolean {
-  if (!rawJson || typeof rawJson !== "object" || Array.isArray(rawJson)) {
+  if (typeof rawJson !== "object" || rawJson === null || Array.isArray(rawJson)) {
     return false;
   }
-  const nodes = /* SAFETY: 类型断言已复核 */ (rawJson as Record<string, unknown>).nodes;
+  /* SAFETY: 类型断言已复核 */
+  const nodes = (rawJson as Record<string, unknown>).nodes;
   return Array.isArray(nodes) && nodes.length > 0;
 }
 

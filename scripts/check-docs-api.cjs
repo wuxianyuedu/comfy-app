@@ -355,7 +355,10 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
  * 读不到结论，与「全是 warning」同罪。`[info]` / `[warning]` 标签带 ANSI 色，
  * 判读前先剥色。
  *
- * @param {string} log typedoc 的日志尾巴（原样，含 ANSI 色码）
+ * @param {string | undefined} log typedoc 的日志尾巴（原样，含 ANSI 色码）。
+ *   声明可缺是因为 `runTypedoc()` 的 `log` 在**起不来**那一支（`typedoc not installed`）
+ *   与其余失败支之间形态不一，而契约测试直接把 `log` 喂进来 —— 与
+ *   `premerge-timing.mjs` 那批「外部数据按实测声明」同口径。
  * @returns {{problems: string[]}}
  */
 function judgeTypedocTail(log) {

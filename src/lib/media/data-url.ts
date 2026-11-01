@@ -93,7 +93,8 @@ export function wrapBase64(base64: string, mime: string): string {
  */
 export function toBase64(bytes: Uint8Array): string {
   /* Node / 服务端：`Buffer` 走原生实现（大图快一个数量级）。 */
-  const bufferCtor = /* SAFETY: 类型断言已复核 */ (
+  /* SAFETY: 类型断言已复核 */
+  const bufferCtor = (
     globalThis as {
       Buffer?: { from(b: Uint8Array): { toString(enc: string): string } };
     }

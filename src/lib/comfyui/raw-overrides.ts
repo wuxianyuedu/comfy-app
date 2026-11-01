@@ -128,7 +128,7 @@ function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
     /* 还有下一段 ⇒ 本节点必须是子图 wrapper：用它的 `type`（子图 UUID）定位
      *  子图定义，下一段在该定义的 nodes 里继续找。 */
     const classType = typeof node.type === "string" ? node.type : undefined;
-    const sub = classType ? defsByUid.get(classType) : undefined;
+    const sub = classType !== undefined && classType !== "" ? defsByUid.get(classType) : undefined;
     if (!sub || !Array.isArray(sub.nodes)) {
       return null;
     }
@@ -142,10 +142,11 @@ function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
  *  节点」用的是**同一条定位逻辑**（`resolveRawNode`），两处各算各的迟早会给出不同的
  *  节点（消费方见 `graph-node-class.ts`，ISSUE #1202）。 */
 export function rawUiNodeType(raw: unknown, nodeId: string): string | undefined {
-  if (!raw || typeof raw !== "object" || !nodeId) {
+  if (typeof raw !== "object" || raw === null || !nodeId) {
     return undefined;
   }
-  const type = resolveRawNode(/* SAFETY: 类型断言已复核 */ raw as JsonRecord, nodeId)?.type;
+  /* SAFETY: 类型断言已复核 */
+  const type = resolveRawNode(raw as JsonRecord, nodeId)?.type;
   return typeof type === "string" && type ? type : undefined;
 }
 /** 具名控件输入在 UI 节点 `widgets_values` 数组里的下标。 */
@@ -153,6 +154,7 @@ function widgetSlot(node: RawUiNode, name: string): number {
   const inputs = node?.inputs ?? [];
   let slot = 0;
   for (const inp of inputs) {
+    // oxlint-disable-next-line strict-boolean-expressions -- widget 标记是「字符串名或 {name} 对象」二形（外部 JSON），按任意真值判「有没有控件」
     if (inp?.widget) {
       if (inp.name === name) {
         return slot;
@@ -168,6 +170,7 @@ function seedWidgetSlot(node: RawUiNode): number {
   const inputs = node?.inputs ?? [];
   let slot = 0;
   for (const inp of inputs) {
+    // oxlint-disable-next-line strict-boolean-expressions -- widget 标记是「字符串名或 {name} 对象」二形（外部 JSON），按任意真值判「有没有控件」
     if (!inp?.widget) {
       continue;
     }
@@ -191,6 +194,7 @@ function seedWidgetSlot(node: RawUiNode): number {
 function seedWidgetName(node: RawUiNode): string | null {
   const inputs = node?.inputs ?? [];
   for (const inp of inputs) {
+    // oxlint-disable-next-line strict-boolean-expressions -- widget 标记是「字符串名或 {name} 对象」二形（外部 JSON），按任意真值判「有没有控件」
     if (!inp?.widget) {
       continue;
     }
@@ -216,6 +220,7 @@ function widgetInputCount(node: RawUiNode): number {
   const inputs = node?.inputs ?? [];
   let count = 0;
   for (const inp of inputs) {
+    // oxlint-disable-next-line strict-boolean-expressions -- widget 标记是「字符串名或 {name} 对象」二形（外部 JSON），按任意真值判「有没有控件」
     if (inp?.widget) {
       count++;
     }
@@ -322,7 +327,7 @@ type SubgraphTargets = {
  */
 function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTargets | null {
   const classType = typeof wrapper.type === "string" ? wrapper.type : undefined;
-  if (!classType) {
+  if (classType === undefined || classType === "") {
     return null;
   }
   const sub = subgraphDefs(raw).get(classType);
@@ -345,7 +350,8 @@ function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTa
     if (l == null || typeof l !== "object") {
       continue;
     }
-    const link = /* SAFETY: 类型断言已复核 */ l as SubgraphLink;
+    /* SAFETY: 类型断言已复核 */
+    const link = l as SubgraphLink;
     if (typeof link.id !== "string" && typeof link.id !== "number") {
       continue;
     }
@@ -358,7 +364,8 @@ function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTa
     if (i == null || typeof i !== "object") {
       continue;
     }
-    defInputs.push(/* SAFETY: 类型断言已复核 */ i as SubgraphPin);
+    /* SAFETY: 类型断言已复核 */
+    defInputs.push(i as SubgraphPin);
   }
 
   const targetByName = new Map<string, { nodeId: string; slot: number }>();
@@ -400,6 +407,7 @@ function hostWidgetIndexes(wrapper: RawUiNode): Map<string, number> {
   const out = new Map<string, number>();
   let i = 0;
   for (const inp of wrapper.inputs ?? []) {
+    // oxlint-disable-next-line strict-boolean-expressions -- widget 标记是「字符串名或 {name} 对象」二形（外部 JSON），按任意真值判「有没有控件」
     if (!inp?.widget) {
       continue;
     }
@@ -491,6 +499,7 @@ function neutralizePromotedHostDrift(raw: JsonRecord): void {
         continue;
       }
       const inner = t.innerById.get(target.nodeId);
+      // oxlint-disable-next-line strict-boolean-expressions -- widget 标记是「字符串名或 {name} 对象」二形（外部 JSON），按任意真值判「有没有控件」
       if (!inner?.inputs?.[target.slot]?.widget) {
         continue;
       }
@@ -535,7 +544,8 @@ function neutralizePromotedHostDrift(raw: JsonRecord): void {
 
       /* zod 解析出的副本上 `widgets_values` 是 `any[]`：这里显式收成 `unknown[]`，
        * 逐项取出的值才不会把 `any` 带进「写回内层」的那一步。 */
-      const host = /* SAFETY: 类型断言已复核 */ (
+      /* SAFETY: 类型断言已复核 */
+      const host = (
         Array.isArray(node.widgets_values) ? node.widgets_values : []
       ) as Array<unknown>;
       for (const [name, idx] of ours) {
@@ -583,6 +593,7 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
   let slot = 0;
   for (let i = 0; i < inputs.length; i++) {
     const inp = inputs[i];
+    // oxlint-disable-next-line strict-boolean-expressions -- widget 标记是「字符串名或 {name} 对象」二形（外部 JSON），按任意真值判「有没有控件」
     if (!inp?.widget) {
       continue;
     }
@@ -645,8 +656,9 @@ export function applyApiOverrides(
   if (graph == null || typeof graph !== "object" || Array.isArray(graph)) {
     return {};
   }
-  const out = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(graph)) as JsonRecord;
-  if (!overrides?.length) {
+  /* SAFETY: 类型断言已复核 */
+  const out = JSON.parse(JSON.stringify(graph)) as JsonRecord;
+  if (overrides === undefined || overrides.length === 0) {
     return out;
   }
 
@@ -659,12 +671,14 @@ export function applyApiOverrides(
     if (nodeRaw == null || typeof nodeRaw !== "object" || Array.isArray(nodeRaw)) {
       continue;
     }
-    const inputsRaw = /* SAFETY: 类型断言已复核 */ (nodeRaw as JsonRecord).inputs;
+    /* SAFETY: 类型断言已复核 */
+    const inputsRaw = (nodeRaw as JsonRecord).inputs;
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (inputsRaw == null || typeof inputsRaw !== "object" || Array.isArray(inputsRaw)) {
       continue;
     }
-    const inputs = /* SAFETY: 类型断言已复核 */ inputsRaw as JsonRecord;
+    /* SAFETY: 类型断言已复核 */
+    const inputs = inputsRaw as JsonRecord;
 
     if (ov.name === CONTROL_AFTER_GENERATE) {
       delete inputs[CONTROL_AFTER_GENERATE];
@@ -672,7 +686,7 @@ export function applyApiOverrides(
         continue;
       }
       const seedKey = SEED_INPUT_NAMES.find((name) => name in inputs);
-      if (seedKey) {
+      if (seedKey !== undefined) {
         inputs[seedKey] = randomSeed();
       }
       continue;
@@ -687,11 +701,12 @@ export function applyRawOverrides(
   rawJson: unknown,
   overrides?: Array<RawWorkflowOverride>,
 ): JsonRecord {
-  const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
+  /* SAFETY: 类型断言已复核 */
+  const raw = JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
   /* **没有**覆盖项也要走漂移抵消：comfy-cli 的提升控件回写错位与「这次有没有
    * 画布覆盖」无关 —— 它错的是宿主自己的值（本次现场 17 处全在我们一次都没碰过
    * 的引脚上）。因此这一步先于「有没有覆盖」的判断。 */
-  if (!overrides?.length) {
+  if (overrides === undefined || overrides.length === 0) {
     neutralizePromotedHostDrift(raw);
     return raw;
   }
