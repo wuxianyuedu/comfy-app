@@ -207,12 +207,16 @@ export function cleanGitEnv() {
  */
 export function git(args, cwd = ROOT) {
   try {
-    const r = spawnSync("git", args, {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      env: cleanGitEnv(),
-    });
+    /* `stdout` / `stderr` 实测在 git 起不来（ENOENT）时是 `undefined`，
+     * `@types/node` 按 `encoding` 声明成 `string` ⇒ 下面 `?? ""` 是给运行时兜的。 */
+    const r = /** @type {{ status: number | null, stdout?: string, stderr?: string }} */ (
+      spawnSync("git", args, {
+        cwd,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        env: cleanGitEnv(),
+      })
+    );
     return {
       ok: r.status === 0,
       status: r.status ?? -1,

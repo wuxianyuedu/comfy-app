@@ -81,11 +81,15 @@ export function gitRun(args, deps = {}) {
   const runGit =
     deps.runGit ??
     ((/** @type {string[]} */ a, /** @type {string} */ c) => {
-      const r = spawnSync("git", a, {
-        cwd: c,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      /* `stdout` / `stderr` 实测在 git 起不来（ENOENT）时是 `undefined`
+       * （`@types/node` 按 `encoding` 声明成 `string`）⇒ `?? ""` 是给运行时兜的。 */
+      const r = /** @type {{ status: number | null, stdout?: string, stderr?: string }} */ (
+        spawnSync("git", a, {
+          cwd: c,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+        })
+      );
       return {
         ok: r.status === 0,
         stdout: r.status === 0 ? String(r.stdout ?? "") : String(r.stderr ?? ""),
@@ -206,7 +210,9 @@ export function changedFilesForBaseRef(ref, deps = {}, dots = "...") {
  * `deduped` 是「`<基线>...HEAD` 里有、而 `第一父..HEAD` 里没有」的那些 ——
  * 也就是**别人的改动**。它是读数，调用方拿去念，不参与判决。
  *
- * @param {string} ref 基线（`CNB_PULL_REQUEST_TARGET_SHA` 或分叉点）
+ * `ref` 声明成可缺：本模块的调用面里它来自环境变量（`CNB_PULL_REQUEST_TARGET_SHA`），
+ * **平台没给这一跑时它就是 `undefined`** —— 那一支正是下面「没有基线可比」的判据。
+ * @param {string | undefined} ref 基线（`CNB_PULL_REQUEST_TARGET_SHA` 或分叉点）
  * @param {{cwd?: string, env?: Record<string, string | undefined>,
  *   runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}}} [deps]
  * @returns {MergeFace}

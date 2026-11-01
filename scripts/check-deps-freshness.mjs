@@ -221,11 +221,15 @@ function git(args, cwd) {
   if (typeof cwd !== "string" || cwd === "") {
     return { ok: false, out: "" };
   }
-  const res = spawnSync("git", args, {
-    cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  });
+  /* `stdout` 实测在 git 起不来（ENOENT）时是 `undefined`，`@types/node` 按 `encoding`
+   * 声明成 `string` ⇒ 下面 `?? ""` 是给运行时兜的。 */
+  const res = /** @type {{ status: number | null, stdout?: string, error?: unknown }} */ (
+    spawnSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+  );
   if (res.error || res.status !== 0) {
     return { ok: false, out: "" };
   }
@@ -510,7 +514,7 @@ function renderInstallDrift(drift) {
   const lines = [
     "node_modules 装的不是你当前检出声明的那套依赖（拉取更新后没重装，或上次 install 被中断）。",
   ];
-  if (drift.unresolved?.length) {
+  if (drift.unresolved.length) {
     lines.push(`同时这些依赖解析不到：${drift.unresolved.join(" / ")} —— 重装会一并解决。`);
   }
   lines.push(
@@ -570,7 +574,9 @@ export function runFreshnessCheck(root, opts = {}) {
      * 本地历史里」。后者是**判过了、没有待同步对象**，不是没看 —— 台账 R12-01 的验收
      * 点名的就是这个形态（远端不领先时不许回落成「未校验」，否则「没看」与「看了且没有」
      * 在输出上同形，而那正是本判据存在的理由）。 */
-    const contained = !merging && isRemoteAncestorOfHead(root, rev);
+    /* 到这里 `merging` 恒假（外层 if 的第三个条件已把它挡掉）—— 写 `!merging &&` 纯属
+     * 冗余，规则读成「恒真」是对的；保留原判据形状只会让下一个人以为这里还有一条分支。 */
+    const contained = isRemoteAncestorOfHead(root, rev);
     // 分叉点拿不到 ⇒ ② 这一层**不判**（不是「无差异」）。`remoteChecked` 保持
     // 由 reflog 决定：两者的含义不同，一个是「② 可信不」，一个是「② 能不能做」。
     if (base) {

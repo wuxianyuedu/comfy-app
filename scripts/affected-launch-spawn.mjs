@@ -146,11 +146,14 @@ export function filterSpawnOutput(stdout, stderr, filterLine) {
 
 export function spawnVitest(entry, args, options = {}) {
   const { timeoutMs, filterLine } = options;
-  const res = spawnSync(process.execPath, [entry, ...args], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-    ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeout: timeoutMs } : {}),
-  });
+  const res = /** @type {{ status: number | null, signal?: string | null, stdout?: string,
+   *   stderr?: string, error?: NodeJS.ErrnoException }} */ (
+    spawnSync(process.execPath, [entry, ...args], {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      ...(Number.isFinite(timeoutMs) && timeoutMs > 0 ? { timeout: timeoutMs } : {}),
+    })
+  );
   /* 噪音屏蔽（CI）：`filterLine` 给的话，把 stdout / stderr 按行过滤后再回吐；不给时逐字回吐
    * （与改动前逐字一致）。注意：本函数体内**始终保留 `process.stdout.write` /
    * `process.stderr.write` 这两个字面 token** —— 那是「输出真被抓在手里、没有退化成
@@ -160,7 +163,8 @@ export function spawnVitest(entry, args, options = {}) {
    * 由 `filterSpawnOutput` 算（噪音清单里不含任何指纹，过滤不会吞掉判决文本）。 */
   /* `res.stdout` / `res.stderr` 是 `spawnSync` 的出参：`@types/node` 按泛型声明成
    * 非空，实测 ENOENT / 超时形态下就是 `undefined`（本文件正是为了给这些形态记读数），
-   * 所以下面两处 `?? ""` 是必要的，删了会 `String(undefined)` 得到 "undefined"。 */
+   * 所以下面两处 `?? ""` 是给运行时兜的（上述 JSDoc 已按实测把这两个字段声明成可缺）——
+   * 删了会 `String(undefined)` 得到 "undefined"。 */
   if (filterLine) {
     for (const line of String(res.stdout ?? "").split("\n")) {
       if (!filterLine(line)) {

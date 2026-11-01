@@ -163,6 +163,9 @@ export function abortedAdvice({ label, timeoutMs }) {
  * @param {string} command @param {string[]} [args]
  * @param {{ cwd?: string, env?: NodeJS.ProcessEnv, timeoutMs?: number, stdio?: "pipe"|"inherit"|"ignore" }} [options]
  * @returns {{ ok: boolean, stdout: string, stderr: string, status: number | null }}
+ *   `stdout` / `stderr` 声明成 `string | undefined`：`spawnSync` 起不来时（ENOENT / 超时）
+ *   这两个字段**实测就是 `undefined`**，而 `@types/node` 按 `encoding` 把它们写成 `string`
+ *   —— 下面那两处 `?? ""` 是给运行时兜的，不是给编译器兜的（§5.10 第①格）。
  */
 export function runSync(
   command,
@@ -171,15 +174,17 @@ export function runSync(
 ) {
   // 回显与真正 spawn 的是同一个 (command, args)：跑起来之前先留一行证据。
   echoCommandLine(command, args);
-  const result = spawnSync(command, args, {
-    cwd,
-    env,
-    encoding: "utf8",
-    timeout: timeoutMs,
-    windowsHide: true,
-    shell: false,
-    stdio: stdio === "pipe" ? ["ignore", "pipe", "pipe"] : stdio,
-  });
+  const result = /** @type {{ status: number | null, stdout?: string, stderr?: string }} */ (
+    spawnSync(command, args, {
+      cwd,
+      env,
+      encoding: "utf8",
+      timeout: timeoutMs,
+      windowsHide: true,
+      shell: false,
+      stdio: stdio === "pipe" ? ["ignore", "pipe", "pipe"] : stdio,
+    })
+  );
   return {
     ok: result.status === 0,
     stdout: String(result.stdout ?? ""),
@@ -332,16 +337,19 @@ export function runPnpmSync(
   // 回显的是**形态判据选出来的**那条（宿主 + `-File <shim>` 都带上）：源码里的
   // `pnpm <args>` 与这台机器上真正被执行的命令常常不是同一条（见 pnpmInvocation）。
   echoCommandLine(invocation.command, invocation.args);
-  const result = spawnSync(invocation.command, invocation.args, {
-    cwd,
-    env,
-    encoding: "utf8",
-    timeout: timeoutMs,
-    windowsHide: true,
-    shell: false,
-    stdio: stdio === "pipe" ? ["ignore", "pipe", "pipe"] : stdio,
-  });
-  const error = /** @type {NodeJS.ErrnoException | null} */ (result.error ?? null);
+  const result = /** @type {{ status: number | null, stdout?: string, stderr?: string,
+   *   error?: NodeJS.ErrnoException | null }} */ (
+    spawnSync(invocation.command, invocation.args, {
+      cwd,
+      env,
+      encoding: "utf8",
+      timeout: timeoutMs,
+      windowsHide: true,
+      shell: false,
+      stdio: stdio === "pipe" ? ["ignore", "pipe", "pipe"] : stdio,
+    })
+  );
+  const error = result.error ?? null;
   return {
     ok: !error && result.status === 0,
     stdout: String(result.stdout ?? ""),

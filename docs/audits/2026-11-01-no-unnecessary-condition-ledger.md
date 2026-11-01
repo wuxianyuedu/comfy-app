@@ -148,9 +148,9 @@
 
 |  行 | 类别       | 格  | 代码 / 理由                                                                                      |
 | --: | ---------- | --- | ------------------------------------------------------------------------------------------------ |
-|  77 | ??-left    |     | `const stdout = res.stdout ?? "";`                                                               |
-|  78 | ??-left    |     | `const stderr = res.stderr ?? "";`                                                               |
-| 397 | no-overlap |     | `if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {` |
+| 77 | ??-left | A | `const stdout = res.stdout ?? "";` —— cmd.exe / 裸 cmd 起不来时 stdout 实测 undefined；runTool 内的 res 已按实测形状声明，下面两处 ?? "" 保留 |
+| 78 | ??-left | A | `const stderr = res.stderr ?? "";` —— 同上 stderr |
+| 397 | no-overlap | D | `if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {` —— `process.argv[1]` 在 `node -e` 宿主下真的是 undefined（实测），但两边 tsc 都把它声明成 string、且 tsgolint 在本行上的读数与文件体积相关（同形小文件不报）—— 判据不可信，保留条件并落账；追规则那条走 ISSUE #2941 |
 
 ### scripts/app-port.mjs
 
@@ -189,16 +189,16 @@
 
 |  行 | 类别    | 格  | 代码 / 理由                                                                           |
 | --: | ------- | --- | ------------------------------------------------------------------------------------- |
-| 378 | ??-left |     | `const sql = (exported.stdout ?? "").trim();`                                         |
-| 382 | ??-left |     | ``${(exported.stderr ?? "").slice(0, 400) \|\| "没有输出"}——桌包首启将没有建表能力`,` |
+| 378 | ??-left | A | `const sql = (exported.stdout ?? "").trim();` —— drizzle-kit 起不来时 stdout 实测 undefined；本文件按实测形状声明 exported |
+| 382 | ??-left | A | ``${(exported.stderr ?? "").slice(0, 400) \|\| "没有输出"}——桌包首启将没有建表能力`,` —— 同上 stderr（失败分支才读，ENOENT 时同样缺） |
 
 ### scripts/changed-scope.mjs
 
 |  行 | 类别    | 格  | 代码 / 理由                                                                 |
 | --: | ------- | --- | --------------------------------------------------------------------------- |
-|  91 | ??-left |     | `stdout: r.status === 0 ? String(r.stdout ?? "") : String(r.stderr ?? ""),` |
-|  91 | ??-left |     | `stdout: r.status === 0 ? String(r.stdout ?? "") : String(r.stderr ?? ""),` |
-| 219 | ??-left |     | `const baseRef = String(ref ?? "").trim();`                                 |
+| 91 | ??-left | A | `stdout: r.status === 0 ? String(r.stdout ?? "") : String(r.stderr ?? ""),` —— git 起不来时 stdout 实测 undefined；注解按实测形状声明 r |
+| 91 | ??-left | A | `stdout: r.status === 0 ? String(r.stdout ?? "") : String(r.stderr ?? ""),` —— 同上 stderr |
+| 219 | ??-left | A | `const baseRef = String(ref ?? "").trim();` —— ref 来自 CNB_PULL_REQUEST_TARGET_SHA，平台没给时就是 undefined 且正是「没有基线可比」那支；把 @param 声明成 string | undefined |
 
 ### scripts/check-bundle-budget.cjs
 
@@ -240,9 +240,9 @@
 
 |  行 | 类别          | 格  | 代码 / 理由                                                        |
 | --: | ------------- | --- | ------------------------------------------------------------------ |
-| 232 | ??-left       |     | `return { ok: true, out: res.stdout ?? "" };`                      |
-| 513 | opt-chain     |     | `if (drift.unresolved?.length) {`                                  |
-| 573 | always-truthy |     | `const contained = !merging && isRemoteAncestorOfHead(root, rev);` |
+| 232 | ??-left | A | `return { ok: true, out: res.stdout ?? "" };` —— git 起不来时 stdout 实测 undefined；注解按实测形状声明 res |
+| 513 | opt-chain     | B | `if (drift.unresolved?.length) {` —— `InstallDrift.unresolved` 是必填（两个构造点都给数组），`?.` 删掉 |
+| 573 | always-truthy | B | `const contained = !merging && isRemoteAncestorOfHead(root, rev);` —— 外层 if 已把 `merging` 挡掉 ⇒ 这一段恒真，删掉 |
 
 ### scripts/check-docs-api.cjs
 
@@ -254,7 +254,7 @@
 
 |  行 | 类别    | 格  | 代码 / 理由                                                                        |
 | --: | ------- | --- | ---------------------------------------------------------------------------------- |
-| 360 | ??-left |     | ``[format][debug] oxfmt --version=${JSON.stringify(ver.stdout ?? ver.error)}\n` +` |
+| 360 | ??-left | A | ``[format][debug] oxfmt --version=${JSON.stringify(ver.stdout ?? ver.error)}\n` +` —— 子进程起不来时 stdout 未定义、error 才有值；注解按实测声明 ver 两个字段 |
 
 ### scripts/check-gate-executors.cjs
 
@@ -810,12 +810,12 @@
 
 |  行 | 类别    | 格  | 代码 / 理由                                                                       |
 | --: | ------- | --- | --------------------------------------------------------------------------------- |
-| 193 | ??-left |     | `const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;`                    |
-| 193 | ??-left |     | `const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;`                    |
-| 199 | ??-left |     | `return failed(command, "no-version", firstLines(output), probe.status ?? null);` |
-| 208 | ??-left |     | `exitCode: probe.status ?? 0,`                                                    |
-| 299 | ??-left |     | `const tail = firstLines(`${result.stdout ?? ""}${result.stderr ?? ""}`);`        |
-| 299 | ??-left |     | `const tail = firstLines(`${result.stdout ?? ""}${result.stderr ?? ""}`);`        |
+| 193 | ??-left | A | `const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;` —— probe.stdout 起不来/超时时实测 undefined；本文件新增 SpawnOutput typedef 按实测声明 |
+| 193 | ??-left | A | `const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;` —— 同上 stderr |
+| 199 | ??-left | A | `return failed(command, "no-version", firstLines(output), probe.status ?? null);` —— probe.status 在 error 支被挡掉后恒有值；typedef 声明 status?: number|null |
+| 208 | ??-left | A | `exitCode: probe.status ?? 0,` —— 同上（error 支已提前 return，这里的 ?? 0 只给类型看） |
+| 299 | ??-left | A | `const tail = firstLines(`${result.stdout ?? ""}${result.stderr ?? ""}`);` —— prepare 的 spawnSync 出参同上，按 SpawnOutput 声明 |
+| 299 | ??-left | A | `const tail = firstLines(`${result.stdout ?? ""}${result.stderr ?? ""}`);` —— 同上 stderr |
 
 ### scripts/launcher-core/log.mjs
 
@@ -840,7 +840,7 @@
 
 |  行 | 类别    | 格  | 代码 / 理由                                 |
 | --: | ------- | --- | ------------------------------------------- |
-|  38 | ??-left |     | `resolve(err ? "" : String(stdout ?? ""));` |
+| 38 | ??-left | A | `resolve(err ? "" : String(stdout ?? ""));` —— execFile 回调的 stdout 在 ENOENT 时实测 undefined（@types/node 按 encoding 声明成 string），必要兜底；回调形参不接受 JSDoc 注记 → 落 D 见 PR |
 
 ### scripts/launcher-core/runtime-heal.mjs
 
@@ -853,10 +853,10 @@
 
 |  行 | 类别    | 格  | 代码 / 理由                            |
 | --: | ------- | --- | -------------------------------------- |
-| 185 | ??-left |     | `stdout: String(result.stdout ?? ""),` |
-| 186 | ??-left |     | `stderr: String(result.stderr ?? ""),` |
-| 347 | ??-left |     | `stdout: String(result.stdout ?? ""),` |
-| 348 | ??-left |     | `stderr: String(result.stderr ?? ""),` |
+| 185 | ??-left | A | `stdout: String(result.stdout ?? ""),` —— spawnSync 出参 stdout 起不来时实测 undefined；runSync 的 @returns/JSDoc 已按实测声明可缺 |
+| 186 | ??-left | A | `stderr: String(result.stderr ?? ""),` —— 同上 stderr |
+| 347 | ??-left | A | `stdout: String(result.stdout ?? ""),` —— spawnInGroup 的 spawnSync 出参按实测声明 stdout 可缺 |
+| 348 | ??-left | A | `stderr: String(result.stderr ?? ""),` —— 同上 stderr |
 
 ### scripts/launcher-core/sync-attribution.mjs
 

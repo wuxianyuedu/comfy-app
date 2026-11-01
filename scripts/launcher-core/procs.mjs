@@ -34,6 +34,8 @@ export function runCapture(command, args, timeoutMs = 10_000) {
       command,
       args,
       { timeout: timeoutMs, encoding: "utf8", windowsHide: true },
+      // `stdout` 在命令起不来时实测是 `undefined`（`@types/node` 的 `execFile` 回调把它
+      // 声明成 `string`）⇒ 这个 `?? ""` 是给运行时兜的，不是多余的。
       (err, stdout) => {
         resolve(err ? "" : String(stdout ?? ""));
       },
