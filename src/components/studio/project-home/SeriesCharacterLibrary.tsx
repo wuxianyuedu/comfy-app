@@ -16,7 +16,7 @@ type SeriesCharacterLibraryProps = {
   projectId?: string;
 };
 
-export const SeriesCharacterLibrary = ({ c, projectId }: SeriesCharacterLibraryProps) => {
+export function SeriesCharacterLibrary({ c, projectId }: SeriesCharacterLibraryProps) {
   const [newName, setNewName] = useState("");
 
   const linkedIds = useMemo(
@@ -192,4 +192,4 @@ export const SeriesCharacterLibrary = ({ c, projectId }: SeriesCharacterLibraryP
       )}
     </div>
   );
-};
+}

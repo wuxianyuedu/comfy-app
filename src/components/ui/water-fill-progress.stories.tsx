@@ -22,11 +22,13 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-const Frame = ({ children }: { children: React.ReactNode }) => (
-  <div className="bg-subtle border-border relative h-40 w-64 overflow-hidden rounded-xl border border-dashed">
-    {children}
-  </div>
-);
+function Frame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-subtle border-border relative h-40 w-64 overflow-hidden rounded-xl border border-dashed">
+      {children}
+    </div>
+  );
+}
 
 export const Default: Story = {
   render: (args) => (
