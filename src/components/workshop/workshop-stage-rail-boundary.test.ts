@@ -20,10 +20,7 @@ const STAGE_MODULES = [
 ];
 
 function readSource(name: string): string {
-  return readFileSync(
-    fileURLToPath(new URL(`./${name}`, import.meta.url)),
-    "utf8",
-  );
+  return readFileSync(fileURLToPath(new URL(name, import.meta.url)), "utf8");
 }
 
 describe("WorkshopStageRail 的边界", () => {

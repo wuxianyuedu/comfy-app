@@ -18,10 +18,7 @@ import { describe, expect, it } from "vitest";
 import { stripComments } from "../../../tests/helpers/strip-comments";
 
 function readSource(name: string): string {
-  return readFileSync(
-    fileURLToPath(new URL(`./${name}`, import.meta.url)),
-    "utf8",
-  );
+  return readFileSync(fileURLToPath(new URL(name, import.meta.url)), "utf8");
 }
 
 describe("工坊各段懒加载的分块失败出口", () => {
@@ -44,9 +41,7 @@ describe("工坊各段懒加载的分块失败出口", () => {
   });
 
   it("接线用自愈那一份实现，不另写一套判据", () => {
-    const boundary = stripComments(
-      readSource("../ui/use-lazy-chunk-fallback.tsx"),
-    );
+    const boundary = stripComments(readSource("../ui/use-lazy-chunk-fallback.tsx"));
     expect(boundary).toContain("~/lib/shell/lazy-chunk-recovery");
     expect(boundary).toContain("isChunkLoadFailure");
     expect(code).toContain("~/components/ui/use-lazy-chunk-fallback");

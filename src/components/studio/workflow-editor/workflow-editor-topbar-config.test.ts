@@ -163,7 +163,7 @@ describe("顶栏容器：窄了换行，不压扁按钮", () => {
   it("统计行不折行（挤不下时截断，而不是把顶栏撑成两行）", () => {
     /* 同一处挤压的第二种表现：面包屑被压窄后，下面那行「N 个节点 · N 个暴露
      * IO…」会折成两行，顶栏高度跟着跳（实测 1024px 时由 66px 变 83px）。 */
-    const source = readFileSync(new URL("./WorkflowEditorTopbar.tsx", import.meta.url), "utf8");
+    const source = readFileSync(new URL("WorkflowEditorTopbar.tsx", import.meta.url), "utf8");
     expect(source).toContain('className="text-ink-soft text-2xs mt-0.5 truncate font-medium"');
   });
 
