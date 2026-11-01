@@ -148,6 +148,7 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
             </Button>
             <Button
               className="h-auto flex-1 rounded-md px-3 py-1.5 text-xs font-semibold"
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void save()}
               type="button"
               variant="primary-solid"

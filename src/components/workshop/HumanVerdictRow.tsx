@@ -128,6 +128,7 @@ export function HumanVerdictRow({
         {onRatingChange && (
           <RatingStars
             disabled={disabled || busy.busy}
+            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
             onPick={(value) => void pickRating(value)}
             value={localRating}
           />
@@ -151,6 +152,7 @@ export function HumanVerdictRow({
         />
         <Button
           disabled={disabled || busy.busy}
+          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
           onClick={() => void submit(true)}
           size="sm"
           type="button"
@@ -160,6 +162,7 @@ export function HumanVerdictRow({
         </Button>
         <Button
           disabled={disabled || busy.busy}
+          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
           onClick={() => void submit(false)}
           size="sm"
           type="button"

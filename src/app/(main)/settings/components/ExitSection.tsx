@@ -77,6 +77,7 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
       <div className="flex items-center gap-2">
         <StatusButton
           disabled={c.saving}
+          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
           onClick={() => void c.savePrefs()}
           variant="primary-solid"
         >

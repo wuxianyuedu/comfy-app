@@ -52,6 +52,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
           <div className="flex flex-wrap items-center gap-3">
             <StatusButton
               disabled={c.appUpdate.busy !== "idle"}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.checkAppUpdate()}
               /* 卡片的**主行动**：缺省档是软底，「保存 / 检测 / 立即备份」这一族
                  显式提为实心（缺省不实心是有意的，见 service-status-row 的 StatusButton 注释）。 */
@@ -66,6 +67,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
             {c.appUpdate.available && (
               <StatusButton
                 disabled={c.appUpdate.busy !== "idle"}
+                // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                 onClick={() => void c.installAppUpdate()}
                 variant="success-solid"
               >
@@ -79,6 +81,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
             <Button
               className="text-muted-foreground hover:text-ink h-auto rounded-lg px-4 py-2 font-semibold"
               disabled={c.appUpdate.busy !== "idle"}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.relaunchApp()}
               variant="outline"
             >

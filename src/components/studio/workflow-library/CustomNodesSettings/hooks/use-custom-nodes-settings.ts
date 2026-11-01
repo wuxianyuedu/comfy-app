@@ -440,6 +440,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     if (!open) {
       return;
     }
+    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     const timer = setTimeout(() => void fetchSettings(), 0);
     return () => clearTimeout(timer);
   }, [open, fetchSettings]);
@@ -456,6 +457,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     if (!open) {
       return;
     }
+    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     const timer = setTimeout(() => void fetchManifest(), 0);
     return () => clearTimeout(timer);
   }, [open, fetchManifest]);
@@ -463,6 +465,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     if (!report) {
       return;
     }
+    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     const timer = setTimeout(() => void fetchManifest(), 0);
     return () => clearTimeout(timer);
   }, [report, fetchManifest]);

@@ -89,6 +89,7 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
         <div className="flex items-center gap-3">
           <StatusButton
             disabled={c.backupBusy || c.restoreBusy}
+            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
             onClick={() => void c.createBackupNow()}
             variant="primary-solid"
           >

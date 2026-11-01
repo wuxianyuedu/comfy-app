@@ -78,6 +78,7 @@ beforeEach(() => {
   written.length = 0;
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
+    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     value: { writeText: async (text: string) => void written.push(text) },
   });
 });

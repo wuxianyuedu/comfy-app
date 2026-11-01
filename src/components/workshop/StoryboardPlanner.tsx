@@ -80,6 +80,7 @@ export function StoryboardPlanner(props: Props) {
                 <Button
                   className="h-auto rounded-lg px-3 py-1.5"
                   disabled={polishBusyAll || polishAnyBusy || aiBusy}
+                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                   onClick={() => void polishAll()}
                   size="xs"
                   variant="primary-solid"
@@ -177,6 +178,7 @@ export function StoryboardPlanner(props: Props) {
               generating={generating}
               key={shot.id}
               onGenerate={onGenerate}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onPolish={() => void polishOne(shot)}
               onRemove={planner.removeShot}
               onUpdate={planner.updateShot}

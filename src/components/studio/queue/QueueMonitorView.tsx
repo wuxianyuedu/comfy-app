@@ -171,6 +171,7 @@ export function QueueMonitorView({
                     aria-label="取消正在跑的这条"
                     className="border-border rounded-lg"
                     disabled={c.isBusy(running.id)}
+                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                     onClick={() => void c.cancel(running.id, running.workflowName)}
                     size="xs"
                     variant="outline"
@@ -214,6 +215,7 @@ export function QueueMonitorView({
                         aria-label="取消正在跑的这条"
                         className="border-border rounded-lg"
                         disabled={c.isBusy(row.id)}
+                        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                         onClick={() => void c.cancel(row.id, row.workflowName)}
                         size="xs"
                         variant="outline"
@@ -245,8 +247,11 @@ export function QueueMonitorView({
                     <QueueRowLine
                       busy={c.isBusy(row.id)}
                       leading={`第 ${String(position)} 位`}
+                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                       onCancel={() => void c.cancel(row.id, row.workflowName)}
+                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                       onCopy={() => void c.copyForReprint(row)}
+                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                       onOpenFolder={() => void c.openFolder(row)}
                       onOpenLog={() => c.openLog(row)}
                       row={row}
@@ -270,8 +275,11 @@ export function QueueMonitorView({
                   <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
                     <QueueRowLine
                       busy={c.isBusy(row.id)}
+                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                       onCancel={() => void c.cancel(row.id, row.workflowName)}
+                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                       onCopy={() => void c.copyForReprint(row)}
+                      // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                       onOpenFolder={() => void c.openFolder(row)}
                       onOpenLog={() => c.openLog(row)}
                       row={row}

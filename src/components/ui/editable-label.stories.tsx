@@ -24,7 +24,7 @@ type Story = StoryObj<typeof meta>;
 
 /** 可编辑（有 `onChange`）：悬停出现铅笔，点开变输入框。 */
 export const Editable: Story = {
-  args: { onChange: () => void 0, title: "点击重命名" },
+  args: { onChange: () => undefined, title: "点击重命名" },
   render: (args) => (
     <div className="flex w-80 items-center rounded-lg border px-3 py-2">
       <EditableLabel {...args} />
@@ -47,7 +47,7 @@ export const ReadOnly: Story = {
 export const LongLabel: Story = {
   args: {
     label: "一个名字非常非常长的工作流：角色一致性三视图加背景补全加超分",
-    onChange: () => void 0,
+    onChange: () => undefined,
   },
   render: (args) => (
     <div className="flex w-64 items-center rounded-lg border px-3 py-2">

@@ -415,6 +415,7 @@ export function ShotStudio({
             (channel === "local" && !workflowId) ||
             (channel === "api" && !apiReady)
           }
+          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
           onClick={() => void generateBatch()}
           size="xs"
           variant="primary-solid"
@@ -471,8 +472,11 @@ export function ShotStudio({
               error={errors[shot.id]}
               gachaBusy={gachaAction.isBusy(shot.id)}
               key={shot.id}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onCancel={(s) => void onCancelShot(s)}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onGacha={(s, n) => void gachaShot(s, n)}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onGenerate={(s) => void generateShot(s)}
               onPromptChange={(id, prompt) => {
                 editedRef.current.add(id);

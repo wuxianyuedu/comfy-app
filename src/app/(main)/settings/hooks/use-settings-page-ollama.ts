@@ -115,6 +115,7 @@ export function useSettingsOllama({
       }, 0);
       return () => clearTimeout(settle);
     }
+    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     const timer = setTimeout(() => void probeOllama(llmBaseUrl), 0);
     return () => clearTimeout(timer);
   }, [providerIsLocal, llmBaseUrl, probeOllama]);

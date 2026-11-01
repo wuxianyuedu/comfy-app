@@ -210,6 +210,7 @@ export function ReviewVerdictDialogButton({
             {controller.revise && (
               <Button
                 disabled={busy || !verdict}
+                // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                 onClick={() => void controller.revise?.()}
                 size="sm"
                 type="button"
@@ -220,6 +221,7 @@ export function ReviewVerdictDialogButton({
             )}
             <Button
               disabled={busy}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void controller.review()}
               size="sm"
               type="button"

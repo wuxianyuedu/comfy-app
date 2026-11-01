@@ -221,6 +221,7 @@ export function UsageTestDialog({
             <Button
               className="h-auto rounded-lg px-4 py-2 text-sm font-semibold"
               disabled={usageTest.running || usageTest.querying || !usageTest.prompt.trim()}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void d.runUsageTest()}
             >
               {usageTest.querying ? "等待中…" : usageTest.running ? "调用中…" : "执行测试"}
@@ -381,6 +382,7 @@ function UsageFieldEditor({
                 ) : (
                   <FieldImageButton
                     hint="本地上传一张图片作为该字段的值（自动转 data URL）"
+                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                     onPick={(file) => void d.pickFieldImage(i, file)}
                   />
                 )}
@@ -463,6 +465,7 @@ function UsageTestResultPanel({
               <Hint label="在系统默认浏览器中打开生成的视频">
                 <Button
                   className="text-primary h-auto items-center gap-1 p-0 text-xs font-medium"
+                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                   onClick={() => void c.openExternalUrl(result.videoUrl ?? "")}
                   variant="link"
                 >
@@ -488,6 +491,7 @@ function UsageTestResultPanel({
                 <Button
                   className="mt-2 h-auto items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold"
                   disabled={usageTest.querying}
+                  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                   onClick={() => void d.continueUsageWait()}
                   variant="warning-solid"
                 >

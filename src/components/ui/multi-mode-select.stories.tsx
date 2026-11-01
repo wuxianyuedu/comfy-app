@@ -31,7 +31,7 @@ import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 const meta = {
   title: "UI/MultiModeSelect",
   component: MultiModeSelect,
-  args: { modes: ["T2I"], defaultMode: "T2I", onChange: () => void 0 },
+  args: { modes: ["T2I"], defaultMode: "T2I", onChange: () => undefined },
 } satisfies Meta<typeof MultiModeSelect>;
 
 export default meta;

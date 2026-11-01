@@ -257,6 +257,7 @@ export function VideoStudio({
         fps={fps}
         onChannelChange={setChannel}
         onFpsChange={setFps}
+        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
         onGenerateBatch={() => void generateBatch()}
         onNextStage={onNextStage}
         onOpenModelAdapters={onOpenModelAdapters}
@@ -279,7 +280,9 @@ export function VideoStudio({
               error={errors[shot.id]}
               fps={fps}
               key={shot.id}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onCancel={() => void onCancelShot(shot)}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onGenerate={() => void generateClip(shot)}
               onPatch={(p) => patchShot(shot.id, p)}
               progress={progress[shot.id] ?? 0}

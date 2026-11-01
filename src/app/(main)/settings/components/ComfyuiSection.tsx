@@ -166,7 +166,13 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           <ArrowRight aria-hidden className="size-3" data-icon="inline-end" />
         </Button>
       </div>
-      <StatusButton disabled={c.saving} onClick={() => void c.savePrefs()} variant="primary-solid">
+      <StatusButton
+        disabled={c.saving}
+        onClick={() => {
+          void c.savePrefs();
+        }}
+        variant="primary-solid"
+      >
         保存偏好
       </StatusButton>
     </SettingsCard>

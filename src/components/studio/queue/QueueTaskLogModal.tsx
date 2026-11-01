@@ -120,6 +120,7 @@ export function QueueTaskLogModal({
                     className="text-2xs h-auto rounded-md px-2 py-0.5"
                     data-testid="queue-log-cancel"
                     disabled={cancelling}
+                    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                     onClick={() => void cancel()}
                     variant="danger"
                   >

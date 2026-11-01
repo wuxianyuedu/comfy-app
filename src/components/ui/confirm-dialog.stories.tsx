@@ -28,8 +28,8 @@ const meta = {
   component: ConfirmDialog,
   args: {
     open: false,
-    onClose: () => void 0,
-    onConfirm: () => void 0,
+    onClose: () => undefined,
+    onConfirm: () => undefined,
     title: "确认操作",
   },
 } satisfies Meta<typeof ConfirmDialog>;

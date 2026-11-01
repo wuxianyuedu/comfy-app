@@ -124,6 +124,7 @@ function parseCost(): void {
     lines.push(sampleLine(i));
   }
   const text = lines.join("\n");
+  // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
   const cost = medianMs(() => void parseFileLogs(text), runs);
   console.log("\n【解析】parseFileLogs（300 行转录文本）");
   console.log(`  ${cost.toFixed(2)} ms`);

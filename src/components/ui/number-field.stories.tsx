@@ -25,7 +25,7 @@ import { NumberField } from "~/components/ui/number-field";
 const meta = {
   title: "UI/NumberField",
   component: NumberField,
-  args: { value: 24, onChange: () => void 0 },
+  args: { value: 24, onChange: () => undefined },
 } satisfies Meta<typeof NumberField>;
 
 export default meta;

@@ -295,6 +295,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
               : "text-ink-muted"
         }`}
         data-log-copy=""
+        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
         onClick={() => void onCopy()}
         size="icon-xs"
         variant="ghost"

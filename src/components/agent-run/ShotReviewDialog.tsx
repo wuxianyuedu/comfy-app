@@ -150,6 +150,7 @@ export function ShotReviewDialog({
         <DialogFooter className="gap-2">
           <Button
             disabled={busy}
+            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
             onClick={() => void review.review(shot.id)}
             size="sm"
             variant="outline"
@@ -161,6 +162,7 @@ export function ShotReviewDialog({
             <>
               <Button
                 disabled={busy}
+                // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                 onClick={() => void review.regenerate(shot.id, "gacha")}
                 size="sm"
                 variant="outline"
@@ -169,6 +171,7 @@ export function ShotReviewDialog({
               </Button>
               <Button
                 disabled={busy}
+                // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                 onClick={() => void review.regenerate(shot.id, "reprompt")}
                 size="sm"
                 variant="primary"

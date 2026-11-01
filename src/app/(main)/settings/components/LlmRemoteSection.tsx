@@ -69,6 +69,7 @@ export function LlmRemoteSection({
                       <Button
                         className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
                         disabled={!!thisProbe?.running}
+                        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                         onClick={() => void d.runEntryConnectionTest(entry)}
                         size="xs"
                         variant="outline"
@@ -100,6 +101,7 @@ export function LlmRemoteSection({
                       <Button
                         aria-label={`移除模型 ${entry.name}`}
                         className="text-muted-foreground hover:text-danger-strong"
+                        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                         onClick={() => void c.removeRemoteModel(entry.name)}
                         size="icon-xs"
                         variant="ghost"

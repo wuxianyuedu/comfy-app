@@ -381,6 +381,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
             <Button
               className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-1.5"
               disabled={c.scanning}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.rescan()}
               size="xs"
               variant="outline"

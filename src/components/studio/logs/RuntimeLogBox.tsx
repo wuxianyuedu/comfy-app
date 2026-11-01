@@ -202,6 +202,7 @@ function LogToolbar({
         )}
         <Button
           className="text-muted-foreground text-2xs h-auto rounded px-2 py-0.5"
+          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
           onClick={() => void log.refresh()}
           size="xs"
           variant="outline"

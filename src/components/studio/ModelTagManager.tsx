@@ -96,13 +96,18 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
             <input
               onChange={textHandler(c.setDraft)}
               value={c.draft}
-              {...enterCommit({ onCommit: () => void c.addTag() })}
+              {...enterCommit({
+                onCommit: () => {
+                  void c.addTag();
+                },
+              })}
               className="border-border-strong bg-canvas-deep text-ink-bright placeholder:text-ink-muted min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none focus:border-fuchsia-500/50"
               placeholder="新增模型名，如 z-image / wan2.2"
             />
             <Button
               className="h-auto rounded-lg px-3 py-2"
               disabled={c.busy || !c.draft.trim()}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.addTag()}
               size="sm"
               variant="primary-solid"
@@ -141,6 +146,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                         onFocus={(event) => event.currentTarget.select()}
                         value={editingDraft}
                         {...enterCommit({
+                          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                           onCommit: () => void commitEdit(tag.id, tag.name),
                           onCancel: cancelEdit,
                         })}
@@ -186,6 +192,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                           aria-label={`删除 ${tag.name}`}
                           className="text-ink-soft hover:bg-danger/15 hover:text-danger-strong hover:border-danger/40 rounded-md border border-transparent"
                           disabled={isEditing}
+                          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                           onClick={() => void c.deleteTag(tag.name, tag.count)}
                           size="icon-xs"
                           variant="ghost"

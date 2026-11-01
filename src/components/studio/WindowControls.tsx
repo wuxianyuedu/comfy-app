@@ -178,7 +178,12 @@ export function WindowControls({
 }) {
   return (
     <div className="flex shrink-0 items-stretch">
-      <WindowButton kind="minimize" onClick={() => void minimizeWindow()} />
+      <WindowButton
+        kind="minimize"
+        onClick={() => {
+          void minimizeWindow();
+        }}
+      />
       <WindowButton
         kind={resolveMaximizeButtonKind(maximized)}
         onClick={() => {
@@ -189,7 +194,13 @@ export function WindowControls({
           });
         }}
       />
-      <WindowButton danger kind="close" onClick={() => void closeWindow()} />
+      <WindowButton
+        danger
+        kind="close"
+        onClick={() => {
+          void closeWindow();
+        }}
+      />
     </div>
   );
 }

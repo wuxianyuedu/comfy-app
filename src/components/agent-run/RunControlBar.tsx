@@ -153,7 +153,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
           <Button
             className="h-9"
             disabled={busy}
-            onClick={() => void c.start()}
+            onClick={() => {
+              void c.start();
+            }}
             size="sm"
             type="button"
           >
@@ -166,7 +168,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             disabled={busy}
-            onClick={() => void c.pause()}
+            onClick={() => {
+              void c.pause();
+            }}
             size="sm"
             type="button"
             variant="outline"
@@ -175,7 +179,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
           </Button>
           <Button
             disabled={busy}
-            onClick={() => void c.cancel()}
+            onClick={() => {
+              void c.cancel();
+            }}
             size="sm"
             type="button"
             variant="ghost"
@@ -187,12 +193,21 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
 
       {run.status === "awaiting_approval" && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={busy} onClick={() => void c.approve()} size="sm" type="button">
+          <Button
+            disabled={busy}
+            onClick={() => {
+              void c.approve();
+            }}
+            size="sm"
+            type="button"
+          >
             确认，继续
           </Button>
           <Button
             disabled={busy}
-            onClick={() => void c.pause()}
+            onClick={() => {
+              void c.pause();
+            }}
             size="sm"
             type="button"
             variant="outline"
@@ -201,7 +216,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
           </Button>
           <Button
             disabled={busy}
-            onClick={() => void c.cancel()}
+            onClick={() => {
+              void c.cancel();
+            }}
             size="sm"
             type="button"
             variant="ghost"
@@ -213,12 +230,21 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
 
       {run.status === "paused" && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button disabled={busy} onClick={() => void c.resume()} size="sm" type="button">
+          <Button
+            disabled={busy}
+            onClick={() => {
+              void c.resume();
+            }}
+            size="sm"
+            type="button"
+          >
             继续
           </Button>
           <Button
             disabled={busy}
-            onClick={() => void c.cancel()}
+            onClick={() => {
+              void c.cancel();
+            }}
             size="sm"
             type="button"
             variant="ghost"

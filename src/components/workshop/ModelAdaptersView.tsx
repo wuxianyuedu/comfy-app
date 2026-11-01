@@ -413,6 +413,7 @@ export function ModelAdaptersView() {
           <Button
             className="h-auto px-4 py-2"
             disabled={saving}
+            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
             onClick={() => void save()}
             variant="primary-solid"
           >

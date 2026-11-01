@@ -303,6 +303,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       <Button
                         className="border-border bg-bg text-ink hover:bg-subtle text-2xs h-auto shrink-0 rounded-lg px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-50"
                         disabled={!!parsing || total === 0 || (parentParsed && cnt.outdated === 0)}
+                        // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                         onClick={() => void onParseAllParent(parent)}
                         variant="outline"
                       >

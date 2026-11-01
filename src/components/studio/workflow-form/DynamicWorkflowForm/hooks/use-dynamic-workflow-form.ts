@@ -315,6 +315,7 @@ export function useDynamicWorkflowForm(
    *  onChange 里复位 `event.target.value`（同一套样板全库 9 份）。 */
   const uploadPicker = useFilePicker({
     accept: "image/*",
+    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     onPick: (file) => void onFile(file),
   });
 

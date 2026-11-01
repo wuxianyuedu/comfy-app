@@ -19,7 +19,7 @@ import { RangeSlider } from "~/components/ui/range-slider";
 const meta = {
   title: "UI/RangeSlider",
   component: RangeSlider,
-  args: { value: 0.5, min: 0, max: 1, onChange: () => void 0 },
+  args: { value: 0.5, min: 0, max: 1, onChange: () => undefined },
 } satisfies Meta<typeof RangeSlider>;
 
 export default meta;

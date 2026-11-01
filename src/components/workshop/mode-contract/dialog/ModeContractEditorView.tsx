@@ -244,7 +244,13 @@ function ModeContractDraftPanel({
       )}
 
       <div>
-        <Button disabled={saving} onClick={() => void controller.save()} variant="primary-solid">
+        <Button
+          disabled={saving}
+          onClick={() => {
+            void controller.save();
+          }}
+          variant="primary-solid"
+        >
           {saving ? "保存中…" : "保存模式契约"}
         </Button>
       </div>

@@ -74,6 +74,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
           <Button
             aria-label="刷新 ComfyUI 状态"
             className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
             onClick={() => void c.refreshStatus()}
             size="xs"
             variant="outline"
@@ -110,6 +111,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
                 点一下，openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */}
             <StatusButton
               disabled={c.opening || (!running && !c.status?.probing)}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.openComfy()}
               variant="primary"
             >
@@ -123,6 +125,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
                 读起来像「这四个按钮各有不同职责」，而它们其实是同一层。 */}
             <StatusButton
               disabled={c.browserOpening || (!running && !c.status?.probing)}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.openComfyInBrowser()}
             >
               {c.browserOpening ? "打开中…" : "在浏览器打开"}
@@ -134,6 +137,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               /* 已配置路径才允许启动：`comfyStart` 会拿库里的路径去 spawn，
                 空路径的失败文案（服务端给的）不如这里提前说清去哪配。 */
               disabled={busy || running || (!!c.instance && !c.instance.pathConfigured)}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.startComfy()}
               variant={running ? "primary" : "primary-solid"}
             >
@@ -141,6 +145,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
             </StatusButton>
             <StatusButton
               disabled={busy || !running}
+              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onClick={() => void c.stopComfy()}
               variant={running ? "primary-solid" : "primary"}
             >

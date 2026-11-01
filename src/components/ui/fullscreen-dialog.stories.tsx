@@ -33,7 +33,7 @@ const meta = {
   component: FullScreenDialog,
   args: {
     open: false,
-    onOpenChange: () => void 0,
+    onOpenChange: () => undefined,
     label: "全屏视图",
     children: null,
   },

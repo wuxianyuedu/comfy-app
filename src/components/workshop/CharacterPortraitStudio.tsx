@@ -54,6 +54,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   /* 导入定妆照：隐藏 input + 选完复位收进`ui/file-picker`。 */
   const importPicker = useFilePicker({
     accept: "image/*",
+    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     onPick: (file) => void actions.importFile(character, file),
   });
 
@@ -159,6 +160,7 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
           className="h-auto rounded-md px-3 py-1.5"
           disabled={!canGenerate}
           onClick={() =>
+            // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
             void actions.generate(
               character,
               session.channel === "remote" && effectiveRemoteModel

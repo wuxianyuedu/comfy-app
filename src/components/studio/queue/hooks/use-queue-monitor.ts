@@ -210,6 +210,7 @@ export function useQueueMonitor(): QueueMonitorController {
     loadError: listQ.isError ? "读不到任务记录，后端可能刚重启" : null,
     logRow,
     isBusy: (id: string) => action.isBusy(id),
+    // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     refresh: () => void listQ.refetch(),
     cancel,
     openFolder,
