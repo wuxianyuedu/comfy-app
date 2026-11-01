@@ -91,8 +91,8 @@ async function readToken(
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("fill", `var(${n})`);
     path.setAttribute("stroke", `var(${n})`);
-    svg.appendChild(path);
-    document.body.appendChild(svg);
+    svg.append(path);
+    document.body.append(svg);
     const cs = getComputedStyle(path);
     const out = { raw, fill: cs.fill, stroke: cs.stroke };
     svg.remove();
@@ -105,7 +105,7 @@ async function readSurface(page: Page, cls: string): Promise<string> {
   return page.evaluate((c) => {
     const el = document.createElement("div");
     el.className = c;
-    document.body.appendChild(el);
+    document.body.append(el);
     const bg = getComputedStyle(el).backgroundColor;
     el.remove();
     return bg;
@@ -286,8 +286,8 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
             const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
             path.setAttribute("style", `stroke: ${e}`);
-            svg.appendChild(path);
-            document.body.appendChild(svg);
+            svg.append(path);
+            document.body.append(svg);
             const stroke = getComputedStyle(path).stroke;
             svg.remove();
             return {
@@ -434,9 +434,9 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         /* 类名是真实路径的关键：stroke 由样式表按这个选择器给，不是内联。 */
         path.setAttribute("class", "react-flow__background-pattern lines");
-        svg.appendChild(path);
-        wrap.appendChild(svg);
-        document.body.appendChild(wrap);
+        svg.append(path);
+        wrap.append(svg);
+        document.body.append(wrap);
         const stroke = getComputedStyle(path).stroke;
         wrap.remove();
         return stroke;
@@ -480,9 +480,9 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         );
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         path.setAttribute("class", "react-flow__background-pattern lines");
-        svg.appendChild(path);
-        host.appendChild(svg);
-        document.body.appendChild(host);
+        svg.append(path);
+        host.append(svg);
+        document.body.append(host);
         const stroke = getComputedStyle(path).stroke;
         host.remove();
         return stroke;
@@ -525,7 +525,7 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         const probe = document.createElement("h2");
         probe.className = "font-title";
         probe.textContent = "字体探针";
-        document.body.appendChild(probe);
+        document.body.append(probe);
         const titleFamily = getComputedStyle(probe).fontFamily;
         probe.remove();
         return {

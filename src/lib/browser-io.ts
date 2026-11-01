@@ -46,7 +46,7 @@ export async function copyText(text: string): Promise<boolean> {
     ta.style.position = "fixed";
     ta.style.left = "-9999px";
     ta.setAttribute("readonly", "");
-    document.body.appendChild(ta);
+    document.body.append(ta);
     ta.select();
     const ok = document.execCommand("copy");
     document.body.removeChild(ta);
@@ -80,7 +80,7 @@ export function downloadText(
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
-  document.body.appendChild(a);
+  document.body.append(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);

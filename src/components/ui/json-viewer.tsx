@@ -150,7 +150,7 @@ function ensureHighlightCss() {
   font-weight: 600;
 }
 `;
-  document.head.appendChild(style);
+  document.head.append(style);
   HIGHLIGHT_CSS_INJECTED = true;
 }
 
@@ -258,11 +258,11 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
     while (i < orig.length) {
       const j = lower.indexOf(q, i);
       if (j === -1) {
-        frag.appendChild(document.createTextNode(orig.slice(i)));
+        frag.append(document.createTextNode(orig.slice(i)));
         break;
       }
       if (j > i) {
-        frag.appendChild(document.createTextNode(orig.slice(i, j)));
+        frag.append(document.createTextNode(orig.slice(i, j)));
       }
       const isActive = activeNode === t.node && globalIdx === hitIndex;
       const mark = document.createElement("mark");
@@ -271,7 +271,7 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
         mark.dataset.jvActiveHit = "true";
       }
       mark.textContent = orig.slice(j, j + q.length);
-      frag.appendChild(mark);
+      frag.append(mark);
       globalIdx += 1;
       i = j + q.length;
     }

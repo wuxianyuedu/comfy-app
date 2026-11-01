@@ -25,7 +25,7 @@ describe("copyText", () => {
         select: vi.fn(),
         setAttribute: vi.fn(),
       }),
-      body: { appendChild: vi.fn(), removeChild: vi.fn() },
+      body: { append: vi.fn(), removeChild: vi.fn() },
       execCommand: exec,
     });
     await expect(copyText("hi")).resolves.toBe(true);
@@ -43,7 +43,7 @@ describe("copyText", () => {
       createElement: () => {
         throw new Error("no dom");
       },
-      body: { appendChild: vi.fn(), removeChild: vi.fn() },
+      body: { append: vi.fn(), removeChild: vi.fn() },
     });
     await expect(copyText("x")).resolves.toBe(false);
   });
@@ -68,7 +68,7 @@ describe("downloadText / downloadJson", () => {
     });
     vi.stubGlobal("document", {
       createElement: () => anchor,
-      body: { appendChild: vi.fn(), removeChild: vi.fn() },
+      body: { append: vi.fn(), removeChild: vi.fn() },
     });
     return { anchor, click, revoke };
   }

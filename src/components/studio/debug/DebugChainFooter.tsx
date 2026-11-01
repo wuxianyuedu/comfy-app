@@ -123,7 +123,7 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
     const a = document.createElement("a");
     a.href = uri;
     a.style.display = "none";
-    document.body.appendChild(a);
+    document.body.append(a);
     a.click();
     a.remove();
   }, []);
