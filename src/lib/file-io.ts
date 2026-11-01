@@ -51,7 +51,9 @@ export async function readFileAsText(file: File): Promise<string> {
       }
       resolve(result);
     };
-    reader.onerror = () => reject(new Error("读取文件失败", { cause: reader.error }));
+    reader.onerror = () => {
+      reject(new Error("读取文件失败", { cause: reader.error }));
+    };
     reader.readAsText(file);
   });
 }
@@ -83,7 +85,9 @@ export function readFileAsDataUrl(file: File): Promise<string> {
       }
       resolve(result);
     };
-    reader.onerror = () => reject(new Error("读取本地图片失败", { cause: reader.error }));
+    reader.onerror = () => {
+      reject(new Error("读取本地图片失败", { cause: reader.error }));
+    };
     reader.readAsDataURL(file);
   });
 }

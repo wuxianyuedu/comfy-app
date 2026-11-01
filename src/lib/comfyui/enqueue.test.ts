@@ -51,9 +51,13 @@ describe("configureEnqueue 接缝", () => {
       findStatusAndPromptById: async () => null,
       cancel: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
     };
-    expect(() => mod.configureEnqueue({ taskRepo: fakeRepo })).not.toThrow();
+    expect(() => {
+      mod.configureEnqueue({ taskRepo: fakeRepo });
+    }).not.toThrow();
     // 再来一次空 Partial：合法、只是没覆盖任何东西。
-    expect(() => mod.configureEnqueue({})).not.toThrow();
+    expect(() => {
+      mod.configureEnqueue({});
+    }).not.toThrow();
   });
 });
 

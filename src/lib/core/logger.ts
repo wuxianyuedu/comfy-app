@@ -157,7 +157,9 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
             /* 镜像失败绝不影响日志主流程 */
           }
         }
-        return method.apply(this, /* SAFETY: 类型断言已复核 */ args as never);
+        // pino 的 `logMethod` 钩子要的就是「就地转发」：它自己的类型声明是 `=> void`，
+        // 转发这一步不产出任何值，也不需要往下游返回（#2918 逐处确认过返回值无人消费）。
+        method.apply(this, /* SAFETY: 类型断言已复核 */ args as never);
       },
     },
   };
@@ -326,10 +328,18 @@ function wrap(inner: PinoLogger): Logger {
   const ns = typeof binding === "string" ? binding : "";
   const next = (childNs: string) => wrap(inner.child({ ns: ns ? `${ns}:${childNs}` : childNs }));
   return {
-    debug: (msg, fields) => inner.debug(fields ?? {}, msg),
-    info: (msg, fields) => inner.info(fields ?? {}, msg),
-    warn: (msg, fields) => inner.warn(fields ?? {}, msg),
-    error: (msg, fields) => inner.error(fields ?? {}, msg),
+    debug: (msg, fields) => {
+      inner.debug(fields ?? {}, msg);
+    },
+    info: (msg, fields) => {
+      inner.info(fields ?? {}, msg);
+    },
+    warn: (msg, fields) => {
+      inner.warn(fields ?? {}, msg);
+    },
+    error: (msg, fields) => {
+      inner.error(fields ?? {}, msg);
+    },
     child: next,
   };
 }

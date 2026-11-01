@@ -87,7 +87,8 @@ export function readPgid(pid: number, timeoutMs = 2000): Promise<number | null> 
   return new Promise((resolve) => {
     execFile("ps", ["-o", "pgid=", "-p", String(pid)], { timeout: timeoutMs }, (err, stdout) => {
       if (err) {
-        return resolve(null);
+        resolve(null);
+        return;
       }
       const pgid = Number.parseInt(stdout.trim().split(/\s+/)[0] ?? "", 10);
       resolve(Number.isInteger(pgid) && pgid > 0 ? pgid : null);
@@ -261,15 +262,15 @@ export async function killProcessTreeByImage(image: string): Promise<KillProcess
   return await new Promise<KillProcessTreeResult>((resolve) => {
     const child = spawn("pkill", ["-x", image], { stdio: "ignore" });
     // pkill 的退出码 1 = 「没有匹配的进程」，对回收语义来说是成功（目标已经不在）。
-    child.on("error", (error) =>
-      resolve({ ok: false, via: `pkill -x ${image} 失败（${error.message}）` }),
-    );
-    child.on("close", (code) =>
+    child.on("error", (error) => {
+      resolve({ ok: false, via: `pkill -x ${image} 失败（${error.message}）` });
+    });
+    child.on("close", (code) => {
       resolve({
         ok: code === 0 || code === 1,
         via: `pkill -x ${image}（exit=${code}）`,
-      }),
-    );
+      });
+    });
   });
 }
 

@@ -177,7 +177,9 @@ describe("workflow-run-store", () => {
   });
 
   it("failWorkflowRun 对未登记的 taskId 静默无操作", () => {
-    expect(() => failWorkflowRun("missing", "boom")).not.toThrow();
+    expect(() => {
+      failWorkflowRun("missing", "boom");
+    }).not.toThrow();
     expect(getWorkflowRun("missing")).toBeNull();
   });
 

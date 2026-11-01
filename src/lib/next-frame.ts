@@ -64,7 +64,9 @@ export type CancelNextFrame = () => void;
  */
 export function onNextFrame(cb: () => void): CancelNextFrame {
   const id = requestAnimationFrame(cb);
-  return () => cancelAnimationFrame(id);
+  return () => {
+    cancelAnimationFrame(id);
+  };
 }
 
 /**

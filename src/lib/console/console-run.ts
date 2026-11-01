@@ -301,7 +301,9 @@ export function createConsoleRunner(): ConsoleRunner {
         });
         resolve({ code: null, signal: null });
       });
-      child.once("close", (code, signal) => resolve({ code, signal }));
+      child.once("close", (code, signal) => {
+        resolve({ code, signal });
+      });
     });
     clearTimeout(guard);
     const killed = current?.killed ?? false;

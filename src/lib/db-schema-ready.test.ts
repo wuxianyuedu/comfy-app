@@ -62,7 +62,11 @@ function useTempCwd(): { restore: () => void } {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
   dbFile = path.join(tmp, "db.sqlite");
   const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tmp);
-  return { restore: () => cwdSpy.mockRestore() };
+  return {
+    restore: () => {
+      cwdSpy.mockRestore();
+    },
+  };
 }
 
 /**
@@ -123,7 +127,9 @@ describe("probeSchemaSync", () => {
     const mod = await import("./db-schema-ready");
     mod.resetSchemaReadinessCache();
   });
-  afterEach(() => cwd.restore());
+  afterEach(() => {
+    cwd.restore();
+  });
 
   it("库文件不存在（干净检出、还没 db:push）时返回 unknown，而不是抛异常", async () => {
     const { probeSchemaSync } = await import("./db-schema-ready");
@@ -158,7 +164,9 @@ describe("isSchemaReady 缓存", () => {
     const mod = await import("./db-schema-ready");
     mod.resetSchemaReadinessCache();
   });
-  afterEach(() => cwd.restore());
+  afterEach(() => {
+    cwd.restore();
+  });
 
   it("同进程内只探一次：建表后缓存仍为 false（调用方每轮自行重探的语义由 sweep 决定）", async () => {
     const { isSchemaReady, resetSchemaReadinessCache } = await import("./db-schema-ready");

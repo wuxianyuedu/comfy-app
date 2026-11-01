@@ -91,7 +91,7 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
   tabs: [MAIN_TAB],
   activeTabId: MAIN_TAB_ID,
 
-  openTab: (tab) =>
+  openTab: (tab) => {
     set((state) => {
       const id = resolveTabId(tab);
       const existing = state.tabs.find((t) => t.id === id);
@@ -121,12 +121,14 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
         blockedUrl: tab.blockedUrl ?? null,
       };
       return { tabs: [...state.tabs, next], activeTabId: id };
-    }),
+    });
+  },
 
-  activateTab: (id) =>
-    set((state) => (state.tabs.some((t) => t.id === id) ? { activeTabId: id } : state)),
+  activateTab: (id) => {
+    set((state) => (state.tabs.some((t) => t.id === id) ? { activeTabId: id } : state));
+  },
 
-  closeTab: (id) =>
+  closeTab: (id) => {
     set((state) => {
       if (id === MAIN_TAB_ID) {
         return state;
@@ -142,10 +144,12 @@ export const useShellTabs = create<ShellTabsState>((set) => ({
           ? (tabs[Math.max(0, idx - 1)]?.id ?? tabs[0]?.id ?? MAIN_TAB_ID)
           : state.activeTabId;
       return { tabs, activeTabId };
-    }),
+    });
+  },
 
-  updateTab: (id, patch) =>
+  updateTab: (id, patch) => {
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-    })),
+    }));
+  },
 }));

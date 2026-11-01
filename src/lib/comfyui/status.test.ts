@@ -275,9 +275,15 @@ describe("配置端口抢跑 — 不让 Get-NetTCPConnection 一个人占满首�
       failed: false,
     });
     vi.mocked(probeComfyAtPort).mockResolvedValue("http://127.0.0.1:8188");
-    // sleep-ok: mock 内部延迟：权威查询（Get-NetTCPConnection）在真机上是 ~2.5s 的慢查询，这里用 5s 模拟它 —— 判据是「不被它拖住」（dt < 2000）。
     vi.mocked(findPidListeningPort).mockImplementation(
-      () => new Promise((r) => setTimeout(() => r(8188), 5000)),
+      () =>
+        // sleep-ok: mock 内部延迟：权威查询（Get-NetTCPConnection）在真机上是 ~2.5s 的慢查询，
+        // 这里用 5s 模拟它 —— 判据是「不被它拖住」（dt < 2000）。
+        new Promise((r) =>
+          setTimeout(() => {
+            r(8188);
+          }, 5000),
+        ),
     );
 
     const t0 = Date.now();

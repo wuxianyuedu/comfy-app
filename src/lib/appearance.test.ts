@@ -85,7 +85,9 @@ describe("applyAppearance", () => {
   });
 
   it("没有元素时是空操作（SSR 不炸）", () => {
-    expect(() => applyAppearance(DEFAULT_APPEARANCE, null)).not.toThrow();
+    expect(() => {
+      applyAppearance(DEFAULT_APPEARANCE, null);
+    }).not.toThrow();
   });
 });
 
