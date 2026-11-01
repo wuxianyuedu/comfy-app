@@ -415,6 +415,29 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(threeDots.output).toContain("纯格式化 12 个");
   });
 
+  /* **区间两侧是同一个提交 ⇒ 必须是 `skip`，不是「没有纯格式化」**（ISSUE #3026）。
+   *
+   * 现场：平台那一跑的命令是 `--range <merge-sha>..<merge-sha>`（`mergePreviewBase()`
+   * 取的端点恒等于 HEAD），于是每一份配对的 `before` / `after` 都取不到、
+   * `classifyReformatOnly` 连 oxfmt 都没起过 —— 屏幕上却是一句
+   * `[ok] 本次改动 N 个源文件，没有纯格式化的`。那两句在终端里一模一样，而一句是
+   * 「判过了」、一句是「没判」，三态口径（§13.5.25）在这里塌成了两态。 */
+  test("区间两侧是同一个提交 ⇒ 报「没判」，不冒充「没有纯格式化」", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+
+    const head = headSha(repo);
+    const r = repo.run(["--range", `${head}..${head}`]);
+    expect(r.code).toBe(0);
+    /* 空 patch 那一支先命中（也是 `skip`）—— 这里钉的是**它不许冒充「判过了」**。 */
+    expect(r.output).toContain("[skip]");
+    expect(r.output).not.toContain("没有纯格式化的");
+  });
+
   /* 「逐提交的读数取不到」≠「这条提交干净」（ISSUE #2990 的 `cnb-rmn-1k6bqsdfg`）。
    *
    * 现场：平台那一格判的是**合成合并预览**，护栏 ② 一个 offender 都没点名（屏幕上是

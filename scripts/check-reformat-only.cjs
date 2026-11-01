@@ -719,12 +719,25 @@ async function main() {
     return;
   }
 
+  /* 区间两侧解析成**同一个提交**（平台合并预览那一档：端点取自同一个 sha）⇒ 这一轮
+   * 没有可判的改动面。它必须是 `skip`，不能落进下面那条「配对为空 ⇒ 没有纯格式化」
+   * 的出口（ISSUE #3026：那两句在屏幕上一模一样，而一句是「判过了」、一句是「没判」）。 */
+  if (range && rangeBefore === rangeAfter) {
+    gateSkip("格式化提交分离", `区间两侧是同一个提交（${rangeBefore.slice(0, 8)}），没有可判的改动面`);
+    return;
+  }
+
   /* 暂存区口径下,「改动后」的内容在 index 里而不是某个 rev —— 新增文件的
    * 改动前版本不存在(该文件在 HEAD 里没有),所以内容取空串,由 collectPairs
    * 按「任一侧取不到就不判定」跳过(纯新增不算格式化)。 */
   const files = collectChangedFiles(patch);
+  /* 「改动后」的取法**两档各一种，不许混**：
+   *   · 暂存区口径（`range` 为空）⇒ `:<路径>`，改动后的内容在 index 里；
+   *   · 区间口径 ⇒ `<after>:<路径>`。
+   * 混着试过一次（ISSUE #3026）：那样暂存档会先命中 `HEAD` 的那份内容，于是被暂存的
+   * 重排一份都判不出来 —— `pre-commit` 现场那条「暂存区里格式化 12 个文件」当场变绿。
+   * 区间档也不需要 index：平台 / 干净快照上根本没有可用的 index。 */
   const pairs = collectPairs(files, rangeBefore, (f) =>
-    // 暂存区口径:改动后的内容在 index 里,`:<path>` 正是它的取法。
     gitOrEmpty(["show", range ? `${rangeAfter}:${f.after}` : `:${f.after}`]),
   );
   process.exit(
