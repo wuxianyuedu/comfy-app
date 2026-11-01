@@ -46,12 +46,12 @@ function openPopup(): HTMLElement {
 describe("SelectMenu 的弹层定位", () => {
   it("关掉 alignItemWithTrigger：弹层不把已选项对齐到触发器（位置与选中项无关）", () => {
     renderMenu();
-    expect(openPopup().getAttribute("data-align-trigger")).toBe("false");
+    expect(openPopup().dataset.alignTrigger).toBe("false");
   });
 
   it("选中末尾项时弹层口径不变（漂移的成因是定位口径，不是选中项）", () => {
     cleanup();
     renderMenu("z-Image");
-    expect(openPopup().getAttribute("data-align-trigger")).toBe("false");
+    expect(openPopup().dataset.alignTrigger).toBe("false");
   });
 });

@@ -108,9 +108,10 @@ describe("侧栏「项目」分组的缩略态", () => {
          tooltip 的触发器」这个可观测形态（base-ui 落在触发器上的属性）。
          它同时反证了「名字有第二个出口」：按钮里的 `<span>` 收起后会被基元的
          `[&>span:last-child]:truncate` 压成零宽，鼠标没地方悬停就没名字可读。 */
-      expect(btn.hasAttribute("data-base-ui-tooltip-trigger"), `${project.name} 没接 tooltip`).toBe(
-        true,
-      );
+      expect(
+        Object.hasOwn(btn.dataset, "baseUiTooltipTrigger"),
+        `${project.name} 没接 tooltip`,
+      ).toBe(true);
     }
   });
 

@@ -98,8 +98,8 @@ describe("侧栏的模型适配 / 模式契约入口", () => {
     const contract = screen.getByRole("button", { name: "模式契约" });
     /* `ui/sidebar` 只在 active 为真时挂 `data-active` —— 缺席即「不在这」。
        两条一起判还反证了「两项被同一份状态一起点亮」：只点亮当前那一个。 */
-    expect(adapters.hasAttribute("data-active")).toBe(true);
-    expect(contract.hasAttribute("data-active")).toBe(false);
+    expect(Object.hasOwn(adapters.dataset, "active")).toBe(true);
+    expect(Object.hasOwn(contract.dataset, "active")).toBe(false);
   });
 
   it("外壳不再持有这两个视图的渲染路径（渲染只在该视图该在的地方）", () => {

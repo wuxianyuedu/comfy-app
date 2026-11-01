@@ -22,7 +22,7 @@ const wrap = (ui: ReactNode) => <TooltipProvider delay={0}>{ui}</TooltipProvider
  *  `aria-describedby`），所以按 `data-slot` 取那一层。 */
 async function findHintPopup(text: string) {
   const popup = await screen.findByText(text);
-  expect(popup.getAttribute("data-slot")).toBe("tooltip-content");
+  expect(popup.dataset.slot).toBe("tooltip-content");
   return popup;
 }
 
