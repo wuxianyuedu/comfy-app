@@ -35,6 +35,18 @@
  *    见 `.cnb.yml` 的令牌权限读数）；`ls-remote` 用的是**同一条**认证路径与同一枚令牌，
  *    所以「它探通了而推不通」仍然只可能是写权 / 保护规则那一层的事 —— 那才是红。
  *
+ * 6. **推送不带本仓的钩子**（`-c core.hooksPath=`，ISSUE #3025 的第二现场）：平台侧检出
+ *    是**工作区**，`prepare` 起的每一步都在同一棵树上，于是 `.githooks/pre-push` 会跟着
+ *    每一次 `git push` 跑。那一跳判的是「这条分支要不要合进本仓 `master`」，对镜像仓库
+ *    这一推没有对象；而它的前置（`refs/remotes/**`、`git-lfs`）在那一形态里都不成立 ——
+ *    #3025 给钩子补了「按目的地放行」，但那条判据要求 `git remote get-url` 读得到本仓
+ *    remote，平台检出连 remote 都没有（`refs/remotes/**` 零条）⇒ 读不到 ⇒ 按不对称口径
+ *    照旧复算 ⇒ 又一次被自家钩子拦死。所以这一跳**不经过任何本地钩子**：`push` 要在
+ *    别人的仓库上写东西，本仓的提交门槛对它没有管辖权。
+ * 7. **`GIT_DIR` / `GIT_WORK_TREE` 一律不从环境继承**（同上）：平台 `prepare` 里有
+ *    `export GIT_DIR=…` 的做法（本仓 `scripts/ci-*.mjs` 就有几处），那一形态下子进程里的
+ *    `git push` 会推到别的树上 —— 这一格的每一条 git 调用都显式清掉这两个变量，只吃 `cwd`。
+ *
  * ## 用法
  *
  * ```text
@@ -57,6 +69,41 @@ export const DEFAULT_REPO = "wuxianyuedu/comfy-app";
 
 /** 派发的事件名，与 `.github/workflows/pr-gate.yml` 的 `types:` 逐字配对。 */
 export const EVENT_TYPE = "cnb-pr-sync";
+
+/** 本仓检出根（`scripts/` 的上一层）—— 所有 git 子进程在这里跑，不靠继承的工作目录。 */
+const ROOT = path.resolve(import.meta.dirname, "..");
+
+/**
+ * 本格那次 `git push` 的完整参数表（含一条「不带本仓钩子」的 `-c`）。
+ *
+ * 为什么钩子必须被关掉（文件头第 6 条）：平台侧检出是一棵工作区，`.githooks/pre-push`
+ * 对每一次 `git push` 都跑，而它判的是「这条分支要不要合进本仓 `master`」—— 与「在镜像
+ * 仓库上写一个专属 ref」没有关系。它跑了只会把这一格拦在自己的前置条件上（远端的
+ * `refs/remotes/**` 在平台检出里并不存在）。
+ *
+ * 关的是**这一次调用**（`-c`），不是 `git config`：不落盘、不改检出状态，也就没有
+ * 「改完忘了改回去」这一种失败形态。
+ *
+ * @param {string} url 带凭据的推送 URL
+ * @param {string} ref 目标 ref 全名（`refs/heads/...`）
+ * @returns {string[]} git 参数表
+ */
+export function pushArgs(url, ref) {
+  return ["-c", "core.hooksPath=", "push", "--force", url, `HEAD:${ref}`];
+}
+
+/**
+ * git 子进程的环境：清掉 `GIT_DIR` / `GIT_WORK_TREE`（文件头第 7 条）。
+ *
+ * @returns {NodeJS.ProcessEnv} 交给 `spawnSync` 的环境
+ */
+function gitEnv() {
+  /** @type {NodeJS.ProcessEnv} */
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  return env;
+}
 
 /**
  * 镜像 ref 名：按 PR 请求 ID 收口的专属分支（不带 `refs/heads/` 前缀）。
@@ -155,7 +202,7 @@ export function resolveContext(io) {
  * @returns {{code: number, stderr: string, stdout: string}}
  */
 function realRunGit(args) {
-  const r = spawnSync("git", args, { encoding: "utf8" });
+  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv() });
   return {
     code: r.status ?? -1,
     stderr: String(r.stderr ?? ""),
@@ -255,7 +302,7 @@ export async function runMirror(io) {
     log("[mirror] 结论：exit 2 —— 目标仓库 / 令牌这一层的前提没落地（不是这一格判出的红）");
     return CODE.NO_FACT;
   }
-  const push = runGit(["push", "--force", url, `HEAD:refs/heads/${ctx.ref}`]);
+  const push = runGit(pushArgs(url, `refs/heads/${ctx.ref}`));
   if (push.code !== 0) {
     log(`[mirror] 推送失败（exit ${push.code}）：`);
     for (const line of `${push.stdout}\n${push.stderr}`.split("\n")) {
