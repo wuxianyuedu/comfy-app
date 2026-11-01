@@ -52,11 +52,23 @@
  *      两个清单一条都不重合（多半是浅克隆、两份历史不相交）⇒ **不做减法，照旧判并把
  *      这件事说出来**：静默丢改动面比误报一条红更贵。
  *
+ * ── 口径 ⑥：「这个 PR 什么都没改」是一个**结论**，不是「没判」────────────────
+ *
+ *      PR 的目标分支已经包含源分支的**全部**提交时（同步 master / 冲突只在源分支那侧、
+ *      解完与目标逐字节相同），平台仍会合成一个 merge 提交，而 `<基线>...HEAD` 是**空**的。
+ *      早先这一形态落进「改动面为空 ⇒ 退 2」，读起来是「这一格没跑起来」——
+ *      可那一跑真的判过了，答案是「零个文件」：受影响面 = 固定清单，一个文件都不必挑
+ *      （ISSUE #3026 的现场：PR #3023 的 `受影响用例` 因此红，而取消重建的那一跑连
+ *      `Prepare` 都没起来 —— 修这一格才拿得回那一跑的读数）。
+ *      判据是**空集**，不是「容忍空」：合成提交上 `<第一父>..HEAD` 也得是空的，两半
+ *      都空才叫「真没有改动」；有一半取不到 ⇒ 照旧退 2（拿不到测量 ≠ 测量结果是 0）。
+ *
  * 用法（一般不直接跑）：
  *   · `resolveBaseRef(deps)`        ⇒ 「基线是哪一条」
  *   · `changedFilesForBaseRef(ref)` ⇒ 「相对那条基线改了哪些文件」
  *   · `resolveChangedFiles(deps)`   ⇒ 前两件事合起来（按环境选基线）
  *   · `reconcileSyntheticMergeFace(ref, deps)` ⇒ 平台合成 merge 提交上的对账（口径 ⑤）
+ *   · `confirmEmptyChangeFace(ref, deps)` ⇒ 「真的一处都没改」的两半读法（口径 ⑥）
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -210,22 +222,25 @@ export function changedFilesForBaseRef(ref, deps = {}, dots = "...") {
  * `deduped` 是「`<基线>...HEAD` 里有、而 `第一父..HEAD` 里没有」的那些 ——
  * 也就是**别人的改动**。它是读数，调用方拿去念，不参与判决。
  *
- * `ref` 声明成可缺：本模块的调用面里它来自环境变量（`CNB_PULL_REQUEST_TARGET_SHA`），
- * **平台没给这一跑时它就是 `undefined`** —— 那一支正是下面「没有基线可比」的判据。
- * @param {string | undefined} ref 基线（`CNB_PULL_REQUEST_TARGET_SHA` 或分叉点）
+ * `ref` **允许为空**（`null` / `undefined` / `''`）：单看拓扑的那一半（合成提交认不认得出来、
+ * 第一父是谁）与「有没有一个合用的基线」是两件事。早先这里第一句就是 `没有基线可比 ⇒
+ * used: false`，于是平台**给了**基线、而那一对合起来没用（基线比 `第一父^1` 新）时，
+ * 调用方连「这说明对方分支在我基线之后自己落过东西」都念不出来 —— 口径 ⑥ 就是靠这个缺口
+ * 活到 ISSUE #3026 的。现在没有基线也照样给拓扑，`theirs` 取不到就只是把
+ * `<基线>..第一父` 那一半跳过（`deduped` 从三点 diff 读，它本来就不需要这一段）。
+ *
+ * @param {string | null | undefined} ref 基线（`CNB_PULL_REQUEST_TARGET_SHA` 或分叉点）；
+ *   空 = 「这一跑没有合用基线」，只做拓扑那一半
  * @param {{cwd?: string, env?: Record<string, string | undefined>,
  *   runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}}} [deps]
  * @returns {MergeFace}
  * @typedef {{used: false, why: string}
  *   | {used: true, files: string[], renamedFrom: string[], deduped: string[],
- *      firstParent: string, head: string}} MergeFace
+ *      firstParent: string, head: string, base: string}} MergeFace
  */
 export function reconcileSyntheticMergeFace(ref, deps = {}) {
   const env = deps.env ?? process.env;
   const baseRef = String(ref ?? "").trim();
-  if (baseRef === "") {
-    return { used: false, why: "没有基线可比" };
-  }
   const source = String(env.CNB_COMMIT ?? "").trim();
   if (source === "") {
     /* 本地 / 手工触发时没有这个变量 ⇒ 无从对账（那边也没有合成提交）。 */
@@ -257,13 +272,15 @@ export function reconcileSyntheticMergeFace(ref, deps = {}) {
       why: `HEAD 的父提交里没有 CNB_COMMIT ${source.slice(0, 8)}（合成形态认不出来）`,
     };
   }
-  /* `<基线>..第一父` 与 `第一父..HEAD` —— 两段都要真算得出来才谈得上对账。 */
-  const theirs = changedFilesForBaseRef(baseRef, deps, "..");
+  /* `<基线>..第一父` 与 `第一父..HEAD` —— 后者必须真算得出来才谈得上对账（它才是
+   * 「这个 PR 带进来的」）。前者的作用只是「证明它是空的那条」`crosses`：
+   * 没有基线时不跳过对账，只是少一条证据 —— 见口径 ⑥ 与上面 `ref` 那段。 */
+  const theirs = baseRef === "" ? null : changedFilesForBaseRef(baseRef, deps, "..");
   const mine = changedFilesForBaseRef(firstParent, deps, "..");
-  if (!theirs.ok || !mine.ok) {
+  if (!mine.ok) {
     return {
       used: false,
-      why: "算不出「目标分支落地的」与「本 PR 带进来的」两段清单",
+      why: "算不出「本 PR 带进来的」那一段清单（第一父..HEAD）",
     };
   }
   const seen = gitRun(
@@ -278,28 +295,132 @@ export function reconcileSyntheticMergeFace(ref, deps = {}) {
   }
   const seenFiles = seen.stdout.split(/\r?\n/).filter(Boolean);
   const mineAll = new Set([...mine.files, ...mine.renamedFrom]);
-  /* **两条判据缺一不可**：
-   *   · 两段历史相交 —— 否则「第一父..HEAD」只是一段与基线无关的历史，
-   *     拿它当改动面等于把 PR 自己的改动丢了；
-   *   · 两点结果落在三点结果里 —— 常态下两者逐字相等；一条都不落说明这一份检出
-   *     拼不出那条等式（浅克隆最常见），此时不许相信减法。 */
-  const crosses =
-    theirs.files.some((f) => mineAll.has(f)) ||
-    mine.files.some((f) => new Set([...theirs.files, ...theirs.renamedFrom]).has(f));
-  if (!crosses || !mine.files.every((f) => seenFiles.includes(f))) {
+  /* 后半条判据：两点结果必须落在三点结果里 —— 常态下两者逐字相等；一条都不落说明
+   * 这一份检出拼不出那条等式（浅克隆最常见），此时不许相信减法。 */
+  if (!mine.files.every((f) => seenFiles.includes(f))) {
     return {
       used: false,
-      why: "两段历史对不上账（多半是浅克隆：取不到第二父那一侧）⇒ 不做减法",
+      why: "两点结果落不进三点结果（多半是浅克隆：取不到第二父那一侧）⇒ 不做减法",
     };
+  }
+  if (theirs !== null) {
+    /* 前半条：两段历史相交 —— 否则「第一父..HEAD」只是一段与基线无关的历史，
+     * 拿它当改动面等于把 PR 自己的改动丢了。**基线不可用（上面 `theirs === null`）
+     * 时这一半没法证明，`used` 也不成立**：那一格由 `confirmEmptyChangeFace()` 接手
+     * （它多一个「两份清单都是空」的判据），调用方念的是那把更细的话。
+     *
+     * `theirs.ok === false` 是「基线那一侧的 diff 没跑起来」（sha 不在对象库里 / 浅克隆）
+     * —— 与「算得出来但对不上」分开念：两者的下一动作不同（前者先 fetch）。 */
+    const theirsOk = theirs.ok;
+    if (!theirsOk) {
+      return {
+        used: false,
+        why: "算不出「目标分支落地的」那一段（基线那一侧取不到）⇒ 不做减法",
+      };
+    }
+    const crosses =
+      theirs.files.some((f) => mineAll.has(f)) ||
+      mine.files.some((f) => new Set([...theirs.files, ...theirs.renamedFrom]).has(f));
+    if (!crosses) {
+      return {
+        used: false,
+        why: "两段历史不相交（基线那一侧对不上第一父）⇒ 不做减法",
+      };
+    }
   }
   const deduped = seenFiles.filter((f) => !mineAll.has(f));
   return {
-    used: true,
-    files: mine.files,
-    renamedFrom: mine.renamedFrom,
+    base: baseRef,
     deduped,
+    files: mine.files,
     firstParent,
     head,
+    renamedFrom: mine.renamedFrom,
+    used: true,
+  };
+}
+
+/**
+ * 「这个 PR 真的一处都没改」—— 口径 ⑥ 的读法（ISSUE #3026）。
+ *
+ * ## 它治的是哪一件事
+ *
+ * 目标分支已经包含源分支的全部提交时（同步 master 之后逐字节相同），平台仍会合成一个
+ * merge 提交，而 `<基线>...HEAD` 是**空**的。早先这一形态被读成「改动面为空 ⇒ 没判」，
+ * 于是 `受影响用例` 那一格红 —— 而它其实判过了，答案是「零个文件」。
+ *
+ * ## 判据：两半都空才算数
+ *
+ *   · `<基线>...HEAD` 空（调用方刚读到的那一份，`emptyFace` 里重复算一次是刻意的：
+ *     这一把的结论必须由**它自己的**两条 git 读数支撑，不继承调用方那次的结果）；
+ *   · 合成提交上 `<第一父>..HEAD` 也空。
+ *
+ * 有一半**取不到**（diff 跑不起来 / 认不出合成提交 / 没有第一父）⇒ `ok: false` 并说清
+ * 哪一半缺 —— 「拿不到测量 ≠ 测量结果是 0」（§13.6.4.1）。调用方照旧退 2。
+ *
+ * ⚠️ 这里**只回答「面是不是真的空」**，不改任何一条判决：「空面 ⇒ 受影响面 = 固定清单」
+ * 那句在 `ci-affected-tests.mjs`，本模块不替它决定跑什么。
+ *
+ * @param {{cwd?: string, env?: Record<string, string | undefined>,
+ *   runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string},
+ *   fallbackRef?: string | null}} [deps]
+ * @returns {{ok: true, via: string, firstParent: string | null, lead: string[]}
+ *   | {ok: false, reason: string}}
+ */
+export function confirmEmptyChangeFace(deps = {}) {
+  const base = resolveBaseRef(deps);
+  if (!base.ok) {
+    return { ok: false, reason: base.reason };
+  }
+  const face = changedFilesForBaseRef(base.ref, deps, base.dots);
+  if (!face.ok) {
+    return { ok: false, reason: face.reason };
+  }
+  if (face.files.length > 0) {
+    return {
+      ok: false,
+      reason: `改动面不是空的（${face.files.length} 个文件）—— 这不是「零个文件」那条形态`,
+    };
+  }
+  const parents = gitRun(
+    ["-c", "core.quotePath=false", "rev-list", "--parents", "-n", "1", "HEAD"],
+    deps,
+  );
+  if (!parents.ok) {
+    return { ok: false, reason: "读不出 HEAD 的父提交（不是 git 检出？）" };
+  }
+  const row = parents.stdout.trim().split(/\s+/).filter(Boolean);
+  const firstParent = row[1] ?? "";
+  if (row.length < 3 || firstParent === "") {
+    /* 只有一条提交历史时，三点 diff 就是全部证据，不需要第二半。 */
+    return {
+      firstParent: null,
+      lead: [],
+      ok: true,
+      via: `${base.via}：单线历史，只有三点 diff 这一半`,
+    };
+  }
+  /* 合成提交上「这个 PR 带进来的」就是 `第一父..HEAD`；它是空的那一份，面才是真空的。
+   * 与 `reconcileSyntheticMergeFace()` 同一读法（两点、同样的 `-M` 与 `core.quotePath=false`）。 */
+  const mine = changedFilesForBaseRef(firstParent, deps, "..");
+  if (!mine.ok) {
+    return { ok: false, reason: `算不出「第一父..HEAD」那一段（${firstParent.slice(0, 8)}）` };
+  }
+  if (mine.files.length > 0) {
+    return {
+      ok: false,
+      reason: `第一父..HEAD 不是空的（${mine.files.length} 个文件）—— 这不是「零个文件」那条形态`,
+    };
+  }
+  /* 空面 PR 的常见成因之一是「只同步了目标分支」：那一批提交在 `<基线>..HEAD` 里、
+   * 却不在 `第一父..HEAD` 里。它是读数（调用方念出来），不参与判决。 */
+  const carried = changedFilesForBaseRef(base.ref, deps, "..");
+  const lead = carried.ok ? carried.files : [];
+  return {
+    firstParent,
+    lead,
+    ok: true,
+    via: `${base.via} 与第一父 ${firstParent.slice(0, 8)} 对过账：两边都是空清单`,
   };
 }
 

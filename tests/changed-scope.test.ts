@@ -14,8 +14,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { gitSandboxEnv, sandboxGitConfig } from "./helpers/git-sandbox-env";
+
 import {
   changedFilesForBaseRef,
+  confirmEmptyChangeFace,
   reconcileSyntheticMergeFace,
   resolveBaseRef,
   resolveChangedFiles,
@@ -333,6 +336,36 @@ describe("changed-scope —— 平台合成 merge 提交上的对账（#2325）"
     expect(face.why).toContain("父提交里没有");
   });
 
+  it("基线比第一父新（PR 已经并进目标 / 逐字节相同）⇒ 三点是恒等式，一个文件都不剔", () => {
+    /* PR #3023 的现场：目标分支已经包含源分支的全部提交。此时基线（= 第一父）与
+     * `第一父^1` 之间没东西可算，`<基线>..第一父` 是空的 —— 早先那一支被读成
+     * 「两段历史不相交」而整条对账被丢掉，调用方连「这说明基线比你们那侧新」都念不出来。 */
+    const { dir, source } = syntheticMerge();
+    const firstParent = git(dir, "rev-parse", "HEAD^1").trim();
+    const face = reconcileSyntheticMergeFace(firstParent, {
+      cwd: dir,
+      env: { CNB_COMMIT: source },
+    });
+    expect(face.used).toBe(true);
+    if (!face.used) {
+      return;
+    }
+    expect(face.files).toEqual(["src/lib/x.ts"]);
+    expect(face.deduped).toEqual([]);
+  });
+
+  it("没有基线（`null`）⇒ 只剩拓扑那一半：不做减法，理由指得出缺的是哪一半", () => {
+    /* 没有基线就没有「别人那一段」可对 —— 这一支不许静默放过（`used: true`），
+     * 也不许把「没基线」说成「浅克隆」。 */
+    const { dir, source } = syntheticMerge();
+    const face = reconcileSyntheticMergeFace(null, { cwd: dir, env: { CNB_COMMIT: source } });
+    expect(face.used).toBe(false);
+    if (face.used) {
+      return;
+    }
+    expect(face.why).toMatch(/不做减法/);
+  });
+
   it("两段历史不相交（合成提交的父与基线无关）⇒ 不做减法，也不许静默", () => {
     const { dir } = syntheticMerge();
     /* 另起一条与 HEAD 完全无关的历史，充作基线。 */
@@ -351,5 +384,150 @@ describe("changed-scope —— 平台合成 merge 提交上的对账（#2325）"
     /* 两份历史不相交时三点 diff 本身就拼不出来 —— 与「两段清单不重合」是同一类
      * 「这一份检出拿不出对照」，只是更早一步。两条都念「不做减法」。 */
     expect(face.why).toContain("不做减法");
+  });
+});
+
+/**
+ * 「这个 PR 真的一处没改」（口径 ⑥，ISSUE #3026）。
+ *
+ * 现场是 PR #3023：目标分支已经包含源分支的全部提交（同步 master 之后逐字节相同），
+ * 平台仍合成 merge 提交，而 `<基线>...HEAD` 是空的 —— 那一跑被读成「改动面为空 ⇒ 没判」
+ * 而红。它其实判过了：答案是零个文件。
+ *
+ * 与上面那族同样**真造 git 仓库**（假 git 回放不出拓扑，而这一族判的就是拓扑）。
+ */
+describe("changed-scope —— 空改动面的两半读法（#3026）", () => {
+  const temps: Array<string> = [];
+
+  afterEach(() => {
+    for (const dir of temps.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /** 跑一条 git。**必须带沙箱环境**：继承来的 `GIT_DIR` 会让 `-C <临时仓库>` 直接失效
+   * （那一次调试里就是它：读的是别人的树，于是每条 diff 都像「坏了」）。 */
+  function git(dir: string, ...args: Array<string>): string {
+    return execFileSync("git", ["-C", dir, ...args], {
+      encoding: "utf8",
+      stdio: "pipe",
+      env: gitSandboxEnv(),
+    });
+  }
+
+  function write(dir: string, rel: string, body: string): void {
+    writeFileSync(path.join(dir, rel), body);
+  }
+
+  function commit(dir: string, msg: string): string {
+    git(dir, "add", "-A");
+    git(dir, "commit", "-q", "-m", msg);
+    return git(dir, "rev-parse", "HEAD").trim();
+  }
+
+  /** 建临时仓库并落下第一条提交（基线）；身份走 `sandboxGitConfig()`。 */
+  function initRepo(): { base: string; dir: string } {
+    const dir = mkdtempSync(path.join(tmpdir(), "changed-scope-empty-"));
+    temps.push(dir);
+    git(dir, "init", "-q", "-b", "main");
+    for (const [k, v] of Object.entries(sandboxGitConfig())) {
+      git(dir, "config", k, v);
+    }
+    write(dir, "README.md", "x\n");
+    return { base: commit(dir, "base"), dir };
+  }
+
+  it("逐字节相同的 PR（同步 master 之后）⇒ 两半都空，判得出「零个文件」", () => {
+    /* #3023 的现场：#3000 的冲突已经以目标分支那一侧解掉，源分支剩下的**净改动为零**
+     * —— 平台照样合成一个 merge 提交，而 `<目标>...HEAD` 是空的。
+     * 拓扑照原样造：源分支 `feat` 从基线分出来、一处没改；目标分支自己有一步。 */
+    const { base, dir } = initRepo();
+    git(dir, "checkout", "-q", "-b", "feat");
+    /* 源分支的净改动为零，但确实动过（那一步与目标分支**同一份内容**）——
+     * #3000 的冲突正是以目标分支那一侧解掉的。 */
+    write(dir, "x.txt", "1\n");
+    commit(dir, "feat: 与目标同形的一步");
+    git(dir, "checkout", "-q", "main");
+    write(dir, "x.txt", "1\n");
+    const target = commit(dir, "main: 同一份内容");
+    git(dir, "checkout", "-q", "feat");
+    git(dir, "merge", "-q", "--no-ff", "-m", "sync main", target);
+    const source = git(dir, "rev-parse", "HEAD").trim();
+    git(dir, "checkout", "-q", "main");
+    git(dir, "merge", "-q", "--no-ff", "-m", "Merge feat into main", source);
+
+    /* 前置读数：这就是 #3023 的那一条（三点 diff 空）。 */
+    expect(changedFilesForBaseRef(target, { cwd: dir })).toEqual({
+      ok: true,
+      files: [],
+      renamedFrom: [],
+    });
+
+    const got = confirmEmptyChangeFace({ cwd: dir, env: { CNB_PULL_REQUEST_TARGET_SHA: target } });
+    expect(got.ok).toBe(true);
+    if (!got.ok) {
+      return;
+    }
+    expect(got.firstParent).toBe(target);
+    /* 读数（同步带进来的那几条）不参与判决 —— 这一版拓扑里它是空的，只核它是一条数组。 */
+    expect(Array.isArray(got.lead)).toBe(true);
+    expect(base === "").toBe(false);
+  });
+
+  it("真的有改动 ⇒ 不是那条形态，理由说得清", () => {
+    const { base, dir } = initRepo();
+    write(dir, "a.txt", "1\n");
+    commit(dir, "feat: a");
+    const got = confirmEmptyChangeFace({ cwd: dir, env: { CNB_PULL_REQUEST_TARGET_SHA: base } });
+    expect(got.ok).toBe(false);
+    if (got.ok) {
+      return;
+    }
+    expect(got.reason).toContain("不是空的");
+  });
+
+  it("三点 diff 空、而「第一父..HEAD」非空 ⇒ 证不出来（两半判据缺一不可）", () => {
+    /* 拓扑：PR 那一侧**只**同步了目标分支、自己一处没改 ⇒ 第一父..HEAD 是空的。
+     * 这一条要造的是反面：第一父..HEAD 有东西。最直接的形态是「PR 自己的改动
+     * 与目标分支那一步在两边各有一份、三点因此为空，而两点看得见自己的那一份」。 */
+    const { base, dir } = initRepo();
+    git(dir, "checkout", "-q", "-b", "feat");
+    write(dir, "a.txt", "1\n");
+    commit(dir, "feat: a");
+    git(dir, "checkout", "-q", "main");
+    write(dir, "t.txt", "t\n");
+    const target = commit(dir, "main: t");
+    git(dir, "checkout", "-q", "feat");
+    git(dir, "checkout", "-q", "--detach");
+    git(dir, "reset", "-q", "--hard", target);
+    git(dir, "merge", "-q", "--no-ff", "-m", "sync main", target);
+    const synced = git(dir, "rev-parse", "HEAD").trim();
+    /* 同步之后再落一笔自己的改动 ⇒ 第一父..HEAD 非空。 */
+    write(dir, "own.txt", "o\n");
+    const source = commit(dir, "feat: own");
+    git(dir, "checkout", "-q", "main");
+    git(dir, "merge", "-q", "--no-ff", "-m", "Merge feat into main", source);
+
+    /* 基线取「同步提交」：三点相对它看得见自己的改动 ⇒ 不是空面形态（退到上面那条判据）。 */
+    const notEmpty = confirmEmptyChangeFace({
+      cwd: dir,
+      env: { CNB_PULL_REQUEST_TARGET_SHA: synced },
+    });
+    expect(notEmpty.ok).toBe(false);
+    if (notEmpty.ok) {
+      return;
+    }
+    expect(notEmpty.reason).toContain("不是空的");
+    expect(base === "").toBe(false);
+  });
+
+  it("读不到基线 ⇒ 证不出来（拿不到测量 ≠ 结果是 0）", () => {
+    const { dir } = initRepo();
+    const got = confirmEmptyChangeFace({ cwd: dir, env: {}, fallbackRef: null });
+    expect(got.ok).toBe(false);
+    if (got.ok) {
+      return;
+    }
+    expect(got.reason).toContain("取不到");
   });
 });

@@ -10,7 +10,9 @@
  *      判成「分支离 master 多远」，而后者随拓扑漂；
  *   ② **没判 ≠ 绿**：git 没跑起来 / 清单为空一律退 2，不许退 0 放行（空清单若
  *      放行，启动器会把 vitest 跑成全量，而全量绿在 PR 这一跳上是被 §13.5.21
- *      否掉的读数）；
+ *      否掉的读数）。**唯一的例外是「拿到了、答案是空的」**（ISSUE #3026）：
+ *      那一形态要先证一次（三点空 **且** 合成提交的 `第一父..HEAD` 也空），
+ *      证得出来才按「零个文件」收 —— 证不出来照旧退 2；
  *   ③ 改动面真的经 `COMFY_AFFECTED_CHANGED` 递进了同一条判决链，并发按
  *      `ci-load.mjs` 收敛（不在这里另写一个 worker 数），退出码原样透传。
  *
@@ -262,13 +264,66 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     expect(code).toBe(1);
   });
 
-  it("清单为空 ⇒ 退 2，并且一次 vitest 都不起", () => {
+  it("清单为空、而证明不了「一处没改」⇒ 退 2，并且一次 vitest 都不起", () => {
+    /* 只有三点 diff 那一条空读数、拿不到父关系（`rev-list` 也不给）⇒ 证不出来，
+     * 照旧退 2：空清单若被当成放行，启动器会把 vitest 跑成全量（§13.5.21 否掉的那个读数）。 */
     const { spawn, seen } = fakeSpawn(0);
     const code = main({
       ...silent(),
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       ledgerDir: null,
-      runGit: () => ({ ok: true, stdout: "" }),
+      runGit: (args) =>
+        args.includes("rev-list") ? { ok: false, stdout: "" } : { ok: true, stdout: "" },
+      spawn,
+      installed: true,
+    });
+    expect(code).toBe(2);
+    expect(seen).toHaveLength(0);
+  });
+
+  it("清单为空、且两半都证明得了 ⇒ 退 0，一次 vitest 都不起（ISSUE #3026）", () => {
+    /* PR #3023 的现场：目标分支已经包含源分支的全部提交（同步 master 之后逐字节
+     * 相同），平台仍合成 merge 提交，而三点 diff 是空的。这一跑**判过了** ——
+     * 答案是「零个文件」，所以是绿；固定清单由 `固定结构用例` 那一格跑，不在这里再跑一遍。 */
+    const { spawn, seen } = fakeSpawn(0);
+    const errs: Array<string> = [];
+    const code = main({
+      writeOut: (_t: string) => undefined,
+      writeErr: (t: string) => errs.push(t),
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      ledgerDir: null,
+      runGit: (args) => {
+        if (args.includes("rev-list")) {
+          /* 合成提交：两个父，第一父就是基线那一侧。 */
+          return { ok: true, stdout: "head123 parent1 parent2\n" };
+        }
+        return { ok: true, stdout: "" };
+      },
+      spawn,
+      installed: true,
+    });
+    expect(code).toBe(0);
+    expect(seen).toHaveLength(0);
+    /* 「静默通过」与「跑过且全绿」在日志里必须分得开（这一格的失效形态就是它俩同形）。 */
+    expect(errs.join("")).toContain("受影响面为空");
+    expect(errs.join("")).toContain("未起 vitest");
+  });
+
+  it("合成提交上第一父..HEAD 不空 ⇒ 不算「一处没改」，退 2", () => {
+    /* 两半判据缺一不可：三点 diff 空、而「这个 PR 带进来的」那一段非空 ⇒ 这份检出
+     * 拼不出「零个文件」那条等式（多半是浅克隆），不许拿它放行。 */
+    const { spawn, seen } = fakeSpawn(0);
+    const code = main({
+      ...silent(),
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      ledgerDir: null,
+      runGit: (args) => {
+        if (args.includes("rev-list")) {
+          return { ok: true, stdout: "head123 parent1 parent2\n" };
+        }
+        /* 三点（`...`）空，两点（`..`）非空。 */
+        return { ok: true, stdout: String(args.at(-1)).includes("...") ? "" : "M\tsrc/a.ts\n" };
+      },
       spawn,
       installed: true,
     });
