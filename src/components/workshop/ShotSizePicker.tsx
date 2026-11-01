@@ -67,8 +67,8 @@ export function ShotSizePicker({
     [state, scene],
   );
 
-  const sections = useMemo<Array<SegmentSection<string>>>(() => {
-    const list: Array<SegmentSection<string>> = [
+  const sections = useMemo<Array<SegmentSection>>(() => {
+    const list: Array<SegmentSection> = [
       {
         label: "比例",
         value: state.ratio,

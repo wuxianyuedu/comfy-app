@@ -49,7 +49,7 @@ export type CheckedEvent = { target: { checked: boolean } };
  * 「值转换是可选的」在这个模块的定位（全库唯一 props 适配器出口）里就是谎言，
  * 现在把它从**类型契约**上就掐掉。
  */
-export function textHandler(onValue: ValueHandler<string>): (event: ValueEvent) => void;
+export function textHandler(onValue: ValueHandler): (event: ValueEvent) => void;
 export function textHandler<T>(
   onValue: ValueHandler<T>,
   transform: (raw: string) => T,
@@ -130,7 +130,7 @@ export function bindKey<T extends object, K extends keyof T>(
  * 与 `textHandler` 共用「取值只有一处」的口径：这条路径读的也是
  * `target.value`，没有第二份取法可言。
  */
-export function readTextInput(event: ValueEvent, onValue: ValueHandler<string>): void {
+export function readTextInput(event: ValueEvent, onValue: ValueHandler): void {
   onValue(event.target.value);
 }
 
