@@ -68,6 +68,9 @@ import { parseJunitXml, failingSuitesFromJunit } from "./precommit-timing.mjs";
  * 而那次红是调度排不上，不是断言报错。 */
 import { isTimeoutShaped, waitForLoadToSettle } from "./affected-launch-load-retry.mjs";
 import { planLaunches } from "./run-affected-tests.mjs";
+/* 停用台账（ISSUE #2948）：全量档是「整档凭证」的口径，剔掉几条就不该再记账 ——
+ * 那一半由下面 `--exclude` 的**在场**决定（见 `planRun` 的 `exclude` 一节）。 */
+import { suspendedNames, suspendedReading } from "./suspended-gate-tests.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 /* junit 落点的三态诊断（#2697）：抽出来单独成模块——full-suite-run.mjs 已过 900 行硬闸，
  * 且诊断逻辑是独立职责、值得被单测直接核。 */
@@ -112,9 +115,17 @@ export const TRACK = freshnessTrack("full");
  * @param {number} [workers] `--maxWorkers`（缺省由 `resolveCiWorkers()` 给）
  * @param {string} [junitFile] 分文件耗时读数的落点。**允许给绝对路径** —— 只要它落在
  *   仓库内，就会被换成相对路径再交给 vitest（原因见 {@link toTransportSafePath}）。
+ * @param {readonly string[]} [exclude] 停用台账要剔掉的用例（ISSUE #2948）。非空即意味着
+ *   「这一跑不是整档」—— 调用点据此不记账（绿了也只是「剩下的那些绿了」，拿它去刷
+ *   整档凭证比不刷更坏，与 `isWholeTrackRun` 拦「透传了参数」是同一条口径）。
  * @returns {{label: string, args: string[]}}
  */
-export function planRun(extra = [], workers = resolveCiWorkers().workers, junitFile = "") {
+export function planRun(
+  extra = [],
+  workers = resolveCiWorkers().workers,
+  junitFile = "",
+  exclude = [],
+) {
   /* 读数参数只在「调用方给了落点」时才加（与钩子那侧 `--junit-dir` 没递到就一个字都不加
    * 同一条口径 —— 让人自己跑的那档形态与此前逐字相同）。 */
   const junitArg = junitFile ? toTransportSafePath(junitFile) : "";
@@ -133,6 +144,10 @@ export function planRun(extra = [], workers = resolveCiWorkers().workers, junitF
       ...(junitArg
         ? ["--reporter=default", "--reporter=junit", `--outputFile.junit=${junitArg}`]
         : []),
+      /* 停用台账：逐条一个旗标，与 `run-affected-tests.mjs` 的 `excludeArgs` 同一个形状
+       * （拼成一个参数会让「剔了哪几条」在命令行上读不出来，而这一档的全部可见性就在
+       * 那一行读数上）。空数组 ⇒ 一个字都不加。 */
+      ...(exclude ?? []).filter(Boolean).flatMap((rel) => ["--exclude", rel]),
       ...extra,
     ],
   };
@@ -395,10 +410,17 @@ export function suitePhaseTax(xmlText, { limit = 10, file = "", wallMs = null, d
  * 「绿」且「跑的是整档」才记：本档透传参数，`--help` / 指到单个文件都会退 0 而没跑
  * 完整档（形状判据三档共用一份，见 `freshness-ledger.mjs` 的 `isWholeTrackRun`）。
  *
- * @param {{exitCode: number, dryRun: boolean, extra?: string[]}} input
+ * ⚠️ 「整档」有**两个**拆法（ISSUE #2948）：调用方在命令行这一侧收窄（透传参数），
+ * 与这一档自己按停用台账剔掉几条（`exclude`）。后者同样是「跑的不是整档」——
+ * 拿它去刷整档凭证比不刷更坏，所以判别口径合并成一处（`extra` 空 **且** `exclude` 空）。
+ *
+ * @param {{exitCode: number, dryRun: boolean, extra?: string[], exclude?: readonly string[]}} input
  * @returns {boolean}
  */
-export function shouldRecord({ exitCode, dryRun, extra = [] }) {
+export function shouldRecord({ exitCode, dryRun, extra = [], exclude = [] }) {
+  if ((exclude ?? []).length > 0) {
+    return false;
+  }
   return exitCode === 0 && !dryRun && isWholeTrackRun(extra).ok;
 }
 
@@ -582,7 +604,19 @@ async function main(argv) {
     /* 删不掉只意味着下面那份榜可能混进上一轮的读数 —— 而这一档是读数，不判红。
      * 真要在意的是「别拿上一轮冒充这一轮」，所以下面打印时把落点一起打出来。 */
   }
-  const run = planRun(extra, load.workers, junitFile);
+  /* 停用台账（ISSUE #2948）：平台这一档里暂不执行的三条（业主口径「先临时关掉，
+   * 后面再开」）在这里剔掉 —— 名字留在固定清单里，本地钩子照跑，剔的只是这一跑的
+   * 收集面。剔了就不记账（`planRun` 的 `exclude` 一节），并把这个缺口说在明处。 */
+  const suspended = [...suspendedNames()];
+  process.stderr.write(suspendedReading(suspended));
+  if (suspended.length > 0) {
+    process.stderr.write(
+      `[full-suite-run] ○ 这一跑剔掉了 ${suspended.length} 条（ISSUE #2948 的停用台账）` +
+        " ⇒ **不构成整档凭证、不记账**：\n" +
+        "  绿只说明「剩下的那些绿了」，拿它去刷整档凭证比不刷更坏（同 `isWholeTrackRun` 那一档）。\n",
+    );
+  }
+  const run = planRun(extra, load.workers, junitFile, suspended);
   if (load.note) {
     process.stderr.write(`[full-suite-run] ${load.note}\n`);
   }
@@ -648,12 +682,10 @@ async function main(argv) {
    * 「这批用例红了」，下一个人去查用例、查一整天。 */
   if (classifyOutcome(res) === "aborted") {
     process.stderr.write(
-      `[full-suite-run] ✗ ${
-        abortedAdvice({
-          label: "全量单测 + 覆盖率",
-          timeoutMs: FULL_SUITE_TIMEOUT_MS,
-        })
-        }        （读数：退出码 ${res.status ?? "信号"}，` +
+      `[full-suite-run] ✗ ${abortedAdvice({
+        label: "全量单测 + 覆盖率",
+        timeoutMs: FULL_SUITE_TIMEOUT_MS,
+      })}        （读数：退出码 ${res.status ?? "信号"}，` +
         `error=${res.error ? String(res.error.code ?? res.error.message) : "无"}）\n` +
         `        规范：docs/standards/13-提交与-code-review.md §13.5.4\n`,
     );
@@ -726,7 +758,7 @@ async function main(argv) {
           `[full-suite-run] ⚠️ **第 2 遍仍然只是超时形态** —— 这台机器此刻给不出可信读数，\n` +
             `  本次这些文件记为**未校验**：既不是绿（没有证据说它过），也不是红\n` +
             `  （失败的是调度，没有一条断言报错）。退 0 放行，**不记账**，逐条点名：\n${
-            named
+              named
             }  ⚠️ 这一档**不许**写成「已通过」；它等价于「这次没测」（ISSUE #1747）。\n` +
             `  **不要**抬 testTimeout，也**不要** --no-verify。\n`,
         );
@@ -740,20 +772,25 @@ async function main(argv) {
       );
     }
   }
-  if (exitCode === 0 && !shouldRecord({ exitCode, dryRun, extra })) {
-    /* **绿了但不记账**：这一跑透传了参数（`--help`、指到单个测试文件），跑的不是整档。
-     * 下面那条「✗ 未通过（退出码 0）」是红的话术，拿它打这一拍会自相矛盾。 */
+  if (exitCode === 0 && !shouldRecord({ exitCode, dryRun, extra, exclude: suspended })) {
+    /* **绿了但不记账**：这一跑透传了参数（`--help`、指到单个测试文件）、或按停用台账
+     * 剔掉了几条（ISSUE #2948），跑的不是整档。下面那条「✗ 未通过（退出码 0）」是红的
+     * 话术，拿它打这一拍会自相矛盾。 */
     process.stderr.write(
-      `[full-suite-run] ${
-        notWholeTrackNotice({
-          label: "全量单测 + 覆盖率",
-          command: "pnpm test:coverage:tracked",
-          why: isWholeTrackRun(extra).why,
-        })}`,
+      `[full-suite-run] ${notWholeTrackNotice({
+        label: "全量单测 + 覆盖率",
+        command: "pnpm test:coverage:tracked",
+        why:
+          isWholeTrackRun(extra).why ??
+          `本次按停用台账剔掉了 ${suspended.length} 条（ISSUE #2948）—— 跑的不是整档`,
+      })}`,
     );
     return 0;
   }
-  if (!shouldRecord({ exitCode, dryRun, extra })) {
+  /* 只判「红 ⇒ 不记账」：`!shouldRecord({…})` 在小结这一侧是**假绿**的陷阱 —— 剔了几条
+   * （或透传了参数）的那次跑绿了，它会走到这里打一句「未通过 / 退出码 0」。上面那两条
+   * 已经各自把「绿且不记账」的口径说完并返回了，这里只剩红着的那一半。 */
+  if (!shouldRecord({ exitCode, dryRun, extra, exclude: suspended })) {
     process.stderr.write(
       `[full-suite-run] ✗ 全量单测未通过（退出码 ${res.status ?? "信号"}）—— **不记账**：\n` +
         "        这条账记的是「上一次真跑绿」，红着记一条「我跑过」会把两件事混成一件。\n" +
