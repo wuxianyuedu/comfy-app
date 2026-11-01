@@ -110,7 +110,7 @@ export function renderReport(report) {
       lines.push(`      → ${action.label}：${action.command}`);
     }
   }
-  if (report.bench && report.bench.ran) {
+  if (report.bench?.ran) {
     lines.push("");
     lines.push("I/O 实测明细（负载窗口内谁在吃 CPU）：");
     for (const target of report.bench.targets) {

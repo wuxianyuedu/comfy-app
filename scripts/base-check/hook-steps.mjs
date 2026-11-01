@@ -348,7 +348,7 @@ export function localTierLabels(hookPath = HOOK) {
       break;
     } // D0 那个 `sh -c '…'` 的收尾引号
     const m = line.match(/^\s*run\s+"([^"]+)"/);
-    if (m && m[1] !== undefined) {
+    if (m?.[1] !== undefined) {
       out.add(m[1]);
     }
   }

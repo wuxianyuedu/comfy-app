@@ -441,7 +441,7 @@ function report() {
  * 任何 `require` 这份文件的用例都会现场跑一次四侧取证并可能 `process.exit`。 */
 if (require.main === module) {
   main().catch((error) => {
-    console.error(`[app-port-vectors] 检查脚本异常：${error && error.message}`);
+    console.error(`[app-port-vectors] 检查脚本异常：${error?.message}`);
     process.exit(1);
   });
 }

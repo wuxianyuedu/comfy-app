@@ -143,7 +143,7 @@ function countTree(sf) {
  *   不传 = 老路径，行为一字不变。
  */
 function countFor(rel, parsed) {
-  const shared = parsed && parsed.get(rel);
+  const shared = parsed?.get(rel);
   if (shared) {
     return countTree(shared);
   }
@@ -208,7 +208,7 @@ function main(parsed) {
   const baseline = readBaseline();
 
   if (UPDATE) {
-    if (baseline && baseline.ruleVersion === RULE_VERSION && total > baseline.total) {
+    if (baseline?.ruleVersion === RULE_VERSION && total > baseline.total) {
       console.error(
         `[void-floats] 拒绝 --update: 当前 ${total} > 基线 ${baseline.total}。棘轮只许降不许升,\n` +
           `  新增的先改用 fireAndForget(p, onError),或在评审里说明「被调方内部已 catch、\n` +

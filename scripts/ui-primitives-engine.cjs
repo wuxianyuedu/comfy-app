@@ -189,7 +189,7 @@ function countNestedMinMax(text) {
         /* 只在**直接内层**（depth 仍为 1）判 —— 深一层的由那一处自己数。 */
         innerRe.lastIndex = i;
         const hit = innerRe.exec(text);
-        if (hit && hit.index === i) {
+        if (hit?.index === i) {
           n++;
           break;
         }

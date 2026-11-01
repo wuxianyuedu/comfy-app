@@ -148,7 +148,7 @@ function scanTree(sf) {
       const labelAttr = attrs.find((a) => ts.isJsxAttribute(a) && a.name.text === "label");
       // `label` 不给、或给成 `null`（`FormField` 只在 `label != null` 时渲染标签行）
       // ⇒ 没有箭头可悬空，不是站点。
-      const init = labelAttr && labelAttr.initializer;
+      const init = labelAttr?.initializer;
       /* `label={null}` / `label={undefined}` 也不渲染标签行 —— 属性的
        * `initializer` 是 `JsxExpression`，字面量在它的 `.expression` 里。 */
       const bound = init && ts.isJsxExpression(init) ? init.expression : init;
@@ -170,7 +170,7 @@ function scanTree(sf) {
            * 都有 `openingElement`，`JsxExpression` 没有 —— 先判类型再取。 */
           const first = kids.find((c) => ts.isJsxElement(c) || ts.isJsxSelfClosingElement(c));
           let tag = "";
-          if (first && first.openingElement) {
+          if (first?.openingElement) {
             tag = first.openingElement.tagName.getText(sf);
           } else if (kids[0] && ts.isJsxExpression(kids[0]) && kids[0].expression) {
             const first = kids[0];
@@ -207,7 +207,7 @@ function collect(parsed) {
     if (FIXTURE_SKIP.has(rel)) {
       continue;
     }
-    const shared = parsed && parsed.get(abs);
+    const shared = parsed?.get(abs);
     const hit = shared ? scanTree(shared) : scanFile(abs);
     if (hit.length) {
       sites.set(rel, hit);

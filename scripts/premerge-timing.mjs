@@ -76,7 +76,7 @@ export function recordTimingLedger(run, opts = {}) {
  * @returns {string}
  */
 export function formatTimingSummary(entries) {
-  const usable = (entries ?? []).filter((e) => e && e.label && Number.isFinite(e.ms) && e.ms >= 0);
+  const usable = (entries ?? []).filter((e) => e?.label && Number.isFinite(e.ms) && e.ms >= 0);
   if (usable.length === 0) {
     return "[premerge-timing] 这一跑没有逐格读数（快照没建 / 段全被跳过）\n";
   }

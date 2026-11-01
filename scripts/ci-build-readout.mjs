@@ -179,7 +179,7 @@ export function fetchStageDetail(run, slug, sn, pipelineId, stageId) {
     stageId,
     "-v",
   ]);
-  const d = res && res.json && typeof res.json === "object" ? res.json.data : null;
+  const d = res?.json && typeof res.json === "object" ? res.json.data : null;
   if (!d || typeof d !== "object") {
     return null;
   }
@@ -216,9 +216,7 @@ export function fetchStageDetail(run, slug, sn, pipelineId, stageId) {
 export function enrichStageErrors(run, slug, sn, json) {
   const data = json && typeof json === "object" ? json.data : null;
   const table =
-    data && data.pipelinesStatus && typeof data.pipelinesStatus === "object"
-      ? data.pipelinesStatus
-      : null;
+    data?.pipelinesStatus && typeof data.pipelinesStatus === "object" ? data.pipelinesStatus : null;
   if (!table) {
     return json;
   }
@@ -309,7 +307,7 @@ export function describeFailedStages(
     /* 两处都是「详情是 null」的出口：`fetchStageDetail` 拿不到/读不懂时回 null，
      * 那时退回摘要里的 status、不打耗时 —— 判定上「取不到详情」与「有详情」必须分开。 */
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- `StageRef` 的字段在 classifyStages 里是从平台 JSON 兜出来的空串，这处兜底仍必要
-    const status = (detail && detail.status) || s.status;
+    const status = detail?.status || s.status;
     const duration =
       detail && detail.duration !== null ? ` · ${formatDurationMs(detail.duration) ?? "未知"}` : "";
     log(

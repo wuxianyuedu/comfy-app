@@ -122,9 +122,7 @@ export function decideCreateBranch({
       branch: name,
       reason:
         `${name} 已经存在（${existsLocal ? "本地" : "远端"} ref 查得到）⇒ 不覆盖、不切换：` +
-        `接着那条分支干就先 \`git checkout ${
-        name
-        }\` 再跑；要新开一条就换一个名字。`,
+        `接着那条分支干就先 \`git checkout ${name}\` 再跑；要新开一条就换一个名字。`,
     };
   }
   if (current && current !== "master" && current !== "HEAD") {
@@ -409,7 +407,7 @@ function trunkFromRemoteHead(remote, remoteHead) {
 export function readFreshnessState(res) {
   let json;
   try {
-    json = JSON.parse((res && res.stdout) ?? "");
+    json = JSON.parse(res?.stdout ?? "");
   } catch {
     return "unknown";
   }
@@ -424,7 +422,7 @@ export function readFreshnessState(res) {
   if (!("code" in json)) {
     return "unknown";
   }
-  const state = json.installDrift && json.installDrift.state;
+  const state = json.installDrift?.state;
   /* `no-install` 与「远端漂移」可能同时成立（没装 + 远端改过依赖）：那时要念的是**漂移**，
    * 因为它的出口（先 pull 再装）才是完整动作 —— 只说「没装」会让人在旧基线上装一套旧依赖。 */
   if (state === "no-install" && (json.remoteDrifts ?? []).length === 0) {
@@ -443,7 +441,7 @@ export function readFreshnessState(res) {
  * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,state:string}} 归一后的字段
  */
 export function readPullVerdict(json) {
-  const d = (json && json.data) ?? {};
+  const d = json?.data ?? {};
   return {
     number: d.number === undefined ? null : Number(d.number),
     mergeableState: String(d.mergeable_state ?? "unknown"),
@@ -492,7 +490,7 @@ export function readPullCreateError(json) {
  * @returns {any | null} 命中的那条记录（`number` / `is_merged` / `state` / `merged_by` 都从它读）
  */
 export function pullRecordForBranch(json, branch) {
-  const raw = json && json.data;
+  const raw = json?.data;
   const list = Array.isArray(raw)
     ? raw
     : raw && Array.isArray(raw.data)
@@ -501,7 +499,7 @@ export function pullRecordForBranch(json, branch) {
         ? json
         : [];
   for (const p of list) {
-    const ref = String((p && p.head && p.head.ref) ?? "");
+    const ref = String(p?.head?.ref ?? "");
     if (ref === `refs/heads/${branch}`) {
       return p;
     }
@@ -541,7 +539,7 @@ export function findMergedPullForHeadSha(json, headSha) {
   if (!sha) {
     return null;
   }
-  const raw = json && json.data;
+  const raw = json?.data;
   const list = Array.isArray(raw) ? raw : raw && Array.isArray(raw.data) ? raw.data : [];
   for (const p of list) {
     if (p?.is_merged !== true) {

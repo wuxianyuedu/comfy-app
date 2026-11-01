@@ -185,12 +185,12 @@ export function cancelledCause(stage) {
   /* 「谁抢的锁」只认 `got lock:` 后面那一格 —— 不能拿「任意一条 marker 有捕获组」去判，
      否则锁 key（`…-push`）会被当成流水线 id 念出来。 */
   const lockHit = error.match(/got lock:\s*([^\s，,。]+)/i);
-  if (lockHit && lockHit[1]) {
+  if (lockHit?.[1]) {
     holder = lockHit[1].replace(/\.$/, "");
     /* 锁 key 里没有 `cnb-` 前缀，而抢锁的是**某一条流水线**：`got lock` 的原话里
        永远带着那条流水线的 id 或构建号（实测两种都出现过），优先认 `cnb-` 打头的那个。 */
     const snHit = error.match(/\b(cnb-[\w-]+?-\d{3,})\b/);
-    if (snHit && snHit[1]) {
+    if (snHit?.[1]) {
       holder = pipelineSn(snHit[1]);
     }
     byLock = true;
@@ -207,7 +207,7 @@ export function cancelledCause(stage) {
       kind: "cancelled",
       reason: error || null,
       holder,
-      sn: holder && holder.startsWith("cnb-") ? holder : null,
+      sn: holder?.startsWith("cnb-") ? holder : null,
     };
   }
   /* ② 状态是 error，但原话是「被另一条流水线拿走了锁 / 被终止」⇒ 仍然是取消。
@@ -217,7 +217,7 @@ export function cancelledCause(stage) {
       kind: "cancelled",
       reason: error || null,
       holder,
-      sn: holder && holder.startsWith("cnb-") ? holder : null,
+      sn: holder?.startsWith("cnb-") ? holder : null,
     };
   }
   if (FAILED_STATES.has(status)) {
@@ -239,7 +239,7 @@ export function pipelineSn(pipelineId) {
   /* 流水线 id 的形状是 `<构建号>-<序号>`，而构建号自己是 `cnb-<短码>-<轮次>` ⇒
      先解到 `cnb-` 打头的那一段，再去掉尾部序号。`-\d+` 这条尾巴是唯一的收尾信号。 */
   const m = id.match(/^(cnb-.*?)-\d+$/);
-  return m && m[1] ? m[1] : id;
+  return m?.[1] ? m[1] : id;
 }
 
 /**
@@ -277,9 +277,7 @@ export function classifyBuildOutcome(json) {
   const configured = [];
   const pipelines = [];
   const table =
-    data && data.pipelinesStatus && typeof data.pipelinesStatus === "object"
-      ? data.pipelinesStatus
-      : {};
+    data?.pipelinesStatus && typeof data.pipelinesStatus === "object" ? data.pipelinesStatus : {};
   for (const key of Object.keys(table)) {
     const p = table[key];
     if (!p || typeof p !== "object") {

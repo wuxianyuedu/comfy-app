@@ -109,7 +109,7 @@ function SidebarProvider({
     preferredOpen,
   });
   const open = !collapsed;
-  const choiceInForce = choice !== null && choice.atCrossing === crossings;
+  const choiceInForce = choice?.atCrossing === crossings;
   /* 收起是纪律替用户做的，还是用户自己点的 —— 决定提示怎么说。 */
   const collapsedByAuto = collapsed && !choiceInForce;
 

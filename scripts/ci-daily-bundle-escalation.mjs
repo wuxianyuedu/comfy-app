@@ -255,7 +255,7 @@ export function fetchBundleRedStreak({
   for (let i = at; i < daily.length && examined < need; i += 1) {
     const sn = String(daily[i]?.sn ?? "");
     if (sn === "") {continue;}
-    const reuse = known && known.sn === sn ? known : null;
+    const reuse = known?.sn === sn ? known : null;
     if (!reuse && fetched >= fetchCap)
       {return {
         days: "unknown",

@@ -146,7 +146,7 @@ export function pushFreshnessLedger({ root, kinds, run }) {
    * 而失败的那一步把整跑后面所有格的输入面换成了它们（ISSUE #2344）。 */
   const unstage = () => {
     const res = git(["reset", "-q", "--", ...allRels]);
-    if (res && res.status === 0) {
+    if (res?.status === 0) {
       return "";
     }
     return (

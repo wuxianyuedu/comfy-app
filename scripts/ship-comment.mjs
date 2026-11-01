@@ -84,7 +84,7 @@ export function appendComment({ run, log, slug, number, body, mkTmp, route = "is
   const res = onPull
     ? cnbJson(run, ["pulls", "post-pull-comment", ...tail])
     : cnbJson(run, ["issues", "post-issue-comment", ...tail]);
-  if (!res || res.code !== 0) {
+  if (res?.code !== 0) {
     return { posted: false, bodies: null };
   }
   return { posted: true, bodies: readCommentBodies({ run, slug, number, route }) };

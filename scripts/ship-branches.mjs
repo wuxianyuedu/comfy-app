@@ -89,7 +89,7 @@ export function branchLandingRows(
       pr: rec ? Number(rec.number) : null,
       isMerged,
       state: rec ? String(rec.state ?? "") : null,
-      mergedBy: Boolean(rec && rec.merged_by),
+      mergedBy: Boolean(rec?.merged_by),
       remote: remoteRefs.has(b.name),
       current: b.name === current,
       verdict,

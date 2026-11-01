@@ -175,7 +175,7 @@ function main(parsed) {
       if (path.basename(key).endsWith(".d.ts")) {
         continue;
       }
-      if (skip && skip.test(path.basename(key))) {
+      if (skip?.test(path.basename(key))) {
         continue;
       }
       scanOne(sourceFile, key);

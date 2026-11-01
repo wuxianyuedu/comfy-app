@@ -86,7 +86,7 @@ export function buildLevers(report) {
   levers.push(blockCloneLever(volume, caps, drive));
   levers.push(defenderLever(volume, report.defender ?? { known: false }));
   levers.push(filtersLever(volume, report.bench ?? null));
-  if (report.bench && report.bench.ran) {
+  if (report.bench?.ran) {
     levers.push(ioBenchLever(report.bench));
   }
   levers.push(
@@ -544,8 +544,8 @@ function ioBenchLever(bench) {
     parts.push(`${target.label}：${formatThroughput(target)}`);
   }
   let verdict = "读数见下。";
-  if (compare && compare.comparable) {
-    verdict = compare.devFaster
+  if (compare?.comparable) {
+    verdict = compare?.devFaster
       ? "开发卷在四项上都不慢于参考卷 → 筛选器栈没有形成瓶颈。"
       : "开发卷在某些项上慢于参考卷 → 那几项是真正的开销所在。";
   } else if (bench.note) {
@@ -676,7 +676,7 @@ function gitIndexLever(git) {
  * @returns {Lever}
  */
 function cacheLever(id, title, entry, drive) {
-  if (!entry || !entry.path) {
+  if (!entry?.path) {
     return {
       id,
       title,

@@ -352,7 +352,7 @@ export function runNewIssue({
     ...(plan.priority ? ["--priority", plan.priority] : []),
     "-v",
   ]);
-  const d = got && got.json && typeof got.json === "object" ? got.json.data : null;
+  const d = got?.json && typeof got.json === "object" ? got.json.data : null;
   const number = Number(d && typeof d === "object" ? (d.number ?? d?.issue?.number) : Number.NaN);
   if (!Number.isInteger(number) || number <= 0) {
     log(

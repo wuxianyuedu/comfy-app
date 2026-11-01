@@ -323,7 +323,7 @@ function pnpmJsEntryIn(dropIn, { isFile }) {
     }
   };
   const own = manifestOf(dropIn);
-  if (own && own.name === "pnpm") {
+  if (own?.name === "pnpm") {
     candidates.push(dropIn);
   }
   for (const pkgDir of candidates) {

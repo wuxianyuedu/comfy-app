@@ -334,10 +334,10 @@ async function runFlow(deps, tmpFiles) {
    * @param {{stdout:string,stderr?:string}} r 执行结果
    */
   const relay = (r) => {
-    if (r.stdout && r.stdout.trim()) {
+    if (r.stdout?.trim()) {
       log(r.stdout.trimEnd());
     }
-    if (r.stderr && r.stderr.trim()) {
+    if (r.stderr?.trim()) {
       log(r.stderr.trimEnd());
     }
   };

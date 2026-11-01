@@ -178,7 +178,7 @@ function countTree(sf, rel = "") {
  *   不传 = 老路径，行为一字不变。
  */
 function countFor(rel, parsed) {
-  const shared = parsed && parsed.get(rel);
+  const shared = parsed?.get(rel);
   if (shared) {
     return countTree(shared, rel);
   }

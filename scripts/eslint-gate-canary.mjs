@@ -234,7 +234,7 @@ function main() {
 
     for (const f of [...tsFiles, ...scriptFiles]) {
       const rules = byFile.get(path.resolve(f.abs));
-      if (!rules || !rules.has(f.rule)) {
+      if (!rules?.has(f.rule)) {
         misses.push(
           `${f.name}：期望命中 ${f.rule}，实际命中 ${rules ? [...rules].join(", ") || "（无）" : "（文件不在输出里 —— 规则面没覆盖到样本目录）"}`,
         );
@@ -246,7 +246,7 @@ function main() {
       misses.push(`clean.ts（反向对照）不该有任何命中，实际：${[...cleanRules].join(", ")}`);
     }
     const noUndefRules = byFile.get(path.resolve(noUndefAbs));
-    if (noUndefRules && noUndefRules.has("no-undef")) {
+    if (noUndefRules?.has("no-undef")) {
       misses.push("node-global.mjs（阴性对照）：no-undef 对 scripts 面是刻意关停的，不该命中");
     }
 

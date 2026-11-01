@@ -628,7 +628,7 @@ function main(io = {}) {
       return 1;
     }
     const grows = [];
-    if (baseline && baseline.ruleVersion === RULE_VERSION) {
+    if (baseline?.ruleVersion === RULE_VERSION) {
       for (const [rel, codes] of Object.entries(cur.files)) {
         for (const [code, n] of Object.entries(codes)) {
           const base = baseline.files?.[rel]?.[code] ?? 0;
