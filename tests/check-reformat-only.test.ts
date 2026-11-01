@@ -600,6 +600,44 @@ describe("pre-commit 现场：必须判「暂存区」而不是上一次提交",
     expect(r.output).toContain("合并提交");
   });
 
+  /* 合并**预览**（ISSUE #3022）：平台那一格没有暂存区，判据落到「判 HEAD 这一次
+   * 提交」那一支，而 `HEAD~1` 是**第一父** —— 合并预览那一笔的第一父是哪一侧由平台
+   * 拼法决定（实测现场是第一父 = 本分支侧），于是 `HEAD~1..HEAD` 覆盖**整条主干**
+   * 带来的 20+ 条提交。它们没有 `format-migration:` 尾注 ⇒ 声明恒 false、护栏 ②
+   * 恒「不干净」，判据红得与本次改动是什么无关（现场：162 份里 120 份判纯格式化）。
+   *
+   * 修法是这一档先问平台要基线（`CNB_PULL_REQUEST_TARGET_SHA`，与 `changed-scope.mjs`
+   * 同一份来源）：给了 ⇒ 区间是「目标 sha..HEAD」= 本 PR 带来的提交。
+   * 场景按真实 PR 搭：分支从主干顶端分出 → 分支上重排（带尾注）→ 主干那边另有
+   * 别人一笔没有尾注的重排 → 平台把主干合进来当第一父。 */
+  test("合并预览：区间取自平台的目标 sha（不把主干那批算进分母）", ({ repo }) => {
+    seedDirty(repo, 12); // 自带一次提交 ⇒ 未格式化版本进历史，这个 sha 当初的主干顶端
+    const fork = headSha(repo);
+    /* 主干那边：别人一笔没有尾注的重排（它不该进本 PR 的分母）。 */
+    repo.write("src/lib/main-only.ts", "export const M={a:1,b:'y'};\n");
+    formatInPlace(repo, ["src/lib/main-only.ts"]);
+    commitAll(repo, "主干：另一批重排（没有尾注）");
+    const mainHead = headSha(repo);
+    /* 分支从分叉点分出，在分支上做重排并声明迁移。 */
+    repo.git("checkout", "-q", "-b", "branch-side", fork);
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, "format only\n\nformat-migration: 用例声明");
+    /* 平台把主干合进来，落成合并提交（不留 MERGE_HEAD）。 */
+    repo.git("merge", "--no-ff", "-q", "-m", "merge preview", mainHead);
+
+    /* 没有基线（退回 `HEAD~1` = 第一父）⇒ 主干那条没有尾注的提交进区间 ⇒ 不按迁移读。 */
+    const withoutBase = repo.run([], { env: { CNB_PULL_REQUEST_TARGET_SHA: undefined } });
+    expect(withoutBase.output).not.toContain("按迁移放行");
+
+    /* 给了基线 ⇒ 区间收回本 PR 带来的提交、尾注都在 ⇒ 按迁移读。 */
+    const r = repo.run([], { env: { CNB_PULL_REQUEST_TARGET_SHA: mainHead } });
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
+  });
+
   test("合并提交豁免不掩盖 CI 的 --range 盘点（按范围判，不受现场影响）", ({ repo }) => {
     seedDirty(repo, 12);
     formatInPlace(
