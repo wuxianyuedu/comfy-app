@@ -54,7 +54,9 @@ export async function GET(): Promise<Response> {
       // 连上先推一帧，让客户端立刻拉一次当前状态（即使还没发生任何变化）。
       send({ changed: true, at: Date.now() });
 
-      unsubscribe = subscribeQueueChanged(() => send({ changed: true, at: Date.now() }));
+      unsubscribe = subscribeQueueChanged(() => {
+        send({ changed: true, at: Date.now() });
+      });
 
       heartbeat = setInterval(() => {
         if (closed) {

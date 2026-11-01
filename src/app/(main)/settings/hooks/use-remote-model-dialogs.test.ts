@@ -38,7 +38,9 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
     const addRemoteModel = vi.fn(async () => ({ ok: true }));
     const { result } = setup({ addRemoteModel });
 
-    act(() => result.current.openAddDialog());
+    act(() => {
+      result.current.openAddDialog();
+    });
     await act(async () => {
       await result.current.submitDialog();
     });
@@ -52,8 +54,12 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
     const addRemoteModel = vi.fn(async () => ({ ok: true }));
     const { result } = setup({ addRemoteModel });
 
-    act(() => result.current.openAddDialog());
-    act(() => result.current.setAddForm({ ...formDefaults, model: "   " }));
+    act(() => {
+      result.current.openAddDialog();
+    });
+    act(() => {
+      result.current.setAddForm({ ...formDefaults, model: "   " });
+    });
     await act(async () => {
       await result.current.submitDialog();
     });
@@ -66,8 +72,12 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
     const addRemoteModel = vi.fn(async () => ({ ok: true }));
     const { result } = setup({ addRemoteModel });
 
-    act(() => result.current.openAddDialog());
-    act(() => result.current.setAddForm({ ...formDefaults, model: "gpt-4o" }));
+    act(() => {
+      result.current.openAddDialog();
+    });
+    act(() => {
+      result.current.setAddForm({ ...formDefaults, model: "gpt-4o" });
+    });
     await act(async () => {
       await result.current.submitDialog();
     });
@@ -83,8 +93,12 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
     }));
     const { result } = setup({ addRemoteModel });
 
-    act(() => result.current.openAddDialog());
-    act(() => result.current.setAddForm({ ...formDefaults, model: "gpt-4o" }));
+    act(() => {
+      result.current.openAddDialog();
+    });
+    act(() => {
+      result.current.setAddForm({ ...formDefaults, model: "gpt-4o" });
+    });
     await act(async () => {
       await result.current.submitDialog();
     });
@@ -100,8 +114,12 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
     }));
     const { result } = setup({ addRemoteModel });
 
-    act(() => result.current.openAddDialog());
-    act(() => result.current.setAddForm({ ...formDefaults, model: "gpt-4o" }));
+    act(() => {
+      result.current.openAddDialog();
+    });
+    act(() => {
+      result.current.setAddForm({ ...formDefaults, model: "gpt-4o" });
+    });
     await act(async () => {
       await result.current.submitDialog();
     });
@@ -113,13 +131,17 @@ describe("useRemoteModelDialogs —— 字段级校验出口", () => {
   it("重开弹窗会清掉上一次的字段错误（不跨次残留）", async () => {
     const { result } = setup();
 
-    act(() => result.current.openAddDialog());
+    act(() => {
+      result.current.openAddDialog();
+    });
     await act(async () => {
       await result.current.submitDialog();
     });
     expect(result.current.fieldErrors.model).toBeTruthy();
 
-    act(() => result.current.openAddDialog());
+    act(() => {
+      result.current.openAddDialog();
+    });
     expect(result.current.fieldErrors).toEqual({});
   });
 });

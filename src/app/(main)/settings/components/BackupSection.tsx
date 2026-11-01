@@ -46,7 +46,9 @@ function BackupRow({
       <Button
         className="h-auto shrink-0 rounded px-2 py-0.5 text-xs"
         disabled={disabled || pending}
-        onClick={() => onRestore(entry.name)}
+        onClick={() => {
+          onRestore(entry.name);
+        }}
         size="xs"
         variant={pending ? "primary-solid" : "outline"}
       >
@@ -165,7 +167,9 @@ export function BackupSection({ c }: { c: ReadySettingsPageController }) {
               </Button>
               <Button
                 className="h-auto rounded px-3 py-1 text-xs"
-                onClick={() => setConfirming(null)}
+                onClick={() => {
+                  setConfirming(null);
+                }}
                 size="xs"
                 variant="outline"
               >

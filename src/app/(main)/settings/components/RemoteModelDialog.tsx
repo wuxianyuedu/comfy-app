@@ -39,7 +39,14 @@ export function RemoteModelDialog({
   /* 关闭语义（Esc / 点遮罩）交给 `ui/dialog`：此前自绘遮罩 div + 手写
      `onClick`，Esc 与焦点归还都没有。 */
   return (
-    <Dialog onOpenChange={(next) => !next && d.closeDialog()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) {
+          d.closeDialog();
+        }
+      }}
+      open
+    >
       {/* 本弹窗自绘关闭按钮（见下方 header）——必须关掉基元的内置那枚，
           否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的 `showCloseButton`）。 */}
       <DialogContent
@@ -54,7 +61,9 @@ export function RemoteModelDialog({
             <Button
               aria-label="关闭"
               className="text-muted-foreground hover:text-ink"
-              onClick={() => d.closeDialog()}
+              onClick={() => {
+                d.closeDialog();
+              }}
               size="icon-sm"
               variant="ghost"
             >
@@ -91,12 +100,12 @@ export function RemoteModelDialog({
                 className="text-sm"
                 fullWidth
                 labels={REMOTE_MODEL_KIND_LABELS}
-                onChange={(kind) =>
+                onChange={(kind) => {
                   d.setAddForm((f) => ({
                     ...f,
                     kind: /* SAFETY: 类型断言已复核 */ kind as RemoteModelKind,
-                  }))
-                }
+                  }));
+                }}
                 options={[...REMOTE_MODEL_KINDS]}
                 popoverMinWidth={160}
                 value={d.addForm.kind}
@@ -114,7 +123,9 @@ export function RemoteModelDialog({
               <Input
                 {...a11y}
                 className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
-                onChange={textHandler((baseUrl) => d.setAddForm({ ...d.addForm, baseUrl }))}
+                onChange={textHandler((baseUrl) => {
+                  d.setAddForm({ ...d.addForm, baseUrl });
+                })}
                 placeholder="https://api.example.com/v1"
                 type="text"
                 value={d.addForm.baseUrl}
@@ -165,7 +176,9 @@ export function RemoteModelDialog({
                   将清除独立密钥、改用全局 API Key。
                   <Button
                     className="text-primary mx-1 h-auto p-0 underline underline-offset-2"
-                    onClick={() => d.setClearKey(false)}
+                    onClick={() => {
+                      d.setClearKey(false);
+                    }}
                     variant="link"
                   >
                     撤销
@@ -175,7 +188,9 @@ export function RemoteModelDialog({
                 !d.addForm.apiKey && (
                   <Button
                     className="text-primary h-auto p-0 underline underline-offset-2"
-                    onClick={() => d.setClearKey(true)}
+                    onClick={() => {
+                      d.setClearKey(true);
+                    }}
                     variant="link"
                   >
                     清除独立密钥，改用全局
@@ -206,7 +221,9 @@ export function RemoteModelDialog({
                     <Button
                       className="text-muted-foreground hover:text-ink text-2xs h-auto rounded px-2 py-0.5"
                       key={name}
-                      onClick={() => d.setAddForm((f) => ({ ...f, model: name }))}
+                      onClick={() => {
+                        d.setAddForm((f) => ({ ...f, model: name }));
+                      }}
                       size="xs"
                       variant="outline"
                     >
@@ -232,7 +249,9 @@ export function RemoteModelDialog({
               <Input
                 {...a11y}
                 className="border-border bg-surface-2 text-ink placeholder:text-muted-foreground/60 focus-visible:border-primary focus-visible:ring-primary/30 h-auto rounded-lg px-3 py-2 text-sm"
-                onChange={(event) => d.setAddForm({ ...d.addForm, model: event.target.value })}
+                onChange={(event) => {
+                  d.setAddForm({ ...d.addForm, model: event.target.value });
+                }}
                 placeholder="输入模型参数值，例如 gpt-4o 或 openai/gpt-4o"
                 type="text"
                 value={d.addForm.model}
@@ -248,7 +267,9 @@ export function RemoteModelDialog({
           <div className="mt-4 flex justify-end gap-2">
             <Button
               className="text-muted-foreground h-auto rounded-lg px-4 py-2 text-sm"
-              onClick={() => d.closeDialog()}
+              onClick={() => {
+                d.closeDialog();
+              }}
               variant="outline"
             >
               取消

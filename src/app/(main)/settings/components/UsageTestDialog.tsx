@@ -58,7 +58,14 @@ export function UsageTestDialog({
   /* mode 快捷选择的当前值：fields 里的 mode 值合法（在预设清单内、非坏值）
    * 才回填 ToggleGroup，否则给空数组（全不选）。 */
   return (
-    <Dialog onOpenChange={(next) => !next && d.closeUsageTest()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) {
+          d.closeUsageTest();
+        }
+      }}
+      open
+    >
       {/* 本弹窗自绘关闭按钮（见下方 header）——必须关掉基元的内置那枚，
           否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的 `showCloseButton`）。 */}
       <DialogContent
@@ -75,7 +82,9 @@ export function UsageTestDialog({
             <Button
               aria-label="关闭"
               className="text-muted-foreground hover:text-ink"
-              onClick={() => d.closeUsageTest()}
+              onClick={() => {
+                d.closeUsageTest();
+              }}
               size="icon-sm"
               variant="ghost"
             >
@@ -91,7 +100,9 @@ export function UsageTestDialog({
               <Textarea
                 {...a11y}
                 className="border-border text-ink bg-surface-2 resize-y"
-                onChange={(event) => d.patchUsageTest({ prompt: event.target.value })}
+                onChange={(event) => {
+                  d.patchUsageTest({ prompt: event.target.value });
+                }}
                 rows={2}
                 value={usageTest.prompt}
               />
@@ -105,7 +116,9 @@ export function UsageTestDialog({
                   <Input
                     {...a11y}
                     className="border-border text-ink bg-surface-2"
-                    onChange={(event) => d.patchUsageTest({ size: event.target.value })}
+                    onChange={(event) => {
+                      d.patchUsageTest({ size: event.target.value });
+                    }}
                     placeholder="1024x1024"
                     type="text"
                     value={usageTest.size}
@@ -122,7 +135,9 @@ export function UsageTestDialog({
                   <Input
                     {...a11y}
                     className="border-border text-ink bg-surface-2"
-                    onChange={(event) => d.patchUsageTest({ size: event.target.value })}
+                    onChange={(event) => {
+                      d.patchUsageTest({ size: event.target.value });
+                    }}
                     placeholder="如 720P（Agnes Flash 固定值）或 1280x704"
                     type="text"
                     value={usageTest.size}
@@ -172,7 +187,9 @@ export function UsageTestDialog({
                             ? "bg-primary/5 border-primary/50 text-primary"
                             : "text-muted-foreground hover:text-ink border-border"
                         }`}
-                        onClick={() => d.addPresetField(preset.key)}
+                        onClick={() => {
+                          d.addPresetField(preset.key);
+                        }}
                         size="xs"
                         variant="outline"
                       >
@@ -213,7 +230,9 @@ export function UsageTestDialog({
           <div className="mt-4 flex justify-end gap-2">
             <Button
               className="text-muted-foreground h-auto rounded-lg px-4 py-2 text-sm"
-              onClick={() => d.closeUsageTest()}
+              onClick={() => {
+                d.closeUsageTest();
+              }}
               variant="outline"
             >
               关闭
@@ -302,7 +321,9 @@ function UsageVideoModeQuickPick({
               {isPreviewableUrl(f.value) && (
                 <Button
                   className="border-warning/60 hover:bg-warning/10 text-2xs mt-1 h-auto rounded px-2 py-0.5"
-                  onClick={() => d.rescueMediaFromMode(i, f.value.trim())}
+                  onClick={() => {
+                    d.rescueMediaFromMode(i, f.value.trim());
+                  }}
                   size="xs"
                   variant="outline"
                 >
@@ -352,14 +373,18 @@ function UsageFieldEditor({
               <div className="flex gap-1.5">
                 <Input
                   className="border-border text-ink bg-surface-2 w-2/5 min-w-0 font-mono text-xs"
-                  onChange={(event) => d.patchField(i, { key: event.target.value })}
+                  onChange={(event) => {
+                    d.patchField(i, { key: event.target.value });
+                  }}
                   placeholder="字段名（如 seed / first_frame）"
                   type="text"
                   value={f.key}
                 />
                 <Input
                   className="border-border text-ink bg-surface-2 w-full min-w-0 font-mono text-xs"
-                  onChange={(event) => d.patchField(i, { value: event.target.value })}
+                  onChange={(event) => {
+                    d.patchField(i, { value: event.target.value });
+                  }}
                   placeholder={
                     f.key === "mode"
                       ? "模式名：text / keyframe / reference（图片请添加 images 行）"
@@ -390,7 +415,9 @@ function UsageFieldEditor({
                   <Hint label="填入公网图片地址占位，直接改成你的图片 URL 即可">
                     <Button
                       className="text-muted-foreground hover:text-ink text-2xs h-auto shrink-0 rounded-lg px-2"
-                      onClick={() => d.patchField(i, { value: "https://" })}
+                      onClick={() => {
+                        d.patchField(i, { value: "https://" });
+                      }}
                       size="xs"
                       variant="outline"
                     >
@@ -401,7 +428,9 @@ function UsageFieldEditor({
                 <Button
                   aria-label="删除该字段"
                   className="text-muted-foreground hover:text-danger-strong"
-                  onClick={() => d.removeField(i)}
+                  onClick={() => {
+                    d.removeField(i);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >
@@ -416,7 +445,9 @@ function UsageFieldEditor({
 
       <Button
         className="text-muted-foreground hover:text-ink border-border mb-3 h-auto rounded-lg border-dashed px-3 py-1.5 text-xs"
-        onClick={() => d.addField()}
+        onClick={() => {
+          d.addField();
+        }}
         size="xs"
         variant="outline"
       >
@@ -520,7 +551,9 @@ function UsageTestResultPanel({
 function FieldImageButton({ hint, onPick }: { hint: string; onPick: (file: File) => void }) {
   const picker = useFilePicker({
     accept: "image/png,image/jpeg,image/webp,image/gif",
-    onPick: (file) => onPick(file),
+    onPick: (file) => {
+      onPick(file);
+    },
   });
   return (
     <>

@@ -31,8 +31,12 @@ function useEditor(initial: State) {
 describe("字段行的稳定 id", () => {
   it("新增的每一行都带 id（缺了它视图就退回「下标当 key」）", () => {
     const { result } = renderHook(() => useEditor({ kind: "chat", fields: [] }));
-    act(() => result.current.editor.addField("seed"));
-    act(() => result.current.editor.addPresetField("duration"));
+    act(() => {
+      result.current.editor.addField("seed");
+    });
+    act(() => {
+      result.current.editor.addPresetField("duration");
+    });
     const ids = result.current.state.fields.map((f) => f.id);
     expect(ids).toHaveLength(2);
     expect(ids.every((id) => Boolean(id))).toBe(true);
@@ -47,7 +51,9 @@ describe("字段行的稳定 id", () => {
       }),
     );
     const before = result.current.state.fields.map((f) => f.id);
-    act(() => result.current.editor.removeField(1));
+    act(() => {
+      result.current.editor.removeField(1);
+    });
     const after = result.current.state.fields;
     expect(after.map((f) => f.key)).toEqual(["a", "c"]);
     /* 关键断言：a 与 c 仍是**原来那两条**（id 逐字相同）。 */
@@ -60,14 +66,18 @@ describe("字段行的稳定 id", () => {
       useEditor({ kind: "chat", fields: [makeUsageField("seed", "1")] }),
     );
     const before = result.current.state.fields[0]!.id;
-    act(() => result.current.editor.patchField(0, { value: "42" }));
+    act(() => {
+      result.current.editor.patchField(0, { value: "42" });
+    });
     expect(result.current.state.fields[0]!.id).toBe(before);
     expect(result.current.state.fields[0]!.value).toBe("42");
   });
 
   it("视频预填的 mode 行也带 id", () => {
     const { result } = renderHook(() => useEditor({ kind: "video", fields: [] }));
-    act(() => result.current.editor.setVideoMode("keyframe"));
+    act(() => {
+      result.current.editor.setVideoMode("keyframe");
+    });
     const [row] = result.current.state.fields;
     expect(row).toMatchObject({ key: "mode", value: "keyframe" });
     expect(row!.id).toBeTruthy();
@@ -81,7 +91,9 @@ describe("字段行的稳定 id", () => {
       }),
     );
     const modeId = result.current.state.fields[0]!.id;
-    act(() => result.current.editor.rescueMediaFromMode(0, "https://a.example/x.png"));
+    act(() => {
+      result.current.editor.rescueMediaFromMode(0, "https://a.example/x.png");
+    });
     const fields = result.current.state.fields;
     const images = fields.find((f) => f.key === "images");
     expect(images?.value).toBe("https://a.example/x.png");

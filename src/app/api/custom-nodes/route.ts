@@ -269,8 +269,12 @@ function spawnCapture(command: string, args: Array<string>): Promise<string | nu
     child.stdout?.on("data", (chunk: string) => {
       stdout += chunk;
     });
-    child.on("error", () => resolve(null));
-    child.on("close", (code) => resolve(code === 0 && stdout.length > 0 ? stdout : null));
+    child.on("error", () => {
+      resolve(null);
+    });
+    child.on("close", (code) => {
+      resolve(code === 0 && stdout.length > 0 ? stdout : null);
+    });
   });
 
   return withTimeoutResult(collect, DISCOVER_TIMEOUT_MS, null, {
@@ -538,8 +542,9 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const send = (ev: ParseStreamEvent) =>
+      const send = (ev: ParseStreamEvent) => {
         controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+      };
 
       const scriptArgs = [
         "-u",
@@ -620,7 +625,9 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
         /* 按行切分交给内核 —— 与探测口原本是一段孪生实现（两份 `indexOf("\n")` 循环，
          * 一份在 `end` 时补发尾行、一份不补）。 */
         const pipeLogs = (s: NodeJS.ReadableStream, defaultLevel: "info" | "error" = "info") => {
-          forEachOutputLine(s, (line) => send({ type: "log", level: defaultLevel, msg: line }));
+          forEachOutputLine(s, (line) => {
+            send({ type: "log", level: defaultLevel, msg: line });
+          });
         };
         // 解析器的 stdout 是正常进度（绿色 info）。
         // stderr 是错误（红色）—— 解析器把语法错误与一般异常经 log_stderr()
@@ -742,8 +749,9 @@ async function buildGetResponse(): Promise<Response> {
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const send = (ev: SettingsStreamEvent) =>
+      const send = (ev: SettingsStreamEvent) => {
         controller.enqueue(encoder.encode(`${JSON.stringify(ev)}\n`));
+      };
       try {
         send({ type: "discover_start", parents: paths, total: paths.length });
         const discoveredByParent: Record<string, Array<unknown>> = {};

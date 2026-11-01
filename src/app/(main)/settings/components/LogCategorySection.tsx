@@ -59,7 +59,9 @@ export function LogCategorySection() {
                 aria-label={`${ORIGIN_TEXT[category]}日志显示开关`}
                 checked={on}
                 className="mt-1 shrink-0"
-                onCheckedChange={(checked) => setEnabled(category, checked)}
+                onCheckedChange={(checked) => {
+                  setEnabled(category, checked);
+                }}
                 size="sm"
               />
             </li>

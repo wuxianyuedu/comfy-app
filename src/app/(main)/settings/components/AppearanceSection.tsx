@@ -33,8 +33,12 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
   useEffect(() => {
     /* 延到提交之后（与 `TopBar` / `workspace/page.tsx` 同一做法）：effect 体内同步
        setState 会触发级联渲染。 */
-    const t = setTimeout(() => setPrefs(readAppearance()), 0);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      setPrefs(readAppearance());
+    }, 0);
+    return () => {
+      clearTimeout(t);
+    };
   }, []);
 
   const update = (patch: Partial<AppearancePrefs>) => {
@@ -74,7 +78,9 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       <RadioGroup
         aria-label="主题外观"
         className="grid max-w-md grid-cols-2 gap-3"
-        onValueChange={(v) => c.setTheme(/* SAFETY: 类型断言已复核 */ v as "dark" | "light")}
+        onValueChange={(v) => {
+          c.setTheme(/* SAFETY: 类型断言已复核 */ v as "dark" | "light");
+        }}
         value={c.theme}
       >
         {
@@ -127,14 +133,18 @@ export function AppearanceSection({ c }: { c: ReadySettingsPageController }) {
       <StepRow
         hint="影响卡片、按钮、输入框等所有圆角。"
         label="圆角"
-        onChange={(id) => update({ radius: id })}
+        onChange={(id) => {
+          update({ radius: id });
+        }}
         steps={RADIUS_STEPS}
         value={prefs.radius}
       />
       <StepRow
         hint="只影响各级标题；正文与小号文字保持原尺寸，不随这一档变化。"
         label="标题字阶"
-        onChange={(id) => update({ fontScale: id })}
+        onChange={(id) => {
+          update({ fontScale: id });
+        }}
         steps={FONT_SCALE_STEPS}
         value={prefs.fontScale}
       />

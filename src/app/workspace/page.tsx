@@ -43,7 +43,9 @@ export default function WorkspacePage() {
    * 载荷里的 `section`（目标设置分区）先落进一次性 state，再由视图栈逐层传给
    * 设置视图、由它消费后回调清空（同下方的 `canvasSeedNew` 那一族）。 */
   const [pendingSettingsSection, setPendingSettingsSection] = useState<string | null>(null);
-  const consumeSettingsSection = useCallback(() => setPendingSettingsSection(null), []);
+  const consumeSettingsSection = useCallback(() => {
+    setPendingSettingsSection(null);
+  }, []);
   useEffect(
     () =>
       subscribeAppEvent("workspace:navigate", ({ view, section }) => {
@@ -66,10 +68,14 @@ export default function WorkspacePage() {
   // 「去设置」的几处入口（侧栏、顶栏菜单、队列、首页算力卡）都切到 settings 视图。
   // 原先是 workspace 内的一层全屏浮层：它会盖住页签条，且「当前在设置里」这件事
   // 只存在于一个布尔值里 —— 既没有页签，也不能同时开着别处。
-  const openSettings = useCallback(() => navigateTo("settings"), [navigateTo]);
+  const openSettings = useCallback(() => {
+    navigateTo("settings");
+  }, [navigateTo]);
   /* 队列屏离线时的出口：送到侧栏「ComfyUI」页（启动 / 关闭与运行状态都在那里，
    * ISSUE #1900）—— 不再送设置页，那一页只管路径。 */
-  const openComfyui = useCallback(() => navigateTo("comfyui"), [navigateTo]);
+  const openComfyui = useCallback(() => {
+    navigateTo("comfyui");
+  }, [navigateTo]);
 
   // ── 画布：为 true 时，画布打开一个全新的命名项目
   const [canvasSeedNew, setCanvasSeedNew] = useState(false);
@@ -77,13 +83,17 @@ export default function WorkspacePage() {
   // ── 当前活跃项目 id（项目闸门的判据）：来源 canvas-store 的 active 键，
   //    只在客户端可读，SSR 首帧为 null。订阅 store 变化事件保持同步。
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const refreshActiveProject = useCallback(() => setActiveProjectId(getActiveId()), []);
+  const refreshActiveProject = useCallback(() => {
+    setActiveProjectId(getActiveId());
+  }, []);
   useEffect(() => {
     // 首帧后同步一次活跃项目 id（getActiveId 只在客户端可读，SSR 为 null）；
     // 与本文件恢复视图处同一约定。订阅回调里的 setState 属合规的外部同步。
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshActiveProject();
-    return subscribeAppEvent("comfyapp:canvas-store-changed", () => refreshActiveProject());
+    return subscribeAppEvent("comfyapp:canvas-store-changed", () => {
+      refreshActiveProject();
+    });
   }, [refreshActiveProject]);
 
   // ── 设置后，无限画布接收这条工作流并为它放一个
@@ -296,11 +306,17 @@ export default function WorkspacePage() {
             activeProjectId={activeProjectId}
             activeView={viewMode}
             canvasSeedNew={canvasSeedNew}
-            onConsumeCanvasSeed={() => setCanvasSeedNew(false)}
-            onConsumePendingWorkflow={() => setPendingCanvasWorkflow(null)}
+            onConsumeCanvasSeed={() => {
+              setCanvasSeedNew(false);
+            }}
+            onConsumePendingWorkflow={() => {
+              setPendingCanvasWorkflow(null);
+            }}
             onConsumeSettingsSection={consumeSettingsSection}
             onEnterProject={refreshActiveProject}
-            onExitProject={() => navigateTo("home")}
+            onExitProject={() => {
+              navigateTo("home");
+            }}
             onHomeNavigate={handleHomeNavigate}
             onNavigate={handleNavSelect}
             onNewProject={handleNewProject}
@@ -318,7 +334,9 @@ export default function WorkspacePage() {
 
         {/* 视频队列弹窗：两个视图分支此前各挂一份同构实例，合并为一处。 */}
         <VideoQueueModal
-          onClose={() => setVideoQueueOpen(false)}
+          onClose={() => {
+            setVideoQueueOpen(false);
+          }}
           onOpenTask={() => {
             setVideoQueueOpen(false);
             // 任务详情弹层（HistoryDetailModal）挂在历史视图里 —— 在视频队列
