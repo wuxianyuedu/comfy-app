@@ -492,7 +492,7 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
     /* `wholeFile` / `lines` 两档与作用域无关，只有第三档要 `scope`；把它留在自己那一档
      * 上判空，`cl` 在场时就不会再出现「另一半恒真」的写法。 */
     const scope = scopes === null ? null : scopes[i];
-    const inScope = scope !== null && cl !== null && cl.names.has(scope);
+    const inScope = scope !== null && cl?.names.has(scope);
     if (cl !== null && (cl.wholeFile || cl.lines.has(lineNo) || inScope)) {
       exempted.push({
         file: r,

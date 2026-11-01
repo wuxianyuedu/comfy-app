@@ -560,9 +560,7 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
       // object_info）走的是 error.details.errors，本仓库的 node_errors 深搜
       // 拿不到，故特判并翻成中文可操作提示，而不是把裸英文 envelope 丢给用户。
       translated = translateWorkflowUnknownNodesError(env);
-      if (translated !== null) {
-        log(taskId, "error", translated);
-      } else {
+      if (translated === null) {
         // 兜底：消息说「validation error」但深搜没找到结构化 node_errors。
         // 把原始 envelope（截断）落盘，支持现场能看到真实形状，而不是只剩
         // 一句「Workflow has N validation error(s)」。
@@ -592,6 +590,8 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
             /* stringify 可能因循环引用抛错 —— 忽略 */
           }
         }
+      } else {
+        log(taskId, "error", translated);
       }
     }
     deps.fail(taskId, deps.promptId() ?? "", translated ?? msg, validationErrors);
