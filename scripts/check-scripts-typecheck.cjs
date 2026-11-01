@@ -613,7 +613,7 @@ function main(io = {}) {
   }
 
   const baseline = loadBase();
-  if (baseline && baseline.__broken) {
+  if (baseline?.__broken) {
     console.error(`${TAG} ✗ ${baseline.__broken}`);
     return 2;
   }

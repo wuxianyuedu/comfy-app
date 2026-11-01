@@ -525,7 +525,12 @@ function main(argv) {
           ? /* `<分叉点>..HEAD` = 本次带进来的那一批（不含分叉点本身：它是目标线上
              *    早就存在、早就被审过的一笔）。 */
             [`${anchor.baseline}..HEAD`]
-          : ["HEAD", "--baseline", anchor.baseline];
+          : /* `--own-from <分叉点>`：把「本笔自身的增补被反向应用后正好回到基线版」
+             *    的那一批减掉（ISSUE #3004）—— 一笔 N 行的改动反向应用必然回上一版，
+             *    那是恒等式、不是退回；不减的话任何改 `src/**` 的提交都会被这一段拦下
+             *    （本会话 #2775 第二批实测：4 份 `src/**` 全被判「整份退回」）。
+             *    分叉点在这里**算得出来**，判据自己算不出，所以由本段显式带上。 */
+            ["HEAD", "--baseline", anchor.baseline, "--own-from", anchor.baseline];
       const t0 = performance.now();
       const r = runScript(script, args);
       gateTimings.push({ label: `段:${seg.label}`, ms: performance.now() - t0 });

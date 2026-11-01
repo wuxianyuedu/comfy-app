@@ -125,10 +125,16 @@ export function isAncestor(ancestor, descendant) {
  * 对 `baseline..sha` 之间改动的每个文件，判它 `sha` 那一版是否 == 基线的某个**祖先**
  * 版本（即退回了）。判据与本文件头「判据形状」一节逐字对应。
  *
- * @param {{sha: string, baseline: string}} target 待查的那一笔与它对照的基线那一笔
- * @returns {{ok: true, lost: string[]} | {ok: false, reason: string}} 取不到事实时给 `ok:false`
+ * `own` 非空时，命中的那份还要过一道「本笔自身」的减除（见 `ownDiffHits()`）——
+ * 一笔 3 行的改动反向应用必然回基线版，那不是退回（ISSUE #3004）。
+ *
+ * @param {{sha: string, baseline: string, own?: {from: string} | null}} target
+ *   待查的那一笔、它对照的基线那一笔，以及（可选）本笔要减掉的那一段起点
+ * @returns {{ok: true, lost: string[], reverted: string[]} | {ok: false, reason: string}}
+ *   取不到事实时给 `ok:false`；`reverted` 是**留在了命中清单里**的那一批（本笔自身的增补
+ *   反向应用对不上），`lost` 是扣掉它们之后的结论。
  */
-export function scan({ sha, baseline }) {
+export function scan({ sha, baseline, own = null }) {
   if (!inGitRepo()) {
     return { ok: false, reason: "不在 git 检出里" };
   }
@@ -159,7 +165,7 @@ export function scan({ sha, baseline }) {
   /* 生成物先摘掉（口径 3），剩下的才是这一轮要取证的面。 */
   const files = changed.filter((f) => !isGenerated(f));
   if (files.length === 0) {
-    return { ok: true, lost: [] };
+    return { ok: true, lost: [], reverted: [] };
   }
 
   /* 取证只要两次遍历：候选历史一次、全部 blob 一次（逐文件 / 逐条历史各起一个 git
@@ -214,7 +220,61 @@ export function scan({ sha, baseline }) {
       lost.push(f);
     }
   }
-  return { ok: true, lost };
+  /* 本笔自身的减除（ISSUE #3004）：见 `ownDiffExplains()` 那段。`own` 取不到 ⇒ 不扣 ——
+   * 「没读到」不许被读成「扣过了」。 */
+  if (own && lost.length > 0) {
+    const explained = ownDiffExplains({ sha, from: own.from, files: lost });
+    if (explained === null) {
+      return { ok: false, reason: "取本笔自身的 diff 没跑起来" };
+    }
+    if (explained) {
+      return { ok: true, lost: [], reverted: lost };
+    }
+  }
+  return { ok: true, lost, reverted: lost };
+}
+
+/**
+ * 命中的那份文件里，哪些是「本笔自己的增补被反向应用后正好回到基线版」。
+ *
+ * ── 为什么需要这一道（ISSUE #3004 的现场）───────────────────────────
+ *
+ * 判据的命中条件是「结果版 == 某个更早版本」，而**一笔 N 行的改动反向应用就必然
+ * 回到上一版** —— 这是恒等式，不是巧合：这一笔的全貌 = 基线 + 本笔 diff，所以
+ * 从结果里减掉本笔 diff 一定等于基线。于是任何一笔纯 `src/**` 的机械改动
+ * （`a && a.b` → `a?.b` 那一种）都会被判成「整份退回」，`pre-push` 因此拦下推送。
+ *
+ * ⚠️ **不能用「结果版 == 基线版」判**（`scan()` 里那条 `result === atBaseline`
+ * 已经放过了正常前移）：被误判的正是「改了东西」的那一批，它们与基线版**不相等**。
+ * 用「本笔 diff 反向应用后得到的 blob」去比，才是与命中条件对称的探针。
+ *
+ * 真事故（#1617 那三次）不受影响：它们被退的文件里，那笔 diff 的反向应用**对不上**
+ * —— 丢的是别人的与更早的增补，本笔自己并没有增补过那些行。
+ *
+ * 做法：把逐个文件的补丁喂给**一次** `git apply -R --cached --check`（只判不改），
+ * 全过就整批算「本笔自身」。用 `--check` 而不是真往索引里写：判据可能在脏树上跑，
+ * 不该留下任何痕迹。
+ *
+ * @param {{sha: string, from: string, files: string[]}} input 待查提交、本笔 diff 的起点、候选文件
+ * @returns {boolean | null} 这一批能否被本笔自身的 diff 整批解释；取不到给 `null`
+ */
+export function ownDiffExplains({ sha, from, files }) {
+  if (files.length === 0) {
+    return true;
+  }
+  /* 补丁的 pathspec 收尾：`--` 之后才是路径（否则与选项混淆）。 */
+  const END_OF_OPTIONS = "--";
+  const specs = files.flatMap((f) => [END_OF_OPTIONS, f]);
+  /* 方向：`from..sha` 是**这一笔做的改动**，反向应用它（`apply -R`）才回到 `from`
+   * 那一版 —— 这正是与命中条件（「结果版 == 更早某一版」）对称的那个探针。
+   * 早先这里写成 `diff -R`，那等于把补丁先反过来、再反向应用一次 = 正向应用，
+   * 对着「已经改过」的结果必然 apply 不上（实测：一笔 3 行改动报
+   * `patch does not apply`，而真事故 ad81a912 的 README.md 反倒「通过」—— 判据整个反了）。 */
+  const patch = git(["diff", "--binary", from, sha, ...specs]);
+  if (patch === null) {
+    return null;
+  }
+  return git(["apply", "-R", "--cached", "--check", "--whitespace=nowarn"], `${patch}\n`) !== null;
 }
 
 /** 从 argv 里取一条 `--key value` 形式的选项。
@@ -231,11 +291,15 @@ function main() {
     if (a.startsWith("--")) {
       return false;
     }
-    // `--baseline <value>` 的 value 不是位置参数。
-    return argv[i - 1] !== "--baseline";
+    // `--baseline <value>` / `--own-from <value>` 的 value 不是位置参数。
+    return argv[i - 1] !== "--baseline" && argv[i - 1] !== "--own-from";
   });
   const sha = positional[0] || "HEAD";
   const baseline = optionValue(argv, "--baseline");
+  /* `--own-from <起点>`（可选，ISSUE #3004）：给了就减掉「本笔自身的增补」——
+   * `mergeLoss` 那一段由 `premerge-check.mjs` 显式带上（分叉点），事后盘点不带。
+   * 「不给」= 从前默认那一版，行为一字不变。 */
+  const ownFrom = optionValue(argv, "--own-from");
 
   if (!baseline) {
     console.error(
@@ -247,13 +311,22 @@ function main() {
     process.exit(2);
   }
 
-  const result = scan({ sha, baseline });
+  const result = scan({ sha, baseline, own: ownFrom ? { from: ownFrom } : null });
   if (!result.ok) {
     console.error(`[merged-side-loss] 没跑起来：${result.reason}（不构成「判据红了」）`);
     process.exit(2);
   }
 
-  const { lost } = result;
+  const { lost, reverted } = result;
+  /* 被减掉的那批要念出来（ISSUE #3004）：安静地少判一批评据，与「那批本来没事」
+   * 在屏幕上长得一样。只在真减掉了东西的时候念。 */
+  const dropped = reverted.length - lost.length;
+  if (dropped > 0) {
+    console.log(
+      `[merged-side-loss] 减掉 ${dropped} 份：反向应用本笔自身的 diff 后正好回到基线版` +
+        "（= 这一笔自己的增补，不是退回；判据要抓的是「丢了别人的成果」）",
+    );
+  }
   if (reportOnly) {
     console.log(`[merged-side-loss] ${sha} vs ${baseline}：疑似整份退回 ${lost.length} 份`);
     lost.forEach((f) => console.log(`  · ${f}`));

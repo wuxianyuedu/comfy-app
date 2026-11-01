@@ -436,7 +436,7 @@ async function execReviewShots(
     // 人通过 → 直接定稿（不花 AI 评审的调用）；人否决 → 判不合格走抽卡重出
     // （rev 抬高后旧裁决自然失效，AI 评审兜底接管）。不新鲜 → AI 双裁判。
     const human = shotView?.humanVerdict ?? null;
-    const humanFresh = human?.rev === rev;
+    const humanFresh = human !== null && human.rev === rev;
     let pass: boolean;
     if (humanFresh && human.pass) {
       reviewed[shotId] = rev;
