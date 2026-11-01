@@ -9638,6 +9638,25 @@ into …` 字样，所以 `check-merge-parents`（§13.6.1）在 squash 之后�
   别的段（提交信息里的声明 / 合并丢一侧）红了不查归属，按构造就是本分支的事；④ 证明只在
   **没有引入新的红**时写（全绿一条干净的，`baseline-red` 那条带名单），红着不记 ——
   「跑过」与「跑绿过」是两件事（与 §11.8 同形）。
+  **目的地那一问：推的不是本仓远端 ⇒ 跳过**（ISSUE #3025）。`pre-push` 对**每一次** push
+  都跑，包括 `.cnb.yml` 的 endStage 把 PR 分支推向**镜像仓库**（GitHub）以及任何第三方
+  备份远端 —— 那些 ref 与本条判的「这条分支要不要合进本仓 `master`」毫无关系。所以钩子把
+  git 给的 `$1`（远端名）`$2`（远端 URL）一并传下去，判据侧 `isForeignRemotePush()` 拿
+  URL 与 `git remote get-url --all` 逐个比对（**比 URL 不比名字**：名字随克隆方式变），
+  对不上就按 `skip` 放行并念出目的地。
+
+  立案现场是一次**假红**：平台侧检出是 `git init` + 单条 ref 的 `fetch` +
+  `git checkout -f FETCH_HEAD`（`prepare` 阶段原文），`refs/remotes/**` 一条都没有 ⇒
+  取不到上游引用 ⇒ `unavailable` ⇒ 退 2 ⇒ 镜像格那次 push 被自家钩子拦死，日志上看起来
+  像镜像逻辑坏了，实际 `[mirror] 推送前这一读：通` 早就绿了。本地按同一形态复现：
+  `resolveMergeBaseRef()` 回 `null`、`readRevisions()` 回 `upstreamSha: null`，与本仓
+  `git clone` 那一形态（有 `refs/remotes/origin/master`）正相反。
+
+  ⚠️ 这一判的**误判方向是不对称的**，别「顺手改成对称」：**取不到 remote 清单、或拿不到
+  push URL ⇒ 判「不是外来」、照旧复算**。误判成外来的代价是**跳过一次该跑的复算**，误判
+  成自己的代价是多跑几分钟 —— 前者会让假绿溜进 `master`，后者只是慢。同理 `unavailable`
+  在**该有上游的地方**仍退 2（本仓远端 + 上游取不到那条用例钉着），这一刀不放宽②。
+
   钩子那侧只负责调用与 stdin 的分配（pre-push 的 stdin 只能读一次，LFS 与复算都要它），
   判据与编排一律不重抄（§12.12）。这条接线由 `tests/premerge-push-trigger.test.ts` 守着，
   并登记在 `scripts/affected-tests.mjs` 的固定清单里 —— 改 `.githooks/**` 会让增量层放弃收窄，
