@@ -3,7 +3,7 @@
  *  react-hooks/static-components。 */
 import { Separator } from "~/components/ui/separator";
 
-export const SectionHeader = ({
+export function SectionHeader({
   label,
   count,
   accent,
@@ -11,13 +11,17 @@ export const SectionHeader = ({
   accent: string;
   count: number;
   label: string;
-}) => (
-  <div className="border-border-strong mt-1 flex items-center gap-2 border-t pt-2.5">
-    <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
-    <span className="text-ink-muted text-3xs font-semibold tracking-wider uppercase">{label}</span>
-    <span className="bg-surface-2 text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">
-      {count}
-    </span>
-    <Separator className="border-border-strong h-0 flex-1 border-t border-dashed bg-transparent" />
-  </div>
-);
+}) {
+  return (
+    <div className="border-border-strong mt-1 flex items-center gap-2 border-t pt-2.5">
+      <span className="size-2 shrink-0 rounded-full" style={{ background: accent }} />
+      <span className="text-ink-muted text-3xs font-semibold tracking-wider uppercase">
+        {label}
+      </span>
+      <span className="bg-surface-2 text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">
+        {count}
+      </span>
+      <Separator className="border-border-strong h-0 flex-1 border-t border-dashed bg-transparent" />
+    </div>
+  );
+}
