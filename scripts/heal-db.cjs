@@ -18,8 +18,8 @@
 //
 // 驱动：与 ~/server/db 同步换成 @libsql/client（原生异步）。整个脚本走 async 结构，
 // 每次操作独立开一个 libsql Client、用完 close —— 自愈路径低频，多开几次的开销可忽略。
-const fs = require("fs");
-const path = require("path");
+const fs = require("node:fs");
+const path = require("node:path");
 const { createClient } = require("@libsql/client");
 
 // pnpm 可执行形态的唯一判据（scripts/launcher-core/shell.mjs 的 runPnpmSync）。
