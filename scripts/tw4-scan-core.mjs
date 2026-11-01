@@ -48,7 +48,7 @@ export function stringLiterals(text) {
   const code = stripComments(text);
   const out = [];
   for (const m of code.matchAll(STRING_LITERAL)) {
-    out.push({ quote: m[1], content: m[2], index: m.index ?? 0 });
+    out.push({ quote: m[1], content: m[2], index: m.index });
   }
   return out;
 }
