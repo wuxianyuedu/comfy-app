@@ -60,8 +60,11 @@
  *      可那一跑真的判过了，答案是「零个文件」：受影响面 = 固定清单，一个文件都不必挑
  *      （ISSUE #3026 的现场：PR #3023 的 `受影响用例` 因此红，而取消重建的那一跑连
  *      `Prepare` 都没起来 —— 修这一格才拿得回那一跑的读数）。
- *      判据是**空集**，不是「容忍空」：合成提交上 `<第一父>..HEAD` 也得是空的，两半
+ *      判据是**空集**，不是「容忍空」：合成提交上**两个父的对称差**也得是空的，两半
  *      都空才叫「真没有改动」；有一半取不到 ⇒ 照旧退 2（拿不到测量 ≠ 测量结果是 0）。
+ *      ⚠️ 那一半**不能**写成 `<第一父>..HEAD`：#3000 的冲突以目标分支那一侧解掉之后，
+ *      源分支只同步了目标分支，第一父（= 平台给的基线）带着自己的历史坐在那条历史里，
+ *      两点 diff 读到的是同步带进来的那批**别人落地的**改动 —— 「一处没改」永远证不出来。
  *
  * 用法（一般不直接跑）：
  *   · `resolveBaseRef(deps)`        ⇒ 「基线是哪一条」
@@ -341,6 +344,50 @@ export function reconcileSyntheticMergeFace(ref, deps = {}) {
 }
 
 /**
+ * 合成提交的**两个父**之间的对称差 —— 「只在某一父之下」的那批文件。
+ *
+ * 它是「这个 PR 带进来的」与「目标分支自己落地的」之间唯一站得住的切法：
+ * `第一父..HEAD` 只在第一父恰好是分叉点时才等于前者，而平台那一跑的基线
+ * （`CNB_PULL_REQUEST_TARGET_SHA`）带着自己的历史、第一父通常就坐在那条历史里 ——
+ * 那时两点 diff 读到的是同步带进来的那批**别人落地的**改动（PR #3023 的现场）。
+ *
+ * 对称差在这里的含义是「只在一边之下」：父 A 有、父 B 没有的（本 PR 带进来的），
+ * 与父 B 有、父 A 没有的（目标分支自己落地的）**都进面**。面为空 ⇔ 两个父的树逐字相同
+ * ⇔ 这次合并没有带进任何改动。
+ *
+ * `-M` 与 `core.quotePath=false` 同 `changedFilesForBaseRef()` 一档（改名两侧都要看得到）。
+ *
+ * ⚠️ 它回答的是「两父是否同树」，**不**替代 `reconcileSyntheticMergeFace()` 的判决：
+ * 那边要的是「本 PR 带进来的」那一半，`deduped` 是另一半 —— 两个答案不同，别合并。
+ *
+ * @param {string} firstParent
+ * @param {string} secondParent
+ * @param {{cwd?: string, runGit?: (args: string[], cwd: string) => {ok: boolean, stdout: string}}} [deps]
+ * @returns {{ok: true, files: string[]} | {ok: false, reason: string}}
+ */
+function inheritFaceFromParents(firstParent, secondParent, deps = {}) {
+  const got = gitRun(
+    [
+      "-c",
+      "core.quotePath=false",
+      "diff",
+      "--name-status",
+      "-M",
+      `${firstParent}...${secondParent}`,
+    ],
+    deps,
+  );
+  if (!got.ok) {
+    return {
+      ok: false,
+      reason:
+        `算不出两个父之间的分叉清单（${firstParent.slice(0, 8)}...${secondParent.slice(0, 8)}）`,
+    };
+  }
+  return { ok: true, files: changedPathsFromNameStatus(got.stdout).paths };
+}
+
+/**
  * 「这个 PR 真的一处都没改」—— 口径 ⑥ 的读法（ISSUE #3026）。
  *
  * ## 它治的是哪一件事
@@ -351,9 +398,11 @@ export function reconcileSyntheticMergeFace(ref, deps = {}) {
  *
  * ## 判据：两半都空才算数
  *
- *   · `<基线>...HEAD` 空（调用方刚读到的那一份，`emptyFace` 里重复算一次是刻意的：
+ *   · `<基线>...HEAD` 空（调用方刚读到的那一份，这里重复算一次是刻意的：
  *     这一把的结论必须由**它自己的**两条 git 读数支撑，不继承调用方那次的结果）；
- *   · 合成提交上 `<第一父>..HEAD` 也空。
+ *   · 合成提交上**两个父的对称差**也空（`第一父...第二父`）。它才是「这个 PR 带进来的」
+ *     —— `第一父..HEAD` 只在第一父恰好是分叉点时才等价，而平台那一跑的基线带着自己的
+ *     历史，第一父通常就在那条历史里面（PR #3023 的现场）。
  *
  * 有一半**取不到**（diff 跑不起来 / 认不出合成提交 / 没有第一父）⇒ `ok: false` 并说清
  * 哪一半缺 —— 「拿不到测量 ≠ 测量结果是 0」（§13.6.4.1）。调用方照旧退 2。
@@ -400,20 +449,20 @@ export function confirmEmptyChangeFace(deps = {}) {
       via: `${base.via}：单线历史，只有三点 diff 这一半`,
     };
   }
-  /* 合成提交上「这个 PR 带进来的」就是 `第一父..HEAD`；它是空的那一份，面才是真空的。
-   * 与 `reconcileSyntheticMergeFace()` 同一读法（两点、同样的 `-M` 与 `core.quotePath=false`）。 */
-  const mine = changedFilesForBaseRef(firstParent, deps, "..");
+  /* 第二半：**两个父的对称差**（理由见 `inheritFaceFromParents()` 的文件注释）。 */
+  const secondParent = row[2] ?? "";
+  const mine = inheritFaceFromParents(firstParent, secondParent, deps);
   if (!mine.ok) {
-    return { ok: false, reason: `算不出「第一父..HEAD」那一段（${firstParent.slice(0, 8)}）` };
+    return mine;
   }
   if (mine.files.length > 0) {
     return {
       ok: false,
-      reason: `第一父..HEAD 不是空的（${mine.files.length} 个文件）—— 这不是「零个文件」那条形态`,
+      reason: `两个父之间有 ${mine.files.length} 个文件分叉 —— 这不是「零个文件」那条形态`,
     };
   }
   /* 空面 PR 的常见成因之一是「只同步了目标分支」：那一批提交在 `<基线>..HEAD` 里、
-   * 却不在 `第一父..HEAD` 里。它是读数（调用方念出来），不参与判决。 */
+   * 却不在两个父的分叉面上。它是读数（调用方念出来），不参与判决。 */
   const carried = changedFilesForBaseRef(base.ref, deps, "..");
   const lead = carried.ok ? carried.files : [];
   return {

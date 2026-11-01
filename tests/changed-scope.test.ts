@@ -521,6 +521,43 @@ describe("changed-scope —— 空改动面的两半读法（#3026）", () => {
     expect(base === "").toBe(false);
   });
 
+  it("两个父的对称差只进「只在一侧之下」的那一份", () => {
+    /* 钉的是**判据的形状**：两个父各自往前走了、谁也包不住谁时，对称差里两边的新文件
+     * 都在；而 `<第一父>..HEAD` 只看得见第二父那一侧。两个答案不同 —— 这正是它与
+     * 「单个父的两点 diff」的实质差别。 */
+    const { dir, base } = initRepo();
+    write(dir, "m.txt", "m\n");
+    commit(dir, "main＃1");
+    git(dir, "checkout", "-q", "-b", "feat", base);
+    write(dir, "a.txt", "1\n");
+    commit(dir, "feat: a");
+
+    git(dir, "checkout", "-q", "main");
+    git(dir, "merge", "-q", "--no-ff", "-m", "main＃1 采纳源分支那一笔", "feat");
+    const adopted = git(dir, "rev-parse", "HEAD").trim();
+    git(dir, "checkout", "-q", "feat");
+    git(dir, "merge", "-q", "--no-ff", "-m", "sync main", adopted);
+    write(dir, "n.txt", "n\n");
+    const source = commit(dir, "feat: 自己的一步");
+
+    git(dir, "checkout", "-q", "main");
+    write(dir, "main3.txt", "m3\n");
+    const firstParent = commit(dir, "main＃2: 目标分支自己写的");
+    git(dir, "checkout", "-q", "feat");
+    /* 让第二父也再走一步（两边各往前一步，谁都不包住谁）。 */
+    write(dir, "main3.txt", "m3\n");
+    write(dir, "n2.txt", "n2\n");
+    const secondParent = commit(dir, "feat: 再走一步");
+    git(dir, "checkout", "-q", "main");
+    git(dir, "merge", "-q", "--no-ff", "-m", "Merge feat into main", secondParent);
+
+    /* 对称差：`main3.txt`（只在第一父之下）与 `n.txt`/`n2.txt`（只在第二父之下）。 */
+    expect(git(dir, "diff", "--name-status", "-M", `${firstParent}...${secondParent}`).trim()).toBe(
+      "A\tmain3.txt\nA\tn.txt\nA\tn2.txt",
+    );
+    expect(source === "").toBe(false);
+  });
+
   it("读不到基线 ⇒ 证不出来（拿不到测量 ≠ 结果是 0）", () => {
     const { dir } = initRepo();
     const got = confirmEmptyChangeFace({ cwd: dir, env: {}, fallbackRef: null });
