@@ -1,12 +1,12 @@
 ## Fixed
 
-#2919 那批 `??` 删除后，`scripts/` 三份没走 `oxfmt`，`oxfmt 格式` 那一格会红：
+#2919 那批删 `??` 之后，`scripts/` 三份没过 `oxfmt` —— 平台这一格上一跑是 `skipped`
+（前一格红，后面 20 多格全跳过），它的红一次也没在 CI 上露过面：
 
-- `affected-tests.mjs` —— 新增的两处块注释把 `for` 顶到了注释栏，缩进错两个空格；
-  另 `attributeAffected` 的嵌套三元被格式化成缺括号的形状。
-- `check-tracked-secrets.cjs` / `spawn-shell-scan.mjs` —— 各一处换行与续行形态不合 `oxfmt`。
+- `affected-tests.mjs` —— 新增的两行块注释把随后的 `for` 顶到了注释栏（缩进少两格）；
+  另 `attributeAffected` 的嵌套三元缺括号。
+- `check-tracked-secrets.cjs` / `spawn-shell-scan.mjs` —— 各一处续行与断行形态。
 
-判据（`pnpm exec oxfmt --check`）与修法都是既有的，没有新增规则、也没有改判据。
-上一跑里这一格是 `skipped`（前一格红），所以它的红没有在 CI 上露过面。
+判据一字未改，只是把 `oxfmt` 的既有要求补上。
 
 #2954
