@@ -23,10 +23,10 @@ const HEARTBEAT_MS = 15_000;
 
 /** 一条 SSE 流的写端：调用方只关心「发什么帧」，不关心「还能不能发」。 */
 export type SseChannel = {
-  /** 发一帧 `data: <json>`。流已关则静默丢弃（不抛给调用方）。 */
-  send: (payload: unknown) => void;
   /** 挂上退订函数：收尾时（关流 / 浏览器断开）由边缘替调用方调一次。 */
   onClose: (unsubscribe: () => void) => void;
+  /** 发一帧 `data: <json>`。流已关则静默丢弃（不抛给调用方）。 */
+  send: (payload: unknown) => void;
 };
 
 /**
