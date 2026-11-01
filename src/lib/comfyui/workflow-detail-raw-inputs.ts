@@ -209,7 +209,7 @@ async function enrichSubgraphProxyWidgets(input: {
         const seedIdx = inputs.findIndex(
           (i) => !!i && (i.name === "seed" || i.name === "noise_seed"),
         );
-        if (seedIdx < 0) {
+        if (seedIdx === -1) {
           return undefined;
         }
         let slot = 0;
@@ -222,7 +222,7 @@ async function enrichSubgraphProxyWidgets(input: {
       }
       /* 通用路径：数出目标输入之前有多少个 widget 槽。 */
       const inputIdx = inputs.findIndex((i) => i?.name === fieldName);
-      if (inputIdx < 0) {
+      if (inputIdx === -1) {
         return undefined;
       }
       let slot = 0;

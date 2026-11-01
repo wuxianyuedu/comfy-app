@@ -31,7 +31,7 @@ vi.mock("~/lib/comfy/comfy-liveness-client", () => ({
     crashListeners.push(l);
     return () => {
       const i = crashListeners.indexOf(l);
-      if (i >= 0) {
+      if (i !== -1) {
         crashListeners.splice(i, 1);
       }
     };

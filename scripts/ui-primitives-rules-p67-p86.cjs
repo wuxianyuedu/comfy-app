@@ -236,11 +236,11 @@ module.exports = {
         let cursor = 0;
         while (true) {
           const start = t2.indexOf(open, cursor);
-          if (start < 0) {
+          if (start === -1) {
             break;
           }
           const end = t2.indexOf(close, start);
-          if (end < 0) {
+          if (end === -1) {
             cursor = start + open.length;
             continue;
           }
@@ -340,7 +340,7 @@ module.exports = {
          * 不递归嵌套（视图里"空态卡"极少嵌套同层 div · 简化足够）。 */
         const after = t2.slice(open.index + open[0].length);
         const close = after.indexOf("</div>");
-        if (close < 0) {
+        if (close === -1) {
           continue;
         }
         const inner = after.slice(0, close);

@@ -155,7 +155,7 @@ const PROBE_LOCK_EXEMPT: Array<{
 function configEventBlock(text: string, event: string): string {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => l === `  ${event}:`);
-  if (start < 0) {
+  if (start === -1) {
     return "";
   }
   const out: Array<string> = [];
@@ -669,7 +669,7 @@ function stageEnvAssignments(text: string, name: string): Array<string> {
   }
   const lines = block.split(/\r?\n/);
   const at = lines.findIndex((l) => /^\s*env:\s*$/.test(l));
-  if (at < 0) {
+  if (at === -1) {
     return [];
   }
   const out: Array<string> = [];
@@ -702,7 +702,7 @@ function stageScriptLine(text: string, name: string): string {
   }
   const lines = block.split(/\r?\n/);
   const at = lines.findIndex((l) => /^\s*script:/.test(l));
-  if (at < 0) {
+  if (at === -1) {
     return "";
   }
   const first = lines[at]?.replace(/^\s*script:[ \t]*/, "") ?? "";
@@ -3576,7 +3576,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
      * 「这一档根本没跑」，所以变异必须真的少一格）。 */
     const browserAt = text.indexOf("  - name: 单跑E2E·浏览器安装");
     const e2eAt = text.indexOf("  - name: 单跑E2E·全量E2E", browserAt);
-    if (browserAt < 0 || e2eAt < 0) {
+    if (browserAt === -1 || e2eAt === -1) {
       throw new Error("单跑E2E 那张锚点表里找不到浏览器/目标那两格");
     }
     const dropped = text.slice(0, browserAt) + text.slice(e2eAt);

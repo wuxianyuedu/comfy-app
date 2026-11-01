@@ -149,7 +149,7 @@ export function imageTagVerdict(image) {
   }
   const lastSegment = text.slice(text.lastIndexOf("/") + 1);
   const at = lastSegment.lastIndexOf(":");
-  const tag = at < 0 ? null : lastSegment.slice(at + 1);
+  const tag = at === -1 ? null : lastSegment.slice(at + 1);
   if (tag === null) {
     return { verdict: "floating", tag: null };
   }

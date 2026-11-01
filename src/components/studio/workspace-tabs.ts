@@ -144,7 +144,7 @@ export function focusViewTab(state: WorkspaceTabsState, key: string): WorkspaceT
  */
 export function closeViewTab(state: WorkspaceTabsState, key: string): WorkspaceTabsState {
   const index = state.tabs.findIndex((tab) => tab.key === key);
-  if (index < 0) {
+  if (index === -1) {
     return state;
   }
   const target = state.tabs[index];

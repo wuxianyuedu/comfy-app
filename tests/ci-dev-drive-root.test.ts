@@ -79,7 +79,7 @@ function unquote(raw: string): string {
 function pipelineEnv(text: string): Record<string, string> {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => /^\.common:\s*&common\s*$/.test(l));
-  if (start < 0) {
+  if (start === -1) {
     return {};
   }
   const out: Record<string, string> = {};

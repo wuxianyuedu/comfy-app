@@ -68,7 +68,7 @@ function medianMs(fn: () => void, runs: number): number {
 
 const args = process.argv.slice(2);
 const runsArg = args.indexOf("--runs");
-const runs = runsArg >= 0 ? Number(args[runsArg + 1] ?? "7") : 7;
+const runs = runsArg !== -1 ? Number(args[runsArg + 1] ?? "7") : 7;
 
 /** 一次写入的耗时 vs（时间线大小 × 批次大小）——本探针的主表。 */
 function tableAppend(): void {

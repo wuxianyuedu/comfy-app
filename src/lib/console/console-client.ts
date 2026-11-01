@@ -111,7 +111,7 @@ export function consumeSseChunk(buffer: string, onFrame: (payload: unknown) => v
   let rest = buffer;
   for (;;) {
     const idx = rest.indexOf("\n\n");
-    if (idx < 0) {
+    if (idx === -1) {
       return rest;
     }
     const frame = rest.slice(0, idx);

@@ -385,11 +385,11 @@ function quotedMask(text) {
     let from = 0;
     for (;;) {
       const a = text.indexOf(open, from);
-      if (a < 0) {
+      if (a === -1) {
         break;
       }
       const b = text.indexOf(close, a + open.length);
-      if (b < 0) {
+      if (b === -1) {
         break;
       }
       const end = Math.min(b + close.length - 1, text.length - 1);

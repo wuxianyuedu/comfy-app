@@ -55,11 +55,11 @@ const sourceCss = readFileSync(path.resolve(__dirname, "../src/app/globals.css")
  */
 function braceBlock(source: string, startMarker: string): string {
   const marker = source.indexOf(startMarker);
-  if (marker < 0) {
+  if (marker === -1) {
     throw new Error(`找不到起始标记：${startMarker}`);
   }
   const open = source.indexOf("{", marker);
-  if (open < 0) {
+  if (open === -1) {
     throw new Error(`${startMarker} 后面没有 {`);
   }
   let depth = 0;

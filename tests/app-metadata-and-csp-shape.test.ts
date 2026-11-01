@@ -32,16 +32,16 @@ const modelsPage = readFileSync(
 /** 取某个导出对象字面量的正文（`export const x … = { … }` 那一段）。 */
 function exportedObjectBody(source: string, exportName: string): string {
   const start = source.indexOf(`export const ${exportName}`);
-  if (start < 0) {
+  if (start === -1) {
     return "";
   }
   const open = source.indexOf("{", start);
-  if (open < 0) {
+  if (open === -1) {
     return "";
   }
   // 单行（`{ title: "模型库" }`）与多行（`{\n  …\n}`）两种收尾都要认。
   const end = source.indexOf("}", open);
-  return end < 0 ? "" : source.slice(open, end + 1);
+  return end === -1 ? "" : source.slice(open, end + 1);
 }
 
 describe("根布局的窗口元数据不再是脚手架残留", () => {

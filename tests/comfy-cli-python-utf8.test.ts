@@ -39,7 +39,7 @@ function pythonEnvKeys(rel: string): { keys: Array<string>; name: string; } {
   let m: RegExpExecArray | null;
   while ((m = head.exec(src))) {
     const start = src.indexOf("{", m.index);
-    if (start < 0) {
+    if (start === -1) {
       continue;
     }
     let depth = 0;

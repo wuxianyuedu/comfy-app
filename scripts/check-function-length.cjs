@@ -312,7 +312,7 @@ function collectHeads(codeLines) {
         continue;
       }
       const parenAt = line.indexOf("(", m.index + m[0].length - 1);
-      const brace = findBodyBrace(codeLines, i, parenAt < 0 ? 0 : parenAt);
+      const brace = findBodyBrace(codeLines, i, parenAt === -1 ? 0 : parenAt);
       if (!brace) {
         continue;
       }
