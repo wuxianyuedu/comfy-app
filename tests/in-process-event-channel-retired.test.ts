@@ -38,7 +38,7 @@ const src = (rel: string): string => stripCode(readFileSync(path.join(ROOT, rel)
  * 排除 `*.test.*`：夹具里造一个 `EventEmitter` 是正当写法，不该被这条判红。
  */
 const EXEC_CHAIN_PATTERN = /^(?:executor|runner-state|enqueue|reaper|firstframe)/;
-const execChainFiles = (): string[] =>
+const execChainFiles = (): Array<string> =>
   readdirSync(path.join(ROOT, COMFYUI_DIR))
     .filter((name) => /\.tsx?$/.test(name) && !/\.(?:test|spec)\.tsx?$/.test(name))
     .filter((name) => EXEC_CHAIN_PATTERN.test(name.replace(/\.tsx?$/, "")))
