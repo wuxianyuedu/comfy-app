@@ -284,9 +284,7 @@ describe("getConfigForClient", () => {
     expect(serialized).not.toContain("sk-remote-secret");
     // 脱敏不等于把条目也删掉：设置页要看得见「这条远端模型存在、且配过密钥」——
     // 后者是台账 A11 的另一半：没有这个信息，客户端就无法把「没重填」与「清空」分开表达。
-    const remote = out.extraModels.find(
-      (e) => typeof e === "object" && e !== null && e.name === "tbl-keyed",
-    );
+    const remote = out.extraModels.find((e) => typeof e === "object" && e?.name === "tbl-keyed");
     expect(remote).toMatchObject({
       name: "tbl-keyed",
       baseUrl: "https://t/v1",
