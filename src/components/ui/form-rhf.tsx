@@ -115,7 +115,7 @@ function FormControl(props: React.PropsWithChildren) {
   ) as React.ReactElement<Record<string, unknown>>;
   return React.cloneElement(child, {
     id: formItemId,
-    "aria-describedby": error ? `${formDescriptionId} ${formMessageId}` : `${formDescriptionId}`,
+    "aria-describedby": error ? `${formDescriptionId} ${formMessageId}` : formDescriptionId,
     "aria-invalid": !!error,
   });
 }

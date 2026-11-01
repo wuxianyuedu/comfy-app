@@ -769,7 +769,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     expect(
       offenders,
       "这些调用点又写了字面 12px / 13px —— 用 text-xs / text-sm（行高要不同就再加 leading-*）：\n" +
-        `${[...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n")}`,
+        [...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n"),
     ).toEqual([]);
     /* 反向：两档真的都还是 Tailwind 默认的 12 / 14px（否则上面那条会因为「这档没了」
        而空绿，而下一轮的人会搞错每档到底多大）。 */
@@ -801,7 +801,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       offenders,
       "这些调用点又写了 10.5px —— 那是「比 2xs 小半像素」的漂移值，不是档；" +
         "要改密度请先在 @theme 动 --text-2xs（\n" +
-        `${[...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n")}`,
+        [...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n"),
     ).toEqual([]);
     /* 反向：2xs 必须还是 11px —— 否则上面那条「并进来」的落点就变了，
        而这批调用点的像素变化量全靠这颗档的值来定（读法与判据共用同一份 helper）。 */
@@ -869,7 +869,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       offenders,
       "这些调用点挂了标题档的同名 class —— 屏级标题走 `.u-title-page`、段级走 " +
         "`.u-title-stage`、卡片标题走 `.u-title`（它们不是 utility，是 components 层的类）：\n" +
-        `${[...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n")}`,
+        [...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n"),
     ).toEqual([]);
   });
 
@@ -925,7 +925,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       vhOffenders,
       "这些调用点又写了浮层上限的字面量 —— 用 ui/overlay-max-height 的 " +
         "OVERLAY_MAX_HEIGHT / EMBEDDED_SCROLL_MAX_HEIGHT：\n" +
-        `${vhOffenders.map((o) => `  ${o.file}  max-h-[${o.value}vh]`).join("\n")}`,
+        vhOffenders.map((o) => `  ${o.file}  max-h-[${o.value}vh]`).join("\n"),
     ).toEqual([]);
 
     const ALIGN_OWNERS = new Set(["src/components/studio/project-canvas/EmptyCanvasHint.tsx"]);
@@ -940,7 +940,7 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       alignOffenders,
       "这些调用点又抄了一枚 `align-[ -Npx ]` —— 先确认父级是不是 flex：是的话它零效果；" +
         "真要基线微调就写进 EmptyCanvasHint 那一处的形态并补理由：\n" +
-        `${alignOffenders.map((o) => `  ${o.file}  align-[-${o.value}px]`).join("\n")}`,
+        alignOffenders.map((o) => `  ${o.file}  align-[-${o.value}px]`).join("\n"),
     ).toEqual([]);
   });
 

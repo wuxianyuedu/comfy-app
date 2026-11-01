@@ -81,6 +81,6 @@ export function readCustomNodesManifest(root: string = process.cwd()): CustomNod
     if (code === "ENOENT") {
       return { kind: "missing" };
     }
-    return { kind: "unreadable", detail: `${code ?? "unknown"}` };
+    return { kind: "unreadable", detail: code ?? "unknown" };
   }
 }

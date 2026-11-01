@@ -130,7 +130,7 @@ export function smokeExecutorHostArtifact(targetDir = DEFAULT_TARGET) {
       fail(
         problems,
         `packaged host exited ${run.status ?? `signal ${run.signal}`}: ` +
-          `${(log || stdout).split("\n").slice(-6).join(" | ")}`,
+          (log || stdout).split("\n").slice(-6).join(" | "),
       );
     } else if (!/runtime inject-ok/.test(log)) {
       fail(

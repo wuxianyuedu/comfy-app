@@ -633,7 +633,7 @@ function main() {
     );
     console.log(
       `[bundle-budget] 基线已更新（${path.relative(ROOT, BASELINE)}）：` +
-        `${before ? `gzip ${kb(before.gzip)} → ${kb(now.gzip)}、文件数 ${before.files} → ` : ""}` +
+        (before ? `gzip ${kb(before.gzip)} → ${kb(now.gzip)}、文件数 ${before.files} → ` : "") +
         `${now.files}${ALLOW_INCREASE && before ? "（--allow-increase：已认过账）" : ""}`,
     );
     return 0;

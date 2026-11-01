@@ -106,7 +106,7 @@ function writeLine(msg) {
 // 不假设 CWD 与脚本目录一致）。这样未来 launcher 从其它工作目录拉起也不飘。
 process.chdir(ROOT);
 
-const bootId = process.env.COMFYAPP_HOST_BOOT_ID ?? `${Date.now().toString(36)}`;
+const bootId = process.env.COMFYAPP_HOST_BOOT_ID ?? Date.now().toString(36);
 
 /** 判据与 launcher **同源**于 `launcher-core/executor-mode.mjs`（ADR §14 D5）。
  *  这里原先自己写了一行 `(process.env.COMFY_EXECUTOR ?? "inline").toLowerCase()`：

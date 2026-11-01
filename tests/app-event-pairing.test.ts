@@ -242,7 +242,7 @@ describe("AppEvents 表的两端成对", () => {
       broken.map(
         (row) =>
           `${row.event} → 派发 ${row.emitters.length} 处 / 订阅 ${row.subscribers.length} 处` +
-          `${row.emitters.length > 0 && row.subscribers.length > 0 ? "（只有自环）" : ""}`,
+          (row.emitters.length > 0 && row.subscribers.length > 0 ? "（只有自环）" : ""),
       ),
     ).toEqual([]);
   });

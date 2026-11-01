@@ -178,7 +178,7 @@ export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): Pro
        * 但要把这条留在哪说清楚，否则人只能自己 `git worktree list` 去撞。 */
       rmSync(parent, { recursive: true, force: true });
       throw new Error(
-        `${String(error instanceof Error ? error.message : error)}` +
+        String(error instanceof Error ? error.message : error) +
           ` —— 且克隆注销失败，需要手工执行：git worktree remove --force ${dir}`,
       );
     }

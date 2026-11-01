@@ -510,7 +510,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
           return (
             `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
             `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.` +
-            `${p(d.getMilliseconds(), 3)}`
+            p(d.getMilliseconds(), 3)
           );
         };
         /* 掺进 2 条警告、3 条错误（取最新的一端，共 450 条仍在上限内）：

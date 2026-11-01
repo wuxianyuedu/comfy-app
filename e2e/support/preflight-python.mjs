@@ -98,7 +98,7 @@ export function checkPythonReady(options = {}) {
     interpreter: absolute ?? found.command,
     detail:
       `用 ${found.command}${prefix ? ` ${prefix}` : ""} → ` +
-      `${absolute ?? "（PATH 上解析不到绝对路径，交回裸名字）"}`,
+      (absolute ?? "（PATH 上解析不到绝对路径，交回裸名字）"),
   };
 }
 

@@ -678,7 +678,7 @@ export async function runChunk(chunk, deps) {
   const firstPass = classifyFirstPass(res);
   process.stderr.write(
     firstPass.kind === "red"
-      ? `${firstPass.note}` +
+      ? firstPass.note +
           `  （入口 ${entry}，本块 ${chunk.length} 个用例，命令行约 ` +
           `${chunk.join(" ").length} 字符）\n`
       : firstPass.note,
