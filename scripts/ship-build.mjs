@@ -76,7 +76,7 @@ export function pickBuildForSha(builds, sha) {
       b.event === "pull_request" &&
       typeof b.sn === "string"
     ) {
-      hit.push({ sn: b.sn, createTime: String(b.createTime || "") });
+      hit.push({ sn: b.sn, createTime: String(b.createTime ?? "") });
     }
   }
   if (hit.length === 0) {
@@ -107,7 +107,7 @@ export function pickBuildForSha(builds, sha) {
  * @returns {string} 形如 `cnb-xxx-yyy/success/1-1+12/33`；没解析到 build 时形如 `(未解析到 build)/?/0-0+0/0`
  */
 export function buildSignature(json, sn = "") {
-  const d = (json && json.data) || null;
+  const d = (json && json.data) ?? null;
   const status = d && typeof d.status === "string" ? d.status : "(取不到 data)";
   const entries =
     d && d.pipelinesStatus && typeof d.pipelinesStatus === "object"

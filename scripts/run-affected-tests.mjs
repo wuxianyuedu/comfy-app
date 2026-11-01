@@ -398,7 +398,7 @@ async function main(argv) {
    * `rm -rf "$LOGD"` 清的是它自己那一份 ⇒ 这里印出真实落点，读数在不在一眼可见，
    * 而不是「读不到 ⇒ 静默没有这一格」。`existsSync` 为假时直接不加参数（退化成
    * 今天的形状），不会写出半个读数冒充整体。 */
-  const rawLogd = process.env.LOGD || "";
+  const rawLogd = process.env.LOGD ?? "";
   const junitDir = rawLogd && existsSync(rawLogd) ? path.resolve(rawLogd) : "";
   if (junitDir) {
     writeFilesManifest(junitDir, segFiles);

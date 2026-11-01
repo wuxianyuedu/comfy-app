@@ -95,7 +95,7 @@ function argValue(key) {
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === key) {
-      return argv[i + 1] || "";
+      return argv[i + 1] ?? "";
     }
     if (argv[i].startsWith(`${key}=`)) {
       return argv[i].slice(key.length + 1);
@@ -176,7 +176,7 @@ function evaluate() {
 function evaluatePr(targetBranch) {
   const branch = currentBranch();
   const parents = parentCount();
-  const target = targetBranch || PROTECTED_BRANCH;
+  const target = targetBranch ?? PROTECTED_BRANCH;
 
   /** 目标分支的引用:优先 `origin/<target>`(容器里只有这一份),再退回本地同名分支。 */
   const targetRef = [`origin/${target}`, target].find((ref) =>
@@ -327,7 +327,7 @@ function main() {
       `[branch-guard] v${
         GUARD_VERSION
         } PR 源分支复核:HEAD 分支 ${
-        pr.branch || "(detached)"
+        pr.branch ?? "(detached)"
         },父提交数 ${
         pr.parents
         },目标分支 ${

@@ -28,13 +28,13 @@ module.exports = {
       /* ① 两个 rect 相减 / 相加（面板内偏移、相对定位）。 */
       const rectDiff =
         /getBoundingClientRect\s*\(\s*\)[\s\S]{0,120}?[-+]\s*[\s\S]{0,120}?getBoundingClientRect\s*\(\s*\)/g;
-      hits += (t2.match(rectDiff) || []).length;
+      hits += (t2.match(rectDiff) ?? []).length;
       /* ② 行高估算：`scrollHeight` 与另一个量做除法。 */
       const lineHeight = /scrollHeight\s*[/]|[)]\s*[/]\s*\w*[Ll]ines?\.length/g;
-      hits += (t2.match(lineHeight) || []).length;
+      hits += (t2.match(lineHeight) ?? []).length;
       /* ③ 用 `clientHeight` / `clientWidth` 算落点（除以 2、加偏移）。 */
       const viewportMath = /client(?:Height|Width)\s*[/]\s*2\b|client(?:Height|Width)\s*[+-]\s*\w/g;
-      hits += (t2.match(viewportMath) || []).length;
+      hits += (t2.match(viewportMath) ?? []).length;
       /* ④ 自己接线量测：`new ResizeObserver(` **且**手写等值判断落状态。 */
       if (
         /new\s+ResizeObserver\s*\(/.test(t2) &&
@@ -170,7 +170,7 @@ module.exports = {
       }
       let hits = 0;
       /* ① 自己定义 `isRecord`（9 处里 8 处是逐字相同的实现）。 */
-      hits += (t2.match(/function\s+isRecord\s*\(/g) || []).length;
+      hits += (t2.match(/function\s+isRecord\s*\(/g) ?? []).length;
       /* ② 入参收窄三步：`req.json()` + 400 信封。信封认的是**键**
        *（`error:`），不是 `error` 字样 —— 后者会把 `catch (error)` 的实参、
        * `apiErrorDetail(` 这类标识符一并算成信封，一次纯改名就能判红。 */
@@ -281,7 +281,7 @@ module.exports = {
       if (/\bcopyFailureText\s*\(/.test(t2)) {
         return 0;
       }
-      return (t2.match(/剪贴板不可用/g) || []).length;
+      return (t2.match(/剪贴板不可用/g) ?? []).length;
     },
   },
 
@@ -312,7 +312,7 @@ module.exports = {
       return (
         t2.match(
           /\.(?:slice|substring)\(0, *(?:2[4-9]|[3-9][0-9]|[0-9]{3,})\)[^;\n]{0,40}(?:…|truncated)/g,
-        ) || []
+        ) ?? []
       ).length;
     },
   },
@@ -338,7 +338,7 @@ module.exports = {
       if (/\bbackoffDelayMs\s*\(/.test(t2)) {
         return 0;
       }
-      return (t2.match(/\* *2 *\*\*|Math\.pow\( *2 *,/g) || []).length;
+      return (t2.match(/\* *2 *\*\*|Math\.pow\( *2 *,/g) ?? []).length;
     },
   },
 
@@ -361,7 +361,7 @@ module.exports = {
       if (/\bformat(?:Date|ShortDate|LocalStamp|CompactStamp)\s*\(/.test(t2)) {
         return 0;
       }
-      return (t2.match(/getFullYear\(\)\}-/g) || []).length;
+      return (t2.match(/getFullYear\(\)\}-/g) ?? []).length;
     },
   },
   /* ── P47「扩展名 ⇄ MIME 类型」的映射表（硬闸，§16.2.4.51）──────────────
@@ -385,9 +385,9 @@ module.exports = {
       if (/\b(?:mimeForExt|extForMime|extOfPath|stemOfPath|contentTypeForPath)\s*\(/.test(t2)) {
         return 0;
       }
-      const mimeToExt = t2.match(/"\w[\w.+-]*\/[-\w.]+"\s*:\s*"[a-z0-9]{2,5}"/g) || [];
+      const mimeToExt = t2.match(/"\w[\w.+-]*\/[-\w.]+"\s*:\s*"[a-z0-9]{2,5}"/g) ?? [];
       const extToMime =
-        t2.match(/"\.?[a-z0-9]{2,5}"\s*:\s*"(?:image|video|audio)\/[-\w.+]+/g) || [];
+        t2.match(/"\.?[a-z0-9]{2,5}"\s*:\s*"(?:image|video|audio)\/[-\w.+]+/g) ?? [];
       return mimeToExt.length + extToMime.length;
     },
   },
@@ -433,7 +433,7 @@ module.exports = {
       return (
         t2.match(
           /typeof (\w+) === "object" && \1 !== null[\s\S]{0,40}?as Record<string, unknown>/g,
-        ) || []
+        ) ?? []
       ).length;
     },
   },
@@ -455,7 +455,7 @@ module.exports = {
       if (/\b(?:safeFileNameSegment|safeDisplayName)\s*\(/.test(t2)) {
         return 0;
       }
-      return (t2.match(/replace\(\/\[\^[^\]]*\]\+?\/g, *"_"\)/g) || []).length;
+      return (t2.match(/replace\(\/\[\^[^\]]*\]\+?\/g, *"_"\)/g) ?? []).length;
     },
   },
 
@@ -481,7 +481,7 @@ module.exports = {
       if (/from "~\/lib\/number-format"/.test(t2)) {
         return 0;
       }
-      return (t2.match(/\.toFixed\(/g) || []).length;
+      return (t2.match(/\.toFixed\(/g) ?? []).length;
     },
   },
 
@@ -509,7 +509,7 @@ module.exports = {
       if (/from "~\/lib\/ordered-set"/.test(t2)) {
         return 0;
       }
-      return (t2.match(/\.sort\(\s*\(\s*\w+\s*,\s*\w+\s*\)\s*=>[^;\n]{0,80}localeCompare\(/g) || [])
+      return (t2.match(/\.sort\(\s*\(\s*\w+\s*,\s*\w+\s*\)\s*=>[^;\n]{0,80}localeCompare\(/g) ?? [])
         .length;
     },
   },
@@ -551,13 +551,13 @@ module.exports = {
       if (/from "~\/lib\/media\/data-url"/.test(t2)) {
         return 0;
       }
-      const writes = t2.match(/data:\$\{[^}]{0,40}\};base64,\$\{/g) || [];
-      const cuts = t2.match(/indexOf\(","\)/g) || [];
+      const writes = t2.match(/data:\$\{[^}]{0,40}\};base64,\$\{/g) ?? [];
+      const cuts = t2.match(/indexOf\(","\)/g) ?? [];
       /* ③ 两个条件同时成立才计：`split(",")` 与 `data:` 前缀同现
        *（`split(",")` 在本仓库另有 CSV 解析的用法）。 */
       const splitCuts =
         t2.includes('startsWith("data:")') || t2.includes("data:${")
-          ? t2.match(/split\(","\)/g) || []
+          ? t2.match(/split\(","\)/g) ?? []
           : [];
       return writes.length + cuts.length + splitCuts.length;
     },
@@ -605,7 +605,7 @@ module.exports = {
        *  那个 `key` 已经脱离了「事件对象」这个名字，机器判不出它是事件字段
        *  还是数据字段。与 P37「忙碌位」、P30「错误位」同款：
        *  按名字判的部分只判能判的那一半，剩下的一半由 Review 兜。 */
-      return (t2.match(/\b(?:e|ev|evt|event|[A-Za-z]+Event)\.key\s*[!=]==?\s*["'`]/g) || []).length;
+      return (t2.match(/\b(?:e|ev|evt|event|[A-Za-z]+Event)\.key\s*[!=]==?\s*["'`]/g) ?? []).length;
     },
   },
 
@@ -631,7 +631,7 @@ module.exports = {
        *  出现 `m` 收尾 —— 即「一条 SGR」。中间形态在本仓库有两种写法
        *  （正则里的 `\\[`、字符串里的 `[`），故不把「中间长什么样」写进判据；
        *  单独的 `\\x1b`（光标移动 / 清屏）不在此列。 */
-      return (t2.match(/(?:\\x1b|\\u001[bB]).{0,16}?m/g) || []).length;
+      return (t2.match(/(?:\\x1b|\\u001[bB]).{0,16}?m/g) ?? []).length;
     },
   },
 
@@ -654,7 +654,7 @@ module.exports = {
       if (/from "~\/lib\/case-token"/.test(t2)) {
         return 0;
       }
-      return (t2.match(/replace\(\/\[A-Z\]\/g[^;\n]{0,60}\$\{/g) || []).length;
+      return (t2.match(/replace\(\/\[A-Z\]\/g[^;\n]{0,60}\$\{/g) ?? []).length;
     },
   },
 
@@ -697,10 +697,10 @@ module.exports = {
       /* `/[\\/]/` 与 `"/"` 两种分隔符写法都数（与 P50/P52「更差的写法也要数」
        * 同款）。锚点：`.split(/[...]/).pop()` 或 `.split("/").pop()`。 */
       const tail =
-        (t2.match(/\.split\(\/\[[^\]\n]*\]\/\)\.pop\(\)/g) || []).length +
-        (t2.match(/\.split\("\/"\)\.pop\(\)/g) || []).length;
-      const slashes = (t2.match(/\.replace\(\/\\\\\/g,\s*"\/"\)/g) || []).length;
-      const sepJoin = (t2.match(/\.split\(path\.sep\)\.join\("\/"\)/g) || []).length;
+        (t2.match(/\.split\(\/\[[^\]\n]*\]\/\)\.pop\(\)/g) ?? []).length +
+        (t2.match(/\.split\("\/"\)\.pop\(\)/g) ?? []).length;
+      const slashes = (t2.match(/\.replace\(\/\\\\\/g,\s*"\/"\)/g) ?? []).length;
+      const sepJoin = (t2.match(/\.split\(path\.sep\)\.join\("\/"\)/g) ?? []).length;
       return relative + tail + slashes + sepJoin;
     },
   },
@@ -740,7 +740,7 @@ module.exports = {
         String.raw`\bOmit\s*<[^;]{0,200}?(?:` + base + String.raw`)[^;]{0,300}?\n\s*\|[^;]{0,200}?"[^"]+"`,
         "g",
       );
-      return (t2.match(oneLine) || []).length + (t2.match(multiLine) || []).length;
+      return (t2.match(oneLine) ?? []).length + (t2.match(multiLine) ?? []).length;
     },
   },
 
@@ -785,7 +785,7 @@ module.exports = {
         return 0;
       }
       const races = /\bsetTimeout\s*\(/.test(t2)
-        ? (t2.match(/\bPromise\.race\s*\(/g) || []).length
+        ? (t2.match(/\bPromise\.race\s*\(/g) ?? []).length
         : 0;
       /* ② 定时器回调里结算 Promise（`resolve(` / `reject(` 就在 setTimeout 的
        * 回调体内）。锚点取「setTimeout」与「resolve/reject」在**同一条语句的
@@ -795,14 +795,14 @@ module.exports = {
       /* `[\s\S]` 而非 `[^;]`：回调体里常有 `;`（`cp.kill("SIGKILL");` 后面
        * 才是 `resolve(…)`），用 `[^;]` 会把那一档**静默漏掉**（漏掉的又恰好是
        * 更完整的那个写法 —— 与 P13/P52「更差的写法也要数」同一课）。 */
-      const settles = (t2.match(/\bsettimeout\s*\([\s\S]{0,200}?\b(?:resolve|reject)\s*\(/gi) || [])
+      const settles = (t2.match(/\bsettimeout\s*\([\s\S]{0,200}?\b(?:resolve|reject)\s*\(/gi) ?? [])
         .length;
       /* ③ 定时器回调里调一个**本地的结算助手**（`finish(` / `settle(` / `done(`）——
        * `waitForDetachMediator` 就是这样写的：它把「这一轮结束」收成 `finish()`
        *（内部判重入 + resolve），定时器到点调它。只看 `resolve(` 会漏掉这一档。
        * 这几个名字在本仓库的语义是「本轮到此为止」。 */
       const settledByHelper = (
-        t2.match(/\bsetTimeout\s*\([\s\S]{0,200}?\b(?:finish|settle|done)\s*\(/gi) || []
+        t2.match(/\bsetTimeout\s*\([\s\S]{0,200}?\b(?:finish|settle|done)\s*\(/gi) ?? []
       ).length;
       return races + settles + settledByHelper;
     },

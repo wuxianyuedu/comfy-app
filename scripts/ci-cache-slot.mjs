@@ -623,7 +623,7 @@ export function main(io = {}) {
   });
   log(
     `[缓存槽读数] 键 ${(key ?? "取不到").slice(0, 12)}·槽 ${
-      cacheRoot ? cacheRoot : "未配置"
+      cacheRoot ?? "未配置"
     }·结论 ${plan.action}`,
   );
   log(`[缓存槽读数]   ${plan.why}`);

@@ -133,9 +133,9 @@ module.exports = {
         return 0;
       }
       const inputs =
-        t2.match(/<input[\s\S]{0,80}type=["'](?:text|number|password|url|email|search|tel)["']/g) ||
+        t2.match(/<input[\s\S]{0,80}type=["'](?:text|number|password|url|email|search|tel)["']/g) ??
         [];
-      const textareas = t2.match(/<textarea[\s\n>]/g) || [];
+      const textareas = t2.match(/<textarea[\s\n>]/g) ?? [];
       return inputs.length + textareas.length;
     },
   },
@@ -155,7 +155,7 @@ module.exports = {
       if (/from ["']~\/components\/ui\/(?:checkbox|radio-group)["']/.test(t2)) {
         return 0;
       }
-      return (t2.match(/<input[\s\S]{0,80}type=["'](?:checkbox|radio)["']/g) || []).length;
+      return (t2.match(/<input[\s\S]{0,80}type=["'](?:checkbox|radio)["']/g) ?? []).length;
     },
   },
 
@@ -170,7 +170,7 @@ module.exports = {
     label: "视图层用 space-y-* / space-x-*（应使用 flex + gap-*，shadcn styling.md）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      return (t2.match(/space-[xy]-\d/g) || []).length;
+      return (t2.match(/space-[xy]-\d/g) ?? []).length;
     },
   },
 
@@ -205,7 +205,7 @@ module.exports = {
       return (
         t2.match(
           /dark:(?:bg|text|border|ring|from|to|shadow|fill|stroke|outline|decoration|accent|caret|divide|placeholder|file|space)-\[?[a-z-]*?(?:emerald|green|rose|red|amber|sky|cyan|violet|blue|purple|fuchsia|indigo|teal|lime|orange|yellow)-[0-9]/g,
-        ) || []
+        ) ?? []
       ).length;
     },
   },
@@ -277,7 +277,7 @@ module.exports = {
       /* 自闭合 div + className 含 border-{t|b|l|r}。用 `[^>]*?/>` 而非
        * `[^/>]*?/>` 是因为 className 值可能带 `/`（如 `w-1/2`），但 `>`
        * 是硬边界、不能跨。 */
-      return (t2.match(/<div\b[^>]*?className="[^"]*\bborder-[tblr]\b[^"]*"[^>]*?\/>/g) || [])
+      return (t2.match(/<div\b[^>]*?className="[^"]*\bborder-[tblr]\b[^"]*"[^>]*?\/>/g) ?? [])
         .length;
     },
   },
@@ -385,7 +385,7 @@ module.exports = {
       const t2 = stripCommentsCached(t);
       /* 只数 `<select` 标签起始形态（后接空白、`>`、`/` 之外的字符），
        * 不误伤 `selectedValue` / `select-none` 这类同前缀的标识符与类名。 */
-      return (t2.match(/<select[\s/>]/g) || []).length;
+      return (t2.match(/<select[\s/>]/g) ?? []).length;
     },
   },
 
@@ -417,7 +417,7 @@ module.exports = {
       "视图层裸写 <label>（表单行应走 ~/components/ui/form-field 的 FormField 或 ~/components/ui/field 的 FieldLabel；checkbox/radio 点击区走 ~/components/ui/{checkbox,radio-group} 的 children 语义）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      return (t2.match(/<label[\s/>]/g) || []).length;
+      return (t2.match(/<label[\s/>]/g) ?? []).length;
     },
   },
 
@@ -453,7 +453,7 @@ module.exports = {
       "视图层手写 aria-pressed（2–7 项的选项组应走 ~/components/ui/toggle-group 的 ToggleGroup + ToggleGroupItem；shadcn forms.md）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      return (t2.match(/aria-pressed\s*=/g) || []).length;
+      return (t2.match(/aria-pressed\s*=/g) ?? []).length;
     },
   },
 
@@ -493,7 +493,7 @@ module.exports = {
       return (
         t2.match(
           /(^|[\s"'`{])(?!dark:)(?:bg|text|border|ring|from|to|shadow|fill|stroke|outline|decoration|accent|caret|divide|placeholder|file)-\[?[a-z-]*?(?:emerald|green|rose|red|amber|sky|cyan|violet|blue|purple|fuchsia|indigo|teal|lime|orange|yellow)-[0-9]/g,
-        ) || []
+        ) ?? []
       ).length;
     },
   },
@@ -780,7 +780,7 @@ module.exports = {
       "视图层手写 <table>（应使用 ~/components/ui/table 的 Table / TableHeader / TableRow / TableCell / TableHead）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      return (t2.match(/<table[\s/>]/g) || []).length;
+      return (t2.match(/<table[\s/>]/g) ?? []).length;
     },
   },
 

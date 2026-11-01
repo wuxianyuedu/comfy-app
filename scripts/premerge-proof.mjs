@@ -219,6 +219,8 @@ export function readRevisions(gitDir, cwd = ROOT) {
   const upstreamRef = ref && ref.includes("/") ? ref : null;
   return {
     headSha: run(["rev-parse", "HEAD"]),
+    // `run()` 失败时给空串，这里要的是 null：`||` 把两种空值并成同一个「拿不到」。
+    // 这里刻意保留 ||：run() 失败时给空串，空串与「没有上游」在这里是同一件事。
     upstreamSha: (upstreamRef && run(["rev-parse", "--verify", "--quiet", upstreamRef])) || null,
   };
 }

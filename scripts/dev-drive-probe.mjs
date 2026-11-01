@@ -517,6 +517,7 @@ export function probeCacheLocations(platform) {
   /** @type {Record<string, CacheEntry | null>} */
   const out = {};
   for (const entry of entries) {
+    // 这里刻意保留 ||：环境变量被设成空串时同样算「没配」，要回落默认目录。
     const target = entry.value || entry.fallback;
     out[entry.key] = target
       ? {

@@ -94,7 +94,7 @@ export function renderReport(report) {
   lines.push(`检出根：${report.repo}`);
   lines.push(
     `所在卷：${volume.root ?? "(未知)"}  文件系统：${volume.fsType ?? "(未知)"}` +
-      `  卷标：${volume.label || "(无)"}  Dev Drive 指定：${volume.devDriveLabel ?? "未知"}`,
+      `  卷标：${volume.label ?? "(无)"}  Dev Drive 指定：${volume.devDriveLabel ?? "未知"}`,
   );
   lines.push(
     `能力实测：硬链接 ${mark.ok} ｜ 块克隆 ${

@@ -410,6 +410,7 @@ export function pnpmCli(deps = {}) {
  */
 export function spawnSettled(command, args, options) {
   const res = spawnSync(command, args, options);
+  /* 这里刻意保留 ||：`error.code` 在个别实现里是空串，那时要念 `message` 那一半。 */
   const err = res.error
     ? /** @type {Error & {code?:string}} */ (res.error).code ||
       String(res.error.message ?? res.error)

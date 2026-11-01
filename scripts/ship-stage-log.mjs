@@ -52,7 +52,7 @@ import {
  * @returns {string[]}
  */
 export function stageLogPlan(slug, sn, stageRef) {
-  const target = sn || "<sn>";
+  const target = sn ?? "<sn>";
   return [
     `cnb build get-build-logs --repo ${
       slug

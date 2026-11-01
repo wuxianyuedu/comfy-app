@@ -203,6 +203,7 @@ function measurePythonOnce(pyChecker) {
     return {
       state: "answered",
       python,
+      // 这里刻意保留 ||：子进程失败时 stdout 可能是空串，空串要走 message 回退。
       problems: [`Python 侧自检失败：${(error.stdout || error.message || "").toString().trim()}`],
     };
   }

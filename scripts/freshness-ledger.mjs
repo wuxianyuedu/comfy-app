@@ -74,7 +74,8 @@ export function gitUser(fallback) {
   const picked = gitUserCandidates()
     .map((v) => String(v ?? "").trim())
     .find((v) => v !== "");
-  return picked || fallback;
+  // 候选里没有可用名字（`find` 给 `undefined`）才用兜底；空串在上一行已经被过滤掉了。
+  return picked ?? fallback;
 }
 
 /**

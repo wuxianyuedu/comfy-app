@@ -264,7 +264,7 @@ export function pipelineForStage(outcome, stageId) {
   return (
     outcome.pipelines.find((p) =>
       [...p.configured, ...p.failed, ...p.cancelled, ...p.skipped].some((s) => s.id === stageId),
-    ) || null
+    ) ?? null
   );
 }
 
@@ -296,12 +296,12 @@ export function describeFailedStages(
     const pipeline = pipelineForStage(outcome, s.id);
     if (!pipeline) {
       log(
-        `${prefix}   失败格：${s.name || s.id}（${s.id}）不在任何一条流水线的读数里 ⇒ 取不到日志。`,
+        `${prefix}   失败格：${s.name ?? s.id}（${s.id}）不在任何一条流水线的读数里 ⇒ 取不到日志。`,
       );
       continue;
     }
     const detail = fetchStageDetail(run, slug, sn, pipeline.id, s.id);
-    const status = (detail && detail.status) || s.status;
+    const status = (detail && detail.status) ?? s.status;
     const duration =
       detail && detail.duration !== null ? ` · ${formatDurationMs(detail.duration) ?? "未知"}` : "";
     log(
@@ -629,7 +629,7 @@ export function main({
     log(usage());
     return CODE.NOT_RUN;
   }
-  const slug = parsed.repo || resolveRepoSlug(run);
+  const slug = parsed.repo ?? resolveRepoSlug(run);
   if (!slug) {
     log("[build-readout] 取不到仓库路径（远端多于一个且没有 origin）⇒ 给 --repo <组织/仓库>。");
     return CODE.NOT_RUN;
