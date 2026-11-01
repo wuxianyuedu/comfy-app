@@ -628,7 +628,7 @@ export async function runChunk(chunk, deps) {
    * 参数。它落在 `spawn(entry, [ … ])` 的实参数组**之后**，不改那个数组的形状
    * （`tests/hook-affected-launch.test.ts` 按那个形状提取「传给 vitest 的实参」）。 */
   const firstPassOptions = filterLine
-    ? { ...(firstPassBase ?? {}), filterLine }
+    ? { ...firstPassBase, filterLine }
     : firstPassBase;
   const firstPassStartedAt = Date.now();
   const res = spawn(

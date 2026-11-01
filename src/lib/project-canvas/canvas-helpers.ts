@@ -151,7 +151,7 @@ export function applyPropagationToNodes(
           ...node,
           data: {
             ...td,
-            workflowInputs: { ...(td.workflowInputs ?? {}), [key]: stored },
+            workflowInputs: { ...td.workflowInputs, [key]: stored },
             upstreamId: sourceId,
           },
         };

@@ -320,8 +320,8 @@ export function collectDependencyFloors(root) {
     return { ok: false, reason: "读不到 package.json" };
   }
   const declared = Object.keys({
-    ...(pkg.dependencies || {}),
-    ...(pkg.devDependencies || {}),
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
   });
   if (declared.length === 0) {
     return { ok: false, reason: "package.json 里没有依赖声明" };

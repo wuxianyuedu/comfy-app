@@ -299,7 +299,7 @@ export function useWorkflowPersistence({
           prev
             ? {
                 ...prev,
-                positions: { ...(prev.positions ?? {}), [nodeId]: [x, y] },
+                positions: { ...prev.positions, [nodeId]: [x, y] },
               }
             : prev,
         );

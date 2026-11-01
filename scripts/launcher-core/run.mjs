@@ -261,7 +261,7 @@ export function recordPid(root, name, pid) {
   if (!meta) {
     return;
   }
-  const pids = { .../** @type {Record<string, number>} */ (meta.pids ?? {}) };
+  const pids = { .../** @type {Record<string, number>} */ (meta.pids) };
   if (pid == null) {
     delete pids[name];
   } else {

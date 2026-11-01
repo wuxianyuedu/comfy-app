@@ -169,7 +169,7 @@ export function useRelatedEdgesHighlight(
         changed = true;
         /* 重建 data 时显式摘掉旧的关注级别：降级回 "none" 的边若留着旧标记，
          * 渲染层会按它继续加粗。 */
-        const rest = { ...(data ?? {}) };
+        const rest = { ...data };
         delete rest[EDGE_FOCUS_DATA_KEY];
         delete rest[EDGE_FOCUS_ACTIVE_KEY];
         if (role === "none") {
@@ -229,7 +229,7 @@ export function useRelatedEdgesHighlight(
           return node;
         }
         changed = true;
-        const rest = { ...(data ?? {}) };
+        const rest = { ...data };
         delete rest[NODE_PORT_FOCUS_DATA_KEY];
         delete rest[NODE_PORT_FOCUS_ACTIVE_KEY];
         if (Object.keys(nextTable).length === 0) {

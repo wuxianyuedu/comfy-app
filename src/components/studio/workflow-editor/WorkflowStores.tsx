@@ -188,7 +188,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           return {};
         }
         const modes: Record<string, WorkflowIOModeOverride> = {
-          ...(cur.modeOverrides ?? {}),
+          ...cur.modeOverrides,
         };
         if (patch === null) {
           if (!(mode in modes)) {
@@ -196,7 +196,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           }
           delete modes[mode];
         } else {
-          modes[mode] = { ...(modes[mode] ?? {}), ...patch };
+          modes[mode] = { ...modes[mode], ...patch };
         }
         /* modes 全空时把字段摘掉，避免往服务端 JSON 里塞一个空对象。 */
         const nextEntry: WorkflowIOParam =

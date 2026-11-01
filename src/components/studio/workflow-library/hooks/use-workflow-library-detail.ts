@@ -329,7 +329,7 @@ export function useWorkflowLibraryDetail(
         >;
         const next: Record<string, unknown> = {
           ...raw,
-          [ioKey]: { ...(raw[ioKey] ?? {}), seedMode: mode },
+          [ioKey]: { ...raw[ioKey], seedMode: mode },
         };
         await onPatchWorkflowIO(workflow.id, next);
       },
