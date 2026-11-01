@@ -142,7 +142,7 @@ export function findPnpm({
       command: process.execPath,
       prefixArgs: [entry],
       args: [entry, "-v"],
-      out: probed.out.trim(),
+      out: `${probed.out}`.trim(),
       ok: true,
     };
   }
@@ -167,7 +167,7 @@ export function findPnpm({
           /* 探测那一趟 = 宿主前缀 + 探针参数；`prefixArgs` 单独留一份给真命令用。 */
           prefixArgs: usable.prefixArgs,
           args: [...usable.prefixArgs, ...usable.probeArgs],
-          out: usable.out.trim(),
+          out: `${usable.out}`.trim(),
           ok: true,
         };
       }
