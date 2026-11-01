@@ -82,11 +82,7 @@ function isSecretShaped(text: string): boolean {
  * 最常见的形态，把错误对象摊平成普通对象会丢掉 `message` —— 那是镜像存在的全部意义。
  * 形状守卫只管字符串，不做脱敏兜底，因此不与 pino redact 的职责重叠。
  */
-export function redactSecretShaped(
-  value: unknown,
-  depth = 0,
-  seen = new WeakSet<object>(),
-): unknown {
+export function redactSecretShaped(value: unknown, depth = 0, seen = new WeakSet()): unknown {
   if (depth > 6) {
     return value;
   }

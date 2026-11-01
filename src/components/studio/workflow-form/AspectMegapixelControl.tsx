@@ -272,7 +272,7 @@ export function AspectMegapixelControl({
     [aspect.ioKey, megapixels.ioKey, multiple, setMany],
   );
 
-  const sections: Array<SegmentSection<string>> = useMemo(
+  const sections: Array<SegmentSection> = useMemo(
     () => [
       {
         label: "比例",
@@ -327,7 +327,7 @@ export function AspectMegapixelControl({
                 }
                 apply(aspectValue, currentMp, hit.value);
               },
-            } satisfies SegmentSection<string>,
+            } satisfies SegmentSection,
           ]
         : []),
     ],

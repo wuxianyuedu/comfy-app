@@ -66,7 +66,7 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
   if (!root || typeof root !== "object") {
     return undefined;
   }
-  const seen = new WeakSet<object>();
+  const seen = new WeakSet();
   const stack: Array<{ d: number; node: JsonRecord }> = [
     { node: /* SAFETY: 类型断言已复核 */ root as JsonRecord, d: 0 },
   ];
