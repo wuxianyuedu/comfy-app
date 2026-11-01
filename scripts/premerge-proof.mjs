@@ -91,6 +91,58 @@ export function mergeCandidates(refs, targetBranch = "master") {
 }
 
 /**
+ * 这次 push 的**目的地**是不是本仓自己的 remote。
+ *
+ * 为什么需要这一判：`pre-push` 是本地钩子，它对**每一次** push 都跑 —— 包括推向
+ * 镜像仓库（`.cnb.yml` 的 endStage 会把 PR 分支推到 GitHub）与任何第三方备份远端。
+ * 那些 ref 与「这条分支要不要被合进本仓 master」毫无关系，而对它们复算本仓判据既跑不出
+ * 结论、又会把一次与合并无关的 push 拦死。
+ *
+ * 判据是**比对 URL、不是比对远端名**：远端名随克隆方式变（本仓实测叫 `origin`，
+ * 别的检出可能叫 `cnb`），而 `git remote get-url <name>` 给出的那把 URL 才是这次
+ * push 真正去的地方。本地路径形态（`/srv/repo.git` / `file://…`）按规范化后比。
+ *
+ * **取不到任何 remote URL 时判「不是外来的」**（返回 `false`）：那时我们没有依据说
+ * 「这是别人的远端」，而这一族的失败代价不对称 —— 误判成外来等于**跳过**一次该跑的
+ * 复算，那比多跑一次坏得多。
+ *
+ * @param {string | null | undefined} pushUrl git 传给 pre-push 的 `$2`
+ * @param {string[]} remoteUrls `git remote get-url --all <name>` 的全部形态
+ * @returns {boolean} 本次 push 的目的地不在本仓任何 remote 上
+ */
+export function isForeignRemotePush(pushUrl, remoteUrls) {
+  const url = normalizeRemoteUrl(pushUrl);
+  if (!url) {
+    return false;
+  }
+  const known = remoteUrls.map(normalizeRemoteUrl).filter(Boolean);
+  if (known.length === 0) {
+    return false;
+  }
+  return !known.includes(url);
+}
+
+/**
+ * 远端 URL 归一：去空白、去尾斜杠、去 `.git` 后缀、小写主机名与协议头。
+ *
+ * 只归一**确实等价**的那几处（协议大小写、尾斜杠、`.git` 后缀）：凭据、端口、路径大小写
+ * 都不动 —— 那几处一动就可能把两个不同的远端判成同一个，而这一判的误判方向是「跳过」。
+ *
+ * @param {string | null | undefined} raw
+ * @returns {string}
+ */
+function normalizeRemoteUrl(raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) {
+    return "";
+  }
+  return text
+    .replace(/\/+$/, "")
+    .replace(/\.git$/i, "")
+    .replace(/^(\w+):\/\//, (_m, scheme) => `${String(scheme).toLowerCase()}://`);
+}
+
+/**
  * 判决本体（纯函数，便于逐条边界都被用例走到）。
  *
  * 三态取代过去的 `{run: boolean}`（ISSUE #2386）：一个布尔承担不了
@@ -101,10 +153,25 @@ export function mergeCandidates(refs, targetBranch = "master") {
  *   · `"skip"` ⇒ 不跑也不拦（没有要合进 master 的分支 ref / 证明仍成立）；
  *   · `"unavailable"` ⇒ **跑不了**（取不到上游引用）⇒ 退 2，「不算绿」。
  *
- * @param {{candidates: ReturnType<typeof mergeCandidates>, headSha: string, upstreamSha: string | null, proof: {headSha?: string, upstreamSha?: string, verifiedAt?: string} | null}} input
+ * 第四个输入 `foreignPush` 回答的是**目的地**那一问（见 {@link isForeignRemotePush}）：
+ * 推的是镜像仓库 / 第三方备份远端时，这批 ref 与「要不要合进本仓 master」无关，按
+ * `skip` 放行并说出理由 —— 否则一次与合并无关的 push 会被「取不到上游引用」拦死。
+ *
+ * @param {{candidates: ReturnType<typeof mergeCandidates>, headSha: string, upstreamSha: string | null, proof: {headSha?: string, upstreamSha?: string, verifiedAt?: string} | null, foreignPush?: {url: string} | null}} input
  * @returns {{verdict: "run" | "skip" | "unavailable", reasons: string[]}}
  */
-export function decidePremergePush({ candidates, headSha, upstreamSha, proof }) {
+export function decidePremergePush({ candidates, headSha, upstreamSha, proof, foreignPush }) {
+  /* 目的地那一问**排在 candidates 之前**：推去别人的远端时，「有没有要合进 master 的分支」
+   * 这个前提根本不成立 —— 说「没有要合进 master 的分支 ref」会把成因说到行为上去。 */
+  if (foreignPush) {
+    return {
+      verdict: "skip",
+      reasons: [
+        `本次 push 的目的地是 \`${foreignPush.url}\`，不在本仓任何 remote 上 —— ` +
+          "合并前复算判的是「这条分支要合进本仓 master」这件事，对它没有对象",
+      ],
+    };
+  }
   if (candidates.length === 0) {
     return {
       verdict: "skip",
@@ -378,10 +445,44 @@ function runQuiet(script, args) {
 }
 
 /**
+ * 本仓登记过的全部远端 URL（`git remote get-url --all` 逐个 remote 摊平）。
+ *
+ * 取不到就返回空数组 —— `isForeignRemotePush()` 把空数组读成「没有依据说这是外来远端」，
+ * 于是照旧走复算。这条不对称是刻意的：**误判成外来 = 跳过一次该跑的复算**，比多跑一次坏。
+ *
+ * @param {string} cwd
+ * @returns {string[]}
+ */
+function readRemoteUrls(cwd) {
+  const names = spawnSync("git", ["remote"], { cwd, encoding: "utf8" });
+  if (names.status !== 0) {
+    return [];
+  }
+  /** @type {string[]} */
+  const urls = [];
+  for (const name of String(names.stdout ?? "").split("\n").map((s) => s.trim())) {
+    if (!name) {
+      continue;
+    }
+    const got = spawnSync("git", ["remote", "get-url", "--all", name], { cwd, encoding: "utf8" });
+    if (got.status !== 0) {
+      continue;
+    }
+    for (const line of String(got.stdout ?? "").split("\n")) {
+      if (line.trim()) {
+        urls.push(line.trim());
+      }
+    }
+  }
+  return urls;
+}
+
+/**
  * @param {string} stdinText
+ * @param {string | null} [pushUrl] git 传给 pre-push 的 `$2`（这次 push 的目的地）
  * @returns {number} 退出码
  */
-export function runFromStdin(stdinText) {
+export function runFromStdin(stdinText, pushUrl = null) {
   const gitDirOut = spawnSync("git", ["rev-parse", "--git-dir"], {
     cwd: ROOT,
     encoding: "utf8",
@@ -391,14 +492,20 @@ export function runFromStdin(stdinText) {
     return 2;
   }
   const gitDir = path.resolve(ROOT, String(gitDirOut.stdout ?? "").trim());
-  const candidates = mergeCandidates(parseRefLines(stdinText));
+  const refs = parseRefLines(stdinText);
+  const candidates = mergeCandidates(refs);
   const { headSha, upstreamSha } = readRevisions(gitDir);
   const proof = readProof(gitDir);
+  const foreignPush =
+    candidates.length > 0 && isForeignRemotePush(pushUrl, readRemoteUrls(ROOT))
+      ? { url: String(pushUrl ?? "").trim() }
+      : null;
   const verdict = decidePremergePush({
     candidates,
     headSha,
     upstreamSha,
     proof,
+    foreignPush,
   });
 
   const notRun = exitForNotRun(verdict, {
@@ -503,5 +610,7 @@ export function runFromStdin(stdinText) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const stdin = fs.readFileSync(0, "utf8");
-  process.exit(runFromStdin(stdin));
+  /* `[远端名, 远端 URL]` —— git 传 pre-push 的就是这两个参数（见 githooks 的文档）。
+   * 只读第二个：名字随克隆方式变，URL 才是这次 push 真正去的地方。 */
+  process.exit(runFromStdin(stdin, process.argv[3] ?? null));
 }
