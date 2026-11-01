@@ -1,0 +1,51 @@
+# PR 质量门禁（镜像档）—— 双远端镜像的一格冒烟（ISSUE #2978）
+#
+# 触发链：cnb PR 流水线的 endStage「GitHub 镜像同步」把本跑 HEAD 推到本仓库的
+# `cnb-pr-<IID>` 专属 ref，再派发 `repository_dispatch`（event_type 逐字配对
+# `scripts/ci-github-mirror-push.mjs` 的 `EVENT_TYPE`）；本 workflow 按**同一笔 sha**
+# 检出并跑一格判据 —— 两边判同一份树，读数才对得上账。
+#
+# 定位：并行双跑期的**旁路验证档**，不阻塞 cnb 侧合并；一格试通后其余格逐步加。
+# 并发：同一 PR 的重复派发互相取消（对位 cnb 的 `pr-$IID` 锁）；手动触发按 run 各算。
+name: PR gate (mirror)
+
+on:
+  repository_dispatch:
+    types: [cnb-pr-sync]
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: 要判的那一笔 sha（留空 = 当前默认分支 HEAD）
+        required: false
+        default: ""
+
+concurrency:
+  group: pr-${{ github.event.client_payload.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  ui-logic-separation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出（按镜像 payload 的 sha）
+        uses: actions/checkout@v4
+        with:
+          # repository_dispatch 的 payload 里是合成 merge 的 sha；手动触发走 inputs。
+          ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
+          # 全量历史：镜像推来的合成 merge 带两支父历史，浅克隆拿不到 payload 那一笔。
+          fetch-depth: 0
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v4
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: 安装依赖（冷装约 8 分钟；allowBuilds 清单见 pnpm-workspace.yaml）
+        run: pnpm install --frozen-lockfile
+
+      - name: UI/逻辑分离硬闸（cnb 同款判据一字不改）
+        run: node scripts/check-ui-logic-separation.cjs
