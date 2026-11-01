@@ -119,7 +119,11 @@ import {
 } from "../scripts/ship-claim.mjs";
 import { cleanBranch, createOrReusePull, reportVerdict } from "../scripts/ship-platform.mjs";
 import { pollUntilTerminal } from "../scripts/ship-poll.mjs";
-import { readIssueBody, runAppendIssueComment, runIssueComment } from "../scripts/ship-issue-new.mjs";
+import {
+  readIssueBody,
+  runAppendIssueComment,
+  runIssueComment,
+} from "../scripts/ship-issue-new.mjs";
 import { sameCommentBody, stripTrailingNewline } from "../scripts/ship-comment.mjs";
 import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/ship-reap.mjs";
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
@@ -563,10 +567,7 @@ describe("classifyPushFailure：push 失败按原话分型，不固定猜 premer
   });
 
   it("两类特征同时在场 ⇒ 仍判 remote（钩子放行后传输被拒，终止原因是远端）", () => {
-    const got = classifyPushFailure(
-      "",
-      `[pre-push] ✓ 合并前复算全绿\n${REMOTE_404_STDERR}`,
-    );
+    const got = classifyPushFailure("", `[pre-push] ✓ 合并前复算全绿\n${REMOTE_404_STDERR}`);
     expect(got.kind).toBe("remote");
   });
 
@@ -2810,13 +2811,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       const s = scratch();
       const { dir, bodyFile } = commentFixture();
       try {
-        const code = runComment(f, s, [
-          "--comment",
-          "2187",
-          "--body-file",
-          bodyFile,
-          "--dry-run",
-        ]);
+        const code = runComment(f, s, ["--comment", "2187", "--body-file", bodyFile, "--dry-run"]);
         expect(code).toBe(CODE.GREEN);
         expect(f.calls).toEqual([]);
       } finally {
@@ -4032,8 +4027,16 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       ` ${n} files changed, ${n} insertions(+)`,
     ].join("\n");
 
-  /** 直调 `createOrReusePull` 的量具：记下每一次命令，以及交给 `mkTmp` 的那份正文。 */
-  function pullHarness(env: { postPull?: FakeResult; stat?: string; } = {}) {
+  /** 直调 `createOrReusePull` 的量具：记下每一次命令，以及交给 `mkTmp` 的那份正文。
+   *  `openPullsPages` 给**开放清单**的逐页读数（下标 0 = 第 1 页），页号取自请求里的
+   *  `--page N`（ISSUE #2964：复用判定必须翻页，量具得能按页给不同的答案）。 */
+  function pullHarness(
+    env: {
+      openPullsPages?: Array<string>;
+      postPull?: FakeResult;
+      stat?: string;
+    } = {},
+  ) {
     const calls: Array<string> = [];
     const bodies: Array<string> = [];
     const heard: Array<string> = [];
@@ -4041,6 +4044,10 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
       const key = args.join(" ");
       calls.push(`${cmd} ${key}`);
       if (cmd === "cnb" && key.includes("list-pulls")) {
+        if (env.openPullsPages && key.includes("--state open")) {
+          const page = Number(/--page (?<page>\d+)/.exec(key)?.groups?.page ?? "1");
+          return ok(env.openPullsPages[page - 1] ?? '{"status":200,"data":[]}');
+        }
         return ok('{"status":200,"data":[]}');
       }
       if (cmd === "cnb" && key.includes("post-pull")) {
@@ -4141,6 +4148,40 @@ describe("PR 正文：diffstat 是摘要而不是清单，改动面再大也不�
     expect(all).toContain("平台给的拒绝：errcode=2000003");
     expect(all).toContain("body length exceeded the limit 65,535");
     expect(all).toContain("没有 PR 号");
+  });
+
+  it("复用按页扫：目标 PR 被挤出第一页也认得到（ISSUE #2964），且复用了就不许再建", () => {
+    const others = Array.from(
+      { length: 20 },
+      (_, i) => `{"number":${3000 - i},"head":{"ref":"refs/heads/feat/other-${i}"}}`,
+    );
+    const { calls, io } = pullHarness({
+      openPullsPages: [
+        `{"status":200,"data":[${others.join(",")}]}`,
+        /* 平台真实形状：`head.ref = "refs/heads/<分支名>"`（裸分支名比对会全条落空）。 */
+        '{"data":[{"head":{"ref":"refs/heads/feat/big"},"number":2649}],"status":200}',
+      ],
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(2649);
+    expect(calls.some((c) => c.includes("--state open") && c.includes("--page 2"))).toBe(true);
+    expect(
+      calls.some((c) => c.includes("post-pull")),
+      "复用命中还发 post-pull，长出来的就是第二条 PR",
+    ).toBe(false);
+  });
+
+  it("翻页扫满仍没见着这条分支 ⇒ 落回「建」那一支（翻页不许把建 PR 的路堵死）", () => {
+    const others = Array.from(
+      { length: 20 },
+      (_, i) => `{"number":${3000 - i},"head":{"ref":"refs/heads/feat/other-${i}"}}`,
+    );
+    const { calls, io } = pullHarness({
+      openPullsPages: [`{"status":200,"data":[${others.join(",")}]}`],
+    });
+    const out = createOrReusePull(io);
+    expect(out.number).toBe(3002);
+    expect(calls.some((c) => c.includes("post-pull"))).toBe(true);
   });
 
   it("readPullCreateError：只认 errcode / errmsg 这两个键名，成功响应一律回 null", () => {
@@ -4883,7 +4924,7 @@ describe("--diagnose：只读取回失败格与日志摘要", () => {
  * 标题对不上 ⇒ 1（公开状态不是请求的那件事）。
  */
 describe("--new-issue：一步建单并回读", () => {
-  function newIssueIo(opts: { created?: unknown; labelsOk?: boolean; readback?: unknown; }) {
+  function newIssueIo(opts: { created?: unknown; labelsOk?: boolean; readback?: unknown }) {
     const calls: Array<string> = [];
     const log: Array<string> = [];
     const ok = (stdout: string): FakeResult => ({
@@ -5958,7 +5999,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
    * `push` 那一段会读 `comfy-premerge-proof.json`，读不到就压上 `NOT_RUN` —— 开发机上它
    * 在（真推送过），CI 节点上没有，于是凡「断言走到 PR / 合并那一段的结论」的格子都会
    * **本地绿、节点红**（实测 #2064 第一条就这样）。凡要断退出码的走完整链的格子，都用这一份。 */
-  function proofRoot(tag: string): { gitDir: string; tmpRoot: string; } {
+  function proofRoot(tag: string): { gitDir: string; tmpRoot: string } {
     const tmpRoot = mkdtempSync(path.join(os.tmpdir(), `ship-${tag}-`));
     const gitDir = path.join(tmpRoot, "gitdir");
     fs.mkdirSync(gitDir, { recursive: true });
