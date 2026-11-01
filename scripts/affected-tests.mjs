@@ -100,8 +100,8 @@ const WIDE_TRIGGERS = [
   { test: (p) => p === "tsconfig.json", why: WIDE_REASON.types },
   /* 脚本档那份配置与主配置是**同一把尺**（`extends` 过去），它一改，`**\/*.mjs` 那整片
    * 判决面就跟着变（ISSUE #2524）—— 与 `tsconfig.json` 同一格理由，不另立新话术。
-   * 面的份数由判据自己按 `git ls-files` ⇄ 配置展开求交现算（不落在账本里，
-   * 见 ISSUE #2963），这里更不抄一个会随新增脚本过期的数。 */
+   * 面的份数由判据自己从 `git ls-files` 现算（账本里没有那一格，ISSUE #2984），
+   * 这里不抄一个会随新增脚本过期的数。 */
   { test: (p) => p === "tsconfig.scripts.json", why: WIDE_REASON.types },
   { test: (p) => p.startsWith(".githooks/"), why: WIDE_REASON.hooks },
 ];

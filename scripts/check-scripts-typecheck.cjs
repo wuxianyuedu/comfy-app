@@ -45,22 +45,25 @@
  *      文件 / 码 ⇒ 红（**新增脚本零容忍**：新写的 `.mjs` 必须干净，不能顺手扩基线）。
  *   ③ **`--update` 只许收紧**：任何一格上涨都拒绝重写（不是「总量降了就行」——
  *      那样一份新文件的红能被另一文件的下降 smuggle 过去，与 ISSUE #2227 那一族同形）。
+ *   ⑤ **「面 ⇄ 账同数」这一问的答案是「没有第二个数」**：账本里从来就只有一本账 ——
+ *      `files`（`(文件, TS 码)` → 处数）、`total`（各处数之和）。`face` 曾经是这份账的
+ *      第三个字段（「判了多少份」的手写副本），它漂一次就红一次「下一个无关的人」
+ *      （2026-11-01 一天里同一处修了 8 次：#2939 / #2940 / #2945 / #2947 / #2952 / #2955，
+ *      清一色只改那一行），中间还试过「判据自己对齐它」，结果又多出一处判定：自动对齐写回
+ *      之后，`tests/scripts-typecheck-ratchet.test.ts` 判「只读不许写」，两种跑法各自
+ *      自洽、互相红。现在那个字段没有了：面的份数由本判据在**每次**跑完就地从
+ *      `git ls-files` 重算，它不再被写进任何文件，也就没有「另一份副本」可漂。
  *   ④ **被截断的一跑不许报绿**：实测（2026-10-28）一份 `.mjs` 里写了一行 TS 类型注解
  *      （`TS8010`）之后，**整跑只打出那一行**，其余 319 处一个字都不报 —— tsc 报完
  *      语法层的错就不做语义检查。所以「当前比基线少」有两种成因，机器必须分得开：
  *      「修好了」与「没判」。这一格红，且**拒绝按被截断的读数重写基线**（那等于
  *      把棘轮清空）。`TS6133`（声明了没用到）**刻意不算截断** —— 它就是本案要抓的
  *      那一类死代码，把它归进「没判」等于把判据最想要的读数扔掉。
- *   ⑤ **判决面跟着入库清单自己走，账本里不记份数**（ISSUE #2963）：面 = `configFace()`
- *      展开 ⇄ `git ls-files` 求交（`splitTrackedFace`），两个方向都自证 —— 少了是
- *      include 被改窄 / 面漏件（`faceProblems()` 逐份点名），多了是新入库一份干净脚本
- *      （带错的已被 `grows` 拦下）。它是**构成**（判了多少份），不是存量（欠了多少处），
- *      所以不由人来跟：账本里**没有** `face` 这一格，`--update` 只剩「收紧存量」。
- *      上一版（#2944）是「面 ⇄ 账对不上就红、出路 `--update`」——它让判据也说红了，
- *      却没让记账这件事发生：存量 0 处时新脚本一个格子都不涨，唯一的满足路径是人再记
- *      一次账，于是同一处一天里被 8 个人各改一次（2026-11-01，#2939 / #2940 / #2945 /
- *      #2947 / #2952 / #2955 那一批）。棘轮只许降的是**存量**，`files` / `total` 一个
- *      字节都不在这一句里动；存量上涨仍由上面那圈 `grows` 零容忍拦下。
+ *   ⑥ **面是算出来的（现行口径，ISSUE #2984）**：`face` 不是账本字段，是这一跑的输出 ——
+ *      「入库的 `.mjs` 有几份」直接由 `trackedMjs()` + `splitTrackedFace()` 现算，判据与
+ *      用例读**同一次**算出来的值，没有第二份副本可对。旧口径那一格（自动对齐写回 `face`）
+ *      的形态值得记一笔：写回是副作用，而用例要判「判据只读时不写」—— 于是同一条判据
+ *      在两种跑法下各自自洽、互相红。字段没了，这一整类「谁跟谁对」的问题就没了对象。
  *
  * ## 判据自己不许静默降级（§11.23.3 同款）
  *
@@ -218,8 +221,8 @@ function trackedMjs(root) {
 /**
  * 「配置展开的那一份」⇄「入库的那一份」的唯一一次求交。
  *
- * 判据与用例共用它 —— 账上的 `face` 与判据读到的面必须是同一个数，两处各写一遍
- * 就是两份口径（§12.12，而这次的漂移恰好会伪装成「面与账不符」那种红）。
+ * 判据与用例共用它 —— 这份「入库的面」是现算的读数，两处各写一遍就是两份口径
+ * （§12.12；而「两处各写一遍」正是这一格此前那份会漂的手写副本的来源）。
  *
  * @param {string[]} mjs `configFace()` 展开的结果（相对路径、正斜杠、已排序）
  * @param {Set<string> | null} tracked `trackedMjs()` 的结果
@@ -430,8 +433,8 @@ function readBaseline() {
 }
 
 /**
- * 账本只记**存量**（`files` / `total`）。判决面的份数（`face`）**不进账** —— 它是判据
- * 自己从 `git ls-files` ⇄ 配置展开求出来的事实（ISSUE #2963），见 `main()` 里那段。
+ * 写账本。**只有一本账**：`(文件, TS 码)` 的处数 + 总数 —— 没有「判了多少份」那一格
+ * （它由 `trackedMjs()` 现算，见文件头第 ⑤/⑥ 条）。
  *
  * @param {ReturnType<typeof tally>} cur
  */
@@ -462,7 +465,7 @@ function writeBaseline(cur) {
 /**
  * @typedef {{args?: Set<string>, update?: boolean, report?: boolean, noRun?: boolean,
  *   runTsc?: () => ({ok: true, code: number, output: string} | {ok: false, reason: string}),
- *   readBaseline?: () => unknown, writeBaseline?: (cur: object, face: number) => void}} CheckIo
+ *   readBaseline?: () => unknown, writeBaseline?: (cur: object) => void}} CheckIo
  */
 
 /**
@@ -496,19 +499,12 @@ function main(io = {}) {
     console.error(`${TAG} ✗ ${cfg.reason}`);
     return 2;
   }
-  /* 账上那个 `face` 记的是「**这份提交**里有多少脚本」，所以比对前先按入库清单求交
+  /* 面记的是「**这份提交**里有多少脚本」，所以比对前先按入库清单求交
    * （ISSUE #2681：`configFace` 走磁盘 glob，平台上落进工作区的构建产物会把它顶大 1 份，
    * 而红只给「212 vs 210」两个数 —— 那份多出来的东西谁都没提交过，也就没人能据此行动）。
    * 求交只动「算不算进账/判不判它的红」这一半；「include 有没有被改窄」那条对账
    * （下面 `faceProblems` 的第①问）仍拿**未筛**的那一份 —— 它判的是配置，不是磁盘。 */
   const { face, untracked, filtered } = splitTrackedFace(cfg.mjs, trackedMjs(ROOT));
-  /* 账本一次读在手里：`--update` 的「拒涨」与默认档那几条都从这一份走 ——
-   * 两处各读一次会在不同分支上读出两个答案。 */
-  const baseline = loadBase();
-  if (baseline && baseline.__broken) {
-    console.error(`${TAG} ✗ ${baseline.__broken}`);
-    return 2;
-  }
   console.log(
     `${TAG} 判决面：${CONFIG_REL} 展开 ${cfg.mjs.length} 份 .mjs（入库的 ${face.length} 份；脚本档全量，不是可达闭包）`,
   );
@@ -616,6 +612,12 @@ function main(io = {}) {
     return 0;
   }
 
+  const baseline = loadBase();
+  if (baseline && baseline.__broken) {
+    console.error(`${TAG} ✗ ${baseline.__broken}`);
+    return 2;
+  }
+
   if (isUpdate) {
     if (masked.length) {
       console.error(
@@ -707,12 +709,11 @@ function main(io = {}) {
     console.error(`${TAG} ✗ 有语法层报错 ⇒ 这一跑的读数不完整，判红（没判 ≠ 绿，§13.6.2）`);
     return 1;
   }
-  /* 面的份数在 `--update` 那一支之后的账本里**不存在**（ISSUE #2963）：它是判据自己
-   * 按入库清单求交算出来的事实，写进账本就等于两份口径，而账那一份只能靠人跟。
-   * 上面那行「判决面：… 展开 N 份（入库的 M 份）」就是这一跑唯一的读数。 */
-  console.log(
-    `${TAG} ✓ 存量 ${cur.total} 处（基线 ${baseline.total}）· 面 ${face.length} 份已自证`,
-  );
+
+  /* 面这一格到这里就只是**读数**：份数由 `trackedMjs()` 现算（文件头第 ⑤/⑥ 条），
+   * 账本里没有它的副本 ⇒ 没有「两份口径」可对，也就没有哪个方向需要人跟。
+   * 干净脚本入库时一个格子都不涨（存量本来就是 0 处），这正是这一档希望发生的事。 */
+  console.log(`${TAG} ✓ 判决面 ${face.length} 份 / 存量 ${cur.total} 处（基线 ${baseline.total}）`);
   return 0;
 }
 

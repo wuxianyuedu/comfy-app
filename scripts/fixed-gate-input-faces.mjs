@@ -213,7 +213,7 @@ export const INPUT_FACES = [
       "tests/helpers/git-sandbox-env.ts",
       "tests/scripts-typecheck-ratchet.test.ts",
     ],
-    why: "判决面是 `tsconfig.scripts.json` 展开的全部 `scripts/**/*.mjs`，还拿盘上枚举与真基线 JSON 对账 —— 新增或改一份脚本都在输入面里（那份 tsconfig 自己是 wide 触发面）",
+    why: "判决面是 `tsconfig.scripts.json` 展开的全部 `scripts/**/*.mjs`，还拿盘上枚举与真基线 JSON 对账、并把账本的字段面钉成「只有 (文件,TS码) 与总数」—— 新增或改一份脚本都在输入面里（那份 tsconfig 自己是 wide 触发面）",
   },
   {
     test: "tests/precommit-timing.test.ts",
