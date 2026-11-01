@@ -142,10 +142,10 @@ export function upsertProject(p: CanvasProject): void {
   const all = readIndex();
   const idx = all.findIndex((item) => item.id === p.id);
   const next: CanvasProject = { ...p, updatedAt: Date.now() };
-  if (idx !== -1) {
-    all[idx] = next;
-  } else {
+  if (idx === -1) {
     all.push(next);
+  } else {
+    all[idx] = next;
   }
   writeIndex(all);
   emitChanged();

@@ -1855,7 +1855,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
       JSON.stringify({ status: 200, contentType: "application/json", data });
     const arg = (args: Array<string>, name: string) => {
       const i = args.indexOf(name);
-      return i !== -1 ? String(args[i + 1] ?? "") : "";
+      return i === -1 ? "" : String(args[i + 1] ?? "");
     };
     const run = (_cmd: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));

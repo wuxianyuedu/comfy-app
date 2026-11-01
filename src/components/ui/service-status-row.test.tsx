@@ -65,7 +65,7 @@ describe("状态行视图：都接上了这套判据", () => {
   const readViewBody = (rel: string) => {
     const src = readFileSync(path.resolve(__dirname, rel), "utf8");
     const end = src.lastIndexOf("\nimport ");
-    const body = end !== -1 ? src.slice(src.indexOf("\n", end + 1) + 1) : src;
+    const body = end === -1 ? src : src.slice(src.indexOf("\n", end + 1) + 1);
     return body;
   };
   const viewBody = [

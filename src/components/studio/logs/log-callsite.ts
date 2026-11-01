@@ -77,8 +77,8 @@ function parseStackFrame(raw: string): StackFrame | null {
   }
   const secondLastColon = loc.lastIndexOf(":", lastColon - 1);
   const lineNo =
-    secondLastColon !== -1 ? loc.slice(secondLastColon + 1, lastColon) : loc.slice(lastColon + 1);
-  let path = secondLastColon !== -1 ? loc.slice(0, secondLastColon) : loc.slice(0, lastColon);
+    secondLastColon === -1 ? loc.slice(lastColon + 1) : loc.slice(secondLastColon + 1, lastColon);
+  let path = secondLastColon === -1 ? loc.slice(0, lastColon) : loc.slice(0, secondLastColon);
 
   // 清理常见前缀 / 协议
   path = path.replace(/^webpack-internal:\/\/\/\.\//, "");

@@ -573,13 +573,13 @@ function main() {
     } else {
       console.log(`[shell-gate] 没能对账合成合并提交：${face.why}。照旧按三点 diff 判。`);
     }
-  } else if (stagedIdx !== -1) {
+  } else if (stagedIdx === -1) {
+    staged = dropAdoptedShellInputs(stagedFiles());
+  } else {
     // 显式清单（`--staged a b c`）是调试 / 覆写通道，调用方说了算，不过采纳过滤；
     // 只有从暂存区自动推导时，才剔除「原样采纳对方那侧」的壳文件
     // （见 dropAdoptedShellInputs）—— 否则纯前端 PR 只要拉了 master 就被永久拦住。
     staged = argv.slice(stagedIdx + 1);
-  } else {
-    staged = dropAdoptedShellInputs(stagedFiles());
   }
 
   const { touchesShell, needsCargoTest } = decide(staged);

@@ -194,7 +194,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
   const pi = argv.indexOf("--pages");
   process.exit(
     main({
-      pages: pi !== -1 ? Number(argv[pi + 1]) || 1 : 1,
+      pages: pi === -1 ? 1 : Number(argv[pi + 1]) || 1,
       json: argv.includes("--json"),
     }),
   );

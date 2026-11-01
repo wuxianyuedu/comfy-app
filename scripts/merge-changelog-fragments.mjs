@@ -49,7 +49,7 @@ const asJson = args.includes("--json");
 const releaseIdx = args.indexOf("--release");
 /* 与 `--anchor` 同一形：下标取到的 `string | undefined` 在产生端收掉。
  * 「给了 `--version` 而后面没值」与「没给」都是「不显式定版，取待发段落的标题」。 */
-const releaseVersion = releaseIdx !== -1 ? (args[releaseIdx + 1] ?? null) : null;
+const releaseVersion = releaseIdx === -1 ? null : (args[releaseIdx + 1] ?? null);
 if (releaseIdx !== -1 && !releaseVersion) {
   console.error("[merge-changelog] --release 需要版本号,如 --release 0.2.0");
   process.exit(1);
@@ -60,7 +60,7 @@ const anchorIdx = args.indexOf("--anchor");
 /* `args[i]` 在 noUncheckedIndexedAccess 下是 `string | undefined`，**在取的那一处就收掉**：
  * 「给了 `--anchor` 而后面没值」与「压根没给」在这里是同一条语义（都交给下面的 HEAD 回退），
  * 留着 undefined 只会让后面每个消费点重新问一遍。 */
-const anchorRevArg = anchorIdx !== -1 ? (args[anchorIdx + 1] ?? null) : null;
+const anchorRevArg = anchorIdx === -1 ? null : (args[anchorIdx + 1] ?? null);
 if (anchorIdx !== -1 && !anchorRevArg) {
   console.error("[merge-changelog] --anchor 需要提交引用,如 --anchor 9321411");
   process.exit(1);

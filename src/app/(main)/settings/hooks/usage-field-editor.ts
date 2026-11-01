@@ -136,10 +136,10 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
       const emptyImgRow = fields.findIndex(
         (f) => f.key.trim() === "images" && f.value.trim() === "",
       );
-      if (emptyImgRow !== -1) {
-        fields[emptyImgRow] = makeUsageField("images", url);
-      } else {
+      if (emptyImgRow === -1) {
         fields.push(makeUsageField("images", url));
+      } else {
+        fields[emptyImgRow] = makeUsageField("images", url);
       }
       return { ...prev, fields };
     });

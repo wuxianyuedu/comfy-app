@@ -412,7 +412,7 @@ export function CharacterDesigner({
                     <Input
                       inputMode="decimal"
                       value={
-                        character.loraStrength !== undefined ? String(character.loraStrength) : "1"
+                        character.loraStrength === undefined ? "1" : String(character.loraStrength)
                       }
                       disabled={!character.loraName}
                       onChange={numberHandler(

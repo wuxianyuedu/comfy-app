@@ -417,12 +417,12 @@ export function main(io = {}) {
   const dryRun = argv.includes("--dry-run");
   const noBlock = argv.includes("--no-block");
   const at = argv.indexOf("--from");
-  const from = at !== -1 ? argv[at + 1] : undefined;
+  const from = at === -1 ? undefined : argv[at + 1];
   /* `--lane <名>`：这一格服务哪一档（缺省 pr）。它是**显式声明**而不是从事件推出来的：
    * 「这一跑归不归本格管」不该由平台给的事件名猜（猜错就是那一档永远不立案，而这一格
    * 自己在记账上还是绿的 —— 桌面成品包那一档今天就是这个形状，见 ISSUE #2550）。 */
   const laneAt = argv.indexOf("--lane");
-  const laneArg = laneAt !== -1 ? String(argv[laneAt + 1] ?? "").trim() : "";
+  const laneArg = laneAt === -1 ? "" : String(argv[laneAt + 1] ?? "").trim();
   const lane = laneArg === "" ? null : laneArg;
 
   /**

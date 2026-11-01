@@ -145,7 +145,7 @@ async function readTail(
    * 只剩一行且它本身就是半行时给空串（而不是把半个 JSON 一样的乱码给出去）。 */
   const firstBreak = raw.indexOf("\n");
   return {
-    text: firstBreak !== -1 ? raw.slice(firstBreak + 1) : "",
+    text: firstBreak === -1 ? "" : raw.slice(firstBreak + 1),
     windowed: true,
     size,
   };

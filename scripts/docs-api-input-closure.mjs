@@ -212,7 +212,7 @@ export function typedocExcludes(root = ROOT) {
 export function entryPointExtension(entryPoint) {
   const base = entryPoint.slice(entryPoint.lastIndexOf("/") + 1);
   const i = base.lastIndexOf(".");
-  return i !== -1 ? base.slice(i) : "";
+  return i === -1 ? "" : base.slice(i);
 }
 
 /**

@@ -109,9 +109,9 @@ export function useWorkshopGeneration({
         ...(loraChar?.loraName
           ? {
               loraName: loraChar.loraName,
-              ...(loraChar.loraStrength !== undefined
-                ? { loraStrength: loraChar.loraStrength }
-                : {}),
+              ...(loraChar.loraStrength === undefined
+                ? {}
+                : { loraStrength: loraChar.loraStrength }),
             }
           : {}),
       });

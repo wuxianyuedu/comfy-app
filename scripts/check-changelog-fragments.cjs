@@ -70,7 +70,7 @@ function checkFragment(name, text) {
   if (!SECTIONS.includes(heading)) {
     fileProblems.push(
       `${FRAGMENT_DIR}/${name}:首行须是段落标题(## Added / ## Changed / ## Deprecated / ` +
-        `## Removed / ## Fixed / ## Security),当前是「${firstContent !== "" ? firstContent : "(空文件)"}」。` +
+        `## Removed / ## Fixed / ## Security),当前是「${firstContent === "" ? "(空文件)" : firstContent}」。` +
         `段落标题决定条目并入 [Unreleased] 的哪一节,不能省。`,
     );
   }

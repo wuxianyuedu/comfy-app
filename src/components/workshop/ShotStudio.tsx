@@ -277,9 +277,9 @@ export function ShotStudio({
           ...(loraChar?.loraName
             ? {
                 loraName: loraChar.loraName,
-                ...(loraChar.loraStrength !== undefined
-                  ? { loraStrength: loraChar.loraStrength }
-                  : {}),
+                ...(loraChar.loraStrength === undefined
+                  ? {}
+                  : { loraStrength: loraChar.loraStrength }),
               }
             : {}),
           // 高级 · 种子：默认随机（留空每次新 seed），填数字则 pin 住（见 resolveSeed）。
