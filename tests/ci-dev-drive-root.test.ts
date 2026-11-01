@@ -60,7 +60,10 @@ function readCnb(): string {
 function unquote(raw: string): string {
   const t = raw.trim();
   if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) {
-    return t.slice(1, -1).replaceAll(String.raw`\\`, "\\").replaceAll(String.raw`\"`, '"');
+    return t
+      .slice(1, -1)
+      .replaceAll(String.raw`\\`, "\\")
+      .replaceAll(String.raw`\"`, '"');
   }
   if (t.length >= 2 && t.startsWith("'") && t.endsWith("'")) {
     return t.slice(1, -1).replaceAll("''", "'");
@@ -191,6 +194,84 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
       `三个落点必须同卷（现在分别是 ${roots.join(" / ")}）—— 跨卷时「往落点里挪一个` +
         "文件」这类动作会直接 EXDEV 失败，而红会落在别人的一条用例里",
     ).toBe(1);
+  });
+
+  it("临时根**不落进会被整目录清空的那棵树**，也不指向检出根内部", () => {
+    /* 这一条守的是「跑 CI 的人随时能清空 G:\Temp」这个前提（ISSUE #2939）。
+     *
+     * 用户的诉求是「跑的过程落在 G 盘别的目录、跑完再挪到 G:\Temp，这样随时能清
+     * G:\Temp」。**「跑完再挪」这一步本仓不做**，理由三格（规范 §13.5.3.4.4）：
+     *
+     *   ① G:\Temp 是**逐进程一次性**的落点，不是归档区 —— 两跑之间没有任何东西
+     *      依赖上一跑留在那里的文件（浏览器按 `PLAYWRIGHT_BROWSERS_PATH` 落在
+     *      `G:\.cache\ms-playwright`，工具链走机器级安装，pnpm store 与缓存槽都在
+     *      别处）。挪过去的字节没有第二个读者；
+     *   ② 「跑完」那一刻的钩子在平台上**不成立**：`stages` 是串行链，前面一红后面整片
+     *      `skipped`（平台没有 `when:` / `always()` 可依赖），而 `endStages` 与主流程
+     *      **并发**、且它自己失败不影响流水线状态 —— 拿它当收尾钩子，最该收尾的那一跑
+     *      （红了、被掐了）恰恰收不到；
+     *   ③ 挪动是一次整树拷贝（node_modules 十几万个文件跨卷重写），换来 0 秒收益。
+     *
+     * 但那条诉求的**真正前提**是「G:\Temp 里只有可以随手删掉的东西」。所以这里判的是
+     * 那个前提的形状：临时根不许落进**会被整目录清空**的那棵树，也不许落进检出根内部
+     * （那时 `清理 G:\Temp` 就等于删掉正在跑的工作区）。 */
+    const temp = env.TEMP!;
+    const roots = /* SAFETY: 类型断言已复核 */ (["TEMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map(
+      (k) => env[k]!,
+    );
+
+    /* ① 不许落进检出根。平台把每个 job 检出到 `…\<流水线 id>~<随机段>\workspace`，
+     *    而宿主把那个工作区的**父目录**记为 `ORANGE_RUNNER_DATA_DIR` —— 两者都认：
+     *    清空 G:\Temp 不许等于删掉正在跑的检出。 */
+    const workspaceLike = [env.COMFY_CI_WORKSPACE, env.ORANGE_RUNNER_DATA_DIR].filter(Boolean);
+    for (const root of workspaceLike) {
+      expect(
+        temp.toLowerCase().startsWith(`${root!.toLowerCase()}\\`) ||
+          temp.toLowerCase().startsWith(`${root!.toLowerCase()}/`),
+        `临时根 ${temp} 落在检出根 ${root} 内部 —— 那样「清空临时目录」就等于删掉正在跑的` +
+          "工作区，而这正是「随时可清」这条诉求要挡的那件事",
+      ).toBe(false);
+    }
+
+    /* ② 临时根本身**不许就是会被整棵树删掉的那几个缓存落点**：`G:\.cache`（浏览器）与
+     *    `G:\.cargo`（Rust 工具链）都有各自的清法，把临时根塞进去等于让「清浏览器缓存」
+     *    顺手抹掉这一跑的临时文件、反之亦然。 */
+    for (const cacheRoot of roots.slice(1)) {
+      const a = temp.toLowerCase();
+      const b = cacheRoot.toLowerCase();
+      expect(
+        a === b || a.startsWith(`${b}\\`) || b.startsWith(`${a}\\`),
+        `临时根 ${temp} 与缓存落点 ${cacheRoot} 互相嵌套 —— 两边的清理动作会互相误伤` +
+          "（清浏览器缓存顺手抹掉临时文件，或反之）",
+      ).toBe(false);
+    }
+
+    /* ③ 「清空 G:\Temp」这条动作必须**不碰**上面那两个缓存落点：它们与临时根同卷、
+     *    但必须是临时根的**兄弟**，不是子目录。 */
+    expect(volumeRootOf(temp), `临时根与缓存落点必须同卷（现在分别是 ${temp} / ${roots[1]}）`).toBe(
+      volumeRootOf(roots[1]!),
+    );
+  });
+
+  it("`stages` 里**没有**「跑完再挪」那一格（平台那一刻没有可靠的收尾钩子）", () => {
+    /* 把「为什么不做跑完再挪」变成机器判据，而不是只写在注释里：下一任执行者读到那条
+     * 诉求时，最容易的动作就是往 `stages` 末尾加一格 `robocopy /MOVE`。那一格在
+     * **红了 / 被掐了**的那一跑上永远不会执行（串行链 + 平台没有条件语法可依赖，
+     * 实测读数见 `.cnb.yml` 的 `*pr_fail_stage` 头注），于是它只会给绿的那一跑多付
+     * 一次整树拷贝 —— 一个只在成功时生效的清理动作，是「看起来做了」的标本。 */
+    const text = readCnb();
+    const offenders = text
+      .split(/\r?\n/)
+      .map((line, i) => ({ line, no: i + 1 }))
+      .filter(({ line }) => !line.trim().startsWith("#"))
+      .filter(({ line }) => /\b(robocopy|Move-Item|Copy-Item)\b/.test(line))
+      .map(({ line, no }) => `${no}: ${line.trim()}`);
+    expect(
+      offenders,
+      "`.cnb.yml` 里出现了搬文件的动作 —— 「跑完再挪到 G:\\Temp」在本仓不做（临时根" +
+        "本身就是一次性落点，挪过去的字节没有第二个读者），理由三格见「临时根不落进" +
+        "会被整目录清空的那棵树」那条用例的注释与规范 §13.5.3.4.4",
+    ).toEqual([]);
   });
 
   it("浏览器落点**不是**容器里那个路径（它在宿主上不存在）", () => {
