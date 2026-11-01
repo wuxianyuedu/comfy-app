@@ -325,7 +325,7 @@ export const CanvasNode = React.memo(function CanvasNode({
           onModesChange={(modes, defaultMode) => saveModes({ modes, defaultMode })}
           onPatch={patch}
           onSeedModeChange={(ioKey, mode) =>
-            patch({ seedModes: { ...(d.seedModes ?? {}), [ioKey]: mode } })
+            patch({ seedModes: { ...d.seedModes, [ioKey]: mode } })
           }
           onSelectWorkflow={(workflowId) => {
             const wf = wfList.find((item) => item.id === workflowId);

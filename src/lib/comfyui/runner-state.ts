@@ -505,7 +505,7 @@ let deps: Partial<RunnerDeps> | null = null;
 /** 覆盖 runner-state 的宿主依赖（executor host 用它注入自带 DB / 日志通道）。
  *  传 `Partial`：允许只覆盖一侧，另一侧留给 `resolveDeps` 的 lazy 默认填。 */
 export function configureRunner(next: Partial<RunnerDeps>): void {
-  deps = { ...(deps ?? {}), ...next };
+  deps = { ...deps, ...next };
 }
 
 /** `deps` 的两条边分别补齐：

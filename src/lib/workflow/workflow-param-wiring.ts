@@ -63,10 +63,10 @@ export function applyWireEdit(
   const parsed = parseParamMapping(base);
   /* 先收成局部变量再改：`mapping.manualByMode` 是刚构造的字面量、
    * 类型上却仍是可选字段，直接写它要多补两处 `!`。 */
-  const manualByMode = { ...(parsed.manualByMode ?? {}) };
+  const manualByMode = { ...parsed.manualByMode };
   const mode = edit.mode ?? "";
   manualByMode[mode] = {
-    ...(manualByMode[mode] ?? {}),
+    ...manualByMode[mode],
     [edit.entryId]: edit.ioKey,
     /* 显式断开也落库（`null`）—— 不落的话刷新后就变成「还没连过」。 */
   };
@@ -101,9 +101,9 @@ export function clearWireEdit(
     return base;
   }
   const parsed = parseParamMapping(base);
-  const byEntry = { ...(parsed.manualByMode?.[mode] ?? {}) };
+  const byEntry = { ...parsed.manualByMode?.[mode] };
   delete byEntry[entryId];
-  const manualByMode = { ...(parsed.manualByMode ?? {}) };
+  const manualByMode = { ...parsed.manualByMode };
   if (Object.keys(byEntry).length > 0) {
     manualByMode[mode] = byEntry;
   } else {

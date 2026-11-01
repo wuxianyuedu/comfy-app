@@ -67,7 +67,7 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
         ...detail,
         nodes: detail.rawView.nodes,
         graph: detail.rawView.graph,
-        positions: { ...(detail.rawView.positions ?? {}), ...overrides },
+        positions: { ...detail.rawView.positions, ...overrides },
       };
     }
     return detail;
