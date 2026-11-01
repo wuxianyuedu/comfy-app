@@ -53,13 +53,67 @@ function stripComments(source: string, lineComments = true): string {
  * 「A 必须排在 B 之前」这类顺序判据要落在**同一个可数的范围**里：整份文件比会
  * 命中别处的同名调用，函数体比才说明这两步真的前后相邻（本仓库把它们抽成小函数
  * 之后，顺序就搬进了那个函数体内）。
+ *
+ * 收尾找不到就**当场红**（ISSUE #2660 的批 5）：原先这一格写的是
+ * `return end > 0 ? rest.slice(0, end) : rest;` —— 「找不到本函数收尾」被静默换成
+ * "从这里到文件尾"，于是顺序判据与反向判据都在一个远比函数宽的区间上判，
+ * 而账面仍是全绿。区间放宽不该是一个可以悄悄发生的决定。
  */
 function fnBody(source: string, marker: string): string {
   const start = source.indexOf(marker);
   expect(start, `找不到 ${marker}`).toBeGreaterThan(-1);
   const rest = source.slice(start);
   const end = rest.indexOf("\n}\n");
-  return end > 0 ? rest.slice(0, end) : rest;
+  expect(
+    end,
+    `${marker} 之内找不到顶格收尾 —— 以前这里返回"剩下的整段"，` +
+      "顺序与反向断言会在一个远比该函数宽的区间上判，而读数与真绿相同",
+  ).toBeGreaterThan(0);
+  return rest.slice(0, end);
+}
+
+/**
+ * 取「起点标记 → 终点标记」那一段，两个标记都**必须看得见**。
+ *
+ * 原先各处直接写 `source.slice(source.indexOf(A), source.indexOf(B))`：
+ * 任一改名的函数一消失，`indexOf` 给 -1 ⇒ 区间变空或反向，落在区间上的反向断言恒真；
+ * 正向那几条虽然会红，红话也只说"没找到 X"，指不到"标记没了"这个真因。
+ * 终点从**起点之后**开始找，顺手堵住"B 在 A 之前"那一形（旧写法会给出一段倒序的空串）。
+ */
+function sliceBetween(
+  source: string,
+  startMarker: string,
+  endMarker: string,
+): string {
+  const start = source.indexOf(startMarker);
+  expect(start, `找不到起点标记 ${startMarker}`).toBeGreaterThan(-1);
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  expect(
+    end,
+    `在 ${startMarker} 之后找不到终点标记 ${endMarker} —— 区间要么空掉、要么放宽成` +
+      "「这一位之后的全部」，两种都让落在它上面的断言不再判它声称的那一段",
+  ).toBeGreaterThan(start);
+  return source.slice(start, end);
+}
+
+/** 固定长度窗口（原先写的是 `slice(i, i + span)`）：起点必须先验在场，否则窗口是最后一个字符。 */
+function windowOf(source: string, marker: string, span: number): string {
+  const start = source.indexOf(marker);
+  expect(start, `找不到 ${marker} —— slice(-1, 399) 给出的是一个字符`).toBeGreaterThan(-1);
+  return source.slice(start, start + span);
+}
+
+/**
+ * 从起点标记到**文件尾**那一段，但起点必须先验在场。
+ *
+ * 只给"确实要看整段尾部"的两处用（match 臂与后面的分支写在一起、没法按函数收）。
+ * 没有 `expect(start…)` 的话，`slice(-1)` 给出最后一个字符，落在它身上的
+ * `toContain` 会红成"没找到 X"——红话指不到"标记改名了"这个真因。
+ */
+function since(source: string, marker: string): string {
+  const start = source.indexOf(marker);
+  expect(start, `找不到起点标记 ${marker}`).toBeGreaterThan(-1);
+  return source.slice(start);
 }
 
 describe("壳自编排：认亲判据", () => {
@@ -73,9 +127,11 @@ describe("壳自编排：认亲判据", () => {
     expect(source).toMatch(/pub fn is_own\(/);
     // 认亲**不能**退化成按名字 / 路径 / 端口猜：那三条都只能说明「有个编排在跑」，
     // 认不出是谁起的，而这里紧跟着的动作是「复用它」或「回收它」。
-    const findFn = source.slice(
-      source.indexOf("pub fn find_owned_orchestrator"),
-    );
+    /* 范围收成"那一个函数体"：原先是 `source.slice(source.indexOf(…))`，也就是**到文件尾**
+     * —— 当场读数：那一段 15395 字符（剥完注释的 `shell_launch.rs` 从该函数起的全部）。
+     * 今天它没红是因为后面确实不含那几个名字，但那是"顺带没撞上"，不是判据设计。 */
+    const findFn = fnBody(source, "pub fn find_owned_orchestrator");
+    expect(findFn.length, "函数体为空").toBeGreaterThan(0);
     expect(findFn).toContain("process_env_is_owned");
     expect(findFn).not.toMatch(/CommandLine|tasklist|wmic/i);
   });
@@ -120,9 +176,10 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
     expect(lib).toMatch(
       /if self_launch \{\s*start_self_orchestration\(app, &project_root\);/,
     );
-    const branch = lib.slice(
-      lib.indexOf("fn start_self_orchestration("),
-      lib.indexOf("fn start_own_orchestrator("),
+    const branch = sliceBetween(
+      lib,
+      "fn start_self_orchestration(",
+      "fn start_own_orchestrator(",
     );
     // 判据是环境块标记（不是「有没有 dev server」），命中即回收：
     // 「别人已经在编排」这条路在双击形态下不存在（编排器只可能是壳自己起的），
@@ -138,10 +195,7 @@ describe("壳自编排：两个入口不许同时起两份编排", () => {
 
   it("自编排只在 release、且在没人替壳做过编排决策时生效（debug 归 pnpm tauri dev 管）", () => {
     const lib = stripComments(read("src-tauri/src/lib.rs"));
-    const decl = lib.slice(
-      lib.indexOf("let self_launch ="),
-      lib.indexOf("let self_launch =") + 400,
-    );
+    const decl = windowOf(lib, "let self_launch =", 400);
     expect(decl).toContain("cfg!(not(debug_assertions))");
     // 判据是 COMFYAPP_PROJECT_ROOT 缺席（= 没人给壳指路，是用户双击了 exe 本身）。
     // 用它而不是 COMFYAPP_LAUNCH_MODE：后者现在由壳自己写，判据会随写入顺序漂。
@@ -220,10 +274,7 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
 
   it("应用地址每轮向壳重取，不在第一轮锁死（standalone 的端口是现挑的）", () => {
     const page = splash();
-    const start = page.indexOf("async function tick()");
-    const end = page.indexOf("setInterval(tick");
-    expect(start, "找不到启动页的轮询函数").toBeGreaterThan(-1);
-    const tickBody = page.slice(start, end);
+    const tickBody = sliceBetween(page, "async function tick()", "setInterval(tick");
     // 一次性锁存（`if (!appUrl) appUrl = await resolveAppUrl()` 当轮定终身）在
     // standalone 下必坏：sidecar 听的是 pick_free_port 挑出来的空闲端口，而它写进
     // 壳状态的时机**晚于**首帧轮询 —— 页面于是永远探测一个没人听的端口，
@@ -286,7 +337,15 @@ describe("壳自编排：启动期的可见性（ISSUE #784 手验反馈）", ()
     expect(startAt, "找不到 log_session_start").toBeGreaterThan(-1);
     const rest = rust.slice(startAt);
     const nextItem = rest.slice(1).search(/\n(?:pub fn |fn |\/\/\/ )/);
-    const startFn = nextItem > 0 ? rest.slice(0, nextItem + 1) : rest;
+    /* 原先这里是 `nextItem > 0 ? … : rest` —— 找不到下一个条目就静默换成"到文件尾"。
+     * 而这条判据数的是**本函数里** `local_timestamp()` 出现几次：区间一旦放宽到尾部，
+     * 后面任何函数里的第二次取时刻都不算，正好把要防的东西放过。 */
+    expect(
+      nextItem,
+      "log_session_start 之后找不到下一个条目边界（顶格 `fn` / `///`）—— " +
+        "区间会放宽到文件尾，「时刻只许取一次」就只判到这一段之后什么都没有",
+    ).toBeGreaterThan(0);
+    const startFn = rest.slice(0, nextItem + 1);
     // `local_timestamp()` 在 `log_session_start` 里**只许出现一次**：写三次就是
     // 三个时刻（即便同一毫秒，判据也不再是「共用」而是「碰巧相同」）。
     const stamps = startFn.match(/local_timestamp\(\)/g) ?? [];
@@ -331,7 +390,7 @@ describe("壳自编排：回收链", () => {
 
   it("壳退出路径只给「自己起的」编排器补刀", () => {
     const lib = stripComments(read("src-tauri/src/lib.rs"));
-    const onExit = lib.slice(lib.indexOf("tauri::RunEvent::Exit =>"));
+    const onExit = since(lib, "tauri::RunEvent::Exit =>");
     expect(onExit).toContain("shell_launch::is_owning()");
     expect(onExit).toContain("shell_launch::reap(&root)");
   });
@@ -342,9 +401,10 @@ describe("壳自编排：回收链", () => {
   // PID …」，而那些 PID 早已被插件 kill / Job Object 收干净（回收是空转）。
   it("壳收走编排器后清掉会话锚点（否则每次启动都刷「回收遗留进程树」）", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    const reap = rust.slice(
-      rust.indexOf("pub fn reap(project_root: &str)"),
-      rust.indexOf("pub fn reap_pid("),
+    const reap = sliceBetween(
+      rust,
+      "pub fn reap(project_root: &str)",
+      "pub fn reap_pid(",
     );
     // 只在 `kill()` 成功那一支清：失败说明编排器可能还活着，锚点必须留给下一次启动回收。
     expect(reap).toMatch(
@@ -362,9 +422,10 @@ describe("壳自编排：回收链", () => {
 
   it("按 PID 回收上一次的残留也走同一处平台判据", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    const fn = rust.slice(
-      rust.indexOf("pub fn reap_pid("),
-      rust.indexOf("pub fn ensure_launch_mode("),
+    const fn = sliceBetween(
+      rust,
+      "pub fn reap_pid(",
+      "pub fn ensure_launch_mode(",
     );
     // 不许在壳里另写一套 taskkill / 单杀 leader（硬规则 3）：转交统一回收。
     expect(fn).toContain("spawn_reaper(");
@@ -405,9 +466,10 @@ describe("壳自编排：回收链", () => {
 describe("壳自编排：能自起的判据与真起得来", () => {
   it("can_self_launch 只读、且宁可漏判成「不能」", () => {
     const rust = stripComments(read("src-tauri/src/shell_launch.rs"));
-    const fn = rust.slice(
-      rust.indexOf("pub fn can_self_launch("),
-      rust.indexOf("pub fn decide_front_when_self_launched("),
+    const fn = sliceBetween(
+      rust,
+      "pub fn can_self_launch(",
+      "pub fn decide_front_when_self_launched(",
     );
     // 判据是「编排脚本 + .modules.yaml + 关键依赖」三件**存在性**检查
     //（跑在 CreateProcess 前置检查里，不能去起进程 / 不能耗时）：脚本路径经
@@ -519,8 +581,16 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       const shell = stripComments(read("src-tauri/src/shell_launch.rs"));
       // 到下一个顶层 `pub fn` 为止（函数结尾形态会随格式化漂，盯它是脆弱判据）。
       const start = shell.indexOf("pub fn spawn_orchestrator");
+      expect(start, "找不到 pub fn spawn_orchestrator").toBeGreaterThan(-1);
       const next = shell.indexOf("\npub fn ", start + 1);
-      const body = shell.slice(start, next > start ? next : undefined);
+      /* 原先是 `slice(start, next > start ? next : undefined)` —— 找不到下一个顶层
+       * `pub fn` 就静默放宽到文件尾。这里两条都是 `toContain`（正向），宽区间不会放过
+       * 什么，但"区间是谁"这句话就没人守了：端口那两行只要在全文件任何地方同现就绿。 */
+      expect(
+        next,
+        "spawn_orchestrator 之后找不到下一个顶层 `pub fn` —— 区间会静默放宽到文件尾",
+      ).toBeGreaterThan(start);
+      const body = shell.slice(start, next);
       expect(body).toContain("let port = app_port_for_root(project_root)");
       expect(body).toContain('.env("COMFYAPP_PORT", port.to_string())');
     });
@@ -552,8 +622,14 @@ describe("壳自编排：能自起的判据与真起得来", () => {
 
     it("不得退回「只查 exe 同级目录」的写法", () => {
       const source = lib();
-      const fn = source.slice(source.indexOf("fn resolve_project_root()"));
-      const body = fn.slice(0, fn.indexOf("\n}\n"));
+      const fn = since(source, "fn resolve_project_root()");
+      const closer = fn.indexOf("\n}\n");
+      expect(
+        closer,
+        "resolve_project_root 里找不到顶格收尾 —— 旧写法 `slice(0, -1)` 会给出" +
+          "整段尾部再少一个字符，反向那条就变成在判全文件",
+      ).toBeGreaterThan(0);
+      const body = fn.slice(0, closer);
       // 旧写法的指纹：直接对 exe.parent() 调 looks_like_project_root。
       expect(body).not.toMatch(/looks_like_project_root\(dir\)/);
       // 而现在的写法是「拿到 dir 之后上溯」。
@@ -566,7 +642,7 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       // C:\Windows\System32），于是单实例失效、推导端口也不是 dev server
       // 真正在听的那个。回填必须发生在它之前。
       const source = lib();
-      const run = source.slice(source.indexOf("pub fn run()"));
+      const run = since(source, "pub fn run()");
       const fillAt = run.indexOf("claim_project_root_env()");
       const singleAt = run.indexOf("another_instance_owns_this_checkout()");
       expect(fillAt).toBeGreaterThan(-1);
@@ -589,8 +665,19 @@ describe("壳自编排：能自起的判据与真起得来", () => {
       expect(judgeAt).toBeGreaterThan(-1);
       expect(judgeAt).toBeLessThan(fillAt);
       // collect 不再自己重算这条判据（重算时环境已被回填 = 常量）。
-      const collect = source.slice(source.indexOf("fn collect("));
-      const collectBody = collect.slice(0, collect.indexOf("\n  }\n"));
+      /* collect 里那条 `not.toMatch(/let self_launch\s*=/)` 是本文件最脆的一格：
+       * 旧写法 `source.slice(source.indexOf("fn collect("))` 一旦 `indexOf` 落空（改名、
+       * 或这个闭包被抽走）就给 -1 ⇒ `slice(-1)` 只剩最后一个字符，而**下一个收尾标记也**
+       * `indexOf("\n  }\n")` 给 -1 ⇒ `slice(0, -1)` 是空串。空串上的反向断言恒真。
+       * 两个标记都必须先看得见，这条才有牙齿。 */
+      const collect = since(source, "fn collect(");
+      const collectCloser = collect.indexOf("\n  }\n");
+      expect(
+        collectCloser,
+        "collect 里找不到两空格缩进的收尾 —— 空区间上的 not.toMatch 恒真，" +
+          "「collect 不再自己重算 self_launch」就成了不判任何东西的一条绿",
+      ).toBeGreaterThan(0);
+      const collectBody = collect.slice(0, collectCloser);
       expect(collectBody).not.toMatch(/let self_launch\s*=/);
     });
 
