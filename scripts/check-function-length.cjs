@@ -50,7 +50,7 @@ if (STAGED && !REPORT_ONLY) {
 }
 const SOURCE_EXT = /\.(ts|tsx)$/;
 const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) || /\.snap$/.test(rel) || rel.includes("/__tests__/");
+  /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.endsWith(".snap") || rel.includes("/__tests__/");
 
 /** 超过这个行数的函数进「拆分候选」清单(与 R5 的文件阈值同性质：提示级)。
  *

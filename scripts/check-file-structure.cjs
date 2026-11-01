@@ -137,7 +137,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       }
       continue;
     }
-    if (!/\.ts$/.test(e.name) || e.name.endsWith(".d.ts")) {
+    if (!e.name.endsWith(".ts") || e.name.endsWith(".d.ts")) {
       continue;
     }
     /* 测试伙伴文件跟着它的被测模块走:模块在豁免清单里,它的用例也在。 */
@@ -196,7 +196,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
     if (head === null) {
       vanished++;
     } else if (
-      /^\/\* eslint-disable @typescript-eslint\/no-explicit-any/.test(head.split("\n")[0] || "")
+      (head.split("\n")[0] || "").startsWith("/* eslint-disable @typescript-eslint/no-explicit-any")
     ) {
       problems.push(`R6 文件级 no-explicit-any 禁用头(战役已清零,禁止回流):${rel}`);
     }
@@ -258,7 +258,7 @@ const { gateFail, gatePass } = require("./ci-log.mjs");
       if (!/\.(ts|tsx|mjs|cjs|js)$/.test(e.name)) {
         continue;
       }
-      if (/\.test\.[cm]?[jt]sx?$/.test(e.name) || /\.d\.ts$/.test(e.name)) {
+      if (/\.test\.[cm]?[jt]sx?$/.test(e.name) || e.name.endsWith(".d.ts")) {
         continue;
       }
       const text = readForScan(p);

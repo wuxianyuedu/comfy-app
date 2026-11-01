@@ -447,7 +447,7 @@ function collect() {
        *     `ui/` 与 `hooks/` 里出现不是「自己实现一份」；
        *   · 反过来，P40「复制之后给什么反馈」在 `ui/json-viewer` 也有消费点，
        *     整体跳过会让出口的消费点无从校验 —— 所以本批三条不走 `ui/` 豁免。 */
-      const inUi = /^src\/components\/ui\//.test(rel);
+      const inUi = rel.startsWith("src/components/ui/");
       const inHooks = /\/hooks\//.test(rel);
       const inLib = /^src\/(lib|server)\//.test(rel);
       const text = fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -645,7 +645,7 @@ function main() {
         if (isTest(rel)) {
           continue;
         }
-        const inUi = /^src\/components\/ui\//.test(rel);
+        const inUi = rel.startsWith("src/components/ui/");
         if (inUi && !UI_ALSO_SCANNED.has("P82")) {
           continue;
         }
