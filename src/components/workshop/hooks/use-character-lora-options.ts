@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
 
 export function useCharacterLoraOptions(): {
-  options: string[];
+  options: Array<string>;
   loading: boolean;
 } {
   const trpc = useTRPC();
