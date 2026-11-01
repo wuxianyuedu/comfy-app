@@ -23,11 +23,13 @@
  *      （`environment` 写根上会让两档同环境，正是 §11.17 整套分档要防的事）；
  *   4. project 里**不再重复声明**共享项（同一件事两个来源）。
  */
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createVitest, type Vitest } from "vitest/node";
 
 import { resolveCiWorkers } from "../scripts/ci-load.mjs";
+import { resolveTimeoutBudget } from "../vitest.config";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -47,8 +49,13 @@ const ROOT_WORKERS = resolveCiWorkers().workers;
 const SHARED_EXPECTATIONS = /* SAFETY: 类型断言已复核 */ {
   setupFiles: ["tests/setup.ts"],
   globals: false,
-  testTimeout: 30_000,
-  hookTimeout: 45_000,
+  /* 判据预算不写死：生效值由 `vitest.config.ts` 的 `resolveTimeoutBudget()` 按
+   * `COMFY_TEST_TIMEOUT_SCALE` 算（ISSUE #2959），缺省乘数 1 ⇒ 与历史的 30_000 / 45_000
+   * 逐字相同。这一格判的是「**两档拿到了同一个值**」，不是「这个值必须是我印象里的那个数」
+   * —— 后者会在 CI 按乘数放宽时变成一条与它要判的事无关的假红（而它的失效形态恰恰是
+   * 「一档落后」，那件事乘数放宽时照样判得出来）。 */
+  testTimeout: resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE).testTimeout,
+  hookTimeout: resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE).hookTimeout,
   maxWorkers: ROOT_WORKERS,
 } as const;
 
@@ -199,5 +206,64 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
         [],
       );
     }
+  });
+});
+
+/**
+ * 判据预算的**临时乘数**（ISSUE #2959）—— 它必须既买得到余量，又收得回原状。
+ *
+ * 这一格存在是因为「临时放宽」这四个字在仓库里最容易腐化成两种形状：
+ *   ① 有人把 `testTimeout` 直接改成 60_000（那就没人知道原来是 30_000、也没人知道
+ *      什么时候该收回 —— §13.6.4 明令禁止的那个动作）；
+ *   ② 放宽之后日志里读不出来（于是下一次「这台机器为什么这么慢」会去查配置）。
+ * 所以判四件事：缺省 = 原值、乘数按上限截断并说出口、生效值真的落到 vitest 解析后的配置上、
+ * 而 `.cnb.yml` 里那一行就是「临时」的全部承重。
+ */
+describe("判据预算的临时乘数（ISSUE #2959）", () => {
+  it("缺省（不设变量）与放宽前逐字相同 —— 收回去不需要改代码", () => {
+    for (const raw of [undefined, "", "  "]) {
+      const got = resolveTimeoutBudget(raw);
+      expect(got.scale, String(raw)).toBe(1);
+      expect(got.testTimeout).toBe(30_000);
+      expect(got.hookTimeout).toBe(45_000);
+      expect(got.note).toBeNull();
+    }
+  });
+
+  it("按乘数放宽，且两条预算同比例（只放宽一条会让钩子比用例更早红）", () => {
+    const got = resolveTimeoutBudget("2");
+    expect(got.testTimeout).toBe(60_000);
+    expect(got.hookTimeout).toBe(90_000);
+  });
+
+  it("非法值 / 超上限落回 1 并说出口，不静默算成一个怪数", () => {
+    for (const bad of ["0", "-2", "abc", "4", "1e9"]) {
+      const got = resolveTimeoutBudget(bad);
+      expect(got.scale, bad).toBe(1);
+      expect(got.testTimeout, bad).toBe(30_000);
+      expect(got.note, bad).toBeTruthy();
+    }
+  });
+
+  it("这一跑**实际生效**的值就是乘数算出来的（不是只改了常量）", async () => {
+    const vitest = await resolvedVitest();
+    const expected = resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE);
+    for (const project of vitest.projects) {
+      const cfg = /* SAFETY: 类型断言已复核 */ project.config as unknown as Record<string, unknown>;
+      expect(cfg.testTimeout, `[${project.name}]`).toBe(expected.testTimeout);
+      expect(cfg.hookTimeout, `[${project.name}]`).toBe(expected.hookTimeout);
+    }
+  });
+
+  it("`COMFY_TEST_TIMEOUT_SCALE` 是流水线级 env 里**唯一**的一行（那是「临时」的承重处）", () => {
+    const text = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
+    const hits = text.split("\n").filter((line) => /^\s*COMFY_TEST_TIMEOUT_SCALE\s*:/.test(line));
+    expect(
+      hits,
+      "这个键只该在 `.common` 的 `env:` 里出现一次 —— 写进某一格就只有那一格放宽",
+    ).toHaveLength(1);
+    /* 值必须是「置着」的形态：空值 / 非数字 / 超过 3 都等于没放宽或放宽过头，
+     * 而这两种在日志里只差一行 note。 */
+    expect(hits[0]).toMatch(/:\s*"?(1(\.\d+)?|2(\.\d+)?|3(\.\d+)?)"?\s*$/);
   });
 });
