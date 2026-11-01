@@ -220,7 +220,7 @@ export function readRevisions(gitDir, cwd = ROOT) {
   return {
     headSha: run(["rev-parse", "HEAD"]),
     // `run()` 失败时给空串，这里要的是 null：`||` 把两种空值并成同一个「拿不到」。
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- run() 的空串才是失败信号
+    // 这里刻意保留 ||：run() 失败时给空串，空串与「没有上游」在这里是同一件事。
     upstreamSha: (upstreamRef && run(["rev-parse", "--verify", "--quiet", upstreamRef])) || null,
   };
 }

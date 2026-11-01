@@ -166,7 +166,7 @@ export function run(cmd, args, options = {}) {
  * @param {Record<string, string | undefined>} [env]
  */
 export function ledgerRoot(env = process.env) {
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 环境变量可能被设成空串，那时同样算「没配」
+  // 这里刻意保留 ||：环境变量可能被设成空串，空串同样算「没配」。
   return env.COMFYAPP_CI_PROBE_DIR || env.LOCALAPPDATA || path.join(os.homedir(), ".cache");
 }
 

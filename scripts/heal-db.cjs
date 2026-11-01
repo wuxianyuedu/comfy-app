@@ -155,7 +155,7 @@ async function main() {
     );
     process.exit(1);
   }
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 子进程未输出时 stdout 是空串，拼接两路输出要的就是字符串
+  // 这里刻意保留 ||：两路输出拼成字符串，空串同样要占位。
   let out = (res.stdout || "") + (res.stderr || "");
   let attempts = 0;
   const MAX = 4;
@@ -168,7 +168,7 @@ async function main() {
     }
     await clearTempTables();
     res = runPush();
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 同上：空串拼接语义
+    // 同上：空串拼接语义。
     out = (res.stdout || "") + (res.stderr || "");
     attempts++;
   }

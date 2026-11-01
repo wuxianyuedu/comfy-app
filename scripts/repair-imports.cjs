@@ -114,7 +114,7 @@ function parseAndFixDepth() {
     }
     out = res.stdout;
   } catch (error) {
-    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 两路输出拼成字符串，空串同样要占位
+    // 这里刻意保留 ||：输出是字符串，空 stdout 也要有个值。
     out = String(error.stdout || "");
   }
   const errs = [

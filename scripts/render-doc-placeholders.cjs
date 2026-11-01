@@ -41,7 +41,7 @@ const docFacts = require("./doc-facts.cjs");
  * 真仓库的入库文件。没设环境变量时行为与从前逐字相同（取 doc-facts 的全量）。
  * FACTS 仍来自真仓库：占位符提取只**读**配置，不会往夹具外的任何地方写。 */
 const ENV_ROOT = process.env.DOC_RENDER_ROOT;
-// eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 未设这个变量是 `undefined`、设成空串则是「没给路径」：两种空值都要回落到真仓库
+// 这里刻意保留 ||：未设这个变量是 undefined、设成空串则是「没给路径」，两种都要回落到真仓库。
 const ROOT = ENV_ROOT || docFacts.ROOT;
 const SCOPED_DOCS = ENV_ROOT
   ? (process.env.DOC_RENDER_SCOPED ?? "")

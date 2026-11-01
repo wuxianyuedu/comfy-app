@@ -411,7 +411,7 @@ export function pnpmCli(deps = {}) {
 export function spawnSettled(command, args, options) {
   const res = spawnSync(command, args, options);
   const err = res.error
-    ? // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- error.code 可能是空串，那时要念 message 那一半
+    ? // 这里刻意保留 ||：error.code 可能是空串，那时要念 message 那一半。
       /** @type {Error & {code?:string}} */ (res.error).code ||
       String(res.error.message ?? res.error)
     : null;

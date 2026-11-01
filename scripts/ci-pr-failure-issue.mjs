@@ -562,10 +562,9 @@ export function main(io = {}) {
   const outcome = classifyBuildOutcome(
     firstDetail ? enrichStageErrors(run, slug, sn, firstDetail.json) : null,
   );
-  // `name` 是展示名、可能缺或为空串，那时退 id —— `??` 管不住空串那一半。
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空展示名同样要回退 id
+  // 这里刻意保留 ||：`name` 是展示名，缺或为空串都退 id —— `??` 管不住空串那一半。
   const failedNames = outcome.failed.map((/** @type {any} */ f) => f.name || f.id);
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 同上：空展示名回退 id
+  // 同上：空展示名回退 id。
   const skipped = downstreamSkipped(outcome).map((/** @type {any} */ s) => s.name || s.id);
   log(
     `[pr-failure-issue] 这一跑 ${sn} · 事件 ${target.event || "(取不到)"} · ` +

@@ -87,9 +87,9 @@ export function makeRunner(cwd) {
       encoding: "utf8",
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
     });
+    // 这里刻意保留 ||：error.code 可能是空串，那时要念 error 本身。
     const err = r.error
-      ? // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- error.code 可能是空串，那时要念 error 本身
-        /** @type {Error & {code?:string}} */ (r.error).code || String(r.error)
+      ? /** @type {Error & {code?:string}} */ (r.error).code || String(r.error)
       : null;
     return {
       status: r.status ?? -1,

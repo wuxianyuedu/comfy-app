@@ -217,8 +217,7 @@ export function runAudit({ cwd = ROOT, runner = runPnpmSync, fixtureFile = null 
   if (text.length === 0) {
     return {
       kind: "unreachable",
-      // 空 stderr 时念退出码：空串在这里就是「没有可念的东西」。
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串要走退出码回退
+      // 这里刻意保留 ||：空 stderr 时要念退出码。
       detail: firstLine(result.stderr) || `exit ${result.status}`,
     };
   }

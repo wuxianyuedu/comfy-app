@@ -298,8 +298,7 @@ export async function runPreflightStage(ctx) {
       sha,
       slug,
       adds: opt.adds,
-      // `Boolean` 只问「有没有给」，不是取值：`||` 在这里的语义就是「两者都空 = 没给」。
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 判存在，空串也算没给
+      // 这里刻意保留 ||：判的是「有没有给」，两者都空才算没给（空串也是没给）。
       hasMessage: Boolean(opt.message || opt.messageFile),
       merge: opt.merge,
       closeIssue: opt.closeIssue,
