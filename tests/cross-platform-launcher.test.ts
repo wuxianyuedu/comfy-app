@@ -460,10 +460,9 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
       "export function spawnExecutorHost(ctx)",
       "export function maybeSpawnExecutorHost(",
     ]) {
-      expect(
-        launcherSrc,
-        `闭包里没有 ${marker} —— 它所在的那份内部分件掉出链路了`,
-      ).toContain(marker);
+      expect(launcherSrc, `闭包里没有 ${marker} —— 它所在的那份内部分件掉出链路了`).toContain(
+        marker,
+      );
     }
   });
 

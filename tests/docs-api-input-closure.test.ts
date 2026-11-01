@@ -180,8 +180,9 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
     const uncovered = c.leaves.filter((l) => !coveredBy(l, INPUT_GLOBS));
     expect(
       uncovered,
-      `闭包里有 ${uncovered.length} 个文件不在收窄面里 —— 改它们会改产物，却不会被判到：${
-        uncovered.join(", ")}`,
+      `闭包里有 ${uncovered.length} 个文件不在收窄面里 —— 改它们会改产物，却不会被判到：${uncovered.join(
+        ", ",
+      )}`,
     ).toEqual([]);
   });
 
@@ -190,8 +191,9 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
     const phantom = CLOSURE_LEAVES.filter((l) => !leaves.has(l));
     expect(
       phantom,
-      `收窄面里这 ${phantom.length} 条已经不在闭包里了（要么没人引用，要么被 typedoc 排除了）：${
-        phantom.join(", ")}`,
+      `收窄面里这 ${phantom.length} 条已经不在闭包里了（要么没人引用，要么被 typedoc 排除了）：${phantom.join(
+        ", ",
+      )}`,
     ).toEqual([]);
   });
 
@@ -201,8 +203,9 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
     const orphans = c.leaves.filter((l) => !CLOSURE_LEAVES.includes(l) && !coveredBy(l, others));
     expect(
       orphans,
-      `闭包里有 ${orphans.length} 个文件既不在那批叶子里、也不被别的 glob 罩住：${
-        orphans.join(", ")}`,
+      `闭包里有 ${orphans.length} 个文件既不在那批叶子里、也不被别的 glob 罩住：${orphans.join(
+        ", ",
+      )}`,
     ).toEqual([]);
   });
 });

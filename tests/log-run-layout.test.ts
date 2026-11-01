@@ -102,7 +102,7 @@ function makeRun(name: string, mtime?: Date): string {
 }
 
 /** 把某个包的 mtime 对齐到它名字里的日期（归档是复制，mtime 本来就跟着变）。 */
-function alignMtimeToName(run: { dir: string; name: string; }): void {
+function alignMtimeToName(run: { dir: string; name: string }): void {
   const [date] = run.name.split("_");
   const [year, month, day] = (date ?? "").split("-").map(Number);
   const ts = new Date(year ?? 2026, (month ?? 1) - 1, day ?? 1, 0, 0, 0);

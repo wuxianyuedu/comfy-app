@@ -1024,8 +1024,9 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
 
     expect(
       offenders,
-      `这些文件自己在拼 pnpm 可执行名（Windows 上会选中 Node 起不来的批处理形态）：\n${
-        offenders.map((o) => `  · ${o}`).join("\n")}`,
+      `这些文件自己在拼 pnpm 可执行名（Windows 上会选中 Node 起不来的批处理形态）：\n${offenders
+        .map((o) => `  · ${o}`)
+        .join("\n")}`,
     ).toEqual([]);
   });
 

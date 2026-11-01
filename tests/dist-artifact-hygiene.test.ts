@@ -286,7 +286,7 @@ type CheckerExports = {
   RUNTIME_DIR: string;
   STANDALONE_ALLOWED_TOPLEVEL: Array<string>;
   STATIC_ALLOWED_TOPLEVEL: Array<string>;
-}
+};
 
 function checkerExports(): CheckerExports {
   return /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(

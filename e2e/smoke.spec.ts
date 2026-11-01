@@ -60,7 +60,7 @@ test.describe("数据库链路冒烟", () => {
   test("@critical 健康检查确认数据库表已就绪", async ({ request }) => {
     const res = await request.get("/api/health");
     expect(res.status()).toBe(200);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as { db: string; status: string; };
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as { db: string; status: string };
     // 表没建时是 503 + db: "empty"（此时应用首页还能 200，正是此前被漏报的形态）
     expect(body).toEqual(expect.objectContaining({ status: "ok", db: "up" }));
   });

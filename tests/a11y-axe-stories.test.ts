@@ -63,7 +63,7 @@ import KNOWN from "../scripts/.a11y-axe-known.json";
 
 import { installJsdomCapabilityGate } from "./helpers/jsdom-capability";
 
-type Finding = { component: string; nodes: number; rule: string; };
+type Finding = { component: string; nodes: number; rule: string };
 
 /** 一个故事的渲染函数（CSF3 的 `render`：吃 args、出节点）。 */
 type StoryFn = (args: Record<string, unknown>) => ReactNode;

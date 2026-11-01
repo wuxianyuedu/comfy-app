@@ -28,7 +28,7 @@ type SegmentOnScreen = {
   name: string | null;
   value: number | null;
   visible: string;
-}
+};
 
 async function readSegments(barRoots: Locator): Promise<Array<SegmentOnScreen>> {
   return await barRoots.evaluateAll((nodes) =>

@@ -149,11 +149,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
     const stubRel = "scripts/fake-oxfmt-color.cjs";
     repo.write(
       stubRel,
-      `process.stdout.write("${
-        String.raw`\u001b[38;2;244;191;117;1m`
-        }src/lib/fresh.ts${
-        String.raw`\u001b[0m (1ms)\n"`
-        });\nprocess.exit(1);\n`,
+      `process.stdout.write("${String.raw`\u001b[38;2;244;191;117;1m`}src/lib/fresh.ts${String.raw`\u001b[0m (1ms)\n"`});\nprocess.exit(1);\n`,
     );
     const stub = join(repo.dir, stubRel);
     const r = repo.run([], { env: { COMFYAPP_OXFMT_ENTRY: stub } });

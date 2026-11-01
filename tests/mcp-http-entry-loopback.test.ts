@@ -24,10 +24,7 @@ const source = stripComments(readFileSync(path.join(ROOT, ENTRY), "utf8"));
 describe("Workshop MCP HTTP 入口的可达面", () => {
   it("监听必须显式绑回环主机，不允许省略 host", () => {
     const bound = /\.listen\(\s*PORT\s*,\s*LOOPBACK_HOST\b/.test(source);
-    expect(
-      bound,
-      `${ENTRY} 的 listen() 必须带 LOOPBACK_HOST 作为第二个实参`,
-    ).toBe(true);
+    expect(bound, `${ENTRY} 的 listen() 必须带 LOOPBACK_HOST 作为第二个实参`).toBe(true);
 
     const bareListen = /\.listen\(\s*PORT\s*,\s*\(\s*\)\s*=>/.test(source);
     expect(
@@ -41,10 +38,9 @@ describe("Workshop MCP HTTP 入口的可达面", () => {
       source.includes('from "~/lib/endpoints"'),
       `${ENTRY} 应 import ~/lib/endpoints 的 LOOPBACK_HOST（硬规则 20：回环地址只在此定义一次）`,
     ).toBe(true);
-    expect(
-      /"127\.0\.0\.1"|"localhost"/.test(source),
-      `${ENTRY} 里出现了写死的回环主机字面量`,
-    ).toBe(false);
+    expect(/"127\.0\.0\.1"|"localhost"/.test(source), `${ENTRY} 里出现了写死的回环主机字面量`).toBe(
+      false,
+    );
   });
 
   it("跨源默认关闭：不许出现通配 ACAO，放行值只能来自按 origin 登记的白名单", () => {
@@ -55,9 +51,7 @@ describe("Workshop MCP HTTP 入口的可达面", () => {
 
     const gated =
       /if\s*\([^)]*ALLOWED_ORIGINS\.includes\(origin\)/.test(source) &&
-      /setHeader\(\s*"Access-Control-Allow-Origin"\s*,\s*origin\s*\)/.test(
-        source,
-      );
+      /setHeader\(\s*"Access-Control-Allow-Origin"\s*,\s*origin\s*\)/.test(source);
     expect(
       gated,
       `${ENTRY} 的 CORS 头必须在 MCP_HTTP_ALLOWED_ORIGINS 命中时才发，且值为该 origin 本身`,

@@ -87,7 +87,7 @@ export type NavigationSample = {
   firstContentfulPaint: number;
   /** `navigation` 时序的 `loadEventEnd`。 */
   loadEventEnd: number;
-}
+};
 
 /**
  * 在页面里读**当前这一次导航**的两个时序值。

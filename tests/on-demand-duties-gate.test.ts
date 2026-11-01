@@ -56,7 +56,7 @@ type DutyRow = {
   id: string;
   name: string;
   notInHook: string;
-}
+};
 
 /** 一份「最小但双向都成立」的索引：六条按需档（下限是 5，留一格余量）。 */
 function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {

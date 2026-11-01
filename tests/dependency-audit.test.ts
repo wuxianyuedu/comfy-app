@@ -103,7 +103,7 @@ type LedgerEntry = {
   severity?: string;
   vulnerable?: string;
 };
-type LedgerFile = { entries: Array<LedgerEntry>; ruleVersion: number; };
+type LedgerFile = { entries: Array<LedgerEntry>; ruleVersion: number };
 
 const LEDGER_REL = path.join("scripts", ".dependency-audit-baseline.json");
 

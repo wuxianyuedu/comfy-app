@@ -71,10 +71,9 @@ function runInRepo(args: Array<string> = []): { code: number; output: string } {
  * 最小替身（只含被解析的那一行），把「脚本从哪里读名单」这件事在隔离环境里钉住。
  */
 function seedFactsDoc(repo: GateRepo, modules: Array<string>): void {
-  const row =
-    `| \`comment.language.asciiOnly\` | ${
-    modules.map((m) => `\`${m}\``).join("、")
-    } | 白名单 | 本行 | 解析本行 |`;
+  const row = `| \`comment.language.asciiOnly\` | ${modules
+    .map((m) => `\`${m}\``)
+    .join("、")} | 白名单 | 本行 | 解析本行 |`;
   repo.write("docs/reference-facts.md", `# refs\n\n${row}\n`);
 }
 

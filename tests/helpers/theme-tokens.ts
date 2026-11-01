@@ -96,7 +96,7 @@ export type ThemeTokens = {
   layered(name: string): boolean;
   /** 原始声明（未解析 `var()`），用于看「引用的是谁」。 */
   raw(name: string): string | undefined;
-}
+};
 
 let compiled: Promise<string> | null = null;
 
@@ -284,7 +284,7 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
     layered: boolean;
     order: number;
     value: string;
-  }
+  };
   const values = new Map<string, Entry>();
   let order = 0;
 

@@ -56,7 +56,7 @@ export type JsdomCapabilityGap = {
   message: string;
   /** 为什么 jsdom 做不到这件事。 */
   why: string;
-}
+};
 
 /**
  * 已登记的 jsdom 能力缺口。两条都是 `axe-core` 在要**绘制事实**时踩到的：
@@ -96,7 +96,7 @@ export type JsdomCapabilityController = {
   summaryLines: () => Array<string>;
   /** 已吞掉的条数（全部缺口相加）。 */
   suppressedCount: () => number;
-}
+};
 
 /**
  * 纯函数那一层：给定白名单，产出一个可单测的处置器。

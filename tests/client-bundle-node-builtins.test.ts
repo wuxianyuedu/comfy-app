@@ -41,9 +41,9 @@ const REPO_ROOT = process.cwd();
 const SRC = join(REPO_ROOT, "src");
 
 type Report = {
-  clientReachable: Array<{ chain: Array<string>; module: string; }>;
+  clientReachable: Array<{ chain: Array<string>; module: string }>;
   counts: Record<string, number>;
-  libOnlyReachable: Array<{ chain: Array<string>; module: string; }>;
+  libOnlyReachable: Array<{ chain: Array<string>; module: string }>;
   unguarded: Array<string>;
 };
 

@@ -125,7 +125,9 @@ afterEach(() => {
     } catch (error) {
       /* 读不到也当成「被动过」交上去报：这里没有「静默跳过」那一档 —— 跳一次，
        * 这道网就在不判任何东西而账面照样绿。 */
-      touched.push(`${abs} → 读当前内容失败：${String(error instanceof Error ? error.message : error)}`);
+      touched.push(
+        `${abs} → 读当前内容失败：${String(error instanceof Error ? error.message : error)}`,
+      );
       continue;
     }
     const same = now === null || want === null ? now === want : now.equals(want);
@@ -136,8 +138,7 @@ afterEach(() => {
   expect(
     touched,
     `探针不该写真实工作树（ISSUE #2665）：下面这些真实入库文件在本文件跑的过程中被改过 —— ` +
-      `写探针要落在克隆里（\`REPO_ROOT\`），不是 \`REAL_ROOT\`。\n  ${
-      touched.join("\n  ")}`,
+      `写探针要落在克隆里（\`REPO_ROOT\`），不是 \`REAL_ROOT\`。\n  ${touched.join("\n  ")}`,
   ).toEqual([]);
 });
 

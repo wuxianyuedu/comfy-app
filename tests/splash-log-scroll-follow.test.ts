@@ -49,7 +49,7 @@ const CLIENT_HEIGHT = 300;
 /** 页面脚本在 jsdom 里暴露出来的那几件事（本组用例的读法，不是实现）。 */
 type SplashInternals = {
   renderLog: (text: string) => void;
-}
+};
 
 /**
  * 把启动页装载进**当前** jsdom 文档并跑它的脚本。

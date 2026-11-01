@@ -70,9 +70,7 @@ function fake(opts: {
     }
     if (args[0] === "pulls" && args[1] === "list-pulls") {
       /* 列表那份 `body` 一律给**空串**（真实形态），用例不许靠它得出结论。 */
-      return ok(
-        json((opts.pulls ?? []).map((p) => ({ ...p, body: "" }))),
-      );
+      return ok(json((opts.pulls ?? []).map((p) => ({ ...p, body: "" }))));
     }
     if (args[0] === "pulls" && args[1] === "get-pull") {
       const number = args[args.indexOf("--number") + 1] ?? "";

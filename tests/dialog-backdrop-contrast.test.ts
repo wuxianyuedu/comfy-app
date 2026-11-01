@@ -25,7 +25,7 @@ beforeAll(async () => {
 });
 
 /** 解析 `rgb(r g b / a)` 或 `#rrggbb`（本仓 token 的两种写法）。 */
-function parseColor(value: string): { a: number; rgb: [number, number, number]; } {
+function parseColor(value: string): { a: number; rgb: [number, number, number] } {
   const v = value.trim();
   const hex = /^#([0-9a-f]{6})$/i.exec(v);
   if (hex) {
@@ -60,7 +60,7 @@ function contrast(a: [number, number, number], b: [number, number, number]): num
 
 /** 把半透明遮罩 `src`（α）合成到底色 `bg` 上，返回合成后的 sRGB。 */
 function over(
-  src: { a: number; rgb: [number, number, number]; },
+  src: { a: number; rgb: [number, number, number] },
   bg: [number, number, number],
 ): [number, number, number] {
   return /* SAFETY: 类型断言已复核 */ src.rgb.map((c, i) =>

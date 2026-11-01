@@ -176,7 +176,7 @@ describe("ci-affected-tests — 改动面从哪来", () => {
 describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   /** 记录 spawn 收到的脚本与 env，按预置退出码回放。 */
   function fakeSpawn(status: number) {
-    const seen: Array<{ env: Record<string, string | undefined>; script: string; }> = [];
+    const seen: Array<{ env: Record<string, string | undefined>; script: string }> = [];
     return {
       seen,
       spawn: (script: string, env: Record<string, string | undefined>) => {
@@ -413,7 +413,7 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
  */
 describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
   function fakeSpawn(status: number) {
-    const seen: Array<{ env: Record<string, string | undefined>; script: string; }> = [];
+    const seen: Array<{ env: Record<string, string | undefined>; script: string }> = [];
     return {
       seen,
       spawn: (script: string, env: Record<string, string | undefined>) => {

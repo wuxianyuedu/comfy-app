@@ -79,7 +79,7 @@ type Measure = {
   problems: Array<string>;
   python: string | null;
   state: "answered" | "timeout" | "missing" | "malformed";
-}
+};
 
 const answered = (problems: Array<string> = []): Measure => ({
   state: "answered",

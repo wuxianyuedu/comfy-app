@@ -21,10 +21,7 @@ const ROOT = path.resolve(__dirname, "..");
 
 function launchSource(): string {
   return stripComments(
-    readFileSync(
-      path.join(ROOT, "src/lib/comfyui/lifecycle-launch.ts"),
-      "utf8",
-    ),
+    readFileSync(path.join(ROOT, "src/lib/comfyui/lifecycle-launch.ts"), "utf8"),
   ).replaceAll("\r\n", "\n");
 }
 

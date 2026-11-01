@@ -134,7 +134,7 @@ describe("gates:which —— 门禁分堆（分档与收窄面都转述既有登
 });
 
 /** 一次子进程读数的形状（只列 `affectedTests` 真正读的那几个字段）。 */
-type FakeResult = { status: number | null; stderr?: string; stdout?: string; };
+type FakeResult = { status: number | null; stderr?: string; stdout?: string };
 
 /**
  * 造一个假的 `spawnSync`。

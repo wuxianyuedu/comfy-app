@@ -55,7 +55,7 @@ type SourceFile = {
   rel: string;
   /** 已经剥掉注释的源码。 */
   text: string;
-}
+};
 
 function collectSources(): Array<SourceFile> {
   const out: Array<SourceFile> = [];
@@ -180,7 +180,7 @@ type PairingRow = {
   emitters: Array<string>;
   event: string;
   subscribers: Array<string>;
-}
+};
 
 /**
  * 两端不齐 —— 含「一端都没有」与「只有自环」两种。

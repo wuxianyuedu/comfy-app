@@ -106,8 +106,7 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
     expect(
       orphaned,
       `以下符号被 \`core/index.ts\` 转出但全仓无人引用 —— 转发它只会制造一条「看起来有用」的出口：\n` +
-        `要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。${
-        reader.vanishedNote(vanished)}`,
+        `要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。${reader.vanishedNote(vanished)}`,
     ).toEqual([]);
   });
 

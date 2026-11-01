@@ -166,7 +166,7 @@ type FakeLink = {
   abs: string;
   rel: string;
   text?: string;
-}
+};
 
 /**
  * 「目标在场而穿不过去」的假象：判 broken、给相对文本、重建后变可跟随。
@@ -180,7 +180,7 @@ function fake(input: {
   brokenRels?: Array<string>;
   dirExists?: boolean;
   links: Array<FakeLink>;
-  rebuildResult?: { error: string; ok: boolean; };
+  rebuildResult?: { error: string; ok: boolean };
   siblingInstalled?: boolean;
   targetExists?: boolean;
   throwOnReadText?: boolean;
@@ -246,7 +246,9 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
       links: [{ abs: "N/pkg", rel: "pkg", text: String.raw`..\pkg@1.0.0\node_modules\pkg` }],
     });
     repairUnfollowableLinks("N", deps);
-    expect(rebuildCalls).toEqual([{ abs: "N/pkg", linkText: String.raw`..\pkg@1.0.0\node_modules\pkg` }]);
+    expect(rebuildCalls).toEqual([
+      { abs: "N/pkg", linkText: String.raw`..\pkg@1.0.0\node_modules\pkg` },
+    ]);
   });
 
   it("「目标在场但修不好」进 broken 且 targetExists=YES —— 不许与缺件同形", () => {

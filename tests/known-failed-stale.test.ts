@@ -314,7 +314,7 @@ describe("自证档的执行者（碰了这套机制才跑的门禁）", () => {
  * 只接一条就会把夹具自己的话术留在报告里 —— 读的人分不清那是夹具的结论还是真跑的结论
  * （同一件事在 `tests/hook-affected-launch.test.ts` 里由一条判据钉着，这里按同一条口径做）。
  */
-function captureStreams<T>(fn: () => T): { text: string; value: T; } {
+function captureStreams<T>(fn: () => T): { text: string; value: T } {
   const chunks: Array<string> = [];
   const originalWrite = process.stderr.write.bind(process.stderr);
   const originalLog = console.log;

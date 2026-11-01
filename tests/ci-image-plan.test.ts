@@ -316,8 +316,9 @@ describe("tarball：权限位、符号链接、可复现", () => {
     } // 这台机器上确实没有 tar（极简容器）—— 那一档不在这里红
     expect(
       list.status,
-      `tar 在盘上，却读不了这份包（退出码 ${list.status}）：${
-        String(list.stderr).trim().slice(0, 200)}`,
+      `tar 在盘上，却读不了这份包（退出码 ${list.status}）：${String(list.stderr)
+        .trim()
+        .slice(0, 200)}`,
     ).toBe(0);
     return list.stdout;
   };

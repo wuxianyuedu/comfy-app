@@ -1053,7 +1053,13 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
     // 下面三条都是**观察到的安全形状**，一条都不许被挑出来。
     expect(
       hostUnsafeArgs(
-        [String.raw`C:\dir\a.xml`, String.raw`out=C:\dir\a.xml`, String.raw`/p=C:\x`, "a=b:c", String.raw`--out=C\dir`],
+        [
+          String.raw`C:\dir\a.xml`,
+          String.raw`out=C:\dir\a.xml`,
+          String.raw`/p=C:\x`,
+          "a=b:c",
+          String.raw`--out=C\dir`,
+        ],
         true,
       ),
     ).toEqual([]);

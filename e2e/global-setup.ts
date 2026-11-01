@@ -63,7 +63,7 @@ export type FakeSlotObservation = {
   payload?: unknown;
   /** HTTP 状态码；连不上（服务不在）是 **0**，不是错误。 */
   status: number;
-}
+};
 
 /**
  * 探一次替身端口，把「谁在那儿」收成一个判决。
@@ -87,7 +87,7 @@ export type FakeSlotObservation = {
  * 应答」而不是「端口上有人」）。
  */
 export async function probeFakeComfySlot(
-  options: { timeoutMs?: number; url?: string; } = {},
+  options: { timeoutMs?: number; url?: string } = {},
 ): Promise<FakeSlotObservation> {
   const url = options.url ?? fakeComfyuiStatsUrl();
   /* 1500ms 是**本地回环**上探一个已经起来的服务，本机实测 13ms —— 给两个数量级

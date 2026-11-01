@@ -18,11 +18,7 @@
 import "server-only";
 
 import { getSession } from "~/server/better-auth/server";
-import {
-  requireServerUser,
-  type ServerUser,
-  type SessionLike,
-} from "~/lib/auth-server";
+import { requireServerUser, type ServerUser, type SessionLike } from "~/lib/auth-server";
 
 /**
  * 鉴权闸（REST 面唯一入口）：`app-settings.json` 的 `loginRequired` 打开时，

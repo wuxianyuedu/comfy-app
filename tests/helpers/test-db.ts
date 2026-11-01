@@ -253,7 +253,7 @@ export type TestTables = {
   users: Array<Row>;
   workflowModelTags: Array<Row>;
   workflowTemplates: Array<Row>;
-}
+};
 
 export type TestDb = {
   [key: string]: unknown;
@@ -261,7 +261,7 @@ export type TestDb = {
   /** 本条用例经过宿主的 SQL 顺序（`$reset()` 清空）。判「读有没有落在事务内」用它。 */
   $sqlTrace: Array<string>;
   $tables: TestTables;
-}
+};
 
 let currentSqlite: Database.Database | null = null;
 let currentDb: TestDb | null = null;
@@ -599,7 +599,7 @@ export type SeedWorkflowTemplateInput = {
   taskType?: string;
   userId: string;
   workflowIO?: unknown;
-}
+};
 
 export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateInput): Row {
   const id = input.id ?? `seed-wt-${++seedSeq}`;
@@ -663,7 +663,7 @@ export type SeedTaskInput = {
   userId: string;
   workflowName?: string;
   workflowSnapshot?: unknown;
-}
+};
 
 export function seedTask(_tdb: TestDb, input: SeedTaskInput): Row {
   const id = input.id ?? `seed-task-${++seedSeq}`;
@@ -807,7 +807,7 @@ export type SeedRemoteModelInput = {
   kind?: string;
   name: string;
   workshopAdapters?: unknown;
-}
+};
 
 /**
  * seed 一行远端模型。`apiKey` 收**明文**、由 helper 调 `encryptLlmKey` 落库

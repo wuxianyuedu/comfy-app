@@ -128,7 +128,7 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
     readFileSync(join(REPO_ROOT, "scripts/.runtime-budget-baseline.json"), "utf8"),
   ) as {
     metric: {
-      byPlatform?: Record<string, { firstContentfulPaint: number; loadEventEnd: number; }>;
+      byPlatform?: Record<string, { firstContentfulPaint: number; loadEventEnd: number }>;
       discard: number;
       factor: number;
       firstContentfulPaint?: number;

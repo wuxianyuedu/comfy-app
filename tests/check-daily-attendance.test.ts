@@ -75,7 +75,7 @@ type StageFixture = {
   duration: number;
   name: string;
   status: string;
-}
+};
 
 /**
  * 造一份「sn + `get-build-status -v` 那个形状」的配对（判据吃的就是这一形）。
@@ -387,20 +387,11 @@ describe("daily-attendance：两条定时档交错时，判的是每日那一档
     expect(asDaily.strays).toHaveLength(1);
     /* 候选那一层（只按事件）仍然收得到它 —— 这一句钉的是「撤掉的是判决面那一步，
      * 不是将候选整个收窄」：否则 #2873 会被读成「桌包那档不再算定时类派发」。 */
-    expect(dailyDispatches(builds).map((b: { sn: string }) => b.sn)).toEqual([
-      "cnb-uuu-1k672u3j6",
-    ]);
+    expect(dailyDispatches(builds).map((b: { sn: string }) => b.sn)).toEqual(["cnb-uuu-1k672u3j6"]);
   });
 
   it("平台没给流水线名时不让它当本档（空名不凑形状）", () => {
-    const nameless = detail(
-      "cnb-x9",
-      "crontab: 0 1 * * *",
-      RECENT,
-      GREEN_STAGES,
-      "success",
-      "   ",
-    );
+    const nameless = detail("cnb-x9", "crontab: 0 1 * * *", RECENT, GREEN_STAGES, "success", "   ");
     const got = pickDailySubject({
       builds: [listed("cnb-x9", "crontab: 0 1 * * *", RECENT)],
       details: [nameless],

@@ -214,7 +214,7 @@ const CONFIG_SHAPE: Array<{ mustMatch: RegExp; why: string }> = [
  * 判据按**码位**扫 script 块的代码行（先剥行内注释），只认那几种「7 有、5.1 没有」
  * 的形状；每一条都是解析期错误、不会有「其实 5.1 也认」的中间态。
  */
-const PS7_ONLY: Array<{ instead: string; pattern: RegExp; what: string; }> = [
+const PS7_ONLY: Array<{ instead: string; pattern: RegExp; what: string }> = [
   {
     pattern: /\?\./,
     what: "`?.` null 条件运算符（PS 7+）",
@@ -401,7 +401,7 @@ type LedgerEntry = {
   name: string;
   note?: string;
   tier: GateTier;
-}
+};
 const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   // ── PR 档（COMFYAPP_CI_GATES）──
   { name: "镜像身份", tier: "PR" },
@@ -739,8 +739,8 @@ function stageScriptLine(text: string, name: string): string {
  */
 export function crontabEvents(
   text: string,
-): Array<{ branch: string; cron: string; event: string; }> {
-  const out: Array<{ branch: string; cron: string; event: string; }> = [];
+): Array<{ branch: string; cron: string; event: string }> {
+  const out: Array<{ branch: string; cron: string; event: string }> = [];
   let branch = "";
   for (const line of text.split("\n")) {
     /* 顶层分支键：顶格、以 `:` 结尾（`master:` / `"dev/*":` / `$:`）。 */
@@ -1215,14 +1215,17 @@ const LOCK_KEY_ALLOWED_VARS = /* SAFETY: 类型断言已复核 */ ["CNB_PULL_REQ
  * @returns 平台算出来的锁键
  */
 export function resolveLockKey(template: string, vars: Record<string, string | undefined>): string {
-  return template.replaceAll(/\$\{?([A-Za-z0-9_]+)\}?/g, (_whole, name: string) => vars[name] ?? "");
+  return template.replaceAll(
+    /\$\{?([A-Za-z0-9_]+)\}?/g,
+    (_whole, name: string) => vars[name] ?? "",
+  );
 }
 
 /** `.lock-*` 那几把**类锁**的定义：锚点名 → `{ key 原文, cancel-in-progress 原文 }`（`null` = 没写）。 */
 export function lockAnchorDefinitions(
   text: string,
-): Map<string, { cancelInProgress: boolean | null; key: string; }> {
-  const out = new Map<string, { cancelInProgress: boolean | null; key: string; }>();
+): Map<string, { cancelInProgress: boolean | null; key: string }> {
+  const out = new Map<string, { cancelInProgress: boolean | null; key: string }>();
   const def = /^\.lock-[\w-]+:[ \t]*&(lock_\w+)[ \t]*$([\s\S]*?)(?=^\S|$(?![\s\S]))/gm;
   for (const m of text.matchAll(def)) {
     const name = m[1];
@@ -1709,7 +1712,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       withBuild,
       `push 清单里出现了会真构建的格子（${withBuild.join(" / ")}），而「安装依赖」那一格置着 ` +
-        '`COMFY_CI_SLOT`：先摘那一行并同批把它登记进 `DAILY_ENV_ONLY_ON_PR`，' +
+        "`COMFY_CI_SLOT`：先摘那一行并同批把它登记进 `DAILY_ENV_ONLY_ON_PR`，" +
         "或先证明 #2521 的 `turbopackAdditionalRoots` 在这一档上跑得通（它在有构建格的档上一次都没被执行过）",
     ).toEqual([]);
   });
@@ -1802,7 +1805,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
   it("每日出勤判据认的流水线名，就是配置里跑 `*daily_gates` 的那几条（不多不少）", () => {
     const rows = pipelineLockAssignments(readRegisteredConfig());
     const dailyNames = rows.filter((r) => r.stagesRef === "*daily_gates").map((r) => r.name);
-    expect(dailyNames.length, "配置里一条跑 `*daily_gates` 的流水线都没解析出来").toBeGreaterThan(0);
+    expect(dailyNames.length, "配置里一条跑 `*daily_gates` 的流水线都没解析出来").toBeGreaterThan(
+      0,
+    );
     expect(
       [...DAILY_LANE_PIPELINES].sort(),
       "`DAILY_LANE_PIPELINES` 与 `.cnb.yml` 里跑 `*daily_gates` 的流水线名不是一张表 —— " +
@@ -1817,9 +1822,10 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "配置里只解析出一条定时流水线 —— 这条判据就没有对象了（第二条定时档就是 #2873 的由来）",
     ).toBeGreaterThanOrEqual(2);
     const otherCron = cronRows.filter((r) => r.stagesRef !== "*daily_gates");
-    expect(otherCron.length, "定时类里没有「不跑每日清单」的那一条，判据的空转形态").toBeGreaterThan(
-      0,
-    );
+    expect(
+      otherCron.length,
+      "定时类里没有「不跑每日清单」的那一条，判据的空转形态",
+    ).toBeGreaterThan(0);
     for (const r of otherCron) {
       expect(
         DAILY_LANE_PIPELINES,
@@ -1926,7 +1932,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         `「${prerequisite}」必须排在「每日全量E2E」之前 —— ${
           prerequisite === "每日生产构建"
             ? "这一格的 webServer 起的是 `pnpm start`，产物来自它"
-            : "缺件时整档会以「每条都报同一个 launch 失败」的形态红"}`,
+            : "缺件时整档会以「每条都报同一个 launch 失败」的形态红"
+        }`,
       ).toBeLessThan(e2eAt);
     }
     /* 产物前提要**写在配置里**，不能只靠顺序推断：这一格显式声明 `COMFY_E2E_SERVER: start`。
@@ -2372,7 +2379,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      * 一条锁都不写」这条例外根本没有对象，而探针 A 的 `false` 也测不到它自己要测的
      * 那把锁（`.cnb.yml` 那段注释早就点了这个坏形态，判据这一侧据此补上）。
      * 顺带钉住例外的**边界**：豁免只覆盖「漏写」与「一条都不写」，别的规则一条都不放过。 */
-    const probeFixture = (o: { cancel?: string | null; extra?: string; probeB?: string; }) =>
+    const probeFixture = (o: { cancel?: string | null; extra?: string; probeB?: string }) =>
       [
         ".common: &common",
         "  lock:",
@@ -2990,20 +2997,15 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
         ]),
       ),
     ).toEqual(["每日生产构建"]);
+    expect(stagesWithBuildConsumer(new Map([["构建", ["pnpm run next build"]]]))).toEqual(["构建"]);
     expect(
-      stagesWithBuildConsumer(new Map([["构建", ["pnpm run next build"]]])),
-    ).toEqual(["构建"]);
-    expect(
-      stagesWithBuildConsumer(new Map([["桌包", ["node tools/build/build-desktop.mjs --release"]]])),
+      stagesWithBuildConsumer(
+        new Map([["桌包", ["node tools/build/build-desktop.mjs --release"]]]),
+      ),
     ).toEqual(["桌包"]);
     expect(
       stagesWithBuildConsumer(
-        new Map([
-          [
-            "打包·桌面成品构建",
-            ["node scripts/ci-cp936-exit.mjs -- pnpm tauri build"],
-          ],
-        ]),
+        new Map([["打包·桌面成品构建", ["node scripts/ci-cp936-exit.mjs -- pnpm tauri build"]]]),
       ),
       "经 tauri 间接触发的那一形没被认出来 —— 桌包档会被这张表判成「没有构建格」，" +
         "而它那一格真的在跑 `build-desktop.mjs` → `pnpm build`（`src-tauri/tauri.conf.json` 的 " +
@@ -3028,13 +3030,21 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     expect(
       stagesWithBuildConsumer(
         new Map([
-          ["合并形态复核", ["node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit"]],
+          [
+            "合并形态复核",
+            [
+              "node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit",
+            ],
+          ],
           ["安装依赖", ["node scripts/ci-cp936-exit.mjs -- node scripts/ci-install-deps.mjs"]],
           [
             "API 文档生成与自检",
             ["node scripts/ci-cp936-exit.mjs -- node scripts/check-docs-api.cjs"],
           ],
-          ["工作区出处", ["node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-provenance.mjs"]],
+          [
+            "工作区出处",
+            ["node scripts/ci-cp936-exit.mjs -- node scripts/ci-workspace-provenance.mjs"],
+          ],
         ]),
       ),
     ).toEqual([]);
@@ -3105,9 +3115,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       ["daily", dailyOrder, "COMFYAPP_CI_DAILY_GATES"],
     ];
     for (const [tier, actual, envKey] of tiers) {
-      const booked = new Set(
-        GATE_TIER_LEDGER.filter((e) => e.tier === tier).map((e) => e.name),
-      );
+      const booked = new Set(GATE_TIER_LEDGER.filter((e) => e.tier === tier).map((e) => e.name));
       expect(
         [...booked].sort(),
         `门格总账记成 ${tier} 档的格 ⇄ ${envKey} 实际在跑的格名不一致（` +
@@ -3536,7 +3544,7 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
       expect(
         slotOn(body),
         `「${name}」在注册表里跟着接槽那一族（source 指向置着开关的那一格），配置里却没把 ` +
-          '`COMFY_CI_SLOT` 置成 1 —— 摘掉那一行不会有任何别处红，所以这一句要在这里红。' +
+          "`COMFY_CI_SLOT` 置成 1 —— 摘掉那一行不会有任何别处红，所以这一句要在这里红。" +
           `（该格正文：\n${body}）`,
       ).toBe(true);
     }

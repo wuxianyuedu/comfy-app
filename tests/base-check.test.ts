@@ -211,7 +211,7 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
 }
 
 /** 清掉一对（work + bare）临时目录。 */
-function dropRepo(r: { bare: string; work: string; }): void {
+function dropRepo(r: { bare: string; work: string }): void {
   rmSync(r.work, { recursive: true, force: true });
   rmSync(r.bare, { recursive: true, force: true });
 }
@@ -226,7 +226,7 @@ function dropRepo(r: { bare: string; work: string; }): void {
 function runBaseCheck(
   cwd: string,
   args: Array<string>,
-): { code: number; stderr: string; stdout: string; } {
+): { code: number; stderr: string; stdout: string } {
   const first = runBaseCheckOnce(cwd, args);
   if (first.code === 0 || first.stdout || first.stderr) {
     return first;
@@ -398,7 +398,9 @@ describe("base-check —— 没收集到用例：inconclusive 的第二条入口
         curOutput: "× 这一跑的前提不成立",
         base: { code: 2, output: "× 这一跑的前提不成立" },
       }),
-    ).toBe("本检出：退 2（判据自己声明这一跳没有结论，不是红）；基线：退 2（判据自己声明这一跳没有结论，不是红）");
+    ).toBe(
+      "本检出：退 2（判据自己声明这一跳没有结论，不是红）；基线：退 2（判据自己声明这一跳没有结论，不是红）",
+    );
   });
 
   test("整批：任一条收集不到用例 ⇒ 整批 inconclusive（压过 baseline-red）", () => {
@@ -764,7 +766,7 @@ describe("base-check —— 真仓库上的四态", () => {
    * 合了进来（还没推）。此时按旧口径拿 `@{u}` 当基线 = 拿**不含那批合并改动**的
    * 自己跟自己比 ⇒ 主干自带的红会被判成 `yours`，把别线的债算到复算的人头上。
    */
-  function makeMergedPrFixture(): { bare: string; work: string; } {
+  function makeMergedPrFixture(): { bare: string; work: string } {
     const bare = mkdtempSync(join(tmpdir(), "base-check-pr-bare-"));
     git(bare, "init", "-q", "--bare", "-b", "master", ".");
     const work = mkdtempSync(join(tmpdir(), "base-check-pr-work-"));

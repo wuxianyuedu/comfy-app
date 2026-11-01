@@ -66,7 +66,10 @@ export async function errorEnvelope(promise: Promise<unknown>): Promise<{
   return promise.then(
     () => ({ code: "OK", message: "" }),
     (error: unknown) => {
-      const err = /* SAFETY: 类型断言已复核 */ error as { code?: unknown; message?: unknown } | null;
+      const err = /* SAFETY: 类型断言已复核 */ error as {
+        code?: unknown;
+        message?: unknown;
+      } | null;
       // 逐维按类型收窄：拿 `String(unknown)` 兜底会在错误对象上打出
       // `[object Object]`，那等于把「码不对」这一维又判回成看运气。
       return {

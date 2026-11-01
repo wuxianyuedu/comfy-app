@@ -30,11 +30,7 @@ import { describe, expect, it } from "vitest";
 
 import { stripComments } from "./helpers/strip-comments";
 import { defineGateRepo, expectGateRan } from "./helpers/gate-repo";
-import {
-  IGNORE_SECTIONS,
-  diffIgnore,
-  renderIgnore,
-} from "../scripts/qoder-ignore.mjs";
+import { IGNORE_SECTIONS, diffIgnore, renderIgnore } from "../scripts/qoder-ignore.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -84,9 +80,7 @@ describe("渲染出的形状：每条排除都带着它的理由", () => {
 
   it("分组名以注释行出现，读者能看出这份表分了几件事", () => {
     for (const { section } of IGNORE_SECTIONS) {
-      expect(WANTED.split("\n"), `缺少分组注释：${section}`).toContain(
-        `# ${section}`,
-      );
+      expect(WANTED.split("\n"), `缺少分组注释：${section}`).toContain(`# ${section}`);
     }
   });
 
@@ -110,11 +104,10 @@ describe("渲染出的形状：每条排除都带着它的理由", () => {
     /* 反向也判：若它们哪天不再入库（镜像出库、归档被拆走），这条排除就是在藏一份
      * 不存在的产物，该整条删掉 —— 而不是留一句会过期的理由占着排除面。 */
     for (const one of ["docs/generated", "CHANGELOG-archive.md"]) {
-      const out = execFileSync(
-        "git",
-        ["-c", "core.quotePath=false", "ls-files", "-z", "--", one],
-        { cwd: ROOT, encoding: "utf8" },
-      );
+      const out = execFileSync("git", ["-c", "core.quotePath=false", "ls-files", "-z", "--", one], {
+        cwd: ROOT,
+        encoding: "utf8",
+      });
       expect(
         out.split("\0").filter(Boolean).length,
         `${one} 并不入库 —— 那这一条排除该归到「构建产物」那一组，或直接删掉`,
@@ -133,12 +126,10 @@ describe("入库那份 ⇄ 工具会写的那份", () => {
     const delta = diffIgnore(disk, WANTED);
     expect(
       delta.same,
-      `.qoderignore 与工具输出不一致：+${delta.added.length} / -${delta.removed.length}\n${
-        [
-          ...delta.added.map((l) => `  + ${l}`),
-          ...delta.removed.map((l) => `  - ${l}`),
-        ].join("\n")
-        }\n修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）`,
+      `.qoderignore 与工具输出不一致：+${delta.added.length} / -${delta.removed.length}\n${[
+        ...delta.added.map((l) => `  + ${l}`),
+        ...delta.removed.map((l) => `  - ${l}`),
+      ].join("\n")}\n修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）`,
     ).toBe(true);
   });
 
@@ -165,13 +156,11 @@ describe("入库那份 ⇄ 工具会写的那份", () => {
   });
 
   it("pnpm 出口在册：写/刷新 与 只比对 各一条，且都指向这一份脚本", () => {
-    const pkg = JSON.parse(
-      readFileSync(path.join(ROOT, "package.json"), "utf8"),
-    ) as { scripts: Record<string, string> };
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
     expect(pkg.scripts["qoder:ignore"]).toBe("node scripts/qoder-ignore.mjs");
-    expect(pkg.scripts["qoder:ignore:check"]).toBe(
-      "node scripts/qoder-ignore.mjs --check",
-    );
+    expect(pkg.scripts["qoder:ignore:check"]).toBe("node scripts/qoder-ignore.mjs --check");
   });
 });
 
@@ -233,10 +222,7 @@ test("默认档写出内容，第二次跑念「没动任何字节」（幂等 =
 
 test("手改产物 ⇒ --check 退 1 并报出增删；默认档刷回来", ({ repo }) => {
   repo.run();
-  repo.write(
-    ".qoderignore",
-    `${WANTED.replace("/node_modules/", "# 有人手删了一条")}\n`,
-  );
+  repo.write(".qoderignore", `${WANTED.replace("/node_modules/", "# 有人手删了一条")}\n`);
   const drift = repo.run(["--check"]);
   expectGateRan(drift);
   expect(drift.code, drift.output).toBe(1);
@@ -261,8 +247,6 @@ test("写不进去退 2，且失败路上不念任何成功话术", ({ repo }) =
   /* 退 2 不是绿：成功话术（已生成 / 已刷新 / 没动任何字节）一条都不许出现在这一跑里。
    * 「拿不到测量」被读成「测量结果是绿的」是这一族最重的失效（规范 §13.6.4）。 */
   for (const success of ["已生成", "已刷新", "没动任何字节"]) {
-    expect(r.raw.stdout, `退 2 的一跑里念了成功话术：${success}`).not.toContain(
-      success,
-    );
+    expect(r.raw.stdout, `退 2 的一跑里念了成功话术：${success}`).not.toContain(success);
   }
 });

@@ -15,7 +15,7 @@ type ExitModule = {
   APP_SERVICE_EXIT_FILE: string;
   appServiceExitPath: (root: string) => string;
   writeAppServiceExit: (root: string, input: Record<string, unknown>) => boolean;
-}
+};
 
 const mod = /* SAFETY: 类型断言已复核 */ (await import(
   pathToFileURL(join(process.cwd(), "scripts", "app-service-exit.mjs")).href

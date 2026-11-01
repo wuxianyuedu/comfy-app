@@ -108,9 +108,7 @@ describe("agent:index —— codegraph 的就绪读哪里", () => {
   });
 
   test("命令不在 PATH ⇒ 没取到读数，且给出装法", () => {
-    const probe = probeCodegraph(
-      fakeRun({ missing: true, code: null, stdout: "", stderr: "" }),
-    );
+    const probe = probeCodegraph(fakeRun({ missing: true, code: null, stdout: "", stderr: "" }));
     expect(probe.verdict).toBe("unknown");
     expect(renderProbe(probe).join("\n")).toContain("pnpm add -g @colbymchenry/codegraph");
   });
@@ -118,9 +116,7 @@ describe("agent:index —— codegraph 的就绪读哪里", () => {
 
 describe("agent:index —— zvec-grep 的就绪读哪里", () => {
   test("`--check-ready` 退 0 ⇒ 就绪", () => {
-    const probe = probeZvec(
-      fakeRun({ missing: false, code: 0, stdout: "ready\n", stderr: "" }),
-    );
+    const probe = probeZvec(fakeRun({ missing: false, code: 0, stdout: "ready\n", stderr: "" }));
     expect(probe.verdict).toBe("ready");
   });
 
@@ -149,9 +145,7 @@ describe("agent:index —— zvec-grep 的就绪读哪里", () => {
   });
 
   test("命令不在 PATH ⇒ 没取到读数，且给出装法", () => {
-    const probe = probeZvec(
-      fakeRun({ missing: true, code: null, stdout: "", stderr: "" }),
-    );
+    const probe = probeZvec(fakeRun({ missing: true, code: null, stdout: "", stderr: "" }));
     expect(probe.verdict).toBe("unknown");
     expect(renderProbe(probe).join("\n")).toContain("pnpm add -g @zvec/zvec-grep");
   });
@@ -162,9 +156,7 @@ describe("agent:index —— 合成口径与缺席形状", () => {
     expect(combineVerdicts([])).toBe(0);
     expect(combineVerdicts([{ verdict: "ready" }, { verdict: "ready" }])).toBe(0);
     expect(combineVerdicts([{ verdict: "ready" }, { verdict: "not-ready" }])).toBe(1);
-    expect(
-      combineVerdicts([{ verdict: "not-ready" }, { verdict: "unknown" }]),
-    ).toBe(2);
+    expect(combineVerdicts([{ verdict: "not-ready" }, { verdict: "unknown" }])).toBe(2);
   });
 
   test("不存在的命令：`missing` 为真（两种平台的缺席形状都归这一格）", () => {

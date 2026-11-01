@@ -797,8 +797,7 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
         "function Log { param([string]$Msg) Write-Output $Msg }",
         "function Log { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
       )
-      .replace("$global:KILLED_PIDS = @()", "$global:KILLED = 0\n$global:KILLED_PIDS = @()")
-    }
+      .replace("$global:KILLED_PIDS = @()", "$global:KILLED = 0\n$global:KILLED_PIDS = @()")}
 $code = Assert-ShellNotRunning -ProjectRoot $root -Purpose "构建 release 壳"
 Write-Output ("CODE=" + $code)
 Write-Output ("KILLED=" + $global:KILLED)

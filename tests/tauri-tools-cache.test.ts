@@ -167,7 +167,7 @@ describe("--seed", () => {
     expect(seed({ cacheDir: la, mirror, dryRun: false, log, plan })).toBe(0);
     const manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(mirror, TOOLS_MANIFEST_FILE), "utf8"),
-    ) as { files: Array<{ path: string; sha256: string }>; version: string; };
+    ) as { files: Array<{ path: string; sha256: string }>; version: string };
     expect(manifest.version).toBe(plan.version);
     expect(manifest.files.map((f) => f.path)).toContain(plan.dllRel);
     /* 清单里的哈希必须真能对上盘上的内容 —— 否则 ensure 那侧的复算就是走过场。 */

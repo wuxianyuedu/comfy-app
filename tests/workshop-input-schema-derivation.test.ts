@@ -117,7 +117,7 @@ describe("工坊写侧 schema ⇄ 派生类型：同读数且可选性方向一�
     const json = /* SAFETY: 类型断言已复核 */ z4mini.toJSONSchema(characterPortraitInputSchema, {
       target: "draft-7",
       io: "input",
-    }) as { properties?: Record<string, unknown>; required?: Array<string>; };
+    }) as { properties?: Record<string, unknown>; required?: Array<string> };
 
     expect(json.properties?.createdAt).toBeDefined();
     expect(json.required ?? []).not.toContain("createdAt");

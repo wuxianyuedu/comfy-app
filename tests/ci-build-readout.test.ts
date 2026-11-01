@@ -976,11 +976,11 @@ type BuildJson = {
   data: {
     pipelinesStatus: Record<
       string,
-      { id?: string; name?: string; stages: Array<StageJson>; status?: string; }
+      { id?: string; name?: string; stages: Array<StageJson>; status?: string }
     >;
     status?: string;
   };
-}
+};
 
 /** 一格（`error` 那一栏只有 `get-build-stage -v` 才给，`get-build-status` 里没有）。 */
 type StageJson = {
@@ -989,7 +989,7 @@ type StageJson = {
   id?: string;
   name?: string;
   status?: string;
-}
+};
 
 /** 取 `prepare` 那一格 —— 这一族样本里它是主角（唯一有读数的那一格）。 */
 function prepareStage(json: BuildJson, key = "cnb-9qi-1k5qojle1-001"): StageJson {
