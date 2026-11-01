@@ -83,6 +83,9 @@ describe("全部参数表（「浏览全部参数」那一块）", () => {
       "duration",
       /* #942 抽卡纠偏起，种子是内置预制口之一（排在时长之后）。 */
       "seed",
+      /* 角色 LoRA 两枚（#2622）：排在种子之后（MODE_CONTRACT_INPUT_TYPES 的顺序）。 */
+      "lora-name",
+      "lora-strength",
       "reference-image",
       "first-frame",
       "last-frame",

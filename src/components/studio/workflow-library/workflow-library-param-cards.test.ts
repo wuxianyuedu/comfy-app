@@ -76,6 +76,8 @@ describe("deriveLibraryParamCards", () => {
       "negative",
       ...SIZE_SUB_IDS,
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
     /* 落点只由作者画的线决定：没有线就没有落点，页面如实显示未配置。 */
     expect(resolved).toEqual({});
@@ -191,12 +193,16 @@ describe("deriveLibraryParamCards", () => {
       exposedParamDisplayLabel("negative"),
       ...sizeLabels,
       exposedParamDisplayLabel("seed"),
+      exposedParamDisplayLabel("lora-name"),
+      exposedParamDisplayLabel("lora-strength"),
     ]);
     expect(withRename.entries.map((entry) => entry.label)).toEqual([
       exposedParamDisplayLabel("prompt"),
       exposedParamDisplayLabel("negative"),
       ...sizeLabels,
       exposedParamDisplayLabel("seed"),
+      exposedParamDisplayLabel("lora-name"),
+      exposedParamDisplayLabel("lora-strength"),
     ]);
     expect(withRename.ownersByPin["9::widget::text"]).toBe("提示词");
   });
@@ -299,6 +305,8 @@ describe("deriveLibraryParamCards", () => {
       "negative",
       ...SIZE_SUB_IDS,
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
     /* 没有落点就没有线：卡片如实显示成未配置，不凭空画。 */
     expect(wires).toHaveLength(0);
@@ -595,6 +603,8 @@ describe("deriveLibraryParamCards — 契约口常驻，不做工作流能力推
       "negative",
       ...SIZE_SUB_IDS,
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
   });
 

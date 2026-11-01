@@ -11,6 +11,11 @@ import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { CharacterDesigner } from "~/components/workshop/CharacterDesigner";
 import type { Character } from "~/lib/workshop/types";
 
+/* 本用例不测 LoRA 绑定：mock 掉候选 hook，视图就不需要 TRPCProvider。 */
+vi.mock("~/components/workshop/hooks/use-character-lora-options", () => ({
+  useCharacterLoraOptions: () => ({ options: [], loading: false }),
+}));
+
 vi.mock("~/components/workshop/LLMContext", () => ({
   useLLM: () => ({
     config: {

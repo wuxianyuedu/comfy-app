@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { familyOfClass } from "./workflow-param-classes";
 import { exposedClassOf, exposedParamLabel, exposedParamsForMode } from "./workflow-exposed-params";
 
 function ids(mode: string | null): Array<string> {
@@ -14,7 +15,14 @@ function ids(mode: string | null): Array<string> {
 
 describe("exposedParamsForMode", () => {
   it("文生图只保留提示词与尺寸（+ 种子口）", () => {
-    expect(ids("T2I")).toEqual(["prompt", "negative", "size", "seed"]);
+    expect(ids("T2I")).toEqual([
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength",
+    ]);
   });
 
   it("图生图额外给参考图（输入本身就是一张图）", () => {
@@ -25,11 +33,22 @@ describe("exposedParamsForMode", () => {
       "reference-image-2",
       "size",
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
   });
 
   it("单图生视频给首帧，不给尾帧；视频口都带时长", () => {
-    expect(ids("I2V")).toEqual(["prompt", "negative", "first-frame", "size", "duration", "seed"]);
+    expect(ids("I2V")).toEqual([
+      "prompt",
+      "negative",
+      "first-frame",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength",
+    ]);
   });
 
   it("首尾帧模式才给尾帧", () => {
@@ -41,11 +60,21 @@ describe("exposedParamsForMode", () => {
       "size",
       "duration",
       "seed",
+      "lora-name",
+      "lora-strength",
     ]);
   });
 
   it("文生视频不给首帧（没有图可给），但有时长", () => {
-    expect(ids("T2V")).toEqual(["prompt", "negative", "size", "duration", "seed"]);
+    expect(ids("T2V")).toEqual([
+      "prompt",
+      "negative",
+      "size",
+      "duration",
+      "seed",
+      "lora-name",
+      "lora-strength",
+    ]);
   });
 
   it("时长是视频专有口：生图模式不带", () => {
@@ -54,8 +83,8 @@ describe("exposedParamsForMode", () => {
   });
 
   it("没有模式时退到最保守的一套（提示词 + 尺寸 + 种子）", () => {
-    expect(ids(null)).toEqual(["prompt", "negative", "size", "seed"]);
-    expect(ids("")).toEqual(["prompt", "negative", "size", "seed"]);
+    expect(ids(null)).toEqual(["prompt", "negative", "size", "seed", "lora-name", "lora-strength"]);
+    expect(ids("")).toEqual(["prompt", "negative", "size", "seed", "lora-name", "lora-strength"]);
   });
 
   it("契约口一律常驻：没有 `optional` 这种「看工作流脸色」的标记", () => {
@@ -64,7 +93,14 @@ describe("exposedParamsForMode", () => {
     for (const def of exposedParamsForMode("T2I")) {
       expect(Object.keys(def)).not.toContain("optional");
     }
-    expect(ids("T2I")).toEqual(["prompt", "negative", "size", "seed"]);
+    expect(ids("T2I")).toEqual([
+      "prompt",
+      "negative",
+      "size",
+      "seed",
+      "lora-name",
+      "lora-strength",
+    ]);
   });
 });
 
@@ -80,5 +116,20 @@ describe("exposedParamLabel / exposedClassOf", () => {
     expect(exposedClassOf("reference-image")).toBe("reference-image");
     expect(exposedClassOf("reference-image-2")).toBe("reference-image");
     expect(exposedClassOf("steps")).toBeNull();
+  });
+});
+
+describe("lora 契约口（FR-QA-02③ · #2622）", () => {
+  it("图像与视频模式的契约口都带 lora-name / lora-strength（连线才生效）", () => {
+    for (const mode of ["T2I", "I2I", "T2V", null]) {
+      const ids = exposedParamsForMode(mode).map((def) => def.id);
+      expect(ids).toContain("lora-name");
+      expect(ids).toContain("lora-strength");
+    }
+  });
+
+  it("familyOfClass：lora-name 走 text 族、lora-strength 走 number 族", () => {
+    expect(familyOfClass("lora-name")).toBe("text");
+    expect(familyOfClass("lora-strength")).toBe("number");
   });
 });

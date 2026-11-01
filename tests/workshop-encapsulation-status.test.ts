@@ -282,6 +282,9 @@ describe("契约口展示名的单一出处", () => {
        * （`model-mode-contract.ts`）。本用例锁的是「展示名同一份出处」，
        * 与清单里有几口无关，所以跟着清单补。 */
       exposedParamDisplayLabel("seed"),
+      /* 角色 LoRA 口（#2622）：与种子口同一句「跟着清单补」。 */
+      exposedParamDisplayLabel("lora-name"),
+      exposedParamDisplayLabel("lora-strength"),
     ]);
   });
 });
