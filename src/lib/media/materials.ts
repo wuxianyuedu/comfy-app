@@ -108,7 +108,7 @@ export function sanitizeFileName(raw: string | null | undefined): string | null 
   if (!base || base === "." || base === "..") {
     return null;
   }
-  const cleaned = base.replaceAll(/[\x00-\x1f<>:"|?*]/g, "_");
+  const cleaned = base.replaceAll(/[\u0000-\u001f<>:"|?*]/g, "_");
   if (!cleaned || cleaned.length > 200) {
     return null;
   }

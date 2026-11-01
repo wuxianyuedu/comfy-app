@@ -384,7 +384,7 @@ function looksLikeScript(candidate) {
   }
   /* 可打印 ASCII 起头即文本脚本；MZ / ELF 那类二进制落到 else（`{2}` 会退化成
    * 「长度恰好为 2」，ISSUE #2563 就是那个形状）。 */
-  return /^[\x09\x0a\x0d\x20-\x7e]{2,}$/.test(head);
+  return /^[\u0009\u000a\u000d\u0020-\u007e]{2,}$/.test(head);
 }
 
 /**

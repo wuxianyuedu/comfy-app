@@ -216,7 +216,7 @@ function commitsSinceDateTouchingSource(dateStr, limit = 5) {
   }
   const res = spawnSync(
     "git",
-    ["log", "--since", `${dateStr} 00:00:00`, "--first-parent", "--format=%h\x1f%s", "--", "src/"],
+    ["log", "--since", `${dateStr} 00:00:00`, "--first-parent", "--format=%h\u001f%s", "--", "src/"],
     { cwd: ROOT, encoding: "utf8" },
   );
   if (res.status !== 0 || typeof res.stdout !== "string") {
@@ -227,7 +227,7 @@ function commitsSinceDateTouchingSource(dateStr, limit = 5) {
     .map((l) => l.trim())
     .filter(Boolean)
     .map((l) => {
-      const at = l.indexOf("\x1f");
+      const at = l.indexOf("\u001f");
       return { rev: l.slice(0, at), title: l.slice(at + 1) };
     });
   return { count: rows.length, recent: rows.slice(0, limit) };

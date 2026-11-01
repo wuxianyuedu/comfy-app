@@ -414,7 +414,7 @@ export function executableKind(candidate: string): ExecutableKind {
     // 量词是 `{2,}`（**至少**两个可打印字节）而不是 `{2}`：`text` 是最多 16 字节的
     // 文件头，写 `{2}` 就成了「长度恰好为 2 才算脚本」，于是每一份真脚本都被判成
     // `binary`（ISSUE #2563 —— 它一直没红，是因为此前没有调用点依赖 `script` 这一支）。
-    return /^[\x09\x0a\x0d\x20-\x7e]{2,}$/.test(text) ? "script" : "binary";
+    return /^[\u0009\u000a\u000d\u0020-\u007e]{2,}$/.test(text) ? "script" : "binary";
   } catch {
     return "unknown";
   } finally {
