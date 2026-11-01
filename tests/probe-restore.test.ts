@@ -143,6 +143,14 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
   const DESTRUCTIVE =
     /(?:checkout|restore)(?:\s+HEAD)?\s+--(?=\s|$)|(?:checkout|restore)["']\s*,\s*["']--(?=["']|\s|$)/;
 
+  /* 被禁形状一律**拼接**写出来：本文件自己也在这条判据的扫描面上，原样写着的夹具与
+   * 红话会把自己算成命中（这条判据的第一失效模式就是自匹配；同一族的标本见
+   * `tests/strip-comments-single-source.test.ts` 里 `DEFINITION_MARK` 那段）。
+   * 拼出来的**值**与原字面量逐字相同 —— 由下面「被禁的三种形状各自命中」那格证明。 */
+  const CHECKOUT = "check" + "out";
+  const RESTORE = "rest" + "ore";
+  const HEADSEP = "-" + "-";
+
   /** 命中就回报这一格；**先剥注释** —— 口径的叙述里必然出现被禁的形态本身（§11.23）。 */
   function hit(src: string, label: string): string | null {
     return DESTRUCTIVE.test(stripComments(src)) ? `  · ${label}` : null;
@@ -173,15 +181,16 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
 
   it("被禁的三种形状各自命中（数组形 / `checkout HEAD --` 字符串形 / `restore --`）", () => {
     const forbidden = [
-      'execFileSync("git", ["checkout", "--", rel]);',
-      "git(`checkout HEAD -- ${E2E_REL}`);",
-      'git("restore -- path/to/file");',
+      'execFileSync("git", ["' + CHECKOUT + '", "' + HEADSEP + '", rel]);',
+      'git(`' + CHECKOUT + ' HEAD ' + HEADSEP + ' ${E2E_REL}`);',
+      'git("' + RESTORE + ' ' + HEADSEP + ' path/to/file");',
     ];
     const missed = forbidden.filter((src) => hit(src, "fixture") === null);
     expect(
       missed,
       "这几条被禁写法扫不出来 —— 判据只在**在场的那些**形状上有效，" +
-        "认不出字符串形就等于把 `git checkout HEAD -- <文件>` 放回来（#2593 的现场正是字符串形）。",
+        "认不出字符串形就等于把 `git " + CHECKOUT + " HEAD " + HEADSEP + " <文件>` 放回来" +
+        "（#2593 的现场正是字符串形）。",
     ).toEqual([]);
   });
 
