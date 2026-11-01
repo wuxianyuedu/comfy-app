@@ -198,7 +198,7 @@ function splitTopLevel(body) {
  */
 function literalArray(objText, key, configText) {
   const at = objText.indexOf(`${key}:`);
-  if (at < 0) {
+  if (at === -1) {
     return null;
   }
   /* 标识符写法：`key: SOME_CONST` —— 去顶层找 `const SOME_CONST = [...]`。 */
@@ -213,7 +213,7 @@ function literalArray(objText, key, configText) {
     return collectStringLiterals(configText.slice(decl.index + decl[0].length - 1));
   }
   const open = objText.indexOf("[", at);
-  if (open < 0) {
+  if (open === -1) {
     return null;
   }
   let depth = 0;
@@ -275,12 +275,12 @@ function readTiers(configText) {
   const tiers = new Map();
   const marker = "projects:";
   const at = text.indexOf(marker);
-  if (at < 0) {
+  if (at === -1) {
     return { tiers, found: 0 };
   }
   /* 从 `projects:` 后的 `[` 开始，按括号配对切出这个数组的**顶层元素**。 */
   const bracket = text.indexOf("[", at);
-  if (bracket < 0) {
+  if (bracket === -1) {
     return { tiers, found: 0 };
   }
   const items = splitTopLevel(text.slice(bracket + 1));
@@ -312,11 +312,11 @@ function readEnvironments(configText) {
   const text = blankComments(configText);
   const marker = "projects:";
   const at = text.indexOf(marker);
-  if (at < 0) {
+  if (at === -1) {
     return {};
   }
   const bracket = text.indexOf("[", at);
-  if (bracket < 0) {
+  if (bracket === -1) {
     return {};
   }
   const out = {};

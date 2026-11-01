@@ -103,7 +103,7 @@ function literalPrefixOf(re: RegExp): string | null {
     return out;
   }
   const cut = out.lastIndexOf("/");
-  return cut < 0 ? null : out.slice(0, cut);
+  return cut === -1 ? null : out.slice(0, cut);
 }
 
 /**

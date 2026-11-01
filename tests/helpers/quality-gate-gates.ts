@@ -61,8 +61,8 @@ export function parsePs1Gates(src: string): Array<GateEntry> {
   // 下面 `Get-*Drift` 那几个返回 `@{ state = …; report = … }` 的哈希表 ——
   // 前者会在默认档里凭空多出一条 `id`（实测就是这条把两个平台的默认档集合判成了不等）。
   const start = src.indexOf("$Blocks = @(");
-  const end = start < 0 ? -1 : src.indexOf("\n)", start);
-  if (start < 0 || end < 0) {
+  const end = start === -1 ? -1 : src.indexOf("\n)", start);
+  if (start === -1 || end < 0) {
     return [];
   }
   const region = src.slice(start, end);
@@ -88,7 +88,7 @@ export function parsePs1Gates(src: string): Array<GateEntry> {
 export function parseMjsGates(src: string): Array<GateEntry> {
   const start = src.indexOf("const GATES = {");
   const end = src.indexOf("function parseArgs");
-  if (start < 0 || end < 0 || end < start) {
+  if (start === -1 || end === -1 || end < start) {
     return [];
   }
   const block = src.slice(start, end);

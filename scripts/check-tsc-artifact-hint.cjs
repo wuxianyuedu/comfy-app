@@ -142,7 +142,7 @@ function main() {
   const fileIdx = argv.indexOf("--file");
   let text;
   try {
-    text = fs.readFileSync(fileIdx >= 0 && argv[fileIdx + 1] ? argv[fileIdx + 1] : 0, "utf8");
+    text = fs.readFileSync(fileIdx !== -1 && argv[fileIdx + 1] ? argv[fileIdx + 1] : 0, "utf8");
   } catch {
     /* 读不到就安静退出：本脚本永远是附属信息，不该制造第二种失败形态。 */
     return 0;

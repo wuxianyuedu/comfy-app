@@ -160,11 +160,11 @@ export function readQueryParam(query: string, key: string): string | null {
       continue;
     }
     const eq = pair.indexOf("=");
-    const rawKey = eq < 0 ? pair : pair.slice(0, eq);
+    const rawKey = eq === -1 ? pair : pair.slice(0, eq);
     if (decode(rawKey) !== key) {
       continue;
     }
-    return eq < 0 ? "" : decode(pair.slice(eq + 1));
+    return eq === -1 ? "" : decode(pair.slice(eq + 1));
   }
   return null;
 }

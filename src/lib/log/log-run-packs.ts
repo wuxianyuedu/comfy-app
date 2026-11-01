@@ -198,7 +198,7 @@ export function formatScopedLabel(
 /** 归档目录名尾段的 runId（`…-a1b2c3` → `a1b2c3`）。 */
 function stripRunId(packName: string): string | null {
   const dash = packName.lastIndexOf("-");
-  return dash >= 0 ? packName.slice(dash + 1) : null;
+  return dash !== -1 ? packName.slice(dash + 1) : null;
 }
 
 /** 退出形态文案（`crashed` 只回答「崩没崩」，两个文案都在这里写一次）。 */

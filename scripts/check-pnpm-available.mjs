@@ -48,7 +48,7 @@ const depsRootArgIndex = process.argv.indexOf("--deps-root");
 /* 取一次再判：`process.argv[i+1]` 在 noUncheckedIndexedAccess 下是 `string | undefined`，
  * 而真值判据已经把它收进「非空串」那一支（同一形见批 8 / 批 10 —— 判的是旗标缺值，
  * 缺值就退回默认的 `root`，不猜、也不用 cast）。 */
-const depsRootArg = depsRootArgIndex >= 0 ? process.argv[depsRootArgIndex + 1] : undefined;
+const depsRootArg = depsRootArgIndex !== -1 ? process.argv[depsRootArgIndex + 1] : undefined;
 const depsRoot = depsRootArg ? path.resolve(depsRootArg) : root;
 
 /** 打印一行结论（纯 ASCII 前缀 + 原文，便于日志检索）。

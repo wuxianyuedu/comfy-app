@@ -111,7 +111,7 @@ export function runnerShape(text) {
     /* `- runner:` 也算（列表项里的键）；只认键本身，不认 `something-runner:`。 */
     return body === "runner:" || body === "- runner:";
   });
-  if (start < 0) {
+  if (start === -1) {
     return { namespace: null, tags: [], verdict: "missing" };
   }
   const first = lines[start] ?? "";

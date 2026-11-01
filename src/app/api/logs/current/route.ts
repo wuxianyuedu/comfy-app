@@ -94,7 +94,7 @@ function alignToLineStart(buf: Buffer, start: number, fileSize: number): number 
     return 0;
   }
   const nl = buf.indexOf(0x0a);
-  if (nl < 0) {
+  if (nl === -1) {
     return fileSize;
   }
   return start + nl + 1;

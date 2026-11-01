@@ -258,7 +258,7 @@ export function acknowledgeReason(message, lost) {
   for (const file of lost) {
     const hit = lines.some((line) => {
       const at = line.indexOf(file);
-      if (at < 0) {
+      if (at === -1) {
         return false;
       }
       /* ③ 理由：路径前后还得有别的字（只有一条 `  · <路径>` 的清单行不算理由）。 */
