@@ -632,9 +632,9 @@ function main() {
           : "本检出问不到 origin/master，退回 HEAD —— 这一枚在 squash 合入后多半不可达，届时判红改走 generatedAt 那条第二归因（ISSUE #2082）"}`,
     );
     console.log(
-      `[bundle-budget] 基线已更新（${path.relative(ROOT, BASELINE)}）：` +
-        (before ? `gzip ${kb(before.gzip)} → ${kb(now.gzip)}、文件数 ${before.files} → ` : "") +
-        `${now.files}${ALLOW_INCREASE && before ? "（--allow-increase：已认过账）" : ""}`,
+      `[bundle-budget] 基线已更新（${path.relative(ROOT, BASELINE)}）：${
+        before ? `gzip ${kb(before.gzip)} → ${kb(now.gzip)}、文件数 ${before.files} → ` : ""
+      }${now.files}${ALLOW_INCREASE && before ? "（--allow-increase：已认过账）" : ""}`,
     );
     return 0;
   }

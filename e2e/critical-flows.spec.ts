@@ -507,11 +507,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         const fmt = (ms: number) => {
           const d = new Date(ms);
           const p = (n: number, l = 2) => String(n).padStart(l, "0");
-          return (
-            `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
-            `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.` +
-            p(d.getMilliseconds(), 3)
-          );
+          return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
         };
         /* 掺进 2 条警告、3 条错误（取最新的一端，共 450 条仍在上限内）：
          * 级别按钮上的 warn / error 才有非零样本，「警告黄、错误红」才可断言。 */

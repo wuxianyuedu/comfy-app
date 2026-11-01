@@ -480,9 +480,9 @@ export function closeIssues(ctx) {
     if (asMerged) {
       asMergedProof = fetchPullMergeProof({ run, slug, prNumber: asMerged });
       log(
-        `[ship] 落地证明改由人点名那条 PR 出：PR #${asMerged} 回读 is_merged=` +
-          (asMergedProof.state === "merged" ? "true" : asMergedProof.state === "not-merged" ? "false" : "(取不到)") +
-          `（标题「${asMergedProof.title || "(空/取不到)"}」）`,
+        `[ship] 落地证明改由人点名那条 PR 出：PR #${asMerged} 回读 is_merged=${
+          asMergedProof.state === "merged" ? "true" : asMergedProof.state === "not-merged" ? "false" : "(取不到)"
+        }（标题「${asMergedProof.title || "(空/取不到)"}」）`,
       );
     } else {
       scan = findMergedPullProofs({ run, slug, numbers: explicit });

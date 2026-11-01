@@ -527,8 +527,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
           stdout?: string;
         };
         throw new Error(
-          `夹具里 git ${args.join(" ")} 失败（cwd=${root}，退出码 ${e.status ?? "?"}）：` +
-            ((e.stderr ?? e.stdout ?? "").trim() || "git 没有输出"),
+          `夹具里 git ${args.join(" ")} 失败（cwd=${root}，退出码 ${e.status ?? "?"}）：${
+            (e.stderr ?? e.stdout ?? "").trim() || "git 没有输出"
+          }`,
           { cause: error },
         );
       }

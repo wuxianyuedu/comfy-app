@@ -240,8 +240,9 @@ export function provenanceVerdict(input) {
   /* ③ 读数档：恒空的断言不是判据。先取数，等常驻树落地再升级（见文件头那张表）。 */
   lines.push(
     untracked.length > 0
-      ? `未跟踪·读数 ${untracked.length} 处（.gitignore 之外）：${untracked.slice(0, 8).join(", ")}` +
-          (untracked.length > 8 ? ` …另 ${untracked.length - 8} 处` : "")
+      ? `未跟踪·读数 ${untracked.length} 处（.gitignore 之外）：${untracked.slice(0, 8).join(", ")}${
+          untracked.length > 8 ? ` …另 ${untracked.length - 8} 处` : ""
+        }`
       : "未跟踪·读数 0 处",
   );
 
