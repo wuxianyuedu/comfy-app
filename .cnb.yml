@@ -1439,6 +1439,18 @@
     - name: 令牌权限读数
       script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
       timeout: 5m
+    # ── GitHub 镜像同步（ISSUE #2978）：把这一跑判的那份树同步到镜像仓库并派发 ──────
+    #
+    # 双远端镜像（cnb 主）的推送跳：推 HEAD 到 `wuxianyuedu/comfy-app` 的 `cnb-pr-<IID>`
+    # 专属 ref + `repository_dispatch` 派发，GitHub 侧 workflow 按**同一笔 sha** 起跑
+    # —— 两边判同一份树，读数才对得上账。为什么放 endStages：它坏了既不许把门禁的红
+    # 洗成绿，也不许把自己的红叠进门禁的账（与立案格同一档语义）；可见性是它自己的读数。
+    #
+    # fail-closed：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席 ⇒ 退 2 留读数，
+    # 不冒充成功。令牌值一个字节都不回显（脚本内先脱敏，硬规则 17）。
+    - name: GitHub 镜像同步
+      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs
+      timeout: 5m
 
 # ── 桌面成品包那一档的失败立案（ISSUE #2550）──────────────────────────────────────
 #

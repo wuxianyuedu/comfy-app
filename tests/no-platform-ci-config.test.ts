@@ -64,9 +64,9 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 /**
  * 自动触发型 CI 配置的仓库相对路径（确切名字，文件形态）。
  *
- * 只收「平台一读就无条件跑」的那些；`.cnb.yml` 是本仓库的当前形态，其余是
- * 「顺手换个平台」的等价形态 —— 判据要拦的是**这件事**，不是某一个文件名。
- * **本仓此刻允许存在的只有 `.cnb.yml` 一项**，多出来的任何一项仍是违规。
+ * 只收「平台一读就无条件跑」的那些；`.cnb.yml` 与 `.github/workflows` 是本仓的
+ * 当前形态（#2978 起双远端镜像并行），其余是「顺手换个平台」的等价形态 ——
+ * 判据要拦的是**这件事**，不是某一个文件名。多出来的任何一项仍是违规。
  */
 const CI_CONFIG_FILES = [
   ".cnb.yml",
@@ -82,14 +82,21 @@ const CI_CONFIG_FILES = [
 const CI_CONFIG_PATHS = [".github/workflows", ".buildkite/pipeline.yml"];
 
 /**
- * 本仓当前**登记在册**的平台侧配置（其余任何 CI 形态都不许出现）。
+ * 本仓当前**登记在册**的 CI 配置（其余任何 CI 形态都不许出现）。
  *
  * 收成具名常量而不是 `[0]` 下标：本文件在提交门槛的固定清单里、每次提交都跑，
  * 而 `noUncheckedIndexedAccess` 下每个下标访问都是一次「可能 undefined」——
  * 那会把「这份配置叫什么」这件事摊成满文件的可选链，反而看不出意图。
+ *
+ * `.github/workflows`（ISSUE #2978）：双远端镜像（cnb 主）的 GitHub Actions 侧，
+ * 定位是**旁路验证档** —— cnb 仍是合并守卫，GH 侧读数只对账不拦合并；
+ * 它与 `.cnb.yml` 并行在场，退役时两处同批收。
  */
 const REGISTERED_CI_CONFIG = ".cnb.yml";
-const REGISTERED_CI_CONFIGS: ReadonlyArray<string> = [REGISTERED_CI_CONFIG];
+const REGISTERED_CI_CONFIGS: ReadonlyArray<string> = [
+  REGISTERED_CI_CONFIG,
+  ".github/workflows",
+];
 
 const CI_NAMES = new Set([...CI_CONFIG_FILES, ...CI_CONFIG_PATHS]);
 
