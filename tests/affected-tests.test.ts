@@ -27,6 +27,24 @@ import { KNOWN_FAILED_FILES } from "../scripts/quality-gate-shared.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
+/**
+ * 起子进程时用的环境：**把两枚着色共识旗标摘掉**。
+ *
+ * 为什么（PR #2990 的 `cnb-fvg-1k6botkg5`）：宿主带着 `FORCE_COLOR` 时，被 spawn 的
+ * `affected-tests.mjs` 会给**整屏**加 ANSI 色号（平台日志就是要带颜色才读得动），
+ * 而下面几条用例的 `maxBuffer` 按「不开色」的量级给（64 MiB 的量级余量刚够一份
+ * 九千条的清单）。同一次跑里还有别的进程在抢核，读起来就是一条 `Test timed out`——
+ * 与「清单太长」的真实故障长得一模一样。这里把输入面的噪声收成常量，
+ * 与 `tests/ci-heavy-gates.test.ts` 的 `runHeavyChild` 同一条口径（它反过来：那边
+ * 要**故意**开启色号，所以那里的注释写的是「摘掉环境里那一份，自己给」）。
+ */
+const SPAWN_ENV: NodeJS.ProcessEnv = (() => {
+  const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: "0" };
+  delete env.COMFYAPP_CI_COLOR;
+  delete env.NO_COLOR;
+  return env;
+})();
+
 /** 夹具：`files` 是「仓库相对路径 → 内容」；测试文件当输出候选，其余当 import 图节点。 */
 function harness(
   files: Record<string, string>,
@@ -663,11 +681,13 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
     const viaArgv = spawnSync(process.execPath, [CLI, "--changed", ...list], {
       cwd: ROOT,
       encoding: "utf8",
+      env: SPAWN_ENV,
     });
     const viaStdin = spawnSync(process.execPath, [CLI, "--changed-stdin"], {
       cwd: ROOT,
       encoding: "utf8",
       input: list.join("\n"),
+      env: SPAWN_ENV,
     });
     expect(viaArgv.status, viaArgv.stderr ?? "").toBe(0);
     expect(viaStdin.status, viaStdin.stderr ?? "").toBe(0);
@@ -685,6 +705,7 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
       encoding: "utf8",
       input: payload,
       maxBuffer: 64 << 20,
+      env: SPAWN_ENV,
     });
     expect(r.status, r.stderr ?? "").toBe(0);
     expect(r.stdout.trim().split(/\s+/).length).toBeGreaterThan(0);
@@ -735,7 +756,7 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
     const r = spawnSync(process.execPath, [LAUNCHER, "--dry-run"], {
       cwd: ROOT,
       encoding: "utf8",
-      env: { ...process.env, COMFY_AFFECTED_CHANGED: payload },
+      env: { ...SPAWN_ENV, COMFY_AFFECTED_CHANGED: payload },
       maxBuffer: 64 << 20,
     });
     expect(r.status, r.stderr ?? "").toBe(0);

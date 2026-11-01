@@ -816,7 +816,9 @@ describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局�
       const spy = vi.spyOn(fs, "renameSync").mockImplementation(() => {
         throw errno("EPERM");
       });
-      expect(() => moveFileAcrossVolumes(from, to)).toThrow("EPERM");
+      expect(() => {
+        moveFileAcrossVolumes(from, to);
+      }).toThrow("EPERM");
       spy.mockRestore();
       expect(fs.existsSync(from), "报错被吞了 ⇒ 原处不该还在").toBe(true);
       expect(fs.existsSync(to), "EPERM 不该被当成「走退路」").toBe(false);

@@ -1957,7 +1957,9 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         fs.writeFileSync(p, text, "utf8");
         return p;
       },
-      cleanup: () => rmSync(dir, { recursive: true, force: true }),
+      cleanup: () => {
+        rmSync(dir, { recursive: true, force: true });
+      },
     };
   }
 

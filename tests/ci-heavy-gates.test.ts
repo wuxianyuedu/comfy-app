@@ -464,10 +464,14 @@ describe("复合档 —— 三态前缀带颜色区分（ISSUE #2748）", () => 
     const env: NodeJS.ProcessEnv = { ...process.env, COMFYAPP_CI_COLOR: "1" };
     delete env.NO_COLOR;
     delete env.FORCE_COLOR;
+    /* `maxBuffer` 显式给：`--json` 那一支会把一格的全部判决行吐出来，而宿主带着
+     * `FORCE_COLOR` 时每一行还多出几十个色号字节。超过默认的 1 MiB 时 `spawnSync`
+     * 报的是 `ENOBUFS`，读起来却像「这一条红在超时」（PR #2990 的
+     * `cnb-fvg-1k6botkg5` 里这条就是这么红成 `Test timed out in 60000ms` 的）。 */
     return spawnSync(
       process.execPath,
       ["scripts/ci-heavy-gates.mjs", "--only=判据自身", ...extraArgs],
-      { cwd: ROOT, encoding: "utf8", env, timeout: 120_000 },
+      { cwd: ROOT, encoding: "utf8", env, timeout: 120_000, maxBuffer: 64 << 20 },
     );
   }
 

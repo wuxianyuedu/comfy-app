@@ -32,6 +32,21 @@ import {
 } from "./helpers/gate-repo";
 import { symlinkDir } from "./helpers/symlink-dir";
 
+/** `perCommitShapeOf` 是判据的**自测入口**（理由见那一条用例的头注）。判据是 `.cjs`，
+ * 所以只能 `require` —— 与 `check-format.test.ts` 同形。 */
+/* SAFETY: 类型断言已复核 */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { perCommitShapeOf } = require("../scripts/check-reformat-only.cjs") as {
+  perCommitShapeOf: (
+    rev: string,
+    spec?: { root?: string; limit?: number },
+  ) => {
+    ok: boolean;
+    offenders: Array<string>;
+    commits: Array<{ rev: string; unknown?: boolean }>;
+  };
+};
+
 /* 每条用例都要在临时仓库里真跑 git（init / add / commit / merge）+ 真起 oxfmt
  * （门禁按「整批一次 oxfmt」调用，但建库 / 提交 / 判定的固定成本仍在）：默认
  * 5s 的用例超时在全量并行满载时会被击穿（CI 实测过一次 `Test timed out in 5000ms`，
@@ -93,6 +108,9 @@ const { test, expect } = defineGateRepo({
   dirs: ["src/lib", "scripts", "docs", "changelog.d"],
   copy: [
     { from: "scripts/launcher-core", to: "scripts/launcher-core" },
+    /* 逐提交护栏（护栏 ②）的机制层 —— 判据 `require` 它，少一份就是
+     * `MODULE_NOT_FOUND`（`copyGateDeps` 只追**同目录**依赖）。 */
+    { from: "scripts/reformat-per-commit.mjs", to: "scripts/reformat-per-commit.mjs" },
     {
       from: "src/lib/process/executable-resolve.ts",
       to: "src/lib/process/executable-resolve.ts",
@@ -369,6 +387,86 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     const r = repo.run(["--range", "HEAD~1..HEAD"]);
     expect(r.code).toBe(1);
     expect(r.output).toContain("不按迁移读");
+  });
+
+  /* **三点区间（`A...B`）必须与两点判出同一个答案**（ISSUE #3024）。
+   *
+   * 现场：平台 `重档静态判据` 那一格红在「格式化提交分离 —— 本次改动 162 个源文件，
+   * 其中纯格式化 120 个」，而**同一批改动**在本地按两点区间判也是 120 个。判据没报错，
+   * 报得也对 —— 错的是另一处：CI 盘点是按 `A...B` 调的，而入口按 `".."` 裸切，
+   * 切出 `["A", ".B"]`，于是每一份文件的「改动后」都取不到，**全部**被
+   * `collectPairs` 按「任一侧取不到」跳过。它既不报错也不说「没判」，屏幕上是一句
+   * 干干净净的 `[ok] 本次改动 … 没有纯格式化的` —— 恒绿的判据。
+   *
+   * 这一条把两个区间形式钉成同一份判决：三点若不等于两点，说明 `after` 那一侧又丢了。 */
+  test("三点区间（`A...B`）与两点区间判出同一个结论", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("feature"));
+
+    const twoDots = repo.run(["--range", "HEAD~2..HEAD"]);
+    const threeDots = repo.run(["--range", "HEAD~2...HEAD"]);
+    expect(threeDots.code).toBe(twoDots.code);
+    expect(threeDots.output).toContain("纯格式化 12 个");
+  });
+
+  /* 「逐提交的读数取不到」≠「这条提交干净」（ISSUE #2990 的 `cnb-rmn-1k6bqsdfg`）。
+   *
+   * 现场：平台那一格判的是**合成合并预览**，护栏 ② 一个 offender 都没点名（屏幕上是
+   * 空的），而汇总仍报一批纯格式化 ⇒ 判决落进「声明了但重排没独占」那一支 ——
+   * 话术指着一件没发生的事，读者只能去猜。
+   *
+   * 根因在取数：**「这条提交没改文件」与「这条提交的 diff 没读到」折成同一支**（空
+   * patch 就 `continue`）—— 后者是**没测**，却被 `offenders` 读成了「干净」。`ok`
+   * 只看 `offenders`，于是护栏 ② 在「一条都没读到」时照样说通过。
+   *
+   * ⚠️ 这一条打的是判据导出的 `perCommitShapeOf`：`--range` 那一跳会先
+   * `git diff <A>..<B>`，而区间两端都要能解析成**提交**，这一档的父恰恰读不到
+   * （`fatal: Invalid revision range`）—— 于是那一格在进程外根本没有入口。入口本身是
+   * 薄的：它把这条提交交给同一份逐提交循环。
+   *
+   * 变异证明：撤掉「父对象读不到 ⇒ unknown」那条判定之后这一条当场红。 */
+  test("逐提交取不到 diff → 记 unknown，不许被读成干净（护栏 ②）", ({ repo }) => {
+    seedDirty(repo, 12);
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("migrate the formatter"));
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+
+    const dirt = (args: Array<string>) =>
+      execFileSync("git", args, { cwd: repo.dir, encoding: "utf8" }).trim();
+
+    /* 取一条**父提交不存在**的提交：`cat-file` 读得到它自己（不解析父），而它与父的
+     * diff 取不到 —— 这正是「历史形状在、对象不全」那一档。
+     * ⚠️ 父哈希是**定长 40 位**：换成更短的会让 `cat-file commit` 当场 bad object，
+     * 那时连这条提交本身都读不到，判的就变成另一件事了。 */
+    const raw = dirt(["cat-file", "commit", "HEAD"]).replace(
+      /^parent .*$/m,
+      `parent ${"1".repeat(40)}`,
+    );
+    const orphan = execFileSync("git", ["hash-object", "-t", "commit", "-w", "--stdin"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+      input: `${raw}\n`,
+    })
+      .toString()
+      .trim();
+
+    /* 前提：这条提交**本身**读得到（`cat-file` 不解析父），而与父的 diff 取不到。 */
+    expect(dirt(["cat-file", "commit", orphan])).toContain("parent 1111");
+    expect(() => dirt(["diff", "--name-only", `${"1".repeat(40)}..${orphan}`])).toThrow();
+
+    const got = perCommitShapeOf(orphan, { root: repo.dir });
+    expect(got.ok, "取不到 diff 的提交不许被读成干净").toBe(false);
+    expect(got.offenders.join("、")).toContain("取不到与父提交的 diff");
   });
 
   test("漏了一个提交没声明 ⇒ 不按迁移读（护栏 ①）", ({ repo }) => {

@@ -81,6 +81,9 @@ async function loadShell() {
 
 const { discernRoots } = require("./gate-scan-read.cjs");
 const { gateFail, gatePass, gateSkip, indentItems } = require("./ci-log.mjs");
+/* 逐提交护栏（护栏 ②）的**机制层**（`reformat-per-commit.mjs`）：它按**职责**切出去
+ * —— 取数与判定在那边，判决话术与三态出口仍在本文件（`report()`）。 */
+const { perCommitShape, perCommitShapeOf } = require("./reformat-per-commit.mjs");
 
 /* git 按 cwd 解析仓库(与 check-circular-deps.cjs 同口径):门禁在仓库根被调用。
  * prettier 则按**脚本自身所在仓库**解析 —— 见 formatFile 的注释。 */
@@ -109,6 +112,18 @@ const LIMIT = 10;
 
 /** 迁移声明的尾注:`format-migration: <一句话说明>`(写在提交正文里)。 */
 const MIGRATION_RE = /^format-migration:/m;
+
+/**
+ * 逐提交护栏要的那几件事实 —— **注入而不是让那边 import 本文件**：机制层不该反过来
+ * 依赖判据的执行者（§18.4：内核里不放业务语义，取数件由入口注入）。
+ */
+const perCommitDeps = {
+  limit: LIMIT,
+  collectChangedFiles,
+  collectPairs,
+  classifyReformatOnly,
+  gitOrEmpty,
+};
 
 /**
  * 「格式化迁移」声明:区间里**每一个**提交的正文都带 `format-migration:` 尾注。
@@ -163,46 +178,6 @@ function migrationDeclaration(revRange) {
  * @param {number} limit 触发阈值(与 `LIMIT` 同义,由调用方传,便于按 `--strict` 走)
  * @returns `{{commits: Array<{rev: string, files: number, reformatOnly: number}>, ok: boolean, offenders: string[]}}`
  */
-function perCommitShape(range, limit) {
-  /* `%H %P`:提交 + 它的父提交(差分要的是**第一父提交**);`--no-merges` 把合并
-   * 提交整条摘出去 —— 理由见上面头注与 `migrationDeclaration` 里同一条。 */
-  const revs = gitOrEmpty(["log", "--reverse", "--no-merges", "--format=%H %P", range])
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [rev, ...parents] = line.split(/\s+/);
-      return { rev, parents };
-    });
-  const commits = [];
-  const offenders = [];
-  for (const { rev, parents } of revs) {
-    if (parents.length === 0) {
-      // 没有可比父提交(根提交 / 浅克隆):拿不到读数就不是「干净」,fail-closed。
-      commits.push({ rev, files: 0, reformatOnly: 0, unknown: true });
-      offenders.push(`${rev.slice(0, 8)}(无可比父提交)`);
-      continue;
-    }
-    const parent = parents[0];
-    const patch = gitOrEmpty(["diff", "--no-color", "--unified=0", `${parent}..${rev}`]);
-    if (!patch.trim()) {
-      continue;
-    }
-    const files = collectChangedFiles(patch);
-    const pairs = collectPairs(files, parent, (f) => gitOrEmpty(["show", `${rev}:${f.after}`]));
-    const reformatOnly = classifyReformatOnly(pairs);
-    commits.push({ rev, files: files.length, reformatOnly: reformatOnly.size });
-    const clean =
-      reformatOnly.size < limit || (files.length > 0 && reformatOnly.size === files.length);
-    if (!clean) {
-      offenders.push(
-        `${rev.slice(0, 8)}(${files.length} 个源文件里 ${reformatOnly.size} 个纯格式化)`,
-      );
-    }
-  }
-  return { commits, ok: commits.length > 0 && offenders.length === 0, offenders };
-}
-
 /** 只看这些扩展名:其余(图片、锁文件)不参与格式判定。 */
 const SOURCE_RE = /\.(ts|tsx|js|jsx|mjs|cjs|css|scss|json|md|mdx)$/;
 
@@ -280,6 +255,42 @@ function collectChangedFiles(patch) {
     out.push({ before, after });
   }
   return out;
+}
+
+/**
+ * 把 `--range` 的两种写法拆成两侧：两点（`A..B`）与三点（`A...B`）。
+ *
+ * 三点的语义是「**分叉点**..B」（`git diff A...B` = `git diff $(git merge-base A B) B`），
+ * 而 `git show <侧>:<路径>` 只能吃一条 rev —— 所以拿它去取「改动后的内容」之前，
+ * 必须先把分叉点算出来。**不能按 `".."` 裸切**：`A...B` 切出来是 `["A", ".B"]`，
+ * 于是每一份文件的「改动后」都取不到、判据静默退化成「本批没有纯格式化」
+ * （ISSUE #3024，现场是平台 `重档静态判据` 那一格）。
+ *
+ * 两个端点在暂存区口径下都是 `HEAD` 的那条路不走这里 —— 它没有 `--range`。
+ *
+ * @param {string} range `A..B` 或 `A...B`（`B` 侧可以省略，默认 `HEAD`）
+ * @returns {?{before: string, after: string, dots: ".." | "..."}} 认不出时回 `null`
+ */
+function parseRange(range) {
+  const trimmed = String(range ?? "").trim();
+  const three = /^(.*?)\.\.\.(.*)$/.exec(trimmed);
+  if (three) {
+    const [, beforeRaw = "", afterRaw = ""] = three;
+    const after = afterRaw === "" ? "HEAD" : afterRaw;
+    if (beforeRaw === "") {
+      return null;
+    }
+    return { before: beforeRaw, after, dots: "..." };
+  }
+  const two = /^(.*?)\.\.(.*)$/.exec(trimmed);
+  if (!two) {
+    return null;
+  }
+  const [, beforeRaw = "", afterRaw = ""] = two;
+  if (beforeRaw === "") {
+    return null;
+  }
+  return { before: beforeRaw, after: afterRaw === "" ? "HEAD" : afterRaw, dots: ".." };
 }
 
 /**
@@ -641,23 +652,38 @@ async function main() {
          * 的判据脚本 / 文档 / 依赖清单照样进分母（实测 32/56），护栏 ② 会把
          * 「重排独占一条」这个正确形态判成夹带。区间口径同一把尺，见
          * `perCommitShape` 的头注。 */
-        perCommitShape(`${beforeRev}..${afterRev}`, limit),
+        perCommitShape(`${beforeRev}..${afterRev}`, limit, ROOT, perCommitDeps),
       ),
     );
     return;
   }
 
   /* `--range <before>..<after>` 的两侧:改动前的内容从 `before` 取,改动后的
-   * 从 `after` 取。暂存区口径下两者都是 `HEAD`(改动后在 index 里,见下)。 */
-  const [rangeBefore, rangeAfter] = range ? range.split("..") : ["HEAD", "HEAD"];
+   * 从 `after` 取。暂存区口径下两者都是 `HEAD`(改动后在 index 里,见下)。
+   *
+   * ⚠️ **三点区间必须解析成两点**（ISSUE #3024）：`A...B` 是「分叉点..B」的简写，
+   * 而按 `".."` 裸切会切出 `["A", ".B"]` —— `after` 那一侧变成 `.B`，于是每一份文件
+   * 的「改动后」都取不到、`collectPairs` 把它们**全部**按「任一侧取不到」跳过，判据
+   * 只剩「没有纯格式化」那一个出口。它不报错、也不说「没判」，屏幕上是一句干干净净
+   * 的 `[ok] 本次改动 162 个源文件，没有纯格式化的` —— 恒绿的判据（平台 `cnb-kf6-1k6bvdese`
+   * 的 `重档静态判据` 现场：同一批改动按两点判是 120/162，按三点判是 0/162）。 */
+  const parsed = range ? parseRange(range) : null;
+  const [rangeBefore, rangeAfter] = parsed ? [parsed.before, parsed.after] : ["HEAD", "HEAD"];
 
-  if (range && gitOrEmpty(["rev-parse", "--verify", "--quiet", rangeBefore]).trim() === "") {
-    gateSkip("格式化提交分离", `无可比父提交（${rangeBefore} 不存在，首次提交或浅克隆）`);
-    return;
+  for (const rev of parsed ? [parsed.before, parsed.after] : []) {
+    if (gitOrEmpty(["rev-parse", "--verify", "--quiet", rev]).trim() === "") {
+      gateSkip("格式化提交分离", `区间端点取不到（${rev} 不存在，首次提交或浅克隆）`);
+      return;
+    }
   }
 
   const patch = range
-    ? gitOrEmpty(["diff", "--no-color", "--unified=0", `${rangeBefore}..${rangeAfter}`])
+    ? gitOrEmpty([
+        "diff",
+        "--no-color",
+        "--unified=0",
+        `${rangeBefore}${parsed?.dots ?? ".."}${rangeAfter}`,
+      ])
     : staged;
 
   if (!patch.trim()) {
@@ -684,7 +710,7 @@ async function main() {
       migrationDeclaration(range ?? "HEAD~1..HEAD"),
       // 护栏 ② 只在区间口径下逐提交取数:暂存区口径下「这一次提交」就是汇总本身,
       // 由 `report()` 按汇判定(迁那一支读 `reformatOnly.size === files.length`)。
-      range ? perCommitShape(range, limit) : null,
+      range ? perCommitShape(range, limit, ROOT, perCommitDeps) : null,
     ),
   );
 }
@@ -695,6 +721,15 @@ function report(files, reformatOnly, limit, migration, perCommit) {
    * ⚠️ 两条分支**都要交回退出码**，调用点是 `process.exit(report(…))`：从前红的那
    * 一支就地 `process.exit(1)`，搬进出口之后若就地退，`report()` 之后的收尾就再没有
    * 执行者 —— 退 0 = 判据恒绿（这一条在把红那一支改成 `return 1` 时当场验过）。 */
+  /* **取不到的读数要念出来**（ISSUE #2990 的 `cnb-rmn-1k6bqsdfg`）：护栏 ② 的结论只有
+   * 「通过 / 不通过」两个出口，于是一屏全是「声明了但重排没独占」而一个 offender 都
+   * 不点名 —— 现场那些指纹（哪条提交没读到、为什么）一个字都没出现，读者只能去猜。
+   * 这一格只加**读数**，不改任何判决：`ok` 仍由 `perCommitShape` 的 `offenders` 决定。 */
+  if (perCommit && perCommit.offenders.length > 0) {
+    for (const line of indentItems([`护栏 ② 没通过：${perCommit.offenders.join("、")}`])) {
+      console.log(line);
+    }
+  }
   if (reformatOnly.size >= limit) {
     /* 「格式化迁移」声明成立 ⇒ 按迁移读（不阻断），但清单与读数照打（可审计）。
      * 护栏 ② 是第二道锁：逐提交看「重排占不占得住这一条」（`perCommitShape`），
@@ -722,9 +757,10 @@ function report(files, reformatOnly, limit, migration, perCommit) {
         }
       }
       basis.push(
-        `重排的文件（照常点名，可审计）：${
-          [...reformatOnly].sort().slice(0, 5).join(", ")
-          }${reformatOnly.size > 5 ? " …" : ""}`,
+        `重排的文件（照常点名，可审计）：${[...reformatOnly]
+          .sort()
+          .slice(0, 5)
+          .join(", ")}${reformatOnly.size > 5 ? " …" : ""}`,
       );
       for (const line of indentItems(basis)) {
         console.log(line);
@@ -732,11 +768,11 @@ function report(files, reformatOnly, limit, migration, perCommit) {
       return 0;
     }
     gateFail("格式化提交分离", [...reformatOnly].sort(), {
-      detail:
-        `本次改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）${
+      detail: `本次改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）${
         migration?.declared === true
           ? `；声明了 \`format-migration:\`，但**逐提交**看有提交把重排与功能改动混在一条里（${perCommit?.offenders.join("、") ?? "重排没有独占本次改动"}）⇒ 不按迁移读`
-          : ""}`,
+          : ""
+      }`,
       hint:
         "为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效,\n" +
         "评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。\n" +
@@ -760,9 +796,10 @@ function report(files, reformatOnly, limit, migration, perCommit) {
       `本次改动 ${files.length} 个源文件，纯格式化 ${reformatOnly.size} 个（阈值 ${limit}，未达阈值）`,
     );
     for (const line of indentItems([
-      `放行但不计入噪声的：${
-        [...reformatOnly].sort().slice(0, 5).join(", ")
-        }${reformatOnly.size > 5 ? " …" : ""}`,
+      `放行但不计入噪声的：${[...reformatOnly]
+        .sort()
+        .slice(0, 5)
+        .join(", ")}${reformatOnly.size > 5 ? " …" : ""}`,
     ])) {
       console.log(line);
     }
@@ -785,6 +822,14 @@ if (require.main === module) {
  */
 module.exports = {
   collectChangedFiles,
+  /* 自测入口：区间那一支在悬空父上根本进不去，而这条判据要断的正是
+   * 「逐提交取不到 diff」那一档。实现在机制层（`reformat-per-commit.mjs`）。 */
+  perCommitShapeOf: (rev, spec = {}) =>
+    perCommitShapeOf(rev, {
+      root: spec.root ?? ROOT,
+      limit: spec.limit ?? LIMIT,
+      deps: perCommitDeps,
+    }),
   classifyReformatOnly,
   LIMIT,
   SOURCE_RE,

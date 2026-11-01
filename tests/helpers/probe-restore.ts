@@ -64,7 +64,9 @@ export const realProbeIo: ProbeIo = {
     }
     throw new Error(`还原写不进去（${WRITE_ATTEMPTS} 次仍失败）：${last}`);
   },
-  remove: (abs) => rmSync(abs, { force: true }),
+  remove: (abs) => {
+    rmSync(abs, { force: true });
+  },
 };
 
 /** 拍下这些路径**此刻**的字节（不存在记成 `null`）。在任何探针动手之前调用。 */
