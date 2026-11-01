@@ -330,7 +330,7 @@ export function WorkflowCanvasNodePreview({
             <LibraryHostCard
               actions={
                 <WorkflowNodeActionButton
-                  disabled={true}
+                  disabled
                   hint="切换到「实际使用」页签后可执行"
                   label="▶ 用此工作流生成"
                   onClick={run}
