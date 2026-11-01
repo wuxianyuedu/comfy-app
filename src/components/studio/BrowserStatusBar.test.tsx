@@ -191,7 +191,7 @@ describe("BrowserStatusBar 指标显隐与降级", () => {
 
     const cell = screen.getByLabelText("应用服务已断开");
     expect(cell).toBeInTheDocument();
-    expect(cell.getAttribute("data-dev-server")).toBe("offline");
+    expect(cell.dataset.devServer).toBe("offline");
   });
 
   it("应用服务刚重启：显示「已重启」并带出真正重启时刻", () => {

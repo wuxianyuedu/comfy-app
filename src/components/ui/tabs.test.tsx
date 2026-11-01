@@ -52,7 +52,7 @@ function Demo({
 /** 取页签列表容器（`role="tablist"`）上的那个 `data-slot="tabs-list"` 元素。 */
 function listEl(): HTMLElement {
   const list = screen.getByRole("tablist");
-  expect(list.getAttribute("data-slot")).toBe("tabs-list");
+  expect(list.dataset.slot).toBe("tabs-list");
   return list;
 }
 
@@ -65,14 +65,14 @@ describe("ui/tabs 的命名钩子", () => {
     const triggers = screen.getAllByRole("tab");
     const panels = document.querySelectorAll('[data-slot="tabs-content"]');
 
-    expect(root.getAttribute("data-orientation")).toBe("vertical");
-    expect(list.getAttribute("data-variant")).toBe("line");
+    expect(root.dataset.orientation).toBe("vertical");
+    expect(list.dataset.variant).toBe("line");
     /* 三枚页签都在 list 里：`has-data-[icon=inline-end]`、
        `group-data-vertical/tabs:w-full` 那一串选择器都以「页签是 list 的直接子级」
        为前提，包一层就全丢。 */
     expect(triggers).toHaveLength(3);
     for (const trigger of triggers) {
-      expect(trigger.getAttribute("data-slot")).toBe("tabs-trigger");
+      expect(trigger.dataset.slot).toBe("tabs-trigger");
       expect(trigger.parentElement).toBe(list);
     }
     /* ⚠️ 实测只有**选中项**那一块面板在 DOM 里（base-ui 1.8 默认卸载非活动面板）。
@@ -101,7 +101,7 @@ describe("ui/tabs 的命名钩子", () => {
 
   it(`orientation 不传时默认 horizontal（\`group-data-horizontal/tabs:h-8\` 只在横向成立）`, () => {
     render(<Demo />);
-    expect(document.querySelector('[data-slot="tabs"]')?.getAttribute("data-orientation")).toBe(
+    expect(document.querySelector<HTMLElement>('[data-slot="tabs"]')?.dataset.orientation).toBe(
       "horizontal",
     );
   });

@@ -218,8 +218,8 @@ describe("WorkflowParamCardColumn", () => {
     );
     for (const cardId of ["prompt", "negative"]) {
       const card = container.querySelector(`[data-testid="param-node-${cardId}"]`)!;
-      const handles = [...card.querySelectorAll("[data-endpoint-handle]")].map((el) =>
-        el.getAttribute("data-endpoint-handle"),
+      const handles = [...card.querySelectorAll<HTMLElement>("[data-endpoint-handle]")].map(
+        (el) => el.dataset.endpointHandle,
       );
       /* 一个口一颗点：每张卡一颗，锚点就是它自己的条目 id —— 两卡不再共用候选 id。 */
       expect(handles, `${cardId} 卡应有一颗端点`).toEqual([cardId]);

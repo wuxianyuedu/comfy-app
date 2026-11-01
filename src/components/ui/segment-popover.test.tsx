@@ -44,8 +44,8 @@ function openPanel() {
 }
 
 /** 面板里的某个选项按钮。触发器在面板外，按文案找也不会混淆。 */
-function option(panel: Element, label: string): Element {
-  const el = [...panel.querySelectorAll("button")].find(
+function option(panel: Element, label: string): HTMLElement {
+  const el = [...panel.querySelectorAll<HTMLElement>("button")].find(
     (button) => button.textContent?.trim() === label,
   );
   expect(el, `面板里应当有「${label}」选项`).not.toBeUndefined();
@@ -56,8 +56,8 @@ describe("MultiSegmentPopover 的选中态", () => {
   it("当前值那一项带 base-ui Toggle 的 data-pressed，未选的不带", () => {
     const panel = openPanel();
 
-    expect(option(panel, "16:9").hasAttribute("data-pressed")).toBe(true);
-    expect(option(panel, "1:1").hasAttribute("data-pressed")).toBe(false);
+    expect(option(panel, "16:9").dataset.pressed !== undefined).toBe(true);
+    expect(option(panel, "1:1").dataset.pressed !== undefined).toBe(false);
   });
 
   it("选中态样式用 data-pressed:（不是永不匹配的 data-[state=on]:）", () => {

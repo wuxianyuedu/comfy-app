@@ -59,12 +59,12 @@ describe("侧栏导航项选中态接到选中档（ISSUE #1291）", () => {
   it("未选中时不落 data-active，但仍保留悬停档", () => {
     const btn = renderButton(false);
     // `active` state 由 isActive 经 useRender 落到 data-active（基元的既有通道）
-    expect(btn.hasAttribute("data-active")).toBe(false);
+    expect(btn.dataset.active !== undefined).toBe(false);
     expect(btn.className).toContain("hover:bg-sidebar-accent");
   });
 
   it("选中时落 data-active（与上一条互为反面）", () => {
     const btn = renderButton(true);
-    expect(btn.hasAttribute("data-active")).toBe(true);
+    expect(btn.dataset.active !== undefined).toBe(true);
   });
 });
