@@ -56,8 +56,8 @@ describe("MultiSegmentPopover 的选中态", () => {
   it("当前值那一项带 base-ui Toggle 的 data-pressed，未选的不带", () => {
     const panel = openPanel();
 
-    expect(Object.hasOwn(option(panel, "16:9").dataset, "pressed")).toBe(true);
-    expect(Object.hasOwn(option(panel, "1:1").dataset, "pressed")).toBe(false);
+    expect(option(panel, "16:9").dataset.pressed !== undefined).toBe(true);
+    expect(option(panel, "1:1").dataset.pressed !== undefined).toBe(false);
   });
 
   it("选中态样式用 data-pressed:（不是永不匹配的 data-[state=on]:）", () => {

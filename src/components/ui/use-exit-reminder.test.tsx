@@ -42,6 +42,6 @@ describe("ExitReminder", () => {
       </div>,
     );
     const host = /* SAFETY: 类型断言已复核 */ container.firstElementChild as HTMLElement;
-    expect(Object.hasOwn(host.dataset, "dirty")).toBe(true);
+    expect(host.dataset.dirty !== undefined).toBe(true);
   });
 });
