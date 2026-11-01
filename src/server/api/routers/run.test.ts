@@ -139,7 +139,8 @@ describe("run.start / 生命周期", () => {
     expect(res.run.goal).toBe("一句话");
     expect(res.action).toEqual({ kind: "generate_script" });
     const row = await productionRepository.getForUser("user-a", "proj_1");
-    expect(/* SAFETY: 类型断言已复核 */ (row?.run as { status: string }).status).toBe("running");
+    /* SAFETY: 类型断言已复核 */
+    expect((row?.run as { status: string }).status).toBe("running");
   });
 
   it("图缺 → 启动后下一步 render_images（只列缺图的镜）", async () => {
@@ -263,7 +264,8 @@ describe("run.reviewShot / reviewCharacter / regenerateShot", () => {
       createCaller(makeCtx()).regenerateShot({
         projectId: "proj_r",
         shotId: "s1",
-        mode: /* SAFETY: 类型断言已复核 */ "乱" as "gacha",
+        /* SAFETY: 类型断言已复核 */
+        mode: "乱" as "gacha",
       }),
     ).rejects.toThrow();
   });
@@ -289,7 +291,8 @@ describe("run 人工侧（#2480）", () => {
       rev: 2,
     });
     const row = await productionRepository.getForUser("user-a", "proj_h");
-    const shot = /* SAFETY: 类型断言已复核 */ (row?.shots as Array<Record<string, unknown>>)[0];
+    /* SAFETY: 类型断言已复核 */
+    const shot = (row?.shots as Array<Record<string, unknown>>)[0];
     expect(shot?.humanVerdict).toMatchObject({ pass: false, rev: 2 });
   });
 

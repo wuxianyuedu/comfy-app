@@ -1119,7 +1119,8 @@ describe("FilmRepository / FilmShotRepository", () => {
     expect(await filmRepository.findByIdForUser("u2", f.id)).toBeNull();
     const plain = await filmRepository.findByIdForUser("u1", f.id);
     expect(plain).not.toBeNull();
-    expect(/* SAFETY: 类型断言已复核 */ (plain as Record<string, unknown>).shots).toBeUndefined();
+    /* SAFETY: 类型断言已复核 */
+    expect((plain as Record<string, unknown>).shots).toBeUndefined();
 
     const withShots = await filmRepository.findByIdForUser("u1", f.id, {
       includeShots: true,
@@ -1286,7 +1287,8 @@ describe("LlmConfigRepository", () => {
     });
 
     // 关键断言：DB 里存的不是明文（这条只有读原始行才能证明）
-    const raw = /* SAFETY: 类型断言已复核 */ tdb.$tables.llmConfig[0]!.apiKey as string;
+    /* SAFETY: 类型断言已复核 */
+    const raw = tdb.$tables.llmConfig[0]!.apiKey as string;
     expect(raw).not.toBe("sk-plain");
     expect(raw.startsWith("enc:v1:")).toBe(true);
 
@@ -1559,7 +1561,8 @@ describe("RemoteModelRepository", () => {
 
   it("seedRemoteModel 落库的是密文（测试基建与生产写入同形）", async () => {
     seedRemoteModel(tdb, { name: "甲", apiKey: "sk-seed" });
-    const raw = /* SAFETY: 类型断言已复核 */ tdb.$tables.remoteModels[0]!.apiKey as string;
+    /* SAFETY: 类型断言已复核 */
+    const raw = tdb.$tables.remoteModels[0]!.apiKey as string;
     expect(raw).not.toBe("sk-seed");
     expect(raw.startsWith("enc:v1:")).toBe(true);
   });

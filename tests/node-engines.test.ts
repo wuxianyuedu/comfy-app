@@ -119,9 +119,8 @@ describe("collectDependencyFloors：exports 隐藏 package.json 的包不静默�
       );
       const scanned = collectDependencyFloors(root);
       expect(scanned.ok).toBe(false);
-      expect(/* SAFETY: 类型断言已复核 */ (scanned as { reason?: string }).reason).toMatch(
-        /没解析到/,
-      );
+      /* SAFETY: 类型断言已复核 */
+      expect((scanned as { reason?: string }).reason).toMatch(/没解析到/);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

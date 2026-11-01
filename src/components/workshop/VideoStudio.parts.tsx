@@ -247,7 +247,8 @@ export function ShotCard({
                 labels={MOTION_LABELS}
                 onChange={(v) =>
                   onPatch({
-                    motion: /* SAFETY: 类型断言已复核 */ v as MotionLevel,
+                    /* SAFETY: 类型断言已复核 */
+                    motion: v as MotionLevel,
                   })
                 }
                 options={MOTIONS}

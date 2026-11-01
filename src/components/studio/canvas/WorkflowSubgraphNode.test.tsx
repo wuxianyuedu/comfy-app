@@ -131,7 +131,8 @@ describe("WorkflowSubgraphNode — 封装节点暴露口的显示名（ISSUE #34
     renderNode(<WorkflowSubgraphNode data={data} />, stores);
     const handles = document.querySelectorAll('[data-handleid="out:IMAGE"]');
     expect(handles.length).toBeGreaterThan(0);
-    const last = /* SAFETY: 类型断言已复核 */ [...handles].at(-1) as HTMLElement;
+    /* SAFETY: 类型断言已复核 */
+    const last = [...handles].at(-1) as HTMLElement;
     expect(last.style.opacity).toBe("0.35");
     expect(last.style.width).toBe("4px");
   });

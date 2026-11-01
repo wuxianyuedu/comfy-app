@@ -261,7 +261,8 @@ export function rubricFor(kind: string): ReviewRubric | null {
 export function renderRubricForPrompt(rubric: ReviewRubric): string {
   return rubric.dimensions
     .map((d) => {
-      const anchors = /* SAFETY: 类型断言已复核 */ ([1, 2, 3, 4, 5] as const)
+      /* SAFETY: 类型断言已复核 */
+      const anchors = ([1, 2, 3, 4, 5] as const)
         .map((score) => `${score}=${d.anchors[score]}`)
         .join("；");
       return `- ${d.label}（${d.key}）：${d.description}。${anchors}`;

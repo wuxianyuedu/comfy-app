@@ -188,17 +188,16 @@ describe("requestShotRedo", () => {
 
     await requestShotRedo("proj_1", "a");
 
-    const drafted = /* SAFETY: 类型断言已复核 */ readWorkshopDraft("proj_1")
-      .shots[0] as unknown as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const drafted = readWorkshopDraft("proj_1").shots[0] as unknown as Record<string, unknown>;
     expect(drafted).toMatchObject({ status: "idle", rev: 1 });
     expect(drafted.imageUrl).toBeUndefined();
     expect(pushDraftMock).toHaveBeenCalledTimes(1);
 
     expect(pushProdMock).toHaveBeenCalledTimes(1);
     const [, payload] = pushProdMock.mock.calls[0]!;
-    const pushed = /* SAFETY: 类型断言已复核 */ (
-      payload.shots as Array<Record<string, unknown>>
-    )[0]!;
+    /* SAFETY: 类型断言已复核 */
+    const pushed = (payload.shots as Array<Record<string, unknown>>)[0]!;
     expect(pushed).toMatchObject({
       status: "idle",
       clipStatus: "idle",

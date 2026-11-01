@@ -48,7 +48,8 @@ const PRISTINE = snapshotPaths([path.join(ROOT, E2E_REL)]);
  * @returns `e2e` 那一档；账里没有这一档时是 `undefined`
  */
 function e2eTrack(ledger: Record<string, unknown> | null): { verifiedAt?: string } | undefined {
-  return /* SAFETY: 类型断言已复核 */ ledger?.e2e as { verifiedAt?: string } | undefined;
+  /* SAFETY: 类型断言已复核 */
+  return ledger?.e2e as { verifiedAt?: string } | undefined;
 }
 
 function git(args: string): string {
@@ -176,7 +177,7 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
   }
 
   /** 记账式 git：按脚本给的回执依次返回，并把每次的参数留下来。 */
-  function fakeGit(script: Array<{ status: number; stderr?: string; stdout?: string; }>) {
+  function fakeGit(script: Array<{ status: number; stderr?: string; stdout?: string }>) {
     const calls: Array<Array<string>> = [];
     const run = (args: Array<string>) => {
       const step = script[calls.length] ?? { status: 0 };

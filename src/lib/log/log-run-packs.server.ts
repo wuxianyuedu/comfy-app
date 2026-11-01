@@ -64,7 +64,8 @@ async function readPackMeta(
       /*turbopackIgnore: true*/ path.join(dir, runJsonName),
       "utf8",
     );
-    return asRecord(/* SAFETY: 类型断言已复核 */ JSON.parse(text) as unknown);
+    /* SAFETY: 类型断言已复核 */
+    return asRecord(JSON.parse(text) as unknown);
   } catch {
     return null;
   }

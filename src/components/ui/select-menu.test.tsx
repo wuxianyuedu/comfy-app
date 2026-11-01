@@ -40,7 +40,8 @@ function openPopup(): HTMLElement {
   fireEvent.click(screen.getByRole("combobox"));
   const popup = document.querySelector("[data-align-trigger]");
   expect(popup, "点开后应当渲染出弹层").not.toBeNull();
-  return /* SAFETY: 类型断言已复核 */ popup as HTMLElement;
+  /* SAFETY: 类型断言已复核 */
+  return popup as HTMLElement;
 }
 
 describe("SelectMenu 的弹层定位", () => {

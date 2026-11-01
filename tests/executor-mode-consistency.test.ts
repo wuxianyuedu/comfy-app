@@ -41,7 +41,8 @@ const LAUNCHER = path.join(ROOT, "scripts", "dev-launcher.mjs");
 const HOST = path.join(ROOT, "scripts", "executor-host.mjs");
 const TS_SIDE = path.join(ROOT, "src", "lib", "comfyui", "executor-mode.ts");
 
-const vectors = /* SAFETY: 类型断言已复核 */ (
+/* SAFETY: 类型断言已复核 */
+const vectors = (
   JSON.parse(fs.readFileSync(path.join(ROOT, VECTORS_FILE), "utf8")) as {
     vectors: Array<{ mode: string; raw: string; unknown: string | null }>;
   }

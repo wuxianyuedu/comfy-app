@@ -138,7 +138,8 @@ function runGuard(overrides: Record<string, string | null>): string {
     });
     return "CODE=0";
   } catch (error: unknown) {
-    const err = /* SAFETY: 类型断言已复核 */ error as {
+    /* SAFETY: 类型断言已复核 */
+    const err = error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -272,9 +273,10 @@ describe("跨平台动作的实现契约", () => {
     }
     // lint 的 `--max-warnings` 唯一真源在 package.json，别让它静默丢失（否则
     // 零警告门禁形同虚设却没人发现）。
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
-    ) as { scripts?: Record<string, string> };
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
+      scripts?: Record<string, string>;
+    };
     expect(
       pkg.scripts?.lint ?? "",
       "package.json 的 lint 脚本缺 --max-warnings（零警告门槛丢失）",

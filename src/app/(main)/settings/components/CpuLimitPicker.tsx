@@ -51,7 +51,8 @@ export function CpuLimitPicker({ c }: { c: ReadySettingsPageController }) {
         className="flex flex-col gap-1.5"
         onValueChange={(v) => {
           c.patchSettings({
-            comfyuiCpuLimit: /* SAFETY: 类型断言已复核 */ v as CpuLimitMode,
+            /* SAFETY: 类型断言已复核 */
+            comfyuiCpuLimit: v as CpuLimitMode,
           });
         }}
         value={value}

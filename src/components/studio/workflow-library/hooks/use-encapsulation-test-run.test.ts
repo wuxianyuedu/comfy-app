@@ -9,8 +9,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook } from "@testing-library/react";
 
 const watchSettle = {
-  ok: /* SAFETY: 类型断言已复核 */ true as boolean,
-  message: /* SAFETY: 类型断言已复核 */ undefined as string | undefined,
+  /* SAFETY: 类型断言已复核 */
+  ok: true as boolean,
+  /* SAFETY: 类型断言已复核 */
+  message: undefined as string | undefined,
 };
 
 vi.mock("~/lib/workshop/generation-client", () => ({

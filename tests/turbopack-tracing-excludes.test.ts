@@ -291,7 +291,8 @@ describe("useTypeScriptCli 与解析到的 TypeScript 版本必须配对", () =>
   /** 从仓库根解析 `typescript` 那份包（本仓的 `typescript` 是 pnpm 别名，指向谁由安装态决定）。 */
   function resolvedTsVersion(): string {
     const requireFromRoot = createRequire(join(process.cwd(), "noop.js"));
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(
       readFileSync(requireFromRoot.resolve("typescript/package.json"), "utf8"),
     ) as { version?: string };
     return pkg.version ?? "";

@@ -122,8 +122,10 @@ const ICON_PROPS = {
   fill: "none",
   stroke: "currentColor",
   strokeWidth: 1.8,
-  strokeLinecap: /* SAFETY: 类型断言已复核 */ "round" as const,
-  strokeLinejoin: /* SAFETY: 类型断言已复核 */ "round" as const,
+  /* SAFETY: 类型断言已复核 */
+  strokeLinecap: "round" as const,
+  /* SAFETY: 类型断言已复核 */
+  strokeLinejoin: "round" as const,
 };
 
 /** 侧栏底部「项目」分组入口（不作为顶部项，也不作为项目页签）。 */

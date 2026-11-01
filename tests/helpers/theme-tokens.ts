@@ -35,7 +35,8 @@ import { createRequire } from "node:module";
 import postcss, { type Declaration } from "postcss";
 
 const require = createRequire(import.meta.url);
-const twModule = /* SAFETY: 类型断言已复核 */ require("@tailwindcss/postcss") as {
+/* SAFETY: 类型断言已复核 */
+const twModule = require("@tailwindcss/postcss") as {
   default?: () => postcss.AcceptedPlugin;
 };
 /* SAFETY: 类型断言已复核 */
@@ -96,7 +97,7 @@ export type ThemeTokens = {
   layered(name: string): boolean;
   /** 原始声明（未解析 `var()`），用于看「引用的是谁」。 */
   raw(name: string): string | undefined;
-}
+};
 
 let compiled: Promise<string> | null = null;
 
@@ -111,7 +112,8 @@ const pinnedCompiles = new Map<string, Promise<string>>();
  * ⚠️ 新增一条「某个 utility 编成了什么」的断言时，**来这里补一行类名**，否则那条判据会因为
  * 产物里没有这个类而红 —— 那是正确形态的红（它在告诉你：这条断言依赖的类没被固定住）。
  */
-const PINNED_UTILITY_CLASSES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const PINNED_UTILITY_CLASSES = [
   "bg-card",
   "bg-popover",
   "border-border",
@@ -284,7 +286,7 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
     layered: boolean;
     order: number;
     value: string;
-  }
+  };
   const values = new Map<string, Entry>();
   let order = 0;
 

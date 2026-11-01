@@ -23,11 +23,13 @@ describe("extraction-log 纯函数", () => {
   it("formatRequestMessages 按 role 分段展示并支持超长截断", () => {
     const messages = [
       {
-        role: /* SAFETY: 类型断言已复核 */ "system" as const,
+        /* SAFETY: 类型断言已复核 */
+        role: "system" as const,
         content: "你是分镜师",
       },
       {
-        role: /* SAFETY: 类型断言已复核 */ "user" as const,
+        /* SAFETY: 类型断言已复核 */
+        role: "user" as const,
         content: "剧本全文:\n场景1 小满出门",
       },
     ];
@@ -41,7 +43,8 @@ describe("extraction-log 纯函数", () => {
     const longContent = "x".repeat(6000);
     const truncated = formatRequestMessages([
       {
-        role: /* SAFETY: 类型断言已复核 */ "user" as const,
+        /* SAFETY: 类型断言已复核 */
+        role: "user" as const,
         content: longContent,
       },
     ]);

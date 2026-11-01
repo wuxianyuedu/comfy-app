@@ -26,7 +26,8 @@ import { describe, expect, it } from "vitest";
  * 是它自己的判据）：`tests/` 下那些自造自删的并发探针（`.setup-cleanup-probe-*.test.tsx`）
  * 与本用例同时活动，CI 上撞出来的是一条不含本判据、也不含真凶的 `ENOENT` 栈。 */
 const requireCjs = createRequire(import.meta.url);
-const reader = /* SAFETY: 类型断言已复核 */ requireCjs("../scripts/gate-scan-read.cjs") as {
+/* SAFETY: 类型断言已复核 */
+const reader = requireCjs("../scripts/gate-scan-read.cjs") as {
   dirExists: (dir: string) => boolean;
   readForScan: (abs: string) => string | null;
   vanishedNote: (count: number) => string;
@@ -106,8 +107,7 @@ describe("core/index.ts 的出口纪律（ISSUE #565）", () => {
     expect(
       orphaned,
       `以下符号被 \`core/index.ts\` 转出但全仓无人引用 —— 转发它只会制造一条「看起来有用」的出口：\n` +
-        `要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。${
-        reader.vanishedNote(vanished)}`,
+        `要么给它接上消费方，要么从 barrel 里删掉（规范 §12.16）。${reader.vanishedNote(vanished)}`,
     ).toEqual([]);
   });
 

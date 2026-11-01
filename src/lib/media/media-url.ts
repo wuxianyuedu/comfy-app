@@ -82,7 +82,8 @@ export function mediaReferenceFilename(reference: unknown): string {
     : reference;
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (raw != null && typeof raw === "object") {
-    const f = /* SAFETY: 类型断言已复核 */ (raw as { filename?: unknown }).filename;
+    /* SAFETY: 类型断言已复核 */
+    const f = (raw as { filename?: unknown }).filename;
     return typeof f === "string" ? f.trim() : "";
   }
   return typeof raw === "string" ? raw.trim() : "";
@@ -122,9 +123,12 @@ export function mediaPreviewUrl(reference: unknown): string | null {
     /* SAFETY: 类型断言已复核 */
     const ref = Array.isArray(reference)
       ? {
-          filename: /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[0] ?? null,
-          subfolder: /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[1] ?? null,
-          type: /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[2] ?? null,
+          /* SAFETY: 类型断言已复核 */
+          filename: (reference as Array<unknown>)[0] ?? null,
+          /* SAFETY: 类型断言已复核 */
+          subfolder: (reference as Array<unknown>)[1] ?? null,
+          /* SAFETY: 类型断言已复核 */
+          type: (reference as Array<unknown>)[2] ?? null,
         }
       : (reference as {
           filename?: unknown;

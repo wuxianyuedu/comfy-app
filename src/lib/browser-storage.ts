@@ -118,7 +118,8 @@ export function readStorageJson<T>(key: string, fallback: T, parse?: (raw: strin
     }
   }
   try {
-    return /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as T;
+    /* SAFETY: 类型断言已复核 */
+    return JSON.parse(raw) as T;
   } catch {
     return fallback;
   }

@@ -217,7 +217,8 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
         .limit(take);
       /* 谓词里已有 `claimedBy IS NOT NULL`，而 drizzle 不会据此把投影收窄成非空：
        * 在边界上断言一次，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
-      return /* SAFETY: 类型断言已复核 */ rows as Array<{
+      /* SAFETY: 类型断言已复核 */
+      return rows as Array<{
         claimedBy: string;
         createdAt: Date;
         id: string;

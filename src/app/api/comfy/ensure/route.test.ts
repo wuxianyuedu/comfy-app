@@ -120,7 +120,8 @@ describe("POST /api/comfy/ensure", () => {
     const { POST } = await import("./route");
     const res = await POST();
     expect(res.status).toBe(503);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       detail: string;
       ok: boolean;
       pending: boolean;
@@ -138,7 +139,8 @@ describe("POST /api/comfy/ensure", () => {
     probeComfyUi.mockResolvedValueOnce(null);
     ensureComfyUiReady.mockRejectedValueOnce("boom");
     const { POST } = await import("./route");
-    const body = /* SAFETY: 类型断言已复核 */ (await (await POST()).json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await (await POST()).json()) as {
       detail: string;
     };
     expect(body.detail).toBeTruthy();

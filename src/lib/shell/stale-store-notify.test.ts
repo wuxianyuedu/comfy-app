@@ -23,7 +23,8 @@ describe("stale-store-notify 送达通道", () => {
 
     expect(reportStaleStoreAction("missing-store-action")).toBe(true);
     expect(seen).toHaveLength(1);
-    expect(/* SAFETY: 类型断言已复核 */ (seen[0] as { body: string }).body).toContain("怎么做：");
+    /* SAFETY: 类型断言已复核 */
+    expect((seen[0] as { body: string }).body).toContain("怎么做：");
   });
 
   it("同一次会话重复观测只送达一次（去重）", () => {

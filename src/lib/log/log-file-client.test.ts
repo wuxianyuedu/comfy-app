@@ -67,7 +67,8 @@ function methodOf(call: FetchCall | undefined): string | undefined {
 /** JSON 请求体。 */
 function bodyOf(call: FetchCall | undefined): Record<string, unknown> {
   const raw = typeof call?.[1]?.body === "string" ? call[1].body : "{}";
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(raw) as Record<string, unknown>;
 }
 
 describe("fetchFileLogSlice —— 增量游标", () => {

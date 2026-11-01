@@ -100,9 +100,10 @@ void b();`,
     // 建立基线
     const upd = repo.run(["--update"]);
     expect(upd.code).toBe(0);
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(
       readFileSync(join(repo.dir, "scripts", ".void-floats-baseline.json"), "utf8"),
-    ) as { files: Record<string, number>; ruleVersion: number; total: number; };
+    ) as { files: Record<string, number>; ruleVersion: number; total: number };
     expect(baseline.total).toBe(2);
     expect(baseline.files["src/lib/mod.ts"]).toBe(2);
     // 同数量:OK
@@ -152,7 +153,8 @@ void a();`,
     );
     repo.run(["--update"]);
     const p = join(repo.dir, "scripts", ".void-floats-baseline.json");
-    const json = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(p, "utf8")) as {
+    /* SAFETY: 类型断言已复核 */
+    const json = JSON.parse(readFileSync(p, "utf8")) as {
       ruleVersion: number;
     };
     json.ruleVersion = 999;

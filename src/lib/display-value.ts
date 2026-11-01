@@ -56,7 +56,8 @@ export function displayValue(value: unknown, options: { fallback?: string } = {}
   }
   /* 其余（symbol / function / 对象数组）交给它们的自有 `toString` —— 与
    * `String(value)` 运行时一致（显式收窄以满足 no-base-to-string）。 */
-  return /* SAFETY: 类型断言已复核 */ (value as { toString(): string }).toString();
+  /* SAFETY: 类型断言已复核 */
+  return (value as { toString(): string }).toString();
 }
 
 /**

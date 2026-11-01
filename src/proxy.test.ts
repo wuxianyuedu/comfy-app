@@ -26,7 +26,8 @@ import { config, proxy } from "./proxy";
 function reqFor(pathnameWithQuery: string): NextRequest {
   const url = new URL(`http://127.0.0.1:3996${pathnameWithQuery}`);
   const nextUrl = Object.assign(url, { clone: () => new URL(url.href) });
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     nextUrl,
   } as unknown as NextRequest;
 }

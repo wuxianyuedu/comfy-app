@@ -85,7 +85,8 @@ export function ShotRow({
               labels={/* SAFETY: 类型断言已复核 */ SHOT_TYPE_LABELS as Record<string, string>}
               onChange={(value) =>
                 onUpdate(shot.id, {
-                  shotType: /* SAFETY: 类型断言已复核 */ value as ShotType,
+                  /* SAFETY: 类型断言已复核 */
+                  shotType: value as ShotType,
                 })
               }
               /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是

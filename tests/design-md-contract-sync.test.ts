@@ -145,7 +145,8 @@ function findHexMismatch(
 ): Array<string> {
   const bad: Array<string> = [];
   for (const row of rows) {
-    for (const state of /* SAFETY: 类型断言已复核 */ ["light", "dark"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const state of ["light", "dark"] as const) {
       const doc = row[state];
       if (!doc) {
         continue;
@@ -707,9 +708,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       .sort((a, b) => Number(a) - Number(b));
     expect(
       unregistered,
-      `这些字号活在 \`@theme\` 之外却没登记角色：${
-        unregistered.map((v) => `${v}px ← ${[...inUse.get(v)!].join(" / ")}`).join("；")
-        } —— 先在 tests/design-md-contract-sync.test.ts 的 OUT_OF_THEME_SIZES 里写清它是干什么的，` +
+      `这些字号活在 \`@theme\` 之外却没登记角色：${unregistered
+        .map((v) => `${v}px ← ${[...inUse.get(v)!].join(" / ")}`)
+        .join(
+          "；",
+        )} —— 先在 tests/design-md-contract-sync.test.ts 的 OUT_OF_THEME_SIZES 里写清它是干什么的，` +
         `再把它加进 docs/DESIGN.md §Typography「内容尺寸：住在 @theme 之外的那一片」那张表。`,
     ).toEqual([]);
 
@@ -719,8 +722,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     expect(
       stale,
       `这些登记过的值在三处来路里都已经不存在（还债把某一档并掉了？）—— 表里的行与 ` +
-        `docs/DESIGN.md 那一节要一起删，留着就是文档在描述一个不存在的东西：${
-        stale.map((v) => `${v}px`).join("、")}`,
+        `docs/DESIGN.md 那一节要一起删，留着就是文档在描述一个不存在的东西：${stale
+          .map((v) => `${v}px`)
+          .join("、")}`,
     ).toEqual([]);
 
     /* 文档侧：每个在册且仍在用的值，都要在那一节里以「Npx」的字面形式出现一次。
@@ -736,8 +740,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
       .filter((v) => !new RegExp(`(^|[^\\d.])${v.replace(".", String.raw`\.`)}px`).test(section));
     expect(
       undocumented,
-      `这些字号在代码里用着、却没写进那一节（或写了但没有角色）：${
-        undocumented.map((v) => `${v}px`).join("、")}`,
+      `这些字号在代码里用着、却没写进那一节（或写了但没有角色）：${undocumented
+        .map((v) => `${v}px`)
+        .join("、")}`,
     ).toEqual([]);
     expect(
       section.length,
@@ -834,7 +839,8 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     /* 两颗微标签刻意**不配对**（globals.css 注释自己写着「也不给 --text-*-line-height
      * 配对」）—— 这正是「10.5px 并进来只动字号、不动行高」的前提。哪天有人给它们
      * 配了行高，那 52 处的账要重算。 */
-    for (const name of /* SAFETY: 类型断言已复核 */ ["2xs", "3xs"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const name of ["2xs", "3xs"] as const) {
       expect(
         renderedLineHeightPx(tiers, name),
         `--text-${name} 被加了配对行高 —— 并入它的那批调用点行盒会变，像素账要重算`,
@@ -957,8 +963,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     expect(
       offenders,
       `这些屏的副说明被写成了小字 —— 屏级副说明走 \`text-sm\`(14px)，` +
-        `转 \`ui/page-header\` 的 \`<PageHeader description=…>\` 也归这一档：\n${
-        offenders.map((o) => `  ${o.file}:${o.line}`).join("\n")}`,
+        `转 \`ui/page-header\` 的 \`<PageHeader description=…>\` 也归这一档：\n${offenders
+          .map((o) => `  ${o.file}:${o.line}`)
+          .join("\n")}`,
     ).toEqual([]);
 
     /* 自己先验一次量具：真实代码面上过一遍，确认扫描器不是「因为解不出东西而全绿」。
@@ -1174,8 +1181,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     }
     expect(
       offenders,
-      `光晕又写成裸色了 —— 色相用 var(--color-glow-*)、强度走 color-mix：\n${
-        offenders.map((o) => `  ${o}`).join("\n")}`,
+      `光晕又写成裸色了 —— 色相用 var(--color-glow-*)、强度走 color-mix：\n${offenders
+        .map((o) => `  ${o}`)
+        .join("\n")}`,
     ).toEqual([]);
     /* 四颗都必须**两态**：每颗在 `@theme`（浅色档）与 `.dark` 各声明一次。这里刻意
        只数声明次数、不抄 hex —— 抄了取值就会和 CSS 各自漂移（取值由 Colors 表那条

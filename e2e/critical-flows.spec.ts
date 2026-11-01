@@ -214,7 +214,8 @@ test.describe("工作区链路 @critical", () => {
        竖条量起来正好是正方形。老写法在最该红的那一刻会绿。 */
     const measure = () =>
       spinner.evaluate((el) => {
-        const style = getComputedStyle(/* SAFETY: 类型断言已复核 */ el as SVGElement);
+        /* SAFETY: 类型断言已复核 */
+        const style = getComputedStyle(el as SVGElement);
         return {
           width: Number.parseFloat(style.width),
           height: Number.parseFloat(style.height),
@@ -240,7 +241,8 @@ test.describe("工作区链路 @critical", () => {
       }
       const previous = parent.style.display;
       parent.style.display = "block";
-      const style = getComputedStyle(/* SAFETY: 类型断言已复核 */ el as SVGElement);
+      /* SAFETY: 类型断言已复核 */
+      const style = getComputedStyle(el as SVGElement);
       const box = {
         width: Number.parseFloat(style.width),
         height: Number.parseFloat(style.height),
@@ -405,9 +407,11 @@ test.describe("应用页签与全屏视图 @critical", () => {
    */
   const centerHitsOwnSubtree = (target: ReturnType<Page["locator"]>) =>
     target.evaluate((el) => {
-      const box = /* SAFETY: 类型断言已复核 */ (el as HTMLElement).getBoundingClientRect();
+      /* SAFETY: 类型断言已复核 */
+      const box = (el as HTMLElement).getBoundingClientRect();
       const top = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-      return top !== null && /* SAFETY: 类型断言已复核 */ (el as HTMLElement).contains(top);
+      /* SAFETY: 类型断言已复核 */
+      return top !== null && (el as HTMLElement).contains(top);
     });
 
   async function expectStatusBarNotCovered(page: Page) {
@@ -542,7 +546,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
      *     `getByTitle` 是对的，别顺手一起换。
      */
     /** 弹层矩形的四元组（`settleBox` 的返回形状）。 */
-    type Box = { height: number; width: number; x: number; y: number; };
+    type Box = { height: number; width: number; x: number; y: number };
 
     /** 相邻两次量到同一矩形即视为落定（与动画时长解耦）。 */
     function sameBox(a: Box | null, b: Box | null): boolean {
@@ -817,7 +821,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
         const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
         let best: Text | null = null;
         for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-          const text = /* SAFETY: 类型断言已复核 */ n as Text;
+          /* SAFETY: 类型断言已复核 */
+          const text = n as Text;
           if (!best || text.length > best.length) {
             best = text;
           }
@@ -1020,7 +1025,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
         expect(box!.width).toBeGreaterThanOrEqual(56);
 
         const overflow = await button.evaluate((el) => {
-          const nodes = /* SAFETY: 类型断言已复核 */ [el, ...el.children] as Array<HTMLElement>;
+          /* SAFETY: 类型断言已复核 */
+          const nodes = [el, ...el.children] as Array<HTMLElement>;
           return nodes.map((n) => n.scrollWidth - n.clientWidth);
         });
         for (const px of overflow) {
@@ -1044,7 +1050,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
             ctx.fillStyle = color;
             ctx.fillRect(0, 0, 1, 1);
             const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-            return /* SAFETY: 类型断言已复核 */ [r, g, b] as [number, number, number];
+            /* SAFETY: 类型断言已复核 */
+            return [r, g, b] as [number, number, number];
           });
       const [wr, wg, wb] = await rgbOf("警告");
       const [er, eg, eb] = await rgbOf("错误");
@@ -1060,7 +1067,8 @@ test.describe("应用页签与全屏视图 @critical", () => {
         .getByTitle(/^当前来源的警告：/)
         .first()
         .evaluate((el) => {
-          const count = /* SAFETY: 类型断言已复核 */ el.children[1] as HTMLElement;
+          /* SAFETY: 类型断言已复核 */
+          const count = el.children[1] as HTMLElement;
           const canvas = document.createElement("canvas");
           canvas.width = canvas.height = 1;
           const ctx = canvas.getContext("2d")!;
@@ -1139,7 +1147,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         .poll(async () =>
           Number(
             await consoleOption.evaluate((el) => {
-              const nodes = [...el.querySelectorAll('.sr-only')];
+              const nodes = [...el.querySelectorAll(".sr-only")];
               const summary =
                 nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
               return /^(\d+) 条/.exec(summary)?.[1] ?? "0";
@@ -1175,7 +1183,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         optionOf(label).evaluate((el) => {
           /* 选项里的 `sr-only` 有好几处（四列各自的「N 警告」也在其中），
            * 只有那个**以数字开头**的才是整行的纯文本摘要。 */
-          const nodes = [...el.querySelectorAll('.sr-only')];
+          const nodes = [...el.querySelectorAll(".sr-only")];
           const summary = nodes
             .map((n) => n.textContent?.trim() ?? "")
             .find((t) => /^\d+ 条/.test(t));
@@ -1184,7 +1192,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
       /** 摘要里的「全部 / 信息 / 警告 / 错误」四个数（不读自绘的列）。 */
       const levelsOf = async (label: string) =>
         optionOf(label).evaluate((el) => {
-          const nodes = [...el.querySelectorAll('.sr-only')];
+          const nodes = [...el.querySelectorAll(".sr-only")];
           const summary =
             nodes.map((n) => n.textContent?.trim() ?? "").find((t) => /^\d+ 条/.test(t)) ?? "";
           const num = (re: RegExp) => Number(re.exec(summary)?.[1] ?? "0");
@@ -1236,12 +1244,12 @@ test.describe("应用页签与全屏视图 @critical", () => {
           const option = [...document.querySelectorAll('[role="option"]')].find((el) =>
             el.textContent?.includes("全部来源（按条去重）"),
           );
-          const summary = [...option?.querySelectorAll('.sr-only') ?? []]
+          const summary = [...(option?.querySelectorAll(".sr-only") ?? [])]
             .map((n) => n.textContent?.trim() ?? "")
             .find((t) => /^\d+ 条/.test(t));
           /* 页脚那句「… · 面板共保留 N 条」。这个数只在页脚出现一处，直接取
              最内层命中它的节点即可（祖先会连着把整行文本都带进来，正则仍能取到）。 */
-          const footer = [...document.querySelectorAll('span, div, p')].find((el) =>
+          const footer = [...document.querySelectorAll("span, div, p")].find((el) =>
             /面板共保留 \d+ 条/.test(el.textContent ?? ""),
           );
           return {

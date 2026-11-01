@@ -21,7 +21,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 
-const OPTIONS = /* SAFETY: 类型断言已复核 */ ["png", "jpg", "webp"] as const;
+/* SAFETY: 类型断言已复核 */
+const OPTIONS = ["png", "jpg", "webp"] as const;
 
 function Demo({
   defaultValue = "png",

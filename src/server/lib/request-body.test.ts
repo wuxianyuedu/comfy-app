@@ -29,10 +29,11 @@ describe("readJsonRecord", () => {
   it("畸形 JSON 回 400，**不再**被静默当成空对象", async () => {
     const result = await readJsonRecord(reqWith("{ 不是 JSON"));
     expect(isErrorResponse(result)).toBe(true);
-    expect(/* SAFETY: 类型断言已复核 */ (result as Response).status).toBe(400);
-    const envelope = /* SAFETY: 类型断言已复核 */ (await /* SAFETY: 类型断言已复核 */ (
-      result as Response
-    ).json()) as {
+    /* SAFETY: 类型断言已复核 */
+    expect((result as Response).status).toBe(400);
+    /* SAFETY: 类型断言已复核 */
+    /* SAFETY: 类型断言已复核 */
+    const envelope = (await (result as Response).json()) as {
       error: { code: string; message: string };
     };
     /* 信封形状走 §10.9 的唯一出口：`{ error: { code, message } }`，
@@ -44,7 +45,8 @@ describe("readJsonRecord", () => {
   it("数组正文算「不是对象」—— 回 400 而不是把它当记录用", async () => {
     const result = await readJsonRecord(reqWith("[1,2,3]"));
     expect(isErrorResponse(result)).toBe(true);
-    expect(/* SAFETY: 类型断言已复核 */ (result as Response).status).toBe(400);
+    /* SAFETY: 类型断言已复核 */
+    expect((result as Response).status).toBe(400);
   });
 
   it("字符串 / 数字 / null 正文同样回 400", async () => {

@@ -64,7 +64,8 @@ function readCache(key: string): WorkflowDetail | null {
     if (!raw) {
       return null;
     }
-    const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as CacheEnvelope;
+    /* SAFETY: 类型断言已复核 */
+    const obj = JSON.parse(raw) as CacheEnvelope;
     return Date.now() - obj.t < CACHE_TTL_MS ? obj.d : null;
   } catch {
     return null;
@@ -269,7 +270,8 @@ export function useWorkflowDetailLoader({
        *  `finally` 里已经是对的；保留显式 `try/finally` 是因为它不仅复位，
        *  还带**竞态令牌**（`myReqId`）判据 —— 那条不属于忙碌位这条账。 */
       try {
-        const d = /* SAFETY: 类型断言已复核 */ (await withTimeout(
+        /* SAFETY: 类型断言已复核 */
+        const d = (await withTimeout(
           subgraphUid
             ? vanillaApi.workflow.subgraph.query({
                 id: workflowId,

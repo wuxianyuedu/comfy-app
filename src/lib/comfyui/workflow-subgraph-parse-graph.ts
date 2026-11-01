@@ -601,7 +601,8 @@ export function buildSubgraphGraph(
                   imageRef: {
                     filename: fname,
                     subfolder: "",
-                    type: /* SAFETY: 类型断言已复核 */ "input" as const,
+                    /* SAFETY: 类型断言已复核 */
+                    type: "input" as const,
                   },
                 }
               : {}),

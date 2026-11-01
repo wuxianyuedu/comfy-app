@@ -48,7 +48,8 @@ const CFG = (over: Partial<LLMConfig> = {}): LLMConfig => ({
 /** 一次性响应替身：`res.json()` / `res.text()` 都可用。 */
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}): Response {
   const status = init.status ?? 200;
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     ok: init.ok ?? (status >= 200 && status < 300),
     status,
     json: async () => body,
@@ -61,7 +62,8 @@ function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {
 function streamResponse(chunks: Array<string>): Response {
   const encoder = new TextEncoder();
   let i = 0;
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     ok: true,
     status: 200,
     json: async () => ({}),
@@ -88,22 +90,22 @@ function callAt(n = 0): { init: RequestInit; url: string } {
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
-  const url = typeof arg === "string" ? arg : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
+  /* SAFETY: 类型断言已复核 */
+  const url = typeof arg === "string" ? arg : (arg as Request).url;
   return { url, init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
-    string,
-    unknown
-  >;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<string, unknown>;
 }
 
 /** 取第 n 次 fetch 调用的请求头。 */
 function sentHeaders(n = 0): Record<string, string> {
-  return /* SAFETY: 类型断言已复核 */ (callAt(n).init.headers ?? {}) as Record<string, string>;
+  /* SAFETY: 类型断言已复核 */
+  return (callAt(n).init.headers ?? {}) as Record<string, string>;
 }
 
 beforeEach(() => {

@@ -207,7 +207,8 @@ describe("reportMirrorFailure：两个分支都要有痕迹", () => {
     /* 界面上看不到 `FORBIDDEN` 这个字，所以日志那一行必须把它带回来 ——
      * 少了这一半，「到底是哪个码拒的」就只能靠猜。 */
     expect(warn).toHaveBeenCalledTimes(1);
-    const logged = /* SAFETY: 类型断言已复核 */ (warn.mock.calls[0] ?? []) as Array<unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const logged = (warn.mock.calls[0] ?? []) as Array<unknown>;
     expect(logged.map((part) => String(part)).join(" ")).toContain("code=FORBIDDEN");
     expect(logged.at(-1)).toBe("proj_rep1");
   });
@@ -224,7 +225,8 @@ describe("reportMirrorFailure：两个分支都要有痕迹", () => {
      * 等于把网络层原文搬进面板（口径同 `~/lib/error-message`）。
      * `console.warn` 的实参在类型上是 `any[]`，先收成 `unknown[]` 再取，
      * 否则断言拿到的是 `any`，写错了也不会红。 */
-    const logged = /* SAFETY: 类型断言已复核 */ (warn.mock.calls[0] ?? []) as Array<unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const logged = (warn.mock.calls[0] ?? []) as Array<unknown>;
     expect(String(logged[0])).toContain("暂时性");
     expect(logged.at(-1)).toBe("proj_rep2");
     expect(listSyncNotices().some((n) => n.projectId === "proj_rep2")).toBe(false);

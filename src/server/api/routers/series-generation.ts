@@ -80,6 +80,7 @@ export const seriesGenerationRouter = createTRPCRouter({
           const prod = await ctx.db.query.production.findFirst({
             where: eq(production.id, ep.projectId),
           });
+          /* SAFETY: 类型断言已复核 */
           const shots = Array.isArray(prod?.shots) ? (prod?.shots as Array<{ id?: string }>) : [];
           total = shots.length;
           const shotIds = shots
@@ -173,6 +174,7 @@ export const seriesGenerationRouter = createTRPCRouter({
         const prod = await ctx.db.query.production.findFirst({
           where: eq(production.id, ep.projectId),
         });
+        /* SAFETY: 类型断言已复核 */
         const shots = Array.isArray(prod?.shots) ? (prod?.shots as Array<{ id?: string }>) : [];
         for (const s of shots) {
           const sid = s.id;

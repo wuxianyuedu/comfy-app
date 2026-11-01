@@ -204,7 +204,8 @@ describe("findPython：把「每个候选为什么没选中」一起交出去", 
     writeCandidate(path.join(dir, "python3"));
     const opts = {
       env: { PATH: dir },
-      platform: /* SAFETY: 类型断言已复核 */ "linux" as const,
+      /* SAFETY: 类型断言已复核 */
+      platform: "linux" as const,
       probe: probeOnly("python3"),
     };
     expect(resolvePython(opts)).toEqual(findPython(opts).hit);

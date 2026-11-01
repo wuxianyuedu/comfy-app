@@ -125,7 +125,8 @@ export async function fetchBuildId(): Promise<BuildIdProbe> {
     if (!res.ok) {
       return empty;
     }
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const data = (await res.json()) as {
       bootId?: unknown;
       buildId?: unknown;
       depsStale?: unknown;

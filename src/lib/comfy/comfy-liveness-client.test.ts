@@ -27,7 +27,8 @@ class FakeEventSource {
     );
   }
   emitRaw(data: string): void {
-    this.onmessage?.(/* SAFETY: 类型断言已复核 */ { data } as MessageEvent<string>);
+    /* SAFETY: 类型断言已复核 */
+    this.onmessage?.({ data } as MessageEvent<string>);
   }
   close(): void {
     this.closed = true;

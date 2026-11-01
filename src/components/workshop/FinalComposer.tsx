@@ -331,7 +331,8 @@ export function FinalComposer({
                       labels={TRANSITION_LABELS}
                       onChange={(value) =>
                         updateShot(shot.id, {
-                          transition: /* SAFETY: 类型断言已复核 */ value as Transition,
+                          /* SAFETY: 类型断言已复核 */
+                          transition: value as Transition,
                         })
                       }
                       options={TRANSITIONS}
@@ -348,7 +349,8 @@ export function FinalComposer({
                       labels={MOTION_LABELS}
                       onChange={(value) =>
                         updateShot(shot.id, {
-                          motion: /* SAFETY: 类型断言已复核 */ value as MotionLevel,
+                          /* SAFETY: 类型断言已复核 */
+                          motion: value as MotionLevel,
                         })
                       }
                       options={MOTIONS}

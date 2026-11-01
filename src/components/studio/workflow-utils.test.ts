@@ -17,7 +17,8 @@ function detailWith(
   graph: WorkflowDetail["graph"],
   rawNodes: WorkflowDetail["rawNodes"],
 ): WorkflowDetail {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     nodes,
     graph,
     rawNodes,

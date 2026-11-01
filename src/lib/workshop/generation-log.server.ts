@@ -81,7 +81,8 @@ export async function readGenerationLogs(
           continue;
         }
         try {
-          const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(trimmed) as Record<string, unknown>;
+          /* SAFETY: 类型断言已复核 */
+          const raw = JSON.parse(trimmed) as Record<string, unknown>;
           // 行内 stage 由 append 写入；不匹配的环节直接跳过
           if (raw.stage !== stage) {
             continue;

@@ -436,7 +436,8 @@ function subgraphAuthorLabelsByUid(
       if (typeof pinRaw !== "object" || pinRaw === null) {
         continue;
       }
-      const pin = /* SAFETY: 类型断言已复核 */ pinRaw as Record<string, unknown>;
+      /* SAFETY: 类型断言已复核 */
+      const pin = pinRaw as Record<string, unknown>;
       const slot = typeof pin.name === "string" ? pin.name.trim() : "";
       const label = typeof pin.label === "string" ? pin.label.trim() : "";
       if (!slot || !label || slot === label) {
@@ -664,7 +665,8 @@ export async function buildRawInputs(
             ...(type === "STRING" &&
             inferIsMultiline(await multilineForClassField(rnClassType, w.name), w.value)
               ? {
-                  multiline: /* SAFETY: 类型断言已复核 */ true as const,
+                  /* SAFETY: 类型断言已复核 */
+                  multiline: true as const,
                 }
               : {}),
           });
@@ -699,7 +701,8 @@ export async function buildRawInputs(
                   imageRef: {
                     filename: fname,
                     subfolder: "",
-                    type: /* SAFETY: 类型断言已复核 */ "input" as const,
+                    /* SAFETY: 类型断言已复核 */
+                    type: "input" as const,
                   },
                 }
               : {}),

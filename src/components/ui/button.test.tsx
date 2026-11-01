@@ -10,7 +10,8 @@ afterEach(cleanup);
  * `Button` 先有对应的语义变体。这组用例把「有哪些变体、各自落在哪些 token 上」
  * 钉住 —— 变体一旦被删除或改回写死色，这里先失败。
  */
-const SEMANTIC_VARIANTS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const SEMANTIC_VARIANTS = [
   "primary",
   "danger",
   "success",
@@ -56,14 +57,8 @@ describe("Button 语义变体", () => {
   });
 
   it("保留既有的六个变体（批量化替换不得顺手改动存量语义）", () => {
-    const EXISTING = /* SAFETY: 类型断言已复核 */ [
-      "default",
-      "outline",
-      "secondary",
-      "ghost",
-      "destructive",
-      "link",
-    ] as const;
+    /* SAFETY: 类型断言已复核 */
+    const EXISTING = ["default", "outline", "secondary", "ghost", "destructive", "link"] as const;
     for (const v of EXISTING) {
       expect(() => buttonVariants({ variant: v })).not.toThrow();
     }

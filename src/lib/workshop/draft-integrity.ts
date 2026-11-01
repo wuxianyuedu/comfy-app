@@ -192,7 +192,8 @@ function auditOne(kind: DraftElementKind, index: number, value: unknown): Array<
       },
     ];
   }
-  const source = /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const source = value as Record<string, unknown>;
   const id = check.idOf(source);
   const label = id ? `${noun} #${String(index + 1)}「${id}」` : `${noun} #${String(index + 1)}`;
   const issues: Array<DraftElementIssue> = [];
@@ -256,7 +257,8 @@ export function describeDraftIssues(issues: ReadonlyArray<DraftElementIssue>): s
     return null;
   }
   const counts = countAffectedElements(issues);
-  const parts = /* SAFETY: 类型断言已复核 */ (["scene", "character", "shot"] as const)
+  /* SAFETY: 类型断言已复核 */
+  const parts = (["scene", "character", "shot"] as const)
     .filter((kind) => counts[kind] > 0)
     .map((kind) => `${String(counts[kind])} ${DRAFT_ELEMENT_NOUN[kind]}`);
   return `草稿里有 ${parts.join("、")} 的形状不认识，已原样保留但需要修复`;

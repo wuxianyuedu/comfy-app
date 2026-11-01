@@ -116,7 +116,8 @@ describe("GET /api/debug/source", () => {
     const { GET } = await import("./route");
     const res = await GET(requestWith("src/lib/clamp.ts"));
     expect(res.status).toBe(200);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, string | number>;
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as Record<string, string | number>;
     expect(body.content).toBe("export const x = 1;");
     expect(body.size).toBe(19);
     expect(body.modifiedAt).toBe(mtime.toISOString());
@@ -134,7 +135,8 @@ describe("GET /api/debug/source", () => {
     const { GET } = await import("./route");
     const res = await GET(requestWith("src/lib/does-not-exist.ts"));
     expect(res.status).toBe(404);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       error: string;
     };
     expect(body.error).toBe("file not found");

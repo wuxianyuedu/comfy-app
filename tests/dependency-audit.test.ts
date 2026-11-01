@@ -103,13 +103,14 @@ type LedgerEntry = {
   severity?: string;
   vulnerable?: string;
 };
-type LedgerFile = { entries: Array<LedgerEntry>; ruleVersion: number; };
+type LedgerFile = { entries: Array<LedgerEntry>; ruleVersion: number };
 
 const LEDGER_REL = path.join("scripts", ".dependency-audit-baseline.json");
 
 function readLedger(dir: string): LedgerFile {
   const raw: unknown = JSON.parse(readFileSync(path.join(dir, LEDGER_REL), "utf8"));
-  return /* SAFETY: 类型断言已复核 */ raw as LedgerFile;
+  /* SAFETY: 类型断言已复核 */
+  return raw as LedgerFile;
 }
 
 function writeLedger(dir: string, ledger: LedgerFile): void {
@@ -226,7 +227,8 @@ describe("真脚本：--update 只许降（验收点名要求的形态）", () =
       );
       return { code: 0, out };
     } catch (error) {
-      const e = /* SAFETY: 类型断言已复核 */ error as {
+      /* SAFETY: 类型断言已复核 */
+      const e = error as {
         status?: number;
         stderr?: string;
         stdout?: string;

@@ -92,7 +92,8 @@ vi.mock("node:fs", async (importOriginal) => {
       ? p
       : p instanceof URL
         ? p.href
-        : /* SAFETY: 类型断言已复核 */ (p as { toString(): string }).toString();
+        : /* SAFETY: 类型断言已复核 */
+          (p as { toString(): string }).toString();
   const stub = {
     ...real,
     existsSync: (p: PathLike): boolean => {
@@ -116,12 +117,12 @@ vi.mock("node:fs", async (importOriginal) => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
       if (!hit) {
-        return /* SAFETY: 类型断言已复核 */ (
-          real.readFileSync as (a: unknown, b: unknown) => unknown
-        )(p, options);
+        /* SAFETY: 类型断言已复核 */
+        return (real.readFileSync as (a: unknown, b: unknown) => unknown)(p, options);
       }
       if (hit.missing || hit.readFails) {
-        const e = /* SAFETY: 类型断言已复核 */ new Error(
+        /* SAFETY: 类型断言已复核 */
+        const e = new Error(
           hit.missing
             ? `ENOENT: no such file or directory, open '${k}'`
             : `EIO: i/o error, read '${k}'`,
@@ -136,10 +137,12 @@ vi.mock("node:fs", async (importOriginal) => {
       const k = keyOf(p);
       const hit = fsState.files.get(k);
       if (!hit) {
-        return /* SAFETY: 类型断言已复核 */ (real.statSync as (a: unknown) => unknown)(p);
+        /* SAFETY: 类型断言已复核 */
+        return (real.statSync as (a: unknown) => unknown)(p);
       }
       if (hit.missing || hit.statFails) {
-        const e = /* SAFETY: 类型断言已复核 */ new Error(
+        /* SAFETY: 类型断言已复核 */
+        const e = new Error(
           hit.missing
             ? `ENOENT: no such file or directory, stat '${k}'`
             : `EACCES: permission denied, stat '${k}'`,
@@ -212,7 +215,8 @@ function emitClose(child: FakeChild, code: number) {
 }
 
 async function post(body: unknown) {
-  const req = /* SAFETY: 类型断言已复核 */ new Request("http://127.0.0.1:3000/api/custom-nodes", {
+  /* SAFETY: 类型断言已复核 */
+  const req = new Request("http://127.0.0.1:3000/api/custom-nodes", {
     method: "POST",
     headers: { "content-type": "application/json" },
     // body 允许是「不是 JSON」的原文 —— 畸形体这一路也在测
@@ -223,7 +227,8 @@ async function post(body: unknown) {
 
 /** 取 argv（spawn 的第二个入参）。 */
 function argv(i = 0): Array<string> {
-  return /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[i]?.[1] as Array<string>;
+  /* SAFETY: 类型断言已复核 */
+  return spawnMock.mock.calls[i]?.[1] as Array<string>;
 }
 
 /**
@@ -295,7 +300,8 @@ describe("POST /api/custom-nodes —— 鉴权与请求体", () => {
       localWorkflowsPath: "C:/Windows",
     });
     expect(res.status).toBe(200);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       localWorkflowPaths: Array<string>;
       paths: Array<string>;
     };
@@ -389,7 +395,8 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
     settingsMock.mockReturnValue({ comfyuiPath: "" });
     const res = await post({ action: "parse" });
     expect(res.status).toBe(400);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       error: string;
       ok: boolean;
     };
@@ -479,7 +486,8 @@ describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () 
       if (String(command) !== "py") {
         continue;
       }
-      expect(/* SAFETY: 类型断言已复核 */ (args as Array<string>)[0]).toBe("-3");
+      /* SAFETY: 类型断言已复核 */
+      expect((args as Array<string>)[0]).toBe("-3");
     }
   });
 });
@@ -675,7 +683,8 @@ const FULL_MANIFEST = {
 /** 摘要事件里的 `summary` 字段（冷/热两种返回形态都走这一个口子取）。 */
 async function summaryOf(): Promise<Record<string, unknown> | null> {
   const payload = await payloadOf();
-  return /* SAFETY: 类型断言已复核 */ payload.summary as Record<string, unknown> | null;
+  /* SAFETY: 类型断言已复核 */
+  return payload.summary as Record<string, unknown> | null;
 }
 
 /**
@@ -694,16 +703,20 @@ async function payloadOf(): Promise<Record<string, unknown>> {
   if ((res.headers.get("content-type") ?? "").includes("ndjson")) {
     return eventOf(await eventsOf(res), "summary");
   }
-  return /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  return (await res.json()) as Record<string, unknown>;
 }
 
 /** 把流式响应读到底，按行解析成事件数组。 */
 async function eventsOf(res: Response): Promise<Array<Record<string, unknown>>> {
   const text = await res.text();
-  return text
-    .split("\n")
-    .filter((line) => line.trim() !== "")
-    .map((line) => /* SAFETY: 类型断言已复核 */ JSON.parse(line) as Record<string, unknown>);
+  return (
+    text
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      /* SAFETY: 类型断言已复核 */
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+  );
 }
 
 describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
@@ -726,7 +739,8 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
     const res = await GET();
     expect(res.status).toBe(500);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       error?: { code?: string; message?: string };
     };
     expect(body.error?.code).toBe("custom_nodes.read_failed");
@@ -738,7 +752,8 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: "silent" });
     const res = await GET();
     expect(res.status).toBe(500);
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as {
       error?: { message?: string };
     };
     expect(body.error?.message).toBe("读取配置失败");
@@ -748,7 +763,8 @@ describe("GET /api/custom-nodes —— 鉴权与错误信封", () => {
     fsState.files.set(MANIFEST, { text: "{}", existsFails: true });
     const res = await GET();
     expect(
-      Object.keys(/* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>),
+      /* SAFETY: 类型断言已复核 */
+      Object.keys((await res.json()) as Record<string, unknown>),
     ).toEqual(["error"]);
   });
 });
@@ -759,7 +775,8 @@ describe("GET 摘要：清单的六种坏法", () => {
     const events = await getEvents();
     const summary = eventOf(events, "summary");
     expect(summary.summary).toBeNull();
-    const settings = /* SAFETY: 类型断言已复核 */ summary.settings as {
+    /* SAFETY: 类型断言已复核 */
+    const settings = summary.settings as {
       localWorkflowPaths: Array<string>;
       paths: Array<string>;
     };
@@ -974,7 +991,8 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     const events = text
       .split("\n")
       .filter((l) => l.trim() !== "")
-      .map((l) => /* SAFETY: 类型断言已复核 */ JSON.parse(l) as Record<string, unknown>);
+      /* SAFETY: 类型断言已复核 */
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
     expect(events.map((e) => e.type)).toEqual([
       "discover_start",
       "progress",
@@ -1006,12 +1024,12 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
 
     const res = await GET();
     expect(res.headers.get("content-type")).toContain("application/json");
-    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const body = (await res.json()) as Record<string, unknown>;
     expect(spawnMock).toHaveBeenCalledTimes(1);
     expect(body.discoveredByParent).toEqual({ [parent]: [{ name: "Foo" }] });
-    expect(/* SAFETY: 类型断言已复核 */ (body.summary as Record<string, unknown>).totalNodes).toBe(
-      2,
-    );
+    /* SAFETY: 类型断言已复核 */
+    expect((body.summary as Record<string, unknown>).totalNodes).toBe(2);
     expect(body.settings).toMatchObject({ paths: [parent] });
   });
 
@@ -1048,7 +1066,8 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     expect(events.map((e) => e.type)).toEqual(["discover_start", "progress", "error"]);
     expect(events[2]).toMatchObject({ type: "error" });
     expect(
-      String(/* SAFETY: 类型断言已复核 */ (events[2] as { message?: string }).message ?? ""),
+      /* SAFETY: 类型断言已复核 */
+      String((events[2] as { message?: string }).message ?? ""),
     ).not.toBe("");
   });
 
@@ -1061,10 +1080,8 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     });
     scriptDiscover([JSON.stringify({ packages: [] })]);
     const events = await getEvents();
-    const byPath = /* SAFETY: 类型断言已复核 */ eventOf(events, "summary").byPath as Record<
-      string,
-      unknown
-    >;
+    /* SAFETY: 类型断言已复核 */
+    const byPath = eventOf(events, "summary").byPath as Record<string, unknown>;
     expect(Object.keys(byPath)).toHaveLength(1);
     const key = Object.keys(byPath)[0] ?? "";
     expect(key).toBe(key.toLowerCase());
@@ -1334,8 +1351,8 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
       lines: [JSON.stringify({ packages: [{ name: "Old", path: "/tmp/a" }] }), ONE_PKG_LINE],
     });
     const events = await getEvents();
-    const packages = /* SAFETY: 类型断言已复核 */ eventOf(events, "discover_done")
-      .packages as Array<{
+    /* SAFETY: 类型断言已复核 */
+    const packages = eventOf(events, "discover_done").packages as Array<{
       name: string;
     }>;
     expect(packages.map((p) => p.name)).toEqual(["Foo"]);

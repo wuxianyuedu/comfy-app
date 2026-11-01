@@ -55,8 +55,9 @@ const SCRIPT_SOURCE = normalizeControlFlow(
   "check-app-port-vectors.cjs",
 );
 // 判据脚本是 CJS（`@ts-nocheck`，require 进来是 any），按仓库惯例显式标注返回形状。
+/* SAFETY: 类型断言已复核 */
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const judge = /* SAFETY: 类型断言已复核 */ require("../scripts/check-app-port-vectors.cjs") as {
+const judge = require("../scripts/check-app-port-vectors.cjs") as {
   decidePythonVerdict: (
     first: Measure,
     second: Measure | null,
@@ -79,7 +80,7 @@ type Measure = {
   problems: Array<string>;
   python: string | null;
   state: "answered" | "timeout" | "missing" | "malformed";
-}
+};
 
 const answered = (problems: Array<string> = []): Measure => ({
   state: "answered",

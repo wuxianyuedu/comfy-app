@@ -40,7 +40,8 @@ afterEach(cleanup);
 
 /** 每个分区一段可辨识的正文（判「全量渲染」时按它找）。 */
 function sectionsStub() {
-  return /* SAFETY: 类型断言已复核 */ Object.fromEntries(
+  /* SAFETY: 类型断言已复核 */
+  return Object.fromEntries(
     SETTINGS_SECTIONS.map((item) => [item.id, <p key={item.id}>正文-{item.id}</p>]),
   ) as Record<Section, React.ReactNode>;
 }

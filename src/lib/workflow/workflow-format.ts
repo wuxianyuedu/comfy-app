@@ -15,6 +15,7 @@ export function isRawWorkflowJson(parsed: unknown): boolean {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return false;
   }
-  const nodes = /* SAFETY: 类型断言已复核 */ (parsed as { nodes?: unknown }).nodes;
+  /* SAFETY: 类型断言已复核 */
+  const nodes = (parsed as { nodes?: unknown }).nodes;
   return Array.isArray(nodes) && nodes.length > 0;
 }

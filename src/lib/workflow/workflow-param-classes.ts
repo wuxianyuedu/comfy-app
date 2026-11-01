@@ -374,7 +374,8 @@ export function portTypeDisplay(type: string | undefined | null): string {
 }
 
 /** 数值端口的三类声明（尺寸的数值形态都能落在这几类行上）。 */
-const NUMERIC_PORT_TYPES = /* SAFETY: 类型断言已复核 */ ["INT", "FLOAT", "NUMBER"] as const;
+/* SAFETY: 类型断言已复核 */
+const NUMERIC_PORT_TYPES = ["INT", "FLOAT", "NUMBER"] as const;
 
 /** 尺寸子口的**规格表**：展示类型 + 可接受的端口类型（一处定义，展示与闸门同源）。
  *

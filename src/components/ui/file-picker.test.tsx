@@ -60,7 +60,8 @@ describe("FilePicker", () => {
     pick(fileInput(), A, B);
 
     expect(onPick).toHaveBeenCalledTimes(1);
-    const call = /* SAFETY: 类型断言已复核 */ onPick.mock.calls[0] as [File, FileList];
+    /* SAFETY: 类型断言已复核 */
+    const call = onPick.mock.calls[0] as [File, FileList];
     expect(call[0]).toBe(A);
     expect([...call[1]]).toEqual([A, B]);
   });

@@ -204,7 +204,8 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
 export function extractSetupCmds(raw: string): string | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    const setup = /* SAFETY: 类型断言已复核 */ (parsed as { setup?: { cmds?: unknown } })?.setup;
+    /* SAFETY: 类型断言已复核 */
+    const setup = (parsed as { setup?: { cmds?: unknown } })?.setup;
     const cmds = setup?.cmds;
     return typeof cmds === "string" && cmds.trim() ? cmds : null;
   } catch {

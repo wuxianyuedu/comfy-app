@@ -117,11 +117,13 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
         >
           {[
             {
-              id: /* SAFETY: 类型断言已复核 */ "project" as MaterialScope,
+              /* SAFETY: 类型断言已复核 */
+              id: "project" as MaterialScope,
               label: "本项目",
             },
             {
-              id: /* SAFETY: 类型断言已复核 */ "cross" as MaterialScope,
+              /* SAFETY: 类型断言已复核 */
+              id: "cross" as MaterialScope,
               label: "跨项目",
             },
           ].map((scopeItem) => (

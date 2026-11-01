@@ -108,7 +108,8 @@ describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
           { name: "tests/broken.test.ts", ms: Number.NaN },
         ]),
       ).toBe(true);
-      const j = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      /* SAFETY: 类型断言已复核 */
+      const j = JSON.parse(
         fs.readFileSync(path.join(dir, "scripts", ".test-file-timing.json"), "utf8"),
       ) as { files: Record<string, number> };
       expect(j.files["tests/a.test.ts"]).toBe(7); // 覆盖 + 取整

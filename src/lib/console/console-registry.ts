@@ -39,7 +39,8 @@ type GlobalWithSlot = typeof globalThis & {
 
 /** 取（必要时建）当前进程的控制台槽。 */
 export function consoleSlot(): ConsoleSlot {
-  const g = /* SAFETY: 类型断言已复核 */ globalThis as GlobalWithSlot;
+  /* SAFETY: 类型断言已复核 */
+  const g = globalThis as GlobalWithSlot;
   g[SLOT_KEY] ??= { runner: createConsoleRunner(), history: [] };
   return g[SLOT_KEY];
 }
@@ -60,5 +61,6 @@ export function recordConsoleHistory(slot: ConsoleSlot, entry: ConsoleHistoryEnt
  * 永远是 undefined → 清空动作变成空操作 → 用例互相污染）。
  */
 export function resetConsoleSlotForTest(): void {
-  delete (/* SAFETY: 类型断言已复核 */ (globalThis as GlobalWithSlot)[SLOT_KEY]);
+  /* SAFETY: 类型断言已复核 */
+  delete (globalThis as GlobalWithSlot)[SLOT_KEY];
 }

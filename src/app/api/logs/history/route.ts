@@ -41,7 +41,8 @@ export async function GET(request: Request) {
     try {
       content = await fs.promises.readFile(full, "utf8");
     } catch (error) {
-      if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT") {
+      /* SAFETY: 类型断言已复核 */
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return invalidOrMissing();
       }
       throw error;

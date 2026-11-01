@@ -313,7 +313,8 @@ describe("useModelLibrary 卸载后不再 setState", () => {
         if (/resolveUpdatePriority|dispatchSetState|scheduleUpdateOnFiber/.test(stack)) {
           scheduleReads += 1;
         }
-        return /* SAFETY: 类型断言已复核 */ realWindow?.value as unknown;
+        /* SAFETY: 类型断言已复核 */
+        return realWindow?.value as unknown;
       },
     };
     Object.defineProperty(globalThis, "window", spy);

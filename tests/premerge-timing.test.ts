@@ -54,7 +54,8 @@ describe("recordTimingLedger —— 追加写、best-effort", () => {
     const ledgerPath = path.join(resolveGitDir(root)!, "comfy-premerge-timing.jsonl");
     const lines = fs.readFileSync(ledgerPath, "utf8").trim().split("\n");
     expect(lines).toHaveLength(2);
-    const first = /* SAFETY: 类型断言已复核 */ JSON.parse(lines[0]!) as {
+    /* SAFETY: 类型断言已复核 */
+    const first = JSON.parse(lines[0]!) as {
       at: string;
       entries: Array<{ label: string; ms: number }>;
       ref: string;

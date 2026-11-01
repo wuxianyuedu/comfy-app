@@ -19,22 +19,19 @@ function tokens(cls: string): Array<string> {
 }
 
 describe("顶栏按钮：不许变形的三条硬规则（ISSUE #404）", () => {
-  const allTones = /* SAFETY: 类型断言已复核 */ [
-    "outline",
-    "solid",
-    "ghost",
-    "ioOn",
-    "ioPreviewOn",
-  ] as const;
+  /* SAFETY: 类型断言已复核 */
+  const allTones = ["outline", "solid", "ghost", "ioOn", "ioPreviewOn"] as const;
 
   it.for(allTones)("tone=%s 在任何密度下都禁止换行", (tone) => {
-    for (const density of /* SAFETY: 类型断言已复核 */ ["regular", "compact"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const density of ["regular", "compact"] as const) {
       expect(tokens(topBarButtonClass(tone, density))).toContain("whitespace-nowrap");
     }
   });
 
   it.for(allTones)("tone=%s 在任何密度下都禁止被 flex 压扁", (tone) => {
-    for (const density of /* SAFETY: 类型断言已复核 */ ["regular", "compact"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const density of ["regular", "compact"] as const) {
       expect(tokens(topBarButtonClass(tone, density))).toContain("shrink-0");
     }
   });
@@ -80,13 +77,8 @@ describe("顶栏按钮：紧凑态收窄但可读（「较小尺寸按钮可适�
  * `ghost` 的 hover 底色**覆盖掉** —— 否则基元默认值会在调用处排在后面胜出，
  * 顶栏的窄窗退化整条失效（规范 16 §16.2.4.2 的 `h-auto` 是同一件事）。 */
 describe("顶栏按钮：必须覆盖 ui/button 基元的默认外观（ISSUE #672 P1）", () => {
-  const allTones = /* SAFETY: 类型断言已复核 */ [
-    "outline",
-    "solid",
-    "ghost",
-    "ioOn",
-    "ioPreviewOn",
-  ] as const;
+  /* SAFETY: 类型断言已复核 */
+  const allTones = ["outline", "solid", "ghost", "ioOn", "ioPreviewOn"] as const;
 
   it.for(allTones)("tone=%s 归还高度与圆角给调用处", (tone) => {
     const cls = tokens(topBarButtonClass(tone, "regular"));
@@ -135,7 +127,8 @@ describe("顶栏按钮：必须覆盖 ui/button 基元的默认外观（ISSUE #6
     const native =
       /(?:^|:)(?:bg|text|border|ring|from|to|via)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\d{2,3}\b/;
     for (const tone of allTones) {
-      for (const density of /* SAFETY: 类型断言已复核 */ ["regular", "compact"] as const) {
+      /* SAFETY: 类型断言已复核 */
+      for (const density of ["regular", "compact"] as const) {
         const cls = topBarButtonClass(tone, density);
         expect(cls).not.toMatch(native);
       }
@@ -145,7 +138,8 @@ describe("顶栏按钮：必须覆盖 ui/button 基元的默认外观（ISSUE #6
 
 describe("顶栏容器：窄了换行，不压扁按钮", () => {
   it("按钮组整体不收缩", () => {
-    for (const density of /* SAFETY: 类型断言已复核 */ ["regular", "compact"] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const density of ["regular", "compact"] as const) {
       expect(tokens(topBarGroupClass(density))).toContain("shrink-0");
     }
   });

@@ -41,7 +41,8 @@ export function readSessionMark(): ComfySessionMark | null {
     if (parsed === null || typeof parsed !== "object") {
       return null;
     }
-    return /* SAFETY: 类型断言已复核 */ parsed as ComfySessionMark;
+    /* SAFETY: 类型断言已复核 */
+    return parsed as ComfySessionMark;
   } catch {
     return null;
   }

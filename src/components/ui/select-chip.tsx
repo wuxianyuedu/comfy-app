@@ -123,13 +123,8 @@ const selectChipVariants = cva(
  *
  * **`className` / `type` 不在表里**：它们照常透传（`className` 还要与形态档
  * 经 `cn()` 合并 —— 这是调用处压过缺省档的唯一入口）。 */
-const OWN_PROPS = /* SAFETY: 类型断言已复核 */ [
-  "selected",
-  "shape",
-  "variant",
-  "role",
-  "aria-checked",
-] as const;
+/* SAFETY: 类型断言已复核 */
+const OWN_PROPS = ["selected", "shape", "variant", "role", "aria-checked"] as const;
 
 export type SelectChipProps = OmitOwnProps<
   React.ComponentProps<typeof Button>,

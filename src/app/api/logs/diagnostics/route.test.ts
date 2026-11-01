@@ -27,7 +27,8 @@ const logRoot = path.join(tmp, "log");
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
-    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
+    /* SAFETY: 类型断言已复核 */
+    ...(actual as Record<string, unknown>),
     LOG_ROOT: logRoot,
   };
 });
@@ -91,7 +92,8 @@ describe("/api/logs/diagnostics", () => {
   it.skipIf(!PYTHON_OK)("打出能解开的 zip，含本次 current/ 与历史 runs/", async () => {
     const res = await POST();
     expect(res.status).toBe(200);
-    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const data = (await res.json()) as {
       bytes: number | null;
       ok: boolean;
       path: string;

@@ -66,7 +66,8 @@ class FakeIntersectionObserver {
   }
 }
 
-const IDS = /* SAFETY: 类型断言已复核 */ ["a", "b", "c"] as const;
+/* SAFETY: 类型断言已复核 */
+const IDS = ["a", "b", "c"] as const;
 
 /** 建宿主容器 + 三个分区节，并把 `ref` 回调挂上去。 */
 function mountSections(ref: React.RefObject<HTMLElement | null>) {

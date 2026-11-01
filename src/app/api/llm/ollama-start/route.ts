@@ -41,10 +41,8 @@ const SPAWN_GRACE_MS = 1000;
  * Next.js dev 模式 HMR 会重置模块变量，让并发 POST 各自 spawn。
  */
 const G_KEY = "__ollamaServeSpawnLock_v2";
-const g = /* SAFETY: 类型断言已复核 */ globalThis as unknown as Record<
-  string,
-  { starting: boolean } | undefined
->;
+/* SAFETY: 类型断言已复核 */
+const g = globalThis as unknown as Record<string, { starting: boolean } | undefined>;
 const st: { starting: boolean } = g[G_KEY] ?? { starting: false };
 g[G_KEY] = st;
 
@@ -98,7 +96,8 @@ async function resolveOllamaExe(): Promise<string> {
   if (process.platform !== "win32") {
     return "ollama";
   }
-  const candidates = /* SAFETY: 类型断言已复核 */ [
+  /* SAFETY: 类型断言已复核 */
+  const candidates = [
     process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Programs\\Ollama\\ollama.exe` : null,
     process.env.ProgramFiles ? `${process.env.ProgramFiles}\\Ollama\\ollama.exe` : null,
     process.env["ProgramFiles(x86)"]

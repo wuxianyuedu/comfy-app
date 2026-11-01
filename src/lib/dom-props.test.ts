@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { commonOwnProps, splitDomProps, type OmitOwnProps } from "./dom-props";
 
 type InputProps = React.ComponentProps<"input">;
-const PRIVATE = /* SAFETY: 类型断言已复核 */ ["type", "value", "onChange"] as const;
+/* SAFETY: 类型断言已复核 */
+const PRIVATE = ["type", "value", "onChange"] as const;
 /** 一个恒等函数当 `onChange` 桩（避免空函数体被 lint 拦下）。 */
 const noop = () => undefined;
 

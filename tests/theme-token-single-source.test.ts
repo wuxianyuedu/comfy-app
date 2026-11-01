@@ -86,7 +86,8 @@ beforeAll(async () => {
 });
 
 /** 别名清单：shadcn 基元要用的那几个名字（与 §16.2.4.4 ② 的表一致）。 */
-const ALIASES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const ALIASES = [
   "--background",
   "--foreground",
   "--card",
@@ -204,7 +205,8 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
     const stray = [...declared].filter(
       (n) =>
         !KNOWN_PREFIXES.some((p) => n.startsWith(p)) &&
-        !ALIASES.includes(/* SAFETY: 类型断言已复核 */ n as (typeof ALIASES)[number]) &&
+        /* SAFETY: 类型断言已复核 */
+        !ALIASES.includes(n as (typeof ALIASES)[number]) &&
         !Object.keys(LITERAL_ALLOWED).includes(n),
     );
     expect(
@@ -297,7 +299,8 @@ describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
 describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Shapes）", () => {
   /** 设计意图：默认档渲染出的整数刻度，sm…4xl 每档 +4px。 */
   const LADDER = [8, 12, 16, 20, 24, 28, 32];
-  const ORDER = /* SAFETY: 类型断言已复核 */ [
+  /* SAFETY: 类型断言已复核 */
+  const ORDER = [
     "--radius-sm",
     "--radius-md",
     "--radius-lg",
@@ -398,12 +401,8 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
    但 T2 的扫描面被截断在块的前 26 个名字上、T3 又只走别名清单，两条都没碰到它。
    这里补的是**产物侧**那半：字体链必须解得出具体值，且解出来的是设计那串栈。 */
 
-const FONT_CHAIN = /* SAFETY: 类型断言已复核 */ [
-  "--font-sans",
-  "--font-heading",
-  "--font-title",
-  "--font-mono",
-] as const;
+/* SAFETY: 类型断言已复核 */
+const FONT_CHAIN = ["--font-sans", "--font-heading", "--font-title", "--font-mono"] as const;
 
 describe("T5 字体链在编译产物里必须解得出具体的栈（#1434）", () => {
   it.for(

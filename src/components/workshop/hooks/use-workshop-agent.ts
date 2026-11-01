@@ -134,7 +134,8 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
           detail: result.detail,
         });
         return {
-          role: /* SAFETY: 类型断言已复核 */ "tool" as const,
+          /* SAFETY: 类型断言已复核 */
+          role: "tool" as const,
           tool_call_id: call.id,
           content: JSON.stringify({
             ok: result.ok,
@@ -146,7 +147,8 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
         const msg = errorMessage(error_, "工具执行失败");
         patchToolRun(runId, { status: "error", detail: msg });
         return {
-          role: /* SAFETY: 类型断言已复核 */ "tool" as const,
+          /* SAFETY: 类型断言已复核 */
+          role: "tool" as const,
           tool_call_id: call.id,
           content: JSON.stringify({ ok: false, error: msg }),
         } satisfies AgentMessageLike;

@@ -125,7 +125,8 @@ function executionErrorMessageOf(msg: unknown): unknown {
     return undefined;
   }
   // Array.isArray 把 unknown 收窄为 any[]，索引取值后立即断言收口。
-  const payload = /* SAFETY: 类型断言已复核 */ msg[1] as Record<string, unknown> | null | undefined;
+  /* SAFETY: 类型断言已复核 */
+  const payload = msg[1] as Record<string, unknown> | null | undefined;
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   return payload != null && typeof payload === "object" ? payload.exception_message : undefined;
 }
@@ -134,7 +135,8 @@ function executionErrorMessageOf(msg: unknown): unknown {
  *  改动范围内）—— 经这里统一收口为 `unknown` 读取；`undefined` 归一为 `null`
  *  与拆分前一致（completeInner 内两者等价）。 */
 function executedWorkflowOf(taskId: string): unknown {
-  const map = /* SAFETY: 类型断言已复核 */ state().executedWorkflow as ReadonlyMap<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const map = state().executedWorkflow as ReadonlyMap<string, unknown>;
   return map.get(taskId) ?? null;
 }
 

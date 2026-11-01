@@ -50,7 +50,8 @@ function parseChange(raw: unknown): ComfyStateChange | null {
   if (typeof raw !== "object" || raw === null) {
     return null;
   }
-  const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const o = raw as Record<string, unknown>;
   if (
     typeof o.seq !== "number" ||
     !Number.isFinite(o.seq) ||
@@ -63,7 +64,8 @@ function parseChange(raw: unknown): ComfyStateChange | null {
   return {
     seq: o.seq,
     at: o.at,
-    kind: /* SAFETY: 类型断言已复核 */ o.kind as ComfyStateChange["kind"],
+    /* SAFETY: 类型断言已复核 */
+    kind: o.kind as ComfyStateChange["kind"],
     detail: o.detail,
   };
 }

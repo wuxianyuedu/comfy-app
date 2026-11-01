@@ -104,7 +104,8 @@ export function useCanvasDrop({ screenToFlowPosition, setNodes }: UseCanvasDropA
       e.preventDefault();
       let payload: MediaDropPayload;
       try {
-        payload = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as MediaDropPayload;
+        /* SAFETY: 类型断言已复核 */
+        payload = JSON.parse(raw) as MediaDropPayload;
       } catch {
         return;
       }

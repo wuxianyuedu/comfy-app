@@ -29,7 +29,8 @@ const SRC_ROOT = fileURLToPath(new URL("../src", import.meta.url));
 const CSS_PATH = fileURLToPath(new URL("../src/app/globals.css", import.meta.url));
 const css = readFileSync(CSS_PATH, "utf8");
 
-const LOOP_SELECTORS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const LOOP_SELECTORS = [
   ".animate-spin",
   ".animate-pulse",
   ".wf-wave",
@@ -40,7 +41,8 @@ const LOOP_SELECTORS = /* SAFETY: 类型断言已复核 */ [
   '[data-slot="progress-bar-indeterminate"]',
   '[data-slot="agent-tool-status-dot"]',
 ] as const;
-const DISPLACEMENT_SELECTORS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const DISPLACEMENT_SELECTORS = [
   '[data-slot="sheet-content"]',
   '[data-slot="navigation-menu-content"]',
 ] as const;

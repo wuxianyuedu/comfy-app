@@ -32,7 +32,8 @@ async function scanLogFiles(dir: string, base: string): Promise<Array<LogFileInf
   try {
     entries = await fs.promises.readdir(dir, { withFileTypes: true });
   } catch (error) {
-    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT") {
+    /* SAFETY: 类型断言已复核 */
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return [];
     }
     throw error;

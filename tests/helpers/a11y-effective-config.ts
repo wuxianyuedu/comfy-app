@@ -50,14 +50,14 @@ export const REAL_ROOT = path.resolve(__dirname, "../..");
 /** 判据的导出面（`scripts/check-a11y-rules.cjs` 的 `module.exports`）。 */
 /** 判据归一的台账形状（`readLedger` 的产物，也是 `judge` 的入参）。 */
 export type Ledger = {
-  dialect: Array<{ decision: string; keeper: string; rule: string; why: string; }>;
+  dialect: Array<{ decision: string; keeper: string; rule: string; why: string }>;
   inlineExemptions: Array<{
     file: string;
     keeper: string;
     rule: string;
     why: string;
   }>;
-}
+};
 
 /** `judge()` 的判决结果（bin 形态再把它翻成退出码）。 */
 export type JudgeVerdict = {
@@ -67,7 +67,7 @@ export type JudgeVerdict = {
   problems: Array<string>;
   /** 那句一行汇总。 */
   summary: string;
-}
+};
 
 export type A11yJudgeModule = {
   /** 生效的 jsx-a11y 规则表（规则名 → 档位）。 */
@@ -88,7 +88,7 @@ export type A11yJudgeModule = {
   rulesInNeitherConfig: () => Promise<Array<string>>;
   /** 本脚本对外公开的面（键 = 上面的函数名），用来核「导出面 ⇄ 执行者」。 */
   VERIFIED_SURFACES: Record<string, string>;
-}
+};
 
 const requireCjs = createRequire(__filename);
 
@@ -102,5 +102,6 @@ const requireCjs = createRequire(__filename);
  * 见文件头「失败路径」）。
  */
 export function loadJudgeModule(): A11yJudgeModule {
-  return /* SAFETY: 类型断言已复核 */ requireCjs(SCRIPT) as A11yJudgeModule;
+  /* SAFETY: 类型断言已复核 */
+  return requireCjs(SCRIPT) as A11yJudgeModule;
 }

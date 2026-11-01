@@ -62,7 +62,8 @@ export function useModelAdapters(): ModelAdaptersController {
     if (typeof raw !== "object" || raw === null) {
       return [];
     }
-    const extra = /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>).extraModels;
+    /* SAFETY: 类型断言已复核 */
+    const extra = (raw as Record<string, unknown>).extraModels;
     if (!Array.isArray(extra)) {
       return [];
     }
@@ -71,7 +72,8 @@ export function useModelAdapters(): ModelAdaptersController {
       if (typeof item !== "object" || item === null) {
         continue;
       }
-      const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
+      /* SAFETY: 类型断言已复核 */
+      const rec = item as Record<string, unknown>;
       const name = typeof rec.name === "string" ? rec.name : "";
       const kind = rec.kind === "video" ? "video" : rec.kind === "image" ? "image" : "chat";
       const baseUrl = typeof rec.baseUrl === "string" ? rec.baseUrl : null;

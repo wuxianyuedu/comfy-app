@@ -136,9 +136,10 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     expect(ok.output).toContain("在预算内");
 
     /* 伪造一个「更紧」的基线：判据必须看得见（探针灵敏度那一档的等价形态）。 */
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as { metric: { gzip: number } };
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as {
+      metric: { gzip: number };
+    };
     baseline.metric.gzip -= 4096;
     repo.write("scripts/.bundle-budget-baseline.json", `${JSON.stringify(baseline, null, 2)}\n`);
     const blocked = repo.run(enforce());
@@ -282,9 +283,10 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
 
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as { entries: Array<{ name: string; sha: string }> };
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as {
+      entries: Array<{ name: string; sha: string }>;
+    };
     /* 基线必须**带指纹**（诊断才可能对齐）—— 这一条钉的是「别退回只存名字」。 */
     expect(Array.isArray(baseline.entries)).toBe(true);
     expect(baseline.entries.length).toBe(20);
@@ -298,9 +300,10 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     /* 直接篡改基线里的 raw —— 若 raw 参与判定，此时必然报「raw 总量上升」。
      * 这一档是**契约**不是巧合：raw 是磁盘/内存形态，gzip 才是下载量，
      * 两者会分叉（可压缩冗余），拿 raw 判红只会制造误报。 */
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as { metric: { raw: number } };
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as {
+      metric: { raw: number };
+    };
     baseline.metric.raw = 1;
     repo.write("scripts/.bundle-budget-baseline.json", `${JSON.stringify(baseline, null, 2)}\n`);
 
@@ -355,9 +358,10 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     /* 把 `baselineRev` 换成一个**形状对、本检出里不存在**的修订号 —— 这正是
      * ISSUE #1988 的现场：master 那份基线记的是 `b6c3c353`，而那个提交在检出里
      * 根本不存在（分支合入 + `git gc` 之后的老形态）。 */
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as { baselineRev?: string };
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as {
+      baselineRev?: string;
+    };
     baseline.baselineRev = "b6c3c353bcfb3c4109f5ceebeaac629731ad221b";
     repo.write("scripts/.bundle-budget-baseline.json", `${JSON.stringify(baseline, null, 2)}\n`);
 
@@ -377,9 +381,10 @@ describe("check-bundle-budget.cjs（提交门槛，规范 §13.5.4）", () => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
 
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as { baselineRev?: string };
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as {
+      baselineRev?: string;
+    };
     delete baseline.baselineRev;
     repo.write("scripts/.bundle-budget-baseline.json", `${JSON.stringify(baseline, null, 2)}\n`);
 
@@ -534,9 +539,11 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
     repo.git("merge", "-q", "--no-ff", "--no-edit", "side");
 
     /* 合并后把基线改成「就记 HEAD」：这正是解冲突时取一侧/重记的形态。 */
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as Record<
+      string,
+      unknown
+    >;
     /* 夹具的 `git()` 不回显 stdout，所以经过一次读文件 + 一次写回把修订号换成 HEAD。 */
     baseline.baselineRev = execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: repo.dir,
@@ -569,9 +576,11 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
     repo.write("src/a.ts", "export const a = 1;\n");
     repo.git("add", "-A");
     repo.git("commit", "-qm", "feat: 往客户端加一个模块");
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as Record<
+      string,
+      unknown
+    >;
     // 形状合法、本检出里不存在：squash 合入 + gc 之后的老形态。
     baseline.baselineRev = "b6c3c353bcfb3c4109f5ceebeaac629731ad221b";
     repo.write("scripts/.bundle-budget-baseline.json", `${JSON.stringify(baseline, null, 2)}\n`);
@@ -589,9 +598,11 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
   testWithGit("src/ 侧其后一次提交都没有时，把「0」当结论说出来而不是退化成量不到", ({ repo }) => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as Record<
+      string,
+      unknown
+    >;
     baseline.baselineRev = "b6c3c353bcfb3c4109f5ceebeaac629731ad221b";
     repo.write("scripts/.bundle-budget-baseline.json", `${JSON.stringify(baseline, null, 2)}\n`);
     chunk(repo, "0800.js", `/* ${"z".repeat(4096)} */\n`);
@@ -605,9 +616,11 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
   test("基线日期也不可信时不许冒充有归因（说「判断不了」而不是编一个数）", ({ repo }) => {
     seedChunks(repo);
     expect(repo.run(["--update"]).code).toBe(0);
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as Record<
+      string,
+      unknown
+    >;
     baseline.baselineRev = "b6c3c353bcfb3c4109f5ceebeaac629731ad221b";
     delete baseline.generatedAt; // 第二通道唯一的输入没了 ⇒ 必须明说量不到
     repo.write("scripts/.bundle-budget-baseline.json", `${JSON.stringify(baseline, null, 2)}\n`);
@@ -639,9 +652,10 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
     const seeded = repo.run(["--update"]);
     expect(seeded.code, seeded.output).toBe(0);
     expect(seeded.output).toContain("取的是主干可达的那一枚");
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as { baselineRev?: string };
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as {
+      baselineRev?: string;
+    };
     expect(baseline.baselineRev, "锚点记成了分支提交 —— 那正是 #2082 的病根").toBe(trunk);
     expect(baseline.baselineRev).not.toBe(head);
   });
@@ -656,9 +670,10 @@ describe("check-bundle-budget.cjs（基线过期要有归因，规范 §13.5.4 /
       cwd: repo.dir,
       encoding: "utf8",
     }).trim();
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      repo.read("scripts/.bundle-budget-baseline.json"),
-    ) as { baselineRev?: string };
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(repo.read("scripts/.bundle-budget-baseline.json")) as {
+      baselineRev?: string;
+    };
     expect(baseline.baselineRev).toBe(head);
   });
 });

@@ -80,7 +80,8 @@ export const taskRouter = createTRPCRouter({
           includeImages: true,
         });
         return tasks.map((task) => {
-          const p = /* SAFETY: 类型断言已复核 */ (task.params ?? {}) as Record<string, unknown>;
+          /* SAFETY: 类型断言已复核 */
+          const p = (task.params ?? {}) as Record<string, unknown>;
           const checkpoint = typeof p.checkpoint === "string" ? p.checkpoint : null;
           const cover = task.images[0]?.localPath ?? null;
           const coverMediaType = task.images[0]?.mediaType ?? null;
@@ -258,7 +259,8 @@ export const taskRouter = createTRPCRouter({
     if (!task) {
       throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在" });
     }
-    const snap = /* SAFETY: 类型断言已复核 */ task.workflowSnapshot as {
+    /* SAFETY: 类型断言已复核 */
+    const snap = task.workflowSnapshot as {
       capturedAt?: string;
       source?: string;
       workflow?: unknown;

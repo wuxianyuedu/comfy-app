@@ -39,8 +39,10 @@ function pkg(status: "ok" | "missing" | "error" | "empty", name: string) {
     exists: true,
     status,
     nodeCount: 0,
-    nodeTypes: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
-    errors: /* SAFETY: 类型断言已复核 */ [] as Array<{
+    /* SAFETY: 类型断言已复核 */
+    nodeTypes: [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    errors: [] as Array<{
       error: string;
       file: string;
     }>,

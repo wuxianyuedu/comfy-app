@@ -22,7 +22,8 @@ vi.mock("~/trpc/vanilla", () => ({
 }));
 
 /** tRPC resolver 的类型是 Resolver<...>，测试里按 vi.Mock 取用。 */
-const mockOf = (fn: unknown) => /* SAFETY: 类型断言已复核 */ fn as Mock;
+/* SAFETY: 类型断言已复核 */
+const mockOf = (fn: unknown) => fn as Mock;
 
 const vanilla = {
   workflowModel: {

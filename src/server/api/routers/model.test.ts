@@ -22,7 +22,8 @@ const { scan, comfy } = vi.hoisted(() => ({
   },
   comfy: {
     listModelFolders: vi.fn(
-      async () => /* SAFETY: 类型断言已复核 */ ["vae", "checkpoints"] as Array<string>,
+      /* SAFETY: 类型断言已复核 */
+      async () => ["vae", "checkpoints"] as Array<string>,
     ),
     comfyBase: vi.fn(() => "http://127.0.0.1:8188"),
   },
@@ -154,7 +155,8 @@ describe("model.list / sync —— 上下文与透传", () => {
   it("列表把 input 原样给仓储；不传时是空对象而不是 undefined", async () => {
     const list = vi
       .spyOn(modelRepository, "list")
-      .mockResolvedValue(/* SAFETY: 类型断言已复核 */ [] as never);
+      /* SAFETY: 类型断言已复核 */
+      .mockResolvedValue([] as never);
     await caller().list({ type: "checkpoints", q: "sd" });
     expect(list).toHaveBeenCalledWith({ type: "checkpoints", q: "sd" });
     await caller().list();

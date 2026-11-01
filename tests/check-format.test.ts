@@ -149,11 +149,7 @@ describe("oxfmt 格式判据（硬闸）", () => {
     const stubRel = "scripts/fake-oxfmt-color.cjs";
     repo.write(
       stubRel,
-      `process.stdout.write("${
-        String.raw`\u001b[38;2;244;191;117;1m`
-        }src/lib/fresh.ts${
-        String.raw`\u001b[0m (1ms)\n"`
-        });\nprocess.exit(1);\n`,
+      `process.stdout.write("${String.raw`\u001b[38;2;244;191;117;1m`}src/lib/fresh.ts${String.raw`\u001b[0m (1ms)\n"`});\nprocess.exit(1);\n`,
     );
     const stub = join(repo.dir, stubRel);
     const r = repo.run([], { env: { COMFYAPP_OXFMT_ENTRY: stub } });
@@ -180,8 +176,9 @@ describe("oxfmt 格式判据（硬闸）", () => {
 });
 
 describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
+  /* SAFETY: 类型断言已复核 */
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
+  const mod = require("../scripts/check-format.cjs") as {
     globToRegExp: (glob: string) => RegExp;
     isIgnored: (rel: string) => boolean;
   };

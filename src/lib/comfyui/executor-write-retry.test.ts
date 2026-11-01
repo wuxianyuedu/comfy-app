@@ -50,7 +50,8 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
       if (calls < 3) {
         throw busyError();
       }
-      return /* SAFETY: 类型断言已复核 */ "written" as const;
+      /* SAFETY: 类型断言已复核 */
+      return "written" as const;
     });
 
     expect(outcome).toBe("written");
@@ -105,7 +106,8 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
     await writeTerminal(
       "t-clean",
       "成功收口",
-      async () => /* SAFETY: 类型断言已复核 */ "written" as const,
+      /* SAFETY: 类型断言已复核 */
+      async () => "written" as const,
     );
     expect(state().logs.has("t-clean")).toBe(false);
     expect(isDispatchedHere("t-clean")).toBe(true);

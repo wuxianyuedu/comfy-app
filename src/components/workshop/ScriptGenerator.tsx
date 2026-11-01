@@ -105,7 +105,8 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
                 onChange={(value) =>
                   onMetaChange({
                     ...meta,
-                    type: /* SAFETY: 类型断言已复核 */ value as ProjectType,
+                    /* SAFETY: 类型断言已复核 */
+                    type: value as ProjectType,
                   })
                 }
                 options={PROJECT_TYPES}

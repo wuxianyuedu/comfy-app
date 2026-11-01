@@ -96,7 +96,8 @@ export function extractValidationErrors(
       if (typeof r !== "object" || r === null) {
         return false;
       }
-      const rec = /* SAFETY: 类型断言已复核 */ r as Record<string, unknown>;
+      /* SAFETY: 类型断言已复核 */
+      const rec = r as Record<string, unknown>;
       // 这几个字段可能是空字符串，必须用 `||` 判空（`??` 只挡 null/undefined）；
       // eslint 的 prefer-nullish-coalescing 在这里给的是误报，故就地豁免。
       return (
@@ -116,18 +117,19 @@ export function extractValidationErrors(
     return [];
   }
   const out: Array<ValidationError> = [];
+  /* SAFETY: 类型断言已复核 */
   const entries: Array<[string, unknown]> = Array.isArray(ne)
     ? ne.map((item: unknown) => {
-        const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown> | null | undefined;
+        /* SAFETY: 类型断言已复核 */
+        const rec = item as Record<string, unknown> | null | undefined;
         // String(x) 的收窄等价（见本文件底部 toStringValue）：值来自外部 JSON。
-        return /* SAFETY: 类型断言已复核 */ [toStringValue(rec?.node_id ?? "?"), item] as [
-          string,
-          unknown,
-        ];
+        /* SAFETY: 类型断言已复核 */
+        return [toStringValue(rec?.node_id ?? "?"), item] as [string, unknown];
       })
-    : Object.entries(/* SAFETY: 类型断言已复核 */ ne as Record<string, unknown>);
+    : /* SAFETY: 类型断言已复核 */ Object.entries(ne as Record<string, unknown>);
   for (const [nid, err] of entries) {
-    const errRec = /* SAFETY: 类型断言已复核 */ err as Record<string, unknown> | null | undefined;
+    /* SAFETY: 类型断言已复核 */
+    const errRec = err as Record<string, unknown> | null | undefined;
     const graphNode = graph?.[nid];
     const graphClass = asRecord(graphNode)?.class_type;
     const errClass = errRec?.class_type;
@@ -141,13 +143,13 @@ export function extractValidationErrors(
       for (const [field, v] of Object.entries(
         /* SAFETY: 类型断言已复核 */ inputErrors as Record<string, unknown>,
       )) {
-        const message =
-          typeof v === "string"
-            ? v
-            : /* SAFETY: 类型断言已复核 */ ((v as { message?: string })?.message ??
-                /* SAFETY: 类型断言已复核 */ (v as { details?: string })?.details ??
-                JSON.stringify(v)) ||
-              "配置错误";
+        /* SAFETY: 类型断言已复核 */
+        const fromObject =
+          ((v as { message?: string })?.message ??
+            /* SAFETY: 类型断言已复核 */ (v as { details?: string })?.details ??
+            JSON.stringify(v)) ||
+          "配置错误";
+        const message = typeof v === "string" ? v : fromObject;
         out.push({ nodeId: nid, classType, field, message });
       }
     } else if (typeof errRec?.message === "string") {
@@ -179,9 +181,11 @@ export function parseValidationErrors(
     return null;
   }
   try {
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown;
+    /* SAFETY: 类型断言已复核 */
+    const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
-      return /* SAFETY: 类型断言已复核 */ parsed as Array<ValidationError>;
+      /* SAFETY: 类型断言已复核 */
+      return parsed as Array<ValidationError>;
     }
   } catch {
     /* fall through */
@@ -204,5 +208,6 @@ function toStringValue(v: unknown): string {
   if (v === undefined) {
     return "undefined";
   }
-  return /* SAFETY: 类型断言已复核 */ (v as { toString(): string }).toString();
+  /* SAFETY: 类型断言已复核 */
+  return (v as { toString(): string }).toString();
 }

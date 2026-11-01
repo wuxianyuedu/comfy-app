@@ -45,7 +45,8 @@ import { requireRequestUser } from "~/server/auth/request-user";
  *  浏览器第一次拖进度条才会想起发 `Range`。
  *  ⚠️ `Cache-Control` 必须是 `private`：加了归属判定之后再标 `public`，
  *  等于允许共享缓存把 A 的产物回给 B —— 那会让上面那道闸只剩形式。 */
-const SHARED_HEADERS = /* SAFETY: type assertion reviewed */ {
+/* SAFETY: type assertion reviewed */
+const SHARED_HEADERS = {
   "Cache-Control": "private, max-age=31536000, immutable",
   "Accept-Ranges": "bytes",
 } as const;

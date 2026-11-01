@@ -62,7 +62,8 @@ export async function saveApiChannels(payload: ApiChannelSavePayload): Promise<A
   }
 
   /* 非法 JSON 按空对象处理（后端 500 可能返回非 JSON）—— 读法收在出口里。 */
-  const data = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
+  /* SAFETY: 类型断言已复核 */
+  const data = (await readJsonBody(res)) as {
     channels?: unknown;
     error?: unknown;
   };

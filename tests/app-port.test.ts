@@ -185,7 +185,8 @@ describe("app-port 端口解析", () => {
  * 任一侧实现漂移 → 对应侧测试失败，而不是等到 Windows 真机上才发现。
  */
 describe("app-port 四语言共享校验向量", () => {
-  const fixture = /* SAFETY: 类型断言已复核 */ JSON.parse(
+  /* SAFETY: 类型断言已复核 */
+  const fixture = JSON.parse(
     fs.readFileSync(path.join(process.cwd(), "tests", "fixtures", "app-port-vectors.json"), "utf8"),
   ) as {
     vectors: Array<{

@@ -453,10 +453,8 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   // 高度，理由见 NODE_TITLE_H 的注释）。`data.size.h` 里带的主体内容高度
   // 正好就是 `size[1]`。
   const NODE_ANCHOR_OFFSET_Y = NODE_TITLE_H;
-  const graphById = /* SAFETY: 类型断言已复核 */ detail.graph as Record<
-    string,
-    GraphEntry | undefined
-  >;
+  /* SAFETY: 类型断言已复核 */
+  const graphById = detail.graph as Record<string, GraphEntry | undefined>;
   const buildWfNode = (n: ComfyGraphNode, pos: { x: number; y: number }): Node => ({
     id: n.id,
     type: "wfNode",
@@ -667,7 +665,8 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
         ? buildSubgraphNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY })
         : buildWfNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY });
     });
-    const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
+    /* SAFETY: 类型断言已复核 */
+    const middlePosById = Object.fromEntries(
       middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
     ) as Record<string, { x: number; y: number }>;
     return [
@@ -701,7 +700,8 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
       }
       return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
     });
-    const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
+    /* SAFETY: 类型断言已复核 */
+    const middlePosById = Object.fromEntries(
       middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
     ) as Record<string, { x: number; y: number }>;
     return [
@@ -717,7 +717,8 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
     const pos = kahn[realNode.id] ?? { x: padX, y: padY };
     return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
   });
-  const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
+  /* SAFETY: 类型断言已复核 */
+  const middlePosById = Object.fromEntries(
     middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
   ) as Record<string, { x: number; y: number }>;
   return [

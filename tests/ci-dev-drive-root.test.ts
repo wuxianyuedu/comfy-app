@@ -174,11 +174,8 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
 
   it("`TEMP` 与 `TMP` 指向同一个目录，且三个落点同卷", () => {
     expect(env.TEMP).toBe(env.TMP);
-    for (const key of /* SAFETY: 类型断言已复核 */ [
-      "TEMP",
-      "TMP",
-      "PLAYWRIGHT_BROWSERS_PATH",
-    ] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const key of ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const) {
       const value = env[key]!;
       expect(
         isAbsolutePath(value),
@@ -186,9 +183,10 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
           "而作业目录每跑换一个，临时文件就散在各个工作区里",
       ).toBe(true);
     }
-    const roots = /* SAFETY: 类型断言已复核 */ (
-      ["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const
-    ).map((k) => volumeRootOf(env[k]!));
+    /* SAFETY: 类型断言已复核 */
+    const roots = (["TEMP", "TMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map((k) =>
+      volumeRootOf(env[k]!),
+    );
     expect(
       new Set(roots).size,
       `三个落点必须同卷（现在分别是 ${roots.join(" / ")}）—— 跨卷时「往落点里挪一个` +
@@ -216,9 +214,8 @@ describe("CI 落点：临时根与浏览器落点都在开发盘上（契约）"
      * 那个前提的形状：临时根不许落进**会被整目录清空**的那棵树，也不许落进检出根内部
      * （那时 `清理 G:\Temp` 就等于删掉正在跑的工作区）。 */
     const temp = env.TEMP!;
-    const roots = /* SAFETY: 类型断言已复核 */ (["TEMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map(
-      (k) => env[k]!,
-    );
+    /* SAFETY: 类型断言已复核 */
+    const roots = (["TEMP", "PLAYWRIGHT_BROWSERS_PATH"] as const).map((k) => env[k]!);
 
     /* ① 不许落进检出根。平台把每个 job 检出到 `…\<流水线 id>~<随机段>\workspace`，
      *    而宿主把那个工作区的**父目录**记为 `ORANGE_RUNNER_DATA_DIR` —— 两者都认：

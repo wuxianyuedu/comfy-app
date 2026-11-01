@@ -198,7 +198,9 @@ export async function connect(): Promise<void> {
     kickQueue();
   });
   ws.on("message", (data) => {
-    fireAndForget(handleMessage(/* SAFETY: 类型断言已复核 */ (data as Buffer).toString()), (e) => {
+    /* SAFETY: 类型断言已复核 */
+    const text = (data as Buffer).toString();
+    fireAndForget(handleMessage(text), (e) => {
       logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`);
     });
   });
@@ -311,7 +313,8 @@ export async function handleMessage(raw: string) {
     return;
   }
   // ComfyUI WS 消息的最小结构视图（协议判断委托给 comfyProtocol Adapter）。
-  const message = /* SAFETY: 类型断言已复核 */ msg as ComfyWsMessage;
+  /* SAFETY: 类型断言已复核 */
+  const message = msg as ComfyWsMessage;
   const data = message.data ?? {};
   const promptId: string | undefined =
     typeof data.prompt_id === "string" ? data.prompt_id : undefined;

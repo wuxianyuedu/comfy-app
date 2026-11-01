@@ -50,7 +50,8 @@ import { stripComments } from "./helpers/strip-comments";
  * 是可选安装。反过来先试 `pwsh` 只会在装了 7 的机器上多起一次进程。
  * `python` 那一条走 `pythonCandidates()`（平台差异在原处回答，见那份模块的头注）。
  */
-const POWER_SHELL_CANDIDATES = /* SAFETY: 类型断言已复核 */ ["powershell", "pwsh"] as const;
+/* SAFETY: 类型断言已复核 */
+const POWER_SHELL_CANDIDATES = ["powershell", "pwsh"] as const;
 /** 探测与真跑共用同一条参数形态：探测要回答的正是「这条形态跑得通吗」。 */
 const POWER_SHELL_PROBE_ARGS = ["-NoProfile", "-Command", "exit 0"];
 /** 本组用例的条数（`env` 档跳过的登记表里记的就是这个数，见
@@ -94,7 +95,8 @@ function runWith(args: Array<string>): { code: number; output: string } {
     );
     return { code: 0, output };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as {
+    /* SAFETY: 类型断言已复核 */
+    const e = error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -797,8 +799,7 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
         "function Log { param([string]$Msg) Write-Output $Msg }",
         "function Log { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
       )
-      .replace("$global:KILLED_PIDS = @()", "$global:KILLED = 0\n$global:KILLED_PIDS = @()")
-    }
+      .replace("$global:KILLED_PIDS = @()", "$global:KILLED = 0\n$global:KILLED_PIDS = @()")}
 $code = Assert-ShellNotRunning -ProjectRoot $root -Purpose "构建 release 壳"
 Write-Output ("CODE=" + $code)
 Write-Output ("KILLED=" + $global:KILLED)
@@ -1296,7 +1297,8 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     label?: string;
     width: number;
   } => {
-    const conf = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(CONF, "utf8")) as {
+    /* SAFETY: 类型断言已复核 */
+    const conf = JSON.parse(readFileSync(CONF, "utf8")) as {
       app: {
         windows: Array<{
           decorations?: boolean;

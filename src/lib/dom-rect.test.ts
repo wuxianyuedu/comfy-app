@@ -40,7 +40,8 @@ function fakeEl(opts: {
     toJSON: () => ({}),
     ...opts.rect,
   };
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     clientWidth: opts.clientWidth ?? 0,
     clientHeight: opts.clientHeight ?? 0,
     scrollWidth: opts.scrollWidth ?? 0,
@@ -81,7 +82,8 @@ describe("readElementBox", () => {
   });
 
   it("不是元素（没有 clientWidth）时给 null", () => {
-    expect(readElementBox(/* SAFETY: 类型断言已复核 */ {} as unknown as Element)).toBeNull();
+    /* SAFETY: 类型断言已复核 */
+    expect(readElementBox({} as unknown as Element)).toBeNull();
   });
 
   it("noRect 跳过视口位置（滚动回调里避免强制布局）", () => {
@@ -159,7 +161,8 @@ describe("centerLineScrollTop", () => {
 
 describe("rectToAnchorRect", () => {
   it("把活着的 DOMRect 冻成可存对象（含 x / y）", () => {
-    const rect = /* SAFETY: 类型断言已复核 */ {
+    /* SAFETY: 类型断言已复核 */
+    const rect = {
       x: 1,
       y: 2,
       left: 1,

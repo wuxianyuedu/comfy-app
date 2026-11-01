@@ -21,7 +21,8 @@ function dotOf(props: Parameters<typeof StatusDot>[0]): HTMLElement {
   if (!el) {
     throw new Error("StatusDot 未渲染出 data-slot=status-dot 的元素");
   }
-  return /* SAFETY: 类型断言已复核 */ el as HTMLElement;
+  /* SAFETY: 类型断言已复核 */
+  return el as HTMLElement;
 }
 
 describe("StatusDot", () => {

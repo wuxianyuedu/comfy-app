@@ -36,7 +36,8 @@ beforeAll(async () => {
 
 /* shadcn 语义别名：两态都必须是「解好的值」，且随主题走。
  * 逐条都是 `bg-*` / `text-*` / `border-*` utility 的取值来源。 */
-const ALIASES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const ALIASES = [
   "--background",
   "--foreground",
   "--card",
@@ -52,11 +53,8 @@ const ALIASES = /* SAFETY: 类型断言已复核 */ [
 ] as const;
 
 /* 两态取值本来就相同（品牌色 + 它上面的文字色）。 */
-const THEME_INVARIANT = /* SAFETY: 类型断言已复核 */ [
-  "--primary",
-  "--accent",
-  "--destructive",
-] as const;
+/* SAFETY: 类型断言已复核 */
+const THEME_INVARIANT = ["--primary", "--accent", "--destructive"] as const;
 
 describe("主题别名 token 在两态下各自生效（ISSUE #609）", () => {
   it.for(ALIASES)("%s 深色档 != 浅色档（别名确实随主题）", (name) => {
@@ -95,7 +93,8 @@ describe("主题别名 token 在两态下各自生效（ISSUE #609）", () => {
  * 假性红、被登记进 `KNOWN_FAILED_FILES` 整个文件静默跳过（ISSUE #1282）。
  * 复用优先（规范 §12.18）：项目 token 是唯一事实来源，凡是 `--color-*` 形态都该
  * 天然被接受，不需要在判据里再养一份会过期的名字清单。 */
-const UTILITY_SOURCES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const UTILITY_SOURCES = [
   { cls: "bg-card", prop: "background-color" },
   { cls: "bg-popover", prop: "background-color" },
   { cls: "border-border", prop: "border-color" },

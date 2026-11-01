@@ -71,7 +71,8 @@
  */
 
 /** 必须剥掉的继承变量：全部是 `git` 给自己的子进程（含钩子）导出的「仓库定位」线索。 */
-export const GIT_INHERITED_ENV_KEYS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const GIT_INHERITED_ENV_KEYS = [
   "GIT_DIR",
   "GIT_WORK_TREE",
   "GIT_INDEX_FILE",
@@ -93,14 +94,16 @@ export const GIT_INHERITED_ENV_KEYS = /* SAFETY: 类型断言已复核 */ [
  * ⚠️ 新增消费者时两处同批：`scripts/changed-scope.mjs` 的 `resolveBaseRef()` /
  * `reconcileSyntheticMergeFace()` 读了哪个键，这里就得有一条。
  */
-export const PLATFORM_RUN_ENV_KEYS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const PLATFORM_RUN_ENV_KEYS = [
   "CNB_PULL_REQUEST_TARGET_SHA",
   "CNB_PULL_REQUEST_MERGE_SHA",
   "CNB_COMMIT",
 ] as const;
 
 /** 剥掉的**全部**继承键：git 那一族 + 平台改动面那一族。 */
-export const SANDBOX_STRIPPED_ENV_KEYS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const SANDBOX_STRIPPED_ENV_KEYS = [
   ...GIT_INHERITED_ENV_KEYS,
   ...PLATFORM_RUN_ENV_KEYS,
 ] as const;
@@ -111,7 +114,8 @@ export const SANDBOX_STRIPPED_ENV_KEYS = /* SAFETY: 类型断言已复核 */ [
  * 值是**常量**而不是 `process.env` 里那一份：这些提交只活在测试自己造的临时仓库里、
  * 用例结束后连目录一起删，不需要、也不该继承调用方的身份（真身份写进 dump 只会泄密）。
  */
-export const SANDBOX_GIT_IDENTITY = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+export const SANDBOX_GIT_IDENTITY = {
   email: "gate@example.com",
   name: "gate",
 } as const;

@@ -112,7 +112,8 @@ describe("FlowNode（WorkflowNode 渲染冒烟）", () => {
     const handles = document.querySelectorAll('[data-handleid="out:LATENT"]');
     expect(handles.length).toBeGreaterThan(0);
     /* 降级 = 缩小 + 降透明度，而不是卸载。 */
-    const last = /* SAFETY: 类型断言已复核 */ [...handles].at(-1) as HTMLElement;
+    /* SAFETY: 类型断言已复核 */
+    const last = [...handles].at(-1) as HTMLElement;
     expect(last.style.opacity).toBe("0.35");
     expect(last.style.width).toBe("4px");
   });
@@ -127,7 +128,8 @@ describe("FlowNode 右上角编号", () => {
   it("detail.nodes 在场时仍显示真实节点 id，不映射成短序号", () => {
     const stores = makeStores();
     stores.viewer.setState({
-      detail: /* SAFETY: 类型断言已复核 */ {
+      /* SAFETY: 类型断言已复核 */
+      detail: {
         nodes: [{ id: "1" }, { id: "9" }, { id: "30" }],
       } as never,
     });

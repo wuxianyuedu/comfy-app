@@ -111,7 +111,8 @@ export function FilmStudioPropertyPanel({
           onValueChange={(vals) => {
             const next = vals[0];
             if (typeof next === "string" && next !== c.shotSource) {
-              c.setShotSource(/* SAFETY: 类型断言已复核 */ next as "project" | "script");
+              /* SAFETY: 类型断言已复核 */
+              c.setShotSource(next as "project" | "script");
             }
           }}
           value={[c.shotSource]}

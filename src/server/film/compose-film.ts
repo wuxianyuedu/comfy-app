@@ -305,7 +305,8 @@ export async function composeFilm(id: string) {
           finalShots.map((s) => ({
             shotId: s.shotId ?? null,
             videoPath: s.videoPath ?? null,
-            status: /* SAFETY: 类型断言已复核 */ s.status as ShotStatus,
+            /* SAFETY: 类型断言已复核 */
+            status: s.status as ShotStatus,
           })),
         );
       } catch (error) {

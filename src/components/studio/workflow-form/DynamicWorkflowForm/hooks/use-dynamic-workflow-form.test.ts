@@ -55,7 +55,8 @@ function pickPickerFile(file: File) {
   if (!input) {
     throw new Error("没有渲染 ui/file-picker 的 input");
   }
-  const files = /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  const files = {
     0: file,
     length: 1,
     item: () => file,
@@ -147,7 +148,8 @@ describe("useDynamicWorkflowForm — IO 切分与空态", () => {
 
 describe("useDynamicWorkflowForm — 数值参数的行归属（运行态 vs 作者态）", () => {
   const numeric = {
-    type: /* SAFETY: 类型断言已复核 */ "INT" as const,
+    /* SAFETY: 类型断言已复核 */
+    type: "INT" as const,
   };
 
   it("运行态：数值 widget（steps 等）并入端口行，继承可连线的单行版式", () => {
@@ -263,7 +265,8 @@ describe("useDynamicWorkflowForm — set 与 values 的不可变更新", () => {
     act(() => result.current.set("b", 99));
 
     expect(onChange).toHaveBeenCalledTimes(1);
-    const next = /* SAFETY: 类型断言已复核 */ onChange.mock.calls[0]![0] as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const next = onChange.mock.calls[0]![0] as Record<string, unknown>;
     expect(next).toEqual({ a: 1, b: 99 });
     expect(next).not.toBe(values); // 不可变：调用方靠引用变化触发重渲染
     expect(values).toEqual({ a: 1, b: 2 }); // 原对象未被改

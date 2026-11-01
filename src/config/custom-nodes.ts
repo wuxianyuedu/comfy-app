@@ -347,7 +347,8 @@ export async function getCustomNodesManifest(
       );
       return null;
     }
-    return /* SAFETY: 类型断言已复核 */ data as {
+    /* SAFETY: 类型断言已复核 */
+    return data as {
       nodes: Record<string, ManifestNodeRaw>;
     };
   } catch (error) {
@@ -385,7 +386,8 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
   }
 
   try {
-    const manifest = /* SAFETY: 类型断言已复核 */ (await res.json()) as RawManifest;
+    /* SAFETY: 类型断言已复核 */
+    const manifest = (await res.json()) as RawManifest;
     const next: Record<string, NodeTypeConfig> = {};
     const nextPackages: Record<string, string> = {};
     const count = buildInto(next, manifest, nextPackages);

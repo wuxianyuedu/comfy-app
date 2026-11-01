@@ -70,7 +70,8 @@ export function paramClassStyle(cls: string): ParamClassStyle {
   if (cls === "output") {
     return PARAM_OUTPUT_STYLE;
   }
-  const key = /* SAFETY: 类型断言已复核 */ cls as ParamClass;
+  /* SAFETY: 类型断言已复核 */
+  const key = cls as ParamClass;
   return {
     label: PARAM_CLASS_LABEL[key] ?? PARAM_CLASS_LABEL.other,
     color: PARAM_CLASS_COLOR[key] ?? PARAM_CLASS_COLOR.other,

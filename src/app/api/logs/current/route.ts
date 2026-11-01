@@ -50,7 +50,8 @@ async function sizeOrNull(file: string): Promise<number | null> {
     const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
     return stat.size;
   } catch (error) {
-    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code === "ENOENT") {
+    /* SAFETY: 类型断言已复核 */
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return null;
     }
     throw error;

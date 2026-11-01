@@ -6,7 +6,8 @@
 // `shortLabel` 只服务**窄槽位**：顶栏的分段健康度一条只有几十像素宽，四字段名
 // （场景分镜 / 镜头生图 / 成片合成）在那儿会被截成「场景分…」。全名 `label` 仍是
 // 阶段轨道与胶囊句子里的口径 —— 缩略是给「放不下」的那一处用的，不是给所有地方换名。
-export const STAGE_DEFS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const STAGE_DEFS = [
   { id: "script", label: "剧本", shortLabel: "剧本" },
   { id: "character", label: "角色卡", shortLabel: "角色" },
   { id: "storyboard", label: "场景分镜", shortLabel: "分镜" },

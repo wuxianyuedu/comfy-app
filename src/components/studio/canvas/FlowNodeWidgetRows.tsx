@@ -30,7 +30,8 @@ export function FlowNodeWidgetRows({
   /* 选中节点时端口行跟着连线一起变（判据与连线同源，见 FlowNodePinRows）：
    *  有连线落到的那一行提亮、端点放大，没有落到的行压暗。级别由
    *  `useRelatedEdgesHighlight` 写在本节点 data 上，行渲染层只读。 */
-  const nodeData = /* SAFETY: 类型断言已复核 */ data as unknown as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const nodeData = data as unknown as Record<string, unknown>;
   const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   return (
     <div className="relative flex min-h-0 flex-1 flex-col py-0.5">

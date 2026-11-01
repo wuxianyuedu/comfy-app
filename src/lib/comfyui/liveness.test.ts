@@ -79,13 +79,8 @@ describe("livenessIntervalMs", () => {
   });
 
   it("每个阶段都有频率，没有「可以不管」的档", () => {
-    for (const phase of /* SAFETY: 类型断言已复核 */ [
-      "verifying",
-      "hidden",
-      "starting",
-      "generating",
-      "idle",
-    ] as const) {
+    /* SAFETY: 类型断言已复核 */
+    for (const phase of ["verifying", "hidden", "starting", "generating", "idle"] as const) {
       expect(livenessIntervalMs(phase)).toBeTypeOf("number");
     }
   });

@@ -36,7 +36,8 @@ async function getModels(
         signal: AbortSignal.timeout(8000),
       },
     );
-    const json = /* SAFETY: 类型断言已复核 */ (await res.json().catch(() => ({}))) as {
+    /* SAFETY: 类型断言已复核 */
+    const json = (await res.json().catch(() => ({}))) as {
       detail?: unknown;
       models?: unknown;
       ok?: unknown;

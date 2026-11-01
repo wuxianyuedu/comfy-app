@@ -70,16 +70,14 @@ function runs(): string {
 
 /** 当前这份 run.json（判据都建立在「它一定写出来了」之上）。 */
 function meta(): RunMeta {
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(
-    fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8"),
-  ) as RunMeta;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8")) as RunMeta;
 }
 
 /** 指定目录下的 run.json（归档包里那份）。 */
 function metaAt(dir: string): RunMeta {
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(
-    fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8"),
-  ) as RunMeta;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8")) as RunMeta;
 }
 
 /** 写一份 current/ 下的日志文件（模拟各写方）。 */
@@ -102,7 +100,7 @@ function makeRun(name: string, mtime?: Date): string {
 }
 
 /** 把某个包的 mtime 对齐到它名字里的日期（归档是复制，mtime 本来就跟着变）。 */
-function alignMtimeToName(run: { dir: string; name: string; }): void {
+function alignMtimeToName(run: { dir: string; name: string }): void {
   const [date] = run.name.split("_");
   const [year, month, day] = (date ?? "").split("-").map(Number);
   const ts = new Date(year ?? 2026, (month ?? 1) - 1, day ?? 1, 0, 0, 0);

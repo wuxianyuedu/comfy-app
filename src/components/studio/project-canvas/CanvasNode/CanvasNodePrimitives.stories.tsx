@@ -28,10 +28,10 @@ import {
  * 现在它走 `ui/status-badge` 的同一份「状态 → 语义 token」映射（规范 16 §16.2.4.5），
  * 所以下面这两件并排时**颜色口径是同一个**。
  */
-const STATUSES = /* SAFETY: 类型断言已复核 */ Object.keys(STATUS_LABEL) as Array<
-  keyof typeof STATUS_LABEL
->;
-const KINDS = /* SAFETY: 类型断言已复核 */ Object.keys(NODE_META) as Array<NodeKind>;
+/* SAFETY: 类型断言已复核 */
+const STATUSES = Object.keys(STATUS_LABEL) as Array<keyof typeof STATUS_LABEL>;
+/* SAFETY: 类型断言已复核 */
+const KINDS = Object.keys(NODE_META) as Array<NodeKind>;
 
 const meta = {
   title: "Studio/CanvasNodePrimitives",

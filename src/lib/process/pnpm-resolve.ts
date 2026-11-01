@@ -162,9 +162,10 @@ export function pnpmJsEntry(dropIn: string): string | null {
   }
   let manifest: { bin?: unknown };
   try {
-    manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
-    ) as { bin?: unknown };
+    /* SAFETY: 类型断言已复核 */
+    manifest = JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8")) as {
+      bin?: unknown;
+    };
   } catch {
     return null;
   }
@@ -173,7 +174,8 @@ export function pnpmJsEntry(dropIn: string): string | null {
   if (typeof bin === "string") {
     rel = bin;
   } else if (bin && typeof bin === "object") {
-    rel = /* SAFETY: 类型断言已复核 */ (bin as Record<string, unknown>).pnpm;
+    /* SAFETY: 类型断言已复核 */
+    rel = (bin as Record<string, unknown>).pnpm;
   }
   if (typeof rel === "string" && rel !== "") {
     const target = path.resolve(pkgDir, rel);
@@ -206,9 +208,10 @@ function pnpmPackageDir(dropIn: string): string | null {
       return dir;
     }
     try {
-      const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-        fs.readFileSync(path.join(dir, "package.json"), "utf8"),
-      ) as { name?: unknown };
+      /* SAFETY: 类型断言已复核 */
+      const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")) as {
+        name?: unknown;
+      };
       if (pkg.name === "pnpm") {
         return dir;
       }

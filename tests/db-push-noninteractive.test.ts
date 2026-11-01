@@ -48,9 +48,10 @@ afterEach(() => {
 
 describe("pnpm db:push 非交互可用", () => {
   it("package.json 的 db:push 经 scripts/db-push.mjs，而不是裸 drizzle-kit push", () => {
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
-    ) as { scripts: Record<string, string> };
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
     // 裸 `drizzle-kit push` 在无 TTY 上「报错 + exit 0 + 留空库」，是本条缺陷的形态。
     expect(pkg.scripts["db:push"]).toBe("node scripts/db-push.mjs");
     expect(pkg.scripts["db:push"]).not.toContain("drizzle-kit");
@@ -187,12 +188,12 @@ describe("探测判据跨实现同源", () => {
     // TS 侧的哨兵表名从源码里读出来，避免「两边各自改名后互不知情」。
     const m = /const SENTINEL_TABLE = "([^"]+)"/.exec(tsSrc);
     expect(m, "TS 侧必须保留单一定义的 SENTINEL_TABLE").toBeTruthy();
-    expect(/* SAFETY: 类型断言已复核 */ (mjs as { SENTINEL_TABLE: string }).SENTINEL_TABLE).toBe(
-      m![1],
-    );
+    /* SAFETY: 类型断言已复核 */
+    expect((mjs as { SENTINEL_TABLE: string }).SENTINEL_TABLE).toBe(m![1]);
     // 探针名也要对得上，否则「在不在」的语义无从对照。
     expect(
-      typeof (/* SAFETY: 类型断言已复核 */ (ts as { probeSchemaSync: unknown }).probeSchemaSync),
+      /* SAFETY: 类型断言已复核 */
+      typeof (ts as { probeSchemaSync: unknown }).probeSchemaSync,
     ).toBe("function");
   });
 

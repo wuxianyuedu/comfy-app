@@ -219,7 +219,8 @@ export function useGenerate({
                 id: nid,
                 flowPosition: { x: base.x + 340, y: base.y },
                 flow: { screenToFlowPosition },
-                data: /* SAFETY: 类型断言已复核 */ sinkData as CanvasNodeData,
+                /* SAFETY: 类型断言已复核 */
+                data: sinkData as CanvasNodeData,
               }),
             );
             setEdges((eds) => [

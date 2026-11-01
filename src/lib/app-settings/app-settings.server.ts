@@ -138,7 +138,8 @@ export function getSettingsSync(): AppSettings {
     if (raw === null) {
       throw new Error("设置文件读不到");
     }
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<AppSettings> & {
+    /* SAFETY: 类型断言已复核 */
+    const parsed = JSON.parse(raw) as Partial<AppSettings> & {
       comfyuiUrl?: string;
     };
     /* comfyuiUrl 已废弃（ComfyUI 由本应用拉起，连接地址固定 127.0.0.1:端口）；

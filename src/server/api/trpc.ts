@@ -112,10 +112,8 @@ type SlowBucket = { at: number; count: number };
 
 const G_KEY = "__trpcSlowQueryBuckets_v1";
 const buckets = (() => {
-  const g = /* SAFETY: 类型断言已复核 */ globalThis as unknown as Record<
-    string,
-    Map<string, SlowBucket> | undefined
-  >;
+  /* SAFETY: 类型断言已复核 */
+  const g = globalThis as unknown as Record<string, Map<string, SlowBucket> | undefined>;
   g[G_KEY] ??= new Map<string, SlowBucket>();
   return g[G_KEY];
 })();

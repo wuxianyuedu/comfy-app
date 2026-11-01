@@ -30,14 +30,8 @@ function sampleLine(i: number): string {
 
 /** 造 `n` 条互不相同的条目（id/seq/time 都单调，保证不会被去重）。 */
 function makeEntries(n: number, seqBase: number, timeBase: number): Array<LogEntry> {
-  const levels = /* SAFETY: 类型断言已复核 */ [
-    "debug",
-    "info",
-    "info",
-    "info",
-    "warn",
-    "error",
-  ] as const;
+  /* SAFETY: 类型断言已复核 */
+  const levels = ["debug", "info", "info", "info", "warn", "error"] as const;
   const out: Array<LogEntry> = [];
   for (let i = 0; i < n; i += 1) {
     out.push({

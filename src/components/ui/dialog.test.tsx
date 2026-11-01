@@ -125,9 +125,8 @@ const CONTENT_MARK = '[data-slot="dialog-content"]';
 
 /** 取最近一次 onOpenChange 的第一实参（新状态）与 reason（关闭原因）。 */
 function lastCall(onOpenChange: ReturnType<typeof vi.fn>) {
-  const calls = /* SAFETY: 类型断言已复核 */ onOpenChange.mock.calls as unknown as Array<
-    [boolean, { reason?: string }?]
-  >;
+  /* SAFETY: 类型断言已复核 */
+  const calls = onOpenChange.mock.calls as unknown as Array<[boolean, { reason?: string }?]>;
   const call = calls.at(-1);
   return { nextOpen: call?.[0], reason: call?.[1]?.reason };
 }

@@ -172,8 +172,8 @@ describe("DocumentFrame（文档型）", () => {
     const scroller = frame.querySelector("[class*='overflow-y-auto']");
     // 同一父级下的前一个兄弟 —— 它不该被塞进居中列里。
     expect(
-      backdrop.compareDocumentPosition(/* SAFETY: 类型断言已复核 */ scroller as Node) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
+      /* SAFETY: 类型断言已复核 */
+      backdrop.compareDocumentPosition(scroller as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 

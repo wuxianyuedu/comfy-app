@@ -16,8 +16,10 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 const { userMock, writes } = vi.hoisted(() => ({
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
   writes: {
-    mkdir: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
-    writeFile: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    mkdir: [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    writeFile: [] as Array<string>,
   },
 }));
 
@@ -54,7 +56,8 @@ afterEach(() => {
 
 /** handler 只要 `formData()`，用真 Request 顶替 NextRequest。 */
 function reqWith(form: FormData): NextRequest {
-  return /* SAFETY: 类型断言已复核 */ new Request("http://localhost/api/film/bgm", {
+  /* SAFETY: 类型断言已复核 */
+  return new Request("http://localhost/api/film/bgm", {
     method: "POST",
     body: form,
   }) as unknown as NextRequest;
@@ -98,7 +101,8 @@ describe("POST /api/film/bgm", () => {
   });
 
   it("请求体不是 multipart → 400「表单解析失败」", async () => {
-    const req = /* SAFETY: 类型断言已复核 */ new Request("http://localhost/api/film/bgm", {
+    /* SAFETY: 类型断言已复核 */
+    const req = new Request("http://localhost/api/film/bgm", {
       method: "POST",
       headers: { "content-type": "text/plain" },
       body: "not-a-form",

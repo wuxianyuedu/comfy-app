@@ -58,7 +58,8 @@ function InputGroupAddon({
       data-align={align}
       data-slot="input-group-addon"
       onClick={(e) => {
-        if (/* SAFETY: 类型断言已复核 */ (e.target as HTMLElement).closest("button")) {
+        /* SAFETY: 类型断言已复核 */
+        if ((e.target as HTMLElement).closest("button")) {
           return;
         }
         e.currentTarget.parentElement?.querySelector("input")?.focus();

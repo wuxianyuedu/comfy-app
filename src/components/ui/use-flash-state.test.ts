@@ -102,7 +102,8 @@ describe("useFlashState", () => {
 
 describe("useFlashLatch", () => {
   const EMPTY = {
-    path: /* SAFETY: 类型断言已复核 */ null as string | null,
+    /* SAFETY: 类型断言已复核 */
+    path: null as string | null,
     failed: false,
   };
 

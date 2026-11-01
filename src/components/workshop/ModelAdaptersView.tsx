@@ -105,7 +105,8 @@ function InputMappingRow({
         )}
         onChange={(value) =>
           onChange({
-            type: /* SAFETY: 类型断言已复核 */ value as WorkshopInputType,
+            /* SAFETY: 类型断言已复核 */
+            type: value as WorkshopInputType,
             field: row.field,
           })
         }

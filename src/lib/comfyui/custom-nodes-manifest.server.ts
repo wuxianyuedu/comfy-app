@@ -77,7 +77,8 @@ export function readCustomNodesManifest(root: string = process.cwd()): CustomNod
       stamp: customNodesManifestStamp(root),
     };
   } catch (error) {
-    const code = /* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code;
+    /* SAFETY: 类型断言已复核 */
+    const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") {
       return { kind: "missing" };
     }

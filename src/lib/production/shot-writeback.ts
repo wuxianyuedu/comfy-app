@@ -80,7 +80,8 @@ export async function requestShotRedo(projectId: string, shotId: string): Promis
   if (nextShots !== draft.shots) {
     const nextDraft = {
       ...draft,
-      shots: /* SAFETY: 类型断言已复核 */ nextShots as Array<Shot>,
+      /* SAFETY: 类型断言已复核 */
+      shots: nextShots as Array<Shot>,
     };
     writeWorkshopDraft(projectId, nextDraft);
     fireAndForget(pushServerDraft(projectId, nextDraft), () => {

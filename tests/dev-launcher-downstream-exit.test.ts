@@ -57,7 +57,8 @@ function markersFor(stderrText: string): {
       encoding: "utf8",
       cwd: process.cwd(),
     });
-    return /* SAFETY: 类型断言已复核 */ JSON.parse(out.stdout || "{}") as {
+    /* SAFETY: 类型断言已复核 */
+    return JSON.parse(out.stdout || "{}") as {
       abandoned: boolean;
       crashed: boolean;
     };

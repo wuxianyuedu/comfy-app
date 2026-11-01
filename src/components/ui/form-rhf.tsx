@@ -110,9 +110,8 @@ function FormLabel({ className, ...props }: React.ComponentProps<typeof Label>) 
 function FormControl(props: React.PropsWithChildren) {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField();
 
-  const child = /* SAFETY: 类型断言已复核 */ React.Children.only(
-    props.children,
-  ) as React.ReactElement<Record<string, unknown>>;
+  /* SAFETY: 类型断言已复核 */
+  const child = React.Children.only(props.children) as React.ReactElement<Record<string, unknown>>;
   return React.cloneElement(child, {
     id: formItemId,
     "aria-describedby": error ? `${formDescriptionId} ${formMessageId}` : formDescriptionId,

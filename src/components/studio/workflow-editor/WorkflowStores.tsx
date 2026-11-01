@@ -565,7 +565,8 @@ export function createNodeJsonViewerStore(
       let rawNodesSource: Array<Record<string, unknown>> | null = null;
       const isSubView = subgraphStackLength > 0 && subgraphRawContext;
       if (isSubView) {
-        const subs = /* SAFETY: 类型断言已复核 */ (
+        /* SAFETY: 类型断言已复核 */
+        const subs = (
           subgraphRawContext.parentRawJson as {
             definitions?: { subgraphs?: Record<string, unknown> };
           } | null
@@ -577,9 +578,8 @@ export function createNodeJsonViewerStore(
           id?: string;
           nodes?: Array<Record<string, unknown>>;
         };
-        let subDef: RawSubgraphDef | undefined = /* SAFETY: 类型断言已复核 */ subs?.[targetUid] as
-          | RawSubgraphDef
-          | undefined;
+        /* SAFETY: 类型断言已复核 */
+        let subDef: RawSubgraphDef | undefined = subs?.[targetUid] as RawSubgraphDef | undefined;
         if (!subDef || !Array.isArray(subDef.nodes)) {
           const matchKey = subs
             ? Object.keys(subs).find(
@@ -589,7 +589,8 @@ export function createNodeJsonViewerStore(
               )
             : undefined;
           if (matchKey && subs) {
-            subDef = /* SAFETY: 类型断言已复核 */ subs[matchKey] as RawSubgraphDef;
+            /* SAFETY: 类型断言已复核 */
+            subDef = subs[matchKey] as RawSubgraphDef;
           }
         }
         if (subDef && Array.isArray(subDef.nodes)) {
@@ -600,9 +601,11 @@ export function createNodeJsonViewerStore(
         !rawNodesSource &&
         typeof detail.rawJson === "object" &&
         detail.rawJson !== null &&
-        Array.isArray(/* SAFETY: 类型断言已复核 */ (detail.rawJson as { nodes?: unknown }).nodes)
+        /* SAFETY: 类型断言已复核 */
+        Array.isArray((detail.rawJson as { nodes?: unknown }).nodes)
       ) {
-        rawNodesSource = /* SAFETY: 类型断言已复核 */ (
+        /* SAFETY: 类型断言已复核 */
+        rawNodesSource = (
           detail.rawJson as {
             nodes: Array<Record<string, unknown>>;
           }

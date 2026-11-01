@@ -131,8 +131,10 @@ describe("允许写脏的名单", () => {
 
 describe("三格的判定与档位", () => {
   const base = {
-    trackedDirty: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
-    untracked: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    trackedDirty: [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    untracked: [] as Array<string>,
     prefixes: ["docs/generated/", "coverage/"],
   };
 
@@ -384,9 +386,8 @@ describe("出口", () => {
     const file = path.join(dir, "comfyapp-ci-workspace-provenance.json");
     /* `JSON.parse` 回 `any` —— 直接取用会让后面三行都挂在 any 上（eslint 三条 unsafe 就
      * 落在这）。按本档真正断言的那三格收成有类型的账目，注入面与读出面从此同一个形状。 */
-    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(file, "utf8"),
-    ) as Array<unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const ledger = JSON.parse(fs.readFileSync(file, "utf8")) as Array<unknown>;
     expect(Array.isArray(ledger)).toBe(true);
     expect(ledger.length).toBe(2);
     expect(ledger[0]).toMatchObject({ red: false, offenders: 0, untracked: 1 });

@@ -166,7 +166,7 @@ type FakeLink = {
   abs: string;
   rel: string;
   text?: string;
-}
+};
 
 /**
  * 「目标在场而穿不过去」的假象：判 broken、给相对文本、重建后变可跟随。
@@ -180,7 +180,7 @@ function fake(input: {
   brokenRels?: Array<string>;
   dirExists?: boolean;
   links: Array<FakeLink>;
-  rebuildResult?: { error: string; ok: boolean; };
+  rebuildResult?: { error: string; ok: boolean };
   siblingInstalled?: boolean;
   targetExists?: boolean;
   throwOnReadText?: boolean;
@@ -201,14 +201,20 @@ function fake(input: {
     follow: (abs: string) => {
       const l = links.find((x) => x.abs === abs);
       if (!l) {
-        return /* SAFETY: 类型断言已复核 */ "broken" as const;
+        /* SAFETY: 类型断言已复核 */
+        return "broken" as const;
       }
       if (nowFollowable.has(abs)) {
-        return /* SAFETY: 类型断言已复核 */ "follow" as const;
+        /* SAFETY: 类型断言已复核 */
+        return "follow" as const;
       }
       return brokenRels.has(l.rel)
-        ? /* SAFETY: 类型断言已复核 */ ("broken" as const)
-        : /* SAFETY: 类型断言已复核 */ ("follow" as const);
+        /* SAFETY: 类型断言已复核 */
+        ? 
+          ("broken" as const)
+        /* SAFETY: 类型断言已复核 */
+        : 
+          ("follow" as const);
     },
     rebuild: (abs: string, linkText: string) => {
       rebuildCalls.push({ abs, linkText });
@@ -246,7 +252,9 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
       links: [{ abs: "N/pkg", rel: "pkg", text: String.raw`..\pkg@1.0.0\node_modules\pkg` }],
     });
     repairUnfollowableLinks("N", deps);
-    expect(rebuildCalls).toEqual([{ abs: "N/pkg", linkText: String.raw`..\pkg@1.0.0\node_modules\pkg` }]);
+    expect(rebuildCalls).toEqual([
+      { abs: "N/pkg", linkText: String.raw`..\pkg@1.0.0\node_modules\pkg` },
+    ]);
   });
 
   it("「目标在场但修不好」进 broken 且 targetExists=YES —— 不许与缺件同形", () => {
@@ -354,9 +362,10 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
 describe("接线在位", () => {
   it("这一步挂在 pnpm build 链上，且顺序是 修链接 → 数产物 → 冒烟", () => {
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      readFileSync(path.resolve(__dirname, "../package.json"), "utf8"),
-    ) as { scripts: { build: string } };
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(readFileSync(path.resolve(__dirname, "../package.json"), "utf8")) as {
+      scripts: { build: string };
+    };
     const build = pkg.scripts.build;
     const order = [
       "next build",

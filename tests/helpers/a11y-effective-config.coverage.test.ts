@@ -30,7 +30,8 @@ import { expect, test } from "vitest";
 import { loadJudgeModule, REAL_ROOT } from "./a11y-effective-config";
 
 /** 在进程内被跑过的判据脚本 + 它们的公开面。 */
-const SCRIPTS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const SCRIPTS = [
   {
     script: "scripts/check-a11y-rules.cjs",
     /** 谁在用这份模块的导出（那一格里点名的用例文件都要真实存在）。 */
@@ -60,10 +61,8 @@ const SCRIPTS = /* SAFETY: 类型断言已复核 */ [
 test("每个在进程内跑的判据脚本，它的每个导出都有人用（零消费导出当场红）", () => {
   const problems: Array<string> = [];
   for (const entry of SCRIPTS) {
-    const mod = /* SAFETY: 类型断言已复核 */ loadJudgeModule() as unknown as Record<
-      string,
-      unknown
-    >;
+    /* SAFETY: 类型断言已复核 */
+    const mod = loadJudgeModule() as unknown as Record<string, unknown>;
     const exported = new Set(Object.keys(mod));
     const claimed = new Set(Object.keys(entry.surfaces));
     for (const key of exported) {
@@ -109,7 +108,8 @@ test("每个在进程内跑的判据脚本，它的每个导出都有人用（�
 });
 
 test("`VERIFIED_SURFACES` 覆盖全部导出面（两个清单不许各说各话）", () => {
-  const mod = /* SAFETY: 类型断言已复核 */ loadJudgeModule() as unknown as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const mod = loadJudgeModule() as unknown as Record<string, unknown>;
   const { VERIFIED_SURFACES } = /* SAFETY: 类型断言已复核 */ mod as {
     VERIFIED_SURFACES: Record<string, string>;
   };

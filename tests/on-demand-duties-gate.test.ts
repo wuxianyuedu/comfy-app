@@ -56,7 +56,7 @@ type DutyRow = {
   id: string;
   name: string;
   notInHook: string;
-}
+};
 
 /** 一份「最小但双向都成立」的索引：六条按需档（下限是 5，留一格余量）。 */
 function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
@@ -143,7 +143,8 @@ function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
 }
 
 /** 真实仓库里的三份事实读数 —— 夹具的断言按它来，避免写死会漂的数字。 */
-const REAL = /* SAFETY: 类型断言已复核 */ JSON.parse(
+/* SAFETY: 类型断言已复核 */
+const REAL = JSON.parse(
   readFileSync(join(process.cwd(), "scripts", ".on-demand-duties.json"), "utf8"),
 ) as { duties: Array<unknown> };
 
@@ -248,7 +249,8 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
   test("行缺字段 ⇒ 红（id / name / fact.kind / executor 都要有）", ({ repo }) => {
     const led = ledgerDuties();
     /* 造「缺字段」那一档 —— 用 `Partial` 表达「这一行故意缺了 executor」。 */
-    const broken = /* SAFETY: 类型断言已复核 */ { ...led.duties[0] } as Partial<DutyRow>;
+    /* SAFETY: 类型断言已复核 */
+    const broken = { ...led.duties[0] } as Partial<DutyRow>;
     delete broken.executor;
     led.duties = [/* SAFETY: 类型断言已复核 */ broken as DutyRow, ...led.duties.slice(1)];
     repo.write("scripts/.on-demand-duties.json", JSON.stringify(led, null, 2));

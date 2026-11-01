@@ -91,8 +91,10 @@ describe("configureReaper 接缝", () => {
     const fakeRepo = {
       listStaleUnownedQueued: async () => [],
       listStaleRunning: async () => [],
-      finalizeFailure: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
-      finalizeFromReaper: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
+      /* SAFETY: 类型断言已复核 */
+      finalizeFailure: async () => "written" as const,
+      /* SAFETY: 类型断言已复核 */
+      finalizeFromReaper: async () => "written" as const,
     };
     expect(() => {
       mod.configureReaper({ taskRepo: fakeRepo });

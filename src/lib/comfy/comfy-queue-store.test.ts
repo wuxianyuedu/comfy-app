@@ -47,7 +47,8 @@ class FakeEventSource {
 const fetchMock = vi.fn();
 
 function queueRes(payload: unknown): Response {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     ok: true,
     json: async () => payload,
   } as unknown as Response;

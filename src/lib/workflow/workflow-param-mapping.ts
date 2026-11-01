@@ -141,7 +141,8 @@ function buildContractEntries(
       if (out.some((entry) => entry.id === id)) {
         continue;
       }
-      const cls = /* SAFETY: 类型断言已复核 */ (def.cls === "size" ? id : def.cls) as ParamClass;
+      /* SAFETY: 类型断言已复核 */
+      const cls = (def.cls === "size" ? id : def.cls) as ParamClass;
       const pins = pinsByClass.get(cls) ?? [];
       const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
       out.push({
@@ -180,7 +181,8 @@ function classifyPins(io: WorkflowIOMap | null | undefined): Map<ParamClass, Par
     number: [],
   };
   for (const [ioKey, raw] of Object.entries(io ?? {})) {
-    const entry = /* SAFETY: 类型断言已复核 */ raw as WorkflowIOEntry | undefined;
+    /* SAFETY: 类型断言已复核 */
+    const entry = raw as WorkflowIOEntry | undefined;
     // 显式空值守卫：`pinFamily(entry)` 的契约本就要求 entry 非 undefined 才
     // 可能返回真 family，但编译器看不到——原实现里 push 的三行 `entry!.xxx`
     // 是把这一契约「用两次」（判据 + 断言）；改成同行守卫后判据与窄化同源。
@@ -199,7 +201,8 @@ function classifyPins(io: WorkflowIOMap | null | undefined): Map<ParamClass, Par
     });
   }
   const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
-  for (const klass of /* SAFETY: 类型断言已复核 */ Object.keys(CLASS_FAMILY) as Array<ParamClass>) {
+  /* SAFETY: 类型断言已复核 */
+  for (const klass of Object.keys(CLASS_FAMILY) as Array<ParamClass>) {
     /* 聚合值 `size` 不单独摆候选：契约层把它摊成六个子口。 */
     if (klass === "size") {
       continue;
@@ -351,7 +354,8 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
   if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) {
     return out;
   }
-  const sourceRaw = /* SAFETY: 类型断言已复核 */ (paramMap as Record<string, unknown>).source;
+  /* SAFETY: 类型断言已复核 */
+  const sourceRaw = (paramMap as Record<string, unknown>).source;
   if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw)) {
     return out;
   }

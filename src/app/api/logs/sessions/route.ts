@@ -187,7 +187,8 @@ export async function GET(request: Request) {
   const requested = searchParams.get("session");
 
   if (
-    !(/* SAFETY: 类型断言已复核 */ (RUNTIME_LOG_SOURCES as ReadonlyArray<string>).includes(source))
+    /* SAFETY: 类型断言已复核 */
+    !(RUNTIME_LOG_SOURCES as ReadonlyArray<string>).includes(source)
   ) {
     return NextResponse.json(emptyPayload(`unknown source: ${source}`), {
       status: 400,
@@ -212,7 +213,8 @@ export async function GET(request: Request) {
       sourceDir: LOG_DIRS.services,
       runJsonName: LOG_LAYOUT.runJson,
       maxPacks: MAX_PACKS,
-      source: /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
+      /* SAFETY: 类型断言已复核 */
+      source: source as RuntimeLogSource,
     });
 
     /* 分组、顺序、文案全在纯判据那一层：端点只把两边的数据递进去，不自己拼列表

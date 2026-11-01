@@ -109,7 +109,8 @@ export const realUsabilityProbe: UsabilityProbe = {
       windowsHide: true,
       timeout: USABILITY_PROBE_TIMEOUT_MS,
     });
-    const err = /* SAFETY: 类型断言已复核 */ probe.error as SpawnSyncError;
+    /* SAFETY: 类型断言已复核 */
+    const err = probe.error as SpawnSyncError;
     return err?.code ?? null;
   },
 };

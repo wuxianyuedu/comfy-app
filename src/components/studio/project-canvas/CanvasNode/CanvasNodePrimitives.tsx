@@ -89,7 +89,8 @@ export function Field({
 /* ── Parameter-level port colors (粉彩渐变 6 色对应 6 类参数) ──
    灵感来源：用户偏好柔和粉彩渐变（紫粉/蓝青/黄橙/青绿/蓝紫/粉红）。
    端口用大圆点 + 渐变 + 同色发光，hover/连线时更醒目。 */
-export const PORT_STYLE = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+export const PORT_STYLE = {
   model: {
     gradient: "linear-gradient(135deg, #5BC6FF 0%, #6BEBEB 100%)",
     color: "#5BC6FF",

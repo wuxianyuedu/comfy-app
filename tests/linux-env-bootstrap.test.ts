@@ -138,9 +138,10 @@ function runEnvInitIn(files: Record<string, string>): {
 
 describe("pnpm env:init：跨平台补齐 .env 的必填项", () => {
   it("package.json 提供 env:init 入口（Windows 的 prepare-local-run.ps1 在 Linux 上不可用）", () => {
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
-    ) as { scripts: Record<string, string> };
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
     expect(pkg.scripts["env:init"]).toBe("node scripts/env-init.mjs");
   });
 

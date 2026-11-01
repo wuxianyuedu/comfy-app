@@ -90,7 +90,8 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     });
     /* 条数从台账现算，不写死：写死一份计数就等于再造一条「加了条目忘了改数」的
      * 会漂的判据（同一族先例见 #2135 那次钩子步数被钉死）。 */
-    const onDemand = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const onDemand = JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
     ) as { onDemand: Record<string, unknown> };
     expect(output).toContain(`按需召唤 ${Object.keys(onDemand.onDemand).length}`);
@@ -208,7 +209,7 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
   const hook = (): string => readFileSync(join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
 
   /** D 组步骤 = `  run "<标签>" <命令>`（与同族用例同款解析，不许 toContain）。 */
-  const steps = (): Array<{ cmd: string; label: string; }> =>
+  const steps = (): Array<{ cmd: string; label: string }> =>
     [...hook().matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
       label: m[1] ?? "",
       cmd: m[2] ?? "",
@@ -565,7 +566,8 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("本仓库的台账：登记的每一形都真验得过（不是把红留在下一跳）", () => {
     // 在真仓库根跑：临时区里没有 `.githooks/` / `.cnb.yml` / `package.json` 的**原样**，
     // 而那些正是入口那一层的执行者来源 —— 这里要证的是「此刻这份账对得上」。
-    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const ledger = JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
     ) as { entrypoints?: Record<string, Array<{ flags?: Array<string> }>> };
     const entrypoints = ledger.entrypoints ?? {};
@@ -595,7 +597,8 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     const { code, output } = repo.run(["--update"]);
     expect(output, output).toContain("台账已重写");
     expect(code).toBe(0);
-    const after = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const after = JSON.parse(
       readFileSync(join(repo.dir, "scripts", ".gate-executor-ledger.json"), "utf8"),
     ) as { entrypoints?: Record<string, Array<unknown>> };
     expect(after.entrypoints?.[PROBE]?.length, "--update 之后入口条目必须原样还在").toBe(2);
@@ -659,12 +662,8 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("两行都在 ⇒ 两形各自被认成自己那一形", ({ repo }) => {
     twoFlagForms(
       repo,
-      `  run "窄档" node scripts/${
-        PROBE
-        } --staged\n` +
-        `  run "窄档出 JSON" node scripts/${
-        PROBE
-        } --staged --json\n`,
+      `  run "窄档" node scripts/${PROBE} --staged\n` +
+        `  run "窄档出 JSON" node scripts/${PROBE} --staged --json\n`,
     );
     expect(repo.run().output).not.toContain("登记了那一形");
   });
@@ -675,14 +674,10 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(
       ".githooks/pre-commit",
-      `  run "窄档" node scripts/${
-        PROBE
-        } --staged\n` +
+      `  run "窄档" node scripts/${PROBE} --staged\n` +
         /* 无旗标那一形也要真有一行 —— 少了它，下面那句「不算包含关系」会被一条
          * 「(无旗标) 那一形没有执行者」的红淹掉，而那条红是本例的**正确答案**。 */
-        `  run "整档" node scripts/${
-        PROBE
-        }\n`,
+        `  run "整档" node scripts/${PROBE}\n`,
     );
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -712,12 +707,8 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(
       ".githooks/pre-commit",
-      `  run "a" node scripts/${
-        PROBE
-        } --staged\n` +
-        `  run "b" node scripts/${
-        PROBE
-        } --staged --json\n`,
+      `  run "a" node scripts/${PROBE} --staged\n` +
+        `  run "b" node scripts/${PROBE} --staged --json\n`,
     );
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -775,14 +766,10 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
       repo.write(`scripts/${reportProbe}`, body);
       repo.write(
         ".githooks/pre-commit",
-        `  run "报告" node scripts/${
-          reportProbe
-          } --staged\n` +
+        `  run "报告" node scripts/${reportProbe} --staged\n` +
           /* 两形都得有一行 —— 不然「没有执行者」那条红会先响，本例要判的那条
            * （它根本不是判定型）就被盖在下面。 */
-          `  run "报告出 JSON" node scripts/${
-          reportProbe
-          } --json\n`,
+          `  run "报告出 JSON" node scripts/${reportProbe} --json\n`,
       );
       repo.write(
         "scripts/.gate-executor-ledger.json",

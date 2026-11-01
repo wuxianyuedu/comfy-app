@@ -148,7 +148,8 @@ export function useParamWiring({
 
 /** 本地 overlay 会涉及的顶层命名空间：左列写 `source`、右列写 `output`，
  *  两者都是「按模式归拢 → 再按条目」的同构结构，合并规则一致。 */
-const LOCAL_OVERLAY_NAMESPACES = /* SAFETY: 类型断言已复核 */ ["source", "output"] as const;
+/* SAFETY: 类型断言已复核 */
+const LOCAL_OVERLAY_NAMESPACES = ["source", "output"] as const;
 
 /** 已落库的 paramMap 叠上本地 overlay。
  *

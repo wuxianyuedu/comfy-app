@@ -30,9 +30,10 @@ function renderRows(): { inRow: Text; outside: Text } {
     <p id="other">页面里别的文本</p>
   `;
   return {
-    inRow: /* SAFETY: 类型断言已复核 */ document.querySelector(`[${LOG_ROW_TEXT_ATTRIBUTE}]`)!
-      .firstChild as Text,
-    outside: /* SAFETY: 类型断言已复核 */ document.querySelector("#other")!.firstChild as Text,
+    /* SAFETY: 类型断言已复核 */
+    inRow: document.querySelector(`[${LOG_ROW_TEXT_ATTRIBUTE}]`)!.firstChild as Text,
+    /* SAFETY: 类型断言已复核 */
+    outside: document.querySelector("#other")!.firstChild as Text,
   };
 }
 
@@ -54,7 +55,8 @@ describe("selectionInsideLogs 选区是否落在日志正文里", () => {
 
   it("选在日志行元素本身上 → true（浏览器给的是元素端点）", () => {
     const { inRow } = renderRows();
-    const element = /* SAFETY: 类型断言已复核 */ (inRow.parentElement ?? inRow) as Node;
+    /* SAFETY: 类型断言已复核 */
+    const element = (inRow.parentElement ?? inRow) as Node;
     expect(selectionInsideLogs(selectionOn(element))).toBe(true);
   });
 

@@ -7,7 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { uploadImageFile } from "./canvas-api";
 
 function jsonRes(status: number, body: unknown): Response {
-  return /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  return {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,

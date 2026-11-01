@@ -37,7 +37,8 @@ function toModelNames(raw: unknown): Array<string> {
         names.push(item);
       }
     } else if (typeof item === "object" && item !== null) {
-      const rec = /* SAFETY: 类型断言已复核 */ item as {
+      /* SAFETY: 类型断言已复核 */
+      const rec = item as {
         kind?: unknown;
         name?: unknown;
       };
@@ -48,7 +49,8 @@ function toModelNames(raw: unknown): Array<string> {
       /* SAFETY: 类型断言已复核 */
       const kind =
         typeof rec.kind === "string" &&
-        REMOTE_MODEL_KINDS.includes(/* SAFETY: 类型断言已复核 */ rec.kind as RemoteModelKind)
+        /* SAFETY: 类型断言已复核 */
+        REMOTE_MODEL_KINDS.includes(rec.kind as RemoteModelKind)
           ? (rec.kind as RemoteModelKind)
           : null;
       if (!isChatModel(kind)) {

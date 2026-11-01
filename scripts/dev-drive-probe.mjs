@@ -106,6 +106,12 @@ export const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * 取路径所在卷根（Windows 形如 `G:\`，POSIX 恒为 `/`）。
+ *
+ * `resolve` 必须走**同一个平台的实现**：`path.resolve` 归 `process.platform`，
+ * 在非 Windows 宿主上它把 `G:\a` 拼成 `<cwd>/G:\a`（绝对路径被当成相对段）⇒
+ * `path.win32.parse` 拿到的是 `/…` 的前导段，`root` 恒为 `/`，「跨卷」永远判不出来。
+ * 这条只在「拿 win32 判据去问一个 POSIX 宿主」时炸 —— 而 CI 跑在 Linux 上，
+ * 所以它一直红在 `tests/dev-drive-tune.test.ts` 那两条 Windows 判据上。
  * @param {string} target
  * @param {NodeJS.Platform} [platform]
  * @returns {string}
@@ -114,7 +120,7 @@ export function volumeRootOf(target, platform = process.platform) {
   if (platform !== "win32") {
     return "/";
   }
-  return path.win32.parse(path.resolve(target)).root.toUpperCase();
+  return path.win32.parse(path.win32.resolve(target)).root.toUpperCase();
 }
 
 /**

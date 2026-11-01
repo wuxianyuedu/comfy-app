@@ -69,7 +69,8 @@ async function rows(col: "shots" | "characters"): Promise<Array<Record<string, u
   const row = await productionRepository.getForUser(USER, PROJ);
   const raw = row?.[col];
   return Array.isArray(raw)
-    ? /* SAFETY: 类型断言已复核 */ (raw as Array<Record<string, unknown>>)
+    ? /* SAFETY: 类型断言已复核 */
+      (raw as Array<Record<string, unknown>>)
     : [];
 }
 
@@ -385,13 +386,15 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
       content: unknown;
       role: string;
     }>;
-    const parts = /* SAFETY: 类型断言已复核 */ userMsg!.content as Array<{
+    /* SAFETY: 类型断言已复核 */
+    const parts = userMsg!.content as Array<{
       image_url?: unknown;
       type: string;
     }>;
     const imageUrls = parts
       .filter((p) => p.type === "image_url")
-      .map((p) => /* SAFETY: 类型断言已复核 */ (p.image_url as { url: string }).url);
+      /* SAFETY: 类型断言已复核 */
+      .map((p) => (p.image_url as { url: string }).url);
     expect(imageUrls).toEqual(["/shot.png", "/portrait.png"]);
   });
 

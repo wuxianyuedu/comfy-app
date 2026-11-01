@@ -145,7 +145,8 @@ export function rawUiNodeType(raw: unknown, nodeId: string): string | undefined 
   if (typeof raw !== "object" || raw === null || !nodeId) {
     return undefined;
   }
-  const type = resolveRawNode(/* SAFETY: 类型断言已复核 */ raw as JsonRecord, nodeId)?.type;
+  /* SAFETY: 类型断言已复核 */
+  const type = resolveRawNode(raw as JsonRecord, nodeId)?.type;
   return typeof type === "string" && type ? type : undefined;
 }
 /** 具名控件输入在 UI 节点 `widgets_values` 数组里的下标。 */
@@ -349,7 +350,8 @@ function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTa
     if (l == null || typeof l !== "object") {
       continue;
     }
-    const link = /* SAFETY: 类型断言已复核 */ l as SubgraphLink;
+    /* SAFETY: 类型断言已复核 */
+    const link = l as SubgraphLink;
     if (typeof link.id !== "string" && typeof link.id !== "number") {
       continue;
     }
@@ -362,7 +364,8 @@ function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTa
     if (i == null || typeof i !== "object") {
       continue;
     }
-    defInputs.push(/* SAFETY: 类型断言已复核 */ i as SubgraphPin);
+    /* SAFETY: 类型断言已复核 */
+    defInputs.push(i as SubgraphPin);
   }
 
   const targetByName = new Map<string, { nodeId: string; slot: number }>();
@@ -541,7 +544,8 @@ function neutralizePromotedHostDrift(raw: JsonRecord): void {
 
       /* zod 解析出的副本上 `widgets_values` 是 `any[]`：这里显式收成 `unknown[]`，
        * 逐项取出的值才不会把 `any` 带进「写回内层」的那一步。 */
-      const host = /* SAFETY: 类型断言已复核 */ (
+      /* SAFETY: 类型断言已复核 */
+      const host = (
         Array.isArray(node.widgets_values) ? node.widgets_values : []
       ) as Array<unknown>;
       for (const [name, idx] of ours) {
@@ -652,7 +656,8 @@ export function applyApiOverrides(
   if (graph == null || typeof graph !== "object" || Array.isArray(graph)) {
     return {};
   }
-  const out = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(graph)) as JsonRecord;
+  /* SAFETY: 类型断言已复核 */
+  const out = JSON.parse(JSON.stringify(graph)) as JsonRecord;
   if (overrides === undefined || overrides.length === 0) {
     return out;
   }
@@ -666,12 +671,14 @@ export function applyApiOverrides(
     if (nodeRaw == null || typeof nodeRaw !== "object" || Array.isArray(nodeRaw)) {
       continue;
     }
-    const inputsRaw = /* SAFETY: 类型断言已复核 */ (nodeRaw as JsonRecord).inputs;
+    /* SAFETY: 类型断言已复核 */
+    const inputsRaw = (nodeRaw as JsonRecord).inputs;
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (inputsRaw == null || typeof inputsRaw !== "object" || Array.isArray(inputsRaw)) {
       continue;
     }
-    const inputs = /* SAFETY: 类型断言已复核 */ inputsRaw as JsonRecord;
+    /* SAFETY: 类型断言已复核 */
+    const inputs = inputsRaw as JsonRecord;
 
     if (ov.name === CONTROL_AFTER_GENERATE) {
       delete inputs[CONTROL_AFTER_GENERATE];
@@ -694,7 +701,8 @@ export function applyRawOverrides(
   rawJson: unknown,
   overrides?: Array<RawWorkflowOverride>,
 ): JsonRecord {
-  const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
+  /* SAFETY: 类型断言已复核 */
+  const raw = JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
   /* **没有**覆盖项也要走漂移抵消：comfy-cli 的提升控件回写错位与「这次有没有
    * 画布覆盖」无关 —— 它错的是宿主自己的值（本次现场 17 处全在我们一次都没碰过
    * 的引脚上）。因此这一步先于「有没有覆盖」的判断。 */

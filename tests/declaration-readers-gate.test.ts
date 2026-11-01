@@ -79,9 +79,9 @@ type Fixture = {
   pkg?: string;
 };
 
-const DEFAULT_HOOK =
-  `${Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join("")
-  }  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n`;
+const DEFAULT_HOOK = `${Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join(
+  "",
+)}  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n`;
 const DEFAULT_FIXED_LIST =
   'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/fixed.test.ts",\n];\n';
 const DEFAULT_PKG = JSON.stringify({
@@ -126,7 +126,8 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
+    /* SAFETY: 类型断言已复核 */
+    const e = error as { stderr?: string; stdout?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

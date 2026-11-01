@@ -66,7 +66,8 @@ function sourceFiles(): Array<string> {
  * （ISSUE #2669：默认档下那份被开关摘空了 —— 拿它当输入，本判据就会在没人改任何门槛
  * 的那一天静默变成空转，而这正是本文件立单要治的「写着有、其实没人判」）。
  * `include` 没有开关，仍读默认导出。 */
-const coverage = /* SAFETY: 类型断言已复核 */ (
+/* SAFETY: 类型断言已复核 */
+const coverage = (
   vitestConfig as unknown as {
     test?: {
       coverage?: { include?: Array<string> };

@@ -41,7 +41,8 @@ export function SubgraphCollapsedAnchors({
       <CollapsedPortHandles
         items={wiredInputs.map(({ inp, label }, idx) => ({
           key: `collapsed-sub-in-${inp.name}-${idx}`,
-          side: /* SAFETY: 类型断言已复核 */ "left" as const,
+          /* SAFETY: 类型断言已复核 */
+          side: "left" as const,
           id: inp.name,
           title: `${label} (${inp.type})`,
           color: portColor(inp.type ?? "*"),
@@ -50,7 +51,8 @@ export function SubgraphCollapsedAnchors({
       <CollapsedPortHandles
         items={wiredOutputs.map(({ out, display }, idx) => ({
           key: `collapsed-sub-out-${out.name}-${idx}`,
-          side: /* SAFETY: 类型断言已复核 */ "right" as const,
+          /* SAFETY: 类型断言已复核 */
+          side: "right" as const,
           id: `out:${out.name}`,
           title: `${display} (${out.type})`,
           color: portColor(out.type ?? "*"),

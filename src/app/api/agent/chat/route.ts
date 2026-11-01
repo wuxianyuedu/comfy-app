@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
   }
 
   const request: AgentChatRequest = {
-    messages: /* SAFETY: 类型断言已复核 */ rawMessages as AgentChatRequest["messages"],
+    /* SAFETY: 类型断言已复核 */
+    messages: rawMessages as AgentChatRequest["messages"],
     draft: parseDraftDto(body.draft),
     useTools: body.useTools !== false,
   };

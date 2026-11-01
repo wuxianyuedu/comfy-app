@@ -61,7 +61,8 @@ function jsonField<T>(
   fallback: T,
 ): T {
   const v: unknown = src?.[key];
-  return /* SAFETY: 类型断言已复核 */ (v ?? fallback) as T;
+  /* SAFETY: 类型断言已复核 */
+  return (v ?? fallback) as T;
 }
 
 /** manifest 里单个已解析包的摘要形状(与前端 SummaryPkg 消费契约一致)。 */
@@ -170,7 +171,8 @@ function readManifestSummary() {
       generatedAt: jsonField<string | null>(m, "generatedAt", null),
       totalNodes: isPlainRecord(nodes) ? Object.keys(nodes).length : 0,
       packages: pkgs,
-      missingPaths: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+      /* SAFETY: 类型断言已复核 */
+      missingPaths: [] as Array<string>,
       parseErrors: jsonField<Array<unknown>>(m, "parseErrors", []),
       sources,
     };
@@ -307,7 +309,8 @@ async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<un
     }
     try {
       const parsed: unknown = JSON.parse(stdout);
-      const pkgs = /* SAFETY: 类型断言已复核 */ (
+      /* SAFETY: 类型断言已复核 */
+      const pkgs = (
         isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
       ) as Array<DiscoveredSubpkg>;
       rememberDiscover(key, pkgs);
@@ -404,7 +407,8 @@ function runDiscoverStreaming(
           if (!m) {
             return;
           }
-          const phase = /* SAFETY: 类型断言已复核 */ m[1] as "scan" | "hash";
+          /* SAFETY: 类型断言已复核 */
+          const phase = m[1] as "scan" | "hash";
           const rest = m[2]!;
           // 取出 msg=...（若其中含 `|` 也没关系：我们把它之后
           // 直到下一个 `|key=` 或行尾的内容整体当作 msg）。
@@ -488,7 +492,8 @@ function runDiscoverStreaming(
         }
         try {
           const parsed: unknown = finalJson ? JSON.parse(finalJson) : { packages: [] };
-          const pkgs = /* SAFETY: 类型断言已复核 */ (
+          /* SAFETY: 类型断言已复核 */
+          const pkgs = (
             isRecord(parsed) && Array.isArray(parsed.packages) ? parsed.packages : []
           ) as Array<DiscoveredSubpkg>;
           rememberDiscover(parent, pkgs);
@@ -663,7 +668,8 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
           send({
             type: "done",
             ok: !!report,
-            report: /* SAFETY: 类型断言已复核 */ report as ParseReport | null,
+            /* SAFETY: 类型断言已复核 */
+            report: report as ParseReport | null,
             stderr: "",
             exitCode: code,
           });
@@ -772,8 +778,10 @@ async function buildGetResponse(): Promise<Response> {
         // 让对话框在同一次注水时就能渲染本地工作流的扫描结果。
         send({
           type: "summary",
-          summary: /* SAFETY: 类型断言已复核 */ summary as SettingsResp["summary"],
-          lastReport: /* SAFETY: 类型断言已复核 */ lastReport as ParseReport | null,
+          /* SAFETY: 类型断言已复核 */
+          summary: summary as SettingsResp["summary"],
+          /* SAFETY: 类型断言已复核 */
+          lastReport: lastReport as ParseReport | null,
           byPath,
           settings: { paths, localWorkflowPaths },
         });

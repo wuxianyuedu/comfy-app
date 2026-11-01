@@ -566,9 +566,8 @@ describe("编排器与启动页的接线契约", () => {
   });
 
   it("自查入口是跨平台薄壳，且登记在 package.json 与 §9.5 对照表", () => {
-    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
-    ) as {
+    /* SAFETY: 类型断言已复核 */
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
     expect(pkg.scripts["check:toolchain"]).toBe("node scripts/check-pnpm-available.mjs");
@@ -1024,8 +1023,9 @@ describe("内层 spawn pnpm 复用同一形态判据（ISSUE #576 第五轮）",
 
     expect(
       offenders,
-      `这些文件自己在拼 pnpm 可执行名（Windows 上会选中 Node 起不来的批处理形态）：\n${
-        offenders.map((o) => `  · ${o}`).join("\n")}`,
+      `这些文件自己在拼 pnpm 可执行名（Windows 上会选中 Node 起不来的批处理形态）：\n${offenders
+        .map((o) => `  · ${o}`)
+        .join("\n")}`,
     ).toEqual([]);
   });
 

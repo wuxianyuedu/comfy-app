@@ -18,7 +18,8 @@ import {
 } from "./types";
 
 describe("resolveTaskTemperature", () => {
-  const overrides = /* SAFETY: 类型断言已复核 */ {
+  /* SAFETY: 类型断言已复核 */
+  const overrides = {
     chat: 0.9,
   } as Record<TaskType, number>;
 
@@ -174,7 +175,8 @@ describe("isLoopbackBaseUrl", () => {
     expect(isLoopbackBaseUrl("https://api.openai.com/v1")).toBe(false);
     expect(isLoopbackBaseUrl("https://192.168.1.10/v1")).toBe(false);
     expect(isLoopbackBaseUrl("")).toBe(false);
-    expect(isLoopbackBaseUrl(/* SAFETY: 类型断言已复核 */ null as unknown as string)).toBe(false);
+    /* SAFETY: 类型断言已复核 */
+    expect(isLoopbackBaseUrl(null as unknown as string)).toBe(false);
   });
 });
 

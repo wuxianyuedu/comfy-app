@@ -11,7 +11,8 @@ import type { AgentChatRequest } from "./shared";
 
 const REQ: AgentChatRequest = {
   messages: [{ role: "user", content: "hi" }],
-  draft: /* SAFETY: 类型断言已复核 */ {} as AgentChatRequest["draft"],
+  /* SAFETY: 类型断言已复核 */
+  draft: {} as AgentChatRequest["draft"],
 };
 
 function mockFetch(impl: () => Promise<Response> | Response) {
@@ -153,6 +154,7 @@ describe("sendAgentMessage", () => {
     await sendAgentMessage(REQ);
     expect(seen.url).toBe("/api/agent/chat");
     expect(seen.init?.method).toBe("POST");
-    expect(JSON.parse(/* SAFETY: 类型断言已复核 */ seen.init?.body as string)).toEqual(REQ);
+    /* SAFETY: 类型断言已复核 */
+    expect(JSON.parse(seen.init?.body as string)).toEqual(REQ);
   });
 });

@@ -50,7 +50,8 @@ export function normalizePortrait(raw: unknown): CharacterPortrait | null {
   if (typeof raw !== "object" || raw === null) {
     return null;
   }
-  const candidate = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const candidate = raw as Record<string, unknown>;
   const url = candidate.url;
   if (typeof url !== "string" || !url) {
     return null;

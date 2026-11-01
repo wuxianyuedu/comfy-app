@@ -25,7 +25,8 @@ const mockDoneRun = {
   taskType: "t2i",
   startedAt: 1,
   source: "canvas-node",
-  status: /* SAFETY: 类型断言已复核 */ "done" as const,
+  /* SAFETY: 类型断言已复核 */
+  status: "done" as const,
   resultUrl: "blob://fake-result.png",
 };
 vi.mock("~/lib/workflow/workflow-run-store", () => ({

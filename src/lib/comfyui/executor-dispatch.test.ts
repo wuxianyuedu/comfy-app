@@ -56,16 +56,21 @@ type ExecJobRow = {
 /** 注入用的假仓储：四条读写的调用都记下来，断言不依赖实现细节。 */
 function fakeRepo(overrides: Record<string, unknown> = {}) {
   return {
-    claimNextQueued: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as Array<string>),
-    findExecJob: vi.fn(async () => /* SAFETY: 类型断言已复核 */ null as ExecJobRow),
-    finalizeFailure: vi.fn(async () => /* SAFETY: 类型断言已复核 */ "written" as const),
-    listQueuedIds: vi.fn(async () => /* SAFETY: 类型断言已复核 */ [] as Array<string>),
+    /* SAFETY: 类型断言已复核 */
+    claimNextQueued: vi.fn(async () => [] as Array<string>),
+    /* SAFETY: 类型断言已复核 */
+    findExecJob: vi.fn(async () => null as ExecJobRow),
+    /* SAFETY: 类型断言已复核 */
+    finalizeFailure: vi.fn(async () => "written" as const),
+    /* SAFETY: 类型断言已复核 */
+    listQueuedIds: vi.fn(async () => [] as Array<string>),
     ...overrides,
   };
 }
 
 function openWs() {
-  state().ws = /* SAFETY: 类型断言已复核 */ { readyState: 1 } as never;
+  /* SAFETY: 类型断言已复核 */
+  state().ws = { readyState: 1 } as never;
 }
 
 function resetRunnerState() {
@@ -431,7 +436,8 @@ describe("叶子总线接线（这一刀把它从一条回调扩成两条）", (
     vi.resetModules();
     const fresh = await import("./executor-dispatch");
     const runnerState = await import("./runner-state");
-    runnerState.state().ws = /* SAFETY: 类型断言已复核 */ {
+    /* SAFETY: 类型断言已复核 */
+    runnerState.state().ws = {
       readyState: 1,
     } as never;
 

@@ -2446,6 +2446,46 @@ describe("墙钟判点：界划在哪一侧（ISSUE #2364）", () => {
  * 那一屏**一条用例名都没有** —— `--reporter=dot` 在第一份跑完之前只往同一行打点，
  * 平台保留的又是日志尾部。所以这一组钉的不是「跑得快些」，是「装不下的那一遍要当场说出
  * 来、且仍按未判定收」。 */
+describe("墙钟预算必须真的到得了第一遍（cnb-53r-1k6b6besn 的现场）", () => {
+  /* 这一条判的是「界到哪里去了」，不是「界取多大」。
+   *
+   * 现场读数：`cnb-53r-1k6b6besn` 的「受影响用例」那一格，预算变量老老实实打出了
+   * 「剩余预算 25 分钟」，而第一遍跑在 9 分钟后被整块吞掉 —— 那一屏没有任何一条用例名，
+   * 也没有 `第 1 遍没跑完` 那句话。根因不是预算太小，是**那一份界没有传到 spawn 上**：
+   * 界在、读数在，掐断却只能等平台（而平台强杀那一屏一个字都不留）。
+   *
+   * 判据取**调用点**（起进程的那一层才拿得到 `timeout`），所以它不随 `main()` 里
+   * 变量的写法漂：`stageBudget` 必须出现在 `runChunk(...)` 的实参里、且在第一块之前
+   * 就被声明。两条都是字符串查找的量级 —— 这一档是提交门槛，代价不能是起 vitest。 */
+  const src = stripComments(readFileSync(LAUNCHER_PATH, "utf8"), { trailing: true });
+
+  it("`stageBudget` 交给了 `runChunk`（第一遍的 `timeout` 只从它来）", () => {
+    /* 针尖按**拼接**构造 —— 同下面那条「不许出现没接住 stderr 的调用点」：整段写成字面量
+     * 会命中那条判据（它判的是本文件里没有漏接 stderr 的调用点），而恒红的判据比没有更坏。 */
+    const call = new RegExp(`await\\s+run${"Chunk"}\\(chunk\\.files, \\{([\\s\\S]*?)\\}\\)`).exec(
+      src,
+    );
+    expect(call, "找不到 `runChunk(chunk.files, { … })` 那个调用点").not.toBeNull();
+    expect(call?.[1] ?? "").toMatch(/\bstageBudget\b/);
+  });
+
+  it("它在分块循环之前声明，且只声明一次", () => {
+    const lines = src.split("\n");
+    const decls = lines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => /^\s*const stageBudget = /.test(line));
+    /* 两份声明就会有一份是死代码，而「读到哪一份」只能靠巧合。 */
+    expect(decls, "`const stageBudget = …` 的声明数").toHaveLength(1);
+    /* 位置判据：声明必须在 `for (const [index, chunk] of chunks.entries())` 之前 ——
+     * 声明放到循环之后时，第一遍拿到的永远是「没有界」（那一跑就是这么被吞掉的）。 */
+    const loop = lines.findIndex((line) =>
+      line.includes("for (const [index, chunk] of chunks.entries())"),
+    );
+    expect(loop, "找不到分块循环").toBeGreaterThan(0);
+    expect(decls[0]?.index ?? -1, "`stageBudget` 声明在分块循环之后").toBeLessThan(loop);
+  });
+});
+
 describe("墙钟判点：第一遍自己开不开得起（PR #2760 的现场）", () => {
   const MIN = 60_000;
 

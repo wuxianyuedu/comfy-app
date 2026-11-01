@@ -65,7 +65,7 @@ type Ratchet = {
   timeout?: number;
   /** 加第 `n` 条违规；实现必须让「第 n+1 条」让计数**严格变大**（不同文件名，别覆盖上一条）。 */
   violate: (repo: GateRepo, n: number) => void;
-}
+};
 
 /** AST 类判据在临时工作区旁边没有 node_modules，靠 NODE_PATH 指回源码仓库。 */
 const AST_ENV = { NODE_PATH: join(process.cwd(), "node_modules") };
@@ -228,10 +228,10 @@ const NOT_A_RATCHET: Record<string, string> = {
  * 于是这条判据会开始报不存在的东西 —— 判据一旦误报，下一次「真的漏登记」就被当成
  * 又一轮噪声（§11.18.4「会误报的判据活不过一次评审」）。
  */
-function discoveredBaselines(): Array<{ baseline: string; script: string; }> {
+function discoveredBaselines(): Array<{ baseline: string; script: string }> {
   const dir = join(import.meta.dirname, "..", "scripts");
   /** 键 = `脚本:基线名`（两者都不含冒号），去重用 Map 而不是拼哨兵字符串。 */
-  const found = new Map<string, { baseline: string; script: string; }>();
+  const found = new Map<string, { baseline: string; script: string }>();
   const push = (script: string, baseline: string) =>
     found.set(`${script}:${baseline}`, { script, baseline });
 
@@ -420,8 +420,7 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
         unclassified,
         `这些判据脚本带 --update 且就地落盘基线，却没被任何一张表点名 —— ` +
           `要么补进 RATCHETS（配一条拒涨用例），要么在 PENDING / RETIRED_RATCHETS / ` +
-          `NOT_A_RATCHET 里写下理由：\n${
-          unclassified.join("\n")}`,
+          `NOT_A_RATCHET 里写下理由：\n${unclassified.join("\n")}`,
       ).toEqual([]);
     });
 
@@ -539,9 +538,10 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
           /* 表里的 `baseline` 带目录前缀（用于 `discoveredBaselines` 对齐），
            * 而沙箱里脚本落点是 `scripts/`（`dir` 默认档），读回时要去掉前缀。 */
           const baselineRel = row!.baseline.split("/").pop() ?? row!.baseline;
-          const written = /* SAFETY: 类型断言已复核 */ JSON.parse(
-            handle.repo.read(join("scripts", baselineRel)),
-          ) as { rules?: Record<string, unknown> };
+          /* SAFETY: 类型断言已复核 */
+          const written = JSON.parse(handle.repo.read(join("scripts", baselineRel))) as {
+            rules?: Record<string, unknown>;
+          };
           expect(
             Object.keys(written.rules ?? {}),
             `${row!.script} 的棘轮车道又有成员了（--update 写回了非空 rules）——` +

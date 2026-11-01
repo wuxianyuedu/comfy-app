@@ -151,7 +151,8 @@ export function probeExecutable(
     /* libuv 认不出的失败不给 `code`，`UNKNOWN` 是判据自己兜的那一档 —— 把它读成
      * 「没有错误」会让一条失败被报成可用（本模块要治的正是那一类）。空串同样是
      * 「没有码」（它会打出一句「起不来（）」），所以这里刻意不用 `??`。 */
-    const errno = /* SAFETY: 类型断言已复核 */ (probe.error as NodeJS.ErrnoException).code;
+    /* SAFETY: 类型断言已复核 */
+    const errno = (probe.error as NodeJS.ErrnoException).code;
     // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
     const code: string = errno || "UNKNOWN";
     if (code === "ETIMEDOUT") {

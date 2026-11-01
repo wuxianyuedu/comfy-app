@@ -93,7 +93,8 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
       // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (v != null && typeof v === "object") {
         stack.push({
-          node: /* SAFETY: 类型断言已复核 */ v as JsonRecord,
+          /* SAFETY: 类型断言已复核 */
+          node: v as JsonRecord,
           d: d + 1,
         });
       }
@@ -126,7 +127,8 @@ export function envelopeErrorMessage(env: unknown): string {
     if (o == null || typeof o !== "object") {
       return undefined;
     }
-    const v = /* SAFETY: 类型断言已复核 */ (o as JsonRecord)[key];
+    /* SAFETY: 类型断言已复核 */
+    const v = (o as JsonRecord)[key];
     return typeof v === "string" ? v : undefined;
   };
   return str(err, "message") ?? str(err, "hint") ?? "comfy-cli 执行失败";
@@ -145,15 +147,18 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
   if (env == null || typeof env !== "object") {
     return null;
   }
-  const err = /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error;
+  /* SAFETY: 类型断言已复核 */
+  const err = (env as JsonRecord).error;
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (err == null || typeof err !== "object") {
     return null;
   }
-  if (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).code !== "workflow_unknown_nodes") {
+  /* SAFETY: 类型断言已复核 */
+  if ((err as JsonRecord).code !== "workflow_unknown_nodes") {
     return null;
   }
-  const details = /* SAFETY: 类型断言已复核 */ (err as JsonRecord).details;
+  /* SAFETY: 类型断言已复核 */
+  const details = (err as JsonRecord).details;
   const list =
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     details != null && typeof details === "object"
@@ -161,7 +166,8 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
       : undefined;
   if (Array.isArray(list) && list.length > 0) {
     const lines = list.slice(0, 12).map((raw) => {
-      const e = /* SAFETY: 类型断言已复核 */ raw as JsonRecord;
+      /* SAFETY: 类型断言已复核 */
+      const e = raw as JsonRecord;
       const node = typeof e.node_id === "string" ? `节点 ${e.node_id}` : "某节点";
       const field = typeof e.field === "string" ? ` 的「${e.field}」输入` : "";
       const hint =
@@ -178,8 +184,10 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
   }
   const message =
     /* SAFETY: 类型断言已复核 */
-    typeof (/* SAFETY: 类型断言已复核 */ (err as JsonRecord).message) === "string"
-      ? /* SAFETY: 类型断言已复核 */ ((err as JsonRecord).message as string)
+    /* SAFETY: 类型断言已复核 */
+    typeof (err as JsonRecord).message === "string"
+      ? /* SAFETY: 类型断言已复核 */
+        ((err as JsonRecord).message as string)
       : "未知校验错误";
   return `工作流校验未通过（comfy-cli 对照服务端校验）：${message}`;
 }
@@ -242,7 +250,8 @@ export type CliEnvelopeParser = {
  * （`deps.patched`，与 `progress` 帧同一条路，见 ADR §24）。
  */
 function nodeTag(evt: JsonRecord, patched: Record<string, unknown> | undefined): string {
-  const node = /* SAFETY: 类型断言已复核 */ (evt.node ??
+  /* SAFETY: 类型断言已复核 */
+  const node = (evt.node ??
     /* SAFETY: 类型断言已复核 */ (evt.data as JsonRecord | null | undefined)?.node ??
     "?") as string;
   const fromEvent =
@@ -314,7 +323,8 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
     }
     /* 已解析事件也原样落 trace：面板会按事件类型折叠成一行，这里保留原文。 */
     doTrace("cli", taskId, "stdout 事件", { event: ev });
-    dispatchEvent(/* SAFETY: 类型断言已复核 */ ev as JsonRecord);
+    /* SAFETY: 类型断言已复核 */
+    dispatchEvent(ev as JsonRecord);
   };
 
   const dispatchEvent = (evt: JsonRecord): void => {

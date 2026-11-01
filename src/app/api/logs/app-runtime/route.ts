@@ -32,7 +32,8 @@ const MAX_MSG_LEN = RUNTIME_LOG_MESSAGE_MAX;
 
 export async function POST(request: Request) {
   try {
-    const body = /* SAFETY: 类型断言已复核 */ (await request.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await request.json()) as {
       fields?: Record<string, unknown>;
       level?: string;
       msg?: string;
@@ -44,7 +45,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false }, { status: 400 });
     }
     const level = body.level ?? "info";
-    if (!ALLOWED_LEVEL.has(/* SAFETY: 类型断言已复核 */ level as "info" | "warn" | "error")) {
+    /* SAFETY: 类型断言已复核 */
+    if (!ALLOWED_LEVEL.has(level as "info" | "warn" | "error")) {
       return NextResponse.json({ ok: false }, { status: 400 });
     }
     if (typeof body.msg !== "string" || body.msg.length === 0) {

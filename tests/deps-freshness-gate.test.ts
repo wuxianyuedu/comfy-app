@@ -73,7 +73,7 @@ type FreshnessReport = {
   remoteAgeMs: number | null;
   remoteChecked: boolean;
   remoteDrifts: Array<{ file: string; kind: string }>;
-}
+};
 
 /**
  * 解析 `--json` 输出。
@@ -88,7 +88,8 @@ function parseReport(output: string): FreshnessReport {
   if (typeof raw !== "object" || raw === null) {
     throw new Error(`--json 输出不是一个对象：${output}`);
   }
-  const r = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const r = raw as Record<string, unknown>;
   if (!Array.isArray(r.remoteDrifts)) {
     throw new Error(`--json 输出缺少 remoteDrifts 数组：${output}`);
   }
@@ -96,9 +97,10 @@ function parseReport(output: string): FreshnessReport {
     code: typeof r.code === "number" ? r.code : -1,
     remoteChecked: r.remoteChecked === true,
     remoteAgeMs: typeof r.remoteAgeMs === "number" ? r.remoteAgeMs : null,
-    remoteDrifts: /* SAFETY: 类型断言已复核 */ r.remoteDrifts as FreshnessReport["remoteDrifts"],
-    installDrift: /* SAFETY: 类型断言已复核 */ (r.installDrift ??
-      null) as FreshnessReport["installDrift"],
+    /* SAFETY: 类型断言已复核 */
+    remoteDrifts: r.remoteDrifts as FreshnessReport["remoteDrifts"],
+    /* SAFETY: 类型断言已复核 */
+    installDrift: (r.installDrift ?? null) as FreshnessReport["installDrift"],
     envBroken: r.envBroken === true,
   };
 }
@@ -350,7 +352,7 @@ describe("check-deps-freshness 契约", () => {
     // （§12.16 的同款教训：一个永远返回空数组的解析器会让所有断言全绿）。
     const facts =
       /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-        FACTS: Array<{ extract: () => unknown; key: string; }>;
+        FACTS: Array<{ extract: () => unknown; key: string }>;
       };
     const probesFact = facts.FACTS.find((f) => f.key === "deps.resolveProbes");
     expect(probesFact, "FACTS 里缺 deps.resolveProbes 登记项").toBeDefined();

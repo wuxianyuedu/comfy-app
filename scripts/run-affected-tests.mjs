@@ -432,7 +432,7 @@ async function main(argv) {
    * （实测 8 块 ⇒ 约 31 分钟，ISSUE #1747 的现场）。用一个可在多块之间共享的
    * `deadline` 表示 —— 第一块等掉的时间，后面的块不会重新拿到一份。 */
   const waitBudget = { deadline: Date.now() + RETRY_BUDGET_MS };
-  /* 跑也要有界：整次一份、跨块共享，与上面那份等待预算同形状（只管开不开下一遍）。 */
+  /* 跑那一侧的界（`stageBudget`）：整次一份、跨块共享，也是第一遍那条 `timeout` 的唯一来源。 */
   const wallClock = resolveWallClockMs(process.env.COMFY_AFFECTED_WALL_CLOCK_MS);
   if (wallClock.note) {
     process.stderr.write(`[affected-launch] ${wallClock.note}\n`);

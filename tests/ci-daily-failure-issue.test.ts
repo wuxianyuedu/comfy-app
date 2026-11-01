@@ -51,7 +51,7 @@ type DetailJson = {
   data: {
     pipelinesStatus: Record<
       string,
-      { id: string; name: string; stages: Array<StageRow>; status: string; }
+      { id: string; name: string; stages: Array<StageRow>; status: string }
     >;
     status: string;
   };
@@ -63,8 +63,9 @@ type Verdict = "green" | "failed" | "cancelled" | "running";
  * `pickPreviousDaily()` 的返回是判别联合（要么挑到、要么给一句为什么挑不到）。
  * 这里要的只是「读哪个字段」的形状，不是再写一套判决 —— 一次 `as`，字段全在这。
  */
-type PickedLike = { none?: string; outcome?: { state: string }; sn?: string; };
-const asPicked = (p: unknown): PickedLike => /* SAFETY: 类型断言已复核 */ p as PickedLike;
+type PickedLike = { none?: string; outcome?: { state: string }; sn?: string };
+/* SAFETY: 类型断言已复核 */
+const asPicked = (p: unknown): PickedLike => p as PickedLike;
 
 /** 建单标题（去重键只认格名那一段，构建号 / 事件 / 时刻只给读者看 — ISSUE #2399）。 */
 const titleOf = (stage: string, sn = "sn-t", at = "2026-10-24T11:40:05.000Z") =>
@@ -382,7 +383,7 @@ describe("正文只含读数，不含因果", () => {
 
 describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
   /** 写一份离线读数，返回它的路径与目录（每份用例自带目录，别往仓库里落东西）。 */
-  function fixture(list: Array<ListBuild>, details: Array<{ json: DetailJson; sn: string; }>) {
+  function fixture(list: Array<ListBuild>, details: Array<{ json: DetailJson; sn: string }>) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "daily-failure-issue-"));
     const file = path.join(dir, "read.json");
     fs.writeFileSync(file, JSON.stringify({ list, details }), "utf8");
@@ -744,7 +745,9 @@ describe("升级判不判：门限可注入，读不出不构成结论", () => {
       account: readBundleAccount(null),
       streak: noStreak,
     });
-    for (const j of [suspended, none, unknown]) {expect(j.fired).toBe(false);}
+    for (const j of [suspended, none, unknown]) {
+      expect(j.fired).toBe(false);
+    }
     expect(suspended.reason).toContain("#2634");
     expect(none.reason).toContain("没有违规读数");
     expect(unknown.reason).toContain("不构成结论");
@@ -823,24 +826,18 @@ describe("正文里的升级段：两种归因都要念成人话", () => {
     };
     const withSection = composeBody({ ...base, escalation: section });
     expect(withSection).toContain(section);
-    expect(withSection.indexOf(section)).toBeGreaterThan(
-      withSection.indexOf("## 当场读数"),
-    );
-    expect(withSection.indexOf(section)).toBeLessThan(
-      withSection.indexOf("## 根因：**未判定**"),
-    );
+    expect(withSection.indexOf(section)).toBeGreaterThan(withSection.indexOf("## 当场读数"));
+    expect(withSection.indexOf(section)).toBeLessThan(withSection.indexOf("## 根因：**未判定**"));
     expect(composeBody(base)).not.toContain("该有人出面");
   });
 });
 
 describe("判决行与判据那一侧对账（改词要两边一起改）", () => {
   it("BUNDLE_GATE_MARKERS 的两句都能在 check-bundle-budget.cjs 的源码里找到", () => {
-    const src = fs.readFileSync(
-      path.join(ROOT, "scripts", "check-bundle-budget.cjs"),
-      "utf8",
-    );
-    for (const marker of Object.values(BUNDLE_GATE_MARKERS))
-      {expect(src, `判据那侧没有这句判决行：${marker}`).toContain(marker);}
+    const src = fs.readFileSync(path.join(ROOT, "scripts", "check-bundle-budget.cjs"), "utf8");
+    for (const marker of Object.values(BUNDLE_GATE_MARKERS)) {
+      expect(src, `判据那侧没有这句判决行：${marker}`).toContain(marker);
+    }
   });
 });
 
@@ -851,7 +848,7 @@ describe("判决行与判据那一侧对账（改词要两边一起改）", () =
  * 用例喂的是同一份平台形状，测的是「哪几跑算看过」与「什么时候必须放弃结论」。
  */
 describe("连续红天数：逐日回看，读不出不是 0", () => {
-  type FakeDay = { status?: string; text: string; };
+  type FakeDay = { status?: string; text: string };
 
   /** 假平台：列表按页答（`null` = 那一页取不到），逐格详情按 sn 答。 */
   function fakePlatform(input: {
@@ -871,7 +868,9 @@ describe("连续红天数：逐日回看，读不出不是 0", () => {
       if (key.includes("get-build-logs")) {
         const at = args.indexOf("--page");
         const rows = input.page(Number(args[at + 1] ?? "1"));
-        if (rows === null) {return { status: 1, stdout: "", stderr: "boom", error: null };}
+        if (rows === null) {
+          return { status: 1, stdout: "", stderr: "boom", error: null };
+        }
         return json({ total: rows.length, data: rows });
       }
       if (key.includes("get-build-status")) {

@@ -64,9 +64,8 @@ const MODES: ReadonlyArray<ReviewMode> = ["gacha", "reprompt"];
 /** 宽容解析重生成方式；非法/缺省回落 `gacha`（抽卡是默认动作）。 */
 export function normalizeReviewMode(raw: unknown): ReviewMode {
   /* SAFETY: 类型断言已复核 */
-  return MODES.includes(/* SAFETY: 类型断言已复核 */ raw as ReviewMode)
-    ? (raw as ReviewMode)
-    : "gacha";
+  /* SAFETY: 类型断言已复核 */
+  return MODES.includes(raw as ReviewMode) ? (raw as ReviewMode) : "gacha";
 }
 
 /**

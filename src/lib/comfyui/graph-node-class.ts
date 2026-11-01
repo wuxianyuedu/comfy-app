@@ -35,10 +35,12 @@ export function classTypeForNode(graph: unknown, nodeId: string): string | undef
   }
 
   // API 形状优先：这一支不需要遍历，是 O(1) 的按键取。
-  const apiNode = /* SAFETY: 类型断言已复核 */ (graph as Record<string, unknown>)[nodeId];
+  /* SAFETY: 类型断言已复核 */
+  const apiNode = (graph as Record<string, unknown>)[nodeId];
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (apiNode != null && typeof apiNode === "object") {
-    const classType = /* SAFETY: 类型断言已复核 */ (apiNode as Record<string, unknown>).class_type;
+    /* SAFETY: 类型断言已复核 */
+    const classType = (apiNode as Record<string, unknown>).class_type;
     if (typeof classType === "string" && classType) {
       return classType;
     }

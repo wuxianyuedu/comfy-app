@@ -58,7 +58,8 @@ export function toStringValue(v: unknown): string {
   if (v === undefined) {
     return "undefined";
   }
-  return /* SAFETY: 类型断言已复核 */ (v as { toString(): string }).toString();
+  /* SAFETY: 类型断言已复核 */
+  return (v as { toString(): string }).toString();
 }
 
 /** raw UI 格式节点的 inputs[] 条目（ComfyUI 只把「转为输入」的槽位写进来）。
@@ -388,7 +389,8 @@ export async function fetchObjectInfo(): Promise<ObjectInfo | null> {
       _objectInfoFailedAt = Date.now();
       return null;
     }
-    const data = /* SAFETY: 类型断言已复核 */ parsed.data as ObjectInfo;
+    /* SAFETY: 类型断言已复核 */
+    const data = parsed.data as ObjectInfo;
     _objectInfoCache = { at: Date.now(), data };
     return data;
   } catch {

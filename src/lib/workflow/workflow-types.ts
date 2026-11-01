@@ -11,7 +11,8 @@
  */
 
 /* ── 分类枚举 ── */
-export const WORKFLOW_CATEGORIES = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+export const WORKFLOW_CATEGORIES = [
   "image", // 图像侧（静态）
   "video", // 视频侧（动态）
   "audio", // 音频 / 语音侧
@@ -467,7 +468,8 @@ export function parseModesJson(raw: unknown): Array<string> {
   }
   if (typeof raw === "string" && raw.trim()) {
     try {
-      const arr = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown;
+      /* SAFETY: 类型断言已复核 */
+      const arr = JSON.parse(raw) as unknown;
       if (Array.isArray(arr)) {
         return arr.filter((x): x is string => typeof x === "string");
       }

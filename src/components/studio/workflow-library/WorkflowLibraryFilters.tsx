@@ -34,14 +34,16 @@ type WorkflowLibraryFiltersProps = {
   typeFilter: TypeFilter;
 };
 
-const SOURCE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "local", "online"] as const;
+/* SAFETY: 类型断言已复核 */
+const SOURCE_OPTIONS = ["all", "local", "online"] as const;
 const SOURCE_LABELS: Record<SourceFilter, string> = {
   all: "全部来源",
   local: "本地工作流",
   online: "在线工作流",
 };
 
-const TYPE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "image", "video", "audio"] as const;
+/* SAFETY: 类型断言已复核 */
+const TYPE_OPTIONS = ["all", "image", "video", "audio"] as const;
 const TYPE_LABELS: Record<TypeFilter, string> = {
   all: "全部类型",
   image: "图像",

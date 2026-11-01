@@ -86,7 +86,8 @@ export function placeCanvasNode(opts: {
     position,
     data: opts.data,
   };
-  return /* SAFETY: 类型断言已复核 */ [...opts.nodes, node] as Array<CanvasNodeType>;
+  /* SAFETY: 类型断言已复核 */
+  return [...opts.nodes, node] as Array<CanvasNodeType>;
 }
 
 /** 双 rAF 的 fitView 调度器：等 ReactFlow 完成本轮布局后再 fit，

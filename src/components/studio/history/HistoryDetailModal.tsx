@@ -88,9 +88,8 @@ export function HistoryDetailModal({
     hasAny: hasParams,
   } = deriveWorkflowParams(current, workflowIO);
   const firstImage = Array.isArray(current?.images) ? current.images[0] : undefined;
-  const snapSource = /* SAFETY: 类型断言已复核 */ (
-    current?.workflowSnapshot as { source?: string } | null | undefined
-  )?.source;
+  /* SAFETY: 类型断言已复核 */
+  const snapSource = (current?.workflowSnapshot as { source?: string } | null | undefined)?.source;
   const sourceLabel =
     snapSource === "backfill"
       ? "历史记录回填快照"

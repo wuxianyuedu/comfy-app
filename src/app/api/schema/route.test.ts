@@ -66,7 +66,8 @@ describe("GET /api/schema", () => {
       "utf8",
     );
     const { GET } = await import("./route");
-    const body = /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const body = (await (await GET()).json()) as {
       phase: string;
     };
     expect(body.phase).toBe("syncing");

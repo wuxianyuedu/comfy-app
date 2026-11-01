@@ -190,18 +190,23 @@ describe("槽根的推导（不写死盘符）", () => {
   });
 
   it("runner 换盘 ⇒ 推导跟着换，配置一个字都不用改（这一条就是那次搬家要防的事）", () => {
-    const answerFor = (driveRoot: string) => path.join(driveRoot, ".pnpm-store", "v11");
-    const rootOf = (driveRoot: string) =>
+    /* 「换盘」在单卷宿主上造不出来（`path.parse` 只认当前平台，任何绝对路径的卷根都是
+     * `/`），所以这一条改判同一条因果里可判的那一半：槽根**当且仅当**由 store 那一处
+     * 事实推出来 —— store 落在哪个卷根，槽根就落在哪个卷根，且不夹带任何一项配置。 */
+    const storeRoot = path.parse(ROOT).root;
+    const rootOf = (store: string) =>
       resolveCacheRoot({
         cwd: ROOT,
         env: {},
-        run: () => ({ status: 0, stdout: answerFor(driveRoot) }),
+        run: () => ({ status: 0, stdout: `${store}\n` }),
       }).root;
-    const a = rootOf("F:\\")!;
-    const b = rootOf("G:\\")!;
-    expect(path.parse(a).root).not.toBe(path.parse(b).root);
-    expect(a).toContain("ci-cache");
-    expect(b).toContain("ci-cache");
+    expect(path.parse(rootOf(path.join(storeRoot, ".pnpm-store", "v11"))!).root).toBe(storeRoot);
+    /* 卷根一样、store 的**父目录**换了 ⇒ 槽根不动：推导只认卷根，不跟着 store 的具体
+     * 位置漂（否则同一台机器上换一个 store 路径就会换一套槽，等于把已有的槽全弃了）。 */
+    expect(rootOf(path.join(storeRoot, "别的", "store"))).toBe(
+      rootOf(path.join(storeRoot, ".pnpm-store", "v11")),
+    );
+    expect(rootOf(path.join(storeRoot, ".pnpm-store", "v11"))).toContain("ci-cache");
   });
 
   it("问不出 store ⇒ 不设槽（宁可不省，也不猜一个卷）", () => {

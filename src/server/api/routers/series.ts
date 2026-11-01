@@ -697,7 +697,8 @@ export const seriesRouter = createTRPCRouter({
       if (epSeriesId === null) {
         throw new TRPCError({ code: "NOT_FOUND", message: "季未归属任何系列" });
       }
-      const prodChars = /* SAFETY: 类型断言已复核 */ (
+      /* SAFETY: 类型断言已复核 */
+      const prodChars = (
         Array.isArray(prod.characters) ? prod.characters : []
       ) as Array<ProductionCharacter>;
       let created = 0;
@@ -777,9 +778,10 @@ export const seriesRouter = createTRPCRouter({
         .from(episodeCharacter)
         .innerJoin(character, eq(episodeCharacter.characterId, character.id))
         .where(eq(episodeCharacter.episodeId, ep.id));
-      const prodChars = /* SAFETY: 类型断言已复核 */ (
-        Array.isArray(prod.characters) ? prod.characters : []
-      ) as Array<Record<string, unknown>>;
+      /* SAFETY: 类型断言已复核 */
+      const prodChars = (Array.isArray(prod.characters) ? prod.characters : []) as Array<
+        Record<string, unknown>
+      >;
       const byName = new Map<string, Record<string, unknown>>();
       for (const c of prodChars) {
         const n = typeof c?.name === "string" ? c.name : "";

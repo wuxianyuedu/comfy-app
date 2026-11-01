@@ -24,10 +24,12 @@ export const skillRouter = createTRPCRouter({
         includeInactive: input?.all === true,
       });
       const parsed = skills.map((skill) => {
-        const obj = /* SAFETY: 类型断言已复核 */ skill as unknown as Record<string, unknown>;
+        /* SAFETY: 类型断言已复核 */
+        const obj = skill as unknown as Record<string, unknown>;
         let tags: unknown;
         try {
-          tags = JSON.parse(/* SAFETY: 类型断言已复核 */ (obj.tags as string) ?? "[]");
+          /* SAFETY: 类型断言已复核 */
+          tags = JSON.parse((obj.tags as string) ?? "[]");
         } catch {
           tags = [];
         }

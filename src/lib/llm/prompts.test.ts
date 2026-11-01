@@ -56,9 +56,8 @@ describe("buildCharacterMessages", () => {
 
   it("信息全空时给出兜底指令，而不是发一条空消息", () => {
     const [, user] = buildCharacterMessages({ name: "" });
-    expect(/* SAFETY: 类型断言已复核 */ (user!.content as string).trim()).toBe(
-      "请帮我设计一个原创角色",
-    );
+    /* SAFETY: 类型断言已复核 */
+    expect((user!.content as string).trim()).toBe("请帮我设计一个原创角色");
   });
 
   it("风格标签用顿号连接", () => {
@@ -348,7 +347,8 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
     expect(msgs[0]!.role).toBe("system");
     const user = msgs[1]!;
     expect(user.role).toBe("user");
-    const content = /* SAFETY: 类型断言已复核 */ user.content as Array<{
+    /* SAFETY: 类型断言已复核 */
+    const content = user.content as Array<{
       image_url?: { url: string };
       text?: string;
       type: string;
@@ -364,7 +364,8 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
   });
 
   it("没有定妆照时只带镜头图一张", () => {
-    const content = /* SAFETY: 类型断言已复核 */ buildShotImageReviewMessages({
+    /* SAFETY: 类型断言已复核 */
+    const content = buildShotImageReviewMessages({
       imageUrl: "/shot.png",
       portraitUrls: [],
       prompt: "x",
@@ -376,7 +377,8 @@ describe("buildShotImageReviewMessages（P8-2 多模态）", () => {
   });
 
   it("传生图 rubric 文本时，system 追加维度评分要求", () => {
-    const system = /* SAFETY: 类型断言已复核 */ buildShotImageReviewMessages(
+    /* SAFETY: 类型断言已复核 */
+    const system = buildShotImageReviewMessages(
       {
         imageUrl: "/s",
         portraitUrls: [],

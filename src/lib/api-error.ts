@@ -108,14 +108,14 @@ export function readApiError(body: unknown): string | null {
   if (typeof body !== "object" || body === null) {
     return null;
   }
-  const err: unknown = /* SAFETY: 类型断言已复核 */ (body as Record<string, unknown>)[
-    RESPONSE_ERROR_KEY
-  ];
+  /* SAFETY: 类型断言已复核 */
+  const err: unknown = (body as Record<string, unknown>)[RESPONSE_ERROR_KEY];
   if (typeof err === "string" && err.trim()) {
     return err;
   }
   if (typeof err === "object" && err !== null) {
-    const message = /* SAFETY: 类型断言已复核 */ (err as { message?: unknown }).message;
+    /* SAFETY: 类型断言已复核 */
+    const message = (err as { message?: unknown }).message;
     if (typeof message === "string" && message.trim()) {
       return message;
     }
@@ -133,7 +133,8 @@ export function readApiError(body: unknown): string | null {
  */
 export async function readJsonBody(res: Response): Promise<unknown> {
   try {
-    return /* SAFETY: 类型断言已复核 */ (await res.json()) as unknown;
+    /* SAFETY: 类型断言已复核 */
+    return (await res.json()) as unknown;
   } catch {
     return {};
   }

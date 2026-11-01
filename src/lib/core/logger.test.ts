@@ -46,7 +46,8 @@ function makeLogger(ns: string) {
       .trim()
       .split("\n")
       .filter(Boolean)
-      .map((l) => /* SAFETY: 类型断言已复核 */ JSON.parse(l) as Record<string, unknown>);
+      /* SAFETY: 类型断言已复核 */
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
   return { log, lines };
 }
 

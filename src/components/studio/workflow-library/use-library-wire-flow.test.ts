@@ -23,13 +23,15 @@ import {
  * 时不用卡片头 ↺ 整张清）正是靠边可单独选中 + 删除键 / 删除按钮落到
  * `disconnect(entryId)` 实现。 */
 
-const inputWire = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+const inputWire = {
   entryId: "size-width",
   handleId: "size-width",
   targetIoKey: "node.width",
   grouped: false,
 } as const;
-const outputWire = /* SAFETY: 类型断言已复核 */ {
+/* SAFETY: 类型断言已复核 */
+const outputWire = {
   entryId: "image",
   handleId: "image",
   targetIoKey: "node.image",

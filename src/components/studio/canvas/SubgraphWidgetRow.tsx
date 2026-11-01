@@ -105,7 +105,8 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           src={previewUrl}
         />
       ) : inp.type === "COMBO" &&
-        Array.isArray(/* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta).comboOptions) &&
+        /* SAFETY: 类型断言已复核 */
+        Array.isArray((inp as ComboInputMeta).comboOptions) &&
         /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
           (inp as ComboInputMeta).comboOptions as Array<unknown>
         ).length > 0 ? (

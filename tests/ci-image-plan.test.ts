@@ -228,7 +228,8 @@ describe("fetchNodePlan：现取而不是猜", () => {
       enginesRange: "^24.15.0",
       /* 只喂这一层真正会读的两格（`ok` / `json()`）：造一个完整的 `Response`
        * 会让这条判据测到 `fetch` 的形状而不是本层的解析。 */
-      fetchImpl: /* SAFETY: 类型断言已复核 */ (async () => ({
+      /* SAFETY: 类型断言已复核 */
+      fetchImpl: (async () => ({
         ok: true,
         json: async () => [
           { version: "v24.22.0", files: ["linux-x64"] },
@@ -244,7 +245,8 @@ describe("fetchNodePlan：现取而不是猜", () => {
     await expect(
       fetchNodePlan({
         enginesRange: "^24.15.0",
-        fetchImpl: /* SAFETY: 类型断言已复核 */ (async () => ({
+        /* SAFETY: 类型断言已复核 */
+        fetchImpl: (async () => ({
           ok: false,
           status: 404,
         })) as unknown as typeof fetch,
@@ -316,8 +318,9 @@ describe("tarball：权限位、符号链接、可复现", () => {
     } // 这台机器上确实没有 tar（极简容器）—— 那一档不在这里红
     expect(
       list.status,
-      `tar 在盘上，却读不了这份包（退出码 ${list.status}）：${
-        String(list.stderr).trim().slice(0, 200)}`,
+      `tar 在盘上，却读不了这份包（退出码 ${list.status}）：${String(list.stderr)
+        .trim()
+        .slice(0, 200)}`,
     ).toBe(0);
     return list.stdout;
   };

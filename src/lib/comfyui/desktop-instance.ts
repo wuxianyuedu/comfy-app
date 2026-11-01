@@ -62,19 +62,22 @@ export function findInstallationById(
         typeof item === "object" &&
         /* SAFETY: 类型断言已复核 */ (item as Record<string, unknown>).id === instanceId
       ) {
-        return /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
+        /* SAFETY: 类型断言已复核 */
+        return item as Record<string, unknown>;
       }
     }
     return null;
   }
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (data != null && typeof data === "object") {
-    const obj = /* SAFETY: 类型断言已复核 */ data as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const obj = data as Record<string, unknown>;
     // 直接键值对应（形如 { "inst-...": {…} }）
     const direct = obj[instanceId];
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (direct != null && typeof direct === "object") {
-      return /* SAFETY: 类型断言已复核 */ direct as Record<string, unknown>;
+      /* SAFETY: 类型断言已复核 */
+      return direct as Record<string, unknown>;
     }
     // 深搜：遍历对象/数组，找 id 字段匹配的节点。
     return deepFindById(obj, instanceId);
@@ -97,7 +100,8 @@ function deepFindById(node: unknown, id: string, depth = 0): Record<string, unkn
     return null;
   }
   if (typeof node === "object") {
-    const obj = /* SAFETY: 类型断言已复核 */ node as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const obj = node as Record<string, unknown>;
     if (obj.id === id && typeof obj === "object") {
       return obj;
     }

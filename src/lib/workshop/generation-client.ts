@@ -170,12 +170,10 @@ function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption 
     : [];
   const mode = row.defaultMode ?? taskType ?? modes[0] ?? null;
   const encapsulationReady = deriveEncapsulationStatus({
-    io: /* SAFETY: 类型断言已复核 */ (row.workflowIO ?? null) as Parameters<
-      typeof deriveEncapsulationStatus
-    >[0]["io"],
-    paramMap: /* SAFETY: 类型断言已复核 */ (row.paramMap ?? null) as Parameters<
-      typeof deriveEncapsulationStatus
-    >[0]["paramMap"],
+    /* SAFETY: 类型断言已复核 */
+    io: (row.workflowIO ?? null) as Parameters<typeof deriveEncapsulationStatus>[0]["io"],
+    /* SAFETY: 类型断言已复核 */
+    paramMap: (row.paramMap ?? null) as Parameters<typeof deriveEncapsulationStatus>[0]["paramMap"],
     mode: typeof mode === "string" ? mode : null,
   }).ready;
   return {
@@ -374,13 +372,8 @@ function narrowLogEntry(raw: unknown): TaskLogEntry | null {
   if (typeof t !== "number" || typeof msg !== "string") {
     return null;
   }
-  const validLevels = /* SAFETY: 类型断言已复核 */ [
-    "info",
-    "progress",
-    "warn",
-    "error",
-    "success",
-  ] as const;
+  /* SAFETY: 类型断言已复核 */
+  const validLevels = ["info", "progress", "warn", "error", "success"] as const;
   const lv = validLevels.find((v) => v === level) ?? null;
   if (!lv) {
     return null;

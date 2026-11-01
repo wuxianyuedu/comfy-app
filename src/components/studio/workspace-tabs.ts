@@ -230,7 +230,8 @@ export function parseWorkspaceTabs(
   if (typeof parsed !== "object" || parsed === null) {
     return null;
   }
-  const record = /* SAFETY: 类型断言已复核 */ parsed as {
+  /* SAFETY: 类型断言已复核 */
+  const record = parsed as {
     activeKey?: unknown;
     tabs?: unknown;
   };
@@ -245,14 +246,16 @@ export function parseWorkspaceTabs(
     const [view, projectId] = /* SAFETY: 类型断言已复核 */ entry as [unknown, unknown];
     if (
       typeof view !== "string" ||
-      !knownViews.includes(/* SAFETY: 类型断言已复核 */ view as WorkspaceView)
+      /* SAFETY: 类型断言已复核 */
+      !knownViews.includes(view as WorkspaceView)
     ) {
       return null;
     }
     if (projectId !== null && typeof projectId !== "string") {
       return null;
     }
-    const tab = makeTab(/* SAFETY: 类型断言已复核 */ view as WorkspaceView, projectId);
+    /* SAFETY: 类型断言已复核 */
+    const tab = makeTab(view as WorkspaceView, projectId);
     // 造不出来（项目类视图丢了项目 id）或键重复 ⇒ 整份不可信。
     if (!tab || tabs.some((existing) => existing.key === tab.key)) {
       return null;

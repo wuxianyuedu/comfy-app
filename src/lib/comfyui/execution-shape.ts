@@ -25,7 +25,8 @@ export function hasRawContent(rawJson: unknown): boolean {
   if (typeof rawJson !== "object" || rawJson === null || Array.isArray(rawJson)) {
     return false;
   }
-  const nodes = /* SAFETY: 类型断言已复核 */ (rawJson as Record<string, unknown>).nodes;
+  /* SAFETY: 类型断言已复核 */
+  const nodes = (rawJson as Record<string, unknown>).nodes;
   return Array.isArray(nodes) && nodes.length > 0;
 }
 

@@ -126,7 +126,8 @@ export async function resolveDesktopStoragePaths(
     ? parseExtraModelPathsYaml(extra.content)
     : {
         basePath: null,
-        entries: /* SAFETY: 类型断言已复核 */ [] as Array<ExtraModelPathEntry>,
+        /* SAFETY: 类型断言已复核 */
+        entries: [] as Array<ExtraModelPathEntry>,
       };
 
   const launchArgs = await resolveArgs(dir);

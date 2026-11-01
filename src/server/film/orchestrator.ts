@@ -144,7 +144,8 @@ async function parseScriptToShots(
     // 离线兜底 —— 复用工坊解析器
     const sc = parseIdeaToScenes(raw, {
       title: "",
-      type: /* SAFETY: 类型断言已复核 */ (type as ProjectType) ?? "short_video",
+      /* SAFETY: 类型断言已复核 */
+      type: (type as ProjectType) ?? "short_video",
       tone: "",
       logline: "",
     });
@@ -346,7 +347,8 @@ async function generateVideoShot(
   userId: string,
   shot: { negative?: string | null; params?: unknown; prompt: string },
 ): Promise<string> {
-  const params = /* SAFETY: 类型断言已复核 */ (shot.params ?? {}) as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const params = (shot.params ?? {}) as Record<string, unknown>;
 
   const videoWorkflowId = typeof params.videoWorkflowId === "string" ? params.videoWorkflowId : "";
   if (!videoWorkflowId) {
@@ -357,9 +359,8 @@ async function generateVideoShot(
 
   // 断言仅收口类型（运行时擦除）：inputImage 为 "" 等 falsy 值时仍需走
   // 下方合成首帧分支。
-  let inputImage = /* SAFETY: 类型断言已复核 */ (params.inputImage ??
-    params.firstFrame ??
-    null) as string;
+  /* SAFETY: 类型断言已复核 */
+  let inputImage = (params.inputImage ?? params.firstFrame ?? null) as string;
 
   if (!inputImage) {
     const imageWorkflowId =
@@ -384,7 +385,8 @@ async function generateVideoShot(
       prompt: shot.prompt,
       ...(shot.negative ? { negativePrompt: shot.negative } : {}),
       firstFrame: inputImage,
-      frames: /* SAFETY: 类型断言已复核 */ (params.frames ?? 81) as number,
+      /* SAFETY: 类型断言已复核 */
+      frames: (params.frames ?? 81) as number,
       size,
       seed: randomSeed(),
     },
@@ -535,7 +537,8 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
     }
     const progressById = new Map(
       (await taskRepository.findExecutionProgressMany(taskIds)).map(
-        (row) => /* SAFETY: 类型断言已复核 */ [row.id, row] as const,
+        /* SAFETY: 类型断言已复核 */
+        (row) => [row.id, row] as const,
       ),
     );
 
@@ -566,13 +569,14 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
 
         videoPath = vid?.localPath;
 
-        const params = /* SAFETY: 类型断言已复核 */ (shot.params ?? {}) as Record<string, unknown>;
+        /* SAFETY: 类型断言已复核 */
+        const params = (shot.params ?? {}) as Record<string, unknown>;
 
-        duration =
-          typeof params.duration === "number"
-            ? params.duration
-            : /* SAFETY: 类型断言已复核 */ ((params.frames ?? 49) as number) /
-              /* SAFETY: 类型断言已复核 */ ((params.fps ?? 16) as number);
+        /* SAFETY: 类型断言已复核 */
+        const frames = (params.frames ?? 49) as number;
+        /* SAFETY: 类型断言已复核 */
+        const fps = (params.fps ?? 16) as number;
+        duration = typeof params.duration === "number" ? params.duration : frames / fps;
       }
 
       /* 只在真的变了才写：原先每轮对每个在跑的镜头都无条件 UPDATE，绝大多数

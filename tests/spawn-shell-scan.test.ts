@@ -247,7 +247,8 @@ describe("scripts/spawn-shell-scan.mjs", () => {
           stdio: ["ignore", "ignore", "pipe"],
         });
       } catch (error) {
-        const e = /* SAFETY: 类型断言已复核 */ error as { status?: number; stderr?: string | Buffer };
+        /* SAFETY: 类型断言已复核 */
+        const e = error as { status?: number; stderr?: string | Buffer };
         code = e.status ?? 1;
         stderr = String(e.stderr ?? "");
       }
@@ -352,9 +353,12 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
     const pkgDir = path.resolve(entry, "..", "..");
     return {
       pkgDir,
-      pkg: /* SAFETY: 类型断言已复核 */ JSON.parse(
-        fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
-      ) as { bin?: Record<string, string>; name: string; version: string; },
+      /* SAFETY: 类型断言已复核 */
+      pkg: JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8")) as {
+        bin?: Record<string, string>;
+        name: string;
+        version: string;
+      },
     };
   };
 
@@ -403,9 +407,11 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
       byShimName,
       '`.bin/tsc` 与 `require.resolve("typescript")` 给了同一份包 —— 口径变了，重读 #2572',
     ).not.toBe(byDepName);
-    const aliasPkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(byDepName, "package.json"), "utf8"),
-    ) as { bin?: Record<string, string>; name: string; };
+    /* SAFETY: 类型断言已复核 */
+    const aliasPkg = JSON.parse(fs.readFileSync(path.join(byDepName, "package.json"), "utf8")) as {
+      bin?: Record<string, string>;
+      name: string;
+    };
     expect(resolvePackageBinEntry("typescript"), "按依赖名居然解析得到").toBeNull();
     expect(resolvePackageBinEntry("@typescript/native"), "按目录名居然解析得到").toBeNull();
     /* 「取第一个键」那条兜底会把 tsc 变成 tsc6 —— 判它，是因为它长得像正确答案。 */
@@ -510,7 +516,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
   const run = (
     argv: Array<string>,
     cwd = ROOT,
-  ): { status: number; stderr: string; stdout: string; } => {
+  ): { status: number; stderr: string; stdout: string } => {
     try {
       const stdout = execFileSync(process.execPath, argv, {
         cwd,
@@ -519,7 +525,8 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
       });
       return { status: 0, stdout, stderr: "" };
     } catch (error) {
-      const e = /* SAFETY: 类型断言已复核 */ error as {
+      /* SAFETY: 类型断言已复核 */
+      const e = error as {
         status?: number;
         stderr?: string;
         stdout?: string;

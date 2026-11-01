@@ -10,7 +10,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const envStub = vi.hoisted(() => ({
-  localWorkflowsPath: /* SAFETY: 类型断言已复核 */ null as string | null,
+  /* SAFETY: 类型断言已复核 */
+  localWorkflowsPath: null as string | null,
 }));
 vi.mock("~/lib/envfile", () => ({
   readEnvVar: vi.fn(() => envStub.localWorkflowsPath),

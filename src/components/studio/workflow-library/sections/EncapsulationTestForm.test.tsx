@@ -79,7 +79,8 @@ describe("EncapsulationTestForm", () => {
     expect(negative).toBeTruthy();
     /* 没连到工作流的口给一句说明，但**不禁用**：值仍可填。 */
     expect(screen.getByText("未连到端口，用工作流默认值")).toBeTruthy();
-    expect(/* SAFETY: 类型断言已复核 */ (negative as HTMLTextAreaElement).disabled).toBe(false);
+    /* SAFETY: 类型断言已复核 */
+    expect((negative as HTMLTextAreaElement).disabled).toBe(false);
   });
 
   it("视频模式的尺寸口没落点也渲染尺寸控件（不再连尺寸都选不了）", () => {

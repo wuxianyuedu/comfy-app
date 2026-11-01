@@ -6,11 +6,8 @@
 import { formatDate } from "~/lib/time-format";
 
 /** 产生执行日志的工坊环节。 */
-export const GENERATION_LOG_STAGES = /* SAFETY: 类型断言已复核 */ [
-  "character",
-  "storyboard",
-  "portrait",
-] as const;
+/* SAFETY: 类型断言已复核 */
+export const GENERATION_LOG_STAGES = ["character", "storyboard", "portrait"] as const;
 export type GenerationLogStage = (typeof GENERATION_LOG_STAGES)[number];
 
 export const GENERATION_LOG_STAGE_LABELS: Record<GenerationLogStage, string> = {
@@ -48,7 +45,8 @@ export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | 
   if (typeof raw !== "object" || raw === null) {
     return null;
   }
-  const rec = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+  /* SAFETY: 类型断言已复核 */
+  const rec = raw as Record<string, unknown>;
   const summary =
     typeof rec.summary === "string" ? rec.summary.trim().slice(0, MAX_LOG_SUMMARY_CHARS) : "";
   if (!summary) {

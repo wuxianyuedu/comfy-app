@@ -23,7 +23,14 @@ import { execFileSync } from "node:child_process";
 /* `vi.spyOn(fs, …)` 要的是可写对象 ⇒ 必须 default 导入
    （`import * as fs` 在 vitest 5 下是冻结命名空间，spy 会以
    `Cannot redefine property: readdirSync` 当场炸掉 —— 先例见 `tests/db-backup.test.ts`）。 */
-import fs, { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import fs, {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -80,7 +87,8 @@ function gate(
       }),
     };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
+    /* SAFETY: 类型断言已复核 */
+    const e = error as { stderr?: string; stdout?: string };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -343,7 +351,8 @@ describe("裸 sleep 门禁：扫描面在枚举途中消失（同族第 5 条）
           removed = true;
           rmSync(dir, { recursive: true, force: true });
         }
-        return /* SAFETY: 类型断言已复核 */ (
+        /* SAFETY: 类型断言已复核 */
+        return (
           realReaddir as (p: typeof dirPath, o: typeof options) => ReturnType<typeof realReaddir>
         )(dirPath, options);
       });

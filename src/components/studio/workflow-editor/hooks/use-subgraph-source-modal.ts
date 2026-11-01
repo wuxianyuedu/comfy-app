@@ -37,7 +37,8 @@ export function useSubgraphSourceModal(params: {
       if (!ctx) {
         return null;
       }
-      const subs = /* SAFETY: 类型断言已复核 */ (
+      /* SAFETY: 类型断言已复核 */
+      const subs = (
         ctx.parentRawJson as {
           definitions?: { subgraphs?: Record<string, unknown> };
         } | null
@@ -48,7 +49,8 @@ export function useSubgraphSourceModal(params: {
       return (
         subs[ctx.subUid] ??
         Object.values(subs).find(
-          (s) => /* SAFETY: 类型断言已复核 */ (s as { id?: unknown } | null)?.id === ctx.subUid,
+          /* SAFETY: 类型断言已复核 */
+          (s) => (s as { id?: unknown } | null)?.id === ctx.subUid,
         ) ??
         null
       );

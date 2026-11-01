@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *   ② 非法值 fail-fast，且错误信息里带**字段名**（否则排障时只知道「配置错了」）。
  */
 
-const KEYS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const KEYS = [
   "NODE_ENV",
   "LOG_LEVEL",
   "DATABASE_URL",
@@ -94,14 +95,12 @@ describe("环境三态", () => {
 });
 
 describe("logLevel", () => {
-  it.for(/* SAFETY: 类型断言已复核 */ ["debug", "info", "warn", "error"] as const)(
-    "%s 合法",
-    async (level) => {
-      process.env.LOG_LEVEL = level;
-      const { config } = await loadConfig();
-      expect(config.logLevel).toBe(level);
-    },
-  );
+  /* SAFETY: 类型断言已复核 */
+  it.for(["debug", "info", "warn", "error"] as const)("%s 合法", async (level) => {
+    process.env.LOG_LEVEL = level;
+    const { config } = await loadConfig();
+    expect(config.logLevel).toBe(level);
+  });
 
   it("非法级别 fail-fast 且错误里带字段名", async () => {
     process.env.LOG_LEVEL = "verbose";

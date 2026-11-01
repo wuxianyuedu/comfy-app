@@ -128,7 +128,8 @@ async function saveRun(userId: string, projectId: string, run: ProductionRun) {
 
 function projectMeta(row: Production) {
   return {
-    type: /* SAFETY: 类型断言已复核 */ row.type as ProjectType,
+    /* SAFETY: 类型断言已复核 */
+    type: row.type as ProjectType,
     tone: row.tone,
     logline: row.logline,
     title: row.title,
@@ -242,7 +243,8 @@ async function execStoryboard(
       index: i,
       sceneId: "",
       sceneHeading: it.sceneHeading ?? "",
-      shotType: /* SAFETY: 类型断言已复核 */ (it.shotType ?? "medium") as Shot["shotType"],
+      /* SAFETY: 类型断言已复核 */
+      shotType: (it.shotType ?? "medium") as Shot["shotType"],
       description: it.description,
       characterIds: [],
       prompt: it.description,

@@ -41,7 +41,8 @@ describe("PageHeader（屏级页头）", () => {
       <PageHeader actions={<button type="button">刷新</button>} title="队列" />,
     );
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
-    const group = /* SAFETY: 类型断言已复核 */ header?.lastElementChild as HTMLElement;
+    /* SAFETY: 类型断言已复核 */
+    const group = header?.lastElementChild as HTMLElement;
     expect(group.className).toContain("shrink-0");
     expect(header?.children).toHaveLength(2);
 
@@ -94,7 +95,8 @@ describe("PageHeader（屏级页头）", () => {
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     /* 两个子元素：`sr-only` 的 h1 + 动作组（说明钮在动作组里）。 */
     expect(header?.children).toHaveLength(2);
-    const group = /* SAFETY: 类型断言已复核 */ header?.lastElementChild as HTMLElement;
+    /* SAFETY: 类型断言已复核 */
+    const group = header?.lastElementChild as HTMLElement;
     expect(group.className).toContain("ml-auto");
     expect(group.contains(screen.getByRole("button", { name: "说明" }))).toBe(true);
   });
@@ -104,7 +106,8 @@ describe("PageHeader（屏级页头）", () => {
     const header = container.querySelector<HTMLElement>('[data-component="page-header"]');
     /* 只有一个子元素（标题那一列），说明钮在它里面。 */
     expect(header?.children).toHaveLength(1);
-    const column = /* SAFETY: 类型断言已复核 */ header?.firstElementChild as HTMLElement;
+    /* SAFETY: 类型断言已复核 */
+    const column = header?.firstElementChild as HTMLElement;
     expect(column.contains(screen.getByRole("button", { name: "说明" }))).toBe(true);
   });
 

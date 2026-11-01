@@ -50,9 +50,11 @@ export function describeGlobalError(reason: unknown): string {
     typeof reason === "object" &&
     reason !== null &&
     "message" in reason &&
-    typeof (/* SAFETY: 类型断言已复核 */ (reason as { message?: unknown }).message) === "string"
+    /* SAFETY: 类型断言已复核 */
+    typeof (reason as { message?: unknown }).message === "string"
   ) {
-    return /* SAFETY: 类型断言已复核 */ (reason as { message: string }).message;
+    /* SAFETY: 类型断言已复核 */
+    return (reason as { message: string }).message;
   }
   try {
     return JSON.stringify(reason, null, 2) ?? String(reason);
@@ -86,14 +88,8 @@ export function describeUnhandledRejection(reason: unknown): string {
  * 各路的行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，因此到达顺序
  * 不影响面板的时间序（ISSUE #262）。
  */
-const POLL_SOURCES = /* SAFETY: 类型断言已复核 */ [
-  "launcher",
-  "shell-launch",
-  "shell",
-  "dev",
-  "app",
-  "app-runtime",
-] as const;
+/* SAFETY: 类型断言已复核 */
+const POLL_SOURCES = ["launcher", "shell-launch", "shell", "dev", "app", "app-runtime"] as const;
 type PollSource = (typeof POLL_SOURCES)[number];
 
 /** 轮询间隔：日志「实时感」与请求量的折中（对齐规范 07 §7.8 的增量轮询）。 */
@@ -113,7 +109,8 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const originals = /* SAFETY: 类型断言已复核 */ {
+    /* SAFETY: 类型断言已复核 */
+    const originals = {
       log: console.log,
       info: console.info,
       warn: console.warn,

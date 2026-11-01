@@ -39,7 +39,8 @@ import { CPU_LIMIT_MODES } from "~/lib/comfyui/cpu-limit";
  *
  *  其余几项（自动启动、退出即杀、工作流自动同步）只改行为偏好，不动「此刻是不是
  *  在跑、在哪跑」这条结论 —— 它们变了不需要通知任何人重问状态。 */
-const COMFY_CONFIG_KEYS = /* SAFETY: 类型断言已复核 */ [
+/* SAFETY: 类型断言已复核 */
+const COMFY_CONFIG_KEYS = [
   "comfyuiPort",
   "comfyuiPath",
   "comfyuiExtraArgs",

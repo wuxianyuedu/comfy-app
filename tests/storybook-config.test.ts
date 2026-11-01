@@ -69,9 +69,8 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
   const main = readFileSync(MAIN, "utf8");
   const preview = readFileSync(PREVIEW, "utf8");
   const launcher = readFileSync(LAUNCHER, "utf8");
-  const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
-    readFileSync(resolve(REPO_ROOT, "package.json"), "utf8"),
-  ) as {
+  /* SAFETY: 类型断言已复核 */
+  const pkg = JSON.parse(readFileSync(resolve(REPO_ROOT, "package.json"), "utf8")) as {
     devDependencies: Record<string, string>;
     scripts: Record<string, string>;
   };

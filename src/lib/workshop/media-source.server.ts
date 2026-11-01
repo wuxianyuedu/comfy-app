@@ -101,7 +101,8 @@ export async function resolveMediaDataUrl(src: string, _origin: string): Promise
 export async function readUpstreamJson(res: Response): Promise<unknown> {
   const text = await res.text();
   try {
-    return /* SAFETY: 类型断言已复核 */ JSON.parse(text) as unknown;
+    /* SAFETY: 类型断言已复核 */
+    return JSON.parse(text) as unknown;
   } catch {
     throw new Error(
       `上游返回非 JSON (${res.status}): ${clampText(text, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,

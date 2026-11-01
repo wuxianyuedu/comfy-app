@@ -291,9 +291,11 @@ async function buildWorkflowDetailJson(input: {
    * （与工作流级的 `WorkflowTemplate.modes` 同名、含义完全不同）归一到
    * `modeOverrides`——下游 `enrichWorkflowIO` 与客户端都只读后者。
    * 少了这一步，同一个 JSON 列就会被两处各按各的名字读。 */
-  const workflowIORaw = /* SAFETY: 类型断言已复核 */ parseWorkflowIOMap(
-    asRecord(tpl.workflowIO) ?? {},
-  ) as Record<string, WorkflowIORawEntry>;
+  /* SAFETY: 类型断言已复核 */
+  const workflowIORaw = parseWorkflowIOMap(asRecord(tpl.workflowIO) ?? {}) as Record<
+    string,
+    WorkflowIORawEntry
+  >;
 
   const nodeTitleById: Record<string, string> = {};
   for (const n of nodes) {
@@ -434,7 +436,8 @@ async function buildWorkflowDetailJson(input: {
             ? { direction: "output", kind: "output" }
             : {
                 direction: "input",
-                kind: /* SAFETY: 类型断言已复核 */ e.kind as "param" | "widget",
+                /* SAFETY: 类型断言已复核 */
+                kind: e.kind as "param" | "widget",
               };
         return [k, { ...e, ...slot } satisfies WorkflowDetailIOEntry];
       }),
@@ -528,7 +531,8 @@ export async function buildWorkflowDetailFull(
    * （缓存在 PATCH / DELETE 时失效；404 从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    return /* SAFETY: 类型断言已复核 */ JSON.parse(cached) as WorkflowDetailFull;
+    /* SAFETY: 类型断言已复核 */
+    return JSON.parse(cached) as WorkflowDetailFull;
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
@@ -594,7 +598,8 @@ export async function buildWorkflowDetailFull(
     }),
   );
 
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(detailJson) as WorkflowDetailFull;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(detailJson) as WorkflowDetailFull;
 }
 
 export async function buildSubgraphDetail(
@@ -612,7 +617,8 @@ export async function buildSubgraphDetail(
    * （下面 400 / 404 那两种情况从不缓存。） */
   const cached = cachePeek<string>(cacheKey);
   if (cached !== undefined && typeof cached === "string") {
-    return /* SAFETY: 类型断言已复核 */ JSON.parse(cached) as WorkflowDetailFull;
+    /* SAFETY: 类型断言已复核 */
+    return JSON.parse(cached) as WorkflowDetailFull;
   }
 
   const tpl = await workflowTemplateRepository.findByIdForUser(userId, id);
@@ -744,5 +750,6 @@ export async function buildSubgraphDetail(
     });
   });
 
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(detailJson) as WorkflowDetailFull;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(detailJson) as WorkflowDetailFull;
 }

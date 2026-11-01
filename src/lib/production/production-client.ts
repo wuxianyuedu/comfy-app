@@ -52,7 +52,8 @@ export async function fetchProduction(projectId: string): Promise<ProductionData
     }
     const data: unknown = await res.json();
     if (isRecord(data) && data.exists === true && isRecord(data.production)) {
-      return /* SAFETY: 类型断言已复核 */ data.production as unknown as ProductionData;
+      /* SAFETY: 类型断言已复核 */
+      return data.production as unknown as ProductionData;
     }
     return null;
   } catch {

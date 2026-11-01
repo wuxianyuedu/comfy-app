@@ -86,7 +86,8 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     }
     const meta = asRecord(rec._meta) ?? {};
     graph[id] = {
-      classType: /* SAFETY: 类型断言已复核 */ rec.class_type as string,
+      /* SAFETY: 类型断言已复核 */
+      classType: rec.class_type as string,
       inputs: asRecord(rec.inputs) ?? {},
       meta,
     };

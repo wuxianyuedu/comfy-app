@@ -34,7 +34,8 @@ const { stat, open, readCalls, disk, userMock, loginRequiredMock, foreignMock } 
   () => ({
     stat: vi.fn(),
     open: vi.fn(),
-    readCalls: /* SAFETY: type assertion reviewed */ [] as Array<{
+    /* SAFETY: type assertion reviewed */
+    readCalls: [] as Array<{
       length: number;
       position: number;
     }>,
@@ -224,12 +225,10 @@ describe("整份读（没有 Range）", () => {
     expect(cache).toMatch(/^private\b/);
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
     // 读的是根目录内的那个文件，不是别处。
-    expect(normalize(/* SAFETY: type assertion reviewed */ stat.mock.calls[0]?.[0] as string)).toBe(
-      `${artifactRoot}/t1/a.png`,
-    );
-    expect(normalize(/* SAFETY: type assertion reviewed */ open.mock.calls[0]?.[0] as string)).toBe(
-      `${artifactRoot}/t1/a.png`,
-    );
+    /* SAFETY: type assertion reviewed */
+    expect(normalize(stat.mock.calls[0]?.[0] as string)).toBe(`${artifactRoot}/t1/a.png`);
+    /* SAFETY: type assertion reviewed */
+    expect(normalize(open.mock.calls[0]?.[0] as string)).toBe(`${artifactRoot}/t1/a.png`);
   });
 
   it("Accept-Ranges 在场，客户端才知道可以分段要", async () => {

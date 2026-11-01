@@ -45,7 +45,8 @@ function emitChanged() {
  *  `typeof localStorage === "undefined"`，另有自己的 `safeParse`。 */
 function readIndex(): Array<CanvasProject> {
   return readStorageJson<Array<CanvasProject>>(INDEX_KEY, [], (raw) => {
-    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Array<CanvasProject>;
+    /* SAFETY: 类型断言已复核 */
+    const parsed = JSON.parse(raw) as Array<CanvasProject>;
     return Array.isArray(parsed) ? parsed : [];
   });
 }
@@ -202,8 +203,10 @@ function toCanvasProject(row: ServerProjectRow): CanvasProject {
     id: row.id,
     name: row.name,
     updatedAt: new Date(row.updatedAt).getTime(),
-    nodes: /* SAFETY: 类型断言已复核 */ (row.nodes as CanvasProject["nodes"]) ?? [],
-    edges: /* SAFETY: 类型断言已复核 */ (row.edges as CanvasProject["edges"]) ?? [],
+    /* SAFETY: 类型断言已复核 */
+    nodes: (row.nodes as CanvasProject["nodes"]) ?? [],
+    /* SAFETY: 类型断言已复核 */
+    edges: (row.edges as CanvasProject["edges"]) ?? [],
   };
 }
 
@@ -308,7 +311,8 @@ export async function hydrateProjectFromServer(id: string): Promise<CanvasProjec
  * 只有当项目「零节点零连线**且**名字等于该字面量」时，
  * 才算是可安全回收的空草稿。
  * 用户自己命名的空项目（他确实有意保存了一个空画布）**不会**被回收。 */
-export const EMPTY_DRAFT_NAMES = /* SAFETY: 类型断言已复核 */ ["未命名"] as const;
+/* SAFETY: 类型断言已复核 */
+export const EMPTY_DRAFT_NAMES = ["未命名"] as const;
 export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 
 /* 当且仅当 `name` 是空草稿哨兵名时为真。用它代替在每个回收判据里

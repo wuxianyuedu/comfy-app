@@ -134,7 +134,8 @@ export function AgentOverlay({
       ? [
           {
             id: "greeting",
-            role: /* SAFETY: 类型断言已复核 */ "assistant" as const,
+            /* SAFETY: 类型断言已复核 */
+            role: "assistant" as const,
             content: GREETING,
           },
         ]

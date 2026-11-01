@@ -28,12 +28,13 @@ type SegmentOnScreen = {
   name: string | null;
   value: number | null;
   visible: string;
-}
+};
 
 async function readSegments(barRoots: Locator): Promise<Array<SegmentOnScreen>> {
   return await barRoots.evaluateAll((nodes) =>
     nodes.map((node) => {
-      const root = /* SAFETY: 类型断言已复核 */ node as HTMLElement;
+      /* SAFETY: 类型断言已复核 */
+      const root = node as HTMLElement;
       const label = root.querySelector("span");
       const fill = root.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]');
       const raw = root.getAttribute("aria-valuenow");

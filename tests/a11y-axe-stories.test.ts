@@ -63,7 +63,7 @@ import KNOWN from "../scripts/.a11y-axe-known.json";
 
 import { installJsdomCapabilityGate } from "./helpers/jsdom-capability";
 
-type Finding = { component: string; nodes: number; rule: string; };
+type Finding = { component: string; nodes: number; rule: string };
 
 /** 一个故事的渲染函数（CSF3 的 `render`：吃 args、出节点）。 */
 type StoryFn = (args: Record<string, unknown>) => ReactNode;
@@ -92,7 +92,8 @@ type StoryModule = { default?: MetaShape } & Record<string, unknown>;
 const globbed = import.meta.glob("../src/components/ui/*.stories.tsx", {
   eager: true,
 });
-const files = /* SAFETY: 类型断言已复核 */ globbed as Record<string, StoryModule>;
+/* SAFETY: 类型断言已复核 */
+const files = globbed as Record<string, StoryModule>;
 
 /** 页面级规则：判的是「一整页」，对单枚裸渲染的组件没有意义（见文件头第 ② 条）。 */
 const PAGE_SCOPE_RULES_OFF = [
@@ -222,7 +223,8 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
         if (!raw || typeof raw !== "object") {
           continue;
         }
-        const story = /* SAFETY: 类型断言已复核 */ raw as StoryShape;
+        /* SAFETY: 类型断言已复核 */
+        const story = raw as StoryShape;
         const key = `${component} > ${storyName}`;
         /* `argTypes[x].defaultValue` 在 Storybook 里由 argsEnhancers 折进 args。
          * 本用例的浅合并与它等价的前提是这一档为空 —— 出现了就是「渲的输入与
@@ -266,7 +268,8 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
           if (tree === null || tree === undefined || tree === false || tree === "") {
             throw new Error("render 未返回可判的节点（副作用式 / 空 render）");
           }
-          view = render(/* SAFETY: 类型断言已复核 */ tree as ReactElement);
+          /* SAFETY: 类型断言已复核 */
+          view = render(tree as ReactElement);
           const results = await axe.run(view.baseElement, {
             resultTypes: ["violations"],
             rules: Object.fromEntries(RULES_OFF.map((rule) => [rule, { enabled: false }])),
@@ -325,13 +328,13 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
       })),
       KNOWN.unrenderable,
     );
-    const actualPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(actual) as {
+    /* SAFETY: 类型断言已复核 */
+    const actualPairs = JSON.parse(actual) as {
       unrenderable: Array<string>;
       violations: Array<{ component: string; rule: string }>;
     };
-    const registeredPairs = /* SAFETY: 类型断言已复核 */ JSON.parse(
-      registered,
-    ) as typeof actualPairs;
+    /* SAFETY: 类型断言已复核 */
+    const registeredPairs = JSON.parse(registered) as typeof actualPairs;
 
     const found = new Set(actualPairs.violations.map((v) => `${v.component}|${v.rule}`));
     const registeredSet = new Set(

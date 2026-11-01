@@ -48,7 +48,8 @@ function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: Arr
   const [state, setState] = useState({
     tabs,
     activeKey: tabs[2]?.key ?? "",
-    closed: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    /* SAFETY: 类型断言已复核 */
+    closed: [] as Array<string>,
   });
   return (
     <div className="flex flex-col gap-3">

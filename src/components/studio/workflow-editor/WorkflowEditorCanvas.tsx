@@ -135,7 +135,8 @@ export function WorkflowEditorCanvas({
    *（角色色是静态的），所以拖节点时 MiniMap 不会因为回调
    * 换了引用而重新渲染。 */
   const miniMapNodeColor = useCallback((node: Node) => {
-    const d = /* SAFETY: 类型断言已复核 */ node.data as WorkflowNodeData | undefined;
+    /* SAFETY: 类型断言已复核 */
+    const d = node.data as WorkflowNodeData | undefined;
     return (
       (d?.assignedRole ? ROLE_COLOR_BY_KEY.get(d.assignedRole) : undefined) ??
       "var(--color-ink-faint)"

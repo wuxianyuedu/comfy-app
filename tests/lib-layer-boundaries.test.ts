@@ -23,7 +23,7 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import eslintConfig from "@/../eslint.config.js";
 
-type ElementDef = { pattern: string; type: string; };
+type ElementDef = { pattern: string; type: string };
 type Policy = {
   disallow?: { to?: { element?: { type?: string } } };
   from?: { element?: { type?: string } };
@@ -31,16 +31,18 @@ type Policy = {
 
 /** 从扁平配置里取出 boundaries 那一节（含 elements 声明与策略）。 */
 function boundariesSection(): { elements: Array<ElementDef>; policies: Array<Policy> } {
-  const configs = /* SAFETY: 类型断言已复核 */ eslintConfig as unknown as Array<{
+  /* SAFETY: 类型断言已复核 */
+  const configs = eslintConfig as unknown as Array<{
     plugins?: Record<string, unknown>;
     rules?: Record<string, unknown>;
     settings?: Record<string, unknown>;
   }>;
   const section = configs.find((c) => c.plugins?.boundaries);
   expect(section, "eslint.config.js 里找不到 boundaries 配置节").toBeTruthy();
-  const elements = /* SAFETY: 类型断言已复核 */ (section?.settings?.["boundaries/elements"] ??
-    []) as Array<ElementDef>;
-  const rule = /* SAFETY: 类型断言已复核 */ section?.rules?.["boundaries/dependencies"] as
+  /* SAFETY: 类型断言已复核 */
+  const elements = (section?.settings?.["boundaries/elements"] ?? []) as Array<ElementDef>;
+  /* SAFETY: 类型断言已复核 */
+  const rule = section?.rules?.["boundaries/dependencies"] as
     | [string, { policies?: Array<Policy> }]
     | undefined;
   return { elements, policies: rule?.[1]?.policies ?? [] };
@@ -109,8 +111,9 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
     walk(join(root, "src", "lib"));
     expect(
       hits,
-      `src/lib 不得 import 视图层（需要共享的类型请下沉到 src/lib 下的类型模块，规范 §18.3）：\n${
-        hits.map((h) => `  ✗ ${h}`).join("\n")}`,
+      `src/lib 不得 import 视图层（需要共享的类型请下沉到 src/lib 下的类型模块，规范 §18.3）：\n${hits
+        .map((h) => `  ✗ ${h}`)
+        .join("\n")}`,
     ).toEqual([]);
   });
 });

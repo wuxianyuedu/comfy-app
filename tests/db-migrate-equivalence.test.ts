@@ -35,7 +35,7 @@ import { acquireRepoDrizzle } from "./helpers/repo-drizzle-lock";
 type TableShape = {
   cols: string;
   idx: string;
-}
+};
 
 let tmp: string;
 /** `db:migrate` 建出来的库。 */
@@ -71,7 +71,8 @@ function readShape(file: string): Record<string, TableShape> {
   if (r.status !== 0 || !r.stdout.trim()) {
     throw new Error(`读库结构失败：${r.stderr}`);
   }
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(r.stdout) as Record<string, TableShape>;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(r.stdout) as Record<string, TableShape>;
 }
 
 /**
@@ -93,7 +94,7 @@ function readShape(file: string): Record<string, TableShape> {
 function diffColumns(
   leftCols: string,
   rightCols: string,
-): { extra: Array<string>; missing: Array<string>; } {
+): { extra: Array<string>; missing: Array<string> } {
   const left = leftCols ? leftCols.split(",") : [];
   const right = rightCols ? rightCols.split(",") : [];
   return {
