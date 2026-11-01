@@ -67,10 +67,10 @@ describe("useOverlayBoundary", () => {
      * 这条分支走 `useSyncExternalStore` 的 `getServerSnapshot`。 */
     setShell(true);
     setViewport(1440, 900);
-    const Probe = () => {
+    function Probe() {
       const boundary = useOverlayBoundary();
       return <span>{boundary === null ? "null" : "rect"}</span>;
-    };
+    }
     expect(renderToString(<Probe />)).toContain("null");
   });
 

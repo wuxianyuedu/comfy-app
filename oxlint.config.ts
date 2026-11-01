@@ -93,6 +93,21 @@ export default defineConfig({
           "store selector 里用 .map/.filter/.slice 造新数组 = 每次求值都是新引用（字段没变也重渲染）。把它下沉进 store 或抽成 store 内的稳定切片（规范 01 §1.2）。",
       },
     ],
+    /* 组件声明形态：具名组件一律 `function` 声明，匿名 / 内联两类形态都收。
+     *
+     * 预设默认反着来（要求具名组件写成箭头 + 变量），在本仓等于要动 811 处 / 430 份 ——
+     * 而全仓 2402 份里 99% 早就是 `function` 声明，这条口径只是把既成事实写下来。
+     * `unnamedComponents` 收数组而不是单选：`function-expression` 会把
+     * `memo(function X(){…})` 这一族判成违例（25 处），`arrow-function` 又会反过来把
+     * `render={() => …}` 判成违例 —— 匿名那侧在 `memo` / `forwardRef` / 行内三种用法里
+     * 本就没有统一形态，两种都是对的。口径与逐条读数见 ISSUE #2920。 */
+    "react/function-component-definition": [
+      "error",
+      {
+        namedComponents: "function-declaration",
+        unnamedComponents: ["function-expression", "arrow-function"],
+      },
+    ],
   },
   /* router 层的错误信封只许 TRPCError（台账 E8 的防线）。
    * 仅作用于 routers 目录（裸 `throw new Error` 在别处合法，必须文件作用域）。
