@@ -17,16 +17,16 @@ const { stripCommentsCached, isBusySlotName } = require("./ui-primitives-engine.
 module.exports = {
   P1: {
     label: "视图内手写 <button>（应使用 ~/components/ui/button 的 <Button>）",
-    count: (t) => (stripCommentsCached(t).match(/<button\b/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/<button\b/g) ?? []).length,
   },
   P2: {
     label: "视图内自建 createPortal 浮层（应使用 ui/dialog / popover / sheet）",
-    count: (t) => (stripCommentsCached(t).match(/\bcreatePortal\s*\(/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/\bcreatePortal\s*\(/g) ?? []).length,
   },
   P3: {
     label:
       "视图内自写加 spinner/pulse 动画（应使用 ui/page-loading 的 PageLoading / Spinner、ui/skeleton / ui/progress）",
-    count: (t) => (stripCommentsCached(t).match(/\banimate-(?:spin|pulse)\b/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/\banimate-(?:spin|pulse)\b/g) ?? []).length,
   },
   P9: {
     label:
@@ -40,26 +40,26 @@ module.exports = {
        （`fixed top-title-bar …`，同时被 `check-title-bar-clearance.cjs` 认），
        视图里出现它 = 这个文件在自绘浮层容器。`FullScreenLayer` 也是浮层，但它
        由基元组件承担（`ui/` 目录整体豁免），调用处不出现这次调用。 */
-    count: (t) => (stripCommentsCached(t).match(/\boverlayClass\s*\(/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/\boverlayClass\s*\(/g) ?? []).length,
   },
   P4: {
     label:
       "视图内自写 ::-webkit-scrollbar 外观（应复用 globals.css 的 .custom-scrollbar / .soft-scrollbar）",
-    count: (t) => (stripCommentsCached(t).match(/::-webkit-scrollbar/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/::-webkit-scrollbar/g) ?? []).length,
   },
   P5: {
     label: "视图内自写剪贴板写入（应使用 ~/lib/browser-io 的 copyText）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       return (
-        (t2.match(/navigator\.clipboard/g) || []).length +
-        (t2.match(/document\.execCommand\(/g) || []).length
+        (t2.match(/navigator\.clipboard/g) ?? []).length +
+        (t2.match(/document\.execCommand\(/g) ?? []).length
       );
     },
   },
   P6: {
     label: "视图内自写 Blob 下载（应使用 ~/lib/browser-io 的 downloadText / downloadJson）",
-    count: (t) => (stripCommentsCached(t).match(/URL\.createObjectURL\s*\(/g) || []).length,
+    count: (t) => (stripCommentsCached(t).match(/URL\.createObjectURL\s*\(/g) ?? []).length,
   },
   P8: {
     label: "视图内自写「值不存在显示 —」的判据（应使用 ~/lib/display-value 的 displayValue）",
@@ -68,7 +68,7 @@ module.exports = {
       /* 数两种写法：① 字面量里直接写占位符；② 比较算子后面紧跟占位符。
        * 两条都要求占位符**字面出现**在代码里 —— 用了 `displayValue` 的地方
        * 自然不含它。 */
-      return (t2.match(/"—"|'—'/g) || []).length + (t2.match(/\?\?\s*"[^"]*—/g) || []).length;
+      return (t2.match(/"—"|'—'/g) ?? []).length + (t2.match(/\?\?\s*"[^"]*—/g) ?? []).length;
     },
   },
   P12: {
@@ -76,7 +76,7 @@ module.exports = {
       "视图 / 逻辑层里自写 setInterval 轮询（应使用 ~/components/ui/use-interval 的 useInterval）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      return (t2.match(/\bsetInterval\s*\(/g) || []).length;
+      return (t2.match(/\bsetInterval\s*\(/g) ?? []).length;
     },
   },
   P11: {
@@ -89,7 +89,7 @@ module.exports = {
       if (!/\bPopoverTrigger\b/.test(t2)) {
         return 0;
       }
-      return (t2.match(/▾/g) || []).length;
+      return (t2.match(/▾/g) ?? []).length;
     },
   },
   P10: {
@@ -103,8 +103,8 @@ module.exports = {
        * 箭头图标（lucide `Chevron*`）不计：它在导航 / 分页 / 浮层触发里都有，
        * 单看图标判不出意图；`▸` / `▾` 这两个字符在本库只用于「折起来」与
        * 「打开面板」，配上 `role="button"` 才唯一指向折叠。 */
-      const details = (t2.match(/<details\b/g) || []).length;
-      const markers = (t2.match(/[▸▾]/g) || []).length;
+      const details = (t2.match(/<details\b/g) ?? []).length;
+      const markers = (t2.match(/[▸▾]/g) ?? []).length;
       const roleButton = /role\s*=\s*["']button["']/.test(t2);
       return details + (roleButton ? markers : 0);
     },
@@ -126,11 +126,11 @@ module.exports = {
        * 只数**变量名像搜索词**的那一类（`kw` / `needle` / `needle` / `term` /
        * `query` / `search` / `keyword` / `q`）—— 否则 `line.trim()` 这类
        * 无关的去空白会被全量计入（那是格式清洗，不是搜索）。 */
-      const both = (t2.match(/\S+\.trim\(\)\.toLowerCase\(\)/g) || []).length;
+      const both = (t2.match(/\S+\.trim\(\)\.toLowerCase\(\)/g) ?? []).length;
       const trimmed = (
         t2.match(
           /\b(?:kw|needle|term|query|search|keyword|q)\w*\s*=\s*[^;\n]*\.trim\(\)(?!\.toLowerCase\(\))/gi,
-        ) || []
+        ) ?? []
       ).length;
       return both + trimmed;
     },
@@ -148,7 +148,7 @@ module.exports = {
        * 是必须的：只数 `[k]: !x[k]` 会把「在跑标记」这类**不是折叠语义**的
        * 映射误判成展开集合（见文件头 P14）。 */
       const flips =
-        t2.match(/[A-Za-z_$][\w$]*\s*,?\s*\[\s*[^\]]+\s*\]\s*:\s*!\s*[A-Za-z_$][\w$]*\s*\[/g) || [];
+        t2.match(/[A-Za-z_$][\w$]*\s*,?\s*\[\s*[^\]]+\s*\]\s*:\s*!\s*[A-Za-z_$][\w$]*\s*\[/g) ?? [];
       let n = 0;
       for (const flip of flips) {
         const src = /!\s*([A-Za-z_$][\w$]*)\s*\[/.exec(flip)?.[1];
@@ -166,7 +166,7 @@ module.exports = {
       const t2 = stripCommentsCached(t);
       /* 形态：`<flag> ? <X>.wide : <X>.base` —— 加宽档的三元写法。
        * 单看 `useState(false)` 会把所有弹窗开关算上（见文件头 P15）。 */
-      return (t2.match(/\?\s*[A-Za-z_$][\w$]*\.wide\s*:\s*[A-Za-z_$][\w$]*\.base/g) || []).length;
+      return (t2.match(/\?\s*[A-Za-z_$][\w$]*\.wide\s*:\s*[A-Za-z_$][\w$]*\.base/g) ?? []).length;
     },
   },
   P16: {
@@ -176,7 +176,7 @@ module.exports = {
       const t2 = stripCommentsCached(t);
       /* 形态：`style={{ width: `${…}%` }}` —— 自己按百分比摆宽度。
        * 这是进度条填充的签名，且不会被圆角 / 背景色这类通用类误伤。 */
-      return (t2.match(/style=\{\{\s*width:\s*`\$\{[^}]+\}%`/g) || []).length;
+      return (t2.match(/style=\{\{\s*width:\s*`\$\{[^}]+\}%`/g) ?? []).length;
     },
   },
   P17: {
@@ -205,7 +205,7 @@ module.exports = {
        * 都连成一次命中。 */
       const pattern =
         /<(?:span|p|div)[^>]*className="[^"]*text-(?:ink-muted|ink-faint|ink-fainter|muted-foreground|faint)[^"]*"[^>]*>\s*(?:\{[^}]{0,60}\}|[^<]{0,30})\s*<\/(?:span|p|div)>[\s\S]{0,160}?(?:displayValue\(|JSON\.stringify\(|typeof\s+[\w.$]+\s*===\s*"string")/g;
-      return (t2.match(pattern) || []).length;
+      return (t2.match(pattern) ?? []).length;
     },
   },
   P18: {
@@ -218,7 +218,7 @@ module.exports = {
        * ⚠️ 单看 `onError=` 会漏掉那 14 处**压根没有兜底**的 `<img>` —— 而
        * 「没有出现 onError」正是这条账里更差的那一半（与 P13 同源）。
        * `<video` 一并数：`MediaThumbnail` 管的就是「图片 / 视频二选一」。 */
-      return (t2.match(/<img\b/g) || []).length + (t2.match(/<video\b/g) || []).length;
+      return (t2.match(/<img\b/g) ?? []).length + (t2.match(/<video\b/g) ?? []).length;
     },
   },
   P19: {
@@ -227,7 +227,7 @@ module.exports = {
       const t2 = stripCommentsCached(t);
       /* 形态：手写本项目跨组件拖拽的自定义 MIME。
        * 单看 `draggable` 会把组件内拖拽（React Flow 节点、表单行）算进来。 */
-      return (t2.match(/setData\(\s*["']application\/x-comfyapp-media["']/g) || []).length;
+      return (t2.match(/setData\(\s*["']application\/x-comfyapp-media["']/g) ?? []).length;
     },
   },
   P20: {
@@ -237,7 +237,7 @@ module.exports = {
       /* 形态：自己往 window / document 上挂 keydown。
        * ⚠️ 单看 `metaKey` / `ctrlKey` 会漏掉「只判 ctrlKey」那两处 ——
        * 而它们才是这条账里更差的那一种（macOS 上按 ⌘ 没反应）。 */
-      return (t2.match(/addEventListener\(\s*["']keydown["']/g) || []).length;
+      return (t2.match(/addEventListener\(\s*["']keydown["']/g) ?? []).length;
     },
   },
   P21: {
@@ -248,7 +248,7 @@ module.exports = {
        * 只数「写 scrollTop」会漏掉「用别的变量名接 contentHeight 再赋」的写法；
        * 而只数 `scrollHeight` 会把 `log-virtual` 的贴底算术（只读不写）与
        * textarea 自动增高（写 `style.height`）算进来。两边同时出现才计。 */
-      return (t2.match(/scrollTop\s*=[^;\n]*scrollHeight/g) || []).length;
+      return (t2.match(/scrollTop\s*=[^;\n]*scrollHeight/g) ?? []).length;
     },
   },
   P22: {
@@ -261,7 +261,7 @@ module.exports = {
        * ⚠️ **不数**对内的路由跳转：那在 App Router 里走 `router.push`
        * （`next/navigation`），不是同一个形态；也不数与文件选择相关的
        * `input.click()`（那是 P7 的账）。 */
-      return (t2.match(/window\.location\.href\s*=/g) || []).length;
+      return (t2.match(/window\.location\.href\s*=/g) ?? []).length;
     },
   },
   P23: {
@@ -286,7 +286,7 @@ module.exports = {
        * 与「整块可点的开关行」一并算上。 */
       const re =
         /<label[^>]*className="[^"]*\bblock\b[^"]*"[^>]*>[\s\S]{0,400}?<(?:input|textarea|select|Input|Textarea|SelectMenu|NumberField|RangeSlider)\b/g;
-      return (t2.match(re) || []).length;
+      return (t2.match(re) ?? []).length;
     },
   },
   P24: {
@@ -297,7 +297,7 @@ module.exports = {
        * 单看 `FileReader` 会漏掉 `file.text()` 那一族（它们才是多数）；
        * `readAs*` 是 FileReader 的唯一签名，漏不掉「手搓 reader」那种。 */
       return (
-        (t2.match(/readAs(?:Text|DataURL|ArrayBuffer|BinaryString)\s*\(/g) || []).length +
+        (t2.match(/readAs(?:Text|DataURL|ArrayBuffer|BinaryString)\s*\(/g) ?? []).length +
         /* **不带 `await` 的 `.text()` 也要数**：那是这条账里更差的一半 ——
          * `void file.text().then(...)` 没有 rejection 分支，读失败被整个吞掉
          *（`VideoQueueModal` / `WorkshopStageBody` 原先就是这两处）。
@@ -307,7 +307,7 @@ module.exports = {
          * `input.files[0]`）—— `.text()` 也是 `fetch` 读响应体的方法
          *（`res.text()`），那是网络读取，不是「读用户选的文件」。
          * 用名字前缀而不是白名单：调用处给 File 变量的命名几乎都带 `file`。 */
-        (t2.match(/\b(?:[A-Za-z_$]*[Ff]iles?(?:\[\d+\])?(?:\.\w+)?)\.text\s*\(\s*\)/g) || []).length
+        (t2.match(/\b(?:[A-Za-z_$]*[Ff]iles?(?:\[\d+\])?(?:\.\w+)?)\.text\s*\(\s*\)/g) ?? []).length
       );
     },
   },
@@ -320,7 +320,7 @@ module.exports = {
        * 不数 `typeof localStorage` —— 那只是它的一个前置判据，
        * 而这条账里更差的一半正是「压根没判」（与 P13 / P18 同源）。 */
       return (
-        t2.match(/(?:window\.)?localStorage\.(?:getItem|setItem|removeItem|clear)\s*\(/g) || []
+        t2.match(/(?:window\.)?localStorage\.(?:getItem|setItem|removeItem|clear)\s*\(/g) ?? []
       ).length;
     },
   },
@@ -344,7 +344,7 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       const blocks =
-        t2.match(/try\s*\{[\s\S]{0,3000}?\}\s*catch\s*(?:\([^)]*\))?\s*\{[\s\S]{0,600}?\n\s*\}/g) ||
+        t2.match(/try\s*\{[\s\S]{0,3000}?\}\s*catch\s*(?:\([^)]*\))?\s*\{[\s\S]{0,600}?\n\s*\}/g) ??
         [];
       return blocks.filter((b) => {
         if (!/\bawait\b/.test(b)) {
@@ -377,8 +377,8 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       return (
-        (t2.match(/\bnatural(?:Width|Height)\b/g) || []).length +
-        (t2.match(/\bvideo(?:Width|Height)\b/g) || []).length
+        (t2.match(/\bnatural(?:Width|Height)\b/g) ?? []).length +
+        (t2.match(/\bvideo(?:Width|Height)\b/g) ?? []).length
       );
     },
   },
@@ -419,7 +419,7 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       const re = /(?:^|[\w./\-'"`(])[?&][A-Za-z][\w.-]*=(?:\$\{|["'`])/g;
-      return (t2.match(re) || []).length;
+      return (t2.match(re) ?? []).length;
     },
   },
 
@@ -437,7 +437,7 @@ module.exports = {
        * `role="tab"` / `role="button"` 上复刻浏览器默认行为的那几处
        * （`e.key === "Enter" || e.key === " "`）是**另一种账** ——
        * 它们要的是 `<Button>`（P1），不是「输入框回车提交」。 */
-      const blocks = t2.match(/onKeyDown=\{[\s\S]{0,600}?\}\s*\}/g) || [];
+      const blocks = t2.match(/onKeyDown=\{[\s\S]{0,600}?\}\s*\}/g) ?? [];
       return blocks.filter((b) => {
         if (!/\.key\s*===\s*"Enter"/.test(b)) {
           return false;
@@ -461,7 +461,7 @@ module.exports = {
        * 判据要同时看到 `type="file"` 与「它被藏起来了」—— 两种常见写法是
        * 同类元素上的 `className="hidden"`，以及同文件里再写一遍
        * `className="hidden"` 的另一处；用「同一元素标签内出现两者」判定。 */
-      const tags = t2.match(/<input\b[^>]*>/g) || [];
+      const tags = t2.match(/<input\b[^>]*>/g) ?? [];
       return tags.filter((tag) => /type\s*=\s*["']file["']/.test(tag) && /\bhidden\b/.test(tag))
         .length;
     },
@@ -503,7 +503,7 @@ module.exports = {
       const slots =
         t2.match(
           /\bconst\s*\[\s*([A-Za-z_$][\w$]*[Ee]rror)\s*,\s*([A-Za-z_$][\w$]*)\s*\]\s*=\s*(?:React\.)?useState(?:<[^>]*>)?\s*\(/g,
-        ) || [];
+        ) ?? [];
       if (slots.length === 0) {
         return 0;
       }
@@ -580,7 +580,7 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* `let cancelled = false;` 这类声明：名字带作废语义。 */
-      const decls = t2.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) || [];
+      const decls = t2.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=\s*false\s*;/g) ?? [];
       let hits = 0;
       for (const decl of decls) {
         const name = decl.match(/\blet\s+([A-Za-z_$][\w$]*)\s*=/)[1];
@@ -628,7 +628,7 @@ module.exports = {
        * 那是往缓存里写一条状态记录，不是 HTTP 响应）。它同形但不同源，
        * 与 P22 / P31 是同一条口径：判据锚在唯一的签名上。 */
       const responseBodies =
-        t2.match(/NextResponse\.json\([\s\S]{0,400}?\)|JSON\.stringify\([^)]{0,200}\)/g) || [];
+        t2.match(/NextResponse\.json\([\s\S]{0,400}?\)|JSON\.stringify\([^)]{0,200}\)/g) ?? [];
       const write = responseBodies.filter((b) =>
         /\berror:\s*(?:errorMessage|apiErrorDetail)\s*\(/.test(b),
       ).length;
@@ -646,7 +646,7 @@ module.exports = {
       const read =
         t2.match(
           /(?:isRecord\s*\(\s*(\w+)\s*\)[\s\S]{0,80}?|\b(\w*(?:body|json|data)\w*)\s+as\s*\{[\s\S]{0,80}?)[\s\S]{0,80}?\b\1\2\.error\b/g,
-        ) || [];
+        ) ?? [];
       return write + read.length;
     },
   },
@@ -680,7 +680,7 @@ module.exports = {
        *    收口前那 6 处**每一处**都另有这三类线索之一，所以判据收窄后
        *    仍全部命中（改完为 0）。 */
       const ID_HINT_RE = /(?:\b[A-Za-z_$]*[Ii]d\b|Math\.random\(\)|\.toString\(36\)|_\$?\{)/;
-      const templates = t2.match(/`[^`]*`/g) || [];
+      const templates = t2.match(/`[^`]*`/g) ?? [];
       for (const tpl of templates) {
         if (!/\bDate\.now\(\)/.test(tpl)) {
           continue;
@@ -696,7 +696,7 @@ module.exports = {
       hits += (
         t2.match(
           /(?:"[^"\n]*"\s*\+\s*(?:Date\.now\(\)|new Date\(\)\.getTime\(\)))|(?:(?:Date\.now\(\)|new Date\(\)\.getTime\(\))\s*\+\s*"[^"\n]*")/g,
-        ) || []
+        ) ?? []
       ).length;
       return hits;
     },
@@ -727,7 +727,7 @@ module.exports = {
       const faultRe =
         /out of memory|OOM|cuda out|tried to allocate|checkpoint|ckpt|\.safetensors|econnrefused|econnreset|fetch failed|server_busy|prompthelperror|not installed/i;
       const literalRe = /\/(?:[^/\\\n]|\\.)*\/[gimsuy]*/g;
-      const literals = t2.match(literalRe) || [];
+      const literals = t2.match(literalRe) ?? [];
       return literals.some((re) => faultRe.test(re)) ? 1 : 0;
     },
   },
@@ -795,7 +795,7 @@ module.exports = {
       /* 引导线 + 缩进同处一个 class 串 —— 即「子行集合」的形态。 */
       const railRe =
         /["'`][^"'`\n]*\b(?:ml|pl)-(?:2|3|4|5|6|8)\b[^"'`\n]*\bborder-l-\d\b[^"'`\n]*["'`]/g;
-      const rails = t2.match(railRe) || [];
+      const rails = t2.match(railRe) ?? [];
       if (rails.length === 0) {
         return 0;
       }

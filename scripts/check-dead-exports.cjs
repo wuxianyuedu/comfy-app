@@ -249,7 +249,7 @@ const PROD_FREQ = (() => {
       continue;
     }
     for (const t of toks) {
-      freq.set(t, (freq.get(t) || 0) + 1);
+      freq.set(t, (freq.get(t) ?? 0) + 1);
     }
   }
   return freq;
@@ -274,7 +274,7 @@ const TEST_FILES = (() => {
     const src = stripComments(raw);
     list.push({
       rel: toPosix(path.relative(ROOT, abs)),
-      tokens: new Set(src.match(/\w+/g) || []),
+      tokens: new Set(src.match(/\w+/g) ?? []),
       specs: importSpecs(src),
     });
   };
@@ -316,7 +316,7 @@ function matchedTestFilesOf(relPath) {
 
 /** 某符号在生产侧出现几次（词表 O(1)，与旧 `\b名\b` 计数等价）。 */
 function prodMentions(name) {
-  return PROD_FREQ.get(name) || 0;
+  return PROD_FREQ.get(name) ?? 0;
 }
 
 /** 判定一个符号是否零消费，返回判定依据（供 `--verify` 打印）。 */

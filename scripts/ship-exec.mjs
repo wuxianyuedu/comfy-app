@@ -87,11 +87,12 @@ export function makeRunner(cwd) {
       encoding: "utf8",
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
     });
+    // 这里刻意保留 ||：error.code 可能是空串，那时要念 error 本身。
     const err = r.error
       ? /** @type {Error & {code?:string}} */ (r.error).code || String(r.error)
       : null;
     return {
-      status: r.status === null || r.status === undefined ? -1 : r.status,
+      status: r.status ?? -1,
       stdout: r.stdout || "",
       stderr: r.stderr || "",
       error: err,

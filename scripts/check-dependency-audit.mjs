@@ -115,18 +115,23 @@ export function collectBlocked(audit) {
       advisoryId: String(raw.id),
       severity: raw.severity,
       vulnerable: raw.vulnerable_versions ?? "(未知)",
-      patched: raw.patched_versions || null,
+      patched: raw.patched_versions ?? null,
       paths: summarizePaths(raw.findings),
     });
   }
   // 稳定序：critical 在前、同严重级按包名 —— 输出与基线文件都不该随 registry 返回顺序漂。
-  out.sort(
-    (a, b) =>
-      BLOCKED_SEVERITIES.indexOf(b.severity) - BLOCKED_SEVERITIES.indexOf(a.severity) ||
-      a.module.localeCompare(b.module) ||
-      a.advisoryId.localeCompare(b.advisoryId),
-  );
+  out.sort(compareBlocked);
   return out;
+}
+
+/** 三级稳定序：严重级降序 → 包名升序 → advisory id 升序。 */
+function compareBlocked(a, b) {
+  const bySeverity = BLOCKED_SEVERITIES.indexOf(b.severity) - BLOCKED_SEVERITIES.indexOf(a.severity);
+  if (bySeverity !== 0) {
+    return bySeverity;
+  }
+  const byModule = a.module.localeCompare(b.module);
+  return byModule === 0 ? a.advisoryId.localeCompare(b.advisoryId) : byModule;
 }
 
 /**
@@ -212,6 +217,7 @@ export function runAudit({ cwd = ROOT, runner = runPnpmSync, fixtureFile = null 
   if (text.length === 0) {
     return {
       kind: "unreachable",
+      // 这里刻意保留 ||：空 stderr 时要念退出码。
       detail: firstLine(result.stderr) || `exit ${result.status}`,
     };
   }

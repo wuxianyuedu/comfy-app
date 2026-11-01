@@ -310,7 +310,7 @@ if (!declaredFloor) {
     const next = floorVerdict.recommend ? ` 建议升到 ${floorVerdict.recommend}` : "";
     say(
       "[INFO]",
-      `越界会踩到的档：${floorVerdict.violated?.join(" / ") || "（依赖侧未点名）"}。${next}`,
+      `越界会踩到的档：${floorVerdict.violated?.length ? floorVerdict.violated.join(" / ") : "（依赖侧未点名）"}。${next}`,
     );
     process.stdout.write(
       [

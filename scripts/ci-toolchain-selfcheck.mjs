@@ -227,12 +227,9 @@ function installAndReverify() {
 export function pythonOnly() {
   section("python");
   /** @type {{command: string, path: string | null, version: string} | null} */
-  let python = findPython({
+  const python = findPython({
     notes: /** @type {string[]} */ (/** @type {unknown} */ (notes)),
-  });
-  if (!python) {
-    python = installAndReverify();
-  }
+  }) ?? installAndReverify();
   if (python) {
     console.log(`python : ${python.path ?? python.command} ${python.version}`.trim());
     return 0;

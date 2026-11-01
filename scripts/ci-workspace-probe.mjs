@@ -166,6 +166,7 @@ export function run(cmd, args, options = {}) {
  * @param {Record<string, string | undefined>} [env]
  */
 export function ledgerRoot(env = process.env) {
+  // 这里刻意保留 ||：环境变量可能被设成空串，空串同样算「没配」。
   return env.COMFYAPP_CI_PROBE_DIR || env.LOCALAPPDATA || path.join(os.homedir(), ".cache");
 }
 

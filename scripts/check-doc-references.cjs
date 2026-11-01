@@ -328,7 +328,7 @@ function checkRuntimeAbsentDriverCommands() {
 function shouldApplyFactToDoc(f, docPath) {
   // onlyDocs：事实的主适用文档组（未命中即跳过）；otherDocs：额外适用文档，
   // 与主文档组取并集（同一值在另一篇文档里以别的形态出现时用，见 doc-facts.cjs）。
-  if (f.onlyDocs && !f.onlyDocs.includes(docPath) && !(f.otherDocs || []).includes(docPath)) {
+  if (f.onlyDocs && !f.onlyDocs.includes(docPath) && !(f.otherDocs ?? []).includes(docPath)) {
     return false;
   }
   if (f.excludeDocs && f.excludeDocs.includes(docPath)) {
@@ -560,7 +560,7 @@ function looksLikeRepoPath(raw) {
   }
   // 末尾斜杠表目录形态；去掉再交给 fs.existsSync
   const normalized = p.endsWith("/") ? p.slice(0, -1) : p;
-  return normalized || null;
+  return normalized === "" ? null : normalized;
 }
 
 function checkAgentsMdPaths() {

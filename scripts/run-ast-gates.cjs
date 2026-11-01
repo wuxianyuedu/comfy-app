@@ -219,15 +219,14 @@ function runGate(gate, parsed) {
     }
   } catch (error) {
     if (error && error.__gateExit) {
-      code = exit.code === null ? 0 : exit.code;
+      code = exit.code ?? 0;
     } else {
       /* 判据自己抛了异常 = 判据没跑成，不能读成「通过」（§13.5.12 那一族）。
        * 把异常文本收进输出、按红算，并**留下面向人的一行**。 */
       code = 1;
       cap.lines.push(
-        `${gate.tag} 判据抛出异常（这一条没有结论，按红处理）：${
-          (error && error.message) || String(error)
-        }`,
+        // 这里刻意保留 ||：异常可能没有 message（抛的是字符串或空 message），那时要念异常本身。
+        `${gate.tag} 判据抛出异常（这一条没有结论，按红处理）：${(error && error.message) || String(error)}`,
       );
     }
   } finally {

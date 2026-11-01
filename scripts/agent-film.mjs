@@ -168,6 +168,7 @@ export function parseSuperjsonEnvelope(payload) {
   if (data && typeof data === "object" && "json" in data) {
     return data.json;
   }
+  // 这里刻意保留 ||：`data` 与 `payload` 都可能是假值（含空串 / 0），一律兜成空快照。
   return (data ?? payload) || {};
 }
 

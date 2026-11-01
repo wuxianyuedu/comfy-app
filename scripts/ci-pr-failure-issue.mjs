@@ -562,7 +562,9 @@ export function main(io = {}) {
   const outcome = classifyBuildOutcome(
     firstDetail ? enrichStageErrors(run, slug, sn, firstDetail.json) : null,
   );
+  // 这里刻意保留 ||：`name` 是展示名，缺或为空串都退 id —— `??` 管不住空串那一半。
   const failedNames = outcome.failed.map((/** @type {any} */ f) => f.name || f.id);
+  // 同上：空展示名回退 id。
   const skipped = downstreamSkipped(outcome).map((/** @type {any} */ s) => s.name || s.id);
   log(
     `[pr-failure-issue] 这一跑 ${sn} · 事件 ${target.event || "(取不到)"} · ` +

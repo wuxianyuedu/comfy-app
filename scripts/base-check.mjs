@@ -589,7 +589,7 @@ function reportMany(result, { json, shape = "batch" }) {
     process.stdout.write(
       `[base-check] 结论：${single.verdict}` +
         `（本检出 ${single.currentCode}，${ref}${commit ? ` @ ${commit}` : ""} ${
-          single.baseCode === null ? "未跑" : single.baseCode
+          single.baseCode ?? "未跑"
         }）\n`,
     );
     if (only.didNotRun) {
@@ -622,7 +622,7 @@ function reportMany(result, { json, shape = "batch" }) {
     const mark = r.currentCode === 0 ? "绿" : (r.verdict ?? "红");
     process.stdout.write(
       `  · ${mark}  ${r.label}（本检出 ${r.currentCode} / 基线 ${
-        r.baseCode === null ? "未跑" : r.baseCode
+        r.baseCode ?? "未跑"
       }）\n`,
     );
     /* 「没跑出结论」的三种形态在退出码上同形（127 / 收集不到 / 判据自己退 2），

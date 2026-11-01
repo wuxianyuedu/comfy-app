@@ -114,6 +114,7 @@ function parseAndFixDepth() {
     }
     out = res.stdout;
   } catch (error) {
+    // 这里刻意保留 ||：输出是字符串，空 stdout 也要有个值。
     out = String(error.stdout || "");
   }
   const errs = [

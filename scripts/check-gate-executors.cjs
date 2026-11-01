@@ -315,7 +315,7 @@ function isCallLine(line) {
   if (t === "") {
     return false;
   }
-  return !(t.startsWith("#") || t.startsWith("//") || t.startsWith("*"));
+  return !t.startsWith("#") && !t.startsWith("//") && !t.startsWith("*");
 }
 
 /**

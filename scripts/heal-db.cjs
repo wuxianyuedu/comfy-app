@@ -155,6 +155,7 @@ async function main() {
     );
     process.exit(1);
   }
+  // 这里刻意保留 ||：两路输出拼成字符串，空串同样要占位。
   let out = (res.stdout || "") + (res.stderr || "");
   let attempts = 0;
   const MAX = 4;
@@ -167,6 +168,7 @@ async function main() {
     }
     await clearTempTables();
     res = runPush();
+    // 同上：空串拼接语义。
     out = (res.stdout || "") + (res.stderr || "");
     attempts++;
   }
