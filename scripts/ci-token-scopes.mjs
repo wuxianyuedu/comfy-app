@@ -559,7 +559,7 @@ export async function main(opts = {}) {
   const value = (name, fallback) => {
     const i = argv.indexOf(name);
     const v = argv[i + 1];
-    return i >= 0 && v !== undefined ? v : fallback;
+    return i !== -1 && v !== undefined ? v : fallback;
   };
 
   const repo = value("--repo", env.CNB_REPO_SLUG ?? "");

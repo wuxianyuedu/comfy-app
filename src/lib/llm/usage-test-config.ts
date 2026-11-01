@@ -253,7 +253,7 @@ export function mediaExtensionFromUrl(url: string, fallback: "png" | "mp4"): str
   if (/^https?:\/\//i.test(u)) {
     const pathPart = u.split(/[?#]/)[0] ?? "";
     const dot = pathPart.lastIndexOf(".");
-    if (dot >= 0 && dot < pathPart.length - 1) {
+    if (dot !== -1 && dot < pathPart.length - 1) {
       const ext = pathPart.slice(dot + 1).toLowerCase();
       if (/^[a-z0-9]{1,8}$/.test(ext)) {
         return ext;

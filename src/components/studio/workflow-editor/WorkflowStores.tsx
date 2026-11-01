@@ -306,7 +306,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         let targetIdx = without.length;
         if (targetKey) {
           const i = without.findIndex(({ entryKey }) => entryKey === targetKey);
-          if (i >= 0) {
+          if (i !== -1) {
             targetIdx = position === "after" ? i + 1 : i;
           }
         }

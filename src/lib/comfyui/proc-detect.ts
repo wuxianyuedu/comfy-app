@@ -140,7 +140,7 @@ export function parseProcNetTcpListeners(content: string): Map<string, number> {
     } // 0A = TCP_LISTEN
     const local = f[1] ?? "";
     const colon = local.lastIndexOf(":");
-    if (colon < 0) {
+    if (colon === -1) {
       continue;
     }
     const port = Number.parseInt(local.slice(colon + 1), 16);

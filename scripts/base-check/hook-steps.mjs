@@ -334,7 +334,7 @@ export function localTierLabels(hookPath = HOOK) {
   }
   const lines = text.split("\n");
   const start = lines.findIndex((l) => /^run_group\s+D0\b/.test(l));
-  if (start < 0) {
+  if (start === -1) {
     return new Set();
   }
   const out = new Set();

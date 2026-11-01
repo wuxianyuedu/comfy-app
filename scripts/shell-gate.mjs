@@ -533,7 +533,7 @@ function main() {
   let mode = "staged";
   let via = "";
 
-  if (baseIdx >= 0) {
+  if (baseIdx !== -1) {
     /* `--base <ref>`：判决面 = 「相对那条基线改了什么」（平台侧那一档）。 */
     mode = "base";
     const baseRef = (argv[baseIdx + 1] ?? "").trim();
@@ -573,7 +573,7 @@ function main() {
     } else {
       console.log(`[shell-gate] 没能对账合成合并提交：${face.why}。照旧按三点 diff 判。`);
     }
-  } else if (stagedIdx >= 0) {
+  } else if (stagedIdx !== -1) {
     // 显式清单（`--staged a b c`）是调试 / 覆写通道，调用方说了算，不过采纳过滤；
     // 只有从暂存区自动推导时，才剔除「原样采纳对方那侧」的壳文件
     // （见 dropAdoptedShellInputs）—— 否则纯前端 PR 只要拉了 master 就被永久拦住。

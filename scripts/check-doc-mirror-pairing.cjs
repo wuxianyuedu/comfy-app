@@ -102,7 +102,7 @@ function stagedPaths() {
  */
 function resolveFace(argv) {
   const baseIdx = argv.indexOf("--base");
-  if (baseIdx >= 0) {
+  if (baseIdx !== -1) {
     const baseRef = (argv[baseIdx + 1] ?? "").trim();
     if (!baseRef) {
       return {

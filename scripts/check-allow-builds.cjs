@@ -132,7 +132,7 @@ const LIFECYCLE_SCRIPTS = ["preinstall", "install", "postinstall"];
 function readAllowBuildsKeys(text) {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => /^allowBuilds:\s*$/.test(l));
-  if (start < 0) {
+  if (start === -1) {
     return { keys: new Set(), blockFound: false };
   }
 

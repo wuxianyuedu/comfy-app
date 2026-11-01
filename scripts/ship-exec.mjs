@@ -133,7 +133,7 @@ export function cnbJson(run, args) {
   }
   const text = r.stdout.trim();
   const at = text.indexOf("{");
-  if (at < 0) {
+  if (at === -1) {
     return null;
   }
   try {

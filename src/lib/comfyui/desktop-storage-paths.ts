@@ -273,12 +273,12 @@ export function parseStorageDirArgs(args: ReadonlyArray<string>): StorageDirOver
   for (let i = 0; i < args.length; i++) {
     const token = args[i] ?? "";
     const eq = token.indexOf("=");
-    const flag = eq >= 0 ? token.slice(0, eq) : token;
+    const flag = eq !== -1 ? token.slice(0, eq) : token;
     const field = OVERRIDE_FLAG_TO_FIELD[flag.toLowerCase()];
     if (!field) {
       continue;
     }
-    const inlineValue = eq >= 0 ? stripScalar(token.slice(eq + 1)) : "";
+    const inlineValue = eq !== -1 ? stripScalar(token.slice(eq + 1)) : "";
     const next = args[i + 1] ?? "";
     // 下一个 token 是另一个 flag 时说明这个目录参数没给值：把它当路径会得到
     // 「D: --listen」这种根本不存在的目录，而真值只能来自 launchArgs 本身。
@@ -306,11 +306,11 @@ export function parseExtraModelPathsConfigArgs(args: ReadonlyArray<string>): Arr
   for (let i = 0; i < args.length; i++) {
     const token = args[i] ?? "";
     const eq = token.indexOf("=");
-    const flag = eq >= 0 ? token.slice(0, eq) : token;
+    const flag = eq !== -1 ? token.slice(0, eq) : token;
     if (flag.toLowerCase() !== "--extra-model-paths-config") {
       continue;
     }
-    const inline = eq >= 0 ? stripScalar(token.slice(eq + 1)) : "";
+    const inline = eq !== -1 ? stripScalar(token.slice(eq + 1)) : "";
     if (inline) {
       out.push(inline);
       continue;

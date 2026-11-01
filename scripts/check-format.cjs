@@ -219,7 +219,7 @@ function globToRegExp(glob) {
       out += "[^/]";
     } else if (c === "{") {
       const close = glob.indexOf("}", i);
-      if (close < 0) {
+      if (close === -1) {
         out += String.raw`\{`;
         continue;
       }

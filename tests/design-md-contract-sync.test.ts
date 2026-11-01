@@ -113,7 +113,7 @@ function collectHexRows(section: string): Array<HexRow> {
 
 function sectionBetween(text: string, heading: string): string | null {
   const start = text.indexOf(heading);
-  if (start < 0) {
+  if (start === -1) {
     return null;
   }
   const body = text.slice(start + heading.length);

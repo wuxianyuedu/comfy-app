@@ -811,7 +811,7 @@ function argValue(/** @type {string} */ flag) {
   const argv = process.argv.slice(2);
   const i = argv.indexOf(flag);
   const value = argv[i + 1];
-  return i >= 0 && value && !value.startsWith("--") ? value : undefined;
+  return i !== -1 && value && !value.startsWith("--") ? value : undefined;
 }
 
 /** 联网取一版本（`--dockerfile` 没给 `--node-version` 时唯一的来路）。 */

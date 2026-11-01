@@ -109,7 +109,7 @@ function parsePairs() {
   }
   const lines = spec.split("\n");
   const start = lines.findIndex((l) => l.trim().startsWith(PAIR_MARKER));
-  if (start < 0) {
+  if (start === -1) {
     problems.push(`${SPEC_REL} 缺少 ${PAIR_MARKER} 标记（跨平台动作对照表的锚点）`);
     return [];
   }
@@ -281,7 +281,7 @@ function readmeSection(title) {
   }
   const lines = text.split("\n");
   const start = lines.findIndex((l) => l.trim() === title);
-  if (start < 0) {
+  if (start === -1) {
     return null;
   }
   const level = title.match(/^#+/)?.[0].length ?? 2;

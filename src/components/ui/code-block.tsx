@@ -44,7 +44,7 @@ const EXT_TO_LANG: Record<string, string> = {
 
 export function extToLanguage(filePath: string): string {
   const dot = filePath.lastIndexOf(".");
-  if (dot < 0) {
+  if (dot === -1) {
     return "plaintext";
   }
   return EXT_TO_LANG[filePath.slice(dot).toLowerCase()] ?? "plaintext";

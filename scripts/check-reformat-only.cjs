@@ -594,7 +594,7 @@ async function main() {
   const args = process.argv.slice(2);
   const limit = args.includes("--strict") ? 1 : LIMIT;
   const rangeIdx = args.indexOf("--range");
-  const range = rangeIdx >= 0 ? args[rangeIdx + 1] : null;
+  const range = rangeIdx !== -1 ? args[rangeIdx + 1] : null;
 
   /* 收窄（`--staged`，见 `STAGED_GATE` 的注释）：暂存里一份源文件都没有时，
    * 下面的每一支都只会得出「没有文件改动，跳过」—— 那就不必先跑一遍 prettier。

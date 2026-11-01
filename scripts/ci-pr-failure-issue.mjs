@@ -417,12 +417,12 @@ export function main(io = {}) {
   const dryRun = argv.includes("--dry-run");
   const noBlock = argv.includes("--no-block");
   const at = argv.indexOf("--from");
-  const from = at >= 0 ? argv[at + 1] : undefined;
+  const from = at !== -1 ? argv[at + 1] : undefined;
   /* `--lane <名>`：这一格服务哪一档（缺省 pr）。它是**显式声明**而不是从事件推出来的：
    * 「这一跑归不归本格管」不该由平台给的事件名猜（猜错就是那一档永远不立案，而这一格
    * 自己在记账上还是绿的 —— 桌面成品包那一档今天就是这个形状，见 ISSUE #2550）。 */
   const laneAt = argv.indexOf("--lane");
-  const laneArg = laneAt >= 0 ? String(argv[laneAt + 1] ?? "").trim() : "";
+  const laneArg = laneAt !== -1 ? String(argv[laneAt + 1] ?? "").trim() : "";
   const lane = laneArg === "" ? null : laneArg;
 
   /**
@@ -445,7 +445,7 @@ export function main(io = {}) {
   };
 
   /* 写在 `finish` 之后（`const` 的 TDZ）：这两句退码要靠它把 `--no-block` 那一层套上。 */
-  if (laneAt >= 0 && laneArg === "") {
+  if (laneAt !== -1 && laneArg === "") {
     log(
       "[pr-failure-issue] `--lane` 没给值 ⇒ 不知道这一格服务哪一档，一次都不写" +
         "（档名进标题与去重键，随手写就把两档的单子混成一族）。",

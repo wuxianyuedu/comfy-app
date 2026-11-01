@@ -102,7 +102,7 @@
 export function stripBundledSection(text) {
   const marker = "\n---\n";
   const i = text.lastIndexOf(marker);
-  return i >= 0 ? text.slice(i + marker.length) : text;
+  return i !== -1 ? text.slice(i + marker.length) : text;
 }
 
 /** 顶层段落标记：只有行首、无缩进的 `key:` 才算段落起点。 */
