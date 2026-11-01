@@ -248,6 +248,25 @@ describe("脚本档棘轮 —— 只降不升", () => {
     expect(readFixtureBaseline().face).toBe(2);
   });
 
+  it("新增一份**干净**的入库脚本 ⇒ 面扩张也要红；`--update` 重记账之后才绿", () => {
+    /* 反过来那一半：面涨了、而新增那份一个错都没有时，存量那一圈（`grows`）**一个格子
+     * 都不涨** —— 面这一格是它唯一的账面信号。此前只判 `↓`，于是这个形状一路绿到提交后：
+     * 真现场（2026-11-01）判据自己打「✓ 判决面 230 份 / 存量 0 处（基线 0）」并退 0，
+     * 而用例判红（expected 229 to be 230），两处读数相反，红只落在下一个动脚本的人身上。 */
+    write(join("scripts", "fresh.mjs"), "export const c = 3;\n");
+    const judged = runCheck([]);
+    expect(judged.code, judged.output).toBe(1);
+    expect(judged.output).toContain("判决面扩张了");
+    expect(judged.output).toContain("--update");
+    /* 记账之后才绿 —— 面变了**不是**「存量没涨就不用管」。 */
+    expect(runCheck(["--update"]).code).toBe(0);
+    expect(runCheck([]).code).toBe(0);
+    expect(readFixtureBaseline().face).toBe(3);
+    rmSync(join(fixture, "scripts", "fresh.mjs"), { force: true });
+    expect(runCheck(["--update"]).code).toBe(0);
+    expect(readFixtureBaseline().face).toBe(2);
+  });
+
   it("下降只提示、不拦（别把「修好了」判成红），且提示指路 `--update`", () => {
     write(join("scripts", "dirty.mjs"), "export const b = 2;\n");
     const { code, output } = runCheck([]);
