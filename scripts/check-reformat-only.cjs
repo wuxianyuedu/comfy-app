@@ -548,6 +548,31 @@ function collectPairs(files, beforeRev, readAfter) {
   return out;
 }
 
+/**
+ * 合并预览下「本次改动」的基线（ISSUE #3022）。少一件就回 `null`。
+ *
+ * 平台那一跑**没有暂存区**，于是判据落到「判 HEAD 这一次提交」那一支，而
+ * `HEAD~1` 是**第一父** —— 合并预览那一笔的第一父是哪一侧由平台拼法决定
+ * （实测现场：第一父 = 本分支侧），于是 `HEAD~1..HEAD` 覆盖**整条主干**带来的
+ * 20+ 条提交。它们没有 `format-migration:` 尾注 ⇒ 声明恒 false、护栏 ② 恒
+ * 「不干净」，判据红得与本次改动是什么无关（#3022：162 份里 120 份判纯格式化，
+ * 而那 120 份没有一份是「顺手全库格式化」）。
+ *
+ * 成立条件两件：**HEAD 是合并提交**（父提交数 ≥ 2）**且**平台给了目标分支 sha
+ * （`CNB_PULL_REQUEST_TARGET_SHA`，与 `changed-scope.mjs` 同一份来源）。
+ * 有了它，区间就是「目标 sha..HEAD」= 本 PR 带来的提交 —— 平台合进来的主干那边
+ * 本来就以它为起点，不在区间里。少一件就退回 `HEAD~1`：本地事后复盘那一档 HEAD
+ * 是普通提交，两者等价，行为与改动前一致。
+ */
+function mergePreviewBase() {
+  const parents = gitOrEmpty(["rev-list", "--parents", "-n", "1", "HEAD"]).trim().split(/\s+/);
+  if (parents.length < 3) {
+    return null;
+  }
+  const target = String(process.env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim();
+  return target === "" ? null : target;
+}
+
 async function main() {
   await loadShell();
   /* **合并提交豁免**：合并会把上游整批（含它们在别处做的格式化）一次性带进来，
@@ -589,8 +614,9 @@ async function main() {
 
   if (!range && !staged.trim()) {
     /* 没有暂存改动:回落到「判 HEAD 这一次提交」(本地事后复盘 / CI 之外的用法)。
-     * 此时基准是 HEAD~1,与改动前版本一致。 */
-    const [afterRev, beforeRev] = ["HEAD", "HEAD~1"];
+     * 基准怎么取见 `mergePreviewBase()`：平台那一跑 HEAD 是**合并预览**，
+     * `HEAD~1` 是第一父（是哪一侧由平台拼法决定），区间会整条跨过主干。 */
+    const [afterRev, beforeRev] = ["HEAD", mergePreviewBase() ?? "HEAD~1"];
     if (gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === "") {
       gateSkip("格式化提交分离", `无可比父提交（${beforeRev} 不存在，首次提交或浅克隆）`);
       return;
