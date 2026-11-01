@@ -359,7 +359,7 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
  * @returns {{problems: string[]}}
  */
 function judgeTypedocTail(log) {
-  const cleanLog = (log ?? "").replaceAll(/\x1b\[[0-9;]*m/g, "");
+  const cleanLog = (log ?? "").replaceAll(/\u001b\[[0-9;]*m/g, "");
   const summary = /Found (\d+) errors and (\d+) warnings/.exec(cleanLog);
   const generated = /\[info\] html generated/.test(cleanLog);
   if (summary) {

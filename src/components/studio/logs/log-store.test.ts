@@ -1403,7 +1403,7 @@ describe("parseFileLogs 文件日志解析", () => {
 
     it("颜色码残缺留下的多余 [ 不影响级别标记", () => {
       const entries = parseFileLogs(
-        ["[10:22:30] [[OK] 服务器已就绪", "[10:22:31] [\x1b[90m[OK\x1b[0m] 服务器已就绪"].join(
+        ["[10:22:30] [[OK] 服务器已就绪", "[10:22:31] [\u001b[90m[OK\u001b[0m] 服务器已就绪"].join(
           "\n",
         ),
         base,
@@ -1484,7 +1484,7 @@ describe("parseFileLogs 文件日志解析", () => {
 
   it("ANSI 颜色码被剥离后仍可解析级别", () => {
     const base = new Date(2026, 7, 15);
-    const entries = parseFileLogs("\x1b[36m[10:00:00] [INFO] colored\x1b[0m", base);
+    const entries = parseFileLogs("\u001b[36m[10:00:00] [INFO] colored\u001b[0m", base);
     expect(entries).toHaveLength(1);
     expect(entries[0]?.level).toBe("info");
     expect(entries[0]?.message).toBe("colored");
