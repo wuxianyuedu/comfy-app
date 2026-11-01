@@ -41,7 +41,27 @@ import {
   writeSession,
 } from "../scripts/dev-launcher-session.mjs";
 import { killProcessTree } from "../src/lib/process/kill-process-tree";
+import { stripComments as stripJs } from "./helpers/strip-comments";
 import { launcherChainSource } from "./helpers/launcher-source";
+
+/**
+ * 读一份源文件并**剥掉注释**（唯一实现 `./helpers/strip-comments`，`{trailing:true}` 连行尾一起去）。
+ *
+ * 为什么这一族的反向断言必须先剥：`scripts/launcher-core/shell.mjs` 里就有一句
+ * 「写着 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`。那条判据在 Windows 上…」——
+ * 拿原文去判「编排器不许自己摸 platform」，就会红在**正在解释为什么不该这么写**的那行文档上。
+ *
+ * 为什么不用这份文件里 `describe` 内那一份本地 `stripComments`（`scripts 里的 src/lib 路径字面量`
+ * 那一组里）：那份是台账登记的另一型（`tests/strip-comments-single-source.test.ts`），
+ * 它只服务那一组的说明符扫描，换语言面不同 —— 引它的名字会构成第二份定义。
+ *
+ * ⚠️ 刻意**不**用在 `#` 注释语法上的那两份接收者：`scripts/dev-launcher.ps1` 与
+ * `src-tauri/Cargo.toml`。实测拿 JS 档剥 `.ps1` 前后字符数完全相同（2898 → 2898，等于没剥），
+ * 而那一格自己的口径写着「判据是『不再调用』而不是『不再提及』」—— 加上去只会造出假红。
+ * 那一格缺口归 ISSUE #2934，不在这里补。
+ */
+const readCode = (rel: string): string =>
+  stripJs(fs.readFileSync(path.join(process.cwd(), rel), "utf8"), { trailing: true });
 
 /** 数出「进程组」里还剩几个活着的标记进程（用唯一标记匹配命令行）。 */
 function countMarkedProcesses(marker: string): number {
@@ -284,7 +304,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
   it("sidecar 的拉起与回收走官方 shell 插件（跨平台机制由它选）", () => {
     const root = process.cwd();
-    const lib = fs.readFileSync(path.join(root, "src-tauri", "src", "lib.rs"), "utf8");
+    const lib = readCode("src-tauri/src/lib.rs");
     const cargo = fs.readFileSync(path.join(root, "src-tauri", "Cargo.toml"), "utf8");
     // 插件在 Rust 侧提供跨平台 spawn/kill：写死 std::process::Command + taskkill
     // 时 POSIX 分支等于「什么都不做」（sidecar 活过壳退出，继续占端口）
@@ -292,18 +312,44 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     expect(lib).toContain(".plugin(tauri_plugin_shell::init())");
     expect(lib).toMatch(/CommandChild/);
     expect(lib).not.toMatch(/Command::new\("taskkill"\)/);
-    // 不向前端暴露执行能力：caps 里不得出现 shell 的 execute/spawn 权限
-    for (const cap of ["default", "remote", "splash"]) {
-      const file = path.join(root, "src-tauri", "capabilities", `${cap}.json`);
-      if (!fs.existsSync(file)) {
-        continue;
-      }
-      expect(fs.readFileSync(file, "utf8")).not.toMatch(/shell:(allow-execute|allow-spawn)/);
+    // 不向前端暴露执行能力：caps 里不得出现 shell 的 execute/spawn 权限。
+    // 面**从目录派生**（登记那三份只在下面那格当"不许掉出去"的锚点）：原先这里写的是
+    // `for (const cap of ["default","remote","splash"])` + `if (!existsSync) continue`，
+    // 一份 caps 被改名 ⇒ 那一轮静默少判一份，而"少判"与"三份都干净"读起来逐字相同。
+    const capsDir = path.join(root, "src-tauri", "capabilities");
+    const capsFiles = fs
+      .readdirSync(capsDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith(".json"))
+      .map((e) => e.name)
+      .sort();
+    for (const name of capsFiles) {
+      expect(
+        fs.readFileSync(path.join(capsDir, name), "utf8"),
+        `capabilities/${name}：不许把执行能力透给前端`,
+      ).not.toMatch(/shell:(allow-execute|allow-spawn)/);
+    }
+  });
+
+  it("capabilities 那一族的面非空，且登记的三份都在面里", () => {
+    const names = fs
+      .readdirSync(path.join(process.cwd(), "src-tauri", "capabilities"))
+      .filter((name) => name.endsWith(".json"))
+      .sort();
+    expect(
+      names.length,
+      "capabilities 目录里一份 .json 都没有 ⇒ 上面那一组反向断言在判一个空面",
+    ).toBeGreaterThan(0);
+    for (const name of ["default.json", "remote.json", "splash.json"]) {
+      expect(
+        names,
+        `面里不见了 ${name} —— 「不许把执行能力透给前端」会静默少判这一份（目录派生的面` +
+          "只认得到的名字，改名 = 掉出去）",
+      ).toContain(name);
     }
   });
 
   it("壳的项目根判据不再绑在 Windows 专属文件上", () => {
-    const lib = fs.readFileSync(path.join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
+    const lib = readCode("src-tauri/src/lib.rs");
     // 旧判据只认 scripts/dev-launcher.ps1 → Linux/macOS 上 resolve_project_root()
     // 恒返回空串：启动页读不到 launch-status、壳日志落不了盘，表现为「一直转圈」。
     // 现在认的是**编排器的唯一实现**（.ps1 只是它的 Windows 调用入口）——
@@ -335,10 +381,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
   it("编排器不再自己摸 process.platform（平台判据收在 launcher-core 与 kill-process-tree）", () => {
     const root = process.cwd();
-    const launcher = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "dev-launcher.mjs"),
-      "utf8",
-    );
+    const launcher = readCode("scripts/dev-launcher.mjs");
     // 唯一允许出现平台判据的地方是它 import 的两个模块：
     //   · launcher-core/shell.mjs 的 isWindows()（进程组 / 可执行名后缀）
     //   · launch-core/procs.mjs 的 isWindows()（进程与端口探测机制）
@@ -349,8 +392,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   });
 
   it("壳退出时的统一回收走 reap-process.mjs（不在 Rust 里重写平台分支）", () => {
-    const root = process.cwd();
-    const lib = fs.readFileSync(path.join(root, "src-tauri", "src", "lib.rs"), "utf8");
+    const lib = readCode("src-tauri/src/lib.rs");
     // kill_sidecar 除了插件的 kill()，还要补一刀统一回收：Node 之下的
     // next-server / turbopack worker 才是真正会残留成孤儿的那几层。
     expect(lib).toMatch(/fn kill_sidecar\(project_root: &str\)/);
@@ -359,11 +401,11 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   });
 
   it("sidecar 命名按平台判据收口（不再是写死的 node.exe）", () => {
-    const lib = fs.readFileSync(path.join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
+    const lib = readCode("src-tauri/src/lib.rs");
     // 写死 "node.exe" 时 Linux 启动找不到 sidecar（资源里叫 node，没有后缀）
     expect(lib).not.toMatch(/join\("node\.exe"\)/);
     expect(lib).toContain("sidecar_binary_name");
-    const build = fs.readFileSync(path.join(process.cwd(), "scripts", "build-desktop.mjs"), "utf8");
+    const build = readCode("scripts/build-desktop.mjs");
     expect(build).toContain("sidecarFileName");
   });
 });
@@ -388,18 +430,42 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
   /* 走**现算的编排链路闭包**（`launcherChainSource()` 从入口按顶层静态 import
    * 递归收），不再手抄一份文件清单：抄了就会随下一刀拆文件再漏一处，而漏的表现
    * 正是这条判据要防的形态 —— `indexOf` 落空、`not.toMatch` 对着空串恒真。 */
-  const launcherSrc = launcherChainSource();
-  const whitelistSrc = fs.readFileSync(
-    path.join(process.cwd(), "scripts", "standalone-private-inputs.mjs"),
-    "utf8",
-  );
+  const launcherSrc = stripJs(launcherChainSource(), { trailing: true });
+  const whitelistSrc = readCode("scripts/standalone-private-inputs.mjs");
   /* 「怎么起宿主」自 ISSUE #1767 起收进这份共用件：编排 6.5 步、scripts/start.mjs
    * 的生产链路都要它，两处各写一份的下场是「某一条忘了起」（host 模式下现场是
    * 任务永远停在队列）。下面几条因此把函数体从 launcher 改到共用件上断。 */
-  const spawnKernelSrc = fs.readFileSync(
-    path.join(process.cwd(), "scripts", "launcher-core", "executor-host-spawn.mjs"),
-    "utf8",
-  );
+  const spawnKernelSrc = readCode("scripts/launcher-core/executor-host-spawn.mjs");
+
+  /* 前置断言：这个 describe 里几组判据既有反向也有正向，反向那几组的接收者
+   * 一旦变空就恒真（`launcherChainSource()` 拼空、或某份分件搬走只留说明）。
+   * 这一格把"读到了东西"变成显式结论，而不是默认前提。 */
+  it("这一族读的三个接收者都非空（闭包 / 白名单 / 起宿主共用件）", () => {
+    expect(launcherSrc.trim(), "编排链路闭包剥完是空文").not.toHaveLength(0);
+    expect(whitelistSrc.trim(), "白名单那份剥完是空文").not.toHaveLength(0);
+    expect(spawnKernelSrc.trim(), "起宿主的共用件剥完是空文").not.toHaveLength(0);
+    // 闭包必须真的"收到比入口多"：原先那格只判到"入口里有一段"，而 `relativeDeps`
+    // 一旦不再命中（改行动态 import、或说明符换形态），闭包会静默缩成入口一份，
+    // 落在闭包上的反向断言就退化成只判入口 —— 那正是本文件头注点名过的失效方向。
+    const entryAlone = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "dev-launcher.mjs"),
+      "utf8",
+    );
+    expect(
+      launcherSrc.length,
+      "闭包不比入口单独一份大 ⇒ launcherChainSource() 的递归没收到内部分件，" +
+        "下面那几组判的其实只是 dev-launcher.mjs 自己",
+    ).toBeGreaterThan(stripJs(entryAlone, { trailing: true }).length);
+    for (const marker of [
+      "export function spawnExecutorHost(ctx)",
+      "export function maybeSpawnExecutorHost(",
+    ]) {
+      expect(
+        launcherSrc,
+        `闭包里没有 ${marker} —— 它所在的那份内部分件掉出链路了`,
+      ).toContain(marker);
+    }
+  });
 
   it("起宿主的实现在共用件里走 spawnInGroup（平台判据不自己摸 process.platform）", () => {
     const start = spawnKernelSrc.indexOf("export function maybeSpawnExecutorHost(");
@@ -417,7 +483,19 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
      * spawned」，与转发层无关。 */
     const start = launcherSrc.indexOf("export function spawnExecutorHost(ctx)");
     expect(start, "downstream.mjs 里没找到实现").toBeGreaterThan(-1);
-    const body = launcherSrc.slice(start, launcherSrc.indexOf("\n}", start));
+    /* 终点必须先验存在：`indexOf("\n}", start)` 取不到给 -1，`slice(start, -1)` 会给出
+     * "从实现起点到倒数第二个字符"—— 那比整个函数宽得多，下面两条 `toContain` 仍然成立，
+     * 于是判据从"这个包装器记了 child"漂成"后面某处记了 child"。（**已知判不到的那一形**：
+     * 收尾被改成缩进、同时 push 搬到后面的函数里 —— 我拿字符串级模拟试过，
+     * "区间里只许有一个顶层 export function"那种廉价边界断言在那一形下不红，
+     * 所以不留它当装饰；要覆盖它得做配对花括号或 AST 作用域，见 #2660 的批 4 评论。） */
+    const end = launcherSrc.indexOf("\n}", start);
+    expect(
+      end,
+      "从实现起点找不到函数收尾（`\\n}`）—— slice(start, -1) 会把区间放宽到后面整段，" +
+        "下面两条 toContain 就在判别的东西",
+    ).toBeGreaterThan(start);
+    const body = launcherSrc.slice(start, end);
     expect(body).toContain("maybeSpawnExecutorHost(");
     expect(body).toContain("spawned.push(result.child)");
   });
@@ -444,10 +522,7 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
     // 在共用件里（三条链路同一份），归一化后的值仍由它显式写回子进程 env。
     expect(spawnKernelSrc).toContain("[EXECUTOR_ENV_KEY]: plan.mode");
     // 回读 `.env` 这件事只许有一份实现（纯 Node 层），且复用既有的 parseEnvFile。
-    const kernel = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "launcher-core", "executor-mode.mjs"),
-      "utf8",
-    );
+    const kernel = readCode("scripts/launcher-core/executor-mode.mjs");
     expect(kernel).toContain("parseEnvFile(");
     expect(kernel).toContain('"COMFY_EXECUTOR"');
     // launcher 里不许再留第二份归一化实现（漂移就是这么发生的）
