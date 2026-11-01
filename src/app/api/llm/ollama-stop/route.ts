@@ -47,13 +47,17 @@ async function writerForStop(): Promise<RuntimeLogWriter> {
   if (latest) {
     return {
       file: latest.file,
-      write: (line) => appendTo(latest.file, `${localTimestamp()} ${line}`),
+      write: (line) => {
+        appendTo(latest.file, `${localTimestamp()} ${line}`);
+      },
     };
   }
   const created = openRuntimeLogWriter("ollama-runtime");
   return {
     file: created.file,
-    write: (line) => created.write(`${localTimestamp()} ${line}`),
+    write: (line) => {
+      created.write(`${localTimestamp()} ${line}`);
+    },
   };
 }
 

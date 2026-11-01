@@ -1,4 +1,5 @@
 import { getLivenessSnapshot, subscribeComfyExit } from "~/lib/comfyui/liveness-signal";
+import { createSseResponse } from "~/app/api/sse-stream";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,78 +21,21 @@ export const dynamic = "force-dynamic";
  *     「已订阅 / 重连中」。注释行对 EventSource 的 `onmessage` 不可见，却能
  *     刷新内核的 TCP 空闲计时器（口径与 tasks 流一致：15s 远小于常见代理超时）。
  *
+ * 帧头 / 心跳 / 关闭收尾三条在 `~/app/api/sse-stream`（与 `/api/comfy/queue/events`
+ * 共用同一份，两处各抄一遍曾是 §12.12 的孪生对）。
+ *
  * **这条通道只推送「进程退出」**，不做存活轮询 —— 存活的主力是它 + HTTP 复核，
  * 兜底是客户端的低频轮询（分阶段频率见 `~/lib/comfyui/liveness`）。把探活也塞
  * 进这条流，就又把「事件」做成了「另一条轮询」。
  */
 export async function GET(): Promise<Response> {
-  const encoder = new TextEncoder();
-  /** 流关闭的收尾：清心跳、退订、关流。**只跑一次**（两条路径都会调它）。 */
-  type Cleanup = () => void;
-
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      let closed = false;
-      let heartbeat: ReturnType<typeof setInterval> | null = null;
-      let unsubscribe: Cleanup = () => undefined;
-
-      const cleanup: Cleanup = () => {
-        if (closed) {
-          return;
-        }
-        closed = true;
-        if (heartbeat !== null) {
-          clearInterval(heartbeat);
-        }
-        unsubscribe();
-        try {
-          controller.close();
-        } catch {
-          /* 流已经关了 —— 忽略 */
-        }
-      };
-
-      const send = (obj: unknown): void => {
-        if (closed) {
-          return;
-        }
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
-        } catch {
-          cleanup();
-        }
-      };
-
-      /* 补发当前快照：`seq === 0` 表示本进程一次退出都没记过，此时没有可发的
-       * 事件（发一个 `seq:0` 的假事件会让客户端把「无事发生」当成一次崩溃）。 */
-      const snap = getLivenessSnapshot();
-      if (snap.seq > 0 && snap.last !== null) {
-        send(snap.last);
-      }
-
-      unsubscribe = subscribeComfyExit(send);
-      heartbeat = setInterval(() => {
-        if (closed) {
-          return;
-        }
-        try {
-          controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
-        } catch {
-          cleanup();
-        }
-      }, 15_000);
-
-      return cleanup;
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      // 反向代理（若有）按此关闭缓冲，否则帧会攒到连接关闭才到客户端。
-      "X-Accel-Buffering": "no",
-    },
+  return createSseResponse(({ send, onClose }) => {
+    /* 补发当前快照：`seq === 0` 表示本进程一次退出都没记过，此时没有可发的
+     * 事件（发一个 `seq:0` 的假事件会让客户端把「无事发生」当成一次崩溃）。 */
+    const snap = getLivenessSnapshot();
+    if (snap.seq > 0 && snap.last !== null) {
+      send(snap.last);
+    }
+    onClose(subscribeComfyExit(send));
   });
 }

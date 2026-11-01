@@ -299,7 +299,9 @@ function makeWrapper(queryClient?: QueryClient) {
   };
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 beforeEach(() => {
   runtimeLogCalls.length = 0;
   sessionLogRequests.length = 0;
@@ -354,7 +356,9 @@ afterEach(() => {
   comfyStatusCalls = 0;
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 describe("useSettingsPage", () => {
   it("草稿从查询结果播种，两份齐了才算 ready", async () => {
@@ -387,7 +391,9 @@ describe("useSettingsPage", () => {
     expect(result.current.pendingJump).toBe("comfyui");
     expect(onConsume).not.toHaveBeenCalled();
 
-    act(() => result.current.ackJumpSection());
+    act(() => {
+      result.current.ackJumpSection();
+    });
     expect(result.current.pendingJump).toBeNull();
     expect(onConsume).toHaveBeenCalled();
   });
@@ -455,7 +461,9 @@ describe("useSettingsPage", () => {
     expect(probeMock).toHaveBeenCalledWith("http://localhost:11434/v1");
 
     const callsAfterLocalProbe = probeMock.mock.calls.length;
-    act(() => result.current.patchLlm({ provider: "remote" }));
+    act(() => {
+      result.current.patchLlm({ provider: "remote" });
+    });
     /* 探测是 setTimeout(…, 0) 里触发的，切到远端后要等一个宏任务再断言，
      * 确认没有新的探测被排进去。 */
     await act(async () => {
@@ -738,21 +746,29 @@ describe("useSettingsPage", () => {
     });
     await expect.poll(() => result.current.drafts).not.toBeNull();
 
-    act(() => result.current.setTaskTemperature("code", "0.1"));
+    act(() => {
+      result.current.setTaskTemperature("code", "0.1");
+    });
     expect(result.current.drafts?.llm.temperatureByTask).toEqual({ code: 0.1 });
 
-    act(() => result.current.setTaskTemperature("chat", "0.9"));
+    act(() => {
+      result.current.setTaskTemperature("chat", "0.9");
+    });
     expect(result.current.drafts?.llm.temperatureByTask).toEqual({
       code: 0.1,
       chat: 0.9,
     });
 
     // 清空 = 删 key，而不是留下 undefined（否则「已覆盖」徽标一直亮）
-    act(() => result.current.setTaskTemperature("code", ""));
+    act(() => {
+      result.current.setTaskTemperature("code", "");
+    });
     expect(result.current.drafts?.llm.temperatureByTask).toEqual({ chat: 0.9 });
 
     // 最后一个也清空 → 整个 map 回到 undefined
-    act(() => result.current.setTaskTemperature("chat", ""));
+    act(() => {
+      result.current.setTaskTemperature("chat", "");
+    });
     expect(result.current.drafts?.llm.temperatureByTask).toBeUndefined();
   });
 
@@ -858,7 +874,9 @@ describe("useSettingsPage", () => {
     });
     await expect.poll(() => result.current.drafts).not.toBeNull();
 
-    act(() => result.current.setLlmApiKey("sk-test"));
+    act(() => {
+      result.current.setLlmApiKey("sk-test");
+    });
     await act(async () => {
       await result.current.saveLlm();
     });
@@ -1068,7 +1086,9 @@ describe("useSettingsPage", () => {
     await expect.poll(() => result.current.drafts).not.toBeNull();
 
     expect(result.current.section).toBe("llmLocal");
-    act(() => result.current.setSection("comfyui"));
+    act(() => {
+      result.current.setSection("comfyui");
+    });
     expect(result.current.section).toBe("comfyui");
   });
 

@@ -423,7 +423,9 @@ describe("POST parse —— argv 注入闸门（台账 A6）", () => {
 describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () => {
   it("全部候选都退 127 → 每一个都起过，且那句原因落成 error 日志", async () => {
     // 「排一个候选一次」按判据的长度来，不写死数字（POSIX 上只有两个候选）。
-    ORDER.forEach(() => queueChild({ closeCode: 127 }));
+    ORDER.forEach(() => {
+      queueChild({ closeCode: 127 });
+    });
     const res = await post({ action: "parse", packages: ["ComfyUI-Foo"] });
     const events = await eventsOf(res);
     /* 旧写法是 `i < pyCandidates.length - 1`：最后一个候选轮不到，于是这一句
@@ -466,7 +468,9 @@ describe("POST parse —— 解释器退避与收尾归属（台账 A14）", () 
 
   it("起 `py` 那一档时 argv 首位是 -3（这条链同样不许裸起 py）", async () => {
     // 「排一个候选一次」按判据的长度来，不写死数字（POSIX 上只有两个候选）。
-    ORDER.forEach(() => queueChild({ closeCode: 127 }));
+    ORDER.forEach(() => {
+      queueChild({ closeCode: 127 });
+    });
     const res = await post({ action: "parse", packages: ["ComfyUI-Foo"] });
     await eventsOf(res);
     /* 逐候选对账，而不是只盯 `calls[2]`：位置由判据给，写死下标就等于在这里
@@ -1203,7 +1207,9 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
 
   it("全部候选都 ENOENT → 每一个都得起过，最后一个的原因当场透出来", async () => {
     coldRoot();
-    ORDER.forEach(() => queueChild({ error: { code: "ENOENT" } }));
+    ORDER.forEach(() => {
+      queueChild({ error: { code: "ENOENT" } });
+    });
     const events = await getEvents();
     /* 「全失败」这一档的真形状是**每个候选都起过**：少起一个就是退避链断了，
      * 而界面只显示「没有节点」，没人知道是解释器没找着。 */
@@ -1220,7 +1226,9 @@ describe("流式探测的进程协议：解释器退避、stderr、PROGRESS 行�
   it("全部候选都以 127 退出 → 同一句「未找到 Python 解释器」，与 ENOENT 那一档同答案", async () => {
     coldRoot();
     // 「排一个候选一次」按判据的长度来，不写死数字（POSIX 上只有两个候选）。
-    ORDER.forEach(() => queueChild({ closeCode: 127 }));
+    ORDER.forEach(() => {
+      queueChild({ closeCode: 127 });
+    });
     const events = await getEvents();
     expect(interpreterNames()).toEqual(ORDER);
     expect(events.filter((e) => msgOf(e).includes("未找到 Python 解释器"))).toHaveLength(1);

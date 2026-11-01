@@ -195,7 +195,9 @@ export function useSettingsPage(options?: {
    * 与全库另一处（`logs/SaveExportButton`）逐行同款、各写一份。 */
   const flashLatch = useFlashLatch(FLASH_MS, NO_FLASH);
   const showFlash = useCallback(
-    (kind: "ok" | "err", text: string) => flashLatch.flash({ kind, text }),
+    (kind: "ok" | "err", text: string) => {
+      flashLatch.flash({ kind, text });
+    },
     [flashLatch],
   );
 
@@ -411,7 +413,9 @@ export function useSettingsPage(options?: {
     pendingJump,
     ackJumpSection,
     theme: theme === "light" ? "light" : "dark",
-    setTheme: (value: "light" | "dark") => setTheme(value),
+    setTheme: (value: "light" | "dark") => {
+      setTheme(value);
+    },
     isInitialLoad: isInitialLoad && !queryFailed && !settingsQ.data && !llmQ.data,
     hasError: queryFailed && !drafts,
     /* 既没在加载、也没失败，草稿却仍为空——正常状态机不可达。视图据此给

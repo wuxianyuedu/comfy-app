@@ -40,21 +40,25 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
   /* 本地 Ollama 下任务温度是主配置区，默认展开。 */
   const [showTaskTemps, setShowTaskTemps] = useState(true);
   const [taskTempEdits, setTaskTempEdits] = useState<Partial<Record<TaskType, string>>>({});
-  const setTaskEdit = (task: TaskType, raw: string) =>
+  const setTaskEdit = (task: TaskType, raw: string) => {
     setTaskTempEdits((prev) => ({ ...prev, [task]: raw }));
-  const clearTaskEdit = (task: TaskType) =>
+  };
+  const clearTaskEdit = (task: TaskType) => {
     setTaskTempEdits((prev) => {
       const next = { ...prev };
       delete next[task];
       return next;
     });
+  };
 
   return (
     <SettingsCard title="本地模型（Ollama）">
       {/* Base URL 仅本地 Ollama 需要；远端的连接参数由模型条目各自携带 */}
       <Field
         label="Base URL"
-        onChange={(value) => c.patchLlm({ baseUrl: value })}
+        onChange={(value) => {
+          c.patchLlm({ baseUrl: value });
+        }}
         placeholder={OLLAMA_DEFAULT_BASE_URL}
         value={c.drafts.llm.baseUrl}
       />
@@ -136,7 +140,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
             {(a11y) => (
               <SelectMenu
                 fullWidth
-                onChange={(model: string) => c.patchLlm({ model })}
+                onChange={(model: string) => {
+                  c.patchLlm({ model });
+                }}
                 options={c.ollamaModels.map((m) => m.name)}
                 value={c.drafts.llm.model}
                 {...a11y}
@@ -156,7 +162,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     <Toggle
                       className="h-auto rounded-lg border px-2.5 py-1 text-xs"
                       key={model.name}
-                      onPressedChange={() => c.toggleExtraModel(model.name)}
+                      onPressedChange={() => {
+                        c.toggleExtraModel(model.name);
+                      }}
                       pressed={checked}
                       size="sm"
                       title={
@@ -177,7 +185,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       ) : (
         <Field
           label="模型"
-          onChange={(value) => c.patchLlm({ model: value })}
+          onChange={(value) => {
+            c.patchLlm({ model: value });
+          }}
           placeholder="请填写要使用的模型名，如 qwen3:14b"
           value={c.drafts.llm.model}
         />
@@ -186,12 +196,16 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
       <div className="mb-4 grid grid-cols-2 gap-3">
         <Field
           label="全局默认温度"
-          onChange={(value) => c.patchLlm({ temperature: Number(value) || 0 })}
+          onChange={(value) => {
+            c.patchLlm({ temperature: Number(value) || 0 });
+          }}
           value={String(c.drafts.llm.temperature)}
         />
         <Field
           label="最大 Token"
-          onChange={(value) => c.patchLlm({ maxTokens: Number(value) || 0 })}
+          onChange={(value) => {
+            c.patchLlm({ maxTokens: Number(value) || 0 });
+          }}
           value={String(c.drafts.llm.maxTokens)}
         />
       </div>
@@ -265,7 +279,9 @@ export function LlmLocalSection({ c }: { c: ReadySettingsPageController }) {
                     className="border-border bg-surface-2 text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-24 rounded-lg px-2 py-1.5 text-right text-sm"
                     max={2}
                     min={0}
-                    onBlur={() => clearTaskEdit(key)}
+                    onBlur={() => {
+                      clearTaskEdit(key);
+                    }}
                     onChange={(event) => {
                       setTaskEdit(key, event.target.value);
                       c.setTaskTemperature(key, event.target.value);

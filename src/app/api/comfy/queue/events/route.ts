@@ -1,4 +1,5 @@
 import { subscribeQueueChanged } from "~/lib/comfyui/queue-signal.server";
+import { createSseResponse } from "~/app/api/sse-stream";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,72 +13,20 @@ export const dynamic = "force-dynamic";
  *   · 之后只在 `queue-signal.server` 的 diff 循环检出变化时推一帧；
  *   · `: hb` 注释行每 15s 一次保活（口径同 liveness：远小于常见代理超时）。
  *
+ * 帧头 / 心跳 / 关闭收尾三条在 `~/app/api/sse-stream`（与 `/api/comfy/liveness`
+ * 共用同一份，两处各抄一遍曾是 §12.12 的孪生对）。
+ *
  * 这一格的真相始终由客户端收到事件后去 `/api/comfy/queue` 拉真值（store 内部 `pollOnce`），
  * 所以帧里不带负载——队列状态很小，但「事件只负责说『变了』、真值走既有 GET」
  * 让单一数据源（`queue-status.server`）不被拆两份。
  */
 export async function GET(): Promise<Response> {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      let closed = false;
-      let heartbeat: ReturnType<typeof setInterval> | null = null;
-      let unsubscribe: () => void = () => undefined;
-
-      const cleanup = (): void => {
-        if (closed) {
-          return;
-        }
-        closed = true;
-        if (heartbeat !== null) {
-          clearInterval(heartbeat);
-        }
-        unsubscribe();
-        try {
-          controller.close();
-        } catch {
-          /* 流已经关了 —— 忽略 */
-        }
-      };
-
-      const send = (obj: unknown): void => {
-        if (closed) {
-          return;
-        }
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
-        } catch {
-          cleanup();
-        }
-      };
-
-      // 连上先推一帧，让客户端立刻拉一次当前状态（即使还没发生任何变化）。
+  return createSseResponse(({ send, onClose }) => {
+    const notify = (): void => {
       send({ changed: true, at: Date.now() });
-
-      unsubscribe = subscribeQueueChanged(() => send({ changed: true, at: Date.now() }));
-
-      heartbeat = setInterval(() => {
-        if (closed) {
-          return;
-        }
-        try {
-          controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
-        } catch {
-          cleanup();
-        }
-      }, 15_000);
-
-      return cleanup;
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      // 反向代理（若有）按此关闭缓冲，否则帧会攒到连接关闭才到客户端。
-      "X-Accel-Buffering": "no",
-    },
+    };
+    // 连上先推一帧，让客户端立刻拉一次当前状态（即使还没发生任何变化）。
+    notify();
+    onClose(subscribeQueueChanged(notify));
   });
 }

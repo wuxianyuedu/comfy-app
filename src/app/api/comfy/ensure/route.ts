@@ -53,7 +53,9 @@ export async function POST() {
       timeoutMs: ENSURE_WAIT_MS,
       // 自动启动的等待上限按任务路径处理：上传这条链路绝不能无限等，
       // 否则请求挂死、reaper 的启动窗口也会被一起拉长。
-      onLog: (msg) => logger.info(`[comfyui-ensure] ${msg}`),
+      onLog: (msg) => {
+        logger.info(`[comfyui-ensure] ${msg}`);
+      },
     });
     if (r.ok) {
       return NextResponse.json({ ok: true, base: r.base, detail: r.detail });

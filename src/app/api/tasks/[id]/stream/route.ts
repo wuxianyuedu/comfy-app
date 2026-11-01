@@ -23,8 +23,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const stream = new ReadableStream({
     start(controller) {
-      const send = (obj: unknown) =>
+      const send = (obj: unknown) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      };
 
       /* 下面「初始回放」与「数据库轮询」两处共用同一组游标。
        * `lastSent`：已发出的状态快照（相同则不重发 state 帧）。
@@ -60,7 +61,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
             // 终态（FAILED/CANCELLED/ERROR）分支时会立即 settle 并关闭 EventSource，
             // 若把 state 排在日志前面，后续 log 帧会被丢弃，用户只看到「等待日志…」
             // 而看不到失败原因（任务在 SSE 建立前就已终态时必现）。
-            replaySrc.forEach((entry) => send({ type: "log", entry }));
+            replaySrc.forEach((entry) => {
+              send({ type: "log", entry });
+            });
             sentLogCount = replaySrc.length;
             // 把结构化校验错误透出去，好让消费方（CreatePanel）
             // 渲染出精确到字段的列表，而不是 `error` 里那句英文摘要。
@@ -218,7 +221,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           });
       }, 3000);
 
-      req.signal.addEventListener("abort", () => cleanup());
+      req.signal.addEventListener("abort", () => {
+        cleanup();
+      });
     },
   });
 

@@ -113,11 +113,15 @@ export function useSettingsOllama({
       const settle = setTimeout(() => {
         setStatus((prev) => (prev === "checking" ? "down" : prev));
       }, 0);
-      return () => clearTimeout(settle);
+      return () => {
+        clearTimeout(settle);
+      };
     }
     // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     const timer = setTimeout(() => void probeOllama(llmBaseUrl), 0);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [providerIsLocal, llmBaseUrl, probeOllama]);
 
   const startOllama = useCallback(async () => {
