@@ -155,7 +155,7 @@ function collect() {
       // H1：逻辑模块（.ts）反引视图文件（.tsx）。
       // 只认 import/export 语句里的模块说明符——渲染链路（*-render-chain.ts）
       // 里那些 .tsx 是「点击复制路径」的调试用字符串常量，不是依赖。
-      if (/\.ts$/.test(r)) {
+      if (r.endsWith(".ts")) {
         const specs = [
           ...(t.match(/\bimport\s+(?:type\s+)?[^;]*?\bfrom\s*["']([^"']+)["']/g) || []),
           ...(t.match(/\bexport\s+(?:\*|\{[^}]*\})\s*from\s*["']([^"']+)["']/g) || []),

@@ -38,7 +38,7 @@ const REPORT_ONLY = ARGS.has("--report");
 /** 扫描范围: Rusta 壳源码。 */
 const SCAN_DIR = "src-tauri/src";
 const SOURCE_EXT = /\.rs$/;
-const isTestFile = (rel) => rel.includes("/tests/") || /_test\.rs$/.test(rel);
+const isTestFile = (rel) => rel.includes("/tests/") || rel.endsWith("_test.rs");
 
 /** 超过这个行数的函数进「拆分候选」清单。
  *
