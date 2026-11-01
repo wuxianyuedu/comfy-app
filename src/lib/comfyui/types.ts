@@ -44,10 +44,10 @@ export const DEFAULT_PORT_COLOR = "#7C7C8A";
 
 /* 查一个端口的配色；查不到就用默认色。 */
 export function portColor(type: string | undefined | null): string {
-  if (!type) {
-    return DEFAULT_PORT_COLOR;
+  if (type !== undefined && type !== null) {
+    return PORT_COLORS[type] ?? DEFAULT_PORT_COLOR;
   }
-  return PORT_COLORS[type] ?? DEFAULT_PORT_COLOR;
+  return DEFAULT_PORT_COLOR;
 }
 
 /* ── 各节点类型的**输出**类型表。ComfyUI 的 API 通过 /object_info 暴露这些，
@@ -423,7 +423,7 @@ const INPUT_TYPES: Record<string, Record<string, string>> = {
  *  实在判断不出时返回 "UNKNOWN" —— 渲染器那时画一个通用灰点。 */
 export function inferInputType(classType: string, inputName: string, value?: unknown): string {
   const fromTable = INPUT_TYPES[classType]?.[inputName];
-  if (fromTable) {
+  if (fromTable !== undefined) {
     return fromTable;
   }
   if (value !== undefined) {
@@ -598,7 +598,7 @@ export function inferIsMultiline(
 /* 给定一条连线的目标端，结合「源节点类型 + 槽位」返回源侧提供的**输出**类型。
  *  用于给连线着色，以及连接行右侧那个小类型标签。 */
 export function edgeType(srcClass: string | undefined, srcSlot: number): string {
-  if (!srcClass) {
+  if (srcClass === undefined) {
     return "UNKNOWN";
   }
   return inferOutputType(srcClass, srcSlot);

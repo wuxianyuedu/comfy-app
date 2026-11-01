@@ -98,7 +98,7 @@ function callerLoc(): string {
   try {
     const stack = new Error().stack;
 
-    if (!stack) {
+    if (stack === undefined) {
       return "";
     }
 
@@ -107,7 +107,7 @@ function callerLoc(): string {
     // 栈的形状：lines[0] 是 "Error"，lines[1] 是 " at log (…)"，lines[2] 才是真正的调用方。
 
     // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-    const frame = lines[2] || lines[1] || "";
+    const frame = lines[2] || lines[1] || ""; // oxlint-disable-line strict-boolean-expressions -- 取第一个非空栈帧：空串与 undefined 同义，这里必须保留「真值回退」，不能换成 ??
 
     const match = /\(([^():]+):(\d+):(\d+)\)/.exec(frame);
 
@@ -442,7 +442,7 @@ export function forgetTaskFootprint(taskId: string, promptId?: string): void {
   /* 手里有 promptId 就按它删（调用点那一格），再整表反查一遍兜底：
    * 本进程同时在飞最多 1 条（MAX_CONCURRENCY），扫不出性能问题，
    * 却能保证「摘干净」这句话没有例外 —— 传空串的那些路径（提交前就崩）靠的就是反查。 */
-  if (promptId && s.promptToTask.get(promptId) === taskId) {
+  if (promptId !== undefined && promptId !== "" && s.promptToTask.get(promptId) === taskId) {
     s.promptToTask.delete(promptId);
   }
   for (const [known, owner] of s.promptToTask) {

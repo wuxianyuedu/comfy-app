@@ -64,7 +64,8 @@ export function friendlyError(raw: unknown): string {
     //（例如 `{ data: { exception_message: "..." } }`）。
     for (const k of ["data", "exception", "exception_payload"]) {
       const inner = o[k];
-      if (inner && typeof inner === "object") {
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      if (inner != null && typeof inner === "object") {
         const innerText = friendlyError(inner);
         if (innerText.trim()) {
           return innerText;

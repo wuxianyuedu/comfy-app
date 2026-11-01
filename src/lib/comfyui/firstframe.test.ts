@@ -60,9 +60,10 @@ const opts = {
 const succeeded = (localPath: string | null): ProgressRow => ({
   status: "SUCCEEDED",
   progress: 100,
-  resultImages: localPath
-    ? [{ localPath, mediaType: "image" }]
-    : [{ localPath: "/api/generated/ff-task/vid_0.mp4", mediaType: "video" }],
+  resultImages:
+    localPath !== null
+      ? [{ localPath, mediaType: "image" }]
+      : [{ localPath: "/api/generated/ff-task/vid_0.mp4", mediaType: "video" }],
   error: null,
 });
 

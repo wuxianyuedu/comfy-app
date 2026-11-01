@@ -120,7 +120,7 @@ function reconcileOptionValue(value: unknown, options: Array<string> | undefined
       const candidate = optionRatio(option);
       return candidate !== null && Math.abs(candidate - ratio) < 1e-6;
     });
-    if (byRatio) {
+    if (byRatio !== undefined) {
       return byRatio;
     }
   }
@@ -182,6 +182,7 @@ export function persistEnrichedWorkflowIO(
 ): Record<string, WorkflowIORawEntry> {
   const out: Record<string, WorkflowIORawEntry> = {};
   for (const [ioKey, v] of Object.entries(workflowIO)) {
+    // oxlint-disable-next-line strict-boolean-expressions -- v 是落库 JSON 记录的值，运行期可能为 null，保留防御判空
     if (!v || typeof v !== "object") {
       continue;
     }
@@ -233,6 +234,7 @@ export async function enrichWorkflowIO(
   const workflowIO: Record<string, WorkflowIOEntry> = {};
 
   for (const [ioKey, v] of Object.entries(workflowIORaw)) {
+    // oxlint-disable-next-line strict-boolean-expressions -- v 是落库 JSON 记录的值，运行期可能为 null，保留防御判空
     if (!v || typeof v !== "object") {
       continue;
     }
@@ -271,6 +273,7 @@ export async function enrichWorkflowIO(
       );
       const dicts: Array<Record<string, unknown>> = [rawInputsById, metaById, graph];
       for (const dict of dicts) {
+        // oxlint-disable-next-line strict-boolean-expressions -- dicts 成员（rawInputsById / graph 等）源于外部 JSON 记录，同域 graph 参数存在可空调用形态，保留防御判空
         if (!dict) {
           continue;
         }
@@ -282,6 +285,7 @@ export async function enrichWorkflowIO(
        * 一个词边界字符（`-`），这样 `9b9009e4` 永远不会
        * 因此不会与 `9b9009e44` 相撞。 */
       for (const dict of dicts) {
+        // oxlint-disable-next-line strict-boolean-expressions -- dicts 成员（rawInputsById / graph 等）源于外部 JSON 记录，同域 graph 参数存在可空调用形态，保留防御判空
         if (!dict) {
           continue;
         }
@@ -289,7 +293,7 @@ export async function enrichWorkflowIO(
           (key) =>
             key.length > full.length && key.startsWith(full) && key.charAt(full.length) === "-",
         );
-        if (hit) {
+        if (hit !== undefined) {
           return hit;
         }
       }

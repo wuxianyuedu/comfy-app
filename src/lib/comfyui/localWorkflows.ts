@@ -239,7 +239,7 @@ export async function scanLocalWorkflowRoots(
   rawPaths: Array<string>,
   opts: { recursive?: boolean } = {},
 ): Promise<{ allFiles: Array<LocalWorkflowFile>; roots: Array<ScannedRoot> }> {
-  const recursive = !!opts.recursive;
+  const recursive = Boolean(opts.recursive);
   const allFiles: Array<LocalWorkflowFile> = [];
   const trimmedPaths = rawPaths.map((raw) => raw.trim()).filter((trimmed) => trimmed.length > 0);
   /* 目录之间并发：同步版是一个目录一个目录地等，总耗时是所有目录之和。 */
@@ -396,7 +396,7 @@ export async function scanLocalWorkflowChecksums(
       const file = allFiles.at(cursor);
       cursor += 1;
 
-      if (!file?.absPath) {
+      if (file === undefined) {
         continue;
       }
 

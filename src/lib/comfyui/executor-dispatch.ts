@@ -159,7 +159,7 @@ export async function claimAndDispatchOnce(options?: {
   }
   const { repo, owner } = resolved;
 
-  if (!options?.skipReadyGate && s.ws?.readyState !== WebSocket.OPEN) {
+  if (options?.skipReadyGate !== true && s.ws?.readyState !== WebSocket.OPEN) {
     // 就绪前不领行；顺手把拉起 ComfyUI 的触发点带起来（原来挂在入队动作上）。
     // 用 fireAndForget 而不是 `void connect()`：连接内部自己会重试，但「兜底通道
     // 之外还抛出来」的那一条要有名字地落一行 warn，而不是变成 unhandled rejection。
@@ -181,7 +181,7 @@ export async function claimAndDispatchOnce(options?: {
     return null;
   }
   const taskId = claimed[0];
-  if (!taskId) {
+  if (taskId === undefined) {
     return null;
   }
 
@@ -205,6 +205,7 @@ export async function claimAndDispatchOnce(options?: {
   );
 
   const row = await repo.findExecJob(taskId);
+  // oxlint-disable-next-line strict-boolean-expressions -- execPayload 是库里读出的外部数据，任何缺值形态（null/undefined/空串）都按「无执行载荷」防御性收口，不许误提交
   if (!row?.execPayload) {
     /* 行没有执行载荷 = 建行异常（或本刀之前的历史 host 行）。判失败并留可见原因，
      * 不许变 RUNNING 僵尸——host 片的 reaper 是这条的兜底，主动收口更快也更准。 */
@@ -225,7 +226,7 @@ export async function claimAndDispatchOnce(options?: {
   /* 完整输入参数入日志（原 `processQueue` 里那条）：任务日志是复现与排障的唯一
    * 现场，本次提交的 workflowInputs 全量进日志，执行面板与历史回放都能看到
    * 当时到底填了什么。 */
-  if (job.overrides?.length) {
+  if (job.overrides !== undefined && job.overrides.length > 0) {
     log(
       taskId,
       "info",

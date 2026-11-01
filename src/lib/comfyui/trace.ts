@@ -135,7 +135,7 @@ export function trace(
     // 动态 import 尚未落地 / 纯 Node 未 configure → 静默 skip。
     // 与「trace 是诊断通道、绝不因写入失败崩业务」的原契约一致。
     const tracePath = traceLogPathRef;
-    if (!tracePath) {
+    if (tracePath === null) {
       return;
     }
     const dir = path.dirname(tracePath);
@@ -224,7 +224,7 @@ export function historyTraceSummary(
     outputNodeCount: Object.keys(outputs).length,
     ...(typeof status.status_str === "string" ? { statusStr: status.status_str } : {}),
     ...(typeof status.completed === "boolean" ? { completed: status.completed } : {}),
-    ...(executionError ? { executionError } : {}),
+    ...(executionError === undefined ? {} : { executionError }),
   };
 }
 
@@ -241,12 +241,16 @@ export function historyOutputKeys(
     /* SAFETY: 类型断言已复核 */
     hist && promptId ? (hist[promptId] as Record<string, unknown> | undefined) : undefined;
   const outputs = entry?.outputs;
-  if (!outputs || typeof outputs !== "object") {
+  if (typeof outputs !== "object" || outputs === null) {
     return [];
   }
   return Object.entries(outputs).map(([nodeId, v]) => ({
     nodeId,
-    keys: v && typeof v === "object" ? Object.keys(/* SAFETY: 类型断言已复核 */ v as object) : [],
+    keys:
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      v != null && typeof v === "object"
+        ? Object.keys(/* SAFETY: 类型断言已复核 */ v as object)
+        : [],
   }));
 }
 
@@ -267,7 +271,8 @@ export function queueTraceSummary(qd: unknown): {
         if (typeof it[1] === "string" && it[1]) {
           ids.push(it[1]);
         }
-      } else if (it && typeof it === "object") {
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      } else if (it != null && typeof it === "object") {
         const id = /* SAFETY: 类型断言已复核 */ (it as { prompt_id?: unknown }).prompt_id;
         if (typeof id === "string" && id) {
           ids.push(id);

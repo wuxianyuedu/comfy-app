@@ -93,7 +93,7 @@ export function extractValidationErrors(
   const isListCarrier =
     Array.isArray(res) &&
     res.some((r: unknown): boolean => {
-      if (!r || typeof r !== "object") {
+      if (typeof r !== "object" || r === null) {
         return false;
       }
       const rec = /* SAFETY: 类型断言已复核 */ r as Record<string, unknown>;
@@ -101,15 +101,17 @@ export function extractValidationErrors(
       // eslint 的 prefer-nullish-coalescing 在这里给的是误报，故就地豁免。
       return (
         // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-        !!(rec.node_id || rec.class_type || rec.input_errors || rec.message)
+        !!(rec.node_id || rec.class_type || rec.input_errors || rec.message) // oxlint-disable-line strict-boolean-expressions -- 字段可能为空串：有意按「任意真值」判，与上面的 `||` 豁免同因
       );
     });
   if (
+    // oxlint-disable-next-line strict-boolean-expressions -- ne 是外部 JSON 的任意值，结构不保证，「有没有内容」按任意真值判
     (!ne || (Array.isArray(ne) ? ne.length === 0 : Object.keys(ne).length === 0)) &&
     isListCarrier
   ) {
     ne = res;
   }
+  // oxlint-disable-next-line strict-boolean-expressions -- 同上：ne 形状来自外部，「没内容」按任意真值判
   if (!ne) {
     return [];
   }
@@ -134,7 +136,8 @@ export function extractValidationErrors(
       (typeof graphClass === "string" ? graphClass : undefined) ??
       "";
     const inputErrors = errRec?.input_errors;
-    if (inputErrors && typeof inputErrors === "object") {
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    if (inputErrors != null && typeof inputErrors === "object") {
       for (const [field, v] of Object.entries(
         /* SAFETY: 类型断言已复核 */ inputErrors as Record<string, unknown>,
       )) {
@@ -151,7 +154,8 @@ export function extractValidationErrors(
       out.push({ nodeId: nid, classType, field: "", message: errRec.message });
     } else if (typeof err === "string") {
       out.push({ nodeId: nid, classType, field: "", message: err });
-    } else if (err && typeof err === "object") {
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    } else if (err != null && typeof err === "object") {
       // 未知的结构化形状 —— 尽力序列化出来，绝不把信息丢掉。
       out.push({
         nodeId: nid,
@@ -170,7 +174,8 @@ export function extractValidationErrors(
 export function parseValidationErrors(
   raw: string | null | undefined,
 ): Array<ValidationError> | null {
-  if (!raw) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (raw == null || raw === "") {
     return null;
   }
   try {

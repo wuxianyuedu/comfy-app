@@ -40,7 +40,7 @@ export async function probeComfyAtPort(port: number): Promise<string | null> {
    * 端口」与要连的地址根本不是一回事——把远端主机的端口换成本机端口会直接
    * 探错地方。这种情况下返回 null，交给调用方走通用探测（它会尊重
    * COMFYUI_BASE）。 */
-  if (process.env.COMFYUI_BASE) {
+  if (process.env.COMFYUI_BASE !== undefined && process.env.COMFYUI_BASE !== "") {
     return null;
   }
   return probeBaseOnce(comfyUiBaseUrl(port));

@@ -227,6 +227,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
     return out;
   }
   for (const n of raw.nodes) {
+    // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 nodes 数组元素运行期可能为 null，保留防御判空
     if (n && Array.isArray(n.pos) && n.pos.length >= 2) {
       const id = String(n.id);
       out[id] = [Number(n.pos[0]) || 0, Number(n.pos[1]) || 0];
@@ -247,6 +248,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
   const subs = raw.definitions?.subgraphs;
   if (subs && typeof subs === "object") {
     for (const wrapper of raw.nodes) {
+      // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 nodes 数组元素运行期可能为 null，保留防御判空
       if (!wrapper || typeof wrapper.type !== "string") {
         continue;
       }
@@ -266,6 +268,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
         continue;
       }
       for (const inner of innerNodes) {
+        // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的子图内部 nodes 数组元素运行期可能为 null，保留防御判空
         if (inner && Array.isArray(inner.pos) && inner.pos.length >= 2) {
           const iId = String(inner.id);
           out[`${wId}:${iId}`] = [Number(inner.pos[0]) || 0, Number(inner.pos[1]) || 0];
@@ -537,7 +540,7 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> 
       return;
     }
     const { type, options } = readInputSpec(spec);
-    if (!type) {
+    if (type === null || type === "") {
       return;
     }
     // 连接类型的值来自 links，不在 widgets_values 里。

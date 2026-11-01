@@ -55,7 +55,7 @@ export type EnsureFacts = {
  *   4. 未开自动启动 / 未配路径 → 给可行动的提示（不是无声返回）。
  */
 export function decideEnsureLaunch(facts: EnsureFacts): EnsureDecision {
-  if (facts.upBase) {
+  if (facts.upBase !== null) {
     return { kind: "already-up", base: facts.upBase };
   }
   if (!facts.manual && facts.manualStop) {
@@ -103,6 +103,7 @@ export type SpawnArgsFacts = {
  */
 export function buildSpawnArgs(facts: SpawnArgsFacts): Array<string> {
   const port =
+    // oxlint-disable-next-line strict-boolean-expressions -- 「0 = 未配置」端口契约判据（scripts/check-comfyui-port-contract.cjs）钉死此形状：0 与 undefined 同为「未配置」，都落 defaultPort
     facts.effectivePort && facts.effectivePort > 0 ? facts.effectivePort : facts.defaultPort;
   const args = [...facts.baseArgs];
   if (port !== facts.defaultPort) {
@@ -162,7 +163,7 @@ export function extractMissingModule(outputLines: Array<string>): string | null 
  */
 export function buildEarlyExitDetail(outputLines: Array<string>): string {
   const missing = extractMissingModule(outputLines);
-  if (missing) {
+  if (missing !== null) {
     return `ComfyUI 进程启动后立即退出：解释器缺少依赖（No module named '${missing}'）——请确认 comfyuiPath 指向装了依赖的环境，或为该环境安装依赖（详见 log/services/comfyui-runtime.log）`;
   }
   return "ComfyUI 进程启动后立即退出，详见 log/services/comfyui-runtime.log";
@@ -204,7 +205,7 @@ export function diagnoseComfyStartupFailure(outputLines: Array<string>): string 
     );
   }
   const missing = extractMissingModule(outputLines);
-  if (missing) {
+  if (missing !== null) {
     return (
       `解释器缺少依赖（No module named '${missing}'）——请确认 comfyuiPath ` +
       "指向装了依赖的环境，或为该环境安装依赖"
@@ -243,7 +244,7 @@ export type StopDecision =
  * 孤儿也必须关得掉）。只有「在跑但按配置路径定位不到 PID」才交给用户。
  */
 export function decideStop(facts: StopFacts): StopDecision {
-  if (facts.pid) {
+  if (facts.pid !== null) {
     return {
       kind: "kill",
       pid: facts.pid,
@@ -417,7 +418,7 @@ export function deriveComfyUiStatus(facts: ComfyStatusFacts): ComfyStatusVerdict
   const fallbackPid = facts.fallbackPid;
 
   // 1) HTTP 通了：能立刻用（base 用探测到的真实地址，可能带端口偏移）。
-  if (probe) {
+  if (probe !== null) {
     return {
       up: true,
       base: probe,
@@ -432,7 +433,7 @@ export function deriveComfyUiStatus(facts: ComfyStatusFacts): ComfyStatusVerdict
 
   // 2) 进程活着且已绑定端口：/system_stats 短暂不响应也算运行中。
   const port = snap.port ?? null;
-  if (snap.running && port) {
+  if (snap.running && port !== null) {
     return {
       up: true,
       base: comfyUiBaseUrl(port),

@@ -99,7 +99,8 @@ function collectProxyWidgetPairs(raw: unknown): Array<{ slot?: string; target: [
     }
     return pairs;
   }
-  if (raw && typeof raw === "object") {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (raw != null && typeof raw === "object") {
     for (const [slot, value] of Object.entries(
       /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>,
     )) {
@@ -208,7 +209,7 @@ async function enrichSubgraphProxyWidgets(input: {
       /* control_after_generate 永远紧跟在 seed 的**下一个**槽位。 */
       if (fieldName === "control_after_generate") {
         const seedIdx = inputs.findIndex(
-          (i) => !!i && (i.name === "seed" || i.name === "noise_seed"),
+          (i) => Boolean(i) && (i.name === "seed" || i.name === "noise_seed"),
         );
         if (seedIdx === -1) {
           return undefined;
@@ -333,7 +334,10 @@ async function enrichSubgraphProxyWidgets(input: {
           if (typeof inp?.type === "string") {
             updated.type = inp.type;
           }
-          if (!updated.label && typeof inp?.localized_name === "string") {
+          if (
+            (updated.label === undefined || updated.label === "") &&
+            typeof inp?.localized_name === "string"
+          ) {
             updated.label = inp.localized_name;
           }
           /* 记录内部真实字段（业务名的唯一来源）。wrapper 本层槽位名是
@@ -364,7 +368,7 @@ async function enrichSubgraphProxyWidgets(input: {
        *  槽位名只是别名。必须排在下面的 COMBO 趟之前：那一趟会把
        *  `__comboClass` / `__comboField` 临时字段删掉。 */
       for (const e of updatedList) {
-        if (e.type !== "STRING" || e.multiline) {
+        if (e.type !== "STRING" || e.multiline === true) {
           continue;
         }
         const declared = await multilineForClassField(
@@ -380,7 +384,7 @@ async function enrichSubgraphProxyWidgets(input: {
        *  其余一律不动。ComfyUI 不可达时，这些临时字段直接丢掉，
        *  消费方回落到普通文本控件。 */
       for (const e of updatedList) {
-        if (e.type === "COMBO" && e.__comboClass) {
+        if (e.type === "COMBO" && Boolean(e.__comboClass)) {
           const opts = await comboOptionsForClassField(e.__comboClass, e.__comboField ?? "");
           if (opts) {
             e.comboOptions = opts;
@@ -423,12 +427,13 @@ function subgraphAuthorLabelsByUid(
       )
     : Object.entries(subgraphs);
   for (const [key, subDef] of subgraphEntries) {
+    // oxlint-disable-next-line strict-boolean-expressions -- subDef 来自外部 JSON（数组元素类型收窄不保证运行期非 null），防御性判空
     if (!subDef || !Array.isArray(subDef.inputs)) {
       continue;
     }
     const table: Record<string, string> = {};
     for (const pinRaw of subDef.inputs) {
-      if (!pinRaw || typeof pinRaw !== "object") {
+      if (typeof pinRaw !== "object" || pinRaw === null) {
         continue;
       }
       const pin = /* SAFETY: 类型断言已复核 */ pinRaw as Record<string, unknown>;
@@ -493,6 +498,7 @@ export async function buildRawInputs(
   const subgraphAuthorLabels = subgraphAuthorLabelsByUid(raw);
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
+      // oxlint-disable-next-line strict-boolean-expressions -- nodes 元素来自外部 JSON，运行期可能是 null/undefined（类型收窄不覆盖），防御性判空
       if (!rn) {
         continue;
       }
@@ -518,12 +524,13 @@ export async function buildRawInputs(
       const legacyByName = new Map<string, unknown>();
       let widgetCounter = 0;
       for (const inp of rn.inputs) {
+        // oxlint-disable-next-line strict-boolean-expressions -- inputs 元素来自外部 JSON，运行期可能是 null/undefined（类型收窄不覆盖），防御性判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
         const widgetName =
           inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
-        if (!widgetName || widgetCounter >= rnWidgets.length) {
+        if (widgetName === undefined || widgetName === "" || widgetCounter >= rnWidgets.length) {
           continue;
         }
         legacyByName.set(widgetName, rnWidgets[widgetCounter]);
@@ -562,6 +569,7 @@ export async function buildRawInputs(
       const usedWidgetNames = new Set<string>();
 
       for (const inp of rn.inputs) {
+        // oxlint-disable-next-line strict-boolean-expressions -- inputs 元素来自外部 JSON，运行期可能是 null/undefined（类型收窄不覆盖），防御性判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
@@ -576,7 +584,7 @@ export async function buildRawInputs(
         const widgetName =
           inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         let widgetValue: unknown = undefined;
-        if (widgetName) {
+        if (widgetName !== undefined && widgetName !== "") {
           usedWidgetNames.add(widgetName);
           if (valueByName.has(widgetName)) {
             widgetValue = valueByName.get(widgetName);
@@ -603,7 +611,7 @@ export async function buildRawInputs(
           type: typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
           isConnection: isConn,
         };
-        if (widgetName) {
+        if (widgetName !== undefined && widgetName !== "") {
           entry.widget = { name: widgetName };
         }
         if (widgetValue !== undefined) {
@@ -676,7 +684,7 @@ export async function buildRawInputs(
        *        * 专属的 `preview: true` 标记会被渲染器的 connEntries / widgetEntries
        *        * 过滤器检查，因此这条条目永远不会落进端口行或 widget 控件清单。 */
       if (LOAD_IMAGE_NODE_TYPES.has(typeof rn.type === "string" ? rn.type : "")) {
-        if (!list.some((list) => list.preview)) {
+        if (!list.some((list) => list.preview === true)) {
           const wv0 = rn.widgets_values?.[0];
           const fname = typeof wv0 === "string" ? wv0.trim() : "";
           list.push({

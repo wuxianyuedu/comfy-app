@@ -244,7 +244,7 @@ export async function executeViaComfyCli(job: Job) {
    * 模型」必须能直接从面板读到，不必去翻 trace 或工作流文件。识别不出
    * （图里没有主模型加载节点）就不打这一行，别用占位文案添噪。 */
   const modelName = primaryModelName(patched);
-  if (modelName) {
+  if (modelName !== null) {
     log(taskId, "info", `使用模型：${modelName}`);
   }
 

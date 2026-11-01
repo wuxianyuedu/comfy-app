@@ -60,7 +60,7 @@ function isLinkRef(v: unknown, graph: Record<string, unknown>): v is [string | n
     v.length === 2 &&
     typeof v[1] === "number" &&
     (typeof v[0] === "string" || typeof v[0] === "number") &&
-    !!graph[String(v[0])]
+    Boolean(graph[String(v[0])])
   );
 }
 
@@ -141,7 +141,7 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     const seen = new Set<string>();
     const candidates: Array<string> = [];
     const sameSlot = order[originSlot];
-    if (sameSlot) {
+    if (sameSlot !== undefined && sameSlot !== "") {
       candidates.push(sameSlot);
       seen.add(sameSlot);
     }
@@ -162,7 +162,8 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
 
       const typeOfNm = types[nm];
       if (
-        wanted &&
+        wanted !== undefined &&
+        wanted !== "" &&
         typeof typeOfNm === "string" &&
         typeOfNm.toUpperCase() !== wanted.toUpperCase()
       ) {
@@ -208,7 +209,7 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
     out[id] = {
       class_type: n.classType,
       inputs,
-      ...(title ? { _meta: { title } } : {}),
+      ...(title !== undefined && title !== "" ? { _meta: { title } } : {}),
     };
   }
 

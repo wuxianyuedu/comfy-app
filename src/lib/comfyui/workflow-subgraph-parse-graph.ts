@@ -232,6 +232,7 @@ export function parseSubgraphSlots(
 
   const innerNodes: Array<RawNode> = Array.isArray(sub.nodes) ? sub.nodes : [];
   for (const rn of innerNodes) {
+    // oxlint-disable-next-line strict-boolean-expressions -- rn.id 是外部 JSON 的 string|number，按「非空真值」判有无（0/空串视为无 id）
     if (!rn?.id) {
       continue;
     }
@@ -382,13 +383,14 @@ export function buildSubgraphGraph(
       }
       const slotNames: Array<string> | undefined = inputNameByNodeSlot[lk.targetId];
       const slotName = slotNames?.[lk.targetSlot];
-      if (slotName) {
+      if (slotName !== undefined && slotName !== "") {
         proxyAuthorLabels[`${lk.targetId}::${slotName}`] = authorLabel;
       }
     }
   }
 
   for (const rn of innerNodes) {
+    // oxlint-disable-next-line strict-boolean-expressions -- rn.id 是外部 JSON 的 string|number，按「非空真值」判有无（0/空串视为无 id）
     if (!rn?.id) {
       continue;
     }
@@ -417,6 +419,7 @@ export function buildSubgraphGraph(
        *  而不是空白行或错位行。 */
       const wvMap = pairWidgetValues(rn.inputs, rnWidgets);
       for (const inp of rn.inputs) {
+        // oxlint-disable-next-line strict-boolean-expressions -- inputs 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
@@ -424,7 +427,8 @@ export function buildSubgraphGraph(
         const isConn = inp.link != null;
         const widgetName =
           inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
-        const widgetValue = widgetName ? wvMap[widgetName] : undefined;
+        const widgetValue =
+          widgetName !== undefined && widgetName !== "" ? wvMap[widgetName] : undefined;
         const entry: RawInputEntry = {
           name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
@@ -436,7 +440,7 @@ export function buildSubgraphGraph(
           isConnection: isConn,
           isBoundary: false, // set later if needed
         };
-        if (widgetName) {
+        if (widgetName !== undefined && widgetName !== "") {
           entry.widget = { name: widgetName };
         }
         if (widgetValue !== undefined) {
@@ -495,9 +499,8 @@ export function buildSubgraphGraph(
           } else {
             /* 非哨兵的输入连线 —— 把源中间节点 id 记进 `connects_from`
              *  （OUTPUT 端点定位助手要用）。只保留**第一个**非哨兵源，
-             *  定位结果才确定。 */
-            // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 需保留 first-truthy 语义（空串也视为未设置）
-            if (!connectsFromByNode[nodeId]) {
+             *  定位结果才确定。空串也视为未设置。 */
+            if (connectsFromByNode[nodeId] === undefined || connectsFromByNode[nodeId] === "") {
               connectsFromByNode[nodeId] = lk?.src ?? "";
             }
           }
@@ -524,6 +527,7 @@ export function buildSubgraphGraph(
     const rawOutputs: Array<RawOutputEntry> = [];
     if (Array.isArray(rn.outputs)) {
       for (const o of rn.outputs) {
+        // oxlint-disable-next-line strict-boolean-expressions -- outputs 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
         if (!o || typeof o.name !== "string") {
           continue;
         }
@@ -547,7 +551,13 @@ export function buildSubgraphGraph(
             }
             /* 非哨兵目标 → 把第一个记成 `connects_to`
              *  （INPUT 端点定位助手要用）。 */
-            if (target && target !== "-10" && target !== "-20" && !connectsToByNode[nodeId]) {
+            if (
+              target !== undefined &&
+              target !== "" &&
+              target !== "-10" &&
+              target !== "-20" &&
+              (connectsToByNode[nodeId] === undefined || connectsToByNode[nodeId] === "")
+            ) {
               connectsToByNode[nodeId] = target;
             }
           }
@@ -575,7 +585,7 @@ export function buildSubgraphGraph(
        *  `preview: true` 标记，因此这条条目永远不会出现在端口行或
        *  widget 控件清单里 —— 只有 <WorkflowImagePreview> 消费它。 */
       if (LOAD_IMAGE_NODE_TYPES.has(classType)) {
-        if (!rawInputs.some((rawInput) => rawInput.preview)) {
+        if (!rawInputs.some((rawInput) => rawInput.preview === true)) {
           const wv0 = rn.widgets_values?.[0];
           const fname = typeof wv0 === "string" ? wv0.trim() : "";
           rawInputs.push({

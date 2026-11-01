@@ -218,22 +218,22 @@ export async function stopComfyUiProcess(): Promise<{
   // findPidForMainPy 以 null 表示「未找到」，与 child?.pid 的 undefined 归一
   let pid: number | null = child?.pid ?? null;
   const stillUp = await probeComfyUi(1500);
-  if (!pid && stillUp && !("error" in plan)) {
+  if (pid === null && stillUp !== null && !("error" in plan)) {
     pid = await findPidForMainPy(plan.mainPy);
-    if (pid) {
+    if (pid !== null) {
       child = undefined;
     } // 无句柄，仅用定位到的 PID
   }
   const stopDecision = decideStop({
     hasChild: !!child,
     pid,
-    stillUp: !!stillUp,
+    stillUp: stillUp !== null,
   });
   if (stopDecision.kind !== "kill") {
     // 目标已经不在了：立刻清「关闭中」标记，不留无意义的进行态窗口。
     if (
       shouldClearStoppingOnStopMiss({
-        stillUp: !!stillUp,
+        stillUp: stillUp !== null,
         starting: isComfyStarting(),
       })
     ) {
@@ -276,7 +276,7 @@ export async function stopComfyUiProcess(): Promise<{
     await sleep(COMFY_STOP_PROBE.baseMs);
     const probe = await probeComfyUi(800);
     stopProbes.push(probe);
-    if (!probe) {
+    if (probe === null) {
       break;
     }
   }
@@ -305,14 +305,14 @@ export async function stopComfyUiProcess(): Promise<{
 }
 
 export function isComfyStarting(): boolean {
-  return !!st.starting;
+  return st.starting !== undefined;
 }
 
 /** 自动启动是否已被闩锁抑制（用户手动关闭过 / 上次自动启动已失败）。
  *  WS 层据此决定「还要不要继续安排重连」——被抑制时重连只是空转
  *  （每轮都是探测失败 → 讨要启动 → 被拦下），徒增日志与请求（ISSUE #335）。 */
 export function isComfyAutoStartSuppressed(): boolean {
-  return !!st.manualStop || !!st.autoStartFailed;
+  return st.manualStop === true || st.autoStartFailed === true;
 }
 
 /** 「启动流程进行中」窗口是否仍然生效（见 COMFY_STARTING_WINDOW_MS）。 */
@@ -442,7 +442,7 @@ export async function getComfyUiStatus(opts: { force?: boolean } = {}): Promise<
    * `resetComfyUiStatus()`，不会读到旧结论。 */
   const cs = statusCache();
   const cached = cs.entry;
-  if (!opts.force && cached && Date.now() - cached.at < COMFY_STATUS_TTL_MS) {
+  if (opts.force !== true && cached !== undefined && Date.now() - cached.at < COMFY_STATUS_TTL_MS) {
     /* `starting` / `stopping` **不缓存**：它们是进程内计时器（启动单飞锁、
      * 关闭窗口）驱动的**瞬时**态，会独立于探测结果变化。把「启动中」缓存
      * 十几秒，设置页会在 ComfyUI 已经起来之后仍显示「启动中…」——这正是
@@ -506,14 +506,14 @@ async function computeComfyUiStatus(): Promise<ComfyUiStatus> {
    * 从「配置端口 / 偏移端口」上发现同一个实例（快照的端口是 PID 的监听端口，
    * 正常情况下两者一致，退回只是兜底）。 */
   const probe =
-    snap.running && snap.port
+    snap.running && snap.port !== null
       ? ((await probeComfyAtPort(snap.port)) ?? (await probeComfyUi(1500)))
       : await probeComfyUi(1500);
   /* 「启动中」是唯一会自动翻页的结论（进程在、端口还没绑定 → 下一秒端口就出来了），
    * 所以它是唯一必须**当场复核**的结论：拿到的快照说还在启动、HTTP 也没通时，
    * 丢掉这份（可能刚过期的）快照重新取一次事实再判，避免把 5s 轮询里的两次
    * 采样都押在同一份陈旧快照上、让状态行停在「ComfyUI 正在启动…」（ISSUE #344）。 */
-  if (!probe && snap.running && snap.port === null) {
+  if (probe === null && snap.running && snap.port === null) {
     const [refreshed, reprobe] = await Promise.all([
       getComfyRuntimeSnapshot({ force: true }),
       probeComfyUi(1500),
@@ -622,7 +622,7 @@ export async function ensureComfyUiReady(
 
   // 用户明确要求拉起 → 状态快照必然过期（进程树即将变化），先失效，
   // 让紧随其后的状态查询看到启动后的新事实而不是旧结论。
-  if (opts.manual) {
+  if (opts.manual === true) {
     resetComfyRuntimeSnapshot();
     resetComfyUiStatus();
     /* 用户明确要求拉起：运行态**从这一刻起**就在变，通知挂在 reset 之后才对
@@ -645,7 +645,7 @@ export async function ensureComfyUiReady(
   // 快路径：已经在运行（探测可能有端口偏移，返回真实 base）
   const upBase = await probeComfyUi();
   warnStaleComfySession(note, upBase !== null);
-  if (upBase) {
+  if (upBase !== null) {
     /* 接管：这个实例不是本次会话拉起的（上一会话的保活实例 / 外部启动），
      * `launchKeepAliveMode` 里的退出监督器不会为它启动。不补上的话，它之后真
      * 没了就只剩状态轮询里的「未运行」——原因一个字都没有，正是「保活莫名
@@ -662,7 +662,7 @@ export async function ensureComfyUiReady(
 
   // 手动启动＝用户明确要求拉起：先清掉两把「自动路径先别动」闩锁，否则上次
   // 手动关闭 / 上次启动失败的小尾巴会把这次明确启动也拦住。
-  if (opts.manual) {
+  if (opts.manual === true) {
     st.manualStop = false;
     clearComfyAutoStartFailure();
   }
@@ -676,7 +676,7 @@ export async function ensureComfyUiReady(
   // 放在判决表之前：这里要的是「原样回报上次的失败详情」，而判决表只认识
   // 「有没有闩锁」——把「上次失败因为保活进程已退出」这类可行动的原因换成
   // 一句泛泛的「未开启自动启动」，用户会对着错误的原因改设置。
-  if (!opts.manual && st.autoStartFailed) {
+  if (opts.manual !== true && st.autoStartFailed === true) {
     const last = st.autoStartFailureDetail ?? "未知原因";
     note(`上次自动启动已失败，跳过自动重试：${last}`);
     return { ok: false, base: null, detail: last };
@@ -689,8 +689,8 @@ export async function ensureComfyUiReady(
    * （ISSUE #335，需要原样回报失败原因），故没有并入判决表。 */
   const decision = decideEnsureLaunch({
     upBase,
-    manual: !!opts.manual,
-    manualStop: !!st.manualStop,
+    manual: opts.manual === true,
+    manualStop: st.manualStop === true,
     autoStart: !!settings.comfyuiAutoStart,
     comfyuiPath: settings.comfyuiPath ?? "",
   });
@@ -759,7 +759,7 @@ export async function ensureComfyUiReady(
      * 直到用户手动启动或重新开启自动启动（ISSUE #335）。只对「明确失败」落锁
      * （见 isTerminalAutoStartFailure）——「已经在运行」「未开启自动启动」这类
      * 结果不该把后续重试永久钉死。手动启动自己不算自动启动，不落锁。 */
-    if (!opts.manual && !r.ok && isTerminalAutoStartFailure(r.detail)) {
+    if (opts.manual !== true && !r.ok && isTerminalAutoStartFailure(r.detail)) {
       st.autoStartFailed = true;
       st.autoStartFailureDetail = r.detail;
     }
@@ -781,7 +781,7 @@ export async function ensureComfyUiReady(
  */
 export async function openComfyUi(): Promise<{ detail: string; ok: boolean }> {
   const base = await probeComfyUi(2000);
-  if (!base) {
+  if (base === null) {
     return {
       ok: false,
       detail: "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",

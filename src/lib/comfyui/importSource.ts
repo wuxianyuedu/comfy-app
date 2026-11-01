@@ -92,7 +92,7 @@ export async function parseWorkflowContent(
   } catch {
     throw new Error("JSON 解析失败，请检查文件内容是否为有效的 ComfyUI 工作流 JSON");
   }
-  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate)) {
     throw new Error("不是有效的工作流 JSON（根节点应为对象）");
   }
 

@@ -89,7 +89,7 @@ export function createObjectInfoResolvers(): {
     classType: string | undefined,
     field: string,
   ): Promise<unknown> => {
-    if (!classType) {
+    if (classType === undefined || classType === "") {
       return undefined;
     }
     const oi = await ensureObjectInfo();

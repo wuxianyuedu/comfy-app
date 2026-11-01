@@ -30,13 +30,14 @@ import { rawUiNodeType } from "./raw-overrides";
  * @param nodeId WS 帧里的节点 id（`String(...)` 之后传进来）
  */
 export function classTypeForNode(graph: unknown, nodeId: string): string | undefined {
-  if (!graph || typeof graph !== "object" || !nodeId) {
+  if (typeof graph !== "object" || graph === null || !nodeId) {
     return undefined;
   }
 
   // API 形状优先：这一支不需要遍历，是 O(1) 的按键取。
   const apiNode = /* SAFETY: 类型断言已复核 */ (graph as Record<string, unknown>)[nodeId];
-  if (apiNode && typeof apiNode === "object") {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (apiNode != null && typeof apiNode === "object") {
     const classType = /* SAFETY: 类型断言已复核 */ (apiNode as Record<string, unknown>).class_type;
     if (typeof classType === "string" && classType) {
       return classType;

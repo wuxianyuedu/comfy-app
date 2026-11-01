@@ -36,7 +36,7 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
   const others: Array<CollectedOutputFile> = [];
   const texts: Array<string> = [];
   for (const nodeOut of Object.values(outputs)) {
-    if (!nodeOut || typeof nodeOut !== "object") {
+    if (typeof nodeOut !== "object" || nodeOut === null) {
       continue;
     }
     const node = /* SAFETY: 类型断言已复核 */ nodeOut as Record<string, unknown>;
@@ -79,7 +79,8 @@ export function collectOutputs(outputs: Record<string, unknown>): CollectedOutpu
         v.length &&
         v.every(
           (it) =>
-            it &&
+            // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+            it != null &&
             typeof it === "object" &&
             typeof (/* SAFETY: 类型断言已复核 */ (it as Record<string, unknown>).filename) ===
               "string",
@@ -183,7 +184,7 @@ export function extractRuntimeParams(entry: unknown): RuntimeParams {
   const graphRaw = /* SAFETY: 类型断言已复核 */ (
     prompt as Record<string, unknown> | null | undefined
   )?.[2];
-  if (!graphRaw || typeof graphRaw !== "object") {
+  if (typeof graphRaw !== "object" || graphRaw === null) {
     return out;
   }
   const graph = /* SAFETY: 类型断言已复核 */ graphRaw as Record<string, unknown>;

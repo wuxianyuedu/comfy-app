@@ -76,7 +76,7 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
   // ① 配置路径的 main.py：进程表命中即「在跑」（不要求 HTTP 已就绪）。
   if (!("error" in plan)) {
     const lookup = await findPidForMainPyDetailed(plan.mainPy);
-    if (lookup.pid) {
+    if (lookup.pid !== null) {
       return withPort(lookup.pid, "process", "配置路径的实例");
     }
     if (lookup.failed) {
@@ -93,7 +93,7 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
     source: InstanceDiscoverySource;
     via: string;
   }> = [];
-  if (registered) {
+  if (registered !== null) {
     candidates.push({
       cmd: registered,
       via: "setup 中登记的启动器",
@@ -127,7 +127,7 @@ export async function queryInstanceByPath(comfyuiPath: string): Promise<Instance
     if (lookup.failed) {
       unverified = true;
     }
-    if (lookup.pid) {
+    if (lookup.pid !== null) {
       return withPort(lookup.pid, candidate.source, candidate.via);
     }
   }
@@ -164,7 +164,7 @@ export function baseForLocalPort(port: number | null): string | null {
   if (port == null || !Number.isInteger(port) || port <= 0 || port > 65_535) {
     return null;
   }
-  if (process.env.COMFYUI_BASE) {
+  if (process.env.COMFYUI_BASE !== undefined && process.env.COMFYUI_BASE !== "") {
     return null;
   }
   return comfyUiBaseUrl(port);

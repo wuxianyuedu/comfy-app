@@ -145,7 +145,7 @@ async function probePort(_host: string, port: number): Promise<boolean> {
  * 依次试：配置端口 → +1 … 到 +PROBE_RANGE。结果缓存到进程生命周期结束。
  */
 export async function resolveComfyBase(): Promise<string> {
-  if (_resolvedBase) {
+  if (_resolvedBase !== null) {
     return _resolvedBase;
   }
 
@@ -187,7 +187,7 @@ export async function resolveComfyBase(): Promise<string> {
     const found = await queryInstanceByPath(comfyuiPath);
     const portBase = baseForLocalPort(found.port);
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    if (found.port != null && portBase) {
+    if (found.port != null && portBase !== null) {
       _resolvedBase = portBase;
       logger.info(
         `[comfyui] Connected to configured instance on :${found.port} (pid=${found.pid}, via=${found.via})`,
@@ -305,7 +305,7 @@ export async function probeComfyBase(): Promise<string | null> {
  * 会改变状态的调用（上传 / 提交 prompt）请用 resolveComfyBase()。
  */
 export function comfyBase(): string {
-  if (_resolvedBase) {
+  if (_resolvedBase !== null) {
     return forceIpv4Host(_resolvedBase);
   }
   const settings = getSettingsSync();

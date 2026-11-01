@@ -244,6 +244,7 @@ async function buildWorkflowDetailJson(input: {
     // （与旧 `n?.class_type || (n?.type as string) || "?"` 逐值等价：
     //  `a || b` ≡ `a ? a : b`，空串同样回退。）
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line strict-boolean-expressions -- n.type 是外部 JSON 任意值：类名按「非空真值」取，空串/缺失/异形回落 "?"（与上方注释的逐值等价口径一致）
     const classType: string = n.class_type ? n.class_type : n.type ? (n.type as string) : "?";
     const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
     /* 子图封装节点（class_type === UUID）的显示名取自
@@ -258,7 +259,7 @@ async function buildWorkflowDetailJson(input: {
       let def = subs[classType];
       if (!def) {
         const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
-        if (matchKey) {
+        if (matchKey !== undefined) {
           def = subs[matchKey];
         }
       }
@@ -363,7 +364,7 @@ async function buildWorkflowDetailJson(input: {
          *  运行期 UI 才能反映、并经 PATCH 切换每个匹配分组的
          *  `flags.bypass`。存在 rawJson 里该分组的 `flags` 对象上 ——
          *  与 ComfyUI 自己的前端读的是同一处。 */
-        bypass: !!asRecord(rec.flags)?.bypass,
+        bypass: Boolean(asRecord(rec.flags)?.bypass),
       });
     });
   }
@@ -373,6 +374,7 @@ async function buildWorkflowDetailJson(input: {
   const notes: Array<WorkflowDetailNote> = [];
   if (raw && Array.isArray(raw.nodes)) {
     raw.nodes.forEach((n) => {
+      // oxlint-disable-next-line strict-boolean-expressions -- nodes 元素来自外部 JSON，运行期可能是 null（类型收窄不覆盖），防御性判空
       if (!n || (n.type !== "Note" && n.type !== "MarkdownNote")) {
         return;
       }
@@ -448,7 +450,7 @@ async function buildWorkflowDetailJson(input: {
     sourceOutdated,
     sourceMissing,
     /** 分类：绑定到磁盘文件时为 "local"，否则 "online"。 */
-    source: sourcePath ? "local" : "online",
+    source: sourcePath !== null ? "local" : "online",
   });
 }
 
@@ -484,7 +486,7 @@ export async function buildWorkflowDetailFull(
    *  绕过，强制从库里现读一份序列化结果。没有它，客户端即使带
    *  cache:"no-store"，仍会从服务端内存里拿到一份已陈旧 60 秒的、预先序列化好的
    *  JSON。这个标记刻意只作为客户端私有 token —— **从不打日志**。 */
-  if (opts.bust) {
+  if (opts.bust === true) {
     cacheDel(cacheKey);
   }
 
@@ -506,7 +508,8 @@ export async function buildWorkflowDetailFull(
   let sourceMissing = false;
   let sourcePath: string | null = null;
   const meta = await workflowTemplateRepository.findSourceMetaForUser(userId, id);
-  if (meta?.sourcePath) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (meta?.sourcePath != null) {
     sourcePath = meta.sourcePath;
     try {
       const stat = fs.statSync(sourcePath);
@@ -542,14 +545,14 @@ export async function buildWorkflowDetailFull(
    *  详情缓存失效），保证两种入口的产物完全一致 —— 不另写一份「自动版导入」，
    *  避免两边判据漂移。写回后把 `sourceOutdated` 翻回 false，否则界面仍挂着
    *  「有更新」提示，而内容其实已经是最新（自相矛盾）。 */
-  if (sourcePath && sourceOutdated && getSettingsSync().autoSyncLocalWorkflow) {
+  if (sourcePath !== null && sourceOutdated && getSettingsSync().autoSyncLocalWorkflow) {
     const reimported = await reimportFromSource({
       sourcePath: tpl.sourcePath ?? "",
       sourceMtime: tpl.sourceMtime,
       sourceChecksum: tpl.sourceChecksum,
       existingTaskType: tpl.taskType,
     });
-    if (!reimported.missing && reimported.update) {
+    if (reimported.missing !== true && reimported.update) {
       /* 先把字段落到内存里的 tpl：下面 buildWorkflowDetailJson 用的是 tpl，
        * 不在这里就地刷新，响应就会是同步前的旧内容（写库成功、界面没变）。 */
       tpl.rawJson = reimported.update.rawJson ?? tpl.rawJson;
@@ -632,7 +635,7 @@ export async function buildSubgraphDetail(
   if (!sub) {
     // 退回按 .id 字段匹配
     const matchUid = Object.keys(subgraphs).find((key) => subgraphs[key]?.id === uid);
-    if (matchUid) {
+    if (matchUid !== undefined) {
       sub = subgraphs[matchUid];
     }
   }
@@ -665,7 +668,7 @@ export async function buildSubgraphDetail(
     for (const [nodeId, entries] of Object.entries(sg.rawInputsById)) {
       const classType = sg.graph[nodeId]?.class_type;
       for (const entry of entries) {
-        if (entry.type !== "STRING" || entry.multiline) {
+        if (entry.type !== "STRING" || entry.multiline === true) {
           continue;
         }
         if (
@@ -684,7 +687,7 @@ export async function buildSubgraphDetail(
     for (const n of sg.nodes) {
       for (const inp of n.raw_inputs ?? []) {
         const authorLabel = sg.proxyAuthorLabels[`${n.id}::${inp.name}`];
-        if (!authorLabel) {
+        if (authorLabel === undefined || authorLabel === "") {
           continue;
         }
         /* 只对「本层槽位名与作者名不同」的暴露口打标；`field` 用槽位名本身，

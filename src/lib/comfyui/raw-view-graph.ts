@@ -128,6 +128,7 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
 
     if (Array.isArray(n.inputs) && n.inputs.length) {
       for (const inp of n.inputs) {
+        // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 inputs 数组元素运行期可能为 null，保留防御判空
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
@@ -169,7 +170,10 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
       raw: n,
       inputs: slots,
       outputTypes: Array.isArray(n.outputs)
-        ? n.outputs.map((output) => (output && typeof output.type === "string" ? output.type : ""))
+        ? n.outputs.map((output) =>
+            // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 outputs 数组元素运行期可能为 null，保留防御判空
+            output && typeof output.type === "string" ? output.type : "",
+          )
         : [],
     });
   }
@@ -211,6 +215,7 @@ export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowN
      * inputTypes/outputTypes 供 `execution-graph` 在提交前穿透旁路节点。 */
     const meta: ApiNodeMeta = {};
     const title = idx.raw.title ?? idx.raw.properties?.title;
+    // oxlint-disable-next-line strict-boolean-expressions -- title 是外部 JSON 的 unknown 值，空串与其它 falsy 形态都要跳过，避免给 _meta.title 写入空标题
     if (title) {
       meta.title = toStringValue(title);
     }
@@ -226,7 +231,7 @@ export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowN
       meta.inputOrder = idx.inputs.map((input) => input.name);
       const types: Record<string, string> = {};
       for (const s of idx.inputs) {
-        if (s.type) {
+        if (s.type !== undefined && s.type !== "") {
           types[s.name] = s.type;
         }
       }

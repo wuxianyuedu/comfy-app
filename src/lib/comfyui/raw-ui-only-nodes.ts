@@ -64,7 +64,7 @@ function pickOutUiOnlyNodes(nodes: Array<unknown>): {
     /* 两种导出形态都认：ComfyUI 新导出走 `type`，部分路径（子图 wrapper）走
      * `class_type`（与 `executor-cli` 里读节点类型同口径）。 */
     const type = strField(node, "type") ?? strField(node, "class_type");
-    if (type && UI_ONLY_NODE_TYPES.has(type)) {
+    if (type !== undefined && type !== "" && UI_ONLY_NODE_TYPES.has(type)) {
       const rawId = node.id;
       if (typeof rawId === "string" || typeof rawId === "number") {
         removedIds.add(String(rawId));
