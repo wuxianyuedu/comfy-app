@@ -209,7 +209,9 @@ function subscribeComfyQueueEvents(onChange: () => void): () => void {
     return () => undefined;
   }
   const es = new EventSource("/api/comfy/queue/events");
-  es.onmessage = () => onChange();
+  es.onmessage = () => {
+    onChange();
+  };
   return () => {
     es.close();
   };

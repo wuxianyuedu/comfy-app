@@ -87,8 +87,12 @@ describe("emitAppEvent / subscribeAppEvent", () => {
       const off = subscribeAppEvent("comfyapp:canvas-sync-changed", () => {
         throw new Error("不该被调用");
       });
-      expect(() => off()).not.toThrow();
-      expect(() => emitAppEvent("comfyapp:canvas-sync-changed")).not.toThrow();
+      expect(() => {
+        off();
+      }).not.toThrow();
+      expect(() => {
+        emitAppEvent("comfyapp:canvas-sync-changed");
+      }).not.toThrow();
     } finally {
       vi.unstubAllGlobals();
     }

@@ -166,7 +166,9 @@ export function waitForComfyStateChange(
    * 钉在事件循环上（Next 的 dev 热重载与测试收尾都会被拖住）。 */
   let unsubscribe: (() => void) | null = null;
   const notified = new Promise<ComfyStateChange | null>((resolve) => {
-    unsubscribe = subscribeComfyState(() => resolve(st.last ?? null));
+    unsubscribe = subscribeComfyState(() => {
+      resolve(st.last ?? null);
+    });
   });
   return withTimeoutResult(notified, timeoutMs, null, {
     /* 超时也要退订 —— 不退就是每次长轮询窗口往订阅表里留一个死回调，

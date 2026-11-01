@@ -1,21 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
-import {
-  nextId,
-  uniqueStamp,
-  randomToken,
-  __resetIdSequences,
-} from "./unique-id";
+import { nextId, uniqueStamp, randomToken, __resetIdSequences } from "./unique-id";
 
 describe("nextId", () => {
-  beforeEach(() => __resetIdSequences());
+  beforeEach(() => {
+    __resetIdSequences();
+  });
 
   it("同一前缀内严格递增（同一毫秒也不撞）", () => {
     /* 这是本出口存在的唯一理由：收口前日志 / 消息中心那两处的计数器
      * 取模回绕（`% 1_000_000`），转一圈之后同一毫秒的两条会拿到同一个 id。 */
-    const ids = Array.from({ length: 50 }, () =>
-      nextId("msg_", { now: 1_700_000_000_000 }),
-    );
+    const ids = Array.from({ length: 50 }, () => nextId("msg_", { now: 1_700_000_000_000 }));
     expect(new Set(ids).size).toBe(50);
   });
 
@@ -40,19 +35,14 @@ describe("nextId", () => {
       nextId("log-", { now: 42 }),
       nextId("log-", { now: 42 }),
     ];
-    expect(ids.every((id) => id.startsWith(`log-${(42).toString(36)}-`))).toBe(
-      true,
-    );
+    expect(ids.every((id) => id.startsWith(`log-${(42).toString(36)}-`))).toBe(true);
   });
 
   it("缺省时刻取当前时间（不必每次传 now）", () => {
     const before = Date.now();
     const id = nextId("t_");
     const after = Date.now();
-    const stamp = Number.parseInt(
-      id.slice("t_".length, id.lastIndexOf("-")),
-      36,
-    );
+    const stamp = Number.parseInt(id.slice("t_".length, id.lastIndexOf("-")), 36);
     expect(stamp).toBeGreaterThanOrEqual(before);
     expect(stamp).toBeLessThanOrEqual(after);
   });
@@ -60,9 +50,7 @@ describe("nextId", () => {
 
 describe("uniqueStamp", () => {
   it("一次调用一个 id，两次调用不撞（哪怕同一毫秒）", () => {
-    const ids = new Set(
-      Array.from({ length: 20 }, () => uniqueStamp("e_", { now: 7 })),
-    );
+    const ids = new Set(Array.from({ length: 20 }, () => uniqueStamp("e_", { now: 7 })));
     expect(ids.size).toBe(20);
   });
 
@@ -112,10 +100,7 @@ describe("uniqueStamp 的缺省分支", () => {
     const before = Date.now();
     const id = uniqueStamp("bare_");
     const after = Date.now();
-    const stamp = Number.parseInt(
-      id.slice("bare_".length, id.lastIndexOf("-")),
-      36,
-    );
+    const stamp = Number.parseInt(id.slice("bare_".length, id.lastIndexOf("-")), 36);
     expect(stamp).toBeGreaterThanOrEqual(before);
     expect(stamp).toBeLessThanOrEqual(after);
   });

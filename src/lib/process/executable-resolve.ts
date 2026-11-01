@@ -100,7 +100,9 @@ function isTransientSpawnCode(code: string | null): boolean {
  *  导出给 `./pnpm-resolve`：`resolveCommandInvocation` 那一条要用它做默认值，而它
  *  只依赖 node 内建、不回头 import 任何本模块的判据（跨宿主叶子性见文件头）。 */
 export const realUsabilityProbe: UsabilityProbe = {
-  access: (candidate) => fs.accessSync(candidate, fs.constants.X_OK),
+  access: (candidate) => {
+    fs.accessSync(candidate, fs.constants.X_OK);
+  },
   spawn: (candidate, args) => {
     const probe = spawnSync(candidate, args, {
       stdio: "ignore",

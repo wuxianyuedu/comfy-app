@@ -24,7 +24,9 @@ const mod = await import("./executor-finalize");
 describe("configureExecutorFinalize 接缝", () => {
   it("接受 Partial<ExecutorFinalizeDeps> 且不抛", () => {
     const runtimeLog = { info: vi.fn(), error: vi.fn() };
-    expect(() => mod.configureExecutorFinalize({ runtimeLog })).not.toThrow();
+    expect(() => {
+      mod.configureExecutorFinalize({ runtimeLog });
+    }).not.toThrow();
   });
 
   it("两次调用是合并语义（Partial 逐次填、未传的字段保留）", () => {
@@ -32,10 +34,12 @@ describe("configureExecutorFinalize 接缝", () => {
     const getView = vi.fn(async () => Buffer.from("x"));
     mod.configureExecutorFinalize({ runtimeLog: a });
     // 第二次只填 getView，runtimeLog 应保留（内部 `{ ...depsOverride, ...next }`）。
-    expect(() => mod.configureExecutorFinalize({ getView })).not.toThrow();
+    expect(() => {
+      mod.configureExecutorFinalize({ getView });
+    }).not.toThrow();
     // 第三次再填一次 runtimeLog，验证不会因"已经给过 getView"就抛错。
-    expect(() =>
-      mod.configureExecutorFinalize({ runtimeLog: a }),
-    ).not.toThrow();
+    expect(() => {
+      mod.configureExecutorFinalize({ runtimeLog: a });
+    }).not.toThrow();
   });
 });

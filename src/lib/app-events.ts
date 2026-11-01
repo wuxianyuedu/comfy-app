@@ -169,5 +169,7 @@ export function subscribeAppEvent<K extends AppEventName>(
     );
   };
   window.addEventListener(name, listener);
-  return () => window.removeEventListener(name, listener);
+  return () => {
+    window.removeEventListener(name, listener);
+  };
 }

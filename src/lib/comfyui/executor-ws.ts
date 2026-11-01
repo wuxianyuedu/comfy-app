@@ -125,7 +125,9 @@ export async function connect(): Promise<void> {
         timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS,
         // onLog 在单飞中被首次调用捕获；启动进程内的每一步 note 都会经这里
         // 写进队列任务的日志面板。
-        onLog: (msg) => announceToQueuedTasks(`ComfyUI 启动：${msg}`),
+        onLog: (msg) => {
+          announceToQueuedTasks(`ComfyUI 启动：${msg}`);
+        },
       })
         .then((r) => {
           if (r.ok) {
@@ -150,9 +152,9 @@ export async function connect(): Promise<void> {
       // 但**必须挂一个 catch**——单飞的 promise 若因未预期路径 reject，
       // 上面 `if (!comfyDownNotified)` 分支那次调用已挂了 .then/.catch，
       // 这次「已经在飞」的分支若不接住，reject 就变成 unhandledRejection。
-      fireAndForget(ensureComfyUiReady({ timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS }), (e) =>
-        logger.warn(`[comfyui] ${errorText(e, "自动启动等待失败")}`),
-      );
+      fireAndForget(ensureComfyUiReady({ timeoutMs: COMFYUI_AUTOSTART_TIMEOUT_MS }), (e) => {
+        logger.warn(`[comfyui] ${errorText(e, "自动启动等待失败")}`);
+      });
     }
     // 自动启动已被闩锁抑制（启动失败 / 用户手动关闭）时不重连：重连只会每
     // 15s 走一遍「探测失败 → 讨要启动 → 被闩锁拦下」的空转（ISSUE #335）。
@@ -194,13 +196,15 @@ export async function connect(): Promise<void> {
     comfyDownNotified = false;
     kickQueue();
   });
-  ws.on("message", (data) =>
-    fireAndForget(handleMessage(/* SAFETY: 类型断言已复核 */ (data as Buffer).toString()), (e) =>
-      logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`),
-    ),
-  );
+  ws.on("message", (data) => {
+    fireAndForget(handleMessage(/* SAFETY: 类型断言已复核 */ (data as Buffer).toString()), (e) => {
+      logger.warn(`[comfyui] ${errorText(e, "handleMessage 异常")}`);
+    });
+  });
   // error / close 都交给 handleWsDrop 统一处理（幂等，双发只生效一次）。
-  ws.on("close", () => handleWsDrop(ws));
+  ws.on("close", () => {
+    handleWsDrop(ws);
+  });
   ws.on("error", (err: Error) => {
     // 某些 ComfyUI 版本 / 网络下 error 之后不一定再发 close，
     // 这里兜底触发重连，否则队列会卡死在 RUNNING。
@@ -249,7 +253,9 @@ function scheduleReconnect() {
   }
   reconnectHandle = setTimeout(() => {
     reconnectHandle = null;
-    fireAndForget(connect(), (err) => logger.warn(`[comfyui] ${errorText(err, "WS 重连失败")}`));
+    fireAndForget(connect(), (err) => {
+      logger.warn(`[comfyui] ${errorText(err, "WS 重连失败")}`);
+    });
   }, delay);
 }
 
@@ -462,9 +468,9 @@ export function armWatchdog(taskId: string, promptId: string) {
     clearTimeout(existing);
   }
   const timer = setTimeout(() => {
-    fireAndForget(fail(taskId, promptId, "生成超时"), (e) =>
-      logger.warn(`[comfyui] ${errorText(e, `fail(${taskId}) 超时收口异常`)}`),
-    );
+    fireAndForget(fail(taskId, promptId, "生成超时"), (e) => {
+      logger.warn(`[comfyui] ${errorText(e, `fail(${taskId}) 超时收口异常`)}`);
+    });
   }, JOB_TIMEOUT_MS);
   s.timers.set(taskId, timer);
 }

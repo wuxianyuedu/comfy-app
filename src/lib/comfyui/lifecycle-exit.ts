@@ -180,7 +180,11 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   const now = deps.now ?? Date.now;
   const missThreshold = deps.missThreshold ?? 2;
   const setTimer = deps.setTimer ?? ((fn: () => void, ms: number) => setInterval(fn, ms));
-  const clearTimer = deps.clearTimer ?? ((h) => clearInterval(h));
+  const clearTimer =
+    deps.clearTimer ??
+    ((h) => {
+      clearInterval(h);
+    });
 
   let stopped = false;
   let startedAt: number | null = null;

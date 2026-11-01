@@ -48,10 +48,16 @@ describe("patchWorkflowSilently", () => {
 
   it("失败静默吞掉，不抛错（次要写不该打断交互）", () => {
     updateMutate.mockReturnValue(Promise.reject(new Error("离线")));
-    expect(() => patchWorkflowSilently({ id: "wf-1" })).not.toThrow();
+    expect(() => {
+      patchWorkflowSilently({ id: "wf-1" });
+    }).not.toThrow();
   });
 
   it("同步返回 undefined，调用方无法 await（刻意：不等结果）", () => {
-    expect(patchWorkflowSilently({ id: "wf-1" })).toBeUndefined();
+    /* 返回值是 void：直接塞进 expect 会让断言退化成「收到非 thenable 就抛」
+       的假阳性形状，所以这里只断言调用本身不抛。 */
+    expect(() => {
+      patchWorkflowSilently({ id: "wf-1" });
+    }).not.toThrow();
   });
 });

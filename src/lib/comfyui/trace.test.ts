@@ -204,7 +204,9 @@ describe("trace() 与 configureTraceLogPath 的落盘契约", () => {
       const nested = path.join(blocker, "deeper", "trace.log");
       configureTraceLogPath(nested);
       // 不抛、不 crash——契约就是「写不进去就静默」。
-      expect(() => trace("http", "t-skip", "should not throw")).not.toThrow();
+      expect(() => {
+        trace("http", "t-skip", "should not throw");
+      }).not.toThrow();
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

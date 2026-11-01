@@ -53,7 +53,9 @@ export async function writeTerminal<T>(
           );
         }
       },
-      onGiveUp: (err, tries) => giveUp(taskId, label, err, tries),
+      onGiveUp: (err, tries) => {
+        giveUp(taskId, label, err, tries);
+      },
     });
   } catch (error) {
     throw new Error(describeSqliteWriteError(error, `终态${label}写库失败`), {

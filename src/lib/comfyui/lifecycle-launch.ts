@@ -326,8 +326,12 @@ export async function waitForExistingInstanceReady(input: {
     deadline: input.timeoutMs == null ? null : Date.now() + input.timeoutMs,
     timeoutDetail: `已有 ComfyUI 实例持续未响应（等待 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 后放弃）；可能正忙或已卡死，详见 log/services/comfyui-runtime.log`,
     readyDetail: "ComfyUI 已就绪（接管已在运行的实例）",
-    onReady: (base) => note(`ComfyUI 已就绪（接管）：${base}`),
-    onDead: (detail) => note(detail),
+    onReady: (base) => {
+      note(`ComfyUI 已就绪（接管）：${base}`);
+    },
+    onDead: (detail) => {
+      note(detail);
+    },
     earlyExit: () =>
       host.st.stopRequested
         ? {
@@ -442,10 +446,11 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     /* 失败通道：这条链内部已把「查不到 PID」收成一行 note，落到这里的只有
      * 意料外的异常（改判据时的 bug），所以只需要让它**有**一条出口、
      * 不静默消失（硬规则 4）。 */
-    (err) =>
+    (err) => {
       note(
         `CPU 档位施加链路异常（不影响启动）：${err instanceof Error ? err.message : String(err)}`,
-      ),
+      );
+    },
   );
 
   const spawnAt = Date.now();
@@ -513,7 +518,9 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     deadline,
     timeoutDetail,
     readyDetail: "ComfyUI 已启动并就绪（保活模式）",
-    onReady: (base) => note(`ComfyUI 已就绪（保活）：${base}`),
+    onReady: (base) => {
+      note(`ComfyUI 已就绪（保活）：${base}`);
+    },
     onDead: (detail) => {
       appendRuntimeLog("■ ComfyUI 保活进程已退出");
       note(detail);
@@ -825,7 +832,9 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
         stopRequested: st.stopRequested === true,
         mode: "bound",
       }),
-      onExitReport: (report) => host.markSessionEnd(report),
+      onExitReport: (report) => {
+        host.markSessionEnd(report);
+      },
     }),
   );
 
@@ -836,7 +845,9 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
     deadline,
     timeoutDetail,
     readyDetail: "ComfyUI 已启动并就绪",
-    onReady: (base) => note(`ComfyUI 已就绪：${base}`),
+    onReady: (base) => {
+      note(`ComfyUI 已就绪：${base}`);
+    },
     /* 用户点了「关闭 ComfyUI」→ 退出循环（child 也会随之消失）。放在
      * child 判断之前，避免把主动关闭误报成「进程启动后立即退出」。 */
     earlyExit: () =>

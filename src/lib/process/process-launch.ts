@@ -42,8 +42,12 @@ import { withTimeoutResult } from "~/lib/with-timeout";
  * 邻居（裸 Node 只认带扩展名的相对说明符），这条 value 边是单向的（本模块 → probe-exe），
  * 不成环、也不改变 `probe-exe` 自己的叶子性。 */
 elevateLogLevel({
-  log: (message) => logger.info(message),
-  warn: (message) => logger.warn(message),
+  log: (message) => {
+    logger.info(message);
+  },
+  warn: (message) => {
+    logger.warn(message);
+  },
 });
 
 /** 拉起方式：bound = 随应用进程树一起结束；keepAlive = 脱离进程树保活。 */
@@ -169,12 +173,12 @@ export function waitForDetachMediator(
    * 永远回空串。而「中介没退出」恰恰只在超时时发生，被拒的原因也只有这时最需要。 */
   return withTimeoutResult(
     new Promise<DetachMediatorOutcome | null>((resolve) => {
-      child.once("exit", (code) =>
+      child.once("exit", (code) => {
         resolve({
           code: code ?? -1,
           stderr: readSoFar(),
-        }),
-      );
+        });
+      });
     }),
     timeoutMs,
     null,

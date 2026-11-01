@@ -56,11 +56,19 @@ describe.runIf(process.platform === "linux")("findListeningPortViaProc", () => {
     const srv = net.createServer((s) => s.end());
     // 端口取一个高位随机值，避免与本机其他服务冲突
     const want = 30_000 + Math.floor(Math.random() * 20_000);
-    await new Promise<void>((r) => srv.listen(want, "127.0.0.1", () => r()));
+    await new Promise<void>((r) =>
+      srv.listen(want, "127.0.0.1", () => {
+        r();
+      }),
+    );
     try {
       expect(findListeningPortViaProc(process.pid)).toBe(want);
     } finally {
-      await new Promise<void>((r) => srv.close(() => r()));
+      await new Promise<void>((r) =>
+        srv.close(() => {
+          r();
+        }),
+      );
     }
   });
 

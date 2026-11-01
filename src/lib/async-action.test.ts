@@ -213,8 +213,11 @@ describe("fireAndForget", () => {
 
   it("成功的 promise：onError 不被调用、也不向 caller 返回任何东西（不制造 caller 侧的 unhandledrejection）", async () => {
     const onError = vi.fn();
-    const ret = fireAndForget(Promise.resolve("ok"), onError);
-    expect(ret).toBeUndefined();
+    /* `fireAndForget` 的返回值是 void：直接塞进 expect 会让断言退化成
+       「收到非 thenable 就抛」的假阳性形状，所以这里只断言调用本身不抛。 */
+    expect(() => {
+      fireAndForget(Promise.resolve("ok"), onError);
+    }).not.toThrow();
     await flushMicrotasks();
     expect(onError).not.toHaveBeenCalled();
   });

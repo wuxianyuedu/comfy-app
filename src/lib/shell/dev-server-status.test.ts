@@ -18,8 +18,7 @@ const base = {
 const exitNotice = {
   why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
   action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
-  detail:
-    "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+  detail: "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
 };
 
 describe("deriveDevServerStatus", () => {
@@ -61,8 +60,7 @@ describe("deriveDevServerStatus", () => {
 
   it("四态文案互不相同且非空（状态必须一眼可辨）", () => {
     const labels = [
-      deriveDevServerStatus({ ...base, everOnline: false, reachable: false })
-        .label,
+      deriveDevServerStatus({ ...base, everOnline: false, reachable: false }).label,
       deriveDevServerStatus(base).label,
       deriveDevServerStatus({ ...base, reachable: false }).label,
       deriveDevServerStatus({
@@ -73,7 +71,9 @@ describe("deriveDevServerStatus", () => {
       }).label,
     ];
     expect(new Set(labels).size).toBe(4);
-    labels.forEach((label) => expect(label.length).toBeGreaterThan(0));
+    labels.forEach((label) => {
+      expect(label.length).toBeGreaterThan(0);
+    });
   });
 
   it("探活端点答 404 → stale：不冒充「连接中」，并给出重启应用这个出口", () => {
