@@ -2162,8 +2162,9 @@ describe("逐份用时：读数怎么排成给人那一段（ISSUE #2683）", ()
   it("接在**收尾**那一段，且取数走账本读者（不是自己扫目录）", () => {
     const launcher = readFileSync(LAUNCHER_PATH, "utf8");
     /* 收尾才读：第一遍跑完才有 junit，而清单那一屏要早于起 vitest —— 两句各在各的位置。
-     * 取数对象是 `segFiles`（ISSUE #2845 起：段开关下它是本段实际送进 vitest 的那份）。 */
-    expect(launcher).toMatch(/const flush = \(\) => \{[\s\S]{0,400}fileTimingReport\(segFiles/);
+     * 取数对象是 `segFiles`（ISSUE #2845 起：段开关下它是本段实际送进 vitest 的那份）。
+     * 窗口 800：flush 开头还插着耗时台账那格（#2863 的 ③），但 fileTimingReport 仍在本函数体内。 */
+    expect(launcher).toMatch(/const flush = \(\) => \{[\s\S]{0,800}fileTimingReport\(segFiles/);
     expect(launcher).toMatch(/collectFileTimings\(\{ dir: junitDir \}\)/);
     /* 没有落点 ⇒ 空读数（「读不到」），不是「每份 0ms」。 */
     expect(launcher).toMatch(/junitDir \? collectFileTimings/);
