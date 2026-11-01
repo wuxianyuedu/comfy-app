@@ -208,6 +208,31 @@ describe("脚本档棘轮 —— 只降不升", () => {
     rmSync(join(fixture, "scripts", "newborn.mjs"), { force: true });
   });
 
+  it("新增一份**干净**的入库脚本 ⇒ 账自己跟上面（不再留一个人手要跟的数）", () => {
+    /* ISSUE #2944 的现场：判据 ✓ 而这一格红，两处读数相反，红全落在下一个无关的人身上。
+     * 面的份数是**构成**（判了多少份），不是存量 —— 干净脚本入库时一个格子都不涨，
+     * 于是 `face` 成了唯一会漂的数。它现在由判据自己对（`alignFace()`）。 */
+    const before = readFixtureBaseline();
+    write(join("scripts", "cleaner.mjs"), "export const d = 4;\n");
+    const { code, output } = runCheck([]);
+    expect(code, output).toBe(0);
+    expect(output).toContain("判决面扩张");
+    expect(readFixtureBaseline().face).toBe(before.face + 1);
+    /* 棘轮那一半一个字节都不许跟着动：面是构成，`files` / `total` 才是存量。 */
+    expect(readFixtureBaseline().files).toEqual(before.files);
+    expect(readFixtureBaseline().total).toBe(before.total);
+    /* 第二跑必须是「已对齐」的静默：它会写回账，不写就会每次都念一遍。 */
+    const again = runCheck([]);
+    expect(again.code, again.output).toBe(0);
+    expect(again.output).not.toContain("判决面扩张");
+    rmSync(join(fixture, "scripts", "cleaner.mjs"), { force: true });
+    /* 复原：删了那份脚本 ⇒ 面收缩也会自己跟回去（向下对齐同样是「面」的事）。 */
+    const shrunk = runCheck([]);
+    expect(shrunk.code, shrunk.output).toBe(0);
+    expect(shrunk.output).toContain("判决面收缩");
+    expect(readFixtureBaseline().face).toBe(before.face);
+  });
+
   it("已有格子上涨 ⇒ 红；`--update` 同样拒，且**一个字节都不写回基线**", () => {
     const before = readFileSync(baselinePath(), "utf8");
     /* 在**已入账**的那份文件里再加一处死声明：基线里这一格从 1 变 2。 */
