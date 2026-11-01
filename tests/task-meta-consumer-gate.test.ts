@@ -82,10 +82,7 @@ function putLedger(repo: GateRepo, content = EMPTY_LEDGER): void {
 
 describe("task.meta 消费方门禁：该放的形状（§11.22）", () => {
   test("零站点 → 通过（纯闸门，不是存量清理）", ({ repo }) => {
-    repo.write(
-      "tests/a.test.ts",
-      `${HEAD}describe("p", () => { it("x", () => {}); });\n`,
-    );
+    repo.write("tests/a.test.ts", `${HEAD}describe("p", () => { it("x", () => {}); });\n`);
     putLedger(repo);
     const r = repo.run();
     expect(r.code).toBe(0);
@@ -104,9 +101,7 @@ describe("task.meta 消费方门禁：该放的形状（§11.22）", () => {
     expect(r.output).toContain("1 条登记");
   });
 
-  test("无关的 meta 用法不算站点（只认 `task.meta` 这条属性链）", ({
-    repo,
-  }) => {
+  test("无关的 meta 用法不算站点（只认 `task.meta` 这条属性链）", ({ repo }) => {
     repo.write(
       "tests/a.test.ts",
       `${HEAD}export const META = { meta: { name: "x" } };\ndescribe("p", () => { it("x", () => { expect(Object.keys(META.meta)).toEqual(["name"]); }); });\n`,
@@ -117,9 +112,7 @@ describe("task.meta 消费方门禁：该放的形状（§11.22）", () => {
     expect(r.output).toContain("纯闸门");
   });
 
-  test("站点写在字符串 / 注释里 → 不算站点（判据不去判自己的夹具）", ({
-    repo,
-  }) => {
+  test("站点写在字符串 / 注释里 → 不算站点（判据不去判自己的夹具）", ({ repo }) => {
     repo.write(
       "tests/a.test.ts",
       `${HEAD}export const FIXTURE = "ctx.task.meta.tier = 'artifact'";\n// ctx.task.meta.owner = "别线" 注释里的不算\ndescribe("p", () => { it("x", () => {}); });\n`,
@@ -145,10 +138,7 @@ describe("task.meta 消费方门禁：该拦的形状（§11.22）", () => {
      台账、台账压根不存在」。原先这一格不存在，于是那条路径从没被执行者走过 ——
      判据零站点时在读到台账之前就 return，全绿的却是「台账从没被创建过」。 */
   test("台账文件根本不在 → 阻断（零站点时也不许静默通过）", ({ repo }) => {
-    repo.write(
-      "tests/a.test.ts",
-      `${HEAD}describe("p", () => { it("x", () => {}); });\n`,
-    );
+    repo.write("tests/a.test.ts", `${HEAD}describe("p", () => { it("x", () => {}); });\n`);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain(".task-meta-consumers.json 不存在");
@@ -160,9 +150,7 @@ describe("task.meta 消费方门禁：该拦的形状（§11.22）", () => {
     expect(r2.output).toContain(".task-meta-consumers.json 不存在");
   });
 
-  test("折行站点（prettier 折开）也要被扫出来 —— 漏掉就是整片静默", ({
-    repo,
-  }) => {
+  test("折行站点（prettier 折开）也要被扫出来 —— 漏掉就是整片静默", ({ repo }) => {
     repo.write(
       "tests/a.test.ts",
       `${HEAD}describe("p", () => {\n  it("x", (ctx) => {\n    ctx\n      .task.meta.tier = "artifact";\n    expect(1).toBe(1);\n  });\n});\n`,

@@ -438,7 +438,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
       env: { ...process.env, PORT: port, ...extraEnv },
       timeout: 90_000,
     });
-  const both = (r: { stderr?: string; stdout?: string; }) => `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  const both = (r: { stderr?: string; stdout?: string }) => `${r.stdout ?? ""}${r.stderr ?? ""}`;
   /** 宿主自己的输出通道内容（入口把这两份路径写在 `host pid=` 那一行里）。 */
   function hostStdout() {
     const dir = path.join(workdir, "log", "current", "services");

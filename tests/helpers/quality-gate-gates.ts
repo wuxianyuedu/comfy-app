@@ -26,7 +26,7 @@ export type GateEntry = {
   name: string;
   /** 只在该侧**显式点名**时才跑（`.mjs` 的 `run: false` / `.ps1` 的 `Run = $false`）。 */
   onDemand: boolean;
-}
+};
 
 /**
  * 去掉注释再解析 —— 不剥注释会咬到「解释这条门禁为什么不进 `all`」的那些 JSDoc，

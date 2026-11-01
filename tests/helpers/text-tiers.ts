@@ -72,7 +72,7 @@ export type TextTiers = {
   lineRatios: Map<string, number>;
   /** 当前在用的全部档名（已按 t-shirt 形状筛过）。 */
   names: Array<string>;
-}
+};
 
 /**
  * 读两张表并按「项目覆盖默认」合并。
@@ -90,7 +90,7 @@ export type TextTiers = {
 export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   const collected = new Map<string, number>();
   const defaults = new Set<string>();
-  const sources: Array<{ fromProject: boolean; text: string; }> = [
+  const sources: Array<{ fromProject: boolean; text: string }> = [
     { text: readFileSync(tailwindThemeCss(), "utf8"), fromProject: false },
     { text: globalsCss, fromProject: true },
   ];

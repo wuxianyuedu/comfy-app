@@ -352,12 +352,11 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       return `；git 清单取不到，定位不了是哪几份：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`;
     }
     const stray = face.map((p) => String(p).replaceAll("\\", "/")).filter((p) => !tracked.has(p));
-    return (
-      `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）${
+    return `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）${
       stray.length > 0
         ? `：${stray.slice(0, 10).join(", ")} —— 修法是把它归进 exclude 或删掉，不是往账上记`
-        : ` —— 差的全是入库文件 ⇒ 有人新加了脚本，它的格子要先入账（跑 --update 之前先把它写干净）`}`
-    );
+        : ` —— 差的全是入库文件 ⇒ 有人新加了脚本，它的格子要先入账（跑 --update 之前先把它写干净）`
+    }`;
   }
 
   /**
@@ -385,7 +384,9 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       prefix,
       "认不出 canary 的临时样本目录前缀 ⇒ 这一格的豁免口径与它漂了，两边要一起改",
     ).not.toBeNull();
-    if (prefix === null) {return;}
+    if (prefix === null) {
+      return;
+    }
     const scratch = new RegExp(`^scripts/${prefix}[^/]*/`);
     expect(scratch.test(`scripts/${prefix}151192-1793363720066/node-global.mjs`)).toBe(true);
     /* 反向的两条：同名的入库脚本目录、与 canary 落在 `tests/` 那一半，都不许被豁免掉。 */
@@ -415,7 +416,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       splitTrackedFace: (
         mjs: Array<string>,
         tracked: Set<string> | null,
-      ) => { face: Array<string>; filtered: boolean; untracked: Array<string>; };
+      ) => { face: Array<string>; filtered: boolean; untracked: Array<string> };
       trackedMjs: (root: string) => Set<string> | null;
     };
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
@@ -436,7 +437,9 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       prefix,
       "认不出 canary 的临时样本目录前缀 ⇒ 这一格的豁免口径与它漂了，两边要一起改",
     ).not.toBeNull();
-    if (prefix === null) {return;}
+    if (prefix === null) {
+      return;
+    }
     const scratch = new RegExp(`^scripts/${prefix}[^/]*/`);
     const strays = untracked.filter((p) => !scratch.test(p));
     if (strays.length !== untracked.length) {
@@ -450,7 +453,7 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     ).toEqual([]);
     const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
-    ) as { files: Record<string, Record<string, number>>; total: number; };
+    ) as { files: Record<string, Record<string, number>>; total: number };
     expect(
       Object.keys(baseline).sort(),
       `账本多出了字段 —— 这一档只认「(文件, TS 码) 的处数」与总数两件事；` +
@@ -486,7 +489,7 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
     splitTrackedFace: (
       mjs: Array<string>,
       tracked: Set<string> | null,
-    ) => { face: Array<string>; filtered: boolean; untracked: Array<string>; };
+    ) => { face: Array<string>; filtered: boolean; untracked: Array<string> };
     trackedMjs: (root: string) => Set<string> | null;
   };
 

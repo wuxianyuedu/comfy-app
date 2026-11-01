@@ -89,30 +89,20 @@ function changelog(
 describe("changelog-versions —— 锚的形状", () => {
   test("合规的锚 + 归属不分裂 ⇒ 通过", ({ repo }) => {
     const sha = headSha(repo);
-    repo.write(
-      "CHANGELOG.md",
-      changelog({ pendingAnchor: `<!-- since: ${sha} — 第一批 -->` }),
-    );
+    repo.write("CHANGELOG.md", changelog({ pendingAnchor: `<!-- since: ${sha} — 第一批 -->` }));
     const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("来源锚与条目归属一致");
   });
 
-  test("写了锚但形状写歪（提交换成日期）⇒ 红 —— 这一格曾经整份静默放过", ({
-    repo,
-  }) => {
-    repo.write(
-      "CHANGELOG.md",
-      changelog({ pendingAnchor: "<!-- since: 2026-09-12 — 第一批 -->" }),
-    );
+  test("写了锚但形状写歪（提交换成日期）⇒ 红 —— 这一格曾经整份静默放过", ({ repo }) => {
+    repo.write("CHANGELOG.md", changelog({ pendingAnchor: "<!-- since: 2026-09-12 — 第一批 -->" }));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("锚形状不对");
   });
 
-  test("没写锚 ⇒ **不拦**（锚不是每段的必修项，第一次并入时由脚本补）", ({
-    repo,
-  }) => {
+  test("没写锚 ⇒ **不拦**（锚不是每段的必修项，第一次并入时由脚本补）", ({ repo }) => {
     repo.write("CHANGELOG.md", changelog());
     const { code, output } = repo.run();
     expect(code).toBe(0);
@@ -120,10 +110,7 @@ describe("changelog-versions —— 锚的形状", () => {
   });
 
   test("锚写了但那个提交不存在（短哈希凑的）⇒ 红", ({ repo }) => {
-    repo.write(
-      "CHANGELOG.md",
-      changelog({ pendingAnchor: "<!-- since: deadbee — 第一批 -->" }),
-    );
+    repo.write("CHANGELOG.md", changelog({ pendingAnchor: "<!-- since: deadbee — 第一批 -->" }));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("解析不出提交");
@@ -147,9 +134,7 @@ describe("changelog-versions —— 跨锚分裂（本条判据的主判据）",
     expect(output).toContain("切成了两半");
   });
 
-  test("待发段落里的号在**已发布段落**里没有出现 ⇒ 通过（负控制）", ({
-    repo,
-  }) => {
+  test("待发段落里的号在**已发布段落**里没有出现 ⇒ 通过（负控制）", ({ repo }) => {
     const sha = headSha(repo);
     repo.write(
       "CHANGELOG.md",
@@ -163,9 +148,7 @@ describe("changelog-versions —— 跨锚分裂（本条判据的主判据）",
     expect(code).toBe(0);
   });
 
-  test("**带日期的版本段落不算待发段落** —— 算进去这条判据就恒空转", ({
-    repo,
-  }) => {
+  test("**带日期的版本段落不算待发段落** —— 算进去这条判据就恒空转", ({ repo }) => {
     /* 这是判据自己的静默失效面：把 `## [0.2.0] - 2026-10-01` 也算成待发段落，
      * 「锚之前的已发布段落」就永远是空集（实测 `earlier` 恒为 0），
      * 上面那条「同时出现 ⇒ 红」当场变成永远绿。 */
@@ -202,31 +185,21 @@ describe("changelog-versions —— 跨锚分裂（本条判据的主判据）",
 });
 
 describe("changelog-versions —— 判据自己不许静默降级", () => {
-  test("CHANGELOG.md 读不到 ⇒ 红（不是「没有段落要查、于是放过」）", ({
-    repo,
-  }) => {
+  test("CHANGELOG.md 读不到 ⇒ 红（不是「没有段落要查、于是放过」）", ({ repo }) => {
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("读不到 CHANGELOG.md");
   });
 
   test("一个待发段落都没有 ⇒ 红", ({ repo }) => {
-    repo.write(
-      "CHANGELOG.md",
-      "# 更新日志\n\n## [0.1.0] - 2026-08-31\n\n基线。\n",
-    );
+    repo.write("CHANGELOG.md", "# 更新日志\n\n## [0.1.0] - 2026-08-31\n\n基线。\n");
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("一个待发段落都没有");
   });
 
-  test("只有版本段落、没有未发布标题 ⇒ 红，且报错点名 `[Unreleased]`", ({
-    repo,
-  }) => {
-    repo.write(
-      "CHANGELOG.md",
-      "# 更新日志\n\n## [0.2.0] - 2026-10-01\n\n### Added\n\n- 一条。\n",
-    );
+  test("只有版本段落、没有未发布标题 ⇒ 红，且报错点名 `[Unreleased]`", ({ repo }) => {
+    repo.write("CHANGELOG.md", "# 更新日志\n\n## [0.2.0] - 2026-10-01\n\n### Added\n\n- 一条。\n");
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("[Unreleased]");
@@ -244,10 +217,7 @@ describe("changelog-versions —— 判据自己不许静默降级", () => {
   });
 
   test("--report 只出清单、不判失败", ({ repo }) => {
-    repo.write(
-      "CHANGELOG.md",
-      "# 更新日志\n\n## [0.1.0] - 2026-08-31\n\n基线。\n",
-    );
+    repo.write("CHANGELOG.md", "# 更新日志\n\n## [0.1.0] - 2026-08-31\n\n基线。\n");
     const { code, output } = repo.run(["--report"]);
     expect(code).toBe(0);
     expect(output).toContain("待发段落的来源锚");

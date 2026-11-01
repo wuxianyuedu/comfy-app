@@ -25,7 +25,10 @@ import { ReactFlowProvider } from "@xyflow/react";
 
 type FlowRenderOptions = Omit<RenderOptions, "wrapper">;
 
-export function renderWithFlow(ui: React.ReactElement, options: FlowRenderOptions = {}): RenderResult {
+export function renderWithFlow(
+  ui: React.ReactElement,
+  options: FlowRenderOptions = {},
+): RenderResult {
   /* RTL 的 wrapper 选项在 rerender 时也会复用同一个包装组件，
    * 因此 Provider store 在整个用例生命周期内保持稳定。 */
   return render(ui, { wrapper: FlowWrapper, ...options });

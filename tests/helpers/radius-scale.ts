@@ -14,14 +14,14 @@
 export type RadiusDerivation = {
   coef: number;
   offset: number;
-}
+};
 
 export type RadiusScale = {
   /** `:root` 里那颗基数，换算成 px（只认 rem/px 两种形态）。 */
   basePx: number;
   /** 档位名（`--radius-sm` … 含 `--radius-node`）→ 派生式。 */
   derivations: Map<string, RadiusDerivation>;
-}
+};
 
 /**
  * 解出所有由 `--radius` 派生的档位（不要求输入里带基数声明，便于反向验证）。支持三种写法：
