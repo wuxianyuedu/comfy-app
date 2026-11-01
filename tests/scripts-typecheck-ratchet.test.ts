@@ -16,7 +16,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, mkdtempSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -72,6 +72,9 @@ let fixture = "";
 
 /** 起真脚本（与 `runCheck` 同一条口径：子进程 + 原样退出码 + 两端输出都收回来）。 */
 function runCheck(args: Array<string>, root = fixture): { code: number; output: string } {
+  if (root === fixture) {
+    commitFixture();
+  }
   try {
     const output = execFileSync(process.execPath, [CHECK, ...args], {
       cwd: REPO_ROOT,
@@ -93,7 +96,24 @@ function runCheck(args: Array<string>, root = fixture): { code: number; output: 
   }
 }
 
+/** 把夹具里的改动「当成一次提交」：面只认入库的那一份（`git add -A` 就是这里的入库动作）。 */
+function commitFixture(): void {
+  execFileSync("git", ["add", "-A"], { cwd: fixture });
+}
+
+/**
+ * 往夹具里写一份文件。`rel` 一律是**相对夹具根**的路径。
+ *
+ * 传绝对路径进来的话，`join(fixture, rel)` 会把夹具根拼两遍，拼出一个
+ * `G:\Temp\x\G:\Temp\x\scripts` 这样的畸形路径 —— 而两条平台在这一步分道：
+ * POSIX 的 `mkdir -p` 会照着拼坏的路径真把目录一层层建出来（用例照样绿），
+ * Windows 的路径里 `:` 非法、直接 `ENOENT`。于是同一个 bug 只在 CI 上红，
+ * 本地跑多少遍都看不见（#2953 的现场）。所以这里当场拒，不靠人眼盯十个调用点。
+ */
 function write(rel: string, body: string): string {
+  if (isAbsolute(rel)) {
+    throw new Error(`write() 只收相对夹具根的路径，收到绝对路径：${rel}`);
+  }
   const abs = join(fixture, rel);
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, body, "utf8");
@@ -128,6 +148,11 @@ beforeAll(() => {
   /* 一份干净的、一份带**死声明**的（`const dead = 1;` 就是立案那一格里 `const HERE` 的形态）。 */
   write(join("scripts", "clean.mjs"), "export const a = 1;\n");
   write(join("scripts", "dirty.mjs"), "const dead = 1;\nexport const b = 2;\n");
+  /* 夹具必须**是它自己的 git 顶层**：否则判据走「没按入库清单筛」那一档、面取磁盘原值，
+   * 而 #2944 的面 ⇄ 账自动对齐要的是「入库的那一份」（读不到清单就写不了账）。
+   * 夹具仓库只含这两个文件 —— 它们就是这一档全部的面。 */
+  execFileSync("git", ["init", "-q"], { cwd: fixture });
+  execFileSync("git", ["add", "-A"], { cwd: fixture });
 });
 
 afterAll(() => {
@@ -208,6 +233,32 @@ describe("脚本档棘轮 —— 只降不升", () => {
     rmSync(join(fixture, "scripts", "newborn.mjs"), { force: true });
   });
 
+  it("新增一份**干净**的入库脚本 ⇒ 账自己跟上面（不再留一个人手要跟的数）", () => {
+    /* ISSUE #2944 的现场：判据 ✓ 而这一格红，两处读数相反，红全落在下一个无关的人身上。
+     * 面的份数是**构成**（判了多少份），不是存量 —— 干净脚本入库时一个格子都不涨，
+     * 于是 `face` 成了唯一会漂的数。它现在由判据自己对（`alignFace()`）。 */
+    const before = readFixtureBaseline();
+    write(join("scripts", "cleaner.mjs"), "export const d = 4;\n");
+    const { code, output } = runCheck([]);
+    expect(code, output).toBe(0);
+    expect(output).toContain("判决面扩张");
+    expect(readFixtureBaseline().face).toBe(before.face + 1);
+    /* 棘轮那一半一个字节都不许跟着动：面是构成，`files` / `total` 才是存量。 */
+    expect(readFixtureBaseline().files).toEqual(before.files);
+    expect(readFixtureBaseline().total).toBe(before.total);
+    /* 第二跑必须是「已对齐」的静默：它会写回账，不写就会每次都念一遍。 */
+    const again = runCheck([]);
+    expect(again.code, again.output).toBe(0);
+    expect(again.output).not.toContain("判决面扩张");
+    rmSync(join(fixture, "scripts", "cleaner.mjs"), { force: true });
+    commitFixture();
+    /* 复原：删了那份脚本 ⇒ 面收缩也会自己跟回去（向下对齐同样是「面」的事）。 */
+    const shrunk = runCheck([]);
+    expect(shrunk.code, shrunk.output).toBe(0);
+    expect(shrunk.output).toContain("判决面收缩");
+    expect(readFixtureBaseline().face).toBe(before.face);
+  });
+
   it("已有格子上涨 ⇒ 红；`--update` 同样拒，且**一个字节都不写回基线**", () => {
     const before = readFileSync(baselinePath(), "utf8");
     /* 在**已入账**的那份文件里再加一处死声明：基线里这一格从 1 变 2。 */
@@ -229,41 +280,23 @@ describe("脚本档棘轮 —— 只降不升", () => {
     write(join("scripts", "dirty.mjs"), "const dead = 1;\nexport const b = 2;\n");
   });
 
-  it("删掉一份入库脚本 ⇒ 面收缩要红；`--update` 收紧之后才绿（不是只有涨才拦）", () => {
-    /* 面变小有两条路：删脚本（合法，但要记账）与 include 被改窄（故障）。两种在读数上
-     * 长得一样 —— 所以判据只判「总数对不上」，出路是 `--update` 收紧并留痕。
-     * 真现场（2026-11-01）：主干连续三次提交 `face` 停在 228、入库 `.mjs` 已到 229，
-     * 往下掉的那一半没人念，红只出现在「新人提第一个 PR」的那一刻。 */
+  it("删掉一份入库脚本 ⇒ 面收缩也自己跟回去（两个方向都不留人手要跟的数）", () => {
+    /* 面变小有两条路：删脚本（合法，账跟着收）与 include 被改窄（故障，上面那格判）。
+     * 两种在总数上长得一样 —— #2944 之后这一格的读数是**自动对齐**：删了脚本账自己跟
+     * 回去并念一句；改窄 include 由「判决面漏了这些 .mjs」那一格拦下，面一并记到新的
+     * 读数上（面是构成，不是棘轮 —— 棘轮是 `files` / `total`）。 */
     rmSync(join(fixture, "scripts", "clean.mjs"), { force: true });
-    const judged = runCheck([]);
-    expect(judged.code, judged.output).toBe(1);
-    expect(judged.output).toContain("判决面收缩了");
-    expect(judged.output).toContain("--update");
-    /* 收紧之后才绿 —— 面变小**不是**「不用管」，它要一次显式的记账。 */
-    expect(runCheck(["--update"]).code).toBe(0);
+    commitFixture();
+    const shrunk = runCheck([]);
+    expect(shrunk.code, shrunk.output).toBe(0);
+    expect(shrunk.output).toContain("判决面收缩");
     expect(readFixtureBaseline().face).toBe(1);
-    expect(runCheck([]).code).toBe(0);
+    /* 第二跑静默：账已对齐，再念一遍就成了天天响的提示。 */
+    expect(runCheck([]).output).not.toContain("判决面收缩");
+    /* `write()` 自己接夹具根（它内部 `join(fixture, rel)`）—— 这里只给相对路径。 */
     write(join("scripts", "clean.mjs"), "export const a = 1;\n");
-    expect(runCheck(["--update"]).code).toBe(0);
-    expect(readFixtureBaseline().face).toBe(2);
-  });
-
-  it("新增一份**干净**的入库脚本 ⇒ 面扩张也要红；`--update` 重记账之后才绿", () => {
-    /* 反过来那一半：面涨了、而新增那份一个错都没有时，存量那一圈（`grows`）**一个格子
-     * 都不涨** —— 面这一格是它唯一的账面信号。此前只判 `↓`，于是这个形状一路绿到提交后：
-     * 真现场（2026-11-01）判据自己打「✓ 判决面 230 份 / 存量 0 处（基线 0）」并退 0，
-     * 而用例判红（expected 229 to be 230），两处读数相反，红只落在下一个动脚本的人身上。 */
-    write(join("scripts", "fresh.mjs"), "export const c = 3;\n");
-    const judged = runCheck([]);
-    expect(judged.code, judged.output).toBe(1);
-    expect(judged.output).toContain("判决面扩张了");
-    expect(judged.output).toContain("--update");
-    /* 记账之后才绿 —— 面变了**不是**「存量没涨就不用管」。 */
-    expect(runCheck(["--update"]).code).toBe(0);
+    commitFixture();
     expect(runCheck([]).code).toBe(0);
-    expect(readFixtureBaseline().face).toBe(3);
-    rmSync(join(fixture, "scripts", "fresh.mjs"), { force: true });
-    expect(runCheck(["--update"]).code).toBe(0);
     expect(readFixtureBaseline().face).toBe(2);
   });
 
