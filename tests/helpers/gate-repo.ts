@@ -270,14 +270,14 @@ export type GateRunResult = {
    * 反过来想断言「这句话**不在** stdout」也做不到。取两条流原值即可，不改 `output`
    * 那条既有约定（全仓门禁自测都挂在那上面）。
    */
-  raw: { stderr: string; stdout: string; };
+  raw: { stderr: string; stdout: string };
   /** 结束它的信号名（win32 上一般为 `null` —— 那一平台上终止不产生信号退出码）。 */
   signal: string | null;
   /** spawn 层的错误原文（取 `error.message` 头 80 字符；`error.code` 在类型上并不存在）。 */
   spawnError: string | null;
   /** 原样退出码（`null` = 被信号杀或没起来）。 */
   status: number | null;
-}
+};
 
 /**
  * 「没跑起来」必须**先被单独判掉**（ISSUE #2405，形状取自 #2329 的参照实现）。
@@ -352,7 +352,7 @@ export type GateRepo = {
   ) => GateRunResult;
   /** 在工作区里写一个文件（自动建父目录），`rel` 是仓库相对路径。 */
   write: (rel: string, content: string) => void;
-}
+};
 
 export type GateRepoOptions = {
   /**
@@ -398,7 +398,7 @@ export type GateRepoOptions = {
   setup?: (repo: GateRepo) => void;
   /** `mkdtempSync` 的前缀；默认由脚本名推出来（去掉 `check-` 与扩展名）。 */
   workdir?: string;
-}
+};
 
 /**
  * 命令式地搭一个门禁工作区（`defineGateRepo` 的 fixture 与本模块的调用点共用这一层）。
@@ -497,7 +497,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
         `{"name":"${name}","version":"${version}"}\n`,
       );
     },
-    remove: (rel) => rmSync(abs(rel), { recursive: true, force: true }),
+    remove: (rel) => {
+      rmSync(abs(rel), { recursive: true, force: true });
+    },
     read: (rel) => readFileSync(abs(rel), "utf8"),
     exists: (rel) => existsSync(abs(rel)),
     git: (...args) => {
@@ -598,7 +600,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
 
   return {
     repo: api,
-    dispose: () => rmSync(root, { recursive: true, force: true }),
+    dispose: () => {
+      rmSync(root, { recursive: true, force: true });
+    },
   };
 }
 
@@ -612,7 +616,7 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
 export type GateRepoHandle = {
   dispose: () => void;
   repo: GateRepo;
-}
+};
 
 /**
  * 造一个带 `repo` fixture 的 `test` —— 每个文件按自己的脚本调用一次。

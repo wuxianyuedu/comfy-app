@@ -728,8 +728,8 @@ function restoreGeneratedFile(
  *  `typescript`（实为 `@typescript/typescript6`）的 `tsc6`），顶层 `node_modules/`
  *  下只是链接 —— 按包名 + `bin` 字段解，别按路径猜。 */
 function resolveTscBin(): {
-  run: (args: Array<string>) => { output: string; status: number | null; };
-  runIn: (cwd: string, args: Array<string>) => { output: string; status: number | null; };
+  run: (args: Array<string>) => { output: string; status: number | null };
+  runIn: (cwd: string, args: Array<string>) => { output: string; status: number | null };
 } | null {
   for (const [pkg, binName] of /* SAFETY: 类型断言已复核 */ [
     ["@typescript/native", "tsc"],
@@ -812,7 +812,9 @@ describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局�
       const spy = vi.spyOn(fs, "renameSync").mockImplementation(() => {
         throw errno("EPERM");
       });
-      expect(() => moveFileAcrossVolumes(from, to)).toThrow("EPERM");
+      expect(() => {
+        moveFileAcrossVolumes(from, to);
+      }).toThrow("EPERM");
       spy.mockRestore();
       expect(fs.existsSync(from), "报错被吞了 ⇒ 原处不该还在").toBe(true);
       expect(fs.existsSync(to), "EPERM 不该被当成「走退路」").toBe(false);

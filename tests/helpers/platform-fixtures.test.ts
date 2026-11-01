@@ -74,8 +74,12 @@ describe("onWindows", () => {
 describe("makeHost", () => {
   test("名单内的路径带执行位、名单外抛 EACCES", ({ makeHost }) => {
     const host = makeHost(["/usr/bin/node"]);
-    expect(() => host.access("/usr/bin/node")).not.toThrow();
-    expect(() => host.access("/usr/bin/other")).toThrow(/EACCES/);
+    expect(() => {
+      host.access("/usr/bin/node");
+    }).not.toThrow();
+    expect(() => {
+      host.access("/usr/bin/other");
+    }).toThrow(/EACCES/);
   });
 
   test("spawn 恒 null = 这台机器的内核起得来它", ({ makeHost }) => {

@@ -208,7 +208,7 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
   const hook = (): string => readFileSync(join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
 
   /** D 组步骤 = `  run "<标签>" <命令>`（与同族用例同款解析，不许 toContain）。 */
-  const steps = (): Array<{ cmd: string; label: string; }> =>
+  const steps = (): Array<{ cmd: string; label: string }> =>
     [...hook().matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
       label: m[1] ?? "",
       cmd: m[2] ?? "",
@@ -390,11 +390,12 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
 describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #2530）", () => {
   /** 临时区里那份判据脚本本体（它只要名字在 `check-` 族里就进扫描面）。 */
   const PROBE = "check-probe-entry.cjs";
-  const withProbe = (repo: { write: (p: string, s: string) => void }) =>
+  const withProbe = (repo: { write: (p: string, s: string) => void }) => {
     repo.write(
       `scripts/${PROBE}`,
       `#!/usr/bin/env node\n// @ts-nocheck -- 探针\nconsole.log("entry");\nprocess.exit(0);\n`,
     );
+  };
   const ledgerWith = (entrypoints: unknown) => JSON.stringify({ onDemand: {}, entrypoints });
 
   test("两形都真有那行命令 ⇒ 不报入口问题（计数那一行由真仓库那条验）", ({ repo }) => {
@@ -659,12 +660,8 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("两行都在 ⇒ 两形各自被认成自己那一形", ({ repo }) => {
     twoFlagForms(
       repo,
-      `  run "窄档" node scripts/${
-        PROBE
-        } --staged\n` +
-        `  run "窄档出 JSON" node scripts/${
-        PROBE
-        } --staged --json\n`,
+      `  run "窄档" node scripts/${PROBE} --staged\n` +
+        `  run "窄档出 JSON" node scripts/${PROBE} --staged --json\n`,
     );
     expect(repo.run().output).not.toContain("登记了那一形");
   });
@@ -675,14 +672,10 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(
       ".githooks/pre-commit",
-      `  run "窄档" node scripts/${
-        PROBE
-        } --staged\n` +
+      `  run "窄档" node scripts/${PROBE} --staged\n` +
         /* 无旗标那一形也要真有一行 —— 少了它，下面那句「不算包含关系」会被一条
          * 「(无旗标) 那一形没有执行者」的红淹掉，而那条红是本例的**正确答案**。 */
-        `  run "整档" node scripts/${
-        PROBE
-        }\n`,
+        `  run "整档" node scripts/${PROBE}\n`,
     );
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -712,12 +705,8 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(
       ".githooks/pre-commit",
-      `  run "a" node scripts/${
-        PROBE
-        } --staged\n` +
-        `  run "b" node scripts/${
-        PROBE
-        } --staged --json\n`,
+      `  run "a" node scripts/${PROBE} --staged\n` +
+        `  run "b" node scripts/${PROBE} --staged --json\n`,
     );
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -775,14 +764,10 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
       repo.write(`scripts/${reportProbe}`, body);
       repo.write(
         ".githooks/pre-commit",
-        `  run "报告" node scripts/${
-          reportProbe
-          } --staged\n` +
+        `  run "报告" node scripts/${reportProbe} --staged\n` +
           /* 两形都得有一行 —— 不然「没有执行者」那条红会先响，本例要判的那条
            * （它根本不是判定型）就被盖在下面。 */
-          `  run "报告出 JSON" node scripts/${
-          reportProbe
-          } --json\n`,
+          `  run "报告出 JSON" node scripts/${reportProbe} --json\n`,
       );
       repo.write(
         "scripts/.gate-executor-ledger.json",

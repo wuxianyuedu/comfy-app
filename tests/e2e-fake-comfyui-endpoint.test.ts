@@ -239,9 +239,12 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
   afterEach(async () => {
     await new Promise<void>((resolve) => {
       if (!server) {
-        return resolve();
+        resolve();
+        return;
       }
-      server.close(() => resolve());
+      server.close(() => {
+        resolve();
+      });
       server = null;
     });
   });
@@ -263,7 +266,9 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     const fakeObserved = await probeFakeComfySlot({ url: fakeUrl });
     expect(classifyFakeSlot(fakeObserved).verdict).toBe("fake");
     await new Promise<void>((resolve) => {
-      server?.close(() => resolve());
+      server?.close(() => {
+        resolve();
+      });
       server = null;
     });
 
@@ -310,7 +315,11 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
       expect(observed.error).toContain("没在预算内");
     } finally {
       slow.closeAllConnections();
-      await new Promise<void>((resolve) => slow.close(() => resolve()));
+      await new Promise<void>((resolve) =>
+        slow.close(() => {
+          resolve();
+        }),
+      );
     }
   });
 
@@ -330,7 +339,11 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     await new Promise<void>((resolve) => s.listen(0, "127.0.0.1", resolve));
     const addr = s.address();
     const port = typeof addr === "object" && addr ? addr.port : 0;
-    await new Promise<void>((resolve) => s.close(() => resolve()));
+    await new Promise<void>((resolve) =>
+      s.close(() => {
+        resolve();
+      }),
+    );
     return port;
   }
 

@@ -110,7 +110,7 @@ function norm(p: string): string {
  * @param {Array<{name: string, data: Buffer}>} files
  * @returns {Buffer}
  */
-function makeZip(files: Array<{ data: Buffer; name: string; }>): Buffer {
+function makeZip(files: Array<{ data: Buffer; name: string }>): Buffer {
   const locals: Array<Buffer> = [];
   const centrals: Array<Buffer> = [];
   let offset = 0;
@@ -392,7 +392,8 @@ describe("工具链自证：失败时的取证（#1959 第三轮）", () => {
        * 判「是不是 D: 盘的 Users 根」按**归一后的正斜杠形态**，不写字面量：
        * 脚本用平台的 `path.join` 拼，POSIX 宿主上会得到 `D:\/Users` 这种混种形态，
        * 写死会漂（这是判据自身的可移植性，不是被测逻辑的形态）。 */
-      listDirs: (p) => (/^d:\/+users\/?$/i.test(p.replaceAll("\\", "/")) ? [String.raw`D:\Users\yuedu`] : []),
+      listDirs: (p) =>
+        /^d:\/+users\/?$/i.test(p.replaceAll("\\", "/")) ? [String.raw`D:\Users\yuedu`] : [],
     });
     /* 一律按**归一后的正斜杠形态**断言落点身份 —— 脚本用平台 `path.join` 拼，
      * POSIX 宿主上会出现 `D:\/...` 这类混种分隔符；判的是「探了哪个落点」，
@@ -515,7 +516,9 @@ describe("工具链自证：缺件时的安装路径（#1959 第二、三轮）"
     );
     /* 其他账号那一条要补 `AppData\Local`（MSIX 按用户安装落在那儿）—— 少补这一段
      * 会拼成一条不存在的路径。 */
-    expect(has(String.raw`C:\Users\other\AppData\Local\Microsoft\WindowsApps\winget.exe`)).toBe(true);
+    expect(has(String.raw`C:\Users\other\AppData\Local\Microsoft\WindowsApps\winget.exe`)).toBe(
+      true,
+    );
     /* 盘符从 PATH 反推的 —— `D:` 盘上的程序目录也在候选里（写死 `C:` 就会漏）。 */
     expect(has(String.raw`D:\Program Files\WindowsApps\winget.exe`)).toBe(true);
     expect(has("/PF/Microsoft/WindowsApps/winget.exe")).toBe(true);
@@ -844,7 +847,10 @@ describe("工具链自证：pnpm 找不到时要有取证（ISSUE #1961）", () 
      * `Path`、取证打的却是空的 `PATH`」—— 那正是第 2281 号单里读不出根因的那种日志。 */
     const env = { Path: String.raw`C:\Windows;C:\nodejs` };
     expect(pnpmPathValue({ platform: "win32", env })).toBe(String.raw`C:\Windows;C:\nodejs`);
-    expect(pnpmPathEntries({ platform: "win32", env })).toEqual([String.raw`C:\Windows`, String.raw`C:\nodejs`]);
+    expect(pnpmPathEntries({ platform: "win32", env })).toEqual([
+      String.raw`C:\Windows`,
+      String.raw`C:\nodejs`,
+    ]);
     // POSIX 上 `Path` 与 `PATH` 是两个变量：不许把不敏感那一条套过去。
     expect(pnpmPathValue({ platform: "linux", env })).toBe("");
   });
@@ -2250,10 +2256,9 @@ function firstStdoutMatch(
   // sleep-ok: 等的是**子进程 stdout 推上来的那一行**（父亲够不到，`expect.poll` 也够不着跨进程的流），
   // 定时器只当「子进程压根没起来」的失败上限，命中即 clear。
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`)),
-      timeoutMs,
-    );
+    const timer = setTimeout(() => {
+      reject(new Error(`${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`));
+    }, timeoutMs);
     let buffered = "";
     child.stdout?.on("data", (chunk: Buffer) => {
       buffered += String(chunk);

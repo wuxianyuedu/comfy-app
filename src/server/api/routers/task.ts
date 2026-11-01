@@ -293,13 +293,11 @@ export const taskRouter = createTRPCRouter({
        * 不允许把一个根外路径交给 `fs.rm(..., { recursive: true })`。 */
       const dir = taskOutputDir(input.id, task.projectId);
       if (dir) {
-        fsPromises
-          .rm(dir, { recursive: true, force: true })
-          .catch((error: unknown) =>
-            logger.warn(
-              `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(error, String(error))}`,
-            ),
+        fsPromises.rm(dir, { recursive: true, force: true }).catch((error: unknown) => {
+          logger.warn(
+            `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(error, String(error))}`,
           );
+        });
       } else {
         logger.warn(
           `[task.delete] 产物目录越界，只删库行不动磁盘：taskId=${input.id} projectId=${task.projectId}`,
