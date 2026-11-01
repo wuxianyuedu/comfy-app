@@ -380,6 +380,15 @@
       "kind": "threshold",
       "strictness": "larger-is-looser",
       "why": "预算闸连续判红的天数门限（ISSUE #2639）：治的是「每次都被重新签过账、但同一格同类账反复出现」那一形（#2639 那六次）。放宽（调大）= 要连续红更久才催；与陈旧度各判各的（2 就是「昨天 + 今天」）。"
+    },
+    {
+      "file": "scripts/affected-launch-segments.mjs",
+      "const": "FIXED_CHUNK_FILES",
+      "value": 24,
+      "unit": "份",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "固定段单块的最大份数（ISSUE #2863）：fixed 段是静态大清单（实测 106 份），argv 预算装得下 ⇒ 只切一块，任何一份带超时指纹判决链都以整块为粒度（cnb-bo5-1k68vik3o 实测一份 30s 超时 ⇒ 整块进复跑链）。24 把复跑粒度降一个量级，代价是多几次 vitest 冷启。不是松紧量：调它不改变任何断言判定。"
     }
   ],
   "$notCovered": {

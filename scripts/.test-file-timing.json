@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-10-31T11:20:00.000Z",
+  "files": {
+    "tests/check-bundle-budget.test.ts": 247200,
+    "tests/eslint-gate-canary.test.ts": 238500,
+    "tests/check-commit-claims.test.ts": 169100,
+    "tests/base-check.test.ts": 103700,
+    "tests/changed-scope.test.ts": 85700,
+    "tests/affected-tests.test.ts": 48500,
+    "tests/gate-executors.test.ts": 48100,
+    "tests/tw4-hardgate-behaviour.test.ts": 47000,
+    "tests/check-merge-parents.test.ts": 42900,
+    "tests/a11y-axe-stories.test.ts": 40100,
+    "tests/ci-env-probe.test.ts": 37700,
+    "tests/scripts-typecheck-ratchet.test.ts": 35900,
+    "tests/precommit-timing.test.ts": 35400,
+    "tests/a11y-rules-gate.test.ts": 35100,
+    "tests/changelog-versions-gate.test.ts": 34900
+  }
+}
