@@ -766,7 +766,7 @@ test.describe("应用页签与全屏视图 @critical", () => {
         el.scrollTop = el.scrollHeight;
       });
       await expect
-        // eslint-disable-next-line unicorn/prefer-dom-node-dataset -- Playwright 的 Locator 没有 dataset，只有 getAttribute
+        // oxlint-disable-next-line unicorn/prefer-dom-node-dataset -- Playwright 的 Locator 没有 dataset，只有 getAttribute
         .poll(async () => page.locator("[data-log-index]").last().getAttribute("data-log-index"))
         .toBe(String(ROWS - 1));
 
