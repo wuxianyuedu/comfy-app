@@ -135,11 +135,11 @@ function stripComments(text) {
 const RULES = {
   Z1: {
     label: "行内数字 zIndex（应改走 Z.*，~/lib/shell/overlay-z）",
-    count: (t) => (stripComments(t).match(/\bzIndex:\s*\d+/g) || []).length,
+    count: (t) => (stripComments(t).match(/\bzIndex:\s*\d+/g) ?? []).length,
   },
   Z2: {
     label: "任意值写法 z-[<数字>]（规范 03 §3.2 应写 z-<数字>）",
-    count: (t) => (stripComments(t).match(/\bz-\[\d+\]/g) || []).length,
+    count: (t) => (stripComments(t).match(/\bz-\[\d+\]/g) ?? []).length,
   },
   Z3: {
     label:
@@ -198,7 +198,8 @@ function collect() {
       for (const [id, rule] of Object.entries(RULES)) {
         const n = rule.count(text);
         if (n > 0) {
-          (files[rel] ||= {})[id] = n;
+          files[rel] ??= {};
+          files[rel][id] = n;
         }
       }
     }

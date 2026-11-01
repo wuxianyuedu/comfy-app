@@ -358,7 +358,7 @@ export function parseLockfile(text) {
   };
   for (const [name, lines] of sections) {
     if (name === LOCK_PREFIX) {
-      out.lockfileVersion = unquote(lines.find((l) => l.trim()) || "");
+      out.lockfileVersion = unquote(lines.find((l) => l.trim()) ?? "");
       continue;
     }
     // keys 用于条目级比对（packages/snapshots/importers）；
@@ -498,13 +498,13 @@ function diffImporters(a, b) {
   /** @type {Record<string, Record<string, GroupDiff>>} */
   const out = {};
   for (const name of names) {
-    const ga = a.importer.get(name) || new Map();
-    const gb = b.importer.get(name) || new Map();
+    const ga = a.importer.get(name) ?? new Map();
+    const gb = b.importer.get(name) ?? new Map();
     /** @type {Record<string, GroupDiff>} */
     const groups = {};
     for (const group of [...new Set([...ga.keys(), ...gb.keys()])].sort()) {
-      const da = ga.get(group) || new Map();
-      const db = gb.get(group) || new Map();
+      const da = ga.get(group) ?? new Map();
+      const db = gb.get(group) ?? new Map();
       /** @type {DepChange[]} */
       const added = [];
       /** @type {DepChange[]} */

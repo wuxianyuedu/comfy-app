@@ -219,6 +219,8 @@ export function readRevisions(gitDir, cwd = ROOT) {
   const upstreamRef = ref && ref.includes("/") ? ref : null;
   return {
     headSha: run(["rev-parse", "HEAD"]),
+    // `run()` 失败时给空串，这里要的是 null：`||` 把两种空值并成同一个「拿不到」。
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- run() 的空串才是失败信号
     upstreamSha: (upstreamRef && run(["rev-parse", "--verify", "--quiet", upstreamRef])) || null,
   };
 }

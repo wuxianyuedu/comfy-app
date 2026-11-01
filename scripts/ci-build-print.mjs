@@ -131,9 +131,9 @@ export function stageLogExcerpt(text, opts = {}) {
  * @returns {string[]}
  */
 export function formatOutcome(outcome, extra = {}) {
-  const sn = extra.sn || "(未知构建)";
-  const slug = extra.slug || "";
-  const tag = extra.prefix || "[build-readout]";
+  const sn = extra.sn ?? "(未知构建)";
+  const slug = extra.slug ?? "";
+  const tag = extra.prefix ?? "[build-readout]";
   const lines = [];
   const head = {
     green: "绿（这一跑有结论）",

@@ -324,7 +324,7 @@ export function judgeAttendance({
     );
   }
   evidence.push(
-    `逐格：${outcome.configured.length} 格有结论 · 判定 ${outcome.state}（平台原文 ${outcome.raw || "?"}）`,
+    `逐格：${outcome.configured.length} 格有结论 · 判定 ${outcome.state}（平台原文 ${outcome.raw ?? "?"}）`,
   );
   for (const s of outcome.failed.slice(0, 5)) {
     evidence.push(`  · 真失败 ${s.name}`);

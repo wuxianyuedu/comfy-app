@@ -110,13 +110,12 @@ const ESLINT_CONFIG = path.join(ROOT, "eslint.config.js");
  *    （实测：失败后下一次调用会重新求值），所以把失败也缓存成 `null` 等于
  *    让一次瞬时 I/O 错误把整个进程钉死在自己的错误结论上。
  */
-let configPromise = null;
+/** @type {Promise<any> | undefined} 未装载时是 undefined —— 不用 `null` 当哨兵，`!` 就能同时管住两种空值 */
+let configPromise;
 
 /** 读一次真正的 `eslint.config.js`（扁平配置数组，**未** `flat()`）。 */
 function loadEslintConfig() {
-  if (!configPromise) {
-    configPromise = import(pathToFileURL(ESLINT_CONFIG).href).then((mod) => mod.default);
-  }
+  configPromise ??= import(pathToFileURL(ESLINT_CONFIG).href).then((mod) => mod.default);
   return configPromise;
 }
 
@@ -360,17 +359,16 @@ function normalize(setting) {
  * §11.23.3 同款），而缓存里存的是那个 rejected promise —— 每个等它的用例都会拿到
  * 同一条真故障，红得起来，也不会退化成「读到 0 条规则于是全绿」。
  */
-let factsPromise = null;
+/** @type {Promise<any> | undefined} 同上 */
+let factsPromise;
 
 async function configFacts() {
-  if (!factsPromise) {
-    factsPromise = (async () => ({
-      effective: await effectiveRules(),
-      recommended: await officialRecommended(),
-      official: await officialRuleMap(),
-      inNeither: await rulesInNeitherConfig(),
-    }))();
-  }
+  factsPromise ??= (async () => ({
+    effective: await effectiveRules(),
+    recommended: await officialRecommended(),
+    official: await officialRuleMap(),
+    inNeither: await rulesInNeitherConfig(),
+  }))();
   return factsPromise;
 }
 
@@ -523,7 +521,9 @@ async function judge(ledger) {
     }
   }
 
-  const undecidedCount = inNeither.filter((n) => !(official.get(n) || {}).deprecated).length;
+  const undecidedCount = inNeither.filter(
+    (n) => !((official.get(n) ?? {}).deprecated),
+  ).length;
   const onCount = Object.values(effective).filter((v) => v !== "off").length;
   const summary =
     `[a11y-rules] 生效 ${onCount} 条 / 官方 recommended ${Object.keys(recommended).length} 条；` +

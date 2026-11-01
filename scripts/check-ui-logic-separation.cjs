@@ -70,11 +70,11 @@ const isTest = (r) => /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/
 const COUNT_RULES = {
   S1: {
     label: "视图内裸 fetch()（应下沉到 lib/<domain>-api.ts 或 hooks/）",
-    count: (t) => (t.match(/\bfetch\s*\(/g) || []).length,
+    count: (t) => (t.match(/\bfetch\s*\(/g) ?? []).length,
   },
   S2: {
     label: "视图内 vanillaApi.*（应经 controller hook 暴露 action）",
-    count: (t) => (t.match(/\bvanillaApi\s*\./g) || []).length,
+    count: (t) => (t.match(/\bvanillaApi\s*\./g) ?? []).length,
   },
   S3: {
     label: "视图内 tRPC 取数（应经 controller hook 暴露数据）",
@@ -87,7 +87,7 @@ const COUNT_RULES = {
       (
         t.match(
           /\bapi\s*\.[A-Za-z0-9_]+\s*\.[A-Za-z0-9_]+\s*\.(?:useQuery|useMutation|useInfiniteQuery|useSubscription)\b|(?<![A-Za-z0-9_])(?:queryOptions|mutationOptions|infiniteQueryOptions|subscriptionOptions|queryFilter)\s*\(/g,
-        ) || []
+        ) ?? []
       ).length,
   },
 };
@@ -95,7 +95,7 @@ const COUNT_RULES = {
 const HINT_RULES = {
   S4: {
     label: "视图内内联 async 事件处理器（多数属纯 UI 交互，人工判断是否下沉）",
-    count: (t) => (t.match(/=\s*async\s*\(/g) || []).length,
+    count: (t) => (t.match(/=\s*async\s*\(/g) ?? []).length,
   },
 };
 
@@ -126,13 +126,15 @@ function collect() {
       for (const [id, rule] of Object.entries(COUNT_RULES)) {
         const n = rule.count(t);
         if (n > 0) {
-          (ratchet[r] ||= {})[id] = n;
+          ratchet[r] ??= {};
+          ratchet[r][id] = n;
         }
       }
       for (const [id, rule] of Object.entries(HINT_RULES)) {
         const n = rule.count(t);
         if (n > 0) {
-          (hints[r] ||= {})[id] = n;
+          hints[r] ??= {};
+          hints[r][id] = n;
         }
       }
     }
@@ -157,14 +159,14 @@ function collect() {
       // 里那些 .tsx 是「点击复制路径」的调试用字符串常量，不是依赖。
       if (r.endsWith(".ts")) {
         const specs = [
-          ...(t.match(/\bimport\s+(?:type\s+)?[^;]*?\bfrom\s*["']([^"']+)["']/g) || []),
-          ...(t.match(/\bexport\s+(?:\*|\{[^}]*\})\s*from\s*["']([^"']+)["']/g) || []),
-          ...(t.match(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g) || []),
+          ...(t.match(/\bimport\s+(?:type\s+)?[^;]*?\bfrom\s*["']([^"']+)["']/g) ?? []),
+          ...(t.match(/\bexport\s+(?:\*|\{[^}]*\})\s*from\s*["']([^"']+)["']/g) ?? []),
+          ...(t.match(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g) ?? []),
         ]
           .map(
             (stmt) =>
-              (stmt.match(/["']([^"']+)["'](?!.*\bfrom\b)/) ||
-                stmt.match(/["']([^"']+)["']/) ||
+              (stmt.match(/["']([^"']+)["'](?!.*\bfrom\b)/) ??
+                stmt.match(/["']([^"']+)["']/) ??
                 [])[1],
           )
           .filter((s) => typeof s === "string" && s.endsWith(".tsx"));

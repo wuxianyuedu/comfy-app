@@ -117,12 +117,12 @@ export function renderLockDiff(diff, opts = {}) {
        * 而它构造上不可达）。 */
       for (const it of g.added) {
         rows.push(
-          `+ ${it.name}  ${it.value?.specifier || "*"} -> ${shortVersion(it.value?.version)}`,
+          `+ ${it.name}  ${it.value?.specifier ?? "*"} -> ${shortVersion(it.value?.version)}`,
         );
       }
       for (const it of g.removed) {
         rows.push(
-          `- ${it.name}  ${it.value?.specifier || "*"} -> ${shortVersion(it.value?.version)}`,
+          `- ${it.name}  ${it.value?.specifier ?? "*"} -> ${shortVersion(it.value?.version)}`,
         );
       }
       for (const it of g.changed) {

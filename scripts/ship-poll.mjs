@@ -235,7 +235,7 @@ export async function pollUntilTerminal(ctx) {
           `且此刻没有一格在飞（${sig}）⇒ 不再轮询：这一格没有终态结论`,
       );
       log(
-        `[ship]   接着看：https://cnb.cool/${slug}/-/build/logs/${buildSn || "<sn>"}` +
+        `[ship]   接着看：https://cnb.cool/${slug}/-/build/logs/${buildSn ?? "<sn>"}` +
           "，或过一会儿再 `pnpm ship`（PR 已存在会复用，不重建）",
       );
       return { buildState, buildSn, stop: CODE.NOT_RUN };

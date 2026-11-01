@@ -54,8 +54,8 @@ module.exports = {
       /* ② 先数（含 `.trim()` 的形态一并数进来）。
        * ① 再数**不带 `.trim()`** 的 `?? ""` 形态 —— 否则
        * `(x ?? "").trim().toUpperCase()` 会被两种形态各数一次（重复计）。 */
-      const trimmed = (t2.match(/\.\s*trim\(\)\s*\.\s*toUpperCase\s*\(/g) || []).length;
-      const plain = (t2.match(/\?\?\s*(?:"[^"]*"|'[^']*')\s*\)\s*\.toUpperCase\s*\(/g) || [])
+      const trimmed = (t2.match(/\.\s*trim\(\)\s*\.\s*toUpperCase\s*\(/g) ?? []).length;
+      const plain = (t2.match(/\?\?\s*(?:"[^"]*"|'[^']*')\s*\)\s*\.toUpperCase\s*\(/g) ?? [])
         .length;
       return trimmed + plain;
     },
@@ -89,11 +89,11 @@ module.exports = {
       if (/from "~\/lib\/app-events"/.test(t2)) {
         return 0;
       }
-      const dispatched = (t2.match(/\bnew CustomEvent\s*\(/g) || []).length;
+      const dispatched = (t2.match(/\bnew CustomEvent\s*\(/g) ?? []).length;
       const namespaced = (
         t2.match(
           /\.(?:add|remove)EventListener\s*\(\s*(?:[A-Za-z_$][\w$]*\s*,\s*)?["'][a-z][\w-]*:[\w:-]+["']/g,
-        ) || []
+        ) ?? []
       ).length;
       return dispatched + namespaced;
     },
@@ -130,12 +130,12 @@ module.exports = {
       const value = (
         t2.match(
           /=>\s*[A-Za-z_$][\w$.[\]?]*\(\s*[A-Za-z_$][\w$]*\.(?:target|currentTarget)\.value\s*\)/g,
-        ) || []
+        ) ?? []
       ).length;
       const checked = (
         t2.match(
           /=>\s*[A-Za-z_$][\w$.[\]?]*\(\s*[A-Za-z_$][\w$]*\.(?:target|currentTarget)\.checked\s*\)/g,
-        ) || []
+        ) ?? []
       ).length;
       return value + checked;
     },
@@ -172,16 +172,16 @@ module.exports = {
         return 0;
       }
       const offset = (
-        t2.match(/\.length\s*-\s*[A-Za-z_$][\w$.[\]?]*\s*\*\s*[A-Za-z_$0-9][\w$.[\]?]*/g) || []
+        t2.match(/\.length\s*-\s*[A-Za-z_$][\w$.[\]?]*\s*\*\s*[A-Za-z_$0-9][\w$.[\]?]*/g) ?? []
       ).length;
       const ceilDiv = (
-        t2.match(/Math\.ceil\s*\(\s*[A-Za-z_$][\w$.[\]?]*\s*\/\s*[A-Za-z_$0-9][\w$.[\]?]*\s*\)/g) ||
+        t2.match(/Math\.ceil\s*\(\s*[A-Za-z_$][\w$.[\]?]*\s*\/\s*[A-Za-z_$0-9][\w$.[\]?]*\s*\)/g) ??
         []
       ).length;
       const tail = (
         t2.match(
           /\b(?!Date\b)(?:logs?|items?|entries|rows?|lines?|list|arr|all|values?|records?|history|sessions?|segments?|collected|out)\b[\w$.[\]?]*\.slice\(\s*-\s*(?:[A-Za-z_$][\w$]*|\d+)\s*\)/g,
-        ) || []
+        ) ?? []
       ).length;
       return offset + ceilDiv + tail;
     },
@@ -214,7 +214,7 @@ module.exports = {
       }
       /* 只认「订阅回调里写 state」：`onProgress:` 之后同一段里出现 setter。 */
       const hits =
-        t2.match(/onProgress\s*:\s*\([^)]*\)\s*=>\s*(?:\{[\s\S]{0,400}?)?set[A-Z][\w$]*\s*\(/g) ||
+        t2.match(/onProgress\s*:\s*\([^)]*\)\s*=>\s*(?:\{[\s\S]{0,400}?)?set[A-Z][\w$]*\s*\(/g) ??
         [];
       return hits.length;
     },
@@ -322,9 +322,9 @@ module.exports = {
           continue;
         }
         const window = t2.slice(m.index, m.index + 900);
-        const writes = (window.match(new RegExp(String.raw`\b` + name + String.raw`\.current\s*=`, "g")) || [])
+        const writes = (window.match(new RegExp(String.raw`\b` + name + String.raw`\.current\s*=`, "g")) ?? [])
           .length;
-        const reads = (window.match(new RegExp(String.raw`!?\b` + name + String.raw`\.current`, "g")) || []).length;
+        const reads = (window.match(new RegExp(String.raw`!?\b` + name + String.raw`\.current`, "g")) ?? []).length;
         if (writes >= 1 && reads >= 2) {
           hits++;
         }

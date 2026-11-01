@@ -28,7 +28,8 @@ export const FRESHNESS_LEDGER_BRANCH = "ci/freshness-ledger";
  * @returns {Record<string, unknown> | null}
  */
 export function readBranchLedger({ root, rel, branch }) {
-  const ref = branch || process.env.FRESHNESS_LEDGER_BRANCH || FRESHNESS_LEDGER_BRANCH;
+  // 三处来源只有「没配」一种空值形态（环境变量未设是 `undefined`），不对空串做特判。
+  const ref = branch ?? process.env.FRESHNESS_LEDGER_BRANCH ?? FRESHNESS_LEDGER_BRANCH;
   const res = spawnSync("git", ["show", `${ref}:${rel}`], {
     cwd: root,
     encoding: "utf8",
@@ -100,7 +101,7 @@ export function pushFreshnessLedger({ root, kinds, run }) {
   // 因为「每日档」与「单跑口」同名 stage 正文须逐字相同（tests/no-platform-ci-config.test.ts 钉死），
   // 写在 stage 里会让 daily 与 oneshot 正文分叉、破坏判据。
   const platformUser =
-    process.env.CNB_BUILD_USER_NICKNAME || process.env.CNB_COMMITTER || process.env.CNB_BUILD_USER;
+    process.env.CNB_BUILD_USER_NICKNAME ?? process.env.CNB_COMMITTER ?? process.env.CNB_BUILD_USER;
   if (!platformUser) {
     return { pushed: false, reason: "not-platform" };
   }
@@ -121,7 +122,7 @@ export function pushFreshnessLedger({ root, kinds, run }) {
   if (contextSubject() !== "master" || !dailyEvent) {
     return { pushed: false, reason: "not-master-subject" };
   }
-  const branch = process.env.FRESHNESS_LEDGER_BRANCH || FRESHNESS_LEDGER_BRANCH;
+  const branch = process.env.FRESHNESS_LEDGER_BRANCH ?? FRESHNESS_LEDGER_BRANCH;
   const allRels = [...new Set(Object.values(FRESHNESS_TRACKS).map((t) => t.ledger))];
   const freshRels = new Set(kinds.map((k) => freshnessTrack(k).ledger));
   /* 把分支上「另外两档」的最新副本取回工作树，避免只推自己那份把别的覆盖掉。

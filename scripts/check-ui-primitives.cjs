@@ -478,7 +478,8 @@ function collect() {
         }
         const n = rule.count(text);
         if (n > 0) {
-          (files[rel] ||= {})[id] = n;
+          files[rel] ??= {};
+          files[rel][id] = n;
         }
       }
     }
@@ -700,10 +701,8 @@ function main() {
     );
     process.exit(1);
   }
-  if (!baseFiles) {
-    // 没有棘轮判据可比：给一份空账，后面的比对天然只剩硬闸一条路。
-    baseFiles = {};
-  }
+  // 没有棘轮判据可比：给一份空账，后面的比对天然只剩硬闸一条路。
+  baseFiles ??= {};
 
   const problems = hardGateHits(now);
   const dropped = [];

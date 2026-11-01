@@ -285,8 +285,8 @@ const HEADER_LINE_RE = /^\*\*\[评论人：[^\]\n]*\]\*\*$/;
 export function withCommentHeader(body, handle) {
   const lines = String(body ?? "").split(/\r?\n/);
   let i = 0;
-  /** @type {string | null} */
-  let kept = null;
+  /** @type {string | undefined} */
+  let kept;
   while (i < lines.length) {
     const line = lines[i];
     const trimmed = String(line ?? "").trim();
@@ -297,9 +297,7 @@ export function withCommentHeader(body, handle) {
     if (!HEADER_LINE_RE.test(trimmed)) {
       break;
     }
-    if (kept === null) {
-      kept = trimmed;
-    }
+    kept ??= trimmed;
     i += 1;
   }
   const rest = lines.slice(i).join("\n").replace(/\s+$/, "");
@@ -464,7 +462,7 @@ export function whoamiLines({ handle = null, source = null, root = "", slug = nu
   const label = handlerLabel(name);
   const author = authorLabel(name);
   const participant = participantLabel(name);
-  const repo = slug || "<组织>/<仓库>";
+  const repo = slug ?? "<组织>/<仓库>";
   const from = String(source ?? "").trim();
   const lines = [
     `[ship] 本检出的平台留痕：${name || "未配"}${name ? `（提单人标签 ${author} · 处理人标签 ${label} · 参与人标签 ${participant}）` : ""

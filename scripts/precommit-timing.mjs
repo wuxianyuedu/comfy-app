@@ -654,7 +654,7 @@ export function recordRun(argv, cwd = process.cwd()) {
   /* 组 C 的分文件读数：钩子只把**目录**递过来（shell 里解析 XML 会变成第二份实现，
    * 而那正是本钩子刻意不写的东西）。没递目录时这一格是空数组 —— 与「这次跑了但没有
    * 明细」不同形，因为 `filesExpected` 会是 0，报表那一侧照实说「没有清单」。 */
-  const junitDir = value(argv, "--junit-dir") || "";
+  const junitDir = value(argv, "--junit-dir") ?? "";
   const cRead = junitDir
     ? collectFileTimings({ dir: junitDir })
     : { files: [], expected: 0, missing: 0, dropped: 0 };

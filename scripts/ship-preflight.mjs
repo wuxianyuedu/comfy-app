@@ -100,9 +100,9 @@ export async function runPreflightStage(ctx) {
    * 「人还没有分支」的时刻是旁观者：第一次跑的屏幕输出全部作废，人得先离开这条链
    * 手动建完再回来跑第二遍。名字仍然只由人给（判断不在这里），脚本只补「动 ref」
    * 那半件机械事；四态的判断在 `decideCreateBranch`。 */
-  const wantName = (opt.branch || "").trim();
+  const wantName = (opt.branch ?? "").trim();
   const cb = decideCreateBranch({
-    requested: wantName || null,
+    requested: wantName === "" ? null : wantName,
     current: branch,
     existsLocal: wantName
       ? run("git", ["show-ref", "--verify", "--quiet", `refs/heads/${wantName}`]).status === 0
@@ -112,7 +112,7 @@ export async function runPreflightStage(ctx) {
           "show-ref",
           "--verify",
           "--quiet",
-          `refs/remotes/${up.remote || "origin"}/${wantName}`,
+          `refs/remotes/${up.remote ?? "origin"}/${wantName}`,
         ]).status === 0
       : false,
   });
@@ -204,8 +204,8 @@ export async function runPreflightStage(ctx) {
   ];
 
   log(
-    `[ship] 分支 ${branch} · sha ${sha.slice(0, 8)} · 仓库 ${slug || "(取不到)"}` +
-      ` · 远端 ${up.remote || "(无)"} · 基线 ${baseRef || "(取不到)"}` +
+    `[ship] 分支 ${branch} · sha ${sha.slice(0, 8)} · 仓库 ${slug ?? "(取不到)"}` +
+      ` · 远端 ${up.remote ?? "(无)"} · 基线 ${baseRef ?? "(取不到)"}` +
       `（来源 ${up.source}${baseRef === null ? " ⇒ 碎片那一查没有事实源，见下" : ""}）`,
   );
   log(
@@ -298,6 +298,8 @@ export async function runPreflightStage(ctx) {
       sha,
       slug,
       adds: opt.adds,
+      // `Boolean` 只问「有没有给」，不是取值：`||` 在这里的语义就是「两者都空 = 没给」。
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 判存在，空串也算没给
       hasMessage: Boolean(opt.message || opt.messageFile),
       merge: opt.merge,
       closeIssue: opt.closeIssue,
@@ -305,7 +307,7 @@ export async function runPreflightStage(ctx) {
       createBranch: cb.act ? cb.branch : null,
       remote: up.remote,
       baseBranch,
-      handle: handle || null,
+      handle: handle ?? null,
     })) {
       log(`        $ ${c}`);
     }

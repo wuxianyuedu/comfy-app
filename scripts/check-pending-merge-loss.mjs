@@ -133,7 +133,7 @@ export function scanPendingMerge({ source = "" } = {}) {
 
   /* HEAD 与索引之间改动的路径 —— 合并结果相对本侧动了哪些文件。
    * 用 `--name-only -z` 一次取完。 */
-  const changed = (git(["diff", "--name-only", "-z", "HEAD"]) || "").split("\0").filter(Boolean);
+  const changed = (git(["diff", "--name-only", "-z", "HEAD"]) ?? "").split("\0").filter(Boolean);
   const files = changed.filter((f) => !isGenerated(f));
   if (files.length === 0) {
     return { ok: true, lost: [] };

@@ -168,6 +168,8 @@ export function parseSuperjsonEnvelope(payload) {
   if (data && typeof data === "object" && "json" in data) {
     return data.json;
   }
+  // 空对象兜底：`data` 与 `payload` 都可能是非对象值，那时要一份空快照而不是原值。
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 假值（含空串 / 0）一律兜成空对象
   return (data ?? payload) || {};
 }
 

@@ -177,7 +177,7 @@ function jsdocStructuralOnly(text) {
   if (JSDOC_PROSE_WORDS_RE.test(rest)) {
     return false;
   }
-  const words = rest.match(/[A-Za-z]{2,}/g) || [];
+  const words = rest.match(/[A-Za-z]{2,}/g) ?? [];
   return words.length < 3;
 }
 
@@ -267,7 +267,7 @@ function looksEnglish(text) {
     .replaceAll(/`[^`]*`/g, " ")
     .replaceAll(/"[^"]*"|'[^']*'|“[^”]*”/g, " ")
     .replaceAll(/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g, " ");
-  if ((bare.match(ENGLISH_WORD_RE) || []).length < ENGLISH_WORDS_THRESHOLD) {
+  if ((bare.match(ENGLISH_WORD_RE) ?? []).length < ENGLISH_WORDS_THRESHOLD) {
     return false;
   }
   return JSDOC_PROSE_WORDS_RE.test(bare);

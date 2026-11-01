@@ -177,7 +177,7 @@ function findCycles(graph) {
     while (work.length) {
       const frame = work.at(-1);
       const [node, i] = frame;
-      const neighbors = graph.get(node) || [];
+      const neighbors = graph.get(node) ?? [];
       if (i < neighbors.length) {
         frame[1] = i + 1;
         const next = neighbors[i];
@@ -207,7 +207,7 @@ function findCycles(graph) {
           onStack.delete(popped);
           comp.push(popped);
         } while (popped !== node);
-        const selfLoop = comp.length === 1 && (graph.get(comp[0]) || []).includes(comp[0]);
+        const selfLoop = comp.length === 1 && (graph.get(comp[0]) ?? []).includes(comp[0]);
         if (comp.length > 1 || selfLoop) {
           cycles.push(comp.sort());
         }

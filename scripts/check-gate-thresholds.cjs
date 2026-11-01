@@ -92,7 +92,7 @@ function num(raw) {
  * @returns {boolean}
  */
 function isLooser(entry, from, to) {
-  const s = entry.strictness || "larger-is-looser";
+  const s = entry.strictness ?? "larger-is-looser";
   if (s === "larger-is-looser") {
     return to > from;
   }
@@ -267,7 +267,7 @@ function analyze({
         continue;
       }
       const signed =
-        Number(e.movedFrom) === prev.value && /^#\d{2,}$/.test(String(e.movedIssue || ""));
+        Number(e.movedFrom) === prev.value && /^#\d{2,}$/.test(String(e.movedIssue ?? ""));
       if (!signed) {
         problems.push(
           `${e.file}#${e.const} 相对主干是**放宽**（${prev.value} → ${e.value}），` +

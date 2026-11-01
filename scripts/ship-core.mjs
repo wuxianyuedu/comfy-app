@@ -86,7 +86,7 @@ export function decideCreateBranch({
   existsLocal = false,
   existsRemote = false,
 }) {
-  const name = (requested || "").trim();
+  const name = (requested ?? "").trim();
   if (!name) {
     return {
       requested: false,
@@ -255,7 +255,7 @@ export function classifyPushFailure(stdout, stderr) {
  * @returns {{title: string, source: "flag" | "branch-first" | "head" | "none"}} 标题与它的来源
  */
 export function deriveTitle({ subjects = [], head = "", explicit = null }) {
-  const flag = (explicit || "").trim();
+  const flag = (explicit ?? "").trim();
   if (flag) {
     return { title: flag, source: "flag" };
   }
@@ -327,8 +327,8 @@ export function parseSlug(remoteUrl) {
  * @returns {{remote: string | null, base: string | null, source: "upstream" | "remote-head" | "sole-remote" | "origin" | "none"}}
  */
 export function resolveUpstream({ upstream, remotes = [], localBranch = null, remoteHead = null }) {
-  const named = remotes.map((r) => (r || "").trim()).filter(Boolean);
-  const u = (upstream || "").trim();
+  const named = remotes.map((r) => (r ?? "").trim()).filter(Boolean);
+  const u = (upstream ?? "").trim();
   const slash = u.indexOf("/");
   const remoteFromUpstream = slash > 0 ? u.slice(0, slash) : null;
   const upstreamBranch = slash > 0 ? u.slice(slash + 1) : "";
@@ -381,7 +381,7 @@ export function resolveUpstream({ upstream, remotes = [], localBranch = null, re
  */
 function trunkFromRemoteHead(remote, remoteHead) {
   const prefix = `refs/remotes/${remote}/`;
-  const s = (remoteHead || "").trim();
+  const s = (remoteHead ?? "").trim();
   if (!s.startsWith(prefix)) {
     return null;
   }
@@ -409,7 +409,7 @@ function trunkFromRemoteHead(remote, remoteHead) {
 export function readFreshnessState(res) {
   let json;
   try {
-    json = JSON.parse((res && res.stdout) || "");
+    json = JSON.parse((res && res.stdout) ?? "");
   } catch {
     return "unknown";
   }
@@ -427,7 +427,7 @@ export function readFreshnessState(res) {
   const state = json.installDrift && json.installDrift.state;
   /* `no-install` 与「远端漂移」可能同时成立（没装 + 远端改过依赖）：那时要念的是**漂移**，
    * 因为它的出口（先 pull 再装）才是完整动作 —— 只说「没装」会让人在旧基线上装一套旧依赖。 */
-  if (state === "no-install" && !(json.remoteDrifts || []).length) {
+  if (state === "no-install" && (json.remoteDrifts ?? []).length === 0) {
     return "no-install";
   }
   if (Number(json.code) === 0) {
@@ -443,7 +443,7 @@ export function readFreshnessState(res) {
  * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,state:string}} 归一后的字段
  */
 export function readPullVerdict(json) {
-  const d = (json && json.data) || {};
+  const d = (json && json.data) ?? {};
   return {
     number: d.number === undefined ? null : Number(d.number),
     mergeableState: String(d.mergeable_state ?? "unknown"),
@@ -501,7 +501,7 @@ export function pullRecordForBranch(json, branch) {
         ? json
         : [];
   for (const p of list) {
-    const ref = String((p && p.head && p.head.ref) || "");
+    const ref = String((p && p.head && p.head.ref) ?? "");
     if (ref === `refs/heads/${branch}`) {
       return p;
     }
@@ -593,8 +593,8 @@ export function looksNewlineMangled(msg) {
  */
 export function planCommands(st) {
   const p = [];
-  const remote = st.remote || "origin";
-  const trunk = st.baseBranch || "master";
+  const remote = st.remote ?? "origin";
+  const trunk = st.baseBranch ?? "master";
   /* 建分支排在最前面：它是 `--branch` 唯一能改变形状的一格（不在分支上时，后面每一跳
    * 的分支名都取自它）。给了旗标才出现 —— 与合并/关单同一档：默认那份计划里没有这一步。 */
   if (st.createBranch) {
@@ -636,7 +636,7 @@ export function planCommands(st) {
    * 对账用例把三个旗标一起拨上，任何一侧新增调用而另一侧没跟都会红。
    * 写标签 / 评论一律**后跟独立回读** —— 回执不算结论。 */
   if (st.claim != null) {
-    const who = st.handle || "<短名>";
+    const who = st.handle ?? "<短名>";
     p.push(`cnb issues get-issue --repo ${st.slug} --number ${st.claim} -v`);
     p.push(
       `cnb issues post-issue-labels --repo ${st.slug} --number ${st.claim} --labels 处理人:${who} -v`,
@@ -655,7 +655,7 @@ export function planCommands(st) {
     );
   }
   if (st.release != null) {
-    const who = st.handle || "<短名>";
+    const who = st.handle ?? "<短名>";
     p.push(`cnb issues get-issue --repo ${st.slug} --number ${st.release} -v`);
     p.push(
       `cnb issues list-issue-comments --repo ${st.slug} --number ${st.release} --sort -created --page-size 100 -v`,
@@ -674,7 +674,7 @@ export function planCommands(st) {
     );
   }
   if (st.claims) {
-    const who = st.handle || "<短名>";
+    const who = st.handle ?? "<短名>";
     p.push(
       `cnb issues list-issues --repo ${st.slug} --labels 处理人:${who} --state open --page <p> --page-size 100 -v`,
     );
@@ -701,7 +701,7 @@ export function planCommands(st) {
    * `--dry-run` 教的执行面要和真跑的一样大，否则它教的是另一件事。 */
   if (st.branches) {
     p.push(`git for-each-ref --format=… refs/heads`);
-    p.push(`git ls-remote --heads ${st.remote || "origin"}`);
+    p.push(`git ls-remote --heads ${st.remote ?? "origin"}`);
     p.push(
       `cnb pulls list-pulls --repo ${st.slug} --state all --page <p> --page-size 100 -v（翻页到窗口取满或到顶）`,
     );

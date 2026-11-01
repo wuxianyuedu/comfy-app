@@ -153,7 +153,7 @@ export function scan({ sha, baseline }) {
     };
   }
 
-  const changed = (git(["diff", "--name-only", "-z", `${baseline}..${sha}`]) || "")
+  const changed = (git(["diff", "--name-only", "-z", `${baseline}..${sha}`]) ?? "")
     .split("\0")
     .filter(Boolean);
   /* 生成物先摘掉（口径 3），剩下的才是这一轮要取证的面。 */

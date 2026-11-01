@@ -73,6 +73,8 @@ try {
   // 任何意外都收成 2（「判不了」），不许让它顶着 Node 的默认退出码 1 被读成「依赖陈旧」。
   console.error(
     `[lock-diff] 判据自身跑不起来（不是「依赖陈旧」）：` +
+      // `stack` 在个别实现里是空串，那时要念 `message` —— 两种空值都要回退。
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空 stack 要走 message
       `${error instanceof Error ? error.stack || error.message : String(error)}`,
   );
   process.exit(2);

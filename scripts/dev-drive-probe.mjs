@@ -517,6 +517,8 @@ export function probeCacheLocations(platform) {
   /** @type {Record<string, CacheEntry | null>} */
   const out = {};
   for (const entry of entries) {
+    // 环境变量可能被设成空串，那时同样算「没配」⇒ 回落到默认目录。
+    // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串环境变量要回落
     const target = entry.value || entry.fallback;
     out[entry.key] = target
       ? {

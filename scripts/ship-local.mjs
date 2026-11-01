@@ -169,7 +169,7 @@ export function runPushStage(ctx) {
   const proof = readProof(root, resolveDir);
   if (proof) {
     log(
-      `[ship] ✓ 合并前证明：head ${short(proof.headSha)} · 上游 ${short(proof.upstreamSha)} · ${proof.verifiedAt || "?"}`,
+      `[ship] ✓ 合并前证明：head ${short(proof.headSha)} · 上游 ${short(proof.upstreamSha)} · ${proof.verifiedAt ?? "?"}`,
     );
     if (Array.isArray(proof.baselineRed) && proof.baselineRed.length > 0) {
       log(`[ship]   其中 ${proof.baselineRed.length} 条是主干自带的红（已放行，见 §13.6.2）`);

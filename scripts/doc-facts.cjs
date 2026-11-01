@@ -171,7 +171,7 @@ function extractShellAppExe() {
 }
 function extractSplash() {
   const conf = readJson("src-tauri/tauri.conf.json");
-  const win = conf.app.windows.find((w) => w.label === "splash") || conf.app.windows[0];
+  const win = conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
   return win.url;
 }
 

@@ -203,6 +203,7 @@ function measurePythonOnce(pyChecker) {
     return {
       state: "answered",
       python,
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串的 stdout 要走 message 回退（子进程失败时 stdout 可能是空串）
       problems: [`Python 侧自检失败：${(error.stdout || error.message || "").toString().trim()}`],
     };
   }
