@@ -41,7 +41,7 @@
  * @returns 只留代码的文本
  */
 export function stripComments(src: string, opts: { trailing?: boolean } = {}): string {
-  const out: string[] = [];
+  const out: Array<string> = [];
   let inBlock = false;
   let quote: null | "'" | '"' | "`" = null;
   /** 本行到目前为止还只有空白 —— 只有这种位置上的 `//` 才算「整行注释」。 */

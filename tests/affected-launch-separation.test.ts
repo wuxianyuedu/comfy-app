@@ -8,14 +8,16 @@
  * 段开关（ISSUE #2845）把两段升级成两个 CI stage：`resolveAffectedSegment` 那一组钉它的
  * 取值面 —— 不设=both（逐字旧行为）、认不出=invalid（不许静默吞成 both）。
  */
-import fs from "node:fs";
-import { mkdtempSync, rmSync } from "node:fs";
+import fs, { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
-import { planSeparatedLaunches, resolveAffectedSegment } from "../scripts/affected-launch-segments.mjs";
+import {
+  planSeparatedLaunches,
+  resolveAffectedSegment,
+} from "../scripts/affected-launch-segments.mjs";
 import { runChunk } from "../scripts/run-affected-tests.mjs";
 import {
   mergeTimingLedger,
@@ -30,7 +32,9 @@ describe("planSeparatedLaunches 的固定段分块帽（ISSUE #2863）", () => {
     const plan = planSeparatedLaunches(files);
     const fixedChunks = plan.filter((c) => c.kind === "fixed");
     expect(fixedChunks.length).toBeGreaterThan(1);
-    for (const c of fixedChunks) expect(c.files.length).toBeLessThanOrEqual(24);
+    for (const c of fixedChunks) {
+      expect(c.files.length).toBeLessThanOrEqual(24);
+    }
     expect(fixedChunks.flatMap((c) => c.files).sort()).toEqual([...files].sort());
   });
 
@@ -60,10 +64,24 @@ describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
       ["tests/b.test.ts", 500],
       ["tests/c.test.ts", 250],
     ]);
-    expect(orderByKnownDuration(
-      ["tests/x.test.ts", "tests/a.test.ts", "tests/y.test.ts", "tests/b.test.ts", "tests/c.test.ts"],
-      ledger,
-    )).toEqual(["tests/b.test.ts", "tests/c.test.ts", "tests/a.test.ts", "tests/x.test.ts", "tests/y.test.ts"]);
+    expect(
+      orderByKnownDuration(
+        [
+          "tests/x.test.ts",
+          "tests/a.test.ts",
+          "tests/y.test.ts",
+          "tests/b.test.ts",
+          "tests/c.test.ts",
+        ],
+        ledger,
+      ),
+    ).toEqual([
+      "tests/b.test.ts",
+      "tests/c.test.ts",
+      "tests/a.test.ts",
+      "tests/x.test.ts",
+      "tests/y.test.ts",
+    ]);
   });
 
   it("空台账（冷启动）⇒ 原序返回，不 throw", () => {
@@ -78,13 +96,18 @@ describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
       fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
       fs.writeFileSync(
         path.join(dir, "scripts", ".test-file-timing.json"),
-        JSON.stringify({ generatedAt: "old", files: { "tests/old.test.ts": 999, "tests/a.test.ts": 5 } }),
+        JSON.stringify({
+          generatedAt: "old",
+          files: { "tests/old.test.ts": 999, "tests/a.test.ts": 5 },
+        }),
       );
-      expect(mergeTimingLedger(dir, [
-        { name: "tests/a.test.ts", ms: 7.4 },
-        { name: "tests/new.test.ts", ms: 0.2 },
-        { name: "tests/broken.test.ts", ms: Number.NaN },
-      ])).toBe(true);
+      expect(
+        mergeTimingLedger(dir, [
+          { name: "tests/a.test.ts", ms: 7.4 },
+          { name: "tests/new.test.ts", ms: 0.2 },
+          { name: "tests/broken.test.ts", ms: Number.NaN },
+        ]),
+      ).toBe(true);
       const j = /* SAFETY: 类型断言已复核 */ JSON.parse(
         fs.readFileSync(path.join(dir, "scripts", ".test-file-timing.json"), "utf8"),
       ) as { files: Record<string, number> };
@@ -93,10 +116,9 @@ describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
       expect(j.files["tests/old.test.ts"]).toBe(999); // 保留
       expect(j.files["tests/broken.test.ts"]).toBeUndefined(); // 脏读数不进账
       // 回读面与排序面同一个源
-      expect(orderByKnownDuration(["tests/a.test.ts", "tests/old.test.ts"], readTimingLedger(dir))).toEqual([
-        "tests/old.test.ts",
-        "tests/a.test.ts",
-      ]);
+      expect(
+        orderByKnownDuration(["tests/a.test.ts", "tests/old.test.ts"], readTimingLedger(dir)),
+      ).toEqual(["tests/old.test.ts", "tests/a.test.ts"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

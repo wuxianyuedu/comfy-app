@@ -49,7 +49,14 @@ export function recordTimingLedger(run, opts = {}) {
       /* 脏读数（无 label / 非有限 / 负）在门口滤掉 —— NaN 会被 JSON.stringify 写成 null，
        * 账上留一格 null 让下一份读账的工具当场哑掉。 */
       entries: run.entries
-        .filter((e) => e && typeof e.label === "string" && e.label !== "" && Number.isFinite(e.ms) && e.ms >= 0)
+        .filter(
+          (e) =>
+            e &&
+            typeof e.label === "string" &&
+            e.label !== "" &&
+            Number.isFinite(e.ms) &&
+            e.ms >= 0,
+        )
         .map((e) => ({ label: String(e.label), ms: Math.round(e.ms) })),
     })}\n`;
     fs.appendFileSync(path.join(dir, "comfy-premerge-timing.jsonl"), line, "utf8");
@@ -85,9 +92,9 @@ export function formatTimingSummary(entries) {
   if (rest.length > SUMMARY_TOP) {
     lines.push(
       `  ……其余 ${rest.length - SUMMARY_TOP} 条合计 ${(
-        (rest.slice(SUMMARY_TOP).reduce((a, e) => a + e.ms, 0)) / 1000
+        rest.slice(SUMMARY_TOP).reduce((a, e) => a + e.ms, 0) / 1000
       ).toFixed(1)}s（完整表看 .git 里的 comfy-premerge-timing.jsonl）`,
     );
   }
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }

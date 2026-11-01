@@ -20,7 +20,7 @@ let root: string;
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "premerge-timing-"));
   // `resolveGitDir` 走 `git rev-parse`：台账落点跟着「哪份检出」走，夹具就得起真仓。
-  const git = (args: string[]) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
+  const git = (args: Array<string>) => spawnSync("git", args, { cwd: root, encoding: "utf8" });
   git(["init", "-q"]);
   git(["config", "user.email", "t@example.test"]);
   git(["config", "user.name", "t"]);
@@ -37,21 +37,27 @@ describe("recordTimingLedger —— 追加写、best-effort", () => {
   it("落点在 git 目录下、JSONL 逐行可解析、两次跑是两行", () => {
     const entries = [
       { label: "快照建树(worktree add + 链依赖)", ms: 4200.4 },
-      { label: "本检出:tsc --noEmit", ms: 61000 },
+      { label: "本检出:tsc --noEmit", ms: 61_000 },
     ];
-    expect(recordTimingLedger({ at: "2026-11-01T00:00:00Z", ref: "origin/master", entries }, { cwd: root })).toBe(
-      true,
-    );
     expect(
-      recordTimingLedger({ at: "2026-11-01T00:10:00Z", ref: "origin/master", entries }, { cwd: root }),
+      recordTimingLedger(
+        { at: "2026-11-01T00:00:00Z", ref: "origin/master", entries },
+        { cwd: root },
+      ),
+    ).toBe(true);
+    expect(
+      recordTimingLedger(
+        { at: "2026-11-01T00:10:00Z", ref: "origin/master", entries },
+        { cwd: root },
+      ),
     ).toBe(true);
     const ledgerPath = path.join(resolveGitDir(root)!, "comfy-premerge-timing.jsonl");
     const lines = fs.readFileSync(ledgerPath, "utf8").trim().split("\n");
     expect(lines).toHaveLength(2);
     const first = /* SAFETY: 类型断言已复核 */ JSON.parse(lines[0]!) as {
       at: string;
-      ref: string;
       entries: Array<{ label: string; ms: number }>;
+      ref: string;
     };
     expect(first.ref).toBe("origin/master");
     expect(first.entries[0]!.ms).toBe(4200); // 取整
@@ -60,7 +66,9 @@ describe("recordTimingLedger —— 追加写、best-effort", () => {
 
   it("空读数不落盘（回 false，连文件都不建）", () => {
     expect(recordTimingLedger({ at: "x", ref: "y", entries: [] }, { cwd: root })).toBe(false);
-    expect(fs.existsSync(path.join(resolveGitDir(root)!, "comfy-premerge-timing.jsonl"))).toBe(false);
+    expect(fs.existsSync(path.join(resolveGitDir(root)!, "comfy-premerge-timing.jsonl"))).toBe(
+      false,
+    );
   });
 
   it("脏读数（非有限 ms）不进账", () => {
@@ -91,10 +99,10 @@ describe("formatTimingSummary —— 快照单独一格 + 最慢 5 条 + 合计"
 
   it("快照建树单独一行；其余按毫秒降序取前 5；合计收尾", () => {
     const entries = [
-      { label: "本检出:tsc --noEmit", ms: 61000 },
+      { label: "本检出:tsc --noEmit", ms: 61_000 },
       { label: "快照建树(worktree add + 链依赖)", ms: 4200 },
-      { label: "本检出:eslint", ms: 120000 },
-      { label: "快照:eslint", ms: 118000 },
+      { label: "本检出:eslint", ms: 120_000 },
+      { label: "快照:eslint", ms: 118_000 },
       { label: "本检出:check-x", ms: 300 },
       { label: "快照:check-x", ms: 280 },
       { label: "本检出:check-y", ms: 200 },

@@ -181,15 +181,15 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
 
   it("被禁的三种形状各自命中（数组形 / `checkout HEAD --` 字符串形 / `restore --`）", () => {
     const forbidden = [
-      'execFileSync("git", ["' + CHECKOUT + '", "' + HEADSEP + '", rel]);',
-      'git(`' + CHECKOUT + ' HEAD ' + HEADSEP + ' ${E2E_REL}`);',
-      'git("' + RESTORE + ' ' + HEADSEP + ' path/to/file");',
+      `execFileSync("git", ["${CHECKOUT}", "${HEADSEP}", rel]);`,
+      `git(\`${CHECKOUT} HEAD ${HEADSEP} \${E2E_REL}\`);`,
+      `git("${RESTORE} ${HEADSEP} path/to/file");`,
     ];
     const missed = forbidden.filter((src) => hit(src, "fixture") === null);
     expect(
       missed,
       "这几条被禁写法扫不出来 —— 判据只在**在场的那些**形状上有效，" +
-        "认不出字符串形就等于把 `git " + CHECKOUT + " HEAD " + HEADSEP + " <文件>` 放回来" +
+        `认不出字符串形就等于把 \`git ${CHECKOUT} HEAD ${HEADSEP} <文件>\` 放回来` +
         "（#2593 的现场正是字符串形）。",
     ).toEqual([]);
   });
