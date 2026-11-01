@@ -86,7 +86,7 @@ const REPORT_ONLY = ARGS.has("--report");
 const SCAN_DIR = "src";
 const SOURCE_EXT = /\.(ts|tsx)$/;
 const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) || /\.snap$/.test(rel) || rel.includes("/__tests__/");
+  /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.endsWith(".snap") || rel.includes("/__tests__/");
 
 /* ── 写死色值的识别 ──────────────────────────────────────── */
 
@@ -457,7 +457,7 @@ const decorativeFallbacks = [];
  */
 const declaredColorVars = new Set();
 for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
-  if (!/\.css$/.test(abs)) {
+  if (!abs.endsWith(".css")) {
     continue;
   }
   const css = stripComments(fs.readFileSync(abs, "utf8"));
