@@ -229,6 +229,25 @@ describe("脚本档棘轮 —— 只降不升", () => {
     write(join("scripts", "dirty.mjs"), "const dead = 1;\nexport const b = 2;\n");
   });
 
+  it("删掉一份入库脚本 ⇒ 面收缩要红；`--update` 收紧之后才绿（不是只有涨才拦）", () => {
+    /* 面变小有两条路：删脚本（合法，但要记账）与 include 被改窄（故障）。两种在读数上
+     * 长得一样 —— 所以判据只判「总数对不上」，出路是 `--update` 收紧并留痕。
+     * 真现场（2026-11-01）：主干连续三次提交 `face` 停在 228、入库 `.mjs` 已到 229，
+     * 往下掉的那一半没人念，红只出现在「新人提第一个 PR」的那一刻。 */
+    rmSync(join(fixture, "scripts", "clean.mjs"), { force: true });
+    const judged = runCheck([]);
+    expect(judged.code, judged.output).toBe(1);
+    expect(judged.output).toContain("判决面收缩了");
+    expect(judged.output).toContain("--update");
+    /* 收紧之后才绿 —— 面变小**不是**「不用管」，它要一次显式的记账。 */
+    expect(runCheck(["--update"]).code).toBe(0);
+    expect(readFixtureBaseline().face).toBe(1);
+    expect(runCheck([]).code).toBe(0);
+    write(join("scripts", "clean.mjs"), "export const a = 1;\n");
+    expect(runCheck(["--update"]).code).toBe(0);
+    expect(readFixtureBaseline().face).toBe(2);
+  });
+
   it("下降只提示、不拦（别把「修好了」判成红），且提示指路 `--update`", () => {
     write(join("scripts", "dirty.mjs"), "export const b = 2;\n");
     const { code, output } = runCheck([]);
