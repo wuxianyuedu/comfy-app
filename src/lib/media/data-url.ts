@@ -143,7 +143,7 @@ export function parseDataUrl(value: string): ParsedDataUrl | null {
     return null;
   }
   const comma = value.indexOf(",");
-  if (comma < 0) {
+  if (comma === -1) {
     return null;
   }
   const meta = value.slice(DATA_URL_PREFIX.length, comma);

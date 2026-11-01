@@ -75,7 +75,7 @@ export function resolveByteRange(header: string | null, size: number): ByteRange
    * 正则那份要给 `shape[1]` 兜一个永远走不到的 `?? ""`（两个可选组只要匹配就都是字符串），
    * 而一条**不可达的分支**挂在覆盖率上就是长期欠账。这里每一支都真能走到。 */
   const dash = spec.indexOf("-");
-  if (dash < 0) {
+  if (dash === -1) {
     return FULL;
   }
   const firstRaw = spec.slice(0, dash);

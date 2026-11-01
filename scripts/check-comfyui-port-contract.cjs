@@ -111,7 +111,7 @@ if (deriveSrc == null) {
 } else {
   // buildSpawnArgs 必须"只在有效端口与默认端口不同时"才补 --port。
   const fnAt = deriveSrc.indexOf("export function buildSpawnArgs");
-  if (fnAt < 0) {
+  if (fnAt === -1) {
     fail(`${DERIVE} 里找不到 buildSpawnArgs —— 拉起侧端口口径的判据点被改名/挪走`);
   } else {
     const body = deriveSrc.slice(fnAt, fnAt + 1400);

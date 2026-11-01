@@ -219,7 +219,7 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
       let p = 0;
       while (true) {
         const j = lower.indexOf(q, p);
-        if (j < 0) {
+        if (j === -1) {
           break;
         }
         count += 1;
@@ -257,7 +257,7 @@ function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number,
     let i = 0;
     while (i < orig.length) {
       const j = lower.indexOf(q, i);
-      if (j < 0) {
+      if (j === -1) {
         frag.appendChild(document.createTextNode(orig.slice(i)));
         break;
       }

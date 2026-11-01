@@ -83,7 +83,7 @@ export function libraryEdgeOwner(
    *  再按 `?` 分出「条目 id」与「handle id」（两者都可能含 `:`）。 */
   const rest = parts.slice(2).join(":");
   const sep = rest.indexOf("?");
-  if (sep < 0) {
+  if (sep === -1) {
     return null;
   }
   return {

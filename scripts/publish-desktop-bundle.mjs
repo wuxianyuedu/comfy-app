@@ -255,7 +255,7 @@ function resolvePlan(io = {}) {
   const args = new Set(argv);
   const flag = /** @param {string} name */ (name) => {
     const i = argv.indexOf(name);
-    return i >= 0 ? String(argv[i + 1] ?? "") : "";
+    return i !== -1 ? String(argv[i + 1] ?? "") : "";
   };
   const bundleDir = path.resolve(cwd, flag("--bundle-dir") || DEFAULT_BUNDLE_DIR);
   const keepRaw = flag("--keep");

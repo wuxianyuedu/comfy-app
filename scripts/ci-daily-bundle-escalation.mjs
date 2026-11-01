@@ -240,7 +240,7 @@ export function fetchBundleRedStreak({
     {return { days: "unknown", note: `没盖住 ${windowHours}h 窗口（${win.note}）` };}
   const daily = win.list.filter(isDailyDispatch);
   const at = daily.findIndex((b) => String(b?.sn ?? "") === fromSn);
-  if (at < 0)
+  if (at === -1)
     {return {
       days: "unknown",
       note: `上一跑 ${fromSn} 不在宽窗口的派发列表里`,

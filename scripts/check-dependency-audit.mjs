@@ -79,7 +79,7 @@ const AS_JSON = argv.includes("--json");
  */
 const FIXTURE = (() => {
   const i = argv.indexOf("--fixture");
-  return i >= 0 && argv[i + 1] ? path.resolve(ROOT, argv[i + 1]) : null;
+  return i !== -1 && argv[i + 1] ? path.resolve(ROOT, argv[i + 1]) : null;
 })();
 
 // `--json` 是给管道读的，而 `runPnpmSync` 会把即将执行的命令行回显到**本进程的 stdout**

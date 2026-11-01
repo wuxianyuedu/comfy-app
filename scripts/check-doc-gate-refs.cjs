@@ -177,12 +177,12 @@ function hookDGroupCommands(hookText) {
  * 遇到的**第一个** ``` 就是这份清单的收尾（别再往回找开围栏，那会切到散文上）。 */
 function checklistCommands(docText) {
   const start = docText.indexOf(CHECKLIST_MARKER);
-  if (start < 0) {
+  if (start === -1) {
     return null;
   }
   const rest = docText.slice(start);
   const close = rest.indexOf("```");
-  if (close < 0) {
+  if (close === -1) {
     return null;
   }
   return rest

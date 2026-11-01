@@ -184,7 +184,7 @@ function runSelfTest() {
  */
 export function resolveFace(argv, { readStaged = stagedFiles } = {}) {
   const baseIdx = argv.indexOf("--base");
-  if (baseIdx >= 0) {
+  if (baseIdx !== -1) {
     const baseRef = (argv[baseIdx + 1] ?? "").trim();
     if (!baseRef) {
       return {
@@ -207,7 +207,7 @@ export function resolveFace(argv, { readStaged = stagedFiles } = {}) {
     };
   }
   const si = argv.indexOf("--staged");
-  const files = si >= 0 ? argv.slice(si + 1) : readStaged();
+  const files = si !== -1 ? argv.slice(si + 1) : readStaged();
   /* 空索引有两种来路（忘了 stage / 刻意空提交），而它在索引上逐字同形 ⇒ 不猜，
    * 只认 `intentional-empty-commit.mjs` 那个唯一口径（ISSUE #2354：
    * `pnpm ship --rerun-ci` 要推一笔空提交重新派生流水线，而「什么都没碰」在这里
@@ -231,7 +231,7 @@ export function resolveFace(argv, { readStaged = stagedFiles } = {}) {
         "上一格的账回写失败就会把账本留在里面，ISSUE #2344）",
     };
   }
-  return { ok: true, files, via: si >= 0 ? "手工指定的清单" : "暂存区" };
+  return { ok: true, files, via: si !== -1 ? "手工指定的清单" : "暂存区" };
 }
 
 /**

@@ -720,7 +720,7 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
       const dry = after.indexOf("if (dryRun)");
       const entry = after.indexOf(CALL);
       expect(dry, `${anchor} 之后找不到 if (dryRun)`).toBeGreaterThan(-1);
-      if (entry < 0) {
+      if (entry === -1) {
         continue;
       } // 这一支根本不解析入口（更好）
       expect(

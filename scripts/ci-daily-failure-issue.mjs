@@ -420,9 +420,9 @@ export function main(io = {}) {
   const dryRun = argv.includes("--dry-run");
   const noBlock = argv.includes("--no-block");
   const at = argv.indexOf("--from");
-  const from = at >= 0 ? argv[at + 1] : undefined;
+  const from = at !== -1 ? argv[at + 1] : undefined;
   const laneAt = argv.indexOf("--lane");
-  const laneValue = laneAt >= 0 ? String(argv[laneAt + 1] ?? "").trim() : "";
+  const laneValue = laneAt !== -1 ? String(argv[laneAt + 1] ?? "").trim() : "";
   const lane = laneValue === "" ? null : laneValue;
 
   /** @type {(code:number, why:string)=>number} 退码出口：`--no-block` 只改码，不改话术。 */

@@ -385,7 +385,7 @@ export function moveContractInput(
   delta: number,
 ): Array<ModeContractInputId> {
   const from = inputs.indexOf(id);
-  if (from < 0) {
+  if (from === -1) {
     return [...inputs];
   }
   const to = from + delta;

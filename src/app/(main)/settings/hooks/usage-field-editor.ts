@@ -108,7 +108,7 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
         return prev;
       }
       const idx = prev.fields.findIndex((f) => f.key === "mode");
-      if (idx >= 0) {
+      if (idx !== -1) {
         const fields = prev.fields.map((f, i) => (i === idx ? { ...f, value: mode } : f));
         return { ...prev, fields };
       }
@@ -136,7 +136,7 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
       const emptyImgRow = fields.findIndex(
         (f) => f.key.trim() === "images" && f.value.trim() === "",
       );
-      if (emptyImgRow >= 0) {
+      if (emptyImgRow !== -1) {
         fields[emptyImgRow] = makeUsageField("images", url);
       } else {
         fields.push(makeUsageField("images", url));

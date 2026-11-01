@@ -347,11 +347,11 @@ function scriptFiles() {
 function tableBody(name) {
   const src = fs.readFileSync(path.join(ROOT, RATCHET_TEST), "utf8");
   const at = src.indexOf(`const ${name}`);
-  if (at < 0) {
+  if (at === -1) {
     return "";
   }
   const end = src.indexOf("\n};", at);
-  return src.slice(at, end < 0 ? undefined : end);
+  return src.slice(at, end === -1 ? undefined : end);
 }
 
 /**

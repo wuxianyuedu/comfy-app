@@ -151,7 +151,7 @@ export function registeredElsewhereGates(text) {
     .map((s) => s.trim())
     .filter(Boolean)) {
     const eq = item.indexOf("=");
-    if (eq < 0) {
+    if (eq === -1) {
       out.set(item, []);
       continue;
     }

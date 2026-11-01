@@ -664,7 +664,7 @@ function stdinPaths() {
  */
 export function changedPathsFrom(argv) {
   const ci = argv.indexOf("--changed");
-  if (ci >= 0) {
+  if (ci !== -1) {
     return {
       paths: argv.slice(ci + 1).filter((a) => !a.startsWith("--")),
       renamedFrom: [],
