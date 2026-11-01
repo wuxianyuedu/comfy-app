@@ -99,7 +99,11 @@ overrides:
   #     这正是 §13.5.9 那条「按 advisory 记账、不按版本记账」的现实理由（ISSUE #1623）。
   'fast-uri@3': '3.1.8'
   #   · undici 7.29.0 → 7.29.1（`shadcn > @dotenvx/dotenvx > undici`）
-  'undici@7': '7.29.1'
+  #     7.29.1 → 7.30.1（ISSUE #2989）：advisory 库后补的四条（DoS via 未处理的
+  #     content-encodings 错误、跨源重定向的缓存投毒、Agent 丢掉 tls 选项导致的证书校验
+  #     绕过、TLS 1.2 renegotiation）patched 一律是 `>=7.30.1`，于是 7.29.1 落回区间 ——
+  #     又一次「override 的版本号会被新 advisory 追上」。
+  'undici@7': '7.30.1'
   #   · brace-expansion 有**两条 major 同时中招**，所以键上必须带 major，写一条全局
   #     override 会把 1.x 的消费方（`minimatch@3`）顶到 5.x 的 API 上：
   #     1.1.18 → 1.1.21（`eslint-config-next > eslint-plugin-* > minimatch@3`）
@@ -149,7 +153,10 @@ overrides:
   #     这条口径此前挡住的不是「修不了的噪声」，是「还没人去修的那批」（ISSUE #1623 §一）。
   #     · markdown-it 14.3.0 → 14.3.1（`typedoc > markdown-it`，linkify 的两条二次路径）。
   #       只在 `pnpm docs` 这一条链上（devDependency），不进运行时、不进产物。
-  'markdown-it@14': '14.3.1'
+  #       14.3.1 → 14.3.3（ISSUE #2989）：两条 High 的 patched 分别抬到 `>=14.3.2`
+  #       （smartquotes 的二次复杂度）与 `>=14.3.3`（多行 link reference definition 的
+  #       二次时间渲染，14.0 起的回归），取交集即 14.3.3。同一链、不进产物。
+  'markdown-it@14': '14.3.3'
   #     · ip-address 10.7.0 → 10.7.1（`express-rate-limit > ip-address` 与 `socks > ip-address`，
   #       两条 advisory 同一修复版：`isInSubnet()` 的地址比较、`Address6` 的诊断串构造成本）。
   #       两条路径都在 `shadcn > @modelcontextprotocol/sdk` 那一支（按需召唤的组件 CLI）。

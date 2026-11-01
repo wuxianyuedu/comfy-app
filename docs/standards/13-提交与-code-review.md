@@ -6713,6 +6713,29 @@ high/critical**（其中 1 条是 `next` 的 **critical**），**全部有同 ma
 **修完不是终点**：`pnpm audit` 每次跑都会重新问一遍，这正是它不进钩子（网络请求）却必须
 在 `pnpm check:all` 里跑的理由。
 
+**2026-11-01 那一轮：台账清零，八条全走「修掉」而不是「登记」**（ISSUE #2989 的同批，
+「台账只许降」那条现在退化成一句「这份文件里还剩几条」）。
+`受影响用例` 那一格在 PR #2982 上并没有跑这条判据（那一格跑的是 `tests/dependency-audit.test.ts`
+的夹具输出），但同一屏里 `pnpm audit` 的真实读数已经摆着：high 命中 **0 → 8**。
+八条**全部有现成修复版**，于是按出路①各走一步：
+
+| advisory                                        | 落点                                     | 处置                                                  |
+| ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------------- |
+| `happy-dom#1243084` / `#1243623`                | `vitest` 的环境（devDependency）          | **21.0.4**（跨大版本：两条的 patched 分别是 `>=21.0.4` / `>=21.0.0`，取交集的最小可行版） |
+| `markdown-it#1242600` / `#1242672`              | `typedoc > markdown-it`（只在 `pnpm docs`） | `overrides` `markdown-it@14` → `14.3.3`                 |
+| `undici#1243113` / `#1243473` / `#1243475` / `#1243478` | `shadcn > @shadcn/registry` / `> @dotenvx/dotenvx` | `overrides` `undici@7` → `7.30.1`                       |
+
+**happy-dom 那一步为什么是跨大版本**：两条 advisory 的受影响区间是 `>=17.0.0 <=21.0.3`
+与 `<=20.14.6`，20.x 里**没有**同时躲开两者的版本 —— 20.14.6 是 20 线最后一个，而
+`>=21.0.4` 才同时出两个区间。它只在测试环境（`environment: "happy-dom"`）里跑，
+不进运行时不进产物；风险面是「大版本的行为差异」，所以改完必须真跑一批 DOM 用例
+（本批实跑 `src/components/studio/**` 与 `src/app/api/logs/**` 共 31 份 / 257 条，全绿）。
+
+`overrides` 那两条是**抬已经存在的键**（`undici@7: 7.29.1` → `7.30.1`、
+`markdown-it@14: 14.3.1` → `14.3.3`），不是新加规则 —— 上一段那句「override 的版本号会被
+新 advisory 追上」在这一轮又兑现了一次，两条都还在原键上，只是 patched 抬高了。
+台账随后被 `--update` 收紧到 **0 条**（`braces#1240992` 那条已随上一轮消掉，双向拦把它点名出来）。
+
 判据由 `tests/dependency-audit.test.ts` 钉住：键的形状、严重级筛选、引入路径按 registry
 的**真分隔符**切（裸 `>`，首段 `.` 是工作区根 —— 按 `" > "` 切会得到一整段没人看得懂的
 字符串，这是本机跑真 `pnpm audit` 时量出来的）、双向拦、空 reason 判红、`--update` 拒绝
@@ -10017,6 +10040,47 @@ prettier / vitest worker），而它们与「等资源」争的是同一样东�
 Rust / PowerShell 侧的锁引用仍在同一趟里判。判决本身是纯函数 `decidePythonVerdict`，
 逐格钉在 `tests/app-port-vectors-timeout-classification.test.ts`（含「missing 不许静默」
 与「第二遍答上了就不许留未校验」两格反向锚点）。
+
+##### 13.6.4.2 「未判定：墙钟掐断」的第一嫌疑永远是**用例往 stdout 说话**（2026-11-01）
+
+**现场**：PR #2982（一次纯 oxlint 的块体改造，46 份 / 132 处，断言一条没动）的
+`受影响用例` 那格跑了 **24m54s**、281 份用例**一份结论都没给出**：
+
+```
+[affected-launch] 第 1 遍**没跑完**：墙钟预算用尽，本块 281 个用例被中途掐断（剩余预算 25 分钟）
+  ⇒ 按**未判定**收（退 2）：这不是红，也不是绿 —— 这一遍没有任何一条断言给出结论。
+```
+
+`dot` reporter 那一屏是**连续的点**，而预算判点落在**第一遍之前**（§13.6.4 第 5 条：
+「份数判点第一块起、单价第二块起才说话」）—— 于是这次读数是「第一遍自己跑不完」，
+不是「判断链算错了」。掐断之前那 25 分钟里，真正吃掉时间的是**一条测试文件往真 stdout
+写了几十行**：
+
+- `src/lib/log/capture-streams.server.test.ts` 往真的 `process.stdout` / `stderr` 写
+  `首屏编译错误：Module not found` / `FATAL: An unexpected Turbopack error occurred` /
+  一段 `AggregateError`（它就是**转录**模块的契约测试，写流是被测行为）；
+- 空库那一组 `ensureSchemaCurrent` 用例让 `forward` 的缺省实现（`process.stdout.write`）
+  打十几句「数据库里还没有表，正在按 schema 建表…」/「这批变更不涉及丢数据，自动应用…」。
+
+而 `COMFY_AFFECTED_NOISE_FILTER` 的屏蔽是**按行**的：它滤掉行、滤不掉 vitest 给每一行加的
+`stderr | <用例名>` 抬头，滤不掉 `----- 应用服务输出（本次运行）-----` 那条横幅，也不管
+**写到真流本身**的墙钟代价（一个被管道接走的流，每次 write 都是一次系统调用 + 消费者线程）。
+
+**判据**（写测试时按这条自查，别等 CI 掐断再说）：
+
+1. **被测行为是「往外说话」时，把两条流在 `beforeEach` 里换成只记录、不外发的桩**，
+   断言读那份记录（`src/lib/log/capture-streams.server.test.ts` 的 `muteStreams` /
+   `writtenText` 就是这一形：桩先记录、再 `original.call(...)`，于是「转录是额外落一份、
+   不接管」那条判据一个字没少）。**样本里的假故障文本尤其要这么办** —— 否则平台日志里
+   留下的是一个没有异常的烂尾栈，读的人会去找一个根本不存在的 bug。
+2. **注入式接口有缺省实现时，用例传自己的收集器**：`ensureSchemaCurrent(root, { forward })`
+   的 `forward` 缺省就是 `process.stdout.write`，不传 = 让用例往屏幕上打进度话术
+   （`tests/db-schema-current.test.ts` 的 `collectForward`）。
+3. **这不是「调 budget」**：`testTimeout` / `wallclock` / `maxWorkers` 一个都不该动
+   （§13.6.4 那两句照样成立）。降的是**噪音成本**，不是判据。
+
+⚠️ 这条的收益是**两件**：掐断的那一跑本来就白付了 25 分钟；就算它跑完，那些行也该被挡在
+跑批日志之外（平台对超长日志只保留尾部，被挤掉的正是「哪条红、红在哪一行」）。
 
 #### 13.6.5 「这条分支落地了没有」只认 PR 的 `is_merged` —— 三点 diff 与 `branch -d` 都不是判据（ISSUE #2427）
 
