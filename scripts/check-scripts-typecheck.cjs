@@ -51,6 +51,12 @@
  *      「修好了」与「没判」。这一格红，且**拒绝按被截断的读数重写基线**（那等于
  *      把棘轮清空）。`TS6133`（声明了没用到）**刻意不算截断** —— 它就是本案要抓的
  *      那一类死代码，把它归进「没判」等于把判据最想要的读数扔掉。
+ *   ⑥ **面 ⇄ 账自动对齐**：账上的 `face` 记的是**构成**（判了多少份），不是存量，
+ *      所以它跟着 `git ls-files '*.mjs'` 自己走（`alignFace()`）。存量 0 处时新脚本
+ *      不涨任何格子，`face` 于是成了唯一会漂的数 —— 而在它由人手跟的那些天里，
+ *      漂一次就红一次「下一个无关的人」（2026-11-01 同一天修了 8 次，#2939 / #2940 /
+ *      #2945 / #2947 / #2952 / #2955 那一批）。棘轮只许降的是**存量**，`files` / `total`
+ *      一个字节都不在这一句里动。
  *
  * ## 判据自己不许静默降级（§11.23.3 同款）
  *
@@ -70,7 +76,7 @@
  * 用法：
  *   node scripts/check-scripts-typecheck.cjs            # 检查（棘轮 + 判决面自证）
  *   node scripts/check-scripts-typecheck.cjs --report   # 只出逐文件读数，不判失败
- *   node scripts/check-scripts-typecheck.cjs --update   # 把基线收紧到当前实测（只许降）
+ *   node scripts/check-scripts-typecheck.cjs --update   # 把基线收紧到当前实测（只许降；面本来就会自动对齐）
  *   node scripts/check-scripts-typecheck.cjs --no-run   # 只做判决面对账，不起 tsc（量具自检用）
  *
  * 退出码：0 = 通过；1 = 阻断（新增 / 判决面漏件）；2 = 没结论（tsc 没跑起来、输出解析不出）。
@@ -441,6 +447,46 @@ function writeBaseline(cur, faceSize) {
   fs.writeFileSync(BASELINE, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 
+/**
+ * 「面 ⇄ 账」对齐（ISSUE #2944）：账上的 `face` 记的是**构成**（判了多少份），
+ * 不是存量（欠了多少处），所以它该自己跟着 `git ls-files '*.mjs'` 走，不该由人来跟。
+ *
+ * 两个方向在因果上是两件事，提示也分开：
+ *   · 面**涨**了 ⇒ 新入库了一份干净的脚本（不干净的已被 `grows` 拦下）。这是这一档
+ *     希望发生的事，记下来即可 —— 不记的代价实测是「判据 ✓ 而用例红」，红全落在
+ *     下一个无关的人身上（2026-11-01 同一处修了 8 次）。
+ *   · 面**降**了 ⇒ 删了脚本，与「存量降了」同一种提示（`--update` 那条）。
+ *
+ * 只改 `face` 那一格，`files` / `total` 原样带过：这两个数才是棘轮，一个字节都不许
+ * 在这一句里动。语法层截断（`masked`）与 `--update` 拒涨那两档都在调用点之前返回了。
+ *
+ * @param {{face: number, files: object, total: number}} baseline
+ * @param {number} faceSize 当前入库的那一份有多少份
+ * @param {(cur: object, face: number) => void} [save] 写回（用例注入）
+ * @returns {{changed: boolean, note: () => void}}
+ */
+function alignFace(baseline, faceSize, save = writeBaseline) {
+  if (baseline.face === faceSize) {
+    return { changed: false, note: () => {} };
+  }
+  const grew = faceSize > baseline.face;
+  save({ files: baseline.files ?? {}, total: baseline.total }, faceSize);
+  return {
+    changed: true,
+    note: () => {
+      console.log(
+        grew
+          ? `${TAG} 判决面扩张：账上记 ${baseline.face} 份、当前 ${faceSize} 份（+${
+            faceSize - baseline.face
+          } 份入库脚本）⇒ 账已跟着记到 ${faceSize}。\n${TAG}   棘轮只许降的是**存量**（${baseline.total} 处），面是构成、它跟着入库清单走。`
+          : `${TAG} 判决面收缩：账上记 ${baseline.face} 份、当前 ${faceSize} 份（${
+            faceSize - baseline.face
+          } 份）⇒ 账已收紧到 ${faceSize}。`,
+      );
+    },
+  };
+}
+
 /* ── main ─────────────────────────────────────────────────────────── */
 
 /**
@@ -686,6 +732,21 @@ function main(io = {}) {
     console.error(`${TAG} ✗ 有语法层报错 ⇒ 这一跑的读数不完整，判红（没判 ≠ 绿，§13.6.2）`);
     return 1;
   }
+
+  /* 面 ⇄ 账对齐（ISSUE #2944）：账上的 `face` 是**构成**（「判了多少份」），不是存量
+   * （「欠了多少处」），所以它不该由人来跟。它会漂是因为「新脚本入库」与「记账」是两件事，
+   * 而存量 0 处时新脚本文档层面上不涨任何格子 —— 判据与用例于是给出两个相反的读数
+   * （判据 ✓、用例红），红全落在下一个无关的人身上。实测一天内同一处修了 8 次
+   * （#2939/#2940/#2945/#2947/#2952/#2955 那一批）。
+   *
+   * 棘轮只许降的是**存量**，而这一件事上有现成的写法：`dropped`（检测到下降）只提示、
+   * 并指路 `--update` —— 向下对齐不留痕（这次提交里死代码归零了，「收紧」是新正确读数）；
+   * 向上对齐**留痕**（新增的格子已由上面 `grows` 零容忍拦下 ⇒ 这份新脚本是干净的，
+   * 干净脚本入库正是这一档希望发生的事，它不该让提交停在这里）。 */
+  const aligned = alignFace(baseline, face.length);
+  if (aligned.changed) {
+    aligned.note();
+  }
   console.log(`${TAG} ✓ 判决面 ${face.length} 份 / 存量 ${cur.total} 处（基线 ${baseline.total}）`);
   return 0;
 }
@@ -700,6 +761,7 @@ module.exports = {
   faceProblems,
   parseOutput,
   tally,
+  alignFace,
   runTsc,
   CONFIG_REL,
   BASELINE,
