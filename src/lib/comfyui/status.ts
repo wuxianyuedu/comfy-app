@@ -259,7 +259,7 @@ async function resolvePortFast(
   const guessed =
     alreadyProbedPort === true
       ? Promise.resolve(configuredPort)
-      : probeComfyAtPort(configuredPort).then((base) => (base !== null ? configuredPort : null));
+      : probeComfyAtPort(configuredPort).then((base) => (base === null ? null : configuredPort));
   const winner = await Promise.race([
     authoritative.then((port) => ({ port })),
     guessed.then((port) => ({ port })),

@@ -2468,6 +2468,7 @@ describe("墙钟预算必须真的到得了第一遍（cnb-53r-1k6b6besn 的现�
   it("`stageBudget` 交给了 `runChunk`（第一遍的 `timeout` 只从它来）", () => {
     /* 针尖按**拼接**构造 —— 同下面那条「不许出现没接住 stderr 的调用点」：整段写成字面量
      * 会命中那条判据（它判的是本文件里没有漏接 stderr 的调用点），而恒红的判据比没有更坏。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-template-expression -- 拆开 run 与 Chunk 是判据的前提：本文件里不许出现完整的 runChunk( 字面量，另一条判据按文本读本文件
     const call = new RegExp(`await\\s+run${"Chunk"}\\(chunk\\.files, \\{([\\s\\S]*?)\\}\\)`).exec(
       src,
     );
