@@ -159,6 +159,7 @@ function CanvasInner({
 }: ProjectCanvasProps) {
   const toast = useToast();
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNodeType>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-arguments -- useEdgesState 的泛型要从显式实参推断，去掉会退化成 never[]
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);

@@ -266,8 +266,8 @@ function DimensionSizeControl({
     [group, set],
   );
 
-  const sections: Array<SegmentSection<string>> = useMemo(() => {
-    const list: Array<SegmentSection<string>> = [
+  const sections: Array<SegmentSection> = useMemo(() => {
+    const list: Array<SegmentSection> = [
       {
         label: "比例",
         value: ratio,

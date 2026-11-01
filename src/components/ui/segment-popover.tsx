@@ -125,7 +125,7 @@ export function MultiSegmentPopover({
    *  `SegmentSection` 的形状）。刻意保持通用，好让后续场景
    * （如视频码率 / 帧率覆盖）复用同一套管线。 */
   footer?: React.ReactNode;
-  sections: Array<SegmentSection<string>>;
+  sections: Array<SegmentSection>;
   triggerContent: React.ReactNode;
 }) {
   return (
@@ -173,7 +173,7 @@ const Section = React.memo(function Section({
   first,
 }: {
   first: boolean;
-  section: SegmentSection<string>;
+  section: SegmentSection;
 }) {
   const grouped = useMemo(() => {
     const hasSubgroups = section.options.some((option) => option.subgroup);

@@ -98,12 +98,12 @@ export type WorkflowEditorCanvasProps = {
   /** 惰性激活被点击边的 deletable/reconnectable（见
    *  下面的 defaultEdgeOptions）。 */
   onEdgeClick?: (event: React.MouseEvent, edge: Edge) => void;
-  onEdgesChange: OnEdgesChange<Edge>;
+  onEdgesChange: OnEdgesChange;
   /** 删除连线（映射线 = 该对外参数在当前模式下断开）。 */
   onEdgesDelete?: (edges: Array<Edge>) => void;
   onMiniMapJump: (event: React.MouseEvent, position: { x: number; y: number }) => void;
   onNodeDragStop: (e: unknown, node: Node) => void;
-  onNodesChange: OnNodesChange<Node>;
+  onNodesChange: OnNodesChange;
   onOpenSettings: () => void;
   /** 「重新居中」：把视口移回有节点的位置（纯视口动作，不改节点布局）。 */
   onRecenter: () => void;

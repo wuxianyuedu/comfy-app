@@ -56,8 +56,8 @@ type StoryArgs = {
 };
 
 /** 按真机的拼法把段拼出来（`DimensionControl` 的 `sections` 同形）。 */
-function buildSections(count: 1 | 2 | 3): Array<SegmentSection<string>> {
-  const list: Array<SegmentSection<string>> = [
+function buildSections(count: 1 | 2 | 3): Array<SegmentSection> {
+  const list: Array<SegmentSection> = [
     {
       label: "比例",
       value: "16:9 横屏",
