@@ -140,7 +140,7 @@ export function EncapsulationTestForm({
      * 值已经在那里面收好了，这里只补上「数字」口那一批。 */
     const pruned = pruneEmptyExposedValues(texts);
     const custom: Record<string, string | number> = {
-      ...(pruned.custom ?? {}),
+      ...pruned.custom,
     };
     for (const entry of entries) {
       const value = numbers[entry.id];
