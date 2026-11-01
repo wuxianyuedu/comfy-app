@@ -73,6 +73,85 @@ const DOM_TEST_GLOBS = [
   "tests/**/*.test.tsx",
 ];
 
+/**
+ * 判据预算（`testTimeout` / `hookTimeout`）的**临时乘数**（ISSUE #2959）。
+ *
+ * 业主口径（ISSUE #2948 / #2959）：「把 CI 里测试的超时时长临时改长，避免负载红」。
+ * 它和 §11.13 / §13.6.4 那两条「不许抬预算」直接对撞，所以这一格不是「调参」，是
+ * **有形状的临时放宽**，形状由四条定死：
+ *
+ *   1. **默认 1 = 与放宽前逐字等价**：不设变量时算出来的数就是 `30_000` / `45_000`，
+ *      配置解析结果一个字都不变（`tests/test-config-inheritance.test.ts` 那条钉的就是它）。
+ *   2. **只抬判据那一层**：`.cnb.yml` 的 stage 预算（`45m` 那几格）、`full-suite-run.mjs`
+ *      的墙钟、Playwright 的 `timeout: 60_000`（红线用例钉着）**一律不动** —— 它们是
+ *      「卡死多久有人知道」的护栏，抬它们只是把唯一的早期信号拆掉。
+ *   3. **上限 3 倍、超了落回 1 并说出口**：再高就等于把「真挂死」的检出时间一起放大到
+ *      §11.13 说的那个数上。
+ *   4. **恢复 = 把 `.cnb.yml` 里那一行变量删掉**（不是「再抬一次」）：默认值 1 让「收回」
+ *      成为一个不需要改代码的动作。
+ *
+ * 这一格的**执行者是 `.cnb.yml` 的流水线级 env**（`COMFY_TEST_TIMEOUT_SCALE: "2"`），
+ * 本地不设 ⇒ 本地行为与今天完全一样 —— 抬的只有共享节点上那一台机器。
+ */
+const TIMEOUT_SCALE_MAX = 3;
+
+/** 判据预算的基数（抬之前的值；`tests/test-config-inheritance.test.ts` 用它们当默认档）。 */
+export const BASE_TEST_TIMEOUT_MS = 30_000;
+export const BASE_HOOK_TIMEOUT_MS = 45_000;
+
+/**
+ * 读 `COMFY_TEST_TIMEOUT_SCALE` 并算出这一跑生效的两条预算。
+ *
+ * 非法值（非正数 / 超上限）**落回 1 并给一句 note**，不静默算成一个怪数 ——
+ * 与 `ci-load.mjs` 读 `COMFY_CI_MAX_WORKERS` 同一条口径：坏值要读得出来，
+ * 否则下一次「这台机器为什么这么慢」会查到配置上去。
+ *
+ * @param {string | undefined} raw 环境变量原值
+ * @returns {{scale: number, testTimeout: number, hookTimeout: number, note: string | null}}
+ */
+export function resolveTimeoutBudget(raw: string | undefined) {
+  const text = String(raw ?? "").trim();
+  const base = {
+    scale: 1,
+    testTimeout: BASE_TEST_TIMEOUT_MS,
+    hookTimeout: BASE_HOOK_TIMEOUT_MS,
+    note: null as string | null,
+  };
+  if (text === "") {
+    return base;
+  }
+  const value = Number(text);
+  if (!Number.isFinite(value) || value <= 0 || value > TIMEOUT_SCALE_MAX) {
+    return {
+      ...base,
+      note:
+        `COMFY_TEST_TIMEOUT_SCALE="${raw}" 不在 (0, ${TIMEOUT_SCALE_MAX}] 内 ⇒ 按 1 倍办` +
+        `（testTimeout 仍是 ${BASE_TEST_TIMEOUT_MS}ms，不是被算成了一个怪数）`,
+    };
+  }
+  return {
+    scale: value,
+    testTimeout: Math.round(BASE_TEST_TIMEOUT_MS * value),
+    hookTimeout: Math.round(BASE_HOOK_TIMEOUT_MS * value),
+    note: null,
+  };
+}
+
+const TIMEOUT_BUDGET = resolveTimeoutBudget(process.env.COMFY_TEST_TIMEOUT_SCALE);
+
+/* 只在**真放宽了**的时候打一行读数：默认档一个字都不多（本地跑测试的屏幕不该多出噪音）。
+ * 而放开了就必须读得出来 —— 否则「这一跑的预算为什么是 60s」与「有人偷偷改过配置」
+ * 在日志里长得一模一样（同 `.cnb.yml` 那几行停用登记的理由）。 */
+if (TIMEOUT_BUDGET.scale !== 1) {
+  process.stdout.write(
+    `[vitest] 判据预算临时放宽 ×${TIMEOUT_BUDGET.scale}：testTimeout ${BASE_TEST_TIMEOUT_MS} → ` +
+      `${TIMEOUT_BUDGET.testTimeout}ms、hookTimeout ${BASE_HOOK_TIMEOUT_MS} → ${TIMEOUT_BUDGET.hookTimeout}ms` +
+      "（ISSUE #2959：只抬判据那一层，stage 墙钟与 e2e 的 60s 没动）\n",
+  );
+} else if (TIMEOUT_BUDGET.note) {
+  process.stdout.write(`[vitest] ${TIMEOUT_BUDGET.note}\n`);
+}
+
 /* 覆盖率门槛的「登记处 ⇄ 判定开关」在**文件末尾**（ISSUE #2669）：这里先把整份配置
  * 收成一份具名对象，末尾再决定「传给 vitest 的那一份带不带 thresholds」。
  * 那 149 条门槛的**字面量一行都没动**，也没有搬家 —— 挪走的只是「谁来判」。 */
@@ -141,9 +220,13 @@ const BASE_CONFIG = defineConfig({
      * 2026-09-27 复测：套件涨到 449 文件后 ×3.6 的余量被吃掉 —— 全量满载下
      * theme 的 beforeAll（隔离 7.2s）与 LogPanel 渲染双双越过 30s/20s，
      * 6 文件 / 11 例争用假红（单跑全绿）。抬到 30s / 45s，同样只买余量
-     * 不改用例；下一轮涨套件时按同一条「最慢实测 × 余量」重算。 */
-    testTimeout: 30_000,
-    hookTimeout: 45_000,
+     * 不改用例；下一轮涨套件时按同一条「最慢实测 × 余量」重算。
+     *
+     * ⚠️ 这里写的两个数**是基数，不是生效值**（ISSUE #2959）：生效值由上面
+     * `resolveTimeoutBudget()` 按 `COMFY_TEST_TIMEOUT_SCALE` 算出来，缺省乘数 1 ⇒
+     * 生效值与这两个数逐字相同。要动它们，动基数（上面那两个常量）而不是在这里写乘数。 */
+    testTimeout: TIMEOUT_BUDGET.testTimeout,
+    hookTimeout: TIMEOUT_BUDGET.hookTimeout,
     /* `expect.poll` 的默认预算。vitest 出厂是 1000ms / 50ms —— 那两个数字是给
      * 「内存里的状态翻转」定的，而本仓库一大批轮询等的是**真的进程动作**：
      * `spawn` 落地、`sleep` 挂成组长、孙进程被 `taskkill` 收走，实测单次就已
