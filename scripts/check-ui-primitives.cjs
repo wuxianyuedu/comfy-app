@@ -322,6 +322,7 @@
 const fs = require("node:fs"),
   path = require("node:path");
 const { skipUnlessStagedTouches } = require("./gate-scan-read.cjs");
+
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
 const REPORT_ONLY = ARGS.has("--report");
