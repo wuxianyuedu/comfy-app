@@ -286,7 +286,7 @@ export function stateOfLine(line) {
   /* 判据自己的话：`✓`（CP936 有字形的是 `√`，`ci-cp936-glyphs.mjs` 会换）
    * 与 `OK` 结尾的结论行按绿算，`×` / `✗` / 「失败」「不合规」按红算。
    * 这一档只影响颜色，**不产生判决** —— 认错了最多是颜色不明显。 */
-  if (/^\[warn\]/.test(text)) {
+  if (text.startsWith("[warn]")) {
     return null;
   }
   if (/^[√✓]|\bOK\b/.test(text)) {

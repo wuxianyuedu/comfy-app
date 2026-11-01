@@ -83,7 +83,7 @@ const MIN_SIMILARITY = 0.75;
  * 所以 `src/` 里那几百份 `.test.ts` 与快照同样不在面上。
  */
 const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) || /\.snap$/.test(rel) || rel.includes("/__tests__/");
+  /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.endsWith(".snap") || rel.includes("/__tests__/");
 
 /** 归一化：去首尾空白；丢掉空行与整行注释(缩进/注释差异不构成差异)。 */
 function normalizedLines(text) {
