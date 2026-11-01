@@ -75,7 +75,7 @@ function renderShell(active: WorkspaceView) {
  *
  * 判属性**在不在**：`useRender` 的 state 通道对真值给空属性、对假值整个不发。 */
 function rowActive(name: string): boolean {
-  return screen.getByRole("button", { name }).hasAttribute("data-active") === true;
+  return screen.getByRole("button", { name }).dataset.active !== undefined;
 }
 
 describe("侧栏项目高亮只在项目视图里成立", () => {

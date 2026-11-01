@@ -141,8 +141,8 @@ describe("WorkflowOutputParamCardColumn", () => {
         outputs={nameless}
       />,
     );
-    const dot = container.querySelector("[data-endpoint-handle]")!;
-    expect(dot.getAttribute("data-endpoint-handle")).toBe("9::output::EMPTY");
+    const dot = container.querySelector<HTMLElement>("[data-endpoint-handle]")!;
+    expect(dot.dataset.endpointHandle).toBe("9::output::EMPTY");
     expect(outputPortLabel(nameless[0]!)).toBe("输出");
     expect(screen.getByTestId("param-node-out-9::output::EMPTY-0").textContent).toContain("输出");
   });
