@@ -9,10 +9,9 @@
 // 这里补的是它管不到的那一侧：工坊**整屏**只能有一个 h1，段标题必须走段级档。
 
 import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const dir = fileURLToPath(new URL(".", import.meta.url));
+const dir = import.meta.dirname;
 
 /** 工坊目录下的视图源文件（测试自身与被测源码都不参与判据）。 */
 function viewSources(where = dir): Array<string> {
@@ -48,7 +47,7 @@ describe("工坊屏的标题结构", () => {
    * 区块标题，本来就该走 `.u-title`。判据若要求它改档，就是逼人为了变绿去动不相干排版。
    */
   it("段级档 .u-title-stage 全工坊只用在一处，就是当前段的标题", () => {
-    const stageFile = readFileSync(`${dir}WorkshopStageBody.tsx`, "utf8");
+    const stageFile = readFileSync(`${dir}/WorkshopStageBody.tsx`, "utf8");
     expect([...stageFile.matchAll(/className="u-title-stage"/g)]).toHaveLength(1);
     expect(allText.match(/u-title-stage/g) ?? []).toHaveLength(1);
   });

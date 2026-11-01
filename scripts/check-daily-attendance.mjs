@@ -52,7 +52,6 @@
  * spawn 会 ENOENT —— 那一份形态判据已有出处，不在这里重拼）。
  */
 import { existsSync, readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
 import { classifyBuildOutcome, downstreamSkipped } from "./ci-build-readout.mjs";
 
@@ -704,7 +703,7 @@ export function main(rawArgv, env = {}) {
       };
     }
   } else {
-    const run = env.run ?? makeRunner(fileURLToPath(new URL(".", import.meta.url)));
+    const run = env.run ?? makeRunner(import.meta.dirname);
     /* `flagValue` 对「没给这个旗标」回**空串**，而空串不是 nullish —— `??` 兜不住，
      * 于是 `--repo` 会被交成一个空字符串，表现就是「取不到构建列表」
      * （实测踩过：把 null 换成空串的那一次改动，在线那一跳当场落到红档）。要显式判空。 */
