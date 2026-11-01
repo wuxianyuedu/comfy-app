@@ -101,8 +101,7 @@ const SHELL_OPTION_RE = /\bshell\s*:(?!\s*(?:false\b|null\b|undefined\b))/;
 /* 起子进程的那几个调用，且必须是**裸标识符**：前面有 `.` / 标识符字符就不认 ——
  * 那一格是 `re.exec(...)` 与 `cp.spawn(...)`，前者是正则、后者是本判据刻意不追的
  * 成员调用形态（见文件头「收窄的代价」）。 */
-const SPAWN_CALLEE_SOURCE =
-  String.raw`(?<![\w$.])(?:spawnSync|spawn|execFileSync|execFile|exec|fork)\s*\(`;
+const SPAWN_CALLEE_SOURCE = String.raw`(?<![\w$.])(?:spawnSync|spawn|execFileSync|execFile|exec|fork)\s*\(`;
 
 /* `exec` / `execSync` **天然走 shell**（没有 `shell: false` 这一说）—— 这正是
  * ISSUE #2562 的盲区：它们的调用点里**一个 `shell` 字样都不会出现**，按字面量扫描

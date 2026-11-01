@@ -422,7 +422,8 @@ function main(argv = process.argv.slice(2), deps = {}) {
       }）没有凭据形状。${
         unreadable.length > 0
           ? ` 另有 ${unreadable.length} 份读不到 ⇒ 它们**不在**这一格的分母里。\n`
-          : "\n"}`,
+          : "\n"
+      }`,
     );
     return 0;
   }

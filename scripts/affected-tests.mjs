@@ -202,8 +202,8 @@ export function specifiersOf(text, fromFile) {
   for (const re of [MOCK_RE, EXPORT_NS_RE]) {
     for (const m of code.matchAll(re)) {
       /* `m[1]` 在类型上仍是 `string | undefined`（TS 不认「正则里的必需分组在 matchAll 里
-     * 必定存在」）—— 这处 `??` 是给 tsc 看的，不是给运行时看的，删了会撞脚本档类型检查（§13.5.14）。 */
-    for (const cand of specCandidates(m[1] ?? "", fromFile)) {
+       * 必定存在」）—— 这处 `??` 是给 tsc 看的，不是给运行时看的，删了会撞脚本档类型检查（§13.5.14）。 */
+      for (const cand of specCandidates(m[1] ?? "", fromFile)) {
         out.add(cand);
       }
     }
@@ -567,7 +567,7 @@ export function attributeAffected(changedPaths, graph, testFiles, sourceFiles, t
   }
   // 稳定排序：同份数时按路径字典序，避免同样的改动在不同机器上给出不同顺序。
   return out.sort((a, b) =>
-    b.affected === a.affected ? a.file < b.file ? -1 : 1 : b.affected - a.affected,
+    b.affected === a.affected ? (a.file < b.file ? -1 : 1) : b.affected - a.affected,
   );
 }
 
