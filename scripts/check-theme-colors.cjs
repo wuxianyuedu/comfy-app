@@ -479,6 +479,8 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
   /** 去注释后的行（保留行号），色值只在代码里判 —— 注释里的色值与 ISSUE 号都不是代码。 */
   const codeLines = stripComments(text).split("\n");
   const cl = classifyFile(r);
+  /* 只有要判「这一行归哪个顶层声明」时才解析作用域（`cl` 为空的文件根本不看它）。
+   * 结果要么是与 `lines` 等长的数组、要么整体是 `null`。 */
   const scopes = cl ? scopeResolver(text) : null;
 
   for (let i = 0; i < lines.length; i++) {
@@ -487,12 +489,16 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
       continue;
     }
     const lineNo = i + 1;
-    if (cl && (cl.wholeFile || cl.lines.has(lineNo) || (scopes[i] && cl.names.has(scopes[i])))) {
+    /* `wholeFile` / `lines` 两档与作用域无关，只有第三档要 `scope`；把它留在自己那一档
+     * 上判空，`cl` 在场时就不会再出现「另一半恒真」的写法。 */
+    const scope = scopes === null ? null : scopes[i];
+    const inScope = scope !== null && cl !== null && cl.names.has(scope);
+    if (cl !== null && (cl.wholeFile || cl.lines.has(lineNo) || inScope)) {
       exempted.push({
         file: r,
         line: lineNo,
         hits: hits.length,
-        scope: scopes[i],
+        scope,
       });
       continue;
     }

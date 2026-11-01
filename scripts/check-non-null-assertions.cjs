@@ -116,7 +116,9 @@ function isLegitSite(rel, node) {
   if (!ts.isIdentifier(target)) {
     return false;
   }
-  const index = expr.argumentExpression ? expr.argumentExpression.getText() : "";
+  /* `a!`（不带下标）是这个函数要放行的形态，而类型层仍把 `argumentExpression` 声明成必填；
+   * 连 `?.` 一起写只会得到一个「多余可选链」的读数 —— 那念的是类型声明，不是这里的代码。 */
+  const index = expr.argumentExpression.getText();
   return LEGIT_SITES.has(`${rel}|${target.text}|${index}`);
 }
 

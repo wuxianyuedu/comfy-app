@@ -86,27 +86,32 @@ export function parseArgs(argv) {
  * @returns {string}
  */
 export function renderReport(report) {
-  const volume = report.volume ?? {};
-  const caps = report.capabilities ?? {};
   const lines = [];
   const mark = { ok: "✓", actionable: "!", blocked: "×", na: "-" };
 
   lines.push(`检出根：${report.repo}`);
   lines.push(
-    `所在卷：${volume.root ?? "(未知)"}  文件系统：${volume.fsType ?? "(未知)"}` +
-      `  卷标：${volume.label ?? "(无)"}  Dev Drive 指定：${volume.devDriveLabel ?? "未知"}`,
+    `所在卷：${report.volume.root}  文件系统：${report.volume.fsType ?? "(未知)"}` +
+      `  卷标：${report.volume.label ?? "(无)"}  Dev Drive 指定：${report.volume.devDriveLabel}`,
   );
   lines.push(
     `能力实测：硬链接 ${mark.ok} ｜ 块克隆 ${
-      caps.blockCloneKnown ? (caps.blockClone ? mark.ok : mark.blocked) : "?"
-    } ｜ 稀疏文件 ${caps.sparse ? mark.ok : mark.na}`,
+      report.capabilities.blockCloneKnown
+        ? (report.capabilities.blockClone ? mark.ok : mark.blocked)
+        : "?"
+    } ｜ 稀疏文件 ${report.capabilities.sparse ? mark.ok : mark.na}`,
   );
   lines.push("");
   lines.push("动作矩阵：");
+  /* `DevDriveReport` 把 `levers` 写成可选（`buildLevers` 之前确实还没有这一格），`?? []`
+   * 留给「报告还没算完就渲染」的调用点；`Lever` 的 `actions` 是必填，那层兜底不成立。
+   * 状态位保留 `?? "?"` —— `mark` 只有四档，状态词表扩了要有归宿。 */
   for (const lever of report.levers ?? []) {
-    lines.push(`  [${mark[lever.status] ?? "?"}] ${lever.id} — ${lever.title}`);
+    /* 状态位不兜底：`mark` 的四档（ok / actionable / blocked / na）与 `LeverStatus`
+     * 是同一份词表的两处写法，少一档是**编译期**就该发现的事，不该留一个运行期 `?`。 */
+    lines.push(`  [${mark[lever.status]}] ${lever.id} — ${lever.title}`);
     lines.push(`      ${lever.detail}`);
-    for (const action of lever.actions ?? []) {
+    for (const action of lever.actions) {
       lines.push(`      → ${action.label}：${action.command}`);
     }
   }

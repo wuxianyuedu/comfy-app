@@ -123,7 +123,10 @@ const BASELINE = path.join(__dirname, ".bundle-budget-baseline.json");
  * 恢复 = 改回 `true`；在此之前想硬档跑一次用 `--enforce-totals`。
  */
 const TOTALS_ENFORCED = false;
-const ENFORCE_TOTALS = TOTALS_ENFORCED || ARGS.has("--enforce-totals");
+/* 前半句**按运行期取值**：常量现在是 `false`，写成 `TOTALS_ENFORCED || …` 会被读成
+ * 「那一半恒假」；而恢复那天把它改成 `true`，同一个表达式又会**短路掉命令行开关**，
+ * `--enforce-totals` 这个自查口当场失效 —— 失效的时机正是最需要它的那一天。 */
+const ENFORCE_TOTALS = Boolean(TOTALS_ENFORCED) || ARGS.has("--enforce-totals");
 
 /**
  * 测量面：`next build` 产出的 client chunk 目录（Turbopack 默认链）。

@@ -204,19 +204,19 @@
 
 |  行 | 类别         | 格  | 代码 / 理由                                                                 |
 | --: | ------------ | --- | --------------------------------------------------------------------------- |
-| 126 | always-falsy |     | `const ENFORCE_TOTALS = TOTALS_ENFORCED \|\| ARGS.has("--enforce-totals");` |
+| 126 | always-falsy | B | `const ENFORCE_TOTALS = TOTALS_ENFORCED \|\| ARGS.has("--enforce-totals");` —— `TOTALS_ENFORCED ||` 那半句在常量是 `false` 时恒假；改成 `Boolean(TOTALS_ENFORCED) || …` —— 恢复那天它才不会短路掉 `--enforce-totals` |
 
 ### scripts/check-commit-claims.mjs
 
 |  行 | 类别        | 格  | 代码 / 理由                                                      |
 | --: | ----------- | --- | ---------------------------------------------------------------- |
-| 312 | no-overlap  |     | `if (cmd === undefined) {`                                       |
-| 460 | no-overlap  |     | `if (num === undefined) {`                                       |
-| 476 | ??-left     |     | `pushSection(m[0], m[0], SECTION_ABSENT_HINT.test(m[2] ?? ""));` |
-| 491 | no-overlap  |     | `if (target === undefined) {`                                    |
-| 504 | no-overlap  |     | `if (target === undefined \|\| m[2] === undefined) {`            |
-| 504 | no-overlap  |     | `if (target === undefined \|\| m[2] === undefined) {`            |
-| 575 | literal-cmp |     | `if (claim.kind === "count") {`                                  |
+| 312 | no-overlap | B | `if (cmd === undefined) {` —— `argv[0]` 两个分支都至少一个元素，`cmd === undefined` 恒假；`cmd` / `argv` 两行的形态不变 |
+| 460 | no-overlap | A | `if (num === undefined) {` —— `[...matchAll].map(n => n[1])` 每格来自必填分组，`num === undefined` 恒假；改 `String(num)` 收口 |
+| 476 | ??-left | B | `pushSection(m[0], m[0], SECTION_ABSENT_HINT.test(m[2] ?? ""));` —— `m[2]` 是可选捕获组，`?? ""` 换成 `String(m[2])`（同一个兜底） |
+| 491 | no-overlap | A | `if (target === undefined) {` —— 第 1 组是必填分组（`PATH_UNTOUCHED_RE`），`target === undefined` 恒假；改 `String(m[1])` 收口 |
+| 504 | no-overlap | A | `if (target === undefined \|\| m[2] === undefined) {` —— 两个分组都必填，`target === undefined || m[2] === undefined` 恒假；改 `String(m[1])` 收口 |
+| 504 | no-overlap | A | `if (target === undefined \|\| m[2] === undefined) {` —— 两个分组都必填，`target === undefined || m[2] === undefined` 恒假；改 `String(m[1])` 收口 |
+| 575 | literal-cmp | B | `if (claim.kind === "count") {` —— 三种 kind 里 section / path 已各自 return，最后一层 `if (kind === "count")` 是恒真的一半；直接落成语句 |
 
 ### scripts/check-daily-attendance.mjs
 
@@ -248,7 +248,7 @@
 
 |  行 | 类别    | 格  | 代码 / 理由                                                         |
 | --: | ------- | --- | ------------------------------------------------------------------- |
-| 362 | ??-left |     | `const cleanLog = (log ?? "").replaceAll(/\u001b\[[0-9;]*m/g, "");` |
+| 362 | ??-left | A | `const cleanLog = (log ?? "").replaceAll(/\u001b\[[0-9;]*m/g, "");` —— `runTypedoc()` 起不起来那一支带 `log: ""`，但它的 `@returns` 没声明 `log`；按实测把形参改成 `string | undefined`，`?? ""` 原地保留 |
 
 ### scripts/check-format.cjs
 
@@ -277,7 +277,7 @@
 
 |  行 | 类别          | 格  | 代码 / 理由                                                                       |
 | --: | ------------- | --- | --------------------------------------------------------------------------------- |
-| 119 | always-truthy |     | `const index = expr.argumentExpression ? expr.argumentExpression.getText() : "";` |
+| 119 | always-truthy | A | `const index = expr.argumentExpression ? expr.argumentExpression.getText() : "";` —— `ts.isElementAccessExpression` 的类型里 `argumentExpression` 是必填，而 `a!`（不带下标）正是本函数要放行的形态；删掉恒假的 `?:`，保留 `getText()` |
 
 ### scripts/check-on-demand-duties.cjs
 
@@ -314,13 +314,13 @@
 
 |  行 | 类别         | 格  | 代码 / 理由                                                                                         |
 | --: | ------------ | --- | --------------------------------------------------------------------------------------------------- |
-| 490 | always-falsy |     | `if (cl && (cl.wholeFile \|\| cl.lines.has(lineNo) \|\| (scopes[i] && cl.names.has(scopes[i])))) {` |
+| 490 | always-falsy | B | `if (cl && (cl.wholeFile \|\| cl.lines.has(lineNo) \|\| (scopes[i] && cl.names.has(scopes[i])))) {` —— `cl` 已判非空，`scopes[i] &&` 在 `scopeResolver` 的 `string[] | null` 上恒真；把 `scope` 判空放回它自己那一档 |
 
 ### scripts/check-ui-customizations.cjs
 
 |  行 | 类别       | 格  | 代码 / 理由              |
 | --: | ---------- | --- | ------------------------ |
-| 150 | no-overlap |     | `if (ledger === null) {` |
+| 150 | no-overlap | A | `if (ledger === null) {` —— `parseLedger` 实际回 `Set<string> | null`（找不到小节即 `null`），JSDoc 补 `| null`；这条判空是那条失败路径的唯一入口，保留 |
 
 ### scripts/ci-build-classify.mjs
 
@@ -639,20 +639,20 @@
 
 |  行 | 类别          | 格  | 代码 / 理由                                                                          |
 | --: | ------------- | --- | ------------------------------------------------------------------------------------ |
-|  77 | ??-left       |     | `const volume = report.volume ?? {};`                                                |
-|  78 | ??-left       |     | `const caps = report.capabilities ?? {};`                                            |
-|  79 | ??-left       |     | `const pnpm = report.pnpm ?? {};`                                                    |
-|  80 | ??-left       |     | `const git = report.git ?? {};`                                                      |
-|  81 | ??-left       |     | `const cache = report.cache ?? {};`                                                  |
-|  82 | ??-left       |     | `const drive = volume.root ?? "";`                                                   |
-|  85 | ??-left       |     | `levers.push(workdirLever(report.workdirs ?? []));`                                  |
-|  87 | ??-left       |     | `levers.push(defenderLever(volume, report.defender ?? { known: false }));`           |
-|  95 | ??-left       |     | `report.indexMarking ?? { known: false, sampled: 0, marked: 0, ratio: null },`       |
-| 143 | ??-left       |     | `const storePath = pnpm.storePath ?? "";`                                            |
-| 336 | ??-left       |     | `const drive = volume.root ?? "";`                                                   |
-| 356 | ??-left       |     | `if (/受信任/.test(volume.devDriveLabel ?? "")) {`                                   |
-| 498 | literal-cmp   |     | `if (usage.state === "unknown") {`                                                   |
-| 582 | always-truthy |     | `if (marking && marking.known && marking.ratio !== null && marking.ratio >= 0.95) {` |
+| 77 | ??-left | B | `const volume = report.volume ?? {};` —— `ProbeReport.volume` 必填；`?? {}` 恒不成立（探针永远回对象，读不到写在字段里） |
+| 78 | ??-left | B | `const caps = report.capabilities ?? {};` —— 同上：`capabilities` |
+| 79 | ??-left | B | `const pnpm = report.pnpm ?? {};` —— 同上：`pnpm` |
+| 80 | ??-left | B | `const git = report.git ?? {};` —— 同上：`git` |
+| 81 | ??-left | B | `const cache = report.cache ?? {};` —— 同上：`cache` |
+| 82 | ??-left | A | `const drive = volume.root ?? "";` —— `VolumeProbe.root` 是 `string`，`?? ""` 恒不成立 |
+| 85 | ??-left | A | `levers.push(workdirLever(report.workdirs ?? []));` —— `workdirs` 在 `ProbeReport` 里是 `WorkdirEntry[]`，`?? []` 恒不成立 —— 它还悄悄把「探针忘了给」读成「空的」 |
+| 87 | ??-left | A | `levers.push(defenderLever(volume, report.defender ?? { known: false }));` —— `defender` 必填（`probeDefender` 永远回对象）；那层 `?? { known: false }` 恒不成立，判空本来就在 `defenderLever` 里 |
+| 95 | ??-left | A | `report.indexMarking ?? { known: false, sampled: 0, marked: 0, ratio: null },` —— `indexMarking` 必填；可 `null` 的是它内部的 `ratio`（`searchIndexLever` 里另有判空） |
+| 143 | ??-left | A | `const storePath = pnpm.storePath ?? "";` —— `PnpmProbe.storePath` 是 `string`（读不到就是空串），`?? ""` 恒不成立 |
+| 336 | ??-left | A | `const drive = volume.root ?? "";` —— `root` 是 `string`，`?? ""` 恒不成立 |
+| 356 | ??-left | A | `if (/受信任/.test(volume.devDriveLabel ?? "")) {` —— `devDriveLabel` 是 `string`，`?? ""` 恒不成立（`devDrive === "yes"` 那一支它一定非空） |
+| 498 | literal-cmp | B | `if (usage.state === "unknown") {` —— 走到这里只剩 `idle`（`busy` / `unknown` 已各自 return）；`=== "idle"` 与 `!== "busy" && !== "unknown"` 都会被 tsc 判 TS2367，直接落成语句 |
+| 582 | always-truthy | A | `if (marking && marking.known && marking.ratio !== null && marking.ratio >= 0.95) {` —— `marking` 由调用点按默认值补全，`&& marking.known` 那半恒真；真正可缺的是 `ratio`（`number | null`） |
 
 ### scripts/dev-drive-probe.mjs
 
@@ -666,12 +666,12 @@
 
 |  行 | 类别    | 格  | 代码 / 理由                                                                             |
 | --: | ------- | --- | --------------------------------------------------------------------------------------- |
-|  89 | ??-left |     | `const volume = report.volume ?? {};`                                                   |
-|  90 | ??-left |     | `const caps = report.capabilities ?? {};`                                               |
-|  96 | ??-left |     | ``所在卷：${volume.root ?? "(未知)"} 文件系统：${volume.fsType ?? "(未知)"}` +`         |
-|  97 | ??-left |     | `` 卷标：${volume.label ?? "(无)"} Dev Drive 指定：${volume.devDriveLabel ?? "未知"}`,` |
-| 107 | ??-left |     | `lines.push(` [${mark[lever.status] ?? "?"}] ${lever.id} — ${lever.title}`);`           |
-| 109 | ??-left |     | `for (const action of lever.actions ?? []) {`                                           |
+| 89 | ??-left | B | `const volume = report.volume ?? {};` —— `ProbeReport.volume` 必填（`probeVolume` 永远返回对象），`?? {}` 恒不成立；真会缺的是 `fsType` / `label`（类型里就有 `null`） |
+| 90 | ??-left | B | `const caps = report.capabilities ?? {};` —— 同上：`capabilities` 必填 |
+| 96 | ??-left | A | `` —— `root` 在 `VolumeProbe` 里是 `string`；`?? "(未知)"` 恒不成立 —— 真正可能缺的是 `fsType` / `label`，它们的 `??` 保留 |
+| 97 | ??-left | A | `` —— 同上：`devDriveLabel` 是 `string`，`?? "未知"` 恒不成立 |
+| 107 | ??-left | A | `lines.push(` —— 状态词表四档与 `mark` 的四档同一份，`?? "?"` 恒不成立；删掉后状态扩档由 tsc 当场点名 |
+| 109 | ??-left | B | `for (const action of lever.actions ?? []) {` —— `Lever.actions` 必填（`buildLevers` 每条都给数组），`?? []` 恒不成立 |
 
 ### scripts/dev-handle.mjs
 
@@ -984,7 +984,7 @@
 
 |  行 | 类别    | 格  | 代码 / 理由                                                            |
 | --: | ------- | --- | ---------------------------------------------------------------------- |
-|  85 | ??-left |     | `for (const m of String(xml ?? "").matchAll(/<testsuite\b[^>]*>/g)) {` |
+| 85 | ??-left | D | `for (const m of String(xml ?? "").matchAll(/<testsuite\b[^>]*>/g)) {` —— `xml` 是磁盘上的 junit 产物（外部数据），`String(xml ?? "")` 兜的是「读不到文件」；规则按形参声明读成恒非空 |
 
 ### scripts/setup-comfy-cli-venv.mjs
 
@@ -1006,7 +1006,7 @@
 
 |  行 | 类别    | 格  | 代码 / 理由                                           |
 | --: | ------- | --- | ----------------------------------------------------- |
-|  45 | ??-left |     | `const bare = String(token ?? "").replace(/^#/, "");` |
+| 45 | ??-left | D | `const bare = String(token ?? "").replace(/^#/, "");` —— `token` 来自命令行 / TAPD 链接尾段（外部输入），`String(token ?? "")` 是它给不出来时的兜底；规则只看得见 JSDoc 的 `string` |
 
 ### scripts/ship-build.mjs
 
@@ -1222,7 +1222,7 @@
 
 |  行 | 类别          | 格  | 代码 / 理由      |
 | --: | ------------- | --- | ---------------- |
-| 237 | always-truthy |     | `while (true) {` |
+| 237 | always-truthy | B | `while (true) {` —— `while (true)` 的终止条件写在体内的 `break`；改成 `for (…; indexOf(...) !== -1; …)`，循环怎么停一眼可见（两处 `cursor` 推进原样） |
 
 ### src/app/(main)/settings/components/ComfyuiSection.tsx
 
