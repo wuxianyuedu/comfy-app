@@ -140,7 +140,7 @@ const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
  * 所以**每一处**调用 `runChunk` 的用例都必须走它（或走下面那份委托它的 `runCapturing`），
  * 「不许有漏掉的调用点」由本文件末尾那条判据钉住（针尖的构造方式见它里面的说明）。
  */
-async function captureStderr<T>(fn: () => Promise<T>): Promise<{ text: string; value: T; }> {
+async function captureStderr<T>(fn: () => Promise<T>): Promise<{ text: string; value: T }> {
   const chunks: Array<string> = [];
   const realWrite = process.stderr.write.bind(process.stderr);
   process.stderr.write = (s: string | Uint8Array) => {
@@ -708,9 +708,9 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
   const CHUNK = ["tests/a.test.ts", "tests/b.test.ts"];
 
   /** 一次假 spawn 的结果（与 launcher 里 `spawnVitest` 的返回形状同构）。 */
-  type SpawnResult = { output: string; status: number | null; };
+  type SpawnResult = { output: string; status: number | null };
   /** 一次假 spawn 的调用记录。 */
-  type SpawnCall = { args: Array<string>; entry: string; };
+  type SpawnCall = { args: Array<string>; entry: string };
 
   /** 造一个假 spawn：按调用次序回放预设的结果。 */
   function fakeSpawn(results: Array<SpawnResult>): {
@@ -758,7 +758,7 @@ describe("受影响用例的启动器 —— 整条判决链（超时 ⇒ 等待
    */
   async function runCapturing(deps: {
     entry: string;
-    onAttempt?: (record: { outcome: string; settled?: boolean; waitedMs?: number; }) => void;
+    onAttempt?: (record: { outcome: string; settled?: boolean; waitedMs?: number }) => void;
     onUnverified?: (files: Array<string>) => void;
     settle?: () => Promise<{
       load: number;
@@ -1171,7 +1171,11 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
        复用带来的是超时形态的负载自适应仍然在场 —— 全量档不该成为「机器太满」的结论出口。 */
     /* reporter 那一档（`quiet`）是**读数**上的选择，不是另写一套跑法：它跟着同一个
        `runChunk` 走 —— 所以这条形状判据把 `quiet` 也算进同一行里。 */
-    expect(src).toMatch(/return await runChunk\(\[\], \{ entry, workers, quiet: \w+ \}\)/);
+    /* `exclude` 是同一个 `runChunk` 的第二个入参（停用台账，ISSUE #2948）—— 它也落在
+       这一行里，同样不改判决链。 */
+    expect(src).toMatch(
+      /return await runChunk\(\[\], \{ entry, workers, quiet: \w+, exclude: \w+ \}\)/,
+    );
   });
 
   it("意外空集仍阻断，且话术里指出 `--full` 是另一档（两者不许同形）", () => {
@@ -1299,7 +1303,7 @@ describe("组 C 的分文件读数：写的一侧与读的一侧必须是同一�
 
   it("runChunk 真的把这两段拼进两次 spawn，清单仍在最后", async () => {
     const dir = tempDir();
-    const calls: Array<{ args: Array<string>; entry: string; }> = [];
+    const calls: Array<{ args: Array<string>; entry: string }> = [];
     await captureStderr(() =>
       runChunk(["tests/a.test.ts"], {
         entry: "vitest.mjs",
@@ -1645,7 +1649,7 @@ describe("第 2 遍的判决按文件分开（超时不替同块里的真红挡�
     );
 
   /** 按次序回放结果的假 spawn，同时把每次的清单记下来（补跑发生过没有要看它）。 */
-  function scripted(results: Array<{ output: string; status: number; }>) {
+  function scripted(results: Array<{ output: string; status: number }>) {
     const lists: Array<Array<string>> = [];
     return {
       lists,
@@ -1854,7 +1858,7 @@ describe("第 1 遍就没跑起来（装载 / 运行时级错误）", () => {
 
   /** 起一次 `runChunk` 并把 stderr 收在手里（与上面那节同一个抓取通道）。 */
   async function runWith(
-    results: Array<{ output: string; status: number; }>,
+    results: Array<{ output: string; status: number }>,
     extra: Partial<Parameters<typeof runChunk>[1]> = {},
   ) {
     const calls: Array<Array<string>> = [];

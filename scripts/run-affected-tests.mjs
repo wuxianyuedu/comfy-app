@@ -121,6 +121,7 @@
 
 import { planSeparatedLaunches, resolveAffectedSegment } from "./affected-launch-segments.mjs";
 import { mergeTimingLedger, orderByKnownDuration, readTimingLedger } from "./affected-launch-duration-order.mjs";
+import { applySuspension, excludeArgs } from "./suspended-gate-tests.mjs"; // #2948
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 /* 「受影响用例」门在 CI 里的良性 stderr 噪音屏蔽（按行判定，见文件头）：本文件只负责
  * 在起 vitest 前解析开关、在两遍 spawn 都把 `isNoiseLine` 透传下去。 */
@@ -211,7 +212,6 @@ import {
 
 export { planLaunches, resolveMaxWorkers, resolveVitestEntry };
 
-
 /* 并发只有一个出处（ISSUE #2324）：兜底档由这里取，`resolveMaxWorkers` 自己不读核数。 */
 import { resolveCiWorkers } from "./ci-load.mjs";
 import { existsSync } from "node:fs";
@@ -242,8 +242,6 @@ export const SAFE_ARGV_BUDGET = 24_000;
  */
 const PER_FILE_RERUN_MAX = 8;
 
-
-
 async function main(argv) {
   const dryRun = argv.includes("--dry-run");
   /* 把本跑的逐份用时并进入库台账（人为跑；CI 不自动写 —— 平台工作区的改动进不了库）。 */
@@ -271,6 +269,8 @@ async function main(argv) {
      * 反过来成了唯一必须装好依赖的一档 —— 干净检出 / 只读沙箱上 `--dry-run` 直接红在
      * 「解析不到 vitest 入口」，而它的全部用途（对账清单份数、问一句跑得起来吗）
      * 一个都用不上。判据 `tests/affected-tests.test.ts` 的「干净检出」一条真起进程判这条顺序。 */
+    const { reading, excludes } = applySuspension([], "full");
+    process.stderr.write(reading);
     if (dryRun) {
       process.stdout.write("[affected-launch] --full：会跑全部用例（vitest 自行收集）\n");
       return 0;
@@ -295,7 +295,7 @@ async function main(argv) {
         : "",
     );
     // 空清单在这里是**明确意图**（全量），所以复用同一条判决链（超时形态仍会隔离复跑）。
-    return await runChunk([], { entry, workers, quiet: quietFull });
+    return await runChunk([], { entry, workers, quiet: quietFull, exclude: excludes });
   }
   const seg = resolveAffectedSegment(process.env.COMFY_AFFECTED_SEGMENT);
   if (seg.note) {
@@ -315,7 +315,12 @@ async function main(argv) {
    *   · both —— 逐字旧行为。 */
   let segFiles;
   if (seg.mode === "fixed") {
-    segFiles = FIXED_STRUCTURAL_TESTS.filter((f) => existsSync(f));
+    const kept = applySuspension(
+      FIXED_STRUCTURAL_TESTS.filter((f) => existsSync(f)),
+      "fixed",
+    );
+    segFiles = kept.files;
+    process.stderr.write(kept.reading);
   } else {
     const files = collectList();
     if (files.length === 0) {
@@ -584,6 +589,7 @@ export async function runChunk(chunk, deps) {
      * 透传给两遍 spawn，在 `spawnVitest` 回吐前按行滤掉噪音（见
      * `affected-launch-noise-reporter.mjs`）。本地不设该变量 ⇒ undefined，不过滤。 */
     filterLine = undefined,
+    exclude = [], // 全量档的停用台账（#2948）：清单由 vitest 收集 ⇒ 只能走 `--exclude`
   } = deps;
   /* reporter：平台那一格 quiet（日志预算），本地默认**一个字都不加** —— 见
    * `affected-launch-log-budget.mjs` 的头注（那一段记着 102400 字节的截断现场）。 */
@@ -642,6 +648,7 @@ export async function runChunk(chunk, deps) {
         withDefaultReporter: reporters.length === 0,
       }),
       `--maxWorkers=${workers}`,
+      ...excludeArgs(exclude),
       ...chunk,
     ],
     firstPassOptions,
