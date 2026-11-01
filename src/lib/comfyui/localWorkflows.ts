@@ -358,7 +358,9 @@ function checksumOfFile(
       const hash = createHash("sha1");
       const stream = fs.createReadStream(absPath, { encoding: "utf8" });
       stream.on("data", (chunk) => hash.update(/* SAFETY: 类型断言已复核 */ chunk as string));
-      stream.on("error", () => resolve(null));
+      stream.on("error", () => {
+        resolve(null);
+      });
       stream.on("end", () => {
         const checksum = hash.digest("hex").slice(0, 16);
         rememberChecksum(key, { mtimeMs, size, checksum });

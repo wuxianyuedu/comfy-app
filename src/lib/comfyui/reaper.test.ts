@@ -94,8 +94,12 @@ describe("configureReaper 接缝", () => {
       finalizeFailure: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
       finalizeFromReaper: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
     };
-    expect(() => mod.configureReaper({ taskRepo: fakeRepo })).not.toThrow();
+    expect(() => {
+      mod.configureReaper({ taskRepo: fakeRepo });
+    }).not.toThrow();
     // 再来一次空 Partial：合法、只是没覆盖任何东西。
-    expect(() => mod.configureReaper({})).not.toThrow();
+    expect(() => {
+      mod.configureReaper({});
+    }).not.toThrow();
   });
 });

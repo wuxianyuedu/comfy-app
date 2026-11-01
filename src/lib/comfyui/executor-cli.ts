@@ -209,9 +209,9 @@ export async function executeViaComfyCli(job: Job) {
     const prep = prepareGraphForExecution(withOverrides);
     if (!Object.keys(prep.graph).length) {
       log(taskId, "error", "工作流没有可执行的节点（可能全部被禁用）");
-      fireAndForget(fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）"), (e) =>
-        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 空图收口异常`)}`),
-      );
+      fireAndForget(fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）"), (e) => {
+        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 空图收口异常`)}`);
+      });
       return;
     }
     if (prep.removed.length) {
@@ -282,9 +282,9 @@ export async function executeViaComfyCli(job: Job) {
       .catch(() => false);
     const hint = comfyCliMissingHint({ inCheckout });
     log(taskId, "error", `未找到 comfy-cli Python 解释器：${py}\n${hint}`);
-    fireAndForget(fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`), (e) =>
-      cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 缺解释器收口异常`)}`),
-    );
+    fireAndForget(fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`), (e) => {
+      cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 缺解释器收口异常`)}`);
+    });
     return;
   }
 
@@ -366,9 +366,9 @@ export async function executeViaComfyCli(job: Job) {
       /* ignore */
     }
     cliProcs.delete(taskId);
-    fireAndForget(fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）"), (e) =>
-      cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 看门狗收口异常`)}`),
-    );
+    fireAndForget(fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）"), (e) => {
+      cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 看门狗收口异常`)}`);
+    });
   }, CLI_TIMEOUT_MS);
 
   /* stdout / stderr 的流解析与 envelope 收口都收在 executor-cli-stream.ts：
@@ -378,14 +378,16 @@ export async function executeViaComfyCli(job: Job) {
     taskId,
     log,
     patched,
-    complete: (id, pid) =>
-      fireAndForget(complete(id, pid), (e) =>
-        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `complete(${id}) 收口异常`)}`),
-      ),
-    fail: (id, pid, detail, ves) =>
-      fireAndForget(fail(id, pid, detail, ves), (e) =>
-        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${id}) 收口异常`)}`),
-      ),
+    complete: (id, pid) => {
+      fireAndForget(complete(id, pid), (e) => {
+        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `complete(${id}) 收口异常`)}`);
+      });
+    },
+    fail: (id, pid, detail, ves) => {
+      fireAndForget(fail(id, pid, detail, ves), (e) => {
+        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${id}) 收口异常`)}`);
+      });
+    },
     settle: () => {
       if (settled) {
         return false;
@@ -476,7 +478,9 @@ export async function executeViaComfyCli(job: Job) {
     log(taskId, "error", `comfy-cli 进程已退出（code=${code}），未收到 envelope 事件`);
     fireAndForget(
       fail(taskId, promptId ?? "", `comfy-cli 异常退出（code=${code}）\n${tail || "(无 stderr)"}`),
-      (e) => cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 进程退出收口异常`)}`),
+      (e) => {
+        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 进程退出收口异常`)}`);
+      },
     );
   });
 
@@ -489,8 +493,8 @@ export async function executeViaComfyCli(job: Job) {
     cliProcs.delete(taskId);
     trace("cli", taskId, "进程启动失败", { error: err });
     log(taskId, "error", errorText(err, "comfy-cli 启动失败"));
-    fireAndForget(fail(taskId, promptId ?? "", errorText(err, "comfy-cli 启动失败")), (e) =>
-      cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 启动失败收口异常`)}`),
-    );
+    fireAndForget(fail(taskId, promptId ?? "", errorText(err, "comfy-cli 启动失败")), (e) => {
+      cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 启动失败收口异常`)}`);
+    });
   });
 }

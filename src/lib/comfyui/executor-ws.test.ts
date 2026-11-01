@@ -62,8 +62,12 @@ const { state } = await import("./runner-state");
 describe("configureExecutorWs 接缝", () => {
   it("接受 Partial<ExecutorWsDeps>、两次调用是合并语义", () => {
     const fakeRepo = { updateProgress: async () => true };
-    expect(() => mod.configureExecutorWs({ taskRepo: fakeRepo })).not.toThrow();
-    expect(() => mod.configureExecutorWs({})).not.toThrow();
+    expect(() => {
+      mod.configureExecutorWs({ taskRepo: fakeRepo });
+    }).not.toThrow();
+    expect(() => {
+      mod.configureExecutorWs({});
+    }).not.toThrow();
   });
 });
 

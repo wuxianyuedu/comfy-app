@@ -130,10 +130,18 @@ function makeLogger(ns: string, file?: string): AppRuntimeLogger {
   };
 
   return {
-    info: (message, fields) => emit("info", message, fields),
-    warn: (message, fields) => emit("warn", message, fields),
-    error: (message, fields) => emit("error", message, fields),
-    debug: (message, fields) => emit("debug", message, fields),
+    info: (message, fields) => {
+      emit("info", message, fields);
+    },
+    warn: (message, fields) => {
+      emit("warn", message, fields);
+    },
+    error: (message, fields) => {
+      emit("error", message, fields);
+    },
+    debug: (message, fields) => {
+      emit("debug", message, fields);
+    },
     child: (childNs) => makeLogger(ns ? `${ns}:${childNs}` : childNs, file),
   };
 }

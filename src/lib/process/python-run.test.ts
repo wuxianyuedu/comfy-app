@@ -173,7 +173,9 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
         seen.push(ev);
       },
     } as unknown as NodeJS.ReadableStream;
-    expect(() => forEachOutputLine(stream, () => undefined)).not.toThrow();
+    expect(() => {
+      forEachOutputLine(stream, () => undefined);
+    }).not.toThrow();
     expect(seen).toEqual(["data", "end"]);
   });
 });

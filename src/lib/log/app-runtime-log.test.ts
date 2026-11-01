@@ -77,7 +77,9 @@ describe("app-runtime-log 行格式", () => {
 
   it("写入失败不抛异常", () => {
     const log = createAppRuntimeLogger("app", "/nonexistent-dir-x/foo.log");
-    expect(() => log.info("boom")).not.toThrow();
+    expect(() => {
+      log.info("boom");
+    }).not.toThrow();
   });
 
   it("字段里有循环引用 ⇒ 整行照写，字段段退化成 <unserializable-fields>", () => {
@@ -86,7 +88,9 @@ describe("app-runtime-log 行格式", () => {
     const log = createAppRuntimeLogger("app", logFile);
     const cyclic: Record<string, unknown> = { taskId: "t1" };
     cyclic.self = cyclic;
-    expect(() => log.info("gen", cyclic)).not.toThrow();
+    expect(() => {
+      log.info("gen", cyclic);
+    }).not.toThrow();
     const content = fs.readFileSync(logFile, "utf8");
     expect(content).toContain("[app] gen <unserializable-fields>\n");
     expect(content).not.toContain('"taskId"');

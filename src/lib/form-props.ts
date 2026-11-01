@@ -64,7 +64,9 @@ export function textHandler<T>(
   // transform」的漏口。
   const fn: (raw: string) => T =
     transform ?? ((raw) => /* SAFETY: 类型断言已复核 */ raw as unknown as T);
-  return (event) => onValue(fn(event.target.value));
+  return (event) => {
+    onValue(fn(event.target.value));
+  };
 }
 
 /**
@@ -75,7 +77,9 @@ export function textHandler<T>(
  * 被当成 `false`，开关永远打不开）。
  */
 export function checkedHandler(onValue: (checked: boolean) => void): (event: CheckedEvent) => void {
-  return (event) => onValue(event.target.checked);
+  return (event) => {
+    onValue(event.target.checked);
+  };
 }
 
 /**
@@ -115,7 +119,9 @@ export function bindKey<T extends object, K extends keyof T>(
   patch: (partial: Pick<T, K>) => void,
   key: K,
 ): (value: T[K]) => void {
-  return (value) => patch(/* SAFETY: 类型断言已复核 */ { [key]: value } as Pick<T, K>);
+  return (value) => {
+    patch(/* SAFETY: 类型断言已复核 */ { [key]: value } as Pick<T, K>);
+  };
 }
 
 /**

@@ -119,9 +119,17 @@ describe("createCrashLatch", () => {
   });
 
   it("非法阈值直接抛：阈值为 0 会让第一次失败就判死（正是本条要拦的形态）", () => {
-    expect(() => assertCrashThreshold(0)).toThrow();
-    expect(() => assertCrashThreshold(-1)).toThrow();
-    expect(() => assertCrashThreshold(1.5)).toThrow();
-    expect(() => assertCrashThreshold(3)).not.toThrow();
+    expect(() => {
+      assertCrashThreshold(0);
+    }).toThrow();
+    expect(() => {
+      assertCrashThreshold(-1);
+    }).toThrow();
+    expect(() => {
+      assertCrashThreshold(1.5);
+    }).toThrow();
+    expect(() => {
+      assertCrashThreshold(3);
+    }).not.toThrow();
   });
 });

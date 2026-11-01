@@ -391,15 +391,15 @@ describe("applyRawOverrides — 子图 wrapper 覆盖同步到内层节点", () 
 describe("configureExecutorCli 接缝", () => {
   it("接受 Partial<ExecutorCliDeps> 且不抛", async () => {
     const mod = await import("./executor-cli");
-    expect(() =>
+    expect(() => {
       mod.configureExecutorCli({
         logger: { warn: () => undefined },
-      }),
-    ).not.toThrow();
-    expect(() =>
+      });
+    }).not.toThrow();
+    expect(() => {
       mod.configureExecutorCli({
         resolveComfyBase: async () => "http://127.0.0.1:8188",
-      }),
-    ).not.toThrow();
+      });
+    }).not.toThrow();
   });
 });

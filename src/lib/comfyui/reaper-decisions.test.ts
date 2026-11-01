@@ -583,11 +583,17 @@ describe("防抖定时器不跨用例泄漏", () => {
     // sleep-ok: 等一个「不会发生的事」：等防抖窗口内不再有决策落地 —— §11.14 明写的合法逃逸口。
     await new Promise((r) => setTimeout(r, 300));
     // 取消是幂等的重复调用也安全
-    expect(() => cancelPersistLogs("leak-probe")).not.toThrow();
+    expect(() => {
+      cancelPersistLogs("leak-probe");
+    }).not.toThrow();
   });
 
   it("取消是幂等的，重复调用安全", async () => {
-    expect(() => cancelPersistLogs("never-scheduled")).not.toThrow();
-    expect(() => cancelPersistLogs("")).not.toThrow();
+    expect(() => {
+      cancelPersistLogs("never-scheduled");
+    }).not.toThrow();
+    expect(() => {
+      cancelPersistLogs("");
+    }).not.toThrow();
   });
 });

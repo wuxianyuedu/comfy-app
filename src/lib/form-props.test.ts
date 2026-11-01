@@ -72,7 +72,11 @@ describe("form-props —— 事件值 → 值回调", () => {
   it("readTextInput 就地取值并返回 void（事件仍归调用处）", () => {
     const onValue = vi.fn();
     const event = valueEvent("hi");
-    expect(readTextInput(event, onValue)).toBeUndefined();
+    /* `readTextInput` 的返回值是 void：直接塞进 expect 会让断言退化成
+       「收到非 thenable 就抛」的假阳性形状，所以这里只断言调用本身不抛。 */
+    expect(() => {
+      readTextInput(event, onValue);
+    }).not.toThrow();
     expect(onValue).toHaveBeenCalledWith("hi");
   });
 

@@ -322,7 +322,9 @@ describe("createCliEnvelopeParser（按行聚合 + 事件分发）", () => {
 
   it("非 JSON 行不抛错，也不触发任何分发", () => {
     const { p, onPromptId, finish } = mk();
-    expect(() => p.sink("Traceback (most recent call last):\n")).not.toThrow();
+    expect(() => {
+      p.sink("Traceback (most recent call last):\n");
+    }).not.toThrow();
     expect(onPromptId).not.toHaveBeenCalled();
     expect(finish).not.toHaveBeenCalled();
   });

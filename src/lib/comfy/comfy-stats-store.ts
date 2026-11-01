@@ -326,7 +326,9 @@ function ensureCrashSubscription(): void {
   if (stopCrashSubscription !== null) {
     return;
   }
-  stopCrashSubscription = subscribeComfyCrashes(() => verifyOnce());
+  stopCrashSubscription = subscribeComfyCrashes(() => {
+    verifyOnce();
+  });
 }
 
 /**

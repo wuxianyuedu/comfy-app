@@ -118,7 +118,9 @@ describe("comfy-queue-store", () => {
   it("订阅即走兜底轮询拉一次真值", async () => {
     const onChange = vi.fn();
     const off = mod.subscribeComfyQueue(onChange);
-    await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
+    await vi.waitFor(() => {
+      expect(onChange).toHaveBeenCalled();
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const snap = mod.getComfyQueueSnapshot();
     expect(snap.online).toBe(true);
@@ -133,10 +135,14 @@ describe("comfy-queue-store", () => {
   it("收到 SSE 帧就补一次真值拉取（事件为主）", async () => {
     const onChange = vi.fn();
     const off = mod.subscribeComfyQueue(onChange);
-    await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
+    await vi.waitFor(() => {
+      expect(onChange).toHaveBeenCalled();
+    });
 
     FakeEventSource.last!.emit("{}");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
     off();
   });
 
@@ -151,7 +157,9 @@ describe("comfy-queue-store", () => {
 
   it("最后一个退订即关掉 SSE", async () => {
     const off = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() => expect(FakeEventSource.last).not.toBeNull());
+    await vi.waitFor(() => {
+      expect(FakeEventSource.last).not.toBeNull();
+    });
     const es = FakeEventSource.last!;
     off();
     expect(es.closed).toBe(true);
@@ -161,7 +169,9 @@ describe("comfy-queue-store", () => {
   it("中间退订不关连接（等到最后一个才关）", async () => {
     const a = mod.subscribeComfyQueue(vi.fn());
     const b = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() => expect(FakeEventSource.last).not.toBeNull());
+    await vi.waitFor(() => {
+      expect(FakeEventSource.last).not.toBeNull();
+    });
     const es = FakeEventSource.last!;
     b();
     expect(es.closed).toBe(false);
@@ -171,11 +181,15 @@ describe("comfy-queue-store", () => {
 
   it("回包非 ok 时不动状态（保留上一次好数据）", async () => {
     const off = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(3));
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().queued).toBe(3);
+    });
 
     fetchMock.mockResolvedValue({ ok: false });
     FakeEventSource.last!.emit("not-ok");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
     await flush();
 
     expect(mod.getComfyQueueSnapshot().online).toBe(true);
@@ -185,11 +199,15 @@ describe("comfy-queue-store", () => {
 
   it("探测抛错时不动状态（瞬时断网不闪）", async () => {
     const off = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(3));
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().queued).toBe(3);
+    });
 
     fetchMock.mockRejectedValue(new Error("network down"));
     FakeEventSource.last!.emit("throw");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
     await flush();
 
     expect(mod.getComfyQueueSnapshot().online).toBe(true);
@@ -206,11 +224,15 @@ describe("comfy-queue-store", () => {
 
     const onChange = vi.fn();
     const off = mod.subscribeComfyQueue(onChange);
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
 
     // 第二拍抢先发出 ⇒ 第一拍从此成为「迟到回包」
     FakeEventSource.last!.emit("overlap");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
 
     // 旧的先到：必须被丢弃（快照里不能出现 111）
     stale.resolve(queueRes(onlinePayload(111)));
@@ -219,18 +241,24 @@ describe("comfy-queue-store", () => {
 
     // 最新的一拍才生效
     fresh.resolve(queueRes(onlinePayload(222)));
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(222));
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().queued).toBe(222);
+    });
 
     off();
   });
 
   it("解析兜底：payload 不是对象 → 按探测失败走迟滞，达阈值后才提交无数据", async () => {
     const off = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(3));
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().queued).toBe(3);
+    });
 
     fetchMock.mockResolvedValue(queueRes("not-a-record"));
     FakeEventSource.last!.emit("bad-payload");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
     await flush();
     // 单拍畸形 ⇒ 容忍期内保留上一次好状态（不闪）
     expect(mod.getComfyQueueSnapshot().online).toBe(true);
@@ -245,7 +273,9 @@ describe("comfy-queue-store", () => {
       }),
     );
     FakeEventSource.last!.emit("bad-comfy");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
     await flush();
     const snap = mod.getComfyQueueSnapshot();
     expect(snap.comfy).toEqual({ running: 0, pending: 0 });
@@ -256,7 +286,9 @@ describe("comfy-queue-store", () => {
 
   it("解析兜底：running 的字段类型不对时各自回落（null / 0）", async () => {
     const off = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(3));
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().queued).toBe(3);
+    });
 
     fetchMock.mockResolvedValue(
       queueRes({
@@ -267,7 +299,9 @@ describe("comfy-queue-store", () => {
       }),
     );
     FakeEventSource.last!.emit("bad-task-id");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
     await flush();
     expect(mod.getComfyQueueSnapshot().running).toBeNull();
 
@@ -287,7 +321,9 @@ describe("comfy-queue-store", () => {
       }),
     );
     FakeEventSource.last!.emit("partial-running");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
     await flush();
     expect(mod.getComfyQueueSnapshot().running).toEqual({
       taskId: "task-2",
@@ -302,28 +338,38 @@ describe("comfy-queue-store", () => {
 
   it("离线迟滞：连续失败达阈值才翻离线，容忍期内保留上一次好状态", async () => {
     const off = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(3));
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().queued).toBe(3);
+    });
 
     fetchMock.mockResolvedValue(queueRes(offlinePayload(9)));
 
     // 第 1 次失败：容忍期内 ⇒ 保留上一次好状态（不闪）
     FakeEventSource.last!.emit("f1");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
     await flush();
     expect(mod.getComfyQueueSnapshot().online).toBe(true);
     expect(mod.getComfyQueueSnapshot().queued).toBe(3);
 
     // 第 2 次失败：仍在容忍期
     FakeEventSource.last!.emit("f2");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
     await flush();
     expect(mod.getComfyQueueSnapshot().online).toBe(true);
     expect(mod.getComfyQueueSnapshot().queued).toBe(3);
 
     // 第 3 次失败：达阈值 ⇒ 提交离线
     FakeEventSource.last!.emit("f3");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().online).toBe(false));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    });
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().online).toBe(false);
+    });
     expect(mod.getComfyQueueSnapshot().queued).toBe(9);
     expect(mod.getComfyQueueSnapshot().elapsedMs).toBeNull();
     off();
@@ -331,29 +377,39 @@ describe("comfy-queue-store", () => {
 
   it("在线一次即清零迟滞：容忍期内回到在线，不会翻离线", async () => {
     const off = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(3));
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().queued).toBe(3);
+    });
 
     fetchMock.mockResolvedValue(queueRes(offlinePayload(9)));
     FakeEventSource.last!.emit("f1");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
     await flush();
     expect(mod.getComfyQueueSnapshot().online).toBe(true);
 
     // 回到在线 ⇒ 连续失败计数清零
     fetchMock.mockResolvedValue(queueRes(onlinePayload(4)));
     FakeEventSource.last!.emit("recover");
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(4));
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().queued).toBe(4);
+    });
 
     // 清零之后再失败两次，仍应在线（阈值未到）
     fetchMock.mockResolvedValue(queueRes(offlinePayload(9)));
     FakeEventSource.last!.emit("f1-again");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    });
     await flush();
     expect(mod.getComfyQueueSnapshot().online).toBe(true);
     expect(mod.getComfyQueueSnapshot().queued).toBe(4);
 
     FakeEventSource.last!.emit("f2-again");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(5);
+    });
     await flush();
     expect(mod.getComfyQueueSnapshot().queued).toBe(4);
     off();
@@ -371,11 +427,15 @@ describe("comfy-queue-store", () => {
     fetchMock.mockResolvedValue(queueRes(steady));
     const onChange = vi.fn();
     const off = mod.subscribeComfyQueue(onChange);
-    await vi.waitFor(() => expect(onChange).toHaveBeenCalled());
+    await vi.waitFor(() => {
+      expect(onChange).toHaveBeenCalled();
+    });
     onChange.mockClear();
 
     FakeEventSource.last!.emit("steady");
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
     await flush();
     expect(onChange).not.toHaveBeenCalled();
     off();
@@ -383,12 +443,16 @@ describe("comfy-queue-store", () => {
 
   it("本地秒表：有在跑的任务时 elapsedMs 随本地时钟推进（且不发请求）", async () => {
     const off = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().running).not.toBeNull());
+    await vi.waitFor(() => {
+      expect(mod.getComfyQueueSnapshot().running).not.toBeNull();
+    });
     const first = mod.getComfyQueueSnapshot().elapsedMs!;
     const before = fetchMock.mock.calls.length;
 
     await vi.waitFor(
-      () => expect(mod.getComfyQueueSnapshot().elapsedMs).toBeGreaterThan(first + 400),
+      () => {
+        expect(mod.getComfyQueueSnapshot().elapsedMs).toBeGreaterThan(first + 400);
+      },
       { timeout: 4000, interval: 100 },
     );
     // 秒表只走本地时钟，不新增探测请求
