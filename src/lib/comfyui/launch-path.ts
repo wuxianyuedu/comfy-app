@@ -9,13 +9,13 @@ import fs from "node:fs";
 import path from "node:path";
 
 export type ComfyLaunchPlan = {
+  baseArgs: Array<string>;
   cmd: string;
-  baseArgs: string[];
   cwd: string;
-  mainPy: string;
   /** 所选解释器的 site-packages 里是否找到了 torch（依赖齐备的标志）。
    *  false = 没找到——启动大概率因缺依赖秒退，调用方可据此提前提示。 */
   hasDeps?: boolean;
+  mainPy: string;
 };
 
 /**
@@ -27,7 +27,7 @@ export type ComfyLaunchPlan = {
 /** 解释器可执行名候选：Windows 是 python.exe；POSIX 是 bin/python（win 无后缀）。
  *  不含 pythonw / pythonw.exe —— 它们吞掉 stdout/stderr，ComfyUI 启动出错时
  *  看不到任何日志（排查不了），工坊只把 ComfyUI 当后端服务用。 */
-const INTERPRETER_NAMES: Record<"win32" | "posix", readonly string[]> = {
+const INTERPRETER_NAMES: Record<"win32" | "posix", ReadonlyArray<string>> = {
   win32: ["python.exe"],
   posix: ["python3", "python"],
 };
@@ -35,7 +35,7 @@ const INTERPRETER_NAMES: Record<"win32" | "posix", readonly string[]> = {
 /** venv 目录候选（含平台特定的可执行子目录）。
  *  Windows 的 venv 把解释器放 `Scripts/`，POSIX 放 `bin/` —— 只认 `Scripts`
  *  时，Linux/macOS 上明明建好的 .venv 会被判「找不到解释器」。 */
-function venvDirs(sourceRoot: string): string[] {
+function venvDirs(sourceRoot: string): Array<string> {
   return [
     path.join(sourceRoot, ".venv", "Scripts"),
     path.join(sourceRoot, ".venv", "bin"),
@@ -47,41 +47,27 @@ function venvDirs(sourceRoot: string): string[] {
 /** 在候选目录里找可用的解释器：按 INTERPRETER_NAMES 逐个试，命中即返回绝对路径。
  *  `pyDir` 可能是「解释器所在目录」（.venv/Scripts 或 .venv/bin），也可能是
  *  「环境根 / 源码根」（python_embeded、standalone-env，解释器直接在根下）。 */
-function findInterpreterIn(
-  pyDir: string,
-  exists: (p: string) => boolean,
-): string | null {
+function findInterpreterIn(pyDir: string, exists: (p: string) => boolean): string | null {
   for (const names of Object.values(INTERPRETER_NAMES)) {
     for (const name of names) {
       const candidate = path.join(pyDir, name);
-      if (exists(/*turbopackIgnore: true*/ candidate)) return candidate;
+      if (exists(/*turbopackIgnore: true*/ candidate)) {
+        return candidate;
+      }
     }
   }
   return null;
 }
 
-export function envHasTorch(
-  pyDir: string,
-  exists: (p: string) => boolean,
-): boolean {
+export function envHasTorch(pyDir: string, exists: (p: string) => boolean): boolean {
   const base = path.basename(pyDir).toLowerCase();
-  const envRoot =
-    base === "scripts" || base === "bin" ? path.dirname(pyDir) : pyDir;
+  const envRoot = base === "scripts" || base === "bin" ? path.dirname(pyDir) : pyDir;
   // 依赖目录随平台命名：
   //   Windows → <envRoot>/Lib/site-packages（大小写不敏感）
   //   POSIX   → <envRoot>/lib/python3.x/site-packages（带版本号子目录）
   // 只看 Windows 形态时，Linux 上明明装了 torch 也会判 hasDeps=false，
   // 退化成「按优先级选中空壳解释器」（启动即 No module named 'torch'）。
-  if (
-    exists(
-      /*turbopackIgnore: true*/ path.join(
-        envRoot,
-        "Lib",
-        "site-packages",
-        "torch",
-      ),
-    )
-  ) {
+  if (exists(/*turbopackIgnore: true*/ path.join(envRoot, "Lib", "site-packages", "torch"))) {
     return true;
   }
   return sitePackagesDirs(envRoot, exists).some((sp) =>
@@ -97,7 +83,7 @@ export function envHasTorch(
  *   ② Turbopack 对目录枚举的静态分析会退化成全项目追踪（仓库既有约定：
  *      动态文件访问要收敛，见 docs §5 「pnpm run build 卡在 Collecting page data」）。
  *  版本号候选覆盖 3.9~3.14：够用且恒定，不做无边界探测。 */
-const PYTHON_MINOR_CANDIDATES: readonly string[] = [
+const PYTHON_MINOR_CANDIDATES: ReadonlyArray<string> = [
   "3.9",
   "3.10",
   "3.11",
@@ -106,15 +92,14 @@ const PYTHON_MINOR_CANDIDATES: readonly string[] = [
   "3.14",
 ];
 
-export function sitePackagesDirs(
-  envRoot: string,
-  exists: (p: string) => boolean,
-): string[] {
-  const out: string[] = [];
+export function sitePackagesDirs(envRoot: string, exists: (p: string) => boolean): Array<string> {
+  const out: Array<string> = [];
   for (const minor of PYTHON_MINOR_CANDIDATES) {
     const sp = path.join(envRoot, "lib", `python${minor}`, "site-packages");
     // 只收实际存在的，免得把一堆猜测路径喂给下游（判 torch 时还要再 exists 一次）。
-    if (exists(/*turbopackIgnore: true*/ sp)) out.push(sp);
+    if (exists(/*turbopackIgnore: true*/ sp)) {
+      out.push(sp);
+    }
   }
   return out;
 }
@@ -154,12 +139,15 @@ export function resolveComfyLaunchPlan(
   }
 
   // 枚举「源码根」候选：配置根本身直接有 main.py，或 <root>/ComfyUI/main.py。
-  const hasMain = (dir: string) =>
-    exists(/*turbopackIgnore: true*/ path.join(dir, "main.py"));
-  const sourceRoots: string[] = [];
-  if (hasMain(root)) sourceRoots.push(root);
+  const hasMain = (dir: string) => exists(/*turbopackIgnore: true*/ path.join(dir, "main.py"));
+  const sourceRoots: Array<string> = [];
+  if (hasMain(root)) {
+    sourceRoots.push(root);
+  }
   const comfySub = path.join(root, "ComfyUI");
-  if (hasMain(comfySub)) sourceRoots.push(comfySub);
+  if (hasMain(comfySub)) {
+    sourceRoots.push(comfySub);
+  }
   if (sourceRoots.length === 0) {
     return {
       error:
@@ -199,11 +187,13 @@ export function resolveComfyLaunchPlan(
         ];
     const present = pyDirs
       .map((pyDir) => ({ pyDir, py: findInterpreterIn(pyDir, exists) }))
-      .filter((c): c is { pyDir: string; py: string } => c.py !== null);
+      .filter((c): c is { py: string; pyDir: string } => c.py !== null);
     /* 取首项与「这个源码根下有没有解释器」是同一个判据：写 `length === 0`
      * 再在下面用 `present[0]!` 会把它判两遍。 */
     const [firstPresent] = present;
-    if (!firstPresent) continue;
+    if (!firstPresent) {
+      continue;
+    }
     // 两段选择：优先挑「装了 torch」的解释器——依赖装在哪个环境随安装方式
     // 漂移（老桌面在 standalone-env，vendor / 新版桌面在 ComfyUI/.venv，便携在
     // python_embeded，Linux 在 .venv），固定优先级会选中空壳解释器（No module

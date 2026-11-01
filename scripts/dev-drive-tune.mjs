@@ -67,10 +67,15 @@ export { buildLevers, summarizeLevers };
 export function parseArgs(argv) {
   const flags = { apply: false, json: false, check: false, bench: false };
   for (const raw of argv) {
-    if (raw === "--apply") flags.apply = true;
-    else if (raw === "--json") flags.json = true;
-    else if (raw === "--check") flags.check = true;
-    else if (raw === "--bench") flags.bench = true;
+    if (raw === "--apply") {
+      flags.apply = true;
+    } else if (raw === "--json") {
+      flags.json = true;
+    } else if (raw === "--check") {
+      flags.check = true;
+    } else if (raw === "--bench") {
+      flags.bench = true;
+    }
   }
   return flags;
 }
@@ -117,12 +122,12 @@ export function renderReport(report) {
       for (const watched of target.watched) {
         if (!watched.known) {
           lines.push(`      ${watched.filter}：认不出对应的引擎进程，不判`);
-        } else if (!watched.present) {
-          lines.push(`      ${watched.filter} → ${watched.process}（${watched.label}）：没在跑`);
-        } else {
+        } else if (watched.present) {
           lines.push(
             `      ${watched.filter} → ${watched.process}（${watched.label}）：在跑，CPU 增量 ${watched.seconds}s`,
           );
+        } else {
+          lines.push(`      ${watched.filter} → ${watched.process}（${watched.label}）：没在跑`);
         }
       }
     }
@@ -160,9 +165,13 @@ function applyGitTuning(git) {
   ];
   const changed = [];
   for (const item of wanted) {
-    if (item.current === item.value) continue;
+    if (item.current === item.value) {
+      continue;
+    }
     const result = runGitConfig(item.key, item.value);
-    if (result) changed.push(`${item.key}=${item.value}`);
+    if (result) {
+      changed.push(`${item.key}=${item.value}`);
+    }
   }
   return changed;
 }

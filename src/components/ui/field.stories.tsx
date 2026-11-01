@@ -28,19 +28,11 @@ import { Switch } from "~/components/ui/switch";
  *
  * 枚举从 props 派生（不从任何变体表的返回值上取，规范 16 §16.2.3.4）。
  */
-type FieldOrientation = NonNullable<
-  React.ComponentProps<typeof Field>["orientation"]
->;
-type FieldLegendVariant = NonNullable<
-  React.ComponentProps<typeof FieldLegend>["variant"]
->;
+type FieldOrientation = NonNullable<React.ComponentProps<typeof Field>["orientation"]>;
+type FieldLegendVariant = NonNullable<React.ComponentProps<typeof FieldLegend>["variant"]>;
 
-const ORIENTATIONS: FieldOrientation[] = [
-  "vertical",
-  "horizontal",
-  "responsive",
-];
-const LEGEND_VARIANTS: FieldLegendVariant[] = ["legend", "label"];
+const ORIENTATIONS: Array<FieldOrientation> = ["vertical", "horizontal", "responsive"];
+const LEGEND_VARIANTS: Array<FieldLegendVariant> = ["legend", "label"];
 
 const meta = {
   title: "UI/Field",
@@ -61,16 +53,11 @@ export const Orientations: Story = {
   render: () => (
     <div className="flex w-xl flex-col gap-6">
       {ORIENTATIONS.map((orientation) => (
-        <div key={orientation} className="flex flex-col gap-1.5">
-          <span className="text-ink-muted font-mono text-[11px]">
-            orientation={orientation}
-          </span>
+        <div className="flex flex-col gap-1.5" key={orientation}>
+          <span className="text-ink-muted font-mono text-[11px]">orientation={orientation}</span>
           <Field orientation={orientation}>
             <FieldLabel htmlFor={`name-${orientation}`}>模型名称</FieldLabel>
-            <Input
-              id={`name-${orientation}`}
-              placeholder="例如 sd_xl_base_1.0"
-            />
+            <Input id={`name-${orientation}`} placeholder="例如 sd_xl_base_1.0" />
           </Field>
         </div>
       ))}
@@ -83,17 +70,15 @@ export const GroupedSet: Story = {
   render: () => (
     <FieldSet className="w-xl">
       <FieldLegend>输出设置</FieldLegend>
-      <FieldDescription>
-        这里的取值会写进工作流模板，节点上的同名字段以节点为准。
-      </FieldDescription>
+      <FieldDescription>这里的取值会写进工作流模板，节点上的同名字段以节点为准。</FieldDescription>
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="field-width">宽度</FieldLabel>
-          <Input id="field-width" defaultValue="1024" />
+          <Input defaultValue="1024" id="field-width" />
         </Field>
         <Field>
           <FieldLabel htmlFor="field-height">高度</FieldLabel>
-          <Input id="field-height" defaultValue="1024" />
+          <Input defaultValue="1024" id="field-height" />
         </Field>
       </FieldGroup>
       <FieldSeparator>高级</FieldSeparator>
@@ -118,12 +103,12 @@ export const WithError: Story = {
       <FieldGroup>
         <Field data-invalid="true">
           <FieldLabel htmlFor="field-bad">提示词</FieldLabel>
-          <Input id="field-bad" defaultValue="" aria-invalid />
+          <Input aria-invalid defaultValue="" id="field-bad" />
           <FieldError>提示词不能为空</FieldError>
         </Field>
         <Field>
           <FieldLabel htmlFor="field-good">负向提示词</FieldLabel>
-          <Input id="field-good" defaultValue="watermark" />
+          <Input defaultValue="watermark" id="field-good" />
           {/* `FieldError` 不判校验（那是 schema 的事）—— 给它 `errors` 它就渲染，
               所以「这行没有错」的现场是**不传** `errors`。 */}
           <FieldError />
@@ -143,15 +128,9 @@ export const ErrorShapes: Story = {
     <div className="flex flex-col gap-4">
       <FieldError errors={[{ message: "单条：直接出文" }]} />
       <FieldError
-        errors={[
-          { message: "重复的一条" },
-          { message: "重复的一条" },
-          { message: "另一条" },
-        ]}
+        errors={[{ message: "重复的一条" }, { message: "重复的一条" }, { message: "另一条" }]}
       />
-      <FieldError errors={[{ message: "这个不会出现" }]}>
-        传了 children 时它优先
-      </FieldError>
+      <FieldError errors={[{ message: "这个不会出现" }]}>传了 children 时它优先</FieldError>
       {/* 空数组 / 全是 undefined 时整行不渲染（`content` 为 null） */}
       <FieldError errors={[]} />
       <FieldError errors={[undefined]} />
@@ -164,12 +143,9 @@ export const SelectionRow: Story = {
   render: () => (
     <FieldGroup className="w-xl">
       {["本地模型", "工作流库", "项目产物"].map((label, index) => (
-        <FieldLabel key={label} htmlFor={`pick-${String(index)}`}>
+        <FieldLabel htmlFor={`pick-${String(index)}`} key={label}>
           <Field orientation="horizontal">
-            <Checkbox
-              id={`pick-${String(index)}`}
-              defaultChecked={index === 0}
-            />
+            <Checkbox defaultChecked={index === 0} id={`pick-${String(index)}`} />
             <FieldContent>
               <FieldTitle>{label}</FieldTitle>
               <FieldDescription>扫这个来源下的条目</FieldDescription>

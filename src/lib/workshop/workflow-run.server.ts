@@ -11,30 +11,24 @@
 import { upperToken } from "~/lib/upper-token";
 import "server-only";
 
-import {
-  taskRepository,
-  workflowTemplateRepository,
-} from "~/lib/core/repository";
+import { taskRepository, workflowTemplateRepository } from "~/lib/core/repository";
 import { kickQueue } from "~/lib/comfyui/executor-continuation";
 import { hasExecutableWorkflow } from "~/lib/comfyui/execution-shape";
 import { resolveExecutorClaim } from "~/lib/comfyui/executor-mode";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
-import {
-  buildEncapsulatedInputs,
-  type WorkshopExposedValues,
-} from "./workflow-encapsulation";
+import { buildEncapsulatedInputs, type WorkshopExposedValues } from "./workflow-encapsulation";
 import { loadModeContracts } from "./mode-contract.server";
 
 /** 一次工作流库执行的入参：提示词 / 尺寸 / 参考图等对外参数 + 任务归属。 */
-export interface RunWorkflowInput {
-  userId: string;
-  /** 工作流库工作流 id（`WorkflowTemplate.id`）。 */
-  workflowId: string;
+export type RunWorkflowInput = {
   /** 任务归属画布 / 工坊项目。 */
   projectId?: string | null;
+  userId: string;
   values: WorkshopExposedValues;
-}
+  /** 工作流库工作流 id（`WorkflowTemplate.id`）。 */
+  workflowId: string;
+};
 
 /** 按工作流的默认模式（缺省回退 taskType / modes[0]）组装对外参数。
  *
@@ -42,28 +36,24 @@ export interface RunWorkflowInput {
  *  变成「任务创建了但没有图」，比直接报错难查。 */
 export async function createWorkflowRunTask(
   input: RunWorkflowInput,
-): Promise<{ taskId: string; workflowName: string; taskType: string }> {
-  const tpl = await workflowTemplateRepository.findByIdForUser(
-    input.userId,
-    input.workflowId,
-  );
-  if (!tpl) throw new Error(`工作流不存在：${input.workflowId}`);
+): Promise<{ taskId: string; taskType: string; workflowName: string }> {
+  const tpl = await workflowTemplateRepository.findByIdForUser(input.userId, input.workflowId);
+  if (!tpl) {
+    throw new Error(`工作流不存在：${input.workflowId}`);
+  }
 
   const modes = parseModesJson(tpl.modes);
   const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;
   const io =
-    tpl.workflowIO &&
-    typeof tpl.workflowIO === "object" &&
-    !Array.isArray(tpl.workflowIO)
+    /* SAFETY: 类型断言已复核 */
+    tpl.workflowIO && typeof tpl.workflowIO === "object" && !Array.isArray(tpl.workflowIO)
       ? (tpl.workflowIO as unknown as WorkflowIOMap)
       : {};
   /* 该模式生效的契约口清单：作者改过的模式按注册表（含自定义口），没改过的
    *  走内置默认（不传即回落）。读不到注册表时按空注册表处理 —— 回落内置契约，
    *  不阻断生成。 */
   const contracts = await loadModeContracts();
-  const contractIds = contracts.find(
-    (c) => c.mode === upperToken(mode),
-  )?.inputs;
+  const contractIds = contracts.find((c) => c.mode === upperToken(mode))?.inputs;
   const { workflowInputs } = buildEncapsulatedInputs({
     io,
     paramMap: tpl.paramMap,
@@ -74,12 +64,8 @@ export async function createWorkflowRunTask(
 
   const params = {
     workflow: tpl.id,
-    ...(input.values.prompt !== undefined
-      ? { prompt: input.values.prompt }
-      : {}),
-    ...(input.values.negativePrompt !== undefined
-      ? { negative: input.values.negativePrompt }
-      : {}),
+    ...(input.values.prompt === undefined ? {} : { prompt: input.values.prompt }),
+    ...(input.values.negativePrompt === undefined ? {} : { negative: input.values.negativePrompt }),
     ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
   };
 

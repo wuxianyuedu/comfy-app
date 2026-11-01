@@ -29,27 +29,23 @@ import { outputPortLabel } from "./workflow-library-param-cards";
 /** 卡片宽度：与左侧输入卡片同宽，两列夹着宿主卡片时仍放得下。 */
 const CARD_WIDTH = 200;
 
-export interface WorkflowOutputParamCardColumnProps {
-  /** 工作流对外暴露的输出（`workflowIO` 里 `direction: "output"` 的那些）。 */
-  outputs: readonly (WorkflowIOEntry & { ioKey: string })[];
-  /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 作者断开）。
-   *  由 `deriveLibraryOutputCards` 派生；缺省时每个口取值于它自己那一行。 */
-  resolved?: Record<string, string | null>;
+export type WorkflowOutputParamCardColumnProps = {
   /** 是否允许拖改（有模式、且上层给了落库回调时才为真）。 */
   canWire?: boolean;
-  /** 作者手里正选中的输出口。 */
-  selectedOutputId?: string | null;
-  onSelect?: (ioKey: string | null) => void;
+  /** 端点槽位：消费方注入 `<Handle>`（库里那层）或只读圆点。 */
+  endpoint?: (port: { handleId: string; name: string; type: string }) => ReactNode;
   /** 该输出口在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual?: (ioKey: string) => boolean;
   onReset?: (ioKey: string) => void;
-  /** 端点槽位：消费方注入 `<Handle>`（库里那层）或只读圆点。 */
-  endpoint?: (port: {
-    name: string;
-    type: string;
-    handleId: string;
-  }) => ReactNode;
-}
+  onSelect?: (ioKey: string | null) => void;
+  /** 工作流对外暴露的输出（`workflowIO` 里 `direction: "output"` 的那些）。 */
+  outputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
+  /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 作者断开）。
+   *  由 `deriveLibraryOutputCards` 派生；缺省时每个口取值于它自己那一行。 */
+  resolved?: Record<string, string | null>;
+  /** 作者手里正选中的输出口。 */
+  selectedOutputId?: string | null;
+};
 
 export function WorkflowOutputParamCardColumn({
   outputs,
@@ -61,14 +57,16 @@ export function WorkflowOutputParamCardColumn({
   onReset,
   endpoint,
 }: WorkflowOutputParamCardColumnProps) {
-  if (outputs.length === 0) return null;
+  if (outputs.length === 0) {
+    return null;
+  }
 
   return (
     <aside
-      className="flex shrink-0 flex-col gap-2 self-start"
-      style={{ width: CARD_WIDTH }}
       aria-label="对外输出参数"
+      className="flex shrink-0 flex-col gap-2 self-start"
       data-testid="workflow-output-param-column"
+      style={{ width: CARD_WIDTH }}
     >
       <p className="text-ink-faint text-2xs px-0.5 font-medium">
         {canWire ? "对外输出参数 · 拖圆点改取值行" : "对外输出参数"}
@@ -87,25 +85,26 @@ export function WorkflowOutputParamCardColumn({
         const manual = !!isManual?.(output.ioKey);
         return (
           <WorkflowParamCard
-            key={output.ioKey}
-            entryId={output.ioKey}
-            cls="output"
-            label={title}
-            classLabel="输出"
-            hostNodeId={output.nodeId}
-            width={CARD_WIDTH}
+            canReset={canWire && manual}
             /* 每个输出口都是一次落点编辑的起点：拖动左缘那颗圆点即改「从哪一行
              *  取值」。它不与输入侧共用键空间，所以这里是 `canWire`（可拖）而不是
              *  输入卡片那种「不可编辑」的只读态。 */
             canWire={canWire}
-            readOnly={!canWire}
-            canReset={canWire && manual}
+            classLabel="输出"
+            cls="output"
+            endpoint={() =>
+              endpoint?.({
+                name: portLabel,
+                type,
+                handleId,
+              })
+            }
+            entryId={output.ioKey}
+            hostNodeId={output.nodeId}
+            key={output.ioKey}
+            label={title}
             onReset={canWire ? () => onReset?.(output.ioKey) : undefined}
-            selected={selectedOutputId === output.ioKey}
             onSelect={onSelect ? () => onSelect(output.ioKey) : undefined}
-            /* 端点槽位在**左侧**：圆点骑跨卡片左缘，线从宿主输出行进来。
-             *  `resolved[ioKey]` 只用来决定这颗点的观感（改过 = 实心提亮）。 */
-            side="left"
             outputPorts={[
               {
                 name: portLabel,
@@ -120,13 +119,12 @@ export function WorkflowOutputParamCardColumn({
                 active: manual || resolved?.[output.ioKey] === undefined,
               },
             ]}
-            endpoint={() =>
-              endpoint?.({
-                name: portLabel,
-                type,
-                handleId,
-              })
-            }
+            readOnly={!canWire}
+            selected={selectedOutputId === output.ioKey}
+            /* 端点槽位在**左侧**：圆点骑跨卡片左缘，线从宿主输出行进来。
+             *  `resolved[ioKey]` 只用来决定这颗点的观感（改过 = 实心提亮）。 */
+            side="left"
+            width={CARD_WIDTH}
           />
         );
       })}

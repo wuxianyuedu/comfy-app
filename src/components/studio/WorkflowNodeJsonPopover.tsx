@@ -11,10 +11,7 @@ import { Hint } from "~/components/ui/hint";
 import { Popover, PopoverContent } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { useFlashState } from "~/components/ui/use-flash-state";
-import {
-  copyFailureText,
-  useCopyFeedback,
-} from "~/components/ui/use-copy-feedback";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { anchorRectToVirtualElement } from "~/lib/dom-rect";
 import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
@@ -33,26 +30,26 @@ import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
  * 服务端返回的 LiteGraph 节点/RawMeta 荷载是无约束 JSON；组件只消费下述
  * 已声明字段，其余一律保持 unknown 接收，不再以 any 逃生。 */
 export type RawNodeJson = {
-  class_type?: string;
-  id?: string;
-  type?: string;
-  mode?: number;
-  widgets_values?: unknown[];
-  inputs?: Record<string, unknown>;
-  outputs?: unknown[];
   _meta?: Record<string, unknown>;
-  flags?: Record<string, unknown>;
-  properties?: Record<string, unknown>;
-  pos?: [number, number];
   [key: string]: unknown;
+  class_type?: string;
+  flags?: Record<string, unknown>;
+  id?: string;
+  inputs?: Record<string, unknown>;
+  mode?: number;
+  outputs?: Array<unknown>;
+  pos?: [number, number];
+  properties?: Record<string, unknown>;
+  type?: string;
+  widgets_values?: Array<unknown>;
 };
 
 export type RawNodeView = {
   entry: RawNodeJson | null;
+  pos: [number, number] | null;
   /** 与 `RawMetaEntry` 同源（同一份节点元数据，可选字段在原件里可能缺失）。 */
   raw?: RawMetaEntry;
   rawNode?: RawNodeJson | null;
-  pos: [number, number] | null;
 };
 
 /**
@@ -64,34 +61,46 @@ export type RawNodeView = {
  * saved 页签的降级文案）。纯派生（§17.1：删掉 JSX 也能测）。
  */
 function buildViewJson(nodeView: RawNodeView | null): RawNodeJson | null {
-  if (!nodeView) return null;
+  if (!nodeView) {
+    return null;
+  }
   if (nodeView.rawNode && typeof nodeView.rawNode === "object") {
     return nodeView.rawNode;
   }
   const out: RawNodeJson = {};
   const e = nodeView.entry;
   const r = nodeView.raw;
-  if (e && typeof e.class_type === "string") out.class_type = e.class_type;
-  if (
-    e &&
-    typeof e === "object" &&
-    "inputs" in e &&
-    e.inputs &&
-    typeof e.inputs === "object"
-  ) {
+  if (e && typeof e.class_type === "string") {
+    out.class_type = e.class_type;
+  }
+  if (e && typeof e === "object" && "inputs" in e && e.inputs && typeof e.inputs === "object") {
     out.inputs = e.inputs;
   }
-  if (e?._meta && Object.keys(e._meta).length) out._meta = e._meta;
-  if (r) {
-    if (r.mode !== 0) out.mode = r.mode;
-    if (r.widgets_values?.length) out.widgets_values = r.widgets_values;
-    if (r.outputs?.length) out.outputs = r.outputs;
-    const flagKeys = Object.keys(r.flags ?? {});
-    if (flagKeys.length) out.flags = r.flags;
-    const propKeys = Object.keys(r.properties ?? {});
-    if (propKeys.length) out.properties = r.properties;
+  if (e?._meta && Object.keys(e._meta).length) {
+    out._meta = e._meta;
   }
-  if (nodeView.pos) out.pos = nodeView.pos;
+  if (r) {
+    if (r.mode !== 0) {
+      out.mode = r.mode;
+    }
+    if (r.widgets_values?.length) {
+      out.widgets_values = r.widgets_values;
+    }
+    if (r.outputs?.length) {
+      out.outputs = r.outputs;
+    }
+    const flagKeys = Object.keys(r.flags ?? {});
+    if (flagKeys.length) {
+      out.flags = r.flags;
+    }
+    const propKeys = Object.keys(r.properties ?? {});
+    if (propKeys.length) {
+      out.properties = r.properties;
+    }
+  }
+  if (nodeView.pos) {
+    out.pos = nodeView.pos;
+  }
   return Object.keys(out).length ? out : null;
 }
 
@@ -101,36 +110,36 @@ export function NodeJsonPopover({
   getView,
   onDismiss,
 }: {
-  request: NodeJsonViewerRequest;
   getJson: (nodeId: string) => RawNodeJson | null;
   getView: (nodeId: string) => RawNodeView | null;
   onDismiss: () => void;
+  request: NodeJsonViewerRequest;
 }) {
-  const json = useMemo(
-    () => getJson(request.nodeId),
-    [getJson, request.nodeId],
-  );
-  const nodeView = useMemo(
-    () => getView?.(request.nodeId) ?? null,
-    [getView, request.nodeId],
-  );
+  const json = useMemo(() => getJson(request.nodeId), [getJson, request.nodeId]);
+  const nodeView = useMemo(() => getView?.(request.nodeId) ?? null, [getView, request.nodeId]);
   const [tab, setTab] = useState<"saved" | "view">("view");
   const viewObj = useMemo(() => buildViewJson(nodeView), [nodeView]);
   const pretty = useMemo(() => {
     if (tab === "saved") {
-      return json
-        ? JSON.stringify(json, null, 2)
-        : "（节点详情尚未加载 — 等待 detail.ready）";
+      return json ? JSON.stringify(json, null, 2) : "（节点详情尚未加载 — 等待 detail.ready）";
     }
-    if (viewObj) return JSON.stringify(viewObj, null, 2);
+    if (viewObj) {
+      return JSON.stringify(viewObj, null, 2);
+    }
     if (json) {
       const thin: RawNodeJson = {};
-      if (typeof json.class_type === "string")
+      if (typeof json.class_type === "string") {
         thin.class_type = json.class_type;
-      if (json.inputs && typeof json.inputs === "object")
+      }
+      if (json.inputs && typeof json.inputs === "object") {
         thin.inputs = json.inputs;
-      if (json._meta && Object.keys(json._meta).length) thin._meta = json._meta;
-      if (Object.keys(thin).length) return JSON.stringify(thin, null, 2);
+      }
+      if (json._meta && Object.keys(json._meta).length) {
+        thin._meta = json._meta;
+      }
+      if (Object.keys(thin).length) {
+        return JSON.stringify(thin, null, 2);
+      }
     }
     return "（节点详情尚未加载 — 等待 detail.ready）";
   }, [tab, json, viewObj]);
@@ -154,11 +163,9 @@ export function NodeJsonPopover({
     },
     onFailure: () => setCopyFailed(true),
   });
-  const accent =
-    request.kind === "subgraph" ? "var(--color-primary)" : "var(--color-info)";
+  const accent = request.kind === "subgraph" ? "var(--color-primary)" : "var(--color-info)";
   /** 带透明度的 accent —— `var()` 不能拼 hex alpha，走 color-mix。 */
-  const accentAlpha = (percent: number) =>
-    `color-mix(in srgb, ${accent} ${percent}%, transparent)`;
+  const accentAlpha = (percent: number) => `color-mix(in srgb, ${accent} ${percent}%, transparent)`;
   const nodeClass = json?.class_type ?? "?";
   const nodeMode =
     typeof nodeView?.raw?.mode === "number"
@@ -168,8 +175,7 @@ export function NodeJsonPopover({
         : typeof json?.mode === "number"
           ? json.mode
           : 0;
-  const modeLabel =
-    nodeMode === 4 ? "Bypass" : nodeMode === 2 ? "Disabled" : "Normal";
+  const modeLabel = nodeMode === 4 ? "Bypass" : nodeMode === 2 ? "Disabled" : "Normal";
   const modeColor =
     nodeMode === 4
       ? "var(--color-accent-soft)"
@@ -185,14 +191,14 @@ export function NodeJsonPopover({
        此前用 `ui/dialog` 配 `top-24 left-1/2` 是**丢掉了锚点定位**：dialog 的
        基类自带 `top-1/2 -translate-y-1/2`，与 `top-24` 叠加后浮层被推到视口之上
        （实测 `top: -174`），头部与 JSON 开头被裁在视口外（ISSUE #717）。 */
-    <Popover open modal onOpenChange={(next) => !next && onDismiss()}>
+    <Popover modal onOpenChange={(next) => !next && onDismiss()} open>
       <PopoverContent
         anchor={anchorElement}
         aria-label={`节点 #${request.nodeId} 的原始 JSON`}
         className="w-115 max-w-[calc(100vw-2rem)] gap-0 border-0 bg-transparent p-0 shadow-none ring-0"
-        positionerClassName="max-h-[60vh]"
         collisionPadding={12}
         onMouseDown={(event) => event.stopPropagation()}
+        positionerClassName="max-h-[60vh]"
       >
         <span className="sr-only">节点 #{request.nodeId} 的原始 JSON</span>
         <div
@@ -202,9 +208,9 @@ export function NodeJsonPopover({
             borderRadius: 12,
             background: "var(--color-bg)",
             border: `1px solid ${accentAlpha(33)}`,
-            boxShadow:
-              "0 20px 48px var(--color-shadow-strong), 0 0 0 1px var(--color-border-subtle) inset, 0 0 24px " +
-              accentAlpha(20),
+            boxShadow: `0 20px 48px var(--color-shadow-strong), 0 0 0 1px var(--color-border-subtle) inset, 0 0 24px ${accentAlpha(
+              20,
+            )}`,
             overflow: "hidden",
             display: "flex",
             flexDirection: "column",
@@ -259,7 +265,6 @@ export function NodeJsonPopover({
                 </span>
               </div>
               <div
-                title={nodeClass}
                 style={{
                   fontSize: 13,
                   fontWeight: 600,
@@ -268,47 +273,46 @@ export function NodeJsonPopover({
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
                 }}
+                title={nodeClass}
               >
                 {nodeClass}
               </div>
             </div>
             <Hint label={copyFailed ? copyFailureText() : "复制 JSON 到剪贴板"}>
               <Button
-                variant="outline"
-                size="xs"
+                className="font-normal"
                 onClick={() => handleCopy(pretty)}
+                size="xs"
                 style={{
-                  background: copied.on
-                    ? accentAlpha(15)
-                    : "var(--color-subtle)",
+                  background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
                   color: copied.on ? accent : "var(--color-ink)",
                   border: `1px solid ${copied.on ? accentAlpha(40) : "var(--color-border-strong)"}`,
                 }}
-                className="font-normal"
+                variant="outline"
               >
                 {copyFailed ? "复制失败" : copied.on ? "✓ 已复制" : "⧉ 复制"}
               </Button>
             </Hint>
             <Hint label="关闭 (Esc)">
               <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={onDismiss}
                 aria-label="关闭"
+                className="rounded-md text-sm leading-none"
+                onClick={onDismiss}
+                size="icon-sm"
                 style={{
                   background: "var(--color-subtle)",
                   border: "1px solid var(--color-border-strong)",
                   color: "var(--color-ink-muted)",
                 }}
-                className="rounded-md text-sm leading-none"
+                variant="outline"
               >
                 ×
               </Button>
             </Hint>
           </div>
           <div
-            role="tablist"
             aria-label="节点 JSON 视图切换"
+            role="tablist"
             style={{
               display: "flex",
               gap: 4,
@@ -317,48 +321,46 @@ export function NodeJsonPopover({
               borderBottom: "1px solid var(--color-border-subtle)",
             }}
           >
-            {(["view", "saved"] as const).map((key) => {
-              /* 参数名**不能**叫 `tab`：它会遮蔽上面那个 `tab` state，使
+            {
+              /* SAFETY: 类型断言已复核 */ (["view", "saved"] as const).map((key) => {
+                /* 参数名**不能**叫 `tab`：它会遮蔽上面那个 `tab` state，使
                  `active` 恒真 —— 两个页签于是永远同时高亮（旧写法是
                  `const active = tab === tab`，自比较恒真）。 */
-              const active = tab === key;
-              return (
-                <Hint
-                  label={
-                    key === "saved"
-                      ? "执行条目：detail.graph[nodeId] —— 从工作流原件派生的节点条目；不含画布元数据"
-                      : "RAW 格式：detail.rawJson.nodes[id] —— 与整工作流「查看 JSON」RAW 逐字节一致"
-                  }
-                  key={key}
-                >
-                  <Button
-                    variant="ghost"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setTab(key)}
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: 11,
-                      padding: "5px 10px",
-                      borderRadius: "6px 6px 0 0",
-                      border: `1px solid ${active ? accentAlpha(33) : "var(--color-border-subtle)"}`,
-                      borderBottom: active
-                        ? `1px solid ${accentAlpha(20)}`
-                        : "1px solid var(--color-border-subtle)",
-                      background: active
-                        ? accentAlpha(13)
-                        : "var(--color-subtle)",
-                      color: active
-                        ? "var(--color-ink)"
-                        : "var(--color-ink-muted)",
-                    }}
-                    className="h-auto font-normal"
+                const active = tab === key;
+                return (
+                  <Hint
+                    key={key}
+                    label={
+                      key === "saved"
+                        ? "执行条目：detail.graph[nodeId] —— 从工作流原件派生的节点条目；不含画布元数据"
+                        : "RAW 格式：detail.rawJson.nodes[id] —— 与整工作流「查看 JSON」RAW 逐字节一致"
+                    }
                   >
-                    {key === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
-                  </Button>
-                </Hint>
-              );
-            })}
+                    <Button
+                      aria-selected={active}
+                      className="h-auto font-normal"
+                      onClick={() => setTab(key)}
+                      role="tab"
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 11,
+                        padding: "5px 10px",
+                        borderRadius: "6px 6px 0 0",
+                        border: `1px solid ${active ? accentAlpha(33) : "var(--color-border-subtle)"}`,
+                        borderBottom: active
+                          ? `1px solid ${accentAlpha(20)}`
+                          : "1px solid var(--color-border-subtle)",
+                        background: active ? accentAlpha(13) : "var(--color-subtle)",
+                        color: active ? "var(--color-ink)" : "var(--color-ink-muted)",
+                      }}
+                      variant="ghost"
+                    >
+                      {key === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
+                    </Button>
+                  </Hint>
+                );
+              })
+            }
           </div>
           <div
             style={{
@@ -391,9 +393,7 @@ export function NodeJsonPopover({
                     label={`outputs: ${json.outputs?.length ?? 0} 个`}
                   />
                 )}
-                {!json && (
-                  <Chip color="var(--color-warning)" label="节点未在派生图中" />
-                )}
+                {!json && <Chip color="var(--color-warning)" label="节点未在派生图中" />}
               </>
             ) : (
               <>
@@ -409,13 +409,12 @@ export function NodeJsonPopover({
                     label={`outputs: ${viewObj.outputs.length} 个`}
                   />
                 )}
-                {viewObj?.widgets_values &&
-                  Array.isArray(viewObj.widgets_values) && (
-                    <Chip
-                      color={CHIP_NEUTRAL_COLOR}
-                      label={`widgets: ${viewObj.widgets_values.length} 项`}
-                    />
-                  )}
+                {viewObj?.widgets_values && Array.isArray(viewObj.widgets_values) && (
+                  <Chip
+                    color={CHIP_NEUTRAL_COLOR}
+                    label={`widgets: ${viewObj.widgets_values.length} 项`}
+                  />
+                )}
                 {viewObj?.properties && (
                   <Chip
                     color={CHIP_NEUTRAL_COLOR}
@@ -429,10 +428,7 @@ export function NodeJsonPopover({
                   />
                 )}
                 {!viewObj && (
-                  <Chip
-                    color="var(--color-warning)"
-                    label="无画布态数据 — 缺少工作流原件"
-                  />
+                  <Chip color="var(--color-warning)" label="无画布态数据 — 缺少工作流原件" />
                 )}
               </>
             )}

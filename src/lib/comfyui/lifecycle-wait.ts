@@ -21,11 +21,7 @@
  * 失守。
  */
 
-import {
-  describeComfyExit,
-  type ComfyExitFacts,
-  type ComfyExitReport,
-} from "./lifecycle-exit";
+import { describeComfyExit, type ComfyExitFacts, type ComfyExitReport } from "./lifecycle-exit";
 import { sleep } from "~/lib/with-timeout";
 
 /** 就绪探测：返回可达 base（不可达为 null）。 */
@@ -33,32 +29,32 @@ export type ComfyProbe = () => Promise<string | null>;
 /** 判死：返回 true 表示进程已确定不会起来（保活进程未出现 / 子进程消失）。 */
 export type ComfyDeadCheck = () => Promise<boolean>;
 
-export interface WaitForComfyReadyOpts {
-  /** 探测一次是否就绪。 */
-  probe: ComfyProbe;
-  /** 判死探测；返回非 null 表示「已判死」，其值为可行动的失败文案。 */
-  isDead: () => Promise<string | null>;
-  /** 每次轮询前的早退理由；返回非 null 立即结束（用户手动关闭 / 子进程消失）。 */
-  earlyExit?: () => { ok: false; base: null; detail: string } | null;
+export type WaitForComfyReadyOpts = {
   /** 硬超时绝对时间戳（null = 不设硬超时，一直等）。 */
   deadline: number | null;
-  /** 超时未就绪时的可行动文案（**唯一一处**，两条路径共用）。 */
-  timeoutDetail: string;
+  /** 每次轮询前的早退理由；返回非 null 立即结束（用户手动关闭 / 子进程消失）。 */
+  earlyExit?: () => { base: null; detail: string; ok: false } | null;
   /** 轮询间隔（默认 2000ms，与既有行为一致）。 */
   intervalMs?: number;
-  /** 就绪时返回的 detail 文案（默认「ComfyUI 已启动并就绪」）。 */
-  readyDetail?: string;
-  /** 就绪时进入日志（成功文案由调用方决定，如「保活」后缀）。 */
-  onReady?: (base: string) => void;
+  /** 判死探测；返回非 null 表示「已判死」，其值为可行动的失败文案。 */
+  isDead: () => Promise<string | null>;
   /** 判死时进入日志。 */
   onDead?: (detail: string) => void;
-}
+  /** 就绪时进入日志（成功文案由调用方决定，如「保活」后缀）。 */
+  onReady?: (base: string) => void;
+  /** 探测一次是否就绪。 */
+  probe: ComfyProbe;
+  /** 就绪时返回的 detail 文案（默认「ComfyUI 已启动并就绪」）。 */
+  readyDetail?: string;
+  /** 超时未就绪时的可行动文案（**唯一一处**，两条路径共用）。 */
+  timeoutDetail: string;
+};
 
-export interface WaitReadyResult {
-  ok: boolean;
+export type WaitReadyResult = {
   base: string | null;
   detail: string;
-}
+  ok: boolean;
+};
 
 /**
  * 单一等待循环：拉起之后「等到就绪 / 等到判死 / 等到超时」。
@@ -77,13 +73,13 @@ export interface WaitReadyResult {
  * 这就是 `lifecycle-derive.ts` 判决表同一手法的延伸：把「怎么探」与
  * 「怎么判」变成参数，循环本身可被逐条测试锁住（不必起真进程）。
  */
-export async function waitForComfyReady(
-  opts: WaitForComfyReadyOpts,
-): Promise<WaitReadyResult> {
+export async function waitForComfyReady(opts: WaitForComfyReadyOpts): Promise<WaitReadyResult> {
   const interval = opts.intervalMs ?? 2000;
   for (;;) {
     const exit = opts.earlyExit?.();
-    if (exit) return exit;
+    if (exit) {
+      return exit;
+    }
 
     const dead = await opts.isDead();
     if (dead !== null) {
@@ -101,7 +97,9 @@ export async function waitForComfyReady(
       };
     }
 
-    if (opts.deadline !== null && Date.now() >= opts.deadline) break;
+    if (opts.deadline !== null && Date.now() >= opts.deadline) {
+      break;
+    }
     await sleep(interval);
   }
   return { ok: false, base: null, detail: opts.timeoutDetail };
@@ -109,14 +107,14 @@ export async function waitForComfyReady(
 
 /* ── 事件回调（可测的具名纯函数）────────────────────────────────────── */
 
-export interface OutputSinkDeps {
+export type OutputSinkDeps = {
   /** 把一行原文追加进运行日志（带 `[out]` / `[err]` 前缀）。 */
   appendRuntimeLog: (line: string) => void;
-  /** 留底一行（供进程秒退时提取可行动报错）。 */
-  pushRecent: (text: string) => void;
   /** 单行截断上限（默认 500，与既有行为一致）。 */
   maxLineChars?: number;
-}
+  /** 留底一行（供进程秒退时提取可行动报错）。 */
+  pushRecent: (text: string) => void;
+};
 
 /**
  * 构造 stdout/stderr 的 `data` 回调。
@@ -133,9 +131,7 @@ export interface OutputSinkDeps {
  * expect(lines[0]).toContain("…");  // 已截断
  * ```
  */
-export function createOutputSink(
-  deps: OutputSinkDeps,
-): (chunk: Buffer | string) => void {
+export function createOutputSink(deps: OutputSinkDeps): (chunk: Buffer | string) => void {
   const cap = deps.maxLineChars ?? 500;
   return (chunk: Buffer | string) => {
     const text = chunk.toString().trimEnd().slice(0, cap);
@@ -145,50 +141,51 @@ export function createOutputSink(
 }
 
 /** 行留底账本：按行累积、超出 `maxLines` 丢弃最旧。 */
-export interface RecentOutputLedger {
-  lines: string[];
+export type RecentOutputLedger = {
+  lines: Array<string>;
   push: (text: string) => void;
-}
+};
 
 /** 留底账本（默认上限 60 行，与既有行为一致）。 */
 export function createRecentOutputLedger(maxLines = 60): RecentOutputLedger {
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   return {
     lines,
     push(text: string) {
       for (const line of text.split("\n")) {
         const trimmed = line.trim();
-        if (!trimmed) continue;
+        if (!trimmed) {
+          continue;
+        }
         lines.push(trimmed);
-        while (lines.length > maxLines) lines.shift();
+        while (lines.length > maxLines) {
+          lines.shift();
+        }
       }
     },
   };
 }
 
-export interface ChildExitDeps {
+export type ChildExitDeps = {
+  /** 写运行日志（`[exit] ...` 那两行落这里，与 `[out]/[err]` 同一个文件，
+   *  这样「它退出前最后说了什么」与「为什么退出」挨在一起）。 */
+  appendRuntimeLog: (line: string) => void;
+  /** 清掉宿主持有的子进程句柄（仅当仍是同一个 child 时）。 */
+  clearChild: () => void;
+  /** 退出事实里只有宿主知道的那几样（pid / 存活时长 / 是否用户主动关 / 模式）。 */
+  context: () => Pick<ComfyExitFacts, "pid" | "uptimeMs" | "stopRequested" | "mode">;
+  /** 进入应用日志（pino）。 */
+  log: (msg: string) => void;
+  /** 把这次退出记进「上一次会话」标记文件（供下次启动对账：
+   *  应用自己也一起没了的那种情况，只能靠它反推）。 */
+  onExitReport?: (report: ComfyExitReport) => void;
   /** 这次的进程叫什么（`ComfyUI` / `Drizzle Studio`）。
    *
    * 横幅与进 pino 那行**都由它拼**，不在原语里写死主语：Studio 复用同一套退出
    * 原语（ISSUE #570 第 6 项），而原语里的句子此前固定说「ComfyUI 进程退出」，
    * 于是 Studio 的崩溃被记在了 ComfyUI 名下（ISSUE #2435）。 */
   subject: string;
-  /** 写运行日志（`[exit] ...` 那两行落这里，与 `[out]/[err]` 同一个文件，
-   *  这样「它退出前最后说了什么」与「为什么退出」挨在一起）。 */
-  appendRuntimeLog: (line: string) => void;
-  /** 进入应用日志（pino）。 */
-  log: (msg: string) => void;
-  /** 清掉宿主持有的子进程句柄（仅当仍是同一个 child 时）。 */
-  clearChild: () => void;
-  /** 把这次退出记进「上一次会话」标记文件（供下次启动对账：
-   *  应用自己也一起没了的那种情况，只能靠它反推）。 */
-  onExitReport?: (report: ComfyExitReport) => void;
-  /** 退出事实里只有宿主知道的那几样（pid / 存活时长 / 是否用户主动关 / 模式）。 */
-  context: () => Pick<
-    ComfyExitFacts,
-    "pid" | "uptimeMs" | "stopRequested" | "mode"
-  >;
-}
+};
 
 /**
  * 构造 `child.on("exit")` 回调：判「为什么退出」→ 落横幅 + `[exit]` 两行 → 清句柄。
@@ -206,8 +203,9 @@ export function createChildExitHandler(
     const report = describeComfyExit({ code, signal, ...deps.context() });
     deps.appendRuntimeLog(`■ ${deps.subject} 进程已退出：${report.reason}`);
     deps.appendRuntimeLog(`[exit] ${report.reason}（${report.detail}）`);
-    if (report.advice !== null)
+    if (report.advice !== null) {
       deps.appendRuntimeLog(`[exit] ↩ ${report.advice}`);
+    }
     deps.log(`${deps.subject} 进程退出：${report.reason}`);
     deps.onExitReport?.(report);
     deps.clearChild();

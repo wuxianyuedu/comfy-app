@@ -33,12 +33,16 @@ import { comfyUiBaseUrl } from "../endpoints";
  * 直接探快照给出的端口既省掉这段重复 IO，也比「按配置端口 + 偏移扫描」
  * 更准：快照里的端口就是该 PID 实际监听的端口（ISSUE #339 残留延迟）。 */
 export async function probeComfyAtPort(port: number): Promise<string | null> {
-  if (!Number.isInteger(port) || port <= 0) return null;
+  if (!Number.isInteger(port) || port <= 0) {
+    return null;
+  }
   /* `COMFYUI_BASE` 指向的是远端实例（不是本机进程），此时「快照给出的本机监听
    * 端口」与要连的地址根本不是一回事——把远端主机的端口换成本机端口会直接
    * 探错地方。这种情况下返回 null，交给调用方走通用探测（它会尊重
    * COMFYUI_BASE）。 */
-  if (process.env.COMFYUI_BASE) return null;
+  if (process.env.COMFYUI_BASE) {
+    return null;
+  }
   return probeBaseOnce(comfyUiBaseUrl(port));
 }
 
@@ -47,10 +51,7 @@ export async function probeComfyAtPort(port: number): Promise<string | null> {
  *  超时按调用场景注入：单点确认（状态判定、启动等待）用默认 1500ms；
  *  端口扫描（配置地址 + 就近偏移连发多次）要压低单次超时，否则「未运行」
  *  场景要付完全部超时之和。判据只有一份——见下。 */
-export async function probeBaseOnce(
-  base: string,
-  timeoutMs = 1500,
-): Promise<string | null> {
+export async function probeBaseOnce(base: string, timeoutMs = 1500): Promise<string | null> {
   try {
     // 只发一次请求、不写会话缓存。存活判据是「端口有没有人应答」：**连上即存活**——
     // 包括 GPU 显存不足时 `/system_stats` 返回的 HTTP 500（CUDA OOM）。过去用

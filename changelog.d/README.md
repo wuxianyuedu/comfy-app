@@ -50,7 +50,8 @@ node scripts/merge-changelog-fragments.mjs --release 0.2.0   # 顺带把 [Unrele
 ## 历史条目去哪了
 
 **`CHANGELOG-archive.md`**（仓库根）。2026-10 整理把此前累积的全部碎片原文收进那一个文件，
-本目录因此只留尚未并入的条目。查一条历史变更时：
+本目录因此只留尚未并入的条目。查一条历史变更时（**这份归档入库给人读，但不进代码索引** —— 单份体量最大，检索面不必常驻它；
+所以下面两条按 `grep`/`git` 搜，而不是按语义检索）：
 
 - 先搜 `CHANGELOG-archive.md`（逐份原文，一字未改）；
 - 再搜 `CHANGELOG.md`（已发布 / 待发的用户可见条目）。

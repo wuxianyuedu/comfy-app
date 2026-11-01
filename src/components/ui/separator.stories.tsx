@@ -14,11 +14,9 @@ import { Separator } from "~/components/ui/separator";
  * 所以「竖档 0 高度」是这类组件的经典错法，也是本 story 存在的理由。
  * 枚举从 props 派生（规范 16 §16.2.3.4）。
  */
-type SeparatorOrientation = NonNullable<
-  React.ComponentProps<typeof Separator>["orientation"]
->;
+type SeparatorOrientation = NonNullable<React.ComponentProps<typeof Separator>["orientation"]>;
 
-const ORIENTATIONS: SeparatorOrientation[] = ["horizontal", "vertical"];
+const ORIENTATIONS: Array<SeparatorOrientation> = ["horizontal", "vertical"];
 
 const meta = {
   title: "UI/Separator",
@@ -58,14 +56,12 @@ export const Orientations: Story = {
   render: () => (
     <div className="flex flex-col gap-6">
       {ORIENTATIONS.map((orientation) => (
-        <div key={orientation} className="flex flex-col gap-2">
-          <span className="text-ink-muted font-mono text-[11px]">
-            orientation={orientation}
-          </span>
+        <div className="flex flex-col gap-2" key={orientation}>
+          <span className="text-ink-muted font-mono text-[11px]">orientation={orientation}</span>
           {orientation === "horizontal" ? (
             <div className="w-[24rem]">
               <div className="text-sm">上</div>
-              <Separator orientation={orientation} className="my-2" />
+              <Separator className="my-2" orientation={orientation} />
               <div className="text-sm">下</div>
             </div>
           ) : (

@@ -37,7 +37,9 @@ function loadConfig(root) {
   try {
     return fs.readFileSync(path.join(root, CONFIG_REL), "utf8");
   } catch (error) {
-    if (error && error.code === "ENOENT") return null;
+    if (error && error.code === "ENOENT") {
+      return null;
+    }
     throw error;
   }
 }
@@ -114,7 +116,9 @@ function blankComments(src) {
         i += 2;
         continue;
       }
-      if (c !== "\n") chars[i] = " ";
+      if (c !== "\n") {
+        chars[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -147,7 +151,9 @@ function splitTopLevel(body) {
         i += 1;
         continue;
       }
-      if (ch === '"' || ch === "'") state = "code";
+      if (ch === '"' || ch === "'") {
+        state = "code";
+      }
       continue;
     }
     if (ch === '"' || ch === "'") {
@@ -155,11 +161,15 @@ function splitTopLevel(body) {
       cur += ch;
       continue;
     }
-    if (ch === "{" || ch === "(" || ch === "[") depth += 1;
+    if (ch === "{" || ch === "(" || ch === "[") {
+      depth += 1;
+    }
     if (ch === "}" || ch === ")" || ch === "]") {
       depth -= 1;
       /* 回到 0 就是 `projects: [...]` 那一层的收尾，后面的内容不属于它。 */
-      if (depth < 0) break;
+      if (depth < 0) {
+        break;
+      }
     }
     if (ch === "," && depth === 0) {
       out.push(cur);
@@ -168,7 +178,9 @@ function splitTopLevel(body) {
     }
     cur += ch;
   }
-  if (cur.trim()) out.push(cur);
+  if (cur.trim()) {
+    out.push(cur);
+  }
   return out;
 }
 
@@ -185,28 +197,31 @@ function splitTopLevel(body) {
  * @returns {string[] | null} 形状不认识时 `null`
  */
 function literalArray(objText, key, configText) {
-  const at = objText.indexOf(key + ":");
-  if (at < 0) return null;
+  const at = objText.indexOf(`${key}:`);
+  if (at === -1) {
+    return null;
+  }
   /* 标识符写法：`key: SOME_CONST` —— 去顶层找 `const SOME_CONST = [...]`。 */
-  const ident = new RegExp(
-    key + String.raw`:\s*([A-Za-z_$][\w$]*)\s*[,}\n]`,
-  ).exec(objText);
+  const ident = new RegExp(key + String.raw`:\s*([A-Za-z_$][\w$]*)\s*[,}\n]`).exec(objText);
   if (ident && configText) {
-    const decl = new RegExp(
-      String.raw`const\s+` + ident[1] + String.raw`\s*=\s*\[`,
-    ).exec(configText);
-    if (!decl) return null;
-    return collectStringLiterals(
-      configText.slice(decl.index + decl[0].length - 1),
+    const decl = new RegExp(String.raw`const\s+` + ident[1] + String.raw`\s*=\s*\[`).exec(
+      configText,
     );
+    if (!decl) {
+      return null;
+    }
+    return collectStringLiterals(configText.slice(decl.index + decl[0].length - 1));
   }
   const open = objText.indexOf("[", at);
-  if (open < 0) return null;
+  if (open === -1) {
+    return null;
+  }
   let depth = 0;
   let close = -1;
   for (let i = open; i < objText.length; i += 1) {
-    if (objText[i] === "[") depth += 1;
-    else if (objText[i] === "]") {
+    if (objText[i] === "[") {
+      depth += 1;
+    } else if (objText[i] === "]") {
       depth -= 1;
       if (depth === 0) {
         close = i;
@@ -214,7 +229,9 @@ function literalArray(objText, key, configText) {
       }
     }
   }
-  if (close < 0) return null;
+  if (close < 0) {
+    return null;
+  }
   return collectStringLiterals(objText.slice(open));
 }
 
@@ -223,8 +240,9 @@ function collectStringLiterals(arrayText) {
   let depth = 0;
   let close = -1;
   for (let i = 0; i < arrayText.length; i += 1) {
-    if (arrayText[i] === "[") depth += 1;
-    else if (arrayText[i] === "]") {
+    if (arrayText[i] === "[") {
+      depth += 1;
+    } else if (arrayText[i] === "]") {
       depth -= 1;
       if (depth === 0) {
         close = i;
@@ -232,7 +250,9 @@ function collectStringLiterals(arrayText) {
       }
     }
   }
-  if (close < 0) return null;
+  if (close < 0) {
+    return null;
+  }
   const inner = arrayText.slice(1, close);
   return [...inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((m) => m[1]);
 }
@@ -255,19 +275,27 @@ function readTiers(configText) {
   const tiers = new Map();
   const marker = "projects:";
   const at = text.indexOf(marker);
-  if (at < 0) return { tiers, found: 0 };
+  if (at === -1) {
+    return { tiers, found: 0 };
+  }
   /* 从 `projects:` 后的 `[` 开始，按括号配对切出这个数组的**顶层元素**。 */
   const bracket = text.indexOf("[", at);
-  if (bracket < 0) return { tiers, found: 0 };
+  if (bracket === -1) {
+    return { tiers, found: 0 };
+  }
   const items = splitTopLevel(text.slice(bracket + 1));
   let found = 0;
   for (const item of items) {
     const nameM = /name:\s*"([^"]+)"/.exec(item);
-    if (!nameM) continue;
+    if (!nameM) {
+      continue;
+    }
     const name = nameM[1];
     const inc = literalArray(item, "include", text);
     const exc = literalArray(item, "exclude", text);
-    if (inc === null) continue; // 形状不认识 —— 不计入 found，由 found 不足兜住
+    if (inc === null) {
+      continue;
+    } // 形状不认识 —— 不计入 found，由 found 不足兜住
     found += 1;
     tiers.set(name, { include: inc, exclude: exc ?? [] });
   }
@@ -284,14 +312,20 @@ function readEnvironments(configText) {
   const text = blankComments(configText);
   const marker = "projects:";
   const at = text.indexOf(marker);
-  if (at < 0) return {};
+  if (at === -1) {
+    return {};
+  }
   const bracket = text.indexOf("[", at);
-  if (bracket < 0) return {};
+  if (bracket === -1) {
+    return {};
+  }
   const out = {};
   for (const item of splitTopLevel(text.slice(bracket + 1))) {
     const nameM = /name:\s*"([^"]+)"/.exec(item);
     const envM = /environment:\s*"([^"]+)"/.exec(item);
-    if (nameM && envM) out[nameM[1]] = envM[1];
+    if (nameM && envM) {
+      out[nameM[1]] = envM[1];
+    }
   }
   return out;
 }
@@ -322,31 +356,33 @@ function globToRe(g) {
           out += ".*";
           i += 1;
         }
-      } else out += "[^/]*";
+      } else {
+        out += "[^/]*";
+      }
       continue;
     }
     if (ch === "{") {
       const close = g.indexOf("}", i);
       if (close > 0) {
         out +=
-          "(?:" +
+          `(?:${
           g
             .slice(i + 1, close)
             .split(",")
             .map(escapeRe)
-            .join("|") +
-          ")";
+            .join("|")
+          })`;
         i = close;
         continue;
       }
     }
     out += escapeRe(ch);
   }
-  return new RegExp("^" + out + "$");
+  return new RegExp(`^${out}$`);
 }
 
 function escapeRe(s) {
-  return s.replace(ESCAPE_RE, String.fromCharCode(92) + "$&");
+  return s.replaceAll(ESCAPE_RE, `${String.fromCharCode(92)}$&`);
 }
 
 function matchesAny(rel, globs) {

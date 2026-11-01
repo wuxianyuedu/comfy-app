@@ -38,11 +38,12 @@ import {
 } from "../scripts/eslint-cache-fingerprint.mjs";
 
 const ROOT = process.cwd();
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 
 afterEach(() => {
-  for (const dir of tmpDirs.splice(0))
+  for (const dir of tmpDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 造一个最小检出：三份指纹输入 + 一份「假装是缓存」的目录。 */
@@ -51,18 +52,14 @@ function makeRoot(): string {
   tmpDirs.push(dir);
   fs.writeFileSync(path.join(dir, "pnpm-lock.yaml"), "lockfileVersion: 9\n");
   fs.mkdirSync(path.join(dir, "node_modules", ".pnpm"), { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, "node_modules", ".pnpm", "lock.yaml"),
-    "lockfileVersion: 9\n",
-  );
+  fs.writeFileSync(path.join(dir, "node_modules", ".pnpm", "lock.yaml"), "lockfileVersion: 9\n");
   fs.writeFileSync(path.join(dir, "tsconfig.json"), "{}\n");
   fs.mkdirSync(path.join(dir, CACHE_DIR_REL), { recursive: true });
   fs.writeFileSync(path.join(dir, CACHE_DIR_REL, "probe.json"), "{}\n");
   return dir;
 }
 
-const cacheExists = (root: string): boolean =>
-  fs.existsSync(path.join(root, CACHE_DIR_REL));
+const cacheExists = (root: string): boolean => fs.existsSync(path.join(root, CACHE_DIR_REL));
 
 describe("指纹口径（ISSUE #1399）", () => {
   it("输入集是「声明要装什么 + 实际装上了什么 + 类型解析口径」", () => {
@@ -83,8 +80,9 @@ describe("指纹口径（ISSUE #1399）", () => {
     tmpDirs.push(dir);
     const fp = computeFingerprint(dir);
     // 跳过会让「lockfile 被删掉」这种拓扑变化哈希不变 —— 正是要拦的极端形态。
-    for (const rel of FINGERPRINT_INPUTS)
+    for (const rel of FINGERPRINT_INPUTS) {
       expect(fp.inputs[rel]).toBe("<missing>");
+    }
   });
 
   it("三份输入任一变化都判「变了」，并点名是哪一份", () => {
@@ -100,10 +98,7 @@ describe("指纹口径（ISSUE #1399）", () => {
   it("输入集变了（口径变更）也判「变了」，不会被读成「一致」", () => {
     const dir = makeRoot();
     const current = computeFingerprint(dir);
-    const verdict = fingerprintChanged(
-      { inputs: { 别的文件: "abc" } },
-      current,
-    );
+    const verdict = fingerprintChanged({ inputs: { 别的文件: "abc" } }, current);
     expect(verdict.changed).toBe(true);
     expect(verdict.reason).toContain("输入集");
   });
@@ -113,9 +108,7 @@ describe("指纹口径（ISSUE #1399）", () => {
     const current = computeFingerprint(dir);
     expect(fingerprintChanged(null, current).changed).toBe(true);
     expect(fingerprintChanged({ inputs: null }, current).changed).toBe(true);
-    expect(
-      fingerprintChanged(readStoredFingerprint(dir), current).changed,
-    ).toBe(true);
+    expect(fingerprintChanged(readStoredFingerprint(dir), current).changed).toBe(true);
   });
 });
 
@@ -128,10 +121,7 @@ describe("两个方向都真跑（ISSUE #1399）", () => {
     // 重建缓存目录，再改一份输入 —— 这次才是「变化」。
     fs.mkdirSync(path.join(dir, CACHE_DIR_REL), { recursive: true });
     fs.writeFileSync(path.join(dir, CACHE_DIR_REL, "probe.json"), "{}\n");
-    fs.appendFileSync(
-      path.join(dir, "node_modules", ".pnpm", "lock.yaml"),
-      "# installed more\n",
-    );
+    fs.appendFileSync(path.join(dir, "node_modules", ".pnpm", "lock.yaml"), "# installed more\n");
     const result = runFingerprint({ root: dir });
     expect(result.changed).toBe(true);
     expect(result.removed).toBe(true);
@@ -177,11 +167,9 @@ describe("postinstall 入口接线（ISSUE #1399）", () => {
     tmpDirs.push(dir);
     // 入口按自身位置找仓库根，所以把两个脚本放进同一个最小检出。
     fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
-    for (const f of ["install-git-hooks.mjs", "eslint-cache-fingerprint.mjs"])
-      fs.copyFileSync(
-        path.join(ROOT, "scripts", f),
-        path.join(dir, "scripts", f),
-      );
+    for (const f of ["install-git-hooks.mjs", "eslint-cache-fingerprint.mjs"]) {
+      fs.copyFileSync(path.join(ROOT, "scripts", f), path.join(dir, "scripts", f));
+    }
     fs.mkdirSync(path.join(dir, CACHE_DIR_REL), { recursive: true });
     fs.writeFileSync(path.join(dir, CACHE_DIR_REL, "probe.json"), "{}\n");
     fs.writeFileSync(path.join(dir, "tsconfig.json"), "{}\n");
@@ -197,10 +185,7 @@ describe("postinstall 入口接线（ISSUE #1399）", () => {
   });
 
   it("入口源码里这一步在 process.exit(0) **之前**（写在其后 = 永不执行）", () => {
-    const src = fs.readFileSync(
-      path.join(ROOT, "scripts", "install-git-hooks.mjs"),
-      "utf8",
-    );
+    const src = fs.readFileSync(path.join(ROOT, "scripts", "install-git-hooks.mjs"), "utf8");
     const fingerprintAt = src.indexOf("eslint-cache-fingerprint.mjs");
     const exitAt = src.lastIndexOf("process.exit(0)");
     expect(fingerprintAt).toBeGreaterThan(-1);
@@ -210,7 +195,7 @@ describe("postinstall 入口接线（ISSUE #1399）", () => {
   it("清的必须是 lint 真正在用的那个目录（与 package.json 的 --cache-location 逐字同源）", () => {
     // 只核 CACHE_DIR_REL 自己的形状不够：改了 `package.json` 的 `--cache-location`
     // 而脚本还盯着老路径 = 白清（清了个没人读的目录，缓存照旧重放旧判决）。
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
     const lintScript = pkg.scripts.lint ?? "";
@@ -228,17 +213,13 @@ describe("postinstall 入口接线（ISSUE #1399）", () => {
     // 这么写的」是正当的，按字面扫会把它一起判红（§13.5.8：在场判据要解析、不要
     // 字面匹配）。这里锚在**旧提示行本身的形状**上（`# ⚠️ 升级 eslint … 先删掉该
     // 缓存目录`，行首即 ⚠️、以删除动作为谓语），只有「又把删除当机制写回去」才命中。
-    const hook = fs.readFileSync(
-      path.join(ROOT, ".githooks", "pre-commit"),
-      "utf8",
-    );
+    const hook = fs.readFileSync(path.join(ROOT, ".githooks", "pre-commit"), "utf8");
     const oldAdvisory = hook
       .split("\n")
       .filter((line) => /^#\s*⚠️.*升级\s*eslint.*先删掉该缓存目录/.test(line));
-    expect(
-      oldAdvisory,
-      `钩子里还留着旧的手动删缓存指示行：\n${oldAdvisory.join("\n")}`,
-    ).toEqual([]);
+    expect(oldAdvisory, `钩子里还留着旧的手动删缓存指示行：\n${oldAdvisory.join("\n")}`).toEqual(
+      [],
+    );
     // 自动路径必须在场，且点名的是既有的唯一 postinstall 入口。
     expect(hook).toMatch(/postinstall/);
     expect(hook).toContain("scripts/install-git-hooks.mjs");

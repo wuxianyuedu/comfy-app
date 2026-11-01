@@ -92,17 +92,13 @@ describe("describeComfyExit", () => {
   });
 
   it("studio 模式下用户主动关闭优先于退出码", () => {
-    const r = describeComfyExit(
-      facts({ mode: "studio", code: 1, stopRequested: true }),
-    );
+    const r = describeComfyExit(facts({ mode: "studio", code: 1, stopRequested: true }));
     expect(r.reason).toBe("用户主动关闭");
     expect(r.advice).toBeNull();
   });
 
   it("保活模式拿不到 code/signal：如实说，不编一个 0", () => {
-    const r = describeComfyExit(
-      facts({ mode: "keepAlive", signal: null, code: null }),
-    );
+    const r = describeComfyExit(facts({ mode: "keepAlive", signal: null, code: null }));
     expect(r.reason).toContain("拿不到退出码");
     expect(r.reason).not.toContain("exit 0");
   });
@@ -129,7 +125,7 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
       isStopped: () => stopRequested,
       setTimer: (fn) => {
         ticks.push(fn);
-        return 0 as unknown as ReturnType<typeof setInterval>;
+        return /* SAFETY: 类型断言已复核 */ 0 as unknown as ReturnType<typeof setInterval>;
       },
       clearTimer: () => {
         stopped = true;
@@ -142,7 +138,9 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
       stopped: () => stopped,
       /** 跑一轮（等它内部的 await 落定）。 */
       tick: async () => {
-        for (const fn of ticks) fn();
+        for (const fn of ticks) {
+          fn();
+        }
         await new Promise((resolve) => setImmediate(resolve));
       },
     };
@@ -169,9 +167,7 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("还没第一次见到它就查不到 → 不抢答（拉起失败由启动循环自己报）", async () => {
     const h = harness(
-      vi
-        .fn<() => Promise<PidLookup>>()
-        .mockResolvedValue({ pid: null, failed: false }),
+      vi.fn<() => Promise<PidLookup>>().mockResolvedValue({ pid: null, failed: false }),
     );
     await h.tick();
     await h.tick();
@@ -197,9 +193,7 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("用户主动关 → 监督器自停，不报「莫名退出」", async () => {
     const h = harness(
-      vi
-        .fn<() => Promise<PidLookup>>()
-        .mockResolvedValue({ pid: null, failed: false }),
+      vi.fn<() => Promise<PidLookup>>().mockResolvedValue({ pid: null, failed: false }),
       true,
     );
     await h.tick();
@@ -209,9 +203,7 @@ describe("startComfyExitWatcher —— 保活模式的退出监督", () => {
 
   it("stop() 之后不再回调（宿主重新拉起前会调它）", async () => {
     const h = harness(
-      vi
-        .fn<() => Promise<PidLookup>>()
-        .mockResolvedValue({ pid: 7001, failed: false }),
+      vi.fn<() => Promise<PidLookup>>().mockResolvedValue({ pid: 7001, failed: false }),
     );
     h.watcher.stop();
     await h.tick();
@@ -250,9 +242,9 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
       'boot ok\nTraceback (most recent call last):\n  File "main.py", line 1\nValueError: boom\n',
     );
     fs.writeFileSync(outFile, "started ok\n");
-    const runtime: string[] = [];
+    const runtime: Array<string> = [];
     reportKeepAliveExit({
-      facts: { pid: 149720, uptimeMs: 26 * 60_000 + 13_000 },
+      facts: { pid: 149_720, uptimeMs: 26 * 60_000 + 13_000 },
       stopRequested: false,
       keepAliveLogs: { out: outFile, err: errFile },
       appendRuntimeLog: (l) => runtime.push(l),
@@ -268,7 +260,7 @@ describe("reportKeepAliveExit —— 把保活崩溃尾部带进 runtime 日志"
   });
 
   it("没有 keepAliveLogs 时不带尾部（向后兼容）", () => {
-    const runtime: string[] = [];
+    const runtime: Array<string> = [];
     reportKeepAliveExit({
       facts: { pid: 1, uptimeMs: 1000 },
       stopRequested: false,

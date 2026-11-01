@@ -7,11 +7,7 @@
 import { isInlineMedia } from "~/lib/media/data-url";
 import { DEFAULT_IMAGE_MIME, extForMime } from "~/lib/media/mime-ext";
 import { uploadMaterialItem } from "~/lib/media/materials-client";
-import {
-  sizeSpecToRelay,
-  sizeSpecToWxH,
-  type SizeSpec,
-} from "~/lib/media/size-presets";
+import { sizeSpecToRelay, sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
 import type { SavedOutput } from "./api-channel-shared";
 import {
   apiGenerateImage,
@@ -26,17 +22,17 @@ import {
  *  尺寸给的是**尺寸表达**（比例 + 分辨率 / 比例 + 百万像素 + 倍数，见
  *  `lib/size-presets`），不是 "WxH" 字符串：两条通道各自要的形状由本层现算
  *  （远端要「比例 + 百万像素」、库工作流直接吃尺寸表达）。 */
-export interface PortraitRequest {
-  prompt: string;
+export type PortraitRequest = {
   negative?: string;
+  prompt: string;
   size: SizeSpec;
-}
+};
 
 /** 本机链路的进展回调（进度 + 执行日志）。 */
-export interface LocalPortraitHandlers {
-  onProgress?: (pct: number) => void;
+export type LocalPortraitHandlers = {
   onLog?: (entry: TaskLogEntry) => void;
-}
+  onProgress?: (pct: number) => void;
+};
 
 /** 本地通道生成一张定妆照：按对外参数封装（提示词 / 尺寸，其余走默认值）
  *  组装输入并提交本地 ComfyUI，返回任务 id 与产物地址。
@@ -50,7 +46,7 @@ export async function generateWorkflowPortrait(
    *  不再下发 "WxH" 兼容字段。 */
   const { input } = await buildLibraryWorkflowInput(opts.workflowId, {
     prompt: req.prompt,
-    ...(req.negative !== undefined ? { negativePrompt: req.negative } : {}),
+    ...(req.negative === undefined ? {} : { negativePrompt: req.negative }),
     size: req.size,
   });
   const taskId = await startLocalGenerate(input);
@@ -60,12 +56,18 @@ export async function generateWorkflowPortrait(
       onProgress: (pct) => handlers.onProgress?.(pct),
       onLog: (entry) => handlers.onLog?.(entry),
       onOutput: (output: SavedOutput) => {
-        if (output.kind !== "video" && !imageUrl) imageUrl = output.url;
+        if (output.kind !== "video" && !imageUrl) {
+          imageUrl = output.url;
+        }
       },
       onSettled: (result) => {
-        if (!result.ok) reject(new Error(result.message ?? "定妆照生成失败"));
-        else if (imageUrl) resolve(imageUrl);
-        else reject(new Error("任务完成但没有产出图片"));
+        if (!result.ok) {
+          reject(new Error(result.message ?? "定妆照生成失败"));
+        } else if (imageUrl) {
+          resolve(imageUrl);
+        } else {
+          reject(new Error("任务完成但没有产出图片"));
+        }
       },
     });
   });
@@ -79,7 +81,9 @@ const DEFAULT_EXT = "png";
 async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
   /* 「这是不是一个内联 media」走 `~/lib/media/data-url`（规范 16 §16.2.4.56）；
    * 解码本身交给 `fetch`（浏览器原生，不必自己 base64 → Blob）。 */
-  if (!isInlineMedia(dataUrl)) throw new Error("data URL 格式无效");
+  if (!isInlineMedia(dataUrl)) {
+    throw new Error("data URL 格式无效");
+  }
   const blob = await (await fetch(dataUrl)).blob();
   /* 服务端按扩展名归属素材种类，没有扩展名会被当成文档，故这里必须有兜底后缀。 */
   const ext = extForMime(blob.type) ?? DEFAULT_EXT;
@@ -93,9 +97,11 @@ async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
  *  （浏览器侧跨域拿不到，引用时由服务端自行拉取）。 */
 async function localizePortraitImage(
   url: string,
-  opts: { projectId: string; name: string },
+  opts: { name: string; projectId: string },
 ): Promise<string> {
-  if (!isInlineMedia(url)) return url;
+  if (!isInlineMedia(url)) {
+    return url;
+  }
   const file = await dataUrlToFile(url, opts.name);
   const item = await uploadMaterialItem(file, {
     folder: "characters",
@@ -112,9 +118,9 @@ async function localizePortraitImage(
 export async function generateRemotePortrait(
   req: PortraitRequest,
   opts: {
-    projectId: string;
-    name: string;
     model?: string;
+    name: string;
+    projectId: string;
   },
 ): Promise<string> {
   const url = await apiGenerateImage({
@@ -130,10 +136,7 @@ export async function generateRemotePortrait(
 }
 
 /** 外部导入现成的定妆照：写进素材库「角色」分类并返回地址。 */
-export async function importPortraitFile(
-  file: File,
-  opts: { projectId: string },
-): Promise<string> {
+export async function importPortraitFile(file: File, opts: { projectId: string }): Promise<string> {
   const item = await uploadMaterialItem(file, {
     folder: "characters",
     projectId: opts.projectId,

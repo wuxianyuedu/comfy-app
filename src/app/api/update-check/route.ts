@@ -17,13 +17,9 @@ import { toDisplayPath } from "~/lib/path-display";
  */
 
 /** 改完需「重编壳」才生效：编译期内嵌进二进制的源与配置。 */
-const RECOMPILE_ROOTS: string[] = [
-  "src-tauri",
-  "tauri.conf.json",
-  "public/splash.html",
-];
+const RECOMPILE_ROOTS: Array<string> = ["src-tauri", "tauri.conf.json", "public/splash.html"];
 /** 改完需「重启 dev server」才生效：运行期由 dev server / 启动器读取。 */
-const RESTART_ROOTS: string[] = [
+const RESTART_ROOTS: Array<string> = [
   ".env",
   "pnpm-workspace.yaml",
   "package.json",
@@ -38,7 +34,9 @@ type FileFingerprint = string;
 function fingerprintOf(abs: string): FileFingerprint | null {
   try {
     const st = fs.statSync(...tracingIgnoreArgs(), abs);
-    if (!st.isFile()) return null;
+    if (!st.isFile()) {
+      return null;
+    }
     return `${Math.trunc(st.mtimeMs)}:${st.size}`;
   } catch {
     return null;
@@ -46,8 +44,8 @@ function fingerprintOf(abs: string): FileFingerprint | null {
 }
 
 /** 递归收集目录下的文件绝对路径。 */
-function walkFiles(dirAbs: string, out: string[] = []): string[] {
-  let entries: fs.Dirent[];
+function walkFiles(dirAbs: string, out: Array<string> = []): Array<string> {
+  let entries: Array<fs.Dirent>;
   try {
     entries = fs.readdirSync(...tracingIgnoreArgs(), dirAbs, {
       withFileTypes: true,
@@ -57,7 +55,9 @@ function walkFiles(dirAbs: string, out: string[] = []): string[] {
   }
   for (const e of entries) {
     if (e.isDirectory()) {
-      if (SKIP_DIRS.has(e.name)) continue;
+      if (SKIP_DIRS.has(e.name)) {
+        continue;
+      }
       walkFiles(path.join(dirAbs, e.name), out);
     } else if (e.isFile()) {
       out.push(path.join(dirAbs, e.name));
@@ -67,7 +67,7 @@ function walkFiles(dirAbs: string, out: string[] = []): string[] {
 }
 
 /** 把一组根（文件或目录）展开成 { 相对路径 → 指纹 }。 */
-function collectGroup(roots: string[]): Map<string, FileFingerprint> {
+function collectGroup(roots: Array<string>): Map<string, FileFingerprint> {
   const map = new Map<string, FileFingerprint>();
   for (const rel of roots) {
     const abs = path.join(...tracingIgnoreArgs(), REPO_ROOT, rel);
@@ -98,19 +98,25 @@ let baseline: {
 } | null = null;
 
 function diffGroup(
-  roots: string[],
+  roots: Array<string>,
   base: Map<string, FileFingerprint> | undefined,
-): { dirty: boolean; files: string[] } {
+): { dirty: boolean; files: Array<string> } {
   const current = collectGroup(roots);
   // 还没有基线：记录当前态作为以后比对参照，本轮视为「无变化」。
-  if (!base) return { dirty: false, files: [] };
-  const files: string[] = [];
+  if (!base) {
+    return { dirty: false, files: [] };
+  }
+  const files: Array<string> = [];
   for (const [rel, fp] of current) {
-    if (base.get(rel) !== fp) files.push(rel);
+    if (base.get(rel) !== fp) {
+      files.push(rel);
+    }
   }
   // 基线里存在、本次已被删除的文件也纳入
   for (const rel of base.keys()) {
-    if (!current.has(rel)) files.push(rel);
+    if (!current.has(rel)) {
+      files.push(rel);
+    }
   }
   return { dirty: files.length > 0, files: files.sort() };
 }

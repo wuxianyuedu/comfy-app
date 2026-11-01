@@ -40,7 +40,7 @@ afterEach(cleanup);
 describe("SheetContent 必须有 Dialog.Portal 祖先", () => {
   it("打开抽屉时渲染内容与关闭按钮，不抛 'Dialog.Portal is missing' 错", () => {
     render(
-      <Sheet open onOpenChange={vi.fn()}>
+      <Sheet onOpenChange={vi.fn()} open>
         <SheetContent>
           <SheetHeader>
             <SheetTitle>画布设置</SheetTitle>

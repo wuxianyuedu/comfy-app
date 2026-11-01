@@ -7,14 +7,14 @@ import { resetConsoleSlotForTest } from "./console-registry";
 /** 起一条真命令并收集全部事件（控制台的判据就是「能不能在用例里直接跑真进程」）。 */
 async function runOnce(
   file: string,
-  args: string[],
+  args: Array<string>,
   timeoutMs = 20_000,
 ): Promise<{
-  events: ConsoleEvent[];
+  events: Array<ConsoleEvent>;
   result: Awaited<ReturnType<ReturnType<typeof createConsoleRunner>["run"]>>;
 }> {
   const runner = createConsoleRunner();
-  const events: ConsoleEvent[] = [];
+  const events: Array<ConsoleEvent> = [];
   const result = await runner.run(
     {
       runId: "test-run",
@@ -29,7 +29,7 @@ async function runOnce(
   return { events, result };
 }
 
-const textOf = (events: ConsoleEvent[], stream?: "stdout" | "stderr") =>
+const textOf = (events: Array<ConsoleEvent>, stream?: "stdout" | "stderr") =>
   events
     .filter((e) => e.type === "out" && (!stream || e.stream === stream))
     .map((e) => (e.type === "out" ? e.text : ""))
@@ -40,7 +40,9 @@ describe("createConsoleRunner", () => {
     const { events } = await runOnce(process.execPath, ["-e", "0"]);
     const start = events[0];
     expect(start?.type).toBe("start");
-    if (start?.type !== "start") return;
+    if (start?.type !== "start") {
+      return;
+    }
     expect(start.file).toBe(process.execPath);
     expect(start.args).toEqual(["-e", "0"]);
     expect(start.cwd).toBe(process.cwd());
@@ -49,15 +51,17 @@ describe("createConsoleRunner", () => {
   it("stdout 与 stderr 各自成帧，顺序与内容如实（含中文，UTF-8 不花）", async () => {
     const { events, result } = await runOnce(process.execPath, [
       "-e",
-      "process.stdout.write('out-中文\\n');process.stderr.write('err-中文\\n')",
+      String.raw`process.stdout.write('out-中文\n');process.stderr.write('err-中文\n')`,
     ]);
     expect(result.exitCode).toBe(0);
     expect(textOf(events, "stdout")).toContain("out-中文");
     expect(textOf(events, "stderr")).toContain("err-中文");
     // 退出帧在最后，且带着用时。
-    const last = events[events.length - 1];
+    const last = events.at(-1);
     expect(last?.type).toBe("exit");
-    if (last?.type !== "exit") return;
+    if (last?.type !== "exit") {
+      return;
+    }
     expect(last.code).toBe(0);
     expect(last.killed).toBe(false);
     expect(last.truncatedNote).toBeNull();
@@ -65,12 +69,9 @@ describe("createConsoleRunner", () => {
   });
 
   it("非零退出码如实透出（界面据此判成败）", async () => {
-    const { result, events } = await runOnce(process.execPath, [
-      "-e",
-      "process.exit(3)",
-    ]);
+    const { result, events } = await runOnce(process.execPath, ["-e", "process.exit(3)"]);
     expect(result.exitCode).toBe(3);
-    const last = events[events.length - 1];
+    const last = events.at(-1);
     expect(last?.type === "exit" && last.code).toBe(3);
     expect(result.killed).toBe(false);
   });
@@ -92,9 +93,7 @@ describe("createConsoleRunner", () => {
     /* 等 spawn 落地、`busy()` 认下这条 run —— 不用「睡 200ms 再赌它起来了」：
      * `expect.poll` 不成立时会打出每次读到的实际值（这里是 `null`），
      * 「压根没登记」和「登记晚了」在报错里分得开。 */
-    await expect
-      .poll(() => runner.busy()?.runId, { timeout: 4000 })
-      .toBe("slow");
+    await expect.poll(() => runner.busy()?.runId, { timeout: 4000 }).toBe("slow");
     const busy = runner.busy();
     expect(busy?.command).toBe("node -e sleep");
     await runner.cancel();
@@ -104,7 +103,7 @@ describe("createConsoleRunner", () => {
 
   it("cancel() 掐整棵树：exit 帧标 killed，而不是伪装成「自己失败」", async () => {
     const runner = createConsoleRunner();
-    const events: ConsoleEvent[] = [];
+    const events: Array<ConsoleEvent> = [];
     const done = runner.run(
       {
         runId: "cancel-me",
@@ -117,13 +116,11 @@ describe("createConsoleRunner", () => {
       (event) => events.push(event),
     );
     /* 等进程真的起来再取消：取消一个还没 spawn 的 runner 测的是别的分支。 */
-    await expect
-      .poll(() => runner.busy() !== null, { timeout: 4000 })
-      .toBe(true);
+    await expect.poll(() => runner.busy() !== null, { timeout: 4000 }).toBe(true);
     expect(await runner.cancel()).toBe(true);
     const result = await done;
     expect(result.killed).toBe(true);
-    const last = events[events.length - 1];
+    const last = events.at(-1);
     expect(last?.type === "exit" && last.killed).toBe(true);
   });
 
@@ -149,9 +146,13 @@ describe("createConsoleRunner", () => {
         timeoutMs: 20_000,
       },
       (event) => {
-        if (event.type !== "out") return;
+        if (event.type !== "out") {
+          return;
+        }
         const m = /GRANDCHILD=(\d+)/.exec(event.text);
-        if (m) grandchildPid = Number(m[1]);
+        if (m) {
+          grandchildPid = Number(m[1]);
+        }
       },
     );
     /* 等孙进程的 PID 从 stdout 里出来（最多 5s）。 */
@@ -178,7 +179,7 @@ describe("createConsoleRunner", () => {
 
   it("输出超过上限即停发并带截断说明（命令继续跑完）", async () => {
     const runner = createConsoleRunner();
-    const events: ConsoleEvent[] = [];
+    const events: Array<ConsoleEvent> = [];
     // 生成 ~500KB：远超 MAX_OUTPUT_CHARS(200k)
     const result = await runner.run(
       {
@@ -193,14 +194,14 @@ describe("createConsoleRunner", () => {
     );
     // 命令本身仍然成功退出（截断只影响转发，不掐进程）。
     expect(result.exitCode).toBe(0);
-    const last = events[events.length - 1];
+    const last = events.at(-1);
     expect(last?.type === "exit" && last.truncatedNote).toBeTruthy();
     expect(textOf(events)).toContain("输出已达");
   }, 30_000);
 
   it("看门狗到点掐整棵树（killed=true 而不是永远转圈）", async () => {
     const runner = createConsoleRunner();
-    const events: ConsoleEvent[] = [];
+    const events: Array<ConsoleEvent> = [];
     const result = await runner.run(
       {
         runId: "timeout",
@@ -219,7 +220,7 @@ describe("createConsoleRunner", () => {
 
   it("可执行文件不存在时给出 error 帧与可读文案（不是抛给调用方）", async () => {
     const runner = createConsoleRunner();
-    const events: ConsoleEvent[] = [];
+    const events: Array<ConsoleEvent> = [];
     const result = await runner.run(
       {
         runId: "enoent",
@@ -250,7 +251,9 @@ describe("createConsoleRunner", () => {
     const { events } = await runOnce("node", ["-e", "0"]);
     const start = events[0];
     expect(start?.type).toBe("start");
-    if (start?.type !== "start") return;
+    if (start?.type !== "start") {
+      return;
+    }
     // `node` 在 PATH 上 → 解析成绝对路径（不再是裸 `node`）。
     expect(start.file).toBe(process.execPath);
   });
@@ -261,7 +264,7 @@ describe("输出的上限边界（精确撞上限的那一轮）", () => {
   it("恰好写满上限：不报截断；再多一个字符：报截断且后续不再转发", async () => {
     const { MAX_OUTPUT_CHARS } = await import("./console-limits");
     const exact = createConsoleRunner();
-    const exactEvents: ConsoleEvent[] = [];
+    const exactEvents: Array<ConsoleEvent> = [];
     await exact.run(
       {
         runId: "exact",
@@ -277,7 +280,7 @@ describe("输出的上限边界（精确撞上限的那一轮）", () => {
     expect(textOf(exactEvents)).not.toContain("输出已达");
 
     const over = createConsoleRunner();
-    const overEvents: ConsoleEvent[] = [];
+    const overEvents: Array<ConsoleEvent> = [];
     await over.run(
       {
         runId: "over",
@@ -308,8 +311,7 @@ describe("输出的上限边界（精确撞上限的那一轮）", () => {
 
 describe("resetConsoleSlotForTest", () => {
   it("清掉单例后拿到的是全新的槽（带空历史）", async () => {
-    const { consoleSlot, recordConsoleHistory } =
-      await import("./console-registry");
+    const { consoleSlot, recordConsoleHistory } = await import("./console-registry");
     resetConsoleSlotForTest();
     const first = consoleSlot();
     recordConsoleHistory(first, {

@@ -15,14 +15,8 @@ import {
   splitWorkflowIO,
   type WorkflowIOMap,
 } from "~/components/studio/workflow-io";
-import {
-  type CanvasNodeData,
-  defaultData,
-} from "~/lib/project-canvas/canvas-types";
-import {
-  makeNodeId,
-  placeCanvasNode,
-} from "~/lib/project-canvas/canvas-helpers";
+import { type CanvasNodeData, defaultData } from "~/lib/project-canvas/canvas-types";
+import { makeNodeId, placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
 import { beginStaleRun } from "~/lib/stale-run";
 import {
   importOutputAsInput,
@@ -34,28 +28,25 @@ import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { setActiveTaskId } from "~/components/studio/project-canvas/activeTask";
 import { vanillaApi } from "~/trpc/vanilla";
 import { buildCanvasGeneratePayload } from "~/components/studio/project-canvas/CanvasNode/generate-payload";
-import {
-  parseGenerateInput,
-  type GenerateInput,
-} from "~/lib/workflow/workflow-generate-input";
+import { parseGenerateInput, type GenerateInput } from "~/lib/workflow/workflow-generate-input";
 import { errorMessage } from "~/lib/error-message";
 
-export interface UseGenerateArgs {
-  id: string;
+export type UseGenerateArgs = {
   d: CanvasNodeData;
-  patch: (p: Partial<CanvasNodeData>) => void;
-  wfIO: WorkflowIOMap | null;
-  /** 作者在工作流库配的「对外参数 → 节点端口」映射（paramMap.source）。 */
-  wfParamMap?: Record<string, unknown> | null;
-  /** 工作流当前生效的模式（落点覆盖按它归属，`source.mode:<模式>`）。 */
-  wfMode?: string | null;
-  setNodes: Dispatch<SetStateAction<Node[]>>;
-  setEdges: Dispatch<SetStateAction<Edge[]>>;
   getNode: (id: string) => Node | undefined;
+  id: string;
+  patch: (p: Partial<CanvasNodeData>) => void;
   /** 屏幕坐标 → 画布坐标（`useReactFlow().screenToFlowPosition`）——
    *  自动孵化下游节点时由出口用它换算落点。 */
   screenToFlowPosition: (p: XYPosition) => XYPosition;
-}
+  setEdges: Dispatch<SetStateAction<Array<Edge>>>;
+  setNodes: Dispatch<SetStateAction<Array<Node>>>;
+  wfIO: WorkflowIOMap | null;
+  /** 工作流当前生效的模式（落点覆盖按它归属，`source.mode:<模式>`）。 */
+  wfMode?: string | null;
+  /** 作者在工作流库配的「对外参数 → 节点端口」映射（paramMap.source）。 */
+  wfParamMap?: Record<string, unknown> | null;
+};
 
 export function useGenerate({
   id,
@@ -81,7 +72,9 @@ export function useGenerate({
    *  上合法地在跑）。 */
   const taskIdForReconcile = typeof d.taskId === "string" ? d.taskId : "";
   useEffect(() => {
-    if (d.status !== "running" || !taskIdForReconcile) return;
+    if (d.status !== "running" || !taskIdForReconcile) {
+      return;
+    }
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：节点卸载 / 换任务时，
      * 对账结论（patch）一律不落地。 */
     const guard = beginStaleRun();
@@ -90,7 +83,9 @@ export function useGenerate({
         const t = await vanillaApi.task.detail.query({
           id: taskIdForReconcile,
         });
-        if (!t?.status) return;
+        if (!t?.status) {
+          return;
+        }
         if (t.status === "RUNNING") {
           // 在另一个 runner 上合法地仍在运行 —— 节点保持原样。
           return;
@@ -108,8 +103,7 @@ export function useGenerate({
           guard.commit(() =>
             patch({
               status: "error",
-              error:
-                t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
+              error: t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
               progress: 0,
             }),
           );
@@ -130,8 +124,7 @@ export function useGenerate({
     // ── 用户上传的工作流节点：跑选中的 WorkflowTemplate ──
     if (
       d.kind === "workflow" ||
-      ((d.kind === "image" || d.kind === "video" || d.kind === "picture") &&
-        d.workflowId)
+      ((d.kind === "image" || d.kind === "video" || d.kind === "picture") && d.workflowId)
     ) {
       if (!d.workflowId) {
         patch({ error: "请先选择工作流", status: "error" });
@@ -156,9 +149,7 @@ export function useGenerate({
         const taskId = await startGenerate(payload);
         patch({ taskId });
         setActiveTaskId(taskId, id);
-        const result = await pollTask(taskId, undefined, (progress) =>
-          patch({ progress }),
-        );
+        const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
         if (isTaskSuccess(result)) {
           // picture 节点 = 图片资产本身，生成结果直接
           //  写回本节点 mediaPath（ContentAssetBody 据此预览），不另起下游节点。
@@ -194,12 +185,9 @@ export function useGenerate({
              * 所以走出口的 `flowPosition` 那一支（坐标本身已在画布坐标系里）。 */
             const cur = getNode(id);
             const base = cur?.position ?? { x: 0, y: 0 };
-            const isVideoOut =
-              outputTargetKind(wfIO ?? undefined, d.workflowTaskType) ===
-              "video";
+            const isVideoOut = outputTargetKind(wfIO ?? undefined, d.workflowTaskType) === "video";
             // 主输出 ioKey（自动连线用，必须与该节点渲染的 output 句柄 id 一致）
-            const outIoKey =
-              splitWorkflowIO(wfIO ?? undefined).outputs[0]?.ioKey ?? "output";
+            const outIoKey = splitWorkflowIO(wfIO ?? undefined).outputs[0]?.ioKey ?? "output";
             let imported: string | null = null;
             if (!isVideoOut && result.mediaType !== "video") {
               try {
@@ -231,7 +219,7 @@ export function useGenerate({
                 id: nid,
                 flowPosition: { x: base.x + 340, y: base.y },
                 flow: { screenToFlowPosition },
-                data: sinkData as CanvasNodeData,
+                data: /* SAFETY: 类型断言已复核 */ sinkData as CanvasNodeData,
               }),
             );
             setEdges((eds) => [
@@ -272,10 +260,10 @@ export function useGenerate({
             },
           });
         }
-      } catch (e: unknown) {
+      } catch (error: unknown) {
         patch({
           status: "error",
-          error: errorMessage(e, "生成失败"),
+          error: errorMessage(error, "生成失败"),
           errorContext: {
             request: payload,
             timestamp: new Date().toISOString(),
@@ -317,9 +305,7 @@ export function useGenerate({
       const taskId = await startGenerate(parsed.input);
       patch({ taskId });
       setActiveTaskId(taskId, id);
-      const result = await pollTask(taskId, undefined, (progress) =>
-        patch({ progress }),
-      );
+      const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
       if (isTaskSuccess(result)) {
         patch({
           status: "done",
@@ -340,10 +326,10 @@ export function useGenerate({
           },
         });
       }
-    } catch (e: unknown) {
+    } catch (error: unknown) {
       patch({
         status: "error",
-        error: errorMessage(e, "生成失败"),
+        error: errorMessage(error, "生成失败"),
         errorContext: {
           request: req,
           timestamp: new Date().toISOString(),

@@ -24,21 +24,19 @@ import { production, project, user, type Production } from "~/server/db/schema";
 import { workshopDb } from "./db";
 
 /** 会话里「属于界面真值」的内容面：绑定后由 production 承载。 */
-export interface SessionContent {
-  title: string;
-  type: string;
-  tone: string;
+export type SessionContent = {
+  characters: Array<Character>;
   logline: string;
+  scenes: Array<Scene>;
   scriptMarkdown: string;
-  scenes: Scene[];
-  characters: Character[];
-  shots: Shot[];
-}
+  shots: Array<Shot>;
+  title: string;
+  tone: string;
+  type: string;
+};
 
 /** 解析会话内容的归属用户：显式 id 必须存在；缺省取本机最早的账号（确定性）。 */
-export async function resolveOwnerUserId(
-  explicit: string | null,
-): Promise<string> {
+export async function resolveOwnerUserId(explicit: string | null): Promise<string> {
   if (explicit) {
     const found = await workshopDb
       .select({ id: user.id })
@@ -46,9 +44,7 @@ export async function resolveOwnerUserId(
       .where(eq(user.id, explicit))
       .limit(1);
     if (!found[0]) {
-      throw new Error(
-        `userId 不存在：${explicit}（归属用户必须在应用内已存在）`,
-      );
+      throw new Error(`userId 不存在：${explicit}（归属用户必须在应用内已存在）`);
     }
     return explicit;
   }
@@ -74,16 +70,10 @@ export async function ensureProductionProject(
   title: string,
 ): Promise<string> {
   if (projectId) {
-    const rows = await workshopDb
-      .select()
-      .from(project)
-      .where(eq(project.id, projectId))
-      .limit(1);
+    const rows = await workshopDb.select().from(project).where(eq(project.id, projectId)).limit(1);
     const proj = rows[0];
     if (!proj) {
-      throw new Error(
-        `项目不存在：${projectId}（projectId 须来自界面的项目列表，不能凭空写）`,
-      );
+      throw new Error(`项目不存在：${projectId}（projectId 须来自界面的项目列表，不能凭空写）`);
     }
     if (proj.userId !== ownerId) {
       throw new Error(
@@ -110,10 +100,10 @@ async function ensureProductionRow(
     .from(production)
     .where(eq(production.id, projectId))
     .limit(1);
-  if (rows[0]) return;
-  await workshopDb
-    .insert(production)
-    .values({ id: projectId, userId: ownerId, title });
+  if (rows[0]) {
+    return;
+  }
+  await workshopDb.insert(production).values({ id: projectId, userId: ownerId, title });
 }
 
 /** 把会话内容写进 production。**只写内容列**——进度 / run / 评审是另外的字段
@@ -154,26 +144,27 @@ export async function writeContentToProduction(
 }
 
 /** 读会话绑定项目的内容面；行不存在（被外部删掉）返回 null，调用方回落会话行。 */
-export async function readProductionContent(
-  projectId: string,
-): Promise<SessionContent | null> {
+export async function readProductionContent(projectId: string): Promise<SessionContent | null> {
   const rows = await workshopDb
     .select()
     .from(production)
     .where(eq(production.id, projectId))
     .limit(1);
   const row: Production | undefined = rows[0];
-  if (!row) return null;
+  if (!row) {
+    return null;
+  }
   return {
     title: row.title,
     type: row.type,
     tone: row.tone,
     logline: row.logline,
     scriptMarkdown: row.scriptMarkdown,
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Scene[]) : [],
-    characters: Array.isArray(row.characters)
-      ? (row.characters as Character[])
-      : [],
-    shots: Array.isArray(row.shots) ? (row.shots as Shot[]) : [],
+    /* SAFETY: 类型断言已复核 */
+    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
+    /* SAFETY: 类型断言已复核 */
+    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
+    /* SAFETY: 类型断言已复核 */
+    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
   };
 }

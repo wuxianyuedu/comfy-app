@@ -121,10 +121,7 @@ export function readBuild(repo, sn, call = cnbCall) {
   if (failure) {
     /* 这一支就是本件要修的那一格：改前 `execFileSync` 在这里直接抛，屏幕上是一段
      * Node 栈（`spawnSync cnb ENOENT`），既没有读数、也没有「为什么没有」。 */
-    return emptyReading(
-      sn,
-      raw ? `${failure}（前 120 字：${raw.slice(0, 120)}）` : failure,
-    );
+    return emptyReading(sn, raw ? `${failure}（前 120 字：${raw.slice(0, 120)}）` : failure);
   }
   /* `-v` 打的是 **JSON**（实测 `{ "status": 200, "data": { "status": "error", … } }`），
    * 不是 YAML —— 第一版按 YAML 逐行取键，取到的是「(取不到)」，而那一屏看上去与
@@ -143,25 +140,18 @@ export function readBuild(repo, sn, call = cnbCall) {
    * 取整跑的最早开始与最晚结束作为它的时间窗 —— 相交判据问的是「这一跑在不在跑」，
    * 而它不是 stage 粒度的问题。`createTime` / `endTime` 在整跑这一层平台不给，
    * 所以缺它们时**不编**（`startTime` 取不到就是取不到，由上面的「取不到时间线」兜）。 */
-  const pipes = Object.values(data.pipelinesStatus ?? {}).filter(
-    (p) => p && typeof p === "object",
-  );
+  const pipes = Object.values(data.pipelinesStatus ?? {}).filter((p) => p && typeof p === "object");
   const startMs = pipes
     .map((p) => Number(p.createTime ?? p.startTime ?? Number.NaN))
     .filter((n) => Number.isFinite(n));
-  const endMs = pipes
-    .map((p) => Number(p.endTime ?? Number.NaN))
-    .filter((n) => Number.isFinite(n));
+  const endMs = pipes.map((p) => Number(p.endTime ?? Number.NaN)).filter((n) => Number.isFinite(n));
   const names = pipes.map((p) => String(p.name ?? "")).filter(Boolean);
   return {
     sn,
     status: String(data.status ?? "(取不到)"),
     createTime: startMs.length > 0 ? isoOf(Math.min(...startMs)) : "",
     startTime: startMs.length > 0 ? isoOf(Math.min(...startMs)) : "",
-    endTime:
-      endMs.length === pipes.length && endMs.length > 0
-        ? isoOf(Math.max(...endMs))
-        : "",
+    endTime: endMs.length === pipes.length && endMs.length > 0 ? isoOf(Math.max(...endMs)) : "",
     title: names.join(" / "),
     note: "",
   };
@@ -201,7 +191,9 @@ export function readRunWindow(repo, sn) {
   /* 这一路只给时间线，不给 `status`：取不到就把四格留空（改前的 `catch` 也是这个形状），
    * 结论行上那句「为什么没有读数」由 `readBuild` 那一路的 `note` 承担 —— 两路拼一行，
    * 不许在这一路再编一个理由。 */
-  if (failure) return { createTime: "", endTime: "", title: "", event: "" };
+  if (failure) {
+    return { createTime: "", endTime: "", title: "", event: "" };
+  }
   try {
     /* 平台这一路给的是一个数组，`JSON.parse` 回来是 `any` —— 那里从没被判过。
      * 只在**进出的那一处**记一次形状（字段全可缺：平台给不给 `title` 不是本件能定的，
@@ -210,9 +202,7 @@ export function readRunWindow(repo, sn) {
     const rows = JSON.parse(raw)?.data?.data ?? [];
     /** @type {RunRow} */
     const row = rows.find((r) => r?.sn === sn) ?? rows[0] ?? {};
-    const create = Number(
-      row.createTime ? Date.parse(row.createTime) : Number.NaN,
-    );
+    const create = Number(row.createTime ? Date.parse(row.createTime) : Number.NaN);
     const durationMs = Number(row.duration ?? Number.NaN);
     const ended = Number.isFinite(create) && Number.isFinite(durationMs);
     return {
@@ -220,10 +210,7 @@ export function readRunWindow(repo, sn) {
       /* 还在跑的那一跑**没有** endTime —— 给空串，由 `overlap()` 按「此刻」收口并
        * 在答案里带 `stillRunning`。拿 `create + duration` 编一个假的结束时刻，
        * 等于把「正在跑」写成「已经停了」。 */
-      endTime:
-        ended && durationMs > 0
-          ? new Date(create + durationMs).toISOString()
-          : "",
+      endTime: ended && durationMs > 0 ? new Date(create + durationMs).toISOString() : "",
       title: String(row.title ?? ""),
       event: String(row.event ?? ""),
     };
@@ -259,8 +246,12 @@ function emptyReading(sn, note) {
  * @returns {number | null}
  */
 export function toMs(value) {
-  if (value == null || value === "") return null;
-  if (/^\d+$/.test(value)) return Number(value);
+  if (value == null || value === "") {
+    return null;
+  }
+  if (/^\d+$/.test(value)) {
+    return Number(value);
+  }
   const t = Date.parse(value);
   return Number.isNaN(t) ? null : t;
 }
@@ -297,9 +288,7 @@ export function overlap(a, b, now = Date.now()) {
   if (sa.start == null || sb.start == null) {
     return { verdict: "取不到时间线", seconds: 0, stillRunning: false };
   }
-  const seconds = Math.round(
-    (Math.min(sa.end, sb.end) - Math.max(sa.start, sb.start)) / 1000,
-  );
+  const seconds = Math.round((Math.min(sa.end, sb.end) - Math.max(sa.start, sb.start)) / 1000);
   return {
     verdict: seconds > 0 ? "相交（同一时刻都在跑）" : "错开",
     seconds: Math.max(0, seconds),
@@ -394,13 +383,15 @@ export function report(
  *          seconds: number, timeout?: string}} opts
  */
 export function probeConfig(opts) {
-  const { event, key, cancelInProgress, wait, stageLock, jobLock, seconds } =
-    opts;
+  const { event, key, cancelInProgress, wait, stageLock, jobLock, seconds } = opts;
   const timeout = opts.timeout ?? "20m";
   const pipelineLock = [`  lock:`, `    key: ${key}`];
-  if (cancelInProgress != null)
+  if (cancelInProgress != null) {
     pipelineLock.push(`    cancel-in-progress: ${cancelInProgress}`);
-  if (wait) pipelineLock.push(`    wait: true`, `    timeout: 900`);
+  }
+  if (wait) {
+    pipelineLock.push(`    wait: true`, `    timeout: 900`);
+  }
   /**
    * @param {number} indent 缩进格数
    * @param {{key: string, wait?: boolean, timeout?: number, expires?: string}} l 锁的三件
@@ -409,9 +400,15 @@ export function probeConfig(opts) {
   const lockBlock = (indent, l) => {
     const pad = " ".repeat(indent);
     const out = [`${pad}lock:`, `${pad}  key: ${l.key}`];
-    if (l.wait != null) out.push(`${pad}  wait: ${l.wait}`);
-    if (l.timeout != null) out.push(`${pad}  timeout: ${l.timeout}`);
-    if (l.expires != null) out.push(`${pad}  expires: ${l.expires}`);
+    if (l.wait != null) {
+      out.push(`${pad}  wait: ${l.wait}`);
+    }
+    if (l.timeout != null) {
+      out.push(`${pad}  timeout: ${l.timeout}`);
+    }
+    if (l.expires != null) {
+      out.push(`${pad}  expires: ${l.expires}`);
+    }
     return out;
   };
   /**
@@ -447,11 +444,13 @@ export function probeConfig(opts) {
     lines.push(...lockBlock(10, jobLock));
     lines.push(...body(10));
   } else {
-    if (stageLock) lines.push(...lockBlock(6, stageLock));
+    if (stageLock) {
+      lines.push(...lockBlock(6, stageLock));
+    }
     lines.push(...body(6));
   }
   lines.push(`      timeout: ${timeout}`);
-  return lines.join("\n") + "\n";
+  return `${lines.join("\n")}\n`;
 }
 
 /**
@@ -502,7 +501,7 @@ export function waitTerminal(repo, sn, timeoutMs = 30 * 60 * 1000) {
   const deadline = Date.now() + timeoutMs;
   let last = readBuild(repo, sn);
   while (Date.now() < deadline && !TERMINAL.has(last.status)) {
-    const wait = Math.min(15000, Math.max(0, deadline - Date.now()));
+    const wait = Math.min(15_000, Math.max(0, deadline - Date.now()));
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait);
     last = readBuild(repo, sn);
   }
@@ -533,8 +532,12 @@ function parseFlags(argv) {
     const a = argv[i];
     /* `noUncheckedIndexedAccess` 下按下标取到的是 `string | undefined`，而 `i < length`
      * 已保证这一格有值 —— 守卫只是把这件事写给类型检查器（同 `dev.mjs` 那一处）。 */
-    if (a === undefined) continue;
-    if (!a.startsWith("--")) continue;
+    if (a === undefined) {
+      continue;
+    }
+    if (!a.startsWith("--")) {
+      continue;
+    }
     const k = a.slice(2);
     const next = argv[i + 1];
     if (next != null && !next.startsWith("--")) {
@@ -547,15 +550,10 @@ function parseFlags(argv) {
   return out;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const [, , cmd, ...rest] = process.argv;
   const f = parseFlags(rest);
-  const positional = rest.filter(
-    (x) => !x.startsWith("--") && !Object.values(f).includes(x),
-  );
+  const positional = rest.filter((x) => !x.startsWith("--") && !Object.values(f).includes(x));
 
   if (cmd === "config") {
     if (!f.event || !f.key) {
@@ -569,13 +567,7 @@ if (
      * @returns {boolean | undefined}
      */
     const bool = (v) =>
-      v === true
-        ? true
-        : v === "false"
-          ? false
-          : v == null
-            ? undefined
-            : v === "true";
+      v === true ? true : v === "false" ? false : v == null ? undefined : v === "true";
     process.stdout.write(
       probeConfig({
         event: String(f.event),
@@ -600,9 +592,7 @@ if (
       console.error(USAGE);
       process.exit(2);
     }
-    console.log(
-      startProbe(repo, String(f.event), String(f.title ?? `probe ${f.event}`)),
-    );
+    console.log(startProbe(repo, String(f.event), String(f.title ?? `probe ${f.event}`)));
     process.exit(0);
   }
 

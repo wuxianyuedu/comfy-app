@@ -48,11 +48,13 @@ export function CpuLimitPicker({ c }: { c: ReadySettingsPageController }) {
       <FieldLabel className="mb-1.5 block text-sm">出图 CPU 占用</FieldLabel>
       <RadioGroup
         aria-label="出图 CPU 占用档位"
-        value={value}
-        onValueChange={(v) =>
-          c.patchSettings({ comfyuiCpuLimit: v as CpuLimitMode })
-        }
         className="flex flex-col gap-1.5"
+        onValueChange={(v) =>
+          c.patchSettings({
+            comfyuiCpuLimit: /* SAFETY: 类型断言已复核 */ v as CpuLimitMode,
+          })
+        }
+        value={value}
       >
         {CPU_LIMIT_MODES.map((mode) => {
           /* `RadioGroupItem` 与标签的关联走 **`htmlFor` + `id`**（不是把
@@ -61,15 +63,13 @@ export function CpuLimitPicker({ c }: { c: ReadySettingsPageController }) {
            * 孤立文本。id 用档位名派生，组内唯一且稳定。 */
           const id = `cpu-limit-${mode}`;
           return (
-            <div key={mode} className="flex items-start gap-2">
-              <RadioGroupItem value={mode} id={id} className="mt-0.5" />
+            <div className="flex items-start gap-2" key={mode}>
+              <RadioGroupItem className="mt-0.5" id={id} value={mode} />
               <div className="flex flex-col">
-                <Label htmlFor={id} className="text-ink text-sm font-normal">
+                <Label className="text-ink text-sm font-normal" htmlFor={id}>
                   {CPU_LIMIT_LABELS[mode]}
                 </Label>
-                <span className="text-muted-foreground text-xs">
-                  {CPU_LIMIT_HINTS[mode]}
-                </span>
+                <span className="text-muted-foreground text-xs">{CPU_LIMIT_HINTS[mode]}</span>
               </div>
             </div>
           );

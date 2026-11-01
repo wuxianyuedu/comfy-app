@@ -59,7 +59,9 @@ const POLL_STALL_MAX = 10;
  * @returns {"green"|"red"|"cancelled"|"running"|"unknown"}
  */
 export function toShipBuildState(state) {
-  if (state === "failed") return "red";
+  if (state === "failed") {
+    return "red";
+  }
   return state;
 }
 
@@ -91,8 +93,7 @@ export function toShipBuildState(state) {
  */
 export async function pollUntilTerminal(ctx) {
   const { run, log, slug, newSha, now, sleep, number } = ctx;
-  let buildState =
-    /** @type {"green"|"red"|"cancelled"|"running"|"unknown"} */ ("unknown");
+  let buildState = /** @type {"green"|"red"|"cancelled"|"running"|"unknown"} */ ("unknown");
   let buildSn = null;
   const deadline = now() + 45 * 60 * 1000;
   /** PR 冲突信号已念过的标记：只在 `!picked` 那一格念一次，不每 20 秒复述。 */
@@ -112,27 +113,66 @@ export async function pollUntilTerminal(ctx) {
   /** 「这一轮已经因为格数续过命」的标记：每轮只念一次那句说明（见下面计数那一段）。 */
   let announcedFlight = false;
   for (;;) {
-    const logs = cnbJson(run, [
-      "build",
-      "get-build-logs",
-      "--repo",
-      slug,
-      "-v",
-    ]);
+    const logs = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
     const builds = logs ? asArray(logs.json) : null;
     if (!builds) {
-      log(
-        "[ship] 取不到 build 列表 ⇒ 没跑起来，不当成「还在跑」也不当成「绿」",
-      );
+      log("[ship] 取不到 build 列表 ⇒ 没跑起来，不当成「还在跑」也不当成「绿」");
       return { buildState, buildSn, stop: CODE.NOT_RUN };
     }
     const picked = pickBuildForSha(builds, newSha);
     /** 这一眼的状态 JSON；没解析到 build 时为 null（签名照样成立）。 */
     let statusJson = null;
-    if (!picked) {
-      log(
-        `[ship] 按 sha ${short(newSha)} 还没解析到 build（平台可能尚未开跑）…`,
-      );
+    if (picked) {
+      buildSn = picked.sn;
+      const st = cnbJson(run, [
+        "build",
+        "get-build-status",
+        "--repo",
+        slug,
+        "--sn",
+        picked.sn,
+        "-v",
+      ]);
+      statusJson = st ? st.json : null;
+      /* 逐格读数优先于构建级状态 —— 平台把「被取消」记成构建级 `error`，而它与
+       * 「真失败」的处置完全不同（前者重跑，后者查产物）。分类只有一份，
+       * 在 `ci-build-readout.mjs`（ISSUE #2158 第 2 条 / 规范 §13.5.27）。
+       * ⚠️ 分界那句**原话**只在 `get-build-stage -v` 的 `data.error` 里，`get-build-status`
+       * 的 `stages[]` 没有这一栏 ⇒ 分类之前先补（ISSUE #2406）。这一跳只对**非绿非 skipped**
+       * 的那几格发请求，且**只在逐格读数已到终态时**才有意义 —— 在飞那几格还没原话。 */
+      const outcome = st
+        ? classifyBuildOutcome(picked ? enrichStageErrors(run, slug, picked.sn, st.json) : st.json)
+        : null;
+      /** @type {{state:"green"|"red"|"cancelled"|"running"|"unknown",raw:string|null}} */
+      const v = outcome
+        ? { state: toShipBuildState(outcome.state), raw: outcome.raw }
+        : { state: "unknown", raw: null };
+      buildState = v.state;
+      log(`[ship] build ${picked.sn} → data.status = ${v.raw ?? "(取不到)"}`);
+      if (v.state === "cancelled" && outcome) {
+        const first = outcome.cancelled[0];
+        const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
+        log(
+          `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"} 被终止 ⇒ 下面那几格根本没跑${
+            skipped.length > 0 ? `（${skipped.join("、")}）` : ""
+            }，这一跑没有 CI 结论`,
+        );
+        /* 「被谁顶掉的」是这一档唯一能让人**不去**查产物的那句话（ISSUE #2406）：
+         * 原话与抢锁那一跑都来自平台，本仓一个字不代写。 */
+        for (const r of outcome.reasons) {
+          const who = r.sn ? `（抢锁的那一跑：${r.sn}）` : "";
+          if (r.reason) {
+            log(`[ship]   平台原话${who}：${r.reason}`);
+          } else if (r.sn) {
+            log(`[ship]   抢走锁的那一跑：${r.sn}`);
+          }
+        }
+      }
+      if (v.state !== "running" && v.state !== "unknown") {
+        break;
+      }
+    } else {
+      log(`[ship] 按 sha ${short(newSha)} 还没解析到 build（平台可能尚未开跑）…`);
       /* ISSUE #2645：CI「没起」与「红了」在读数上长得像，而真因常在**冲突**——
        * `mergeable_state=conflict` 的 PR 平台不派生构建，干等只会烧预算。顺带读一眼
        * PR 的 `mergeable_state` / `blocked_on`，把人从「再等等 / 换分支名」那条冤枉路
@@ -160,53 +200,6 @@ export async function pollUntilTerminal(ctx) {
           }
         }
       }
-    } else {
-      buildSn = picked.sn;
-      const st = cnbJson(run, [
-        "build",
-        "get-build-status",
-        "--repo",
-        slug,
-        "--sn",
-        picked.sn,
-        "-v",
-      ]);
-      statusJson = st ? st.json : null;
-      /* 逐格读数优先于构建级状态 —— 平台把「被取消」记成构建级 `error`，而它与
-       * 「真失败」的处置完全不同（前者重跑，后者查产物）。分类只有一份，
-       * 在 `ci-build-readout.mjs`（ISSUE #2158 第 2 条 / 规范 §13.5.27）。
-       * ⚠️ 分界那句**原话**只在 `get-build-stage -v` 的 `data.error` 里，`get-build-status`
-       * 的 `stages[]` 没有这一栏 ⇒ 分类之前先补（ISSUE #2406）。这一跳只对**非绿非 skipped**
-       * 的那几格发请求，且**只在逐格读数已到终态时**才有意义 —— 在飞那几格还没原话。 */
-      const outcome = st
-        ? classifyBuildOutcome(
-            picked ? enrichStageErrors(run, slug, picked.sn, st.json) : st.json,
-          )
-        : null;
-      /** @type {{state:"green"|"red"|"cancelled"|"running"|"unknown",raw:string|null}} */
-      const v = outcome
-        ? { state: toShipBuildState(outcome.state), raw: outcome.raw }
-        : { state: "unknown", raw: null };
-      buildState = v.state;
-      log(`[ship] build ${picked.sn} → data.status = ${v.raw ?? "(取不到)"}`);
-      if (v.state === "cancelled" && outcome) {
-        const first = outcome.cancelled[0];
-        const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
-        log(
-          `[ship]   这一跑**被取消**（不是产物坏了）：${first ? first.name : "(不知哪一格)"}` +
-            " 被终止 ⇒ 下面那几格根本没跑" +
-            (skipped.length > 0 ? `（${skipped.join("、")}）` : "") +
-            "，这一跑没有 CI 结论",
-        );
-        /* 「被谁顶掉的」是这一档唯一能让人**不去**查产物的那句话（ISSUE #2406）：
-         * 原话与抢锁那一跑都来自平台，本仓一个字不代写。 */
-        for (const r of outcome.reasons) {
-          const who = r.sn ? `（抢锁的那一跑：${r.sn}）` : "";
-          if (r.reason) log(`[ship]   平台原话${who}：${r.reason}`);
-          else if (r.sn) log(`[ship]   抢走锁的那一跑：${r.sn}`);
-        }
-      }
-      if (v.state !== "running" && v.state !== "unknown") break;
     }
     const sig = buildSignature(statusJson, picked ? picked.sn : "");
     /* 「同签名」只是**没产生新计数**，不等于「没在动」：一格长 stage 在内部推进时签名逐字不变
@@ -252,7 +245,7 @@ export async function pollUntilTerminal(ctx) {
       buildState = "unknown";
       break;
     }
-    await sleep(20000);
+    await sleep(20_000);
   }
   return { buildState, buildSn, stop: null };
 }

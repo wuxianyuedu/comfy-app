@@ -30,25 +30,22 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  stat,
-  open,
-  readCalls,
-  disk,
-  userMock,
-  loginRequiredMock,
-  foreignMock,
-} = vi.hoisted(() => ({
-  stat: vi.fn(),
-  open: vi.fn(),
-  readCalls: [] as { length: number; position: number }[],
-  disk: { bytes: Buffer.from("") },
-  userMock: vi.fn<() => Promise<{ id: string } | null>>(),
-  loginRequiredMock: vi.fn<() => boolean>(() => false),
-  foreignMock: vi.fn<(segments: string[], userId: string) => Promise<boolean>>(
-    async () => false,
-  ),
-}));
+const { stat, open, readCalls, disk, userMock, loginRequiredMock, foreignMock } = vi.hoisted(
+  () => ({
+    stat: vi.fn(),
+    open: vi.fn(),
+    readCalls: /* SAFETY: type assertion reviewed */ [] as Array<{
+      length: number;
+      position: number;
+    }>,
+    disk: { bytes: Buffer.from("") },
+    userMock: vi.fn<() => Promise<{ id: string } | null>>(),
+    loginRequiredMock: vi.fn<() => boolean>(() => false),
+    foreignMock: vi.fn<(segments: Array<string>, userId: string) => Promise<boolean>>(
+      async () => false,
+    ),
+  }),
+);
 
 vi.mock("fs", () => ({ promises: { stat, open } }));
 vi.mock("~/server/auth/request-user", () => ({
@@ -71,17 +68,17 @@ const artifactRoot = normalize(generatedRootOf(ROOT));
 
 /** 把平台分隔符统一成正斜杠再比 —— 断言的是语义，不是 path.sep 的形状。 */
 function normalize(p: string): string {
-  return p.replace(/\\/g, "/");
+  return p.replaceAll("\\", "/");
 }
 
-function paramsOf(path: string[] | undefined) {
+function paramsOf(path: Array<string> | undefined) {
   return { params: Promise.resolve({ path }) };
 }
 
-function get(path: string[] | undefined, range?: string) {
+function get(path: Array<string> | undefined, range?: string) {
   return import("./route").then(({ GET }) =>
     GET(
-      new Request("http://x/api/generated", {
+      /* SAFETY: type assertion reviewed */ new Request("http://x/api/generated", {
         headers: range === undefined ? {} : { range },
       }) as never,
       paramsOf(path),
@@ -91,19 +88,13 @@ function get(path: string[] | undefined, range?: string) {
 
 /** 种一份「磁盘上的文件」：`stat` 报它的长度，`open` 之后按请求的位置与长度读它。 */
 function putFile(bytes: Uint8Array | string) {
-  disk.bytes =
-    typeof bytes === "string" ? Buffer.from(bytes) : Buffer.from(bytes);
+  disk.bytes = typeof bytes === "string" ? Buffer.from(bytes) : Buffer.from(bytes);
   stat.mockImplementation(async () => ({
     isFile: () => true,
     size: disk.bytes.length,
   }));
   open.mockImplementation(async () => ({
-    read: async (
-      buf: Buffer,
-      offset: number,
-      length: number,
-      position: number,
-    ) => {
+    read: async (buf: Buffer, offset: number, length: number, position: number) => {
       readCalls.push({ length, position });
       disk.bytes.subarray(position, position + length).copy(buf, offset);
       return {
@@ -172,10 +163,7 @@ describe("闸门顺序：每一种拒绝都发生在碰磁盘之前", () => {
     expect(await res.text()).toBe("Not found");
     expect(open).not.toHaveBeenCalled();
     // 判定拿的是解码后的路径片段 + 当前用户，不自己再解析一遍字符串
-    expect(foreignMock).toHaveBeenCalledWith(
-      ["projects", "proj-b", "t9", "a.png"],
-      "user-a",
-    );
+    expect(foreignMock).toHaveBeenCalledWith(["projects", "proj-b", "t9", "a.png"], "user-a");
   });
 
   it.for(["bytes=0-3", "bytes=9999-", "seconds=1-2"])(
@@ -236,10 +224,10 @@ describe("整份读（没有 Range）", () => {
     expect(cache).toMatch(/^private\b/);
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
     // 读的是根目录内的那个文件，不是别处。
-    expect(normalize(stat.mock.calls[0]?.[0] as string)).toBe(
+    expect(normalize(/* SAFETY: type assertion reviewed */ stat.mock.calls[0]?.[0] as string)).toBe(
       `${artifactRoot}/t1/a.png`,
     );
-    expect(normalize(open.mock.calls[0]?.[0] as string)).toBe(
+    expect(normalize(/* SAFETY: type assertion reviewed */ open.mock.calls[0]?.[0] as string)).toBe(
       `${artifactRoot}/t1/a.png`,
     );
   });
@@ -283,12 +271,7 @@ describe("整份读（没有 Range）", () => {
   it("读完必须 close 句柄（漏了它，Windows 上产物会被自己锁住，重生成即失败）", async () => {
     let closed = 0;
     open.mockImplementationOnce(async () => ({
-      read: async (
-        buf: Buffer,
-        offset: number,
-        length: number,
-        position: number,
-      ) => {
+      read: async (buf: Buffer, offset: number, length: number, position: number) => {
         readCalls.push({ length, position });
         disk.bytes.subarray(position, position + length).copy(buf, offset);
         return { bytesRead: length, buffer: buf };

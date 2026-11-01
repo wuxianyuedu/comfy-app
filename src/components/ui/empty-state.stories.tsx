@@ -52,11 +52,7 @@ export const Hint: Story = {
 export const Panel: Story = {
   render: () => (
     <div className="bg-canvas-deep h-70 w-md">
-      <EmptyState
-        variant="panel"
-        icon={FolderTree}
-        title="运行生成后此处会显示执行步骤日志"
-      />
+      <EmptyState icon={FolderTree} title="运行生成后此处会显示执行步骤日志" variant="panel" />
     </div>
   ),
 };

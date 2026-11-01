@@ -51,32 +51,29 @@ import { isCliJsonLine } from "~/lib/log/log-cli-json";
  *  性能优化，不该变成「内容看不见」的判据——取不到值时说「全都要」最安全，
  *  与改动前的行为一致。jsdom 里的单测正是走这一支。 */
 function useVirtualWindow(input: {
-  pageLogs: LogEntry[];
-  wrap: boolean;
-  viewportWidth: number;
-  viewportHeight: number;
-  scrollTop: number;
   expansionMap: Record<string, boolean>;
+  pageLogs: Array<LogEntry>;
+  scrollTop: number;
+  viewportHeight: number;
+  viewportWidth: number;
+  wrap: boolean;
 }) {
-  const {
-    pageLogs,
-    wrap,
-    viewportWidth,
-    viewportHeight,
-    scrollTop,
-    expansionMap,
-  } = input;
+  const { pageLogs, wrap, viewportWidth, viewportHeight, scrollTop, expansionMap } = input;
   const cliJsonIds = useMemo(() => {
     const ids = new Set<string>();
     for (const entry of pageLogs) {
-      if (isCliJsonLine(entry.message)) ids.add(entry.id);
+      if (isCliJsonLine(entry.message)) {
+        ids.add(entry.id);
+      }
     }
     return ids;
   }, [pageLogs]);
   const expandedIds = useMemo(() => {
     const ids = new Set<string>();
     for (const key of Object.keys(expansionMap)) {
-      if (expansionMap[key]) ids.add(key);
+      if (expansionMap[key]) {
+        ids.add(key);
+      }
     }
     return ids;
   }, [expansionMap]);
@@ -113,7 +110,7 @@ const PANEL_WIDTH = modalWidth("w-6xl");
 
 /* 面板关闭时喂给分页/布局 memo 的稳定空数组（引用恒定，memo 据此不随
  * header.filteredLogs 每 2s 变化而重算整页前缀和）。 */
-const NO_LOG_ENTRIES: LogEntry[] = [];
+const NO_LOG_ENTRIES: Array<LogEntry> = [];
 
 export function LogPanel() {
   const {
@@ -167,10 +164,7 @@ export function LogPanel() {
 
   /* 「复制全部」的文本要到点击那一刻才从 store 取（当前筛选 × 所有页），
    * 所以走出口的**现算**形态。 */
-  const copyAllAction = useCallback(
-    () => copyAll(() => copyAllRaw()),
-    [copyAll, copyAllRaw],
-  );
+  const copyAllAction = useCallback(() => copyAll(() => copyAllRaw()), [copyAll, copyAllRaw]);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   /* 滚动视口的**元素本身**进 state：下面「量视口」的 effect 必须等到这个元素
@@ -245,10 +239,7 @@ export function LogPanel() {
     entries: rawPageLogs,
     page: safePage,
     totalPages,
-  } = useMemo(
-    () => selectPageLogs(viewLogs, page, pageSize),
-    [viewLogs, page, pageSize],
-  );
+  } = useMemo(() => selectPageLogs(viewLogs, page, pageSize), [viewLogs, page, pageSize]);
 
   /* 第 1 页用**锚定**窗口（见 store 的 anchorId）：不锚定时窗口整体前移，每来一条
    * 新日志就重建一次首行节点——用户刚框住的文本随节点被卸载，选区当场消失
@@ -258,10 +249,7 @@ export function LogPanel() {
    *
    * 其余页（历史页）本来就与「最新」无关，继续用固定窗口。 */
   const anchored = useMemo(
-    () =>
-      safePage === 1
-        ? selectFirstPageWindow(viewLogs, anchorId, pageSize)
-        : null,
+    () => (safePage === 1 ? selectFirstPageWindow(viewLogs, anchorId, pageSize) : null),
     [safePage, viewLogs, anchorId, pageSize],
   );
   const visibleLogs = anchored ? anchored.entries : rawPageLogs;
@@ -288,7 +276,9 @@ export function LogPanel() {
   });
 
   useEffect(() => {
-    if (page !== safePage) setPage(safePage);
+    if (page !== safePage) {
+      setPage(safePage);
+    }
   }, [page, safePage, setPage]);
 
   /* 换页时把滚动位置收回头部，并同步 `scrollTop` 状态。
@@ -301,7 +291,9 @@ export function LogPanel() {
    * `safePage` 是钳过边界的真实页码（见 selectPageLogs），据此判定「真的换了页」。 */
   useEffect(() => {
     const el = bodyRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     el.scrollTop = 0;
     setScrollTop(0);
   }, [safePage]);
@@ -359,7 +351,9 @@ export function LogPanel() {
     .filter(Boolean)
     .join(" · ");
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前这里**既没接
      Esc、也没有遮罩点击关闭** —— 面板只能靠外壳的开关按钮关掉。层级仍由刻度表
@@ -371,40 +365,38 @@ export function LogPanel() {
      * 面板打开时仍可见可点，仅靠 z-index 只保住了鼠标命中、没保住 a11y 可见）。日志面板
      * 本就是「开着还能继续用页签」的非阻塞工具窗，用非模态正好。关闭路径不变（Esc +
      * onOpenChange + Ctrl+Shift+L + 关闭按钮）。 */
-    <Dialog
-      open
-      modal={false}
-      onOpenChange={(next) => !next && setIsOpen(false)}
-    >
+    <Dialog modal={false} onOpenChange={(next) => !next && setIsOpen(false)} open>
       <DialogContent
         aria-label="应用日志"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
         popupClassName={panel.widthClass}
+        showCloseButton={false}
       >
         <div
           className={`border-border-strong bg-panel flex h-[85vh] flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/25 dark:shadow-black/60 ${panel.widthClass}`}
         >
           <LogPanelHeader
-            originCounts={originCounts}
-            countsByOrigin={countsByOrigin}
-            origin={origin}
-            setOrigin={setOrigin}
-            wrap={wrap}
-            setWrap={setWrap}
-            copyFailed={copyFailed}
-            copyDone={copyOutcome.on}
-            copyAllAction={copyAllAction}
-            scopeLabel={scopeLabel}
-            total={total}
-            download={download}
             clear={clear}
+            copyAllAction={copyAllAction}
+            copyDone={copyOutcome.on}
+            copyFailed={copyFailed}
+            countsByOrigin={countsByOrigin}
+            download={download}
+            origin={origin}
+            originCounts={originCounts}
             panel={panel}
+            scopeLabel={scopeLabel}
             setIsOpen={setIsOpen}
+            setOrigin={setOrigin}
+            setWrap={setWrap}
+            total={total}
+            wrap={wrap}
           />
 
           {/* Body */}
           <div
+            className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
+            onScroll={onScroll}
             ref={(el) => {
               bodyRef.current = el;
               bodyBoxRef(el);
@@ -414,27 +406,22 @@ export function LogPanel() {
                * ref**（外部系统通知）里同步，而不是在 effect 体里 setState。 */
               setScrollTop(el?.scrollTop ?? 0);
             }}
-            onScroll={onScroll}
-            className="custom-scrollbar bg-canvas-deep/60 flex-1 overflow-y-auto"
           >
             {pageLogs.length === 0 ? (
               <EmptyState
-                variant="panel"
                 icon={FileText}
                 title={total === 0 ? "暂无匹配的日志" : "本页无内容"}
+                variant="panel"
               />
             ) : (
               /* 虚拟窗口：外层撑出**估算总高**（滚动条长度与真实内容一致），
                内层 `translateY` 到当前窗口的起点——只挂视口内的行。 */
-              <div
-                style={{ height: `${scrollHeight}px` }}
-                className="relative w-full"
-              >
+              <div className="relative w-full" style={{ height: `${scrollHeight}px` }}>
                 <div
+                  className="absolute top-0 left-0 w-full"
                   style={{
                     transform: `translateY(${rows[rowWindow.start]?.start ?? 0}px)`,
                   }}
-                  className="absolute top-0 left-0 w-full"
                 >
                   {/* `data-log-index`：这一行在**整页**里的绝对序号（不是它在
                     当前窗口里的第几个）。它同时是测试量「渲染了哪一段」的落点
@@ -443,18 +430,18 @@ export function LogPanel() {
                   {rowWindow.entries.map((entry, offset) => {
                     const index = rowWindow.start + offset;
                     return (
-                      <div key={entry.id} data-log-index={index}>
+                      <div data-log-index={index} key={entry.id}>
                         <LogRow
                           entry={entry}
-                          wrap={wrap}
-                          keyword={search}
                           expanded={expansion.isExpanded(entry.id)}
+                          keyword={search}
                           onToggleExpand={expansion.toggle}
                           /* 显式高度 = 估算高度：两者不同口径时误差会累积，
                            滚动位置与内容就错开了（见 log-virtual 的常量）。 */
                           style={{
                             height: `${rows[index]?.size ?? LOG_ROW_SINGLE}px`,
                           }}
+                          wrap={wrap}
                         />
                       </div>
                     );
@@ -469,23 +456,23 @@ export function LogPanel() {
             累计并在下方提示「更早 N 条已折叠」，完整历史仍在磁盘日志文件里。
             同时显示多少条由每页 ≤ LOG_PAGE_SIZE 兜住。 */}
           <LogPanelFooter
-            safePage={safePage}
-            totalPages={totalPages}
+            bootId={bootId}
+            droppedTotal={droppedTotal}
+            filter={filter}
+            jumpToLatest={jumpToLatest}
+            newLogCount={newLogCount}
+            origin={origin}
             pageSize={pageSize}
+            safePage={safePage}
+            search={search}
+            setFilter={setFilter}
+            setOrigin={setOrigin}
+            setPage={setPage}
+            setSearch={setSearch}
+            shouldPin={shouldPin}
             total={total}
             totalAll={counts.all}
-            search={search}
-            droppedTotal={droppedTotal}
-            bootId={bootId}
-            shouldPin={shouldPin}
-            newLogCount={newLogCount}
-            jumpToLatest={jumpToLatest}
-            setPage={setPage}
-            origin={origin}
-            setOrigin={setOrigin}
-            filter={filter}
-            setFilter={setFilter}
-            setSearch={setSearch}
+            totalPages={totalPages}
           />
         </div>
       </DialogContent>

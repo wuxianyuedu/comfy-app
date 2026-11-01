@@ -18,13 +18,7 @@
  * 自然尺寸也不会真的读出来 —— 用例自己把 `naturalWidth/Height` 打上去，
  * 这正是真实浏览器里 `onLoad` 那一刻读到的两个数。
  */
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ImageViewer, ViewableImage } from "./image-viewer";
@@ -65,23 +59,19 @@ function emitLoad(base: HTMLElement, width: number, height: number) {
 }
 
 function renderViewer(onClose: () => void = () => undefined) {
-  const view = render(
-    <ImageViewer src={SRC} alt="运行结果" onClose={onClose} />,
-  );
+  const view = render(<ImageViewer alt="运行结果" onClose={onClose} src={SRC} />);
   return {
     ...view,
-    canvas: () => view.getByTestId("image-viewer-canvas") as HTMLDivElement,
-    percent: () =>
-      view.getByTestId("image-viewer-percent").textContent?.trim() ?? "",
+    canvas: () =>
+      /* SAFETY: 类型断言已复核 */ view.getByTestId("image-viewer-canvas") as HTMLDivElement,
+    percent: () => view.getByTestId("image-viewer-percent").textContent?.trim() ?? "",
     mode: () => view.getByTestId("image-viewer-mode").textContent?.trim() ?? "",
   };
 }
 
 describe("ImageViewer", () => {
   it("src 为 null 时什么都不渲染（调用处用它表达「关着」）", () => {
-    const { container } = render(
-      <ImageViewer src={null} onClose={() => undefined} />,
-    );
+    const { container } = render(<ImageViewer onClose={() => undefined} src={null} />);
     expect(container.innerHTML).toBe("");
   });
 
@@ -243,7 +233,7 @@ describe("ImageViewer", () => {
     /* 这一条自己接管 rAF：默认 stub 是「同步执行」，那样看不出「合并」。
      * 帧队列里可能还有别的调用方（React / Dialog 的动画），所以按**增量**
      * 数帧，而不是数总数。 */
-    const frames: FrameRequestCallback[] = [];
+    const frames: Array<FrameRequestCallback> = [];
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       frames.push(cb);
       return frames.length;
@@ -267,7 +257,7 @@ describe("ImageViewer", () => {
     expect(frames.length - before).toBe(1);
     expect(inner.style.transform).toBe("");
 
-    frames[frames.length - 1]!(0);
+    frames.at(-1)!(0);
     expect(inner.style.transform).toBe("translate3d(-20px, 0px, 0)");
   });
 
@@ -318,49 +308,41 @@ describe("ImageViewer", () => {
   });
 
   it("label 缺省回退到 alt，再回退到通用文案", () => {
-    const altOnly = render(
-      <ImageViewer src={SRC} alt="封面" onClose={() => undefined} />,
-    );
+    const altOnly = render(<ImageViewer alt="封面" onClose={() => undefined} src={SRC} />);
     expect(altOnly.getByText("封面")).not.toBeNull();
 
     cleanup();
-    const none = render(<ImageViewer src={SRC} onClose={() => undefined} />);
+    const none = render(<ImageViewer onClose={() => undefined} src={SRC} />);
     expect(none.getByText("图片查看")).not.toBeNull();
   });
 });
 
 describe("ViewableImage", () => {
   it("默认只渲染缩略图，点一下才出现查看器", () => {
-    const view = render(<ViewableImage src={SRC} alt="结果图" />);
+    const view = render(<ViewableImage alt="结果图" src={SRC} />);
     expect(view.baseElement.querySelector("img")).not.toBeNull();
-    expect(
-      view.baseElement.querySelector('[data-slot="image-viewer"]'),
-    ).toBeNull();
+    expect(view.baseElement.querySelector('[data-slot="image-viewer"]')).toBeNull();
 
     fireEvent.click(view.getByRole("button", { name: "查看大图：结果图" }));
-    expect(
-      view.baseElement.querySelector('[data-slot="image-viewer"]'),
-    ).not.toBeNull();
+    expect(view.baseElement.querySelector('[data-slot="image-viewer"]')).not.toBeNull();
   });
 
   it("关闭查看器后缩略图还在（查看器不吞掉触发布局）", () => {
-    const view = render(<ViewableImage src={SRC} alt="结果图" />);
+    const view = render(<ViewableImage alt="结果图" src={SRC} />);
     fireEvent.click(view.getByRole("button", { name: "查看大图：结果图" }));
     fireEvent.click(view.getByRole("button", { name: "关闭" }));
-    expect(
-      view.baseElement.querySelector('[data-slot="image-viewer"]'),
-    ).toBeNull();
+    expect(view.baseElement.querySelector('[data-slot="image-viewer"]')).toBeNull();
     expect(view.baseElement.querySelector("img")).not.toBeNull();
   });
 
   it("alt 作标题；label 优先于 alt", () => {
-    const view = render(<ViewableImage src={SRC} alt="缩略图" />);
+    const view = render(<ViewableImage alt="缩略图" src={SRC} />);
     fireEvent.click(view.getByRole("button", { name: "查看大图：缩略图" }));
     expect(view.getByText("缩略图")).not.toBeNull();
   });
 
   it("没有 src 时整块不渲染", () => {
-    const view = render(<ViewableImage src={null} alt="x" />);
+    const view = render(<ViewableImage alt="x" src={null} />);
     expect(view.container.innerHTML).toBe("");
   });
 });

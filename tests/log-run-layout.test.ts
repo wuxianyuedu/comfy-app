@@ -35,13 +35,13 @@ import { launcherChainSource } from "./helpers/launcher-source";
 
 /** run.json 的形态（判据只读这几个字段）。 */
 type RunMeta = {
-  runId?: string;
-  mode?: string;
-  args?: string[];
+  args?: Array<string>;
   crashed?: boolean;
-  exitCode?: number | null;
-  endedAt?: string | null;
   durationMs?: number | null;
+  endedAt?: string | null;
+  exitCode?: number | null;
+  mode?: string;
+  runId?: string;
   startedAt?: string;
 };
 
@@ -70,14 +70,14 @@ function runs(): string {
 
 /** 当前这份 run.json（判据都建立在「它一定写出来了」之上）。 */
 function meta(): RunMeta {
-  return JSON.parse(
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(
     fs.readFileSync(path.join(cur(), LOG_LAYOUT.runJson), "utf8"),
   ) as RunMeta;
 }
 
 /** 指定目录下的 run.json（归档包里那份）。 */
 function metaAt(dir: string): RunMeta {
-  return JSON.parse(
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(
     fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8"),
   ) as RunMeta;
 }
@@ -95,12 +95,14 @@ function makeRun(name: string, mtime?: Date): string {
   const dir = path.join(runs(), name);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "launcher.log"), "x");
-  if (mtime) fs.utimesSync(dir, mtime, mtime);
+  if (mtime) {
+    fs.utimesSync(dir, mtime, mtime);
+  }
   return dir;
 }
 
 /** 把某个包的 mtime 对齐到它名字里的日期（归档是复制，mtime 本来就跟着变）。 */
-function alignMtimeToName(run: { name: string; dir: string }): void {
+function alignMtimeToName(run: { dir: string; name: string; }): void {
   const [date] = run.name.split("_");
   const [year, month, day] = (date ?? "").split("-").map(Number);
   const ts = new Date(year ?? 2026, (month ?? 1) - 1, day ?? 1, 0, 0, 0);
@@ -111,7 +113,7 @@ function alignMtimeToName(run: { name: string; dir: string }): void {
  *
  * 解释器走共享的 `runPython()`：Windows 上官方安装器落的是 `python.exe`，
  * 硬编码 `"python3"` 在自托管 Windows 构建节点上直接 ENOENT（见该 helper 的文件头）。 */
-function unzip(paths: string[]): string[] {
+function unzip(paths: Array<string>): Array<string> {
   return runPython(
     `
 import sys, zipfile
@@ -146,7 +148,9 @@ describe("目录名与路径", () => {
   });
 
   it("runId 是 6 位小写十六进制", () => {
-    for (let i = 0; i < 50; i++) expect(newRunId()).toMatch(/^[0-9a-f]{6}$/);
+    for (let i = 0; i < 50; i++) {
+      expect(newRunId()).toMatch(/^[0-9a-f]{6}$/);
+    }
   });
 
   it("路径常量全在 log/ 下，current 与 runs 是同级子目录", () => {
@@ -199,9 +203,7 @@ describe("归档（正常退出）", () => {
 
     // 归档里内容齐全
     expect(fs.existsSync(path.join(target ?? "", "launcher.log"))).toBe(true);
-    expect(
-      fs.existsSync(path.join(target ?? "", "services", "comfyui.log")),
-    ).toBe(true);
+    expect(fs.existsSync(path.join(target ?? "", "services", "comfyui.log"))).toBe(true);
     // 归档的那份 run.json 补全了收尾字段
     const m = metaAt(target ?? "");
     expect(m.runId).toBe(runId);
@@ -234,9 +236,7 @@ describe("崩溃补做（下次启动）", () => {
     expect(m.crashed).toBe(true);
     expect(m.exitCode).toBe(null);
     // 现场内容一字不少
-    expect(
-      fs.readFileSync(path.join(target ?? "", "launcher.log"), "utf8"),
-    ).toBe("崩之前的现场\n");
+    expect(fs.readFileSync(path.join(target ?? "", "launcher.log"), "utf8")).toBe("崩之前的现场\n");
   });
 
   it("已归档过的 current/ 不重复收（endedAt 在场即跳过）", () => {
@@ -261,13 +261,15 @@ describe("崩溃补做（下次启动）", () => {
 
 describe("保留策略", () => {
   it("只留最近 20 包（更早的删掉）", async () => {
-    const names: string[] = [];
+    const names: Array<string> = [];
     for (let i = 1; i <= 25; i++) {
       const name = `2026-09-${String(i).padStart(2, "0")}_000000-aaaaaa`;
       makeRun(name);
       names.push(name);
     }
-    for (const run of listRuns(root)) alignMtimeToName(run);
+    for (const run of listRuns(root)) {
+      alignMtimeToName(run);
+    }
     // now 设在最后一个包的一个月后：25 包全部掉出 7 天窗口，只剩「最近 20」这条通道
     const now = new Date(2026, 9, 10, 12, 0, 0).getTime();
     const result = await pruneRuns(root, { now });
@@ -281,7 +283,7 @@ describe("保留策略", () => {
   it("7 天内的包即使超过 20 个也留着（两条通道各管一头）", async () => {
     // 同一天里 25 包（高频调试的真实形态）—— 全部落在 7 天窗口内，
     // 若只剩「20 包上限」这一条通道生效，最早的 5 包会被删。
-    const names: string[] = [];
+    const names: Array<string> = [];
     for (let i = 0; i < 25; i++) {
       const name = `2026-09-10_00000${String(i).padStart(2, "0")}-aaaaaa`;
       makeRun(name, new Date(2026, 8, 10, 12, 0, i));
@@ -311,61 +313,67 @@ describe("保留策略", () => {
 });
 
 describe("zip 写入器与诊断包", () => {
-  itWithPython("打出来的包能被系统解压工具读（compress_size 与 uncompressed_size 分开写）", async () => {
-    const dir = path.join(root, "src");
-    fs.mkdirSync(dir, { recursive: true });
-    // 高可压缩内容：store 模式下两个 size 字段恰好相等，**只有这条路径会露馅**
-    fs.writeFileSync(path.join(dir, "a.log"), "A".repeat(5000));
-    fs.writeFileSync(path.join(dir, "b.bin"), Buffer.from([0, 1, 2, 3, 255]));
-    const out = path.join(root, "out.zip");
-    await zipDirectory(dir, out);
+  itWithPython(
+    "打出来的包能被系统解压工具读（compress_size 与 uncompressed_size 分开写）",
+    async () => {
+      const dir = path.join(root, "src");
+      fs.mkdirSync(dir, { recursive: true });
+      // 高可压缩内容：store 模式下两个 size 字段恰好相等，**只有这条路径会露馅**
+      fs.writeFileSync(path.join(dir, "a.log"), "A".repeat(5000));
+      fs.writeFileSync(path.join(dir, "b.bin"), Buffer.from([0, 1, 2, 3, 255]));
+      const out = path.join(root, "out.zip");
+      await zipDirectory(dir, out);
 
-    const listing = unzip([out]);
-    expect(listing[0]).toBe("OK");
-    expect(listing[1]).toBe("a.log,b.bin");
-    // 内容长度对：压坏 / 截断都会在这里露馅
-    const sizes = runPython(
-      `
+      const listing = unzip([out]);
+      expect(listing[0]).toBe("OK");
+      expect(listing[1]).toBe("a.log,b.bin");
+      // 内容长度对：压坏 / 截断都会在这里露馅
+      const sizes = runPython(
+        `
 import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
 print(len(z.read("a.log")), len(z.read("b.bin")))
 `,
-      [out],
-    );
-    expect(sizes).toBe("5000 5");
-  });
+        [out],
+      );
+      expect(sizes).toBe("5000 5");
+    },
+  );
 
-  itWithPython("诊断包 = current/ + 最近 3 次 runs/，落在 exports/ 而不是 current/ 下", async () => {
-    startRun(root, { runId: "a1b2c3" });
-    writeCurrentLog("launcher.log", "本次\n");
-    for (let i = 0; i < 5; i++) {
-      const name = `2026-09-${String(20 + i).padStart(2, "0")}_000000-aaaaaa`;
-      makeRun(name);
-    }
-    const out = await exportDiagnostics(root, {
-      at: new Date(2026, 8, 30, 19, 36, 12),
-    });
-    expect(path.dirname(out)).toBe(path.join(root, "log", LOG_LAYOUT.exports));
-    expect(path.basename(out)).toBe("diagnostics-2026-09-30_193612-a1b2c3.zip");
+  itWithPython(
+    "诊断包 = current/ + 最近 3 次 runs/，落在 exports/ 而不是 current/ 下",
+    async () => {
+      startRun(root, { runId: "a1b2c3" });
+      writeCurrentLog("launcher.log", "本次\n");
+      for (let i = 0; i < 5; i++) {
+        const name = `2026-09-${String(20 + i).padStart(2, "0")}_000000-aaaaaa`;
+        makeRun(name);
+      }
+      const out = await exportDiagnostics(root, {
+        at: new Date(2026, 8, 30, 19, 36, 12),
+      });
+      expect(path.dirname(out)).toBe(path.join(root, "log", LOG_LAYOUT.exports));
+      expect(path.basename(out)).toBe("diagnostics-2026-09-30_193612-a1b2c3.zip");
 
-    const names = unzip([out])[1]?.split(",") ?? [];
-    expect(names).toContain("current/launcher.log");
-    // 最近 3 次：22/23/24（19/20/21 更早的被排除）—— 按目录去重数，不是数文件
-    const packed = new Set(
-      names.filter((n) => n.startsWith("runs/")).map((n) => n.split("/")[1]),
-    );
-    expect([...packed].sort()).toEqual([
-      "2026-09-22_000000-aaaaaa",
-      "2026-09-23_000000-aaaaaa",
-      "2026-09-24_000000-aaaaaa",
-    ]);
-    // 暂存目录不留痕（否则下一次会被一起打进去）
-    expect(
-      fs
-        .readdirSync(path.join(root, "log", LOG_LAYOUT.exports))
-        .filter((n) => n.startsWith(".stage")),
-    ).toEqual([]);
-  });
+      const names = unzip([out])[1]?.split(",") ?? [];
+      expect(names).toContain("current/launcher.log");
+      // 最近 3 次：22/23/24（19/20/21 更早的被排除）—— 按目录去重数，不是数文件
+      const packed = new Set(
+        names.filter((n) => n.startsWith("runs/")).map((n) => n.split("/")[1]),
+      );
+      expect([...packed].sort()).toEqual([
+        "2026-09-22_000000-aaaaaa",
+        "2026-09-23_000000-aaaaaa",
+        "2026-09-24_000000-aaaaaa",
+      ]);
+      // 暂存目录不留痕（否则下一次会被一起打进去）
+      expect(
+        fs
+          .readdirSync(path.join(root, "log", LOG_LAYOUT.exports))
+          .filter((n) => n.startsWith(".stage")),
+      ).toEqual([]);
+    },
+  );
 });
 
 describe("log/ 根目录只许那几样", () => {
@@ -399,14 +407,10 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
 
   it("schema-sync 两个孤儿已归入 current/tools/（根目录不再有它们）", async () => {
     const paths = await import("../src/lib/log/log-paths.ts");
-    expect(path.basename(path.dirname(paths.SCHEMA_SYNC_STATUS_FILE))).toBe(
-      "tools",
-    );
+    expect(path.basename(path.dirname(paths.SCHEMA_SYNC_STATUS_FILE))).toBe("tools");
     expect(path.dirname(paths.SCHEMA_SYNC_STATUS_FILE)).toBe(paths.TOOLS_LOG_DIR);
     // 与 scripts/db-schema-state.mjs 的相对路径同形（写方在那边、读方在这边）
-    const { SCHEMA_SYNC_STATUS_FILE } = await import(
-      "../scripts/db-schema-state.mjs"
-    );
+    const { SCHEMA_SYNC_STATUS_FILE } = await import("../scripts/db-schema-state.mjs");
     expect(SCHEMA_SYNC_STATUS_FILE.split(path.sep)).toEqual([
       "log",
       "current",
@@ -427,7 +431,9 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
       const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
       const offenders = src
         .split("\n")
-        .filter((line) => /"log",\s*"(launcher|nextjs|services|shell|tools|comfyui|workshop)"/.test(line));
+        .filter((line) =>
+          /"log",\s*"(launcher|nextjs|services|shell|tools|comfyui|workshop)"/.test(line),
+        );
       expect(offenders, `${rel} 里仍有绕过 current/ 的日志路径`).toEqual([]);
     }
   });
@@ -436,7 +442,9 @@ describe("布局的单一出处（写方不得自己拼路径）", () => {
 describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", () => {
   /** 四个写方。（读方在端点侧，不在这里列。） */
   const WRITERS = [
-    "src/lib/comfyui/lifecycle.ts",
+    /* ComfyUI 那一支的实际写盘在手：`lifecycle.ts` 把它按职责拆出去了
+     * （会话标记 + runtime 日志写入器），文件名仍走 `runtime-log-pack.server`。 */
+    "src/lib/comfyui/lifecycle-session-log.ts",
     "src/lib/drizzle-studio/lifecycle.ts",
     "src/app/api/llm/ollama-start/route.ts",
     "src/app/api/llm/ollama-stop/route.ts",
@@ -463,10 +471,9 @@ describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", ()
      * —— 静默、只在真实运行里才露头。 */
     for (const rel of WRITERS) {
       const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
-      expect(
-        src.includes("runtime-log-pack.server"),
-        `${rel} 没经 runtime-log-pack 落盘`,
-      ).toBe(true);
+      expect(src.includes("runtime-log-pack.server"), `${rel} 没经 runtime-log-pack 落盘`).toBe(
+        true,
+      );
     }
   });
 
@@ -476,13 +483,11 @@ describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", ()
    * 而那正是本仓库要求写的东西（§12.4.2 禁止的是日期/编号式的历史流水，不是
    * 「为什么改」）。 */
   function code(name: string): string {
-    return name.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    return name.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/.*$/gm, "");
   }
 
   it("log-paths 里不再有那四个固定名常量（一次启动一份，没有单一文件可指）", () => {
-    const src = code(
-      fs.readFileSync(path.join(ROOT, "src/lib/log/log-paths.ts"), "utf8"),
-    );
+    const src = code(fs.readFileSync(path.join(ROOT, "src/lib/log/log-paths.ts"), "utf8"));
     for (const dead of [
       "COMFYUI_RUNTIME_LOG",
       "OLLAMA_RUNTIME_LOG",
@@ -500,9 +505,7 @@ describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", ()
      *
      * 连 `session-banner.server.ts` 本身也一并删了：它现在**零消费方**，
      * 留着会让下一个人以为「横幅仍是有效口径」。 */
-    expect(
-      fs.existsSync(path.join(ROOT, "src/lib/session-banner.server.ts")),
-    ).toBe(false);
+    expect(fs.existsSync(path.join(ROOT, "src/lib/session-banner.server.ts"))).toBe(false);
     for (const rel of [
       "src/lib/comfyui/lifecycle.ts",
       "src/lib/drizzle-studio/lifecycle.ts",
@@ -511,10 +514,7 @@ describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", ()
       "src/app/api/llm/ollama-stop/route.ts",
     ]) {
       const src = code(fs.readFileSync(path.join(ROOT, rel), "utf8"));
-      expect(
-        src.includes("session-banner"),
-        `${rel} 仍在往 runtime 日志写会话横幅`,
-      ).toBe(false);
+      expect(src.includes("session-banner"), `${rel} 仍在往 runtime 日志写会话横幅`).toBe(false);
     }
   });
 });
@@ -534,10 +534,7 @@ describe("旧归档机制已移除（只留一处归档实现）", () => {
   it("log.mjs 里不再有年月归档出口与 archive 分区", async () => {
     const { LOG_DIRS } = await import("../scripts/launcher-core/log.mjs");
     expect("archive" in LOG_DIRS).toBe(false);
-    const src = fs.readFileSync(
-      path.join(ROOT, "scripts", "launcher-core", "log.mjs"),
-      "utf8",
-    );
+    const src = fs.readFileSync(path.join(ROOT, "scripts", "launcher-core", "log.mjs"), "utf8");
     expect(src).not.toContain("archiveRunLog");
   });
 });

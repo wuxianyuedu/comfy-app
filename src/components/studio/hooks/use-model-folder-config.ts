@@ -19,31 +19,31 @@ import { useTRPC } from "~/trpc/react";
 import { type FolderConfigRow, splitFolders } from "../model-library-config";
 
 /** 「还没有答案」时复用的空列表 —— 引用必须稳定，理由见 hook 内那一行。 */
-const EMPTY_FOLDERS: FolderConfigRow[] = [];
+const EMPTY_FOLDERS: Array<FolderConfigRow> = [];
 
-export interface ModelFolderConfigController {
-  folders: FolderConfigRow[];
+export type ModelFolderConfigController = {
+  add: (folder: string) => Promise<void>;
+  availableRows: Array<FolderConfigRow>;
   comfyReachable: boolean;
-  loading: boolean;
-  /** 扫描中（全量重新扫描 ComfyUI 目录）。 */
-  scanning: boolean;
+  /** 筛选后的已启用 / 可添加两组。 */
+  enabledRows: Array<FolderConfigRow>;
   /** 最近一次操作的错误文案；null 表示无错误。 */
   err: string | null;
-  /** 目录关键字。 */
-  q: string;
-  setQ: (q: string) => void;
+  folders: Array<FolderConfigRow>;
+  loading: boolean;
   /** 「仅显示已启用」开关。 */
   onlyEnabled: boolean;
-  setOnlyEnabled: (value: boolean) => void;
-  /** 筛选后的已启用 / 可添加两组。 */
-  enabledRows: FolderConfigRow[];
-  availableRows: FolderConfigRow[];
-  totalCount: number;
-  toggle: (folder: string, enabled: boolean) => Promise<void>;
-  add: (folder: string) => Promise<void>;
+  /** 目录关键字。 */
+  q: string;
   remove: (folder: string) => Promise<void>;
   rescan: () => Promise<void>;
-}
+  /** 扫描中（全量重新扫描 ComfyUI 目录）。 */
+  scanning: boolean;
+  setOnlyEnabled: (value: boolean) => void;
+  setQ: (q: string) => void;
+  toggle: (folder: string, enabled: boolean) => Promise<void>;
+  totalCount: number;
+};
 
 export function useModelFolderConfig(): ModelFolderConfigController {
   const trpc = useTRPC();
@@ -74,7 +74,9 @@ export function useModelFolderConfig(): ModelFolderConfigController {
      * 永远进不来，列表拉不下来时既不报错、也不改连接状态，于是「没拿到答案」被显示成
      * 「已连接 + 一个目录都没有」两条假结论。成败要看返回值，不能等异常。 */
     const result = await configQ.refetch();
-    if (result.isError) setErr(errorMessage(result.error, "网络错误"));
+    if (result.isError) {
+      setErr(errorMessage(result.error, "网络错误"));
+    }
     setLoading(false);
   }, [configQ]);
 
@@ -119,7 +121,9 @@ export function useModelFolderConfig(): ModelFolderConfigController {
        * 出口负责「失败文案走 `errorMessage`」这一半（规范 16 §16.2.4.30）。 */
       await runAsyncAction(fn, {
         report: (kind, detail) => {
-          if (kind === "err") setErr(detail);
+          if (kind === "err") {
+            setErr(detail);
+          }
         },
         failureText: "网络错误",
       });
@@ -129,13 +133,11 @@ export function useModelFolderConfig(): ModelFolderConfigController {
   );
 
   const toggle = useCallback(
-    (folder: string, enabled: boolean) =>
-      runMutate(() => saveMut.mutateAsync({ folder, enabled })),
+    (folder: string, enabled: boolean) => runMutate(() => saveMut.mutateAsync({ folder, enabled })),
     [runMutate, saveMut],
   );
   const add = useCallback(
-    (folder: string) =>
-      runMutate(() => saveMut.mutateAsync({ folder, enabled: true })),
+    (folder: string) => runMutate(() => saveMut.mutateAsync({ folder, enabled: true })),
     [runMutate, saveMut],
   );
   const remove = useCallback(
@@ -148,7 +150,9 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     await scanBusy.run(() =>
       runAsyncAction(() => syncMut.mutateAsync(), {
         report: (kind, detail) => {
-          if (kind === "err") setErr(detail);
+          if (kind === "err") {
+            setErr(detail);
+          }
         },
         failureText: "扫描失败",
       }),
@@ -156,10 +160,7 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     await load();
   }, [load, scanBusy, syncMut]);
 
-  const { enabled, available } = useMemo(
-    () => splitFolders(folders, q),
-    [folders, q],
-  );
+  const { enabled, available } = useMemo(() => splitFolders(folders, q), [folders, q]);
 
   return {
     folders,

@@ -118,8 +118,12 @@ export function ps7OnlySyntaxIn(text) {
       bodyIndent = null;
       return;
     }
-    if (!inScript) return;
-    if (trimmed === "") return;
+    if (!inScript) {
+      return;
+    }
+    if (trimmed === "") {
+      return;
+    }
     const indent = raw.length - raw.trimStart().length;
     if (bodyIndent === null) {
       if (indent === 0) {
@@ -167,7 +171,9 @@ export function parseVersionTriple(text) {
   /* 大版本可以单写（`3` / `Python 3`）—— 缺的那几段按 0 算，与
    * `ci-toolchain-selfcheck.mjs` 的 `cmpVersion` 同口径。 */
   const m = /(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(String(text ?? ""));
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   return [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)];
 }
 
@@ -181,7 +187,9 @@ export function parseVersionTriple(text) {
  */
 export function pythonVersionMeetsFloor(text) {
   const triple = parseVersionTriple(text);
-  if (!triple) return { ok: false, triple: null };
+  if (!triple) {
+    return { ok: false, triple: null };
+  }
   const [maj, min] = PYTHON_MIN_VERSION;
   const [major = 0, minor = 0] = triple;
   return { ok: major > maj || (major === maj && minor >= min), triple };
@@ -262,19 +270,18 @@ export function stageBlockIn(text, name) {
       }
     }
   }
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   const out = [strip(lines[start] ?? "")];
   for (let i = start + 1; i < lines.length; i += 1) {
     const raw = lines[i] ?? "";
     /* 下一个同级 stage 项（活的或注释态）/ 回到**未注释**的更浅键都算收尾
      * （空行不算 —— 配置里正文之间有空行）。⚠️ 判据不能写成「`^\S` 就收尾」：
      * 注释块里每一行都以 `#` 开头，那也是 `\S`。 */
-    if (
-      live.test(raw) ||
-      commented.test(raw) ||
-      (/^\S/.test(raw) && !raw.startsWith("#"))
-    )
+    if (live.test(raw) || commented.test(raw) || (/^\S/.test(raw) && !raw.startsWith("#"))) {
       break;
+    }
     out.push(strip(raw));
   }
   return out.join("\n");
@@ -310,11 +317,17 @@ export function stagesWithImage(text) {
   for (let i = 0; i < lines.length; i += 1) {
     const item = /^ {2}-\s+name:\s*(\S.*?)\s*$/.exec(lines[i] ?? "");
     const name = item?.[1];
-    if (name === undefined) continue;
+    if (name === undefined) {
+      continue;
+    }
     const block = stageBlockIn(text, name);
-    if (block === null) continue;
+    if (block === null) {
+      continue;
+    }
     const found = block.split("\n").some((raw) => /^ {4}image:\s*\S/.test(raw));
-    if (found && !out.includes(name)) out.push(name);
+    if (found && !out.includes(name)) {
+      out.push(name);
+    }
   }
   return out;
 }
@@ -345,16 +358,20 @@ export const BROWSER_INSTALL_STAGE = "每日浏览器安装";
  */
 export function stageEnvValue(text, stage, key) {
   const block = stageBlockIn(text, stage);
-  if (block === null) return null;
+  if (block === null) {
+    return null;
+  }
   /* `\s*` 而不是 `\s+`：**停用形态**里那一项的缩进已被压平（注释块按第 0 列读），
    * 键因此可能顶格出现。匹配面仍限在这一项自己的块内，不会串到别的 stage。 */
   const re = new RegExp(
-    `^\\s*${key.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}:\\s*(.+?)\\s*$`,
+    `^\\s*${key.replaceAll(/[.*+?^${}()|[\\]\\\\]/g, String.raw`\\$&`)}:\\s*(.+?)\\s*$`,
     "m",
   );
   const m = re.exec(block);
-  if (!m?.[1]) return null;
-  const raw = m[1].trim().replace(/^["']|["']$/g, "");
+  if (!m?.[1]) {
+    return null;
+  }
+  const raw = m[1].trim().replaceAll(/^["']|["']$/g, "");
   return raw === "" ? null : raw;
 }
 
@@ -388,12 +405,16 @@ function run(cmd, args) {
  */
 export function ensureDir(dir) {
   const target = String(dir ?? "").trim();
-  if (!target) return { ok: false, created: false, why: "路径是空的" };
+  if (!target) {
+    return { ok: false, created: false, why: "路径是空的" };
+  }
   if (!path.isAbsolute(target)) {
     return { ok: false, created: false, why: "不是绝对路径" };
   }
   try {
-    if (existsSync(target)) return { ok: true, created: false, why: "已在" };
+    if (existsSync(target)) {
+      return { ok: true, created: false, why: "已在" };
+    }
     mkdirSync(target, { recursive: true });
     return { ok: true, created: true, why: "刚补出来" };
   } catch (error) {
@@ -463,10 +484,10 @@ export function envProbe({
     const bad = ps7OnlySyntaxIn(configText);
     if (bad.length > 0) {
       problems.push(
-        "`.cnb.yml` 里有宿主的 Windows PowerShell（5.1）认不了的语法面：\n" +
-          bad.map((l) => `      ${l}`).join("\n") +
-          "\n      —— 它们**不会在解析期报错**，只会在跑到那一步时整段炸。" +
-          "宿主是节点上的默认 powershell（pwsh 7 才认 `?.` / `??`）。",
+        `\`.cnb.yml\` 里有宿主的 Windows PowerShell（5.1）认不了的语法面：\n${
+          bad.map((l) => `      ${l}`).join("\n")
+          }\n      —— 它们**不会在解析期报错**，只会在跑到那一步时整段炸。` +
+          `宿主是节点上的默认 powershell（pwsh 7 才认 \`?.\` / \`??\`）。`,
       );
     } else {
       notes.push("`.cnb.yml` 的 script 块只用宿主 PowerShell 认的语法面");
@@ -491,9 +512,7 @@ export function envProbe({
           "`node scripts/ci-image-plan.mjs`，别在流水线里声明它。",
       );
     } else {
-      notes.push(
-        "`.cnb.yml` 的 stage 一格都没带 `image:`（这条路径上没有 docker daemon）",
-      );
+      notes.push("`.cnb.yml` 的 stage 一格都没带 `image:`（这条路径上没有 docker daemon）");
     }
   }
 
@@ -504,9 +523,7 @@ export function envProbe({
   } catch {
     /* 探测本身出错时**不是这一条要答的问题**（那一格同样归 `Python 可用性`），
      * 如实记一条读数、不判红 —— 本步骤不做「探测失败」的第二份判据。 */
-    notes.push(
-      "解释器探测本身出错：本步不判它（缺件与探测失败归「Python 可用性」）",
-    );
+    notes.push("解释器探测本身出错：本步不判它（缺件与探测失败归「Python 可用性」）");
   }
   if (python) {
     const floor = pythonVersionMeetsFloor(python.version);
@@ -515,7 +532,12 @@ export function envProbe({
         `解释器 ${python.path ?? python.command} 的版本号解析不出（原文：` +
           `${python.version}）—— 本步不据此判红（那是「不知道」，不是「不达标」）`,
       );
-    } else if (!floor.ok) {
+    } else if (floor.ok) {
+      notes.push(
+        `解释器 ${python.path ?? python.command} ${floor.triple.join(".")} ` +
+          `满足 ≥ ${PYTHON_MIN_TEXT}`,
+      );
+    } else {
       problems.push(
         `解释器 ${python.path ?? python.command} 是 ${floor.triple.join(".")}，` +
           `低于本仓写明的下限 Python ${PYTHON_MIN_TEXT}（唯一定义：本文件的 PYTHON_MIN_VERSION）。\n` +
@@ -525,16 +547,9 @@ export function envProbe({
           "PATH 看得见它（python.org 安装包勾「Add python.exe to PATH」；" +
           "默认的「Install for me only」只写安装者那个用户）。",
       );
-    } else {
-      notes.push(
-        `解释器 ${python.path ?? python.command} ${floor.triple.join(".")} ` +
-          `满足 ≥ ${PYTHON_MIN_TEXT}`,
-      );
     }
   } else {
-    notes.push(
-      "这台机器上没有可用解释器：缺件那一格归「Python 可用性」，本步不重复判",
-    );
+    notes.push("这台机器上没有可用解释器：缺件那一格归「Python 可用性」，本步不重复判");
   }
 
   /* ── ③ pnpm 能不能**真跑起仓库的脚本**（不是在不在）──
@@ -578,12 +593,9 @@ export function envProbe({
     notes.push(`${codes}${notTheSwitch}`);
   } else {
     notes.push(
-      `${codes}；chcp 读数 ${encoding.chcpRaw ?? "没量到"}` +
-        (encodingOk
+      `${codes}；chcp 读数 ${encoding.chcpRaw ?? "没量到"}${encodingOk
           ? notTheSwitch
-          : "\n      下一动作：让流水线第一步先跑 " +
-            "`node scripts/ci-console-encoding.mjs --apply`（「工具链自证」的第一步就是它）。" +
-            notTheSwitch),
+          : `\n      下一动作：让流水线第一步先跑 \`node scripts/ci-console-encoding.mjs --apply\`（「工具链自证」的第一步就是它）。${notTheSwitch}`}`,
     );
   }
 
@@ -642,9 +654,9 @@ export function envProbe({
     if (already.ok) {
       notes.push(
         `浏览器落点上已经有那一件（${already.out}）—— ` +
-          "`" +
-          BROWSER_INSTALL_STAGE +
-          "` 会走「已装，跳过下载」，这一格不依赖网络",
+          `\`${
+          BROWSER_INSTALL_STAGE
+          }\` 会走「已装，跳过下载」，这一格不依赖网络`,
       );
     } else {
       /* 配置里那一步会用的根（读不到那条配置 / 那个键时退回「按本步 env」的老口径
@@ -653,15 +665,9 @@ export function envProbe({
        * 名字加了前缀，写死的字符串会**静默**读不到根 ⇒ 这一步退回「量五个候选根」，
        * 于是它报的不再是「配置给的那一个到不到」，而它的全部职责就是回答那一句。 */
       const configuredHost = configText
-        ? stageEnvValue(
-            configText,
-            BROWSER_INSTALL_STAGE,
-            "PLAYWRIGHT_DOWNLOAD_HOST",
-          )
+        ? stageEnvValue(configText, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST")
         : null;
-      const roots = configuredHost
-        ? [configuredHost]
-        : playwrightDownloadRoots(env);
+      const roots = configuredHost ? [configuredHost] : playwrightDownloadRoots(env);
       /* 没给根时用候选那一族；给了根就只量它（配置给的那一个优先于本步 env ——
        * 那才是这一步真正要回答的对象）。
        *
@@ -683,38 +689,22 @@ export function envProbe({
           /* 话术里的 stage 名一律取 `BROWSER_INSTALL_STAGE`：读不到配置那一步的根
            * 时，人照着红话去改的那一行必须**就是**这一格读的那一格。名字散在
            * 消息里写死，下一次挪档就会把人指到一个不存在的 stage 上。 */
-          (configuredHost
-            ? "浏览器落点是空的，而 `.cnb.yml` 给 `" +
-              BROWSER_INSTALL_STAGE +
-              "` 配的那个下载根" +
-              `（${configuredHost}）**取不回字节** —— `
-            : "浏览器落点是空的，而**一个下载根都到不了** —— ") +
-            "`" +
-            BROWSER_INSTALL_STAGE +
-            "` 那一步排在倒数第二（E2E 之前），照这个读数它**必然**会在" +
-            "那里失败，而那时前面三十步的预算已经花掉了。\n" +
-            `      实测过的现场：${verdicts[0]?.root ?? "（没有候选）"} → ` +
-            `${verdicts[0]?.verdict ?? "?"}\n` +
-            "      下一动作（前两条在人不在仓）：\n" +
-            (configuredHost
-              ? "        · 把这台节点**真能到**的镜像根换到 `.cnb.yml` 的 `" +
-                BROWSER_INSTALL_STAGE +
-                "` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上 —— 就是上面" +
-                "「下载根探测」那几行里判通的那一个；\n"
-              : "        · 把这台节点**真能到**的镜像根配到 `.cnb.yml` 的 `" +
-                BROWSER_INSTALL_STAGE +
-                "` stage 的 `PLAYWRIGHT_DOWNLOAD_HOST` 上；\n") +
-            "        · 或给节点配内网代理 / 放行镜像域；\n" +
-            "        · 或**预先把 `chromium-headless-shell` 装进节点的落点** —— " +
-            "装过一次之后这一格就再也不碰网络（长期存在的机器上这是最省事的一条）。",
+          `${
+            configuredHost
+              ? `浏览器落点是空的，而 \`.cnb.yml\` 给 \`${BROWSER_INSTALL_STAGE}\` 配的那个下载根（${configuredHost}）**取不回字节** —— `
+              : "浏览器落点是空的，而**一个下载根都到不了** —— "
+          }\`${BROWSER_INSTALL_STAGE}\` 那一步排在倒数第二（E2E 之前），照这个读数它**必然**会在那里失败，而那时前面三十步的预算已经花掉了。\n      实测过的现场：${verdicts[0]?.root ?? "（没有候选）"} → ${verdicts[0]?.verdict ?? "?"}\n      下一动作（前两条在人不在仓）：\n${
+            configuredHost
+              ? `        · 把这台节点**真能到**的镜像根换到 \`.cnb.yml\` 的 \`${BROWSER_INSTALL_STAGE}\` stage 的 \`PLAYWRIGHT_DOWNLOAD_HOST\` 上 —— 就是上面「下载根探测」那几行里判通的那一个；\n`
+              : `        · 把这台节点**真能到**的镜像根配到 \`.cnb.yml\` 的 \`${BROWSER_INSTALL_STAGE}\` stage 的 \`PLAYWRIGHT_DOWNLOAD_HOST\` 上；\n`
+          }        · 或给节点配内网代理 / 放行镜像域；\n        · 或**预先把 \`chromium-headless-shell\` 装进节点的落点** —— 装过一次之后这一格就再也不碰网络（长期存在的机器上这是最省事的一条）。`,
         );
       } else {
         notes.push(
-          `浏览器落点是空的，而${configuredHost ? "配置里那个根" : "下载根"}` +
-            `有 ${reachable.length}/${verdicts.length} 条真取回了字节` +
-            "（`" +
-            BROWSER_INSTALL_STAGE +
-            "` 那一步应该装得成）",
+          `浏览器落点是空的，而${configuredHost ? "配置里那个根" : "下载根"}有 ${reachable.length}/${verdicts.length} 条真取回了字节` +
+            `（\`${
+            BROWSER_INSTALL_STAGE
+            }\` 那一步应该装得成）`,
         );
       }
       if (configuredHost) {
@@ -730,9 +720,9 @@ export function envProbe({
      * 但它要留一条读数，否则这一步会看起来像「浏览器那一格没在判」。 */
     notes.push(
       `浏览器前提探测本身出错：${/** @type {Error} */ (error).message} —— ` +
-        "本步不据此判红（那一格仍归 `" +
-        BROWSER_INSTALL_STAGE +
-        "`）",
+        `本步不据此判红（那一格仍归 \`${
+        BROWSER_INSTALL_STAGE
+        }\`）`,
     );
   }
 
@@ -754,9 +744,8 @@ export function envProbe({
     const ensured = ensureDir(tempRoot);
     if (ensured.ok) {
       notes.push(
-        `临时根 ${tempRoot}` +
-          (ensured.created ? "（原先不存在，这一格刚补出来）" : "（已在）") +
-          `·TMP=${env.TMP ?? "(未设)"}`,
+        `临时根 ${tempRoot}${ensured.created ? "（原先不存在，这一格刚补出来）" : "（已在）"
+          }·TMP=${env.TMP ?? "(未设)"}`,
       );
     } else {
       problems.push(
@@ -765,22 +754,20 @@ export function envProbe({
       );
     }
   } else {
-    notes.push(
-      "临时根没配（`TEMP` / `TMP` 都没设）—— 工具会退回系统默认的那个",
-    );
+    notes.push("临时根没配（`TEMP` / `TMP` 都没设）—— 工具会退回系统默认的那个");
   }
   notes.push(`浏览器落点 ${playwrightBrowsersRoot({ env })}`);
 
-  for (const note of notes) log(`（${note}）`);
+  for (const note of notes) {
+    log(`（${note}）`);
+  }
 
   if (problems.length > 0) {
-    logError(
-      "\n环境前提未满足（这些问题都**只要几秒**就能问出来，早问早改）：",
-    );
-    for (const p of problems) logError(`  ✗ ${p}`);
-    logError(
-      "\n背景与判读顺序见 docs/standards/13-提交与-code-review.md §13.5.3.9。",
-    );
+    logError("\n环境前提未满足（这些问题都**只要几秒**就能问出来，早问早改）：");
+    for (const p of problems) {
+      logError(`  ✗ ${p}`);
+    }
+    logError("\n背景与判读顺序见 docs/standards/13-提交与-code-review.md §13.5.3.9。");
     return 1;
   }
   log("\n环境前提通过 ✓");
@@ -793,9 +780,6 @@ export function envProbe({
  * 于是这一段一次都不跑、**退出码恒 0 且一行输出都没有**（`工具链自证` /
  * `Python 可用性` 在自托管节点上就栽在这上面：两步双双空转，缺 Python 一路滑到
  * 18 分钟后的 E2E 才暴露）。判据见 `tests/script-main-guard.test.ts`。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(envProbe());
 }

@@ -1,9 +1,7 @@
 "use client";
 import { useMemo } from "react";
-import {
-  resolveEntryRequired,
-  type WorkflowIOMap,
-} from "~/components/studio/workflow-io";
+import { resolveEntryRequired, type WorkflowIOMap } from "~/components/studio/workflow-io";
+
 export function RequiredSummary({
   io,
   mode,
@@ -15,12 +13,21 @@ export function RequiredSummary({
   const counts = useMemo(() => {
     let required = 0;
     let optional = 0;
-    if (!io) return { required, optional };
+    if (!io) {
+      return { required, optional };
+    }
     for (const e of Object.values(io)) {
-      if (e?.direction !== "input") continue;
-      if (e.kind !== "widget") continue;
-      if (resolveEntryRequired(e, mode)) required++;
-      else optional++;
+      if (e?.direction !== "input") {
+        continue;
+      }
+      if (e.kind !== "widget") {
+        continue;
+      }
+      if (resolveEntryRequired(e, mode)) {
+        required++;
+      } else {
+        optional++;
+      }
     }
     return { required, optional };
   }, [io, mode]);

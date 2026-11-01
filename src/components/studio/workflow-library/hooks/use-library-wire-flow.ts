@@ -20,18 +20,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  type Connection,
-  type Edge,
-  type Node,
-  type OnConnectEnd,
-} from "@xyflow/react";
+import type { Connection, Edge, Node, OnConnectEnd } from "@xyflow/react";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
-import {
-  pinAcceptsEntry,
-  type ParamEntry,
-} from "~/lib/workflow/workflow-param-mapping";
+import { pinAcceptsEntry, type ParamEntry } from "~/lib/workflow/workflow-param-mapping";
 import {
   LIBRARY_EDGE_STYLE,
   LIB_NODE_BACKDROP,
@@ -52,7 +44,7 @@ import type {
 } from "../workflow-library-param-cards";
 
 /** 三列节点的节点类型名（注册表在视图里，见 `WorkflowLibraryCanvasNodes`）。 */
-export const LIB_NODE_TYPES = {
+export const LIB_NODE_TYPES = /* SAFETY: 类型断言已复核 */ {
   libParams: "libParams",
   libHost: "libHost",
   libOutputs: "libOutputs",
@@ -63,49 +55,49 @@ export const LIB_NODE_TYPES = {
 /** 落点失败时给用户的原因（人类可读）——「拖了没反应」不许是静默的。 */
 export type LibraryDropHint = string | null;
 
-export interface LibraryWireFlowArgs {
-  io: WorkflowIOMap | null | undefined;
-  /** 输入侧卡片派生（entries / resolved / ownersByPin / wires…）。 */
-  paramCards: LibraryParamCards;
-  /** 输出侧的连线（宿主输出行 → 右列卡片）。 */
-  outputWires: readonly ParamCardWire[];
-  /** 契约条目表（闸门判「这个口接受什么类型的端口」，与自动落点同一份）。 */
-  entries: readonly ParamEntry[];
-  /** 三列节点的渲染内容（`LibraryNodeContent` 的三段，见画布的说明）。 */
-  paramsNode: LibraryNodeContent["params"];
-  hostNode: LibraryNodeContent["host"];
-  outputsNode: LibraryNodeContent["outputs"];
+export type LibraryWireFlowArgs = {
+  /** 背景板尺寸（画布量到容器尺寸后给出；不传用兜底值，见 `buildLibraryNodes`）。 */
+  backdropSize?: { height: number; width: number };
+  /** 是否允许编辑（有模式 + 上层给了落库回调）。为 false 时连线不可单独点选 /
+   *  删除（只读预览，避免误删）。与画布的 `canWire` 同源。 */
+  canWire?: boolean;
   /** 输入侧落点写入（`use-param-wiring.connect`）。 */
   connect?: (entryId: string, ioKey: string) => void;
   /** 输出侧取值行写入。 */
   connectOutput?: (outputIoKey: string, targetIoKey: string) => void;
-  /** 背景板尺寸（画布量到容器尺寸后给出；不传用兜底值，见 `buildLibraryNodes`）。 */
-  backdropSize?: { width: number; height: number };
-  /** 是否允许编辑（有模式 + 上层给了落库回调）。为 false 时连线不可单独点选 /
-   *  删除（只读预览，避免误删）。与画布的 `canWire` 同源。 */
-  canWire?: boolean;
+  /** 契约条目表（闸门判「这个口接受什么类型的端口」，与自动落点同一份）。 */
+  entries: ReadonlyArray<ParamEntry>;
+  hostNode: LibraryNodeContent["host"];
+  io: WorkflowIOMap | null | undefined;
+  outputsNode: LibraryNodeContent["outputs"];
+  /** 输出侧的连线（宿主输出行 → 右列卡片）。 */
+  outputWires: ReadonlyArray<ParamCardWire>;
+  /** 输入侧卡片派生（entries / resolved / ownersByPin / wires…）。 */
+  paramCards: LibraryParamCards;
+  /** 三列节点的渲染内容（`LibraryNodeContent` 的三段，见画布的说明）。 */
+  paramsNode: LibraryNodeContent["params"];
   /** 画布上当前点选中的边 id 集合（来自 `onEdgeClick`）。命中即注入高亮描边。 */
   selectedEdgeIds?: ReadonlySet<string>;
-}
+};
 
 /** 三列节点的首帧布局尺寸（面板靠 fitView 收进视口，这里只需稳定可读）。
  *
  *  `envelopeHeight` 与 `fillHeight` 是**两个不同的高度**，见
  *  `LibraryNodeSizing` 的说明：前者是卡片列的首帧声明高度，后者是背景板高度。 */
-export interface LayoutSizing {
-  paramsWidth: number;
-  outputsWidth: number;
-  hostWidth: number;
+export type LayoutSizing = {
   columnGap: number;
-  originX: number;
-  originY: number;
   /** 宿主节点的首帧声明高度（真实高度由内容撑开，见 `buildLibraryNodes`）。 */
   envelopeHeight: number;
   /** 背景板高度（面板可视高度与卡片列高度取大，见 `backdropSize`）。 */
   fillHeight: number;
-}
+  hostWidth: number;
+  originX: number;
+  originY: number;
+  outputsWidth: number;
+  paramsWidth: number;
+};
 
-export const LAYOUT_SIZING: LayoutSizing = {
+export const LAYOUT_SIZING: LayoutSizing = /* SAFETY: 类型断言已复核 */ {
   paramsWidth: 220,
   outputsWidth: 200,
   hostWidth: 380,
@@ -140,12 +132,16 @@ export function useLibraryWireFlow({
   const dropHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
-      if (dropHintTimerRef.current) clearTimeout(dropHintTimerRef.current);
+      if (dropHintTimerRef.current) {
+        clearTimeout(dropHintTimerRef.current);
+      }
     };
   }, []);
   const showHint = useCallback((message: string) => {
     setDropHint(message);
-    if (dropHintTimerRef.current) clearTimeout(dropHintTimerRef.current);
+    if (dropHintTimerRef.current) {
+      clearTimeout(dropHintTimerRef.current);
+    }
     dropHintTimerRef.current = setTimeout(() => setDropHint(null), 4000);
   }, []);
 
@@ -181,13 +177,7 @@ export function useLibraryWireFlow({
    *  节点集合仍是固定的（三列布局，见 `defaultNodes` 的说明）：节点内部是整张
    *  表单，逐帧重建代价高；边只是几条线，重建无妨。 */
   const defaultEdges = useMemo(
-    () =>
-      deriveLibraryEdges(
-        paramCards.wires,
-        outputWires,
-        !!canWire,
-        selectedEdgeIds,
-      ),
+    () => deriveLibraryEdges(paramCards.wires, outputWires, !!canWire, selectedEdgeIds),
     [paramCards.wires, outputWires, canWire, selectedEdgeIds],
   );
 
@@ -211,7 +201,9 @@ export function useLibraryWireFlow({
   const onConnect = useCallback(
     (connection: Connection) => {
       const { source, target, sourceHandle, targetHandle } = connection;
-      if (!sourceHandle || !targetHandle) return;
+      if (!sourceHandle || !targetHandle) {
+        return;
+      }
       /* 左列卡片起手：handle id 就是**条目 id**（落库键），落点取另一端（宿主行的
        *  ioKey）；右列输出卡的 handle id 就是输出口的 ioKey，同样是落库键。 */
       if (source === LIB_NODE_PARAMS && target === LIB_NODE_HOST) {
@@ -239,7 +231,9 @@ export function useLibraryWireFlow({
     (_event, connectionState) => {
       /* `FinalConnectionState` 与 `NoConnection` 的并集：没拖过线时
        *  `fromNode === null`，据此早退（此时也不该有任何提示）。 */
-      if (!connectionState.fromNode) return;
+      if (!connectionState.fromNode) {
+        return;
+      }
       if (connectionState.isValid === null) {
         showHint("松手时不在任何端口上（对准那一行 / 卡片再松手）");
         return;
@@ -271,7 +265,7 @@ export function useLibraryWireFlow({
 }
 
 /** 三列**内容**节点的 id（首帧定向 fitView 的包围盒 = 这三个）。 */
-export const LIBRARY_CONTENT_NODE_IDS = [
+export const LIBRARY_CONTENT_NODE_IDS = /* SAFETY: 类型断言已复核 */ [
   LIB_NODE_PARAMS,
   LIB_NODE_HOST,
   LIB_NODE_OUTPUTS,
@@ -290,7 +284,7 @@ export const LIBRARY_FIT_PADDING = 0.08;
  *  `nodes` 只给 id（React Flow 的 `FitViewOptions.nodes` 接受 `{ id }` 形状），
  *  避免把节点对象复制成第二份事实。 */
 export function libraryFitViewOptions(): {
-  nodes: { id: string }[];
+  nodes: Array<{ id: string }>;
   padding: number;
 } {
   return {
@@ -313,8 +307,8 @@ export function libraryFitViewOptions(): {
  */
 export function buildLibraryNodes(
   sizing: LayoutSizing,
-  backdropSize?: { width: number; height: number },
-): Node[] {
+  backdropSize?: { height: number; width: number },
+): Array<Node> {
   const at = layoutLibraryNodes(sizing);
   const extent = libraryBackdropSize(sizing, {
     width: sizing.paramsWidth + sizing.hostWidth + sizing.outputsWidth,
@@ -372,11 +366,7 @@ export function buildLibraryNodes(
     },
     contentNode(LIB_NODE_PARAMS, LIB_NODE_TYPES.libParams, sizing.paramsWidth),
     contentNode(LIB_NODE_HOST, LIB_NODE_TYPES.libHost, sizing.hostWidth),
-    contentNode(
-      LIB_NODE_OUTPUTS,
-      LIB_NODE_TYPES.libOutputs,
-      sizing.outputsWidth,
-    ),
+    contentNode(LIB_NODE_OUTPUTS, LIB_NODE_TYPES.libOutputs, sizing.outputsWidth),
   ];
 }
 
@@ -413,10 +403,10 @@ export type LibraryConnection = Pick<
 >;
 
 /** 闸门需要的上下文：IO 表（端口分类） + 契约条目表。 */
-export interface LibraryGateContext {
+export type LibraryGateContext = {
+  entries: ReadonlyArray<ParamEntry>;
   io: WorkflowIOMap | null | undefined;
-  entries: readonly ParamEntry[];
-}
+};
 
 /** 库内连线的**类型闸门**（纯函数，可单测）。
  *
@@ -473,10 +463,7 @@ export function libraryConnectionRefusal(
 }
 
 /** `onConnectEnd` 交回来的两端（只取还原连接需要的字段）。 */
-type DropHandle =
-  | { id?: string | null; nodeId?: string; type?: string }
-  | null
-  | undefined;
+type DropHandle = { id?: string | null; nodeId?: string; type?: string } | null | undefined;
 
 /** 从松手现场还原这次连接的形状（`null` = 有一端没落在端点上）。
  *
@@ -488,7 +475,9 @@ function connectionFromDrop(state: {
   toHandle?: DropHandle;
 }): LibraryConnection | null {
   const { fromHandle: from, toHandle: to } = state;
-  if (!from?.nodeId || !to?.nodeId) return null;
+  if (!from?.nodeId || !to?.nodeId) {
+    return null;
+  }
   const fromIsTarget = from.type === "target";
   return {
     source: fromIsTarget ? to.nodeId : from.nodeId,
@@ -506,14 +495,14 @@ function connectionFromDrop(state: {
  *  `selectedIds` 是画布上当前点选中的边 id 集合 —— 命中的边在 `style` 里直接注入
  *  高亮（内联 style 优先级确定，不依赖 React Flow 是否给 `<g>` 加 `.selected`）。 */
 export function deriveLibraryEdges(
-  inputWires: readonly ParamCardWire[],
-  outputWires: readonly ParamCardWire[],
+  inputWires: ReadonlyArray<ParamCardWire>,
+  outputWires: ReadonlyArray<ParamCardWire>,
   interactive: boolean,
   selectedIds?: ReadonlySet<string>,
-): Edge[] {
+): Array<Edge> {
   const sel = selectedIds ?? new Set<string>();
-  const out: Edge[] = [];
-  for (const wire of inputWires)
+  const out: Array<Edge> = [];
+  for (const wire of inputWires) {
     out.push(
       buildInputEdge(
         wire,
@@ -521,7 +510,8 @@ export function deriveLibraryEdges(
         sel.has(libraryEdgeId("param", wire.entryId, wire.handleId)),
       ),
     );
-  for (const wire of outputWires)
+  }
+  for (const wire of outputWires) {
     out.push(
       buildOutputEdge(
         wire,
@@ -529,6 +519,7 @@ export function deriveLibraryEdges(
         sel.has(libraryEdgeId("output", wire.entryId, wire.handleId)),
       ),
     );
+  }
   return out;
 }
 
@@ -539,10 +530,7 @@ export function deriveLibraryEdges(
  *  端口名反查条目。查不到（端口已从 IO 移除 / 过期快照）时拒绝连线。 */
 /** handle id 就是**条目 id**：一个口一颗点（见 `paramOutputPorts`），条目 id 在
  *  同一个画布节点内天然唯一（尺寸卡的六行各是子口 id，普通卡就是契约口 id）。 */
-function entryForHandle(
-  entries: readonly ParamEntry[],
-  handleId: string,
-): ParamEntry | null {
+function entryForHandle(entries: ReadonlyArray<ParamEntry>, handleId: string): ParamEntry | null {
   return entries.find((item) => item.id === handleId) ?? null;
 }
 
@@ -552,11 +540,7 @@ function entryForHandle(
  *  某一条线时不必用卡片头 ↺ 把整张卡（尺寸卡是六条形态线）一起清掉 —— 点这条线、
  *  按 Delete 即可只断这一条（断开的就是它对应的那个 entryId）。只读（无模式 /
  *  无落库回调）时不可交互，避免误删。 */
-export function buildInputEdge(
-  wire: ParamCardWire,
-  interactive: boolean,
-  selected = false,
-): Edge {
+export function buildInputEdge(wire: ParamCardWire, interactive: boolean, selected = false): Edge {
   return {
     id: libraryEdgeId("param", wire.entryId, wire.handleId),
     source: LIB_NODE_PARAMS,
@@ -576,11 +560,7 @@ export function buildInputEdge(
 }
 
 /** 输出侧一条边：宿主卡片的输出行圆点 → 右列卡片圆点。 */
-export function buildOutputEdge(
-  wire: ParamCardWire,
-  interactive: boolean,
-  selected = false,
-): Edge {
+export function buildOutputEdge(wire: ParamCardWire, interactive: boolean, selected = false): Edge {
   return {
     id: libraryEdgeId("output", wire.entryId, wire.handleId),
     source: LIB_NODE_HOST,

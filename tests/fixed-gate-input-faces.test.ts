@@ -13,14 +13,20 @@
  *   ① 登记的每一条必须**真的在固定清单里** —— 给一条本来就走 import 图的判据写面，
  *      写出来的是一条永不生效的死面；
  *   ② 每个模式必须**至少命中仓库里一个被跟踪的路径** —— 这一条直接判死拼写错误；
- *   ③ 名单封闭（现在 4 条）—— 加第 5 条是一次签字，不是这一层代码能自己扩张的；
+ *      并且**不能整条落在宽面触发上**（宽面一命中整档就退回全跑，这一层轮不到问）；
+ *   ③ 名单封闭 —— 加一条是一次签字，不是这一层代码能自己扩张的；
  *   ④ 两向都测：面没命中 ⇒ 缺席**且被点名**；命中 ⇒ 在场；
- *   ⑤ 放弃收窄那一档（`wide`）**完全不过筛** —— 那一刻的前提就是「不能信筛出来的结果」。
+ *   ⑤ 放弃收窄那一档（`wide`）**完全不过筛** —— 那一刻的前提就是「不能信筛出来的结果」；
+ *   ⑥ 用例**直接 import** 的每一份仓库文件都必须在它自己的面里 —— 面自称「它读什么」，
+ *     少写一份共享夹具，那句自称就有一处是假的（#2802 抓到两条）。
  */
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { resolveAffectedTests } from "../scripts/affected-tests.mjs";
+import { resolveAffectedTests, wideReasonFor } from "../scripts/affected-tests.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "../scripts/fixed-structural-tests.mjs";
 import {
   INPUT_FACES,
@@ -30,18 +36,68 @@ import {
 } from "../scripts/fixed-gate-input-faces.mjs";
 
 /** 被跟踪路径的全集 —— ② 那一条的事实来源（本地 `git ls-files`，不走网络）。 */
-function trackedPaths(): string[] {
+function trackedPaths(): Array<string> {
   return execFileSync("git", ["ls-files"], { encoding: "utf8" })
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 }
 
+const ROOT = path.resolve(import.meta.dirname, "..");
+const MODULE_EXTS = [
+  "",
+  ".ts",
+  ".tsx",
+  ".mts",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".json",
+  "/index.ts",
+  "/index.tsx",
+  "/index.mjs",
+];
+
+/**
+ * 一份用例里**真正的**静态 `import` / `export … from` 说明符。
+ *
+ * 为什么走语法树而不是正则：用例的夹具文本里本来就会写 `import x from "./…"`
+ * （`tests/storybook-tsc-input.test.ts` 的模块标识符常量就是），而那是被测输入、
+ * 不是本文件自己的依赖。正则分不开这两种形状，语法树里只有前者是 ImportDeclaration。
+ */
+function importSpecifiersOf(rel: string): Array<string> {
+  const text = readFileSync(path.join(ROOT, rel), "utf8");
+  const source = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const specs: Array<string> = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      specs.push(node.moduleSpecifier.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return specs;
+}
+
+/** 相对说明符 → 被跟踪的仓库路径（按 `tsconfig` 的候选扩展名逐个试；裸包名与别名回 `null`）。 */
+function resolveRelative(spec: string, from: string, tracked: Set<string>): string | null {
+  const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec));
+  for (const ext of MODULE_EXTS) {
+    const candidate = base + ext;
+    if (tracked.has(candidate)) {return candidate;}
+  }
+  return null;
+}
+
 describe("输入面登记的形状", () => {
   it("每一条都在固定清单里（不然那是一条永不生效的死面）", () => {
-    const orphans = INPUT_FACES.filter(
-      (entry) => !FIXED_STRUCTURAL_TESTS.includes(entry.test),
-    ).map((entry) => entry.test);
+    const orphans = INPUT_FACES.filter((entry) => !FIXED_STRUCTURAL_TESTS.includes(entry.test)).map(
+      (entry) => entry.test,
+    );
     expect(
       orphans,
       "这些登记不在 FIXED_STRUCTURAL_TESTS 里 —— 它们本来就走 import 图（有条件跑），" +
@@ -66,18 +122,73 @@ describe("输入面登记的形状", () => {
     ).toEqual([]);
   });
 
-  it("名单是封闭的那 4 条：加一条要人来签字", () => {
+  it("每一个模式都不许整条落在宽面触发上（那种条件永远到不了筛这一层）", () => {
+    const tracked = trackedPaths();
+    const dead = [];
+    for (const entry of INPUT_FACES) {
+      for (const pattern of entry.face) {
+        const matched = tracked.filter((file) => faceMatches(file, pattern));
+        if (matched.length > 0 && matched.every((file) => wideReasonFor(file) !== null)) {
+          dead.push(`${entry.test} :: ${pattern}（命中的 ${matched.length} 份全是宽面触发）`);
+        }
+      }
+    }
+    expect(
+      dead,
+      "这些模式命中的每一份路径都在 `WIDE_TRIGGERS` 里 —— 它们一改，整档就先退回「固定清单全跑」，" +
+        "输入面这一层根本轮不到问。写成这样只会让面看起来更宽（`base-check` 的 `.githooks/**` 就是这一格）",
+    ).toEqual([]);
+  });
+
+  it("用例直接 import 的每一份仓库文件都在它自己的面里（面自称「它读什么」就不许有假话）", () => {
+    const tracked = new Set(trackedPaths());
+    const gaps: Array<string> = [];
+    const unresolved: Array<string> = [];
+    for (const entry of INPUT_FACES) {
+      for (const spec of importSpecifiersOf(entry.test)) {
+        if (!spec.startsWith(".")) {continue;}
+        const rel = resolveRelative(spec, entry.test, tracked);
+        if (rel === null) {
+          unresolved.push(`${entry.test} :: ${spec}`);
+          continue;
+        }
+        if (!faceHits(entry, [rel])) {gaps.push(`${entry.test} :: ${spec} → ${rel}`);}
+      }
+    }
+    expect(
+      unresolved,
+      "这些相对 import 在索引里找不到对应文件 —— 要么是面要盯着的一份还没入库的文件，要么是判据的解析漏了扩展名形态",
+    ).toEqual([]);
+    expect(
+      gaps,
+      "这些文件是用例直接 import 的，却没写进它的面 —— 面少一份输入，改到那一份时这条判据就会「按面静默跳过」；" +
+        "今天 import 图还会把它点回来（两套机制是并集），可那句「它读什么」已经有一处是假的",
+    ).toEqual([]);
+  });
+
+  it("名单是封闭的那一份：加一条要人来签字", () => {
     expect(INPUT_FACES.map((entry) => entry.test).sort()).toEqual([
+      "tests/a11y-axe-stories.test.ts",
       "tests/a11y-rules-gate.test.ts",
       "tests/base-check.test.ts",
+      "tests/changed-scope.test.ts",
+      "tests/changelog-versions-gate.test.ts",
       "tests/check-bundle-budget.test.ts",
+      "tests/check-commit-claims.test.ts",
+      "tests/check-merge-parents.test.ts",
+      "tests/ci-env-probe.test.ts",
+      "tests/eslint-exemption-staleness.test.ts",
+      "tests/eslint-gate-canary.test.ts",
+      "tests/gate-executors.test.ts",
+      "tests/merge-changelog-anchor.test.ts",
+      "tests/precommit-timing.test.ts",
+      "tests/scripts-typecheck-ratchet.test.ts",
+      "tests/storybook-tsc-input.test.ts",
       "tests/tw4-hardgate-behaviour.test.ts",
     ]);
     /* 每条都得说清「它读什么」—— 没有 why 的面，下一条只会照着猜着改宽。 */
     for (const entry of INPUT_FACES) {
-      expect(entry.why.length, `${entry.test} 缺「它读什么」`).toBeGreaterThan(
-        20,
-      );
+      expect(entry.why.length, `${entry.test} 缺「它读什么」`).toBeGreaterThan(20);
       expect(entry.face.length).toBeGreaterThan(1);
     }
   });
@@ -93,9 +204,7 @@ describe("模式匹配的三种形状", () => {
      * 不相干的判据一路点进来，面就悄悄变宽了。 */
     expect(faceMatches("scripts/x2/y", "scripts/x/**")).toBe(false);
     expect(faceMatches("scripts/tw4-a.json", "scripts/tw4-*.json")).toBe(true);
-    expect(faceMatches("scripts/deep/tw4-a.json", "scripts/tw4-*.json")).toBe(
-      false,
-    );
+    expect(faceMatches("scripts/deep/tw4-a.json", "scripts/tw4-*.json")).toBe(false);
   });
 
   it("空模式与「整仓库通配」一律不命中（那种写法等于没写面）", () => {
@@ -119,30 +228,65 @@ describe("切分与接线", () => {
       INPUT_FACES.map((entry) => entry.test).sort(),
     );
     for (const one of got.skipped) {
-      expect(
-        one.why.length,
-        `${one.test} 的跳过原因要说清它读什么`,
-      ).toBeGreaterThan(20);
+      expect(one.why.length, `${one.test} 的跳过原因要说清它读什么`).toBeGreaterThan(20);
     }
     expect(got.keep).toEqual(
-      FIXED_STRUCTURAL_TESTS.filter(
-        (t) => !INPUT_FACES.some((entry) => entry.test === t),
-      ),
+      FIXED_STRUCTURAL_TESTS.filter((t) => !INPUT_FACES.some((entry) => entry.test === t)),
     );
   });
 
   it("改了被测工具 ⇒ 那一条回到清单里", () => {
-    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, [
-      "scripts/base-check.mjs",
-    ]);
+    const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["scripts/base-check.mjs"]);
     expect(got.keep).toContain("tests/base-check.test.ts");
-    expect(got.skipped.map((s) => s.test)).not.toContain(
-      "tests/base-check.test.ts",
-    );
+    expect(got.skipped.map((s) => s.test)).not.toContain("tests/base-check.test.ts");
     /* 其余三条不该被它带起来：面是各判各的。 */
-    expect(got.skipped.map((s) => s.test)).toContain(
+    expect(got.skipped.map((s) => s.test)).toContain("tests/a11y-rules-gate.test.ts");
+  });
+
+  it("后补面的四条各按自己的触发面回来，且不互相带起（#2793）", () => {
+    const cases: Array<[string, string]> = [
+      ["eslint.config.js", "tests/eslint-gate-canary.test.ts"],
+      ["scripts/check-commit-claims.mjs", "tests/check-commit-claims.test.ts"],
+      ["scripts/changed-scope.mjs", "tests/changed-scope.test.ts"],
+      ["src/components/ui/button.tsx", "tests/a11y-axe-stories.test.ts"],
+    ];
+    for (const [changed, test] of cases) {
+      const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, [changed]);
+      expect(got.keep, `${changed} 应当把 ${test} 点回来`).toContain(test);
+      for (const other of cases.map(([, one]) => one).filter((one) => one !== test)) {
+        expect(got.skipped.map((s) => s.test), `${changed} 不该带起 ${other}`).toContain(other);
+      }
+    }
+    /* 自指那一条**不许**开面：它在清单里的理由是「解析器的缺陷只有它能发现」。 */
+    expect(INPUT_FACES.map((entry) => entry.test)).not.toContain("tests/affected-tests.test.ts");
+  });
+
+  it("这一批九条各按自己的触发面回来，且不把四条业务自检带进来（#2798）", () => {
+    const cases: Array<[string, string]> = [
+      ["scripts/base-check/verdict.mjs", "tests/base-check.test.ts"],
+      ["scripts/quality-gate.mjs", "tests/gate-executors.test.ts"],
+      ["scripts/check-merge-parents.mjs", "tests/check-merge-parents.test.ts"],
+      ["scripts/merge-changelog-fragments.mjs", "tests/merge-changelog-anchor.test.ts"],
+      [".storybook/preview.tsx", "tests/storybook-tsc-input.test.ts"],
+      ["scripts/check-eslint-exemptions.cjs", "tests/eslint-exemption-staleness.test.ts"],
+      ["scripts/check-scripts-typecheck.cjs", "tests/scripts-typecheck-ratchet.test.ts"],
+      ["scripts/precommit-timing.mjs", "tests/precommit-timing.test.ts"],
+      [".cnb.yml", "tests/ci-env-probe.test.ts"],
+      ["scripts/check-changelog-versions.cjs", "tests/changelog-versions-gate.test.ts"],
+    ];
+    const untouchable = [
+      "tests/a11y-axe-stories.test.ts",
       "tests/a11y-rules-gate.test.ts",
-    );
+      "tests/check-bundle-budget.test.ts",
+      "tests/tw4-hardgate-behaviour.test.ts",
+    ];
+    for (const [changed, test] of cases) {
+      const got = selectFixedByFace(FIXED_STRUCTURAL_TESTS, [changed]);
+      expect(got.keep, `${changed} 应当把 ${test} 点回来`).toContain(test);
+      for (const other of untouchable) {
+        expect(got.skipped.map((s) => s.test), `${changed} 不该带起 ${other}`).toContain(other);
+      }
+    }
   });
 
   it("增量档（subset）过筛，并把跳过记进 reasons.__faceSkipped", () => {
@@ -154,9 +298,7 @@ describe("切分与接线", () => {
     });
     expect(res.mode).toBe("subset");
     expect(res.tests).not.toContain("tests/base-check.test.ts");
-    expect(String(res.reasons.__faceSkipped ?? "")).toContain(
-      "tests/a11y-rules-gate.test.ts",
-    );
+    expect(String(res.reasons.__faceSkipped ?? "")).toContain("tests/a11y-rules-gate.test.ts");
   });
 
   it("改动清单为空 ⇒ 一条都不跳（「不知道」不等于「没变」，与装依赖那档同一口径）", () => {
@@ -169,9 +311,7 @@ describe("切分与接线", () => {
     expect(res.mode).toBe("subset");
     expect(res.reasons.__faceSkipped).toBeUndefined();
     for (const entry of INPUT_FACES) {
-      expect(res.tests, `${entry.test} 在拿不到清单时必须照跑`).toContain(
-        entry.test,
-      );
+      expect(res.tests, `${entry.test} 在拿不到清单时必须照跑`).toContain(entry.test);
     }
   });
 
@@ -186,9 +326,7 @@ describe("切分与接线", () => {
     expect(res.mode).toBe("all");
     expect(res.reasons.__faceSkipped).toBeUndefined();
     for (const entry of INPUT_FACES) {
-      expect(res.tests, `${entry.test} 在 wide 档必须照跑`).toContain(
-        entry.test,
-      );
+      expect(res.tests, `${entry.test} 在 wide 档必须照跑`).toContain(entry.test);
     }
   });
 });

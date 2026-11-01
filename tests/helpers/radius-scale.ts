@@ -11,12 +11,12 @@
  */
 
 /** 一颗派生式：`渲染值 = 基数 × coef + offset`。 */
-export interface RadiusDerivation {
+export type RadiusDerivation = {
   coef: number;
   offset: number;
 }
 
-export interface RadiusScale {
+export type RadiusScale = {
   /** `:root` 里那颗基数，换算成 px（只认 rem/px 两种形态）。 */
   basePx: number;
   /** 档位名（`--radius-sm` … 含 `--radius-node`）→ 派生式。 */
@@ -33,7 +33,9 @@ export function parseDerivations(css: string): Map<string, RadiusDerivation> {
   for (const m of css.matchAll(
     /^\s*(--radius-[a-z0-9]+)\s*:\s*(?:var\(--radius\)|calc\(var\(--radius\)\s*(?:(\*)\s*([0-9.]+)|([+-])\s*([0-9.]+)px)\))\s*;/gm,
   )) {
-    if (!m[1]) continue;
+    if (!m[1]) {
+      continue;
+    }
     if (m[2] === "*") {
       derivations.set(m[1], {
         coef: Number.parseFloat(m[3] ?? "1"),
@@ -59,9 +61,7 @@ export function parseRadiusScale(css: string): RadiusScale {
     throw new Error("globals.css 里找不到 --radius 基数");
   }
   const basePx =
-    baseMatch[2] === "rem"
-      ? Number.parseFloat(baseMatch[1]) * 16
-      : Number.parseFloat(baseMatch[1]);
+    baseMatch[2] === "rem" ? Number.parseFloat(baseMatch[1]) * 16 : Number.parseFloat(baseMatch[1]);
 
   return { basePx, derivations: parseDerivations(css) };
 }
@@ -72,8 +72,6 @@ export function renderRadiusPx(d: RadiusDerivation, basePx: number): number {
 }
 
 /** 整张表渲染出来的 px 值集合（含 `--radius-node` 这类非档位）。 */
-export function renderedRadiusValues(scale: RadiusScale): number[] {
-  return [...scale.derivations.values()].map((d) =>
-    renderRadiusPx(d, scale.basePx),
-  );
+export function renderedRadiusValues(scale: RadiusScale): Array<number> {
+  return [...scale.derivations.values()].map((d) => renderRadiusPx(d, scale.basePx));
 }

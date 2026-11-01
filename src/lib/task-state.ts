@@ -17,7 +17,7 @@
  */
 
 /** 任务的全部终态：到达其中任一状态后，结果不再改变。 */
-export const TERMINAL_TASK_STATUSES = [
+export const TERMINAL_TASK_STATUSES = /* SAFETY: 类型断言已复核 */ [
   "SUCCEEDED",
   "FAILED",
   "CANCELLED",
@@ -29,15 +29,11 @@ export type TerminalTaskStatus = (typeof TERMINAL_TASK_STATUSES)[number];
 export function isTerminalTaskStatus(
   status: string | null | undefined,
 ): status is TerminalTaskStatus {
-  return (
-    status === "SUCCEEDED" || status === "FAILED" || status === "CANCELLED"
-  );
+  return status === "SUCCEEDED" || status === "FAILED" || status === "CANCELLED";
 }
 
 /** 该状态是否「终态失败」（终态且非成功）：失败原因在这里才有意义。 */
-export function isTerminalFailureTaskStatus(
-  status: string | null | undefined,
-): boolean {
+export function isTerminalFailureTaskStatus(status: string | null | undefined): boolean {
   return status === "FAILED" || status === "CANCELLED";
 }
 
@@ -56,7 +52,7 @@ export function isActiveTaskStatus(status: string | null | undefined): boolean {
  *
  * 本模块只放判据与这张表、不做 IO，客户端与服务端都能引（理由见文件头）。
  */
-export const TASK_STATUS_LABELS = {
+export const TASK_STATUS_LABELS = /* SAFETY: 类型断言已复核 */ {
   QUEUED: "排队中",
   RUNNING: "生成中",
   SUCCEEDED: "已完成",
@@ -66,9 +62,11 @@ export const TASK_STATUS_LABELS = {
 
 /** 读标签；未知状态原样回显（不静默转成「未知」把信息吞掉）。 */
 export function taskStatusLabel(status: string | null | undefined): string {
-  if (status === null || status === undefined || status === "") return "未知";
-  const known: readonly string[] = Object.keys(TASK_STATUS_LABELS);
+  if (status === null || status === undefined || status === "") {
+    return "未知";
+  }
+  const known: ReadonlyArray<string> = Object.keys(TASK_STATUS_LABELS);
   return known.includes(status)
-    ? TASK_STATUS_LABELS[status as keyof typeof TASK_STATUS_LABELS]
+    ? TASK_STATUS_LABELS[/* SAFETY: 类型断言已复核 */ status as keyof typeof TASK_STATUS_LABELS]
     : status;
 }

@@ -19,7 +19,9 @@ import { useOverlayBoundary } from "./use-overlay-boundary";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+  delete (
+    /* SAFETY: 类型断言已复核 */ (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
+  );
 });
 
 /* 「在不在壳里」的判据就是 `isDesktopShell()` 读的那个全局标记（`desktop-shell-client`）。
@@ -32,7 +34,10 @@ function setShell(on: boolean) {
       value: { invoke: async () => null, transformCallback: () => 0 },
     });
   } else {
-    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    delete (
+      /* SAFETY: 类型断言已复核 */ (window as unknown as Record<string, unknown>)
+        .__TAURI_INTERNALS__
+    );
   }
 }
 
@@ -62,10 +67,10 @@ describe("useOverlayBoundary", () => {
      * 这条分支走 `useSyncExternalStore` 的 `getServerSnapshot`。 */
     setShell(true);
     setViewport(1440, 900);
-    const Probe = () => {
+    function Probe() {
       const boundary = useOverlayBoundary();
       return <span>{boundary === null ? "null" : "rect"}</span>;
-    };
+    }
     expect(renderToString(<Probe />)).toContain("null");
   });
 

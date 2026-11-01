@@ -14,11 +14,7 @@ import { useItemErrors } from "~/components/ui/use-item-errors";
 import { useItemAction } from "~/components/ui/use-item-action";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import type { Shot, Scene, Character, StyleRef } from "~/lib/workshop/types";
-import {
-  buildShotPrompt,
-  buildShotNegative,
-  mergeParams,
-} from "~/lib/workshop/prompt-builder";
+import { buildShotPrompt, buildShotNegative, mergeParams } from "~/lib/workshop/prompt-builder";
 import { workshopUid } from "~/lib/workshop/script-parser";
 import { runWithConcurrency } from "~/lib/async-pool";
 import { WORKSHOP_BATCH_CONCURRENCY } from "~/lib/workshop/generation-client";
@@ -33,32 +29,32 @@ import { errorMessage } from "~/lib/error-message";
 import { useStoryboardExtractFlow } from "./useStoryboardExtractFlow";
 
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别），由管线页传入。 */
-export type ShotProgress = Record<string, { pct: number; label?: string }>;
+export type ShotProgress = Record<string, { label?: string; pct: number }>;
 
-export interface Props {
-  scenes: Scene[];
-  characters: Character[];
-  styles: StyleRef[];
-  shots: Shot[];
-  onShotsChange: (s: Shot[]) => void;
-  onGenerate: (shot: Shot) => Promise<void>;
-  generating: boolean;
-  /** 镜头节点上的实时生成进度（running 时在节点内渲染进度条） */
-  progressByShot?: ShotProgress;
-  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
-  scriptMarkdown?: string;
-  /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
-  onCharactersChange?: (c: Character[]) => void;
+export type Props = {
+  characters: Array<Character>;
   /** 分镜「从剧本提取」会话(busy/progress/日志)已收归 controller，经 props 注入；
    *  未注入(遗留/独立使用)时退化为本 hook 局部会话。 */
-  extract?: { session: ExtractSession; actions: ExtractSessionActions };
-}
+  extract?: { actions: ExtractSessionActions; session: ExtractSession };
+  generating: boolean;
+  /** 分镜阶段导入角色卡 JSON 时的角色写入口(可选,未接入时仅提示) */
+  onCharactersChange?: (c: Array<Character>) => void;
+  onGenerate: (shot: Shot) => Promise<void>;
+  onShotsChange: (s: Array<Shot>) => void;
+  /** 镜头节点上的实时生成进度（running 时在节点内渲染进度条） */
+  progressByShot?: ShotProgress;
+  scenes: Array<Scene>;
+  /** 工坊流水线的剧本 markdown(既有状态,经 props 传入,不改变数据归属) */
+  scriptMarkdown?: string;
+  shots: Array<Shot>;
+  styles: Array<StyleRef>;
+};
 
 /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */
 function recompute(
   shot: Shot,
   scene: Scene | undefined,
-  chars: Character[],
+  chars: Array<Character>,
   style?: StyleRef,
 ): Shot {
   const prompt = buildShotPrompt(shot, scene, chars, style);
@@ -121,7 +117,7 @@ export function useStoryboardPlanner(props: Props) {
 
   // 从剧本导入镜头：每个场景 → shotCount 个镜头
   function importFromScript() {
-    const built: Shot[] = [];
+    const built: Array<Shot> = [];
     let n = shots.length;
     scenes.forEach((scene) => {
       const count = Math.max(1, scene.shotCount);
@@ -151,12 +147,12 @@ export function useStoryboardPlanner(props: Props) {
   function updateShot(id: string, patch: Partial<Shot>) {
     onShotsChange(
       shots.map((shot) => {
-        if (shot.id !== id) return shot;
+        if (shot.id !== id) {
+          return shot;
+        }
         const next = { ...shot, ...patch };
         const scene = scenes.find((sc) => sc.id === next.sceneId);
-        const chars = characters.filter((character) =>
-          next.characterIds.includes(character.id),
-        );
+        const chars = characters.filter((character) => next.characterIds.includes(character.id));
         const style = styles.find((st) => st.slug === next.skillSlug);
         return recompute(next, scene, chars, style);
       }),
@@ -168,11 +164,15 @@ export function useStoryboardPlanner(props: Props) {
   }
 
   function clearShots() {
-    if (confirm("确定清空当前所有分镜？")) onShotsChange([]);
+    if (confirm("确定清空当前所有分镜？")) {
+      onShotsChange([]);
+    }
   }
 
   async function handleAISplit() {
-    if (scenes.length === 0) return;
+    if (scenes.length === 0) {
+      return;
+    }
     if (!config) {
       openSettings();
       return;
@@ -180,20 +180,16 @@ export function useStoryboardPlanner(props: Props) {
     setAiProgress("");
     setAiError("");
     try {
-      const built: Shot[] = [];
+      const built: Array<Shot> = [];
       let n = shots.length;
-      const charNames = characters
-        .map((character) => character.name)
-        .filter(Boolean);
+      const charNames = characters.map((character) => character.name).filter(Boolean);
       /* 「逐幕拆镜」这一整段套进忙碌位出口：复位绑在 finally 上，
        * 于是中途抛错（模型报错 / 解析失败）不会把「拆镜中」永远留在界面上。 */
       await ai.run(async () => {
         /* 用 `entries()` 同时拿下标与元素：写 `scenes[i]` 就得多一次 `!`
          * 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉。 */
         for (const [i, scene] of scenes.entries()) {
-          setAiProgress(
-            `正在拆镜 ${i + 1}/${scenes.length} · ${scene.heading}`,
-          );
+          setAiProgress(`正在拆镜 ${i + 1}/${scenes.length} · ${scene.heading}`);
           const full = await streamChat({
             messages: buildStoryboardMessages(scene, charNames),
             /* onToken 不传即「无需逐 token 处理」（streamChat 内部 onToken?.() 调用） */
@@ -202,10 +198,7 @@ export function useStoryboardPlanner(props: Props) {
           raws.forEach((raw) => {
             n += 1;
             const charIds = characters
-              .filter(
-                (character) =>
-                  character.name && raw.characterNames.includes(character.name),
-              )
+              .filter((character) => character.name && raw.characterNames.includes(character.name))
               .map((character) => character.id);
             const shot: Shot = {
               id: workshopUid("shot"),
@@ -220,29 +213,23 @@ export function useStoryboardPlanner(props: Props) {
               params: {},
               status: "idle",
             };
-            const linkedChars = characters.filter((character) =>
-              charIds.includes(character.id),
-            );
+            const linkedChars = characters.filter((character) => charIds.includes(character.id));
             built.push(recompute(shot, scene, linkedChars, undefined));
           });
         }
       });
       onShotsChange([...shots, ...built]);
       setAiProgress(`已用 AI 生成 ${built.length} 个镜头`);
-    } catch (e: unknown) {
-      setAiError(errorMessage(e, "AI 拆镜失败"));
+    } catch (error: unknown) {
+      setAiError(errorMessage(error, "AI 拆镜失败"));
     }
   }
 
   async function generateAll() {
-    const pending = shots.filter(
-      (shot) => shot.status === "idle" || shot.status === "failed",
-    );
+    const pending = shots.filter((shot) => shot.status === "idle" || shot.status === "failed");
     /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：onGenerate 内部自兜单条失败，
      * 一条 failed 不中断批量。 */
-    await runWithConcurrency(pending, WORKSHOP_BATCH_CONCURRENCY, (shot) =>
-      onGenerate(shot),
-    );
+    await runWithConcurrency(pending, WORKSHOP_BATCH_CONCURRENCY, (shot) => onGenerate(shot));
   }
 
   /* ── 图片提示词：AI 润色 ──
@@ -285,10 +272,12 @@ export function useStoryboardPlanner(props: Props) {
           opts: { temperature: 0.7 },
         });
         const polished = full.trim();
-        if (!polished) throw new Error("模型未返回提示词");
+        if (!polished) {
+          throw new Error("模型未返回提示词");
+        }
         updateShot(shot.id, { prompt: polished });
-      } catch (e: unknown) {
-        polishErrors.report(shot.id)("err", errorMessage(e, "提示词润色失败"));
+      } catch (error: unknown) {
+        polishErrors.report(shot.id)("err", errorMessage(error, "提示词润色失败"));
       }
       /* 忙标记由出口的 `finally` 清。 */
     });
@@ -296,9 +285,7 @@ export function useStoryboardPlanner(props: Props) {
 
   function sceneFallback(shot: Shot): string {
     const scene = scenes.find((sc) => sc.id === shot.sceneId);
-    return [shot.shotType, scene?.location, scene?.action]
-      .filter(Boolean)
-      .join(", ");
+    return [shot.shotType, scene?.location, scene?.action].filter(Boolean).join(", ");
   }
 
   async function polishAll() {

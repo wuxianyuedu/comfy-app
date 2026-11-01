@@ -107,11 +107,10 @@ export function configFingerprint(root) {
   const files = {};
   for (const rel of FINGERPRINT_FILES) {
     const full = path.join(root, rel);
-    if (!fs.existsSync(full)) continue;
-    const digest = crypto
-      .createHash("sha256")
-      .update(fs.readFileSync(full))
-      .digest("hex");
+    if (!fs.existsSync(full)) {
+      continue;
+    }
+    const digest = crypto.hash("sha256", fs.readFileSync(full), "hex");
     files[rel] = digest;
     combined.update(`${rel}\u0000${digest}\u0000`);
   }
@@ -125,11 +124,7 @@ export function configFingerprint(root) {
  * @param {{ hash: string, files: Record<string, string> }} [fingerprint]
  * @returns {{ cleaned: boolean, reason: string }}
  */
-export function syncNextCache(
-  root,
-  env,
-  fingerprint = configFingerprint(root),
-) {
+export function syncNextCache(root, env, fingerprint = configFingerprint(root)) {
   const nextDir = path.join(root, ".next");
   const hashFile = path.join(nextDir, "config-fingerprint");
   const filesFile = path.join(nextDir, "config-fingerprint-files.json");
@@ -160,9 +155,7 @@ export function syncNextCache(
     writeMarks();
     return { cleaned: false, reason: "首次启动：写入初始指纹，执行全量编译" };
   }
-  const saved = fs.existsSync(hashFile)
-    ? fs.readFileSync(hashFile, "utf8").trim()
-    : "";
+  const saved = fs.existsSync(hashFile) ? fs.readFileSync(hashFile, "utf8").trim() : "";
   if (saved === fingerprint.hash) {
     return { cleaned: false, reason: "配置指纹未变，保留缓存" };
   }
@@ -208,7 +201,9 @@ export function brokenKeyDeps(root) {
         broken.push(rel);
         continue;
       }
-      if (fs.readdirSync(real).length === 0) broken.push(rel);
+      if (fs.readdirSync(real).length === 0) {
+        broken.push(rel);
+      }
     } catch {
       broken.push(rel);
     }
@@ -233,7 +228,9 @@ export function checkNodeModules(root) {
   } catch {
     hasNext = false;
   }
-  if (!hasNext) reasons.push("缺 node_modules/.bin/next");
+  if (!hasNext) {
+    reasons.push("缺 node_modules/.bin/next");
+  }
   for (const dep of brokenKeyDeps(root)) {
     reasons.push(`关键依赖目录 node_modules/${dep} 为空或缺失`);
   }
@@ -297,10 +294,12 @@ export function pruneTimestampedLogs(dir, prefixes, keep = 5) {
 export function lockfileDrift(root) {
   const repoLock = path.join(root, "pnpm-lock.yaml");
   const modulesLock = path.join(root, "node_modules", ".pnpm", "lock.yaml");
-  if (!fs.existsSync(repoLock))
+  if (!fs.existsSync(repoLock)) {
     return { state: "no-lockfile", modulesLock: null };
-  if (!fs.existsSync(modulesLock))
+  }
+  if (!fs.existsSync(modulesLock)) {
     return { state: "no-install", modulesLock: null };
+  }
 
   /* 全量 diff 的短路缓存：每次启动都要解析两份 ~1.2 万行的 YAML（数百 ms），
    * 而两份文件的 (size, mtime) 都没变时结论不可能变 —— `pnpm install` 与
@@ -321,9 +320,7 @@ export function lockfileDrift(root) {
       fs.readFileSync(repoLock, "utf8"),
     );
     const result = {
-      state: /** @type {"fresh" | "drift"} */ (
-        isEmptyDiff(diff) ? "fresh" : "drift"
-      ),
+      state: /** @type {"fresh" | "drift"} */ (isEmptyDiff(diff) ? "fresh" : "drift"),
       modulesLock,
       diff,
     };
@@ -360,8 +357,9 @@ function stampOf(file) {
  */
 export function verifyInstall(root) {
   const modules = checkNodeModules(root);
-  if (!modules.healthy)
+  if (!modules.healthy) {
     return { ok: false, reason: modules.reasons.join("；") };
+  }
   const drift = lockfileDrift(root);
   if (drift.state !== "fresh") {
     return {

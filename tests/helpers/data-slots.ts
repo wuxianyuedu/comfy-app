@@ -16,13 +16,18 @@ import { fileURLToPath } from "node:url";
 const SRC_DIR = fileURLToPath(new URL("../../src", import.meta.url));
 
 /** 递归列出目录下的文件（跳过 `node_modules` 与构建产物那一类点开头目录）。 */
-function walk(dir: string): string[] {
-  const out: string[] = [];
+function walk(dir: string): Array<string> {
+  const out: Array<string> = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith(".")) continue;
+    if (entry.name.startsWith(".")) {
+      continue;
+    }
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...walk(full));
-    else if (/\.(tsx|ts)$/.test(entry.name)) out.push(full);
+    if (entry.isDirectory()) {
+      out.push(...walk(full));
+    } else if (/\.(tsx|ts)$/.test(entry.name)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -32,13 +37,15 @@ function walk(dir: string): string[] {
  * 动态拼出来的（`data-slot={name}`）本仓库没有这种形态，真出现了这条判据
  * 会因「查无此名」而红，那是正确形态的红（它在告诉你：口径变了）。
  */
-export function collectDataSlots(): { slots: Set<string>; files: number } {
+export function collectDataSlots(): { files: number; slots: Set<string>; } {
   const slots = new Set<string>();
   const files = walk(SRC_DIR);
   for (const file of files) {
     const text = readFileSync(file, "utf8");
     for (const m of text.matchAll(/data-slot="([^"]+)"/g)) {
-      if (m[1]) slots.add(m[1]);
+      if (m[1]) {
+        slots.add(m[1]);
+      }
     }
   }
   return { slots, files: files.length };

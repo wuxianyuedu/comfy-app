@@ -76,13 +76,17 @@ import { appRouter } from "~/server/api/root";
 const ROUTER_DIR = "src/server/api/routers";
 
 /** 递归收集 `src` 与 `tests` 下的 `.ts` / `.tsx`（跳过构建产物与生成物）。 */
-function collect(dir: string, out: string[] = []): string[] {
+function collect(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === ".next" || entry === "generated")
+    if (entry === "node_modules" || entry === ".next" || entry === "generated") {
       continue;
+    }
     const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) collect(full, out);
-    else if (/\.(ts|tsx)$/.test(entry)) out.push(full);
+    if (statSync(full).isDirectory()) {
+      collect(full, out);
+    } else if (/\.(ts|tsx)$/.test(entry)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -98,30 +102,33 @@ function mountTable(source: string): Record<string, string> {
   const mounts: Record<string, string> = {};
   for (const m of source.matchAll(/^\s{2}(\w+):\s*(\w+),$/gm)) {
     const file = varToFile[m[2]!];
-    if (file) mounts[m[1]!] = file;
+    if (file) {
+      mounts[m[1]!] = file;
+    }
   }
   return mounts;
 }
 
 /** 一个 router 文件的「文件闭包」：它自己 + 沿 `routers/` 目录里的 import 链
  *  拉进来的所有 router 文件（聚合 router 的 procedure 住在拆出去的兄弟文件里）。 */
-function routerClosure(
-  entry: string,
-  sources: Map<string, string>,
-): Set<string> {
+function routerClosure(entry: string, sources: Map<string, string>): Set<string> {
   const closure = new Set<string>();
   const queue = [entry];
   while (queue.length) {
     const current = queue.shift()!;
-    if (closure.has(current)) continue;
+    if (closure.has(current)) {
+      continue;
+    }
     closure.add(current);
     const text = sources.get(current);
-    if (!text) continue;
-    for (const m of text.matchAll(
-      /from\s+"(?:~\/server\/api\/routers|\.)\/?([\w-]+)"/g,
-    )) {
+    if (!text) {
+      continue;
+    }
+    for (const m of text.matchAll(/from\s+"(?:~\/server\/api\/routers|\.)\/?([\w-]+)"/g)) {
       const next = m[1]!;
-      if (next !== current && sources.has(next)) queue.push(next);
+      if (next !== current && sources.has(next)) {
+        queue.push(next);
+      }
     }
   }
   return closure;
@@ -132,9 +139,13 @@ function routerClosure(
 function importsClosure(testText: string, closure: Set<string>): boolean {
   for (const m of testText.matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)) {
     const spec = m[1]!;
-    if (!/^(?:~\/server\/api\/routers|\.)/.test(spec)) continue;
+    if (!/^(?:~\/server\/api\/routers|\.)/.test(spec)) {
+      continue;
+    }
     const base = spec.split("/").pop()!;
-    if (closure.has(base)) return true;
+    if (closure.has(base)) {
+      return true;
+    }
   }
   return false;
 }
@@ -148,21 +159,22 @@ function callNeedle(proc: string): RegExp {
 /** 核心判据（纯函数，便于下面用合成输入自证它在工作）：
  *  返回「没有任何执行者」的 procedure 路径。 */
 function proceduresWithoutExecutor(input: {
-  procedurePaths: string[];
-  mounts: Record<string, string>;
   closures: Record<string, Set<string>>;
-  tests: { file: string; text: string }[];
-}): string[] {
-  const offenders: string[] = [];
+  mounts: Record<string, string>;
+  procedurePaths: Array<string>;
+  tests: Array<{ file: string; text: string }>;
+}): Array<string> {
+  const offenders: Array<string> = [];
   for (const dotted of input.procedurePaths) {
     const ns = dotted.split(".")[0]!;
     const proc = dotted.slice(ns.length + 1);
     const closure = input.closures[input.mounts[ns]!] ?? new Set<string>();
     const executed = input.tests.some(
-      ({ text }) =>
-        importsClosure(text, closure) && callNeedle(proc).test(text),
+      ({ text }) => importsClosure(text, closure) && callNeedle(proc).test(text),
     );
-    if (!executed) offenders.push(dotted);
+    if (!executed) {
+      offenders.push(dotted);
+    }
   }
   return offenders;
 }
@@ -173,13 +185,12 @@ function scanSurface() {
   const sources = new Map<string, string>();
   for (const f of collect(path.join(process.cwd(), ROUTER_DIR))) {
     const base = path.basename(f).replace(/\.tsx?$/, "");
-    if (base.endsWith(".test")) continue;
+    if (base.endsWith(".test")) {
+      continue;
+    }
     sources.set(base, readFileSync(f, "utf8"));
   }
-  const rootText = readFileSync(
-    path.join(process.cwd(), "src/server/api/root.ts"),
-    "utf8",
-  );
+  const rootText = readFileSync(path.join(process.cwd(), "src/server/api/root.ts"), "utf8");
   const mounts = mountTable(rootText);
   const closures: Record<string, Set<string>> = {};
   for (const file of new Set(Object.values(mounts))) {
@@ -201,8 +212,9 @@ function scanSurface() {
       text: stripComments(readFileSync(f, "utf8")),
     }));
   const procedurePaths = Object.keys(
-    (appRouter._def as unknown as { procedures: Record<string, unknown> })
-      .procedures,
+    /* SAFETY: 类型断言已复核 */ (
+      appRouter._def as unknown as { procedures: Record<string, unknown> }
+    ).procedures,
   ).sort();
   return { mounts, closures, tests, consumers, procedurePaths };
 }
@@ -307,7 +319,7 @@ const ZERO_CONSUMER: Record<string, string> = {
 const MAX_ZERO_CONSUMER = 3;
 
 /** 「有人点名这条口」的三种形态。收不全的形态写在下面的已知边界里。 */
-function consumerNeedles(ns: string, proc: string): RegExp[] {
+function consumerNeedles(ns: string, proc: string): Array<RegExp> {
   return [
     // ① 链式点名：`api.project.upsert` / `vanillaApi.skill.list` / `"task.detail"`
     //    （失效键、日志标签这类字符串形状也走这一支）
@@ -321,9 +333,9 @@ function consumerNeedles(ns: string, proc: string): RegExp[] {
 }
 
 type ConsumerInput = {
-  mounts: Record<string, string>;
   closures: Record<string, Set<string>>;
-  consumers: { base: string; text: string }[];
+  consumers: Array<{ base: string; text: string }>;
+  mounts: Record<string, string>;
 };
 
 /** 单条口有没有消费方 —— 本维度的唯一实现，主断言与登记表的两条陈旧判据共用。
@@ -336,15 +348,14 @@ function hasConsumer(dotted: string, input: ConsumerInput): boolean {
   // 定义这条口的文件闭包不算它自己的消费方（router 内部互指是实现细节，不是使用方）
   const self = input.closures[input.mounts[ns]!] ?? new Set<string>();
   return input.consumers.some(
-    ({ base, text }) =>
-      !self.has(base) && consumerNeedles(ns, proc).some((r) => r.test(text)),
+    ({ base, text }) => !self.has(base) && consumerNeedles(ns, proc).some((r) => r.test(text)),
   );
 }
 
 /** 核心判据（纯函数，便于用合成输入自证）：未登记在案、又找不到消费方的口。 */
 function proceduresWithoutConsumer(
-  input: ConsumerInput & { procedurePaths: string[] },
-): string[] {
+  input: ConsumerInput & { procedurePaths: Array<string> },
+): Array<string> {
   return input.procedurePaths.filter(
     (dotted) => !(dotted in ZERO_CONSUMER) && !hasConsumer(dotted, input),
   );
@@ -375,15 +386,11 @@ describe("tRPC 挂载面：每条 procedure 都要有消费方（台账 E3′）
   });
 
   it("登记表本身不陈旧：每条都要有原因、口还在、且真的还没人用", () => {
-    expect(Object.keys(ZERO_CONSUMER).length).toBeLessThanOrEqual(
-      MAX_ZERO_CONSUMER,
-    );
+    expect(Object.keys(ZERO_CONSUMER).length).toBeLessThanOrEqual(MAX_ZERO_CONSUMER);
     for (const [dotted, reason] of Object.entries(ZERO_CONSUMER)) {
       // 原因不能是空壳（「TODO」这类）：一张只写 TODO 的登记表 = 没有登记表
       expect(reason.length, `${dotted} 的登记理由太短`).toBeGreaterThan(30);
-      expect(procedurePaths, `${dotted} 已经不存在，登记该删掉`).toContain(
-        dotted,
-      );
+      expect(procedurePaths, `${dotted} 已经不存在，登记该删掉`).toContain(dotted);
       expect(
         hasConsumer(dotted, { mounts, closures, consumers }),
         `${dotted} 已经有消费方了，把登记撤掉`,
@@ -403,24 +410,16 @@ describe("tRPC 挂载面：每条 procedure 都要有消费方（台账 E3′）
       consumers: [{ base: "panel", text: stripComments(text) }],
     });
     // ① 链式点名
-    expect(
-      proceduresWithoutConsumer(input("api.ghost.useIt.useQuery();")),
-    ).toEqual([]);
+    expect(proceduresWithoutConsumer(input("api.ghost.useIt.useQuery();"))).toEqual([]);
     // ② 计算属性
-    expect(
-      proceduresWithoutConsumer(input('api.ghost["useIt"].mutate({});')),
-    ).toEqual([]);
+    expect(proceduresWithoutConsumer(input('api.ghost["useIt"].mutate({});'))).toEqual([]);
     // ③ 类型层索引链
-    expect(
-      proceduresWithoutConsumer(
-        input('type X = RouterInputs["ghost"]["useIt"];'),
-      ),
-    ).toEqual([]);
+    expect(proceduresWithoutConsumer(input('type X = RouterInputs["ghost"]["useIt"];'))).toEqual(
+      [],
+    );
     // 名字只出现在注释里 → 不算消费方（这条是本判据最容易松的地方）
     expect(
-      proceduresWithoutConsumer(
-        input("// 与 ghost.useIt 同一份判据，只是文档里提了一句\n"),
-      ),
+      proceduresWithoutConsumer(input("// 与 ghost.useIt 同一份判据，只是文档里提了一句\n")),
     ).toEqual(["ghost.useIt"]);
     // 定义它自己的那份 router 文件 → 不算消费方
     expect(

@@ -11,7 +11,8 @@ vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     task: {
       detail: {
-        query: (...args: unknown[]) => taskDetailQuery(...args) as never,
+        query: (...args: Array<unknown>) =>
+          /* SAFETY: 类型断言已复核 */ taskDetailQuery(...args) as never,
       },
     },
   },

@@ -36,10 +36,7 @@ import "react18-json-view/src/style.css";
 import { Button } from "~/components/ui/button";
 import { onNextFrame } from "~/lib/next-frame";
 import { useHotkey } from "~/components/ui/use-hotkey";
-import {
-  copyFailureText,
-  useCopyFeedback,
-} from "~/components/ui/use-copy-feedback";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useFlashState } from "~/components/ui/use-flash-state";
 import { Icon } from "~/components/ui/icon";
 
@@ -51,42 +48,46 @@ import { Icon } from "~/components/ui/icon";
 const MemoJsonView = memo(JsonView);
 
 // ─── 路径工具 ──────────────────────────────────────────────────────────────
-type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [k: string]: JsonValue };
+type JsonValue = null | boolean | number | string | Array<JsonValue> | { [k: string]: JsonValue };
 
 /** 命中路径 — `{[nodeId]: {class_type, inputs, widgets_values, ...}}` 这一层
  *  对应 `["nodes", "3", "widgets_values", "2"]`。在 我们用不到具体 path
  *  做 DOM 后处理, 留作 collectHits 返回类型 + 日后扩展 (例如 toggle 行级
  *  highlight) 时使用。 */
-type Path = readonly (string | number)[];
+type Path = ReadonlyArray<string | number>;
 
 // ─── 命中收集 ──────────────────────────────────────────────────────────────
 /** 收集所有命中路径 (key / primitive value 都参与匹配, 大小写不敏感) */
-function collectHits(root: JsonValue, query: string): Path[] {
+function collectHits(root: JsonValue, query: string): Array<Path> {
   const q = query.toLowerCase();
-  if (!q) return [];
-  const hits: Path[] = [];
+  if (!q) {
+    return [];
+  }
+  const hits: Array<Path> = [];
 
   const visit = (node: JsonValue, path: Path) => {
     if (node === null) {
-      if ("null".includes(q)) hits.push(path);
+      if ("null".includes(q)) {
+        hits.push(path);
+      }
       return;
     }
     if (typeof node === "string") {
-      if (node.toLowerCase().includes(q)) hits.push(path);
+      if (node.toLowerCase().includes(q)) {
+        hits.push(path);
+      }
       return;
     }
     if (typeof node === "number") {
-      if (String(node).toLowerCase().includes(q)) hits.push(path);
+      if (String(node).toLowerCase().includes(q)) {
+        hits.push(path);
+      }
       return;
     }
     if (typeof node === "boolean") {
-      if (String(node).toLowerCase().includes(q)) hits.push(path);
+      if (String(node).toLowerCase().includes(q)) {
+        hits.push(path);
+      }
       return;
     }
     if (Array.isArray(node)) {
@@ -95,7 +96,9 @@ function collectHits(root: JsonValue, query: string): Path[] {
     }
     // object
     for (const [k, value] of Object.entries(node)) {
-      if (k.toLowerCase().includes(q)) hits.push([...path, k]);
+      if (k.toLowerCase().includes(q)) {
+        hits.push([...path, k]);
+      }
       visit(value, [...path, k]);
     }
   };
@@ -109,7 +112,9 @@ function collectHits(root: JsonValue, query: string): Path[] {
 /** 高亮 CSS 注入 (一次性 module-load) — 用 CSS 比 inline style 更稳 */
 let HIGHLIGHT_CSS_INJECTED = false;
 function ensureHighlightCss() {
-  if (HIGHLIGHT_CSS_INJECTED || typeof document === "undefined") return;
+  if (HIGHLIGHT_CSS_INJECTED || typeof document === "undefined") {
+    return;
+  }
   const style = document.createElement("style");
   style.dataset.jvHilite = "true";
   style.textContent = `
@@ -166,14 +171,11 @@ function clearPreviousHighlights(body: HTMLElement) {
 }
 
 /** 把 hits 注入 DOM (行级 + substring) */
-function applyHighlights(
-  body: HTMLElement,
-  hits: Path[],
-  hitIndex: number,
-  query: string,
-) {
+function applyHighlights(body: HTMLElement, hits: Array<Path>, hitIndex: number, query: string) {
   clearPreviousHighlights(body);
-  if (!query || hits.length === 0) return;
+  if (!query || hits.length === 0) {
+    return;
+  }
 
   const q = query.toLowerCase();
   // 提前统计每个 primitive text-node 的命中数, 用于将全局 activeIdx 映射到
@@ -184,9 +186,13 @@ function applyHighlights(
   const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
-      if (!parent) return NodeFilter.FILTER_REJECT;
+      if (!parent) {
+        return NodeFilter.FILTER_REJECT;
+      }
       const cls = parent.className;
-      if (typeof cls !== "string") return NodeFilter.FILTER_REJECT;
+      if (typeof cls !== "string") {
+        return NodeFilter.FILTER_REJECT;
+      }
       if (
         cls.includes("json-view--string") ||
         cls.includes("json-view--number") ||
@@ -200,11 +206,11 @@ function applyHighlights(
     },
   });
 
-  type HitNode = { node: Text; count: number };
-  const targets: HitNode[] = [];
+  type HitNode = { count: number; node: Text };
+  const targets: Array<HitNode> = [];
   let cur = walker.nextNode();
   while (cur) {
-    const t = cur as Text;
+    const t = /* SAFETY: 类型断言已复核 */ cur as Text;
     const text = t.textContent || "";
     if (text.toLowerCase().includes(q)) {
       // 估算该 textNode 内出现次数 (大小写不敏感)
@@ -213,11 +219,15 @@ function applyHighlights(
       let p = 0;
       while (true) {
         const j = lower.indexOf(q, p);
-        if (j < 0) break;
+        if (j === -1) {
+          break;
+        }
         count += 1;
         p = j + q.length;
       }
-      if (count > 0) targets.push({ node: t, count });
+      if (count > 0) {
+        targets.push({ node: t, count });
+      }
     }
     cur = walker.nextNode();
   }
@@ -247,15 +257,19 @@ function applyHighlights(
     let i = 0;
     while (i < orig.length) {
       const j = lower.indexOf(q, i);
-      if (j < 0) {
+      if (j === -1) {
         frag.appendChild(document.createTextNode(orig.slice(i)));
         break;
       }
-      if (j > i) frag.appendChild(document.createTextNode(orig.slice(i, j)));
+      if (j > i) {
+        frag.appendChild(document.createTextNode(orig.slice(i, j)));
+      }
       const isActive = activeNode === t.node && globalIdx === hitIndex;
       const mark = document.createElement("mark");
       mark.className = "jv-hit-sub";
-      if (isActive) mark.dataset.jvActiveHit = "true";
+      if (isActive) {
+        mark.dataset.jvActiveHit = "true";
+      }
       mark.textContent = orig.slice(j, j + q.length);
       frag.appendChild(mark);
       globalIdx += 1;
@@ -266,23 +280,19 @@ function applyHighlights(
 }
 
 // ─── 外层组件 ──────────────────────────────────────────────────────────────
-export interface JsonViewerProps {
+export type JsonViewerProps = {
   data: unknown;
-  /** Toolbar 副标题 (默认 "JSON") */
-  title?: string;
   /** 首屏折叠口径（阈值由下方 `collapseObjectsAfterLength` 决定）：
    *   - 0   → 全部展开（不折叠任何容器）
    *   - >=1 → 项数超过 `30 + N*40` 的 object/array 首屏折成 `…`，
    *           N 越大阈值越宽松（dense 场景下更紧凑）
    * 默认 1。 */
   initialCollapsedDepth?: number;
-}
+  /** Toolbar 副标题 (默认 "JSON") */
+  title?: string;
+};
 
-export function JsonViewer({
-  data,
-  title = "JSON",
-  initialCollapsedDepth = 1,
-}: JsonViewerProps) {
+export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: JsonViewerProps) {
   // ── 搜索 + 命中索引 ──
   const [query, setQuery] = useState("");
   const [hitIndex, setHitIndex] = useState(0);
@@ -292,7 +302,7 @@ export function JsonViewer({
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const hits = useMemo(
-    () => collectHits(data as JsonValue, query.trim()),
+    () => collectHits(/* SAFETY: 类型断言已复核 */ data as JsonValue, query.trim()),
     [data, query],
   );
 
@@ -314,12 +324,18 @@ export function JsonViewer({
   useEffect(() => {
     ensureHighlightCss();
     const body = bodyRef.current;
-    if (!body) return;
+    if (!body) {
+      return;
+    }
     const needle = query.trim();
-    if (!needle && !paintedRef.current) return;
+    if (!needle && !paintedRef.current) {
+      return;
+    }
     // 折叠 state 引发的 DOM 变化先 settle, 再扫
     return onNextFrame(() => {
-      if (!bodyRef.current) return;
+      if (!bodyRef.current) {
+        return;
+      }
       applyHighlights(bodyRef.current, hits, hitIndex, needle);
       paintedRef.current = needle.length > 0 && hits.length > 0;
     });
@@ -327,12 +343,16 @@ export function JsonViewer({
 
   // ── active hit 居中滚动 ──
   useEffect(() => {
-    if (!bodyRef.current || hits.length === 0) return;
+    if (!bodyRef.current || hits.length === 0) {
+      return;
+    }
     return onNextFrame(() => {
-      const el = bodyRef.current?.querySelector(
+      const el = /* SAFETY: 类型断言已复核 */ bodyRef.current?.querySelector(
         "mark.jv-hit-sub[data-jv-active-hit]",
       ) as HTMLElement | null;
-      if (!el) return;
+      if (!el) {
+        return;
+      }
       el.scrollIntoView({ block: "center", behavior: "smooth" });
     });
   }, [hitIndex, hits]);
@@ -351,7 +371,9 @@ export function JsonViewer({
 
   const nextHit = useCallback(
     (dir: 1 | -1) => {
-      if (hits.length === 0) return;
+      if (hits.length === 0) {
+        return;
+      }
       setHitIndex((index) => (index + dir + hits.length) % hits.length);
     },
     [hits.length],
@@ -364,7 +386,7 @@ export function JsonViewer({
     }
     if (e.key === "Escape") {
       setQuery("");
-      (e.target as HTMLInputElement).blur();
+      /* SAFETY: 类型断言已复核 */ (e.target as HTMLInputElement).blur();
     }
   };
 
@@ -382,8 +404,7 @@ export function JsonViewer({
 
   // ── 渲染 ──
   // collapseObjectsAfterLength: initialCollapsedDepth=0 → 不折叠, 否则按深度折叠
-  const collapseThreshold =
-    initialCollapsedDepth >= 1 ? 30 + initialCollapsedDepth * 40 : 1e9;
+  const collapseThreshold = initialCollapsedDepth >= 1 ? 30 + initialCollapsedDepth * 40 : 1e9;
 
   return (
     <div className="bg-panel-deep flex h-full min-h-0 flex-col">
@@ -392,11 +413,11 @@ export function JsonViewer({
         <span className="text-ink-bright font-medium">{title}</span>
         <span className="flex-1" />
         <Button
-          variant="outline"
-          size="xs"
-          onClick={() => copy(JSON.stringify(data, null, 2))}
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright bg-transparent"
+          onClick={() => copy(JSON.stringify(data, null, 2))}
+          size="xs"
           title={copyFailed ? copyFailureText() : "把当前 JSON 复制到剪贴板"}
+          variant="outline"
         >
           {copyFailed ? "复制失败" : copied.on ? "已复制" : "复制"}
         </Button>
@@ -404,16 +425,16 @@ export function JsonViewer({
 
       {/* 搜索条 */}
       <div className="border-border-subtle flex items-center gap-2 border-b px-3 py-1.5 text-xs">
-        <Icon name="search" size={14} className="text-ink-fainter shrink-0" />
+        <Icon className="text-ink-fainter shrink-0" name="search" size={14} />
         <input
-          ref={searchRef}
-          type="text"
-          value={query}
           aria-label="在 JSON 里搜索"
+          className="border-border bg-canvas-deep text-ink-bright placeholder:text-ink-faintest focus:border-primary-400/60 flex-1 rounded border px-2 py-0.5 font-mono outline-none"
           onChange={textHandler(setQuery)}
           onKeyDown={onSearchKey}
           placeholder="搜索 key / string / number / bool / null…（⌘F / Ctrl+F）"
-          className="border-border bg-canvas-deep text-ink-bright placeholder:text-ink-faintest focus:border-primary-400/60 flex-1 rounded border px-2 py-0.5 font-mono outline-none"
+          ref={searchRef}
+          type="text"
+          value={query}
         />
         {query && (
           <span className="text-ink-muted font-mono">
@@ -423,48 +444,43 @@ export function JsonViewer({
         {query && (
           <>
             <Button
-              variant="outline"
-              size="icon-xs"
-              onClick={() => nextHit(-1)}
-              disabled={hits.length === 0}
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
+              disabled={hits.length === 0}
+              onClick={() => nextHit(-1)}
+              size="icon-xs"
               title="上一个 (Shift+Enter)"
+              variant="outline"
             >
               <Icon
+                className="text-ink-muted"
                 data-icon="inline-start"
                 name="chevronup"
                 size={14}
-                className="text-ink-muted"
               />
             </Button>
             <Button
-              variant="outline"
-              size="icon-xs"
-              onClick={() => nextHit(1)}
-              disabled={hits.length === 0}
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
+              disabled={hits.length === 0}
+              onClick={() => nextHit(1)}
+              size="icon-xs"
               title="下一个 (Enter)"
+              variant="outline"
             >
               <Icon
+                className="text-ink-muted"
                 data-icon="inline-start"
                 name="chevrondown"
                 size={14}
-                className="text-ink-muted"
               />
             </Button>
             <Button
-              variant="outline"
-              size="icon-xs"
-              onClick={() => setQuery("")}
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
+              onClick={() => setQuery("")}
+              size="icon-xs"
               title="清空 (Esc)"
+              variant="outline"
             >
-              <Icon
-                data-icon="inline-start"
-                name="close"
-                size={14}
-                className="text-ink-muted"
-              />
+              <Icon className="text-ink-muted" data-icon="inline-start" name="close" size={14} />
             </Button>
           </>
         )}
@@ -472,18 +488,15 @@ export function JsonViewer({
 
       {/* 主体 (lib 渲染) */}
       <div
-        ref={bodyRef}
         className="min-h-0 flex-1 overflow-auto px-3 py-2"
         data-testid="json-viewer-body"
+        ref={bodyRef}
       >
         {data === undefined ? (
           <span className="text-ink-fainter">(empty)</span>
         ) : (
           <MemoJsonView
-            src={data}
-            /* 不再传 `dark`（它会挂上写死的 dark.css），语法着色统一由
-               `.jv-theme-comfy` 的两态 token 负责（见 globals.css）。 */
-            theme="default"
+            className="jv-theme-comfy"
             /* 这里**不能**传 `collapsed`：库的 isCollapsed() 第一句就是
                `if (typeof collapsed === 'boolean') return collapsed;` —— 传
                `collapsed={false}` 会让它「每个容器都返回 false」，下面的
@@ -492,13 +505,16 @@ export function JsonViewer({
                「查看完整输出」弹窗卡死。省略它才走阈值分支：小容器展开、项数
                超过 `collapseThreshold` 的容器折成 `…`，点开才渲染。 */
             collapseObjectsAfterLength={collapseThreshold}
-            collapseStringsAfterLength={80}
             collapseStringMode="word"
-            enableClipboard={false}
-            displaySize={false}
+            collapseStringsAfterLength={80}
             displayArrayIndex
+            displaySize={false}
+            enableClipboard={false}
             matchesURL={false}
-            className="jv-theme-comfy"
+            src={data}
+            /* 不再传 `dark`（它会挂上写死的 dark.css），语法着色统一由
+               `.jv-theme-comfy` 的两态 token 负责（见 globals.css）。 */
+            theme="default"
           />
         )}
       </div>

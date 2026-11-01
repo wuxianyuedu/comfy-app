@@ -14,10 +14,7 @@
  * `projectId` 由调用点注入（原来是函数体内直接 `getActiveId()`）—— 读 store 这件事
  * 一旦写进构造函数，它就再也没法在没有人造上下文的条件下被测。
  */
-import {
-  toWorkflowInputsPayload,
-  type WorkflowIOMap,
-} from "~/components/studio/workflow-io";
+import { toWorkflowInputsPayload, type WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
 import {
   applyParamMapping,
@@ -29,18 +26,18 @@ import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { collectReferenceImages, seedModeOverrides } from "./helpers";
 
 /** 构造一次生成请求所需的全部输入（都来自节点数据 + 该工作流的 IO 映射）。 */
-export interface CanvasGeneratePayloadArgs {
+export type CanvasGeneratePayloadArgs = {
   /** 发起生成的那个节点的数据（工作流 id、对外口的取值、种子控制模式、上游图）。 */
   d: CanvasNodeData;
-  /** 该工作流的对外 IO 表；没有（还没加载完）时按「全部走工作流默认值」兜底。 */
-  wfIO: WorkflowIOMap | null;
-  /** 作者在工作流库配的「对外参数 → 节点端口」映射（`paramMap.source`）。 */
-  wfParamMap?: Record<string, unknown> | null;
-  /** 工作流当前生效的模式（落点覆盖按它归属，`source.mode:<模式>`）。 */
-  wfMode?: string | null;
   /** 项目级产出：归属到哪个画布项目（`getActiveId()` 的结果，由调用点传入）。 */
   projectId?: string | null;
-}
+  /** 该工作流的对外 IO 表；没有（还没加载完）时按「全部走工作流默认值」兜底。 */
+  wfIO: WorkflowIOMap | null;
+  /** 工作流当前生效的模式（落点覆盖按它归属，`source.mode:<模式>`）。 */
+  wfMode?: string | null;
+  /** 作者在工作流库配的「对外参数 → 节点端口」映射（`paramMap.source`）。 */
+  wfParamMap?: Record<string, unknown> | null;
+};
 
 /** 把「这个节点要点一次生成」翻译成 tRPC 入参。 */
 export function buildCanvasGeneratePayload({

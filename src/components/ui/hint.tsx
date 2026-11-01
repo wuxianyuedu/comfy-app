@@ -2,11 +2,7 @@
 
 import { cloneElement, type ReactElement, type ReactNode } from "react";
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 
 /**
  * Hint —— 「给一个控件配悬停提示」的**全库唯一出口**（规范 16 §16.2.3 P82 /
@@ -57,7 +53,11 @@ import {
  * 互不吞并。回归判据：`TopBar.test.tsx` 的 `aria-haspopup` 断言（jsdom 能判，
  * 因为它是渲染结果）+ `e2e/top-bar-app-menu.spec.ts`（菜单真的弹出来只能真浏览器判）。
  */
-export interface HintProps {
+export type HintProps = {
+  /** 纯图标按钮：把 `label` 同时写进子元素的 `aria-label`（已有则不覆盖）。 */
+  accessibleName?: boolean;
+  /** 被提示的控件本身（`<Button>` 或做锚点的元素），必须是单个元素。 */
+  children: ReactElement<{ "aria-label"?: string }>;
   /**
    * 提示文案。传 `undefined` / `""` / `false` 时整条提示不生效（不渲染浮层、
    * trigger 置 `disabled`）—— 这一档是给 `title={cond ? "说明" : undefined}`
@@ -66,27 +66,15 @@ export interface HintProps {
   label?: ReactNode;
   /** 弹出方向，默认 `top`。密集工具条上被裁切时按容器改档。 */
   side?: "top" | "bottom" | "left" | "right";
-  /** 纯图标按钮：把 `label` 同时写进子元素的 `aria-label`（已有则不覆盖）。 */
-  accessibleName?: boolean;
   /** 被提示的控件带 `disabled` 时置真：提示挂到外层锚点，禁用态也能弹。 */
   wrap?: boolean;
-  /** 被提示的控件本身（`<Button>` 或做锚点的元素），必须是单个元素。 */
-  children: ReactElement<{ "aria-label"?: string }>;
-}
+};
 
 function isEmptyLabel(label: ReactNode): boolean {
-  return (
-    label === undefined || label === null || label === "" || label === false
-  );
+  return label === undefined || label === null || label === "" || label === false;
 }
 
-function Hint({
-  label,
-  side = "top",
-  accessibleName = false,
-  wrap = false,
-  children,
-}: HintProps) {
+function Hint({ label, side = "top", accessibleName = false, wrap = false, children }: HintProps) {
   const empty = isEmptyLabel(label);
   /* 补名只在「字符串文案 + 子元素没写 aria-label」时做：富文本 label 当名字
    * 会被读屏器整段念成长串，而已有 aria-label 是调用处更精确的判断。 */
@@ -97,10 +85,7 @@ function Hint({
     children.props["aria-label"] === undefined
       ? label
       : null;
-  const target =
-    autoName !== null
-      ? cloneElement(children, { "aria-label": autoName })
-      : children;
+  const target = autoName === null ? children : cloneElement(children, { "aria-label": autoName });
   const trigger = wrap ? <span className="inline-flex">{target}</span> : target;
 
   return (

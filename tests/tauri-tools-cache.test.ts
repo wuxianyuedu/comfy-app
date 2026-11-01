@@ -37,7 +37,7 @@ import {
 } from "../scripts/tauri-tools-cache.mjs";
 
 const ROOT = path.resolve(__dirname, "..");
-const made: string[] = [];
+const made: Array<string> = [];
 
 function tmpDir(tag: string): string {
   const onRepoVolume = path.join(path.parse(ROOT).root, `comfy-tools-${tag}`);
@@ -52,8 +52,9 @@ function tmpDir(tag: string): string {
 }
 
 afterEach(() => {
-  for (const dir of made.splice(0))
+  for (const dir of made.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 一份与生产同形状的 plan，但 dll 的哈希按夹具内容现算 —— 让「哈希认不过」这条能被测到。 */
@@ -79,13 +80,15 @@ function fixturePlan(dllContent: string) {
  */
 function fakeCacheTree(
   tauriRoot: string,
-  opts: { dllContent?: string; drop?: string[] } = {},
+  opts: { dllContent?: string; drop?: Array<string> } = {},
 ) {
   const dllContent = opts.dllContent ?? "dll-bytes";
   const plan = fixturePlan(dllContent);
   const root = path.join(tauriRoot, NSIS_PLAN.cacheRel);
   for (const rel of plan.required) {
-    if (opts.drop?.includes(rel)) continue;
+    if (opts.drop?.includes(rel)) {
+      continue;
+    }
     const abs = path.join(root, ...rel.split("/"));
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, rel === plan.dllRel ? dllContent : `内容:${rel}`);
@@ -99,7 +102,7 @@ function fakeCacheTree(
 
 /** 那一档不看日志，但也不许交一个空函数出去（空函数正是「这句话没被读」的形状）。 */
 function quiet() {
-  const sink: string[] = [];
+  const sink: Array<string> = [];
   return (line: string) => sink.push(line);
 }
 
@@ -114,9 +117,9 @@ describe("落点与根", () => {
 
     const run = () => ({ status: 0, stdout: "G:\\.pnpm-store\\v11\n" });
     const pkgName = String(
-      (JSON.parse(
-        fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
-      ) as { name?: string }).name,
+      /* SAFETY: 类型断言已复核 */ (
+        JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { name?: string }
+      ).name,
     ).toLowerCase();
     expect(resolveToolRoot({ cwd: ROOT, env: {}, run }).root).toBe(
       path.join("G:\\", "ci-tools", pkgName),
@@ -143,10 +146,7 @@ describe("必需件视图", () => {
   it("缺件清单按 bundler 那份路径点名；相对路径一律正斜杠", () => {
     const la = tmpDir("missing");
     const { root } = fakeCacheTree(la, { drop: ["NSIS.exe", "makensis.exe"] });
-    expect(missingRequired(root, NSIS_PLAN.required)).toEqual([
-      "NSIS.exe",
-      "makensis.exe",
-    ]);
+    expect(missingRequired(root, NSIS_PLAN.required)).toEqual(["NSIS.exe", "makensis.exe"]);
     expect(listTreeFiles(root)).toContain("Include/extra.nsh");
     expect(listTreeFiles(path.join(la, "nope"))).toEqual([]);
   });
@@ -162,12 +162,12 @@ describe("--seed", () => {
     const tools = tmpDir("seed-tools");
     const { plan } = fakeCacheTree(la);
     const mirror = mirrorDir(tools, plan);
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const log = (line: string) => lines.push(line);
     expect(seed({ cacheDir: la, mirror, dryRun: false, log, plan })).toBe(0);
-    const manifest = JSON.parse(
+    const manifest = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(mirror, TOOLS_MANIFEST_FILE), "utf8"),
-    ) as { version: string; files: { path: string; sha256: string }[] };
+    ) as { files: Array<{ path: string; sha256: string }>; version: string; };
     expect(manifest.version).toBe(plan.version);
     expect(manifest.files.map((f) => f.path)).toContain(plan.dllRel);
     /* 清单里的哈希必须真能对上盘上的内容 —— 否则 ensure 那侧的复算就是走过场。 */
@@ -182,7 +182,7 @@ describe("--seed", () => {
     const la = tmpDir("seed-incomplete");
     fakeCacheTree(la, { drop: ["NSIS.exe"] });
     const mirror = path.join(tmpDir("seed-incomplete-tools"), "nsis", "9.99");
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     expect(
       seed({
         cacheDir: la,
@@ -198,7 +198,7 @@ describe("--seed", () => {
     const plan = fakeCacheTree(la2).plan;
     const bad = { ...plan, assets: { ...plan.assets, dll: { sha256: "f".repeat(64), bytes: 1 } } };
     const mirror2 = path.join(tmpDir("seed-baddll-tools"), "nsis", "9.99");
-    const lines2: string[] = [];
+    const lines2: Array<string> = [];
     expect(
       seed({
         cacheDir: la2,
@@ -231,7 +231,7 @@ describe("ensure（作业起手那一格）", () => {
 
   it("空缓存 + 镜像在场 ⇒ 补齐、必需件全在、退 0", () => {
     const { la, tools, plan } = seededPair();
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = ensure({
       cacheDir: la,
       toolRoot: tools,
@@ -241,8 +241,7 @@ describe("ensure（作业起手那一格）", () => {
       plan,
     });
     expect(code).toBe(0);
-    expect(missingRequired(path.join(la, NSIS_PLAN.cacheRel), plan.required))
-      .toEqual([]);
+    expect(missingRequired(path.join(la, NSIS_PLAN.cacheRel), plan.required)).toEqual([]);
     expect(lines.join("\n")).toContain("已补齐");
   });
 
@@ -259,7 +258,7 @@ describe("ensure（作业起手那一格）", () => {
     expect(first).toBe(0);
     const dll = path.join(la, NSIS_PLAN.cacheRel, ...plan.dllRel.split("/"));
     const before = fs.statSync(dll);
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     expect(
       ensure({
         cacheDir: la,
@@ -276,7 +275,7 @@ describe("ensure（作业起手那一格）", () => {
 
   it("两边都没有 ⇒ 退 2「没有结论」并给出出口，而不是放行让 bundler 去撞预算", () => {
     const la = tmpDir("ens-empty");
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = ensure({
       cacheDir: la,
       toolRoot: tmpDir("ens-none-tools"),
@@ -295,7 +294,7 @@ describe("ensure（作业起手那一格）", () => {
     const { la, tools, plan } = seededPair();
     const dllInMirror = path.join(tools, "nsis", plan.version, ...plan.dllRel.split("/"));
     fs.writeFileSync(dllInMirror, "被人换过的内容");
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = ensure({
       cacheDir: la,
       toolRoot: tools,

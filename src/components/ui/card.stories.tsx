@@ -27,7 +27,7 @@ import {
  */
 type CardSize = NonNullable<React.ComponentProps<typeof Card>["size"]>;
 
-const SIZES: CardSize[] = ["default", "sm"];
+const SIZES: Array<CardSize> = ["default", "sm"];
 
 const meta = {
   title: "UI/Card",
@@ -47,9 +47,7 @@ export const Default: Story = {
         <CardDescription>这些取值会写进工作流模板。</CardDescription>
       </CardHeader>
       <CardContent>
-        <p className="text-ink-muted">
-          默认 1024×1024，节点上的同名字段以节点为准。
-        </p>
+        <p className="text-ink-muted">默认 1024×1024，节点上的同名字段以节点为准。</p>
       </CardContent>
     </Card>
   ),
@@ -64,7 +62,7 @@ export const WithAction: Story = {
         <CardTitle>角色一致性 · 三视图</CardTitle>
         <CardDescription>27 个节点 · 昨天更新</CardDescription>
         <CardAction>
-          <Button size="icon-sm" variant="ghost" aria-label="更多操作">
+          <Button aria-label="更多操作" size="icon-sm" variant="ghost">
             <MoreHorizontal />
           </Button>
         </CardAction>
@@ -102,15 +100,13 @@ export const Sizes: Story = {
   render: () => (
     <div className="flex items-start gap-6">
       {SIZES.map((size) => (
-        <Card key={size} size={size} className="w-[18rem]">
+        <Card className="w-[18rem]" key={size} size={size}>
           <CardHeader>
             <CardTitle>size={size}</CardTitle>
             <CardDescription>内边距由 --card-spacing 给</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-ink-muted">
-              default 是 spacing(4)，sm 是 spacing(3)。
-            </p>
+            <p className="text-ink-muted">default 是 spacing(4)，sm 是 spacing(3)。</p>
           </CardContent>
         </Card>
       ))}

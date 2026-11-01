@@ -17,10 +17,10 @@
  *      不是靠人记住（引号混进来时该组会被**静默截断**，而判据读到的是半块）。
  *   ③ 步骤行的两空格缩进就是组内 shell 的形态，行首锚定即「真调用」。
  */
-export type HookStep = { label: string; cmd: string };
+export type HookStep = { cmd: string; label: string; };
 
 /** 全文的 `  run "<标签>" <命令…>` 步骤行（**不分组** —— 门禁链的在场判据用它）。 */
-export function runSteps(hookText: string): HookStep[] {
+export function runSteps(hookText: string): Array<HookStep> {
   return [...hookText.matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
     label: m[1] ?? "",
     cmd: m[2] ?? "",
@@ -37,7 +37,7 @@ export function groupShBody(hookText: string, id: string): string {
 }
 
 /** 某个组内的步骤行（= 组正文上的 {@link runSteps}）。 */
-export function stepsInGroup(hookText: string, id: string): HookStep[] {
+export function stepsInGroup(hookText: string, id: string): Array<HookStep> {
   return runSteps(groupShBody(hookText, id));
 }
 

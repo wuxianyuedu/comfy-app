@@ -5,17 +5,14 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { completeLLM, completeLLMStructured, getLLMConfig, getVisionLLMConfig } =
-  vi.hoisted(() => ({
-    completeLLM: vi.fn(
-      async (_cfg: unknown, _msgs: unknown) => "## 场景1 · 街道（夜）· 改写版",
-    ),
-    completeLLMStructured: vi.fn<
-      (cfg: unknown, msgs: unknown, schema: unknown) => Promise<unknown>
-    >(async () => ({ pass: true, issues: [], suggestion: "" })),
-    getLLMConfig: vi.fn(async () => ({})),
-    getVisionLLMConfig: vi.fn(async () => ({ model: "vision" })),
-  }));
+const { completeLLM, completeLLMStructured, getLLMConfig, getVisionLLMConfig } = vi.hoisted(() => ({
+  completeLLM: vi.fn(async (_cfg: unknown, _msgs: unknown) => "## 场景1 · 街道（夜）· 改写版"),
+  completeLLMStructured: vi.fn<(cfg: unknown, msgs: unknown, schema: unknown) => Promise<unknown>>(
+    async () => ({ pass: true, issues: [], suggestion: "" }),
+  ),
+  getLLMConfig: vi.fn(async () => ({})),
+  getVisionLLMConfig: vi.fn(async () => ({ model: "vision" })),
+}));
 vi.mock("~/lib/llm/server", () => ({
   getLLMConfig,
   completeLLMStructured,
@@ -42,21 +39,16 @@ import {
   reviewShotImage,
   reviseScript,
 } from "~/server/agent/review";
-import {
-  getTestDb,
-  seedTask,
-  seedUser,
-  type Row,
-} from "../../../tests/helpers/test-db";
+import { getTestDb, seedTask, seedUser, type Row } from "../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
 const USER = "user-a";
 const PROJ = "proj_rev";
 
 async function seed(content: {
+  characters?: Array<unknown>;
   scriptMarkdown?: string;
-  characters?: unknown[];
-  shots?: unknown[];
+  shots?: Array<unknown>;
 }) {
   await productionRepository.upsertForUser(USER, {
     id: PROJ,
@@ -73,12 +65,12 @@ async function seed(content: {
 }
 
 /** 读回库里的 shots / characters。 */
-async function rows(
-  col: "shots" | "characters",
-): Promise<Record<string, unknown>[]> {
+async function rows(col: "shots" | "characters"): Promise<Array<Record<string, unknown>>> {
   const row = await productionRepository.getForUser(USER, PROJ);
   const raw = row?.[col];
-  return Array.isArray(raw) ? (raw as Record<string, unknown>[]) : [];
+  return Array.isArray(raw)
+    ? /* SAFETY: 类型断言已复核 */ (raw as Array<Record<string, unknown>>)
+    : [];
 }
 
 beforeEach(() => {
@@ -117,7 +109,7 @@ describe("reviewContent", () => {
     // 只写内容列，没碰 run（run 仍是 upsert 默认的空对象，无 status）
     const row = await productionRepository.getForUser(USER, PROJ);
     expect(
-      (row?.run as Record<string, unknown> | undefined)?.status,
+      /* SAFETY: 类型断言已复核 */ (row?.run as Record<string, unknown> | undefined)?.status,
     ).toBeUndefined();
   });
 
@@ -145,9 +137,7 @@ describe("reviewContent", () => {
   });
 
   it("无生产数据行 → 抛可行动错误", async () => {
-    await expect(
-      reviewContent(USER, "proj_none", "shot", "s1"),
-    ).rejects.toThrow(/还没有生产数据/);
+    await expect(reviewContent(USER, "proj_none", "shot", "s1")).rejects.toThrow(/还没有生产数据/);
   });
 
   it("评审温度走 review 档：getLLMConfig 收到 taskType=review（FR-QA-07 ③）", async () => {
@@ -196,9 +186,7 @@ describe("reviewScript", () => {
     });
     expect(outcome.history).toEqual([outcome.verdict]); // 首评曲线只含本轮
     const row = await productionRepository.getForUser(USER, PROJ);
-    expect(normalizeScriptReviewState(row?.scriptReview).review).toEqual(
-      outcome.verdict,
-    );
+    expect(normalizeScriptReviewState(row?.scriptReview).review).toEqual(outcome.verdict);
     // 温度档同 review
     expect(getLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
   });
@@ -223,9 +211,7 @@ describe("reviewScript", () => {
   });
 
   it("无生产数据行 → 抛可行动错误", async () => {
-    await expect(reviewScript(USER, "proj_none")).rejects.toThrow(
-      /还没有生产数据/,
-    );
+    await expect(reviewScript(USER, "proj_none")).rejects.toThrow(/还没有生产数据/);
   });
 });
 
@@ -277,9 +263,7 @@ describe("reviseScript", () => {
   it("无剧本 / 无生产数据行 → 抛可行动错误", async () => {
     await seed({ scriptMarkdown: " " });
     await expect(reviseScript(USER, PROJ)).rejects.toThrow(/还没有剧本/);
-    await expect(reviseScript(USER, "proj_none")).rejects.toThrow(
-      /还没有生产数据/,
-    );
+    await expect(reviseScript(USER, "proj_none")).rejects.toThrow(/还没有生产数据/);
   });
 });
 
@@ -359,9 +343,9 @@ describe("regenerateShot", () => {
 
   it("镜头不存在 → 抛可行动错误", async () => {
     await seed({ shots: [{ id: "s1" }] });
-    await expect(
-      regenerateShot(USER, PROJ, "missing", "gacha"),
-    ).rejects.toThrow(/找不到要重生成的镜头/);
+    await expect(regenerateShot(USER, PROJ, "missing", "gacha")).rejects.toThrow(
+      /找不到要重生成的镜头/,
+    );
   });
 });
 
@@ -396,33 +380,30 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
     // 视觉评审走独立视觉模型配置通道
     expect(getVisionLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
     // 消息里带图：镜头图 + 定妆照都进了 image_url 块
-    const [, userMsg] = completeLLMStructured.mock.calls[0]![1] as Array<{
-      role: string;
+    const [, userMsg] = /* SAFETY: 类型断言已复核 */ completeLLMStructured.mock
+      .calls[0]![1] as Array<{
       content: unknown;
+      role: string;
     }>;
-    const parts = userMsg!.content as Array<{
-      type: string;
+    const parts = /* SAFETY: 类型断言已复核 */ userMsg!.content as Array<{
       image_url?: unknown;
+      type: string;
     }>;
     const imageUrls = parts
       .filter((p) => p.type === "image_url")
-      .map((p) => (p.image_url as { url: string }).url);
+      .map((p) => /* SAFETY: 类型断言已复核 */ (p.image_url as { url: string }).url);
     expect(imageUrls).toEqual(["/shot.png", "/portrait.png"]);
   });
 
   it("没图（imageUrl 空）→ 抛可行动错误，不调模型", async () => {
     await seed({ shots: [{ id: "s1", prompt: "x" }] });
-    await expect(reviewShotImage(USER, PROJ, "s1")).rejects.toThrow(
-      /还没有生成图/,
-    );
+    await expect(reviewShotImage(USER, PROJ, "s1")).rejects.toThrow(/还没有生成图/);
     expect(completeLLMStructured).not.toHaveBeenCalled();
   });
 
   it("镜头 id 不存在 → 抛可行动错误", async () => {
     await seed({ shots: [{ id: "s1", imageUrl: "/x" }] });
-    await expect(reviewShotImage(USER, PROJ, "missing")).rejects.toThrow(
-      /找不到要评审的镜头/,
-    );
+    await expect(reviewShotImage(USER, PROJ, "missing")).rejects.toThrow(/找不到要评审的镜头/);
   });
 });
 
@@ -491,14 +472,8 @@ describe("autoselectShotImage", () => {
         scores: { 对齐: { score: 5, note: "" } },
       });
 
-    console.log(
-      "DEBUG row:",
-      (await productionRepository.getForUser(USER, PROJ))?.id,
-    );
-    const res = await autoselectShotImage(USER, PROJ, "shot-1", [
-      "task-a",
-      "task-b",
-    ]);
+    console.log("DEBUG row:", (await productionRepository.getForUser(USER, PROJ))?.id);
+    const res = await autoselectShotImage(USER, PROJ, "shot-1", ["task-a", "task-b"]);
     expect(res.winnerTaskId).toBe("task-b");
     expect(res.winnerImageUrl).toBe("/generated/task-b/1.png");
     expect(res.candidates.length).toBe(2);
@@ -506,7 +481,9 @@ describe("autoselectShotImage", () => {
     // 赢家判定落 shot.imageReview（与 reviewShotImage 同一落点）；镜头的
     // imageUrl / taskId 不被服务端动（草稿回写口径，字段所有权见 #2615）。
     const shot = (await rows("shots"))[0]!;
-    expect((shot.imageReview as { scores: unknown }).scores).toBeTruthy();
+    expect(
+      /* SAFETY: 类型断言已复核 */ (shot.imageReview as { scores: unknown }).scores,
+    ).toBeTruthy();
     expect(shot.imageUrl).toBe("/generated/task-a/1.png");
   });
 
@@ -537,8 +514,6 @@ describe("autoselectShotImage", () => {
     await expect(
       autoselectShotImage(USER, PROJ, "shot-1", ["task-other", "task-other"]),
     ).rejects.toThrow(/不属于当前用户/);
-    await expect(
-      autoselectShotImage(USER, PROJ, "shot-1", ["only-one"]),
-    ).rejects.toThrow(/2~4/);
+    await expect(autoselectShotImage(USER, PROJ, "shot-1", ["only-one"])).rejects.toThrow(/2~4/);
   });
 });

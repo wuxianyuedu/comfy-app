@@ -32,8 +32,9 @@ beforeAll(() => {
         void 0;
       }
     }
-    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver =
-      ResizeObserverStub;
+    /* SAFETY: 类型断言已复核 */ (
+      globalThis as unknown as { ResizeObserver: unknown }
+    ).ResizeObserver = ResizeObserverStub;
   }
   // jsdom 没有 Element.prototype.scrollIntoView；cmdk 选中项会调用它。
   if (typeof Element.prototype.scrollIntoView !== "function") {
@@ -70,7 +71,7 @@ afterEach(cleanup);
 describe("CommandDialog 必须有 <Command> 祖先", () => {
   it("打开面板时渲染 cmdk 各部件不抛 'subscribe' 错", () => {
     render(
-      <CommandDialog open onOpenChange={vi.fn()}>
+      <CommandDialog onOpenChange={vi.fn()} open>
         <CommandInput placeholder="搜索…" />
         <CommandList>
           <CommandEmpty>无结果</CommandEmpty>

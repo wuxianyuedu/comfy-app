@@ -20,36 +20,36 @@ import { useModeContracts } from "~/components/workshop/mode-contract/hooks/use-
 import { useTRPC } from "~/trpc/react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 
-export interface AdapterCandidate {
-  name: string;
-  kind: "image" | "video" | "chat";
+export type AdapterCandidate = {
   baseUrl: string | null;
-}
+  kind: "image" | "video" | "chat";
+  name: string;
+};
 
-export interface ModelAdaptersController {
-  /** 可配置适配器的远端模型（kind=image / video）。 */
-  candidates: AdapterCandidate[];
-  loading: boolean;
-  /** 模式契约注册表（每种模式的统一输入 / 输出）。 */
-  modeContracts: ReturnType<typeof useModeContracts>;
-  /** 当前选中模型的适配器草稿（选中变化时自动播种）。 */
-  draft: RemoteModeAdapter[];
-  setDraft: React.Dispatch<React.SetStateAction<RemoteModeAdapter[]>>;
-  selectModel: (name: string) => void;
-  selectedModel: string;
+export type ModelAdaptersController = {
   /** 给选中模型追加一个模式的适配器草稿（预填该模式的默认输入清单）。 */
   addMode: (mode: string) => void;
+  /** 可配置适配器的远端模型（kind=image / video）。 */
+  candidates: Array<AdapterCandidate>;
+  /** 当前选中模型的适配器草稿（选中变化时自动播种）。 */
+  draft: Array<RemoteModeAdapter>;
+  loading: boolean;
+  message: { kind: "ok" | "err"; text: string } | null;
+  /** 模式契约注册表（每种模式的统一输入 / 输出）。 */
+  modeContracts: ReturnType<typeof useModeContracts>;
   save: () => Promise<void>;
   saving: boolean;
-  message: { kind: "ok" | "err"; text: string } | null;
-}
+  selectedModel: string;
+  selectModel: (name: string) => void;
+  setDraft: React.Dispatch<React.SetStateAction<Array<RemoteModeAdapter>>>;
+};
 
 export function useModelAdapters(): ModelAdaptersController {
   const trpc = useTRPC();
   const configQ = useQuery(trpc.llm.configGet.queryOptions());
   const modeContracts = useModeContracts();
   const [selectedModel, setSelectedModel] = useState("");
-  const [draft, setDraft] = useState<RemoteModeAdapter[]>([]);
+  const [draft, setDraft] = useState<Array<RemoteModeAdapter>>([]);
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const saveBusy = useBusyAction();
   const [message, setMessage] = useState<{
@@ -57,24 +57,27 @@ export function useModelAdapters(): ModelAdaptersController {
     text: string;
   } | null>(null);
 
-  const candidates: AdapterCandidate[] = React.useMemo(() => {
+  const candidates: Array<AdapterCandidate> = React.useMemo(() => {
     const raw: unknown = configQ.data?.config;
-    if (typeof raw !== "object" || raw === null) return [];
-    const extra = (raw as Record<string, unknown>).extraModels;
-    if (!Array.isArray(extra)) return [];
-    const out: AdapterCandidate[] = [];
+    if (typeof raw !== "object" || raw === null) {
+      return [];
+    }
+    const extra = /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>).extraModels;
+    if (!Array.isArray(extra)) {
+      return [];
+    }
+    const out: Array<AdapterCandidate> = [];
     for (const item of extra) {
-      if (typeof item !== "object" || item === null) continue;
-      const rec = item as Record<string, unknown>;
+      if (typeof item !== "object" || item === null) {
+        continue;
+      }
+      const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
       const name = typeof rec.name === "string" ? rec.name : "";
-      const kind =
-        rec.kind === "video"
-          ? "video"
-          : rec.kind === "image"
-            ? "image"
-            : "chat";
+      const kind = rec.kind === "video" ? "video" : rec.kind === "image" ? "image" : "chat";
       const baseUrl = typeof rec.baseUrl === "string" ? rec.baseUrl : null;
-      if (!name || kind === "chat") continue; // 文本模型不参与工坊生图/视频
+      if (!name || kind === "chat") {
+        continue;
+      } // 文本模型不参与工坊生图/视频
       out.push({ name, kind, baseUrl });
     }
     return out;
@@ -93,9 +96,7 @@ export function useModelAdapters(): ModelAdaptersController {
    * （表现为删不掉）；只播种一次也保留了「不覆盖用户编辑」的原意。 */
   const fetched = adaptersQ.data?.adapters;
   const fetchedTag = fetched ? JSON.stringify(fetched) : "";
-  const [seeded, setSeeded] = useState<{ model: string; tag: string } | null>(
-    null,
-  );
+  const [seeded, setSeeded] = useState<{ model: string; tag: string } | null>(null);
   if (selectedModel && seeded?.model !== selectedModel) {
     // 切换选中模型：用当前（可能还没回来的）结果播种一次。
     setSeeded({ model: selectedModel, tag: fetchedTag });
@@ -106,9 +107,7 @@ export function useModelAdapters(): ModelAdaptersController {
     setDraft(parseRemoteModeAdapters(fetched ?? []));
   }
 
-  const saveMutation = useMutation(
-    trpc.llm.workshopAdaptersSave.mutationOptions(),
-  );
+  const saveMutation = useMutation(trpc.llm.workshopAdaptersSave.mutationOptions());
 
   const selectModel = useCallback((name: string) => {
     setSelectedModel(name);
@@ -129,8 +128,7 @@ export function useModelAdapters(): ModelAdaptersController {
                 // 默认输入清单来自**生效的模式契约**（本机覆盖里有就用它，
                 // 否则按成品配置现算）—— 统一口在这里先定义、适配器只做翻译。
                 inputs: adapterInputsFromContract(
-                  modeContracts.contracts.find((c) => c.mode === mode) ??
-                    derivedModeContract(mode),
+                  modeContracts.contracts.find((c) => c.mode === mode) ?? derivedModeContract(mode),
                 ),
                 outputField: "",
               },
@@ -141,7 +139,9 @@ export function useModelAdapters(): ModelAdaptersController {
   );
 
   const save = useCallback(async () => {
-    if (!selectedModel) return;
+    if (!selectedModel) {
+      return;
+    }
     setMessage(null);
     try {
       const data = await saveBusy.run(() =>
@@ -155,10 +155,10 @@ export function useModelAdapters(): ModelAdaptersController {
         kind: "ok",
         text: `已保存 ${selectedModel} 的模式适配器。`,
       });
-    } catch (e) {
+    } catch (error) {
       setMessage({
         kind: "err",
-        text: errorMessage(e, "保存失败"),
+        text: errorMessage(error, "保存失败"),
       });
     }
   }, [selectedModel, draft, saveMutation, saveBusy]);

@@ -71,13 +71,7 @@ export type IOEditContextValue = ReturnType<typeof useIOEditContext>;
  *  NodeIdChip — 节点头部 `#id` 章，点击弹出 JSON 查看器。
  *  数据来自 store hook `useNodeJsonViewer`（弹层本身的挂点在 WorkflowStores）。
  * ──────────────────────────────────────────────────────────────────────── */
-export function NodeIdChip({
-  nodeId,
-  variant,
-}: {
-  nodeId: string;
-  variant: "node" | "subgraph";
-}) {
+export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node" | "subgraph" }) {
   const viewerApi = useNodeJsonViewer();
   const ref = React.useRef<HTMLButtonElement | null>(null);
   const requestShow = viewerApi.requestShow;
@@ -89,27 +83,27 @@ export function NodeIdChip({
 
   const handleOpen = (e: React.SyntheticEvent) => {
     e.stopPropagation();
-    const el = e.currentTarget as HTMLElement;
+    const el = /* SAFETY: 类型断言已复核 */ e.currentTarget as HTMLElement;
     requestShow(el, nodeId, variant);
   };
 
   return (
     <Hint label={`查看节点 ${nodeId} 在工作流 JSON 中的原始数据`}>
       <Button
-        ref={ref}
-        variant="outline"
-        data-node-id-chip={nodeId}
-        data-variant={variant}
-        onClick={handleOpen}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
         aria-label={`查看节点 #${nodeId} 的原始 JSON 数据`}
         className={
           variant === "subgraph"
             ? "nodrag nopan group border-primary-400/40 bg-primary-500/10 text-primary-strong hover:border-primary-300/70 hover:bg-primary-500/25 focus:ring-primary-400/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold tracking-wider uppercase focus:ring-1 focus:outline-none"
             : "nodrag nopan group border-info/45 bg-info/15 text-info-strong hover:border-info/70 hover:bg-info/25 focus:ring-info/40 inline-flex h-auto shrink-0 cursor-pointer items-center gap-0.5 rounded px-1 font-mono text-[9.5px] font-semibold focus:ring-1 focus:outline-none"
         }
+        data-node-id-chip={nodeId}
+        data-variant={variant}
+        onClick={handleOpen}
+        onDoubleClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        ref={ref}
+        variant="outline"
       >
         <span aria-hidden style={{ fontSize: 9, lineHeight: 1 }}>
           🔍
@@ -121,13 +115,7 @@ export function NodeIdChip({
 }
 
 /** rgthree Power Lora Loader — 每行参数暴露的勾选（输入→左；输出→右）。 */
-export function IoCheckbox({
-  ioRef,
-  io,
-}: {
-  ioRef: IoRef;
-  io: IOEditContextValue;
-}) {
+export function IoCheckbox({ ioRef, io }: { io: IOEditContextValue; ioRef: IoRef }) {
   const key = `${ioRef.nodeId}::${ioRef.kind}::${ioRef.name}`;
   const checked = !!io.workflowIO[key];
   const isOut = ioRef.direction === "output";
@@ -135,15 +123,10 @@ export function IoCheckbox({
   return (
     <Checkbox
       checked={checked}
+      className="size-3.5"
       onCheckedChange={() => io.toggleIO(ioRef)}
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
-      title={
-        checked
-          ? `已暴露为工作流${dirLabel}`
-          : `点击将其暴露为工作流${dirLabel}`
-      }
-      className="size-3.5"
       style={{
         width: 13,
         height: 13,
@@ -153,6 +136,7 @@ export function IoCheckbox({
         accentColor: checked ? "#fbbf24" : "#a1a1aa",
         cursor: "pointer",
       }}
+      title={checked ? `已暴露为工作流${dirLabel}` : `点击将其暴露为工作流${dirLabel}`}
     />
   );
 }

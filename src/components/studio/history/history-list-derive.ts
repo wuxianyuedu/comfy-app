@@ -6,21 +6,19 @@ import type { FilterKey, SortKey, TaskItem } from "./history-types";
 import { dateBucket } from "./history-utils";
 import { getOrCreate } from "~/lib/collections";
 
-export interface TaskGroup {
+export type TaskGroup = {
+  items: Array<TaskItem>;
   /** 日期桶标题（今天 / 昨天 / yyyy-mm-dd）。 */
   key: string;
-  items: TaskItem[];
-}
+};
 
 /** 筛选：ALL 表示不过滤。 */
-export function filterTasks(tasks: TaskItem[], filter: FilterKey): TaskItem[] {
-  return filter === "ALL"
-    ? tasks
-    : tasks.filter((task) => task.status === filter);
+export function filterTasks(tasks: Array<TaskItem>, filter: FilterKey): Array<TaskItem> {
+  return filter === "ALL" ? tasks : tasks.filter((task) => task.status === filter);
 }
 
 /** 排序：newest 时间倒序，oldest 时间正序。返回新数组，不改入参。 */
-export function sortTasks(tasks: TaskItem[], sort: SortKey): TaskItem[] {
+export function sortTasks(tasks: Array<TaskItem>, sort: SortKey): Array<TaskItem> {
   return [...tasks].sort((taskA, taskB) => {
     const da = new Date(taskA.createdAt).getTime();
     const db = new Date(taskB.createdAt).getTime();
@@ -29,20 +27,21 @@ export function sortTasks(tasks: TaskItem[], sort: SortKey): TaskItem[] {
 }
 
 /** 各状态计数：ALL 为总数，其余按 status 累加。 */
-export function countByStatus(tasks: TaskItem[]): Record<string, number> {
+export function countByStatus(tasks: Array<TaskItem>): Record<string, number> {
   const countsMap: Record<string, number> = { ALL: tasks.length };
-  for (const task of tasks)
+  for (const task of tasks) {
     countsMap[task.status] = (countsMap[task.status] ?? 0) + 1;
+  }
   return countsMap;
 }
 
 /** 按日期分组（已排序的输入，保持组内顺序）。 */
-export function groupByDate(tasks: TaskItem[]): TaskGroup[] {
-  const bucketMap = new Map<string, TaskItem[]>();
+export function groupByDate(tasks: Array<TaskItem>): Array<TaskGroup> {
+  const bucketMap = new Map<string, Array<TaskItem>>();
   for (const task of tasks) {
     getOrCreate(bucketMap, dateBucket(task.createdAt), () => []).push(task);
   }
-  return Array.from(bucketMap.entries()).map(([key, items]) => ({
+  return [...bucketMap.entries()].map(([key, items]) => ({
     key,
     items,
   }));
@@ -54,22 +53,22 @@ export function groupByDate(tasks: TaskItem[]): TaskGroup[] {
  * 语义完整：一个分组要么整组可见，要么整组不展开。
  */
 export function paginateGroups(
-  groups: TaskGroup[],
+  groups: Array<TaskGroup>,
   displayCount: number,
-): { visibleGroups: TaskGroup[]; visibleTotal: number; canLoadMore: boolean } {
+): { canLoadMore: boolean; visibleGroups: Array<TaskGroup>; visibleTotal: number } {
   let remaining = displayCount;
-  const visibleGroups: TaskGroup[] = [];
+  const visibleGroups: Array<TaskGroup> = [];
   for (const group of groups) {
-    if (remaining <= 0) break;
+    if (remaining <= 0) {
+      break;
+    }
     const sliced = group.items.slice(0, remaining);
-    if (sliced.length > 0)
+    if (sliced.length > 0) {
       visibleGroups.push({ key: group.key, items: sliced });
+    }
     remaining -= group.items.length;
   }
-  const visibleTotal = visibleGroups.reduce(
-    (sum, group) => sum + group.items.length,
-    0,
-  );
+  const visibleTotal = visibleGroups.reduce((sum, group) => sum + group.items.length, 0);
   return {
     visibleGroups,
     visibleTotal,
@@ -77,7 +76,7 @@ export function paginateGroups(
   };
 }
 
-function total(groups: TaskGroup[]): number {
+function total(groups: Array<TaskGroup>): number {
   return groups.reduce((sum, group) => sum + group.items.length, 0);
 }
 
@@ -85,7 +84,7 @@ function total(groups: TaskGroup[]): number {
 export function emptyStateText(
   filter: FilterKey,
   filterLabel: string,
-): { title: string; hint: string } {
+): { hint: string; title: string } {
   if (filter === "ALL") {
     return {
       title: "暂无任务记录",

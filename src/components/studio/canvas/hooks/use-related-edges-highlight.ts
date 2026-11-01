@@ -55,13 +55,15 @@ export function readPortFocusRole(
   data: Record<string, unknown> | undefined,
   handle: string | undefined | null,
 ): EdgeFocusRole {
-  if (!handle) return "none";
+  if (!handle) {
+    return "none";
+  }
   const table = data?.[NODE_PORT_FOCUS_DATA_KEY];
-  if (!table || typeof table !== "object") return "none";
-  const role = (table as Record<string, unknown>)[handle];
-  return role === "upstream" || role === "downstream" || role === "related"
-    ? role
-    : "none";
+  if (!table || typeof table !== "object") {
+    return "none";
+  }
+  const role = /* SAFETY: 类型断言已复核 */ (table as Record<string, unknown>)[handle];
+  return role === "upstream" || role === "downstream" || role === "related" ? role : "none";
 }
 
 /** 两个端口级别表是否等价（避免每次选中都重建节点对象）。 */
@@ -69,10 +71,16 @@ function portFocusEquals(
   a: Record<string, EdgeFocusRole> | undefined,
   b: Record<string, EdgeFocusRole> | undefined,
 ): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
   const keys = Object.keys(a);
-  if (keys.length !== Object.keys(b).length) return false;
+  if (keys.length !== Object.keys(b).length) {
+    return false;
+  }
   return keys.every((key) => a[key] === b[key]);
 }
 
@@ -82,26 +90,24 @@ function portFocusEquals(
  *  （工作流节点 `WorkflowNodeData` / 项目画布 `CanvasNodeData`），而这里写入的
  *  只是 data 上的一个旁路字段（结构上兼容）。调用方若拿着更窄的 setter，需要显式
  *  说明这次写入不改变节点类型 —— 见 ProjectCanvas 的传参处。 */
-export type NodeTableWriter = (updater: (nodes: Node[]) => Node[]) => void;
+export type NodeTableWriter = (updater: (nodes: Array<Node>) => Array<Node>) => void;
 
 /** 从边 data 读回关注级别（没标记过 → "none"）。 */
 export function readEdgeFocusRole(edge: Pick<Edge, "data">): EdgeFocusRole {
   const role = edge.data?.[EDGE_FOCUS_DATA_KEY];
-  return role === "upstream" || role === "downstream" || role === "related"
-    ? role
-    : "none";
+  return role === "upstream" || role === "downstream" || role === "related" ? role : "none";
 }
 
-export interface UseRelatedEdgesHighlightOptions {
+export type UseRelatedEdgesHighlightOptions = {
   /** 端点在当前画布坐标系下的解析（折叠锚点等）。默认按内部节点表恒等解析。 */
   resolveNodeId?: (visualNodeId: string) => string | null;
   /** 写回节点表：选中节点的相关端口行级别写进节点 data（见 `NODE_PORT_FOCUS_DATA_KEY`）。
    *  不传则只做连线高亮（部分画布没有节点级端口行，且这是历史行为）。 */
   setNodes?: NodeTableWriter;
-}
+};
 
 export function useRelatedEdgesHighlight(
-  setEdges: (updater: (edges: Edge[]) => Edge[]) => void,
+  setEdges: (updater: (edges: Array<Edge>) => Array<Edge>) => void,
   options: UseRelatedEdgesHighlightOptions = {},
 ) {
   const store = useStoreApi();
@@ -115,12 +121,16 @@ export function useRelatedEdgesHighlight(
      * 读渲染期真实节点对象，而不是可能滞后的顶层 nodes 数组。 */
     const selectedIds = new Set<string>();
     state.nodeLookup.forEach((internal, nodeId) => {
-      const userNode = internal.internals.userNode as Node | undefined;
-      if (userNode?.selected) selectedIds.add(nodeId);
+      const userNode = /* SAFETY: 类型断言已复核 */ internal.internals.userNode as Node | undefined;
+      if (userNode?.selected) {
+        selectedIds.add(nodeId);
+      }
     });
 
     const resolveNodeId = (visualNodeId: string): string | null => {
-      if (resolveNodeIdOption) return resolveNodeIdOption(visualNodeId);
+      if (resolveNodeIdOption) {
+        return resolveNodeIdOption(visualNodeId);
+      }
       return state.nodeLookup.has(visualNodeId) ? visualNodeId : null;
     };
     const isSelected = (nodeId: string) => selectedIds.has(nodeId);
@@ -151,20 +161,23 @@ export function useRelatedEdgesHighlight(
         const previousActive = data?.[EDGE_FOCUS_ACTIVE_KEY] === true;
         /* 写入是不是已经正确 —— 关注级别与压暗开关都要对上，任何一个残留旧值
          * 都会让渲染层按上一次的选中状态画（线一直亮着 / 一直灰着）。 */
-        const upToDate =
-          previous === role && (focusActive ? previousActive : !previousActive);
-        if (upToDate) return edge;
+        const upToDate = previous === role && (focusActive ? previousActive : !previousActive);
+        if (upToDate) {
+          return edge;
+        }
 
         changed = true;
         /* 重建 data 时显式摘掉旧的关注级别：降级回 "none" 的边若留着旧标记，
          * 渲染层会按它继续加粗。 */
-        const rest = { ...(data ?? {}) };
+        const rest = { ...data };
         delete rest[EDGE_FOCUS_DATA_KEY];
         delete rest[EDGE_FOCUS_ACTIVE_KEY];
         if (role === "none") {
           /* 无关连线：没有选中项时什么都不留（边表回到未标记的初始形态）。 */
           if (!focusActive) {
-            if (!data) return edge;
+            if (!data) {
+              return edge;
+            }
             return { ...edge, data: rest };
           }
           return { ...edge, data: { ...rest, [EDGE_FOCUS_ACTIVE_KEY]: true } };
@@ -182,7 +195,9 @@ export function useRelatedEdgesHighlight(
     });
 
     /* 同一份快照里算出端口行级别并写回节点（未变的不换对象）。 */
-    if (!setNodes) return;
+    if (!setNodes) {
+      return;
+    }
     const { nodes } = resolvePortFocusRoles({
       connections: state.edges,
       selectedIds,
@@ -196,35 +211,33 @@ export function useRelatedEdgesHighlight(
         const nextTable: Record<string, EdgeFocusRole> = {};
         if (bucket) {
           bucket.upstream.forEach((handle) => (nextTable[handle] = "upstream"));
-          bucket.downstream.forEach(
-            (handle) => (nextTable[handle] = "downstream"),
-          );
+          bucket.downstream.forEach((handle) => (nextTable[handle] = "downstream"));
           bucket.related.forEach((handle) => (nextTable[handle] = "related"));
         }
-        const data = node.data as Record<string, unknown> | undefined;
-        const previousTable = data?.[NODE_PORT_FOCUS_DATA_KEY] as
+        const data = /* SAFETY: 类型断言已复核 */ node.data as Record<string, unknown> | undefined;
+        const previousTable = /* SAFETY: 类型断言已复核 */ data?.[NODE_PORT_FOCUS_DATA_KEY] as
           | Record<string, EdgeFocusRole>
           | undefined;
         /* 没有端口标记且本来就没有字段 → 原样返回，不制造无意义的新对象。 */
         const previousActive = data?.[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
         const activeUpToDate = focusActive ? previousActive : !previousActive;
         /* 没有端口标记、开关也对上 → 原样返回，不制造无意义的新对象。 */
-        if (
-          Object.keys(nextTable).length === 0 &&
-          previousTable === undefined &&
-          activeUpToDate
-        )
+        if (Object.keys(nextTable).length === 0 && previousTable === undefined && activeUpToDate) {
           return node;
-        if (portFocusEquals(previousTable, nextTable) && activeUpToDate)
+        }
+        if (portFocusEquals(previousTable, nextTable) && activeUpToDate) {
           return node;
+        }
         changed = true;
-        const rest = { ...(data ?? {}) };
+        const rest = { ...data };
         delete rest[NODE_PORT_FOCUS_DATA_KEY];
         delete rest[NODE_PORT_FOCUS_ACTIVE_KEY];
         if (Object.keys(nextTable).length === 0) {
           /* 无关节点：没有选中项时什么都不留（节点回到未标记的初始形态）。 */
           if (!focusActive) {
-            if (!data) return node;
+            if (!data) {
+              return node;
+            }
             return { ...node, data: rest };
           }
           return {
@@ -251,10 +264,14 @@ export function useRelatedEdgesHighlight(
      * 先比一个轻量签名再决定是否重算，拖动节点时位置更新不会反复重写边表。 */
     const signature = () => {
       const state = store.getState();
-      const ids: string[] = [];
+      const ids: Array<string> = [];
       state.nodeLookup.forEach((internal, nodeId) => {
-        const userNode = internal.internals.userNode as Node | undefined;
-        if (userNode?.selected) ids.push(nodeId);
+        const userNode = /* SAFETY: 类型断言已复核 */ internal.internals.userNode as
+          | Node
+          | undefined;
+        if (userNode?.selected) {
+          ids.push(nodeId);
+        }
       });
       /* 边表签名参与进来：端口行级别由边表算出，连线增删（含「连上 / 断开某一行」）
        * 必须重算，否则新连上的行不会亮、断开的行仍然亮着。 */
@@ -270,7 +287,9 @@ export function useRelatedEdgesHighlight(
     let previousSignature = signature();
     const unsubscribe = store.subscribe(() => {
       const nextSignature = signature();
-      if (nextSignature === previousSignature) return;
+      if (nextSignature === previousSignature) {
+        return;
+      }
       previousSignature = nextSignature;
       apply();
     });

@@ -19,24 +19,19 @@ import {
   SidebarRail,
 } from "~/components/ui/sidebar";
 
-import {
-  sidebarNavItems,
-  isProjectTab,
-  PROJECTS_ENTRY,
-  type WorkspaceView,
-} from "./NavItems";
+import { sidebarNavItems, isProjectTab, PROJECTS_ENTRY, type WorkspaceView } from "./NavItems";
 import { CommandPalette } from "./CommandPalette";
 import { TopBar } from "./TopBar";
 import { ViewTabStrip, type OpenableView } from "./ViewTabStrip";
 import { useTitleBarTabsActive } from "./hooks/use-title-bar-tabs-active";
-import { type ViewTab } from "./workspace-tabs";
+import type { ViewTab } from "./workspace-tabs";
 import { ViewActionsProvider } from "./ViewActions";
 
 /** 侧栏底部「项目」分组里列出的一条项目（只需 id + 展示名）。 */
-export interface SidebarProject {
+export type SidebarProject = {
   id: string;
   name: string;
-}
+};
 
 /**
  * 一条项目的**缩略图标**。
@@ -54,34 +49,25 @@ function ProjectGlyph() {
   return (
     <svg
       aria-hidden
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
       fill="none"
+      height="16"
       stroke="currentColor"
-      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+      width="16"
     >
-      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <rect height="18" rx="2" width="18" x="3" y="3" />
       <path d="M3 9h18M9 21V9" />
       <circle cx="15" cy="15" r="2" />
     </svg>
   );
 }
 
-export interface AppShellProps {
+export type AppShellProps = {
   /** 当前视图（决定侧栏高亮与顶部标题）。 */
   active: WorkspaceView;
-  /** 切换视图。 */
-  onSelect: (view: WorkspaceView) => void;
-  /** 打开设置 —— 切到 `settings` **视图页签**（与历史 / 队列 / 控制台同一套），
-   *  不再是 workspace 上的一层浮层，也不跳 `/settings` 路由：组件树因此不卸载。 */
-  onOpenSettings: () => void;
-  /** 首帧侧栏展开态。由服务端读 `sidebar_state` cookie 传来（见 `ui/sidebar` 里那段说明）；不传按展开。 */
-  defaultSidebarOpen?: boolean;
-  /** 底部「项目」分组列出的项目（来自 canvas-store）。 */
-  projects: SidebarProject[];
   /** 当前活跃项目 id。
    *
    *  ⚠️ 它是**存储里那一格活跃 id**，不等于「用户此刻在这个项目里」—— 两者
@@ -89,25 +75,34 @@ export interface AppShellProps {
    *  持有活跃 id，但那一屏上没有任何项目内容，把 id 直接当高亮判据会让分组里
    *  某一项**看起来被选中、而它对应的内容一处都没显示**（ISSUE #1691 第 2 条）。 */
   activeProjectId: string | null;
-  /** 点开某个项目 → 进入项目界面（画布为其默认页签）。 */
-  onOpenProject: (id: string) => void;
-  /** 「查看全部」→ 项目网格落地页（works）。 */
-  onShowAllProjects: () => void;
-  /** 新建项目 → 建一条 proj_* 并进画布。 */
-  onNewProject: () => void;
+  activeViewKey?: string;
   /** 主内容。各视图只往这里塞东西，外壳细节（侧栏 / 顶栏 / 滚动容器）不归它们管。 */
   children: ReactNode /**
    * 视图页签（浏览器 / dev 形态下由外壳渲染在内容列最顶端的栏，位于 TopBar 之上）。
    * 不传时外壳行为与从前一致。
    */;
-  viewTabs?: ViewTab[];
-  activeViewKey?: string;
-  projectNameOf?: (projectId: string | null) => string | null | undefined;
-  onSelectViewTab?: (key: string) => void;
+  /** 首帧侧栏展开态。由服务端读 `sidebar_state` cookie 传来（见 `ui/sidebar` 里那段说明）；不传按展开。 */
+  defaultSidebarOpen?: boolean;
   onCloseViewTab?: (key: string) => void;
-  openableViews?: OpenableView[];
+  /** 新建项目 → 建一条 proj_* 并进画布。 */
+  onNewProject: () => void;
+  /** 点开某个项目 → 进入项目界面（画布为其默认页签）。 */
+  onOpenProject: (id: string) => void;
+  /** 打开设置 —— 切到 `settings` **视图页签**（与历史 / 队列 / 控制台同一套），
+   *  不再是 workspace 上的一层浮层，也不跳 `/settings` 路由：组件树因此不卸载。 */
+  onOpenSettings: () => void;
   onOpenView?: (view: WorkspaceView) => void;
-}
+  /** 切换视图。 */
+  onSelect: (view: WorkspaceView) => void;
+  onSelectViewTab?: (key: string) => void;
+  /** 「查看全部」→ 项目网格落地页（works）。 */
+  onShowAllProjects: () => void;
+  openableViews?: Array<OpenableView>;
+  projectNameOf?: (projectId: string | null) => string | null | undefined;
+  /** 底部「项目」分组列出的项目（来自 canvas-store）。 */
+  projects: Array<SidebarProject>;
+  viewTabs?: Array<ViewTab>;
+};
 
 /**
  * 应用外壳 —— 左侧栏（官方 `ui/sidebar`）+ 顶部工具条（`TopBar`）+ 主内容。
@@ -177,10 +172,7 @@ export function AppShell({
     /* 视图动作槽的宿主在 `TopBar`、使用者是各视图（它的后代）—— 提供者因此
        必须裹住两者。见 `ViewActions` 里那段「为什么是槽不是注册表」。 */
     <ViewActionsProvider>
-      <SidebarProvider
-        defaultOpen={defaultSidebarOpen}
-        className="h-full min-h-0"
-      >
+      <SidebarProvider className="h-full min-h-0" defaultOpen={defaultSidebarOpen}>
         <Sidebar collapsible="icon">
           <SidebarContent>
             <SidebarGroup>
@@ -193,14 +185,14 @@ export function AppShell({
                         {/* 未上线的视图留在列表里但禁用：移除会让「以后有这个」这件事消失，
                           禁用则给出「即将推出」（`tooltip` 里写明）。 */}
                         <SidebarMenuButton
-                          isActive={active === item.id}
                           disabled={!enabled}
-                          tooltip={
-                            enabled ? item.label : `${item.label}（即将推出）`
-                          }
+                          isActive={active === item.id}
                           onClick={() => {
-                            if (enabled) onSelect(item.id);
+                            if (enabled) {
+                              onSelect(item.id);
+                            }
                           }}
+                          tooltip={enabled ? item.label : `${item.label}（即将推出）`}
                         >
                           {item.icon}
                           <span>{item.label}</span>
@@ -224,16 +216,6 @@ export function AppShell({
                 <SidebarMenu>
                   <SidebarMenuItem>
                     <Disclosure
-                      defaultOpen
-                      marker="chevron"
-                      trigger={
-                        <>
-                          {PROJECTS_ENTRY.icon}
-                          <span className="group-data-[collapsible=icon]:hidden">
-                            {PROJECTS_ENTRY.label}
-                          </span>
-                        </>
-                      }
                       className={cn(
                         "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                         "rounded-md p-2 text-sm font-medium [&_svg]:size-4 [&_svg]:shrink-0",
@@ -243,18 +225,26 @@ export function AppShell({
                         "group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center",
                         "group-data-[collapsible=icon]:**:data-[slot=disclosure-marker]:hidden",
                       )}
+                      defaultOpen
+                      marker="chevron"
                       panelClassName="mt-1"
+                      trigger={
+                        <>
+                          {PROJECTS_ENTRY.icon}
+                          <span className="group-data-[collapsible=icon]:hidden">
+                            {PROJECTS_ENTRY.label}
+                          </span>
+                        </>
+                      }
                     >
                       <SidebarMenu>
                         {projects.map((project) => (
                           <SidebarMenuItem key={project.id}>
                             <SidebarMenuButton
-                              size="sm"
-                              isActive={
-                                insideProject && project.id === activeProjectId
-                              }
-                              tooltip={project.name}
+                              isActive={insideProject && project.id === activeProjectId}
                               onClick={() => onOpenProject(project.id)}
+                              size="sm"
+                              tooltip={project.name}
                             >
                               {/* 缩略图标：展开态与缩略态都要有，否则收起后
                                 按钮里只剩一个空格子（名称被 `truncate` 掉）。 */}
@@ -265,20 +255,16 @@ export function AppShell({
                         ))}
                         <SidebarMenuItem>
                           <SidebarMenuButton
+                            onClick={onShowAllProjects}
                             size="sm"
                             tooltip="查看全部"
-                            onClick={onShowAllProjects}
                           >
                             <LayoutGrid />
                             <span>查看全部</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                         <SidebarMenuItem>
-                          <SidebarMenuButton
-                            size="sm"
-                            tooltip="新建项目"
-                            onClick={onNewProject}
-                          >
+                          <SidebarMenuButton onClick={onNewProject} size="sm" tooltip="新建项目">
                             <Plus />
                             <span>新建项目</span>
                           </SidebarMenuButton>
@@ -305,32 +291,30 @@ export function AppShell({
             保留在 `SidebarInset` 内部是为了让 fixed 侧栏自然让位，避免被侧栏压住关闭按钮。 */}
           {titleBarTabs ? null : (
             <ViewTabStrip
-              tabs={viewTabs ?? []}
               activeKey={activeViewKey ?? ""}
-              projectNameOf={projectNameOf}
-              onSelect={(key) => onSelectViewTab?.(key)}
               onClose={(key) => onCloseViewTab?.(key)}
-              openableViews={openableViews}
               onOpenView={onOpenView}
+              onSelect={(key) => onSelectViewTab?.(key)}
+              openableViews={openableViews}
+              projectNameOf={projectNameOf}
+              tabs={viewTabs ?? []}
             />
           )}
 
           <TopBar
             active={active}
-            onOpenSettings={onOpenSettings}
             onOpenSearch={() => setCommandOpen(true)}
+            onOpenSettings={onOpenSettings}
           />
 
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            {children}
-          </div>
+          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
         </SidebarInset>
 
         <CommandPalette
-          open={commandOpen}
-          onOpenChange={setCommandOpen}
           active={active}
+          onOpenChange={setCommandOpen}
           onSelect={onSelect}
+          open={commandOpen}
         />
       </SidebarProvider>
     </ViewActionsProvider>

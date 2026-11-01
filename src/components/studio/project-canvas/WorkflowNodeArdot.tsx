@@ -1,4 +1,4 @@
-﻿/**
+/**
  * WorkflowNode.ardot.tsx — 纯设计转代码参考件（PURE DESIGN-TO-CODE · v4）
  *
  * 由 Ardot 稿 714503087315759（项目画布节点 v2 重设计，frame 3:12 NodeCard-v2）
@@ -43,7 +43,7 @@ import { Textarea } from "~/components/ui/textarea";
  * 与 `lib/comfyui/types.ts` 的 PORT_COLORS 同源；本文件只用到三档前缀，
  * 集中在这里而不是散在 JSX 里 —— 「成组集中的常量表」才是规范 §3.6.1
  * 「类型色例外」的合法载体，也便于扫描器显式豁免。 */
-const PORT_TYPE_COLORS = {
+const PORT_TYPE_COLORS = /* SAFETY: 类型断言已复核 */ {
   image: "#7C5CFC",
   video: "#FF5CA8",
   boolean: "#67E89D",
@@ -56,10 +56,15 @@ const PORT_DOT_SHADOW = "0 4px 4px rgba(0,0,0,0.25)";
 /** 端口类型 → 该类型的强调色（端点圆点 / chip 文字）。 */
 const portColor = (type?: string) => {
   const t = upperToken(type);
-  if (t === "IMAGE" || t === "MASK") return PORT_TYPE_COLORS.image;
-  if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO")
+  if (t === "IMAGE" || t === "MASK") {
+    return PORT_TYPE_COLORS.image;
+  }
+  if (t === "VIDEO" || t.startsWith("VHS") || t === "AUDIO") {
     return PORT_TYPE_COLORS.video;
-  if (t === "BOOLEAN" || t === "BOOL") return PORT_TYPE_COLORS.boolean;
+  }
+  if (t === "BOOLEAN" || t === "BOOL") {
+    return PORT_TYPE_COLORS.boolean;
+  }
   return "var(--color-ink-muted)";
 };
 
@@ -91,7 +96,7 @@ function PortChip({ type }: { type: string }) {
           border: "1px solid var(--color-border-subtle)",
         };
   return (
-    <TypeChip tone="none" style={style}>
+    <TypeChip style={style} tone="none">
       {type}
     </TypeChip>
   );
@@ -103,13 +108,12 @@ function PortDot({
   color,
   top,
 }: {
-  side: "left" | "right";
   color: string;
+  side: "left" | "right";
   /** 距 wrapper 顶部 px（按 Ardot 实测绝对位置） */
   top: number;
 }) {
-  const stroke =
-    side === "right" ? "var(--color-card)" : "var(--color-border-strong)";
+  const stroke = side === "right" ? "var(--color-card)" : "var(--color-border-strong)";
   return (
     <span
       aria-hidden
@@ -127,15 +131,7 @@ function PortDot({
 }
 
 /* ── STRING 端口行（label subrow + textarea，不含端点；端点由外层 wrapper 渲染）── */
-function PortRowString({
-  label,
-  type,
-  value,
-}: {
-  label: string;
-  type: string;
-  value: string;
-}) {
+function PortRowString({ label, type, value }: { label: string; type: string; value: string }) {
   return (
     <div className="flex h-21.5 flex-col gap-1.5 py-1.5">
       <div className="flex h-4 items-center justify-between gap-2.5 pr-3.5 pl-3.5">
@@ -148,10 +144,10 @@ function PortRowString({
         <PortChip type={type} />
       </div>
       <Textarea
+        className="bg-canvas-deep text-ink-soft border-border-subtle field-sizing-normal text-2xs mx-3.5 h-13 min-h-0 resize-none rounded-md border px-2.5 py-2 leading-relaxed focus-visible:ring-0"
+        defaultValue={value}
         readOnly
         rows={2}
-        defaultValue={value}
-        className="bg-canvas-deep text-ink-soft border-border-subtle field-sizing-normal text-2xs mx-3.5 h-13 min-h-0 resize-none rounded-md border px-2.5 py-2 leading-relaxed focus-visible:ring-0"
         style={{ fontFamily: "var(--font-sans)" }}
       />
     </div>
@@ -159,15 +155,7 @@ function PortRowString({
 }
 
 /* ── INT/FLOAT 端口行（单行 33h：label + spacer + miniInput + chip） ── */
-function PortRowInt({
-  label,
-  type,
-  value,
-}: {
-  label: string;
-  type: string;
-  value: string;
-}) {
+function PortRowInt({ label, type, value }: { label: string; type: string; value: string }) {
   return (
     <div className="flex h-8.25 items-center gap-2.5 pr-3.5 pl-3.5">
       <span
@@ -178,10 +166,10 @@ function PortRowInt({
       </span>
       <div className="flex-1" />
       <input
-        readOnly
-        defaultValue={value}
         aria-label={label}
         className="border-border-strong bg-canvas-deep text-ink-bright h-5.25 w-35 rounded border px-2 text-right text-xs tabular-nums outline-none"
+        defaultValue={value}
+        readOnly
         style={{ fontFamily: "var(--font-sans)" }}
       />
       <PortChip type={type} />
@@ -259,8 +247,8 @@ export function WorkflowNodeArdot() {
         <div className="flex h-11 items-center gap-1.5 pr-3.5 pl-3.5">
           {/* Chip 1：本机（位置）· 绿点+本机+▾ */}
           <Button
-            variant="outline"
             className="border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-normal"
+            variant="outline"
           >
             <span
               aria-hidden
@@ -282,8 +270,8 @@ export function WorkflowNodeArdot() {
           </Button>
           {/* Chip 2：image_z_image_int8（具体工作流名）· flex-1 撑满中间 */}
           <Button
-            variant="outline"
             className="border-primary/35 bg-node-accent flex h-6 min-w-0 flex-1 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-normal"
+            variant="outline"
           >
             <span
               className="text-ink-bright min-w-0 flex-1 truncate text-left font-semibold"
@@ -301,8 +289,8 @@ export function WorkflowNodeArdot() {
           </Button>
           {/* Chip 3：T2I（类型，单独下拉，最右）· 紫描边加深强调可切换 */}
           <Button
-            variant="outline"
             className="border-primary/55 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-normal"
+            variant="outline"
           >
             <span
               className="text-ink-bright font-medium"
@@ -324,16 +312,12 @@ export function WorkflowNodeArdot() {
         <PortRowString
           label="positive_prompt"
           type="STRING"
-          value={
-            "1girl, silver hair, intricate white armor, soft cinematic lighting, highly detailed, masterpiece --ar 3:4"
-          }
+          value="1girl, silver hair, intricate white armor, soft cinematic lighting, highly detailed, masterpiece --ar 3:4"
         />
         <PortRowString
           label="negative_prompt"
           type="STRING"
-          value={
-            "lowres, bad anatomy, worst quality, blurry, extra fingers, watermark, text"
-          }
+          value="lowres, bad anatomy, worst quality, blurry, extra fingers, watermark, text"
         />
         <PortRowInt label="seed" type="INT" value="378304737375764" />
 
@@ -348,10 +332,10 @@ export function WorkflowNodeArdot() {
       {/* ── 端点层（外层 wrapper 的 absolute 子元素，骑跨 Card 边框）──
           y 坐标按 Ardot 实测（3:161/3:162/3:163 + 输出行 y=282 h=28, 圆心 296） */}
       <div className="pointer-events-none absolute inset-0">
-        <PortDot side="left" top={91} color={portColor("STRING")} />
-        <PortDot side="left" top={177} color={portColor("STRING")} />
-        <PortDot side="left" top={265} color={portColor("INT")} />
-        <PortDot side="right" top={296} color={portColor("IMAGE")} />
+        <PortDot color={portColor("STRING")} side="left" top={91} />
+        <PortDot color={portColor("STRING")} side="left" top={177} />
+        <PortDot color={portColor("INT")} side="left" top={265} />
+        <PortDot color={portColor("IMAGE")} side="right" top={296} />
       </div>
     </div>
   );

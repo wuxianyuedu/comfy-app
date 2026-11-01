@@ -39,9 +39,9 @@ export const Sizes: Story = {
 export const InButton: Story = {
   render: () => (
     <button
-      type="button"
-      disabled
       className="bg-primary text-primary-foreground inline-flex h-8 items-center gap-2 rounded-md px-3 text-sm opacity-80"
+      disabled
+      type="button"
     >
       <Spinner />
       正在生成

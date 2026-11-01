@@ -60,7 +60,7 @@ const ROOT = process.cwd();
  * @param globs glob 清单
  * @returns 是否被某一条罩住
  */
-function coveredBy(rel: string, globs: readonly string[]): boolean {
+function coveredBy(rel: string, globs: ReadonlyArray<string>): boolean {
   return globs.some((g) => globToRe(g).test(rel));
 }
 
@@ -84,10 +84,7 @@ function closure(): ReturnType<typeof docsApiInputClosure> {
  * 于是依赖它的那一条是**产物级条件断言**（登记在 `tests/conditional-skip-registry.test.ts`，
  * tier=artifact）—— 「绿」与「产物级判据跑过」不是同一件事。
  */
-const productPath = path.join(
-  ROOT,
-  "docs/api/functions/lib_db-backup_backup.createBackup.html",
-);
+const productPath = path.join(ROOT, "docs/api/functions/lib_db-backup_backup.createBackup.html");
 const productOnDisk = fs.existsSync(productPath);
 
 describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
@@ -102,11 +99,7 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
      * （否则 `scripts/db-backup-core.mjs` 会把 `scripts` 整个目录划进去），
      * 它自己是一个根外叶子。 */
     const rootsOfEntryPoints = [
-      ...new Set(
-        typedocEntryPoints()
-          .filter(isGlobEntryPoint)
-          .map(rootOfEntryPoint),
-      ),
+      ...new Set(typedocEntryPoints().filter(isGlobEntryPoint).map(rootOfEntryPoint)),
     ];
     expect(rootsOfEntryPoints.sort()).toEqual(c.roots);
     /* 三根的 glob 形态必须都在收窄面里：面罩不住根 = 根下的改动全漏判。 */
@@ -117,17 +110,16 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
 
   it("typedoc 的取反括号与 exclude 都被认出来（测试文件不是入口点）", () => {
     const eps = typedocEntryPoints();
-    expect(eps.length, "typedoc.json 里一条 entryPoint 都没有 —— 根算出来是空的").toBeGreaterThan(0);
+    expect(eps.length, "typedoc.json 里一条 entryPoint 都没有 —— 根算出来是空的").toBeGreaterThan(
+      0,
+    );
     for (const ep of eps) {
       if (isGlobEntryPoint(ep)) {
         expect(
           negatedBasenamePattern(ep),
           `${ep} 里没有取反括号 —— 取反失效会让测试文件变成入口点`,
         ).not.toBeNull();
-        expect(
-          [".ts", ".tsx"],
-          `${ep} 的扩展名认错了`,
-        ).toContain(entryPointExtension(ep));
+        expect([".ts", ".tsx"], `${ep} 的扩展名认错了`).toContain(entryPointExtension(ep));
       } else {
         /* 单文件入口（ISSUE #2444）：没有取反括号形态可言，但它本身必须
          * 在盘上且带扩展名 —— typedoc 真读它，读不到就是配置漂了。 */
@@ -173,20 +165,23 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
     expect(fs.readFileSync(source, "utf8")).toContain("BackupResult");
   });
 
-  it.skipIf(!productOnDisk)("它定义的类型真的出现在产物里（产物不在 git 里 ⇒ 本机没生成就没有）", () => {
-    /* 这一条是**产物级**断言：产物在盘上才判。产物出库（ISSUE #2231）之后它是一档
-     * 条件跳过（tier=artifact），登记在 `tests/conditional-skip-registry.test.ts` ——
-     * 「绿」与「产物级判据跑过」不是同一件事，那张表就是这句话的账。 */
-    expect(fs.readFileSync(productPath, "utf8")).toContain("BackupResult");
-  });
+  it.skipIf(!productOnDisk)(
+    "它定义的类型真的出现在产物里（产物不在 git 里 ⇒ 本机没生成就没有）",
+    () => {
+      /* 这一条是**产物级**断言：产物在盘上才判。产物出库（ISSUE #2231）之后它是一档
+       * 条件跳过（tier=artifact），登记在 `tests/conditional-skip-registry.test.ts` ——
+       * 「绿」与「产物级判据跑过」不是同一件事，那张表就是这句话的账。 */
+      expect(fs.readFileSync(productPath, "utf8")).toContain("BackupResult");
+    },
+  );
 
   it("面罩得住闭包：闭包算出来的每一个叶子都被收窄面罩住（面判窄了 = 漏判）", () => {
     const c = closure();
     const uncovered = c.leaves.filter((l) => !coveredBy(l, INPUT_GLOBS));
     expect(
       uncovered,
-      `闭包里有 ${uncovered.length} 个文件不在收窄面里 —— 改它们会改产物，却不会被判到：` +
-        uncovered.join(", "),
+      `闭包里有 ${uncovered.length} 个文件不在收窄面里 —— 改它们会改产物，却不会被判到：${
+        uncovered.join(", ")}`,
     ).toEqual([]);
   });
 
@@ -195,21 +190,19 @@ describe("docs/api 输入面的传递闭包（ISSUE #2223）", () => {
     const phantom = CLOSURE_LEAVES.filter((l) => !leaves.has(l));
     expect(
       phantom,
-      `收窄面里这 ${phantom.length} 条已经不在闭包里了（要么没人引用，要么被 typedoc 排除了）：` +
-        phantom.join(", "),
+      `收窄面里这 ${phantom.length} 条已经不在闭包里了（要么没人引用，要么被 typedoc 排除了）：${
+        phantom.join(", ")}`,
     ).toEqual([]);
   });
 
   it("闭包里不在那批叶子里的，必须被别的 glob 罩住（当前只有 package.json）", () => {
     const c = closure();
     const others = INPUT_GLOBS.filter((g) => !CLOSURE_LEAVES.includes(g));
-    const orphans = c.leaves.filter(
-      (l) => !CLOSURE_LEAVES.includes(l) && !coveredBy(l, others),
-    );
+    const orphans = c.leaves.filter((l) => !CLOSURE_LEAVES.includes(l) && !coveredBy(l, others));
     expect(
       orphans,
-      `闭包里有 ${orphans.length} 个文件既不在那批叶子里、也不被别的 glob 罩住：` +
-        orphans.join(", "),
+      `闭包里有 ${orphans.length} 个文件既不在那批叶子里、也不被别的 glob 罩住：${
+        orphans.join(", ")}`,
     ).toEqual([]);
   });
 });

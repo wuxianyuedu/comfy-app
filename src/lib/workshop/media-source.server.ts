@@ -11,11 +11,7 @@ import { promises as fs } from "node:fs";
 import { isRecord } from "~/lib/is-record";
 import { artifactDiskPath } from "~/lib/media/output-paths";
 import { isInlineMedia, parseDataUrl, toDataUrl } from "~/lib/media/data-url";
-import {
-  DEFAULT_IMAGE_MIME,
-  extOfPath,
-  mimeForExt,
-} from "~/lib/media/mime-ext";
+import { DEFAULT_IMAGE_MIME, extOfPath, mimeForExt } from "~/lib/media/mime-ext";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
 const MAX_BYTES = 24 * 1024 * 1024;
@@ -27,35 +23,42 @@ function localPathFor(src: string): string | null {
   return artifactDiskPath(src);
 }
 
-export interface ResolvedMedia {
+export type ResolvedMedia = {
   buffer: Buffer;
   mime: string;
-}
+};
 
 /**
  * 从 data URL、本地生成路径或绝对 http(s) URL 加载图片字节。
  * 源不可用时抛出带可读说明的错误。
  */
-export async function resolveMediaBytes(
-  src: string,
-  _origin: string,
-): Promise<ResolvedMedia> {
+export async function resolveMediaBytes(src: string, _origin: string): Promise<ResolvedMedia> {
   if (isInlineMedia(src)) {
     /* 「怎么读回一个 data URL 的 MIME 与载荷」只有一处定义
      *（`~/lib/media/data-url`，规范 16 §16.2.4.56）。 */
     const parsed = parseDataUrl(src);
-    if (!parsed) throw new Error("data URL 格式无效");
+    if (!parsed) {
+      throw new Error("data URL 格式无效");
+    }
     const buffer = Buffer.from(parsed.base64, "base64");
-    if (buffer.byteLength === 0) throw new Error("data URL 解码为空");
-    if (buffer.byteLength > MAX_BYTES) throw new Error("图片超过 24MB 上限");
+    if (buffer.byteLength === 0) {
+      throw new Error("data URL 解码为空");
+    }
+    if (buffer.byteLength > MAX_BYTES) {
+      throw new Error("图片超过 24MB 上限");
+    }
     return { buffer, mime: parsed.mime };
   }
 
   if (src.startsWith("/")) {
     const abs = localPathFor(src);
-    if (!abs) throw new Error(`无法定位本地生成文件: ${src}`);
+    if (!abs) {
+      throw new Error(`无法定位本地生成文件: ${src}`);
+    }
     const buffer = await fs.readFile(abs);
-    if (buffer.byteLength > MAX_BYTES) throw new Error("图片超过 24MB 上限");
+    if (buffer.byteLength > MAX_BYTES) {
+      throw new Error("图片超过 24MB 上限");
+    }
     /* `mimeForExt` 收的是**扩展名**，不是路径 —— 传整条路径时它永远查不到，
      * 于是这一支此前**恒**回 `image/png`（webp / jpeg 的产物被标成 png 发给
      * 远程通道）。取扩展名走 `extOfPath`（与 `contentTypeForPath` 同一把尺）。 */
@@ -66,20 +69,22 @@ export async function resolveMediaBytes(
     let res: Response;
     try {
       res = await fetch(src, { signal: AbortSignal.timeout(30_000) });
-    } catch (e) {
-      throw new Error(errorText(e, "拉取参考图失败"), { cause: e });
+    } catch (error) {
+      throw new Error(errorText(error, "拉取参考图失败"), { cause: error });
     }
-    if (!res.ok) throw new Error(`拉取参考图失败 (${res.status})`);
+    if (!res.ok) {
+      throw new Error(`拉取参考图失败 (${res.status})`);
+    }
     const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.byteLength > MAX_BYTES) throw new Error("图片超过 24MB 上限");
+    if (buffer.byteLength > MAX_BYTES) {
+      throw new Error("图片超过 24MB 上限");
+    }
     const mime = res.headers.get("content-type")?.split(";")[0] ?? undefined;
     return {
       buffer,
       /* 类型头说不是图（网关错误页的 text/html、空类型头）时按 URL 的扩展名回落 ——
        * 同样要先取扩展名再查表，见上面本地分支那条注释。 */
-      mime: mime?.startsWith("image/")
-        ? mime
-        : (mimeForExt(extOfPath(src)) ?? DEFAULT_IMAGE_MIME),
+      mime: mime?.startsWith("image/") ? mime : (mimeForExt(extOfPath(src)) ?? DEFAULT_IMAGE_MIME),
     };
   }
 
@@ -87,10 +92,7 @@ export async function resolveMediaBytes(
 }
 
 /* 与 resolveMediaBytes 相同，只是返回内联 data URL（给远程 API 用）。 */
-export async function resolveMediaDataUrl(
-  src: string,
-  _origin: string,
-): Promise<string> {
+export async function resolveMediaDataUrl(src: string, _origin: string): Promise<string> {
   const { buffer, mime } = await resolveMediaBytes(src, _origin);
   return toDataUrl(buffer, mime);
 }
@@ -99,7 +101,7 @@ export async function resolveMediaDataUrl(
 export async function readUpstreamJson(res: Response): Promise<unknown> {
   const text = await res.text();
   try {
-    return JSON.parse(text) as unknown;
+    return /* SAFETY: 类型断言已复核 */ JSON.parse(text) as unknown;
   } catch {
     throw new Error(
       `上游返回非 JSON (${res.status}): ${clampText(text, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}`,
@@ -108,10 +110,7 @@ export async function readUpstreamJson(res: Response): Promise<unknown> {
 }
 
 /* 从 unknown 响应体里按默认值取字符串字段（请求侧守卫）。 */
-export function strField(
-  rec: Record<string, unknown>,
-  key: string,
-): string | undefined {
+export function strField(rec: Record<string, unknown>, key: string): string | undefined {
   const v: unknown = rec[key];
   return typeof v === "string" && v.trim().length > 0 ? v : undefined;
 }
@@ -124,8 +123,10 @@ export function intField(
   max: number,
 ): number | undefined {
   const v: unknown = rec[key];
-  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
-  if (!Number.isFinite(n)) return undefined;
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : Number.NaN;
+  if (!Number.isFinite(n)) {
+    return undefined;
+  }
   const clamped = clampInt(n, min, max);
   return clamped;
 }

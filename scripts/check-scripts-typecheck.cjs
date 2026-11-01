@@ -171,22 +171,28 @@ function trackedMjs(root) {
     cwd: root,
     encoding: "utf8",
   });
-  if (top.status !== 0 || !String(top.stdout ?? "").trim()) return null;
+  if (top.status !== 0 || !String(top.stdout ?? "").trim()) {
+    return null;
+  }
   /* 比 realpath：Windows 上盘符大小写与 8.3 形态都会让字符串不同而目录相同。 */
   const same = (p) => {
     try {
-      return fs.realpathSync(p).replace(/\\/g, "/").toLowerCase();
+      return fs.realpathSync(p).replaceAll("\\", "/").toLowerCase();
     } catch {
-      return path.resolve(p).replace(/\\/g, "/").toLowerCase();
+      return path.resolve(p).replaceAll("\\", "/").toLowerCase();
     }
   };
-  if (same(String(top.stdout).trim()) !== same(root)) return null;
+  if (same(String(top.stdout).trim()) !== same(root)) {
+    return null;
+  }
   const listed = spawnSync("git", ["ls-files", "-z", "--", "*.mjs"], {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
-  if (listed.status !== 0 || listed.error) return null;
+  if (listed.status !== 0 || listed.error) {
+    return null;
+  }
   return new Set(
     String(listed.stdout ?? "")
       .split("\0")
@@ -206,11 +212,15 @@ function trackedMjs(root) {
  * @returns {{face: string[], untracked: string[], filtered: boolean}}
  */
 function splitTrackedFace(mjs, tracked) {
-  if (tracked === null) return { face: mjs, untracked: [], filtered: false };
+  if (tracked === null) {
+    return { face: mjs, untracked: [], filtered: false };
+  }
   const face = [];
   /** @type {string[]} */
   const untracked = [];
-  for (const f of mjs) (tracked.has(f) ? face : untracked).push(f);
+  for (const f of mjs) {
+    (tracked.has(f) ? face : untracked).push(f);
+  }
   return { face, untracked, filtered: true };
 }
 
@@ -235,7 +245,9 @@ function diskFace(configList, excludes = []) {
       const abs = path.join(dir, e.name);
       const rel = path.relative(ROOT, abs).replaceAll("\\", "/");
       if (e.isDirectory()) {
-        if (e.name.startsWith(".")) continue;
+        if (e.name.startsWith(".")) {
+          continue;
+        }
         walk(abs);
       } else if (e.isFile() && e.name.endsWith(".mjs")) {
         out.push(rel);
@@ -245,11 +257,14 @@ function diskFace(configList, excludes = []) {
   walk(ROOT);
   out.sort();
   const excludedTop = new Set(
-    excludes.map((e) => String(e).replace(/^\*\*\//, "").split("/")[0]),
+    excludes.map(
+      (e) =>
+        String(e)
+          .replace(/^\*\*\//, "")
+          .split("/")[0],
+    ),
   );
-  const missed = out.filter(
-    (rel) => !inConfig.has(rel) && !excludedTop.has(rel.split("/")[0]),
-  );
+  const missed = out.filter((rel) => !inConfig.has(rel) && !excludedTop.has(rel.split("/")[0]));
   return { all: out, missed };
 }
 
@@ -269,23 +284,24 @@ function faceProblems(cfg, ran, face = cfg.ok ? cfg.mjs : []) {
   const { missed } = diskFace(cfg.mjs, cfg.excludes);
   if (missed.length) {
     problems.push(
-      `判决面漏了这些 .mjs（盘上有、配置没收到）：\n` +
-        missed.map((f) => `    · ${f}`).join("\n") +
-        `\n  要么 ${CONFIG_REL} 的 include 被改窄了，要么它落进了一个新的 exclude 条目`,
+      `判决面漏了这些 .mjs（盘上有、配置没收到）：\n${
+        missed.map((f) => `    · ${f}`).join("\n")
+        }\n  要么 ${CONFIG_REL} 的 include 被改窄了，要么它落进了一个新的 exclude 条目`,
     );
   }
   if (ran.listed.length) {
     const listed = new Set(
-      ran.listed
-        .map((f) => path.relative(ROOT, f).replaceAll("\\", "/"))
-        .filter(Boolean),
+      ran.listed.map((f) => path.relative(ROOT, f).replaceAll("\\", "/")).filter(Boolean),
     );
     const notRun = face.filter((f) => !listed.has(f));
     if (notRun.length) {
       problems.push(
-        `配置声称在判、tsc 却没报回来这些文件（⇒ 这一跑不可信）：\n` +
-          notRun.slice(0, 10).map((f) => `    · ${f}`).join("\n") +
-          (notRun.length > 10 ? `\n    · …共 ${notRun.length} 份` : ""),
+        `配置声称在判、tsc 却没报回来这些文件（⇒ 这一跑不可信）：\n${
+          notRun
+            .slice(0, 10)
+            .map((f) => `    · ${f}`)
+            .join("\n")
+          }${notRun.length > 10 ? `\n    · …共 ${notRun.length} 份` : ""}`,
       );
     }
   }
@@ -345,7 +361,9 @@ function parseOutput(output) {
   let unparsed = 0;
   for (const raw of output.split(/\r?\n/)) {
     const line = raw.trim();
-    if (!line) continue;
+    if (!line) {
+      continue;
+    }
     const m = DIAG_RE.exec(line);
     if (m) {
       diags.push({
@@ -356,8 +374,11 @@ function parseOutput(output) {
       continue;
     }
     /* `--listFiles` 报的是绝对路径；其余散文行（比如 next 插件的提示）忽略并计数。 */
-    if (path.isAbsolute(line.replace(/^"|"$/g, ""))) listed.push(line);
-    else unparsed += 1;
+    if (path.isAbsolute(line.replaceAll(/^"|"$/g, ""))) {
+      listed.push(line);
+    } else {
+      unparsed += 1;
+    }
   }
   return { diags, listed, unparsed };
 }
@@ -372,9 +393,7 @@ function tally(diags) {
   /** @type {Record<string, Record<string, number>>} */
   const files = {};
   for (const d of diags) {
-    const rel = path.isAbsolute(d.rel)
-      ? path.relative(ROOT, d.rel).replaceAll("\\", "/")
-      : d.rel;
+    const rel = path.isAbsolute(d.rel) ? path.relative(ROOT, d.rel).replaceAll("\\", "/") : d.rel;
     files[rel] ??= {};
     files[rel][d.code] = (files[rel][d.code] ?? 0) + 1;
   }
@@ -385,11 +404,13 @@ function tally(diags) {
 /* ── 基线 ───────────────────────────────────────────────────────── */
 
 function readBaseline() {
-  if (!fs.existsSync(BASELINE)) return null;
+  if (!fs.existsSync(BASELINE)) {
+    return null;
+  }
   try {
     return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-  } catch (e) {
-    return { __broken: `基线文件不是合法 JSON：${e.message}` };
+  } catch (error) {
+    return { __broken: `基线文件不是合法 JSON：${error.message}` };
   }
 }
 
@@ -406,10 +427,13 @@ function writeBaseline(cur, faceSize) {
       "记账的**棘轮**，只许降不许升（ISSUE #2524 / 规范 §13.5.14.1）。登记时实测 320 处 / 31 份；" +
       "合并并行那批 #2585（scripts 的 84 条死代码逐条清零）之后重测 310 处 / 29 份 —— 其中 " +
       "`TS6133`（声明了没用到）已被那一批当场清零、**账上 0 格**，所以本档从一开始就不给死代码留额度。" +
-      "为什么剩下的不清零：约一半是 `TS7006` 隐式 any 参数（要给 JSDoc 补类型），另一半是 `TS2339` / " +
-      "`TS18048` / `TS2532` 那一族要在启动链与构建链上加守卫的真改动 —— 同批做完等于把「覆盖面收口」" +
-      "押在一份改动最大的 PR 上。逐条清的账是 #2589，读数由 `pnpm check:scripts-types -- --report` 现算。" +
-      "规则版本变了必须同步改脚本常数。",
+      "**剩下的已由 ISSUE #2589 按文件逐份清零，本档现在是空账**（`files` 为 `{}`、`total` 为 0）：" +
+      "它不再登记任何「已知欠账」，任何一格出现都是新增 ⇒ 红。清账那一份一份的因果与凭据在 " +
+      "ISSUE #2589 的批记录评论与提交信息（主语前缀「脚本档清账批」）里 —— 那里也是「为什么" +
+      "当初不当场清零」那句话的出处：把「覆盖面收口」与「改动面最大的一次脚本重写」押进同一张单，" +
+      "改动跑挂了会被读成「扩面这件事不该做」，两件事的结论再也分不开。读数由 " +
+      "`pnpm check:scripts-types -- --report` 现算（`--report` 只念数；「账面高于实跑、请收紧」" +
+      "那句在默认档里）。规则版本变了必须同步改脚本常数。",
     face: faceSize,
     total: cur.total,
     files: cur.files,
@@ -444,8 +468,8 @@ function main(io = {}) {
   let ts;
   try {
     ts = require("typescript");
-  } catch (e) {
-    console.error(`${TAG} ✗ 取不到 typescript（判决面对账要用它自己的 glob 引擎）：${e.message}`);
+  } catch (error) {
+    console.error(`${TAG} ✗ 取不到 typescript（判决面对账要用它自己的 glob 引擎）：${error.message}`);
     return 2;
   }
 
@@ -466,15 +490,13 @@ function main(io = {}) {
   if (!filtered) {
     /* 只有「这一棵树的 git 顶层不是它自己」才走到这里 —— 临时夹具那一档的形状。
      * 必须念出来：不筛 ⇒ 面 = 磁盘展开，此时「面 ⇄ 账」那条比对的口径与真仓库不同。 */
-    console.log(
-      `${TAG} （没按入库清单筛：这棵树不是它自己的 git 顶层 ⇒ 面 = 磁盘展开原值）`,
-    );
+    console.log(`${TAG} （没按入库清单筛：这棵树不是它自己的 git 顶层 ⇒ 面 = 磁盘展开原值）`);
   }
   if (untracked.length) {
     console.log(
       `${TAG} 面外未入库 ${untracked.length} 份（磁盘上有、git 清单里没有 ⇒ 不进账、` +
-        `它们的红也不记账，但逐景点名）：\n` +
-        untracked.map((f) => `    · ${f}`).join("\n"),
+        `它们的红也不记账，但逐景点名）：\n${
+        untracked.map((f) => `    · ${f}`).join("\n")}`,
     );
   }
 
@@ -496,27 +518,26 @@ function main(io = {}) {
 
   const problems = faceProblems(cfg, { listed }, face);
   if (problems.length) {
-    console.error(`${TAG} ✗ 判决面不自证：\n  ` + problems.join("\n  "));
+    console.error(`${TAG} ✗ 判决面不自证：\n  ${problems.join("\n  ")}`);
     return 1;
   }
   if (noRun) {
-    console.log(
-      `${TAG} 只做判决面对账（--no-run：没起 tsc，这一跑**不构成**「类型层过了」）`,
-    );
+    console.log(`${TAG} 只做判决面对账（--no-run：没起 tsc，这一跑**不构成**「类型层过了」）`);
     return 0;
   }
 
   /* 未入库那份的报错**不并进账**（否则一份没人提交的产物能凭空地涨棘轮），但念出来：
    * 「不判它」与「看不见它」是两句话 —— 后者会让下一次同类污染再次无名。 */
   const untrackedSet = new Set(untracked);
-  const toRel = (f) =>
-    path.isAbsolute(f) ? path.relative(ROOT, f).replaceAll("\\", "/") : f;
+  const toRel = (f) => (path.isAbsolute(f) ? path.relative(ROOT, f).replaceAll("\\", "/") : f);
   const judged = diags.filter((d) => !untrackedSet.has(toRel(d.rel)));
   if (judged.length !== diags.length) {
     const offFace = new Map();
     for (const d of diags) {
       const rel = toRel(d.rel);
-      if (!untrackedSet.has(rel)) continue;
+      if (!untrackedSet.has(rel)) {
+        continue;
+      }
       offFace.set(rel, (offFace.get(rel) ?? 0) + 1);
     }
     console.log(
@@ -591,17 +612,16 @@ function main(io = {}) {
       for (const [rel, codes] of Object.entries(cur.files)) {
         for (const [code, n] of Object.entries(codes)) {
           const base = baseline.files?.[rel]?.[code] ?? 0;
-          if (n > base) grows.push(`    · ${rel} ${code}: 基线 ${base} → 当前 ${n}`);
+          if (n > base) {
+            grows.push(`    · ${rel} ${code}: 基线 ${base} → 当前 ${n}`);
+          }
         }
       }
     }
     if (grows.length) {
       console.error(
-        `${TAG} ✗ 拒绝 --update：棘轮只许降。下面这些格子比基线**多**（不是总量比较——\n` +
-          `${TAG}   总量降了也可能夹带一份新文件的红，那正是要拦的方向）：\n` +
-          grows.join("\n") +
-          `\n${TAG}   先把它改掉，再跑 --update 把基线收紧到当前实测；确属判据变更（现为 ` +
-          `${TAG}   ruleVersion=${RULE_VERSION}）才先改脚本里的常数，再跑 --update。`,
+        `${TAG} ✗ 拒绝 --update：棘轮只许降。下面这些格子比基线**多**（不是总量比较——\n${TAG}   总量降了也可能夹带一份新文件的红，那正是要拦的方向）：\n${grows.join("\n")
+          }\n${TAG}   先把它改掉，再跑 --update 把基线收紧到当前实测；确属判据变更（现为 ${TAG}   ruleVersion=${RULE_VERSION}）才先改脚本里的常数，再跑 --update。`,
       );
       return 1;
     }
@@ -631,20 +651,15 @@ function main(io = {}) {
     for (const [code, n] of Object.entries(codes)) {
       const base = baseline.files?.[rel]?.[code] ?? 0;
       if (n > base) {
-        grows.push(
-          `    · ${rel} ${code}: 基线 ${base} → 当前 ${n}（新增 ${n - base} 处）`,
-        );
+        grows.push(`    · ${rel} ${code}: 基线 ${base} → 当前 ${n}（新增 ${n - base} 处）`);
       }
     }
   }
   if (grows.length) {
     console.error(
-      `${TAG} ✗ 脚本档新增类型错误 / 死代码（ISSUE #2524 / 规范 §13.5.14）：\n` +
-        grows.join("\n") +
-        `\n${TAG}   这一档的面是全量 \`**/*.mjs\`，**新写的脚本零容忍**（基线里没有的格子就是新增）。\n` +
-        `${TAG}   修法是把它写干净（补 JSDoc 类型 / 加守卫 / 删死声明），**不许用 \`--update\`** 把\n` +
-        `${TAG}   新增的格子登记成「已知」；确实改不动的，请单独立单、在评审里写清理由，\n` +
-        `${TAG}   再由那张单决定怎么处理，而不是在这里抬账。`,
+      `${TAG} ✗ 脚本档新增类型错误 / 死代码（ISSUE #2524 / 规范 §13.5.14）：\n${
+        grows.join("\n")
+        }\n${TAG}   这一档的面是全量 \`**/*.mjs\`，**新写的脚本零容忍**（基线里没有的格子就是新增）。\n${TAG}   修法是把它写干净（补 JSDoc 类型 / 加守卫 / 删死声明），**不许用 \`--update\`** 把\n${TAG}   新增的格子登记成「已知」；确实改不动的，请单独立单、在评审里写清理由，\n${TAG}   再由那张单决定怎么处理，而不是在这里抬账。`,
     );
     return 1;
   }
@@ -653,14 +668,16 @@ function main(io = {}) {
   for (const [rel, codes] of Object.entries(baseline.files ?? {})) {
     for (const [code, base] of Object.entries(codes)) {
       const n = cur.files?.[rel]?.[code] ?? 0;
-      if (n < base) dropped.push(`  ${rel} ${code}: ${base} → ${n}`);
+      if (n < base) {
+        dropped.push(`  ${rel} ${code}: ${base} → ${n}`);
+      }
     }
   }
   if (dropped.length && !masked.length) {
     console.log(
-      `${TAG} 检测到 ${dropped.length} 格下降，请收紧基线：\n  ` +
-        dropped.join("\n  ") +
-        `\n  执行 node scripts/check-scripts-typecheck.cjs --update`,
+      `${TAG} 检测到 ${dropped.length} 格下降，请收紧基线：\n  ${
+        dropped.join("\n  ")
+        }\n  执行 node scripts/check-scripts-typecheck.cjs --update`,
     );
   }
   if (masked.length) {
@@ -669,9 +686,7 @@ function main(io = {}) {
     console.error(`${TAG} ✗ 有语法层报错 ⇒ 这一跑的读数不完整，判红（没判 ≠ 绿，§13.6.2）`);
     return 1;
   }
-  console.log(
-    `${TAG} ✓ 判决面 ${face.length} 份 / 存量 ${cur.total} 处（基线 ${baseline.total}）`,
-  );
+  console.log(`${TAG} ✓ 判决面 ${face.length} 份 / 存量 ${cur.total} 处（基线 ${baseline.total}）`);
   return 0;
 }
 
@@ -691,4 +706,6 @@ module.exports = {
   RULE_VERSION,
 };
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

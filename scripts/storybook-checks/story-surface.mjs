@@ -110,26 +110,23 @@ export function metaObjectOf(source) {
   /** @type {ts.ObjectLiteralExpression | null} */
   let found = null;
   walk(source, (node) => {
-    if (found !== null) return;
+    if (found !== null) {
+      return;
+    }
     /** @param {ts.Expression} expr */
     const unwrap = (expr) => {
       const inner =
-        ts.isSatisfiesExpression(expr) || ts.isAsExpression(expr)
-          ? expr.expression
-          : expr;
-      if (!ts.isObjectLiteralExpression(inner)) return null;
+        ts.isSatisfiesExpression(expr) || ts.isAsExpression(expr) ? expr.expression : expr;
+      if (!ts.isObjectLiteralExpression(inner)) {
+        return null;
+      }
       /* 认「`title` 或 `component` 至少有一个」的对象字面量：CSF 里 `component`
          是可选的（纯属性包 / 复合件那种故事就没有），只要求 `title`；反过来
          `component` 有而 `title` 缺的那一份由「缺 title」那条判据点名。 */
       const keys = inner.properties
-        .filter(
-          (p) =>
-            ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p),
-        )
-        .map((p) => p.name.getText(source).replace(/^["']|["']$/g, ""));
-      return keys.includes("title") || keys.includes("component")
-        ? inner
-        : null;
+        .filter((p) => ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p))
+        .map((p) => p.name.getText(source).replaceAll(/^["']|["']$/g, ""));
+      return keys.includes("title") || keys.includes("component") ? inner : null;
     };
     if (ts.isExportAssignment(node) && !node.isExportEquals) {
       found = unwrap(node.expression);
@@ -159,11 +156,15 @@ function resolveSpecifier(spec, fromDir, repoRoot) {
     : spec.startsWith(".")
       ? path.resolve(fromDir, spec)
       : null;
-  if (base === null) return null;
-  const withSlash = base.replace(/\\/g, "/");
+  if (base === null) {
+    return null;
+  }
+  const withSlash = base.replaceAll("\\", "/");
   /* 说明符通常不带扩展名，比对的是**文件**：按 `.tsx` / `.ts` 试出真实存在的那份。 */
   for (const ext of ["", ".tsx", ".ts"]) {
-    if (fs.existsSync(withSlash + ext)) return fs.realpathSync(withSlash + ext);
+    if (fs.existsSync(withSlash + ext)) {
+      return fs.realpathSync(withSlash + ext);
+    }
   }
   return withSlash;
 }
@@ -186,20 +187,32 @@ export function storySurface(source) {
   const args = new Set();
   /** @param {ts.ObjectLiteralExpression | null} obj */
   const readArgs = (obj) => {
-    if (obj === null) return;
+    if (obj === null) {
+      return;
+    }
     for (const prop of obj.properties) {
-      if (!ts.isPropertyAssignment(prop)) continue;
-      if (prop.name.getText(source) !== "args") continue;
-      if (!ts.isObjectLiteralExpression(prop.initializer)) continue;
+      if (!ts.isPropertyAssignment(prop)) {
+        continue;
+      }
+      if (prop.name.getText(source) !== "args") {
+        continue;
+      }
+      if (!ts.isObjectLiteralExpression(prop.initializer)) {
+        continue;
+      }
       for (const field of prop.initializer.properties) {
-        if (field.name === undefined) continue;
+        if (field.name === undefined) {
+          continue;
+        }
         args.add(propName(field.name.getText(source)));
       }
     }
   };
   if (meta !== null) {
     for (const prop of meta.properties) {
-      if (!ts.isPropertyAssignment(prop)) continue;
+      if (!ts.isPropertyAssignment(prop)) {
+        continue;
+      }
       const key = propName(prop.name.getText(source));
       if (key === "title" && ts.isStringLiteral(prop.initializer)) {
         title = prop.initializer.text;
@@ -207,7 +220,9 @@ export function storySurface(source) {
       if (key === "component" && ts.isIdentifier(prop.initializer)) {
         component = prop.initializer.text;
       }
-      if (key === "args") readArgs(meta);
+      if (key === "args") {
+        readArgs(meta);
+      }
     }
   }
   /* 每个具名 story 上的 args（`export const X: Story = { args: { … } }`）。 */
@@ -217,10 +232,7 @@ export function storySurface(source) {
       node.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
     ) {
       for (const decl of node.declarationList.declarations) {
-        if (
-          decl.initializer !== undefined &&
-          ts.isObjectLiteralExpression(decl.initializer)
-        ) {
+        if (decl.initializer !== undefined && ts.isObjectLiteralExpression(decl.initializer)) {
           readArgs(decl.initializer);
         }
       }
@@ -232,7 +244,7 @@ export function storySurface(source) {
 /** `"title"` / `title` 归一成不带引号的形态。
  *  @param {string} text @returns {string} */
 function propName(text) {
-  return text.replace(/^["']|["']$/g, "");
+  return text.replaceAll(/^["']|["']$/g, "");
 }
 
 /**
@@ -248,16 +260,15 @@ export function importedBindings(source) {
   /** @type {Map<string, string>} */
   const out = new Map();
   walk(source, (node) => {
-    if (
-      !ts.isImportDeclaration(node) ||
-      !ts.isStringLiteral(node.moduleSpecifier)
-    ) {
+    if (!ts.isImportDeclaration(node) || !ts.isStringLiteral(node.moduleSpecifier)) {
       return;
     }
     const spec = node.moduleSpecifier.text;
     const named = node.importClause?.namedBindings;
     if (named !== undefined && ts.isNamedImports(named)) {
-      for (const el of named.elements) out.set(el.name.text, spec);
+      for (const el of named.elements) {
+        out.set(el.name.text, spec);
+      }
     }
   });
   return out;
@@ -275,10 +286,16 @@ export function requiredProps(source) {
   /** @type {string[]} */
   const out = [];
   walk(source, (node) => {
-    if (!ts.isTypeAliasDeclaration(node)) return;
+    if (!ts.isTypeAliasDeclaration(node)) {
+      return;
+    }
     const keys = componentPropKeys(node.type);
-    if (keys === null) return;
-    for (const key of keys) out.push(key);
+    if (keys === null) {
+      return;
+    }
+    for (const key of keys) {
+      out.push(key);
+    }
   });
   return out;
 }
@@ -293,9 +310,13 @@ export function requiredProps(source) {
  * @returns {string[] | null} 读不到时给 null
  */
 function componentPropKeys(type) {
-  if (!ts.isTypeReferenceNode(type)) return null;
+  if (!ts.isTypeReferenceNode(type)) {
+    return null;
+  }
   const name = type.typeName.getText();
-  if (name === "Partial") return []; // 全可选，没有必填项
+  if (name === "Partial") {
+    return [];
+  } // 全可选，没有必填项
   /* `ComponentProps<typeof C>` 的成员住在组件的类型上 —— 静态读不到，交给调用处
      按「不判」处理（见文件头的已知边界）。 */
   return null;
@@ -322,8 +343,12 @@ function componentUsedIn(source, storyFile, componentFile, repoRoot) {
   const imported = importedBindings(source);
   for (const [name, spec] of imported) {
     const resolved = resolveSpecifier(spec, path.dirname(storyFile), repoRoot);
-    if (resolved === null || resolved !== target) continue;
-    if (identifierUsed(source, name)) return name;
+    if (resolved === null || resolved !== target) {
+      continue;
+    }
+    if (identifierUsed(source, name)) {
+      return name;
+    }
   }
   return null;
 }
@@ -340,11 +365,17 @@ function componentUsedIn(source, storyFile, componentFile, repoRoot) {
 function identifierUsed(source, name) {
   let used = false;
   walk(source, (node) => {
-    if (used || !ts.isIdentifier(node) || node.text !== name) return;
+    if (used || !ts.isIdentifier(node) || node.text !== name) {
+      return;
+    }
     /* import 子句里的那几个标识符不算「用到」。 */
     const parent = node.parent;
-    if (parent !== undefined && ts.isImportSpecifier(parent)) return;
-    if (parent !== undefined && ts.isImportClause(parent)) return;
+    if (parent !== undefined && ts.isImportSpecifier(parent)) {
+      return;
+    }
+    if (parent !== undefined && ts.isImportClause(parent)) {
+      return;
+    }
     used = true;
   });
   return used;
@@ -366,7 +397,9 @@ function identifierUsed(source, name) {
  */
 export function missingRequiredArgs(storyFile, givenArgs) {
   const componentFile = componentSourceOf(storyFile);
-  if (componentFile === null) return [];
+  if (componentFile === null) {
+    return [];
+  }
   const component = ts.createSourceFile(
     componentFile,
     fs.readFileSync(componentFile, "utf8"),
@@ -387,19 +420,29 @@ export function missingRequiredArgs(storyFile, givenArgs) {
    * 六个 slot、`Sidebar` 的二十来件）也住在同目录，一起算进来的话每个 story 都会
    * 被判「缺 slot」，而那不是 story 的错。 */
   const referenced = referencedPropsInterfaces(component, componentFile);
-  if (referenced.size === 0) return [];
+  if (referenced.size === 0) {
+    return [];
+  }
   /** @type {string[]} */
   const required = [];
   for (const file of [component, ...siblingTypeSources(componentFile)]) {
     walk(file, (node) => {
-      if (!ts.isInterfaceDeclaration(node)) return;
-      if (!referenced.has(node.name.text)) return;
+      if (!ts.isInterfaceDeclaration(node)) {
+        return;
+      }
+      if (!referenced.has(node.name.text)) {
+        return;
+      }
       for (const member of node.members) {
-        if (!ts.isPropertySignature(member) || member.name === undefined)
+        if (!ts.isPropertySignature(member) || member.name === undefined) {
           continue;
-        if (member.questionToken !== undefined) continue;
-        if (member.type !== undefined && typeAllowsUndefined(member.type))
+        }
+        if (member.questionToken !== undefined) {
           continue;
+        }
+        if (member.type !== undefined && typeAllowsUndefined(member.type)) {
+          continue;
+        }
         required.push(member.name.getText(file));
       }
     });
@@ -410,9 +453,7 @@ export function missingRequiredArgs(storyFile, givenArgs) {
      （「写进 `args`，或在 `render` 里显式传」）。只统计 `args` 会把这一整类
      正当写法全判成缺口（实测：全仓 6 份有缺口的 story 全是这一类）。 */
   const assigned = assignedNamesIn(storySourceOf(storyFile));
-  return [...new Set(required)].filter(
-    (name) => !givenArgs.has(name) && !assigned.has(name),
-  );
+  return [...new Set(required)].filter((name) => !givenArgs.has(name) && !assigned.has(name));
 }
 
 /**
@@ -428,7 +469,9 @@ export function missingRequiredArgs(storyFile, givenArgs) {
 function assignedNamesIn(source) {
   /** @type {Set<string>} */
   const out = new Set();
-  if (source === null) return out;
+  if (source === null) {
+    return out;
+  }
   walk(source, (node) => {
     if (ts.isJsxAttribute(node) && node.name !== undefined) {
       out.add(propName(node.name.getText(source)));
@@ -454,7 +497,9 @@ function assignedNamesIn(source) {
  * @returns {ts.SourceFile | null}
  */
 function storySourceOf(storyFile) {
-  if (!fs.existsSync(storyFile)) return null;
+  if (!fs.existsSync(storyFile)) {
+    return null;
+  }
   return ts.createSourceFile(
     storyFile,
     fs.readFileSync(storyFile, "utf8"),
@@ -488,11 +533,19 @@ function storySourceOf(storyFile) {
 function hasInputSideReference(file, name) {
   let found = false;
   walk(file, (node) => {
-    if (found) return;
-    if (!ts.isIdentifier(node) || node.text !== name) return;
-    if (isReturnTypePosition(node)) return;
+    if (found) {
+      return;
+    }
+    if (!ts.isIdentifier(node) || node.text !== name) {
+      return;
+    }
+    if (isReturnTypePosition(node)) {
+      return;
+    }
     /* 接口自己的声明不算「引用点」。 */
-    if (ts.isInterfaceDeclaration(node.parent)) return;
+    if (ts.isInterfaceDeclaration(node.parent)) {
+      return;
+    }
     found = true;
   });
   return found;
@@ -538,7 +591,6 @@ function isReturnTypePosition(node) {
   return false;
 }
 
-
 /**
  * 组件文件里**被引用到的** props 接口名（`XProps` / `ComponentProps<typeof C>`）。
  *
@@ -555,29 +607,45 @@ function referencedPropsInterfaces(component, componentFile) {
      且**至少有一处在入参方向**——只有返回类型位置出现的是出参接口，不算
      （判据理由见 `hasInputSideReference`）。 */
   walk(component, (node) => {
-    if (!ts.isIdentifier(node)) return;
-    if (!TS_PROPS_NAME.test(node.text)) return;
-    if (!hasInputSideReference(component, node.text)) return;
+    if (!ts.isIdentifier(node)) {
+      return;
+    }
+    if (!TS_PROPS_NAME.test(node.text)) {
+      return;
+    }
+    if (!hasInputSideReference(component, node.text)) {
+      return;
+    }
     out.add(node.text);
   });
   /* ② 同目录里**导出的** props 接口，且它的字段名在组件文件里出现过
      （`FilePickerProps.onPick` 这种：接口在兄弟模块，组件只解构那几个字段）。 */
   const identifiers = new Set();
   walk(component, (node) => {
-    if (ts.isIdentifier(node)) identifiers.add(node.text);
+    if (ts.isIdentifier(node)) {
+      identifiers.add(node.text);
+    }
   });
   for (const file of siblingTypeSources(componentFile)) {
     walk(file, (node) => {
-      if (!ts.isInterfaceDeclaration(node)) return;
-      if (!TS_PROPS_NAME.test(node.name.text)) return;
-      if (!hasExportModifier(node)) return;
+      if (!ts.isInterfaceDeclaration(node)) {
+        return;
+      }
+      if (!TS_PROPS_NAME.test(node.name.text)) {
+        return;
+      }
+      if (!hasExportModifier(node)) {
+        return;
+      }
       const touched = node.members.some(
         (m) =>
           ts.isPropertySignature(m) &&
           m.name !== undefined &&
           identifiers.has(propName(m.name.getText(file))),
       );
-      if (touched) out.add(node.name.text);
+      if (touched) {
+        out.add(node.name.text);
+      }
     });
   }
   return out;
@@ -587,12 +655,10 @@ function referencedPropsInterfaces(component, componentFile) {
  *  @param {ts.Node} node @returns {boolean} */
 function hasExportModifier(node) {
   /* `modifiers` 只长在 `HasModifiers` 那几个节点上，先判一下再读。 */
-  if (!ts.canHaveModifiers(node)) return false;
-  return (
-    ts
-      .getModifiers(node)
-      ?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) === true
-  );
+  if (!ts.canHaveModifiers(node)) {
+    return false;
+  }
+  return ts.getModifiers(node)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) === true;
 }
 
 /** 读同目录里其余 `.ts` 兄弟模块（可能放着 props 接口）。
@@ -603,8 +669,12 @@ function siblingTypeSources(componentFile) {
   /** @type {ts.SourceFile[]} */
   const out = [];
   for (const entry of fs.readdirSync(dir)) {
-    if (!entry.endsWith(".ts")) continue;
-    if (entry.endsWith(".d.ts") || entry.endsWith(".test.ts")) continue;
+    if (!entry.endsWith(".ts")) {
+      continue;
+    }
+    if (entry.endsWith(".d.ts") || entry.endsWith(".test.ts")) {
+      continue;
+    }
     const full = path.join(dir, entry);
     out.push(
       ts.createSourceFile(
@@ -628,7 +698,9 @@ function typeAllowsUndefined(type) {
   let allows = false;
   /** @param {ts.Node} node */
   const check = (node) => {
-    if (node.kind === ts.SyntaxKind.UndefinedKeyword) allows = true;
+    if (node.kind === ts.SyntaxKind.UndefinedKeyword) {
+      allows = true;
+    }
   };
   /** @param {ts.Node} node */
   const visit = (node) => {
@@ -637,7 +709,9 @@ function typeAllowsUndefined(type) {
   };
   /* 只往里走一层联合就够了：`X | undefined`，以及 `Partial<…>` 已在外面被排除。 */
   if (ts.isUnionTypeNode(type)) {
-    for (const t of type.types) check(t);
+    for (const t of type.types) {
+      check(t);
+    }
     return allows;
   }
   visit(type);
@@ -649,7 +723,9 @@ function typeAllowsUndefined(type) {
 function componentSourceOf(storyFile) {
   const base = storyFile.replace(/\.stories\.tsx$/, "");
   for (const ext of [".tsx", ".ts"]) {
-    if (fs.existsSync(base + ext)) return base + ext;
+    if (fs.existsSync(base + ext)) {
+      return base + ext;
+    }
   }
   return null;
 }
@@ -667,16 +743,16 @@ export function dominantGroup(stories) {
   const counts = new Map();
   for (const s of stories) {
     const group = groupOf(s.title);
-    if (group === null) continue;
+    if (group === null) {
+      continue;
+    }
     counts.set(group, (counts.get(group) ?? 0) + 1);
   }
   /** @type {string | null} */
   let best = null;
   let bestCount = 0;
   /* 计数相同时取字典序小的那个，保证同一输入恒定同结论。 */
-  for (const [group, count] of [...counts].sort((a, b) =>
-    a[0].localeCompare(b[0]),
-  )) {
+  for (const [group, count] of [...counts].sort((a, b) => a[0].localeCompare(b[0]))) {
     if (count > bestCount) {
       best = group;
       bestCount = count;
@@ -688,7 +764,9 @@ export function dominantGroup(stories) {
 /** `title` 的第一段（分组前缀）；没有 title 时给 null。
  *  @param {string | null} title @returns {string | null} */
 function groupOf(title) {
-  if (title === null || !title.includes("/")) return null;
+  if (title === null || !title.includes("/")) {
+    return null;
+  }
   return title.split("/")[0] ?? null;
 }
 
@@ -705,7 +783,9 @@ export function storySurfaces({ componentsRoot, repoRoot }) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === "node_modules") continue;
+        if (entry.name === "node_modules") {
+          continue;
+        }
         collect(full);
       } else if (entry.name.endsWith(".stories.tsx")) {
         files.push(full);
@@ -734,8 +814,7 @@ export function storySurfaces({ componentsRoot, repoRoot }) {
       .find((cand) => fs.existsSync(cand));
     const usesRealComponent =
       sourceFile !== undefined &&
-      componentUsedIn(source, file, sourceFile, fs.realpathSync(repoRoot)) !==
-        null;
+      componentUsedIn(source, file, sourceFile, fs.realpathSync(repoRoot)) !== null;
     stories.push({
       file: rel,
       title: surface.title,
@@ -760,10 +839,11 @@ export function storySurfaces({ componentsRoot, repoRoot }) {
   const groupDeviations = [];
   for (const [, list] of byDir) {
     const expected = dominantGroup(list);
-    if (expected === null) continue;
+    if (expected === null) {
+      continue;
+    }
     for (const s of list) {
-      const group =
-        s.title?.includes("/") === true ? s.title.split("/")[0] : null;
+      const group = s.title?.includes("/") === true ? s.title.split("/")[0] : null;
       if (group !== expected) {
         groupDeviations.push({
           file: s.file,

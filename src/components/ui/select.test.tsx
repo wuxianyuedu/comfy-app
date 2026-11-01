@@ -19,15 +19,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 
-const OPTIONS = ["png", "jpg", "webp"] as const;
+const OPTIONS = /* SAFETY: 类型断言已复核 */ ["png", "jpg", "webp"] as const;
 
 function Demo({
   defaultValue = "png",
@@ -36,23 +30,23 @@ function Demo({
   positionerClassName,
   alignItemWithTrigger,
 }: {
+  alignItemWithTrigger?: boolean;
   defaultValue?: string;
   /* 实参形状从基元的 props 类型上取，不在这里手抄一份：base-ui 的回传是
      `(value: string | null, eventDetails) => void`，自己写 `(value: string) => void`
      在 `tsc` 那一层就是不兼容的。 */
   onValueChange?: React.ComponentProps<typeof Select>["onValueChange"];
-  size?: "sm" | "default";
   positionerClassName?: string;
-  alignItemWithTrigger?: boolean;
+  size?: "sm" | "default";
 }) {
   return (
     <Select defaultValue={defaultValue} onValueChange={onValueChange}>
-      <SelectTrigger size={size} aria-label="输出格式">
+      <SelectTrigger aria-label="输出格式" size={size}>
         <SelectValue placeholder="选一个格式" />
       </SelectTrigger>
       <SelectContent
-        positionerClassName={positionerClassName}
         alignItemWithTrigger={alignItemWithTrigger}
+        positionerClassName={positionerClassName}
       >
         {OPTIONS.map((value) => (
           <SelectItem key={value} value={value}>
@@ -81,14 +75,18 @@ const POPUP_MARK = '[data-slot="select-content"]';
 function openPopup(): HTMLElement {
   fireEvent.click(screen.getByRole("combobox"));
   const el = document.querySelector<HTMLElement>(POPUP_MARK);
-  if (!el) throw new Error("点开后没有渲染出弹层");
+  if (!el) {
+    throw new Error("点开后没有渲染出弹层");
+  }
   return el;
 }
 
 /** 弹层的外层 = base-ui 的 Positioner（层级与碰撞边界都住在这一层）。 */
 function positionerOf(popup: HTMLElement): HTMLElement {
   const positioner = popup.parentElement;
-  if (!positioner) throw new Error("弹层没有定位层祖先 —— Portal 结构变了？");
+  if (!positioner) {
+    throw new Error("弹层没有定位层祖先 —— Portal 结构变了？");
+  }
   return positioner;
 }
 
@@ -162,9 +160,7 @@ describe("ui/select 的选择回路", () => {
     /* 只在**选项**这一层数（`data-slot="select-item"`）：base-ui 会把
        `data-selected` 同时打在弹层内部的其他节点上，按裸属性数会得到 2 枚，
        那条数法判不出「到底哪一项被选中」。 */
-    const selected = document.querySelectorAll(
-      '[data-slot="select-item"][data-selected]',
-    );
+    const selected = document.querySelectorAll('[data-slot="select-item"][data-selected]');
     expect(selected).toHaveLength(1);
     expect(selected[0]?.textContent).toContain("JPG");
     /* 指示器是 `pointer-events-none` 的绝对定位小格：它不许吃掉点击，

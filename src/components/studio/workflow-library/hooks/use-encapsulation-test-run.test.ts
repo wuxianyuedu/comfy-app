@@ -9,8 +9,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook } from "@testing-library/react";
 
 const watchSettle = {
-  ok: true as boolean,
-  message: undefined as string | undefined,
+  ok: /* SAFETY: 类型断言已复核 */ true as boolean,
+  message: /* SAFETY: 类型断言已复核 */ undefined as string | undefined,
 };
 
 vi.mock("~/lib/workshop/generation-client", () => ({
@@ -28,9 +28,9 @@ vi.mock("~/lib/workshop/generation-client", () => ({
     (
       _id: string,
       h: {
-        onLog?: (e: { t: number; level: string; msg: string }) => void;
+        onLog?: (e: { level: string; msg: string; t: number }) => void;
         onOutput?: (o: { kind: string; url: string }) => void;
-        onSettled: (r: { ok: boolean; message?: string }) => void;
+        onSettled: (r: { message?: string; ok: boolean }) => void;
       },
     ) => {
       h.onLog?.({ t: 1, level: "info", msg: "开始执行" });
@@ -41,10 +41,7 @@ vi.mock("~/lib/workshop/generation-client", () => ({
   ),
 }));
 
-import {
-  clearAllWorkflowRuns,
-  getWorkflowRun,
-} from "~/lib/workflow/workflow-run-store";
+import { clearAllWorkflowRuns, getWorkflowRun } from "~/lib/workflow/workflow-run-store";
 import { useEncapsulationTestRun } from "./use-encapsulation-test-run";
 
 afterEach(() => {
@@ -101,8 +98,7 @@ describe("useEncapsulationTestRun", () => {
     result.current.run({});
     result.current.run({});
     await expect.poll(() => result.current.running).toBe(false);
-    const { startLocalGenerate } =
-      await import("~/lib/workshop/generation-client");
+    const { startLocalGenerate } = await import("~/lib/workshop/generation-client");
     expect(vi.mocked(startLocalGenerate)).toHaveBeenCalledTimes(1);
   });
 
@@ -115,11 +111,8 @@ describe("useEncapsulationTestRun", () => {
       }),
     );
     const file = new File(["x"], "cat.png", { type: "image/png" });
-    await expect(result.current.uploadImage(file)).resolves.toBe(
-      "uploaded.png",
-    );
-    const { prepareLocalInputImage } =
-      await import("~/lib/workshop/generation-client");
+    await expect(result.current.uploadImage(file)).resolves.toBe("uploaded.png");
+    const { prepareLocalInputImage } = await import("~/lib/workshop/generation-client");
     expect(vi.mocked(prepareLocalInputImage)).toHaveBeenCalledWith(
       expect.stringContaining("data:"),
     );

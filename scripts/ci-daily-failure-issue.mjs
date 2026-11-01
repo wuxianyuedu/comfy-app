@@ -68,6 +68,28 @@
  * 平台自己写进 `get-build-status -v` 的 `pipelinesStatus[*].name` 再核一次。给不出
  * （名字写错）就退 2「没有结论」——**不许**退化成「不过滤」，那正是上面那一形。
  *
+ * ## 预算账陈旧度触发器（ISSUE #2639）
+ *
+ * 预算闸（`check-bundle-budget.cjs`）判红时自己念得出「基线修订号 dd8d4647 · 其后 35 次提交」，
+ * 却没有任何一格说「陈旧到什么程度就该有人出面」—— 六次同类账（#2219 / #2273 / #2464 /
+ * #2512 / #2518 / #2634）全靠碰巧有个正在修别的单子的人读到它。所以这一格在**判红**时把那笔
+ * 账升成一句点名：基线其后提交数 ≥ `BUNDLE_BASELINE_STALE_COMMITS`、或预算闸连续红
+ * ≥ `BUNDLE_GATE_RED_STREAK_DAYS` 天，正文就多一节「该有人出面了」+ §13.5.4 的两条出口
+ * （认账 / 压回）。**它不改判据的判定**（棘轮只许降不许升照旧），只把「该有人出面」从
+ * 「碰巧被读到」变成「被念出来」。
+ *
+ * 三条边界：
+ *   · **只认判据自己打的那两句判决行**（`BUNDLE_GATE_MARKERS`），不重算金额 —— 重算就是
+ *     第二个量具，两处会开始各说各话（§13.5.4）；
+ *   · **撤档期间不响**（#2634 把 `TOTALS_ENFORCED` 改成 false）：判据照打差额、但明说
+ *     「今天没判」，那种读数**不是红**，升它就是替业主的暂撤决定编一条催办。撤档也不静默：
+ *     这一格每次都把「今天没判」这句打出来；
+ *   · **读不出 ≠ 没到门限**（§13.6.4.1）：连续天数没盖住窗口 / 日志没取到 / 中间有一跑没判，
+ *     一律不升并念出是哪一档 —— 不把它读成「还没满 M 天」。
+ *
+ * 整段实现（判决行解析 / 门限 / 连续天数 / 正文那一节）在 `ci-daily-bundle-escalation.mjs`
+ * —— 拆成模块是为了让本文件留在 900 行硬闸之内；本文件只把这一跑的读数递过去、把结论念出来。
+ *
  * ## 用法
  *
  * ```text
@@ -90,6 +112,7 @@ import {
   enrichStageErrors,
   resolveRepoSlug,
 } from "./ci-build-readout.mjs";
+import { BUNDLE_GATE_STAGE, judgeBundleStageReading } from "./ci-daily-bundle-escalation.mjs";
 import { machineHandle } from "./dev-handle.mjs";
 import {
   DEFAULT_WINDOW_HOURS,
@@ -164,20 +187,23 @@ export function issueTitle({ sn, event, at, stage }) {
  */
 export function pickPreviousDaily({ list, details, lanes = [] }) {
   const daily = (Array.isArray(list) ? list : []).filter(isDailyDispatch);
-  if (daily.length === 0)
+  if (daily.length === 0) {
     return { none: "列表里没有每日类派发（定时 / 手点 / API 三种事件都没有）" };
+  }
   const bySn = new Map((details ?? []).map((d) => [String(d.sn), d.json]));
   /** 与 `ci-pr-failure-issue` 的 `--lane` 同一口径：名单为空 = 不按档过滤。 */
-  const wanted = new Set(
-    (Array.isArray(lanes) ? lanes : []).map((l) => String(l ?? "").trim()),
-  );
+  const wanted = new Set((Array.isArray(lanes) ? lanes : []).map((l) => String(l ?? "").trim()));
   let stray = 0;
   for (const build of daily) {
     const sn = String(build.sn ?? "");
     const json = bySn.get(sn);
-    if (!json) continue;
+    if (!json) {
+      continue;
+    }
     const outcome = classifyBuildOutcome(json);
-    if (outcome.state === "running" || outcome.state === "unknown") continue;
+    if (outcome.state === "running" || outcome.state === "unknown") {
+      continue;
+    }
     if (wanted.size > 0 && !outcome.pipelines.some((p) => wanted.has(p.name))) {
       stray += 1;
       continue;
@@ -209,7 +235,7 @@ export function pickPreviousDaily({ list, details, lanes = [] }) {
  * 缺省（不给 `--lane`）= 空名单 = 不按档过滤，只为旧调用点与 `--from` 离线复现保留。
  */
 export const LANE_STAGES = /** @type {Record<string, string[]>} */ ({
-  每日生产构建: ["每日生产构建"],
+  [BUNDLE_GATE_STAGE]: [BUNDLE_GATE_STAGE],
 });
 
 /**
@@ -218,7 +244,7 @@ export const LANE_STAGES = /** @type {Record<string, string[]>} */ ({
  */
 export function laneStages(lane) {
   const key = String(lane ?? "").trim();
-  return key === "" ? [] : (LANE_STAGES[key] ?? []).slice();
+  return key === "" ? [] : [...LANE_STAGES[key] ?? []];
 }
 
 /**
@@ -240,7 +266,9 @@ export function openDailyIssues(run, slug) {
     "100",
     "-v",
   ]);
-  if (!res) return null;
+  if (!res) {
+    return null;
+  }
   const d = res.json?.data;
   const arr = Array.isArray(res.json)
     ? res.json
@@ -249,7 +277,9 @@ export function openDailyIssues(run, slug) {
       : Array.isArray(d)
         ? d
         : null;
-  if (!arr) return null;
+  if (!arr) {
+    return null;
+  }
   return arr.map((/** @type {any} */ i) => ({
     number: Number(i?.number ?? 0),
     title: String(i?.title ?? ""),
@@ -263,35 +293,40 @@ export function openDailyIssues(run, slug) {
  * @returns {{action:"none"|"no-fact"|"write", reason?:string, stages:Array<{stage:string,number?:number}>}}
  */
 export function decideAction({ state, failedNames, existing }) {
-  if (state === "green")
+  if (state === "green") {
     return { action: "none", stages: [], reason: "上一跑是绿的 ⇒ 无事可立" };
-  if (state === "cancelled")
+  }
+  if (state === "cancelled") {
     return {
       action: "none",
       stages: [],
       reason:
         "上一跑是被取消的 —— 这一跑没有结论，**不是产物坏了**（把它写成红就是替平台编一个不存在的故障）",
     };
-  if (state !== "failed")
+  }
+  if (state !== "failed") {
     return {
       action: "no-fact",
       stages: [],
       reason: `判定是「${state}」，不构成结论 ⇒ 不写`,
     };
-  if (failedNames.length === 0)
+  }
+  if (failedNames.length === 0) {
     return {
       action: "no-fact",
       stages: [],
       reason:
         "整跑判成真失败，却认不出是哪一格红的 ⇒ 不知道往哪张单上记，先不动账（认不出格名 = 判据没跑起来，不是「没有红」）",
     };
-  if (!existing)
+  }
+  if (!existing) {
     return {
       action: "no-fact",
       stages: [],
       reason:
         "开着的单列表取不到 —— 「查不到已有单」不等于「没有已有单」，据它新建就是每天多一张重复单",
     };
+  }
   return {
     action: "write",
     stages: failedNames.map((stage) => {
@@ -305,18 +340,10 @@ export function decideAction({ state, failedNames, existing }) {
  * 拼正文：只有事实与出口。
  *
  * @param {{slug:string, build:any, sn:string, stage:string, skipped:string[],
- *   readout:string[], handle:string}} input
+ *   readout:string[], handle:string, escalation?:string}} input
  * @returns {string}
  */
-export function composeBody({
-  slug,
-  build,
-  sn,
-  stage,
-  skipped,
-  readout,
-  handle,
-}) {
+export function composeBody({ slug, build, sn, stage, skipped, readout, handle, escalation = "" }) {
   return [
     commentHeader(handle),
     "",
@@ -337,6 +364,7 @@ export function composeBody({
     readout.join("\n").trim() ||
       "(这一格的日志正文没取到 —— 那句不是「日志里没有失败行」，是**取不到**)",
     "```",
+    ...(escalation ? ["", escalation] : []),
     "",
     "## 根因：**未判定**",
     "",
@@ -370,8 +398,7 @@ export function composeBody({
 export function appendReading(io, slug, number, body, sn) {
   return runAppendIssueComment({
     run: io.run,
-    log: (line) =>
-      io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+    log: (line) => io.log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
     slug,
     number,
     body,
@@ -393,9 +420,9 @@ export function main(io = {}) {
   const dryRun = argv.includes("--dry-run");
   const noBlock = argv.includes("--no-block");
   const at = argv.indexOf("--from");
-  const from = at >= 0 ? argv[at + 1] : undefined;
+  const from = at !== -1 ? argv[at + 1] : undefined;
   const laneAt = argv.indexOf("--lane");
-  const laneValue = laneAt >= 0 ? String(argv[laneAt + 1] ?? "").trim() : "";
+  const laneValue = laneAt !== -1 ? String(argv[laneAt + 1] ?? "").trim() : "";
   const lane = laneValue === "" ? null : laneValue;
 
   /** @type {(code:number, why:string)=>number} 退码出口：`--no-block` 只改码，不改话术。 */
@@ -411,11 +438,9 @@ export function main(io = {}) {
     return code;
   };
 
-  const slug = io.slug !== undefined ? io.slug : resolveRepoSlug(run);
+  const slug = io.slug === undefined ? resolveRepoSlug(run) : io.slug;
   if (!slug) {
-    log(
-      "[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。",
-    );
+    log("[daily-failure-issue] 推不出仓库 slug（不在 git 检出里 / 没有远端）⇒ 这一格没有执行者。");
     return finish(CODE.NO_FACT, "推不出仓库 slug");
   }
   /* 机器自起的账用**自己的**名字，不取平台账号昵称（ISSUE #2355）：`gitUser()` 的第一顺位是
@@ -429,6 +454,10 @@ export function main(io = {}) {
   let list;
   /** @type {Array<{sn:string,json:any}>} */
   let details;
+  /* 离线档里那一跑的**格日志正文**（`stageLogs[sn]`）：预算账触发器要在离线档也能被复现，
+   * 否则它只有联网那一条路可测 —— 而那条路上的输入（真红 + 连续几天红）恰恰最难造。 */
+  /** @type {Record<string,string> | null} */
+  let offlineLogs = null;
   const offline = Boolean(from);
   if (offline) {
     if (!from || !fs.existsSync(from)) {
@@ -444,14 +473,22 @@ export function main(io = {}) {
      */
     /** @type {any[]} */
     let rows = [];
-    if (Array.isArray(parsed)) rows = parsed;
-    else if (Array.isArray(parsed?.list)) rows = parsed.list;
-    else if (Array.isArray(parsed?.data?.data)) rows = parsed.data.data;
-    else if (Array.isArray(parsed?.data)) rows = parsed.data;
+    if (Array.isArray(parsed)) {
+      rows = parsed;
+    } else if (Array.isArray(parsed?.list)) {
+      rows = parsed.list;
+    } else if (Array.isArray(parsed?.data?.data)) {
+      rows = parsed.data.data;
+    } else if (Array.isArray(parsed?.data)) {
+      rows = parsed.data;
+    }
     list = rows;
     details = Array.isArray(parsed?.details) ? parsed.details : [];
+    offlineLogs =
+      parsed?.stageLogs && typeof parsed.stageLogs === "object" ? parsed.stageLogs : null;
     log(
-      `[daily-failure-issue] 离线档：列表 ${rows.length} 条 · 详情 ${details.length} 跑 ⇒ ` +
+      `[daily-failure-issue] 离线档：列表 ${rows.length} 条 · 详情 ${details.length} 跑 · ` +
+        `格日志 ${offlineLogs ? Object.keys(offlineLogs).length : 0} 份 ⇒ ` +
         "**强制只读**（离线那份详情与「开着的单」都不是当场取的，据它写平台就是把过期读数写成事实）",
     );
   } else {
@@ -490,8 +527,9 @@ export function main(io = {}) {
     log(`[daily-failure-issue] ${why} ⇒ 不写。`);
     return finish(CODE.NO_FACT, why);
   }
-  if (lanes.length > 0)
+  if (lanes.length > 0) {
     log(`[daily-failure-issue] 这一档的流水线名：${lanes.join(" / ")}`);
+  }
   const picked = pickPreviousDaily({
     list: Array.isArray(list) ? list : [],
     details,
@@ -500,9 +538,7 @@ export function main(io = {}) {
   /* 判别靠**字段在不在**，不靠 cast 成 any：cast 会把联合的收窄整条弄丢，
    * 之后每一处 `.sn` / `.outcome` 都变成没人守的自由点。 */
   if ("none" in picked) {
-    log(
-      `[daily-failure-issue] ${picked.none} ⇒ 这一格没有可立的案，一次都不写。`,
-    );
+    log(`[daily-failure-issue] ${picked.none} ⇒ 这一格没有可立的案，一次都不写。`);
     return finish(CODE.NO_FACT, picked.none);
   }
   const { build, sn } = picked;
@@ -516,12 +552,7 @@ export function main(io = {}) {
   const outcome = offline
     ? picked.outcome
     : classifyBuildOutcome(
-        enrichStageErrors(
-          run,
-          slug,
-          sn,
-          details.find((d) => String(d.sn) === sn)?.json ?? null,
-        ),
+        enrichStageErrors(run, slug, sn, details.find((d) => String(d.sn) === sn)?.json ?? null),
       );
   const failedNames = outcome.failed.map((f) => f.name || f.id);
   const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
@@ -552,11 +583,28 @@ export function main(io = {}) {
   });
   if (decision.action === "none" || decision.action === "no-fact") {
     const why = decision.reason ?? "(没给出原因)";
-    log(
-      `[daily-failure-issue] ${why} ⇒ 不写（没结论既不许落成红字，也不许落成新建单）。`,
-    );
+    log(`[daily-failure-issue] ${why} ⇒ 不写（没结论既不许落成红字，也不许落成新建单）。`);
     return decision.action === "none" ? CODE.DONE : finish(CODE.NO_FACT, why);
   }
+
+  /* ── 预算账陈旧度触发器（ISSUE #2639）────────────────────────────────
+   * 实现（判决行解析 / 门限 / 连续天数 / 正文那一节）整段在
+   * `ci-daily-bundle-escalation.mjs`：这里只负责把这一跑的读数递过去、把那句话打出来。
+   * 这一段**不参与写不写**：它只给正文多一节 / 少一节，改了预算闸的判定才是越界。 */
+  const bundleJudge = judgeBundleStageReading({
+    run,
+    slug,
+    offline,
+    offlineLogs,
+    outcome,
+    sn,
+    details,
+    lanes,
+  });
+  const escalation = bundleJudge.section;
+  log(
+    `[daily-failure-issue] 预算账触发器：${bundleJudge.fired ? "↑ 升级" : "不升级"} —— ${bundleJudge.reason}`,
+  );
 
   const willWrite = offline || dryRun;
   let wrote = true;
@@ -569,6 +617,9 @@ export function main(io = {}) {
       skipped,
       readout,
       handle,
+      /* 升级那一节只挂在预算闸那一张单上：别的格的红与这笔账无关，
+       * 挂上去就是替它说一句它没有读数支撑的话。 */
+      escalation: s.stage === BUNDLE_GATE_STAGE ? escalation : "",
     });
     const title = issueTitle({
       sn,
@@ -578,11 +629,9 @@ export function main(io = {}) {
     });
     if (willWrite) {
       log(
-        `[daily-failure-issue] ${offline ? "离线档" : "--dry-run"}：「${s.stage}」` +
-          (s.number
-            ? `→ 在 #${s.number} 下追加一条读数（不新建）`
-            : `→ 新建一张：${title}`) +
-          ` · 正文 ${body.length} 字 · 优先级 ${AUTO_PRIORITY} · 一条都没写`,
+        `[daily-failure-issue] ${offline ? "离线档" : "--dry-run"}：「${s.stage}」${
+          s.number ? `→ 在 #${s.number} 下追加一条读数（不新建）` : `→ 新建一张：${title}`
+          } · 正文 ${body.length} 字 · 优先级 ${AUTO_PRIORITY} · 一条都没写`,
       );
       continue;
     }
@@ -594,21 +643,20 @@ export function main(io = {}) {
           : `[daily-failure-issue] ✗ #${s.number} 的评论没写成或回读不到 ⇒ 手工出口：` +
               `cnb issues post-issue-comment --repo ${slug} --number ${s.number} --body-file <正文文件> -v`,
       );
-      if (!ok) wrote = false;
+      if (!ok) {
+        wrote = false;
+      }
       continue;
     }
     const file = writeScratch(ROOT, "daily-failure-issue", body);
     if (!file) {
-      log(
-        "[daily-failure-issue] ✗ 取不到 git 目录 ⇒ 正文没有落点，一条都不写。",
-      );
+      log("[daily-failure-issue] ✗ 取不到 git 目录 ⇒ 正文没有落点，一条都不写。");
       wrote = false;
       continue;
     }
     const code = runNewIssue({
       run,
-      log: (line) =>
-        log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
+      log: (line) => log(`[daily-failure-issue] ${line.replace(/^\[ship\]\s*/, "")}`),
       slug,
       handle,
       root: ROOT,
@@ -623,25 +671,20 @@ export function main(io = {}) {
       dryRun: false,
     });
     if (code !== CODE.DONE) {
-      log(
-        `[daily-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${code}）`,
-      );
+      log(`[daily-failure-issue] ✗ 「${s.stage}」那张单没建成（runNewIssue 退 ${code}）`);
       wrote = false;
       continue;
     }
-    log(
-      `[daily-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`,
-    );
+    log(`[daily-failure-issue] ✓ 「${s.stage}」已立案（建 → 补标签 → 独立回读全过）`);
   }
-  if (willWrite) return CODE.DONE;
+  if (willWrite) {
+    return CODE.DONE;
+  }
   return wrote ? CODE.DONE : finish(CODE.WRITE_FAILED, "该写的没写成");
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const exit = main();
   if (exit !== CODE.DONE) {
     process.stderr.write(

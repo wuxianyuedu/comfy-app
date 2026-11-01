@@ -134,10 +134,16 @@ function reasonText(key) {
  * @param {ProbeOptions} [options] 探测选项
  * @returns {ProbeResult} 探测结论
  */
-export function probePnpm({ root = process.cwd(), env = process.env, platform = process.platform } = {}) {
+export function probePnpm({
+  root = process.cwd(),
+  env = process.env,
+  platform = process.platform,
+} = {}) {
   const key = probeKey(root, env, platform);
   const cached = probeMemo.get(key);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
   const candidate = whichCommand("pnpm", { env, platform });
   /* 结论是**完整对象**，调用方会就地读字段（`orchestratePnpm` 把它塞进返回结构
    * 与 tip）；这里没有可变共享状态，唯一会过期的只有时间，而时间的正确处置就是
@@ -155,7 +161,10 @@ export function probePnpm({ root = process.cwd(), env = process.env, platform = 
  * @param {ProbeOptions & { args?: string[] }} [options] 探测选项，外加自定义参数
  * @returns {ProbeResult} 探测结论
  */
-export function probeCommand(candidate, { root = process.cwd(), env = process.env, platform = process.platform, args = ["-v"] } = {}) {
+export function probeCommand(
+  candidate,
+  { root = process.cwd(), env = process.env, platform = process.platform, args = ["-v"] } = {},
+) {
   /** 注入的 env 可能是更宽的 Record（测试里常只给 PATH），这里统一成 spawn 认的形状。 */
   const spawnEnv = /** @type {NodeJS.ProcessEnv} */ (env);
   // 形态与回退由 usableCommand 决定（shebang shim 会换成 `powershell -File <name>.ps1`），
@@ -174,7 +183,12 @@ export function probeCommand(candidate, { root = process.cwd(), env = process.en
   /** `spawnSync` 的 error 是 Error 的运行时子类（`code` 由 libuv 填）。 */
   const error = /** @type {NodeJS.ErrnoException | undefined} */ (probe.error);
   if (error?.code) {
-    return failed(command, "spawn-error", `${error.code}（${usableReason(candidate, args, { env, platform })}）`, null);
+    return failed(
+      command,
+      "spawn-error",
+      `${error.code}（${usableReason(candidate, args, { env, platform })}）`,
+      null,
+    );
   }
   const output = `${probe.stdout ?? ""}${probe.stderr ?? ""}`;
   const version = /(\d+\.\d+[\w.-]*)/.exec(output)?.[1] ?? null;
@@ -205,14 +219,24 @@ export function probeCommand(candidate, { root = process.cwd(), env = process.en
  *  @param {{ env?: NodeJS.ProcessEnv | Record<string, string | undefined>, platform?: NodeJS.Platform }} [options] 环境变量表与平台 */
 function usableReason(candidate, args, { env = process.env, platform = process.platform } = {}) {
   const usable = commandInvocation(candidate, args, { env, platform });
-  return usable.command === candidate ? "未发现可回退形态" : `已回退到 ${path.basename(usable.command)}`;
+  return usable.command === candidate
+    ? "未发现可回退形态"
+    : `已回退到 ${path.basename(usable.command)}`;
 }
 
 /** 统一的失败返回，保证字段齐全（调用方不必到处判 undefined）。 */
 /** @param {string | null} command 命令名 @param {ProbeReason} reason 成因键 @param {string} detail 细节文本
  *  @param {number | null} exitCode 退出码（未启动为 null）@returns {ProbeResult} 失败结论 */
 function failed(command, reason, detail, exitCode) {
-  return { ok: false, command, version: null, reason, reasonText: reasonText(reason), detail, exitCode };
+  return {
+    ok: false,
+    command,
+    version: null,
+    reason,
+    reasonText: reasonText(reason),
+    detail,
+    exitCode,
+  };
 }
 
 /** 只留输出的头几行（错误摘要足够，整段栈会顶掉启动页那一行提示）。 */
@@ -236,7 +260,12 @@ function firstLines(output) {
  * @param {ProbeOptions & { expected?: string | null }} [options] 探测选项，外加期望的版本号
  * @returns {{ ran: boolean, ok: boolean, description: string }} 是否执行、是否成功、说明
  */
-export function preparePnpm({ root = process.cwd(), expected = null, env = process.env, platform = process.platform } = {}) {
+export function preparePnpm({
+  root = process.cwd(),
+  expected = null,
+  env = process.env,
+  platform = process.platform,
+} = {}) {
   const spawnEnv = /** @type {NodeJS.ProcessEnv} */ (env);
   const version = expected ?? packageManagerVersion(root);
   if (!version) {
@@ -268,7 +297,11 @@ export function preparePnpm({ root = process.cwd(), expected = null, env = proce
   }
   if (result.status !== 0) {
     const tail = firstLines(`${result.stdout ?? ""}${result.stderr ?? ""}`);
-    return { ran: true, ok: false, description: `corepack prepare 失败（exit=${result.status ?? "?"}${tail ? "：" + tail : ""}）` };
+    return {
+      ran: true,
+      ok: false,
+      description: `corepack prepare 失败（exit=${result.status ?? "?"}${tail ? `：${tail}` : ""}）`,
+    };
   }
   return { ran: true, ok: true, description: `corepack 已重建 pnpm@${version}` };
 }
@@ -286,10 +319,21 @@ export function preparePnpm({ root = process.cwd(), expected = null, env = proce
  *             post: ProbeResult, before: string | null, after: string | null }}  ← 重建前 / 后版本号
  * 重建前后的两次探测结论、prepare 的执行情况，以及前后版本号。
  */
-export function repairPnpm({ root = process.cwd(), env = process.env, platform = process.platform } = {}) {
+export function repairPnpm({
+  root = process.cwd(),
+  env = process.env,
+  platform = process.platform,
+} = {}) {
   const pre = probePnpm({ root, env, platform });
   if (pre.ok) {
-    return { repaired: false, pre, prepare: { ran: false, ok: true, description: "无需重建" }, post: pre, before: pre.version, after: pre.version };
+    return {
+      repaired: false,
+      pre,
+      prepare: { ran: false, ok: true, description: "无需重建" },
+      post: pre,
+      before: pre.version,
+      after: pre.version,
+    };
   }
   const prepare = preparePnpm({ root, env, platform });
   const post = probePnpm({ root, env, platform });
@@ -319,10 +363,17 @@ export function shouldRepair(probe) {
  *             repairable: boolean, expected: string | null }}
  * 探测结论、是否重建过、给用户的提示语、是否可重建、期望版本号。
  */
-export function orchestratePnpm({ root = process.cwd(), env = process.env, platform = process.platform, autoRepair = true } = {}) {
+export function orchestratePnpm({
+  root = process.cwd(),
+  env = process.env,
+  platform = process.platform,
+  autoRepair = true,
+} = {}) {
   const expected = packageManagerVersion(root);
   const probe = probePnpm({ root, env, platform });
-  if (probe.ok) return { probe, repaired: false, tip: null, repairable: false, expected };
+  if (probe.ok) {
+    return { probe, repaired: false, tip: null, repairable: false, expected };
+  }
 
   if (autoRepair && shouldRepair(probe)) {
     const repair = repairPnpm({ root, env, platform });
@@ -370,17 +421,25 @@ export function orchestratePnpm({ root = process.cwd(), env = process.env, platf
 export function buildTip(probe, { expected = null, extra = null } = {}) {
   const parts = [];
   const where = probe.command ? `（命令：${probe.command}）` : "";
-  parts.push(`pnpm 不可用：${probe.reasonText}${probe.detail ? ` —— ${probe.detail}` : ""}${where}`);
-  if (extra) parts.push(`实测经过：${extra}`);
+  parts.push(
+    `pnpm 不可用：${probe.reasonText}${probe.detail ? ` —— ${probe.detail}` : ""}${where}`,
+  );
+  if (extra) {
+    parts.push(`实测经过：${extra}`);
+  }
   parts.push("");
   parts.push("修复（按顺序试，改完重启应用）：");
-  const prepareCmd = expected ? `corepack prepare pnpm@${expected} --activate` : "corepack prepare --activate";
+  const prepareCmd = expected
+    ? `corepack prepare pnpm@${expected} --activate`
+    : "corepack prepare --activate";
   if (probe.reason === "not-found") {
     parts.push(`  1. 先开启 pnpm：corepack enable（版本由 package.json 钉死，无需手动指定）`);
     parts.push(`  2. 仍不可用时重建：${prepareCmd}`);
   } else {
     parts.push(`  1. 重建 pnpm（版本取自 package.json）：${prepareCmd}`);
-    parts.push("     仍不行就删掉损坏的缓存目录后重装 Node（corepack 缓存位于 Node 安装目录旁的 corepack/ 下）。");
+    parts.push(
+      "     仍不行就删掉损坏的缓存目录后重装 Node（corepack 缓存位于 Node 安装目录旁的 corepack/ 下）。",
+    );
   }
   parts.push(
     "  3. 若命令本身能跑、只是被选错了：检查 PATH 上是否同时存在多个 pnpm 形态" +

@@ -24,10 +24,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import {
-  buildParamEntries,
-  sizeGroupIds,
-} from "~/lib/workflow/workflow-param-mapping";
+import { buildParamEntries, sizeGroupIds } from "~/lib/workflow/workflow-param-mapping";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 import { modeContractEntries } from "~/lib/workshop/model-mode-contract";
 import {
@@ -42,10 +39,7 @@ import { DynamicWorkflowForm } from "~/components/studio/workflow-form/DynamicWo
 import { WorkflowNodeActionButton } from "~/components/studio/workflow-form/WorkflowNodeParts";
 import { ParamOwnerTag } from "./ParamOwnerTag";
 import { modeLabel } from "./workflow-library-config";
-import {
-  deriveLibraryOutputCards,
-  deriveLibraryParamCards,
-} from "./workflow-library-param-cards";
+import { deriveLibraryOutputCards, deriveLibraryParamCards } from "./workflow-library-param-cards";
 import { useParamWiring } from "./hooks/use-param-wiring";
 import { useGenerationRunner, type Phase } from "./hooks/use-generation-runner";
 import { useDefaultValueSeeding } from "./hooks/use-default-value-seeding";
@@ -57,29 +51,29 @@ import { WorkflowPreviewRunFeedback } from "./WorkflowPreviewRunFeedback";
 import { WorkflowRunLogModal } from "./WorkflowRunLogModal";
 import { latestRunForWorkflow } from "~/lib/workflow/workflow-run-store";
 
-interface Props {
-  workflowId: string;
-  workflowName: string;
-  taskType: string;
-  workflowIO: WorkflowIOMap | null;
-  /** 模板 paramMap（含 `source.mode:<模式>` 的对外参数落点）。 */
-  paramMap?: Record<string, unknown>;
-  usable: boolean;
-  /** 多模式工作流：提供时第二行右侧的类型 chip 变成模式切换下拉。 */
-  modes?: string[];
+type Props = {
   defaultMode?: string;
+  /** 多模式工作流：提供时第二行右侧的类型 chip 变成模式切换下拉。 */
+  modes?: Array<string>;
   onModeChange?: (code: string) => void;
-  /** seed 类参数「控件后行为」的持久化回调（与 IO 编辑一致）。 */
-  onSeedModeChange?: (ioKey: string, mode: string) => void;
   /** 对外参数落点的持久化回调（库里拖圆点改落点，写回
    *  `paramMap.source.mode:<模式>`）。不传时卡片列只呈现当前落点、不可拖。 */
   onPatchParamMap?: (next: Record<string, unknown>) => void | Promise<void>;
+  /** seed 类参数「控件后行为」的持久化回调（与 IO 编辑一致）。 */
+  onSeedModeChange?: (ioKey: string, mode: string) => void;
+  /** 模板 paramMap（含 `source.mode:<模式>` 的对外参数落点）。 */
+  paramMap?: Record<string, unknown>;
+  taskType: string;
+  usable: boolean;
   /** 视图模式（受控，顶层页签持有）：
    *  "edit" = 编辑对外参数（参数连线画布，禁止执行生成）
    *  "use"  = 实际使用（简化视图，可生成、可看结果）
    *  缺省按 "edit"（首个页签；测试等只读消费方无需关心视图模式）。 */
   viewMode?: "edit" | "use";
-}
+  workflowId: string;
+  workflowIO: WorkflowIOMap | null;
+  workflowName: string;
+};
 
 /* 相位 → 状态胶囊文案（running 的百分比是动态的，查表只覆盖静态四种）。 */
 const STATUS_LABEL: Record<Exclude<Phase["kind"], "running">, string> = {
@@ -138,10 +132,7 @@ export function WorkflowCanvasNodePreview({
   );
 
   const missing = useMemo(
-    () =>
-      workflowIO
-        ? getMissingRequiredInputs(workflowIO, values, effectiveMode)
-        : [],
+    () => (workflowIO ? getMissingRequiredInputs(workflowIO, values, effectiveMode) : []),
     [workflowIO, values, effectiveMode],
   );
   /* 缺参提示人性化：ioKey（76::widget::text）→ 展示标签（pos text 等）。 */
@@ -149,7 +140,9 @@ export function WorkflowCanvasNodePreview({
     () =>
       missing.map((ioKey) => {
         const entry = workflowIO?.[ioKey];
-        if (!entry) return ioKey;
+        if (!entry) {
+          return ioKey;
+        }
         const fromInputs = inputs.find((input) => input.ioKey === ioKey);
         return fromInputs?.label ?? fromInputs?.name ?? ioKey;
       }),
@@ -162,7 +155,9 @@ export function WorkflowCanvasNodePreview({
     const map: Record<string, string> = {};
     for (const [ioKey, entry] of Object.entries(workflowIO ?? {})) {
       const resolved = resolveEntrySeedMode(entry, effectiveMode);
-      if (resolved) map[ioKey] = resolved;
+      if (resolved) {
+        map[ioKey] = resolved;
+      }
     }
     return map;
   }, [workflowIO, effectiveMode]);
@@ -171,26 +166,20 @@ export function WorkflowCanvasNodePreview({
    *  表单里因此**没有独立的一行**（窄版的组合控件仍把这几个端口摆成逐行参数，
    *  各带自己的端点）。对外参数卡片据此不再重复列这些端口 —— 那块控件本身就是
    *  它们的入口。判定与表单同一份（`inferGroups`），不另算一遍避免漂移。 */
-  const groupedKeys = useMemo(
-    () => inferGroups(widgetInputs).groupedKeys,
-    [widgetInputs],
-  );
+  const groupedKeys = useMemo(() => inferGroups(widgetInputs).groupedKeys, [widgetInputs]);
 
   /* 生成运行器。`enabled` 是除「已在运行」外的可运行条件；载荷（含生效映射）
    * 由下面的 run() 在点击时组装 —— 生效映射持有在 wiring 里，倒灌进运行器
    * 会与 useParamWiring 的回调依赖互相成环。 */
-  const { phase, running, canRun, resultUrl, startRun, clearFailure } =
-    useGenerationRunner({
-      workflowId,
-      enabled: usable && missing.length === 0 && viewMode === "use",
-    });
+  const { phase, running, canRun, resultUrl, startRun, clearFailure } = useGenerationRunner({
+    workflowId,
+    enabled: usable && missing.length === 0 && viewMode === "use",
+  });
 
   /* 失败态只保留到用户采取行动前：改输入值或改落点都算「采取了行动」。 */
   const setValuesAndClearFailure = useCallback(
     (
-      next:
-        | Record<string, unknown>
-        | ((prev: Record<string, unknown>) => Record<string, unknown>),
+      next: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>),
     ) => {
       clearFailure();
       setValues(next);
@@ -215,13 +204,9 @@ export function WorkflowCanvasNodePreview({
   );
   const logViewTaskId = logTaskId ?? latestLogTaskId;
 
-  const statusLabel =
-    phase.kind === "running"
-      ? `生成中 ${phase.pct}%`
-      : STATUS_LABEL[phase.kind];
+  const statusLabel = phase.kind === "running" ? `生成中 ${phase.pct}%` : STATUS_LABEL[phase.kind];
   const pct = phase.kind === "running" ? phase.pct : 0;
-  const nodeLabel =
-    phase.kind === "running" && phase.node?.label ? phase.node.label : null;
+  const nodeLabel = phase.kind === "running" && phase.node?.label ? phase.node.label : null;
 
   /* 模式契约口清单 —— 卡片头的话术与「工坊封装」页签**同一份**
    * （`modeContractEntries`：用户改过的模式走注册表，未改过的回落内置默认）。
@@ -271,13 +256,7 @@ export function WorkflowCanvasNodePreview({
          *  清单列 —— 用内置默认会多列出契约里没有的口，见 `deriveLibraryParamCards`）。 */
         contractIds: contractEntries.map((item) => item.id),
       }),
-    [
-      workflowIO,
-      wiring.effectiveParamMap,
-      effectiveMode,
-      groupedKeys,
-      contractEntries,
-    ],
+    [workflowIO, wiring.effectiveParamMap, effectiveMode, groupedKeys, contractEntries],
   );
   /* ── 对外输出参数（右列）──
    * 与左列对称：左列是「对外要什么 → 落到哪一行」，右列是「对外给什么 →
@@ -310,7 +289,9 @@ export function WorkflowCanvasNodePreview({
 
   /** 提交到本机生成并等待落定（相位与 SSE 订阅在 use-generation-runner）。 */
   function run() {
-    if (!canRun) return;
+    if (!canRun) {
+      return;
+    }
     startRun({
       workflowId,
       workflowName,
@@ -336,9 +317,8 @@ export function WorkflowCanvasNodePreview({
       {/* ── edit 模式：参数连线画布（三列 React Flow） ── */}
       {viewMode === "edit" && (
         <WorkflowLibraryCanvas
-          io={workflowIO}
-          paramCards={paramCards}
-          outputCards={outputCards}
+          canWire={!!effectiveMode && !!onPatchParamMap}
+          contractEntries={contractEntries}
           /* 闸门（`isValidConnection`）按它判类型 —— 必须与卡片列**同一份**
              契约（含作者自定义的口），否则自定义口的圆点拖到宿主行上会被判成
              「这一行不收这个口子」，而卡片列明明画着它。 */
@@ -346,140 +326,134 @@ export function WorkflowCanvasNodePreview({
             mode: effectiveMode,
             contractIds: contractEntries.map((item) => item.id),
           })}
-          contractEntries={contractEntries}
-          canWire={!!effectiveMode && !!onPatchParamMap}
-          selectedEntryId={selectedParamId}
-          selectedOutputId={selectedOutputId}
-          onSelectParam={(id) => {
-            setSelectedParamId(id);
-            if (id) setSelectedOutputId(null);
-          }}
-          onSelectOutput={(id) => {
-            setSelectedOutputId(id);
-            if (id) setSelectedParamId(null);
-          }}
-          onResetParam={(id) => {
-            wiring.resetMany(sizeGroupIds(id));
-          }}
-          onResetOutput={outputWiring.reset}
-          onConnect={
-            effectiveMode && onPatchParamMap ? wiring.connect : undefined
-          }
-          onConnectOutput={
-            effectiveMode && onPatchParamMap ? outputWiring.connect : undefined
-          }
-          onDeleteWire={
-            effectiveMode && onPatchParamMap
-              ? (namespace, entryId) => {
-                  if (namespace === "param") wiring.disconnect(entryId);
-                  else outputWiring.disconnect(entryId);
-                }
-              : undefined
-          }
           host={
             <LibraryHostCard
-              workflowName={workflowName}
+              actions={
+                <WorkflowNodeActionButton
+                  disabled
+                  hint="切换到「实际使用」页签后可执行"
+                  label="▶ 用此工作流生成"
+                  onClick={run}
+                />
+              }
+              effectiveMode={effectiveMode}
+              effectiveModeLabel={effectiveModeLabel}
+              form={
+                <DynamicWorkflowForm
+                  compact
+                  io={workflowIO ?? undefined}
+                  mode={effectiveMode}
+                  onChange={setValuesAndClearFailure}
+                  onSeedModeChange={onSeedModeChange}
+                  onUploadError={setUploadNotice}
+                  onUploadProgress={setUploadNotice}
+                  rowTrailing={(entry) => (
+                    <ParamOwnerTag label={paramCards.ownersByPin[entry.ioKey]} />
+                  )}
+                  seedModes={seedModes}
+                  showOutputs={false}
+                  values={values}
+                  workflowId={workflowId}
+                />
+              }
+              hostRef={hostRef}
+              inputs={inputs}
+              modes={modes}
+              onModeChange={onModeChange}
+              outputs={outputs}
+              phaseKind={viewMode === "edit" && phase.kind === "failed" ? "idle" : phase.kind}
+              running={running}
               /* 编辑对外参数页签是配置界面，不应显示上次运行的失败状态（红点 +
                *  「失败」文案）。这里把失败态渲染成「待开始」的中性状态，运行中 /
                *  已完成等状态保留，方便用户必要时感知运行进度。 */
-              statusLabel={
-                viewMode === "edit" && phase.kind === "failed"
-                  ? "待开始"
-                  : statusLabel
-              }
-              running={running}
-              phaseKind={
-                viewMode === "edit" && phase.kind === "failed"
-                  ? "idle"
-                  : phase.kind
-              }
-              modes={modes}
-              effectiveMode={effectiveMode}
+              statusLabel={viewMode === "edit" && phase.kind === "failed" ? "待开始" : statusLabel}
               taskType={taskType}
-              effectiveModeLabel={effectiveModeLabel}
-              onModeChange={onModeChange}
-              hostRef={hostRef}
-              form={
-                <DynamicWorkflowForm
-                  io={workflowIO ?? undefined}
-                  values={values}
-                  onChange={setValuesAndClearFailure}
-                  showOutputs={false}
-                  compact
-                  mode={effectiveMode}
-                  seedModes={seedModes}
-                  rowTrailing={(entry) => (
-                    <ParamOwnerTag
-                      label={paramCards.ownersByPin[entry.ioKey]}
-                    />
-                  )}
-                  onSeedModeChange={onSeedModeChange}
-                  workflowId={workflowId}
-                  onUploadProgress={setUploadNotice}
-                  onUploadError={setUploadNotice}
-                />
-              }
-              outputs={outputs}
-              inputs={inputs}
-              actions={
-                <WorkflowNodeActionButton
-                  label="▶ 用此工作流生成"
-                  disabled={true}
-                  onClick={run}
-                  hint="切换到「实际使用」页签后可执行"
-                />
-              }
+              workflowName={workflowName}
             />
           }
+          io={workflowIO}
+          onConnect={effectiveMode && onPatchParamMap ? wiring.connect : undefined}
+          onConnectOutput={effectiveMode && onPatchParamMap ? outputWiring.connect : undefined}
+          onDeleteWire={
+            effectiveMode && onPatchParamMap
+              ? (namespace, entryId) => {
+                  if (namespace === "param") {
+                    wiring.disconnect(entryId);
+                  } else {
+                    outputWiring.disconnect(entryId);
+                  }
+                }
+              : undefined
+          }
+          onResetOutput={outputWiring.reset}
+          onResetParam={(id) => {
+            wiring.resetMany(sizeGroupIds(id));
+          }}
+          onSelectOutput={(id) => {
+            setSelectedOutputId(id);
+            if (id) {
+              setSelectedParamId(null);
+            }
+          }}
+          onSelectParam={(id) => {
+            setSelectedParamId(id);
+            if (id) {
+              setSelectedOutputId(null);
+            }
+          }}
+          outputCards={outputCards}
+          paramCards={paramCards}
+          selectedEntryId={selectedParamId}
+          selectedOutputId={selectedOutputId}
         />
       )}
 
       {/* ── use 模式：简化视图（表单 + 生成按钮 + 日志入口 + 模式切换） ── */}
       {viewMode === "use" && (
         <WorkflowPreviewUsePanel
-          workflowId={workflowId}
-          workflowName={workflowName}
-          workflowIO={workflowIO}
+          canRun={canRun}
           effectiveMode={effectiveMode}
-          taskType={taskType}
+          effectiveModeLabel={effectiveModeLabel}
+          logViewTaskId={logViewTaskId}
+          missingLabels={missingLabels}
           modes={modes}
           onModeChange={onModeChange}
-          effectiveModeLabel={effectiveModeLabel}
-          values={values}
-          onValuesChange={setValuesAndClearFailure}
-          seedModes={seedModes}
+          onOpenLog={() => setLogOpen(true)}
           onSeedModeChange={onSeedModeChange}
           onUploadNotice={setUploadNotice}
-          running={running}
-          canRun={canRun}
-          run={run}
+          onValuesChange={setValuesAndClearFailure}
           pct={pct}
-          missingLabels={missingLabels}
-          logViewTaskId={logViewTaskId}
-          onOpenLog={() => setLogOpen(true)}
+          run={run}
+          running={running}
+          seedModes={seedModes}
+          taskType={taskType}
+          values={values}
+          workflowId={workflowId}
+          workflowIO={workflowIO}
+          workflowName={workflowName}
         />
       )}
 
       {/* ── 运行的内联反馈（进度 / 结果 / 失败原因 / 上传与缺参提示） ── */}
       <WorkflowPreviewRunFeedback
-        phase={phase}
-        pct={pct}
-        nodeLabel={nodeLabel}
-        resultUrl={resultUrl}
-        workflowName={workflowName}
-        viewMode={viewMode}
-        running={running}
         missingLabels={missingLabels}
-        uploadNotice={uploadNotice}
+        nodeLabel={nodeLabel}
         onDismissUploadNotice={() => setUploadNotice(null)}
+        pct={pct}
+        phase={phase}
+        resultUrl={resultUrl}
+        running={running}
+        uploadNotice={uploadNotice}
+        viewMode={viewMode}
+        workflowName={workflowName}
       />
       <WorkflowRunLogModal
+        onClose={() => setLogOpen(false)}
+        onViewTaskIdChange={setLogTaskId}
         open={logOpen}
-        workflowId={workflowId}
         source="canvas-node"
         viewTaskId={logViewTaskId}
-        onViewTaskIdChange={setLogTaskId}
-        onClose={() => setLogOpen(false)}
+        workflowId={workflowId}
       />
     </div>
   );

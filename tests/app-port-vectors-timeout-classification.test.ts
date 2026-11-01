@@ -34,6 +34,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { normalizeControlFlow } from "./helpers/source-shape";
+
 /**
  * 需要 POSIX 执行语义的用例开关：这条要写一个 `#!/bin/sh` 的假命令、再 `chmod`
  * 出执行位，而 Windows 上 libuv 不解析 shebang、`chmodSync` 也不存执行位 ——
@@ -46,19 +48,21 @@ import { describe, expect, it } from "vitest";
  */
 const needsPosixExec = it.skipIf(process.platform === "win32");
 
-const SCRIPT_SOURCE = readFileSync(
-  path.resolve(__dirname, "../scripts/check-app-port-vectors.cjs"),
-  "utf8",
+/* 形态断言的对象是这个脚本的**控制流**，不是括号 —— 先过归一化，
+ * oxlint `curly` 给单语句体补 `{}` 才不会把断言打成「判据写错了」。 */
+const SCRIPT_SOURCE = normalizeControlFlow(
+  readFileSync(path.resolve(__dirname, "../scripts/check-app-port-vectors.cjs"), "utf8"),
+  "check-app-port-vectors.cjs",
 );
 // 判据脚本是 CJS（`@ts-nocheck`，require 进来是 any），按仓库惯例显式标注返回形状。
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const judge = require("../scripts/check-app-port-vectors.cjs") as {
-  isTimeoutLike: (e: unknown) => boolean;
-  probeCommand: (cmd: string, args: string[]) => ProbeState;
+const judge = /* SAFETY: 类型断言已复核 */ require("../scripts/check-app-port-vectors.cjs") as {
   decidePythonVerdict: (
     first: Measure,
     second: Measure | null,
-  ) => { problems: string[]; unverified: string[] };
+  ) => { problems: Array<string>; unverified: Array<string> };
+  isTimeoutLike: (e: unknown) => boolean;
+  probeCommand: (cmd: string, args: Array<string>) => ProbeState;
 };
 
 /**
@@ -71,13 +75,13 @@ const judge = require("../scripts/check-app-port-vectors.cjs") as {
 type ProbeState = "ok" | "timeout" | "missing" | "present-but-nonzero";
 
 /** 一趟取证的返回形状（`measurePythonOnce` 的结果，也是本文件的输入夹具）。 */
-interface Measure {
-  state: "answered" | "timeout" | "missing" | "malformed";
+type Measure = {
+  problems: Array<string>;
   python: string | null;
-  problems: string[];
+  state: "answered" | "timeout" | "missing" | "malformed";
 }
 
-const answered = (problems: string[] = []): Measure => ({
+const answered = (problems: Array<string> = []): Measure => ({
   state: "answered",
   python: "python3",
   problems,
@@ -100,13 +104,9 @@ const malformed = (): Measure => ({
 
 describe("超时形状识别（execFileSync 带 timeout 的两种落法都要认）", () => {
   it("code=ETIMEDOUT 与 message 里带 ETIMEDOUT 都算「没拿到测量」", () => {
-    expect(
-      judge.isTimeoutLike({ code: "ETIMEDOUT", message: "spawnSync python3" }),
-    ).toBe(true);
+    expect(judge.isTimeoutLike({ code: "ETIMEDOUT", message: "spawnSync python3" })).toBe(true);
     // 实测那一发的报错形态：code 不在顶层，只在 message 里
-    expect(
-      judge.isTimeoutLike({ message: "spawnSync python3 ETIMEDOUT" }),
-    ).toBe(true);
+    expect(judge.isTimeoutLike({ message: "spawnSync python3 ETIMEDOUT" })).toBe(true);
     expect(
       judge.isTimeoutLike({
         message: "Command failed: timed out after 30000ms",
@@ -115,9 +115,7 @@ describe("超时形状识别（execFileSync 带 timeout 的两种落法都要认
   });
 
   it("真的执行失败 / 命令不存在都不算超时（否则真红会被读成「未校验」而放过去）", () => {
-    expect(
-      judge.isTimeoutLike({ code: "ENOENT", message: "python3 not found" }),
-    ).toBe(false);
+    expect(judge.isTimeoutLike({ code: "ENOENT", message: "python3 not found" })).toBe(false);
     expect(
       judge.isTimeoutLike({
         code: 1,
@@ -131,9 +129,7 @@ describe("超时形状识别（execFileSync 带 timeout 的两种落法都要认
 
 describe("命令探测分四态，不许糊成布尔", () => {
   it("不存在的命令报 missing（而不是 timeout）", () => {
-    expect(
-      judge.probeCommand("definitely-not-a-real-binary-xyz", ["--version"]),
-    ).toBe("missing");
+    expect(judge.probeCommand("definitely-not-a-real-binary-xyz", ["--version"])).toBe("missing");
   });
 
   /* 「没有执行位」是**权限位**语义，而 Windows 的文件系统没有执行位（`chmodSync`
@@ -141,16 +137,19 @@ describe("命令探测分四态，不许糊成布尔", () => {
    * `CreateProcess` 当作 `….exe` 去找、得到 ENOENT，判出的 `missing` 是巧合而不是
    * 被测形态。判据本身（EACCES 归 missing 的口径）由 `probeCommand` 的源码与
    * `scripts/check-app-port-vectors.cjs` 的注释持有，平台分叉只此一处。 */
-  needsPosixExec("没有执行位的文件同样归 missing（拿不到回答，下一步动作与「没有文件」同一件）", () => {
-    const noexec = path.join(os.tmpdir(), `app-port-probe-noexec-${process.pid}`);
-    writeFileSync(noexec, "#!/bin/sh\nexit 0\n");
-    chmodSync(noexec, 0o644);
-    try {
-      expect(judge.probeCommand(noexec, ["--version"])).toBe("missing");
-    } finally {
-      rmSync(noexec, { force: true });
-    }
-  });
+  needsPosixExec(
+    "没有执行位的文件同样归 missing（拿不到回答，下一步动作与「没有文件」同一件）",
+    () => {
+      const noexec = path.join(os.tmpdir(), `app-port-probe-noexec-${process.pid}`);
+      writeFileSync(noexec, "#!/bin/sh\nexit 0\n");
+      chmodSync(noexec, 0o644);
+      try {
+        expect(judge.probeCommand(noexec, ["--version"])).toBe("missing");
+      } finally {
+        rmSync(noexec, { force: true });
+      }
+    },
+  );
 
   /* 这一格**不** skip：它判的是「命令在、只是非零退出」，而那个形态在 Windows 上照样
    * 存在 —— 缺的是「用 POSIX 才有的夹具造出来」这件事。探针命令取**跑测试自己的那个
@@ -172,7 +171,9 @@ describe("命令探测分四态，不许糊成布尔", () => {
   it("真的存在的解释器仍是 ok（四态没有把正常路径收窄）", () => {
     // python3 不在 PATH 上时这一格不成立 —— 那是机器的形状，不是判据的形状，
     // 所以只在探到 ok 时断言，没探到就跳过。
-    if (judge.probeCommand("python3", ["--version"]) !== "ok") return;
+    if (judge.probeCommand("python3", ["--version"]) !== "ok") {
+      return;
+    }
     expect(judge.probeCommand("python3", ["--version"])).toBe("ok");
   });
 });
@@ -270,16 +271,14 @@ describe("接线在位：复跑真的会发生，出口真的分两条", () => {
   });
 
   it("catch 里按形态分流：超时返回 timeout 态，真失败返回带 problems 的 answered 态", () => {
-    expect(SCRIPT_SOURCE).toMatch(
-      /if \(isTimeoutLike\(e\)\) return \{ state: "timeout"/,
-    );
+    /* 判的是「catch 里按形态分流、超时走 timeout 态」，不判 catch 绑定的名字：
+     * 改名（unicorn/catch-error-name 那类）与这条语义无关，钉死名字会让它假红。 */
+    expect(SCRIPT_SOURCE).toMatch(/if \(isTimeoutLike\(\w+\)\) return \{ state: "timeout"/);
     expect(SCRIPT_SOURCE).toMatch(/problems: \[\s*\n?\s*`Python 侧自检失败：/);
   });
 
   it("判决结果同时喂两条出口（problems 与 unverified 各走各的）", () => {
-    expect(SCRIPT_SOURCE).toMatch(
-      /const verdict = decidePythonVerdict\(first, second\);/,
-    );
+    expect(SCRIPT_SOURCE).toMatch(/const verdict = decidePythonVerdict\(first, second\);/);
     expect(SCRIPT_SOURCE).toMatch(/problems\.push\(\.\.\.verdict\.problems\);/);
     expect(SCRIPT_SOURCE).toMatch(
       /for \(const note of verdict\.unverified\) unverified\.push\(note\);/,
@@ -289,9 +288,7 @@ describe("接线在位：复跑真的会发生，出口真的分两条", () => {
   it("纯未校验那一支：说「未完全取证（放行）」、点名、且**不再** exit 1", () => {
     const branch = SCRIPT_SOURCE.slice(
       SCRIPT_SOURCE.indexOf("if (problems.length === 0) {"),
-      SCRIPT_SOURCE.indexOf(
-        'console.error("[app-port-vectors] 四语言端口推导一致性失败：")',
-      ),
+      SCRIPT_SOURCE.indexOf('console.error("[app-port-vectors] 四语言端口推导一致性失败：")'),
     );
     expect(branch).toContain("未完全取证");
     expect(branch).toContain("（放行）");
@@ -303,15 +300,14 @@ describe("接线在位：复跑真的会发生，出口真的分两条", () => {
 
   it("真不一致那一支照旧拦（放宽只放宽了「没拿到测量」那一格）", () => {
     const tail = SCRIPT_SOURCE.slice(
-      SCRIPT_SOURCE.indexOf(
-        'console.error("[app-port-vectors] 四语言端口推导一致性失败：")',
-      ),
+      SCRIPT_SOURCE.indexOf('console.error("[app-port-vectors] 四语言端口推导一致性失败：")'),
     );
     expect(tail).toContain("process.exit(1)");
     expect(tail).toContain("[未校验·附带]");
   });
 
   it("被 import 时不跑检查（否则用例一 require 就现场取证并可能 process.exit）", () => {
-    expect(SCRIPT_SOURCE).toMatch(/if \(require\.main === module\) \{/);
+    // 归一化之后块括号没了，判的是那个条件本身（括号在不在不影响这条判据）。
+    expect(SCRIPT_SOURCE).toMatch(/if \(require\.main === module\)/);
   });
 });

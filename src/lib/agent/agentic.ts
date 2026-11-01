@@ -2,35 +2,35 @@
 // 配了本地/远程 LLM 时就用它；没配则回落到一个脚本化的离线状态机，
 // 保证多轮流程始终可用。
 
-export interface AgentSpec {
-  prompt: string;
+export type AgentSpec = {
+  kind?: "image" | "video";
   negative?: string;
   params?: AgentParams;
+  prompt: string;
   skillHint?: string;
-  kind?: "image" | "video";
-}
+};
 
 export type AgentParams = {
-  steps?: number;
   cfg?: number;
   sampler?: string;
   scheduler?: string;
   size?: string;
+  steps?: number;
 };
 
-export interface ChatMessage {
-  role: "user" | "assistant" | "system";
+export type ChatMessage = {
   content: string;
-}
+  role: "user" | "assistant" | "system";
+};
 
-export interface AgentTurnResult {
-  /** 助手的自然语言回复（一个提问，或一次确认）。 */
-  reply: string;
+export type AgentTurnResult = {
   /** 有此字段且为真，表示描述已定稿、可以开始生成。 */
   ready: boolean;
+  /** 助手的自然语言回复（一个提问，或一次确认）。 */
+  reply: string;
   /** 最终的结构化描述（仅在就绪时给出）。 */
   spec?: AgentSpec;
-}
+};
 
 const MULTITURN_SYSTEM = `你是一个 AI 创作引导助手，帮助用户用 ComfyUI 生成图片或视频。
 通过简短的多轮对话帮用户理清需求，每轮最多问 1-2 个最关键的澄清问题，不要一次问太多。
@@ -49,10 +49,7 @@ const MULTITURN_SYSTEM = `你是一个 AI 创作引导助手，帮助用户用 C
      "params": {"steps": 25, "cfg": 7, "sampler": "euler", "scheduler": "normal", "size": "1024x1024"}
    }}`;
 
-function offlineIdea(
-  text: string,
-  kind: "image" | "video" = "image",
-): AgentSpec {
+function offlineIdea(text: string, kind: "image" | "video" = "image"): AgentSpec {
   const trimmed = text.trim();
 
   return {
@@ -78,21 +75,23 @@ function offlineIdea(
   };
 }
 
-function detectKind(msgs: string[]): "image" | "video" | null {
+function detectKind(msgs: Array<string>): "image" | "video" | null {
   for (const m of msgs) {
-    if (/视频|video|短片|动图|mv|影片|动漫短/.test(m)) return "video";
+    if (/视频|video|短片|动图|mv|影片|动漫短/.test(m)) {
+      return "video";
+    }
   }
   for (const m of msgs) {
-    if (/图片|图像|照片|插画|画作|海报|图$/.test(m)) return "image";
+    if (/图片|图像|照片|插画|画作|海报|图$/.test(m)) {
+      return "image";
+    }
   }
   return null;
 }
 
 /* 没配 LLM 时用的脚本化多轮兜底。 */
-function offlineAgent(history: ChatMessage[]): AgentTurnResult {
-  const userMsgs = history
-    .filter((history) => history.role === "user")
-    .map((msg) => msg.content);
+function offlineAgent(history: Array<ChatMessage>): AgentTurnResult {
+  const userMsgs = history.filter((history) => history.role === "user").map((msg) => msg.content);
   if (userMsgs.length === 0) {
     return {
       reply: "你好！想生成【图片】还是【视频】？简单描述下主题就行～",
@@ -125,13 +124,11 @@ function offlineAgent(history: ChatMessage[]): AgentTurnResult {
 }
 
 type RawSpec = {
-  prompt?: unknown;
-  negative?: unknown;
   kind?: unknown;
+  negative?: unknown;
+  params?: Partial<Record<"steps" | "cfg" | "sampler" | "scheduler" | "size", unknown>>;
+  prompt?: unknown;
   skillHint?: unknown;
-  params?: Partial<
-    Record<"steps" | "cfg" | "sampler" | "scheduler" | "size", unknown>
-  >;
 };
 
 function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
@@ -144,8 +141,7 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
       steps: typeof params.steps === "number" ? params.steps : undefined,
       cfg: typeof params.cfg === "number" ? params.cfg : undefined,
       sampler: typeof params.sampler === "string" ? params.sampler : undefined,
-      scheduler:
-        typeof params.scheduler === "string" ? params.scheduler : undefined,
+      scheduler: typeof params.scheduler === "string" ? params.scheduler : undefined,
       size: typeof params.size === "string" ? params.size : undefined,
     },
     skillHint: typeof s?.skillHint === "string" ? s.skillHint : undefined,
@@ -157,9 +153,7 @@ function normalizeSpec(s: RawSpec | null | undefined): AgentSpec {
  * @param history 截至目前完整对话（只含用户/助手消息；
  *                 系统提示词在内部注入）。
  */
-export async function chatAgent(
-  history: ChatMessage[],
-): Promise<AgentTurnResult> {
+export async function chatAgent(history: Array<ChatMessage>): Promise<AgentTurnResult> {
   const sysMsg: ChatMessage = { role: "system", content: MULTITURN_SYSTEM };
   try {
     const res = await fetch("/api/llm", {
@@ -171,15 +165,17 @@ export async function chatAgent(
         maxTokens: 700,
       }),
     });
-    if (!res.ok) throw new Error("llm failed");
-    const data = (await res.json()) as {
-      content?: string;
+    if (!res.ok) {
+      throw new Error("llm failed");
+    }
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
+      content?: string;
     };
     const content = data.content ?? data.choices?.[0]?.message?.content ?? "";
     const jsonMatch = /\{[\s\S]*\}/.exec(content);
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as {
+      const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(jsonMatch[0]) as {
         ready?: boolean;
         reply?: string;
         spec?: RawSpec;

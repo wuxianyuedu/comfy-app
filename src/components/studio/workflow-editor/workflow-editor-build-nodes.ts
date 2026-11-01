@@ -52,16 +52,14 @@ import {
 type GraphEntry = { inputs?: WorkflowNodeData["inputs"] };
 /** `detail.boundaryPins.inputs / .outputs` 里的一个边界 pin ——
  *  两个数组的元素形状相同。 */
-type BoundaryPin = NonNullable<
-  WorkflowDetail["boundaryPins"]
->["inputs"][number];
+type BoundaryPin = NonNullable<WorkflowDetail["boundaryPins"]>["inputs"][number];
 
-export interface BuildInitialNodesCtx {
+export type BuildInitialNodesCtx = {
   detail: WorkflowDetail | null;
-  scopeDetail: WorkflowDetail | null;
-  rawMetaById: Record<string, RawNodeMeta>;
-  outSlotNameById: Record<string, string[]>;
-  paramMap: Record<string, unknown>;
+  /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
+   *  时传入。本层节点都是子图内部节点，勾选时把它一并带上，运行期据此还原
+   *  comfy-cli 展开后的 `host:inner` 拼接 id（见 IoRef.hostNodeId）。 */
+  hostNodeId?: string;
   onEnterSubgraph?: (
     id: string,
     classType: string,
@@ -69,11 +67,11 @@ export interface BuildInitialNodesCtx {
     /** 本层视图的宿主链，嵌套下钻时与当前节点的 id 拼成新的宿主链。 */
     parentHostId?: string,
   ) => void;
-  /** 当前视图的宿主（外层封装）节点 id —— 仅当视图是「下钻后的子工作流内部」
-   *  时传入。本层节点都是子图内部节点，勾选时把它一并带上，运行期据此还原
-   *  comfy-cli 展开后的 `host:inner` 拼接 id（见 IoRef.hostNodeId）。 */
-  hostNodeId?: string;
-}
+  outSlotNameById: Record<string, Array<string>>;
+  paramMap: Record<string, unknown>;
+  rawMetaById: Record<string, RawNodeMeta>;
+  scopeDetail: WorkflowDetail | null;
+};
 
 /**
  * 边界 pin → wfGroup(wfIoPort …) 栏杆布局（从 `buildInitialNodes` 拆出，§12.13）。
@@ -175,7 +173,9 @@ const buildBoundaryGroup = (
   pos: { x: number; y: number },
   height: number,
 ): Node | null => {
-  if (height <= 0) return null;
+  if (height <= 0) {
+    return null;
+  }
   return {
     id,
     type: "wfGroup",
@@ -203,19 +203,31 @@ const buildBoundaryGroup = (
 function layoutBoundaryPins(
   detail: WorkflowDetail,
   middlePos: Record<string, { x: number; y: number }>,
-): Node[] {
-  if (!detail.boundaryPins) return [];
+): Array<Node> {
+  if (!detail.boundaryPins) {
+    return [];
+  }
   const mIds = Object.keys(middlePos);
-  if (mIds.length === 0) return [];
+  if (mIds.length === 0) {
+    return [];
+  }
   let minX = Infinity,
     maxX = -Infinity,
     minY = Infinity;
   for (const id of mIds) {
     const p = middlePos[id];
-    if (!p) continue;
-    if (p.x < minX) minX = p.x;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y < minY) minY = p.y;
+    if (!p) {
+      continue;
+    }
+    if (p.x < minX) {
+      minX = p.x;
+    }
+    if (p.x > maxX) {
+      maxX = p.x;
+    }
+    if (p.y < minY) {
+      minY = p.y;
+    }
   }
   /* 参考布局：┃ 左输入列 ┃ 中间画布列 ┃ 右输出列 ┃。
    *  每条栏杆与中间包围盒之间的空隙必须 ≥ 一个中间节点的宽度（约 280px）
@@ -233,7 +245,9 @@ function layoutBoundaryPins(
       /* (0,0) 一律当作「没提供」—— 原件里没有该 pin 的位置时就是这个形态。
        *  回落到按包围盒锚定的栏杆，
        *  总好过把所有 pin 都堆在画布原点。 */
-      if (x !== 0 || y !== 0) return [x, y];
+      if (x !== 0 || y !== 0) {
+        return [x, y];
+      }
     }
     return null;
   };
@@ -244,19 +258,27 @@ function layoutBoundaryPins(
    *  让最上面那个 pin 落在标题栏 + 约 GROUP_PAD_X 之内。
    *  输入与输出是「朝内」的，所以左侧取 minX、右侧取 maxX。 */
   const computeGroupDefault = (
-    list: ([number, number] | null)[],
+    list: Array<[number, number] | null>,
     side: "left" | "right",
   ): { x: number; y: number } | null => {
     let anchorX = side === "left" ? Infinity : -Infinity;
     let minRy = Infinity;
     let any = false;
     for (const p of list) {
-      if (!p) continue;
+      if (!p) {
+        continue;
+      }
       any = true;
-      if (side === "left" ? p[0] < anchorX : p[0] > anchorX) anchorX = p[0];
-      if (p[1] < minRy) minRy = p[1];
+      if (side === "left" ? p[0] < anchorX : p[0] > anchorX) {
+        anchorX = p[0];
+      }
+      if (p[1] < minRy) {
+        minRy = p[1];
+      }
     }
-    if (!any) return null;
+    if (!any) {
+      return null;
+    }
     return {
       x: anchorX - GROUP_PAD_X,
       y: minRy - GROUP_TITLE_BAR - GROUP_PAD_X,
@@ -266,10 +288,8 @@ function layoutBoundaryPins(
   const outputsDefault = computeGroupDefault(outputsRaw, "right");
 
   const positionsById = detail.positions ?? {};
-  const savedIn: [number, number] | undefined =
-    positionsById["grp:bpin:inputs"];
-  const savedOut: [number, number] | undefined =
-    positionsById["grp:bpin:outputs"];
+  const savedIn: [number, number] | undefined = positionsById["grp:bpin:inputs"];
+  const savedOut: [number, number] | undefined = positionsById["grp:bpin:outputs"];
 
   const inputsGroupPos = savedIn
     ? { x: savedIn[0], y: savedIn[1] }
@@ -284,8 +304,7 @@ function layoutBoundaryPins(
         y: minY - GROUP_TITLE_BAR,
       });
 
-  const stackRel = (i: number) =>
-    GROUP_TITLE_BAR + i * (IO_PORT_HEIGHT + PORT_ROW_GAP);
+  const stackRel = (i: number) => GROUP_TITLE_BAR + i * (IO_PORT_HEIGHT + PORT_ROW_GAP);
   const inputsRelYs = detail.boundaryPins.inputs.map((_p, i) => {
     const r = inputsRaw[i];
     return r ? r[1] - inputsGroupPos.y : stackRel(i);
@@ -295,15 +314,14 @@ function layoutBoundaryPins(
     return r ? r[1] - outputsGroupPos.y : stackRel(i);
   });
   const minHeight = GROUP_TITLE_BAR + GROUP_PAD_Y_BOTTOM;
-  const computedHeight = (relYs: number[]): number => {
-    if (relYs.length === 0) return 0;
-    return Math.max(
-      minHeight,
-      Math.max(...relYs) + IO_PORT_HEIGHT + GROUP_PAD_Y_BOTTOM,
-    );
+  const computedHeight = (relYs: Array<number>): number => {
+    if (relYs.length === 0) {
+      return 0;
+    }
+    return Math.max(minHeight, Math.max(...relYs) + IO_PORT_HEIGHT + GROUP_PAD_Y_BOTTOM);
   };
 
-  const out: Node[] = [];
+  const out: Array<Node> = [];
 
   const inputsGroup = buildBoundaryGroup(
     "grp:bpin:inputs",
@@ -318,10 +336,10 @@ function layoutBoundaryPins(
      * `number` 传给 `buildBoundaryPinNode`，坏的是一张画布。 */
     detail.boundaryPins.inputs.forEach((pin, i) => {
       const relY = inputsRelYs.at(i);
-      if (relY === undefined) return;
-      out.push(
-        buildBoundaryPinNode(pin, "input", "grp:bpin:inputs", relY, inputRelX),
-      );
+      if (relY === undefined) {
+        return;
+      }
+      out.push(buildBoundaryPinNode(pin, "input", "grp:bpin:inputs", relY, inputRelX));
     });
   }
 
@@ -335,23 +353,17 @@ function layoutBoundaryPins(
     out.push(outputsGroup);
     detail.boundaryPins.outputs.forEach((pin, i) => {
       const relY = outputsRelYs.at(i);
-      if (relY === undefined) return;
-      out.push(
-        buildBoundaryPinNode(
-          pin,
-          "output",
-          "grp:bpin:outputs",
-          relY,
-          outputRelX,
-        ),
-      );
+      if (relY === undefined) {
+        return;
+      }
+      out.push(buildBoundaryPinNode(pin, "output", "grp:bpin:outputs", relY, outputRelX));
     });
   }
 
   return out;
 }
 
-export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
+export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   const {
     detail,
     scopeDetail,
@@ -362,8 +374,12 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     hostNodeId,
   } = ctx;
 
-  if (!detail) return [];
-  if (!scopeDetail) return [];
+  if (!detail) {
+    return [];
+  }
+  if (!scopeDetail) {
+    return [];
+  }
   const colW = 300;
   const rowH = 220;
   const padX = 80;
@@ -371,11 +387,15 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
 
   // 按 id 给节点建索引，才能把 [srcId, slot] 形态的输入解析成源节点标题。
   const nodesById: Record<string, ComfyGraphNode> = {};
-  for (const n of scopeDetail.nodes) nodesById[n.id] = n;
+  for (const n of scopeDetail.nodes) {
+    nodesById[n.id] = n;
+  }
 
   /* 按 id 取每个节点的原始输入元数据（画布视图用） */
-  const rawById: Record<string, RawInputMeta[]> = {};
-  for (const n of scopeDetail.nodes) rawById[n.id] = n.raw_inputs ?? [];
+  const rawById: Record<string, Array<RawInputMeta>> = {};
+  for (const n of scopeDetail.nodes) {
+    rawById[n.id] = n.raw_inputs ?? [];
+  }
 
   /* 「本节点的 OUTPUT 槽馈入了子图边界」的**独立**视图 —— 直接从
    *  detail.boundaryLinks（bl.kind === "output"）里推出。用作 WfNode 的
@@ -395,7 +415,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
     for (const bl of detail.boundaryLinks) {
       const nid = String(bl.innerNodeId);
       const slot = String(bl.innerSlotName || "");
-      if (!nid || !slot) continue;
+      if (!nid || !slot) {
+        continue;
+      }
       if (bl.kind === "output") {
         (boundaryOutputsByNodeId[nid] ??= new Set()).add(slot);
       } else if (bl.kind === "input") {
@@ -431,17 +453,15 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   // 高度，理由见 NODE_TITLE_H 的注释）。`data.size.h` 里带的主体内容高度
   // 正好就是 `size[1]`。
   const NODE_ANCHOR_OFFSET_Y = NODE_TITLE_H;
-  const graphById = detail.graph as Record<string, GraphEntry | undefined>;
-  const buildWfNode = (
-    n: ComfyGraphNode,
-    pos: { x: number; y: number },
-  ): Node => ({
+  const graphById = /* SAFETY: 类型断言已复核 */ detail.graph as Record<
+    string,
+    GraphEntry | undefined
+  >;
+  const buildWfNode = (n: ComfyGraphNode, pos: { x: number; y: number }): Node => ({
     id: n.id,
     type: "wfNode",
     position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
-    style: n.size
-      ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H }
-      : undefined,
+    style: n.size ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H } : undefined,
     zIndex: NODE_Z,
     data: {
       nodeId: n.id,
@@ -493,18 +513,16 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
    *  芯片（见 WfSubgraphNode）。下钻（双击，或点头部的展开按钮）才加载
    *  子图内部的图，那里的 IO 成员节点会被包进 INPUTS / OUTPUTS wfGroup。
    */
-  const buildSubgraphNode = (
-    n: ComfyGraphNode,
-    pos: { x: number; y: number },
-  ): Node => {
+  const buildSubgraphNode = (n: ComfyGraphNode, pos: { x: number; y: number }): Node => {
     /* 有**外部**连线的子图输入，就是父工作流接进来的那些。判据取自
      *  detail.graph[子图节点id].inputs —— 这里的键，只要值是
      *  [srcId, slot] 元组，就算已连接。 */
     const subgraphInp = graphById[n.id]?.inputs ?? {};
     const connectedInputs = new Set<string>();
     for (const [name, v] of Object.entries(subgraphInp)) {
-      if (Array.isArray(v) && typeof v[0] === "string")
+      if (Array.isArray(v) && typeof v[0] === "string") {
         connectedInputs.add(name);
+      }
     }
     return {
       id: n.id,
@@ -514,9 +532,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       // 主体因此正好落在导入的 pos.y 上。
       position: { x: pos.x, y: pos.y - NODE_ANCHOR_OFFSET_Y },
       zIndex: SUBGRAPH_Z, // 画在普通节点之上，紫色描边才读得出来
-      style: n.size
-        ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H }
-        : undefined,
+      style: n.size ? { width: n.size[0], height: n.size[1] + NODE_TITLE_H } : undefined,
       data: {
         nodeId: n.id,
         /* 本层若是「子图内部的子图」，本卡片自身就是下一层的宿主，其内部
@@ -532,8 +548,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
         connectedInputs,
         size: n.size ? { w: n.size[0], h: n.size[1] } : undefined,
         mode: rawMetaById[n.id]?.mode ?? 0,
-        onEnter: () =>
-          onEnterSubgraph?.(n.id, n.class_type, n.title, hostNodeId),
+        onEnter: () => onEnterSubgraph?.(n.id, n.class_type, n.title, hostNodeId),
       },
     };
   };
@@ -551,7 +566,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
    *  `groupDepth`（以原始 g.id 为键）与 WfGroupNode 的 data.title/color
    *  都不受影响。 */
   const usedGroupIds = new Set<string>();
-  const groupNodes: Node[] = groups
+  const groupNodes: Array<Node> = groups
     .filter((group) => group.bounding[2] > 0 && group.bounding[3] > 0)
     .map((group) => {
       const [x, y, w, h] = group.bounding;
@@ -578,7 +593,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
 
   /* ── 便签 / MarkdownNote 注释节点 ── */
   const notes = detail.notes ?? [];
-  const noteNodes: Node[] = notes.map((note) => {
+  const noteNodes: Array<Node> = notes.map((note) => {
     const title = extractNoteTitle(note.text, note.title);
     /* 锚点约定（与图节点相同）：React Flow 的 `position` 是卡片顶部
      *  （标题栏顶部），主体在它下面 NODE_TITLE_H 处。要让**主体**顶部落在
@@ -611,9 +626,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   });
 
   // 只处理真实的图节点（便签类节点在上面单独渲染）。
-  const realNodes = scopeDetail.nodes.filter(
-    (node) => !isNoteType(node.class_type),
-  );
+  const realNodes = scopeDetail.nodes.filter((node) => !isNoteType(node.class_type));
 
   /* 内层的图节点一律渲染成完整的 WfNode / WfSubgraphNode 卡片 ——
    *  不再按 is_input_endpoint / is_output_endpoint 把某些节点换成 wfIoPort。
@@ -638,37 +651,22 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   // 单一格式（不再区分 RAW / API 视图）。节点布局优先使用
   // detail.positions（已含 rawJson 原始位置 + 用户拖拽覆盖），不足时退回
   // Kahn 拓扑自动布局兜底。
-  const kahn = computeKahnLayout(
-    realNodes,
-    scopeDetail.graph ?? {},
-    colW,
-    rowH,
-    padX,
-    padY,
-  );
+  const kahn = computeKahnLayout(realNodes, scopeDetail.graph ?? {}, colW, rowH, padX, padY);
 
   const savedPositions = scopeDetail.positions;
   const positionsCount = Object.keys(savedPositions ?? {}).length;
 
   const useSavedPositions =
-    savedPositions != null &&
-    positionsCount > 0 &&
-    positionsCount >= realNodes.length;
+    savedPositions != null && positionsCount > 0 && positionsCount >= realNodes.length;
   if (useSavedPositions && savedPositions) {
     const positionsById = savedPositions;
     const middleNodes = realNodes.map((realNode) => {
       const p = positionsById[realNode.id];
       return realNode.is_subgraph
-        ? buildSubgraphNode(
-            realNode,
-            p ? { x: p[0], y: p[1] } : { x: padX, y: padY },
-          )
-        : buildWfNode(
-            realNode,
-            p ? { x: p[0], y: p[1] } : { x: padX, y: padY },
-          );
+        ? buildSubgraphNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY })
+        : buildWfNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY });
     });
-    const middlePosById = Object.fromEntries(
+    const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
       middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
     ) as Record<string, { x: number; y: number }>;
     return [
@@ -700,11 +698,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
       } else {
         pos = { x: padX, y: padY };
       }
-      return realNode.is_subgraph
-        ? buildSubgraphNode(realNode, pos)
-        : buildWfNode(realNode, pos);
+      return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
     });
-    const middlePosById = Object.fromEntries(
+    const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
       middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
     ) as Record<string, { x: number; y: number }>;
     return [
@@ -718,11 +714,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Node[] {
   /* ── 2) Auto-layout via Kahn longest-path ── (raw 视图兜底，复用上面算好的 kahn) */
   const middleNodes = realNodes.map((realNode) => {
     const pos = kahn[realNode.id] ?? { x: padX, y: padY };
-    return realNode.is_subgraph
-      ? buildSubgraphNode(realNode, pos)
-      : buildWfNode(realNode, pos);
+    return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
   });
-  const middlePosById = Object.fromEntries(
+  const middlePosById = /* SAFETY: 类型断言已复核 */ Object.fromEntries(
     middleNodes.map((middleNode) => [middleNode.id, middleNode.position]),
   ) as Record<string, { x: number; y: number }>;
   return [

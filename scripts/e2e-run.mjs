@@ -69,10 +69,7 @@ export {
 /* schema 预检那三张卡（判词 / 取证 / 空库建齐）在 `./e2e-schema-preflight.mjs` ——
  * 拆的边界与 `e2e-run-playwright.mjs` 同一条：那一层是**判据与机制**，本文件是
  * **编排与打印**（§12.6 R5：本文件涨过了 900 行硬闸，出口只有拆）。 */
-import {
-  checkSchemaBeforeRun,
-  ensureSchemaBeforeRun,
-} from "./e2e-schema-preflight.mjs";
+import { checkSchemaBeforeRun, ensureSchemaBeforeRun } from "./e2e-schema-preflight.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import { pnpmCli } from "./ci-install-deps.mjs";
 import {
@@ -81,14 +78,8 @@ import {
   runPreflight,
 } from "../e2e/support/preflight-ports.mjs";
 import { resolveFakeComfyuiPort } from "../e2e/support/fake-comfyui-endpoint.mjs";
-import {
-  reclaimOwnAppPort,
-  reclaimOwnFakePort,
-} from "../e2e/support/reclaim-ports.mjs";
-import {
-  checkBrowserReady,
-  describeBrowserMissing,
-} from "../e2e/support/preflight-browser.mjs";
+import { reclaimOwnAppPort, reclaimOwnFakePort } from "../e2e/support/reclaim-ports.mjs";
+import { checkBrowserReady, describeBrowserMissing } from "../e2e/support/preflight-browser.mjs";
 import {
   checkPythonReady,
   describePythonMissing,
@@ -183,14 +174,14 @@ export function makePreflightCollectors({
         const hasRisky = (verdict.risky?.length ?? 0) > 0;
         return {
           abort:
-            `[e2e-run] ✗ ${verdict.reason}\n` +
-            risky +
-            "[e2e-run] 跑下去的下场：task 表缺列 → queue-status 500 → " +
-            "queue-monitor / main-journey 一批红，报错说的是「元素没出现」。\n" +
-            (hasRisky
+            `[e2e-run] ✗ ${verdict.reason}\n${
+            risky
+            }[e2e-run] 跑下去的下场：task 表缺列 → queue-status 500 → ` +
+            `queue-monitor / main-journey 一批红，报错说的是「元素没出现」。\n${
+            hasRisky
               ? "[e2e-run] 这是要人做「丢不丢得起」决定的变更。"
-              : "[e2e-run] 库与 schema 的关系现在读不出来，这一档不肯替你猜。") +
-            "先执行：pnpm db:push   然后重跑本档。\n",
+              : "[e2e-run] 库与 schema 的关系现在读不出来，这一档不肯替你猜。"
+            }先执行：pnpm db:push   然后重跑本档。\n`,
         };
       }
       return { say: `[e2e-run] schema 预检：${verdict.reason}\n` };
@@ -202,11 +193,11 @@ export function makePreflightCollectors({
       }
       return {
         say:
-          "[e2e-run] 浏览器预检：" +
-          (verdict.verdict === "ready"
+          `[e2e-run] 浏览器预检：${
+          verdict.verdict === "ready"
             ? "这一档要用的浏览器能起来"
-            : `拿不到结论（${verdict.detail ?? "原因未知"}）—— 不阻断`) +
-          "\n",
+            : `拿不到结论（${verdict.detail ?? "原因未知"}）—— 不阻断`
+          }\n`,
       };
     },
   };
@@ -245,16 +236,17 @@ export async function runPreflightReadings({ collect }) {
   /* 顺序有理由，且与 `main` 里短路的顺序**必须一致**（否则「说出来的」与「拦下来的」
    * 不是同一件事）：端口（毫秒）→ Python（毫秒）→ schema（秒级，空库那档要付一轮
    * drizzle）→ 浏览器（毫秒，但缺件才是要早报的那一格）。 */
-  for (const step of /** @type {const} */ ([
-    "ports",
-    "python",
-    "schema",
-    "browser",
-  ])) {
+  for (const step of /** @type {const} */ (["ports", "python", "schema", "browser"])) {
     const result = await collect(step);
-    if (!result) continue;
-    if (result.say) process.stdout.write(result.say);
-    if (result.abort) return { abort: result.abort };
+    if (!result) {
+      continue;
+    }
+    if (result.say) {
+      process.stdout.write(result.say);
+    }
+    if (result.abort) {
+      return { abort: result.abort };
+    }
   }
   return { abort: null };
 }
@@ -310,7 +302,9 @@ export function planRun(extra = []) {
  */
 export function stripArgvSeparator(argv) {
   const at = argv.indexOf("--");
-  if (at === -1) return argv;
+  if (at === -1) {
+    return argv;
+  }
   return [...argv.slice(0, at), ...argv.slice(at + 1)];
 }
 
@@ -442,7 +436,9 @@ async function main(argv) {
    * `writeLedgerNote` 分（与另两档 runner 同一个形状），本处只把 `mode` 原样传下去。 */
   for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
     const exit = parseSkip(argv, flag);
-    if (!exit.skipped) continue;
+    if (!exit.skipped) {
+      continue;
+    }
     if (exit.reason === null) {
       const raw = argv[argv.indexOf(flag) + 1];
       process.stderr.write(
@@ -453,9 +449,7 @@ async function main(argv) {
       return 2;
     }
     if (dryRun) {
-      process.stdout.write(
-        `[e2e-run] 本次不跑、只记一条（${exit.mode}）：${exit.reason}\n`,
-      );
+      process.stdout.write(`[e2e-run] 本次不跑、只记一条（${exit.mode}）：${exit.reason}\n`);
       return 0;
     }
     return writeLedgerNote({
@@ -468,9 +462,7 @@ async function main(argv) {
   const extra = argv.filter((a) => a !== "--dry-run");
   const run = planRun(extra);
   if (dryRun) {
-    process.stdout.write(
-      `[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`,
-    );
+    process.stdout.write(`[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`);
     process.stdout.write(
       "[e2e-run] 说明：跑绿之后会把这一档的**新鲜度**记进账里\n" +
         `[e2e-run] 记账文件：${TRACK.ledger}（键 \`${TRACK.key}\`，跑法 \`${TRACK.run}\`）\n`,
@@ -483,7 +475,9 @@ async function main(argv) {
    * `playwright.config.ts` 走 `pnpm dev` 还是 `pnpm start`，而后者要求先有生产构建 ——
    * 把这一步留给 Playwright 自己按环境判，本文件不改它的语义。 */
   const env = { ...process.env };
-  if (!env.CI) delete env.CI;
+  if (!env.CI) {
+    delete env.CI;
+  }
 
   /* **就在这一刻**端口上有没有别人 —— 这是**唯一**能回答这个问题的时机
    * （ISSUE #1766）：再往后 Playwright 会先把 webServer 起起来并等它可访问，
@@ -562,9 +556,7 @@ async function main(argv) {
   const pnpm = pnpmCli();
   env.COMFY_E2E_PNPM = pnpm.command;
 
-  process.stdout.write(
-    `[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`,
-  );
+  process.stdout.write(`[e2e-run] ${run.label} → playwright ${run.args.join(" ")}\n`);
   const mode = resolveServerMode(env);
   process.stdout.write(
     `[e2e-run] webServer：${mode.start ? "pnpm start（生产构建，首屏零编译）" : "pnpm dev（Turbopack，首帧现场编译）"}` +
@@ -631,12 +623,12 @@ async function main(argv) {
      * 不是「全量 e2e 绿了」—— 混记会把账变成一句承诺，而这张账的价值全在它是事实。 */
     const why = isWholeTrackRun(extra).why;
     process.stderr.write(
-      `[e2e-run] ` +
+      `[e2e-run] ${
         notWholeTrackNotice({
           label: "全量 e2e",
           command: "pnpm test:e2e",
           why,
-        }),
+        })}`,
     );
     return 0;
   }
@@ -663,20 +655,13 @@ async function main(argv) {
    * `FRESHNESS_LEDGER_PUSH=1` 时真正推，否则 no-op。 */
   const freshPush = pushFreshnessLedger({ root: ROOT, kinds: ["e2e"] });
   if (freshPush.pushed) {
-    process.stdout.write(
-      "[e2e-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n",
-    );
+    process.stdout.write("[e2e-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n");
   } else if (freshPush.reason && freshPush.reason !== "opt-out") {
-    process.stdout.write(
-      `[e2e-run] （新鲜度账回写未执行：${freshPush.reason}）\n`,
-    );
+    process.stdout.write(`[e2e-run] （新鲜度账回写未执行：${freshPush.reason}）\n`);
   }
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(await main(process.argv.slice(2)));
 }

@@ -21,7 +21,7 @@ import { useMemo } from "react";
 import { SettingsShell } from "~/components/settings/SettingsShell";
 import { Button } from "~/components/ui/button";
 import { Alert, AlertAction, AlertDescription } from "~/components/ui/alert";
-import type { Section } from "./hooks/use-settings-page";
+import type { Section, ReadySettingsPageController } from "./hooks/use-settings-page";
 
 import { AppUpdateSection } from "./components/AppUpdateSection";
 import { BackupSection } from "./components/BackupSection";
@@ -34,7 +34,6 @@ import { LlmLocalSection } from "./components/LlmLocalSection";
 import { LlmRemoteSection } from "./components/LlmRemoteSection";
 import { UpdateCheckSection } from "./components/UpdateCheckSection";
 import { useRemoteModelDialogs } from "./hooks/use-remote-model-dialogs";
-import type { ReadySettingsPageController } from "./hooks/use-settings-page";
 
 export function SettingsPageView({
   c,
@@ -76,12 +75,10 @@ export function SettingsPageView({
 
   return (
     <SettingsShell
-      section={c.section}
-      onSelect={c.setSection}
       className={className}
+      onSelect={c.setSection}
+      section={c.section}
       {...(title === undefined ? {} : { title })}
-      jumpSection={c.pendingJump}
-      onJumpApplied={c.ackJumpSection}
       banner={
         <>
           {c.flash && (
@@ -100,20 +97,17 @@ export function SettingsPageView({
               整页错误视图只留给「连兜底都没有」的场景——应用服务刚重启时把整个
               设置页换成错误页，对用户没有任何好处（ISSUE #360）。 */}
           {c.serveState && (
-            <Alert
-              variant="warning"
-              className="mb-4 flex items-start gap-3 px-4 py-2 text-sm"
-            >
+            <Alert className="mb-4 flex items-start gap-3 px-4 py-2 text-sm" variant="warning">
               <AlertDescription className="min-w-0 flex-1 text-sm wrap-break-word">
                 本次未能读取最新配置，界面显示的是上一次成功读取的内容：
                 {c.serveState.errorText}
               </AlertDescription>
               <AlertAction className="static shrink-0">
                 <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={c.retry}
                   className="border-warning/40 hover:bg-warning/15 h-auto shrink-0 rounded px-2 py-0.5 text-xs"
+                  onClick={c.retry}
+                  size="xs"
+                  variant="outline"
                 >
                   重新读取
                 </Button>
@@ -122,6 +116,8 @@ export function SettingsPageView({
           )}
         </>
       }
+      jumpSection={c.pendingJump}
+      onJumpApplied={c.ackJumpSection}
       sections={sections}
     />
   );

@@ -11,14 +11,14 @@ import {
 
 import { globalNavItems, projectTabs, type WorkspaceView } from "./NavItems";
 
-export interface CommandPaletteProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+export type CommandPaletteProps = {
   /** 当前视图（保留入参：以后按视图给命令排序 / 高亮用，与侧栏同一份数据源）。 */
   active: WorkspaceView;
+  onOpenChange: (open: boolean) => void;
   /** 选中某条命令时回调（这里用来切换视图）。 */
   onSelect: (view: WorkspaceView) => void;
-}
+  open: boolean;
+};
 
 /**
  * 全局命令面板（⌘/Ctrl+K）。
@@ -31,17 +31,13 @@ export interface CommandPaletteProps {
  * （避免两套事实来源）。后面要加「打开设置 / 搜项目」等，往 `CommandGroup`
  * 里加一组即可，不必动侧栏。
  */
-export function CommandPalette({
-  open,
-  onOpenChange,
-  onSelect,
-}: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, onSelect }: CommandPaletteProps) {
   return (
     <CommandDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="全局命令"
       description="搜索视图或命令…"
+      onOpenChange={onOpenChange}
+      open={open}
+      title="全局命令"
     >
       <CommandInput placeholder="搜索视图或命令…" />
       <CommandList>
@@ -52,11 +48,11 @@ export function CommandPalette({
             .map((item) => (
               <CommandItem
                 key={item.id}
-                value={`${item.label} ${item.id}`}
                 onSelect={() => {
                   onSelect(item.id);
                   onOpenChange(false);
                 }}
+                value={`${item.label} ${item.id}`}
               >
                 {item.icon}
                 <span>{item.label}</span>

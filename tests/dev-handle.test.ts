@@ -12,6 +12,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -21,6 +22,7 @@ import {
   SETTLED_FALLBACK,
   devHandle,
   devHandleForEnvFile,
+  explicitDevHandle,
   machineHandle,
   resolveDevHandle,
 } from "../scripts/dev-handle.mjs";
@@ -169,5 +171,75 @@ describe("readDevHandleWithSource：ship 念的那一格与取值链同源", () 
       source: "CNB_NPC_NAME",
       explicit: false,
     });
+  });
+});
+
+/* ── 链接 worktree 的 `.env` 回落（ISSUE #2833）──────────────────────────────
+ * 现场：为隔离并行工作流用 `git worktree add` 挂分支收尾时，worktree 里**天然没有**
+ * `.gitignore` 掉的 `.env`，取值链跌到 `git config user.name` —— 「我是谁」答错人，
+ * 关单收尾的自动释放被跳过。修法：本检出根读不到该键时，顺着 `git rev-parse
+ * --git-common-dir` 找主检出的 `.env` 再读一次；source 说出来路，仍算「人填的」。
+ * 判据用**真 git**（spawn 那一刀不在注入面上，mock 它等于没测到 common-dir 的判据）。 */
+describe("链接 worktree 的 .env 回落（ISSUE #2833）", () => {
+  let mainRoot: string;
+  let wtRoot: string;
+  const made: Array<string> = [];
+
+  function git(cwd: string, args: Array<string>): void {
+    const r = spawnSync("git", args, { cwd, encoding: "utf8" });
+    if (r.status !== 0) {
+      throw new Error(`git ${args.join(" ")} 失败：${r.stderr}`);
+    }
+  }
+
+  beforeEach(() => {
+    mainRoot = fs.mkdtempSync(path.join(os.tmpdir(), "dev-handle-main-"));
+    wtRoot = path.join(mainRoot, "..", `${path.basename(mainRoot)}-wt`);
+    made.push(mainRoot, wtRoot);
+    git(mainRoot, ["init", "-q"]);
+    git(mainRoot, ["config", "user.email", "t@example.test"]);
+    git(mainRoot, ["config", "user.name", "t"]);
+    fs.writeFileSync(path.join(mainRoot, "a.txt"), "x", "utf8");
+    git(mainRoot, ["add", "a.txt"]);
+    git(mainRoot, ["commit", "-q", "-m", "init"]);
+    git(mainRoot, ["worktree", "add", "-q", wtRoot]);
+  });
+
+  afterEach(() => {
+    for (const dir of made) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    made.length = 0;
+  });
+
+  it("worktree 根没有 .env ⇒ 读主检出的，source 说出「主检出」，且算人填的", () => {
+    fs.writeFileSync(path.join(mainRoot, ".env"), "COMFYAPP_DEV_HANDLE=e-win\n", "utf8");
+    const r = resolveDevHandle({ root: wtRoot, env: {} });
+    expect(r.name).toBe("e-win");
+    expect(r.source).toBe(HANDLE_SOURCES.dotenvMain);
+    expect(r.explicit).toBe(true);
+    /* 两个读「人填过没有」的口子必须看到同一个 `.env` 面（分叉 = 一半口子还在漏）。 */
+    expect(explicitDevHandle({ root: wtRoot, env: {} })).toBe("e-win");
+  });
+
+  it("主检出自己不受影响：source 仍是 .env", () => {
+    fs.writeFileSync(path.join(mainRoot, ".env"), "COMFYAPP_DEV_HANDLE=e-win\n", "utf8");
+    const r = resolveDevHandle({ root: mainRoot, env: {} });
+    expect(r.source).toBe(HANDLE_SOURCES.dotenv);
+    expect(r.explicit).toBe(true);
+  });
+
+  it("两边都没有 ⇒ 照旧跌取值链（不因回落档改变既有顺位）", () => {
+    const r = resolveDevHandle({ root: wtRoot, env: {} });
+    expect(r.name).toBe("t"); // 临时仓的 local git config user.name
+    expect(r.source).toBe("git config user.name");
+    expect(r.explicit).toBe(false);
+  });
+
+  it("worktree 里进程环境仍然最优先（回落档排在人填之后）", () => {
+    fs.writeFileSync(path.join(mainRoot, ".env"), "COMFYAPP_DEV_HANDLE=e-win\n", "utf8");
+    const r = resolveDevHandle({ root: wtRoot, env: { COMFYAPP_DEV_HANDLE: "proc-win" } });
+    expect(r.name).toBe("proc-win");
+    expect(r.source).toBe(HANDLE_SOURCES.processEnv);
   });
 });

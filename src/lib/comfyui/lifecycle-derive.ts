@@ -22,7 +22,7 @@ export type LaunchPolicy = "bound" | "keepAlive";
 
 export type EnsureDecision =
   /** 已经在运行：直接用探测到的 base。 */
-  | { kind: "already-up"; base: string }
+  | { base: string; kind: "already-up" }
   /** 用户刚手动关闭过，自动启动路径必须让路。 */
   | { kind: "skip-manual-stop" }
   /** 未开启自动启动。 */
@@ -32,18 +32,18 @@ export type EnsureDecision =
   /** 可以拉起。 */
   | { kind: "launch" };
 
-export interface EnsureFacts {
-  /** 探测到的可达 base（不可达为 null）。 */
-  upBase: string | null;
-  /** 调用方是否显式声明「这是用户手动启动」。 */
-  manual: boolean;
-  /** 用户手动关闭后残留的「不自动启动」闩锁。 */
-  manualStop: boolean;
+export type EnsureFacts = {
   /** 设置里是否开启自动启动。 */
   autoStart: boolean;
   /** 设置里的 ComfyUI 路径（空串视为未配置）。 */
   comfyuiPath: string;
-}
+  /** 调用方是否显式声明「这是用户手动启动」。 */
+  manual: boolean;
+  /** 用户手动关闭后残留的「不自动启动」闩锁。 */
+  manualStop: boolean;
+  /** 探测到的可达 base（不可达为 null）。 */
+  upBase: string | null;
+};
 
 /**
  * 自动启动路径的判决表。
@@ -55,10 +55,18 @@ export interface EnsureFacts {
  *   4. 未开自动启动 / 未配路径 → 给可行动的提示（不是无声返回）。
  */
 export function decideEnsureLaunch(facts: EnsureFacts): EnsureDecision {
-  if (facts.upBase) return { kind: "already-up", base: facts.upBase };
-  if (!facts.manual && facts.manualStop) return { kind: "skip-manual-stop" };
-  if (!facts.autoStart) return { kind: "skip-autostart-off" };
-  if (!facts.comfyuiPath) return { kind: "skip-no-path" };
+  if (facts.upBase) {
+    return { kind: "already-up", base: facts.upBase };
+  }
+  if (!facts.manual && facts.manualStop) {
+    return { kind: "skip-manual-stop" };
+  }
+  if (!facts.autoStart) {
+    return { kind: "skip-autostart-off" };
+  }
+  if (!facts.comfyuiPath) {
+    return { kind: "skip-no-path" };
+  }
   return { kind: "launch" };
 }
 
@@ -70,23 +78,21 @@ export function decideEnsureLaunch(facts: EnsureFacts): EnsureDecision {
  * 注意开关只在**拉起那一刻**生效：桌面壳退出是整树强制关闭，
  * 退出时没有机会再改决定。
  */
-export function resolveLaunchPolicy(
-  exitKillComfyui: boolean | undefined,
-): LaunchPolicy {
+export function resolveLaunchPolicy(exitKillComfyui: boolean | undefined): LaunchPolicy {
   return exitKillComfyui === true ? "bound" : "keepAlive";
 }
 
 /** spawn 参数计算所需的已探明事实。 */
-export interface SpawnArgsFacts {
+export type SpawnArgsFacts = {
   /** 解析出的基础参数（解释器 + main.py + 用户额外参数之外的部分）。 */
-  baseArgs: string[];
-  /** 有效端口；0 / undefined 表示未指定（用默认端口）。 */
-  effectivePort: number | undefined;
+  baseArgs: Array<string>;
   /** 默认端口常量（由调用方从 app-settings 注入，避免本模块依赖配置层）。 */
   defaultPort: number;
+  /** 有效端口；0 / undefined 表示未指定（用默认端口）。 */
+  effectivePort: number | undefined;
   /** 桌面实例带来的附加参数。 */
-  extraArgs: string[];
-}
+  extraArgs: Array<string>;
+};
 
 /**
  * 组装实际 spawn 的参数。
@@ -95,16 +101,14 @@ export interface SpawnArgsFacts {
  * ComfyUI 传一个等于默认值的参数，白白污染日志与「界面显示端口 = 实际
  * 监听端口」的对照关系。
  */
-export function buildSpawnArgs(facts: SpawnArgsFacts): string[] {
+export function buildSpawnArgs(facts: SpawnArgsFacts): Array<string> {
   const port =
-    facts.effectivePort && facts.effectivePort > 0
-      ? facts.effectivePort
-      : facts.defaultPort;
-  const args = [
-    ...facts.baseArgs,
-    ...(port !== facts.defaultPort ? ["--port", String(port)] : []),
-    ...facts.extraArgs,
-  ];
+    facts.effectivePort && facts.effectivePort > 0 ? facts.effectivePort : facts.defaultPort;
+  const args = [...facts.baseArgs];
+  if (port !== facts.defaultPort) {
+    args.push("--port", String(port));
+  }
+  args.push(...facts.extraArgs);
   /* 无条件补上内嵌放行开关（幂等）：应用把 ComfyUI 内嵌进同一窗口的页签，
    * 而两者不同源——未开 CORS 时 ComfyUI 的 origin-only 中间件会对跨源
    * 请求直接 403，页签里就是一片空白（见本文件 embed clearance 一节）。
@@ -113,16 +117,16 @@ export function buildSpawnArgs(facts: SpawnArgsFacts): string[] {
 }
 
 /** 保活模式下「进程存在性检查」的节流判决所需事实。 */
-export interface ProcessCheckFacts {
-  /** 距 spawn 的毫秒数。 */
-  sinceSpawnMs: number;
-  /** 距上一次进程表查询的毫秒数。 */
-  sinceLastCheckMs: number;
+export type ProcessCheckFacts = {
   /** 宽限期（解释器冷启动也要时间）。 */
   graceMs: number;
   /** 两次查询之间的最小间隔。 */
   intervalMs: number;
-}
+  /** 距上一次进程表查询的毫秒数。 */
+  sinceLastCheckMs: number;
+  /** 距 spawn 的毫秒数。 */
+  sinceSpawnMs: number;
+};
 
 /**
  * 保活模式该不该在这一轮去查进程表。
@@ -131,10 +135,7 @@ export interface ProcessCheckFacts {
  * 早查会误判「没起来」）；②距上次查询够久（限频，避免每轮轮询都全表扫描）。
  */
 export function shouldCheckKeepAliveProcess(facts: ProcessCheckFacts): boolean {
-  return (
-    facts.sinceSpawnMs > facts.graceMs &&
-    facts.sinceLastCheckMs > facts.intervalMs
-  );
+  return facts.sinceSpawnMs > facts.graceMs && facts.sinceLastCheckMs > facts.intervalMs;
 }
 
 /**
@@ -148,7 +149,7 @@ export function isKeepAliveDead(missCount: number): boolean {
 }
 
 /** 进程秒退时从输出里提取缺失依赖的可行动报错。 */
-export function extractMissingModule(outputLines: string[]): string | null {
+export function extractMissingModule(outputLines: Array<string>): string | null {
   const m = /No module named '([^']+)'/.exec(outputLines.join("\n"));
   return m?.[1] ?? null;
 }
@@ -159,7 +160,7 @@ export function extractMissingModule(outputLines: string[]): string | null {
  * 两种成因的用户动作完全不同（装依赖 vs 看日志），所以必须分开说——
  * 只报「启动后立即退出」会让用户不知道该动哪个环境。
  */
-export function buildEarlyExitDetail(outputLines: string[]): string {
+export function buildEarlyExitDetail(outputLines: Array<string>): string {
   const missing = extractMissingModule(outputLines);
   if (missing) {
     return `ComfyUI 进程启动后立即退出：解释器缺少依赖（No module named '${missing}'）——请确认 comfyuiPath 指向装了依赖的环境，或为该环境安装依赖（详见 log/services/comfyui-runtime.log）`;
@@ -193,9 +194,7 @@ const PIP_UV_MISSING_PATTERN =
  * @param outputLines ComfyUI 的 stdout+stderr（顺序任意，按 `\n` 拼接后匹配）
  * @returns 可行动诊断句；识别不出返回 null（caller 据此回落通用文案）
  */
-export function diagnoseComfyStartupFailure(
-  outputLines: string[],
-): string | null {
+export function diagnoseComfyStartupFailure(outputLines: Array<string>): string | null {
   const text = outputLines.join("\n");
   if (PIP_UV_MISSING_PATTERN.test(text)) {
     return (
@@ -215,21 +214,21 @@ export function diagnoseComfyStartupFailure(
 }
 
 /** 停止流程的收尾判决所需事实（`stopComfyUiProcess`）。 */
-export interface StopFacts {
+export type StopFacts = {
   /** 是否握有本进程拉起的子进程句柄。 */
   hasChild: boolean;
   /** 依据句柄或进程表定位到的 PID。 */
   pid: number | null;
   /** 目标是否仍在响应探测。 */
   stillUp: boolean;
-}
+};
 
 export type StopDecision =
   /** 杀进程树（平台机制由 `~/lib/process/kill-process-tree` 选）。 */
   | {
       kind: "kill";
-      pid: number;
       kindLabel: "bound 子进程" | "按配置路径定位到的进程";
+      pid: number;
     }
   /** 在跑但不是本应用按配置路径启动的：只能用户自己关。 */
   | { kind: "foreign-running" }
@@ -261,8 +260,8 @@ export function decideStop(facts: StopFacts): StopDecision {
  * 窗口期应立刻结束（其余情况交给 `COMFY_STOPPING_WINDOW_MS` 兜底）。
  */
 export function shouldClearStoppingOnStopMiss(facts: {
-  stillUp: boolean;
   starting: boolean;
+  stillUp: boolean;
 }): boolean {
   return !facts.stillUp && !facts.starting;
 }
@@ -273,17 +272,21 @@ export function isWithinWindow(facts: {
   nowMs: number;
   windowMs: number;
 }): boolean {
-  if (facts.at === undefined) return false;
+  if (facts.at === undefined) {
+    return false;
+  }
   return facts.nowMs - facts.at < facts.windowMs;
 }
 
 /** 「关闭中」窗口内的时间判据（`isComfyStopping` 的纯实现）。 */
 export function isWithinStoppingWindow(facts: {
-  stoppingAt: number | undefined;
   nowMs: number;
+  stoppingAt: number | undefined;
   windowMs: number;
 }): boolean {
-  if (facts.stoppingAt === undefined) return false;
+  if (facts.stoppingAt === undefined) {
+    return false;
+  }
   return facts.nowMs - facts.stoppingAt < facts.windowMs;
 }
 
@@ -291,11 +294,11 @@ export function isWithinStoppingWindow(facts: {
  * 关闭流程的最终结论：等待若干个 500ms 探测窗口后的判定。
  * `probeResults` 按时间顺序给出每轮探测结果（null = 不可达）。
  */
-export function decideStopOutcome(probeResults: (string | null)[]): {
-  ok: boolean;
+export function decideStopOutcome(probeResults: Array<string | null>): {
   detail: string;
+  ok: boolean;
 } {
-  const stillUp = probeResults[probeResults.length - 1] !== null;
+  const stillUp = probeResults.at(-1) !== null;
   return stillUp
     ? {
         ok: false,
@@ -330,12 +333,10 @@ export function decideStopOutcome(probeResults: (string | null)[]): {
 export const COMFY_EMBED_FLAG = "--enable-cors-header";
 
 /** 该参数是否已存在（兼容 `--enable-cors-header` 与 `--enable-cors-header=ORIGIN`）。 */
-export function hasEmbedClearanceFlag(args: string[]): boolean {
+export function hasEmbedClearanceFlag(args: Array<string>): boolean {
   return args.some((a) => {
     const lower = a.toLowerCase();
-    return (
-      lower === COMFY_EMBED_FLAG || lower.startsWith(`${COMFY_EMBED_FLAG}=`)
-    );
+    return lower === COMFY_EMBED_FLAG || lower.startsWith(`${COMFY_EMBED_FLAG}=`);
   });
 }
 
@@ -349,8 +350,10 @@ export function hasEmbedClearanceFlag(args: string[]): boolean {
  * @param args        已组装好的 spawn 参数（含 baseArgs / --port / 用户额外参数）
  * @returns 追加了开关的新数组；已有则不重复注入（原数组原样返回新副本）
  */
-export function withEmbedClearanceFlag(args: string[]): string[] {
-  if (hasEmbedClearanceFlag(args)) return [...args];
+export function withEmbedClearanceFlag(args: Array<string>): Array<string> {
+  if (hasEmbedClearanceFlag(args)) {
+    return [...args];
+  }
   return [...args, COMFY_EMBED_FLAG];
 }
 
@@ -370,48 +373,46 @@ export function withEmbedClearanceFlag(args: string[]): string[] {
  */
 
 /** 运行状态结论所需的**纯事实**（生命周期状态由调用方翻成布尔后传入）。 */
-export interface ComfyStatusFacts {
-  /** 本进程发出的拉起流程正在进行（进程内单飞锁）。 */
-  starting: boolean;
-  /** 用户刚点过关闭、进程树尚未确认退出。 */
-  stopping: boolean;
+export type ComfyStatusFacts = {
+  /** 兜底 PID（本进程握着的子进程句柄；快照里没有时用它）。 */
+  fallbackPid?: number | undefined;
+  /** 「探明没在跑」是否仍在黏滞期内（见 COMFY_NOT_RUNNING_HOLD_MS）。 */
+  notRunningHeld: boolean;
   /** 探测到的可达 base；不可达为 null。 */
   probe: string | null;
   /** 进程级快照（见 comfyui/status.ts）。 */
   snap: {
-    running: boolean;
-    pid: number | null;
-    port: number | null;
-    via: string | null;
-    /** 进程表查询本身失败：本次结论不可信。 */
-    unverified: boolean;
     /** 本次是否**真的查过**进程表（0 条候选时「没命中」不构成「未运行」证据）。 */
     didQueryProcTable: boolean;
+    pid: number | null;
+    port: number | null;
+    running: boolean;
+    /** 进程表查询本身失败：本次结论不可信。 */
+    unverified: boolean;
+    via: string | null;
   };
+  /** 本进程发出的拉起流程正在进行（进程内单飞锁）。 */
+  starting: boolean;
   /** 是否仍在「启动流程进行中」的计时窗口内（见 COMFY_STARTING_WINDOW_MS）。 */
   startingWindow: boolean;
-  /** 「探明没在跑」是否仍在黏滞期内（见 COMFY_NOT_RUNNING_HOLD_MS）。 */
-  notRunningHeld: boolean;
-  /** 兜底 PID（本进程握着的子进程句柄；快照里没有时用它）。 */
-  fallbackPid?: number | undefined;
-}
-
-export interface ComfyStatusVerdict {
-  up: boolean;
-  base: string | null;
-  starting: boolean;
+  /** 用户刚点过关闭、进程树尚未确认退出。 */
   stopping: boolean;
-  /** 探测仍在进行 / 事实不可信：UI 显示「检测中…」而不是先报「未运行」。 */
-  probing: boolean;
+};
+
+export type ComfyStatusVerdict = {
+  base: string | null;
   pid?: number | undefined;
   port?: number | null;
+  /** 探测仍在进行 / 事实不可信：UI 显示「检测中…」而不是先报「未运行」。 */
+  probing: boolean;
+  starting: boolean;
+  stopping: boolean;
+  up: boolean;
   via?: string | null;
-}
+};
 
 /** 两份事实 → 一条状态结论（纯组装，无 IO、无全局状态）。 */
-export function deriveComfyUiStatus(
-  facts: ComfyStatusFacts,
-): ComfyStatusVerdict {
+export function deriveComfyUiStatus(facts: ComfyStatusFacts): ComfyStatusVerdict {
   const { starting, stopping, probe, snap } = facts;
   const fallbackPid = facts.fallbackPid;
 
@@ -473,10 +474,7 @@ export function deriveComfyUiStatus(
     base: null,
     starting: startingNow,
     stopping,
-    probing:
-      !startingNow &&
-      !facts.notRunningHeld &&
-      (!snap.didQueryProcTable || snap.unverified),
+    probing: !startingNow && !facts.notRunningHeld && (!snap.didQueryProcTable || snap.unverified),
     pid: fallbackPid,
     port: null,
     via: null,

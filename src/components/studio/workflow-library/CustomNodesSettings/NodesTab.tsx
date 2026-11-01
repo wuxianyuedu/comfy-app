@@ -25,7 +25,7 @@ const CARD_ROW_ESTIMATE_PX = 44;
 /** 卡间距，与 fallback 档的 `gap-1` 同一个值。 */
 const CARD_GAP_PX = 4;
 /** 卡列表的滚动视口上限：超过就容器内滚，不再把页面撑成几千像素。 */
-const CARD_LIST_MAX_H_CLASS = "max-h-[480px] overflow-y-auto";
+const CARD_LIST_MAX_H_CLASS = "max-h-120 overflow-y-auto";
 
 /** 单张卡（从层 3 的 `nodeTypeList.map` 里原样提出 —— 窗口化只改「哪几张在场」，
  * 不改卡本身的任何形态/行为）。 */
@@ -41,8 +41,8 @@ function CardRow({
   return (
     <NodePreviewCard
       data={manifestByNode[ct]}
-      fallbackName={ct}
       expanded={nodeCardExpansion.isExpanded(ct)}
+      fallbackName={ct}
       onToggle={() => nodeCardExpansion.toggle(ct)}
     />
   );
@@ -57,7 +57,7 @@ function CardRow({
  * 交互卡（每张还是自己的 Disclosure）。
  *
  * 形态与取舍：
- *   · **窗口化用独立滚动容器**（`max-h-[480px] overflow-y-auto`），不用
+ *   · **窗口化用独立滚动容器**（`max-h-120 overflow-y-auto`），不用
  *     ModelLibrary / ProjectOutputs 那种「文档滚动锚 + scrollMargin」—— 那份
  *     模式适合页面顶层的单列表；这里列表嵌在树面板里、多包可**同时**展开，
  *     各自的 offsetTop 随其它面板开合漂移，页面锚方案要做跨列表的 margin 对账。
@@ -73,9 +73,9 @@ function NodeCardList({
   manifestByNode,
   nodeCardExpansion,
 }: {
-  nodeTypeList: string[];
   manifestByNode: CustomNodesSettingsController["manifestByNode"];
   nodeCardExpansion: CustomNodesSettingsController["nodeCardExpansion"];
+  nodeTypeList: Array<string>;
 }) {
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   // 与 ModelLibrary / ProjectOutputs 同一条误报豁免：virtualizer 的读数只在
@@ -93,8 +93,8 @@ function NodeCardList({
   const renderCard = useCallback(
     (ct: string) => (
       <CardRow
-        key={ct}
         ct={ct}
+        key={ct}
         manifestByNode={manifestByNode}
         nodeCardExpansion={nodeCardExpansion}
       />
@@ -104,16 +104,13 @@ function NodeCardList({
 
   if (!measured) {
     return (
-      <div
-        ref={setScrollEl}
-        className={cn("flex flex-col gap-1", CARD_LIST_MAX_H_CLASS)}
-      >
+      <div className={cn("flex flex-col gap-1", CARD_LIST_MAX_H_CLASS)} ref={setScrollEl}>
         {nodeTypeList.map(renderCard)}
       </div>
     );
   }
   return (
-    <div ref={setScrollEl} className={CARD_LIST_MAX_H_CLASS}>
+    <div className={CARD_LIST_MAX_H_CLASS} ref={setScrollEl}>
       <div
         style={{
           position: "relative",
@@ -123,11 +120,13 @@ function NodeCardList({
       >
         {virtualizer.getVirtualItems().map((vi) => {
           const ct = nodeTypeList[vi.index];
-          if (ct === undefined) return null;
+          if (ct === undefined) {
+            return null;
+          }
           return (
             <div
-              key={vi.key}
               data-index={vi.index}
+              key={vi.key}
               ref={virtualizer.measureElement}
               style={{
                 position: "absolute",
@@ -174,13 +173,13 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
       {/* 节点目录只读展示：由设置的 ComfyUI 路径自动推导，不再支持手动配置 */}
       <section className="border-border bg-bg mb-4 rounded-xl border p-4">
         <div className="mb-2 flex items-center justify-between">
-          <FieldLegend variant="label" className="text-ink text-sm font-medium">
+          <FieldLegend className="text-ink text-sm font-medium" variant="label">
             自定义节点目录
           </FieldLegend>
           <Badge
-            tone="success"
             size="pill-sm"
             title="解析器只读取这些目录里的 .py、绝不修改其中任何文件"
+            tone="success"
           >
             🔒 只读
           </Badge>
@@ -189,8 +188,8 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           <div className="flex flex-col gap-1">
             {savedPaths.map((path) => (
               <div
-                key={path}
                 className="border-border bg-surface text-ink truncate rounded-lg border px-3 py-2 font-mono text-xs"
+                key={path}
                 title={path}
               >
                 {path}
@@ -199,10 +198,8 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           </div>
         ) : (
           <p className="text-muted-foreground text-xs">
-            未找到自定义节点目录 —— 请先在 设置 → 创作后端 中配置 ComfyUI
-            安装路径，目录会自动推导为{""}
-            <code className="font-mono">&lt;comfyuiPath&gt;/custom_nodes</code>
-            。
+            未找到自定义节点目录 —— 请先在 设置 → 创作后端 中配置 ComfyUI 安装路径，目录会自动推导为
+            <code className="font-mono">&lt;comfyuiPath&gt;/custom_nodes</code>。
           </p>
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
@@ -234,9 +231,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             )}
           </div>
           <Button
-            onClick={onParseAll}
-            disabled={parsing || savedPaths.length === 0}
             className="h-auto rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90"
+            disabled={parsing || savedPaths.length === 0}
+            onClick={onParseAll}
           >
             {parsing ? "解析全部中…" : "▶ 解析全部"}
           </Button>
@@ -255,7 +252,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
           <span className="text-ink text-sm font-medium">
             可导入的节点包
             {totalAcrossParents.outdated > 0 && (
-              <Badge tone="warning" size="pill-sm" className="ml-2">
+              <Badge className="ml-2" size="pill-sm" tone="warning">
                 ↻ {totalAcrossParents.outdated} 个有更新
               </Badge>
             )}
@@ -275,13 +272,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         <div className="flex flex-col gap-2">
           {parentBlocks.map(({ parent, subs, cnt, total }) => {
             const isOpen = parentExpansion.isExpanded(parent);
-            const parentParsed =
-              total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
+            const parentParsed = total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
             return (
-              <div
-                key={parent}
-                className="border-border bg-bg rounded-xl border"
-              >
+              <div className="border-border bg-bg rounded-xl border" key={parent}>
                 {/* 父级头 —— 可点击切换。`▸/▾`、`role`、`tabIndex`、
  Enter/Space 全交给`Disclosure`（规范 16 §16.2.4.13）——
  此前是自绘的`role="button"` div，注释里写着「不能用原生
@@ -289,23 +282,39 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
  「解析本目录」：改走基元的`trailing` 后，它不再被嵌在
  触发按钮里。面板 = 子包列表（见下方`subs.map`）。 */}
                 <Disclosure
-                  open={isOpen}
-                  onOpenChange={() => parentExpansion.toggle(parent)}
+                  className="hover:bg-subtle w-auto flex-1 justify-between gap-2 rounded-xl px-3 py-2.5"
                   marker="caret"
+                  onOpenChange={() => parentExpansion.toggle(parent)}
+                  open={isOpen}
+                  panelClassName="contents"
                   /* 整排的排布在 Root 上（`rootClassName`）：触发开关与右侧的
                    * 「解析本目录」是 Root 的**并列**子元素，Root 不写`flex`
                    * 它们就各自独占一行（规范 16 §16.2.4.13 迁移口径第 2 条）。 */
                   rootClassName="flex items-center gap-2"
-                  className="hover:bg-subtle w-auto flex-1 justify-between gap-2 rounded-xl px-3 py-2.5"
-                  panelClassName="contents"
+                  trailing={
+                    <Hint
+                      label={
+                        parentParsed && cnt.outdated === 0
+                          ? "已加载、无更新"
+                          : "重新解析此目录下所有子包"
+                      }
+                      wrap
+                    >
+                      <Button
+                        className="border-border bg-bg text-ink hover:bg-subtle text-2xs h-auto shrink-0 rounded-lg px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!!parsing || total === 0 || (parentParsed && cnt.outdated === 0)}
+                        onClick={() => void onParseAllParent(parent)}
+                        variant="outline"
+                      >
+                        {parsing ? "…" : "解析本目录"}
+                      </Button>
+                    </Hint>
+                  }
                   trigger={
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-ink font-medium">📁</span>
-                        <span
-                          className="text-ink truncate font-mono text-xs"
-                          title={parent}
-                        >
+                        <span className="text-ink truncate font-mono text-xs" title={parent}>
                           {parent}
                         </span>
                       </div>
@@ -339,35 +348,12 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       </div>
                     </div>
                   }
-                  trailing={
-                    <Hint
-                      label={
-                        parentParsed && cnt.outdated === 0
-                          ? "已加载、无更新"
-                          : "重新解析此目录下所有子包"
-                      }
-                      wrap
-                    >
-                      <Button
-                        variant="outline"
-                        onClick={() => void onParseAllParent(parent)}
-                        disabled={
-                          !!parsing ||
-                          total === 0 ||
-                          (parentParsed && cnt.outdated === 0)
-                        }
-                        className="border-border bg-bg text-ink hover:bg-subtle text-2xs h-auto shrink-0 rounded-lg px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {parsing ? "…" : "解析本目录"}
-                      </Button>
-                    </Hint>
-                  }
                 />
                 {/* 子包 —— 仅展开时显示 */}
                 {isOpen && subs.length > 0 && (
                   <TreeChildren
-                    depth={0}
                     className="border-border bg-surface/50 flex flex-col gap-1.5 border-t p-2"
+                    depth={0}
                   >
                     {subs.map(({ sub, saved, state }) => {
                       const preset = ROW_STATE_PRESET[state.kind];
@@ -386,11 +372,8 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                       // 点击展开只对有已解析节点的包可用。
                       // 未导入 / 缺失 /
                       // 空的包没东西可显示。
-                      const nodesAreLoaded =
-                        state.kind === "loaded" || state.kind === "outdated";
-                      const nodeListOpen = nodeListExpansion.isExpanded(
-                        sub.path,
-                      );
+                      const nodesAreLoaded = state.kind === "loaded" || state.kind === "outdated";
+                      const nodeListOpen = nodeListExpansion.isExpanded(sub.path);
                       const nodeTypeList = saved?.nodeTypes ?? [];
                       return (
                         <div key={sub.path}>
@@ -403,18 +386,16 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                           >
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
-                                <span className="text-ink font-medium">
-                                  {sub.name}
-                                </span>
+                                <span className="text-ink font-medium">{sub.name}</span>
                                 <StatusBadge
-                                  status={preset.status}
+                                  className="text-3xs px-2 py-0.5"
+                                  dot={false}
                                   label={
                                     state.kind === "loaded" && saved?.parsedAt
                                       ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`
                                       : preset.label
                                   }
-                                  dot={false}
-                                  className="text-3xs px-2 py-0.5"
+                                  status={preset.status}
                                 />
                               </div>
                               <div
@@ -435,12 +416,10 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
  留空：面板是下面那个 rail（由外面的条件渲染
  承担），此处的`Disclosure` 只接管这一行。 */
                                 <Disclosure
-                                  open={nodeListOpen}
-                                  onOpenChange={() =>
-                                    nodeListExpansion.toggle(sub.path)
-                                  }
-                                  marker="caret"
                                   className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
+                                  marker="caret"
+                                  onOpenChange={() => nodeListExpansion.toggle(sub.path)}
+                                  open={nodeListOpen}
                                   panelClassName="hidden"
                                   trigger={
                                     <div
@@ -466,22 +445,20 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                 </div>
                               )}
                               <Button
-                                variant="ghost"
-                                onClick={() => onParseSingle(sub.path)}
+                                className={cn(
+                                  "h-auto rounded-md px-3 py-1.5 text-xs font-medium",
+                                  preset.btn,
+                                )}
                                 disabled={
                                   !!perPkgParsing[sub.path] ||
                                   parsing ||
                                   state.kind === "missing" ||
                                   state.kind === "empty"
                                 }
-                                className={cn(
-                                  "h-auto rounded-md px-3 py-1.5 text-xs font-medium",
-                                  preset.btn,
-                                )}
+                                onClick={() => onParseSingle(sub.path)}
+                                variant="ghost"
                               >
-                                {perPkgParsing[sub.path]
-                                  ? "解析中…"
-                                  : preset.btnLabel}
+                                {perPkgParsing[sub.path] ? "解析中…" : preset.btnLabel}
                               </Button>
                             </div>
                           </div>
@@ -492,9 +469,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
  一个 233 节点的包挂载成本不再线性涨。 */}
                           {nodesAreLoaded && nodeListOpen && (
                             <TreeChildren
+                              className="flex flex-col gap-1"
                               depth={1}
                               railClassName={preset.railCls}
-                              className="flex flex-col gap-1"
                             >
                               {nodeTypeList.length === 0 ? (
                                 <div className="text-muted-foreground text-3xs italic">
@@ -502,9 +479,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                 </div>
                               ) : (
                                 <NodeCardList
-                                  nodeTypeList={nodeTypeList}
                                   manifestByNode={manifestByNode}
                                   nodeCardExpansion={nodeCardExpansion}
+                                  nodeTypeList={nodeTypeList}
                                 />
                               )}
                             </TreeChildren>

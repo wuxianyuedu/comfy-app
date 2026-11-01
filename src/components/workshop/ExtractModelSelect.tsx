@@ -3,10 +3,7 @@
 import React from "react";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { beginStaleRun } from "~/lib/stale-run";
-import {
-  fetchLocalModels,
-  fetchRemoteModels,
-} from "~/lib/llm/model-catalog-client";
+import { fetchLocalModels, fetchRemoteModels } from "~/lib/llm/model-catalog-client";
 import { useLLM } from "~/components/workshop/LLMContext";
 import { parseChannelOption } from "~/lib/workshop/channel-options";
 
@@ -15,9 +12,7 @@ function optionLabel(name: string, badge: string): React.ReactNode {
   return (
     <span className="flex w-full items-center">
       <span className="min-w-0 flex-1 truncate">{name}</span>
-      <span className="text-muted-foreground text-3xs ml-2 shrink-0">
-        {badge}
-      </span>
+      <span className="text-muted-foreground text-3xs ml-2 shrink-0">{badge}</span>
     </span>
   );
 }
@@ -30,41 +25,40 @@ export function ExtractModelSelect({
   value,
   onChange,
 }: {
-  value: string;
   onChange: (value: string) => void;
+  value: string;
 }) {
   const { localModels, remoteModels } = useLLM();
   const { channel, model } = parseChannelOption(value);
-  const selKey = !model ? "" : `${channel}::${model}`;
+  const selKey = model ? `${channel}::${model}` : "";
 
   /* 「选完再校验可用性」：选中本地 / 远端模型后才去探测对应服务是否可达。
    * 以 (key → 结果) 的缓存保存校验结果，异步回调里才 setState（不违反
    * react-hooks/set-state-in-effect）；重复选同一模型不重复探测。 */
   const [availByKey, setAvailByKey] = React.useState<
-    Record<string, { kind: "ok" } | { kind: "err"; detail: string }>
+    Record<string, { kind: "ok" } | { detail: string; kind: "err" }>
   >({});
   const probeStarted = React.useRef<Record<string, boolean>>({});
 
   React.useEffect(() => {
-    if (!selKey) return;
-    if (probeStarted.current[selKey]) return;
+    if (!selKey) {
+      return;
+    }
+    if (probeStarted.current[selKey]) {
+      return;
+    }
     probeStarted.current[selKey] = true;
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换选中项 / 通道 / 模型会重开
      * 一轮，旧轮次的探测结论不落地（否则会把上一个选中项的结论写上去）。 */
     const guard = beginStaleRun();
     // 远端探测带上当前选中的模型名：该模型若配了独立 baseUrl/apiKey，
     // 服务端会用它探测（而不是拿全局 Base URL 探，避免误报 fetch failed）。
-    const probe =
-      channel === "local"
-        ? () => fetchLocalModels()
-        : () => fetchRemoteModels(model);
+    const probe = channel === "local" ? () => fetchLocalModels() : () => fetchRemoteModels(model);
     void probe().then((res) => {
       guard.commit(() =>
         setAvailByKey((prev) => ({
           ...prev,
-          [selKey]: res.ok
-            ? { kind: "ok" }
-            : { kind: "err", detail: res.detail },
+          [selKey]: res.ok ? { kind: "ok" } : { kind: "err", detail: res.detail },
         })),
       );
     });
@@ -72,16 +66,24 @@ export function ExtractModelSelect({
   }, [selKey, channel, model]);
 
   const options = React.useMemo(() => {
-    const list: string[] = [];
-    for (const m of localModels) list.push(`local::${m}`);
-    for (const m of remoteModels) list.push(`remote::${m}`);
+    const list: Array<string> = [];
+    for (const m of localModels) {
+      list.push(`local::${m}`);
+    }
+    for (const m of remoteModels) {
+      list.push(`remote::${m}`);
+    }
     return list;
   }, [localModels, remoteModels]);
 
   const labels = React.useMemo(() => {
     const map: Record<string, React.ReactNode> = {};
-    for (const m of localModels) map[`local::${m}`] = optionLabel(m, "本地");
-    for (const m of remoteModels) map[`remote::${m}`] = optionLabel(m, "远端");
+    for (const m of localModels) {
+      map[`local::${m}`] = optionLabel(m, "本地");
+    }
+    for (const m of remoteModels) {
+      map[`remote::${m}`] = optionLabel(m, "远端");
+    }
     return map;
   }, [localModels, remoteModels]);
 
@@ -94,22 +96,13 @@ export function ExtractModelSelect({
   if (channel) {
     const badge = channel === "local" ? "本地" : "远端";
     if (selChecking) {
-      hint = (
-        <p className="text-muted-foreground text-2xs mt-1">
-          {badge}服务可用性校验中…
-        </p>
-      );
+      hint = <p className="text-muted-foreground text-2xs mt-1">{badge}服务可用性校验中…</p>;
     } else if (selAvail?.kind === "ok") {
-      hint = (
-        <p className="text-success-strong text-2xs mt-1">
-          {badge}服务可达，可直接使用。
-        </p>
-      );
+      hint = <p className="text-success-strong text-2xs mt-1">{badge}服务可达，可直接使用。</p>;
     } else if (selAvail?.kind === "err") {
       hint = (
         <p className="text-destructive text-2xs mt-1 leading-relaxed">
-          {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 /
-          配置正确后再试。
+          {badge}模型不可用：{selAvail.detail}。可先确认对应服务已启动 / 配置正确后再试。
         </p>
       );
     }
@@ -119,14 +112,14 @@ export function ExtractModelSelect({
     <div>
       <div className="min-w-56">
         <SelectMenu
-          value={value}
+          autoFitFromOptions={false}
+          className="bg-subtle! border-border! text-xs"
+          labels={labels}
           onChange={onChange}
           options={options}
-          labels={labels}
           placeholder="选择模型"
-          className="bg-subtle! border-border! text-xs"
           popoverMinWidth={280}
-          autoFitFromOptions={false}
+          value={value}
         />
       </div>
       {hint}

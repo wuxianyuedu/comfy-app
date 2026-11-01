@@ -45,14 +45,9 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  * 从那份文件里读出来（它是这条边界的唯一出处）。抄一遍会立刻被 §12.12 的孪生判据
  * 盯上，且两份必然漂。
  */
-function crossHostModules(): string[] {
-  const source = readFileSync(
-    path.join(ROOT, "tests", "esm-cross-host-imports.test.ts"),
-    "utf8",
-  );
-  const block = /const CROSS_HOST_MODULES\s*=\s*\[([\s\S]*?)\]/.exec(
-    source,
-  )?.[1];
+function crossHostModules(): Array<string> {
+  const source = readFileSync(path.join(ROOT, "tests", "esm-cross-host-imports.test.ts"), "utf8");
+  const block = /const CROSS_HOST_MODULES\s*=\s*\[([\s\S]*?)\]/.exec(source)?.[1];
   if (block === undefined) {
     throw new Error(
       "读不出 `esm-cross-host-imports.test.ts` 的 `CROSS_HOST_MODULES` —— " +
@@ -63,7 +58,7 @@ function crossHostModules(): string[] {
 }
 
 /** 在**真 Node 进程**里加载一个模块（不注册任何 loader）。 */
-function loadInRealNode(absPath: string): { ok: boolean; message: string } {
+function loadInRealNode(absPath: string): { message: string; ok: boolean; } {
   const r = spawnSync(
     process.execPath,
     [
@@ -73,7 +68,9 @@ function loadInRealNode(absPath: string): { ok: boolean; message: string } {
     ],
     { encoding: "utf8", cwd: ROOT, env: { ...process.env, NODE_ENV: "test" } },
   );
-  if (r.status === 0) return { ok: true, message: "" };
+  if (r.status === 0) {
+    return { ok: true, message: "" };
+  }
   const message = `${r.stderr ?? ""}${r.stdout ?? ""}`.trim();
   return { ok: false, message: message || `(无输出，退出码 ${r.status})` };
 }
@@ -89,18 +86,20 @@ describe("跨宿主地基层模块在真 Node 里加载得起来", () => {
   });
 
   it("每个跨宿主地基层模块都能被真 Node 直接加载", () => {
-    const failures: string[] = [];
+    const failures: Array<string> = [];
     for (const rel of crossHostModules()) {
       const r = loadInRealNode(path.join(ROOT, rel));
-      if (r.ok) continue;
+      if (r.ok) {
+        continue;
+      }
       failures.push(
-        `${rel}\n` +
+        `${rel}\n${
           r.message
             .split("\n")
             .slice(0, 3)
             .map((l) => `      ${l}`)
-            .join("\n") +
-          `\n      ⇒ 它由 .mjs 宿主直接加载（平台侧 \`node scripts/e2e-run.mjs\`），` +
+            .join("\n")
+          }\n      ⇒ 它由 .mjs 宿主直接加载（平台侧 \`node scripts/e2e-run.mjs\`），` +
           `这一跳崩在「E2E 关键流程」的加载期；\n` +
           `        常见成因：误加了 \`import "server-only"\`（入口就是一句 throw）、` +
           `顶层读库未过 \`isSchemaReady()\`、\n` +
@@ -114,13 +113,7 @@ describe("跨宿主地基层模块在真 Node 里加载得起来", () => {
     // 反向自证：上面那条一旦把 `spawnSync` 的退出码读错（或判据悄悄退化成恒绿），
     // 只有这一格看得出来。两个方向都钉 —— 只判「不存在的必须红」会让「全都红」
     // 也满足；只判「存在的必须绿」会让恒绿满足。
-    const missing = path.join(
-      ROOT,
-      "src",
-      "lib",
-      "process",
-      "__no-such-module__.ts",
-    );
+    const missing = path.join(ROOT, "src", "lib", "process", "__no-such-module__.ts");
     expect(loadInRealNode(missing).ok).toBe(false);
     // 反方向用清单里第一个真模块（它必然在盘上：上一条用例刚加载过）。
     expect(loadInRealNode(path.join(ROOT, crossHostModules()[0]!))).toEqual({

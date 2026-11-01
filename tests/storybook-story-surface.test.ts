@@ -30,22 +30,19 @@ import {
   storySurface,
 } from "../scripts/storybook-checks/story-surface.mjs";
 
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0))
+  for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /**
  * 造一个只含「组件 + 故事」的临时仓库，跑一遍扫描。
  * @param {{component?: string, story: string, componentName?: string}} input
  */
-function scan(input: {
-  component?: string;
-  story: string;
-  componentName?: string;
-}) {
+function scan(input: { component?: string; componentName?: string; story: string; }) {
   const root = mkdtempSync(join(tmpdir(), "story-surface-"));
   tempDirs.push(root);
   const dir = join(root, "src", "components", "ui");
@@ -88,13 +85,7 @@ export const Default: Story = {};
 
 /** 解析一份源码（`missingRequiredArgs` 要 AST）。 */
 function parseSource(file: string, source: string) {
-  return ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  return ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 }
 
 describe("故事面的判据（规范 16 §16.2.3.8）", () => {
@@ -171,9 +162,9 @@ export const Default: Story = {};
     /* 三份故事各自 import 同目录的 `a` / `b` / `c` 组件：`GOOD_STORY` 里的名字
        一起换掉，否则三份都指向 `./thing`，接真组件那条会先红。 */
     const storyFor = (name: string, title: string) =>
-      GOOD_STORY.replace(/thing/g, name)
-        .replace(/Thing/g, name.toUpperCase())
-        .replace('title: "UI/' + name.toUpperCase() + '"', `title: "${title}"`);
+      GOOD_STORY.replaceAll("thing", name)
+        .replaceAll("Thing", name.toUpperCase())
+        .replace(`title: "UI/${name.toUpperCase()}"`, `title: "${title}"`);
     writeFileSync(join(dir, "a.stories.tsx"), storyFor("a", "UI/A"));
     writeFileSync(join(dir, "b.stories.tsx"), storyFor("b", "UI/B"));
     /* 第三份写的是另一套前缀 —— 多数是 `UI/`，它就是那个偏离项。 */
@@ -224,10 +215,7 @@ export const Probe = ({ label }: ProbeProps) => <div>{label}</div>;
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    writeFileSync(
-      storyFile,
-      GOOD_STORY.replace(/thing/g, "probe").replace("Thing", "Probe"),
-    );
+    writeFileSync(storyFile, GOOD_STORY.replaceAll("thing", "probe").replace("Thing", "Probe"));
     const surface = storySurface(parseSource(storyFile, GOOD_STORY));
     expect(missingRequiredArgs(storyFile, surface.args)).toEqual([]);
   });
@@ -366,7 +354,7 @@ export const Default: Story = {};
 `,
     );
     const storyFile = join(dir, "probe.stories.tsx");
-    writeFileSync(storyFile, GOOD_STORY.replace(/thing/g, "probe"));
+    writeFileSync(storyFile, GOOD_STORY.replaceAll("thing", "probe"));
     expect(missingRequiredArgs(storyFile, new Set(["label"]))).toEqual([]);
   });
 

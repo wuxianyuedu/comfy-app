@@ -20,23 +20,18 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  cnbCall,
-  formatReadingRow,
-  readBuild,
-} from "../scripts/ci-probe-lock-readout.mjs";
+import { cnbCall, formatReadingRow, readBuild } from "../scripts/ci-probe-lock-readout.mjs";
 
 /** `ExecResult` 形态（`makeRunner` 的返回）。 */
 type Spawned = {
-  status: number;
-  stdout: string;
-  stderr: string;
   error: string | null;
+  status: number;
+  stderr: string;
+  stdout: string;
 };
 
 /** 造一个「这一次平台调用长成这样」的取数出口：走真的 `cnbCall`，只假最外面那一层。 */
-const callWith = (result: Spawned) => (args: string[]) =>
-  cnbCall(args, () => result);
+const callWith = (result: Spawned) => (args: Array<string>) => cnbCall(args, () => result);
 
 /** 起不来（本机实测的那一形）。 */
 const ENOENT: Spawned = {
@@ -53,10 +48,12 @@ describe("`cnb` 起不来 → 一行读数，不是一段栈", () => {
   });
 
   it("假执行者非零退出 ⇒ failure 带退出码，且把 stderr 一起念（只接 stdout 会没有理由）", () => {
-    const r = cnbCall(
-      ["-v"],
-      () => ({ status: 1, stdout: "", stderr: "Error: not found", error: null }),
-    );
+    const r = cnbCall(["-v"], () => ({
+      status: 1,
+      stdout: "",
+      stderr: "Error: not found",
+      error: null,
+    }));
     expect(r.failure).toBe("cnb 退 1");
     expect(r.text).toContain("Error: not found");
   });
@@ -80,11 +77,7 @@ describe("`cnb` 起不来 → 一行读数，不是一段栈", () => {
     let thrown: unknown = null;
     let reading;
     try {
-      reading = readBuild(
-        "moon-read/comfy-app-t3",
-        "cnb-abc-1",
-        callWith(ENOENT),
-      );
+      reading = readBuild("moon-read/comfy-app-t3", "cnb-abc-1", callWith(ENOENT));
     } catch (error) {
       thrown = error;
     }
@@ -104,18 +97,26 @@ describe("`cnb` 起不来 → 一行读数，不是一段栈", () => {
   it("三种取不到的原因互不相同（拿读数的人能据此选下一动作）", () => {
     const rows = [
       readBuild("r", "sn-1", callWith(ENOENT)),
-      readBuild("r", "sn-2", callWith({
-        status: 1,
-        stdout: "",
-        stderr: '{"message":"unauthorized"}',
-        error: null,
-      })),
-      readBuild("r", "sn-3", callWith({
-        status: 0,
-        stdout: "<html>502</html>",
-        stderr: "",
-        error: null,
-      })),
+      readBuild(
+        "r",
+        "sn-2",
+        callWith({
+          status: 1,
+          stdout: "",
+          stderr: '{"message":"unauthorized"}',
+          error: null,
+        }),
+      ),
+      readBuild(
+        "r",
+        "sn-3",
+        callWith({
+          status: 0,
+          stdout: "<html>502</html>",
+          stderr: "",
+          error: null,
+        }),
+      ),
     ];
     const notes = rows.map((x) => x.note);
     expect(new Set(notes).size).toBe(3);

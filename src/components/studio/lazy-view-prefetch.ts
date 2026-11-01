@@ -26,7 +26,7 @@
 export type LazyViewLoader = () => Promise<unknown>;
 
 /** 已登记、还没预热的 loader（`lazyView` 追加，预热队列逐个消费）。 */
-const pending: LazyViewLoader[] = [];
+const pending: Array<LazyViewLoader> = [];
 
 /** 预热是否已排过（幂等闸：StrictMode 双跑 effect / 重复挂载只排一次）。 */
 let scheduled = false;
@@ -38,7 +38,9 @@ export function registerLazyViewLoader(loader: LazyViewLoader): void {
 
 /** 启动空闲预热（幂等）—— 由工作区视图栈挂载时调用一次。 */
 export function startLazyViewPrefetch(): void {
-  if (scheduled) return;
+  if (scheduled) {
+    return;
+  }
   scheduled = true;
   scheduleIdle(drainOne);
 }
@@ -46,7 +48,9 @@ export function startLazyViewPrefetch(): void {
 /** 取队头一个 loader 要一次；要完（或失败）再排下一个 —— 串行的落点。 */
 function drainOne(): void {
   const loader = pending.shift();
-  if (!loader) return;
+  if (!loader) {
+    return;
+  }
   void loader()
     .catch(() => undefined)
     .finally(() => {
@@ -55,10 +59,10 @@ function drainOne(): void {
 }
 
 /** 空闲回调的最长等待：页面一直忙（首屏数据在飞）也至多这么久就开始预热。 */
-const IDLE_TIMEOUT_MS = 2_000;
+const IDLE_TIMEOUT_MS = 2000;
 
 /** 宿主没有 `requestIdleCallback`（老浏览器 / 测试环境）时的退化延迟。 */
-const IDLE_FALLBACK_DELAY_MS = 1_000;
+const IDLE_FALLBACK_DELAY_MS = 1000;
 
 /** 浏览器空闲回调；宿主没有这个 API 时退化成定时器。 */
 function scheduleIdle(run: () => void): void {

@@ -101,11 +101,7 @@
  */
 const path = require("node:path");
 const { maskNonCode } = require("./check-test-concurrency.cjs");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -199,7 +195,11 @@ function walk(dir) {
 /** 第几行（1 起）：数到某个字符偏移为止的换行数。 */
 function lineOf(src, index) {
   let n = 1;
-  for (let i = 0; i < index; i++) if (src[i] === "\n") n += 1;
+  for (let i = 0; i < index; i++) {
+    if (src[i] === "\n") {
+      n += 1;
+    }
+  }
   return n;
 }
 
@@ -220,7 +220,9 @@ function nearbySleepOk(raw, siteIndex) {
   /* ① 行尾注释 */
   const ownLine = lines[line - 1] ?? "";
   const tail = ownLine.match(SLEEP_OK_RE);
-  if (tail) return tail[1].trim();
+  if (tail) {
+    return tail[1].trim();
+  }
   /* ② 向上走。**能跨过「包着我的那一句的开头」** —— 站点常常长这样：
    *
    *     // sleep-ok: <理由>
@@ -238,14 +240,19 @@ function nearbySleepOk(raw, siteIndex) {
    */
   for (let i = line - 2; i >= 0 && i >= line - 8; i--) {
     const t = lines[i].trim();
-    if (!t) continue;
+    if (!t) {
+      continue;
+    }
     const hit = t.match(SLEEP_OK_RE);
-    if (hit) return hit[1].trim();
-    const isComment =
-      t.startsWith("//") || t.startsWith("*") || t.startsWith("/*");
+    if (hit) {
+      return hit[1].trim();
+    }
+    const isComment = t.startsWith("//") || t.startsWith("*") || t.startsWith("/*");
     /* 续行：以 \`(\` / \`,\` / \`[\` / \`{\` 收尾 —— 它不构成一条独立语句。 */
     const isContinuation = /[(,[{]\s*$/.test(t);
-    if (!isComment && !isContinuation) break;
+    if (!isComment && !isContinuation) {
+      break;
+    }
   }
   return null;
 }
@@ -259,7 +266,9 @@ function scanFile(abs) {
   /* 消失时 `null` = 这一轮没读到，调用方计数（口径见 `gate-scan-read.cjs`，
    * 与上面 `walk` 那条是同一种竞态的两个窗口）。 */
   const raw = readForScan(abs);
-  if (raw === null) return null;
+  if (raw === null) {
+    return null;
+  }
   const masked = maskNonCode(raw);
   const sites = [];
 
@@ -269,7 +278,9 @@ function scanFile(abs) {
      * 只要找到窗口内是否出现 `setTimeout(` 就够，本判据数的是「Promise 里带定时器」
      * 这个形状，数括号会让判据多一层词法分析而与它要回答的问题无关（§11.18.3 同款取舍）。 */
     const window = masked.slice(start, start + WINDOW_MAX);
-    if (!SETTIMEOUT_WITH_DELAY_RE.test(window)) continue;
+    if (!SETTIMEOUT_WITH_DELAY_RE.test(window)) {
+      continue;
+    }
 
     /* 是不是「等这条语句过去」：满足任一条即算 ——
      *   ① 前缀里紧跟 `await` / `return`（`await new Promise(…)`）；
@@ -287,16 +298,17 @@ function scanFile(abs) {
      * 前缀只往回看一小段 —— 更早的 `await`（上一句的）不该算作这一句的。 */
     const prefix = masked.slice(Math.max(0, start - AWAIT_LOOKBEHIND), start);
     const isAwaitOrReturn =
-      /(?<![\w.$])(?:await|return)\s*$/.test(prefix) ||
-      ZERO_ARG_ARROW_RE.test(prefix);
-    if (!isAwaitOrReturn) continue;
+      /(?<![\w.$])(?:await|return)\s*$/.test(prefix) || ZERO_ARG_ARROW_RE.test(prefix);
+    if (!isAwaitOrReturn) {
+      continue;
+    }
 
     /* 站点文字取原文（mask 过的是空格），给报错一个可读的现场。 */
     const line = lineOf(masked, start);
     const rawLine = raw.split("\n")[line - 1] ?? "";
     sites.push({
       line,
-      text: rawLine.trim().replace(/\s+/g, " ").slice(0, 100),
+      text: rawLine.trim().replaceAll(/\s+/g, " ").slice(0, 100),
       exempt: nearbySleepOk(raw, start),
     });
   }
@@ -316,7 +328,9 @@ function main() {
 
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    if (FIXTURE_SKIP.has(rel)) continue;
+    if (FIXTURE_SKIP.has(rel)) {
+      continue;
+    }
     const sites = scanFile(abs);
     if (sites === null) {
       vanished += 1;
@@ -324,7 +338,9 @@ function main() {
     }
     const liveSites = sites.filter((s) => !s.exempt);
     const exemptSites = sites.filter((s) => s.exempt);
-    if (liveSites.length > 0) live.set(rel, liveSites);
+    if (liveSites.length > 0) {
+      live.set(rel, liveSites);
+    }
     if (exemptSites.length > 0) {
       exempt.set(rel, exemptSites);
       exemptTotal += exemptSites.length;
@@ -341,23 +357,19 @@ function main() {
    * 走**另一条已经存在的车道**：站点上方 `// sleep-ok: <理由>` 逐条声明。 */
 
   if (REPORT_ONLY) {
-    console.log(
-      `[test-sleep] 盘点：裸 sleep ${liveTotal} 处 / 声明豁免 ${exemptTotal} 处。`,
-    );
+    console.log(`[test-sleep] 盘点：裸 sleep ${liveTotal} 处 / 声明豁免 ${exemptTotal} 处。`);
     for (const [rel, sites] of [...live.entries()].sort()) {
-      console.log(
-        `  · ${rel}: ${sites.length} 处（第 ${sites.map((s) => s.line).join(",")} 行）`,
-      );
+      console.log(`  · ${rel}: ${sites.length} 处（第 ${sites.map((s) => s.line).join(",")} 行）`);
     }
     return 0;
   }
 
   if (liveTotal === 0) {
     console.log(
-      `[test-sleep] OK —— 裸 sleep 0 处 / 声明豁免 ${exemptTotal} 处。` +
+      `[test-sleep] OK —— 裸 sleep 0 处 / 声明豁免 ${exemptTotal} 处。${
         /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
            目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-        vanishedNote(vanished),
+        vanishedNote(vanished)}`,
     );
     return 0;
   }
@@ -375,12 +387,12 @@ function main() {
   );
   for (const [rel, sites] of [...live.entries()].sort()) {
     console.error(
-      `  · ${rel}: ${sites.length} 处\n` +
+      `  · ${rel}: ${sites.length} 处\n${
         sites
           .slice(0, 6)
           .map((s) => `      ${s.line}: ${s.text}`)
-          .join("\n") +
-        (sites.length > 6 ? `\n      …另有 ${sites.length - 6} 处` : ""),
+          .join("\n")
+        }${sites.length > 6 ? `\n      …另有 ${sites.length - 6} 处` : ""}`,
     );
   }
   console.error("\n口径见 docs/standards/11-测试与可观测性.md §11.14。");
@@ -393,4 +405,6 @@ function main() {
 module.exports = { scanFile, nearbySleepOk, walk };
 
 /* 被 import 时（自测）只导出、不执行；被当脚本跑时（钩子）才判。 */
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

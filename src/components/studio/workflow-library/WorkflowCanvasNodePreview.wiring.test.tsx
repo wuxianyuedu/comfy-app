@@ -43,10 +43,7 @@ vi.mock("~/lib/workflow/workflow-run-store", () => {
 });
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
-import {
-  parseParamMapping,
-  SIZE_SUB_IDS,
-} from "~/lib/workflow/workflow-param-mapping";
+import { parseParamMapping, SIZE_SUB_IDS } from "~/lib/workflow/workflow-param-mapping";
 import { applyWireEdit } from "~/lib/workflow/workflow-param-wiring";
 import { WorkflowCanvasNodePreview } from "./WorkflowCanvasNodePreview";
 import { deriveLibraryParamCards } from "./workflow-library-param-cards";
@@ -114,14 +111,14 @@ function previewElement(
 ) {
   return (
     <WorkflowCanvasNodePreview
-      workflowId="wf-1"
-      workflowName="测试工作流"
-      taskType="t2i"
-      workflowIO={io}
-      paramMap={paramMap}
-      usable
       defaultMode="T2I"
       onPatchParamMap={onPatch}
+      paramMap={paramMap}
+      taskType="t2i"
+      usable
+      workflowId="wf-1"
+      workflowIO={io}
+      workflowName="测试工作流"
     />
   );
 }
@@ -148,9 +145,7 @@ describe("库内映射编辑", () => {
     expect(dot, "尺寸卡「像素量」那一行应有一颗可连的 handle").toBeTruthy();
     /* 它是 source（线从这里出发去宿主卡片），不是装饰圆点。 */
     expect(
-      container.querySelector(
-        '.react-flow__handle.source[data-handleid="size-megapixels"]',
-      ),
+      container.querySelector('.react-flow__handle.source[data-handleid="size-megapixels"]'),
     ).toBeTruthy();
   });
 
@@ -195,9 +190,7 @@ describe("库内映射编辑", () => {
      *  表并落库 —— 后一次把前一次的删除覆盖回去，只有最后一条真的清掉了。 */
     const sixWired = {
       source: {
-        "mode:T2I": Object.fromEntries(
-          SIZE_SUB_IDS.map((id) => [id, "5::widget::width"]),
-        ),
+        "mode:T2I": Object.fromEntries(SIZE_SUB_IDS.map((id) => [id, "5::widget::width"])),
       },
     };
     const { onPatch } = renderPreview(sixWired);
@@ -217,13 +210,13 @@ describe("库内映射编辑", () => {
 
     render(
       <WorkflowCanvasNodePreview
-        workflowId="wf-2"
-        workflowName="无模式工作流"
-        taskType=""
-        workflowIO={io}
-        paramMap={{}}
-        usable
         onPatchParamMap={vi.fn()}
+        paramMap={{}}
+        taskType=""
+        usable
+        workflowId="wf-2"
+        workflowIO={io}
+        workflowName="无模式工作流"
       />,
     );
     expect(screen.getByText("对外参数")).toBeTruthy();
@@ -253,9 +246,7 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
     };
     const { container } = renderPreview({});
     SIZE_SUB_IDS.forEach((cls, index) => {
-      const badge = container.querySelector(
-        `[data-testid="param-node-out-type-size-${index}"]`,
-      );
+      const badge = container.querySelector(`[data-testid="param-node-out-type-size-${index}"]`);
       expect(badge?.textContent, `${cls} 行的类型`).toBe(expectedByCls[cls]);
       expect(badge?.textContent, `${cls} 行不该显示星号`).not.toBe("*");
     });
@@ -265,15 +256,11 @@ describe("尺寸卡：六行的类型与拖线后的线（回归）", () => {
     const { container } = renderPreview({});
     /* 少任一端，松手时都落不上（画布会提示「松手时不在任何端口上」）。 */
     expect(
-      container.querySelector(
-        '[data-handleid="size-megapixels"][data-nodeid="lib:params"]',
-      ),
+      container.querySelector('[data-handleid="size-megapixels"][data-nodeid="lib:params"]'),
       "起手端：尺寸卡「像素量」那一行",
     ).toBeTruthy();
     expect(
-      container.querySelector(
-        '[data-handleid="5::widget::megapixels"][data-nodeid="lib:host"]',
-      ),
+      container.querySelector('[data-handleid="5::widget::megapixels"][data-nodeid="lib:host"]'),
       "落点端：宿主卡片上那一行（handle id = ioKey）",
     ).toBeTruthy();
   });
@@ -307,9 +294,7 @@ describe("画布铺满：背景板（ISSUE #596）", () => {
    * 背景板必须是**透明、不可交互**的：它只是底，不能抢走卡片与表单的点击 / 拖动。 */
   it("三列之下有一层背景板节点，且它不抢交互", () => {
     const { container } = renderPreview({});
-    const backdrop = container.querySelector(
-      '[data-testid="wflib-canvas-backdrop"]',
-    );
+    const backdrop = container.querySelector('[data-testid="wflib-canvas-backdrop"]');
     expect(backdrop, "画布应有一层撑满高度的背景板").toBeTruthy();
 
     /* 它的节点外壳不可选中 / 不可拖动 —— React Flow 只在为真时挂上这两个类，
@@ -323,9 +308,9 @@ describe("画布铺满：背景板（ISSUE #596）", () => {
 
   it("背景板垫在三列之下，不遮挡卡片（DOM 顺序在前的那个先画）", () => {
     const { container } = renderPreview({});
-    const nodes = Array.from(
-      container.querySelectorAll(".react-flow__node"),
-    ).map((el) => el.getAttribute("data-id"));
+    const nodes = [...container.querySelectorAll(".react-flow__node")].map((el) =>
+      el.getAttribute("data-id"),
+    );
     const backdropIndex = nodes.indexOf("lib:backdrop");
     const paramsIndex = nodes.indexOf("lib:params");
     expect(backdropIndex).toBeGreaterThanOrEqual(0);
@@ -339,53 +324,37 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
      *  这颗点（`PortHandle dir="out"`），库内预览此前漏了 —— 补上，且它正是
      *  右列连线的起点。 */
     const { container } = renderPreview({});
-    const host = container.querySelector(
-      '[data-testid="wflib-canvas-node-host"]',
-    )!;
+    const host = container.querySelector('[data-testid="wflib-canvas-node-host"]')!;
     expect(
-      host.querySelector(
-        '.react-flow__handle.source[data-handleid="5::output::IMAGE"]',
-      ),
+      host.querySelector('.react-flow__handle.source[data-handleid="5::output::IMAGE"]'),
     ).toBeTruthy();
   });
 
   it("节点右侧列出对外输出参数，卡片端点在卡片左缘", () => {
     const { container } = renderPreview({});
-    const column = container.querySelector(
-      '[data-testid="workflow-output-param-column"]',
-    )!;
+    const column = container.querySelector('[data-testid="workflow-output-param-column"]')!;
     expect(column).toBeTruthy();
     expect(column.getAttribute("aria-label")).toBe("对外输出参数");
-    const card = column.querySelector(
-      '[data-testid="param-node-5::output::IMAGE"]',
-    )!;
+    const card = column.querySelector('[data-testid="param-node-5::output::IMAGE"]')!;
     expect(card.textContent).toContain("images");
     /* 端点在行首（圆点在左）：卡片的左缘才是「线从宿主进来」的那一侧。 */
     const dot = column.querySelector(
       '.react-flow__handle.target[data-handleid="5::output::IMAGE"]',
     )!;
     expect(dot).toBeTruthy();
-    expect(
-      screen.getByTestId("param-node-out-5::output::IMAGE-0").firstElementChild,
-    ).toBe(dot);
+    expect(screen.getByTestId("param-node-out-5::output::IMAGE-0").firstElementChild).toBe(dot);
   });
 
   it("右列可连线：有模式 + 给了落库回调时端点就是起手位", () => {
     const { container } = renderPreview({ source: { "mode:T2I": {} } });
     /* 没改过时「恢复默认」不可用（点了不会有变化）。 */
-    const card = container.querySelector(
-      '[data-testid="param-node-5::output::IMAGE"]',
-    )!;
+    const card = container.querySelector('[data-testid="param-node-5::output::IMAGE"]')!;
     expect(
-      card.querySelector<HTMLButtonElement>(
-        '[data-testid^="param-node-reset"]',
-      )!.disabled,
+      card.querySelector<HTMLButtonElement>('[data-testid^="param-node-reset"]')!.disabled,
     ).toBe(true);
     /* 但端点本身在（可拖）—— 端点由画布的节点注入；锚点 = 输出口的 ioKey。 */
     expect(
-      container.querySelector(
-        '.react-flow__handle[data-handleid="5::output::IMAGE"]',
-      ),
+      container.querySelector('.react-flow__handle[data-handleid="5::output::IMAGE"]'),
     ).toBeTruthy();
   });
 
@@ -393,13 +362,9 @@ describe("对外输出参数（节点右侧）—— ISSUE #355", () => {
     const { container } = renderPreview({
       output: { "mode:T2I": { "5::output::IMAGE": "5::output::IMAGE" } },
     });
-    const card = container.querySelector(
-      '[data-testid="param-node-5::output::IMAGE"]',
-    )!;
+    const card = container.querySelector('[data-testid="param-node-5::output::IMAGE"]')!;
     expect(
-      card.querySelector<HTMLButtonElement>(
-        '[data-testid^="param-node-reset"]',
-      )!.disabled,
+      card.querySelector<HTMLButtonElement>('[data-testid^="param-node-reset"]')!.disabled,
     ).toBe(false);
   });
 });
@@ -424,9 +389,7 @@ describe("画布视口（由 React Flow 承担）", () => {
   it("三列各挂在一个节点里（左列 / 宿主 / 右列）", () => {
     const { container } = renderPreview({});
     for (const id of ["lib:params", "lib:host", "lib:outputs"]) {
-      const node = container.querySelector(
-        `.react-flow__node[data-id="${id}"]`,
-      );
+      const node = container.querySelector(`.react-flow__node[data-id="${id}"]`);
       expect(node, `节点 ${id} 应挂载`).toBeTruthy();
     }
   });
@@ -437,9 +400,7 @@ describe("画布视口（由 React Flow 承担）", () => {
      *  端点、按钮全部点不动。所以节点保持可拖，用「拖完吸附回布局」兜住
      *  「三列不错位」。 */
     const { container } = renderPreview({});
-    const params = container.querySelector<HTMLElement>(
-      '.react-flow__node[data-id="lib:params"]',
-    )!;
+    const params = container.querySelector<HTMLElement>('.react-flow__node[data-id="lib:params"]')!;
     expect(params.className).toContain("draggable");
   });
 });
@@ -449,9 +410,7 @@ describe("尺寸各项各自可取外部值", () => {
     const { container } = renderPreview({});
     for (const handle of ["size-aspect", "size-megapixels", "size-width"]) {
       expect(
-        container.querySelector(
-          `.react-flow__handle.source[data-handleid="${handle}"]`,
-        ),
+        container.querySelector(`.react-flow__handle.source[data-handleid="${handle}"]`),
         `尺寸的 ${handle} 应各有一颗出口端点`,
       ).toBeTruthy();
     }
@@ -499,13 +458,8 @@ describe("画布节点页签：卡片列的口子清单取「生效契约」", (
    *  （`contractEntries`，用户改过的模式走注册表）真的传下去了 —— 传漏了就退回内置
    *  默认，两个表面又各说一份。判据容忍换行（prettier 会把调用拆成多行）。 */
   it("派生卡片列时把生效契约的 id 传下去", () => {
-    const preview = readFileSync(
-      path.join(__dirname, "WorkflowCanvasNodePreview.tsx"),
-      "utf8",
-    );
+    const preview = readFileSync(path.join(__dirname, "WorkflowCanvasNodePreview.tsx"), "utf8");
     expect(preview).toMatch(/contractIds:\s*contractEntries\.map/);
-    expect(preview).toContain(
-      "modeContractEntries(effectiveMode, storedContracts)",
-    );
+    expect(preview).toContain("modeContractEntries(effectiveMode, storedContracts)");
   });
 });

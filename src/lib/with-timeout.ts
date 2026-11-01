@@ -35,14 +35,14 @@ export class TimeoutError extends Error {
   }
 }
 
-export interface WithTimeoutOptions {
+export type WithTimeoutOptions = {
+  label?: string;
   /**
    * 超时时抛出的错误文案。给了 `message` 用它；只给 `label` 则由出口拼
    * `${label}超时（${秒}s）` —— 秒数是**出口自己算**的（`ms / 1000`），
    * 调用处不再重复一遍量纲换算（收口前六处里三处自己算、三处硬编码）。
    */
   message?: string;
-  label?: string;
   /**
    * 超时那一刻的收尾钩子（在抛出之前调）。
    *
@@ -52,7 +52,7 @@ export interface WithTimeoutOptions {
    * 收尾失败不该改变「这是一次超时」这个结论。
    */
   onTimeout?: () => void;
-}
+};
 
 /** 超时文案的默认拼法（带量纲，与收口前的 `加载超时（25s）` 同形）。 */
 function timeoutMessage(ms: number, label?: string): string {
@@ -84,13 +84,13 @@ export function withTimeout<T>(
       } catch {
         /* 收尾钩子失败不改结论：这依然是一次超时。 */
       }
-      reject(
-        new TimeoutError(opts.message ?? timeoutMessage(ms, opts.label), ms),
-      );
+      reject(new TimeoutError(opts.message ?? timeoutMessage(ms, opts.label), ms));
     }, ms);
   });
   return Promise.race([promise, timeout]).finally(() => {
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
   });
 }
 
@@ -124,7 +124,9 @@ export function withTimeoutResult<T>(
     }, ms);
   });
   return Promise.race([promise, timeout]).finally(() => {
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
   });
 }
 

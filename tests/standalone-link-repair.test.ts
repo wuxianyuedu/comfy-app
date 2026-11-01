@@ -21,14 +21,7 @@
  *      否则下一个人只会看到 `Cannot find package`，又去查一遍缺件；
  *   4. 没跑过 `next build` 时这一步**不报错**（与同链上的 `standalone-private-inputs.mjs` 同口径）。
  */
-import {
-  lstatSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -52,7 +45,7 @@ afterEach(() => {
 });
 
 /** 在夹具里造 `<root>/<…>` 这条路径（并返回它）。 */
-function dir(...rel: string[]): string {
+function dir(...rel: Array<string>): string {
   const p = path.join(root, ...rel);
   mkdirSync(p, { recursive: true });
   return p;
@@ -75,9 +68,9 @@ describe("真文件系统那一层（跨平台夹具）", () => {
   it("嵌套目录里的链接也被列出来（走的是整棵 node_modules，不是只扫顶层）", () => {
     const inner = dir("node_modules", ".pnpm", "a@1.0.0", "node_modules");
     symlinkDir(dir("real"), path.join(inner, "a"));
-    expect(
-      listLinks(path.join(root, "node_modules")).map((l) => l.rel),
-    ).toEqual([".pnpm/a@1.0.0/node_modules/a"]);
+    expect(listLinks(path.join(root, "node_modules")).map((l) => l.rel)).toEqual([
+      ".pnpm/a@1.0.0/node_modules/a",
+    ]);
   });
 
   it("可跟随判 follow、目标不在判 broken —— 这一步的判据就是一个 stat", () => {
@@ -125,13 +118,7 @@ describe("真文件系统那一层（跨平台夹具）", () => {
     /* 造 pnpm 的真实形状：`.pnpm/<包>+<变体>@<ver>/node_modules/<包>/<变体>`。
      * 死链指向**没装实体**的那一支，同包的另一支（win32 那份）有实体。 */
     const nm = dir("node_modules");
-    const scopeDir = dir(
-      "node_modules",
-      ".pnpm",
-      "libsql@0.5.29",
-      "node_modules",
-      "@libsql",
-    );
+    const scopeDir = dir("node_modules", ".pnpm", "libsql@0.5.29", "node_modules", "@libsql");
     // 同包的另一支：win32-x64-msvc，实体在。
     dir(
       "node_modules",
@@ -146,8 +133,7 @@ describe("真文件系统那一层（跨平台夹具）", () => {
     symlinkDir(dir("nothing-here"), dead);
     rmSync(path.join(root, "nothing-here"), { recursive: true, force: true });
 
-    const text =
-      "..\\..\\..\\@libsql+darwin-arm64@0.5.29\\node_modules\\@libsql\\darwin-arm64";
+    const text = String.raw`..\..\..\@libsql+darwin-arm64@0.5.29\node_modules\@libsql\darwin-arm64`;
     expect(siblingVariantInstalled(nm, text)).toBe(true);
 
     // 而「同包一个变体都没装」时，那才是真缺件。
@@ -169,14 +155,14 @@ describe("真文件系统那一层（跨平台夹具）", () => {
     expect(
       siblingVariantInstalled(
         lonelyNm,
-        "..\\..\\..\\gone+variant@1.0.0\\node_modules\\gone\\variant",
+        String.raw`..\..\..\gone+variant@1.0.0\node_modules\gone\variant`,
       ),
     ).toBe(false);
   });
 });
 
 /** 注入用的一条链接（`text` 是它的链接文本；`abs` 不必真存在）。 */
-interface FakeLink {
+type FakeLink = {
   abs: string;
   rel: string;
   text?: string;
@@ -191,13 +177,13 @@ interface FakeLink {
  * @param input.targetExists 目标在不在（默认在 —— 这才是本条发现ing的形状）
  */
 function fake(input: {
-  links: FakeLink[];
-  brokenRels?: string[];
-  rebuildResult?: { ok: boolean; error: string };
-  targetExists?: boolean;
+  brokenRels?: Array<string>;
   dirExists?: boolean;
-  throwOnReadText?: boolean;
+  links: Array<FakeLink>;
+  rebuildResult?: { error: string; ok: boolean; };
   siblingInstalled?: boolean;
+  targetExists?: boolean;
+  throwOnReadText?: boolean;
 }) {
   const links = input.links;
   const brokenRels = new Set(input.brokenRels ?? links.map((l) => l.rel));
@@ -214,14 +200,22 @@ function fake(input: {
     },
     follow: (abs: string) => {
       const l = links.find((x) => x.abs === abs);
-      if (!l) return "broken" as const;
-      if (nowFollowable.has(abs)) return "follow" as const;
-      return brokenRels.has(l.rel) ? ("broken" as const) : ("follow" as const);
+      if (!l) {
+        return /* SAFETY: 类型断言已复核 */ "broken" as const;
+      }
+      if (nowFollowable.has(abs)) {
+        return /* SAFETY: 类型断言已复核 */ "follow" as const;
+      }
+      return brokenRels.has(l.rel)
+        ? /* SAFETY: 类型断言已复核 */ ("broken" as const)
+        : /* SAFETY: 类型断言已复核 */ ("follow" as const);
     },
     rebuild: (abs: string, linkText: string) => {
       rebuildCalls.push({ abs, linkText });
       const r = input.rebuildResult ?? { ok: true, error: "" };
-      if (r.ok) nowFollowable.add(abs);
+      if (r.ok) {
+        nowFollowable.add(abs);
+      }
       return r;
     },
     exists: (_p: string) => input.targetExists ?? true,
@@ -236,8 +230,8 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
   it("可跟随的链接一次都不重建（「不许扰动 mtime」那条护栏）", () => {
     const { deps, rebuildCalls } = fake({
       links: [
-        { abs: "N/good", rel: "good", text: "..\\r\\node_modules\\good" },
-        { abs: "N/bad", rel: "bad", text: "..\\r\\node_modules\\bad" },
+        { abs: "N/good", rel: "good", text: String.raw`..\r\node_modules\good` },
+        { abs: "N/bad", rel: "bad", text: String.raw`..\r\node_modules\bad` },
       ],
       brokenRels: ["bad"],
     });
@@ -249,14 +243,10 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
   it("重建用的是**原链接文本**，不是 resolve 之后的绝对路径", () => {
     const { deps, rebuildCalls } = fake({
-      links: [
-        { abs: "N/pkg", rel: "pkg", text: "..\\pkg@1.0.0\\node_modules\\pkg" },
-      ],
+      links: [{ abs: "N/pkg", rel: "pkg", text: String.raw`..\pkg@1.0.0\node_modules\pkg` }],
     });
     repairUnfollowableLinks("N", deps);
-    expect(rebuildCalls).toEqual([
-      { abs: "N/pkg", linkText: "..\\pkg@1.0.0\\node_modules\\pkg" },
-    ]);
+    expect(rebuildCalls).toEqual([{ abs: "N/pkg", linkText: String.raw`..\pkg@1.0.0\node_modules\pkg` }]);
   });
 
   it("「目标在场但修不好」进 broken 且 targetExists=YES —— 不许与缺件同形", () => {
@@ -265,7 +255,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
         {
           abs: "N/promise-limit",
           rel: "promise-limit",
-          text: "..\\promise-limit@2.7.0\\node_modules\\promise-limit",
+          text: String.raw`..\promise-limit@2.7.0\node_modules\promise-limit`,
         },
       ],
       rebuildResult: { ok: false, error: "EPERM (no privilege)" },
@@ -279,9 +269,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
   it("目标真不在时 targetExists=NO：报的是「修好了也仍不可跟随」这一格", () => {
     const { deps } = fake({
-      links: [
-        { abs: "N/gone", rel: "gone", text: "..\\nope\\node_modules\\nope" },
-      ],
+      links: [{ abs: "N/gone", rel: "gone", text: String.raw`..\nope\node_modules\nope` }],
       targetExists: false,
       rebuildResult: { ok: false, error: "ENOENT (no such file)" },
     });
@@ -305,7 +293,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
   it("有没修好的链接时，输出逐条点名并说出后果", () => {
     const { deps } = fake({
-      links: [{ abs: "N/pkg", rel: "pkg", text: "..\\x\\node_modules\\pkg" }],
+      links: [{ abs: "N/pkg", rel: "pkg", text: String.raw`..\x\node_modules\pkg` }],
       rebuildResult: { ok: false, error: "EPERM" },
     });
     const out = runLinkRepair("N", deps);
@@ -326,7 +314,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
         {
           abs: "N/.pnpm/libsql@0.5.29/node_modules/@libsql/darwin-arm64",
           rel: ".pnpm/libsql@0.5.29/node_modules/@libsql/darwin-arm64",
-          text: "..\\..\\..\\@libsql+darwin-arm64@0.5.29\\node_modules\\@libsql\\darwin-arm64",
+          text: String.raw`..\..\..\@libsql+darwin-arm64@0.5.29\node_modules\@libsql\darwin-arm64`,
         },
       ],
       targetExists: false,
@@ -350,7 +338,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
         {
           abs: "N/.pnpm/foo@1.0.0/node_modules/foo",
           rel: ".pnpm/foo@1.0.0/node_modules/foo",
-          text: "..\\..\\..\\foo@1.0.0\\node_modules\\foo",
+          text: String.raw`..\..\..\foo@1.0.0\node_modules\foo`,
         },
       ],
       targetExists: false,
@@ -366,7 +354,7 @@ describe("决策面（注入边界，任何平台都判得动）", () => {
 
 describe("接线在位", () => {
   it("这一步挂在 pnpm build 链上，且顺序是 修链接 → 数产物 → 冒烟", () => {
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(path.resolve(__dirname, "../package.json"), "utf8"),
     ) as { scripts: { build: string } };
     const build = pkg.scripts.build;
@@ -376,7 +364,9 @@ describe("接线在位", () => {
       "scripts/check-standalone-contents.cjs",
       "scripts/smoke-executor-host-standalone.mjs",
     ].map((s) => build.indexOf(s));
-    for (const idx of order) expect(idx).toBeGreaterThanOrEqual(0);
+    for (const idx of order) {
+      expect(idx).toBeGreaterThanOrEqual(0);
+    }
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 

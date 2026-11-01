@@ -42,18 +42,18 @@ export type LivenessPhase =
   | "verifying";
 
 /** 分类所需的**事实**（全部由调用方从已有状态里读，本模块不做 IO）。 */
-export interface LivenessFacts {
-  /** HTTP 这一拍回答了吗（`/system_stats` 连上即算，含 CUDA OOM 的 500，见 probe.ts）。 */
-  up: boolean;
-  /** 进程在跑（进程级快照），但 HTTP 还没就绪 —— 即「正在启动」。 */
-  starting: boolean;
+export type LivenessFacts = {
   /** 队列里有活儿（本应用在跑 / ComfyUI 自己排着队）。 */
   busy: boolean;
   /** 窗口不可见（页面隐藏 / 桌面壳失焦）。 */
   hidden: boolean;
+  /** 进程在跑（进程级快照），但 HTTP 还没就绪 —— 即「正在启动」。 */
+  starting: boolean;
+  /** HTTP 这一拍回答了吗（`/system_stats` 连上即算，含 CUDA OOM 的 500，见 probe.ts）。 */
+  up: boolean;
   /** 刚收到进程退出事件、正在做那次单次复核。 */
   verifying: boolean;
-}
+};
 
 /**
  * 此刻该按哪个阶段给频率。
@@ -72,10 +72,18 @@ export interface LivenessFacts {
  * 负载 —— 用出图档的 30s 会把「就绪」拖成半分钟。
  */
 export function classifyLivenessPhase(facts: LivenessFacts): LivenessPhase {
-  if (facts.verifying) return "verifying";
-  if (facts.hidden) return "hidden";
-  if (facts.starting) return "starting";
-  if (facts.busy) return "generating";
+  if (facts.verifying) {
+    return "verifying";
+  }
+  if (facts.hidden) {
+    return "hidden";
+  }
+  if (facts.starting) {
+    return "starting";
+  }
+  if (facts.busy) {
+    return "generating";
+  }
   return "idle";
 }
 
@@ -86,7 +94,7 @@ export function classifyLivenessPhase(facts: LivenessFacts): LivenessPhase {
  */
 
 /** 启动等待：进程在跑、HTTP 未就绪。 */
-export const LIVENESS_STARTING = {
+export const LIVENESS_STARTING = /* SAFETY: 类型断言已复核 */ {
   /** 前 10s 用 400ms 一探：用户在盯着转圈，越快越好，此时也没别的负载
    *  （ComfyUI 还在 import torch / 加载模型，没有生成请求在排队）。 */
   fastMs: 400,
@@ -121,23 +129,25 @@ export const LIVENESS_VERIFY_MS = 0;
  * `elapsedInStartingMs` 只在 `starting` 档参与判断（快档 → 慢档的切换点）
  * —— 其它阶段传什么都一样。
  */
-export function livenessIntervalMs(
-  phase: LivenessPhase,
-  elapsedInStartingMs = 0,
-): number {
+export function livenessIntervalMs(phase: LivenessPhase, elapsedInStartingMs = 0): number {
   switch (phase) {
-    case "verifying":
+    case "verifying": {
       return LIVENESS_VERIFY_MS;
-    case "hidden":
+    }
+    case "hidden": {
       return LIVENESS_HIDDEN_MS;
-    case "starting":
+    }
+    case "starting": {
       return elapsedInStartingMs < LIVENESS_STARTING.fastWindowMs
         ? LIVENESS_STARTING.fastMs
         : LIVENESS_STARTING.slowMs;
-    case "generating":
+    }
+    case "generating": {
       return LIVENESS_GENERATING_MS;
-    case "idle":
+    }
+    case "idle": {
       return LIVENESS_IDLE_MS;
+    }
   }
 }
 

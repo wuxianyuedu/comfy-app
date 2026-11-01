@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { LOG_DETAIL_MAX } from "~/lib/text-clamp";
-import {
-  describeSqliteWriteError,
-  isSqliteBusyError,
-  sqliteAwareErrorText,
-} from "./sqlite-error";
+import { describeSqliteWriteError, isSqliteBusyError, sqliteAwareErrorText } from "./sqlite-error";
 
 /* 这两条判据的形状照 drizzle 的真实包法写：drizzle 把驱动错误放在 `cause` 上，
  * 自己的 message 只有 `Failed query: <sql>\nparams: <…>`。#1250 的现场就是日志里
@@ -14,7 +10,7 @@ function drizzleWrapped(cause: unknown): Error {
   const e = new Error(
     'Failed query: update "task" set "status" = ? where "task"."id" = ?\nparams: FAILED,t1',
   );
-  (e as { cause?: unknown }).cause = cause;
+  /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause = cause;
   return e;
 }
 
@@ -42,20 +38,18 @@ describe("describeSqliteWriteError", () => {
   });
 
   it("没有 cause 时退回原消息；原消息为空才用 fallback", () => {
-    expect(
-      describeSqliteWriteError(new Error("no such table: task"), "f"),
-    ).toBe("no such table: task");
-    expect(describeSqliteWriteError(new Error(""), "收口写失败")).toContain(
-      "收口写失败",
+    expect(describeSqliteWriteError(new Error("no such table: task"), "f")).toBe(
+      "no such table: task",
     );
+    expect(describeSqliteWriteError(new Error(""), "收口写失败")).toContain("收口写失败");
     /* 抛值可以是任何东西 —— 这条链不能因为拿到 string / null 就抛。 */
     expect(() => describeSqliteWriteError("boom", "f")).not.toThrow();
     expect(() => describeSqliteWriteError(null, "f")).not.toThrow();
   });
 
   it("cause 自引用时不会把进程吊死（有层数上限）", () => {
-    const a: { message: string; cause?: unknown } = { message: "A" };
-    const b: { message: string; cause?: unknown } = { message: "B", cause: a };
+    const a: { cause?: unknown; message: string } = { message: "A" };
+    const b: { cause?: unknown; message: string } = { message: "B", cause: a };
     a.cause = b;
     expect(() => describeSqliteWriteError(a, "f")).not.toThrow();
     expect(isSqliteBusyError(a)).toBe(false);
@@ -91,21 +85,14 @@ describe("sqliteAwareErrorText —— 库写失败的捕获点都要看得见原
   it("是库失败但 cause 链上一个码都没有：**明说**取不到，不留空白", () => {
     /* 这一刻正是最容易被误读的时刻 —— 空白会被读成「没有原因」，而真实情况是
      * 「原因在链路里丢了」。#1262 第一次读数读不出谁扣的锁，缺的就是这一句。 */
-    const text = sqliteAwareErrorText(
-      drizzleWrapped(undefined),
-      "领取队列任务失败",
-    );
+    const text = sqliteAwareErrorText(drizzleWrapped(undefined), "领取队列任务失败");
     expect(text).toContain("Failed query");
     expect(text).toContain("原因未取到");
   });
 
   it("不是库失败：原样交给 errorText，网络错的翻译本领一条不丢", () => {
-    expect(sqliteAwareErrorText(new Error("fetch failed"), "f")).toContain(
-      "连接被拒绝或中断",
-    );
-    expect(sqliteAwareErrorText(new Error(""), "续跑出队失败")).toContain(
-      "续跑出队失败",
-    );
+    expect(sqliteAwareErrorText(new Error("fetch failed"), "f")).toContain("连接被拒绝或中断");
+    expect(sqliteAwareErrorText(new Error(""), "续跑出队失败")).toContain("续跑出队失败");
   });
 
   it("「没表」也是库失败（照样带原因），但它仍然判不可重试", () => {
@@ -124,9 +111,7 @@ describe("sqliteAwareErrorText —— 库写失败的捕获点都要看得见原
       expect(() => sqliteAwareErrorText(value, "收口写失败")).not.toThrow();
     }
     /* 与 errorText 同规则：动作前缀永远在，兜底只补详情那一半。 */
-    expect(sqliteAwareErrorText(null, "收口写失败")).toBe(
-      "收口写失败：未知错误",
-    );
+    expect(sqliteAwareErrorText(null, "收口写失败")).toBe("收口写失败：未知错误");
   });
 });
 
@@ -139,9 +124,7 @@ describe("isSqliteBusyError", () => {
 
   it("个别驱动只在 message 里给原因，也算", () => {
     expect(isSqliteBusyError({ message: "database is locked" })).toBe(true);
-    expect(
-      isSqliteBusyError({ message: "SQLITE_BUSY: too many attached" }),
-    ).toBe(true);
+    expect(isSqliteBusyError({ message: "SQLITE_BUSY: too many attached" })).toBe(true);
   });
 
   it("认不出原因就不重试：真故障不该被拖成四次同样的写入", () => {

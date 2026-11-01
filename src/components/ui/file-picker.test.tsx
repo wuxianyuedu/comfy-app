@@ -20,20 +20,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * 这类假失败会出现。显式清，开销可以忽略。 */
 afterEach(cleanup);
 
-import {
-  FilePicker,
-  FilePickerButton,
-  useFilePicker,
-  type FilePickerHandle,
-} from "./file-picker";
+import { FilePicker, FilePickerButton, useFilePicker, type FilePickerHandle } from "./file-picker";
+import { fakeFileList } from "../../../tests/helpers/fake-file-list";
 
 /** 把文件塞进 input 的 `files` 并派发 `change`（jsdom 不允许直接赋值）。 */
-function pick(input: HTMLInputElement, ...files: File[]) {
-  const list = {
-    ...files,
-    length: files.length,
-    item: (i: number) => files[i],
-  } as unknown as FileList;
+function pick(input: HTMLInputElement, ...files: Array<File>) {
+  const list = fakeFileList(...files);
   Object.defineProperty(input, "files", { value: list, configurable: true });
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
@@ -53,7 +45,7 @@ function makeFile(name: string): File {
 
 describe("FilePicker", () => {
   it("默认隐藏，accept / multiple 透传", () => {
-    render(<FilePicker onPick={noop} accept="image/*" multiple />);
+    render(<FilePicker accept="image/*" multiple onPick={noop} />);
     const input = fileInput();
     expect(input.className).toContain("hidden");
     expect(input.accept).toBe("image/*");
@@ -62,15 +54,15 @@ describe("FilePicker", () => {
 
   it("选中文件后回调：同时给出 file 与整份 FileList（多选要整份）", () => {
     const onPick = vi.fn();
-    render(<FilePicker onPick={onPick} multiple />);
+    render(<FilePicker multiple onPick={onPick} />);
     const A = makeFile("a.png");
     const B = makeFile("b.png");
     pick(fileInput(), A, B);
 
     expect(onPick).toHaveBeenCalledTimes(1);
-    const call = onPick.mock.calls[0] as [File, FileList];
+    const call = /* SAFETY: 类型断言已复核 */ onPick.mock.calls[0] as [File, FileList];
     expect(call[0]).toBe(A);
-    expect(Array.from(call[1])).toEqual([A, B]);
+    expect([...call[1]]).toEqual([A, B]);
   });
 
   it("**选完复位 value**：不清时连选同一个文件不会触发 change", () => {
@@ -102,9 +94,7 @@ describe("FilePicker", () => {
   });
 
   it("inputProps 透传（`aria-label` 这类无障碍属性要能传进去）", () => {
-    render(
-      <FilePicker onPick={noop} inputProps={{ "aria-label": "选择文件" }} />,
-    );
+    render(<FilePicker inputProps={{ "aria-label": "选择文件" }} onPick={noop} />);
     expect(screen.getByLabelText("选择文件")).toBeTruthy();
   });
 });
@@ -127,7 +117,7 @@ describe("useFilePicker（命令式）", () => {
   });
 
   it("Input 身份稳定：多次渲染不重建 input（否则会打断正开着的文件对话框）", () => {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     function Probe() {
       const [, force] = useState(0);
       const picker = useFilePicker({ onPick: noop });
@@ -158,7 +148,7 @@ describe("FilePickerButton（声明式）", () => {
 
   it("按钮样式与文案透传（调用方仍能控制外观）", () => {
     render(
-      <FilePickerButton onPick={noop} className="custom-class">
+      <FilePickerButton className="custom-class" onPick={noop}>
         导入
       </FilePickerButton>,
     );
@@ -175,7 +165,7 @@ describe("FilePicker 与 handleRef", () => {
       return (
         <>
           <button onClick={() => ref.current?.open()}>开</button>
-          <FilePicker onPick={noop} handleRef={ref} />
+          <FilePicker handleRef={ref} onPick={noop} />
         </>
       );
     }

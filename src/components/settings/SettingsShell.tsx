@@ -57,27 +57,14 @@
  *     屏名只在这一屏才出现，仍给可见标题；说明仍收掉（它读一次就够）。
  */
 
-import {
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  type ReactNode,
-} from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 
-import {
-  SETTINGS_SECTIONS,
-  type Section,
-} from "~/app/(main)/settings/hooks/use-settings-page";
+import { SETTINGS_SECTIONS, type Section } from "~/app/(main)/settings/hooks/use-settings-page";
 import { Button } from "~/components/ui/button";
 import { TreeChildren } from "~/components/ui/tree-rows";
 import { cn } from "~/lib/utils";
 
-import {
-  SETTINGS_SCROLL_ORDER,
-  TREE_GROUPS,
-  sectionSummary,
-} from "./settings-section-summary";
+import { SETTINGS_SCROLL_ORDER, TREE_GROUPS, sectionSummary } from "./settings-section-summary";
 import { useSectionScrollSpy } from "./use-section-scroll-spy";
 
 /**
@@ -89,18 +76,6 @@ import { useSectionScrollSpy } from "./use-section-scroll-spy";
  *   · **三态**：给 `fallback`（整块内容区的替代品），导航仍在、右侧换成这一块。
  */
 type SettingsShellProps = {
-  /** 当前分区（导航高亮用）。 */
-  section: Section;
-  /** 分区变化（点击导航或滚动跟随都走它）。 */
-  onSelect: (section: Section) => void;
-  /**
-   * 屏级可见标题 —— 走 `.u-title-page`。**页签（或顶栏）已经在说屏名时不传**
-   * （ISSUE #1872）：那一次出现是重复的，不传时屏名以 `sr-only` 留在 DOM，
-   * 这一行也不再占位（口径与 `ui/page-header` 的 `title` / `srTitle` 同一份）。
-   */
-  title?: string;
-  /** 根容器高度 class（overlay 模式传 h-full 覆盖）。 */
-  className?: string;
   /**
    * 页面级提示条（保存结果 / 读取失败降级），落在滚动区**之内、分区之前**。
    *
@@ -108,6 +83,8 @@ type SettingsShellProps = {
    * 占位置；而放在分区之前则保证它不会被第一节的标题挡掉。
    */
   banner?: ReactNode;
+  /** 根容器高度 class（overlay 模式传 h-full 覆盖）。 */
+  className?: string;
   /**
    * 跳转载荷要求直接停驻的目标分区（尚未落定）。外壳在分区节挂好之后**瞬时**滚到
    * 它，并回调 `onJumpApplied`；三态壳（`fallback`）下没有分区节，滚不过去、
@@ -116,8 +93,19 @@ type SettingsShellProps = {
   jumpSection?: Section | null;
   /** 跳转目标真的滚过去了（外壳命中了锚点）—— 调用方据此消费一次性载荷。 */
   onJumpApplied?: () => void;
+  /** 分区变化（点击导航或滚动跟随都走它）。 */
+  onSelect: (section: Section) => void;
+  /** 当前分区（导航高亮用）。 */
+  section: Section;
+  /**
+   * 屏级可见标题 —— 走 `.u-title-page`。**页签（或顶栏）已经在说屏名时不传**
+   * （ISSUE #1872）：那一次出现是重复的，不传时屏名以 `sr-only` 留在 DOM，
+   * 这一行也不再占位（口径与 `ui/page-header` 的 `title` / `srTitle` 同一份）。
+   */
+  title?: string;
 } & (
   | {
+      fallback?: undefined;
       /**
        * 每个分区的正文（**一份映射，不许缺项**）。
        *
@@ -127,7 +115,6 @@ type SettingsShellProps = {
        * 比再加一条运行时判据直接。
        */
       sections: Record<Section, ReactNode>;
-      fallback?: undefined;
     }
   | {
       /**
@@ -185,8 +172,12 @@ export function SettingsShell({
    * 只有 `scrollToSection` 真的命中锚点（返回 true）才回调消费载荷 —— 三态壳
    * （加载 / 失败）没有分区节，那时不能把载荷吃掉，就绪壳挂上后再滚。 */
   useLayoutEffect(() => {
-    if (!jumpSection) return;
-    if (scrollToSection(jumpSection, "auto")) onJumpApplied?.();
+    if (!jumpSection) {
+      return;
+    }
+    if (scrollToSection(jumpSection, "auto")) {
+      onJumpApplied?.();
+    }
   }, [jumpSection, scrollToSection, onJumpApplied]);
 
   return (
@@ -210,7 +201,7 @@ export function SettingsShell({
         {/* 导航在左、内容在右：树需要的是**纵向**空间（父行 + 缩进子行），
             而横排那条带子只能靠分隔符暗示分组 —— 层级读不出来。 */}
         <div className="flex min-h-0 flex-1 gap-6 pt-4">
-          <SettingsSectionNav section={section} onSelect={handleSelect} />
+          <SettingsSectionNav onSelect={handleSelect} section={section} />
 
           {/* 内容区：**全部**分区节，唯一一根滚动条。每个节自带 `id` 与
               `scroll-mt-*`（顶线偏移，避免滚过去被标题行盖住顶部）。
@@ -218,31 +209,31 @@ export function SettingsShell({
               主操作按钮仍在各区卡片自己的末尾（规范 §4.12 管的是「列表容器内
               不要放主操作」，这里是文档式长页、卡片不是滚动容器的直接子项）。 */}
           <div
-            ref={scrollRef}
             className="custom-scrollbar min-h-0 min-w-0 flex-1 overflow-y-auto pb-6"
+            ref={scrollRef}
           >
-            {fallback !== undefined ? (
-              fallback
-            ) : (
+            {fallback === undefined ? (
               <>
                 {banner}
                 {sectionIds.map((id) => (
                   <section
-                    key={id}
-                    id={sectionAnchorId(id)}
-                    ref={registerSection(id)}
                     aria-label={sectionLabel(id)}
                     /* `scroll-mt-*` 是滚过去的**落点补偿**：`scrollIntoView` 把节顶
                    对到容器上沿，不给上边距就会贴着标题行。
                    节与节之间用 `mb-*` 拉开一档：上一节卡片末尾与下一节标题
                    若贴着，读起来像同属一组。 */
                     className="mb-8 scroll-mt-6 last:mb-0"
+                    id={sectionAnchorId(id)}
+                    key={id}
+                    ref={registerSection(id)}
                   >
                     <SettingsSectionHeading section={id} />
                     {sections?.[id]}
                   </section>
                 ))}
               </>
+            ) : (
+              fallback
             )}
           </div>
         </div>
@@ -258,9 +249,7 @@ export function sectionAnchorId(section: Section): string {
 
 /** 分区的可读名（`SETTINGS_SECTIONS` 是分区名的唯一定义处）。 */
 function sectionLabel(section: Section): string {
-  return (
-    SETTINGS_SECTIONS.find((item) => item.id === section)?.label ?? section
-  );
+  return SETTINGS_SECTIONS.find((item) => item.id === section)?.label ?? section;
 }
 
 /**
@@ -282,9 +271,7 @@ function SettingsSectionHeading({ section }: { section: Section }) {
   return (
     <h2 className="u-title-stage border-border-subtle mb-3 flex items-baseline gap-2 border-b pb-2">
       {sectionLabel(section)}
-      <span className="text-ink-muted text-xs font-normal">
-        {sectionSummary(section)}
-      </span>
+      <span className="text-ink-muted text-xs font-normal">{sectionSummary(section)}</span>
     </h2>
   );
 }
@@ -300,48 +287,42 @@ function SettingsSectionNav({
   section,
   onSelect,
 }: {
-  section: Section;
   onSelect: (section: Section) => void;
+  section: Section;
 }) {
   return (
-    <nav
-      aria-label="设置分区"
-      className="custom-scrollbar w-40 shrink-0 overflow-y-auto pb-2"
-    >
+    <nav aria-label="设置分区" className="custom-scrollbar w-40 shrink-0 overflow-y-auto pb-2">
       {TREE_GROUPS.map((group) => {
-        const items = SETTINGS_SECTIONS.filter((item) =>
-          group.sections.includes(item.id),
-        );
-        if (items.length === 0) return null;
+        const items = SETTINGS_SECTIONS.filter((item) => group.sections.includes(item.id));
+        if (items.length === 0) {
+          return null;
+        }
         return (
-          <div key={group.label} className="mb-3 last:mb-0">
+          <div className="mb-3 last:mb-0" key={group.label}>
             {/* 分组名是父行：弱一档、不可点 —— 它只回答「这几项属于一类」，
                 不是导航目标（点了也不会切到某个分区）。读屏不进可访问名，
                 分区自身由子行的 `aria-current` 表达。 */}
-            <p
-              aria-hidden
-              className="text-ink-fainter px-2 text-xs font-medium"
-            >
+            <p aria-hidden className="text-ink-fainter px-2 text-xs font-medium">
               {group.label}
             </p>
             {/* 子行集合走 `TreeChildren`：缩进档 + 引导线一处给全（§16.2.4.39）。
                 `depth=1` 是「父行是分组头」这一档的标准形态。 */}
-            <TreeChildren depth={1} className="flex flex-col gap-0.5">
+            <TreeChildren className="flex flex-col gap-0.5" depth={1}>
               {items.map((item) => {
                 const active = section === item.id;
                 return (
                   <Button
-                    key={item.id}
-                    variant="ghost"
-                    size="sm"
                     aria-current={active ? "true" : undefined}
-                    onClick={() => onSelect(item.id)}
                     className={cn(
                       "h-auto w-full justify-start rounded-lg px-3 py-1.5 text-sm font-medium",
                       active
                         ? "bg-primary-soft text-primary-strong hover:bg-primary-soft hover:text-primary-strong"
                         : "text-ink-muted hover:text-ink",
                     )}
+                    key={item.id}
+                    onClick={() => onSelect(item.id)}
+                    size="sm"
+                    variant="ghost"
                   >
                     {item.label}
                   </Button>

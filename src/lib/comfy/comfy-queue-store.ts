@@ -21,10 +21,7 @@ import { createOfflineGate } from "~/lib/offline-gate";
 import { noteComfyBusy } from "~/lib/comfy/comfy-busy-store";
 import { fireAndForget } from "~/lib/async-action";
 import { isRecord } from "~/lib/is-record";
-import type {
-  ComfyQueueStatus,
-  ComfyRunningTask,
-} from "~/lib/comfyui/queue-status-types";
+import type { ComfyQueueStatus, ComfyRunningTask } from "~/lib/comfyui/queue-status-types";
 
 /** 状态轮询节奏（2s）：与 dev server 存活探测同频。注意——本常量仍被
  * `use-queue-monitor` 借去当 `task.list` 的 `refetchInterval`，**不是**本 store 的
@@ -47,16 +44,16 @@ const EMPTY: ComfyQueueStatus = {
 
 const SERVER_SNAPSHOT: ComfyQueueView = { ...EMPTY, elapsedMs: null };
 
-export interface ComfyQueueView extends ComfyQueueStatus {
+export type ComfyQueueView = {
   /** 当前任务已运行的毫秒数；没有在跑的任务时为 null。 */
   elapsedMs: number | null;
-}
+} & ComfyQueueStatus;
 
 let snapshot: ComfyQueueView = SERVER_SNAPSHOT;
 
-interface Subscription {
+type Subscription = {
   onChange: () => void;
-}
+};
 const subscriptions = new Set<Subscription>();
 
 let subscriberCount = 0;
@@ -83,14 +80,15 @@ function publish(next: ComfyQueueView): void {
     return;
   }
   snapshot = next;
-  for (const subscription of subscriptions) subscription.onChange();
+  for (const subscription of subscriptions) {
+    subscription.onChange();
+  }
 }
 
-function sameRunning(
-  a: ComfyRunningTask | null,
-  b: ComfyRunningTask | null,
-): boolean {
-  if (a === null || b === null) return a === b;
+function sameRunning(a: ComfyRunningTask | null, b: ComfyRunningTask | null): boolean {
+  if (a === null || b === null) {
+    return a === b;
+  }
   return (
     a.taskId === b.taskId &&
     a.startedAt === b.startedAt &&
@@ -106,14 +104,15 @@ function numberOr(value: unknown, fallback: number): number {
 }
 
 function parseRunning(value: unknown): ComfyRunningTask | null {
-  if (!isRecord(value)) return null;
+  if (!isRecord(value)) {
+    return null;
+  }
   if (typeof value.taskId !== "string" || typeof value.startedAt !== "number") {
     return null;
   }
   return {
     taskId: value.taskId,
-    workflowName:
-      typeof value.workflowName === "string" ? value.workflowName : null,
+    workflowName: typeof value.workflowName === "string" ? value.workflowName : null,
     model: typeof value.model === "string" ? value.model : null,
     startedAt: value.startedAt,
     progress: numberOr(value.progress, 0),
@@ -122,7 +121,9 @@ function parseRunning(value: unknown): ComfyRunningTask | null {
 }
 
 function parseStatus(data: unknown): ComfyQueueStatus {
-  if (!isRecord(data)) return EMPTY;
+  if (!isRecord(data)) {
+    return EMPTY;
+  }
   const comfy = isRecord(data.comfy) ? data.comfy : {};
   return {
     online: data.online === true,
@@ -136,7 +137,9 @@ function parseStatus(data: unknown): ComfyQueueStatus {
 }
 
 function elapsedFor(running: ComfyRunningTask | null): number | null {
-  if (running === null) return null;
+  if (running === null) {
+    return null;
+  }
   return Math.max(0, Date.now() - running.startedAt);
 }
 
@@ -151,10 +154,16 @@ async function pollOnce(): Promise<void> {
       cache: "no-store",
       signal: AbortSignal.timeout(2500),
     });
-    if (myRequest !== requestId) return; // 已有更新的请求在跑，丢弃本次迟到回包
-    if (!res.ok) return;
+    if (myRequest !== requestId) {
+      return;
+    } // 已有更新的请求在跑，丢弃本次迟到回包
+    if (!res.ok) {
+      return;
+    }
     const data: unknown = await res.json();
-    if (myRequest !== requestId) return;
+    if (myRequest !== requestId) {
+      return;
+    }
     const parsed = parseStatus(data);
     if (parsed.online) {
       observeOnline(true);
@@ -183,7 +192,9 @@ async function pollOnce(): Promise<void> {
 
 /* 本地秒表：只让「已运行」连续（不发请求），每秒刷一次 elapsedMs。 */
 function tickElapsed(): void {
-  if (snapshot.running === null) return;
+  if (snapshot.running === null) {
+    return;
+  }
   const elapsed = elapsedFor(snapshot.running);
   if (elapsed !== snapshot.elapsedMs) {
     publish({ ...snapshot, elapsedMs: elapsed });
@@ -194,7 +205,9 @@ function tickElapsed(): void {
  * 拉取（refreshComfyQueue）。EventSource 自带断线重连；只在主动退订时关。非浏览器
  * 环境（jsdom 单测）没有 EventSource，跳过——此时只剩兜底轮询。 */
 function subscribeComfyQueueEvents(onChange: () => void): () => void {
-  if (typeof EventSource === "undefined") return () => undefined;
+  if (typeof EventSource === "undefined") {
+    return () => undefined;
+  }
   const es = new EventSource("/api/comfy/queue/events");
   es.onmessage = () => onChange();
   return () => {
@@ -203,7 +216,9 @@ function subscribeComfyQueueEvents(onChange: () => void): () => void {
 }
 
 function ensurePolling(): void {
-  if (stopPolling !== null) return;
+  if (stopPolling !== null) {
+    return;
+  }
   // 慢速兜底轮询：事件通道掉线 / 还没连上时的安全网（事件为主、轮询兜底）。
   stopPolling = startPollTimer(pollOnce, {
     ms: COMFY_QUEUE_FALLBACK_MS,
@@ -246,7 +261,9 @@ export function subscribeComfyQueue(onChange: () => void): () => void {
   return () => {
     subscriptions.delete(subscription);
     subscriberCount -= 1;
-    if (subscriberCount === 0) stopAll();
+    if (subscriberCount === 0) {
+      stopAll();
+    }
   };
 }
 

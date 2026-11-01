@@ -42,12 +42,15 @@ const SYNC_FS_CALL =
   /\b(?:stat|lstat|readdir|readFile|writeFile|appendFile|open|close|exists|mkdir|rm|unlink|rename|copyFile|chmod|symlink|realpath|access|watch)Sync\s*\(/g;
 
 /** 目录下所有 `route.ts`（不含同目录的 `route.test.ts`）。 */
-function routeFiles(dir: string): string[] {
-  const out: string[] = [];
+function routeFiles(dir: string): Array<string> {
+  const out: Array<string> = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...routeFiles(full));
-    else if (entry.isFile() && entry.name === "route.ts") out.push(full);
+    if (entry.isDirectory()) {
+      out.push(...routeFiles(full));
+    } else if (entry.isFile() && entry.name === "route.ts") {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -63,7 +66,7 @@ describe("日志路由不许用同步 fs IO（ISSUE #2193）", () => {
   });
 
   it("每份 route 去掉注释后都不含同步 fs 调用", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const file of files) {
       const code = stripComments(fs.readFileSync(file, "utf8"));
       const hits = code.match(SYNC_FS_CALL) ?? [];
@@ -83,9 +86,7 @@ describe("日志路由不许用同步 fs IO（ISSUE #2193）", () => {
   });
 
   it("负控制：这段文本里的 statSync 真的会被抓到（判据不是恒过）", () => {
-    const sample = stripComments(
-      "const n = fs.statSync(f).size;\n// 注释里的 readFileSync 不算\n",
-    );
+    const sample = stripComments("const n = fs.statSync(f).size;\n// 注释里的 readFileSync 不算\n");
     expect(sample.match(SYNC_FS_CALL) ?? []).toContain("statSync(");
   });
 

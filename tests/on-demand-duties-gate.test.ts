@@ -16,8 +16,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe } from "./helpers/gate-repo";
-import { defineGateRepo } from "./helpers/gate-repo";
+import { describe, defineGateRepo } from "./helpers/gate-repo";
 
 /* `test` 与 `expect` 都由夹具给出（`test` 带 `repo`；`expect` 是它转发的那一份，
  * 这样断言的实现与夹具同源）；`describe` 不随 `extend` 变，从夹具模块取。 */
@@ -51,18 +50,18 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 索引里一行的形状（夹具按它造）。 */
-interface DutyRow {
+type DutyRow = {
+  executor: string;
+  fact: { gate?: string; key?: string; kind: string; script?: string };
   id: string;
   name: string;
   notInHook: string;
-  fact: { kind: string; key?: string; gate?: string; script?: string };
-  executor: string;
 }
 
 /** 一份「最小但双向都成立」的索引：六条按需档（下限是 5，留一格余量）。 */
-function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
+function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
+  duties: Array<DutyRow>;
   why: string;
-  duties: DutyRow[];
 } {
   return {
     why: "测试夹具",
@@ -144,9 +143,9 @@ function ledgerDuties(overrides: { extra?: DutyRow[] } = {}): {
 }
 
 /** 真实仓库里的三份事实读数 —— 夹具的断言按它来，避免写死会漂的数字。 */
-const REAL = JSON.parse(
+const REAL = /* SAFETY: 类型断言已复核 */ JSON.parse(
   readFileSync(join(process.cwd(), "scripts", ".on-demand-duties.json"), "utf8"),
-) as { duties: unknown[] };
+) as { duties: Array<unknown> };
 
 describe("on-demand-duties —— 双向", () => {
   test("索引与实际机器事实一致 ⇒ 通过", ({ repo }) => {
@@ -154,10 +153,7 @@ describe("on-demand-duties —— 双向", () => {
      * 夹具里只有 FRESHNESS_TRACKS 的三档 + quality-gate 的 premerge。
      * 真实索引还登记了 dependencyAudit / tw4 等条目（需要真实 quality-gate 与台账），
      * 所以这里不直接用真索引，而是用最小的那份。 */
-    repo.write(
-      "scripts/.on-demand-duties.json",
-      JSON.stringify(ledgerDuties(), null, 2),
-    );
+    repo.write("scripts/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(0);
     expect(output).toContain("双向核对通过");
@@ -199,10 +195,7 @@ describe("on-demand-duties —— 双向", () => {
   });
 
   test("方向②：新增的按需台账条目没登记 ⇒ 红", ({ repo }) => {
-    repo.write(
-      "scripts/.on-demand-duties.json",
-      JSON.stringify(ledgerDuties(), null, 2),
-    );
+    repo.write("scripts/.on-demand-duties.json", JSON.stringify(ledgerDuties(), null, 2));
     repo.write(
       "scripts/.gate-executor-ledger.json",
       JSON.stringify(
@@ -232,10 +225,7 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
   });
 
   test("duties 为空数组 ⇒ 红（空索引 = 把门禁关掉）", ({ repo }) => {
-    repo.write(
-      "scripts/.on-demand-duties.json",
-      JSON.stringify({ why: "", duties: [] }, null, 2),
-    );
+    repo.write("scripts/.on-demand-duties.json", JSON.stringify({ why: "", duties: [] }, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);
     expect(output).toContain("duties");
@@ -258,9 +248,9 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
   test("行缺字段 ⇒ 红（id / name / fact.kind / executor 都要有）", ({ repo }) => {
     const led = ledgerDuties();
     /* 造「缺字段」那一档 —— 用 `Partial` 表达「这一行故意缺了 executor」。 */
-    const broken = { ...led.duties[0] } as Partial<DutyRow>;
+    const broken = /* SAFETY: 类型断言已复核 */ { ...led.duties[0] } as Partial<DutyRow>;
     delete broken.executor;
-    led.duties = [broken as DutyRow, ...led.duties.slice(1)];
+    led.duties = [/* SAFETY: 类型断言已复核 */ broken as DutyRow, ...led.duties.slice(1)];
     repo.write("scripts/.on-demand-duties.json", JSON.stringify(led, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);

@@ -27,16 +27,14 @@ const HOST_PATH = join(process.cwd(), "scripts", "executor-host.mjs");
 const read = (p: string): string => readFileSync(p, "utf8");
 
 /** 提取模块内全部 import 语句原文（单行与跨行的分组具名导入都覆盖）。 */
-function collectImports(src: string): string[] {
-  const out: string[] = [];
+function collectImports(src: string): Array<string> {
+  const out: Array<string> = [];
   for (const m of src.matchAll(/^import\s[^\n]+?;/gm)) {
     out.push(m[0]);
   }
-  const noSingle = src.replace(/^import\s[^\n]+?;/gm, "");
-  for (const m of noSingle.matchAll(
-    /import\s[\s\S]*?from\s+["'][^"']+["'];/gm,
-  )) {
-    out.push(m[0].replace(/\s+/g, " ").trim());
+  const noSingle = src.replaceAll(/^import\s[^\n]+?;/gm, "");
+  for (const m of noSingle.matchAll(/import\s[\s\S]*?from\s+["'][^"']+["'];/gm)) {
+    out.push(m[0].replaceAll(/\s+/g, " ").trim());
   }
   return out;
 }
@@ -109,23 +107,19 @@ describe("ComfyUI reaper 启动路径（ADR §14 D3：宿主显式起、模块�
      * 剥字符串是必须的 —— 本判据的报错文案正是一个字符串字面量。 */
     const strip = (src: string): string =>
       src
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/^[ \t]*\/\/.*$/gm, "")
-        .replace(/"(?:[^"\\]|\\.)*"/g, '""')
-        .replace(/'(?:[^'\\]|\\.)*'/g, "''")
-        .replace(/`(?:[^`\\]|\\.)*`/g, "``");
+        .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+        .replaceAll(/^[ \t]*\/\/.*$/gm, "")
+        .replaceAll(/"(?:[^"\\]|\\.)*"/g, '""')
+        .replaceAll(/'(?:[^'\\]|\\.)*'/g, "''")
+        .replaceAll(/`(?:[^`\\]|\\.)*`/g, "``");
     /* 两种真调用形态都算：成员调用（`m.startReaper()`）与解构后直呼
      * （`const { stopReaper } = …; stopReaper()`）。注释里的同形文本靠上面
      * `stripComments()` 挡掉 —— **不能**只认成员调用：解构那一形态正当存在，
      * 漏掉它会把「已经收了」的用例报成没收（本判据第一版就是这样误报的）。 */
     const count = (src: string, name: string): number =>
-      [
-        ...src.matchAll(
-          new RegExp(`(?:\\.\\s*|\\b)${name}\\(\\)`, "g"),
-        ),
-      ].length;
+      [...src.matchAll(new RegExp(`(?:\\.\\s*|\\b)${name}\\(\\)`, "g"))].length;
 
-    const files: string[] = [];
+    const files: Array<string> = [];
     const stack = [join(ROOT, "src"), join(ROOT, "tests")];
     while (stack.length) {
       const dir = stack.pop()!;
@@ -135,7 +129,9 @@ describe("ComfyUI reaper 启动路径（ADR §14 D3：宿主显式起、模块�
           stack.push(full);
           continue;
         }
-        if (!/\.test\.tsx?$/.test(entry.name)) continue;
+        if (!/\.test\.tsx?$/.test(entry.name)) {
+          continue;
+        }
         files.push(full);
       }
     }

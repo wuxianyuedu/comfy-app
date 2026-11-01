@@ -41,12 +41,9 @@ const Z_TOAST = zClass("toast");
 type StoryArgs = { zClass: string };
 
 /** 适配件：`zClass` 进 Args，正文由各 story 的 `render` 给。 */
-function LayerSample({
-  zClass: z,
-  children,
-}: StoryArgs & { children?: React.ReactNode }) {
+function LayerSample({ zClass: z, children }: StoryArgs & { children?: React.ReactNode }) {
   return (
-    <FullScreenLayer zClass={z} className="bg-bg flex flex-col">
+    <FullScreenLayer className="bg-bg flex flex-col" zClass={z}>
       {children}
     </FullScreenLayer>
   );
@@ -82,8 +79,8 @@ function ChromeFrame({
   showStatusBar = false,
   children,
 }: {
-  showStatusBar?: boolean;
   children: React.ReactNode;
+  showStatusBar?: boolean;
 }) {
   return (
     <div className="bg-canvas-deep border-border-strong relative h-104 w-full overflow-hidden rounded-xl border">
@@ -91,15 +88,11 @@ function ChromeFrame({
       <div
         className={`bg-canvas border-border h-title-bar absolute inset-x-0 top-0 flex items-center gap-2 border-b px-3 ${Z_CHROME}`}
       >
-        <span className="text-ink-soft text-[11px]">
-          标题行（页签栏 · z-chrome）
-        </span>
+        <span className="text-ink-soft text-[11px]">标题行（页签栏 · z-chrome）</span>
         <span className="bg-primary text-primary-foreground rounded px-2 py-0.5 text-[11px]">
           画布
         </span>
-        <span className="text-ink-faint rounded px-2 py-0.5 text-[11px]">
-          工坊
-        </span>
+        <span className="text-ink-faint rounded px-2 py-0.5 text-[11px]">工坊</span>
         <span className="text-ink-faint ml-auto font-mono text-[10px]">
           {String(TITLE_BAR_PX)}px = 2.25rem × 16px
         </span>
@@ -134,23 +127,19 @@ function InContainer({
   a11y,
   children,
 }: {
-  zClass: string;
-  chrome?: "title" | "title+status";
   a11y?: {
-    role?: string;
-    "aria-modal"?: boolean;
     "aria-label"?: string;
+    "aria-modal"?: boolean;
+    role?: string;
   };
   children: React.ReactNode;
+  chrome?: "title" | "title+status";
+  zClass: string;
 }) {
   return (
     <ChromeFrame showStatusBar={chrome === "title+status"}>
       <div className="absolute inset-0">
-        <FullScreenLayer
-          zClass={z}
-          className="bg-bg absolute flex flex-col"
-          {...a11y}
-        >
+        <FullScreenLayer className="bg-bg absolute flex flex-col" zClass={z} {...a11y}>
           {children}
         </FullScreenLayer>
       </div>
@@ -173,12 +162,12 @@ export const Default: Story = {
 export const MaskedPanel: Story = {
   render: (args) => (
     <InContainer
-      zClass={args.zClass}
       a11y={{
         role: "dialog",
         "aria-modal": true,
         "aria-label": "系统消息中心",
       }}
+      zClass={args.zClass}
     >
       <div className="text-ink-soft flex flex-1 items-center justify-center text-xs">
         遮罩式全屏面板（读屏器播报 aria-label）
@@ -197,7 +186,7 @@ export const MaskedPanel: Story = {
  */
 export const StatusBarOverlap: Story = {
   render: (args) => (
-    <InContainer zClass={args.zClass} chrome="title+status">
+    <InContainer chrome="title+status" zClass={args.zClass}>
       <div className="text-ink-soft flex flex-1 items-center justify-center text-xs">
         内容铺到 bottom-0 —— 最后 24px 被状态栏压住
       </div>

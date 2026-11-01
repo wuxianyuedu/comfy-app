@@ -39,17 +39,13 @@ export const Default: Story = {
       <AccordionItem value="a">
         <AccordionTrigger>输出设置</AccordionTrigger>
         <AccordionContent>
-          <p className="text-ink-muted">
-            默认 1024×1024，节点上的同名字段以节点为准。
-          </p>
+          <p className="text-ink-muted">默认 1024×1024，节点上的同名字段以节点为准。</p>
         </AccordionContent>
       </AccordionItem>
       <AccordionItem value="b">
         <AccordionTrigger>采样设置</AccordionTrigger>
         <AccordionContent>
-          <p className="text-ink-muted">
-            dpmpp_2m + karras，24 步；这一组由工作流模板给出。
-          </p>
+          <p className="text-ink-muted">dpmpp_2m + karras，24 步；这一组由工作流模板给出。</p>
         </AccordionContent>
       </AccordionItem>
       <AccordionItem value="c">
@@ -66,7 +62,7 @@ export const Default: Story = {
  *  但并排看才知道「一组里能同时开几个」是本件的一个开关。 */
 export const MultipleOpen: Story = {
   render: () => (
-    <Accordion className="w-lg" multiple defaultValue={["a", "c"]}>
+    <Accordion className="w-lg" defaultValue={["a", "c"]} multiple>
       <AccordionItem value="a">
         <AccordionTrigger>输出设置</AccordionTrigger>
         <AccordionContent>
@@ -98,7 +94,7 @@ export const WithDisabled: Story = {
         <AccordionTrigger>可用</AccordionTrigger>
         <AccordionContent>这一节能展开。</AccordionContent>
       </AccordionItem>
-      <AccordionItem value="b" disabled>
+      <AccordionItem disabled value="b">
         <AccordionTrigger>运行时不可改（禁用）</AccordionTrigger>
         <AccordionContent>按理看不到这段。</AccordionContent>
       </AccordionItem>
@@ -111,13 +107,11 @@ export const WithDisabled: Story = {
  *  但**点开时的高度过渡**就是这条；两态并存可对照收起后的高度为 0。 */
 export const AnimatedContent: Story = {
   render: () => (
-    <Accordion className="w-lg" multiple defaultValue={["a"]}>
+    <Accordion className="w-lg" defaultValue={["a"]} multiple>
       <AccordionItem value="a">
         <AccordionTrigger>展开态（有内容高度）</AccordionTrigger>
         <AccordionContent>
-          <p className="text-ink-muted">
-            展开靠 `h-(--accordion-panel-height)`；收起时是 `h-0`。
-          </p>
+          <p className="text-ink-muted">展开靠 `h-(--accordion-panel-height)`；收起时是 `h-0`。</p>
         </AccordionContent>
       </AccordionItem>
       <AccordionItem value="b">

@@ -128,13 +128,7 @@ export function sameVolumeAs(a, b) {
  * @returns {{action: string, path: string | null, why: string}}
  */
 export function planSlot(input) {
-  const {
-    cacheRoot,
-    key,
-    slotPresent = false,
-    slotFingerprint = null,
-    sameVolume = true,
-  } = input;
+  const { cacheRoot, key, slotPresent = false, slotFingerprint = null, sameVolume = true } = input;
   if (!cacheRoot) {
     return {
       action: "no-cache",
@@ -248,8 +242,7 @@ function cacheRootFacts(io) {
   let name = "repo";
   try {
     name = String(
-      JSON.parse(fs.readFileSync(path.join(io.cwd, "package.json"), "utf8"))
-        .name ?? "repo",
+      JSON.parse(fs.readFileSync(path.join(io.cwd, "package.json"), "utf8")).name ?? "repo",
     ).toLowerCase();
   } catch {
     /* 读不到包名就用一个中性目录名 —— 它只用于区分同机上的不同仓库。 */
@@ -269,8 +262,12 @@ function cacheRootFacts(io) {
  */
 export function resolveCacheRoot(io) {
   const facts = cacheRootFacts(io);
-  if (facts.explicit) return { root: facts.explicit, from: facts.from };
-  if (!facts.volumeRoot) return { root: null, from: facts.from };
+  if (facts.explicit) {
+    return { root: facts.explicit, from: facts.from };
+  }
+  if (!facts.volumeRoot) {
+    return { root: null, from: facts.from };
+  }
   return {
     root: path.join(facts.volumeRoot, "ci-cache", facts.name),
     from: facts.from,
@@ -301,7 +298,9 @@ export function resolveBuildCacheRoot(io) {
       from: `${facts.from}（该变量只覆盖依赖面那套槽，构建缓存槽不跟着它走）`,
     };
   }
-  if (!facts.volumeRoot) return { root: null, from: facts.from };
+  if (!facts.volumeRoot) {
+    return { root: null, from: facts.from };
+  }
   return {
     root: path.join(facts.volumeRoot, "ci-build-cache", facts.name),
     from: facts.from,
@@ -325,7 +324,9 @@ export function resolveBuildCacheRoot(io) {
  */
 export function resolveArtifactRoot(io) {
   const explicit = String(io.env?.[ARTIFACT_ROOT_ENV] ?? "").trim();
-  if (explicit) return { root: explicit, from: `环境变量 ${ARTIFACT_ROOT_ENV}` };
+  if (explicit) {
+    return { root: explicit, from: `环境变量 ${ARTIFACT_ROOT_ENV}` };
+  }
   const facts = cacheRootFacts(io);
   if (facts.explicit) {
     return {
@@ -333,7 +334,9 @@ export function resolveArtifactRoot(io) {
       from: `${facts.from}（该变量只覆盖依赖面那套槽，成品目录不跟着它走）`,
     };
   }
-  if (!facts.volumeRoot) return { root: null, from: facts.from };
+  if (!facts.volumeRoot) {
+    return { root: null, from: facts.from };
+  }
   return {
     root: path.join(facts.volumeRoot, "ci-artifacts", facts.name),
     from: facts.from,
@@ -355,7 +358,9 @@ export function resolveArtifactRoot(io) {
  */
 export function resolveToolRoot(io) {
   const explicit = String(io.env?.[TOOLS_ROOT_ENV] ?? "").trim();
-  if (explicit) return { root: explicit, from: `环境变量 ${TOOLS_ROOT_ENV}` };
+  if (explicit) {
+    return { root: explicit, from: `环境变量 ${TOOLS_ROOT_ENV}` };
+  }
   const facts = cacheRootFacts(io);
   if (facts.explicit) {
     return {
@@ -363,7 +368,9 @@ export function resolveToolRoot(io) {
       from: `${facts.from}（该变量只覆盖依赖面那套槽，工具镜像不跟着它走）`,
     };
   }
-  if (!facts.volumeRoot) return { root: null, from: facts.from };
+  if (!facts.volumeRoot) {
+    return { root: null, from: facts.from };
+  }
   return {
     root: path.join(facts.volumeRoot, "ci-tools", facts.name),
     from: facts.from,
@@ -377,9 +384,13 @@ export function resolveToolRoot(io) {
  * @returns {{slotPresent: boolean, slotFingerprint: string | null}}
  */
 function readSlot(slot, cwd) {
-  if (!slot) return { slotPresent: false, slotFingerprint: null };
+  if (!slot) {
+    return { slotPresent: false, slotFingerprint: null };
+  }
   const abs = path.resolve(cwd, slot);
-  if (!fs.existsSync(abs)) return { slotPresent: false, slotFingerprint: null };
+  if (!fs.existsSync(abs)) {
+    return { slotPresent: false, slotFingerprint: null };
+  }
   let fp;
   try {
     fp = fs.readFileSync(path.join(abs, FINGERPRINT_FILE), "utf8").trim();
@@ -403,9 +414,7 @@ function readSlot(slot, cwd) {
  */
 export function slotLastUsed(slot) {
   try {
-    const n = Number(
-      fs.readFileSync(path.join(slot, SLOT_USED_FILE), "utf8").trim(),
-    );
+    const n = Number(fs.readFileSync(path.join(slot, SLOT_USED_FILE), "utf8").trim());
     return Number.isFinite(n) ? n : null;
   } catch {
     return null;
@@ -432,7 +441,9 @@ export function readSlotState(slot) {
   } catch {
     /* `existsSync` 自己不抛；留着是为了形状一致，读不动照样落到下面那一格。 */
   }
-  if (!exists) return { treePresent, fingerprint: null, unreadable: false };
+  if (!exists) {
+    return { treePresent, fingerprint: null, unreadable: false };
+  }
   try {
     return {
       treePresent,
@@ -475,7 +486,9 @@ export function isUselessShell(abs, now, ttlMs, state = readSlotState(abs)) {
     return false;
   }
   try {
-    if (fs.existsSync(path.join(abs, SLOT_LOCK_FILE))) return false;
+    if (fs.existsSync(path.join(abs, SLOT_LOCK_FILE))) {
+      return false;
+    }
   } catch {
     return false;
   }
@@ -565,9 +578,7 @@ export function listSlots(io) {
   /* 与 `pruneSlots` 同口径：当前键先剔出候选、再按 `quota - 1` 切。
    * 只扣预算不剔候选时，当前键最旧的那份盘会被算成「超额」（执行档却永远不删它）——
    * ISSUE #2490。 */
-  const candidates = currentOnDisk
-    ? keys.filter((k) => k.key !== currentKey)
-    : keys;
+  const candidates = currentOnDisk ? keys.filter((k) => k.key !== currentKey) : keys;
   const budget = Math.max(0, quota - (currentKey ? 1 : 0));
   const over = candidates.slice(budget);
   return {
@@ -619,11 +630,7 @@ export function main(io = {}) {
   if (cacheRoot) {
     const slots = listSlots({ cacheRoot, currentKey: key });
     const current =
-      key === null
-        ? "未知"
-        : slots.currentOnDisk
-          ? "已在盘上"
-          : "未落盘（它要占一格）";
+      key === null ? "未知" : slots.currentOnDisk ? "已在盘上" : "未落盘（它要占一格）";
     log(
       `[缓存槽读数] 键数 ${slots.count}（配额 ${slots.quota}）·超配额 ${slots.overQuota} 个` +
         `（其中被 TTL 挡着 ${slots.heldByTtl} 个 ⇒ 它们可能正被人用，这是用空间换正确性；` +
@@ -642,9 +649,6 @@ export function main(io = {}) {
   return 0;
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

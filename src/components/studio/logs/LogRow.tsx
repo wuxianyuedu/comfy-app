@@ -21,10 +21,7 @@ import { Button } from "~/components/ui/button";
 import { Disclosure } from "~/components/ui/disclosure";
 import { Hint } from "~/components/ui/hint";
 import { LazyJsonViewer } from "~/components/ui/lazy-json-viewer";
-import {
-  copyFailureText,
-  useCopyFeedback,
-} from "~/components/ui/use-copy-feedback";
+import { copyFailureText, useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { isCliJsonLine, parseCliJsonLine } from "~/lib/log/log-cli-json";
 import { findLogPathTokens } from "~/lib/log/log-path-tokens";
 import { normalizeNeedle } from "~/lib/list-filter";
@@ -48,27 +45,30 @@ import {
  * 内存由 RENDER_CACHE_MAX 限制（溢出时整体清空）。开发注记：
  * Fast Refresh 会在编辑时重执行本模块，所以规则变化天然
  * 从空缓存开始 —— 无需清理陈旧条目。 */
-const FRAGMENT_CACHE = new Map<string, RowToken[]>();
+const FRAGMENT_CACHE = new Map<string, Array<RowToken>>();
 const FRAGMENT_CACHE_MAX = 5000;
 
 /* 搜索命中 `<mark>` 高亮——琥珀是"荧光笔"的通用视觉语言、不是状态色
  * (warning-strong 会把「搜索到」误读为「警告」)。没有对应的"命中/高亮"
  * 语义 token → §3.6.1 例外块。 */
 // p71-allow:start 搜索命中 `<mark>` 高亮——荧光笔装饰色、非状态语义、无匹配 token
-const SEARCH_HIT_CLASS =
-  "rounded-sm bg-amber-400/30 px-0.5 text-amber-900 dark:text-amber-100";
+const SEARCH_HIT_CLASS = "rounded-sm bg-amber-400/30 px-0.5 text-amber-900 dark:text-amber-100";
 // p71-allow:end
 
-function fragmentsOf(text: string): RowToken[] {
+function fragmentsOf(text: string): Array<RowToken> {
   const hit = FRAGMENT_CACHE.get(text);
-  if (hit) return hit;
+  if (hit) {
+    return hit;
+  }
   const out = rowFragments(text);
-  if (FRAGMENT_CACHE.size >= FRAGMENT_CACHE_MAX) FRAGMENT_CACHE.clear();
+  if (FRAGMENT_CACHE.size >= FRAGMENT_CACHE_MAX) {
+    FRAGMENT_CACHE.clear();
+  }
   FRAGMENT_CACHE.set(text, out);
   return out;
 }
 
-function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
+function HighlightedText({ text, keyword }: { keyword: string; text: string }) {
   const fragments = fragmentsOf(text);
   /* 归一化走 `~/lib/list-filter`（规范 16 §16.2.4.16）：它与 `matchesSearch`
    * 必须同一口径 —— 命中判据折了小写而高亮没折，会出现「行被选中但字没高亮」。 */
@@ -76,11 +76,9 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
   return (
     <>
       {fragments.map((fragment, index) => {
-        const className = fragment.style
-          ? TOKEN_CLASS[fragment.style]
-          : undefined;
+        const className = fragment.style ? TOKEN_CLASS[fragment.style] : undefined;
         return (
-          <span key={index} className={className}>
+          <span className={className} key={index}>
             {highlightNeedle(fragment.text, needle)}
           </span>
         );
@@ -91,20 +89,20 @@ function HighlightedText({ text, keyword }: { text: string; keyword: string }) {
 
 /** 把一段文本按命中关键字切成 `<mark>` 与普通文本两种片段。 */
 function highlightNeedle(text: string, needle: string): React.ReactNode {
-  if (!needle) return <PathLinkedText text={text} />;
+  if (!needle) {
+    return <PathLinkedText text={text} />;
+  }
   const lower = text.toLowerCase();
-  const parts: React.ReactNode[] = [];
+  const parts: Array<React.ReactNode> = [];
   let cursor = 0;
   let at = lower.indexOf(needle);
   let key = 0;
   while (at !== -1) {
     if (at > cursor) {
-      parts.push(
-        <PathLinkedText key={`t${key}`} text={text.slice(cursor, at)} />,
-      );
+      parts.push(<PathLinkedText key={`t${key}`} text={text.slice(cursor, at)} />);
     }
     parts.push(
-      <mark key={`m${key}`} className={SEARCH_HIT_CLASS}>
+      <mark className={SEARCH_HIT_CLASS} key={`m${key}`}>
         <PathLinkedText text={text.slice(at, at + needle.length)} />
       </mark>,
     );
@@ -144,11 +142,15 @@ function highlightNeedle(text: string, needle: string): React.ReactNode {
  */
 function PathLinkedText({ text }: { text: string }): React.ReactNode {
   const tokens = findLogPathTokens(text);
-  if (tokens.length === 0) return text;
-  const parts: React.ReactNode[] = [];
+  if (tokens.length === 0) {
+    return text;
+  }
+  const parts: Array<React.ReactNode> = [];
   let cursor = 0;
   for (const [index, token] of tokens.entries()) {
-    if (token.start > cursor) parts.push(text.slice(cursor, token.start));
+    if (token.start > cursor) {
+      parts.push(text.slice(cursor, token.start));
+    }
     parts.push(
       <RevealPathButton key={`p${index}`} path={token.text}>
         {token.text}
@@ -156,7 +158,9 @@ function PathLinkedText({ text }: { text: string }): React.ReactNode {
     );
     cursor = token.end;
   }
-  if (cursor < text.length) parts.push(text.slice(cursor));
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
   return parts;
 }
 
@@ -171,20 +175,16 @@ function PathLinkedText({ text }: { text: string }): React.ReactNode {
  * 放常驻说明，而「点了有反应」这件事必须在**点的那一处**看得出来。失败的原因
  * （服务端给的那句）进 `title`，鼠标停一下就能看到。
  */
-function RevealPathButton({
-  path,
-  children,
-}: {
-  path: string;
-  children: React.ReactNode;
-}) {
+function RevealPathButton({ path, children }: { children: React.ReactNode; path: string }) {
   /* 回执与成功态**必须同生共死**：两个独立定时器在时长一改就会漂移，留下
    * 「已定位」还在、绿色已经消失的自相矛盾画面（与 `SaveExportButton` 同款）。 */
   const hint = useFlashState(1200);
   const feedback = useRevealLogPath(() => hint.flash());
 
   const onReveal = () => {
-    if (feedback.busy) return;
+    if (feedback.busy) {
+      return;
+    }
     feedback.reveal(path);
   };
 
@@ -210,12 +210,12 @@ function RevealPathButton({
   return (
     <Hint label={hintLabel}>
       <Button
-        type="button"
-        onClick={onReveal}
+        aria-label={`在文件管理器里定位 ${path}`}
         /* 悬停/聚焦都给一点底色：日志行本身就是可滚动的密集文本，只有下划线时
          * 「这一段能不能点」在长行里读不出来。 */
         className={`hover:bg-subtle focus-visible:bg-subtle h-auto cursor-pointer rounded-sm px-0.5 py-0 leading-snug underline decoration-dotted underline-offset-2 ${tone}`}
-        aria-label={`在文件管理器里定位 ${path}`}
+        onClick={onReveal}
+        type="button"
       >
         {children}
         {hint.on ? (
@@ -279,11 +279,7 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
       }
     >
       <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={() => void onCopy()}
         aria-label="复制本条日志"
-        data-log-copy=""
         /* 悬停/聚焦才显形：日志是「长时间盯着看」的界面，一个常在的按钮列会
          * 在每行末尾多出一块常驻色块，把正文的右边界切碎。键盘 Tab 聚焦时同样
          * 显形（`focus-visible`），不然纯键盘用户点不到它。 */
@@ -298,6 +294,10 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
               ? "text-danger-strong"
               : "text-ink-muted"
         }`}
+        data-log-copy=""
+        onClick={() => void onCopy()}
+        size="icon-xs"
+        variant="ghost"
       >
         {outcome === "idle" ? (
           <Copy data-icon="inline-start" size={13} />
@@ -335,13 +335,13 @@ export const LogRow = memo(function LogRow({
   style,
 }: {
   entry: LogEntry;
-  wrap: boolean;
-  keyword: string;
   /** 该行是否处于展开态（只对可展开的原始输出行有意义）。 */
   expanded: boolean;
+  keyword: string;
   /** 点标题行折叠 / 展开（`Disclosure` 的受控回调）；回调带 id 以便面板方用稳定引用。 */
   onToggleExpand: (id: string) => void;
   style: React.CSSProperties;
+  wrap: boolean;
 }) {
   /* 文件路径那枚的复制：**显式静默**失败 —— 整条路径就印在按钮上，
    * 旁边没有第二处可说的地方，而弹 toast 会盖住正在看的日志。 */
@@ -358,8 +358,8 @@ export const LogRow = memo(function LogRow({
   const location = entry.location;
   const timeNode = (
     <time
-      dateTime={new Date(entry.time).toISOString()}
       className="text-ink-muted shrink-0 tabular-nums"
+      dateTime={new Date(entry.time).toISOString()}
     >
       {formatTime(entry.time)}
     </time>
@@ -377,9 +377,9 @@ export const LogRow = memo(function LogRow({
     ? expanded
       ? "点击收起完整输出"
       : "点击展开完整 JSON"
-    : !wrap
-      ? entry.message
-      : undefined;
+    : wrap
+      ? undefined
+      : entry.message;
   const messageNode = (
     <span
       /* 选区判定的落点：面板贴底前要知道「用户框选的是不是日志正文」，
@@ -390,7 +390,7 @@ export const LogRow = memo(function LogRow({
       } ${LEVEL_TEXT_STYLES[entry.level]}`}
       title={messageTitle}
     >
-      <HighlightedText text={entry.message} keyword={keyword} />
+      <HighlightedText keyword={keyword} text={entry.message} />
     </span>
   );
   /* 位置分两态（ISSUE #1703）：`src/…:123` 是可点开的业务位置；`pkg → fn` 是
@@ -408,9 +408,9 @@ export const LogRow = memo(function LogRow({
   const locationNode = location ? (
     <Hint label={locationHint}>
       <Button
-        variant="ghost"
-        onClick={() => copyLocation(location)}
         className="text-ink-fainter hover:text-ink-soft text-2xs h-auto max-w-[28%] shrink-0 cursor-pointer truncate rounded-none p-0 text-right font-normal whitespace-nowrap"
+        onClick={() => copyLocation(location)}
+        variant="ghost"
       >
         {location}
       </Button>
@@ -418,9 +418,9 @@ export const LogRow = memo(function LogRow({
   ) : null;
   const sourceNode = entry.origin ? (
     <span className="text-ink-fainter text-2xs shrink-0">{entry.origin}</span>
-  ) : entry.source !== "console" ? (
+  ) : entry.source === "console" ? null : (
     <span className="text-ink-fainter text-2xs shrink-0">{entry.source}</span>
-  ) : null;
+  );
   /* 复制按钮永远在**最后一列**：它是行的终点，位置固定用户才找得到；
      `self-center` 让它在多行（换行显示）的行里也贴住垂直中线。 */
   const copyNode = <RowCopyButton entry={entry} />;
@@ -428,8 +428,8 @@ export const LogRow = memo(function LogRow({
   if (!expandable) {
     return (
       <div
-        style={style}
         className="border-border-subtle hover:bg-subtle/60 group flex items-start gap-2.5 overflow-hidden border-b px-4 py-1 font-mono text-sm leading-snug"
+        style={style}
       >
         {timeNode}
         {levelNode}
@@ -446,24 +446,26 @@ export const LogRow = memo(function LogRow({
    * `gap`（不要行间距，否则标题行 + 面板会超出 `LOG_ROW_EXPANDED` 而被裁掉）。 */
   return (
     <div
-      style={style}
       className="border-border-subtle hover:bg-subtle/60 group overflow-hidden border-b font-mono text-sm leading-snug"
+      style={style}
     >
       <Disclosure
-        open={expanded}
-        onOpenChange={(next) => {
-          if (next !== expanded) onToggleExpand(entry.id);
-        }}
-        marker="chevron"
-        rootClassName="flex flex-wrap items-start gap-x-2.5 px-4 py-1"
         className="w-auto min-w-0 flex-1"
-        panelClassName="basis-full"
         leading={
           <>
             {timeNode}
             {levelNode}
           </>
         }
+        marker="chevron"
+        onOpenChange={(next) => {
+          if (next !== expanded) {
+            onToggleExpand(entry.id);
+          }
+        }}
+        open={expanded}
+        panelClassName="basis-full"
+        rootClassName="flex flex-wrap items-start gap-x-2.5 px-4 py-1"
         trailing={
           <>
             {locationNode}
@@ -474,14 +476,11 @@ export const LogRow = memo(function LogRow({
         trigger={messageNode}
       >
         {expanded && cliJson ? (
-          <div
-            className="min-h-0"
-            style={{ height: LOG_ROW_EXPANDED - LOG_ROW_SINGLE }}
-          >
+          <div className="min-h-0" style={{ height: LOG_ROW_EXPANDED - LOG_ROW_SINGLE }}>
             <LazyJsonViewer
               data={cliJson.value}
-              title={`comfy-cli ${cliJson.tag}`}
               initialCollapsedDepth={2}
+              title={`comfy-cli ${cliJson.tag}`}
             />
           </div>
         ) : null}

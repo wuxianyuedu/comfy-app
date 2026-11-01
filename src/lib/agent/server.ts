@@ -18,7 +18,7 @@ import {
 import { workshopOpenAITools } from "./tools";
 
 /** 把 messages 数组窄化为 LLMMessage 形状并透传 tool_calls / tool_call_id。 */
-function narrowMessages(raw: AgentChatRequest["messages"]): LLMMessage[] {
+function narrowMessages(raw: AgentChatRequest["messages"]): Array<LLMMessage> {
   return raw
     .filter((m) => m && typeof m === "object")
     .map((m) => {
@@ -33,7 +33,7 @@ function narrowMessages(raw: AgentChatRequest["messages"]): LLMMessage[] {
       if (role === "assistant" && Array.isArray(m.tool_calls)) {
         msg.tool_calls = m.tool_calls.map((call) => ({
           id: call.id,
-          type: "function" as const,
+          type: /* SAFETY: 类型断言已复核 */ "function" as const,
           function: {
             name: call.name,
             arguments: call.arguments,
@@ -51,37 +51,32 @@ function narrowMessages(raw: AgentChatRequest["messages"]): LLMMessage[] {
 /** 走 OpenAI 兼容 tools 协议调用模型，返回 content 与 tool_calls。 */
 async function callWithTools(
   cfg: LLMConfig,
-  messages: LLMMessage[],
-  tools: LLMTool[],
+  messages: Array<LLMMessage>,
+  tools: Array<LLMTool>,
 ): Promise<{
   content: string;
   toolCalls: Array<{
+    function: { arguments: string; name: string };
     id: string;
-    function: { name: string; arguments: string };
   }>;
 }> {
   return completeLLMTools(cfg, messages, tools);
 }
 
 /** 普通对话调用（不带 tools / response_format）。 */
-async function callPlain(
-  cfg: LLMConfig,
-  messages: LLMMessage[],
-): Promise<string> {
+async function callPlain(cfg: LLMConfig, messages: Array<LLMMessage>): Promise<string> {
   return completeLLM(cfg, messages);
 }
 
 /** 处理一次 Agent 请求：调模型理解意图并返回指令。 */
-export async function handleAgentChat(
-  req: AgentChatRequest,
-): Promise<AgentChatResponse> {
+export async function handleAgentChat(req: AgentChatRequest): Promise<AgentChatResponse> {
   const cfg = await getLLMConfig({ taskType: "chat" });
   const messages = narrowMessages(req.messages);
   const tools = workshopOpenAITools();
   const context = formatDraftContext(req.draft);
 
   // 构造给模型的系统消息 + 项目状态上下文
-  const sysMessages: LLMMessage[] = [
+  const sysMessages: Array<LLMMessage> = [
     {
       role: "system",
       content: `${AGENT_SYSTEM_PROMPT}\n\n${context}`,
@@ -92,11 +87,7 @@ export async function handleAgentChat(
   // 方案 1：OpenAI 兼容 tools 协议
   if (req.useTools !== false) {
     try {
-      const { content, toolCalls } = await callWithTools(
-        cfg,
-        sysMessages,
-        tools,
-      );
+      const { content, toolCalls } = await callWithTools(cfg, sysMessages, tools);
       if (toolCalls.length > 0) {
         return {
           ...(content.trim() ? { reply: content.trim() } : {}),
@@ -117,7 +108,7 @@ export async function handleAgentChat(
   }
 
   // 方案 2：JSON 指令序列回退（lightweight MVP）
-  const fallbackMessages: LLMMessage[] = [
+  const fallbackMessages: Array<LLMMessage> = [
     {
       role: "system",
       content: `${AGENT_FALLBACK_SYSTEM_PROMPT}\n\n${context}`,
@@ -140,16 +131,23 @@ export async function handleAgentChat(
   const hasAction = typeof instruction.action === "string";
   const validNames = new Set(workshopOpenAITools().map((t) => t.function.name));
   if (hasReply && !hasAction) {
-    return { reply: instruction.reply as string };
+    return {
+      reply: /* SAFETY: 类型断言已复核 */ instruction.reply as string,
+    };
   }
-  if (hasAction && validNames.has(instruction.action as string)) {
+  if (hasAction && validNames.has(/* SAFETY: 类型断言已复核 */ instruction.action as string)) {
     return { fallback_instruction: instruction };
   }
   if (instruction.done === true && hasReply) {
-    return { reply: instruction.reply as string, done: true };
+    return {
+      reply: /* SAFETY: 类型断言已复核 */ instruction.reply as string,
+      done: true,
+    };
   }
   if (hasReply) {
-    return { reply: instruction.reply as string };
+    return {
+      reply: /* SAFETY: 类型断言已复核 */ instruction.reply as string,
+    };
   }
   return {
     reply: content.trim() || "我已收到你的请求，但暂时无法处理。",

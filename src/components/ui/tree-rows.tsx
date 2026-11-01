@@ -89,15 +89,15 @@ export function TreeChildren({
   className,
   children,
 }: {
+  children: React.ReactNode;
+  className?: string;
   depth?: number;
   railClassName?: string;
-  className?: string;
-  children: React.ReactNode;
 }) {
   return (
     <div
-      data-slot="tree-children"
       className={cn("mt-1 py-1", indentClass(depth), railClassName, className)}
+      data-slot="tree-children"
     >
       {children}
     </div>
@@ -123,21 +123,17 @@ export function TreeRow({
   /** 子行容器的 class（间隔 / 底色 / 状态 rail 色）。 */
   childrenClassName,
 }: {
-  row: React.ReactNode;
   children?: React.ReactNode;
+  childrenClassName?: string;
   depth?: number;
   railClassName?: string;
-  childrenClassName?: string;
+  row: React.ReactNode;
 }) {
   return (
     <div data-slot="tree-row">
       {row}
       {children != null && (
-        <TreeChildren
-          depth={depth}
-          railClassName={railClassName}
-          className={childrenClassName}
-        >
+        <TreeChildren className={childrenClassName} depth={depth} railClassName={railClassName}>
           {children}
         </TreeChildren>
       )}

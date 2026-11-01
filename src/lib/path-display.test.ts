@@ -12,26 +12,24 @@ describe("toDisplayPath", () => {
   it("相对 base 取一截并归一分隔符", () => {
     expect(
       toDisplayPath(
-        "F:\\AI\\Comfy-APP-T3\\log\\exports\\a.txt",
-        "F:\\AI\\Comfy-APP-T3",
+        String.raw`F:\AI\Comfy-APP-T3\log\exports\a.txt`,
+        String.raw`F:\AI\Comfy-APP-T3`,
       ),
     ).toBe("log/exports/a.txt");
   });
 
   it("base 用正斜杠写也一样剥得掉（两侧各自归一）", () => {
-    expect(toDisplayPath("F:/AI/x/log/a.txt", "F:\\AI\\x")).toBe("log/a.txt");
+    expect(toDisplayPath("F:/AI/x/log/a.txt", String.raw`F:\AI\x`)).toBe("log/a.txt");
   });
 
   it("不给 base 时只归一分隔符", () => {
-    expect(toDisplayPath("src\\components\\studio\\x.tsx")).toBe(
+    expect(toDisplayPath(String.raw`src\components\studio\x.tsx`)).toBe(
       "src/components/studio/x.tsx",
     );
   });
 
   it("相对不上（不同源）时原样返回，不抛也不给 ../.. 串", () => {
-    expect(toDisplayPath("D:\\other\\a.txt", "F:\\AI\\x")).toBe(
-      "D:/other/a.txt",
-    );
+    expect(toDisplayPath(String.raw`D:\other\a.txt`, String.raw`F:\AI\x`)).toBe("D:/other/a.txt");
   });
 
   it("base 末尾的多余斜杠不影响", () => {
@@ -55,9 +53,7 @@ describe("toDisplayPath", () => {
 
 describe("stripPathPrefix", () => {
   it("命中才剥", () => {
-    expect(stripPathPrefix("ComfyUI-DaSiWa-Nodes", "ComfyUI-")).toBe(
-      "DaSiWa-Nodes",
-    );
+    expect(stripPathPrefix("ComfyUI-DaSiWa-Nodes", "ComfyUI-")).toBe("DaSiWa-Nodes");
   });
 
   it("未命中原样返回", () => {
@@ -84,7 +80,7 @@ describe("lastSegments", () => {
   });
 
   it("归一反斜杠后按 / 连接（与收口前 slice(-2).join('/') 同形）", () => {
-    expect(lastSegments("C:\\nodes\\ComfyUI-X\\pkg", 2)).toBe("ComfyUI-X/pkg");
+    expect(lastSegments(String.raw`C:\nodes\ComfyUI-X\pkg`, 2)).toBe("ComfyUI-X/pkg");
   });
 
   it("忽略重复分隔符造成的空段", () => {
@@ -97,8 +93,7 @@ describe("lastSegments", () => {
 });
 
 describe("ellipsisMiddle", () => {
-  const longPath =
-    "F:/AI/Other/Comfy-APP-T3/src/components/studio/WorkflowNode.tsx";
+  const longPath = "F:/AI/Other/Comfy-APP-T3/src/components/studio/WorkflowNode.tsx";
 
   it("不超长时原样返回", () => {
     expect(ellipsisMiddle("a/b.ts", 40)).toBe("a/b.ts");
@@ -136,7 +131,7 @@ describe("ellipsisMiddle", () => {
 
 describe("normalizeSlashes", () => {
   it("反斜杠换正斜杠并剥前导 ./", () => {
-    expect(normalizeSlashes("a\\b\\c")).toBe("a/b/c");
+    expect(normalizeSlashes(String.raw`a\b\c`)).toBe("a/b/c");
     expect(normalizeSlashes("./a/b")).toBe("a/b");
   });
 

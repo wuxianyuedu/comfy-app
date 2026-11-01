@@ -11,20 +11,20 @@ import { and, eq } from "drizzle-orm";
 import type { ProductionRun } from "~/lib/production/run-types";
 
 /** 写一条生产数据（按 proj_* upsert）的入参；JSON 列传对象，Drizzle 负责序列化。 */
-export interface ProductionInput {
-  id: string;
-  title?: string;
-  type?: string;
-  tone?: string;
-  logline?: string;
-  scriptMarkdown?: string;
-  scenes?: unknown;
+export type ProductionInput = {
   characters?: unknown;
-  shots?: unknown;
+  id: string;
+  logline?: string;
   progress?: unknown;
+  scenes?: unknown;
+  scriptMarkdown?: string;
   /** 剧本评审位（FR-QA-07）：形状见 `~/lib/production/review-types` 的 ScriptReviewState。 */
   scriptReview?: unknown;
-}
+  shots?: unknown;
+  title?: string;
+  tone?: string;
+  type?: string;
+};
 
 export class ProductionRepository extends DrizzleRepository<Production> {
   constructor() {
@@ -45,11 +45,7 @@ export class ProductionRepository extends DrizzleRepository<Production> {
    * 只更新 `run` 列（AI 自主执行协调态），不碰内容字段 —— 字段所有权：run 由控制端点写、
    * 工坊自动保存写内容，两条路各写各的列，互不覆盖。行不存在（项目还没生产数据）→ false。
    */
-  async updateRun(
-    userId: string,
-    id: string,
-    run: ProductionRun,
-  ): Promise<boolean> {
+  async updateRun(userId: string, id: string, run: ProductionRun): Promise<boolean> {
     const rows = await db
       .update(production)
       .set({ run, updatedAt: new Date() })
@@ -67,19 +63,26 @@ export class ProductionRepository extends DrizzleRepository<Production> {
     userId: string,
     id: string,
     patch: {
-      scriptMarkdown?: string;
       characters?: unknown;
-      shots?: unknown;
+      scriptMarkdown?: string;
       /** 剧本评审位（FR-QA-07）：评审器写判定与轮次历史；工坊自动保存不传 = 不碰。 */
       scriptReview?: unknown;
+      shots?: unknown;
     },
   ): Promise<boolean> {
     const set: Record<string, unknown> = { updatedAt: new Date() };
-    if (patch.scriptMarkdown !== undefined)
+    if (patch.scriptMarkdown !== undefined) {
       set.scriptMarkdown = patch.scriptMarkdown;
-    if (patch.characters !== undefined) set.characters = patch.characters;
-    if (patch.shots !== undefined) set.shots = patch.shots;
-    if (patch.scriptReview !== undefined) set.scriptReview = patch.scriptReview;
+    }
+    if (patch.characters !== undefined) {
+      set.characters = patch.characters;
+    }
+    if (patch.shots !== undefined) {
+      set.shots = patch.shots;
+    }
+    if (patch.scriptReview !== undefined) {
+      set.scriptReview = patch.scriptReview;
+    }
     const rows = await db
       .update(production)
       .set(set)
@@ -89,15 +92,8 @@ export class ProductionRepository extends DrizzleRepository<Production> {
   }
 
   /** 按 proj_* upsert 生产数据（不存在则建、存在则更新，带归属）。 */
-  async upsertForUser(
-    userId: string,
-    data: ProductionInput,
-  ): Promise<Production> {
-    const existing = await db
-      .select()
-      .from(production)
-      .where(eq(production.id, data.id))
-      .limit(1);
+  async upsertForUser(userId: string, data: ProductionInput): Promise<Production> {
+    const existing = await db.select().from(production).where(eq(production.id, data.id)).limit(1);
     if (!existing[0]) {
       const rows = await db
         .insert(production)

@@ -1,10 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "~/components/ui/resizable";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 
 /**
  * `ui/resizable` 是 `react-resizable-panels` 的薄封装：左中右可拖拽分栏。
@@ -51,15 +47,11 @@ export const WithoutHandle: Story = {
   render: () => (
     <ResizablePanelGroup className="h-56 w-xl rounded-lg border">
       <ResizablePanel defaultSize="40">
-        <div className="text-ink-muted flex h-full items-center justify-center text-sm">
-          40%
-        </div>
+        <div className="text-ink-muted flex h-full items-center justify-center text-sm">40%</div>
       </ResizablePanel>
       <ResizableHandle />
       <ResizablePanel defaultSize="60">
-        <div className="text-ink-muted flex h-full items-center justify-center text-sm">
-          60%
-        </div>
+        <div className="text-ink-muted flex h-full items-center justify-center text-sm">60%</div>
       </ResizablePanel>
     </ResizablePanelGroup>
   ),
@@ -70,10 +62,7 @@ export const WithoutHandle: Story = {
  *  —— 这是同一件组件里最容易写错的一处。 */
 export const Vertical: Story = {
   render: () => (
-    <ResizablePanelGroup
-      orientation="vertical"
-      className="h-56 w-120 rounded-lg border"
-    >
+    <ResizablePanelGroup className="h-56 w-120 rounded-lg border" orientation="vertical">
       <ResizablePanel defaultSize="50">
         <div className="text-ink-muted flex h-full items-center justify-center text-sm">
           上（50%）
@@ -95,15 +84,11 @@ export const ThreePanels: Story = {
   render: () => (
     <ResizablePanelGroup className="h-56 w-xl rounded-lg border">
       <ResizablePanel defaultSize="25" minSize="15">
-        <div className="text-ink-muted flex h-full items-center justify-center text-sm">
-          节点树
-        </div>
+        <div className="text-ink-muted flex h-full items-center justify-center text-sm">节点树</div>
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize="50" minSize={30}>
-        <div className="text-ink-muted flex h-full items-center justify-center text-sm">
-          画布
-        </div>
+        <div className="text-ink-muted flex h-full items-center justify-center text-sm">画布</div>
       </ResizablePanel>
       <ResizableHandle withHandle />
       <ResizablePanel defaultSize="25" minSize="15">

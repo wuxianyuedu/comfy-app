@@ -116,7 +116,9 @@ export function referencedNotClaimed(text) {
 export function pullTitleBody(title, prNumber) {
   const t = String(title ?? "");
   const n = String(prNumber ?? "");
-  if (!/^\d+$/.test(n)) return t;
+  if (!/^\d+$/.test(n)) {
+    return t;
+  }
   return t.replace(new RegExp(`\\s*\\(#${n}\\)\\s*$`), "");
 }
 
@@ -178,7 +180,9 @@ export function decideCloseIssue({
       numbers.push(n);
     }
     for (const n of explicit) {
-      if (!sources.has(n)) sources.set(n, "人点名的（本轮合并已验真）");
+      if (!sources.has(n)) {
+        sources.set(n, "人点名的（本轮合并已验真）");
+      }
       numbers.push(n);
     }
     const uniq = [...new Set(numbers)];
@@ -318,7 +322,9 @@ export function findMergedPullProofs(ctx) {
   const want = new Set(numbers);
   /** @type {{proofs: Map<number, {prNumber: number, title: string}>, scanned: number, ran: boolean}} */
   const nothing = { proofs, scanned: 0, ran: false };
-  if (!slug) return nothing;
+  if (!slug) {
+    return nothing;
+  }
   let scanned = 0;
   let ran = false;
   for (let p = 1; p <= pages; p += 1) {
@@ -335,12 +341,18 @@ export function findMergedPullProofs(ctx) {
       String(pageSize),
       "-v",
     ]);
-    if (!got) break;
+    if (!got) {
+      break;
+    }
     ran = true;
     const list = asArray(got.json);
-    if (!list || list.length === 0) break;
+    if (!list || list.length === 0) {
+      break;
+    }
     for (const item of list) {
-      if (item?.is_merged !== true) continue;
+      if (item?.is_merged !== true) {
+        continue;
+      }
       scanned += 1;
       const number = Number(item.number ?? 0);
       const body = pullTitleBody(String(item.title ?? ""), number);
@@ -350,7 +362,9 @@ export function findMergedPullProofs(ctx) {
         }
       }
     }
-    if (list.length < pageSize) break;
+    if (list.length < pageSize) {
+      break;
+    }
   }
   return { proofs, scanned, ran };
 }
@@ -376,7 +390,9 @@ export function findMergedPullProofs(ctx) {
 export function fetchPullMergeProof({ run, slug, prNumber }) {
   /** @type {{state: "merged" | "not-merged" | "unreadable", title: string, prNumber: number}} */
   const unreadable = { state: "unreadable", title: "", prNumber };
-  if (!slug || !prNumber) return unreadable;
+  if (!slug || !prNumber) {
+    return unreadable;
+  }
   const got = cnbJson(run, [
     "pulls",
     "get-pull",
@@ -387,13 +403,18 @@ export function fetchPullMergeProof({ run, slug, prNumber }) {
     "-v",
   ]);
   const d = got?.json?.data ?? null;
-  if (!d || typeof d !== "object") return unreadable;
+  if (!d || typeof d !== "object") {
+    return unreadable;
+  }
   /* 标题喂 `pullTitleBody` 剥掉平台末尾拼的 `(#<PR号>)` 再念：编号空间是共用的，
    * 原样念会把「这条 PR」与「同号的那张单子」混成一句话（与 `findMergedPullProofs` 同一条纪律）。 */
   const title = pullTitleBody(String(d.title ?? ""), prNumber);
-  if (d.is_merged === true) return { state: "merged", title, prNumber };
-  if (typeof d.is_merged === "boolean")
+  if (d.is_merged === true) {
+    return { state: "merged", title, prNumber };
+  }
+  if (typeof d.is_merged === "boolean") {
     return { state: "not-merged", title, prNumber };
+  }
   return unreadable;
 }
 
@@ -419,13 +440,19 @@ export function fetchPullMergeProof({ run, slug, prNumber }) {
  *   landed?: {verified: boolean, sha?: string, title?: string} | null,
  *   explicit?: number[],
  *   handle?: string | null,
+ *   handleExplicit?: boolean,
  *   mkTmp?: ((name: string, text: string) => string | null) | null,
  *   asMerged?: number | null,
+ *   dryRun?: boolean,
  * }} ctx
  *   `handle` / `mkTmp` 是「关完之后补结束评论并撤处理人标签」那一格的执行面：
  *   未配留痕、或调用方没给临时文件落点时，那一格**跳过**（关单本身照常）。
  *   `asMerged` 是人点名的**凭据编号**（不是结论）—— 给了它就去回读那条 PR 的 `is_merged`，
  *   并**不再**扫「已合并 PR」那份列表（ISSUE #2491）。
+ *   `dryRun` 是「预览就是预览」（ISSUE #2766）：这一族的读面（落地证明的回读、
+ *   该不该关的判决、条目形态读数）照跑，**第一件写动作之前**停下并把要写什么念出来。
+ *   过去「只补关」那一路没把它传进来，于是 `--dry-run --close-issue=<号>` 三件写动作
+ *   （置 closed、发「开发结束」评论、撤处理人标签）一件不落 —— 预览一次就把单子真关了。
  * @returns {number} `CODE` 之一
  */
 export function closeIssues(ctx) {
@@ -437,8 +464,12 @@ export function closeIssues(ctx) {
     landed = null,
     explicit = [],
     handle = null,
+    /* 「我是谁」是不是**人填的**（ISSUE #2833）：false 时「不代发」那格要念出
+     * 「取的名字」这条因，不许让它长得像「处理人真是别人」。 */
+    handleExplicit = undefined,
     mkTmp = null,
     asMerged = null,
+    dryRun = false,
   } = ctx;
   const landedVerified = landed?.verified === true;
   const title = landed?.title ?? "";
@@ -481,16 +512,16 @@ export function closeIssues(ctx) {
     return CODE.GREEN;
   }
   for (const number of plan.numbers) {
-    log(
-      `[ship] 关 #${number} —— 依据：${plan.sources.get(number) ?? "(未标注)"}`,
-    );
+    log(`[ship] 关 #${number} —— 依据：${plan.sources.get(number) ?? "(未标注)"}`);
   }
   /* 引用与认领是两件事（ISSUE #2646）：标题正文里裸写的 `#730` 不再算本单的认领凭证。
    * 这一行把「**没关**它」念出来 —— 静默不关与静默关掉，在读者那边是同一种
    * 「不知道处理过没有」；而那处引用本身有信息量（「这一格与那张单同源」），不该丢。 */
   const claimed = new Set(plan.numbers);
   for (const n of referencedNotClaimed(title)) {
-    if (claimed.has(n)) continue;
+    if (claimed.has(n)) {
+      continue;
+    }
     log(
       `[ship] 标题引用了 #${n}，它不在认领形态 (#号) 里 ⇒ **没关**` +
         `（人点名才算）：要关请 pnpm ship --close-issue ${n}`,
@@ -505,6 +536,21 @@ export function closeIssues(ctx) {
 
   /** @type {number[]} */
   const codes = [];
+  /* 预览就是预览（ISSUE #2766）。上面那些行全是**判决**：凭据从平台回读、该不该关由
+   * `decideCloseIssue` 判、不关的那几张逐张说明为什么没结论 —— 它们只发读命令，
+   * 所以 dry-run 底下照原样跑完，预览出来的结论与真跑那一次同一份来源。
+   * 从这里往下才是写面：一条也不发。返回 GREEN 而不是 NOT_RUN —— 这一格**跑起来了**，
+   * 它的结论就是「按这些凭据可以关，而这次没写」。 */
+  if (dryRun) {
+    for (const number of plan.numbers) {
+      log(
+        `[ship] --dry-run：#${number} 将置 state=closed / state_reason=completed，` +
+          `随后（处理人标签是我时）补「开发结束」评论并撤那枚标签` +
+          ` —— 这一跑一条写命令都没发。依据：${plan.sources.get(number) ?? "(未标注)"}`,
+      );
+    }
+    return CODE.GREEN;
+  }
   for (const number of plan.numbers) {
     const put = cnbJson(run, [
       "issues",
@@ -542,32 +588,28 @@ export function closeIssues(ctx) {
     const reason = d?.state_reason ?? "(无)";
     const at = d?.closed_at ?? "(无)";
     log(
-      `[ship] #${number} 回读：state=${state} state_reason=${reason} closed_at=${at}` +
-        (landed?.sha
+      `[ship] #${number} 回读：state=${state} state_reason=${reason} closed_at=${at}${landed?.sha
           ? ` · 落地那一行 sha=${short(landed.sha)}`
-          : ` · 落地证明：${plan.sources.get(number) ?? "(未标注)"}`),
+          : ` · 落地证明：${plan.sources.get(number) ?? "(未标注)"}`}`,
     );
     /* 「回读里没有正文这一格」与「正文是空的」必须分开念：前者不能念成「零条」
      * （拿缺字段当结论，正是这一族反复在收的那一型）。 */
-    if (typeof d?.body !== "string") {
-      log(
-        `[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`,
-      );
-    } else {
+    if (typeof d?.body === "string") {
       const s = issueItemShapes(d.body);
       log(
-        `[ship] #${number} 条目读数：\`###\` 小节 ${s.headings} · 复选 未勾 ${s.unchecked}/已勾 ${s.checked} · 序号 ${s.ordered}` +
-          (s.total === 0 ? "（正文里没数出条目形态）" : "") +
-          " —— 关的是**整张单**，这些条目的处置不随之判定；一条诉求一张单见规范 §13.10.9。" +
-          "这一格是读数，不改退码。",
+        `[ship] #${number} 条目读数：\`###\` 小节 ${s.headings} · 复选 未勾 ${s.unchecked}/已勾 ${s.checked} · 序号 ${s.ordered}${s.total === 0 ? "（正文里没数出条目形态）" : ""
+          } —— 关的是**整张单**，这些条目的处置不随之判定；一条诉求一张单见规范 §13.10.9。` +
+          `这一格是读数，不改退码。`,
       );
+    } else {
+      log(`[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`);
     }
     if (state === "closed") {
       codes.push(CODE.GREEN);
       /* 关单成功之后才做「开发结束」评论与撤处理人标签：单子还没关成就先放掉标签，
        * 等于在「还在开着的单」上宣布结束。评论失败时 `finishIssueWork` 会保留标签。 */
       if (handle && mkTmp) {
-        codes.push(finishIssueWork({ run, log, slug, handle, number, mkTmp }));
+        codes.push(finishIssueWork({ run, log, slug, handle, handleExplicit, number, mkTmp }));
       }
     } else {
       codes.push(CODE.RED);

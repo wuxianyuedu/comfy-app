@@ -21,7 +21,7 @@ import {
   type UsageTaskQueryInput,
   type UsageTestInput,
 } from "~/lib/llm/usage-test-client";
-import { type RemoteModelEntry, type TaskType } from "~/lib/llm/types";
+import type { RemoteModelEntry, TaskType } from "~/lib/llm/types";
 /* 条目形状的唯一出处：controller 收的那一枚，就是 lib 里那座草稿→条目桥产出的那枚。 */
 import type { RemoteModelDraftEntry } from "~/lib/llm/remote-model-schema";
 
@@ -35,19 +35,16 @@ type LlmDraftSetter = Dispatch<SetStateAction<LlmConfig | null>>;
  * 主模型永远在列（本地 Ollama 当前生效模型）；查询结果相同时返回原引用，
  * 避免「主模型切换 → 勾选列表重算」引发受控组件输入抖动。
  */
-function mergeExtraModels(
-  current: string[],
-  model: string,
-  toggled: string,
-): string[] {
-  const next =
-    model.trim() !== ""
-      ? [model, ...current.filter((m) => m !== model)]
-      : [...current];
-  if (!toggled.trim()) return next;
+function mergeExtraModels(current: Array<string>, model: string, toggled: string): Array<string> {
+  const next = model.trim() === "" ? [...current] : [model, ...current.filter((m) => m !== model)];
+  if (!toggled.trim()) {
+    return next;
+  }
   if (next.includes(toggled)) {
     // 取消勾选：主模型不可移除
-    if (toggled === model) return next;
+    if (toggled === model) {
+      return next;
+    }
     return next.filter((m) => m !== toggled);
   }
   return [...next, toggled];
@@ -55,12 +52,10 @@ function mergeExtraModels(
 
 export function useSettingsRemoteModels(input: {
   llmDraft: LlmConfig | null;
-  setLlmDraft: LlmDraftSetter;
   patchLlm: (patch: Partial<LlmConfig>) => void;
   /** 增删改的即时落库出口（主 hook 的 `persistLlmDraft` 原样传入）。 */
-  persistLlmDraft: (
-    draft: LlmConfig,
-  ) => Promise<{ ok: boolean; error?: string }>;
+  persistLlmDraft: (draft: LlmConfig) => Promise<{ error?: string; ok: boolean }>;
+  setLlmDraft: LlmDraftSetter;
 }) {
   const { llmDraft, setLlmDraft, patchLlm, persistLlmDraft } = input;
 
@@ -70,12 +65,10 @@ export function useSettingsRemoteModels(input: {
   const toggleExtraModel = useCallback(
     (name: string) => {
       setLlmDraft((draft) => {
-        if (!draft) return draft;
-        const nextNames = mergeExtraModels(
-          draft.localCandidates,
-          draft.model,
-          name,
-        );
+        if (!draft) {
+          return draft;
+        }
+        const nextNames = mergeExtraModels(draft.localCandidates, draft.model, name);
         const unchanged =
           nextNames.length === draft.localCandidates.length &&
           nextNames.every((n, i) => n === draft.localCandidates[i]);
@@ -91,12 +84,14 @@ export function useSettingsRemoteModels(input: {
    * 增删改即时落库（无需再点保存按钮），失败时提示条给出可读错误。
    * 连通性 / 实际调用测试走服务端代理（apiKey 不直接打远端）。 */
   const addRemoteModel = useCallback(
-    async (
-      entry: RemoteModelDraftEntry,
-    ): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
+    async (entry: RemoteModelDraftEntry): Promise<{ error?: string; ok: boolean }> => {
+      if (!llmDraft) {
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      }
       const name = entry.name.trim();
-      if (!name) return { ok: false, error: "请填写模型名称" };
+      if (!name) {
+        return { ok: false, error: "请填写模型名称" };
+      }
       if (llmDraft.extraModels.some((e) => e.name === name)) {
         return { ok: false, error: `模型「${name}」已在列表中` };
       }
@@ -117,10 +112,14 @@ export function useSettingsRemoteModels(input: {
   );
 
   const removeRemoteModel = useCallback(
-    async (name: string): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
+    async (name: string): Promise<{ error?: string; ok: boolean }> => {
+      if (!llmDraft) {
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      }
       const next = llmDraft.extraModels.filter((e) => e.name !== name);
-      if (next.length === llmDraft.extraModels.length) return { ok: true };
+      if (next.length === llmDraft.extraModels.length) {
+        return { ok: true };
+      }
       const nextDraft = { ...llmDraft, extraModels: next };
       setLlmDraft(nextDraft);
       return persistLlmDraft(nextDraft);
@@ -134,27 +133,25 @@ export function useSettingsRemoteModels(input: {
     async (
       name: string,
       patch: Partial<RemoteModelDraftEntry>,
-    ): Promise<{ ok: boolean; error?: string }> => {
-      if (!llmDraft) return { ok: false, error: "配置未就绪，请稍后重试" };
+    ): Promise<{ error?: string; ok: boolean }> => {
+      if (!llmDraft) {
+        return { ok: false, error: "配置未就绪，请稍后重试" };
+      }
       const nextName = (patch.name ?? name).trim();
-      if (!nextName) return { ok: false, error: "请填写模型名称" };
+      if (!nextName) {
+        return { ok: false, error: "请填写模型名称" };
+      }
       const existing = llmDraft.extraModels.find((e) => e.name === name);
       if (!existing) {
         return { ok: false, error: `模型「${name}」不存在，请刷新后重试` };
       }
-      if (
-        nextName !== name &&
-        llmDraft.extraModels.some((e) => e.name === nextName)
-      ) {
+      if (nextName !== name && llmDraft.extraModels.some((e) => e.name === nextName)) {
         return { ok: false, error: `模型「${nextName}」已在列表中` };
       }
       const typedKey = patch.apiKey?.trim();
       const updated: RemoteModelEntry = {
         name: nextName,
-        baseUrl:
-          patch.baseUrl === undefined
-            ? (existing?.baseUrl ?? null)
-            : patch.baseUrl,
+        baseUrl: patch.baseUrl === undefined ? (existing?.baseUrl ?? null) : patch.baseUrl,
         /* `apiKey` 三态（台账 A11 的客户端这一半）：
          *   · 用户重填了 → 新值；
          *   · 显式勾了「清除密钥」→ `null`；
@@ -162,19 +159,13 @@ export function useSettingsRemoteModels(input: {
          * 此前这里是 `(existing?.apiKey ?? null)`，而真实场景里 `existing` 来自服务端
          * **脱敏下发**的清单（永远不带值）→ 折成 `null` → `replaceAll` 按覆盖语义把
          * 库里那把密钥清掉。草稿不该揣测保留值：「我没意见」的正确表达是缺键。 */
-        ...(typedKey
-          ? { apiKey: typedKey }
-          : patch.clearApiKey
-            ? { apiKey: null }
-            : {}),
+        ...(typedKey ? { apiKey: typedKey } : patch.clearApiKey ? { apiKey: null } : {}),
         kind: patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
       };
       const nextDraft = {
         ...llmDraft,
         model: llmDraft.model === name ? nextName : llmDraft.model,
-        extraModels: llmDraft.extraModels.map((e) =>
-          e.name === name ? updated : e,
-        ),
+        extraModels: llmDraft.extraModels.map((e) => (e.name === name ? updated : e)),
       };
       setLlmDraft(nextDraft);
       return persistLlmDraft(nextDraft);
@@ -183,17 +174,13 @@ export function useSettingsRemoteModels(input: {
   );
 
   const probeRemote = useCallback(
-    async (input: { baseUrl?: string; apiKey?: string; model?: string }) =>
-      probeRemoteApi(input),
+    async (input: { apiKey?: string; baseUrl?: string; model?: string }) => probeRemoteApi(input),
     [],
   );
 
   /** 模型「实际使用」测试（chat / 生图 / 生视频各一次真实调用）。
    *  网络封装在 lib/llm/usage-test-client，密钥解析在服务端完成。 */
-  const testModelUsageFn = useCallback(
-    async (input: UsageTestInput) => testModelUsage(input),
-    [],
-  );
+  const testModelUsageFn = useCallback(async (input: UsageTestInput) => testModelUsage(input), []);
 
   /** 「继续等待」已提交的异步视频任务（同一条目连接参数 + taskId，只查不重交）。
    *  网络封装在 lib/llm/usage-test-client，密钥解析在服务端完成。 */
@@ -204,25 +191,24 @@ export function useSettingsRemoteModels(input: {
 
   /** 远端候选模型列表（配置视图，按保存顺序）——设置页不区分「当前生效」，
    *  用哪个模型由工坊运行时切换。 */
-  const remoteModelList: RemoteModelEntry[] = llmDraft?.extraModels ?? [];
+  const remoteModelList: Array<RemoteModelEntry> = llmDraft?.extraModels ?? [];
 
   const setTaskTemperature = useCallback(
     (task: TaskType, raw: string) => {
-      if (!llmDraft) return;
+      if (!llmDraft) {
+        return;
+      }
       const base = llmDraft.temperatureByTask ?? {};
       /* 清空输入框 = 删掉该 key（而不是写入 undefined），否则「已覆盖」徽标
        * 会一直亮着，且保存时会把 undefined 一并发给后端。 */
       const next =
         raw === ""
-          ? Object.fromEntries(
-              Object.entries(base).filter(([key]) => key !== task),
-            )
+          ? Object.fromEntries(Object.entries(base).filter(([key]) => key !== task))
           : { ...base, [task]: Number(raw) };
       patchLlm({
         temperatureByTask:
-          Object.keys(next).length > 0
-            ? (next as Record<TaskType, number>)
-            : undefined,
+          /* SAFETY: 类型断言已复核 */
+          Object.keys(next).length > 0 ? (next as Record<TaskType, number>) : undefined,
       });
     },
     [llmDraft, patchLlm],

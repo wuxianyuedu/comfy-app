@@ -54,8 +54,8 @@ export function describeDevServerRestart(
   reason: string | null,
   detail: string | null = null,
 ): {
-  title: string;
   body: string;
+  title: string;
 } {
   if (reason === "route-404-heal") {
     /* 运行期自愈：故障发生时页面**已经在跑**，所以页面自己连着的是被换掉的那个
@@ -104,8 +104,8 @@ export function describeDevServerRestart(
  * 后者会把用户留在「它说修好了，可数据还是加载不出来」的状态里。
  */
 export function describeDepsStale(state: DepsFreshnessState): {
-  title: string;
   body: string;
+  title: string;
 } {
   return {
     title: "依赖与代码不一致，需重装依赖",
@@ -122,8 +122,7 @@ export function describeDepsStale(state: DepsFreshnessState): {
 
 /** 依赖面各形态的「为什么」（与 `DepsFreshnessState` 一一对应）。 */
 const DEPS_STALE_WHY: Record<DepsFreshnessState, string> = {
-  drift:
-    "安装时的依赖清单与仓库 pnpm-lock.yaml 已不一致（多半是刚拉到的新代码动了依赖面）",
+  drift: "安装时的依赖清单与仓库 pnpm-lock.yaml 已不一致（多半是刚拉到的新代码动了依赖面）",
   "no-install": "本地依赖没有装好（缺安装记录）",
   unresolved: "本地依赖树里有个别声明的依赖解析不到（树停在它们被加入之前）",
   fresh: "依赖面与代码一致",
@@ -139,7 +138,7 @@ const DEPS_STALE_WHY: Record<DepsFreshnessState, string> = {
 const SELF_HEAL_MERGE_WINDOW_MS = 120_000;
 
 /** 「断开 / 恢复」这两档只有 `use-app-service-message-log` 在生产（见 store 注释）。 */
-const HEAL_PAIR_KINDS: readonly MessageKind[] = ["offline", "restart"];
+const HEAL_PAIR_KINDS: ReadonlyArray<MessageKind> = ["offline", "restart"];
 
 /**
  * 撤掉同一场自愈留下的「断开 / 恢复」两条。
@@ -159,8 +158,12 @@ const HEAL_PAIR_KINDS: readonly MessageKind[] = ["offline", "restart"];
 function dropHealPairFromCenter(now: number): void {
   const store = useMessageCenterStore.getState();
   for (const message of store.messages) {
-    if (!HEAL_PAIR_KINDS.includes(message.kind)) continue;
-    if (now - message.time > SELF_HEAL_MERGE_WINDOW_MS) continue;
+    if (!HEAL_PAIR_KINDS.includes(message.kind)) {
+      continue;
+    }
+    if (now - message.time > SELF_HEAL_MERGE_WINDOW_MS) {
+      continue;
+    }
     store.remove(message.id);
   }
 }
@@ -172,7 +175,9 @@ export function CodeUpdateWatcher() {
     onDevServerRestart: (reason, detail) => {
       /* 只对启动器发起的自愈做合并（见文件头）；用户手动重启那一族没有 reason，
        * 它的「断开 → 恢复」是要留的记录。 */
-      if (reason !== null) dropHealPairFromCenter(Date.now());
+      if (reason !== null) {
+        dropHealPairFromCenter(Date.now());
+      }
       const { title, body } = describeDevServerRestart(reason, detail);
       toast.info(title, `${body}（可到消息中心查看）`, 8000);
       useMessageCenterStore.getState().push({

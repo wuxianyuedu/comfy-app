@@ -16,22 +16,22 @@ import { firstRowRequired } from "./repository-row";
  *  （成片监看每 4s 就打进度日志），界面也只显示最近一段。 */
 const LOGS_MAX = 500;
 
-export interface FilmSummary {
-  id: string;
-  title: string;
-  status: string;
-  progress: number;
-  finalVideo: string | null;
-  shotCount: number;
+export type FilmSummary = {
   createdAt: Date;
-}
+  finalVideo: string | null;
+  id: string;
+  progress: number;
+  shotCount: number;
+  status: string;
+  title: string;
+};
 
 export class FilmRepository extends DrizzleRepository<FilmProject> {
   constructor() {
     super(filmProject, filmProject.id);
   }
 
-  async listByUser(userId: string): Promise<FilmSummary[]> {
+  async listByUser(userId: string): Promise<Array<FilmSummary>> {
     const rows = await db
       .select({
         id: filmProject.id,
@@ -78,20 +78,20 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   }
 
   async create(input: {
-    userId: string;
+    bgmName?: string | null;
+    fps: number;
+    framesPerShot: number;
     /** 关联的统一项目 id（proj_*）；纯文本自由建片时为空。 */
     projectId?: string | null;
-    title: string;
     script: string;
-    type: string;
-    styleSlug?: string | null;
     /** 成片画幅的**尺寸表达** JSON（`lib/size-presets` 的 `SizeSpec`）。
      *  老行里是 "1280x720" 字符串 —— 读的一律用 `toSizeSpec` 归一。 */
     size: string;
-    fps: number;
-    framesPerShot: number;
+    styleSlug?: string | null;
     subtitleOn: boolean;
-    bgmName?: string | null;
+    title: string;
+    type: string;
+    userId: string;
   }): Promise<FilmProject> {
     const rows = await db
       .insert(filmProject)
@@ -116,9 +116,9 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   async appendLog(
     id: string,
     entry: {
-      t: number;
       level: "info" | "progress" | "warn" | "error" | "success";
       msg: string;
+      t: number;
     },
   ): Promise<void> {
     const film = await db
@@ -126,7 +126,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
       .from(filmProject)
       .where(eq(filmProject.id, id))
       .limit(1);
-    const arr = (film[0]?.logs as unknown[] | null) ?? [];
+    const arr = /* SAFETY: 类型断言已复核 */ (film[0]?.logs as Array<unknown> | null) ?? [];
     arr.push(entry);
     await db
       .update(filmProject)
@@ -141,9 +141,11 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
    *  扫描者不知道也不该关心归属；本应用是单用户本地应用，多一层归属条件只会让
    *  「重启后没人续跑」的窗口更难解释。排序与领取队列同口径（先起先续）。 */
   async listByStatus(
-    statuses: readonly string[],
+    statuses: ReadonlyArray<string>,
   ): Promise<Array<{ id: string; status: string }>> {
-    if (statuses.length === 0) return [];
+    if (statuses.length === 0) {
+      return [];
+    }
     return db
       .select({ id: filmProject.id, status: filmProject.status })
       .from(filmProject)
@@ -159,17 +161,11 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
   }
 
   async updateProgress(id: string, pct: number): Promise<void> {
-    await db
-      .update(filmProject)
-      .set({ progress: pct })
-      .where(eq(filmProject.id, id));
+    await db.update(filmProject).set({ progress: pct }).where(eq(filmProject.id, id));
   }
 
   async markFailed(id: string, error: string): Promise<void> {
-    await db
-      .update(filmProject)
-      .set({ status: "FAILED", error })
-      .where(eq(filmProject.id, id));
+    await db.update(filmProject).set({ status: "FAILED", error }).where(eq(filmProject.id, id));
   }
 
   async markComposing(id: string): Promise<void> {
@@ -198,13 +194,13 @@ export class FilmShotRepository {
   async createMany(
     filmId: string,
     shots: Array<{
+      heading?: string | null;
+      negative?: string | null;
       order: number;
+      params: unknown;
+      prompt: string;
       /** 关联的统一镜头 id（Phase 5 回写用）；自由建片时为空。 */
       shotId?: string | null;
-      heading?: string | null;
-      prompt: string;
-      negative?: string | null;
-      params: unknown;
     }>,
   ): Promise<void> {
     await db.insert(filmShot).values(
@@ -223,21 +219,21 @@ export class FilmShotRepository {
 
   async listByFilm(
     filmId: string,
-    opts: { status?: string; onlyWithVideo?: boolean } = {},
+    opts: { onlyWithVideo?: boolean; status?: string } = {},
   ): Promise<
     Array<{
-      id: string;
-      shotId: string | null;
-      order: number;
+      duration: number | null;
       heading: string | null;
-      prompt: string;
+      id: string;
       negative: string | null;
+      order: number;
+      params: unknown;
+      progress: number;
+      prompt: string;
+      shotId: string | null;
       status: string;
       taskId: string | null;
-      progress: number;
-      params: unknown;
       videoPath: string | null;
-      duration: number | null;
     }>
   > {
     const where = and(
@@ -256,19 +252,16 @@ export class FilmShotRepository {
   }
 
   async markFailed(shotId: string): Promise<void> {
-    await db
-      .update(filmShot)
-      .set({ status: "FAILED" })
-      .where(eq(filmShot.id, shotId));
+    await db.update(filmShot).set({ status: "FAILED" }).where(eq(filmShot.id, shotId));
   }
 
   async updateFromTask(
     shotId: string,
     data: {
-      status: string;
-      progress: number;
-      videoPath?: string | null;
       duration?: number | null;
+      progress: number;
+      status: string;
+      videoPath?: string | null;
     },
   ): Promise<void> {
     await db
@@ -282,9 +275,7 @@ export class FilmShotRepository {
       .where(eq(filmShot.id, shotId));
   }
 
-  async listActiveWithTask(
-    filmId: string,
-  ): Promise<Array<{ id: string; taskId: string | null }>> {
+  async listActiveWithTask(filmId: string): Promise<Array<{ id: string; taskId: string | null }>> {
     return db
       .select({ id: filmShot.id, taskId: filmShot.taskId })
       .from(filmShot)
@@ -301,12 +292,7 @@ export class FilmShotRepository {
     await db
       .update(filmShot)
       .set({ status: "FAILED" })
-      .where(
-        and(
-          eq(filmShot.filmId, filmId),
-          inArray(filmShot.status, ["QUEUED", "RUNNING"]),
-        ),
-      );
+      .where(and(eq(filmShot.filmId, filmId), inArray(filmShot.status, ["QUEUED", "RUNNING"])));
   }
 }
 

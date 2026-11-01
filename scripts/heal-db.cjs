@@ -18,8 +18,8 @@
 //
 // 驱动：与 ~/server/db 同步换成 @libsql/client（原生异步）。整个脚本走 async 结构，
 // 每次操作独立开一个 libsql Client、用完 close —— 自愈路径低频，多开几次的开销可忽略。
-const fs = require("fs");
-const path = require("path");
+const fs = require("node:fs");
+const path = require("node:path");
 const { createClient } = require("@libsql/client");
 
 // pnpm 可执行形态的唯一判据（scripts/launcher-core/shell.mjs 的 runPnpmSync）。
@@ -28,7 +28,9 @@ const { createClient } = require("@libsql/client");
 // 「命令没起来」与「push 报错退出」混在一起。判据模块是 ESM，.cjs 用动态 import()。
 let runPnpmSync = null;
 async function loadShell() {
-  if (runPnpmSync) return runPnpmSync;
+  if (runPnpmSync) {
+    return runPnpmSync;
+  }
   ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
   return runPnpmSync;
 }
@@ -37,11 +39,13 @@ const root = path.join(__dirname, "..");
 const dbPath = path.join(root, "db.sqlite");
 /** 每次操作独立开一个 libsql 客户端；调用方负责 close()。 */
 function openDb() {
-  return createClient({ url: "file:" + dbPath });
+  return createClient({ url: `file:${dbPath}` });
 }
 
 async function clearTempTables() {
-  if (!fs.existsSync(dbPath)) return;
+  if (!fs.existsSync(dbPath)) {
+    return;
+  }
   const db = openDb();
   try {
     const result = await db.execute(
@@ -50,7 +54,7 @@ async function clearTempTables() {
     for (const row of result.rows) {
       const t = row.name;
       try {
-        await db.execute('DROP TABLE IF EXISTS "' + t + '"');
+        await db.execute(`DROP TABLE IF EXISTS "${t}"`);
       } catch {
         /* 忽略个别残留表的删除失败 */
       }
@@ -69,36 +73,39 @@ function runPush() {
 
 async function healMissingColumn(out) {
   const colMatch = out.match(/no such column:\s*"?([\w]+)"?/i);
-  if (!colMatch) return false;
+  if (!colMatch) {
+    return false;
+  }
   const col = colMatch[1];
   const re = new RegExp(
-    'INSERT\\s+INTO\\s+[`"]__new_(\\w+)[`"]\\s*\\([\\s\\S]*?\\)\\s*SELECT[\\s\\S]*?[`"]' +
-      col +
-      '[`"]',
+    `INSERT\\s+INTO\\s+[\`"]__new_(\\w+)[\`"]\\s*\\([\\s\\S]*?\\)\\s*SELECT[\\s\\S]*?[\`"]${
+      col
+      }[\`"]`,
     "i",
   );
   const tblMatch = out.match(re);
-  if (!tblMatch) return false;
+  if (!tblMatch) {
+    return false;
+  }
   const table = tblMatch[1];
   const db = openDb();
   try {
-    const result = await db.execute('PRAGMA table_info("' + table + '")');
+    const result = await db.execute(`PRAGMA table_info("${table}")`);
     const cur = new Set(result.rows.map((c) => c.name));
-    if (cur.has(col)) return false;
-    await db.execute(
-      'ALTER TABLE "' + table + '" ADD COLUMN "' + col + '" text',
-    );
+    if (cur.has(col)) {
+      return false;
+    }
+    await db.execute(`ALTER TABLE "${table}" ADD COLUMN "${col}" text`);
   } finally {
     db.close();
   }
-  console.log("[heal] 已为 " + table + " 自动补列 " + col);
+  console.log(`[heal] 已为 ${table} 自动补列 ${col}`);
   return true;
 }
 
 async function healIndexes(out) {
   // 提取 push 计划中全部 CREATE [UNIQUE] INDEX "idx" ON "tbl" (cols)，以 IF NOT EXISTS 补齐
-  const re =
-    /CREATE\s+(UNIQUE\s+)?INDEX\s+[`"]?(\w+)[`"]?\s+ON\s+[`"]?(\w+)[`"]?\s*\(([^)]*)\)/gi;
+  const re = /CREATE\s+(UNIQUE\s+)?INDEX\s+[`"]?(\w+)[`"]?\s+ON\s+[`"]?(\w+)[`"]?\s*\(([^)]*)\)/gi;
   let m;
   let changed = false;
   const db = openDb();
@@ -109,20 +116,14 @@ async function healIndexes(out) {
       const idx = m[2];
       const tbl = m[3];
       const cols = m[4];
-      const key = idx + "@" + tbl;
-      if (seen.has(key)) continue; // 跳过 drizzle-kit 重复发出的第二条
+      const key = `${idx}@${tbl}`;
+      if (seen.has(key)) {
+        continue;
+      } // 跳过 drizzle-kit 重复发出的第二条
       seen.add(key);
       try {
         await db.execute(
-          "CREATE " +
-            unique +
-            'INDEX IF NOT EXISTS "' +
-            idx +
-            '" ON "' +
-            tbl +
-            '" (' +
-            cols +
-            ")",
+          `CREATE ${unique}INDEX IF NOT EXISTS "${idx}" ON "${tbl}" (${cols})`,
         );
         changed = true;
       } catch {
@@ -132,7 +133,9 @@ async function healIndexes(out) {
   } finally {
     db.close();
   }
-  if (changed) console.log("[heal] 已幂等补齐缺失/重复索引");
+  if (changed) {
+    console.log("[heal] 已幂等补齐缺失/重复索引");
+  }
   return changed;
 }
 
@@ -159,7 +162,9 @@ async function main() {
     // 先补列，索引才能建得上
     const healedCol = await healMissingColumn(out);
     const healedIdx = await healIndexes(out);
-    if (!healedCol && !healedIdx) break;
+    if (!healedCol && !healedIdx) {
+      break;
+    }
     await clearTempTables();
     res = runPush();
     out = (res.stdout || "") + (res.stderr || "");

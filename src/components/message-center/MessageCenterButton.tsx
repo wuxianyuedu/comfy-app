@@ -11,26 +11,20 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 
 export function MessageCenterButton() {
-  const unread = useMessageCenterStore((s) =>
-    s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0),
-  );
+  const unread = useMessageCenterStore((s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0));
   const open = useMessageCenterStore((s) => s.open);
   const toggleOpen = useMessageCenterStore((s) => s.toggleOpen);
 
   return (
-    <Hint
-      label={`系统消息${unread > 0 ? `（${unread} 条未读）` : ""}，点击全屏查看`}
-    >
+    <Hint label={`系统消息${unread > 0 ? `（${unread} 条未读）` : ""}，点击全屏查看`}>
       <Button
-        variant="ghost"
-        onClick={toggleOpen}
-        aria-label={`系统消息${unread > 0 ? `，${unread} 条未读` : ""}`}
         aria-expanded={open}
+        aria-label={`系统消息${unread > 0 ? `，${unread} 条未读` : ""}`}
         className={`text-2xs relative h-auto gap-1 rounded px-1.5 py-0.5 ${
-          open || unread > 0
-            ? "text-primary"
-            : "text-ink-muted hover:bg-subtle hover:text-ink"
+          open || unread > 0 ? "text-primary" : "text-ink-muted hover:bg-subtle hover:text-ink"
         }`}
+        onClick={toggleOpen}
+        variant="ghost"
       >
         <Bell data-icon="inline-start" size={12} />
         {unread > 0 && (

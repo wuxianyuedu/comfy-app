@@ -2,8 +2,7 @@ import { useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
 import { adviseWithFallback } from "~/lib/comfyui/error-advice";
-import { timeAgo as timeAgoImpl } from "~/lib/time-format";
-import { formatDate } from "~/lib/time-format";
+import { timeAgo as timeAgoImpl, formatDate } from "~/lib/time-format";
 
 import type { TaskItem } from "./history-types";
 
@@ -12,18 +11,18 @@ export function timeAgo(iso: string): string {
   return timeAgoImpl(iso) ?? "刚刚";
 }
 
-export interface StatusStyle {
-  label: string;
-  pillCls: string;
+export type StatusStyle = {
   // 左缘 3px accent（Tailwind border-l-4 系列）
   accentCls: string;
   // 整卡边框（失败/进行中/排队中加深）
   cardBorderCls: string;
-  isActive: boolean;
-  showProgress: boolean;
   // 失败错误转修复建议
   failureSuggestion?: (err?: string | null) => string;
-}
+  isActive: boolean;
+  label: string;
+  pillCls: string;
+  showProgress: boolean;
+};
 
 /** 任务状态 → pill / 左缘 accent / 卡边框样式（**状态语义**，全部走语义 token）。
  *  §4.11.1 + P71：`--color-destructive` / `--color-success` / `--color-primary`
@@ -102,13 +101,17 @@ export function dateBucket(iso: string): string {
   };
   const today = startOfDay(now).getTime();
   const task = startOfDay(date).getTime();
-  if (task === today) return "今天";
-  if (task === today - 86400000) return "昨天";
+  if (task === today) {
+    return "今天";
+  }
+  if (task === today - 86_400_000) {
+    return "昨天";
+  }
   return formatDate(date);
 }
 
 /** 简单的「看起来在跑」动效：递增到 95% 后封顶；任务结束时归 0。 */
-export function useSimulatedProgress(tasks: TaskItem[]) {
+export function useSimulatedProgress(tasks: Array<TaskItem>) {
   const [map, setMap] = useState<Record<string, number>>({});
   /* `useInterval` 的 `ms` 固定、回调放 ref —— 此前把 `tasks` 写进依赖数组，
    * 每次任务数组变化（轮询每次都会给新数组）都要重建定时器、把计时重置；

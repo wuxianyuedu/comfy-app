@@ -49,7 +49,7 @@ const BANNED_EDITOR_MODULES = [
 
 /** 去掉块注释与行注释，避免文档里提到旧机制时误伤断言。 */
 function stripComments(code: string): string {
-  return code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  return code.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
 }
 
 function readEditor(file: string): string {
@@ -73,8 +73,9 @@ describe("编辑器画布只画工作流图", () => {
     expect(derivation).toContain("buildInitialNodes");
     for (const allowed of ALLOWED_GRAPH_SOURCES.filter(
       (source) => source !== "buildInitialNodes",
-    ))
+    )) {
       expect(inner).toContain(allowed);
+    }
     /* 卡片 / 映射线的构建入口已从编辑器移除。 */
     for (const gone of [
       "buildParamNodes",
@@ -97,13 +98,7 @@ describe("编辑器画布只画工作流图", () => {
     expect(nodes).not.toContain("wfParam");
     expect(nodes).not.toContain("wfOutput");
     /* 图自身的五类仍要齐（少了哪一类画布都会静默丢节点）。 */
-    for (const keep of [
-      "wfNode",
-      "wfNote",
-      "wfGroup",
-      "wfSubgraph",
-      "wfIoPort",
-    ]) {
+    for (const keep of ["wfNode", "wfNote", "wfGroup", "wfSubgraph", "wfIoPort"]) {
       expect(nodes).toContain(keep);
     }
   });
@@ -113,14 +108,9 @@ describe("编辑器画布只画工作流图", () => {
      * 「恢复默认映射」，它保存时必须把当前 `paramMap` **原样**交上去 —— 否则
      * 「进编辑器点一次保存」就会把库内改的线抹掉。 */
     const persistence = stripComments(
-      readFileSync(
-        path.join(EDITOR_DIR, "hooks/use-workflow-persistence.ts"),
-        "utf8",
-      ),
+      readFileSync(path.join(EDITOR_DIR, "hooks/use-workflow-persistence.ts"), "utf8"),
     );
-    expect(persistence).toMatch(
-      /savePatch\.mutateAsync\(\{[\s\S]{0,120}paramMap/,
-    );
+    expect(persistence).toMatch(/savePatch\.mutateAsync\(\{[\s\S]{0,120}paramMap/);
     /* 编辑器里也没有映射编排层了：落点归库内那一层管。 */
     const inner = stripComments(readEditor("WorkflowEditorInner.tsx"));
     for (const gone of ["useParamMapping", "resetAll", "resetParamWiring"]) {
@@ -143,10 +133,7 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
      * （`endpoint`），卡片列只负责把槽位让出来。这条边界必须留在源码里：
      * 卡片列一旦直接用 `<Handle>`，它就不能再被非画布表面复用。 */
     const column = stripComments(
-      readFileSync(
-        path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"),
-        "utf8",
-      ),
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowParamCardColumn.tsx"), "utf8"),
     );
     expect(column).toContain("endpoint");
     for (const forbidden of ["@xyflow/react", "Handle", "onConnect"]) {
@@ -154,10 +141,7 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     }
     /* 端点注入点在画布节点那一层（那里才是 React Flow 的上下文）。 */
     const nodes = stripComments(
-      readFileSync(
-        path.join(LIBRARY_DIR, "WorkflowLibraryCanvasNodes.tsx"),
-        "utf8",
-      ),
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowLibraryCanvasNodes.tsx"), "utf8"),
     );
     expect(nodes).toContain("@xyflow/react");
     expect(nodes).toContain("PortHandle");
@@ -178,10 +162,7 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
 
   it("库内也画对外输出卡片列（左列说「要什么」，右列说「给什么」）", () => {
     const outputColumn = stripComments(
-      readFileSync(
-        path.join(LIBRARY_DIR, "WorkflowOutputParamCardColumn.tsx"),
-        "utf8",
-      ),
+      readFileSync(path.join(LIBRARY_DIR, "WorkflowOutputParamCardColumn.tsx"), "utf8"),
     );
     expect(outputColumn).toContain('side="left"');
     expect(outputColumn).toContain("endpoint");
@@ -199,10 +180,7 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
   });
 
   it("工作流库不叠「对外参数映射层」（库内是 React Flow 画布，不是自绘连线层）", () => {
-    const preview = readFileSync(
-      path.join(LIBRARY_DIR, "WorkflowCanvasNodePreview.tsx"),
-      "utf8",
-    );
+    const preview = readFileSync(path.join(LIBRARY_DIR, "WorkflowCanvasNodePreview.tsx"), "utf8");
     const code = stripComments(preview);
     expect(code).not.toContain("WorkflowParamMapLayer");
     expect(code).not.toContain("deriveLibraryCanvas");
@@ -228,19 +206,13 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     /* 「对外参数」是产品对用户承诺的那几个口子（提示词 / 尺寸 / 首帧…），
      *  由模式决定，与具体工作流无关 —— 契约表是唯一来源。 */
     const lib = readFileSync(
-      path.resolve(
-        __dirname,
-        "../../../lib/workflow/workflow-exposed-params.ts",
-      ),
+      path.resolve(__dirname, "../../../lib/workflow/workflow-exposed-params.ts"),
       "utf8",
     );
     expect(lib).toContain("exposedParamsForMode");
     const mapping = stripComments(
       readFileSync(
-        path.resolve(
-          __dirname,
-          "../../../lib/workflow/workflow-param-mapping.ts",
-        ),
+        path.resolve(__dirname, "../../../lib/workflow/workflow-param-mapping.ts"),
         "utf8",
       ),
     );
@@ -249,10 +221,7 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
 
   it("库内卡片圆点的 handle id 卡内唯一（`<条目 id>?<落点 ioKey>`）", () => {
     const cards = stripComments(
-      readFileSync(
-        path.join(LIBRARY_DIR, "workflow-library-param-cards.ts"),
-        "utf8",
-      ),
+      readFileSync(path.join(LIBRARY_DIR, "workflow-library-param-cards.ts"), "utf8"),
     );
     /* 锚点带上**条目 id**：三列卡片列是同一个 React Flow 节点，而提示词与负向
      *  提示词的候选行完全相同（都吃 text 族）—— 只用端口名或只用 ioKey 都会撞车，
@@ -261,10 +230,7 @@ describe("库内「画布节点」页签仍是映射连线的编辑面", () => {
     expect(cards).toContain("wiredTargetsForEntry");
     expect(cards).toMatch(/handleId:[\s\S]{0,120}wired\.ioKey/);
     const classes = readFileSync(
-      path.resolve(
-        __dirname,
-        "../../../lib/workflow/workflow-param-classes.ts",
-      ),
+      path.resolve(__dirname, "../../../lib/workflow/workflow-param-classes.ts"),
       "utf8",
     );
     /* `wiredTargetsForEntry` 的定义已随 86e515a 拆分移到 workflow-param-classes.ts

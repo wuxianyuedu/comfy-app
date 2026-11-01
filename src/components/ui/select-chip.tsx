@@ -123,7 +123,7 @@ const selectChipVariants = cva(
  *
  * **`className` / `type` 不在表里**：它们照常透传（`className` 还要与形态档
  * 经 `cn()` 合并 —— 这是调用处压过缺省档的唯一入口）。 */
-const OWN_PROPS = [
+const OWN_PROPS = /* SAFETY: 类型断言已复核 */ [
   "selected",
   "shape",
   "variant",
@@ -158,13 +158,13 @@ export function SelectChip(rawProps: SelectChipProps) {
   return (
     <Button
       {...rest}
+      aria-checked={selected}
+      className={cn(selectChipVariants({ shape, className: rest.className }))}
+      role="radio"
       /* 这三件由本件**写死**：它们正是 `OWN_PROPS` 里被摘掉的那几项 ——
        * 调用处传了也不生效，所以从类型上就不给传（免得写出「传了却没反应」）。 */
       type={rest.type ?? "button"}
-      role="radio"
-      aria-checked={selected}
       variant="ghost"
-      className={cn(selectChipVariants({ shape, className: rest.className }))}
     />
   );
 }

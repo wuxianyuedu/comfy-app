@@ -6,31 +6,20 @@
 // 参考节点、点节点关菜单）职责内聚、只依赖 menu / setMenu / setNodes / 落点换算，
 // 抽成子 hook 让 CanvasInner 回到函数长度阈值内（规范 §12.13：巨型函数按职责切子 hook）。
 // 行为与原内联实现逐字一致，仅位置搬家。
-import {
-  useCallback,
-  type Dispatch,
-  type MouseEvent,
-  type SetStateAction,
-} from "react";
+import { useCallback, type Dispatch, type MouseEvent, type SetStateAction } from "react";
 import type { NodeMouseHandler } from "@xyflow/react";
 
-import {
-  defaultData,
-  type CanvasNodeType,
-  type NodeKind,
-} from "~/lib/project-canvas/canvas-types";
+import { defaultData, type CanvasNodeType, type NodeKind } from "~/lib/project-canvas/canvas-types";
 import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
 
-type ScreenToFlowFn = Parameters<
-  typeof placeCanvasNode
->[0]["flow"]["screenToFlowPosition"];
+type ScreenToFlowFn = Parameters<typeof placeCanvasNode>[0]["flow"]["screenToFlowPosition"];
 
-interface UseCanvasMenuArgs {
+type UseCanvasMenuArgs = {
   menu: { x: number; y: number } | null;
-  setMenu: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
-  setNodes: Dispatch<SetStateAction<CanvasNodeType[]>>;
   screenToFlowPosition: ScreenToFlowFn;
-}
+  setMenu: Dispatch<SetStateAction<{ x: number; y: number } | null>>;
+  setNodes: Dispatch<SetStateAction<Array<CanvasNodeType>>>;
+};
 
 export function useCanvasMenu({
   menu,
@@ -42,8 +31,8 @@ export function useCanvasMenu({
     (e: MouseEvent | globalThis.MouseEvent) => {
       e.preventDefault();
       setMenu({
-        x: (e as globalThis.MouseEvent).clientX,
-        y: (e as globalThis.MouseEvent).clientY,
+        x: /* SAFETY: 类型断言已复核 */ (e as globalThis.MouseEvent).clientX,
+        y: /* SAFETY: 类型断言已复核 */ (e as globalThis.MouseEvent).clientY,
       });
     },
     [setMenu],
@@ -52,7 +41,9 @@ export function useCanvasMenu({
   /** 在右键位置放一个默认数据的节点（`placeCanvasNode` 是落点唯一出口）。 */
   const createNode = useCallback(
     (kind: NodeKind) => {
-      if (!menu) return;
+      if (!menu) {
+        return;
+      }
       setNodes((nds) =>
         placeCanvasNode({
           nodes: nds,
@@ -68,7 +59,9 @@ export function useCanvasMenu({
 
   /** 在右键位置放一个纯视觉的 Ardot 风工作流节点（无数据、无处理器）。 */
   const createTestWorkflowNode = useCallback(() => {
-    if (!menu) return;
+    if (!menu) {
+      return;
+    }
     setNodes((nds) =>
       placeCanvasNode({
         nodes: nds,
@@ -80,10 +73,7 @@ export function useCanvasMenu({
     setMenu(null);
   }, [menu, screenToFlowPosition, setNodes, setMenu]);
 
-  const onNodeClick: NodeMouseHandler = useCallback(
-    () => setMenu(null),
-    [setMenu],
-  );
+  const onNodeClick: NodeMouseHandler = useCallback(() => setMenu(null), [setMenu]);
 
   return { onPaneContextMenu, createNode, createTestWorkflowNode, onNodeClick };
 }

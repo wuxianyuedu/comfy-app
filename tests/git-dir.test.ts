@@ -29,7 +29,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { gitScratchPath, resolveGitDir } from "../scripts/git-dir.mjs";
 
 /** 跑一次 git（静默，失败时把 stderr 带进断言消息）。 */
-function git(args: string[], cwd: string): string {
+function git(args: Array<string>, cwd: string): string {
   const r = spawnSync("git", args, { cwd, encoding: "utf8" });
   if (r.status !== 0) {
     throw new Error(`git ${args.join(" ")} 失败：${r.stderr || r.status}`);
@@ -63,7 +63,7 @@ function mustGitDir(cwd: string): string {
  * 判据要在它跑得到的那种宿主上自证，而不是共用一个数）。
  */
 function norm(p: string | null): string {
-  const slashed = String(p ?? "").replace(/\\/g, "/");
+  const slashed = String(p ?? "").replaceAll("\\", "/");
   return process.platform === "win32" ? slashed.toLowerCase() : slashed;
 }
 
@@ -129,7 +129,7 @@ describe("resolveGitDir：三种检出形态", () => {
   it("norm() 按平台归一：win32 连大小写一起，posix 只动分隔符", () => {
     const slashed = "C:/Windows/Temp/git-dir-x/repo/.git";
     const upper = "C:/WINDOWS/TEMP/git-dir-x/repo/.git";
-    const backslashed = "C:\\Windows\\Temp\\git-dir-x\\repo\\.git";
+    const backslashed = String.raw`C:\Windows\Temp\git-dir-x\repo\.git`;
     expect(norm(backslashed)).toBe(norm(slashed));
     if (process.platform === "win32") {
       expect(norm(upper)).toBe(norm(slashed));

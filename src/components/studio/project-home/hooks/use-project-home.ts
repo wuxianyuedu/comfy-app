@@ -16,10 +16,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useInterval } from "~/components/ui/use-interval";
-import {
-  useAgentRun,
-  type AgentRunController,
-} from "~/components/agent-run/use-agent-run";
+import { useAgentRun, type AgentRunController } from "~/components/agent-run/use-agent-run";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 import { fetchProduction } from "~/lib/production/production-client";
 import {
@@ -37,20 +34,20 @@ import { beginStaleRun } from "~/lib/stale-run";
 /** run 在跑时刷新项目状态的周期（run 推进阶段后会改 production，主页要跟上）。 */
 const ACTIVE_REFRESH_MS = 5000;
 
-export interface ProjectHomeController {
-  /** 活跃项目 id（无项目为空串）。 */
-  projectId: string;
-  /** 项目状态总览（未取到前是空项目的形状，不是 null —— 视图不必判两遍）。 */
-  overview: ProjectOverview;
+export type ProjectHomeController = {
   /** 顶栏那一句（「下一步：镜头生图」这类）。 */
   headline: string;
   /** 首次取数完成前为真（视图据此显示加载态而不是「还没开始」）。 */
   loading: boolean;
+  /** 项目状态总览（未取到前是空项目的形状，不是 null —— 视图不必判两遍）。 */
+  overview: ProjectOverview;
+  /** 活跃项目 id（无项目为空串）。 */
+  projectId: string;
   /** 主动重取一次（评审 / 退回某镜后刷新用，也挂在 run 跑动时）。 */
   refresh: () => Promise<void>;
   /** AI 自主成片的控制器（与工坊 / 画布同一份 run）。 */
   run: AgentRunController;
-}
+};
 
 export function useProjectHome(): ProjectHomeController {
   const [projectId] = useState(() => getActiveId() ?? "");
@@ -72,7 +69,9 @@ export function useProjectHome(): ProjectHomeController {
   }, [projectId]);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     const guard = beginStaleRun();
     void (async () => {
       const production = await fetchProduction(projectId);
@@ -88,8 +87,7 @@ export function useProjectHome(): ProjectHomeController {
   /* run 跑动 / 待确认时顺带刷新项目状态：引擎每一步都会改 production，
    * 不刷的话主页的阶段条会停在「启动前」的样子。停着的时候不轮询（无人看时
    * 不打服务端，与状态栏那格的订阅口径一致）。 */
-  const runActive =
-    run.run.status === "running" || run.run.status === "awaiting_approval";
+  const runActive = run.run.status === "running" || run.run.status === "awaiting_approval";
   useInterval(
     () => {
       void load();

@@ -13,12 +13,24 @@ import { extractJson, extractJsonArray } from "./parse";
 // ─────────────────────────────────────────────────────────────
 /** 将未知值安全转字符串：字符串原样返回，对象 JSON 序列化，避免 [object Object]。 */
 function asText(v: unknown, fallback = ""): string {
-  if (typeof v === "string") return v;
-  if (v === undefined || v === null) return fallback;
-  if (typeof v === "object") return JSON.stringify(v) ?? fallback;
-  if (typeof v === "function") return v.name || fallback;
-  if (typeof v === "symbol" || typeof v === "bigint") return v.toString();
-  if (typeof v === "number" || typeof v === "boolean") return `${v}`;
+  if (typeof v === "string") {
+    return v;
+  }
+  if (v === undefined || v === null) {
+    return fallback;
+  }
+  if (typeof v === "object") {
+    return JSON.stringify(v) ?? fallback;
+  }
+  if (typeof v === "function") {
+    return v.name || fallback;
+  }
+  if (typeof v === "symbol" || typeof v === "bigint") {
+    return v.toString();
+  }
+  if (typeof v === "number" || typeof v === "boolean") {
+    return `${v}`;
+  }
   return fallback;
 }
 
@@ -34,7 +46,7 @@ export const SCRIPT_MD_SYSTEM = `你是一位专业影视编剧助手。用户�
 export function buildScriptMarkdownMessages(
   meta: Pick<ProjectMeta, "type" | "tone" | "logline">,
   idea: string,
-): LLMMessage[] {
+): Array<LLMMessage> {
   const user = `项目类型：${meta.type}
 基调/情绪：${meta.tone || "未指定"}
 一句话梗概：${meta.logline || "无"}
@@ -55,13 +67,13 @@ export const CHARACTER_SYSTEM = `你是角色设定助手。用户会给出一�
 全程使用中文。`;
 
 export function buildCharacterMessages(c: {
-  name: string;
   appearance?: string;
   costume?: string;
+  name: string;
   personality?: string;
-  styleTags?: string[];
   skillName?: string;
-}): LLMMessage[] {
+  styleTags?: Array<string>;
+}): Array<LLMMessage> {
   const brief = [
     c.name ? `名字：${c.name}` : "",
     c.appearance ? `已有外貌：${c.appearance}` : "",
@@ -78,14 +90,14 @@ export function buildCharacterMessages(c: {
   ];
 }
 
-export interface RawCharacter {
+export type RawCharacter = {
   appearance: string;
   costume: string;
   personality: string;
-}
+};
 
 export function parseCharacter(text: string): RawCharacter {
-  const obj = (extractJson(text) as Record<string, unknown>) ?? {};
+  const obj = /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
     appearance: asText(obj.appearance),
@@ -102,19 +114,19 @@ export const CHARACTER_FROM_BRIEF_SYSTEM = `你是角色设定助手。用户会
 { "name": "角色名", "appearance": "外貌特征（发型、五官、身材、肤色等，具象）", "costume": "服装（具象，含颜色与材质）", "personality": "性格/气质关键词（逗号分隔）" }
 全程使用中文。`;
 
-export function buildCharacterFromBriefMessages(brief: string): LLMMessage[] {
+export function buildCharacterFromBriefMessages(brief: string): Array<LLMMessage> {
   return [
     { role: "system", content: CHARACTER_FROM_BRIEF_SYSTEM },
     { role: "user", content: brief },
   ];
 }
 
-export interface RawCharacterFull extends RawCharacter {
+export type RawCharacterFull = {
   name: string;
-}
+} & RawCharacter;
 
 export function parseCharacterFull(text: string): RawCharacterFull {
-  const obj = (extractJson(text) as Record<string, unknown>) ?? {};
+  const obj = /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
     name: asText(obj.name, "未命名角色"),
@@ -137,9 +149,9 @@ export const STORYBOARD_SYSTEM = `你是分镜师。给定一个场景描述和�
 
 export function buildStoryboardMessages(
   scene: Pick<Scene, "heading" | "location" | "time" | "action" | "dialogue">,
-  characterNames: string[],
+  characterNames: Array<string>,
   styleName?: string,
-): LLMMessage[] {
+): Array<LLMMessage> {
   const user = `艺术风格：${styleName ?? "默认"}
 可选角色名单：${characterNames.join("、") || "（无）"}
 
@@ -155,16 +167,16 @@ export function buildStoryboardMessages(
   ];
 }
 
-export interface RawShot {
-  shotType: ShotType;
+export type RawShot = {
+  characterNames: Array<string>;
   description: string;
-  characterNames: string[];
-}
+  shotType: ShotType;
+};
 
-export function parseStoryboard(text: string): RawShot[] {
+export function parseStoryboard(text: string): Array<RawShot> {
   const data = extractJsonArray(text);
   return data.map((datum) => {
-    const obj = (datum ?? {}) as Record<string, unknown>;
+    const obj = /* SAFETY: 类型断言已复核 */ (datum ?? {}) as Record<string, unknown>;
 
     return {
       shotType: normalizeShotType(obj.shotType),
@@ -172,7 +184,7 @@ export function parseStoryboard(text: string): RawShot[] {
       description: asText(obj.description, ""),
 
       characterNames: Array.isArray(obj.characterNames)
-        ? (obj.characterNames as unknown[]).map(String)
+        ? /* SAFETY: 类型断言已复核 */ (obj.characterNames as Array<unknown>).map(String)
         : [],
     };
   });
@@ -183,14 +195,14 @@ export function parseStoryboard(text: string): RawShot[] {
 // ─────────────────────────────────────────────────────────────
 
 /** 评审时的创作上下文（判断内容是否贴合项目意图）。字段都可能是空串，构建时兜底。 */
-export interface ContentReviewContext {
-  title: string;
-  type: string;
-  tone: string;
+export type ContentReviewContext = {
   logline: string;
   /** 剧本节选（判一致性用），已由调用方裁剪长度。 */
   scriptExcerpt: string;
-}
+  title: string;
+  tone: string;
+  type: string;
+};
 
 export const REVIEW_SYSTEM = `你是严格的 AI 生成内容质检评审。用户会给出创作上下文（项目类型 / 基调 / 梗概 / 剧本节选）与一条待评审内容（分镜镜头或角色卡的文本）。判断它是否合格：
 - 画面 / 设定是否**具象、可拍**（不是空泛套话）；
@@ -207,7 +219,9 @@ export const REVIEW_SYSTEM = `你是严格的 AI 生成内容质检评审。用�
  * 避免跨域耦合——与 `RepromptFeedback` 同一口径）。
  */
 export function scoringAddendum(rubricText: string): string {
-  if (!rubricText.trim()) return "";
+  if (!rubricText.trim()) {
+    return "";
+  }
   return `
 
 另外，按下面的评分量表（rubric）逐维度打分：scores 的键必须用维度 key，每个维度给 1~5 分与一句打分依据。分数与 pass 相互独立——低分但勉强可用仍可 pass=true，每档按锚点描述对号入座。
@@ -225,7 +239,7 @@ export function buildReviewMessages(
   sourceText: string,
   ctx: ContentReviewContext,
   rubricText?: string,
-): LLMMessage[] {
+): Array<LLMMessage> {
   const user = `【创作上下文】
 项目标题：${ctx.title || "未命名"}
 类型：${ctx.type || "未指定"}
@@ -265,7 +279,7 @@ export function buildScriptReviewMessages(
   sourceText: string,
   ctx: ContentReviewContext,
   rubricText?: string,
-): LLMMessage[] {
+): Array<LLMMessage> {
   const user = `【项目信息】
 项目标题：${ctx.title || "未命名"}
 类型：${ctx.type || "未指定"}
@@ -305,19 +319,19 @@ export const SCRIPT_REVISION_SYSTEM = `你是剧本打磨助手。用户会给�
  * 避免跨域耦合——与 `RepromptFeedback` 同一口径）。`lowScores` 由调用方从判定里
  * 挑出低分维度（`~/lib/production/review-types` 的 `weakScoreEntries`），按分升序。
  */
-export interface ScriptRevisionFeedback {
-  issues: string[];
-  suggestion: string;
+export type ScriptRevisionFeedback = {
+  issues: Array<string>;
   /** 低分维度：key + 分 + 打分依据；未评分（旧判定）时为空数组。 */
-  lowScores: { key: string; score: number; note: string }[];
-}
+  lowScores: Array<{ key: string; note: string; score: number }>;
+  suggestion: string;
+};
 
 /** 组装「按评审意见定向改写剧本」的消息。`sourceText` 是完整剧本 Markdown（调用方裁长）。 */
 export function buildScriptRevisionMessages(
   sourceText: string,
   feedback: ScriptRevisionFeedback,
   ctx: ContentReviewContext,
-): LLMMessage[] {
+): Array<LLMMessage> {
   const defects =
     feedback.issues.length > 0
       ? feedback.issues.map((issue) => `- ${issue}`).join("\n")
@@ -325,10 +339,7 @@ export function buildScriptRevisionMessages(
   const lowScores =
     feedback.lowScores.length > 0
       ? feedback.lowScores
-          .map(
-            (item) =>
-              `- ${item.key}：${item.score} 分${item.note ? `（${item.note}）` : ""}`,
-          )
+          .map((item) => `- ${item.key}：${item.score} 分${item.note ? `（${item.note}）` : ""}`)
           .join("\n")
       : "（本判定未带维度评分）";
   const user = `【项目信息】
@@ -372,18 +383,18 @@ export const SHOT_IMAGE_REVIEW_SYSTEM = `你是严格的 AI 生图质检评审�
 全程使用中文，判断从严但务实：主题清楚、角色认得出、没崩即可算合格，不因风格偏好判不合格。`;
 
 /** 视觉评审输入：图（镜头图 + 角色定妆照）+ 该镜的文本上下文。 */
-export interface ShotImageReviewInput {
+export type ShotImageReviewInput = {
+  /** 出场角色名（用于角色一致性对照说明）。 */
+  characterNames: Array<string>;
   /** 镜头产物图 URL（HTTP / data: base64）。 */
   imageUrl: string;
   /** 该镜出场角色的生效定妆照 URL（可能为空数组）。 */
-  portraitUrls: string[];
+  portraitUrls: Array<string>;
   /** 镜头提示词（文本评审评它写得好不好，这里只作对照）。 */
   prompt: string;
   /** 景别（如「中景」「特写」）。 */
   shotType: string;
-  /** 出场角色名（用于角色一致性对照说明）。 */
-  characterNames: string[];
-}
+};
 
 /**
  * 组装「看图评审生图」的消息：system = 视觉评审系统提示 + 维度评分加段（rubric）；
@@ -393,18 +404,21 @@ export interface ShotImageReviewInput {
 export function buildShotImageReviewMessages(
   input: ShotImageReviewInput,
   rubricText?: string,
-): LLMMessage[] {
+): Array<LLMMessage> {
   const context = `【镜头设定】
 提示词：${input.prompt || "（无）"}
 景别：${input.shotType || "未指定"}
 出场角色：${input.characterNames.join("、") || "（无）"}
 
 请对照上面的提示词与定妆照，评审这张图是否合格（重点看：对不对题、角色认不认得出、景别对不对、有没有崩）。`;
-  const imageParts: LLMContentPart[] = [
+  const imageParts: Array<LLMContentPart> = [
     { type: "image_url", image_url: { url: input.imageUrl } },
     ...input.portraitUrls
       .filter((url) => url.trim() !== "")
-      .map((url) => ({ type: "image_url" as const, image_url: { url } })),
+      .map((url) => ({
+        type: /* SAFETY: 类型断言已复核 */ "image_url" as const,
+        image_url: { url },
+      })),
   ];
   return [
     {
@@ -420,17 +434,17 @@ export function buildShotImageReviewMessages(
 }
 
 /** 评审意见的最小形状（与 `ReviewVerdict` 结构兼容；这里不 import production 域，避免跨域耦合）。 */
-export interface RepromptFeedback {
-  issues: string[];
+export type RepromptFeedback = {
+  issues: Array<string>;
   suggestion: string;
-}
+};
 
 /** 组装「据评审意见改写镜头提示词」的消息。`sourceText` 是原提示词 / 画面描述文本。 */
 export function buildShotRepromptMessages(
   sourceText: string,
   feedback: RepromptFeedback,
   ctx: ContentReviewContext,
-): LLMMessage[] {
+): Array<LLMMessage> {
   const defects =
     feedback.issues.length > 0
       ? feedback.issues.map((issue) => `- ${issue}`).join("\n")

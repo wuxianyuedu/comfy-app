@@ -29,14 +29,14 @@ import {
 } from "~/lib/project-canvas/canvas-store";
 import { useSyncRefusalNotice } from "./use-sync-refusal-notice";
 
-export interface UseProjectPersistenceParams {
-  projectId: string | null;
-  nodes: CanvasNodeType[];
-  edges: Edge[];
-  projectName: string;
+export type UseProjectPersistenceParams = {
+  edges: Array<Edge>;
   /** 项目是否已完成首次加载（!hydrating）；false 时不触发持久化。 */
   loaded: boolean;
-}
+  nodes: Array<CanvasNodeType>;
+  projectId: string | null;
+  projectName: string;
+};
 
 export function useProjectPersistence({
   projectId,
@@ -67,7 +67,9 @@ export function useProjectPersistence({
       edges: liveEdges,
       projectName: liveName,
     } = ref.current;
-    if (!pid) return;
+    if (!pid) {
+      return;
+    }
 
     const nameLive = nameOverride ?? liveName;
     const isEmpty = liveNodes.length === 0 && liveEdges.length === 0;
@@ -78,7 +80,9 @@ export function useProjectPersistence({
        * 被清了，界面留下「项目还在、上下文没了」的半截状态。
        * 回收真正的语义是「这一条既不在索引里、也不在 active 上」，
        * 两件事要一起做、或者一起不做。 */
-      if (reapEmptyProject(pid)) clearActiveIfDraft(pid);
+      if (reapEmptyProject(pid)) {
+        clearActiveIfDraft(pid);
+      }
       return;
     }
     upsertProject({
@@ -92,15 +96,21 @@ export function useProjectPersistence({
 
   /* 500ms debounce：内容变化（含重命名）后落盘。 */
   useEffect(() => {
-    if (!projectId || !loaded) return;
+    if (!projectId || !loaded) {
+      return;
+    }
     const t = setTimeout(() => persistNow(), 500);
     return () => clearTimeout(t);
   }, [nodes, edges, projectId, projectName, loaded, persistNow]);
 
   /* 600ms mutation effect：跳过加载后首轮变更，后续变更落盘。 */
   useEffect(() => {
-    if (!loaded) return;
-    if (!ref.current.projectId) return;
+    if (!loaded) {
+      return;
+    }
+    if (!ref.current.projectId) {
+      return;
+    }
     if (firstMutationRef.current) {
       firstMutationRef.current = false;
       return;

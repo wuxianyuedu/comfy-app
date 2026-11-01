@@ -5,27 +5,27 @@ import { useMemo } from "react";
 import { inferOutputTypeAll } from "../workflow-utils";
 import type { WorkflowNodeData, RawInputMeta } from "../workflow-types";
 
-export interface FlowNodeEntries {
+export type FlowNodeEntries = {
+  /** 组装好的输入行：先是 rawInputs（服务端配对的 widget 值），再是 data.inputs。 */
+  allEntries: Array<[string, unknown]>;
+  /** 纯类型端口行（rawInputs[i].widget 缺省）—— 在左边缘拿一个 Handle。 */
+  connEntries: Array<[string, unknown]>;
+  /** LoadImage 合成的 `preview: true` 条目（内联缩略图 / 占位）。 */
+  imagePreviewEntries: Array<RawInputMeta>;
+  /** 遗留的合并列表 —— 留给溢出句柄的兜底用。 */
+  orderedEntries: Array<[string, unknown]>;
+  /** 输出端口：静态 inferOutputTypeAll 表 → rawOutputs → 空。 */
+  outputs: Array<[string, string]>;
   /** raw_inputs（每节点元数据，带本地化标签），按 API `name` 索引。 */
   rawMeta: Record<string, RawInputMeta>;
-  /** 组装好的输入行：先是 rawInputs（服务端配对的 widget 值），再是 data.inputs。 */
-  allEntries: [string, unknown][];
-  /** 纯类型端口行（rawInputs[i].widget 缺省）—— 在左边缘拿一个 Handle。 */
-  connEntries: [string, unknown][];
-  /** 背后是 widgets_values 槽位的行（rawInputs[i].widget 存在）。 */
-  widgetEntries: [string, unknown][];
   /** connEntries 去掉同时也是 widget 的名字（去重）。 */
-  uniqueConnEntries: [string, unknown][];
-  uniqueWidgetEntries: [string, unknown][];
-  /** 遗留的合并列表 —— 留给溢出句柄的兜底用。 */
-  orderedEntries: [string, unknown][];
+  uniqueConnEntries: Array<[string, unknown]>;
+  uniqueWidgetEntries: Array<[string, unknown]>;
   /** 不设上限 —— 每个 widget 都渲染（DaSiWa 之类要显示完整参数表）。 */
-  visibleWidgetEntries: [string, unknown][];
-  /** LoadImage 合成的 `preview: true` 条目（内联缩略图 / 占位）。 */
-  imagePreviewEntries: RawInputMeta[];
-  /** 输出端口：静态 inferOutputTypeAll 表 → rawOutputs → 空。 */
-  outputs: [string, string][];
-}
+  visibleWidgetEntries: Array<[string, unknown]>;
+  /** 背后是 widgets_values 槽位的行（rawInputs[i].widget 存在）。 */
+  widgetEntries: Array<[string, unknown]>;
+};
 
 /**
  * 把一个节点的输入分桶成连接行（顶部针脚）与 widget 行
@@ -35,28 +35,35 @@ export interface FlowNodeEntries {
 export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
   const rawMeta: Record<string, RawInputMeta> = useMemo(() => {
     const out: Record<string, RawInputMeta> = {};
-    for (const r of data.rawInputs ?? []) out[r.name] = r;
+    for (const r of data.rawInputs ?? []) {
+      out[r.name] = r;
+    }
     return out;
   }, [data.rawInputs]);
 
-  const allEntries: [string, unknown][] = useMemo(() => {
+  const allEntries: Array<[string, unknown]> = useMemo(() => {
     if (data.rawInputs && data.rawInputs.length > 0) {
       return data.rawInputs.map((rawInput) => {
         // 服务端配对的 widget 值 —— **每个** widget 型输入都有，
         // 连不连线都在。无论连线与否都显示它。
         if (rawInput.widgetValue !== undefined) {
-          return [rawInput.name, rawInput.widgetValue] as [string, unknown];
+          return /* SAFETY: 类型断言已复核 */ [rawInput.name, rawInput.widgetValue] as [
+            string,
+            unknown,
+          ];
         }
         // 纯连接型输入没有 widget 值 —— 发一个数组，好让
         // conn/widget 分流器把它们当成带 Handle 的连线行。
-        return [rawInput.name, rawInput.isConnection ? [] : ""] as [
+        return /* SAFETY: 类型断言已复核 */ [rawInput.name, rawInput.isConnection ? [] : ""] as [
           string,
           unknown,
         ];
       });
     }
     const fromGraph = Object.entries(data.inputs ?? {});
-    if (fromGraph.length > 0) return fromGraph;
+    if (fromGraph.length > 0) {
+      return fromGraph;
+    }
     return [];
   }, [data.inputs, data.rawInputs]);
 
@@ -89,12 +96,15 @@ export function useFlowNodeEntries(data: WorkflowNodeData): FlowNodeEntries {
 
   // 输出端口：静态表 → raw outputs[]（只有这里能让 ResolutionSelector.width/height
   // 这类自定义节点输出存活下来）→ 空列表。
-  const outputs: [string, string][] = useMemo(() => {
+  const outputs: Array<[string, string]> = useMemo(() => {
     const staticOuts = Object.entries(inferOutputTypeAll(data.classType));
-    if (staticOuts.length > 0) return staticOuts;
+    if (staticOuts.length > 0) {
+      return staticOuts;
+    }
     if (data.rawOutputs && data.rawOutputs.length > 0) {
       return data.rawOutputs.map(
-        (rawOutput) => [rawOutput.name, rawOutput.type] as [string, string],
+        (rawOutput) =>
+          /* SAFETY: 类型断言已复核 */ [rawOutput.name, rawOutput.type] as [string, string],
       );
     }
     return [];

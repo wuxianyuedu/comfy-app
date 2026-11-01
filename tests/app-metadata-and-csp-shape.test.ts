@@ -23,10 +23,7 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(__dirname, "..");
 const nextConfig = readFileSync(path.join(root, "next.config.js"), "utf8");
-const layout = readFileSync(
-  path.join(root, "src", "app", "layout.tsx"),
-  "utf8",
-);
+const layout = readFileSync(path.join(root, "src", "app", "layout.tsx"), "utf8");
 const modelsPage = readFileSync(
   path.join(root, "src", "app", "(main)", "models", "page.tsx"),
   "utf8",
@@ -35,12 +32,16 @@ const modelsPage = readFileSync(
 /** 取某个导出对象字面量的正文（`export const x … = { … }` 那一段）。 */
 function exportedObjectBody(source: string, exportName: string): string {
   const start = source.indexOf(`export const ${exportName}`);
-  if (start < 0) return "";
+  if (start === -1) {
+    return "";
+  }
   const open = source.indexOf("{", start);
-  if (open < 0) return "";
+  if (open === -1) {
+    return "";
+  }
   // 单行（`{ title: "模型库" }`）与多行（`{\n  …\n}`）两种收尾都要认。
   const end = source.indexOf("}", open);
-  return end < 0 ? "" : source.slice(open, end + 1);
+  return end === -1 ? "" : source.slice(open, end + 1);
 }
 
 describe("根布局的窗口元数据不再是脚手架残留", () => {
@@ -74,19 +75,16 @@ describe("根布局的窗口元数据不再是脚手架残留", () => {
     const body = exportedObjectBody(modelsPage, "metadata");
     expect(body, "models 页里找不到 metadata 导出").toBeTruthy();
     expect(body).toContain('title: "模型库"');
-    expect(
-      body,
-      "models 页自带品牌后又会被根 template 补一遍，标题会重复",
-    ).not.toContain("Comfy-APP");
+    expect(body, "models 页自带品牌后又会被根 template 补一遍，标题会重复").not.toContain(
+      "Comfy-APP",
+    );
   });
 });
 
 describe("CSP 是模块级常量，不是逐请求现拼", () => {
   it("CSP 在模块级算一次（`headers()` 里没有 join 出来的那份拼装）", () => {
     expect(nextConfig).toContain("const CSP = [");
-    const headersBody = /async headers\(\)\s*\{([\s\S]*?)\n {2}\},/.exec(
-      nextConfig,
-    )?.[1];
+    const headersBody = /async headers\(\)\s*\{([\s\S]*?)\n {2}\},/.exec(nextConfig)?.[1];
     expect(headersBody, "next.config.js 里找不到 headers()").toBeTruthy();
     expect(
       headersBody,

@@ -9,12 +9,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { generatedRoot } from "~/lib/media/output-paths";
-import {
-  buildNormalizeArgs,
-  buildSegmentVf,
-  buildSrtBody,
-  clipPathOf,
-} from "./compose-steps";
+import { buildNormalizeArgs, buildSegmentVf, buildSrtBody, clipPathOf } from "./compose-steps";
 
 describe("buildSegmentVf", () => {
   it("拼出 scale/pad/fps + 首尾淡入淡出的滤镜串", () => {
@@ -75,17 +70,15 @@ describe("buildNormalizeArgs", () => {
 
 describe("clipPathOf", () => {
   /* 期望值一律现算，且根从唯一出处取（在测试里重抄落点 = 搬根那天假红）。 */
-  const CWD = path.resolve(path.sep + "proj");
-  const at = (...segs: string[]) => path.join(generatedRoot(CWD), ...segs);
+  const CWD = path.resolve(`${path.sep}proj`);
+  const at = (...segs: Array<string>) => path.join(generatedRoot(CWD), ...segs);
 
   it("执行器写进库里的 /api/generated/… 解析到产物根，不是 public/api/…", () => {
     /* 这条就是「合成成片每次都失败」的判据。库里 `filmShot.videoPath` 的值来自
      * `TaskImage.localPath`，而那是 `taskOutputUrl()` 写的 `/api/generated/…`；
      * 旧实现只剥前导斜杠再拼 `public`，得到 `<cwd>/public/api/generated/…`
      * —— 那个目录不存在，ffmpeg 每个镜头都报找不到输入。 */
-    expect(clipPathOf(CWD, "/api/generated/films/x.mp4")).toBe(
-      at("films", "x.mp4"),
-    );
+    expect(clipPathOf(CWD, "/api/generated/films/x.mp4")).toBe(at("films", "x.mp4"));
   });
 
   it("历史留下的 /generated/… 与 /api/generated/… 同答案", () => {

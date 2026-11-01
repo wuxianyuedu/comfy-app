@@ -14,15 +14,15 @@
 /* 引擎 helper 按本片实际用量解构（core no-unused-vars 守着）；跨片搬规则时同步增删。 */
 const { stripCommentsCached, countNestedMinMax } = require("./ui-primitives-engine.cjs");
 
-
 module.exports = {
   P59: {
-    label:
-      "视图 / 逻辑 / 服务端里手写数值夹取（应使用 ~/lib/clamp 的 clamp / clampInt）",
+    label: "视图 / 逻辑 / 服务端里手写数值夹取（应使用 ~/lib/clamp 的 clamp / clampInt）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/lib\/clamp"/.test(t2)) return 0;
+      if (/from "~\/lib\/clamp"/.test(t2)) {
+        return 0;
+      }
       return countNestedMinMax(t2);
     },
   },
@@ -44,20 +44,19 @@ module.exports = {
    * 出口：`~/lib/upper-token` 的 `upperToken` / `upperTokenOr`。
    */
   P60: {
-    label:
-      "视图 / 逻辑 / 服务端里自写大写归一（应使用 ~/lib/upper-token 的 upperToken）",
+    label: "视图 / 逻辑 / 服务端里自写大写归一（应使用 ~/lib/upper-token 的 upperToken）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/lib\/upper-token"/.test(t2)) return 0;
+      if (/from "~\/lib\/upper-token"/.test(t2)) {
+        return 0;
+      }
       /* ② 先数（含 `.trim()` 的形态一并数进来）。
        * ① 再数**不带 `.trim()`** 的 `?? ""` 形态 —— 否则
        * `(x ?? "").trim().toUpperCase()` 会被两种形态各数一次（重复计）。 */
-      const trimmed = (t2.match(/\.\s*trim\(\)\s*\.\s*toUpperCase\s*\(/g) || [])
+      const trimmed = (t2.match(/\.\s*trim\(\)\s*\.\s*toUpperCase\s*\(/g) || []).length;
+      const plain = (t2.match(/\?\?\s*(?:"[^"]*"|'[^']*')\s*\)\s*\.toUpperCase\s*\(/g) || [])
         .length;
-      const plain = (
-        t2.match(/\?\?\s*(?:"[^"]*"|'[^']*')\s*\)\s*\.toUpperCase\s*\(/g) || []
-      ).length;
       return trimmed + plain;
     },
   },
@@ -87,7 +86,9 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/lib\/app-events"/.test(t2)) return 0;
+      if (/from "~\/lib\/app-events"/.test(t2)) {
+        return 0;
+      }
       const dispatched = (t2.match(/\bnew CustomEvent\s*\(/g) || []).length;
       const namespaced = (
         t2.match(
@@ -123,7 +124,9 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/lib\/form-props"/.test(t2)) return 0;
+      if (/from "~\/lib\/form-props"/.test(t2)) {
+        return 0;
+      }
       const value = (
         t2.match(
           /=>\s*[A-Za-z_$][\w$.[\]?]*\(\s*[A-Za-z_$][\w$]*\.(?:target|currentTarget)\.value\s*\)/g,
@@ -165,16 +168,15 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/lib\/page-window"/.test(t2)) return 0;
+      if (/from "~\/lib\/page-window"/.test(t2)) {
+        return 0;
+      }
       const offset = (
-        t2.match(
-          /\.length\s*-\s*[A-Za-z_$][\w$.[\]?]*\s*\*\s*[A-Za-z_$0-9][\w$.[\]?]*/g,
-        ) || []
+        t2.match(/\.length\s*-\s*[A-Za-z_$][\w$.[\]?]*\s*\*\s*[A-Za-z_$0-9][\w$.[\]?]*/g) || []
       ).length;
       const ceilDiv = (
-        t2.match(
-          /Math\.ceil\s*\(\s*[A-Za-z_$][\w$.[\]?]*\s*\/\s*[A-Za-z_$0-9][\w$.[\]?]*\s*\)/g,
-        ) || []
+        t2.match(/Math\.ceil\s*\(\s*[A-Za-z_$][\w$.[\]?]*\s*\/\s*[A-Za-z_$0-9][\w$.[\]?]*\s*\)/g) ||
+        []
       ).length;
       const tail = (
         t2.match(
@@ -207,12 +209,13 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/components\/ui\/use-throttled-progress"/.test(t2)) return 0;
+      if (/from "~\/components\/ui\/use-throttled-progress"/.test(t2)) {
+        return 0;
+      }
       /* 只认「订阅回调里写 state」：`onProgress:` 之后同一段里出现 setter。 */
       const hits =
-        t2.match(
-          /onProgress\s*:\s*\([^)]*\)\s*=>\s*(?:\{[\s\S]{0,400}?)?set[A-Z][\w$]*\s*\(/g,
-        ) || [];
+        t2.match(/onProgress\s*:\s*\([^)]*\)\s*=>\s*(?:\{[\s\S]{0,400}?)?set[A-Z][\w$]*\s*\(/g) ||
+        [];
       return hits.length;
     },
   },
@@ -243,27 +246,38 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/components\/ui\/use-busy-action"/.test(t2)) return 0;
-      const decl =
-        /const\s*\[\s*\w+\s*,\s*(set[A-Z][\w$]*)\s*\]\s*=\s*(?:React\.)?useState\s*\(/g;
+      if (/from "~\/components\/ui\/use-busy-action"/.test(t2)) {
+        return 0;
+      }
+      const decl = /const\s*\[\s*\w+\s*,\s*(set[A-Z][\w$]*)\s*\]\s*=\s*(?:React\.)?useState\s*\(/g;
       const setters = new Set();
       let m;
-      while ((m = decl.exec(t2)) !== null) setters.add(m[1]);
+      while ((m = decl.exec(t2)) !== null) {
+        setters.add(m[1]);
+      }
       let hits = 0;
       for (const setter of setters) {
-        const off = new RegExp("\\b" + setter + "\\(\\s*false\\s*\\)");
-        if (!off.test(t2)) continue;
-        const on = new RegExp("\\b" + setter + "\\(\\s*true\\s*\\)", "g");
+        const off = new RegExp(String.raw`\b` + setter + String.raw`\(\s*false\s*\)`);
+        if (!off.test(t2)) {
+          continue;
+        }
+        const on = new RegExp(String.raw`\b` + setter + String.raw`\(\s*true\s*\)`, "g");
         let o;
         while ((o = on.exec(t2)) !== null) {
           /* 取置忙之后的一段，够跨过动作体（含 NDJSON 流式消费那种长回调）。 */
           const window = t2.slice(o.index, o.index + 1500);
           const offAt = window.search(off);
-          if (offAt < 0) continue;
+          if (offAt < 0) {
+            continue;
+          }
           const awaitAt = window.search(/\bawait\b/);
-          if (awaitAt < 0 || awaitAt > offAt) continue;
+          if (awaitAt < 0 || awaitAt > offAt) {
+            continue;
+          }
           const before = window.slice(0, offAt);
-          if (/\bfinally\b/.test(before) || /\bcatch\b/.test(before)) continue;
+          if (/\bfinally\b/.test(before) || /\bcatch\b/.test(before)) {
+            continue;
+          }
           hits++;
         }
       }
@@ -295,26 +309,27 @@ module.exports = {
     count: (t) => {
       const t2 = stripCommentsCached(t);
       /* 已用出口的文件跳过（换用出口即自动合规）。 */
-      if (/from "~\/components\/ui\/use-reentrancy-lock"/.test(t2)) return 0;
+      if (/from "~\/components\/ui\/use-reentrancy-lock"/.test(t2)) {
+        return 0;
+      }
       const decl = /(?:const|let)\s+(\w+)\s*=\s*(?:React\.)?useRef\s*\(/g;
       let m;
       let hits = 0;
       while ((m = decl.exec(t2)) !== null) {
         const name = m[1];
         /* 只认「闸门语义」的名字 —— 镜像 ref / 计数 ref 不算。 */
-        if (!/busy|pending|inflight|locked|running|checked/i.test(name))
+        if (!/busy|pending|inflight|locked|running|checked/i.test(name)) {
           continue;
+        }
         const window = t2.slice(m.index, m.index + 900);
-        const writes = (
-          window.match(new RegExp("\\b" + name + "\\.current\\s*=", "g")) || []
-        ).length;
-        const reads = (
-          window.match(new RegExp("!?\\b" + name + "\\.current", "g")) || []
-        ).length;
-        if (writes >= 1 && reads >= 2) hits++;
+        const writes = (window.match(new RegExp(String.raw`\b` + name + String.raw`\.current\s*=`, "g")) || [])
+          .length;
+        const reads = (window.match(new RegExp(String.raw`!?\b` + name + String.raw`\.current`, "g")) || []).length;
+        if (writes >= 1 && reads >= 2) {
+          hits++;
+        }
       }
       return hits;
     },
   },
-
 };

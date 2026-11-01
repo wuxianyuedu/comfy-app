@@ -39,8 +39,7 @@ const TEXT_DECL_RE = /^\s*--text-([a-z0-9]+)\s*:\s*([0-9.]+)(rem|px)\s*;/gm;
  * **认不出形状就抛错，不当「没有配对」**：静默漏掉一条配对，会让
  * 「按行高推理」的判据拿到一份缺东西的表，那比红更糟。
  */
-const LINE_HEIGHT_RE =
-  /^\s*--text-([a-z0-9]+)--line-height\s*:\s*([^;]+);\s*$/gm;
+const LINE_HEIGHT_RE = /^\s*--text-([a-z0-9]+)--line-height\s*:\s*([^;]+);\s*$/gm;
 
 /** 解一条行高声明成比值（乘字号得像素）。支持 `calc(a / b)` 与裸数值两种形状。 */
 function parseLineRatio(raw: string, where: string): number {
@@ -49,7 +48,9 @@ function parseLineRatio(raw: string, where: string): number {
     return Number.parseFloat(calc[1]) / Number.parseFloat(calc[2]);
   }
   const bare = /^([0-9.]+)$/.exec(raw.trim());
-  if (bare?.[1]) return Number.parseFloat(bare[1]);
+  if (bare?.[1]) {
+    return Number.parseFloat(bare[1]);
+  }
   throw new Error(
     `认不出的 --text-${where}--line-height 形状：${raw}（新增写法要同步这里的解法，不许静默跳过）`,
   );
@@ -61,16 +62,16 @@ function toPx(value: string, unit: string): number {
   return unit === "rem" ? n * 16 : n;
 }
 
-export interface TextTiers {
+export type TextTiers = {
   /** 渲染 px → 档名（多个档同名值时保留第一个，仅用于报错话术）。 */
   byPx: Map<number, string>;
-  /** 当前在用的全部档名（已按 t-shirt 形状筛过）。 */
-  names: string[];
   /**
    * 档名 → **配对行高比值**（`text-<名>` 会连带锁 `line-height`）。
    * 不在表里 = 这一档没有配对，行高走继承（项目自加的 `2xs` / `3xs` 就是刻意如此）。
    */
   lineRatios: Map<string, number>;
+  /** 当前在用的全部档名（已按 t-shirt 形状筛过）。 */
+  names: Array<string>;
 }
 
 /**
@@ -89,15 +90,21 @@ export interface TextTiers {
 export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   const collected = new Map<string, number>();
   const defaults = new Set<string>();
-  const sources: Array<{ text: string; fromProject: boolean }> = [
+  const sources: Array<{ fromProject: boolean; text: string; }> = [
     { text: readFileSync(tailwindThemeCss(), "utf8"), fromProject: false },
     { text: globalsCss, fromProject: true },
   ];
   for (const { text, fromProject } of sources) {
     for (const m of text.matchAll(TEXT_DECL_RE)) {
-      if (!m[1] || !m[2] || !m[3]) continue;
-      if (fromProject && !fromProjectIsUsable(m[1], tshirt, defaults)) continue;
-      if (!fromProject) defaults.add(m[1]);
+      if (!m[1] || !m[2] || !m[3]) {
+        continue;
+      }
+      if (fromProject && !fromProjectIsUsable(m[1], tshirt, defaults)) {
+        continue;
+      }
+      if (!fromProject) {
+        defaults.add(m[1]);
+      }
       collected.set(m[1], toPx(m[2], m[3]));
     }
   }
@@ -105,16 +112,20 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   const lineRatios = new Map<string, number>();
   for (const { text } of sources) {
     for (const m of text.matchAll(LINE_HEIGHT_RE)) {
-      if (!m[1] || !m[2]) continue;
+      if (!m[1] || !m[2]) {
+        continue;
+      }
       lineRatios.set(m[1], parseLineRatio(m[2], m[1]));
     }
   }
 
   const byPx = new Map<number, string>();
-  const names: string[] = [];
+  const names: Array<string> = [];
   for (const [name, px] of [...collected].sort((a, b) => a[1] - b[1])) {
     names.push(name);
-    if (!byPx.has(px)) byPx.set(px, name);
+    if (!byPx.has(px)) {
+      byPx.set(px, name);
+    }
   }
   if (names.length === 0) {
     throw new Error(
@@ -137,21 +148,16 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
  * 某一档在真浏览器里渲染出的行盒高度（px，四舍五入到 0.01 与读数对齐）。
  * 没有配对的档返回 `null` —— 那一档的行高由继承决定，不由这张表担保。
  */
-export function renderedLineHeightPx(
-  tiers: TextTiers,
-  name: string,
-): number | null {
+export function renderedLineHeightPx(tiers: TextTiers, name: string): number | null {
   const ratio = tiers.lineRatios.get(name);
   const size = [...tiers.byPx].find(([, n]) => n === name)?.[0];
-  if (ratio === undefined || size === undefined) return null;
+  if (ratio === undefined || size === undefined) {
+    return null;
+  }
   return Math.round(size * ratio * 100) / 100;
 }
 
 /** 项目自加的档名：t-shirt 形状、或覆盖的是一个默认名（那 `cn` 本来就认识）才算可用。 */
-function fromProjectIsUsable(
-  name: string,
-  tshirt: RegExp,
-  defaults: Set<string>,
-): boolean {
+function fromProjectIsUsable(name: string, tshirt: RegExp, defaults: Set<string>): boolean {
   return tshirt.test(name) || defaults.has(name);
 }

@@ -68,22 +68,22 @@ function Demo({
   onOpenChange,
   open,
 }: {
-  showCloseButton?: boolean;
-  showOverlay?: boolean;
-  popupClassName?: string;
   className?: string;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
+  popupClassName?: string;
+  showCloseButton?: boolean;
+  showOverlay?: boolean;
 }) {
   return (
     <div id="host">
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog onOpenChange={onOpenChange} open={open}>
         <DialogTrigger>打开设置</DialogTrigger>
         <DialogContent
+          className={className}
+          popupClassName={popupClassName}
           showCloseButton={showCloseButton}
           showOverlay={showOverlay}
-          popupClassName={popupClassName}
-          className={className}
         >
           <DialogHeader>
             <DialogTitle>弹窗标题</DialogTitle>
@@ -105,14 +105,18 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>) {
      再把元素取回来（§11.14.3 的口径：等一个条件变成真一律写 `expect.poll`）。 */
   await expect.poll(() => document.querySelector(CONTENT_MARK)).not.toBeNull();
   const el = document.querySelector<HTMLElement>(CONTENT_MARK);
-  if (!el) throw new Error("点开后没有渲染出弹窗本体");
+  if (!el) {
+    throw new Error("点开后没有渲染出弹窗本体");
+  }
   return el;
 }
 
 /** 受控形态下弹窗一开始就是开的；此时触发器已被移出无障碍树（见下面那条用例）。 */
 function alreadyOpenPopup(): HTMLElement {
   const el = document.querySelector<HTMLElement>(CONTENT_MARK);
-  if (!el) throw new Error("受控 open 下应当直接渲染出弹窗本体");
+  if (!el) {
+    throw new Error("受控 open 下应当直接渲染出弹窗本体");
+  }
   return el;
 }
 
@@ -121,10 +125,9 @@ const CONTENT_MARK = '[data-slot="dialog-content"]';
 
 /** 取最近一次 onOpenChange 的第一实参（新状态）与 reason（关闭原因）。 */
 function lastCall(onOpenChange: ReturnType<typeof vi.fn>) {
-  const calls = onOpenChange.mock.calls as unknown as [
-    boolean,
-    { reason?: string }?,
-  ][];
+  const calls = /* SAFETY: 类型断言已复核 */ onOpenChange.mock.calls as unknown as Array<
+    [boolean, { reason?: string }?]
+  >;
   const call = calls.at(-1);
   return { nextOpen: call?.[0], reason: call?.[1]?.reason };
 }
@@ -147,9 +150,7 @@ describe("ui/dialog 的关闭按钮", () => {
     /* 内置那枚带绝对定位（右上角），自绘那枚不带 —— 位置重合是事故的几何成因。 */
     const builtin = [...closes].find((el) => el.className.includes("absolute"));
     expect(builtin).toBeDefined();
-    expect(
-      [...closes].filter((el) => el.className.includes("absolute")),
-    ).toHaveLength(1);
+    expect([...closes].filter((el) => el.className.includes("absolute"))).toHaveLength(1);
   });
 
   it("正确用法：showCloseButton={false} 之后只剩自绘那一枚，不多不少", async () => {
@@ -166,7 +167,7 @@ describe("ui/dialog 的关闭按钮", () => {
   it("关闭按钮回传 false，并带上原因 close-press", async () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();
-    render(<Demo showCloseButton={false} onOpenChange={onOpenChange} />);
+    render(<Demo onOpenChange={onOpenChange} showCloseButton={false} />);
     const popup = await openDialog(user);
 
     await user.click(popup.querySelector<HTMLElement>(CLOSE_MARK)!);
@@ -179,7 +180,7 @@ describe("ui/dialog 的关闭按钮", () => {
   it("Esc 回传 false（reason=escape-key）；关掉后重开仍带那层遮罩", async () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();
-    render(<Demo showCloseButton={false} onOpenChange={onOpenChange} />);
+    render(<Demo onOpenChange={onOpenChange} showCloseButton={false} />);
     await openDialog(user);
 
     await user.keyboard("{Escape}");
@@ -191,9 +192,7 @@ describe("ui/dialog 的关闭按钮", () => {
     /* 重新打开后 `[data-slot="dialog-overlay"]` 必须在位 —— 它是「弹窗背后变暗、
        且背后内容点不中」的那一层（ISSUE #1742 之前缺的就是它）。 */
     await user.click(screen.getByRole("button", { name: "打开设置" }));
-    await expect
-      .poll(() => document.querySelector(CONTENT_MARK))
-      .not.toBeNull();
+    await expect.poll(() => document.querySelector(CONTENT_MARK)).not.toBeNull();
     expect(
       document.querySelector('[data-slot="dialog-overlay"]'),
       "DialogContent 必须自带 Backdrop",
@@ -237,18 +236,12 @@ describe("ui/dialog 的可访问名与归属", () => {
        aria-labelledby → 那个节点的文本，才是规范 06 要的关联。 */
     const labelledBy = popup.getAttribute("aria-labelledby");
     expect(labelledBy).toBeTruthy();
-    expect(document.getElementById(labelledBy ?? "")?.textContent).toContain(
-      "弹窗标题",
-    );
-    expect(
-      screen.getByRole("dialog", { name: "弹窗标题" }),
-    ).toBeInTheDocument();
+    expect(document.getElementById(labelledBy ?? "")?.textContent).toContain("弹窗标题");
+    expect(screen.getByRole("dialog", { name: "弹窗标题" })).toBeInTheDocument();
 
     const describedBy = popup.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy ?? "")?.textContent).toContain(
-      "这是说明文案",
-    );
+    expect(document.getElementById(describedBy ?? "")?.textContent).toContain("这是说明文案");
   });
 
   it("内容渲染在 body 的 Portal 里，不在触发器的宿主容器内", async () => {
@@ -265,9 +258,7 @@ describe("ui/dialog 的可访问名与归属", () => {
     /* 这条是上面那条受控用例「拿不到按钮」的正面表述：弹窗开着的时候，外部
        内容不在 a11y 树里 ⇒ 读屏与 Tab 键都进不去背景页面。谁要是把模态行为
        关掉（或改成自绘遮罩），这里会先红。 */
-    expect(
-      screen.queryByRole("button", { name: "打开设置" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "打开设置" })).not.toBeInTheDocument();
   });
 });
 
@@ -292,7 +283,7 @@ describe("ui/dialog 的宽度写法", () => {
 
   it(`同族宽度同时传时 className 取胜（\`cn()\` 同组后者胜、把输家摘掉）`, async () => {
     const user = userEvent.setup();
-    render(<Demo popupClassName="w-6xl" className="w-3xl" />);
+    render(<Demo className="w-3xl" popupClassName="w-6xl" />);
     const popup = await openDialog(user);
     expect(popup.className).toContain("w-3xl");
     expect(popup.className).not.toContain("w-6xl");
@@ -303,7 +294,7 @@ describe("ui/dialog 的受控形态", () => {
   it("受控时点关闭只回传、不自己关（由调用方的 state 决定）", async () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();
-    render(<Demo open showCloseButton={false} onOpenChange={onOpenChange} />);
+    render(<Demo onOpenChange={onOpenChange} open showCloseButton={false} />);
     const popup = alreadyOpenPopup();
 
     await user.click(popup.querySelector<HTMLElement>(CLOSE_MARK)!);

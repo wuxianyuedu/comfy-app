@@ -78,14 +78,8 @@ import process from "node:process";
 import { defaultShellExe, shellStaleWarning } from "./dev-launcher.mjs";
 import { findCargo, findCargoLookup } from "./shell-gate-cargo.mjs";
 import { resolveGitDir } from "./git-dir.mjs";
-import {
-  changedFilesForBaseRef,
-  reconcileSyntheticMergeFace,
-} from "./changed-scope.mjs";
-import {
-  hostTripleFromCargoVersion,
-  sidecarFileName,
-} from "./sidecar-name.mjs";
+import { changedFilesForBaseRef, reconcileSyntheticMergeFace } from "./changed-scope.mjs";
+import { hostTripleFromCargoVersion, sidecarFileName } from "./sidecar-name.mjs";
 
 /* cargo 的**寻址判据**（PATH 优先、安装位兜底、探针取证）整段在 `shell-gate-cargo.mjs`
  * —— R5 的 900 行硬闸不给人留「再挤一挤」的余地，而按职责切的口子在「怎么找 cargo」
@@ -111,8 +105,7 @@ const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** 会改变壳二进制内容的四类输入（与 `shellStaleWarning` 的 targets 同集合）。 */
-export const SHELL_INPUT_RE =
-  /^src-tauri\/(?:tauri\.conf\.json|build\.rs|src\/|splash-assets\/)/;
+export const SHELL_INPUT_RE = /^src-tauri\/(?:tauri\.conf\.json|build\.rs|src\/|splash-assets\/)/;
 /** Rust 源码（决定要不要付 `cargo test` 那笔编译钱）。 */
 export const RUST_SOURCE_RE = /^src-tauri\/src\/.*\.rs$/;
 
@@ -120,15 +113,13 @@ export const RUST_SOURCE_RE = /^src-tauri\/src\/.*\.rs$/;
 export function stagedFiles() {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
-  const out = spawnSync(
-    "git",
-    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-    },
-  );
-  if (out.status !== 0) return [];
+  const out = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (out.status !== 0) {
+    return [];
+  }
   return out.stdout.split(/\r?\n/).filter(Boolean);
 }
 
@@ -149,13 +140,21 @@ export function dropAdoptedShellInputs(staged, repoRoot = ROOT) {
   // 本仓检出在哪：走权威解析（认链接工作树里 `.git` 是个文件的情形），不硬拼
   // 检出子目录（硬拼在 worktree 上指向那个文件、MERGE_HEAD 永远查不到）。
   const gitDir = resolveGitDir(repoRoot);
-  if (!gitDir) return staged; // 不在 git 检出里 ⇒ 没有合并进行中，原样返回
+  if (!gitDir) {
+    return staged;
+  } // 不在 git 检出里 ⇒ 没有合并进行中，原样返回
   const mergeHeadPath = path.join(gitDir, "MERGE_HEAD");
-  if (!fs.existsSync(mergeHeadPath)) return staged;
+  if (!fs.existsSync(mergeHeadPath)) {
+    return staged;
+  }
   const mergeHead = fs.readFileSync(mergeHeadPath, "utf8").trim();
-  if (!mergeHead) return staged;
+  if (!mergeHead) {
+    return staged;
+  }
   return staged.filter((file) => {
-    if (!SHELL_INPUT_RE.test(file)) return true;
+    if (!SHELL_INPUT_RE.test(file)) {
+      return true;
+    }
     // 与第二父（被合进来的那侧）一致 ⇒ 只是采纳，不算本次改动。
     const againstMergeHead = spawnSync(
       "git",
@@ -234,8 +233,7 @@ export function materializeCargoTestInputs({
   if (cargo !== null && cargo !== undefined) {
     const out =
       versionOutput ??
-      spawnSync(cargo, ["-vV"], { encoding: "utf8", windowsHide: true })
-        .stdout ??
+      spawnSync(cargo, ["-vV"], { encoding: "utf8", windowsHide: true }).stdout ??
       "";
     triple = hostTripleFromCargoVersion(out) ?? null;
   }
@@ -249,15 +247,13 @@ export function materializeCargoTestInputs({
     };
   }
 
-  const sidecar = path.join(
-    srcTauri,
-    "binaries",
-    sidecarFileName(triple, platform),
-  );
+  const sidecar = path.join(srcTauri, "binaries", sidecarFileName(triple, platform));
   if (!exists(sidecar)) {
     mkdir(path.dirname(sidecar), { recursive: true });
     copy(execPath, sidecar);
-    if (platform !== "win32") chmod(sidecar, 0o755);
+    if (platform !== "win32") {
+      chmod(sidecar, 0o755);
+    }
     lines.push(
       `[shell-gate] cargo test 编译前提：sidecar 不在（全新 clone 的常态）⇒ 复制当前 node 落位 ${sidecar}`,
     );
@@ -292,10 +288,16 @@ export function materializeCargoTestInputs({
 function runCargoTest() {
   const lookup = findCargoLookup();
   const cargo = lookup.path;
-  if (!cargo) return { code: null, probes: lookup.probes };
+  if (!cargo) {
+    return { code: null, probes: lookup.probes };
+  }
   const prep = materializeCargoTestInputs({ cargo });
-  for (const line of prep.lines) process.stdout.write(`${line}\n`);
-  if (!prep.ok) return { code: 1 };
+  for (const line of prep.lines) {
+    process.stdout.write(`${line}\n`);
+  }
+  if (!prep.ok) {
+    return { code: 1 };
+  }
   const r = spawnSync(cargo, ["test"], {
     cwd: path.join(ROOT, "src-tauri"),
     stdio: "inherit",
@@ -322,7 +324,9 @@ export function freshnessProblem(root = ROOT) {
     );
   }
   const warning = shellStaleWarning(exe, root);
-  if (!warning) return null;
+  if (!warning) {
+    return null;
+  }
   // 判据原文结尾就是「建议重编：<命令>」，这里不再重复一遍，只补上「为什么必须重编」。
   const detail = (warning.split("；建议重编")[0] ?? warning).replace(
     /^正在运行旧版桌面壳/,
@@ -369,12 +373,7 @@ export function freshnessProblem(root = ROOT) {
  *   它顺带把探针读数交上来，好让调用方那句话能说出「探了哪几处」。
  * @returns {{ exitCode: number, steps: GateStep[] }}
  */
-export function runGate({
-  staged,
-  root = ROOT,
-  cargoRunner = runCargoTest,
-  mode = "staged",
-} = {}) {
+export function runGate({ staged, root = ROOT, cargoRunner = runCargoTest, mode = "staged" } = {}) {
   const { touchesShell, needsCargoTest } = decide(staged ?? []);
   if (!touchesShell) {
     // 没碰壳就什么都不做（这一步不该给普通前端提交加一毫秒）。
@@ -445,20 +444,15 @@ function probesText(probes) {
     empty: "目录在，但没有那个名字",
   };
   const lines = probes.map(
-    (p) =>
-      `        · ${p.where}：${label[p.result]}${p.detail ? `（${p.detail}）` : ""}`,
+    (p) => `        · ${p.where}：${label[p.result]}${p.detail ? `（${p.detail}）` : ""}`,
   );
-  const hint = probes.some(
-    (p) => p.result === "unreadable" && /fs/.test(String(p.detail ?? "")),
-  )
+  const hint = probes.some((p) => p.result === "unreadable" && /fs/.test(String(p.detail ?? "")))
     ? "        有落点在目录里**看得见那个名字、而 `fs` 判它不存在** —— 那是本判据被路径形态骗了" +
       "（subst 出来的盘符 / 长路径前缀，见 probeCargoIn 的头注），不是没装工具链。\n" +
       "        交叉确认一条：在这个目录里跑 `<cargo> --version`，能出版本号就说明判据该让一步。\n"
     : probes.some((p) => p.result === "unreadable")
       ? "        有落点「读不了」—— 那是权限问题，先查执行账号对那个目录的读权限，别再装一遍工具链。\n"
-      : probes.some(
-            (p) => p.where.startsWith("CARGO_HOME/bin") && p.result !== "hit",
-          )
+      : probes.some((p) => p.where.startsWith("CARGO_HOME/bin") && p.result !== "hit")
         ? "        CARGO_HOME 给了而这一处没命中：那个值下确实没有 bin/cargo，或平台的 PATH 没跟着它长出来。\n"
         : "" +
           "        PATH 与上面那几处（CARGO_HOME/bin、rustup 记着的 cargo_home/bin、" +
@@ -484,13 +478,13 @@ function linesFor(result, mode = "staged") {
         out.push({
           to: "err",
           text:
-            "[shell-gate] 找不到 cargo（PATH 与 rustup 的默认安装位都没有）—— 改了 Rust 壳却编不了，等于没验证。\n" +
-            probesText(step.probes) +
-            "        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）\n" +
-            "        已装却仍探不到时：PATH 里加上 $CARGO_HOME/bin（rustup 默认 <home>/.cargo/bin）" +
-            (mode === "base"
+            `[shell-gate] 找不到 cargo（PATH 与 rustup 的默认安装位都没有）—— 改了 Rust 壳却编不了，等于没验证。\n${
+            probesText(step.probes)
+            }        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）\n` +
+            `        已装却仍探不到时：PATH 里加上 $CARGO_HOME/bin（rustup 默认 <home>/.cargo/bin）${
+            mode === "base"
               ? "\n        这一格按「没跑起来」收（退 2）—— 判据在场、执行者不在，不是「判出失败」。"
-              : ""),
+              : ""}`,
         });
       } else if (step.state === "failed") {
         out.push({
@@ -539,7 +533,7 @@ function main() {
   let mode = "staged";
   let via = "";
 
-  if (baseIdx >= 0) {
+  if (baseIdx !== -1) {
     /* `--base <ref>`：判决面 = 「相对那条基线改了什么」（平台侧那一档）。 */
     mode = "base";
     const baseRef = (argv[baseIdx + 1] ?? "").trim();
@@ -556,9 +550,7 @@ function main() {
      * 起 CLI，基线只在那个仓库里）；平台上 `cwd` 就是本检出，行为一字不变。 */
     const got = changedFilesForBaseRef(baseRef, { cwd: process.cwd() });
     if (!got.ok) {
-      console.error(
-        `[shell-gate] ${got.reason} —— 这一格按「没跑起来」收（退 2）。`,
-      );
+      console.error(`[shell-gate] ${got.reason} —— 这一格按「没跑起来」收（退 2）。`);
       return 2;
     }
     /* 改名的两侧都进面：旧路径上的壳文件被搬走了，也算「这次改了壳」。 */
@@ -575,19 +567,13 @@ function main() {
       const dropped = face.deduped.filter((f) => SHELL_INPUT_RE.test(f));
       console.log(
         `[shell-gate] 这一跑的检出是平台合成的 merge 提交（首父 ${face.firstParent.slice(0, 8)}）：` +
-          `改动面取「首父..HEAD」（${face.files.length} 条），并剔掉基线之后别人自己落地的 ` +
-          `${face.deduped.length} 条` +
-          (dropped.length > 0
-            ? `（其中壳输入 ${dropped.length} 条：${dropped.join(" ")}）`
-            : "") +
-          "。",
+          `改动面取「首父..HEAD」（${face.files.length} 条），并剔掉基线之后别人自己落地的 ${face.deduped.length} 条${dropped.length > 0 ? `（其中壳输入 ${dropped.length} 条：${dropped.join(" ")}）` : ""
+          }。`,
       );
     } else {
-      console.log(
-        `[shell-gate] 没能对账合成合并提交：${face.why}。照旧按三点 diff 判。`,
-      );
+      console.log(`[shell-gate] 没能对账合成合并提交：${face.why}。照旧按三点 diff 判。`);
     }
-  } else if (stagedIdx >= 0) {
+  } else if (stagedIdx !== -1) {
     // 显式清单（`--staged a b c`）是调试 / 覆写通道，调用方说了算，不过采纳过滤；
     // 只有从暂存区自动推导时，才剔除「原样采纳对方那侧」的壳文件
     // （见 dropAdoptedShellInputs）—— 否则纯前端 PR 只要拉了 master 就被永久拦住。
@@ -602,9 +588,9 @@ function main() {
      * 曾经恒绿且一个字都不打 —— 账面全绿，而「改了壳必须重编」与壳内那批
      * `#[test]` 在平台侧一个执行者都没有。 */
     console.log(
-      `[shell-gate] 本次没有壳改动（清单 ${staged.length} 条，未命中 src-tauri 的四类壳输入）` +
-        (mode === "base" ? `；改动面来自 ${via}` : "") +
-        "。",
+      `[shell-gate] 本次没有壳改动（清单 ${staged.length} 条，未命中 src-tauri 的四类壳输入）${
+        mode === "base" ? `；改动面来自 ${via}` : ""
+        }。`,
     );
     return 0;
   }
@@ -619,16 +605,15 @@ function main() {
   }
   const result = runGate({ staged, mode });
   for (const line of linesFor(result, mode)) {
-    if (line.to === "err") console.error(line.text);
-    else console.log(line.text);
+    if (line.to === "err") {
+      console.error(line.text);
+    } else {
+      console.log(line.text);
+    }
   }
   return result.exitCode;
 }
 
-if (
-  process.argv[1] &&
-  fs.realpathSync(process.argv[1]) ===
-    fs.realpathSync(import.meta.filename)
-) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(import.meta.filename)) {
   process.exit(main());
 }

@@ -30,6 +30,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { isExplicitSource } from "./dev-handle.mjs";
+import { appendComment, sameCommentBody, stripTrailingNewline } from "./ship-comment.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
@@ -74,42 +75,105 @@ export function runAppendIssueComment({
   mkTmp,
   path: route = "issue",
 }) {
-  const onPull = route === "pull";
-  const file = mkTmp(onPull ? "pull-comment" : "issue-comment", body);
-  if (!file) {
-    log("[ship] ✗ 取不到 git 目录 ⇒ 评论没有落点，这一步没有执行者。");
+  const wrote = appendComment({ run, log, slug, number, body, mkTmp, route });
+  if (!wrote.bodies) {
     return false;
   }
-  const res = cnbJson(run, [
-    onPull ? "pulls" : "issues",
-    onPull ? "post-pull-comment" : "post-issue-comment",
-    "--repo",
+  return wrote.bodies.some((c) => c.includes(marker));
+}
+
+/**
+ * `--comment <号>` 的入口：往一张**已有**单子下写一条不属于任何状态动作的评论
+ * （回执、读数、定性说明），写完**逐字回读**（ISSUE #2719）。
+ *
+ * 为什么要有这一格：这条链此前只能由人现写一份一次性脚本（`makeRunner` → `post-issue-comment`
+ * → `list-issue-comments` 回读），而「要写一条评论」这件事在 #2712 的收尾里发生了两次。
+ *
+ * 四条边界：
+ *   · **正文只从文件读**（`--body-file`）。argv 内联那一族被反引号挖过洞（§13.6 记过
+ *     同型事故），所以不给 `-m` 那种写法；
+ *   · **回读不等价就不退 0**：按「去掉正文末尾那个换行之后逐字相同」判
+ *     （`sameCommentBody`，平台会收掉末尾换行），两侧长度一起念出来；
+ *   · 署名行由 `withCommentHeader` 保证（与建单同一口径）；正文里的人话是调用方的判断；
+ *   · 未配留痕**不阻断**：署名会写「未配」，评论照发 —— 它仍是读数，不是判据。
+ *
+ * @param {{run:any, log:(s:string)=>void, slug:string, number:number, handle:string, root:string, opt:any, mkTmp:(name:string,text:string)=>string|null, dryRun?:boolean}} ctx 全部由装配层注入
+ * @returns {number} `CODE` 之一
+ */
+export function runIssueComment({
+  run,
+  log,
+  slug,
+  number,
+  handle,
+  root,
+  opt,
+  mkTmp,
+  dryRun = false,
+}) {
+  const bodyFile = String(opt.bodyFile ?? "").trim();
+  if (bodyFile === "") {
+    log(
+      "[ship] [ERROR] --comment 要和 --body-file <正文文件> 一起用：" +
+        "正文是判断（读数 / 定性 / 回执），不由脚本生成，也不从 argv 内联读" +
+        "（反引号会在 shell 那一步被当命令替换执行掉）。",
+    );
+    return CODE.NOT_RUN;
+  }
+  const read = readIssueBody(root, bodyFile, handle);
+  if (!read.ok) {
+    log(`[ship] 读不到正文文件：${read.where} ⇒ 这一格没有执行者。`);
+    return CODE.NOT_RUN;
+  }
+  if (read.raw.trim() === "") {
+    log(`[ship] 正文文件是空的：${read.where} ⇒ 不写一条只有署名的评论（那是噪音，不是读数）。`);
+    return CODE.NOT_RUN;
+  }
+  if (dryRun) {
+    log(
+      `[ship] --dry-run：#${number} 将发一条评论（正文 ${bodyFile}，长度 ${read.text.length} 字，` +
+        `首行「${read.text.split(/\r?\n/)[0] ?? ""}」），再 list-issue-comments 回读比对；一条都没写。`,
+    );
+    return CODE.GREEN;
+  }
+  const wrote = appendComment({
+    run,
+    log,
     slug,
-    "--number",
-    String(number),
-    "--body-file",
-    file,
-    "-v",
-  ]);
-  if (!res || res.code !== 0) return false;
-  const back = cnbJson(run, [
-    onPull ? "pulls" : "issues",
-    onPull ? "list-pull-comments" : "list-issue-comments",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--sort",
-    "-created",
-    "--page-size",
-    "20",
-    "-v",
-  ]);
-  const d = back ? back.json?.data : null;
-  const rows = Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : [];
-  return rows.some((/** @type {any} */ c) =>
-    String(c?.body ?? "").includes(marker),
+    number,
+    body: read.text,
+    mkTmp,
+  });
+  if (!wrote.posted) {
+    log(
+      `[ship] #${number} 评论写那一步没跑起来 ⇒ 不念「已评论」` +
+        "（下一动作：确认 cnb 与仓库 slug，再重跑一次这条命令）。",
+    );
+    return CODE.NOT_RUN;
+  }
+  if (!wrote.bodies) {
+    log(
+      `[ship] #${number} 评论写后回读没跑起来 ⇒ **不念「已评论」**：` +
+        "写可能已经成功，先去评论区看一眼再决定要不要重投（重复投递是这一格的已知失效方向）。",
+    );
+    return CODE.NOT_RUN;
+  }
+  const hit = wrote.bodies.find((c) => sameCommentBody(read.text, c));
+  if (!hit) {
+    const near = wrote.bodies[0] ?? "";
+    log(
+      `[ship] ✗ #${number} 回读里没有与正文逐字相同的那一条` +
+        `（发出 ${read.text.length} 字、最新一条回读 ${String(near).length} 字；` +
+        `去末尾换行后 ${stripTrailingNewline(read.text).length} ⇄ ${stripTrailingNewline(near).length}）。` +
+        "⇒ 不念「已评论」；先去看评论区，别直接重投。",
+    );
+    return CODE.RED;
+  }
+  log(
+    `[ship] ✓ #${number} 评论已回读（list-issue-comments，逐字相同）：` +
+      `${stripTrailingNewline(read.text).length} 字 · 首行「${String(hit).split(/\r?\n/)[0] ?? ""}」`,
   );
+  return CODE.GREEN;
 }
 
 /**
@@ -164,7 +228,7 @@ export function decideNewIssue({ title = null, body = null, priority = null }) {
  * @param {string} root 仓库根
  * @param {string} file 正文文件（相对路径按仓库根解析）
  * @param {string | null} handle 留痕短名
- * @returns {{ok:boolean, text:string, where:string}} 读不到时 `ok:false`
+ * @returns {{ok:boolean, text:string, raw:string, where:string}} 读不到时 `ok:false`；`text` 带署名行、`raw` 是文件原文
  */
 export function readIssueBody(root, file, handle) {
   const where = path.resolve(root || ".", file);
@@ -172,10 +236,11 @@ export function readIssueBody(root, file, handle) {
   try {
     text = fs.readFileSync(where, "utf8");
   } catch {
-    return { ok: false, text: "", where };
+    return { ok: false, text: "", raw: "", where };
   }
   return {
     ok: true,
+    raw: text,
     /* 幂等：正文文件里自己已经写了署名行的（#2258 那单就是），不再前插第二遍。 */
     text: withCommentHeader(text, handle),
     where,
@@ -264,11 +329,9 @@ export function runNewIssue({
   if (dryRun) {
     log(
       `[ship] --dry-run：将创建「${plan.title}」（正文 ${bodyFile}，长度 ${read.text.length} 字，` +
-        `优先级 ${plan.priority ?? "平台默认"}）` +
-        (label
-          ? `，再按 ${label}，最后 get-issue 回读`
-          : "，不回读标签（未配留痕）") +
-        "；一条都没写。",
+        `优先级 ${plan.priority ?? "平台默认"}）${
+        label ? `，再按 ${label}，最后 get-issue 回读` : "，不回读标签（未配留痕）"
+        }；一条都没写。`,
     );
     return CODE.GREEN;
   }
@@ -289,11 +352,8 @@ export function runNewIssue({
     ...(plan.priority ? ["--priority", plan.priority] : []),
     "-v",
   ]);
-  const d =
-    got && got.json && typeof got.json === "object" ? got.json.data : null;
-  const number = Number(
-    d && typeof d === "object" ? (d.number ?? d?.issue?.number) : NaN,
-  );
+  const d = got && got.json && typeof got.json === "object" ? got.json.data : null;
+  const number = Number(d && typeof d === "object" ? (d.number ?? d?.issue?.number) : Number.NaN);
   if (!Number.isInteger(number) || number <= 0) {
     log(
       "[ship] 建单的回执里没有可用的单号 ⇒ 不念「已建成」。" +
@@ -335,10 +395,7 @@ export function runNewIssue({
    * 只管**这个名稳不稳**。把「取的」念成「这次不带标签」会与下一行回读互相推翻，
    * 还给人一条错误指令（名字不空，标签已经在了）。 */
   const landed =
-    label &&
-    labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(
-      String(handle).trim(),
-    );
+    label && labelValues(back.labels, ISSUE_LABEL_ROLES.author).includes(String(handle).trim());
   if (label && !landed && explicitHandle) {
     /* 你填的却没落地 ⇒ 不念「留痕已补上」（ISSUE #2355）。 */
     log(
@@ -349,12 +406,11 @@ export function runNewIssue({
   }
   if (label && landed) {
     log(
-      `[ship] ✓ 留痕已补：${label}` +
-        (explicitHandle || isExplicitSource(handleSource)
+      `[ship] ✓ 留痕已补：${label}${explicitHandle || isExplicitSource(handleSource)
           ? "（你填的）。"
           : handleSource
             ? `（短名取自 ${handleSource}，换机器会变；要固定就在 .env 里填一行 \`COMFYAPP_DEV_HANDLE\`。）`
-            : "。"),
+            : "。"}`,
     );
   } else if (label) {
     log(

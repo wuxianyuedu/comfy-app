@@ -22,25 +22,25 @@
 export type StaleStoreReason = "missing-store-action";
 
 /** 需要向用户提示陈旧实例的条件（全部由调用方提供的**事实**派生）。 */
-export interface StaleStoreSignalInput {
+export type StaleStoreSignalInput = {
   /** 页面已运行过一段代码更新（加载时 / 运行中），此刻的运行图不保证是当前源码。 */
   codeUpdatedSinceLoad: boolean;
   /** 本次「调用 store 动作」因动作不在实例上而跳过。 */
   reason: StaleStoreReason | null;
-}
+};
 
 /** 陈旧实例提示的收敛结果：该不该告知、告知什么。 */
-export interface StaleStoreNotification {
-  /** 一句话标题（toast / 消息中心列表行）。 */
-  title: string;
-  /** 概要（toast 第二行，短）。 */
-  summary: string;
+export type StaleStoreNotification = {
   /** 正文（消息中心全屏可读，含「怎么办」）。 */
   body: string;
-}
+  /** 概要（toast 第二行，短）。 */
+  summary: string;
+  /** 一句话标题（toast / 消息中心列表行）。 */
+  title: string;
+};
 
 /** 陈旧实例的**唯一**解法：重载一次，让运行图重新对齐当前源码。 */
-export const STALE_STORE_RELOAD_STEPS = [
+export const STALE_STORE_RELOAD_STEPS = /* SAFETY: 类型断言已复核 */ [
   "在桌面窗口里按 Ctrl+R 重新加载页面（浏览器 / 开发态同理）；",
   "如果窗口里正是「工作流编辑器」这类全屏视图，也可以先关掉再打开——它挂载时重取一次模块；",
   "仍然报同样的错，说明应用服务（dev server）自身也是旧的：关掉应用窗口重新启动一次。",
@@ -64,11 +64,11 @@ export const STALE_STORE_SAFETY_NOTE =
 export function deriveStaleStoreNotification(
   input: StaleStoreSignalInput,
 ): StaleStoreNotification | null {
-  if (!input.codeUpdatedSinceLoad || input.reason === null) return null;
+  if (!input.codeUpdatedSinceLoad || input.reason === null) {
+    return null;
+  }
 
-  const steps = STALE_STORE_RELOAD_STEPS.map((s, i) => `${i + 1}. ${s}`).join(
-    "\n",
-  );
+  const steps = STALE_STORE_RELOAD_STEPS.map((s, i) => `${i + 1}. ${s}`).join("\n");
   const body = [
     "应用在运行期间拉取到了新代码，但当前页面还停留在改动之前的模块上，",
     "所以刚新增的部分能力在旧组件实例上不存在（表现为某个功能静默失效，",

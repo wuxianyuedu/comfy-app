@@ -49,12 +49,15 @@ const NODE_ONLY_FACE = "scripts";
 /** 那一族属性：`import.meta.dirname` / `import.meta.filename`（`url` 不在其内）。 */
 const UNSAFE_IN_BUNDLE = /import\.meta\.(dirname|filename)\b/g;
 
-function walk(dir: string): string[] {
-  const out: string[] = [];
+function walk(dir: string): Array<string> {
+  const out: Array<string> = [];
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else out.push(full);
+    if (statSync(full).isDirectory()) {
+      out.push(...walk(full));
+    } else {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -66,18 +69,22 @@ function walk(dir: string): string[] {
  * 边界讲清楚 —— 把说明文字算成违规，逼出来的只会是一份读不出原因的注释。
  * 尾随注释（`code // import.meta.dirname`）仍然算：那一行本来就是代码。 */
 function findUnsafe(face: string, { includeTests }: { includeTests: boolean }) {
-  const hits: string[] = [];
+  const hits: Array<string> = [];
   for (const file of walk(path.join(REPO_ROOT, face))) {
-    if (!/\.(ts|tsx|js|mjs|cjs)$/.test(file)) continue;
-    if (!includeTests && /\.test\.(ts|tsx|js|mjs|cjs)$/.test(file)) continue;
-    const lines: string[] = readFileSync(file, "utf8").split("\n");
+    if (!/\.(ts|tsx|js|mjs|cjs)$/.test(file)) {
+      continue;
+    }
+    if (!includeTests && /\.test\.(ts|tsx|js|mjs|cjs)$/.test(file)) {
+      continue;
+    }
+    const lines: Array<string> = readFileSync(file, "utf8").split("\n");
     lines.forEach((line, index) => {
       const trimmed = line.trim();
-      if (trimmed.startsWith("//") || trimmed.startsWith("*")) return;
+      if (trimmed.startsWith("//") || trimmed.startsWith("*")) {
+        return;
+      }
       for (const match of line.matchAll(UNSAFE_IN_BUNDLE)) {
-        hits.push(
-          `${path.relative(REPO_ROOT, file)}:${index + 1} · import.meta.${match[1]}`,
-        );
+        hits.push(`${path.relative(REPO_ROOT, file)}:${index + 1} · import.meta.${match[1]}`);
       }
     });
   }
@@ -94,7 +101,7 @@ describe("打包面上的 import.meta：src/** 只有 url 这一位是活的（I
       hits,
       `被打包器重写的那一侧出现了只在 Node ESM 运行时才有的属性 —— 下一跳就是 ` +
         "`next build` 红在 collect page data（ISSUE #2599）。改法：" +
-        "`dirname(fileURLToPath(import.meta.url))` 或 `new URL(\"../x\", import.meta.url)`。" +
+        '`dirname(fileURLToPath(import.meta.url))` 或 `new URL("../x", import.meta.url)`。' +
         `命中：\n${hits.join("\n")}`,
     ).toEqual([]);
   });
@@ -131,14 +138,13 @@ describe("打包面上的 import.meta：src/** 只有 url 这一位是活的（I
      * 稳：注释里出现 `join(` 太常见，会把「干活在前」判成假红。 */
     const text = readFileSync(path.join(REPO_ROOT, "src/env.js"), "utf8");
     const guard = text.indexOf("!process.env.SKIP_ENV_VALIDATION");
-    expect(
-      guard,
-      "取不到那条短路 ⇒ 外层守卫里没有这枚旗标（#2599 那一格会回来）",
-    ).toBeGreaterThan(-1);
+    expect(guard, "取不到那条短路 ⇒ 外层守卫里没有这枚旗标（#2599 那一格会回来）").toBeGreaterThan(
+      -1,
+    );
     const firstWork = text.indexOf('await import("node:fs")');
     expect(
       firstWork,
-      "取不到 `await import(\"node:fs\")` ⇒ 这段预检被删了？那就不是「顺序」问题了",
+      '取不到 `await import("node:fs")` ⇒ 这段预检被删了？那就不是「顺序」问题了',
     ).toBeGreaterThan(-1);
     expect(
       guard < firstWork,

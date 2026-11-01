@@ -7,21 +7,17 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import type { FilmStudioController } from "./hooks/use-film-studio";
-import {
-  MODE_LABELS,
-  STATUS_BADGE,
-  type ShotListItem,
-} from "./film-studio-config";
+import { MODE_LABELS, STATUS_BADGE, type ShotListItem } from "./film-studio-config";
 
-interface FilmStudioShotListPanelProps {
+type FilmStudioShotListPanelProps = {
   c: FilmStudioController;
-  listShots: ShotListItem[];
-  selectedShotId: string;
   isProjectSource: boolean;
-  onSelectShot: (id: string) => void;
+  listShots: Array<ShotListItem>;
   onAddShot: () => void;
   onReviewShot: (shot: ShotListItem) => void;
-}
+  onSelectShot: (id: string) => void;
+  selectedShotId: string;
+};
 
 export function FilmStudioShotListPanel({
   c,
@@ -38,18 +34,11 @@ export function FilmStudioShotListPanel({
       <div className="border-border-subtle flex h-11 items-center justify-between border-b px-4">
         <div className="flex items-center gap-2">
           <span className="text-ink-field text-sm font-semibold">分镜列表</span>
-          <span className="text-ink-fainter text-2xs">
-            {listShots.length} 镜头
-          </span>
+          <span className="text-ink-fainter text-2xs">{listShots.length} 镜头</span>
         </div>
         {!isProjectSource && (
-          <Hint label="新增镜头" accessibleName>
-            <Button
-              variant="primary"
-              size="icon-xs"
-              onClick={onAddShot}
-              className="rounded-md"
-            >
+          <Hint accessibleName label="新增镜头">
+            <Button className="rounded-md" onClick={onAddShot} size="icon-xs" variant="primary">
               +
             </Button>
           </Hint>
@@ -63,23 +52,23 @@ export function FilmStudioShotListPanel({
           const isSelected = shot.id === selectedShotId;
           return (
             <div
-              key={shot.id}
               className={`flex items-center gap-1 rounded-xl border transition-all ${
                 isSelected
                   ? "border-primary-500/40 bg-primary-500/12 shadow-sm shadow-black/5 dark:shadow-black/10"
                   : "bg-card hover:border-border border-transparent"
               }`}
+              key={shot.id}
             >
               <Button
-                variant="ghost"
-                onClick={() => onSelectShot(shot.id)}
                 className="group flex h-auto min-w-0 flex-1 items-center gap-3 rounded-xl p-2.5 text-left font-normal"
+                onClick={() => onSelectShot(shot.id)}
+                variant="ghost"
               >
                 {/* Thumbnail：项目镜头有产出图则显缩略图，否则占位 */}
                 {shot.thumbnailUrl ? (
                   <MediaThumbnail
-                    src={shot.thumbnailUrl}
                     className="h-12 w-14 shrink-0 rounded-md object-cover"
+                    src={shot.thumbnailUrl}
                   />
                 ) : (
                   <div
@@ -101,13 +90,9 @@ export function FilmStudioShotListPanel({
                     {shot.name}
                   </p>
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="text-ink-faintest text-3xs">
-                      {shot.duration}
-                    </span>
+                    <span className="text-ink-faintest text-3xs">{shot.duration}</span>
                     <span className="text-ink-faintest text-3xs">·</span>
-                    <span className="text-ink-fainter text-3xs">
-                      {MODE_LABELS[shot.mode]}
-                    </span>
+                    <span className="text-ink-fainter text-3xs">{MODE_LABELS[shot.mode]}</span>
                   </div>
                 </div>
 
@@ -122,25 +107,22 @@ export function FilmStudioShotListPanel({
               {/* 项目镜头才给「退回让 AI 重做」入口（与画布镜头节点同源 requestShotRedo）。 */}
               {isProjectSource && (
                 <>
-                  <Hint
-                    label="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）"
-                    accessibleName
-                  >
+                  <Hint accessibleName label="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）">
                     <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => onReviewShot(shot)}
                       className="text-ink-soft hover:bg-primary/15 shrink-0"
+                      onClick={() => onReviewShot(shot)}
+                      size="icon-xs"
+                      variant="ghost"
                     >
                       <ClipboardCheck data-icon="inline-start" />
                     </Button>
                   </Hint>
-                  <Hint label="退回让 AI 重做这一镜" accessibleName>
+                  <Hint accessibleName label="退回让 AI 重做这一镜">
                     <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      onClick={() => void c.redoShot(shot.id)}
                       className="text-ink-soft hover:bg-primary/15 mr-1 shrink-0"
+                      onClick={() => void c.redoShot(shot.id)}
+                      size="icon-xs"
+                      variant="ghost"
                     >
                       ↺
                     </Button>

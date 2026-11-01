@@ -86,9 +86,7 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
     expect(injectedWarn).toHaveBeenCalledWith(
       expect.stringContaining("persistLogs(t-di-fail) 落库失败"),
     );
-    expect(injectedWarn).toHaveBeenCalledWith(
-      expect.stringContaining("db-on-fire"),
-    );
+    expect(injectedWarn).toHaveBeenCalledWith(expect.stringContaining("db-on-fire"));
     // 默认 logger 不该被绕过：注入 log 后失败分支只走注入侧。
     expect(defaultLoggerMock.warn).not.toHaveBeenCalled();
   });
@@ -110,9 +108,7 @@ describe("runner-state 的宿主依赖注入接缝（P3 第 1 期·第二步）"
     expect(injectedReplace).toHaveBeenCalledTimes(1);
     // 未覆盖侧应回到默认 logger 的替身（vitest mock），而不是抛「log undefined」。
     expect(defaultLoggerMock.warn).toHaveBeenCalledTimes(1);
-    expect(defaultLoggerMock.warn).toHaveBeenCalledWith(
-      expect.stringContaining("落库失败"),
-    );
+    expect(defaultLoggerMock.warn).toHaveBeenCalledWith(expect.stringContaining("落库失败"));
   });
 });
 
@@ -130,9 +126,7 @@ describe("logWhileQueued / takeQueuedEntries", () => {
     expect(s.logs.get("t-q")).toHaveLength(1);
 
     const kept = mod.takeQueuedEntries("t-q");
-    expect(kept.map((e) => e.msg)).toEqual([
-      "⏳ 等待 ComfyUI WebSocket 连接就绪…",
-    ]);
+    expect(kept.map((e) => e.msg)).toEqual(["⏳ 等待 ComfyUI WebSocket 连接就绪…"]);
     /* 只兑现一次：同一 taskId 的下一轮不该把上一轮的等待原因再搬一遍。 */
     expect(s.queuedEntries.has("t-q")).toBe(false);
     expect(mod.takeQueuedEntries("t-q")).toEqual([]);
@@ -155,10 +149,10 @@ describe("logWhileQueued / takeQueuedEntries", () => {
 
   it("落库是整包替换：收口之后再打的行必须仍带着之前的现场（不许提前删缓冲）", async () => {
     const mod = await loadRunnerState();
-    const written: unknown[][] = [];
+    const written: Array<Array<unknown>> = [];
     mod.configureRunner({
       taskRepo: {
-        replaceLogs: vi.fn(async (_taskId: string, entries: LogEntry[]) => {
+        replaceLogs: vi.fn(async (_taskId: string, entries: Array<LogEntry>) => {
           written.push(entries.map((e) => e.msg));
         }),
         replaceRawCli: vi.fn(async () => undefined),
@@ -174,10 +168,7 @@ describe("logWhileQueued / takeQueuedEntries", () => {
 
     expect(written).toHaveLength(2);
     expect(written[0]).toEqual(["输入参数（workflowInputs，4 项）"]);
-    expect(written[1]).toEqual([
-      "输入参数（workflowInputs，4 项）",
-      "✓ 全部完成（总耗时 6.8s）",
-    ]);
+    expect(written[1]).toEqual(["输入参数（workflowInputs，4 项）", "✓ 全部完成（总耗时 6.8s）"]);
   });
 
   it("排队期登记有界：超过 LOGS_MAX_TASKS 个任务时淘汰最早登记的键", async () => {

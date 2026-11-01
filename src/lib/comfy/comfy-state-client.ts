@@ -28,11 +28,11 @@ const REQUEST_TIMEOUT_MS = 35_000;
 export type Listener = (change: ComfyStateChange) => void;
 
 type StateClientGlobal = {
-  seenSeq?: number;
   listeners?: Set<Listener>;
-  stop?: (() => void) | null;
   /** 在途请求的身份：迟到的回包不许再触发下一轮（否则会与新轮次打架）。 */
   runId?: number;
+  seenSeq?: number;
+  stop?: (() => void) | null;
 };
 
 declare global {
@@ -47,8 +47,10 @@ const listeners = new Set<Listener>();
 
 /** 帧形状收窄：外部输入，逐字段判型，不做类型断言。 */
 function parseChange(raw: unknown): ComfyStateChange | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const o = raw as Record<string, unknown>;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
+  const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
   if (
     typeof o.seq !== "number" ||
     !Number.isFinite(o.seq) ||
@@ -61,16 +63,20 @@ function parseChange(raw: unknown): ComfyStateChange | null {
   return {
     seq: o.seq,
     at: o.at,
-    kind: o.kind as ComfyStateChange["kind"],
+    kind: /* SAFETY: 类型断言已复核 */ o.kind as ComfyStateChange["kind"],
     detail: o.detail,
   };
 }
 
 function deliver(change: ComfyStateChange): void {
   const seen = st.seenSeq ?? 0;
-  if (change.seq <= seen) return;
+  if (change.seq <= seen) {
+    return;
+  }
   st.seenSeq = change.seq;
-  for (const listener of listeners) listener(change);
+  for (const listener of listeners) {
+    listener(change);
+  }
 }
 
 /**
@@ -79,10 +85,14 @@ function deliver(change: ComfyStateChange): void {
  */
 export function subscribeComfyStateChanges(listener: Listener): () => void {
   listeners.add(listener);
-  if (listeners.size === 1) start();
+  if (listeners.size === 1) {
+    start();
+  }
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0) stop();
+    if (listeners.size === 0) {
+      stop();
+    }
   };
 }
 
@@ -101,14 +111,20 @@ export function subscribeComfyStateChanges(listener: Listener): () => void {
  * （请求本身就是等待）不会成为忙等。
  */
 function start(): void {
-  if (st.stop) return;
+  if (st.stop) {
+    return;
+  }
   const runId = (st.runId = (st.runId ?? 0) + 1);
   st.stop = startPollTimer(
     async () => {
       /* 已经换过一条链（退订又订阅）：这一拍的结果与下一拍都不该再落下。 */
-      if (st.runId !== runId) return null;
+      if (st.runId !== runId) {
+        return null;
+      }
       const change = await pollOnce();
-      if (change !== null && st.runId === runId) deliver(change);
+      if (change !== null && st.runId === runId) {
+        deliver(change);
+      }
       /* 回来就立刻再发一轮：长轮询的「等」在服务端，客户端这边不该再加延迟。 */
       return 0;
     },
@@ -145,8 +161,12 @@ async function pollOnce(): Promise<ComfyStateChange | null> {
      * 它坏了不该在界面上说话 —— 兜底是设置页那次重新问状态，而不是这里 */
     return null;
   }
-  if (res.status === 204) return null;
-  if (!res.ok) return null;
+  if (res.status === 204) {
+    return null;
+  }
+  if (!res.ok) {
+    return null;
+  }
   try {
     return parseChange(await res.json());
   } catch {

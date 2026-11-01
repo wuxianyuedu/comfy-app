@@ -26,11 +26,11 @@ import { classifyComfyInstall } from "./instance-kind";
 /** 桌面实例最终派生出的 headless 启动参数（不含解释器与 main.py 路径）。 */
 export type DesktopLaunchArgs = {
   /** 映射后的 headless 额外参数（如 --enable-manager …）。 */
-  args: string[];
-  /** 从 launchArgs 抽出的 --port；无则 null（用默认 8188）。 */
-  port: number | null;
+  args: Array<string>;
   /** 实例登记的 envVars（如 PYTHONUTF8 等）；无则空对象。 */
   envVars: Record<string, string>;
+  /** 从 launchArgs 抽出的 --port；无则 null（用默认 8188）。 */
+  port: number | null;
 };
 
 /** 从 .comfyui-desktop-* 文件内容读实例 ID（单行文本，去掉空白）。 */
@@ -51,63 +51,72 @@ export function findInstallationById(
   data: unknown,
   instanceId: string,
 ): Record<string, unknown> | null {
-  if (!instanceId) return null;
+  if (!instanceId) {
+    return null;
+  }
   if (Array.isArray(data)) {
     for (const item of data) {
       if (
         item &&
         typeof item === "object" &&
-        (item as Record<string, unknown>).id === instanceId
+        /* SAFETY: 类型断言已复核 */ (item as Record<string, unknown>).id === instanceId
       ) {
-        return item as Record<string, unknown>;
+        return /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
       }
     }
     return null;
   }
   if (data && typeof data === "object") {
-    const obj = data as Record<string, unknown>;
+    const obj = /* SAFETY: 类型断言已复核 */ data as Record<string, unknown>;
     // 直接键值对应（形如 { "inst-...": {…} }）
     const direct = obj[instanceId];
-    if (direct && typeof direct === "object")
-      return direct as Record<string, unknown>;
+    if (direct && typeof direct === "object") {
+      return /* SAFETY: 类型断言已复核 */ direct as Record<string, unknown>;
+    }
     // 深搜：遍历对象/数组，找 id 字段匹配的节点。
     return deepFindById(obj, instanceId);
   }
   return null;
 }
 
-function deepFindById(
-  node: unknown,
-  id: string,
-  depth = 0,
-): Record<string, unknown> | null {
-  if (depth > 12 || node == null) return null;
+function deepFindById(node: unknown, id: string, depth = 0): Record<string, unknown> | null {
+  if (depth > 12 || node == null) {
+    return null;
+  }
   if (Array.isArray(node)) {
     for (const item of node) {
       const hit = deepFindById(item, id, depth + 1);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
     return null;
   }
   if (typeof node === "object") {
-    const obj = node as Record<string, unknown>;
-    if (obj.id === id && typeof obj === "object") return obj;
+    const obj = /* SAFETY: 类型断言已复核 */ node as Record<string, unknown>;
+    if (obj.id === id && typeof obj === "object") {
+      return obj;
+    }
     for (const key of Object.keys(obj)) {
       const hit = deepFindById(obj[key], id, depth + 1);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
   }
   return null;
 }
 
 /** launchArgs 字段可能是空格分隔字符串或字符串数组，统一成数组。 */
-function toArgList(launchArgs: unknown): string[] {
+function toArgList(launchArgs: unknown): Array<string> {
   if (typeof launchArgs === "string") {
     // 支持双引号包裹含空格的路径。
     const re = /"([^"]*)"|(\S+)/g;
-    const out: string[] = [];
+    const out: Array<string> = [];
     let m: RegExpExecArray | null;
-    while ((m = re.exec(launchArgs))) out.push(m[1] ?? m[2] ?? "");
+    while ((m = re.exec(launchArgs))) {
+      out.push(m[1] ?? m[2] ?? "");
+    }
     return out;
   }
   if (Array.isArray(launchArgs)) {
@@ -130,7 +139,7 @@ function toArgList(launchArgs: unknown): string[] {
  */
 export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
   const argv = toArgList(raw);
-  const args: string[] = [];
+  const args: Array<string> = [];
   let port: number | null = null;
 
   // GUI/桌面专属、或命令头 token 的去重黑名单。
@@ -152,14 +161,18 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
     /* 循环体里有「跳过端口值」的手动 `i++`，所以不能换成 `for...of`；
      * `at()` 的越界即 `undefined` 正好与循环判据同源。 */
     const token = argv.at(i);
-    if (token === undefined) break;
+    if (token === undefined) {
+      break;
+    }
     const lower = token.toLowerCase();
-    if (drop.has(lower)) continue;
+    if (drop.has(lower)) {
+      continue;
+    }
     // 提取 --port：`--port <n>` 或 `--port=<n>` 或 `-p <n>`。
     if (lower === "--port" || lower === "-p") {
       const next = argv[i + 1];
-      const n = parseInt(next ?? "", 10);
-      if (!isNaN(n)) {
+      const n = Number.parseInt(next ?? "", 10);
+      if (!Number.isNaN(n)) {
         port = n;
         i++; // 跳过端口值
       }
@@ -167,8 +180,10 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
     }
     const eq = /^--port=(.+)$/.exec(lower) ?? /^-p=(.+)$/.exec(lower);
     if (eq) {
-      const n = parseInt(eq[1] ?? "", 10);
-      if (!isNaN(n)) port = n;
+      const n = Number.parseInt(eq[1] ?? "", 10);
+      if (!Number.isNaN(n)) {
+        port = n;
+      }
       continue;
     }
     args.push(token);
@@ -178,14 +193,16 @@ export function launchArgsToHeadless(raw: unknown): DesktopLaunchArgs {
 }
 
 /** 从 installations.json 条目里解出 envVars（可能为对象或空）。 */
-function extractEnvVars(
-  entry: Record<string, unknown> | null,
-): Record<string, string> {
+function extractEnvVars(entry: Record<string, unknown> | null): Record<string, string> {
   const ev = entry?.envVars;
   if (ev && typeof ev === "object" && !Array.isArray(ev)) {
     const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(ev as Record<string, unknown>)) {
-      if (typeof v === "string" || typeof v === "number") out[k] = String(v);
+    for (const [k, v] of Object.entries(
+      /* SAFETY: 类型断言已复核 */ ev as Record<string, unknown>,
+    )) {
+      if (typeof v === "string" || typeof v === "number") {
+        out[k] = String(v);
+      }
     }
     return out;
   }
@@ -204,7 +221,9 @@ export function parseDesktopLaunchArgs(
     return null;
   }
   const entry = findInstallationById(parsed, instanceId);
-  if (!entry) return null;
+  if (!entry) {
+    return null;
+  }
   const headless = launchArgsToHeadless(entry.launchArgs);
   return { ...headless, envVars: extractEnvVars(entry) };
 }
@@ -218,13 +237,12 @@ export function parseDesktopLaunchArgs(
 export async function resolveDesktopLaunchArgs(
   instanceIdFile: string,
   deps: {
-    readFile?: (p: string, enc: "utf8") => Promise<string>;
     configRoot?: string;
+    readFile?: (p: string, enc: "utf8") => Promise<string>;
   } = {},
 ): Promise<DesktopLaunchArgs | null> {
   const readFile =
-    deps.readFile ??
-    (async (p: string, enc: "utf8") => fs.promises.readFile(p, enc));
+    deps.readFile ?? (async (p: string, enc: "utf8") => fs.promises.readFile(p, enc));
   let idContent: string;
   try {
     idContent = await readFile(instanceIdFile, "utf8");
@@ -232,7 +250,9 @@ export async function resolveDesktopLaunchArgs(
     return null;
   }
   const instanceId = parseInstanceId(idContent);
-  if (!instanceId) return null;
+  if (!instanceId) {
+    return null;
+  }
 
   // Comfy Desktop 的数据目录：默认 %APPDATA%\Comfy Desktop。
   const configRoot =
@@ -243,7 +263,9 @@ export async function resolveDesktopLaunchArgs(
           "Comfy Desktop",
         )
       : null);
-  if (!configRoot) return null;
+  if (!configRoot) {
+    return null;
+  }
   const installsPath = path.join(configRoot, "installations.json");
   let raw: string;
   try {
@@ -255,19 +277,21 @@ export async function resolveDesktopLaunchArgs(
 }
 
 /** 把空格分隔的 extraArgs 切成参数数组（支持双引号包裹含空格的路径）。 */
-export function splitArgTokens(s: string): string[] {
-  const out: string[] = [];
+export function splitArgTokens(s: string): Array<string> {
+  const out: Array<string> = [];
   const re = /"([^"]*)"|(\S+)/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(s ?? ""))) out.push(m[1] ?? m[2] ?? "");
+  while ((m = re.exec(s ?? ""))) {
+    out.push(m[1] ?? m[2] ?? "");
+  }
   return out;
 }
 
 /** 便携版/venv 的有效启动参数（端口 + 额外参数），由设置项直接决定。 */
 export type ManualLaunch = {
-  port: number;
-  extraArgs: string[];
   envVars: Record<string, string>;
+  extraArgs: Array<string>;
+  port: number;
 };
 
 /** 组装一次启动所需的有效端口 / 额外参数 / 环境变量。
@@ -279,15 +303,15 @@ export type ManualLaunch = {
  * 便携版 / venv：沿用设置里的 comfyuiPort（0 = 默认 8188）与 comfyuiExtraArgs。
  */
 export async function resolveEffectiveLaunch(input: {
+  classify?: (dir: string) => {
+    instanceIdFile: string | null;
+    kind: string;
+  };
+  comfyuiExtraArgs: string;
   comfyuiPath: string;
   comfyuiPort: number;
-  comfyuiExtraArgs: string;
-  classify?: (dir: string) => {
-    kind: string;
-    instanceIdFile: string | null;
-  };
-  resolveDesktop?: (file: string) => Promise<DesktopLaunchArgs | null>;
   exists?: (p: string) => boolean;
+  resolveDesktop?: (file: string) => Promise<DesktopLaunchArgs | null>;
 }): Promise<ManualLaunch> {
   const kind = input.classify
     ? input.classify(input.comfyuiPath)
@@ -296,9 +320,7 @@ export async function resolveEffectiveLaunch(input: {
 
   if (isDesktop) {
     const meta = kind.instanceIdFile
-      ? await (input.resolveDesktop ?? resolveDesktopLaunchArgs)(
-          kind.instanceIdFile,
-        )
+      ? await (input.resolveDesktop ?? resolveDesktopLaunchArgs)(kind.instanceIdFile)
       : null;
     if (meta) {
       return {

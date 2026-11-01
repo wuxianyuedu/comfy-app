@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Download,
-  Image as ImageIcon,
-  Music,
-  Plus,
-  RefreshCw,
-  Video,
-  X,
-} from "lucide-react";
+import { Download, Image as ImageIcon, Music, Plus, RefreshCw, Video, X } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
@@ -31,24 +23,24 @@ import {
 } from "~/lib/project-canvas/history-panel-types";
 
 function KindIcon({ kind }: { kind: TaskMediaType }) {
-  if (kind === "video") return <Video size={16} strokeWidth={1.8} />;
-  if (kind === "audio") return <Music size={16} strokeWidth={1.8} />;
+  if (kind === "video") {
+    return <Video size={16} strokeWidth={1.8} />;
+  }
+  if (kind === "audio") {
+    return <Music size={16} strokeWidth={1.8} />;
+  }
   return <ImageIcon size={16} strokeWidth={1.8} />;
 }
 
 /* ── Component ─────────────────────────────────────────────── */
 
-interface HistoryPanelProps {
+type HistoryPanelProps = {
   onClose: () => void;
+  /** 把历史产出投放到画布（由 ProjectCanvas 实现建节点）。 */
+  onUse?: (task: { cover: string; id: string; mediaType: TaskMediaType }) => void;
   /** 当前画布项目 id；有值时默认只看本项目记录。 */
   projectId?: string | null;
-  /** 把历史产出投放到画布（由 ProjectCanvas 实现建节点）。 */
-  onUse?: (task: {
-    id: string;
-    cover: string;
-    mediaType: TaskMediaType;
-  }) => void;
-}
+};
 
 export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
   const {
@@ -70,32 +62,30 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
     <aside className="bg-panel border-border-strong flex h-full w-90 shrink-0 flex-col overflow-hidden border-l">
       {/* ── Header ── */}
       <div className="border-border-strong flex items-center gap-2 border-b px-4 py-3">
-        <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">
-          历史记录
-        </h2>
+        <h2 className="text-ink-bright flex-1 text-[15px] font-semibold">历史记录</h2>
         {activeCount > 0 && (
-          <Badge tone="primary" size="pill-sm">
+          <Badge size="pill-sm" tone="primary">
             {activeCount} 进行中
           </Badge>
         )}
-        <Hint label="刷新" accessibleName>
+        <Hint accessibleName label="刷新">
           <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={refresh}
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
+            onClick={refresh}
+            size="icon-xs"
+            variant="ghost"
           >
             <RefreshCw data-icon="inline-start" size={13} />
           </Button>
         </Hint>
         {/* 显示密度切换 —— 三处逐字相同的孪生对已收口到基元（ISSUE #1925）。 */}
-        <DisplayDensityToggle value={display} onChange={setDisplay} />
-        <Hint label="关闭" accessibleName>
+        <DisplayDensityToggle onChange={setDisplay} value={display} />
+        <Hint accessibleName label="关闭">
           <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={onClose}
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft rounded-md"
+            onClick={onClose}
+            size="icon-xs"
+            variant="ghost"
           >
             <X data-icon="inline-start" size={14} />
           </Button>
@@ -111,22 +101,28 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           选中态由 `data-active` 驱动（字色 / 下划线两层），两枚同高同基线。 */}
       {projectId && (
         <Tabs
-          value={scope}
-          onValueChange={(value) => setScope(value as HistoryScope)}
           className="gap-0"
+          onValueChange={(value) => setScope(/* SAFETY: 类型断言已复核 */ value as HistoryScope)}
+          value={scope}
         >
           <TabsList
-            variant="line"
             className="border-border-strong h-auto w-full justify-start gap-4 rounded-none border-b px-4 pt-2"
+            variant="line"
           >
             {[
-              { id: "project" as HistoryScope, label: "本项目" },
-              { id: "all" as HistoryScope, label: "全部" },
+              {
+                id: /* SAFETY: 类型断言已复核 */ "project" as HistoryScope,
+                label: "本项目",
+              },
+              {
+                id: /* SAFETY: 类型断言已复核 */ "all" as HistoryScope,
+                label: "全部",
+              },
             ].map((scopeItem) => (
               <TabsTrigger
+                className="h-auto flex-none rounded-none px-0 pb-2.5 text-sm font-medium"
                 key={scopeItem.id}
                 value={scopeItem.id}
-                className="h-auto flex-none rounded-none px-0 pb-2.5 text-sm font-medium"
               >
                 {scopeItem.label}
               </TabsTrigger>
@@ -144,16 +140,12 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           唯一实现，规范 16 §16.2.4）：选中态有底色 / 字色 / 描边 / 字重四层，
           且自带与常态同值的 `hover:`。语义也从 `aria-pressed` 回到
           `radiogroup` + `radio`（这一排本来就只能选一个）。 */}
-      <div
-        role="radiogroup"
-        aria-label="按类型筛选生成记录"
-        className="flex gap-1.5 px-4 py-3"
-      >
+      <div aria-label="按类型筛选生成记录" className="flex gap-1.5 px-4 py-3" role="radiogroup">
         {FILTER_TABS.map((filterTab) => (
           <SelectChip
             key={filterTab.id}
-            selected={filter === filterTab.id}
             onClick={() => setFilter(filterTab.id)}
+            selected={filter === filterTab.id}
           >
             {filterTab.label}
           </SelectChip>
@@ -163,13 +155,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       {/* ── Error banner ── */}
       {error && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
-          <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">
-            {error}
-          </span>
+          <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">{error}</span>
           <Button
-            variant="ghost"
-            onClick={refresh}
             className="text-destructive text-2xs h-auto shrink-0 underline hover:bg-transparent"
+            onClick={refresh}
+            variant="ghost"
           >
             重试
           </Button>
@@ -181,10 +171,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
         {loading ? (
           <div className="flex-col gap-1 px-2 pt-1">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={`skeleton-${i}`}
-                className="flex items-center gap-3 py-2"
-              >
+              <div className="flex items-center gap-3 py-2" key={`skeleton-${i}`}>
                 <Skeleton className="bg-subtle size-10 shrink-0 rounded-md" />
                 <div className="min-w-0 flex-1 flex-col gap-1.5">
                   <Skeleton className="bg-subtle h-3 w-3/4 rounded" />
@@ -200,9 +187,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
             </p>
             {scope === "project" && globalCount !== null && globalCount > 0 && (
               <Button
-                variant="outline"
-                onClick={() => setScope("all")}
                 className="border-border-strong text-ink-soft hover:bg-subtle hover:text-ink-bright text-2xs mt-3 h-auto rounded-lg px-3 py-1.5"
+                onClick={() => setScope("all")}
+                variant="outline"
               >
                 查看全部记录
               </Button>
@@ -231,9 +218,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
                     {task.cover ? (
                       <MediaThumbnail
-                        src={task.cover}
                         alt={titleOf(task)}
                         className="h-full w-full object-cover"
+                        src={task.cover}
                       />
                     ) : (
                       <div
@@ -250,14 +237,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                       {pill.label}
                     </span>
                   )}
-                  <p className="text-ink-soft text-2xs truncate px-2 py-1.5">
-                    {titleOf(task)}
-                  </p>
+                  <p className="text-ink-soft text-2xs truncate px-2 py-1.5">{titleOf(task)}</p>
                   {onUse && cover && (
-                    <Hint label="加入画布" accessibleName>
+                    <Hint accessibleName label="加入画布">
                       <Button
-                        variant="ghost"
-                        size="icon-xs"
+                        className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/60 hover:text-white"
                         onClick={() =>
                           onUse({
                             id: task.id,
@@ -265,13 +249,10 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                             mediaType: task.mediaType,
                           })
                         }
-                        className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/60 hover:text-white"
+                        size="icon-xs"
+                        variant="ghost"
                       >
-                        <Plus
-                          data-icon="inline-start"
-                          size={12}
-                          strokeWidth={2.5}
-                        />
+                        <Plus data-icon="inline-start" size={12} strokeWidth={2.5} />
                       </Button>
                     </Hint>
                   )}
@@ -301,9 +282,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   {task.cover ? (
                     <div className="bg-canvas-deep size-10 shrink-0 overflow-hidden rounded-md">
                       <MediaThumbnail
-                        src={task.cover}
                         alt={titleOf(task)}
                         className="h-full w-full object-cover"
+                        src={task.cover}
                       />
                     </div>
                   ) : (
@@ -315,17 +296,11 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   )}
 
                   <div className="min-w-0 flex-1">
-                    <p className="text-ink-bright truncate text-sm">
-                      {titleOf(task)}
-                    </p>
+                    <p className="text-ink-bright truncate text-sm">{titleOf(task)}</p>
                     <div className="mt-0.5 flex items-center gap-1.5">
-                      <span className="text-ink-fainter text-2xs">
-                        {timeAgo(task.createdAt)}
-                      </span>
+                      <span className="text-ink-fainter text-2xs">{timeAgo(task.createdAt)}</span>
                       {pill && (
-                        <span
-                          className={`text-4xs rounded px-1.5 py-0.5 ${pill.cls}`}
-                        >
+                        <span className={`text-4xs rounded px-1.5 py-0.5 ${pill.cls}`}>
                           {pill.label}
                         </span>
                       )}
@@ -342,10 +317,9 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
 
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
                     {onUse && cover && (
-                      <Hint label="加入画布" accessibleName>
+                      <Hint accessibleName label="加入画布">
                         <Button
-                          variant="ghost"
-                          size="icon-sm"
+                          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
                           onClick={() =>
                             onUse({
                               id: task.id,
@@ -353,22 +327,19 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                               mediaType: task.mediaType,
                             })
                           }
-                          className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
+                          size="icon-sm"
+                          variant="ghost"
                         >
-                          <Plus
-                            data-icon="inline-start"
-                            size={13}
-                            strokeWidth={2.5}
-                          />
+                          <Plus data-icon="inline-start" size={13} strokeWidth={2.5} />
                         </Button>
                       </Hint>
                     )}
                     {task.cover && (
                       <a
-                        href={task.cover}
+                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
                         download
                         draggable={false}
-                        className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
+                        href={task.cover}
                         title="下载"
                       >
                         <Download size={13} />

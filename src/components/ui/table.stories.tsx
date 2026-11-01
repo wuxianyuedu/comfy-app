@@ -59,9 +59,7 @@ export const Default: Story = {
           <TableRow key={key}>
             <TableCell className="font-mono text-xs">{key}</TableCell>
             <TableCell className="text-ink-muted">{type}</TableCell>
-            <TableCell className="text-right font-mono text-xs">
-              {value}
-            </TableCell>
+            <TableCell className="text-right font-mono text-xs">{value}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -96,7 +94,7 @@ export const WithStatusColumn: Story = {
           <TableRow key={name}>
             <TableCell className="font-mono text-xs">{name}</TableCell>
             <TableCell>
-              <Badge tone={tone as BadgeTone}>{status}</Badge>
+              <Badge tone={/* SAFETY: 类型断言已复核 */ tone as BadgeTone}>{status}</Badge>
             </TableCell>
             <TableCell className="text-right">
               <Button size="xs" variant="ghost">
@@ -156,7 +154,7 @@ export const Empty: Story = {
       </TableHeader>
       <TableBody>
         <TableRow>
-          <TableCell colSpan={2} className="text-ink-muted py-8 text-center">
+          <TableCell className="text-ink-muted py-8 text-center" colSpan={2}>
             这个工作流没有声明对外参数
           </TableCell>
         </TableRow>

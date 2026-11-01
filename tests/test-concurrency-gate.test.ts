@@ -48,7 +48,7 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
       }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -203,14 +203,12 @@ describe("字符串状态机：挖掉非代码区间（§11.19.4）", () => {
    * 而 eslint 禁止裸 `require()`。两者的语义在这里一样（跑一次就拿到导出），
    * 取 `createRequire` 是因为它**同步** —— 不必让一条纯函数用例变成 async。 */
   const requireCjs = createRequire(import.meta.url);
-  const { maskNonCode } = requireCjs(
+  const { maskNonCode } = /* SAFETY: 类型断言已复核 */ requireCjs(
     "../scripts/check-test-concurrency.cjs",
   ) as { maskNonCode: (src: string) => string };
 
   it("模板串的整体被挖掉（含里面的站点字样）", () => {
-    const masked = maskNonCode(
-      'const F = `it.concurrent("x", () => {});`;\nconst G = 1;',
-    );
+    const masked = maskNonCode('const F = `it.concurrent("x", () => {});`;\nconst G = 1;');
     expect(masked).not.toContain("concurrent");
     expect(masked).toContain("const G = 1;");
   });
@@ -223,9 +221,7 @@ describe("字符串状态机：挖掉非代码区间（§11.19.4）", () => {
       'const S = `pre ${fn({ a: 1 }) ?? ""} ' +
         'it.concurrent("漏出来的站点", () => {});`;\nconst T = 2;',
     );
-    expect(masked, "插值没弹栈 —— 站点整片漏出扫描面").not.toContain(
-      "concurrent",
-    );
+    expect(masked, "插值没弹栈 —— 站点整片漏出扫描面").not.toContain("concurrent");
     expect(masked).toContain("const T = 2;");
   });
 

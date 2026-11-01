@@ -46,11 +46,7 @@ import {
 } from "../scripts/ci-incremental-gates.mjs";
 import { HEAVY_GATES } from "../scripts/ci-heavy-gates.mjs";
 import { parseStageScripts } from "../scripts/ci-autofix-duties.mjs";
-import {
-  INPUT_GLOBS,
-  INPUT_RES,
-  matchedInputs,
-} from "../scripts/check-docs-api.cjs";
+import { INPUT_GLOBS, INPUT_RES, matchedInputs } from "../scripts/check-docs-api.cjs";
 import { filesUnder } from "../scripts/docs-api-input-closure.mjs";
 import { SCAN_ROOTS, TRIGGER_GLOBS } from "../scripts/file-structure-rules.cjs";
 import { globToRe } from "../scripts/vitest-projects.cjs";
@@ -68,7 +64,7 @@ const CONFIG = readCnbConfig();
  * @param globs glob 清单
  * @returns 是否被某一条罩住
  */
-function coveredBy(rel: string, globs: readonly string[]): boolean {
+function coveredBy(rel: string, globs: ReadonlyArray<string>): boolean {
   return globs.some((g) => globToRe(g).test(rel));
 }
 
@@ -90,7 +86,9 @@ function literalPrefixOf(re: RegExp): string | null {
     /* 转义符把下一个字符当**字面量**（`\/` 是斜杠、`\.` 是点），不是通配。 */
     if (ch === "\\") {
       const next = src[i + 1];
-      if (next === undefined) break;
+      if (next === undefined) {
+        break;
+      }
       out += next;
       i += 1;
       continue;
@@ -101,16 +99,18 @@ function literalPrefixOf(re: RegExp): string | null {
     }
     out += ch;
   }
-  if (!sawWildcard) return out;
+  if (!sawWildcard) {
+    return out;
+  }
   const cut = out.lastIndexOf("/");
-  return cut < 0 ? null : out.slice(0, cut);
+  return cut === -1 ? null : out.slice(0, cut);
 }
 
 /**
  * 目录枚举的缓存 —— 同一次运行里同一个前缀只列一次（三根加起来 600 多个文件，
  * 而这条用例是**每次提交都跑**的固定清单成员）。
  */
-const filesUnderCache = new Map<string, string[]>();
+const filesUnderCache = new Map<string, Array<string>>();
 
 /**
  * 一条输入面正则命中的、**盘上真实存在**的文件清单。
@@ -122,12 +122,18 @@ const filesUnderCache = new Map<string, string[]>();
  * @param re 输入面正则
  * @returns 仓库相对路径清单
  */
-function filesMatchedBy(re: RegExp): string[] {
+function filesMatchedBy(re: RegExp): Array<string> {
   const prefix = literalPrefixOf(re);
-  if (prefix === null || prefix === "") return [];
+  if (prefix === null || prefix === "") {
+    return [];
+  }
   const abs = path.join(process.cwd(), prefix);
-  if (!fs.existsSync(abs)) return [];
-  if (fs.statSync(abs).isFile()) return re.test(prefix) ? [prefix] : [];
+  if (!fs.existsSync(abs)) {
+    return [];
+  }
+  if (fs.statSync(abs).isFile()) {
+    return re.test(prefix) ? [prefix] : [];
+  }
   let listed = filesUnderCache.get(prefix);
   if (listed === undefined) {
     listed = filesUnder(prefix);
@@ -139,10 +145,7 @@ function filesMatchedBy(re: RegExp): string[] {
 describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", () => {
   it("真仓一致：登记表与 .cnb.yml 逐字同源", () => {
     const problems = checkIncrementalGates(CONFIG);
-    expect(
-      problems,
-      `平台侧增量登记与配置不一致：\n${problems.join("\n")}`,
-    ).toEqual([]);
+    expect(problems, `平台侧增量登记与配置不一致：\n${problems.join("\n")}`).toEqual([]);
   });
 
   it("登记表非空（清单被掏空时这条会红，而不是让上面那条恒绿）", () => {
@@ -150,16 +153,9 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
      * 「判据不是空转」的同一形态（见 tests/no-platform-ci-config.test.ts 的头注）。 */
     expect(INCREMENTAL_GATES.length).toBeGreaterThan(0);
     for (const gate of INCREMENTAL_GATES) {
-      expect(gate.globs.length, `${gate.name} 的 globs 是空的`).toBeGreaterThan(
-        0,
-      );
-      expect(gate.script, `${gate.name} 没写它守的是哪份脚本`).toMatch(
-        /^scripts\/.+\.(cjs|mjs)$/,
-      );
-      expect(
-        gate.why.length,
-        `${gate.name} 没写「为什么这条收窄安全」`,
-      ).toBeGreaterThan(20);
+      expect(gate.globs.length, `${gate.name} 的 globs 是空的`).toBeGreaterThan(0);
+      expect(gate.script, `${gate.name} 没写它守的是哪份脚本`).toMatch(/^scripts\/.+\.(cjs|mjs)$/);
+      expect(gate.why.length, `${gate.name} 没写「为什么这条收窄安全」`).toBeGreaterThan(20);
     }
   });
 
@@ -251,13 +247,8 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       `这些 stage 被判为「任何改动都要跑」，不许挂 ifModify：${wronglyGated.join(", ")}`,
     ).toEqual([]);
     // 反过来：登记表里也不许出现它们（两个方向都堵住）。
-    const inRegistry = MUST_ALWAYS_RUN.filter((n) =>
-      INCREMENTAL_GATE_NAMES.has(n),
-    );
-    expect(
-      inRegistry,
-      `登记表里混进了全仓级 stage：${inRegistry.join(", ")}`,
-    ).toEqual([]);
+    const inRegistry = MUST_ALWAYS_RUN.filter((n) => INCREMENTAL_GATE_NAMES.has(n));
+    expect(inRegistry, `登记表里混进了全仓级 stage：${inRegistry.join(", ")}`).toEqual([]);
   });
 
   it("`API 文档生成与自检` 自己占一格、收窄挂在**那一格**上，且输入面只有一处出处", () => {
@@ -324,10 +315,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       "scripts/check-docs-api.cjs",
       "scripts/typedoc-run.mjs",
     ]) {
-      expect(
-        matchedInputs([f]),
-        `判据不认 ${f}，这条用例的样本已经过期`,
-      ).toEqual([f]);
+      expect(matchedInputs([f]), `判据不认 ${f}，这条用例的样本已经过期`).toEqual([f]);
     }
     /* ⚠️ 两侧形态不许分叉 —— 而且核的是「**罩住**」，不是「前缀沾边」
      * （ISSUE #2223 的现场：旧写法只比第一段前缀，于是
@@ -371,20 +359,13 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     ).toBeDefined();
     expect(gate?.script).toBe("scripts/check-format.cjs");
     /* `["src/**", ".storybook/**"]` 是那两棵树的写法；顺序不判（两棵树之间没有语义）。 */
-    expect([...(gate?.globs ?? [])].sort()).toEqual([
-      ".storybook/**",
-      "src/**",
-    ]);
+    expect([...(gate?.globs ?? [])].sort()).toEqual([".storybook/**", "src/**"]);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fmt = require("../scripts/check-format.cjs") as {
+    const fmt = /* SAFETY: 类型断言已复核 */ require("../scripts/check-format.cjs") as {
+      IGNORE_GLOBS: ReadonlyArray<string>;
       isScanned: (rel: string) => boolean;
-      IGNORE_GLOBS: readonly string[];
     };
-    for (const rel of [
-      "src/lib/a.ts",
-      "src/app/b.tsx",
-      ".storybook/preview.tsx",
-    ]) {
+    for (const rel of ["src/lib/a.ts", "src/app/b.tsx", ".storybook/preview.tsx"]) {
       expect(fmt.isScanned(rel), `判据面应当包含 ${rel}`).toBe(true);
     }
     /* 反向：`IGNORE_GLOBS` 里每一条都把文件真正剔出扫描面 —— 这一步是自检，
@@ -393,7 +374,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
       /* 造一个「一定长得像那个 glob 命中物」的探针：先展开花括号，再补上缺的路径与
        * 扩展名。`*.js` 那类「通配 + 扩展名」的条目展开后已经是真文件名，不能再改扩展名
        * —— 换成 `.ts` 会让它落回扫描面里，那测的是本函数而不是 `IGNORE_GLOBS`。 */
-      const braced = glob.replace(/\{[^}]*\}/g, "ts");
+      const braced = glob.replaceAll(/\{[^}]*\}/g, "ts");
       const probe = /\.\w+$/.test(braced.replace(/^\*/, "x"))
         ? braced.replace(/\*/, "probe")
         : braced.replace(/\*\*$|\*$/, "probe.ts");
@@ -435,9 +416,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
     /* 根目录那几种扩展名：R7（禁用 .bat/.cmd/.vbs）与 R9（根目录禁 .ps1）都扫在
      * `"."` 上，所以它们必须都在触发面里 —— 否则「根目录多了一个 .cmd」不会触发判据。 */
     for (const ext of [".ps1", ".bat", ".cmd", ".vbs", ".ts", ".tsx"]) {
-      expect(TRIGGER_GLOBS, `根目录的 ${ext} 不在触发面里`).toContain(
-        `*${ext}`,
-      );
+      expect(TRIGGER_GLOBS, `根目录的 ${ext} 不在触发面里`).toContain(`*${ext}`);
     }
   });
 
@@ -475,10 +454,7 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
         fs.existsSync(path.join(process.cwd(), entry ?? "")),
         `\`${gate.name}\` 点的入口不在盘上：${entry}`,
       ).toBe(true);
-      expect(
-        gate.why.length,
-        `\`${gate.name}\` 没写「它判什么」`,
-      ).toBeGreaterThan(10);
+      expect(gate.why.length, `\`${gate.name}\` 没写「它判什么」`).toBeGreaterThan(10);
     }
   });
 
@@ -492,12 +468,11 @@ describe("平台侧门禁的增量收窄（.cnb.yml ifModify ⇄ 登记表）", 
      * 会被判成「$1 可能是 undefined」，而它在正则命中时必然存在（tsc 抓不到这层语义）。
      * 2026-10-28 起核对面是**三份档位清单的并集**（PR / push / 每日）：带 ifModify 的
      * 格子合法地活在哪个档都行，「死配置」指的是三份里都不在，不是「不在 PR 那份」。 */
-    const folded = (key: string): string[] => {
-      const body =
-        new RegExp(
-          `^[ \\t]*${key}:[ \\t]*>?-?[ \\t]*\\r?\\n((?:[ \\t]+(?!#)\\S[^\\n]*\\r?\\n)+)`,
-          "m",
-        ).exec(CONFIG)?.[1];
+    const folded = (key: string): Array<string> => {
+      const body = new RegExp(
+        `^[ \\t]*${key}:[ \\t]*>?-?[ \\t]*\\r?\\n((?:[ \\t]+(?!#)\\S[^\\n]*\\r?\\n)+)`,
+        "m",
+      ).exec(CONFIG)?.[1];
       return body === undefined
         ? []
         : body

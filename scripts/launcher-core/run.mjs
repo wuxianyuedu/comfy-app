@@ -94,7 +94,7 @@ export function exportsDir(root) {
  * @returns {string}
  */
 export function newRunId() {
-  return Math.floor(Math.random() * 0x1000000)
+  return Math.floor(Math.random() * 0x1_00_00_00)
     .toString(16)
     .padStart(6, "0");
 }
@@ -130,10 +130,14 @@ export function readGitHead(root) {
   // 本仓检出在哪：走权威解析（认链接工作树里 `.git` 是个文件的情形），不硬拼
   // 检出子目录（硬拼在 worktree 上指向那个文件、HEAD 永远读不到）。
   const gitDir = resolveGitDir(root);
-  if (!gitDir) return { branch: null, commit: null };
+  if (!gitDir) {
+    return { branch: null, commit: null };
+  }
   try {
     const head = fs.readFileSync(path.join(gitDir, "HEAD"), "utf8").trim();
-    if (!head.startsWith("ref:")) return { branch: null, commit: head || null };
+    if (!head.startsWith("ref:")) {
+      return { branch: null, commit: head || null };
+    }
     const ref = head.slice(4).trim();
     const branch = ref.replace(/^refs\/heads\//, "");
     try {
@@ -154,9 +158,7 @@ export function readGitHead(root) {
  */
 export function readAppVersion(root) {
   try {
-    const pkg = JSON.parse(
-      fs.readFileSync(path.join(root, "package.json"), "utf8"),
-    );
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
     return typeof pkg.version === "string" ? pkg.version : null;
   } catch {
     return null;
@@ -174,13 +176,7 @@ export function readAppVersion(root) {
  */
 export function startRun(
   root,
-  {
-    runId = newRunId(),
-    at = new Date(),
-    args = [],
-    mode = "",
-    platform = process.platform,
-  } = {},
+  { runId = newRunId(), at = new Date(), args = [], mode = "", platform = process.platform } = {},
 ) {
   const dir = currentDir(root);
   fs.mkdirSync(dir, { recursive: true });
@@ -233,9 +229,7 @@ export function readRunJson(root) {
  */
 export function readRunJsonAt(dir) {
   try {
-    return JSON.parse(
-      fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8"),
-    );
+    return JSON.parse(fs.readFileSync(path.join(dir, LOG_LAYOUT.runJson), "utf8"));
   } catch {
     return null;
   }
@@ -264,10 +258,15 @@ export function patchRun(root, patch) {
  */
 export function recordPid(root, name, pid) {
   const meta = readRunJson(root);
-  if (!meta) return;
-  const pids = { .../** @type {Record<string, number>} */ ((meta.pids) ?? {}) };
-  if (pid == null) delete pids[name];
-  else pids[name] = pid;
+  if (!meta) {
+    return;
+  }
+  const pids = { .../** @type {Record<string, number>} */ (meta.pids) };
+  if (pid == null) {
+    delete pids[name];
+  } else {
+    pids[name] = pid;
+  }
   patchRun(root, { pids });
 }
 
@@ -296,8 +295,11 @@ function copyTree(from, to) {
   for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
     const src = path.join(from, entry.name);
     const dst = path.join(to, entry.name);
-    if (entry.isDirectory()) copyTree(src, dst);
-    else if (entry.isFile()) fs.copyFileSync(src, dst);
+    if (entry.isDirectory()) {
+      copyTree(src, dst);
+    } else if (entry.isFile()) {
+      fs.copyFileSync(src, dst);
+    }
   }
 }
 
@@ -323,25 +325,23 @@ function emptyDir(dir) {
  */
 export function archiveCurrent(
   root,
-  {
-    exitCode = null,
-    crashed = false,
-    at = new Date(),
-    touchLatest = true,
-  } = {},
+  { exitCode = null, crashed = false, at = new Date(), touchLatest = true } = {},
 ) {
   const cur = currentDir(root);
-  if (!fs.existsSync(cur)) return null;
+  if (!fs.existsSync(cur)) {
+    return null;
+  }
   const before = readRunJson(root);
-  if (!before) return null;
+  if (!before) {
+    return null;
+  }
   if (!hasCurrentContent(cur) && !crashed) {
     // 只有 run.json、且是正常结束：这次运行什么都没写，不留空包污染 runs/。
     emptyDir(cur);
     return null;
   }
   const runId = typeof before.runId === "string" ? before.runId : "unknown";
-  const startedAt =
-    typeof before.startedAt === "string" ? new Date(before.startedAt) : at;
+  const startedAt = typeof before.startedAt === "string" ? new Date(before.startedAt) : at;
   patchRun(root, {
     endedAt: at.toISOString(),
     durationMs: Math.max(0, at.getTime() - startedAt.getTime()),
@@ -353,7 +353,9 @@ export function archiveCurrent(
   const target = path.join(runs, runDirName(at, runId));
   copyTree(cur, target);
   emptyDir(cur);
-  if (touchLatest) writeLatest(root, path.basename(target));
+  if (touchLatest) {
+    writeLatest(root, path.basename(target));
+  }
   return target;
 }
 
@@ -368,11 +370,7 @@ export function archiveCurrent(
 export function writeLatest(root, name) {
   try {
     fs.mkdirSync(logRoot(root), { recursive: true });
-    fs.writeFileSync(
-      path.join(logRoot(root), LOG_LAYOUT.latest),
-      `${name}\n`,
-      "utf8",
-    );
+    fs.writeFileSync(path.join(logRoot(root), LOG_LAYOUT.latest), `${name}\n`, "utf8");
   } catch {
     /* 落盘失败不影响启动 */
   }
@@ -385,9 +383,7 @@ export function writeLatest(root, name) {
  */
 export function readLatest(root) {
   try {
-    const text = fs
-      .readFileSync(path.join(logRoot(root), LOG_LAYOUT.latest), "utf8")
-      .trim();
+    const text = fs.readFileSync(path.join(logRoot(root), LOG_LAYOUT.latest), "utf8").trim();
     return text || null;
   } catch {
     return null;
@@ -409,11 +405,19 @@ export function readLatest(root) {
  */
 export function recoverStaleCurrent(root, { at = new Date() } = {}) {
   const cur = currentDir(root);
-  if (!fs.existsSync(cur)) return null;
-  if (!readRunJson(root)) return null;
-  if (!hasCurrentContent(cur)) return null;
+  if (!fs.existsSync(cur)) {
+    return null;
+  }
+  if (!readRunJson(root)) {
+    return null;
+  }
+  if (!hasCurrentContent(cur)) {
+    return null;
+  }
   const meta = readRunJson(root) ?? {};
-  if (meta.endedAt) return null; // 已归档过（清空失败之类的边缘），不重复收
+  if (meta.endedAt) {
+    return null;
+  } // 已归档过（清空失败之类的边缘），不重复收
   // touchLatest: false —— 「最近一次」指的是最近一次**正常完成**的运行；
   // 崩溃补做把它改成崩溃那次的目录名，反而让这一栏失真（用户/我们翻它就是为了
   // 找「上一次好好结束的是哪一包」）。
@@ -475,8 +479,9 @@ export function dirSize(dir) {
   }
   for (const entry of entries) {
     const p = path.join(dir, entry.name);
-    if (entry.isDirectory()) total += dirSize(p);
-    else if (entry.isFile()) {
+    if (entry.isDirectory()) {
+      total += dirSize(p);
+    } else if (entry.isFile()) {
       try {
         total += fs.statSync(p).size;
       } catch {
@@ -504,13 +509,11 @@ export async function pruneRuns(root, { now = Date.now(), delete: del } = {}) {
   const runs = listRuns(root);
   const cutoff = now - RETENTION.maxAgeDays * 24 * 60 * 60 * 1000;
   const byAge = new Set(
-    runs
-      .slice()
+    [...runs]
       .sort((a, b) => b.name.localeCompare(a.name))
       .map((r) => r.name),
   );
-  const recent = runs
-    .slice()
+  const recent = [...runs]
     .sort((a, b) => b.name.localeCompare(a.name))
     .slice(0, RETENTION.maxRuns)
     .map((r) => r.name);
@@ -520,8 +523,12 @@ export async function pruneRuns(root, { now = Date.now(), delete: del } = {}) {
   for (const run of runs) {
     // 「留」的两条通道：新近 20 包（keep）或 7 天内（mtime / 名字）不掉进 cutoff。
     // 名字前缀即日期，不必依赖 mtime —— 复制归档时 mtime 会跟着变。
-    if (keep.has(run.name)) continue;
-    if (run.mtimeMs >= cutoff) continue;
+    if (keep.has(run.name)) {
+      continue;
+    }
+    if (run.mtimeMs >= cutoff) {
+      continue;
+    }
     drop.push(run.name);
   }
   let removed = 0;
@@ -529,15 +536,15 @@ export async function pruneRuns(root, { now = Date.now(), delete: del } = {}) {
   for (const name of drop) {
     const dir = path.join(runsDir(root), name);
     try {
-      if (
-        dirSize(dir) > RETENTION.zipAboveBytes &&
-        name.endsWith(".zip") === false
-      ) {
+      if (dirSize(dir) > RETENTION.zipAboveBytes && name.endsWith(".zip") === false) {
         await zipDirectory(dir, `${dir}.zip`);
         zipped++;
       }
-      if (del) del(dir, name);
-      else fs.rmSync(dir, { recursive: true, force: true });
+      if (del) {
+        del(dir, name);
+      } else {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
       removed++;
     } catch {
       /* 单个包删不掉不该影响别的（文件被锁是常见情况） */
@@ -619,9 +626,11 @@ function collectFiles(dir, prefix = "") {
     .readdirSync(dir, { withFileTypes: true })
     .sort((a, b) => a.name.localeCompare(b.name))) {
     const rel = prefix ? path.join(prefix, entry.name) : entry.name;
-    if (entry.isDirectory())
+    if (entry.isDirectory()) {
       out.push(...collectFiles(path.join(dir, entry.name), rel));
-    else if (entry.isFile()) out.push(rel);
+    } else if (entry.isFile()) {
+      out.push(rel);
+    }
   }
   return out;
 }
@@ -633,18 +642,12 @@ function collectFiles(dir, prefix = "") {
  * @param {{ nameBytes: Buffer, crc: number, compressSize: number, uncompressedSize: number, method: number }} p
  * @returns {{ header: Buffer, size: number }}
  */
-function localHeader({
-  nameBytes,
-  crc,
-  compressSize,
-  uncompressedSize,
-  method,
-}) {
+function localHeader({ nameBytes, crc, compressSize, uncompressedSize, method }) {
   const size = 30 + nameBytes.length;
   const b = Buffer.alloc(size);
-  b.writeUInt32LE(0x04034b50, 0);
+  b.writeUInt32LE(0x04_03_4b_50, 0);
   b.writeUInt16LE(20, 4); // version needed
-  b.writeUInt16LE(0x0800, 6); // flags: UTF-8 文件名
+  b.writeUInt16LE(0x08_00, 6); // flags: UTF-8 文件名
   b.writeUInt16LE(method, 8);
   b.writeUInt16LE(0, 10); // mod time（不定：跨平台时区差异会让包不可复现）
   b.writeUInt16LE(0x21, 12); // mod date（1980-01-01，zip 纪元）
@@ -662,19 +665,12 @@ function localHeader({
  * @param {{ nameBytes: Buffer, crc: number, compressSize: number, uncompressedSize: number, method: number, offset: number }} p
  * @returns {Buffer}
  */
-function centralHeader({
-  nameBytes,
-  crc,
-  compressSize,
-  uncompressedSize,
-  method,
-  offset,
-}) {
+function centralHeader({ nameBytes, crc, compressSize, uncompressedSize, method, offset }) {
   const b = Buffer.alloc(46 + nameBytes.length);
-  b.writeUInt32LE(0x02014b50, 0);
+  b.writeUInt32LE(0x02_01_4b_50, 0);
   b.writeUInt16LE(20, 4); // version made by
   b.writeUInt16LE(20, 6); // version needed
-  b.writeUInt16LE(0x0800, 8);
+  b.writeUInt16LE(0x08_00, 8);
   b.writeUInt16LE(method, 10);
   b.writeUInt16LE(0, 12);
   b.writeUInt16LE(0x21, 14);
@@ -699,7 +695,7 @@ function centralHeader({
  */
 function endOfCentral({ count, centralSize, centralOffset }) {
   const b = Buffer.alloc(22);
-  b.writeUInt32LE(0x06054b50, 0);
+  b.writeUInt32LE(0x06_05_4b_50, 0);
   b.writeUInt16LE(0, 4);
   b.writeUInt16LE(0, 6);
   b.writeUInt16LE(count, 8);
@@ -722,7 +718,9 @@ function crc32(buf) {
     crcTable = new Int32Array(256);
     for (let i = 0; i < 256; i++) {
       let c = i;
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      for (let k = 0; k < 8; k++) {
+        c = c & 1 ? 0xed_b8_83_20 ^ (c >>> 1) : c >>> 1;
+      }
       crcTable[i] = c;
     }
   }
@@ -747,14 +745,10 @@ function crc32(buf) {
 export async function exportDiagnostics(root, { at = new Date(), runId } = {}) {
   const cur = currentDir(root);
   const meta = readRunJson(root);
-  const id =
-    runId ?? (typeof meta?.runId === "string" ? meta.runId : "unknown");
+  const id = runId ?? (typeof meta?.runId === "string" ? meta.runId : "unknown");
   // 时间戳与 runs 目录名同形（`<日期>_<时分秒>`，无冒号）：用户在 Windows 上
   // 打开 exports/ 时两个地方的名字读起来是同一套写法。
-  const stamp = localTimestamp(at)
-    .slice(0, 19)
-    .replace(" ", "_")
-    .replace(/:/g, "");
+  const stamp = localTimestamp(at).slice(0, 19).replace(" ", "_").replaceAll(":", "");
   const out = path.join(exportsDir(root), `diagnostics-${stamp}-${id}.zip`);
   // 先备一份到临时目录，再按「current/ + 最近几次 runs/」的目录结构打包，
   // 保证解压出来就是 log/ 的形状（用户/我们能直接对照规范 §4 读）。
@@ -762,7 +756,9 @@ export async function exportDiagnostics(root, { at = new Date(), runId } = {}) {
   fs.rmSync(stage, { recursive: true, force: true });
   fs.mkdirSync(stage, { recursive: true });
   try {
-    if (fs.existsSync(cur)) copyTree(cur, path.join(stage, LOG_LAYOUT.current));
+    if (fs.existsSync(cur)) {
+      copyTree(cur, path.join(stage, LOG_LAYOUT.current));
+    }
     const recent = listRuns(root).slice(-RETENTION.diagnosticsRuns);
     for (const run of recent) {
       copyTree(run.dir, path.join(stage, LOG_LAYOUT.runs, run.name));

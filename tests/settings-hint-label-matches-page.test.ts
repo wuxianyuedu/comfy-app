@@ -23,7 +23,7 @@ import { comfyCliMissingHint } from "~/lib/comfyui/comfy-cli-python";
 /** 抓 `「设置 → X → Y」` 里那两段（两处文案都用中文引号把整条路径包住）。 */
 const POINTER_RE = /设置 → ([^ →]+) → ([^」]+)」/;
 
-function pointerOf(text: string): { section: string; field: string } {
+function pointerOf(text: string): { field: string; section: string; } {
   const match = POINTER_RE.exec(text);
   return { section: match?.[1] ?? "", field: (match?.[2] ?? "").trim() };
 }
@@ -47,7 +47,7 @@ describe("解释器提示指向的设置页位置", () => {
      * 这里让它以「抓不到路径形态」红出来，而不是把 null 传下去。 */
     const advice =
       adviseOnError(
-        "未找到 comfy-cli Python 解释器：C:\\Users\\x\\python.exe",
+        String.raw`未找到 comfy-cli Python 解释器：C:\Users\x\python.exe`,
       ) ?? "";
     const pointer = pointerOf(advice);
     expect(

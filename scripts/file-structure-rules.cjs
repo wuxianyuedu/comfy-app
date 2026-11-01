@@ -18,7 +18,7 @@ const FORBIDDEN_SCRIPT_EXT = /\.(bat|cmd|vbs)$/i;
 /** R8 需 UTF-8 BOM 的目录:入口与逻辑脚本都在这里,含中文的是绝大多数。 */
 const BOM_REQUIRED_DIRS = ["scripts/", "tools/"];
 /** R8 只校验含非 ASCII 字符的 .ps1 —— 纯 ASCII 脚本没有解码歧义,不强求 BOM。 */
-const NON_ASCII = /[^\x00-\x7F]/;
+const NON_ASCII = /[^\u0000-\u007F]/;
 
 // R10 注释里的「历史流水」标记(ISSUE #46 / 规范 12.4.2)
 const HISTORY_DATE = /\d{4}-\d{2}-\d{2}/;

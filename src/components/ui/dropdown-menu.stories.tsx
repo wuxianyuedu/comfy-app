@@ -1,11 +1,4 @@
-import {
-  Copy,
-  Download,
-  FolderOpen,
-  Settings,
-  Share2,
-  Trash2,
-} from "lucide-react";
+import { Copy, Download, FolderOpen, Settings, Share2, Trash2 } from "lucide-react";
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { Button } from "~/components/ui/button";
@@ -46,7 +39,7 @@ type DropdownMenuItemVariant = NonNullable<
   React.ComponentProps<typeof DropdownMenuItem>["variant"]
 >;
 
-const ITEM_VARIANTS: DropdownMenuItemVariant[] = ["default", "destructive"];
+const ITEM_VARIANTS: Array<DropdownMenuItemVariant> = ["default", "destructive"];
 
 const meta = {
   title: "UI/DropdownMenu",
@@ -61,9 +54,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" />}>
-        打开菜单
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button variant="outline" />}>打开菜单</DropdownMenuTrigger>
       <DropdownMenuContent className="w-52">
         <DropdownMenuLabel>工作流</DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -93,9 +84,7 @@ export const Default: Story = {
 export const ItemVariants: Story = {
   render: () => (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" />}>
-        variant 两档
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button variant="outline" />}>variant 两档</DropdownMenuTrigger>
       <DropdownMenuContent className="w-52">
         {ITEM_VARIANTS.map((variant) => (
           <DropdownMenuItem key={variant} variant={variant}>
@@ -112,9 +101,7 @@ export const ItemVariants: Story = {
 export const Inset: Story = {
   render: () => (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" />}>
-        inset 对齐
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button variant="outline" />}>inset 对齐</DropdownMenuTrigger>
       <DropdownMenuContent className="w-56">
         <DropdownMenuItem inset>inset：给图标留位</DropdownMenuItem>
         <DropdownMenuItem>
@@ -131,9 +118,7 @@ export const Inset: Story = {
 export const CheckboxAndRadio: Story = {
   render: () => (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" />}>
-        勾选 / 单选
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button variant="outline" />}>勾选 / 单选</DropdownMenuTrigger>
       <DropdownMenuContent className="w-56">
         <DropdownMenuLabel>显示列</DropdownMenuLabel>
         <DropdownMenuCheckboxItem defaultChecked>参数</DropdownMenuCheckboxItem>
@@ -142,9 +127,7 @@ export const CheckboxAndRadio: Story = {
         <DropdownMenuSeparator />
         <DropdownMenuLabel>排序</DropdownMenuLabel>
         <DropdownMenuRadioGroup defaultValue="updated">
-          <DropdownMenuRadioItem value="updated">
-            按更新时间
-          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="updated">按更新时间</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="name">按名称</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="size">按体积</DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
@@ -158,9 +141,7 @@ export const CheckboxAndRadio: Story = {
 export const WithSubmenu: Story = {
   render: () => (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" />}>
-        子菜单
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button variant="outline" />}>子菜单</DropdownMenuTrigger>
       <DropdownMenuContent className="w-56">
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
@@ -190,15 +171,13 @@ export const WithSubmenu: Story = {
 export const WithDisabled: Story = {
   render: () => (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" />}>
-        含禁用项
-      </DropdownMenuTrigger>
+      <DropdownMenuTrigger render={<Button variant="outline" />}>含禁用项</DropdownMenuTrigger>
       <DropdownMenuContent className="w-52">
         <DropdownMenuItem>可用</DropdownMenuItem>
         <DropdownMenuItem disabled>
           <Download /> 还没产物（禁用）
         </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" disabled>
+        <DropdownMenuItem disabled variant="destructive">
           运行中不能删除（禁用）
         </DropdownMenuItem>
       </DropdownMenuContent>

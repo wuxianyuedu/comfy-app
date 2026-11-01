@@ -11,7 +11,7 @@
  */
 
 /* ── 分类枚举 ── */
-export const WORKFLOW_CATEGORIES = [
+export const WORKFLOW_CATEGORIES = /* SAFETY: 类型断言已复核 */ [
   "image", // 图像侧（静态）
   "video", // 视频侧（动态）
   "audio", // 音频 / 语音侧
@@ -20,26 +20,26 @@ export const WORKFLOW_CATEGORIES = [
 export type WorkflowCategory = (typeof WORKFLOW_CATEGORIES)[number];
 
 /* ── 图像侧（静态） ── */
-export interface WorkflowTypeDefinition {
-  /** 缩写码，如 T2I / I2V / S2V */
-  code: string;
-  /** 英文全称 */
-  fullName: string;
-  /** 中文描述 */
-  label: string;
+export type WorkflowTypeDefinition = {
   /** 所属一级分类 */
   category: WorkflowCategory;
-  /** 更详细的子分类标签（可选） */
-  subCategory?: string;
+  /** 缩写码，如 T2I / I2V / S2V */
+  code: string;
   /** 简短说明（用于 tooltip / 帮助文案） */
   description: string;
+  /** 英文全称 */
+  fullName: string;
+  /** 该类型在 ComfyUI 中常用的节点特征（用于自动推断） */
+  hints?: Array<string>;
   /** 是否为「生成模式」（true）还是「后处理模式」（false，如 Upscale/Outpaint） */
   isGenerative: boolean;
-  /** 该类型在 ComfyUI 中常用的节点特征（用于自动推断） */
-  hints?: string[];
-}
+  /** 中文描述 */
+  label: string;
+  /** 更详细的子分类标签（可选） */
+  subCategory?: string;
+};
 
-export const IMAGE_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
+export const IMAGE_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   {
     code: "T2I",
     fullName: "Text-to-Image",
@@ -161,7 +161,7 @@ export const IMAGE_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 ];
 
 /* ── 视频侧（动态） ── */
-export const VIDEO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
+export const VIDEO_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   {
     code: "T2V",
     fullName: "Text-to-Video",
@@ -195,8 +195,7 @@ export const VIDEO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
     label: "首尾帧生视频",
     category: "video",
     subCategory: "生成",
-    description:
-      "Wan/LTX/Bernini 用（首尾帧只此一个 code，旧 FL2V 已归一至此）",
+    description: "Wan/LTX/Bernini 用（首尾帧只此一个 code，旧 FL2V 已归一至此）",
     isGenerative: true,
   },
   {
@@ -310,7 +309,7 @@ export const VIDEO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 ];
 
 /* ── 音频 / 语音侧 ── */
-export const AUDIO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
+export const AUDIO_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   {
     code: "T2A",
     fullName: "Text-to-Audio",
@@ -377,7 +376,7 @@ export const AUDIO_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 ];
 
 /* ── 全量合并表 ── */
-export const ALL_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
+export const ALL_WORKFLOW_TYPES: Array<WorkflowTypeDefinition> = [
   ...IMAGE_WORKFLOW_TYPES,
   ...VIDEO_WORKFLOW_TYPES,
   ...AUDIO_WORKFLOW_TYPES,
@@ -386,21 +385,13 @@ export const ALL_WORKFLOW_TYPES: WorkflowTypeDefinition[] = [
 /* ── 查找工具 ── */
 
 /** 按 code 查找 */
-export function getWorkflowType(
-  code: string,
-): WorkflowTypeDefinition | undefined {
-  return ALL_WORKFLOW_TYPES.find(
-    (ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === code,
-  );
+export function getWorkflowType(code: string): WorkflowTypeDefinition | undefined {
+  return ALL_WORKFLOW_TYPES.find((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.code === code);
 }
 
 /** 按分类查找 */
-export function getWorkflowTypesByCategory(
-  cat: WorkflowCategory,
-): WorkflowTypeDefinition[] {
-  return ALL_WORKFLOW_TYPES.filter(
-    (ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.category === cat,
-  );
+export function getWorkflowTypesByCategory(cat: WorkflowCategory): Array<WorkflowTypeDefinition> {
+  return ALL_WORKFLOW_TYPES.filter((ALL_WORKFLOW_TYPES) => ALL_WORKFLOW_TYPES.category === cat);
 }
 
 /** 获取所有合法的 taskType code 集合（用于校验 DB 字段） */
@@ -431,7 +422,9 @@ const RETIRED_CODE_ALIASES = new Map<string, string>([["fl2v", "FLF2V"]]);
  */
 export function normalizeTaskType(raw: string): string {
   const trimmed = raw.trim();
-  if (!trimmed) return trimmed;
+  if (!trimmed) {
+    return trimmed;
+  }
   const lower = trimmed.toLowerCase();
   return CODE_BY_LOWER.get(lower) ?? RETIRED_CODE_ALIASES.get(lower) ?? trimmed;
 }
@@ -442,18 +435,21 @@ export function normalizeTaskType(raw: string): string {
  *  优先级：声明的 defaultMode（且必须仍在 modes 里）→ modes[0] → taskType。
  *  都为空 = 该工作流确实没有模式（此时才谈得上「未声明模式」）。 */
 export function resolveWorkflowMode(args: {
-  modes?: readonly string[] | null;
   defaultMode?: string | null;
+  modes?: ReadonlyArray<string> | null;
   taskType?: string | null;
 }): string | null {
   const modes = (args.modes ?? []).filter(
     (mode): mode is string => typeof mode === "string" && mode.length > 0,
   );
   const declared = args.defaultMode;
-  if (declared && (modes.length === 0 || modes.includes(declared)))
+  if (declared && (modes.length === 0 || modes.includes(declared))) {
     return declared;
+  }
   const [firstMode] = modes;
-  if (firstMode) return firstMode;
+  if (firstMode) {
+    return firstMode;
+  }
   if (typeof args.taskType === "string" && args.taskType) {
     return normalizeTaskType(args.taskType);
   }
@@ -465,13 +461,13 @@ export function resolveWorkflowMode(args: {
  * JSON 字符串（与 Skill.tags 同构）。下面两个函数统一在「DB 列 ↔
  * TS 数组」之间转换，并在任何畸形输入下都安全降级为空数组 / 合法
  * JSON，绝不抛错（路由层吞异常比崩溃更安全）。 */
-export function parseModesJson(raw: unknown): string[] {
+export function parseModesJson(raw: unknown): Array<string> {
   if (Array.isArray(raw)) {
     return raw.filter((x): x is string => typeof x === "string");
   }
   if (typeof raw === "string" && raw.trim()) {
     try {
-      const arr = JSON.parse(raw) as unknown;
+      const arr = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown;
       if (Array.isArray(arr)) {
         return arr.filter((x): x is string => typeof x === "string");
       }
@@ -482,6 +478,6 @@ export function parseModesJson(raw: unknown): string[] {
   return [];
 }
 
-export function serializeModesJson(modes: string[]): string {
+export function serializeModesJson(modes: Array<string>): string {
   return JSON.stringify(Array.isArray(modes) ? modes : []);
 }

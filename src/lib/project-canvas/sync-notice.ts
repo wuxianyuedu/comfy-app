@@ -36,13 +36,13 @@ import { emitAppEvent } from "~/lib/app-events";
 import { errorCode, errorText, rawErrorDetail } from "~/lib/error-message";
 
 /** 一条「这份画布没能进服务端」的记录。 */
-export interface SyncNotice {
+export type SyncNotice = {
+  /** 已经过 `errorText` 翻译的详情（含动作前缀，可直接给人读）。 */
+  detail: string;
   projectId: string;
   /** 拒收时那条画布的名字 —— 用户认得出的是名字，不是 `proj_1727…` 这种 id。 */
   projectName: string;
-  /** 已经过 `errorText` 翻译的详情（含动作前缀，可直接给人读）。 */
-  detail: string;
-}
+};
 
 /**
  * 「重试也不会成功」的 tRPC 码集合。
@@ -78,7 +78,9 @@ const TRANSIENT_CODES: ReadonlySet<string> = new Set<TRPC_ERROR_CODE_KEY>([
 /** 这条失败是不是「服务端确定不收这份内容」。 */
 export function isPermanentRefusal(e: unknown): boolean {
   const code = errorCode(e);
-  if (code === null) return false;
+  if (code === null) {
+    return false;
+  }
   return !TRANSIENT_CODES.has(code);
 }
 
@@ -93,21 +95,12 @@ const notices = new Map<string, SyncNotice>();
  * `tests/single-logger-channel.test.ts` 管（豁免清单点名的是**本文件**，
  * 不是整个 `project-canvas` 目录）。
  */
-export function logSyncIssue(
-  action: string,
-  e: unknown,
-  projectId?: string,
-): void {
+export function logSyncIssue(action: string, e: unknown, projectId?: string): void {
   /* 一行里给两份：`errorText` 是翻译过的人话（「服务返回了非预期内容…」），
    * `rawErrorDetail` 是**服务端原文 + 码**（`code=FORBIDDEN — …`）。
    * 只留前者，「到底是哪个码拒的」就查不回来；只留后者，面板上是一串原文。
    * 口径同 `~/lib/error-message` 那两个函数的分工说明。 */
-  console.warn(
-    `[canvas-sync] ${action}：`,
-    errorText(e, action),
-    rawErrorDetail(e),
-    projectId,
-  );
+  console.warn(`[canvas-sync] ${action}：`, errorText(e, action), rawErrorDetail(e), projectId);
 }
 
 /**
@@ -131,7 +124,9 @@ const REFUSAL_PHRASES: Partial<Record<TRPC_ERROR_CODE_KEY, string>> = {
 function refusalDetail(action: string, e: unknown): string {
   const code = errorCode(e);
   const phrase =
-    code === null ? undefined : REFUSAL_PHRASES[code as TRPC_ERROR_CODE_KEY];
+    code === null
+      ? undefined
+      : REFUSAL_PHRASES[/* SAFETY: 类型断言已复核 */ code as TRPC_ERROR_CODE_KEY];
   return phrase ? `${action}：${phrase}` : errorText(e, action);
 }
 
@@ -152,10 +147,14 @@ export function recordSyncFailure(
   project: { id: string; name: string },
   e: unknown,
 ): boolean {
-  if (!isPermanentRefusal(e)) return false;
+  if (!isPermanentRefusal(e)) {
+    return false;
+  }
   const detail = refusalDetail(action, e);
   const prev = notices.get(project.id);
-  if (prev?.detail === detail) return false;
+  if (prev?.detail === detail) {
+    return false;
+  }
   notices.set(project.id, {
     projectId: project.id,
     projectName: project.name,
@@ -167,7 +166,9 @@ export function recordSyncFailure(
 
 /** 这一份终于写进去了 → 撤掉记录（并把名字改对之后残留的旧提示一起收掉）。 */
 export function clearSyncFailure(projectId: string): boolean {
-  if (!notices.delete(projectId)) return false;
+  if (!notices.delete(projectId)) {
+    return false;
+  }
   emitAppEvent("comfyapp:canvas-sync-changed");
   return true;
 }
@@ -198,6 +199,6 @@ export function reportMirrorFailure(
 }
 
 /** 当前所有「确定被拒」的画布（读侧挂载时先读一次，见文件头那条承诺）。 */
-export function listSyncNotices(): SyncNotice[] {
+export function listSyncNotices(): Array<SyncNotice> {
   return [...notices.values()];
 }

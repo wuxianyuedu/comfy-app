@@ -11,7 +11,7 @@ import { useLogPanel } from "./LogProvider";
 const SAVED_FLASH_MS = 8000;
 
 /* 「未亮起」的空载荷：模块级常量，身份稳定（见 `useFlashLatch`）。 */
-const EMPTY_SAVED: { savedPath: string | null; failed: boolean } = {
+const EMPTY_SAVED: { failed: boolean; savedPath: string | null } = {
   savedPath: null,
   failed: false,
 };
@@ -55,23 +55,20 @@ export function DiagnosticsButton() {
     <span className="flex items-center gap-1">
       <Hint label="打包本次运行与最近几次的历史日志（含 run.json 环境信息）到 log/exports/">
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={onPackage}
           aria-label="打包诊断现场到本地文件"
           className={`hover:bg-subtle hover:text-ink rounded-md ${
             failed ? "text-danger-strong" : "text-ink-muted"
           }`}
+          onClick={onPackage}
+          size="icon"
+          variant="ghost"
         >
           <PackageSearch size={16} />
         </Button>
       </Hint>
       {/* 路径就是这次打包的「回执」：没有它，用户只能自己去猜文件在哪。 */}
       {savedPath && (
-        <span
-          className="text-ink-fainter text-2xs max-w-56 truncate"
-          title={savedPath}
-        >
+        <span className="text-ink-fainter text-2xs max-w-56 truncate" title={savedPath}>
           已打包 {savedPath}
         </span>
       )}

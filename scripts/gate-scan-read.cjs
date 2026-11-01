@@ -105,7 +105,9 @@ function readForScan(abs) {
     return fs.readFileSync(abs, "utf8");
   } catch (error) {
     /* 消失不是判据要判的形态：一个已经不存在的文件里没有站点可言。 */
-    if (error && error.code === "ENOENT") return null;
+    if (error && error.code === "ENOENT") {
+      return null;
+    }
     throw error;
   }
 }
@@ -123,7 +125,9 @@ function readBytesForScan(abs) {
   try {
     return fs.readFileSync(abs);
   } catch (error) {
-    if (error && error.code === "ENOENT") return null;
+    if (error && error.code === "ENOENT") {
+      return null;
+    }
     throw error;
   }
 }
@@ -142,7 +146,9 @@ function readdirForScan(dir) {
   try {
     return fs.readdirSync(dir, { withFileTypes: true });
   } catch (error) {
-    if (error && error.code === "ENOENT") return null;
+    if (error && error.code === "ENOENT") {
+      return null;
+    }
     throw error;
   }
 }
@@ -169,27 +175,45 @@ function walkForScan(dir, fileRe, opts = {}) {
   const out = [];
 
   const entries = readdirForScan(dir);
-  if (entries === null) return out;
+  if (entries === null) {
+    return out;
+  }
 
   for (const e of entries) {
-    if (skipDirs.has(e.name)) continue;
-    if (skipHiddenDirs && e.isDirectory() && e.name.startsWith(".")) continue;
+    if (skipDirs.has(e.name)) {
+      continue;
+    }
+    if (skipHiddenDirs && e.isDirectory() && e.name.startsWith(".")) {
+      continue;
+    }
     const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walkInto(abs, out);
-    else if (fileRe.test(e.name)) out.push(abs);
+    if (e.isDirectory()) {
+      walkInto(abs, out);
+    } else if (fileRe.test(e.name)) {
+      out.push(abs);
+    }
   }
   return out;
 
   /** 递归那一层：每支自己判「列不到就跳过」。 */
   function walkInto(current, sink) {
     const list = readdirForScan(current);
-    if (list === null) return;
+    if (list === null) {
+      return;
+    }
     for (const e of list) {
-      if (skipDirs.has(e.name)) continue;
-      if (skipHiddenDirs && e.isDirectory() && e.name.startsWith(".")) continue;
+      if (skipDirs.has(e.name)) {
+        continue;
+      }
+      if (skipHiddenDirs && e.isDirectory() && e.name.startsWith(".")) {
+        continue;
+      }
       const abs = path.join(current, e.name);
-      if (e.isDirectory()) walkInto(abs, sink);
-      else if (fileRe.test(e.name)) sink.push(abs);
+      if (e.isDirectory()) {
+        walkInto(abs, sink);
+      } else if (fileRe.test(e.name)) {
+        sink.push(abs);
+      }
     }
   }
 }
@@ -206,7 +230,9 @@ function walkForScan(dir, fileRe, opts = {}) {
  * @returns {string}
  */
 function vanishedNote(count) {
-  if (!(count > 0)) return "";
+  if (!(count > 0)) {
+    return "";
+  }
   return `\n  ⚠️ 另有 ${count} 个条目在扫描期间消失（工作区并发变更），本轮未读。`;
 }
 
@@ -234,15 +260,13 @@ function readStagedPaths(root = process.cwd()) {
    * 文件（全在 `docs/` 下）⇒ 转义过的路径**对不上扫描根前缀** ⇒ `skipUnlessStagedTouches()`
    * 会**跳过整条判据**：判据在场却没跑，而机器之间还不一样（本机全局配了
    * `core.quotepath=false`，CI runner 是 git 默认值）。 */
-  const res = spawnSync(
-    "git",
-    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-    {
-      cwd: root,
-      encoding: "utf8",
-    },
-  );
-  if (res.status !== 0) return null;
+  const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  if (res.status !== 0) {
+    return null;
+  }
   return (res.stdout || "")
     .split(/\r?\n/)
     .filter(Boolean)
@@ -261,7 +285,7 @@ function readStagedPaths(root = process.cwd()) {
  * @returns {boolean}
  */
 function isUnderAny(rel, roots) {
-  return roots.some((dir) => rel === dir || rel.startsWith(dir + "/"));
+  return roots.some((dir) => rel === dir || rel.startsWith(`${dir}/`));
 }
 
 /**
@@ -285,12 +309,7 @@ function isUnderAny(rel, roots) {
  * @param {string} [options.what] 「扫描面」的名字，用于跳过话术
  * @returns {boolean} 是否被跳过（`true` 表示进程已退出，调用方不必再做事）
  */
-function skipUnlessStagedTouches({
-  roots,
-  tag,
-  root = process.cwd(),
-  what = "扫描面",
-}) {
+function skipUnlessStagedTouches({ roots, tag, root = process.cwd(), what = "扫描面" }) {
   const files = readStagedPaths(root);
   if (files === null) {
     console.error(
@@ -300,7 +319,9 @@ function skipUnlessStagedTouches({
     );
     process.exit(2);
   }
-  if (files.some((f) => isUnderAny(f, roots))) return false;
+  if (files.some((f) => isUnderAny(f, roots))) {
+    return false;
+  }
   console.log(
     `${tag} ✓ 本次提交未触及${what}（${files.length} 个暂存文件中 0 个落在 ${roots.length} 条根内），跳过。`,
   );

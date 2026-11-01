@@ -74,12 +74,12 @@
  * 文件时自动落在白名单里(不误报)。豁免不进棘轮计数。
  *
  * 白名单里的第二类是**非源码产物**:`src-tauri/target/` 下是 `cargo build` 的输出
- * (Rust 壳),由**嵌套的** `src-tauri/.gitignore` 忽略。prettier 只按 cwd(仓库根)
- * 读 `.gitignore`,嵌套的忽略文件它看不到 —— 于是构建过一次的检出会把 target 下的
- * 生成脚本(out/__global-api-script.js)判成「新增未过格式的文件」,阻断每一次提交
- * (ISSUE #638 修好 pnpm 启动形态后本门禁才第一次真正扫到全库,这条才暴露;CI 的
- * 干净检出没有 target 目录,所以只有开发机踩得到)。产物既不该被格式化 ——
- * 下一次构建会覆盖它,也不该进棘轮计数。
+ * (Rust 壳)。**现在谁在忽略它**（ISSUE #2602）:本门禁与 `format:check` / `format:write`
+ * 的扫描面收口在 `SCAN_ROOTS` 两个目录（`src` 与 `.storybook`）——`target/` 天然不在
+ * 面内,不存在「生成脚本被格式化工具折行 ⇒ serde_json 读到尾随逗号 ⇒ 整壳编译失败」
+ * 那一条(那是 prettier 时代的现场,当年的执行者是根级 `.prettierignore`,#2541 删
+ * prettier 时一并删了;这条历史上的根因与取证见 ISSUE #730 / #638)。产物既不该被
+ * 格式化 —— 下一次构建会覆盖它,也不该进棘轮计数。
  *
  * 为什么逐个 glob 调 prettier 而不是一次性:需要把 glob 交给 shell 展开或引号
  * 透传,而 Windows 上 cmd/pwsh 的展开语义与 POSIX 不同;逐个 glob 调用对平台
@@ -90,6 +90,8 @@
  *   node scripts/check-format.cjs --changed   # 只判改动面 ∩ 扫描面 —— 平台侧与 check:all 用这一档
  *   node scripts/check-format.cjs --report    # 只出清单不判失败(盘点用,照旧全库)
  *   node scripts/check-format.cjs --staged    # 判暂存面(人的动作:提交前自查)
+ *                                           #   合并态(MERGE_HEAD 在场)下暂存面 = 相对第一父的
+ *                                           #   全量差异,会收窄到本分支带来的那份(ISSUE #2747)
  *
  * ── `--staged`：全库扫描的「白付」与它的输入面 ────────────────────────────────
  *
@@ -142,15 +144,15 @@ const { gateFail, gatePass, indentItems } = require("./ci-log.mjs");
 /** oxfmt 入口的三级解析（见上）。取不到返回 null，由 `main()` 以 exit 2 收尾。 */
 function resolveOxfmtEntry() {
   const fromEnv = process.env.COMFYAPP_OXFMT_ENTRY;
-  if (fromEnv) return fs.existsSync(fromEnv) ? fromEnv : null;
+  if (fromEnv) {
+    return fs.existsSync(fromEnv) ? fromEnv : null;
+  }
   try {
     // 按扫描根解析：门禁在仓库根被调用，本地 `node_modules/oxfmt` 就是它的依赖。
     // 取 `oxfmt/package.json` 而不是直接 resolve `oxfmt/bin/oxfmt`：后者可能被包的
     // `exports` 字段挡住（子路径不导出），前者是常见可解析面；两者都失败时退回按
     // 扫描根拼路径（与 prettier 时代「任何一档都不许回落成 0 个未过」同口径）。
-    const pkg = createRequire(path.join(ROOT, "noop.js")).resolve(
-      "oxfmt/package.json",
-    );
+    const pkg = createRequire(path.join(ROOT, "noop.js")).resolve("oxfmt/package.json");
     return path.join(path.dirname(pkg), "bin", "oxfmt");
   } catch {
     const fallback = path.join(ROOT, "node_modules", "oxfmt", "bin", "oxfmt");
@@ -195,7 +197,7 @@ function toPosix(p) {
 }
 
 function escapeRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return s.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /** 把 glob 转成正则(支持 `**` / `*` / `?` / `{a,b}`):不引依赖,口径可控。 */
@@ -217,18 +219,18 @@ function globToRegExp(glob) {
       out += "[^/]";
     } else if (c === "{") {
       const close = glob.indexOf("}", i);
-      if (close < 0) {
-        out += "\\{";
+      if (close === -1) {
+        out += String.raw`\{`;
         continue;
       }
       out +=
-        "(?:" +
+        `(?:${
         glob
           .slice(i + 1, close)
           .split(",")
           .map(escapeRe)
-          .join("|") +
-        ")";
+          .join("|")
+        })`;
       i = close;
     } else if (c === "/") {
       out += "/";
@@ -236,7 +238,7 @@ function globToRegExp(glob) {
       out += escapeRe(c);
     }
   }
-  return new RegExp(out + "$");
+  return new RegExp(`${out}$`);
 }
 
 const IGNORE_RES = IGNORE_GLOBS.map(globToRegExp);
@@ -255,20 +257,49 @@ function isScanned(rel) {
   return GLOB_RES.some((re) => re.test(rel)) && !isIgnored(rel);
 }
 
+/** 本次提交是不是一个**待落地的合并提交**（`$GIT_DIR/MERGE_HEAD` 在场）。
+ * 判据只有一份：`git-dir.mjs` 的 `hasInProgressMerge` —— 那里写清了为什么只有这一个
+ * 信号算数（`merge-base` / `--is-ancestor` 都看不出来，HEAD 还没动），以及为什么
+ * 不能硬拼 `<根>/.git/MERGE_HEAD`（链接工作树里 `.git` 是个文件，拼出来的路径永远读不到）。
+ * `require(esm)` 与下面 `--changed` 那一档同形（Node 24 认得了），而 `git-dir.mjs`
+ * 只依赖 node 内置 —— 沙箱夹具那份依赖抄得动。 */
+function mergeInProgress() {
+  const { hasInProgressMerge } = require("./git-dir.mjs");
+  return hasInProgressMerge(ROOT);
+}
+
+/**
+ * 改动面先算（这是 git 的事，与 oxfmt 装没装无关）：拿不到 ⇒ exit 2，
+ * 「没判」不冒充「干净」—— 与 ci-affected-tests 同一口径（§13.6.2）。
+ * 判据实现只有一份出处：`changed-scope.mjs`（基线选取 / 三点 diff / quotePath
+ * / 改名两侧都收），这里不抄第二份（§12.18）。`require(esm)` 与
+ * `check-doc-mirror-pairing.cjs` 同形，`copyGateDeps` 按这一形态补沙箱依赖。
+ */
+function changedFaceOrExit() {
+  const { resolveChangedFiles } = require("./changed-scope.mjs");
+  const changed = resolveChangedFiles({ cwd: ROOT });
+  if (!changed.ok) {
+    console.error(
+      `[format] 改动面没算出来：${changed.reason}\n` +
+        "[format]   按 fail-closed 判「没判」，以 exit 2 结束（不冒充「未触及扫描面」）。",
+    );
+    process.exit(2);
+  }
+  return changed;
+}
+
 /** 暂存改动清单(仓库根相对 POSIX 路径)。git 拿不到时返回 null —— 由调用方 fail-closed。 */
 function stagedFiles() {
   /* `-c core.quotePath=false`:路径要原样(ISSUE #2272,机制见 scripts/changed-scope.mjs 的
    * 文件头「口径 ④」)。git 默认把含非 ASCII 字符的路径转义加引号,而本仓有 38 份文件名
    * 带非 ASCII 的文件(全在 docs/ 下)⇒ 转义过的路径认不出来,那些文件会**不进 prettier**。 */
-  const res = spawnSync(
-    "git",
-    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-    },
-  );
-  if (res.status !== 0) return null;
+  const res = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (res.status !== 0) {
+    return null;
+  }
   return (res.stdout || "").split(/\r?\n/).filter(Boolean).map(toPosix);
 }
 
@@ -336,15 +367,13 @@ function oxfmtCheckTargets(entry, targets, subject) {
     // `\u001b[38;2;…msrc/lib/fresh.ts\u001b[0m (0ms)`），带码的「文件名」
     // 过不了 `isScanned` 的路径形态，整张清单会被悄悄滤成空 —— 门禁当场读成
     // 「命中 0 个」（本地 stdout 不着色，所以这一档只在 CI 形态下暴露）。
-    .replace(/\u001b\[[0-9;]*m/g, "")
+    .replaceAll(/\u001b\[[0-9;]*m/g, "")
     .split("\n")
     .map((line) => line.trim())
     // 有差异行形如 `src/foo.ts (12ms)`；其余是 `Checking formatting...` /
     // `Format issues found in above N files.` / `Finished in ...` 这类摘要行，
     // 认不出的行一律丢掉（宁可漏报也不许把摘要行当成文件名）。
-    .map(
-      (line) => line.match(/^(.+?)\s+\(\d+(?:\.\d+)?(?:ms|s)\)$/)?.[1] ?? null,
-    )
+    .map((line) => line.match(/^(.+?)\s+\(\d+(?:\.\d+)?(?:ms|s)\)$/)?.[1] ?? null)
     .filter((line) => line && !line.startsWith("["));
   if (res.status !== 0 && res.status !== 1) {
     console.error(
@@ -358,8 +387,9 @@ function oxfmtCheckTargets(entry, targets, subject) {
         "[format]   「命令没跑成」，不是「全库干净」。真实仓里出现这一行请贴出入口与\n" +
         "[format]   下面这段 stderr。",
     );
-    if (res.stderr)
+    if (res.stderr) {
       console.error(`[format]   stderr: ${String(res.stderr).trim()}`);
+    }
     process.exit(2);
   }
   return lines;
@@ -370,7 +400,9 @@ function keepScanned(f, found) {
   const rel = toPosix(path.relative(ROOT, path.resolve(ROOT, f)));
   // 传目录给 oxfmt 会把它认识的语言（含 md / json / css）一并扫到，
   // 本格的面仍是 ts/tsx/js/jsx/mdx 减白名单 —— 用 isScanned 收口。
-  if (!isScanned(rel)) return;
+  if (!isScanned(rel)) {
+    return;
+  }
   found.add(rel);
 }
 
@@ -385,7 +417,9 @@ function collectUnformatted(entry) {
      * 也不是「没跑成」，而是「这一根没有账可算」（判据自测的临时仓库就没有
      * `.storybook`，实测把整条门打成了 fail-closed 的 exit 2）。真实仓两个根都在，
      * 这条跳过不改真实仓的判决面。 */
-    if (!fs.existsSync(path.join(ROOT, root))) continue;
+    if (!fs.existsSync(path.join(ROOT, root))) {
+      continue;
+    }
     for (const f of oxfmtCheckTargets(entry, [root], `扫描根 ${root}`)) {
       keepScanned(f, found);
     }
@@ -455,10 +489,32 @@ async function main() {
       );
       process.exit(2);
     }
-    const hits = files.filter(isScanned);
+    /* 合并态下的暂存面**不是**「本次改动」（ISSUE #2747）：`git merge` 解完冲突、
+     * 提交还没落地时，`git diff --cached` 是**相对第一父提交（合并前的自己）**的全量
+     * 差异 —— 也就是整份主干的改动面（现场：901 份）。于是主干上任何存量未格式化文件
+     * 都会被点名为「本次带来的」而阻断一次与本 PR 无关的解冲突（被点名的两份相对
+     * `origin/master` 是**零 diff**）。同一判据的 `--changed` 档对此给出相反结论
+     * （「0 个在靶子内」）—— 两个入口不可能都对，错的是这一头的输入面。
+     *
+     * 收窄到「本条分支相对目标分支带来的那一份」，与 `--changed` **同一个口径**
+     * （`changedFaceOrExit()`，基线只有一份）。收窄后的面仍然**逐份判**：这不是降档，
+     * 而是把面修回它自称的那个东西（「本次提交带进来的改动」）。剔掉多少必须念出来。 */
+    let face = files;
+    if (mergeInProgress()) {
+      const changed = changedFaceOrExit();
+      const mine = new Set(changed.files);
+      face = files.filter((f) => mine.has(f));
+      console.log(
+        `[format] 合并态（MERGE_HEAD 在场）：暂存面 ${files.length} 份 → 收窄到本分支带来的` +
+          ` ${face.length} 份（基线：${changed.via}）。被剔掉的 ${files.length - face.length} 份` +
+          "是主干那边的改动，不随本次提交走 —— 判据没降，只是不再让主干存量替这次解冲突背书" +
+          "（ISSUE #2747）。",
+      );
+    }
+    const hits = face.filter(isScanned);
     if (!hits.length) {
       console.log(
-        `[format] ✓ 本次提交未触及扫描面（${files.length} 个暂存文件中 0 个在 prettier 靶子内），跳过。`,
+        `[format] ✓ 本次提交未触及扫描面（${face.length} 个暂存文件中 0 个在 prettier 靶子内），跳过。`,
       );
       process.exit(0);
     }
@@ -466,26 +522,17 @@ async function main() {
      * 未迁移的存量恒红（见文件头），而提交这一刻要判的是「这一批带进来干不干净」
      * —— 那批没被暂存的存量文件并不随本次提交走，不该由它背书。 */
     const entry = resolveOxfmtEntry();
-    if (!entry) entryMissing();
+    if (!entry) {
+      entryMissing();
+    }
     judge(collectUnformattedFiles(entry, hits), "暂存面");
     return;
   }
 
   if (CHANGED && !REPORT_ONLY) {
-    /* 改动面先算（这是 git 的事，与 oxfmt 装没装无关）：拿不到 ⇒ exit 2，
-     * 「没判」不冒充「干净」—— 与 ci-affected-tests 同一口径（§13.6.2）。
-     * 判据实现只有一份出处：`changed-scope.mjs`（基线选取 / 三点 diff / quotePath
-     * / 改名两侧都收），这里不抄第二份（§12.18）。`require(esm)` 与
-     * `check-doc-mirror-pairing.cjs` 同形，`copyGateDeps` 按这一形态补沙箱依赖。 */
-    const { resolveChangedFiles } = require("./changed-scope.mjs");
-    const changed = resolveChangedFiles({ cwd: ROOT });
-    if (!changed.ok) {
-      console.error(
-        `[format] 改动面没算出来：${changed.reason}\n` +
-          "[format]   按 fail-closed 判「没判」，以 exit 2 结束（不冒充「未触及扫描面」）。",
-      );
-      process.exit(2);
-    }
+    /* 改动面走共通壳（`changedFaceOrExit()`：基线选取 / 三点 diff / quotePath /
+     * 改名两侧都收都在 `changed-scope.mjs` 那一份里，这里不抄第二份，§12.18）。 */
+    const changed = changedFaceOrExit();
     const hits = changed.files.filter(isScanned);
     if (!hits.length) {
       console.log(
@@ -494,7 +541,9 @@ async function main() {
       process.exit(0);
     }
     const entry = resolveOxfmtEntry();
-    if (!entry) entryMissing();
+    if (!entry) {
+      entryMissing();
+    }
     /* 只看**已提交**的改动（`git diff <基线>...HEAD` 的定义边界）：没提交的新文件
      * 不在面里，它们由 pre-commit 的 `--staged` 档在提交那一刻判 —— 两档合起来
      * 才是完整的一条链，单独哪一档都不许被读成「全量」。 */
@@ -503,23 +552,26 @@ async function main() {
   }
 
   const entry = resolveOxfmtEntry();
-  if (!entry) entryMissing();
+  if (!entry) {
+    entryMissing();
+  }
   console.log("[format] 运行 oxfmt --check（无缓存档，全量约 2s）…");
   const current = collectUnformatted(entry);
 
   if (REPORT_ONLY) {
-    gatePass(
-      "oxfmt 格式",
-      `未过 oxfmt ${current.length} 个文件（只出清单）`,
-    );
-    for (const line of indentItems(current)) console.log(line);
+    gatePass("oxfmt 格式", `未过 oxfmt ${current.length} 个文件（只出清单）`);
+    for (const line of indentItems(current)) {
+      console.log(line);
+    }
     process.exit(0);
   }
 
   judge(current, "全库");
 }
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}
 
 /** 供测试引用:判据实现共用一份(§12.18),不跑 oxfmt 的纯判定入口
  *  (main 守卫在,require 本文件不会触发扫描)。三个消费方都在 tests/ 下：

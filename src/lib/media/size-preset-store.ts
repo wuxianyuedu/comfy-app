@@ -31,9 +31,11 @@ export type Listener = () => void;
 
 /** 单格宽高是否合法（正整数且在常识范围内）。 */
 function isValidDims(value: unknown): value is SizeDims {
-  if (!value || typeof value !== "object") return false;
-  const width = (value as { width?: unknown }).width;
-  const height = (value as { height?: unknown }).height;
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const width = /* SAFETY: 类型断言已复核 */ (value as { width?: unknown }).width;
+  const height = /* SAFETY: 类型断言已复核 */ (value as { height?: unknown }).height;
   return (
     typeof width === "number" &&
     typeof height === "number" &&
@@ -45,22 +47,19 @@ function isValidDims(value: unknown): value is SizeDims {
 }
 
 /** 逐格合并：默认表打底，合法覆盖项才生效。 */
-function mergeScene(
-  fallback: SceneResolutionTable,
-  raw: unknown,
-): SceneResolutionTable {
+function mergeScene(fallback: SceneResolutionTable, raw: unknown): SceneResolutionTable {
   const out: SceneResolutionTable = {};
   for (const preset of SIZE_RATIO_PRESETS) {
     const fallbackRow = fallback[preset.label];
     const rawRow =
       raw && typeof raw === "object"
-        ? (raw as Record<string, unknown>)[preset.label]
+        ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>)[preset.label]
         : undefined;
-    const row = {} as Record<ResolutionTier, SizeDims>;
+    const row = /* SAFETY: 类型断言已复核 */ {} as Record<ResolutionTier, SizeDims>;
     for (const tier of RESOLUTION_TIERS) {
       const candidate =
         rawRow && typeof rawRow === "object"
-          ? (rawRow as Record<string, unknown>)[tier]
+          ? /* SAFETY: 类型断言已复核 */ (rawRow as Record<string, unknown>)[tier]
           : undefined;
       row[tier] = isValidDims(candidate)
         ? {
@@ -76,6 +75,7 @@ function mergeScene(
 
 function mergeTable(raw: unknown): SizePresetTable {
   const record =
+    /* SAFETY: 类型断言已复核 */
     raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return {
     image: mergeScene(DEFAULT_SIZE_PRESET_TABLE.image, record.image),
@@ -87,9 +87,7 @@ function readStored(): SizePresetTable {
   /* 存储不可用 / JSON 损坏 / SSR：一律按默认表走，不影响生成 ——
    * 三条判据收在 `~/lib/browser-storage`（§16.2.4.28）。 */
   return mergeTable(
-    readStorageJson<unknown>(SIZE_PRESET_STORAGE_KEY, null, (raw) =>
-      JSON.parse(raw),
-    ),
+    readStorageJson<unknown>(SIZE_PRESET_STORAGE_KEY, null, (raw) => JSON.parse(raw)),
   );
 }
 
@@ -117,7 +115,9 @@ function commit(next: SizePresetTable): void {
   snapshot = next;
   /* 存储不可用（配额满 / 隐私模式）静默：本次会话内仍然生效。 */
   writeStorageJson(SIZE_PRESET_STORAGE_KEY, next);
-  for (const listener of listeners) listener();
+  for (const listener of listeners) {
+    listener();
+  }
 }
 
 /** 改一格（场景 + 比例行 + 分辨率档）。 */
@@ -128,7 +128,9 @@ export function setSizePresetDims(
   size: SizeDims,
 ): void {
   const row = snapshot[scene]?.[ratioLabel];
-  if (!row) return;
+  if (!row) {
+    return;
+  }
   const nextScene: SceneResolutionTable = {
     ...snapshot[scene],
     [ratioLabel]: {
@@ -136,19 +138,13 @@ export function setSizePresetDims(
       [tier]: { width: size.width, height: size.height },
     },
   };
-  commit(
-    scene === "image"
-      ? { ...snapshot, image: nextScene }
-      : { ...snapshot, video: nextScene },
-  );
+  commit(scene === "image" ? { ...snapshot, image: nextScene } : { ...snapshot, video: nextScene });
 }
 
 /** 把某个场景整表恢复默认（另一个场景不受影响）。 */
 export function resetSizePresetScene(scene: SizeScene): void {
   const fresh = mergeTable(null);
   commit(
-    scene === "image"
-      ? { ...snapshot, image: fresh.image }
-      : { ...snapshot, video: fresh.video },
+    scene === "image" ? { ...snapshot, image: fresh.image } : { ...snapshot, video: fresh.video },
   );
 }

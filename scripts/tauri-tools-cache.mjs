@@ -67,11 +67,11 @@ export const NSIS_PLAN = {
   assets: {
     zip: {
       sha256: "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8",
-      bytes: 2363925,
+      bytes: 2_363_925,
     },
     dll: {
       sha256: "5ba143b5db4a87d32d6e7802e033330aae56cbceabe0d1e3ba41948385ad4709",
-      bytes: 34304,
+      bytes: 34_304,
     },
   },
   /** dll 在缓存树里的落点（正斜杠写，比较时统一分隔符）。 */
@@ -97,10 +97,7 @@ export const TOOLS_MANIFEST_FILE = "manifest.json";
 
 /** @param {string} file @returns {string} 该文件的 sha256（十六进制，小写） */
 function sha256File(file) {
-  return crypto
-    .createHash("sha256")
-    .update(fs.readFileSync(file))
-    .digest("hex");
+  return crypto.hash("sha256", fs.readFileSync(file), "hex");
 }
 
 /**
@@ -123,7 +120,9 @@ export function resolveTauriCacheRoot(env) {
   }
   /* 非 Windows：bundler 用的是 XDG 那套，这里只给一个能被验证的落点，不猜。 */
   const xdg = String(env.XDG_CACHE_HOME ?? "").trim();
-  if (xdg) return { dir: path.join(xdg, "tauri"), from: "环境变量 XDG_CACHE_HOME" };
+  if (xdg) {
+    return { dir: path.join(xdg, "tauri"), from: "环境变量 XDG_CACHE_HOME" };
+  }
   return { dir: null, from: "既无 LOCALAPPDATA 也无 XDG_CACHE_HOME ⇒ 落点问不出来" };
 }
 
@@ -135,14 +134,19 @@ export function resolveTauriCacheRoot(env) {
 export function listTreeFiles(dir) {
   /** @type {string[]} */
   const out = [];
-  if (!fs.existsSync(dir)) return out;
+  if (!fs.existsSync(dir)) {
+    return out;
+  }
   /** @param {string} current @param {string} rel */
   const walk = (current, rel) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const abs = path.join(current, entry.name);
       const relPath = (rel ? `${rel}/` : "") + entry.name;
-      if (entry.isDirectory()) walk(abs, relPath);
-      else if (entry.isFile()) out.push(relPath);
+      if (entry.isDirectory()) {
+        walk(abs, relPath);
+      } else if (entry.isFile()) {
+        out.push(relPath);
+      }
     }
   };
   walk(dir, "");
@@ -166,7 +170,9 @@ export function mirrorDir(toolRoot, plan = NSIS_PLAN) {
 /** @param {string} mirror @returns {{files: {path: string, sha256: string, bytes: number}[]} | null} */
 function readMirrorManifest(mirror) {
   const file = path.join(mirror, TOOLS_MANIFEST_FILE);
-  if (!fs.existsSync(file)) return null;
+  if (!fs.existsSync(file)) {
+    return null;
+  }
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
     return Array.isArray(parsed?.files) ? { files: parsed.files } : null;
@@ -264,9 +270,7 @@ export function seed({ cacheDir, mirror, dryRun, log, plan = NSIS_PLAN }) {
     fs.renameSync(staging, mirror);
   } catch (error) {
     fs.rmSync(staging, { recursive: true, force: true });
-    log(
-      `[工具缓存] 失败：种盘被拒 —— ${error instanceof Error ? error.message : String(error)}`,
-    );
+    log(`[工具缓存] 失败：种盘被拒 —— ${error instanceof Error ? error.message : String(error)}`);
     return 1;
   }
   log(`[工具缓存] ✓ 已种 ${files.length} 件；作业里那一格从此不必现下。`);
@@ -326,9 +330,7 @@ export function ensure({ cacheDir, toolRoot, toolRootFrom, dryRun, log, plan = N
       }
     }
   } catch (error) {
-    log(
-      `[工具缓存] 失败：补盘被拒 —— ${error instanceof Error ? error.message : String(error)}`,
-    );
+    log(`[工具缓存] 失败：补盘被拒 —— ${error instanceof Error ? error.message : String(error)}`);
     return 1;
   }
   log("[工具缓存] ✓ 已补齐，必需件在场。");
@@ -357,9 +359,7 @@ export function main(io = {}) {
   const resolved = resolveToolRoot({
     cwd: io.cwd ?? ROOT,
     env,
-    run:
-      io.runStore ??
-      ((args, opts) => runPnpmSync(args, { ...opts, stdio: "pipe" })),
+    run: io.runStore ?? ((args, opts) => runPnpmSync(args, { ...opts, stdio: "pipe" })),
   });
   log(`[工具缓存] 工具根：${resolved.root ?? "取不到"}（来源：${resolved.from}）`);
   if (!resolved.root) {
@@ -382,9 +382,6 @@ export function main(io = {}) {
       });
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }

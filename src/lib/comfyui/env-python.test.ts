@@ -21,24 +21,22 @@ describe("parsePyvenvCfg — 解析 venv 的基础解释器线索", () => {
   it("读出 home / executable（值含 Windows 反斜杠与空格）", () => {
     const cfg = parsePyvenvCfg(
       [
-        "home = C:\\Users\\me\\AppData\\Local\\uv\\python\\cpython-3.12.8-windows-x86_64-none",
+        String.raw`home = C:\Users\me\AppData\Local\uv\python\cpython-3.12.8-windows-x86_64-none`,
         "include-system-site-packages = false",
         "version = 3.12.8",
-        "executable = C:\\Users\\me\\AppData\\Local\\uv\\python\\cpython-3.12.8-windows-x86_64-none\\python.exe",
+        String.raw`executable = C:\Users\me\AppData\Local\uv\python\cpython-3.12.8-windows-x86_64-none\python.exe`,
       ].join("\n"),
     );
     expect(cfg.home).toBe(
-      "C:\\Users\\me\\AppData\\Local\\uv\\python\\cpython-3.12.8-windows-x86_64-none",
+      String.raw`C:\Users\me\AppData\Local\uv\python\cpython-3.12.8-windows-x86_64-none`,
     );
     expect(cfg.executable).toBe(
-      "C:\\Users\\me\\AppData\\Local\\uv\\python\\cpython-3.12.8-windows-x86_64-none\\python.exe",
+      String.raw`C:\Users\me\AppData\Local\uv\python\cpython-3.12.8-windows-x86_64-none\python.exe`,
     );
   });
 
   it("键名大小写不敏感、忽略注释与未知键、缺字段为 null", () => {
-    const cfg = parsePyvenvCfg(
-      ["# 注释", "HOME = /usr/bin", "weird = x", ""].join("\r\n"),
-    );
+    const cfg = parsePyvenvCfg(["# 注释", "HOME = /usr/bin", "weird = x", ""].join("\r\n"));
     expect(cfg.home).toBe("/usr/bin");
     expect(cfg.executable).toBeNull();
   });
@@ -56,23 +54,18 @@ describe("pythonPathsFromPyvenv — 由 cfg 推出解释器候选", () => {
   it("Windows：executable 直用，home 补 python/pythonw（含 install/ 一层）", () => {
     const list = pythonPathsFromPyvenv(
       {
-        home: "C:\\uv\\cpython-3.12",
-        executable: "C:\\uv\\cpython-3.12\\python.exe",
+        home: String.raw`C:\uv\cpython-3.12`,
+        executable: String.raw`C:\uv\cpython-3.12\python.exe`,
       },
       "win32",
     );
-    expect(list).toContain("C:\\uv\\cpython-3.12\\python.exe");
-    expect(list).toContain(path.join("C:\\uv\\cpython-3.12", "pythonw.exe"));
-    expect(list).toContain(
-      path.join("C:\\uv\\cpython-3.12", "install", "python.exe"),
-    );
+    expect(list).toContain(String.raw`C:\uv\cpython-3.12\python.exe`);
+    expect(list).toContain(path.join(String.raw`C:\uv\cpython-3.12`, "pythonw.exe"));
+    expect(list).toContain(path.join(String.raw`C:\uv\cpython-3.12`, "install", "python.exe"));
   });
 
   it("POSIX：补 bin 下的 python/python3", () => {
-    const list = pythonPathsFromPyvenv(
-      { home: "/opt/py", executable: null },
-      "linux",
-    );
+    const list = pythonPathsFromPyvenv({ home: "/opt/py", executable: null }, "linux");
     expect(list).toContain(path.join("/opt/py", "python"));
     expect(list).toContain(path.join("/opt/py", "python3"));
   });
@@ -83,42 +76,36 @@ describe("pythonPathsFromPyvenv — 由 cfg 推出解释器候选", () => {
 });
 
 describe("uvPythonDirs — uv 托管目录候选", () => {
-  it("Windows 默认 %LOCALAPPDATA%\\uv\\python，且显式环境变量优先", () => {
+  it(String.raw`Windows 默认 %LOCALAPPDATA%\uv\python，且显式环境变量优先`, () => {
     const dirs = uvPythonDirs(
       {
-        LOCALAPPDATA: "C:\\Users\\me\\AppData\\Local",
-        UV_PYTHON_INSTALL_DIR: "D:\\uvpy",
+        LOCALAPPDATA: String.raw`C:\Users\me\AppData\Local`,
+        UV_PYTHON_INSTALL_DIR: String.raw`D:\uvpy`,
       },
       "win32",
-      "C:\\Users\\me",
+      String.raw`C:\Users\me`,
     );
-    expect(dirs[0]).toBe("D:\\uvpy");
-    expect(dirs).toContain(
-      path.join("C:\\Users\\me\\AppData\\Local", "uv", "python"),
-    );
+    expect(dirs[0]).toBe(String.raw`D:\uvpy`);
+    expect(dirs).toContain(path.join(String.raw`C:\Users\me\AppData\Local`, "uv", "python"));
   });
 
   it("POSIX 默认走 XDG_DATA_HOME / ~/.local/share", () => {
     const dirs = uvPythonDirs({}, "linux", "/home/me");
-    expect(dirs).toEqual([
-      path.join("/home/me", ".local", "share", "uv", "python"),
-    ]);
+    expect(dirs).toEqual([path.join("/home/me", ".local", "share", "uv", "python")]);
   });
 
-  it("无环境变量时 Windows 用 homedir 拼 AppData\\Local", () => {
-    const dirs = uvPythonDirs({}, "win32", "C:\\Users\\me");
-    expect(dirs).toEqual([
-      path.join("C:\\Users\\me", "AppData", "Local", "uv", "python"),
-    ]);
+  it(String.raw`无环境变量时 Windows 用 homedir 拼 AppData\Local`, () => {
+    const dirs = uvPythonDirs({}, "win32", String.raw`C:\Users\me`);
+    expect(dirs).toEqual([path.join(String.raw`C:\Users\me`, "AppData", "Local", "uv", "python")]);
   });
 });
 
 describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", () => {
   /** 构造注入用的 fs 桩：exists 按集合，readFile/readdir 按表。 */
   function fakeFs(opts: {
-    exists: string[];
+    dirs?: Record<string, Array<string>>;
+    exists: Array<string>;
     files?: Record<string, string>;
-    dirs?: Record<string, string[]>;
   }) {
     const existsSet = new Set(opts.exists.map((p) => path.normalize(p)));
     return {
@@ -137,10 +124,9 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
       "install",
       "python.exe",
     );
-    const cfgText = [
-      `home = ${path.dirname(path.dirname(uvExe))}`,
-      `executable = ${uvExe}`,
-    ].join("\n");
+    const cfgText = [`home = ${path.dirname(path.dirname(uvExe))}`, `executable = ${uvExe}`].join(
+      "\n",
+    );
 
     const cands = collectComfyPythonCandidates(root, {
       platform: "win32",
@@ -175,26 +161,9 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
 
   it("枚举 uv 托管目录下的 cpython-* 环境（两种解释器布局都认）", () => {
     const root = path.resolve("/comfy/v");
-    const uvDir = path.join(
-      path.resolve("/home/me"),
-      ".local",
-      "share",
-      "uv",
-      "python",
-    );
-    const e1 = path.join(
-      uvDir,
-      "cpython-3.12.8-linux-x86_64-gnu",
-      "bin",
-      "python3",
-    );
-    const e2 = path.join(
-      uvDir,
-      "cpython-3.11.9-linux-x86_64-gnu",
-      "install",
-      "bin",
-      "python3",
-    );
+    const uvDir = path.join(path.resolve("/home/me"), ".local", "share", "uv", "python");
+    const e1 = path.join(uvDir, "cpython-3.12.8-linux-x86_64-gnu", "bin", "python3");
+    const e2 = path.join(uvDir, "cpython-3.11.9-linux-x86_64-gnu", "install", "bin", "python3");
 
     const cands = collectComfyPythonCandidates(root, {
       platform: "linux",
@@ -219,13 +188,7 @@ describe("collectComfyPythonCandidates — 反查到真正在跑的解释器", (
 
   it("非 cpython-* 目录跳过；去重后同一解释器只出现一次", () => {
     const root = path.resolve("/comfy/v");
-    const uvDir = path.join(
-      path.resolve("/home/me"),
-      ".local",
-      "share",
-      "uv",
-      "python",
-    );
+    const uvDir = path.join(path.resolve("/home/me"), ".local", "share", "uv", "python");
     const exe = path.join(uvDir, "cpython-3.12.0-linux-gnu", "bin", "python3");
     // pyvenv.cfg 与 uv 枚举同时指向同一个解释器 → 只保留一条。
     const cfgPath = path.join(root, "pyvenv.cfg");

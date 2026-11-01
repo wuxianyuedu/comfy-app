@@ -53,10 +53,7 @@ const FORBIDDEN = [
   // 自带 README / tsconfig.json / eslint.config.js 是正常且必需的，把它们算违规
   // 会让这条护栏变成噪声，进而被当成「反正都红」而忽略。
   ["开发期文件", /^(AGENTS|CHANGELOG|CHANGELOG-archive|README)\.md$/],
-  [
-    "开发期配置",
-    /^(eslint|playwright|prettier|drizzle|vitest)\.config\.[cm]?[jt]s$/,
-  ],
+  ["开发期配置", /^(eslint|playwright|prettier|drizzle|vitest)\.config\.[cm]?[jt]s$/],
   ["开发期配置", /^(components|tsconfig|typedoc)\.json$/],
   ["门禁锁文件", /^pnpm-(lock|workspace)\.ya?ml$/],
   ["TS 增量编译缓存", /^tsconfig\.tsbuildinfo$/],
@@ -220,13 +217,18 @@ const ALLOWED_SRC_FILES = [
   "lib/process/kill-process-tree.ts",
   "lib/process/executable-resolve.ts",
   "lib/process/platform.ts",
+  /* 上面那两份按职责拆出来的链（`executable-resolve.ts` 越过文件长度硬闸时切的）。
+   * 与 `scripts/standalone-private-inputs.mjs` 的 `RUNTIME_SRC` **必须同批**改：
+   * 剔除侧漏了 = 产物缺件、重编排起不来（表现只是「双击没反应」）；这一侧漏了 =
+   * 构建后检查把合法产物判成违规。判据在两处：本文件的集合与
+   * `tests/dist-artifact-hygiene.test.ts` 的「两侧同源」。 */
+  "lib/process/pnpm-resolve.ts",
+  "lib/process/version-compare.ts",
 ];
 
 /** 该层允许的顶层条目。 */
 function allowedTopLevelFor(label) {
-  return label === "static"
-    ? STATIC_ALLOWED_TOPLEVEL
-    : STANDALONE_ALLOWED_TOPLEVEL;
+  return label === "static" ? STATIC_ALLOWED_TOPLEVEL : STANDALONE_ALLOWED_TOPLEVEL;
 }
 
 /**
@@ -275,10 +277,14 @@ const REQUIRED_PAYLOAD_FILES = [
  * 与剔除侧的 `RUNTIME_SRC` 同源；`rel` 形如 `src` / `src/lib` / `src/lib/…/x.ts`。
  */
 function isAllowedSrcPath(rel) {
-  if (rel === "src") return true;
+  if (rel === "src") {
+    return true;
+  }
   for (const allowed of ALLOWED_SRC_FILES) {
     const full = `src/${allowed}`;
-    if (rel === full || full.startsWith(`${rel}/`)) return true;
+    if (rel === full || full.startsWith(`${rel}/`)) {
+      return true;
+    }
   }
   return false;
 }
@@ -356,9 +362,7 @@ function collectFiles(dir, followLinks) {
  */
 function missingRequiredRuntimeFiles(dir) {
   const reachable = collectFiles(dir, true);
-  return REQUIRED_RUNTIME_FILES.filter(
-    (name) => !reachable.includes(`${RUNTIME_DIR}/${name}`),
-  );
+  return REQUIRED_RUNTIME_FILES.filter((name) => !reachable.includes(`${RUNTIME_DIR}/${name}`));
 }
 
 /**
@@ -399,27 +403,25 @@ function checkDir(dir, label) {
     if (missingRuntime.length > 0) {
       failed = true;
       console.error(
-        `[${label}] Next 运行时脚本缺件 ${missingRuntime.length} 个：\n  ` +
-          missingRuntime.join("\n  ") +
-          "\n  后果是所有 App Route 返回 500（页面正常、接口全挂）。" +
-          (label === "standalone"
+        `[${label}] Next 运行时脚本缺件 ${missingRuntime.length} 个：\n  ${
+          missingRuntime.join("\n  ")
+          }\n  后果是所有 App Route 返回 500（页面正常、接口全挂）。${
+          label === "standalone"
             ? "请确认 next.config.js 的 outputFileTracingIncludes 仍在（§7.4）。"
             : "这一层是 build-desktop 组装出来的：先确认 `.next/standalone` 那层不缺" +
               "（缺则回到 outputFileTracingIncludes，§7.4），再确认组装时的拷贝/剪枝" +
-              "没把它抹掉（`dereference: true` 那一步），然后重跑 pnpm tauri build。"),
+              "没把它抹掉（`dereference: true` 那一步），然后重跑 pnpm tauri build。"}`,
       );
     }
   }
   if (strayScripts.length > 0) {
     failed = true;
     console.error(
-      `[${label}] 内部门禁脚本不该进产物，却发现 ${strayScripts.length} 个：\n  ` +
-        strayScripts.slice(0, 8).join("\n  ") +
-        (strayScripts.length > 8
-          ? `\n  …（其余 ${strayScripts.length - 8} 个省略）`
-          : "") +
-        "\n  （runtime 真的会读的脚本靠 ALLOWED_SCRIPTS 白名单保留；" +
-        "新增脚本默认应被剔除，要保留请登记并说明理由）",
+      `[${label}] 内部门禁脚本不该进产物，却发现 ${strayScripts.length} 个：\n  ${
+        strayScripts.slice(0, 8).join("\n  ")
+        }${strayScripts.length > 8 ? `\n  …（其余 ${strayScripts.length - 8} 个省略）` : ""
+        }\n  （runtime 真的会读的脚本靠 ALLOWED_SCRIPTS 白名单保留；` +
+        `新增脚本默认应被剔除，要保留请登记并说明理由）`,
     );
   }
   // 宿主必需文件的反向检查（3-E1）。**两层产物都查**，但只在这一层真的是个产物时
@@ -432,12 +434,12 @@ function checkDir(dir, label) {
   if (missingHost.length > 0) {
     failed = true;
     console.error(
-      `[${label}] 执行器宿主必需文件缺件 ${missingHost.length} 个：\n  ` +
-        missingHost.join("\n  ") +
-        "\n  后果：桌包/standalone 里设 COMFY_EXECUTOR=host 时宿主 boot 大声失败" +
-        "（exit 1）——任务不会误跑，但也不会跑。\n  修法：先跑 pnpm build（收尾含 " +
-        "node scripts/build-executor-host.mjs），再确认没被剪枝误删（白名单在 " +
-        "standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS）。",
+      `[${label}] 执行器宿主必需文件缺件 ${missingHost.length} 个：\n  ${
+        missingHost.join("\n  ")
+        }\n  后果：桌包/standalone 里设 COMFY_EXECUTOR=host 时宿主 boot 大声失败` +
+        `（exit 1）——任务不会误跑，但也不会跑。\n  修法：先跑 pnpm build（收尾含 ` +
+        `node scripts/build-executor-host.mjs），再确认没被剪枝误删（白名单在 ` +
+        `standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS）。`,
     );
   }
   // 桌包载荷的必备件（ISSUE #1216）：**只查 static 这一层**——`schema.sql` 与运行入口
@@ -451,11 +453,11 @@ function checkDir(dir, label) {
   if (missingPayload.length > 0) {
     failed = true;
     console.error(
-      `[${label}] 桌包载荷必备件缺件 ${missingPayload.length} 个：\n  ` +
-        missingPayload.join("\n  ") +
-        "\n  后果：standalone 形态下壳起不了 server（缺入口）或首启建不出表（缺 " +
-        "schema.sql，表现是页面 200、接口全 500）。\n  修法：跑 node scripts/build-desktop.mjs" +
-        "（§首启建表 导出 DDL、§10.2 同步运行期脚本），再确认没被 §装配 白名单剪掉。",
+      `[${label}] 桌包载荷必备件缺件 ${missingPayload.length} 个：\n  ${
+        missingPayload.join("\n  ")
+        }\n  后果：standalone 形态下壳起不了 server（缺入口）或首启建不出表（缺 ` +
+        `schema.sql，表现是页面 200、接口全 500）。\n  修法：跑 node scripts/build-desktop.mjs` +
+        `（§首启建表 导出 DDL、§10.2 同步运行期脚本），再确认没被 §装配 白名单剪掉。`,
     );
   }
   /* ── 顶层默认拒绝（ISSUE #1217）─────────────────────────────────────
@@ -476,9 +478,7 @@ function checkDir(dir, label) {
    * 「祖先放行、叶子逐文件判」，叶子在下一条里单独判。
    */
   const allowedTop = allowedTopLevelFor(label);
-  const topEntries = fs
-    .readdirSync(dir, { withFileTypes: true })
-    .map((e) => e.name);
+  const topEntries = fs.readdirSync(dir, { withFileTypes: true }).map((e) => e.name);
   /* **只有真的是装配产物时才数顶层**（ISSUE #2629）：`src-tauri/static/` 由
    * `build-desktop.mjs` 装配，判据本仓里唯一能认出「装配过」的事实就是那一层有没有
    * `server.js` —— 上面那三条「缺件」检查早就是这道门（见 `files.includes("server.js")`
@@ -500,46 +500,40 @@ function checkDir(dir, label) {
      * 全套过了」在同一件事上的应用）。 */
     console.log(
       `[${label}] 这一层还没装配过（没有 \`server.js\`）⇒ **顶层这一格不判**，` +
-        `不是「已检查通过」。当前目录里有 ${topEntries.length} 项` +
-        (topEntries.length > 0
+        `不是「已检查通过」。当前目录里有 ${topEntries.length} 项${
+        topEntries.length > 0
           ? `：${topEntries.slice(0, 6).join(" / ")}${topEntries.length > 6 ? " …" : ""}`
-          : "") +
-        "。\n  要数出厂件这一层，先跑 pnpm build:desktop（装配发生在这道检查之后，" +
-        "规范 §7.3「产物要数两层」）。",
+          : ""
+        }。\n  要数出厂件这一层，先跑 pnpm build:desktop（装配发生在这道检查之后，` +
+        `规范 §7.3「产物要数两层」）。`,
     );
   }
   if (strayTop.length > 0) {
     failed = true;
     console.error(
-      `[${label}] 顶层出现白名单外的条目 ${strayTop.length} 个：\n  ` +
-        strayTop.slice(0, 12).join("\n  ") +
-        (strayTop.length > 12
-          ? `\n  …（其余 ${strayTop.length - 12} 个省略）`
-          : "") +
-        `\n  允许的就这些：${allowedTop.join(" / ")}（外加逐文件放行的 src/）。` +
-        "\n  新增一项必须**同批**改两处：剔除侧 `standalone-private-inputs.mjs` 与这里" +
-        "（两份清单逐字同源，由 tests/dist-artifact-hygiene.test.ts 核对），并写清" +
-        "「谁在运行期读它」——只补一处会得到「删掉了却仍判违规」或反过来。" +
-        "\n  根因不在 excludes：规范 §7.2 实测 Turbopack 不读 outputFileTracingExcludes" +
-        " 的整目录条目（webpack 那条链才读，而桌包运行时脚本清单点名的是 " +
-        "`*-turbo.runtime.prod.js`，换构建器等于换整条产物链）。",
+      `[${label}] 顶层出现白名单外的条目 ${strayTop.length} 个：\n  ${
+        strayTop.slice(0, 12).join("\n  ")
+        }${strayTop.length > 12 ? `\n  …（其余 ${strayTop.length - 12} 个省略）` : ""
+        }\n  允许的就这些：${allowedTop.join(" / ")}（外加逐文件放行的 src/）。` +
+        `\n  新增一项必须**同批**改两处：剔除侧 \`standalone-private-inputs.mjs\` 与这里` +
+        `（两份清单逐字同源，由 tests/dist-artifact-hygiene.test.ts 核对），并写清` +
+        `「谁在运行期读它」——只补一处会得到「删掉了却仍判违规」或反过来。` +
+        `\n  根因不在 excludes：规范 §7.2 实测 Turbopack 不读 outputFileTracingExcludes` +
+        ` 的整目录条目（webpack 那条链才读，而桌包运行时脚本清单点名的是 ` +
+        `\`*-turbo.runtime.prod.js\`，换构建器等于换整条产物链）。`,
     );
   }
   // `src/` 的叶子逐文件判。只锚**产物根**那一份 `src/`：`node_modules/<pkg>/src/**` 是
   // 第三方包自己的源码，把它算成违规会让护栏变成噪声（与 FORBIDDEN 那批同一条理由）。
-  const straySrcFiles = files.filter(
-    (f) => f.startsWith("src/") && !isAllowedSrcPath(f),
-  );
+  const straySrcFiles = files.filter((f) => f.startsWith("src/") && !isAllowedSrcPath(f));
   if (straySrcFiles.length > 0) {
     failed = true;
     console.error(
-      `[${label}] src/ 下出现未逐文件登记的条目 ${straySrcFiles.length} 个：\n  ` +
-        straySrcFiles.slice(0, 8).join("\n  ") +
-        (straySrcFiles.length > 8
-          ? `\n  …（其余 ${straySrcFiles.length - 8} 个省略）`
-          : "") +
-        `\n  这一格是「祖先放行、叶子逐文件判」：允许的是 ${ALLOWED_SRC_FILES.join(" / ")}；` +
-        "\n  运行期真要读别的源文件，请同批改剔除侧的 RUNTIME_SRC 与这里的 ALLOWED_SRC_FILES。",
+      `[${label}] src/ 下出现未逐文件登记的条目 ${straySrcFiles.length} 个：\n  ${
+        straySrcFiles.slice(0, 8).join("\n  ")
+        }${straySrcFiles.length > 8 ? `\n  …（其余 ${straySrcFiles.length - 8} 个省略）` : ""
+        }\n  这一格是「祖先放行、叶子逐文件判」：允许的是 ${ALLOWED_SRC_FILES.join(" / ")}；` +
+        `\n  运行期真要读别的源文件，请同批改剔除侧的 RUNTIME_SRC 与这里的 ALLOWED_SRC_FILES。`,
     );
   }
   for (const [tag, re] of FORBIDDEN) {
@@ -547,9 +541,9 @@ function checkDir(dir, label) {
     if (hits.length > 0) {
       failed = true;
       console.error(
-        `[${label}] ${tag}不该进产物，却发现 ${hits.length} 个：\n  ` +
-          hits.slice(0, 8).join("\n  ") +
-          (hits.length > 8 ? `\n  …（其余 ${hits.length - 8} 个省略）` : ""),
+        `[${label}] ${tag}不该进产物，却发现 ${hits.length} 个：\n  ${
+          hits.slice(0, 8).join("\n  ")
+          }${hits.length > 8 ? `\n  …（其余 ${hits.length - 8} 个省略）` : ""}`,
       );
     }
   }
@@ -601,7 +595,9 @@ function main() {
  * 要把两份清单拿来**逐字比对**）绝不能顺手 `process.exit` —— 那会把测试进程带走，
  * 而「比对代码在、但一条都没真的比过」正是这类清单判据最难发现的失效形态。
  */
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}
 
 module.exports = {
   FORBIDDEN,

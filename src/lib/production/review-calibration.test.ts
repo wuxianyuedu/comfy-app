@@ -1,17 +1,14 @@
 // review-calibration 纯逻辑单测（FR-QA-07 人工侧 · #2480）：人评分 ⇄ AI 评分的聚合。
 import { describe, expect, it } from "vitest";
 
-import {
-  calibrateFromShots,
-  emptyCalibrationReport,
-} from "./review-calibration";
+import { calibrateFromShots, emptyCalibrationReport } from "./review-calibration";
 
 /** 一条有 AI 视觉判定（可带维度分）与人评分的镜头记录。 */
 function shot(
   id: string,
   opts: {
-    aiPass: boolean;
     aiMean: number; // 各维度都给同一分，均分即此值
+    aiPass: boolean;
     human: number | null;
   },
 ): unknown {
@@ -36,9 +33,7 @@ describe("calibrateFromShots（#2480 校准读数）", () => {
   it("空 / 全是没对齐样本 → 全 null 读数，不硬造", () => {
     expect(calibrateFromShots([])).toEqual(emptyCalibrationReport());
     // 只有 AI 判定、没人评分 → 样本 0
-    const onlyAi = calibrateFromShots([
-      shot("a", { aiPass: true, aiMean: 4, human: null }),
-    ]);
+    const onlyAi = calibrateFromShots([shot("a", { aiPass: true, aiMean: 4, human: null })]);
     expect(onlyAi.samples).toBe(0);
     expect(onlyAi.mae).toBeNull();
     expect(onlyAi.decisionAgreement).toBeNull();
@@ -76,9 +71,7 @@ describe("calibrateFromShots（#2480 校准读数）", () => {
     expect(dims.promptAlignment?.samples).toBe(2);
     // 同一判定里的两个维度读数一致
     expect(dims.characterConsistency?.aiAvg).toBe(dims.promptAlignment?.aiAvg);
-    expect(dims.characterConsistency?.humanAvg).toBe(
-      dims.promptAlignment?.humanAvg,
-    );
+    expect(dims.characterConsistency?.humanAvg).toBe(dims.promptAlignment?.humanAvg);
     // 维度按 key 排序，读数稳定
     expect(report.perDimension.map((d) => d.key)).toEqual([
       "characterConsistency",

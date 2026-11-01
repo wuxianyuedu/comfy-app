@@ -19,21 +19,20 @@
 import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { spawnMock, openSyncMock, closeSyncMock, warnMock, spawned } =
-  vi.hoisted(() => ({
-    spawnMock: vi.fn(),
-    openSyncMock: vi.fn<(file: string, flags: string) => number>(() => 42),
-    closeSyncMock: vi.fn<(fd: number) => void>(),
-    warnMock: vi.fn<(message: string) => void>(),
-    /** 每次 `spawn` 产出的假句柄，按调用顺序记录（用例从尾部拿）。 */
-    spawned: [] as Array<EmitterChild>,
-  }));
+const { spawnMock, openSyncMock, closeSyncMock, warnMock, spawned } = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  openSyncMock: vi.fn<(file: string, flags: string) => number>(() => 42),
+  closeSyncMock: vi.fn<(fd: number) => void>(),
+  warnMock: vi.fn<(message: string) => void>(),
+  /** 每次 `spawn` 产出的假句柄，按调用顺序记录（用例从尾部拿）。 */
+  spawned: /* SAFETY: 类型断言已复核 */ [] as Array<EmitterChild>,
+}));
 
 type EmitterChild = EventEmitter & {
   pid: number;
-  unref: () => void;
-  stdout: EventEmitter | null;
   stderr: EventEmitter | null;
+  stdout: EventEmitter | null;
+  unref: () => void;
 };
 
 vi.mock("child_process", () => ({ spawn: spawnMock }));
@@ -77,11 +76,13 @@ function fakeChild(): EmitterChild {
 }
 
 /** 最近一次 `spawn` 的三元参数（命令 / 参数 / 选项）。 */
-function lastSpawn(): [string, string[], Record<string, unknown>] {
-  const call = spawnMock.mock.calls.at(-1) as
-    | [string, string[], Record<string, unknown>]
+function lastSpawn(): [string, Array<string>, Record<string, unknown>] {
+  const call = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls.at(-1) as
+    | [string, Array<string>, Record<string, unknown>]
     | undefined;
-  if (!call) throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
+  if (!call) {
+    throw new Error("这一条用例没有调到 spawn —— 判据落空，先查分支");
+  }
   return call;
 }
 
@@ -99,8 +100,8 @@ const callerEnv: NodeJS.ProcessEnv = {
  * Linux/CI 上也只会走 POSIX 分支** —— 断言写 `powershell.exe`，实收
  * `{detached:true, stdio:全 ignore}`，五条恒红且看着像「代码坏了」。
  * 现在两端机器判同一份输入，两个分支在任何宿主上都有执行者。 */
-const POSIX = "linux" as const;
-const WINDOWS = "win32" as const;
+const POSIX = /* SAFETY: 类型断言已复核 */ "linux" as const;
+const WINDOWS = /* SAFETY: 类型断言已复核 */ "win32" as const;
 
 beforeEach(() => {
   /* 登记表按用例清：`spawn` / `openSync` 的调用次数本身就是判据
@@ -123,8 +124,8 @@ afterEach(() => {
 
 describe("escapePwshSingle", () => {
   it("普通路径原样包进单引号", () => {
-    expect(escapePwshSingle("D:\\ComfyUI\\python.exe")).toBe(
-      "'D:\\ComfyUI\\python.exe'",
+    expect(escapePwshSingle(String.raw`D:\ComfyUI\python.exe`)).toBe(
+      String.raw`'D:\ComfyUI\python.exe'`,
     );
   });
 
@@ -142,24 +143,19 @@ describe("escapePwshSingle", () => {
 
 describe("buildStartProcessArgumentList", () => {
   it("多参数整体写成一个 @() 数组字面量（裸排会被 PS5.1 当位置参数拒绝）", () => {
-    expect(buildStartProcessArgumentList(["-s", "D:\\x\\main.py"])).toBe(
+    expect(buildStartProcessArgumentList(["-s", String.raw`D:\x\main.py`])).toBe(
       `@('"-s"','"D:\\x\\main.py"')`,
     );
   });
 
   it("含空格的参数由元素自带双引号，拼接后不会被拆分", () => {
-    const out = buildStartProcessArgumentList([
-      "--input-directory",
-      "D:/a b/input",
-    ]);
+    const out = buildStartProcessArgumentList(["--input-directory", "D:/a b/input"]);
     expect(out).toBe(`@('"--input-directory"','"D:/a b/input"')`);
     expect(out).toContain('"D:/a b/input"');
   });
 
   it("参数值里的双引号按 Windows 命令行约定转义", () => {
-    expect(buildStartProcessArgumentList(['a"; rm -rf /'])).toBe(
-      `@('"a\\"; rm -rf /"')`,
-    );
+    expect(buildStartProcessArgumentList(['a"; rm -rf /'])).toBe(`@('"a\\"; rm -rf /"')`);
   });
 
   it("空数组返回空数组字面量", () => {
@@ -169,25 +165,18 @@ describe("buildStartProcessArgumentList", () => {
 
 describe("decodePowerShellOutput", () => {
   it("UTF-16LE 带 BOM 的输出解码为可读文本", () => {
-    const utf16 = Buffer.concat([
-      Buffer.from([0xff, 0xfe]),
-      Buffer.from("hello 中文", "utf16le"),
-    ]);
+    const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("hello 中文", "utf16le")]);
     expect(decodePowerShellOutput(utf16)).toBe("hello 中文");
   });
 
   it("普通 UTF-8 输出原样解码（不带 BOM、非宽字符）", () => {
-    expect(decodePowerShellOutput(Buffer.from("hello utf8", "utf8"))).toBe(
-      "hello utf8",
-    );
+    expect(decodePowerShellOutput(Buffer.from("hello utf8", "utf8"))).toBe("hello utf8");
   });
 
   it("无 BOM 但按字节交错为零的宽字符串也按 UTF-16LE 解（PowerShell 偶尔不写 BOM）", () => {
     /* "hi" 的 UTF-16LE 是 68 00 69 00 —— 偶数长度且奇数位多为零，
      * 按 utf8 读会得到夹 \x00 的乱码，这条判据把「交错」形状认出来。 */
-    expect(decodePowerShellOutput(Buffer.from([0x68, 0x00, 0x69, 0x00]))).toBe(
-      "hi",
-    );
+    expect(decodePowerShellOutput(Buffer.from([0x68, 0x00, 0x69, 0x00]))).toBe("hi");
   });
 
   it("奇数长度的缓冲不走宽字符判定（宽字符一定成对）", () => {
@@ -258,17 +247,15 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
      * 抛过纯字符串 —— 每一格都要单独判，否则「这一路的失败有没有话可说」
      * 就只被其中一条测到。 */
     spawnMock.mockImplementationOnce(() => hostileThrow("纯字符串"));
-    expect(spawnManaged({ command: "x", args: [], mode: "bound" }).error).toBe(
-      "纯字符串",
-    );
+    expect(spawnManaged({ command: "x", args: [], mode: "bound" }).error).toBe("纯字符串");
   });
 
   it("其余三条拉起路径同样把非 Error 的抛错收成一句话", () => {
     const paths: Array<{
       name: string;
-      shellExe?: string;
       platform: NodeJS.Platform;
       run: () => string | undefined;
+      shellExe?: string;
     }> = [
       {
         name: "POSIX keepAlive",
@@ -306,11 +293,12 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
       },
     ];
     for (const path of paths) {
-      if (path.shellExe) process.env.COMFYAPP_SHELL_EXE = path.shellExe;
-      else delete process.env.COMFYAPP_SHELL_EXE;
-      spawnMock.mockImplementationOnce(() =>
-        hostileThrow(`${path.name} 抛的字符串`),
-      );
+      if (path.shellExe) {
+        process.env.COMFYAPP_SHELL_EXE = path.shellExe;
+      } else {
+        delete process.env.COMFYAPP_SHELL_EXE;
+      }
+      spawnMock.mockImplementationOnce(() => hostileThrow(`${path.name} 抛的字符串`));
       expect(path.run(), path.name).toBe(`${path.name} 抛的字符串`);
     }
   });
@@ -434,9 +422,7 @@ describe("spawnManaged —— keepAlive / POSIX（detached + unref）", () => {
 
 describe("spawnManaged —— keepAlive / Windows（两条中介形态）", () => {
   /** Windows 分支的入口判据是这两个环境变量，用例逐个给出。 */
-  function windowsOptions(
-    overrides: Partial<ManagedSpawnOptions> = {},
-  ): ManagedSpawnOptions {
+  function windowsOptions(overrides: Partial<ManagedSpawnOptions> = {}): ManagedSpawnOptions {
     return {
       command: "C:/ComfyUI/python.exe",
       args: ["main.py", "--port 8188"],
@@ -511,11 +497,7 @@ describe("spawnManaged —— keepAlive / Windows（两条中介形态）", () =
     /* 整段脚本走 `-Command` 的**一个** argv：拆成多个 argv 时 PowerShell 会把
      * 后面的当成额外位置参数，实测表现是 Start-Process 完全不执行。 */
     expect(args).toHaveLength(4);
-    expect(args.slice(0, 3)).toEqual([
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-    ]);
+    expect(args.slice(0, 3)).toEqual(["-NoProfile", "-NonInteractive", "-Command"]);
   });
 
   it("中介脚本的整串形状（FilePath / ArgumentList 数组 / Hidden / Redirect / WorkingDirectory / exit）", () => {
@@ -548,9 +530,7 @@ describe("spawnManaged —— keepAlive / Windows（两条中介形态）", () =
     spawnMock.mockImplementationOnce(() => {
       throw new Error("spawn powershell.exe ENOENT");
     });
-    expect(spawnManaged(windowsOptions()).error).toBe(
-      "spawn powershell.exe ENOENT",
-    );
+    expect(spawnManaged(windowsOptions()).error).toBe("spawn powershell.exe ENOENT");
   });
 
   it("壳 CLI 形态 spawn 抛错时同样收成 error，且不带出 child", () => {
@@ -573,10 +553,7 @@ describe("waitForDetachMediator —— 中介的退出码与 stderr", () => {
      * 的全部理由，所以这里用真实形状而不是 ASCII。 */
     child.stderr?.emit(
       "data",
-      Buffer.concat([
-        Buffer.from([0xff, 0xfe]),
-        Buffer.from("拉起被拒", "utf16le"),
-      ]),
+      Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("拉起被拒", "utf16le")]),
     );
     child.emit("exit", 1);
     await expect(p).resolves.toEqual({

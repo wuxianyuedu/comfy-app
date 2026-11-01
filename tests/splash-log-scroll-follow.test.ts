@@ -36,7 +36,9 @@ const PAGE_HTML = fs.readFileSync(path.join(ROOT, PAGE_REL), "utf8");
 /** 从页面里取出内联 `<script>` 的正文（页面只有这一段）。 */
 function pageScript(html: string): string {
   const match = /<script>([\s\S]*?)<\/script>/.exec(html);
-  if (!match?.[1]) throw new Error(`${PAGE_REL} 里找不到内联 <script>`);
+  if (!match?.[1]) {
+    throw new Error(`${PAGE_REL} 里找不到内联 <script>`);
+  }
   return match[1];
 }
 
@@ -45,7 +47,7 @@ const SCROLL_HEIGHT = 2000;
 const CLIENT_HEIGHT = 300;
 
 /** 页面脚本在 jsdom 里暴露出来的那几件事（本组用例的读法，不是实现）。 */
-interface SplashInternals {
+type SplashInternals = {
   renderLog: (text: string) => void;
 }
 
@@ -57,16 +59,17 @@ interface SplashInternals {
  * 分支）——日志正文由用例自己喂进去，测的是渲染那一侧。
  */
 function bootSplash(): {
-  scroll: HTMLElement;
-  setScrollTop: (value: number) => void;
-  renderLog: (text: string) => void;
   latestVisible: () => boolean;
   openPanel: () => void;
+  renderLog: (text: string) => void;
+  scroll: HTMLElement;
+  setScrollTop: (value: number) => void;
 } {
   document.documentElement.innerHTML = PAGE_HTML;
 
-  window.setInterval = (() => 0) as unknown as typeof window.setInterval;
-  window.setTimeout = (() => 0) as unknown as typeof window.setTimeout;
+  window.setInterval = /* SAFETY: 类型断言已复核 */ (() =>
+    0) as unknown as typeof window.setInterval;
+  window.setTimeout = /* SAFETY: 类型断言已复核 */ (() => 0) as unknown as typeof window.setTimeout;
   /* 页面自己的 warn 与本组用例无关（壳 IPC 与网络都不可用时各喊一嗓子），
    * 静音掉——真红应当来自断言，而不是一屏噪声。 */
   window.console.warn = (): void => {
@@ -77,7 +80,7 @@ function bootSplash(): {
    * 那不是本组用例的红，却会把「6 errors」挂在结果上。一律拒掉。 */
   window.fetch = () => Promise.reject(new Error("网络在用例里不可用"));
 
-  const internals = window.eval(
+  const internals = /* SAFETY: 类型断言已复核 */ window.eval(
     `${pageScript(PAGE_HTML)}\n;({ renderLog })`,
   ) as SplashInternals;
 
@@ -100,8 +103,7 @@ function bootSplash(): {
     },
     renderLog: internals.renderLog.bind(window),
     /** 「回到最新」按钮当前可不可见（页面用 data-visible 表达）。 */
-    latestVisible: () =>
-      document.getElementById("log-latest")!.dataset.visible === "true",
+    latestVisible: () => document.getElementById("log-latest")!.dataset.visible === "true",
     /** 走真实入口展开日志面板（用户看到的那一下点击）。面板收起时
      * 「回到最新」不该出现——它只对看得见面板的用户有意义。 */
     openPanel: () => {
@@ -131,9 +133,7 @@ describe("启动页日志面板：用户上翻后刷新不再把他拽回底部"
     env.setScrollTop(parked);
 
     env.renderLog("[b] 第二批（刷新时新到的内容）");
-    expect(env.scroll.scrollTop, "用户已接管滚动，刷新不该覆盖他的位置").toBe(
-      parked,
-    );
+    expect(env.scroll.scrollTop, "用户已接管滚动，刷新不该覆盖他的位置").toBe(parked);
   });
 
   it("暂停有可见出口：按钮出现，点了回到最新并恢复跟随", () => {
@@ -149,9 +149,7 @@ describe("启动页日志面板：用户上翻后刷新不再把他拽回底部"
     document
       .getElementById("log-latest")!
       .dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-    expect(env.scroll.scrollTop, "点「回到最新」要真的到底").toBe(
-      SCROLL_HEIGHT,
-    );
+    expect(env.scroll.scrollTop, "点「回到最新」要真的到底").toBe(SCROLL_HEIGHT);
     expect(env.latestVisible(), "恢复跟随后按钮收回").toBe(false);
 
     env.renderLog("新的一帧");

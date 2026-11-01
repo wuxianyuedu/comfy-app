@@ -27,38 +27,38 @@ import { useTRPC } from "~/trpc/react";
 import type { ActionReport } from "~/lib/async-action";
 
 /** 一份可选备份（与服务端 `listBackupEntries` 的形状同源）。 */
-export interface BackupEntry {
-  name: string;
-  size: number;
+export type BackupEntry = {
   /** 文件名里的时刻（毫秒）；形态认不出时 null。 */
   at: number | null;
-}
+  name: string;
+  size: number;
+};
 
 /** 待恢复标记（写入后到下次启动之间一直有效）。 */
-export interface PendingRestore {
-  file: string;
+export type PendingRestore = {
   at: string | null;
-}
+  file: string;
+};
 
-export interface UseSettingsBackup {
-  backups: BackupEntry[];
-  pending: PendingRestore | null;
+export type UseSettingsBackup = {
+  backupBusy: boolean;
+  backups: Array<BackupEntry>;
+  createBackupNow: () => Promise<void>;
   /** 备份清单首次加载完成前为 true（视图据此避免把「还没读到」当「一份都没有」）。 */
   loading: boolean;
-  backupBusy: boolean;
+  pending: PendingRestore | null;
   restoreBusy: boolean;
-  createBackupNow: () => Promise<void>;
   restoreFrom: (name: string) => Promise<void>;
-}
+};
 
 export function useSettingsBackup({
   statusQueriesEnabled,
   showFlash,
 }: {
-  /** 首屏两份配置就绪前不发探测（同 dbStudio / comfyStatus 的口径）。 */
-  statusQueriesEnabled: boolean;
   /** 整页提示条通道，来自主 hook 的 useFlashLatch。 */
   showFlash: ActionReport;
+  /** 首屏两份配置就绪前不发探测（同 dbStudio / comfyStatus 的口径）。 */
+  statusQueriesEnabled: boolean;
 }): UseSettingsBackup {
   const trpc = useTRPC();
   const listQ = useQuery(
@@ -98,9 +98,11 @@ export function useSettingsBackup({
         await runAsyncAction(
           async () => {
             const result = await restoreM.mutateAsync({ name });
-            if (!result.ok) throw new Error(result.reason);
+            if (!result.ok) {
+              throw new Error(result.reason);
+            }
             return {
-              ok: true as const,
+              ok: /* SAFETY: 类型断言已复核 */ true as const,
               text: `已登记恢复 ${name} —— **重启应用**后生效（当前进程还连着数据库，不能就地换文件）`,
             };
           },

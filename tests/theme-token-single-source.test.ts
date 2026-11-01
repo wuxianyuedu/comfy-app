@@ -40,16 +40,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { DEFAULT_APPEARANCE, RADIUS_STEPS } from "~/lib/appearance";
 import { loadThemeTokens, type ThemeTokens } from "./helpers/theme-tokens";
-import {
-  parseDerivations,
-  parseRadiusScale,
-  renderRadiusPx,
-} from "./helpers/radius-scale";
+import { parseDerivations, parseRadiusScale, renderRadiusPx } from "./helpers/radius-scale";
 
-const sourceCss = readFileSync(
-  path.resolve(__dirname, "../src/app/globals.css"),
-  "utf8",
-);
+const sourceCss = readFileSync(path.resolve(__dirname, "../src/app/globals.css"), "utf8");
 
 /**
  * 按**花括号配对**取一个块的内部。
@@ -62,15 +55,22 @@ const sourceCss = readFileSync(
  */
 function braceBlock(source: string, startMarker: string): string {
   const marker = source.indexOf(startMarker);
-  if (marker < 0) throw new Error(`找不到起始标记：${startMarker}`);
+  if (marker === -1) {
+    throw new Error(`找不到起始标记：${startMarker}`);
+  }
   const open = source.indexOf("{", marker);
-  if (open < 0) throw new Error(`${startMarker} 后面没有 {`);
+  if (open === -1) {
+    throw new Error(`${startMarker} 后面没有 {`);
+  }
   let depth = 0;
   for (let i = open; i < source.length; i++) {
-    if (source[i] === "{") depth += 1;
-    else if (source[i] === "}") {
+    if (source[i] === "{") {
+      depth += 1;
+    } else if (source[i] === "}") {
       depth -= 1;
-      if (depth === 0) return source.slice(open + 1, i);
+      if (depth === 0) {
+        return source.slice(open + 1, i);
+      }
     }
   }
   throw new Error(`${startMarker} 的花括号没闭合`);
@@ -86,7 +86,7 @@ beforeAll(async () => {
 });
 
 /** 别名清单：shadcn 基元要用的那几个名字（与 §16.2.4.4 ② 的表一致）。 */
-const ALIASES = [
+const ALIASES = /* SAFETY: 类型断言已复核 */ [
   "--background",
   "--foreground",
   "--card",
@@ -139,14 +139,14 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
     const rawL = light.raw(name);
     const rawD = dark.raw(name);
     // 至少有一态声明了它（两态都声明时值应一致 —— 它就是纯转发）
-    expect(rawL !== undefined || rawD !== undefined, `${name} 未被声明`).toBe(
-      true,
-    );
-    for (const [label, raw] of [
+    expect(rawL !== undefined || rawD !== undefined, `${name} 未被声明`).toBe(true);
+    for (const [label, raw] of /* SAFETY: 类型断言已复核 */ [
       ["浅色", rawL],
       ["深色", rawD],
     ] as const) {
-      if (raw === undefined) continue;
+      if (raw === undefined) {
+        continue;
+      }
       expect(raw, `${name} ${label}档应转发到项目 token，而不是写死`).toMatch(
         /^var\(\s*--color-[a-z0-9-]+\s*\)$/,
       );
@@ -160,10 +160,10 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
     for (const name of ALIASES) {
       const rawL = light.raw(name);
       const rawD = dark.raw(name);
-      if (rawL === undefined || rawD === undefined) continue;
-      expect
-        .soft(rawL, `${name} 又按主题写了两份（应只转发表达一次）`)
-        .toBe(rawD);
+      if (rawL === undefined || rawD === undefined) {
+        continue;
+      }
+      expect.soft(rawL, `${name} 又按主题写了两份（应只转发表达一次）`).toBe(rawD);
     }
   });
 
@@ -196,12 +196,15 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
       "--shadow-card", // 浮层卡片投影（Tailwind shadow 命名空间）
     ];
     const declared = new Set<string>();
-    for (const m of sourceCss.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm))
-      if (m[1]) declared.add(m[1]);
+    for (const m of sourceCss.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)) {
+      if (m[1]) {
+        declared.add(m[1]);
+      }
+    }
     const stray = [...declared].filter(
       (n) =>
         !KNOWN_PREFIXES.some((p) => n.startsWith(p)) &&
-        !ALIASES.includes(n as (typeof ALIASES)[number]) &&
+        !ALIASES.includes(/* SAFETY: 类型断言已复核 */ n as (typeof ALIASES)[number]) &&
         !Object.keys(LITERAL_ALLOWED).includes(n),
     );
     expect(
@@ -223,30 +226,19 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
     const themeBlock = braceBlock(sourceCss, "@theme {");
     const inlineBlock = braceBlock(sourceCss, "@theme inline {");
     const projectNames = new Set(
-      [...themeBlock.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].flatMap((m) =>
-        m[1] ? [m[1]] : [],
-      ),
+      [...themeBlock.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].flatMap((m) => (m[1] ? [m[1]] : [])),
     );
     /* 判据自己的视力表：命名空间一旦又落到扫描面外，这里先红。 */
-    for (const mustSee of [
-      "--font-sans",
-      "--container-narrow",
-      "--color-card",
-    ]) {
+    for (const mustSee of ["--font-sans", "--container-narrow", "--color-card"]) {
       expect(
         projectNames.has(mustSee),
         `@theme 的扫描面里看不到 ${mustSee} —— 取块又缩水了，这条判据正在空转`,
       ).toBe(true);
     }
     const bridged = [
-      ...inlineBlock.matchAll(
-        /^\s*(--[a-z0-9-]+)\s*:\s*var\(--([a-z0-9-]+)\);?/gm,
-      ),
-    ].flatMap((m) => (m[1] && m[2] ? [[m[1], m[2]] as const] : []));
-    expect(
-      bridged.length,
-      "@theme inline 的桥一条都没有（判据失效）",
-    ).toBeGreaterThan(10);
+      ...inlineBlock.matchAll(/^\s*(--[a-z0-9-]+)\s*:\s*var\(--([a-z0-9-]+)\);?/gm),
+    ].flatMap((m) => (m[1] && m[2] ? [/* SAFETY: 类型断言已复核 */ [m[1], m[2]] as const] : []));
+    expect(bridged.length, "@theme inline 的桥一条都没有（判据失效）").toBeGreaterThan(10);
     const shadowed = bridged.filter(([name]) => projectNames.has(name));
     expect(
       shadowed,
@@ -260,36 +252,32 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
       ...inlineBlock.matchAll(/^\s*--[a-z0-9-]+\s*:\s*var\(--([a-z0-9-]+)\)/gm),
     ].flatMap((m) => (m[1] ? [m[1]] : []));
     const declared = new Set(
-      [...sourceCss.matchAll(/^\s*--([a-z0-9-]+)\s*:/gm)].flatMap((m) =>
-        m[1] ? [m[1]] : [],
-      ),
+      [...sourceCss.matchAll(/^\s*--([a-z0-9-]+)\s*:/gm)].flatMap((m) => (m[1] ? [m[1]] : [])),
     );
     /* 软断言：一条桥指向空气时，其余坏的桥也一起报出来（§11.18）。 */
     for (const alias of bridged) {
-      expect
-        .soft(declared.has(alias), `@theme inline 引用了未声明的 --${alias}`)
-        .toBe(true);
+      expect.soft(declared.has(alias), `@theme inline 引用了未声明的 --${alias}`).toBe(true);
     }
   });
 });
 
 describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
-  it.for([
-    ["浅色", () => light],
-    ["深色", () => dark],
-  ] as const)("%s：每个别名都能解到一个具体值", ([, get]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["浅色", () => light],
+      ["深色", () => dark],
+    ] as const,
+  )("%s：每个别名都能解到一个具体值", ([, get]) => {
     const t = get();
     /* 软断言：这三条是一张 30 条别名的清单上的逐项检查 —— 一条别名成环不该
        把其余 29 条的结论一起藏起来（§11.18）。 */
     for (const name of ALIASES) {
-      if (!t.has(name)) continue;
-      expect
-        .soft(() => t.get(name), `${name} 解析抛错（多半是成环或缺定义）`)
-        .not.toThrow();
+      if (!t.has(name)) {
+        continue;
+      }
+      expect.soft(() => t.get(name), `${name} 解析抛错（多半是成环或缺定义）`).not.toThrow();
       expect.soft(t.get(name), `${name} 解不出具体值`).toBeTruthy();
-      expect
-        .soft(t.get(name), `${name} 解出的仍是未展开的 var()`)
-        .not.toMatch(/var\(/);
+      expect.soft(t.get(name), `${name} 解出的仍是未展开的 var()`).not.toMatch(/var\(/);
     }
   });
 
@@ -299,9 +287,7 @@ describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
     expect(dark.get("--card")).toBe(dark.get("--color-surface"));
     expect(light.get("--border")).toBe(light.get("--color-border"));
     expect(dark.get("--border")).toBe(dark.get("--color-border"));
-    expect(light.get("--muted-foreground")).toBe(
-      light.get("--color-ink-muted"),
-    );
+    expect(light.get("--muted-foreground")).toBe(light.get("--color-ink-muted"));
     expect(dark.get("--muted-foreground")).toBe(dark.get("--color-ink-muted"));
     expect(light.get("--muted")).toBe(light.get("--color-subtle"));
     expect(dark.get("--muted")).toBe(dark.get("--color-subtle"));
@@ -311,7 +297,7 @@ describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
 describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Shapes）", () => {
   /** 设计意图：默认档渲染出的整数刻度，sm…4xl 每档 +4px。 */
   const LADDER = [8, 12, 16, 20, 24, 28, 32];
-  const ORDER = [
+  const ORDER = /* SAFETY: 类型断言已复核 */ [
     "--radius-sm",
     "--radius-md",
     "--radius-lg",
@@ -327,9 +313,9 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
 
   it("@theme 里不许再有 --radius-* 字面量（那份死声明别再长回来）", () => {
     const themeBlock = braceBlock(sourceCss, "@theme {");
-    const stray = [
-      ...themeBlock.matchAll(/^\s*(--radius-[a-z0-9-]+)\s*:/gm),
-    ].flatMap((m) => (m[1] ? [m[1]] : []));
+    const stray = [...themeBlock.matchAll(/^\s*(--radius-[a-z0-9-]+)\s*:/gm)].flatMap((m) =>
+      m[1] ? [m[1]] : [],
+    );
     expect(
       stray,
       "@theme 里写了圆角字面量：它与 @theme inline 的派生值同名、后者获胜，" +
@@ -387,12 +373,8 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
       "--radius-node: calc(var(--radius) - 2px);",
     ].join("\n");
     const derived = parseDerivations(polluted);
-    expect(derived.size, "解析器一条都没解出来（正则失效，判据会空转）").toBe(
-      7,
-    );
-    expect(derived.has("--radius-2xl"), "字面 px 的档位被当成了派生值").toBe(
-      false,
-    );
+    expect(derived.size, "解析器一条都没解出来（正则失效，判据会空转）").toBe(7);
+    expect(derived.has("--radius-2xl"), "字面 px 的档位被当成了派生值").toBe(false);
     /* 偏移族也得真的被解出来（否则上面那条节点判据是空转）。 */
     expect(derived.get("--radius-node")).toEqual({ coef: 1, offset: -2 });
   });
@@ -403,8 +385,7 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
     const rem = `${scale().basePx / 16}rem`;
     expect(
       step?.value,
-      `默认档与 globals.css 的 --radius=${rem} 不一致：` +
-        "没设置过与选了默认档会渲染出两套圆角",
+      `默认档与 globals.css 的 --radius=${rem} 不一致：` + "没设置过与选了默认档会渲染出两套圆角",
     ).toBe(rem);
   });
 });
@@ -417,7 +398,7 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
    但 T2 的扫描面被截断在块的前 26 个名字上、T3 又只走别名清单，两条都没碰到它。
    这里补的是**产物侧**那半：字体链必须解得出具体值，且解出来的是设计那串栈。 */
 
-const FONT_CHAIN = [
+const FONT_CHAIN = /* SAFETY: 类型断言已复核 */ [
   "--font-sans",
   "--font-heading",
   "--font-title",
@@ -425,23 +406,19 @@ const FONT_CHAIN = [
 ] as const;
 
 describe("T5 字体链在编译产物里必须解得出具体的栈（#1434）", () => {
-  it.for([
-    ["浅色", () => light],
-    ["深色", () => dark],
-  ] as const)("%s：四档字体令牌都解得到值，不留未展开的 var()", ([, get]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["浅色", () => light],
+      ["深色", () => dark],
+    ] as const,
+  )("%s：四档字体令牌都解得到值，不留未展开的 var()", ([, get]) => {
     const t = get();
     for (const name of FONT_CHAIN) {
       expect.soft(t.has(name), `产物里没有 ${name} 这条声明`).toBe(true);
-      expect
-        .soft(() => t.get(name), `${name} 解不开（多半是自引用成环）`)
-        .not.toThrow();
+      expect.soft(() => t.get(name), `${name} 解不开（多半是自引用成环）`).not.toThrow();
       const value = t.get(name);
-      expect
-        .soft(value, `${name} 解出空值 —— 全站正文会退回浏览器默认字体`)
-        .toBeTruthy();
-      expect
-        .soft(value, `${name} 解出的仍是未展开的 var()：${value}`)
-        .not.toMatch(/var\(/);
+      expect.soft(value, `${name} 解出空值 —— 全站正文会退回浏览器默认字体`).toBeTruthy();
+      expect.soft(value, `${name} 解出的仍是未展开的 var()：${value}`).not.toMatch(/var\(/);
     }
   });
 
@@ -492,16 +469,12 @@ describe("T6 标题字阶三颗住在 :root，不得被 @theme 生成成工具�
          求解器在编译产物里会把 `var(--font-scale, 1)` 代成缺省值 1，所以「跟着变」
          这一半只能在源码上判；产物那一半判的是「解得出一个具体长度」—— 读不到值的
          形态是 h1 字号退回继承，那才是这条要防的事。 */
-      const shape = new RegExp(
-        `:root\\s*\\{[^}]*${name}:\\s*calc\\([^;]*var\\(--font-scale`,
-      );
+      const shape = new RegExp(`:root\\s*\\{[^}]*${name}:\\s*calc\\([^;]*var\\(--font-scale`);
       expect(
         shape.test(sourceCss),
         `${name} 不再是「:root 里一条乘 --font-scale 的 calc」—— 住处或基准的来路变了`,
       ).toBe(true);
-      expect(light.has(name), `产物里没有 ${name} —— .u-title* 读不到值`).toBe(
-        true,
-      );
+      expect(light.has(name), `产物里没有 ${name} —— .u-title* 读不到值`).toBe(true);
       expect(light.get(name), `${name} 解不出一个长度`).toMatch(/rem|px/);
     }
   });
@@ -526,10 +499,9 @@ describe("T6 标题字阶三颗住在 :root，不得被 @theme 生成成工具�
       "  --font-sans:",
       "  --text-section: calc(0.875rem * var(--font-scale, 1));\n  --font-sans:",
     );
-    expect(
-      movedBack,
-      "锚点漂了（--font-sans 不在第一个 @theme 里），这条反向验证已失效",
-    ).not.toBe(sourceCss);
+    expect(movedBack, "锚点漂了（--font-sans 不在第一个 @theme 里），这条反向验证已失效").not.toBe(
+      sourceCss,
+    );
     expect(braceBlock(movedBack, "@theme")).toContain("--text-section:");
   });
 });

@@ -21,6 +21,12 @@
  *  · **不认具体钟点**：`crontab` 的事件名**含小时**，而 10-22 一天内换过两次
  *    （`0 4` → `0 2` → `0 0`）⇒ 按 `crontab:` **前缀**认事件，绝不写死时刻。
  *    三条触发口（定时 / 手点 / API）按 §13.5.23 跑的是同一件事，所以都算出勤。
+ *  · **但事件名认不出「这是哪一档」**（ISSUE #2873，与 #2595 是同一条）：`.cnb.yml`
+ *    现在有**两条**定时档 —— `crontab: 0 1 * * *`（每日那一跑）与 `crontab: 0 3 * * *`
+ *    （桌面成品包，#2503 / #2611）。前缀认法在只有一条定时档时与「每日那一档」等价，
+ *    第二条一出现，「最近一次每日派发」就会念成别档那一跑。所以候选之后还要按
+ *    **流水线名**认档（`DAILY_LANE_PIPELINES`）—— 那是平台自己写的归属，
+ *    与 `ci-daily-failure-issue.mjs` 的 `--lane` 是同一条认法，不另造第二轮子。
  *
  * ## 三态退码（与 `ci-build-readout` / `base-check` 同口径）
  *
@@ -48,10 +54,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { cnbJson, makeRunner } from "./ship-exec.mjs";
-import {
-  classifyBuildOutcome,
-  downstreamSkipped,
-} from "./ci-build-readout.mjs";
+import { classifyBuildOutcome, downstreamSkipped } from "./ci-build-readout.mjs";
 
 /** 一天一次 + 半天余量：补派与延迟落地（实测有 04:00 事件 08:42 才落的那次）都吃得下。 */
 export const DEFAULT_WINDOW_HOURS = 36;
@@ -72,6 +75,30 @@ export const FETCH_MAX_PAGES = 8;
 export const CODE = { PRESENT: 0, ABSENT: 1, NO_VERDICT: 2 };
 
 /**
+ * 每日那一档的**流水线名**（`get-build-status -v` 里 `pipelinesStatus[*].name` 的原值）。
+ *
+ * 为什么事件名不够而要靠它（ISSUE #2873）：`isDailyDispatch` 按 `crontab:` 前缀认候选是
+ * 刻意的（小时会漂，见文件头），但本仓现在有两条定时档共用那个前缀 —— 01:00 的每日那一跑
+ * 与 03:00 的桌面成品包。只按前缀挑「最近一次」，就会把别档的死法念成每日档的缺勤：
+ * 实测 2026-10-31 那一跑，`cnb-uuu-1k672u3j6`（`crontab: 0 3 * * *`）死在平台 `Prepare`
+ * （`runner … not connected`），而这一档把它的 `真失败 Prepare` 连同五格 `打包·*` 一起
+ * 念成了「最近一次每日派发」。
+ *
+ * ⚠️ 这三份名字**必须**与 `.cnb.yml` 里跑 `*daily_gates` 那三个触发口的 `name:` 同批改
+ * （定时 / 手点 / API 三条是同一份七格的三个入口，§13.5.23）：两边由
+ * `tests/no-platform-ci-config.test.ts` 对账 —— 改了配置里的流水线名而没改这里，
+ * 或反过来多登记一条已经不存在的，都当场红。
+ *
+ * ⚠️ 这里**刻意不含**`桌面成品包`：那条档的出勤由它自己的立案格与 #2874 那一单管；
+ * 把它算进「每日出勤」就是两档互相替对方作证（那正是本判据要拦的假绿）。
+ */
+export const DAILY_LANE_PIPELINES = Object.freeze([
+  "每日生产构建",
+  "每日档（手动触发）",
+  "每日档（API 触发）",
+]);
+
+/**
  * 这一条构建算不算「每日那一跑」的一次派发。
  *
  * 按前缀认 `crontab:`（事件名里带小时 ⇒ 换时刻不需要改这里），外加两条手点 / API 触发口。
@@ -82,25 +109,109 @@ export const CODE = { PRESENT: 0, ABSENT: 1, NO_VERDICT: 2 };
 export function isDailyDispatch(build) {
   const event = String(build?.event ?? "");
   return (
-    event.startsWith("crontab:") ||
-    event === "web_trigger_daily" ||
-    event === "api_trigger_daily"
+    event.startsWith("crontab:") || event === "web_trigger_daily" || event === "api_trigger_daily"
   );
 }
 
 /**
- * 从一批构建里挑出最近一次每日类派发。
+ * 定时类候选按时刻**新→旧**排开（不含档的身份，只看事件名）。
+ *
+ * @param {any[]} builds 列表（项里要有 `event` / `createTime` / `sn`）
+ * @returns {any[]} 候选，最近在前；一个都没有时是空数组
+ */
+export function dailyDispatches(builds) {
+  return (Array.isArray(builds) ? builds : [])
+    .filter(isDailyDispatch)
+    .sort((a, b) => String(b?.createTime ?? "").localeCompare(String(a?.createTime ?? "")));
+}
+
+/**
+ * 从一批构建里挑出最近一次每日类派发（**不看档**，看档用 `pickDailySubject()`）。
+ *
+ * 留着它是给「只问事件那一层」的调用点用的（`ci-daily-failure-issue.mjs` 拿它当候选集，
+ * 自己再做档过滤）；本判据的判决**不**走这里 —— 那正是 #2873 的形状。
  *
  * @param {any[]} builds 列表（项里要有 `event` / `createTime` / `sn`）
  * @returns {any | null} 最近那一次；一次都没有时回 null
  */
 export function latestDailyDispatch(builds) {
-  const daily = (Array.isArray(builds) ? builds : [])
-    .filter(isDailyDispatch)
-    .sort((a, b) =>
-      String(b?.createTime ?? "").localeCompare(String(a?.createTime ?? "")),
-    );
-  return daily[0] ?? null;
+  return dailyDispatches(builds)[0] ?? null;
+}
+
+/**
+ * 逐格详情里平台写的那条流水线名（**不自己拆 `pipelinesStatus`**：那份归一在
+ * `ci-build-classify.mjs` 里唯一实现，拆第二遍就是 §12.12 的孪生）。
+ *
+ * @param {any} detail `get-build-status -v` 那份 JSON
+ * @returns {string[]} 流水线名（按平台给的顺序，空名剔除）
+ */
+function pipelineNamesOf(detail) {
+  return classifyBuildOutcome(detail)
+    .pipelines.map((p) => String(p?.name ?? "").trim())
+    .filter((n) => n !== "");
+}
+
+/**
+ * 一条「按事件名认得到、按档让开」的派发。
+ *
+ * @typedef {object} Stray
+ * @property {string} sn 那一跑的构建号
+ * @property {string[]} names 平台写在那一跑上的流水线名（可以是空数组 —— 平台没给名时）
+ */
+
+/**
+ * 候选里挑出**属于每日那一档**的最近一次，并把让开的那些留下账。
+ *
+ * 三种「挑不着」分开给，因为下一动作不同：
+ *  · `strays` 非空而没有本档候选 —— 定时派发确实发生过，只是都属于别的档 ⇒ **缺勤**
+ *    （这一档今天没跑，不需要再去查平台）；
+ *  · `undetailed` 非空 —— 有几条拿不到逐格详情，**档身份就认不出来**（列表那份没有
+ *    流水线名，见 `fetchBuildDetails` 那段），而「认不出是不是本档」不等于「不是本档」
+ *    ⇒ **没结论**（退 2 不算绿，也不算红）；
+ *  · 两者都空 —— 窗口内压根没有定时类派发 ⇒ **缺勤**，话术与旧的一致。
+ *
+ * ⚠️ 详情是按 `fetchDailyDetails` 那**三跑**的上限取的：两条定时档交错时一天两条，
+ * 三跑够捞到本档最近那一次；真不够（某档加密到一天多条）时这里落的是「没结论」而不是
+ * 「缺勤」—— 那正是「我没取到」不许被念成「它没跑」的同一格（#2392）。
+ *
+ * @param {{builds: any[], details?: Array<{sn: string, json: any}>, lanes?: readonly string[]}} input
+ *   候选 + 逐格详情 + 这一档的流水线名名单（缺省取 `DAILY_LANE_PIPELINES`，那是 frozen 的，
+ *   所以这一栏写 `readonly string[]` 而不是 `string[]`）
+ * @returns {{found: true, build: any, outcome: ReturnType<typeof classifyBuildOutcome>,
+ *   pipelineNames: string[], strays: Stray[]} | {found: false, strays: Stray[], undetailed: string[]}}
+ *   两种挑法靠 `found` 这个字面量判别（不靠 `build` 是不是 null：`build` 是 `any`，
+ *   拿它做判别式的话类型上收不回来，实测会报「`outcome` 不存在」）
+ */
+export function pickDailySubject({ builds, details = [], lanes = DAILY_LANE_PIPELINES }) {
+  const wanted = new Set((Array.isArray(lanes) ? lanes : []).map((l) => String(l ?? "").trim()));
+  const bySn = new Map(
+    (Array.isArray(details) ? details : []).map((d) => [String(d?.sn ?? ""), d?.json]),
+  );
+  /** @type {Stray[]} */
+  const strays = [];
+  /** @type {string[]} */
+  const undetailed = [];
+  for (const build of dailyDispatches(builds)) {
+    const sn = String(build?.sn ?? "");
+    const detail = bySn.get(sn);
+    if (!detail) {
+      undetailed.push(sn);
+      continue;
+    }
+    const names = pipelineNamesOf(detail);
+    if (wanted.size > 0 && !names.some((n) => wanted.has(n))) {
+      strays.push({ sn, names });
+      continue;
+    }
+    return {
+      found: true,
+      build,
+      outcome: classifyBuildOutcome(detail),
+      pipelineNames: names,
+      strays,
+    };
+  }
+  return { found: false, strays, undetailed };
 }
 
 /**
@@ -115,6 +226,7 @@ export function latestDailyDispatch(builds) {
  * @property {Array<{sn: string, json: any}>} [details] `sn → get-build-status -v 那份 JSON` 的配对；可为空 ⇒ 判「取不到逐格」
  * @property {number} now 现在时刻（毫秒）
  * @property {number} [windowHours] 窗口小时数，缺省取 `DEFAULT_WINDOW_HOURS`
+ * @property {readonly string[]} [lanes] 这一档的流水线名名单，缺省取 `DAILY_LANE_PIPELINES`（用例可注入别的档）
  *
  * @typedef {object} AttendanceVerdict
  * @property {"present" | "absent" | "cancelled" | "running" | "unknown"} verdict 落在哪一档
@@ -132,9 +244,45 @@ export function judgeAttendance({
   details = [],
   now,
   windowHours = DEFAULT_WINDOW_HOURS,
+  lanes = DAILY_LANE_PIPELINES,
 }) {
-  const latest = latestDailyDispatch(builds);
-  if (!latest) {
+  /* 候选（事件那一层）→ 档身份（流水线名那一层）两步走：只走第一步就会把别档的死法
+   * 念成这一档的结论（ISSUE #2873 的现场），所以判决从这里开始不再碰 `latestDailyDispatch`。 */
+  const picked = pickDailySubject({ builds, details, lanes });
+  const candidateCount = dailyDispatches(builds).length;
+  if (!picked.found) {
+    const strays = picked.strays;
+    const undetailed = picked.undetailed;
+    const strayText = strays
+      .map((s) => `${s.names.join(" / ") || "(平台没给流水线名)"} @ ${s.sn}`)
+      .join("、");
+    /* 「取不到详情」与「取到了、但不是这一档」是两种没挑着：前者的下一动作是去查取数，
+     * 后者的下一动作是去查这一档自己的调度 —— 混成一句话会把人支使到错的那一侧。 */
+    if (undetailed.length > 0) {
+      return {
+        code: CODE.NO_VERDICT,
+        verdict: "unknown",
+        headline:
+          `未校验 ? 窗口内 ${candidateCount} 条定时类派发里有 ${undetailed.length} 条取不到逐格读数` +
+          `（${undetailed.join("、")}）—— 列表那份没有流水线名，就认不出它是哪一档；` +
+          "认不出 ≠ 不是这一档",
+        evidence: strays.length > 0 ? [`  · 已确认属于别的档：${strayText}`] : [],
+        ageHours: null,
+        sn: null,
+      };
+    }
+    if (strays.length > 0) {
+      return {
+        code: CODE.ABSENT,
+        verdict: "absent",
+        headline:
+          `缺勤 ✗ 窗口内 ${candidateCount} 条定时类派发没有一条属于每日那一档` +
+          `（认的流水线名是 ${[...lanes].join(" / ")}；让开的那些：${strayText}）`,
+        evidence: [],
+        ageHours: null,
+        sn: null,
+      };
+    }
     return {
       code: CODE.ABSENT,
       verdict: "absent",
@@ -145,13 +293,15 @@ export function judgeAttendance({
       sn: null,
     };
   }
+  const latest = picked.build;
+  const outcome = picked.outcome;
   const sn = String(latest.sn ?? "");
   const created = Date.parse(String(latest.createTime ?? ""));
   if (Number.isNaN(created)) {
     return {
       code: CODE.NO_VERDICT,
       verdict: "unknown",
-      headline: `未校验 ? 最近一次每日派发「${sn}」的 createTime 读不出时间 —— 不构成结论`,
+      headline: `未校验 ? 每日那一档最近一次派发「${sn}」的 createTime 读不出时间 —— 不构成结论`,
       evidence: [],
       ageHours: null,
       sn,
@@ -159,22 +309,20 @@ export function judgeAttendance({
   }
   const ageHours = (now - created) / 3_600_000;
   const evidence = [
-    `最近一次每日派发：${sn} · 事件 ${latest.event} · ${latest.createTime}（${ageHours.toFixed(1)} 小时前）`,
+    `每日那一档最近一次派发：${sn} · 流水线 ${picked.pipelineNames.join(" / ") || "(没给名)"} · ` +
+      `事件 ${latest.event} · ${latest.createTime}（${ageHours.toFixed(1)} 小时前）`,
   ];
-  /* 按 sn 对齐：详情自己说不出它是哪一跑（见 `fetchDailyDetails`），所以配对必须由调用方带上。 */
-  const detail = details.find((d) => String(d?.sn ?? "") === sn)?.json ?? null;
-  if (!detail) {
-    return {
-      code: CODE.NO_VERDICT,
-      verdict: "unknown",
-      headline: `未校验 ? 「${sn}」取不到逐格读数 —— 拿不到测量不等于结论是红的`,
-      evidence,
-      ageHours,
-      sn,
-    };
+  /* 让开的别档要**念出来**，不是一路 continue 掉：读的人看见「窗口里有两条定时派发、
+   * 判的是其中一条」才知道另一条去哪了 —— 否则这一档与「它自称的那件事」之间又留下一格
+   * 只能靠读代码才看得见的差距（§11.23 那一族：读数落在结论里没有，等于没有）。 */
+  if (picked.strays.length > 0) {
+    const gone = picked.strays
+      .map((s) => `${s.sn} → ${s.names.join(" / ") || "(没给名)"}`)
+      .join("、");
+    evidence.push(
+      `  · 窗口内另有 ${picked.strays.length} 条定时类派发不属于这一档（按事件名认得到、按档让开）：${gone}`,
+    );
   }
-  /* 逐格判定整个交给 ci-build-readout（它那份四档是现成的，这里再写一份就是孪生）。 */
-  const outcome = classifyBuildOutcome(detail);
   evidence.push(
     `逐格：${outcome.configured.length} 格有结论 · 判定 ${outcome.state}（平台原文 ${outcome.raw || "?"}）`,
   );
@@ -186,9 +334,7 @@ export function judgeAttendance({
   }
   const dragged = downstreamSkipped(outcome);
   if (dragged.length > 0) {
-    evidence.push(
-      `  · 被它带下去、根本没跑的格：${dragged.map((s) => s.name).join("、")}`,
-    );
+    evidence.push(`  · 被它带下去、根本没跑的格：${dragged.map((s) => s.name).join("、")}`);
   }
 
   if (outcome.state === "green" && ageHours <= windowHours) {
@@ -205,7 +351,7 @@ export function judgeAttendance({
     return {
       code: CODE.ABSENT,
       verdict: "absent",
-      headline: `缺勤 ✗ 最近一次每日派发是绿的，但已经 ${ageHours.toFixed(1)} 小时没有下一次（窗口 ${windowHours}h）`,
+      headline: `缺勤 ✗ 每日那一档最近一次是绿的，但已经 ${ageHours.toFixed(1)} 小时没有下一次（窗口 ${windowHours}h）`,
       evidence,
       ageHours,
       sn,
@@ -264,8 +410,12 @@ export function judgeAttendance({
  */
 function asBuildArray(json) {
   const first = json?.data ?? json;
-  if (Array.isArray(first)) return first;
-  if (Array.isArray(first?.data)) return first.data;
+  if (Array.isArray(first)) {
+    return first;
+  }
+  if (Array.isArray(first?.data)) {
+    return first.data;
+  }
   return null;
 }
 
@@ -308,7 +458,7 @@ function fetchBuildPage(run, slug, page, pageSize = FETCH_PAGE_SIZE) {
  */
 function oldestCreateTime(builds) {
   const rows = Array.isArray(builds) ? builds : [];
-  const last = rows[rows.length - 1];
+  const last = rows.at(-1);
   const parsed = Date.parse(String(last?.createTime ?? ""));
   return Number.isNaN(parsed) ? null : parsed;
 }
@@ -359,11 +509,11 @@ export function fetchBuildsCoveringWindow({
       exhausted = true;
       break;
     }
-    if (oldestMs !== null && oldestMs <= horizonMs) break;
+    if (oldestMs !== null && oldestMs <= horizonMs) {
+      break;
+    }
   }
-  const covered =
-    broke === null &&
-    (exhausted || (oldestMs !== null && oldestMs <= horizonMs));
+  const covered = broke === null && (exhausted || (oldestMs !== null && oldestMs <= horizonMs));
   const span = `${pages} 页 / ${list.length} 条 · 最早 ${
     oldestMs === null ? "(认不出时刻)" : new Date(oldestMs).toISOString()
   }`;
@@ -401,17 +551,13 @@ export function fetchBuildDetails(run, slug, builds) {
   const out = [];
   for (const build of (Array.isArray(builds) ? builds : []).slice(0, 3)) {
     const sn = String(build?.sn ?? "");
-    if (sn === "") continue;
-    const res = cnbJson(run, [
-      "build",
-      "get-build-status",
-      "--repo",
-      slug,
-      "--sn",
-      sn,
-      "-v",
-    ]);
-    if (res?.json) out.push({ sn, json: res.json });
+    if (sn === "") {
+      continue;
+    }
+    const res = cnbJson(run, ["build", "get-build-status", "--repo", slug, "--sn", sn, "-v"]);
+    if (res?.json) {
+      out.push({ sn, json: res.json });
+    }
   }
   return out;
 }
@@ -445,11 +591,11 @@ export function readOffline(file) {
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(file, "utf8"));
-  } catch (e) {
+  } catch (error) {
     return {
       list: [],
       details: [],
-      failure: `--from 那份不是能解析的 JSON：${/** @type {Error} */ (e).message}`,
+      failure: `--from 那份不是能解析的 JSON：${/** @type {Error} */ (error).message}`,
     };
   }
   const list = asBuildArray(parsed);
@@ -468,8 +614,7 @@ export function readOffline(file) {
   const looksLikeBuild =
     one &&
     typeof one === "object" &&
-    (one.pipelinesStatus !== undefined ||
-      (typeof one.status === "string" && one.status !== ""));
+    (one.pipelinesStatus !== undefined || (typeof one.status === "string" && one.status !== ""));
   if (!one || !looksLikeBuild) {
     return {
       list: [],
@@ -521,9 +666,7 @@ function flagValue(argv, flag) {
 export function main(rawArgv, env = {}) {
   const argv = rawArgv ?? process.argv.slice(2);
   const asJson = argv.includes("--json");
-  const windowHours = Number(
-    flagValue(argv, "--hours") || DEFAULT_WINDOW_HOURS,
-  );
+  const windowHours = Number(flagValue(argv, "--hours") || DEFAULT_WINDOW_HOURS);
   /* 「现在」也要能钉住：夹具里的派发时刻是**绝对时刻**，而窗口比的是「距现在多久」
    * ⇒ 不钉住 now，这一档就会随真实时间推移自己变红（2026-10-24 现场：夹具写的是
    * 10-22 16:00Z，真实时间到 10-24 08:21Z 已隔 40.4h > 36h ⇒ 一条本该恒绿的离线
@@ -557,19 +700,16 @@ export function main(rawArgv, env = {}) {
       source = {
         ...source,
         failure:
-          source.failure ??
-          "--from 那一档必须同时钉住「现在」（--now <ISO 时刻> 或 --now <毫秒>）",
+          source.failure ?? "--from 那一档必须同时钉住「现在」（--now <ISO 时刻> 或 --now <毫秒>）",
       };
     }
   } else {
-    const run =
-      env.run ?? makeRunner(fileURLToPath(new URL(".", import.meta.url)));
+    const run = env.run ?? makeRunner(fileURLToPath(new URL(".", import.meta.url)));
     /* `flagValue` 对「没给这个旗标」回**空串**，而空串不是 nullish —— `??` 兜不住，
      * 于是 `--repo` 会被交成一个空字符串，表现就是「取不到构建列表」
      * （实测踩过：把 null 换成空串的那一次改动，在线那一跳当场落到红档）。要显式判空。 */
     const repoFlag = flagValue(argv, "--repo");
-    const slug =
-      env.slug ?? (repoFlag === "" ? "moon-read/comfy-app-t3" : repoFlag);
+    const slug = env.slug ?? (repoFlag === "" ? "moon-read/comfy-app-t3" : repoFlag);
     const win = fetchBuildsCoveringWindow({
       run,
       slug,
@@ -580,10 +720,16 @@ export function main(rawArgv, env = {}) {
       source = {
         list: [],
         details: [],
-        failure:
-          "取不到构建列表（`cnb` 起不来 / 网络不通 / 返回不是 JSON）—— 判据自身不做重试",
+        failure: "取不到构建列表（`cnb` 起不来 / 网络不通 / 返回不是 JSON）—— 判据自身不做重试",
       };
-    } else if (!win.covered) {
+    } else if (win.covered) {
+      source = {
+        list: win.list,
+        details: fetchDailyDetails(run, slug, win.list),
+        failure: null,
+      };
+      coverage = { label: "取数覆盖自证", text: win.note };
+    } else {
       /* 这一格是整个判据最坏的形状在这里：窗口没盖住就往下单念「缺勤」，是把「我没取到」
        * 写成「它没跑」（ISSUE #2392）。所以这里**不进判决**，落成未校验（退 2 不算绿）。 */
       source = {
@@ -591,13 +737,6 @@ export function main(rawArgv, env = {}) {
         details: [],
         failure: `取数没盖住窗口 —— ${win.note}；「窗口内没有派发」这句话在这上面不成立`,
       };
-    } else {
-      source = {
-        list: win.list,
-        details: fetchDailyDetails(run, slug, win.list),
-        failure: null,
-      };
-      coverage = { label: "取数覆盖自证", text: win.note };
     }
   }
   const out = source.failure
@@ -617,13 +756,18 @@ export function main(rawArgv, env = {}) {
       });
   /** JSON 里多带一句覆盖自证（只有拿得出来的时候才多这个键，形状不凭空长）。 */
   const payload = coverage ? { ...out, coverage } : out;
-  if (asJson) console.log(JSON.stringify(payload, null, 2));
-  else {
+  if (asJson) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
     console.log(`[daily-attendance] ${out.headline}`);
     /* 「窗口内没有派发」这句话必须有依据才能念，而依据是**取数盖到了多久以前**。
      * 成功路径上把它一起打出来：不印就等于让读者只看见结论（§11.23 那一族）。 */
-    if (coverage) console.log(`[daily-attendance] ${coverage.label}：${coverage.text}`);
-    for (const line of out.evidence) console.log(line);
+    if (coverage) {
+      console.log(`[daily-attendance] ${coverage.label}：${coverage.text}`);
+    }
+    for (const line of out.evidence) {
+      console.log(line);
+    }
   }
   return out.code;
 }

@@ -12,7 +12,7 @@ import { beginStaleRun } from "./stale-run";
 describe("beginStaleRun", () => {
   it("未作废时提交生效，作废后整段跳过", () => {
     const guard = beginStaleRun();
-    const writes: string[] = [];
+    const writes: Array<string> = [];
     guard.commit(() => writes.push("a"));
     guard.dispose();
     guard.commit(() => writes.push("b"));
@@ -22,7 +22,7 @@ describe("beginStaleRun", () => {
 
   it("`commit` 是一段原子写入（两个 setState 一起跳，不必各抄一遍守卫）", () => {
     const guard = beginStaleRun();
-    const writes: string[] = [];
+    const writes: Array<string> = [];
     guard.commit(() => {
       writes.push("rows");
       writes.push("loading=false");
@@ -65,9 +65,11 @@ describe("beginStaleRun", () => {
 
   it("`isStale()` 是判据形态 —— 给需要 `return` 早退的调用点用", () => {
     const guard = beginStaleRun();
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     const step = () => {
-      if (guard.isStale()) return;
+      if (guard.isStale()) {
+        return;
+      }
       seen.push("继续");
     };
     step();

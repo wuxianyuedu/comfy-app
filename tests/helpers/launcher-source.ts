@@ -33,11 +33,9 @@ const ENTRY = "dev-launcher.mjs";
  * 认的形状是 `from "./…"` —— 编排器这一层的相对引用全是这一种（与
  * `gate-repo.ts::copyGateDeps` 的口径同源，只是那边收 `.cjs`、这边收 `.mjs`）。
  */
-function relativeDeps(src: string): string[] {
+function relativeDeps(src: string): Array<string> {
   const found = new Set<string>();
-  for (const m of src.matchAll(
-    /^\s*(?:import|export)\b[^;]*?from\s+"(\.\/[\w./-]+)"/gm,
-  )) {
+  for (const m of src.matchAll(/^\s*(?:import|export)\b[^;]*?from\s+"(\.\/[\w./-]+)"/gm)) {
     found.add(m[1]!.replace(/^\.\//, ""));
   }
   return [...found];
@@ -53,7 +51,7 @@ function relativeDeps(src: string): string[] {
  * 返回**固定顺序**（`ENTRY` 打头、其余按字典序）而不是遍历顺序：同一份输入必须
  * 给出同一份输出，否则「断言在某一段」会随遍历顺序漂。
  */
-function chainModules(): string[] {
+function chainModules(): Array<string> {
   const seen = new Set<string>([ENTRY]);
   const queue = [ENTRY];
   while (queue.length > 0) {
@@ -73,7 +71,9 @@ function chainModules(): string[] {
       /* 只收 `scripts/**` 内的形态。跨层引用（`../src/**`）不在 `scripts/` 里，
        * 它们是运行期兜底 `await import` 的落点，不属于这条链路的源码面。 */
       const resolved = path.posix.normalize(path.posix.join(baseDir, dep));
-      if (resolved.startsWith("..") || seen.has(resolved)) continue;
+      if (resolved.startsWith("..") || seen.has(resolved)) {
+        continue;
+      }
       seen.add(resolved);
       queue.push(resolved);
     }

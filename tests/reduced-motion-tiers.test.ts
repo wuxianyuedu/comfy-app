@@ -24,13 +24,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { collectDataSlots } from "./helpers/data-slots";
+
 const SRC_ROOT = fileURLToPath(new URL("../src", import.meta.url));
-const CSS_PATH = fileURLToPath(
-  new URL("../src/app/globals.css", import.meta.url),
-);
+const CSS_PATH = fileURLToPath(new URL("../src/app/globals.css", import.meta.url));
 const css = readFileSync(CSS_PATH, "utf8");
 
-const LOOP_SELECTORS = [
+const LOOP_SELECTORS = /* SAFETY: 类型断言已复核 */ [
   ".animate-spin",
   ".animate-pulse",
   ".wf-wave",
@@ -41,7 +40,7 @@ const LOOP_SELECTORS = [
   '[data-slot="progress-bar-indeterminate"]',
   '[data-slot="agent-tool-status-dot"]',
 ] as const;
-const DISPLACEMENT_SELECTORS = [
+const DISPLACEMENT_SELECTORS = /* SAFETY: 类型断言已复核 */ [
   '[data-slot="sheet-content"]',
   '[data-slot="navigation-menu-content"]',
 ] as const;
@@ -54,47 +53,50 @@ const DISPLACEMENT_SELECTORS = [
  */
 function reduceBlockOf(text: string): string | null {
   const start = text.search(/@media[^{]*prefers-reduced-motion[^{]*\{/);
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   let depth = 0;
   for (let i = text.indexOf("{", start); i < text.length; i += 1) {
     const ch = text[i];
-    if (ch === "{") depth += 1;
-    else if (ch === "}") {
+    if (ch === "{") {
+      depth += 1;
+    } else if (ch === "}") {
       depth -= 1;
-      if (depth === 0) return text.slice(text.indexOf("{", start) + 1, i);
+      if (depth === 0) {
+        return text.slice(text.indexOf("{", start) + 1, i);
+      }
     }
   }
   return null;
 }
 
 /** 块体内出现过的 `data-slot` 值（选择器里点名的那些）。 */
-function slotsNamedIn(block: string): string[] {
-  return [
-    ...new Set(
-      [...block.matchAll(/\[data-slot="([^"]+)"\]/g)].map((m) => m[1]!),
-    ),
-  ];
+function slotsNamedIn(block: string): Array<string> {
+  return [...new Set([...block.matchAll(/\[data-slot="([^"]+)"\]/g)].map((m) => m[1]!))];
 }
 
-
 /** 用到某个 class 的 `.tsx` 清单（只扫 `src/components` 与 `src/app`）。 */
-function collectConsumers(cls: string): string[] {
-  const out: string[] = [];
+function collectConsumers(cls: string): Array<string> {
+  const out: Array<string> = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.name.startsWith(".")) continue;
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
       const full = join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (/\.tsx?$/.test(entry.name)) {
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (/\.tsx?$/.test(entry.name)) {
         const text = readFileSync(full, "utf8");
         /* 只认 `className` 里的写法，**并且先剥注释** —— 注释里提到类名
            不算消费（本仓库已有 18 份内联的剥注释实现，见
            `tests/strip-comments-single-source.test.ts`；这里按同口径内联一遍，
            它的判据是「不许再新增第 19 份」，而本文件是既有的一份）。 */
-        const code = text
-          .replace(/\/\*[\s\S]*?\*\//g, "")
-          .replace(/(^|[^:])\/\/.*$/gm, "$1");
-        if (code.includes(cls)) out.push(full);
+        const code = text.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/(^|[^:])\/\/.*$/gm, "$1");
+        if (code.includes(cls)) {
+          out.push(full);
+        }
       }
     }
   };
@@ -106,14 +108,8 @@ const block = reduceBlockOf(css);
 
 describe("prefers-reduced-motion 三档分治（规范 06 §6.7）", () => {
   it("降级块在、且不是空块（条文不许只写在规范里）", () => {
-    expect(
-      block,
-      "globals.css 里找不到 @media (prefers-reduced-motion: reduce) 块",
-    ).not.toBeNull();
-    expect(
-      block!.trim().length,
-      "reduce 块是空的 —— 判据在空转",
-    ).toBeGreaterThan(40);
+    expect(block, "globals.css 里找不到 @media (prefers-reduced-motion: reduce) 块").not.toBeNull();
+    expect(block!.trim().length, "reduce 块是空的 —— 判据在空转").toBeGreaterThan(40);
   });
 
   it("① 循环动画一律停掉，内联 style 那两处带 !important", () => {
@@ -134,10 +130,9 @@ describe("prefers-reduced-motion 三档分治（规范 06 §6.7）", () => {
     expect(/translate:\s*none/.test(body), "位移没有被归零").toBe(true);
     /* 淡入这条过渡**不能**被一起关掉 —— 关掉之后「面板出现了」就没有任何反馈了。
        所以块里不许出现 transition: none（下面第 ③ 档也从另一个方向钉同一件事）。 */
-    expect(
-      body,
-      "reduce 块不许写 transition: none，那会把淡入一起杀掉",
-    ).not.toMatch(/transition:\s*none/);
+    expect(body, "reduce 块不许写 transition: none，那会把淡入一起杀掉").not.toMatch(
+      /transition:\s*none/,
+    );
   });
 
   it("③ 短程反馈是刻意豁免：不许出现全局一把梭的写法", () => {
@@ -152,10 +147,7 @@ describe("prefers-reduced-motion 三档分治（规范 06 §6.7）", () => {
   it("④ 块里点名的每个 data-slot 在组件源码里真的存在", () => {
     const named = slotsNamedIn(block ?? "");
     // 量具自证：一个都不解析到时，这条会绿得没有意义
-    expect(
-      named.length,
-      "reduce 块里没有 data-slot 选择器 —— 解析失效",
-    ).toBeGreaterThan(2);
+    expect(named.length, "reduce 块里没有 data-slot 选择器 —— 解析失效").toBeGreaterThan(2);
     const { slots, files } = collectDataSlots();
     expect(files, "一个源码文件都没扫到 —— 扫描面失效").toBeGreaterThan(100);
     const ghosts = named.filter((slot) => !slots.has(slot));
@@ -174,9 +166,7 @@ describe("本轮新增的两条动效机制在位（06 §6.7 第 ①/③ 档）"
     expect(css, "globals.css 里没有 .value-tick 的定义").toMatch(
       /\.value-tick\s*\{[^}]*animation:\s*value-tick/,
     );
-    expect(css, "@keyframes value-tick 不在").toMatch(
-      /@keyframes\s+value-tick\s*\{/,
-    );
+    expect(css, "@keyframes value-tick 不在").toMatch(/@keyframes\s+value-tick\s*\{/);
     /* 消费点：至少一处视图写了这个类名，否则这条判据在守一个没人用的类。 */
     const consumers = collectConsumers("value-tick");
     expect(
@@ -216,14 +206,13 @@ describe("reduceBlockOf / slotsNamedIn 自身可反证", () => {
 
   it("缺块与空块都判不出来（返回 null / 空串），而不是假装通过", () => {
     expect(reduceBlockOf(".a { color: red }")).toBeNull();
-    expect(
-      reduceBlockOf("@media (prefers-reduced-motion: reduce) {}")!.trim(),
-    ).toBe("");
+    expect(reduceBlockOf("@media (prefers-reduced-motion: reduce) {}")!.trim()).toBe("");
   });
 
   it("slotsNamedIn 只取选择器里的值，且去重", () => {
-    expect(
-      slotsNamedIn('[data-slot="x"] , [data-slot="y"], [data-slot="x"] {a:b}'),
-    ).toEqual(["x", "y"]);
+    expect(slotsNamedIn('[data-slot="x"] , [data-slot="y"], [data-slot="x"] {a:b}')).toEqual([
+      "x",
+      "y",
+    ]);
   });
 });

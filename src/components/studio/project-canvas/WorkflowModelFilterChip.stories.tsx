@@ -56,11 +56,7 @@ export const EmptyTagLibrary: Story = {
 export const WithCounts: Story = {
   render: () => (
     <div className="flex min-h-64 items-start">
-      <WorkflowModelFilterChip
-        value="all"
-        tags={TAGS}
-        onChange={() => undefined}
-      />
+      <WorkflowModelFilterChip onChange={() => undefined} tags={TAGS} value="all" />
     </div>
   ),
 };

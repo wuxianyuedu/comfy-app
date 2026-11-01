@@ -13,12 +13,10 @@ import { Icon } from "~/components/ui/icon";
  * 存在）。那样写 tsc 会红、storybook 会在加载期抛 `Cannot read properties of
  * undefined` —— 即「索引里有故事、画布上什么都没有」。
  */
-type ButtonVariant = NonNullable<
-  React.ComponentProps<typeof Button>["variant"]
->;
+type ButtonVariant = NonNullable<React.ComponentProps<typeof Button>["variant"]>;
 type ButtonSize = NonNullable<React.ComponentProps<typeof Button>["size"]>;
 
-const VARIANTS: ButtonVariant[] = [
+const VARIANTS: Array<ButtonVariant> = [
   "default",
   "outline",
   "secondary",
@@ -36,7 +34,7 @@ const VARIANTS: ButtonVariant[] = [
   "gradient",
   "link",
 ];
-const SIZES: ButtonSize[] = [
+const SIZES: Array<ButtonSize> = [
   "xs",
   "sm",
   "default",

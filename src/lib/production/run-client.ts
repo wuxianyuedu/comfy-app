@@ -10,16 +10,12 @@ import {
   type ProductionRun,
   type RunAction,
 } from "~/lib/production/run-types";
-import type {
-  HumanVerdict,
-  ReviewMode,
-  ReviewVerdict,
-} from "~/lib/production/review-types";
+import type { HumanVerdict, ReviewMode, ReviewVerdict } from "~/lib/production/review-types";
 
-export interface RunSnapshot {
-  run: ProductionRun;
+export type RunSnapshot = {
   action: RunAction;
-}
+  run: ProductionRun;
+};
 
 const IDLE_SNAPSHOT: RunSnapshot = {
   run: normalizeProductionRun(null),
@@ -27,34 +23,30 @@ const IDLE_SNAPSHOT: RunSnapshot = {
 };
 
 /** 归一 tRPC 回包（run/action 已是服务端类型，这里只兜 run 的脏 JSON）。 */
-function toSnapshot(res: {
-  run: ProductionRun;
-  action: RunAction;
-}): RunSnapshot {
+function toSnapshot(res: { action: RunAction; run: ProductionRun }): RunSnapshot {
   return { run: normalizeProductionRun(res.run), action: res.action };
 }
 
 /** 读当前 run + 下一步动作；无活跃项目 → idle。 */
 export async function fetchRunStatus(projectId: string): Promise<RunSnapshot> {
-  if (!projectId) return IDLE_SNAPSHOT;
+  if (!projectId) {
+    return IDLE_SNAPSHOT;
+  }
   const res = await vanillaApi.run.status.query({ projectId });
   return toSnapshot(res);
 }
 
-export interface StartRunInput {
-  goal?: string;
+export type StartRunInput = {
   approvalMode?: ApprovalMode;
-  imageWorkflowId?: string;
-  videoWorkflowId?: string;
   /** 生图后自动逐镜评审、不合格自动抽卡重生成（有界重试）。 */
   autoReview?: boolean;
-}
+  goal?: string;
+  imageWorkflowId?: string;
+  videoWorkflowId?: string;
+};
 
 /** 启动 / 重启自主执行（引擎会在服务端 fire-and-forget 推进到下一个停点）。 */
-export async function startRun(
-  projectId: string,
-  input: StartRunInput,
-): Promise<RunSnapshot> {
+export async function startRun(projectId: string, input: StartRunInput): Promise<RunSnapshot> {
   const res = await vanillaApi.run.start.mutate({ projectId, ...input });
   return toSnapshot(res);
 }
@@ -82,10 +74,7 @@ export async function cancelRun(projectId: string): Promise<RunSnapshot> {
 /* ── AI 评审（Phase 8 · P8-1b）：文本评审 + 不合格重生成，均走 run.* 端点 ── */
 
 /** 评审一个分镜镜头（文本），返回判定（服务端已落库到 `shot.review`）。 */
-export async function reviewShot(
-  projectId: string,
-  shotId: string,
-): Promise<ReviewVerdict> {
+export async function reviewShot(projectId: string, shotId: string): Promise<ReviewVerdict> {
   const res = await vanillaApi.run.reviewShot.mutate({ projectId, shotId });
   return res.verdict;
 }
@@ -104,8 +93,8 @@ export async function reviewCharacter(
 
 /** 评审整份剧本（FR-QA-07 ② · #2477），返回判定与完整分数曲线（服务端已落库 `production.scriptReview` 列）。 */
 export async function reviewScript(projectId: string): Promise<{
+  history: Array<ReviewVerdict>;
   verdict: ReviewVerdict;
-  history: ReviewVerdict[];
 }> {
   return vanillaApi.run.reviewScript.mutate({ projectId });
 }
@@ -114,10 +103,7 @@ export async function reviewScript(projectId: string): Promise<{
  * 视觉评审一个分镜镜头的生图（P8-2 · #2479），返回判定（服务端已落库到 `shot.imageReview`）。
  * 没图 / 找不到镜头时服务端抛可行动错误。
  */
-export async function reviewShotImage(
-  projectId: string,
-  shotId: string,
-): Promise<ReviewVerdict> {
+export async function reviewShotImage(projectId: string, shotId: string): Promise<ReviewVerdict> {
   const res = await vanillaApi.run.reviewShotImage.mutate({
     projectId,
     shotId,
@@ -196,30 +182,30 @@ export async function regenerateShot(
     projectId,
     shotId,
     mode,
-    ...(newPrompt !== undefined ? { newPrompt } : {}),
+    ...(newPrompt === undefined ? {} : { newPrompt }),
   });
 }
 
 /** 抽卡优选的候选判定（FR-QA-04④ · #2612）：服务端逐张视觉评审后的原值。 */
-export interface AutoselectCandidateScore {
-  taskId: string;
+export type AutoselectCandidateScore = {
   imageUrl: string | null;
+  taskId: string;
   verdict: ReviewVerdict | null;
-}
+};
 
-export interface AutoselectShotResult {
-  winnerTaskId: string;
+export type AutoselectShotResult = {
+  candidates: Array<AutoselectCandidateScore>;
   winnerImageUrl: string;
+  winnerTaskId: string;
   winnerVerdict: ReviewVerdict;
-  candidates: AutoselectCandidateScore[];
-}
+};
 
 /** 对同一镜头的 2~4 个候选任务做抽卡优选（run.autoselectShot）；回写由调用方
  *  经镜头草稿完成（字段所有权见 #2615）。 */
 export async function autoselectShot(
   projectId: string,
   shotId: string,
-  taskIds: string[],
+  taskIds: Array<string>,
 ): Promise<AutoselectShotResult> {
   return vanillaApi.run.autoselectShot.mutate({
     projectId,

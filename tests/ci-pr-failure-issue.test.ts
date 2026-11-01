@@ -56,7 +56,7 @@ const build = (
  * ⚠️ 状态词用平台原话：`error` / `cancel` / `skipped` / `start`；构建级在跑是 `pending`。
  */
 function detail(state: Verdict) {
-  const stages: StageRow[] =
+  const stages: Array<StageRow> =
     state === "green"
       ? [
           { id: "stage-1", name: "分支守卫", status: "success" },
@@ -77,8 +77,7 @@ function detail(state: Verdict) {
             { id: "stage-3", name: "受影响用例", status: "skipped" },
             { id: "stage-4", name: "重档静态判据", status: "skipped" },
           ];
-  const status =
-    state === "green" ? "success" : state === "running" ? "pending" : "error";
+  const status = state === "green" ? "success" : state === "running" ? "pending" : "error";
   return {
     data: {
       status,
@@ -278,10 +277,7 @@ describe("决定写不写：②落点（PR 评论 vs 建单）与去重", () => 
       existing: null,
     });
     expect(act.action).toBe("recommend");
-    expect(act.stages).toEqual([
-      { stage: "类型检查" },
-      { stage: "受影响用例" },
-    ]);
+    expect(act.stages).toEqual([{ stage: "类型检查" }, { stage: "受影响用例" }]);
   });
 
   it("没有 PR ⇒ 按格名建单；同一格已有 open 单则追加，不新建", () => {
@@ -292,10 +288,7 @@ describe("决定写不写：②落点（PR 评论 vs 建单）与去重", () => 
       existing: [{ number: 2200, title: issueTitle("类型检查") }],
     });
     expect(act.action).toBe("write");
-    expect(act.stages).toEqual([
-      { stage: "类型检查", number: 2200 },
-      { stage: "受影响用例" },
-    ]);
+    expect(act.stages).toEqual([{ stage: "类型检查", number: 2200 }, { stage: "受影响用例" }]);
   });
 
   it("人工写的单只要带同一串前缀就自动进这一族", () => {
@@ -323,10 +316,7 @@ describe("正文只含读数，不含因果", () => {
     target,
     stage: "类型检查",
     skipped: ["受影响用例", "重档静态判据"],
-    readout: [
-      "── 失败格：类型检查（stage-2）",
-      "L88 src/x.ts(3,5): error TS2322",
-    ],
+    readout: ["── 失败格：类型检查（stage-2）", "L88 src/x.ts(3,5): error TS2322"],
     handle: "ci-pr",
   });
 
@@ -335,9 +325,7 @@ describe("正文只含读数，不含因果", () => {
     expect(body).toContain("cnb-0j2-1k5ogfi0l");
     expect(body).toContain("PR #2323");
     expect(body).toContain("「类型检查」");
-    expect(body).toContain(
-      "被它带下去、**根本没跑**的格：受影响用例、重档静态判据",
-    );
+    expect(body).toContain("被它带下去、**根本没跑**的格：受影响用例、重档静态判据");
     expect(body).toContain("L88 src/x.ts(3,5): error TS2322");
     expect(body).toContain("## 根因：**未判定**");
     expect(body).toContain("pnpm ship --diagnose cnb-0j2-1k5ogfi0l");
@@ -350,9 +338,7 @@ describe("正文只含读数，不含因果", () => {
 
   it("负控制：不许出现替人说「谁的错 / 为什么红」那类因果句", () => {
     for (const banned of ["因为", "由于", "根因是", "造成的", "是它的错"]) {
-      expect(body, `正文里出现了未经验证的因果句：${banned}`).not.toContain(
-        banned,
-      );
+      expect(body, `正文里出现了未经验证的因果句：${banned}`).not.toContain(banned);
     }
   });
 
@@ -380,9 +366,13 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
     return { dir, file };
   }
 
-  const run = (args: string[], extraEnv: Record<string, string> = {}) => {
+  const run = (args: Array<string>, extraEnv: Record<string, string> = {}) => {
     const env = { ...process.env, ...extraEnv };
-    for (const [k, v] of Object.entries(extraEnv)) if (v === "") delete env[k];
+    for (const [k, v] of Object.entries(extraEnv)) {
+      if (v === "") {
+        delete env[k];
+      }
+    }
     return spawnSync(process.execPath, [ENTRY, ...args], {
       cwd: ROOT,
       encoding: "utf8",
@@ -443,9 +433,7 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
         CNB_BUILD_ID: "",
         CNB_PULL_REQUEST_IID: "",
       });
-      expect(strict.status, `${strict.stdout}\n${strict.stderr}`).toBe(
-        CODE.NO_FACT,
-      );
+      expect(strict.status, `${strict.stdout}\n${strict.stderr}`).toBe(CODE.NO_FACT);
       const loose = run(["--from", f.file, "--no-block"], {
         CNB_BUILD_ID: "",
         CNB_PULL_REQUEST_IID: "",
@@ -461,10 +449,7 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
   });
 
   it("--from 那个路径不存在 ⇒ 退 2，而不是「没有红」", () => {
-    const r = run([
-      "--from",
-      path.join(os.tmpdir(), "definitely-not-here-2332.json"),
-    ]);
+    const r = run(["--from", path.join(os.tmpdir(), "definitely-not-here-2332.json")]);
     expect(r.status).toBe(CODE.NO_FACT);
     expect(`${r.stdout}${r.stderr}`).toContain("不构成结论（不是「没有红」）");
   });
@@ -475,7 +460,7 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
    * 互不相认的单。它必须是**入口自己的退 2**，而不是变成「默认落到 pr 那一族」。
    */
   it("`--lane` 没给值 / 没登记 ⇒ 退 2 且一次都不写（不许退化成默认那档）", () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const boom = () => {
       throw new Error("这一行走到我 ⇒ 这一格在还没判完之前就联网了");
     };
@@ -501,13 +486,13 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
      * 会被判成「不归本格管」，给了它就该继续往下读（详情那份刻意不含 `pipelinesStatus`
      * ⇒ 认不出格名 ⇒ 落在「没结论」，同样不是「不写」）。 */
     heard.length = 0;
-    const calls: string[] = [];
+    const calls: Array<string> = [];
     const ok = main({
       argv: ["--lane", "package", "--dry-run"],
       slug: "moon-read/comfy-app-t3",
       env: { CNB_BUILD_ID: "sn-pkg", CNB_PULL_REQUEST_IID: "" },
       log: (s: string) => heard.push(s),
-      run: (cmd: string, args: string[]) => {
+      run: (cmd: string, args: Array<string>) => {
         const key = args.join(" ");
         calls.push(`${cmd} ${key}`);
         const data = key.includes("get-build-logs")
@@ -546,14 +531,14 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
    * （列表 → 逐格详情 → 逐格日志 → PR 评论），断言 `--dry-run` 一个写命令都不发。
    */
   it("--dry-run 走完整条读链，一次 post-pull-comment / create-issue 都不发", () => {
-    const calls: string[] = [];
-    const heard: string[] = [];
+    const calls: Array<string> = [];
+    const heard: Array<string> = [];
     const code = main({
       argv: ["--dry-run"],
       slug: "moon-read/comfy-app-t3",
       env: { CNB_BUILD_ID: "sn-live", CNB_PULL_REQUEST_IID: "2323" },
       log: (s: string) => heard.push(s),
-      run: (cmd: string, args: string[]) => {
+      run: (cmd: string, args: Array<string>) => {
         const key = args.join(" ");
         calls.push(`${cmd} ${key}`);
         const json = (data: unknown) => ({
@@ -562,9 +547,12 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
           stderr: "",
           error: null,
         });
-        if (key.includes("get-build-logs")) return json([build("sn-live")]);
-        if (key.includes("get-build-status"))
+        if (key.includes("get-build-logs")) {
+          return json([build("sn-live")]);
+        }
+        if (key.includes("get-build-status")) {
           return json(detail("failed").data);
+        }
         return json({});
       },
     });
@@ -574,9 +562,7 @@ describe("跑生产入口本身（真起进程，`--from` 离线档）", () => {
     expect(out).toContain("判定 failed");
     expect(out).toContain("--dry-run：「类型检查」→ 评论在 PR #2323 下");
     expect(
-      calls.some(
-        (c) => c.includes("post-pull-comment") || c.includes("create-issue"),
-      ),
+      calls.some((c) => c.includes("post-pull-comment") || c.includes("create-issue")),
       `dry-run 却发了写命令：${calls.join(" / ")}`,
     ).toBe(false);
     // 读链真的走到了逐格日志那一层（不是靠 --from 绕过去的）。
@@ -637,9 +623,7 @@ describe("平台配置：这一格是 Pipeline 级 `endStages`，不是 `stages`
       body,
       "`pull_request` 那条流水线没有引用 `*pr_fail_stage` —— 锚点写了也是白写",
     ).toContain("- <<: [*common, *pr_fail_stage]");
-    expect(body, "`*gates`（串行链）也不许把它带回来").not.toContain(
-      "PR 失败立案",
-    );
+    expect(body, "`*gates`（串行链）也不许把它带回来").not.toContain("PR 失败立案");
   });
 
   /**

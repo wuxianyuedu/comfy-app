@@ -1,29 +1,25 @@
 "use client";
 
 import { useMemo } from "react";
-import type {
-  ComfyGraphNode,
-  RawOutputMeta,
-  WorkflowDetail,
-} from "../workflow-types";
+import type { ComfyGraphNode, RawOutputMeta, WorkflowDetail } from "../workflow-types";
 import { inferSourceOutNames } from "../workflow-utils";
 
 /** 原始 ComfyUI 节点元数据 —— `widgets_values` 元素与 flags /
  *  properties 字典都是不透明的 raw-JSON 负载，保持 `unknown`（此前
  *  是 `any`；消费方本来就当它们不透明处理）。 */
 export type RawNodeMeta = {
-  widgets_values: unknown[];
-  outputs: RawOutputMeta[];
   flags: Record<string, unknown>;
-  properties: Record<string, unknown>;
   mode: number;
+  outputs: Array<RawOutputMeta>;
+  properties: Record<string, unknown>;
+  widgets_values: Array<unknown>;
 };
 
-export interface WorkflowDerivedData {
+export type WorkflowDerivedData = {
+  outSlotNameById: Record<string, Array<string>>;
   rawMetaById: Record<string, RawNodeMeta>;
   scopeDetail: WorkflowDetail | null;
-  outSlotNameById: Record<string, string[]>;
-}
+};
 
 /**
  * 工作流编辑器画布的派生查表：
@@ -32,23 +28,16 @@ export interface WorkflowDerivedData {
  *    的来源换成 `detail.rawView`，包装层数据保持不变）
  *  - outSlotNameById：按节点的输出槽名推导
  */
-export function useWorkflowDerivedData(
-  detail: WorkflowDetail | null,
-): WorkflowDerivedData {
+export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowDerivedData {
   const rawMetaById: Record<string, RawNodeMeta> = useMemo(() => {
     const m: Record<string, RawNodeMeta> = {};
     for (const rn of detail?.rawNodes ?? []) {
       if (rn?.id) {
         m[rn.id] = {
-          widgets_values: Array.isArray(rn.widgets_values)
-            ? rn.widgets_values
-            : [],
+          widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
           outputs: Array.isArray(rn.outputs) ? rn.outputs : [],
           flags: rn.flags && typeof rn.flags === "object" ? rn.flags : {},
-          properties:
-            rn.properties && typeof rn.properties === "object"
-              ? rn.properties
-              : {},
+          properties: rn.properties && typeof rn.properties === "object" ? rn.properties : {},
           mode: typeof rn.mode === "number" ? rn.mode : 0,
         };
       }
@@ -62,28 +51,36 @@ export function useWorkflowDerivedData(
    *  通过展开保留。RAW 视图下已在 `detail.positions` 镜像的 raw-id 拖拽覆盖
    *  会叠加在最上层，使 RAW 视图的手动拖拽无需重新拉取即生效。 */
   const scopeDetail: WorkflowDetail | null = useMemo(() => {
-    if (!detail) return null;
+    if (!detail) {
+      return null;
+    }
     if (detail.rawView) {
       const rawIds = new Set(detail.rawView.nodes.map((node) => node.id));
       const overrides: Record<string, [number, number]> = {};
       const dp = detail.positions ?? {};
       for (const [k, position] of Object.entries(dp)) {
-        if (position && rawIds.has(k)) overrides[k] = position;
+        if (position && rawIds.has(k)) {
+          overrides[k] = position;
+        }
       }
       return {
         ...detail,
         nodes: detail.rawView.nodes,
         graph: detail.rawView.graph,
-        positions: { ...(detail.rawView.positions ?? {}), ...overrides },
+        positions: { ...detail.rawView.positions, ...overrides },
       };
     }
     return detail;
   }, [detail]);
 
-  const outSlotNameById: Record<string, string[]> = useMemo(() => {
-    if (!scopeDetail) return {};
+  const outSlotNameById: Record<string, Array<string>> = useMemo(() => {
+    if (!scopeDetail) {
+      return {};
+    }
     const nodesById: Record<string, ComfyGraphNode> = {};
-    for (const n of scopeDetail.nodes) nodesById[n.id] = n;
+    for (const n of scopeDetail.nodes) {
+      nodesById[n.id] = n;
+    }
     return inferSourceOutNames(scopeDetail, nodesById, rawMetaById);
   }, [scopeDetail, rawMetaById]);
 

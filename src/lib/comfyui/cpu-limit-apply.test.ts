@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import { applyComfyCpuLimit } from "./cpu-limit-apply";
 
 /** 注入式执行器：记下调了什么，并按需伪造失败。 */
-function recorder(failFor: string[] = []) {
-  const calls: Array<{ command: string; args: string[] }> = [];
+function recorder(failFor: Array<string> = []) {
+  const calls: Array<{ args: Array<string>; command: string }> = [];
   return {
     calls,
-    exec: (command: string, args: string[]) => {
+    exec: (command: string, args: Array<string>) => {
       calls.push({ command, args });
       return Promise.resolve(
         failFor.includes(command)

@@ -7,18 +7,9 @@ import type { Node } from "@xyflow/react";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import { errorMessage } from "~/lib/error-message";
 import { afterNextPaint } from "~/lib/next-frame";
-import type {
-  WorkflowDetail,
-  WorkflowIOParam,
-} from "~/components/studio/workflow-types";
-import {
-  NODE_TITLE_H,
-  extractNoteTitle,
-} from "~/components/studio/workflow-utils";
-import {
-  MODE_KEY_PREFIX,
-  runtimeNodeId,
-} from "~/lib/workflow/workflow-param-mapping";
+import type { WorkflowDetail, WorkflowIOParam } from "~/components/studio/workflow-types";
+import { NODE_TITLE_H, extractNoteTitle } from "~/components/studio/workflow-utils";
+import { MODE_KEY_PREFIX, runtimeNodeId } from "~/lib/workflow/workflow-param-mapping";
 import { useToast } from "../../ToastProvider";
 import type { WorkflowSaver } from "./use-workflow-save";
 
@@ -33,22 +24,9 @@ const NODE_TITLE_ANCHOR: Record<string, number> = {
   wfSubgraph: NODE_TITLE_H,
 };
 
-export interface WorkflowPersistenceArgs {
-  workflowId: string;
+export type WorkflowPersistenceArgs = {
   detail: WorkflowDetail | null;
-  setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
-  setNodes: Dispatch<SetStateAction<Node[]>>;
-  paramMap: Record<string, unknown>;
-  workflowIO: Record<string, WorkflowIOParam>;
   fitToContent: () => void;
-  savePatch: WorkflowSaver;
-  onSave?: () => void;
-  onClose: () => void;
-  setSaving: Dispatch<SetStateAction<boolean>>;
-  setError: Dispatch<SetStateAction<string>>;
-  /** 重置布局后重新拉当前视图的数据：服务端已删掉本视图的坐标覆盖，
-   *  重新取到的就是工作流自带的原始布局。 */
-  reloadView?: () => void;
   /** 当前视图的宿主链路（顶层为空串，下钻一层是 `4`，再下钻是 `4:5`）。
    *  子图内部的节点 id 是**裸内部 id**（`1670`），而服务端 `positions` 列里
    *  同一批节点存的是**拼接键**（`4:1670`，见 `extractPositions` 里
@@ -57,7 +35,20 @@ export interface WorkflowPersistenceArgs {
    *  「原始坐标」把真实位置盖掉 —— 这正是「改过位置的节点重置后回不到原始
    *  布局、再改一次却回归到一个错误位置」的来源。 */
   hostNodeId?: string;
-}
+  onClose: () => void;
+  onSave?: () => void;
+  paramMap: Record<string, unknown>;
+  /** 重置布局后重新拉当前视图的数据：服务端已删掉本视图的坐标覆盖，
+   *  重新取到的就是工作流自带的原始布局。 */
+  reloadView?: () => void;
+  savePatch: WorkflowSaver;
+  setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
+  setError: Dispatch<SetStateAction<string>>;
+  setNodes: Dispatch<SetStateAction<Array<Node>>>;
+  setSaving: Dispatch<SetStateAction<boolean>>;
+  workflowId: string;
+  workflowIO: Record<string, WorkflowIOParam>;
+};
 
 /**
  * 工作流编辑器的布局快照 / 重置 / 保存 / 拖拽落盘逻辑。
@@ -93,10 +84,16 @@ export function useWorkflowPersistence({
       /* 导轨不属于任何数据节点：顶层视图的导轨是顶层布局的一部分，属于本层
        *  （返回 false = 一并清掉）；子图视图里的导轨属于外层画布，不能顺手
        *  抹掉（返回 true = 保留）。 */
-      if (key.startsWith("grp:bpin:")) return hostNodeId !== "";
-      if (!hostNodeId) return key.includes(":");
+      if (key.startsWith("grp:bpin:")) {
+        return hostNodeId !== "";
+      }
+      if (!hostNodeId) {
+        return key.includes(":");
+      }
       const prefix = `${hostNodeId}:`;
-      if (!key.startsWith(prefix)) return true;
+      if (!key.startsWith(prefix)) {
+        return true;
+      }
       const inner = key.slice(prefix.length);
       return inner.includes(":");
     },
@@ -105,7 +102,9 @@ export function useWorkflowPersistence({
   /* 把当前视图的节点位置恢复成工作流自带的原始布局（用户口语里的
    *  「重置位置」）。语义 = 清除本视图所有被改动过的坐标，见下方实现说明。 */
   const resetLayout = useCallback(() => {
-    if (!detail) return;
+    if (!detail) {
+      return;
+    }
     /* 「重置布局」= 清除本视图所有被改动过的位置，回到工作流自带的原始布局。
      *
      * 不能靠「把进入时的快照写回去」：客户端拿到的 `detail.positions` 是
@@ -119,12 +118,18 @@ export function useWorkflowPersistence({
      * 位置」一致。本地的旧坐标同样要剔除，否则在重新拉取落到之前，画布还是
      * 旧的覆盖值。 */
     setDetail((prev) => {
-      if (!prev) return prev;
+      if (!prev) {
+        return prev;
+      }
       const cur = prev.positions ?? null;
-      if (cur === null) return prev;
+      if (cur === null) {
+        return prev;
+      }
       const kept: Record<string, [number, number]> = {};
       for (const [key, pos] of Object.entries(cur)) {
-        if (isForeignViewKey(key)) kept[key] = pos;
+        if (isForeignViewKey(key)) {
+          kept[key] = pos;
+        }
       }
       return { ...prev, positions: Object.keys(kept).length > 0 ? kept : null };
     });
@@ -165,8 +170,7 @@ export function useWorkflowPersistence({
           ...node.data,
           assignedRole:
             Object.entries(paramMap).find(
-              ([key, value]) =>
-                value === node.data.nodeId && !key.startsWith(MODE_KEY_PREFIX),
+              ([key, value]) => value === node.data.nodeId && !key.startsWith(MODE_KEY_PREFIX),
             )?.[0] ?? null,
         },
       })),
@@ -203,16 +207,7 @@ export function useWorkflowPersistence({
     } finally {
       setSaving(false);
     }
-  }, [
-    workflowId,
-    paramMap,
-    workflowIO,
-    onSave,
-    savePatch,
-    setError,
-    setSaving,
-    toast,
-  ]);
+  }, [workflowId, paramMap, workflowIO, onSave, savePatch, setError, setSaving, toast]);
 
   /* 用户拖完节点后落盘它的位置。
    *  - 备注节点（`note:<id>`）→ 经 `notes` PATCH 字段写回
@@ -233,10 +228,7 @@ export function useWorkflowPersistence({
    *  锚点换算见下一段。 */
   const reportPositionSaveFailure = useCallback(
     (err: unknown) => {
-      console.error(
-        "[workflow-persistence] failed to persist node position",
-        err,
-      );
+      console.error("[workflow-persistence] failed to persist node position", err);
       /* 失败路径的文案统一走 `errorMessage`（`~/lib/async-action` 的口径）——
        * 收口前这里是自己拼的 `err instanceof Error ? err.message : "请重试"`，
        * 网络层原文没有经过 `errorMessage` 的翻译。 */
@@ -251,7 +243,9 @@ export function useWorkflowPersistence({
        *（例如用户在加载中关掉了编辑器）；那种情况下没地方
        * 写新位置。静默返回 —— 下次打开时画布会带着
        * 已落盘的状态重新挂载。 */
-      if (!detail) return;
+      if (!detail) {
+        return;
+      }
       const x = Math.round(node.position.x);
       /* 锚点反转：wfNode / wfSubgraph 卡片会在卡片体**上方**画一条
        *  30px 标题栏，所以 React Flow 的 `position.y` 是**卡片**（标题栏）顶点，
@@ -271,15 +265,9 @@ export function useWorkflowPersistence({
          *  `pos` 保持 ComfyUI 的卡片体顶点约定，因此落盘前
          *  **加上** NODE_TITLE_H。无标题备注无需反转，
          *  因为它们的 React Flow 盒子没有标题栏。 */
-        const noteMeta = (detail.notes ?? []).find(
-          (nn) => String(nn.id) === noteId,
-        );
-        const noteHasTitle = noteMeta
-          ? !!extractNoteTitle(noteMeta.text, noteMeta.title)
-          : false;
-        const noteY = Math.round(
-          node.position.y + (noteHasTitle ? NODE_TITLE_H : 0),
-        );
+        const noteMeta = (detail.notes ?? []).find((nn) => String(nn.id) === noteId);
+        const noteHasTitle = noteMeta ? !!extractNoteTitle(noteMeta.text, noteMeta.title) : false;
+        const noteY = Math.round(node.position.y + (noteHasTitle ? NODE_TITLE_H : 0));
         setDetail((prev) =>
           prev
             ? {
@@ -311,7 +299,7 @@ export function useWorkflowPersistence({
           prev
             ? {
                 ...prev,
-                positions: { ...(prev.positions ?? {}), [nodeId]: [x, y] },
+                positions: { ...prev.positions, [nodeId]: [x, y] },
               }
             : prev,
         );
@@ -328,14 +316,7 @@ export function useWorkflowPersistence({
         );
       }
     },
-    [
-      detail,
-      setDetail,
-      workflowId,
-      savePatch,
-      hostNodeId,
-      reportPositionSaveFailure,
-    ],
+    [detail, setDetail, workflowId, savePatch, hostNodeId, reportPositionSaveFailure],
   );
 
   return { resetLayout, handleSave, onNodeDragStop };

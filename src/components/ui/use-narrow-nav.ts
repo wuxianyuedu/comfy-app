@@ -1,12 +1,9 @@
 import { useSyncExternalStore } from "react";
 
-import {
-  NAV_AUTO_COLLAPSE_MAX_PX,
-  NAV_AUTO_COLLAPSE_QUERY,
-} from "~/lib/layout-budget";
+import { NAV_AUTO_COLLAPSE_MAX_PX, NAV_AUTO_COLLAPSE_QUERY } from "~/lib/layout-budget";
 
 /** 窄窗判据 + 「跨越过阈值的次数」。 */
-export type NarrowNavState = { narrow: boolean; crossings: number };
+export type NarrowNavState = { crossings: number; narrow: boolean };
 
 /* 已建立的订阅者。通知不发给自己，而是发给这张表 —— 于是「补一次通知」不再
    绑在某一次订阅的生命周期上（见下方 `scheduleInitialSync` 的说明）。 */
@@ -43,15 +40,21 @@ let initialSyncTimer: ReturnType<typeof setTimeout> | null = null;
  * 提交之后。
  */
 function scheduleInitialSync(): void {
-  if (initialSyncTimer !== null) return;
+  if (initialSyncTimer !== null) {
+    return;
+  }
   initialSyncTimer = setTimeout(() => {
     /* 惰性取值顺手把 `crossings` 推到正确档位，再通知订阅者重读。 */
     getSnapshot();
     const delivered = listeners.size > 0;
     /* 先清句柄再决定是否重排：重排走的是同一个入口。 */
     initialSyncTimer = null;
-    for (const listener of listeners) listener();
-    if (!delivered) scheduleInitialSync();
+    for (const listener of listeners) {
+      listener();
+    }
+    if (!delivered) {
+      scheduleInitialSync();
+    }
   }, 0);
 }
 
@@ -73,9 +76,7 @@ function subscribe(onChange: () => void): () => void {
 /* 判据用 `innerWidth` 而不是 `mql.matches`：两者同源，但前者与 `NAV_AUTO_COLLAPSE_MAX_PX`
    是同一个数，只有一处要维护。 */
 function isNarrowNow(): boolean {
-  return typeof window !== "undefined"
-    ? window.innerWidth <= NAV_AUTO_COLLAPSE_MAX_PX
-    : false;
+  return typeof window === "undefined" ? false : window.innerWidth <= NAV_AUTO_COLLAPSE_MAX_PX;
 }
 
 let snapshot: NarrowNavState = { narrow: isNarrowNow(), crossings: 0 };

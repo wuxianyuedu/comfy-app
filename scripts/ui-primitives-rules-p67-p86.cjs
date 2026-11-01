@@ -39,8 +39,9 @@ module.exports = {
       if (
         !/from ["']~\/components\/ui\/badge["']/.test(t2) &&
         /export function \w*(?:Badge|Chip|Tag)\s*\(/.test(t2)
-      )
+      ) {
         hits++;
+      }
 
       /* b. Progress 绕开：手写 `role="progressbar"` 却没用 shadcn Progress
        *    也没直接引 base-ui Progress。`ui/progress.tsx` 自身走的是
@@ -50,8 +51,9 @@ module.exports = {
         !/from ["']~\/components\/ui\/progress["']/.test(t2) &&
         !/from ["']@base-ui\/react\/progress["']/.test(t2) &&
         /role=["']progressbar["']/.test(t2)
-      )
+      ) {
         hits++;
+      }
 
       /* c. Slider 绕开：原生 `<input type="range">` 却不用 shadcn Slider。
        *    `ui/slider.tsx` 自身是 base-ui 复合控件，源码里不含字面
@@ -60,8 +62,9 @@ module.exports = {
         !/from ["']~\/components\/ui\/slider["']/.test(t2) &&
         !/from ["']@base-ui\/react\/slider["']/.test(t2) &&
         /type=["']range["']/.test(t2)
-      )
+      ) {
         hits++;
+      }
 
       /* d. Empty 绕开：`export function Empty*` 命名形态。`ui/empty.tsx` 已装
        *    （Empty / EmptyHeader / EmptyTitle / EmptyDescription / EmptyMedia /
@@ -72,8 +75,9 @@ module.exports = {
       if (
         !/from ["']~\/components\/ui\/empty["']/.test(t2) &&
         /export function Empty\w*\s*\(/.test(t2)
-      )
+      ) {
         hits++;
+      }
 
       /* e. Field 绕开：手拼 `<label htmlFor=` 与 `aria-describedby=` 的表单
        *    行 —— `ui/field.tsx` 已装（Field / FieldSet / FieldGroup / FieldContent /
@@ -93,8 +97,9 @@ module.exports = {
         !/from ["']~\/components\/ui\/field["']/.test(t2) &&
         /<label[\s\S]{0,60}?htmlFor=/.test(t2) &&
         /aria-describedby["']?\s*[:=]/.test(t2)
-      )
+      ) {
         hits++;
+      }
 
       return hits;
     },
@@ -124,16 +129,12 @@ module.exports = {
       "视图层手写 <input> 或 <textarea>（应使用 ~/components/ui/{input,textarea,number-field}）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      if (
-        /from ["']~\/components\/ui\/(?:input|textarea|number-field)["']/.test(
-          t2,
-        )
-      )
+      if (/from ["']~\/components\/ui\/(?:input|textarea|number-field)["']/.test(t2)) {
         return 0;
+      }
       const inputs =
-        t2.match(
-          /<input[\s\S]{0,80}type=["'](?:text|number|password|url|email|search|tel)["']/g,
-        ) || [];
+        t2.match(/<input[\s\S]{0,80}type=["'](?:text|number|password|url|email|search|tel)["']/g) ||
+        [];
       const textareas = t2.match(/<textarea[\s\n>]/g) || [];
       return inputs.length + textareas.length;
     },
@@ -151,11 +152,10 @@ module.exports = {
       "视图层手写 <input type=checkbox|radio>（应使用 ~/components/ui/{checkbox,radio-group}）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
-      if (/from ["']~\/components\/ui\/(?:checkbox|radio-group)["']/.test(t2))
+      if (/from ["']~\/components\/ui\/(?:checkbox|radio-group)["']/.test(t2)) {
         return 0;
-      return (
-        t2.match(/<input[\s\S]{0,80}type=["'](?:checkbox|radio)["']/g) || []
-      ).length;
+      }
+      return (t2.match(/<input[\s\S]{0,80}type=["'](?:checkbox|radio)["']/g) || []).length;
     },
   },
 
@@ -167,8 +167,7 @@ module.exports = {
    * 嵌套 flex 容器里会被父级的 `gap` 叠加出非预期间距。
    * 2026-09-24 一次治理把全库 107 处 `space-y-*` 清零，本条从此是硬闸。 */
   P70: {
-    label:
-      "视图层用 space-y-* / space-x-*（应使用 flex + gap-*，shadcn styling.md）",
+    label: "视图层用 space-y-* / space-x-*（应使用 flex + gap-*，shadcn styling.md）",
     count: (t) => {
       const t2 = stripCommentsCached(t);
       return (t2.match(/space-[xy]-\d/g) || []).length;
@@ -200,8 +199,7 @@ module.exports = {
    * bg/border、品牌紫 violet→primary、类型青 cyan）token 值非精确等值、
    * 需逐案视觉核对，按域分片降基线。 */
   P71: {
-    label:
-      "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
+    label: "视图层手写 dark:palette 色（应走语义 token，shadcn styling.md / §4.11.1）",
     count: (t) => {
       const t2 = stripCommentsCached(stripP71AllowBlocks(t));
       return (
@@ -238,17 +236,16 @@ module.exports = {
         let cursor = 0;
         while (true) {
           const start = t2.indexOf(open, cursor);
-          if (start < 0) break;
+          if (start === -1) {
+            break;
+          }
           const end = t2.indexOf(close, start);
-          if (end < 0) {
+          if (end === -1) {
             cursor = start + open.length;
             continue;
           }
           const block = t2.slice(start, end);
-          if (
-            !/aria-label\s*=|aria-labelledby\s*=/.test(block) &&
-            !nameRe.test(block)
-          ) {
+          if (!/aria-label\s*=|aria-labelledby\s*=/.test(block) && !nameRe.test(block)) {
             n++;
           }
           cursor = end + close.length;
@@ -280,11 +277,8 @@ module.exports = {
       /* 自闭合 div + className 含 border-{t|b|l|r}。用 `[^>]*?/>` 而非
        * `[^/>]*?/>` 是因为 className 值可能带 `/`（如 `w-1/2`），但 `>`
        * 是硬边界、不能跨。 */
-      return (
-        t2.match(
-          /<div\b[^>]*?className="[^"]*\bborder-[tblr]\b[^"]*"[^>]*?\/>/g,
-        ) || []
-      ).length;
+      return (t2.match(/<div\b[^>]*?className="[^"]*\bborder-[tblr]\b[^"]*"[^>]*?\/>/g) || [])
+        .length;
     },
   },
 
@@ -325,22 +319,38 @@ module.exports = {
       for (const open of t2.matchAll(openRe)) {
         const attrs = open[1];
         /* 排除自闭合（`/` 结尾 · 那是 P73 虚线的账）。 */
-        if (attrs.trimEnd().endsWith("/")) continue;
+        if (attrs.trimEnd().endsWith("/")) {
+          continue;
+        }
         const cm = attrs.match(/className=["']([^"']+)["']/);
-        if (!cm) continue;
+        if (!cm) {
+          continue;
+        }
         const cls = cm[1];
-        if (!/\bborder-dashed\b/.test(cls)) continue;
-        if (!/\brounded-(?:xl|2xl|3xl)\b/.test(cls)) continue;
-        if (/\bcursor-pointer\b/.test(cls)) continue;
+        if (!/\bborder-dashed\b/.test(cls)) {
+          continue;
+        }
+        if (!/\brounded-(?:xl|2xl|3xl)\b/.test(cls)) {
+          continue;
+        }
+        if (/\bcursor-pointer\b/.test(cls)) {
+          continue;
+        }
         /* 找匹配的 </div> · 简化：从 open.index 起、扫第一个 </div> ·
          * 不递归嵌套（视图里"空态卡"极少嵌套同层 div · 简化足够）。 */
         const after = t2.slice(open.index + open[0].length);
         const close = after.indexOf("</div>");
-        if (close < 0) continue;
+        if (close === -1) {
+          continue;
+        }
         const inner = after.slice(0, close);
-        if (/\bonClick=/.test(inner)) continue;
+        if (/\bonClick=/.test(inner)) {
+          continue;
+        }
         /* 装饰性空 div（padding 或 min-h 撑位）不算。 */
-        if (inner.trim().length < 5) continue;
+        if (inner.trim().length < 5) {
+          continue;
+        }
         n++;
       }
       return n;
@@ -521,23 +531,25 @@ module.exports = {
       const clsRe = /className\s*=\s*(?:"([^"]*)"|'([^']*)'|`\([^`]*`\s*)/g;
       for (const m of t2.matchAll(clsRe)) {
         const cls = m[1] ?? m[2] ?? "";
-        if (!cls) continue;
+        if (!cls) {
+          continue;
+        }
         const ws = new Set();
         const hs = new Set();
         /* 前面必须是**行首 / 空白 / 引号**（`(^|[^-\w])` + 捕获后续），
          * 否则会把 `min-h-0` / `max-w-md` 这类带前缀的容器写法误当
          * 成 `h-0` / `w-md`（JS 正则 `\b` 在 `-h-` 处也算边界）。 */
-        for (const x of cls.matchAll(
-          /(?:^|[^-\w])w-(\d+(?:\.\d+)?)(?=\s|$)/g,
-        )) {
+        for (const x of cls.matchAll(/(?:^|[^-\w])w-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
           ws.add(x[1]);
         }
-        for (const x of cls.matchAll(
-          /(?:^|[^-\w])h-(\d+(?:\.\d+)?)(?=\s|$)/g,
-        )) {
+        for (const x of cls.matchAll(/(?:^|[^-\w])h-(\d+(?:\.\d+)?)(?=\s|$)/g)) {
           hs.add(x[1]);
         }
-        for (const w of ws) if (hs.has(w)) n++;
+        for (const w of ws) {
+          if (hs.has(w)) {
+            n++;
+          }
+        }
       }
       return n;
     },
@@ -591,17 +603,17 @@ module.exports = {
           const attrs = tg[3];
           const selfClose = tg[4] === "/";
           if (closing) {
-            if (depth > 0) depth--;
+            if (depth > 0) {
+              depth--;
+            }
             continue;
           }
-          if (
-            depth === 0 &&
-            isP81IconName(name) &&
-            !/\bdata-icon\s*=/.test(attrs)
-          ) {
+          if (depth === 0 && isP81IconName(name) && !/\bdata-icon\s*=/.test(attrs)) {
             n++;
           }
-          if (!selfClose) depth++;
+          if (!selfClose) {
+            depth++;
+          }
         }
       }
       return n;
@@ -694,16 +706,19 @@ module.exports = {
       const re = /<h1(?=[\s/>])/g;
       while (re.exec(t2) !== null) {
         const attrs = readJsxAttrsPastTag(t2, re.lastIndex);
-        if (attrs === null) continue;
+        if (attrs === null) {
+          continue;
+        }
         /* `sr-only` = 只给读屏的跳转锚点，不占视觉空间、不冒充可见标题 ——
          * 不是「屏级标题不走档」，而是根本不该有档。 */
-        if (/\bsr-only\b/.test(attrs)) continue;
+        if (/\bsr-only\b/.test(attrs)) {
+          continue;
+        }
         const hasTier = /\bu-title-page\b/.test(attrs);
-        const hardSize =
-          /\btext-(?:xs|sm|base|md|lg|xl|2xl|3xl|4xl|5xl)\b|\btext-\[/.test(
-            attrs,
-          );
-        if (!hasTier || hardSize) n++;
+        const hardSize = /\btext-(?:xs|sm|base|md|lg|xl|2xl|3xl|4xl|5xl)\b|\btext-\[/.test(attrs);
+        if (!hasTier || hardSize) {
+          n++;
+        }
       }
       return n;
     },
@@ -732,7 +747,9 @@ module.exports = {
        *    属性段放开到 `[^>]*`，但**要求不以 `/` 结尾**（避开自闭合
        *    `<span … />` 这种不承载文本的形态）。 */
       const sepRe = /<span\b[^>]*>\s*\/\s*<\/span>/g;
-      if (!sepRe.test(t2)) return 0;
+      if (!sepRe.test(t2)) {
+        return 0;
+      }
       /* ② 段数组的 map：回调里有末尾判定。三种常见写法都算。 */
       const tailRe =
         /\bisLast\b|\bi\s*===\s*[^\n]*\.length\s*-\s*1\b|\bindex\s*===\s*[^\n]*\.length\s*-\s*1\b/;
@@ -741,7 +758,9 @@ module.exports = {
       while ((m = mapRe.exec(t2)) !== null) {
         /* 看 map 回调这一小段（到下一个 `)` 或 200 字符，够判末尾判定了）。 */
         const window = t2.slice(m.index, m.index + 400);
-        if (tailRe.test(window)) return 1;
+        if (tailRe.test(window)) {
+          return 1;
+        }
       }
       return 0;
     },
@@ -815,59 +834,16 @@ module.exports = {
       const lines = t2.split("\n");
       let n = 0;
       for (let i = 0; i < lines.length; i++) {
-        if (!/\bu-title-page\b/.test(lines[i])) continue;
+        if (!/\bu-title-page\b/.test(lines[i])) {
+          continue;
+        }
         /* 那枚标题行起、往后 8 行内（含自身）出现副说明档即算 ——
          * `mt-1` 与 `text-sm` 同处一枚 class 串，但两枚 token 的先后
          * 不固定（`mt-1 text-sm` / `text-sm mt-1` 都见过），所以分开判。 */
         const window = lines.slice(i, i + 9).join("\n");
-        if (/\bmt-1\b/.test(window) && /\btext-sm\b/.test(window)) n++;
-      }
-      return n;
-    },
-  },
-
-  /* ── P87「整块容器自己带背景模糊」（硬闸，ISSUE #2031 · 规范 03 §3.13）───────
-   * 扁平档说的是「纯色、无阴影、无模糊、无渐变发光」。阴影有真实的分层语义
-   * （浮层真的浮在内容之上），所以只禁**按钮上的装饰发光**；**模糊**不一样，
-   * 它只在「下面有活的、会动的东西」时才看得出来 —— 一条贴边的降透明条
-   * （顶栏 / 页脚 / 只占一条的状态栏）与一张卡片是两件事：
-   *
-   *   · **贴边条**（有两条对边贴齐容器）就坐在滚动的画布上，模糊在那里是
-   *     「内容从底下流过」的唯一可读线索 —— 留；与它成对的 `bg-*` 85-95 档
-   *     也一并留（模糊 + 半透是一件事的两半，只留半边等于把可读性交给运气）。
-   *   · **整块容器**（卡片 / 弹窗 / 浮层 / 提示条）下面是一层带色遮罩或静止
-   *     页面：模糊 0 像素效果，代价是把自身与背后的每一份内容拖进一个
-   *     backdrop-filter 图层。这一档禁止。
-   *
-   * 判据按**行**取锚（不是整文件、也不是整串 class）：只要某一行里
-   * `backdrop-blur*` 与**贴边定位**（`inset-x-0|inset-y-0|inset-0|fixed` 这类
-   * 铺满一段的声明，或 `top-0|bottom-0|left-0|right-0` 里出现两个相对的）
-   * 同现，就判定为贴边条、放行；其余一律算整块容器。
-   *
-   * 为什么锚「贴边」而不是白名单文件：白名单会随新增屏漂移（同 P86 的教训），
-   * 而「这一条是不是贴着容器边」是**从形状读得出来的**。
-   *
-   * ⚠️ 判定范围是**视图层**（默认作用域）。`ui/` 走 `UI_ALSO_SCANNED` 一起扫：
-   * 基元自己带模糊是更贵的一处 —— 它下面所有调用点会一起绕开这条规范。 */
-  P87: {
-    label:
-      "整块容器自带 backdrop-blur（卡片/弹窗/浮层下面没有活的内容，模糊 0 像素效果却整树多一个图层；贴边条不在此账）",
-    count: (t) => {
-      const t2 = stripCommentsCached(t);
-      let n = 0;
-      for (const line of t2.split("\n")) {
-        if (!/backdrop-blur/.test(line)) continue;
-        /* 贴边条：模糊要盖住的是一段会流动的内容，形态上必然「两条对边贴齐」。
-         * 写法集合按实测取：整段铺满（inset-x-0 / inset-y-0 / inset-0 / fixed）、
-         * 或两条对边各自归零（top-0+bottom-0 / left-0+right-0）。 */
-        const spansBoth =
-          /\b(?:inset-[xy]-0|inset-0|fixed)\b/.test(line) ||
-          (/\b(?:top|bottom)-0\b/.test(line) &&
-            /\b(?:top|bottom)-0\b/.test(
-              line.replace(/^.*?(top-0|bottom-0)/, ""),
-            )) ||
-          (/\bleft-0\b/.test(line) && /\bright-0\b/.test(line));
-        if (!spansBoth) n++;
+        if (/\bmt-1\b/.test(window) && /\btext-sm\b/.test(window)) {
+          n++;
+        }
       }
       return n;
     },

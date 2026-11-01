@@ -28,12 +28,12 @@ const DATA = { name: "demo-workflow", source: { nodes: [], last_node_id: 3 } };
 
 /** 弹窗里所有「关闭」控件：自绘 ✕（`aria-label="关闭"`，说明文字走 `<Hint>`）
  *  + `ui/dialog` 内置那枚。 */
-function closeControls(): HTMLElement[] {
-  return Array.from(
-    document.querySelectorAll<HTMLElement>(
+function closeControls(): Array<HTMLElement> {
+  return [
+    ...document.querySelectorAll<HTMLElement>(
       '[data-slot="dialog-close"], button[aria-label="关闭"]',
     ),
-  );
+  ];
 }
 
 function dialogSlot(): HTMLElement | null {
@@ -43,7 +43,9 @@ function dialogSlot(): HTMLElement | null {
 /** 复刻调用处的受控用法：父层持开关，关闭后弹窗由父层卸载。 */
 function Harness() {
   const [open, setOpen] = useState(true);
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
   return <SourceModal data={DATA} onClose={() => setOpen(false)} />;
 }
 

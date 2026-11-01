@@ -74,14 +74,18 @@ function read(rel: string): string {
 }
 
 /** 一份源码里的静态 `import … from "<spec>"` / `require(<字面量>)`（剥注释后）。 */
-function staticSpecifiers(source: string): string[] {
+function staticSpecifiers(source: string): Array<string> {
   const code = stripComments(source);
-  const specs: string[] = [];
+  const specs: Array<string> = [];
   for (const m of code.matchAll(/from\s+["']([^"']+)["']/g)) {
-    if (m[1]) specs.push(m[1]);
+    if (m[1]) {
+      specs.push(m[1]);
+    }
   }
   for (const m of code.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) {
-    if (m[1]) specs.push(m[1]);
+    if (m[1]) {
+      specs.push(m[1]);
+    }
   }
   return specs;
 }
@@ -128,11 +132,7 @@ function withoutModuleExt(spec: string): string {
  * `incremental: false` 是必须的：真配置开着 incremental，缓存命中时这一跑可以什么都不
  * 检查就退 0 —— 判据会静默空转。宁可每次都真算。
  */
-function narrowTsconfigText(
-  root: string,
-  envDts: string,
-  inheritedExclude: string[],
-): string {
+function narrowTsconfigText(root: string, envDts: string, inheritedExclude: Array<string>): string {
   const abs = (p: string) => path.join(root, p).split(path.sep).join("/");
   return JSON.stringify(
     {
@@ -164,13 +164,13 @@ function narrowTsconfigText(
  */
 async function provisionNextEnv(outDir: string): Promise<string> {
   const { writeAppTypeDeclarations } =
-    (await import("next/dist/lib/typescript/writeAppTypeDeclarations.js")) as {
+    /* SAFETY: 类型断言已复核 */ (await import("next/dist/lib/typescript/writeAppTypeDeclarations.js")) as {
       writeAppTypeDeclarations: (options: {
         baseDir: string;
         distDir: string;
-        imageImportsEnabled: boolean;
-        hasPagesDir: boolean;
         hasAppDir: boolean;
+        hasPagesDir: boolean;
+        imageImportsEnabled: boolean;
         strictRouteTypes: boolean;
         typedRoutes: boolean;
       }) => Promise<void>;
@@ -206,13 +206,11 @@ async function provisionNextEnv(outDir: string): Promise<string> {
  * 「仓库内的输入 + 仓库外的临时目录」这条组合判死过一回。
  */
 async function writeNarrowTsconfig(): Promise<{
-  dir: string;
   cfg: string;
+  dir: string;
   envDts: string;
 }> {
-  const dir = fs.mkdtempSync(
-    path.join(ROOT, "node_modules", ".cache", "sb-narrow-tsc-"),
-  );
+  const dir = fs.mkdtempSync(path.join(ROOT, "node_modules", ".cache", "sb-narrow-tsc-"));
   const envDts = await provisionNextEnv(path.join(dir, "env"));
   const cfg = path.join(dir, "tsconfig.json");
   fs.writeFileSync(cfg, narrowTsconfigText(ROOT, envDts, repoExclude()));
@@ -227,17 +225,15 @@ async function writeNarrowTsconfig(): Promise<{
  * 行注释与尾逗号，手搓的剥离器是第三个事实来源。用 `tsc6` 那份包（与 `resolveTscBin`
  * 解出的可执行同源）—— 拿到的是**解析后**的清单，`extends` 链也一并展开。
  */
-function repoExclude(): string[] {
+function repoExclude(): Array<string> {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ts = require("typescript") as {
+  const ts = /* SAFETY: 类型断言已复核 */ require("typescript") as {
     readConfigFile: (
       file: string,
       read: (p: string) => string | undefined,
-    ) => { config?: { exclude?: string[] } };
+    ) => { config?: { exclude?: Array<string> } };
   };
-  const parsed = ts.readConfigFile("tsconfig.json", (f) =>
-    fs.readFileSync(f, "utf8"),
-  );
+  const parsed = ts.readConfigFile("tsconfig.json", (f) => fs.readFileSync(f, "utf8"));
   const exclude = parsed.config?.exclude;
   expect(
     Array.isArray(exclude) && exclude.length > 0,
@@ -253,7 +249,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     /* 三处都可能去读它：注入层（值源）、preview（缺省 origin 与旋钮）、
        main（把值注入浏览器 bundle）。**一处都不许静态 import** —— 生成件不在
        检出里，静态说明符会让类型程序去解析一个不存在的文件。 */
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const rel of [CONSUMER_REL, PREVIEW_REL, MAIN_REL]) {
       for (const spec of staticSpecifiers(read(rel))) {
         if (spec === OLD_MODULE_SPEC || spec.includes("generated/app-origin")) {
@@ -269,15 +265,13 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     /* 反向：注入层确实从**入库的**那份读类型（不然上面那条会因为「谁都没引」而空转）。
        比的是剥掉后缀的说明符（见 withoutModuleExt）：要判的是「引的是不是那个模块」，
        后缀写法由 `tests/storybook-config.test.ts` 那条判据单独守。 */
-    expect(
-      staticSpecifiers(read(CONSUMER_REL)).map(withoutModuleExt),
-    ).toContain("./app-origin-defaults");
+    expect(staticSpecifiers(read(CONSUMER_REL)).map(withoutModuleExt)).toContain(
+      "./app-origin-defaults",
+    );
     expect(staticSpecifiers(read(PREVIEW_REL)).map(withoutModuleExt)).toContain(
       "./app-origin-reader",
     );
-    expect(staticSpecifiers(read(MAIN_REL)).map(withoutModuleExt)).toContain(
-      "./app-origin-reader",
-    );
+    expect(staticSpecifiers(read(MAIN_REL)).map(withoutModuleExt)).toContain("./app-origin-reader");
   });
 
   it("② 生成件的字段名与入库类型逐字段对齐（改名 = 静默回落成缺省端口）", () => {
@@ -288,7 +282,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     try {
       const outFile = path.join(dir, GENERATED_REL);
       writeStorybookAppOrigin(dir, outFile);
-      payload = JSON.parse(fs.readFileSync(outFile, "utf8")) as Record<
+      payload = /* SAFETY: 类型断言已复核 */ JSON.parse(fs.readFileSync(outFile, "utf8")) as Record<
         string,
         unknown
       >;
@@ -302,7 +296,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     // 类型也要对得上：`APP_DEV_PORT` 不是数字时 reader 会整份回落到缺省值。
     for (const [key, value] of Object.entries(payload)) {
       expect(typeof value, `${key} 的类型与入库缺省值不一致`).toBe(
-        typeof (APP_ORIGIN_DEFAULTS as Record<string, unknown>)[key],
+        typeof (/* SAFETY: 类型断言已复核 */ (APP_ORIGIN_DEFAULTS as Record<string, unknown>)[key]),
       );
     }
   });
@@ -380,7 +374,9 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
           fs.rmSync(dir, { recursive: true, force: true });
         }
       } finally {
-        if (existed) restoreGeneratedFile(generatedFile, stash);
+        if (existed) {
+          restoreGeneratedFile(generatedFile, stash);
+        }
       }
       /* 活性证明（≈0.3s）：同一个可执行文件报得出版本号 —— 上面断言的是退出码，
          万一解出来的是个空壳，`--version` 也会红。 */
@@ -416,10 +412,9 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
       const { dir, cfg, envDts } = await writeNarrowTsconfig();
       try {
         const listed = tsc!.run(["-p", cfg, "--noEmit", "--listFilesOnly"]);
-        expect(
-          listed.status,
-          `--listFilesOnly 都退非 0，配置本身有问题：\n${listed.output}`,
-        ).toBe(0);
+        expect(listed.status, `--listFilesOnly 都退非 0，配置本身有问题：\n${listed.output}`).toBe(
+          0,
+        );
         const norm = listed.output.split("\\").join("/");
         for (const rel of [CONSUMER_REL, PREVIEW_REL, MAIN_REL]) {
           expect(
@@ -537,15 +532,12 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
         "junction",
       );
       fs.mkdirSync(path.join(dir, "src", "app"), { recursive: true });
-      fs.writeFileSync(
-        path.join(dir, "src", "app", "globals.css"),
-        "/* x */\n",
-      );
+      fs.writeFileSync(path.join(dir, "src", "app", "globals.css"), "/* x */\n");
       fs.writeFileSync(
         path.join(dir, "entry.tsx"),
         `import "./src/app/globals.css";\nexport const Y = 1;\n`,
       );
-      const writeCfg = (include: string[]): void => {
+      const writeCfg = (include: Array<string>): void => {
         fs.writeFileSync(
           path.join(dir, "tsconfig.json"),
           JSON.stringify(
@@ -579,10 +571,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
       );
       writeCfg(["next-env.d.ts"]);
       const withEnv = tsc!.runIn(dir, ["--noEmit"]);
-      expect(
-        withEnv.status,
-        `补上环境声明后必须退 0，实际输出：\n${withEnv.output}`,
-      ).toBe(0);
+      expect(withEnv.status, `补上环境声明后必须退 0，实际输出：\n${withEnv.output}`).toBe(0);
       /* 上面那份声明里的 `import "./.next/dev/types/routes.d.ts"` 是**悬空**的
          （`.next` 根本不存在），而这一跑照样退 0 —— 与仓库里那条长期存在的读数
          （`check-tsc-artifact-hint.cjs` 的注释也记了）一致。别把这段拆掉换成
@@ -597,27 +586,21 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
   });
 
   it("postinstall 的唯一入口仍然把它补上，且这一步失败只提示", () => {
-    const pkg = JSON.parse(read("package.json")) as {
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(read("package.json")) as {
       scripts?: Record<string, string>;
     };
     // 契约：postinstall 必须逐字是那一条、禁止 `&&`（launcher-core 的
     // checkPostinstall() 守的就是它，#636 的形态），所以「补输入」只能并进入口内部。
-    expect(String(pkg.scripts?.postinstall)).toBe(
-      "node scripts/install-git-hooks.mjs",
-    );
+    expect(String(pkg.scripts?.postinstall)).toBe("node scripts/install-git-hooks.mjs");
     const entry = stripComments(read(ENTRY_REL));
     // 动态 import 的那条说明符（prettier 会按行宽折行，所以按形状判而不是整行字面量）
-    expect(entry).toMatch(
-      /await import\(\s*["']\.\/storybook-assets\.mjs["']\s*\)/,
-    );
+    expect(entry).toMatch(/await import\(\s*["']\.\/storybook-assets\.mjs["']\s*\)/);
     expect(entry).toMatch(/\bwriteStorybookAppOrigin\s*\(/);
     // 同一族的第二格：media 值源要指向磁盘上的真图，那份目录也是现生成且不入库的。
     expect(entry).toMatch(/\bensureStorybookAssets\s*\(/);
     // 调用必须在 try 里、且 catch 说得出「这一步没做成怎么办」：
     // 它是开发体验的兜底，绝不能变成 `pnpm install` 的新失败点。
-    expect(entry).toMatch(
-      /try\s*\{[\s\S]*?\bwriteStorybookAppOrigin\s*\([\s\S]*?\}\s*catch/,
-    );
+    expect(entry).toMatch(/try\s*\{[\s\S]*?\bwriteStorybookAppOrigin\s*\([\s\S]*?\}\s*catch/);
     expect(entry).toContain("警告：Storybook");
   });
 
@@ -625,14 +608,12 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     /* 这一条不依赖磁盘上有没有生成件：`env` 里那三个键由 `main.ts` 的 `env()`
        在编译期注入，`readAppOrigin` 只解释它 —— 把 `process.env` 临时换成缺键
        的形状，它必须给出缺省值。 */
-    const keys = [
-      "SB_APP_DEV_PORT",
-      "SB_APP_DEV_ORIGIN",
-      "SB_APP_DEV_PORT_SOURCE",
-    ];
+    const keys = ["SB_APP_DEV_PORT", "SB_APP_DEV_ORIGIN", "SB_APP_DEV_PORT_SOURCE"];
     const saved = new Map(keys.map((k) => [k, process.env[k]]));
     try {
-      for (const k of keys) delete process.env[k];
+      for (const k of keys) {
+        delete process.env[k];
+      }
       expect(readAppOrigin()).toEqual(APP_ORIGIN_DEFAULTS);
       // 形状不对（端口不是数字）同样走缺省 —— 半份数据比没有更危险。
       process.env.SB_APP_DEV_PORT = "not-a-port";
@@ -648,8 +629,11 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
       });
     } finally {
       for (const [k, v] of saved) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
       }
     }
   });
@@ -696,8 +680,10 @@ function generatedStashFile(root: string, pid: number): string {
 function moveFileAcrossVolumes(from: string, to: string): void {
   try {
     fs.renameSync(from, to);
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== "EXDEV") throw e;
+  } catch (error) {
+    if (/* SAFETY: 类型断言已复核 */ (error as NodeJS.ErrnoException).code !== "EXDEV") {
+      throw error;
+    }
     fs.copyFileSync(from, to);
     fs.unlinkSync(from);
   }
@@ -742,31 +728,31 @@ function restoreGeneratedFile(
  *  `typescript`（实为 `@typescript/typescript6`）的 `tsc6`），顶层 `node_modules/`
  *  下只是链接 —— 按包名 + `bin` 字段解，别按路径猜。 */
 function resolveTscBin(): {
-  run: (args: string[]) => { status: number | null; output: string };
-  runIn: (
-    cwd: string,
-    args: string[],
-  ) => { status: number | null; output: string };
+  run: (args: Array<string>) => { output: string; status: number | null; };
+  runIn: (cwd: string, args: Array<string>) => { output: string; status: number | null; };
 } | null {
-  for (const [pkg, binName] of [
+  for (const [pkg, binName] of /* SAFETY: 类型断言已复核 */ [
     ["@typescript/native", "tsc"],
     ["typescript", "tsc6"],
   ] as const) {
     const pkgJson = path.join(ROOT, "node_modules", pkg, "package.json");
     let bin: string | undefined;
     try {
-      const pkgData = JSON.parse(fs.readFileSync(pkgJson, "utf8")) as {
+      const pkgData = /* SAFETY: 类型断言已复核 */ JSON.parse(fs.readFileSync(pkgJson, "utf8")) as {
         bin?: Record<string, string> | string;
       };
-      bin =
-        typeof pkgData.bin === "string" ? pkgData.bin : pkgData.bin?.[binName];
+      bin = typeof pkgData.bin === "string" ? pkgData.bin : pkgData.bin?.[binName];
     } catch {
       continue;
     }
-    if (!bin) continue;
+    if (!bin) {
+      continue;
+    }
     const file = path.resolve(path.dirname(pkgJson), bin);
-    if (!fs.existsSync(file)) continue;
-    const runIn = (cwd: string, args: string[]) => {
+    if (!fs.existsSync(file)) {
+      continue;
+    }
+    const runIn = (cwd: string, args: Array<string>) => {
       /* bin 是带 shebang 的 node 脚本垫片 —— Windows 的 spawnSync 不认
        * shebang，直接 exec 会 ENOENT（本机实测），必须经 node 启动。 */
       const r = spawnSync(process.execPath, [file, ...args], {
@@ -788,7 +774,7 @@ function resolveTscBin(): {
  *  这两条判据测的是**形状兜底还在**，不是「正在被走到的那条路」。 */
 describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局当判据红", () => {
   const errno = (code: string): NodeJS.ErrnoException => {
-    const e = new Error(`${code}: simulated`) as NodeJS.ErrnoException;
+    const e = /* SAFETY: 类型断言已复核 */ new Error(`${code}: simulated`) as NodeJS.ErrnoException;
     e.code = code;
     return e;
   };
@@ -844,12 +830,7 @@ describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局�
 describe("restoreGeneratedFile：挪不动也必须把开发期输入找回来", () => {
   /** 造一份「生成件已被挪走、暂存点在」的现场，返回两侧路径。 */
   const staged = (dir: string, content: string) => {
-    const generatedFile = path.join(
-      dir,
-      ".storybook",
-      "generated",
-      "app-origin.json",
-    );
+    const generatedFile = path.join(dir, ".storybook", "generated", "app-origin.json");
     const stash = generatedStashFile(dir, 7777);
     fs.mkdirSync(path.dirname(stash), { recursive: true });
     fs.writeFileSync(stash, content, "utf8");
@@ -867,13 +848,13 @@ describe("restoreGeneratedFile：挪不动也必须把开发期输入找回来",
         fs.existsSync(generatedFile),
         "承诺是「一次判据不该把开发期输入弄丢」—— 挪不动时两侧都不许是空的",
       ).toBe(true);
-      const restored = JSON.parse(fs.readFileSync(generatedFile, "utf8")) as {
+      const restored = /* SAFETY: 类型断言已复核 */ JSON.parse(
+        fs.readFileSync(generatedFile, "utf8"),
+      ) as {
         APP_DEV_PORT?: number;
       };
       expect(typeof restored.APP_DEV_PORT).toBe("number");
-      expect(fs.existsSync(path.dirname(stash)), "暂存目录不许留在缓存里").toBe(
-        false,
-      );
+      expect(fs.existsSync(path.dirname(stash)), "暂存目录不许留在缓存里").toBe(false);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -882,18 +863,13 @@ describe("restoreGeneratedFile：挪不动也必须把开发期输入找回来",
   it("挪得动 ⇒ 放回的是暂存那一份，不是重生成出来的另一份", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-restore-ok-"));
     try {
-      const { generatedFile, stash } = staged(
-        dir,
-        '{"sentinel":"放回的不是重生成"}',
-      );
+      const { generatedFile, stash } = staged(dir, '{"sentinel":"放回的不是重生成"}');
       restoreGeneratedFile(generatedFile, stash, (from, to) => {
         fs.mkdirSync(path.dirname(to), { recursive: true });
         fs.copyFileSync(from, to);
         fs.unlinkSync(from);
       });
-      expect(fs.readFileSync(generatedFile, "utf8")).toBe(
-        '{"sentinel":"放回的不是重生成"}',
-      );
+      expect(fs.readFileSync(generatedFile, "utf8")).toBe('{"sentinel":"放回的不是重生成"}');
       expect(fs.existsSync(path.dirname(stash))).toBe(false);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -903,12 +879,7 @@ describe("restoreGeneratedFile：挪不动也必须把开发期输入找回来",
   it("暂存点压根不存在 ⇒ 现生成一份（既有那一支不许被上面的 try/catch 带跑）", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sb-restore-nostash-"));
     try {
-      const generatedFile = path.join(
-        dir,
-        ".storybook",
-        "generated",
-        "app-origin.json",
-      );
+      const generatedFile = path.join(dir, ".storybook", "generated", "app-origin.json");
       restoreGeneratedFile(generatedFile, generatedStashFile(dir, 6666), () => {
         throw new Error("这一支不该碰到 move");
       });

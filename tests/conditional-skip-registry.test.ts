@@ -32,16 +32,16 @@ import { stripComments } from "./helpers/strip-comments";
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 档位：缺工具 / 平台分叉 / 缺构建产物 / 人工挂起。 */
-const TIERS = ["env", "platform", "artifact", "manual"] as const;
+const TIERS = /* SAFETY: 类型断言已复核 */ ["env", "platform", "artifact", "manual"] as const;
 type Tier = (typeof TIERS)[number];
 
 type Registration = {
+  /** 该文件内这个守卫的站点数（别名按调用点计）。 */
+  count: number;
   /** 仓库相对路径。 */
   file: string;
   /** `skipIf` 括号里的守卫文本（已去空白）；无条件 skip 记 `"skip"`。 */
   guard: string;
-  /** 该文件内这个守卫的站点数（别名按调用点计）。 */
-  count: number;
   tier: Tier;
   why: string;
 };
@@ -52,7 +52,7 @@ type Registration = {
  * `artifact` 那两条最需要盯：它们不是「这台机器没装东西」，而是「没构建就整块不判」，
  * 报覆盖率与报「全绿」时都得把它单独说一句。
  */
-const REGISTERED: Registration[] = [
+const REGISTERED: Array<Registration> = [
   {
     file: "tests/log-common-invoke.test.ts",
     guard: "!hasPs",
@@ -142,7 +142,6 @@ const REGISTERED: Registration[] = [
     count: 1,
     tier: "platform",
     why: "经 needsPosixExec 别名：「没有执行位 ⇒ missing」那条要写一个 `#!/bin/sh` 的假命令再 `chmod` 出执行位，而 Windows 上 libuv 不解析 shebang、`chmodSync` 也不存执行位（ISSUE #1959 换到自托管 Windows 节点时当场照出来的）。同一组里的 `present-but-nonzero` 那条原先用同一份夹具，现已改用两个平台都真能起的 `process.execPath`，**不再 skip** —— 计数从 2 降到 1 就是这件事的读数",
-
   },
   {
     file: "tests/standalone-runtime-completeness.test.ts",
@@ -185,17 +184,21 @@ const REGISTERED: Registration[] = [
  */
 const DIRECT_SITE_RE = /^\s*\w+\.skip(?:If\(([^)]*)\))?\(/;
 /** 别名定义：`const needsPosixExec = it.skipIf(<guard>);` */
-const ALIAS_DEF_RE =
-  /^\s*const\s+(\w+)\s*=\s*(?:it|test)\.skipIf\(([^)]*)\)\s*;?\s*$/;
+const ALIAS_DEF_RE = /^\s*const\s+(\w+)\s*=\s*(?:it|test)\.skipIf\(([^)]*)\)\s*;?\s*$/;
 
 /** 测试文件的扫描面（`tests/**` 与 `src/**` 下的 `*.test.ts(x)`）。 */
-function testFiles(dir: string, found: string[] = []): string[] {
+function testFiles(dir: string, found: Array<string> = []): Array<string> {
   const abs = path.join(ROOT, dir);
-  if (!existsSync(abs)) return found;
+  if (!existsSync(abs)) {
+    return found;
+  }
   for (const entry of readdirSync(abs, { withFileTypes: true })) {
     const rel = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) testFiles(rel, found);
-    else if (/\.test\.tsx?$/.test(entry.name)) found.push(rel);
+    if (entry.isDirectory()) {
+      testFiles(rel, found);
+    } else if (/\.test\.tsx?$/.test(entry.name)) {
+      found.push(rel);
+    }
   }
   return found;
 }
@@ -259,31 +262,33 @@ describe("条件性 skip 的登记表（§11.7 的「绿有两种含义」）", 
   const measured = measuredSites();
 
   it("每个站点都已登记，且数量一致", () => {
-    const problems: string[] = [];
+    const problems: Array<string> = [];
     const registry = new Map(REGISTERED.map((r) => [keyOf(r), r]));
     for (const [key, count] of measured) {
       const hit = registry.get(key);
-      if (!hit) problems.push(`未登记的 skip 站点：${key}（${count} 处）`);
-      else if (hit.count !== count)
-        problems.push(
-          `登记数量与实测不符：${key} 记 ${hit.count} 实测 ${count}`,
-        );
+      if (!hit) {
+        problems.push(`未登记的 skip 站点：${key}（${count} 处）`);
+      } else if (hit.count !== count) {
+        problems.push(`登记数量与实测不符：${key} 记 ${hit.count} 实测 ${count}`);
+      }
     }
     expect(problems).toEqual([]);
   });
 
   it("登记项都不许是失效的旧账（站点已消失或守卫改名）", () => {
-    const stale = REGISTERED.filter((r) => !measured.has(keyOf(r))).map((r) =>
-      keyOf(r),
-    );
+    const stale = REGISTERED.filter((r) => !measured.has(keyOf(r))).map((r) => keyOf(r));
     expect(stale).toEqual([]);
   });
 
   it("每条登记都要有档位与非空理由", () => {
-    const bad: string[] = [];
+    const bad: Array<string> = [];
     for (const r of REGISTERED) {
-      if (!TIERS.includes(r.tier)) bad.push(`${keyOf(r)} 档位非法：${r.tier}`);
-      if (r.why.trim().length < 8) bad.push(`${keyOf(r)} 理由太短或缺失`);
+      if (!TIERS.includes(r.tier)) {
+        bad.push(`${keyOf(r)} 档位非法：${r.tier}`);
+      }
+      if (r.why.trim().length < 8) {
+        bad.push(`${keyOf(r)} 理由太短或缺失`);
+      }
     }
     expect(bad).toEqual([]);
   });
@@ -299,27 +304,23 @@ describe("条件性 skip 的登记表（§11.7 的「绿有两种含义」）", 
 
   it("判据不是空转：三种站点形状都要被扫出来", () => {
     // ① 直接条件 skip
-    expect([
-      ...skipSitesIn("tests/cross-platform-launcher.test.ts").keys(),
-    ]).toContain('process.platform !== "win32"');
+    expect([...skipSitesIn("tests/cross-platform-launcher.test.ts").keys()]).toContain(
+      'process.platform !== "win32"',
+    );
     // ② 别名定义 + 调用点（定义行不算站点）
     const aliased = skipSitesIn("tests/dev-launcher-toolchain-gate.test.ts");
     expect(aliased.get('process.platform === "win32"')).toBeGreaterThan(1);
     // ③ 写在断言里的同形字符串**不能**被算成站点
-    const artifactFile = skipSitesIn(
-      "tests/turbopack-tracing-excludes.test.ts",
-    );
+    const artifactFile = skipSitesIn("tests/turbopack-tracing-excludes.test.ts");
     expect(artifactFile.get("!standaloneExists")).toBe(1);
     /* ③′ **派生 test 对象**上的 skip 站点也要被扫到。
      * `tests/helpers/platform-fixtures.ts` 给出的 `platformTest` 来自
      * `test.extend`，调用点写成 `platformTest.skipIf(...)`。标识符写成白名单
      * （只认 it/test/describe）时这一格会**整个漏出扫描面** —— 表现不是「这里红」，
      * 而是「一条静默不跑的用例没人登记」，比红更糟。这条是那个放宽的执行者。 */
-    expect(
-      skipSitesIn("src/lib/process/kill-process-tree.windows.test.ts").get(
-        "ON_WINDOWS",
-      ),
-    ).toBe(2);
+    expect(skipSitesIn("src/lib/process/kill-process-tree.windows.test.ts").get("ON_WINDOWS")).toBe(
+      2,
+    );
     // ④ 扫描面本身不许是空的（掏空了前三条判据一起恒绿）
     expect(measured.size).toBeGreaterThanOrEqual(REGISTERED.length);
     expect(TIERS).toHaveLength(4);

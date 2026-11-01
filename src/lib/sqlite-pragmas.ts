@@ -68,7 +68,7 @@ import { runWithSqliteBusyRetry } from "~/lib/sqlite-busy-retry";
 export const SQLITE_BUSY_TIMEOUT_MS = 250;
 
 /** Database-level PRAGMA list. Order is meaning: WAL first, then integrity. */
-export const SQLITE_PRAGMAS: readonly string[] = [
+export const SQLITE_PRAGMAS: ReadonlyArray<string> = [
   "PRAGMA journal_mode = WAL",
   "PRAGMA foreign_keys = ON",
 ];
@@ -78,9 +78,9 @@ export const SQLITE_PRAGMAS: readonly string[] = [
  *  只声明用到的那一个方法，调用方传 `@libsql/client` 的 `Client`（它有更多方法）
  *  或本测试里的假对象都成立 —— 这样本模块不必依赖驱动类型，`scripts/*.mjs` 那侧
  *  的可测性也不受影响。 */
-export interface SqlitePragmaTarget {
+export type SqlitePragmaTarget = {
   execute(sql: string): Promise<unknown>;
-}
+};
 
 /**
  * 把那份清单应用到一条连接上，**撞锁按预算重试**。
@@ -109,7 +109,7 @@ export interface SqlitePragmaTarget {
  */
 export async function applySqlitePragmas(
   target: SqlitePragmaTarget,
-  pragmas: readonly string[] = SQLITE_PRAGMAS,
+  pragmas: ReadonlyArray<string> = SQLITE_PRAGMAS,
 ): Promise<void> {
   for (const pragma of pragmas) {
     /* The loop body moved into `~/lib/sqlite-busy-retry` (ISSUE #2586) — the same

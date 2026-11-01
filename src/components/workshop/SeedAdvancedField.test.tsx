@@ -8,13 +8,13 @@ afterEach(cleanup);
 
 describe("SeedAdvancedField", () => {
   it("渲染「高级」触发器", () => {
-    render(<SeedAdvancedField value="" onChange={() => 0} />);
+    render(<SeedAdvancedField onChange={() => 0} value="" />);
     expect(screen.getByText("高级")).toBeTruthy();
   });
 
   it("展开后：输入回抛值、点「随机」回抛空串（回到自动随机）", () => {
     const onChange = vi.fn();
-    render(<SeedAdvancedField value="123" onChange={onChange} />);
+    render(<SeedAdvancedField onChange={onChange} value="123" />);
     fireEvent.click(screen.getByText("高级"));
     const input = screen.getByPlaceholderText("留空＝每次随机");
     fireEvent.change(input, { target: { value: "456" } });

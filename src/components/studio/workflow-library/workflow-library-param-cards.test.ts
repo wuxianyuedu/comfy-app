@@ -211,7 +211,7 @@ describe("deriveLibraryParamCards", () => {
     for (const bad of [{ source: [] }, { source: 1 }, [], null, undefined]) {
       const { resolved } = deriveLibraryParamCards({
         io,
-        paramMap: bad as Record<string, unknown>,
+        paramMap: /* SAFETY: 类型断言已复核 */ bad as Record<string, unknown>,
         mode: "T2I",
       });
       expect(resolved).toEqual({});

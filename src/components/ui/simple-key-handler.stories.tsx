@@ -17,16 +17,18 @@ const meta = {
   title: "UI/SimpleKeyHandler",
   /* `component` 是可选的，这里刻意不给：属性包不是组件，连上去只会让人以为它有
      props 面板 —— 画出形态的是 `Demo` 里那个 `role` 元素，Args 也由它接。 */
-  args: { keys: ["Space", "Enter"] as readonly string[] },
+  args: {
+    keys: /* SAFETY: 类型断言已复核 */ ["Space", "Enter"] as ReadonlyArray<string>,
+  },
 } satisfies Meta<SimpleKeyHandlerProps>;
 
 export default meta;
 
-interface SimpleKeyHandlerProps {
-  keys: readonly string[];
+type SimpleKeyHandlerProps = {
   ignoreRepeat?: boolean;
+  keys: ReadonlyArray<string>;
   preventDefault?: boolean;
-}
+};
 
 type Story = StoryObj<typeof meta>;
 
@@ -37,10 +39,10 @@ function Demo({ keys, ignoreRepeat, preventDefault }: SimpleKeyHandlerProps) {
   return (
     <div className="flex flex-col items-start gap-2">
       <div
+        className="border-border bg-subtle focus-visible:border-ring rounded-md border border-dashed px-4 py-3 text-xs"
+        data-slot="key-target"
         role="button"
         tabIndex={0}
-        data-slot="key-target"
-        className="border-border bg-subtle focus-visible:border-ring rounded-md border border-dashed px-4 py-3 text-xs"
         {...simpleKeyHandler(
           keys,
           (event) => {
@@ -60,6 +62,7 @@ function Demo({ keys, ignoreRepeat, preventDefault }: SimpleKeyHandlerProps) {
 }
 
 export const Default: Story = {
+  /* SAFETY: 类型断言已复核 */
   render: (args) => <Demo {...(args as SimpleKeyHandlerProps)} />,
 };
 

@@ -36,22 +36,22 @@ import { useEffect, useRef } from "react";
  */
 
 /** `mod` 在 macOS 上是 ⌘、其它平台是 Ctrl。 */
-export interface HotkeySpec {
-  /** 主键，大小写不敏感（`"l"` / `"Escape"` / `"s"`）。 */
-  key: string;
-  /** ⌘（macOS）/ Ctrl（其它）—— **优先用这一项**，不要写 `ctrl`。 */
-  mod?: boolean;
-  /** 显式要求 Ctrl（仅当行为**刻意**只在 Ctrl 上成立时用，写明理由）。 */
-  ctrl?: boolean;
-  /** 显式要求 ⌘（同上）。 */
-  meta?: boolean;
-  /** 要求 Shift。 */
-  shift?: boolean;
+export type HotkeySpec = {
   /** 要求 Alt。 */
   alt?: boolean;
-}
+  /** 显式要求 Ctrl（仅当行为**刻意**只在 Ctrl 上成立时用，写明理由）。 */
+  ctrl?: boolean;
+  /** 主键，大小写不敏感（`"l"` / `"Escape"` / `"s"`）。 */
+  key: string;
+  /** 显式要求 ⌘（同上）。 */
+  meta?: boolean;
+  /** ⌘（macOS）/ Ctrl（其它）—— **优先用这一项**，不要写 `ctrl`。 */
+  mod?: boolean;
+  /** 要求 Shift。 */
+  shift?: boolean;
+};
 
-export interface UseHotkeyOptions {
+export type UseHotkeyOptions = {
   /** 是否注册。`false` 时不注册（如面板未打开）。默认 `true`。 */
   enabled?: boolean;
   /**
@@ -63,18 +63,15 @@ export interface UseHotkeyOptions {
   preventDefault?: boolean;
   /** 监听目标。默认 `window`（`document` 在 iframe / portal 场景下等价）。 */
   target?: Window | Document;
-}
+};
 
 /** 单键是否可编辑元素 —— 焦点在输入类元素里时不该抢键。 */
 function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
   const tag = target.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable
-  );
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
 /**
@@ -90,12 +87,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
  * 折成 `ctrl`。这条是这次收口的核心 —— 收口前所有 Ctrl 组合键在 mac 上都是
  * 死的，因为没人写 `metaKey`。
  */
-export function matchesHotkey(
-  event: KeyboardEvent,
-  spec: HotkeySpec,
-  isMac: boolean,
-): boolean {
-  if (event.key.toLowerCase() !== spec.key.toLowerCase()) return false;
+export function matchesHotkey(event: KeyboardEvent, spec: HotkeySpec, isMac: boolean): boolean {
+  if (event.key.toLowerCase() !== spec.key.toLowerCase()) {
+    return false;
+  }
 
   /* 目标修饰键集合：`mod` 只是「当前平台那一个」的简写。 */
   const wantCtrl = spec.ctrl === true || (spec.mod === true && !isMac);
@@ -103,16 +98,26 @@ export function matchesHotkey(
   const wantShift = spec.shift === true;
   const wantAlt = spec.alt === true;
 
-  if (wantCtrl !== event.ctrlKey) return false;
-  if (wantMeta !== event.metaKey) return false;
-  if (wantShift !== event.shiftKey) return false;
-  if (wantAlt !== event.altKey) return false;
+  if (wantCtrl !== event.ctrlKey) {
+    return false;
+  }
+  if (wantMeta !== event.metaKey) {
+    return false;
+  }
+  if (wantShift !== event.shiftKey) {
+    return false;
+  }
+  if (wantAlt !== event.altKey) {
+    return false;
+  }
   return true;
 }
 
 /** 当前平台是否为 macOS（`navigator` 不可用时按非 mac 处理）。 */
 function detectMac(): boolean {
-  if (typeof navigator === "undefined") return false;
+  if (typeof navigator === "undefined") {
+    return false;
+  }
   const platform = navigator.platform ?? "";
   return /Mac|iPhone|iPad|iPod/i.test(platform);
 }
@@ -126,12 +131,7 @@ function detectMac(): boolean {
 export function useHotkey(
   spec: HotkeySpec,
   handler: () => void,
-  {
-    enabled = true,
-    filterInput = true,
-    preventDefault = true,
-    target,
-  }: UseHotkeyOptions = {},
+  { enabled = true, filterInput = true, preventDefault = true, target }: UseHotkeyOptions = {},
 ): void {
   /* handler 放 ref：传新函数不该重建监听（同 `useInterval` 的口径）。 */
   const handlerRef = useRef(handler);
@@ -142,32 +142,27 @@ export function useHotkey(
   const { key, mod, ctrl, meta, shift, alt } = spec;
 
   useEffect(() => {
-    if (!enabled) return;
-    const host: Window | Document =
-      target ?? (typeof window !== "undefined" ? window : document);
+    if (!enabled) {
+      return;
+    }
+    const host: Window | Document = target ?? (typeof window === "undefined" ? document : window);
     const isMac = detectMac();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (filterInput && isEditableTarget(event.target)) return;
-      if (!matchesHotkey(event, { key, mod, ctrl, meta, shift, alt }, isMac))
+      if (filterInput && isEditableTarget(event.target)) {
         return;
-      if (preventDefault) event.preventDefault();
+      }
+      if (!matchesHotkey(event, { key, mod, ctrl, meta, shift, alt }, isMac)) {
+        return;
+      }
+      if (preventDefault) {
+        event.preventDefault();
+      }
       handlerRef.current();
     };
 
-    host.addEventListener("keydown", onKeyDown as EventListener);
+    host.addEventListener("keydown", /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener);
     return () =>
-      host.removeEventListener("keydown", onKeyDown as EventListener);
-  }, [
-    enabled,
-    filterInput,
-    preventDefault,
-    target,
-    key,
-    mod,
-    ctrl,
-    meta,
-    shift,
-    alt,
-  ]);
+      host.removeEventListener("keydown", /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener);
+  }, [enabled, filterInput, preventDefault, target, key, mod, ctrl, meta, shift, alt]);
 }

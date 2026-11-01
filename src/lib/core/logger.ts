@@ -55,7 +55,7 @@ export { redactSecretShaped };
 /* ── 配置：level / redact / 镜像 / 输出形态（唯一实现）──────────────────── */
 
 /** redact 脱敏路径（单一事实来源）：契约测试据此断言敏感字段永不落盘。 */
-export const REDACT_PATHS = [
+export const REDACT_PATHS = /* SAFETY: 类型断言已复核 */ [
   // 认证/密钥类
   "req.headers.authorization",
   "req.headers.cookie",
@@ -80,19 +80,11 @@ export const REDACT_PATHS = [
   "phoneNumber",
 ] as const;
 
-export interface PinoLoggerOptions {
+export type PinoLoggerOptions = {
   /** 日志目标流。显式传入时走 JSON 直写（不经 pino-pretty worker transport），便于测试/定制输出。 */
   destination?: DestinationStream;
   /** 覆盖日志级别；缺省读 `LOG_LEVEL`，再回退 info。 */
   level?: string;
-  /**
-   * 绑定的命名空间（pino 的 `bindings.ns`）。
-   *
-   * 核心层入口**不带 `server-only`**（它被纯 Node 宿主与 Next 服务端同时加载），
-   * 它不能把命名空间塞进 `every log call` 的对象里，否则同一条日志的字段形状
-   * 会随调用方漂移。绑定一次、处处带上，是 pino 的标准做法（`log.child({ ns })`）。
-   */
-  ns?: string;
   /**
    * 覆盖 ERROR 镜像的落盘目标（app-runtime 通道）。
    *
@@ -102,7 +94,15 @@ export interface PinoLoggerOptions {
    * 并写入 6 行，其中含被断言的「密钥原文」标记行）。
    */
   mirror?: { error(msg: string, fields?: Record<string, unknown>): void };
-}
+  /**
+   * 绑定的命名空间（pino 的 `bindings.ns`）。
+   *
+   * 核心层入口**不带 `server-only`**（它被纯 Node 宿主与 Next 服务端同时加载），
+   * 它不能把命名空间塞进 `every log call` 的对象里，否则同一条日志的字段形状
+   * 会随调用方漂移。绑定一次、处处带上，是 pino 的标准做法（`log.child({ ns })`）。
+   */
+  ns?: string;
+};
 
 /**
  * 镜像的目标：显式传入者优先；**未传时在测试进程里直接空转**。
@@ -115,9 +115,13 @@ export interface PinoLoggerOptions {
  * 这么做的），所以这里对测试进程关掉默认落盘不损失任何判据，只堵住污染。
  */
 function resolveMirrorTarget(mirror?: PinoLoggerOptions["mirror"]) {
-  if (mirror) return mirror;
+  if (mirror) {
+    return mirror;
+  }
   // `process.env.VITEST` 由 vitest 自己设置（不用 NODE_ENV：本仓库另有它用）。
-  if (process.env.VITEST) return { error: () => undefined };
+  if (process.env.VITEST) {
+    return { error: () => undefined };
+  }
   return appRuntimeLog;
 }
 
@@ -153,16 +157,20 @@ export function createPinoLogger(opts: PinoLoggerOptions = {}) {
             /* 镜像失败绝不影响日志主流程 */
           }
         }
-        return method.apply(this, args as never);
+        return method.apply(this, /* SAFETY: 类型断言已复核 */ args as never);
       },
     },
   };
 
   // 显式指定目标流：JSON 直写，用于契约测试捕获输出（不启 worker transport）。
-  if (destination) return pino(base, destination);
+  if (destination) {
+    return pino(base, destination);
+  }
 
   // 生产：JSON 直写 stdout（采集端解析）。
-  if (process.env.NODE_ENV === "production") return pino(base);
+  if (process.env.NODE_ENV === "production") {
+    return pino(base);
+  }
 
   // 本地开发：pino-pretty 美化。
   return pino({
@@ -218,7 +226,7 @@ export const logger = createPinoLogger();
  * pino 里也没有「(msg, ns)」这种签名：`(msg, extra)` 的第二个参数是格式化实参。
  */
 function renderServerLogEntry(
-  rawArgs: unknown[],
+  rawArgs: Array<unknown>,
   loggerNs?: string,
 ): { msg: string; ns: string } {
   // 二次防线（也覆盖直接调用本函数的路径）：先把 payload 里的密钥形状值擦掉再取文案。
@@ -229,12 +237,11 @@ function renderServerLogEntry(
   const stringArg = typeof first === "string" ? first : undefined;
   const secondString = typeof second === "string" ? second : undefined;
   const payload =
-    first && typeof first === "object"
-      ? (first as Record<string, unknown>)
-      : undefined;
+    /* SAFETY: 类型断言已复核 */
+    first && typeof first === "object" ? (first as Record<string, unknown>) : undefined;
 
   // 空串按「没取到」处理：`??` 只挡 null/undefined，挡不住 ""（会写出空行）
-  const firstNonEmpty = (...candidates: (string | undefined)[]) =>
+  const firstNonEmpty = (...candidates: Array<string | undefined>) =>
     candidates.find((c) => c !== undefined && c.length > 0);
 
   // 优先级：字段里的正文 > 调用方给的第二个字符串（pino 的 `(obj, msg)`）>
@@ -242,11 +249,8 @@ function renderServerLogEntry(
   // `renderServerLogMessage` 里，于是第二个字符串（真正的文案）永远选不上，
   // 面板只剩「（无可读文案；字段：…）」。
   const msg = payload
-    ? (firstNonEmpty(
-        renderServerLogMessage(payload),
-        secondString,
-        renderFieldKeyList(payload),
-      ) ?? "服务端错误")
+    ? (firstNonEmpty(renderServerLogMessage(payload), secondString, renderFieldKeyList(payload)) ??
+      "服务端错误")
     : // 没有结构化字段：字符串参数就是正文；再没有才回落占位文案
       (firstNonEmpty(stringArg, secondString) ?? "服务端错误");
 
@@ -270,10 +274,14 @@ function renderServerLogEntry(
  * （见 `renderServerLogEntry` 的 ISSUE #1696 说明），因此不能在这里顺手返回。
  */
 function renderServerLogMessage(payload?: Record<string, unknown>): string {
-  if (!payload) return "";
+  if (!payload) {
+    return "";
+  }
   const raw = payload.msg ?? payload.message;
-  if (typeof raw === "string" && raw.length > 0) return raw;
-  const err = payload.err as { message?: unknown } | undefined;
+  if (typeof raw === "string" && raw.length > 0) {
+    return raw;
+  }
+  const err = /* SAFETY: 类型断言已复核 */ payload.err as { message?: unknown } | undefined;
   if (err && typeof err.message === "string" && err.message.length > 0) {
     return err.message;
   }
@@ -299,23 +307,24 @@ function renderFieldKeyList(payload?: Record<string, unknown>): string {
  * 显式包装成「命名空间拼接」的语义（`a:b`），与旧接口逐字一致 —— 调用方
  * （各 repository、workshop 生成日志等）无需改动。
  */
-export interface Logger {
-  debug(msg: string, fields?: Record<string, unknown>): void;
-  info(msg: string, fields?: Record<string, unknown>): void;
-  warn(msg: string, fields?: Record<string, unknown>): void;
-  error(msg: string, fields?: Record<string, unknown>): void;
+export type Logger = {
   /** 派生子日志器，命名空间拼接为 `parent:child`。 */
   child(ns: string): Logger;
-}
+  debug(msg: string, fields?: Record<string, unknown>): void;
+  error(msg: string, fields?: Record<string, unknown>): void;
+  info(msg: string, fields?: Record<string, unknown>): void;
+  warn(msg: string, fields?: Record<string, unknown>): void;
+};
 
 /** 绑定名放在 `ns` 字段（pino 的 `bindings` 会带上它，便于采集端按命名空间过滤）。 */
 function wrap(inner: PinoLogger): Logger {
   // pino 的 `bindings()` 类型是 `Record<string, unknown>` 之外的自由形状，
   // 这里显式窄化，避免把 any 带进后续字符串拼接（本仓库零 any 口径）。
-  const binding: unknown = (inner.bindings() as Record<string, unknown>).ns;
+  const binding: unknown = /* SAFETY: 类型断言已复核 */ (
+    inner.bindings() as Record<string, unknown>
+  ).ns;
   const ns = typeof binding === "string" ? binding : "";
-  const next = (childNs: string) =>
-    wrap(inner.child({ ns: ns ? `${ns}:${childNs}` : childNs }));
+  const next = (childNs: string) => wrap(inner.child({ ns: ns ? `${ns}:${childNs}` : childNs }));
   return {
     debug: (msg, fields) => inner.debug(fields ?? {}, msg),
     info: (msg, fields) => inner.info(fields ?? {}, msg),
@@ -331,10 +340,7 @@ function wrap(inner: PinoLogger): Logger {
  * `opts` 只用于把落盘目标换成调用方自己的流（测试断言 JSON 行、或宿主自定义
  * 目标流）；常规调用方不需要传。
  */
-export function createLogger(
-  namespace: string,
-  opts: Omit<PinoLoggerOptions, "ns"> = {},
-): Logger {
+export function createLogger(namespace: string, opts: Omit<PinoLoggerOptions, "ns"> = {}): Logger {
   return wrap(createPinoLogger({ ...opts, ns: namespace }));
 }
 

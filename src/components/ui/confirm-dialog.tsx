@@ -47,29 +47,29 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Spinner } from "~/components/ui/spinner";
 import { onNextFrame } from "~/lib/next-frame";
 
-export interface ConfirmDialogProps {
-  open: boolean;
-  onClose: () => void;
-  /** Short headline. */
-  title: string;
-  /** 可选的描述文字（支持换行）。 */
-  description?: React.ReactNode;
-  /** 确认按钮文字。 */
-  confirmLabel?: string;
+export type ConfirmDialogProps = {
   /** 取消按钮文字。 */
   cancelLabel?: string;
+  /** 确认按钮文字。 */
+  confirmLabel?: string;
   /** 切换破坏性红色按钮变体。 */
   danger?: boolean;
-  /** 为 true 时确认按钮禁用。异步操作很有用。 */
-  pending?: boolean;
-  /** 用户确认时触发。 */
-  onConfirm: () => void;
+  /** 可选的描述文字（支持换行）。 */
+  description?: React.ReactNode;
   /**
    * 可选小图标，显示在标题旁。默认取与 `danger` 变体
    * 匹配的字符；传节点可覆盖。
    */
   icon?: React.ReactNode;
-}
+  onClose: () => void;
+  /** 用户确认时触发。 */
+  onConfirm: () => void;
+  open: boolean;
+  /** 为 true 时确认按钮禁用。异步操作很有用。 */
+  pending?: boolean;
+  /** Short headline. */
+  title: string;
+};
 
 const ICON_WARN = <TriangleAlert size={22} strokeWidth={1.8} />;
 
@@ -109,10 +109,9 @@ export function ConfirmDialog({
   const iconColor = danger ? "text-destructive" : "text-primary-strong";
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open={open}>
       <DialogContent
         aria-labelledby={titleId}
-        showCloseButton={false}
         /* 卡片外观由本组件的内部 div 决定（与库里其它自绘弹窗同一惯例）：
            popup 基元自带 `fixed top-1/2 left-1/2` 居中定位，**不能**把
            `overlayClass("modal", …)`（那是给遮罩层的「铺满内容区」定位）传给
@@ -120,8 +119,9 @@ export function ConfirmDialog({
            成整块内容区又被 −50% 平移，实体卡缩到左上角视口之外，用户看到的
            就是一块空黑框（「数据库过期 → 点击同步」的确认弹窗实测如此）。 */
         className="bg-transparent p-0 ring-0"
-        popupClassName="w-fit"
         data-testid="modal-dialog"
+        popupClassName="w-fit"
+        showCloseButton={false}
       >
         <div
           className={`bg-panel/95 relative w-full max-w-105 overflow-hidden rounded-2xl border p-6 ring-1 ${ringClass}`}
@@ -145,10 +145,7 @@ export function ConfirmDialog({
               {accentIcon}
             </div>
             <div className="min-w-0 flex-1">
-              <h2
-                id={titleId}
-                className="text-ink text-[15px] leading-tight font-semibold"
-              >
+              <h2 className="text-ink text-[15px] leading-tight font-semibold" id={titleId}>
                 {title}
               </h2>
               {description && (
@@ -163,21 +160,21 @@ export function ConfirmDialog({
             {/* 取消 / 确认走 `ui/button` 的语义变体（规范 16 §16.2.4.2 第 6 条）：
                 配色交给 variant，调用处只留「这排按钮的尺寸与排布」。 */}
             <Button
-              variant="secondary"
-              size="lg"
-              onClick={onClose}
-              disabled={pending}
               className="focus-visible:ring-foreground/20 text-ink-strong bg-subtle hover:bg-surface-2 px-4 text-sm font-medium"
+              disabled={pending}
+              onClick={onClose}
+              size="lg"
+              variant="secondary"
             >
               {cancelLabel}
             </Button>
             <Button
-              ref={confirmRef}
-              variant={danger ? "danger-solid" : "primary-solid"}
-              size="lg"
-              onClick={onConfirm}
-              disabled={pending}
               className="gap-1.5 px-4 text-sm font-semibold"
+              disabled={pending}
+              onClick={onConfirm}
+              ref={confirmRef}
+              size="lg"
+              variant={danger ? "danger-solid" : "primary-solid"}
             >
               {/* 内联加载态用 `Spinner`（§16.2.4.2 第 7 条）：它是行内尺寸、
                   继承 `currentColor`，不会把按钮撑高。 */}

@@ -2,11 +2,7 @@
 import { useId, useRef, useState } from "react";
 import { textHandler } from "~/lib/form-props";
 import { Check, ChevronDown, Search, X } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Button } from "~/components/ui/button";
 import { enterCommit } from "~/components/ui/use-enter-commit";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
@@ -26,16 +22,16 @@ import type { OptionGroup } from "~/lib/workshop/character-options";
  * 定位与关闭语义本就不该由每个调用点各写一遍。翻上/翻下、右边界收边、随触发
  * 元素滚动重定位全部交给 base-ui Positioner。
  */
-interface AttributeMultiSelectProps {
-  label: string;
-  groups: OptionGroup[];
-  /** 当前已选中值（源即 Character 对应字段） */
-  value: string[];
-  onChange: (value: string[]) => void;
-  placeholder?: string;
-  disabled?: boolean;
+type AttributeMultiSelectProps = {
   className?: string;
-}
+  disabled?: boolean;
+  groups: Array<OptionGroup>;
+  label: string;
+  onChange: (value: Array<string>) => void;
+  placeholder?: string;
+  /** 当前已选中值（源即 Character 对应字段） */
+  value: Array<string>;
+};
 
 export function AttributeMultiSelect({
   label,
@@ -56,11 +52,18 @@ export function AttributeMultiSelect({
 
   function toggle(opt: string) {
     const next = new Set(selected);
-    if (next.has(opt)) next.delete(opt);
-    else next.add(opt);
+    if (next.has(opt)) {
+      next.delete(opt);
+    } else {
+      next.add(opt);
+    }
     // 保持 value 原顺序（含自定义项），新选中项追加在末尾
     const ordered = value.filter((v) => next.has(v));
-    for (const v of next) if (!ordered.includes(v)) ordered.push(v);
+    for (const v of next) {
+      if (!ordered.includes(v)) {
+        ordered.push(v);
+      }
+    }
     onChange(ordered);
   }
 
@@ -70,8 +73,12 @@ export function AttributeMultiSelect({
 
   function addCustom() {
     const t = custom.trim();
-    if (!t) return;
-    if (!selected.has(t)) onChange([...value, t]);
+    if (!t) {
+      return;
+    }
+    if (!selected.has(t)) {
+      onChange([...value, t]);
+    }
     setCustom("");
     // 选中后保持展开，便于连续添加
   }
@@ -90,46 +97,43 @@ export function AttributeMultiSelect({
       <div className="border-border bg-bg flex flex-wrap items-center gap-1.5 rounded-md border px-1.5 py-1.5">
         {value.map((v) => (
           <span
-            key={v}
             className="bg-primary-soft text-primary flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+            key={v}
           >
             {v}
             <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => removeOne(v)}
-              className="text-primary/60 hover:text-danger-strong"
               aria-label={`移除 ${v}`}
+              className="text-primary/60 hover:text-danger-strong"
+              onClick={() => removeOne(v)}
+              size="icon-xs"
+              variant="ghost"
             >
               <X data-icon="inline-start" size={11} />
             </Button>
           </span>
         ))}
         <Popover
-          open={open}
           onOpenChange={(next) => {
             setOpen(next);
-            if (next) setKeyword("");
+            if (next) {
+              setKeyword("");
+            }
           }}
+          open={open}
         >
           <PopoverTrigger
-            ref={triggerRef}
-            type="button"
-            role="combobox"
-            id={panelId}
-            disabled={disabled}
             className="border-border text-muted-foreground hover:border-primary hover:text-primary ml-1 inline-flex h-auto items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-xs transition-colors disabled:opacity-40"
+            disabled={disabled}
+            id={panelId}
+            ref={triggerRef}
+            role="combobox"
+            type="button"
           >
             + 选择
-            <ChevronDown
-              size={11}
-              className={`transition-transform ${open ? "rotate-180" : ""}`}
-            />
+            <ChevronDown className={`transition-transform ${open ? "rotate-180" : ""}`} size={11} />
           </PopoverTrigger>
           {value.length === 0 && (
-            <span className="text-muted-foreground/60 text-2xs px-1">
-              {placeholder}
-            </span>
+            <span className="text-muted-foreground/60 text-2xs px-1">{placeholder}</span>
           )}
 
           {/* 下拉面板 */}
@@ -140,20 +144,20 @@ export function AttributeMultiSelect({
           >
             {/* 搜索 */}
             <div className="border-border flex items-center gap-1.5 border-b px-2 py-1.5">
-              <Search size={13} className="text-muted-foreground shrink-0" />
+              <Search className="text-muted-foreground shrink-0" size={13} />
               <input
-                value={keyword}
-                onChange={textHandler(setKeyword)}
                 className="placeholder:text-muted-foreground/50 min-w-0 flex-1 bg-transparent text-xs outline-none"
+                onChange={textHandler(setKeyword)}
                 placeholder="搜索…"
+                value={keyword}
               />
             </div>
 
             {/* 选项（分组） · role="option" 要求 listbox 父级 · 允许多选 */}
             <div
-              role="listbox"
               aria-multiselectable="true"
               className="max-h-56 overflow-y-auto px-1 py-1"
+              role="listbox"
             >
               {visibleGroups.length === 0 ? (
                 <p className="text-muted-foreground text-2xs px-2 py-2">
@@ -161,7 +165,7 @@ export function AttributeMultiSelect({
                 </p>
               ) : (
                 visibleGroups.map((g) => (
-                  <div key={g.title} className="mb-1">
+                  <div className="mb-1" key={g.title}>
                     <p className="text-muted-foreground/70 text-3xs px-2 py-0.5 font-medium tracking-wide uppercase">
                       {g.title}
                     </p>
@@ -170,9 +174,10 @@ export function AttributeMultiSelect({
                       return (
                         /* eslint-disable-next-line jsx-a11y/click-events-have-key-events -- 同上：选项行的键出口是 `simpleKeyHandler` 的展开（`tabIndex` 本轮已补）。 */
                         <div
-                          key={opt}
-                          role="option"
                           aria-selected={on}
+                          key={opt}
+                          onClick={() => toggle(opt)}
+                          role="option"
                           /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`，
                            * 连 `tabIndex` 都没有 —— 键盘用户完全进不来。
                            * `role="option"` 承诺「Space / Enter 可选中」，键判据
@@ -181,27 +186,20 @@ export function AttributeMultiSelect({
                            * 字面量找 `onKeyDown` 找不到，豁免登记在
                            * `scripts/.a11y-rule-ledger.json`）。 */
                           tabIndex={0}
-                          onClick={() => toggle(opt)}
                           /* 选项行是 `role="checkbox"` 的可点整行（不是 `<button>`：
                            * 这一行里还有「点 label 选、点默认星切默认」两个动作，合成
                            * 一个 button 会把后者的键语义一起吞掉）。`tabIndex={0}` 让
                            * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给
                            *（§16.2.4.57 的唯一出口：ARIA 的 `checkbox` 承诺「Space 可
                            * 切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」）。 */
-                          {...simpleKeyHandler(["Space", "Enter"], () =>
-                            toggle(opt),
-                          )}
+                          {...simpleKeyHandler(["Space", "Enter"], () => toggle(opt))}
                           className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs transition-colors ${
-                            on
-                              ? "bg-primary-soft text-primary"
-                              : "text-ink/80 hover:bg-subtle"
+                            on ? "bg-primary-soft text-primary" : "text-ink/80 hover:bg-subtle"
                           }`}
                         >
                           <span
                             className={`grid size-3.5 shrink-0 place-items-center rounded border ${
-                              on
-                                ? "border-primary bg-primary text-white"
-                                : "border-border bg-bg"
+                              on ? "border-primary bg-primary text-white" : "border-border bg-bg"
                             }`}
                           >
                             {on && <Check size={10} />}
@@ -218,17 +216,17 @@ export function AttributeMultiSelect({
             {/* 自定义添加 */}
             <div className="border-border flex items-center gap-1.5 border-t px-2 py-1.5">
               <input
-                value={custom}
                 onChange={textHandler(setCustom)}
+                value={custom}
                 {...enterCommit({ onCommit: addCustom })}
                 className="border-border bg-bg focus:border-primary min-w-0 flex-1 rounded border px-1.5 py-0.5 text-xs outline-none"
                 placeholder="没有想要的？自定义添加后回车"
               />
               <Button
-                type="button"
-                onClick={addCustom}
-                disabled={!custom.trim()}
                 className="h-auto shrink-0 rounded px-2 py-0.5 text-xs font-medium text-white disabled:opacity-40"
+                disabled={!custom.trim()}
+                onClick={addCustom}
+                type="button"
               >
                 添加
               </Button>

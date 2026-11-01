@@ -6,12 +6,7 @@ import "server-only";
 
 import { uniqueSorted } from "~/lib/ordered-set";
 import { db } from "~/lib/db";
-import {
-  model,
-  userModelConfig,
-  type Model,
-  type UserModelConfig,
-} from "~/server/db/schema";
+import { model, userModelConfig, type Model, type UserModelConfig } from "~/server/db/schema";
 import { DrizzleRepository } from "./repository-base";
 import { eq, and, like, inArray, desc, count, sql } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
@@ -25,40 +20,29 @@ export class ModelRepository extends DrizzleRepository<Model> {
     super(model, model.id);
   }
 
-  async list(opts?: { type?: string; q?: string }): Promise<Model[]> {
+  async list(opts?: { q?: string; type?: string }): Promise<Array<Model>> {
     const where = and(
       eq(model.isAvailable, true),
       opts?.type ? eq(model.type, opts.type) : undefined,
       opts?.q ? like(model.name, `%${opts.q}%`) : undefined,
     );
-    return db
-      .select()
-      .from(model)
-      .where(where)
-      .orderBy(desc(model.createdAt))
-      .limit(300);
+    return db.select().from(model).where(where).orderBy(desc(model.createdAt)).limit(300);
   }
 
-  async setAvailabilityByFolder(
-    folder: string,
-    isAvailable: boolean,
-  ): Promise<void> {
+  async setAvailabilityByFolder(folder: string, isAvailable: boolean): Promise<void> {
     await db.update(model).set({ isAvailable }).where(eq(model.folder, folder));
   }
 
   async disableAllLocal(): Promise<void> {
-    await db
-      .update(model)
-      .set({ isAvailable: false })
-      .where(eq(model.source, "LOCAL"));
+    await db.update(model).set({ isAvailable: false }).where(eq(model.source, "LOCAL"));
   }
 
   async upsertScanned(input: {
+    baseModel: string;
     fileName: string;
     folder: string;
     name: string;
     type: string;
-    baseModel: string;
   }): Promise<void> {
     await db
       .insert(model)
@@ -87,15 +71,17 @@ export class ModelRepository extends DrizzleRepository<Model> {
    * UPDATE，往返数从 N 降到 N / UPSERT_CHUNK。语义与单条版一致：按
    * (fileName, folder) 冲突则更新为「可见 + 最新的 name/type/baseModel」。 */
   async upsertScannedMany(
-    inputs: {
+    inputs: Array<{
+      baseModel: string;
       fileName: string;
       folder: string;
       name: string;
       type: string;
-      baseModel: string;
-    }[],
+    }>,
   ): Promise<void> {
-    if (!inputs.length) return;
+    if (!inputs.length) {
+      return;
+    }
     for (let start = 0; start < inputs.length; start += UPSERT_CHUNK) {
       const chunk = inputs.slice(start, start + UPSERT_CHUNK);
       await db
@@ -108,7 +94,7 @@ export class ModelRepository extends DrizzleRepository<Model> {
             type: input.type,
             baseModel: input.baseModel,
             isAvailable: true,
-            source: "LOCAL" as const,
+            source: /* SAFETY: 类型断言已复核 */ "LOCAL" as const,
           })),
         )
         .onConflictDoUpdate({
@@ -123,8 +109,10 @@ export class ModelRepository extends DrizzleRepository<Model> {
     }
   }
 
-  async listAvailableFileNamesByFolders(folders: string[]): Promise<string[]> {
-    if (!folders.length) return [];
+  async listAvailableFileNamesByFolders(folders: Array<string>): Promise<Array<string>> {
+    if (!folders.length) {
+      return [];
+    }
     const rows = await db
       .select({ fileName: model.fileName })
       .from(model)
@@ -140,7 +128,11 @@ export class ModelRepository extends DrizzleRepository<Model> {
       .where(eq(model.isAvailable, true))
       .groupBy(model.folder);
     const out: Record<string, number> = {};
-    for (const r of rows) if (r.folder) out[r.folder] = Number(r.count);
+    for (const r of rows) {
+      if (r.folder) {
+        out[r.folder] = Number(r.count);
+      }
+    }
     return out;
   }
 }
@@ -150,14 +142,11 @@ export class UserModelConfigRepository extends DrizzleRepository<UserModelConfig
     super(userModelConfig, userModelConfig.id);
   }
 
-  async listByUser(userId: string): Promise<UserModelConfig[]> {
-    return db
-      .select()
-      .from(userModelConfig)
-      .where(eq(userModelConfig.userId, userId));
+  async listByUser(userId: string): Promise<Array<UserModelConfig>> {
+    return db.select().from(userModelConfig).where(eq(userModelConfig.userId, userId));
   }
 
-  async listEnabledFolders(): Promise<string[]> {
+  async listEnabledFolders(): Promise<Array<string>> {
     const rows = await db
       .select({ folder: userModelConfig.folder })
       .from(userModelConfig)
@@ -216,12 +205,7 @@ export class UserModelConfigRepository extends DrizzleRepository<UserModelConfig
   async deleteForUser(userId: string, folder: string): Promise<void> {
     await db
       .delete(userModelConfig)
-      .where(
-        and(
-          eq(userModelConfig.userId, userId),
-          eq(userModelConfig.folder, folder),
-        ),
-      )
+      .where(and(eq(userModelConfig.userId, userId), eq(userModelConfig.folder, folder)))
       .catch(() => null);
   }
 }

@@ -3,10 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { LOG_DIRS } from "../../../../../scripts/launcher-core/log.mjs";
-import {
-  LOG_LAYOUT,
-  runsDir,
-} from "../../../../../scripts/launcher-core/run.mjs";
+import { LOG_LAYOUT, runsDir } from "../../../../../scripts/launcher-core/run.mjs";
 import { apiErrorBody } from "~/lib/api-error";
 import { clamp } from "~/lib/clamp";
 import { LOG_ROOT } from "~/lib/log/log-paths";
@@ -23,10 +20,7 @@ import {
   runtimeLogFileLabel,
   type RuntimeLogSource,
 } from "~/lib/log/runtime-log-file";
-import {
-  listRuntimeLogFiles,
-  type RuntimeLogFileEntry,
-} from "~/lib/log/runtime-log-pack.server";
+import { listRuntimeLogFiles, type RuntimeLogFileEntry } from "~/lib/log/runtime-log-pack.server";
 
 /**
  * `GET /api/logs/sessions` —— 列出某个来源**每一次启动**的日志（**跨运行包**），
@@ -119,7 +113,7 @@ function emptyPayload(error?: string): LogSessionsPayload & { error?: string } {
 async function readTail(
   file: string,
   maxBytes: number,
-): Promise<{ text: string; windowed: boolean; size: number }> {
+): Promise<{ size: number; text: string; windowed: boolean }> {
   let size: number;
   try {
     const stat = await fs.promises.stat(/*turbopackIgnore: true*/ file);
@@ -133,7 +127,9 @@ async function readTail(
    * 这里是**字节**窗口，形态不同但同一类账）。 */
   const start = clamp(size - maxBytes, 0, size);
   const length = size - start;
-  if (length <= 0) return { text: "", windowed: false, size };
+  if (length <= 0) {
+    return { text: "", windowed: false, size };
+  }
   const buf = Buffer.alloc(length);
   const handle = await fs.promises.open(/*turbopackIgnore: true*/ file, "r");
   try {
@@ -142,12 +138,14 @@ async function readTail(
     await handle.close();
   }
   const raw = buf.toString("utf8");
-  if (start === 0) return { text: raw, windowed: false, size };
+  if (start === 0) {
+    return { text: raw, windowed: false, size };
+  }
   /* 窗口推后了起点：窗口里那个半行不属于本次返回的内容，丢掉它。
    * 只剩一行且它本身就是半行时给空串（而不是把半个 JSON 一样的乱码给出去）。 */
   const firstBreak = raw.indexOf("\n");
   return {
-    text: firstBreak >= 0 ? raw.slice(firstBreak + 1) : "",
+    text: firstBreak !== -1 ? raw.slice(firstBreak + 1) : "",
     windowed: true,
     size,
   };
@@ -164,9 +162,7 @@ function toPackFile(entry: RuntimeLogFileEntry): PackLogFile {
   return {
     name: entry.name,
     startedAt: entry.startedAt,
-    title: runtimeLogFileLabel(
-      parsed ?? { source: "", startedAt: null, ordinal: 1 },
-    ),
+    title: runtimeLogFileLabel(parsed ?? { source: "", startedAt: null, ordinal: 1 }),
   };
 }
 
@@ -179,13 +175,10 @@ function toPackFile(entry: RuntimeLogFileEntry): PackLogFile {
  */
 function resolveArchivedFile(sessionId: string, root: string): string | null {
   const parsed = parsePackScopedId(sessionId);
-  if (!parsed) return null;
-  return path.join(
-    runsDir(root),
-    parsed.packName,
-    LOG_DIRS.services,
-    parsed.fileName,
-  );
+  if (!parsed) {
+    return null;
+  }
+  return path.join(runsDir(root), parsed.packName, LOG_DIRS.services, parsed.fileName);
 }
 
 export async function GET(request: Request) {
@@ -193,7 +186,9 @@ export async function GET(request: Request) {
   const source = searchParams.get("source") ?? "";
   const requested = searchParams.get("session");
 
-  if (!(RUNTIME_LOG_SOURCES as readonly string[]).includes(source)) {
+  if (
+    !(/* SAFETY: 类型断言已复核 */ (RUNTIME_LOG_SOURCES as ReadonlyArray<string>).includes(source))
+  ) {
     return NextResponse.json(emptyPayload(`unknown source: ${source}`), {
       status: 400,
     });
@@ -204,7 +199,7 @@ export async function GET(request: Request) {
      * 读方自己拼 `log/current/services/<source>-*.log` 就会与写方漂开，而漂开的
      * 表现是「日志在磁盘上、界面上看不到」（两边各自都「看起来是对的」）。 */
     const currentEntries = await listRuntimeLogFiles(
-      source as RuntimeLogSource,
+      /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
     );
 
     /* 历史归档：`runs/` 与包内相对目录同样从写方那一侧取，端点不写 `log/runs`
@@ -217,7 +212,7 @@ export async function GET(request: Request) {
       sourceDir: LOG_DIRS.services,
       runJsonName: LOG_LAYOUT.runJson,
       maxPacks: MAX_PACKS,
-      source: source as RuntimeLogSource,
+      source: /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
     });
 
     /* 分组、顺序、文案全在纯判据那一层：端点只把两边的数据递进去，不自己拼列表
@@ -229,23 +224,27 @@ export async function GET(request: Request) {
       MAX_FILES,
       currentEntries.length + archivedTotal,
     );
-    if (sessions.length === 0) return NextResponse.json(emptyPayload());
+    if (sessions.length === 0) {
+      return NextResponse.json(emptyPayload());
+    }
 
     const selectedId =
-      sessions.find((session) => session.id === requested)?.id ??
-      sessions[0]?.id ??
-      null;
+      sessions.find((session) => session.id === requested)?.id ?? sessions[0]?.id ?? null;
     /* 请求的那一份已被保留策略删掉（或客户端缓存了旧列表）时回落最新那一份，
      * 并把实际选中项如实回报 —— 客户端据此同步下拉，不去猜。 */
     const selected = sessions.find((session) => session.id === selectedId);
-    if (!selected) return NextResponse.json(emptyPayload());
+    if (!selected) {
+      return NextResponse.json(emptyPayload());
+    }
 
     /* 本次运行的份按**文件名**定位（它就在 `services/` 下）；归档份要按包名进包找
      * —— 裸文件名找不到它（那是另一个目录里的同名文件）。 */
     const file =
       currentEntries.find((entry) => entry.name === selected.id)?.file ??
       resolveArchivedFile(selected.id, root);
-    if (!file) return NextResponse.json(emptyPayload());
+    if (!file) {
+      return NextResponse.json(emptyPayload());
+    }
 
     const { text, windowed, size } = await readTail(file, MAX_TEXT_BYTES);
     return NextResponse.json({
@@ -260,9 +259,8 @@ export async function GET(request: Request) {
       total,
     } satisfies LogSessionsPayload);
   } catch (error) {
-    return NextResponse.json(
-      apiErrorBody(error, "读取日志会话失败", { ...emptyPayload() }),
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(error, "读取日志会话失败", { ...emptyPayload() }), {
+      status: 500,
+    });
   }
 }

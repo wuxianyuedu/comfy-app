@@ -15,7 +15,7 @@ import { SelectChip } from "~/components/ui/select-chip";
  */
 type ChipShape = NonNullable<React.ComponentProps<typeof SelectChip>["shape"]>;
 
-const SHAPES: ChipShape[] = ["pill", "segment", "compact", "dashed"];
+const SHAPES: Array<ChipShape> = ["pill", "segment", "compact", "dashed"];
 
 const meta = {
   title: "UI/SelectChip",
@@ -71,8 +71,7 @@ export const SelectedVsHover: Story = {
       </div>
       <div>
         <p className="text-muted-foreground mb-2 text-xs">
-          把鼠标移上来：已选中的**不应当**变样（这正是 ISSUE #1423
-          修掉的那件事）
+          把鼠标移上来：已选中的**不应当**变样（这正是 ISSUE #1423 修掉的那件事）
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <SelectChip selected>已选中（悬停试试）</SelectChip>
@@ -87,11 +86,7 @@ export const SelectedVsHover: Story = {
 export const RadioGroupUsage: Story = {
   args: { children: "gpt-image-1" },
   render: (args) => (
-    <div
-      role="radiogroup"
-      aria-label="选择远端模型"
-      className="flex flex-wrap items-center gap-2"
-    >
+    <div aria-label="选择远端模型" className="flex flex-wrap items-center gap-2" role="radiogroup">
       {["gpt-image-1", "flux-pro-ultra", "seedream-4"].map((name, i) => (
         <SelectChip key={name} {...args} selected={i === 0}>
           {name}
@@ -109,7 +104,7 @@ export const DashedAction: Story = {
       <SelectChip {...args} selected>
         文生图
       </SelectChip>
-      <SelectChip {...args} shape="dashed" selected={false}>
+      <SelectChip {...args} selected={false} shape="dashed">
         ＋ 添加模式
       </SelectChip>
     </div>
@@ -121,7 +116,7 @@ export const Disabled: Story = {
   args: { children: "提示词" },
   render: (args) => (
     <div className="flex flex-wrap items-center gap-2">
-      <SelectChip {...args} shape="compact" selected disabled>
+      <SelectChip {...args} disabled selected shape="compact">
         ✓ 提示词
       </SelectChip>
       <SelectChip {...args} shape="compact">

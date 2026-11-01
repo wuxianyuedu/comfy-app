@@ -5,11 +5,7 @@ import {
   pruneRuntimeLogFiles,
   type RuntimeLogWriter,
 } from "~/lib/log/runtime-log-pack.server";
-import {
-  LAUNCH_STAMP_ENV,
-  parseLaunchStamp,
-  runtimeLogFileName,
-} from "~/lib/log/runtime-log-file";
+import { LAUNCH_STAMP_ENV, parseLaunchStamp, runtimeLogFileName } from "~/lib/log/runtime-log-file";
 import { formatLocalStamp } from "~/lib/time-format";
 
 /**
@@ -57,17 +53,19 @@ const LEVEL_TAG: Record<AppLogLevel, string> = {
   debug: "DEBUG",
 };
 
-export interface AppRuntimeLogger {
-  info(msg: string, fields?: Record<string, unknown>): void;
-  warn(msg: string, fields?: Record<string, unknown>): void;
-  error(msg: string, fields?: Record<string, unknown>): void;
-  debug(msg: string, fields?: Record<string, unknown>): void;
+export type AppRuntimeLogger = {
   /** 派生子日志器，命名空间拼接为 `parent:child`。 */
   child(ns: string): AppRuntimeLogger;
-}
+  debug(msg: string, fields?: Record<string, unknown>): void;
+  error(msg: string, fields?: Record<string, unknown>): void;
+  info(msg: string, fields?: Record<string, unknown>): void;
+  warn(msg: string, fields?: Record<string, unknown>): void;
+};
 
 function stringify(fields?: Record<string, unknown>): string {
-  if (!fields || Object.keys(fields).length === 0) return "";
+  if (!fields || Object.keys(fields).length === 0) {
+    return "";
+  }
   try {
     return ` ${JSON.stringify(fields)}`;
   } catch {
@@ -90,7 +88,7 @@ let writer: RuntimeLogWriter | null = null;
 
 function appendTo(file: string, line: string): void {
   try {
-    fs.appendFileSync(/*turbopackIgnore: true*/ file, `${line}\n`, "utf-8");
+    fs.appendFileSync(/*turbopackIgnore: true*/ file, `${line}\n`, "utf8");
   } catch {
     // 日志写入失败绝不阻塞业务主流程
   }
@@ -111,7 +109,9 @@ function appendTo(file: string, line: string): void {
  * 正常形态，不是降级：此时根本没有 launcher，也没有提醒要合并。
  */
 function writerFor(): RuntimeLogWriter {
-  if (writer) return writer;
+  if (writer) {
+    return writer;
+  }
   pruneRuntimeLogFiles();
   const at = parseLaunchStamp(process.env[LAUNCH_STAMP_ENV]);
   writer = at
@@ -123,11 +123,7 @@ function writerFor(): RuntimeLogWriter {
 }
 
 function makeLogger(ns: string, file?: string): AppRuntimeLogger {
-  const emit = (
-    level: AppLogLevel,
-    msg: string,
-    fields?: Record<string, unknown>,
-  ) => {
+  const emit = (level: AppLogLevel, msg: string, fields?: Record<string, unknown>) => {
     const line = `[${localTimestamp()}] [${LEVEL_TAG[level]}]${ns ? ` [${ns}]` : ""} ${msg}${stringify(fields)}`;
     const target = file ?? writerFor().file;
     appendTo(target, line);
@@ -148,10 +144,7 @@ function makeLogger(ns: string, file?: string): AppRuntimeLogger {
  * `file` 只在测试里传（指向自己的临时目录）：真实调用方一律走内部的
  * `writerFor()` 命名规则，别在别处拼 `app-runtime-*.log`。
  */
-export function createAppRuntimeLogger(
-  namespace: string,
-  file?: string,
-): AppRuntimeLogger {
+export function createAppRuntimeLogger(namespace: string, file?: string): AppRuntimeLogger {
   return makeLogger(namespace, file);
 }
 

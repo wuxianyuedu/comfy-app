@@ -6,9 +6,7 @@
  * 漂了那一侧就红，而不是等到下一次流水线跑出一次看不懂的红。
  */
 const PY_CANDIDATES =
-  process.platform === "win32"
-    ? ["python", "py", "python3"]
-    : ["python3", "python"];
+  process.platform === "win32" ? ["python", "py", "python3"] : ["python3", "python"];
 /** 裸 `py` 是「列出已装版本」并退非零，必须带 `-3`。 */
 const PY_PROBE_ARGS = /** @type {Record<string, string[]>} */ ({
   py: ["-3", "--version"],
@@ -143,7 +141,7 @@ function pathDrives(env) {
  * @returns {string[]}
  */
 function userRoots(env) {
-  const roots = new Set(["C:\\Users"]);
+  const roots = new Set([String.raw`C:\Users`]);
   for (const drive of pathDrives(env)) {
     roots.add(path.join(drive, "Users"));
   }
@@ -191,9 +189,7 @@ function pythonInstallRoots(env, listDirs = listDirectories) {
       roots.push(path.join(profile, "AppData", "Local", "Programs", "Python"));
     }
   }
-  return [...new Set(roots)].filter(
-    (p) => p.length > 0 && path.dirname(p) !== p,
-  );
+  return [...new Set(roots)].filter((p) => p.length > 0 && path.dirname(p) !== p);
 }
 
 /**
@@ -230,13 +226,17 @@ export function pythonForensics({
   }
   const hits = [];
   for (const root of pythonInstallRoots(env, listDirs)) {
-    if (existing(root)) hits.push(...listDirs(root));
+    if (existing(root)) {
+      hits.push(...listDirs(root));
+    }
   }
   lines.push("常见安装位置在盘上的（有则说明装过、只是这个账号 PATH 里没有）:");
   if (hits.length === 0) {
     lines.push("  （一个都没找到 —— 更像「这台机真的没装」）");
   } else {
-    for (const hit of hits) lines.push(`  ${hit}`);
+    for (const hit of hits) {
+      lines.push(`  ${hit}`);
+    }
   }
   lines.push("----------------------------------------");
   return lines;
@@ -253,11 +253,7 @@ export function currentAccount() {
   }
   const r = spawnSync(
     "powershell",
-    [
-      "-NoProfile",
-      "-Command",
-      "[System.Security.Principal.WindowsIdentity]::GetCurrent().Name",
-    ],
+    ["-NoProfile", "-Command", "[System.Security.Principal.WindowsIdentity]::GetCurrent().Name"],
     { encoding: "utf8", windowsHide: true },
   );
   return (r.stdout ?? "").trim() || "(取不到)";
@@ -351,7 +347,9 @@ export function installPython({
   ]) {
     const result = channel();
     attempts.push(result.reason ?? "(无说明)");
-    if (result.path) return { ...result, installed: true, attempts };
+    if (result.path) {
+      return { ...result, installed: true, attempts };
+    }
   }
   return {
     installed: false,
@@ -489,10 +487,10 @@ function installViaWinget({
        * 取决于「跑判据那台机上碰巧有没有 Python」。实测复现：造一个 winget 链接
        * 目录下**真有** `python.exe` 的形态，两个接缝**都**注入 `() => null` 之后
        * 仍然是 `installed: true`（path 指向那个真文件）。 */
-      findExeUnder(
-        path.join(env.LOCALAPPDATA ?? "", "Microsoft", "WinGet", "Links"),
-      );
-    if (found) return { installed: true, path: found, reason: null };
+      findExeUnder(path.join(env.LOCALAPPDATA ?? "", "Microsoft", "WinGet", "Links"));
+    if (found) {
+      return { installed: true, path: found, reason: null };
+    }
     tried.push(`--scope ${scope} 报成功，但安装根下找不到解释器`);
   }
   return {
@@ -542,7 +540,9 @@ function viaScoop({ run: runCmd, env, existing, findExeUnder: findExe }) {
       return { path: candidate, channel: "scoop", reason: null };
     }
     const found = findExe(root);
-    if (found) return { path: found, channel: "scoop", reason: null };
+    if (found) {
+      return { path: found, channel: "scoop", reason: null };
+    }
   }
   return {
     path: null,
@@ -569,7 +569,9 @@ function viaScoop({ run: runCmd, env, existing, findExeUnder: findExe }) {
 function viaEmbed({ env, existing, mkdir, download, unzip, cwd }) {
   const root = path.join(cwd, "python-embeded");
   const exe = path.join(root, "python.exe");
-  if (existing(exe)) return { path: exe, channel: "embed", reason: null };
+  if (existing(exe)) {
+    return { path: exe, channel: "embed", reason: null };
+  }
   const zip = path.join(
     env.TEMP ?? env.TMP ?? root,
     `python-${PYTHON_EMBED_VERSION}-embed-amd64.zip`,
@@ -579,11 +581,11 @@ function viaEmbed({ env, existing, mkdir, download, unzip, cwd }) {
     mkdir(root);
     download(url, zip);
     unzip(zip, root);
-  } catch (e) {
+  } catch (error) {
     return {
       path: null,
       channel: "embed",
-      reason: `embed 包下载/解压失败：${e instanceof Error ? e.message : String(e)}`,
+      reason: `embed 包下载/解压失败：${error instanceof Error ? error.message : String(error)}`,
     };
   }
   return existing(exe)
@@ -606,16 +608,10 @@ function viaEmbed({ env, existing, mkdir, download, unzip, cwd }) {
  * @param {string} dest
  */
 export function downloadFile(url, dest, { run: runCmd = run } = {}) {
-  const r = runCmd("curl", [
-    "-L",
-    "--fail",
-    "--silent",
-    "--show-error",
-    "-o",
-    dest,
-    url,
-  ]);
-  if (!r.ok) throw new Error(r.out || `curl 下载失败（${url}）`);
+  const r = runCmd("curl", ["-L", "--fail", "--silent", "--show-error", "-o", dest, url]);
+  if (!r.ok) {
+    throw new Error(r.out || `curl 下载失败（${url}）`);
+  }
 }
 
 /**
@@ -626,7 +622,9 @@ export function downloadFile(url, dest, { run: runCmd = run } = {}) {
  */
 function unzipArchive(zip, dest) {
   const r = run("tar", ["-xf", zip, "-C", dest]);
-  if (!r.ok) throw new Error(r.out || "tar -xf 解压失败");
+  if (!r.ok) {
+    throw new Error(r.out || "tar -xf 解压失败");
+  }
 }
 
 /**
@@ -655,7 +653,9 @@ function installPythonPosix({ run: runCmd, platform }) {
   for (const [cmd, probeArgs, args] of plans) {
     /* 用 `--version` 判它在不在，而不是 `shutil.which`：本脚本刻意只用
      * `node:child_process`（见文件头），少一层平台差异。 */
-    if (!runCmd(cmd, probeArgs).ok) continue;
+    if (!runCmd(cmd, probeArgs).ok) {
+      continue;
+    }
     const r = runCmd(cmd, args);
     if (!r.ok) {
       return {
@@ -709,7 +709,9 @@ function firstLine(text) {
 function findExeUnderAllRoots(env) {
   for (const root of pythonInstallRoots(env)) {
     const found = findExeUnder(root);
-    if (found) return found;
+    if (found) {
+      return found;
+    }
   }
   return null;
 }
@@ -763,7 +765,9 @@ export function wingetCandidates(env, listDirs = listDirectories) {
   ];
   const out = [];
   for (const base of bases) {
-    if (!base) continue;
+    if (!base) {
+      continue;
+    }
     out.push(path.join(base, "Microsoft", "WindowsApps", "winget.exe"));
     out.push(path.join(base, "WindowsApps", "winget.exe"));
   }
@@ -783,7 +787,9 @@ export function wingetCandidates(env, listDirs = listDirectories) {
 export function wingetAtStandardLocation(env, existing = fs.existsSync) {
   const base = env.LOCALAPPDATA;
   // 没有 `LOCALAPPDATA` 时**不**拼出一个相对路径来冒充绝对路径。
-  if (!base) return null;
+  if (!base) {
+    return null;
+  }
   const p = path.join(base, "Microsoft", "WindowsApps", "winget.exe");
   return existing(p) ? p : null;
 }
@@ -795,10 +801,14 @@ export function wingetAtStandardLocation(env, existing = fs.existsSync) {
  * @returns {string | null}
  */
 function findExeUnder(root) {
-  if (!root || !fs.existsSync(root)) return null;
+  if (!root || !fs.existsSync(root)) {
+    return null;
+  }
   for (const name of ["python.exe", "python3.exe"]) {
     const hit = walk(root, name);
-    if (hit) return hit;
+    if (hit) {
+      return hit;
+    }
   }
   return null;
 }
@@ -819,10 +829,14 @@ function walk(dir, wanted) {
   }
   for (const e of entries) {
     const p = path.join(dir, e.name);
-    if (e.isFile() && e.name.toLowerCase() === wanted) return p;
+    if (e.isFile() && e.name.toLowerCase() === wanted) {
+      return p;
+    }
     if (e.isDirectory()) {
       const hit = walk(p, wanted);
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
   }
   return null;
@@ -849,7 +863,9 @@ export function findPython({
   for (const name of candidates) {
     const args = probeArgs[name] ?? ["--version"];
     const r = runCmd(name, args);
-    if (r.ok) return { command: name, path: null, version: r.out };
+    if (r.ok) {
+      return { command: name, path: null, version: r.out };
+    }
     // 「在盘上但起不来」只说一句：它与「压根没装」的处置不同（换探测方式 vs 去装）。
     if (r.out) {
       notes.push(`${name} 在盘上但起不来（${r.out.split("\n")[0]}）`);

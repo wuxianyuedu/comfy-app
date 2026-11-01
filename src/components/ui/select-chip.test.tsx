@@ -34,7 +34,7 @@ function tokensOf(el: HTMLElement): Set<string> {
 describe("SelectChip", () => {
   it("选中档把悬停值钉回常态（否则会被 Button 的默认悬停档吃掉）", () => {
     render(
-      <SelectChip selected data-testid="chip">
+      <SelectChip data-testid="chip" selected>
         文生图
       </SelectChip>,
     );
@@ -68,7 +68,7 @@ describe("SelectChip", () => {
 
   it("选中语义落到 aria-checked 上，且视觉与语义由同一个入参驱动", () => {
     const { rerender } = render(
-      <SelectChip selected={false} data-testid="chip">
+      <SelectChip data-testid="chip" selected={false}>
         甲
       </SelectChip>,
     );
@@ -77,7 +77,7 @@ describe("SelectChip", () => {
     expect(chip).toHaveAttribute("aria-checked", "false");
 
     rerender(
-      <SelectChip selected data-testid="chip">
+      <SelectChip data-testid="chip" selected>
         甲
       </SelectChip>,
     );
@@ -86,14 +86,26 @@ describe("SelectChip", () => {
 
   it("四种形态各自带自己的形状档（圆形胶囊 / 方角分段 / 紧凑 / 虚线动作）", () => {
     const shapes = [
-      { shape: "pill" as const, expect: "rounded-full" },
-      { shape: "segment" as const, expect: "rounded-lg" },
-      { shape: "compact" as const, expect: "rounded" },
-      { shape: "dashed" as const, expect: "border-dashed" },
+      {
+        shape: /* SAFETY: 类型断言已复核 */ "pill" as const,
+        expect: "rounded-full",
+      },
+      {
+        shape: /* SAFETY: 类型断言已复核 */ "segment" as const,
+        expect: "rounded-lg",
+      },
+      {
+        shape: /* SAFETY: 类型断言已复核 */ "compact" as const,
+        expect: "rounded",
+      },
+      {
+        shape: /* SAFETY: 类型断言已复核 */ "dashed" as const,
+        expect: "border-dashed",
+      },
     ];
     for (const { shape, expect: token } of shapes) {
       const { unmount } = render(
-        <SelectChip shape={shape} data-testid="chip">
+        <SelectChip data-testid="chip" shape={shape}>
           x
         </SelectChip>,
       );
@@ -104,7 +116,7 @@ describe("SelectChip", () => {
 
   it("虚线档是「动作」不是「选中」：底色透明、不参与选中态配色", () => {
     render(
-      <SelectChip shape="dashed" data-testid="chip">
+      <SelectChip data-testid="chip" shape="dashed">
         ＋ 添加
       </SelectChip>,
     );
@@ -115,7 +127,7 @@ describe("SelectChip", () => {
 
   it("调用处的 className 压得过形态档（cn 让调用处取胜）", () => {
     render(
-      <SelectChip shape="pill" className="text-sm" data-testid="chip">
+      <SelectChip className="text-sm" data-testid="chip" shape="pill">
         x
       </SelectChip>,
     );

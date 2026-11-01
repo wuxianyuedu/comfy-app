@@ -16,9 +16,9 @@ describe("EmptyState（三合一）", () => {
   it("page：标题 / 说明 / 操作区都渲染，骨架居中带虚线框", () => {
     render(
       <EmptyState
-        title="还没有工作流"
-        description="点右上角导入"
         action={<button type="button">重试</button>}
+        description="点右上角导入"
+        title="还没有工作流"
       />,
     );
     expect(screen.getByText("还没有工作流")).toBeInTheDocument();
@@ -29,26 +29,19 @@ describe("EmptyState（三合一）", () => {
   });
 
   it("page：icon 传 lucide 组件按统一尺寸渲染（原 studio/ui 形态）", () => {
-    const { container } = render(
-      <EmptyState icon={TriangleAlert} title="列表还没返回" />,
-    );
+    const { container } = render(<EmptyState icon={TriangleAlert} title="列表还没返回" />);
     const svg = container.querySelector("svg");
     expect(svg).not.toBeNull();
     expect(svg?.getAttribute("width")).toBe("32");
   });
 
   it("page：icon 传已渲染节点原样使用（原 ui/empty-state 形态）", () => {
-    render(
-      <EmptyState
-        icon={<Loader2 data-testid="spin-icon" size={20} />}
-        title="正在加载…"
-      />,
-    );
+    render(<EmptyState icon={<Loader2 data-testid="spin-icon" size={20} />} title="正在加载…" />);
     expect(screen.getByTestId("spin-icon")).toBeInTheDocument();
   });
 
   it("error：走破坏色而非品牌色，形态与 page 一致", () => {
-    render(<EmptyState variant="error" icon={TriangleAlert} title="失败了" />);
+    render(<EmptyState icon={TriangleAlert} title="失败了" variant="error" />);
     const title = screen.getByText("失败了");
     expect(title.className).toContain("text-destructive");
     const root = title.closest("div.grid");
@@ -56,23 +49,19 @@ describe("EmptyState（三合一）", () => {
   });
 
   it("hint：行内提示条形态，只有一段文案（原 EmptyStateHint 形态）", () => {
-    render(
-      <EmptyState variant="hint" description="该工作流尚未标记对外参数。" />,
-    );
+    render(<EmptyState description="该工作流尚未标记对外参数。" variant="hint" />);
     expect(screen.getByText("该工作流尚未标记对外参数。")).toBeInTheDocument();
     // 行内形态刻意不带标题位与虚线卡片的居中骨架
     expect(document.querySelector("div.grid.place-items-center")).toBeNull();
   });
 
   it("hint：只给 title 时也能出文案（description 优先）", () => {
-    render(<EmptyState variant="hint" title="没有匹配项" />);
+    render(<EmptyState title="没有匹配项" variant="hint" />);
     expect(screen.getByText("没有匹配项")).toBeInTheDocument();
   });
 
   it("minHeightClass 可覆盖（原 studio/ui 的列表区矮态）", () => {
-    const { container } = render(
-      <EmptyState title="空" minHeightClass="min-h-40" />,
-    );
+    const { container } = render(<EmptyState minHeightClass="min-h-40" title="空" />);
     expect(container.firstElementChild?.className).toContain("min-h-40");
   });
 
@@ -83,9 +72,9 @@ describe("EmptyState（三合一）", () => {
 
   it("panel：铺满父级的无框形状（不带 page 那档的虚线卡片骨架）", () => {
     const { container } = render(
-      <EmptyState variant="panel" icon={FileText} title="暂无匹配的日志" />,
+      <EmptyState icon={FileText} title="暂无匹配的日志" variant="panel" />,
     );
-    const root = container.firstElementChild as HTMLElement;
+    const root = /* SAFETY: 类型断言已复核 */ container.firstElementChild as HTMLElement;
     for (const cls of [
       "flex",
       "h-full",
@@ -104,9 +93,7 @@ describe("EmptyState（三合一）", () => {
   });
 
   it("panel：icon 传 lucide 组件按弱化档渲染（32 / 1.5 / opacity-30）", () => {
-    const { container } = render(
-      <EmptyState variant="panel" icon={FileText} />,
-    );
+    const { container } = render(<EmptyState icon={FileText} variant="panel" />);
     const svg = container.querySelector("svg");
     expect(svg?.getAttribute("width")).toBe("32");
     expect(svg?.getAttribute("stroke-width")).toBe("1.5");
@@ -119,10 +106,10 @@ describe("EmptyState（三合一）", () => {
   it("panel：className 与已渲染图标节点都听调用点的（差异不必抄整串类名）", () => {
     render(
       <EmptyState
-        variant="panel"
         className="gap-3"
         icon={<Loader2 data-testid="big-icon" size={44} strokeWidth={1.2} />}
         title="暂无系统消息"
+        variant="panel"
       />,
     );
     /* 文案是根 div 的直接子节点，所以 `getByText` 拿到的就是那枚根 —— 判「同组

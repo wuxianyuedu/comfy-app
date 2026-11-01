@@ -9,11 +9,7 @@
 import { ArrowDownToLine, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "~/components/ui/pagination";
+import { Pagination, PaginationContent, PaginationItem } from "~/components/ui/pagination";
 import { FILTER_LABELS } from "./LogFilterBar";
 import { ORIGIN_TEXT } from "./LogPanelOriginSelect";
 import type { LogFilter, LogOriginFilter } from "./log-types";
@@ -26,30 +22,32 @@ function pageSummary(
   all: number,
   search: string,
 ): string {
-  if (total === 0) return search.trim() ? "无筛选命中的日志" : "无匹配日志";
+  if (total === 0) {
+    return search.trim() ? "无筛选命中的日志" : "无匹配日志";
+  }
   const head = `第 ${page} / ${totalPages} 页 · 每页最多 ${pageSize} 条`;
   const tail = `${search.trim() ? "筛选命中" : "匹配"} ${total} 条 · 面板共保留 ${all} 条`;
   return `${head} · ${tail}`;
 }
 
 export function LogPanelFooter(input: {
-  safePage: number;
-  totalPages: number;
+  bootId: string | null;
+  droppedTotal: number;
+  filter: LogFilter;
+  jumpToLatest: () => void;
+  newLogCount: number;
+  origin: LogOriginFilter | null;
   pageSize: number;
+  safePage: number;
+  search: string;
+  setFilter: (value: LogFilter) => void;
+  setOrigin: (value: LogOriginFilter) => void;
+  setPage: (page: number) => void;
+  setSearch: (value: string) => void;
+  shouldPin: boolean;
   total: number;
   totalAll: number;
-  search: string;
-  droppedTotal: number;
-  bootId: string | null;
-  shouldPin: boolean;
-  newLogCount: number;
-  jumpToLatest: () => void;
-  setPage: (page: number) => void;
-  origin: LogOriginFilter | null;
-  setOrigin: (value: LogOriginFilter) => void;
-  filter: LogFilter;
-  setFilter: (value: LogFilter) => void;
-  setSearch: (value: string) => void;
+  totalPages: number;
 }) {
   const {
     safePage,
@@ -74,9 +72,7 @@ export function LogPanelFooter(input: {
   return (
     <div className="border-border-strong bg-surface-1 text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
       <span className="flex items-center gap-2">
-        <span>
-          {pageSummary(safePage, totalPages, pageSize, total, totalAll, search)}
-        </span>
+        <span>{pageSummary(safePage, totalPages, pageSize, total, totalAll, search)}</span>
         {droppedTotal > 0 && (
           <span
             className="text-ink-fainter shrink-0"
@@ -98,11 +94,9 @@ export function LogPanelFooter(input: {
       </span>
       <span className="flex items-center gap-3">
         {shouldPin && (
-          <Button variant="primary-solid" size="xs" onClick={jumpToLatest}>
+          <Button onClick={jumpToLatest} size="xs" variant="primary-solid">
             <ArrowDownToLine size={12} />
-            {newLogCount > 0
-              ? `有 ${newLogCount} 条新的日志 · 回到最新`
-              : "回到最新"}
+            {newLogCount > 0 ? `有 ${newLogCount} 条新的日志 · 回到最新` : "回到最新"}
           </Button>
         )}
         {/* 翻页控件走 `ui/pagination`（规范 16 §16.2.4.6 / §16.2.4.72 的零引用
@@ -115,13 +109,13 @@ export function LogPanelFooter(input: {
         <Pagination className="w-auto flex-1 justify-end">
           <PaginationContent className="gap-1">
             <PaginationItem>
-              <Hint label="更新的一页" accessibleName wrap>
+              <Hint accessibleName label="更新的一页" wrap>
                 <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setPage(safePage - 1)}
-                  disabled={safePage <= 1}
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(safePage - 1)}
+                  size="icon-xs"
+                  variant="ghost"
                 >
                   <ChevronLeft data-icon="inline-start" size={14} />
                 </Button>
@@ -131,29 +125,26 @@ export function LogPanelFooter(input: {
             那一层筛选。此处用按钮而不是纯文本：页脚是「说出来我在看什么」
             的位置，回滚动作本来就该在这儿，不必让用户跑回顶部找。 */}
             <PaginationItem className="text-ink-soft flex items-center gap-1">
-              <Hint
-                label={origin && origin !== "all" ? "去掉来源筛选" : undefined}
-                wrap
-              >
+              <Hint label={origin && origin !== "all" ? "去掉来源筛选" : undefined} wrap>
                 <Button
-                  variant="ghost"
-                  size="xs"
-                  data-testid="logpanel-origin-chip"
-                  onClick={() => setOrigin("all")}
-                  disabled={!origin || origin === "all"}
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
+                  data-testid="logpanel-origin-chip"
+                  disabled={!origin || origin === "all"}
+                  onClick={() => setOrigin("all")}
+                  size="xs"
+                  variant="ghost"
                 >
                   {ORIGIN_TEXT[origin ?? "all"]}
                 </Button>
               </Hint>
-              <Hint label={filter !== "all" ? "去掉级别筛选" : undefined} wrap>
+              <Hint label={filter === "all" ? undefined : "去掉级别筛选"} wrap>
                 <Button
-                  variant="ghost"
-                  size="xs"
-                  data-testid="logpanel-level-chip"
-                  onClick={() => setFilter("all")}
-                  disabled={filter === "all"}
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
+                  data-testid="logpanel-level-chip"
+                  disabled={filter === "all"}
+                  onClick={() => setFilter("all")}
+                  size="xs"
+                  variant="ghost"
                 >
                   {FILTER_LABELS.find((item) => item.value === filter)?.label}
                 </Button>
@@ -161,10 +152,10 @@ export function LogPanelFooter(input: {
               {search.trim() && (
                 <Hint label="清空搜索">
                   <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setSearch("")}
                     className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
+                    onClick={() => setSearch("")}
+                    size="xs"
+                    variant="ghost"
                   >
                     {`搜索「${search.trim()}」`}
                   </Button>
@@ -172,13 +163,13 @@ export function LogPanelFooter(input: {
               )}
             </PaginationItem>
             <PaginationItem>
-              <Hint label="更早的一页" accessibleName wrap>
+              <Hint accessibleName label="更早的一页" wrap>
                 <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => setPage(safePage + 1)}
-                  disabled={safePage >= totalPages}
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(safePage + 1)}
+                  size="icon-xs"
+                  variant="ghost"
                 >
                   <ChevronRight data-icon="inline-start" size={14} />
                 </Button>

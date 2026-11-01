@@ -14,17 +14,17 @@ export type ExtractLogKind =
   | "skipped" // 有重名等被跳过
   | "error"; // 执行失败 / 解析失败
 
-export interface ExtractLogEntry {
-  ts: string; // ISO 时间戳
+export type ExtractLogEntry = {
+  /** 需要多行展示的正文（输入消息 / 输出原文），可省略。 */
+  detail?: string;
   kind: ExtractLogKind;
   /** 人类可读的单行摘要（如「调用模型 remote::gpt-4o」）。 */
   summary: string;
-  /** 需要多行展示的正文（输入消息 / 输出原文），可省略。 */
-  detail?: string;
-}
+  ts: string; // ISO 时间戳
+};
 
 /** 空日志。 */
-export function emptyExtractLog(): ExtractLogEntry[] {
+export function emptyExtractLog(): Array<ExtractLogEntry> {
   return [];
 }
 
@@ -44,12 +44,14 @@ export function makeExtractLog(
 
 /** 把一条消息的 content（纯文本或多模态块）压成可记录的纯文本。 */
 function messageText(content: LLMMessage["content"]): string {
-  if (typeof content === "string") return content;
+  if (typeof content === "string") {
+    return content;
+  }
   return content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
 }
 
 /** 请求消息 → 适合放进日志正文的多行文本（截断超长剧本，避免面板过载）。 */
-export function formatRequestMessages(messages: LLMMessage[]): string {
+export function formatRequestMessages(messages: Array<LLMMessage>): string {
   const MAX_USER_CHARS = 4000;
   return messages
     .map((m) => {

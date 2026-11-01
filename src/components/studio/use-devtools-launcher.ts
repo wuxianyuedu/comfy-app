@@ -29,18 +29,15 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useHotkey } from "~/components/ui/use-hotkey";
-import {
-  devtoolsAvailable,
-  openDevtools,
-} from "~/lib/shell/desktop-shell-client";
+import { devtoolsAvailable, openDevtools } from "~/lib/shell/desktop-shell-client";
 import { beginStaleRun } from "~/lib/stale-run";
 
-export interface DevtoolsLauncher {
+export type DevtoolsLauncher = {
   /** 这个壳是否带调试能力（决定入口渲不渲染 / 快捷键注不注册）。挂载前为 false。 */
   available: boolean;
   /** 打开开发者工具；失败已静默降级（调试动作不该弹错误打断当前操作）。 */
   open: () => void;
-}
+};
 
 export function useDevtoolsLauncher(): DevtoolsLauncher {
   const [available, setAvailable] = useState(false);

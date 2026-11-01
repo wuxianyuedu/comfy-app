@@ -37,25 +37,25 @@
 
 /** jsdom 发出的错误对象（只声明本文件用到的那几个字段，不依赖 jsdom 的类型包）。 */
 type JsdomErrorLike = {
-  type?: string;
-  message: string;
   cause?: { stack?: string };
+  message: string;
+  type?: string;
 };
 
 /** `jsdom.virtualConsole` 的结构面（它继承 `node:events` 的 EventEmitter）。 */
 type VirtualConsoleLike = {
-  listeners(event: string): unknown[];
-  removeAllListeners(event: string): unknown;
+  listeners(event: string): Array<unknown>;
   on(event: string, listener: (error: JsdomErrorLike) => void): unknown;
+  removeAllListeners(event: string): unknown;
 };
 
-export interface JsdomCapabilityGap {
+export type JsdomCapabilityGap = {
+  /** 撤拦 ≠ 撤账：这一档的覆盖真正落在哪儿。 */
+  coveredBy: string;
   /** jsdom 的原文，**逐字相等**才吞（见文件头第 ① 条）。 */
   message: string;
   /** 为什么 jsdom 做不到这件事。 */
   why: string;
-  /** 撤拦 ≠ 撤账：这一档的覆盖真正落在哪儿。 */
-  coveredBy: string;
 }
 
 /**
@@ -71,7 +71,7 @@ export interface JsdomCapabilityGap {
  * 规则的关闭与理由写在 `tests/a11y-axe-stories.test.ts`，这里只处置**残余**噪音
  * （axe 之外也有代码走到这两条通道时，仍按白名单吞、并计数报出来）。
  */
-export const KNOWN_JSDOM_GAPS: readonly JsdomCapabilityGap[] = [
+export const KNOWN_JSDOM_GAPS: ReadonlyArray<JsdomCapabilityGap> = [
   {
     message:
       "Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package",
@@ -80,23 +80,22 @@ export const KNOWN_JSDOM_GAPS: readonly JsdomCapabilityGap[] = [
       "连字 / 图标度量这一档由 Storybook 的 a11y 面板（真浏览器，有度量）现场判；axe 侧的两条规则已在 a11y 用例里点名关掉。",
   },
   {
-    message:
-      "Not implemented: Window's getComputedStyle() method: with pseudo-elements",
+    message: "Not implemented: Window's getComputedStyle() method: with pseudo-elements",
     why: "jsdom 的 `getComputedStyle` 只实现了无伪元素那一档（`Window.js` 对第二参非空直接 notImplemented），而 `::before/::after` 的 `content` 正是它要读的。",
     coveredBy:
       "伪元素绘制由 Storybook 的 a11y 面板（真浏览器，CSS 生效）现场判；axe 侧的相关规则已在 a11y 用例里点名关掉。",
   },
 ];
 
-export interface JsdomCapabilityController {
+export type JsdomCapabilityController = {
   /** 处置一条 `jsdomError`：按白名单吞掉并计数返回 `true`，需要转发返回 `false`。 */
   consume: (error: JsdomErrorLike) => boolean;
-  /** 已吞掉的条数（全部缺口相加）。 */
-  suppressedCount: () => number;
-  /** 汇总行；一条都没吞过则是空数组（不打「0 条」那种废话）。 */
-  summaryLines: () => string[];
   /** 还原 jsdom 原本的 `jsdomError` 监听。 */
   detach: () => void;
+  /** 汇总行；一条都没吞过则是空数组（不打「0 条」那种废话）。 */
+  summaryLines: () => Array<string>;
+  /** 已吞掉的条数（全部缺口相加）。 */
+  suppressedCount: () => number;
 }
 
 /**
@@ -104,7 +103,7 @@ export interface JsdomCapabilityController {
  * 转发与否的判据全在这里，`VirtualConsole` 只是它的一个消费者。
  */
 export function createJsdomCapabilityGate(
-  gaps: readonly JsdomCapabilityGap[] = KNOWN_JSDOM_GAPS,
+  gaps: ReadonlyArray<JsdomCapabilityGap> = KNOWN_JSDOM_GAPS,
 ): JsdomCapabilityController {
   const byMessage = new Map(gaps.map((gap) => [gap.message, gap]));
   const counts = new Map<string, number>();
@@ -153,7 +152,7 @@ const installed = new WeakMap<VirtualConsoleLike, JsdomCapabilityController>();
  */
 export function installJsdomCapabilityGate(
   scope: unknown,
-  gaps: readonly JsdomCapabilityGap[] = KNOWN_JSDOM_GAPS,
+  gaps: ReadonlyArray<JsdomCapabilityGap> = KNOWN_JSDOM_GAPS,
 ): JsdomCapabilityController | null {
   const console_ = readVirtualConsole(scope);
   if (!console_) {
@@ -188,7 +187,10 @@ export function installJsdomCapabilityGate(
     detach: () => {
       console_.removeAllListeners("jsdomError");
       for (const listener of originals) {
-        console_.on("jsdomError", listener as (error: JsdomErrorLike) => void);
+        console_.on(
+          "jsdomError",
+          /* SAFETY: 类型断言已复核 */ listener as (error: JsdomErrorLike) => void,
+        );
       }
       installed.delete(console_);
     },
@@ -206,11 +208,9 @@ function readVirtualConsole(scope: unknown): VirtualConsoleLike | null {
   if (typeof scope !== "object" || scope === null) {
     return null;
   }
-  const holder = scope as {
+  const holder = /* SAFETY: 类型断言已复核 */ scope as {
     jsdom?: { virtualConsole?: VirtualConsoleLike };
     window?: { jsdom?: { virtualConsole?: VirtualConsoleLike } };
   };
-  return (
-    holder.jsdom?.virtualConsole ?? holder.window?.jsdom?.virtualConsole ?? null
-  );
+  return holder.jsdom?.virtualConsole ?? holder.window?.jsdom?.virtualConsole ?? null;
 }

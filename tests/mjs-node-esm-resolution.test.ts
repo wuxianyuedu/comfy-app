@@ -52,27 +52,34 @@ const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "coverage"]);
 const TS_SPEC = /\.(ts|tsx|mts|cts)$/;
 
 /** 抽出一个模块里**相对**的静态说明符（只认 `from "…"` 与裸 `import "…"`）。 */
-export function relativeSpecifiers(source: string): string[] {
-  const out: string[] = [];
+export function relativeSpecifiers(source: string): Array<string> {
+  const out: Array<string> = [];
   const fromRe = /\bfrom\s+["']([^"']+)["']/g;
   const bareRe = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
   for (const re of [fromRe, bareRe]) {
     let m: RegExpExecArray | null;
     while ((m = re.exec(source))) {
       const spec = m[1];
-      if (spec?.startsWith(".")) out.push(spec);
+      if (spec?.startsWith(".")) {
+        out.push(spec);
+      }
     }
   }
   return out;
 }
 
 /** 递归列出 `dir` 下的文件（跳过 `SKIP_DIRS`）。 */
-function listFiles(dir: string, out: string[] = []): string[] {
+function listFiles(dir: string, out: Array<string> = []): Array<string> {
   for (const name of readdirSync(dir)) {
-    if (SKIP_DIRS.has(name)) continue;
+    if (SKIP_DIRS.has(name)) {
+      continue;
+    }
     const full = path.join(dir, name);
-    if (statSync(full).isDirectory()) listFiles(full, out);
-    else out.push(full);
+    if (statSync(full).isDirectory()) {
+      listFiles(full, out);
+    } else {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -97,19 +104,23 @@ export function extensionlessTsSpecifiers(root: string = ROOT): Array<{
 }> {
   const offenders: Array<{ file: string; spec: string }> = [];
   const seen = new Set<string>();
-  const queue: string[] = [];
+  const queue: Array<string> = [];
 
   // 入口：三个目录下的 .mjs / .cjs（它们是「Node 直接跑」的形态）。
   for (const dir of ENTRY_DIRS) {
     const abs = path.join(root, dir);
     for (const file of listFiles(abs)) {
-      if (/\.(mjs|cjs)$/.test(file)) queue.push(file);
+      if (/\.(mjs|cjs)$/.test(file)) {
+        queue.push(file);
+      }
     }
   }
 
   while (queue.length > 0) {
     const file = queue.shift();
-    if (file === undefined || seen.has(file)) continue;
+    if (file === undefined || seen.has(file)) {
+      continue;
+    }
     seen.add(file);
 
     const source = readFileSync(file, "utf8");
@@ -124,7 +135,9 @@ export function extensionlessTsSpecifiers(root: string = ROOT): Array<{
       //    记一笔 —— 那正是本次事故的形态（`"./executable-resolve"` → `…ts`）。
       //    指向目录 barrel / 扩展名别名（`.js` → `.ts`）的那些不是本条的扫描面，
       //    本条不替它们下结论。
-      if (TS_SPEC.test(spec)) continue;
+      if (TS_SPEC.test(spec)) {
+        continue;
+      }
       if (isFile(`${target}.ts`)) {
         offenders.push({ file: path.relative(root, file), spec });
       }
@@ -143,14 +156,14 @@ describe("`.mjs` 入口 → `src/**` 的 Node ESM 路径：相对说明符必须
     const offenders = extensionlessTsSpecifiers();
     expect(
       offenders,
-      "以下模块由 `.mjs` 入口经 Node ESM（类型擦除）直接加载，却用了无后缀的相对" +
-        "说明符 —— Node 不猜扩展名，整条 stage 会在**加载期** `ERR_MODULE_NOT_FOUND`" +
-        "退 1（ISSUE #1959 第七跑实测 897ms 崩在 `E2E 关键流程`）：\n" +
+      `以下模块由 \`.mjs\` 入口经 Node ESM（类型擦除）直接加载，却用了无后缀的相对` +
+        `说明符 —— Node 不猜扩展名，整条 stage 会在**加载期** \`ERR_MODULE_NOT_FOUND\`` +
+        `退 1（ISSUE #1959 第七跑实测 897ms 崩在 \`E2E 关键流程\`）：\n${
         offenders
           .map((o) => `  ✗ ${o.file}：import "…${o.spec}" → 改成 "${o.spec}.ts"`)
-          .join("\n") +
-        "\n（`tsc` / eslint / vitest 走的是打包器解析，三条**都会**放过无后缀形态 ——" +
-        "所以只有这条按 Node 口径走的判据照得出来。）",
+          .join("\n")
+        }\n（\`tsc\` / eslint / vitest 走的是打包器解析，三条**都会**放过无后缀形态 ——` +
+        `所以只有这条按 Node 口径走的判据照得出来。）`,
     ).toEqual([]);
   });
 
@@ -158,11 +171,11 @@ describe("`.mjs` 入口 → `src/**` 的 Node ESM 路径：相对说明符必须
     // 反向自证：掏空 ENTRY_DIRS 或改坏解析，上面那条会变成恒绿。
     const files = ENTRY_DIRS.flatMap((d) => listFiles(path.join(ROOT, d)));
     const mjsImportingSrc = files.filter((f) => {
-      if (!/\.(mjs|cjs)$/.test(f)) return false;
+      if (!/\.(mjs|cjs)$/.test(f)) {
+        return false;
+      }
       return relativeSpecifiers(readFileSync(f, "utf8")).some(
-        (s) =>
-          s.includes("/src/") ||
-          path.resolve(path.dirname(f), s).includes("/src/"),
+        (s) => s.includes("/src/") || path.resolve(path.dirname(f), s).includes("/src/"),
       );
     });
     expect(

@@ -96,7 +96,9 @@ export const LOG_SCROLL_MAX = 8_000_000;
  * 「不低估」：低估会让下面几行被推到视口外，高估只是多留一点空白。
  */
 export function estimateRowHeight(message: string, wrap: boolean): number {
-  if (!wrap) return LOG_ROW_SINGLE;
+  if (!wrap) {
+    return LOG_ROW_SINGLE;
+  }
   const lines = Math.max(1, countLines(message));
   return LOG_ROW_SINGLE + (lines - 1) * LOG_ROW_LINE;
 }
@@ -116,10 +118,12 @@ export function countLines(message: string, availableWidth = 0): number {
   /* 行尾换行符产生的**末尾空段**不算独立的一行：一条以 `\n` 结尾的消息会被拆出
    * 一个空末段，若按它计数就会多估一整行空白（「只显示一行却占了两行空间」）。
    * 段中间的空段（空行）仍保留——它确实是一行。 */
-  while (segments.length > 1 && segments[segments.length - 1] === "") {
+  while (segments.length > 1 && segments.at(-1) === "") {
     segments.pop();
   }
-  if (availableWidth <= 0) return segments.length;
+  if (availableWidth <= 0) {
+    return segments.length;
+  }
   let total = 0;
   for (const segment of segments) {
     total += Math.max(1, Math.ceil((segment.length * 13) / availableWidth));
@@ -128,15 +132,15 @@ export function countLines(message: string, availableWidth = 0): number {
 }
 
 /** 一条日志在列表里的位置与高度（见 {@link layoutRows}）。 */
-export interface RowLayout {
-  /** 该行上边缘距列表顶部（不含顶部留白）的像素数。 */
-  start: number;
+export type RowLayout = {
   /** 该行的估算高度（像素）。 */
   size: number;
-}
+  /** 该行上边缘距列表顶部（不含顶部留白）的像素数。 */
+  start: number;
+};
 
 /** {@link layoutRows} 的两类**按 id 点名**的行（见下方说明）。 */
-export interface LogLayoutOptions {
+export type LogLayoutOptions = {
   /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
   expandedIds?: ReadonlySet<string>;
   /**
@@ -148,7 +152,7 @@ export interface LogLayoutOptions {
    * 参与换行估高。
    */
   singleLineIds?: ReadonlySet<string>;
-}
+};
 
 /**
  * 估算整页每一行的位置与高度。
@@ -162,15 +166,15 @@ export interface LogLayoutOptions {
  * 仍是同一行。
  */
 export function layoutRows(
-  entries: readonly { message: string; id?: string }[],
+  entries: ReadonlyArray<{ id?: string; message: string }>,
   wrap: boolean,
   availableWidth = 0,
   options: LogLayoutOptions = {},
-): { rows: RowLayout[]; totalSize: number } {
+): { rows: Array<RowLayout>; totalSize: number } {
   const { expandedIds, singleLineIds } = options;
   /* `Array.from` 而不是 `new Array(n)`：后者在 lint 下是 `any[]`，会一路传染到
      下面的 `rows[i]` 赋值上。 */
-  const rows: RowLayout[] = Array.from({ length: entries.length }, () => ({
+  const rows: Array<RowLayout> = Array.from({ length: entries.length }, () => ({
     start: 0,
     size: LOG_ROW_SINGLE,
   }));
@@ -203,17 +207,17 @@ export function layoutRows(
  *   - `scrollTop` 为负 / `NaN`（jsdom 与初次布局）当 0 处理。
  */
 export function visibleRange(
-  rows: readonly RowLayout[],
+  rows: ReadonlyArray<RowLayout>,
   scrollTop: number,
   viewportHeight: number,
   overscan = LOG_VIRTUAL_OVERSCAN,
-): { start: number; end: number } {
+): { end: number; start: number } {
   const count = rows.length;
-  if (count === 0) return { start: 0, end: 0 };
+  if (count === 0) {
+    return { start: 0, end: 0 };
+  }
   const top = Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0;
-  const height = Number.isFinite(viewportHeight)
-    ? Math.max(0, viewportHeight)
-    : 0;
+  const height = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0;
   const pad = Math.max(0, overscan);
 
   const first = firstVisibleRow(rows, top);
@@ -229,17 +233,19 @@ export function visibleRange(
  * 二分而不是线性扫描：滚动事件每帧都要求一次，线性扫描 2000 行在慢速设备上
  * 会直接体现在滚动掉帧上。`rows` 的 `start` 单调递增，因此二分成立。
  */
-export function firstVisibleRow(
-  rows: readonly RowLayout[],
-  offset: number,
-): number {
-  if (rows.length === 0) return 0;
+export function firstVisibleRow(rows: ReadonlyArray<RowLayout>, offset: number): number {
+  if (rows.length === 0) {
+    return 0;
+  }
   let low = 0;
   let high = rows.length - 1;
   while (low < high) {
     const mid = (low + high + 1) >> 1;
-    if ((rows.at(mid)?.start ?? Number.POSITIVE_INFINITY) <= offset) low = mid;
-    else high = mid - 1;
+    if ((rows.at(mid)?.start ?? Number.POSITIVE_INFINITY) <= offset) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
   }
   return low;
 }
@@ -251,8 +257,8 @@ export function firstVisibleRow(
  * 滚一半对应的其实是真实高度里的另一处。
  */
 export function scrollHeightOf(estimated: number): {
-  height: number;
   compressed: boolean;
+  height: number;
 } {
   /* 取不到 / 负数一律当 0：`Math.max(0, NaN)` 是 NaN，直接交给 style 会得到
    * 一个非法的 `height: NaNpx`（浏览器静默忽略，滚动条长度就与内容对不上了）。 */
@@ -279,15 +285,8 @@ export function scrollHeightOf(estimated: number): {
  * 取 max 是为了「新行一条条露出来」（不跳空），钳到末条是为了不被后面的新行
  * 无限拖走。
  */
-export function pinTargetIndex(
-  baseline: number,
-  applied: number,
-  bottomIndex: number,
-): number {
-  return Math.max(
-    clamp(baseline, 0, bottomIndex),
-    clamp(applied, 0, bottomIndex),
-  );
+export function pinTargetIndex(baseline: number, applied: number, bottomIndex: number): number {
+  return Math.max(clamp(baseline, 0, bottomIndex), clamp(applied, 0, bottomIndex));
 }
 
 /**
@@ -310,12 +309,10 @@ export function pinTargetIndex(
  * `scrollTop` 会被静默忽略（位置不更新）。
  */
 export function pinScrollTop(
-  geometry: { start: number; size: number },
+  geometry: { size: number; start: number },
   viewportHeight: number,
 ): number {
-  const viewport = Number.isFinite(viewportHeight)
-    ? Math.max(0, viewportHeight)
-    : 0;
+  const viewport = Number.isFinite(viewportHeight) ? Math.max(0, viewportHeight) : 0;
   const next = geometry.start + geometry.size - viewport;
   return Number.isFinite(next) ? Math.max(0, next) : 0;
 }
@@ -332,19 +329,14 @@ export function pinScrollTop(
  *      小数位取整，同一位置的读写不必逐位相等。
  */
 export function pinPlan(input: {
-  baseline: number;
   applied: number;
+  appliedTop: number;
+  baseline: number;
   bottomIndex: number;
   scrollTop: number;
-  appliedTop: number;
 }): number | null {
-  const targetIndex = pinTargetIndex(
-    input.baseline,
-    input.applied,
-    input.bottomIndex,
-  );
+  const targetIndex = pinTargetIndex(input.baseline, input.applied, input.bottomIndex);
   const userTookOver =
-    input.applied === targetIndex &&
-    Math.abs(input.scrollTop - input.appliedTop) > 1;
+    input.applied === targetIndex && Math.abs(input.scrollTop - input.appliedTop) > 1;
   return userTookOver ? null : targetIndex;
 }

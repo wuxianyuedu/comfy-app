@@ -8,46 +8,22 @@ import { emitAppEvent } from "~/lib/app-events";
 import { getActiveId } from "~/lib/project-canvas/canvas-store";
 
 import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
-import {
-  cancelLocalTask,
-  type WorkshopWorkflowOption,
-} from "~/lib/workshop/generation-client";
-import {
-  fetchServerDraft,
-  pushServerDraft,
-} from "~/lib/workshop/draft-sync-client";
-import {
-  fetchProductionProgress,
-  pushProduction,
-} from "~/lib/production/production-client";
+import { cancelLocalTask, type WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
+import { fetchServerDraft, pushServerDraft } from "~/lib/workshop/draft-sync-client";
+import { fetchProductionProgress, pushProduction } from "~/lib/production/production-client";
 import { buildProductionPayload } from "~/lib/production/payload";
 import { errorMessage } from "~/lib/error-message";
 import { beginStaleRun } from "~/lib/stale-run";
-import {
-  useWorkshopBootstrapData,
-  useWorkshopTaskRecovery,
-} from "./use-workshop-pipeline-effects";
+import { useWorkshopBootstrapData, useWorkshopTaskRecovery } from "./use-workshop-pipeline-effects";
 import {
   DEFAULT_META,
   readWorkshopDraft as readDraft,
   writeWorkshopDraft as writeDraft,
   type WorkshopDraft,
 } from "~/lib/workshop/draft-store";
-import {
-  draftHasContent,
-  type WorkshopDraftDto,
-} from "~/lib/workshop/draft-sync-shared";
-import {
-  auditDraftElements,
-  type DraftElementIssue,
-} from "~/lib/workshop/draft-integrity";
-import type {
-  Character,
-  ProjectMeta,
-  Scene,
-  Shot,
-  StyleRef,
-} from "~/lib/workshop/types";
+import { draftHasContent, type WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
+import { auditDraftElements, type DraftElementIssue } from "~/lib/workshop/draft-integrity";
+import type { Character, ProjectMeta, Scene, Shot, StyleRef } from "~/lib/workshop/types";
 import {
   buildHealthSnapshot,
   buildMissingSummary,
@@ -66,10 +42,7 @@ import {
 import type { ExtractLogEntry } from "~/lib/workshop/extraction-log";
 import { persistGenerationLogs } from "~/lib/workshop/generation-log-client";
 import type { GenerationLogStage } from "~/lib/workshop/generation-log";
-import {
-  useWorkshopGeneration,
-  type ShotProgressMap,
-} from "./use-workshop-generation";
+import { useWorkshopGeneration, type ShotProgressMap } from "./use-workshop-generation";
 import {
   useCharacterPortrait,
   type PortraitSession,
@@ -119,7 +92,9 @@ function loadWorkshopDraftOnce(): WorkshopDraft | null {
   /* invalidateDraftCache() 卸载时把缓存置 null 标记「需从 localStorage 重读」，
    * 这里须用 ??=（null / undefined 都重读），否则重挂载读回旧缓存 → 切页签丢内容。 */
   const pid = getActiveId();
-  if (!pid) return null;
+  if (!pid) {
+    return null;
+  }
   workshopDraftCache ??= readDraft(pid);
   return workshopDraftCache;
 }
@@ -138,133 +113,125 @@ export type { ShotProgressMap };
  *  收在 controller 层 —— 提取中切页签再切回，进度与日志不丢（取代原先
  *  散落在各组件里的会话级模块缓存）。
  */
-export interface ExtractSession {
+export type ExtractSession = {
+  busy: boolean;
   /** 模型下拉完整选项值（tool | local::<model> | remote::<model>） */
   channelValue: string;
-  busy: boolean;
-  /** 成功 / 结果提示文案 */
-  status: string;
-  /** 模型通道的实时流式提取过程（token 累积） */
-  progress: string;
   error: string;
   /** 结构化执行日志（输入/输出/结果/错误），跑完仍保留展示 */
-  log: ExtractLogEntry[];
-}
+  log: Array<ExtractLogEntry>;
+  /** 模型通道的实时流式提取过程（token 累积） */
+  progress: string;
+  /** 成功 / 结果提示文案 */
+  status: string;
+};
 
 /** 提取会话更新动作：patch 更新普通字段，appendLog / resetLog 维护日志。
  *  阶段组件卸载期间后台 async 仍可调用（controller 常驻），故能跨页签续传。 */
-export interface ExtractSessionActions {
+export type ExtractSessionActions = {
+  /** 追加一条结构化执行日志 */
+  appendLog: (entry: ExtractLogEntry) => void;
+  /** 向实时 process 追加一段文本（流式 token 累积用） */
+  appendProgress: (text: string) => void;
   /** 合并更新普通字段（通道 / busy / status / progress / error） */
   patch: (
     p:
-      | Partial<
-          Pick<
-            ExtractSession,
-            "channelValue" | "busy" | "status" | "progress" | "error"
-          >
-        >
+      | Partial<Pick<ExtractSession, "channelValue" | "busy" | "status" | "progress" | "error">>
       | ((
           prev: ExtractSession,
         ) => Partial<
-          Pick<
-            ExtractSession,
-            "channelValue" | "busy" | "status" | "progress" | "error"
-          >
+          Pick<ExtractSession, "channelValue" | "busy" | "status" | "progress" | "error">
         >),
   ) => void;
-  /** 向实时 process 追加一段文本（流式 token 累积用） */
-  appendProgress: (text: string) => void;
-  /** 追加一条结构化执行日志 */
-  appendLog: (entry: ExtractLogEntry) => void;
   /** 以给定数组整体替换执行日志（新一次提取重置时用） */
-  setLog: (entries: ExtractLogEntry[]) => void;
-}
+  setLog: (entries: Array<ExtractLogEntry>) => void;
+};
 
-export interface WorkshopPipelineController {
-  // ── 阶段
-  tab: Tab;
-  setTab: (tab: Tab) => void;
-  stageIndex: number;
-  stageTitle: string;
-  stageDesc: string;
-  stageRatios: StageRatios;
-  progressPct: number;
-  prereq: { text: string; go: Tab } | null;
-  /** 六段的健康度快照（唯一一份进度账；「还差几段」由它派生）。 */
-  health: HealthRow[];
-  viewContext: StageViewContext;
-  missing: MissingItem[];
-
-  // ── 数据
-  meta: ProjectMeta;
-  setMeta: React.Dispatch<React.SetStateAction<ProjectMeta>>;
-  scriptMarkdown: string;
-  setScriptMarkdown: (value: string) => void;
-  scenes: Scene[];
-  setScenes: React.Dispatch<React.SetStateAction<Scene[]>>;
-  characters: Character[];
-  setCharacters: React.Dispatch<React.SetStateAction<Character[]>>;
-  shots: Shot[];
-  setShots: React.Dispatch<React.SetStateAction<Shot[]>>;
-  styles: StyleRef[];
-  /** 工作流库里的可选工作流（ISSUE #145）。 */
-  workflowOptions: WorkshopWorkflowOption[];
-  /** 生图阶段选定的工作流 id（本地链路唯一来源，空串 = 未选）。 */
-  workflowId: string;
-  setWorkflowId: (value: string) => void;
-  /** 视频阶段选定的工作流 id（空串 = 未选）。 */
-  videoWorkflowId: string;
-  setVideoWorkflowId: (value: string) => void;
+export type WorkshopPipelineController = {
+  /* ── 所在项目（Phase 2：并入统一 proj_*，工坊不再自建多项目） ── */
+  activeProjectId: string;
   apiChannels: ApiChannelsView | null;
-  imageDoneCount: number;
-  clipDoneCount: number;
-  rendered: boolean;
-
-  // ── 交互态
-  generating: boolean;
-  shotProgress: ShotProgressMap;
-  isScriptEditorOpen: boolean;
-  /** 需要引起用户注意的失败/阻断文案（替代 alert，由视图决定怎么渲染）。 */
-  notice: string | null;
-  /** 草稿里形状不认识但已原样保留的元素（台账 F13″）：视图据此标「需要修复」。 */
-  integrity: DraftElementIssue[];
-
-  // ── 提取会话（角色卡 / 分镜）：busy / progress / 日志 收归 controller ──
-  characterExtract: ExtractSession;
-  characterExtractActions: ExtractSessionActions;
-  storyboardExtract: ExtractSession;
-  storyboardExtractActions: ExtractSessionActions;
-  /** 角色定妆照：生成 / 导入的进度与日志（跨页签常驻） */
-  characterPortrait: PortraitSession;
-  characterPortraitActions: PortraitSessionActions;
-
-  // ── 动作
-  generateShot: (shot: Shot) => Promise<void>;
   /** 取消一个进行中的本机任务（生图 / 视频通用）：调 task.cancel 后由观察
    *  循环收到 CANCELLED 终态收尾。API 直连任务没有本机任务 id，取消不了。 */
   cancelShotTask: (shot: Shot, target: "image" | "video") => Promise<void>;
-  openScriptEditor: () => void;
+  // ── 提取会话（角色卡 / 分镜）：busy / progress / 日志 收归 controller ──
+  characterExtract: ExtractSession;
+  characterExtractActions: ExtractSessionActions;
+  /** 角色定妆照：生成 / 导入的进度与日志（跨页签常驻） */
+  characterPortrait: PortraitSession;
+  characterPortraitActions: PortraitSessionActions;
+  characters: Array<Character>;
+  clipDoneCount: number;
   closeScriptEditor: () => void;
-  saveScriptEditor: () => void;
-  /** 「API 直连未配置 → 去配置」这类就近提示的出口：**切到全局的模型适配视图页签**
-   *  （广播 `workspace:navigate`，与工坊右栏「在资源库中打开」同一条通道）。
-   *  此前它是 `openApiSettings` + 一个 `apiSettingsOpen` 布尔 + 工坊内部一层弹窗 ——
-   *  同一件事现在只有页签那一个落点。 */
-  openModelAdapters: () => void;
+  dismissNotice: () => void;
+
+  // ── 动作
+  generateShot: (shot: Shot) => Promise<void>;
+  // ── 交互态
+  generating: boolean;
   /** 切到「成片」视图页签（广播 `workspace:navigate`，与 `openModelAdapters`
    *  同一条通道）：阶段⑥导出合成清单后，把用户送到真出 MP4 的成片工坊。
    *  成片工坊已能从活跃项目读镜头并一键成片（`createFromProject`），这条出口
    *  就是让阶段⑥不再「导个清单就当做完」（ISSUE #2476）。 */
   goToFilm: () => void;
   handleApiChannelsSaved: (channels: ApiChannelsView) => void;
-  dismissNotice: () => void;
+  /** 六段的健康度快照（唯一一份进度账；「还差几段」由它派生）。 */
+  health: Array<HealthRow>;
+  imageDoneCount: number;
+  /** 草稿里形状不认识但已原样保留的元素（台账 F13″）：视图据此标「需要修复」。 */
+  integrity: Array<DraftElementIssue>;
+  isScriptEditorOpen: boolean;
+  markRendered: () => void;
+  // ── 数据
+  meta: ProjectMeta;
+  missing: Array<MissingItem>;
+  /** 需要引起用户注意的失败/阻断文案（替代 alert，由视图决定怎么渲染）。 */
+  notice: string | null;
+  /** 「API 直连未配置 → 去配置」这类就近提示的出口：**切到全局的模型适配视图页签**
+   *  （广播 `workspace:navigate`，与工坊右栏「在资源库中打开」同一条通道）。
+   *  此前它是 `openApiSettings` + 一个 `apiSettingsOpen` 布尔 + 工坊内部一层弹窗 ——
+   *  同一件事现在只有页签那一个落点。 */
+  openModelAdapters: () => void;
+  openScriptEditor: () => void;
+  prereq: { go: Tab; text: string } | null;
+  progressPct: number;
+  rendered: boolean;
+  saveScriptEditor: () => void;
+  scenes: Array<Scene>;
+  scriptMarkdown: string;
+
+  setCharacters: React.Dispatch<React.SetStateAction<Array<Character>>>;
+  setMeta: React.Dispatch<React.SetStateAction<ProjectMeta>>;
+  setScenes: React.Dispatch<React.SetStateAction<Array<Scene>>>;
+  setScriptMarkdown: (value: string) => void;
+  setShots: React.Dispatch<React.SetStateAction<Array<Shot>>>;
+
+  setTab: (tab: Tab) => void;
+  setVideoWorkflowId: (value: string) => void;
+  setWorkflowId: (value: string) => void;
+  shotProgress: ShotProgressMap;
+  shots: Array<Shot>;
   /** 写一条用户可见的提示（错误 / 门禁 / 未生效警告）：stage 组件内部的
    *  降级路径（如文件导入失败）经它上屏，不在视图里自建第二条提示通道。 */
   showNotice: (message: string) => void;
-  markRendered: () => void;
-  /* ── 所在项目（Phase 2：并入统一 proj_*，工坊不再自建多项目） ── */
-  activeProjectId: string;
-}
+
+  stageDesc: string;
+  stageIndex: number;
+  stageRatios: StageRatios;
+  stageTitle: string;
+  storyboardExtract: ExtractSession;
+  storyboardExtractActions: ExtractSessionActions;
+  styles: Array<StyleRef>;
+  // ── 阶段
+  tab: Tab;
+  /** 视频阶段选定的工作流 id（空串 = 未选）。 */
+  videoWorkflowId: string;
+  viewContext: StageViewContext;
+  /** 生图阶段选定的工作流 id（本地链路唯一来源，空串 = 未选）。 */
+  workflowId: string;
+  /** 工作流库里的可选工作流（ISSUE #145）。 */
+  workflowOptions: Array<WorkshopWorkflowOption>;
+};
 
 /** 创建一个收在 controller 的提取会话（state + 稳定动作）。
  *  在工坊控制器内调用两次（角色卡 / 分镜），动作经 useCallback 保持稳定，
@@ -286,19 +253,11 @@ export function useExtractSession(
   const patch = React.useCallback(
     (
       p:
-        | Partial<
-            Pick<
-              ExtractSession,
-              "channelValue" | "busy" | "status" | "progress" | "error"
-            >
-          >
+        | Partial<Pick<ExtractSession, "channelValue" | "busy" | "status" | "progress" | "error">>
         | ((
             prev: ExtractSession,
           ) => Partial<
-            Pick<
-              ExtractSession,
-              "channelValue" | "busy" | "status" | "progress" | "error"
-            >
+            Pick<ExtractSession, "channelValue" | "busy" | "status" | "progress" | "error">
           >),
     ) =>
       setSession((prev) => ({
@@ -317,11 +276,13 @@ export function useExtractSession(
         ...prev,
         log: [...prev.log, entry].slice(-EXTRACT_LOG_MAX_ENTRIES),
       }));
-      if (stage) persistGenerationLogs(stage, [entry]);
+      if (stage) {
+        persistGenerationLogs(stage, [entry]);
+      }
     },
     [stage],
   );
-  const setLog = React.useCallback((entries: ExtractLogEntry[]) => {
+  const setLog = React.useCallback((entries: Array<ExtractLogEntry>) => {
     setSession((prev) => ({ ...prev, log: entries }));
   }, []);
   return [session, { patch, appendProgress, appendLog, setLog }];
@@ -335,20 +296,16 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   const [meta, setMeta] = React.useState<ProjectMeta>(
     () => loadWorkshopDraftOnce()?.meta ?? DEFAULT_META,
   );
-  const [scenes, setScenes] = React.useState<Scene[]>(
+  const [scenes, setScenes] = React.useState<Array<Scene>>(
     () => loadWorkshopDraftOnce()?.scenes ?? [],
   );
-  const [characters, setCharacters] = React.useState<Character[]>(
+  const [characters, setCharacters] = React.useState<Array<Character>>(
     () => loadWorkshopDraftOnce()?.characters ?? [],
   );
-  const [shots, setShots] = React.useState<Shot[]>(
-    () => loadWorkshopDraftOnce()?.shots ?? [],
-  );
-  const [styles, setStyles] = React.useState<StyleRef[]>([]);
+  const [shots, setShots] = React.useState<Array<Shot>>(() => loadWorkshopDraftOnce()?.shots ?? []);
+  const [styles, setStyles] = React.useState<Array<StyleRef>>([]);
   /* 工坊可用的工作流库工作流 + 当前选择（ISSUE #145）：本地通道的唯一来源。 */
-  const [workflowOptions, setWorkflowOptions] = React.useState<
-    WorkshopWorkflowOption[]
-  >([]);
+  const [workflowOptions, setWorkflowOptions] = React.useState<Array<WorkshopWorkflowOption>>([]);
   const [workflowId, setWorkflowId] = React.useState(
     () => loadWorkshopDraftOnce()?.workflowId ?? "",
   );
@@ -357,20 +314,12 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   );
   /* 镜头进度的节流闸门（见 `~/components/ui/use-throttled-progress`）。 */
   const [rendered, setRendered] = React.useState(false);
-  const [apiChannels, setApiChannels] = React.useState<ApiChannelsView | null>(
-    null,
-  );
+  const [apiChannels, setApiChannels] = React.useState<ApiChannelsView | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
 
   // ── 提取会话收归 controller：切页签卸载只丢 stage 组件，此处常驻 ──
-  const [characterExtract, characterExtractActions] = useExtractSession(
-    "local",
-    "character",
-  );
-  const [storyboardExtract, storyboardExtractActions] = useExtractSession(
-    "local",
-    "storyboard",
-  );
+  const [characterExtract, characterExtractActions] = useExtractSession("local", "character");
+  const [storyboardExtract, storyboardExtractActions] = useExtractSession("local", "storyboard");
 
   // 剧本内容默认为空，全部内容经 localStorage 草稿持久化
   // （防抖自动保存，挂载时惰性恢复）。
@@ -401,15 +350,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       workflowId,
       videoWorkflowId,
     }),
-    [
-      meta,
-      scriptMarkdown,
-      scenes,
-      characters,
-      shots,
-      workflowId,
-      videoWorkflowId,
-    ],
+    [meta, scriptMarkdown, scenes, characters, shots, workflowId, videoWorkflowId],
   );
 
   /** 把一份草稿灌进所有受管 state（切换 / 删除项目后接手时调用）。 */
@@ -448,10 +389,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       writeDraft(activeProjectId, draft);
       void pushServerDraft(activeProjectId, draft);
       // Phase 3b-2：额外写穿一份「生产数据」到 production 表，供画布读取物化（3c）。
-      void pushProduction(
-        activeProjectId,
-        buildProductionPayload(draft, tab, rendered),
-      );
+      void pushProduction(activeProjectId, buildProductionPayload(draft, tab, rendered));
     }, 600);
     return () => clearTimeout(timer);
   }, [activeProjectId, currentDraft, tab, rendered]);
@@ -483,10 +421,16 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   React.useEffect(() => {
     void (async () => {
       const activeId = activeProjectRef.current;
-      if (!activeId) return;
-      if (serverRecoveredIds.has(activeId)) return;
+      if (!activeId) {
+        return;
+      }
+      if (serverRecoveredIds.has(activeId)) {
+        return;
+      }
       serverRecoveredIds.add(activeId);
-      if (!draftIsEmpty(latestDraftRef.current)) return;
+      if (!draftIsEmpty(latestDraftRef.current)) {
+        return;
+      }
       try {
         const serverDraft = await fetchServerDraft(activeId);
         if (serverDraft && draftHasContent(serverDraft)) {
@@ -511,14 +455,20 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    * 卸载即 dispose、结论不落地。 */
   React.useEffect(() => {
     const activeId = activeProjectRef.current;
-    if (!activeId) return;
+    if (!activeId) {
+      return;
+    }
     const guard = beginStaleRun();
     void (async () => {
       const progress = await fetchProductionProgress(activeId);
-      if (!progress) return;
+      if (!progress) {
+        return;
+      }
       guard.commit(() => {
         setRendered(progress.rendered);
-        if (tabRef.current === "script") setTab(progress.stage);
+        if (tabRef.current === "script") {
+          setTab(progress.stage);
+        }
       });
     })();
     return () => guard.dispose();
@@ -545,31 +495,25 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
 
   /* 镜头目标数从场景表派生（每场景至少算 1 镜，与导入时铺占位镜头的口径同源）；
    * 场景还没拆出来时它是 0 —— 此时「还差几镜」没有可信答案，清单就不报缺口。 */
-  const shotTarget = scenes.reduce(
-    (sum, scene) => sum + Math.max(1, scene.shotCount),
-    0,
-  );
+  const shotTarget = scenes.reduce((sum, scene) => sum + Math.max(1, scene.shotCount), 0);
 
   /** 取消一个进行中的本机任务（生图 / 视频通用）。真正把界面收尾的是观察
    *  循环：task.cancel 把任务置 CANCELLED，SSE 的终态帧随后落定 —— 状态回
    *  failed、提示「已取消，可重新生成」。这里只负责发起取消并把失败原因
    *  说清（任务可能恰好已结束）。 */
-  const cancelShotTask = React.useCallback(
-    async (shot: Shot, target: "image" | "video") => {
-      const taskId = target === "video" ? shot.clipTaskId : shot.taskId;
-      if (!taskId) {
-        setNotice("该任务无法取消（非本机任务，或已经结束）");
-        return;
-      }
-      try {
-        await cancelLocalTask(taskId);
-        setNotice("已发送取消请求，正在等待任务停止…");
-      } catch (e: unknown) {
-        setNotice(errorMessage(e, "取消失败（任务可能已经结束）"));
-      }
-    },
-    [],
-  );
+  const cancelShotTask = React.useCallback(async (shot: Shot, target: "image" | "video") => {
+    const taskId = target === "video" ? shot.clipTaskId : shot.taskId;
+    if (!taskId) {
+      setNotice("该任务无法取消（非本机任务，或已经结束）");
+      return;
+    }
+    try {
+      await cancelLocalTask(taskId);
+      setNotice("已发送取消请求，正在等待任务停止…");
+    } catch (error: unknown) {
+      setNotice(errorMessage(error, "取消失败（任务可能已经结束）"));
+    }
+  }, []);
 
   /* 恢复失联任务（刷新 / 切走页签后重挂载）——沉在
    * `./use-workshop-pipeline-effects` 的 `useWorkshopTaskRecovery`：查 task 表
@@ -615,10 +559,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     ],
   );
 
-  const missing = React.useMemo(
-    () => buildMissingSummary(viewContext),
-    [viewContext],
-  );
+  const missing = React.useMemo(() => buildMissingSummary(viewContext), [viewContext]);
 
   const stageRatios = computeStageRatios(viewContext, rendered);
   const progressPct = computeProgressPct(stageRatios);
@@ -654,12 +595,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     [],
   );
 
-  const handleApiChannelsSaved = React.useCallback(
-    (channels: ApiChannelsView) => {
-      setApiChannels(channels);
-    },
-    [],
-  );
+  const handleApiChannelsSaved = React.useCallback((channels: ApiChannelsView) => {
+    setApiChannels(channels);
+  }, []);
 
   const dismissNotice = React.useCallback(() => setNotice(null), []);
   const showNotice = React.useCallback((message: string) => {

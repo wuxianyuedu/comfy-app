@@ -45,13 +45,12 @@ const STAGED = ARGS.has("--staged");
 /** 扫描范围：应用源码。 */
 const SCAN_DIR = "src";
 
-if (STAGED && !REPORT_ONLY)
+if (STAGED && !REPORT_ONLY) {
   skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[function-length]" });
+}
 const SOURCE_EXT = /\.(ts|tsx)$/;
 const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) ||
-  /\.snap$/.test(rel) ||
-  rel.includes("/__tests__/");
+  /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.endsWith(".snap") || rel.includes("/__tests__/");
 
 /** 超过这个行数的函数进「拆分候选」清单(与 R5 的文件阈值同性质：提示级)。
  *
@@ -87,7 +86,9 @@ function bracketDepths(lines) {
           j++;
           continue;
         }
-        if (ch === "`") inTemplate--;
+        if (ch === "`") {
+          inTemplate--;
+        }
         continue;
       }
       if (inStr) {
@@ -95,10 +96,14 @@ function bracketDepths(lines) {
           j++;
           continue;
         }
-        if (ch === inStr) inStr = null;
+        if (ch === inStr) {
+          inStr = null;
+        }
         continue;
       }
-      if (ch === "/" && nx === "/") break; // 行注释
+      if (ch === "/" && nx === "/") {
+        break;
+      } // 行注释
       if (ch === "/" && nx === "*") {
         inBlock = true;
         j++;
@@ -116,8 +121,11 @@ function bracketDepths(lines) {
        * (`TaskProgressNode | undefined`) 与 JSX 标签都会被当成不配平的尖括号，
        * 累计下去整文件深度漂成负数，函数尾永远找不到(实测泄漏为「一个 TSX 文件
        * 只报 0~1 个巨型函数」)。这三种括号在 TS/TSX 里总是配平的。 */
-      if (ch === "{" || ch === "(" || ch === "[") depth++;
-      else if (ch === "}" || ch === ")" || ch === "]") depth--;
+      if (ch === "{" || ch === "(" || ch === "[") {
+        depth++;
+      } else if (ch === "}" || ch === ")" || ch === "]") {
+        depth--;
+      }
     }
     depthAtLine[i] = depth;
   }
@@ -128,9 +136,13 @@ function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === ".next") continue;
+      if (e.name === "node_modules" || e.name === ".next") {
+        continue;
+      }
       walk(p, out);
-    } else out.push(p);
+    } else {
+      out.push(p);
+    }
   }
   return out;
 }
@@ -139,7 +151,7 @@ const relOf = (p) =>
   p
     .split(path.sep)
     .join("/")
-    .replace(ROOT.split(path.sep).join("/") + "/", "");
+    .replace(`${ROOT.split(path.sep).join("/")}/`, "");
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
@@ -177,7 +189,9 @@ function stripNonCode(lines) {
           res += "  ";
           continue;
         }
-        if (ch === "`") inTemplate--;
+        if (ch === "`") {
+          inTemplate--;
+        }
         res += " ";
         continue;
       }
@@ -187,7 +201,9 @@ function stripNonCode(lines) {
           res += "  ";
           continue;
         }
-        if (ch === inStr) inStr = null;
+        if (ch === inStr) {
+          inStr = null;
+        }
         res += " ";
         continue;
       }
@@ -227,14 +243,19 @@ function findBodyBrace(codeLines, line, col) {
     const text = codeLines[i];
     for (let j = i === line ? col : 0; j < text.length; j++) {
       const ch = text[j];
-      if (ch === "(" || ch === "[") depth++;
-      else if (ch === ")" || ch === "]") {
+      if (ch === "(" || ch === "[") {
+        depth++;
+      } else if (ch === ")" || ch === "]") {
         depth--;
-        if (ch === ")") seenClose = true;
+        if (ch === ")") {
+          seenClose = true;
+        }
       } else if (depth <= 0 && ch === "{") {
         /* 必须已见过 `)` —— 否则 `function f({a, b}) {` 的解构参数会被当函数体。 */
         return seenClose ? { line: i, col: j } : null;
-      } else if (depth < 0) return null;
+      } else if (depth < 0) {
+        return null;
+      }
     }
   }
   return null;
@@ -252,7 +273,9 @@ function findAnonHeads(codeLines, i) {
   const fnAnon = /(?:^|[\s(=,:;[{])(?:async\s+)?function\s*\(/g;
   while ((m = fnAnon.exec(text)) !== null) {
     const brace = findBodyBrace(codeLines, i, m.index + m[0].length - 1);
-    if (brace) heads.push({ decl: i, body: brace.line, name: null });
+    if (brace) {
+      heads.push({ decl: i, body: brace.line, name: null });
+    }
   }
   return heads;
 }
@@ -271,7 +294,9 @@ function collectHeads(codeLines) {
       byPos.set(key, h);
       return;
     }
-    if (prev.name && !h.name) return;
+    if (prev.name && !h.name) {
+      return;
+    }
     byPos.set(key, {
       decl: Math.min(prev.decl, h.decl),
       body: h.body,
@@ -283,17 +308,23 @@ function collectHeads(codeLines) {
     let namedEnd = -1;
     for (const re of [NAMED_HEAD_RE, ASSIGN_HEAD_RE]) {
       const m = re.exec(line);
-      if (!m) continue;
+      if (!m) {
+        continue;
+      }
       const parenAt = line.indexOf("(", m.index + m[0].length - 1);
-      const brace = findBodyBrace(codeLines, i, parenAt < 0 ? 0 : parenAt);
-      if (!brace) continue;
+      const brace = findBodyBrace(codeLines, i, parenAt === -1 ? 0 : parenAt);
+      if (!brace) {
+        continue;
+      }
       push({ decl: i, body: brace.line, name: m[1] });
       namedEnd = brace.line;
       break;
     }
     for (const h of findAnonHeads(codeLines, i)) {
       /* 落在具名签名区间内的匿名头是类型注解 / 参数默认值的一部分，跳过。 */
-      if (namedEnd >= i && h.body <= namedEnd) continue;
+      if (namedEnd >= i && h.body <= namedEnd) {
+        continue;
+      }
       push(h);
     }
   }
@@ -322,10 +353,14 @@ function scanFile(rel, source) {
         break;
       }
     }
-    if (end < 0) continue;
+    if (end < 0) {
+      continue;
+    }
     /* 长度从**声明行**算起（签名占了 7 行时那 7 行也属这个函数）。 */
     const size = end - head.decl + 1;
-    if (size < HINT_LINES) continue;
+    if (size < HINT_LINES) {
+      continue;
+    }
     rows.push({
       rel,
       line: head.decl + 1,
@@ -344,8 +379,10 @@ function scanFile(rel, source) {
   const kept = [];
   const seen = new Set();
   for (const f of rows) {
-    const key = f.start + ":" + f.end;
-    if (seen.has(key)) continue;
+    const key = `${f.start}:${f.end}`;
+    if (seen.has(key)) {
+      continue;
+    }
     seen.add(key);
     kept.push(f);
   }
@@ -355,8 +392,12 @@ function scanFile(rel, source) {
 const longFunctions = [];
 for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
   const rel = relOf(abs);
-  if (!SOURCE_EXT.test(rel) || rel.endsWith(".d.ts")) continue;
-  if (isTestFile(rel)) continue;
+  if (!SOURCE_EXT.test(rel) || rel.endsWith(".d.ts")) {
+    continue;
+  }
+  if (isTestFile(rel)) {
+    continue;
+  }
   longFunctions.push(...scanFile(rel, fs.readFileSync(abs, "utf8")));
 }
 
@@ -372,15 +413,13 @@ const fmt = (f) => `${f.lines} 行  ${f.rel}:${f.line}  ${f.name}`;
 
 if (REPORT_ONLY) {
   if (longFunctions.length) {
-    gatePass(
-      "函数长度",
-      `超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个（只出清单）`,
-      {
-        subject: `${SCAN_DIR}/**`,
-        out: (line) => console.log(line),
-      },
-    );
-    for (const line of indentItems(longFunctions.map(fmt))) console.log(line);
+    gatePass("函数长度", `超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个（只出清单）`, {
+      subject: `${SCAN_DIR}/**`,
+      out: (line) => console.log(line),
+    });
+    for (const line of indentItems(longFunctions.map(fmt))) {
+      console.log(line);
+    }
   } else {
     gatePass("函数长度", `超过 ${HINT_LINES} 行的函数 0 个`, {
       subject: `${SCAN_DIR}/**`,
@@ -394,11 +433,11 @@ if (longFunctions.length) {
     subject: `${SCAN_DIR}/**`,
     detail: `超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个`,
     hint:
-      "判据：函数体超过 " +
-      HINT_LINES +
-      " 行即应拆分（按职责切子函数 / 子组件 / 子 hook），\n" +
-      "不是靠「在一个函数里加注释分段」（规范 §12.13）。\n" +
-      "本判据是硬闸（无基线、无 --update）：巨型函数存量已清零，新增即阻断。",
+      `判据：函数体超过 ${
+      HINT_LINES
+      } 行即应拆分（按职责切子函数 / 子组件 / 子 hook），\n` +
+      `不是靠「在一个函数里加注释分段」（规范 §12.13）。\n` +
+      `本判据是硬闸（无基线、无 --update）：巨型函数存量已清零，新增即阻断。`,
   });
   process.exit(1);
 }

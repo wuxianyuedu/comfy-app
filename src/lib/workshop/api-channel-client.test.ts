@@ -7,7 +7,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubFetch(impl: (...args: unknown[]) => unknown) {
+function stubFetch(impl: (...args: Array<unknown>) => unknown) {
   const fetchMock = vi.fn(impl);
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -23,9 +23,9 @@ describe("readApiErrorMessage", () => {
   });
 
   it("认信封错误体（鉴权错误用 {error:{message}}）", () => {
-    expect(
-      readApiErrorMessage({ error: { message: "未登录或会话已失效" } }),
-    ).toBe("未登录或会话已失效");
+    expect(readApiErrorMessage({ error: { message: "未登录或会话已失效" } })).toBe(
+      "未登录或会话已失效",
+    );
   });
 
   it("无 error 字段返回 null，交由调用方回落", () => {
@@ -53,9 +53,7 @@ describe("saveApiChannels", () => {
       },
     };
     const fetchMock = stubFetch(async () => jsonResponse({ channels }));
-    await expect(
-      saveApiChannels({ image: { baseUrl: "https://a" } }),
-    ).resolves.toEqual(channels);
+    await expect(saveApiChannels({ image: { baseUrl: "https://a" } })).resolves.toEqual(channels);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/workshop-api/config",
       expect.objectContaining({ method: "POST" }),
@@ -69,9 +67,7 @@ describe("saveApiChannels", () => {
 
   it("响应格式不符时抛可读错误，不把 undefined 漏给调用方", async () => {
     stubFetch(async () => jsonResponse({ channels: { image: {} } }));
-    await expect(saveApiChannels({})).rejects.toThrow(
-      "服务端返回的通道配置格式不正确",
-    );
+    await expect(saveApiChannels({})).rejects.toThrow("服务端返回的通道配置格式不正确");
   });
 
   it("fetch 直接 reject（断网 / dev server 未起）时统一中文文案", async () => {

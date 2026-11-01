@@ -75,10 +75,7 @@ import { dirname, join, relative, sep } from "node:path";
 // 所以这里不在脚本里再写一份格式化（AGENTS 硬规则 24 / §12.18）。
 import { formatDurationMs } from "../src/lib/time-format.ts";
 
-import {
-  echoCommandLine,
-  formatCommandLine,
-} from "./launcher-core/command-echo.mjs";
+import { echoCommandLine, formatCommandLine } from "./launcher-core/command-echo.mjs";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 // 启动页副本（`splash.html` + `index.html`）的清单与同步：与 dev-launcher 共用
 // 同一份实现，避免「少写一个副本名」这类静默失误在两处各自发生。
@@ -117,18 +114,12 @@ function elapsedSince(since) {
 
 function targetTriple() {
   if (process.platform === "win32") {
-    return process.arch === "arm64"
-      ? "aarch64-pc-windows-msvc"
-      : "x86_64-pc-windows-msvc";
+    return process.arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
   }
   if (process.platform === "darwin") {
-    return process.arch === "arm64"
-      ? "aarch64-apple-darwin"
-      : "x86_64-apple-darwin";
+    return process.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin";
   }
-  return process.arch === "arm64"
-    ? "aarch64-unknown-linux-gnu"
-    : "x86_64-unknown-linux-gnu";
+  return process.arch === "arm64" ? "aarch64-unknown-linux-gnu" : "x86_64-unknown-linux-gnu";
 }
 
 // sidecar 文件名（**平台判据的单点**，Rust 侧 `sidecar_binary_name()` 与之同源）。
@@ -143,6 +134,7 @@ function targetTriple() {
 //   表现为 resource path binaries/node-x86_64-unknown-linux-gnu 不存在
 // 而壳侧再写死 `node.exe`，即使编过也找不到 sidecar。两处必须同一个判据。
 import { sidecarFileName } from "./sidecar-name.mjs";
+
 export { sidecarFileName };
 
 /** 报错并终止 —— 返回类型必须是 `never`，不是「不返回」的语义描述：
@@ -165,7 +157,9 @@ function dirSize(dir) {
      * 本仓「补类型不是纯减法」第五次现场）。`break` 与那句长度判据是同一件事的两种写法，
      * 不是新增的容错分支。 */
     const cur = stack.pop();
-    if (cur === undefined) break;
+    if (cur === undefined) {
+      break;
+    }
     let ents;
     try {
       ents = readdirSync(cur, { withFileTypes: true });
@@ -175,8 +169,11 @@ function dirSize(dir) {
     for (const e of ents) {
       const p = join(cur, e.name);
       try {
-        if (e.isDirectory()) stack.push(p);
-        else if (e.isFile()) total += statSync(p).size;
+        if (e.isDirectory()) {
+          stack.push(p);
+        } else if (e.isFile()) {
+          total += statSync(p).size;
+        }
       } catch {
         /* 忽略无权限文件 */
       }
@@ -213,13 +210,12 @@ const step1At = performance.now();
         `实际命令：${formatCommandLine(invocation.command, invocation.args)}`,
     );
   }
-  if (build.status !== 0)
+  if (build.status !== 0) {
     fail(`pnpm build 失败（exit ${build.status ?? "?"}）。`);
+  }
 }
 if (!existsSync(join(nextOut, "server.js"))) {
-  fail(
-    ".next/standalone/server.js 不存在，请确认 next.config.js 已配置 output: 'standalone'",
-  );
+  fail(".next/standalone/server.js 不存在，请确认 next.config.js 已配置 output: 'standalone'");
 }
 console.log(`[build-desktop]   1/4 完成（耗时 ${elapsedSince(step1At)}）`);
 
@@ -236,21 +232,19 @@ mkdirSync(staticDir, { recursive: true });
 // 入口就会在运行时 ENOENT，而表现只是「双击没反应」。
 // 清单与白名单同源：scripts/standalone-private-inputs.mjs 的 RUNTIME_SCRIPTS。
 const launcherDestDir = join(staticDir, "scripts");
-for (const launcherFile of RUNTIME_SCRIPTS.filter((name) =>
-  name.endsWith(".mjs"),
-)) {
+for (const launcherFile of RUNTIME_SCRIPTS.filter((name) => name.endsWith(".mjs"))) {
   // BUILT_RUNTIME_SCRIPTS 是构建期由 scripts/build-executor-host.mjs 直接写进
   // .next/standalone 的产物（宿主的预编译运行时图，3-E1 / ISSUE #1169）——仓库里
   // 没有同名源文件，按「清单漂移」失败会把人引向错误方向。它们随下面的整树拷贝
   // 进 static，并由其后的「桌包里的宿主件在不在」断言兜住。
-  if (BUILT_RUNTIME_SCRIPTS.includes(launcherFile)) continue;
+  if (BUILT_RUNTIME_SCRIPTS.includes(launcherFile)) {
+    continue;
+  }
   const launcherSrc = join(root, "scripts", launcherFile);
   if (!existsSync(launcherSrc)) {
     // 白名单里面写了但源文件不在 = 清单漂移。静默跳过会让桌面包里的编排器
     // 在运行时 ENOENT，而表现只是「双击没反应」，所以这里直接失败。
-    fail(
-      `白名单登记的运行期脚本不存在：scripts/${launcherFile}（与 RUNTIME_SCRIPTS 不同步）`,
-    );
+    fail(`白名单登记的运行期脚本不存在：scripts/${launcherFile}（与 RUNTIME_SCRIPTS 不同步）`);
   }
   // 白名单条目允许是相对路径（`launcher-core/procs.mjs`）：目标子目录要先建出来。
   const dest = join(launcherDestDir, launcherFile);
@@ -300,7 +294,9 @@ cpSync(nextOut, staticDir, {
   filter: (src) => {
     cpSeen += 1;
     const rel = relative(nextOut, src);
-    if (rel === "") return true; // 根目录本身
+    if (rel === "") {
+      return true;
+    } // 根目录本身
     if (!staticAllowed(src)) {
       cpRejected += 1;
       return false;
@@ -344,9 +340,7 @@ rmSync(join(staticDir, "node_modules", ".cache"), {
 // 因此这里**显式删除**这两类文件（含 SQLite 的 WAL/SHM 边车文件）：
 // 分发产物必须是「干净安装」，配置文件由用户侧自行提供。
 stripPrivateInputs(staticDir, (name) => {
-  console.log(
-    `[build-desktop]   §分发卫生 已剔除开发机私有输入 static/${name}`,
-  );
+  console.log(`[build-desktop]   §分发卫生 已剔除开发机私有输入 static/${name}`);
 });
 // 开发期文件与内部门禁脚本同理：`next build` 的全项目 tracking 会把 AGENTS.md /
 // CHANGELOG.md / 各 *.config.* 与 **整套 scripts/**（含 16 个 *.cjs 门禁脚本）
@@ -371,12 +365,7 @@ stripDevArtifacts(staticDir, (name) => {
 // （手工副本迟早与 schema 漂开，而漂开的表现是首启建出一张缺列的表）。
 const schemaSqlPath = join(staticDir, "schema.sql");
 {
-  const invocation = pnpmInvocation([
-    "exec",
-    "drizzle-kit",
-    "export",
-    "--sql",
-  ]);
+  const invocation = pnpmInvocation(["exec", "drizzle-kit", "export", "--sql"]);
   if (!invocation) {
     fail("PATH 上找不到可用的 pnpm，无法导出首启建表用的 DDL（先跑 pnpm check:toolchain）。");
   }
@@ -458,11 +447,17 @@ if (existsSync(storeDir)) {
   const packages = new Map();
   /** @param {string} base */
   const collectLevel = (base) => {
-    if (!existsSync(base)) return;
+    if (!existsSync(base)) {
+      return;
+    }
     for (const entry of readdirSync(base)) {
-      if (entry.startsWith(".")) continue;
+      if (entry.startsWith(".")) {
+        continue;
+      }
       const abs = join(base, entry);
-      if (!existsSync(abs) || !statSync(abs).isDirectory()) continue;
+      if (!existsSync(abs) || !statSync(abs).isDirectory()) {
+        continue;
+      }
       if (entry.startsWith("@")) {
         for (const sub of readdirSync(abs)) {
           const subAbs = join(abs, sub);
@@ -472,18 +467,24 @@ if (existsSync(storeDir)) {
         }
         continue;
       }
-      if (!packages.has(entry)) packages.set(entry, abs);
+      if (!packages.has(entry)) {
+        packages.set(entry, abs);
+      }
     }
   };
   collectLevel(join(storeDir, "node_modules"));
   for (const key of readdirSync(storeDir)) {
-    if (key === "node_modules") continue;
+    if (key === "node_modules") {
+      continue;
+    }
     collectLevel(join(storeDir, key, "node_modules"));
   }
   let hoisted = 0;
   for (const [rel, src] of packages) {
     const dest = join(nmDir, rel);
-    if (existsSync(dest)) continue;
+    if (existsSync(dest)) {
+      continue;
+    }
     cpSync(src, dest, { recursive: true, dereference: true });
     hoisted += 1;
   }
@@ -515,9 +516,7 @@ if (existsSync(storeDir)) {
         "standalone server 起不来（表现是窗口停在启动页）。先查上面的 §载荷实体化 是否被跳过。",
     );
   }
-  console.log(
-    `[build-desktop]   §载荷实体化 可解析性断言通过（${mustResolve.join(", ")}）`,
-  );
+  console.log(`[build-desktop]   §载荷实体化 可解析性断言通过（${mustResolve.join(", ")}）`);
 }
 
 cpSync(join(root, ".next", "static"), join(staticDir, ".next", "static"), {
@@ -580,9 +579,9 @@ if (totalMB / 1024 > MAX_STATIC_GB) {
     .slice(0, 8);
   fail(
     `static 体积 ${(totalMB / 1024).toFixed(2)}GB 超过护栏阈值 ${MAX_STATIC_GB}GB，` +
-      "说明 Next standalone file tracing 再次失控。Top 目录: " +
-      top.map((t) => `${t.name}=${t.mb.toFixed(0)}MB`).join(", ") +
-      "。请检查 next.config.js 的 outputFileTracingExcludes 是否覆盖了新的大目录。",
+      `说明 Next standalone file tracing 再次失控。Top 目录: ${
+      top.map((t) => `${t.name}=${t.mb.toFixed(0)}MB`).join(", ")
+      }。请检查 next.config.js 的 outputFileTracingExcludes 是否覆盖了新的大目录。`,
   );
 }
 console.log(

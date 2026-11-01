@@ -2,10 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { AppShell } from "~/components/studio/AppShell";
 import { WorksGallery } from "~/components/studio/WorksGallery";
-import {
-  DocumentFrame,
-  WorkspaceFrame,
-} from "~/components/studio/ViewContainer";
+import { DocumentFrame, WorkspaceFrame } from "~/components/studio/ViewContainer";
 import type { Edge } from "@xyflow/react";
 
 import {
@@ -17,11 +14,7 @@ import {
   type CanvasProject,
 } from "~/lib/project-canvas/canvas-store";
 import { placeCanvasNode } from "~/lib/project-canvas/canvas-helpers";
-import {
-  defaultData,
-  type CanvasNodeType,
-  type NodeKind,
-} from "~/lib/project-canvas/canvas-types";
+import { defaultData, type CanvasNodeType, type NodeKind } from "~/lib/project-canvas/canvas-types";
 
 /**
  * 「整屏容器 → story」注入层（ISSUE #1381 的第三批：三层注入之三）。
@@ -74,9 +67,10 @@ import {
  * 工作台加一层 mock（那正是这一批在防的事）。
  */
 /** 一个真项目：名字与节点数据都是真形状（节点类型用 `canvas-types` 的真 kind）。 */
-export interface ProjectScene {
+export type ProjectScene = {
   /** 这个场景解决什么（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
+  readonly edges?: ReadonlyArray<Edge>;
   readonly name: string;
   /**
    * 摆在画布上的节点（可选）。给了它就是「打开一个**有内容**的项目」那一档：
@@ -87,9 +81,8 @@ export interface ProjectScene {
    * 而节点渲染器读的是整套（`model` / `size` / `steps` …），少一项就在画布上
    * 退化成另一种形态。
    */
-  readonly nodes?: readonly CanvasNodeType[];
-  readonly edges?: readonly Edge[];
-}
+  readonly nodes?: ReadonlyArray<CanvasNodeType>;
+};
 
 /**
  * 造一批真形状的业务节点 —— 走 `placeCanvasNode()`（建节点的**唯一出口**）。
@@ -103,15 +96,15 @@ export interface ProjectScene {
  * 场景里写的坐标就是画布上的坐标 —— 摆在哪里是可复现的。
  */
 export function canvasNodes(
-  specs: readonly {
+  specs: ReadonlyArray<{
     id: string;
     kind: NodeKind;
+    prompt?: string;
     x: number;
     y: number;
-    prompt?: string;
-  }[],
-): CanvasNodeType[] {
-  return specs.reduce<CanvasNodeType[]>(
+  }>,
+): Array<CanvasNodeType> {
+  return specs.reduce<Array<CanvasNodeType>>(
     (nodes, spec) =>
       placeCanvasNode({
         nodes,
@@ -225,8 +218,8 @@ export type ProjectSceneName = keyof typeof PROJECT_SCENES;
 
 /** 取一个场景；名字不认识时**抛错**（与值源 / 画布场景同一条口径）。 */
 export function projectScene(name: string): ProjectScene {
-  const scene: ProjectScene | undefined =
-    PROJECT_SCENES[name as ProjectSceneName];
+  /* SAFETY: 类型断言已复核 */
+  const scene: ProjectScene | undefined = PROJECT_SCENES[name as ProjectSceneName];
   if (scene === undefined) {
     throw new Error(
       `项目场景里没有叫「${name}」的那种。现有的：${PROJECT_SCENE_NAMES.join(" / ")}`,
@@ -245,7 +238,9 @@ export function projectScene(name: string): ProjectScene {
  */
 export function seedProject(scene: ProjectScene): CanvasProject {
   for (const existing of listProjects()) {
-    if (existing.name === scene.name) deleteProject(existing.id);
+    if (existing.name === scene.name) {
+      deleteProject(existing.id);
+    }
   }
   const created = createProject(scene.name);
   /* 场景给了节点/连线就落进去（`upsertProject` 与生产代码的自动保存同一条路）。
@@ -268,9 +263,9 @@ export function seedProject(scene: ProjectScene): CanvasProject {
  * `findNextAvailableName()` 不会把它们挤成一个。
  */
 export function seedProjects(spec: {
+  extraNames: ReadonlyArray<string>;
   primary: ProjectScene;
-  extraNames: readonly string[];
-}): CanvasProject[] {
+}): Array<CanvasProject> {
   const created = [seedProject(spec.primary)];
   for (const name of spec.extraNames) {
     const project = createProject(name);
@@ -298,11 +293,11 @@ export function StorybookScreenFrame({
   projects,
   activeView = "works",
 }: {
+  activeView?: Parameters<typeof AppShell>[0]["active"];
   /** 真视图（必须是真的 —— 见文件头的第一条口径）。 */
   children?: ReactNode;
   /** 侧栏分组里列出的项目（真 `CanvasProject[]`）。 */
-  projects: readonly CanvasProject[];
-  activeView?: Parameters<typeof AppShell>[0]["active"];
+  projects: ReadonlyArray<CanvasProject>;
 }) {
   const sidebarProjects = projects.map((project) => ({
     id: project.id,
@@ -314,13 +309,13 @@ export function StorybookScreenFrame({
     <div className="bg-bg h-[720px] w-full overflow-hidden">
       <AppShell
         active={activeView}
-        onSelect={() => undefined}
-        onOpenSettings={() => undefined}
-        projects={sidebarProjects}
         activeProjectId={activeProjectId}
-        onOpenProject={() => undefined}
-        onShowAllProjects={() => undefined}
         onNewProject={() => undefined}
+        onOpenProject={() => undefined}
+        onOpenSettings={() => undefined}
+        onSelect={() => undefined}
+        onShowAllProjects={() => undefined}
+        projects={sidebarProjects}
       >
         {children ?? <WorksGallery />}
       </AppShell>
@@ -333,11 +328,7 @@ export function StorybookScreenFrame({
  * （画布 / 成片 / 工坊）。与 `StorybookScreenFrame` 分开是因为它们**不是一件事**：
  * 前者是「外壳 + 视图」，后者是「视图内部那圈不出滚动条的框」。
  */
-export function StorybookWorkspaceFrame({
-  children,
-}: {
-  children?: ReactNode;
-}) {
+export function StorybookWorkspaceFrame({ children }: { children?: ReactNode }) {
   return (
     <div className="bg-bg h-[720px] w-full overflow-hidden">
       <WorkspaceFrame>{children}</WorkspaceFrame>
@@ -380,13 +371,15 @@ export function StorybookDocumentFrame({ children }: { children?: ReactNode }) {
  * 这条边界写在这是为了下一个人不必再查一遍。
  */
 export function useSeededProjects(spec: {
+  extraNames: ReadonlyArray<string>;
   primary: ProjectScene;
-  extraNames: readonly string[];
-}): CanvasProject[] {
-  const [projects] = useState<CanvasProject[]>(() => seedProjects(spec));
+}): Array<CanvasProject> {
+  const [projects] = useState<Array<CanvasProject>>(() => seedProjects(spec));
   useEffect(() => {
     return () => {
-      for (const project of projects) deleteProject(project.id);
+      for (const project of projects) {
+        deleteProject(project.id);
+      }
     };
   }, [projects]);
   return projects;

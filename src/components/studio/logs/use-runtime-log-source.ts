@@ -22,10 +22,7 @@ import { tailWindow } from "~/lib/page-window";
 import { useInterval } from "~/components/ui/use-interval";
 
 import { parseAnsiSegments, type AnsiSegment } from "~/lib/log/log-ansi";
-import {
-  fetchLogSessions,
-  type RuntimeLogSourceKind,
-} from "~/lib/log/log-file-client";
+import { fetchLogSessions, type RuntimeLogSourceKind } from "~/lib/log/log-file-client";
 import type { LogSessionMeta } from "~/lib/log/log-sessions";
 
 /** 跟随轮询间隔：与启动过程的可观测性要求一致（秒级）。 */
@@ -40,19 +37,19 @@ const MAX_SEGMENTS = 4000;
 /** `\r`（Windows 行尾）在日志面板里只添乱；SGR 颜色序列保留给视图层渲染。 */
 const CR_RE = /\r/g;
 
-export interface RuntimeLogSourceState {
-  /** 选中会话的正文（已去掉 `\r`）。 */
-  text: string;
+export type RuntimeLogSourceState = {
+  /** 重新拉取当前会话（「刷新」按钮）。 */
+  refresh: () => Promise<void>;
   /** 正文解析出的带样式片段（视图只渲染它）。 */
-  segments: AnsiSegment[];
-  /** 可切换的会话（**新→旧，第一项就是最新**）；不足两条时界面不显示下拉。 */
-  sessions: LogSessionMeta[];
+  segments: Array<AnsiSegment>;
+  /** 切到指定会话并立即重新拉取。 */
+  selectSession: (id: string) => void;
   /** 当前选中会话的 id；没有日志文件时为 null。 */
   sessionId: string | null;
-  /** 选中那一份的正文被服务端截断（界面提示「只看得到最近一段」）。 */
-  truncated: boolean;
-  /** 该份日志过大、服务端只扫了尾部窗口（界面提示「这次启动只显示了一段」）。 */
-  windowed: boolean;
+  /** 可切换的会话（**新→旧，第一项就是最新**）；不足两条时界面不显示下拉。 */
+  sessions: Array<LogSessionMeta>;
+  /** 选中会话的正文（已去掉 `\r`）。 */
+  text: string;
   /**
    * 这个来源一共有几份启动日志（不受下拉上限影响）。
    *
@@ -60,24 +57,24 @@ export interface RuntimeLogSourceState {
    * 一次启动一份文件之后，同一天可能攒几十份，不说的话用户会以为「只启动过这些次」。
    */
   total: number;
-  /** 切到指定会话并立即重新拉取。 */
-  selectSession: (id: string) => void;
-  /** 重新拉取当前会话（「刷新」按钮）。 */
-  refresh: () => Promise<void>;
-}
+  /** 选中那一份的正文被服务端截断（界面提示「只看得到最近一段」）。 */
+  truncated: boolean;
+  /** 该份日志过大、服务端只扫了尾部窗口（界面提示「这次启动只显示了一段」）。 */
+  windowed: boolean;
+};
 
 /** 视图消费的日志来源：来源状态 + 「是否正在跟随本次启动」（由 controller 给）。 */
 export type RuntimeLogController = RuntimeLogSourceState & { active: boolean };
 
-interface Snapshot {
-  text: string;
-  segments: AnsiSegment[];
-  sessions: LogSessionMeta[];
+type Snapshot = {
+  segments: Array<AnsiSegment>;
   sessionId: string | null;
+  sessions: Array<LogSessionMeta>;
+  text: string;
+  total: number;
   truncated: boolean;
   windowed: boolean;
-  total: number;
-}
+};
 
 const EMPTY_SNAPSHOT: Snapshot = {
   text: "",
@@ -90,12 +87,11 @@ const EMPTY_SNAPSHOT: Snapshot = {
 };
 
 /** 解析结果按上限取尾部（与「只看最新一段」的口径一致）。 */
-function capSegments(segments: AnsiSegment[]): AnsiSegment[] {
+function capSegments(segments: Array<AnsiSegment>): Array<AnsiSegment> {
   return tailWindow(segments, MAX_SEGMENTS);
 }
 
-export interface RuntimeLogSourceOptions {
-  source: RuntimeLogSourceKind;
+export type RuntimeLogSourceOptions = {
   /** 正在启动：每秒跟随该次启动的新增输出；否则只在挂载 / 切换 / 刷新时取一次。 */
   active: boolean;
   /**
@@ -103,8 +99,9 @@ export interface RuntimeLogSourceOptions {
    * `parseOllamaLogText`）：它进 effect 依赖，内联箭头函数会让定时器每次渲染
    * 重建。
    */
-  parse?: (text: string) => AnsiSegment[];
-}
+  parse?: (text: string) => Array<AnsiSegment>;
+  source: RuntimeLogSourceKind;
+};
 
 export function useRuntimeLogSource({
   source,
@@ -139,7 +136,9 @@ export function useRuntimeLogSource({
         latest !== null &&
         latest.startedAt !== null &&
         latest.startedAt !== latestStartedAtRef.current;
-      if (isNewStart) latestStartedAtRef.current = latest.startedAt;
+      if (isNewStart) {
+        latestStartedAtRef.current = latest.startedAt;
+      }
       if (isNewStart && slice.selectedId !== latest.id) {
         /* 切过去并在同一次调用里把新会话的正文取回来（不走递归：
          * useCallback 的自引用过不了 react-hooks 的静态检查）。 */
@@ -147,10 +146,12 @@ export function useRuntimeLogSource({
         slice = await fetchLogSessions(source, latest.id);
       }
     }
-    if (!slice || seq !== seqRef.current) return;
+    if (!slice || seq !== seqRef.current) {
+      return;
+    }
     /* 服务端回落的选中项（请求的 id 已不在列表里时它会选最新）：以它为准。 */
     sessionRef.current = slice.selectedId;
-    const text = slice.content.replace(CR_RE, "");
+    const text = slice.content.replaceAll(CR_RE, "");
     setSnapshot({
       text,
       segments: capSegments(parse(text)),

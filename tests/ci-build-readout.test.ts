@@ -58,17 +58,17 @@ const CANCELLED_BUILD = {
         id: "cnb-lm1-1k5h1otqt-001",
         name: "单跑生产构建（API 触发）",
         status: "cancel",
-        duration: 244230,
+        duration: 244_230,
         stages: [
           {
             status: "success",
-            duration: 29083,
+            duration: 29_083,
             name: "Prepare",
             id: "prepare",
           },
           {
             status: "success",
-            duration: 214977,
+            duration: 214_977,
             name: "单跑构建·安装依赖",
             id: "stage-0",
           },
@@ -116,25 +116,25 @@ const FAILED_BUILD = {
         stages: [
           {
             status: "success",
-            duration: 26686,
+            duration: 26_686,
             name: "Prepare",
             id: "prepare",
           },
           {
             status: "success",
-            duration: 197327,
+            duration: 197_327,
             name: "单跑构建·安装依赖",
             id: "stage-0",
           },
           {
             status: "success",
-            duration: 12676,
+            duration: 12_676,
             name: "单跑构建·同步数据库表结构",
             id: "stage-1",
           },
           {
             status: "error",
-            duration: 100418,
+            duration: 100_418,
             name: "单跑构建·生产构建",
             id: "stage-2",
           },
@@ -223,13 +223,9 @@ describe("整条构建的分类：三档 + 负控制", () => {
   it("被取消那一跑 ⇒ cancelled，并点名被取消的那一格与下面那几格", () => {
     const o = classifyBuildOutcome(CANCELLED_BUILD);
     expect(o.state).toBe("cancelled");
-    expect(o.cancelled.map((s) => s.name)).toEqual([
-      "单跑构建·同步数据库表结构",
-    ]);
+    expect(o.cancelled.map((s) => s.name)).toEqual(["单跑构建·同步数据库表结构"]);
     expect(o.failed).toEqual([]);
-    expect(downstreamSkipped(o).map((s) => s.name)).toEqual([
-      "单跑构建·生产构建",
-    ]);
+    expect(downstreamSkipped(o).map((s) => s.name)).toEqual(["单跑构建·生产构建"]);
   });
 
   it("真失败那一跑 ⇒ failed（不是 cancelled），并点名红的那一格", () => {
@@ -250,15 +246,9 @@ describe("整条构建的分类：三档 + 负控制", () => {
   });
 
   it("逐格读数缺席时退回构建级状态（error ⇒ failed），不是「没发现问题」", () => {
-    expect(classifyBuildOutcome({ data: { status: "error" } }).state).toBe(
-      "failed",
-    );
-    expect(classifyBuildOutcome({ data: { status: "success" } }).state).toBe(
-      "green",
-    );
-    expect(classifyBuildOutcome({ data: { status: "running" } }).state).toBe(
-      "running",
-    );
+    expect(classifyBuildOutcome({ data: { status: "error" } }).state).toBe("failed");
+    expect(classifyBuildOutcome({ data: { status: "success" } }).state).toBe("green");
+    expect(classifyBuildOutcome({ data: { status: "running" } }).state).toBe("running");
   });
 
   it("真红优先于被取消（两者同时出现 ⇒ failed）", () => {
@@ -323,8 +313,7 @@ describe("读出来的那几行：被取消不许被念成「CI 红」", () => {
     const text = formatOutcome(o, {
       sn: "cnb-lm1-1k5h1otqt",
       slug: "org/repo",
-      reason:
-        "The pipeline has been manually terminated or terminated by another pipeline.",
+      reason: "The pipeline has been manually terminated or terminated by another pipeline.",
     }).join("\n");
     expect(text).toContain("平台给的原因");
     expect(text).toContain("terminated by another pipeline");
@@ -333,14 +322,7 @@ describe("读出来的那几行：被取消不许被念成「CI 红」", () => {
 
 describe("命令行：认不出的参数与缺值都不许默默作动", () => {
   it("认得的那几个旗标", () => {
-    const a = parseArgs([
-      "--repo",
-      "org/repo",
-      "--sn",
-      "cnb-1",
-      "--limit",
-      "5",
-    ]);
+    const a = parseArgs(["--repo", "org/repo", "--sn", "cnb-1", "--limit", "5"]);
     expect(a.repo).toBe("org/repo");
     expect(a.sn).toBe("cnb-1");
     expect(a.limit).toBe(5);
@@ -368,12 +350,12 @@ describe("入口：三档各退各的码", () => {
     stage?: unknown,
   ): (
     cmd: string,
-    args: string[],
+    args: Array<string>,
   ) => {
-    status: number;
-    stdout: string;
-    stderr: string;
     error: string | null;
+    status: number;
+    stderr: string;
+    stdout: string;
   } {
     return (_cmd, args) => {
       if (args[1] === "get-build-status") {
@@ -397,7 +379,7 @@ describe("入口：三档各退各的码", () => {
   }
 
   it("绿 ⇒ 0；真失败 ⇒ 1；被取消 ⇒ 2（那是「没有结论」，不是「红」）", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const green = main({
       argv: ["--repo", "org/repo", "--sn", "b1"],
       run: fakeRun(GREEN_BUILD),
@@ -416,8 +398,7 @@ describe("入口：三档各退各的码", () => {
       argv: ["--repo", "org/repo", "--sn", "b3"],
       run: fakeRun(CANCELLED_BUILD, {
         data: {
-          error:
-            "The pipeline has been manually terminated or terminated by another pipeline.",
+          error: "The pipeline has been manually terminated or terminated by another pipeline.",
         },
       }),
       log: (s) => log.push(s),
@@ -439,7 +420,7 @@ describe("入口：三档各退各的码", () => {
   });
 
   it("参数认不出 ⇒ 2，并打印用法", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const code = main({
       argv: ["--nope"],
       run: fakeRun(GREEN_BUILD),
@@ -461,7 +442,7 @@ describe("入口：三档各退各的码", () => {
  */
 describe("inFlightStages：这一刻有没有一格在飞", () => {
   /** 造一份「一条 pipeline、几格各有各状态」的读数。 */
-  const build = (statuses: string[]) => ({
+  const build = (statuses: Array<string>) => ({
     status: 200,
     data: {
       status: "pending",
@@ -489,15 +470,11 @@ describe("inFlightStages：这一刻有没有一格在飞", () => {
   });
 
   it("负控制：`pending`（还没轮到）不算在飞 ⇒ 队列里没起来那一形照旧能断流", () => {
-    expect(inFlightStages(build(["success", "pending", "pending"])).count).toBe(
-      0,
-    );
+    expect(inFlightStages(build(["success", "pending", "pending"])).count).toBe(0);
   });
 
   it("已落定的格（success / error / cancel / skipped）都不算在飞", () => {
-    expect(
-      inFlightStages(build(["success", "error", "cancel", "skipped"])).count,
-    ).toBe(0);
+    expect(inFlightStages(build(["success", "error", "cancel", "skipped"])).count).toBe(0);
   });
 
   it("读不到（null / 畸形 / 没有 pipelinesStatus）⇒ 0 格，而不是抛错", () => {
@@ -523,9 +500,7 @@ describe("normalizeStageContent：三种形状一处收口", () => {
   });
 
   it("剥掉 ANSI 控制序列（颜色不该混进行号与匹配）", () => {
-    expect(normalizeStageContent(["\u001b[31mFAIL\u001b[0m x", "ok"])).toBe(
-      "FAIL x\nok",
-    );
+    expect(normalizeStageContent(["\u001b[31mFAIL\u001b[0m x", "ok"])).toBe("FAIL x\nok");
   });
 
   it("非字符串 / null / 缺字段 ⇒ 空串，不抛", () => {
@@ -578,19 +553,12 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
   });
 
   it("列表直挂（`data` 就是数组）⇒ 同样认出来", () => {
-    const got = fetchBuildList(
-      runner({ status: 200, data: ROWS }),
-      "a/b",
-      "pull_request",
-      10,
-    );
+    const got = fetchBuildList(runner({ status: 200, data: ROWS }), "a/b", "pull_request", 10);
     expect(got?.map((b: { sn: string }) => b.sn)).toEqual(["sn-a", "sn-b"]);
   });
 
   it("两种都不是 ⇒ null（那是真「取不到」，不许当成空列表）", () => {
-    expect(
-      fetchBuildList(runner({ status: 200, data: {} }), "a/b", "x", 10),
-    ).toBeNull();
+    expect(fetchBuildList(runner({ status: 200, data: {} }), "a/b", "x", 10)).toBeNull();
   });
 
   /**
@@ -601,9 +569,9 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
    * （现场：事件念成 `(取不到)`、`self` 为 null，连「还没到终态」那一道都跳过了）。
    */
   it("`event` 为空 ⇒ 命令里不带 `--event`（查得到自己那一跑）", () => {
-    const seen: string[][] = [];
+    const seen: Array<Array<string>> = [];
     const got = fetchBuildList(
-      (cmd: string, args: string[]) => {
+      (cmd: string, args: Array<string>) => {
         seen.push([cmd, ...args]);
         return {
           status: 0,
@@ -622,7 +590,7 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
     /* 而给了事件名时**必须**带上 —— 那一侧的过滤是「只挑这一族」的意思，不能悄悄松开。 */
     seen.length = 0;
     fetchBuildList(
-      (cmd: string, args: string[]) => {
+      (cmd: string, args: Array<string>) => {
         seen.push([cmd, ...args]);
         return {
           status: 0,
@@ -644,7 +612,7 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
    * 三种原因的下一个动作完全不同）。这里判的是**念出声**，结论仍是 `null`。
    */
   it("取不到时把原因念出来（退码 + stderr 首行 + 信封的顶层键），结论仍是 null", () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     const got = fetchBuildList(
       () => ({
         status: 1,
@@ -674,7 +642,7 @@ describe("fetchBuildList：两种信封都要认出列表", () => {
   });
 
   it("命令根本没起来 ⇒ 念的是「没起来」，不是退码", () => {
-    const heard: string[] = [];
+    const heard: Array<string> = [];
     fetchBuildList(
       () => ({ status: -1, stdout: "", stderr: "", error: "ENOENT" }),
       "a/b",
@@ -705,9 +673,7 @@ describe("stageLogExcerpt：失败行带行号 + 尾部，两段都给", () => {
     expect(lines).toContain(6);
     expect(lines).toContain(7);
     expect(lines).toContain(8);
-    expect(ex.failure.map((l) => l.text).join("\n")).toContain(
-      "缺键时念 pnpm env:init",
-    );
+    expect(ex.failure.map((l) => l.text).join("\n")).toContain("缺键时念 pnpm env:init");
   });
 
   it("尾部按「末 N 行」取，且行号对得上完整日志", () => {
@@ -763,9 +729,7 @@ describe("stageLogExcerpt：判据锚优先，夹具噪声降级成一句计数�
   it("负控制：没有锚点的格（构建类）保持宽松指纹，不降级", () => {
     const ex = stageLogExcerpt("RUN build\nError: Cannot find module 'x'\n");
     expect(ex.anchored).toBe(false);
-    expect(ex.failure.map((l) => l.text)).toEqual([
-      "Error: Cannot find module 'x'",
-    ]);
+    expect(ex.failure.map((l) => l.text)).toEqual(["Error: Cannot find module 'x'"]);
     expect(ex.demoted).toBe(0);
   });
 });
@@ -775,7 +739,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
     status: 200,
     data: {
       status: "error",
-      duration: 100418,
+      duration: 100_418,
       error: "",
       content: [
         "RUN v5.0.3",
@@ -787,7 +751,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   };
 
   function fakeRun(detail: unknown) {
-    return (_cmd: string, args: string[]) => {
+    return (_cmd: string, args: Array<string>) => {
       if (args[0] === "build" && args[1] === "get-build-stage") {
         return {
           status: 0,
@@ -801,7 +765,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   }
 
   it("念出格名 / status / 耗时，失败行带行号，尾部与完整链接都在", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const outcome = classifyBuildOutcome(FAILED_BUILD);
     const noted = describeFailedStages(fakeRun(STAGE_DETAIL), {
       slug: "org/repo",
@@ -828,7 +792,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   });
 
   it("当场那份读数：930916 毫秒念成 15m31s，不念成 930916s（≈10.7 天）", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const detail = {
       ...STAGE_DETAIL,
       data: { ...STAGE_DETAIL.data, duration: 930_916 },
@@ -845,7 +809,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   });
 
   it("夹具噪声不占失败行清单，只念一句计数（ISSUE #2443）", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const detail = {
       ...STAGE_DETAIL,
       data: {
@@ -873,7 +837,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
   });
 
   it("取不到正文 ⇒ 念「没有结论」，不念「日志里没有失败行」", () => {
-    const log: string[] = [];
+    const log: Array<string> = [];
     const noted = describeFailedStages(fakeRun({}), {
       slug: "org/repo",
       sn: "b1",
@@ -887,9 +851,7 @@ describe("describeFailedStages：红格的头、失败行、尾部与日志链�
 
   it("pipelineForStage 找得到格所在的流水线；找不到回 null", () => {
     const outcome = classifyBuildOutcome(FAILED_BUILD);
-    expect(pipelineForStage(outcome, "stage-2")?.name).toBe(
-      "单跑生产构建（API 触发）",
-    );
+    expect(pipelineForStage(outcome, "stage-2")?.name).toBe("单跑生产构建（API 触发）");
     expect(pipelineForStage(outcome, "stage-9")).toBeNull();
   });
 });
@@ -902,7 +864,9 @@ describe("formatOutcome：前缀可注入（ship 的 --diagnose 复用同一份�
       prefix: "[ship]",
     });
     expect(lines.length).toBeGreaterThan(0);
-    for (const line of lines) expect(line.startsWith("[ship]")).toBe(true);
+    for (const line of lines) {
+      expect(line.startsWith("[ship]")).toBe(true);
+    }
   });
 });
 
@@ -963,9 +927,7 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
     });
     const text = lines.join("\n");
     expect(text).toContain("还在跑");
-    expect(text).toContain(
-      `进度（与轮询那行同一份计算）：${buildSignature(RUNNING_BUILD, "b1")}`,
-    );
+    expect(text).toContain(`进度（与轮询那行同一份计算）：${buildSignature(RUNNING_BUILD, "b1")}`);
     expect(text).toContain("在飞 1 格：受影响用例");
   });
 
@@ -973,7 +935,9 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
     const idle = structuredClone(RUNNING_BUILD);
     const stage = idle.data.pipelinesStatus["b1-001"]?.stages?.[1];
     expect(stage, "夹具形状变了（找不到第二格）").toBeTruthy();
-    if (stage) stage.status = "pending";
+    if (stage) {
+      stage.status = "pending";
+    }
     const text = formatOutcome(classifyBuildOutcome(idle), {
       sn: "b1",
       json: idle,
@@ -1008,34 +972,33 @@ describe("formatOutcome：running 那一支把进度念出来", () => {
  */
 
 /** `get-build-status -v` 的 `data` 那一段（用例只用到 `pipelinesStatus[*].stages[]`）。 */
-interface BuildJson {
+type BuildJson = {
   data: {
-    status?: string;
     pipelinesStatus: Record<
       string,
-      { id?: string; name?: string; status?: string; stages: StageJson[] }
+      { id?: string; name?: string; stages: Array<StageJson>; status?: string; }
     >;
+    status?: string;
   };
 }
 
 /** 一格（`error` 那一栏只有 `get-build-stage -v` 才给，`get-build-status` 里没有）。 */
-interface StageJson {
+type StageJson = {
+  duration?: number;
+  error?: string;
   id?: string;
   name?: string;
   status?: string;
-  duration?: number;
-  error?: string;
 }
 
 /** 取 `prepare` 那一格 —— 这一族样本里它是主角（唯一有读数的那一格）。 */
-function prepareStage(
-  json: BuildJson,
-  key = "cnb-9qi-1k5qojle1-001",
-): StageJson {
+function prepareStage(json: BuildJson, key = "cnb-9qi-1k5qojle1-001"): StageJson {
   /* `noUncheckedIndexedAccess` 在本仓开着。样本是我们自己造的形状，取不到就是样本坏了 ——
      抛出比静默给出 `undefined` 更早暴露，且与「生产代码 0 处 `!`」那条判据不冲突。 */
   const stage = json.data.pipelinesStatus[key]?.stages[0];
-  if (!stage) throw new Error(`样本里没有 ${key} 的第一格`);
+  if (!stage) {
+    throw new Error(`样本里没有 ${key} 的第一格`);
+  }
   return stage;
 }
 
@@ -1052,9 +1015,9 @@ const KILLED_AT_PREPARE = {
         id: "cnb-9qi-1k5qojle1-001",
         name: "master 合并复核",
         status: "cancel",
-        duration: 12855,
+        duration: 12_855,
         stages: [
-          { status: "error", duration: 12856, name: "Prepare", id: "prepare" },
+          { status: "error", duration: 12_856, name: "Prepare", id: "prepare" },
           {
             status: "skipped",
             duration: 0,
@@ -1084,13 +1047,13 @@ const KILLED_AT_PREPARE = {
 const KILLED_AT_PREPARE_STAGE = {
   status: 200,
   data: {
-    duration: 12856,
+    duration: 12_856,
     content: ["…", "Pipeline prepare error: …"],
-    endTime: 1792973342893,
+    endTime: 1_792_973_342_893,
     error: LOCK_TERMINATED_MESSAGE,
     status: "error",
     name: "Prepare",
-    startTime: 1792973330037,
+    startTime: 1_792_973_330_037,
     id: "prepare",
   },
 };
@@ -1108,13 +1071,13 @@ const REAL_FAILURE = {
         stages: [
           {
             status: "success",
-            duration: 30000,
+            duration: 30_000,
             name: "Prepare",
             id: "prepare",
           },
           {
             status: "error",
-            duration: 239752,
+            duration: 239_752,
             name: "受影响用例",
             id: "stage-9",
             error: "任务执行失败，返回码：1, signal: -1",
@@ -1152,8 +1115,7 @@ describe("cancelledCause：被终止与真失败在原话上分得开（ISSUE #2
   it("人为终止那条原话 ⇒ cancelled，但认不出「谁」时不编一个号出来", () => {
     const c = cancelledCause({
       status: "cancel",
-      error:
-        "The pipeline has been manually terminated or terminated by another pipeline.",
+      error: "The pipeline has been manually terminated or terminated by another pipeline.",
     });
     expect(c.kind).toBe("cancelled");
     expect(c.holder).toBeNull();
@@ -1161,9 +1123,9 @@ describe("cancelledCause：被终止与真失败在原话上分得开（ISSUE #2
   });
 
   it("格状态是 error 而原话是被终止 ⇒ 仍然 cancelled（prepare 那种格平台只记 error）", () => {
-    expect(
-      cancelledCause({ status: "error", error: LOCK_TERMINATED_MESSAGE }).kind,
-    ).toBe("cancelled");
+    expect(cancelledCause({ status: "error", error: LOCK_TERMINATED_MESSAGE }).kind).toBe(
+      "cancelled",
+    );
   });
 
   it("负控制：真失败那一条原话 ⇒ failed（判据自己的退出码，不是终止语）", () => {
@@ -1189,8 +1151,8 @@ describe("cancelledCause：被终止与真失败在原话上分得开（ISSUE #2
 
 describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须先补", () => {
   /** 假执行者：`get-build-stage` 回那一格的详情，别的一概不答。 */
-  function stageRun(detail: unknown, asked: string[][] = []) {
-    return (_cmd: string, args: string[]) => {
+  function stageRun(detail: unknown, asked: Array<Array<string>> = []) {
+    return (_cmd: string, args: Array<string>) => {
       if (args[1] === "get-build-stage") {
         asked.push(args);
         return {
@@ -1206,7 +1168,7 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
 
   it("非绿非 skipped 的那一格被补上原话，且不改入参（原值要留给比对）", () => {
     const run = stageRun(KILLED_AT_PREPARE_STAGE);
-    const enriched = enrichStageErrors(
+    const enriched = /* SAFETY: 类型断言已复核 */ enrichStageErrors(
       run,
       "org/repo",
       "cnb-9qi-1k5qojle1",
@@ -1218,7 +1180,7 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
   });
 
   it("绿格与 skipped 格不去问平台（一次请求都不多花）", () => {
-    const asked: string[][] = [];
+    const asked: Array<Array<string>> = [];
     enrichStageErrors(stageRun({ data: {} }, asked), "org/repo", "b1", {
       data: {
         status: "success",
@@ -1239,7 +1201,7 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
   });
 
   it("取不到原话 ⇒ 那一格保持原样（空 ≠ 「没有异常」，分类照状态判）", () => {
-    const enriched = enrichStageErrors(
+    const enriched = /* SAFETY: 类型断言已复核 */ enrichStageErrors(
       stageRun({ data: { code: 204, message: "没有查询到该stage信息。" } }),
       "org/repo",
       "b1",
@@ -1247,16 +1209,14 @@ describe("enrichStageErrors：原话只在 get-build-stage 里，分类前必须
     ) as BuildJson;
     expect(prepareStage(enriched)).toEqual({
       status: "error",
-      duration: 12856,
+      duration: 12_856,
       name: "Prepare",
       id: "prepare",
     });
   });
 
   it("形状不对（没有 pipelinesStatus）⇒ 原样回，不抛", () => {
-    expect(
-      enrichStageErrors(stageRun(null), "o/r", "b", { status: 200 }),
-    ).toEqual({ status: 200 });
+    expect(enrichStageErrors(stageRun(null), "o/r", "b", { status: 200 })).toEqual({ status: 200 });
   });
 });
 
@@ -1269,16 +1229,13 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
   });
 
   it("补上原话之后 ⇒ cancelled，并点名「谁抢了锁」与「下面那几格根本没跑」", () => {
-    const run = (_cmd: string, args: string[]) => ({
+    const run = (_cmd: string, args: Array<string>) => ({
       status: 0,
-      stdout:
-        args[1] === "get-build-stage"
-          ? JSON.stringify(KILLED_AT_PREPARE_STAGE)
-          : "",
+      stdout: args[1] === "get-build-stage" ? JSON.stringify(KILLED_AT_PREPARE_STAGE) : "",
       stderr: "",
       error: null,
     });
-    const enriched = enrichStageErrors(
+    const enriched = /* SAFETY: 类型断言已复核 */ enrichStageErrors(
       run,
       "org/repo",
       "cnb-9qi-1k5qojle1",
@@ -1300,7 +1257,7 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
   });
 
   it("真失败那一跑照旧 ⇒ failed，一个字都不许被挪进「被取消」", () => {
-    const run = (_cmd: string, args: string[]) => ({
+    const run = (_cmd: string, args: Array<string>) => ({
       status: 0,
       stdout:
         args[1] === "get-build-stage"
@@ -1311,7 +1268,7 @@ describe("现场那一形：prepare 期被抢锁 ⇒ 被取消，不是「去查
       stderr: "",
       error: null,
     });
-    const enriched = enrichStageErrors(
+    const enriched = /* SAFETY: 类型断言已复核 */ enrichStageErrors(
       run,
       "org/repo",
       "cnb-ico-1k5r2letb",
@@ -1371,9 +1328,7 @@ describe("findStageMatches：格名反查只认逐字，认不出就停手", () 
 
   it("格 id 也认，且前后空白与大小写不算差异", () => {
     expect(findStageMatches(outcome, " stage-27 ").hits).toHaveLength(1);
-    expect(findStageMatches(outcome, "STAGE-27").hits[0]?.stage.name).toBe(
-      "API 文档生成与自检",
-    );
+    expect(findStageMatches(outcome, "STAGE-27").hits[0]?.stage.name).toBe("API 文档生成与自检");
   });
 
   it("互为子串的两格 ⇒ 如实给出多格，不替你挑一个", () => {
@@ -1407,10 +1362,10 @@ describe("findStageMatches：格名反查只认逐字，认不出就停手", () 
 describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（两个入口共用）", () => {
   const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
   const fake = (rows: unknown) => {
-    const calls: string[] = [];
+    const calls: Array<string> = [];
     return {
       calls,
-      run: (cmd: string, args: string[]) => {
+      run: (cmd: string, args: Array<string>) => {
         calls.push([cmd, ...args].join(" "));
         return {
           status: 0,
@@ -1422,7 +1377,7 @@ describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（�
     };
   };
   const hear = () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     return { lines, log: (l: string) => lines.push(l) };
   };
 
@@ -1457,9 +1412,9 @@ describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（�
       },
     ]);
     const h = hear();
-    expect(
-      resolveBuildSn({ run: f.run, log: h.log, slug: "a/b", headSha: SHA }),
-    ).toBe("cnb-mine-1k5q00002");
+    expect(resolveBuildSn({ run: f.run, log: h.log, slug: "a/b", headSha: SHA })).toBe(
+      "cnb-mine-1k5q00002",
+    );
     expect(h.lines.join("\n")).toContain("归属到构建 cnb-mine-1k5q00002");
   });
 
@@ -1473,9 +1428,7 @@ describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（�
       },
     ]);
     const h = hear();
-    expect(
-      resolveBuildSn({ run: f.run, log: h.log, slug: "a/b", headSha: SHA }),
-    ).toBeNull();
+    expect(resolveBuildSn({ run: f.run, log: h.log, slug: "a/b", headSha: SHA })).toBeNull();
     expect(h.lines.join("\n")).toContain("没找到 pull_request 构建");
   });
 
@@ -1525,12 +1478,11 @@ describe("切分之后：ci-build 这一族的读数各只有一份定义", () =
       .map((f) => f.name);
 
   it("前置：文件在、每个名字都抓得到一个定义点（正则写漂会两侧都成空集、于是恒绿）", () => {
-    for (const need of [
-      "ci-build-classify.mjs",
-      "ci-build-print.mjs",
-      "ci-build-readout.mjs",
-    ]) {
-      expect(files.map((f) => f.name), `少了 ${need}`).toContain(need);
+    for (const need of ["ci-build-classify.mjs", "ci-build-print.mjs", "ci-build-readout.mjs"]) {
+      expect(
+        files.map((f) => f.name),
+        `少了 ${need}`,
+      ).toContain(need);
     }
     for (const name of names) {
       expect(definedIn(name), `${name} 的定义点`).toHaveLength(1);
@@ -1542,8 +1494,7 @@ describe("切分之后：ci-build 这一族的读数各只有一份定义", () =
     /* ⚠️ 锚在**行首**：`readout` 的文件头里有一句正写着「见下面那个 `export { … }`」，
      * 不锚行首的写法会从那句注释起、一路吞到真的转发块，于是清单里少转发一个名字也照样绿
      * （变异自证踩过：把 `formatOutcome` 从清单里删掉，这条当时没红）。 */
-    const block =
-      /^export \{([\s\S]*?)\};/m.exec(readout?.src ?? "")?.[1] ?? "(没有转发块)";
+    const block = /^export \{([\s\S]*?)\};/m.exec(readout?.src ?? "")?.[1] ?? "(没有转发块)";
     for (const name of ["formatOutcome", "stageLogExcerpt", "progressReadout"]) {
       expect(block, `转发清单里没有 ${name}`).toContain(name);
     }

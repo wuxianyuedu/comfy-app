@@ -46,9 +46,7 @@
  * 三个方法各对应上面那三件事：`isStale` 是判据、`commit` 是「按轮次提交」、
  * `dispose` 是清理。
  */
-export interface StaleRunGuard {
-  /** 这一轮是否已经作废（卸载、或同一容器上又开了一轮）。 */
-  isStale: () => boolean;
+export type StaleRunGuard = {
   /**
    * 把这一轮产生的写入提交进去 —— **作了废就整段跳过**。
    *
@@ -59,7 +57,9 @@ export interface StaleRunGuard {
   commit: (write: () => void) => void;
   /** 作废这一轮（effect 清理里去调）。 */
   dispose: () => void;
-}
+  /** 这一轮是否已经作废（卸载、或同一容器上又开了一轮）。 */
+  isStale: () => boolean;
+};
 
 /**
  * 就地开一把守卫（给 `useEffect` 用）。语义就是那段样板里的 `let cancelled`，
@@ -78,7 +78,9 @@ export function beginStaleRun(): StaleRunGuard {
   return {
     isStale,
     commit(write) {
-      if (!stale) write();
+      if (!stale) {
+        write();
+      }
     },
     dispose() {
       stale = true;

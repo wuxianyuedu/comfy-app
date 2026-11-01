@@ -14,16 +14,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { parseDataUrl } from "~/lib/media/data-url";
 import { generatedRoot } from "~/lib/media/output-paths";
@@ -89,19 +80,13 @@ describe("resolveMediaBytes —— 本地产物地址", () => {
     const file = path.join(ROOT, "t-jpg", "img_0.jpg");
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, Buffer.from("fake-jpeg"));
-    const got = await resolveMediaBytes(
-      "/api/generated/t-jpg/img_0.jpg",
-      "http://127.0.0.1:3100",
-    );
+    const got = await resolveMediaBytes("/api/generated/t-jpg/img_0.jpg", "http://127.0.0.1:3100");
     expect(got.mime).toBe("image/jpeg");
     expect(got.buffer.toString()).toBe("fake-jpeg");
   });
 
   it("历史留下的 /generated/… 形状答得出同一个文件（两种形状同答案）", async () => {
-    const { buffer } = await resolveMediaBytes(
-      "/generated/t-1/img_0.png",
-      "http://127.0.0.1:3100",
-    );
+    const { buffer } = await resolveMediaBytes("/generated/t-1/img_0.png", "http://127.0.0.1:3100");
     expect(buffer.toString()).toBe("fake-png");
   });
 
@@ -111,10 +96,7 @@ describe("resolveMediaBytes —— 本地产物地址", () => {
     fs.writeFileSync(outside, "not-mine");
     // 归一化之后落到的正是那个同级目录 —— startsWith(根) 会把它放行
     await expect(
-      resolveMediaBytes(
-        "/api/generated/../generatedX/evil.png",
-        "http://127.0.0.1:3100",
-      ),
+      resolveMediaBytes("/api/generated/../generatedX/evil.png", "http://127.0.0.1:3100"),
     ).rejects.toThrow("无法定位本地生成文件");
   });
 
@@ -122,17 +104,14 @@ describe("resolveMediaBytes —— 本地产物地址", () => {
     const secret = path.join(TMP, "secrets.env");
     fs.writeFileSync(secret, "TOP-SECRET");
     await expect(
-      resolveMediaBytes(
-        "/api/generated/../secrets.env",
-        "http://127.0.0.1:3100",
-      ),
+      resolveMediaBytes("/api/generated/../secrets.env", "http://127.0.0.1:3100"),
     ).rejects.toThrow("无法定位本地生成文件");
   });
 
   it("不是产物地址的相对路径同样拒绝（不给「换个前缀就能读任意文件」留缝）", async () => {
-    await expect(
-      resolveMediaBytes("/api/other/x.png", "http://127.0.0.1:3100"),
-    ).rejects.toThrow("无法定位本地生成文件");
+    await expect(resolveMediaBytes("/api/other/x.png", "http://127.0.0.1:3100")).rejects.toThrow(
+      "无法定位本地生成文件",
+    );
   });
 });
 
@@ -163,15 +142,18 @@ describe("resolveMediaBytes —— 内联 data URL", () => {
  * 两支互斥的联合，`in` 收窄后抛值仍是 unknown —— 判据要钉的正是「上游拒绝出来的东西
  * 未必是 Error」，所以这里不许把它收窄成 Error。 */
 function stubFetch(
-  reply:
-    | { body?: BodyInit; status?: number; contentType?: string | null }
-    | { throws: unknown },
+  reply: { body?: BodyInit; contentType?: string | null; status?: number } | { throws: unknown },
 ) {
   const spy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
-    if ("throws" in reply) throw reply.throws;
+    if ("throws" in reply) {
+      throw reply.throws;
+    }
     const headers: Record<string, string> = {};
-    if (reply.contentType) headers["content-type"] = reply.contentType;
-    else if (reply.contentType === "") headers["content-type"] = "";
+    if (reply.contentType) {
+      headers["content-type"] = reply.contentType;
+    } else if (reply.contentType === "") {
+      headers["content-type"] = "";
+    }
     return new Response(reply.body ?? "bytes", {
       status: reply.status ?? 200,
       headers,
@@ -189,10 +171,7 @@ describe("resolveMediaBytes 的 http(s) 分支", () => {
   it("请求带一个未触发的超时信号（沉默的上游不许挂住整条流水线）", async () => {
     const spy = stubFetch({ contentType: "image/png" });
     await expect(
-      resolveMediaBytes(
-        "https://cdn.example.com/a.png",
-        "http://127.0.0.1:3100",
-      ),
+      resolveMediaBytes("https://cdn.example.com/a.png", "http://127.0.0.1:3100"),
     ).resolves.toMatchObject({ mime: "image/png" });
     const signal = spy.mock.calls[0]?.[1]?.signal;
     expect(signal).toBeInstanceOf(AbortSignal);
@@ -208,10 +187,7 @@ describe("resolveMediaBytes 的 http(s) 分支", () => {
 
   it("上游回的不是图（网关错误页的 text/html）时按扩展名回落", async () => {
     stubFetch({ body: "<html>502</html>", contentType: "text/html" });
-    const got = await resolveMediaBytes(
-      "https://cdn.example.com/dir/pic.png",
-      "http://x",
-    );
+    const got = await resolveMediaBytes("https://cdn.example.com/dir/pic.png", "http://x");
     /* 回落不是将就：远程通道与 ComfyUI input 都按 MIME 决定怎么解码，
      * 拿着 text/html 的字节标成图片会让下游解不出图。 */
     expect(got.mime).toBe("image/png");
@@ -229,25 +205,25 @@ describe("resolveMediaBytes 的 http(s) 分支", () => {
 
   it("HTTP 不成功 → 文案里带状态码（只说「失败了」等于没说）", async () => {
     stubFetch({ status: 502, contentType: "text/plain" });
-    await expect(
-      resolveMediaBytes("https://cdn.example.com/a.png", "http://x"),
-    ).rejects.toThrow("502");
+    await expect(resolveMediaBytes("https://cdn.example.com/a.png", "http://x")).rejects.toThrow(
+      "502",
+    );
   });
 
   it("网络层抛错也翻成「哪儿错了 + 为什么」的一句话，不冒栈噪声", async () => {
     stubFetch({ throws: new TypeError("fetch failed") });
-    await expect(
-      resolveMediaBytes("https://down.example.com/a.png", "http://x"),
-    ).rejects.toThrow(/^拉取参考图失败：/);
+    await expect(resolveMediaBytes("https://down.example.com/a.png", "http://x")).rejects.toThrow(
+      /^拉取参考图失败：/,
+    );
   });
 
   it("拒绝出来的不是 Error 时回落兜底，而不是 undefined / [object Object]", async () => {
     /* 代理与 polyfill 会 `reject("...")` 丢一个裸字符串。这里拼的是给用户看的
      * 一句提示（硬规则 4）：详情取不到时宁可写「未知错误」，也不许把 undefined 递上去。 */
     stubFetch({ throws: "boom" });
-    await expect(
-      resolveMediaBytes("https://weird.example.com/a.png", "http://x"),
-    ).rejects.toThrow(/^拉取参考图失败：未知错误$/);
+    await expect(resolveMediaBytes("https://weird.example.com/a.png", "http://x")).rejects.toThrow(
+      /^拉取参考图失败：未知错误$/,
+    );
   });
 
   it("超过 24MB 就拒（远端图源不许把内存吃掉）", async () => {
@@ -255,22 +231,16 @@ describe("resolveMediaBytes 的 http(s) 分支", () => {
       body: new Uint8Array(24 * 1024 * 1024 + 1),
       contentType: "image/png",
     });
-    await expect(
-      resolveMediaBytes("https://cdn.example.com/big.png", "http://x"),
-    ).rejects.toThrow("24MB");
+    await expect(resolveMediaBytes("https://cdn.example.com/big.png", "http://x")).rejects.toThrow(
+      "24MB",
+    );
   });
 
   it("只认三扇门：data URL / 产物根内 / http(s)。file: 之类一律拒", async () => {
     /* 这一支的输入是用户粘的或上游给的地址。若允许 `file:`，
      * 「参考图」就变成「读本机任意文件」——工坊会把它编码成 data URL 发去远程通道。 */
-    for (const src of [
-      "file:///etc/passwd",
-      "javascript:alert(1)",
-      "ftp://x/a.png",
-    ]) {
-      await expect(resolveMediaBytes(src, "http://x")).rejects.toThrow(
-        "不支持的图片来源",
-      );
+    for (const src of ["file:///etc/passwd", "javascript:alert(1)", "ftp://x/a.png"]) {
+      await expect(resolveMediaBytes(src, "http://x")).rejects.toThrow("不支持的图片来源");
     }
   });
 
@@ -278,24 +248,19 @@ describe("resolveMediaBytes 的 http(s) 分支", () => {
     /* 它以 `/` 开头 → 先进「本地产物地址」那一支，`artifactDiskPath` 认不出它 →
      * 明确报错。**结论同样是拒绝，但文案不同**：这一档要钉的是「不会被当成远端
      * 地址去 fetch」——那是一条 SSRF 形状的缝。 */
-    await expect(
-      resolveMediaBytes("//cdn.example.com/a.png", "http://x"),
-    ).rejects.toThrow("无法定位本地生成文件");
+    await expect(resolveMediaBytes("//cdn.example.com/a.png", "http://x")).rejects.toThrow(
+      "无法定位本地生成文件",
+    );
   });
 });
 
 describe("resolveMediaDataUrl", () => {
   it("与字节出口同一条判据，且 data URL 能解回同一份字节与类型", async () => {
     stubFetch({ body: "hello-bytes", contentType: "image/png" });
-    const url = await resolveMediaDataUrl(
-      "https://cdn.example.com/a.png",
-      "http://x",
-    );
+    const url = await resolveMediaDataUrl("https://cdn.example.com/a.png", "http://x");
     const parsed = parseDataUrl(url);
     expect(parsed?.mime).toBe("image/png");
-    expect(Buffer.from(parsed?.base64 ?? "", "base64").toString()).toBe(
-      "hello-bytes",
-    );
+    expect(Buffer.from(parsed?.base64 ?? "", "base64").toString()).toBe("hello-bytes");
   });
 
   it("图源不可用时把错误原样交回调用方（不在这里咽成空串）", async () => {
@@ -308,24 +273,22 @@ describe("resolveMediaDataUrl", () => {
 
 describe("readUpstreamJson / 字段守卫", () => {
   it("上游回非 JSON 时给出状态码与被截断的片段（长响应不许整包进错误）", async () => {
-    const long = "<html>" + "x".repeat(4_000) + "</html>";
-    const message = await readUpstreamJson(
-      new Response(long, { status: 502 }),
-    ).then(
+    const long = `<html>${"x".repeat(4000)}</html>`;
+    const message = await readUpstreamJson(new Response(long, { status: 502 })).then(
       () => "",
-      (e: unknown) => (e instanceof Error ? e.message : String(e)),
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
     );
     expect(message).toContain("上游返回非 JSON (502)");
     /* 片段是有界的：拿整包 HTML 当错误消息会顺着日志与界面文案一路扩散。
      * 长度单独断一句，而不是靠 `toThrow(正则)` 蒙过去。 */
-    expect(message.length).toBeLessThan(1_000);
+    expect(message.length).toBeLessThan(1000);
     expect(message.length).toBeLessThan(long.length);
   });
 
   it("正常 JSON 原样解析（是 unknown，收窄交给调用方）", async () => {
-    await expect(
-      readUpstreamJson(new Response('{"a":[1,2]}', { status: 200 })),
-    ).resolves.toEqual({ a: [1, 2] });
+    await expect(readUpstreamJson(new Response('{"a":[1,2]}', { status: 200 }))).resolves.toEqual({
+      a: [1, 2],
+    });
   });
 
   it("strField：非字符串 / 空串 / 全空格都算「没给」", () => {
@@ -341,9 +304,7 @@ describe("readUpstreamJson / 字段守卫", () => {
     expect(intField({ n: -5 }, "n", 0, 100)).toBe(0);
     expect(intField({ n: 999 }, "n", 0, 100)).toBe(100);
     expect(intField({ n: "abc" }, "n", 0, 100)).toBeUndefined();
-    expect(
-      intField({ n: Number.POSITIVE_INFINITY }, "n", 0, 100),
-    ).toBeUndefined();
+    expect(intField({ n: Number.POSITIVE_INFINITY }, "n", 0, 100)).toBeUndefined();
     expect(intField({ n: true }, "n", 0, 100)).toBeUndefined();
   });
 });
@@ -360,28 +321,25 @@ describe("尺寸与空值的兜底档", () => {
      * 而「解码为空」那一支因此按构造走不到 —— **没有**为了凑满分支去构造一个
      * `base64,====` 形状的输入（那测的是解析器的边角，不是这一层的判据；
      * 口径同台账 E8 那批不可达防御支的处置）。 */
-    await expect(
-      resolveMediaBytes("data:image/png;base64,", "http://x"),
-    ).rejects.toThrow(/data URL/);
+    await expect(resolveMediaBytes("data:image/png;base64,", "http://x")).rejects.toThrow(
+      /data URL/,
+    );
   });
 
   it("data URL 超 24MB → 拒（远程通道的那一侧按尺寸付账）", async () => {
     /* 载荷是 base64：24MB+1 的字节需要约 32MB 的字符串。这条分配是一次性的，
      * 换来的是「超限」这一档在**每一支**上都有人判，而不是只判了 http 那一支。 */
     const big = Buffer.alloc(24 * 1024 * 1024 + 1, 0x41).toString("base64");
-    await expect(
-      resolveMediaBytes(`data:image/png;base64,${big}`, "http://x"),
-    ).rejects.toThrow("24MB");
+    await expect(resolveMediaBytes(`data:image/png;base64,${big}`, "http://x")).rejects.toThrow(
+      "24MB",
+    );
   });
 
   it("产物根里扩展名推不出的文件 → 显式落到默认图片类型，而不是 undefined", async () => {
     const file = path.join(ROOT, "t-bin", "payload");
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, Buffer.from("no-extension"));
-    const got = await resolveMediaBytes(
-      "/api/generated/t-bin/payload",
-      "http://127.0.0.1:3100",
-    );
+    const got = await resolveMediaBytes("/api/generated/t-bin/payload", "http://127.0.0.1:3100");
     expect(got.mime).toBe(DEFAULT_IMAGE_MIME);
     /* 这一档的存在本身值得留话：MIME 交给远程通道时不许是 undefined，
      * 否则拼出来的 data URL 头是 `data:undefined;base64,…`，症状出现在远端。 */

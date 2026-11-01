@@ -23,11 +23,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect } from "vitest";
-import {
-  defineGateRepo,
-  type GateRepo,
-  type GateRepoOptions,
-} from "./helpers/gate-repo";
+import { defineGateRepo, type GateRepo, type GateRepoOptions } from "./helpers/gate-repo";
 import { symlinkDir } from "./helpers/symlink-dir";
 
 /** 起引擎的实测单次预算（口径同 §11.13：真进程慢到贴边就登记实测值）。 */
@@ -51,7 +47,7 @@ const PX_LITERAL_CLASS = "h-" + "[22px]";
  * 配置」同一族：**判据也不许假定读者的路径分隔符**。
  */
 function namesFile(output: string, relPosix: string): boolean {
-  return output.replace(/\\/g, "/").includes(relPosix);
+  return output.replaceAll("\\", "/").includes(relPosix);
 }
 
 /** 两份工具的公共夹具：`scripts/` 落点 + globals.css + 链回来的 node_modules。 */
@@ -61,28 +57,23 @@ function tw4Fixture(script: string): GateRepoOptions {
     dirs: ["src"],
     copy: [{ from: "src/app/globals.css", to: "src/app/globals.css" }],
     setup: (repo: GateRepo) =>
-      symlinkDir(
-        join(process.cwd(), "node_modules"),
-        join(repo.dir, "node_modules"),
-      ),
+      symlinkDir(join(process.cwd(), "node_modules"), join(repo.dir, "node_modules")),
   };
 }
 
 /** 临时工作区 `scripts/` 下现存的基线 JSON（判「`--update` 有没有落盘」用）。 */
-function baselinesIn(root: string): string[] {
+function baselinesIn(root: string): Array<string> {
   const dir = join(root, "scripts");
-  if (!existsSync(dir)) return [];
+  if (!existsSync(dir)) {
+    return [];
+  }
   return readdirSync(dir).filter((name) => name.endsWith(".json"));
 }
 
 /* `defineGateRepo` 返回的是「扩展过 repo fixture 的 test」+ vitest 本来的 expect ——
  * 两份工具各要一套夹具，所以各起一个 test；expect 从 vitest 直接来（同一份）。 */
-const { test: canonicalTest } = defineGateRepo(
-  tw4Fixture("tw4-canonical-report.mjs"),
-);
-const { test: spacingTest } = defineGateRepo(
-  tw4Fixture("tw4-spacing-canonical.mjs"),
-);
+const { test: canonicalTest } = defineGateRepo(tw4Fixture("tw4-canonical-report.mjs"));
+const { test: spacingTest } = defineGateRepo(tw4Fixture("tw4-spacing-canonical.mjs"));
 
 describe("tw4-canonical-report 硬闸", () => {
   canonicalTest(
@@ -172,9 +163,7 @@ describe("tw4-spacing-canonical 硬闸", () => {
       const check = repo.run(["--check"]);
       expect(check.code, check.output).toBe(0);
       repo.run(["--write"]);
-      expect(repo.read("src/Comment.tsx")).toContain(
-        `此前写成 \`${PX_LITERAL_CLASS}\``,
-      );
+      expect(repo.read("src/Comment.tsx")).toContain(`此前写成 \`${PX_LITERAL_CLASS}\``);
     },
     ENGINE_TIMEOUT,
   );

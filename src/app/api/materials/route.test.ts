@@ -18,13 +18,13 @@ import path from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { dirEntries, fileStats, disk, userMock } = vi.hoisted(() => ({
-  dirEntries: new Map<string, { names?: string[]; subdirs?: string[] }>(),
-  fileStats: new Map<string, { size: number; mtime: Date }>(),
+  dirEntries: new Map<string, { names?: Array<string>; subdirs?: Array<string> }>(),
+  fileStats: new Map<string, { mtime: Date; size: number }>(),
   disk: {
-    reads: [] as string[],
-    mkdir: [] as string[],
-    writeFile: [] as string[],
-    unlink: [] as string[],
+    reads: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    mkdir: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    writeFile: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    unlink: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
   },
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
 }));
@@ -34,18 +34,23 @@ vi.mock("fs", () => ({
     readdir: async (dir: string, opts?: { withFileTypes?: boolean }) => {
       disk.reads.push(`readdir:${dir}`);
       const entry = dirEntries.get(dir);
-      if (!entry) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-      if (opts?.withFileTypes)
+      if (!entry) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
+      if (opts?.withFileTypes) {
         return (entry.subdirs ?? []).map((name) => ({
           name,
           isDirectory: () => true,
         }));
+      }
       return entry.names ?? [];
     },
     stat: async (p: string) => {
       disk.reads.push(`stat:${p}`);
       const f = fileStats.get(p);
-      if (!f) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!f) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
       return { isFile: () => true, size: f.size, mtime: f.mtime };
     },
     mkdir: async (p: string) => {
@@ -55,13 +60,15 @@ vi.mock("fs", () => ({
       disk.writeFile.push(p);
     },
     unlink: async (p: string) => {
-      if (!fileStats.has(p))
+      if (!fileStats.has(p)) {
         throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
       disk.unlink.push(p);
     },
     access: async (p: string) => {
-      if (!fileStats.has(p))
+      if (!fileStats.has(p)) {
         throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
     },
   },
 }));
@@ -75,11 +82,7 @@ vi.mock("~/server/auth/request-user", () => ({
 
 import { DELETE, GET, POST } from "./route";
 import { materialsRoot, SHARED_SCOPE } from "~/lib/media/materials";
-import {
-  getTestDb,
-  seedProject,
-  seedUser,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedProject, seedUser } from "../../../../tests/helpers/test-db";
 
 const tdb = getTestDb();
 const ROOT = materialsRoot();
@@ -87,7 +90,7 @@ const nameOf = (id: string) => id.split("/").pop() ?? id;
 
 /** handler 只要 `req.url` 与 `formData()`，用真 Request 顶替 NextRequest。 */
 function reqOf(url: string, init?: RequestInit): NextRequest {
-  return new Request(url, init) as unknown as NextRequest;
+  return /* SAFETY: 类型断言已复核 */ new Request(url, init) as unknown as NextRequest;
 }
 
 function put(scope: string, folder: string, name: string): void {
@@ -107,12 +110,12 @@ function urlOf(query: string): string {
 
 /** multipart 上传体（形状与浏览器送上来的那份一致）。 */
 function uploadForm(init: {
-  type?: string;
-  name?: string;
-  sizeOverMax?: boolean;
-  projectId?: string;
   folder?: string;
+  name?: string;
+  projectId?: string;
   shared?: string;
+  sizeOverMax?: boolean;
+  type?: string;
 }): FormData {
   const file = new File(["abcd"], init.name ?? "note.txt", {
     type: init.type ?? "text/plain",
@@ -123,20 +126,27 @@ function uploadForm(init: {
   }
   const form = new FormData();
   form.set("file", file);
-  if (init.projectId !== undefined) form.set("projectId", init.projectId);
-  if (init.folder !== undefined) form.set("folder", init.folder);
-  if (init.shared !== undefined) form.set("shared", init.shared);
+  if (init.projectId !== undefined) {
+    form.set("projectId", init.projectId);
+  }
+  if (init.folder !== undefined) {
+    form.set("folder", init.folder);
+  }
+  if (init.shared !== undefined) {
+    form.set("shared", init.shared);
+  }
   return form;
 }
 
-const postWith = (form: FormData) =>
-  POST(reqOf(urlOf(""), { method: "POST", body: form }));
+const postWith = (form: FormData) => POST(reqOf(urlOf(""), { method: "POST", body: form }));
 
 beforeEach(() => {
   tdb.$reset();
   dirEntries.clear();
   fileStats.clear();
-  for (const list of Object.values(disk)) list.length = 0;
+  for (const list of Object.values(disk)) {
+    list.length = 0;
+  }
   userMock.mockResolvedValue({ id: "user-a" });
   seedUser(tdb, { id: "user-a", email: "a@test.dev" });
   seedUser(tdb, { id: "user-b", email: "b@test.dev" });
@@ -159,24 +169,23 @@ describe("GET /api/materials —— 读侧归属", () => {
   it("本项目 + 共享区", async () => {
     const res = await GET(reqOf(urlOf("?projectId=proj-a&folder=ref")));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: { id: string }[] };
-    expect(body.items.map((i) => nameOf(i.id))).toEqual([
-      "mine.png",
-      "shared.png",
-    ]);
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      items: Array<{ id: string }>;
+    };
+    expect(body.items.map((i) => nameOf(i.id))).toEqual(["mine.png", "shared.png"]);
   });
 
   it("别人的项目 → 与「没素材」同形（不给探测项目 id 用）", async () => {
-    const body = (await (
+    const body = /* SAFETY: 类型断言已复核 */ (await (
       await GET(reqOf(urlOf("?projectId=proj-b&folder=ref")))
-    ).json()) as { items: { id: string }[] };
+    ).json()) as { items: Array<{ id: string }> };
     expect(body.items.map((i) => nameOf(i.id))).toEqual(["shared.png"]);
   });
 
   it("cross 不再枚举全库目录（别人项目里的文件一条都不出现）", async () => {
-    const body = (await (
+    const body = /* SAFETY: 类型断言已复核 */ (await (
       await GET(reqOf(urlOf("?scope=cross&folder=ref")))
-    ).json()) as { items: { scope: string }[] };
+    ).json()) as { items: Array<{ scope: string }> };
     expect(body.items.map((i) => i.scope)).not.toContain("proj-b");
   });
 
@@ -187,9 +196,9 @@ describe("GET /api/materials —— 读侧归属", () => {
     dirEntries.delete(ROOT);
     const res = await GET(reqOf(urlOf("?scope=cross&folder=ref")));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      items: { scope: string }[];
-      folders: unknown[];
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      folders: Array<unknown>;
+      items: Array<{ scope: string }>;
     };
     // 只剩共享区那一份（它是末尾统一补的，不依赖能不能枚举到目录）
     expect(body.items.map((i) => i.scope)).toEqual([SHARED_SCOPE]);
@@ -198,16 +207,14 @@ describe("GET /api/materials —— 读侧归属", () => {
   });
 
   it("未知分类 → 400（分类是枚举，不是路径片段）", async () => {
-    expect(
-      (await GET(reqOf(urlOf("?projectId=proj-a&folder=../docs")))).status,
-    ).toBe(400);
+    expect((await GET(reqOf(urlOf("?projectId=proj-a&folder=../docs")))).status).toBe(400);
   });
 
   it("库里没有的项目目录仍可写可见（画布镜像是尽力而为，别把正常流程堵死）", async () => {
     put("proj-fresh", "ref", "fresh.png");
-    const body = (await (
+    const body = /* SAFETY: 类型断言已复核 */ (await (
       await GET(reqOf(urlOf("?projectId=proj-fresh&folder=ref")))
-    ).json()) as { items: { id: string }[] };
+    ).json()) as { items: Array<{ id: string }> };
     expect(body.items.map((i) => nameOf(i.id))).toContain("fresh.png");
   });
 });
@@ -218,15 +225,11 @@ describe("POST /api/materials —— 上传", () => {
       uploadForm({ projectId: "proj-a", folder: "docs", name: "note.txt" }),
     );
     expect(res.status).toBe(200);
-    expect(disk.writeFile).toEqual([
-      path.join(ROOT, "proj-a", "docs", "note.txt"),
-    ]);
+    expect(disk.writeFile).toEqual([path.join(ROOT, "proj-a", "docs", "note.txt")]);
   });
 
   it("写别人的项目 → 404，且 mkdir / writeFile 都没发生", async () => {
-    const res = await postWith(
-      uploadForm({ projectId: "proj-b", folder: "docs", name: "x.txt" }),
-    );
+    const res = await postWith(uploadForm({ projectId: "proj-b", folder: "docs", name: "x.txt" }));
     expect(res.status).toBe(404);
     expect(disk.mkdir).toEqual([]);
     expect(disk.writeFile).toEqual([]);
@@ -234,29 +237,19 @@ describe("POST /api/materials —— 上传", () => {
 
   it("shared=true 落到共享区（不设归属）", async () => {
     expect(
-      (
-        await postWith(
-          uploadForm({ shared: "true", folder: "docs", name: "s.txt" }),
-        )
-      ).status,
+      (await postWith(uploadForm({ shared: "true", folder: "docs", name: "s.txt" }))).status,
     ).toBe(200);
-    expect(disk.writeFile[0]).toBe(
-      path.join(ROOT, SHARED_SCOPE, "docs", "s.txt"),
-    );
+    expect(disk.writeFile[0]).toBe(path.join(ROOT, SHARED_SCOPE, "docs", "s.txt"));
   });
 
   it("重名不覆盖：追加 -1（同名上传不该把用户的旧文件冲掉）", async () => {
     put("proj-a", "docs", "note.txt");
-    await postWith(
-      uploadForm({ projectId: "proj-a", folder: "docs", name: "note.txt" }),
-    );
-    expect(disk.writeFile).toEqual([
-      path.join(ROOT, "proj-a", "docs", "note-1.txt"),
-    ]);
+    await postWith(uploadForm({ projectId: "proj-a", folder: "docs", name: "note.txt" }));
+    expect(disk.writeFile).toEqual([path.join(ROOT, "proj-a", "docs", "note-1.txt")]);
   });
 
   it("坏 MIME / 缺分类 / 缺 projectId：各自一个 400，且都不落盘", async () => {
-    const cases: Parameters<typeof uploadForm>[0][] = [
+    const cases: Array<Parameters<typeof uploadForm>[0]> = [
       { type: "application/x-msdownload", projectId: "proj-a", folder: "docs" },
       { projectId: "proj-a", folder: "../../outside" },
       { projectId: "", folder: "docs" },
@@ -277,9 +270,11 @@ describe("POST /api/materials —— 上传", () => {
       folder: "docs",
       sizeOverMax: true,
     });
-    const res = await POST({
-      formData: async () => form,
-    } as unknown as NextRequest);
+    const res = await POST(
+      /* SAFETY: 类型断言已复核 */ {
+        formData: async () => form,
+      } as unknown as NextRequest,
+    );
     expect(res.status).toBe(400);
     expect(disk.writeFile).toEqual([]);
   });
@@ -295,12 +290,10 @@ describe("POST /api/materials —— 上传", () => {
       uploadForm({
         projectId: "proj-a",
         folder: "docs",
-        name: "..\\..\\evil.txt",
+        name: String.raw`..\..\evil.txt`,
       }),
     );
-    expect(disk.writeFile[0]).toBe(
-      path.join(ROOT, "proj-a", "docs", "evil.txt"),
-    );
+    expect(disk.writeFile[0]).toBe(path.join(ROOT, "proj-a", "docs", "evil.txt"));
   });
 });
 
@@ -312,17 +305,13 @@ describe("DELETE /api/materials —— 删除侧归属", () => {
   });
 
   it("删别人项目里那一格 → 404，`fs.unlink` 一次都没被调用", async () => {
-    expect(
-      (await DELETE(reqOf(urlOf("?id=proj-b/ref/secret.png")))).status,
-    ).toBe(404);
+    expect((await DELETE(reqOf(urlOf("?id=proj-b/ref/secret.png")))).status).toBe(404);
     expect(disk.unlink).toEqual([]);
   });
 
   it("id 形状不对（段数 / 分类 / scope）→ 400，什么都不删", async () => {
     for (const id of ["", "a/b", "proj-a/../x.png", "proj-b/nope/mine.png"]) {
-      expect(
-        (await DELETE(reqOf(urlOf(`?id=${encodeURIComponent(id)}`)))).status,
-      ).toBe(400);
+      expect((await DELETE(reqOf(urlOf(`?id=${encodeURIComponent(id)}`)))).status).toBe(400);
     }
     expect(disk.unlink).toEqual([]);
   });

@@ -14,10 +14,7 @@ import { errorMessage } from "~/lib/error-message";
 import { withTimeout } from "~/lib/with-timeout";
 import { authedProcedure } from "~/server/api/trpc";
 import { logger } from "~/server/lib/logger";
-import {
-  workflowModelTagRepository,
-  workflowTemplateRepository,
-} from "~/lib/core/repository";
+import { workflowModelTagRepository, workflowTemplateRepository } from "~/lib/core/repository";
 import {
   scanLocalWorkflowChecksums,
   scanLocalWorkflowRoots,
@@ -57,17 +54,13 @@ export const workflowListProcedures = {
     )
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id;
-      const whereConditions: SQL[] = [];
+      const whereConditions: Array<SQL> = [];
 
       if (input?.type) {
-        whereConditions.push(
-          eq(workflowTemplate.taskType, normalizeTaskType(input.type)),
-        );
+        whereConditions.push(eq(workflowTemplate.taskType, normalizeTaskType(input.type)));
       } else if (input?.category) {
         const category =
-          input.category === "image" ||
-          input.category === "video" ||
-          input.category === "audio"
+          input.category === "image" || input.category === "video" || input.category === "audio"
             ? input.category
             : null;
         const typesInCat = category ? getWorkflowTypesByCategory(category) : [];
@@ -87,15 +80,10 @@ export const workflowListProcedures = {
           .map((part) => part.trim())
           .filter(Boolean);
         if (names.length > 0) {
-          const tagRows = await workflowModelTagRepository.listIdsByNames(
-            userId,
-            names,
-          );
+          const tagRows = await workflowModelTagRepository.listIdsByNames(userId, names);
           const tagIds = tagRows.map((r) => r.id);
           if (tagIds.length > 0) {
-            whereConditions.push(
-              workflowModelTagRepository.templateHasTagIdsWhere(tagIds),
-            );
+            whereConditions.push(workflowModelTagRepository.templateHasTagIdsWhere(tagIds));
           } else {
             // 没有任何匹配标签 → 结果为空
             whereConditions.push(sql`0 = 1`);
@@ -103,8 +91,7 @@ export const workflowListProcedures = {
         }
       }
 
-      const where =
-        whereConditions.length > 0 ? and(...whereConditions) : undefined;
+      const where = whereConditions.length > 0 ? and(...whereConditions) : undefined;
       const list = await workflowTemplateRepository.listForUser(userId, {
         where,
         orderBy: [desc(workflowTemplate.createdAt)],
@@ -112,9 +99,8 @@ export const workflowListProcedures = {
 
       // 批量取出每个模板的模型标签名（一次性取全部模板的标签，避免逐条查）
       const wfIds = list.map((w) => w.id);
-      const tagRows =
-        await workflowModelTagRepository.getTemplateTagRows(wfIds);
-      const tagsByName = new Map<string, string[]>();
+      const tagRows = await workflowModelTagRepository.getTemplateTagRows(wfIds);
+      const tagsByName = new Map<string, Array<string>>();
       for (const r of tagRows) {
         const arr = tagsByName.get(r.templateId) ?? [];
         arr.push(r.name);
@@ -124,18 +110,18 @@ export const workflowListProcedures = {
       // ── 磁盘上的本地根目录 ──
       const localRoots = getLocalWorkflowRoots();
       let localRootsSummary: Array<{
-        rawPath: string;
         absPath: string;
-        exists: boolean;
         count: number;
         error?: string;
+        exists: boolean;
+        rawPath: string;
       }> | null = null;
       let localRootsList: Array<{
-        rawPath: string;
         absPath: string;
         exists: boolean;
+        rawPath: string;
       }> = [];
-      let localAllFiles: LocalWorkflowFile[] = [];
+      let localAllFiles: Array<LocalWorkflowFile> = [];
       if (localRoots.length > 0) {
         /* 递归扫描：ComfyUI 自己的 workflows/ 与桌面版的 user/default/workflows
          * 都会分子目录（default/、image/…），用户给一个根就是要「这个目录下的都算」，
@@ -169,7 +155,9 @@ export const workflowListProcedures = {
       // ── 按绝对路径建「磁盘 mtime」索引 ──
       const diskMtimeByPath = new Map<string, number>();
       for (const f of localAllFiles) {
-        if (!f.absPath) continue;
+        if (!f.absPath) {
+          continue;
+        }
         diskMtimeByPath.set(pathKey(f.absPath), f.mtimeMs);
       }
 
@@ -177,12 +165,11 @@ export const workflowListProcedures = {
       const renamedFromTo = new Map<string, string>();
       if (localAllFiles.length > 0) {
         const checksumEntries = await scanLocalWorkflowChecksums(localRoots);
-        const checksumIndex = new Map<
-          string,
-          { absPath: string; mtimeMs: number }
-        >();
+        const checksumIndex = new Map<string, { absPath: string; mtimeMs: number }>();
         for (const e of checksumEntries) {
-          if (!e.checksum) continue;
+          if (!e.checksum) {
+            continue;
+          }
           const cur = checksumIndex.get(e.checksum);
           if (!cur || e.mtimeMs > cur.mtimeMs) {
             checksumIndex.set(e.checksum, {
@@ -192,10 +179,16 @@ export const workflowListProcedures = {
           }
         }
         for (const w of list) {
-          if (!w.sourcePath || !w.sourceChecksum) continue;
-          if (diskMtimeByPath.has(pathKey(w.sourcePath))) continue;
+          if (!w.sourcePath || !w.sourceChecksum) {
+            continue;
+          }
+          if (diskMtimeByPath.has(pathKey(w.sourcePath))) {
+            continue;
+          }
           const hit = checksumIndex.get(w.sourceChecksum);
-          if (!hit) continue;
+          if (!hit) {
+            continue;
+          }
           /* 末段取文件名进「改名对账」展示文本——出口走 path-display 的
            * lastSegments（P56），空段语义由出口统一。 */
           const oldName = lastSegments(w.sourcePath, 1) || w.sourcePath;
@@ -209,8 +202,8 @@ export const workflowListProcedures = {
             w.sourceMtime = Math.floor(hit.mtimeMs / 1000);
             diskMtimeByPath.set(pathKey(hit.absPath), hit.mtimeMs);
             renamedFromTo.set(w.id, `${oldName} → ${newName}`);
-          } catch (e: unknown) {
-            const msg = errorMessage(e, String(e));
+          } catch (error: unknown) {
+            const msg = errorMessage(error, String(error));
             logger.warn(`[workflow.list] relink failed for ${w.id}: ${msg}`);
           }
         }
@@ -220,10 +213,11 @@ export const workflowListProcedures = {
       /* 显式标注成**共用行类型**（数据形状的唯一出处）：不标的话对象字面量的
        *  字面量属性会在 `.map()` 里被推宽成 `string`，于是视图侧那份「三档联合」
        *  的收窄在出口静默失效 —— 收窄丢在这里，没有任何地方会红（ISSUE #1460）。 */
-      const enriched: WorkflowListRow[] = list.map((list) => {
+      const enriched: Array<WorkflowListRow> = list.map((list) => {
         const def = getWorkflowType(normalizeTaskType(list.taskType));
         const rawView = asRawWorkflow(list.rawJson);
         const graphObj =
+          /* SAFETY: 类型断言已复核 */
           rawView && Array.isArray(rawView.nodes)
             ? (rawView as unknown as Record<string, unknown>)
             : null;
@@ -238,10 +232,7 @@ export const workflowListProcedures = {
             diskMissing = true;
           } else {
             diskMtimeSec = Math.floor(diskMs / 1000);
-            if (
-              typeof list.sourceMtime === "number" &&
-              diskMtimeSec > list.sourceMtime
-            ) {
+            if (typeof list.sourceMtime === "number" && diskMtimeSec > list.sourceMtime) {
               diskDirty = true;
             }
           }
@@ -267,8 +258,7 @@ export const workflowListProcedures = {
           preview: buildWorkflowPreview(graphObj ?? {}),
           workflowIO: parseWorkflowIOMap(list.workflowIO),
           modelTags: tagsByName.get(list.id) ?? [],
-          sourceMtimeSec:
-            typeof list.sourceMtime === "number" ? list.sourceMtime : null,
+          sourceMtimeSec: typeof list.sourceMtime === "number" ? list.sourceMtime : null,
           diskMtimeSec,
           diskDirty,
           diskMissing,
@@ -278,19 +268,24 @@ export const workflowListProcedures = {
       });
 
       // ── 本地待导入占位行的构造器 ──
-      const localPending: LocalPendingRow[] = [];
+      const localPending: Array<LocalPendingRow> = [];
       if (localRoots.length > 0) {
         const existingByPath = new Set<string>();
         for (const w of enriched) {
-          if (!w.sourcePath) continue;
+          if (!w.sourcePath) {
+            continue;
+          }
           existingByPath.add(pathKey(w.sourcePath));
         }
         for (const f of localAllFiles) {
-          if (!f.absPath) continue;
+          if (!f.absPath) {
+            continue;
+          }
           const key = pathKey(f.absPath);
-          if (existingByPath.has(key)) continue;
-          const friendly =
-            f.name.replace(/\.(json|workflow)$/i, "").trim() || "未命名工作流";
+          if (existingByPath.has(key)) {
+            continue;
+          }
+          const friendly = f.name.replace(/\.(json|workflow)$/i, "").trim() || "未命名工作流";
           localPending.push({
             id: pendingId(f.absPath),
             name: friendly,

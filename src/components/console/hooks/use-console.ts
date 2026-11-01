@@ -27,42 +27,45 @@ import {
   type ConsoleClientEvent,
 } from "~/lib/console/console-client";
 import { shellSyntaxWarning } from "~/lib/console/console-catalog";
-import { MAX_COMMAND_CHARS } from "~/lib/console/console-limits";
-import { MAX_HISTORY_ENTRIES } from "~/lib/console/console-limits";
+import { MAX_COMMAND_CHARS, MAX_HISTORY_ENTRIES } from "~/lib/console/console-limits";
 import { fixed } from "~/lib/number-format";
 
 /** 一条**已跑过**的命令（本次会话的历史；只在内存里）。 */
-export interface ConsoleHistoryItem {
+export type ConsoleHistoryItem = {
   command: string;
+  durationMs: number;
+  ok: boolean;
   /** 结果文案（判据在控制器，视图不重算）。 */
   verdict: string;
-  ok: boolean;
-  durationMs: number;
-}
+};
 
 export type ConsolePhase = "idle" | "running" | "done" | "stopped";
 
-export interface ConsoleController {
-  /** 输入框内容（受控）。 */
-  command: string;
-  setCommand: (next: string) => void;
-  phase: ConsolePhase;
-  /** 输出正文（stdout 与 stderr 合并按到达顺序，与真实终端一致）。 */
-  output: string;
-  /** 正在跑的那条命令；null = 没有在跑。 */
-  runningCommand: string | null;
-  /** 跑完那条的退出码；null = 没拿到（起不来 / 被掐）。 */
-  exitCode: number | null;
-  /** 结论摘要（一行，直接渲染）。 */
-  verdict: string;
-  /** 结论是否为「成功」（决定颜色）。 */
-  verdictOk: boolean;
-  /** 本次会话跑过的命令（新的在前）。 */
-  history: ConsoleHistoryItem[];
+export type ConsoleController = {
   /** 命令是否可提交（非空 + 没在跑 + 不超长）。 */
   canRun: boolean;
+  /** 清空输出与结论（保留历史）。 */
+  clear: () => void;
+  /** 输入框内容（受控）。 */
+  command: string;
+  /** 跑完那条的退出码；null = 没拿到（起不来 / 被掐）。 */
+  exitCode: number | null;
+  /** 填入一条命令（**不直接跑**：用户还能改参数）。 */
+  fill: (command: string) => void;
+  /** 本次会话跑过的命令（新的在前）。 */
+  history: Array<ConsoleHistoryItem>;
   /** 输入框的字符上限（与路由同一常量，界面与服务端不会各说各话）。 */
   maxCommandChars: number;
+  /** 输出正文（stdout 与 stderr 合并按到达顺序，与真实终端一致）。 */
+  output: string;
+  phase: ConsolePhase;
+  /** 提交当前输入框里的命令。 */
+  run: () => void;
+  /** 正在跑的那条命令；null = 没有在跑。 */
+  runningCommand: string | null;
+  setCommand: (next: string) => void;
+  /** 停止正在跑的命令（杀整棵树）。 */
+  stop: () => void;
   /**
    * 「这行里有会被误当成 shell 语法的东西」的提示；null = 没有。
    *
@@ -71,15 +74,11 @@ export interface ConsoleController {
    * （`shellSyntaxWarning` 的文件头记了实测量到的现象）。
    */
   syntaxWarning: string | null;
-  /** 提交当前输入框里的命令。 */
-  run: () => void;
-  /** 停止正在跑的命令（杀整棵树）。 */
-  stop: () => void;
-  /** 清空输出与结论（保留历史）。 */
-  clear: () => void;
-  /** 填入一条命令（**不直接跑**：用户还能改参数）。 */
-  fill: (command: string) => void;
-}
+  /** 结论摘要（一行，直接渲染）。 */
+  verdict: string;
+  /** 结论是否为「成功」（决定颜色）。 */
+  verdictOk: boolean;
+};
 
 /** 用时的人话（<1s 给毫秒、<60s 给秒、再往上给分秒）。
  *
@@ -87,8 +86,12 @@ export interface ConsoleController {
  *  手写 `toFixed` 会在不同落点给出不同的尾零口径（这里一位、别处两位），
  *  而「同一条命令在两处显示不同用时」是没人会去查的静默不一致。 */
 function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${fixed(ms / 1000, 1) ?? "0.0"}s`;
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
+  if (ms < 60_000) {
+    return `${fixed(ms / 1000, 1) ?? "0.0"}s`;
+  }
   const min = Math.floor(ms / 60_000);
   const sec = Math.round((ms % 60_000) / 1000);
   return `${min}m${sec}s`;
@@ -102,7 +105,7 @@ export function useConsole(): ConsoleController {
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [verdict, setVerdict] = useState("");
   const [verdictOk, setVerdictOk] = useState(false);
-  const [history, setHistory] = useState<ConsoleHistoryItem[]>([]);
+  const [history, setHistory] = useState<Array<ConsoleHistoryItem>>([]);
 
   /** 在飞请求的中止控制器：`stop()` 与卸载都经它断开（断开 = 服务端回收命令）。 */
   const abortRef = useRef<AbortController | null>(null);
@@ -131,7 +134,9 @@ export function useConsole(): ConsoleController {
    */
   const startRun = useCallback(
     (line: string) => {
-      if (abortRef.current) return; // 已经有一条在跑
+      if (abortRef.current) {
+        return;
+      } // 已经有一条在跑
       setOutput("");
       setExitCode(null);
       setVerdict("");
@@ -152,7 +157,9 @@ export function useConsole(): ConsoleController {
         command: line,
         signal: controller.signal,
         onEvent: (event: ConsoleClientEvent) => {
-          if (!aliveRef.current) return;
+          if (!aliveRef.current) {
+            return;
+          }
           if (event.type === "start") {
             echoed = event.command || line;
             append(`$ ${echoed}\n`);
@@ -171,15 +178,11 @@ export function useConsole(): ConsoleController {
           setExitCode(event.code);
           if (event.killed) {
             setPhase("stopped");
-            setVerdict(
-              `已停止（用时 ${formatDuration(event.durationMs)}）—— 命令及其子进程已回收`,
-            );
+            setVerdict(`已停止（用时 ${formatDuration(event.durationMs)}）—— 命令及其子进程已回收`);
             setVerdictOk(false);
           } else if (event.code === 0) {
             setPhase("done");
-            setVerdict(
-              `完成（退出码 0，用时 ${formatDuration(event.durationMs)}）`,
-            );
+            setVerdict(`完成（退出码 0，用时 ${formatDuration(event.durationMs)}）`);
             setVerdictOk(true);
           } else {
             setPhase("done");
@@ -188,7 +191,9 @@ export function useConsole(): ConsoleController {
             );
             setVerdictOk(false);
           }
-          if (event.truncatedNote) append(`\n${event.truncatedNote}\n`);
+          if (event.truncatedNote) {
+            append(`\n${event.truncatedNote}\n`);
+          }
           append(`\n[进程已退出，退出码 ${event.code ?? "未知"}]\n`);
           finish({
             command: echoed,
@@ -202,7 +207,9 @@ export function useConsole(): ConsoleController {
           });
         },
       }).then((outcome) => {
-        if (!aliveRef.current) return;
+        if (!aliveRef.current) {
+          return;
+        }
         abortRef.current = null;
         setRunningCommand(null);
         if (outcome.kind === "ok") {
@@ -265,10 +272,7 @@ export function useConsole(): ConsoleController {
   const fill = useCallback((next: string) => setCommand(next), []);
 
   const canRun = useMemo(
-    () =>
-      phase !== "running" &&
-      command.trim().length > 0 &&
-      command.length <= MAX_COMMAND_CHARS,
+    () => phase !== "running" && command.trim().length > 0 && command.length <= MAX_COMMAND_CHARS,
     [command, phase],
   );
 

@@ -56,8 +56,7 @@ import { describe, expect, it } from "vitest";
 import { stripComments } from "./helpers/strip-comments";
 
 /** 路由段的一种形状：写死的名字、单段动态、还是吃掉剩下的全部。 */
-type RouteToken =
-  { kind: "static"; value: string } | { kind: "one" } | { kind: "many" };
+type RouteToken = { kind: "static"; value: string } | { kind: "one" } | { kind: "many" };
 
 /** 通配段：来自模板插值 `${…}`，与任何路由段都对得上。 */
 const WILD = "*";
@@ -68,12 +67,17 @@ const WILD = "*";
  *  产物根在仓库根，但 `src/app/api/generated/[...path]` 是一个真 route handler，
  *  跟着跳就会把「产物读取口」从路由表里抹掉 —— 表现是判据把 `/api/generated/...`
  *  报成没有落点（假红），而真正该报的那条反而被同一份盲区盖住。 */
-function collectTs(dir: string, out: string[] = []): string[] {
+function collectTs(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
-    if (entry === "node_modules" || entry === ".next") continue;
+    if (entry === "node_modules" || entry === ".next") {
+      continue;
+    }
     const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) collectTs(full, out);
-    else if (/\.tsx?$/.test(entry)) out.push(full);
+    if (statSync(full).isDirectory()) {
+      collectTs(full, out);
+    } else if (/\.tsx?$/.test(entry)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -82,21 +86,26 @@ function collectTs(dir: string, out: string[] = []): string[] {
  *
  *  目录形状就是 URL：`src/app/api/tasks/[id]/stream/route.ts` → `api/tasks/:id/stream`。
  *  三处 Next 约定要照办：路由组 `(...)` 不进 URL；`[x]` 是一段；`[...x]` 是剩余全部。 */
-function routeTable(appDir: string): Map<string, RouteToken[]> {
-  const routes = new Map<string, RouteToken[]>();
+function routeTable(appDir: string): Map<string, Array<RouteToken>> {
+  const routes = new Map<string, Array<RouteToken>>();
   for (const file of collectTs(appDir)) {
-    if (!/(^|[\\/])route\.tsx?$/.test(path.basename(file))) continue;
+    if (!/(^|[\\/])route\.tsx?$/.test(path.basename(file))) {
+      continue;
+    }
     const dirs = path
       .relative(appDir, path.dirname(file))
       .split(/[\\/]+/)
       .filter((seg) => seg && !/^\(.*\)$/.test(seg));
-    const tokens: RouteToken[] = [];
+    const tokens: Array<RouteToken> = [];
     for (const seg of dirs) {
       // `[...x]` 与 `[[...x]]` 都算「吃掉剩下的全部」；`[x]` 只吃一段
-      if (/^\[\.{3}[\w-]+\]$/.test(seg) || /^\[\[\.{3}[\w-]+\]\]$/.test(seg))
+      if (/^\[\.{3}[\w-]+\]$/.test(seg) || /^\[\[\.{3}[\w-]+\]\]$/.test(seg)) {
         tokens.push({ kind: "many" });
-      else if (/^\[[\w-]+\]$/.test(seg)) tokens.push({ kind: "one" });
-      else tokens.push({ kind: "static", value: seg });
+      } else if (/^\[[\w-]+\]$/.test(seg)) {
+        tokens.push({ kind: "one" });
+      } else {
+        tokens.push({ kind: "static", value: seg });
+      }
     }
     routes.set(dirs.join("/"), tokens);
   }
@@ -104,7 +113,7 @@ function routeTable(appDir: string): Map<string, RouteToken[]> {
 }
 
 /** 一个地址字面量 → 段序列；`${…}` 折成通配段，查询串与尾斜杠丢掉。 */
-function endpointSegments(literal: string): string[] {
+function endpointSegments(literal: string): Array<string> {
   return literal
     .split("?")[0]!
     .split("#")[0]!
@@ -114,10 +123,7 @@ function endpointSegments(literal: string): string[] {
 }
 
 /** 地址能不能被某个 handler 接住（段序列逐段比，见文件头的三条形状规则）。 */
-function hasRouteFor(
-  segments: string[],
-  routes: Map<string, RouteToken[]>,
-): boolean {
+function hasRouteFor(segments: Array<string>, routes: Map<string, Array<RouteToken>>): boolean {
   for (const tokens of routes.values()) {
     let i = 0;
     let j = 0;
@@ -129,15 +135,22 @@ function hasRouteFor(
         matched = true;
         break;
       }
-      if (j >= segments.length) break;
+      if (j >= segments.length) {
+        break;
+      }
       const seg = segments[j]!;
-      if (seg !== WILD && token.kind === "static" && token.value !== seg) break;
+      if (seg !== WILD && token.kind === "static" && token.value !== seg) {
+        break;
+      }
       i++;
       j++;
     }
-    if (!matched && j === segments.length && i === tokens.length)
+    if (!matched && j === segments.length && i === tokens.length) {
       matched = true;
-    if (matched) return true;
+    }
+    if (matched) {
+      return true;
+    }
   }
   return false;
 }
@@ -185,7 +198,7 @@ const UPSTREAM_SERVICE_ADDRESS: Record<string, string> = {
 
 /** 把地址折成比较用的规范形：丢查询串、丢尾斜杠、段序保持。 */
 function normalizeAddress(literal: string): string {
-  return "/" + endpointSegments(literal).join("/");
+  return `/${endpointSegments(literal).join("/")}`;
 }
 
 /** 登记的粒度是**整条地址**，不是前缀：`/api/trpc` 放行，`/api/trpcx` 不放行。 */
@@ -206,10 +219,8 @@ function isUpstreamAddress(literal: string): boolean {
  *  `}` 那一档是模板形态 `` `${base}/api/x` ``。它以前被整类豁免，理由是「前面是
  *  `}` 的一定是外部服务」—— 那次豁免放走了一条真事故（见文件头）。现在默认判，
  *  上游那十条由 `UPSTREAM_SERVICE_ADDRESS` 逐条放行。 */
-function endpointsOf(text: string): string[] {
-  return [...text.matchAll(/["'`}]\/api\/[^"'`\s]*/g)].map((m) =>
-    m[0].slice(1),
-  );
+function endpointsOf(text: string): Array<string> {
+  return [...text.matchAll(/["'`}]\/api\/[^"'`\s]*/g)].map((m) => m[0].slice(1));
 }
 
 describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命中一个 route handler", () => {
@@ -218,7 +229,7 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
   const files = collectTs(path.join(process.cwd(), "src"))
     .filter((f) => !/\.test\.tsx?$/.test(f))
     .map((f) => ({
-      file: path.relative(process.cwd(), f).replace(/\\/g, "/"),
+      file: path.relative(process.cwd(), f).replaceAll("\\", "/"),
       text: stripComments(readFileSync(f, "utf8")),
     }));
   const found = files.flatMap(({ file, text }) =>
@@ -251,15 +262,12 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
      * 于是 handler 被删掉之后没有任何一条门禁知道。现在它进了扫描面，并且
      * 必须**不被两张登记表放行**（放行它 = 把漏点重新打开）。 */
     const hit = found.filter(
-      ({ literal }) =>
-        normalizeAddress(literal) === "/api/custom-nodes/manifest",
+      ({ literal }) => normalizeAddress(literal) === "/api/custom-nodes/manifest",
     );
     expect(hit.length).toBeGreaterThan(0);
     expect(isUpstreamAddress("/api/custom-nodes/manifest")).toBe(false);
     expect(isRegisteredNonAddress("/api/custom-nodes/manifest")).toBe(false);
-    expect(
-      hasRouteFor(endpointSegments("/api/custom-nodes/manifest"), routes),
-    ).toBe(true);
+    expect(hasRouteFor(endpointSegments("/api/custom-nodes/manifest"), routes)).toBe(true);
   });
 
   it("登记表本身不陈旧：每条都还有字面量在用它、写着原因，且确实没有落点", () => {
@@ -272,10 +280,9 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
       for (const [address, reason] of Object.entries(table)) {
         // 空壳原因（「TODO」这类）等于没有登记表
         expect(reason.length, `${address} 的登记理由太短`).toBeGreaterThan(30);
-        expect(
-          used,
-          `${tableName}: ${address} 已经没有字面量在用了，把登记删掉`,
-        ).toContain(address);
+        expect(used, `${tableName}: ${address} 已经没有字面量在用了，把登记删掉`).toContain(
+          address,
+        );
         // 有落点的路径不可能是「非地址」：那说明登记写错了，或这条已经有了 handler
         expect(
           hasRouteFor(endpointSegments(address), routes),
@@ -286,18 +293,13 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
   });
 
   it("判据自身可反证：少一段、多一段、通配段、注释都要判对", () => {
-    const table = new Map<string, RouteToken[]>([
+    const table = new Map<string, Array<RouteToken>>([
       ["api/film/[id]", endpointTokens(["api", "film", ":one"])],
-      [
-        "api/generated/[...path]",
-        endpointTokens(["api", "generated", ":many"]),
-      ],
+      ["api/generated/[...path]", endpointTokens(["api", "generated", ":many"])],
       ["api/materials", endpointTokens(["api", "materials"])],
     ]);
     // 命中：写死形状
-    expect(
-      hasRouteFor(endpointSegments("/api/materials?projectId=x"), table),
-    ).toBe(true);
+    expect(hasRouteFor(endpointSegments("/api/materials?projectId=x"), table)).toBe(true);
     // 命中：动态段被真实 id 填上
     expect(hasRouteFor(endpointSegments("/api/film/abc123"), table)).toBe(true);
     // 命中：模板插值段 = 通配
@@ -307,18 +309,16 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
     // 名字对不上也要报
     expect(hasRouteFor(endpointSegments("/api/skills"), table)).toBe(false);
     // catch-all 吃任意深度，也吃零段（`/api/trpc` 那条）
-    expect(
-      hasRouteFor(endpointSegments("/api/generated/a/b/img_0.png"), table),
-    ).toBe(true);
+    expect(hasRouteFor(endpointSegments("/api/generated/a/b/img_0.png"), table)).toBe(true);
     expect(hasRouteFor(endpointSegments("/api/generated"), table)).toBe(true);
     // 只有注释里出现的地址不进扫描面（先剥注释再提）
     expect(endpointsOf(stripComments('// 见 "/api/nope"'))).toEqual([]);
     /* 模板形态现在**进**扫描面：`}` 不再是整类豁免。这一条就是本次改动的判据面 ——
      * 上游那一档随后由 `UPSTREAM_SERVICE_ADDRESS` 逐条放行，而不是靠语法。 */
     expect(endpointsOf("fetch(`${base}/api/prompt`)")).toEqual(["/api/prompt"]);
-    expect(
-      endpointsOf('fetch(`${comfyBase()}/api/view?filename=a.png")'),
-    ).toEqual(["/api/view?filename=a.png"]);
+    expect(endpointsOf('fetch(`${comfyBase()}/api/view?filename=a.png")')).toEqual([
+      "/api/view?filename=a.png",
+    ]);
     // 未登记的上游形态照旧要点名：登记表的粒度是整条地址，不是「有 `${` 就放过」
     expect(isUpstreamAddress("/api/prompt")).toBe(true);
     expect(isUpstreamAddress("/api/promptx")).toBe(false);
@@ -337,7 +337,7 @@ describe("REST 地址都要有落点：客户端写的每个 /api/... 必须命�
 });
 
 /** 测试夹具用的短写法：把人类可读的段序列折成 `RouteToken[]`。 */
-function endpointTokens(segs: string[]): RouteToken[] {
+function endpointTokens(segs: Array<string>): Array<RouteToken> {
   return segs.map((seg) =>
     seg === ":one"
       ? { kind: "one" }

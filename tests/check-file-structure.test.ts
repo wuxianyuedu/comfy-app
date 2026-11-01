@@ -50,7 +50,7 @@ import { stripComments } from "./helpers/strip-comments";
  * 是可选安装。反过来先试 `pwsh` 只会在装了 7 的机器上多起一次进程。
  * `python` 那一条走 `pythonCandidates()`（平台差异在原处回答，见那份模块的头注）。
  */
-const POWER_SHELL_CANDIDATES = ["powershell", "pwsh"] as const;
+const POWER_SHELL_CANDIDATES = /* SAFETY: 类型断言已复核 */ ["powershell", "pwsh"] as const;
 /** 探测与真跑共用同一条参数形态：探测要回答的正是「这条形态跑得通吗」。 */
 const POWER_SHELL_PROBE_ARGS = ["-NoProfile", "-Command", "exit 0"];
 /** 本组用例的条数（`env` 档跳过的登记表里记的就是这个数，见
@@ -85,7 +85,7 @@ function run(): { code: number; output: string } {
  */
 
 /** 带参数的调用（R5 的翻闸断头用例要传 `--update` 正面证明它不存在，规范 §12.6）。 */
-function runWith(args: string[]): { code: number; output: string } {
+function runWith(args: Array<string>): { code: number; output: string } {
   try {
     const output = execFileSync(
       process.execPath,
@@ -93,8 +93,12 @@ function runWith(args: string[]): { code: number; output: string } {
       { cwd: workdir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     return { code: 0, output };
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+  } catch (error) {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
+      status?: number;
+      stderr?: string;
+      stdout?: string;
+    };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -123,10 +127,7 @@ beforeEach(() => {
   mkdirSync(join(workdir, "src", "lib"), { recursive: true });
   /* R11 的默认前提：Next 16 代理约定文件在 src/ 根。真实仓库里它一直在，
    * 所以「干净工作区放行」这类基线用例必须带上它，否则测的不是真实形态。 */
-  writeFileSync(
-    join(workdir, "src", "proxy.ts"),
-    "export function proxy() {}\n",
-  );
+  writeFileSync(join(workdir, "src", "proxy.ts"), "export function proxy() {}\n");
 });
 
 afterEach(() => {
@@ -178,12 +179,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
   it("R9：根目录的 git 临时状态文件被阻断（ISSUE #1586）", () => {
     // 实测形态：`.merge_msg` 曾随一次 squash 合并进 master（27 行合并说明）。
     // 名字不区分大小写，带不带前导点都认 —— 这一族唯一的稳定特征就是名字。
-    for (const name of [
-      ".merge_msg",
-      "MERGE_MSG",
-      "SQUASH_MSG",
-      "COMMIT_EDITMSG",
-    ]) {
+    for (const name of [".merge_msg", "MERGE_MSG", "SQUASH_MSG", "COMMIT_EDITMSG"]) {
       rmSync(join(workdir, name), { force: true });
       writeFileSync(join(workdir, name), "合并说明\n");
       const { code, output } = run();
@@ -226,10 +222,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
   });
 
   it("R8：含中文但无 BOM 的 .ps1 被阻断", () => {
-    writeFileSync(
-      join(workdir, "tools", "build", "bad.ps1"),
-      'Write-Host "中文提示"\n',
-    );
+    writeFileSync(join(workdir, "tools", "build", "bad.ps1"), 'Write-Host "中文提示"\n');
     const { code, output } = run();
     expect(code).toBe(1);
     expect(output).toContain("R8");
@@ -237,20 +230,14 @@ describe("check-file-structure.cjs（提交门槛）", () => {
   });
 
   it("R8：纯 ASCII 的 .ps1 不强制 BOM（不制造无谓噪音）", () => {
-    writeFileSync(
-      join(workdir, "tools", "build", "ascii.ps1"),
-      'Write-Host "hello"\n',
-    );
+    writeFileSync(join(workdir, "tools", "build", "ascii.ps1"), 'Write-Host "hello"\n');
     const { code, output } = run();
     expect(code).toBe(0);
     expect(output).not.toContain("R8");
   });
 
   it("R8：带 BOM 的中文 .ps1 放行", () => {
-    const content = Buffer.concat([
-      BOM,
-      Buffer.from('Write-Host "桌面版自检"\n'),
-    ]);
+    const content = Buffer.concat([BOM, Buffer.from('Write-Host "桌面版自检"\n')]);
     writeFileSync(join(workdir, "tools", "build", "good.ps1"), content);
     const { code } = run();
     expect(code).toBe(0);
@@ -266,10 +253,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     };
 
     it("改动编号 R-ardot114 被阻断", () => {
-      writeSrc(
-        "a.ts",
-        "// R-ardot114 (2026-08-17): SSE 心跳\nexport const a = 1;\n",
-      );
+      writeSrc("a.ts", "// R-ardot114 (2026-08-17): SSE 心跳\nexport const a = 1;\n");
       const { code, output } = run();
       expect(code).toBe(1);
       expect(output).toContain("R10");
@@ -277,10 +261,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("短编号 R83 与批次号 T12-3 被阻断", () => {
-      writeSrc(
-        "b.ts",
-        "/* 2026-08-13 R83: 失败面板 */\n/* T12-3 抽离 */\nexport const b = 2;\n",
-      );
+      writeSrc("b.ts", "/* 2026-08-13 R83: 失败面板 */\n/* T12-3 抽离 */\nexport const b = 2;\n");
       const { code, output } = run();
       expect(code).toBe(1);
       expect(output).toContain("R83");
@@ -288,10 +269,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("只写当前 Why（无日期无编号）的注释放行", () => {
-      writeSrc(
-        "c.ts",
-        "// SSE 心跳：防止 Nginx 60s 空闲断开。\nexport const c = 3;\n",
-      );
+      writeSrc("c.ts", "// SSE 心跳：防止 Nginx 60s 空闲断开。\nexport const c = 3;\n");
       const { code } = run();
       expect(code).toBe(0);
     });
@@ -438,10 +416,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     };
 
     it("内嵌 NUL 字节被阻断", () => {
-      writeSrc(
-        "a.ts",
-        'export const SENTINEL = "' + NUL + "CODE0" + NUL + '";\n',
-      );
+      writeSrc("a.ts", `export const SENTINEL = "${NUL}CODE0${NUL}";\n`);
       const { code, output } = run();
       expect(code).toBe(1);
       expect(output).toContain("R12");
@@ -466,10 +441,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("普通注释里的中文与 emoji 不是控制字符，放行", () => {
-      writeSrc(
-        "d.ts",
-        "// 哨兵 → 用可打印形式，别用真的 NUL 字节 ✅\nexport const d = 4;\n",
-      );
+      writeSrc("d.ts", "// 哨兵 → 用可打印形式，别用真的 NUL 字节 ✅\nexport const d = 4;\n");
       const { code, output } = run();
       expect(code).toBe(0);
       expect(output).not.toMatch(/^ {4}R12 /m);
@@ -540,10 +512,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     const writeLines = (rel: string, lines: number) => {
       const abs = join(workdir, rel);
       mkdirSync(dirname(abs), { recursive: true });
-      writeFileSync(
-        abs,
-        Array.from({ length: lines }, () => "// x").join("\n"),
-      );
+      writeFileSync(abs, Array.from({ length: lines }, () => "// x").join("\n"));
     };
 
     it("src/app 下的超长视图即阻断（不再只是提醒）", () => {
@@ -578,10 +547,7 @@ describe("check-file-structure.cjs（提交门槛）", () => {
     });
 
     it("测试文件不进扫描面（用例体量不是可维护性信号）", () => {
-      writeLines(
-        "src/app/(main)/settings/hooks/use-settings-page.test.ts",
-        901,
-      );
+      writeLines("src/app/(main)/settings/hooks/use-settings-page.test.ts", 901);
       const { code, output } = run();
       expect(code).toBe(0);
       expect(output).not.toContain("R5 超限文件");
@@ -699,13 +665,7 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   const runGuard = (script: string): string => {
     const proc = spawnSync(
       psExe,
-      [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        psUtf8Prelude + script,
-      ],
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psUtf8Prelude + script],
       { encoding: "utf8" },
     );
     return `${proc.stdout ?? ""}${proc.stderr ?? ""}`;
@@ -721,7 +681,7 @@ describe("Build-Guard.ps1（构建前置守卫）", () => {
   // 桩件查自身时如实回 `$PID`，查父进程时回 `opts.parent`。
   const guardScript = (
     procsJson: string,
-    opts: { parent?: string; processes?: unknown[] } = {},
+    opts: { parent?: string; processes?: Array<unknown> } = {},
   ): string => `
 $ErrorActionPreference = "Stop"
 function Log { param([string]$Msg) Write-Output $Msg }
@@ -790,7 +750,7 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
         Cmd: "",
         Name: "app.exe",
       },
-      { Id: 222, Path: "D:\\other\\app.exe", Cmd: "", Name: "app.exe" },
+      { Id: 222, Path: String.raw`D:\other\app.exe`, Cmd: "", Name: "app.exe" },
       { Id: 333, Path: "", Cmd: `other ${root} unrelated`, Name: "app.exe" },
     ]);
     const out = runGuard(guardScript(json));
@@ -831,20 +791,14 @@ foreach ($h in $hits) { Write-Output ("HIT=" + $h.Id) }
   // 结论走 stdout、守卫日志走 stderr（同 dev-launcher 用例的套路）：`Log` 若也写
   // stdout，正文会与 `CODE=` 挤在同一行，断言被日志粘住而失衡。
   // KILLED 计数用 `$global:`（Assert-ShellNotRunning 有自己的作用域，`$script:` 改不到）。
-  const assertShellScript = (
-    procsJson: string,
-    opts: { parent?: string } = {},
-  ): string =>
-    guardScript(procsJson, opts)
+  const assertShellScript = (procsJson: string, opts: { parent?: string } = {}): string =>
+    `${guardScript(procsJson, opts)
       .replace(
         "function Log { param([string]$Msg) Write-Output $Msg }",
         "function Log { param([string]$Msg) [Console]::Error.WriteLine($Msg) }",
       )
-      .replace(
-        "$global:KILLED_PIDS = @()",
-        "$global:KILLED = 0\n$global:KILLED_PIDS = @()",
-      ) +
-    `
+      .replace("$global:KILLED_PIDS = @()", "$global:KILLED = 0\n$global:KILLED_PIDS = @()")
+    }
 $code = Assert-ShellNotRunning -ProjectRoot $root -Purpose "构建 release 壳"
 Write-Output ("CODE=" + $code)
 Write-Output ("KILLED=" + $global:KILLED)
@@ -901,25 +855,22 @@ Write-Output ("|END")
     },
   );
 
-  it.skipIf(!psExe)(
-    "双击构建（父进程 explorer）没人能确认，占用一律自动回收后继续",
-    () => {
-      const root = process.cwd();
-      const json = JSON.stringify([
-        {
-          Id: 731,
-          Path: join(root, "src-tauri", "target", "release", "app.exe"),
-          Cmd: "",
-          Name: "app.exe",
-        },
-      ]);
-      // 路径命中本仓库 -> 不是陈旧壳，本该中止；非交互（双击）没人能确认，改走自动回收分支。
-      const out = runGuard(assertShellScript(json, { parent: "explorer.exe" }));
-      expect(out).toContain("CODE=0");
-      expect(out).toContain("KILLED=1");
-      expect(out).toContain("非交互构建");
-    },
-  );
+  it.skipIf(!psExe)("双击构建（父进程 explorer）没人能确认，占用一律自动回收后继续", () => {
+    const root = process.cwd();
+    const json = JSON.stringify([
+      {
+        Id: 731,
+        Path: join(root, "src-tauri", "target", "release", "app.exe"),
+        Cmd: "",
+        Name: "app.exe",
+      },
+    ]);
+    // 路径命中本仓库 -> 不是陈旧壳，本该中止；非交互（双击）没人能确认，改走自动回收分支。
+    const out = runGuard(assertShellScript(json, { parent: "explorer.exe" }));
+    expect(out).toContain("CODE=0");
+    expect(out).toContain("KILLED=1");
+    expect(out).toContain("非交互构建");
+  });
 });
 
 describe("启动链路「不抢前台」判据（唯一的入口是壳）", () => {
@@ -939,10 +890,7 @@ describe("启动链路「不抢前台」判据（唯一的入口是壳）", () =
    * 函数是编译期常量决策，源码就是判据本体（历史实现是 python 启动器的
    * `decide_foreground()` + PowerShell 桩件真跑，启动器已随 ISSUE #784 移除）。
    */
-  const rust = readFileSync(
-    join(process.cwd(), "src-tauri", "src", "shell_launch.rs"),
-    "utf8",
-  );
+  const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "shell_launch.rs"), "utf8");
 
   it("双击启动默认**不**抢前台（判据是常量 false，不是查进程表）", () => {
     const fn = rust.slice(
@@ -960,10 +908,7 @@ describe("启动链路「不抢前台」判据（唯一的入口是壳）", () =
   });
 
   it("壳用「读到的注入值 ?? 双击默认值」这一条判据，不另写一份", () => {
-    const lib = readFileSync(
-      join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const lib = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     expect(lib).toContain("shell_launch::read_foreground_env()");
     expect(lib).toContain("shell_launch::decide_front_when_self_launched");
     // 启动期不给 → 交给窗口显示那一层执行（它负责「进任务栏 + 闪烁提醒」）
@@ -1017,54 +962,36 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
 
   it.skipIf(!python)("用户就在等它（启动期判决允许）时把前台拿到手", () => {
     expect(
-      decide(
-        "startup_allowed=True, window_visible=True, window_was_foreground=False",
-      ),
+      decide("startup_allowed=True, window_visible=True, window_was_foreground=False"),
     ).toContain('RESULT="give"');
     expect(
-      decide(
-        "startup_allowed=True, window_visible=True, window_was_foreground=True",
-      ),
+      decide("startup_allowed=True, window_visible=True, window_was_foreground=True"),
     ).toContain('RESULT="give"');
   });
 
   it.skipIf(!python)("不该给但系统交接时自动放行了前台 -> 把前台还回去", () => {
     expect(
-      decide(
-        "startup_allowed=False, window_visible=True, window_was_foreground=True",
-      ),
+      decide("startup_allowed=False, window_visible=True, window_was_foreground=True"),
     ).toContain('RESULT="restore"');
   });
 
-  it.skipIf(!python)(
-    "用户切走了（前台是别的应用）时什么都不做，窗口留在任务栏",
-    () => {
-      expect(
-        decide(
-          "startup_allowed=False, window_visible=True, window_was_foreground=False",
-        ),
-      ).toContain('RESULT="leave"');
-    },
-  );
+  it.skipIf(!python)("用户切走了（前台是别的应用）时什么都不做，窗口留在任务栏", () => {
+    expect(
+      decide("startup_allowed=False, window_visible=True, window_was_foreground=False"),
+    ).toContain('RESULT="leave"');
+  });
 
   it.skipIf(!python)("窗口没显示时不做任何前台动作", () => {
     expect(
-      decide(
-        "startup_allowed=False, window_visible=False, window_was_foreground=True",
-      ),
+      decide("startup_allowed=False, window_visible=False, window_was_foreground=True"),
     ).toContain('RESULT="leave"');
     expect(
-      decide(
-        "startup_allowed=True, window_visible=False, window_was_foreground=False",
-      ),
+      decide("startup_allowed=True, window_visible=False, window_was_foreground=False"),
     ).toContain('RESULT="leave"');
   });
 
   it("壳侧不再无条件 set_focus 试探（那条路径让「别打断用户」形同虚设）", () => {
-    const rust = readFileSync(
-      join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     const body = rust.slice(
       rust.indexOf("fn show_main_window_without_focus"),
       rust.indexOf("fn open_comfyui_window"),
@@ -1080,10 +1007,7 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     // 主窗在 setup 时就以隐藏态创建：只关 splash 的话壳会带着看不见的主窗
     // 继续活着——任务栏残留、dev server 继续拉起、服务就绪后主窗还会自己
     // 弹出来。启动页的关闭请求必须在主窗尚未显示时让整个壳退出。
-    const rust = readFileSync(
-      join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     // 关闭请求的处理：钩子挂在 splash 窗口对象上、检查主窗可见性、放弃时退出
     const handler = rust.slice(
       rust.indexOf("启动页关闭 = 放弃本次启动"),
@@ -1096,10 +1020,9 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     // 交接与安全网等「显示主窗」的路径都要被 abandoned 标记拦住
     // （CloseRequested 处理器之外的调用点：交接 / 150s 安全网 / 就绪兜底导航）
     const abandonedGuards = rust.match(/is_abandoned\(\)/g)?.length ?? 0;
-    expect(
-      abandonedGuards,
-      "is_abandoned 拦截必须覆盖全部「显示主窗」路径",
-    ).toBeGreaterThanOrEqual(3);
+    expect(abandonedGuards, "is_abandoned 拦截必须覆盖全部「显示主窗」路径").toBeGreaterThanOrEqual(
+      3,
+    );
   });
 
   it("交接复核进程的唯一调用方是启动脚本（Python 启动器已移除）", () => {
@@ -1110,9 +1033,7 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     const focus = readFileSync(FOCUS_SCRIPT, "utf8");
     expect(focus).toContain("def decide_handoff(");
     expect(focus).toContain("foreground-watch.log");
-    expect(
-      existsSync(join(process.cwd(), "scripts", "start_tauri_launcher.py")),
-    ).toBe(false);
+    expect(existsSync(join(process.cwd(), "scripts", "start_tauri_launcher.py"))).toBe(false);
   });
 
   it("启动页首次可见时被带到前台（双击的直接反馈，不是「别打断」那一档）", () => {
@@ -1124,10 +1045,7 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     // 启动器移除后这一段的执行者换成壳自己：`setup_splash_window` 里
     // `bring_splash_to_front`，判据（`should_front_splash` / `run_bring_splash`）
     // 仍留在复核脚本里，供需要它的一方派发。
-    const lib = readFileSync(
-      join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const lib = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     const focus = readFileSync(FOCUS_SCRIPT, "utf8");
     expect(lib).toContain("fn bring_splash_to_front(");
     expect(lib).toMatch(/bring_splash_to_front\(&splash\)/);
@@ -1157,10 +1075,7 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
    *     时，on_page_load(Finished) 照样触发，交换窗口就把错误页/空白顶给了用户。
    */
   it("主窗首帧之前由壳注入加载占位，应用挂载时收尾（ISSUE #730）", () => {
-    const rust = readFileSync(
-      join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     // ① 注入端：占位必须由壳侧 eval 注入（导航一发起 WebView2 就已切走画面，
     //    应用那一端此刻连首帧都没有，能抢在它前面的只有壳）
     expect(rust).toContain("const MAIN_LOADING_STUB_JS");
@@ -1206,19 +1121,14 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
       "承载 HTML 的字符串字面量必须纯 ASCII，中文只许出现在注释里",
     ).toBe(0);
     // …而中文注释里的说明必须是「应用侧怎么收尾」那条（注入端与收尾端同源）
-    expect(rust.slice(stubEnd, stubEnd + 400)).toContain(
-      "clearLaunchLoadingStub",
-    );
+    expect(rust.slice(stubEnd, stubEnd + 400)).toContain("clearLaunchLoadingStub");
     // ⑥ 应用侧收尾：根布局挂载即清（浏览器里没有占位，调用是空操作）
     const cleaner = readFileSync(
       join(process.cwd(), "src", "app", "LaunchLoadingStubCleaner.tsx"),
       "utf8",
     );
     expect(cleaner).toContain("clearLaunchLoadingStub");
-    const layout = readFileSync(
-      join(process.cwd(), "src", "app", "layout.tsx"),
-      "utf8",
-    );
+    const layout = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
     expect(layout).toContain("<LaunchLoadingStubCleaner />");
     const client = readFileSync(
       join(process.cwd(), "src", "lib", "shell", "desktop-shell-client.ts"),
@@ -1234,10 +1144,7 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
   });
 
   it("standalone 模式不注入占位（内嵌 server 随壳就绪，注入只会白闪）", () => {
-    const rust = readFileSync(
-      join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     const shellLaunch = readFileSync(
       join(process.cwd(), "src-tauri", "src", "shell_launch.rs"),
       "utf8",
@@ -1258,9 +1165,7 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
       rust,
       "collect 必须收 launch_mode 参数（值来自 ensure_launch_mode 的返回），不要再自己读",
     ).toContain("fn collect(self_launch: bool, launch_mode: &str)");
-    expect(rust).toContain(
-      'expect_slow_first_paint: launch_mode != "standalone"',
-    );
+    expect(rust).toContain('expect_slow_first_paint: launch_mode != "standalone"');
     expect(rust).toContain(
       "watch_main_first_paint(app.handle().clone(), expect_slow_first_paint);",
     );
@@ -1268,16 +1173,15 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
     // 函数体用**括号配平**取：按「下一个同级 `fn`」切尾不可靠 —— collect 可能是
     // 该 impl 里最后一个函数，那样会把后面别的函数的读取点一起扫进来（实测如此）。
     const collectAt = rust.indexOf("fn collect(self_launch: bool");
-    expect(collectAt, "找不到 collect 的定义（判据落点漂了）").toBeGreaterThan(
-      -1,
-    );
+    expect(collectAt, "找不到 collect 的定义（判据落点漂了）").toBeGreaterThan(-1);
     const bodyStart = rust.indexOf("{", collectAt);
     let depth = 0;
     let bodyEnd = -1;
     for (let i = bodyStart; i < rust.length; i += 1) {
       const ch = rust[i];
-      if (ch === "{") depth += 1;
-      else if (ch === "}") {
+      if (ch === "{") {
+        depth += 1;
+      } else if (ch === "}") {
         depth -= 1;
         if (depth === 0) {
           bodyEnd = i;
@@ -1285,10 +1189,7 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
         }
       }
     }
-    expect(
-      bodyEnd,
-      "collect 的函数体括号没配平（判据取形失败）",
-    ).toBeGreaterThan(-1);
+    expect(bodyEnd, "collect 的函数体括号没配平（判据取形失败）").toBeGreaterThan(-1);
     const collectBody = rust.slice(bodyStart, bodyEnd + 1);
     expect(collectBody).not.toContain(READ);
     // 两处消费点各自可指认：一处在 setup_standalone_runtime（决定起不起内嵌
@@ -1312,17 +1213,13 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
       "ensure_launch_mode 之外不许再写启动模式",
     ).toBe(1);
     expect(rust).not.toContain('set_var("COMFYAPP_LAUNCH_MODE"');
-    expect(
-      shellLaunch.split(READ).length - 1,
-      "决定者自己只许读一次（已写过就返回那个值）",
-    ).toBe(1);
+    expect(shellLaunch.split(READ).length - 1, "决定者自己只许读一次（已写过就返回那个值）").toBe(
+      1,
+    );
   });
 
   it("壳侧启动页也显式置前一次（本地冷启动时无须等复核进程）", () => {
-    const rust = readFileSync(
-      join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     expect(rust).toContain("fn bring_splash_to_front(");
     // 只 `show()` 不给前台的写法不够：启动页要真的到前面
     expect(rust).toContain("splash.set_focus()");
@@ -1334,121 +1231,24 @@ print("RESULT=" + json.dumps(namespace["decide_handoff"](${call})))
 /**
  * ISSUE #730 的 release 壳构建失败（`cargo build --release --features custom-protocol`）。
  *
- * 现场是两条**互不相干**的编译错误（用户日志里同时出现，容易被当成一件事）：
+ * 当年现场是两条**互不相干**的编译错误（用户日志里同时出现，容易被当成一件事）：
  *
- * 1. `generate_context!` 报一条「解析插件全局 API 脚本路径失败」的错误（报的是
- *    脚本里的尾随逗号与行列号）—— 真正的原因文件根本不在源码里（见下条用例的注释）。
+ * 1. `generate_context!` 报一条「解析插件全局 API 脚本路径失败」（脚本被格式化工具
+ *    折行、serde_json 读到尾随逗号）—— 这一条的判据（根级 `.prettierignore` 兜住
+ *    `src-tauri/target/`）随 #2541 删 prettier 一起退役（ISSUE #2602）：oxfmt 的
+ *    扫描面只有 `package.json` 里点名的两个 glob（`src/**` 与 `.storybook/**`），
+ *    天然不碰 `target/`，「谁在忽略」的答案写在 `scripts/check-format.cjs` 头注里。
  * 2. 「上限 × 间隔」的两个常量相乘报 `expected u32, found u64`
  *    + `cannot multiply u32 by u64` —— 同一处表达式里的两个常量类型不同档。
  *    这一条随 #2192 退役：首帧看护的预算改由 `poll_clock::PollClock` 以 `Duration`
  *    持有，拍数不再是一个常量，于是那个相乘的形状从源码里消失了（详见下面那条用例）。
  *
  * 两条的共同点是「本地跑 lint / tsc / 单测全绿，只有真编 release 壳才暴露」，
- * 所以判据只能落在「编译前提」这一层。
+ * 所以判据只能落在「编译前提」这一层。第 1 条退役之后，本组只剩一条钉住回溯的用例。
  */
 describe("release 壳构建的地雷（ISSUE #730）", () => {
-  it("格式化工具不碰 src-tauri/target（Tauri 的插件脚本清单被折行 = 整壳编译失败）", () => {
-    // 现场已在 Linux 上逐字复现（错误信息与用户日志完全一致）：
-    //   tauri-build 把插件全局 API 脚本清单写成**紧凑单行** JSON
-    //   （serde_json::to_string 不产生换行，因此它自己永远不会带尾逗号）；
-    //   文件落在 src-tauri/target/ 下的 out/__global-api-script.js，后缀是 .js。
-    //   于是格式化器（`pnpm format:write` / 编辑器保存）按 print-width 把它折成
-    //   多行、并给最后一项补一个尾逗号；generate_context! 再读时 serde_json 直接报
-    //   "trailing comma"。6 个插件 → 6 项 + 首尾两行 = 8 行，所以「line: 8」
-    //   是可以反推出来的：那正是折行后的最后一项。
-    //   **报错位置落在 lib.rs 的 generate_context! 那一行**，与真正被改坏的
-    //   target 生成物毫无关系 —— 这正是本条长期定位不到的原因。
-    //
-    // 防线是别让格式化工具碰到它。oxfmt 的忽略面有两处（`--help` 原文）：不给
-    // `--ignore-path` 时**只读 cwd 的** `.gitignore` / `.prettierignore`，外加
-    // `.oxfmtrc.json` 的 `ignorePatterns` —— 它同样**看不到** `src-tauri/.gitignore`
-    // 里的 `/target/`，所以必须由根级配置兜。prettier 时代那份是根级
-    // `.prettierignore`；它随 #2541 被删（依赖一起没了），而这条用例当时**没同批改**，
-    // 于是在主干上 ENOENT 崩了两天 —— 见 ISSUE #2603。现在真正生效的那一份是
-    // `.oxfmtrc.json`。
-    const config = JSON.parse(
-      readFileSync(join(process.cwd(), ".oxfmtrc.json"), "utf8"),
-    ) as { ignorePatterns?: string[] };
-    expect(
-      config.ignorePatterns ?? [],
-      "`.oxfmtrc.json` 的 `ignorePatterns` 必须含 `src-tauri/target/`：漏掉它，" +
-        "任何在本机 cargo build 过的检出都会在下次格式化后编不出 release 壳",
-    ).toContain("src-tauri/target/");
-
-    /* ⚠️ 光读配置守不住「工具真的没碰它」——这条用例原本就只读文本（ISSUE #2603 的
-     * 期望第 2 条）。补行为档：真起 oxfmt，把当年那个形状（`.js`、内容是一份紧凑
-     * JSON）落在 `src-tauri/target/` 下，判它**没被处理**。
-     *
-     * 两侧同批跑，缺一侧这条就空转：
-     *   · 仓库内那一份被排除 ⇒ 读数必须是「一个目标都没有」（oxfmt 在这种情形退 **2**，
-     *     且不打任何文件名）；
-     *   · 同一份内容放在**仓库外**的临时目录 ⇒ 必须退 **1** 并点名那个文件。
-     * 没有对照，「没点名」和「oxfmt 根本没跑起来 / 那份文件没被看见」是同一个读数。 */
-    /* 入口取**判据自己那一份**三级解析（`resolveOxfmtEntry`）—— 这里再造一个
-     * 「按 node_modules 拼路径」就是第二次实现同一件事（§12.18），而它会和判据漂移。 */
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const formatGate = require("../scripts/check-format.cjs") as {
-      resolveOxfmtEntry: () => string | null;
-    };
-    const entry = formatGate.resolveOxfmtEntry();
-    /* 取不到入口时**如实失败**而不是拿 `null` 往下拼：那条「没跑起来」与
-     * 「跑了但排除规则生效」在这格上是两种结论，混一次就把这条护栏念反。 */
-    if (!entry) {
-      throw new Error(
-        "取不到 oxfmt 入口 ⇒ 行为档没有执行者（判据本体在这一档取不到就退 2，说同一段话）",
-      );
-    }
-
-    const probeName = "__2603-global-api-script-probe.js";
-    const targetDir = join(process.cwd(), "src-tauri", "target");
-    const probeDir = join(targetDir, "__2603-probe__");
-    /* 全新检出（没在本机 `cargo build` 过）没有 `target/`，而这条判据在那种机器上
-     * **照样要跑**（平台那一跑的节点就是这种状态）⇒ 目录按需造，但**造了就要负责**：
-     * 收尾按来源分别清理，不许给别人的工作区留一个空 `target/`。 */
-    const targetPreexisted = existsSync(targetDir);
-    const outside = mkdtempSync(join(tmpdir(), "2603-oxfmt-control-"));
-    const runOxfmt = (file: string) =>
-      spawnSync(process.execPath, [entry, "--check", file], {
-        encoding: "utf8",
-        cwd: process.cwd(),
-      });
-    /* 未格式化的形状：`printWidth: 80` 装不下 ⇒ 会被折行，正是 #730 被改坏的那个动作。 */
-    const unformatted =
-      'const plugins=["@tauri-apps/plugin-process","@tauri-apps/plugin-shell","@tauri-apps/plugin-global-shortcut","@tauri-apps/plugin-dialog","@tauri-apps/plugin-fs","@tauri-apps/plugin-clipboard-manager"];\n';
-    try {
-      mkdirSync(probeDir, { recursive: true });
-      const inside = join(probeDir, probeName);
-      const control = join(outside, probeName);
-      writeFileSync(inside, unformatted);
-      writeFileSync(control, unformatted);
-
-      const excluded = runOxfmt(inside);
-      expect(
-        excluded.stdout + excluded.stderr,
-        `src-tauri/target 下的文件被格式化工具看见了 ⇒ #730 那个整壳编译失败会回来。` +
-          `读数：\n${excluded.stdout}\n${excluded.stderr}`,
-      ).not.toContain(probeName);
-      /* 退 1 = 「发现未格式化的文件」；被排除时是退 2（一个目标都没有）。两者必须是 1 之外。 */
-      expect(excluded.status).not.toBe(1);
-
-      const controlRun = runOxfmt(control);
-      expect(
-        controlRun.status,
-        "对照组必须**判出未格式化**（退 1），否则上面那句「没点名」是空转读出来的",
-      ).toBe(1);
-      expect(controlRun.stdout).toContain(probeName);
-    } finally {
-      rmSync(probeDir, { recursive: true, force: true });
-      if (!targetPreexisted) rmSync(targetDir, { recursive: true, force: true });
-      rmSync(outside, { recursive: true, force: true });
-    }
-  });
-
   it("首帧看护的超时预算由 poll_clock 持有 —— 「两常数相乘」的旧形状不得回潮（#2328 / #2192）", () => {
-    const rust = readFileSync(
-      join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const rust = readFileSync(join(process.cwd(), "src-tauri", "src", "lib.rs"), "utf8");
     // 旧形状：`PROBE_ATTEMPTS * PROBE_INTERVAL_MS`（u32 * u64 的 E0277 地雷）与
     // 「看护只在该支自己睡」的事故同源 —— #2192 把预算收进 poll_clock（墙钟
     // `Instant`），相乘与手写计数一起退役。这条钉住退役不回潮：
@@ -1458,9 +1258,7 @@ describe("release 壳构建的地雷（ISSUE #730）", () => {
      * 拿原文去匹配就是自打自。 */
     const code = stripComments(rust);
     expect(code, "常数声明不得回来").not.toMatch(/const PROBE_ATTEMPTS/);
-    expect(code, "相乘表达式不得回来").not.toContain(
-      "(PROBE_ATTEMPTS * PROBE_INTERVAL_MS)",
-    );
+    expect(code, "相乘表达式不得回来").not.toContain("(PROBE_ATTEMPTS * PROBE_INTERVAL_MS)");
     expect(rust).toContain("clock.budget_secs()");
   });
 });
@@ -1493,24 +1291,25 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
   ];
 
   const splashWindow = (): {
+    decorations?: boolean;
+    height: number;
     label?: string;
     width: number;
-    height: number;
-    decorations?: boolean;
   } => {
-    const conf = JSON.parse(readFileSync(CONF, "utf8")) as {
+    const conf = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(CONF, "utf8")) as {
       app: {
-        windows: {
+        windows: Array<{
+          decorations?: boolean;
+          height: number;
           label?: string;
           width: number;
-          height: number;
-          decorations?: boolean;
-        }[];
+        }>;
       };
     };
-    const win =
-      conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
-    if (!win) throw new Error("tauri.conf.json 里没有窗口配置");
+    const win = conf.app.windows.find((w) => w.label === "splash") ?? conf.app.windows[0];
+    if (!win) {
+      throw new Error("tauri.conf.json 里没有窗口配置");
+    }
     return win;
   };
 
@@ -1519,7 +1318,9 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     const m = new RegExp(
       `const ${name}: \\(f64, f64\\) = \\((\\d+(?:\\.\\d+)?), (\\d+(?:\\.\\d+)?)\\);`,
     ).exec(rust);
-    if (!m) throw new Error(`lib.rs 里没有常量 ${name}`);
+    if (!m) {
+      throw new Error(`lib.rs 里没有常量 ${name}`);
+    }
     return [Number(m[1]), Number(m[2])];
   };
 
@@ -1539,10 +1340,7 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
 
   it("展开日志那一档够放下未折行的日志（旧的 1280 太窄）", () => {
     const rust = readFileSync(LIB_RS, "utf8");
-    const [expandedWidth, expandedHeight] = sizeConst(
-      rust,
-      "SPLASH_WINDOW_SIZE_EXPANDED",
-    );
+    const [expandedWidth, expandedHeight] = sizeConst(rust, "SPLASH_WINDOW_SIZE_EXPANDED");
     expect(expandedWidth).toBeGreaterThanOrEqual(1400);
     expect(expandedHeight).toBeGreaterThanOrEqual(700);
     // 紧凑档必须比展开档小，否则「两档」没有意义
@@ -1611,7 +1409,7 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(interactive).toContain("button");
     expect(interactive).toContain("[data-no-drag]");
     // 窗口按钮 / 查看日志 / 日志面板各自声明 no-drag（与脚本判据同源）
-    for (const [start, end] of [
+    for (const [start, end] of /* SAFETY: 类型断言已复核 */ [
       [".win-buttons {", ".win-btn {"],
       [".log-toggle {", ".log-toggle:hover"],
       [".log-panel {", ".log-panel pre"],
@@ -1629,10 +1427,7 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     // 主窗走的是另两份 capability，一并守住「这条权限是每窗各自声明的」
     for (const name of ["default.json", "remote.json"]) {
       expect(
-        readFileSync(
-          join(process.cwd(), "src-tauri", "capabilities", name),
-          "utf8",
-        ),
+        readFileSync(join(process.cwd(), "src-tauri", "capabilities", name), "utf8"),
       ).toContain('"core:window:allow-start-dragging"');
     }
   });
@@ -1642,21 +1437,20 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(new Set(texts).size).toBe(1);
     const html = texts[0];
     expect(html).toBeDefined();
-    if (!html) return;
+    if (!html) {
+      return;
+    }
     // 页面只报「紧凑 / 展开」，尺寸常量只在壳里一份（避免两处常量漂移）
     expect(html).toContain("set_splash_compact");
     expect(html).not.toContain(".card.wide");
     const rust = readFileSync(LIB_RS, "utf8");
     expect(rust).toContain("fn set_splash_compact");
     // 新增应用命令要三处同步：build.rs / capabilities（否则运行期 not allowed by ACL）
+    expect(readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8")).toContain(
+      '"set_splash_compact"',
+    );
     expect(
-      readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8"),
-    ).toContain('"set_splash_compact"');
-    expect(
-      readFileSync(
-        join(process.cwd(), "src-tauri", "capabilities", "splash.json"),
-        "utf8",
-      ),
+      readFileSync(join(process.cwd(), "src-tauri", "capabilities", "splash.json"), "utf8"),
     ).toContain('"allow-set-splash-compact"');
   });
 
@@ -1686,10 +1480,7 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     );
     expect(html).toContain("performWinAction");
     // 按钮容器整体也不拖拽（个别按钮漏标 no-drag 时的第二层保险）
-    const buttonsCss = html.slice(
-      html.indexOf(".win-buttons {"),
-      html.indexOf(".win-btn {"),
-    );
+    const buttonsCss = html.slice(html.indexOf(".win-buttons {"), html.indexOf(".win-btn {"));
     expect(buttonsCss).toContain("-webkit-app-region: no-drag");
   });
 
@@ -1706,9 +1497,9 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(rust).toContain("win_minimize,");
     expect(rust).toContain("win_close,");
 
-    expect(
-      readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8"),
-    ).toContain('"win_close"');
+    expect(readFileSync(join(process.cwd(), "src-tauri", "build.rs"), "utf8")).toContain(
+      '"win_close"',
+    );
     const splashCap = readFileSync(
       join(process.cwd(), "src-tauri", "capabilities", "splash.json"),
       "utf8",
@@ -1722,9 +1513,7 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     // 尺寸/最小化语义各写一份就会改一处、两边不一致。ISSUE #784 的第二轮把
     // 整个 Python 启动器删掉，画面从此只有壳内嵌的启动页一处 —— 这里把「不再
     // 长出第二份实现」变成可失败断言，避免下一个人为了「双击反馈」再画一个。
-    expect(
-      existsSync(join(process.cwd(), "scripts", "start_tauri_launcher.py")),
-    ).toBe(false);
+    expect(existsSync(join(process.cwd(), "scripts", "start_tauri_launcher.py"))).toBe(false);
     // 启动页那一个出口仍在，且仍有自己的紧凑 / 展开两档尺寸。
     const win = splashWindow();
     expect(win.width).toBeGreaterThan(0);
@@ -1733,10 +1522,7 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
 
   it("日志面板吃掉窗口剩余高度（展开后不是一条窄缝，也不留空白）", () => {
     const html = readFileSync(SPLASH_COPIES[0] ?? "", "utf8");
-    const panel = html.slice(
-      html.indexOf(".log-panel {"),
-      html.indexOf(".log-panel pre"),
-    );
+    const panel = html.slice(html.indexOf(".log-panel {"), html.indexOf(".log-panel pre"));
     // 不再写死高度：面板 flex 撑满窗口剩余空间，窗口放大多少就显示多少行
     expect(panel).toContain("flex: 1 1 auto");
     expect(panel).not.toMatch(/height:\s*\d+px/);

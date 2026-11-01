@@ -58,9 +58,9 @@ const SCRIPT_ONLY_CTX: StageViewContext = {
 /** 这一族 story 的 Args：一个**阶段上下文** + 当前段 + 是否已渲染。 */
 type StoryArgs = {
   ctx: StageViewContext;
-  tab: Tab;
   /** 成片是否已经渲染出来（`computeStageRatios` 的 `render` 档取决于它）。 */
   rendered: boolean;
+  tab: Tab;
 };
 
 function RailSample({ ctx, tab, rendered }: StoryArgs) {
@@ -69,10 +69,10 @@ function RailSample({ ctx, tab, rendered }: StoryArgs) {
     <div className="flex flex-col gap-4">
       <div className="w-64">
         <WorkshopStageRail
-          tab={tab}
-          stageRatios={ratios}
-          viewContext={ctx}
           onTabChange={() => undefined}
+          stageRatios={ratios}
+          tab={tab}
+          viewContext={ctx}
         />
       </div>
       <p className="text-ink-muted font-mono text-[11px]">
@@ -126,10 +126,8 @@ export const EachStageCurrent: Story = {
   render: (args) => (
     <div className="flex flex-wrap gap-6">
       {STAGE_DEFS.map((stage) => (
-        <div key={stage.id} className="flex flex-col items-start gap-1.5">
-          <span className="text-ink-muted font-mono text-[11px]">
-            {stage.id}
-          </span>
+        <div className="flex flex-col items-start gap-1.5" key={stage.id}>
+          <span className="text-ink-muted font-mono text-[11px]">{stage.id}</span>
           <RailSample {...args} tab={stage.id} />
         </div>
       ))}

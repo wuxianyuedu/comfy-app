@@ -116,9 +116,13 @@ function parseSections(text) {
   let current = null;
   let inFence = false;
   lines.forEach((line, i) => {
-    if (/^\s*```/.test(line)) inFence = !inFence;
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+    }
     if (inFence) {
-      if (current) current.body.push(line);
+      if (current) {
+        current.body.push(line);
+      }
       return;
     }
     const m = /^##\s+(.+?)\s*$/.exec(line);
@@ -135,7 +139,9 @@ function parseSections(text) {
       out.push(current);
       return;
     }
-    if (current) current.body.push(line);
+    if (current) {
+      current.body.push(line);
+    }
   });
   /* 锚写在段落标题下面(或紧贴标题的那几行),只认段落开头 6 行 —— 认成「段落里的
    * 任意一行有 `<!-- since:`」会让正文里一句**讨论锚本身的**话被当成本段落的锚。 */
@@ -155,8 +161,10 @@ function parseSections(text) {
 function issuesIn(body) {
   const set = new Set();
   for (const line of body) {
-    const stripped = line.replace(/<!--[\s\S]*?-->/g, "");
-    for (const m of stripped.matchAll(ISSUE_RE)) set.add(m[1]);
+    const stripped = line.replaceAll(/<!--[\s\S]*?-->/g, "");
+    for (const m of stripped.matchAll(ISSUE_RE)) {
+      set.add(m[1]);
+    }
   }
   return set;
 }
@@ -188,7 +196,9 @@ function anchorLineOf(section) {
   for (let i = 0; i < Math.min(6, section.body.length); i++) {
     const line = section.body[i];
     const m = ANCHOR_RE.exec(line);
-    if (m) return { rev: m[1], slug: m[2], line: section.line + 1 + i };
+    if (m) {
+      return { rev: m[1], slug: m[2], line: section.line + 1 + i };
+    }
     if (LOOSE_ANCHOR_RE.test(line)) {
       return { malformed: true, text: line.trim(), line: section.line + 1 + i };
     }
@@ -201,9 +211,9 @@ function anchorLineOf(section) {
 let text = null;
 try {
   text = fs.readFileSync(CHANGELOG, "utf8");
-} catch (err) {
+} catch (error) {
   problems.push(
-    `读不到 CHANGELOG.md:${err.message} —— 本判据的对象就是它,读不到时判失败,` +
+    `读不到 CHANGELOG.md:${error.message} —— 本判据的对象就是它,读不到时判失败,` +
       `不按「没有段落要查」放过(§11.23.3 同款)`,
   );
 }
@@ -212,9 +222,7 @@ if (text !== null) {
   const sections = parseSections(text);
   const versionSections = sections.filter((s) => VERSION_RE.test(s.title));
   const pending = sections.filter((s) => s.isPending);
-  const unreleasedCount = sections.filter((s) =>
-    UNRELEASED_RE.test(s.title),
-  ).length;
+  const unreleasedCount = sections.filter((s) => UNRELEASED_RE.test(s.title)).length;
 
   if (pending.length === 0) {
     problems.push(
@@ -240,7 +248,9 @@ if (text !== null) {
   const seenVersions = new Map();
   for (const s of sections) {
     const m = VERSION_RE.exec(s.title);
-    if (!m || !versionSections.includes(s)) continue;
+    if (!m || !versionSections.includes(s)) {
+      continue;
+    }
     const ver = m[1];
     if (seenVersions.has(ver)) {
       problems.push(
@@ -281,13 +291,17 @@ if (text !== null) {
     const after = new Set(issuesIn(s.body));
     const earlier = new Set();
     for (const other of sections) {
-      if (other === s || other.line < s.line) continue;
-      if (other.isPending) continue;
-      for (const n of issuesIn(other.body)) earlier.add(n);
+      if (other === s || other.line < s.line) {
+        continue;
+      }
+      if (other.isPending) {
+        continue;
+      }
+      for (const n of issuesIn(other.body)) {
+        earlier.add(n);
+      }
     }
-    const split = [...after]
-      .filter((n) => earlier.has(n))
-      .sort((a, b) => Number(a) - Number(b));
+    const split = [...after].filter((n) => earlier.has(n)).sort((a, b) => Number(a) - Number(b));
     if (split.length > 0) {
       problems.push(
         `「## ${s.title}」与它**之前**的已发布段落同时点名了 ISSUE ${split
@@ -305,24 +319,18 @@ if (text !== null) {
 
 if (REPORT_ONLY) {
   process.stdout.write(
-    `待发段落的来源锚(${report.length} 行):\n` +
-      report.map((l) => "  " + l).join("\n") +
-      "\n",
+    `待发段落的来源锚(${report.length} 行):\n${report.map((l) => `  ${l}`).join("\n")}\n`,
   );
   process.exit(0);
 }
 
 if (problems.length > 0) {
-  console.error(
-    `[changelog-versions] ${problems.length} 处问题(规范 §13.10.6):\n`,
-  );
-  for (const p of problems) console.error("  ✗ " + p);
-  console.error(
-    `\n待发段落与锚的写法见 docs/standards/13-提交与-code-review.md §13.10.6。`,
-  );
+  console.error(`[changelog-versions] ${problems.length} 处问题(规范 §13.10.6):\n`);
+  for (const p of problems) {
+    console.error(`  ✗ ${p}`);
+  }
+  console.error(`\n待发段落与锚的写法见 docs/standards/13-提交与-code-review.md §13.10.6。`);
   process.exit(1);
 }
 
-console.log(
-  `[changelog-versions] ✓ 待发段落的来源锚与条目归属一致(${report.length} 个段落)`,
-);
+console.log(`[changelog-versions] ✓ 待发段落的来源锚与条目归属一致(${report.length} 个段落)`);

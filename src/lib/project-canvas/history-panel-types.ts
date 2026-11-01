@@ -23,21 +23,21 @@ export type DisplayMode = "grid" | "list";
 export type TaskMediaType = "image" | "video" | "audio";
 
 /** 镜像 /api/tasks（task.list）响应行的前端形状。 */
-export interface HistoryTaskRow {
+export type HistoryTaskRow = {
+  cover: string | null;
+  createdAt: string;
+  error: string | null;
   id: string;
+  mediaType: TaskMediaType;
+  progress: number;
+  projectId: string | null;
+  prompt: string;
+  status: string;
   type: string;
   workflowName: string;
-  status: string;
-  prompt: string;
-  createdAt: string;
-  cover: string | null;
-  mediaType: TaskMediaType;
-  projectId: string | null;
-  progress: number;
-  error: string | null;
-}
+};
 
-export const STATUS_PILL: Record<string, { label: string; cls: string }> = {
+export const STATUS_PILL: Record<string, { cls: string; label: string }> = {
   QUEUED: {
     label: "排队中",
     cls: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300",
@@ -78,26 +78,26 @@ export function timeAgo(iso: string): string {
 /** 卡片主标题：优先提示词摘要，退回工作流名，最后退回任务 id 短码。 */
 export function titleOf(task: HistoryTaskRow): string {
   const p = task.prompt?.trim();
-  if (p) return clampText(p, { maxLength: PROMPT_TITLE_MAX });
-  if (task.workflowName) return task.workflowName;
+  if (p) {
+    return clampText(p, { maxLength: PROMPT_TITLE_MAX });
+  }
+  if (task.workflowName) {
+    return task.workflowName;
+  }
   return task.id.slice(0, 12);
 }
 
 /** 进行中（需要轮询）的任务数。 */
-export function countActive(tasks: HistoryTaskRow[]): number {
-  return tasks.filter(
-    (task) => task.status === "RUNNING" || task.status === "QUEUED",
-  ).length;
+export function countActive(tasks: Array<HistoryTaskRow>): number {
+  return tasks.filter((task) => task.status === "RUNNING" || task.status === "QUEUED").length;
 }
 
 /** 只有图片/视频封面可拖拽到画布；音频没有可视封面。 */
 export function isDraggableCover(task: HistoryTaskRow): boolean {
-  return (
-    !!task.cover && (task.mediaType === "image" || task.mediaType === "video")
-  );
+  return !!task.cover && (task.mediaType === "image" || task.mediaType === "video");
 }
 
-export const FILTER_TABS: { id: HistoryFilter; label: string }[] = [
+export const FILTER_TABS: Array<{ id: HistoryFilter; label: string }> = [
   { id: "all", label: "全部" },
   { id: "image", label: "图片" },
   { id: "video", label: "视频" },

@@ -48,9 +48,7 @@ export type ElementBoxRef = (el: Element | null) => void;
  * 「元素什么时候出现」的唯一途径），`box` 是量到的盒子（未挂上时为 `null`）。
  * 传 `initial` 可以让调用处先接一个已存在的元素（少见；多数情况给 `null`）。
  */
-export function useElementBox(
-  initial: Element | null = null,
-): [ElementBoxRef, ElementBox | null] {
+export function useElementBox(initial: Element | null = null): [ElementBoxRef, ElementBox | null] {
   const [el, setEl] = useState<Element | null>(initial);
   const [box, setBox] = useState<ElementBox | null>(null);
 
@@ -63,7 +61,9 @@ export function useElementBox(
   }, []);
 
   useEffect(() => {
-    if (!el) return;
+    if (!el) {
+      return;
+    }
 
     /* 首帧与后续走**同一条**路径：都从 `ResizeObserver` 的回调外部调一次
      * `measure`。`measure` 里的 setState 只在取值真的变了才落状态，因此
@@ -77,7 +77,9 @@ export function useElementBox(
     measure();
     /* jsdom 与老浏览器没有 `ResizeObserver`：此时量一次就定住（读数与不接
      * 观察者时一致），不额外退化 —— 与 `LogPanel` 收口前的口径相同。 */
-    if (typeof ResizeObserver === "undefined") return;
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
@@ -92,8 +94,12 @@ export function useElementBox(
 
 /** 两个盒子是否等价（等值判断 —— 不等才落状态）。 */
 function sameBox(a: ElementBox | null, b: ElementBox | null): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
   return (
     a.width === b.width &&
     a.height === b.height &&

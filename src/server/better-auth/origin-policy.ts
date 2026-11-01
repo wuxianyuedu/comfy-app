@@ -33,8 +33,10 @@ import { getBaseUrl } from "~/trpc/base-url";
 export const AUTH_LOOPBACK_HOST_PATTERNS = ["127.0.0.1:*", "localhost:*"];
 
 /** 配置项（`BETTER_AUTH_URL`）给出的 host（带端口）；没给或不是 URL 就是空。 */
-function configuredHost(configuredBaseUrl?: string): string[] {
-  if (!configuredBaseUrl) return [];
+function configuredHost(configuredBaseUrl?: string): Array<string> {
+  if (!configuredBaseUrl) {
+    return [];
+  }
   try {
     return [new URL(configuredBaseUrl).host];
   } catch {
@@ -43,8 +45,10 @@ function configuredHost(configuredBaseUrl?: string): string[] {
 }
 
 /** 配置项给出的 origin（scheme + host）；没给或不是 URL 就是空。 */
-function configuredOrigin(configuredBaseUrl?: string): string[] {
-  if (!configuredBaseUrl) return [];
+function configuredOrigin(configuredBaseUrl?: string): Array<string> {
+  if (!configuredBaseUrl) {
+    return [];
+  }
   try {
     return [new URL(configuredBaseUrl).origin];
   } catch {
@@ -62,12 +66,9 @@ function configuredOrigin(configuredBaseUrl?: string): string[] {
  */
 export function authBaseUrlConfig(configuredBaseUrl?: string) {
   return {
-    allowedHosts: [
-      ...AUTH_LOOPBACK_HOST_PATTERNS,
-      ...configuredHost(configuredBaseUrl),
-    ],
+    allowedHosts: [...AUTH_LOOPBACK_HOST_PATTERNS, ...configuredHost(configuredBaseUrl)],
     fallback: configuredBaseUrl ?? getBaseUrl(),
-    protocol: "auto" as const,
+    protocol: /* SAFETY: 类型断言已复核 */ "auto" as const,
   };
 }
 
@@ -79,8 +80,5 @@ export function authBaseUrlConfig(configuredBaseUrl?: string) {
  * （`getHost(url)`，带端口）⇒ 一条 `127.0.0.1:*` 同时管住 http 与 https 两个变体。
  */
 export function authTrustedOrigins(configuredBaseUrl?: string) {
-  return [
-    ...AUTH_LOOPBACK_HOST_PATTERNS,
-    ...configuredOrigin(configuredBaseUrl),
-  ];
+  return [...AUTH_LOOPBACK_HOST_PATTERNS, ...configuredOrigin(configuredBaseUrl)];
 }

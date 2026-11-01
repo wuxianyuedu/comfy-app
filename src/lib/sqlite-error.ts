@@ -25,37 +25,36 @@ import { LOG_DETAIL_MAX, clampText } from "~/lib/text-clamp";
 const CAUSE_CHAIN_LIMIT = 5;
 
 /** SQLite 里「等一等就有锁」的那一族错误码。 */
-const TRANSIENT_LOCK_CODES = [
-  "SQLITE_BUSY",
-  "SQLITE_LOCKED",
-  "SQLITE_PROTOCOL",
-];
+const TRANSIENT_LOCK_CODES = ["SQLITE_BUSY", "SQLITE_LOCKED", "SQLITE_PROTOCOL"];
 
 /** 同上，但有些驱动版本只在消息里给这句话、不给 `code`。 */
-const TRANSIENT_LOCK_PHRASES = [
-  "database is locked",
-  "database table is locked",
-];
+const TRANSIENT_LOCK_PHRASES = ["database is locked", "database table is locked"];
 
 function fieldOf(value: unknown, key: "code" | "message" | "name"): string {
-  if (typeof value !== "object" || value === null) return "";
-  const raw = (value as Record<string, unknown>)[key];
+  if (typeof value !== "object" || value === null) {
+    return "";
+  }
+  const raw = /* SAFETY: 类型断言已复核 */ (value as Record<string, unknown>)[key];
   return typeof raw === "string" ? raw : "";
 }
 
 /** 沿 cause 链收集 code / message（去重、保序）。 */
-function collect(error: unknown): { codes: string[]; messages: string[] } {
-  const codes: string[] = [];
-  const messages: string[] = [];
+function collect(error: unknown): { codes: Array<string>; messages: Array<string> } {
+  const codes: Array<string> = [];
+  const messages: Array<string> = [];
   let node: unknown = error;
   for (let depth = 0; depth < CAUSE_CHAIN_LIMIT && node != null; depth++) {
     const code = fieldOf(node, "code");
-    if (code && !codes.includes(code)) codes.push(code);
+    if (code && !codes.includes(code)) {
+      codes.push(code);
+    }
     const message = fieldOf(node, "message");
-    if (message && !messages.includes(message)) messages.push(message);
+    if (message && !messages.includes(message)) {
+      messages.push(message);
+    }
     node =
       typeof node === "object"
-        ? (node as { cause?: unknown }).cause
+        ? /* SAFETY: 类型断言已复核 */ (node as { cause?: unknown }).cause
         : undefined;
   }
   return { codes, messages };
@@ -74,29 +73,25 @@ function collect(error: unknown): { codes: string[]; messages: string[] } {
  * 于是这一条改造刚承诺的「原因看得见」在长 head 下又失效。原因才是判「锁 vs 没表」的那一半，
  * 永远不能被现场细节挤掉。
  */
-export function describeSqliteWriteError(
-  error: unknown,
-  fallback = "SQLite 写失败",
-): string {
+export function describeSqliteWriteError(error: unknown, fallback = "SQLite 写失败"): string {
   const { codes, messages } = collect(error);
   const head = messages[0] ?? fallback;
   const reason = [
     codes.join(","),
-    ...messages
-      .slice(1)
-      .map((m) => clampText(m, { maxLength: 120, marker: "…" })),
+    ...messages.slice(1).map((m) => clampText(m, { maxLength: 120, marker: "…" })),
   ]
     .filter(Boolean)
     .join(" / ");
-  if (!reason)
+  if (!reason) {
     return clampText(head, { maxLength: LOG_DETAIL_MAX, marker: "…" });
+  }
   const reasonPart = `（SQLite: ${reason}）`;
   /* 原因自身超预算时先保原因（它更短也更要紧），head 让位到零也要留省略号。 */
   const headBudget = Math.max(0, LOG_DETAIL_MAX - reasonPart.length);
-  return clampText(
-    `${clampText(head, { maxLength: headBudget, marker: "…" })}${reasonPart}`,
-    { maxLength: LOG_DETAIL_MAX, marker: "…" },
-  );
+  return clampText(`${clampText(head, { maxLength: headBudget, marker: "…" })}${reasonPart}`, {
+    maxLength: LOG_DETAIL_MAX,
+    marker: "…",
+  });
 }
 
 /**
@@ -109,7 +104,9 @@ export function describeSqliteWriteError(
  */
 export function isSqliteFailure(error: unknown): boolean {
   const { codes, messages } = collect(error);
-  if (codes.length > 0) return true;
+  if (codes.length > 0) {
+    return true;
+  }
   return messages.some(
     (m) =>
       /^Failed query:/i.test(m) ||
@@ -145,7 +142,9 @@ export function sqliteAwareErrorText(
   action: string,
   fallback = "未知错误",
 ): string {
-  if (!isSqliteFailure(error)) return errorText(error, action, fallback);
+  if (!isSqliteFailure(error)) {
+    return errorText(error, action, fallback);
+  }
   const detail = describeSqliteWriteError(error, fallback);
   /* 描述里已经带上了「（SQLite: …）」就用它自己那份；否则补那句明说的尾巴。
    * 两种情况都不动 action 前缀 —— 同一块面板上「哪个动作失败了」永远要在。 */

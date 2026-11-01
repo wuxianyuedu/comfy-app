@@ -48,9 +48,9 @@ export function WorkflowNodeHeader({
   titleTitle,
   right,
 }: {
+  right?: React.ReactNode;
   title: string;
   titleTitle?: string;
-  right?: React.ReactNode;
 }) {
   return (
     <div className="flex h-8 min-w-0 items-center justify-between gap-2 pr-3.5 pl-3.5">
@@ -93,8 +93,8 @@ export function WorkflowNodePill({
   className,
 }: {
   children: React.ReactNode;
-  title?: string;
   className?: string;
+  title?: string;
 }) {
   return (
     <div
@@ -122,8 +122,8 @@ export function WorkflowStaticChip({
 }) {
   return (
     <span
-      title={title}
       className={`border-primary/35 bg-node-accent flex h-6 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 ${className}`}
+      title={title}
     >
       {children}
     </span>
@@ -150,18 +150,15 @@ export function WorkflowNodeActionButton({
   hint,
   corner = "own",
 }: {
-  label: React.ReactNode;
-  disabled?: boolean;
-  onClick?: () => void;
-  hint?: string;
   /** `own` = 卡片不裁切，按钮自带下沿圆角；`clipped` = 卡片 `overflow-hidden`，四角交还给卡片。 */
   corner?: "own" | "clipped";
+  disabled?: boolean;
+  hint?: string;
+  label: React.ReactNode;
+  onClick?: () => void;
 }) {
   const button = (
     <Button
-      variant="primary-solid"
-      disabled={disabled}
-      onClick={onClick}
       className={cn(
         "from-primary to-accent nodrag nopan flex h-10.75 w-full items-center justify-center gap-2 bg-linear-to-r text-sm font-bold text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_35%,transparent)] hover:opacity-95",
         /* 圆角是这一枚唯一按宿主分叉的形状：坐在卡片下沿时自己收角，并把顶角收成直角
@@ -170,7 +167,10 @@ export function WorkflowNodeActionButton({
          * 认的那枚形状，往里塞形态就是往唯一出处里塞第二份来源。 */
         corner === "own" ? "rounded-b-node rounded-t-none" : "rounded-none",
       )}
+      disabled={disabled}
+      onClick={onClick}
       style={{ fontFamily: "var(--font-sans)" }}
+      variant="primary-solid"
     >
       {label}
     </Button>
@@ -194,19 +194,15 @@ export function WorkflowNodeOutputsRow({
   outputs,
   renderHandle,
 }: {
+  inputs: Array<WorkflowIOEntry & { ioKey: string }>;
   output: WorkflowIOEntry & { ioKey: string };
-  inputs: (WorkflowIOEntry & { ioKey: string })[];
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
-  renderHandle?: (arg: {
-    id: string;
-    dir: "out";
-    type: string;
-  }) => React.ReactNode;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  renderHandle?: (arg: { dir: "out"; id: string; type: string }) => React.ReactNode;
 }) {
   const oLabel = ioLabel(output, [...inputs, ...outputs]);
   const oType = output.type ?? "*";
   return (
-    <div key={output.nodeId + ":" + output.name} className="relative">
+    <div className="relative" key={`${output.nodeId}:${output.name}`}>
       {renderHandle && output.ioKey
         ? renderHandle({ id: output.ioKey, dir: "out", type: oType })
         : null}

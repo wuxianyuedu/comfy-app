@@ -129,7 +129,9 @@ export function isAncestor(ancestor, descendant) {
  * @returns {{ok: true, lost: string[]} | {ok: false, reason: string}} 取不到事实时给 `ok:false`
  */
 export function scan({ sha, baseline }) {
-  if (!inGitRepo()) return { ok: false, reason: "不在 git 检出里" };
+  if (!inGitRepo()) {
+    return { ok: false, reason: "不在 git 检出里" };
+  }
 
   /** 成对遍历写成元组数组，不写裸字面量：后者被推成 `string[][]`，解构出的
    *  `ref` / `label` 各带 `| undefined`（与批 9 / 批 10 同一形，第三次撞上）。 */
@@ -156,14 +158,18 @@ export function scan({ sha, baseline }) {
     .filter(Boolean);
   /* 生成物先摘掉（口径 3），剩下的才是这一轮要取证的面。 */
   const files = changed.filter((f) => !isGenerated(f));
-  if (files.length === 0) return { ok: true, lost: [] };
+  if (files.length === 0) {
+    return { ok: true, lost: [] };
+  }
 
   /* 取证只要两次遍历：候选历史一次、全部 blob 一次（逐文件 / 逐条历史各起一个 git
    * 进程的话，成本是「变更文件数 ×（1 + 该文件历史条目数）」，实测约 2–3s/文件，
    * 一次大 diff 能把这条判据拖到几分钟 —— 见 `merged-side-loss-git.mjs` 的实测表）。
    * 任一次没跑起来就整体退 2：不许拿半份事实给出「没命中」这种绿。 */
   const hist = historyByFile(git, { ref: baseline, files });
-  if (!hist) return { ok: false, reason: "批量取候选历史没跑起来" };
+  if (!hist) {
+    return { ok: false, reason: "批量取候选历史没跑起来" };
+  }
 
   /* 候选集里不含基线那一版自己（与逐文件读法同口径：判的是「退回成**更早**的某一版」，
    * 而「等于基线版」在上面已按正常前移放过）。 */
@@ -178,17 +184,23 @@ export function scan({ sha, baseline }) {
      * 与批 7 那处「取一次 + 兜底并说明键必在」同一形。 */
     const older = (hist.get(f) ?? []).filter((s) => s !== baseline);
     candidates.set(f, older);
-    for (const h of older) specs.push(`${h}:${f}`);
+    for (const h of older) {
+      specs.push(`${h}:${f}`);
+    }
   }
   const blob = resolveBlobs(git, specs);
-  if (!blob) return { ok: false, reason: "批量解析 blob 没跑起来（`cat-file --batch-check`）" };
+  if (!blob) {
+    return { ok: false, reason: "批量解析 blob 没跑起来（`cat-file --batch-check`）" };
+  }
 
   const lost = [];
   for (const f of files) {
     const result = blob.get(`${sha}:${f}`);
     const atBaseline = blob.get(`${baseline}:${f}`);
     // 结果里没有这个文件（删除）、或与基线同版（正常前移）→ 不是「取了一侧」。
-    if (!result || !atBaseline || result === atBaseline) continue;
+    if (!result || !atBaseline || result === atBaseline) {
+      continue;
+    }
 
     /* 基线的历史上，这个文件有没有过**逐字节相同**的版本 —— 有 = 退回了那一版。
      * 判定核心取自共用内核（与 1-2 的提交前档同一份实现，见模块头）；
@@ -198,7 +210,9 @@ export function scan({ sha, baseline }) {
       historyShas: candidates.get(f) ?? [], // 同一圈 `files` 刚逐个 set 过，键必在（见上面那句注释）
       blobAt: (older) => blob.get(`${older}:${f}`) ?? null,
     });
-    if (hit) lost.push(f);
+    if (hit) {
+      lost.push(f);
+    }
   }
   return { ok: true, lost };
 }
@@ -214,7 +228,9 @@ function main() {
   const argv = process.argv.slice(2);
   const reportOnly = argv.includes("--report");
   const positional = argv.filter((a, i) => {
-    if (a.startsWith("--")) return false;
+    if (a.startsWith("--")) {
+      return false;
+    }
     // `--baseline <value>` 的 value 不是位置参数。
     return argv[i - 1] !== "--baseline";
   });
@@ -250,20 +266,17 @@ function main() {
   }
 
   console.error(
-    `[merged-side-loss] ${sha} vs ${baseline}：${lost.length} 份文件疑似整份退回 ——\n` +
-      lost.map((f) => `  · ${f}`).join("\n") +
-      "\n\n⚠️ 命中 = **需要人工看**，不等于「确定丢了」：blob 相等性有巧合（空文件、\n" +
-      "逐字相同的正当改动）。逐份核对后，真丢的那批按原提交重放（cherry-pick）补回，\n" +
-      "**别整份 goback**（会二次回退该文件上分支侧的正当增补）。",
+    `[merged-side-loss] ${sha} vs ${baseline}：${lost.length} 份文件疑似整份退回 ——\n${
+      lost.map((f) => `  · ${f}`).join("\n")
+      }\n\n⚠️ 命中 = **需要人工看**，不等于「确定丢了」：blob 相等性有巧合（空文件、\n` +
+      `逐字相同的正当改动）。逐份核对后，真丢的那批按原提交重放（cherry-pick）补回，\n` +
+      `**别整份 goback**（会二次回退该文件上分支侧的正当增补）。`,
   );
   process.exit(1);
 }
 
 // 只在被直接运行时执行 CLI（被 import 时不跑）。判「是不是直接运行」用路径解析后比较 ——
 // 拼 `file://${argv[1]}` 在 Windows 上恒不相等，那会让 main() 一次都不跑、退出码恒 0。
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   main();
 }

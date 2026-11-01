@@ -32,30 +32,33 @@ const ROOT = path.resolve(__dirname, "..");
  * 用「含 PYTHONUNBUFFERED」当选择器是错的（ComfyUI 那一份没有这个键），
  * 第一版就是这么判的、直接把另一条链路判成「找不到」。
  */
-function pythonEnvKeys(rel: string): { name: string; keys: string[] } {
-  const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replace(
-    /\r\n/g,
-    "\n",
-  );
-  const found: { name: string; keys: string[] }[] = [];
+function pythonEnvKeys(rel: string): { keys: Array<string>; name: string; } {
+  const src = stripComments(readFileSync(path.join(ROOT, rel), "utf8")).replaceAll("\r\n", "\n");
+  const found: Array<{ keys: Array<string>; name: string; }> = [];
   const head = /(?:^|[\s,(])(env|stdioEnv|childEnv)\s*:\s*\{/g;
   let m: RegExpExecArray | null;
   while ((m = head.exec(src))) {
     const start = src.indexOf("{", m.index);
-    if (start < 0) continue;
+    if (start === -1) {
+      continue;
+    }
     let depth = 0;
     let i = start;
     for (; i < src.length; i++) {
-      if (src[i] === "{") depth++;
-      else if (src[i] === "}") {
+      if (src[i] === "{") {
+        depth++;
+      } else if (src[i] === "}") {
         depth--;
-        if (depth === 0) break;
+        if (depth === 0) {
+          break;
+        }
       }
     }
     const body = src.slice(start + 1, i);
     const keys = [...body.matchAll(/([A-Z][A-Z0-9_]*)\s*:/g)].map((k) => k[1]!);
-    if (keys.some((k) => k.startsWith("PYTHON")))
+    if (keys.some((k) => k.startsWith("PYTHON"))) {
       found.push({ name: m[1]!, keys });
+    }
   }
   expect(
     found.length,
@@ -83,11 +86,11 @@ describe("Python 子进程必须被锁在 UTF-8（ISSUE #1164）", () => {
     const src = stripComments(
       readFileSync(path.join(ROOT, "src/lib/comfyui/executor-cli.ts"), "utf8"),
     );
-    const decodes = [...src.matchAll(/\.setEncoding\(\s*"([^"]+)"\s*\)/g)].map(
-      (m) => m[1],
-    );
+    const decodes = [...src.matchAll(/\.setEncoding\(\s*"([^"]+)"\s*\)/g)].map((m) => m[1]);
     expect(decodes.length).toBeGreaterThanOrEqual(2); // stdout + stderr
-    expect(new Set(decodes)).toEqual(new Set(["utf-8"]));
+    /* oxlint 的 `unicorn/text-encoding-identifier-case` 把编码标识统一成规范短名
+     *（`utf8`）；两种写法 Node 等价，这里钉的是「两条管道都显式按 UTF-8 解」。 */
+    expect(new Set(decodes)).toEqual(new Set(["utf8"]));
   });
 
   it("ComfyUI 本体那条链路保持着同一口径（自定义节点 print emoji 会崩进程）", () => {

@@ -11,12 +11,12 @@ import { describe, expect, it } from "vitest";
 import { findLogPathTokens } from "./log-path-tokens";
 
 /** 取出这一行里所有被认成路径的文本。 */
-function paths(line: string): string[] {
+function paths(line: string): Array<string> {
   return findLogPathTokens(line).map((t) => t.text);
 }
 
 describe("日志行路径识别（ISSUE #1365 的用户原文）", () => {
-  const ROOT = "F:\\AI\\Other\\comfy-app-t3-branch4";
+  const ROOT = String.raw`F:\AI\Other\comfy-app-t3-branch4`;
 
   it("启动报告里的四行路径逐条认出，且不留尾随字符", () => {
     expect(paths(`项目根: ${ROOT}`)).toEqual([ROOT]);
@@ -26,9 +26,9 @@ describe("日志行路径识别（ISSUE #1365 的用户原文）", () => {
     expect(paths(`启动状态文件: ${ROOT}\\run\\launch-status.json`)).toEqual([
       `${ROOT}\\run\\launch-status.json`,
     ]);
-    expect(
-      paths(`编排链路日志: ${ROOT}\\log\\launcher\\shell-launch.log`),
-    ).toEqual([`${ROOT}\\log\\launcher\\shell-launch.log`]);
+    expect(paths(`编排链路日志: ${ROOT}\\log\\launcher\\shell-launch.log`)).toEqual([
+      `${ROOT}\\log\\launcher\\shell-launch.log`,
+    ]);
   });
 
   it("一行两段路径各认一段（逗号并列）", () => {
@@ -45,8 +45,8 @@ describe("日志行路径识别（ISSUE #1365 的用户原文）", () => {
         `>>> "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" -NoProfile -ExecutionPolicy Bypass -File "D:\\Program Files\\nodejs\\pnpm.ps1" -v`,
       ),
     ).toEqual([
-      "C:\\Program Files\\PowerShell\\7\\pwsh.EXE",
-      "D:\\Program Files\\nodejs\\pnpm.ps1",
+      String.raw`C:\Program Files\PowerShell\7\pwsh.EXE`,
+      String.raw`D:\Program Files\nodejs\pnpm.ps1`,
     ]);
   });
 
@@ -54,15 +54,15 @@ describe("日志行路径识别（ISSUE #1365 的用户原文）", () => {
     expect(paths("allowedRoot: /workspace/generated （见 §1.1）。")).toEqual([
       "/workspace/generated",
     ]);
-    expect(paths("路径：F:\\a\\b.log。后面还有中文")).toEqual(["F:\\a\\b.log"]);
+    expect(paths(String.raw`路径：F:\a\b.log。后面还有中文`)).toEqual([String.raw`F:\a\b.log`]);
   });
 
   it("POSIX 形态与 UNC 形态都认", () => {
-    expect(
-      paths("  1) 壳侧编排链路（壳自己写的）：/workspace/log/launcher/x.log"),
-    ).toEqual(["/workspace/log/launcher/x.log"]);
-    expect(paths("resolved to \\\\server\\share\\dir\\x.log")).toEqual([
-      "\\\\server\\share\\dir\\x.log",
+    expect(paths("  1) 壳侧编排链路（壳自己写的）：/workspace/log/launcher/x.log")).toEqual([
+      "/workspace/log/launcher/x.log",
+    ]);
+    expect(paths(String.raw`resolved to \\server\share\dir\x.log`)).toEqual([
+      String.raw`\\server\share\dir\x.log`,
     ]);
   });
 });
@@ -70,15 +70,11 @@ describe("日志行路径识别（ISSUE #1365 的用户原文）", () => {
 describe("日志行路径识别：刻意漏的那几档", () => {
   it("相对路径不认（判不了相对谁，猜错会到别的文件夹）", () => {
     expect(paths("shell log: log/shell/shell.log")).toEqual([]);
-    expect(paths("见 ./src/lib/log.ts 与 src/lib/log/log-store.ts:12")).toEqual(
-      [],
-    );
+    expect(paths("见 ./src/lib/log.ts 与 src/lib/log/log-store.ts:12")).toEqual([]);
   });
 
   it("URL 里不切出裸路径段", () => {
-    expect(
-      paths("见 https://cnb.cool/moon-read/comfy-app-t3/-/issues/1365"),
-    ).toEqual([]);
+    expect(paths("见 https://cnb.cool/moon-read/comfy-app-t3/-/issues/1365")).toEqual([]);
     expect(paths("http://127.0.0.1:3100/workspace/x")).toEqual([]);
   });
 
@@ -89,7 +85,7 @@ describe("日志行路径识别：刻意漏的那几档", () => {
 
   it("POSIX 形态只有一段时不认", () => {
     expect(paths("progress 42% (12/29)")).toEqual([]);
-    expect(paths("分隔符 / 与 \\ 都是硬字符")).toEqual([]);
+    expect(paths(String.raw`分隔符 / 与 \ 都是硬字符`)).toEqual([]);
   });
 
   it("纯散文一行不认", () => {
@@ -100,32 +96,25 @@ describe("日志行路径识别：刻意漏的那几档", () => {
 
 describe("日志行路径识别：边界形状", () => {
   it("盘符 / UNC 起点把空格吃进来（Program Files 是一整段）", () => {
-    expect(paths("at F:\\with space\\file name.txt")).toEqual([
-      "F:\\with space\\file name.txt",
+    expect(paths(String.raw`at F:\with space\file name.txt`)).toEqual([
+      String.raw`F:\with space\file name.txt`,
     ]);
   });
 
   it("POSIX 起点不吃空格（否则 `a and b`、并列路径会连成一段）", () => {
-    expect(paths("paths: /a/b/c.log and /d/e/f.log")).toEqual([
-      "/a/b/c.log",
-      "/d/e/f.log",
-    ]);
+    expect(paths("paths: /a/b/c.log and /d/e/f.log")).toEqual(["/a/b/c.log", "/d/e/f.log"]);
   });
 
   it("成对括号留给文件名，落单的右括号才裁", () => {
-    expect(paths("installer at C:\\Program Files (x86)\\x.exe")).toEqual([
-      "C:\\Program Files (x86)\\x.exe",
+    expect(paths(String.raw`installer at C:\Program Files (x86)\x.exe`)).toEqual([
+      String.raw`C:\Program Files (x86)\x.exe`,
     ]);
     expect(paths("（日志：/var/log/app.log)")).toEqual(["/var/log/app.log"]);
   });
 
   it("尾随开关裁到路径为止（含 `--k=v` 与 `--k v` 两种写法）", () => {
-    expect(paths("cmd F:\\a\\b\\d.mjs --mode prebuilt")).toEqual([
-      "F:\\a\\b\\d.mjs",
-    ]);
-    expect(paths("cmd F:\\a\\b\\d.mjs --port=3847")).toEqual([
-      "F:\\a\\b\\d.mjs",
-    ]);
+    expect(paths(String.raw`cmd F:\a\b\d.mjs --mode prebuilt`)).toEqual([String.raw`F:\a\b\d.mjs`]);
+    expect(paths(String.raw`cmd F:\a\b\d.mjs --port=3847`)).toEqual([String.raw`F:\a\b\d.mjs`]);
   });
 
   it("盘符根目录本身是合法路径（可以点开）", () => {
@@ -140,7 +129,7 @@ describe("日志行路径识别：边界形状", () => {
      * 猜错的后果是用户点一下看到「路径不存在」的反馈（有出口、可纠正），
      * 而猜得过紧的后果是 `C:\Program Files\…` 被切成 `C:\Program`
      * —— 那是一段**看起来能点、点了什么都不是**的片段，更糟。 */
-    expect(paths("drive C:\\ then")).toEqual(["C:\\ then"]);
+    expect(paths(String.raw`drive C:\ then`)).toEqual([String.raw`C:\ then`]);
   });
 
   /* ISSUE #1695：访问日志里的 URL 与真磁盘路径**同为 `/` 起头**，形状判据分不开，
@@ -157,17 +146,11 @@ describe("日志行路径识别：边界形状", () => {
     expect(paths("OPTIONS /api/schema 204")).toEqual([]);
     /* 请求行的**查询串**同样不认：`/api/logs/current?source=…` 是本面板自己的
      * 轮询端点（与 `isPanelSelfPollingLine` 同一族行）。 */
-    expect(
-      paths("GET /api/logs/current?source=app-runtime 200 in 12ms"),
-    ).toEqual([]);
+    expect(paths("GET /api/logs/current?source=app-runtime 200 in 12ms")).toEqual([]);
   });
 
   it("带时刻 / 级别前缀的请求行照样不认（面板里就是长这样）", () => {
-    expect(
-      paths(
-        "[18:44:13] [INFO] GET /api/comfy/queue 200 in 2.5s (next.js: 20ms)",
-      ),
-    ).toEqual([]);
+    expect(paths("[18:44:13] [INFO] GET /api/comfy/queue 200 in 2.5s (next.js: 20ms)")).toEqual([]);
   });
 
   /* 第二条**真实**形态（实测从 564KB 的 nextjs-panel 转录里扫出来的唯一漏网者）：
@@ -193,22 +176,16 @@ describe("日志行路径识别：边界形状", () => {
       "/workspace/log/launcher/shell.log",
     ]);
     expect(paths("/var/log/app.log")).toEqual(["/var/log/app.log"]);
-    expect(paths("log at /home/user/data/a.txt")).toEqual([
-      "/home/user/data/a.txt",
-    ]);
+    expect(paths("log at /home/user/data/a.txt")).toEqual(["/home/user/data/a.txt"]);
     /* `GET` 出现在**别的**位置（不是紧挨着这个候选）时不该误伤。 */
-    expect(paths("GET 完成，日志在 /workspace/log/x.log")).toEqual([
-      "/workspace/log/x.log",
-    ]);
+    expect(paths("GET 完成，日志在 /workspace/log/x.log")).toEqual(["/workspace/log/x.log"]);
   });
 
   it("盘符 / UNC 不受 URL 判据影响（它们不可能是 URL）", () => {
-    expect(paths("cmd C:\\Program Files\\x.exe")).toEqual([
-      "C:\\Program Files\\x.exe",
+    expect(paths(String.raw`cmd C:\Program Files\x.exe`)).toEqual([
+      String.raw`C:\Program Files\x.exe`,
     ]);
-    expect(paths("GET \\\\server\\share\\x.log")).toEqual([
-      "\\\\server\\share\\x.log",
-    ]);
+    expect(paths(String.raw`GET \\server\share\x.log`)).toEqual([String.raw`\\server\share\x.log`]);
   });
 
   it("回的是半开区间，切出来与 text 一致", () => {

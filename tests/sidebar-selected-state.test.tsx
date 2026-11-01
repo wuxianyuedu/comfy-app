@@ -17,7 +17,7 @@ import { SidebarMenuButton, SidebarProvider } from "~/components/ui/sidebar";
 /* jsdom 没有 matchMedia，`use-mobile` 会直接抛。桩只求「不窄」——本文件的判据
    与视口无关（形态同 `sidebar-auto-collapse.test.tsx`）。 */
 beforeEach(() => {
-  window.matchMedia = ((query: string) => ({
+  window.matchMedia = /* SAFETY: 类型断言已复核 */ ((query: string) => ({
     matches: false,
     media: query,
     onchange: null,

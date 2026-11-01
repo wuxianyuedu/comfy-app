@@ -46,18 +46,18 @@ const MEGAPIXEL_OPTIONS = MEGAPIXEL_TIERS.map((tier) => ({
 
 /** 这一族 story 的 Args：只看**能序列化**的那部分（面板形态由代码给）。 */
 type StoryArgs = {
-  /** 触发器上折成一行的那句摘要（真机上是「16:9 / 2K」这种）。 */
-  summary: string;
-  /** 面板里画几段（比例一段、像素一段、倍数一段）。 */
-  sectionCount: 1 | 2 | 3;
   /** 面板宽窄两档：窄档要在画布节点里也放得下。 */
   align: "left" | "right";
   disabled?: boolean;
+  /** 面板里画几段（比例一段、像素一段、倍数一段）。 */
+  sectionCount: 1 | 2 | 3;
+  /** 触发器上折成一行的那句摘要（真机上是「16:9 / 2K」这种）。 */
+  summary: string;
 };
 
 /** 按真机的拼法把段拼出来（`DimensionControl` 的 `sections` 同形）。 */
-function buildSections(count: 1 | 2 | 3): SegmentSection<string>[] {
-  const list: SegmentSection<string>[] = [
+function buildSections(count: 1 | 2 | 3): Array<SegmentSection<string>> {
+  const list: Array<SegmentSection<string>> = [
     {
       label: "比例",
       value: "16:9 横屏",
@@ -87,20 +87,15 @@ function buildSections(count: 1 | 2 | 3): SegmentSection<string>[] {
   return list;
 }
 
-function SegmentWithSummary({
-  summary,
-  sectionCount,
-  align,
-  disabled,
-}: StoryArgs) {
+function SegmentWithSummary({ summary, sectionCount, align, disabled }: StoryArgs) {
   return (
     <div className="w-72">
       <MultiSegmentPopover
-        ariaLabel="选择比例与像素"
-        triggerContent={summary}
-        sections={buildSections(sectionCount)}
         align={align}
+        ariaLabel="选择比例与像素"
         disabled={disabled}
+        sections={buildSections(sectionCount)}
+        triggerContent={summary}
       />
     </div>
   );
@@ -156,20 +151,16 @@ export const WithFooter: Story = {
           </span>
           <div className="w-40 min-w-0">
             <MultiSegmentPopover
-              ariaLabel="选择比例与像素"
-              triggerContent={args.summary}
-              sections={buildSections(args.sectionCount)}
               align={args.align}
+              ariaLabel="选择比例与像素"
               footer={
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-ink-muted text-[11px]">
-                    打开尺寸表…
-                  </span>
-                  <span className="text-ink-faint text-[10px]">
-                    像素按长边给定
-                  </span>
+                  <span className="text-ink-muted text-[11px]">打开尺寸表…</span>
+                  <span className="text-ink-faint text-[10px]">像素按长边给定</span>
                 </div>
               }
+              sections={buildSections(args.sectionCount)}
+              triggerContent={args.summary}
             />
           </div>
         </div>

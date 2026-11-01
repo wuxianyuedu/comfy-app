@@ -21,8 +21,7 @@ import type { WorkflowIODropPosition } from "../workflow-types";
 /** 端口行与 widget 行同一守卫：可编辑控件（输入框 / 下拉 / 按钮）上起手
  * 不发起拖拽 —— 行级 draggable 会劫持文本选择，且从这些控件发起的原生
  * 拖拽经常不触发 drop（只有 dragend），表现成「拖了但顺序没变」。 */
-const DRAG_CANCEL_SELECTOR =
-  "input, textarea, select, button, [contenteditable]";
+const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]";
 
 /** 画布`workflow` 节点的可连接端口行。连线型输入渲染一个
  * 骑在左边缘的句柄 + 一个卡片体（STRING → 内联 textarea，IMAGE → 上传
@@ -61,31 +60,12 @@ export function WirePortRows({
   onPortDragStart,
   onPortDragEnd,
 }: {
-  wireInputs: (WorkflowIOEntry & { ioKey: string; control: ControlKind })[];
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
-  values: Record<string, unknown>;
-  set: (ioKey: string, v: unknown) => void;
-  pickFile: (ioKey: string) => void;
-  uploading: boolean;
-  uploadTarget: string | null;
-  /** 内联渲染在类 seed 的数值行上，好让
-   * 用户不离开画布节点就能切 control_after_generate（固定值 / 递增值 / 递减值 / 随机值）。
-   * 可选 —— 非画布调用方可以
-   * 两个都不传。 */
-  seedModes?: Record<string, string>;
-  onSeedModeChange?: (ioKey: string, mode: string) => void;
-  /** 内部 OutputRow 守卫。 false 时不渲染 outputs 段。 */
-  showOutputs?: boolean;
   /** 见 DynamicWorkflowForm。传了就每行端口
    * 都可拖；不传则行渲染时
    * 不带拖拽提示。 */
   draggingKey?: string | null;
   dragOverKey?: string | null;
-  onReorder?: (
-    fromKey: string,
-    targetKey: string | null,
-    position: WorkflowIODropPosition,
-  ) => void;
+  onPortDragEnd?: () => void;
   /** 回调，好让父级在被拖的是
    * 端口行时同步它的`draggingKey` 状态。镜像
    * widget 行用的契约（DynamicWorkflowForm 自己的
@@ -93,7 +73,22 @@ export function WirePortRows({
    * 完成`drop` /`reorder`，只是丢掉活跃行的
    * 高亮。 */
   onPortDragStart?: (ioKey: string) => void;
-  onPortDragEnd?: () => void;
+  onReorder?: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
+  onSeedModeChange?: (ioKey: string, mode: string) => void;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  pickFile: (ioKey: string) => void;
+  /** 内联渲染在类 seed 的数值行上，好让
+   * 用户不离开画布节点就能切 control_after_generate（固定值 / 递增值 / 递减值 / 随机值）。
+   * 可选 —— 非画布调用方可以
+   * 两个都不传。 */
+  seedModes?: Record<string, string>;
+  set: (ioKey: string, v: unknown) => void;
+  /** 内部 OutputRow 守卫。 false 时不渲染 outputs 段。 */
+  showOutputs?: boolean;
+  uploading: boolean;
+  uploadTarget: string | null;
+  values: Record<string, unknown>;
+  wireInputs: Array<WorkflowIOEntry & { control: ControlKind; ioKey: string }>;
 }) {
   /* 行级内联处理器 —— 每次渲染都重建，因为它们很小，
    * 且每轮渲染重绑闭包能让`draggingKey` 保持
@@ -106,22 +101,23 @@ export function WirePortRows({
   /* 落点位置（指针在目标行的上/下半区）：端口行自己持有 —— 上抛给父级的
    * 只有「拖起 / 放下」这两个时机，位置随每条 dragover 变化，放父级会多余
    * 一趟重渲染。指示线画的位置与 onDrop 收到的 position 同源。 */
-  const [portDropPosition, setPortDropPosition] =
-    useState<WorkflowIODropPosition>("before");
-  const positionOf = (
-    e: React.DragEvent<HTMLDivElement>,
-  ): WorkflowIODropPosition => {
+  const [portDropPosition, setPortDropPosition] = useState<WorkflowIODropPosition>("before");
+  const positionOf = (e: React.DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
     const rect = e.currentTarget?.getBoundingClientRect?.();
-    if (!rect || rect.height <= 0) return "before";
+    if (!rect || rect.height <= 0) {
+      return "before";
+    }
     return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
   };
   const portDrag = (ioKey: string) => {
-    if (!onReorder) return {};
+    if (!onReorder) {
+      return {};
+    }
     return {
       draggable: true,
       onDragStart: (e: React.DragEvent<HTMLDivElement>) => {
         /* 输入框 / 下拉 / 按钮上起手不拖（与 widget 行同守卫）。 */
-        const target = e.target as HTMLElement | null;
+        const target = /* SAFETY: 类型断言已复核 */ e.target as HTMLElement | null;
         if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
           e.preventDefault();
           return;
@@ -135,15 +131,21 @@ export function WirePortRows({
         onPortDragStart?.(ioKey);
       },
       onDragOver: (e: React.DragEvent<HTMLDivElement>) => {
-        if (!draggingKey || draggingKey === ioKey) return;
+        if (!draggingKey || draggingKey === ioKey) {
+          return;
+        }
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         const pos = positionOf(e);
-        if (portDropPosition !== pos) setPortDropPosition(pos);
+        if (portDropPosition !== pos) {
+          setPortDropPosition(pos);
+        }
       },
       onDrop: (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
-        if (!onReorder || !draggingKey || draggingKey === ioKey) return;
+        if (!onReorder || !draggingKey || draggingKey === ioKey) {
+          return;
+        }
         const pos = positionOf(e);
         setPortDropPosition("before");
         onReorder(draggingKey, ioKey, pos);
@@ -173,11 +175,7 @@ export function WirePortRows({
  输入 · SeedModeButton · chip 行末。chip 永在所有控件之后，与
  Card pr=14 边距对齐——STRING/INT/FLOAT/NUMBER chip 统一右对齐。*/
         }
-        if (
-          numericType &&
-          wireInput.control !== "textarea" &&
-          wireInput.control !== "image"
-        ) {
+        if (numericType && wireInput.control !== "textarea" && wireInput.control !== "image") {
           const b = numericBounds(wireInput);
           const isSeed = isSeedLike(wireInput);
           const isDragging = onReorder && draggingKey === wireInput.ioKey;
@@ -198,10 +196,10 @@ export function WirePortRows({
                 />
               )}
               <PortHandle
-                id={wireInput.ioKey}
                 dir="in"
-                type={wireInput.type}
+                id={wireInput.ioKey}
                 style={{ top: "50%", transform: "translateY(-50%)" }}
+                type={wireInput.type}
               />
               <span
                 className="text-ink-bright text-sm font-medium"
@@ -223,14 +221,12 @@ export function WirePortRows({
                */}
               <div className="flex-1">
                 <NumberField
-                  value={(typeof v === "number" ? v : Number(v)) || b.min}
-                  onChange={(value) => set(wireInput.ioKey, value)}
-                  min={b.min}
+                  decimalPlaces={wireInput.control === "float" ? b.decimalPlaces : 0}
                   max={b.max}
+                  min={b.min}
+                  onChange={(value) => set(wireInput.ioKey, value)}
                   step={b.step}
-                  decimalPlaces={
-                    wireInput.control === "float" ? b.decimalPlaces : 0
-                  }
+                  value={(typeof v === "number" ? v : Number(v)) || b.min}
                 />
               </div>
               {isSeed && onSeedModeChange && (
@@ -239,11 +235,8 @@ export function WirePortRows({
                   onPick={(mode) => onSeedModeChange(wireInput.ioKey, mode)}
                 />
               )}
-              <TypeChip size="md" tone="none" style={chipStyle}>
-                {typeDisplay(
-                  wireInput.type,
-                  wireInput.control === "float" ? "FLOAT" : "INT",
-                )}
+              <TypeChip size="md" style={chipStyle} tone="none">
+                {typeDisplay(wireInput.type, wireInput.control === "float" ? "FLOAT" : "INT")}
               </TypeChip>
             </div>
           );
@@ -277,10 +270,10 @@ export function WirePortRows({
                 />
               )}
             <PortHandle
-              id={wireInput.ioKey}
               dir="in"
-              type={wireInput.type}
+              id={wireInput.ioKey}
               style={{ top: 14, transform: "none" }}
+              type={wireInput.type}
             />
             <div className="flex min-h-21.5 flex-col pt-1.5 pb-1.5">
               {/* subrow h=16：label 在左（pl-14 避让 Handle 圆点 -6），
@@ -292,7 +285,7 @@ export function WirePortRows({
                 >
                   {label}
                 </span>
-                <TypeChip size="md" tone="none" style={chipStyle}>
+                <TypeChip size="md" style={chipStyle} tone="none">
                   {typeDisplay(wireInput.type)}
                 </TypeChip>
               </div>
@@ -305,33 +298,27 @@ export function WirePortRows({
               <div className="mt-1.5 min-h-0 min-w-0 flex-1 overflow-hidden pr-3.5 pl-3.5">
                 {wireInput.control === "textarea" && (
                   <AutoResizeTextarea
-                    value={typeof v === "string" ? v : ""}
-                    placeholder={`输入 ${label}`}
                     onChange={(val) => set(wireInput.ioKey, val)}
+                    placeholder={`输入 ${label}`}
+                    value={typeof v === "string" ? v : ""}
                   />
                 )}
                 {wireInput.control === "text" && (
                   <input
-                    value={
-                      typeof v === "string" || typeof v === "number"
-                        ? String(v)
-                        : ""
-                    }
                     aria-label={`输入 ${label}`}
-                    placeholder={`输入 ${label}`}
-                    onChange={textHandler((value) =>
-                      set(wireInput.ioKey, value),
-                    )}
                     className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder h-full w-full rounded-md px-2.5 py-2 text-sm outline-none"
+                    onChange={textHandler((value) => set(wireInput.ioKey, value))}
+                    placeholder={`输入 ${label}`}
                     style={{ fontFamily: "var(--font-sans)" }}
+                    value={typeof v === "string" || typeof v === "number" ? String(v) : ""}
                   />
                 )}
                 {wireInput.control === "image" && (
                   <Button
-                    variant="ghost"
+                    className="nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright h-full gap-1.5 rounded-md px-2.5 py-1.5 text-sm"
                     disabled={uploading}
                     onClick={() => pickFile(wireInput.ioKey)}
-                    className="nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright h-full gap-1.5 rounded-md px-2.5 py-1.5 text-sm"
+                    variant="ghost"
                   >
                     {uploading && uploadTarget === wireInput.ioKey
                       ? "上传中…"
@@ -374,14 +361,14 @@ export function WirePortRows({
                     />
                   )}
                 <PortHandle
-                  id={output.ioKey}
                   dir="out"
-                  type={output.type}
+                  id={output.ioKey}
                   style={{
                     right: -6,
                     top: "50%",
                     transform: "translateY(-50%)",
                   }}
+                  type={output.type}
                 />
                 <div className="flex-1" />
                 <span
@@ -390,7 +377,7 @@ export function WirePortRows({
                 >
                   {label}
                 </span>
-                <TypeChip size="md" tone="none" style={chipStyle}>
+                <TypeChip size="md" style={chipStyle} tone="none">
                   {typeDisplay(output.type)}
                 </TypeChip>
               </div>

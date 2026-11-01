@@ -78,17 +78,25 @@ let cachedSet = null;
  * @returns {Set<string>} 能在 CP936 里编出来的字符
  */
 export function cp936EncodableSet() {
-  if (cachedSet) return cachedSet;
+  if (cachedSet) {
+    return cachedSet;
+  }
   const set = new Set();
-  for (let cp = 0; cp < 0x80; cp++) set.add(String.fromCodePoint(cp));
+  for (let cp = 0; cp < 0x80; cp++) {
+    set.add(String.fromCodePoint(cp));
+  }
   const decoder = new TextDecoder("gbk", { fatal: false });
   for (let hi = 0x81; hi <= 0xfe; hi++) {
     for (let lo = 0x40; lo <= 0xfe; lo++) {
-      if (lo === 0x7f) continue;
+      if (lo === 0x7f) {
+        continue;
+      }
       const decoded = decoder.decode(Uint8Array.from([hi, lo]));
       /* 解不出来的那一格（.NET 那边会写成问号）不进表；解出来是两个字的那一格也不进
        * （GBK 里没有「一个字对应两码元」的映射，解出两个字说明这一格是别的意思）。 */
-      if (decoded.length === 1 && decoded !== "�") set.add(decoded);
+      if (decoded.length === 1 && decoded !== "�") {
+        set.add(decoded);
+      }
     }
   }
   cachedSet = set;
@@ -103,7 +111,9 @@ export function cp936EncodableSet() {
  */
 export function isCp936Encodable(ch) {
   const cp = codePointOf(ch);
-  if (cp < 0x80) return true;
+  if (cp < 0x80) {
+    return true;
+  }
   return cp936EncodableSet().has(ch);
 }
 
@@ -124,11 +134,11 @@ export const GLYPH_KEPT = new Set(["²", "µ"]);
  * —— 视觉上几乎一样，比「一个问号夹在中间」好。
  */
 export const GLYPH_DROPPED = new Set([
-  "\u200B", /* 零宽空格 */
-  "\u200D", /* 零宽连接符 */
-  "\u00AD", /* 软连字符 */
-  "\uFE0F", /* 变体选择符 */
-  "\uFEFF", /* 零宽不换行空格（BOM） */
+  "\u200B" /* 零宽空格 */,
+  "\u200D" /* 零宽连接符 */,
+  "\u00AD" /* 软连字符 */,
+  "\uFE0F" /* 变体选择符 */,
+  "\uFEFF" /* 零宽不换行空格（BOM） */,
 ]);
 
 /**
@@ -147,7 +157,7 @@ export const GLYPH_DROPPED = new Set([
  */
 export const GLYPH_REPLACEMENTS = new Map([
   /* ── 判决类：绿标与红标 ── */
-  ["✓", "√"], /* vitest 的通过标记 */
+  ["✓", "√"] /* vitest 的通过标记 */,
   ["✔", "√"],
   ["✅", "√"],
   ["✗", "×"],
@@ -280,7 +290,9 @@ export const GLYPH_REPLACEMENTS = new Map([
  *   `text` 是归一化后的文本；`replaced` 按「原字符 → 替代」分组，带处数。
  */
 export function normalizeCp936Glyphs(text) {
-  if (!text) return { text: text ?? "", replaced: [] };
+  if (!text) {
+    return { text: text ?? "", replaced: [] };
+  }
   const groups = new Map();
   let out = "";
   /* 按**码点**遍历：代理对整体取出（emoji 落在 GB18030 四字节区，CP936 里没有 ⇒
@@ -320,7 +332,9 @@ export function normalizeCp936Glyphs(text) {
  * @returns {string} 空串 = 这一批没有需要人看的东西（调用方据此**整行不发**，别发空行）
  */
 export function describeGlyphReplacements(replaced, scope = "这一批") {
-  if (!replaced.length) return "";
+  if (!replaced.length) {
+    return "";
+  }
   /* 出声的判据只有一个：**有没有字符只能记成 `\uXXXX`**（登记表里没有它的替代写法）。
    * 登记过的那些（`✓→√`、`⚠→※`、零宽类直接删）是「按设计已经办完」，日志里本来就读得出来；
    * 逐次念它们只会教读者忽略这一行 —— 而这一行唯一的对象正是那种需要人看一眼的形态
@@ -328,7 +342,9 @@ export function describeGlyphReplacements(replaced, scope = "这一批") {
   /** @param {{to: string}} r */
   const isFallback = (r) => /^\\u[0-9A-F]{4,6}$/.test(r.to);
   const spoken = replaced.filter(isFallback);
-  if (spoken.length === 0) return "";
+  if (spoken.length === 0) {
+    return "";
+  }
   const parts = spoken
     .map((r) => {
       const from = `U+${codePointOf(r.from).toString(16).toUpperCase().padStart(4, "0")}`;
@@ -336,13 +352,8 @@ export function describeGlyphReplacements(replaced, scope = "这一批") {
     })
     .join("、");
   const spokenTotal = spoken.reduce((n, r) => n + r.count, 0);
-  const quietTotal = replaced
-    .filter((r) => !isFallback(r))
-    .reduce((n, r) => n + r.count, 0);
+  const quietTotal = replaced.filter((r) => !isFallback(r)).reduce((n, r) => n + r.count, 0);
   return (
-    `[cp936-glyph] ${scope}有 ${spokenTotal} 个字符在 CP936 里没有字形、也没有登记的替代写法，已如实记成 \\uXXXX：${parts}` +
-    (quietTotal > 0
-      ? `；另有 ${quietTotal} 处按登记表换成读得出来的写法（那些不再逐次报）`
-      : "")
+    `[cp936-glyph] ${scope}有 ${spokenTotal} 个字符在 CP936 里没有字形、也没有登记的替代写法，已如实记成 \\uXXXX：${parts}${quietTotal > 0 ? `；另有 ${quietTotal} 处按登记表换成读得出来的写法（那些不再逐次报）` : ""}`
   );
 }

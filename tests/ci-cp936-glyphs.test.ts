@@ -26,8 +26,12 @@ import {
   normalizeCp936Glyphs,
 } from "../scripts/ci-cp936-glyphs.mjs";
 
+import { normalizeControlFlow } from "./helpers/source-shape";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
-const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
+/* 读源断言的是**控制流**（谁先谁后、有没有这道守卫），不是括号形态：先过归一化，
+ * oxlint `curly` 给单语句体补 `{}` 就不会把这些断言打成「形状变了」。 */
+const read = (rel: string) => normalizeControlFlow(readFileSync(path.join(ROOT, rel), "utf8"), rel);
 
 describe("字形归一化：等义替换", () => {
   it("绿色通过标记换成 CP936 里有的字形（这一格最要紧）", () => {
@@ -61,10 +65,9 @@ describe("字形归一化：等义替换", () => {
   it("替代物**全部**落在 CP936 里 —— 否则替换完还要再被吃一次", () => {
     for (const [from, to] of GLYPH_REPLACEMENTS) {
       for (const ch of to) {
-        expect(
-          isCp936Encodable(ch),
-          `${from} 的替代写法里有 CP936 编不出来的字符：${ch}`,
-        ).toBe(true);
+        expect(isCp936Encodable(ch), `${from} 的替代写法里有 CP936 编不出来的字符：${ch}`).toBe(
+          true,
+        );
       }
     }
   });
@@ -100,14 +103,14 @@ describe("字形归一化：不动不该动的东西", () => {
 describe("字形归一化：emoji 与代理对", () => {
   it("emoji 走 `\\uXXXX` 兜底（CP936 没有四字节区，emoji 同样会变问号）", () => {
     const out = normalizeCp936Glyphs("📂");
-    expect(out.text).toBe("\\u1F4C2");
+    expect(out.text).toBe(String.raw`\u1F4C2`);
   });
 
   it("代理对**不拆**：一个 emoji 出来是一个码位，不是两截", () => {
     /* 拆开的话会得到两个 `\\uD83C` / `\\uDF42` —— 那是半个字符，读不出来。 */
     const out = normalizeCp936Glyphs("📂");
-    expect(out.text).not.toContain("\\uD83C");
-    expect(out.text).not.toContain("\\uDF42");
+    expect(out.text).not.toContain(String.raw`\uD83C`);
+    expect(out.text).not.toContain(String.raw`\uDF42`);
     expect(out.replaced).toHaveLength(1);
   });
 });
@@ -127,7 +130,9 @@ describe("字形归一化：幂等与读数", () => {
     const line = describeGlyphReplacements(out.replaced);
     expect(line.length).toBeGreaterThan(0);
     for (const ch of line) {
-      if (ch.codePointAt(0)! < 0x80) continue;
+      if (ch.codePointAt(0)! < 0x80) {
+        continue;
+      }
       expect(
         isCp936Encodable(ch),
         `读数里有 CP936 编不出来的字符：${ch}（U+${(ch.codePointAt(0) ?? 0)
@@ -154,7 +159,7 @@ describe("字形归一化：幂等与读数", () => {
     const out = normalizeCp936Glyphs("✓ ⇒ 🐧");
     const line = describeGlyphReplacements(out.replaced);
     expect(line).toContain("U+1F427");
-    expect(line).toContain("\\u1F427");
+    expect(line).toContain(String.raw`\u1F427`);
     expect(line).toContain("有 1 个字符");
     // 兜底那一个单独点名；登记过的两个只留总数，不逐字念出来。
     expect(line).toContain("另有 2 处按登记表换成读得出来的写法");
@@ -199,7 +204,7 @@ describe("CP936 码表：与 .NET 的判定同源", () => {
   });
 
   it("码表本身不是空的（判据在空表上会假绿）", () => {
-    expect(cp936EncodableSet().size).toBeGreaterThan(20000);
+    expect(cp936EncodableSet().size).toBeGreaterThan(20_000);
   });
 });
 
@@ -226,7 +231,10 @@ describe("转码外壳：接上了归一化", () => {
     expect(source).toContain("describeGlyphReplacements");
     const guards = source.match(/if \(said !== ""\)/g) ?? [];
     expect(guards.length, "两处调用点各要有一个「空串就不发」").toBe(2);
-    const summaryAt = source.indexOf('describeGlyphReplacements(\n');
+    /* 收尾那条调用的**两种形态**都认：参数只有一个且短时格式化器会把它收成一行，
+     * 而这里读的已经是归一化后的文本。钉住的是「收尾那处也走 describeGlyphReplacements」
+     * 这层结构，不是换行在哪 —— 只认 `(\n` 会随格式化器的排版飘。 */
+    const summaryAt = source.indexOf("describeGlyphReplacements([");
     expect(summaryAt, "认不出收尾那条调用；它的形状变了要同批改这里").toBeGreaterThan(-1);
     const summaryChunk = source.slice(summaryAt, summaryAt + 320);
     expect(summaryChunk).toContain("write(summary");

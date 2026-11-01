@@ -19,7 +19,7 @@ import {
  * 选项行前缀的圆点按 `sourcePath` 分叉（有本机路径走 `status-online`、否则
  * `primary-strong`）——所以下面同时给了本机工作流与在线工作流两种选项。
  */
-const OPTIONS: WorkflowPickOption[] = [
+const OPTIONS: Array<WorkflowPickOption> = [
   {
     id: "wf_local",
     name: "角色一致性 · 三视图",
@@ -69,21 +69,12 @@ export const LoadingVersusEmpty: Story = {
   render: () => (
     <div className="flex min-h-64 items-start gap-6">
       <div className="flex flex-col items-start gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          loading = true
-        </span>
-        <WorkflowPickChip
-          value=""
-          options={[]}
-          onSelect={() => undefined}
-          loading
-        />
+        <span className="text-ink-muted font-mono text-[11px]">loading = true</span>
+        <WorkflowPickChip loading onSelect={() => undefined} options={[]} value="" />
       </div>
       <div className="flex flex-col items-start gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          loading = false · options = []
-        </span>
-        <WorkflowPickChip value="" options={[]} onSelect={() => undefined} />
+        <span className="text-ink-muted font-mono text-[11px]">loading = false · options = []</span>
+        <WorkflowPickChip onSelect={() => undefined} options={[]} value="" />
       </div>
     </div>
   ),

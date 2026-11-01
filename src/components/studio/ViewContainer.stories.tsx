@@ -1,9 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  DocumentFrame,
-  WorkspaceFrame,
-} from "~/components/studio/ViewContainer";
+import { DocumentFrame, WorkspaceFrame } from "~/components/studio/ViewContainer";
 import { cn } from "~/lib/utils";
 
 /**
@@ -34,10 +31,7 @@ type StoryArgs = {
 };
 
 /** 适配件：`width` 进 Args，正文由各 story 的 `render` 给。 */
-function FrameSample({
-  width,
-  children,
-}: StoryArgs & { children?: React.ReactNode }) {
+function FrameSample({ width, children }: StoryArgs & { children?: React.ReactNode }) {
   return <DocumentFrame width={width}>{children}</DocumentFrame>;
 }
 
@@ -63,8 +57,8 @@ function Body({ rows = 24 }: { rows?: number }) {
     <div className="flex flex-col gap-2 p-4">
       {Array.from({ length: rows }, (_, i) => (
         <div
-          key={i}
           className="bg-surface border-border text-ink-soft rounded-lg border px-3 py-2 text-xs"
+          key={i}
         >
           第 {String(i + 1)} 行 —— 内容要高过容器，滚动条才会出现
         </div>
@@ -76,13 +70,7 @@ function Body({ rows = 24 }: { rows?: number }) {
 /** 演示用的外框。宽度可调 —— 宽度档位**只有在比最窄的档还宽的框里才看得出区别**：
  * 钉死 `w-160`（640px）时四个档位长得一模一样，story 说什么都行（这正是「文档写着
  * 四档、实现只有三档」长期没人发现的原因）。 */
-function Shell({
-  wide = false,
-  children,
-}: {
-  wide?: boolean;
-  children: React.ReactNode;
-}) {
+function Shell({ wide = false, children }: { children: React.ReactNode; wide?: boolean }) {
   return (
     <div
       className={cn(
@@ -140,14 +128,12 @@ export const DocumentWithBackdrop: Story = {
   render: (args) => (
     <Shell>
       <DocumentFrame
-        width={args.width}
         backdrop={
           <div className="bg-primary/10 pointer-events-none absolute inset-0 grid place-items-center">
-            <span className="text-primary-strong text-xs">
-              铺底（不随内容滚动）
-            </span>
+            <span className="text-primary-strong text-xs">铺底（不随内容滚动）</span>
           </div>
         }
+        width={args.width}
       >
         <Body rows={8} />
       </DocumentFrame>

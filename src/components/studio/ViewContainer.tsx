@@ -56,17 +56,14 @@ function ViewFrame({
   className,
   children,
 }: {
-  kind: "document" | "workspace";
-  className?: string;
   children: ReactNode;
+  className?: string;
+  kind: "document" | "workspace";
 }) {
   return (
     <div
+      className={cn("relative flex h-full min-h-0 w-full flex-col overflow-hidden", className)}
       data-view-container={kind}
-      className={cn(
-        "relative flex h-full min-h-0 w-full flex-col overflow-hidden",
-        className,
-      )}
     >
       {children}
     </div>
@@ -91,24 +88,19 @@ export function DocumentFrame({
   backdrop,
   children,
 }: {
-  width?: DocumentWidth;
-  className?: string;
   backdrop?: ReactNode;
   children: ReactNode;
+  className?: string;
+  width?: DocumentWidth;
 }) {
   return (
-    <ViewFrame kind="document" className="bg-canvas text-ink">
+    <ViewFrame className="bg-canvas text-ink" kind="document">
       {backdrop}
       {/* `data-document-scroll`：文档型的滚动锚 —— 视图深处的行虚拟化
           （如 ProjectOutputs 的产出网格）经 `closest()` 找到它作为
           `useVirtualizer` 的 scroll element（#2190），不依赖 class 名。 */}
-      <div
-        data-document-scroll
-        className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto"
-      >
-        <div className={cn("mx-auto w-full", WIDTH_CLASS[width], className)}>
-          {children}
-        </div>
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-y-auto" data-document-scroll>
+        <div className={cn("mx-auto w-full", WIDTH_CLASS[width], className)}>{children}</div>
       </div>
     </ViewFrame>
   );
@@ -130,11 +122,11 @@ export function WorkspaceFrame({
   className,
   children,
 }: {
-  className?: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <ViewFrame kind="workspace" className={className}>
+    <ViewFrame className={className} kind="workspace">
       {children}
     </ViewFrame>
   );

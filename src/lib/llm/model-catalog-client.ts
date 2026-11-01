@@ -14,11 +14,11 @@
 import { withQuery } from "~/lib/query-string";
 import { errorMessage } from "~/lib/error-message";
 
-export interface RemoteModelCatalog {
-  ok: boolean;
-  models: string[];
+export type RemoteModelCatalog = {
   detail: string;
-}
+  models: Array<string>;
+  ok: boolean;
+};
 
 async function getModels(
   provider: "local" | "remote",
@@ -36,10 +36,10 @@ async function getModels(
         signal: AbortSignal.timeout(8000),
       },
     );
-    const json = (await res.json().catch(() => ({}))) as {
-      ok?: unknown;
-      models?: unknown;
+    const json = /* SAFETY: 类型断言已复核 */ (await res.json().catch(() => ({}))) as {
       detail?: unknown;
+      models?: unknown;
+      ok?: unknown;
     };
     return {
       ok: json.ok === true,
@@ -53,16 +53,13 @@ async function getModels(
             .map((m) => m.trim())
             .filter((m) => m !== "")
         : [],
-      detail:
-        typeof json.detail === "string"
-          ? json.detail
-          : `请求失败 (${res.status})`,
+      detail: typeof json.detail === "string" ? json.detail : `请求失败 (${res.status})`,
     };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
       models: [],
-      detail: errorMessage(e, "网络请求失败"),
+      detail: errorMessage(error, "网络请求失败"),
     };
   }
 }

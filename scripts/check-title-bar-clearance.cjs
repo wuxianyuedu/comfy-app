@@ -96,9 +96,11 @@ const COLLISION_BOUNDARY = /collisionBoundary=\{boundary \?\? undefined\}/;
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) walk(p, out);
-    else if (/\.[jt]sx?$/.test(e.name) && !/\.test\.[jt]sx?$/.test(e.name))
+    if (e.isDirectory()) {
+      walk(p, out);
+    } else if (/\.[jt]sx?$/.test(e.name) && !/\.test\.[jt]sx?$/.test(e.name)) {
       out.push(p);
+    }
   }
   return out;
 }
@@ -115,16 +117,24 @@ const notes = [];
 
 for (const dir of SCAN_DIRS) {
   const abs = path.join(ROOT, dir);
-  if (!fs.existsSync(abs)) continue;
+  if (!fs.existsSync(abs)) {
+    continue;
+  }
   for (const file of walk(abs)) {
     const r = rel(path.relative(ROOT, file));
-    if (EXEMPT.has(r)) continue;
+    if (EXEMPT.has(r)) {
+      continue;
+    }
     const text = fs.readFileSync(file, "utf8");
     const lines = text.split("\n");
     let hits = 0;
     lines.forEach((line, i) => {
-      if (!FIXED_INSET.test(line)) return;
-      if (CLEARANCE.test(line)) return;
+      if (!FIXED_INSET.test(line)) {
+        return;
+      }
+      if (CLEARANCE.test(line)) {
+        return;
+      }
       hits += 1;
       problems.push(
         `${r}:${i + 1} 顶层浮层铺满视口(fixed + inset-0)未让出标题行\n` +
@@ -148,7 +158,9 @@ for (const dir of SCAN_DIRS) {
     for (const { line, i } of positioners) {
       /* Positioner 的属性可能跨行，判据要覆盖到闭合标签为止（最多 20 行）。 */
       const block = lines.slice(i, i + 20).join("\n");
-      if (COLLISION_BOUNDARY.test(block)) continue;
+      if (COLLISION_BOUNDARY.test(block)) {
+        continue;
+      }
       problems.push(
         `${r}:${i + 1} 锚定浮层（base-ui Positioner）没有交出可用区域\n` +
           `    → ${line.trim()}\n` +
@@ -166,9 +178,15 @@ for (const dir of SCAN_DIRS) {
      * `FULL_PAGE_CLEARANCE_CLASS`。 */
     if (r.startsWith(`${PAGE_DIR}/`)) {
       lines.forEach((line, i) => {
-        if (COMMENT_LINE.test(line)) return;
-        if (!SCREEN_HEIGHT.test(line)) return;
-        if (CONTENT_HEIGHT.test(line)) return;
+        if (COMMENT_LINE.test(line)) {
+          return;
+        }
+        if (!SCREEN_HEIGHT.test(line)) {
+          return;
+        }
+        if (CONTENT_HEIGHT.test(line)) {
+          return;
+        }
         problems.push(
           `${r}:${i + 1} 整屏页面按视口高度铺开，会盖住右上角的窗口按钮（关闭/最大化）\n` +
             `    → ${line.trim()}\n` +
@@ -182,9 +200,7 @@ for (const dir of SCAN_DIRS) {
     // class 串换行书写；误报会让成员直接删掉门禁，见 tests 的注释）。
     const renderLines = lines
       .map((line, i) => ({ line, i }))
-      .filter(
-        ({ line }) => !IMPORT_LINE.test(line) && TITLE_BAR_RENDER.test(line),
-      );
+      .filter(({ line }) => !IMPORT_LINE.test(line) && TITLE_BAR_RENDER.test(line));
     if (renderLines.length && !CHROME_Z.test(text)) {
       const at = renderLines[0];
       problems.push(
@@ -199,16 +215,14 @@ for (const dir of SCAN_DIRS) {
 
 if (notes.length) {
   console.log(
-    "[title-bar] 同文件已出现 top-title-bar（常量拼接的让位不在此静态扫描内，需人工确认）：\n  " +
-      notes.join("\n  "),
+    `[title-bar] 同文件已出现 top-title-bar（常量拼接的让位不在此静态扫描内，需人工确认）：\n  ${
+      notes.join("\n  ")}`,
   );
 }
 
 if (problems.length) {
-  console.error("[title-bar] 违规(阻断提交):\n  " + problems.join("\n  "));
-  console.error(
-    "背景与修法见 docs/standards/launch-and-build.md §5「页签/窗口按钮被浮层盖住」条",
-  );
+  console.error(`[title-bar] 违规(阻断提交):\n  ${problems.join("\n  ")}`);
+  console.error("背景与修法见 docs/standards/launch-and-build.md §5「页签/窗口按钮被浮层盖住」条");
   process.exit(1);
 }
 console.log("[title-bar] OK");

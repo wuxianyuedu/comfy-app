@@ -42,6 +42,7 @@ function expected(body: string): string {
 }
 
 import { createHash } from "node:crypto";
+
 function createHashOf(body: string): string {
   return createHash("sha1").update(body, "utf8").digest("hex").slice(0, 16);
 }
@@ -130,9 +131,7 @@ describe("scanLocalWorkflowChecksums 的 mtime+size 记忆", () => {
 
   it("未配置根目录 / 目录不存在时返回空数组，不抛错", async () => {
     expect(await scanLocalWorkflowChecksums([])).toEqual([]);
-    expect(
-      await scanLocalWorkflowChecksums([path.join(dir, "missing")]),
-    ).toEqual([]);
+    expect(await scanLocalWorkflowChecksums([path.join(dir, "missing")])).toEqual([]);
   });
 });
 
@@ -149,10 +148,6 @@ describe("scanLocalWorkflowRoots 只读不写", () => {
     });
     expect(roots).toHaveLength(1);
     expect(roots[0]!.exists).toBe(true);
-    expect(allFiles.map((f) => f.name).sort()).toEqual([
-      "a.workflow",
-      "b.json",
-      "c.json",
-    ]);
+    expect(allFiles.map((f) => f.name).sort()).toEqual(["a.workflow", "b.json", "c.json"]);
   });
 });

@@ -62,7 +62,7 @@ function queuedRow(id: string, workflowName: string): QueueRow {
 const refetch = vi.fn();
 const toast = { info: vi.fn(), error: vi.fn() };
 const copyResult = vi.fn<(text: string) => Promise<boolean>>();
-let listTasks: QueueRow[] = [];
+let listTasks: Array<QueueRow> = [];
 let queueResult: ComfyQueueModule.ComfyQueueView = queueView();
 
 /* 新集成下 hub 交出的是「options 工厂」，本文件的题目是位次/耗时/剩余时间这些
@@ -109,10 +109,7 @@ const mockedReveal = vi.mocked(revealTaskFolder);
 beforeEach(() => {
   vi.clearAllMocks();
   /* 服务端回的是 createdAt 倒序：后提交的在前面。 */
-  listTasks = [
-    queuedRow("late", "后提交的工作流"),
-    queuedRow("early", "先提交的工作流"),
-  ];
+  listTasks = [queuedRow("late", "后提交的工作流"), queuedRow("early", "先提交的工作流")];
   queueResult = queueView();
 });
 
@@ -121,9 +118,7 @@ afterEach(cleanup);
 describe("useQueueMonitor", () => {
   it("位次是先入先出：提交最早的那条排第 1", () => {
     const { result } = renderHook(() => useQueueMonitor());
-    expect(
-      result.current.queued.map((entry) => [entry.row.id, entry.position]),
-    ).toEqual([
+    expect(result.current.queued.map((entry) => [entry.row.id, entry.position])).toEqual([
       ["early", 1],
       ["late", 2],
     ]);
@@ -179,9 +174,7 @@ describe("useQueueMonitor", () => {
     await act(async () => {
       await result.current.cancel("early", "先提交的工作流");
     });
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.stringContaining("先提交的工作流"),
-    );
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("先提交的工作流"));
   });
 
   it("复制去重投：浏览器拒绝访问剪贴板时报错，而不是当成成功", async () => {
@@ -190,9 +183,7 @@ describe("useQueueMonitor", () => {
     await act(async () => {
       await result.current.copyForReprint(queuedRow("late", "后提交的工作流"));
     });
-    expect(copyResult).toHaveBeenCalledWith(
-      expect.stringContaining("提示词 late"),
-    );
+    expect(copyResult).toHaveBeenCalledWith(expect.stringContaining("提示词 late"));
     expect(toast.error).toHaveBeenCalled();
     expect(toast.info).not.toHaveBeenCalled();
   });
@@ -214,16 +205,14 @@ describe("useQueueMonitor", () => {
   it("打开输出目录：成功时报的是服务端探出来的定位结论", async () => {
     mockedReveal.mockResolvedValue({
       ok: true,
-      detail: "已在文件管理器里定位：F:\\gen\\task-late",
+      detail: String.raw`已在文件管理器里定位：F:\gen\task-late`,
     });
     const { result } = renderHook(() => useQueueMonitor());
     await act(async () => {
       await result.current.openFolder(queuedRow("late", "后提交的工作流"));
     });
     expect(mockedReveal).toHaveBeenCalledWith("late");
-    expect(toast.info).toHaveBeenCalledWith(
-      "已在文件管理器里定位：F:\\gen\\task-late",
-    );
+    expect(toast.info).toHaveBeenCalledWith(String.raw`已在文件管理器里定位：F:\gen\task-late`);
     expect(toast.error).not.toHaveBeenCalled();
   });
 

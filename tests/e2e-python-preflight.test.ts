@@ -41,13 +41,13 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
       platform: "win32",
       resolve: () => ({
         command: "python",
-        path: "C:\\Py\\python.exe",
+        path: String.raw`C:\Py\python.exe`,
         args: [],
       }),
       which: (name) => `C:\\Python312\\${name}.exe`,
     });
     expect(ready.verdict).toBe("ready");
-    expect(ready.interpreter).toBe("C:\\Python312\\python.exe");
+    expect(ready.interpreter).toBe(String.raw`C:\Python312\python.exe`);
     // 话术里要报出「用了哪一个」——缺件时那行是唯一的排障线索，绿的时候同理。
     expect(ready.detail).toContain("python");
   });
@@ -57,13 +57,13 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
       platform: "win32",
       resolve: () => ({
         command: "py",
-        path: "C:\\Windows\\py.exe",
+        path: String.raw`C:\Windows\py.exe`,
         args: ["-3"],
       }),
-      which: () => "C:\\Windows\\py.exe",
+      which: () => String.raw`C:\Windows\py.exe`,
     });
     expect(ready.detail).toContain("-3");
-    expect(ready.interpreter).toBe("C:\\Windows\\py.exe");
+    expect(ready.interpreter).toBe(String.raw`C:\Windows\py.exe`);
   });
 
   it("`which` 解析不到时退回 `resolvePython` 给的那一条（不编一条不存在的路径）", () => {
@@ -80,17 +80,17 @@ describe("e2e Python 前置：可用时给出绝对路径", () => {
      * 「列出已装版本」并退非零。第一处（`resolvePython`）修好而这里漏掉的话，
      * 这第二次 `whichCommand` 会按缺省 `["--version"]` 重探 —— 那次能过全靠
      * `whichCommand` 的记忆化键不含 `probeArgs`。判据不该建立在缓存顺序上。 */
-    const calls: Array<{ name: string; args: string[] }> = [];
+    const calls: Array<{ args: Array<string>; name: string; }> = [];
     const ready = checkPythonReady({
       platform: "win32",
       resolve: () => ({
         command: "py",
-        path: "C:\\Windows\\py.exe",
+        path: String.raw`C:\Windows\py.exe`,
         args: ["-3"],
       }),
       which: (name, options) => {
         calls.push({ name, args: options?.probeArgs ?? [] });
-        return "C:\\Windows\\py.exe";
+        return String.raw`C:\Windows\py.exe`;
       },
     });
     expect(ready.verdict).toBe("ready");
@@ -113,8 +113,7 @@ describe("e2e Python 前置：缺件时判红并给出出口", () => {
 
   it("出口是一条能直接跑的命令，并说清跑下去的下场", () => {
     const text = describePythonMissing({
-      detail: checkPythonReady({ platform: "linux", resolve: () => null })
-        .detail,
+      detail: checkPythonReady({ platform: "linux", resolve: () => null }).detail,
     });
     expect(text).toContain("scripts/ci-toolchain-selfcheck.mjs");
     expect(text).toContain("@critical");
@@ -132,9 +131,7 @@ describe("e2e Python 前置：结论怎么带下去", () => {
       ),
     ).toEqual({ verdict: "ready", interpreter: "/usr/bin/python3" });
     expect(
-      decodePythonPreflight(
-        encodePythonPreflight({ verdict: "missing", interpreter: null }),
-      ),
+      decodePythonPreflight(encodePythonPreflight({ verdict: "missing", interpreter: null })),
     ).toEqual({ verdict: "missing", interpreter: null });
   });
 
@@ -161,9 +158,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
      * 排在短路之后，平台侧 36 分钟零行时连它们说没说话都读不出来）。
      * 所以判据认的是这三句**还在**，不是它们还写在 `main` 里。 */
     expect(text).toContain("const verdict = python({ env });");
-    expect(text).toContain(
-      "env[PYTHON_PREFLIGHT_ENV_KEY] = encodePythonPreflight(verdict)",
-    );
+    expect(text).toContain("env[PYTHON_PREFLIGHT_ENV_KEY] = encodePythonPreflight(verdict)");
     expect(text).toContain("describePythonMissing(verdict)");
     // 而且要真的被 `main` 编排上（写了不接等于没有）。
     expect(text).toContain("makePreflightCollectors({ env, cwd: ROOT })");
@@ -173,9 +168,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`playwright.config.ts` 真用上了那个绝对路径", () => {
     const text = readFileSync(path.join(ROOT, "playwright.config.ts"), "utf8");
     expect(text).toContain("decodePythonPreflight");
-    expect(text).toMatch(
-      /COMFY_CLI_PYTHON_KEY\]\s*=\s*pythonPreflight\.interpreter/,
-    );
+    expect(text).toMatch(/COMFY_CLI_PYTHON_KEY\]\s*=\s*pythonPreflight\.interpreter/);
   });
 
   it("`.cnb.yml` 里 E2E 之前那一步答的就是 Python 这一格", () => {
@@ -187,9 +180,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
      * 被改了」），但**判据要的从来是顺序**，不是那一串参数 —— 参数形态由
      * `tests/no-platform-ci-config.test.ts` 判（那里钉的是「每日那一格不许带 `--grep`」），
      * 这里不抄第二轮（§12.12）。 */
-    const pythonAt = yml.indexOf(
-      "node scripts/ci-toolchain-selfcheck.mjs --python-only",
-    );
+    const pythonAt = yml.indexOf("node scripts/ci-toolchain-selfcheck.mjs --python-only");
     const e2eAt = yml.indexOf("node scripts/e2e-run.mjs");
     /* **前置断言**：两侧都必须取到数。`indexOf` 取不到回 `-1`，而 `-1` 参与大小比较
      * 仍然「像一个答案」—— 那正是「解析失败伪装成结论」那一族（没有这两句，这一格会在
@@ -198,10 +189,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
       pythonAt,
       "`.cnb.yml` 里没有 Python 预检那一步了 —— 顺序无从比起",
     ).toBeGreaterThanOrEqual(0);
-    expect(
-      e2eAt,
-      "`.cnb.yml` 里没有 E2E 那一步了 —— 顺序无从比起",
-    ).toBeGreaterThanOrEqual(0);
+    expect(e2eAt, "`.cnb.yml` 里没有 E2E 那一步了 —— 顺序无从比起").toBeGreaterThanOrEqual(0);
     // 顺序是判据的一部分：它必须排在 E2E 那一步**之前**。
     expect(pythonAt).toBeLessThan(e2eAt);
     /* ⚠️ 顺带钉住**命令形态**：`--grep` 的值必须与开关连成一个 token（`=`）。

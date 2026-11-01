@@ -97,9 +97,13 @@ const SOURCES = [
           inPackage = line === "[package]";
           continue;
         }
-        if (!inPackage) continue;
+        if (!inPackage) {
+          continue;
+        }
         const m = /^version\s*=\s*"([^"]*)"/.exec(line);
-        if (m) return m[1];
+        if (m) {
+          return m[1];
+        }
       }
       return null;
     },
@@ -110,12 +114,13 @@ function readVersion(src) {
   let text;
   try {
     text = fs.readFileSync(path.join(ROOT, src.file), "utf8");
-  } catch (e) {
-    return { error: `读不到 ${src.file}（${e.code || e.message}）` };
+  } catch (error) {
+    return { error: `读不到 ${src.file}（${error.code || error.message}）` };
   }
   const value = src.extract(text);
-  if (value == null)
+  if (value == null) {
     return { error: `${src.file} 里提取不出 ${src.label} —— 字段被改名 / 挪位了？` };
+  }
   return { value };
 }
 
@@ -125,17 +130,19 @@ function main() {
   const reads = [];
   for (const src of SOURCES) {
     const r = readVersion(src);
-    if (r.error) problems.push(r.error);
-    else reads.push({ label: src.label, value: r.value });
+    if (r.error) {
+      problems.push(r.error);
+    } else {
+      reads.push({ label: src.label, value: r.value });
+    }
   }
 
   /* 形态检查与相等检查分开报：形态不对时「三处相等」是一条没有意义的话
    * （三处都写成 `0.1` 也会相等），分开报才指得出该改哪儿。 */
   for (const r of reads) {
-    if (!SEMVER_RE.test(r.value))
-      problems.push(
-        `${r.label} 不是 MAJOR.MINOR.PATCH 形态：${JSON.stringify(r.value)}`,
-      );
+    if (!SEMVER_RE.test(r.value)) {
+      problems.push(`${r.label} 不是 MAJOR.MINOR.PATCH 形态：${JSON.stringify(r.value)}`);
+    }
   }
 
   if (reads.length === SOURCES.length) {
@@ -150,7 +157,9 @@ function main() {
   }
 
   if (REPORT_ONLY) {
-    for (const r of reads) process.stdout.write(`  ${r.label}：${r.value}\n`);
+    for (const r of reads) {
+      process.stdout.write(`  ${r.label}：${r.value}\n`);
+    }
     if (problems.length) {
       process.stdout.write(`  （另有 ${problems.length} 处读不出/形态异常）\n`);
     }
@@ -159,13 +168,13 @@ function main() {
 
   if (problems.length) {
     process.stderr.write(
-      `[app-version] ✗ 版本号三处必须同步（ISSUE #1611 阶段三 D7）：\n      · ` +
-        problems.join("\n      · ") +
-        `\n        ${SOURCES.map((s) => s.file).join(" / ")} 三处都写、且逐字相等。` +
-        "\n        为什么不是「改一处就够」：tauri.conf.json 的版本在**编译期**内嵌进壳，" +
-        "\n        也是 tauri-plugin-updater 判「更新新旧」的基准 —— 只升 package.json 时，" +
-        "\n        安装包与更新判定还停在旧版本，用户会看到「已是最新」。" +
-        "\n        规范：docs/standards/launch-and-build.md §7.1.1\n",
+      `[app-version] ✗ 版本号三处必须同步（ISSUE #1611 阶段三 D7）：\n      · ${
+        problems.join("\n      · ")
+        }\n        ${SOURCES.map((s) => s.file).join(" / ")} 三处都写、且逐字相等。` +
+        `\n        为什么不是「改一处就够」：tauri.conf.json 的版本在**编译期**内嵌进壳，` +
+        `\n        也是 tauri-plugin-updater 判「更新新旧」的基准 —— 只升 package.json 时，` +
+        `\n        安装包与更新判定还停在旧版本，用户会看到「已是最新」。` +
+        `\n        规范：docs/standards/launch-and-build.md §7.1.1\n`,
     );
     return 1;
   }

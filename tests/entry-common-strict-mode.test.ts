@@ -48,9 +48,11 @@ const psExe = (() => {
   return "";
 })();
 
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
-  for (const dir of tmpDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
+  for (const dir of tmpDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /**
@@ -70,9 +72,11 @@ function declarationText(text: string, name: string): string {
 
 /** 一个函数（不含注释）里引用的 `$变量` 集合。 */
 function referencedVars(body: string): Set<string> {
-  const code = body.replace(/<#[\s\S]*?#>/g, "").replace(/(?<![:"'])#.*$/gm, "");
+  const code = body.replaceAll(/<#[\s\S]*?#>/g, "").replaceAll(/(?<![:"'])#.*$/gm, "");
   const vars = new Set<string>();
-  for (const m of code.matchAll(/\$([A-Za-z_]\w*)/g)) vars.add(m[1]!);
+  for (const m of code.matchAll(/\$([A-Za-z_]\w*)/g)) {
+    vars.add(m[1]!);
+  }
   return vars;
 }
 
@@ -89,19 +93,28 @@ describe("entry-common.ps1：StrictMode 下不得引用未声明的变量", () =
     expect(close, "找不到 Invoke-Entry 的 param() 收尾").toBeGreaterThan(open);
     const signaturePart = body.slice(open, close);
     const codePart = body.slice(close);
-    const declared = new Set(
-      [...signaturePart.matchAll(/\$([A-Za-z_]\w*)/g)].map((m) => m[1]!),
-    );
+    const declared = new Set([...signaturePart.matchAll(/\$([A-Za-z_]\w*)/g)].map((m) => m[1]!));
     // 函数体内自己赋值/定义的局部变量（`$abs = …` / `foreach ($f in …)`）也算声明；
     // 这里只抓「赋值目标」与 `param(` 之外的形参声明，做法是从代码里取出所有
     // 「出现在 = 左边」或「for/foreach 引入」的名字。
-    for (const m of codePart.matchAll(/\$([A-Za-z_]\w*)\s*=/g)) declared.add(m[1]!);
-    for (const m of codePart.matchAll(/fore(?:ach)?\s*\(\s*\$([A-Za-z_]\w*)/g)) declared.add(m[1]!);
+    for (const m of codePart.matchAll(/\$([A-Za-z_]\w*)\s*=/g)) {
+      declared.add(m[1]!);
+    }
+    for (const m of codePart.matchAll(/fore(?:ach)?\s*\(\s*\$([A-Za-z_]\w*)/g)) {
+      declared.add(m[1]!);
+    }
     // 本库自己的函数名（`Get-Pwsh` 写成 `$psExe = Get-Pwsh` 时不会误命中，
     // 但 `return (Get-Pwsh)` 这类形态在粗匹配里可能落到 `$` 上）与 PowerShell
     // 自动变量不算「未声明」。
     const ALLOWED = new Set([
-      "PSScriptRoot", "LASTEXITCODE", "env", "PID", "null", "true", "false", "_",
+      "PSScriptRoot",
+      "LASTEXITCODE",
+      "env",
+      "PID",
+      "null",
+      "true",
+      "false",
+      "_",
     ]);
 
     const undeclared = [...referencedVars(codePart)].filter(

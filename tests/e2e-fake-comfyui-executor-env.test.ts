@@ -55,11 +55,13 @@ function readText(rel: string): string {
 
 /** 用例自己的 tmpdir：`whichCommand` 的候选判据要**真文件**（它读文件头判形态），
  *  所以这里造一份真的 bin 目录，而不是拿注入的探针伪造一个不存在的路径。 */
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
   while (tmpDirs.length) {
     const dir = tmpDirs.pop();
-    if (dir) rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 });
 
@@ -145,9 +147,7 @@ describe("fakeExecutorEnv：两个平台同一条形状", () => {
     expect(result.python).toContain("python3");
     expect(result.env[COMFY_CLI_PYTHON_KEY]).toBe(result.python);
     expect(result.env.PYTHONPATH).toBe("/fake/fake-comfyui");
-    expect(result.env[FAKE_CLI_FAIL_SENTINEL_KEY]).toBe(
-      FAKE_CLI_FAIL_SENTINEL_VALUE,
-    );
+    expect(result.env[FAKE_CLI_FAIL_SENTINEL_KEY]).toBe(FAKE_CLI_FAIL_SENTINEL_VALUE);
   });
 
   it("PYTHONPATH 是**前缀**不是覆盖：调用方已有的路径必须留着", () => {
@@ -207,9 +207,7 @@ describe("fakeExecutorEnv：两个平台同一条形状", () => {
     /* 能走到这里就说明本机有可用的 Python（守卫在上面那条 skipIf 上）。 */
     expect(result.reason).toBeNull();
     expect(result.python).toBeTruthy();
-    expect(existsSync(path.join(FAKE_CLI_MODULE_ROOT, "comfy_cli", "__main__.py"))).toBe(
-      true,
-    );
+    expect(existsSync(path.join(FAKE_CLI_MODULE_ROOT, "comfy_cli", "__main__.py"))).toBe(true);
     expect(result.env.PYTHONPATH).toBe(FAKE_CLI_MODULE_ROOT);
   });
 });

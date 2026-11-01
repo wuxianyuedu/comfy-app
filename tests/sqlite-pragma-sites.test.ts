@@ -17,14 +17,7 @@
  * 预算给在宿主（250ms）而不给 Next 侧，是签字决定，理由写进 `src/lib/sqlite-pragmas.ts`
  * 文件头：libsql 的语句执行是同步的，等锁多少毫秒，本进程的事件循环就停摆多少毫秒。
  */
-import {
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  rmdirSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -44,8 +37,7 @@ import {
 import { SQLITE_PRAGMA_BOOT } from "../src/lib/retry-policy";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const code = (rel: string): string =>
-  readFileSync(path.join(ROOT, rel), "utf8");
+const code = (rel: string): string => readFileSync(path.join(ROOT, rel), "utf8");
 
 /** 三处 TS 连接：Next 主库、工坊 MCP 库、执行宿主自己的库。 */
 const TS_SITES = [
@@ -55,10 +47,7 @@ const TS_SITES = [
 ];
 
 /* ── 行为量具用的临时目录（绝不往仓库 log/ 或库文件里写） ────────────── */
-const sandbox = path.join(
-  os.tmpdir(),
-  `sqlite-budget-${process.pid}-${Date.now().toString(36)}`,
-);
+const sandbox = path.join(os.tmpdir(), `sqlite-budget-${process.pid}-${Date.now().toString(36)}`);
 const dbFile = path.join(sandbox, "measure.sqlite");
 const holderScript = path.join(sandbox, "hold-write-lock.mjs");
 
@@ -86,21 +75,21 @@ db.close();
 
 function runHolder(holdMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      process.execPath,
-      [holderScript, dbFile, String(holdMs)],
-      {
-        stdio: ["ignore", "pipe", "inherit"],
-      },
-    );
+    const child = spawn(process.execPath, [holderScript, dbFile, String(holdMs)], {
+      stdio: ["ignore", "pipe", "inherit"],
+    });
     let out = "";
     child.stdout.on("data", (chunk: Buffer) => {
       out += chunk.toString();
       /* 等它真拿到写位再让争用方开写，否则量的不是争用窗口。 */
-      if (out.includes("LOCKED")) resolve();
+      if (out.includes("LOCKED")) {
+        resolve();
+      }
     });
     child.on("exit", (code) => {
-      if (code !== 0) reject(new Error(`holder exited ${code}`));
+      if (code !== 0) {
+        reject(new Error(`holder exited ${code}`));
+      }
     });
   });
 }
@@ -119,14 +108,9 @@ const BUDGET_MS = 5000;
 async function attemptWith(shape: "pragma" | "option") {
   const url = `file:${dbFile}`;
   const client =
-    shape === "option"
-      ? createClient({ url, timeout: BUDGET_MS })
-      : createClient({ url });
+    shape === "option" ? createClient({ url, timeout: BUDGET_MS }) : createClient({ url });
   if (shape === "pragma") {
-    for (const pragma of [
-      ...SQLITE_PRAGMAS,
-      `PRAGMA busy_timeout = ${BUDGET_MS}`,
-    ]) {
+    for (const pragma of [...SQLITE_PRAGMAS, `PRAGMA busy_timeout = ${BUDGET_MS}`]) {
       await client.execute(pragma);
     }
   }
@@ -147,10 +131,7 @@ async function attemptWith(shape: "pragma" | "option") {
 
 describe("库级 PRAGMA 清单只有一份定义", () => {
   it("清单本身只有 WAL 与外键，且**不含** busy_timeout（预算不该混进来）", () => {
-    expect(SQLITE_PRAGMAS).toEqual([
-      "PRAGMA journal_mode = WAL",
-      "PRAGMA foreign_keys = ON",
-    ]);
+    expect(SQLITE_PRAGMAS).toEqual(["PRAGMA journal_mode = WAL", "PRAGMA foreign_keys = ON"]);
     /* 这条不是洁癖：把预算放进清单 = 让「四处都设了」这句话重新变成假的
      * （池后开的连接读不到它），而假的判据比没有判据更坏。 */
     expect(
@@ -167,18 +148,16 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
       const src = code(rel);
       /* 出口是 `applySqlitePragmas`（清单 + 撞锁重试都在它里面，ISSUE #1282）：
        * 三处站点要的是同一件事，各写一遍循环就必然漏一处。 */
-      expect.soft(src, `${rel} 必须 import 共用出口`).toContain(
-        "applySqlitePragmas",
-      );
-      expect.soft(src, `${rel} 不该再自己遍历清单`).not.toContain(
-        "for (const pragma of SQLITE_PRAGMAS)",
-      );
-      expect.soft(src, `${rel} 不该再硬编码 journal_mode`).not.toContain(
-        '"PRAGMA journal_mode = WAL"',
-      );
-      expect.soft(src, `${rel} 不该再硬编码 foreign_keys`).not.toContain(
-        '"PRAGMA foreign_keys = ON"',
-      );
+      expect.soft(src, `${rel} 必须 import 共用出口`).toContain("applySqlitePragmas");
+      expect
+        .soft(src, `${rel} 不该再自己遍历清单`)
+        .not.toContain("for (const pragma of SQLITE_PRAGMAS)");
+      expect
+        .soft(src, `${rel} 不该再硬编码 journal_mode`)
+        .not.toContain('"PRAGMA journal_mode = WAL"');
+      expect
+        .soft(src, `${rel} 不该再硬编码 foreign_keys`)
+        .not.toContain('"PRAGMA foreign_keys = ON"');
     }
   });
 
@@ -188,9 +167,7 @@ describe("库级 PRAGMA 清单只有一份定义", () => {
     /* Next 两处的「不设」同样是签字决定，所以要被钉住：回潮就会把界面请求变成
      * 最长 250ms 的同步停摆，而那条停摆既不在本 issue 的收口路径上、也没有测试。 */
     for (const rel of ["src/server/db.ts", "src/server/workshop/db.ts"]) {
-      expect(code(rel), `${rel} 不该给 Next 侧设等锁预算`).not.toContain(
-        "SQLITE_BUSY_TIMEOUT_MS",
-      );
+      expect(code(rel), `${rel} 不该给 Next 侧设等锁预算`).not.toContain("SQLITE_BUSY_TIMEOUT_MS");
     }
   });
 
@@ -239,11 +216,10 @@ const RACE_CONTROL_ROUNDS = 6;
  * 等到位上限。必须显式给 —— 否则是以「超时红」的形态失败，而那条红又会像极了
  * 「前提不成立」，正好是本次要分开的那两种成因。
  */
-const RACE_CASE_TIMEOUT_MS =
-  RACE_CONTROL_ROUNDS * (ARRIVAL_DEADLINE_MS + 20_000) + 30_000;
+const RACE_CASE_TIMEOUT_MS = RACE_CONTROL_ROUNDS * (ARRIVAL_DEADLINE_MS + 20_000) + 30_000;
 
 /** 一轮竞态的读数：每个进程的结论 + **实际到位数**（后者是 #1337 补的那一格）。 */
-type RaceRound = { outcomes: string[]; arrived: number };
+type RaceRound = { arrived: number; outcomes: Array<string>; };
 
 /**
  * `applySqlitePragmas` 的**撞锁重试**当场量出来（ISSUE #1282，形状重定于 #1337）。
@@ -274,26 +250,25 @@ describe("开机 PRAGMA 撞锁有界重试，当场量出来", () => {
   it(
     `裸循环在 ${RACE_PROCS} 进程同时打新库时会抛（量具没坏；多轮、见一次抛就停）`,
     async () => {
-      const rounds: RaceRound[] = [];
+      const rounds: Array<RaceRound> = [];
       for (let round = 0; round < RACE_CONTROL_ROUNDS; round++) {
         const r = await racePragmaBoot("bare");
         rounds.push(r);
         /* 见一次抛就收工：常态下第一轮就够（约 3s），只有「今天一直没抛」那种轮次才会跑满。 */
-        if (r.outcomes.some((o) => o !== "ok")) break;
+        if (r.outcomes.some((o) => o !== "ok")) {
+          break;
+        }
       }
-      const threw = rounds.reduce(
-        (n, r) => n + r.outcomes.filter((o) => o !== "ok").length,
-        0,
-      );
+      const threw = rounds.reduce((n, r) => n + r.outcomes.filter((o) => o !== "ok").length, 0);
       const desynced = rounds.filter((r) => r.arrived < RACE_PROCS);
       expect(
         threw,
-        `${rounds.length} 轮互撞一次都没抛（其中 ${desynced.length} 轮没等齐 ${RACE_PROCS} 个进程）。` +
-          (desynced.length > 0
+        `${rounds.length} 轮互撞一次都没抛（其中 ${desynced.length} 轮没等齐 ${RACE_PROCS} 个进程）。${
+          desynced.length > 0
             ? ` 没齐的那几轮量到的是「错开起跑」而不是「抢不到锁」—— 先查 tsx 冷启与机器负载` +
               `（到位上限 ${ARRIVAL_DEADLINE_MS}ms；本机冷启实测 7.4s、满载更久），别去放宽下面的断言。`
             : ` 每轮都齐步发令却没人撞锁 —— 那才是「WAL 转换不再互斥」这一前提真的变了，` +
-              `要按 ISSUE #1337 重新定性这条对照，而不是把它删掉。`),
+              `要按 ISSUE #1337 重新定性这条对照，而不是把它删掉。`}`,
       ).toBeGreaterThan(0);
     },
     RACE_CASE_TIMEOUT_MS,
@@ -337,16 +312,13 @@ function scriptedTarget(
     code: "SQLITE_BUSY",
     message: "database is locked",
   },
-): { calls: string[]; execute(sql: string): Promise<unknown> } {
-  const target: { calls: string[]; execute(sql: string): Promise<unknown> } = {
+): { calls: Array<string>; execute(sql: string): Promise<unknown> } {
+  const target: { calls: Array<string>; execute(sql: string): Promise<unknown> } = {
     calls: [],
     async execute(sql: string): Promise<unknown> {
       target.calls.push(sql);
       if (target.calls.length <= failures) {
-        throw Object.assign(
-          new Error(err.message),
-          err.code ? { code: err.code } : {},
-        );
+        throw Object.assign(new Error(err.message), err.code ? { code: err.code } : {});
       }
       return { rows: [] };
     },
@@ -357,17 +329,17 @@ function scriptedTarget(
 /** 修复前那个形状：没有容错的裸循环（等价于 #1282 之前三处站点各写一遍的那段）。 */
 async function bareLoop(
   target: { execute(sql: string): Promise<unknown> },
-  pragmas: readonly string[],
+  pragmas: ReadonlyArray<string>,
 ): Promise<void> {
-  for (const pragma of pragmas) await target.execute(pragma);
+  for (const pragma of pragmas) {
+    await target.execute(pragma);
+  }
 }
 
 describe("撞锁重试的因果（单元层：注入 BUSY，不赌时机）", () => {
   it("锁族错误连续出现时，出口重试到成功 —— 同一条 PRAGMA 试了 3 次才过", async () => {
     const target = scriptedTarget(2);
-    await expect(
-      applySqlitePragmas(target, SQLITE_PRAGMAS),
-    ).resolves.toBeUndefined();
+    await expect(applySqlitePragmas(target, SQLITE_PRAGMAS)).resolves.toBeUndefined();
     /* 前 3 次都是 WAL（抛、抛、成），第 4 次才是 foreign_keys。
      * 认次数而不是认耗时：等没等由退避常数决定，本机负载会改它，而次数不会说谎。 */
     expect(target.calls).toEqual([
@@ -387,25 +359,23 @@ describe("撞锁重试的因果（单元层：注入 BUSY，不赌时机）", ()
       code: "SQLITE_ERROR",
       message: "no such table: task",
     });
-    await expect(
-      applySqlitePragmas(target, SQLITE_PRAGMAS),
-    ).rejects.toMatchObject({ code: "SQLITE_ERROR" });
+    await expect(applySqlitePragmas(target, SQLITE_PRAGMAS)).rejects.toMatchObject({
+      code: "SQLITE_ERROR",
+    });
     expect(target.calls.length).toBe(1);
   });
 
   it("驱动只给 message、不给 code 时仍按锁族重试（那条兜底分支是有用的，别删）", async () => {
     const target = scriptedTarget(2, { message: "database is locked" });
-    await expect(
-      applySqlitePragmas(target, SQLITE_PRAGMAS),
-    ).resolves.toBeUndefined();
+    await expect(applySqlitePragmas(target, SQLITE_PRAGMAS)).resolves.toBeUndefined();
     expect(target.calls.length).toBe(4);
   });
 
   it(`一直撞锁：穷尽后照样抛，且正好试 ${SQLITE_PRAGMA_BOOT.maxAttempts} 次`, async () => {
     const target = scriptedTarget(99);
-    await expect(
-      applySqlitePragmas(target, SQLITE_PRAGMAS),
-    ).rejects.toMatchObject({ code: "SQLITE_BUSY" });
+    await expect(applySqlitePragmas(target, SQLITE_PRAGMAS)).rejects.toMatchObject({
+      code: "SQLITE_BUSY",
+    });
     expect(target.calls.length).toBe(SQLITE_PRAGMA_BOOT.maxAttempts);
   });
 
@@ -431,12 +401,7 @@ describe("撞锁重试的因果（单元层：注入 BUSY，不赌时机）", ()
  * 因果交给单元层注入，进程层只负责「现场还在」。 */
 let raceRoundSeq = 0;
 
-const raceSandbox = path.join(
-  ROOT,
-  "node_modules",
-  ".cache",
-  `sqlite-pragma-race-${process.pid}`,
-);
+const raceSandbox = path.join(ROOT, "node_modules", ".cache", `sqlite-pragma-race-${process.pid}`);
 
 /** 子进程脚本源码：`mode=bare` 是修复前的形状（裸循环），`mode=retry` 走真出口。
  *
@@ -482,9 +447,7 @@ try {
 `;
 
 /** 被量子进程加载的模块：**绝对 file: URL**（见 worker 源码里那段说明）。 */
-const PRAGMA_MODULE_URL = pathToFileURL(
-  path.join(ROOT, "src", "lib", "sqlite-pragmas.ts"),
-).href;
+const PRAGMA_MODULE_URL = pathToFileURL(path.join(ROOT, "src", "lib", "sqlite-pragmas.ts")).href;
 
 /** 跑一轮 N 进程竞态，返回每个进程的结论（`ok` / `fail:CODE` / `exit:N`）**以及实际到位数**。
  *
@@ -496,10 +459,7 @@ async function racePragmaBoot(mode: "bare" | "retry"): Promise<RaceRound> {
   /* 每一轮一个**独立目录**：库文件、齐步文件、到位标记、子进程脚本都关在里面 ——
    * 共用目录时上一轮的 `.arrived.*` 会被这一轮数进来，「人都齐了」就是假的。
    * 序号 + 时间戳两个都带上：多轮可以在同一毫秒内开跑，只靠时间戳会撞同一个目录。 */
-  const dir = path.join(
-    raceSandbox,
-    `${mode}-${++raceRoundSeq}-${Date.now().toString(36)}`,
-  );
+  const dir = path.join(raceSandbox, `${mode}-${++raceRoundSeq}-${Date.now().toString(36)}`);
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, "race.sqlite");
   const startFile = path.join(dir, "go");
@@ -527,17 +487,16 @@ async function racePragmaBoot(mode: "bare" | "retry"): Promise<RaceRound> {
  * 「一次都不抛」（文件里另一处注释早就点过这个形态）。到位数现在进 `RaceRound`，
  * 由用例判它自己那条结论还成不成立。
  */
-async function waitForArrivals(
-  startFile: string,
-  expectCount: number,
-): Promise<number> {
+async function waitForArrivals(startFile: string, expectCount: number): Promise<number> {
   const dir = path.dirname(startFile);
-  const base = path.basename(startFile) + ".arrived.";
+  const base = `${path.basename(startFile)}.arrived.`;
   const deadline = Date.now() + ARRIVAL_DEADLINE_MS;
   let arrived = 0;
   while (Date.now() < deadline) {
     arrived = readdirSync(dir).filter((n) => n.startsWith(base)).length;
-    if (arrived >= expectCount) return arrived;
+    if (arrived >= expectCount) {
+      return arrived;
+    }
     await sleep(10);
   }
   return arrived;
@@ -561,11 +520,10 @@ function runOnce(
      * tsx 的入口按**它自己的 exports 表**解析（`tsx/cli`），不硬编码 `dist/cli.mjs`。
      * CWD 仍是仓库根 —— 只有这样才能加载真模块（`src/lib/sqlite-pragmas.ts` 还要 import
      * `~/lib/**`，别名由仓库根的 tsconfig 解析）。 */
-    const child = spawn(
-      process.execPath,
-      [TSX_CLI, worker, moduleUrl, startFile, file, mode],
-      { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] },
-    );
+    const child = spawn(process.execPath, [TSX_CLI, worker, moduleUrl, startFile, file, mode], {
+      cwd: ROOT,
+      stdio: ["ignore", "pipe", "inherit"],
+    });
     let out = "";
     child.stdout.on("data", (chunk: Buffer) => {
       out += chunk.toString();
@@ -594,10 +552,7 @@ describe("等锁预算的两种形状，当场量出来", () => {
   it("timeout 选项覆盖每一条连接：短锁被等到并写成功", async () => {
     const { outcome, elapsed } = await attemptWith("option");
     expect(outcome).toBe("ok");
-    expect(
-      elapsed,
-      "写成功却几乎没等：说明外部根本没按住，量具坏了",
-    ).toBeGreaterThanOrEqual(300);
+    expect(elapsed, "写成功却几乎没等：说明外部根本没按住，量具坏了").toBeGreaterThanOrEqual(300);
   });
 
   it(`宿主那一侧的预算（${SQLITE_BUSY_TIMEOUT_MS}ms）比一次真锁短，所以穷尽路径是常备路径`, () => {

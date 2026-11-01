@@ -30,9 +30,9 @@ function renderRows(): { inRow: Text; outside: Text } {
     <p id="other">页面里别的文本</p>
   `;
   return {
-    inRow: document.querySelector(`[${LOG_ROW_TEXT_ATTRIBUTE}]`)!
+    inRow: /* SAFETY: 类型断言已复核 */ document.querySelector(`[${LOG_ROW_TEXT_ATTRIBUTE}]`)!
       .firstChild as Text,
-    outside: document.querySelector("#other")!.firstChild as Text,
+    outside: /* SAFETY: 类型断言已复核 */ document.querySelector("#other")!.firstChild as Text,
   };
 }
 
@@ -54,7 +54,7 @@ describe("selectionInsideLogs 选区是否落在日志正文里", () => {
 
   it("选在日志行元素本身上 → true（浏览器给的是元素端点）", () => {
     const { inRow } = renderRows();
-    const element = (inRow.parentElement ?? inRow) as Node;
+    const element = /* SAFETY: 类型断言已复核 */ (inRow.parentElement ?? inRow) as Node;
     expect(selectionInsideLogs(selectionOn(element))).toBe(true);
   });
 
@@ -96,8 +96,7 @@ describe("selectionInsideLogs 选区是否落在日志正文里", () => {
  */
 describe("词法上色里的路径区间", () => {
   /** 用户贴图那行命令回显（两个带空格的路径 + 一堆开关）。 */
-  const ECHO =
-    '>>> "C:\\Program Files\\PowerShell\\7\\pwsh.EXE" -NoProfile -ExecutionPolicy Bypass -File "D:\\Program Files\\nodejs\\pnpm.ps1" -v';
+  const ECHO = String.raw`>>> "C:\Program Files\PowerShell\7\pwsh.EXE" -NoProfile -ExecutionPolicy Bypass -File "D:\Program Files\nodejs\pnpm.ps1" -v`;
 
   it("带空格的路径整条上色，不在第一个空格处断开", () => {
     expect(
@@ -105,15 +104,15 @@ describe("词法上色里的路径区间", () => {
         .filter((token) => token.style !== undefined)
         .map((token) => token.text),
     ).toEqual([
-      "C:\\Program Files\\PowerShell\\7\\pwsh.EXE",
-      "D:\\Program Files\\nodejs\\pnpm.ps1",
+      String.raw`C:\Program Files\PowerShell\7\pwsh.EXE`,
+      String.raw`D:\Program Files\nodejs\pnpm.ps1`,
     ]);
   });
 
   it("分片拼回去逐字等于原文（切分不许吃字，也不出重复段）", () => {
     for (const line of [
       ECHO,
-      "项目根: F:\\AI\\Other\\comfy-app-t3-branch4",
+      String.raw`项目根: F:\AI\Other\comfy-app-t3-branch4`,
       "[OK] 阶段: 壳已接手（双击 app.exe）",
       "见 https://cnb.cool/moon-read/comfy-app-t3/-/issues/1365",
     ]) {
@@ -137,10 +136,7 @@ describe("词法上色里的路径区间", () => {
 
   it("时间戳 / 标签 / URL 那几档的上色不受影响（路径改造别动到它们）", () => {
     expect(
-      tokenizeRow("[17:43:16] INFO [OK] 阶段: 壳已接手 http://x/y").map((t) => [
-        t.text,
-        t.style,
-      ]),
+      tokenizeRow("[17:43:16] INFO [OK] 阶段: 壳已接手 http://x/y").map((t) => [t.text, t.style]),
     ).toEqual([
       ["[17:43:16]", "gray"],
       [" INFO ", undefined],

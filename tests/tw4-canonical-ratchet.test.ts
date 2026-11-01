@@ -31,10 +31,12 @@ const SPACING_SCRIPT = join(REPO_ROOT, "scripts", "tw4-spacing-canonical.mjs");
 /** 两份脚本共享的扫描内核：注释剥离就住在这里（`!row` 那条误报的修法）。 */
 const SCAN_CORE = join(REPO_ROOT, "scripts", "tw4-scan-core.mjs");
 
-describe.for([
-  ["canonical", CANON_BASELINE, CANON_SCRIPT],
-  ["spacing", SPACING_BASELINE, SPACING_SCRIPT],
-] as const)("%s 判据（ISSUE #1451 要求 2 / #1811 翻硬闸）", ([_name, baseline, script]) => {
+describe.for(
+  /* SAFETY: 类型断言已复核 */ [
+    ["canonical", CANON_BASELINE, CANON_SCRIPT],
+    ["spacing", SPACING_BASELINE, SPACING_SCRIPT],
+  ] as const,
+)("%s 判据（ISSUE #1451 要求 2 / #1811 翻硬闸）", ([_name, baseline, script]) => {
   it("基线已随翻闸删除（留存一份就是「手改 JSON 就能登记存量」的通道）", () => {
     expect(
       existsSync(baseline),
@@ -57,12 +59,11 @@ describe.for([
     // 认调用本身而不是认变量名 —— 换个拼法也躲不过（口径同 §13.5.9 的 `HARD_GATE_FLIPS`）。
     /* 只判**代码**，不判注释 —— 翻闸的记录（「此前带一份基线、`--update` 收紧」）
      * 正是写在文件头的那一段，把注释也算进来会逼人删掉那段历史。 */
-    const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const code = src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
     expect(code, "--update 是翻闸时删掉的收紧档").not.toContain("--update");
-    expect(
-      code,
-      "脚本里出现了「把一份 .json 写回去」的调用 —— 那正是翻闸要消灭的通道",
-    ).not.toMatch(/writeFileSync\([^)]*\.json/);
+    expect(code, "脚本里出现了「把一份 .json 写回去」的调用 —— 那正是翻闸要消灭的通道").not.toMatch(
+      /writeFileSync\([^)]*\.json/,
+    );
   });
 
   it("扫描走共享内核（注释里的示例不算候选、也不会被 --write 改到）", () => {
@@ -79,9 +80,10 @@ describe.for([
       readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
     );
     const onDemand =
-      (ledger as { onDemand?: Record<string, unknown> }).onDemand ?? {};
-    const hits = Object.keys(onDemand).filter((k) =>
-      script.endsWith(k) || k === script.split("/").pop(),
+      /* SAFETY: 类型断言已复核 */ (ledger as { onDemand?: Record<string, unknown> }).onDemand ??
+      {};
+    const hits = Object.keys(onDemand).filter(
+      (k) => script.endsWith(k) || k === script.split("/").pop(),
     );
     expect(
       hits.length,

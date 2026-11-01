@@ -17,27 +17,23 @@ import {
   type EnrichedWidget,
   type WorkflowIOEntry,
 } from "~/components/studio/workflow-io";
-import {
-  isNumericWidget,
-  type DynamicWorkflowFormProps,
-} from "../dynamic-workflow-form-config";
+import { isNumericWidget, type DynamicWorkflowFormProps } from "../dynamic-workflow-form-config";
 import type { WorkflowIODropPosition } from "~/components/studio/workflow-types";
 
 /** 在这些可编辑控件上起手不发起拖拽：输入框 / 下拉 / 按钮是「用」的地方，
  *  不是「抓」的地方 —— 行级 draggable 会劫持文本选择与下拉交互；且从这些
  *  控件发起的原生拖拽经常根本不触发 drop（只有 dragend），表现成
  *  「拖了但顺序没变」。用户口径：只能从不可编辑区域拖动。 */
-const DRAG_CANCEL_SELECTOR =
-  "input, textarea, select, button, [contenteditable]";
+const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]";
 
 /** 指针在行内的上/下半区决定插入点：上半区 = 插到该行之前，下半区 = 之后。
  *  指示线画在实际插入位置，落点即所见。取不到几何信息（测试桩 / 理论上
  *  的分离节点）时退回 before。 */
-const positionOf = (
-  event: DragEvent<HTMLDivElement>,
-): WorkflowIODropPosition => {
+const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
   const rect = event.currentTarget?.getBoundingClientRect?.();
-  if (!rect || rect.height <= 0) return "before";
+  if (!rect || rect.height <= 0) {
+    return "before";
+  }
   return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
 };
 
@@ -45,57 +41,57 @@ const positionOf = (
  *
  *  刻意没有 onDragLeave：指针在同一行的子元素间移动时它同样会触发，据此清除
  *  高亮会频闪 —— 高亮统一由 dragover / drop / dragend 收敛。 */
-export interface RowDragHandlers {
-  onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
-  onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
-  onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
+export type RowDragHandlers = {
   onDragEnd: () => void;
-}
+  onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
+  onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => void;
+};
 
-export interface DynamicWorkflowFormController {
-  /** 当前值表（keyed by ioKey）—— 调用方持有，这里只读透传。 */
-  values: Record<string, unknown>;
-  /** 整表写入口：GroupedControls 这类批量写入的组件直接用它，`set` 是它的
-   *  单键快捷方式。 */
-  onChange: (next: Record<string, unknown>) => void;
-  /** 全量输入（wire + widget），按 displayOrder 稳定排序。 */
-  inputs: EnrichedWidget[];
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
-  wireInputs: EnrichedWidget[];
-  widgetInputs: EnrichedWidget[];
-  groups: ReturnType<typeof inferGroups>;
-  /** 端口行：wire inputs + 数值 widget（已分组的 pin 除外）。 */
-  portEntries: EnrichedWidget[];
-  /** 可编辑参数行：非数值 widget（已分组的 pin 除外）。 */
-  widgetSectionEntries: EnrichedWidget[];
-  /** 没有任何输入/输出端点 —— 视图据此渲染空态提示。 */
-  isEmpty: boolean;
-  uploading: boolean;
-  uploadTarget: string | null;
-  /** 隐藏图片选择 input 的挂载点（`ui/file-picker`）。 */
-  FileInput: ComponentType;
-  pickFile: (ioKey: string) => void;
-  /** 用户刚选过这张图时的本地预览地址（data URL）；没有则 undefined，
-   *  由控件回退到按值算出的 ComfyUI 代理地址。让「选完就能看到」不依赖 ComfyUI。 */
-  localPreviewUrl: (ioKey: string) => string | undefined;
-  /** 上传失败的可读原因（未运行 / 启动超时…）；下一次选择文件时清空。
-   *  视图据此在表单内渲染提示条——上传位本身没有错误区。 */
-  uploadError: string | null;
+export type DynamicWorkflowFormController = {
+  /** 端口行被拿起时回传本 controller —— 端口行自身不持有拖拽状态。 */
+  beginPortDrag: (ioKey: string) => void;
   dismissUploadError: () => void;
-  /** 上传是异步的（读文件 + 调接口），但 `<input type=file>` 的 onChange 只
-   *  要求 void 返回 —— 调用方不需要 await，失败在这里转成 uploadError。 */
-  set: (ioKey: string, value: unknown) => void;
+  draggingKey: string | null;
   /** 未开启重排（调用方未传 onReorder）时为 null。 */
   dragHandlers: RowDragHandlers | null;
-  draggingKey: string | null;
   dragOverKey: string | null;
   /** 指示线画在 `dragOverKey` 那一行的上缘还是下缘 —— 与 reorderIO 收到的
    *  `position` 同源，指示线永远画在实际插入位置。 */
   dropPosition: WorkflowIODropPosition;
-  /** 端口行被拿起时回传本 controller —— 端口行自身不持有拖拽状态。 */
-  beginPortDrag: (ioKey: string) => void;
   endDrag: () => void;
-}
+  /** 隐藏图片选择 input 的挂载点（`ui/file-picker`）。 */
+  FileInput: ComponentType;
+  groups: ReturnType<typeof inferGroups>;
+  /** 全量输入（wire + widget），按 displayOrder 稳定排序。 */
+  inputs: Array<EnrichedWidget>;
+  /** 没有任何输入/输出端点 —— 视图据此渲染空态提示。 */
+  isEmpty: boolean;
+  /** 用户刚选过这张图时的本地预览地址（data URL）；没有则 undefined，
+   *  由控件回退到按值算出的 ComfyUI 代理地址。让「选完就能看到」不依赖 ComfyUI。 */
+  localPreviewUrl: (ioKey: string) => string | undefined;
+  /** 整表写入口：GroupedControls 这类批量写入的组件直接用它，`set` 是它的
+   *  单键快捷方式。 */
+  onChange: (next: Record<string, unknown>) => void;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  pickFile: (ioKey: string) => void;
+  /** 端口行：wire inputs + 数值 widget（已分组的 pin 除外）。 */
+  portEntries: Array<EnrichedWidget>;
+  /** 上传是异步的（读文件 + 调接口），但 `<input type=file>` 的 onChange 只
+   *  要求 void 返回 —— 调用方不需要 await，失败在这里转成 uploadError。 */
+  set: (ioKey: string, value: unknown) => void;
+  /** 上传失败的可读原因（未运行 / 启动超时…）；下一次选择文件时清空。
+   *  视图据此在表单内渲染提示条——上传位本身没有错误区。 */
+  uploadError: string | null;
+  uploading: boolean;
+  uploadTarget: string | null;
+  /** 当前值表（keyed by ioKey）—— 调用方持有，这里只读透传。 */
+  values: Record<string, unknown>;
+  widgetInputs: Array<EnrichedWidget>;
+  /** 可编辑参数行：非数值 widget（已分组的 pin 除外）。 */
+  widgetSectionEntries: Array<EnrichedWidget>;
+  wireInputs: Array<EnrichedWidget>;
+};
 
 export function useDynamicWorkflowForm(
   props: DynamicWorkflowFormProps,
@@ -123,10 +119,7 @@ export function useDynamicWorkflowForm(
     onReorder
   );
 
-  const { wireInputs, widgetInputs, outputs } = useMemo(
-    () => splitWorkflowIO(io),
-    [io],
-  );
+  const { wireInputs, widgetInputs, outputs } = useMemo(() => splitWorkflowIO(io), [io]);
 
   /* 多模式：按当前模式过滤掉 `visible === false` 的行。
    *  只是展示层过滤——被隐藏的参数仍留在 values 里（调用方用
@@ -157,10 +150,7 @@ export function useDynamicWorkflowForm(
    * 改由 `GroupedControls` 渲染 —— 一个下拉在 分别填写 与
    * 友好预设范式之间切换。`groupedKeys` 是
    * 各组消费的 ioKey 集合。 */
-  const groups = useMemo(
-    () => inferGroups(shownWidgetInputs),
-    [shownWidgetInputs],
-  );
+  const groups = useMemo(() => inferGroups(shownWidgetInputs), [shownWidgetInputs]);
   const { groupedKeys } = groups;
 
   /* 端口行 = 连线输入 + 数值 widget（seed/steps/cfg …）。数值
@@ -174,9 +164,7 @@ export function useDynamicWorkflowForm(
       ...shownWireInputs,
       ...shownWidgetInputs.filter(
         (widgetInput) =>
-          isNumericWidget(widgetInput) &&
-          !groupedKeys.has(widgetInput.ioKey) &&
-          !isAuthoringEdit,
+          isNumericWidget(widgetInput) && !groupedKeys.has(widgetInput.ioKey) && !isAuthoringEdit,
       ),
     ],
     [shownWireInputs, shownWidgetInputs, groupedKeys, isAuthoringEdit],
@@ -186,8 +174,7 @@ export function useDynamicWorkflowForm(
     () =>
       shownWidgetInputs.filter(
         (widgetInput) =>
-          !groupedKeys.has(widgetInput.ioKey) &&
-          (isAuthoringEdit || !isNumericWidget(widgetInput)),
+          !groupedKeys.has(widgetInput.ioKey) && (isAuthoringEdit || !isNumericWidget(widgetInput)),
       ),
     [shownWidgetInputs, groupedKeys, isAuthoringEdit],
   );
@@ -208,8 +195,7 @@ export function useDynamicWorkflowForm(
   const dragFromRef = useRef<string | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
-  const [dropPosition, setDropPosition] =
-    useState<WorkflowIODropPosition>("before");
+  const [dropPosition, setDropPosition] = useState<WorkflowIODropPosition>("before");
 
   const beginDrag = useCallback((ioKey: string) => {
     dragFromRef.current = ioKey;
@@ -236,12 +222,14 @@ export function useDynamicWorkflowForm(
   const beginPortDrag = beginDrag;
 
   const dragHandlers = useMemo<RowDragHandlers | null>(() => {
-    if (!onReorder) return null;
+    if (!onReorder) {
+      return null;
+    }
     return {
       onDragStart: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         /* 输入框 / 下拉 / 按钮上起手不拖（用户口径：只能从不可编辑区域拖动）
          *  —— preventDefault 直接取消这次拖拽。 */
-        const target = event.target as HTMLElement | null;
+        const target = /* SAFETY: 类型断言已复核 */ event.target as HTMLElement | null;
         if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
           event.preventDefault();
           return;
@@ -262,12 +250,18 @@ export function useDynamicWorkflowForm(
       },
       onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         const fromKey = dragFromRef.current;
-        if (!fromKey || fromKey === ioKey) return;
+        if (!fromKey || fromKey === ioKey) {
+          return;
+        }
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
-        if (dragOverKey !== ioKey) setDragOverKey(ioKey);
+        if (dragOverKey !== ioKey) {
+          setDragOverKey(ioKey);
+        }
         const pos = positionOf(event);
-        if (dropPosition !== pos) setDropPosition(pos);
+        if (dropPosition !== pos) {
+          setDropPosition(pos);
+        }
       },
       onDrop: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
@@ -278,7 +272,9 @@ export function useDynamicWorkflowForm(
         const toKey = rowKeyOf(event.target) ?? ioKey;
         const pos = positionOf(event);
         endDrag();
-        if (!fromKey || fromKey === toKey) return;
+        if (!fromKey || fromKey === toKey) {
+          return;
+        }
         onReorder(fromKey, toKey, pos);
       },
       onDragEnd: endDrag,
@@ -300,7 +296,9 @@ export function useDynamicWorkflowForm(
       /* 清空某格 → 撤掉它的本地预览，避免「值已空却还显示旧图」。 */
       if (value === "" || value == null) {
         setPreviews((prev) => {
-          if (prev[ioKey] === undefined) return prev;
+          if (prev[ioKey] === undefined) {
+            return prev;
+          }
           const next = { ...prev };
           delete next[ioKey];
           return next;
@@ -330,16 +328,16 @@ export function useDynamicWorkflowForm(
   const onFile = useCallback(
     async (file: File) => {
       const target = uploadTarget;
-      if (!target) return;
+      if (!target) {
+        return;
+      }
       setUploading(true);
       setUploadError(null);
       /* 本地预览：读成 data URL 后存起来，选完立刻显示、不依赖 ComfyUI 是否运行。
        * **不 await** —— 它是附带效果，读文件的异步不该推迟真正的上传时序；读失败
        * 也只是没有本地预览，不阻断上传。 */
       void readFileAsDataUrl(file)
-        .then((dataUrl) =>
-          setPreviews((prev) => ({ ...prev, [target]: dataUrl })),
-        )
+        .then((dataUrl) => setPreviews((prev) => ({ ...prev, [target]: dataUrl })))
         .catch(() => undefined);
       try {
         /* ComfyUI 未运行 / 正在启动时由客户端自动等就绪后重试；等待期间
@@ -348,9 +346,9 @@ export function useDynamicWorkflowForm(
           onProgress: (message) => onUploadProgress?.(message),
         });
         set(target, name);
-      } catch (err) {
-        const message = errorMessage(err, "上传失败");
-        console.error("[DynamicWorkflowForm] upload failed", err);
+      } catch (error) {
+        const message = errorMessage(error, "上传失败");
+        console.error("[DynamicWorkflowForm] upload failed", error);
         setUploadError(message);
         onUploadError?.(message);
       } finally {

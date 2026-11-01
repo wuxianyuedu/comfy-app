@@ -72,7 +72,7 @@ export function localTimestamp(at = new Date()) {
 /** 按次命名的运行戳（文件名安全：去掉冒号、点与空格）。
  * @param {Date} [at] @returns {string} */
 export function runStamp(at = new Date()) {
-  return localTimestamp(at).replace(/[:. ]/g, "-").slice(0, 19);
+  return localTimestamp(at).replaceAll(/[:. ]/g, "-").slice(0, 19);
 }
 
 /** 「一次启动一份文件」那份 runtime 日志的名字戳（`YYYYMMDD-HHmmss`，无分隔符）。
@@ -139,12 +139,7 @@ export function createLogSink(
   fs.mkdirSync(dir, { recursive: true });
   const target =
     file ??
-    path.join(
-      dir,
-      timestampInFileName
-        ? `dev-launcher-${runStamp()}.log`
-        : "dev-launcher.log",
-    );
+    path.join(dir, timestampInFileName ? `dev-launcher-${runStamp()}.log` : "dev-launcher.log");
   try {
     fs.writeFileSync(target, "", "utf8");
   } catch {
@@ -163,7 +158,9 @@ export function createLogSink(
       clearTimeout(flushTimer);
       flushTimer = null;
     }
-    if (!pending) return;
+    if (!pending) {
+      return;
+    }
     const text = pending;
     pending = "";
     try {

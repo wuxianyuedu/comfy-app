@@ -43,10 +43,10 @@ export const ERROR_AUTO_EXPAND_RE =
   /not found|not installed|out of memory|cannot find model|checkpoint.*not exists|missing\s+\w+\s+model|ValueError|IndexError|KeyError|BackendError|server_busy|insufficient/i;
 
 /** 一条建议规则：先命中先返回（顺序即优先级）。 */
-interface AdviceRule {
-  pattern: RegExp;
+type AdviceRule = {
   advice: (error: string) => string;
-}
+  pattern: RegExp;
+};
 
 /* 顺序即优先级。三条刻意排在最前：
  *  · comfy-cli 解释器缺失 —— 报错原文带着 Windows 绝对路径，会被后面的规则按
@@ -54,11 +54,10 @@ interface AdviceRule {
  *  · UUID 形态（wrapper 子图缺失）—— 它同时含 `not found`，会被模型缺失那条抢走；
  *  · 结构化校验（ValueError / KeyError / 类型不匹配）—— 它同时含 `not found` 的
  *    子串（`not exists`）时也一样。 */
-const ADVICE_RULES: AdviceRule[] = [
+const ADVICE_RULES: Array<AdviceRule> = [
   {
     // 执行链的 Python 解释器找不到（桌包不随包 Python / comfy-cli，ISSUE #1239）
-    pattern:
-      /未找到 comfy-cli|comfy[-_]cli.{0,24}(python|解释器)|COMFY_CLI_PYTHON/i,
+    pattern: /未找到 comfy-cli|comfy[-_]cli.{0,24}(python|解释器)|COMFY_CLI_PYTHON/i,
     advice: () =>
       "执行链找不到 comfy-cli 的 Python 解释器。桌包不随包 Python：请自备一个装好 comfy-cli 的 Python，再到「设置 → 创作后端 → comfy-cli 解释器」填它的绝对路径（开发检出也可以直接建 `python-venv/comfy-cli`），然后点「重试」。",
   },
@@ -66,9 +65,10 @@ const ADVICE_RULES: AdviceRule[] = [
     // wrapper 子图 / ComfyUI 子图未安装（必须优先于通用的「模型缺失」）
     pattern: /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
     advice: (e) => {
-      const uuid =
-        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(e);
-      if (!uuid || !/not found|not installed/i.test(e)) return "";
+      const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(e);
+      if (!uuid || !/not found|not installed/i.test(e)) {
+        return "";
+      }
       return `wrapper 子图（${uuid[0].slice(0, 8)}…）找不到。自定义工作流依赖的节点未在 ComfyUI 端安装；请确认 wrapper 在源工作流里声明了相同的自定义节点包，或回退到「无 wrapper」的 flat form 模板。`;
     },
   },
@@ -90,15 +90,13 @@ const ADVICE_RULES: AdviceRule[] = [
       "节点参数类型不匹配。常见原因是把类型不符的连线接到了强类型输入端口；请检查报错节点的输入端口与上游产出的数据形状。",
   },
   {
-    pattern:
-      /timeout|timed out|connection.*refused|econnrefused|econnreset|fetch failed|network/i,
+    pattern: /timeout|timed out|connection.*refused|econnrefused|econnreset|fetch failed|network/i,
     advice: () =>
       "连接被拒绝或超时。请确认本机 ComfyUI 进程还在运行、端口没有被防火墙拦截，并且它最近没有在加载大模型（实际端口见「设置 → 创作后端」）。",
   },
   {
     pattern: /server_busy|503|429|queue/i,
-    advice: () =>
-      "服务端正忙或队列已满。可以稍候重试，或在 ComfyUI 里清空队列 / 重启服务后重试。",
+    advice: () => "服务端正忙或队列已满。可以稍候重试，或在 ComfyUI 里清空队列 / 重启服务后重试。",
   },
   {
     pattern: /prompt.*empty|empty.*prompt|null|undefined|提示词/i,
@@ -114,11 +112,17 @@ const ADVICE_RULES: AdviceRule[] = [
  */
 export function adviseOnError(error: string | null | undefined): string | null {
   const text = error ?? "";
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
   for (const rule of ADVICE_RULES) {
-    if (!rule.pattern.test(text)) continue;
+    if (!rule.pattern.test(text)) {
+      continue;
+    }
     const advice = rule.advice(text);
-    if (advice) return advice;
+    if (advice) {
+      return advice;
+    }
   }
   return null;
 }
@@ -142,7 +146,11 @@ export function shouldAutoExpandError(
   error: string | null | undefined,
   validationErrorCount = 0,
 ): boolean {
-  if (validationErrorCount > 0) return true;
-  if (!error) return false;
+  if (validationErrorCount > 0) {
+    return true;
+  }
+  if (!error) {
+    return false;
+  }
   return ERROR_AUTO_EXPAND_RE.test(error);
 }

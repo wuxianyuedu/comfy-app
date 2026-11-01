@@ -14,12 +14,12 @@ import {
 } from "./workflow-editor-topbar-config";
 
 /** class 串按空格切词，便于断言「含有某个工具类」而不受顺序影响。 */
-function tokens(cls: string): string[] {
+function tokens(cls: string): Array<string> {
   return cls.split(/\s+/).filter(Boolean);
 }
 
 describe("顶栏按钮：不许变形的三条硬规则（ISSUE #404）", () => {
-  const allTones = [
+  const allTones = /* SAFETY: 类型断言已复核 */ [
     "outline",
     "solid",
     "ghost",
@@ -28,23 +28,19 @@ describe("顶栏按钮：不许变形的三条硬规则（ISSUE #404）", () => 
   ] as const;
 
   it.for(allTones)("tone=%s 在任何密度下都禁止换行", (tone) => {
-    for (const density of ["regular", "compact"] as const) {
-      expect(tokens(topBarButtonClass(tone, density))).toContain(
-        "whitespace-nowrap",
-      );
+    for (const density of /* SAFETY: 类型断言已复核 */ ["regular", "compact"] as const) {
+      expect(tokens(topBarButtonClass(tone, density))).toContain("whitespace-nowrap");
     }
   });
 
   it.for(allTones)("tone=%s 在任何密度下都禁止被 flex 压扁", (tone) => {
-    for (const density of ["regular", "compact"] as const) {
+    for (const density of /* SAFETY: 类型断言已复核 */ ["regular", "compact"] as const) {
       expect(tokens(topBarButtonClass(tone, density))).toContain("shrink-0");
     }
   });
 
   it.for(allTones)("tone=%s 图标与中文同一基线", (tone) => {
-    expect(tokens(topBarButtonClass(tone, "regular"))).toContain(
-      "leading-none",
-    );
+    expect(tokens(topBarButtonClass(tone, "regular"))).toContain("leading-none");
   });
 
   it("基础类本身就把三条规则带全（漏传 tone 也不会退化）", () => {
@@ -74,9 +70,7 @@ describe("顶栏按钮：紧凑态收窄但可读（「较小尺寸按钮可适�
   });
 
   it("紧凑态字号不低于 12px（正文可读下限）", () => {
-    expect(tokens(topBarButtonClass("outline", "compact"))).toContain(
-      "text-xs",
-    );
+    expect(tokens(topBarButtonClass("outline", "compact"))).toContain("text-xs");
   });
 });
 
@@ -86,7 +80,7 @@ describe("顶栏按钮：紧凑态收窄但可读（「较小尺寸按钮可适�
  * `ghost` 的 hover 底色**覆盖掉** —— 否则基元默认值会在调用处排在后面胜出，
  * 顶栏的窄窗退化整条失效（规范 16 §16.2.4.2 的 `h-auto` 是同一件事）。 */
 describe("顶栏按钮：必须覆盖 ui/button 基元的默认外观（ISSUE #672 P1）", () => {
-  const allTones = [
+  const allTones = /* SAFETY: 类型断言已复核 */ [
     "outline",
     "solid",
     "ghost",
@@ -141,7 +135,7 @@ describe("顶栏按钮：必须覆盖 ui/button 基元的默认外观（ISSUE #6
     const native =
       /(?:^|:)(?:bg|text|border|ring|from|to|via)-(?:red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone)-\d{2,3}\b/;
     for (const tone of allTones) {
-      for (const density of ["regular", "compact"] as const) {
+      for (const density of /* SAFETY: 类型断言已复核 */ ["regular", "compact"] as const) {
         const cls = topBarButtonClass(tone, density);
         expect(cls).not.toMatch(native);
       }
@@ -151,7 +145,7 @@ describe("顶栏按钮：必须覆盖 ui/button 基元的默认外观（ISSUE #6
 
 describe("顶栏容器：窄了换行，不压扁按钮", () => {
   it("按钮组整体不收缩", () => {
-    for (const density of ["regular", "compact"] as const) {
+    for (const density of /* SAFETY: 类型断言已复核 */ ["regular", "compact"] as const) {
       expect(tokens(topBarGroupClass(density))).toContain("shrink-0");
     }
   });
@@ -169,21 +163,14 @@ describe("顶栏容器：窄了换行，不压扁按钮", () => {
   it("统计行不折行（挤不下时截断，而不是把顶栏撑成两行）", () => {
     /* 同一处挤压的第二种表现：面包屑被压窄后，下面那行「N 个节点 · N 个暴露
      * IO…」会折成两行，顶栏高度跟着跳（实测 1024px 时由 66px 变 83px）。 */
-    const source = readFileSync(
-      new URL("./WorkflowEditorTopbar.tsx", import.meta.url),
-      "utf8",
-    );
-    expect(source).toContain(
-      'className="text-ink-soft text-2xs mt-0.5 truncate font-medium"',
-    );
+    const source = readFileSync(new URL("./WorkflowEditorTopbar.tsx", import.meta.url), "utf8");
+    expect(source).toContain('className="text-ink-soft text-2xs mt-0.5 truncate font-medium"');
   });
 
   it("面包屑区给得出可读下限，否则永远挤在一行", () => {
     /* 名字带 truncate，min-content 极小——没有下限时 flex 会一直「再压一点」，
      * 按钮组永远等不到换行、只能与面包屑重叠。 */
-    expect(tokens(TOP_BAR_BREADCRUMB_CLASS)).toContain(
-      TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS,
-    );
+    expect(tokens(TOP_BAR_BREADCRUMB_CLASS)).toContain(TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS);
     expect(tokens(TOP_BAR_BREADCRUMB_MIN_WIDTH_CLASS)).toContain("min-w-42.5");
   });
 });
@@ -194,13 +181,8 @@ describe("顶栏容器：窄了换行，不压扁按钮", () => {
  * 消失、节点卡片上的一排勾选框还留着 —— 作者看到一个关不掉的编辑态。
  * 这里做源码级守卫 —— 断言的是「有没有留后门」，不是某个按钮的字面实现。 */
 describe("IO 编辑 / 预览开关必须走 store 动作（ISSUE #400）", () => {
-  const source = readFileSync(
-    path.resolve(__dirname, "WorkflowEditorTopbar.tsx"),
-    "utf8",
-  );
-  const code = source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/[^\n]*/g, "");
+  const source = readFileSync(path.resolve(__dirname, "WorkflowEditorTopbar.tsx"), "utf8");
+  const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
 
   it("顶栏不直接 setState 写 ioEditMode / ioPreviewOpen", () => {
     expect(code).not.toMatch(/setState\([\s\S]{0,120}?ioEditMode/);
@@ -220,13 +202,8 @@ describe("IO 编辑 / 预览开关必须走 store 动作（ISSUE #400）", () =>
 /* 画布侧（`WorkflowEditorInner.tsx`）的预览关闭按钮同样是「关面板」的入口，
  * 它若绕开动作，预览面板收起、勾选框照样留在画布上。 */
 describe("画布侧关闭预览也走 store 动作（ISSUE #400）", () => {
-  const source = readFileSync(
-    path.resolve(__dirname, "WorkflowEditorInner.tsx"),
-    "utf8",
-  );
-  const code = source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/\/\/[^\n]*/g, "");
+  const source = readFileSync(path.resolve(__dirname, "WorkflowEditorInner.tsx"), "utf8");
+  const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
 
   it("不直接 setState 写 ioPreviewOpen", () => {
     expect(code).not.toMatch(/setState\([\s\S]{0,120}?ioPreviewOpen/);

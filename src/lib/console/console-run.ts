@@ -42,61 +42,58 @@ import { MAX_OUTPUT_CHARS } from "./console-limits";
 /** 一条命令的执行事件（路由按顺序翻成 SSE 的 `data:` 行）。 */
 export type ConsoleEvent =
   | {
-      type: "start";
-      runId: string;
+      args: Array<string>;
       /** 回显的命令行（已规范化，可能与用户输入的空格不同）。 */
       command: string;
-      /** 实际可执行文件与参数（排障时「到底跑的是谁」的唯一答案）。 */
-      file: string;
-      args: string[];
       /** 工作目录（项目根）。 */
       cwd: string;
+      /** 实际可执行文件与参数（排障时「到底跑的是谁」的唯一答案）。 */
+      file: string;
+      runId: string;
       startedAt: number;
+      type: "start";
     }
-  | { type: "out"; stream: "stdout" | "stderr"; text: string }
+  | { stream: "stdout" | "stderr"; text: string; type: "out" }
   | {
-      type: "exit";
       code: number | null;
-      signal: string | null;
+      durationMs: number;
       /** 是否被看门狗 / 用户主动取消掐掉（比 code 更能说明「为什么没跑完」）。 */
       killed: boolean;
+      signal: string | null;
       /** 被截断的说明；null = 输出完整。 */
       truncatedNote: string | null;
-      durationMs: number;
+      type: "exit";
     }
-  | { type: "error"; message: string };
+  | { message: string; type: "error" };
 
 /** 一次执行的收尾事实（供运行日志与界面共用）。 */
-export interface ConsoleRunResult {
-  runId: string;
+export type ConsoleRunResult = {
   command: string;
+  durationMs: number;
   exitCode: number | null;
   killed: boolean;
-  durationMs: number;
-}
-
-export interface StartRunOptions {
   runId: string;
+};
+
+export type StartRunOptions = {
+  args: Array<string>;
   command: string;
-  file: string;
-  args: string[];
   cwd: string;
+  file: string;
+  runId: string;
   /** 看门狗上限（毫秒）。超时走 `killProcessTree` 掐整棵树。 */
   timeoutMs: number;
-}
+};
 
 /** 控制台执行器的对外形状（单槽 + 取消）。 */
-export interface ConsoleRunner {
+export type ConsoleRunner = {
   /** 当前是否有命令在跑；忙时回「是谁、跑了多久」（界面据此禁用输入）。 */
-  busy: () => { runId: string; command: string; startedAt: number } | null;
-  /** 起一条命令，逐事件推给 `onEvent`。返回收尾事实。 */
-  run: (
-    opts: StartRunOptions,
-    onEvent: (event: ConsoleEvent) => void,
-  ) => Promise<ConsoleRunResult>;
+  busy: () => { command: string; runId: string; startedAt: number } | null;
   /** 取消当前命令（杀整棵树）。没有在跑的命令时返回 false。 */
   cancel: () => Promise<boolean>;
-}
+  /** 起一条命令，逐事件推给 `onEvent`。返回收尾事实。 */
+  run: (opts: StartRunOptions, onEvent: (event: ConsoleEvent) => void) => Promise<ConsoleRunResult>;
+};
 
 /**
  * 「这条命令没起来」的**可读出口**（硬规则 4：失败路径要有人看得懂的那句话）。
@@ -135,12 +132,12 @@ function startFailureMessage(
  */
 export function createConsoleRunner(): ConsoleRunner {
   let current: {
-    runId: string;
-    command: string;
-    startedAt: number;
     child: ReturnType<typeof spawn>;
+    command: string;
     /** 用户 / 看门狗是否已经判它「该死了」（用于 exit 事件里区分「失败」与「掐掉」）。 */
     killed: boolean;
+    runId: string;
+    startedAt: number;
   } | null = null;
 
   const busy = () =>
@@ -198,14 +195,14 @@ export function createConsoleRunner(): ConsoleRunner {
            * `drizzle-kit` 的中文输出会先被编码成 GBK 再被我们按 utf-8 解 ——
            * 用户看到的是乱码，且看不出是编码问题（与 `executor-cli.ts` 给
            * Python 那两个变量同源的口径）。 */
-          PYTHONIOENCODING: "utf-8",
+          PYTHONIOENCODING: "utf8",
           PYTHONUTF8: "1",
         },
       });
-    } catch (e) {
+    } catch (error) {
       onEvent({
         type: "error",
-        message: startFailureMessage(opts.file, invocation, e),
+        message: startFailureMessage(opts.file, invocation, error),
       });
       return {
         runId: opts.runId,
@@ -229,44 +226,47 @@ export function createConsoleRunner(): ConsoleRunner {
      * （同「硬规则 4：日志要有上限」的口气）。 */
     let emitted = 0;
     let truncated = false;
-    const forward =
-      (stream: "stdout" | "stderr") => (chunk: Buffer | string) => {
-        const text = String(chunk);
-        if (truncated) return;
-        const remaining = MAX_OUTPUT_CHARS - emitted;
-        if (remaining <= 0) {
-          truncated = true;
-          onEvent({
-            type: "out",
-            stream: "stderr",
-            text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行，可在下方「完整输出」文件里看尾部）\n`,
-          });
-          return;
-        }
-        if (text.length > remaining) {
-          onEvent({ type: "out", stream, text: text.slice(0, remaining) });
-          emitted += remaining;
-          truncated = true;
-          /* 单个 chunk 就撞上限时必须补一句说明：否则用户看到的是「输出到一半
-           * 戛然而止」，而 exit 帧那句 `truncatedNote` 只有界面读得懂字段名的人
-           * 才看得见（硬规则 4：失败/降级路径要有**用户可见**的出口）。 */
-          onEvent({
-            type: "out",
-            stream: "stderr",
-            text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行）\n`,
-          });
-          return;
-        }
-        emitted += text.length;
-        onEvent({ type: "out", stream, text });
-      };
+    const forward = (stream: "stdout" | "stderr") => (chunk: Buffer | string) => {
+      const text = String(chunk);
+      if (truncated) {
+        return;
+      }
+      const remaining = MAX_OUTPUT_CHARS - emitted;
+      if (remaining <= 0) {
+        truncated = true;
+        onEvent({
+          type: "out",
+          stream: "stderr",
+          text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行，可在下方「完整输出」文件里看尾部）\n`,
+        });
+        return;
+      }
+      if (text.length > remaining) {
+        onEvent({ type: "out", stream, text: text.slice(0, remaining) });
+        emitted += remaining;
+        truncated = true;
+        /* 单个 chunk 就撞上限时必须补一句说明：否则用户看到的是「输出到一半
+         * 戛然而止」，而 exit 帧那句 `truncatedNote` 只有界面读得懂字段名的人
+         * 才看得见（硬规则 4：失败/降级路径要有**用户可见**的出口）。 */
+        onEvent({
+          type: "out",
+          stream: "stderr",
+          text: `\n… 输出已达 ${MAX_OUTPUT_CHARS} 字符上限，后续内容不再转发（命令仍在运行）\n`,
+        });
+        return;
+      }
+      emitted += text.length;
+      onEvent({ type: "out", stream, text });
+    };
 
     child.stdout?.on("data", forward("stdout"));
     child.stderr?.on("data", forward("stderr"));
 
     const guard = setTimeout(
       () => {
-        if (current?.runId !== opts.runId) return;
+        if (current?.runId !== opts.runId) {
+          return;
+        }
         current.killed = true;
         onEvent({
           type: "out",
@@ -313,9 +313,7 @@ export function createConsoleRunner(): ConsoleRunner {
       code: exit.code,
       signal: exit.signal,
       killed,
-      truncatedNote: truncated
-        ? `输出超过 ${MAX_OUTPUT_CHARS} 字符已截断`
-        : null,
+      truncatedNote: truncated ? `输出超过 ${MAX_OUTPUT_CHARS} 字符已截断` : null,
       durationMs,
     });
     return {
@@ -328,7 +326,9 @@ export function createConsoleRunner(): ConsoleRunner {
   }
 
   async function cancel(): Promise<boolean> {
-    if (!current) return false;
+    if (!current) {
+      return false;
+    }
     current.killed = true;
     const child = current.child;
     // 不在这里 `current = null`：`run()` 的 close 回调还要读 `killed` 才能把
@@ -352,7 +352,9 @@ export function createConsoleRunner(): ConsoleRunner {
  */
 async function terminate(child: ReturnType<typeof spawn>): Promise<void> {
   const pid = child.pid;
-  if (!pid) return;
+  if (!pid) {
+    return;
+  }
   await killProcessTree({
     pid,
     detached: process.platform !== "win32",

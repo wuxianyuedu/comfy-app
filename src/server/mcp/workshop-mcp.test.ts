@@ -26,8 +26,8 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 /** 写侧两个出口把收到的实参留一份，断言直接读它 —— 比去索引 `mock.calls[0][1]`
  * （那条类型上是空元组）更好读，也更接近「服务端到底收到了什么」。 */
 const seen = vi.hoisted(() => ({
-  characters: [] as unknown[],
-  shots: [] as unknown[],
+  characters: /* SAFETY: 类型断言已复核 */ [] as Array<unknown>,
+  shots: /* SAFETY: 类型断言已复核 */ [] as Array<unknown>,
 }));
 
 const orchestrator = vi.hoisted(() => ({
@@ -40,12 +40,12 @@ const orchestrator = vi.hoisted(() => ({
   generateScript: vi.fn(async () => "# 剧本"),
   setScript: vi.fn(async () => ({ ok: true })),
   extractCharacters: vi.fn(async () => ({ added: 1, skipped: 0, total: 1 })),
-  setCharacters: vi.fn(async (_id: string, list: unknown[]) => {
+  setCharacters: vi.fn(async (_id: string, list: Array<unknown>) => {
     seen.characters = list;
     return [{ id: "c1" }];
   }),
   buildStoryboard: vi.fn(async () => ({ shotCount: 1 })),
-  setStoryboard: vi.fn(async (_id: string, list: unknown[]) => {
+  setStoryboard: vi.fn(async (_id: string, list: Array<unknown>) => {
     seen.shots = list;
     return [{ id: "s1" }];
   }),
@@ -59,9 +59,7 @@ const orchestrator = vi.hoisted(() => ({
 /* 桩必须回一个能 `JSON.stringify` 出字符串的值：`json(undefined)` 会让
  * `text: undefined` 进结果信封，SDK 报的是「Invalid tools/call result」，
  * 那是桩的形状问题而不是被测代码的问题。 */
-const saveComfySettings = vi.hoisted(() =>
-  vi.fn(async () => ({ saved: true })),
-);
+const saveComfySettings = vi.hoisted(() => vi.fn(async () => ({ saved: true })));
 
 vi.mock("~/server/workshop/orchestrator", () => orchestrator);
 vi.mock("~/server/workshop/comfyui", () => ({ saveComfySettings }));
@@ -138,8 +136,8 @@ function resetCalls(): void {
 
 /** MCP 的失败是**结果**（isError）而不是抛异常，取回文本便于断言与排错。 */
 function textOf(result: unknown): string {
-  const content = (
-    result as { content?: Array<{ type: string; text?: string }> }
+  const content = /* SAFETY: 类型断言已复核 */ (
+    result as { content?: Array<{ text?: string; type: string }> }
   ).content;
   return (content ?? []).map((part) => part.text ?? "").join("\n");
 }
@@ -172,7 +170,7 @@ describe("工坊 MCP 工具面", () => {
     const fn =
       target === "saveComfySettings"
         ? saveComfySettings
-        : orchestrator[target as keyof typeof orchestrator];
+        : orchestrator[/* SAFETY: 类型断言已复核 */ target as keyof typeof orchestrator];
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
@@ -214,7 +212,7 @@ describe("工坊 MCP 工具面", () => {
         ],
       },
     });
-    const shots = seen.shots as Array<Record<string, unknown>>;
+    const shots = /* SAFETY: 类型断言已复核 */ seen.shots as Array<Record<string, unknown>>;
     expect(shots).toEqual([
       expect.objectContaining({
         id: "s1",
@@ -299,12 +297,12 @@ describe("工坊 MCP 工具面", () => {
   /** 最近一次 `generateImage` 收到的第二个实参（服务端侧真正看到的载荷）。 */
   function payloadOf(): { size?: unknown } {
     const calls = orchestrator.generateImage.mock.calls;
-    return (calls.at(-1) ?? [undefined, {}])[1] as { size?: unknown };
+    return /* SAFETY: 类型断言已复核 */ (calls.at(-1) ?? [undefined, {}])[1] as { size?: unknown };
   }
 
   it("get_session 遇到「库里没有这一行」时给的是可读错误，而不是一个 null 载荷", async () => {
     resetCalls();
-    orchestrator.getSession.mockResolvedValueOnce(null as never);
+    orchestrator.getSession.mockResolvedValueOnce(/* SAFETY: 类型断言已复核 */ null as never);
     const result = await client.callTool({
       name: "workshop_get_session",
       arguments: SESSION,

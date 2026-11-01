@@ -20,9 +20,7 @@ import { MultiSegmentPopover, type SegmentSection } from "./segment-popover";
 
 afterEach(cleanup);
 
-function ratioSection(
-  onChange: (value: string) => void = vi.fn(),
-): SegmentSection<string> {
+function ratioSection(onChange: (value: string) => void = vi.fn()): SegmentSection<string> {
   return {
     label: "比例",
     value: "16:9",
@@ -37,11 +35,7 @@ function ratioSection(
 /** 打开浮层，并把面板（`data-slot="popover-content"`）返回。 */
 function openPanel() {
   render(
-    <MultiSegmentPopover
-      triggerContent="16:9"
-      ariaLabel="尺寸"
-      sections={[ratioSection()]}
-    />,
+    <MultiSegmentPopover ariaLabel="尺寸" sections={[ratioSection()]} triggerContent="16:9" />,
   );
   fireEvent.click(screen.getByRole("button", { name: "尺寸" }));
   const panel = document.querySelector('[data-slot="popover-content"]');
@@ -51,7 +45,7 @@ function openPanel() {
 
 /** 面板里的某个选项按钮。触发器在面板外，按文案找也不会混淆。 */
 function option(panel: Element, label: string): Element {
-  const el = Array.from(panel.querySelectorAll("button")).find(
+  const el = [...panel.querySelectorAll("button")].find(
     (button) => button.textContent?.trim() === label,
   );
   expect(el, `面板里应当有「${label}」选项`).not.toBeUndefined();

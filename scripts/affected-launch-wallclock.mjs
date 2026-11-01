@@ -74,10 +74,7 @@ export const SERIAL_RERUN_FACTOR = 2;
  * @param {{startMs?: number, budgetMs?: number}} [options]
  * @returns {{deadline: number, budgetMs: number}}
  */
-export function wallClockBudget({
-  startMs = Date.now(),
-  budgetMs = STAGE_WALL_CLOCK_MS,
-} = {}) {
+export function wallClockBudget({ startMs = Date.now(), budgetMs = STAGE_WALL_CLOCK_MS } = {}) {
   return { deadline: startMs + budgetMs, budgetMs };
 }
 
@@ -92,7 +89,9 @@ export function wallClockBudget({
  * @returns {number | null}
  */
 export function remainingWallClockMs(budget, nowMs = Date.now()) {
-  if (!budget) return null;
+  if (!budget) {
+    return null;
+  }
   return budget.deadline - nowMs;
 }
 
@@ -200,16 +199,17 @@ export function budgetAllows({
  * @param {{budget?: {deadline: number} | null, perFileMs: number, pending: number, nowMs?: number}} args
  * @returns {number} 还能跑的份数（0 = 剩下的退回既有那条「拿不到自己的读数 ⇒ 退 2 并点名」）
  */
-export function affordablePerFileCount({
-  budget,
-  perFileMs,
-  pending,
-  nowMs = Date.now(),
-}) {
+export function affordablePerFileCount({ budget, perFileMs, pending, nowMs = Date.now() }) {
   const remainingMs = remainingWallClockMs(budget, nowMs);
-  if (remainingMs === null) return pending;
-  if (remainingMs <= 0 || pending <= 0) return 0;
-  if (perFileMs <= 0) return Math.min(pending, 1);
+  if (remainingMs === null) {
+    return pending;
+  }
+  if (remainingMs <= 0 || pending <= 0) {
+    return 0;
+  }
+  if (perFileMs <= 0) {
+    return Math.min(pending, 1);
+  }
   return Math.min(pending, Math.floor(remainingMs / perFileMs));
 }
 
@@ -227,7 +227,9 @@ export function affordablePerFileCount({
  * @returns {string[]} 第 2 遍要跑的文件（`via: "block"` ⇒ 全部）
  */
 export function rerunFileList({ gate, files, readSuites, isTimeout }) {
-  if (gate.via !== "probe") return [...files];
+  if (gate.via !== "probe") {
+    return [...files];
+  }
   return probeFiles({
     files,
     count: gate.probeCount ?? 1,
@@ -261,16 +263,15 @@ export function rerunFileList({ gate, files, readSuites, isTimeout }) {
  *   `isTimeout` 默认取 `isTimeoutShaped`（由调用点注入，本文件不复制第二份指纹清单）
  * @returns {string[]} 挑出来的文件（`count` ≤ 0 ⇒ 空；`count ≥ 份数` ⇒ 原样）
  */
-export function probeFiles({
-  files,
-  count,
-  readSuites = [],
-  isTimeout = () => true,
-}) {
+export function probeFiles({ files, count, readSuites = [], isTimeout = () => true }) {
   const list = Array.isArray(files) ? files : [];
   const n = Math.max(0, Math.trunc(Number(count) || 0));
-  if (n <= 0 || list.length === 0) return [];
-  if (n >= list.length) return [...list];
+  if (n <= 0 || list.length === 0) {
+    return [];
+  }
+  if (n >= list.length) {
+    return [...list];
+  }
   /** @type {Map<string, string>} */
   const bodyByName = new Map();
   for (const s of readSuites) {
@@ -281,7 +282,9 @@ export function probeFiles({
   /** @param {string} file */
   const rank = (file) => {
     const body = bodyByName.get(file);
-    if (body === undefined) return 1;
+    if (body === undefined) {
+      return 1;
+    }
     return isTimeout(body) ? 1 : 0;
   };
   return list
@@ -329,7 +332,9 @@ export function perFileBudgetStopReport({ remainingMs, perFileMs, left }) {
  */
 export function resolveWallClockMs(raw) {
   const text = String(raw ?? "").trim();
-  if (text === "") return { budgetMs: STAGE_WALL_CLOCK_MS, note: null };
+  if (text === "") {
+    return { budgetMs: STAGE_WALL_CLOCK_MS, note: null };
+  }
   const value = Number(text);
   if (!Number.isInteger(value) || value < 1) {
     return {
@@ -340,6 +345,73 @@ export function resolveWallClockMs(raw) {
     };
   }
   return { budgetMs: value, note: null };
+}
+
+/**
+ * 第一遍**开不开得起** —— 界要落在第一遍之前，而不只是落在第二遍之前。
+ *
+ * ## 为什么必须有这一格（2026-10-30 的现场）
+ *
+ * 上面那几格都只划在「**还开不开下一遍**」，前提是「第一遍总会跑完」。那个前提在
+ * 改动面大到一个量级时会失效，而失效的形态**没有任何一处会说话**：
+ *
+ * | 读数（build `cnb-l0u-1k66agmv9`，PR #2760） | 值 |
+ * | -- | -- |
+ * | 改动面 | 1158 个文件（`curly` 批量化，7194 处 `--fix`） |
+ * | 受影响清单 | **808 份 / 11443 条**（固定 106 + 受影响 702） |
+ * | 首跑并发（`ci-load.mjs` 按现场核数折算） | 1 |
+ * | `受影响用例` 那一格 | **3240104ms ≈ 54.0 分钟**，`timeout of 3240000ms exceeded` |
+ * | 那一屏日志里的用例名 | **0 个**（`--reporter=dot` 在第一份跑完之前只往同一行打点，
+ *   而平台保留的是日志**尾部**） |
+ *
+ * 也就是说这一跑里连「跑了哪些、卡在哪一份」都读不回来 —— 它既不是某条用例红，
+ * 也不是某条断言超时，而是**这一格根本装不下这次改动面**。而 `STAGE_WALL_CLOCK_MS`
+ * （25 分钟）当时在这里一次都没生效过：它的判点在第一遍之后，而第一遍自己就吃了 54 分钟。
+ *
+ * ## 判据只有一条，且不含任何常数界
+ *
+ * 「按首跑并发折算的单份单价 × 份数」是否塞得进**剩余预算**。单价不是拍的常数 ——
+ * 它由调用点按 `affected-launch-per-file-cost.mjs` 那套「已跑过的块 / 已跑过的份」现算
+ * （同一份口径：`affordablePerFileCount` 也用它）；拿不到单价时**不拦**（`ok: true`）：
+ * 「不知道」不等于「跑不完」，拿一个猜的数去拦会把正常提交挡在门口。
+ *
+ * ⚠️ 它**不新增结论档**：拦下来就是「没判」（退 2），与 `budgetAllows` 那两档同一口径 ——
+ * 没跑 ≠ 绿，也不等于红（§13.6.2）。
+ *
+ * @param {{budget?: {deadline: number, budgetMs: number} | null,
+ *   files: number, perFileMs: number, nowMs?: number}} 入参
+ *   `files` = 这一遍要跑的份数；`perFileMs` = 单份的实测单价（≤0 / 不给 ⇒ 不拦）
+ * @returns {{ok: boolean, remainingMs: number | null, estimateMs: number, note: string}}
+ *   `estimateMs` = 这一遍的估时；`note` 是要打到 stderr 的正文（空串 = 不用说话）
+ */
+export function gateFirstPassByWallClock({ budget, files, perFileMs, nowMs = Date.now() }) {
+  const remainingMs = remainingWallClockMs(budget, nowMs);
+  /* 没有界 / 没有单价 / 没有份数 ⇒ 这一格不说话。三个都是「不知道」，而不知道
+   * 不构成阻断的理由（同 `ci-install-deps.mjs` 那两条安全边界的一条取向）。 */
+  if (remainingMs === null || !(perFileMs > 0) || !(files > 0)) {
+    return { ok: true, remainingMs, estimateMs: 0, note: "" };
+  }
+  const estimateMs = perFileMs * files;
+  if (estimateMs <= remainingMs) {
+    return { ok: true, remainingMs, estimateMs, note: "" };
+  }
+  /** @param {number} ms */
+  const fmt = (ms) => `${(Number(ms) / 60_000).toFixed(1)}分钟`;
+  return {
+    ok: false,
+    remainingMs,
+    estimateMs,
+    note:
+      "[affected-launch] 这一遍**开不起**：改动面 " +
+      `${files} 份 × 单份 ${(perFileMs / 1000).toFixed(1)}s ≈ ${fmt(estimateMs)}，` +
+      `而剩余预算只有 ${fmt(remainingMs)} ⇒\n` +
+      "  一份都不开。这不是红，也不是绿 ⇒ 按**未判定**收（退 2，§13.6.2）。\n" +
+      "  「合不进来」与「这次改动难不难」无关 —— 是反向 import 闭包把少数几个被广泛\n" +
+      "  import 的文件放大成了几百份。下一动作有两个，都不改判据：\n" +
+      "  ① 把改动拆开：一次 PR 一批（规范 §13.5.8.1 / §13.5.8.2「第七笔账」）；\n" +
+      "  ② 真要一次跑完就按名字要全量 —— `node scripts/run-affected-tests.mjs --full`\n" +
+      "     （那是 `每日单元测试` 的量级，不是这一格）。\n",
+  };
 }
 
 /**
@@ -357,12 +429,7 @@ export function resolveWallClockMs(raw) {
  *   `via` 说的是「开的是哪一种」（整块 / 逐文件补跑里的 n 份）；`note` 是要打到 stderr
  *   的那段正文（空串 = 这一档什么都不用说）。
  */
-export function gateRerunByWallClock({
-  budget,
-  firstPassMs,
-  retryFiles,
-  nowMs = Date.now(),
-}) {
+export function gateRerunByWallClock({ budget, firstPassMs, retryFiles, nowMs = Date.now() }) {
   const estimateMs = estimateSerialRerunMs(firstPassMs);
   const remainingMs = remainingWallClockMs(budget, nowMs);
   const gate = budgetAllows({
@@ -395,12 +462,12 @@ export function gateRerunByWallClock({
     ...gate,
     note: gate.ok
       ? ""
-      : "[affected-launch] " +
-        (broke
+      : `[affected-launch] ${
+        broke
           ? "墙钟已经用完"
-          : `墙钟买不起**整块**串行复跑（剩余 ${fmt(remainingMs ?? 0)} < 估计 ${fmt(estimateMs)}）`) +
-        (broke ? "" : "，而**逐文件补跑**也一份都买不起") +
-        " ⇒\n  第 2 遍不开。这不是红，也不是绿 ⇒ 按**未判定**收（退 2，ISSUE #2364）。\n",
+          : `墙钟买不起**整块**串行复跑（剩余 ${fmt(remainingMs ?? 0)} < 估计 ${fmt(estimateMs)}）`
+        }${broke ? "" : "，而**逐文件补跑**也一份都买不起"
+        } ⇒\n  第 2 遍不开。这不是红，也不是绿 ⇒ 按**未判定**收（退 2，ISSUE #2364）。\n`,
   };
 }
 
@@ -416,23 +483,23 @@ export function gateRerunByWallClock({
  */
 export function wallClockSkipReport({ remainingMs, estimateMs, files }) {
   /** @param {number} ms */
-  const fmt = (ms) => `${(Number(ms) / 60000).toFixed(1)} 分钟`;
+  const fmt = (ms) => `${(Number(ms) / 60_000).toFixed(1)} 分钟`;
   return (
-    "[affected-launch] ⚠ **这一格的墙钟预算用完了 ⇒ 第 2 遍不开。**\n" +
+    `[affected-launch] ⚠ **这一格的墙钟预算用完了 ⇒ 第 2 遍不开。**\n` +
     `  剩余 ${remainingMs === null ? "(没设界)" : fmt(remainingMs)}、` +
     `估计要 ${fmt(estimateMs)}（串行复跑按第 1 遍墙钟 ×${SERIAL_RERUN_FACTOR} 估 —— ` +
-    "实测串行那一遍比并行那一遍更慢，所以不按比例算）。\n" +
-    "  连**逐文件补跑**也买不起（那一档的单价还不知道时放一份过去，这里连那一份都没有）：\n" +
-    "  逐文件补跑只跑失败的那几份、一份一个退出码，它比整块串行便宜得多 ——\n" +
-    "  所以这句话之前本应先量过一份（见 `budgetAllows` 的 `probeFiles`）。\n" +
-    "  这不是红，也不是绿，也不是「未校验」：未校验是**两次测量都只给超时指纹**，\n" +
-    "  而这里连第二次测量都没有发生 ⇒ 按**未判定**收（退 2，规范 §13.6.4）。\n" +
-    `  下面这 ${files.length} 份文件这次没有结论：\n` +
-    files.map((f) => `    · ${f}\n`).join("") +
-    "  下一动作：机器空下来时把那几份单独串行跑一次 ——\n" +
-    "    pnpm exec vitest run --no-file-parallelism <那几份路径>\n" +
-    "  ⚠️ **不要**抬 `testTimeout` / `hookTimeout`，也不要 --no-verify：\n" +
-    "     本件的整个前提就是「争用不是预算不够」（§11.13）；界在这里，是为了让\n" +
-    "     这一格在被平台掐掉之前**先把话说完**。\n"
+    `实测串行那一遍比并行那一遍更慢，所以不按比例算）。\n` +
+    `  连**逐文件补跑**也买不起（那一档的单价还不知道时放一份过去，这里连那一份都没有）：\n` +
+    `  逐文件补跑只跑失败的那几份、一份一个退出码，它比整块串行便宜得多 ——\n` +
+    `  所以这句话之前本应先量过一份（见 \`budgetAllows\` 的 \`probeFiles\`）。\n` +
+    `  这不是红，也不是绿，也不是「未校验」：未校验是**两次测量都只给超时指纹**，\n` +
+    `  而这里连第二次测量都没有发生 ⇒ 按**未判定**收（退 2，规范 §13.6.4）。\n` +
+    `  下面这 ${files.length} 份文件这次没有结论：\n${
+    files.map((f) => `    · ${f}\n`).join("")
+    }  下一动作：机器空下来时把那几份单独串行跑一次 ——\n` +
+    `    pnpm exec vitest run --no-file-parallelism <那几份路径>\n` +
+    `  ⚠️ **不要**抬 \`testTimeout\` / \`hookTimeout\`，也不要 --no-verify：\n` +
+    `     本件的整个前提就是「争用不是预算不够」（§11.13）；界在这里，是为了让\n` +
+    `     这一格在被平台掐掉之前**先把话说完**。\n`
   );
 }

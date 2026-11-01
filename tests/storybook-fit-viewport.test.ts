@@ -73,20 +73,17 @@ function pinnedScenes(): Set<string> {
   const visit = (node: ts.Node): void => {
     /* `CANVAS_SCENES` 是 `{ name: { … } satisfies Record<string, CanvasScene> }`：
        直接按「属性赋值 + 对象字面量」的形状找，不依赖它的声明写法。 */
-    if (
-      ts.isPropertyAssignment(node) &&
-      ts.isObjectLiteralExpression(node.initializer)
-    ) {
-      const name = ts.isIdentifier(node.name)
-        ? node.name.text
-        : stringLiteralText(node.name);
+    if (ts.isPropertyAssignment(node) && ts.isObjectLiteralExpression(node.initializer)) {
+      const name = ts.isIdentifier(node.name) ? node.name.text : stringLiteralText(node.name);
       const hasPinZoom = node.initializer.properties.some(
         (prop) =>
           ts.isPropertyAssignment(prop) &&
           ts.isIdentifier(prop.name) &&
           prop.name.text === "pinZoom",
       );
-      if (name !== null && hasPinZoom) pinned.add(name);
+      if (name !== null && hasPinZoom) {
+        pinned.add(name);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -94,20 +91,20 @@ function pinnedScenes(): Set<string> {
   return pinned;
 }
 
-interface CanvasUsage {
+type CanvasUsage = {
   /** 消费方文件（相对仓库根）。 */
   readonly file: string;
+  readonly hasFit: boolean;
   /** 这个 `<StorybookFlowCanvas>` 传了 `nodeTypes`（自定义渲染器，高度未知）。 */
   readonly hasNodeTypes: boolean;
-  readonly hasFit: boolean;
   /** `scene={… canvasScene("名字") …}` 里的场景名（读不到就是 null）。 */
   readonly sceneName: string | null;
 }
 
 /** 扫一个文件里的所有 `<StorybookFlowCanvas>` 用法。 */
-function canvasUsagesIn(file: string): CanvasUsage[] {
+function canvasUsagesIn(file: string): Array<CanvasUsage> {
   const source = parse(file);
-  const usages: CanvasUsage[] = [];
+  const usages: Array<CanvasUsage> = [];
   const visit = (node: ts.Node): void => {
     /* `<X … />` 是 **`JsxSelfClosingElement`**、`<X …>…</X>` 才是 `JsxOpeningElement`
        —— 只看后者会把 `<StorybookFlowCanvas … />` 这种写法**整片漏掉**
@@ -121,10 +118,16 @@ function canvasUsagesIn(file: string): CanvasUsage[] {
       let hasFit = false;
       let sceneName: string | null = null;
       for (const attr of node.attributes.properties) {
-        if (!ts.isJsxAttribute(attr) || !ts.isIdentifier(attr.name)) continue;
-        if (attr.name.text === "nodeTypes") hasNodeTypes = true;
+        if (!ts.isJsxAttribute(attr) || !ts.isIdentifier(attr.name)) {
+          continue;
+        }
+        if (attr.name.text === "nodeTypes") {
+          hasNodeTypes = true;
+        }
         /* `fit` 是简写属性（`fit`）或 `fit={true}`：两种都算。 */
-        if (attr.name.text === "fit") hasFit = true;
+        if (attr.name.text === "fit") {
+          hasFit = true;
+        }
         if (attr.name.text === "scene" && attr.initializer) {
           /* 场景名经 `canvasScene("twoNodes")` 求值 —— 从**调用实参**取字面量，
              不按整个属性文本猜（`withNodeType(canvasScene("x"), "story")` 里
@@ -155,12 +158,15 @@ function canvasUsagesIn(file: string): CanvasUsage[] {
 }
 
 /** 递归找 `src/` 下的故事文件。 */
-function storyFiles(dir: string): string[] {
-  const out: string[] = [];
+function storyFiles(dir: string): Array<string> {
+  const out: Array<string> = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...storyFiles(full));
-    else if (full.endsWith(".stories.tsx")) out.push(full);
+    if (statSync(full).isDirectory()) {
+      out.push(...storyFiles(full));
+    } else if (full.endsWith(".stories.tsx")) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -173,9 +179,7 @@ describe("画布帧的视口口径（装不下要显式认账）", () => {
   it("解析器不是空转：扫得出场景标记与消费方", () => {
     /* 没这半，下面两条会在「解析器什么都没解析出来」时恒绿 —— 判据空转比没有更坏。 */
     expect(pinned.size, "带 pinZoom 的场景一个都没解析出来").toBeGreaterThan(0);
-    expect(usages.length, "一份 <StorybookFlowCanvas> 都没扫到").toBeGreaterThan(
-      0,
-    );
+    expect(usages.length, "一份 <StorybookFlowCanvas> 都没扫到").toBeGreaterThan(0);
     /* 「传 nodeTypes 的」与「传 fit 的」都得真出现过，否则规则的另一半没被验过。 */
     expect(
       usages.some((u) => u.hasNodeTypes),
@@ -190,10 +194,7 @@ describe("画布帧的视口口径（装不下要显式认账）", () => {
   it("传了 nodeTypes 的消费方要么传 fit、要么用 pinZoom 场景", () => {
     const offenders = usages
       .filter((u) => u.hasNodeTypes && !u.hasFit && !pinned.has(u.sceneName ?? ""))
-      .map(
-        (u) =>
-          `${u.file}（场景 ${u.sceneName ?? "读不到"}：渲染器尺寸未知、又没传 fit）`,
-      );
+      .map((u) => `${u.file}（场景 ${u.sceneName ?? "读不到"}：渲染器尺寸未知、又没传 fit）`);
     expect(
       offenders,
       [
@@ -233,10 +234,9 @@ describe("画布帧的视口口径（装不下要显式认账）", () => {
       pinnedBranch,
       "钉住视口那条口径（viewport + onViewportChange 空实现）不许被删",
     ).toContain("viewport: scene.viewport");
-    expect(
-      pinnedBranch,
-      "受控视口的 onViewportChange 空实现不许被删",
-    ).toContain("onViewportChange: () => undefined");
+    expect(pinnedBranch, "受控视口的 onViewportChange 空实现不许被删").toContain(
+      "onViewportChange: () => undefined",
+    );
   });
 
   it("两种口径互斥：fit 档不传受控的 viewport", () => {
@@ -246,9 +246,7 @@ describe("画布帧的视口口径（装不下要显式认账）", () => {
     /* `viewport: scene.viewport` 与 `fitView: true` 必须在三元的两支里，
        而不是并列传给 <ReactFlow>。 */
     const start = flow.indexOf("...(fit");
-    expect(start, "两种口径互斥的那个三元找不到 —— fit 接线被改写了").toBeGreaterThan(
-      -1,
-    );
+    expect(start, "两种口径互斥的那个三元找不到 —— fit 接线被改写了").toBeGreaterThan(-1);
     const spread = flow.slice(start, flow.indexOf("proOptions", start));
     expect(spread).toContain("fitView: true");
     expect(spread).toContain("viewport: scene.viewport");

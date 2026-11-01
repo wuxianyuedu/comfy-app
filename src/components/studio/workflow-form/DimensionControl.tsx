@@ -74,51 +74,51 @@ function DimensionControl({
   visibilityMode,
   onVisibilityChange,
 }: {
-  group: DimensionGroup;
-  values: Record<string, unknown>;
-  set: (ioKey: string, v: unknown) => void;
-  setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
-  workflowId?: string;
+  group: DimensionGroup;
+  /** 多模式作者态：按该模式解析必填。 */
+  mode?: string | null;
   /** 画布 / 库内的紧凑版式：控件按内容收窄（`w-fit`），不再占满整行。
    * 与宽版表单的区别**只是宽度**：录入能力、下拉、落点锚点全部一致。 */
   narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
-  /** 多模式作者态：按该模式解析必填。 */
-  mode?: string | null;
+  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  set: (ioKey: string, v: unknown) => void;
+  setMany: (patch: Record<string, unknown>) => void;
+  values: Record<string, unknown>;
   /** IO 编辑态：按该模式解析可见性。 */
   visibilityMode?: string | null;
-  onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  workflowId?: string;
 }) {
   if (group.width && group.height) {
     return (
       <DimensionSizeControl
-        group={{ ...group, width: group.width, height: group.height }}
-        values={values}
-        set={set}
-        setMany={setMany}
         disabled={disabled}
-        workflowId={workflowId}
+        group={{ ...group, width: group.width, height: group.height }}
+        mode={mode}
         narrow={narrow}
         onRequiredChange={onRequiredChange}
-        mode={mode}
-        visibilityMode={visibilityMode}
         onVisibilityChange={onVisibilityChange}
+        set={set}
+        setMany={setMany}
+        values={values}
+        visibilityMode={visibilityMode}
+        workflowId={workflowId}
       />
     );
   }
   if (group.aspect && group.megapixels) {
     return (
       <AspectMegapixelControl
-        group={{ ...group, aspect: group.aspect, megapixels: group.megapixels }}
-        values={values}
-        setMany={setMany}
         disabled={disabled}
+        group={{ ...group, aspect: group.aspect, megapixels: group.megapixels }}
+        mode={mode}
         narrow={narrow}
         onRequiredChange={onRequiredChange}
-        mode={mode}
-        visibilityMode={visibilityMode}
         onVisibilityChange={onVisibilityChange}
+        setMany={setMany}
+        values={values}
+        visibilityMode={visibilityMode}
       />
     );
   }
@@ -138,24 +138,20 @@ function DimensionSizeControl({
   visibilityMode,
   onVisibilityChange,
 }: {
-  group: SizeGroup;
-  values: Record<string, unknown>;
-  set: (ioKey: string, v: unknown) => void;
-  setMany: (patch: Record<string, unknown>) => void;
   disabled?: boolean;
-  workflowId?: string;
+  group: SizeGroup;
+  mode?: string | null;
   narrow?: boolean;
   onRequiredChange?: (ioKey: string, required: boolean) => void;
-  mode?: string | null;
-  visibilityMode?: string | null;
   onVisibilityChange?: (ioKey: string, visible: boolean) => void;
+  set: (ioKey: string, v: unknown) => void;
+  setMany: (patch: Record<string, unknown>) => void;
+  values: Record<string, unknown>;
+  visibilityMode?: string | null;
+  workflowId?: string;
 }) {
-  const w0 = Number(
-    values[group.width.ioKey] ?? group.width.defaultValue ?? 1024,
-  );
-  const h0 = Number(
-    values[group.height.ioKey] ?? group.height.defaultValue ?? 1024,
-  );
+  const w0 = Number(values[group.width.ioKey] ?? group.width.defaultValue ?? 1024);
+  const h0 = Number(values[group.height.ioKey] ?? group.height.defaultValue ?? 1024);
 
   /** 场景决定 1k/2k/4k 查哪张表（图片 = AI 出图口径，视频 = 行业标准口径）。
    * 模式码是视频模式（T2V / I2V …）时用视频表。 */
@@ -171,10 +167,8 @@ function DimensionSizeControl({
   const [alignMultiple, setAlignMultipleState] = useState<number>(() =>
     /* SSR / 隐私模式 / 坏数据一律回落默认值（§16.2.4.28）。窄化交给
      *`parse`：此前这里要在本地写一遍`Number.parseInt` + 归一化。 */
-    readStorageJson(
-      `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
-      DEFAULT_ALIGN_MULTIPLE,
-      (raw) => normalizeAlignMultiple(Number.parseInt(raw, 10)),
+    readStorageJson(`${ALIGN_PREFIX}:${workflowId ?? "global"}`, DEFAULT_ALIGN_MULTIPLE, (raw) =>
+      normalizeAlignMultiple(Number.parseInt(raw, 10)),
     ),
   );
   const setAlignMultiple = useCallback(
@@ -182,10 +176,7 @@ function DimensionSizeControl({
       const clamped = normalizeAlignMultiple(multiple);
       setAlignMultipleState(clamped);
       /* 存储不可用（配额满 / 隐私模式）非致命，静默 —— 本次会话内仍然生效。 */
-      writeStorageItem(
-        `${ALIGN_PREFIX}:${workflowId ?? "global"}`,
-        String(clamped),
-      );
+      writeStorageItem(`${ALIGN_PREFIX}:${workflowId ?? "global"}`, String(clamped));
     },
     [workflowId],
   );
@@ -197,10 +188,7 @@ function DimensionSizeControl({
     const currentRatio = h0 === 0 ? 1 : w0 / h0;
     return DIM_RATIO_PRESETS.reduce(
       (best, preset) =>
-        Math.abs(preset.ratio - currentRatio) <
-        Math.abs(best.ratio - currentRatio)
-          ? preset
-          : best,
+        Math.abs(preset.ratio - currentRatio) < Math.abs(best.ratio - currentRatio) ? preset : best,
       DEFAULT_DIM_RATIO_PRESET,
     ).label;
   }, [w0, h0]);
@@ -224,27 +212,17 @@ function DimensionSizeControl({
    * 宽高推出来的那个量，所以起点与屏幕上看到的尺寸一致（选 1k 就是它的实际
    * 0.8M，而不是从 1M 跳一下）。用户改它 → 按同一比例换总像素预算，宽高随之
    * 吸附到倍数网格。 */
-  const currentMegapixels = useMemo(
-    () => megapixelsOf({ width: w0, height: h0 }),
-    [w0, h0],
-  );
+  const currentMegapixels = useMemo(() => megapixelsOf({ width: w0, height: h0 }), [w0, h0]);
 
   const applyPreset = useCallback(
     (rLabel: string, cLabel: string) => {
       const rp =
-        DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ??
-        DEFAULT_DIM_RATIO_PRESET;
+        DIM_RATIO_PRESETS.find((preset) => preset.label === rLabel) ?? DEFAULT_DIM_RATIO_PRESET;
       /* 含自由百万像素值（`"2.5M"`）：`clarityPresetFor` 认档位表之外的合法值，
        * 直接用`DIM_CLARITY_PRESETS.find` 会把用户填的 2.5 悄悄换成 1k。 */
       const cp = clarityPresetFor(cLabel);
       /* 分辨率档查场景表；百万像素档把用户选的倍数带进去吸附宽高。 */
-      const { width, height } = dimsForRatio(
-        rp.ratio,
-        cp,
-        alignMultiple,
-        scene,
-        table,
-      );
+      const { width, height } = dimsForRatio(rp.ratio, cp, alignMultiple, scene, table);
       setExplicitClarity(cLabel);
       setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
     },
@@ -262,18 +240,11 @@ function DimensionSizeControl({
       const clamped = normalizeAlignMultiple(next);
       setAlignMultiple(clamped);
       const rp =
-        DIM_RATIO_PRESETS.find((preset) => preset.label === ratio) ??
-        DEFAULT_DIM_RATIO_PRESET;
+        DIM_RATIO_PRESETS.find((preset) => preset.label === ratio) ?? DEFAULT_DIM_RATIO_PRESET;
       const cp =
         DIM_CLARITY_PRESETS.find((preset) => preset.label === clarity) ??
         DEFAULT_DIM_CLARITY_PRESET;
-      const { width, height } = dimsForRatio(
-        rp.ratio,
-        cp,
-        clamped,
-        scene,
-        table,
-      );
+      const { width, height } = dimsForRatio(rp.ratio, cp, clamped, scene, table);
       setExplicitClarity(null);
       setMany({ [group.width.ioKey]: width, [group.height.ioKey]: height });
     },
@@ -295,8 +266,8 @@ function DimensionSizeControl({
     [group, set],
   );
 
-  const sections: SegmentSection<string>[] = useMemo(() => {
-    const list: SegmentSection<string>[] = [
+  const sections: Array<SegmentSection<string>> = useMemo(() => {
+    const list: Array<SegmentSection<string>> = [
       {
         label: "比例",
         value: ratio,
@@ -323,11 +294,9 @@ function DimensionSizeControl({
          *`clarityPresetFor` 认出它。 */
         extra: (
           <MegapixelStepper
-            value={currentMegapixels}
             disabled={disabled}
-            onChange={(megapixels) =>
-              applyPreset(ratio, megapixelLabel(megapixels))
-            }
+            onChange={(megapixels) => applyPreset(ratio, megapixelLabel(megapixels))}
+            value={currentMegapixels}
           />
         ),
       },
@@ -374,30 +343,28 @@ function DimensionSizeControl({
           </span>
           <div className={narrow ? "w-28 min-w-0" : "min-w-0 flex-1"}>
             <MultiSegmentPopover
-              ariaLabel="选择比例与像素"
-              triggerContent={`${shortRatioLabel(ratio)} / ${clarity}${clarityKind === "megapixel" ? ` / ${alignMultiple}` : ""}`}
-              sections={sections}
               align="right"
+              ariaLabel="选择比例与像素"
               footer={
                 <SizeTableFooter
-                  scene={scene}
-                  onOpen={() => setTableOpen(true)}
                   extra={
-                    <span className="text-ink-faint text-3xs">
-                      {CLARITY_HINT[clarityKind]}
-                    </span>
+                    <span className="text-ink-faint text-3xs">{CLARITY_HINT[clarityKind]}</span>
                   }
+                  onOpen={() => setTableOpen(true)}
+                  scene={scene}
                 />
               }
+              sections={sections}
+              triggerContent={`${shortRatioLabel(ratio)} / ${clarity}${clarityKind === "megapixel" ? ` / ${alignMultiple}` : ""}`}
             />
           </div>
         </div>
         <RequiredChips
-          pins={[group.width, group.height]}
-          onRequiredChange={onRequiredChange}
           mode={mode}
-          visibilityMode={visibilityMode}
+          onRequiredChange={onRequiredChange}
           onVisibilityChange={onVisibilityChange}
+          pins={[group.width, group.height]}
+          visibilityMode={visibilityMode}
         />
       </div>
 
@@ -411,33 +378,28 @@ function DimensionSizeControl({
         <div className="grid grid-cols-2 gap-2">
           <Field label="宽度">
             <NumberField
-              value={w0}
-              min={64}
-              max={GROUPED_SIZE_MAX}
-              step={alignMultiple}
               disabled={disabled}
+              max={GROUPED_SIZE_MAX}
+              min={64}
               onChange={handleW}
+              step={alignMultiple}
+              value={w0}
             />
           </Field>
           <Field label="高度">
             <NumberField
-              value={h0}
-              min={64}
-              max={GROUPED_SIZE_MAX}
-              step={alignMultiple}
               disabled={disabled}
+              max={GROUPED_SIZE_MAX}
+              min={64}
               onChange={handleH}
+              step={alignMultiple}
+              value={h0}
             />
           </Field>
         </div>
       )}
 
-      {tableOpen && (
-        <SizePresetTableModal
-          scene={scene}
-          onClose={() => setTableOpen(false)}
-        />
-      )}
+      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
     </div>
   );
 }

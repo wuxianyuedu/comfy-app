@@ -32,9 +32,15 @@ export const ELLIPSIS = "…";
 /** 截断方向。 */
 export type ClampDirection = "head" | "tail";
 
-export interface ClampOptions {
-  /** 上限（字符数）。必填 —— 本条账的判据就是「上限必须显式」。 */
-  maxLength: number;
+export type ClampOptions = {
+  /**
+   * 标记的**圆括号内容**（如 `"truncated"` / `"truncated, 原始 12345 字符"`）。
+   *
+   * 与 {@link marker} 二选一：给了它，标记即由出口拼成 `…(内容)`；
+   * 没给则用 {@link marker}（默认 `…`）。给诊断通道用 ——
+   * 「被切了多少」是排查时最想知道的那一个数，而它只能由调用处算出来。
+   */
+  annotation?: string;
   /**
    * 保留哪一头（默认 `"head"`）。
    *
@@ -49,15 +55,9 @@ export interface ClampOptions {
    * 一般不该用它：不标记的截断会让用户把腰斩内容当成全部。
    */
   marker?: string;
-  /**
-   * 标记的**圆括号内容**（如 `"truncated"` / `"truncated, 原始 12345 字符"`）。
-   *
-   * 与 {@link marker} 二选一：给了它，标记即由出口拼成 `…(内容)`；
-   * 没给则用 {@link marker}（默认 `…`）。给诊断通道用 ——
-   * 「被切了多少」是排查时最想知道的那一个数，而它只能由调用处算出来。
-   */
-  annotation?: string;
-}
+  /** 上限（字符数）。必填 —— 本条账的判据就是「上限必须显式」。 */
+  maxLength: number;
+};
 
 /**
  * 超出 `maxLength` 时截断，否则原样返回。
@@ -68,22 +68,19 @@ export interface ClampOptions {
  */
 export function clampText(text: string, opts: ClampOptions): string {
   const { maxLength, direction = "head", marker, annotation } = opts;
-  if (maxLength <= 0) return "";
-  if (text.length <= maxLength) return text;
-  const mark =
-    marker ??
-    (annotation !== undefined ? `${ELLIPSIS}(${annotation})` : ELLIPSIS);
+  if (maxLength <= 0) {
+    return "";
+  }
+  if (text.length <= maxLength) {
+    return text;
+  }
+  const mark = marker ?? (annotation === undefined ? ELLIPSIS : `${ELLIPSIS}(${annotation})`);
   /* 标记比上限还长时**不留标记**（只裁到上限）—— 否则返回值反而变长。 */
   if (mark.length >= maxLength) {
-    return direction === "tail"
-      ? text.slice(text.length - maxLength)
-      : text.slice(0, maxLength);
+    return direction === "tail" ? text.slice(text.length - maxLength) : text.slice(0, maxLength);
   }
   const budget = maxLength - mark.length;
-  const body =
-    direction === "tail"
-      ? text.slice(text.length - budget)
-      : text.slice(0, budget);
+  const body = direction === "tail" ? text.slice(text.length - budget) : text.slice(0, budget);
   return direction === "tail" ? mark + body : body + mark;
 }
 

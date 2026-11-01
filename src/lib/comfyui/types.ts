@@ -44,14 +44,16 @@ export const DEFAULT_PORT_COLOR = "#7C7C8A";
 
 /* 查一个端口的配色；查不到就用默认色。 */
 export function portColor(type: string | undefined | null): string {
-  if (!type) return DEFAULT_PORT_COLOR;
+  if (!type) {
+    return DEFAULT_PORT_COLOR;
+  }
   return PORT_COLORS[type] ?? DEFAULT_PORT_COLOR;
 }
 
 /* ── 各节点类型的**输出**类型表。ComfyUI 的 API 通过 /object_info 暴露这些，
  *    但画布只需要「每个槽位的输出顺序」—— 那是节点类型最稳定的属性。
  *    拿不到在跑的 /object_info 时，这张静态兜底表让连线配色依旧正确。 */
-const OUTPUT_TYPES: Record<string, string[]> = {
+const OUTPUT_TYPES: Record<string, Array<string>> = {
   /* Loaders */
   CheckpointLoaderSimple: ["MODEL", "CLIP", "VAE"],
   CheckpointLoader: ["MODEL", "CLIP", "VAE"],
@@ -166,7 +168,9 @@ export function inferOutputType(classType: string, slot: number): string {
   const types = OUTPUT_TYPES[classType];
 
   const slotType = types?.at(slot);
-  if (slotType !== undefined && slot >= 0) return slotType;
+  if (slotType !== undefined && slot >= 0) {
+    return slotType;
+  }
 
   /* 静态表没列出的自定义节点的启发式兜底
 
@@ -179,13 +183,21 @@ export function inferOutputType(classType: string, slot: number): string {
   const lower = classType.toLowerCase();
 
   if (slot === 0) {
-    if (lower.startsWith("empty") && lower.includes("latent")) return "LATENT";
+    if (lower.startsWith("empty") && lower.includes("latent")) {
+      return "LATENT";
+    }
 
-    if (lower.startsWith("empty") && lower.includes("image")) return "IMAGE";
+    if (lower.startsWith("empty") && lower.includes("image")) {
+      return "IMAGE";
+    }
 
-    if (lower.startsWith("empty") && lower.includes("audio")) return "AUDIO";
+    if (lower.startsWith("empty") && lower.includes("audio")) {
+      return "AUDIO";
+    }
 
-    if (lower.startsWith("empty")) return "LATENT";
+    if (lower.startsWith("empty")) {
+      return "LATENT";
+    }
 
     if (
       lower.includes("modelsampling") ||
@@ -197,67 +209,85 @@ export function inferOutputType(classType: string, slot: number): string {
       lower === "modelmerge" ||
       lower.startsWith("modelload") ||
       lower.startsWith("modelsamp")
-    )
+    ) {
       return "MODEL";
+    }
 
-    if (lower.includes("dualclip") || lower.includes("tripleclip"))
+    if (lower.includes("dualclip") || lower.includes("tripleclip")) {
       return "CLIP";
+    }
 
-    if (
-      lower.includes("clip") &&
-      !lower.includes("textencode") &&
-      !lower.includes("applyclip")
-    )
+    if (lower.includes("clip") && !lower.includes("textencode") && !lower.includes("applyclip")) {
       return "CLIP";
+    }
 
-    if (lower.includes("vae") && lower.includes("decode")) return "IMAGE";
+    if (lower.includes("vae") && lower.includes("decode")) {
+      return "IMAGE";
+    }
 
-    if (lower.includes("vae") && lower.includes("encode")) return "LATENT";
+    if (lower.includes("vae") && lower.includes("encode")) {
+      return "LATENT";
+    }
 
-    if (lower.includes("vae")) return "VAE";
+    if (lower.includes("vae")) {
+      return "VAE";
+    }
 
     if (
       (lower.includes("controlnet") || lower.includes("applycontrol")) &&
       lower.includes("apply")
-    )
+    ) {
       return "CONDITIONING";
+    }
 
-    if (lower.includes("controlnet")) return "CONTROL_NET";
+    if (lower.includes("controlnet")) {
+      return "CONTROL_NET";
+    }
 
-    if (lower.includes("upscale") && lower.includes("model"))
+    if (lower.includes("upscale") && lower.includes("model")) {
       return "UPSCALE_MODEL";
+    }
 
-    if (lower.includes("upscale")) return "IMAGE";
-
-    if (lower.includes("style") && lower.includes("model"))
-      return "STYLE_MODEL";
-
-    if (lower.includes("style") && lower.includes("apply"))
-      return "CONDITIONING";
-
-    if (
-      lower.includes("ksampler") ||
-      (lower.includes("sampler") && !lower.includes("custom"))
-    )
-      return "LATENT";
-
-    if (lower.includes("textencode") || lower.includes("conditioning"))
-      return "CONDITIONING";
-
-    if (lower.includes("loadimage") || lower.includes("loadmask"))
+    if (lower.includes("upscale")) {
       return "IMAGE";
+    }
+
+    if (lower.includes("style") && lower.includes("model")) {
+      return "STYLE_MODEL";
+    }
+
+    if (lower.includes("style") && lower.includes("apply")) {
+      return "CONDITIONING";
+    }
+
+    if (lower.includes("ksampler") || (lower.includes("sampler") && !lower.includes("custom"))) {
+      return "LATENT";
+    }
+
+    if (lower.includes("textencode") || lower.includes("conditioning")) {
+      return "CONDITIONING";
+    }
+
+    if (lower.includes("loadimage") || lower.includes("loadmask")) {
+      return "IMAGE";
+    }
 
     if (
       lower.includes("imagescale") ||
       lower.includes("imagebatch") ||
       lower.includes("imagecomposite") ||
       lower.startsWith("image")
-    )
+    ) {
       return "IMAGE";
+    }
 
-    if (lower.includes("latent")) return "LATENT";
+    if (lower.includes("latent")) {
+      return "LATENT";
+    }
 
-    if (lower.includes("audio") || lower.includes("sound")) return "AUDIO";
+    if (lower.includes("audio") || lower.includes("sound")) {
+      return "AUDIO";
+    }
   }
 
   return "UNKNOWN";
@@ -391,20 +421,24 @@ const INPUT_TYPES: Record<string, Record<string, string>> = {
 
 /* 判断某节点类型上某个输入槽位的数据类型。兜底是「按输入名启发式推断」。
  *  实在判断不出时返回 "UNKNOWN" —— 渲染器那时画一个通用灰点。 */
-export function inferInputType(
-  classType: string,
-  inputName: string,
-  value?: unknown,
-): string {
+export function inferInputType(classType: string, inputName: string, value?: unknown): string {
   const fromTable = INPUT_TYPES[classType]?.[inputName];
-  if (fromTable) return fromTable;
+  if (fromTable) {
+    return fromTable;
+  }
   if (value !== undefined) {
-    if (Array.isArray(value)) return "CONNECTION"; // placeholder
+    if (Array.isArray(value)) {
+      return "CONNECTION";
+    } // placeholder
     if (typeof value === "number") {
       return Number.isInteger(value) ? "INT" : "FLOAT";
     }
-    if (typeof value === "boolean") return "BOOLEAN";
-    if (typeof value === "string") return "STRING";
+    if (typeof value === "boolean") {
+      return "BOOLEAN";
+    }
+    if (typeof value === "string") {
+      return "STRING";
+    }
   }
   return inferInputTypeByName(inputName);
 }
@@ -413,57 +447,65 @@ export function inferInputType(
 export function inferInputTypeByName(name: string): string {
   const lower = name.toLowerCase();
 
-  if (lower === "model" || lower.includes("model")) return "MODEL";
+  if (lower === "model" || lower.includes("model")) {
+    return "MODEL";
+  }
 
-  if (
-    lower === "clip" ||
-    lower === "clip_g" ||
-    lower === "clip_l" ||
-    lower === "clip_name"
-  )
+  if (lower === "clip" || lower === "clip_g" || lower === "clip_l" || lower === "clip_name") {
     return "CLIP";
+  }
 
-  if (lower === "vae" || lower === "vae_name") return "VAE";
+  if (lower === "vae" || lower === "vae_name") {
+    return "VAE";
+  }
 
   if (
     lower === "positive" ||
     lower === "negative" ||
     lower === "conditioning" ||
     lower.startsWith("cond")
-  )
+  ) {
     return "CONDITIONING";
+  }
 
   if (
     lower === "latent" ||
     lower === "latent_image" ||
     lower === "samples" ||
     lower.endsWith("_latent")
-  )
+  ) {
     return "LATENT";
+  }
 
-  if (
-    lower === "image" ||
-    lower === "images" ||
-    lower === "pixels" ||
-    lower === "output_image"
-  )
+  if (lower === "image" || lower === "images" || lower === "pixels" || lower === "output_image") {
     return "IMAGE";
+  }
 
-  if (lower === "mask" || lower.endsWith("_mask")) return "MASK";
+  if (lower === "mask" || lower.endsWith("_mask")) {
+    return "MASK";
+  }
 
-  if (lower === "control_net" || lower.endsWith("_controlnet"))
+  if (lower === "control_net" || lower.endsWith("_controlnet")) {
     return "CONTROL_NET";
+  }
 
-  if (lower === "upscale_model" || lower === "model_name")
+  if (lower === "upscale_model" || lower === "model_name") {
     return "UPSCALE_MODEL";
+  }
 
-  if (lower === "audio" || lower === "waveform") return "AUDIO";
+  if (lower === "audio" || lower === "waveform") {
+    return "AUDIO";
+  }
 
   /* 按后缀识别的控件类型 */
 
-  if (lower === "seed") return "INT";
+  if (lower === "seed") {
+    return "INT";
+  }
 
-  if (lower === "steps" || lower === "step") return "INT";
+  if (lower === "steps" || lower === "step") {
+    return "INT";
+  }
 
   if (
     lower === "cfg" ||
@@ -471,8 +513,9 @@ export function inferInputTypeByName(name: string): string {
     lower === "strength" ||
     lower === "scale" ||
     lower.includes("strength")
-  )
+  ) {
     return "FLOAT";
+  }
 
   if (
     lower === "width" ||
@@ -480,41 +523,43 @@ export function inferInputTypeByName(name: string): string {
     lower === "batch_size" ||
     lower.endsWith("_size") ||
     lower.endsWith("_count")
-  )
+  ) {
     return "INT";
+  }
 
   if (
     lower === "sampler_name" ||
     lower === "scheduler" ||
     lower === "method" ||
     lower.endsWith("_method")
-  )
+  ) {
     return "COMBO";
+  }
 
-  if (
-    lower.endsWith("_name") ||
-    lower === "filename_prefix" ||
-    lower === "ckpt_name"
-  )
+  if (lower.endsWith("_name") || lower === "filename_prefix" || lower === "ckpt_name") {
     return "COMBO";
+  }
 
   if (
     lower === "text" ||
     lower.endsWith("_text") ||
     lower === "prompt" ||
     lower === "negative_prompt"
-  )
+  ) {
     return "STRING";
+  }
 
-  if (lower === "noise_mask" || lower === "return_with_leftover_noise")
+  if (lower === "noise_mask" || lower === "return_with_leftover_noise") {
     return "COMBO";
+  }
 
   if (
     lower === "start_at_step" ||
     lower === "end_at_step" ||
     lower === "return_with_leftover_noise"
-  )
+  ) {
     return "COMBO";
+  }
 
   return "UNKNOWN";
 }
@@ -544,17 +589,18 @@ export function inferIsMultiline(
   declaredMultiline: boolean | undefined,
   defaultValue?: unknown,
 ): boolean {
-  if (declaredMultiline === true) return true;
+  if (declaredMultiline === true) {
+    return true;
+  }
   return typeof defaultValue === "string" && defaultValue.length > 40;
 }
 
 /* 给定一条连线的目标端，结合「源节点类型 + 槽位」返回源侧提供的**输出**类型。
  *  用于给连线着色，以及连接行右侧那个小类型标签。 */
-export function edgeType(
-  srcClass: string | undefined,
-  srcSlot: number,
-): string {
-  if (!srcClass) return "UNKNOWN";
+export function edgeType(srcClass: string | undefined, srcSlot: number): string {
+  if (!srcClass) {
+    return "UNKNOWN";
+  }
   return inferOutputType(srcClass, srcSlot);
 }
 

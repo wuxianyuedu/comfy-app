@@ -14,9 +14,7 @@ test.describe("登录页冒烟", () => {
     await page.goto("/login");
 
     // 品牌与引导文案
-    await expect(
-      page.getByText("登录以同步你的作品、工作流与训练任务"),
-    ).toBeVisible();
+    await expect(page.getByText("登录以同步你的作品、工作流与训练任务")).toBeVisible();
 
     // 邮箱 / 密码输入框（登录态）
     await expect(page.getByPlaceholder("name@example.com")).toBeVisible();
@@ -31,18 +29,14 @@ test.describe("登录页冒烟", () => {
     await /* 登录 / 创建账号是一排里选一个（`role="radio"`，规范 16 §16.2.4.75）——
      不是按钮。改的是读法，不是用例锁的那件事。 */
     page.getByRole("radio", { name: "创建账号" }).click();
-    await expect(
-      page.getByText("创建一个本地账号，开启你的 AI 创作"),
-    ).toBeVisible();
+    await expect(page.getByText("创建一个本地账号，开启你的 AI 创作")).toBeVisible();
     await expect(page.getByText("昵称（可选）")).toBeVisible();
     await expect(submit).toHaveText("创建并登录");
   });
 });
 
 test.describe("首页冒烟", () => {
-  test("@critical 首页重定向到 /workspace 且创作台正常渲染", async ({
-    page,
-  }) => {
+  test("@critical 首页重定向到 /workspace 且创作台正常渲染", async ({ page }) => {
     await page.goto("/");
 
     // src/app/page.tsx 服务端 redirect("/workspace")
@@ -66,7 +60,7 @@ test.describe("数据库链路冒烟", () => {
   test("@critical 健康检查确认数据库表已就绪", async ({ request }) => {
     const res = await request.get("/api/health");
     expect(res.status()).toBe(200);
-    const body = (await res.json()) as { status: string; db: string };
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as { db: string; status: string; };
     // 表没建时是 503 + db: "empty"（此时应用首页还能 200，正是此前被漏报的形态）
     expect(body).toEqual(expect.objectContaining({ status: "ok", db: "up" }));
   });

@@ -30,13 +30,15 @@ import { AppError, NotFoundError } from "./errors";
  * @param rows `returning()` 的结果数组
  * @param what 出错信息里的人读主语（如 `"用户插入"`）
  */
-export function firstRowRequired<T>(rows: T[], what: string): T {
+export function firstRowRequired<T>(rows: Array<T>, what: string): T {
   const row = rows.at(0);
   /* 判据是 `=== undefined` 而不是 `!row`：本函数是**泛型**的，`T` 今天是 Drizzle
    * 的行对象（永远真值），但签名上没有任何东西保证这一点 —— 一个 `T = number`
    * 的调用点传进 `[0]` 就会被 `!row` 误判成「缺席」并抛内部错误，而那是**数据错了
    * 却被报成我方故障**。缺席这件事的准确表达就是「有没有元素」。 */
-  if (row === undefined) throw new AppError(`${what}未返回记录`);
+  if (row === undefined) {
+    throw new AppError(`${what}未返回记录`);
+  }
   return row;
 }
 
@@ -49,10 +51,12 @@ export function firstRowRequired<T>(rows: T[], what: string): T {
  * @param rows `returning()` 的结果数组
  * @param what 出错信息里的人读主语（如 `` `用户不存在: ${id}` ``）
  */
-export function firstRowOfExisting<T>(rows: T[], what: string): T {
+export function firstRowOfExisting<T>(rows: Array<T>, what: string): T {
   const row = rows.at(0);
   /* 同 `firstRowRequired`：判「有没有元素」，不判「值真不真」。这里误判的后果更重
    * —— 把一条真记录报成 404 会让调用方以为它不存在，从而**重写一遍**。 */
-  if (row === undefined) throw new NotFoundError(what);
+  if (row === undefined) {
+    throw new NotFoundError(what);
+  }
   return row;
 }

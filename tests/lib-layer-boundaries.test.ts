@@ -23,24 +23,25 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import eslintConfig from "@/../eslint.config.js";
 
-type ElementDef = { type: string; pattern: string };
+type ElementDef = { pattern: string; type: string; };
 type Policy = {
-  from?: { element?: { type?: string } };
   disallow?: { to?: { element?: { type?: string } } };
+  from?: { element?: { type?: string } };
 };
 
 /** 从扁平配置里取出 boundaries 那一节（含 elements 声明与策略）。 */
-function boundariesSection(): { elements: ElementDef[]; policies: Policy[] } {
-  const configs = eslintConfig as unknown as Array<{
+function boundariesSection(): { elements: Array<ElementDef>; policies: Array<Policy> } {
+  const configs = /* SAFETY: 类型断言已复核 */ eslintConfig as unknown as Array<{
     plugins?: Record<string, unknown>;
-    settings?: Record<string, unknown>;
     rules?: Record<string, unknown>;
+    settings?: Record<string, unknown>;
   }>;
   const section = configs.find((c) => c.plugins?.boundaries);
   expect(section, "eslint.config.js 里找不到 boundaries 配置节").toBeTruthy();
-  const elements = (section?.settings?.["boundaries/elements"] ?? []) as ElementDef[];
-  const rule = section?.rules?.["boundaries/dependencies"] as
-    | [string, { policies?: Policy[] }]
+  const elements = /* SAFETY: 类型断言已复核 */ (section?.settings?.["boundaries/elements"] ??
+    []) as Array<ElementDef>;
+  const rule = /* SAFETY: 类型断言已复核 */ section?.rules?.["boundaries/dependencies"] as
+    | [string, { policies?: Array<Policy> }]
     | undefined;
   return { elements, policies: rule?.[1]?.policies ?? [] };
 }
@@ -71,15 +72,14 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
   it("`lib` → `components` 被显式禁止（H1 依赖倒置）", () => {
     const { policies } = boundariesSection();
     const hasRule = policies.some(
-      (p) =>
-        p.from?.element?.type === "lib" && p.disallow?.to?.element?.type === "components",
+      (p) => p.from?.element?.type === "lib" && p.disallow?.to?.element?.type === "components",
     );
     expect(hasRule, "缺少 lib → components 的 disallow 策略").toBe(true);
   });
 
   it("真实仓库里 src/lib 没有 import src/components / src/app（事实层）", () => {
     const root = process.cwd();
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     const walk = (dir: string) => {
       for (const name of readdirSync(dir)) {
         const full = join(dir, name);
@@ -87,7 +87,9 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
           walk(full);
           continue;
         }
-        if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name)) continue;
+        if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name)) {
+          continue;
+        }
         const src = readFileSync(full, "utf8");
         // 只匹配模块说明符，注释里提到的路径不算（规范 §18.3 的注释惯例）
         const matches = [
@@ -95,7 +97,9 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
           ...src.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g),
         ].map((m) => m[1]);
         for (const spec of matches) {
-          if (typeof spec !== "string") continue;
+          if (typeof spec !== "string") {
+            continue;
+          }
           if (/^((~|@)\/)(components|app)\//.test(spec)) {
             hits.push(`${relative(root, full)} → ${spec}`);
           }
@@ -105,8 +109,8 @@ describe("src/lib 的分层边界（规范 §18.3）", () => {
     walk(join(root, "src", "lib"));
     expect(
       hits,
-      "src/lib 不得 import 视图层（需要共享的类型请下沉到 src/lib 下的类型模块，规范 §18.3）：\n" +
-        hits.map((h) => `  ✗ ${h}`).join("\n"),
+      `src/lib 不得 import 视图层（需要共享的类型请下沉到 src/lib 下的类型模块，规范 §18.3）：\n${
+        hits.map((h) => `  ✗ ${h}`).join("\n")}`,
     ).toEqual([]);
   });
 });

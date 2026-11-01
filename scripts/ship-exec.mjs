@@ -128,10 +128,14 @@ export function buildSnFromOutput(raw) {
  */
 export function cnbJson(run, args) {
   const r = run("cnb", args);
-  if (r.error === "ENOENT") return null;
+  if (r.error === "ENOENT") {
+    return null;
+  }
   const text = r.stdout.trim();
   const at = text.indexOf("{");
-  if (at < 0) return null;
+  if (at === -1) {
+    return null;
+  }
   try {
     return {
       json: JSON.parse(text.slice(at)),
@@ -161,7 +165,9 @@ export function cnbJson(run, args) {
  */
 export function writeScratch(root, name, text, resolve = resolveGitDir) {
   const dir = gitScratchPath(root, "comfy-ship-tmp", resolve);
-  if (!dir) return null;
+  if (!dir) {
+    return null;
+  }
   fs.mkdirSync(dir, { recursive: true });
   const p = path.join(dir, `${name}-${process.pid}.tmp`);
   fs.writeFileSync(p, text, "utf8");

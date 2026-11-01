@@ -20,10 +20,7 @@
 import process from "node:process";
 
 import { parseFileLogs } from "../src/components/studio/logs/log-analysis.ts";
-import {
-  LOG_STORE_MAX,
-  useLogStore,
-} from "../src/components/studio/logs/log-store.ts";
+import { LOG_STORE_MAX, useLogStore } from "../src/components/studio/logs/log-store.ts";
 import type { LogEntry } from "../src/components/studio/logs/log-types.ts";
 
 /** 一行日志正文的样本：形状取自真实转录（带 tRPC 计时与业务中文），长度典型。 */
@@ -32,9 +29,16 @@ function sampleLine(i: number): string {
 }
 
 /** 造 `n` 条互不相同的条目（id/seq/time 都单调，保证不会被去重）。 */
-function makeEntries(n: number, seqBase: number, timeBase: number): LogEntry[] {
-  const levels = ["debug", "info", "info", "info", "warn", "error"] as const;
-  const out: LogEntry[] = [];
+function makeEntries(n: number, seqBase: number, timeBase: number): Array<LogEntry> {
+  const levels = /* SAFETY: 类型断言已复核 */ [
+    "debug",
+    "info",
+    "info",
+    "info",
+    "warn",
+    "error",
+  ] as const;
+  const out: Array<LogEntry> = [];
   for (let i = 0; i < n; i += 1) {
     out.push({
       id: `probe-${seqBase + i}`,
@@ -52,7 +56,7 @@ function makeEntries(n: number, seqBase: number, timeBase: number): LogEntry[] {
 /** 取中位数（比均值抗机器负载抖动，也比最小值更能反映典型成本）。 */
 function medianMs(fn: () => void, runs: number): number {
   fn(); // 预热：让 JIT 与内联缓存先热起来，否则首个样本吞掉一次编译
-  const samples: number[] = [];
+  const samples: Array<number> = [];
   for (let i = 0; i < runs; i += 1) {
     const t0 = performance.now();
     fn();
@@ -64,11 +68,11 @@ function medianMs(fn: () => void, runs: number): number {
 
 const args = process.argv.slice(2);
 const runsArg = args.indexOf("--runs");
-const runs = runsArg >= 0 ? Number(args[runsArg + 1] ?? "7") : 7;
+const runs = runsArg !== -1 ? Number(args[runsArg + 1] ?? "7") : 7;
 
 /** 一次写入的耗时 vs（时间线大小 × 批次大小）——本探针的主表。 */
 function tableAppend(): void {
-  const rows: string[] = [];
+  const rows: Array<string> = [];
   for (const size of [0, 1000, 2000, LOG_STORE_MAX]) {
     for (const batch of [1, 10, 100, 300, 1000]) {
       const base = makeEntries(size, 0, 1_700_000_000_000);
@@ -80,11 +84,7 @@ function tableAppend(): void {
         useLogStore
           .getState()
           .appendFileLogs(
-            makeEntries(
-              batch,
-              size + round * 1_000_000,
-              1_700_000_000_000 + round * 1_000_000,
-            ),
+            makeEntries(batch, size + round * 1_000_000, 1_700_000_000_000 + round * 1_000_000),
           );
       }, runs);
       rows.push(
@@ -105,32 +105,24 @@ function pollRound(): void {
       seq += 1;
       useLogStore
         .getState()
-        .appendFileLogs(
-          makeEntries(
-            perSource,
-            seq * 1_000_000,
-            1_700_000_000_000 + seq * 1_000,
-          ),
-        );
+        .appendFileLogs(makeEntries(perSource, seq * 1_000_000, 1_700_000_000_000 + seq * 1000));
     }
   };
   useLogStore.setState({ logs: [], filteredLogs: [], revision: 0 });
   const growing = medianMs(round, 5);
   const saturated = medianMs(round, 5);
   console.log("\n【一轮轮询】六路来源各写一次（六路 × 300 行）");
-  console.log(
-    `  时间线增长中（0 → ${LOG_STORE_MAX}）: ${growing.toFixed(1)} ms`,
-  );
-  console.log(
-    `  时间线已封顶（${LOG_STORE_MAX} 条）: ${saturated.toFixed(1)} ms`,
-  );
+  console.log(`  时间线增长中（0 → ${LOG_STORE_MAX}）: ${growing.toFixed(1)} ms`);
+  console.log(`  时间线已封顶（${LOG_STORE_MAX} 条）: ${saturated.toFixed(1)} ms`);
   console.log(`  参照：一帧 16.7ms；轮询间隔 2s。读数超过一帧即「每轮丢帧」。`);
 }
 
 /** 解析侧的开销：轮询回来的文本要先过 parseFileLogs，它不该被忽略。 */
 function parseCost(): void {
-  const lines: string[] = [];
-  for (let i = 0; i < 300; i += 1) lines.push(sampleLine(i));
+  const lines: Array<string> = [];
+  for (let i = 0; i < 300; i += 1) {
+    lines.push(sampleLine(i));
+  }
   const text = lines.join("\n");
   const cost = medianMs(() => void parseFileLogs(text), runs);
   console.log("\n【解析】parseFileLogs（300 行转录文本）");

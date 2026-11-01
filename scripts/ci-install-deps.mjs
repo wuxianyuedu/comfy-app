@@ -35,7 +35,9 @@
  *
  * 上面两条只管「依赖面碰没碰」，而平台侧每一次构建都是**全新 clone**（自托管上没有
  * OverlayFS，§13.5.3.4.2）—— `node_modules` 一个都没有，于是那条「空转就跳过」的
- * 判据**一次都没生效过**：实测 `Install dependencies` 一直是 59~61s。
+ * 判据**一次都没生效过**：当时实测 `Install dependencies` 一直是 59~61s。
+ * ⚠️ 那一句是**接槽之前**的历史读数，不要拿它当今天的代价 —— 今天的数要按格当场取
+ * （`pnpm ship --stage-log <sn> <格名>`），别往散文里抄。
  *
  * 所以判据换成「装出来的那一套 ⇄ 锁文件说的那一套」对不对得上：装的顺序由
  * `pnpmInstallFingerprint()` 记一份（**装之前算、装成功后落盘**），比对时用同一个
@@ -61,15 +63,8 @@ import path from "node:path";
 import process from "node:process";
 import { pnpmInvocation } from "./launcher-core/shell.mjs";
 import { applySlot, clearJobLink, SLOT_ENABLED_ENV } from "./ci-slot-apply.mjs";
-import {
-  installBudgetMs,
-  runInstallWithBudget,
-} from "./ci-install-deadline.mjs";
-import {
-  DEP_FILES,
-  FINGERPRINT_FILE,
-  pnpmInstallFingerprint,
-} from "./ci-deps-face.mjs";
+import { installBudgetMs, runInstallWithBudget } from "./ci-install-deadline.mjs";
+import { DEP_FILES, FINGERPRINT_FILE, pnpmInstallFingerprint } from "./ci-deps-face.mjs";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -93,9 +88,7 @@ const INSTALLED_PROBE = "node_modules/.modules.yaml";
  */
 export function readInstallFingerprint(root) {
   try {
-    return (
-      fs.readFileSync(path.join(root, FINGERPRINT_FILE), "utf8").trim() || null
-    );
+    return fs.readFileSync(path.join(root, FINGERPRINT_FILE), "utf8").trim() || null;
   } catch {
     return null;
   }
@@ -142,13 +135,7 @@ export function changedFiles(run) {
   const attempts = [
     /* PR：平台 checkout 的是预合并提交，与目标分支的差集就是本次 PR 的变更面。
      * `CNB_PULL_REQUEST_TARGET_BRANCH` 缺省时退回 `master`（本仓唯一的目标分支）。 */
-    [
-      "-c",
-      "core.quotePath=false",
-      "diff",
-      "--name-only",
-      `origin/${targetBranch()}...HEAD`,
-    ],
+    ["-c", "core.quotePath=false", "diff", "--name-only", `origin/${targetBranch()}...HEAD`],
     /* push：与上一个提交比（新建分支时这条会失败，落进下面那支）。 */
     ["-c", "core.quotePath=false", "diff", "--name-only", "HEAD^..HEAD"],
     /* 本地 / 还没提交的形态：工作区与暂存区。前两条在「平台侧 checkout 出来的那份」
@@ -162,12 +149,16 @@ export function changedFiles(run) {
    * 的 `node_modules` 去跑门禁。空清单在这里与「拿不到」同一档，继续试下一条。 */
   for (const args of attempts) {
     const out = run(args);
-    if (out.status !== 0) continue;
+    if (out.status !== 0) {
+      continue;
+    }
     const files = out.stdout
       .split(/\r?\n/)
-      .map((line) => line.trim().replace(/\\/g, "/"))
+      .map((line) => line.trim().replaceAll("\\", "/"))
       .filter(Boolean);
-    if (files.length > 0) return files;
+    if (files.length > 0) {
+      return files;
+    }
   }
   return null;
 }
@@ -271,9 +262,7 @@ async function runInstall(explicit = null) {
   /* 作业里那条指进槽的链必须先摘掉：留着它跑作业内的 install，pnpm 会顺着链把新的一套
    * 写进**槽**、而键仍是旧的（规范 §13.5.3.4.3 第一条，从散文变成有执行者）。 */
   if (clearJobLink(ROOT)) {
-    process.stdout.write(
-      "[ci-install-deps] 已摘掉作业里那条指进缓存槽的链接（不在链上装）\n",
-    );
+    process.stdout.write("[ci-install-deps] 已摘掉作业里那条指进缓存槽的链接（不在链上装）\n");
   }
   /* `explicit` = 上游已经**亲眼看见**它起了一次 `-v`（`ensurePnpmOnPath` 的结论）。
    * 那一份比形态判据更硬：判据按 `PATH × 扩展名` 找候选，而 `pnpm-native.exe` 这个
@@ -325,9 +314,15 @@ async function runInstall(explicit = null) {
  * 已经示范过这种叠法后来多难拆。
  *
  * 开关是 `COMFY_CI_SLOT`：置成 `1` 才问槽，不置时**一次槽都不问**（连空闲空间都不读）。
- * 现在的拨法是**按档**：PR 那一格接、每日那一格不接 —— 每日后面背着 `每日生产构建`，
- * 而接槽形态下 Turbopack 拒指向项目根之外的 `node_modules` 链（ISSUE #2081）。
- * 为什么这样分、回退要动哪一行，写在 `.cnb.yml` 那两格上面与规范 §13.5.3.4.3。
+ * 现在的拨法是**按档**，而分档的那条线不是档名，是**这一档后面有没有会真构建的格子**：
+ * 接槽把作业的 `node_modules` 整棵接成指向项目根之外的 junction，Turbopack 对这一条有硬
+ * 要求（ISSUE #2081 那次的死法是 13.8s 就红 + 后面四格整片 `skipped`）。所以
+ * **接**的是 PR 那格 `Install dependencies` 与 push 那格 `安装依赖`（两档都没有构建格，
+ * push 那一半由 `tests/no-platform-ci-config.test.ts` 钉住「清单里不许出现构建格」）；
+ * **不接**的是每日那格（它后面背着 `每日生产构建`）。其余几格（`单跑*·安装依赖`、
+ * `打包·安装依赖`）也没置开关 —— 其中 `单跑构建` 后面同样背着构建格，另外几个该不该接
+ * **不在这里当场当我们验过了**。为什么这样分、回退要动哪一行，写在 `.cnb.yml` 那两格上面
+ * 与规范 §13.5.3.4.3。
  *
  * 三条出口都必须**在日志里读得出来**（规范 §13.5.3.4.3 那句「往上读收益时，出处只能是那几句打印」）：
  * 开关没拨／ 接上了（`✓ 走缓存槽（…）`）／ 接不上退回（`槽未接管（原因）⇒ 照常装`）。
@@ -347,8 +342,9 @@ export async function runInstallWithSlot(_expected, deps = {}) {
   const install = deps.install ?? runInstall;
   if ((env[SLOT_ENABLED_ENV] ?? "").trim() !== "1") {
     write(
-      "[ci-install-deps] 槽未接管（开关没拨：这一档按策略不接槽 —— 每日档后面背着 next build，" +
-        "见 .cnb.yml 里那格的注释与 ISSUE #2081）⇒ 照常装\n",
+      "[ci-install-deps] 槽未接管（开关没拨：这一档按策略不接槽 —— `COMFY_CI_SLOT` 没置成 1；" +
+        "分档的那条线是「这一档后面有没有会真构建的格子」，哪几格置着见 .cnb.yml 里" +
+        "`每日安装依赖` 那段的注释与规范 §13.5.3.4.3）⇒ 照常装\n",
     );
     return await install();
   }
@@ -441,10 +437,14 @@ function compareVersions(a, b) {
     const nb = Number.parseInt(pb[i] ?? "0", 10);
     if (Number.isNaN(na) || Number.isNaN(nb)) {
       const cmp = String(pa[i] ?? "").localeCompare(String(pb[i] ?? ""));
-      if (cmp !== 0) return cmp;
+      if (cmp !== 0) {
+        return cmp;
+      }
       continue;
     }
-    if (na !== nb) return na - nb;
+    if (na !== nb) {
+      return na - nb;
+    }
   }
   return 0;
 }
@@ -462,13 +462,8 @@ function compareVersions(a, b) {
  * @returns {string[]} 候选（绝对路径）
  */
 function storeCandidates(base, versioned) {
-  const names = versioned
-    ? ["pnpm-native.exe", "pnpm.exe"]
-    : ["pnpm.exe", "pnpm-native.exe"];
-  return [
-    ...names.map((n) => path.join(base, n)),
-    path.join(base, "bin", "pnpm.cjs"),
-  ];
+  const names = versioned ? ["pnpm-native.exe", "pnpm.exe"] : ["pnpm.exe", "pnpm-native.exe"];
+  return [...names.map((n) => path.join(base, n)), path.join(base, "bin", "pnpm.cjs")];
 }
 
 /**
@@ -499,10 +494,14 @@ function storeCandidates(base, versioned) {
  * @returns {string | null} 垫片的路径；非 Windows 或写不成时 `null`
  */
 function shimPnpm(dir, { platform = process.platform } = {}) {
-  if (platform !== "win32") return null;
+  if (platform !== "win32") {
+    return null;
+  }
   /* 已有能跑的同名 `pnpm.exe` 时不必垫（名字对得上，扩展名也在候选集里）。 */
   const exe = path.join(dir, "pnpm.exe");
-  if (fs.existsSync(exe)) return exe;
+  if (fs.existsSync(exe)) {
+    return exe;
+  }
   const native = path.join(dir, "pnpm-native.exe");
   /* 后缀单独拼出来而不是写成字面量：仓里有一条判据把「源码里写死 pnpm 的平台后缀」
    * 判成缺陷（它会选中 Node 起不来的形态）—— 那是**起 pnpm** 的判据，而这里落的是
@@ -571,8 +570,7 @@ export function ensurePnpmOnPath({
    * @param {{status: number | null, stdout: string, error: string | null}} res
    * @returns {boolean}
    */
-  const works = (res) =>
-    res.error === null && res.status === 0 && /\d+\.\d+/.test(res.stdout);
+  const works = (res) => res.error === null && res.status === 0 && /\d+\.\d+/.test(res.stdout);
   /**
    * 一条可读的失败读数（「为什么没用它」要有答案，不能只剩「没找到」）。
    *
@@ -591,7 +589,9 @@ export function ensurePnpmOnPath({
   for (const dir of pathValue.split(sep).filter(Boolean)) {
     for (const name of ["pnpm.exe", "pnpm"]) {
       const candidate = path.join(dir, name);
-      if (!exists(candidate)) continue;
+      if (!exists(candidate)) {
+        continue;
+      }
       const res = spawn(candidate, ["-v"], {
         cwd: root,
         encoding: "utf8",
@@ -617,24 +617,11 @@ export function ensurePnpmOnPath({
   const stores =
     platform === "win32"
       ? [
-          [
-            "corepack",
-            localAppData &&
-              path.join(localAppData, "node", "corepack", "v1", "pnpm"),
-          ],
+          ["corepack", localAppData && path.join(localAppData, "node", "corepack", "v1", "pnpm")],
           ["pnpm home", localAppData && path.join(localAppData, "pnpm")],
           [
             "corepack(~)",
-            home &&
-              path.join(
-                home,
-                "AppData",
-                "Local",
-                "node",
-                "corepack",
-                "v1",
-                "pnpm",
-              ),
+            home && path.join(home, "AppData", "Local", "node", "corepack", "v1", "pnpm"),
           ],
           ["pnpm home(~)", home && path.join(home, "AppData", "Local", "pnpm")],
         ]
@@ -663,14 +650,18 @@ export function ensurePnpmOnPath({
     }
     for (const base of bases) {
       for (const candidate of storeCandidates(base, versioned)) {
-        if (!exists(candidate)) continue;
+        if (!exists(candidate)) {
+          continue;
+        }
         const res = spawn(candidate, ["-v"], {
           cwd: root,
           encoding: "utf8",
           windowsHide: true,
         });
         consulted.push(`${label} ${candidate} → ${verdict(res)}`);
-        if (!works(res)) continue;
+        if (!works(res)) {
+          continue;
+        }
         const dir = path.dirname(candidate);
         env.PATH = [dir, pathValue].filter(Boolean).join(sep);
         /* 进程全局也必须一起改（ISSUE #2281 第二轮，已在平台那一跑上实测复现）：
@@ -678,7 +669,9 @@ export function ensurePnpmOnPath({
          * （`whichCache` 的键含 PATH）。只改注入的那份 env 时，本函数的 `-v` 过了、
          * 紧接着的 `pnpm install` 仍报 `pnpm not found on PATH` —— 判据看得见、
          * 安装看不见，正是这一族最贵的形状。 */
-        if (env !== process.env) process.env.PATH = env.PATH;
+        if (env !== process.env) {
+          process.env.PATH = env.PATH;
+        }
         /* 还差最后一步：把按**名字**找的那条路也接上（见 `shimPnpm` 的注释）。
          * 当前进程的形态判据已经缓存过「PATH 上没有 pnpm」这条结论，而它的键里只有
          * PATH —— 再问一次仍拿到那个 null。所以这里落一个同名垫片，让**新起的进程**
@@ -762,10 +755,7 @@ export async function main(deps = {}) {
   return code;
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   /* 装之前先把 pnpm 放回 PATH（ISSUE #2281）：平台节点是服务账号会话，它的 PATH
    * 与开发者会话不是同一份 —— 实测同一台机上一边 `pnpm -v` 一直正常、另一边十几格
    * 齐刷刷写「pnpm 不可用」。那两句话都对，所以真相只能来自「这个账号看得见什么」。 */

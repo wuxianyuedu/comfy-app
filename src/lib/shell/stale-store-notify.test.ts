@@ -17,13 +17,13 @@ afterEach(() => {
 
 describe("stale-store-notify 送达通道", () => {
   it("代码更新过 + 观测到动作缺失 → 送达一次，带完整「怎么办」", () => {
-    const seen: unknown[] = [];
+    const seen: Array<unknown> = [];
     registerStaleStoreDeliver((n) => seen.push(n));
     reportCodeUpdatedSinceLoad();
 
     expect(reportStaleStoreAction("missing-store-action")).toBe(true);
     expect(seen).toHaveLength(1);
-    expect((seen[0] as { body: string }).body).toContain("怎么做：");
+    expect(/* SAFETY: 类型断言已复核 */ (seen[0] as { body: string }).body).toContain("怎么做：");
   });
 
   it("同一次会话重复观测只送达一次（去重）", () => {

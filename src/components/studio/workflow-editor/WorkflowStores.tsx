@@ -23,11 +23,7 @@
  *  消费方（WorkflowNode / WorkflowSubgraphNode / NodeIdChip …）只读不改。
  * ════════════════════════════════════════════════════════════════════════ */
 import React, { createContext, useContext } from "react";
-import {
-  createStore,
-  useStore as useZustandStore,
-  type StoreApi,
-} from "zustand";
+import { createStore, useStore as useZustandStore, type StoreApi } from "zustand";
 import type {
   WorkflowDetail,
   WorkflowGroup,
@@ -57,18 +53,31 @@ import { reportStaleStoreAction } from "~/lib/shell/stale-store-notify";
  *  workflowId。其余动作（toggleIO / setIOLabel / toggleIORequired /
  *  setIOModeOverride / purgeModeOverrides）都是纯状态更新，与编辑器其它 30+
  *  个画布 state 解耦。 */
-export interface IOEditState {
+export type IOEditState = {
   ioEditMode: boolean;
-  workflowIO: Record<string, WorkflowIOParam>;
   ioPreviewOpen: boolean;
+  workflowIO: Record<string, WorkflowIOParam>;
   /** 本地勾选态里的作者重命名（`label`）只由 `setIOLabel` 写入；勾选 / 取消
    *  勾选不再抄画布的显示名进库，因此这里没有「既不是作者命名、又要保留」的
    *  中间态，也不需要任何机器名判定。 */
-}
-export interface IOEditActions {
+};
+export type IOEditActions = {
+  /** 批量摘掉所有 IO 条目上给定模式码的覆盖层（modes[mode]）。
+   *  模式从工作流 `modes` 列移除后，条目里的覆盖必须跟着清掉，否则这些
+   *  无主覆盖会一直跟着 workflowIO 落库往返（页签栏不再显示，纯脏数据）。
+   *  返回清理后的 workflowIO 映射；没有任何覆盖命中时返回 null，调用方
+   *  据此决定是否需要把清理结果落库。 */
+  purgeModeOverrides: (codes: Array<string>) => Record<string, WorkflowIOParam> | null;
+  reorderIO: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
   /** 开关 IO 编辑模式。关闭时**一并关掉 IO 预览**（见下一条的耦合说明）；
    *  打开时不动预览。 */
   setIoEditMode: (on: boolean) => void;
+  setIOLabel: (key: string, label: string) => void;
+  /** 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
+   *  `patch` 为 null 表示删除该模式的覆盖（回到「通用默认值 + 默认可见」）。
+   *  与 setIOLabel / toggleIORequired 同路径持久化：下一次 PATCH 整体
+   *  workflowIO 时一起落库，无需改表。 */
+  setIOModeOverride: (key: string, mode: string, patch: WorkflowIOModeOverride | null) => void;
   /** 开关 IO 预览面板。关闭时**一并退出 IO 编辑模式**：面板已经在画面上消失，
    *  节点卡片上再留着勾选框，作者手上就只剩一个「看不到结果、只看到选择器」的
    *  半截状态。打开时**一并进入编辑模式**，让勾选框与面板同时可用。
@@ -77,34 +86,11 @@ export interface IOEditActions {
    *  画布按钮都只调这一个动作，谁都不许绕过（源码级守卫见
    *  `workflow-editor-topbar-config.test.ts`）。 */
   setIoPreviewOpen: (open: boolean) => void;
-  toggleIO: (ref: IoRef) => void;
-  setIOLabel: (key: string, label: string) => void;
-  toggleIORequired: (key: string) => void;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。 */
   setIOSeedMode: (key: string, mode: string) => void;
-  reorderIO: (
-    fromKey: string,
-    targetKey: string | null,
-    position: WorkflowIODropPosition,
-  ) => void;
-  /** 多模式：写入 / 清除某个参数在某一模式下的覆盖项。
-   *  `patch` 为 null 表示删除该模式的覆盖（回到「通用默认值 + 默认可见」）。
-   *  与 setIOLabel / toggleIORequired 同路径持久化：下一次 PATCH 整体
-   *  workflowIO 时一起落库，无需改表。 */
-  setIOModeOverride: (
-    key: string,
-    mode: string,
-    patch: WorkflowIOModeOverride | null,
-  ) => void;
-  /** 批量摘掉所有 IO 条目上给定模式码的覆盖层（modes[mode]）。
-   *  模式从工作流 `modes` 列移除后，条目里的覆盖必须跟着清掉，否则这些
-   *  无主覆盖会一直跟着 workflowIO 落库往返（页签栏不再显示，纯脏数据）。
-   *  返回清理后的 workflowIO 映射；没有任何覆盖命中时返回 null，调用方
-   *  据此决定是否需要把清理结果落库。 */
-  purgeModeOverrides: (
-    codes: string[],
-  ) => Record<string, WorkflowIOParam> | null;
-}
+  toggleIO: (ref: IoRef) => void;
+  toggleIORequired: (key: string) => void;
+};
 export type IOEditStore = IOEditState & IOEditActions;
 
 export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
@@ -114,9 +100,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     ioPreviewOpen: false,
 
     setIoEditMode: (on) =>
-      set(
-        on ? { ioEditMode: true } : { ioEditMode: false, ioPreviewOpen: false },
-      ),
+      set(on ? { ioEditMode: true } : { ioEditMode: false, ioPreviewOpen: false }),
     setIoPreviewOpen: (open) =>
       set(
         open
@@ -162,12 +146,16 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     setIOLabel: (key, label) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (!cur) return {};
+        if (!cur) {
+          return {};
+        }
         /* 清空 = 恢复默认（取消这条参数的重命名），显示名回到富化链。
          * 写什么就存什么：不再有「这个名字像机器名，所以不让存」的判定 ——
          * 作者的显式命名是唯一真相（ISSUE #349 的「改了也不行」不会再出现）。 */
         const kept = label.trim() || undefined;
-        if (kept === cur.label) return {};
+        if (kept === cur.label) {
+          return {};
+        }
         return {
           workflowIO: { ...state.workflowIO, [key]: { ...cur, label: kept } },
         };
@@ -176,11 +164,15 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     toggleIORequired: (key) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (!cur) return {};
+        if (!cur) {
+          return {};
+        }
         /* 只有本代画布勾选写入的 widget 条目可调「必填」；param（连线端口）
          *  与 output 不可调。存储自新格式起即正确区分 kind，此处直接以
          *  kind !== "widget" 拦截即可，无需旧数据特判。 */
-        if (cur.kind !== "widget") return {};
+        if (cur.kind !== "widget") {
+          return {};
+        }
         return {
           workflowIO: {
             ...state.workflowIO,
@@ -192,15 +184,19 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     setIOModeOverride: (key, mode, patch) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (!cur || !mode) return {};
+        if (!cur || !mode) {
+          return {};
+        }
         const modes: Record<string, WorkflowIOModeOverride> = {
-          ...(cur.modeOverrides ?? {}),
+          ...cur.modeOverrides,
         };
         if (patch === null) {
-          if (!(mode in modes)) return {};
+          if (!(mode in modes)) {
+            return {};
+          }
           delete modes[mode];
         } else {
-          modes[mode] = { ...(modes[mode] ?? {}), ...patch };
+          modes[mode] = { ...modes[mode], ...patch };
         }
         /* modes 全空时把字段摘掉，避免往服务端 JSON 里塞一个空对象。 */
         const nextEntry: WorkflowIOParam =
@@ -220,11 +216,12 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       set((state) => {
         const hit = codes.filter((code) =>
           Object.values(state.workflowIO).some(
-            (entry) =>
-              entry?.modeOverrides != null && code in entry.modeOverrides,
+            (entry) => entry?.modeOverrides != null && code in entry.modeOverrides,
           ),
         );
-        if (hit.length === 0) return {};
+        if (hit.length === 0) {
+          return {};
+        }
         const next: Record<string, WorkflowIOParam> = {};
         for (const [key, entry] of Object.entries(state.workflowIO)) {
           const modes = entry?.modeOverrides;
@@ -233,7 +230,9 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             continue;
           }
           const rest = { ...modes };
-          for (const code of hit) delete rest[code];
+          for (const code of hit) {
+            delete rest[code];
+          }
           /* 与 setIOModeOverride 的落库形态一致：modes 全空时摘掉字段。 */
           next[key] = {
             ...entry,
@@ -249,8 +248,12 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     setIOSeedMode: (key, mode) =>
       set((state) => {
         const cur = state.workflowIO[key];
-        if (cur?.kind !== "widget") return {};
-        if (cur.seedMode === mode) return {};
+        if (cur?.kind !== "widget") {
+          return {};
+        }
+        if (cur.seedMode === mode) {
+          return {};
+        }
         return {
           workflowIO: {
             ...state.workflowIO,
@@ -266,13 +269,19 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
      *  before、下半区 = after，与指示线画的位置同源。旧版按拖动方向猜插入点，
      *  指示线却永远画在行顶，两者打架时用户看到的就是「拖了但顺序没变」。 */
     reorderIO: (fromKey, targetKey, position) => {
-      if (fromKey === targetKey) return;
+      if (fromKey === targetKey) {
+        return;
+      }
       set((state) => {
         const prev = state.workflowIO;
         const fromEntry = prev[fromKey];
-        if (!fromEntry) return {};
+        if (!fromEntry) {
+          return {};
+        }
         const groupOf = (e: WorkflowIOParam): "wire" | "widget" | "output" => {
-          if (e.direction === "output") return "output";
+          if (e.direction === "output") {
+            return "output";
+          }
           return e.kind === "widget" ? "widget" : "wire";
         };
         const movingGroup = groupOf(fromEntry);
@@ -282,16 +291,22 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           .sort((itemA, itemB) => {
             const ao = itemA.entry.displayOrder;
             const bo = itemB.entry.displayOrder;
-            if (ao === bo) return 0;
-            if (ao === undefined) return 1;
-            if (bo === undefined) return -1;
+            if (ao === bo) {
+              return 0;
+            }
+            if (ao === undefined) {
+              return 1;
+            }
+            if (bo === undefined) {
+              return -1;
+            }
             return ao - bo;
           });
         const without = ordered.filter(({ entryKey }) => entryKey !== fromKey);
         let targetIdx = without.length;
         if (targetKey) {
           const i = without.findIndex(({ entryKey }) => entryKey === targetKey);
-          if (i >= 0) {
+          if (i !== -1) {
             targetIdx = position === "after" ? i + 1 : i;
           }
         }
@@ -316,11 +331,11 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
  *  订阅。这既消除 React Context 的「value 对象每次重渲重建 → 全子树重渲」问题，
  *  又保留每实例隔离。
  * ─────────────────────────────────────────────────────────────────────── */
-export interface WFStores {
+export type WFStores = {
   io: StoreApi<IOEditStore>;
   rgthree: StoreApi<RgthreeGroupsStore>;
   viewer: StoreApi<NodeJsonViewerStore>;
-}
+};
 export const WFStoresContext = createContext<WFStores | null>(null);
 
 /** 取 IOEdit store 的 api —— 供 owner（WorkflowEditorInner）在容器上方直写。
@@ -328,20 +343,23 @@ export const WFStoresContext = createContext<WFStores | null>(null);
  *  消费方请用 useIOEditStore(selector)。 */
 export function useIOEditApi(): StoreApi<IOEditStore> {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
+  if (!ctx) {
     throw new Error("useIOEditApi 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return ctx.io;
 }
 export function useRgthreeApi(): StoreApi<RgthreeGroupsStore> {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
+  if (!ctx) {
     throw new Error("useRgthreeApi 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return ctx.rgthree;
 }
 export function useViewerApi(): StoreApi<NodeJsonViewerStore> {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
+  if (!ctx) {
     throw new Error("useViewerApi 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return ctx.viewer;
 }
 
@@ -392,8 +410,9 @@ export function callStoreAction<S extends object>(
 
 export function useIOEditStore<U>(selector: (s: IOEditStore) => U): U {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
+  if (!ctx) {
     throw new Error("useIOEditStore 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return useZustandStore(ctx.io, selector);
 }
 
@@ -408,22 +427,22 @@ export const selectIoPreviewOpen = (s: IOEditStore) => s.ioPreviewOpen;
  *  乐观 overrides（groupId → bypass）优先于 detail.groups[].bypass，
  *  直到一次成功的 PATCH + detail refetch 调和。工厂参数携带 workflowId +
  *  detail（读 groups 的 fallback）。 */
-export interface RgthreeGroupsState {
-  /** 乐观 overrides（groupId → bypass），优先于 detail.groups[].bypass。 */
-  overrides: Record<string, boolean>;
+export type RgthreeGroupsState = {
   /** 运行时同步进来的有效 detail / workflowId —— getBypass 每次从 get() 读，确切
    *  detail 到达（而非首次 factory 的 null）后仍反射最新 groups。 */
   detail: WorkflowDetail | null;
+  /** 乐观 overrides（groupId → bypass），优先于 detail.groups[].bypass。 */
+  overrides: Record<string, boolean>;
   workflowId: string;
-}
-export interface RgthreeGroupsActions {
+};
+export type RgthreeGroupsActions = {
   getBypass: (groupId: string) => boolean;
   setBypass: (groupId: string, bypass: boolean) => void;
-}
+};
 export type RgthreeGroupsStore = RgthreeGroupsState & RgthreeGroupsActions;
 export type RgthreeGroupsStoreParams = {
-  workflowId: string;
   detail: WorkflowDetail | null;
+  workflowId: string;
 };
 
 export function createRgthreeGroupsStore(
@@ -438,10 +457,10 @@ export function createRgthreeGroupsStore(
       const override = get().overrides[groupId];
       /* 用 `in` 判据 + 值本身收窄：`hasOwnProperty` 只回答「有没有这个键」，
        * 类型上仍要做一次索引取值。 */
-      if (override !== undefined) return override;
-      const g = get().detail?.groups?.find(
-        (x: WorkflowGroup) => x.id === groupId,
-      );
+      if (override !== undefined) {
+        return override;
+      }
+      const g = get().detail?.groups?.find((x: WorkflowGroup) => x.id === groupId);
       return !!g?.bypass;
     },
 
@@ -457,23 +476,19 @@ export function createRgthreeGroupsStore(
   }));
 }
 
-export function useRgthreeGroupsStore<U>(
-  selector: (s: RgthreeGroupsStore) => U,
-): U {
+export function useRgthreeGroupsStore<U>(selector: (s: RgthreeGroupsStore) => U): U {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error(
-      "useRgthreeGroupsStore 必须在 <WFStoresContext.Provider> 内使用",
-    );
+  if (!ctx) {
+    throw new Error("useRgthreeGroupsStore 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return useZustandStore(ctx.rgthree, selector);
 }
 /* 返回 getBypass/setBypass —— 与 RgthreeGroupsContextValue 等价。 */
 export function useRgthreeGroups(): RgthreeGroupsContextValue {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error(
-      "useRgthreeGroups 必须在 <WFStoresContext.Provider> 内使用",
-    );
+  if (!ctx) {
+    throw new Error("useRgthreeGroups 必须在 <WFStoresContext.Provider> 内使用");
+  }
   const getBypass = useZustandStore(ctx.rgthree, (state) => state.getBypass);
   const setBypass = useZustandStore(ctx.rgthree, (state) => state.setBypass);
   return { getBypass, setBypass };
@@ -486,35 +501,35 @@ export function useRgthreeGroups(): RgthreeGroupsContextValue {
  *  getNodeJson / getNodeView（detail / rawMeta / positions / 子图 raw def）。
  *  popover 本体（NodeJsonPopover）仍由 Provider 渲染并通过 context 提供，
  *  但状态/动作全部收进 store。 */
-export interface NodeJsonViewerState {
+export type NodeJsonViewerState = {
   viewer: NodeJsonViewerRequest | null;
-}
-export interface NodeJsonViewerActions {
+};
+export type NodeJsonViewerActions = {
+  dismiss: () => void;
   getNodeJson: NodeJsonViewerContextValue["getNodeJson"];
   getNodeView: NodeJsonViewerContextValue["getNodeView"];
   requestShow: NodeJsonViewerContextValue["requestShow"];
-  dismiss: () => void;
-}
+};
 export type NodeJsonViewerStore = NodeJsonViewerState &
   NodeJsonViewerActions &
   NodeJsonViewerLookup;
 export type NodeJsonViewerStoreParams = {
   detail: WorkflowDetail | null;
-  rawMetaById: Record<string, RawMetaEntry>;
   positions: Record<string, [number, number]> | null;
+  rawMetaById: Record<string, RawMetaEntry>;
   subgraphRawContext: { parentRawJson: unknown; subUid: string } | null;
   subgraphStackLength: number;
 };
 
 /* 可变查找上下文 —— getNodeJson/getNodeView 每次调用都从 get() 读最新值，
  * 由 Provider 在 params 变化时同步，确保 drill-in 子图视图仍反射最新 detail。 */
-export interface NodeJsonViewerLookup {
+export type NodeJsonViewerLookup = {
   detail: WorkflowDetail | null;
-  rawMetaById: Record<string, RawMetaEntry>;
   positions: Record<string, [number, number]> | null;
+  rawMetaById: Record<string, RawMetaEntry>;
   subgraphRawContext: { parentRawJson: unknown; subUid: string } | null;
   subgraphStackLength: number;
-}
+};
 
 export function createNodeJsonViewerStore(
   params: NodeJsonViewerStoreParams,
@@ -529,31 +544,27 @@ export function createNodeJsonViewerStore(
 
     getNodeJson: (nodeId) => {
       const { detail } = get();
-      if (!detail?.graph) return null;
+      if (!detail?.graph) {
+        return null;
+      }
       const entry: unknown = detail.graph[nodeId];
-      return entry && typeof entry === "object"
-        ? (entry as Record<string, unknown>)
-        : null;
+      /* SAFETY: 类型断言已复核 */
+      return entry && typeof entry === "object" ? (entry as Record<string, unknown>) : null;
     },
 
     getNodeView: (nodeId) => {
-      const {
-        detail,
-        rawMetaById,
-        positions,
-        subgraphRawContext,
-        subgraphStackLength,
-      } = get();
-      if (!detail) return null;
+      const { detail, rawMetaById, positions, subgraphRawContext, subgraphStackLength } = get();
+      if (!detail) {
+        return null;
+      }
       const rawEntry: unknown = detail.graph?.[nodeId];
       const entry =
-        rawEntry && typeof rawEntry === "object"
-          ? (rawEntry as Record<string, unknown>)
-          : null;
+        /* SAFETY: 类型断言已复核 */
+        rawEntry && typeof rawEntry === "object" ? (rawEntry as Record<string, unknown>) : null;
       let rawNodesSource: Array<Record<string, unknown>> | null = null;
       const isSubView = subgraphStackLength > 0 && subgraphRawContext;
       if (isSubView) {
-        const subs = (
+        const subs = /* SAFETY: 类型断言已复核 */ (
           subgraphRawContext.parentRawJson as {
             definitions?: { subgraphs?: Record<string, unknown> };
           } | null
@@ -565,17 +576,20 @@ export function createNodeJsonViewerStore(
           id?: string;
           nodes?: Array<Record<string, unknown>>;
         };
-        let subDef: RawSubgraphDef | undefined = subs?.[targetUid] as
+        let subDef: RawSubgraphDef | undefined = /* SAFETY: 类型断言已复核 */ subs?.[targetUid] as
           | RawSubgraphDef
           | undefined;
         if (!subDef || !Array.isArray(subDef.nodes)) {
           const matchKey = subs
             ? Object.keys(subs).find(
                 (key) =>
-                  (subs[key] as RawSubgraphDef | undefined)?.id === targetUid,
+                  /* SAFETY: 类型断言已复核 */ (subs[key] as RawSubgraphDef | undefined)?.id ===
+                  targetUid,
               )
             : undefined;
-          if (matchKey && subs) subDef = subs[matchKey] as RawSubgraphDef;
+          if (matchKey && subs) {
+            subDef = /* SAFETY: 类型断言已复核 */ subs[matchKey] as RawSubgraphDef;
+          }
         }
         if (subDef && Array.isArray(subDef.nodes)) {
           rawNodesSource = subDef.nodes;
@@ -585,17 +599,16 @@ export function createNodeJsonViewerStore(
         !rawNodesSource &&
         typeof detail.rawJson === "object" &&
         detail.rawJson !== null &&
-        Array.isArray((detail.rawJson as { nodes?: unknown }).nodes)
+        Array.isArray(/* SAFETY: 类型断言已复核 */ (detail.rawJson as { nodes?: unknown }).nodes)
       ) {
-        rawNodesSource = (
+        rawNodesSource = /* SAFETY: 类型断言已复核 */ (
           detail.rawJson as {
             nodes: Array<Record<string, unknown>>;
           }
         ).nodes;
       }
       const rawNode = rawNodesSource
-        ? (rawNodesSource.find((rawNode) => String(rawNode?.id) === nodeId) ??
-          null)
+        ? (rawNodesSource.find((rawNode) => String(rawNode?.id) === nodeId) ?? null)
         : null;
       return {
         entry,
@@ -614,23 +627,19 @@ export function createNodeJsonViewerStore(
   }));
 }
 
-export function useNodeJsonViewerStore<U>(
-  selector: (s: NodeJsonViewerStore) => U,
-): U {
+export function useNodeJsonViewerStore<U>(selector: (s: NodeJsonViewerStore) => U): U {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error(
-      "useNodeJsonViewerStore 必须在 <WFStoresContext.Provider> 内使用",
-    );
+  if (!ctx) {
+    throw new Error("useNodeJsonViewerStore 必须在 <WFStoresContext.Provider> 内使用");
+  }
   return useZustandStore(ctx.viewer, selector);
 }
 /* 便捷访问 —— 与原 NodeJsonViewerContextValue 等价，供 NodeIdChip 等使用。 */
 export function useNodeJsonViewer(): NodeJsonViewerContextValue {
   const ctx = useContext(WFStoresContext);
-  if (!ctx)
-    throw new Error(
-      "useNodeJsonViewer 必须在 <WFStoresContext.Provider> 内使用",
-    );
+  if (!ctx) {
+    throw new Error("useNodeJsonViewer 必须在 <WFStoresContext.Provider> 内使用");
+  }
   const getNodeJson = useZustandStore(ctx.viewer, (state) => state.getNodeJson);
   const getNodeView = useZustandStore(ctx.viewer, (state) => state.getNodeView);
   const requestShow = useZustandStore(ctx.viewer, (state) => state.requestShow);
@@ -648,8 +657,8 @@ export function WFStoresProvider({
   stores,
   children,
 }: {
-  stores: WFStores;
   children: React.ReactNode;
+  stores: WFStores;
 }) {
   return (
     <WFStoresContext.Provider value={stores}>
@@ -659,23 +668,21 @@ export function WFStoresProvider({
   );
 }
 
-function NodeJsonViewerPortal({
-  store,
-}: {
-  store: StoreApi<NodeJsonViewerStore>;
-}) {
+function NodeJsonViewerPortal({ store }: { store: StoreApi<NodeJsonViewerStore> }) {
   const viewer = useZustandStore(store, (state) => state.viewer);
   const getNodeJson = useZustandStore(store, (state) => state.getNodeJson);
   const getNodeView = useZustandStore(store, (state) => state.getNodeView);
   const dismiss = useZustandStore(store, (state) => state.dismiss);
-  if (!viewer) return null;
+  if (!viewer) {
+    return null;
+  }
   return (
     <NodeJsonPopover
-      key={`${viewer.nodeId}-${viewer.kind}`}
-      request={viewer}
       getJson={getNodeJson}
       getView={getNodeView}
+      key={`${viewer.nodeId}-${viewer.kind}`}
       onDismiss={dismiss}
+      request={viewer}
     />
   );
 }

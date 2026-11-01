@@ -26,7 +26,7 @@ function stubFetch(handler: () => Promise<Response>) {
 
 /** 用手工 chunk 列表造一条真 `ReadableStream`（分块粒度是判据本身：
  *  「半个帧被续接下一次」只有在 chunk 边界处才看得出来）。 */
-function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
+function streamFrom(chunks: Array<string>): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let i = 0;
   return new ReadableStream({
@@ -58,9 +58,11 @@ describe("parseConsoleFrame", () => {
       cwd: "/x",
       startedAt: 123,
     });
-    expect(
-      parseConsoleFrame({ type: "out", stream: "stderr", text: "e" }),
-    ).toEqual({ type: "out", stream: "stderr", text: "e" });
+    expect(parseConsoleFrame({ type: "out", stream: "stderr", text: "e" })).toEqual({
+      type: "out",
+      stream: "stderr",
+      text: "e",
+    });
     expect(
       parseConsoleFrame({
         type: "exit",
@@ -111,7 +113,7 @@ describe("parseConsoleFrame", () => {
 
 describe("consumeSseChunk", () => {
   it("切出完整帧，并把不完整的一帧作为残余返回", () => {
-    const frames: unknown[] = [];
+    const frames: Array<unknown> = [];
     const rest = consumeSseChunk(
       `${frame({ type: "out", text: "a" })}data: {"type":"out","te`,
       (p) => frames.push(p),
@@ -122,20 +124,17 @@ describe("consumeSseChunk", () => {
   });
 
   it("残余续接后能拼出一帧（跨 chunk 的 JSON 不会被切断）", () => {
-    const frames: unknown[] = [];
-    const rest1 = consumeSseChunk('data: {"type":"out","text":"he', (p) =>
-      frames.push(p),
-    );
+    const frames: Array<unknown> = [];
+    const rest1 = consumeSseChunk('data: {"type":"out","text":"he', (p) => frames.push(p));
     const rest2 = consumeSseChunk(`${rest1}llo"}\n\n`, (p) => frames.push(p));
     expect(frames).toEqual([{ type: "out", text: "hello" }]);
     expect(rest2).toBe("");
   });
 
   it("一次 chunk 里的多帧按顺序全部回调", () => {
-    const frames: unknown[] = [];
-    consumeSseChunk(
-      frame({ type: "out", text: "1" }) + frame({ type: "out", text: "2" }),
-      (p) => frames.push(p),
+    const frames: Array<unknown> = [];
+    consumeSseChunk(frame({ type: "out", text: "1" }) + frame({ type: "out", text: "2" }), (p) =>
+      frames.push(p),
     );
     expect(frames).toEqual([
       { type: "out", text: "1" },
@@ -144,16 +143,13 @@ describe("consumeSseChunk", () => {
   });
 
   it("畸形 JSON 的帧被丢掉，不影响后续帧", () => {
-    const frames: unknown[] = [];
-    consumeSseChunk(
-      `data: {oops\n\n${frame({ type: "out", text: "ok" })}`,
-      (p) => frames.push(p),
-    );
+    const frames: Array<unknown> = [];
+    consumeSseChunk(`data: {oops\n\n${frame({ type: "out", text: "ok" })}`, (p) => frames.push(p));
     expect(frames).toEqual([{ type: "out", text: "ok" }]);
   });
 
   it("忽略非 data: 行与空 data 行（SSE 的注释与心跳）", () => {
-    const frames: unknown[] = [];
+    const frames: Array<unknown> = [];
     consumeSseChunk(": ping\ndata:\n\n", (p) => frames.push(p));
     expect(frames).toEqual([]);
   });
@@ -180,15 +176,12 @@ describe("runConsoleCommand", () => {
   it("非 2xx 读服务端信封的文案 → rejected（这是用户能修的那一类）", async () => {
     const restore = stubFetch(
       async () =>
-        new Response(
-          JSON.stringify({ error: "已有一条命令在运行：pnpm test" }),
-          {
-            status: 409,
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
+        new Response(JSON.stringify({ error: "已有一条命令在运行：pnpm test" }), {
+          status: 409,
+          headers: { "Content-Type": "application/json" },
+        }),
     );
-    const events: unknown[] = [];
+    const events: Array<unknown> = [];
     const outcome = await runConsoleCommand({
       command: "x",
       onEvent: (e) => events.push(e),
@@ -202,9 +195,7 @@ describe("runConsoleCommand", () => {
   });
 
   it("非 JSON 的失败体也给可读文案（不吐 `Unexpected token '<'`）", async () => {
-    const restore = stubFetch(
-      async () => new Response("<!DOCTYPE html>", { status: 500 }),
-    );
+    const restore = stubFetch(async () => new Response("<!DOCTYPE html>", { status: 500 }));
     const outcome = await runConsoleCommand({ command: "x", onEvent: noop });
     expect(outcome.kind).toBe("rejected");
     expect(outcome.kind === "rejected" && outcome.reason).toContain("500");
@@ -229,7 +220,7 @@ describe("runConsoleCommand", () => {
           ]),
         ),
     );
-    const events: unknown[] = [];
+    const events: Array<unknown> = [];
     const outcome = await runConsoleCommand({
       command: "pnpm test",
       onEvent: (e) => events.push(e),
@@ -275,7 +266,9 @@ describe("runConsoleCommand", () => {
     /* ISSUE #1327 现场：面板结论条只写着 `Failed to fetch`，用户看不出是应用服务
      * 没起来还是命令写错。文案走 `~/lib/error-message` 的唯一出口翻成中文。 */
     expect(outcome.kind).toBe("failed");
-    if (outcome.kind !== "failed") return;
+    if (outcome.kind !== "failed") {
+      return;
+    }
     expect(outcome.reason).toContain("网络请求失败");
     expect(outcome.reason).not.toBe("Failed to fetch");
     restore();

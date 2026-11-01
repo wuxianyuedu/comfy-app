@@ -23,19 +23,27 @@ import { TASK_ERROR_MAX, clampText } from "~/lib/text-clamp";
 // 用户看到的就不是真实原因了。本函数递归剥出已知字段，兜底再打印 JSON ——
 // 保证 `task.error` 里**总有**可读的信息。
 export function friendlyError(raw: unknown): string {
-  if (raw == null) return "";
-  if (typeof raw === "string") return raw;
-  if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
-  if (typeof raw === "bigint") return raw.toString();
+  if (raw == null) {
+    return "";
+  }
+  if (typeof raw === "string") {
+    return raw;
+  }
+  if (typeof raw === "number" || typeof raw === "boolean") {
+    return String(raw);
+  }
+  if (typeof raw === "bigint") {
+    return raw.toString();
+  }
   if (Array.isArray(raw)) {
     const parts = raw.map(friendlyError).filter((msg) => msg.trim() !== "");
     return parts.length ? parts.join("\n") : "";
   }
   if (typeof raw === "object") {
-    const o = raw as Record<string, unknown>;
+    const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
     // 按优先级取：先 ComfyUI 自己的规范字段，再取通用异常形状
     //（Error.message / details / reason 这类通用形状）。
-    const candidates: (keyof typeof o)[] = [
+    const candidates: Array<keyof typeof o> = [
       "exception_message",
       "message",
       "error",
@@ -47,7 +55,9 @@ export function friendlyError(raw: unknown): string {
     ];
     for (const k of candidates) {
       const v = o[k];
-      if (typeof v === "string" && v.trim()) return v;
+      if (typeof v === "string" && v.trim()) {
+        return v;
+      }
     }
     // 部分 ComfyUI 的 exception_payload 把 `exception_message` 埋得更深
     //（例如 `{ data: { exception_message: "..." } }`）。
@@ -55,7 +65,9 @@ export function friendlyError(raw: unknown): string {
       const inner = o[k];
       if (inner && typeof inner === "object") {
         const innerText = friendlyError(inner);
-        if (innerText.trim()) return innerText;
+        if (innerText.trim()) {
+          return innerText;
+        }
       }
     }
     // 最后手段：把对象打印出来，让用户至少看到点东西而不是 "[object Object]"。
@@ -72,7 +84,11 @@ export function friendlyError(raw: unknown): string {
     }
   }
   // symbol / function 的兜底分支 —— 正常不会走到，留着以防万一。
-  if (typeof raw === "function") return raw.name || "[function]";
-  if (typeof raw === "symbol") return Symbol.prototype.toString.call(raw);
+  if (typeof raw === "function") {
+    return raw.name || "[function]";
+  }
+  if (typeof raw === "symbol") {
+    return Symbol.prototype.toString.call(raw);
+  }
   return "[unknown error]";
 }

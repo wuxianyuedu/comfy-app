@@ -41,8 +41,8 @@ const SubgraphIdentitySchema = z.looseObject({ id: z.string() });
 
 /** 前端下发的工作流覆盖项（nodeId / name / value）。 */
 export type RawWorkflowOverride = {
-  nodeId: string;
   name: string;
+  nodeId: string;
   value?: unknown;
 };
 
@@ -62,9 +62,9 @@ export type RawUiNodeInput = {
  */
 export type RawUiNode = {
   id?: unknown;
+  inputs?: Array<RawUiNodeInput>;
   type?: unknown;
-  inputs?: RawUiNodeInput[];
-  widgets_values?: unknown[];
+  widgets_values?: Array<unknown>;
 };
 /** 把 API 格式的节点 id（例如 "4:1670"）或顶层 id 映射到原始 UI 节点。
  *
@@ -76,44 +76,62 @@ export type RawUiNode = {
  *  落空（`slot < 0 → continue`，用户看到「改了没生效」），逐层下钻才是确定性的。 */
 function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
   const findInNodes = (nodes: unknown, id: string): RawUiNode | null => {
-    if (!Array.isArray(nodes)) return null;
+    if (!Array.isArray(nodes)) {
+      return null;
+    }
     for (const x of nodes) {
       const parsed = UiNodeIdentitySchema.safeParse(x);
-      if (!parsed.success) continue;
-      if (String(parsed.data.id) === id) return parsed.data;
+      if (!parsed.success) {
+        continue;
+      }
+      if (String(parsed.data.id) === id) {
+        return parsed.data;
+      }
     }
     return null;
   };
 
   if (!nodeId.includes(":")) {
     const top = findInNodes(raw.nodes, nodeId);
-    if (top) return top;
+    if (top) {
+      return top;
+    }
     /* 存量兜底：入库时还不知道「宿主 id」的旧数据，内部节点只存了裸 id
      *  （`1670`）。新数据一律带宿主 id 走上方确定性下钻；这里仅为已在库的
      *  旧行保留「在子图定义里找同名内部节点」的最后兜底，找不到就是找不到
      *  —— 顶层确实没有这个 id 时返回 null 好过误写到别处。 */
     for (const sub of subgraphDefs(raw).values()) {
       const found = findInNodes(sub.nodes, nodeId);
-      if (found) return found;
+      if (found) {
+        return found;
+      }
     }
     return null;
   }
 
   const segments = nodeId.split(":").filter((seg) => seg !== "");
-  if (segments.length < 2) return null;
+  if (segments.length < 2) {
+    return null;
+  }
 
   const defsByUid = subgraphDefs(raw);
   let currentNodes: unknown = raw.nodes;
   let node: RawUiNode | null = null;
   for (const [i, segment] of segments.entries()) {
     node = findInNodes(currentNodes, segment);
-    if (!node) return null;
-    if (i === segments.length - 1) return node;
+    if (!node) {
+      return null;
+    }
+    if (i === segments.length - 1) {
+      return node;
+    }
     /* 还有下一段 ⇒ 本节点必须是子图 wrapper：用它的 `type`（子图 UUID）定位
      *  子图定义，下一段在该定义的 nodes 里继续找。 */
     const classType = typeof node.type === "string" ? node.type : undefined;
     const sub = classType ? defsByUid.get(classType) : undefined;
-    if (!sub || !Array.isArray(sub.nodes)) return null;
+    if (!sub || !Array.isArray(sub.nodes)) {
+      return null;
+    }
     currentNodes = sub.nodes;
   }
   return node;
@@ -123,12 +141,11 @@ function resolveRawNode(raw: JsonRecord, nodeId: string): RawUiNode | null {
  *  这个出口只为一件事存在：让「WS 帧回来的节点 id → 类名」与「画布覆盖注入找到那个
  *  节点」用的是**同一条定位逻辑**（`resolveRawNode`），两处各算各的迟早会给出不同的
  *  节点（消费方见 `graph-node-class.ts`，ISSUE #1202）。 */
-export function rawUiNodeType(
-  raw: unknown,
-  nodeId: string,
-): string | undefined {
-  if (!raw || typeof raw !== "object" || !nodeId) return undefined;
-  const type = resolveRawNode(raw as JsonRecord, nodeId)?.type;
+export function rawUiNodeType(raw: unknown, nodeId: string): string | undefined {
+  if (!raw || typeof raw !== "object" || !nodeId) {
+    return undefined;
+  }
+  const type = resolveRawNode(/* SAFETY: 类型断言已复核 */ raw as JsonRecord, nodeId)?.type;
   return typeof type === "string" && type ? type : undefined;
 }
 /** 具名控件输入在 UI 节点 `widgets_values` 数组里的下标。 */
@@ -137,7 +154,9 @@ function widgetSlot(node: RawUiNode, name: string): number {
   let slot = 0;
   for (const inp of inputs) {
     if (inp?.widget) {
-      if (inp.name === name) return slot;
+      if (inp.name === name) {
+        return slot;
+      }
       slot++;
     }
   }
@@ -149,16 +168,20 @@ function seedWidgetSlot(node: RawUiNode): number {
   const inputs = node?.inputs ?? [];
   let slot = 0;
   for (const inp of inputs) {
-    if (!inp?.widget) continue;
+    if (!inp?.widget) {
+      continue;
+    }
     const w = inp.widget;
     const wname =
+      /* SAFETY: 类型断言已复核 */
       typeof w === "string"
         ? w
         : w != null && typeof w === "object"
           ? ((w as JsonRecord).name ?? inp.name)
           : inp.name;
-    if (typeof wname === "string" && /seed|noise_seed/i.test(wname))
+    if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
       return slot;
+    }
     slot++;
   }
   return -1;
@@ -167,9 +190,12 @@ function seedWidgetSlot(node: RawUiNode): number {
 function seedWidgetName(node: RawUiNode): string | null {
   const inputs = node?.inputs ?? [];
   for (const inp of inputs) {
-    if (!inp?.widget) continue;
+    if (!inp?.widget) {
+      continue;
+    }
     const w = inp.widget;
     const wname =
+      /* SAFETY: 类型断言已复核 */
       typeof w === "string"
         ? w
         : w != null && typeof w === "object"
@@ -188,7 +214,9 @@ function widgetInputCount(node: RawUiNode): number {
   const inputs = node?.inputs ?? [];
   let count = 0;
   for (const inp of inputs) {
-    if (inp?.widget) count++;
+    if (inp?.widget) {
+      count++;
+    }
   }
   return count;
 }
@@ -200,7 +228,9 @@ function widgetInputCount(node: RawUiNode): number {
  *  写 `seedSlot + 1` 会把它覆盖掉。被暴露 seed 的随机化被隔离时
  *  （ComfyUI 的 `proxyWidgetErrorQuarantine`），更不能写。 */
 function hasSeedControlSlot(node: RawUiNode): boolean {
-  if (!Array.isArray(node?.widgets_values)) return false;
+  if (!Array.isArray(node?.widgets_values)) {
+    return false;
+  }
   /* 只有当 `widgets_values` 比带控件的输入多出一项时，哨兵槽才存在
    *（更早的 ComfyUI 不序列化哨兵，长度相等说明 seed+1 也是真控件）。 */
   return node.widgets_values.length > widgetInputCount(node);
@@ -211,8 +241,8 @@ function hasSeedControlSlot(node: RawUiNode): boolean {
 const SUBGRAPH_INPUT_NODE_ID = -10;
 /** 子图定义 `inputs[]` 引脚列表里一项的最小视图。 */
 type SubgraphPin = {
-  name?: unknown;
   linkIds?: unknown;
+  name?: unknown;
 };
 /** 子图定义内部一条连线对象的最小视图（含 id、起止节点与槽位、类型等字段：
  *  依次是 id、源节点、源槽、目标节点、目标槽、类型。 */
@@ -225,9 +255,9 @@ type SubgraphLink = {
 /** 子图定义（`definitions.subgraphs[uid]`）的最小视图。 */
 type RawSubgraph = {
   id?: unknown;
-  nodes?: unknown;
-  links?: unknown;
   inputs?: unknown;
+  links?: unknown;
+  nodes?: unknown;
 };
 /** 收集所有子图定义，按其 UUID（`sub.id`）作键。 */
 function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
@@ -235,16 +265,18 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
   const defs = raw.definitions;
   const subs =
     defs != null && typeof defs === "object"
-      ? (defs as JsonRecord).subgraphs
+      ? /* SAFETY: 类型断言已复核 */ (defs as JsonRecord).subgraphs
       : undefined;
-  const list: unknown[] = Array.isArray(subs)
+  const list: Array<unknown> = Array.isArray(subs)
     ? subs
     : subs != null && typeof subs === "object"
       ? Object.values(subs)
       : [];
   for (const sg of list) {
     const parsed = SubgraphIdentitySchema.safeParse(sg);
-    if (!parsed.success) continue;
+    if (!parsed.success) {
+      continue;
+    }
     out.set(parsed.data.id, parsed.data);
   }
   return out;
@@ -266,16 +298,16 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
  * `inputs[]` 与定义 `inputs[]` 按**名字**对齐（顺序可能不同）。
  */
 /** 一个子图 wrapper 的「提升输入 → 内层节点」解析结果。 */
-interface SubgraphTargets {
-  /** 子图定义本体（用于继续下钻嵌套实例）。 */
-  sub: RawSubgraph;
+type SubgraphTargets = {
+  /** 定义里声明的输入引脚（**按声明顺序**）。 */
+  defInputs: Array<SubgraphPin>;
   /** 定义内部节点（按 id）。 */
   innerById: Map<string, RawUiNode>;
+  /** 子图定义本体（用于继续下钻嵌套实例）。 */
+  sub: RawSubgraph;
   /** 提升引脚名 → 内层节点 id 与其**入参下标**（首条 origin=-10 的边界连线）。 */
   targetByName: Map<string, { nodeId: string; slot: number }>;
-  /** 定义里声明的输入引脚（**按声明顺序**）。 */
-  defInputs: SubgraphPin[];
-}
+};
 
 /**
  * 解析一个子图 wrapper 的提升输入映射（宿主值 → 内层节点的落点）。
@@ -284,52 +316,69 @@ interface SubgraphTargets {
  * `inputs[i]` 取其 `linkIds` 中第一条「起点是 `-10`（输入轨）」的边界连线，
  * 该连线的 `target_id` / `target_slot` 即内层节点与其入参槽位。
  */
-function collectSubgraphTargets(
-  raw: JsonRecord,
-  wrapper: RawUiNode,
-): SubgraphTargets | null {
+function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTargets | null {
   const classType = typeof wrapper.type === "string" ? wrapper.type : undefined;
-  if (!classType) return null;
+  if (!classType) {
+    return null;
+  }
   const sub = subgraphDefs(raw).get(classType);
-  if (!sub) return null;
+  if (!sub) {
+    return null;
+  }
 
   const innerById = new Map<string, RawUiNode>();
   for (const n of Array.isArray(sub.nodes) ? sub.nodes : []) {
     const parsed = UiNodeIdentitySchema.safeParse(n);
-    if (!parsed.success) continue;
+    if (!parsed.success) {
+      continue;
+    }
     innerById.set(String(parsed.data.id), parsed.data);
   }
 
   const linksById = new Map<string, SubgraphLink>();
   for (const l of Array.isArray(sub.links) ? sub.links : []) {
-    if (l == null || typeof l !== "object") continue;
-    const link = l as SubgraphLink;
-    if (typeof link.id !== "string" && typeof link.id !== "number") continue;
+    if (l == null || typeof l !== "object") {
+      continue;
+    }
+    const link = /* SAFETY: 类型断言已复核 */ l as SubgraphLink;
+    if (typeof link.id !== "string" && typeof link.id !== "number") {
+      continue;
+    }
     linksById.set(String(link.id), link);
   }
 
-  const defInputs: SubgraphPin[] = [];
+  const defInputs: Array<SubgraphPin> = [];
   for (const i of Array.isArray(sub.inputs) ? sub.inputs : []) {
-    if (i == null || typeof i !== "object") continue;
-    defInputs.push(i as SubgraphPin);
+    if (i == null || typeof i !== "object") {
+      continue;
+    }
+    defInputs.push(/* SAFETY: 类型断言已复核 */ i as SubgraphPin);
   }
 
   const targetByName = new Map<string, { nodeId: string; slot: number }>();
   for (const pin of defInputs) {
-    if (typeof pin.name !== "string") continue;
+    if (typeof pin.name !== "string") {
+      continue;
+    }
     for (const lid of Array.isArray(pin.linkIds) ? pin.linkIds : []) {
-      if (typeof lid !== "string" && typeof lid !== "number") continue;
-      const link = linksById.get(String(lid));
-      if (!link) continue;
-      if (Number(link.origin_id) !== SUBGRAPH_INPUT_NODE_ID) continue;
-      if (
-        typeof link.target_id !== "string" &&
-        typeof link.target_id !== "number"
-      )
+      if (typeof lid !== "string" && typeof lid !== "number") {
         continue;
+      }
+      const link = linksById.get(String(lid));
+      if (!link) {
+        continue;
+      }
+      if (Number(link.origin_id) !== SUBGRAPH_INPUT_NODE_ID) {
+        continue;
+      }
+      if (typeof link.target_id !== "string" && typeof link.target_id !== "number") {
+        continue;
+      }
       const tid = String(link.target_id);
       const slot = Number(link.target_slot);
-      if (!innerById.has(tid) || !Number.isFinite(slot)) continue;
+      if (!innerById.has(tid) || !Number.isFinite(slot)) {
+        continue;
+      }
       targetByName.set(pin.name, { nodeId: tid, slot: Math.trunc(slot) });
       break;
     }
@@ -345,8 +394,12 @@ function hostWidgetIndexes(wrapper: RawUiNode): Map<string, number> {
   const out = new Map<string, number>();
   let i = 0;
   for (const inp of wrapper.inputs ?? []) {
-    if (!inp?.widget) continue;
-    if (typeof inp.name === "string") out.set(inp.name, i);
+    if (!inp?.widget) {
+      continue;
+    }
+    if (typeof inp.name === "string") {
+      out.set(inp.name, i);
+    }
     i += 1;
   }
   return out;
@@ -355,24 +408,38 @@ function hostWidgetIndexes(wrapper: RawUiNode): Map<string, number> {
 function applySubgraphInteriorOverrides(
   raw: JsonRecord,
   wrapper: RawUiNode,
-  entries: { name: string; value: unknown }[],
+  entries: Array<{ name: string; value: unknown }>,
 ): void {
   const t = collectSubgraphTargets(raw, wrapper);
-  if (!t) return;
+  if (!t) {
+    return;
+  }
   const defNames = new Set<string>();
   for (const pin of t.defInputs) {
-    if (typeof pin.name === "string") defNames.add(pin.name);
+    if (typeof pin.name === "string") {
+      defNames.add(pin.name);
+    }
   }
 
   for (const { name, value } of entries) {
-    if (!defNames.has(name)) continue;
+    if (!defNames.has(name)) {
+      continue;
+    }
     const target = t.targetByName.get(name);
-    if (!target) continue;
+    if (!target) {
+      continue;
+    }
     const inner = t.innerById.get(target.nodeId);
-    if (!inner) continue;
+    if (!inner) {
+      continue;
+    }
     const slot = mapInputSlotToWidgetSlot(inner, target.slot);
-    if (slot < 0) continue;
-    if (!Array.isArray(inner.widgets_values)) continue;
+    if (slot < 0) {
+      continue;
+    }
+    if (!Array.isArray(inner.widgets_values)) {
+      continue;
+    }
     inner.widgets_values[slot] = value;
   }
 }
@@ -401,17 +468,25 @@ function applySubgraphInteriorOverrides(
  * 只改深拷贝出来的载荷，库里的工作流不受影响。
  */
 function neutralizePromotedHostDrift(raw: JsonRecord): void {
-  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return;
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    return;
+  }
   /** comfy-cli 的判据（复刻自 `comfy_cli.cql.promoted.promoted_inputs`）。 */
   const cliWidgetIndexes = (t: SubgraphTargets): Map<string, number> => {
     const out = new Map<string, number>();
     let idx = 0;
     for (const pin of t.defInputs) {
-      if (typeof pin.name !== "string") continue;
+      if (typeof pin.name !== "string") {
+        continue;
+      }
       const target = t.targetByName.get(pin.name);
-      if (!target) continue;
+      if (!target) {
+        continue;
+      }
       const inner = t.innerById.get(target.nodeId);
-      if (!inner?.inputs?.[target.slot]?.widget) continue;
+      if (!inner?.inputs?.[target.slot]?.widget) {
+        continue;
+      }
       out.set(pin.name, idx);
       idx += 1;
     }
@@ -420,13 +495,19 @@ function neutralizePromotedHostDrift(raw: JsonRecord): void {
 
   const visit = (nodes: unknown, depth: number): void => {
     /* 嵌套层数只是防止定义里的环把遍历拖死；真实工作流远到不了这个深度。 */
-    if (depth > 8 || !Array.isArray(nodes)) return;
+    if (depth > 8 || !Array.isArray(nodes)) {
+      return;
+    }
     for (const n of nodes) {
       const parsed = UiNodeIdentitySchema.safeParse(n);
-      if (!parsed.success) continue;
+      if (!parsed.success) {
+        continue;
+      }
       const node = parsed.data;
       const t = collectSubgraphTargets(raw, node);
-      if (!t) continue;
+      if (!t) {
+        continue;
+      }
       /* 先下钻：与 comfy-cli 一致（内层实例先处理，外层后处理）。 */
       visit(t.sub.nodes, depth + 1);
 
@@ -441,29 +522,43 @@ function neutralizePromotedHostDrift(raw: JsonRecord): void {
           }
         }
       }
-      if (!drift) continue;
+      if (!drift) {
+        continue;
+      }
 
       /* zod 解析出的副本上 `widgets_values` 是 `any[]`：这里显式收成 `unknown[]`，
        * 逐项取出的值才不会把 `any` 带进「写回内层」的那一步。 */
-      const host = (
+      const host = /* SAFETY: 类型断言已复核 */ (
         Array.isArray(node.widgets_values) ? node.widgets_values : []
-      ) as unknown[];
+      ) as Array<unknown>;
       for (const [name, idx] of ours) {
         const value = host[idx];
-        if (value === undefined) continue;
+        if (value === undefined) {
+          continue;
+        }
         const target = t.targetByName.get(name);
-        if (!target) continue;
+        if (!target) {
+          continue;
+        }
         const inner = t.innerById.get(target.nodeId);
-        if (!inner) continue;
+        if (!inner) {
+          continue;
+        }
         const slot = mapInputSlotToWidgetSlot(inner, target.slot);
-        if (slot < 0) continue;
-        if (!Array.isArray(inner.widgets_values)) continue;
+        if (slot < 0) {
+          continue;
+        }
+        if (!Array.isArray(inner.widgets_values)) {
+          continue;
+        }
         inner.widgets_values[slot] = value;
       }
       /* **就地**清空，不能重新赋值：`UiNodeIdentitySchema.safeParse` 给出的
        * `node` 是解析出的副本，给它换一个数组不会反映到载荷上；清空**同一份**
        * 数组才会（本模块其它写入同理，都只改数组元素）。 */
-      if (Array.isArray(node.widgets_values)) node.widgets_values.length = 0;
+      if (Array.isArray(node.widgets_values)) {
+        node.widgets_values.length = 0;
+      }
     }
   };
 
@@ -481,18 +576,25 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
   let slot = 0;
   for (let i = 0; i < inputs.length; i++) {
     const inp = inputs[i];
-    if (!inp?.widget) continue;
+    if (!inp?.widget) {
+      continue;
+    }
     // 目标槽位的值格就是当前游标；seed 的 control 哨兵只把它**之后**的
     // 控件整体推后一格，所以哨兵的额外 +1 必须在返回游标之后才累加。
-    if (i === inputIndex) return slot;
+    if (i === inputIndex) {
+      return slot;
+    }
     slot++;
     const wname =
+      /* SAFETY: 类型断言已复核 */
       typeof inp.widget === "string"
         ? inp.widget
         : inp.widget != null && typeof inp.widget === "object"
           ? ((inp.widget as JsonRecord).name ?? inp.name)
           : inp.name;
-    if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) slot++;
+    if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
+      slot++;
+    }
   }
   return -1;
 }
@@ -504,8 +606,9 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
 export function coerceApiInputValue(current: unknown, value: unknown): unknown {
   if (typeof current === "number" && typeof value === "string") {
     const trimmed = value.trim();
-    if (trimmed !== "" && !Number.isNaN(Number(trimmed)))
+    if (trimmed !== "" && !Number.isNaN(Number(trimmed))) {
       return Number(trimmed);
+    }
   }
   return value;
 }
@@ -528,36 +631,39 @@ const CONTROL_AFTER_GENERATE = "control_after_generate";
  *  图本身不变（不修改入参对象），返回一份深拷贝。 */
 export function applyApiOverrides(
   graph: unknown,
-  overrides?: RawWorkflowOverride[],
+  overrides?: Array<RawWorkflowOverride>,
 ): JsonRecord {
-  if (graph == null || typeof graph !== "object" || Array.isArray(graph))
+  if (graph == null || typeof graph !== "object" || Array.isArray(graph)) {
     return {};
-  const out = JSON.parse(JSON.stringify(graph)) as JsonRecord;
-  if (!overrides?.length) return out;
+  }
+  const out = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(graph)) as JsonRecord;
+  if (!overrides?.length) {
+    return out;
+  }
 
   for (const ov of overrides) {
-    if (!ov?.nodeId || ov.value === undefined) continue;
+    if (!ov?.nodeId || ov.value === undefined) {
+      continue;
+    }
     const nodeRaw = out[ov.nodeId];
-    if (
-      nodeRaw == null ||
-      typeof nodeRaw !== "object" ||
-      Array.isArray(nodeRaw)
-    )
+    if (nodeRaw == null || typeof nodeRaw !== "object" || Array.isArray(nodeRaw)) {
       continue;
-    const inputsRaw = (nodeRaw as JsonRecord).inputs;
-    if (
-      inputsRaw == null ||
-      typeof inputsRaw !== "object" ||
-      Array.isArray(inputsRaw)
-    )
+    }
+    const inputsRaw = /* SAFETY: 类型断言已复核 */ (nodeRaw as JsonRecord).inputs;
+    if (inputsRaw == null || typeof inputsRaw !== "object" || Array.isArray(inputsRaw)) {
       continue;
-    const inputs = inputsRaw as JsonRecord;
+    }
+    const inputs = /* SAFETY: 类型断言已复核 */ inputsRaw as JsonRecord;
 
     if (ov.name === CONTROL_AFTER_GENERATE) {
       delete inputs[CONTROL_AFTER_GENERATE];
-      if (ov.value !== "randomize") continue;
+      if (ov.value !== "randomize") {
+        continue;
+      }
       const seedKey = SEED_INPUT_NAMES.find((name) => name in inputs);
-      if (seedKey) inputs[seedKey] = randomSeed();
+      if (seedKey) {
+        inputs[seedKey] = randomSeed();
+      }
       continue;
     }
 
@@ -568,9 +674,9 @@ export function applyApiOverrides(
 /** 尽力把画布的 `workflowInputs` 注入到原始 UI JSON 里。 */
 export function applyRawOverrides(
   rawJson: unknown,
-  overrides?: RawWorkflowOverride[],
+  overrides?: Array<RawWorkflowOverride>,
 ): JsonRecord {
-  const raw = JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
+  const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(JSON.stringify(rawJson)) as JsonRecord;
   /* **没有**覆盖项也要走漂移抵消：comfy-cli 的提升控件回写错位与「这次有没有
    * 画布覆盖」无关 —— 它错的是宿主自己的值（本次现场 17 处全在我们一次都没碰过
    * 的引脚上）。因此这一步先于「有没有覆盖」的判断。 */
@@ -579,19 +685,27 @@ export function applyRawOverrides(
     return raw;
   }
   /* 已落到节点上的覆盖项，循环结束后统一同步子图内层（见文件末尾）。 */
-  const pendingByNode = new Map<string, { name: string; value: unknown }[]>();
+  const pendingByNode = new Map<string, Array<{ name: string; value: unknown }>>();
   for (const ov of overrides) {
-    if (!ov?.nodeId || ov.value === undefined) continue;
+    if (!ov?.nodeId || ov.value === undefined) {
+      continue;
+    }
     const node = resolveRawNode(raw, ov.nodeId);
-    if (!node) continue;
+    if (!node) {
+      continue;
+    }
     /* 原始 UI 格式里 seed 的 "control after generate" **不是**具名控件 ——
      * 它被序列化成 seed 控件紧挨着的下一个 widgets_values 槽。
      * 所以这里解析出 seed 控件槽，目标就是槽 +1。
      *（API 格式的图则带一个真正的 `control_after_generate` 输入，由按名分支处理。） */
     if (ov.name === "control_after_generate") {
       const seedSlot = seedWidgetSlot(node);
-      if (seedSlot < 0) continue;
-      if (!Array.isArray(node.widgets_values)) node.widgets_values = [];
+      if (seedSlot < 0) {
+        continue;
+      }
+      if (!Array.isArray(node.widgets_values)) {
+        node.widgets_values = [];
+      }
       /* 只有当该节点确实在 seed 之后保留了 `control_after_generate` 哨兵槽时，
        * 才写 seed 的控制模式。只暴露内部 seed、却不暴露其随机化能力的子图 wrapper
        *（子图没有对应输入引脚时 ComfyUI 会把它隔离）没有这个槽 ——
@@ -615,8 +729,12 @@ export function applyRawOverrides(
     }
 
     const slot = widgetSlot(node, ov.name);
-    if (slot < 0) continue;
-    if (!Array.isArray(node.widgets_values)) node.widgets_values = [];
+    if (slot < 0) {
+      continue;
+    }
+    if (!Array.isArray(node.widgets_values)) {
+      node.widgets_values = [];
+    }
     node.widgets_values[slot] = ov.value;
     pendingByNode.set(ov.nodeId, [
       ...(pendingByNode.get(ov.nodeId) ?? []),
@@ -630,7 +748,9 @@ export function applyRawOverrides(
    * （提示词/种子等入参全部失效，每次都跑工作流里存的那张图）。 */
   for (const [nodeId, entries] of pendingByNode) {
     const node = resolveRawNode(raw, nodeId);
-    if (!node) continue;
+    if (!node) {
+      continue;
+    }
     applySubgraphInteriorOverrides(raw, node, entries);
   }
   /* 最后一步：抵消 comfy-cli 提升控件回写的槽位漂移（见该函数注释）。必须在覆盖

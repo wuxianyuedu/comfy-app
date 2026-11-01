@@ -156,9 +156,7 @@ function stampHandlerLabel({ run, log, slug, number, handle, root }) {
     String(number),
     "-v",
   ]);
-  const names = read
-    ? (asArray(read.json) ?? []).map((x) => String(x?.name ?? ""))
-    : [];
+  const names = read ? (asArray(read.json) ?? []).map((x) => String(x?.name ?? "")) : [];
   if (names.includes(label)) {
     log(`[ship] ✓ PR #${number} 标签 ${label} 已回读（list-pull-labels）`);
     return;
@@ -168,9 +166,7 @@ function stampHandlerLabel({ run, log, slug, number, handle, root }) {
       `（${read ? "回读里没有这个名字" : "回读没跑起来"}）⇒ 不念「已打上」；` +
       "这一格是读数、不改退码。手工补：",
   );
-  log(
-    `[ship]   cnb pulls post-pull-labels --repo ${slug} --number ${number} --labels ${label} -v`,
-  );
+  log(`[ship]   cnb pulls post-pull-labels --repo ${slug} --number ${number} --labels ${label} -v`);
 }
 
 /**
@@ -189,7 +185,9 @@ function stampHandlerLabel({ run, log, slug, number, handle, root }) {
  */
 function findLandedPull(ctx) {
   const { run, slug, headSha, pages = 5, pageSize = 20 } = ctx;
-  if (!slug || !headSha) return { prNumber: null, scanned: 0, ran: false };
+  if (!slug || !headSha) {
+    return { prNumber: null, scanned: 0, ran: false };
+  }
   let scanned = 0;
   let ran = false;
   for (let p = 1; p <= pages; p += 1) {
@@ -206,14 +204,22 @@ function findLandedPull(ctx) {
       String(pageSize),
       "-v",
     ]);
-    if (!got) break;
+    if (!got) {
+      break;
+    }
     ran = true;
     const list = asArray(got.json);
-    if (!list || list.length === 0) break;
+    if (!list || list.length === 0) {
+      break;
+    }
     scanned += list.length;
     const hit = findMergedPullForHeadSha(got.json, headSha);
-    if (hit) return { prNumber: hit, scanned, ran };
-    if (list.length < pageSize) break;
+    if (hit) {
+      return { prNumber: hit, scanned, ran };
+    }
+    if (list.length < pageSize) {
+      break;
+    }
   }
   return { prNumber: null, scanned, ran };
 }
@@ -240,28 +246,9 @@ function findLandedPull(ctx) {
  * @returns {{number: any}} PR 号；拿不到时是 falsy，由调用方按 `CODE.NOT_RUN` 收
  */
 export function createOrReusePull(ctx) {
-  const {
-    run,
-    log,
-    mkTmp,
-    root,
-    slug,
-    branch,
-    frags,
-    baseRef,
-    baseBranch,
-    explicitTitle,
-    handle,
-  } = ctx;
-  const list = cnbJson(run, [
-    "pulls",
-    "list-pulls",
-    "--repo",
-    slug,
-    "--state",
-    "open",
-    "-v",
-  ]);
+  const { run, log, mkTmp, root, slug, branch, frags, baseRef, baseBranch, explicitTitle, handle } =
+    ctx;
+  const list = cnbJson(run, ["pulls", "list-pulls", "--repo", slug, "--state", "open", "-v"]);
   let number = list ? findPullForBranch(list.json, branch) : null;
   if (number) {
     log(`[ship] 已有开放 PR #${number} ⇒ 复用，不重建（幂等）`);
@@ -306,9 +293,7 @@ export function createOrReusePull(ctx) {
     handle,
     /* 基线取不到时这一格就是空 —— 宁缺：拿 `HEAD...HEAD` 会得到一份「什么都没有」
      * 的 diffstat，而 PR 正文里那句「这次改了哪些文件」正是读者判断成本的入口。 */
-    diffstat: baseRef
-      ? run("git", ["diff", "--stat", `${baseRef}...HEAD`]).stdout.trim()
-      : "",
+    diffstat: baseRef ? run("git", ["diff", "--stat", `${baseRef}...HEAD`]).stdout.trim() : "",
   });
   /* 守卫排在落临时文件**之前**：`mkTmp` 的回收挂在 `main` 的 `finally` 上，
    * 先建再退虽然不会留垃圾，但会让「这次没建 PR」那一次也在盘上写过一份
@@ -335,9 +320,7 @@ export function createOrReusePull(ctx) {
     /* 正文可能上千行，`--body <串>` 会撞上 Windows 的 32k argv 上限，
      * 所以这一格只能走文件。取不到 git 目录 = 不在真检出里 ⇒ 说清楚
      * 而不是往工作区猜一个落点。 */
-    log(
-      "[ship] 取不到 git 目录 ⇒ PR 正文没有落点，这一格没有执行者（不是「不需要」）。",
-    );
+    log("[ship] 取不到 git 目录 ⇒ PR 正文没有落点，这一格没有执行者（不是「不需要」）。");
     return { number: null };
   }
   const made = cnbJson(run, [
@@ -358,9 +341,7 @@ export function createOrReusePull(ctx) {
     "-v",
   ]);
   if (!made) {
-    log(
-      "[ship] 建 PR 没拿到可解析的响应 ⇒ 这一格没有结论（不是「失败」也不是「成功」）",
-    );
+    log("[ship] 建 PR 没拿到可解析的响应 ⇒ 这一格没有结论（不是「失败」也不是「成功」）");
     return { number: null };
   }
   number = readPullVerdict(made.json).number;
@@ -374,9 +355,7 @@ export function createOrReusePull(ctx) {
       "[ship] 建 PR 的响应解析出来了，但里面**没有 PR 号** ⇒ 不打印「已建」，" +
         "这一格按「没跑起来」处理（exit 2）。",
     );
-    log(
-      `[ship]   退码 ${made.code} · 响应原文（截 500 字）：${made.raw.slice(0, 500)}`,
-    );
+    log(`[ship]   退码 ${made.code} · 响应原文（截 500 字）：${made.raw.slice(0, 500)}`);
     const platErr = readPullCreateError(made.json);
     if (platErr) {
       /* 单独一行，不靠上面那个字符窗口：拒绝理由是平台给的原值，念得出就不该让人
@@ -417,15 +396,7 @@ export function createOrReusePull(ctx) {
  */
 export function reportVerdict(ctx) {
   const { run, log, slug, number, buildState, buildSn } = ctx;
-  const pr = cnbJson(run, [
-    "pulls",
-    "get-pull",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "-v",
-  ]);
+  const pr = cnbJson(run, ["pulls", "get-pull", "--repo", slug, "--number", String(number), "-v"]);
   const pv = pr ? readPullVerdict(pr.json) : null;
   if (pv) {
     log(
@@ -440,9 +411,7 @@ export function reportVerdict(ctx) {
     log(
       `[ship] ✗ CI 那一跑**被取消**（build ${buildSn}）—— 不是产物坏了：那一跑没跑完，下游格根本没跑。`,
     );
-    log(
-      "[ship] 下一动作：重跑这一跑（锁被另一跑顶掉 / 人为终止）再读一次；不要去查产物。",
-    );
+    log("[ship] 下一动作：重跑这一跑（锁被另一跑顶掉 / 人为终止）再读一次；不要去查产物。");
     log(`[ship] 日志：https://cnb.cool/${slug}/-/build/logs/${buildSn}`);
     return CODE.NOT_RUN;
   }
@@ -450,9 +419,7 @@ export function reportVerdict(ctx) {
     log(
       `[ship] ✗ CI 红（build ${buildSn}）。日志：https://cnb.cool/${slug}/-/build/logs/${buildSn}`,
     );
-    log(
-      `[ship] 失败格与失败行：pnpm ship --diagnose ${buildSn}（只读，不用再手抄 stage 日志）。`,
-    );
+    log(`[ship] 失败格与失败行：pnpm ship --diagnose ${buildSn}（只读，不用再手抄 stage 日志）。`);
     log(
       "[ship] 归因交给既有执行者：`node scripts/base-check.mjs <拦住你的那条>` —— 本脚本不自己判「是我的还是主干的」。",
     );
@@ -514,10 +481,10 @@ export function mergeAndVerify(ctx) {
   }
   if (buildState !== "green") {
     log(
-      "[ship] 拒绝合并：CI 不是绿的（当前是 " +
-        buildState +
-        (buildState === "cancelled" ? " = 那一跑被取消，没有结论" : "") +
-        "）。",
+      `[ship] 拒绝合并：CI 不是绿的（当前是 ${
+        buildState
+        }${buildState === "cancelled" ? " = 那一跑被取消，没有结论" : ""
+        }）。`,
     );
     return CODE.RED;
   }
@@ -556,11 +523,7 @@ export function mergeAndVerify(ctx) {
   // 回读两件事：平台说合上了，**且**碎片真的在主干顶端（只看平台回执 = 半个结论）。
   const baseParts = (baseRef ?? "").split("/");
   const trunkBranch = baseParts.slice(1).join("/");
-  run("git", [
-    "fetch",
-    baseParts[0] ?? up.remote ?? "origin",
-    trunkBranch || "master",
-  ]);
+  run("git", ["fetch", baseParts[0] ?? up.remote ?? "origin", trunkBranch || "master"]);
   const stillOpen = cnbJson(run, [
     "pulls",
     "get-pull",
@@ -578,7 +541,9 @@ export function mergeAndVerify(ctx) {
   log(
     `[ship] 合并回执 sha=${short(mergeData.sha)} 回读 is_merged=${back ? back.isMerged : "?"} 碎片在主干顶端=${fragOnMaster}`,
   );
-  if (!(back && back.isMerged && fragOnMaster)) return CODE.RED;
+  if (!(back && back.isMerged && fragOnMaster)) {
+    return CODE.RED;
+  }
   /* 验真过了才写这份读数 —— 并且**在这里**写，不留给阶段 7 去回推：
    * 下面两行 `git checkout master` + `pull` 会把 HEAD 挪走，而
    * `pickTitle` 取的是「这条分支相对主干带进来的第一笔」，跳过了这一步就再也算不出来。
@@ -627,14 +592,7 @@ export function mergeAndVerify(ctx) {
  * @returns {number} `CODE` 之一
  */
 export function cleanBranch(ctx) {
-  const {
-    run,
-    log,
-    remote,
-    branch,
-    landedVerified,
-    cleanBranch: requested,
-  } = ctx;
+  const { run, log, remote, branch, landedVerified, cleanBranch: requested } = ctx;
   const plan = decideCleanBranch({ requested, landedVerified, branch });
   if (!plan.act) {
     if (plan.code === CODE.NOT_RUN) {
@@ -660,17 +618,13 @@ export function cleanBranch(ctx) {
   /** @type {number[]} */
   const codes = [];
   const del = run("git", ["push", remote, "--delete", name]);
-  const echo = [del.stdout, del.stderr]
-    .map((s) => (s || "").trim())
-    .filter(Boolean);
+  const echo = [del.stdout, del.stderr].map((s) => (s || "").trim()).filter(Boolean);
   for (const line of echo) {
     log(`[ship]   ${line.split("\n").join("\n[ship]   ")}`);
   }
   const back = run("git", ["ls-remote", "--heads", remote, name]);
   if (back.status !== 0) {
-    log(
-      `[ship] 远端回读没跑起来（exit ${back.status}）⇒ 这一格不判「已删」，也不判「还在」`,
-    );
+    log(`[ship] 远端回读没跑起来（exit ${back.status}）⇒ 这一格不判「已删」，也不判「还在」`);
     codes.push(CODE.NOT_RUN);
   } else if (back.stdout.trim()) {
     log(`[ship] 远端回读：${remote} 的 heads 里**仍然有** ${name}（删没掉）`);
@@ -681,22 +635,13 @@ export function cleanBranch(ctx) {
   }
 
   const rm = run("git", ["branch", "-D", name]);
-  const rmEcho = [rm.stdout, rm.stderr]
-    .map((s) => (s || "").trim())
-    .filter(Boolean);
+  const rmEcho = [rm.stdout, rm.stderr].map((s) => (s || "").trim()).filter(Boolean);
   for (const line of rmEcho) {
     log(`[ship]   ${line.split("\n").join("\n[ship]   ")}`);
   }
-  const verify = run("git", [
-    "show-ref",
-    "--verify",
-    "--quiet",
-    `refs/heads/${name}`,
-  ]);
+  const verify = run("git", ["show-ref", "--verify", "--quiet", `refs/heads/${name}`]);
   if (rm.status !== 0 && verify.status === 0) {
-    log(
-      `[ship] 本地那一半没删掉（exit ${rm.status}）⇒ 这一格是红的，不记「已清理」`,
-    );
+    log(`[ship] 本地那一半没删掉（exit ${rm.status}）⇒ 这一格是红的，不记「已清理」`);
     codes.push(CODE.RED);
   } else if (verify.status === 0) {
     log(`[ship] 本地回读：refs/heads/${name} **还在**`);

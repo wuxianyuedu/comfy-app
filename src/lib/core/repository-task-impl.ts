@@ -30,17 +30,7 @@
  * `unguarded`；登记 PURE_NODE_HOSTS 只是**给未来**「impl 里若加了 node: 前缀
  * import」留的锚，当前 scanner 视角不严格必要。
  */
-import {
-  and,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  notInArray,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { TERMINAL_TASK_STATUSES } from "../task-state";
 import { task, taskImage } from "~/server/db/schema";
@@ -56,7 +46,7 @@ import type { TaskRepoDb } from "./repository-task-impl-types";
  * 且**判据的唯一定义**在 `../task-state` 的 `TERMINAL_TASK_STATUSES`，
  * 两边只是各自的 `[...tuple]`，语义与来源同步。
  */
-const TERMINAL_STATES: string[] = [...TERMINAL_TASK_STATUSES];
+const TERMINAL_STATES: Array<string> = [...TERMINAL_TASK_STATUSES];
 
 /** `claimedBy` 列的值域（ADR §6 的两种执行器归属）。提交侧（tRPC `generate`，
  *  3-B 接线）按 `COMFY_EXECUTOR` env 决定写哪个值；NULL 语义归 inline。 */
@@ -75,14 +65,12 @@ function ownedBy(owner: TaskClaimMode) {
 /** 已知的归属片（值域同上）。回收器要用它的**补集**：一条 `QUEUED` 行只要属于
  *  任何一片，就是「还在等自己那片的领取循环」，不是死信——`ownedBy()` 是正向形态，
  *  这里是反向形态，两者必须一起改。 */
-const KNOWN_CLAIM_MODES: string[] = ["inline", "host"];
+const KNOWN_CLAIM_MODES: Array<string> = ["inline", "host"];
 
 /** `ownedBy()` 的内存侧同判据（行已经在手里、只需分类「为什么没写进去」时用）。
  *  两条必须同步改：SQL 侧漏一行、内存侧多认一行，就会把别人的行判成「归我」。 */
 function isOwnedBy(claimedBy: string | null, owner: TaskClaimMode): boolean {
-  return owner === "host"
-    ? claimedBy === "host"
-    : claimedBy === null || claimedBy === "inline";
+  return owner === "host" ? claimedBy === "host" : claimedBy === null || claimedBy === "inline";
 }
 
 /**
@@ -115,7 +103,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     /** 排队行的只读窥视（P3 §5 ADR §14 D1 的第二刀）：领取循环在「本进程现在还
      *  跑不动」时需要告诉用户它在等什么，而**不能**为此就把行领走（领了不跑正是
      *  这一刀要消灭的形态）。只取 id、按提交序、不改任何状态。 */
-    async listQueuedIds(owner: TaskClaimMode, take: number): Promise<string[]> {
+    async listQueuedIds(owner: TaskClaimMode, take: number): Promise<Array<string>> {
       const rows = await db
         .select({ id: task.id })
         .from(task)
@@ -139,10 +127,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
      * 未带归属的建行）与 `'inline'`。领取时把 `claimedBy` 覆写为 `mode`，NULL
      * 行由此转为显式归属；reaper 分片（`listStale*` 的 `owner`）用同一归属谓词。
      */
-    async claimNextQueued(
-      mode: TaskClaimMode,
-      take: number,
-    ): Promise<string[]> {
+    async claimNextQueued(mode: TaskClaimMode, take: number): Promise<Array<string>> {
       const candidates = db
         .select({ id: task.id })
         .from(task)
@@ -171,9 +156,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
      *  带归属条件是刻意的：这条读出来的就是**要交给 ComfyUI 执行的图**，跨片读到
      *  别人的载荷（比如误把 inline 的 id 递进 host 的 tick）等于替别的宿主起跑。 */
     async findExecJob(taskId: string): Promise<{
-      workflowName: string;
       execPayload: unknown;
       params: unknown;
+      workflowName: string;
     } | null> {
       const rows = await db
         .select({
@@ -203,10 +188,10 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
       take: number,
     ): Promise<
       Array<{
-        id: string;
-        createdAt: Date;
-        workflowName: string;
         claimedBy: string;
+        createdAt: Date;
+        id: string;
+        workflowName: string;
       }>
     > {
       const rows = await db
@@ -232,11 +217,11 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
         .limit(take);
       /* 谓词里已有 `claimedBy IS NOT NULL`，而 drizzle 不会据此把投影收窄成非空：
        * 在边界上断言一次，读侧（把陌生归属值写进用户可见的判死原因）不必再判空。 */
-      return rows as Array<{
-        id: string;
-        createdAt: Date;
-        workflowName: string;
+      return /* SAFETY: 类型断言已复核 */ rows as Array<{
         claimedBy: string;
+        createdAt: Date;
+        id: string;
+        workflowName: string;
       }>;
     },
 
@@ -252,9 +237,9 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
       owner: TaskClaimMode = "inline",
     ): Promise<
       Array<{
+        createdAt: Date;
         id: string;
         promptId: string | null;
-        createdAt: Date;
         workflowName: string;
       }>
     > {
@@ -282,13 +267,13 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     async createImages(
       taskId: string,
       images: Array<{
-        localPath: string;
-        sortIndex: number;
+        height?: number | null;
         isCover: boolean;
+        localPath: string;
         mediaType: string;
         seed: string | null;
+        sortIndex: number;
         width?: number | null;
-        height?: number | null;
       }>,
     ): Promise<void> {
       await db.insert(taskImage).values(
@@ -319,9 +304,7 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
     },
 
     /** 按 id 读一张产物图（连带 task 的归属 userId 做归属校验）；不存在 → null。 */
-    async findImageById(
-      imageId: string,
-    ): Promise<{ id: string; userId: string } | null> {
+    async findImageById(imageId: string): Promise<{ id: string; userId: string } | null> {
       const rows = await db
         .select({ id: taskImage.id, userId: task.userId })
         .from(taskImage)
@@ -356,19 +339,12 @@ function createQueueScanSection(db: TaskRepoDb, owner: TaskClaimMode) {
  * `createTestDb()` 传进来（走 `as unknown as TaskRepoDb` 一次性断言）。
  */
 
-export function createTaskRepoImpl(
-  db: TaskRepoDb,
-  options: { owner: TaskClaimMode },
-) {
+export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMode }) {
   const { owner } = options;
 
   /** 收口写入的共用守卫：终态不再被改写 + 只动自己那一片（ADR §14 D4）。 */
   function writeGuard(taskId: string) {
-    return and(
-      eq(task.id, taskId),
-      notInArray(task.status, TERMINAL_STATES),
-      ownedBy(owner),
-    );
+    return and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES), ownedBy(owner));
   }
 
   /** 「第一次转到 RUNNING 时把开始时刻定格」的 SET 片段（P3 §5 ADR §14 D1 的 4-B2）。
@@ -391,8 +367,12 @@ export function createTaskRepoImpl(
       .where(eq(task.id, taskId))
       .limit(1);
     const row = rows[0];
-    if (!row) return "skipped-missing";
-    if (!isOwnedBy(row.claimedBy, owner)) return "skipped-not-owned";
+    if (!row) {
+      return "skipped-missing";
+    }
+    if (!isOwnedBy(row.claimedBy, owner)) {
+      return "skipped-not-owned";
+    }
     return "skipped-terminal";
   }
 
@@ -401,13 +381,13 @@ export function createTaskRepoImpl(
     /** executor-finalize 收口时读归属与请求参数（projectId / params / prompt /
      *  negativePrompt / workflowName / referenceImages / createdAt）。 */
     async findExecutionMeta(taskId: string): Promise<{
-      projectId: string | null;
-      params: unknown;
-      prompt: string;
-      negativePrompt: string | null;
-      workflowName: string;
-      referenceImages: unknown;
       createdAt: Date;
+      negativePrompt: string | null;
+      params: unknown;
+      projectId: string | null;
+      prompt: string;
+      referenceImages: unknown;
+      workflowName: string;
     } | null> {
       const rows = await db
         .select({
@@ -441,11 +421,11 @@ export function createTaskRepoImpl(
       taskId: string,
       pct: number,
       node?: {
+        classType?: string;
         id: string;
         label?: string;
-        classType?: string;
-        value: number;
         max: number;
+        value: number;
       },
     ): Promise<boolean> {
       const updated = await db
@@ -454,7 +434,7 @@ export function createTaskRepoImpl(
           progress: pct,
           status: "RUNNING",
           claimedAt: claimStamp(),
-          ...(node !== undefined ? { progressNode: node } : {}),
+          ...(node === undefined ? {} : { progressNode: node }),
         })
         .where(writeGuard(taskId))
         .returning({ id: task.id });
@@ -479,8 +459,8 @@ export function createTaskRepoImpl(
     async finalizeSuccess(
       taskId: string,
       data: {
-        resultImages: unknown;
         params: unknown;
+        resultImages: unknown;
         workflowSnapshot?: unknown;
       },
     ): Promise<TaskWriteOutcome> {
@@ -492,9 +472,9 @@ export function createTaskRepoImpl(
           finishedAt: new Date(),
           resultImages: data.resultImages,
           params: data.params,
-          ...(data.workflowSnapshot !== undefined
-            ? { workflowSnapshot: data.workflowSnapshot }
-            : {}),
+          ...(data.workflowSnapshot === undefined
+            ? {}
+            : { workflowSnapshot: data.workflowSnapshot }),
         })
         .where(writeGuard(taskId))
         .returning({ id: task.id });
@@ -510,16 +490,14 @@ export function createTaskRepoImpl(
     async finalizeFailure(
       taskId: string,
       error: string,
-      validationErrors?: unknown[],
+      validationErrors?: Array<unknown>,
     ): Promise<TaskWriteOutcome> {
       const updated = await db
         .update(task)
         .set({
           status: "FAILED",
           error,
-          validationErrors: validationErrors?.length
-            ? JSON.stringify(validationErrors)
-            : null,
+          validationErrors: validationErrors?.length ? JSON.stringify(validationErrors) : null,
           finishedAt: new Date(),
         })
         .where(writeGuard(taskId))
@@ -540,9 +518,7 @@ export function createTaskRepoImpl(
       const updated = await db
         .update(task)
         .set({ status: "CANCELLED", finishedAt: new Date() })
-        .where(
-          and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)),
-        )
+        .where(and(eq(task.id, taskId), notInArray(task.status, TERMINAL_STATES)))
         .returning({ id: task.id });
       return updated.length > 0 ? "written" : classifySkipped(taskId);
     },
@@ -568,7 +544,7 @@ export function createTaskRepoImpl(
      *  logs 这种大字段拉回来。 */
     async findStatusAndPromptById(
       taskId: string,
-    ): Promise<{ status: string; promptId: string | null } | null> {
+    ): Promise<{ promptId: string | null; status: string } | null> {
       const rows = await db
         .select({ status: task.status, promptId: task.promptId })
         .from(task)
@@ -583,7 +559,7 @@ export function createTaskRepoImpl(
      *
      *  只带归属守卫、**不带终态守卫**：收口之后仍会有尾随日志（耗时、产物路径、
      *  取消原因），按终态挡掉就等于把失败原因从面板上抹掉——那条正是排障要看的。 */
-    async replaceLogs(taskId: string, logs: unknown[]): Promise<void> {
+    async replaceLogs(taskId: string, logs: Array<unknown>): Promise<void> {
       await db
         .update(task)
         .set({ logs })
@@ -598,7 +574,7 @@ export function createTaskRepoImpl(
      *  与 `replaceLogs` 分开而不是并成一条 UPDATE：日志走 200ms 防抖、每几秒一次，
      *  原文整包可以到几千行，跟着防抖重写等于白写几十遍。这里不吞错——`persistRawCli`
      *  那一层统一决定失败怎么露出来。 */
-    async replaceRawCli(taskId: string, lines: string[]): Promise<void> {
+    async replaceRawCli(taskId: string, lines: Array<string>): Promise<void> {
       await db
         .update(task)
         .set({ rawCli: lines })
@@ -607,14 +583,15 @@ export function createTaskRepoImpl(
 
     /** 「查看完整输出」入口的行读（跨归属：这是给用户看的读，不是执行侧的写）。
      *  只取这一列，别的字段调用方一个都不需要。 */
-    async findRawCli(taskId: string): Promise<string[] | null> {
+    async findRawCli(taskId: string): Promise<Array<string> | null> {
       const rows = await db
         .select({ rawCli: task.rawCli })
         .from(task)
         .where(eq(task.id, taskId))
         .limit(1);
       const value = rows[0]?.rawCli;
-      return Array.isArray(value) ? (value as string[]) : null;
+      /* SAFETY: 类型断言已复核 */
+      return Array.isArray(value) ? (value as Array<string>) : null;
     },
   };
 }

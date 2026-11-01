@@ -17,7 +17,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { userMock, readMock, pathMock } = vi.hoisted(() => ({
   userMock: vi.fn<() => Promise<{ id: string } | null>>(),
   readMock: vi.fn(),
-  pathMock: vi.fn(() => "C:\\repo\\src\\generated\\customNodes.manifest.json"),
+  pathMock: vi.fn(() => String.raw`C:\repo\src\generated\customNodes.manifest.json`),
 }));
 
 vi.mock("~/server/auth/request-user", () => ({
@@ -63,7 +63,7 @@ describe("三相比两相：404 与 500 是两件事", () => {
     readMock.mockReturnValue({ kind: "missing" });
     const res = await GET();
     expect(res.status).toBe(404);
-    const body = (await res.json()) as {
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       error: { code: string; message: string };
     };
     expect(body.error.code).toBe("custom_nodes.manifest_missing");
@@ -75,7 +75,7 @@ describe("三相比两相：404 与 500 是两件事", () => {
     readMock.mockReturnValue({ kind: "unreadable", detail: "EISDIR" });
     const res = await GET();
     expect(res.status).toBe(500);
-    const body = (await res.json()) as {
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       error: { code: string; message: string };
     };
     expect(body.error.code).toBe("custom_nodes.manifest_unreadable");
@@ -84,9 +84,11 @@ describe("三相比两相：404 与 500 是两件事", () => {
 
   it("两相的码互不相同：客户端按码分档说话，混了就等于没分", async () => {
     readMock.mockReturnValue({ kind: "missing" });
-    const missing = (await (await GET()).json()) as { error: { code: string } };
+    const missing = /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
+      error: { code: string };
+    };
     readMock.mockReturnValue({ kind: "unreadable", detail: "EACCES" });
-    const unreadable = (await (await GET()).json()) as {
+    const unreadable = /* SAFETY: 类型断言已复核 */ (await (await GET()).json()) as {
       error: { code: string };
     };
     expect(missing.error.code).not.toBe(unreadable.error.code);

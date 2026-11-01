@@ -19,11 +19,7 @@ import { archiveCurrent } from "./run.mjs";
  * @param {{ log: (m: string, l?: import("./log.mjs").LogLevel) => void }} ctx 日志出口
  * @param {string} url */
 export function openBrowser(ctx, url) {
-  const command = isWindows()
-    ? "cmd"
-    : process.platform === "darwin"
-      ? "open"
-      : "xdg-open";
+  const command = isWindows() ? "cmd" : process.platform === "darwin" ? "open" : "xdg-open";
   const args = isWindows() ? ["/c", "start", "", url] : [url];
   // 三平台各有一条不同的命令（cmd / open / xdg-open）：回显后「浏览器没弹出来」
   // 这类现象能落到具体是哪条命令、参数对不对上。
@@ -70,15 +66,25 @@ export function parseArgs(argv) {
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] ?? "";
-    if (a === "--mode") args.mode = argv[++i] ?? args.mode;
-    else if (a.startsWith("--mode=")) args.mode = a.slice("--mode=".length);
-    else if (a === "--tauri") args.mode = "tauri";
-    else if (a === "--prebuilt" || a === "-Prebuilt") args.mode = "prebuilt";
-    else if (a === "--no-open") args.open = false;
-    else if (a === "--cold-start" || a === "-ColdStart") args.coldStart = true;
-    else if (a === "--host") args.host = argv[++i] ?? args.host;
-    else if (a === "-p" || a === "--port") args.port = argv[++i] ?? null;
-    else if (a === "--shell-exe") args.shellExe = argv[++i] ?? null;
+    if (a === "--mode") {
+      args.mode = argv[++i] ?? args.mode;
+    } else if (a.startsWith("--mode=")) {
+      args.mode = a.slice("--mode=".length);
+    } else if (a === "--tauri") {
+      args.mode = "tauri";
+    } else if (a === "--prebuilt" || a === "-Prebuilt") {
+      args.mode = "prebuilt";
+    } else if (a === "--no-open") {
+      args.open = false;
+    } else if (a === "--cold-start" || a === "-ColdStart") {
+      args.coldStart = true;
+    } else if (a === "--host") {
+      args.host = argv[++i] ?? args.host;
+    } else if (a === "-p" || a === "--port") {
+      args.port = argv[++i] ?? null;
+    } else if (a === "--shell-exe") {
+      args.shellExe = argv[++i] ?? null;
+    }
   }
   return args;
 }

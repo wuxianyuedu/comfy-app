@@ -15,13 +15,7 @@
  * 账本」的输入端判 —— 记账失败时退出码仍是 0。
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -46,7 +40,7 @@ const TIMING_SH = join(REPO_ROOT, ".githooks", "timing.sh");
  * @param {string} [cwd]
  * @returns {{code: number, out: string, err: string}}
  */
-function run(args: string[], cwd = REPO_ROOT) {
+function run(args: Array<string>, cwd = REPO_ROOT) {
   const r = spawnSync(process.execPath, [SCRIPT, ...args], {
     cwd,
     encoding: "utf8",
@@ -61,14 +55,14 @@ function run(args: string[], cwd = REPO_ROOT) {
 
 /** 账本一条记录的形状（判据只读下面这几个字段）。 */
 type LedgerRun = {
-  totalMs: number;
-  stagedFiles: number;
-  groups: { name: string; ms: number }[];
-  steps: { name: string; ms: number }[];
   /** 组 C 的分文件读数（后加的一格，旧记录里没有 —— 报表那侧不许为它打空表）。 */
-  files?: { name: string; ms: number }[];
+  files?: Array<{ ms: number; name: string; }>;
   filesExpected?: number;
   filesMissing?: number;
+  groups: Array<{ ms: number; name: string; }>;
+  stagedFiles: number;
+  steps: Array<{ ms: number; name: string; }>;
+  totalMs: number;
 };
 
 /**
@@ -79,8 +73,8 @@ type LedgerRun = {
  * @param {{out: string}} result
  * @returns {LedgerRun[]}
  */
-function readLedger(result: { out: string }): LedgerRun[] {
-  return JSON.parse(result.out) as LedgerRun[];
+function readLedger(result: { out: string }): Array<LedgerRun> {
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(result.out) as Array<LedgerRun>;
 }
 
 /**
@@ -96,12 +90,14 @@ function readLedger(result: { out: string }): LedgerRun[] {
  */
 function firstRun(result: { out: string }): LedgerRun {
   const [run] = readLedger(result);
-  if (!run) throw new Error(`账本是空的（--json 输出：${result.out}）`);
+  if (!run) {
+    throw new Error(`账本是空的（--json 输出：${result.out}）`);
+  }
   return run;
 }
 
 /** 临时仓库（真的 `git init`）—— 账本落点由 `git rev-parse --absolute-git-dir` 定。 */
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
   for (const dir of tmpDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
@@ -148,22 +144,22 @@ describe("pre-commit 耗时账：记账与读账", () => {
     expect(view.code).toBe(0);
     expect(readLedger(view)).toHaveLength(1);
     const record = firstRun(view);
-    expect(record.totalMs).toBe(69400);
+    expect(record.totalMs).toBe(69_400);
     expect(record.stagedFiles).toBe(3);
     expect(record.groups).toEqual([
       { name: "A", ms: 3500 },
-      { name: "C", ms: 23400 },
+      { name: "C", ms: 23_400 },
     ]);
     expect(record.steps).toEqual([{ name: "文件结构硬规则", ms: 820 }]);
   });
 
   it("多条追加、不打乱前面的（账本的价值全在多次之间的比较）", () => {
     const repo = makeRepo();
-    for (const total of [10000, 20000, 30000]) {
+    for (const total of [10_000, 20_000, 30_000]) {
       run(["record", "--total-ms", String(total), "--exit", "0"], repo);
     }
     const runs = readLedger(run(["--json"], repo));
-    expect(runs.map((r) => r.totalMs)).toEqual([10000, 20000, 30000]);
+    expect(runs.map((r) => r.totalMs)).toEqual([10_000, 20_000, 30_000]);
   });
 
   it("解析不出的耗时读数被丢掉并计数，但整条记录仍然落盘", () => {
@@ -184,9 +180,7 @@ describe("pre-commit 耗时账：记账与读账", () => {
     );
     expect(wrote.code).toBe(0);
     expect(wrote.out).toContain("2 条耗时读数解析不出");
-    expect(firstRun(run(["--json"], repo)).groups).toEqual([
-      { name: "B", ms: 200 },
-    ]);
+    expect(firstRun(run(["--json"], repo)).groups).toEqual([{ name: "B", ms: 200 }]);
   });
 
   it("还没记过账时读账不是错误（只是说没有记录）", () => {
@@ -207,7 +201,7 @@ describe("pre-commit 耗时账：记账与读账", () => {
 
   it("报告里有中位数、各组、逐步骤（人看的那一档不能只是原始 dump）", () => {
     const repo = makeRepo();
-    for (const total of [20000, 40000]) {
+    for (const total of [20_000, 40_000]) {
       run(
         [
           "record",
@@ -242,9 +236,7 @@ describe("pre-commit 耗时账：记账与读账", () => {
   it("--clear 清空账本（且裸开关不带值时也认）", () => {
     const repo = makeRepo();
     run(["record", "--total-ms", "1000", "--exit", "0"], repo);
-    expect(existsSync(join(repo, ".git", "comfy-precommit-timing.jsonl"))).toBe(
-      true,
-    );
+    expect(existsSync(join(repo, ".git", "comfy-precommit-timing.jsonl"))).toBe(true);
     const cleared = run(["--clear"], repo);
     expect(cleared.code).toBe(0);
     expect(cleared.out).toContain("已清空");
@@ -255,11 +247,7 @@ describe("pre-commit 耗时账：记账与读账", () => {
     const repo = makeRepo();
     run(["record", "--total-ms", "1000", "--exit", "0"], repo);
     const ledger = join(repo, ".git", "comfy-precommit-timing.jsonl");
-    writeFileSync(
-      ledger,
-      `${readFileSync(ledger, "utf8")}{"totalMs": 4242`,
-      "utf8",
-    );
+    writeFileSync(ledger, `${readFileSync(ledger, "utf8")}{"totalMs": 4242`, "utf8");
     const runs = readLedger(run(["--json"], repo));
     expect(runs).toHaveLength(1);
   });
@@ -334,10 +322,7 @@ describe("pre-commit 耗时账：钩子的接线", () => {
       body.includes("$(now_ms)"),
       "timed_step 又用命令替换取时钟 —— 那一步的钱会记进判据的读数里",
     ).toBe(false);
-    expect(
-      body.includes("set_now_ms _ts_start") &&
-        body.includes("set_now_ms _ts_now"),
-    ).toBe(true);
+    expect(body.includes("set_now_ms _ts_start") && body.includes("set_now_ms _ts_now")).toBe(true);
   });
 
   it("`LOGD` 与 `COMFY_TIMING_SH` 都导出（D 组是新 shell，未导出就读不到）", () => {
@@ -374,7 +359,7 @@ describe("pre-commit 耗时账：钩子的接线", () => {
  *
  * @param {[string, number][]} rows `[文件, 秒]`
  */
-function junitXml(rows: [string, number][]) {
+function junitXml(rows: Array<[string, number]>) {
   const suites = rows
     .map(
       ([name, secs]) =>
@@ -397,17 +382,10 @@ function junitXml(rows: [string, number][]) {
  * @param {string[]} files 这次要跑的清单
  * @param {Record<string, [string, number][]>} xmls 文件名 → 该文件里的 suite
  */
-function makeCDir(
-  files: string[],
-  xmls: Record<string, [string, number][]>,
-): string {
+function makeCDir(files: Array<string>, xmls: Record<string, Array<[string, number]>>): string {
   const dir = mkdtempSync(join(tmpdir(), "precommit-c-"));
   tmpDirs.push(dir);
-  writeFileSync(
-    join(dir, "comfy-c-files.txt"),
-    `${files.join("\n")}\n`,
-    "utf8",
-  );
+  writeFileSync(join(dir, "comfy-c-files.txt"), `${files.join("\n")}\n`, "utf8");
   for (const [name, rows] of Object.entries(xmls)) {
     writeFileSync(join(dir, name), junitXml(rows), "utf8");
   }
@@ -417,19 +395,13 @@ function makeCDir(
 describe("组 C 的分文件读数：自带分母与对账，否则它只是另一张没法比的表", () => {
   it("清单 3 份而 junit 只给出 2 份 ⇒ 缺的那份被点名，不许当成 0 秒", () => {
     const repo = makeRepo();
-    const dir = makeCDir(
-      ["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"],
-      {
-        "comfy-c-0-1.xml": [
-          ["tests/a.test.ts", 1.5],
-          ["tests/b.test.ts", 0.25],
-        ],
-      },
-    );
-    const wrote = run(
-      ["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir],
-      repo,
-    );
+    const dir = makeCDir(["tests/a.test.ts", "tests/b.test.ts", "tests/c.test.ts"], {
+      "comfy-c-0-1.xml": [
+        ["tests/a.test.ts", 1.5],
+        ["tests/b.test.ts", 0.25],
+      ],
+    });
+    const wrote = run(["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir], repo);
     expect(wrote.code).toBe(0);
     expect(wrote.out).toContain("组 C 分文件 2 份");
     expect(wrote.out).toContain("1 份没给出读数");
@@ -450,28 +422,16 @@ describe("组 C 的分文件读数：自带分母与对账，否则它只是另�
       "comfy-c-0-1.xml": [["tests/a.test.ts", 6]],
       "comfy-c-0-2.xml": [["tests/a.test.ts", 1]],
     });
-    run(
-      ["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir],
-      repo,
-    );
-    expect(firstRun(run(["--json"], repo)).files).toEqual([
-      { name: "tests/a.test.ts", ms: 1000 },
-    ]);
+    run(["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir], repo);
+    expect(firstRun(run(["--json"], repo)).files).toEqual([{ name: "tests/a.test.ts", ms: 1000 }]);
   });
 
   it("没有清单 ⇒ 不许把「取到读数的份数」冒充分母", () => {
     const dir = mkdtempSync(join(tmpdir(), "precommit-c-nomanifest-"));
     tmpDirs.push(dir);
-    writeFileSync(
-      join(dir, "comfy-c-0-1.xml"),
-      junitXml([["tests/a.test.ts", 2]]),
-      "utf8",
-    );
+    writeFileSync(join(dir, "comfy-c-0-1.xml"), junitXml([["tests/a.test.ts", 2]]), "utf8");
     const repo = makeRepo();
-    run(
-      ["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir],
-      repo,
-    );
+    run(["record", "--total-ms", "9000", "--exit", "0", "--junit-dir", dir], repo);
     const record = firstRun(run(["--json"], repo));
     expect(record.files).toHaveLength(1);
     expect(record.filesExpected).toBe(0);
@@ -486,27 +446,15 @@ describe("组 C 的分文件读数：自带分母与对账，否则它只是另�
     );
     const dir = makeCDir(many, {
       "comfy-c-0-1.xml": many.map(
-        (name, i) => [name, i + 1] as [string, number],
+        (name, i) => /* SAFETY: 类型断言已复核 */ [name, i + 1] as [string, number],
       ),
     });
     run(
-      [
-        "record",
-        "--total-ms",
-        "30000",
-        "--exit",
-        "0",
-        "--group",
-        "C=20000",
-        "--junit-dir",
-        dir,
-      ],
+      ["record", "--total-ms", "30000", "--exit", "0", "--group", "C=20000", "--junit-dir", dir],
       repo,
     );
     const report = run([], repo).out;
-    expect(report).toContain(
-      "组 C 各文件（中位数，前 10 名；共 12 份有读数 / 清单 12 份）",
-    );
+    expect(report).toContain("组 C 各文件（中位数，前 10 名；共 12 份有读数 / 清单 12 份）");
     expect(report).toContain("tests/f11.test.ts");
     /* 12 行只留最贵 10 行 —— 一屏读不完的表等于没人读（§13.5.8.3）。 */
     expect(report).not.toContain("tests/f01.test.ts");
@@ -518,10 +466,7 @@ describe("组 C 的分文件读数：自带分母与对账，否则它只是另�
 
   it("旧记录（没有 files 那一格）⇒ 不打这一节，也不打一张空表冒充读过", () => {
     const repo = makeRepo();
-    run(
-      ["record", "--total-ms", "9000", "--exit", "0", "--group", "C=8000"],
-      repo,
-    );
+    run(["record", "--total-ms", "9000", "--exit", "0", "--group", "C=8000"], repo);
     const report = run([], repo).out;
     expect(report).not.toContain("组 C 各文件");
     expect(report).not.toContain("分文件之和");

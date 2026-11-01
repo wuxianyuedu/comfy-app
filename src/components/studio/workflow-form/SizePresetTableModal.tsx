@@ -12,12 +12,7 @@ import { useCallback, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "~/components/ui/dialog";
 import { NumberField } from "~/components/ui/number-field";
 import {
   Table,
@@ -38,7 +33,7 @@ import {
 } from "~/lib/media/size-presets";
 import { useSizePresetTable } from "./hooks/use-size-preset-table";
 
-const SCENES: SizeScene[] = ["image", "video"];
+const SCENES: Array<SizeScene> = ["image", "video"];
 
 /** 表里允许的宽高范围：比常规参数的 [64, 4096] 宽 —— 超宽 4k 档要到 5120。 */
 const TABLE_MIN = 64;
@@ -49,10 +44,10 @@ export function SizePresetTableModal({
   title = "尺寸表",
   onClose,
 }: {
+  onClose: () => void;
   /** 打开时选中的场景页签（当前控件正用的场景）。 */
   scene?: SizeScene;
   title?: string;
-  onClose: () => void;
 }) {
   const { table, setDims, resetScene, isModified } = useSizePresetTable();
   const [scene, setScene] = useState<SizeScene>(initialScene);
@@ -71,32 +66,32 @@ export function SizePresetTableModal({
        与 `ui/dialog` 是同一个能力的第二份实现（Esc / 点遮罩关闭、焦点归还
        只在基元那边有）。尺寸表弹窗要的是「大一点的居中卡片」，这属于形态，
        经 `popupClassName` 覆盖即可。 */
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label={`${title}配置`}
         className="max-w-3xl"
         popupClassName={`flex ${OVERLAY_MAX_HEIGHT} w-full max-w-3xl flex-col gap-0 overflow-hidden rounded-xl p-0`}
       >
         <DialogHeader className="border-border-strong flex-row items-center gap-3 border-b px-4 py-3">
-          <DialogTitle className="text-ink-bright text-sm font-semibold">
-            {title}配置
-          </DialogTitle>
+          <DialogTitle className="text-ink-bright text-sm font-semibold">{title}配置</DialogTitle>
           <div className="border-border-strong bg-canvas-deep flex items-center gap-1 rounded-lg border p-0.5">
             <ToggleGroup
-              multiple={false}
-              value={[scene]}
-              onValueChange={(vals) => {
-                const next = vals[0];
-                if (next === "image" || next === "video") setScene(next);
-              }}
               aria-label="尺寸档位场景"
               className="gap-1"
+              multiple={false}
+              onValueChange={(vals) => {
+                const next = vals[0];
+                if (next === "image" || next === "video") {
+                  setScene(next);
+                }
+              }}
+              value={[scene]}
             >
               {SCENES.map((item) => (
                 <ToggleGroupItem
+                  className="text-2xs h-auto rounded-md px-2.5 py-1"
                   key={item}
                   value={item}
-                  className="text-2xs h-auto rounded-md px-2.5 py-1"
                 >
                   {SIZE_SCENE_LABELS[item]}
                 </ToggleGroupItem>
@@ -114,7 +109,7 @@ export function SizePresetTableModal({
               <TableRow className="text-ink-muted border-0 text-left hover:bg-transparent">
                 <TableHead className="w-23 font-medium">比例</TableHead>
                 {RESOLUTION_TIERS.map((tier) => (
-                  <TableHead key={tier} className="font-medium">
+                  <TableHead className="font-medium" key={tier}>
                     {tier.toUpperCase()}（宽 × 高）
                   </TableHead>
                 ))}
@@ -122,44 +117,42 @@ export function SizePresetTableModal({
             </TableHeader>
             <TableBody>
               {SIZE_RATIO_PRESETS.map((preset) => (
-                <TableRow key={preset.label} className="align-middle">
-                  <TableCell className="text-ink-bright pr-2">
-                    {preset.label}
-                  </TableCell>
+                <TableRow className="align-middle" key={preset.label}>
+                  <TableCell className="text-ink-bright pr-2">{preset.label}</TableCell>
                   {RESOLUTION_TIERS.map((tier) => {
                     const dims = table[scene]?.[preset.label]?.[tier] ?? {
                       width: 1024,
                       height: 1024,
                     };
                     return (
-                      <TableCell key={tier} className="pr-2">
+                      <TableCell className="pr-2" key={tier}>
                         <div className="flex items-center gap-1">
                           <NumberField
                             className="w-24"
-                            value={dims.width}
-                            min={TABLE_MIN}
                             max={TABLE_MAX}
-                            step={8}
+                            min={TABLE_MIN}
                             onChange={(width) =>
                               handleChange(preset.label, tier, {
                                 width,
                                 height: dims.height,
                               })
                             }
+                            step={8}
+                            value={dims.width}
                           />
                           <span className="text-ink-faint">×</span>
                           <NumberField
                             className="w-24"
-                            value={dims.height}
-                            min={TABLE_MIN}
                             max={TABLE_MAX}
-                            step={8}
+                            min={TABLE_MIN}
                             onChange={(height) =>
                               handleChange(preset.label, tier, {
                                 width: dims.width,
                                 height,
                               })
                             }
+                            step={8}
+                            value={dims.height}
                           />
                         </div>
                       </TableCell>
@@ -173,10 +166,10 @@ export function SizePresetTableModal({
 
         <div className="border-border-strong flex items-center gap-3 border-t px-4 py-3">
           <Button
-            variant="outline"
-            onClick={() => resetScene(scene)}
-            disabled={!modified}
             className="text-2xs h-auto px-2.5 py-1"
+            disabled={!modified}
+            onClick={() => resetScene(scene)}
+            variant="outline"
           >
             恢复默认（{SIZE_SCENE_LABELS[scene]}）
           </Button>
@@ -184,9 +177,9 @@ export function SizePresetTableModal({
             改动即时生效并记住；选择「百万像素」时宽高由倍数对齐，不查这张表。
           </span>
           <Button
-            variant="primary-solid"
-            onClick={onClose}
             className="text-2xs ml-auto h-auto px-3 py-1"
+            onClick={onClose}
+            variant="primary-solid"
           >
             完成
           </Button>

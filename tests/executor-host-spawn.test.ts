@@ -39,13 +39,10 @@ import {
 } from "../scripts/launcher-core/executor-host-spawn.mjs";
 import { launcherChainSource } from "./helpers/launcher-source";
 
-const REPO_ROOT = path.resolve(
-  import.meta.dirname,
-  "..",
-);
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 用例自己造的「项目根」：只放宿主入口，日志因此落它自己的 tmpdir 下。 */
-const tmpRoots: string[] = [];
+const tmpRoots: Array<string> = [];
 function mkRoot({ withHost = true } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "executor-host-spawn-"));
   tmpRoots.push(root);
@@ -60,13 +57,15 @@ function mkRoot({ withHost = true } = {}) {
 afterEach(() => {
   while (tmpRoots.length) {
     const dir = tmpRoots.pop();
-    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+    if (dir) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }
   vi.restoreAllMocks();
 });
 
 function readScript(rel: string): string {
-  return fs.readFileSync(path.join(REPO_ROOT, rel), "utf-8");
+  return fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
 }
 
 /**
@@ -85,8 +84,8 @@ function readScript(rel: string): string {
 function topLevelCallAt(source: string, name: string): number {
   // 先剥块注释与行注释，避免注释里的示例写法被当成真实调用。
   const stripped = source
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
-    .replace(/\/\/[^\n]*/g, "");
+    .replaceAll(/\/\*[\s\S]*?\*\//g, (m) => m.replaceAll(/[^\n]/g, " "))
+    .replaceAll(/\/\/[^\n]*/g, "");
   const re = new RegExp(`^[ \t]*${name}\\(`, "m");
   const hit = re.exec(stripped);
   return hit ? hit.index + hit[0].indexOf(name) : -1;
@@ -125,7 +124,7 @@ describe("planExecutorHostSpawn：哪些值会起宿主", () => {
 describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
   it("inline 时不起进程，返回 null（根目录里连宿主入口都没有）", () => {
     const root = mkRoot({ withHost: false });
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = maybeSpawnExecutorHost({
       root,
       runTimestamp: "t",
@@ -139,7 +138,7 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
 
   it("设了 host 但入口不在：不退回 inline，并说清后果", () => {
     const root = mkRoot({ withHost: false });
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = maybeSpawnExecutorHost({
       root,
       runTimestamp: "t",
@@ -156,7 +155,7 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
 
   it("认不出的值留一行可见提示（硬规则 4）", () => {
     const root = mkRoot();
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     maybeSpawnExecutorHost({
       root,
       runTimestamp: "t",
@@ -184,9 +183,9 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
       });
 
       expect(spawnInGroup).toHaveBeenCalledTimes(1);
-      const call = spawnInGroup.mock.calls[0]?.[0] as {
+      const call = /* SAFETY: 类型断言已复核 */ spawnInGroup.mock.calls[0]?.[0] as {
+        args: Array<string>;
         command: string;
-        args: string[];
         cwd: string;
         env: Record<string, string>;
         platform: string;
@@ -200,7 +199,13 @@ describe("maybeSpawnExecutorHost：不起 / 起不来都不抛", () => {
       expect(call.env.COMFYAPP_HOST_BOOT_ID).toBe("2026-01-01-00-00-00");
       expect(result?.child).toEqual({ pid: 4242 });
       expect(result?.stdoutFile).toBe(
-        path.join(root, "log", "current", "services", "executor-host-stdout-2026-01-01-00-00-00.log"),
+        path.join(
+          root,
+          "log",
+          "current",
+          "services",
+          "executor-host-stdout-2026-01-01-00-00-00.log",
+        ),
       );
       expect(result?.stderrFile).toContain("executor-host-stderr-2026-01-01-00-00-00.log");
       expect(EXECUTOR_HOST_LOG_PREFIXES).toEqual([

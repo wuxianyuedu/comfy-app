@@ -50,31 +50,39 @@ import { stripComments } from "./helpers/strip-comments";
 const ROOT = process.cwd();
 const TABLE_FILE = "src/lib/app-events.ts";
 
-interface SourceFile {
+type SourceFile = {
   /** 相对仓库根、正斜杠的路径（断言消息里要能直接点开）。 */
   rel: string;
   /** 已经剥掉注释的源码。 */
   text: string;
 }
 
-function collectSources(): SourceFile[] {
-  const out: SourceFile[] = [];
+function collectSources(): Array<SourceFile> {
+  const out: Array<SourceFile> = [];
   const walk = (dir: string): void => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
         /* 只跳这两类：`generated` 在本仓库是**产物根**的名字，
          * 别处抄来的「跳过名为 generated 的目录」会把真源文件一起摘掉
          * （同一份扫描工具在不同目录语义不同，实测踩过一次）。 */
-        if (entry.name === "node_modules" || entry.name === ".next") continue;
+        if (entry.name === "node_modules" || entry.name === ".next") {
+          continue;
+        }
         walk(path.join(dir, entry.name));
         continue;
       }
-      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-      if (/\.(test|spec)\./.test(entry.name)) continue;
+      if (!/\.(ts|tsx)$/.test(entry.name)) {
+        continue;
+      }
+      if (/\.(test|spec)\./.test(entry.name)) {
+        continue;
+      }
       const abs = path.join(dir, entry.name);
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       /* 定义处不算任何一端：它的类型注释里会写出每个事件名。 */
-      if (rel === TABLE_FILE) continue;
+      if (rel === TABLE_FILE) {
+        continue;
+      }
       out.push({ rel, text: fs.readFileSync(abs, "utf8") });
     }
   };
@@ -83,16 +91,21 @@ function collectSources(): SourceFile[] {
 }
 
 /** 表里的事件名（键带引号或不带引号都认）。 */
-function readEventTable(source: string): string[] {
-  const start = source.indexOf("export interface AppEvents");
-  if (start < 0) return [];
+function readEventTable(source: string): Array<string> {
+  /* 表的声明形态两种都认：`interface` 与 `type =`。声明形态归 lint 规则管，
+   * 这条判据只认「这张表在哪儿」 —— 只认一种写法会在改写声明形态那一批把扫描面
+   * 静默打成 0（0 条恰好像「都齐了」，见本文件头注）。 */
+  const start = source.search(/export (?:interface AppEvents \{|type AppEvents = \{)/);
+  if (start < 0) {
+    return [];
+  }
   const block = source.slice(start, source.indexOf("\n}", start));
-  const names: string[] = [];
-  for (const match of block.matchAll(
-    /^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gm,
-  )) {
+  const names: Array<string> = [];
+  for (const match of block.matchAll(/^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gm)) {
     const name = match[1] ?? match[2];
-    if (name) names.push(name);
+    if (name) {
+      names.push(name);
+    }
   }
   return names;
 }
@@ -102,7 +115,7 @@ function readEventTable(source: string): string[] {
  *
  * 派发侧完全可以传常量（库里就有一处这么写），只认字面量的判据会把它判成「没派发」。
  */
-function readNameConstants(sources: SourceFile[]): Map<string, string> {
+function readNameConstants(sources: Array<SourceFile>): Map<string, string> {
   const map = new Map<string, string>();
   for (const file of sources) {
     for (const match of file.text.matchAll(
@@ -110,7 +123,9 @@ function readNameConstants(sources: SourceFile[]): Map<string, string> {
     )) {
       const identifier = match[1];
       const name = match[2];
-      if (identifier && name) map.set(identifier, name);
+      if (identifier && name) {
+        map.set(identifier, name);
+      }
     }
   }
   return map;
@@ -129,8 +144,12 @@ function resolveEventName(
   identifier: string | undefined,
   names: Map<string, string>,
 ): string | null {
-  if (literal !== undefined) return literal;
-  if (identifier === undefined) return null;
+  if (literal !== undefined) {
+    return literal;
+  }
+  if (identifier === undefined) {
+    return null;
+  }
   return names.get(identifier) ?? null;
 }
 
@@ -138,10 +157,10 @@ function resolveEventName(
 function sidesOf(
   file: SourceFile,
   names: Map<string, string>,
-): { emitted: string[]; subscribed: string[] } {
-  const emitted: string[] = [];
-  const subscribed: string[] = [];
-  for (const [fn, bucket] of [
+): { emitted: Array<string>; subscribed: Array<string> } {
+  const emitted: Array<string> = [];
+  const subscribed: Array<string> = [];
+  for (const [fn, bucket] of /* SAFETY: 类型断言已复核 */ [
     ["emitAppEvent", emitted],
     ["subscribeAppEvent", subscribed],
   ] as const) {
@@ -149,16 +168,18 @@ function sidesOf(
       new RegExp(`\\b${fn}\\s*\\(\\s*(?:"([^"]+)"|([A-Za-z_$][\\w$]*))`, "g"),
     )) {
       const name = resolveEventName(match[1], match[2], names);
-      if (name) bucket.push(name);
+      if (name) {
+        bucket.push(name);
+      }
     }
   }
   return { emitted, subscribed };
 }
 
-interface PairingRow {
+type PairingRow = {
+  emitters: Array<string>;
   event: string;
-  emitters: string[];
-  subscribers: string[];
+  subscribers: Array<string>;
 }
 
 /**
@@ -174,7 +195,7 @@ function isUnpaired(row: PairingRow): boolean {
   );
 }
 
-function judge(sources: SourceFile[], tableSource: string): PairingRow[] {
+function judge(sources: Array<SourceFile>, tableSource: string): Array<PairingRow> {
   /* 剥注释这一步放在 `judge` 里面而不是采集时：真实扫描与合成反证必须吃同一条
    * 口径，否则「注释里提到某个事件名不算端」这条承诺只是文件头的一句话，
    * 没有任何东西保证它真的生效。 */
@@ -184,8 +205,8 @@ function judge(sources: SourceFile[], tableSource: string): PairingRow[] {
   }));
   const names = readNameConstants(clean);
   const table = readEventTable(stripComments(tableSource));
-  const emitters = new Map<string, string[]>();
-  const subscribers = new Map<string, string[]>();
+  const emitters = new Map<string, Array<string>>();
+  const subscribers = new Map<string, Array<string>>();
   for (const file of clean) {
     const sides = sidesOf(file, names);
     for (const event of sides.emitted) {
@@ -228,15 +249,15 @@ describe("AppEvents 表的两端成对", () => {
 
   it("反向证明：只剩一端的通道会被点名，两端都在的不报", () => {
     const table = [
-      "export interface AppEvents {",
+      "export type AppEvents = {",
       '  "only:emit": undefined;',
       '  "only:subscribe": { id: string };',
       '  "both:ways": undefined;',
       '  "self:loop": undefined;',
       '  "mixed:ends": undefined;',
-      "}",
+      "};",
     ].join("\n");
-    const synthetic: SourceFile[] = [
+    const synthetic: Array<SourceFile> = [
       {
         rel: "virtual/a.ts",
         /* 常量间接形态也必须认到：`ONLY_EMIT_EVENT` 解成 `only:emit`。 */
@@ -269,20 +290,13 @@ describe("AppEvents 表的两端成对", () => {
        * 不加这一条判据就是「看着齐」的空通道有处可藏。 */
       {
         rel: "virtual/e.ts",
-        text: [
-          'emitAppEvent("self:loop");',
-          'subscribeAppEvent("self:loop", () => {});',
-        ].join("\n"),
+        text: ['emitAppEvent("self:loop");', 'subscribeAppEvent("self:loop", () => {});'].join(
+          "\n",
+        ),
       },
     ];
     const judged = judge(synthetic, table);
-    expect(
-      judged.map((row) => [
-        row.event,
-        row.emitters.length,
-        row.subscribers.length,
-      ]),
-    ).toEqual([
+    expect(judged.map((row) => [row.event, row.emitters.length, row.subscribers.length])).toEqual([
       ["only:emit", 1, 0],
       ["only:subscribe", 0, 1],
       ["both:ways", 1, 1],
@@ -291,11 +305,7 @@ describe("AppEvents 表的两端成对", () => {
     ]);
 
     const broken = judged.filter(isUnpaired);
-    expect(broken.map((row) => row.event)).toEqual([
-      "only:emit",
-      "only:subscribe",
-      "self:loop",
-    ]);
+    expect(broken.map((row) => row.event)).toEqual(["only:emit", "only:subscribe", "self:loop"]);
     /* `both:ways` 与 `mixed:ends` 必须**不**在名单里：后者是「派发方自己也订阅」
      * 这一常见形状，误报一片的判据会被当噪音关掉，那比没有判据更糟。 */
     expect(broken.map((row) => row.event)).not.toContain("mixed:ends");

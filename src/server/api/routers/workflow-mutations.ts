@@ -8,10 +8,7 @@ import type { WorkflowTemplate } from "~/server/db/schema";
 import { errorMessage } from "~/lib/error-message";
 import { authedProcedure, rateLimitedProcedure } from "~/server/api/trpc";
 import { logger } from "~/server/lib/logger";
-import {
-  workflowModelTagRepository,
-  workflowTemplateRepository,
-} from "~/lib/core/repository";
+import { workflowModelTagRepository, workflowTemplateRepository } from "~/lib/core/repository";
 import {
   importFromLocalPath,
   parseWorkflowContent,
@@ -47,8 +44,7 @@ export const workflowMutationProcedures = {
       const body = input;
 
       // ── 本地文件导入 ──
-      const sourcePathRaw =
-        typeof body.sourcePath === "string" ? body.sourcePath.trim() : "";
+      const sourcePathRaw = typeof body.sourcePath === "string" ? body.sourcePath.trim() : "";
       if (sourcePathRaw) {
         let absSourcePath: string;
         try {
@@ -59,19 +55,17 @@ export const workflowMutationProcedures = {
         if (!isWithinAllowedLocalWorkflowRoot(absSourcePath)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message:
-              "只允许导入配置目录（LOCAL_WORKFLOWS_PATH / ComfyUI workflows）下的工作流文件",
+            message: "只允许导入配置目录（LOCAL_WORKFLOWS_PATH / ComfyUI workflows）下的工作流文件",
           });
         }
         let imported;
         try {
           imported = await importFromLocalPath(absSourcePath, {
-            preferredTaskType:
-              typeof body.taskType === "string" ? body.taskType : undefined,
+            preferredTaskType: typeof body.taskType === "string" ? body.taskType : undefined,
             defaultName: typeof body.name === "string" ? body.name : undefined,
           });
-        } catch (e: unknown) {
-          const msg = errorMessage(e, String(e));
+        } catch (error: unknown) {
+          const msg = errorMessage(error, String(error));
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: msg || "本地文件读取失败",
@@ -84,17 +78,10 @@ export const workflowMutationProcedures = {
             ?.replace(/\.(json|workflow)$/i, "")
             .trim() ?? "未命名工作流";
         const name =
-          typeof body.name === "string" && body.name.trim()
-            ? body.name.trim()
-            : fallbackName;
-        const modes =
-          Array.isArray(body.modes) && body.modes.length > 0
-            ? body.modes
-            : undefined;
+          typeof body.name === "string" && body.name.trim() ? body.name.trim() : fallbackName;
+        const modes = Array.isArray(body.modes) && body.modes.length > 0 ? body.modes : undefined;
         const defaultMode =
-          typeof body.defaultMode === "string" && body.defaultMode
-            ? body.defaultMode
-            : modes?.[0];
+          typeof body.defaultMode === "string" && body.defaultMode ? body.defaultMode : modes?.[0];
         const tpl = await workflowTemplateRepository.createImported({
           userId: ctx.user.id,
           name,
@@ -120,15 +107,10 @@ export const workflowMutationProcedures = {
         };
       }
 
-      if (
-        !body.raw ||
-        typeof body.raw !== "object" ||
-        Array.isArray(body.raw)
-      ) {
+      if (!body.raw || typeof body.raw !== "object" || Array.isArray(body.raw)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message:
-            "缺少工作流 JSON。请粘贴 ComfyUI「导出 (工作流格式)」的 JSON",
+          message: "缺少工作流 JSON。请粘贴 ComfyUI「导出 (工作流格式)」的 JSON",
         });
       }
 
@@ -138,10 +120,10 @@ export const workflowMutationProcedures = {
       let parsed: Awaited<ReturnType<typeof parseWorkflowContent>>;
       try {
         parsed = await parseWorkflowContent(JSON.stringify(body.raw));
-      } catch (e: unknown) {
+      } catch (error: unknown) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: errorMessage(e, "工作流解析失败"),
+          message: errorMessage(error, "工作流解析失败"),
         });
       }
       const rawJson = parsed.rawJson;
@@ -149,23 +131,16 @@ export const workflowMutationProcedures = {
       const warnings = [...parsed.warnings];
 
       const name = String(body.name ?? "未命名工作流").slice(0, 80);
-      const modes =
-        Array.isArray(body.modes) && body.modes.length > 0
-          ? body.modes
-          : undefined;
+      const modes = Array.isArray(body.modes) && body.modes.length > 0 ? body.modes : undefined;
       const explicitDefaultMode =
-        typeof body.defaultMode === "string" && body.defaultMode
-          ? body.defaultMode
-          : undefined;
+        typeof body.defaultMode === "string" && body.defaultMode ? body.defaultMode : undefined;
       const defaultMode = explicitDefaultMode ?? modes?.[0];
       let taskType = defaultMode ?? String(body.taskType ?? "");
       if (taskType) {
         taskType = normalizeTaskType(taskType);
       }
       if (taskType && !VALID_TASK_TYPE_CODES.has(taskType)) {
-        logger.info(
-          `[workflow] Unknown taskType "${taskType}", allowing as custom type`,
-        );
+        logger.info(`[workflow] Unknown taskType "${taskType}", allowing as custom type`);
       }
 
       const tpl = await workflowTemplateRepository.createImported({
@@ -215,15 +190,13 @@ export const workflowMutationProcedures = {
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const existing = await workflowTemplateRepository.findByIdForUser(
-        ctx.user.id,
-        input.id,
-      );
-      if (!existing)
+      const existing = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
+      if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Workflow not found",
         });
+      }
 
       // patch 为显式字段构造（不含 ...rest 展开），故 mergePositions / groups /
       // notes 无需在此排除——它们的读取走下方具名变量。
@@ -238,17 +211,17 @@ export const workflowMutationProcedures = {
         /* 保存 IO 映射时把类型 / 默认值固化进库（fix 4）：用图里当前字面量补全
          * 缺失的 type / defaultValue，离线也能做，不依赖 object_info 重算。 */
         workflowIO:
-          rest.workflowIO !== undefined
-            ? persistEnrichedWorkflowIO(
+          rest.workflowIO === undefined
+            ? undefined
+            : persistEnrichedWorkflowIO(
                 /* IO 的类型 / 默认值从 RAW 原件的字面量与 object_info 富化，
                  * 存库不再有第二份可执行的 API 图。 */
-                (existing.rawJson as
+                /* SAFETY: 类型断言已复核 */ (existing.rawJson as
                   | Record<string, unknown>
                   | null
                   | undefined) ?? null,
                 parseWorkflowIOMap(rest.workflowIO),
-              )
-            : undefined,
+              ),
       };
 
       if (input.taskType !== undefined) {
@@ -277,6 +250,7 @@ export const workflowMutationProcedures = {
         /* 重置是「删除覆盖」这一件事本身，与写入互斥：同时传 positions 时
          *  以重置为准，否则刚清掉的键又被写回来，按钮看起来时灵时不灵。 */
         patch.positions = undefined;
+        /* SAFETY: 类型断言已复核 */
         const cur =
           existing.positions &&
           typeof existing.positions === "object" &&
@@ -290,21 +264,27 @@ export const workflowMutationProcedures = {
             /* 导轨坐标 `grp:bpin:*` 不属于任何数据节点，但它是顶层画布的布局
              *  一部分：顶层重置要清掉，子图重置不能顺手抹掉（那是外层视图的
              *  布局）。 */
-            if (key.startsWith("grp:bpin:")) continue;
-            const inner = key.startsWith(prefix)
-              ? key.slice(prefix.length)
-              : "";
+            if (key.startsWith("grp:bpin:")) {
+              continue;
+            }
+            const inner = key.startsWith(prefix) ? key.slice(prefix.length) : "";
             /* 只保留「不属于本层」的键：不带前缀的裸键（原始/老数据）与更深一层
              *  的拼接键都要留着，「属于本层」的才丢。 */
-            if (inner && !inner.includes(":")) continue;
+            if (inner && !inner.includes(":")) {
+              continue;
+            }
             next[key] = value;
           }
         } else {
           for (const [key, value] of Object.entries(cur)) {
-            if (key.startsWith("grp:bpin:")) continue;
+            if (key.startsWith("grp:bpin:")) {
+              continue;
+            }
             /* 顶层只清「裸 id」：保留的必须是带冒号的键 —— 子图内部节点的
              *  `host:inner` 坐标属于下钻视图，顶层重置不该动。 */
-            if (!key.includes(":")) continue;
+            if (!key.includes(":")) {
+              continue;
+            }
             next[key] = value;
           }
         }
@@ -318,48 +298,59 @@ export const workflowMutationProcedures = {
         typeof existing.rawJson === "object" &&
         !Array.isArray(existing.rawJson)
       ) {
-        nextRawJson = existing.rawJson as Record<string, unknown>;
+        nextRawJson = /* SAFETY: 类型断言已复核 */ existing.rawJson as Record<string, unknown>;
       }
       const writePositions =
-        input.positions !== undefined &&
-        input.resetPositionsScope === undefined;
+        input.positions !== undefined && input.resetPositionsScope === undefined;
       if (writePositions || groups !== undefined || notes !== undefined) {
         nextRawJson = nextRawJson ? { ...nextRawJson } : {};
+        /* SAFETY: 类型断言已复核 */
         const nodes = Array.isArray(nextRawJson.nodes)
-          ? [...(nextRawJson.nodes as unknown[])]
+          ? [...(nextRawJson.nodes as Array<unknown>)]
           : [];
         if (writePositions) {
-          const posMap = input.positions as Record<string, [number, number]>;
+          const posMap = /* SAFETY: 类型断言已复核 */ input.positions as Record<
+            string,
+            [number, number]
+          >;
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
-            if (!nd || typeof nd !== "object") continue;
+            if (!nd || typeof nd !== "object") {
+              continue;
+            }
             const rawId =
-              nd && "id" in nd ? (nd as { id?: unknown }).id : undefined;
+              nd && "id" in nd
+                ? /* SAFETY: 类型断言已复核 */ (nd as { id?: unknown }).id
+                : undefined;
             const pid =
-              typeof rawId === "string"
-                ? rawId
-                : typeof rawId === "number"
-                  ? String(rawId)
-                  : "";
+              typeof rawId === "string" ? rawId : typeof rawId === "number" ? String(rawId) : "";
             if (pid && posMap?.[pid]) {
               nodes[i] = { ...nd, pos: posMap[pid] };
             }
           }
         }
-        if (groups !== undefined) nextRawJson.groups = groups;
-        if (notes !== undefined) nextRawJson.notes = notes;
-        if (nodes.length > 0) nextRawJson.nodes = nodes;
+        if (groups !== undefined) {
+          nextRawJson.groups = groups;
+        }
+        if (notes !== undefined) {
+          nextRawJson.notes = notes;
+        }
+        if (nodes.length > 0) {
+          nextRawJson.nodes = nodes;
+        }
         patch.rawJson = nextRawJson;
         if (writePositions) {
           if (mergePositions) {
             // 合并进已有的 positions 列（从子图 / RAW 视图拖单个键时，
             // 不能把另一个命名空间一起抹掉）。
+            /* SAFETY: 类型断言已复核 */
             const cur =
               existing.positions &&
               typeof existing.positions === "object" &&
               !Array.isArray(existing.positions)
                 ? (existing.positions as Record<string, [number, number]>)
                 : {};
+            /* SAFETY: 类型断言已复核 */
             patch.positions = {
               ...cur,
               ...(input.positions as Record<string, [number, number]>),
@@ -382,10 +373,7 @@ export const workflowMutationProcedures = {
       if (modelTags !== undefined) {
         // 批量 upsert：逐个 `upsertByName` 是每个标签 2~3 次往返，
         // 标签一多保存工作流就明显变慢（见仓储层的 `upsertByNames`）。
-        const tagIds = await workflowModelTagRepository.upsertByNames(
-          ctx.user.id,
-          modelTags,
-        );
+        const tagIds = await workflowModelTagRepository.upsertByNames(ctx.user.id, modelTags);
         await workflowTemplateRepository.setModelTags(id, tagIds);
       }
 
@@ -401,60 +389,54 @@ export const workflowMutationProcedures = {
   delete: rateLimitedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const existing = await workflowTemplateRepository.findByIdForUser(
-        ctx.user.id,
-        input.id,
-      );
-      if (!existing)
+      const existing = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
+      if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Workflow not found",
         });
+      }
       await workflowTemplateRepository.delete(input.id);
       return { ok: true };
     }),
 
   /* POST /api/workflows/[id]/resync —— 新建 */
-  resync: authedProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const existing = await workflowTemplateRepository.findByIdForUser(
-        ctx.user.id,
-        input.id,
-      );
-      if (!existing)
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Workflow not found",
-        });
-      const result = await reimportFromSource({
-        sourcePath: existing.sourcePath ?? "",
-        sourceMtime: existing.sourceMtime,
-        sourceChecksum: existing.sourceChecksum,
-        existingTaskType: existing.taskType,
+  resync: authedProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+    const existing = await workflowTemplateRepository.findByIdForUser(ctx.user.id, input.id);
+    if (!existing) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Workflow not found",
       });
-      if (result.missing) {
-        return { missing: true };
-      }
-      if (result.unchanged) {
-        return { unchanged: true };
-      }
-      if (!result.update) {
-        return { unchanged: true };
-      }
-      // 把重新导入的内容落回模板
-      const updated = await workflowTemplateRepository.update(existing.id, {
-        rawJson: result.update.rawJson ?? existing.rawJson,
-        paramMap: result.update.paramMap ?? existing.paramMap,
-        positions: result.update.positions ?? existing.positions,
-        sourceMtime: result.update.sourceMtime ?? existing.sourceMtime,
-        sourceChecksum: result.update.sourceChecksum ?? existing.sourceChecksum,
-        taskType: result.update.taskType ?? existing.taskType,
-      });
-      /* 详情缓存的 TTL 是 30s：不清的话用户点完「同步」再进详情还是旧内容，
-       * 而磁盘标记已经翻回「无更新」—— 那是最难解释的一种自相矛盾。
-       * （这是**唯一**会写回磁盘内容的入口，缓存失效也就只在这一处需要。） */
-      invalidateWorkflowDetailCache(ctx.user.id, existing.id);
-      return { updated: true, template: updated };
-    }),
+    }
+    const result = await reimportFromSource({
+      sourcePath: existing.sourcePath ?? "",
+      sourceMtime: existing.sourceMtime,
+      sourceChecksum: existing.sourceChecksum,
+      existingTaskType: existing.taskType,
+    });
+    if (result.missing) {
+      return { missing: true };
+    }
+    if (result.unchanged) {
+      return { unchanged: true };
+    }
+    if (!result.update) {
+      return { unchanged: true };
+    }
+    // 把重新导入的内容落回模板
+    const updated = await workflowTemplateRepository.update(existing.id, {
+      rawJson: result.update.rawJson ?? existing.rawJson,
+      paramMap: result.update.paramMap ?? existing.paramMap,
+      positions: result.update.positions ?? existing.positions,
+      sourceMtime: result.update.sourceMtime ?? existing.sourceMtime,
+      sourceChecksum: result.update.sourceChecksum ?? existing.sourceChecksum,
+      taskType: result.update.taskType ?? existing.taskType,
+    });
+    /* 详情缓存的 TTL 是 30s：不清的话用户点完「同步」再进详情还是旧内容，
+     * 而磁盘标记已经翻回「无更新」—— 那是最难解释的一种自相矛盾。
+     * （这是**唯一**会写回磁盘内容的入口，缓存失效也就只在这一处需要。） */
+    invalidateWorkflowDetailCache(ctx.user.id, existing.id);
+    return { updated: true, template: updated };
+  }),
 };

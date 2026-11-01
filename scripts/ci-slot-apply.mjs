@@ -27,17 +27,27 @@
  *    **检出的 `.git/config`**（`core.hooksPath` + `git lfs install --local --manual`），
  *    那不在 `node_modules` 里、接槽接不过来 —— 于是由作业自己补（`runJobLifecycle`）。
  *
- * ## 开关：按档拨（PR 接、每日不接）
+ * ## 开关：按档拨（没有构建格的档接，有构建格的档不接）
  *
  * `Install dependencies` 每一次构建都过，它红了后面就没有任何一步。把「机制」与
  * 「换执行者」同批推上去的形态是一次键算错就让所有 PR 装不上 —— 与本仓在档位那一刀上
  * 立的纪律相反，所以机制先落地、开关后拨（#2045 与本次之间就是这一隔）。
- * 2026-10-20 那一刻的状态是「PR 与每日两格都置 `COMFY_CI_SLOT=1`」，而它被上面第 1 条
+ * 拨下去那一刻的状态是「PR 与每日两格都置 `COMFY_CI_SLOT=1`」，而它被上面第 1 条
  * 那半句新事实推翻：**每日那一跑后面背着 `每日生产构建`，接槽让它 13.8s 就死**
- * （ISSUE #2081）。现在状态：PR 那格接，**每日那格不接**。
+ * （ISSUE #2081）。此后它被按档收回：PR 那格接、**每日那格不接**；
+ * push 档的 `安装依赖` 也接（ISSUE #2851 —— 那份清单里六格没有一格真构建；而文档链那三格
+ * 与 `工作区出处` 在搬到 push 档之前本来就长在**接了槽的** PR 流水线上，同一个入口、
+ * 同一份旗标，两臂（`install-into-slot` / `reuse`）下逐格绿的读数记在规范 §13.5.3.4.3）。
+ * 所以分档的那条线不是档名，是**这一档后面有没有会真构建的格子**；push 那一侧由
+ * `tests/no-platform-ci-config.test.ts` 里「push 清单不许出现构建格」那条钉住，
+ * 往那份清单里加构建格的人会当场被拦，而不是等 13.8s 死法重演一次。
  * 代价写在明处：每日那一跳从 13.8s（命中）回到 48.8s（暖）/ 216s（冷）——
  * 每天多付 ~35s，换回一个能构建的工作区；槽是优化，不是前提。
- * 这条差别**不是**「两格各漂一份」：判据 `tests/no-platform-ci-config.test.ts` 里它是一条
+ * ⚠️ 而这条「不接」今天的性质是**没验过**，不是**无解**：#2521 已把官方
+ * `experimental.turbopackAdditionalRoots` 装进 `next.config.js`（只在 `COMFY_CI_SLOT=1`
+ * 时登记槽根），可这些档从不置那个开关 ⇒ 那份缓解在有构建格的档上**一次都没被执行过**。
+ * 撤「不接」之前要先拿一次真构建验它承重。
+ * 每日那一侧的差别**不是**「两格各漂一份」：判据 `tests/no-platform-ci-config.test.ts` 里它是一条
  * 登记过的例外（`DAILY_ENV_ONLY_ON_PR`），钉的形状是「PR 侧必须正好置着一行 `KEY: "1"`、
  * 每日侧一个字都不许出现」，其余各行仍逐字相同。回退 = 摘掉 PR 那格的 env **并同批**把
  * 那行从名单里删掉，只动一边会被那条判据当场点名。
@@ -176,9 +186,7 @@ export function materializeSlotInputs(input) {
  */
 export function runJobLifecycle(io = {}) {
   const jobRoot = io.jobRoot ?? ROOT;
-  const spawn =
-    io.spawn ??
-    ((exe, args, opts) => ({ status: spawnSync(exe, args, opts).status }));
+  const spawn = io.spawn ?? ((exe, args, opts) => ({ status: spawnSync(exe, args, opts).status }));
   const res = spawn(process.execPath, [JOB_HOOK_SCRIPT], {
     cwd: jobRoot,
     stdio: "inherit",
@@ -210,7 +218,9 @@ export function clearJobLink(jobRoot) {
   } catch {
     return false;
   }
-  if (!stat.isSymbolicLink()) return false;
+  if (!stat.isSymbolicLink()) {
+    return false;
+  }
   unlinkDependencies(link);
   return true;
 }
@@ -253,9 +263,9 @@ export function acquireSlotLock(io) {
   try {
     fs.writeFileSync(file, stamp, { flag: "wx" });
     return { acquired: true, why: "拿到写锁", release };
-  } catch (err) {
-    if (errCode(err) !== "EEXIST") {
-      return { acquired: false, why: `锁建不起来（${errCode(err)}）`, release };
+  } catch (error) {
+    if (errCode(error) !== "EEXIST") {
+      return { acquired: false, why: `锁建不起来（${errCode(error)}）`, release };
     }
   }
   let held = Number.NaN;
@@ -271,8 +281,8 @@ export function acquireSlotLock(io) {
   try {
     fs.writeFileSync(file, stamp);
     return { acquired: true, why: "接管一把过期的锁", release };
-  } catch (err) {
-    return { acquired: false, why: `接管失败（${errCode(err)}）`, release };
+  } catch (error) {
+    return { acquired: false, why: `接管失败（${errCode(error)}）`, release };
   }
 }
 
@@ -332,11 +342,15 @@ export function statfsFreeBytes(target) {
       const info = fs.statfsSync(dir);
       const bytes = info.bsize * info.bavail;
       return Number.isFinite(bytes) ? bytes : null;
-    } catch (err) {
-      const code = errCode(err);
-      if (code !== "ENOENT" && code !== "ENOTDIR") return null;
+    } catch (error) {
+      const code = errCode(error);
+      if (code !== "ENOENT" && code !== "ENOTDIR") {
+        return null;
+      }
       const parent = path.dirname(dir);
-      if (parent === dir) return null;
+      if (parent === dir) {
+        return null;
+      }
       dir = parent;
     }
   }
@@ -446,7 +460,9 @@ export function pruneSlots(io) {
       }
       continue;
     }
-    if (index < budget) continue;
+    if (index < budget) {
+      continue;
+    }
     const fresh = item.lastUsed === null || now - item.lastUsed < ttlMs;
     if (fresh) {
       held.push(item.key);
@@ -526,9 +542,7 @@ export function applySlot(io = {}) {
     : { treePresent: false, fingerprint: null, unreadable: false };
   /* 读不动 ⇒ 既不接也不重装：这一跑没省到时间是小事，把别人正在用的树删了是事故。 */
   if (state.unreadable) {
-    log(
-      "[缓存槽] 槽里有指纹文件但这一趟读不动 ⇒ 不判「键变了」、不接、不删（退回普通装）",
-    );
+    log("[缓存槽] 槽里有指纹文件但这一趟读不动 ⇒ 不判「键变了」、不接、不删（退回普通装）");
     return {
       handled: false,
       action: "no-cache",
@@ -611,7 +625,7 @@ export function applySlot(io = {}) {
       return {
         handled: false,
         action: plan.action,
-        why: status !== 0 ? `槽内安装退 ${status}` : "槽内安装退 0 但没有产物",
+        why: status === 0 ? "槽内安装退 0 但没有产物" : `槽内安装退 ${status}`,
       };
     }
     fs.writeFileSync(path.join(slot, FINGERPRINT_FILE), `${key}\n`);
@@ -640,10 +654,7 @@ export function applySlot(io = {}) {
   }
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   applySlot();
   process.exit(0);
 }

@@ -61,26 +61,16 @@ import { cn } from "~/lib/utils";
  *   「标题」是数据不是屏名，但字阶档与副说明这两件仍然该走这里。
  */
 
-export interface PageHeaderProps {
+export type PageHeaderProps = {
+  /** 右侧动作组（按钮 / 筛选）。整组不收缩。 */
+  actions?: ReactNode;
   /**
-   * 屏级可见标题 —— 走 `.u-title-page`。**每屏至多一个**。
-   *
-   * 页签（或顶栏）已经在说屏名时**不传**：那一次出现是重复的（ISSUE #1693）。
-   * 不传时这一行不再占位，只留右侧的动作组 / 说明按钮。
-   *
-   * ⚠️ 不传**不等于这一屏没有 `h1`**：屏名会以 `sr-only` 保留在 DOM 里
-   * （读屏按标题跳转的前提，规范 06）。真要彻底没有标题的场景不存在 ——
-   * 每一屏都该有一个可跳转的名字。
+   * 标题的标签名。默认 `h1`（屏级）。
+   * 传 `h2` / `p` 用于「标题行嵌在更大结构里」或「标题本身是数据」的落点 ——
+   * 那时用 `h1` 会与它所在屏的屏级 `h1` 撞成两个（一屏一 `h1` 是读屏跳转的前提）。
    */
-  title?: ReactNode;
-  /**
-   * 省略 `title` 时仍要写进 DOM（`sr-only`）的屏名。
-   *
-   * 给「页签在视线里、标题看不见」的屏用：名字仍要能被读屏与 `h1` 判据
-   * 找到，只是不占视觉空间。页签名的唯一出处仍是 `pageHeaderTitle(view)`
-   * —— 调用点照传同一个出口，别在这里另写一份字面量。
-   */
-  srTitle?: ReactNode;
+  as?: "h1" | "h2" | "p";
+  className?: string;
   /**
    * 一行副说明：写「答案在别处拿不到的那句话」（时间口径 / 数据来源 / 能做什么）。
    * **同义反复的话不要写** —— 不传就不渲染这一行。
@@ -88,6 +78,11 @@ export interface PageHeaderProps {
    * 与 `help` 二选一：这句话**每次看屏都要读**才放这里；偶尔才需要读的用 `help`。
    */
   description?: ReactNode;
+  /**
+   * 标题行下面再挂一层（如一行进度条、一枚徽标）。它落在副说明之下、动作区之上。
+   * 只有真需要「页头里还有一行结构」时才传 —— 普通的补充信息归 `description`。
+   */
+  extra?: ReactNode;
   /**
    * 把同一句话挂成一枚悬浮「说明」按钮（不占标题区那一行）。
    *
@@ -103,26 +98,31 @@ export interface PageHeaderProps {
    * 独立路由页）才走这个 prop。
    */
   help?: ReactNode;
-  /** 右侧动作组（按钮 / 筛选）。整组不收缩。 */
-  actions?: ReactNode;
   /**
-   * 标题的标签名。默认 `h1`（屏级）。
-   * 传 `h2` / `p` 用于「标题行嵌在更大结构里」或「标题本身是数据」的落点 ——
-   * 那时用 `h1` 会与它所在屏的屏级 `h1` 撞成两个（一屏一 `h1` 是读屏跳转的前提）。
+   * 省略 `title` 时仍要写进 DOM（`sr-only`）的屏名。
+   *
+   * 给「页签在视线里、标题看不见」的屏用：名字仍要能被读屏与 `h1` 判据
+   * 找到，只是不占视觉空间。页签名的唯一出处仍是 `pageHeaderTitle(view)`
+   * —— 调用点照传同一个出口，别在这里另写一份字面量。
    */
-  as?: "h1" | "h2" | "p";
+  srTitle?: ReactNode;
   /**
-   * 标题行下面再挂一层（如一行进度条、一枚徽标）。它落在副说明之下、动作区之上。
-   * 只有真需要「页头里还有一行结构」时才传 —— 普通的补充信息归 `description`。
+   * 屏级可见标题 —— 走 `.u-title-page`。**每屏至多一个**。
+   *
+   * 页签（或顶栏）已经在说屏名时**不传**：那一次出现是重复的（ISSUE #1693）。
+   * 不传时这一行不再占位，只留右侧的动作组 / 说明按钮。
+   *
+   * ⚠️ 不传**不等于这一屏没有 `h1`**：屏名会以 `sr-only` 保留在 DOM 里
+   * （读屏按标题跳转的前提，规范 06）。真要彻底没有标题的场景不存在 ——
+   * 每一屏都该有一个可跳转的名字。
    */
-  extra?: ReactNode;
+  title?: ReactNode;
   /**
    * 标题的补充文本（lucide / 副标题 / 数据名），渲染在标题右侧、同一基线。
    * 用于 `FilmStudioTopBar` 那类「项目名 + · 视图名」的组合。
    */
   titleSuffix?: ReactNode;
-  className?: string;
-}
+};
 
 export function PageHeader({
   title,
@@ -153,49 +153,33 @@ export function PageHeader({
 
   return (
     <header
+      className={cn("flex flex-wrap items-center justify-between gap-3", className)}
       data-component="page-header"
-      className={cn(
-        "flex flex-wrap items-center justify-between gap-3",
-        className,
-      )}
     >
-      {hiddenTitle !== undefined ? (
-        <Heading className="sr-only">{hiddenTitle}</Heading>
-      ) : null}
+      {hiddenTitle === undefined ? null : <Heading className="sr-only">{hiddenTitle}</Heading>}
       {hasTitleBlock ? (
         /* `min-w-0` 是给长标题留的截断位（规范 03 §3.8.1 的兜底顺序：先收标题、
            再换行，不压右侧按钮组）。 */
         <div className="min-w-0">
           <div className="flex items-baseline gap-2">
-            {title !== undefined ? (
-              <Heading className="font-title u-title-page min-w-0 truncate">
-                {title}
-              </Heading>
-            ) : null}
+            {title === undefined ? null : (
+              <Heading className="font-title u-title-page min-w-0 truncate">{title}</Heading>
+            )}
             {titleSuffix ? (
-              <span className="text-ink-fainter shrink-0 text-xs">
-                {titleSuffix}
-              </span>
+              <span className="text-ink-fainter shrink-0 text-xs">{titleSuffix}</span>
             ) : null}
             {/* 有可见标题时说明钮跟在标题右侧（读者在「这一屏叫什么」的地方
                 顺路看见「还有一句解释」）。没有标题时它并进右侧动作组 —— 见下，
                 否则它会孤零零贴在页头最左边、与页签和动作组都隔着一大片空白。 */}
-            {title !== undefined && helpText !== undefined ? (
-              <HeaderHelp text={helpText} />
-            ) : null}
+            {title !== undefined && helpText !== undefined ? <HeaderHelp text={helpText} /> : null}
           </div>
-          {description ? (
-            <p className="text-ink-muted mt-1 text-sm">{description}</p>
-          ) : null}
+          {description ? <p className="text-ink-muted mt-1 text-sm">{description}</p> : null}
           {extra}
         </div>
       ) : null}
-      {actions !== undefined ||
-      (helpText !== undefined && title === undefined) ? (
+      {actions !== undefined || (helpText !== undefined && title === undefined) ? (
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {helpText !== undefined && title === undefined ? (
-            <HeaderHelp text={helpText} />
-          ) : null}
+          {helpText !== undefined && title === undefined ? <HeaderHelp text={helpText} /> : null}
           {actions}
         </div>
       ) : null}

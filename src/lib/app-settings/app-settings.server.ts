@@ -8,16 +8,11 @@
  * `~/lib/endpoints`（零依赖常量层），而不是走这条会拖进 `node:fs` 的路。
  */
 
-import { createHash } from "node:crypto";
 import fs from "node:fs";
+import { hash } from "node:crypto";
 import path from "node:path";
 
-import {
-  DEFAULTS,
-  migrateExitDefaults,
-  type AppSettings,
-  type ExitPolicy,
-} from "./index";
+import { DEFAULTS, migrateExitDefaults, type AppSettings, type ExitPolicy } from "./index";
 
 export * from "./index";
 export type { AppSettings, ExitPolicy };
@@ -37,7 +32,9 @@ export function deriveComfyuiSubdir(
   subdir: "custom_nodes" | "workflows",
 ): string | null {
   const root = (comfyuiPath ?? "").trim();
-  if (!root) return null;
+  if (!root) {
+    return null;
+  }
   // 各布局的「ComfyUI 源码根」（main.py 所在目录）。
   const candidates = [
     root, // 便携版 / venv：main.py 直接在配置根下
@@ -46,7 +43,9 @@ export function deriveComfyuiSubdir(
   for (const base of candidates) {
     const dir = path.join(base, subdir);
     try {
-      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
+      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+        return dir;
+      }
     } catch {
       /* 忽略 —— 继续往下走 */
     }
@@ -59,7 +58,7 @@ export function deriveComfyuiSubdir(
  *  只有旧源码布局才是 `<root>/workflows`：只认后者时，明明配好了 ComfyUI 路径
  *  却一个本地工作流都扫不到，而扫描器把「根不存在」当「没有工作流」，界面上
  *  完全看不出原因。 */
-const COMFYUI_WORKFLOW_SUBDIRS: readonly (readonly string[])[] = [
+const COMFYUI_WORKFLOW_SUBDIRS: ReadonlyArray<ReadonlyArray<string>> = [
   ["user", "default", "workflows"],
   ["workflows"],
 ];
@@ -68,12 +67,16 @@ const COMFYUI_WORKFLOW_SUBDIRS: readonly (readonly string[])[] = [
  *  回退旧的 `<comfyuiPath>[/ComfyUI]/workflows`。找不到返回 null（调用方自行降级）。 */
 export function deriveComfyuiWorkflowsDir(comfyuiPath: string): string | null {
   const root = (comfyuiPath ?? "").trim();
-  if (!root) return null;
+  if (!root) {
+    return null;
+  }
   for (const base of [root, path.join(root, "ComfyUI")]) {
     for (const sub of COMFYUI_WORKFLOW_SUBDIRS) {
       const dir = path.join(base, ...sub);
       try {
-        if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
+        if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+          return dir;
+        }
       } catch {
         /* 该候选不可访问 → 试下一个 */
       }
@@ -117,8 +120,8 @@ function readSettingsFile(): { fingerprint: string; raw: string | null } {
   try {
     const raw = fs.readFileSync(/*turbopackIgnore: true*/ SETTINGS_FILE);
     return {
-      fingerprint: createHash("sha1").update(raw).digest("hex"),
-      raw: raw.toString("utf-8"),
+      fingerprint: hash("sha1", raw, "hex"),
+      raw: raw.toString("utf8"),
     };
   } catch {
     return { fingerprint: "", raw: null };
@@ -128,10 +131,14 @@ function readSettingsFile(): { fingerprint: string; raw: string | null } {
 /* 同步读取，带进程内缓存（磁盘上的设置一变就重读）。从请求处理器里调用是安全的。 */
 export function getSettingsSync(): AppSettings {
   const { fingerprint, raw } = readSettingsFile();
-  if (cache && fingerprint === cacheFingerprint) return cache;
+  if (cache && fingerprint === cacheFingerprint) {
+    return cache;
+  }
   try {
-    if (raw === null) throw new Error("设置文件读不到");
-    const parsed = JSON.parse(raw) as Partial<AppSettings> & {
+    if (raw === null) {
+      throw new Error("设置文件读不到");
+    }
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<AppSettings> & {
       comfyuiUrl?: string;
     };
     /* comfyuiUrl 已废弃（ComfyUI 由本应用拉起，连接地址固定 127.0.0.1:端口）；
@@ -150,23 +157,15 @@ export async function getSettings(): Promise<AppSettings> {
 }
 
 /* 合并一次局部更新并落盘，返回合并后的完整设置。 */
-export async function saveSettings(
-  partial: Partial<AppSettings>,
-): Promise<AppSettings> {
+export async function saveSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
   const next: AppSettings = { ...getSettingsSync(), ...partial };
   cache = next;
   await fs.promises.mkdir(path.dirname(SETTINGS_FILE), { recursive: true });
-  await fs.promises.writeFile(
-    SETTINGS_FILE,
-    JSON.stringify(next, null, 2),
-    "utf-8",
-  );
+  await fs.promises.writeFile(SETTINGS_FILE, JSON.stringify(next, null, 2), "utf8");
   /* 落盘后把指纹对齐到刚写的这一份：不这样做的话，下一次读会拿「自己刚写进去的
    * 内容」判成外部改动、白白重读一遍（读出来还是同一份，只是白花一次 IO）。
    * 别的进程（执行宿主）不受这里影响，它自己按文件指纹重读。 */
-  cacheFingerprint = createHash("sha1")
-    .update(JSON.stringify(next, null, 2))
-    .digest("hex");
+  cacheFingerprint = hash("sha1", JSON.stringify(next, null, 2), "hex");
   return next;
 }
 

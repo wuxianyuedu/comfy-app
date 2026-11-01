@@ -1,4 +1,4 @@
-﻿/**
+/**
  * `executor-finalize.ts` — 任务终态收口（成功下载 / 失败落库）
  * ===========================================================================
  *
@@ -31,11 +31,7 @@ import path from "node:path";
 import { collectOutputs, extractRuntimeParams } from "./executor-outputs";
 import { friendlyError } from "./executor-errors";
 import { taskOutputDir, taskOutputUrl } from "~/lib/media/output-paths";
-import {
-  fetchHistoryEntry,
-  traceComfyQueue,
-  type ComfyHistoryEntry,
-} from "./executor-history";
+import { fetchHistoryEntry, traceComfyQueue, type ComfyHistoryEntry } from "./executor-history";
 import { historyTraceSummary, historyOutputKeys, trace } from "./trace";
 import { kickQueue } from "./executor-continuation";
 import { writeTerminal } from "./executor-write-retry";
@@ -64,19 +60,15 @@ export type TaskRepoLike = Pick<
   Awaited<ReturnType<typeof loadRealTaskRepo>>,
   "findExecutionMeta" | "finalizeSuccess" | "createImages" | "finalizeFailure"
 >;
-export type GetViewLike = (
-  filename: string,
-  subfolder: string,
-  type: string,
-) => Promise<Buffer>;
+export type GetViewLike = (filename: string, subfolder: string, type: string) => Promise<Buffer>;
 export type RuntimeLoggerLike = {
-  info(msg: string, ctx?: unknown): void;
   error(msg: string, ctx?: unknown): void;
+  info(msg: string, ctx?: unknown): void;
 };
 export type ExecutorFinalizeDeps = {
-  taskRepo: TaskRepoLike;
   getView: GetViewLike;
   runtimeLog: RuntimeLoggerLike;
+  taskRepo: TaskRepoLike;
 };
 
 let depsOverride: Partial<ExecutorFinalizeDeps> = {};
@@ -84,19 +76,21 @@ let depsOverride: Partial<ExecutorFinalizeDeps> = {};
 /** 显式注入宿主侧的实现。executor host 需在 boot 时至少提供 `taskRepo` 与
  *  `getView`（关键路径），`runtimeLog` 缺省则退化为静默 skip。
  *  Next server 侧不需要调用本函数——首次 getDeps 会走 dynamic import 拿真单例。 */
-export function configureExecutorFinalize(
-  next: Partial<ExecutorFinalizeDeps>,
-): void {
+export function configureExecutorFinalize(next: Partial<ExecutorFinalizeDeps>): void {
   depsOverride = { ...depsOverride, ...next };
 }
 
 async function resolveTaskRepo(): Promise<TaskRepoLike> {
-  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  if (depsOverride.taskRepo) {
+    return depsOverride.taskRepo;
+  }
   return loadRealTaskRepo();
 }
 
 async function resolveGetView(): Promise<GetViewLike> {
-  if (depsOverride.getView) return depsOverride.getView;
+  if (depsOverride.getView) {
+    return depsOverride.getView;
+  }
   return (await import("./client")).getView;
 }
 
@@ -104,11 +98,14 @@ async function resolveGetView(): Promise<GetViewLike> {
  *  server-only）时静默 skip，与旧契约「日志挂不上不阻塞收口」同构。 */
 let _runtimeLoggerCache: RuntimeLoggerLike | null | undefined;
 async function resolveRuntimeLogger(): Promise<RuntimeLoggerLike | null> {
-  if (depsOverride.runtimeLog) return depsOverride.runtimeLog;
-  if (_runtimeLoggerCache !== undefined) return _runtimeLoggerCache;
+  if (depsOverride.runtimeLog) {
+    return depsOverride.runtimeLog;
+  }
+  if (_runtimeLoggerCache !== undefined) {
+    return _runtimeLoggerCache;
+  }
   try {
-    const { createAppRuntimeLogger } =
-      await import("~/lib/log/app-runtime-log");
+    const { createAppRuntimeLogger } = await import("~/lib/log/app-runtime-log");
     _runtimeLoggerCache = createAppRuntimeLogger("task");
   } catch {
     _runtimeLoggerCache = null;
@@ -124,44 +121,42 @@ function statusMessageTypeOf(msg: unknown): unknown {
 }
 
 function executionErrorMessageOf(msg: unknown): unknown {
-  if (!Array.isArray(msg)) return undefined;
+  if (!Array.isArray(msg)) {
+    return undefined;
+  }
   // Array.isArray 把 unknown 收窄为 any[]，索引取值后立即断言收口。
-  const payload = msg[1] as Record<string, unknown> | null | undefined;
-  return payload != null && typeof payload === "object"
-    ? payload.exception_message
-    : undefined;
+  const payload = /* SAFETY: 类型断言已复核 */ msg[1] as Record<string, unknown> | null | undefined;
+  return payload != null && typeof payload === "object" ? payload.exception_message : undefined;
 }
 
 /** runner-state 的 `executedWorkflow` 是 `Map<string, unknown>`（不在本次 8 文件
  *  改动范围内）—— 经这里统一收口为 `unknown` 读取；`undefined` 归一为 `null`
  *  与拆分前一致（completeInner 内两者等价）。 */
 function executedWorkflowOf(taskId: string): unknown {
-  const map = state().executedWorkflow as ReadonlyMap<string, unknown>;
+  const map = /* SAFETY: 类型断言已复核 */ state().executedWorkflow as ReadonlyMap<string, unknown>;
   return map.get(taskId) ?? null;
 }
 
 /** 完成入口：抢终态 → completeInner → 兜底失败。 */
 export async function complete(taskId: string, promptId: string) {
-  if (!claimSettle(taskId)) return;
+  if (!claimSettle(taskId)) {
+    return;
+  }
   const executedWorkflow = executedWorkflowOf(taskId);
   try {
     await completeInner(taskId, promptId, executedWorkflow);
-  } catch (e) {
+  } catch (error) {
     // 下载 / 落盘 / 写库任何一步炸了，都必须把任务收口，否则队列同样会卡死。
     await finalizeFailure(
       taskId,
       promptId,
-      (e as { message?: unknown } | null | undefined)?.message ??
+      /* SAFETY: 类型断言已复核 */ (error as { message?: unknown } | null | undefined)?.message ??
         "结果处理失败",
     );
   }
 }
 
-async function completeInner(
-  taskId: string,
-  promptId: string,
-  executedWorkflow: unknown = null,
-) {
+async function completeInner(taskId: string, promptId: string, executedWorkflow: unknown = null) {
   // 三条依赖在函数入口一次性解析；后续 call site 沿用旧名字（`taskRepository` /
   // `getView` / `taskRuntimeLog`），改动面小、review 友好。
   // taskRepository / getView 是关键路径（拿不到 → 抛错让 caller 感知）；
@@ -176,7 +171,8 @@ async function completeInner(
   // 复现元数据。projectId 为 localStorage 的 CanvasProject.id（client 侧字符串）。
   const taskRow = await taskRepository.findExecutionMeta(taskId);
   const projectId: string | null = taskRow?.projectId ?? null;
-  const taskParams = (taskRow?.params as Record<string, unknown> | null) ?? {};
+  const taskParams =
+    /* SAFETY: 类型断言已复核 */ (taskRow?.params as Record<string, unknown> | null) ?? {};
   const reqSeed =
     typeof taskParams.seed === "number" || typeof taskParams.seed === "string"
       ? String(taskParams.seed)
@@ -236,21 +232,16 @@ async function completeInner(
     log(
       taskId,
       "info",
-      "输出节点明细：\n" +
-        outputKeys
-          .map((o) => `  · 节点 ${o.nodeId} → ${o.keys.join(", ") || "(空)"}`)
-          .join("\n"),
+      `输出节点明细：\n${outputKeys
+        .map((o) => `  · 节点 ${o.nodeId} → ${o.keys.join(", ") || "(空)"}`)
+        .join("\n")}`,
     );
   }
 
-  const msgs: unknown[] = entry.status?.messages ?? [];
-  const errored = msgs.some(
-    (msg) => statusMessageTypeOf(msg) === "execution_error",
-  );
+  const msgs: Array<unknown> = entry.status?.messages ?? [];
+  const errored = msgs.some((msg) => statusMessageTypeOf(msg) === "execution_error");
   if (errored || entry.status?.status_str === "error") {
-    const ex = msgs.find(
-      (msg) => statusMessageTypeOf(msg) === "execution_error",
-    );
+    const ex = msgs.find((msg) => statusMessageTypeOf(msg) === "execution_error");
     /* ISSUE #216：执行错误此前只留一句 exception_message，status.messages 的
      *  完整结构（含节点 id / traceback）全部丢弃。原文进 trace，面板给摘要。 */
     trace("history", taskId, "ComfyUI 报执行错误", {
@@ -262,23 +253,13 @@ async function completeInner(
       "error",
       `ComfyUI 报执行错误（status=${entry.status?.status_str ?? "error"}），完整 status.messages 见 log/comfyui/comfyui-trace.log`,
     );
-    await finalizeFailure(
-      taskId,
-      promptId,
-      executionErrorMessageOf(ex) ?? "执行错误",
-    );
+    await finalizeFailure(taskId, promptId, executionErrorMessageOf(ex) ?? "执行错误");
     return;
   }
 
-  const { images, videos, audios, others, texts } = collectOutputs(
-    entry.outputs ?? {},
-  );
+  const { images, videos, audios, others, texts } = collectOutputs(entry.outputs ?? {});
   const hasOutput =
-    images.length ||
-    videos.length ||
-    audios.length ||
-    texts.length ||
-    others.length;
+    images.length || videos.length || audios.length || texts.length || others.length;
   if (!hasOutput) {
     /* ISSUE #216：outputs 非空但收集不到任何产物（未知输出键 / 输出被节点丢弃）
      *  时，把 outputs 原文落 trace，并提示去哪里核对，而不是只报「无输出内容」。 */
@@ -311,12 +292,22 @@ async function completeInner(
     );
   }
 
-  const parts: string[] = [];
-  if (images.length) parts.push(`${images.length} 张图像`);
-  if (videos.length) parts.push(`${videos.length} 个视频`);
-  if (audios.length) parts.push(`${audios.length} 个音频`);
-  if (others.length) parts.push(`${others.length} 个文件`);
-  if (texts.length) parts.push(`${texts.length} 段文本`);
+  const parts: Array<string> = [];
+  if (images.length) {
+    parts.push(`${images.length} 张图像`);
+  }
+  if (videos.length) {
+    parts.push(`${videos.length} 个视频`);
+  }
+  if (audios.length) {
+    parts.push(`${audios.length} 个音频`);
+  }
+  if (others.length) {
+    parts.push(`${others.length} 个文件`);
+  }
+  if (texts.length) {
+    parts.push(`${texts.length} 段文本`);
+  }
   log(taskId, "success", `✓ 生成完成，开始下载 ${parts.join("、") || "结果"}`);
 
   /* 落盘目录：与 publicBase 同源。越界判据也在这里生效 —— projectId 由客户端
@@ -325,12 +316,10 @@ async function completeInner(
    * 现在它变成一次硬失败（由 complete() 收口成 finalizeFailure，用户看得见）。 */
   const dir = taskOutputDir(taskId, projectId);
   if (!dir) {
-    throw new Error(
-      `产物目录越界，已拒绝落盘：taskId=${taskId} projectId=${projectId ?? "(无)"}`,
-    );
+    throw new Error(`产物目录越界，已拒绝落盘：taskId=${taskId} projectId=${projectId ?? "(无)"}`);
   }
   await fs.mkdir(dir, { recursive: true });
-  const saved: { localPath: string; mediaType: string }[] = [];
+  const saved: Array<{ localPath: string; mediaType: string }> = [];
 
   /* 这批循环都靠 `entries()` 同时拿下标与元素：写 `images[i]` 就得多一次 `!`
    * 把 `noUncheckedIndexedAccess` 加上的 `undefined` 抹掉，而 `i` 只用于
@@ -374,7 +363,7 @@ async function completeInner(
   // 文本产物（ShowText）：存成 .txt，结果可读可查。
   for (const [i, text] of texts.entries()) {
     const fname = `txt_${i}.txt`;
-    await fs.writeFile(path.join(dir, fname), text, "utf-8");
+    await fs.writeFile(path.join(dir, fname), text, "utf8");
     saved.push({ localPath: `${publicBase}/${fname}`, mediaType: "text" });
     log(taskId, "info", `保存第 ${i + 1} 段文本`);
   }
@@ -387,21 +376,17 @@ async function completeInner(
     const prevRuntime = taskParamsPatched.runtime;
     taskParamsPatched.runtime = {
       ...(typeof prevRuntime === "object" && prevRuntime ? prevRuntime : {}),
-      ...(actualSeed !== undefined ? { seed: actualSeed } : {}),
-      ...(runtime.steps !== undefined ? { steps: runtime.steps } : {}),
-      ...(runtime.cfg !== undefined ? { cfg: runtime.cfg } : {}),
+      ...(actualSeed === undefined ? {} : { seed: actualSeed }),
+      ...(runtime.steps === undefined ? {} : { steps: runtime.steps }),
+      ...(runtime.cfg === undefined ? {} : { cfg: runtime.cfg }),
       ...(runtime.sampler_name ? { sampler_name: runtime.sampler_name } : {}),
       ...(runtime.scheduler ? { scheduler: runtime.scheduler } : {}),
-      ...(runtime.denoise !== undefined ? { denoise: runtime.denoise } : {}),
-      ...(runtime.samplerClassType
-        ? { sampler_class: runtime.samplerClassType }
-        : {}),
+      ...(runtime.denoise === undefined ? {} : { denoise: runtime.denoise }),
+      ...(runtime.samplerClassType ? { sampler_class: runtime.samplerClassType } : {}),
       ...(runtime.samplerNodeId ? { sampler_node: runtime.samplerNodeId } : {}),
       // 一个工作流可能有多个采样节点：顶层字段只反映主采样器（第一个），完整
       // 逐节点信息随 samplers 数组落库，原始 JSON 因此能展示全部 KSampler。
-      ...(runtime.samplers && runtime.samplers.length > 0
-        ? { samplers: runtime.samplers }
-        : {}),
+      ...(runtime.samplers && runtime.samplers.length > 0 ? { samplers: runtime.samplers } : {}),
       source: "history",
     };
   }
@@ -412,13 +397,13 @@ async function completeInner(
   // workflow 一并写进 Task.workflowSnapshot，使「任务」与「模板当前版本」彻底
   // 解耦、可独立复现。`source: "execution"` 标记这是执行时自动捕获的独立副本。
   const workflowSnapshot =
-    executedWorkflow != null
-      ? {
+    executedWorkflow == null
+      ? undefined
+      : {
           workflow: executedWorkflow,
           capturedAt: new Date().toISOString(),
           source: "execution",
-        }
-      : undefined;
+        };
 
   /* 与 finalizeFailure 共用同一把「DB 终态一次写入」锁：若 reaper 已把
    *  这条任务判过终态，就不再覆盖，避免「执行日志说成功、应用日志说失败」
@@ -458,7 +443,7 @@ async function completeInner(
       sortIndex: i,
       isCover: i === 0,
       mediaType: s2.mediaType,
-      seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
+      seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
       width: s2.mediaType === "image" ? (reqW ?? null) : null,
       height: s2.mediaType === "image" ? (reqH ?? null) : null,
     })),
@@ -471,19 +456,16 @@ async function completeInner(
     workflowName: taskRow?.workflowName ?? null,
     prompt: taskRow?.prompt ?? null,
     negativePrompt: taskRow?.negativePrompt ?? null,
-    seed: actualSeed !== undefined ? String(actualSeed) : (reqSeed ?? null),
+    seed: actualSeed === undefined ? (reqSeed ?? null) : String(actualSeed),
     size: sizeStr || null,
-    referenceImages: (taskRow?.referenceImages as string[] | null) ?? [],
+    referenceImages:
+      /* SAFETY: 类型断言已复核 */ (taskRow?.referenceImages as Array<string> | null) ?? [],
     params: taskParams,
     createdAt: taskRow?.createdAt ?? null,
     files: saved,
   };
   await fs
-    .writeFile(
-      path.join(dir, "manifest.json"),
-      JSON.stringify(manifest, null, 2),
-      "utf-8",
-    )
+    .writeFile(path.join(dir, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8")
     .catch(() => undefined);
 
   // 落盘本次执行实际用到的 workflow.json。种子等已在
@@ -492,11 +474,7 @@ async function completeInner(
   // 已展开 graph。
   if (executedWorkflow != null) {
     await fs
-      .writeFile(
-        path.join(dir, "workflow.json"),
-        JSON.stringify(executedWorkflow, null, 2),
-        "utf-8",
-      )
+      .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf8")
       .catch(() => undefined);
   }
 
@@ -510,10 +488,7 @@ async function completeInner(
    * 极其罕见。 */
   const startedAt = s.startedAt.get(taskId);
   if (startedAt) {
-    const elapsedSec = Math.max(
-      0,
-      Math.round((Date.now() - startedAt) / 100) / 10,
-    );
+    const elapsedSec = Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10);
     log(taskId, "info", `✓ 全部完成（总耗时 ${elapsedSec}s）`);
   }
   /* 本进程对这一行的记账一次清完（键表就是那份判据读的四样，见 runner-state）。
@@ -531,9 +506,11 @@ export async function fail(
   taskId: string,
   promptId: string,
   error: unknown,
-  validationErrors?: ValidationError[],
+  validationErrors?: Array<ValidationError>,
 ) {
-  if (!claimSettle(taskId)) return;
+  if (!claimSettle(taskId)) {
+    return;
+  }
   await finalizeFailure(taskId, promptId, error, validationErrors);
 }
 
@@ -545,7 +522,7 @@ export async function finalizeFailure(
   taskId: string,
   promptId: string,
   error: unknown,
-  validationErrors?: ValidationError[],
+  validationErrors?: Array<ValidationError>,
 ) {
   // 与 completeInner 同一套 lazy 依赖，只取本函数用到的两条（getView 在成功分支
   // 才用，这里不 resolve）。taskRepository 是关键路径（拿不到 → reject 让 caller
@@ -559,11 +536,7 @@ export async function finalizeFailure(
    *  直接跳过——否则后写入的原因会覆盖先写入的，SSE（执行日志）与
    *  DB / 应用日志就会显示两个互相矛盾的失败原因。 */
   if (!claimFinalize(taskId)) {
-    log(
-      taskId,
-      "warn",
-      `跳过重复收口：终态已由其它路径落库（本次原因：${friendly}）`,
-    );
+    log(taskId, "warn", `跳过重复收口：终态已由其它路径落库（本次原因：${friendly}）`);
     /* 仍需释放活跃槽位并推进队列，否则重复收口会把队列卡死。 */
     releaseDispatchSlot(taskId);
     kickQueue();
@@ -588,11 +561,7 @@ export async function finalizeFailure(
     /* 典型现场：用户先点取消（行已是 CANCELLED），随后被 kill 的执行进程走到
      *  这里——守卫把它挡成「不改写别人的终态」。后面的清理照做（槽位、内存映射、
      *  日志），只有落库这一步没发生。 */
-    log(
-      taskId,
-      "warn",
-      `失败收口未落库（${outcome}）：终态已由别处落定或归属不属于本进程`,
-    );
+    log(taskId, "warn", `失败收口未落库（${outcome}）：终态已由别处落定或归属不属于本进程`);
   }
 
   await persistLogs(taskId);

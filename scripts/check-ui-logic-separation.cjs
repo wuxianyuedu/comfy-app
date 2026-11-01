@@ -34,9 +34,13 @@ function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === ".next") continue;
+      if (e.name === "node_modules" || e.name === ".next") {
+        continue;
+      }
       walk(p, out);
-    } else out.push(p);
+    } else {
+      out.push(p);
+    }
   }
   return out;
 }
@@ -44,7 +48,7 @@ const rel = (p) =>
   p
     .split(path.sep)
     .join("/")
-    .replace(ROOT.split(path.sep).join("/") + "/", "");
+    .replace(`${ROOT.split(path.sep).join("/")}/`, "");
 
 /** 指标作用域：视图层（组件 + 路由页面）。Route Handler 是服务端入口，不计。 */
 const RATCHET_DIRS = ["src/components", "src/app"];
@@ -59,8 +63,7 @@ const RATCHET_EXCLUDE = [
 /** 硬规则作用域：全部源码。 */
 const HARD_DIRS = ["src"];
 
-const isTest = (r) =>
-  /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
+const isTest = (r) => /\.test\.[cm]?[jt]sx?$/.test(r) || r.includes("/__tests__/");
 
 /* ── 指标 ────────────────────────────────────────────────── */
 
@@ -105,43 +108,57 @@ function collect() {
 
   for (const dir of RATCHET_DIRS) {
     const abs = path.join(ROOT, dir);
-    if (!fs.existsSync(abs)) continue;
+    if (!fs.existsSync(abs)) {
+      continue;
+    }
     for (const f of walk(abs)) {
       const r = rel(f);
-      if (!/\.[jt]sx?$/.test(r) || r.endsWith(".d.ts")) continue;
-      if (isTest(r)) continue;
-      if (RATCHET_EXCLUDE.some((re) => re.test(r))) continue;
+      if (!/\.[jt]sx?$/.test(r) || r.endsWith(".d.ts")) {
+        continue;
+      }
+      if (isTest(r)) {
+        continue;
+      }
+      if (RATCHET_EXCLUDE.some((re) => re.test(r))) {
+        continue;
+      }
       const t = fs.readFileSync(f, "utf8");
       for (const [id, rule] of Object.entries(COUNT_RULES)) {
         const n = rule.count(t);
-        if (n > 0) (ratchet[r] ||= {})[id] = n;
+        if (n > 0) {
+          (ratchet[r] ||= {})[id] = n;
+        }
       }
       for (const [id, rule] of Object.entries(HINT_RULES)) {
         const n = rule.count(t);
-        if (n > 0) (hints[r] ||= {})[id] = n;
+        if (n > 0) {
+          (hints[r] ||= {})[id] = n;
+        }
       }
     }
   }
 
   for (const dir of HARD_DIRS) {
     const abs = path.join(ROOT, dir);
-    if (!fs.existsSync(abs)) continue;
+    if (!fs.existsSync(abs)) {
+      continue;
+    }
     for (const f of walk(abs)) {
       const r = rel(f);
-      if (!/\.[jt]sx?$/.test(r) || r.endsWith(".d.ts")) continue;
-      if (isTest(r)) continue;
+      if (!/\.[jt]sx?$/.test(r) || r.endsWith(".d.ts")) {
+        continue;
+      }
+      if (isTest(r)) {
+        continue;
+      }
       const t = fs.readFileSync(f, "utf8");
       // H1：逻辑模块（.ts）反引视图文件（.tsx）。
       // 只认 import/export 语句里的模块说明符——渲染链路（*-render-chain.ts）
       // 里那些 .tsx 是「点击复制路径」的调试用字符串常量，不是依赖。
-      if (/\.ts$/.test(r)) {
+      if (r.endsWith(".ts")) {
         const specs = [
-          ...(t.match(
-            /\bimport\s+(?:type\s+)?[^;]*?\bfrom\s*["']([^"']+)["']/g,
-          ) || []),
-          ...(t.match(
-            /\bexport\s+(?:\*|\{[^}]*\})\s*from\s*["']([^"']+)["']/g,
-          ) || []),
+          ...(t.match(/\bimport\s+(?:type\s+)?[^;]*?\bfrom\s*["']([^"']+)["']/g) || []),
+          ...(t.match(/\bexport\s+(?:\*|\{[^}]*\})\s*from\s*["']([^"']+)["']/g) || []),
           ...(t.match(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g) || []),
         ]
           .map(
@@ -151,16 +168,13 @@ function collect() {
                 [])[1],
           )
           .filter((s) => typeof s === "string" && s.endsWith(".tsx"));
-        if (specs.length)
-          hard.push(
-            `H1 逻辑模块反引 .tsx → ${r}（${[...new Set(specs)].join(", ")}）`,
-          );
+        if (specs.length) {
+          hard.push(`H1 逻辑模块反引 .tsx → ${r}（${[...new Set(specs)].join(", ")}）`);
+        }
       }
       // H2：lib 下不得出现 React
       if (r.startsWith("src/lib/") && /\bfrom\s+["']react["']/.test(t)) {
-        hard.push(
-          `H2 src/lib 内禁止 React → ${r}（改用 components/<feature>/hooks/）`,
-        );
+        hard.push(`H2 src/lib 内禁止 React → ${r}（改用 components/<feature>/hooks/）`);
       }
     }
   }
@@ -169,7 +183,11 @@ function collect() {
 
 function total(map) {
   let n = 0;
-  for (const v of Object.values(map)) for (const c of Object.values(v)) n += c;
+  for (const v of Object.values(map)) {
+    for (const c of Object.values(v)) {
+      n += c;
+    }
+  }
   return n;
 }
 
@@ -189,16 +207,12 @@ for (const [file, counts] of Object.entries(now.ratchet)) {
   }
 }
 
-const hintLines = Object.entries(now.hints).map(
-  ([r, c]) => `  ${r}（内联 async ${c.S4} 处）`,
-);
+const hintLines = Object.entries(now.hints).map(([r, c]) => `  ${r}（内联 async ${c.S4} 处）`);
 
 /* 判决行只有一处出处（`scripts/ci-log.mjs`，ISSUE #2506）。提示行留在判决**之前** ——
  * 它讲的是「不计入的那些」，排在红之后会被读成「也是这次要修的东西」。 */
 if (hintLines.length) {
-  console.log(
-    "[ui-logic] 内联 async 处理器（仅提示，不计入）：\n" + hintLines.join("\n"),
-  );
+  console.log(`[ui-logic] 内联 async 处理器（仅提示，不计入）：\n${hintLines.join("\n")}`);
 }
 
 if (problems.length) {

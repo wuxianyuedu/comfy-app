@@ -16,78 +16,82 @@ import type { FilmStatus, ShotStatus } from "~/lib/film/film-status";
 
 export type ShotMode = "txt2img" | "img2video" | "transition";
 
-export interface FilmShot {
+export type FilmShot = {
+  duration: number | null;
+  heading: string | null;
   id: string;
   order: number;
-  heading: string | null;
+  progress: number;
   prompt: string;
   status: ShotStatus;
-  progress: number;
   videoPath: string | null;
-  duration: number | null;
-}
+};
 
-export interface Film {
+export type Film = {
+  bgmName: string | null;
+  error: string | null;
+  finalVideo: string | null;
+  fps: number;
+  framesPerShot: number;
   id: string;
-  title: string;
+  logs: Array<{ level: string; msg: string; t: number }> | null;
+  progress: number;
   script: string;
-  type: string;
-  styleSlug: string | null;
+  shots: Array<FilmShot>;
   /** 成片画幅：库存的是**尺寸表达 JSON**（`lib/size-presets` 的 `SizeSpec`）；
    *  老行里是 "1280x720" 字符串 —— 展示/消费前用 `toSizeSpec` 归一。 */
   size: string;
-  fps: number;
-  framesPerShot: number;
-  subtitleOn: boolean;
-  bgmName: string | null;
   status: FilmStatus;
-  progress: number;
-  finalVideo: string | null;
-  error: string | null;
-  logs: { t: number; level: string; msg: string }[] | null;
-  shots: FilmShot[];
-}
+  styleSlug: string | null;
+  subtitleOn: boolean;
+  title: string;
+  type: string;
+};
 
 /** 时间轴编辑器的镜头条目（当前为设计稿样例数据，未接后端）。 */
-export interface ShotListItem {
-  id: string;
-  name: string;
+export type ShotListItem = {
   duration: string;
+  id: string;
   mode: ShotMode;
+  name: string;
+  selected?: boolean;
   status: ShotStatus;
   /** 该镜已产出的首帧 / 图（项目真实镜头有则显缩略图）。 */
   thumbnailUrl?: string;
-  selected?: boolean;
-}
+};
 
 /** production 的镜头状态（idle/queued/running/done/failed/stale）→ 成片列表大写态。 */
 function shotStatusToFilmStatus(status: unknown): ShotStatus {
   switch (status) {
-    case "done":
+    case "done": {
       return "SUCCEEDED";
+    }
     case "running":
-    case "queued":
+    case "queued": {
       return "RUNNING";
-    case "failed":
+    }
+    case "failed": {
       return "FAILED";
-    default:
+    }
+    default: {
       return "IDLE";
+    }
   }
 }
 
 /** 把统一项目的 `production.shots`（unknown 记录）映射为成片左栏的镜头列表（纯函数）。 */
-export function productionShotsToShotList(shots: unknown[]): ShotListItem[] {
-  const list: ShotListItem[] = [];
+export function productionShotsToShotList(shots: Array<unknown>): Array<ShotListItem> {
+  const list: Array<ShotListItem> = [];
   for (const raw of shots) {
-    if (!isRecord(raw) || typeof raw.id !== "string") continue;
+    if (!isRecord(raw) || typeof raw.id !== "string") {
+      continue;
+    }
     const name =
       (typeof raw.sceneHeading === "string" && raw.sceneHeading) ||
       (typeof raw.prompt === "string" && raw.prompt.slice(0, 24)) ||
       `镜头 ${list.length + 1}`;
     const duration =
-      typeof raw.duration === "number"
-        ? `${fixed(raw.duration, 1)}s`
-        : EMPTY_PLACEHOLDER;
+      typeof raw.duration === "number" ? `${fixed(raw.duration, 1)}s` : EMPTY_PLACEHOLDER;
     list.push({
       id: raw.id,
       name,
@@ -101,13 +105,13 @@ export function productionShotsToShotList(shots: unknown[]): ShotListItem[] {
 }
 
 /** 时间轴上的一段素材条。 */
-export interface TimelineClip {
+export type TimelineClip = {
+  colorClass: string;
   id: string;
   label: string;
-  width: number /* px proportion */;
-  colorClass: string;
   textColorClass: string;
-}
+  width: number /* px proportion */;
+};
 
 /* ── 表单默认值（原组件内的 useState 初始值）── */
 
@@ -139,7 +143,7 @@ export function formatShotDuration(seconds: number): string {
 
 /* 标成**非空数组**：`MOCK_SHOTS[0]` 用作「没选中任何镜头」时的兜底项
  *（`FilmStudio` 的 `selectedShot`），类型上直接是元素而非 `| undefined`。 */
-export const MOCK_SHOTS: [ShotListItem, ...ShotListItem[]] = [
+export const MOCK_SHOTS: [ShotListItem, ...Array<ShotListItem>] = [
   {
     id: "shot-1",
     name: "开场 · 城市全景",
@@ -164,7 +168,7 @@ export const MOCK_SHOTS: [ShotListItem, ...ShotListItem[]] = [
   },
 ];
 
-export const VIDEO_CLIPS: TimelineClip[] = [
+export const VIDEO_CLIPS: Array<TimelineClip> = [
   {
     id: "vc-1",
     label: "开场全景",
@@ -189,10 +193,7 @@ export const MODE_LABELS: Record<ShotMode, string> = {
   transition: "自动转场",
 };
 
-export const STATUS_BADGE: Record<
-  ShotStatus,
-  { bg: string; text: string; label: string }
-> = {
+export const STATUS_BADGE: Record<ShotStatus, { bg: string; label: string; text: string }> = {
   IDLE: { bg: "bg-subtle", text: "text-ink-fainter", label: "待处理" },
   QUEUED: {
     bg: "bg-info/15",
@@ -227,7 +228,5 @@ export const STAGE_LABEL: Record<FilmStatus, string> = {
 
 /** 成片是否仍在推进（决定进度条与「取消」按钮的显隐）。 */
 export function isFilmRunning(status: FilmStatus): boolean {
-  return (
-    status === "GENERATING" || status === "COMPOSING" || status === "PARSING"
-  );
+  return status === "GENERATING" || status === "COMPOSING" || status === "PARSING";
 }

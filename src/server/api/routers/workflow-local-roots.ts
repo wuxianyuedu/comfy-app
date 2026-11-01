@@ -6,13 +6,10 @@
  * 文件、守卫用 `process.env` 启动快照），`.env` 新增目录后界面会出现
  * 「待导入」项、点击导入却被守卫拒绝。现在两个口径收成本文件的一份出处。
  */
-import { createHash } from "node:crypto";
 import path from "node:path";
+import { hash } from "node:crypto";
 
-import {
-  deriveComfyuiWorkflowsDir,
-  getSettingsSync,
-} from "~/lib/app-settings/app-settings.server";
+import { deriveComfyuiWorkflowsDir, getSettingsSync } from "~/lib/app-settings/app-settings.server";
 import { hasRawContent } from "~/lib/comfyui/execution-shape";
 import { readEnvVar } from "~/lib/envfile";
 import { normalizeSlashes } from "~/lib/path-display";
@@ -37,7 +34,7 @@ function executionShapeOf(row: { rawJson: unknown }): {
  *  主路径：设置里配置的 ComfyUI 安装根下的用户工作流目录（自动推导，
  *  见 deriveComfyuiWorkflowsDir —— 兼容 user/default/workflows 与旧 workflows）。
  *  `.env` 的 LOCAL_WORKFLOWS_PATH 仍作为覆盖项保留（向后兼容，可加扫额外目录）。 */
-function getLocalWorkflowRoots(): string[] {
+function getLocalWorkflowRoots(): Array<string> {
   const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
   const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
     .split(/[\n,]/)
@@ -48,9 +45,7 @@ function getLocalWorkflowRoots(): string[] {
 
 /* 给「磁盘上有、但还没导入过」的文件生成的稳定、确定的占位 id。 */
 function pendingId(absPath: string): string {
-  return (
-    "pending-" + createHash("sha1").update(absPath).digest("hex").slice(0, 12)
-  );
+  return `pending-${hash("sha1", absPath, "hex").slice(0, 12)}`;
 }
 
 /* 追加到 `list` 里的「本地待导入」占位行的形状。
@@ -61,34 +56,36 @@ function pendingId(absPath: string): string {
  * 同一份 payload 里出现两种形状（一处 `Date` 一处 ISO 串、一处权威类型一处
  * 泛对象）时，视图读任何一行都得先判形状 —— 那正是 #1460 要消掉的东西。
  * 两处都是 `Date`（superjson 过线保真）与 `WorkflowParamMap`（同一份读边界）。 */
-interface LocalPendingRow {
-  id: string;
-  name: string;
-  taskType: string;
-  modes: string[];
-  defaultMode: string | null;
+type LocalPendingRow = {
   createdAt: Date;
+  defaultMode: string | null;
+  hasRaw: boolean;
+  id: string;
+  isGenerative: boolean;
+  modelTags: Array<string>;
+  modes: Array<string>;
+  name: string;
   paramMap: WorkflowParamMap;
+  pending: boolean;
+  pendingMtime: number;
+  pendingSize: number;
+  preview: WorkflowPreview;
+  source: "local-pending";
   sourcePath: string;
   sourceRoot: string | undefined;
-  source: "local-pending";
-  typeLabel: string;
+  taskType: string;
   typeCategory: string;
   typeDescription: string;
-  isGenerative: boolean;
-  hasRaw: boolean;
+  typeLabel: string;
   usable: boolean;
-  preview: WorkflowPreview;
   workflowIO: WorkflowIOMap;
-  modelTags: string[];
-  pending: boolean;
-  pendingSize: number;
-  pendingMtime: number;
-}
+};
 
 /* 按 `localWorkflows.pathKey` 的同一口径归一化绝对路径。 */
 function pathKey(p: string): string {
-  if (!p) return "";
+  if (!p) {
+    return "";
+  }
   try {
     return normalizeSlashes(path.resolve(p).toLowerCase()).replace(/\/+$/, "");
   } catch {
@@ -99,18 +96,26 @@ function pathKey(p: string): string {
 /* 找出「`absPath` 是 `filePath` 路径前缀」的那个已配置根目录。 */
 function findRootFor(
   filePath: string,
-  roots: Array<{ rawPath: string; absPath: string }>,
+  roots: Array<{ absPath: string; rawPath: string }>,
 ): string | undefined {
-  if (!filePath || roots.length === 0) return undefined;
+  if (!filePath || roots.length === 0) {
+    return undefined;
+  }
   const target = pathKey(filePath);
-  if (!target) return undefined;
+  if (!target) {
+    return undefined;
+  }
   let best: { len: number; raw: string } | undefined;
   for (const r of roots) {
     const rk = pathKey(r.absPath);
-    if (!rk) continue;
+    if (!rk) {
+      continue;
+    }
     const exact = target === rk;
-    const child = target.startsWith(rk + "/");
-    if (!exact && !child) continue;
+    const child = target.startsWith(`${rk}/`);
+    if (!exact && !child) {
+      continue;
+    }
     if (!best || rk.length > best.len) {
       best = { len: rk.length, raw: r.rawPath };
     }
@@ -120,9 +125,9 @@ function findRootFor(
 
 function normalizePathKey(p: string): string {
   try {
-    return path.resolve(p).replace(/\\/g, "/").toLowerCase();
+    return path.resolve(p).replaceAll("\\", "/").toLowerCase();
   } catch {
-    return p.replace(/\\/g, "/").toLowerCase();
+    return p.replaceAll("\\", "/").toLowerCase();
   }
 }
 
@@ -131,7 +136,7 @@ function normalizePathKey(p: string): string {
  *  读 `LOCAL_WORKFLOWS_PATH` 与 `getLocalWorkflowRoots` 同走 `readEnvVar`：
  *  此前守卫用 `process.env`（启动快照），.env 新增目录后扫描器看得到、
  *  守卫却拒绝——「界面给得出待导入项、点了导入被拒」的死胡同。 */
-function getAllowedLocalWorkflowRoots(): string[] {
+function getAllowedLocalWorkflowRoots(): Array<string> {
   const derived = deriveComfyuiWorkflowsDir(getSettingsSync().comfyuiPath);
   const extra = (readEnvVar("LOCAL_WORKFLOWS_PATH") ?? "")
     .split(/[\n,]/)
@@ -145,7 +150,7 @@ function isWithinAllowedLocalWorkflowRoot(absPath: string): boolean {
   const key = normalizePathKey(absPath);
   return getAllowedLocalWorkflowRoots().some((root) => {
     const rk = normalizePathKey(root);
-    return key === rk || key.startsWith(rk + "/");
+    return key === rk || key.startsWith(`${rk}/`);
   });
 }
 

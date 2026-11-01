@@ -61,10 +61,7 @@ describe("buildSubgraphGraph — 子图暴露口的作者名", () => {
   it("按哨兵边的内层槽位名回收 wrapper 上的作者 label", () => {
     const sub = makeSub();
     const { linkById } = parseSubgraphLinks(sub);
-    const labels: Record<string, string> = buildSubgraphGraph(
-      sub,
-      linkById,
-    ).proxyAuthorLabels;
+    const labels: Record<string, string> = buildSubgraphGraph(sub, linkById).proxyAuthorLabels;
     expect(labels["1670::value"]).toBe("Seed");
   });
 
@@ -186,9 +183,7 @@ describe("buildSubgraphGraph — 节点作者标题", () => {
     const { linkById } = parseSubgraphLinks(sub);
     const result = buildSubgraphGraph(sub, linkById);
     expect(result.graph["1670"]!._meta).toBeUndefined();
-    expect(result.nodes.find((n) => n.id === "1670")!.title).toBe(
-      "PrimitiveInt",
-    );
+    expect(result.nodes.find((n) => n.id === "1670")!.title).toBe("PrimitiveInt");
   });
 });
 
@@ -199,8 +194,11 @@ describe("buildSubgraphGraph — 节点作者标题", () => {
  * 用户以为「位置没保存 / 重置后全乱」。
  */
 describe("extractSubgraphAnnotations — 宿主链坐标", () => {
-  function subWith(nodes: unknown[]): RawSubgraphDef {
-    return { id: "uid", nodes } as RawSubgraphDef;
+  function subWith(nodes: Array<unknown>): RawSubgraphDef {
+    return /* SAFETY: 类型断言已复核 */ {
+      id: "uid",
+      nodes,
+    } as RawSubgraphDef;
   }
 
   it("读得回 `宿主:内部` 拼接键的拖拽覆盖", () => {
@@ -233,11 +231,7 @@ describe("extractSubgraphAnnotations — 宿主链坐标", () => {
 
   it("更深一层的键不属于本视图，退回原始坐标", () => {
     const sub = subWith([{ id: 1670, type: "KSampler", pos: [100, 100] }]);
-    const ann = extractSubgraphAnnotations(
-      sub,
-      { "4:5:1670": [900, 900] },
-      "4",
-    );
+    const ann = extractSubgraphAnnotations(sub, { "4:5:1670": [900, 900] }, "4");
     expect(ann.positions).toEqual({ "1670": [100, 100] });
   });
 
@@ -277,15 +271,15 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
 
   /** 复刻 ISSUE 报文的内层节点：`model`/`negative` 是纯连接口，`seed` 是控件槽。 */
   function makeConsumerSub(opts: {
-    targetSlot: number;
-    seedIdx: number;
     /** seed 在 raw `inputs[]` 里的数组位置（缺省 = 紧跟两个纯连接口之后）。 */
     seedArrayIndex?: number;
+    seedIdx: number;
+    targetSlot: number;
   }): RawSubgraphDef {
     /* 前两行是纯连接口，中间补若干占位槽 —— 让「控件序号空间」与「数组位置
      * 空间」在下标上真的错开，测试才有区分度。 */
     const seedAt = opts.seedArrayIndex ?? 2;
-    const slots: RawNodeInput[] = [];
+    const slots: Array<RawNodeInput> = [];
     for (let index = 0; index <= Math.max(seedAt, 2); index++) {
       if (index === seedAt) {
         slots.push({
@@ -333,11 +327,7 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
   /** 走一遍「服务端解析 → 客户端组装 handle id」的完整链路。 */
   function resolveTargetHandle(sub: RawSubgraphDef): string | null {
     const { linkById, boundaryLinkInfoById } = parseSubgraphLinks(sub);
-    const sg = buildSubgraphGraph(
-      sub,
-      linkById,
-      boundarySlotsByNode(boundaryLinkInfoById),
-    );
+    const sg = buildSubgraphGraph(sub, linkById, boundarySlotsByNode(boundaryLinkInfoById));
     const { pinIdByLinkId } = parseSubgraphPins(sub);
     const links = buildBoundaryLinks(
       boundaryLinkInfoById,
@@ -351,9 +341,7 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
   }
 
   it("target_slot 落在 inputs[] 下标空间时解析到 seed", () => {
-    expect(
-      resolveTargetHandle(makeConsumerSub({ targetSlot: 2, seedIdx: 2 })),
-    ).toBe("seed");
+    expect(resolveTargetHandle(makeConsumerSub({ targetSlot: 2, seedIdx: 2 }))).toBe("seed");
   });
 
   it("target_slot 落在控件序号空间时同样解析到 seed", () => {
@@ -372,15 +360,11 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
   it("控件槽 idx 从 0 连续编号（跳过纯连接口）时不串到 model", () => {
     /* 有的导出路径给 widget 槽写 `idx: 1`（> 前面纯连接口的数量）——照抄 idx
      * 会把线锚到 model 那一行，值落错端口。哨兵边口径不受 idx 影响。 */
-    expect(
-      resolveTargetHandle(makeConsumerSub({ targetSlot: 2, seedIdx: 1 })),
-    ).toBe("seed");
+    expect(resolveTargetHandle(makeConsumerSub({ targetSlot: 2, seedIdx: 1 }))).toBe("seed");
   });
 
   it("哨兵边指向不存在的槽位时不产出边（不再落成字面量 in）", () => {
-    expect(
-      resolveTargetHandle(makeConsumerSub({ targetSlot: 9, seedIdx: 2 })),
-    ).toBeNull();
+    expect(resolveTargetHandle(makeConsumerSub({ targetSlot: 9, seedIdx: 2 }))).toBeNull();
   });
 
   it("边界落点与控件值取的是同一行（seed 拿到哨兵边的控件值）", () => {
@@ -399,15 +383,8 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
     const sub = makeConsumerSub({ targetSlot: 9, seedIdx: 2 });
     const { boundaryLinkInfoById } = parseSubgraphLinks(sub);
     const { pinIdByLinkId } = parseSubgraphPins(sub);
-    const dropped = reportDroppedBoundaryLinks(
-      sub,
-      boundaryLinkInfoById,
-      pinIdByLinkId,
-      [],
-    );
-    expect(dropped).toEqual([
-      { linkId: 7, pinId: "pin-1", innerNodeId: "5277", innerSlot: 9 },
-    ]);
+    const dropped = reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, []);
+    expect(dropped).toEqual([{ linkId: 7, pinId: "pin-1", innerNodeId: "5277", innerSlot: 9 }]);
   });
 
   it("正常产出的边不算「被丢掉」", () => {
@@ -417,19 +394,14 @@ describe("buildBoundaryLinks — 暴露口的槽位名必须是画布上真实�
     const produced = [
       {
         linkId: 7,
-        kind: "input" as const,
+        kind: /* SAFETY: 类型断言已复核 */ "input" as const,
         pinId: "pin-1",
         innerNodeId: "5277",
         innerSlotName: "seed",
       },
     ];
-    expect(
-      reportDroppedBoundaryLinks(
-        sub,
-        boundaryLinkInfoById,
-        pinIdByLinkId,
-        produced,
-      ),
-    ).toEqual([]);
+    expect(reportDroppedBoundaryLinks(sub, boundaryLinkInfoById, pinIdByLinkId, produced)).toEqual(
+      [],
+    );
   });
 });

@@ -32,7 +32,7 @@ import {
 /* 槽位→名字映射用的兜底「完整输入顺序」（控件 + 连线）。
  *  Raw 节点没有 `inputs[]` 时（老导出 / 被裁过的节点）只能按槽位序号查这张表
  *  拿名字；有 `inputs[]` 时一律以节点自带的名字为准。 */
-const FALLBACK_FULL: Record<string, string[]> = {
+const FALLBACK_FULL: Record<string, Array<string>> = {
   KSampler: [
     "model",
     "positive",
@@ -74,33 +74,35 @@ const FALLBACK_FULL: Record<string, string[]> = {
   DualCLIPLoader: ["clip_name1", "clip_name2", "type", "device"],
 };
 
-interface NodeInputSlot {
+type NodeInputSlot = {
+  link: number | null;
   name: string;
   type?: string;
-  link: number | null;
-}
+};
 
-interface IndexedNode {
+type IndexedNode = {
   id: string;
-  type: string;
-  mode: number;
-  virtual: boolean;
-  raw: RawNode;
   /** 按槽位顺序排列，索引即 slot index */
-  inputs: NodeInputSlot[];
-  outputTypes: string[];
-}
+  inputs: Array<NodeInputSlot>;
+  mode: number;
+  outputTypes: Array<string>;
+  raw: RawNode;
+  type: string;
+  virtual: boolean;
+};
 
-interface LinkRef {
+type LinkRef = {
   originId: string;
   originSlot: number;
-}
+};
 
 /** link id → 起点。每条 link 是 [link_id, src_id, src_slot, dst_id, dst_slot, type]。 */
 function buildLinkIndex(raw: RawWorkflow): Map<number, LinkRef> {
   const map = new Map<number, LinkRef>();
   for (const l of raw.links ?? []) {
-    if (!Array.isArray(l) || l.length < 5) continue;
+    if (!Array.isArray(l) || l.length < 5) {
+      continue;
+    }
     map.set(Number(l[0]), {
       originId: String(l[1]),
       originSlot: Number(l[2]),
@@ -122,11 +124,13 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
   for (const n of raw.nodes) {
     const id = String(n.id);
     const type = String(n.type);
-    const slots: NodeInputSlot[] = [];
+    const slots: Array<NodeInputSlot> = [];
 
     if (Array.isArray(n.inputs) && n.inputs.length) {
       for (const inp of n.inputs) {
-        if (!inp || typeof inp.name !== "string") continue;
+        if (!inp || typeof inp.name !== "string") {
+          continue;
+        }
         slots.push({
           name: inp.name,
           type: typeof inp.type === "string" ? inp.type : undefined,
@@ -135,14 +139,24 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
       }
     } else {
       const order = FALLBACK_FULL[type] ?? [];
-      for (const name of order) slots.push({ name, link: null });
+      for (const name of order) {
+        slots.push({ name, link: null });
+      }
       for (const l of raw.links ?? []) {
-        if (!Array.isArray(l) || l.length < 5) continue;
-        if (String(l[3]) !== id) continue;
+        if (!Array.isArray(l) || l.length < 5) {
+          continue;
+        }
+        if (String(l[3]) !== id) {
+          continue;
+        }
         const slot = slots[Number(l[4])];
-        if (!slot) continue;
+        if (!slot) {
+          continue;
+        }
         slot.link = Number(l[0]);
-        if (typeof l[5] === "string") slot.type = l[5];
+        if (typeof l[5] === "string") {
+          slot.type = l[5];
+        }
       }
     }
 
@@ -154,9 +168,7 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
       raw: n,
       inputs: slots,
       outputTypes: Array.isArray(n.outputs)
-        ? n.outputs.map((output) =>
-            output && typeof output.type === "string" ? output.type : "",
-          )
+        ? n.outputs.map((output) => (output && typeof output.type === "string" ? output.type : ""))
         : [],
     });
   }
@@ -170,11 +182,11 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
  * 不含任何「转成 API 提交」的语义：控件值不由这里映射
  *（画布的参数值走 `rawInputsById` 与 rawNodes 的 `widgets_values` 两处）。
  */
-export function buildRawViewGraph(
-  raw: RawWorkflow,
-): Record<string, ApiWorkflowNode> {
+export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowNode> {
   const graph: Record<string, ApiWorkflowNode> = {};
-  if (!Array.isArray(raw.nodes)) return graph;
+  if (!Array.isArray(raw.nodes)) {
+    return graph;
+  }
 
   const linkIndex = buildLinkIndex(raw);
   const index = indexRawNodes(raw);
@@ -182,9 +194,13 @@ export function buildRawViewGraph(
   for (const idx of index.values()) {
     const inputs: Record<string, unknown> = {};
     for (const slot of idx.inputs) {
-      if (slot.link == null) continue;
+      if (slot.link == null) {
+        continue;
+      }
       const ref = linkIndex.get(slot.link);
-      if (!ref) continue;
+      if (!ref) {
+        continue;
+      }
       inputs[slot.name] = [ref.originId, ref.originSlot];
     }
 
@@ -193,25 +209,36 @@ export function buildRawViewGraph(
      * inputTypes/outputTypes 供 `execution-graph` 在提交前穿透旁路节点。 */
     const meta: ApiNodeMeta = {};
     const title = idx.raw.title ?? idx.raw.properties?.title;
-    if (title) meta.title = toStringValue(title);
-    if (idx.mode !== NODE_MODE_ALWAYS) meta.mode = idx.mode;
-    if (idx.virtual) meta.virtual = true;
+    if (title) {
+      meta.title = toStringValue(title);
+    }
+    if (idx.mode !== NODE_MODE_ALWAYS) {
+      meta.mode = idx.mode;
+    }
+    if (idx.virtual) {
+      meta.virtual = true;
+    }
 
-    const inactive =
-      idx.virtual ||
-      idx.mode === NODE_MODE_NEVER ||
-      idx.mode === NODE_MODE_BYPASS;
+    const inactive = idx.virtual || idx.mode === NODE_MODE_NEVER || idx.mode === NODE_MODE_BYPASS;
     if (inactive) {
       meta.inputOrder = idx.inputs.map((input) => input.name);
       const types: Record<string, string> = {};
-      for (const s of idx.inputs) if (s.type) types[s.name] = s.type;
-      if (Object.keys(types).length) meta.inputTypes = types;
-      if (idx.outputTypes.length) meta.outputTypes = idx.outputTypes;
+      for (const s of idx.inputs) {
+        if (s.type) {
+          types[s.name] = s.type;
+        }
+      }
+      if (Object.keys(types).length) {
+        meta.inputTypes = types;
+      }
+      if (idx.outputTypes.length) {
+        meta.outputTypes = idx.outputTypes;
+      }
       if (idx.type === "PrimitiveNode") {
-        const value = Array.isArray(idx.raw.widgets_values)
-          ? idx.raw.widgets_values[0]
-          : undefined;
-        if (value !== undefined) meta.value = value;
+        const value = Array.isArray(idx.raw.widgets_values) ? idx.raw.widgets_values[0] : undefined;
+        if (value !== undefined) {
+          meta.value = value;
+        }
       }
     }
 

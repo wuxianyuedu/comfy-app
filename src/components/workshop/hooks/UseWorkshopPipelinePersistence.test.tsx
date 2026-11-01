@@ -44,7 +44,9 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 function requestUrl(input: RequestInfo | URL): string {
-  if (typeof input === "string") return input;
+  if (typeof input === "string") {
+    return input;
+  }
   return input instanceof URL ? input.href : input.url;
 }
 
@@ -76,7 +78,8 @@ describe("useWorkshopPipeline 剧本持久化回归（Phase 2：按 proj_* 键�
     const stored: string | null = localStorage.getItem(key);
     expect(stored).toBeTruthy();
     expect(
-      (JSON.parse(stored!) as { scriptMarkdown: string }).scriptMarkdown,
+      /* SAFETY: 类型断言已复核 */ (JSON.parse(stored!) as { scriptMarkdown: string })
+        .scriptMarkdown,
     ).toBe(SCRIPT);
 
     // 切回 → 重挂载，剧本应恢复而非清空

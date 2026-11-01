@@ -86,18 +86,16 @@ describe("③ 不挑刺：干净元素一条都不报", () => {
   });
 
   it("空数组不算问题（没写不等于写坏）", () => {
-    expect(
-      auditDraftElements({ scenes: [], characters: [], shots: [] }),
-    ).toEqual([]);
+    expect(auditDraftElements({ scenes: [], characters: [], shots: [] })).toEqual([]);
   });
 });
 
 describe("② 不静默：每一种脏法都要被点名", () => {
   /** 每个用例给一份「只有某一处脏」的草稿，断言报出来的 `kind + field`。 */
   const cases: Array<{
-    name: string;
     draft: DraftElements;
     expect: Array<[string, string | null]>;
+    name: string;
   }> = [
     {
       name: "场景缺 id",
@@ -116,7 +114,7 @@ describe("② 不静默：每一种脏法都要被点名", () => {
     },
     {
       name: "建议镜数是 NaN",
-      draft: draftOf({ scenes: [{ ...CLEAN_SCENES[0], shotCount: NaN }] }),
+      draft: draftOf({ scenes: [{ ...CLEAN_SCENES[0], shotCount: Number.NaN }] }),
       expect: [["scene", "shotCount"]],
     },
     {
@@ -185,23 +183,20 @@ describe("② 不静默：每一种脏法都要被点名", () => {
   for (const item of cases) {
     it(item.name, () => {
       const issues = auditDraftElements(item.draft);
-      expect(issues.map((issue) => [issue.kind, issue.field])).toEqual(
-        item.expect,
-      );
+      expect(issues.map((issue) => [issue.kind, issue.field])).toEqual(item.expect);
       // 每一条都得带一句能行动的原因
-      for (const issue of issues)
+      for (const issue of issues) {
         expect(issue.reason.length).toBeGreaterThan(8);
+      }
     });
   }
 
   it("枚举取值跟着 types.ts 走：新增一个 ShotStatus 不必改判据", async () => {
     const { SHOT_STATUSES } = await import("./types");
-    const known = SHOT_STATUSES[SHOT_STATUSES.length - 1];
-    expect(
-      auditDraftElements(
-        draftOf({ shots: [{ ...CLEAN_SHOTS[0], status: known }] }),
-      ),
-    ).toEqual([]);
+    const known = SHOT_STATUSES.at(-1);
+    expect(auditDraftElements(draftOf({ shots: [{ ...CLEAN_SHOTS[0], status: known }] }))).toEqual(
+      [],
+    );
   });
 });
 
@@ -237,9 +232,7 @@ describe("① 不丢数据：脏元素留在原地，下标指得回去", () => 
       draftOf({ characters: [{ id: "c7", name: "小美", styleTags: 3 }] }),
     );
     expect(issues[0]?.label).toBe("角色 #1「c7」");
-    const noId = auditDraftElements(
-      draftOf({ characters: [{ name: "没有 id", styleTags: [] }] }),
-    );
+    const noId = auditDraftElements(draftOf({ characters: [{ name: "没有 id", styleTags: [] }] }));
     expect(noId[0]?.label).toBe("角色 #1");
     // 可选字段缺席不报（否则每条老草稿都会被念一遍）—— 只报真正缺的那个 id
     expect(noId.map((issue) => issue.field)).toEqual(["id"]);
@@ -252,10 +245,7 @@ describe("与 parseDraftDto 配对：脏数据既还在、又被报出来", () =
     meta: { title: "T", type: "short_video", tone: "", logline: "" },
     scriptMarkdown: "",
     scenes: CLEAN_SCENES,
-    characters: [
-      CLEAN_CHARACTERS[0],
-      { id: "c2", name: "老张", styleTags: "厚涂" },
-    ],
+    characters: [CLEAN_CHARACTERS[0], { id: "c2", name: "老张", styleTags: "厚涂" }],
     shots: [CLEAN_SHOTS[0], { index: "2", sceneId: "s1", characterIds: "c2" }],
   };
 
@@ -275,9 +265,7 @@ describe("与 parseDraftDto 配对：脏数据既还在、又被报出来", () =
     const issues = auditDraftElements(draft);
     // 按「哪几条元素」断言而不是数问题条数：一条元素可以坏好几个字段，
     // 数条数会把「漏判一个字段」这种退化算成通过。
-    const affected = new Set(
-      issues.map((issue) => `${issue.kind}#${String(issue.index)}`),
-    );
+    const affected = new Set(issues.map((issue) => `${issue.kind}#${String(issue.index)}`));
     expect([...affected].sort()).toEqual(["character#1", "shot#1"]);
     // 干净的那两条绝不该被牵连
     expect(issues.some((issue) => issue.kind === "scene")).toBe(false);
@@ -309,9 +297,7 @@ describe("界面那句话", () => {
   });
 
   it("同种类多条只数一次条数，不数问题数", () => {
-    const issues = auditDraftElements(
-      draftOf({ shots: [{ id: "" }, { id: "ok", prompt: 1 }] }),
-    );
+    const issues = auditDraftElements(draftOf({ shots: [{ id: "" }, { id: "ok", prompt: 1 }] }));
     expect(issues.length).toBeGreaterThan(2);
     expect(describeDraftIssues(issues)).toContain("2 镜头");
   });

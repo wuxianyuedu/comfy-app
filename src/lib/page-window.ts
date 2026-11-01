@@ -31,13 +31,13 @@
 import { clamp } from "~/lib/clamp";
 
 /** 一页 / 一个窗口的条目数与它在原列表里的位置（左闭右开）。 */
-export interface PageWindow<T> {
-  entries: T[];
+export type PageWindow<T> = {
+  entries: Array<T>;
   /** 钳回有效区间之后的页码（从 1 起）。 */
   page: number;
   /** 总页数，**至少 1**（空列表也是「1 页」，只是这一页有 0 条）。 */
   totalPages: number;
-}
+};
 
 /** `pageSize` 的合法下限：0 / 负数 / `NaN` 都会让 `ceil(total / size)` 变成 `Infinity`。 */
 function safeSize(pageSize: number): number {
@@ -69,7 +69,7 @@ function normalizeIndex(value: number, fallback: number): number {
  * 期望的是落回末页那一档，而不是看到一片空白。
  */
 export function tailPages<T>(
-  items: readonly T[],
+  items: ReadonlyArray<T>,
   page: number,
   pageSize: number,
 ): PageWindow<T> {
@@ -93,11 +93,7 @@ export function tailPages<T>(
  * 钳过的页码、另一处用的是原始页码 —— 页码越界时它们会给出不同答案
  *（虽然那时页面正好也被钳回了，差值恰好被 `max(0, …)` 吃掉，所以一直没人发现）。
  */
-export function countAfterPage(
-  total: number,
-  page: number,
-  pageSize: number,
-): number {
+export function countAfterPage(total: number, page: number, pageSize: number): number {
   const size = safeSize(pageSize);
   const totalPages = Math.max(1, Math.ceil(total / size));
   const safePage = clamp(normalizeIndex(page, 1), 1, totalPages);
@@ -127,9 +123,11 @@ export const LOG_MODAL_MAX_ROWS = 300;
  * 「第 N 页是哪一段」（要能往前翻），本函数回答「最新的 N 条是哪几条」。
  * 硬合成一支会需要一个「有没有页码」的开关，而那是调用处该说的事。
  */
-export function tailWindow<T>(items: readonly T[], size: number): T[] {
+export function tailWindow<T>(items: ReadonlyArray<T>, size: number): Array<T> {
   const n = safeSize(size);
-  if (n >= items.length) return items.slice();
+  if (n >= items.length) {
+    return [...items];
+  }
   return items.slice(items.length - n);
 }
 
@@ -152,31 +150,29 @@ export function tailWindow<T>(items: readonly T[], size: number): T[] {
  * 只在放入得下时复制、只在放不下时原地搬，两条合起来就是「每次追加恰好一趟
  * O(size) 搬移」的最小写法。
  */
-export function tailWindowAppend<T>(
-  items: readonly T[],
-  item: T,
-  size: number,
-): T[] {
+export function tailWindowAppend<T>(items: ReadonlyArray<T>, item: T, size: number): Array<T> {
   const n = safeSize(size);
   /* 窗口未满：复制 + 追加（必须换引用，见上）。这一支就是
    * `tailWindow([...items, item], n)` 本身 —— 归一口径不必在这里再算一遍，
    * 直接借 `tailWindow` 的那一处定义。 */
-  if (items.length < n) return tailWindow([...items, item], n);
+  if (items.length < n) {
+    return tailWindow([...items, item], n);
+  }
   /* 窗口已满：原数组长度就是上限，`shift` + `push` 后仍恰为 `n` 条，
    * 不必再切片。 */
-  const next = items as T[];
+  const next = /* SAFETY: 类型断言已复核 */ items as Array<T>;
   next.shift();
   next.push(item);
   return next;
 }
 
 /** 分块遍历：第 `index` 块在原列表里的位置（左闭右开）。 */
-export interface ChunkRange {
-  start: number;
+export type ChunkRange = {
   end: number;
+  start: number;
   /** 总块数，至少 1（空列表也是「1 块」的空块）。 */
   total: number;
-}
+};
 
 /**
  * **平行分块**：把列表从头按固定片长切开，返回第 `index` 块的范围。
@@ -188,11 +184,7 @@ export interface ChunkRange {
  * 算进度、标记已处理），交出范围比交出数组更贴用途 —— 也让「块内元素个数」
  * 与「块在原文里的位置」不会各算一遍。
  */
-export function chunkRange(
-  totalItems: number,
-  size: number,
-  index: number,
-): ChunkRange {
+export function chunkRange(totalItems: number, size: number, index: number): ChunkRange {
   const s = safeSize(size);
   /* 条目数先归零：负数会让下面的 `Math.min` 给出负的 `end`（`slice(0, -5)`
    * 不是空窗口，而是「从末尾倒数」）。 */

@@ -13,23 +13,23 @@ import { reviewScript, reviseScript } from "~/lib/production/run-client";
 import type { ReviewVerdict } from "~/lib/production/review-types";
 import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
-export interface ScriptReviewController {
-  verdict: ReviewVerdict | null;
-  /** 完整分数曲线（旧→新含本轮）；还没评过 → 空数组。 */
-  history: ReviewVerdict[];
-  reviewing: boolean;
-  revising: boolean;
+export type ScriptReviewController = {
   error: string;
+  /** 完整分数曲线（旧→新含本轮）；还没评过 → 空数组。 */
+  history: Array<ReviewVerdict>;
   review: () => Promise<void>;
+  reviewing: boolean;
   revise: () => Promise<void>;
-}
+  revising: boolean;
+  verdict: ReviewVerdict | null;
+};
 
 export function useScriptReview(
   projectId: string,
   onScriptRevised: (markdown: string) => void,
 ): ScriptReviewController {
   const [verdict, setVerdict] = useState<ReviewVerdict | null>(null);
-  const [history, setHistory] = useState<ReviewVerdict[]>([]);
+  const [history, setHistory] = useState<Array<ReviewVerdict>>([]);
   const [error, setError] = useState("");
   const reviewBusy = useBusyAction();
   const reviseBusy = useBusyAction();
@@ -41,7 +41,9 @@ export function useScriptReview(
   }, []);
 
   const review = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     guardRef.current.dispose();
     const guard = beginStaleRun();
     guardRef.current = guard;
@@ -53,16 +55,18 @@ export function useScriptReview(
           setVerdict(outcome.verdict);
           setHistory(outcome.history);
         });
-      } catch (e) {
+      } catch (error_) {
         guard.commit(() => {
-          setError(e instanceof Error ? e.message : "评审失败");
+          setError(error_ instanceof Error ? error_.message : "评审失败");
         });
       }
     });
   }, [projectId, reviewBusy]);
 
   const revise = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      return;
+    }
     guardRef.current.dispose();
     const guard = beginStaleRun();
     guardRef.current = guard;
@@ -78,9 +82,9 @@ export function useScriptReview(
         });
         // 定向改写完成后立即复评 —— 闭环在界面侧一次点击走完。
         await review();
-      } catch (e) {
+      } catch (error_) {
         guard.commit(() => {
-          setError(e instanceof Error ? e.message : "改写失败");
+          setError(error_ instanceof Error ? error_.message : "改写失败");
         });
       }
     });

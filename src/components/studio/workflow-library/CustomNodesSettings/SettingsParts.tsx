@@ -24,10 +24,10 @@ export function PortRow({
   type,
   name,
 }: {
-  side: "in" | "out";
   color: string;
-  type: string;
   name: string;
+  side: "in" | "out";
+  type: string;
 }) {
   const isOut = side === "out";
   // ComfyUI 给输出固定用青色调，输入则按类别派生。
@@ -35,9 +35,7 @@ export function PortRow({
   //`workflow-param-mapping-ui` 的`PARAM_CLASS_COLOR` 同源。
   const dotColor = isOut ? "#06B6D4" : color;
   return (
-    <div
-      className={`flex min-w-0 items-center gap-1 ${isOut ? "flex-row-reverse" : ""}`}
-    >
+    <div className={`flex min-w-0 items-center gap-1 ${isOut ? "flex-row-reverse" : ""}`}>
       <span
         className="inline-block shrink-0 rounded-full"
         style={{ width: 7, height: 7, background: dotColor }}
@@ -56,8 +54,8 @@ export function PortRow({
         className={`text-ink-soft text-2xs min-w-0 truncate font-semibold ${
           isOut ? "text-right" : ""
         }`}
-        title={name}
         style={isOut ? { textAlign: "right" } : undefined}
+        title={name}
       >
         {name}
       </span>
@@ -75,32 +73,40 @@ export function PortRow({
  * 「空值显示什么」由调用处经`displayValue` 决定 —— 这里只负责「有值时
  * 怎么成文本」，返回空串即表示「没值」。 */
 function widgetValueToText(v: unknown): string {
-  if (v == null) return "";
-  if (typeof v === "object") return JSON.stringify(v);
-  if (typeof v === "string") return v;
-  if (typeof v === "number") return String(v);
-  if (typeof v === "boolean") return v ? "true" : "false";
-  if (typeof v === "bigint") return v.toString();
-  if (typeof v === "symbol") return v.toString();
-  if (typeof v === "function") return v.toString();
+  if (v == null) {
+    return "";
+  }
+  if (typeof v === "object") {
+    return JSON.stringify(v);
+  }
+  if (typeof v === "string") {
+    return v;
+  }
+  if (typeof v === "number") {
+    return String(v);
+  }
+  if (typeof v === "boolean") {
+    return v ? "true" : "false";
+  }
+  if (typeof v === "bigint") {
+    return v.toString();
+  }
+  if (typeof v === "symbol") {
+    return v.toString();
+  }
+  if (typeof v === "function") {
+    return v.toString();
+  }
   return "";
 }
 
-export function WidgetValueChip({
-  widget,
-  value,
-}: {
-  widget: string | null;
-  value: unknown;
-}) {
+export function WidgetValueChip({ widget, value }: { value: unknown; widget: string | null }) {
   if (widget === "toggle") {
     const on = value === true || value === "true" || value === "True";
     return (
       <span
         className={`text-3xs rounded px-1.5 py-px font-mono font-semibold ${
-          on
-            ? "bg-success-strong/18 text-success-strong"
-            : "bg-destructive/18 text-destructive"
+          on ? "bg-success-strong/18 text-success-strong" : "bg-destructive/18 text-destructive"
         }`}
       >
         {on ? "✓" : "✗"}
@@ -140,18 +146,12 @@ export function WidgetValueChip({
 
 /** 「当前清单」单行清单摘要 —— 从主组件
  * 的「nodes」页签 render 原样提出。 */
-export function ManifestSummary({
-  summary,
-}: {
-  summary: NonNullable<SettingsResp["summary"]>;
-}) {
+export function ManifestSummary({ summary }: { summary: NonNullable<SettingsResp["summary"]> }) {
   return (
     <div className="border-border bg-bg text-muted-foreground mb-4 rounded-lg border px-3 py-2 text-xs">
       当前清单：共 <b className="text-ink">{summary.totalNodes}</b> 个节点类型
       {summary.generatedAt ? ` · 生成于 ${summary.generatedAt}` : ""}
-      {summary.missingPaths?.length
-        ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到`
-        : ""}
+      {summary.missingPaths?.length ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到` : ""}
     </div>
   );
 }
@@ -165,14 +165,13 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
       {/* 顶行：当前阶段 + 包计数（用户最关心的）。.py 文件数
  已去掉 —— 用户明说它没用。 */}
       <div className="flex items-center gap-2">
-        <StatusDot state="busy" sizeClass="size-2" pulse />
+        <StatusDot pulse sizeClass="size-2" state="busy" />
         {progress.phase === "hash" && progress.total > 0 ? (
           <span className="text-ink">
-            🔎 正在处理{""}
+            🔎 正在处理
             <span className="font-mono">
               {progress.done}/{progress.total}
             </span>
-            {""}
             个节点包
             {progress.parent && (
               <span
@@ -186,11 +185,8 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
         ) : progress.phase === "scan" && progress.discovered > 0 ? (
           <span className="text-ink">
             📦 已发现 <span className="font-mono">{progress.discovered}</span>
-            {""}
             个节点包
-            <span className="text-muted-foreground text-2xs ml-2">
-              （总数待定，正在扫描…）
-            </span>
+            <span className="text-muted-foreground text-2xs ml-2">（总数待定，正在扫描…）</span>
           </span>
         ) : (
           <span>首次扫描目录中的节点包…</span>
@@ -201,15 +197,15 @@ export function ParseProgressBanner({ progress }: { progress: ParseProgress }) {
  所以条子能干净地从扫描（不定态）过渡到哈希（确定态）。
  「总数未知 → 不确定态」的换算收在`~/lib/progress` 的`toPct`。 */}
       <ProgressBar
+        className="mt-2"
+        fillClassName="duration-300 ease-out"
+        showValue={false}
+        trackClassName="bg-surface-2 h-1.5"
         value={
           progress.phase === "hash" && progress.total > 0
             ? toPct(progress.done, progress.total)
             : null
         }
-        showValue={false}
-        className="mt-2"
-        trackClassName="bg-surface-2 h-1.5"
-        fillClassName="duration-300 ease-out"
       />
       {progress.msg && (
         <div
@@ -232,44 +228,36 @@ export function ParseConsole({
   logsRef,
   consoleRef,
 }: {
-  logs: { level: string; msg: string }[];
-  parsing: boolean;
-  logsRef: RefObject<HTMLDivElement | null>;
   consoleRef: RefObject<HTMLDivElement | null>;
+  logs: Array<{ level: string; msg: string }>;
+  logsRef: RefObject<HTMLDivElement | null>;
+  parsing: boolean;
 }) {
   return (
-    <div ref={logsRef} className="mb-4">
+    <div className="mb-4" ref={logsRef}>
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-muted-foreground text-xs font-medium">
-          解析日志
-        </span>
+        <span className="text-muted-foreground text-xs font-medium">解析日志</span>
         {parsing && (
           <span className="text-primary flex items-center gap-1.5 text-xs">
-            <StatusDot state="busy" sizeClass="size-2" pulse />
+            <StatusDot pulse sizeClass="size-2" state="busy" />
             解析中…
           </span>
         )}
       </div>
       {logs.length === 0 ? (
         <div className="border-border bg-bg/30 text-muted-foreground text-2xs rounded-lg border border-dashed p-3 text-center">
-          {parsing
-            ? "等待第一条日志…"
-            : "点击「解析全部」或「导入此包」后日志会出现在这里。"}
+          {parsing ? "等待第一条日志…" : "点击「解析全部」或「导入此包」后日志会出现在这里。"}
         </div>
       ) : (
         <div
-          ref={consoleRef}
           className="border-border text-2xs h-48 overflow-y-auto rounded-lg border bg-black/70 p-3 font-mono leading-relaxed"
+          ref={consoleRef}
         >
           {logs.map((log, idx) => (
             <div
-              key={`log-${idx}`}
+              className={log.level === "error" ? "text-destructive" : "text-success-strong"}
               data-log-row
-              className={
-                log.level === "error"
-                  ? "text-destructive"
-                  : "text-success-strong"
-              }
+              key={`log-${idx}`}
             >
               {log.msg}
             </div>
@@ -299,19 +287,16 @@ export function ReportCards({ report }: { report: ParseReport }) {
         {(report.packages ?? []).map((pkg) => {
           const st = STATUS_STYLE[pkg.status] ?? OK_STATUS_STYLE;
           return (
-            <div
-              key={pkg.name}
-              className="border-border bg-bg rounded-xl border p-3"
-            >
+            <div className="border-border bg-bg rounded-xl border p-3" key={pkg.name}>
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-ink font-medium">{pkg.name}</span>
                     <StatusBadge
-                      status={pkg.status === "ok" ? "SUCCEEDED" : pkg.status}
-                      label={st.label}
-                      dot={false}
                       className="text-2xs px-2 py-0.5"
+                      dot={false}
+                      label={st.label}
+                      status={pkg.status === "ok" ? "SUCCEEDED" : pkg.status}
                     />
                   </div>
                   <div
@@ -324,9 +309,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-ink-bright text-lg font-semibold">
-                    {pkg.nodeCount}
-                  </div>
+                  <div className="text-ink-bright text-lg font-semibold">{pkg.nodeCount}</div>
                   <div className="text-muted-foreground text-2xs">节点类型</div>
                 </div>
               </div>
@@ -334,8 +317,8 @@ export function ReportCards({ report }: { report: ParseReport }) {
                 <div className="mt-2 flex flex-wrap gap-1">
                   {pkg.nodeTypes.slice(0, 24).map((ct) => (
                     <span
-                      key={ct}
                       className="bg-subtle text-muted-foreground text-2xs rounded-md px-1.5 py-0.5 font-mono"
+                      key={ct}
                     >
                       {ct}
                     </span>
@@ -350,10 +333,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
               {pkg.errors?.length > 0 && (
                 <div className="mt-2 flex flex-col gap-1">
                   {pkg.errors.map((er, j) => (
-                    <div
-                      key={j}
-                      className="text-destructive text-2xs font-mono"
-                    >
+                    <div className="text-destructive text-2xs font-mono" key={j}>
                       ⚠ {er.file}: {er.error}
                     </div>
                   ))}

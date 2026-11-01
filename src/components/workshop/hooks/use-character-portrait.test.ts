@@ -54,9 +54,7 @@ function makeCharacter(patch: Partial<Character> = {}): Character {
 
 /** 被测 hook 的宿主：真实持有 characters state，候选写没写进去一目了然。 */
 function useHarness(projectId: string) {
-  const [characters, setCharacters] = React.useState<Character[]>([
-    makeCharacter(),
-  ]);
+  const [characters, setCharacters] = React.useState<Array<Character>>([makeCharacter()]);
   const [session, actions] = useCharacterPortrait({ setCharacters, projectId });
   return { characters, session, actions };
 }
@@ -89,9 +87,7 @@ describe("useCharacterPortrait 门禁", () => {
     const { result } = renderHook(() => useHarness("p1"));
 
     await act(async () => {
-      await result.current.actions.generate(
-        makeCharacter({ positivePrompt: "   " }),
-      );
+      await result.current.actions.generate(makeCharacter({ positivePrompt: "   " }));
     });
 
     expect(mockedLocal).not.toHaveBeenCalled();
@@ -157,9 +153,7 @@ describe("useCharacterPortrait 门禁", () => {
     const { result } = renderHook(() => useHarness("p1"));
 
     await act(async () => {
-      await result.current.actions.generate(
-        makeCharacter({ positivePrompt: "  " }),
-      );
+      await result.current.actions.generate(makeCharacter({ positivePrompt: "  " }));
     });
     expect(result.current.session.error).toContain("还没有生成提示词");
 
@@ -202,22 +196,18 @@ describe("useCharacterPortrait 生成", () => {
       taskId: "task-1234567890abc",
     });
     /* 角色还没有定妆照时第一张自动选中 —— 后续分镜图就能拿它当参考图 */
-    expect(result.current.characters[0]!.portraitUrl).toBe(
-      "/api/generated/a.png",
-    );
+    expect(result.current.characters[0]!.portraitUrl).toBe("/api/generated/a.png");
     expect(result.current.session.busy).toBe(false);
     expect(result.current.session.progress).toBe(100);
     expect(result.current.session.status).toContain("已生成一张定妆照");
-    expect(result.current.session.log.map((entry) => entry.level)).toEqual([
-      "info",
-      "success",
-    ]);
+    expect(result.current.session.log.map((entry) => entry.level)).toEqual(["info", "success"]);
     /* 每条日志异步落一份到 log/workshop/，刷新 / 重启后仍可回看。
      * 首行（通道 · 模型 · 尺寸）与完成行都要落盘 —— 只有「完成」没有「开始」时，
      * 回看历史根本看不出这一张是用什么参数跑的。 */
-    expect(
-      mockedPersist.mock.calls.map(([, entries]) => entries[0]?.kind),
-    ).toEqual(["info", "success"]);
+    expect(mockedPersist.mock.calls.map(([, entries]) => entries[0]?.kind)).toEqual([
+      "info",
+      "success",
+    ]);
   });
 
   it("本地进行中：进度与执行日志实时进会话，progress 帧不混进日志", async () => {
@@ -294,9 +284,10 @@ describe("useCharacterPortrait 生成", () => {
     expect(result.current.session.error).toBe("连接中断");
     expect(result.current.session.busy).toBe(false);
     expect(result.current.characters[0]!.portraits ?? []).toHaveLength(0);
-    expect(
-      result.current.session.log[result.current.session.log.length - 1],
-    ).toMatchObject({ level: "error", text: "连接中断" });
+    expect(result.current.session.log.at(-1)).toMatchObject({
+      level: "error",
+      text: "连接中断",
+    });
   });
 
   it("同一时刻只跑一件：第二次 generate 被原子锁挡下（不能只靠 state 的 busy）", async () => {
@@ -422,9 +413,10 @@ describe("useCharacterPortrait 导入", () => {
     });
 
     expect(result.current.session.error).toBe("素材库写入失败");
-    expect(
-      result.current.session.log[result.current.session.log.length - 1],
-    ).toMatchObject({ level: "error", text: "素材库写入失败" });
+    expect(result.current.session.log.at(-1)).toMatchObject({
+      level: "error",
+      text: "素材库写入失败",
+    });
     expect(mockedPersist).toHaveBeenCalledWith("portrait", [
       expect.objectContaining({ kind: "error", summary: "素材库写入失败" }),
     ]);

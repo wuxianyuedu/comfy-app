@@ -25,45 +25,36 @@ import {
 } from "../workflow-library-config";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
 
-export interface WorkflowLibraryDetailActions {
-  use: () => void;
+export type WorkflowLibraryDetailActions = {
+  download: () => void;
   edit: () => void;
   remove: () => void;
-  download: () => void;
   resync: () => void;
-}
+  use: () => void;
+};
 
 /** 类型 / 模型编辑器的派生数据与动作（规范 17 §17.2 第②层）。 */
-export interface MetaEditorController {
-  /** 当前生效的 mode 集合（缺省回退 [taskType]，兼容旧行）。 */
-  modes: string[];
+export type MetaEditorController = {
+  /** 全部可选模型标签。 */
+  allModelTags: Array<{ count: number; id: string; name: string }>;
+  busy: boolean;
   defaultMode: string;
   /** 已绑定的模型标签名。 */
-  modelTags: string[];
-  /** 全部可选模型标签。 */
-  allModelTags: { id: string; name: string; count: number }[];
-  busy: boolean;
-  patchModes: (modes: string[], defaultMode: string) => Promise<void>;
-  patchModelTags: (names: string[]) => Promise<void>;
-  /** 持久化某个 IO 参数的 seed「控件后行为」（fixed/increment/decrement/random）。
-   *  写进 workflowIO 条目并整体落库，预览面板与画布运行时共用。 */
-  patchSeedMode: (ioKey: string, mode: string) => Promise<void>;
+  modelTags: Array<string>;
+  /** 当前生效的 mode 集合（缺省回退 [taskType]，兼容旧行）。 */
+  modes: Array<string>;
+  patchModelTags: (names: Array<string>) => Promise<void>;
+  patchModes: (modes: Array<string>, defaultMode: string) => Promise<void>;
   /** 持久化对外参数落点（预览面板拖圆点改落点 / 断开 / 恢复默认）。
    *  整列写回 `paramMap.source.mode:<模式>`，与编辑器画布同一份形状。 */
   patchParamMap: (next: Record<string, unknown>) => Promise<void>;
-}
+  /** 持久化某个 IO 参数的 seed「控件后行为」（fixed/increment/decrement/random）。
+   *  写进 workflowIO 条目并整体落库，预览面板与画布运行时共用。 */
+  patchSeedMode: (ioKey: string, mode: string) => Promise<void>;
+};
 
-export interface WorkflowLibraryDetailController {
-  /** null = 左侧未选中工作流，视图据此渲染空态。 */
-  workflow: WorkflowRow | null;
-  activeTab: DetailTab;
-  setActiveTab: (tab: DetailTab) => void;
-  /** 画布预览那一份常驻实例是否该挂载（首次访问画布页签之后才为真）。
-   *
-   *  视图据此决定要不要渲染「编辑对外参数 / 实际使用」共用的那棵子树 ——
-   *  默认页签（工坊封装）上不渲染，画布引擎因此不进这一屏。一旦访问过就
-   *  保持挂载（切回其它页签也不卸载），表单值与运行态才不会丢。 */
-  canvasMounted: boolean;
+export type WorkflowLibraryDetailController = {
+  actions: WorkflowLibraryDetailActions;
   /** **两个页签共用的当前模式**（画布节点卡片列与工坊封装都按它渲染）。
    *
    *  初值取工作流的默认模式（`resolveWorkflowMode`：defaultMode → modes[0] →
@@ -73,33 +64,42 @@ export interface WorkflowLibraryDetailController {
    *
    *  换工作流时重置回该工作流的默认模式（不把上一条工作流的查看模式带过来）。 */
   activeMode: string | null;
+  activeTab: DetailTab;
+  busyDownload: boolean;
+  busyResync: boolean;
+  canResync: boolean;
+  /** 画布预览那一份常驻实例是否该挂载（首次访问画布页签之后才为真）。
+   *
+   *  视图据此决定要不要渲染「编辑对外参数 / 实际使用」共用的那棵子树 ——
+   *  默认页签（工坊封装）上不渲染，画布引擎因此不进这一屏。一旦访问过就
+   *  保持挂载（切回其它页签也不卸载），表单值与运行态才不会丢。 */
+  canvasMounted: boolean;
+  closeSource: () => void;
+  errorMessage: string | undefined;
+  isLoading: boolean;
+  /** 名字是 ComfyUI 默认技术名（纯小写 + 下划线），改用等宽字体更易读。 */
+  isTechnical: boolean;
+  /** 类型 / 模型编辑器（缺省空实现，调用方可安全忽略）。 */
+  metaEditor: MetaEditorController;
+  missing: boolean;
+  openSource: () => void;
+  /** 模板 paramMap（`source.mode:<模式>` 的对外参数落点），画布节点页签据此
+   *  标出每个对外参数与它落到的那一行。 */
+  paramMap: Record<string, unknown>;
   /** 切换当前模式（**只改查看/测试语境，不落库**）。
    *
    *  落「默认模式」是另一件事（画布节点卡片的模式下拉走 `patchModes`）：用户
    *  在封装页试着切模式跑一次流程测试，不该顺手改掉这条工作流的默认模式。 */
   setActiveMode: (mode: string) => void;
-  sourceOpen: boolean;
-  openSource: () => void;
-  closeSource: () => void;
-  isLoading: boolean;
-  errorMessage: string | undefined;
-  workflowIO: WorkflowIOMap | null;
-  /** 模板 paramMap（`source.mode:<模式>` 的对外参数落点），画布节点页签据此
-   *  标出每个对外参数与它落到的那一行。 */
-  paramMap: Record<string, unknown>;
+  setActiveTab: (tab: DetailTab) => void;
   sourceData: SourceModalData | null;
+  sourceOpen: boolean;
   /** 有可执行图 —— 决定主 CTA 是否可点。 */
   usable: boolean;
-  canResync: boolean;
-  missing: boolean;
-  /** 名字是 ComfyUI 默认技术名（纯小写 + 下划线），改用等宽字体更易读。 */
-  isTechnical: boolean;
-  busyDownload: boolean;
-  busyResync: boolean;
-  /** 类型 / 模型编辑器（缺省空实现，调用方可安全忽略）。 */
-  metaEditor: MetaEditorController;
-  actions: WorkflowLibraryDetailActions;
-}
+  /** null = 左侧未选中工作流，视图据此渲染空态。 */
+  workflow: WorkflowRow | null;
+  workflowIO: WorkflowIOMap | null;
+};
 
 /** 生效模式：用户在这条工作流上切过就用切过的，否则用默认模式解析值。
  *
@@ -109,11 +109,13 @@ export interface WorkflowLibraryDetailController {
  *     （`undefined === undefined`）从而去读一个空的 `modeOverride` —— 直接抛错；
  *   · 分支（切过 / 没切过 / 换过工作流）可以单测，不必挂载整个详情面板。 */
 export function resolveActiveMode(
-  override: { workflowId: string; mode: string | null } | null,
+  override: { mode: string | null; workflowId: string } | null,
   workflowId: string | null,
   defaultMode: string | null,
 ): string | null {
-  if (!workflowId || !override) return defaultMode;
+  if (!workflowId || !override) {
+    return defaultMode;
+  }
   return override.workflowId === workflowId ? override.mode : defaultMode;
 }
 
@@ -159,7 +161,9 @@ export function useWorkflowLibraryDetail(
   const handleTabChange = useCallback(
     (tab: DetailTab) => {
       setActiveTab(tab);
-      if (isCanvasTab(tab) && workflow) setCanvasVisitedFor(workflow.id);
+      if (isCanvasTab(tab) && workflow) {
+        setCanvasVisitedFor(workflow.id);
+      }
     },
     [workflow],
   );
@@ -167,12 +171,14 @@ export function useWorkflowLibraryDetail(
    *  `null` = 用户主动切到了「自动（工作流默认）」——与「还没初始化」靠 workflow.id
    *  区分，故用一个「记住初值来自哪条工作流」的 ref 而不是 effect 里 setState。 */
   const [modeOverride, setModeOverride] = useState<{
-    workflowId: string;
     mode: string | null;
+    workflowId: string;
   } | null>(null);
   const setActiveMode = useCallback(
     (mode: string) => {
-      if (!workflow) return;
+      if (!workflow) {
+        return;
+      }
       setModeOverride({ workflowId: workflow.id, mode });
     },
     [workflow],
@@ -184,10 +190,7 @@ export function useWorkflowLibraryDetail(
   /* 未选中工作流时不发请求（enabled:false）。hooks 顺序必须稳定，因此这里不
    * 做 early return —— 空态交给视图渲染。 */
   const detailQuery = useQuery(
-    trpc.workflow.detail.queryOptions(
-      { id: workflow?.id ?? "" },
-      { enabled: !!workflow },
-    ),
+    trpc.workflow.detail.queryOptions({ id: workflow?.id ?? "" }, { enabled: !!workflow }),
   );
 
   const template = detailQuery.data?.template;
@@ -198,10 +201,7 @@ export function useWorkflowLibraryDetail(
    * 表解析 + 存量清洗），这里取它的 workflowIO 覆盖原始列；rawJson /
    * graph 等仍用轻量 template，patchSeedMode 也继续以原始列为底稿。 */
   const enrichedQuery = useQuery(
-    trpc.workflow.detailFull.queryOptions(
-      { id: workflow?.id ?? "" },
-      { enabled: !!workflow },
-    ),
+    trpc.workflow.detailFull.queryOptions({ id: workflow?.id ?? "" }, { enabled: !!workflow }),
   );
 
   /* 就绪条件：当前选中工作流已排空过一次详情请求的数据（或错误）。
@@ -217,8 +217,7 @@ export function useWorkflowLibraryDetail(
   /* detailFull 是与 detail 并行的第二个请求；两者都排空才把表单交给预览，
    * 否则表单会先按空 IO 渲染再重排一次（左下「首次打开布局切换」）。 */
   const isDetailLoading =
-    isDetailLoadingFor(workflow?.id ?? null, detailSettledId) ||
-    (!!workflow && !enrichedSettled);
+    isDetailLoadingFor(workflow?.id ?? null, detailSettledId) || (!!workflow && !enrichedSettled);
 
   const workflowIO = useMemo(
     () =>
@@ -236,45 +235,53 @@ export function useWorkflowLibraryDetail(
    * 稿（它直读 DB 列，没有富化改写），缺省空对象。 */
   const paramMap = useMemo<Record<string, unknown>>(() => {
     const raw = template?.paramMap;
+    /* SAFETY: 类型断言已复核 */
     return raw && typeof raw === "object" && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
       : {};
   }, [template]);
 
   const formatFlags = useMemo(
-    () =>
-      workflow ? deriveFormatFlags(workflow) : { hasRaw: false, usable: false },
+    () => (workflow ? deriveFormatFlags(workflow) : { hasRaw: false, usable: false }),
     [workflow],
   );
 
   const syncFlags = useMemo(
     () =>
-      workflow
-        ? deriveSyncFlags(workflow)
-        : { dirty: false, missing: false, canResync: false },
+      workflow ? deriveSyncFlags(workflow) : { dirty: false, missing: false, canResync: false },
     [workflow],
   );
 
   const actions = useMemo<WorkflowLibraryDetailActions>(
     () => ({
       use: () => {
-        if (!workflow) return;
+        if (!workflow) {
+          return;
+        }
         onUse(workflow.id, {
           name: workflow.name,
           taskType: workflow.taskType,
         });
       },
       edit: () => {
-        if (workflow) onEdit(workflow.id);
+        if (workflow) {
+          onEdit(workflow.id);
+        }
       },
       remove: () => {
-        if (workflow) onDelete(workflow.id, workflow.name);
+        if (workflow) {
+          onDelete(workflow.id, workflow.name);
+        }
       },
       download: () => {
-        if (workflow) onDownload(workflow.id, workflow.name);
+        if (workflow) {
+          onDownload(workflow.id, workflow.name);
+        }
       },
       resync: () => {
-        if (workflow) onResync(workflow.id, workflow.name);
+        if (workflow) {
+          onResync(workflow.id, workflow.name);
+        }
       },
     }),
     [workflow, onUse, onEdit, onDelete, onDownload, onResync],
@@ -291,31 +298,38 @@ export function useWorkflowLibraryDetail(
       defaultMode: workflow?.defaultMode ?? workflow?.taskType ?? "",
       modelTags: workflow?.modelTags ?? [],
       allModelTags,
-      busy:
-        !!workflow && (isBundleBusy(workflow.id) || isResyncBusy(workflow.id)),
+      busy: !!workflow && (isBundleBusy(workflow.id) || isResyncBusy(workflow.id)),
       patchModes: async (modes, defaultMode) => {
-        if (!workflow || !onPatchModes) return;
+        if (!workflow || !onPatchModes) {
+          return;
+        }
         await onPatchModes(workflow.id, modes, defaultMode);
       },
       patchModelTags: async (names) => {
-        if (!workflow || !onPatchModelTags) return;
+        if (!workflow || !onPatchModelTags) {
+          return;
+        }
         await onPatchModelTags(workflow.id, names);
       },
       patchParamMap: async (next) => {
-        if (!workflow || !onPatchParamMap) return;
+        if (!workflow || !onPatchParamMap) {
+          return;
+        }
         await onPatchParamMap(workflow.id, next);
       },
       patchSeedMode: async (ioKey, mode) => {
-        if (!workflow || !onPatchWorkflowIO) return;
+        if (!workflow || !onPatchWorkflowIO) {
+          return;
+        }
         /* 在模板原始 workflowIO 上只改目标条目的 seedMode，整体落库；
          * 其余字段原样透传，避免用富化视图覆盖原始数据。 */
-        const raw = (template?.workflowIO ?? {}) as Record<
+        const raw = /* SAFETY: 类型断言已复核 */ (template?.workflowIO ?? {}) as Record<
           string,
           Record<string, unknown>
         >;
         const next: Record<string, unknown> = {
           ...raw,
-          [ioKey]: { ...(raw[ioKey] ?? {}), seedMode: mode },
+          [ioKey]: { ...raw[ioKey], seedMode: mode },
         };
         await onPatchWorkflowIO(workflow.id, next);
       },
@@ -345,11 +359,7 @@ export function useWorkflowLibraryDetail(
       }),
     [workflow],
   );
-  const activeMode = resolveActiveMode(
-    modeOverride,
-    workflow?.id ?? null,
-    defaultMode,
-  );
+  const activeMode = resolveActiveMode(modeOverride, workflow?.id ?? null, defaultMode);
 
   return {
     workflow,

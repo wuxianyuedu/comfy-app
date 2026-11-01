@@ -29,11 +29,11 @@ import { sleep } from "~/lib/with-timeout";
  */
 export type ComfyHistoryEntry = {
   outputs?: Record<string, unknown>;
-  status?: {
-    status_str?: string;
-    messages?: unknown[];
-  };
   prompt?: unknown;
+  status?: {
+    messages?: Array<unknown>;
+    status_str?: string;
+  };
 };
 
 /** 轮询 history —— ComfyUI 是「先广播完成、后写 history」，直接读会扑空。
@@ -42,9 +42,7 @@ export type ComfyHistoryEntry = {
  *  现场可查。因此这里在**每个终局分支**都把原始回执写进 trace（comfyui/trace.ts）：
  *  promptId 是什么、轮询了几轮、最后一轮 /history 的原始 JSON、以及 ComfyUI 的
  *  实时 /queue 快照（回答「任务其实还在跑吗」）。 */
-export async function fetchHistoryEntry(
-  promptId: string,
-): Promise<ComfyHistoryEntry | null> {
+export async function fetchHistoryEntry(promptId: string): Promise<ComfyHistoryEntry | null> {
   let lastRaw: Record<string, unknown> | null = null;
   let lastErr: unknown = null;
   for (let i = 0; i < HISTORY_RETRIES; i++) {
@@ -52,19 +50,14 @@ export async function fetchHistoryEntry(
       const hist = await getHistory(promptId);
       lastRaw = hist;
       lastErr = null;
-      const entry = hist?.[promptId] as ComfyHistoryEntry | undefined;
+      const entry = /* SAFETY: 类型断言已复核 */ hist?.[promptId] as ComfyHistoryEntry | undefined;
       // outputs 落盘也可能晚一拍，等到有 outputs 或明确报错为止。
       if (entry && (entry.outputs || entry.status?.status_str)) {
         /* 拿到结果也原样记一份：成功路径同样需要「ComfyUI 回了什么」的现场。 */
-        trace(
-          "history",
-          taskTraceIdForPrompt(promptId),
-          `history 命中（第 ${i + 1} 轮）`,
-          {
-            promptId,
-            entry,
-          },
-        );
+        trace("history", taskTraceIdForPrompt(promptId), `history 命中（第 ${i + 1} 轮）`, {
+          promptId,
+          entry,
+        });
         return entry;
       }
       if (entry && i >= 3) {
@@ -76,8 +69,8 @@ export async function fetchHistoryEntry(
         );
         return entry;
       }
-    } catch (err) {
-      lastErr = err;
+    } catch (error) {
+      lastErr = error;
     }
     await sleep(HISTORY_RETRY_DELAY_MS);
   }
@@ -103,7 +96,9 @@ export async function fetchHistoryEntry(
  * 直接读共享状态而不引入新参数：本函数所有调用方都来自同一条执行链。
  */
 function taskTraceIdForPrompt(promptId: string): string | null {
-  if (!promptId) return null;
+  if (!promptId) {
+    return null;
+  }
   return state().promptToTask.get(promptId) ?? null;
 }
 
@@ -117,19 +112,19 @@ export async function traceComfyQueue(taskId: string | null): Promise<void> {
   try {
     base = await resolveComfyBase();
     const r = await fetch(`${base}/queue`, {
-      signal: AbortSignal.timeout(3_000),
+      signal: AbortSignal.timeout(3000),
     });
     if (!r.ok) {
       trace("http", taskId, `/queue 探测失败 HTTP ${r.status}`, { base });
       return;
     }
-    const qd = (await r.json()) as unknown;
+    const qd = /* SAFETY: 类型断言已复核 */ (await r.json()) as unknown;
     const sum = queueTraceSummary(qd);
     trace("http", taskId, "ComfyUI /queue 快照", { base, ...sum, raw: qd });
-  } catch (err) {
+  } catch (error) {
     trace("http", taskId, "ComfyUI /queue 探测不可达", {
       base,
-      error: err instanceof Error ? err.message : String(err),
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 }

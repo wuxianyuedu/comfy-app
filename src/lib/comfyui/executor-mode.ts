@@ -27,17 +27,21 @@ import type { TaskClaimMode } from "../core/repository-task-impl";
  *  `if (claim === "inline") enqueue(...)`——同一个判据读一次，不分两个函数防漂移。 */
 export function resolveExecutorClaim(): TaskClaimMode {
   const raw = (process.env.COMFY_EXECUTOR ?? "").trim().toLowerCase();
-  if (raw === "host") return "host";
-  if (raw === "" || raw === "inline") return "inline";
+  if (raw === "host") {
+    return "host";
+  }
+  if (raw === "" || raw === "inline") {
+    return "inline";
+  }
   warnUnknownOnce(raw);
   return "inline";
 }
 
 let warnedUnknown = false;
 function warnUnknownOnce(raw: string): void {
-  if (warnedUnknown) return;
+  if (warnedUnknown) {
+    return;
+  }
   warnedUnknown = true;
-  logger.warn(
-    `[comfyui] COMFY_EXECUTOR="${raw}" 不识别，按 inline 执行（可选：inline|host）`,
-  );
+  logger.warn(`[comfyui] COMFY_EXECUTOR="${raw}" 不识别，按 inline 执行（可选：inline|host）`);
 }

@@ -1,6 +1,6 @@
 import "~/app/globals.css";
 
-import { type Metadata } from "next";
+import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 
 import { TRPCReactProvider } from "~/trpc/react";
@@ -46,13 +46,11 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     /* suppressHydrationWarning：主题 class 由 next-themes 内联脚本在首帧前
      * 依据 localStorage 写入，需跳过 SSR 与客户端对 <html> 属性的水合告警。 */
-    <html lang="zh-CN" className={`${geist.variable}`} suppressHydrationWarning>
+    <html className={`${geist.variable}`} lang="zh-CN" suppressHydrationWarning>
       <body className="font-sans antialiased">
         {/* 外观偏好（圆角 / 标题字阶）改的是全局 CSS 变量，必须在任何路由下都成立，
             所以引导挂在根布局而不是设置页内部。 */}

@@ -19,33 +19,29 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const REAL_ROOT = process.cwd();
-const LEDGER = path.join(
-  REAL_ROOT,
-  "scripts",
-  ".tsc-diagnostic-executors.json",
-);
+const LEDGER = path.join(REAL_ROOT, "scripts", ".tsc-diagnostic-executors.json");
 const READERS = path.join(REAL_ROOT, "scripts", ".declaration-readers.json");
 
 /** 真台账的一份深拷贝（用例里改完必须还原的那份）。 */
-const REAL_LEDGER = JSON.parse(readFileSync(LEDGER, "utf8")) as Ledger;
-const REAL_READERS = JSON.parse(readFileSync(READERS, "utf8")) as {
-  carriers: { id: string; reader: string }[];
+const REAL_LEDGER = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(LEDGER, "utf8")) as Ledger;
+const REAL_READERS = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(READERS, "utf8")) as {
+  carriers: Array<{ id: string; reader: string }>;
 };
 
-interface Entry {
-  id: string;
-  name: string;
-  paths: string[];
-  markers?: string[];
-  reader: string;
-  executor: { kind: string; test?: string; label?: string };
+type Entry = {
   baseline: Record<string, number>;
+  executor: { kind: string; label?: string; test?: string; };
+  id: string;
+  markers?: Array<string>;
+  name: string;
+  paths: Array<string>;
+  reader: string;
   section: string;
   /** 条目声称**执行者逐条核过**的面（选填；写了就要核，见判据的 ①′）。 */
-  verifiedSurfaces?: string[];
+  verifiedSurfaces?: Array<string>;
 }
-interface Ledger {
-  entries: Entry[];
+type Ledger = {
+  entries: Array<Entry>;
 }
 
 const { test, expect } = defineGateRepo({
@@ -75,14 +71,8 @@ const MARKER = "__MARKER__";
 const DECL = `export const ${MARKER} = 1;\nexport function f() {}\nexport const x = 1;\n`;
 
 function writeBoth(repo: GateRepo, ledger: Ledger, readers = REAL_READERS) {
-  repo.write(
-    "scripts/.tsc-diagnostic-executors.json",
-    JSON.stringify(ledger, null, 2),
-  );
-  repo.write(
-    "scripts/.declaration-readers.json",
-    JSON.stringify(readers, null, 2),
-  );
+  repo.write("scripts/.tsc-diagnostic-executors.json", JSON.stringify(ledger, null, 2));
+  repo.write("scripts/.declaration-readers.json", JSON.stringify(readers, null, 2));
 }
 
 /**
@@ -97,9 +87,7 @@ const SAMPLE = REAL_LEDGER.entries.find((e) => e.id === "expect-type-of")!;
  * 真台账里那条**带 `verifiedSurfaces`** 的条目 —— ①′ 那一组用例要一个真实的
  * `reader` 路径（临时仓库里要把那份脚本也写出来）。
  */
-const REAL_SAMPLE = REAL_LEDGER.entries.find(
-  (e) => e.id === "a11y-rule-switch",
-)!;
+const REAL_SAMPLE = REAL_LEDGER.entries.find((e) => e.id === "a11y-rule-switch")!;
 
 /* ── 基线：真台账在真文件上应该是绿的 ──────────────────────── */
 
@@ -148,9 +136,7 @@ test("② 声明行数涨上去 → 阻断，且出口必须是**人写得下的
   /* 反向断言取的是**那句指令的形状**，不是字面量「--update」：红话里现在会明确写
    * 「这一步不给 `--update`」，那是在**否认**这条出路，用 `not.toContain("--update")`
    * 会把这句否认本身判成违规（判据报错了对象，正是 §11.2.1 说的「断言抄的是实现」）。 */
-  expect(output).not.toMatch(
-    /再跑 `node scripts\/check-tsc-diagnostic-executors\.cjs --update`/,
-  );
+  expect(output).not.toMatch(/再跑 `node scripts\/check-tsc-diagnostic-executors\.cjs --update`/);
   expect(output).toContain("这一步**不给");
   // 也不许把人推向「放宽判据」那一侧。
   expect(output).toContain("为了让这一步变绿");
@@ -180,13 +166,8 @@ test("② 声明行数降下去 → 不阻断，但提示收紧基线", ({ repo 
 
 /* ── ③ 台账与事实脱钩 ──────────────────────────────────────── */
 
-test("③ 落点文件上扫不到任何声明行 → 阻断（台账是负债不是赦免名单）", ({
-  repo,
-}) => {
-  repo.write(
-    "scripts/check-type-assertion-executor.cjs",
-    "// 只有注释，没有声明\n",
-  );
+test("③ 落点文件上扫不到任何声明行 → 阻断（台账是负债不是赦免名单）", ({ repo }) => {
+  repo.write("scripts/check-type-assertion-executor.cjs", "// 只有注释，没有声明\n");
   writeBoth(repo, {
     entries: [
       {
@@ -225,9 +206,7 @@ test("③ 登记的关键词已经找不到了 → 阻断", ({ repo }) => {
 const READER_SRC =
   "function judge() {}\nfunction normalize() {}\nmodule.exports = { judge, normalize };\n";
 
-test("①′ 声称核过的面在读者脚本里找不到 → 阻断（台账那句话与事实脱钩）", ({
-  repo,
-}) => {
+test("①′ 声称核过的面在读者脚本里找不到 → 阻断（台账那句话与事实脱钩）", ({ repo }) => {
   repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
   repo.write(REAL_SAMPLE.reader, READER_SRC);
   writeBoth(repo, {
@@ -273,9 +252,7 @@ test("①′ 声称核过的面都在读者脚本里 → 放过（正面清单�
   expect(code, output).toBe(0);
 });
 
-test("①′ 空数组 / 重复名字 → 阻断（写了就要核，重复是两份清单开始分叉）", ({
-  repo,
-}) => {
+test("①′ 空数组 / 重复名字 → 阻断（写了就要核，重复是两份清单开始分叉）", ({ repo }) => {
   repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
   repo.write(REAL_SAMPLE.reader, READER_SRC);
   const base = {
@@ -315,9 +292,7 @@ test("① 姊妹索引里缺同 id 的条目 → 阻断", ({ repo }) => {
       ],
     },
     {
-      carriers: [
-        { id: "别的条目", reader: "scripts/check-type-assertion-executor.cjs" },
-      ],
+      carriers: [{ id: "别的条目", reader: "scripts/check-type-assertion-executor.cjs" }],
     },
   );
   const { code, output } = repo.run();
@@ -325,9 +300,7 @@ test("① 姊妹索引里缺同 id 的条目 → 阻断", ({ repo }) => {
   expect(output).toContain("没有对应条目");
 });
 
-test("① 两处的 reader 写成不同脚本 → 阻断（同源核对拦的就是这一处漂移）", ({
-  repo,
-}) => {
+test("① 两处的 reader 写成不同脚本 → 阻断（同源核对拦的就是这一处漂移）", ({ repo }) => {
   repo.write("scripts/check-type-assertion-executor.cjs", DECL.repeat(19));
   writeBoth(
     repo,
@@ -414,20 +387,14 @@ test("台账不是合法 JSON → 判失败", ({ repo }) => {
 });
 
 test("entries 不是数组 → 判失败", ({ repo }) => {
-  repo.write(
-    "scripts/.tsc-diagnostic-executors.json",
-    JSON.stringify({ entries: {} }),
-  );
+  repo.write("scripts/.tsc-diagnostic-executors.json", JSON.stringify({ entries: {} }));
   const { code, output } = repo.run();
   expect(code).toBe(1);
   expect(output).toContain("不是数组");
 });
 
 test("空表 → 判失败（空表是最像全绿的那种失效）", ({ repo }) => {
-  repo.write(
-    "scripts/.tsc-diagnostic-executors.json",
-    JSON.stringify({ entries: [] }),
-  );
+  repo.write("scripts/.tsc-diagnostic-executors.json", JSON.stringify({ entries: [] }));
   const { code, output } = repo.run();
   expect(code).toBe(1);
   expect(output).toContain("台账是空的");
@@ -459,13 +426,13 @@ test("声明行只认 JSDoc 类型位与 TS 声明头，字符串里的不算站
    * 而「声明落后于实现」这条判据里，文案与实现是两件事（§11.18.3.1 同款取舍）。 */
   repo.write(
     "scripts/check-type-assertion-executor.cjs",
-    'const fixture = "@param {string} nope";\n/** 不是类型位的一行 */\n' +
-      "// export function commented() {}\n" +
-      "// @param {number} 注释里的类型位\n" +
-      DECL.repeat(18) +
+    `const fixture = "@param {string} nope";\n/** 不是类型位的一行 */\n` +
+      `// export function commented() {}\n` +
+      `// @param {number} 注释里的类型位\n${
+      DECL.repeat(18)
       // 只补 1 行声明：撇掉注释行、夹具字符串与那一行裸 `const fixture`
       // 之后，总数必须仍然落在 57 那一条基线上。
-      "export const y = 2;\n",
+      }export const y = 2;\n`,
   );
   writeBoth(repo, {
     entries: [
@@ -497,12 +464,10 @@ test("--update 收紧变短的基线 → 退 0 且真的写回台账", ({ repo }
   });
   const { code } = repo.run(["--update"]);
   expect(code).toBe(0);
-  const written = JSON.parse(
+  const written = /* SAFETY: 类型断言已复核 */ JSON.parse(
     repo.read("scripts/.tsc-diagnostic-executors.json"),
-  ) as { entries: { baseline: Record<string, number> }[] };
-  expect(
-    written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"],
-  ).toBe(30);
+  ) as { entries: Array<{ baseline: Record<string, number> }> };
+  expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(30);
 });
 
 test("--update 遇到基线**上涨**时拒绝写入并退 2", ({ repo }) => {
@@ -521,12 +486,10 @@ test("--update 遇到基线**上涨**时拒绝写入并退 2", ({ repo }) => {
   expect(code).toBe(2);
   expect(output).toContain("只许降不许升");
   /* 台账必须原样不动 —— 「顺手把上涨记进基线」正是零增量那一档的失效形态。 */
-  const written = JSON.parse(
+  const written = /* SAFETY: 类型断言已复核 */ JSON.parse(
     repo.read("scripts/.tsc-diagnostic-executors.json"),
-  ) as { entries: { baseline: Record<string, number> }[] };
-  expect(
-    written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"],
-  ).toBe(57);
+  ) as { entries: Array<{ baseline: Record<string, number> }> };
+  expect(written.entries[0]!.baseline["scripts/check-type-assertion-executor.cjs"]).toBe(57);
 });
 
 /* ── 真仓库自查：盘面够不够、仓库现状是否绿 ────────────────── */

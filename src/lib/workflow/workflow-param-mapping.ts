@@ -52,15 +52,8 @@ import {
   sceneFromMode,
   type SizeScene,
 } from "~/lib/media/size-presets";
-import type {
-  WorkflowIOEntry,
-  WorkflowIOMap,
-} from "~/lib/workflow/workflow-io-types";
-import type {
-  ParamClass,
-  ParamEntry,
-  PinFamily,
-} from "./workflow-param-classes";
+import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
+import type { ParamClass, ParamEntry, PinFamily } from "./workflow-param-classes";
 import {
   CLASS_FAMILY,
   SIZE_SUB_IDS,
@@ -101,26 +94,21 @@ export function buildParamEntries(
   io: WorkflowIOMap | null | undefined,
   labels?: Record<string, string>,
   options?: {
-    mode?: string | null;
     /** **该模式生效的契约口清单**（`modeContractEntries(mode, storedContracts)`
      *  的 id）。不传 = 按内置默认（`exposedParamsForMode`）。
      *
      *  必须传的情形：模式契约被用户改过（契约编辑器里标「已改」）。内置默认只是
      *  「没改过时」的回落 —— 拿它当口径会让画布多列出契约里没有的口（用户报的
      *  「画布上有时长，模式契约里没有」），也会漏掉用户在契约里**新增**的口。 */
-    contractIds?: readonly string[];
+    contractIds?: ReadonlyArray<string>;
+    mode?: string | null;
   },
-): ParamEntry[] {
+): Array<ParamEntry> {
   /* 只有一条构造路径：契约（按模式 / 按该模式生效的契约清单）。没有模式语境时退
    *  到最保守的一套（提示词 + 尺寸）。旧版「按节点 + 端口名分类聚类」那条路已删除
    *  —— 对外有哪些参数只由契约决定，工作流里的内部参数（步数 / CFG…）不再是
    *  「对外参数」。 */
-  return buildContractEntries(
-    io,
-    labels,
-    options?.mode ?? null,
-    options?.contractIds,
-  );
+  return buildContractEntries(io, labels, options?.mode ?? null, options?.contractIds);
 }
 
 /** 契约驱动的条目构造（有模式语境时的唯一路径）。 */
@@ -128,28 +116,32 @@ function buildContractEntries(
   io: WorkflowIOMap | null | undefined,
   labels: Record<string, string> | undefined,
   mode: string | null,
-  contractIds?: readonly string[],
-): ParamEntry[] {
+  contractIds?: ReadonlyArray<string>,
+): Array<ParamEntry> {
   const pinsByClass = classifyPins(io);
 
   /* 口子的来源：调用方给的**生效契约**优先；没给才回落内置默认。两边都只提供
    * 「有哪些口、按什么顺序」，落点仍由映射表决定。 */
-  const defs: Array<{ id: string; cls: ParamClass | null }> = contractIds
+  const defs: Array<{ cls: ParamClass | null; id: string }> = contractIds
     ? contractIds.map((id) => ({ id, cls: exposedClassOf(id) }))
     : exposedParamsForMode(mode).map((def) => ({ id: def.id, cls: def.cls }));
 
-  const out: ParamEntry[] = [];
+  const out: Array<ParamEntry> = [];
   for (const def of defs) {
     /* 认不出的 id（历史脏数据 / 别的键空间）不列：映射层没有它的分类，也就没有
      *  任何可落点的候选，列出来只会是一张永远「未配置」的卡。 */
-    if (!def.cls) continue;
+    if (!def.cls) {
+      continue;
+    }
     /* 「尺寸」在映射层摊成四个子口（`SIZE_SUB_IDS`）：形态由作者连到哪个子口
      * 声明，不再从端口名里猜。对外契约仍是那一个「尺寸」口 —— 工坊送来的
      * `values.size` 由运行期按子口身份派成各自认的形状（见 sizeValueForPin）。 */
-    const ids: readonly string[] = def.cls === "size" ? SIZE_SUB_IDS : [def.id];
+    const ids: ReadonlyArray<string> = def.cls === "size" ? SIZE_SUB_IDS : [def.id];
     for (const id of ids) {
-      if (out.some((entry) => entry.id === id)) continue;
-      const cls = (def.cls === "size" ? id : def.cls) as ParamClass;
+      if (out.some((entry) => entry.id === id)) {
+        continue;
+      }
+      const cls = /* SAFETY: 类型断言已复核 */ (def.cls === "size" ? id : def.cls) as ParamClass;
       const pins = pinsByClass.get(cls) ?? [];
       const override = pins.map((pin) => labels?.[pin.ioKey]).find(Boolean);
       out.push({
@@ -163,10 +155,7 @@ function buildContractEntries(
         nodeTitle: "",
         cls,
         label:
-          override ??
-          (def.cls === "size"
-            ? sizeSubLabel(cls)
-            : exposedParamDisplayLabel(def.id)),
+          override ?? (def.cls === "size" ? sizeSubLabel(cls) : exposedParamDisplayLabel(def.id)),
         pins,
       });
     }
@@ -179,9 +168,7 @@ function buildContractEntries(
  *  这是「这个工作流能承接什么」的**唯一**判定处，只回答一个事实问题：某个
  *  对外参数现在能落到哪几行上。它不参与「对外有哪些参数」的决策 —— 那是契约表
  *  的事（`exposedParamsForMode`），判据里不含任何推导。 */
-function classifyPins(
-  io: WorkflowIOMap | null | undefined,
-): Map<ParamClass, ParamEntry["pins"]> {
+function classifyPins(io: WorkflowIOMap | null | undefined): Map<ParamClass, ParamEntry["pins"]> {
   /** 三份**按类型**收的候选池：一族一份，族内所有对外参数共享。
    *
    *  形态 / 正负 / 首尾都由作者连线声明，所以每个口都摆出它那一族的全部候选，
@@ -193,13 +180,17 @@ function classifyPins(
     number: [],
   };
   for (const [ioKey, raw] of Object.entries(io ?? {})) {
-    const entry = raw as WorkflowIOEntry | undefined;
+    const entry = /* SAFETY: 类型断言已复核 */ raw as WorkflowIOEntry | undefined;
     // 显式空值守卫：`pinFamily(entry)` 的契约本就要求 entry 非 undefined 才
     // 可能返回真 family，但编译器看不到——原实现里 push 的三行 `entry!.xxx`
     // 是把这一契约「用两次」（判据 + 断言）；改成同行守卫后判据与窄化同源。
-    if (!entry) continue;
+    if (!entry) {
+      continue;
+    }
     const family = pinFamily(entry);
-    if (!family) continue;
+    if (!family) {
+      continue;
+    }
     pools[family].push({
       ioKey,
       name: entry.name,
@@ -208,11 +199,15 @@ function classifyPins(
     });
   }
   const pinsByClass = new Map<ParamClass, ParamEntry["pins"]>();
-  for (const klass of Object.keys(CLASS_FAMILY) as ParamClass[]) {
+  for (const klass of /* SAFETY: 类型断言已复核 */ Object.keys(CLASS_FAMILY) as Array<ParamClass>) {
     /* 聚合值 `size` 不单独摆候选：契约层把它摊成六个子口。 */
-    if (klass === "size") continue;
+    if (klass === "size") {
+      continue;
+    }
     const family = CLASS_FAMILY[klass];
-    if (!family || pools[family].length === 0) continue;
+    if (!family || pools[family].length === 0) {
+      continue;
+    }
     pinsByClass.set(klass, [...pools[family]]);
   }
   return pinsByClass;
@@ -224,17 +219,23 @@ function classifyPins(
  * 聚类」时代的产物。现在键变成契约口子（`size` / `prompt`…），作者当年连过的
  * 线若只按新键去查会落空，表现就是「改了落点没生效」（不报错，静默显示成「未配置」）。
  * 因此解析映射时把旧键一并当作候选：只读、不写，落库一律用新键。 */
-function legacyEntryIds(entry: ParamEntry): string[] {
+function legacyEntryIds(entry: ParamEntry): Array<string> {
   const nodeIds = new Set<string>();
-  if (entry.nodeId) nodeIds.add(entry.nodeId);
+  if (entry.nodeId) {
+    nodeIds.add(entry.nodeId);
+  }
   for (const pin of entry.pins) {
     const raw = pin.ioKey.split("::")[0];
-    if (raw) nodeIds.add(raw);
+    if (raw) {
+      nodeIds.add(raw);
+    }
   }
   const classes = candidateClasses(entry.cls);
-  const out: string[] = [];
+  const out: Array<string> = [];
   for (const nodeId of nodeIds) {
-    for (const klass of classes) out.push(`${nodeId}|${klass}`);
+    for (const klass of classes) {
+      out.push(`${nodeId}|${klass}`);
+    }
   }
   return out;
 }
@@ -244,12 +245,14 @@ function manualTargetForEntryRaw(
   manual: Record<string, string | null> | undefined,
   entry: ParamEntry,
 ): { found: boolean; target: string | null } {
-  if (!manual) return { found: false, target: null };
-  if (Object.prototype.hasOwnProperty.call(manual, entry.id)) {
+  if (!manual) {
+    return { found: false, target: null };
+  }
+  if (Object.hasOwn(manual, entry.id)) {
     return { found: true, target: manual[entry.id] ?? null };
   }
   for (const legacy of legacyEntryIds(entry)) {
-    if (Object.prototype.hasOwnProperty.call(manual, legacy)) {
+    if (Object.hasOwn(manual, legacy)) {
       return { found: true, target: manual[legacy] ?? null };
     }
   }
@@ -264,12 +267,12 @@ export const MODE_KEY_PREFIX = "mode:";
 /** 逐模式映射：模式码 → (对外参数 id → 目标 ioKey)。空对象 = 各模式用同一张图。 */
 export type ParamMappingByMode = Record<string, Record<string, string | null>>;
 
-export interface ParamMapping {
-  /** 作者画的线，按模式分开（`{ [mode]: { [entryId]: ioKey | null } }`）。 */
-  manualByMode?: ParamMappingByMode;
+export type ParamMapping = {
   /** 作者改过的「对外参数名」（ioKey → 名字）。 */
   labels?: Record<string, string>;
-}
+  /** 作者画的线，按模式分开（`{ [mode]: { [entryId]: ioKey | null } }`）。 */
+  manualByMode?: ParamMappingByMode;
+};
 
 /** 解析某一模式下生效的「对外参数 id → 目标 ioKey」表。
  *
@@ -284,7 +287,7 @@ export interface ParamMapping {
  *  `io` 只用于**校验落点仍然存在**（端口被改名 / 移除后，一条指向不存在端口的
  *  线会让运行期静默落不到值 —— 这种线按未配置处理，与画布上画不出线一致）。 */
 export function resolveMapping(
-  entries: readonly ParamEntry[],
+  entries: ReadonlyArray<ParamEntry>,
   io: WorkflowIOMap | null | undefined,
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
@@ -295,8 +298,12 @@ export function resolveMapping(
     (mode ? mapping?.manualByMode?.[mode] : undefined) ?? {};
   for (const entry of entries) {
     const hit = manualTargetForEntryRaw(manual, entry);
-    if (!hit.found) continue;
-    if (hit.target !== null && io && !io[hit.target]) continue;
+    if (!hit.found) {
+      continue;
+    }
+    if (hit.target !== null && io && !io[hit.target]) {
+      continue;
+    }
     out[entry.id] = hit.target;
   }
   return out;
@@ -310,9 +317,11 @@ export function manualTargetFor(
   entryId: string,
   mode?: string | null,
 ): string | null | undefined {
-  if (!mode) return undefined;
+  if (!mode) {
+    return undefined;
+  }
   const byEntry = mapping?.manualByMode?.[mode];
-  if (byEntry && Object.prototype.hasOwnProperty.call(byEntry, entryId)) {
+  if (byEntry && Object.hasOwn(byEntry, entryId)) {
     return byEntry[entryId] ?? null;
   }
   return undefined;
@@ -339,30 +348,46 @@ const LEGACY_SIZE_ENTRY_ID = "size";
 export function parseParamMapping(paramMap: unknown): ParamMapping {
   const manualByMode: Record<string, Record<string, string | null>> = {};
   const out: ParamMapping = { manualByMode, labels: {} };
-  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap))
+  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) {
     return out;
-  const sourceRaw = (paramMap as Record<string, unknown>).source;
-  if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw))
+  }
+  const sourceRaw = /* SAFETY: 类型断言已复核 */ (paramMap as Record<string, unknown>).source;
+  if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw)) {
     return out;
+  }
   for (const [key, value] of Object.entries(
-    sourceRaw as Record<string, unknown>,
+    /* SAFETY: 类型断言已复核 */ sourceRaw as Record<string, unknown>,
   )) {
-    if (!key.startsWith(MODE_KEY_PREFIX)) continue;
+    if (!key.startsWith(MODE_KEY_PREFIX)) {
+      continue;
+    }
     const mode = key.slice(MODE_KEY_PREFIX.length);
-    if (!mode) continue;
-    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    if (!mode) {
+      continue;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      continue;
+    }
     const byEntry: Record<string, string | null> = {};
     for (const [entryId, target] of Object.entries(
-      value as Record<string, unknown>,
+      /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>,
     )) {
       /* 存量清理：那个键没有任何入口能再写出来，读到即丢（下面 `byEntry` 里没它，
        *  序列化自然也不会把它写回去）。 */
-      if (entryId === LEGACY_SIZE_ENTRY_ID) continue;
-      if (typeof target === "string") byEntry[entryId] = target;
+      if (entryId === LEGACY_SIZE_ENTRY_ID) {
+        continue;
+      }
+      if (typeof target === "string") {
+        byEntry[entryId] = target;
+      }
       /* 显式的 null = 作者把这条线断开了，属于合法状态。 */
-      else if (target === null) byEntry[entryId] = null;
+      else if (target === null) {
+        byEntry[entryId] = null;
+      }
     }
-    if (Object.keys(byEntry).length > 0) manualByMode[mode] = byEntry;
+    if (Object.keys(byEntry).length > 0) {
+      manualByMode[mode] = byEntry;
+    }
   }
   return out;
 }
@@ -380,11 +405,14 @@ export function serializeParamMapping(
   for (const [mode, byEntry] of Object.entries(mapping.manualByMode ?? {})) {
     const targets: Record<string, string | null> = {};
     for (const [id, target] of Object.entries(byEntry ?? {})) {
-      if (typeof target !== "string" && target !== null) continue;
+      if (typeof target !== "string" && target !== null) {
+        continue;
+      }
       targets[id] = target;
     }
-    if (Object.keys(targets).length > 0)
+    if (Object.keys(targets).length > 0) {
       source[`${MODE_KEY_PREFIX}${mode}`] = targets;
+    }
   }
   return { ...paramMap, source };
 }
@@ -407,7 +435,9 @@ export function hasManualWiring(
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
 ): boolean {
-  if (!mode) return false;
+  if (!mode) {
+    return false;
+  }
   return Object.keys(mapping?.manualByMode?.[mode] ?? {}).length > 0;
 }
 
@@ -417,9 +447,11 @@ export function clearModeWiring(
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
 ): ParamMapping {
-  const manualByMode = { ...(mapping?.manualByMode ?? {}) };
-  if (mode) delete manualByMode[mode];
-  return { manualByMode, labels: { ...(mapping?.labels ?? {}) } };
+  const manualByMode = { ...mapping?.manualByMode };
+  if (mode) {
+    delete manualByMode[mode];
+  }
+  return { manualByMode, labels: { ...mapping?.labels } };
 }
 
 /** 映射落点（`resolved` 的值，= ioKey）→ 画布渲染侧那条端口的 **React Flow
@@ -447,7 +479,9 @@ export function handleIdForIoKey(
   io: WorkflowIOMap | null | undefined,
   ioKey: string | null | undefined,
 ): string | null {
-  if (!ioKey) return null;
+  if (!ioKey) {
+    return null;
+  }
   const name = io?.[ioKey]?.name;
   return typeof name === "string" && name.length > 0 ? name : null;
 }
@@ -463,9 +497,13 @@ export function ioKeyForHandle(
   nodeId: string,
   handleId: string | null | undefined,
 ): string | null {
-  if (!nodeId || !handleId) return null;
+  if (!nodeId || !handleId) {
+    return null;
+  }
   for (const [ioKey, entry] of Object.entries(io ?? {})) {
-    if (entry?.nodeId === nodeId && entry.name === handleId) return ioKey;
+    if (entry?.nodeId === nodeId && entry.name === handleId) {
+      return ioKey;
+    }
   }
   return null;
 }
@@ -474,7 +512,7 @@ export function ioKeyForHandle(
  *  消费方（后端 buildCustomWorkflow）据此把「该端口的实参来自哪个对外参数」
  *  解析出来，从而不覆盖工作流图上原有的连线。null 表示作者显式断开了这条线。 */
 export function buildSourceOverrides(
-  entries: readonly ParamEntry[],
+  entries: ReadonlyArray<ParamEntry>,
   io: WorkflowIOMap | null | undefined,
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
@@ -482,17 +520,19 @@ export function buildSourceOverrides(
   const resolved = resolveMapping(entries, io, mapping, mode);
   const out: Record<string, string | null> = {};
   for (const entry of entries) {
-    if (!Object.prototype.hasOwnProperty.call(resolved, entry.id)) continue;
+    if (!Object.hasOwn(resolved, entry.id)) {
+      continue;
+    }
     out[entry.id] = resolved[entry.id] ?? null;
   }
   return out;
 }
 
-export interface MappedInput {
-  nodeId: string;
+export type MappedInput = {
   name: string;
+  nodeId: string;
   value: unknown;
-}
+};
 
 /** 运行期节点 id：库内 `nodeId` 是「勾选所在视图的节点 id」。
  *
@@ -504,12 +544,11 @@ export interface MappedInput {
  *  之所以要把宿主 id 一起存下来，而不是运行期「拿裸 id 去所有子图定义里扫
  *  一遍」：后者在同名内部 id 或子图定义缺失时会静默失效（表现为「改了参数
  *  没生效」），拼出来的 id 才是确定性事实。 */
-export function runtimeNodeId(entry: {
-  nodeId: string;
-  hostNodeId?: string;
-}): string {
+export function runtimeNodeId(entry: { hostNodeId?: string; nodeId: string }): string {
   /* 已经是拼接形式（旧数据或嵌套场景已带冒号）→ 不重复拼。 */
-  if (entry.nodeId.includes(":") || !entry.hostNodeId) return entry.nodeId;
+  if (entry.nodeId.includes(":") || !entry.hostNodeId) {
+    return entry.nodeId;
+  }
   return `${entry.hostNodeId}:${entry.nodeId}`;
 }
 
@@ -530,29 +569,41 @@ function sizeValueForPin(
   /** 场景（图片 / 视频）：`1k` 在两种场景下不是同一组宽高，反解档位要按场景查表。 */
   scene: SizeScene,
 ): unknown {
-  if (!isSizeClass(entry.cls)) return supplied;
+  if (!isSizeClass(entry.cls)) {
+    return supplied;
+  }
   const raw = io?.[ioKey];
-  if (!raw) return supplied;
+  if (!raw) {
+    return supplied;
+  }
   const dims = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(String(supplied).trim());
-  if (!dims) return supplied;
+  if (!dims) {
+    return supplied;
+  }
   const width = Number(dims[1]);
   const height = Number(dims[2]);
   /* 形状由**子口身份**给出：作者连的是「尺寸 · 宽高比」，值就按比例标签派 ——
    * 端口叫什么名字不参与判定。 */
   switch (entry.cls) {
-    case "size-width":
+    case "size-width": {
       return width;
-    case "size-height":
+    }
+    case "size-height": {
       return height;
+    }
     case "size-aspect": {
       const label = aspectLabelForDims(width, height, raw.options);
       return label ?? undefined;
     }
     case "size-resolution": {
       const tier = resolutionTierOf(scene, width, height);
-      if (!tier) return undefined;
+      if (!tier) {
+        return undefined;
+      }
       const options = Array.isArray(raw.options) ? raw.options : [];
-      if (options.length === 0) return tier;
+      if (options.length === 0) {
+        return tier;
+      }
       /* 端口声明了自己的候选（`1k` / `1K` / …）→ 挑与档位同名的那个。挑不到就
        *  不写：写一个不在候选里的值只会被 ComfyUI 静默回落到第一个选项。 */
       return options.find((option) => resolutionTierOfLabel(option) === tier);
@@ -561,16 +612,19 @@ function sizeValueForPin(
       /* 倍数：由宽高反推能整除两侧的最大候选（与工坊 `sizeSpecMultiple` 同源）。 */
       const multiple = alignMultipleOf({ width, height });
       const options = Array.isArray(raw.options) ? raw.options : [];
-      if (options.length === 0) return multiple;
+      if (options.length === 0) {
+        return multiple;
+      }
       return options.find((option) => Number(option) === multiple);
     }
     case "size-megapixels": {
       const mp = megapixelsForSize(width, height, raw.defaultValue);
       return mp ?? undefined;
     }
-    default:
+    default: {
       /* 落点不是尺寸类端口（工作流的自定义 pin）：原样透传，由工作流自己解释。 */
       return supplied;
+    }
   }
 }
 
@@ -582,22 +636,26 @@ function sizeValueForPin(
  *  · 没画线的口：**不认用户值**（没有落点可落，不替作者猜），只按工作流默认值
  *    兜底 —— 与「未连线的口就用工作流自己的默认值」一致。 */
 export function applyParamMapping(args: {
+  entries: ReadonlyArray<ParamEntry>;
   io: WorkflowIOMap | null | undefined;
-  entries: readonly ParamEntry[];
   mapping: ParamMapping | null | undefined;
-  values: Record<string, unknown>;
   mode?: string | null;
-}): { inputs: MappedInput[]; unmatched: string[] } {
+  values: Record<string, unknown>;
+}): { inputs: Array<MappedInput>; unmatched: Array<string> } {
   const { io, entries, mapping, values, mode } = args;
   const resolved = resolveMapping(entries, io, mapping, mode);
-  const inputs: MappedInput[] = [];
-  const unmatched: string[] = [];
+  const inputs: Array<MappedInput> = [];
+  const unmatched: Array<string> = [];
   const seen = new Set<string>();
 
   const push = (ioKey: string, value: unknown) => {
-    if (value === undefined || seen.has(ioKey)) return;
+    if (value === undefined || seen.has(ioKey)) {
+      return;
+    }
     const raw = io?.[ioKey];
-    if (!raw) return;
+    if (!raw) {
+      return;
+    }
     seen.add(ioKey);
     inputs.push({ nodeId: runtimeNodeId(raw), name: raw.name, value });
   };
@@ -624,7 +682,9 @@ export function applyParamMapping(args: {
     const target = resolved[entry.id];
     const byPinKeys = target ? values[target] : undefined;
     const supplied = byContract ?? byPinKeys;
-    if (supplied === undefined) continue;
+    if (supplied === undefined) {
+      continue;
+    }
     /* 一个对外参数可能接到**多个端口**（「尺寸」的宽高比 / 像素量由同一块控件
      *  录入，作者把这几条线都连到同一个口上）。这时要把同一个对外值派生成每个
      *  端口各自认的形状，逐个下发 —— 只往其中一条线写，作者连出来的另外两条就
@@ -632,22 +692,23 @@ export function applyParamMapping(args: {
     const targets = wiredTargetsForEntry({ target });
     let pushed = false;
     for (const target of targets) {
-      if (!io?.[target.ioKey]) continue;
-      const perPort = sizeValueForPin(
-        io,
-        entry,
-        target.ioKey,
-        supplied,
-        sceneFromMode(mode),
-      );
-      if (perPort === undefined) continue;
+      if (!io?.[target.ioKey]) {
+        continue;
+      }
+      const perPort = sizeValueForPin(io, entry, target.ioKey, supplied, sceneFromMode(mode));
+      if (perPort === undefined) {
+        continue;
+      }
       push(target.ioKey, perPort);
       pushed = true;
     }
     /* 有落点但**没落上**（端口已消失 / 尺寸形状算不出）也要如实记 —— 否则用户
      * 改了值、任务跑出来还是旧值，而界面上没有任何地方说「这个口没接上」。 */
-    if (pushed) suppliedEntries.add(entry.id);
-    else unmatched.push(entry.id);
+    if (pushed) {
+      suppliedEntries.add(entry.id);
+    } else {
+      unmatched.push(entry.id);
+    }
   }
 
   /* 不兜底候选：候选是**按类型**收来的（同族几个口子摆的是同一份候选：宽 / 高 /

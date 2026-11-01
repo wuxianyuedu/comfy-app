@@ -17,14 +17,14 @@ import {
 } from "~/config/custom-nodes";
 import { deriveRowState, pathKey } from "../parsing";
 import { useBusyAction } from "~/components/ui/use-busy-action";
+
+/* 三个解析入口（全部 / 单条子包 / 单个父目录）：见 use-parse-actions.ts 头注。 */
+import { createParseActions } from "./use-parse-actions";
 import { errorText } from "~/lib/error-message";
 import { offsetWithin } from "~/lib/dom-rect";
 import { tailWindowAppend } from "~/lib/page-window";
 import { onNextFrame } from "~/lib/next-frame";
-import {
-  useExpansionSet,
-  type ExpansionSet,
-} from "~/components/ui/expansion-set";
+import { useExpansionSet, type ExpansionSet } from "~/components/ui/expansion-set";
 import type {
   DiscoveredSubpkg,
   ParseProgress,
@@ -41,61 +41,61 @@ const PARSE_LOG_MAX = 2000;
 
 type RowState = ReturnType<typeof deriveRowState>;
 
-export interface ParentBlock {
-  parent: string;
-  subs: {
-    sub: DiscoveredSubpkg;
-    saved: SummaryPkg | undefined;
-    state: RowState;
-  }[];
+export type ParentBlock = {
   cnt: {
+    empty: number;
+    error: number;
     loaded: number;
+    missing: number;
     outdated: number;
     unimported: number;
-    error: number;
-    missing: number;
-    empty: number;
   };
+  parent: string;
+  subs: Array<{
+    saved: SummaryPkg | undefined;
+    state: RowState;
+    sub: DiscoveredSubpkg;
+  }>;
   total: number;
-}
+};
 
 /** 自定义节点 / 本地工作流对话框的全部状态、派生数据与操作。
  *  容器与视图组件只消费这个 controller，不自己持有任何逻辑。 */
-export interface CustomNodesSettingsController {
-  open: boolean;
-  setOpen: Dispatch<SetStateAction<boolean>>;
-  savedPaths: string[];
-  /** 目录配置相关错误（如 ComfyUI 路径未配置）。 */
-  saveErr: string | null;
-  loading: boolean;
-  progress: ParseProgress;
-  parsing: boolean;
-  perPkgParsing: Record<string, boolean>;
-  report: ParseReport | null;
-  summary: SettingsResp["summary"];
-  discoveredByParent: Record<string, DiscoveredSubpkg[]>;
+export type CustomNodesSettingsController = {
   byPath: Record<string, SummaryPkg>;
-  /** 父目录展开集合（`~/components/ui/expansion-set`，规范 16 §16.2.4.17）。 */
-  parentExpansion: ExpansionSet;
-  logs: { level: string; msg: string }[];
   consoleRef: RefObject<HTMLDivElement | null>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
+  loading: boolean;
+  logs: Array<{ level: string; msg: string }>;
   logsRef: RefObject<HTMLDivElement | null>;
   manifestByNode: Record<string, ManifestNodeRaw>;
-  /** 子包「节点清单」展开集合。 */
-  nodeListExpansion: ExpansionSet;
   /** 节点预览卡展开集合。 */
   nodeCardExpansion: ExpansionSet;
+  /** 子包「节点清单」展开集合。 */
+  nodeListExpansion: ExpansionSet;
   onParseAll: () => Promise<void>;
-  onParseSingle: (pkgPath: string) => Promise<void>;
   onParseAllParent: (parent: string) => Promise<void>;
-  parentBlocks: ParentBlock[];
+  onParseSingle: (pkgPath: string) => Promise<void>;
+  open: boolean;
+  parentBlocks: Array<ParentBlock>;
+  /** 父目录展开集合（`~/components/ui/expansion-set`，规范 16 §16.2.4.17）。 */
+  parentExpansion: ExpansionSet;
+  parsing: boolean;
+  perPkgParsing: Record<string, boolean>;
+  progress: ParseProgress;
+  report: ParseReport | null;
+  savedPaths: Array<string>;
+  /** 目录配置相关错误（如 ComfyUI 路径未配置）。 */
+  saveErr: string | null;
+  setOpen: Dispatch<SetStateAction<boolean>>;
+  summary: SettingsResp["summary"];
   totalAcrossParents: {
     loaded: number;
     outdated: number;
-    unimported: number;
     total: number;
+    unimported: number;
   };
-}
+};
 
 /**
  * ndjson 进度事件流的消费器（从 `fetchSettings` 拆出，§12.13）。
@@ -116,16 +116,15 @@ function parseSettingsBlob(
   data: SettingsResp & { error?: { message?: string } | string },
   status: number,
 ): {
-  paths: string[];
-  summary: SettingsResp["summary"];
-  lastReport: ParseReport | null;
-  discoveredByParent: Record<string, DiscoveredSubpkg[]>;
   byPath: Record<string, SummaryPkg>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
+  lastReport: ParseReport | null;
+  paths: Array<string>;
+  summary: SettingsResp["summary"];
 } {
   if (!data.settings) {
     const err = data.error;
-    const detail =
-      typeof err === "string" ? err : (err?.message ?? `HTTP ${status}`);
+    const detail = typeof err === "string" ? err : (err?.message ?? `HTTP ${status}`);
     throw new Error(detail || `读取配置失败（HTTP ${status}）`);
   }
   const paths = data.settings.paths || [];
@@ -144,35 +143,41 @@ async function consumeSettingsStream(
     setSaveErr: (msg: string) => void;
   },
 ): Promise<{
-  paths: string[];
-  summary: SettingsResp["summary"];
-  lastReport: ParseReport | null;
   byPath: Record<string, SummaryPkg>;
-  discoveredByParent: Record<string, DiscoveredSubpkg[]>;
+  discoveredByParent: Record<string, Array<DiscoveredSubpkg>>;
+  lastReport: ParseReport | null;
+  paths: Array<string>;
+  summary: SettingsResp["summary"];
 }> {
   const reader = res.body?.getReader();
-  if (!reader) throw new Error("服务器未返回流式响应");
+  if (!reader) {
+    throw new Error("服务器未返回流式响应");
+  }
   const decoder = new TextDecoder();
   let buf = "";
   let summary: SettingsResp["summary"] = null;
   let lastReport: ParseReport | null = null;
   let byPath: Record<string, SummaryPkg> = {};
-  const discoveredByParent: Record<string, DiscoveredSubpkg[]> = {};
-  const paths: string[] = [];
+  const discoveredByParent: Record<string, Array<DiscoveredSubpkg>> = {};
+  const paths: Array<string> = [];
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      break;
+    }
     buf += decoder.decode(value, { stream: true });
     let nl: number;
     while ((nl = buf.indexOf("\n")) >= 0) {
       const line = buf.slice(0, nl);
       buf = buf.slice(nl + 1);
-      if (!line.trim()) continue;
+      if (!line.trim()) {
+        continue;
+      }
       // 设置流的 ndjson 事件 —— 仅本对话框消费的字段；每行由 JSON.parse 自身校验。
       let ev: SettingsStreamEvent;
       try {
-        ev = JSON.parse(line) as SettingsStreamEvent;
+        ev = /* SAFETY: 类型断言已复核 */ JSON.parse(line) as SettingsStreamEvent;
       } catch {
         continue;
       }
@@ -196,11 +201,21 @@ async function consumeSettingsStream(
             ...progress,
             parent: evParent.length > 0 ? evParent : progress.parent,
           };
-          if (ev.phase) next.phase = ev.phase;
-          if (ev.msg) next.msg = ev.msg;
-          if (ev.discovered !== undefined) next.discovered = ev.discovered;
-          if (ev.total !== undefined) next.total = ev.total;
-          if (ev.done !== undefined) next.done = ev.done;
+          if (ev.phase) {
+            next.phase = ev.phase;
+          }
+          if (ev.msg) {
+            next.msg = ev.msg;
+          }
+          if (ev.discovered !== undefined) {
+            next.discovered = ev.discovered;
+          }
+          if (ev.total !== undefined) {
+            next.total = ev.total;
+          }
+          if (ev.done !== undefined) {
+            next.done = ev.done;
+          }
           return next;
         });
       } else if (ev.type === "discover_done") {
@@ -219,11 +234,8 @@ async function consumeSettingsStream(
         lastReport = ev.lastReport ?? null;
         byPath = ev.byPath ?? {};
       } else if (ev.type === "error") {
-        const message =
-          ev.message !== undefined && ev.message.length > 0
-            ? ev.message
-            : "未知错误";
-        sinks.setSaveErr("扫描失败：" + message);
+        const message = ev.message !== undefined && ev.message.length > 0 ? ev.message : "未知错误";
+        sinks.setSaveErr(`扫描失败：${message}`);
       }
     }
   }
@@ -233,7 +245,7 @@ async function consumeSettingsStream(
 
 export function useCustomNodesSettings(): CustomNodesSettingsController {
   const [open, setOpen] = useState(false);
-  const [savedPaths, setSavedPaths] = useState<string[]>([]);
+  const [savedPaths, setSavedPaths] = useState<Array<string>>([]);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // 进度分两阶段，均用「包数」而非「文件数」表达（shape/字段文档见 ./types.ts 的
@@ -250,13 +262,11 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   });
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const parseBusy = useBusyAction();
-  const [perPkgParsing, setPerPkgParsing] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [perPkgParsing, setPerPkgParsing] = useState<Record<string, boolean>>({});
   const [report, setReport] = useState<ParseReport | null>(null);
   const [summary, setSummary] = useState<SettingsResp["summary"]>(null);
   const [discoveredByParent, setDiscoveredByParent] = useState<
-    Record<string, DiscoveredSubpkg[]>
+    Record<string, Array<DiscoveredSubpkg>>
   >({});
   const [byPath, setByPath] = useState<Record<string, SummaryPkg>>({});
   const parentExpansion = useExpansionSet();
@@ -266,7 +276,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * `useCallback` 每轮重建，那正是它此前 `[]` 想避免的事。 */
   const { seedDefaults: seedParentDefaults } = parentExpansion;
 
-  const [logs, setLogs] = useState<{ level: string; msg: string }[]>([]);
+  const [logs, setLogs] = useState<Array<{ level: string; msg: string }>>([]);
   const consoleRef = useRef<HTMLDivElement>(null);
   const logsRef = useRef<HTMLDivElement>(null);
   /* 卸载标记：见 fetchSettings 的 finally —— 那里有一个「让完成后提示停留
@@ -275,24 +285,21 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    * `ReferenceError: window is not defined`，`pnpm test` 因此随机非零退出，
    * 而用例层面全绿）。ISSUE #489。 */
   const aliveRef = useRef(true);
-  const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const progressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
-      if (progressHideTimerRef.current)
+      if (progressHideTimerRef.current) {
         clearTimeout(progressHideTimerRef.current);
+      }
     };
   }, []);
 
   // 原始 manifest（classType → 完整 spec），独立于 refreshCustomNodes() 填充的
   // 注册表：即使对话框刚打开、尚无消费者调用 refresh，也能渲染预览卡片。每次解析
   // 后重新拉取，使新导入的包无需硬刷新即可显示节点。
-  const [manifestByNode, setManifestByNode] = useState<
-    Record<string, ManifestNodeRaw>
-  >({});
+  const [manifestByNode, setManifestByNode] = useState<Record<string, ManifestNodeRaw>>({});
   // 每个子包：内联节点列表是否展开？
   // 子包内联节点清单是否展开？
   const nodeListExpansion = useExpansionSet();
@@ -301,30 +308,32 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const nodeCardExpansion = useExpansionSet();
 
   useEffect(() => {
-    const stillParsing =
-      parseBusy.busy || Object.values(perPkgParsing).some(Boolean);
+    const stillParsing = parseBusy.busy || Object.values(perPkgParsing).some(Boolean);
     if (stillParsing) {
-      if (consoleRef.current)
+      if (consoleRef.current) {
         consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
-    } else if (
-      logs.some((log) => log.level === "error" || log.msg.includes("✗"))
-    ) {
-      const idx = logs.findIndex(
-        (log) => log.level === "error" || log.msg.includes("✗"),
-      );
+      }
+    } else if (logs.some((log) => log.level === "error" || log.msg.includes("✗"))) {
+      const idx = logs.findIndex((log) => log.level === "error" || log.msg.includes("✗"));
       return onNextFrame(() => {
         const console_ = consoleRef.current;
-        if (!console_) return;
+        if (!console_) {
+          return;
+        }
         const row = console_.querySelectorAll<HTMLDivElement>("[data-log-row]");
         const target = row[idx];
-        if (!target) return;
+        if (!target) {
+          return;
+        }
         /* 相对面板自身的位置收在 `~/lib/dom-rect` 的 `offsetWithin`
          * （规范 16 §16.2.4.41）：`target.offsetTop` 量的是最近定位祖先，
          * 而本面板没有 `position:relative`，会回退到更高层的 `fixed` 包装，
          * 得到乱值 —— 正确的算式（两个 rect 相减 + 面板自身滚动偏移 + 8px
          * 留白）此前就地写在这一个文件里。 */
         const targetTop = offsetWithin(target, console_);
-        if (targetTop === null) return;
+        if (targetTop === null) {
+          return;
+        }
         console_.scrollTop = Math.max(0, console_.scrollTop + targetTop - 8);
       });
     }
@@ -343,11 +352,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   }, [parseBusy.busy, perPkgParsing, logs.length]);
   // 单包解析完成时也滚到日志：此刻新 report 追加、reloadFromServer() 重新填充列表。
   useEffect(() => {
-    if (
-      report &&
-      !parseBusy.busy &&
-      !Object.values(perPkgParsing).some(Boolean)
-    ) {
+    if (report && !parseBusy.busy && !Object.values(perPkgParsing).some(Boolean)) {
       return onNextFrame(() => {
         logsRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
@@ -366,7 +371,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
 
       if (!isStream) {
         // 缓存预热路径：服务端返回单个 JSON blob。
-        const data = (await res.json()) as SettingsResp & {
+        const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as SettingsResp & {
           error?: { message?: string } | string;
         };
         const parsed = parseSettingsBlob(data, res.status);
@@ -387,8 +392,8 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       setDiscoveredByParent(acc.discoveredByParent);
       setByPath(acc.byPath);
       seedParentDefaults(acc.paths);
-    } catch (e) {
-      setSaveErr(errorText(e, "读取配置失败"));
+    } catch (error) {
+      setSaveErr(errorText(error, "读取配置失败"));
     } finally {
       /* 卸载后不再碰任何 state。原写法在 finally 里 `return` —— 那会吞掉
        * try/catch 抛出的任何异常（no-unsafe-finally 拦的正是这个形态）；
@@ -396,10 +401,13 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
       if (aliveRef.current) {
         setLoading(false);
         // 保留最终进度行短暂可见，让用户看到「完成」再消失；下次重置时清除。
-        if (progressHideTimerRef.current)
+        if (progressHideTimerRef.current) {
           clearTimeout(progressHideTimerRef.current);
+        }
         progressHideTimerRef.current = setTimeout(() => {
-          if (!aliveRef.current) return;
+          if (!aliveRef.current) {
+            return;
+          }
           setProgress({
             phase: "",
             done: 0,
@@ -429,7 +437,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   }, [fetchSettings]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const timer = setTimeout(() => void fetchSettings(), 0);
     return () => clearTimeout(timer);
   }, [open, fetchSettings]);
@@ -438,15 +448,21 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   // 文件已在磁盘上、响应是小 JSON，开销低。
   const fetchManifest = useCallback(async () => {
     const manifest = await getCustomNodesManifest();
-    if (manifest) setManifestByNode(manifest.nodes || {});
+    if (manifest) {
+      setManifestByNode(manifest.nodes || {});
+    }
   }, []);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const timer = setTimeout(() => void fetchManifest(), 0);
     return () => clearTimeout(timer);
   }, [open, fetchManifest]);
   useEffect(() => {
-    if (!report) return;
+    if (!report) {
+      return;
+    }
     const timer = setTimeout(() => void fetchManifest(), 0);
     return () => clearTimeout(timer);
   }, [report, fetchManifest]);
@@ -465,15 +481,19 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     let buf = "";
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       buf += decoder.decode(value, { stream: true });
       let nl: number;
       while ((nl = buf.indexOf("\n")) >= 0) {
         const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
-        if (!line.trim()) continue;
+        if (!line.trim()) {
+          continue;
+        }
         try {
-          const obj = JSON.parse(line) as ParseStreamEvent;
+          const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(line) as ParseStreamEvent;
           if (obj.type === "log") {
             setLogs((prev) =>
               tailWindowAppend(
@@ -501,16 +521,14 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
    *  收口前这段 fetch + NDJSON 流式消费在**三处逐字重复**，而忙碌位的复位各自
    *  写在 `finally` 里；现在复位绑在忙碌位出口上（规范 16 §16.2.4.71），
    *  「解析中」不会因为中途抛错永远留在界面上。 */
-  async function runParse(packages?: string[]) {
+  async function runParse(packages?: Array<string>) {
     setError_(null);
     setLogs([]);
     try {
       const res = await fetch("/api/custom-nodes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          packages ? { action: "parse", packages } : { action: "parse" },
-        ),
+        body: JSON.stringify(packages ? { action: "parse", packages } : { action: "parse" }),
       });
       await readNdjson(res, async (record, ok) => {
         if (ok && record) {
@@ -519,34 +537,14 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         }
         await reloadFromServer();
       });
-    } catch (e) {
-      setError_(errorText(e, "解析失败"));
+    } catch (error) {
+      setError_(errorText(error, "解析失败"));
     }
   }
 
-  async function onParseAll() {
-    if (savedPaths.length === 0) {
-      setError_(
-        "未找到自定义节点目录 —— 请先在设置 → 创作后端 中配置 ComfyUI 安装路径",
-      );
-      return;
-    }
-    setReport(null);
-    await parseBusy.run(() => runParse());
-  }
-
-  async function onParseSingle(pkgPath: string) {
-    /* 按子包的忙碌位**不是一个布尔**（一屏多个子行各跑各的），所以它不走
-     *  `useBusyAction` —— 那一条账管的是「一次动作一块界面忙不忙」。 */
-    setPerPkgParsing((parsing) => ({ ...parsing, [pkgPath]: true }));
-    try {
-      await runParse([pkgPath]);
-    } finally {
-      clearPerPkgParsing(pkgPath);
-    }
-  }
-
-  /** 撤下单条子包的解析中标记（按子包维度的忙碌位，见 `onParseSingle`）。 */
+  /** 撤下单条子包的解析中标记（按子包维度的忙碌位，见 `use-parse-actions.ts` 的
+   *  `onParseSingle`）。留在本 hook 里而不是搬过去：它是个 `setState` 包装，
+   *  主 hook 的其它地方也用它，搬走会变成「两个模块互相递状态」。 */
   function clearPerPkgParsing(pkgPath: string) {
     setPerPkgParsing((parsing) => {
       const next = { ...parsing };
@@ -555,17 +553,19 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     });
   }
 
-  /** 一次性重新解析单个已配置父目录下的所有子包。复用同一子集解析路径，只是一次传 N
-   *  个绝对路径。空/缺失目录由解析器自身容忍（记录日志并跳过）。 */
-  async function onParseAllParent(parent: string) {
-    const subs = discoveredByParent[parent] ?? [];
-    const targets = subs.map((sub) => sub.path).filter(Boolean);
-    if (targets.length === 0) {
-      setError_("该目录下没有可解析的子包");
-      return;
-    }
-    await parseBusy.run(() => runParse(targets));
-  }
+  /* 三个解析入口（全部 / 单条子包 / 单个父目录）在 `use-parse-actions.ts`：
+   * 它们只读已配路径与已发现子包、写进度与错误，与本 hook 的状态编排是两件事
+   * （拆分前它们是内联在这里的四段函数，见那个文件头注）。 */
+  const { onParseAll, onParseSingle, onParseAllParent } = createParseActions({
+    savedPaths,
+    discoveredByParent,
+    parseBusy,
+    setError: setError_,
+    setReport,
+    setPerPkgParsing,
+    runParse,
+    clearPerPkgParsing,
+  });
 
   // 跨所有已配置父目录的扁平子包列表。一个顶层包（如 Anima-Artist-Mixer）即便用户
   // 输入的是父 custom_nodes 路径也只显示一次 —— 不渲染父卡片本身。
@@ -586,7 +586,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
         missing: 0,
         empty: 0,
       };
-      for (const e of enriched) cnt[e.state.kind] += 1;
+      for (const e of enriched) {
+        cnt[e.state.kind] += 1;
+      }
       return { parent, subs: enriched, cnt, total: enriched.length };
     });
   }, [savedPaths, discoveredByParent, byPath]);

@@ -10,21 +10,21 @@
  * 把「复算」这件事重新实现一遍（而它唯一的失效形态正是「假装干净」）。
  *
  * 覆盖：① 三态的判决（纯函数，两向各一组）；② 命令解析（钩子标签 / 裸脚本名 /
- * 完整命令 / 标签歧义）；③ **`inconclusive` 的两条入口** —— 只存在未提交改动里的
+ * 完整命令 / 标签歧义）；③ **`inconclusive` 的三条入口** —— 只存在未提交改动里的
  * 判据在基线侧 `MODULE_NOT_FOUND`，退出码与「跑了且红」同形（Node 是 1），
  * 所以「跑不起来」必须由**目标存不存在**判，不能由退出码判（实测踩过）；
  * 另一条是**一条用例都没收集到**（`Tests  no tests` / `Cannot find package`，
  * ISSUE #1652）—— 它同样是退出码 1，而「目标存不存在」看不见它（目标在、是它
  * 运行时的依赖链断了），所以这一族必须由**输出指纹**判，且两向都要钉住
  * （真红 `1 failed / 3 failed tests` 不许被吞成 `inconclusive`）。
+ * 第三条是**判据自己退 2**（ISSUE #2791）：三态口径里那是「这一跳没有结论」，
+ * 而它与 1 只差一个码位 —— 过去同权，于是「什么都没判」被报成「别线的红」。
  */
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { vi } from "vitest";
-
-import { describe, expect, test } from "vitest";
+import { vi, describe, expect, test } from "vitest";
 
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 import {
@@ -67,7 +67,7 @@ const SCRIPT = join(REPO_ROOT, "scripts", "base-check.mjs");
  * @param cwd 工作目录
  * @param args git 的子命令与参数
  * @returns stdout */
-function git(cwd: string, ...args: string[]): string {
+function git(cwd: string, ...args: Array<string>): string {
   /* 走 `gitSandboxEnv()`：本文件的夹具仓库里 `git add` 几十次，而宿主若开着
    * `core.autocrlf=true`，每一次都往 stderr 打一行 `LF will be replaced by CRLF`
    * —— 那批噪音会盖满 CI 日志，且与任何判据结论无关（见 `git-sandbox-env.ts` 文件头）。 */
@@ -98,11 +98,11 @@ function git(cwd: string, ...args: string[]): string {
  */
 function runBaseCheckOnce(
   cwd: string,
-  args: string[],
+  args: Array<string>,
 ): {
   code: number;
-  stdout: string;
   stderr: string;
+  stdout: string;
 } {
   try {
     const stdout = execFileSync(process.execPath, [SCRIPT, ...args], {
@@ -111,8 +111,12 @@ function runBaseCheckOnce(
       stdio: ["ignore", "pipe", "pipe"],
     });
     return { code: 0, stdout, stderr: "" };
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+  } catch (error) {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
+      status?: number;
+      stderr?: string;
+      stdout?: string;
+    };
     return {
       code: e.status ?? -1,
       stdout: String(e.stdout ?? ""),
@@ -131,11 +135,9 @@ function runBaseCheckOnce(
  * 的首选是 `@{u}`（当前分支的上游），而它只有在分支真跟踪某个远端时才解析得出。
  * 手写引用只能覆盖候选顺序的后半段，恰好绕开了最常走的那一条。
  */
-function makeRepo(
-  opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {},
-): {
-  work: string;
+function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}): {
   bare: string;
+  work: string;
 } {
   const bare = mkdtempSync(join(tmpdir(), "base-check-bare-"));
   git(bare, "init", "-q", "--bare", "-b", "master", ".");
@@ -152,14 +154,16 @@ function makeRepo(
     [
       'const fs = require("node:fs");',
       'const has = fs.existsSync("marker.txt");',
-      'process.stdout.write(has ? "[gate] 命中\\n" : "[gate] 干净\\n");',
+      String.raw`process.stdout.write(has ? "[gate] 命中\n" : "[gate] 干净\n");`,
       "process.exit(has ? 1 : 0);",
       "",
     ].join("\n"),
   );
   writeFileSync(join(work, "seed.txt"), "seed\n");
   /* 「违规已经落进主干」那一档：基线上就带着 marker ⇒ 两侧都红。 */
-  if (opts.markerOnBase) writeFileSync(join(work, "marker.txt"), "x\n");
+  if (opts.markerOnBase) {
+    writeFileSync(join(work, "marker.txt"), "x\n");
+  }
   /* 「基线侧一条用例都没收集到」那一档（ISSUE #1652）：判据脚本在**基线之后**被
    * 改成会收集用例的形态，于是基线那一版的 `node gate.cjs` 打印一段
    * vitest 形态的 `Tests  no tests` 并退 **1** —— 与「判据跑了且红」逐字同形。 */
@@ -167,7 +171,7 @@ function makeRepo(
     writeFileSync(
       join(work, "gate.cjs"),
       [
-        'process.stdout.write("Test Files  1 failed (1)\\n     Tests  no tests\\n");',
+        String.raw`process.stdout.write("Test Files  1 failed (1)\n     Tests  no tests\n");`,
         "process.exit(1);",
         "",
       ].join("\n"),
@@ -194,8 +198,8 @@ function makeRepo(
     writeFileSync(
       join(work, "gate.cjs"),
       [
-        'process.stdout.write("Test Files  1 failed (1)\\n     Tests  1 failed (1)\\n");',
-        'process.stdout.write("[gate] 真红\\n");',
+        String.raw`process.stdout.write("Test Files  1 failed (1)\n     Tests  1 failed (1)\n");`,
+        String.raw`process.stdout.write("[gate] 真红\n");`,
         "process.exit(1);",
         "",
       ].join("\n"),
@@ -207,7 +211,7 @@ function makeRepo(
 }
 
 /** 清掉一对（work + bare）临时目录。 */
-function dropRepo(r: { work: string; bare: string }): void {
+function dropRepo(r: { bare: string; work: string; }): void {
   rmSync(r.work, { recursive: true, force: true });
   rmSync(r.bare, { recursive: true, force: true });
 }
@@ -221,10 +225,12 @@ function dropRepo(r: { work: string; bare: string }): void {
  */
 function runBaseCheck(
   cwd: string,
-  args: string[],
-): { code: number; stdout: string; stderr: string } {
+  args: Array<string>,
+): { code: number; stderr: string; stdout: string; } {
   const first = runBaseCheckOnce(cwd, args);
-  if (first.code === 0 || first.stdout || first.stderr) return first;
+  if (first.code === 0 || first.stdout || first.stderr) {
+    return first;
+  }
   return runBaseCheckOnce(cwd, args);
 }
 
@@ -247,7 +253,7 @@ describe("base-check —— judge() 判决（纯函数，两向各一组）", ()
   });
 
   test("每一态都答得出「下一步做什么」（答不出 = 判据没有出口）", () => {
-    for (const verdict of [
+    for (const verdict of /* SAFETY: 类型断言已复核 */ [
       "current-green",
       "baseline-red",
       "yours",
@@ -332,12 +338,18 @@ describe("base-check —— 没收集到用例：inconclusive 的第二条入口
     expect(isDidNotRunShaped(REAL_RED)).toBe(false);
   });
 
-  test("runState 把三种形态分开，且指纹优先于退出码", () => {
+  test("runState 把四种形态分开，且指纹优先于退出码", () => {
     expect(runState({ code: 1, output: NO_TESTS })).toBe("did-not-run");
     expect(runState({ code: 0, output: "Tests  8 passed" })).toBe("ran");
     expect(runState({ code: 1, output: REAL_RED })).toBe("ran");
     expect(runState({ code: 127, output: "" })).toBe("did-not-run");
     expect(runState({ code: 7, output: "看不懂的输出" })).toBe("unknown");
+    /* 退 **2** = 判据跑了、但它自己答「这一跳没有结论」（本仓三态口径）。
+     * 它必须与 `ran` 分开：与 1 同权过一次，于是被读成 `baseline-red`（ISSUE #2791）。 */
+    expect(runState({ code: 2, output: "× 这一跑的前提不成立" })).toBe("no-conclusion");
+    /* 判序仍是「指纹优先于退出码」：一条用例都没收集到且退 2 时，说的是**那一种**形态，
+     * 不是"它声明没有结论"—— 两者的下一动作不同（前者修命令，后者清前置）。 */
+    expect(runState({ code: 2, output: NO_TESTS })).toBe("did-not-run");
   });
 
   test("指纹表认的是真见到的原文，不含「跑了且红」的形态", () => {
@@ -378,6 +390,15 @@ describe("base-check —— 没收集到用例：inconclusive 的第二条入口
         base: { code: 0, output: "" },
       }),
     ).toContain("本检出：127");
+    /* 退 2 那一形也要点得出**是哪一侧**——两侧都是 2 时（#2791 的现场），
+     * 只报一句「没跑起来」会让人去查本检出的命令，而两边都没坏。 */
+    expect(
+      didNotRunSide({
+        cur: 2,
+        curOutput: "× 这一跑的前提不成立",
+        base: { code: 2, output: "× 这一跑的前提不成立" },
+      }),
+    ).toBe("本检出：退 2（判据自己声明这一跳没有结论，不是红）；基线：退 2（判据自己声明这一跳没有结论，不是红）");
   });
 
   test("整批：任一条收集不到用例 ⇒ 整批 inconclusive（压过 baseline-red）", () => {
@@ -395,12 +416,8 @@ describe("base-check —— 没收集到用例：inconclusive 的第二条入口
   });
 
   test("「跑了但 0 条用例、退 0」⇒ inconclusive —— 不许与真绿同形（ISSUE #2400）", () => {
-    expect(
-      judge({ currentCode: 0, baseCode: 1, currentOutput: NO_TESTS }),
-    ).toBe("inconclusive");
-    expect(
-      judge({ currentCode: 0, baseCode: 1, currentOutput: "all good" }),
-    ).toBe("current-green");
+    expect(judge({ currentCode: 0, baseCode: 1, currentOutput: NO_TESTS })).toBe("inconclusive");
+    expect(judge({ currentCode: 0, baseCode: 1, currentOutput: "all good" })).toBe("current-green");
   });
 
   test("整批：段绿 + 逐条里混着一条「0 码没收集到」 ⇒ inconclusive（ISSUE #2400）", () => {
@@ -428,6 +445,71 @@ describe("base-check —— 没收集到用例：inconclusive 的第二条入口
  * 31.9s 全绿；把机器压到 load≈42 时 `tests/check-a11y-rules.test.ts` 报
  * `Test timed out in 30000ms`，隔离重跑立刻全绿。四态里没有它 —— 两侧都红
  * ⇒ 报 `baseline-red`，而照那个动作走会把一次调度抖动登记进 `KNOWN_FAILED_FILES`。 */
+/* ── inconclusive 的第三条入口：判据自己退 2（ISSUE #2791）─────────────────
+ *
+ * 现场（本检出，被 §13.6.2 那条路撞出来）：
+ *
+ *     $ node scripts/base-check.mjs "node scripts/ci-affected-tests.mjs"
+ *     [base-check] 结论：baseline-red（本检出 2，origin/master @ 224a5a3d 2）
+ *     [base-check] 基线那次输出的末尾：… ※ 这一档**不算绿也不算红** …
+ *
+ * 两侧都是 **2**（本仓三态口径里的「这一跳没有结论」：0 绿 / 1 事实红 / 2 没结论，
+ * 且 2 压 1 —— 同口径见 `check-daily-attendance` 的「退 2 不算绿」）。而 `judge()`
+ * 过去只看「非零」，于是 2 与 1 逐字同权。后果不是难看，是**下一动作相反**：
+ * `baseline-red` 要人把这条红记进历史（就地修 / 登记 `KNOWN_FAILED_FILES`），
+ * 而这一次什么都没判 —— 登记的是一条不存在的账。
+ */
+describe("base-check —— inconclusive 的第三条入口：判据自己退 2", () => {
+  const NO_PREMISE =
+    "[deps-probe] × 这一跑的**前提**不成立（不是用例红）：\n" +
+    "  · 环境里串进来了 1 个 npm_config_*（npm_config_cache）……\n" +
+    "※ 这一档不算绿也不算红：拿它当「用例红」去查代码，查的是一件没发生的事。";
+
+  test("两侧都退 2 ⇒ inconclusive（这一格曾报 baseline-red）", () => {
+    expect(
+      judge({
+        currentCode: 2,
+        baseCode: 2,
+        currentOutput: NO_PREMISE,
+        baseOutput: NO_PREMISE,
+      }),
+    ).toBe("inconclusive");
+  });
+
+  test("只有一侧退 2 也算没结论（两个方向各钉一条）", () => {
+    expect(
+      judge({ currentCode: 2, baseCode: 1, currentOutput: NO_PREMISE, baseOutput: "gate red" }),
+    ).toBe("inconclusive");
+    expect(
+      judge({ currentCode: 1, baseCode: 2, currentOutput: "gate red", baseOutput: NO_PREMISE }),
+    ).toBe("inconclusive");
+  });
+
+  test("反方向对照：两侧都退 1 且无超时指纹 ⇒ 仍是 baseline-red", () => {
+    /* 这一条挡的是"修过头"：把「2 才算没结论」写成「非 0 都算没结论」，就会把真·别线的红
+     * 吞成 inconclusive —— 比原来那格错得更坏（红彻底看不见，而人会以为无需处理）。 */
+    const real = "× 多了一行 — 3 个文件里 1 处命中";
+    expect(judge({ currentCode: 1, baseCode: 1, currentOutput: real, baseOutput: real })).toBe(
+      "baseline-red",
+    );
+  });
+
+  test("inconclusive 的话术点得出退 2 与它的下一动作（不是登记进历史）", () => {
+    const steps = nextSteps("inconclusive", { ref: "origin/master" }).join("\n");
+    expect(steps).toContain("退 2");
+    expect(steps).toContain("KNOWN_FAILED_FILES");
+  });
+
+  test("整批：混着一条退 2 ⇒ 整批 inconclusive（压过那一批 baseline-red）", () => {
+    expect(
+      summarizeRows([
+        { currentCode: 1, baseCode: 1, output: "gate red", baseOutput: "gate red" },
+        { currentCode: 2, baseCode: 2, output: NO_PREMISE, baseOutput: NO_PREMISE },
+      ]),
+    ).toBe("inconclusive");
+  });
+});
+
 describe("base-check —— load-flake：时间型判据在负载下的误红", () => {
   const TIMEOUT = "Test timed out in 30000ms.";
   const REAL_RED = "AssertionError: expected 3 to be 4";
@@ -538,9 +620,7 @@ describe("base-check —— load-flake：时间型判据在负载下的误红", 
 
   test("整批：本检出那侧的全文单独也能判（行里只有 `output` 时）", () => {
     expect(
-      summarizeRows([
-        { currentCode: 1, baseCode: 1, output: TIMEOUT, baseOutput: TIMEOUT },
-      ]),
+      summarizeRows([{ currentCode: 1, baseCode: 1, output: TIMEOUT, baseOutput: TIMEOUT }]),
     ).toBe("load-flake");
   });
 
@@ -571,28 +651,18 @@ describe("base-check —— 命令解析", () => {
       ok: true,
       argv: ["node", "scripts/x.cjs"],
     });
-    expect(
-      resolveGateCommand(["node scripts/x.cjs --base origin/master"]),
-    ).toMatchObject({
+    expect(resolveGateCommand(["node scripts/x.cjs --base origin/master"])).toMatchObject({
       ok: true,
       argv: ["node", "scripts/x.cjs", "--base", "origin/master"],
     });
-    expect(
-      resolveGateCommand(["pnpm exec vitest run tests/x.test.ts"]),
-    ).toMatchObject({
+    expect(resolveGateCommand(["pnpm exec vitest run tests/x.test.ts"])).toMatchObject({
       ok: true,
       argv: ["pnpm", "exec", "vitest", "run", "tests/x.test.ts"],
     });
   });
 
   test("完整命令原样透传", () => {
-    const r = resolveGateCommand([
-      "pnpm",
-      "exec",
-      "vitest",
-      "run",
-      "tests/x.test.ts",
-    ]);
+    const r = resolveGateCommand(["pnpm", "exec", "vitest", "run", "tests/x.test.ts"]);
     expect(r).toMatchObject({
       ok: true,
       argv: ["pnpm", "exec", "vitest", "run", "tests/x.test.ts"],
@@ -612,7 +682,7 @@ describe("base-check —— 命令解析", () => {
   test("标签不存在 ⇒ 判失败并列出候选（不许猜）", () => {
     const r = resolveGateCommand(["这个标签不存在"]);
     expect(r.ok).toBe(false);
-    expect(String((r as { error: string }).error)).toContain("可用");
+    expect(String(/* SAFETY: 类型断言已复核 */ (r as { error: string }).error)).toContain("可用");
   });
 
   test("没给命令 ⇒ 判失败", () => {
@@ -620,12 +690,7 @@ describe("base-check —— 命令解析", () => {
   });
 
   test("分词尊重引号、剥掉行内注释", () => {
-    expect(tokenize('node a.cjs --skip "两个 词"')).toEqual([
-      "node",
-      "a.cjs",
-      "--skip",
-      "两个 词",
-    ]);
+    expect(tokenize('node a.cjs --skip "两个 词"')).toEqual(["node", "a.cjs", "--skip", "两个 词"]);
     const steps = readHookSteps();
     /* 钩子里的步骤没有带 `#` 的行内注释残留 —— 否则 argv 里会出现一个 `#` 开头的词。 */
     for (const s of steps) {
@@ -641,24 +706,17 @@ describe("base-check —— 目标存在性（127 那条边界）", () => {
   });
 
   test("存在的脚本 ⇒ ok", () => {
-    const state = commandTargetState(
-      ["node", "scripts/base-check.mjs"],
-      REPO_ROOT,
-    );
+    const state = commandTargetState(["node", "scripts/base-check.mjs"], REPO_ROOT);
     expect(state.kind).toBe("ok");
   });
 
   test("非 node 命令 ⇒ unknown（交给它自己报错）", () => {
-    expect(commandTargetState(["pnpm", "exec", "vitest"], REPO_ROOT).kind).toBe(
-      "unknown",
-    );
-    expect(commandTargetState(["node", "--version"], REPO_ROOT).kind).toBe(
-      "unknown",
-    );
+    expect(commandTargetState(["pnpm", "exec", "vitest"], REPO_ROOT).kind).toBe("unknown");
+    expect(commandTargetState(["node", "--version"], REPO_ROOT).kind).toBe("unknown");
   });
 
   test("normalizeRun 把 spawn error 归成 127", () => {
-    const fake = {
+    const fake = /* SAFETY: 类型断言已复核 */ {
       error: new Error("ENOENT"),
       status: null,
       stdout: "",
@@ -672,10 +730,7 @@ describe("base-check —— 真仓库上的四态", () => {
   test("本检出红 / 基线绿 ⇒ yours，且给出上游提交号", () => {
     const r = makeRepo();
     try {
-      const { code, stdout, stderr } = runBaseCheck(r.work, [
-        "node",
-        "gate.cjs",
-      ]);
+      const { code, stdout, stderr } = runBaseCheck(r.work, ["node", "gate.cjs"]);
       expect(code, `stderr=${stderr}`).toBe(0);
       expect(stdout).toContain("yours");
       /* 基线引用由 `@{u}` 解析出来 —— 结论里要点名是**哪一条**基线。 */
@@ -709,7 +764,7 @@ describe("base-check —— 真仓库上的四态", () => {
    * 合了进来（还没推）。此时按旧口径拿 `@{u}` 当基线 = 拿**不含那批合并改动**的
    * 自己跟自己比 ⇒ 主干自带的红会被判成 `yours`，把别线的债算到复算的人头上。
    */
-  function makeMergedPrFixture(): { work: string; bare: string } {
+  function makeMergedPrFixture(): { bare: string; work: string; } {
     const bare = mkdtempSync(join(tmpdir(), "base-check-pr-bare-"));
     git(bare, "init", "-q", "--bare", "-b", "master", ".");
     const work = mkdtempSync(join(tmpdir(), "base-check-pr-work-"));
@@ -723,7 +778,7 @@ describe("base-check —— 真仓库上的四态", () => {
       [
         'const fs = require("node:fs");',
         'const has = fs.existsSync("marker.txt");',
-        'process.stdout.write(has ? "[gate] 命中\\n" : "[gate] 干净\\n");',
+        String.raw`process.stdout.write(has ? "[gate] 命中\n" : "[gate] 干净\n");`,
         "process.exit(has ? 1 : 0);",
         "",
       ].join("\n"),
@@ -772,10 +827,7 @@ describe("base-check —— 真仓库上的四态", () => {
       expect(got.why).toContain("up/feat");
 
       writeFileSync(join(r.work, "green.cjs"), "process.exit(0);\n");
-      const { code, stdout, stderr } = runBaseCheck(r.work, [
-        "node",
-        "green.cjs",
-      ]);
+      const { code, stdout, stderr } = runBaseCheck(r.work, ["node", "green.cjs"]);
       expect(code, `stderr=${stderr}`).toBe(0);
       /* 取了哪条基线必须在**真实输出**里看得见：一份写着 `up/feat` 的报告读起来
          像「与主干比过」，而它一个字都没比 —— 那就是本次误判的形态。 */
@@ -820,13 +872,9 @@ describe("base-check —— 真仓库上的四态", () => {
     try {
       /* 把 marker 删了 —— 判据在两侧都绿。 */
       rmSync(join(r.work, "marker.txt"));
-      const before = git(r.work, "worktree", "list")
-        .split("\n")
-        .filter(Boolean).length;
+      const before = git(r.work, "worktree", "list").split("\n").filter(Boolean).length;
       const { stdout } = runBaseCheck(r.work, ["node", "gate.cjs"]);
-      const after = git(r.work, "worktree", "list")
-        .split("\n")
-        .filter(Boolean).length;
+      const after = git(r.work, "worktree", "list").split("\n").filter(Boolean).length;
       expect(stdout).toContain("current-green");
       expect(after).toBe(before);
     } finally {
@@ -853,13 +901,13 @@ describe("base-check —— 真仓库上的四态", () => {
      * 「就地修 / 登记 KNOWN_FAILED_FILES」那条下一动作（ISSUE #1652）。 */
     const r = makeRepo({ noTestsOnBase: true });
     try {
-      const { code, stdout, stderr } = runBaseCheck(r.work, [
-        "node",
-        "gate.cjs",
-      ]);
+      const { code, stdout, stderr } = runBaseCheck(r.work, ["node", "gate.cjs"]);
       expect(code, `stderr=${stderr}`).toBe(0);
       expect(stdout).toContain("inconclusive");
-      expect(stdout).toContain("没跑起来：基线：一条用例都没收集到");
+      /* 标签从「没跑起来」改成「没跑出结论」：第三条入口（退 2）里命令**跑起来了**，
+         是它自己答"没有结论"—— 沿用旧标签会把那一形说成"命令坏了"，而它的下一动作
+         是清前置后复算（ISSUE #2791）。 */
+      expect(stdout).toContain("没跑出结论：基线：一条用例都没收集到");
       /* 不许再报成「别线的红」—— 那正是这次要修的那一格。 */
       expect(stdout).not.toContain("结论：baseline-red");
       expect(stdout).toContain("pnpm install --frozen-lockfile");
@@ -938,7 +986,9 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
   test("默认面 = 钩子里的全仓判据，且含 A 组的 tsc 与 B 组的 eslint", () => {
     const r = resolveMergeBatch([]);
     expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    if (!r.ok) {
+      return;
+    }
     const labels = r.commands.map((c) => c.label);
     /* 这两条就是 ISSUE #1591 立案的那两条：它们在钩子里是 `run_group`（并行成组）、
      * 不是 `run "<标签>"`，所以只读 `run` 的解析器看不见它们 —— 只读 `run` 会让
@@ -965,51 +1015,35 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     expect(byLabel.ok).toBe(true);
     if (byLabel.ok) {
       expect(byLabel.commands).toHaveLength(1);
-      expect(byLabel.commands[0]!.argv).toContain(
-        "scripts/check-file-structure.cjs",
-      );
+      expect(byLabel.commands[0]!.argv).toContain("scripts/check-file-structure.cjs");
     }
     /* 不存在的名字 ⇒ 判失败并列出候选（不许猜，同 `resolveGateCommand`）。 */
     expect(resolveMergeBatch(["这个标签不存在"]).ok).toBe(false);
   });
 
   test("只在「本次改了啥」上作答的判据不进这一批（干净快照里没有暂存区）", () => {
-    expect(
-      mayDecideOnCleanSnapshot([
-        "node",
-        "scripts/check-deps-freshness.mjs",
-        "--staged",
-      ]),
-    ).toBe(false);
-    expect(
-      mayDecideOnCleanSnapshot([
-        "node",
-        "scripts/storybook-check.mjs",
-        "--changed",
-      ]),
-    ).toBe(false);
-    /* 它的判决**依赖暂存改动**：干净快照里它立刻返回 0，那行绿是假绿。 */
-    expect(mayDecideOnCleanSnapshot(["node", "scripts/shell-gate.mjs"])).toBe(
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-deps-freshness.mjs", "--staged"])).toBe(
       false,
     );
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/storybook-check.mjs", "--changed"])).toBe(
+      false,
+    );
+    /* 它的判决**依赖暂存改动**：干净快照里它立刻返回 0，那行绿是假绿。 */
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/shell-gate.mjs"])).toBe(false);
     /* 复算里再复算会递归。 */
-    expect(
-      mayDecideOnCleanSnapshot(["node", "scripts/base-check.mjs", "x"]),
-    ).toBe(false);
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/base-check.mjs", "x"])).toBe(false);
     /* 全仓判据留下。 */
-    expect(
-      mayDecideOnCleanSnapshot([
-        "node",
-        "scripts/check-file-structure.cjs",
-        "--strict",
-      ]),
-    ).toBe(true);
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-file-structure.cjs", "--strict"])).toBe(
+      true,
+    );
   });
 
   test("默认面里不含任何「只在改动上作答」的判据", () => {
     const r = resolveMergeBatch([]);
     expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    if (!r.ok) {
+      return;
+    }
     for (const c of r.commands) {
       expect(mayDecideOnCleanSnapshot(c.argv), c.label).toBe(true);
     }
@@ -1046,10 +1080,13 @@ describe("base-check --base —— 整批结论的优先级（纯函数）", () 
   });
 
   test("红的那几条基线上绿 ⇒ yours", () => {
+    /* 这一条原来写的是 `currentCode: 2` —— 那时 2 还没有含义，被当"任意非零"用。
+     * 现在 2 = 判据自己声明「这一跳没有结论」⇒ 它落 `inconclusive`（见上面 #2791 那一组），
+     * 所以这里必须用**真红** 1，否则测的就不是「你的红」这一档了。 */
     expect(
       summarizeRows([
         { currentCode: 0, baseCode: 0 },
-        { currentCode: 2, baseCode: 0 },
+        { currentCode: 1, baseCode: 0 },
       ]),
     ).toBe("yours");
   });
@@ -1070,27 +1107,21 @@ describe("base-check --base —— 整批结论的优先级（纯函数）", () 
   });
 
   test("每一态都答得出「下一步做什么」，且红的那几条被点名", () => {
-    for (const summary of [
+    for (const summary of /* SAFETY: 类型断言已复核 */ [
       "current-green",
       "inconclusive",
       "baseline-red",
       "yours",
     ] as const) {
-      const lines = nextStepsMany(
-        summary,
-        [{ label: "tsc --noEmit", verdict: "yours" }],
-        { ref: "origin/master" },
-      );
+      const lines = nextStepsMany(summary, [{ label: "tsc --noEmit", verdict: "yours" }], {
+        ref: "origin/master",
+      });
       expect(lines.length).toBeGreaterThan(0);
       expect(lines.join("\n")).not.toMatch(/undefined/);
     }
-    const named = nextStepsMany(
-      "yours",
-      [{ label: "tsc --noEmit", verdict: "yours" }],
-      {
-        ref: "origin/master",
-      },
-    );
+    const named = nextStepsMany("yours", [{ label: "tsc --noEmit", verdict: "yours" }], {
+      ref: "origin/master",
+    });
     expect(named[0]).toContain("tsc --noEmit");
   });
 });
@@ -1139,12 +1170,14 @@ describe("base-check --base —— 真仓库上的端到端", () => {
       [
         'const fs = require("node:fs");',
         'const has = fs.existsSync("marker.txt");',
-        'process.stdout.write(has ? "[gate] 命中\\n" : "[gate] 干净\\n");',
+        String.raw`process.stdout.write(has ? "[gate] 命中\n" : "[gate] 干净\n");`,
         "process.exit(has ? 1 : 0);",
         "",
       ].join("\n"),
     );
-    if (opts.baselineRed) writeFileSync(join(work, "marker.txt"), "x\n");
+    if (opts.baselineRed) {
+      writeFileSync(join(work, "marker.txt"), "x\n");
+    }
     writeFileSync(join(work, "seed.txt"), "seed\n");
     git(work, "add", ".");
     git(work, "commit", "-qm", "chore: seed");
@@ -1152,10 +1185,7 @@ describe("base-check --base —— 真仓库上的端到端", () => {
     git(work, "checkout", "-q", "-b", "feat", "up/master");
     /* 依赖树链进快照那一手要核的东西：一个假 `node_modules`（判据读它）。 */
     mkdirSync(join(work, "node_modules", "fake-dep"), { recursive: true });
-    writeFileSync(
-      join(work, "node_modules", "fake-dep", "index.js"),
-      "module.exports = 1;\n",
-    );
+    writeFileSync(join(work, "node_modules", "fake-dep", "index.js"), "module.exports = 1;\n");
     return { work, bare };
   }
 
@@ -1217,14 +1247,14 @@ describe("base-check --base —— 真仓库上的端到端", () => {
     const r = makeBatchRepo({ baselineRed: true });
     try {
       const { stdout } = runBaseCheck(r.work, ["--base", "--json"]);
-      const parsed = JSON.parse(stdout) as {
-        summary: string;
+      const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(stdout) as {
         ref: string;
         rows: Array<{
+          baseCode: number | null;
           label: string;
           verdict: string;
-          baseCode: number | null;
         }>;
+        summary: string;
       };
       expect(parsed.summary).toBe("baseline-red");
       expect(parsed.ref).toMatch(/up\/master/);
@@ -1250,9 +1280,7 @@ describe("base-check --base —— 基线引用只认「要并进去的那条」
     /* 夹具：远端 master + 一条跟踪它的 feat 分支 —— 这正是 PR 分支的形状。 */
     const r = makeRepo();
     try {
-      expect(git(r.work, "rev-parse", "--abbrev-ref", "feat@{u}").trim()).toBe(
-        "up/master",
-      );
+      expect(git(r.work, "rev-parse", "--abbrev-ref", "feat@{u}").trim()).toBe("up/master");
       /* 事后复算那一档：认 `@{u}`（它要答的是「我这条线的上游有没有这个红」）。 */
       expect(resolveUpstreamRef(r.work)).toBe("up/master");
       /* 合并前那一档：只认「要并进去的那条」。 */

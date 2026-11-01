@@ -75,7 +75,7 @@ function toPosix(p) {
 
 /** 去掉注释与字符串字面量里的噪声前先剥注释 —— 注释里写 `import "x"` 不构成依赖。 */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 /**
@@ -86,17 +86,24 @@ function stripComments(src) {
  */
 function resolveSpec(spec, fromFile) {
   let base;
-  if (spec.startsWith("~/")) base = path.join(SRC, spec.slice(2));
-  else if (spec.startsWith("@/")) base = path.join(SRC, spec.slice(2));
-  else if (spec.startsWith(".")) base = path.resolve(path.dirname(fromFile), spec);
-  else return null;
+  if (spec.startsWith("~/")) {
+    base = path.join(SRC, spec.slice(2));
+  } else if (spec.startsWith("@/")) {
+    base = path.join(SRC, spec.slice(2));
+  } else if (spec.startsWith(".")) {
+    base = path.resolve(path.dirname(fromFile), spec);
+  } else {
+    return null;
+  }
   for (const c of [
     `${base}.ts`,
     `${base}.tsx`,
     path.join(base, "index.ts"),
     path.join(base, "index.tsx"),
   ]) {
-    if (fs.existsSync(c) && fs.statSync(c).isFile()) return toPosix(path.relative(ROOT, c));
+    if (fs.existsSync(c) && fs.statSync(c).isFile()) {
+      return toPosix(path.relative(ROOT, c));
+    }
   }
   return null;
 }
@@ -133,9 +140,12 @@ function staticSpecs(src) {
    * ③ 裸副作用 `import "x"` 单独一条正则（它没有 `from`）。 */
   for (const m of src.matchAll(
     /\b(?:import|export)\s(?!type\s)[^;=(]*?\bfrom\s*["']([^"']+)["']/g,
-  ))
+  )) {
     out.add(m[1]);
-  for (const m of src.matchAll(/^\s*import\s*["']([^"']+)["']/gm)) out.add(m[1]);
+  }
+  for (const m of src.matchAll(/^\s*import\s*["']([^"']+)["']/gm)) {
+    out.add(m[1]);
+  }
   return [...out];
 }
 
@@ -149,7 +159,9 @@ function staticClosure(entryRel) {
     const curRel = toPosix(path.relative(ROOT, cur));
     for (const spec of staticSpecs(readSrc(cur))) {
       const resolved = resolveSpec(spec, cur);
-      if (resolved === null || parent.has(resolved)) continue;
+      if (resolved === null || parent.has(resolved)) {
+        continue;
+      }
       parent.set(resolved, curRel);
       queue.push(path.join(ROOT, resolved));
     }
@@ -163,7 +175,9 @@ function chainTo(parent, entryRel, target) {
   let cur = parent.get(target);
   while (cur) {
     chain.push(cur);
-    if (cur === entryRel) break;
+    if (cur === entryRel) {
+      break;
+    }
     cur = parent.get(cur);
   }
   return chain.reverse();
@@ -182,21 +196,28 @@ function runtimeDepsOf(modRel) {
   const src = readSrc(path.join(ROOT, modRel));
   const out = new Set();
   const bare = (spec) => {
-    if (!spec || spec.startsWith(".") || spec.startsWith("~/") || spec.startsWith("@/"))
+    if (!spec || spec.startsWith(".") || spec.startsWith("~/") || spec.startsWith("@/")) {
       return;
-    if (spec.startsWith("node:")) return;
+    }
+    if (spec.startsWith("node:")) {
+      return;
+    }
     out.add(spec);
   };
   /* 静态：import / export … from（排除 `import type`）。 */
   for (const m of src.matchAll(
     /\b(?:import|export)\s(?!type\s)[^;=(]*?\bfrom\s*["']([^"']+)["']/g,
-  ))
+  )) {
     bare(m[1]);
+  }
   /* 裸副作用 import "x"。 */
-  for (const m of src.matchAll(/^\s*import\s*["']([^"']+)["']/gm)) bare(m[1]);
-  /* 动态 `import("x")` 与 `require("x")` —— 懒加载也算「这个模块引了它」。 */
-  for (const m of src.matchAll(/\b(?:import|require)\s*\(\s*["']([^"']+)["']/g))
+  for (const m of src.matchAll(/^\s*import\s*["']([^"']+)["']/gm)) {
     bare(m[1]);
+  }
+  /* 动态 `import("x")` 与 `require("x")` —— 懒加载也算「这个模块引了它」。 */
+  for (const m of src.matchAll(/\b(?:import|require)\s*\(\s*["']([^"']+)["']/g)) {
+    bare(m[1]);
+  }
   return [...out];
 }
 
@@ -229,14 +250,18 @@ function main() {
      * 解析算法、还要处理 pnpm 的软链，代价远大于收益 —— 而形态（谁 import 了
      * `@xyflow/react`）在本仓是稳定的、可直接 grep 的事实。 */
     for (const modRel of reachable) {
-      if (modRel === entryRel) continue;
+      if (modRel === entryRel) {
+        continue;
+      }
       /* 只看**真引用**：`import` / `require` / 裸副作用 import 里的说明符。
        * 不能用「文件里出现过这个字符串」判 —— `import type { X } from
        * "@xyflow/react"` 同样含这个串，而它编译后被完全擦除（与上面
        * `staticSpecs` 的 ② 是同一口径）。本判据的立案现场就有一半是类型。 */
       const deps = runtimeDepsOf(modRel);
       for (const dep of heavyDeps) {
-        if (!deps.some((d) => d === dep || d.startsWith(`${dep}/`))) continue;
+        if (!deps.some((d) => d === dep || d.startsWith(`${dep}/`))) {
+          continue;
+        }
         findings.push({
           kind: "heavy-dep-static-reachable",
           entry: entryRel,
@@ -248,7 +273,9 @@ function main() {
     }
 
     for (const lazyRel of lazyMustBeDynamicFromEntry) {
-      if (!parent.has(lazyRel)) continue;
+      if (!parent.has(lazyRel)) {
+        continue;
+      }
       findings.push({
         kind: "lazy-module-statically-reachable",
         entry: entryRel,
@@ -259,7 +286,7 @@ function main() {
   }
 
   if (AS_JSON) {
-    process.stdout.write(JSON.stringify({ reports, findings }, null, 2) + "\n");
+    process.stdout.write(`${JSON.stringify({ reports, findings }, null, 2)}\n`);
     process.exit(findings.length > 0 ? 1 : 0);
   }
 
@@ -279,18 +306,14 @@ function main() {
     return;
   }
 
-  console.error(
-    `\n✗ 入口的**静态**可达图里出现了不该有的东西（${findings.length} 处）：\n`,
-  );
+  console.error(`\n✗ 入口的**静态**可达图里出现了不该有的东西（${findings.length} 处）：\n`);
   for (const f of findings) {
     if (f.kind === "entry-missing") {
       console.error(`  · ${f.message}`);
       continue;
     }
     const kind =
-      f.kind === "heavy-dep-static-reachable"
-        ? `重依赖 ${f.dep}`
-        : "按设计必须懒加载的模块";
+      f.kind === "heavy-dep-static-reachable" ? `重依赖 ${f.dep}` : "按设计必须懒加载的模块";
     console.error(`  · 入口 ${f.entry} 静态拿到 ${f.module}（${kind}）`);
     console.error(`    链：${f.chain.join(" -> ")}`);
   }

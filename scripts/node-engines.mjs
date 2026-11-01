@@ -80,7 +80,9 @@ const COMPARATOR_RE = /^(\^|>=|<=|>|<|=)?\s*(\d+(?:\.\d+){0,2})$/;
  */
 function parseVersion(raw) {
   const m = TRIPLE_RE.exec(String(raw ?? "").trim());
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const g = m.slice(1, 4).map(Number);
   return /** @type {Triple} */ ([g[0], g[1], g[2]]);
 }
@@ -95,9 +97,12 @@ function parseBound(raw) {
     .trim()
     .split(".")
     .map(Number);
-  if (!parts.length || parts.some((n) => !Number.isInteger(n) || n < 0))
+  if (!parts.length || parts.some((n) => !Number.isInteger(n) || n < 0)) {
     return null;
-  while (parts.length < 3) parts.push(0);
+  }
+  while (parts.length < 3) {
+    parts.push(0);
+  }
   const t = parts.slice(0, 3);
   return /** @type {Triple} */ ([t[0], t[1], t[2]]);
 }
@@ -108,7 +113,9 @@ function parseBound(raw) {
  */
 export function compareVersions(a, b) {
   for (let i = 0; i < 3; i++) {
-    if (a[i] !== b[i]) return (a[i] ?? 0) - (b[i] ?? 0);
+    if (a[i] !== b[i]) {
+      return (a[i] ?? 0) - (b[i] ?? 0);
+    }
   }
   return 0;
 }
@@ -123,12 +130,14 @@ export function compareVersions(a, b) {
 export function parseRange(range) {
   /* 真实世界里 `>= 10`（操作符后带空格）与 `>=22.12.0 <23.0.0`（一档内并排）都在，
    * 先把操作符后面的空格吃掉，否则 `>=` 与 `10` 会被拆成两个比较符、整条读不懂。 */
-  const normalized = String(range ?? "").replace(/(\^|>=|<=|>|<|=)\s+/g, "$1");
+  const normalized = String(range ?? "").replaceAll(/(\^|>=|<=|>|<|=)\s+/g, "$1");
   const alternatives = normalized
     .split("||")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (alternatives.length === 0) return null;
+  if (alternatives.length === 0) {
+    return null;
+  }
 
   /** @type {Interval[]} */
   const out = [];
@@ -173,15 +182,23 @@ export function parseRange(range) {
 
     for (const c of alt.split(/[\s,]+/).filter(Boolean)) {
       const m = COMPARATOR_RE.exec(c);
-      if (!m) return null;
+      if (!m) {
+        return null;
+      }
       const op = m[1] ?? "=";
       const rawVersion = m[2];
-      if (!rawVersion) return null;
+      if (!rawVersion) {
+        return null;
+      }
       const v = parseBound(rawVersion);
-      if (!v) return null;
+      if (!v) {
+        return null;
+      }
       if (op === "^") {
         /* ^X.Y.Z ⇒ >=X.Y.Z 且 <(X+1).0.0（X>0 时）。0.x 另有语义，本族用不到 ⇒ 拒解。 */
-        if (v[0] === 0) return null;
+        if (v[0] === 0) {
+          return null;
+        }
         raiseLower(v, true);
         lowerUpper(/** @type {Triple} */ ([v[0] + 1, 0, 0]), false);
       } else if (op === ">=") {
@@ -197,7 +214,9 @@ export function parseRange(range) {
         lowerUpper(v, true);
       }
     }
-    if (lower === null) return null;
+    if (lower === null) {
+      return null;
+    }
     out.push({ lower, lowerInclusive, upper, upperInclusive });
   }
   return out;
@@ -212,18 +231,24 @@ export function parseRange(range) {
  */
 export function satisfies(version, range) {
   const v = parseVersion(String(version ?? "").replace(/^v/, ""));
-  if (!v) return null;
+  if (!v) {
+    return null;
+  }
   const intervals = Array.isArray(range) ? range : parseRange(range);
-  if (!intervals) return null;
+  if (!intervals) {
+    return null;
+  }
   return intervals.some((iv) => {
     const lowOk = iv.lowerInclusive
       ? compareVersions(v, iv.lower) >= 0
       : compareVersions(v, iv.lower) > 0;
-    if (!lowOk) return false;
-    if (iv.upper === null) return true;
-    return iv.upperInclusive
-      ? compareVersions(v, iv.upper) <= 0
-      : compareVersions(v, iv.upper) < 0;
+    if (!lowOk) {
+      return false;
+    }
+    if (iv.upper === null) {
+      return true;
+    }
+    return iv.upperInclusive ? compareVersions(v, iv.upper) <= 0 : compareVersions(v, iv.upper) < 0;
   });
 }
 
@@ -239,14 +264,23 @@ function within(inner, outer) {
    * outer `>20`、inner `>=20` 是真实 gap，旧式会误报 true 放过）。
    * 现网形状两端皆 inclusive（^ 与 >=），故此前休眠；一旦写 `>26.0.0` 即活。 */
   const lowCmp = compareVersions(inner.lower, outer.lower);
-  const lowOk =
-    lowCmp > 0 || (lowCmp === 0 && (outer.lowerInclusive || !inner.lowerInclusive));
-  if (!lowOk) return false;
-  if (outer.upper === null) return true;
-  if (inner.upper === null) return false;
+  const lowOk = lowCmp > 0 || (lowCmp === 0 && (outer.lowerInclusive || !inner.lowerInclusive));
+  if (!lowOk) {
+    return false;
+  }
+  if (outer.upper === null) {
+    return true;
+  }
+  if (inner.upper === null) {
+    return false;
+  }
   const upCmp = compareVersions(inner.upper, outer.upper);
-  if (upCmp < 0) return true;
-  if (upCmp > 0) return false;
+  if (upCmp < 0) {
+    return true;
+  }
+  if (upCmp > 0) {
+    return false;
+  }
   return inner.upperInclusive === false || outer.upperInclusive === true;
 }
 
@@ -264,10 +298,10 @@ function within(inner, outer) {
 export function covers(outer, inner) {
   const outerIntervals = Array.isArray(outer) ? outer : parseRange(outer);
   const innerIntervals = Array.isArray(inner) ? inner : parseRange(inner);
-  if (!outerIntervals || !innerIntervals) return null;
-  return innerIntervals.every((iv) =>
-    outerIntervals.some((o) => within(iv, o)),
-  );
+  if (!outerIntervals || !innerIntervals) {
+    return null;
+  }
+  return innerIntervals.every((iv) => outerIntervals.some((o) => within(iv, o)));
 }
 
 /**
@@ -282,13 +316,16 @@ export function covers(outer, inner) {
  */
 export function collectDependencyFloors(root) {
   const pkg = readJson(path.join(root, "package.json"));
-  if (!pkg) return { ok: false, reason: "读不到 package.json" };
+  if (!pkg) {
+    return { ok: false, reason: "读不到 package.json" };
+  }
   const declared = Object.keys({
-    ...(pkg.dependencies || {}),
-    ...(pkg.devDependencies || {}),
+    ...pkg.dependencies,
+    ...pkg.devDependencies,
   });
-  if (declared.length === 0)
+  if (declared.length === 0) {
     return { ok: false, reason: "package.json 里没有依赖声明" };
+  }
 
   const requireFromRoot = createRequire(path.join(root, "noop.js"));
   /** @type {DependencyFloor[]} */
@@ -303,9 +340,13 @@ export function collectDependencyFloors(root) {
        * 退回直接读盘，否则它会静默退出扫描范围（`continue` 既不计入 resolved、
        * 也不算失败，只有全部失败才判红 ⇒ 部分依赖悄悄漏扫）。 */
       const direct = path.join(root, "node_modules", name, "package.json");
-      if (fs.existsSync(direct)) manifest = direct;
+      if (fs.existsSync(direct)) {
+        manifest = direct;
+      }
     }
-    if (!manifest) continue;
+    if (!manifest) {
+      continue;
+    }
     resolved++;
     const json = readJson(manifest);
     const range = json?.engines?.node;
@@ -335,8 +376,7 @@ export function collectDependencyFloors(root) {
  * @returns {FloorVerdict}
  */
 export function checkDeclaredFloor({ root, declared, floors }) {
-  const range =
-    declared ?? readJson(path.join(root ?? "", "package.json"))?.engines?.node;
+  const range = declared ?? readJson(path.join(root ?? "", "package.json"))?.engines?.node;
   if (typeof range !== "string" || !range.trim()) {
     return {
       ok: false,
@@ -375,7 +415,9 @@ export function checkDeclaredFloor({ root, declared, floors }) {
         reason: `依赖 ${f.pkg} 的 engines.node 形状读不懂：${f.range}`,
       };
     }
-    if (!accepted) gaps.push(f);
+    if (!accepted) {
+      gaps.push(f);
+    }
   }
   return {
     ok: gaps.length === 0,
@@ -397,17 +439,16 @@ export function describeNodeAgainstFloor({ version, range, floors }) {
   const ok = satisfies(version, range);
   const parsed = parseVersion(String(version ?? "").replace(/^v/, ""));
   const clean = String(version ?? "").replace(/^v/, "");
-  if (ok === null || !parsed)
+  if (ok === null || !parsed) {
     return { ok: false, kind: "unparsable", version: clean, range };
+  }
   return {
     ok,
     kind: ok ? "ok" : "outside",
     version: clean,
     range,
     recommend: ok ? null : recommendFrom(range, parsed),
-    violated: (floors ?? [])
-      .filter((f) => satisfies(version, f.range) === false)
-      .map((f) => f.pkg),
+    violated: (floors ?? []).filter((f) => satisfies(version, f.range) === false).map((f) => f.pkg),
   };
 }
 
@@ -418,7 +459,9 @@ export function describeNodeAgainstFloor({ version, range, floors }) {
  */
 function recommendFrom(range, currentVersion) {
   const intervals = parseRange(range);
-  if (!intervals) return null;
+  if (!intervals) {
+    return null;
+  }
   const above = intervals
     .map((iv) => iv.lower)
     .filter((lower) => compareVersions(lower, currentVersion) > 0)

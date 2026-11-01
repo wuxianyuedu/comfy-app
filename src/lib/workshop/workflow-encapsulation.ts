@@ -46,40 +46,7 @@ import type { WorkflowIOEntry, WorkflowIOMap } from "~/lib/workflow/workflow-io-
  *
  *  这些值是**工坊的业务语义**（镜头图 / 首帧 / 尾帧各是什么），与「落到工作流的
  *  哪一行」是两件事：后者由作者在工作流库里的连线声明。 */
-export interface WorkshopExposedValues {
-  prompt?: string;
-  negativePrompt?: string;
-  /** 尺寸：比例 + 分辨率 或 比例 + 百万像素 + 倍数（见 `lib/size-presets`）。
-   *  本层落到哪个尺寸端口由作者连线决定，值按该端口的形态派（宽高 / 比例标签 /
-   *  百万像素 / 分辨率档 / 对齐倍数）。 */
-  size?: SizeSpecValue;
-  /** 参考图文件名（已上传到 ComfyUI 输入目录）。
-   *  按契约口顺序（`reference-image` / `reference-image-2`…）给值，各自落到作者
-   *  连的那一行；未连线的槽不落。 */
-  referenceImages?: string[];
-  /** 视频：首帧文件名。缺省时回退到 referenceImages[0]。 */
-  firstFrame?: string;
-  /** 视频：尾帧文件名（首尾帧工作流用）。 */
-  lastFrame?: string;
-  /** 视频：时长（秒）。落在作者连到「时长」口、且按秒表达的那个端口上
-   *  （`duration` / `seconds` / `时长`）。 */
-  duration?: number;
-  /** 视频：帧数。落在按帧表达的时长端口上（`length` / `num_frames` / `帧数`）。
-   *
-   *  与 `duration` 是同一个「时长」口的两种落点单位：调用方按 fps 折算好再给
-   *  （见 VideoStudio 的 framesFor），这里不猜 fps。 */
-  frames?: number;
-  /** 采样种子（INT）。落在作者连到「种子」口、指向工作流 seed / noise_seed 端口的
-   *  那一行上。**没连种子口的工作流：这个值落不下去（进 unmatched），仍用其图内
-   *  seed 配置** —— 实际是否可换由工作流决定。「抽卡重生成」= 给一个新的随机 seed。 */
-  seed?: number;
-  /** 角色 LoRA 文件名（模型库 loras 目录）。落在作者连到「lora-name」口、
-   *  指向 LoraLoader 的 lora_name 端口的落点上；没连的工作流用其图内 LoRA
-   *  配置（FR-QA-02③ · #2622）。 */
-  loraName?: string;
-  /** 角色 LoRA 强度（缺省 1.0 由工作流图内值兜底；只连 lora-name 不连强度时
-   *  本值不生效）。 */
-  loraStrength?: number;
+export type WorkshopExposedValues = {
   /** **自定义口**的值（契约口 id → 值，如 `{ "custom-text-1": "水彩" }`）。
    *
    *  预制的几个口各有业务语义（提示词 / 尺寸 / 首帧…），所以各占一个字段；
@@ -87,27 +54,60 @@ export interface WorkshopExposedValues {
    *  在一张表里。值原样下发（文本口是字符串，数字口是数字），落点仍由作者连线
    *  声明（`applyParamMapping` 只认作者画的线）。 */
   custom?: Record<string, string | number>;
-}
+  /** 视频：时长（秒）。落在作者连到「时长」口、且按秒表达的那个端口上
+   *  （`duration` / `seconds` / `时长`）。 */
+  duration?: number;
+  /** 视频：首帧文件名。缺省时回退到 referenceImages[0]。 */
+  firstFrame?: string;
+  /** 视频：帧数。落在按帧表达的时长端口上（`length` / `num_frames` / `帧数`）。
+   *
+   *  与 `duration` 是同一个「时长」口的两种落点单位：调用方按 fps 折算好再给
+   *  （见 VideoStudio 的 framesFor），这里不猜 fps。 */
+  frames?: number;
+  /** 视频：尾帧文件名（首尾帧工作流用）。 */
+  lastFrame?: string;
+  /** 角色 LoRA 文件名（模型库 loras 目录）。落在作者连到「lora-name」口、
+   *  指向 LoraLoader 的 lora_name 端口的落点上；没连的工作流用其图内 LoRA
+   *  配置（FR-QA-02③ · #2622）。 */
+  loraName?: string;
+  /** 角色 LoRA 强度（缺省 1.0 由工作流图内值兜底；只连 lora-name 不连强度时
+   *  本值不生效）。 */
+  loraStrength?: number;
+  negativePrompt?: string;
+  prompt?: string;
+  /** 参考图文件名（已上传到 ComfyUI 输入目录）。
+   *  按契约口顺序（`reference-image` / `reference-image-2`…）给值，各自落到作者
+   *  连的那一行；未连线的槽不落。 */
+  referenceImages?: Array<string>;
+  /** 采样种子（INT）。落在作者连到「种子」口、指向工作流 seed / noise_seed 端口的
+   *  那一行上。**没连种子口的工作流：这个值落不下去（进 unmatched），仍用其图内
+   *  seed 配置** —— 实际是否可换由工作流决定。「抽卡重生成」= 给一个新的随机 seed。 */
+  seed?: number;
+  /** 尺寸：比例 + 分辨率 或 比例 + 百万像素 + 倍数（见 `lib/size-presets`）。
+   *  本层落到哪个尺寸端口由作者连线决定，值按该端口的形态派（宽高 / 比例标签 /
+   *  百万像素 / 分辨率档 / 对齐倍数）。 */
+  size?: SizeSpecValue;
+};
 
 /** 尺寸表达（结构上与 `lib/size-presets` 的 `SizeSpec` 一致）。
  *
  *  在类型上**不**从 size-presets 取 `SizeSpec`：本模块的入参来自调用方拼装的
  *  plain object（工坊表单 / 服务端编排），用结构子集能少一层耦合；规范化由
  *  `normalizeSizeSpec` 在运行期做。 */
-export interface SizeSpecValue {
-  ratio?: unknown;
+export type SizeSpecValue = {
   clarity?: unknown;
   multiple?: unknown;
-}
+  ratio?: unknown;
+};
 
 /** 一次封装的结果。 */
-export interface EncapsulatedInputs {
-  /** 下发给 generate.generate 的 workflowInputs（**只含作者连过线的口**）。 */
-  workflowInputs: { nodeId: string; name: string; value: unknown }[];
+export type EncapsulatedInputs = {
   /** 用户给了值、但落不到任何端口的口（未连线 / 作者显式断开 / 端口已消失）。
    *  以前这里会按名字猜一个端口兜住，现在如实上报 —— 没连线就是「未配置」。 */
-  unmatched: string[];
-}
+  unmatched: Array<string>;
+  /** 下发给 generate.generate 的 workflowInputs（**只含作者连过线的口**）。 */
+  workflowInputs: Array<{ name: string; nodeId: string; value: unknown }>;
+};
 
 /** 该时长端口按「帧」还是按「秒」表达。
  *
@@ -115,7 +115,9 @@ export interface EncapsulatedInputs {
  *  只有一个「时长」口，落点由作者连线声明；单位是端口自己的事）。 */
 function durationPinUsesFrames(e: WorkflowIOEntry): boolean {
   const text = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
-  if (/duration|seconds?|secs?|秒/.test(text)) return false;
+  if (/duration|seconds?|secs?|秒/.test(text)) {
+    return false;
+  }
   return /frames?|num_?frames|frame_?count|length|帧数/.test(text);
 }
 
@@ -132,7 +134,9 @@ function matchDurationOption(entry: WorkflowIOEntry, value: number): number | st
   const options = Array.isArray(entry.options)
     ? entry.options.filter((option): option is string => typeof option === "string")
     : [];
-  if (options.length === 0) return value;
+  if (options.length === 0) {
+    return value;
+  }
   const wanted = String(value);
   const exact = options.find((option) => option.trim() === wanted);
   if (exact !== undefined) {
@@ -144,7 +148,9 @@ function matchDurationOption(entry: WorkflowIOEntry, value: number): number | st
   let bestDist = Number.POSITIVE_INFINITY;
   for (const option of options) {
     const num = Number(option.trim());
-    if (option.trim() === "" || !Number.isFinite(num)) return undefined;
+    if (option.trim() === "" || !Number.isFinite(num)) {
+      return undefined;
+    }
     const dist = Math.abs(num - value);
     if (dist < bestDist) {
       best = num;
@@ -166,10 +172,14 @@ function durationValueFor(args: {
   const { io, resolved, values } = args;
   const target = resolved.duration;
   const port = target ? io[target] : undefined;
-  if (!port) return values.duration ?? values.frames;
+  if (!port) {
+    return values.duration ?? values.frames;
+  }
   const wantsFrames = durationPinUsesFrames(port);
   const raw = wantsFrames ? (values.frames ?? values.duration) : (values.duration ?? values.frames);
-  if (raw === undefined) return undefined;
+  if (raw === undefined) {
+    return undefined;
+  }
   const matched = matchDurationOption(port, raw);
   return typeof matched === "number" ? matched : undefined;
 }
@@ -181,17 +191,21 @@ function durationValueFor(args: {
  *  首帧（first-frame）、尾帧（last-frame）、参考图（reference-image，可带序号）、
  *  时长（duration）—— 这些键与作者连线的键空间一致，映射层据此查落点。 */
 function toContractValues(args: {
+  entries: ReadonlyArray<{ cls: string; id: string }>;
   io: WorkflowIOMap;
   mode: string | null;
-  values: WorkshopExposedValues;
   resolved: Record<string, string | null>;
-  entries: readonly { id: string; cls: string }[];
+  values: WorkshopExposedValues;
 }): Record<string, unknown> {
   const { io, mode, values, resolved, entries } = args;
   const out: Record<string, unknown> = {};
 
-  if (values.prompt !== undefined) out.prompt = values.prompt;
-  if (values.negativePrompt !== undefined) out.negative = values.negativePrompt;
+  if (values.prompt !== undefined) {
+    out.prompt = values.prompt;
+  }
+  if (values.negativePrompt !== undefined) {
+    out.negative = values.negativePrompt;
+  }
 
   /* 尺寸：工坊给的是「比例 + 档位（+ 倍数）」，映射层按**落点子口身份**派成各自
    *  认的形状（宽 / 高 / 比例标签 / 像素量 / 分辨率档 / 倍数）—— 换算只此一处，
@@ -208,23 +222,33 @@ function toContractValues(args: {
    *  那一行上。 */
   const refs = values.referenceImages ?? [];
   const firstFrame = values.firstFrame ?? refs[0];
-  if (firstFrame !== undefined) out["first-frame"] = firstFrame;
-  if (values.lastFrame !== undefined) out["last-frame"] = values.lastFrame;
+  if (firstFrame !== undefined) {
+    out["first-frame"] = firstFrame;
+  }
+  if (values.lastFrame !== undefined) {
+    out["last-frame"] = values.lastFrame;
+  }
   /* 参考图按契约顺序一一对应（第一张不带序号）。 */
   const referenceIds = entries
     .filter((entry) => entry.cls === "reference-image")
     .map((entry) => entry.id);
   referenceIds.forEach((id, index) => {
     const ref = refs[index];
-    if (ref !== undefined) out[id] = ref;
+    if (ref !== undefined) {
+      out[id] = ref;
+    }
   });
 
   const duration = durationValueFor({ io, resolved, values });
-  if (duration !== undefined) out.duration = duration;
+  if (duration !== undefined) {
+    out.duration = duration;
+  }
 
   /* 种子：调用方（如「抽卡重生成」）给一个 seed 值，落到作者连的「种子」口上；
    *  作者没连这一口 → applyParamMapping 如实报进 unmatched，工作流用其图内 seed。 */
-  if (values.seed !== undefined) out.seed = values.seed;
+  if (values.seed !== undefined) {
+    out.seed = values.seed;
+  }
 
   /* 角色 LoRA（FR-QA-02③ · #2622）：出场角色的绑定值，落到作者连的
    *  「lora-name」/「lora-strength」口上；没连 → unmatched 如实提示，
@@ -247,9 +271,13 @@ function toContractValues(args: {
 /** 契约口 id → 对外值里对应的参考图槽位（`reference-image` = 0，`-2` = 1…）。
  *  非参考图口返回 -1。 */
 function referenceSlotOf(id: string): number {
-  if (id === "reference-image") return 0;
+  if (id === "reference-image") {
+    return 0;
+  }
   const matched = /^reference-image-(\d+)$/.exec(id);
-  if (!matched) return -1;
+  if (!matched) {
+    return -1;
+  }
   return Math.max(0, Number(matched[1]) - 1);
 }
 
@@ -260,15 +288,29 @@ function referenceSlotOf(id: string): number {
  *  读写各写一遍会让「表单上显示的那一口」与「真正下发下去的值」对不上，
  *  所以两个方向共用这一份映射（尺寸 / 时长各有自己的控件，不走这里）。 */
 export function exposedValueOf(values: WorkshopExposedValues, id: string): string {
-  if (id === "prompt") return values.prompt ?? "";
-  if (id === "negative") return values.negativePrompt ?? "";
-  if (id === "first-frame") return values.firstFrame ?? "";
-  if (id === "last-frame") return values.lastFrame ?? "";
-  if (id === "seed") return values.seed === undefined ? "" : String(values.seed);
+  if (id === "prompt") {
+    return values.prompt ?? "";
+  }
+  if (id === "negative") {
+    return values.negativePrompt ?? "";
+  }
+  if (id === "first-frame") {
+    return values.firstFrame ?? "";
+  }
+  if (id === "last-frame") {
+    return values.lastFrame ?? "";
+  }
+  if (id === "seed") {
+    return values.seed === undefined ? "" : String(values.seed);
+  }
   /* 自定义口：值按 id 收在 `custom` 里（界面按文本显示它的当前内容）。 */
-  if (exposedCustomKindOf(id)) return String(values.custom?.[id] ?? "");
+  if (exposedCustomKindOf(id)) {
+    return String(values.custom?.[id] ?? "");
+  }
   const slot = referenceSlotOf(id);
-  if (slot < 0) return "";
+  if (slot < 0) {
+    return "";
+  }
   return values.referenceImages?.[slot] ?? "";
 }
 
@@ -283,13 +325,21 @@ export function withExposedValue(
   next: string | number,
 ): WorkshopExposedValues {
   if (exposedCustomKindOf(id)) {
-    return { ...values, custom: { ...(values.custom ?? {}), [id]: next } };
+    return { ...values, custom: { ...values.custom, [id]: next } };
   }
   const text = typeof next === "string" ? next : String(next);
-  if (id === "prompt") return { ...values, prompt: text };
-  if (id === "negative") return { ...values, negativePrompt: text };
-  if (id === "first-frame") return { ...values, firstFrame: text };
-  if (id === "last-frame") return { ...values, lastFrame: text };
+  if (id === "prompt") {
+    return { ...values, prompt: text };
+  }
+  if (id === "negative") {
+    return { ...values, negativePrompt: text };
+  }
+  if (id === "first-frame") {
+    return { ...values, firstFrame: text };
+  }
+  if (id === "last-frame") {
+    return { ...values, lastFrame: text };
+  }
   /* 种子是数值口：写数字（空串 / 非数字 → 清掉该值，回落工作流图内 seed）。 */
   if (id === "seed") {
     if (typeof next === "number") {
@@ -299,12 +349,16 @@ export function withExposedValue(
       };
     }
     const t = next.trim();
-    if (t === "") return { ...values, seed: undefined };
+    if (t === "") {
+      return { ...values, seed: undefined };
+    }
     const n = Number(t);
     return { ...values, seed: Number.isFinite(n) ? Math.trunc(n) : undefined };
   }
   const slot = referenceSlotOf(id);
-  if (slot < 0) return values;
+  if (slot < 0) {
+    return values;
+  }
   const refs = [...(values.referenceImages ?? [])];
   refs[slot] = text;
   return { ...values, referenceImages: refs };
@@ -320,22 +374,40 @@ export function pruneEmptyExposedValues(values: WorkshopExposedValues): Workshop
   const out: WorkshopExposedValues = {};
   const text = (v: string | undefined) => (v !== undefined && v.trim() !== "" ? v : undefined);
   const prompt = text(values.prompt);
-  if (prompt !== undefined) out.prompt = prompt;
+  if (prompt !== undefined) {
+    out.prompt = prompt;
+  }
   const negative = text(values.negativePrompt);
-  if (negative !== undefined) out.negativePrompt = negative;
+  if (negative !== undefined) {
+    out.negativePrompt = negative;
+  }
   const firstFrame = text(values.firstFrame);
-  if (firstFrame !== undefined) out.firstFrame = firstFrame;
+  if (firstFrame !== undefined) {
+    out.firstFrame = firstFrame;
+  }
   const lastFrame = text(values.lastFrame);
-  if (lastFrame !== undefined) out.lastFrame = lastFrame;
+  if (lastFrame !== undefined) {
+    out.lastFrame = lastFrame;
+  }
   const refs = (values.referenceImages ?? []).filter(
     (ref): ref is string => typeof ref === "string" && ref.trim() !== "",
   );
-  if (refs.length > 0) out.referenceImages = refs;
-  if (values.size !== undefined) out.size = values.size;
-  if (values.duration !== undefined) out.duration = values.duration;
-  if (values.frames !== undefined) out.frames = values.frames;
+  if (refs.length > 0) {
+    out.referenceImages = refs;
+  }
+  if (values.size !== undefined) {
+    out.size = values.size;
+  }
+  if (values.duration !== undefined) {
+    out.duration = values.duration;
+  }
+  if (values.frames !== undefined) {
+    out.frames = values.frames;
+  }
   /* 种子：数字，`0` 是有效值，不能按假值剪掉；只在给了的时候保留。 */
-  if (values.seed !== undefined) out.seed = values.seed;
+  if (values.seed !== undefined) {
+    out.seed = values.seed;
+  }
   /* 自定义口：空串当「没给」（与上面几条同一口径）；数字原样保留 —— `0` 是
    *  一个有效值，不能按「假值」剪掉。 */
   const custom: Record<string, string | number> = {};
@@ -345,9 +417,13 @@ export function pruneEmptyExposedValues(values: WorkshopExposedValues): Workshop
       continue;
     }
     const trimmed = value.trim();
-    if (trimmed !== "") custom[id] = trimmed;
+    if (trimmed !== "") {
+      custom[id] = trimmed;
+    }
   }
-  if (Object.keys(custom).length > 0) out.custom = custom;
+  if (Object.keys(custom).length > 0) {
+    out.custom = custom;
+  }
   return out;
 }
 
@@ -370,11 +446,11 @@ export function pruneEmptyExposedValues(values: WorkshopExposedValues): Workshop
  *      `unmatched`，不会静默丢）。有契约注册表的调用方必须传。
  */
 export function buildEncapsulatedInputs(args: {
+  contractIds?: ReadonlyArray<string>;
   io: WorkflowIOMap | null | undefined;
-  paramMap: unknown;
   mode: string | null | undefined;
+  paramMap: unknown;
   values: WorkshopExposedValues;
-  contractIds?: readonly string[];
 }): EncapsulatedInputs {
   const { io, paramMap, mode, values, contractIds } = args;
   if (!io || typeof io !== "object") {
@@ -423,13 +499,17 @@ export function buildEncapsulatedInputs(args: {
   if (sizeIds.length > 0 && values.size !== undefined) {
     const landed = sizeIds.some((id) => resolved[id] !== undefined && !reported.has(id));
     sizeIds.forEach((id) => reported.delete(id));
-    if (!landed) reported.add("size");
+    if (!landed) {
+      reported.add("size");
+    }
   }
   /* 自定义口同理：给了值而**生效契约里没有这个口**（作者刚把它从契约里删掉，
    * 而调用方还在按旧清单给值）映射层看不见 —— 在这里补报，否则用户会以为值
    * 已经下发下去了。 */
   for (const id of Object.keys(values.custom ?? {})) {
-    if (!hasEntry(id)) reported.add(id);
+    if (!hasEntry(id)) {
+      reported.add(id);
+    }
   }
   return { workflowInputs: inputs, unmatched: [...reported] };
 }
@@ -465,13 +545,17 @@ function unmatchedLabel(id: string): string {
  *  「给了值却落不到端口」意味着该值**没有生效**（工作流用图内默认值顶上），
  *  静默就是「改了没反应」（规范 10 §10.3.1 降级不得静默）—— 调用方拿到
  *  非空结果必须展示给用户。 */
-export function describeUnmatchedInputs(unmatched: readonly string[]): string | null {
-  if (unmatched.length === 0) return null;
+export function describeUnmatchedInputs(unmatched: ReadonlyArray<string>): string | null {
+  if (unmatched.length === 0) {
+    return null;
+  }
   const seen = new Set<string>();
-  const labels: string[] = [];
+  const labels: Array<string> = [];
   for (const id of unmatched) {
     const label = unmatchedLabel(id);
-    if (seen.has(label)) continue;
+    if (seen.has(label)) {
+      continue;
+    }
     seen.add(label);
     labels.push(label);
   }

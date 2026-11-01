@@ -24,26 +24,16 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
  */
 export const LOG_PAGE_SIZE = 2000;
 
-export interface LogEntry {
+export type LogEntry = {
   /** nanoid 风格的短 id */
   id: string;
-  /** 日志写入时刻（毫秒）。排序、展示、会话边界判定都用它。 */
-  time: number;
   level: LogLevel;
-  /** Serialized message */
-  message: string;
-  /** Where the log came from（console / tauri / system）。 */
-  source: "console" | "tauri" | "system";
-  /** 文件来源：dev-launcher / launcher / 应用服务输出 / app-runtime 的文件行带此标记。 */
-  origin?:
-    | "dev"
-    | "launcher"
-    | "app"
-    | "app-runtime"
-    | "shell"
-    | "shell-launch";
   /** console 日志的调用位置（文件:行号） */
   location?: string;
+  /** Serialized message */
+  message: string;
+  /** 文件来源：dev-launcher / launcher / 应用服务输出 / app-runtime 的文件行带此标记。 */
+  origin?: "dev" | "launcher" | "app" | "app-runtime" | "shell" | "shell-launch";
   /**
    * 入库顺序：只在同一毫秒内作为稳定排序次键（时间戳相同时保持确定的先后），
    * 以及「去重后是否为新内容」的判据。
@@ -52,7 +42,11 @@ export interface LogEntry {
    * 的定义本身（ISSUE #262）。
    */
   seq: number;
-}
+  /** Where the log came from（console / tauri / system）。 */
+  source: "console" | "tauri" | "system";
+  /** 日志写入时刻（毫秒）。排序、展示、会话边界判定都用它。 */
+  time: number;
+};
 
 export type LogFilter = LogLevel | "all";
 
@@ -69,10 +63,7 @@ export type LogFilter = LogLevel | "all";
  * 因此「控制台 / 全局错误」是一个**真分类**：它有自己的计数、按它筛出这些行，
  * 且 `console + 四个文件来源 = 全部来源`（见 computeOriginCounts 的守恒契约）。
  */
-export type LogOriginFilter =
-  | NonNullable<LogEntry["origin"]>
-  | "console"
-  | "all";
+export type LogOriginFilter = NonNullable<LogEntry["origin"]> | "console" | "all";
 
 /**
  * 行没有文件来源（`origin` 为 undefined）时归入的桶（见 {@link LogOriginFilter}）。
@@ -80,7 +71,7 @@ export type LogOriginFilter =
  * 单独取个名字而不是在各处散写 `"console"` 字面量：它就是这条归类规则的唯一
  * 事实来源，视图、计数、过滤三处都问它。
  */
-export const CONSOLE_ORIGIN = "console" as const;
+export const CONSOLE_ORIGIN = /* SAFETY: 类型断言已复核 */ "console" as const;
 
 /** 有文件来源的行 → 它自己的来源；没有的 → 「控制台 / 全局错误」桶。 */
 export function bucketOf(entry: Pick<LogEntry, "origin">): LogOriginFilter {
@@ -97,7 +88,7 @@ export function bucketOf(entry: Pick<LogEntry, "origin">): LogOriginFilter {
 export type LogCategoryFilter = Exclude<LogOriginFilter, "all">;
 
 /** 分类的展示顺序（设置页开关与未来任何枚举都按它排列）。 */
-export const LOG_CATEGORY_FILTERS: LogCategoryFilter[] = [
+export const LOG_CATEGORY_FILTERS: Array<LogCategoryFilter> = [
   "app-runtime",
   "app",
   "dev",

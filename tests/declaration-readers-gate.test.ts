@@ -26,10 +26,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(
-  __dirname,
-  "../scripts/check-declaration-readers.cjs",
-);
+const SCRIPT = path.resolve(__dirname, "../scripts/check-declaration-readers.cjs");
 
 /**
  * 够过地板（MIN_CARRIERS = 8）的一份合法索引。
@@ -58,7 +55,7 @@ function selfRow(): Record<string, unknown> {
  * 表现是同一文件里靠后的那一格红、而它测的与被改坏的原因毫无关系 ——
  * 与 §11.19 那条「并发档把共享状态从「各自持有一份」变成「互相踩」」同族。
  */
-function carriers(n = 8): Record<string, unknown>[] {
+function carriers(n = 8): Array<Record<string, unknown>> {
   return [
     selfRow(),
     ...Array.from({ length: n - 1 }, (_, i) => ({
@@ -73,19 +70,18 @@ function carriers(n = 8): Record<string, unknown>[] {
 }
 
 type Fixture = {
-  ledger?: unknown;
-  hook?: string;
+  files?: Record<string, string>;
   /** 固定清单那份数据模块的内容（默认给一条 tests/fixed.test.ts）。 */
   fixedList?: string;
+  hook?: string;
+  ledger?: unknown;
   /** `package.json` 的内容；默认给一份带 `check:claims` 的（供 npm-script 那一格）。 */
   pkg?: string;
-  files?: Record<string, string>;
 };
 
 const DEFAULT_HOOK =
-  Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join(
-    "",
-  ) + '  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n';
+  `${Array.from({ length: 9 }, (_, i) => `  run "标签 ${i}" node x.cjs\n`).join("")
+  }  run "声明 ⇄ 读者索引" node scripts/check-declaration-readers.cjs\n`;
 const DEFAULT_FIXED_LIST =
   'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/fixed.test.ts",\n];\n';
 const DEFAULT_PKG = JSON.stringify({
@@ -102,17 +98,10 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
   copyFileSync(SCRIPT, path.join(root, "scripts", path.basename(SCRIPT)));
 
   if (fx.ledger !== undefined) {
-    const body =
-      typeof fx.ledger === "string" ? fx.ledger : JSON.stringify(fx.ledger);
-    writeFileSync(
-      path.join(root, "scripts", ".declaration-readers.json"),
-      body,
-    );
+    const body = typeof fx.ledger === "string" ? fx.ledger : JSON.stringify(fx.ledger);
+    writeFileSync(path.join(root, "scripts", ".declaration-readers.json"), body);
   }
-  writeFileSync(
-    path.join(root, ".githooks", "pre-commit"),
-    fx.hook ?? DEFAULT_HOOK,
-  );
+  writeFileSync(path.join(root, ".githooks", "pre-commit"), fx.hook ?? DEFAULT_HOOK);
   writeFileSync(
     path.join(root, "scripts", "fixed-structural-tests.mjs"),
     fx.fixedList ?? DEFAULT_FIXED_LIST,
@@ -130,14 +119,14 @@ function gate(fx: Fixture): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(
-        process.execPath,
-        [path.join(root, "scripts", path.basename(SCRIPT))],
-        { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-      ),
+      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -205,8 +194,7 @@ describe("声明 ⇄ 读者门禁：该拦的形状（§11.23）", () => {
     const r = gate({
       ledger: { carriers: list },
       // 固定清单里换成另一份文件 → 登记的那份出局
-      fixedList:
-        'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/other.test.ts",\n];\n',
+      fixedList: 'export const FIXED_STRUCTURAL_TESTS = [\n  "tests/other.test.ts",\n];\n',
     });
     expect(r.ok).toBe(false);
     expect(r.output).toContain("FIXED_STRUCTURAL_TESTS");

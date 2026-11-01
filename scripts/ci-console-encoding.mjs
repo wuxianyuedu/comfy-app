@@ -68,7 +68,7 @@ import process from "node:process";
  *
  * 它同时是判断读数「对不对」的基准，所以两处不许各写一个数字。
  */
-export const UTF8_CODE_PAGE = 65001;
+export const UTF8_CODE_PAGE = 65_001;
 
 /**
  * 一条子进程的读数 —— `applyConsoleEncoding` / `readConsoleEncoding` 共用的形状。
@@ -111,25 +111,26 @@ function defaultRun(cmd, args) {
  */
 export function readConsoleEncoding(ports) {
   const { platform = process.platform, runImpl } = ports ?? {};
-  if (platform !== "win32")
+  if (platform !== "win32") {
     return { codePage: null, chcpRaw: null, ansiCodePage: null };
+  }
   const run = runImpl ?? defaultRun;
-  const nls = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage";
+  const nls = String.raw`HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage`;
   const r = run("powershell", [
     "-NoProfile",
     "-NonInteractive",
     "-Command",
-    "[Console]::OutputEncoding.CodePage; " +
-      `'ACP=' + (Get-ItemProperty '${nls}').ACP; ` +
-      "chcp",
+    "[Console]::OutputEncoding.CodePage; " + `'ACP=' + (Get-ItemProperty '${nls}').ACP; ` + "chcp",
   ]);
   const out = String(r.out ?? "").trim();
   const empty = { codePage: null, chcpRaw: null, ansiCodePage: null };
-  if (r.status !== 0 && out === "") return empty;
+  if (r.status !== 0 && out === "") {
+    return empty;
+  }
   /* 取**第一处**数字 = 第一行那个控制台代码页；`chcp` 排最后，故取最后一行当原文。
    * ACP 单独带标签，免得与 `chcp` 那行里的数字撞车。 */
-  const codePage = Number(/(\d{3,5})/.exec(out)?.[1] ?? NaN);
-  const acp = Number(/ACP=(\d{3,5})/.exec(out)?.[1] ?? NaN);
+  const codePage = Number(/(\d{3,5})/.exec(out)?.[1] ?? Number.NaN);
+  const acp = Number(/ACP=(\d{3,5})/.exec(out)?.[1] ?? Number.NaN);
   return {
     codePage: Number.isFinite(codePage) ? codePage : null,
     chcpRaw: out.split("\n").pop()?.trim() ?? null,
@@ -150,10 +151,7 @@ export function readConsoleEncoding(ports) {
  * @param {{runImpl?: (cmd: string, args: string[]) => RunResult, platform?: NodeJS.Platform}} [ports]
  * @returns {{applied: boolean, detail: string}}
  */
-export function applyConsoleEncoding({
-  runImpl,
-  platform = process.platform,
-} = {}) {
+export function applyConsoleEncoding({ runImpl, platform = process.platform } = {}) {
   if (platform !== "win32") {
     return {
       applied: false,
@@ -166,13 +164,8 @@ export function applyConsoleEncoding({
     `[Console]::OutputEncoding = [Console]::InputEncoding = ` +
     `[Text.UTF8Encoding]::new($false); ` +
     `[Console]::OutputEncoding.CodePage`;
-  const r = run("powershell", [
-    "-NoProfile",
-    "-NonInteractive",
-    "-Command",
-    script,
-  ]);
-  const after = Number(/(\d{3,5})/.exec(r.out ?? "")?.[1] ?? NaN);
+  const r = run("powershell", ["-NoProfile", "-NonInteractive", "-Command", script]);
+  const after = Number(/(\d{3,5})/.exec(r.out ?? "")?.[1] ?? Number.NaN);
   if (after === UTF8_CODE_PAGE) {
     return {
       applied: true,
@@ -196,7 +189,9 @@ export function applyConsoleEncoding({
  * @returns {boolean | null}
  */
 export function codePageIsUtf8(codePage) {
-  if (codePage === null || !Number.isFinite(codePage)) return null;
+  if (codePage === null || !Number.isFinite(codePage)) {
+    return null;
+  }
   return codePage === UTF8_CODE_PAGE;
 }
 
@@ -211,10 +206,7 @@ export function codePageIsUtf8(codePage) {
  * 两种形态都**恒退 0**：它是纠正动作与读数，不是判据。真要说「乱码还没解决」，
  * 那是日志读的人看得见的事，把它变成红只会拦住与之无关的变更。
  */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const apply = process.argv.includes("--apply");
   if (apply) {
     const r = applyConsoleEncoding();
@@ -233,7 +225,9 @@ if (
       `[console-encoding] 宿主 ANSI 代码页（注册表 Nls\\CodePage\\ACP）：${now.ansiCodePage}`,
     );
   }
-  if (now.chcpRaw) console.log(`[console-encoding] chcp 读数：${now.chcpRaw}`);
+  if (now.chcpRaw) {
+    console.log(`[console-encoding] chcp 读数：${now.chcpRaw}`);
+  }
   console.log(
     "[console-encoding] 平台侧解码读的**不是**上面这两个读数（2026-10-16 两轮探针都" +
       "否掉了：控制台换 65001 与 ANSI 换 UTF-8 之后，四行探针逐字未变）——" +

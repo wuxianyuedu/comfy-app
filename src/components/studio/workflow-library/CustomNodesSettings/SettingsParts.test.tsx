@@ -39,8 +39,11 @@ function pkg(status: "ok" | "missing" | "error" | "empty", name: string) {
     exists: true,
     status,
     nodeCount: 0,
-    nodeTypes: [] as string[],
-    errors: [] as { file: string; error: string }[],
+    nodeTypes: /* SAFETY: 类型断言已复核 */ [] as Array<string>,
+    errors: /* SAFETY: 类型断言已复核 */ [] as Array<{
+      error: string;
+      file: string;
+    }>,
   };
 }
 
@@ -55,7 +58,7 @@ const REPORT: ParseReport = {
 describe("PortRow", () => {
   it("输入行:色点用入参 color,类型徽标大写展示,name 带 title", () => {
     const { container } = render(
-      <PortRow side="in" color="#FF9C5B" type="CONDITIONING" name="positive" />,
+      <PortRow color="#FF9C5B" name="positive" side="in" type="CONDITIONING" />,
     );
     expect(screen.getByText("positive")).toHaveAttribute("title", "positive");
     expect(screen.getByText("CONDITIONING")).toBeInTheDocument();
@@ -65,7 +68,7 @@ describe("PortRow", () => {
 
   it("输出行:色点固定为青色 #06B6D4(与入参 color 无关)", () => {
     const { container } = render(
-      <PortRow side="out" color="#FF0000" type="IMAGE" name="IMAGE_FINAL" />,
+      <PortRow color="#FF0000" name="IMAGE_FINAL" side="out" type="IMAGE" />,
     );
     const dot = container.querySelector("span.rounded-full")!;
     expect(dot).toHaveStyle({ background: "#06B6D4" });
@@ -76,37 +79,33 @@ describe("PortRow", () => {
 
 describe("WidgetValueChip", () => {
   it('toggle:truthy 值渲染 ✓(含字符串 "true"/"True")', () => {
-    const { rerender } = render(
-      <WidgetValueChip widget="toggle" value={true} />,
-    );
+    const { rerender } = render(<WidgetValueChip value widget="toggle" />);
     expect(screen.getByText("✓")).toBeInTheDocument();
-    rerender(<WidgetValueChip widget="toggle" value="True" />);
+    rerender(<WidgetValueChip value="True" widget="toggle" />);
     expect(screen.getByText("✓")).toBeInTheDocument();
   });
 
   it("toggle:falsy 值渲染 ✗", () => {
-    render(<WidgetValueChip widget="toggle" value={false} />);
+    render(<WidgetValueChip value={false} widget="toggle" />);
     expect(screen.getByText("✗")).toBeInTheDocument();
   });
 
   it("select:值经 String() 渲染并同步 title,null 显示 —", () => {
-    const { rerender } = render(
-      <WidgetValueChip widget="select" value="sdxl" />,
-    );
+    const { rerender } = render(<WidgetValueChip value="sdxl" widget="select" />);
     expect(screen.getByText("sdxl")).toHaveAttribute("title", "sdxl");
-    rerender(<WidgetValueChip widget="select" value={null} />);
+    rerender(<WidgetValueChip value={null} widget="select" />);
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 
   it("number:数值渲染为字符串", () => {
-    render(<WidgetValueChip widget="number" value={25} />);
+    render(<WidgetValueChip value={25} widget="number" />);
     expect(screen.getByText("25")).toBeInTheDocument();
   });
 
   it("其他 widget(string/text/未知):null 显示 —,标量显示 String 值", () => {
-    const { rerender } = render(<WidgetValueChip widget={null} value={null} />);
+    const { rerender } = render(<WidgetValueChip value={null} widget={null} />);
     expect(screen.getByText("—")).toBeInTheDocument();
-    rerender(<WidgetValueChip widget="text" value="hello world" />);
+    rerender(<WidgetValueChip value="hello world" widget="text" />);
     expect(screen.getByText("hello world")).toBeInTheDocument();
   });
 });
@@ -146,7 +145,7 @@ describe("ParseProgressBanner", () => {
           phase: "hash",
           done: 3,
           total: 8,
-          parent: "C:\\ComfyUI\\custom_nodes\\ipadapter_plus",
+          parent: String.raw`C:\ComfyUI\custom_nodes\ipadapter_plus`,
           msg: "hashing packages…",
         }}
       />,
@@ -154,16 +153,12 @@ describe("ParseProgressBanner", () => {
     expect(screen.getByText(/正在处理/)).toBeInTheDocument();
     expect(screen.getByText("3/8")).toBeInTheDocument();
     // 父路径只保留最后两段(支持 \ 与 / 两种分隔符)
-    expect(
-      screen.getByText("· custom_nodes/ipadapter_plus"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("· custom_nodes/ipadapter_plus")).toBeInTheDocument();
     /* 进度条为确定宽度：`done/total*100` 经 `~/lib/progress` 的 `pctToWidth`
        取整（3/8 = 37.5 → 38）；渲染侧改用 translateX 动画（§2.7 布局属性
        动画），38% 对应 translateX(-62%)。口径收口后不再出现小数 —— 走
        `~/components/ui/progress-bar` 的 `data-slot` 取节点。 */
-    const bar = container.querySelector<HTMLElement>(
-      '[data-slot="progress-bar-fill"]',
-    )!;
+    const bar = container.querySelector<HTMLElement>('[data-slot="progress-bar-fill"]')!;
     expect(bar.style.transform).toBe("translateX(-62%)");
     expect(screen.getByTitle("hashing packages…")).toBeInTheDocument();
   });
@@ -183,12 +178,8 @@ describe("ParseProgressBanner", () => {
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("（总数待定，正在扫描…）")).toBeInTheDocument();
     // 不定态：滑动条纹，而不是按百分比设置的确定条
-    expect(
-      container.querySelector('[data-slot="progress-bar-fill"]'),
-    ).toBeNull();
-    expect(
-      container.querySelector('[data-slot="progress-bar-indeterminate"]'),
-    ).not.toBeNull();
+    expect(container.querySelector('[data-slot="progress-bar-fill"]')).toBeNull();
+    expect(container.querySelector('[data-slot="progress-bar-indeterminate"]')).not.toBeNull();
   });
 
   it("queue/初始阶段:渲染「首次扫描」兜底文案", () => {
@@ -196,9 +187,7 @@ describe("ParseProgressBanner", () => {
       <ParseProgressBanner progress={{ ...PROGRESS, phase: "queue" }} />,
     );
     expect(screen.getByText("首次扫描目录中的节点包…")).toBeInTheDocument();
-    expect(
-      container.querySelector('[data-slot="progress-bar-fill"]'),
-    ).toBeNull();
+    expect(container.querySelector('[data-slot="progress-bar-fill"]')).toBeNull();
   });
 });
 
@@ -225,26 +214,18 @@ describe("ReportCards", () => {
     render(<ReportCards report={report} />);
 
     expect(screen.getByText("最近解析结果")).toBeInTheDocument();
-    expect(
-      screen.getByText("3 个目录 · 30 个节点 · 1 个错误"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("3 个目录 · 30 个节点 · 1 个错误")).toBeInTheDocument();
 
-    const okCard = screen
-      .getByText("ipadapter")
-      .closest<HTMLDivElement>("div.rounded-xl")!;
+    const okCard = screen.getByText("ipadapter").closest<HTMLDivElement>("div.rounded-xl")!;
     expect(within(okCard).getByText("已加载")).toBeInTheDocument(); // STATUS_STYLE.ok
     /* 路径按**末几段**渲染（语义在尾部，CSS `truncate` 只留头部会把它切掉），
      * 完整路径仍在 `title` 上（hover 可见 / 可复制）。 */
-    expect(
-      within(okCard).getByText("ComfyUI/custom_nodes/ipadapter"),
-    ).toBeInTheDocument();
+    expect(within(okCard).getByText("ComfyUI/custom_nodes/ipadapter")).toBeInTheDocument();
     expect(within(okCard).getByText("18")).toBeInTheDocument();
     expect(within(okCard).getByText("IPAdapter")).toBeInTheDocument();
     expect(within(okCard).getByText("KSampler")).toBeInTheDocument();
 
-    const errCard = screen
-      .getByText("broken_pkg")
-      .closest<HTMLDivElement>("div.rounded-xl")!;
+    const errCard = screen.getByText("broken_pkg").closest<HTMLDivElement>("div.rounded-xl")!;
     expect(within(errCard).getByText("解析出错")).toBeInTheDocument(); // STATUS_STYLE.error
     expect(within(errCard).getByText("⚠ foo.py: boom")).toBeInTheDocument();
 
@@ -261,9 +242,7 @@ describe("ReportCards", () => {
         }}
       />,
     );
-    const card = screen
-      .getByText("gone_pkg")
-      .closest<HTMLDivElement>("div.rounded-xl")!;
+    const card = screen.getByText("gone_pkg").closest<HTMLDivElement>("div.rounded-xl")!;
     expect(within(card).getByText("目录不存在")).toBeInTheDocument();
   });
 

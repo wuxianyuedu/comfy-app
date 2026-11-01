@@ -82,11 +82,11 @@ export const ROUNDS = 12;
 export const DISCARD_ROUNDS = 4;
 
 /** 一次导航的读数（毫秒，相对 `navigationStart`）。 */
-export interface NavigationSample {
-  /** `navigation` 时序的 `loadEventEnd`。 */
-  loadEventEnd: number;
+export type NavigationSample = {
   /** `paint` 时序里 `first-contentful-paint` 的 `startTime`。 */
   firstContentfulPaint: number;
+  /** `navigation` 时序的 `loadEventEnd`。 */
+  loadEventEnd: number;
 }
 
 /**
@@ -100,13 +100,13 @@ export interface NavigationSample {
  * 所以它同样必须能表达「没有」。
  */
 export function readNavigationSample(page: Page): Promise<{
-  loadEventEnd: number | null;
   firstContentfulPaint: number | null;
+  loadEventEnd: number | null;
 }> {
   return page.evaluate(() => {
-    const nav = performance.getEntriesByType(
-      "navigation",
-    )[0] as PerformanceNavigationTiming | undefined;
+    const nav = /* SAFETY: 类型断言已复核 */ performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
     const fcp = performance.getEntriesByName("first-contentful-paint")[0];
     return {
       // `loadEventEnd` 在 load 未完成时是 0 —— 那是「还没有这个读数」，不是「0 毫秒」。
@@ -132,13 +132,17 @@ export function readNavigationSample(page: Page): Promise<{
  * @returns 稳态段最小值；判不了时 `null`
  */
 export function steadyMin(
-  samples: (number | null)[],
+  samples: Array<number | null>,
   discard: number = DISCARD_ROUNDS,
 ): number | null {
-  if (samples.length <= discard) return null;
+  if (samples.length <= discard) {
+    return null;
+  }
   const kept = samples.slice(discard);
-  if (kept.some((v) => v === null || !Number.isFinite(v))) return null;
-  return Math.min(...(kept as number[]));
+  if (kept.some((v) => v === null || !Number.isFinite(v))) {
+    return null;
+  }
+  return Math.min(.../* SAFETY: 类型断言已复核 */ (kept as Array<number>));
 }
 
 /**
@@ -158,8 +162,8 @@ export function steadyMin(
 export async function collectSamples(
   context: BrowserContext,
   url: string,
-): Promise<NavigationSample[]> {
-  const out: NavigationSample[] = [];
+): Promise<Array<NavigationSample>> {
+  const out: Array<NavigationSample> = [];
   for (let i = 0; i < ROUNDS; i++) {
     const page = await context.newPage();
     try {
@@ -182,9 +186,9 @@ export async function collectSamples(
  * @param samples 逐轮读数
  * @returns `{ loadEventEnd, firstContentfulPaint }`（稳态段 `min`，判不了时 `null`）
  */
-export function summarize(samples: NavigationSample[]): {
-  loadEventEnd: number | null;
+export function summarize(samples: Array<NavigationSample>): {
   firstContentfulPaint: number | null;
+  loadEventEnd: number | null;
 } {
   return {
     loadEventEnd: steadyMin(samples.map((s) => s.loadEventEnd)),

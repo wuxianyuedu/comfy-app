@@ -53,13 +53,15 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 export type ItemActionScope = string | null;
 
-export interface ItemAction {
-  /** 当前在忙的那一条（`null` = 没有动作在跑）。 */
-  busyId: ItemActionScope;
-  /** 读取用的判据：`busyId === id`（视图里不再自己写这个比较）。 */
-  isBusy: (id: ItemActionScope) => boolean;
+export type ItemAction = {
   /** 是否**有任何**动作在跑（决定「全部重试」这类整表动作能不能点）。 */
   anyBusy: boolean;
+  /** 当前在忙的那一条（`null` = 没有动作在跑）。 */
+  busyId: ItemActionScope;
+  /** 手动清忙标记（如动作被外部取消）。正常路径不必调。 */
+  clear: () => void;
+  /** 读取用的判据：`busyId === id`（视图里不再自己写这个比较）。 */
+  isBusy: (id: ItemActionScope) => boolean;
   /**
    * 跑一次**针对某一条**的动作。
    *
@@ -72,13 +74,8 @@ export interface ItemAction {
    * 返回 `action` 的返回值；被重复点忽略时返回 `undefined` ——
    * 调用处本来也不会去读它（那条路根本不发请求）。
    */
-  run: <T>(
-    id: ItemActionScope,
-    action: () => Promise<T>,
-  ) => Promise<T | undefined>;
-  /** 手动清忙标记（如动作被外部取消）。正常路径不必调。 */
-  clear: () => void;
-}
+  run: <T>(id: ItemActionScope, action: () => Promise<T>) => Promise<T | undefined>;
+};
 
 /**
  * 「一屏多条目、一次只忙一条」的执行态。
@@ -88,7 +85,7 @@ export interface ItemAction {
  * 否则删掉一条正在跑的条目会留下一个指向不存在条目的忙标记，
  * 而它会让 `anyBusy` 永远为真（整表动作再也点不动）。
  */
-export function useItemAction(keys?: readonly string[]): ItemAction {
+export function useItemAction(keys?: ReadonlyArray<string>): ItemAction {
   const [busyId, setBusyId] = useState<ItemActionScope>(null);
   /* 同步的「正在跑」集合 —— `setBusyId` 是异步的，同一次事件循环里
    * 连点两下时 `busyId` 还是旧值，读它判不出重入。 */
@@ -108,13 +105,12 @@ export function useItemAction(keys?: readonly string[]): ItemAction {
           : null;
 
   const run = useCallback(
-    async <T>(
-      id: ItemActionScope,
-      action: () => Promise<T>,
-    ): Promise<T | undefined> => {
+    async <T>(id: ItemActionScope, action: () => Promise<T>): Promise<T | undefined> => {
       const key = scopeKey(id);
       /* 同一条重复点：直接忽略（不发第二次请求，也不动忙标记）。 */
-      if (runningRef.current.has(key)) return undefined;
+      if (runningRef.current.has(key)) {
+        return undefined;
+      }
       runningRef.current.add(key);
       setBusyId(id);
       try {

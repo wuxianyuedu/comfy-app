@@ -24,14 +24,7 @@
  * 判据把**全仓**判红也是「红」。
  */
 import { spawnSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -65,7 +58,7 @@ function makeWorkspace(): { dir: string; dispose: () => void } {
 }
 
 /** 跑一次判据。`cwd` 指向工作区 —— 判据全部输入按 `process.cwd()` 解析。 */
-function run(dir: string, args: string[] = []): { code: number; output: string } {
+function run(dir: string, args: Array<string> = []): { code: number; output: string } {
   const r = spawnSync(
     process.execPath,
     [join(dir, "scripts", "check-gate-flag-claims.cjs"), ...args],
@@ -90,7 +83,11 @@ function writeScript(
 /** 写归类表夹具。 */
 function writeTables(
   dir: string,
-  { covered = "", retired = "", flips = "" }: { covered?: string; retired?: string; flips?: string },
+  {
+    covered = "",
+    retired = "",
+    flips = "",
+  }: { covered?: string; flips?: string; retired?: string; },
 ): void {
   writeFileSync(
     join(dir, "tests", "ratchet-update-guards.test.ts"),
@@ -162,8 +159,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
         ws.dir,
         "check-fake.cjs",
         " * 用法：\n *   node scripts/check-fake.cjs",
-        'const B = path.join(__dirname, ".fake-baseline.json");\n' +
-          'fs.writeFileSync(B, "{}");\n',
+        'const B = path.join(__dirname, ".fake-baseline.json");\n' + 'fs.writeFileSync(B, "{}");\n',
       );
       /* 表里点名的是**基线名**（键），脚本名由「谁把它写回去」现算 —— 与真表的形状一致。 */
       writeTables(ws.dir, {
@@ -342,11 +338,7 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
   it("--report 只出清单、不判失败（清零后的自证档）", () => {
     const ws = makeWorkspace();
     try {
-      writeScript(
-        ws.dir,
-        "check-fake.cjs",
-        " * 用法：\n *   node scripts/check-fake.cjs --update",
-      );
+      writeScript(ws.dir, "check-fake.cjs", " * 用法：\n *   node scripts/check-fake.cjs --update");
       writeTables(ws.dir, {});
       const { code, output } = run(ws.dir, ["--report"]);
       expect(code).toBe(0);

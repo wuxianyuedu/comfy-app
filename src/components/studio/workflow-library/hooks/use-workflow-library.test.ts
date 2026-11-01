@@ -13,21 +13,10 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createTestQueryClient } from "../../../../../tests/helpers/renderWithProviders";
-import {
-  createTestTRPC,
-  testTrpcEndpoint,
-} from "../../../../../tests/helpers/test-trpc";
+import { createTestTRPC, testTrpcEndpoint } from "../../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../../tests/helpers/trpc-msw";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
@@ -49,19 +38,19 @@ vi.mock("../../ToastProvider", () => ({
 }));
 
 /** 可控的「服务端」行为。 */
-interface Behavior {
-  workflows: Record<string, unknown>[];
-  localPending: Record<string, unknown>[];
-  tags: { id: string; name: string; count: number }[];
-  /** 非空时 workflow.list 抛错 —— 覆盖加载错误通道 */
-  listError?: string;
-  /** 非空时 workflow.update 抛错 —— 覆盖动作错误通道 */
-  updateError?: string;
+type Behavior = {
   /** 非空时 workflow.delete 抛错 —— 覆盖 §17.5.4 的动作错误通道 */
   deleteError?: string;
   /** workflow.list 延迟多少毫秒才 resolve，模拟后端扫描卡住。 */
   listDelayMs?: number;
-}
+  /** 非空时 workflow.list 抛错 —— 覆盖加载错误通道 */
+  listError?: string;
+  localPending: Array<Record<string, unknown>>;
+  tags: Array<{ count: number; id: string; name: string }>;
+  /** 非空时 workflow.update 抛错 —— 覆盖动作错误通道 */
+  updateError?: string;
+  workflows: Array<Record<string, unknown>>;
+};
 
 let behavior: Behavior = { workflows: [], localPending: [], tags: [] };
 let listCalls = 0;
@@ -73,9 +62,7 @@ const mockRouter = t.router({
       listCalls += 1;
       if (behavior.listDelayMs && behavior.listDelayMs > 0) {
         // sleep-ok: mock 内部延迟：tRPC mock 的 listDelayMs 是给用例制造「列表慢一拍」的现场（行为开关），不是等条件。
-        await new Promise((resolve) =>
-          setTimeout(resolve, behavior.listDelayMs),
-        );
+        await new Promise((resolve) => setTimeout(resolve, behavior.listDelayMs));
       }
       if (behavior.listError) {
         throw new TRPCError({
@@ -197,9 +184,7 @@ describe("useWorkflowLibrary", () => {
       video: 1,
       audio: 0,
     });
-    expect(result.current.modelTags).toEqual([
-      { id: "t1", name: "flux", count: 2 },
-    ]);
+    expect(result.current.modelTags).toEqual([{ id: "t1", name: "flux", count: 2 }]);
   });
 
   it("筛选与搜索都是本地派生，不打新请求", async () => {
@@ -218,31 +203,22 @@ describe("useWorkflowLibrary", () => {
 
     const callsBefore = listCalls;
     act(() => result.current.setTypeFilter("video"));
-    expect(result.current.workflows.map((workflow) => workflow.id)).toEqual([
-      "2",
-    ]);
+    expect(result.current.workflows.map((workflow) => workflow.id)).toEqual(["2"]);
 
     act(() => result.current.setTypeFilter("all"));
     act(() => result.current.setModelFilter("flux"));
-    expect(result.current.workflows.map((workflow) => workflow.id)).toEqual([
-      "1",
-    ]);
+    expect(result.current.workflows.map((workflow) => workflow.id)).toEqual(["1"]);
 
     act(() => result.current.setModelFilter("all"));
     act(() => result.current.setSearch("beta"));
-    expect(result.current.workflows.map((workflow) => workflow.id)).toEqual([
-      "2",
-    ]);
+    expect(result.current.workflows.map((workflow) => workflow.id)).toEqual(["2"]);
 
     expect(listCalls).toBe(callsBefore);
   });
 
   it("选中项随列表联动；删除被选中项时清空选择", async () => {
     behavior = {
-      workflows: [
-        row({ id: "1", name: "Alpha" }),
-        row({ id: "2", name: "Beta" }),
-      ],
+      workflows: [row({ id: "1", name: "Alpha" }), row({ id: "2", name: "Beta" })],
       localPending: [],
       tags: [],
     };
@@ -335,7 +311,7 @@ describe("useWorkflowLibrary", () => {
       workflows: [],
       localPending: [],
       tags: [],
-      listDelayMs: LIST_STALL_MS + 2_000,
+      listDelayMs: LIST_STALL_MS + 2000,
     };
 
     const { result } = renderHook(() => useWorkflowLibrary(), {

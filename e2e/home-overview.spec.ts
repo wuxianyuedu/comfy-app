@@ -17,10 +17,12 @@ import { expect, test } from "@playwright/test";
  */
 test.describe("首页概览区 @critical", () => {
   test("两块卡都在，概览卡对自己的状态有一句说法", async ({ page }) => {
-    const errors: string[] = [];
+    const errors: Array<string> = [];
     page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
     page.on("console", (m) => {
-      if (m.type() === "error") errors.push(`console: ${m.text()}`);
+      if (m.type() === "error") {
+        errors.push(`console: ${m.text()}`);
+      }
     });
 
     await page.goto("/workspace");

@@ -35,7 +35,6 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
       <div className="border-border-strong bg-canvas-deep overflow-hidden rounded-md border">
         {/* 失败兜底收在基元里（同一个「110px 高」盒子，不跳布局）。 */}
         <MediaThumbnail
-          src={src}
           alt={ref.filename}
           className="block max-h-27.5 w-full object-contain"
           fallback={
@@ -48,8 +47,11 @@ export function WorkflowImagePreview({ entry }: { entry: RawInputMeta }) {
            * 出口给 `null`，而不是 `{0, 0}` 那种会让下游算出 `Infinity` 的值。 */
           onLoad={(media) => {
             const size = readNaturalSize(media);
-            if (size) setSize(size);
+            if (size) {
+              setSize(size);
+            }
           }}
+          src={src}
         />
       </div>
       {size && (

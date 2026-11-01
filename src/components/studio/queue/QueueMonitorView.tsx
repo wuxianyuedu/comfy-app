@@ -6,12 +6,7 @@ import { AuroraBackground } from "~/components/ui/aurora-background";
 import { DocumentFrame } from "~/components/studio/ViewContainer";
 import { pageHeaderTitle } from "~/components/studio/NavItems";
 import { ViewActions } from "~/components/studio/ViewActions";
-import {
-  Alert,
-  AlertAction,
-  AlertDescription,
-  AlertTitle,
-} from "~/components/ui/alert";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageHeader } from "~/components/ui/page-header";
@@ -56,11 +51,7 @@ export function QueueMonitorView({
   const running = c.running;
   /* 离线兜底卡：富卡片的数据源（/api/comfy/queue）读不到、但库里确有 RUNNING 行。 */
   const offlineRunning = running === null ? c.runningRows : [];
-  const hasAny =
-    running !== null ||
-    c.runningRows.length > 0 ||
-    c.queued.length > 0 ||
-    hasRecent;
+  const hasAny = running !== null || c.runningRows.length > 0 || c.queued.length > 0 || hasRecent;
   const empty = offlineEmptyText();
   const banner = offlineBannerText();
   const runningHint = runningHintText(c.online, c.waitingCount);
@@ -68,9 +59,9 @@ export function QueueMonitorView({
 
   return (
     <DocumentFrame
-      width="wide"
-      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
       backdrop={<AuroraBackground />}
+      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
+      width="wide"
     >
       {/* 屏名由页签给出，页头不再重复一次可见标题（`srTitle` 只留给读屏）——
           此前页签写「队列」、这里的大标题也写「队列」，同一件事占两行而读者
@@ -86,13 +77,13 @@ export function QueueMonitorView({
           {`待执行 ${String(c.waitingCount)}`}
         </span>
         <Button
-          variant="outline"
-          size="xs"
-          onClick={c.refresh}
           aria-label="立即重新读取队列"
           className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+          onClick={c.refresh}
+          size="xs"
+          variant="outline"
         >
-          <RefreshCcw data-icon="inline-start" className="size-3" aria-hidden />
+          <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
           刷新
         </Button>
       </ViewActions>
@@ -100,24 +91,24 @@ export function QueueMonitorView({
       {c.loadError ? (
         <EmptyState
           className="mb-6"
-          variant="hint"
-          title={c.loadError}
           description="读不到任务记录时不沿用旧数据 —— 把已经结束的条目显示成还在跑，比读到空更坏。"
+          title={c.loadError}
+          variant="hint"
         />
       ) : null}
 
       {/* 离线且还有任务：横幅说明「不会开始」，列表照常铺开（数据来自本地库） */}
       {!c.online && hasAny ? (
-        <Alert variant="warning" className="mb-6">
+        <Alert className="mb-6" variant="warning">
           <WifiOff />
           <AlertTitle>{banner.title}</AlertTitle>
           <AlertDescription>{banner.description}</AlertDescription>
           <AlertAction>
             <Button
-              variant="outline"
-              size="xs"
-              onClick={onOpenComfyui}
               className="border-warning/40 text-warning-strong hover:bg-warning/10 h-auto gap-1 rounded-lg px-2.5 py-1"
+              onClick={onOpenComfyui}
+              size="xs"
+              variant="outline"
             >
               去「ComfyUI」页启动
             </Button>
@@ -128,14 +119,14 @@ export function QueueMonitorView({
       {/* 离线且一条任务都没有：保留整页空态（有按钮的引导入口） */}
       {!c.online && !hasAny ? (
         <EmptyState
-          title={empty.title}
-          description={empty.description}
-          icon={ListChecks}
           action={
-            <Button variant="outline" size="sm" onClick={onOpenComfyui}>
+            <Button onClick={onOpenComfyui} size="sm" variant="outline">
               去「ComfyUI」页启动
             </Button>
           }
+          description={empty.description}
+          icon={ListChecks}
+          title={empty.title}
         />
       ) : null}
 
@@ -151,16 +142,9 @@ export function QueueMonitorView({
                       fallback: "（未知工作流）",
                     })}
                   </h3>
-                  <StatusBadge
-                    status="RUNNING"
-                    label={taskStatusLabel("RUNNING")}
-                  />
+                  <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
                 </div>
-                <ProgressBar
-                  className="mt-3"
-                  value={running.progressPct}
-                  label="采样进度"
-                />
+                <ProgressBar className="mt-3" label="采样进度" value={running.progressPct} />
                 <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                   <Field label="已跑">{running.elapsedText}</Field>
                   <Field label="预计剩余">{running.remainingText}</Field>
@@ -169,8 +153,8 @@ export function QueueMonitorView({
                 </dl>
                 <div className="mt-3 flex justify-end gap-1">
                   <Button
-                    variant="ghost"
-                    size="xs"
+                    aria-label="查看正在跑这条的执行日志"
+                    className="h-auto gap-1"
                     onClick={() =>
                       c.openLog({
                         id: running.id,
@@ -178,20 +162,18 @@ export function QueueMonitorView({
                         status: "RUNNING",
                       })
                     }
-                    aria-label="查看正在跑这条的执行日志"
-                    className="h-auto gap-1"
+                    size="xs"
+                    variant="ghost"
                   >
                     日志
                   </Button>
                   <Button
-                    variant="outline"
-                    size="xs"
-                    disabled={c.isBusy(running.id)}
-                    onClick={() =>
-                      void c.cancel(running.id, running.workflowName)
-                    }
                     aria-label="取消正在跑的这条"
                     className="border-border rounded-lg"
+                    disabled={c.isBusy(running.id)}
+                    onClick={() => void c.cancel(running.id, running.workflowName)}
+                    size="xs"
+                    variant="outline"
                   >
                     {c.isBusy(running.id) ? "处理中" : "取消这条"}
                   </Button>
@@ -200,33 +182,21 @@ export function QueueMonitorView({
             ) : offlineRunning.length > 0 ? (
               <ol className="flex flex-col gap-3">
                 {offlineRunning.map((row) => (
-                  <li
-                    key={row.id}
-                    className="bg-card border-border rounded-2xl border p-4"
-                  >
+                  <li className="bg-card border-border rounded-2xl border p-4" key={row.id}>
                     <div className="flex flex-wrap items-center gap-3">
                       <h3 className="text-ink-bright min-w-0 flex-1 truncate text-sm font-semibold">
                         {displayValue(row.workflowName, {
                           fallback: "（未知工作流）",
                         })}
                       </h3>
-                      <StatusBadge
-                        status="RUNNING"
-                        label={taskStatusLabel("RUNNING")}
-                      />
+                      <StatusBadge label={taskStatusLabel("RUNNING")} status="RUNNING" />
                     </div>
-                    <ProgressBar
-                      className="mt-3"
-                      value={row.progress}
-                      label="采样进度"
-                    />
-                    <p className="text-ink-fainter mt-2 text-xs">
-                      {offlineNote}
-                    </p>
+                    <ProgressBar className="mt-3" label="采样进度" value={row.progress} />
+                    <p className="text-ink-fainter mt-2 text-xs">{offlineNote}</p>
                     <div className="mt-3 flex justify-end gap-1">
                       <Button
-                        variant="ghost"
-                        size="xs"
+                        aria-label="查看正在跑这条的执行日志"
+                        className="h-auto gap-1"
                         onClick={() =>
                           c.openLog({
                             id: row.id,
@@ -235,18 +205,18 @@ export function QueueMonitorView({
                             error: row.error,
                           })
                         }
-                        aria-label="查看正在跑这条的执行日志"
-                        className="h-auto gap-1"
+                        size="xs"
+                        variant="ghost"
                       >
                         日志
                       </Button>
                       <Button
-                        variant="outline"
-                        size="xs"
-                        disabled={c.isBusy(row.id)}
-                        onClick={() => void c.cancel(row.id, row.workflowName)}
                         aria-label="取消正在跑的这条"
                         className="border-border rounded-lg"
+                        disabled={c.isBusy(row.id)}
+                        onClick={() => void c.cancel(row.id, row.workflowName)}
+                        size="xs"
+                        variant="outline"
                       >
                         {c.isBusy(row.id) ? "处理中" : "取消这条"}
                       </Button>
@@ -256,10 +226,10 @@ export function QueueMonitorView({
               </ol>
             ) : (
               <EmptyState
-                variant="hint"
+                description={runningHint.description}
                 minHeightClass="min-h-30"
                 title={runningHint.title}
-                description={runningHint.description}
+                variant="hint"
               />
             )}
           </section>
@@ -271,25 +241,22 @@ export function QueueMonitorView({
             {c.queued.length > 0 ? (
               <ol className="border-border bg-card overflow-hidden rounded-2xl border">
                 {c.queued.map(({ row, position }) => (
-                  <li
-                    key={row.id}
-                    className="border-border border-b px-4 py-3 last:border-b-0"
-                  >
+                  <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
                     <QueueRowLine
-                      row={row}
-                      leading={`第 ${String(position)} 位`}
                       busy={c.isBusy(row.id)}
+                      leading={`第 ${String(position)} 位`}
                       onCancel={() => void c.cancel(row.id, row.workflowName)}
                       onCopy={() => void c.copyForReprint(row)}
                       onOpenFolder={() => void c.openFolder(row)}
                       onOpenLog={() => c.openLog(row)}
+                      row={row}
                     />
                   </li>
                 ))}
               </ol>
             ) : (
               <p className="text-ink-fainter flex items-center gap-1.5 text-xs">
-                <ListOrdered className="size-3.5" aria-hidden />
+                <ListOrdered aria-hidden className="size-3.5" />
                 没有排队中的条目。提交新任务后它会出现在这里，位次按提交先后排。
               </p>
             )}
@@ -300,17 +267,14 @@ export function QueueMonitorView({
             {hasRecent ? (
               <ul className="border-border bg-card overflow-hidden rounded-2xl border">
                 {c.recent.map((row) => (
-                  <li
-                    key={row.id}
-                    className="border-border border-b px-4 py-3 last:border-b-0"
-                  >
+                  <li className="border-border border-b px-4 py-3 last:border-b-0" key={row.id}>
                     <QueueRowLine
-                      row={row}
                       busy={c.isBusy(row.id)}
                       onCancel={() => void c.cancel(row.id, row.workflowName)}
                       onCopy={() => void c.copyForReprint(row)}
                       onOpenFolder={() => void c.openFolder(row)}
                       onOpenLog={() => c.openLog(row)}
+                      row={row}
                     />
                   </li>
                 ))}

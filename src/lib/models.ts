@@ -1,22 +1,25 @@
 import { listModels, comfyBase } from "./comfyui/client";
 import { modelRepository, userModelConfigRepository } from "./core/repository";
-import { type ModelType } from "./model-types";
+import type { ModelType } from "./model-types";
 
 export function baseFromName(name: string): string {
   const lower = name.toLowerCase();
 
-  if (lower.includes("illustrious") || lower.includes("sdxl")) return "SDXL";
+  if (lower.includes("illustrious") || lower.includes("sdxl")) {
+    return "SDXL";
+  }
 
-  if (lower.includes("flux")) return "Flux";
+  if (lower.includes("flux")) {
+    return "Flux";
+  }
 
-  if (
-    lower.includes("sd1.5") ||
-    lower.includes("sd_1.5") ||
-    lower.includes("sd15")
-  )
+  if (lower.includes("sd1.5") || lower.includes("sd_1.5") || lower.includes("sd15")) {
     return "SD1.5";
+  }
 
-  if (lower.includes("pony")) return "Pony";
+  if (lower.includes("pony")) {
+    return "Pony";
+  }
 
   return "未知";
 }
@@ -44,13 +47,13 @@ async function isComfyReachable(): Promise<boolean> {
   }
 }
 
-interface ScannedFile {
-  folder: string;
-  fileName: string;
-  type: ModelType;
-  name: string;
+type ScannedFile = {
   baseModel: string;
-}
+  fileName: string;
+  folder: string;
+  name: string;
+  type: ModelType;
+};
 
 /* 把磁盘上的 ComfyUI 模型同步进本项目的注册表。
  *
@@ -80,13 +83,13 @@ export async function syncModels(userId?: string): Promise<number> {
   await modelRepository.disableAllLocal();
 
   // 第 2 步 —— 只在 ComfyUI 可达时才从磁盘回填。
-  if (!(await isComfyReachable())) return 0;
+  if (!(await isComfyReachable())) {
+    return 0;
+  }
 
   /* 按目录**并发**拉取：原先是串行 await，目录一个接一个等，总耗时是所有目录
    * 的往返之和。目录数就是模型类型数（十几个），并发不会打爆本地 ComfyUI。 */
-  const enabledFolders = [...overrides]
-    .filter(([, ov]) => ov.enabled)
-    .map(([folder]) => folder);
+  const enabledFolders = [...overrides].filter(([, ov]) => ov.enabled).map(([folder]) => folder);
   const perFolder = await Promise.all(
     enabledFolders.map(async (folder) => ({
       folder,
@@ -94,7 +97,7 @@ export async function syncModels(userId?: string): Promise<number> {
     })),
   );
 
-  const scanned: ScannedFile[] = [];
+  const scanned: Array<ScannedFile> = [];
   for (const { folder, files } of perFolder) {
     for (const fileName of files) {
       const name = stripExt(fileName);
@@ -125,14 +128,16 @@ export async function syncModels(userId?: string): Promise<number> {
  * `/api/models/<folder>` 的原始条目 —— 例如
  * `waiIllustriousSDXL_v170.safetensors` 这样的文件名。
  */
-export async function localModelFileNames(
-  folders: string[],
-): Promise<string[]> {
-  if (!folders.length) return [];
+export async function localModelFileNames(folders: Array<string>): Promise<Array<string>> {
+  if (!folders.length) {
+    return [];
+  }
   const enabled = await userModelConfigRepository.listEnabledFolders();
   const wanted = new Set(folders);
   const matchedFolders = enabled.filter((enabled) => wanted.has(enabled));
-  if (!matchedFolders.length) return [];
+  if (!matchedFolders.length) {
+    return [];
+  }
   return modelRepository.listAvailableFileNamesByFolders(matchedFolders);
 }
 

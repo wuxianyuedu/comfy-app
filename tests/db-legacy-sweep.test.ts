@@ -17,10 +17,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  epochMsToIso,
-  sweepLegacyTimestamps,
-} from "../scripts/db-legacy-sweep.mjs";
+import { epochMsToIso, sweepLegacyTimestamps } from "../scripts/db-legacy-sweep.mjs";
 
 let tmp: string;
 let dbFile: string;
@@ -37,9 +34,7 @@ function open(): DatabaseSync {
 function rows() {
   const db = open();
   try {
-    return db
-      .prepare("SELECT id, createdAt, updatedAt FROM project ORDER BY id")
-      .all();
+    return db.prepare("SELECT id, createdAt, updatedAt FROM project ORDER BY id").all();
   } finally {
     db.close();
   }
@@ -49,9 +44,7 @@ beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "db-sweep-"));
   dbFile = path.join(tmp, "db.sqlite");
   const db = open();
-  db.exec(
-    "CREATE TABLE project (id TEXT PRIMARY KEY, name TEXT, createdAt TEXT, updatedAt TEXT)",
-  );
+  db.exec("CREATE TABLE project (id TEXT PRIMARY KEY, name TEXT, createdAt TEXT, updatedAt TEXT)");
   db.close();
 });
 
@@ -67,7 +60,7 @@ describe("epochMsToIso —— 形状判据", () => {
   it("已是 ISO / 空串 / 非字符串 → null（原样保留）", () => {
     expect(epochMsToIso("2026-09-23T12:55:34.886Z")).toBeNull();
     expect(epochMsToIso("")).toBeNull();
-    expect(epochMsToIso(1787379642808)).toBeNull();
+    expect(epochMsToIso(1_787_379_642_808)).toBeNull();
     expect(epochMsToIso(null)).toBeNull();
   });
 
@@ -131,7 +124,7 @@ describe("sweepLegacyTimestamps —— 归一与幂等", () => {
     );
     db.close();
 
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const summary = sweepLegacyTimestamps(dbFile, (l) => lines.push(l));
     expect(summary.skipped).toEqual(["proj_c.updatedAt = not-a-date"]);
     expect(lines.join("")).toContain("proj_c.updatedAt = not-a-date");

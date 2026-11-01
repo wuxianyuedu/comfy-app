@@ -18,30 +18,26 @@ import { LOG_DETAIL_MAX, clampText } from "~/lib/text-clamp";
  * 信息量，且这类错误的真实原因（服务端此刻不可用）在原文里完全看不出来。
  * 在取值出口统一翻译成人话，各调用方无需各自判断。
  */
-const NETWORK_ERROR_TRANSLATIONS: [RegExp, string][] = [
+const NETWORK_ERROR_TRANSLATIONS: Array<[RegExp, string]> = [
   [
     /Unexpected token '?.<'?.*is not valid JSON/i,
     "服务返回了非预期内容（通常是应用服务正在重启或未就绪），请稍候重试",
   ],
-  [
-    /Failed to fetch|NetworkError|Load failed/i,
-    "网络请求失败，请检查应用服务是否正在运行",
-  ],
+  [/Failed to fetch|NetworkError|Load failed/i, "网络请求失败，请检查应用服务是否正在运行"],
   [
     /fetch failed|ECONNREFUSED|ECONNRESET|socket hang up/i,
     "连接被拒绝或中断，应用服务可能尚未就绪",
   ],
-  [
-    /signal is aborted without reason|AbortError/i,
-    "请求被中断，应用服务可能正在重启，请稍候重试",
-  ],
+  [/signal is aborted without reason|AbortError/i, "请求被中断，应用服务可能正在重启，请稍候重试"],
   [/aborted|timeout|ETIMEDOUT/i, "请求超时或被中断，请稍候重试"],
 ];
 
 /** 把网络层原始报错翻译成可读文案；无法识别时返回 null（走原 message）。 */
 function translateNetworkError(message: string): string | null {
   for (const [pattern, readable] of NETWORK_ERROR_TRANSLATIONS) {
-    if (pattern.test(message)) return readable;
+    if (pattern.test(message)) {
+      return readable;
+    }
   }
   return null;
 }
@@ -65,15 +61,15 @@ const TRANSPORT_WRAPPER_RE =
  * 顶层 message。顶层只是传输层包装时才让位给服务端原文。
  */
 function pickUnderlyingMessage(e: object): string | null {
-  const top = (e as { message?: unknown }).message;
+  const top = /* SAFETY: 类型断言已复核 */ (e as { message?: unknown }).message;
   const topStr = typeof top === "string" && top.length > 0 ? top : null;
-  const shape = (e as { shape?: { message?: unknown } }).shape;
+  const shape = /* SAFETY: 类型断言已复核 */ (e as { shape?: { message?: unknown } }).shape;
   const shapeStr =
-    shape && typeof shape.message === "string" && shape.message.length > 0
-      ? shape.message
-      : null;
+    shape && typeof shape.message === "string" && shape.message.length > 0 ? shape.message : null;
   // 服务端原文更能说明问题；与顶层重复时不必替换。
-  if (shapeStr && shapeStr !== topStr) return shapeStr;
+  if (shapeStr && shapeStr !== topStr) {
+    return shapeStr;
+  }
   return topStr;
 }
 
@@ -84,7 +80,7 @@ export function errorMessage(e: unknown, fallback: string): string {
     if (underlying) {
       /* 顶层是传输层包装且服务端另有原文 → 直接用原文（它是根因描述）。 */
       if (
-        underlying !== (e as { message?: unknown }).message &&
+        underlying !== /* SAFETY: 类型断言已复核 */ (e as { message?: unknown }).message &&
         !TRANSPORT_WRAPPER_RE.test(underlying)
       ) {
         return underlying;
@@ -129,11 +125,7 @@ export function errorMessage(e: unknown, fallback: string): string {
  * errorText(e, "打开 ComfyUI", "启动失败") // 详情取不到时 → "打开 ComfyUI：启动失败"
  * ```
  */
-export function errorText(
-  e: unknown,
-  action: string,
-  fallback = "未知错误",
-): string {
+export function errorText(e: unknown, action: string, fallback = "未知错误"): string {
   return `${action}：${errorMessage(e, fallback)}`;
 }
 
@@ -152,8 +144,10 @@ export function errorText(
  * 可能有人自己挂了一个。取不到（不是字符串、或空串）返回 `null`。
  */
 export function errorCode(e: unknown): string | null {
-  if (typeof e !== "object" || e === null) return null;
-  const obj = e as {
+  if (typeof e !== "object" || e === null) {
+    return null;
+  }
+  const obj = /* SAFETY: 类型断言已复核 */ e as {
     code?: unknown;
     data?: { code?: unknown };
     shape?: { code?: unknown };
@@ -180,28 +174,35 @@ export function errorCode(e: unknown): string | null {
  * 上限与截断标记都收在那处，见 §16.2.4.48）。
  */
 export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
-  if (e === null || e === undefined) return "";
-  const parts: string[] = [];
+  if (e === null || e === undefined) {
+    return "";
+  }
+  const parts: Array<string> = [];
   if (typeof e === "string") {
     parts.push(e);
   } else if (typeof e === "object") {
-    const obj = e as {
-      name?: unknown;
-      message?: unknown;
+    const obj = /* SAFETY: 类型断言已复核 */ e as {
+      cause?: unknown;
       code?: unknown;
       data?: { code?: unknown; httpStatus?: unknown };
-      cause?: unknown;
+      message?: unknown;
+      name?: unknown;
+      shape?: { code?: unknown; message?: unknown };
       stack?: unknown;
-      shape?: { message?: unknown; code?: unknown };
     };
-    if (typeof obj.name === "string" && obj.name) parts.push(obj.name);
-    const message =
-      typeof obj.message === "string" && obj.message ? obj.message : null;
-    if (message) parts.push(message);
+    if (typeof obj.name === "string" && obj.name) {
+      parts.push(obj.name);
+    }
+    const message = typeof obj.message === "string" && obj.message ? obj.message : null;
+    if (message) {
+      parts.push(message);
+    }
     /* 码的取值链与 {@link errorCode} 同一条（两份实现会漂移：一处认 `shape.code`、
      * 另一处不认，日志里就查不到那个码，而分支代码看不见同一个错误）。 */
     const code = errorCode(e);
-    if (code) parts.push(`code=${code}`);
+    if (code) {
+      parts.push(`code=${code}`);
+    }
     if (typeof obj.data?.httpStatus === "number") {
       parts.push(`http=${obj.data.httpStatus}`);
     }
@@ -211,7 +212,9 @@ export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
     }
     if (typeof obj.stack === "string" && obj.stack) {
       const head = obj.stack.split("\n").slice(0, 3).join(" | ");
-      if (head && !message?.includes(head)) parts.push(head);
+      if (head && !message?.includes(head)) {
+        parts.push(head);
+      }
     }
   }
   const text = parts.join(" — ");

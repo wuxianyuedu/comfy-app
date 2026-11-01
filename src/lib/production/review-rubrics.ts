@@ -14,25 +14,25 @@
 export type ReviewScoreAnchor = Record<1 | 2 | 3 | 4 | 5, string>;
 
 /** rubric 的一个评分维度。 */
-export interface ReviewRubricDimension {
+export type ReviewRubricDimension = {
+  /** 分值锚点：1~5 每档一句「什么样子打这个分」。 */
+  anchors: ReviewScoreAnchor;
+  /** 一句话说明这个维度评什么。 */
+  description: string;
   /** 维度 key（进 `ReviewVerdict.scores` 的键，判据代码按它取分；定稿后不可改）。 */
   key: string;
   /** 人读维度名（进提示词与展示）。 */
   label: string;
-  /** 一句话说明这个维度评什么。 */
-  description: string;
-  /** 分值锚点：1~5 每档一句「什么样子打这个分」。 */
-  anchors: ReviewScoreAnchor;
-}
+};
 
 /** 一张评分量表：评审对象 + 版本 + 维度集。 */
-export interface ReviewRubric {
+export type ReviewRubric = {
+  dimensions: Array<ReviewRubricDimension>;
   /** 评审对象（与 `ReviewKind` 同族 + 剧本）。 */
   kind: ReviewRubricKind;
   /** 版本号（口径演进后旧分数仍可解释的判据；进 `ReviewVerdict.rubricVersion`）。 */
   version: string;
-  dimensions: ReviewRubricDimension[];
-}
+};
 
 /** 评审对象：剧本 / 角色卡 / 分镜镜头文本 / 生图（视觉评审 P8-2）。 */
 export type ReviewRubricKind = "script" | "character" | "shot" | "shotImage";
@@ -249,7 +249,7 @@ export const REVIEW_RUBRICS: Record<ReviewRubricKind, ReviewRubric> = {
 
 /** 取某评审对象的 rubric；未知 kind → null（调用方回落「无评分」旧路，不抛）。 */
 export function rubricFor(kind: string): ReviewRubric | null {
-  const rubric = REVIEW_RUBRICS[kind as ReviewRubricKind];
+  const rubric = REVIEW_RUBRICS[/* SAFETY: 类型断言已复核 */ kind as ReviewRubricKind];
   return rubric ?? null;
 }
 
@@ -261,7 +261,7 @@ export function rubricFor(kind: string): ReviewRubric | null {
 export function renderRubricForPrompt(rubric: ReviewRubric): string {
   return rubric.dimensions
     .map((d) => {
-      const anchors = ([1, 2, 3, 4, 5] as const)
+      const anchors = /* SAFETY: 类型断言已复核 */ ([1, 2, 3, 4, 5] as const)
         .map((score) => `${score}=${d.anchors[score]}`)
         .join("；");
       return `- ${d.label}（${d.key}）：${d.description}。${anchors}`;

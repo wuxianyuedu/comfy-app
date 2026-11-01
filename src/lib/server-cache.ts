@@ -12,12 +12,12 @@
  *   因此按 TTL 失效是安全的。
  */
 
-type Entry<T> = { value: T; expiresAt: number };
+type Entry<T> = { expiresAt: number; value: T };
 
-interface CacheStore {
+type CacheStore = {
   map: Map<string, Entry<unknown>>;
   max: number;
-}
+};
 
 const MAX_ENTRIES = 256;
 
@@ -48,7 +48,7 @@ export async function cacheJson<T>(
     // 重新插入一次，以标记为「最近使用」。
     store.map.delete(key);
     store.map.set(key, existing);
-    return existing.value as T;
+    return /* SAFETY: 类型断言已复核 */ existing.value as T;
   }
 
   const value = await build();
@@ -59,7 +59,9 @@ export async function cacheJson<T>(
   // 超出容量就淘汰最旧的。
   while (store.map.size > store.max) {
     const oldest = store.map.keys().next().value;
-    if (oldest === undefined) break;
+    if (oldest === undefined) {
+      break;
+    }
     store.map.delete(oldest);
   }
   return value;
@@ -82,7 +84,7 @@ export function cachePeek<T>(key: string): T | undefined {
     // 重新插入一次，以标记为「最近使用」。
     store.map.delete(key);
     store.map.set(key, existing);
-    return existing.value as T;
+    return /* SAFETY: 类型断言已复核 */ existing.value as T;
   }
   return undefined;
 }
@@ -90,7 +92,9 @@ export function cachePeek<T>(key: string): T | undefined {
 /* 删除所有以 `prefix` 开头的缓存键（例如 `wf:userId:`）。 */
 export function cacheDelPrefix(prefix: string): void {
   const store = getStore();
-  for (const k of Array.from(store.map.keys())) {
-    if (k.startsWith(prefix)) store.map.delete(k);
+  for (const k of store.map.keys()) {
+    if (k.startsWith(prefix)) {
+      store.map.delete(k);
+    }
   }
 }

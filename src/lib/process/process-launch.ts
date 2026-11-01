@@ -53,22 +53,14 @@ export type ManagedSpawnResult =
   | { child: ChildProcess; error?: never }
   | { child?: never; error: string };
 
-export interface ManagedSpawnOptions {
+export type ManagedSpawnOptions = {
+  args: Array<string>;
   command: string;
-  args: string[];
   cwd?: string;
   env?: NodeJS.ProcessEnv;
-  /** keepAlive 生效时恒忽略；bound 模式下透传给 spawn。 */
-  windowsHide?: boolean;
-  mode: DetachMode;
   /** spawn 找不到可执行文件时是否静默吞掉（默认 false）。 */
   ignoreMissing?: boolean;
-  /** keepAlive 专用：把子进程 stdout / stderr 重定向到这两个按次命名的文件
-   *  （脱离进程树的进程没有管道可读，落文件才能保住启动日志）。
-   *  Windows 经 Start-Process -RedirectStandardOutput/-Error；POSIX 直接把
-   *  文件描述符交给 stdio。两文件必须不同路径。 */
-  redirectStdoutFile?: string;
-  redirectStderrFile?: string;
+  mode: DetachMode;
   /** keepAlive 的两条平台分支的分叉判据。缺省 `process.platform`。
    *
    *  **为什么它是一个入参**：`process.platform` 在 POSIX 宿主上是不可覆盖的
@@ -79,11 +71,19 @@ export interface ManagedSpawnOptions {
    *  五条用例恒红；把判据搬到入参之后，两端机器判的是同一个结论。
    *  注入的是**判据的输入**，不是把假信号发给真进程。 */
   platform?: NodeJS.Platform;
-}
+  redirectStderrFile?: string;
+  /** keepAlive 专用：把子进程 stdout / stderr 重定向到这两个按次命名的文件
+   *  （脱离进程树的进程没有管道可读，落文件才能保住启动日志）。
+   *  Windows 经 Start-Process -RedirectStandardOutput/-Error；POSIX 直接把
+   *  文件描述符交给 stdio。两文件必须不同路径。 */
+  redirectStdoutFile?: string;
+  /** keepAlive 生效时恒忽略；bound 模式下透传给 spawn。 */
+  windowsHide?: boolean;
+};
 
 /** 把单个参数安全地包进 PowerShell 单引号（' 转义为 ''）。 */
 export function escapePwshSingle(s: string): string {
-  return `'${s.replace(/'/g, "''")}'`;
+  return `'${s.replaceAll("'", "''")}'`;
 }
 
 /**
@@ -92,7 +92,7 @@ export function escapePwshSingle(s: string): string {
  * 含空格的参数必须由元素自带引号才不会被拆分。
  */
 function toStartProcessElement(arg: string): string {
-  return escapePwshSingle(`"${arg.replace(/"/g, '\\"')}"`);
+  return escapePwshSingle(`"${arg.replaceAll('"', String.raw`\"`)}"`);
 }
 
 /**
@@ -101,7 +101,7 @@ function toStartProcessElement(arg: string): string {
  * 多个位置参数导致绑定失败（实测报「找不到接受实际参数 … 的位置形式参数」，
  * Start-Process 完全不执行，目标进程根本不会被拉起）。
  */
-export function buildStartProcessArgumentList(args: string[]): string {
+export function buildStartProcessArgumentList(args: Array<string>): string {
   return `@(${args.map(toStartProcessElement).join(",")})`;
 }
 
@@ -111,7 +111,9 @@ export function buildStartProcessArgumentList(args: string[]): string {
  * 每个可见字符间夹 \x00 的乱码。这里剥 BOM 后按 utf16le 解码。
  */
 export function decodePowerShellOutput(buf: Buffer): string {
-  if (!buf || buf.length === 0) return "";
+  if (!buf || buf.length === 0) {
+    return "";
+  }
   if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) {
     return buf.subarray(2).toString("utf16le");
   }
@@ -126,11 +128,11 @@ export function decodePowerShellOutput(buf: Buffer): string {
 }
 
 /** 等 Windows keepAlive 的 powershell 中介退出并收集其 stderr。 */
-export interface DetachMediatorOutcome {
+export type DetachMediatorOutcome = {
   /** 中介退出码；超时未退出为 null（调用方按「未知，继续外部探测」处理）。 */
   code: number | null;
   stderr: string;
-}
+};
 
 /**
  * 中介句柄**真正被读到的那两样**（不是整包 `ChildProcess`）。
@@ -141,12 +143,12 @@ export interface DetachMediatorOutcome {
  * —— 那种cast 会把「调用点到底喂了什么」这一格重新变成 tsc 看不见的地方
  *（台账 F13 那一族的成因）。真的 `ChildProcess` 天然满足这个形状。
  */
-export interface DetachMediatorHandle {
+export type DetachMediatorHandle = {
   once(event: "exit", listener: (code: number | null) => void): unknown;
   stderr?: {
     on(event: "data", listener: (chunk: Buffer) => void): unknown;
   } | null;
-}
+};
 
 /**
  * 等 Windows keepAlive 的 powershell 中介退出，带出它的 stderr。
@@ -158,7 +160,7 @@ export function waitForDetachMediator(
   child: DetachMediatorHandle,
   timeoutMs = 5000,
 ): Promise<DetachMediatorOutcome> {
-  const chunks: Buffer[] = [];
+  const chunks: Array<Buffer> = [];
   child.stderr?.on("data", (d: Buffer) => chunks.push(d));
   const readSoFar = (): string => decodePowerShellOutput(Buffer.concat(chunks));
   /* 兜底必须**在超时那一刻**算，不能在这一行算：`withTimeoutResult` 的 fallback
@@ -199,8 +201,8 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
         stdio: ["ignore", "pipe", "pipe"],
       });
       return { child };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -214,7 +216,9 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     let errFd: number | undefined;
     const closeOpenedFds = (): void => {
       for (const fd of [outFd, errFd]) {
-        if (fd === undefined) continue;
+        if (fd === undefined) {
+          continue;
+        }
         try {
           closeSync(fd);
         } catch {
@@ -226,7 +230,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     try {
       // 有重定向文件时把文件描述符直接交给 stdio（脱离进程树后依然落盘），
       // 父进程侧的副本用完即关。
-      let stdio: ("ignore" | number)[] = ["ignore", "ignore", "ignore"];
+      let stdio: Array<"ignore" | number> = ["ignore", "ignore", "ignore"];
       if (opts.redirectStdoutFile && opts.redirectStderrFile) {
         outFd = openSync(opts.redirectStdoutFile, "w");
         errFd = openSync(opts.redirectStderrFile, "w");
@@ -241,9 +245,9 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
       child.unref();
       closeOpenedFds();
       return { child };
-    } catch (e) {
+    } catch (error) {
       closeOpenedFds();
-      return { error: e instanceof Error ? e.message : String(e) };
+      return { error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -263,20 +267,12 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
    * 两侧契约一致：中介立即退出，退出码非 0 表示拉起被拒，stderr 带原因。 */
   const shellExe = process.env.COMFYAPP_SHELL_EXE?.trim();
   if (shellExe) {
-    const cliArgs = [
-      "--spawn-detached",
-      "--cmd",
-      command,
-      ...args.flatMap((a) => ["--arg", a]),
-    ];
-    if (opts.cwd) cliArgs.push("--cwd", opts.cwd);
+    const cliArgs = ["--spawn-detached", "--cmd", command, ...args.flatMap((a) => ["--arg", a])];
+    if (opts.cwd) {
+      cliArgs.push("--cwd", opts.cwd);
+    }
     if (opts.redirectStdoutFile && opts.redirectStderrFile) {
-      cliArgs.push(
-        "--out",
-        opts.redirectStdoutFile,
-        "--err",
-        opts.redirectStderrFile,
-      );
+      cliArgs.push("--out", opts.redirectStdoutFile, "--err", opts.redirectStderrFile);
     }
     try {
       // 不传 env：与下面的 powershell 中介同语义（继承本进程环境，目标再由它继承）。
@@ -286,8 +282,8 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
       });
       mediator.unref();
       return { child: mediator };
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -306,9 +302,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
 
   // 退回：powershell Start-Process 孤儿中介。stderr 用 pipe 带出
   // （调用方经 waitForDetachMediator 读），拉起被拒时才有可行动的报错。
-  const cwdArg = opts.cwd
-    ? ` -WorkingDirectory ${escapePwshSingle(opts.cwd)}`
-    : "";
+  const cwdArg = opts.cwd ? ` -WorkingDirectory ${escapePwshSingle(opts.cwd)}` : "";
   const redirectArg =
     opts.redirectStdoutFile && opts.redirectStderrFile
       ? ` -RedirectStandardOutput ${escapePwshSingle(opts.redirectStdoutFile)}` +
@@ -319,15 +313,14 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
     ` -ArgumentList ${buildStartProcessArgumentList(args)}` +
     ` -WindowStyle Hidden${redirectArg}${cwdArg}; exit`;
   try {
-    const mediator = spawn(
-      "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", ps],
-      { windowsHide: true, stdio: ["ignore", "ignore", "pipe"] },
-    );
+    const mediator = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", ps], {
+      windowsHide: true,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
     mediator.unref();
     // 中介是立即退出的 powershell；返回它仅供调用方持有引用，pid 不代表目标。
     return { child: mediator };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
   }
 }

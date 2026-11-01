@@ -19,10 +19,7 @@ import {
   usageTestDraftKey,
   type UsageField,
 } from "~/lib/llm/usage-test-config";
-import type {
-  UsageTestKind,
-  UsageTestResult,
-} from "~/lib/llm/usage-test-client";
+import type { UsageTestKind, UsageTestResult } from "~/lib/llm/usage-test-client";
 import type { RemoteModelEntry, RemoteModelKind } from "~/lib/llm/types";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import {
@@ -41,43 +38,43 @@ export type ModelDialogForm = RemoteModelFieldValues;
 
 export type ModelDialog =
   | { mode: "add" }
-  | { mode: "edit"; original: string; entry: RemoteModelEntry }
+  | { entry: RemoteModelEntry; mode: "edit"; original: string }
   | null;
 
 /** 字段级错误的键（与 `ModelDialogForm` 同域）。 */
 type ModelDialogField = keyof ModelDialogForm;
 
 /** 「实际使用」测试弹窗的状态：参数可自定义，结果按用途渲染。 */
-export interface UsageTestDialogState {
-  kind: UsageTestKind;
-  entry: RemoteModelEntry;
-  baseUrl: string;
-  path: string;
+export type UsageTestDialogState = {
   apiKey: string;
-  prompt: string;
-  size: string;
+  baseUrl: string;
+  entry: RemoteModelEntry;
   /** 请求体额外字段（结构化编辑，替代原先手填整段 JSON）。 */
-  fields: UsageField[];
-  running: boolean;
+  fields: Array<UsageField>;
+  kind: UsageTestKind;
+  path: string;
+  prompt: string;
   /** 是否正在「继续等待」一个已提交的异步视频任务（区别于首次提交的 running） */
   querying: boolean;
   result: UsageTestResult | null;
-}
+  running: boolean;
+  size: string;
+};
 
 /** 每个条目「实际使用」测试弹窗的草稿快照：不含运行时 running / entry 引用，
  *  只保留「重开可恢复」的填写内容与最近一次执行结果 / 状态。
  *  关闭弹窗不丢内容（ISSUE #107）：重开同一 kind + 条目的弹窗时据此恢复。 */
-export interface UsageTestDialogSnapshot {
+export type UsageTestDialogSnapshot = {
+  apiKey: string;
+  baseUrl: string;
+  fields: Array<UsageField>;
   kind: UsageTestKind;
   name: string;
-  baseUrl: string;
   path: string;
-  apiKey: string;
   prompt: string;
-  size: string;
-  fields: UsageField[];
   result: UsageTestResult | null;
-}
+  size: string;
+};
 
 /** 模块级草稿仓库：键 = usageTestDraftKey(kind, name)。
  *  放在模块作用域而非组件 state，是为了「关闭弹窗」也能保留——
@@ -102,84 +99,79 @@ function rememberUsageTestDraft(state: UsageTestDialogState): void {
 }
 
 /** 若存在对应草稿快照则返回，否则返回 null（调用方按默认值新建弹窗）。 */
-function restoreUsageTestDraft(
-  kind: UsageTestKind,
-  name: string,
-): UsageTestDialogSnapshot | null {
+function restoreUsageTestDraft(kind: UsageTestKind, name: string): UsageTestDialogSnapshot | null {
   return usageTestDrafts.get(usageTestDraftKey(kind, name)) ?? null;
 }
 
 /** 每个模型条目的「测试连接」进行态与结果。 */
-export interface RowProbe {
+export type RowProbe = {
+  msg: { kind: "ok" | "err"; text: string } | null;
   name: string;
   running: boolean;
-  msg: { kind: "ok" | "err"; text: string } | null;
-}
+};
 
-export interface RemoteModelDialogs {
-  /** 「添加 / 编辑模型」弹窗状态（null = 关闭）。 */
-  dialog: ModelDialog;
-  closeDialog: () => void;
-  addForm: ModelDialogForm;
-  setAddForm: React.Dispatch<React.SetStateAction<ModelDialogForm>>;
+export type RemoteModelDialogs = {
   /** 弹窗内提交失败的错误文案（留在原地展示）。 */
   addError: string | null;
+  addField: (key?: string) => void;
+  addForm: ModelDialogForm;
+  addPresetField: (key: string) => void;
+  /** 编辑态显式清除独立密钥的勾选。 */
+  clearKey: boolean;
+  closeDialog: () => void;
+  /** 关闭「实际使用」弹窗（草稿仍在仓库，重开可恢复）。 */
+  closeUsageTest: () => void;
+  /** 对已提交但仍在生成的异步视频任务「继续等待」一轮。 */
+  continueUsageWait: () => Promise<void>;
+  /** 「添加 / 编辑模型」弹窗状态（null = 关闭）。 */
+  dialog: ModelDialog;
   /** 字段级校验错误（键 = 字段名）。规则住在 `~/lib/llm/remote-model-schema`，
    *  这里只转述 —— 字段级与集合级（重名查重）分开，见该模块头注释。 */
   fieldErrors: Partial<Record<ModelDialogField, string>>;
-  /** 编辑态显式清除独立密钥的勾选。 */
-  clearKey: boolean;
-  setClearKey: React.Dispatch<React.SetStateAction<boolean>>;
-  /** 弹窗内「测试连接」的进行态与结果。 */
-  testing: boolean;
-  testMsg: { kind: "ok" | "err"; text: string } | null;
-  /** 测试连接成功后返回的服务端模型清单（供点选）。 */
-  suggestions: string[];
-  /** 提交添加 / 编辑（即时落库；失败留在弹窗报错）。 */
-  submitDialog: () => Promise<void>;
   /** 打开「添加模型」弹窗，按用途预选用途。 */
   openAddDialog: (kind?: RemoteModelKind) => void;
   /** 打开「编辑模型」弹窗（密钥留空不改）。 */
   openEditDialog: (entry: RemoteModelEntry) => void;
-  /** 弹窗内「测试连接」（编辑态密钥留空 = 沿用已保存密钥）。 */
-  testConnection: () => Promise<void>;
+  /** 打开「实际使用」测试弹窗（按用途预填，重开恢复草稿）。 */
+  openUsageTest: (kind: UsageTestKind, entry: RemoteModelEntry) => void;
+  /** 额外字段行编辑：增 / 改 / 删 / 设为图片 / 应用 mode 预设。 */
+  patchField: (index: number, patch: Partial<UsageField>) => void;
+  /** 局部更新弹窗里的受控输入（提示词 / 尺寸等）。 */
+  patchUsageTest: (patch: Partial<UsageTestDialogState>) => void;
 
+  pickFieldImage: (index: number, file: File | undefined) => Promise<void>;
+  removeField: (index: number) => void;
+
+  rescueMediaFromMode: (index: number, url: string) => void;
   /** 条目行内「测试连接」：只探测连通性，不消耗额度。 */
   rowProbe: RowProbe | null;
   runEntryConnectionTest: (entry: RemoteModelEntry) => Promise<void>;
-
-  /** 「实际使用」测试弹窗状态（null = 关闭）。 */
-  usageTest: UsageTestDialogState | null;
-  /** 打开「实际使用」测试弹窗（按用途预填，重开恢复草稿）。 */
-  openUsageTest: (kind: UsageTestKind, entry: RemoteModelEntry) => void;
-  /** 关闭「实际使用」弹窗（草稿仍在仓库，重开可恢复）。 */
-  closeUsageTest: () => void;
-  /** 局部更新弹窗里的受控输入（提示词 / 尺寸等）。 */
-  patchUsageTest: (patch: Partial<UsageTestDialogState>) => void;
   /** 发起一次真实调用（图片 / 视频会真实生成、消耗额度）。 */
   runUsageTest: () => Promise<void>;
-  /** 对已提交但仍在生成的异步视频任务「继续等待」一轮。 */
-  continueUsageWait: () => Promise<void>;
-  /** 额外字段行编辑：增 / 改 / 删 / 设为图片 / 应用 mode 预设。 */
-  patchField: (index: number, patch: Partial<UsageField>) => void;
-  addField: (key?: string) => void;
-  addPresetField: (key: string) => void;
-  removeField: (index: number) => void;
-  pickFieldImage: (index: number, file: File | undefined) => Promise<void>;
+  setAddForm: React.Dispatch<React.SetStateAction<ModelDialogForm>>;
+  setClearKey: React.Dispatch<React.SetStateAction<boolean>>;
   setVideoMode: (mode: string) => void;
-  rescueMediaFromMode: (index: number, url: string) => void;
+  /** 提交添加 / 编辑（即时落库；失败留在弹窗报错）。 */
+  submitDialog: () => Promise<void>;
+  /** 测试连接成功后返回的服务端模型清单（供点选）。 */
+  suggestions: Array<string>;
+  /** 弹窗内「测试连接」（编辑态密钥留空 = 沿用已保存密钥）。 */
+  testConnection: () => Promise<void>;
+  /** 弹窗内「测试连接」的进行态与结果。 */
+  testing: boolean;
+  testMsg: { kind: "ok" | "err"; text: string } | null;
   /** 随请求发送的字段行（视频 mode=text 时剔除已隐藏的媒体字段）。 */
-  usageFieldsToSend: (state: UsageTestDialogState) => UsageField[];
-}
+  usageFieldsToSend: (state: UsageTestDialogState) => Array<UsageField>;
+  /** 「实际使用」测试弹窗状态（null = 关闭）。 */
+  usageTest: UsageTestDialogState | null;
+};
 
 /**
  * 远程模型管理的弹窗交互状态与动作。
  *
  * @param c 设置页 controller（网络侧动作都在它上面）
  */
-export function useRemoteModelDialogs(
-  c: ReadySettingsPageController,
-): RemoteModelDialogs {
+export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteModelDialogs {
   const [dialog, setDialog] = useState<ModelDialog>(null);
   const [addForm, setAddForm] = useState<ModelDialogForm>({
     baseUrl: "",
@@ -193,11 +185,9 @@ export function useRemoteModelDialogs(
     kind: "ok" | "err";
     text: string;
   } | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<Array<string>>([]);
   const [addError, setAddError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<
-    Partial<Record<ModelDialogField, string>>
-  >({});
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<ModelDialogField, string>>>({});
   const [clearKey, setClearKey] = useState(false);
   const [usageTest, setUsageTest] = useState<UsageTestDialogState | null>(null);
   const [rowProbe, setRowProbe] = useState<RowProbe | null>(null);
@@ -205,7 +195,9 @@ export function useRemoteModelDialogs(
   /* 弹窗打开期间每次状态变化都存入草稿仓库：这样无论点关闭 / ✕ / 点遮罩，
    * 关闭后的下次重开都能从仓库恢复已填内容与最近一次执行结果。 */
   useEffect(() => {
-    if (usageTest) rememberUsageTestDraft(usageTest);
+    if (usageTest) {
+      rememberUsageTestDraft(usageTest);
+    }
   }, [usageTest]);
 
   /* 字段行编辑器是一个自洽的交互面（只读写 usageTest.fields），已切到
@@ -246,8 +238,7 @@ export function useRemoteModelDialogs(
     setTestMsg(null);
     try {
       /* 编辑态 API Key 留空 = 沿用该条目已保存的密钥去测（「留空不改」） */
-      const savedKey =
-        dialog?.mode === "edit" ? dialog.entry.apiKey : undefined;
+      const savedKey = dialog?.mode === "edit" ? dialog.entry.apiKey : undefined;
       const typedKey = addForm.apiKey.trim();
       const out = await c.probeRemote({
         baseUrl: addForm.baseUrl.trim() || undefined,
@@ -265,7 +256,9 @@ export function useRemoteModelDialogs(
    *  探测只验证接口地址 / 密钥是否可达、可列出模型，不发起生成调用、不耗额度；
    *  结果内联展示在该条目下方。独立接口 / 独立密钥缺省时回落已保存的全局连接配置。 */
   async function runEntryConnectionTest(entry: RemoteModelEntry) {
-    if (rowProbe?.running && rowProbe.name === entry.name) return;
+    if (rowProbe?.running && rowProbe.name === entry.name) {
+      return;
+    }
     setRowProbe({ name: entry.name, running: true, msg: null });
     try {
       const out = await c.probeRemote({
@@ -347,7 +340,9 @@ export function useRemoteModelDialogs(
   }
 
   async function runUsageTest() {
-    if (!usageTest || usageTest.running) return;
+    if (!usageTest || usageTest.running) {
+      return;
+    }
     setUsageTest({ ...usageTest, running: true, result: null });
     /* 弹窗留空 → 用草稿条目里的密钥（未保存的条目也有）：
      * 只靠服务端按名字查已保存配置，会漏掉「加了条目还没点保存」的情况，
@@ -358,14 +353,12 @@ export function useRemoteModelDialogs(
       name: usageTest.entry.name,
       baseUrl: usageTest.baseUrl.trim(),
       path: usageTest.path.trim(),
-      apiKey:
-        typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
+      apiKey: typedKey === "" ? (usageTest.entry.apiKey ?? undefined) : typedKey,
       prompt: usageTest.prompt,
       size: usageTest.size.trim() || undefined,
       /* 由结构化字段行生成请求体 JSON（替代原先手填整段 JSON）；
        * 视频且 mode=text 时媒体字段已被界面隐藏，这里同样排除，避免 invalid mode */
-      extraJson:
-        usageFieldsToJson(editor.usageFieldsToSend(usageTest)) || undefined,
+      extraJson: usageFieldsToJson(editor.usageFieldsToSend(usageTest)) || undefined,
     });
     setUsageTest((prev) =>
       prev ? { ...prev, running: false, querying: false, result: out } : prev,
@@ -375,22 +368,23 @@ export function useRemoteModelDialogs(
   /** 对已提交但仍在生成的异步视频任务「继续等待」一轮（同一条目连接参数 +
    *  上次返回的 taskId）。只查既有任务，不重新提交、不重复扣费。 */
   async function continueUsageWait() {
-    if (!usageTest || usageTest.querying) return;
+    if (!usageTest || usageTest.querying) {
+      return;
+    }
     const taskId = usageTest.result?.taskId;
-    if (!taskId) return;
+    if (!taskId) {
+      return;
+    }
     setUsageTest({ ...usageTest, querying: true });
     const typedKey = usageTest.apiKey.trim();
     const out = await c.queryUsageTask({
       name: usageTest.entry.name,
       baseUrl: usageTest.baseUrl.trim(),
       path: usageTest.path.trim(),
-      apiKey:
-        typedKey !== "" ? typedKey : (usageTest.entry.apiKey ?? undefined),
+      apiKey: typedKey === "" ? (usageTest.entry.apiKey ?? undefined) : typedKey,
       taskId,
     });
-    setUsageTest((prev) =>
-      prev ? { ...prev, querying: false, result: out } : prev,
-    );
+    setUsageTest((prev) => (prev ? { ...prev, querying: false, result: out } : prev));
   }
 
   /** 添加 / 编辑提交即落库（远端模型清单已无单独的保存按钮）；
@@ -433,10 +427,7 @@ export function useRemoteModelDialogs(
 
   /** 把集合级（要看列表的）失败错位到具体字段上：重名 → `model` 字段。
    *  其余（配置未就绪 / 条目已不存在）没有对应字段，仍走横幅。 */
-  function markCollectionError(
-    error: string | undefined,
-    fallback: string,
-  ): void {
+  function markCollectionError(error: string | undefined, fallback: string): void {
     const text = error ?? fallback;
     if (text.includes("已在列表中")) {
       setFieldErrors((prev) => ({ ...prev, model: text }));

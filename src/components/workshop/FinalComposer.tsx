@@ -19,26 +19,26 @@ import {
   type Transition,
 } from "~/lib/workshop/types";
 
-interface Props {
-  shots: Shot[];
-  title: string;
-  /** 镜头列表所有者回调（时长 / 转场 / 运动编辑）。 */
-  onShotsChange: (shots: Shot[]) => void;
-  /** Raised when the user exports the composition plan (合成清单已导出，非成片). */
-  onRendered: () => void;
-  rendered: boolean;
+type Props = {
   /** 跳到「成片」视图（真出 MP4）。由父组件注入（内部走 workspace:navigate 广播）。 */
   onComposeFilm?: () => void;
-}
+  /** Raised when the user exports the composition plan (合成清单已导出，非成片). */
+  onRendered: () => void;
+  /** 镜头列表所有者回调（时长 / 转场 / 运动编辑）。 */
+  onShotsChange: (shots: Array<Shot>) => void;
+  rendered: boolean;
+  shots: Array<Shot>;
+  title: string;
+};
 
-const TRANSITIONS: Transition[] = ["cut", "dissolve", "fade"];
-const MOTIONS: MotionLevel[] = ["low", "medium", "high"];
+const TRANSITIONS: Array<Transition> = ["cut", "dissolve", "fade"];
+const MOTIONS: Array<MotionLevel> = ["low", "medium", "high"];
 
 /** 顺序播放预览中的一个时间线条目。 */
-interface TimelineEntry {
-  shot: Shot;
+type TimelineEntry = {
   duration: number;
-}
+  shot: Shot;
+};
 
 const MOTION_PROMPTS: Record<MotionLevel, string> = {
   low: "subtle motion, gentle camera drift",
@@ -67,28 +67,22 @@ export function FinalComposer({
 }: Props) {
   const [playing, setPlaying] = React.useState(false);
   const [currentIdx, setCurrentIdx] = React.useState(0);
-  const imageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const imageTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const timeline: TimelineEntry[] = shots.map((shot) => ({
+  const timeline: Array<TimelineEntry> = shots.map((shot) => ({
     shot,
-    duration:
-      typeof shot.duration === "number" && shot.duration > 0
-        ? shot.duration
-        : 4,
+    duration: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
   }));
 
   const clipsDone = timeline.filter((entry) => entry.shot.clipUrl).length;
-  const totalDuration = timeline.reduce(
-    (acc, entry) => acc + entry.duration,
-    0,
-  );
+  const totalDuration = timeline.reduce((acc, entry) => acc + entry.duration, 0);
   const current = timeline[currentIdx];
 
   React.useEffect(() => {
     return () => {
-      if (imageTimerRef.current) clearTimeout(imageTimerRef.current);
+      if (imageTimerRef.current) {
+        clearTimeout(imageTimerRef.current);
+      }
     };
   }, []);
 
@@ -106,26 +100,24 @@ export function FinalComposer({
       const next = timeline[idx + 1];
       if (next && !next.shot.clipUrl && next.shot.imageUrl) {
         // 静止帧兜底：按住该镜头时长。
-        imageTimerRef.current = setTimeout(
-          () => advance(),
-          next.duration * 1000,
-        );
+        imageTimerRef.current = setTimeout(() => advance(), next.duration * 1000);
       }
       return idx + 1;
     });
   }
 
   function startPlayback() {
-    if (timeline.length === 0) return;
-    if (imageTimerRef.current) clearTimeout(imageTimerRef.current);
+    if (timeline.length === 0) {
+      return;
+    }
+    if (imageTimerRef.current) {
+      clearTimeout(imageTimerRef.current);
+    }
     const first = timeline[0];
     setCurrentIdx(0);
     setPlaying(true);
     if (first && !first.shot.clipUrl && first.shot.imageUrl) {
-      imageTimerRef.current = setTimeout(
-        () => advance(),
-        first.duration * 1000,
-      );
+      imageTimerRef.current = setTimeout(() => advance(), first.duration * 1000);
     }
   }
 
@@ -169,9 +161,9 @@ export function FinalComposer({
   if (shots.length === 0) {
     return (
       <EmptyState
-        variant="hint"
-        description="暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。"
         className="p-8 text-sm"
+        description="暂无分镜数据。请先完成「场景分镜」与「视频生成」，再回到这里合成成片。"
+        variant="hint"
       />
     );
   }
@@ -194,37 +186,29 @@ export function FinalComposer({
           片段 {clipsDone}/{timeline.length}
         </span>
         <div className="ml-auto flex gap-2">
-          {!playing ? (
+          {playing ? (
             <Button
-              variant="primary-solid"
-              onClick={startPlayback}
-              disabled={
-                clipsDone === 0 &&
-                timeline.every((entry) => !entry.shot.imageUrl)
-              }
-              className="h-auto rounded-xl px-4 py-2 font-semibold"
-            >
-              <Icon
-                data-icon="inline-start"
-                name="play"
-                size={13}
-                className="mr-1"
-              />
-              串播预览
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              onClick={stopPlayback}
               className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-4 py-2 font-semibold"
+              onClick={stopPlayback}
+              variant="secondary"
             >
               停止
             </Button>
+          ) : (
+            <Button
+              className="h-auto rounded-xl px-4 py-2 font-semibold"
+              disabled={clipsDone === 0 && timeline.every((entry) => !entry.shot.imageUrl)}
+              onClick={startPlayback}
+              variant="primary-solid"
+            >
+              <Icon className="mr-1" data-icon="inline-start" name="play" size={13} />
+              串播预览
+            </Button>
           )}
           <Button
-            variant="primary-solid"
-            onClick={exportPlan}
             className="h-auto rounded-xl px-4 py-2 font-semibold"
+            onClick={exportPlan}
+            variant="primary-solid"
           >
             导出合成清单
           </Button>
@@ -233,17 +217,15 @@ export function FinalComposer({
 
       <div className="border-border bg-subtle text-ink flex flex-wrap items-center gap-3 rounded-xl border px-4 py-2 text-xs">
         <span>
-          {rendered
-            ? "合成清单已导出（这是 JSON 清单，"
-            : "导出合成清单只是 JSON 规划，"}
+          {rendered ? "合成清单已导出（这是 JSON 清单，" : "导出合成清单只是 JSON 规划，"}
           <span className="font-semibold">还不是成片 MP4</span>
           。真出片请到「成片」视图。
         </span>
         {onComposeFilm && (
           <Button
-            variant="primary-solid"
-            onClick={onComposeFilm}
             className="h-auto rounded-lg px-3 py-1.5 font-semibold"
+            onClick={onComposeFilm}
+            variant="primary-solid"
           >
             去成片合成 MP4
           </Button>
@@ -255,7 +237,7 @@ export function FinalComposer({
         <div className="border-border bg-surface rounded-2xl border p-4">
           <div className="text-muted-foreground text-2xs mb-2 flex items-center justify-between">
             <span>
-              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /{""}
+              预览中 · 镜 {String(currentIdx + 1).padStart(2, "0")} /
               {String(timeline.length).padStart(2, "0")}
             </span>
             <span>{current.shot.sceneHeading}</span>
@@ -263,29 +245,25 @@ export function FinalComposer({
           <div className="bg-bg grid min-h-60 place-items-center overflow-hidden rounded-xl">
             {current.shot.clipUrl ? (
               <MediaThumbnail
-                key={current.shot.id}
-                src={current.shot.clipUrl}
                 autoPlay
-                controls
-                onEnded={advance}
                 className="max-h-105 w-full"
+                controls
+                key={current.shot.id}
+                onEnded={advance}
+                src={current.shot.clipUrl}
               />
             ) : current.shot.imageUrl ? (
               <MediaThumbnail
-                src={current.shot.imageUrl}
                 alt={current.shot.sceneHeading}
                 className="max-h-105 w-full object-contain"
+                src={current.shot.imageUrl}
               />
             ) : (
-              <span className="text-muted-foreground text-xs">
-                该镜头缺少画面，已跳过
-              </span>
+              <span className="text-muted-foreground text-xs">该镜头缺少画面，已跳过</span>
             )}
           </div>
           {current.shot.dialogue && (
-            <p className="text-ink mt-2 text-center text-[12.5px]">
-              {current.shot.dialogue}
-            </p>
+            <p className="text-ink mt-2 text-center text-[12.5px]">{current.shot.dialogue}</p>
           )}
         </div>
       )}
@@ -297,18 +275,18 @@ export function FinalComposer({
           const active = playing && idx === currentIdx;
           return (
             <div
-              key={shot.id}
               className={`border-border bg-surface flex items-center gap-3 rounded-xl border p-3 ${
                 active ? "ring-primary/40 ring-1" : ""
               }`}
+              key={shot.id}
             >
               <IndexDot index={idx + 1} size="lg" />
               <div className="bg-elevated h-14 w-20 shrink-0 overflow-hidden rounded-lg">
                 {shot.imageUrl ? (
                   <MediaThumbnail
-                    src={shot.imageUrl}
                     alt={shot.sceneHeading}
                     className="h-full w-full object-cover"
+                    src={shot.imageUrl}
                   />
                 ) : (
                   <div className="text-muted-foreground grid h-full place-items-center">
@@ -317,9 +295,7 @@ export function FinalComposer({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-ink truncate text-xs font-medium">
-                  {shot.sceneHeading}
-                </div>
+                <div className="text-ink truncate text-xs font-medium">{shot.sceneHeading}</div>
                 <div className="text-muted-foreground text-2xs mt-0.5 truncate">
                   {shot.clipUrl
                     ? "片段就绪"
@@ -330,63 +306,54 @@ export function FinalComposer({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <FormField
-                  label="时长(s)"
-                  labelClassName="text-muted-foreground mb-0.5 text-3xs"
-                >
+                <FormField label="时长(s)" labelClassName="text-muted-foreground mb-0.5 text-3xs">
                   {(field) => (
                     <Input
                       {...field}
-                      type="number"
-                      min={1}
+                      className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
                       max={20}
-                      value={entry.duration}
+                      min={1}
                       onChange={(event) =>
                         updateShot(shot.id, {
-                          duration: clamp(
-                            Number(event.target.value) || 4,
-                            1,
-                            20,
-                          ),
+                          duration: clamp(Number(event.target.value) || 4, 1, 20),
                         })
                       }
-                      className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
+                      type="number"
+                      value={entry.duration}
                     />
                   )}
                 </FormField>
-                <FormField
-                  label="转场"
-                  labelClassName="text-muted-foreground mb-0.5 text-3xs"
-                >
+                <FormField label="转场" labelClassName="text-muted-foreground mb-0.5 text-3xs">
                   {(field) => (
                     <SelectMenu
                       {...field}
                       className="bg-subtle! border-border! text-xs"
-                      value={shot.transition ?? "cut"}
+                      labels={TRANSITION_LABELS}
                       onChange={(value) =>
-                        updateShot(shot.id, { transition: value as Transition })
+                        updateShot(shot.id, {
+                          transition: /* SAFETY: 类型断言已复核 */ value as Transition,
+                        })
                       }
                       options={TRANSITIONS}
-                      labels={TRANSITION_LABELS}
                       placeholder="转场"
+                      value={shot.transition ?? "cut"}
                     />
                   )}
                 </FormField>
-                <FormField
-                  label="运动"
-                  labelClassName="text-muted-foreground mb-0.5 text-3xs"
-                >
+                <FormField label="运动" labelClassName="text-muted-foreground mb-0.5 text-3xs">
                   {(field) => (
                     <SelectMenu
                       {...field}
                       className="bg-subtle! border-border! text-xs"
-                      value={shot.motion ?? "medium"}
+                      labels={MOTION_LABELS}
                       onChange={(value) =>
-                        updateShot(shot.id, { motion: value as MotionLevel })
+                        updateShot(shot.id, {
+                          motion: /* SAFETY: 类型断言已复核 */ value as MotionLevel,
+                        })
                       }
                       options={MOTIONS}
-                      labels={MOTION_LABELS}
                       placeholder="运动"
+                      value={shot.motion ?? "medium"}
                     />
                   )}
                 </FormField>

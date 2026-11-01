@@ -32,7 +32,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { acquireRepoDrizzle } from "./helpers/repo-drizzle-lock";
 
 /** 一张表的可比结构：列（名/类型/非空/主键）+ 索引名。 */
-interface TableShape {
+type TableShape = {
   cols: string;
   idx: string;
 }
@@ -71,7 +71,7 @@ function readShape(file: string): Record<string, TableShape> {
   if (r.status !== 0 || !r.stdout.trim()) {
     throw new Error(`读库结构失败：${r.stderr}`);
   }
-  return JSON.parse(r.stdout) as Record<string, TableShape>;
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(r.stdout) as Record<string, TableShape>;
 }
 
 /**
@@ -93,7 +93,7 @@ function readShape(file: string): Record<string, TableShape> {
 function diffColumns(
   leftCols: string,
   rightCols: string,
-): { missing: string[]; extra: string[] } {
+): { extra: Array<string>; missing: Array<string>; } {
   const left = leftCols ? leftCols.split(",") : [];
   const right = rightCols ? rightCols.split(",") : [];
   return {
@@ -135,17 +135,13 @@ beforeAll(async () => {
       throw new Error(`db:migrate 失败：${migrate.stderr || migrate.stdout}`);
     }
 
-    const push = spawnSync(
-      process.execPath,
-      [path.join(process.cwd(), "scripts", "db-push.mjs")],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-        env: { ...process.env, DATABASE_URL: `file:${pushedDb}` },
-        stdio: ["ignore", "pipe", "pipe"],
-        timeout: 300_000,
-      },
-    );
+    const push = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "db-push.mjs")], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: `file:${pushedDb}` },
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 300_000,
+    });
     if (push.status !== 0) {
       throw new Error(`db:push 失败：${push.stderr || push.stdout}`);
     }
@@ -182,14 +178,16 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
   it("逐表逐列一致（列名 / 类型 / NOT NULL / 主键；**不比列序**，ISSUE #2655）", () => {
     const a = readShape(migratedDb);
     const b = readShape(pushedDb);
-    const mismatches: string[] = [];
+    const mismatches: Array<string> = [];
     for (const name of Object.keys(a)) {
       /* `noUncheckedIndexedAccess` 下 `a[name]` 是 `T | undefined` —— 这里用
        * 解构取出来并显式收窄，而不是 `!` 断言：断言会把「键不在」这类真问题
        * 一起咽掉（上面那条 `!b[name]` 的 continue 已经表达了「只在两边都有时比」）。 */
       const left = a[name];
       const right = b[name];
-      if (!left || !right) continue;
+      if (!left || !right) {
+        continue;
+      }
       const diff = diffColumns(left.cols, right.cols);
       if (diff.missing.length || diff.extra.length) {
         mismatches.push(
@@ -219,8 +217,10 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
       missing: ["a:TEXT"],
       extra: ["a:TEXT NOT NULL"],
     });
-    expect(diffColumns("a:TEXT NOT NULL PK,b:TEXT", "b:TEXT,a:TEXT NOT NULL PK"))
-      .toEqual({ missing: [], extra: [] });
+    expect(diffColumns("a:TEXT NOT NULL PK,b:TEXT", "b:TEXT,a:TEXT NOT NULL PK")).toEqual({
+      missing: [],
+      extra: [],
+    });
     /* 主键那一维单独确认一次：`PK` 在 token 里，丢了它两条就不等。 */
     expect(diffColumns("a:TEXT PK", "a:TEXT").missing).toEqual(["a:TEXT"]);
   });
@@ -236,21 +236,23 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
        * 断言写不出「为什么没有这张表」，而这一条的失败信息必须是「migrate 侧没有它」。 */
       const shapeOf = (file: string): TableShape => {
         const s = readShape(file)[t];
-        if (!s) throw new Error(`${t} 不在 ${file} 里 ⇒ 这条用例没有对象`);
+        if (!s) {
+          throw new Error(`${t} 不在 ${file} 里 ⇒ 这条用例没有对象`);
+        }
         return s;
       };
       const a = shapeOf(migratedDb);
       const b = shapeOf(pushedDb);
-      const tokens = (s: TableShape): string[] => s.cols.split(",");
+      const tokens = (s: TableShape): Array<string> => s.cols.split(",");
       /* token 形状是 `名:类型 [NOT NULL] [PK]` —— 取名就是切到第一个冒号为止。 */
-      const namesOf = (s: TableShape): string[] =>
+      const namesOf = (s: TableShape): Array<string> =>
         tokens(s).map((tok) => tok.slice(0, tok.indexOf(":")));
       const values = tokens(a).map((tok) => (tok.includes(":INTEGER") ? 7 : "probe"));
       /**
        * 在这个库里插同一行、再按 `selectList`（**这一侧自己的物理列序**）取回，
        * 还原成 `名=值` 的有序串 —— 顺序进、名字出，两边才能直接比。
        */
-      const readBack = (file: string, selectList: string[]) => {
+      const readBack = (file: string, selectList: Array<string>) => {
         const script = [
           'const { DatabaseSync } = require("node:sqlite");',
           `const db = new DatabaseSync(${JSON.stringify(file)}, { open: true });`,
@@ -288,11 +290,13 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
   it("索引集合一致", () => {
     const a = readShape(migratedDb);
     const b = readShape(pushedDb);
-    const mismatches: string[] = [];
+    const mismatches: Array<string> = [];
     for (const name of Object.keys(a)) {
       const left = a[name];
       const right = b[name];
-      if (!left || !right) continue;
+      if (!left || !right) {
+        continue;
+      }
       if (left.idx !== right.idx) {
         mismatches.push(`${name}: migrate=[${left.idx}] push=[${right.idx}]`);
       }
@@ -302,17 +306,13 @@ describe("db:migrate ⇄ db:push 的 schema 等价", () => {
 
   it("迁移是幂等的：连跑两次第二次不改结构", () => {
     const before = readShape(migratedDb);
-    const r = spawnSync(
-      process.execPath,
-      [path.join(process.cwd(), "scripts", "db-migrate.mjs")],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-        env: { ...process.env, DATABASE_URL: `file:${migratedDb}` },
-        stdio: ["ignore", "pipe", "pipe"],
-        timeout: 300_000,
-      },
-    );
+    const r = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "db-migrate.mjs")], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_URL: `file:${migratedDb}` },
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 300_000,
+    });
     expect(r.status, "第二次迁移必须是 no-op 且 exit 0").toBe(0);
     expect(readShape(migratedDb)).toEqual(before);
   }, 300_000);

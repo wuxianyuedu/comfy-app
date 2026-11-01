@@ -44,13 +44,13 @@ export const DRIZZLE_STUDIO_DEFAULT_PORT = 4983;
 export const DRIZZLE_STUDIO_HOST = "https://local.drizzle.studio";
 
 export type DrizzleStudioStatus = {
-  up: boolean;
+  pid?: number;
   port: number;
   starting: boolean;
-  pid?: number;
+  up: boolean;
 };
 
-export type EnsureResult = { ok: boolean; port: number; detail: string };
+export type EnsureResult = { detail: string; ok: boolean; port: number };
 
 type LifecycleGlobal = {
   child?: ReturnType<typeof spawn>;
@@ -76,10 +76,7 @@ export async function probeDrizzleStudio(
   return up;
 }
 
-async function probeDrizzleStudioRaw(
-  port: number,
-  timeoutMs: number,
-): Promise<boolean> {
+async function probeDrizzleStudioRaw(port: number, timeoutMs: number): Promise<boolean> {
   try {
     return await new Promise((resolve) => {
       const sock = connect({ host: "127.0.0.1", port });
@@ -115,10 +112,14 @@ export function resolveDrizzleKitBin(
     const nodeModules = path.join(dir, "node_modules");
     for (const name of names) {
       const candidate = path.join(nodeModules, name);
-      if (exists(/*turbopackIgnore: true*/ candidate)) return candidate;
+      if (exists(/*turbopackIgnore: true*/ candidate)) {
+        return candidate;
+      }
     }
     const parent = path.dirname(dir);
-    if (parent === dir) break;
+    if (parent === dir) {
+      break;
+    }
     dir = parent;
   }
   return null;
@@ -152,9 +153,9 @@ function appendRuntimeLog(line: string): void {
 /** 确保 studio 本地端口就绪：可达则直接返回；否则按解析出的 drizzle-kit 拉起。 */
 export async function ensureDrizzleStudioUp(
   opts: {
+    onLog?: (msg: string) => void;
     port?: number;
     timeoutMs?: number;
-    onLog?: (msg: string) => void;
   } = {},
 ): Promise<EnsureResult> {
   const port = opts.port ?? DRIZZLE_STUDIO_DEFAULT_PORT;
@@ -203,15 +204,13 @@ export async function ensureDrizzleStudioUp(
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
       });
-    } catch (e) {
-      const detail = errorText(e, "启动 Drizzle Studio 失败");
+    } catch (error) {
+      const detail = errorText(error, "启动 Drizzle Studio 失败");
       note(detail);
       return { ok: false, port, detail };
     }
     st.child = child;
-    appendRuntimeLog(
-      `[spawn] pid=${child.pid} cmd=${nodeExe} args=${JSON.stringify(args)}`,
-    );
+    appendRuntimeLog(`[spawn] pid=${child.pid} cmd=${nodeExe} args=${JSON.stringify(args)}`);
     /* 回调与等待循环复用 comfyui 侧的同一套原语（ISSUE #570 第 6 项）：
      * 此前这里是另一段 80 行 IIFE，与 lifecycle.ts 同构 —— 两处各写一遍
      * 「留底 + 输出截断 + 退出横幅 + 轮询」只会各自漂移。 */
@@ -231,7 +230,9 @@ export async function ensureDrizzleStudioUp(
         appendRuntimeLog,
         log: note,
         clearChild: () => {
-          if (st.child === child) st.child = undefined;
+          if (st.child === child) {
+            st.child = undefined;
+          }
         },
         context: () => ({
           pid: child.pid ?? null,
@@ -247,14 +248,14 @@ export async function ensureDrizzleStudioUp(
       timeoutDetail: `Drizzle Studio 启动超时（${Math.round(timeoutMs / 1000)}s 未就绪），详见 log/services/drizzle-studio-runtime.log`,
       readyDetail: `Drizzle Studio 已就绪（端口 ${port}）`,
       intervalMs: 500,
-      probe: async () =>
-        (await probeDrizzleStudio(port)) ? `127.0.0.1:${port}` : null,
+      probe: async () => ((await probeDrizzleStudio(port)) ? `127.0.0.1:${port}` : null),
       isDead: async () => {
-        if (st.child === child) return null;
-        const modErr =
-          /Cannot find module '([^']+)'|Cannot find package '([^']+)'/.exec(
-            ledger.lines.join("\n"),
-          );
+        if (st.child === child) {
+          return null;
+        }
+        const modErr = /Cannot find module '([^']+)'|Cannot find package '([^']+)'/.exec(
+          ledger.lines.join("\n"),
+        );
         return modErr
           ? `Drizzle Studio 启动后立即退出：缺少依赖（${modErr[1] ?? modErr[2]}）——请确认已安装 drizzle-kit（pnpm install），详见 log/services/drizzle-studio-runtime.log`
           : "Drizzle Studio 进程启动后立即退出，详见 log/services/drizzle-studio-runtime.log";
@@ -274,7 +275,7 @@ export async function ensureDrizzleStudioUp(
  */
 export async function stopDrizzleStudio(
   port = DRIZZLE_STUDIO_DEFAULT_PORT,
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ detail: string; ok: boolean }> {
   const child = st.child;
   const pid = child?.pid;
   const stillUp = await probeDrizzleStudio(port);
@@ -282,8 +283,7 @@ export async function stopDrizzleStudio(
     return stillUp
       ? {
           ok: false,
-          detail:
-            "Drizzle Studio 不是由本应用启动的，请在启动它的终端中手动 Ctrl+C 关闭",
+          detail: "Drizzle Studio 不是由本应用启动的，请在启动它的终端中手动 Ctrl+C 关闭",
         }
       : { ok: true, detail: "Drizzle Studio 未在运行" };
   }
@@ -319,12 +319,11 @@ export async function stopDrizzleStudio(
  */
 export async function openDrizzleStudio(
   port = DRIZZLE_STUDIO_DEFAULT_PORT,
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ detail: string; ok: boolean }> {
   if (!(await probeDrizzleStudio(port))) {
     return {
       ok: false,
-      detail:
-        "Drizzle Studio 未在运行，请先点「启动 Drizzle Studio」再打开查看",
+      detail: "Drizzle Studio 未在运行，请先点「启动 Drizzle Studio」再打开查看",
     };
   }
   const url = `${DRIZZLE_STUDIO_HOST}?port=${port}`;
@@ -348,7 +347,9 @@ let probeCache: { at: number; up: boolean } | null = null;
 
 /** 记录一次异步探测结论（供同步状态读取）。 */
 function rememberProbe(port: number, up: boolean): void {
-  if (port !== DRIZZLE_STUDIO_DEFAULT_PORT) return;
+  if (port !== DRIZZLE_STUDIO_DEFAULT_PORT) {
+    return;
+  }
   probeCache = { at: Date.now(), up };
 }
 
@@ -362,13 +363,8 @@ export function resetDrizzleStudioProbeCache(): void {
   probeCache = null;
 }
 
-export function getDrizzleStudioStatus(
-  port = DRIZZLE_STUDIO_DEFAULT_PORT,
-): DrizzleStudioStatus {
-  const fresh =
-    probeCache && Date.now() - probeCache.at < PROBE_TTL_MS
-      ? probeCache.up
-      : false;
+export function getDrizzleStudioStatus(port = DRIZZLE_STUDIO_DEFAULT_PORT): DrizzleStudioStatus {
+  const fresh = probeCache && Date.now() - probeCache.at < PROBE_TTL_MS ? probeCache.up : false;
   return {
     up: fresh,
     port,

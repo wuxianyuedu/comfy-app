@@ -23,10 +23,7 @@ import {
   readBranchLedger,
 } from "../scripts/freshness-ledger.mjs";
 import { readFreshnessLedger } from "../scripts/freshness-gate.mjs";
-import {
-  restoreToSnapshot,
-  snapshotPaths,
-} from "./helpers/probe-restore.ts";
+import { restoreToSnapshot, snapshotPaths } from "./helpers/probe-restore.ts";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -50,10 +47,8 @@ const PRISTINE = snapshotPaths([path.join(ROOT, E2E_REL)]);
  * @param ledger 读回来那份账（读不出时是 `null`）
  * @returns `e2e` 那一档；账里没有这一档时是 `undefined`
  */
-function e2eTrack(
-  ledger: Record<string, unknown> | null,
-): { verifiedAt?: string } | undefined {
-  return ledger?.e2e as { verifiedAt?: string } | undefined;
+function e2eTrack(ledger: Record<string, unknown> | null): { verifiedAt?: string } | undefined {
+  return /* SAFETY: 类型断言已复核 */ ledger?.e2e as { verifiedAt?: string } | undefined;
 }
 
 function git(args: string): string {
@@ -78,16 +73,11 @@ beforeAll(() => {
     },
   };
   // 只改 E2E_REL 工作树 + 暂存，造一个「机器分支」提交，但**不切换工作树**。
-  fs.writeFileSync(
-    path.join(ROOT, E2E_REL),
-    `${JSON.stringify(machine, null, 2)}\n`,
-  );
+  fs.writeFileSync(path.join(ROOT, E2E_REL), `${JSON.stringify(machine, null, 2)}\n`);
   gitNoHook(`add ${E2E_REL}`);
   const tree = gitNoHook(`write-tree`).trim();
   const parent = git(`rev-parse HEAD`).trim();
-  const sha = gitNoHook(
-    `commit-tree ${tree} -p ${parent} -m "test: machine ledger"`,
-  ).trim();
+  const sha = gitNoHook(`commit-tree ${tree} -p ${parent} -m "test: machine ledger"`).trim();
   git(`update-ref refs/heads/${BRANCH} ${sha}`);
   /* 还原工作树里那份账 = **进本文件那一刻的字节**，不是 `git checkout HEAD -- <文件>`
    * （ISSUE #2593 / §11.16.2：那一句会把同一分支上未提交的账改动一起抹掉，
@@ -167,27 +157,28 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
 
   /** 在「平台身份 + 每日事件 + 主体 master」这套现场里跑一次。 */
   function onPlatform<T>(fn: () => T): T {
-    const saved = new Map<string, string | undefined>(
-      KEYS.map((k) => [k, process.env[k]]),
-    );
+    const saved = new Map<string, string | undefined>(KEYS.map((k) => [k, process.env[k]]));
     try {
-      for (const [k, v] of Object.entries(LEDGER_ENV)) process.env[k] = v;
+      for (const [k, v] of Object.entries(LEDGER_ENV)) {
+        process.env[k] = v;
+      }
       delete process.env.FRESHNESS_LEDGER_BRANCH;
       return fn();
     } finally {
       for (const [k, v] of saved) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
       }
     }
   }
 
   /** 记账式 git：按脚本给的回执依次返回，并把每次的参数留下来。 */
-  function fakeGit(
-    script: Array<{ status: number; stdout?: string; stderr?: string }>,
-  ) {
-    const calls: string[][] = [];
-    const run = (args: string[]) => {
+  function fakeGit(script: Array<{ status: number; stderr?: string; stdout?: string; }>) {
+    const calls: Array<Array<string>> = [];
+    const run = (args: Array<string>) => {
       const step = script[calls.length] ?? { status: 0 };
       calls.push(args);
       return { ...step, stdout: step.stdout ?? "", stderr: step.stderr ?? "" };
@@ -200,7 +191,7 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
     return fs.mkdtempSync(path.join(os.tmpdir(), "freshness-push-"));
   }
 
-  const resetArgs = (calls: string[][]) =>
+  const resetArgs = (calls: Array<Array<string>>) =>
     calls.find((a) => a[0] === "reset" && a[1] === "-q");
 
   it("commit 被拒 ⇒ 原因带 git 的 stderr 原文，并把 add 撤回", () => {
@@ -215,9 +206,7 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
       },
       { status: 0 }, // reset
     ]);
-    const r = onPlatform(() =>
-      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
-    );
+    const r = onPlatform(() => pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }));
     expect(r.pushed).toBe(false);
     expect(r.reason).toContain("commit-failed");
     /* 这一条就是验收的第二格：那一行后面要能跟着 git 给的原因，而不是只剩那个词。 */
@@ -242,9 +231,7 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
         stderr: "fatal: Unable to create index.lock: File exists",
       },
     ]);
-    const r = onPlatform(() =>
-      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
-    );
+    const r = onPlatform(() => pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }));
     expect(r.reason).toContain("撤回暂存也失败");
     expect(r.reason).toContain("index.lock");
   });
@@ -257,9 +244,7 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
         stderr: "The following path is ignored by one of your .gitignore files",
       },
     ]);
-    const r = onPlatform(() =>
-      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
-    );
+    const r = onPlatform(() => pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }));
     expect(r.reason).toContain("add-failed");
     expect(r.reason).toContain("ignored by one of your .gitignore files");
   });
@@ -271,24 +256,15 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
       { status: 0 }, // commit
       { status: 1, stderr: "remote rejected: update-policy-hook" },
     ]);
-    const r = onPlatform(() =>
-      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
-    );
+    const r = onPlatform(() => pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }));
     expect(r.reason).toContain("push-failed");
     expect(r.reason).toContain("remote rejected");
     expect(resetArgs(calls)).toBeUndefined();
   });
 
   it("全绿那一跑 ⇒ 不撤回（撤回只属于失败路径）", () => {
-    const { run, calls } = fakeGit([
-      { status: 0 },
-      { status: 0 },
-      { status: 0 },
-      { status: 0 },
-    ]);
-    const r = onPlatform(() =>
-      pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }),
-    );
+    const { run, calls } = fakeGit([{ status: 0 }, { status: 0 }, { status: 0 }, { status: 0 }]);
+    const r = onPlatform(() => pushFreshnessLedger({ root: scratchRoot(), kinds: ["e2e"], run }));
     expect(r.pushed).toBe(true);
     expect(resetArgs(calls)).toBeUndefined();
   });
@@ -302,7 +278,9 @@ describe("账回写失败：念出原因并撤回暂存（ISSUE #2344）", () =>
       const r = pushFreshnessLedger({ root: ROOT, kinds: ["e2e"] });
       expect(r.reason).toBe("not-platform");
     } finally {
-      if (saved !== undefined) process.env.CNB_BUILD_USER_NICKNAME = saved;
+      if (saved !== undefined) {
+        process.env.CNB_BUILD_USER_NICKNAME = saved;
+      }
     }
   });
 });

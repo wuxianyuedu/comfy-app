@@ -36,11 +36,7 @@ import process from "node:process";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
 import { pnpmCli } from "./ci-install-deps.mjs";
 import { withBuildCacheSlot } from "./ci-build-cache-slot.mjs";
-import {
-  abortedAdvice,
-  classifyOutcome,
-  runPnpmSync,
-} from "./launcher-core/shell.mjs";
+import { abortedAdvice, classifyOutcome, runPnpmSync } from "./launcher-core/shell.mjs";
 import {
   freshnessTrack,
   gitUser,
@@ -101,7 +97,9 @@ export function main(argv) {
   const dryRun = argv.includes("--dry-run");
   for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
     const parsed = parseLedgerFlag(argv, flag);
-    if (parsed.mode === "run") continue;
+    if (parsed.mode === "run") {
+      continue;
+    }
     if (parsed.reason === null) {
       process.stderr.write(
         `[artifact-run] ✗ 理由（"${String(argv[argv.indexOf(flag) + 1] ?? "").trim()}"）` +
@@ -126,9 +124,7 @@ export function main(argv) {
   const extra = argv.filter((a) => a !== "--dry-run");
   const run = planRun(extra);
   if (dryRun) {
-    process.stdout.write(
-      `[artifact-run] ${run.label} → pnpm ${run.args.join(" ")}\n`,
-    );
+    process.stdout.write(`[artifact-run] ${run.label} → pnpm ${run.args.join(" ")}\n`);
     process.stdout.write(
       `[artifact-run] 记账文件：${TRACK.ledger}（键 \`${TRACK.key}\`，跑法 \`${TRACK.run}\`）\n`,
     );
@@ -153,12 +149,12 @@ export function main(argv) {
   /* 「被预算砍」与「判据红」分开报（`launcher-core/shell.mjs` 一份实现）。 */
   if (classifyOutcome(res) === "aborted") {
     process.stderr.write(
-      "[artifact-run] ✗ " +
+      `[artifact-run] ✗ ${
         abortedAdvice({
           label: "产物级护栏（build + 数产物）",
           timeoutMs: ARTIFACT_TIMEOUT_MS,
-        }) +
-        `        （读数：退出码 ${res.status ?? "信号"}）\n`,
+        })
+        }        （读数：退出码 ${res.status ?? "信号"}）\n`,
     );
     return 1;
   }
@@ -167,12 +163,12 @@ export function main(argv) {
     /* **绿了但不记账**：这一跑透传了参数（`--help`、指到单个入口），跑的不是整档护栏。
      * 下面那条「✗ 未通过（退出码 0）」是红的话术，拿它打这一拍会自相矛盾。 */
     process.stderr.write(
-      `[artifact-run] ` +
+      `[artifact-run] ${
         notWholeTrackNotice({
           label: "产物级护栏",
           command: "pnpm build:tracked",
           why: isWholeTrackRun(extra).why,
-        }),
+        })}`,
     );
     return 0;
   }
@@ -189,28 +185,19 @@ export function main(argv) {
     kind: "artifact",
     who: gitUser(TRACK.key),
   });
-  process.stdout.write(
-    `[artifact-run] ✓ 产物级护栏通过\n[artifact-run] ${note}\n`,
-  );
+  process.stdout.write(`[artifact-run] ✓ 产物级护栏通过\n[artifact-run] ${note}\n`);
   /* 把这一档的账回写到机器自有分支 `ci/freshness-ledger`（ISSUE #2247）。
    * 仅在 `.cnb.yml` 每日档置了 `FRESHNESS_LEDGER_PUSH=1` 时真正推，否则 no-op；
    * 回写失败只提示、不影响跑法结论。 */
   const freshPush = pushFreshnessLedger({ root: ROOT, kinds: ["artifact"] });
   if (freshPush.pushed) {
-    process.stdout.write(
-      "[artifact-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n",
-    );
+    process.stdout.write("[artifact-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n");
   } else if (freshPush.reason && freshPush.reason !== "opt-out") {
-    process.stdout.write(
-      `[artifact-run] （新鲜度账回写未执行：${freshPush.reason}）\n`,
-    );
+    process.stdout.write(`[artifact-run] （新鲜度账回写未执行：${freshPush.reason}）\n`);
   }
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main(process.argv.slice(2)));
 }

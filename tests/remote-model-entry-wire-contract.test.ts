@@ -36,11 +36,7 @@ import {
   remoteModelEntrySchema,
   type RemoteModelFieldValues,
 } from "~/lib/llm/remote-model-schema";
-import {
-  REMOTE_MODEL_KINDS,
-  normalizeExtraModels,
-  splitExtraModels,
-} from "~/lib/llm/types";
+import { REMOTE_MODEL_KINDS, normalizeExtraModels, splitExtraModels } from "~/lib/llm/types";
 import { createCallerFactory } from "~/server/api/trpc";
 import { llmRouter } from "~/server/api/routers/llm";
 import { getTestDb } from "./helpers/test-db";
@@ -76,9 +72,9 @@ function entryFromDialog(form: Partial<RemoteModelFieldValues> = {}) {
 }
 
 /** 取回读那一份里的远端条目（本地候选是字符串、远端是对象，两支混在一个数组里）。 */
-function remoteEntriesOf(config: unknown): Record<string, unknown>[] {
+function remoteEntriesOf(config: unknown): Array<Record<string, unknown>> {
   const { extraModels } = throughJsonWire<{
-    extraModels: Record<string, unknown>[];
+    extraModels: Array<Record<string, unknown>>;
   }>(config);
   return extraModels.filter((item) => typeof item === "object");
 }
@@ -124,9 +120,7 @@ describe("远端模型条目 ⇄ configSave 的入参判据", () => {
     const saved = await createCaller(makeCtx()).configSave({
       extraModels: entries,
     });
-    expect(remoteEntriesOf(saved.config).map((e) => e.kind)).toEqual([
-      ...REMOTE_MODEL_KINDS,
-    ]);
+    expect(remoteEntriesOf(saved.config).map((e) => e.kind)).toEqual([...REMOTE_MODEL_KINDS]);
     /* 同一条 zod 也逐值认（判据与真调用用的是同一份 schema，不是第二份收窄）。 */
     for (const entry of entries) {
       expect(remoteModelEntrySchema.safeParse(entry).success).toBe(true);
@@ -138,7 +132,9 @@ describe("远端模型条目 ⇄ configSave 的入参判据", () => {
      * 它不会编译红，只会让用户刚加的模型没进列表。 */
     const drifted = { model: "gpt-x", baseUrl: "https://api.example/v1" };
     await expect(
-      createCaller(makeCtx()).configSave({ extraModels: [drifted as never] }),
+      createCaller(makeCtx()).configSave({
+        extraModels: [/* SAFETY: 类型断言已复核 */ drifted as never],
+      }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(tdb.$tables.remoteModels).toHaveLength(0);
   });

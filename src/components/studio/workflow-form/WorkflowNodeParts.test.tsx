@@ -22,9 +22,7 @@ import { WorkflowNodeActionButton } from "./WorkflowNodeParts";
 
 describe("WorkflowNodeActionButton", () => {
   it("基础形状恒在，且不随 corner / hint 分叉", () => {
-    const { rerender } = render(
-      <WorkflowNodeActionButton label="▶ 用此工作流生成" />,
-    );
+    const { rerender } = render(<WorkflowNodeActionButton label="▶ 用此工作流生成" />);
     const own = screen.getByRole("button", { name: "▶ 用此工作流生成" });
     expect(own).toHaveClass(
       "from-primary",
@@ -39,14 +37,7 @@ describe("WorkflowNodeActionButton", () => {
     );
     expect(own.className).toContain("color-mix");
 
-    rerender(
-      <WorkflowNodeActionButton
-        label="生成中…"
-        disabled
-        corner="clipped"
-        hint="稍后"
-      />,
-    );
+    rerender(<WorkflowNodeActionButton corner="clipped" disabled hint="稍后" label="生成中…" />);
     const clipped = screen.getByRole("button", { name: /生成中/ });
     expect(clipped).toHaveClass("from-primary", "h-10.75", "nodrag", "nopan");
     expect(clipped.className).toContain("color-mix");
@@ -58,27 +49,19 @@ describe("WorkflowNodeActionButton", () => {
       "rounded-b-node",
       "rounded-t-none",
     );
-    expect(screen.getByRole("button", { name: "A" })).not.toHaveClass(
-      "rounded-none",
-    );
+    expect(screen.getByRole("button", { name: "A" })).not.toHaveClass("rounded-none");
 
-    rerender(<WorkflowNodeActionButton label="B" corner="clipped" />);
-    expect(screen.getByRole("button", { name: "B" })).toHaveClass(
-      "rounded-none",
-    );
-    expect(screen.getByRole("button", { name: "B" })).not.toHaveClass(
-      "rounded-b-node",
-    );
+    rerender(<WorkflowNodeActionButton corner="clipped" label="B" />);
+    expect(screen.getByRole("button", { name: "B" })).toHaveClass("rounded-none");
+    expect(screen.getByRole("button", { name: "B" })).not.toHaveClass("rounded-b-node");
   });
 
   it("没有 hint 时必须是裸按钮 —— 那层 inline-flex 锚点会把 w-full 收成内容宽", () => {
-    const { container, rerender } = render(
-      <WorkflowNodeActionButton label="bare" />,
-    );
+    const { container, rerender } = render(<WorkflowNodeActionButton label="bare" />);
     const bare = screen.getByRole("button", { name: "bare" });
     expect(bare.parentElement).toBe(container);
 
-    rerender(<WorkflowNodeActionButton label="hinted" hint="必填参数未填" />);
+    rerender(<WorkflowNodeActionButton hint="必填参数未填" label="hinted" />);
     const hinted = screen.getByRole("button", { name: "hinted" });
     expect(hinted.parentElement?.className).toContain("inline-flex");
   });
@@ -87,15 +70,11 @@ describe("WorkflowNodeActionButton", () => {
     const onClick = () => {
       throw new Error("不该被调用");
     };
-    const { rerender } = render(
-      <WorkflowNodeActionButton label="R" disabled onClick={onClick} />,
-    );
+    const { rerender } = render(<WorkflowNodeActionButton disabled label="R" onClick={onClick} />);
     expect(screen.getByRole("button", { name: "R" })).toBeDisabled();
 
-    const clicked: string[] = [];
-    rerender(
-      <WorkflowNodeActionButton label="P" onClick={() => clicked.push("P")} />,
-    );
+    const clicked: Array<string> = [];
+    rerender(<WorkflowNodeActionButton label="P" onClick={() => clicked.push("P")} />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "P" }));
     expect(clicked).toEqual(["P"]);

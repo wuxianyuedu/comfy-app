@@ -102,20 +102,21 @@ function stagedPaths() {
  */
 function resolveFace(argv) {
   const baseIdx = argv.indexOf("--base");
-  if (baseIdx >= 0) {
+  if (baseIdx !== -1) {
     const baseRef = (argv[baseIdx + 1] ?? "").trim();
     if (!baseRef) {
       return {
         ok: false,
-        reason:
-          "`--base` 要一条基线（用法：`--base <ref>`）—— 拿不到基线就没有判决面",
+        reason: "`--base` 要一条基线（用法：`--base <ref>`）—— 拿不到基线就没有判决面",
       };
     }
     /* 惰性 require：只有走 `--base` 形态才加载它（它会拖进一条依赖链），
      * 暂存形态那一跳的加载面一字未变。 */
     const { changedFilesForBaseRef } = require("./changed-scope.mjs");
     const got = changedFilesForBaseRef(baseRef, { cwd: ROOT });
-    if (!got.ok) return { ok: false, reason: got.reason };
+    if (!got.ok) {
+      return { ok: false, reason: got.reason };
+    }
     /* 改名的两侧都进面：源被搬走了也算「这次改了源」。 */
     /* ⚠️ **空清单在这里是「成功测得没有改动」**，不是「取不到面」—— 基线取到了、
      *   diff 跑成功了、结果是空，那就是「这次什么都没改」⇒ 没有可判的内容 ⇒ 绿。
@@ -133,10 +134,13 @@ function resolveFace(argv) {
    * 一条流水线，而 D0 把空索引读成「取不到面」就等于把那条路堵死）。
    * 两种不一致都要**当场念出来**：不念就留下一个「设了旗标而没人知道它被忽略」的现场。 */
   const intent = intentionalEmptyCommit({ stagedCount: files.length });
-  if (intent.voidNote)
+  if (intent.voidNote) {
     console.error(`[doc-mirror-pairing] ⚠ ${intent.voidNote}`);
+  }
   if (files.length === 0) {
-    if (intent.note) console.log(`[doc-mirror-pairing] ${intent.note}`);
+    if (intent.note) {
+      console.log(`[doc-mirror-pairing] ${intent.note}`);
+    }
     if (intent.applies) {
       return { ok: true, files: [], via: "刻意空提交（没有可判的配对）" };
     }
@@ -184,12 +188,12 @@ function main() {
     "  为什么拦在这里而不是等平台：平台那一格 `生成态文档与源同步` 跑的是 `--check --autofix`，\n" +
       "  它会**就地修好再判**，所以这一族在平台读数里从不出现；红总是落在下一个动文档面的 PR 上\n" +
       "  （命中它的是 `受影响用例` 里 `tests/check-doc-references.test.ts` 的「绿的时候不多写」）。\n" +
-        "  修法：`pnpm run doc:render -- --only <上面那些源>`，只提交**自己源对应的那几份**镜像" +
-        "（不要手改生成物）。\n" +
-        "  ⚠️ 别跑无参的全量档：那一档**无条件**重生成所有镜像，会把别人留在 HEAD 上的陈旧镜像\n" +
-        "  一起改脏进你这批（实测一例：改 1 份规范带出另一份镜像 126 行整表重排，ISSUE #2527）。\n" +
-        "  想知道「全量现在漂了谁」跑 `pnpm run doc:render -- --check`（只比对不写），\n" +
-        "  它点名的那几份若不在你的批里，那是上一批留下的漂移 —— 立案或留给那一批，别顺手代改。",
+      "  修法：`pnpm run doc:render -- --only <上面那些源>`，只提交**自己源对应的那几份**镜像" +
+      "（不要手改生成物）。\n" +
+      "  ⚠️ 别跑无参的全量档：那一档**无条件**重生成所有镜像，会把别人留在 HEAD 上的陈旧镜像\n" +
+      "  一起改脏进你这批（实测一例：改 1 份规范带出另一份镜像 126 行整表重排，ISSUE #2527）。\n" +
+      "  想知道「全量现在漂了谁」跑 `pnpm run doc:render -- --check`（只比对不写），\n" +
+      "  它点名的那几份若不在你的批里，那是上一批留下的漂移 —— 立案或留给那一批，别顺手代改。",
   );
   return 1;
 }

@@ -27,14 +27,7 @@ describe("parseArgs", () => {
     expect(parseArgs(["--approval", "stage"]).approval).toBe("stage");
   });
   it("flags 解析", () => {
-    const o = parseArgs([
-      "--project",
-      "p",
-      "--idea",
-      "i",
-      "--dry-run",
-      "--json",
-    ]);
+    const o = parseArgs(["--project", "p", "--idea", "i", "--dry-run", "--json"]);
     expect(o.project).toBe("p");
     expect(o.idea).toBe("i");
     expect(o.dryRun).toBe(true);
@@ -44,20 +37,14 @@ describe("parseArgs", () => {
 
 describe("validateArgs", () => {
   it("缺 project/idea → 两条错误；齐全 → 空", () => {
-    expect(
-      validateArgs({ ...parseArgs([]), project: "", idea: "" }),
-    ).toHaveLength(2);
-    expect(validateArgs({ ...parseArgs([]), project: "p", idea: "i" })).toEqual(
-      [],
-    );
+    expect(validateArgs({ ...parseArgs([]), project: "", idea: "" })).toHaveLength(2);
+    expect(validateArgs({ ...parseArgs([]), project: "p", idea: "i" })).toEqual([]);
   });
 });
 
 describe("build*Call（superjson 编码）", () => {
   it("start body = {json:{...}}，仅在有工作流时带对应键", () => {
-    const onlyBase = buildStartCall(
-      parseArgs(["--project", "proj_1", "--idea", "x"]),
-    );
+    const onlyBase = buildStartCall(parseArgs(["--project", "proj_1", "--idea", "x"]));
     expect(onlyBase.method).toBe("POST");
     expect(onlyBase.url).toBe(`${DEFAULT_URL}/api/trpc/run.start`);
     expect(onlyBase.body).toEqual({
@@ -92,9 +79,7 @@ describe("build*Call（superjson 编码）", () => {
 
 describe("parseSuperjsonEnvelope / formatStep", () => {
   it("解 .result.data.json；无信封原样返回", () => {
-    expect(
-      parseSuperjsonEnvelope({ result: { data: { json: { a: 1 } } } }),
-    ).toEqual({ a: 1 });
+    expect(parseSuperjsonEnvelope({ result: { data: { json: { a: 1 } } } })).toEqual({ a: 1 });
     expect(parseSuperjsonEnvelope({ run: { status: "idle" } })).toEqual({
       run: { status: "idle" },
     });
@@ -120,9 +105,7 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
   it("start=running → 轮询到 done 停", async () => {
     const request = vi
       .fn()
-      .mockResolvedValueOnce(
-        envelope(snap("running", { kind: "generate_script" })),
-      )
+      .mockResolvedValueOnce(envelope(snap("running", { kind: "generate_script" })))
       .mockResolvedValue(envelope(snap("done", { kind: "done" })));
     const { snapshot, timedOut, polls } = await driveFilmRun(
       opts({ project: "p", idea: "i", pollMs: 1, timeoutMs: 1000 }),
@@ -146,9 +129,7 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
   it("一直 running 且超时 → timedOut", async () => {
     const request = vi
       .fn()
-      .mockResolvedValue(
-        envelope(snap("running", { kind: "generate_script" })),
-      );
+      .mockResolvedValue(envelope(snap("running", { kind: "generate_script" })));
     const { timedOut } = await driveFilmRun(
       opts({ project: "p", idea: "i", pollMs: 1, timeoutMs: 0 }),
       { request, doSleep: noopSleep },
@@ -158,13 +139,13 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
   });
 
   it("打印引擎执行日志（run.log 新增条目，去重）", async () => {
-    interface Step {
-      ts: string;
+    type Step = {
+      detail: string;
       kind: string;
       ok: boolean;
-      detail: string;
+      ts: string;
     }
-    const withLog = (status: string, log: Step[]) => ({
+    const withLog = (status: string, log: Array<Step>) => ({
       run: { status, log },
       action: { kind: "idle" },
     });
@@ -184,20 +165,15 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
       .fn()
       .mockResolvedValueOnce(envelope(withLog("running", [step1])))
       .mockResolvedValue(envelope(withLog("done", [step1, step2])));
-    const lines: string[] = [];
-    await driveFilmRun(
-      opts({ project: "p", idea: "i", pollMs: 1, timeoutMs: 1000 }),
-      {
-        request,
-        doSleep: noopSleep,
-        log: (s: string) => lines.push(s),
-      },
-    );
+    const lines: Array<string> = [];
+    await driveFilmRun(opts({ project: "p", idea: "i", pollMs: 1, timeoutMs: 1000 }), {
+      request,
+      doSleep: noopSleep,
+      log: (s: string) => lines.push(s),
+    });
     expect(lines.some((l) => l.includes("已生成剧本（7 字）"))).toBe(true);
     expect(lines.some((l) => l.includes("全流程完成，已出片"))).toBe(true);
     // step1 只在 start 打印一次，轮询不重复
-    expect(lines.filter((l) => l.includes("已生成剧本（7 字）"))).toHaveLength(
-      1,
-    );
+    expect(lines.filter((l) => l.includes("已生成剧本（7 字）"))).toHaveLength(1);
   });
 });

@@ -91,7 +91,7 @@ function resetStore() {
    * 重置会导致不同用例造出同名条目（时间线去重会误判成重复行）。 */
 }
 
-function idsOf(entries: LogEntry[]): (string | undefined)[] {
+function idsOf(entries: Array<LogEntry>): Array<string | undefined> {
   return entries.map((e) => e.id);
 }
 
@@ -110,8 +110,7 @@ function newCount(page: number, autoScroll: boolean): number {
   /* 与面板同一条算式（第 1 页 = 锚定窗口的 truncatedFromEnd；历史页 = 页码之后）。 */
   const unseenAfterView =
     page === 1
-      ? selectFirstPageWindow(s.filteredLogs, s.anchorId, s.pageSize)
-          .truncatedFromEnd
+      ? selectFirstPageWindow(s.filteredLogs, s.anchorId, s.pageSize).truncatedFromEnd
       : Math.max(0, s.filteredLogs.length - s.pageSize * page);
   return selectNewLogCount({
     unseenAfterView,
@@ -128,11 +127,7 @@ function newCount(page: number, autoScroll: boolean): number {
  * 会话边界用例要测的就是那条规则，因此夹具必须落在会被裁的那一类里
  * （覆盖重建的 launcher / dev 不参与，见 `isSessionScopedOrigin`）。
  */
-function entry(
-  id: string,
-  time: number,
-  origin: LogEntry["origin"] = "app-runtime",
-): LogEntry {
+function entry(id: string, time: number, origin: LogEntry["origin"] = "app-runtime"): LogEntry {
   return {
     id,
     /* 入库顺序由夹具自己维持单调：断言只看内容与顺序，与时间戳解耦。 */
@@ -205,7 +200,7 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       warn: 1,
       error: 1,
     });
-    for (const origin of [
+    for (const origin of /* SAFETY: 类型断言已复核 */ [
       "dev",
       "launcher",
       "shell-launch",
@@ -269,7 +264,7 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
       makeEntry({ source: "system", level: "warn" }), // 全局未捕获错误
     ];
     const table = computeOriginCounts(logs);
-    const buckets = [
+    const buckets = /* SAFETY: 类型断言已复核 */ [
       "dev",
       "launcher",
       "shell-launch",
@@ -283,7 +278,7 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     expect(sum).toBe(table.all.all);
     expect(sum).toBe(logs.length);
     /* 逐级别也同样守恒（否则「全部」下的警告数与各分类加起来对不上）。 */
-    for (const level of ["debug", "info", "warn", "error"] as const) {
+    for (const level of /* SAFETY: 类型断言已复核 */ ["debug", "info", "warn", "error"] as const) {
       const perLevel = buckets.reduce((acc, key) => acc + table[key][level], 0);
       expect(perLevel).toBe(table.all[level]);
     }
@@ -300,7 +295,7 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
   it("同一条日志被多路读到：全部来源算一条，逐来源各算一份（守恒只在来源内成立）", () => {
     const dup = {
       time: 1_700_000_000_000,
-      level: "info" as const,
+      level: /* SAFETY: 类型断言已复核 */ "info" as const,
       message: "同一行",
     };
     const table = computeOriginCounts([
@@ -314,7 +309,7 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     /* 「全部来源」= 两条不同的日志（副本不重复算）。 */
     expect(table.all.all).toBe(2);
     /* 逐来源 = 那份文件里的行数：切到「启动器」确实会看到那一行。 */
-    for (const origin of [
+    for (const origin of /* SAFETY: 类型断言已复核 */ [
       "dev",
       "launcher",
       "shell",
@@ -324,7 +319,7 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
     }
     expect(table.app.all).toBe(1);
     /* 逐来源**内部**守恒仍然成立（该来源的四个级别之和 = 该来源的总数）。 */
-    for (const origin of [
+    for (const origin of /* SAFETY: 类型断言已复核 */ [
       "dev",
       "launcher",
       "shell-launch",
@@ -342,13 +337,10 @@ describe("computeOriginCounts 来源 × 级别二维计数（#360）", () => {
   it("「全部来源」与逐来源同口径落到「切过去有几行」上（筛选结果与计数对齐）", () => {
     const dup = {
       time: 1_700_000_000_000,
-      level: "warn" as const,
+      level: /* SAFETY: 类型断言已复核 */ "warn" as const,
       message: "同一行",
     };
-    const logs = [
-      makeEntry({ ...dup, origin: "launcher" }),
-      makeEntry({ ...dup, origin: "dev" }),
-    ];
+    const logs = [makeEntry({ ...dup, origin: "launcher" }), makeEntry({ ...dup, origin: "dev" })];
     /* 全部来源：副本只显示一次（时间线上不出现两条一模一样的行）。 */
     expect(computeFiltered(logs, "all", "", "all")).toHaveLength(1);
     /* 具体来源：照给，那是用户切过去要找的那一份。 */
@@ -443,9 +435,7 @@ describe("addEntry 追加日志", () => {
 describe("appendFileLogs 批量追加", () => {
   it("批量条目按传入顺序追加到已有日志之后", () => {
     useLogStore.setState({ logs: [makeEntry({ id: "a" })] });
-    useLogStore
-      .getState()
-      .appendFileLogs([makeEntry({ id: "b" }), makeEntry({ id: "c" })]);
+    useLogStore.getState().appendFileLogs([makeEntry({ id: "b" }), makeEntry({ id: "c" })]);
     const { logs } = useLogStore.getState();
     expect(idsOf(logs)).toEqual(["a", "b", "c"]);
   });
@@ -503,7 +493,7 @@ describe("dropStaleEntries 的口径（机制保留）", () => {
         time: cutoff - 60_000,
         origin: "app-runtime",
       }),
-      makeEntry({ id: "new", time: cutoff + 1_000, origin: "app-runtime" }),
+      makeEntry({ id: "new", time: cutoff + 1000, origin: "app-runtime" }),
     ];
     expect(idsOf(dropStaleEntries(entries, cutoff))).toEqual(["old", "new"]);
   });
@@ -537,7 +527,7 @@ describe("setSessionStart（机制保留，集合为空时它是幂等的空操�
     useLogStore.setState({
       logs: [
         makeStale({ id: "old", time: cutoff - 60_000 }),
-        makeStale({ id: "new", time: cutoff + 1_000 }),
+        makeStale({ id: "new", time: cutoff + 1000 }),
       ],
     });
     useLogStore.getState().setSessionStart(cutoff);
@@ -569,17 +559,17 @@ describe("时间线在上限内不裁剪（分页可翻历史）", () => {
     /* 夹具的 seq 跨用例共享且单调递增：先造 1995 条「旧」的、再造 10 条
      * 「新」的，两批的时间戳与 seq 都天然有序。 */
     const baseSeq = seq;
-    const oldLogs: LogEntry[] = Array.from({ length: 1995 }, (_, i) =>
+    const oldLogs: Array<LogEntry> = Array.from({ length: 1995 }, (_, i) =>
       makeEntry({
         id: `old-${i}`,
         message: `old-${i}`,
-        time: 1_000 + i,
+        time: 1000 + i,
         seq: baseSeq + 1 + i,
       }),
     );
     seq = baseSeq + 1995;
     useLogStore.setState({ logs: oldLogs });
-    const fresh: LogEntry[] = Array.from({ length: 10 }, (_, i) =>
+    const fresh: Array<LogEntry> = Array.from({ length: 10 }, (_, i) =>
       makeEntry({
         id: `new-${i}`,
         message: `new-${i}`,
@@ -587,7 +577,7 @@ describe("时间线在上限内不裁剪（分页可翻历史）", () => {
         seq: seq + 1 + i,
       }),
     );
-    seq = seq + 10;
+    seq += 10;
     useLogStore.getState().appendFileLogs(fresh);
 
     const { logs, counts } = useLogStore.getState();
@@ -599,18 +589,16 @@ describe("时间线在上限内不裁剪（分页可翻历史）", () => {
   });
 
   it("addEntry 只追加、不挤出旧行", () => {
-    const oldLogs: LogEntry[] = Array.from({ length: 2001 }, (_, i) =>
+    const oldLogs: Array<LogEntry> = Array.from({ length: 2001 }, (_, i) =>
       makeEntry({ id: `old-${i}`, time: i, seq: i - 2001 }),
     );
     useLogStore.setState({ logs: oldLogs });
-    useLogStore
-      .getState()
-      .addEntry({ level: "warn", message: "最新一条", source: "system" });
+    useLogStore.getState().addEntry({ level: "warn", message: "最新一条", source: "system" });
 
     const { logs } = useLogStore.getState();
     expect(logs).toHaveLength(2002);
     expect(logs[0]?.id).toBe("old-0");
-    expect(logs[logs.length - 1]?.message).toBe("最新一条");
+    expect(logs.at(-1)?.message).toBe("最新一条");
   });
 
   it("显示的上限只由每页大小承担：时间线超过一页时分页接管", () => {
@@ -650,13 +638,13 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
     const baseSeq = seq;
     /* 不用 makeEntry：它会递增共享计数器并**覆盖**这里显式给出的 seq，
      * 让「时间线里谁在前谁在后」变得不可预测（用例要的是确定性顺序）。 */
-    const full: LogEntry[] = Array.from({ length: 2000 }, (_, i) => ({
+    const full: Array<LogEntry> = Array.from({ length: 2000 }, (_, i) => ({
       id: `full-${i}`,
       message: `full-${i}`,
       time: 1_700_000_000_000 + i,
       seq: baseSeq + 1 + i,
-      level: "info" as const,
-      source: "system" as const,
+      level: /* SAFETY: 类型断言已复核 */ "info" as const,
+      source: /* SAFETY: 类型断言已复核 */ "system" as const,
     }));
     seq = baseSeq + 2000;
     /* 直接 setState 灌时间线时 `filteredLogs` 不会跟着派生，而 setPage 的水位
@@ -676,7 +664,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
         makeEntry({
           id: "overflow-1",
           message: "溢出的一条",
-          time: before.logs[before.logs.length - 1]!.time + 1,
+          time: before.logs.at(-1)!.time + 1,
           seq: seq + 1,
         }),
       ]),
@@ -695,7 +683,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
   it("全批都是重复行：时间线原样返回，revision 不推进", () => {
     fillLong();
     const before = useLogStore.getState();
-    const lastTime = before.logs[before.logs.length - 1]!.time;
+    const lastTime = before.logs.at(-1)!.time;
 
     act(() =>
       useLogStore.getState().appendFileLogs([
@@ -713,9 +701,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
     /* 同一行再送一次（内容/时刻/级别全同，只是 id 不同）：跨来源去重把整批
      * 判成重复、时间线原样返回——revision 不动，页脚不会虚报「有新的日志」。 */
     const again = useLogStore.getState().logs.find((e) => e.id === "fresh-1")!;
-    act(() =>
-      useLogStore.getState().appendFileLogs([{ ...again, id: "dup-again" }]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([{ ...again, id: "dup-again" }]));
     const after = useLogStore.getState();
     expect(after.logs).toHaveLength(landed.logs.length);
     expect(after.revision).toBe(landed.revision);
@@ -726,7 +712,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
     const baseline = useLogStore.getState().followBaseline;
 
     const baseSeq = seq;
-    const overflow: LogEntry[] = Array.from({ length: 5 }, (_, i) =>
+    const overflow: Array<LogEntry> = Array.from({ length: 5 }, (_, i) =>
       makeEntry({
         id: `ov-${i}`,
         message: `ov-${i}`,
@@ -768,10 +754,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
     /* 「有没有新内容」这个数由窗口给出，与总量无关。
      * 注意贴底看第 1 页时（autoScroll=true）页脚**不显示**这个入口——新内容本来
      * 就自动呈现在眼前；显式的「回到最新」只在用户上滚离开底部、或翻到历史页时给。 */
-    expect(
-      selectFirstPageWindow(s.filteredLogs, s.anchorId, s.pageSize)
-        .truncatedFromEnd,
-    ).toBe(1);
+    expect(selectFirstPageWindow(s.filteredLogs, s.anchorId, s.pageSize).truncatedFromEnd).toBe(1);
     expect(newCount(1, false)).toBe(1);
   });
 
@@ -805,7 +788,7 @@ describe("长时间线下的水位与 revision（#262 复审）", () => {
 
 describe("computeFiltered 级别过滤与搜索", () => {
   function seedFixture() {
-    const fixture: LogEntry[] = [
+    const fixture: Array<LogEntry> = [
       makeEntry({
         id: "e1",
         level: "info",
@@ -857,10 +840,7 @@ describe("computeFiltered 级别过滤与搜索", () => {
   it("搜索匹配 message 且不区分大小写", () => {
     seedFixture();
     useLogStore.getState().setSearch("KERNEL");
-    expect(idsOf(useLogStore.getState().filteredLogs).sort()).toEqual([
-      "e1",
-      "e2",
-    ]);
+    expect(idsOf(useLogStore.getState().filteredLogs).sort()).toEqual(["e1", "e2"]);
   });
 
   it("搜索匹配 location 字段", () => {
@@ -918,12 +898,14 @@ describe("computeFiltered 级别过滤与搜索", () => {
 describe("日志分类开关过滤", () => {
   /** 每条用例前后把所有分类复位为开启，避免用例间污染（store 是模块级单例）。 */
   beforeEach(() => {
-    for (const c of LOG_CATEGORY_FILTERS)
+    for (const c of LOG_CATEGORY_FILTERS) {
       useLogCategoryStore.getState().setEnabled(c, true);
+    }
   });
   afterEach(() => {
-    for (const c of LOG_CATEGORY_FILTERS)
+    for (const c of LOG_CATEGORY_FILTERS) {
       useLogCategoryStore.getState().setEnabled(c, true);
+    }
   });
 
   function seedByCategory() {
@@ -992,9 +974,13 @@ describe("日志分类开关过滤", () => {
       makeEntry({ id: "x2", origin: "app" }),
     ];
     const open = computeFiltered(base, "all", "", "all");
-    const hidden = computeFiltered(base, "all", "", "all", [
-      "app",
-    ] as LogCategoryFilter[]);
+    const hidden = computeFiltered(
+      base,
+      "all",
+      "",
+      "all",
+      /* SAFETY: 类型断言已复核 */ ["app"] as Array<LogCategoryFilter>,
+    );
     expect(idsOf(open)).toEqual(["x1", "x2"]);
     expect(idsOf(hidden)).toEqual(["x1"]);
   });
@@ -1004,9 +990,7 @@ describe("日志分类开关过滤", () => {
 
 describe("setFilter / setSearch 派生正确性", () => {
   it("setFilter 只更新 filter 与 filteredLogs,不动 logs 与 counts", () => {
-    useLogStore
-      .getState()
-      .appendFileLogs([makeEntry({ id: "a", level: "warn" })]);
+    useLogStore.getState().appendFileLogs([makeEntry({ id: "a", level: "warn" })]);
     useLogStore.getState().setFilter("warn");
     const { filter, logs, counts, filteredLogs } = useLogStore.getState();
     expect(filter).toBe("warn");
@@ -1016,9 +1000,7 @@ describe("setFilter / setSearch 派生正确性", () => {
   });
 
   it("setSearch 更新 search 并保留已有 filter", () => {
-    useLogStore
-      .getState()
-      .appendFileLogs([makeEntry({ id: "a", message: "hello" })]);
+    useLogStore.getState().appendFileLogs([makeEntry({ id: "a", message: "hello" })]);
     const s = useLogStore.getState();
     s.setFilter("info");
     s.setSearch("hello");
@@ -1049,10 +1031,7 @@ describe("clear 清空动作", () => {
   it("clear 清空 logs / counts / filteredLogs", () => {
     useLogStore
       .getState()
-      .appendFileLogs([
-        makeEntry({ id: "a" }),
-        makeEntry({ id: "b", level: "error" }),
-      ]);
+      .appendFileLogs([makeEntry({ id: "a" }), makeEntry({ id: "b", level: "error" })]);
     useLogStore.getState().clear();
     const { logs, counts, filteredLogs } = useLogStore.getState();
     expect(logs).toEqual([]);
@@ -1127,9 +1106,7 @@ describe("serialize 参数序列化", () => {
       message: "bad thing",
       stack: "FakeError: bad thing\n  at fake.ts:1:1",
     };
-    expect(serialize([fake])).toBe(
-      "bad thing\nFakeError: bad thing\n  at fake.ts:1:1",
-    );
+    expect(serialize([fake])).toBe("bad thing\nFakeError: bad thing\n  at fake.ts:1:1");
   });
 
   it("普通对象输出两空格缩进的 JSON", () => {
@@ -1151,9 +1128,7 @@ describe("serialize 参数序列化", () => {
 
 describe("isReactQueryLog React Query 内部日志识别", () => {
   it("匹配 %c << query #N 形式", () => {
-    expect(
-      isReactQueryLog(["%c << query #488 %cworkflowModel.list", "color:red"]),
-    ).toBe(true);
+    expect(isReactQueryLog(["%c << query #488 %cworkflowModel.list", "color:red"])).toBe(true);
   });
 
   it("匹配 >> 出站方向", () => {
@@ -1177,16 +1152,12 @@ describe("isReactQueryLog React Query 内部日志识别", () => {
   });
 
   it("匹配 mutation 方向（tRPC loggerLink 标准形态）", () => {
-    expect(
-      isReactQueryLog(["%c << mutation #43 %cworkflow.update", "color:red"]),
-    ).toBe(true);
+    expect(isReactQueryLog(["%c << mutation #43 %cworkflow.update", "color:red"])).toBe(true);
     expect(isReactQueryLog(["%c >> mutation #7 %cfoo.bar", "x"])).toBe(true);
   });
 
   it("匹配塌缩/重包装形态（React devtools 合并单串）", () => {
-    expect(isReactQueryLog(["[[ << mutation #43 ]workflow.update {}"])).toBe(
-      true,
-    );
+    expect(isReactQueryLog(["[[ << mutation #43 ]workflow.update {}"])).toBe(true);
     expect(isReactQueryLog(["[ >> query #2 ]workflow.list"])).toBe(true);
     expect(isReactQueryLog(["[<< mutation #1 x"])).toBe(true);
   });
@@ -1206,9 +1177,7 @@ describe("isNextDevNoise Next.js dev 提示识别", () => {
   });
 
   it("识别带 %c 样式参数的多参数形态", () => {
-    expect(isNextDevNoise(["[Fast Refresh] done in 120ms", "color:#555"])).toBe(
-      true,
-    );
+    expect(isNextDevNoise(["[Fast Refresh] done in 120ms", "color:#555"])).toBe(true);
   });
 
   it("普通业务日志返回 false", () => {
@@ -1220,11 +1189,9 @@ describe("isNextDevNoise Next.js dev 提示识别", () => {
 
 describe("isRoutineRpcTimingLog 常规 tRPC 调用计时识别（#294）", () => {
   it("识别 [rpc]/[trpc] 命名空间的 info 计时行", () => {
-    expect(
-      isRoutineRpcTimingLog([
-        '[rpc] setting.dbStudioStatus 155ms {"type":"query"}',
-      ]),
-    ).toBe(true);
+    expect(isRoutineRpcTimingLog(['[rpc] setting.dbStudioStatus 155ms {"type":"query"}'])).toBe(
+      true,
+    );
     expect(isRoutineRpcTimingLog(["[trpc] generate.generate 25ms"])).toBe(true);
     expect(isRoutineRpcTimingLog(["rpc] setting.get 12ms"])).toBe(true);
   });
@@ -1247,9 +1214,7 @@ describe("isRoutineRpcTimingLine 文件行侧过滤（#294）", () => {
 
   it("WARN 级别的慢查询行保留（返回 false）", () => {
     expect(
-      isRoutineRpcTimingLine(
-        "[2026-09-15 10:20:30.123] [WARN] [trpc] generate.generate 1500ms",
-      ),
+      isRoutineRpcTimingLine("[2026-09-15 10:20:30.123] [WARN] [trpc] generate.generate 1500ms"),
     ).toBe(false);
   });
 
@@ -1272,19 +1237,13 @@ describe("isPanelSelfPollingLine 面板自轮询行过滤", () => {
         "GET /api/logs/current?source=app&offset=5168432&bootId=dev-boot%3Ax 200 in 64ms (next.js: 36ms)",
       ),
     ).toBe(true);
-    expect(isPanelSelfPollingLine("GET /api/logs/current 200 in 5ms")).toBe(
-      true,
-    );
-    expect(isPanelSelfPollingLine("GET /api/dev/server-id 200 in 3ms")).toBe(
-      true,
-    );
+    expect(isPanelSelfPollingLine("GET /api/logs/current 200 in 5ms")).toBe(true);
+    expect(isPanelSelfPollingLine("GET /api/dev/server-id 200 in 3ms")).toBe(true);
     /* build-id 是端点族后来长出的第三个（代码更新检测，每 30s 一拍且切后台照打）。
      * 判据此前手抄了两个名字，它因此稳定漏滤 —— 集合改成从
      * `~/lib/log/panel-self-poll` 那份清单推之后，新增自用端点与过滤它是同一处
      * 改动（ISSUE #2417）。 */
-    expect(isPanelSelfPollingLine("GET /api/dev/build-id 200 in 7ms")).toBe(
-      true,
-    );
+    expect(isPanelSelfPollingLine("GET /api/dev/build-id 200 in 7ms")).toBe(true);
     /* 转录文件里的**原样形状**（行首一个空格 + 尾部的分段耗时）：
      * `log/current/nextjs/nextjs-panel-*.log` 里这样的一行有 472 条（一次约 5 小时的
      * dev 会话，每 30s 一拍），全部在改前稳定漏滤。 */
@@ -1294,12 +1253,8 @@ describe("isPanelSelfPollingLine 面板自轮询行过滤", () => {
       ),
     ).toBe(true);
     /* 业务请求与面板之外的可观测端点不是回声 */
-    expect(
-      isPanelSelfPollingLine("GET /api/trpc/workflow.list 200 in 12ms"),
-    ).toBe(false);
-    expect(isPanelSelfPollingLine("POST /api/logs/app-runtime 204")).toBe(
-      false,
-    );
+    expect(isPanelSelfPollingLine("GET /api/trpc/workflow.list 200 in 12ms")).toBe(false);
+    expect(isPanelSelfPollingLine("POST /api/logs/app-runtime 204")).toBe(false);
     expect(isPanelSelfPollingLine("GET /api/logs/history?q=x 200")).toBe(false);
     /* 前缀相同但不是那条端点：`currentX` 不是 `/api/logs/current` 的查询形态，
      * 集合写宽会把真日志滤没 —— 那比多几行回声坏得多。 */
@@ -1341,7 +1296,7 @@ describe("壳写的启动会话标记在面板里的形态（ISSUE #1364）", ()
       [
         MARKER_LINE,
         "[2026-10-02 12:00:00.100] [INFO] === 启动报告：壳已接手（双击 app.exe） ===",
-        "[2026-10-02 12:00:00.200] [INFO]   项目根: F:\\AI\\Other\\comfy-app-t3",
+        String.raw`[2026-10-02 12:00:00.200] [INFO]   项目根: F:\AI\Other\comfy-app-t3`,
       ].join("\n"),
       undefined,
       "shell-launch",
@@ -1357,9 +1312,9 @@ describe("壳写的启动会话标记在面板里的形态（ISSUE #1364）", ()
     // 面板把三路合进同一条时间线，去重键是「时刻 + 级别 + 正文」——三份各自盖
     // 一个「此刻」就会被读成三条，用户看到的就是「这条标记有很多条」（ISSUE #1364）。
     // 判据的写法侧那一半（三份共用一个 `stamped`）在 `shell_launch.rs` 的单测里。
-    const perSource = (["shell-launch", "shell", "launcher"] as const).map(
-      (origin) => parseFileLogs(MARKER_LINE + "\n", undefined, origin),
-    );
+    const perSource = /* SAFETY: 类型断言已复核 */ (
+      ["shell-launch", "shell", "launcher"] as const
+    ).map((origin) => parseFileLogs(`${MARKER_LINE}\n`, undefined, origin));
     expect(perSource.every((e) => e.length === 1)).toBe(true);
     const merged = dedupeByIdentity(perSource.flat());
     expect(merged).toHaveLength(1);
@@ -1391,20 +1346,12 @@ describe("parseFileLogs 文件日志解析", () => {
       ].join("\n"),
       base,
     );
-    expect(entries.map((e) => e.level)).toEqual([
-      "error",
-      "warn",
-      "info",
-      "debug",
-    ]);
+    expect(entries.map((e) => e.level)).toEqual(["error", "warn", "info", "debug"]);
   });
 
   it("STEP/OK 归一化为 info", () => {
     const base = new Date(2026, 7, 15);
-    const entries = parseFileLogs(
-      ["[01:00:00] [STEP] s", "[01:00:01] [OK] ok"].join("\n"),
-      base,
-    );
+    const entries = parseFileLogs(["[01:00:00] [STEP] s", "[01:00:01] [OK] ok"].join("\n"), base);
     expect(entries.map((e) => e.level)).toEqual(["info", "info"]);
   });
 
@@ -1431,13 +1378,7 @@ describe("parseFileLogs 文件日志解析", () => {
         ].join("\n"),
         base,
       );
-      expect(entries.map((e) => e.level)).toEqual([
-        "info",
-        "info",
-        "info",
-        "warn",
-        "error",
-      ]);
+      expect(entries.map((e) => e.level)).toEqual(["info", "info", "info", "warn", "error"]);
       expect(entries.map((e) => e.message)).toEqual([
         "预检通过",
         "检查端口占用",
@@ -1446,17 +1387,14 @@ describe("parseFileLogs 文件日志解析", () => {
         "找不到预编译 Tauri 壳",
       ]);
       /* 时刻仍取行首时刻，不是「解析当下」——否则启动日志会被排到时间线末尾。 */
-      expect(entries[0]?.time).toBe(
-        new Date(2026, 8, 13, 10, 22, 24).getTime(),
-      );
+      expect(entries[0]?.time).toBe(new Date(2026, 8, 13, 10, 22, 24).getTime());
     });
 
     it("缩进两格的续行同样算日志行，级别不退化成 info 原文", () => {
       const entries = parseFileLogs(
-        [
-          "  [10:22:24] [INFO ] 未检测到 .env 配置文件。",
-          "  [10:22:25] [ERROR] 启动失败：",
-        ].join("\n"),
+        ["  [10:22:24] [INFO ] 未检测到 .env 配置文件。", "  [10:22:25] [ERROR] 启动失败："].join(
+          "\n",
+        ),
         base,
       );
       expect(entries.map((e) => e.level)).toEqual(["info", "error"]);
@@ -1465,17 +1403,13 @@ describe("parseFileLogs 文件日志解析", () => {
 
     it("颜色码残缺留下的多余 [ 不影响级别标记", () => {
       const entries = parseFileLogs(
-        [
-          "[10:22:30] [[OK] 服务器已就绪",
-          "[10:22:31] [\x1b[90m[OK\x1b[0m] 服务器已就绪",
-        ].join("\n"),
+        ["[10:22:30] [[OK] 服务器已就绪", "[10:22:31] [\u001b[90m[OK\u001b[0m] 服务器已就绪"].join(
+          "\n",
+        ),
         base,
       );
       expect(entries).toHaveLength(2);
-      expect(entries.map((e) => e.message)).toEqual([
-        "服务器已就绪",
-        "服务器已就绪",
-      ]);
+      expect(entries.map((e) => e.message)).toEqual(["服务器已就绪", "服务器已就绪"]);
     });
 
     it("python 启动器的裸文本行不被当成日志行（原样保留，交给兜底分支）", () => {
@@ -1513,9 +1447,7 @@ describe("parseFileLogs 文件日志解析", () => {
       expect(entries[0]?.level).toBe("info");
       expect(entries[0]?.message).toBe("[orchestrator] 检查端口占用");
       /* 时刻只来自行首（面板行首那一个），正文里不得再出现第二份时刻/级别。 */
-      expect(entries[0]?.time).toBe(
-        new Date(2026, 9, 2, 11, 50, 31, 391).getTime(),
-      );
+      expect(entries[0]?.time).toBe(new Date(2026, 9, 2, 11, 50, 31, 391).getTime());
       expect(entries[0]?.message).not.toContain("2026-10-02");
       expect(entries[0]?.message).not.toContain("[STEP ]");
     });
@@ -1545,17 +1477,14 @@ describe("parseFileLogs 文件日志解析", () => {
     expect(entries[0]?.message).toBe("plain text line");
   });
 
-  it("空行被跳过且行尾 \\r 被剥离", () => {
+  it(String.raw`空行被跳过且行尾 \r 被剥离`, () => {
     const entries = parseFileLogs("a\r\n\nb");
     expect(entries.map((e) => e.message)).toEqual(["a", "b"]);
   });
 
   it("ANSI 颜色码被剥离后仍可解析级别", () => {
     const base = new Date(2026, 7, 15);
-    const entries = parseFileLogs(
-      "\x1b[36m[10:00:00] [INFO] colored\x1b[0m",
-      base,
-    );
+    const entries = parseFileLogs("\u001b[36m[10:00:00] [INFO] colored\u001b[0m", base);
     expect(entries).toHaveLength(1);
     expect(entries[0]?.level).toBe("info");
     expect(entries[0]?.message).toBe("colored");
@@ -1573,9 +1502,7 @@ describe("parseFileLogs 文件日志解析", () => {
     );
     expect(entries).toHaveLength(1);
     expect(entries[0]?.level).toBe("info");
-    expect(entries[0]?.message).toBe(
-      "[Fast Refresh] rebuilding [ERROR] leftover",
-    );
+    expect(entries[0]?.message).toBe("[Fast Refresh] rebuilding [ERROR] leftover");
   });
 
   it("Fast Refresh rebuilding 不带级别标记时保持 info", () => {
@@ -1608,10 +1535,7 @@ describe("parseFileLogs 文件日志解析", () => {
 
   it("app-runtime 行无命名空间时消息不加命名空间前缀", () => {
     const base = new Date(2026, 8, 15);
-    const entries = parseFileLogs(
-      "[2026-09-15 10:20:30.123] [INFO] plain",
-      base,
-    );
+    const entries = parseFileLogs("[2026-09-15 10:20:30.123] [INFO] plain", base);
     expect(entries).toHaveLength(1);
     expect(entries[0]?.level).toBe("info");
     expect(entries[0]?.message).toBe("plain");
@@ -1630,10 +1554,7 @@ describe("parseFileLogs 文件日志解析", () => {
 
   it("app-runtime 行优先于 launcher 行解析（带 LEVEL 时不被降级为 info）", () => {
     const base = new Date(2026, 8, 15);
-    const entries = parseFileLogs(
-      "[2026-09-15 10:20:30.123] [ERROR] [task] boom",
-      base,
-    );
+    const entries = parseFileLogs("[2026-09-15 10:20:30.123] [ERROR] [task] boom", base);
     expect(entries).toHaveLength(1);
     expect(entries[0]?.level).toBe("error");
   });
@@ -1655,9 +1576,7 @@ describe("调用位置采集", () => {
     /* 三种合法形态：业务位置（`src/…:行号`）、库描述（`pkg → fn` / `pkg`）、
      * 或确实取不到（undefined）。断言留在「不抛错 + 形态正确」这一层 ——
      * 运行器不同时栈帧内容不同，把具体某一帧写死会让用例跟着运行器版本红。 */
-    expect(
-      loc === undefined || /:\d+$/.test(loc) || /^[@\w][\w./@-]*$/.test(loc),
-    ).toBe(true);
+    expect(loc === undefined || /:\d+$/.test(loc) || /^[@\w][\w./@-]*$/.test(loc)).toBe(true);
   });
 
   it("业务帧优先：栈里同时有业务帧与库帧时取业务帧", () => {
@@ -1724,11 +1643,7 @@ describe("console 占位符展开", () => {
 
   it("%c 的样式表被吃掉、不进正文（tRPC loggerLink 常态）", () => {
     expect(
-      formatConsoleArgs([
-        "%c<< mutation #43 %cworkflow.update",
-        "color:red",
-        "color:blue",
-      ]),
+      formatConsoleArgs(["%c<< mutation #43 %cworkflow.update", "color:red", "color:blue"]),
     ).toBe("<< mutation #43 workflow.update");
   });
 
@@ -1795,11 +1710,7 @@ describe("会话边界：接口契约与边界（规范 07 §7.14）", () => {
     const outOfOrder = [entry("new", 200), entry("old", 50), entry("mid", 150)];
     /* 集合为空 → 这一轮什么也没摘，但**顺序也没被动过**：这是本用例要锁的那条
      * 分工（过滤不排序），与「谁需要被过滤」是两件事。 */
-    expect(idsOf(dropStaleEntries(outOfOrder, cutoff))).toEqual([
-      "new",
-      "old",
-      "mid",
-    ]);
+    expect(idsOf(dropStaleEntries(outOfOrder, cutoff))).toEqual(["new", "old", "mid"]);
   });
 
   it("读不到锚点时起点为 null，客户端据此退化为不截断（规则②）", () => {
@@ -1834,7 +1745,7 @@ describe("mergeTimeline：时间线按时刻排序，时刻相同再按入库顺
   });
 
   it("同一毫秒内的多行按入库顺序（seq）保持稳定，不随排序抖动", () => {
-    const same = 1_000;
+    const same = 1000;
     const a: LogEntry = { ...entry("a", same), seq: 10 };
     const b: LogEntry = { ...entry("b", same), seq: 11 };
     const c: LogEntry = { ...entry("c", same), seq: 12 };
@@ -1844,35 +1755,30 @@ describe("mergeTimeline：时间线按时刻排序，时刻相同再按入库顺
   });
 
   it("跨毫秒只看时刻：更早到达但时刻更晚的行排在后面", () => {
-    const first = [entry("late-time", 2_000)];
+    const first = [entry("late-time", 2000)];
     const second = [entry("early-time", 500)];
-    expect(idsOf(mergeTimeline(first, second))).toEqual([
-      "early-time",
-      "late-time",
-    ]);
+    expect(idsOf(mergeTimeline(first, second))).toEqual(["early-time", "late-time"]);
   });
 
   it("同一行被两路读到（时刻/级别/内容全同）时只保留一条", () => {
     // launcher 转写会包含 dev 输出：同一行可能在两个来源里各出现一次。
-    const dup = { ...entry("dev-copy", 1_000) };
+    const dup = { ...entry("dev-copy", 1000) };
     const other = { ...dup, id: "launcher-copy", seq: dup.seq + 1 };
     const out = mergeTimeline([dup], [other]);
     expect(idsOf(out)).toEqual(["dev-copy"]);
   });
 
   it("内容相同但时刻不同的行都保留（同一句话在两个时间点各发生一次）", () => {
-    const a = entry("a", 1_000);
-    const b = { ...entry("b", 2_000), message: a.message };
+    const a = entry("a", 1000);
+    const b = { ...entry("b", 2000), message: a.message };
     expect(mergeTimeline([a], [b])).toHaveLength(2);
   });
 
   it("全是重复行时返回原数组引用（不产生无谓的状态更新）", () => {
     const current = [entry("a", 1)];
-    expect(
-      mergeTimeline(current, [
-        { ...entry("b", 1), message: current[0]!.message },
-      ]),
-    ).toBe(current);
+    expect(mergeTimeline(current, [{ ...entry("b", 1), message: current[0]!.message }])).toBe(
+      current,
+    );
   });
 
   it("空批返回原数组引用", () => {
@@ -1881,14 +1787,9 @@ describe("mergeTimeline：时间线按时刻排序，时刻相同再按入库顺
   });
 
   it("后到但时刻更早的一批全部并入：时间线不设上限，谁也不被裁掉", () => {
-    const current = [entry("newest", 1_000)];
+    const current = [entry("newest", 1000)];
     // 后到达但时刻更早的一批：合并后按时刻排在前面
-    const late = [
-      entry("ancient", 1),
-      entry("old", 2),
-      entry("new", 3),
-      entry("mid", 500),
-    ];
+    const late = [entry("ancient", 1), entry("old", 2), entry("new", 3), entry("mid", 500)];
     const out = mergeTimeline(current, late);
     expect(idsOf(out)).toEqual(["ancient", "old", "new", "mid", "newest"]);
   });
@@ -1896,35 +1797,22 @@ describe("mergeTimeline：时间线按时刻排序，时刻相同再按入库顺
 
 describe("appendFileLogs 走时间线合并（#262 回归）", () => {
   it("后到的批次时刻更早时，面板里仍按时刻顺序排列", () => {
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry({ id: "newer", time: 5_000 })]),
-    );
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry({ id: "older", time: 1_000 })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "newer", time: 5000 })]));
+    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "older", time: 1000 })]));
     expect(idsOf(useLogStore.getState().logs)).toEqual(["older", "newer"]);
   });
 
   it("同一批内容被重复轮询回来时不会重复入库（面板条数＝真实行数）", () => {
     const batch = [
-      makeEntry({ id: "x1", message: "第一行", time: 1_000 }),
-      makeEntry({ id: "x2", message: "第二行", time: 1_100 }),
+      makeEntry({ id: "x1", message: "第一行", time: 1000 }),
+      makeEntry({ id: "x2", message: "第二行", time: 1100 }),
     ];
     act(() => useLogStore.getState().appendFileLogs(batch));
     // 文件被整段重读（首帧窗口 / 服务端要求回退重读）→ 同一批行再次送达
     act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs(batch.map((e, i) => ({ ...e, id: `dup-${i}` }))),
+      useLogStore.getState().appendFileLogs(batch.map((e, i) => ({ ...e, id: `dup-${i}` }))),
     );
-    expect(useLogStore.getState().logs.map((e) => e.message)).toEqual([
-      "第一行",
-      "第二行",
-    ]);
+    expect(useLogStore.getState().logs.map((e) => e.message)).toEqual(["第一行", "第二行"]);
   });
 });
 
@@ -1943,7 +1831,7 @@ describe("dedupeRepeats 连续重复行折叠", () => {
       makeEntry({
         id: `r-${i}`,
         message: "ComfyUI 未就绪，等待中",
-        time: 1_000 + i * 1_000,
+        time: 1000 + i * 1000,
       }),
     );
 
@@ -1961,7 +1849,7 @@ describe("dedupeRepeats 连续重复行折叠", () => {
   it("只折叠连续重复：中间隔着别的行时不合并", () => {
     const entries = [
       ...repeat(3),
-      makeEntry({ id: "other", message: "别的事件", time: 2_000 }),
+      makeEntry({ id: "other", message: "别的事件", time: 2000 }),
       ...repeat(3),
     ];
     expect(dedupeRepeats(entries)).toHaveLength(7);
@@ -1979,9 +1867,7 @@ describe("dedupeRepeats 连续重复行折叠", () => {
 /* ── 分页选择器（#262：显示多少条 ≠ 内存上限）────────────────────────── */
 
 describe("selectPageLogs 倒序分页", () => {
-  const logs = Array.from({ length: 450 }, (_, i) =>
-    makeEntry({ id: `p-${i}`, time: i, seq: i }),
-  );
+  const logs = Array.from({ length: 450 }, (_, i) => makeEntry({ id: `p-${i}`, time: i, seq: i }));
 
   it("第 1 页是最新的一段，往前翻看到更早的", () => {
     const first = selectPageLogs(logs, 1, 200);
@@ -2063,11 +1949,7 @@ describe("「有 N 条新的日志」按窗口口径计数（#346 / #262 复审�
     act(() => useLogStore.getState().setPage(2));
     expect(newCount(2, true)).toBe(0);
 
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry({ id: "later", time: 999_999 })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "later", time: 999_999 })]));
     expect(newCount(2, true)).toBe(1);
   });
 
@@ -2076,9 +1958,7 @@ describe("「有 N 条新的日志」按窗口口径计数（#346 / #262 复审�
     act(() => useLogStore.getState().setPage(2));
     /* 迟到的一条时刻更早，会插到时间线**中间**：末条不变、窗口却确实往后挪了。 */
     act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry({ id: "late", time: 5, seq: 9_999 })]),
+      useLogStore.getState().appendFileLogs([makeEntry({ id: "late", time: 5, seq: 9999 })]),
     );
     expect(newCount(2, true)).toBe(1);
   });
@@ -2086,11 +1966,7 @@ describe("「有 N 条新的日志」按窗口口径计数（#346 / #262 复审�
   it("回到第 1 页即视为已读，计数归零", () => {
     seedPages();
     act(() => useLogStore.getState().setPage(2));
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry({ id: "later", time: 999_999 })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "later", time: 999_999 })]));
     expect(newCount(2, true)).toBe(1);
 
     act(() => useLogStore.getState().setPage(1));
@@ -2101,11 +1977,7 @@ describe("「有 N 条新的日志」按窗口口径计数（#346 / #262 复审�
     seedPages();
     /* setPage(1) = 用户把第 1 页（最新一段）当作已读基线，锚点随之就位。 */
     act(() => useLogStore.getState().setPage(1));
-    act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry({ id: "later", time: 999_999 })]),
-    );
+    act(() => useLogStore.getState().appendFileLogs([makeEntry({ id: "later", time: 999_999 })]));
     /* 用户上滚 = autoScroll false：这正是「新日志把他的阅读位置冲走」的场景 */
     expect(newCount(1, false)).toBe(1);
   });
@@ -2136,9 +2008,7 @@ describe("「有 N 条新的日志」按窗口口径计数（#346 / #262 复审�
  * 修法是给第 1 页一个锚点：窗口钉在「用户看过的那一段」上，新行列在它之后。
  */
 describe("selectFirstPageWindow 第 1 页锚定窗口（#262 复审）", () => {
-  const logs = Array.from({ length: 300 }, (_, i) =>
-    makeEntry({ id: `w-${i}`, time: i, seq: i }),
-  );
+  const logs = Array.from({ length: 300 }, (_, i) => makeEntry({ id: `w-${i}`, time: i, seq: i }));
 
   it("有锚点时以锚点为窗口起点，且给出「后面还有多少条更新的日志」", () => {
     const out = selectFirstPageWindow(logs, "w-50", 200);
@@ -2150,15 +2020,10 @@ describe("selectFirstPageWindow 第 1 页锚定窗口（#262 复审）", () => {
 
   it("新日志到达时窗口不动（这正是选区不被冲掉的原因）", () => {
     const before = selectFirstPageWindow(logs, "w-50", 200);
-    const grown = [
-      ...logs,
-      makeEntry({ id: "w-new", time: 9_999, seq: 9_999 }),
-    ];
+    const grown = [...logs, makeEntry({ id: "w-new", time: 9999, seq: 9999 })];
     const after = selectFirstPageWindow(grown, "w-50", 200);
     /* 窗口内容逐条相同（DOM 节点不会被重建），只是「后面的」多了 1 条 */
-    expect(after.entries.map((e) => e.id)).toEqual(
-      before.entries.map((e) => e.id),
-    );
+    expect(after.entries.map((e) => e.id)).toEqual(before.entries.map((e) => e.id));
     expect(after.truncatedFromEnd).toBe(before.truncatedFromEnd + 1);
   });
 
@@ -2189,15 +2054,15 @@ describe("setOrigin 按来源筛选", () => {
     act(() =>
       useLogStore.getState().appendFileLogs([
         {
-          ...makeEntry({ id: "dev-1", time: 1_000, message: "开发服务已就绪" }),
+          ...makeEntry({ id: "dev-1", time: 1000, message: "开发服务已就绪" }),
           origin: "dev",
         },
         {
-          ...makeEntry({ id: "app-1", time: 2_000, message: "任务入队" }),
+          ...makeEntry({ id: "app-1", time: 2000, message: "任务入队" }),
           origin: "app-runtime",
         },
         {
-          ...makeEntry({ id: "app-2", time: 3_000, message: "任务完成" }),
+          ...makeEntry({ id: "app-2", time: 3000, message: "任务完成" }),
           origin: "app-runtime",
         },
       ]),
@@ -2206,10 +2071,7 @@ describe("setOrigin 按来源筛选", () => {
   it("只看应用运行日志时启动行被挡在外面", () => {
     seed();
     act(() => useLogStore.getState().setOrigin("app-runtime"));
-    expect(idsOf(useLogStore.getState().filteredLogs)).toEqual([
-      "app-1",
-      "app-2",
-    ]);
+    expect(idsOf(useLogStore.getState().filteredLogs)).toEqual(["app-1", "app-2"]);
     expect(useLogStore.getState().counts.all).toBe(3);
   });
 
@@ -2248,33 +2110,28 @@ describe("setOrigin 按来源筛选", () => {
         {
           ...makeEntry({
             id: "console-1",
-            time: 1_000,
+            time: 1000,
             message: "ResizeObserver",
           }),
           source: "console",
         },
         {
-          ...makeEntry({ id: "tauri-1", time: 2_000, message: "Tauri 事件" }),
+          ...makeEntry({ id: "tauri-1", time: 2000, message: "Tauri 事件" }),
           source: "tauri",
         },
         {
-          ...makeEntry({ id: "dev-1", time: 3_000, message: "开发服务已就绪" }),
+          ...makeEntry({ id: "dev-1", time: 3000, message: "开发服务已就绪" }),
           origin: "dev",
         },
       ]),
     );
 
     act(() => useLogStore.getState().setOrigin(CONSOLE_ORIGIN));
-    expect(idsOf(useLogStore.getState().filteredLogs)).toEqual([
-      "console-1",
-      "tauri-1",
-    ]);
+    expect(idsOf(useLogStore.getState().filteredLogs)).toEqual(["console-1", "tauri-1"]);
     /* 计数与过滤同口径：切过去看到的条数就是下拉上写的那个数。 */
     const state = useLogStore.getState();
     expect(state.countsByOrigin[CONSOLE_ORIGIN].all).toBe(2);
-    expect(state.filteredLogs).toHaveLength(
-      state.countsByOrigin[CONSOLE_ORIGIN].all,
-    );
+    expect(state.filteredLogs).toHaveLength(state.countsByOrigin[CONSOLE_ORIGIN].all);
   });
 
   it("有来源的行不会漏进「控制台 / 全局错误」", () => {
@@ -2319,14 +2176,11 @@ describe("formatEntryForClipboard 单行文本", () => {
       makeEntry({
         level: "error",
         message: "boom",
-        location:
-          "src/components/studio/workflow-editor/WorkflowEditorCanvas.tsx:67",
+        location: "src/components/studio/workflow-editor/WorkflowEditorCanvas.tsx:67",
         origin: "app",
       }),
     );
-    expect(text).toContain(
-      "<src/components/studio/workflow-editor/WorkflowEditorCanvas.tsx:67>",
-    );
+    expect(text).toContain("<src/components/studio/workflow-editor/WorkflowEditorCanvas.tsx:67>");
     expect(text).toContain("· app");
   });
 
@@ -2353,9 +2207,7 @@ describe("log store — 服务端进程标识与会话边界", () => {
     act(() => {
       useLogStore
         .getState()
-        .appendFileLogs([
-          makeEntry({ time: 1_700_000_000_000, origin: "app" }),
-        ]);
+        .appendFileLogs([makeEntry({ time: 1_700_000_000_000, origin: "app" })]);
     });
     expect(useLogStore.getState().logs).toHaveLength(1);
 
@@ -2390,9 +2242,7 @@ describe("log store — 服务端进程标识与会话边界", () => {
   it("同一 bootId 重复写入是幂等的（轮询每 2s 都会带一次）", () => {
     act(() => {
       useLogStore.getState().setBootId("dev-boot:1:a");
-      useLogStore
-        .getState()
-        .appendFileLogs([makeEntry({ time: 1_700_000_000_000 })]);
+      useLogStore.getState().appendFileLogs([makeEntry({ time: 1_700_000_000_000 })]);
     });
     const before = useLogStore.getState();
     act(() => useLogStore.getState().setBootId("dev-boot:1:a"));
@@ -2422,9 +2272,7 @@ describe("内存上限 LOG_STORE_MAX：时间线折叠更旧行 + droppedTotal �
   it("重投当前已保留的时间线（真全重复）：不涨、时间线不变（身份判据）", () => {
     resetStore();
     act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs(Array.from({ length: LOG_STORE_MAX + 50 }, makeEntry)),
+      useLogStore.getState().appendFileLogs(Array.from({ length: LOG_STORE_MAX + 50 }, makeEntry)),
     );
     const before = useLogStore.getState();
     // 只重投「还留在时间线里」的行——mergeTimeline 全判重复 → 原样返回，
@@ -2441,9 +2289,7 @@ describe("内存上限 LOG_STORE_MAX：时间线折叠更旧行 + droppedTotal �
     act(() =>
       useLogStore
         .getState()
-        .appendFileLogs(
-          Array.from({ length: LOG_STORE_MAX + 10 }, () => makeEntry()),
-        ),
+        .appendFileLogs(Array.from({ length: LOG_STORE_MAX + 10 }, () => makeEntry())),
     );
     expect(useLogStore.getState().droppedTotal).toBe(10);
     act(() => useLogStore.getState().clear());
@@ -2466,7 +2312,7 @@ describe("内存上限 LOG_STORE_MAX：时间线折叠更旧行 + droppedTotal �
 describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", () => {
   it("索引复用版与「每轮重建」在整段序列上逐字一致", () => {
     // 混入乱序时刻、同秒副本行、跨来源同一行，把去重两条规则都走到
-    const freshBatches: LogEntry[][] = [
+    const freshBatches: Array<Array<LogEntry>> = [
       [entry("a", 300)],
       [entry("b", 100)],
       [
@@ -2478,7 +2324,7 @@ describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", (
     ];
 
     // 路径①：索引复用
-    let reused: LogEntry[] = [];
+    let reused: Array<LogEntry> = [];
     let index = buildTimelineIndex(reused);
     for (const batch of freshBatches) {
       const out = mergeTimelineIndexed(reused, batch, index);
@@ -2487,7 +2333,7 @@ describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", (
     }
 
     // 路径②：每轮从零重建（等价对照）
-    let rebuilt: LogEntry[] = [];
+    let rebuilt: Array<LogEntry> = [];
     for (const batch of freshBatches) {
       rebuilt = mergeTimeline(rebuilt, batch);
     }
@@ -2523,11 +2369,7 @@ describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", (
     const out = mergeTimelineIndexed(logs, [entry("a", 100)], index);
     expect(idsOf(out.logs)).toEqual(["a", "d", "e", "f"]);
     // 仍在窗口里的 f 重投则被丢弃
-    const again = mergeTimelineIndexed(
-      out.logs,
-      [{ ...out.logs[3]! }],
-      out.index,
-    );
+    const again = mergeTimelineIndexed(out.logs, [{ ...out.logs[3]! }], out.index);
     expect(again.logs).toBe(out.logs);
   });
 
@@ -2557,11 +2399,7 @@ describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", (
 
     // 仍在窗口的那条重投：必须仍被识别为重复（返回原数组引用）
     const current = [inWindow];
-    const out = mergeTimelineIndexed(
-      current,
-      [{ ...inWindow, id: "again" }],
-      index,
-    );
+    const out = mergeTimelineIndexed(current, [{ ...inWindow, id: "again" }], index);
     expect(out.logs).toBe(current);
   });
 
@@ -2571,7 +2409,7 @@ describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", (
      * 出在这一步没做。此前只有 store 级的间接覆盖，增量索引这一版把它挑明了。
      * 变异（去掉并 origin 那一步）会让本用例红。 */
     const landed: LogEntry = {
-      ...entry("landed", 1_000),
+      ...entry("landed", 1000),
       origin: "dev",
       message: "同一段正文",
     };
@@ -2585,11 +2423,7 @@ describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", (
       time: landed.time + 4,
       origin: "launcher",
     };
-    const out = mergeTimelineIndexed(
-      [landed],
-      [copy],
-      buildTimelineIndex([landed]),
-    );
+    const out = mergeTimelineIndexed([landed], [copy], buildTimelineIndex([landed]));
     // 时间线仍只有一条……
     expect(out.logs).toHaveLength(1);
     // ……但它的 origin 被并成了后到的那一路（用户要找的那个来源）
@@ -2608,9 +2442,7 @@ describe("时间线去重索引：跨轮复用（ISSUE #1869 性能轮次）", (
      */
     resetStore();
     act(() =>
-      useLogStore
-        .getState()
-        .appendFileLogs(Array.from({ length: LOG_STORE_MAX }, makeEntry)),
+      useLogStore.getState().appendFileLogs(Array.from({ length: LOG_STORE_MAX }, makeEntry)),
     );
     const before = useLogStore.getState();
 

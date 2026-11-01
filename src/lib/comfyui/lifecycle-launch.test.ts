@@ -26,9 +26,7 @@ vi.mock("./launch-path", () => ({
   }),
 }));
 vi.mock("./proc-detect", () => ({
-  findPidForMainPyDetailed: vi
-    .fn()
-    .mockResolvedValue({ pid: null, failed: false }),
+  findPidForMainPyDetailed: vi.fn().mockResolvedValue({ pid: null, failed: false }),
   findPidListeningPort: vi.fn().mockResolvedValue(null),
 }));
 /* runEnsureLaunch 的端口冲突用例需要封闭的探测面：./probe（快照的端口探测）、
@@ -69,10 +67,7 @@ vi.mock("./lifecycle-exit", async (importOriginal) => {
   return { ...actual, startComfyExitWatcher: vi.fn(() => ({ stop: vi.fn() })) };
 });
 
-import {
-  getExitPolicy,
-  getSettingsSync,
-} from "../app-settings/app-settings.server";
+import { getExitPolicy, getSettingsSync } from "../app-settings/app-settings.server";
 
 import { SERVICES_LOG_DIR } from "~/lib/log/log-paths";
 
@@ -147,7 +142,9 @@ describe("ensureKeepAliveWatchOnAdoption —— 接管场景补挂保活退出�
    * （`startComfyExitWatcher` 返回 `{stop}`），这条不会真起定时器。 */
   afterEach(() => {
     const deps = lastWatcherDeps();
-    if (!deps) return;
+    if (!deps) {
+      return;
+    }
     deps.onExit({ pid: 1, uptimeMs: 0 });
     vi.mocked(startComfyExitWatcher).mockClear();
   });
@@ -208,11 +205,11 @@ describe("pruneKeepAliveLogs —— 按次命名的保活日志只建不删会�
     }
   }
 
-  function keepAliveFiles(): string[] {
-    if (!fs.existsSync(SERVICES_LOG_DIR)) return [];
-    return fs
-      .readdirSync(SERVICES_LOG_DIR)
-      .filter((name) => name.startsWith("comfyui-keepalive-"));
+  function keepAliveFiles(): Array<string> {
+    if (!fs.existsSync(SERVICES_LOG_DIR)) {
+      return [];
+    }
+    return fs.readdirSync(SERVICES_LOG_DIR).filter((name) => name.startsWith("comfyui-keepalive-"));
   }
 
   beforeEach(() => {
@@ -263,25 +260,28 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
     // 现场原文：新进程绑 8188 失败当场退出，这行落在保活重定向 err 文件里。
     fs.writeFileSync(
       path.join(SERVICES_LOG_DIR, "comfyui-keepalive-stamp.err.log"),
-      "[INFO] Starting server\n" +
-        "[ERROR] Port 8188 is already in use on address 127.0.0.1.\n",
+      "[INFO] Starting server\n" + "[ERROR] Port 8188 is already in use on address 127.0.0.1.\n",
     );
     const { spawnManaged } = await import("~/lib/process/process-launch");
     // spawnManaged 是同步返回（keepAlive 下 child 是中介进程句柄）
-    vi.mocked(spawnManaged).mockReturnValue({ child: { pid: 4321 } } as never);
+    vi.mocked(spawnManaged).mockReturnValue(
+      /* SAFETY: 类型断言已复核 */ { child: { pid: 4321 } } as never,
+    );
     const { getComfyRuntimeSnapshot } = await import("./status");
-    vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue({
-      running: true,
-      pid: 97356,
-      port: 8188,
-      via: "配置路径的实例",
-      unverified: false,
-      didQueryProcTable: true,
-      source: "process",
-    } as never);
+    vi.mocked(getComfyRuntimeSnapshot).mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ {
+        running: true,
+        pid: 97_356,
+        port: 8188,
+        via: "配置路径的实例",
+        unverified: false,
+        didQueryProcTable: true,
+        source: "process",
+      } as never,
+    );
 
     const { runEnsureLaunch } = await import("./lifecycle-launch");
-    const notes: string[] = [];
+    const notes: Array<string> = [];
     /* 探针编排：等待循环第 1 轮（还没读到冲突行之前）应答 null → 置冲突标记；
      * 第 2 轮 earlyExit 中止并转接管 —— 此后实例应答，接管成功。 */
     const host: LaunchHost = {
@@ -292,10 +292,7 @@ describe("runEnsureLaunch —— 保活拉起遇端口被占：识别、中止�
       localTimestamp: () => "stamp",
       markSessionStart: vi.fn(),
       markSessionEnd: vi.fn(),
-      probeComfyUi: vi
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValue("http://127.0.0.1:8188"),
+      probeComfyUi: vi.fn().mockResolvedValueOnce(null).mockResolvedValue("http://127.0.0.1:8188"),
     };
 
     const r = await runEnsureLaunch({

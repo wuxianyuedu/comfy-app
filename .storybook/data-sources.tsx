@@ -69,14 +69,14 @@ export type ValueSourceKind = "json" | "media";
  * 每个 `load` 都必须是「真东西」。**不许**在这里塞一份手写的示例对象去讨好某个
  * story —— 那就是把假形态请回来。
  */
-export interface ValueSource<T> {
+export type ValueSource<T> = {
   /** 这个源解决什么、真数据从哪来（故事读者看这一段才知道自己在看什么）。 */
   readonly about: string;
-  /** 这个名字下**有哪些**取值（进 Args 面板的选项）。 */
-  readonly names: readonly string[];
   /** 按名字取值；不认识的名字**抛错** —— 静默回退会让「源名写错了」看不出来。 */
   readonly load: (name: string) => T;
-}
+  /** 这个名字下**有哪些**取值（进 Args 面板的选项）。 */
+  readonly names: ReadonlyArray<string>;
+};
 
 /**
  * 值源的**真实来源**：Storybook 的 `staticDirs` 里那份开发期资源目录。
@@ -230,8 +230,7 @@ export type MediaSourceName = (typeof MEDIA_SOURCE_NAMES)[number];
 /** 值源注册表 —— **唯一**一份「名字 → 真数据源」的映射。 */
 export const DATA_SOURCES: Record<ValueSourceKind, ValueSource<unknown>> = {
   json: {
-    about:
-      "真实形状的 ComfyUI / tRPC 报文（键名、嵌套深度、字符串长度按真报文给）",
+    about: "真实形状的 ComfyUI / tRPC 报文（键名、嵌套深度、字符串长度按真报文给）",
     names: JSON_SOURCE_NAMES,
     load: (name) => {
       const found = JSON_SOURCES[name];
@@ -249,7 +248,8 @@ export const DATA_SOURCES: Record<ValueSourceKind, ValueSource<unknown>> = {
       "`missing.png` 故意不存在 —— 那是「加载失败落兜底」那条分支的现场",
     names: MEDIA_SOURCE_NAMES,
     load: (name) => {
-      if (!(MEDIA_SOURCE_NAMES as readonly string[]).includes(name)) {
+      /* SAFETY: 类型断言已复核 */
+      if (!(MEDIA_SOURCE_NAMES as ReadonlyArray<string>).includes(name)) {
         throw new Error(
           `media 源里没有叫「${name}」的文件。现有的：${MEDIA_SOURCE_NAMES.join(" / ")}`,
         );
@@ -358,12 +358,7 @@ export function sourceNameArgType(kind: ValueSourceKind) {
  * 工具栏的「应用 origin」旋钮（`preview.tsx` 的 `globalTypes.appOrigin`）。
  * 应用**没起**时不必换 —— 那时画布上就是它真实的降级形态，那也是要看的。
  */
-export {
-  APP_DEV_ORIGIN,
-  APP_DEV_PORT,
-  APP_DEV_PORT_SOURCE,
-  DEFAULT_APP_ORIGIN,
-};
+export { APP_DEV_ORIGIN, APP_DEV_PORT, APP_DEV_PORT_SOURCE, DEFAULT_APP_ORIGIN };
 
 /**
  * 工具栏可选的几个 origin：本检出算出来的那个，加上两个常见的手改落点。
@@ -373,14 +368,13 @@ export {
  */
 export function appOriginChoices(
   dev: AppOrigin = {
-    APP_DEV_PORT: APP_DEV_PORT,
-    APP_DEV_ORIGIN: APP_DEV_ORIGIN,
-    APP_DEV_PORT_SOURCE: APP_DEV_PORT_SOURCE,
+    APP_DEV_PORT,
+    APP_DEV_ORIGIN,
+    APP_DEV_PORT_SOURCE,
   },
 ): Record<string, string> {
   return {
-    [`本检出 ${String(dev.APP_DEV_PORT)}（${dev.APP_DEV_PORT_SOURCE}）`]:
-      dev.APP_DEV_ORIGIN,
+    [`本检出 ${String(dev.APP_DEV_PORT)}（${dev.APP_DEV_PORT_SOURCE}）`]: dev.APP_DEV_ORIGIN,
     "静态链兜底 3100": "http://127.0.0.1:3100",
     "回落候选 +1": `http://127.0.0.1:${String(dev.APP_DEV_PORT + 1)}`,
   };
@@ -412,7 +406,7 @@ export function StorybookTrpcProvider({
 
   return (
     <QueryClientProvider client={bundle.queryClient}>
-      <TRPCProvider trpcClient={bundle.client} queryClient={bundle.queryClient}>
+      <TRPCProvider queryClient={bundle.queryClient} trpcClient={bundle.client}>
         {children}
       </TRPCProvider>
     </QueryClientProvider>
@@ -421,6 +415,7 @@ export function StorybookTrpcProvider({
 
 /** 全局装饰器：给每个 story 接上真 tRPC 链路（见 `StorybookTrpcProvider`）。 */
 export const withTrpcApp: Decorator = (Story, context) => {
+  /* SAFETY: 类型断言已复核 */
   const globals = context.globals as { appOrigin?: unknown };
   const origin =
     typeof globals.appOrigin === "string" && globals.appOrigin.trim() !== ""
@@ -489,9 +484,9 @@ export function StorybookAppProviders({
  * 不挂它，就没有第二份面板状态。
  */
 export const withAppProviders: Decorator = (Story, context) => {
+  /* SAFETY: 类型断言已复核 */
   const hidePanel =
-    (context.parameters as { messagePanelHidden?: unknown })
-      .messagePanelHidden === true;
+    (context.parameters as { messagePanelHidden?: unknown }).messagePanelHidden === true;
   return (
     <StorybookAppProviders hideMessagePanel={hidePanel}>
       <Story />

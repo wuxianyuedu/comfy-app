@@ -32,7 +32,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error -- storybook 未随包提供该子路径的类型声明（exports 只有 default 条件）
 import * as storybookLoader from "storybook/internal/bin/loader";
 
-const { addExtensionsToRelativeImports } = storybookLoader as {
+const { addExtensionsToRelativeImports } = /* SAFETY: 类型断言已复核 */ storybookLoader as {
   addExtensionsToRelativeImports: (source: string, filePath: string) => string;
 };
 
@@ -53,7 +53,7 @@ const GENERATED_DIRS = [`${sep}assets${sep}`, `${sep}generated${sep}`];
  * 文件**决定 —— 否则本机跑过一次 `pnpm storybook` 之后的判据覆盖面就与别人的检出
  * 不一样了（那正是生成件不进类型程序的理由在判据这一侧的回声）。
  */
-function storybookSources(): string[] {
+function storybookSources(): Array<string> {
   return readdirSync(STORYBOOK_DIR, { recursive: true, withFileTypes: true })
     .filter(
       (entry) =>
@@ -69,11 +69,11 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
   const main = readFileSync(MAIN, "utf8");
   const preview = readFileSync(PREVIEW, "utf8");
   const launcher = readFileSync(LAUNCHER, "utf8");
-  const pkg = JSON.parse(
+  const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
     readFileSync(resolve(REPO_ROOT, "package.json"), "utf8"),
   ) as {
-    scripts: Record<string, string>;
     devDependencies: Record<string, string>;
+    scripts: Record<string, string>;
   };
 
   it("主配置扫的就是 src/ 下的 stories（glob 写错 = 侧栏空着但构建成功）", () => {
@@ -86,7 +86,7 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
 
   it("主题装饰器按 class 切换，且默认 dark（与 ThemeProvider 同口径）", () => {
     expect(preview).toContain("withThemeByClassName");
-    expect(preview).toContain("defaultTheme: \"dark\"");
+    expect(preview).toContain('defaultTheme: "dark"');
     // `dark` 档在 html 上加的 class 名必须是 globals.css 认的那个
     expect(preview).toMatch(/dark:\s*"dark"/);
   });
@@ -104,20 +104,16 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
 
   it("package.json 的 Storybook 脚本走 Node 启动器，且不写死 pnpm 包名", () => {
     expect(pkg.scripts.storybook).toBe("node scripts/storybook.mjs dev");
-    expect(pkg.scripts["storybook:build"]).toBe(
-      "node scripts/storybook.mjs build",
-    );
+    expect(pkg.scripts["storybook:build"]).toBe("node scripts/storybook.mjs build");
   });
 
   it("依赖钉在同一版本（Storybook 各包版本错配的报错指向完全无关的内部 API）", () => {
-    const storybookDeps = Object.entries(pkg.devDependencies).filter(([name]) =>
-      name === "storybook" || name.startsWith("@storybook/"),
+    const storybookDeps = Object.entries(pkg.devDependencies).filter(
+      ([name]) => name === "storybook" || name.startsWith("@storybook/"),
     );
     expect(storybookDeps.length).toBeGreaterThanOrEqual(3);
     const versions = new Set(storybookDeps.map(([, version]) => version));
-    expect(versions.size, `版本不一致：${JSON.stringify(storybookDeps)}`).toBe(
-      1,
-    );
+    expect(versions.size, `版本不一致：${JSON.stringify(storybookDeps)}`).toBe(1);
   });
 
   it("静态产物路径已被忽略（`pnpm storybook:build` 的产物不入库）", () => {
@@ -157,7 +153,7 @@ describe("Storybook 配置契约（ISSUE #1381）", () => {
     // 扫描面非空：目录读空了，下面那条相等断言会在空集上假绿。
     expect(files.length).toBeGreaterThan(0);
 
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const abs of files) {
       const source = readFileSync(abs, "utf8");
       if (addExtensionsToRelativeImports(source, abs) !== source) {

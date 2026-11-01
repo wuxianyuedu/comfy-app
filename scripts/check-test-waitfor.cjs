@@ -55,11 +55,7 @@
  */
 const path = require("node:path");
 const { maskNonCode } = require("./check-test-concurrency.cjs");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -111,8 +107,7 @@ const DOM_MATCHERS = [
 ];
 
 /** RTL 的 `waitFor` —— 判据只认这个来源，不认同名本地 helper。 */
-const RTL_IMPORT_RE =
-  /import\s*\{([^}]*)\}\s*from\s*["']@testing-library\/react["']/;
+const RTL_IMPORT_RE = /import\s*\{([^}]*)\}\s*from\s*["']@testing-library\/react["']/;
 
 /** `await waitFor(` 的站点。 */
 const SITE_RE = /(?<![\w.$])await\s+waitFor\s*\(/g;
@@ -135,7 +130,11 @@ function walk(dir) {
 
 function lineOf(src, index) {
   let line = 1;
-  for (let i = 0; i < index; i++) if (src[i] === "\n") line++;
+  for (let i = 0; i < index; i++) {
+    if (src[i] === "\n") {
+      line++;
+    }
+  }
   return line;
 }
 
@@ -150,9 +149,13 @@ function lineOf(src, index) {
  */
 function importsRtlWaitFor(raw) {
   for (const m of raw.matchAll(/import\s*\{[^}]*\}\s*from\s*["'][^"']+["']/g)) {
-    if (!RTL_IMPORT_RE.test(m[0])) continue;
+    if (!RTL_IMPORT_RE.test(m[0])) {
+      continue;
+    }
     const names = m[0].match(/\{([^}]*)\}/)[1];
-    if (/(?<![\w$])waitFor\s*(?:,|$)/.test(names)) return true;
+    if (/(?<![\w$])waitFor\s*(?:,|$)/.test(names)) {
+      return true;
+    }
   }
   return false;
 }
@@ -164,34 +167,42 @@ function importsRtlWaitFor(raw) {
 function scanFile(abs) {
   /* 消失时 `null` = 这一轮没读到；口径与两种窗口在 `gate-scan-read.cjs`。 */
   const raw = readForScan(abs);
-  if (raw === null) return null;
+  if (raw === null) {
+    return null;
+  }
   const masked = maskNonCode(raw);
 
-  if (!importsRtlWaitFor(raw)) return [];
+  if (!importsRtlWaitFor(raw)) {
+    return [];
+  }
 
   /* 假定时器窗口：逐行扫标记，给每行一个「在不在窗口内」的布尔。 */
   const lines = masked.split("\n");
   const fakeLines = new Set();
   let inFake = false;
   lines.forEach((l, i) => {
-    if (FAKE_OFF_RE.test(l)) inFake = false;
-    if (inFake) fakeLines.add(i + 1);
-    if (FAKE_ON_RE.test(l)) inFake = true;
+    if (FAKE_OFF_RE.test(l)) {
+      inFake = false;
+    }
+    if (inFake) {
+      fakeLines.add(i + 1);
+    }
+    if (FAKE_ON_RE.test(l)) {
+      inFake = true;
+    }
   });
 
   const sites = [];
   for (const m of masked.matchAll(SITE_RE)) {
     const start = m.index;
     const window = masked.slice(start, start + WINDOW_MAX);
-    const dom = DOM_MATCHERS.some((name) =>
-      new RegExp(`\\.${name}\\s*\\(`).test(window),
-    );
+    const dom = DOM_MATCHERS.some((name) => new RegExp(`\\.${name}\\s*\\(`).test(window));
     const line = lineOf(masked, start);
     const fake = fakeLines.has(line);
     const rawLine = raw.split("\n")[line - 1] ?? "";
     sites.push({
       line,
-      text: rawLine.trim().replace(/\s+/g, " ").slice(0, 110),
+      text: rawLine.trim().replaceAll(/\s+/g, " ").slice(0, 110),
       legit: dom ? "dom" : fake ? "fake-timer" : null,
       dom,
       fake,
@@ -212,7 +223,9 @@ function main() {
 
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    if (FIXTURE_SKIP.has(rel)) continue;
+    if (FIXTURE_SKIP.has(rel)) {
+      continue;
+    }
     const sites = scanFile(abs);
     if (sites === null) {
       vanished += 1;
@@ -220,10 +233,15 @@ function main() {
     }
     const bad = [];
     for (const s of sites) {
-      if (s.legit) legit[s.legit]++;
-      else bad.push(s);
+      if (s.legit) {
+        legit[s.legit]++;
+      } else {
+        bad.push(s);
+      }
     }
-    if (bad.length) violations.set(rel, bad);
+    if (bad.length) {
+      violations.set(rel, bad);
+    }
   }
 
   const total = [...violations.values()].reduce((n, v) => n + v.length, 0);
@@ -236,9 +254,7 @@ function main() {
       } 处（等 DOM ${legit.dom} + 假定时器窗口 ${legit["fake-timer"]}）。`,
     );
     for (const [rel, sites] of [...violations.entries()].sort()) {
-      console.log(
-        `  · ${rel}: ${sites.length} 处（第 ${sites.map((s) => s.line).join(",")} 行）`,
-      );
+      console.log(`  · ${rel}: ${sites.length} 处（第 ${sites.map((s) => s.line).join(",")} 行）`);
     }
     return 0;
   }
@@ -260,27 +276,26 @@ function main() {
     );
     for (const [rel, sites] of [...violations.entries()].sort()) {
       console.error(
-        `  · ${rel}: ${sites.length} 处\n` +
+        `  · ${rel}: ${sites.length} 处\n${
           sites
             .slice(0, 8)
             .map((s) => `      ${s.line}: ${s.text}`)
-            .join("\n") +
-          (sites.length > 8 ? `\n      …另有 ${sites.length - 8} 处` : ""),
+            .join("\n")
+          }${sites.length > 8 ? `\n      …另有 ${sites.length - 8} 处` : ""}`,
       );
     }
     console.error(
-      "\n口径见 docs/standards/11-测试与可观测性.md §11.14.3。" +
-        vanishedNote(vanished),
+      `\n口径见 docs/standards/11-测试与可观测性.md §11.14.3。${vanishedNote(vanished)}`,
     );
     return 1;
   }
 
   console.log(
     `[test-waitfor] OK —— 越界 0 处 / 正当 ${legitTotal} 处` +
-      `（等 DOM ${legit.dom} + 假定时器窗口 ${legit["fake-timer"]}）。` +
+      `（等 DOM ${legit.dom} + 假定时器窗口 ${legit["fake-timer"]}）。${
       /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。静默让判据在没读过的
          目录上绿，是 §13.5.12 那一族「自称在跑、实际没跑」的入口。 */
-      vanishedNote(vanished),
+      vanishedNote(vanished)}`,
   );
   return 0;
 }
@@ -288,4 +303,6 @@ function main() {
 /* 自测（`tests/test-waitfor-gate.test.ts`）钉的是**站点识别口径**。 */
 module.exports = { scanFile, importsRtlWaitFor, DOM_MATCHERS, FIXTURE_SKIP };
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

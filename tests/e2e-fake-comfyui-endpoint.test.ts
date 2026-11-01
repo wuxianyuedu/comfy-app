@@ -67,8 +67,8 @@ function readText(rel: string): string {
 const REAL_PAYLOAD = {
   system: {
     os: "win32",
-    ram_total: 34204610560,
-    ram_free: 7156305920,
+    ram_total: 34_204_610_560,
+    ram_free: 7_156_305_920,
     comfyui_version: "0.37.0",
   },
   devices: [],
@@ -101,10 +101,7 @@ describe("替身与真件分居两个端口（ISSUE #1756 的修复取向）", (
 
     const ports = comfyProbeWindowPorts();
     expect(ports).toEqual(
-      Array.from(
-        { length: probeRange + 1 },
-        (_, i) => COMFYUI_DEFAULT_PORT + i,
-      ),
+      Array.from({ length: probeRange + 1 }, (_, i) => COMFYUI_DEFAULT_PORT + i),
     );
     // 替身落在这个窗口之外（两处口径合起来才说明「没混身份」）。
     expect(ports).not.toContain(FAKE_COMFYUI_DEFAULT_PORT);
@@ -114,13 +111,9 @@ describe("替身与真件分居两个端口（ISSUE #1756 的修复取向）", (
     /* 「换端口」是 `describeSlotConflict` 给出的出口①。它必须真的生效，且是
      * **一处生效、处处生效** —— 应用连的地址与替身监听的地址不能各说一套。 */
     const env = envWith({ [FAKE_COMFY_PORT_ENV_KEY]: "18999" });
-    expect(resolveFakeComfyuiPort(env)).toBe(18999);
-    expect(fakeComfyuiBaseUrl({ env })).toBe(
-      `http://${FAKE_COMFYUI_HOST}:18999`,
-    );
-    expect(fakeComfyuiStatsUrl({ env })).toBe(
-      `http://${FAKE_COMFYUI_HOST}:18999/system_stats`,
-    );
+    expect(resolveFakeComfyuiPort(env)).toBe(18_999);
+    expect(fakeComfyuiBaseUrl({ env })).toBe(`http://${FAKE_COMFYUI_HOST}:18999`);
+    expect(fakeComfyuiStatsUrl({ env })).toBe(`http://${FAKE_COMFYUI_HOST}:18999/system_stats`);
     expect(fakeComfyuiEnv({ env })).toEqual({
       [COMFY_BASE_ENV_KEY]: `http://${FAKE_COMFYUI_HOST}:18999`,
       E2E_FAKE_COMFY_HOST: FAKE_COMFYUI_HOST,
@@ -130,10 +123,9 @@ describe("替身与真件分居两个端口（ISSUE #1756 的修复取向）", (
 
   it("非法的端口覆盖回落到默认值（不是 NaN / 0 / 越界值）", () => {
     for (const bad of ["", "abc", "0", "-1", "70000", "1e999"]) {
-      expect(
-        resolveFakeComfyuiPort(envWith({ [FAKE_COMFY_PORT_ENV_KEY]: bad })),
-        bad,
-      ).toBe(FAKE_COMFYUI_DEFAULT_PORT);
+      expect(resolveFakeComfyuiPort(envWith({ [FAKE_COMFY_PORT_ENV_KEY]: bad })), bad).toBe(
+        FAKE_COMFYUI_DEFAULT_PORT,
+      );
     }
   });
 
@@ -146,9 +138,7 @@ describe("替身与真件分居两个端口（ISSUE #1756 的修复取向）", (
     );
     // 应用侧那个键是 `comfyui/client.ts` 的最高优先级覆盖（也是
     // `baseForLocalPort()` 见到就放弃进程表反查的那个）—— 名字不能写错。
-    expect(readText("src/lib/comfyui/client.ts")).toContain(
-      "process.env.COMFYUI_BASE",
-    );
+    expect(readText("src/lib/comfyui/client.ts")).toContain("process.env.COMFYUI_BASE");
   });
 });
 
@@ -161,22 +151,12 @@ describe("两个形状互不误判（真件指纹 vs 替身指纹）", () => {
   });
 
   it("空壳 / 非对象一律两边都不像（不做「默认是真件」的猜测）", () => {
-    for (const junk of [
-      null,
-      undefined,
-      42,
-      "x",
-      {},
-      { system: null },
-      { system: {} },
-    ]) {
+    for (const junk of [null, undefined, 42, "x", {}, { system: null }, { system: {} }]) {
       expect(isRealComfyuiPayload(junk), JSON.stringify(junk)).toBe(false);
       expect(isFakeComfyuiPayload(junk), JSON.stringify(junk)).toBe(false);
     }
     // `comfyui_version` 是空串等同于没有（真件不会回空版本号）。
-    expect(isRealComfyuiPayload({ system: { comfyui_version: "  " } })).toBe(
-      false,
-    );
+    expect(isRealComfyuiPayload({ system: { comfyui_version: "  " } })).toBe(false);
   });
 
   it("替身回的形状不会把自己送进「真件」那一支", () => {
@@ -187,9 +167,7 @@ describe("两个形状互不误判（真件指纹 vs 替身指纹）", () => {
      * 判据的输入是真件那条响应（`comfyui_version` 是 ComfyUI `/system_stats`
      * 固定填的字段，本应用不读它 —— 它在这里只做**身份指纹**）。 */
     const serverSrc = readText("e2e/support/fake-comfyui-server.mjs");
-    expect(serverSrc).toContain(
-      'system: { os: "nt", ram_total: 1, ram_free: 1 }',
-    );
+    expect(serverSrc).toContain('system: { os: "nt", ram_total: 1, ram_free: 1 }');
     expect(serverSrc).not.toContain("comfyui_version");
   });
 
@@ -224,9 +202,7 @@ describe("跑前那一探的判决（四态各归各的出口）", () => {
   });
 
   it("应答两边都不像 / 非 200 ⇒ unknown：同样阻断", () => {
-    expect(
-      classifyFakeSlot({ status: 200, payload: { hello: "world" } }).verdict,
-    ).toBe("unknown");
+    expect(classifyFakeSlot({ status: 200, payload: { hello: "world" } }).verdict).toBe("unknown");
     expect(classifyFakeSlot({ status: 500 }).verdict).toBe("unknown");
     expect(classifyFakeSlot({ status: 403 }).verdict).toBe("unknown");
   });
@@ -262,7 +238,9 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
 
   afterEach(async () => {
     await new Promise<void>((resolve) => {
-      if (!server) return resolve();
+      if (!server) {
+        return resolve();
+      }
       server.close(() => resolve());
       server = null;
     });
@@ -274,9 +252,7 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(payload));
     });
-    await new Promise<void>((resolve) =>
-      server?.listen(0, "127.0.0.1", resolve),
-    );
+    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
     const addr = server.address();
     const port = typeof addr === "object" && addr ? addr.port : 0;
     return `http://127.0.0.1:${port}/system_stats`;
@@ -369,9 +345,7 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
       res.writeHead(200, { "content-type": "text/html" });
       res.end("<html></html>");
     });
-    await new Promise<void>((resolve) =>
-      server?.listen(0, "127.0.0.1", resolve),
-    );
+    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
     const addr = server.address();
     const port = typeof addr === "object" && addr ? addr.port : 0;
     expect(await probePortOccupied(port)).toBe(true);
@@ -381,9 +355,7 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     server = createServer((_req, res) => {
       res.writeHead(200).end("ok");
     });
-    await new Promise<void>((resolve) =>
-      server?.listen(0, "127.0.0.1", resolve),
-    );
+    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
     const addr = server.address();
     const port = typeof addr === "object" && addr ? addr.port : 0;
     const result = await runPreflight({
@@ -402,11 +374,10 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
       fakeOccupied: false,
     });
     // 反着来一次：只有两栏真的各归各位才可能同时对上。
-    expect(
-      decodePreflight(
-        encodePreflight({ appOccupied: false, fakeOccupied: true }),
-      ),
-    ).toEqual({ appOccupied: false, fakeOccupied: true });
+    expect(decodePreflight(encodePreflight({ appOccupied: false, fakeOccupied: true }))).toEqual({
+      appOccupied: false,
+      fakeOccupied: true,
+    });
   });
 
   it("读不出 pre-flight 结论 ⇒ null（是「不知道」，不是「没有」）", () => {
@@ -418,13 +389,12 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
     }
     // 只有一栏、类型不对的也一律不认（半份结论比没有更危险）。
     expect(decodePreflight('{"appOccupied":true}')).toBe(null);
-    expect(decodePreflight('{"appOccupied":"yes","fakeOccupied":false}')).toBe(
-      null,
-    );
+    expect(decodePreflight('{"appOccupied":"yes","fakeOccupied":false}')).toBe(null);
     // 两栏都在且是布尔 ⇒ 认。
-    expect(
-      decodePreflight('{"appOccupied":true,"fakeOccupied":false}'),
-    ).toEqual({ appOccupied: true, fakeOccupied: false });
+    expect(decodePreflight('{"appOccupied":true,"fakeOccupied":false}')).toEqual({
+      appOccupied: true,
+      fakeOccupied: false,
+    });
   });
 
   it("`globalSetup` 侧的读法：拿不到结论一律 null（不阻断、也不误报复用）", () => {
@@ -445,9 +415,7 @@ describe("探针真的探（拿真 HTTP 服务喂它，不复刻一份实现）"
       res.writeHead(200, { "content-type": "text/plain" });
       res.end("not json");
     });
-    await new Promise<void>((resolve) =>
-      server?.listen(0, "127.0.0.1", resolve),
-    );
+    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
     const addr = server.address();
     const port = typeof addr === "object" && addr ? addr.port : 0;
     const observed = await probeFakeComfySlot({
@@ -466,10 +434,7 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
      *
      * 判据拿的是真实源码（不是一份抄过来的顺序表）——上游改了这个顺序时，
      * 「探测为什么不能挂在 globalSetup 上」这个前提就要重新量，这条会红。 */
-    const runner = readFileSync(
-      resolvePlaywrightFile("lib/runner/index.js"),
-      "utf8",
-    );
+    const runner = readFileSync(resolvePlaywrightFile("lib/runner/index.js"), "utf8");
     /* 取整个函数体：靠**配平花括号**而不是找第一个 `}` —— 后者会切在数组元素
      * 的花括号上（`createRemoveOutputDirsTask()` 后面并没有 `}`），于是
      * 「plugin 在 globalSetup 之前」这句话压根没被检查。 */
@@ -479,8 +444,9 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
     let depth = 0;
     let bodyEnd = bodyStart;
     for (let i = bodyStart; i < runner.length; i += 1) {
-      if (runner[i] === "{") depth += 1;
-      else if (runner[i] === "}") {
+      if (runner[i] === "{") {
+        depth += 1;
+      } else if (runner[i] === "}") {
         depth -= 1;
         if (depth === 0) {
           bodyEnd = i;
@@ -503,15 +469,11 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
      * + `await`），所以到最后一个 plugin 跑完时，**每一个** webServer 都可用。
      * 若哪天改成并行「起完就算」，第二个 server 可能还没 bind —— 那时
      * 「替身端口必在跑」这句话就不再是对所有 webServer 成立的。 */
-    const taskLoop = runner.slice(
-      runner.indexOf("const taskLoop = async () => {"),
-    );
+    const taskLoop = runner.slice(runner.indexOf("const taskLoop = async () => {"));
     /* 取到「循环体首次 await setup」为止 —— 写死字符数会随上游注释漂，
      * 那会让这条断言变成「上游改了个注释就红」的假报警。 */
     const firstSetupAwait = taskLoop.indexOf("await task.setup?.(");
-    expect(firstSetupAwait, "taskLoop 里没有 await task.setup").toBeGreaterThan(
-      0,
-    );
+    expect(firstSetupAwait, "taskLoop 里没有 await task.setup").toBeGreaterThan(0);
     const loopHead = taskLoop.slice(0, firstSetupAwait);
     expect(loopHead).toContain("for (const task of this._tasks)");
     /* `await` 在循环体内 ⇒ 上一个 setup 跑完才轮到下一个（串行）。
@@ -524,10 +486,7 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
     /* 「本地跑必然探到自己起的」= 这条链：webServer → plugin setup →
      * 排在 globalSetup 之前。所以 config 里**有 webServer**、且本地档
      * `reuseExistingServer` 为真，正是本 ISSUE 的现场条件。 */
-    const runner = readFileSync(
-      resolvePlaywrightFile("lib/runner/index.js"),
-      "utf8",
-    );
+    const runner = readFileSync(resolvePlaywrightFile("lib/runner/index.js"), "utf8");
     expect(runner).toContain("webServerPluginsForConfig(config2)");
     const config = readText("playwright.config.ts");
     // 两条 webServer 各有一处 `reuseExistingServer: !process.env.CI`。
@@ -563,9 +522,7 @@ describe("探测时机：判「起之前有没有别人」就不能挂在 global
     expect(preflightAt).toBeLessThan(spawnAt);
     // 结论要随 env 带下去（不带的话 globalSetup 那侧的读法恒 null，
     // 「复用」话术永远不出现 = 一次静默降级）。
-    expect(run).toContain(
-      "env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)",
-    );
+    expect(run).toContain("env[E2E_PREFLIGHT_ENV_KEY] = encodePreflight(preflight)");
   });
 });
 
@@ -590,11 +547,13 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     /* Python 侧引不了 `.mjs`，所以它的兜底值是**唯一**允许的第二处字面量
      * —— 这里把它与模块导出对一遍，漂了就红。 */
     const cliSrc = readText("e2e/support/fake-comfyui/comfy_cli/cli.py");
-    const defaults = [...cliSrc.matchAll(/E2E_FAKE_COMFY_PORT", "(\d+)"/g)].map(
-      (m) => Number(m[1]),
+    const defaults = [...cliSrc.matchAll(/E2E_FAKE_COMFY_PORT", "(\d+)"/g)].map((m) =>
+      Number(m[1]),
     );
     expect(defaults.length).toBeGreaterThan(0);
-    for (const d of defaults) expect(d).toBe(FAKE_COMFYUI_DEFAULT_PORT);
+    for (const d of defaults) {
+      expect(d).toBe(FAKE_COMFYUI_DEFAULT_PORT);
+    }
   });
 
   it("e2e 用例里不再写死真件的 8188 地址", () => {

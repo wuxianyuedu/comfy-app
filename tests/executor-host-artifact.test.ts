@@ -25,10 +25,10 @@ const hostEntry = read("scripts/executor-host.mjs");
 const runtimeGraph = read("src/lib/comfyui/host-runtime.ts");
 const privateInputs = read("scripts/standalone-private-inputs.mjs");
 const buildDesktop = read("scripts/build-desktop.mjs");
-const pkg = JSON.parse(read("package.json")) as {
-  scripts: Record<string, string>;
+const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(read("package.json")) as {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  scripts: Record<string, string>;
 };
 
 describe("构建链顺序：预编译 → 剪枝 → 冒烟", () => {
@@ -68,9 +68,7 @@ describe("预编译的形态判据", () => {
    *  的 node_modules 顶层**没有**它们（Next 把它们编进 server chunk 了），留
    *  external 就是运行期 ERR_MODULE_NOT_FOUND —— 实测数过产物目录才定下的清单。 */
   it("外部件清单是显式白名单，且不含纯 JS 的那三个", () => {
-    const externals = /const EXTERNAL_PACKAGES = \[([\s\S]*?)\];/.exec(
-      buildScript,
-    )?.[1];
+    const externals = /const EXTERNAL_PACKAGES = \[([\s\S]*?)\];/.exec(buildScript)?.[1];
     expect(externals, "找不到 EXTERNAL_PACKAGES").toBeTruthy();
     for (const keep of ["@libsql/client", "ws", "pino"]) {
       expect(externals).toContain(keep);
@@ -94,9 +92,7 @@ describe("预编译的形态判据", () => {
   it("server-only 走内联抛错桩，且不在外部件清单里", () => {
     expect(buildScript).toMatch(/filter:\s*\/\^server-only\$\//);
     expect(buildScript).toContain("SERVER_ONLY_STUB");
-    const externals = /const EXTERNAL_PACKAGES = \[([\s\S]*?)\];/.exec(
-      buildScript,
-    )?.[1];
+    const externals = /const EXTERNAL_PACKAGES = \[([\s\S]*?)\];/.exec(buildScript)?.[1];
     expect(externals).not.toContain("server-only");
   });
 
@@ -137,22 +133,15 @@ describe("白名单两侧与桌包断言", () => {
       privateInputs.indexOf("export const RUNTIME_SCRIPTS"),
       privateInputs.indexOf("export const BUILT_RUNTIME_SCRIPTS"),
     );
-    const built = /export const BUILT_RUNTIME_SCRIPTS = \[([\s\S]*?)\];/.exec(
-      privateInputs,
-    )?.[1];
+    const built = /export const BUILT_RUNTIME_SCRIPTS = \[([\s\S]*?)\];/.exec(privateInputs)?.[1];
     expect(built, "找不到 BUILT_RUNTIME_SCRIPTS").toBeTruthy();
     for (const name of [...built!.matchAll(/"([^"]+)"/g)].map((m) => m[1])) {
-      expect(
-        runtime,
-        `产物件 ${name} 没登记进 RUNTIME_SCRIPTS，会被剪枝删掉`,
-      ).toContain(name);
+      expect(runtime, `产物件 ${name} 没登记进 RUNTIME_SCRIPTS，会被剪枝删掉`).toContain(name);
     }
   });
 
   it("build-desktop 跳过按源文件拷贝、改在组装后断言存在", () => {
-    expect(buildDesktop).toContain(
-      "BUILT_RUNTIME_SCRIPTS.includes(launcherFile)",
-    );
+    expect(buildDesktop).toContain("BUILT_RUNTIME_SCRIPTS.includes(launcherFile)");
     expect(buildDesktop).toContain("桌包缺件");
   });
 });
@@ -163,10 +152,7 @@ describe("冒烟判据本身有效", () => {
   it("目录里没有 server.js 时报错，而不是当成通过", async () => {
     const { smokeExecutorHostArtifact } =
       await import("../scripts/smoke-executor-host-standalone.mjs");
-    const empty = join(
-      (await import("node:os")).tmpdir(),
-      `comfyapp-empty-${Date.now()}`,
-    );
+    const empty = join((await import("node:os")).tmpdir(), `comfyapp-empty-${Date.now()}`);
     const result = smokeExecutorHostArtifact(empty);
     expect(result.ok).toBe(false);
     expect(result.problems.join(" ")).toContain("server.js");

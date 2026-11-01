@@ -115,9 +115,7 @@ let configPromise = null;
 /** 读一次真正的 `eslint.config.js`（扁平配置数组，**未** `flat()`）。 */
 function loadEslintConfig() {
   if (!configPromise) {
-    configPromise = import(pathToFileURL(ESLINT_CONFIG).href).then(
-      (mod) => mod.default,
-    );
+    configPromise = import(pathToFileURL(ESLINT_CONFIG).href).then((mod) => mod.default);
   }
   return configPromise;
 }
@@ -133,14 +131,11 @@ function parseArgs(argv) {
   let ledger = path.join(__dirname, ".a11y-rule-ledger.json");
   let report = false;
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--report") report = true;
-    else if (argv[i] === "--ledger") {
+    if (argv[i] === "--report") {
+      report = true;
+    } else if (argv[i] === "--ledger") {
       const next = argv[i + 1];
-      if (
-        typeof next !== "string" ||
-        next.trim() === "" ||
-        next.startsWith("--")
-      ) {
+      if (typeof next !== "string" || next.trim() === "" || next.startsWith("--")) {
         console.error("[a11y-rules] --ledger 后面要跟一个台账文件路径。");
         process.exit(2);
       }
@@ -172,9 +167,13 @@ async function effectiveRules() {
   /** 扁平配置按数组顺序合并，**后者覆盖前者** —— 取最后一次出现。 */
   const merged = {};
   for (const config of flat) {
-    if (!config.rules) continue;
+    if (!config.rules) {
+      continue;
+    }
     for (const [name, setting] of Object.entries(config.rules)) {
-      if (name.startsWith(PREFIX)) merged[name] = setting;
+      if (name.startsWith(PREFIX)) {
+        merged[name] = setting;
+      }
     }
   }
   return merged;
@@ -193,7 +192,9 @@ async function officialRecommended() {
   const flat = (await loadEslintConfig()).flat();
   let plugin = null;
   for (const config of flat) {
-    if (config.plugins?.["jsx-a11y"]) plugin = config.plugins["jsx-a11y"];
+    if (config.plugins?.["jsx-a11y"]) {
+      plugin = config.plugins["jsx-a11y"];
+    }
   }
   if (!plugin) {
     throw new Error(
@@ -205,7 +206,9 @@ async function officialRecommended() {
   /** @type {Record<string, unknown>} */
   const out = {};
   for (const [name, setting] of Object.entries(rec)) {
-    if (setting === "off") continue;
+    if (setting === "off") {
+      continue;
+    }
     out[name] = Array.isArray(setting) ? setting[1] : undefined;
   }
   return out;
@@ -224,11 +227,18 @@ function registeredDialectRules(ledger) {
   const { dialect } = ledger;
   const out = new Set();
   for (const entry of dialect) {
-    if (!entry || typeof entry.rule !== "string") continue;
-    if (entry.decision !== "off") continue;
-    if (typeof entry.why !== "string" || entry.why.trim() === "") continue;
-    if (typeof entry.keeper !== "string" || entry.keeper.trim() === "")
+    if (!entry || typeof entry.rule !== "string") {
       continue;
+    }
+    if (entry.decision !== "off") {
+      continue;
+    }
+    if (typeof entry.why !== "string" || entry.why.trim() === "") {
+      continue;
+    }
+    if (typeof entry.keeper !== "string" || entry.keeper.trim() === "") {
+      continue;
+    }
     out.add(entry.rule);
   }
   return out;
@@ -239,9 +249,7 @@ function readLedger(ledgerPath) {
     const raw = JSON.parse(fs.readFileSync(ledgerPath, "utf8"));
     return {
       dialect: Array.isArray(raw.dialect) ? raw.dialect : [],
-      inlineExemptions: Array.isArray(raw.inlineExemptions)
-        ? raw.inlineExemptions
-        : [],
+      inlineExemptions: Array.isArray(raw.inlineExemptions) ? raw.inlineExemptions : [],
     };
   } catch {
     return { dialect: [], inlineExemptions: [] };
@@ -266,7 +274,9 @@ async function officialRuleMap() {
   const flat = (await loadEslintConfig()).flat();
   let plugin = null;
   for (const config of flat) {
-    if (config.plugins?.["jsx-a11y"]) plugin = config.plugins["jsx-a11y"];
+    if (config.plugins?.["jsx-a11y"]) {
+      plugin = config.plugins["jsx-a11y"];
+    }
   }
   if (!plugin || typeof plugin.rules !== "object" || plugin.rules === null) {
     throw new Error(
@@ -301,9 +311,13 @@ async function rulesInNeitherConfig() {
   const flat = (await loadEslintConfig()).flat();
   let plugin = null;
   for (const config of flat) {
-    if (config.plugins?.["jsx-a11y"]) plugin = config.plugins["jsx-a11y"];
+    if (config.plugins?.["jsx-a11y"]) {
+      plugin = config.plugins["jsx-a11y"];
+    }
   }
-  if (!plugin) throw new Error("配置里没有 jsx-a11y 插件对象。");
+  if (!plugin) {
+    throw new Error("配置里没有 jsx-a11y 插件对象。");
+  }
   const mentionedBy = (config) => {
     const rules = config && config.rules ? config.rules : {};
     return (name) => rules[name] !== undefined;
@@ -313,7 +327,9 @@ async function rulesInNeitherConfig() {
   /** @type {string[]} */
   const out = [];
   for (const name of (await officialRuleMap()).keys()) {
-    if (inRecommended(name) || inStrict(name)) continue;
+    if (inRecommended(name) || inStrict(name)) {
+      continue;
+    }
     out.push(name);
   }
   return out;
@@ -323,7 +339,9 @@ async function rulesInNeitherConfig() {
 function normalize(setting) {
   if (Array.isArray(setting)) {
     const [level, ...rest] = setting;
-    if (rest.length === 0) return JSON.stringify(level);
+    if (rest.length === 0) {
+      return JSON.stringify(level);
+    }
     return JSON.stringify([level, ...rest]);
   }
   return JSON.stringify(setting);
@@ -386,7 +404,9 @@ async function judge(ledger) {
    * 台账会变成一份**死账**：要么写不进去（① 恒红），要么写成「官方这条我们不看」
    * 却仍然要过 ①（同一件事两处打架）。 */
   for (const [name, options] of Object.entries(recommended)) {
-    if (isRegisteredDialect(name)) continue;
+    if (isRegisteredDialect(name)) {
+      continue;
+    }
     if (!(name in effective)) {
       problems.push(
         `官方 recommended 的 ${name} **没开**（配置里查不到这条规则）。\n` +
@@ -394,9 +414,7 @@ async function judge(ledger) {
       );
       continue;
     }
-    const want = normalize(
-      options === undefined ? "error" : ["error", options],
-    );
+    const want = normalize(options === undefined ? "error" : ["error", options]);
     const got = normalize(effective[name]);
     if (got !== want) {
       problems.push(
@@ -416,9 +434,7 @@ async function judge(ledger) {
     }
     dialectByRule.set(entry.rule, entry);
     if (typeof entry.why !== "string" || entry.why.trim() === "") {
-      problems.push(
-        `台账 dialect 的 ${entry.rule} 没写「为什么」—— 空理由没有记账价值。`,
-      );
+      problems.push(`台账 dialect 的 ${entry.rule} 没写「为什么」—— 空理由没有记账价值。`);
     }
     if (typeof entry.keeper !== "string" || entry.keeper.trim() === "") {
       problems.push(
@@ -445,8 +461,12 @@ async function judge(ledger) {
 
   /* ③ 官方 recommended 里被本仓关掉的每一条都必须登记 —— 没登记 = 悄悄关掉了判据。 */
   for (const name of Object.keys(recommended)) {
-    if (effective[name] !== "off") continue;
-    if (dialectByRule.has(name)) continue;
+    if (effective[name] !== "off") {
+      continue;
+    }
+    if (dialectByRule.has(name)) {
+      continue;
+    }
     problems.push(
       `${name} 属官方 recommended 却被关掉了，而台账里没有登记。\n` +
         "    → 要么把它开回来，要么在 scripts/.a11y-rule-ledger.json 的 dialect 里\n" +
@@ -463,10 +483,16 @@ async function judge(ledger) {
    * 两条都不满足 = 没有人决定过 —— 与「没登记就关掉一条真判据」同罪。 */
   for (const name of inNeither) {
     const meta = official.get(name);
-    if (meta && meta.deprecated) continue;
+    if (meta && meta.deprecated) {
+      continue;
+    }
     const off = effective[name] === "off";
-    if (!off && name in effective) continue;
-    if (dialectByRule.has(name)) continue;
+    if (!off && name in effective) {
+      continue;
+    }
+    if (dialectByRule.has(name)) {
+      continue;
+    }
     problems.push(
       `${name} 既不在官方 recommended、也不在官方 strict（而它**没有**被标记废弃）——` +
         "本仓对它的裁决没有任何痕迹。\n" +
@@ -478,18 +504,12 @@ async function judge(ledger) {
 
   /* ④ 就地豁免的文件与理由都要在。 */
   for (const entry of ledger.inlineExemptions) {
-    if (
-      !entry ||
-      typeof entry.rule !== "string" ||
-      typeof entry.file !== "string"
-    ) {
+    if (!entry || typeof entry.rule !== "string" || typeof entry.file !== "string") {
       problems.push("台账 inlineExemptions 里有一条缺 `rule` 或 `file` 字段。");
       continue;
     }
     if (!fs.existsSync(path.join(ROOT, entry.file))) {
-      problems.push(
-        `台账 inlineExemptions 里的 ${entry.file} 不存在（文件改名 / 搬走了？）。`,
-      );
+      problems.push(`台账 inlineExemptions 里的 ${entry.file} 不存在（文件改名 / 搬走了？）。`);
     }
     if (
       typeof entry.why !== "string" ||
@@ -503,9 +523,7 @@ async function judge(ledger) {
     }
   }
 
-  const undecidedCount = inNeither.filter(
-    (n) => !(official.get(n) || {}).deprecated,
-  ).length;
+  const undecidedCount = inNeither.filter((n) => !(official.get(n) || {}).deprecated).length;
   const onCount = Object.values(effective).filter((v) => v !== "off").length;
   const summary =
     `[a11y-rules] 生效 ${onCount} 条 / 官方 recommended ${Object.keys(recommended).length} 条；` +
@@ -523,16 +541,12 @@ async function judge(ledger) {
  * `--ledger` 的用法错（缺路径）已经在 `parseArgs` 里退 2，进不到这里。
  */
 async function main() {
-  const { problems, summary, effective } = await judge(
-    readLedger(CLI_ARGS.LEDGER),
-  );
+  const { problems, summary, effective } = await judge(readLedger(CLI_ARGS.LEDGER));
 
   if (CLI_ARGS.REPORT_ONLY) {
     console.log(summary);
     for (const [name, setting] of Object.entries(effective).sort()) {
-      console.log(
-        `  ${setting === "off" ? "·" : "*"} ${name} = ${normalize(setting)}`,
-      );
+      console.log(`  ${setting === "off" ? "·" : "*"} ${name} = ${normalize(setting)}`);
     }
     console.log("\n[a11y-rules] --report 模式：只出清单，不判失败 ✓");
     return 0;
@@ -540,9 +554,9 @@ async function main() {
 
   if (problems.length > 0) {
     console.error(
-      "[a11y-rules] jsx-a11y 的规则开关与台账对不上：\n\n  " +
-        problems.join("\n  ") +
-        "\n\n口径见 docs/standards/06-无障碍访问-a11y.md §6.12。",
+      `[a11y-rules] jsx-a11y 的规则开关与台账对不上：\n\n  ${
+        problems.join("\n  ")
+        }\n\n口径见 docs/standards/06-无障碍访问-a11y.md §6.12。`,
     );
     return 1;
   }

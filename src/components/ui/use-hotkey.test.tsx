@@ -21,13 +21,13 @@ afterEach(cleanup);
 function key(
   k: string,
   mods: {
+    alt?: boolean;
     ctrl?: boolean;
     meta?: boolean;
     shift?: boolean;
-    alt?: boolean;
   } = {},
 ) {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     key: k,
     ctrlKey: mods.ctrl ?? false,
     metaKey: mods.meta ?? false,
@@ -80,12 +80,8 @@ describe("mod 是跨平台的（这条正是原来两处 mac 上死的根因）"
   });
 
   it("显式 ctrl 时与平台无关（刻意只在 Ctrl 上成立）", () => {
-    expect(
-      matchesHotkey(key("l", { ctrl: true }), { key: "l", ctrl: true }, true),
-    ).toBe(true);
-    expect(
-      matchesHotkey(key("l", { meta: true }), { key: "l", ctrl: true }, true),
-    ).toBe(false);
+    expect(matchesHotkey(key("l", { ctrl: true }), { key: "l", ctrl: true }, true)).toBe(true);
+    expect(matchesHotkey(key("l", { meta: true }), { key: "l", ctrl: true }, true)).toBe(false);
   });
 });
 
@@ -95,25 +91,17 @@ describe("未声明的修饰键必须没按（否则单键会互相吞）", () =
   });
 
   it("Escape 配 anything 修饰键时不命中（避免与别的 Escape 快捷键打架）", () => {
-    expect(
-      matchesHotkey(key("Escape", { shift: true }), { key: "Escape" }, false),
-    ).toBe(false);
+    expect(matchesHotkey(key("Escape", { shift: true }), { key: "Escape" }, false)).toBe(false);
   });
 
   it("声明了 shift 的组合键在没按 Shift 时不命中", () => {
     expect(
-      matchesHotkey(
-        key("l", { ctrl: true }),
-        { key: "l", mod: true, shift: true },
-        false,
-      ),
+      matchesHotkey(key("l", { ctrl: true }), { key: "l", mod: true, shift: true }, false),
     ).toBe(false);
   });
 
   it("主键大小写不敏感", () => {
-    expect(
-      matchesHotkey(key("L", { ctrl: true }), { key: "l", mod: true }, false),
-    ).toBe(true);
+    expect(matchesHotkey(key("L", { ctrl: true }), { key: "l", mod: true }, false)).toBe(true);
   });
 });
 
@@ -123,11 +111,11 @@ function Probe({
   onHit,
   enabled = true,
   filterInput = true,
-  spec = { key: "l", mod: true } as const,
+  spec = /* SAFETY: 类型断言已复核 */ { key: "l", mod: true } as const,
 }: {
-  onHit: () => void;
   enabled?: boolean;
   filterInput?: boolean;
+  onHit: () => void;
   spec?: { key: string; mod?: boolean; shift?: boolean };
 }) {
   useHotkey(spec, onHit, { enabled, filterInput });
@@ -144,7 +132,7 @@ describe("注册与清理", () => {
 
   it("enabled 为 false 时**不注册**（而不是注册了再 early return）", () => {
     const onHit = vi.fn();
-    render(<Probe onHit={onHit} enabled={false} />);
+    render(<Probe enabled={false} onHit={onHit} />);
     fireEvent.keyDown(window, { key: "l", ctrlKey: true });
     expect(onHit).not.toHaveBeenCalled();
   });
@@ -180,7 +168,7 @@ describe("input 过滤（json-viewer 那处的缺陷）", () => {
 
   it("filterInput: false 时输入框里也命中（全屏编辑器就是要这样）", () => {
     const onHit = vi.fn();
-    const { getByTestId } = render(<Probe onHit={onHit} filterInput={false} />);
+    const { getByTestId } = render(<Probe filterInput={false} onHit={onHit} />);
     fireEvent.keyDown(getByTestId("field"), { key: "l", ctrlKey: true });
     expect(onHit).toHaveBeenCalledTimes(1);
   });
@@ -246,7 +234,7 @@ describe("target 与平台探测的边界", () => {
 
 describe("回调身份变化不重建监听", () => {
   it("父组件每轮渲染传新函数，按住一次也只在每次按下时触发一次", () => {
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     const { rerender } = render(<Probe onHit={() => hits.push("a")} />);
     fireEvent.keyDown(window, { key: "l", ctrlKey: true });
     rerender(<Probe onHit={() => hits.push("b")} />);

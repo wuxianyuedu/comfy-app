@@ -54,12 +54,19 @@ import { findEarlierVersion, isGenerated } from "./merged-side-loss-core.mjs";
 import { historyByFile, resolveBlobs } from "./merged-side-loss-git.mjs";
 
 /** 仓库根：本条判据是本仓的钩子件，扫描面就是本检出（`scripts/` 的上一级）。 */
-const REPO_ROOT = path.resolve(
-  import.meta.dirname,
-  "..",
-);
+const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 
-/** 在仓库内跑一条 git 命令；失败回 `null`（取不到 ≠ 空值，据此保守放行）。 */
+/**
+ * 在仓库内跑一条 git 命令；失败回 `null`（取不到 ≠ 空值，据此保守放行）。
+ *
+ * 形参与返回值必须写出来：这份函数是**当值传进内核**的
+ * （`historyByFile(git, …)` / `resolveBlobs(git, specs)`），那边声明的契约是
+ * `(args: string[], input?: string) => (string | null)` —— 这里留隐式 any，
+ * 那份契约就在边界上被抹掉，传错了（少个参数、返回值折成字符串）类型层读不出来。
+ * @param {string[]} args 跟在 `git` 后面的参数数组（`-c core.quotepath=false` 由本函数加）
+ * @param {string} [input] 要喂 stdin 的内容；不给就关掉 stdin
+ * @returns {string | null} 已 `trim` 的标准输出；跑不起来是 `null`
+ */
 function git(args, input) {
   try {
     return execFileSync("git", ["-c", "core.quotepath=false", ...args], {
@@ -68,10 +75,7 @@ function git(args, input) {
        * cwd 解析 —— 那会变成「在另一个路径上问同一个问题」，答出来的东西没法用。 */
       cwd: REPO_ROOT,
       encoding: "utf8",
-      stdio:
-        input === undefined
-          ? ["ignore", "pipe", "ignore"]
-          : ["pipe", "pipe", "ignore"],
+      stdio: input === undefined ? ["ignore", "pipe", "ignore"] : ["pipe", "pipe", "ignore"],
       input,
       maxBuffer: 1 << 28,
     }).trim();
@@ -88,7 +92,9 @@ function inGitRepo() {
 /** 合并进行中要合进来的那些父（`MERGE_HEAD` 的每一行）；不在合并中给 `[]`。 */
 export function mergeHeads() {
   const rev = git(["rev-parse", "MERGE_HEAD"]);
-  if (rev === null) return [];
+  if (rev === null) {
+    return [];
+  }
   return rev.split(/\s+/).filter(Boolean);
 }
 
@@ -109,25 +115,29 @@ export function scanPendingMerge({ source = "" } = {}) {
       reason: `source=${source}（父提交不从 MERGE_HEAD 来，不判）`,
     };
   }
-  if (!inGitRepo()) return { ok: false, reason: "不在 git 检出里" };
+  if (!inGitRepo()) {
+    return { ok: false, reason: "不在 git 检出里" };
+  }
 
   const heads = mergeHeads();
-  if (heads.length === 0)
+  if (heads.length === 0) {
     return { ok: false, reason: "不是合并提交（MERGE_HEAD 不在）" };
+  }
 
   // ② 三条事实的公共前提：merge-base 必须取得到（浅克隆里取不到 → 保守放行）。
   const head = git(["rev-parse", "HEAD"]);
   const base = git(["merge-base", "HEAD", "MERGE_HEAD"]);
-  if (!head || !base)
+  if (!head || !base) {
     return { ok: false, reason: "取不到 merge-base（浅克隆？）" };
+  }
 
   /* HEAD 与索引之间改动的路径 —— 合并结果相对本侧动了哪些文件。
    * 用 `--name-only -z` 一次取完。 */
-  const changed = (git(["diff", "--name-only", "-z", "HEAD"]) || "")
-    .split("\0")
-    .filter(Boolean);
+  const changed = (git(["diff", "--name-only", "-z", "HEAD"]) || "").split("\0").filter(Boolean);
   const files = changed.filter((f) => !isGenerated(f));
-  if (files.length === 0) return { ok: true, lost: [] };
+  if (files.length === 0) {
+    return { ok: true, lost: [] };
+  }
 
   /* 取证批量做（两个执行者共用 `merged-side-loss-git.mjs`，理由与实测表都在那一份的
    * 模块头）：候选历史对每个合并父各一次遍历，blob 一次批量解析。
@@ -137,53 +147,78 @@ export function scanPendingMerge({ source = "" } = {}) {
   const perHead = [];
   for (const mh of heads) {
     const hist = historyByFile(git, { ref: mh, files });
-    if (!hist)
+    if (!hist) {
       return {
         ok: false,
         reason: `批量取 ${mh} 的候选历史没跑起来（浅克隆？）`,
       };
+    }
     perHead.push(hist);
   }
 
   /* 候选序与旧实现逐字同：先第一个合并父那条线、再第二个，并排除 HEAD 自己那一版。 */
+  /** @type {Map<string, string[]>} */
   const candidates = new Map();
   const specs = [];
   for (const f of files) {
     specs.push(`:${f}`, `HEAD:${f}`, `${base}:${f}`);
     const older = [];
     for (const hist of perHead) {
-      for (const s of hist.get(f)) if (s !== head) older.push(s);
+      /* `hist.get(f)` 一定取得到：`historyByFile` 在入口就把**传进去的每一份文件**
+       * 预置成空数组（`merged-side-loss-git.mjs:118` 的 `files.map((f) => [f, []])`），
+       * 而这里遍历的 `files` 正是那一份。`?? []` 是写给类型看的（`Map.get` 在
+       * `noUncheckedIndexedAccess` 下带 `| undefined`），不是「防它不在」——
+       * 那一侧的预置由 `tests/merged-side-loss-git.test.ts` 里「日志里一次没出现过的
+       * 文件仍有空条目」那条钉着：撤掉预置，本档会把整份取一侧的真违规**放行**。 */
+      for (const s of hist.get(f) ?? []) {
+        if (s !== head) {
+          older.push(s);
+        }
+      }
     }
     candidates.set(f, older);
-    for (const s of older) specs.push(`${s}:${f}`);
+    for (const s of older) {
+      specs.push(`${s}:${f}`);
+    }
   }
   const blob = resolveBlobs(git, specs);
-  if (!blob)
+  if (!blob) {
     return {
       ok: false,
       reason: "批量解析 blob 没跑起来（`cat-file --batch-check`）",
     };
+  }
 
   const lost = [];
   for (const f of files) {
     // ① 结果版（索引）≠ HEAD 版，否则是正常前移。
     const result = blob.get(`:${f}`);
     const atHead = blob.get(`HEAD:${f}`);
-    if (!result || !atHead || result === atHead) continue;
+    if (!result || !atHead || result === atHead) {
+      continue;
+    }
 
     /* ③ HEAD 侧确有「还没被取代的改动」：HEAD 那一版与 merge-base 那一版不同。
      * 两边都动过、或只有 HEAD 动过的都在这里留下；「三方一致」的被排除。 */
     const atBase = blob.get(`${base}:${f}`);
-    if (atBase && atHead === atBase) continue;
+    if (atBase && atHead === atBase) {
+      continue;
+    }
 
     /* ② 结果版 == MERGE_HEAD 侧历史上出现过的某一版 —— 整份取了非 HEAD 侧。
      * 判定核心取自共用内核；`blobAt` 查已取回的表，不再起进程。 */
     const hit = findEarlierVersion({
       result,
-      historyShas: candidates.get(f),
+      /* 这一格一定取得到：上面那个收集候选的循环对**每一份** `f of files` 都无条件
+       * `candidates.set(f, older)`，而这里遍历的是同一个 `files` 数组。`?? []` 只是
+       * `Map.get` 在 `noUncheckedIndexedAccess` 下的如实写法（内核那边声明收 `string[]`，
+       * 把 `undefined` 递过去才是拿「没这一格」冒充「没有候选」）。 */
+      historyShas: candidates.get(f) ?? [],
       blobAt: (older) => blob.get(`${older}:${f}`) ?? null,
     });
-    if (hit) lost.push(f);
+    if (hit) {
+      lost.push(f);
+    }
   }
   return { ok: true, lost };
 }
@@ -223,17 +258,17 @@ export function acknowledgeReason(message, lost) {
   for (const file of lost) {
     const hit = lines.some((line) => {
       const at = line.indexOf(file);
-      if (at < 0) return false;
+      if (at === -1) {
+        return false;
+      }
       /* ③ 理由：路径前后还得有别的字（只有一条 `  · <路径>` 的清单行不算理由）。 */
-      const before = line
-        .slice(0, at)
-        .replace(/[-*·\s:：、,，()（）「」"']/g, "");
-      const after = line
-        .slice(at + file.length)
-        .replace(/[-*·\s:：、,，()（）「」"']/g, "");
+      const before = line.slice(0, at).replaceAll(/[-*·\s:：、,，()（）「」"']/g, "");
+      const after = line.slice(at + file.length).replaceAll(/[-*·\s:：、,，()（）「」"']/g, "");
       return before.length > 0 || after.length > 0;
     });
-    if (!hit) missing.push(file);
+    if (!hit) {
+      missing.push(file);
+    }
   }
   if (missing.length > 0) {
     return {
@@ -244,25 +279,22 @@ export function acknowledgeReason(message, lost) {
   return { ok: true };
 }
 
-/** 阻断时打印人类可读的出口（怎么改），不只报错。 */
+/**
+ * 阻断时打印人类可读的出口（怎么改），不只报错。
+ * @param {string[]} lost 疑似「整份取一侧」的那些文件路径（逐份点名，与上面的认账判据同一份清单）
+ */
 function printBlockedTip(lost) {
   console.error("");
-  console.error(
-    "[pending-merge-loss] 阻断:本次合并把某些文件整份取了非 HEAD 侧(规范 §11.23.6)。",
-  );
+  console.error("[pending-merge-loss] 阻断:本次合并把某些文件整份取了非 HEAD 侧(规范 §11.23.6)。");
   console.error(`[pending-merge-loss] 疑似整份取一侧 ${lost.length} 份:`);
   lost.forEach((f) => console.error(`  · ${f}`));
   console.error("");
-  console.error(
-    "[pending-merge-loss] 后果:HEAD 侧在这些文件上已合入的改动被一笔退回,而拓扑与",
-  );
+  console.error("[pending-merge-loss] 后果:HEAD 侧在这些文件上已合入的改动被一笔退回,而拓扑与");
   console.error(
     "[pending-merge-loss]   提交信息看起来完全正常(双亲在、消息也像样)——这正是立案现场。",
   );
   console.error("[pending-merge-loss] 出口(逐份核对,别整份 checkout):");
-  console.error(
-    "[pending-merge-loss]   git checkout HEAD -- <文件>            # 取回本侧那一版",
-  );
+  console.error("[pending-merge-loss]   git checkout HEAD -- <文件>            # 取回本侧那一版");
   console.error(
     "[pending-merge-loss]   git checkout --merge <文件>           # 或重跑一次三向合并,人工解冲突",
   );
@@ -313,7 +345,9 @@ function main() {
   /* 「不是合并提交」是**正常且高频**的形态（普通提交每次都会走到这里）——
    * 按 #1618 验收标准 3，这一档必须**零输出、零耗时**，所以这里静默返回 0。 */
   if (!result.ok) {
-    if (result.reason.startsWith("不是合并提交")) return;
+    if (result.reason.startsWith("不是合并提交")) {
+      return;
+    }
     console.log(`[pending-merge-loss] 放行（${result.reason}）`);
     return;
   }
@@ -327,23 +361,24 @@ function main() {
    * 消息读不到 ≠ 认过账 —— 那一档维持原判。 */
   let message = null;
   try {
-    if (messagePath) message = fs.readFileSync(messagePath, "utf8");
+    if (messagePath) {
+      message = fs.readFileSync(messagePath, "utf8");
+    }
   } catch {
     message = null;
   }
   /* 先算认账结论、再打印：被拦时那句提示若也走 stderr，会排在阻断话术**前面**，
    * 读者先看到的是「为什么不行」而不是「拦了什么」——顺序反了就等于没说。 */
-  const acked =
-    message === null ? null : acknowledgeReason(message, result.lost);
+  const acked = message === null ? null : acknowledgeReason(message, result.lost);
   if (acked?.ok) {
-    console.log(
-      `[pending-merge-loss] 放行（提交信息已逐份认账：${result.lost.join(", ")}）`,
-    );
+    console.log(`[pending-merge-loss] 放行（提交信息已逐份认账：${result.lost.join(", ")}）`);
     return;
   }
 
   printBlockedTip(result.lost);
-  if (acked) console.error(`[pending-merge-loss] 认账不成：${acked.why}`);
+  if (acked) {
+    console.error(`[pending-merge-loss] 认账不成：${acked.why}`);
+  }
   process.exit(1);
 }
 
@@ -351,9 +386,6 @@ function main() {
 //
 // ⚠️ 判「是不是直接运行」用**路径解析后比较**，不是拼 `file://${argv[1]}`：后者在
 // Windows 上恒不相等 ⇒ `main()` 一次都不跑而退出码恒 0（判据在场、却什么都不做）。
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   main();
 }

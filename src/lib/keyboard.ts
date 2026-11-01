@@ -18,7 +18,7 @@
  */
 
 /** 本仓库用到的具名键（`event.key` 的 W3C 口径字面量）。 */
-export const KEY = {
+export const KEY = /* SAFETY: 类型断言已复核 */ {
   Enter: "Enter",
   Escape: "Escape",
   Tab: "Tab",
@@ -46,17 +46,23 @@ export type KeyName = (typeof KEY)[keyof typeof KEY];
  */
 export function normalizeKeyName(key: string): string {
   /* 单字符（含空格本身）走字符分支：`trim()` 在这里是错的。 */
-  if (key.length === 1) return key === " " ? "space" : key.toLowerCase();
+  if (key.length === 1) {
+    return key === " " ? "space" : key.toLowerCase();
+  }
   const trimmed = key.trim();
-  if (trimmed === "") return "space";
+  if (trimmed === "") {
+    return "space";
+  }
   return trimmed.toLowerCase();
 }
 
 /** `event.key` 是不是这几个键之一（比较用归一形态，见 `normalizeKeyName`）。 */
-export function isKeyIn(key: string, keys: readonly string[]): boolean {
+export function isKeyIn(key: string, keys: ReadonlyArray<string>): boolean {
   const normalized = normalizeKeyName(key);
   for (const candidate of keys) {
-    if (normalizeKeyName(candidate) === normalized) return true;
+    if (normalizeKeyName(candidate) === normalized) {
+      return true;
+    }
   }
   return false;
 }

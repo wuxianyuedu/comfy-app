@@ -17,39 +17,38 @@ import { nextId } from "~/lib/unique-id";
 
 type ToastKind = "success" | "error" | "info" | "loading";
 
-export interface ToastItem {
-  id: string;
-  kind: ToastKind;
-  title: string;
+export type ToastItem = {
   description?: string;
   /** 自动关闭前的毫秒数；0 = 手动关闭前一直停留 */
   duration?: number;
-}
+  id: string;
+  kind: ToastKind;
+  title: string;
+};
 
-export interface ToastContextValue {
-  toast: (t: Omit<ToastItem, "id">) => string;
-  success: (title: string, description?: string, duration?: number) => string;
+export type ToastContextValue = {
+  dismiss: (id: string) => void;
   error: (title: string, description?: string, duration?: number) => string;
   /** `duration` 覆盖默认 3.2s 自动收起时间；用于「这句话是要照着做的」这类提示
    *  （如陈旧实例的「重载一次即恢复」指引）——默认时长会让用户来不及读完。 */
   info: (title: string, description?: string, duration?: number) => string;
   loading: (title: string, description?: string) => string;
+  success: (title: string, description?: string, duration?: number) => string;
+  toast: (t: Omit<ToastItem, "id">) => string;
   update: (id: string, patch: Partial<Omit<ToastItem, "id">>) => void;
-  dismiss: (id: string) => void;
-}
+};
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 export function useToast(): ToastContextValue {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used within <ToastProvider>");
+  if (!ctx) {
+    throw new Error("useToast must be used within <ToastProvider>");
+  }
   return ctx;
 }
 
-const KIND_STYLE: Record<
-  ToastKind,
-  { ring: string; icon: string; iconColor: string }
-> = {
+const KIND_STYLE: Record<ToastKind, { icon: string; iconColor: string; ring: string }> = {
   success: {
     ring: "border-success-strong/30",
     icon: "check",
@@ -75,7 +74,7 @@ const KIND_STYLE: Record<
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<ToastItem[]>([]);
+  const [items, setItems] = useState<Array<ToastItem>>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   /* 卸载时清掉所有挂起的自动收起定时器：Provider 卸载后这些 setTimeout 仍会
@@ -100,7 +99,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const schedule = useCallback(
     (id: string, duration?: number) => {
       const tm = timers.current.get(id);
-      if (tm) clearTimeout(tm);
+      if (tm) {
+        clearTimeout(tm);
+      }
       if (duration && duration > 0) {
         timers.current.set(
           id,
@@ -127,10 +128,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const update = useCallback(
     (id: string, patch: Partial<Omit<ToastItem, "id">>) => {
-      setItems((prev) =>
-        prev.map((prev) => (prev.id === id ? { ...prev, ...patch } : prev)),
-      );
-      if (patch.duration !== undefined) schedule(id, patch.duration);
+      setItems((prev) => prev.map((prev) => (prev.id === id ? { ...prev, ...patch } : prev)));
+      if (patch.duration !== undefined) {
+        schedule(id, patch.duration);
+      }
     },
     [schedule],
   );
@@ -142,10 +143,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         toast({ kind: "success", title, description, duration }),
       error: (title, description, duration) =>
         toast({ kind: "error", title, description, duration }),
-      info: (title, description, duration) =>
-        toast({ kind: "info", title, description, duration }),
-      loading: (title, description) =>
-        toast({ kind: "loading", title, description, duration: 0 }),
+      info: (title, description, duration) => toast({ kind: "info", title, description, duration }),
+      loading: (title, description) => toast({ kind: "loading", title, description, duration: 0 }),
       update,
       dismiss,
     }),
@@ -160,8 +159,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           const st = KIND_STYLE[item.kind];
           return (
             <div
-              key={item.id}
               className={`pointer-events-auto flex items-start gap-3 rounded-xl border ${st.ring} bg-panel p-3.5 shadow-xl shadow-black/8 transition-all dark:shadow-black/40`}
+              key={item.id}
             >
               <div className={`mt-0.5 ${st.iconColor}`}>
                 {item.kind === "loading" ? (
@@ -171,21 +170,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-ink-bright text-sm font-semibold">
-                  {item.title}
-                </p>
+                <p className="text-ink-bright text-sm font-semibold">{item.title}</p>
                 {item.description && (
-                  <p className="text-ink-soft mt-0.5 text-xs wrap-break-word">
-                    {item.description}
-                  </p>
+                  <p className="text-ink-soft mt-0.5 text-xs wrap-break-word">{item.description}</p>
                 )}
               </div>
               <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => dismiss(item.id)}
-                className="text-ink-muted hover:text-ink-bright hover:bg-transparent"
                 aria-label="关闭"
+                className="text-ink-muted hover:text-ink-bright hover:bg-transparent"
+                onClick={() => dismiss(item.id)}
+                size="icon-xs"
+                variant="ghost"
               >
                 <X data-icon="inline-start" size={14} />
               </Button>

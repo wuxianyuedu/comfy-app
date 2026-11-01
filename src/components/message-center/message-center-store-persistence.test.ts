@@ -8,10 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  MESSAGE_CENTER_STORAGE_KEY,
-  useMessageCenterStore,
-} from "./message-center-store";
+import { MESSAGE_CENTER_STORAGE_KEY, useMessageCenterStore } from "./message-center-store";
 
 /** 造一条可用的持久化记录（字段与 `MessageRecord` 一致）。 */
 function record(overrides: Record<string, unknown> = {}) {
@@ -50,7 +47,7 @@ describe("消息中心持久化：写", () => {
     useMessageCenterStore
       .getState()
       .push({ kind: "offline", title: "应用服务已断开", body: "正文" });
-    const list = stored() as ReturnType<typeof record>[];
+    const list = /* SAFETY: 类型断言已复核 */ stored() as Array<ReturnType<typeof record>>;
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       kind: "offline",
@@ -61,23 +58,17 @@ describe("消息中心持久化：写", () => {
   });
 
   it("clear 之后落盘的是空列表（不留旧消息的残影）", () => {
-    useMessageCenterStore
-      .getState()
-      .push({ kind: "info", title: "A", body: "a" });
+    useMessageCenterStore.getState().push({ kind: "info", title: "A", body: "a" });
     useMessageCenterStore.getState().clear();
     expect(stored()).toEqual([]);
   });
 
   it("开关面板不碰存储（只有消息变化才写）", () => {
-    useMessageCenterStore
-      .getState()
-      .push({ kind: "info", title: "A", body: "a" });
+    useMessageCenterStore.getState().push({ kind: "info", title: "A", body: "a" });
     const before = window.localStorage.getItem(MESSAGE_CENTER_STORAGE_KEY);
     useMessageCenterStore.getState().setOpen(true);
     useMessageCenterStore.getState().toggleOpen();
-    expect(window.localStorage.getItem(MESSAGE_CENTER_STORAGE_KEY)).toBe(
-      before,
-    );
+    expect(window.localStorage.getItem(MESSAGE_CENTER_STORAGE_KEY)).toBe(before);
   });
 });
 
@@ -119,10 +110,7 @@ describe("消息中心持久化：恢复", () => {
   });
 
   it("不是数组（有人把键改成了对象）→ 同样当没存过", () => {
-    window.localStorage.setItem(
-      MESSAGE_CENTER_STORAGE_KEY,
-      JSON.stringify({ a: 1 }),
-    );
+    window.localStorage.setItem(MESSAGE_CENTER_STORAGE_KEY, JSON.stringify({ a: 1 }));
     useMessageCenterStore.getState().hydrate();
     expect(useMessageCenterStore.getState().messages).toEqual([]);
   });
@@ -146,9 +134,7 @@ describe("消息中心持久化：恢复", () => {
   it("存了超过上限的条数 → 恢复时按上限裁剪（不被一份坏存储撑爆面板）", () => {
     window.localStorage.setItem(
       MESSAGE_CENTER_STORAGE_KEY,
-      JSON.stringify(
-        Array.from({ length: 250 }, (_, i) => record({ id: `msg_${i}` })),
-      ),
+      JSON.stringify(Array.from({ length: 250 }, (_, i) => record({ id: `msg_${i}` }))),
     );
     useMessageCenterStore.getState().hydrate();
     expect(useMessageCenterStore.getState().messages).toHaveLength(200);
@@ -183,9 +169,7 @@ describe("消息中心持久化：启动戳（runId）", () => {
     /* 这两者的区别就是上一条注释里说的那句：补成当前启动等于断言「它属于现在
      * 这次启动」——而面板正是拿它分组的，断言错了就是把两次启动并成一次。 */
     useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
-    useMessageCenterStore
-      .getState()
-      .push({ kind: "offline", title: "T", body: "b", runId: null });
+    useMessageCenterStore.getState().push({ kind: "offline", title: "T", body: "b", runId: null });
     expect(useMessageCenterStore.getState().messages[0]!.runId).toBeNull();
   });
 
@@ -202,9 +186,7 @@ describe("消息中心持久化：启动戳（runId）", () => {
 
   it("currentRunId 是运行时事实，**不**落盘（刷新后由探活链路重新学到）", () => {
     useMessageCenterStore.getState().setCurrentRunId("a1b2c3");
-    useMessageCenterStore
-      .getState()
-      .push({ kind: "info", title: "A", body: "a" });
+    useMessageCenterStore.getState().push({ kind: "info", title: "A", body: "a" });
     const raw = window.localStorage.getItem(MESSAGE_CENTER_STORAGE_KEY) ?? "";
     expect(raw).not.toContain("currentRunId");
   });

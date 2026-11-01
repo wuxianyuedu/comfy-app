@@ -25,11 +25,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import {
-  main,
-  makeLedgerDir,
-  resolveChangedFiles,
-} from "../scripts/ci-affected-tests.mjs";
+import { main, makeLedgerDir, resolveChangedFiles } from "../scripts/ci-affected-tests.mjs";
 
 /** 接住 `main` 的两条读数出口（夹具话术不进报告，见文件头）。 */
 function silent() {
@@ -41,18 +37,17 @@ function silent() {
 
 /** 假 git：按调用顺序回放预置结果（diff 的键取最后一个参数 —— 前面是 name-status / -M 这类选项）。 */
 function fakeGit(handlers: Record<string, { ok: boolean; stdout: string }>) {
-  const calls: string[][] = [];
-  const runGit = (args: string[], _cwd: string) => {
+  const calls: Array<Array<string>> = [];
+  const runGit = (args: Array<string>, _cwd: string) => {
     calls.push(args);
     /* 剥掉**全局旗标**那一对（`-c core.quotePath=false`，ISSUE #2272）：它是 git 的
      * 全局配置，不属于「这条 diff 是什么形状」⇒ 键要按形状算。 */
     const shape = args[0] === "-c" ? args.slice(2) : args;
-    const key =
-      shape[0] === "diff"
-        ? `diff ${shape[shape.length - 1] ?? ""}`
-        : (shape[0] ?? "");
+    const key = shape[0] === "diff" ? `diff ${shape.at(-1) ?? ""}` : (shape[0] ?? "");
     const hit = handlers[key] ?? handlers[shape[0] ?? ""];
-    if (!hit) return { ok: false, stdout: "" };
+    if (!hit) {
+      return { ok: false, stdout: "" };
+    }
     return hit;
   };
   return { runGit, calls };
@@ -89,7 +84,9 @@ describe("ci-affected-tests — 改动面从哪来", () => {
       runGit,
     });
     expect(got.ok).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.reason).toContain("abc123");
     expect(got.reason).toContain("没跑起来");
   });
@@ -169,7 +166,9 @@ describe("ci-affected-tests — 改动面从哪来", () => {
       fallbackRef: null,
     });
     expect(got.ok).toBe(false);
-    if (got.ok) return;
+    if (got.ok) {
+      return;
+    }
     expect(got.reason).toContain("取不到");
   });
 });
@@ -177,8 +176,7 @@ describe("ci-affected-tests — 改动面从哪来", () => {
 describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
   /** 记录 spawn 收到的脚本与 env，按预置退出码回放。 */
   function fakeSpawn(status: number) {
-    const seen: { script: string; env: Record<string, string | undefined> }[] =
-      [];
+    const seen: Array<{ env: Record<string, string | undefined>; script: string; }> = [];
     return {
       seen,
       spawn: (script: string, env: Record<string, string | undefined>) => {
@@ -220,9 +218,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
       installed: true,
     });
     expect(code).toBe(0);
-    expect(seen[0]!.env.COMFY_AFFECTED_CHANGED).toBe(
-      "scripts/old-name.mjs\nscripts/new-name.mjs",
-    );
+    expect(seen[0]!.env.COMFY_AFFECTED_CHANGED).toBe("scripts/old-name.mjs\nscripts/new-name.mjs");
   });
 
   it("退出码原样透传（红就是红，不在入口里翻译）", () => {
@@ -243,8 +239,8 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
      * 截掉的正是开头那一段（实测某跑第 2 行就是 `The log length exceeds the limit(102400)`），
      * 于是「这一跑开了几个并发」在页面上根本读不回来。尾部必须有同一件事实。 */
     const { spawn } = fakeSpawn(1);
-    const out: string[] = [];
-    const err: string[] = [];
+    const out: Array<string> = [];
+    const err: Array<string> = [];
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123", CNB_CPUS: "16" },
       ledgerDir: null,
@@ -293,6 +289,48 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
     expect(code).toBe(2);
     expect(seen).toHaveLength(0);
   });
+
+  it("段开关 fixed：不算改动面也照跑（runGit 一次都不调），面清单递空串（ISSUE #2845）", () => {
+    /* 固定结构清单是静态契约，与「这次改了什么」无关 —— 这正是它能独立成一个
+     * CI stage 的前提：PR 三点 diff 拿不到 / 为空，这一格照样有对象可判。 */
+    let gitCalls = 0;
+    const { spawn, seen } = fakeSpawn(0);
+    const code = main({
+      ...silent(),
+      env: { COMFY_AFFECTED_SEGMENT: "fixed", CNB_PULL_REQUEST_TARGET_SHA: "" },
+      ledgerDir: null,
+      runGit: () => {
+        gitCalls += 1;
+        return { ok: false, stdout: "" };
+      },
+      spawn,
+      installed: true,
+    });
+    expect(code).toBe(0);
+    expect(gitCalls).toBe(0);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.env.COMFY_AFFECTED_CHANGED).toBe("");
+    expect(seen[0]!.env.COMFY_AFFECTED_SEGMENT).toBe("fixed");
+  });
+
+  it("段开关认不出的值不在入口拦 —— 由 run-affected-tests 的解析器退 2（口径一处）", () => {
+    /* 入口只认 `fixed` 这一个词的**正向形态**；其他值（含手滑的 `Fixed` / `both`）
+     * 原样递下去，由 `resolveAffectedSegment` 统一说「没看懂」—— 两处各拦一半，
+     * 读数就会分成两套。⚠️ 面解析那一路要给**确定性注入**（TARGET_SHA + runGit）：
+     * 不给的话它去真调 git，本地全量检出绿、CI 工作区形态退 2 —— 用例就变成
+     * 「在哪台机上跑决定红绿」（实测 cnb-u3i-1k68kgpbv 就红在这一格）。 */
+    const { spawn, seen } = fakeSpawn(0);
+    const code = main({
+      ...silent(),
+      env: { COMFY_AFFECTED_SEGMENT: "Fixed", CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+      ledgerDir: null,
+      runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
+      spawn,
+      installed: true,
+    });
+    expect(code).toBe(0);
+    expect(seen[0]!.env.COMFY_AFFECTED_SEGMENT).toBe("Fixed");
+  });
 });
 
 /* ── 起跑前的依赖面体检（`scripts/ci-worktree-deps.mjs`）─────────────────────────
@@ -303,7 +341,7 @@ describe("ci-affected-tests — 主流程（不起真 vitest）", () => {
  */
 describe("ci-affected-tests — 起跑前的依赖面体检", () => {
   function fakeSpawn(status: number) {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     return {
       seen,
       spawn: (script: string) => {
@@ -315,7 +353,7 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
 
   it("依赖没装上 ⇒ 退 2，点名 AggregateError 那一屏，且一次 vitest 都不起", () => {
     const { spawn, seen } = fakeSpawn(0);
-    const err: string[] = [];
+    const err: Array<string> = [];
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       ledgerDir: null,
@@ -332,7 +370,7 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
 
   it("环境里串进 npm_config_* ⇒ 同样退 2（那一族配错时每次 pnpm 都抛）", () => {
     const { spawn, seen } = fakeSpawn(0);
-    const err: string[] = [];
+    const err: Array<string> = [];
     const code = main({
       env: {
         CNB_PULL_REQUEST_TARGET_SHA: "abc123",
@@ -351,7 +389,7 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
 
   it("两道都过了 ⇒ 读数照打（quiet 与否都能在日志里读回来）", () => {
     const { spawn } = fakeSpawn(0);
-    const out: string[] = [];
+    const out: Array<string> = [];
     const code = main({
       ...silent(),
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
@@ -375,8 +413,7 @@ describe("ci-affected-tests — 起跑前的依赖面体检", () => {
  */
 describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
   function fakeSpawn(status: number) {
-    const seen: { script: string; env: Record<string, string | undefined> }[] =
-      [];
+    const seen: Array<{ env: Record<string, string | undefined>; script: string; }> = [];
     return {
       seen,
       spawn: (script: string, env: Record<string, string | undefined>) => {
@@ -395,9 +432,7 @@ describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
     try {
       const dir = makeLedgerDir(root);
       expect(dir).not.toBeNull();
-      expect(path.dirname(dir!)).toBe(
-        path.join(root, "node_modules", ".cache"),
-      );
+      expect(path.dirname(dir!)).toBe(path.join(root, "node_modules", ".cache"));
       expect(path.basename(dir!).startsWith("comfy-affected-")).toBe(true);
       expect(existsSync(dir!)).toBe(true);
     } finally {
@@ -412,8 +447,8 @@ describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
     /* 只数 xml：同一目录里的清单（`comfy-c-files.txt`）不是读数份数。 */
     writeFileSync(path.join(ledger, "comfy-c-files.txt"), "a.test.ts\n");
     const { spawn, seen } = fakeSpawn(1);
-    const out: string[] = [];
-    const err: string[] = [];
+    const out: Array<string> = [];
+    const err: Array<string> = [];
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
@@ -436,7 +471,7 @@ describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
     try {
       writeFileSync(path.join(ledger, "comfy-c-0-1.xml"), "<testsuite/>");
       const { spawn, seen } = fakeSpawn(0);
-      const err: string[] = [];
+      const err: Array<string> = [];
       const code = main({
         env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
         runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),
@@ -457,7 +492,7 @@ describe("ci-affected-tests — 分文件读数目录（ISSUE #2074）", () => {
 
   it("造不出账本 ⇒ LOGD 显式清空、明说退回整块，退码照透传", () => {
     const { spawn, seen } = fakeSpawn(0);
-    const err: string[] = [];
+    const err: Array<string> = [];
     const code = main({
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
       runGit: () => ({ ok: true, stdout: "M\tsrc/a.ts\n" }),

@@ -144,13 +144,11 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 export function normalizeStageContent(content) {
   const raw = Array.isArray(content)
-    ? content
-        .map((x) => (typeof x === "string" ? x : x == null ? "" : String(x)))
-        .join("\n")
+    ? content.map((x) => (typeof x === "string" ? x : x == null ? "" : String(x))).join("\n")
     : typeof content === "string"
       ? content
       : "";
-  return raw.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "").replace(/\r\n?/g, "\n");
+  return raw.replaceAll(/\u001b\[[0-9;]*[A-Za-z]/g, "").replaceAll(/\r\n?/g, "\n");
 }
 
 /**
@@ -180,9 +178,10 @@ export function fetchStageDetail(run, slug, sn, pipelineId, stageId) {
     stageId,
     "-v",
   ]);
-  const d =
-    res && res.json && typeof res.json === "object" ? res.json.data : null;
-  if (!d || typeof d !== "object") return null;
+  const d = res && res.json && typeof res.json === "object" ? res.json.data : null;
+  if (!d || typeof d !== "object") {
+    return null;
+  }
   return {
     status: typeof d.status === "string" ? d.status : "",
     duration: Number.isFinite(d.duration) ? Number(d.duration) : null,
@@ -219,7 +218,9 @@ export function enrichStageErrors(run, slug, sn, json) {
     data && data.pipelinesStatus && typeof data.pipelinesStatus === "object"
       ? data.pipelinesStatus
       : null;
-  if (!table) return json;
+  if (!table) {
+    return json;
+  }
   let asked = 0;
   /** @type {Record<string, any>} */
   const pipelinesStatus = {};
@@ -230,20 +231,21 @@ export function enrichStageErrors(run, slug, sn, json) {
       continue;
     }
     const stages = p.stages.map((/** @type {any} */ st) => {
-      if (!st || typeof st !== "object") return st;
-      const status =
-        typeof st.status === "string" ? st.status.toLowerCase() : "";
-      if (status === "success" || status === "skipped") return st;
-      if (asked >= MAX_DETAIL_STAGES) return st;
+      if (!st || typeof st !== "object") {
+        return st;
+      }
+      const status = typeof st.status === "string" ? st.status.toLowerCase() : "";
+      if (status === "success" || status === "skipped") {
+        return st;
+      }
+      if (asked >= MAX_DETAIL_STAGES) {
+        return st;
+      }
       asked += 1;
-      const detail = fetchStageDetail(
-        run,
-        slug,
-        sn,
-        String(p.id ?? key),
-        String(st.id ?? ""),
-      );
-      if (!detail || detail.error === "") return st;
+      const detail = fetchStageDetail(run, slug, sn, String(p.id ?? key), String(st.id ?? ""));
+      if (!detail || detail.error === "") {
+        return st;
+      }
       return { ...st, error: detail.error };
     });
     pipelinesStatus[key] = { ...p, stages };
@@ -261,9 +263,7 @@ export function enrichStageErrors(run, slug, sn, json) {
 export function pipelineForStage(outcome, stageId) {
   return (
     outcome.pipelines.find((p) =>
-      [...p.configured, ...p.failed, ...p.cancelled, ...p.skipped].some(
-        (s) => s.id === stageId,
-      ),
+      [...p.configured, ...p.failed, ...p.cancelled, ...p.skipped].some((s) => s.id === stageId),
     ) || null
   );
 }
@@ -303,20 +303,18 @@ export function describeFailedStages(
     const detail = fetchStageDetail(run, slug, sn, pipeline.id, s.id);
     const status = (detail && detail.status) || s.status;
     const duration =
-      detail && detail.duration !== null
-        ? ` · ${formatDurationMs(detail.duration) ?? "未知"}`
-        : "";
+      detail && detail.duration !== null ? ` · ${formatDurationMs(detail.duration) ?? "未知"}` : "";
     log(
       `${prefix}   ── 失败格：${s.name || s.id}（${s.id} · ${pipeline.name || pipeline.id} · status=${status}${duration}）`,
     );
     if (!detail) {
-      log(
-        `${prefix}      取不到这一格的日志正文 ⇒ 没有结论（不是「日志里没有失败行」）。`,
-      );
+      log(`${prefix}      取不到这一格的日志正文 ⇒ 没有结论（不是「日志里没有失败行」）。`);
       continue;
     }
     detailed += 1;
-    if (detail.error) log(`${prefix}      平台给的原因：${detail.error}`);
+    if (detail.error) {
+      log(`${prefix}      平台给的原因：${detail.error}`);
+    }
     const excerpt = stageLogExcerpt(detail.text);
     if (excerpt.failure.length === 0) {
       log(
@@ -324,8 +322,9 @@ export function describeFailedStages(
       );
     } else {
       log(`${prefix}      失败行（行号即完整日志的行号）：`);
-      for (const l of excerpt.failure)
+      for (const l of excerpt.failure) {
         log(`${prefix}      L${l.line} ${l.text}`);
+      }
     }
     if (excerpt.demoted > 0) {
       const why = excerpt.anchored
@@ -336,7 +335,9 @@ export function describeFailedStages(
       );
     }
     log(`${prefix}      末 ${excerpt.tail.length} 行：`);
-    for (const l of excerpt.tail) log(`${prefix}      L${l.line} ${l.text}`);
+    for (const l of excerpt.tail) {
+      log(`${prefix}      L${l.line} ${l.text}`);
+    }
   }
   if (outcome.failed.length > shown.length) {
     log(
@@ -355,15 +356,7 @@ export function describeFailedStages(
  * @returns {any | null} 平台 JSON；取不到时 null
  */
 export function fetchBuildStatus(run, slug, sn) {
-  const res = cnbJson(run, [
-    "build",
-    "get-build-status",
-    "--repo",
-    slug,
-    "--sn",
-    sn,
-    "-v",
-  ]);
+  const res = cnbJson(run, ["build", "get-build-status", "--repo", slug, "--sn", sn, "-v"]);
   return res ? res.json : null;
 }
 
@@ -414,10 +407,10 @@ export function fetchBuildList(run, slug, event, limit, opts = {}) {
             return ` · ${inner}`;
           })()
         : "";
-      const why = !res
-        ? "命令没起来或输出不是 JSON（`cnb` 不可用 / 非 JSON 输出）"
-        : `退码 ${res.code}${res.stderr.trim() ? ` · stderr: ${res.stderr.trim().split("\n")[0]}` : ""}` +
-          ` · 信封里认不出列表${shape}`;
+      const why = res
+        ? `退码 ${res.code}${res.stderr.trim() ? ` · stderr: ${res.stderr.trim().split("\n")[0]}` : ""}` +
+          ` · 信封里认不出列表${shape}`
+        : "命令没起来或输出不是 JSON（`cnb` 不可用 / 非 JSON 输出）";
       opts.log(`[build-readout] 构建列表取不到：${why}`);
     }
     return null;
@@ -468,7 +461,9 @@ export function resolveBuildSn({
   prefix = "[ship]",
 }) {
   const target = typeof sn === "string" && sn.trim() !== "" ? sn.trim() : null;
-  if (target) return target;
+  if (target) {
+    return target;
+  }
   const got = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
   const list = got ? asArray(got.json) : null;
   if (!list) {
@@ -484,9 +479,7 @@ export function resolveBuildSn({
       `${prefix} 按 HEAD ${short(headSha)} 没找到 pull_request 构建（还没推 / CI 还没起 / 构建挂在别的 sha 上）` +
         " ⇒ 没有结论。",
     );
-    log(
-      `${prefix} 下一动作：在 PR 上确认构建已创建后重跑，或点名构建号：${command} <sn>`,
-    );
+    log(`${prefix} 下一动作：在 PR 上确认构建已创建后重跑，或点名构建号：${command} <sn>`);
     return null;
   }
   log(
@@ -529,14 +522,13 @@ export function resolveRepoSlug(run) {
     .split("\n")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (remotes.length === 0) return null;
-  const picked =
-    remotes.length === 1
-      ? remotes[0]
-      : remotes.includes("origin")
-        ? "origin"
-        : null;
-  if (!picked) return null;
+  if (remotes.length === 0) {
+    return null;
+  }
+  const picked = remotes.length === 1 ? remotes[0] : remotes.includes("origin") ? "origin" : null;
+  if (!picked) {
+    return null;
+  }
   const url = run("git", ["remote", "get-url", picked]);
   return parseSlug(url.stdout || "");
 }
@@ -571,9 +563,13 @@ export function parseArgs(argv) {
         return out;
       }
       i += 1;
-      if (arg === "--repo") out.repo = value;
-      else if (arg === "--sn") out.sn = value;
-      else out.event = value;
+      if (arg === "--repo") {
+        out.repo = value;
+      } else if (arg === "--sn") {
+        out.sn = value;
+      } else {
+        out.event = value;
+      }
       continue;
     }
     if (arg === "--limit") {
@@ -635,9 +631,7 @@ export function main({
   }
   const slug = parsed.repo || resolveRepoSlug(run);
   if (!slug) {
-    log(
-      "[build-readout] 取不到仓库路径（远端多于一个且没有 origin）⇒ 给 --repo <组织/仓库>。",
-    );
+    log("[build-readout] 取不到仓库路径（远端多于一个且没有 origin）⇒ 给 --repo <组织/仓库>。");
     return CODE.NOT_RUN;
   }
   /** @type {string[]} */
@@ -647,9 +641,7 @@ export function main({
   } else {
     const builds = fetchBuildList(run, slug, parsed.event, parsed.limit);
     if (!builds) {
-      log(
-        "[build-readout] 取不到 build 列表 ⇒ 没跑起来，不当成「绿」也不当成「红」。",
-      );
+      log("[build-readout] 取不到 build 列表 ⇒ 没跑起来，不当成「绿」也不当成「红」。");
       return CODE.NOT_RUN;
     }
     sns = builds.map((b) => b.sn);
@@ -685,15 +677,13 @@ export function main({
     if (outcome.state === "failed") {
       describeFailedStages(run, { slug, sn, outcome, log });
       worst = CODE.RED;
-    } else if (outcome.state !== "green" && worst !== CODE.RED)
+    } else if (outcome.state !== "green" && worst !== CODE.RED) {
       worst = CODE.NOT_RUN;
+    }
   }
   return worst;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }

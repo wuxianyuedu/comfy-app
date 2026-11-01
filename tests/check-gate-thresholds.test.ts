@@ -15,19 +15,19 @@ import { gateChainScripts } from "../scripts/gate-chain-scripts.cjs";
 
 /** 账里一条的形状（`group` / `movedFrom` / `movedIssue` 都是可选位）。 */
 type Entry = {
-  file: string;
   const: string;
-  value: number;
-  kind: string;
-  strictness?: string;
-  unit?: string;
+  file: string;
   group?: string;
+  kind: string;
   movedFrom?: number;
   movedIssue?: string;
+  strictness?: string;
+  unit?: string;
+  value: number;
 };
 
 /** 一条 A 档阻断阈值 + 一条 B 档地板 + 一条 report，构成最小可判的账。 */
-const baseEntries = (): Entry[] => [
+const baseEntries = (): Array<Entry> => [
   {
     file: "scripts/check-a.cjs",
     const: "SPLIT_LINES",
@@ -46,7 +46,7 @@ const baseEntries = (): Entry[] => [
   {
     file: "scripts/check-c.cjs",
     const: "PROBE_TIMEOUT_MS",
-    value: 10000,
+    value: 10_000,
     kind: "report",
     strictness: "n/a",
   },
@@ -56,7 +56,7 @@ const baseEntries = (): Entry[] => [
  * 按 `file` 定点改一条。刻意不写下标访问：`noUncheckedIndexedAccess` 下
  * `entries[0]` 是 `Entry | undefined`，而这里的用例点名的都是唯一的那条。
  */
-const patch = (list: Entry[], file: string, over: Partial<Entry>): Entry[] =>
+const patch = (list: Array<Entry>, file: string, over: Partial<Entry>): Array<Entry> =>
   list.map((e) => (e.file === file ? { ...e, ...over } : e));
 
 /** 按账造一份源码：默认与账一致，`over` 里点名的那条改成别的值。 */
@@ -66,12 +66,14 @@ function sources(over: Record<string, string> = {}) {
     "scripts/check-b.cjs": "const MIN_DUTIES = 5;\n",
     "scripts/check-c.cjs": "const PROBE_TIMEOUT_MS = 10_000;\n",
   };
-  for (const [k, v] of Object.entries(over)) src[k] = v;
+  for (const [k, v] of Object.entries(over)) {
+    src[k] = v;
+  }
   return (f: string) => src[f] ?? null;
 }
 
 const run = (
-  entries: Entry[],
+  entries: Array<Entry>,
   over: Record<string, string> = {},
   masterEntries: Map<string, { value: number }> | null = null,
 ) =>
@@ -85,7 +87,7 @@ const run = (
 
 describe("num：源码里的数值分隔写法要归成数字", () => {
   it("`10_000` 与 `0.75` 都读得出来", () => {
-    expect(num("10_000")).toBe(10000);
+    expect(num("10_000")).toBe(10_000);
     expect(num("0.75")).toBe(0.75);
   });
 });
@@ -134,9 +136,7 @@ describe("analyze：账 ⇄ 源码", () => {
     const r = run(baseEntries(), {
       "scripts/check-a.cjs": "const SPLIT_LINES_X = 900;\n",
     });
-    expect(r.problems.some((p: string) => p.includes("找不到该常量声明"))).toBe(
-      true,
-    );
+    expect(r.problems.some((p: string) => p.includes("找不到该常量声明"))).toBe(true);
   });
 
   it("负控制④：提取坏了（账被清空）⇒ 红，而不是两侧空集的恒绿", () => {
@@ -170,8 +170,7 @@ describe("analyze：组内同数、未入账、相对主干签字", () => {
 
   it("判据文件里冒出账上没有的顶层数值 ⇒ 红，并给出两条出路", () => {
     const r = run(baseEntries(), {
-      "scripts/check-a.cjs":
-        "const SPLIT_LINES = 900;\nconst NEW_GATE_LIMIT = 42;\n",
+      "scripts/check-a.cjs": "const SPLIT_LINES = 900;\nconst NEW_GATE_LIMIT = 42;\n",
     });
     const hit = r.problems.find((p: string) => p.includes("NEW_GATE_LIMIT"));
     expect(hit, "未入账的新承重数值没被拦").toContain("report");
@@ -182,24 +181,14 @@ describe("analyze：组内同数、未入账、相对主干签字", () => {
       ["scripts/check-a.cjs#SPLIT_LINES", { value: 900, kind: "threshold" }],
     ]);
     const loose = patch(baseEntries(), "scripts/check-a.cjs", { value: 1500 });
-    const unsigned = run(
-      loose,
-      { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" },
-      master,
-    );
-    expect(
-      unsigned.problems.some((p: string) => p.includes("相对主干是**放宽**")),
-    ).toBe(true);
+    const unsigned = run(loose, { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" }, master);
+    expect(unsigned.problems.some((p: string) => p.includes("相对主干是**放宽**"))).toBe(true);
 
     const signed = patch(loose, "scripts/check-a.cjs", {
       movedFrom: 900,
       movedIssue: "#2156",
     });
-    const okRun = run(
-      signed,
-      { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" },
-      master,
-    );
+    const okRun = run(signed, { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" }, master);
     expect(
       okRun.problems.some((p: string) => p.includes("相对主干是**放宽**")),
       "签了字还在拦，等于把这条路堵死",
@@ -215,11 +204,7 @@ describe("analyze：组内同数、未入账、相对主干签字", () => {
       "scripts/check-a.cjs",
       { movedFrom: 900, movedIssue: "2156" },
     );
-    const r = run(
-      loose,
-      { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" },
-      master,
-    );
+    const r = run(loose, { "scripts/check-a.cjs": "const SPLIT_LINES = 1500;\n" }, master);
     expect(r.problems.some((p: string) => p.includes("放宽"))).toBe(true);
   });
 });
@@ -257,7 +242,7 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
   });
 
   it("出路真的能走通：给它补一条 report 条目 ⇒ 绿", () => {
-    const entries: Entry[] = [
+    const entries: Array<Entry> = [
       ...baseEntries(),
       {
         file: NEW_FILE,
@@ -290,9 +275,9 @@ describe("analyze：整份未入账的判据文件（扫描根 = 磁盘现算）
 
   it("自指面在扫描根里，且真仓在这张面上今天全绿", () => {
     const root = path.resolve(__dirname, "..");
-    const ledger = JSON.parse(
+    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
-    ) as { entries: Entry[] };
+    ) as { entries: Array<Entry> };
     /* glob 写错的失效形态是「面为空 ⇒ 整格恒绿」，所以这里按磁盘自己数一遍：
        扫描根必须非空、必须含这份判据自己（`MIN_ENTRIES` 那条自证的下限在账里），
        否则「覆盖面」这句话只是断言里的一个装饰。 */
@@ -334,7 +319,7 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
     kind: "threshold",
     strictness: "larger-is-looser",
   };
-  const runWith = (src: string, entries: Entry[]) =>
+  const runWith = (src: string, entries: Array<Entry>) =>
     analyze({
       entries,
       readSource: sources({ [NEW_FILE]: src }),
@@ -351,10 +336,7 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
   });
 
   it("已入账的它被改大 ⇒ 漂移红且念成「变松」（取值那一路也认 export）", () => {
-    const r = runWith("export const GATE_LIMIT = 90;\n", [
-      ...baseEntries(),
-      entry,
-    ]);
+    const r = runWith("export const GATE_LIMIT = 90;\n", [...baseEntries(), entry]);
     const drift = r.problems.find((p: string) => p.includes("GATE_LIMIT"));
     expect(drift, "取值不认 export 时，放宽后的面会恒红").toBeTruthy();
     expect(drift).toContain("源码 90 ≠ 账 42");
@@ -362,10 +344,7 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
   });
 
   it("账与源码一致时不许有红（同一把尺子的第三向）", () => {
-    const r = runWith("export const GATE_LIMIT = 42;\n", [
-      ...baseEntries(),
-      entry,
-    ]);
+    const r = runWith("export const GATE_LIMIT = 42;\n", [...baseEntries(), entry]);
     expect(r.problems, r.problems.join("\n")).toEqual([]);
   });
 });
@@ -373,9 +352,9 @@ describe("账的覆盖面：export 前缀不是挡箭牌", () => {
 describe("真仓自证：这本账现在必须与源码一致", () => {
   it("账里每条都能在源码里定位到，且数值相等", () => {
     const root = path.resolve(__dirname, "..");
-    const ledger = JSON.parse(
+    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(path.join(root, "scripts/.gate-thresholds.json"), "utf8"),
-    ) as { entries: Entry[] };
+    ) as { entries: Array<Entry> };
     const r = analyze({
       entries: ledger.entries,
       readSource: (f: string) => {

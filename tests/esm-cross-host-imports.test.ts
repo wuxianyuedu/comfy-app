@@ -57,6 +57,11 @@ const CROSS_HOST_MODULES = [
   "src/lib/process/python-resolve.ts",
   "src/lib/process/probe-exe.ts",
   "src/lib/process/kill-process-tree.ts",
+  /* `executable-resolve.ts` 拆出来的两块（它越过文件长度硬闸时按职责切的）：
+   * 它们同样只依赖 `platform.ts` 与 node 内建，所以仍然是**叶子** —— 但必须登记
+   * 在这里，否则判据 ① 会把它俩读成「清单外的依赖」。 */
+  "src/lib/process/pnpm-resolve.ts",
+  "src/lib/process/version-compare.ts",
 ];
 
 /** `.mjs` 侧的宿主：直接 `import` 上面那些模块的那些文件。 */
@@ -69,7 +74,7 @@ const MJS_HOSTS = [
 ];
 
 /** 一份 TS 里的相对 import 说明符。 */
-function relativeSpecifiers(src: string): string[] {
+function relativeSpecifiers(src: string): Array<string> {
   return [...src.matchAll(/from "(\.[^"]*)"/g)]
     .map((m) => m[1])
     .filter((v): v is string => v !== undefined);
@@ -78,7 +83,7 @@ function relativeSpecifiers(src: string): string[] {
 describe("跨宿主 import 的扩展名形态（ISSUE #1961）", () => {
   it("每个跨宿主地基层模块都是**叶子**（只 import 同一批里的东西）", () => {
     const allowed = new Set(CROSS_HOST_MODULES);
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const rel of CROSS_HOST_MODULES) {
       const src = readFileSync(path.join(ROOT, rel), "utf8");
       for (const spec of relativeSpecifiers(src)) {
@@ -86,9 +91,7 @@ describe("跨宿主 import 的扩展名形态（ISSUE #1961）", () => {
           offenders.push(`${rel} → ${spec}（跨宿主说明符必须带 .ts）`);
           continue;
         }
-        const resolved = path.posix.normalize(
-          path.posix.join(path.posix.dirname(rel), spec),
-        );
+        const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(rel), spec));
         if (!allowed.has(resolved)) {
           offenders.push(`${rel} → ${spec}（指向了清单外的模块）`);
         }
@@ -96,10 +99,10 @@ describe("跨宿主 import 的扩展名形态（ISSUE #1961）", () => {
     }
     expect(
       offenders,
-      "跨宿主的那条链上出现了「清单外的依赖」或「不带 .ts 的说明符」——\n" +
-        "前者会让 `.mjs` 宿主加载到一半 `ERR_MODULE_NOT_FOUND`（tsc / vitest 都照不出来），\n" +
-        "后者在 Node 的 ESM 解析器下必然找不到文件（它不补扩展名）：\n" +
-        offenders.map((o) => `  ✗ ${o}`).join("\n"),
+      `跨宿主的那条链上出现了「清单外的依赖」或「不带 .ts 的说明符」——\n` +
+        `前者会让 \`.mjs\` 宿主加载到一半 \`ERR_MODULE_NOT_FOUND\`（tsc / vitest 都照不出来），\n` +
+        `后者在 Node 的 ESM 解析器下必然找不到文件（它不补扩展名）：\n${
+        offenders.map((o) => `  ✗ ${o}`).join("\n")}`,
     ).toEqual([]);
   });
 
@@ -108,8 +111,8 @@ describe("跨宿主 import 的扩展名形态（ISSUE #1961）", () => {
       readFileSync(path.join(ROOT, rel), "utf8"); // 不存在就抛
     }
     const referenced = MJS_HOSTS.filter((h) =>
-      relativeSpecifiers(readFileSync(path.join(ROOT, h), "utf8")).some(
-        (spec) => spec.includes("src/lib/process/"),
+      relativeSpecifiers(readFileSync(path.join(ROOT, h), "utf8")).some((spec) =>
+        spec.includes("src/lib/process/"),
       ),
     );
     expect(

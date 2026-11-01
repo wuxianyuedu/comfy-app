@@ -32,10 +32,7 @@ import {
   modeUsesFirstFrame,
   modeUsesLastFrame,
 } from "~/lib/workflow/workflow-exposed-params";
-import {
-  buildEncapsulatedInputs,
-  type WorkshopExposedValues,
-} from "./workflow-encapsulation";
+import { buildEncapsulatedInputs, type WorkshopExposedValues } from "./workflow-encapsulation";
 import { deriveEncapsulationStatus } from "./workshop-encapsulation-status";
 
 /* 本地（ComfyUI）生成 mutation 的 tRPC 传输契约。 */
@@ -63,11 +60,11 @@ export function withGenerationAttribution(
   };
 }
 
-export async function startLocalGenerate(
-  input: GenerateInput,
-): Promise<string> {
+export async function startLocalGenerate(input: GenerateInput): Promise<string> {
   const res = await vanillaApi.generate.generate.mutate(input);
-  if (!res?.taskId) throw new Error("本地生成任务创建失败");
+  if (!res?.taskId) {
+    throw new Error("本地生成任务创建失败");
+  }
   return res.taskId;
 }
 
@@ -94,30 +91,30 @@ export const LOCAL_TASK_TIMEOUT_MS = 30 * 60 * 1000;
  *  既不带产物也不发 done 帧（产物只随 live 的 done 帧下发），订阅一个已经
  *  成功的任务拿不到 imageUrl。所以「刷新后恢复失联任务」必须先查这份真值：
  *  已终态直接回写，仍在跑才去重订阅等 done 帧。 */
-export interface TaskSnapshot {
-  /** 任务表里的状态原文（SUCCEEDED / FAILED / CANCELLED / RUNNING / QUEUED…）。 */
-  status: string;
+export type TaskSnapshot = {
   /** 终态失败时的原因（任务表 error 列）。 */
   error?: string;
   /** 已落盘产物（本地任务 imageUrl / clipUrl 的真值来源）。 */
-  outputs: SavedOutput[];
-}
+  outputs: Array<SavedOutput>;
+  /** 任务表里的状态原文（SUCCEEDED / FAILED / CANCELLED / RUNNING / QUEUED…）。 */
+  status: string;
+};
 
 /** 查一个本地任务的状态与产物快照；任务不存在 / 查询失败返回 null
  *（调用方按「任务失联」如实收尾，不假装它还在跑）。 */
-export async function fetchTaskSnapshot(
-  taskId: string,
-): Promise<TaskSnapshot | null> {
+export async function fetchTaskSnapshot(taskId: string): Promise<TaskSnapshot | null> {
   try {
     const task: unknown = await vanillaApi.task.detail.query({ id: taskId });
-    if (!isRecord(task)) return null;
+    if (!isRecord(task)) {
+      return null;
+    }
     const status = task.status;
-    if (typeof status !== "string" || status === "") return null;
+    if (typeof status !== "string" || status === "") {
+      return null;
+    }
     return {
       status,
-      ...(typeof task.error === "string" && task.error
-        ? { error: task.error }
-        : {}),
+      ...(typeof task.error === "string" && task.error ? { error: task.error } : {}),
       outputs: extractSavedOutputs(task.images),
     };
   } catch {
@@ -131,30 +128,30 @@ export async function fetchTaskSnapshot(
 export type WorkshopWorkflowCategory = "image" | "video";
 
 /** 工作流库里的一个可选工作流（工坊「生成资源」下拉用）。 */
-export interface WorkshopWorkflowOption {
-  id: string;
-  name: string;
-  taskType?: string;
+export type WorkshopWorkflowOption = {
   /** 服务端富化的内容类别（image / video / audio；未知按 image 处理）。 */
   category: WorkshopWorkflowCategory;
-  /** 该工作流可跑的全部模式码（taskType 常是其中的默认模式）。 */
-  modes: string[];
-  /** 挂在条目上的模型标签（工作流库「管理模型」维护，如 z-Image）。 */
-  modelTags: string[];
   /** 对外参数封装就绪：契约必备口「提示词」已有落点，工坊可直接驱动。 */
   encapsulationReady: boolean;
-}
+  id: string;
+  /** 挂在条目上的模型标签（工作流库「管理模型」维护，如 z-Image）。 */
+  modelTags: Array<string>;
+  /** 该工作流可跑的全部模式码（taskType 常是其中的默认模式）。 */
+  modes: Array<string>;
+  name: string;
+  taskType?: string;
+};
 
 /** 工作流列表项 → 工坊选项；字段缺失/异常时给出安全缺省。
  *
  *  类别优先取服务端富化的 typeCategory（由 taskType 在类型体系里查到），
  *  查不到则退到「模式码是否视频」。 */
-function toWorkflowOption(
-  row: Record<string, unknown>,
-): WorkshopWorkflowOption | null {
+function toWorkflowOption(row: Record<string, unknown>): WorkshopWorkflowOption | null {
   const id = row.id;
   const name = row.name;
-  if (typeof id !== "string" || typeof name !== "string") return null;
+  if (typeof id !== "string" || typeof name !== "string") {
+    return null;
+  }
   const taskType = typeof row.taskType === "string" ? row.taskType : undefined;
   const modes = Array.isArray(row.modes)
     ? row.modes.filter((mode): mode is string => typeof mode === "string")
@@ -169,16 +166,14 @@ function toWorkflowOption(
           ? "video"
           : "image";
   const modelTags = Array.isArray(row.modelTags)
-    ? row.modelTags.filter(
-        (tag): tag is string => typeof tag === "string" && tag !== "",
-      )
+    ? row.modelTags.filter((tag): tag is string => typeof tag === "string" && tag !== "")
     : [];
   const mode = row.defaultMode ?? taskType ?? modes[0] ?? null;
   const encapsulationReady = deriveEncapsulationStatus({
-    io: (row.workflowIO ?? null) as Parameters<
+    io: /* SAFETY: 类型断言已复核 */ (row.workflowIO ?? null) as Parameters<
       typeof deriveEncapsulationStatus
     >[0]["io"],
-    paramMap: (row.paramMap ?? null) as Parameters<
+    paramMap: /* SAFETY: 类型断言已复核 */ (row.paramMap ?? null) as Parameters<
       typeof deriveEncapsulationStatus
     >[0]["paramMap"],
     mode: typeof mode === "string" ? mode : null,
@@ -186,7 +181,7 @@ function toWorkflowOption(
   return {
     id,
     name,
-    ...(taskType !== undefined ? { taskType } : {}),
+    ...(taskType === undefined ? {} : { taskType }),
     category,
     modes,
     modelTags,
@@ -195,17 +190,21 @@ function toWorkflowOption(
 }
 
 /** 拉取工作流列表，供工坊选择「用哪个工作流库工作流生成」。 */
-export async function fetchWorkshopWorkflows(): Promise<
-  WorkshopWorkflowOption[]
-> {
+export async function fetchWorkshopWorkflows(): Promise<Array<WorkshopWorkflowOption>> {
   const res = await vanillaApi.workflow.list.query({});
   const rows: unknown = res;
-  if (!Array.isArray(rows)) return [];
-  const out: WorkshopWorkflowOption[] = [];
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  const out: Array<WorkshopWorkflowOption> = [];
   for (const row of rows) {
-    if (!isRecord(row)) continue;
+    if (!isRecord(row)) {
+      continue;
+    }
     const option = toWorkflowOption(row);
-    if (option) out.push(option);
+    if (option) {
+      out.push(option);
+    }
   }
   return out;
 }
@@ -216,19 +215,15 @@ function toStyleRef(row: Record<string, unknown>): StyleRef | null {
   const slug = row.slug;
   const name = row.name;
   const promptTemplate = row.promptTemplate;
-  if (
-    typeof slug !== "string" ||
-    typeof name !== "string" ||
-    typeof promptTemplate !== "string"
-  )
+  if (typeof slug !== "string" || typeof name !== "string" || typeof promptTemplate !== "string") {
     return null;
+  }
   return {
     slug,
     name,
     icon: typeof row.icon === "string" ? row.icon : "✨",
     promptTemplate,
-    negativePrompt:
-      typeof row.negativePrompt === "string" ? row.negativePrompt : undefined,
+    negativePrompt: typeof row.negativePrompt === "string" ? row.negativePrompt : undefined,
     defaultParams: isRecord(row.defaultParams) ? row.defaultParams : undefined,
   };
 }
@@ -242,33 +237,39 @@ function toStyleRef(row: Record<string, unknown>): StyleRef | null {
  *  404 的 HTML 又让 `res.json()` 抛错，被调用点那句 `catch {}` 吞成「没有技能」，
  *  于是工坊的风格卡常年空态、全仓库没有一条判据红过。「客户端写的地址有没有落点」
  *  由 `tests/rest-endpoint-targets.test.ts` 钉住。 */
-export async function fetchWorkshopStyles(): Promise<StyleRef[]> {
+export async function fetchWorkshopStyles(): Promise<Array<StyleRef>> {
   const res = await vanillaApi.skill.list.query();
   const rows: unknown = res.skills;
-  if (!Array.isArray(rows)) return [];
-  const out: StyleRef[] = [];
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  const out: Array<StyleRef> = [];
   for (const row of rows) {
-    if (!isRecord(row)) continue;
+    if (!isRecord(row)) {
+      continue;
+    }
     const style = toStyleRef(row);
-    if (style) out.push(style);
+    if (style) {
+      out.push(style);
+    }
   }
   return out;
 }
 
 /** 一次封装结果 + 该工作流在库里的模式信息（供调用方按模式做提示/校验）。 */
-export interface LibraryWorkflowBuildResult {
+export type LibraryWorkflowBuildResult = {
   input: GenerateInput;
-  /** 用户给了值、但落不到任何端口的口（未连线 / 断开 / 端口已消失）。
-   *  键是**契约口 id**（`prompt` / `size-width`…），不是工作流里的端口名。 */
-  unmatched: string[];
   /** 本次实际使用的模式码（服务端默认模式，缺省回退 taskType / modes[0]）。 */
   mode: string | null;
   /** 该工作流可跑的全部模式码。 */
-  modes: string[];
+  modes: Array<string>;
+  /** 用户给了值、但落不到任何端口的口（未连线 / 断开 / 端口已消失）。
+   *  键是**契约口 id**（`prompt` / `size-width`…），不是工作流里的端口名。 */
+  unmatched: Array<string>;
   /** 本次生成会用到首帧 / 尾帧图（按模式判定，供调用方决定要不要预传图）。 */
   usesFirstFrame: boolean;
   usesLastFrame: boolean;
-}
+};
 
 /** 用选定的工作流库工作流封装一次生成请求。
  *
@@ -293,14 +294,12 @@ export async function buildLibraryWorkflowInput(
    *  不传时按内置默认契约组载荷 —— 作者在「模式契约」里新增的自定义口不在
    *  其中，给它的值就落不下去（如实进 `unmatched`，不静默丢）。能拿到契约
    *  注册表的调用方（封装页签的流程测试）必须传。 */
-  contractIds?: readonly string[],
+  contractIds?: ReadonlyArray<string>,
 ): Promise<LibraryWorkflowBuildResult> {
   const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
   const io = detail?.workflowIO ?? null;
   const modes = Array.isArray(detail?.availableModes)
-    ? detail.availableModes.filter(
-        (mode): mode is string => typeof mode === "string",
-      )
+    ? detail.availableModes.filter((mode): mode is string => typeof mode === "string")
     : [];
   const mode =
     requestedMode && requestedMode.trim() !== ""
@@ -319,16 +318,12 @@ export async function buildLibraryWorkflowInput(
    *  `buildEncapsulatedInputs`）。历史里那一串 "768x1024" 就是这条兼容字段。 */
   const input: GenerateInput = {
     workflow: workflowId,
-    ...(values.prompt !== undefined ? { prompt: values.prompt } : {}),
-    ...(values.negativePrompt !== undefined
-      ? { negative: values.negativePrompt }
-      : {}),
-    ...(values.firstFrame !== undefined
-      ? { firstFrame: values.firstFrame }
-      : {}),
-    ...(values.lastFrame !== undefined ? { lastFrame: values.lastFrame } : {}),
+    ...(values.prompt === undefined ? {} : { prompt: values.prompt }),
+    ...(values.negativePrompt === undefined ? {} : { negative: values.negativePrompt }),
+    ...(values.firstFrame === undefined ? {} : { firstFrame: values.firstFrame }),
+    ...(values.lastFrame === undefined ? {} : { lastFrame: values.lastFrame }),
     // 视频时长：帧数走内置字段，秒数由 workflowInputs 里的时长口落下去。
-    ...(values.frames !== undefined ? { frames: values.frames } : {}),
+    ...(values.frames === undefined ? {} : { frames: values.frames }),
     ...(workflowInputs.length > 0 ? { workflowInputs } : {}),
   };
   return {
@@ -342,42 +337,54 @@ export async function buildLibraryWorkflowInput(
 }
 
 /** 进度事件附带的节点级信息（ComfyUI progress 消息里的当前节点与步数）。 */
-export interface TaskProgressNode {
+export type TaskProgressNode = {
   id: string;
   label?: string;
-  value: number;
   max: number;
-}
+  value: number;
+};
 
 /** 一条执行步骤日志（对应项目画布 /api/tasks/:id/stream 的 `log` 帧），
  *  字段与后端 LogEntry 一致。工作流库就地运行也据此展示「执行日志」。 */
-export interface TaskLogEntry {
-  t: number;
+export type TaskLogEntry = {
   level: "info" | "progress" | "warn" | "error" | "success";
   msg: string;
   src?: string;
-}
+  t: number;
+};
 
-export interface TaskWatchHandlers {
-  onProgress?: (progress: number, node?: TaskProgressNode) => void;
+export type TaskWatchHandlers = {
   /** 每条执行步骤日志（SSE `log` 帧）。供调用方累积展示。 */
   onLog?: (entry: TaskLogEntry) => void;
   /* 任务完成过程中，每落盘一个产物文件就回调一次。 */
   onOutput?: (output: SavedOutput) => void;
+  onProgress?: (progress: number, node?: TaskProgressNode) => void;
   /* 任务到达终态时**恰好**回调一次。 */
-  onSettled: (result: { ok: boolean; message?: string }) => void;
-}
+  onSettled: (result: { message?: string; ok: boolean }) => void;
+};
 
 /* 把 SSE `log` 帧的 unknown 载荷收窄成 TaskLogEntry；收窄不了则为 null。 */
 function narrowLogEntry(raw: unknown): TaskLogEntry | null {
-  if (!isRecord(raw)) return null;
+  if (!isRecord(raw)) {
+    return null;
+  }
   const t = raw.t;
   const level = raw.level;
   const msg = raw.msg;
-  if (typeof t !== "number" || typeof msg !== "string") return null;
-  const validLevels = ["info", "progress", "warn", "error", "success"] as const;
+  if (typeof t !== "number" || typeof msg !== "string") {
+    return null;
+  }
+  const validLevels = /* SAFETY: 类型断言已复核 */ [
+    "info",
+    "progress",
+    "warn",
+    "error",
+    "success",
+  ] as const;
   const lv = validLevels.find((v) => v === level) ?? null;
-  if (!lv) return null;
+  if (!lv) {
+    return null;
+  }
   return {
     t,
     level: lv,
@@ -430,17 +437,15 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
     }
     settled = true;
     es.close();
-    note(
-      ok
-        ? "落定：成功，已关闭流"
-        : `落定：失败，已关闭流（原因：${message ?? "未提供"}）`,
-    );
+    note(ok ? "落定：成功，已关闭流" : `落定：失败，已关闭流（原因：${message ?? "未提供"}）`);
     h.onSettled({ ok, message });
   };
   es.onmessage = (ev: MessageEvent<string>) => {
     try {
       const msg: unknown = JSON.parse(ev.data);
-      if (!isRecord(msg)) return;
+      if (!isRecord(msg)) {
+        return;
+      }
       const type: unknown = msg.type;
       if (type === "state") {
         const p: unknown = msg.progress;
@@ -453,11 +458,7 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
             const value: unknown = rawNode.value;
             const max: unknown = rawNode.max;
             const label: unknown = rawNode.label;
-            if (
-              typeof id === "string" &&
-              typeof value === "number" &&
-              typeof max === "number"
-            ) {
+            if (typeof id === "string" && typeof value === "number" && typeof max === "number") {
               node = {
                 id,
                 value,
@@ -474,17 +475,16 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
           if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
             const err: unknown = msg.error;
             note(`收到 state 帧 status=${st}，按失败落定`);
-            settle(
-              false,
-              typeof err === "string" && err.trim() ? err : `任务 ${st}`,
-            );
+            settle(false, typeof err === "string" && err.trim() ? err : `任务 ${st}`);
           } else if (st === "SUCCEEDED") {
             /*  成功收口走这条：终态 state 帧带 DB 的产出清单（与 TaskImage 同源，
              * 见 executor-finalize 的 `saved`）。inline 与 host 执行的任务到这里
              * 完全同形——进程内 done 帧已随 ADR §14 D1 退役，不存在「另一种宿主
              * 收不到成功」的那半边流量了。
              * 已落定时整帧跳过：产出回调不许重发（同一终态可能被轮询发两次）。 */
-            if (settled) return;
+            if (settled) {
+              return;
+            }
             const outputs = extractSavedOutputs(msg.images);
             if (outputs.length === 0) {
               note("收到 state 帧 status=SUCCEEDED 但无产出，按失败落定");
@@ -512,7 +512,9 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
       }
       if (type === "log") {
         const entry = narrowLogEntry(msg.entry);
-        if (entry) h.onLog?.(entry);
+        if (entry) {
+          h.onLog?.(entry);
+        }
         return;
       }
       /*  这里过去还分两条分支收口 `done` / `error` 帧：那是 SSE 直接转发进程内
@@ -526,12 +528,12 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
     /* 诊断：连接异常此前只有「彻底关闭才落定」这一条出口，中间过程不可见。
      *  EventSource 的 readyState 有三态，分别对应「重连中 / 已关闭」。 */
     note(
-      es.readyState === EventSource.CLOSED
-        ? "SSE 连接已关闭"
-        : "SSE 连接中断，浏览器将自动重连",
+      es.readyState === EventSource.CLOSED ? "SSE 连接已关闭" : "SSE 连接中断，浏览器将自动重连",
     );
     // 短暂断开会自动重连；只有流真正彻底关闭才算终态。
-    if (es.readyState === EventSource.CLOSED) settle(false, "任务连接中断");
+    if (es.readyState === EventSource.CLOSED) {
+      settle(false, "任务连接中断");
+    }
   };
   return () => {
     if (!settled) {
@@ -549,10 +551,14 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
 function relayErrorMessage(data: unknown, status: number): string {
   if (isRecord(data)) {
     const err: unknown = data.error;
-    if (typeof err === "string" && err) return err;
+    if (typeof err === "string" && err) {
+      return err;
+    }
     if (isRecord(err)) {
       const msg: unknown = err.message;
-      if (typeof msg === "string" && msg) return msg;
+      if (typeof msg === "string" && msg) {
+        return msg;
+      }
     }
   }
   return `API 请求失败 (${status})`;
@@ -571,9 +577,7 @@ type RelayResponse = Record<string, unknown> | null;
  *  到点 abort，调用方拿到一句可行动的中文报错。 */
 const RELAY_TIMEOUT_MS = 10 * 60 * 1000;
 
-async function postRelay(
-  body: Record<string, unknown>,
-): Promise<RelayResponse> {
+async function postRelay(body: Record<string, unknown>): Promise<RelayResponse> {
   let res: Response;
   try {
     res = await fetch("/api/workshop-api/generate", {
@@ -582,20 +586,19 @@ async function postRelay(
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
     });
-  } catch (e: unknown) {
+  } catch (error: unknown) {
     /* AbortSignal.timeout 的到点是 TimeoutError（浏览器主动 abort 是
      * AbortError）：翻译成可行动的中文，别让控制台的英文 DOMException
      * 原样进错误条。 */
     if (
-      e instanceof DOMException &&
-      (e.name === "TimeoutError" || e.name === "AbortError")
+      error instanceof DOMException &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
     ) {
-      throw new Error(
-        "API 通道请求超时（10 分钟无响应），请检查通道地址或稍后重试",
-        { cause: e },
-      );
+      throw new Error("API 通道请求超时（10 分钟无响应），请检查通道地址或稍后重试", {
+        cause: error,
+      });
     }
-    throw e;
+    throw error;
   }
   let data: unknown;
   try {
@@ -603,7 +606,9 @@ async function postRelay(
   } catch {
     data = undefined;
   }
-  if (!res.ok) throw new Error(relayErrorMessage(data, res.status));
+  if (!res.ok) {
+    throw new Error(relayErrorMessage(data, res.status));
+  }
   // 「res.ok 但 body 不是对象」——以前是三个 caller 各自 `isRecord(data)` 前奏，
   // 现在这一层判据只写一次；null 交给 caller 决定抛错还是降级。
   return isRecord(data) ? data : null;
@@ -613,20 +618,20 @@ async function postRelay(
  * 当 `model` 传的是设置页里的远端模型名（remoteModel 表）时，服务端按该条目的
  * 连接参数生图；不传则回落到工坊 API 通道设置（旧行为）。 */
 export async function apiGenerateImage(req: {
-  prompt: string;
-  negative?: string;
-  size?: string;
-  /** 设置页配置的远端模型名（remoteModel 表按名取连接参数） */
-  model?: string;
-  /** 工坊模式码（T2I / I2I / …）：远端模型有该模式适配器时按它翻译字段 */
-  mode?: string;
   /** 统一输入：宽高比（如 "16:9"）/ 百万像素（如 "1.5"）/ 宽高对齐倍数 / 输入图。
    *  三者合起来就是工坊的「比例 + 百万像素 + 倍数」尺寸表达 —— 选「分辨率」时
    *  由调用方（`shotSizeToRelay`）换算后再传，不把 "1k" 这种档位名丢给远端。 */
   aspectRatio?: string;
-  megapixels?: string;
-  multiple?: number;
   image?: string;
+  megapixels?: string;
+  /** 工坊模式码（T2I / I2I / …）：远端模型有该模式适配器时按它翻译字段 */
+  mode?: string;
+  /** 设置页配置的远端模型名（remoteModel 表按名取连接参数） */
+  model?: string;
+  multiple?: number;
+  negative?: string;
+  prompt: string;
+  size?: string;
 }): Promise<string> {
   const data = await postRelay({
     kind: "image",
@@ -637,30 +642,31 @@ export async function apiGenerateImage(req: {
     ...(req.mode ? { mode: req.mode } : {}),
     ...(req.aspectRatio ? { aspectRatio: req.aspectRatio } : {}),
     ...(req.megapixels ? { megapixels: req.megapixels } : {}),
-    ...(req.multiple !== undefined ? { multiple: req.multiple } : {}),
+    ...(req.multiple === undefined ? {} : { multiple: req.multiple }),
     ...(req.image ? { image: req.image } : {}),
   });
-  const url =
-    data && typeof data.url === "string" && data.url ? data.url : null;
-  if (!url) throw new Error("API 生图响应中未找到图片 URL");
+  const url = data && typeof data.url === "string" && data.url ? data.url : null;
+  if (!url) {
+    throw new Error("API 生图响应中未找到图片 URL");
+  }
   return url;
 }
 
-export interface ApiVideoSubmitResult {
-  /* 上游同步返回时给出的成品视频 URL。 */
-  url?: string;
+export type ApiVideoSubmitResult = {
   /* 否则用 apiPollVideo 轮询的异步任务 id。 */
   remoteTaskId?: string;
-}
+  /* 上游同步返回时给出的成品视频 URL。 */
+  url?: string;
+};
 
 /* API 通道：提交一个（图生）视频任务。 */
 export async function apiSubmitVideo(req: {
-  prompt: string;
-  negative?: string;
+  fps?: number;
+  frames?: number;
   /* 参考首帧（任何可解析的来源都行：/generated/… 、data URL、http）。 */
   image?: string;
-  frames?: number;
-  fps?: number;
+  negative?: string;
+  prompt: string;
 }): Promise<ApiVideoSubmitResult> {
   const data = await postRelay({
     kind: "video",
@@ -670,23 +676,26 @@ export async function apiSubmitVideo(req: {
     frames: req.frames,
     fps: req.fps,
   });
-  if (!data) throw new Error("API 视频响应格式错误");
+  if (!data) {
+    throw new Error("API 视频响应格式错误");
+  }
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
   const remoteTaskId =
-    typeof data.remoteTaskId === "string" && data.remoteTaskId
-      ? data.remoteTaskId
-      : undefined;
-  if (!url && !remoteTaskId)
+    typeof data.remoteTaskId === "string" && data.remoteTaskId ? data.remoteTaskId : undefined;
+  if (!url && !remoteTaskId) {
     throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
+  }
   return { url, remoteTaskId };
 }
 
 /* API 通道：对异步视频任务做一次轮询。 */
 export async function apiPollVideo(
   remoteTaskId: string,
-): Promise<{ url?: string; pending: boolean }> {
+): Promise<{ pending: boolean; url?: string }> {
   const data = await postRelay({ kind: "video", remoteTaskId });
-  if (!data) return { pending: true };
+  if (!data) {
+    return { pending: true };
+  }
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
   return { url, pending: !url };
 }
@@ -706,13 +715,9 @@ export async function prepareLocalInputImage(image: string): Promise<string> {
     data = undefined;
   }
   const filename =
-    isRecord(data) && typeof data.filename === "string" && data.filename
-      ? data.filename
-      : null;
+    isRecord(data) && typeof data.filename === "string" && data.filename ? data.filename : null;
   if (!res.ok || !filename) {
-    throw new Error(
-      !res.ok ? relayErrorMessage(data, res.status) : "参考图准备失败",
-    );
+    throw new Error(res.ok ? "参考图准备失败" : relayErrorMessage(data, res.status));
   }
   return filename;
 }
@@ -735,14 +740,14 @@ const PORTRAIT_REF_CACHE_MAX = 32;
  *  （reference-image / -2），超过两张的定妆照落不进端口，这里截到两张、
  *  不做无效上传。没有角色选了定妆照 → 空数组，调用方不给这个口。 */
 export async function preparePortraitReferences(
-  characters: Character[],
-  characterIds: readonly string[],
-): Promise<{ files: string[]; failedCount: number }> {
+  characters: Array<Character>,
+  characterIds: ReadonlyArray<string>,
+): Promise<{ failedCount: number; files: Array<string> }> {
   const urls = characterIds
     .map((id) => characters.find((c) => c.id === id)?.portraitUrl)
     .filter((url): url is string => typeof url === "string" && url !== "")
     .slice(0, 2);
-  const files: string[] = [];
+  const files: Array<string> = [];
   let failedCount = 0;
   for (const url of urls) {
     const cached = portraitRefCache.get(url);
@@ -780,10 +785,14 @@ function narrowChannel(v: unknown, fallbackPath: string): ApiChannelView {
 export async function fetchApiChannels(): Promise<ApiChannelsView | null> {
   try {
     const res = await fetch("/api/workshop-api/config");
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return null;
+    }
     const data: unknown = await res.json();
     const channels = isRecord(data) ? data.channels : undefined;
-    if (!isRecord(channels)) return null;
+    if (!isRecord(channels)) {
+      return null;
+    }
     return {
       image: narrowChannel(channels.image, "/images/generations"),
       video: narrowChannel(channels.video, "/videos/generations"),

@@ -10,12 +10,12 @@ import { useStore } from "@xyflow/react";
 import { ALL_WORKFLOW_TYPES } from "~/lib/workflow/workflow-types";
 import { OptionListPopover } from "~/components/ui/option-list-popover";
 
-interface WorkflowModePickChipProps {
-  modes: string[];
+type WorkflowModePickChipProps = {
   defaultMode: string | null;
-  onChange: (modes: string[], defaultMode: string) => void;
   disabled?: boolean;
-}
+  modes: Array<string>;
+  onChange: (modes: Array<string>, defaultMode: string) => void;
+};
 
 /* transform 订阅收敛（商业级性能）。
  * 之前 ModePickChip 顶层常驻订阅 state.transform —— 画布每 pan/zoom 一次，
@@ -47,9 +47,7 @@ export function WorkflowModePickChip({
    * 好决定 `PopoverAutoClose` 挂不挂。 */
   const [open, setOpen] = useState(false);
 
-  const defType = ALL_WORKFLOW_TYPES.find(
-    (workflowType) => workflowType.code === defaultMode,
-  );
+  const defType = ALL_WORKFLOW_TYPES.find((workflowType) => workflowType.code === defaultMode);
   const triggerLabel = defType?.label ?? defaultMode ?? "未选";
   const hasModes = modes.length > 0;
 
@@ -64,29 +62,18 @@ export function WorkflowModePickChip({
   );
 
   const pick = (code: string) => {
-    if (code !== defaultMode) onChange(modes, code);
+    if (code !== defaultMode) {
+      onChange(modes, code);
+    }
   };
 
   return (
     <>
       {open && <PopoverAutoClose onClose={() => setOpen(false)} />}
       <OptionListPopover
-        value={defaultMode ?? ""}
-        onSelect={pick}
-        onOpenChange={setOpen}
-        triggerTitle="工作流模式选择"
         align="start"
         contentClassName="w-60 rounded-xl"
         disabled={disabled}
-        triggerClassName="border-primary/55 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs disabled:opacity-50"
-        trigger={
-          <span
-            className={`font-semibold ${hasModes ? "text-ink-bright" : "text-ink-muted"}`}
-            style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
-          >
-            {hasModes ? triggerLabel : "未选"}
-          </span>
-        }
         emptyHint="该工作流没有声明可用模式"
         items={items.map((item) => {
           const isDef = defaultMode === item.code;
@@ -97,14 +84,10 @@ export function WorkflowModePickChip({
             prefix: (
               <span
                 className={`flex size-3.5 shrink-0 items-center justify-center rounded-full border ${
-                  isDef
-                    ? "border-primary bg-primary-soft"
-                    : "border-border-strong bg-subtle"
+                  isDef ? "border-primary bg-primary-soft" : "border-border-strong bg-subtle"
                 }`}
               >
-                {isDef && (
-                  <span className="bg-primary-strong size-1.5 rounded-full" />
-                )}
+                {isDef && <span className="bg-primary-strong size-1.5 rounded-full" />}
               </span>
             ),
             suffix: (
@@ -117,6 +100,19 @@ export function WorkflowModePickChip({
             ),
           };
         })}
+        onOpenChange={setOpen}
+        onSelect={pick}
+        trigger={
+          <span
+            className={`font-semibold ${hasModes ? "text-ink-bright" : "text-ink-muted"}`}
+            style={{ fontFamily: "var(--font-sans)", fontSize: 10 }}
+          >
+            {hasModes ? triggerLabel : "未选"}
+          </span>
+        }
+        triggerClassName="border-primary/55 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs disabled:opacity-50"
+        triggerTitle="工作流模式选择"
+        value={defaultMode ?? ""}
       />
     </>
   );

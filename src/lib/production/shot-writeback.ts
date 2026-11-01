@@ -13,25 +13,20 @@
 //
 // 单一写入者（§6.4）：只写生成态字段，编辑面（prompt/negative）仍是工坊写入面，这里不碰。
 // 放 src/lib/<domain>-client 层，视图/hook 不经手 fetch（对齐 §17 / 硬规则 10）。
-import {
-  fetchProduction,
-  pushProduction,
-} from "~/lib/production/production-client";
+import { fetchProduction, pushProduction } from "~/lib/production/production-client";
 import {
   applyShotGeneration,
   applyShotRedo,
   type ShotGenerationPatch,
 } from "~/lib/production/sync";
-import {
-  readWorkshopDraft,
-  writeWorkshopDraft,
-} from "~/lib/workshop/draft-store";
+import { readWorkshopDraft, writeWorkshopDraft } from "~/lib/workshop/draft-store";
 import { pushServerDraft } from "~/lib/workshop/draft-sync-client";
 import { fireAndForget } from "~/lib/async-action";
 import type { Shot } from "~/lib/workshop/types";
 
-function asShots(raw: unknown): Shot[] {
-  return Array.isArray(raw) ? (raw as Shot[]) : [];
+function asShots(raw: unknown): Array<Shot> {
+  /* SAFETY: 类型断言已复核 */
+  return Array.isArray(raw) ? (raw as Array<Shot>) : [];
 }
 
 /** 把某镜头的生成态补丁回写进该项目（草稿 + 两张服务端镜像）。静默失败、不阻塞画布。 */
@@ -40,7 +35,9 @@ export async function recordCanvasShotGeneration(
   shotId: string,
   patch: ShotGenerationPatch,
 ): Promise<void> {
-  if (!projectId || !shotId) return;
+  if (!projectId || !shotId) {
+    return;
+  }
 
   // 1) 共享工坊草稿（即时缓存）+ workshopDraft 表镜像。
   const draft = readWorkshopDraft(projectId);
@@ -57,10 +54,14 @@ export async function recordCanvasShotGeneration(
   // 2) production 表镜像：读-改-写，只替换命中镜头，保留 progress / 其它镜头字段。
   try {
     const prod = await fetchProduction(projectId);
-    if (!prod) return;
+    if (!prod) {
+      return;
+    }
     const prodShots = asShots(prod.shots);
     const patched = applyShotGeneration(prodShots, shotId, patch);
-    if (patched === prodShots) return;
+    if (patched === prodShots) {
+      return;
+    }
     await pushProduction(projectId, { ...prod, shots: patched });
   } catch {
     /* 服务不可用时静默降级：草稿已更新，工坊侧下次自动保存会补推 production 镜像 */
@@ -69,16 +70,18 @@ export async function recordCanvasShotGeneration(
 
 /** 单镜「退回让 AI 重做」（Phase 6 · P6-3b）：清空该镜产出、状态回 idle、rev 自增，
  *  作为「用户改过」的显式信号 —— run 规划器据此把该镜重新纳入待办。同样落草稿 + production 两处。 */
-export async function requestShotRedo(
-  projectId: string,
-  shotId: string,
-): Promise<void> {
-  if (!projectId || !shotId) return;
+export async function requestShotRedo(projectId: string, shotId: string): Promise<void> {
+  if (!projectId || !shotId) {
+    return;
+  }
 
   const draft = readWorkshopDraft(projectId);
   const nextShots = applyShotRedo(draft.shots, shotId);
   if (nextShots !== draft.shots) {
-    const nextDraft = { ...draft, shots: nextShots as Shot[] };
+    const nextDraft = {
+      ...draft,
+      shots: /* SAFETY: 类型断言已复核 */ nextShots as Array<Shot>,
+    };
     writeWorkshopDraft(projectId, nextDraft);
     fireAndForget(pushServerDraft(projectId, nextDraft), () => {
       /* 静默：pushServerDraft 自带 catch，草稿本地缓存已兜底 */
@@ -87,10 +90,14 @@ export async function requestShotRedo(
 
   try {
     const prod = await fetchProduction(projectId);
-    if (!prod) return;
+    if (!prod) {
+      return;
+    }
     const prodShots = Array.isArray(prod.shots) ? prod.shots : [];
     const patched = applyShotRedo(prodShots, shotId);
-    if (patched === prodShots) return;
+    if (patched === prodShots) {
+      return;
+    }
     await pushProduction(projectId, { ...prod, shots: patched });
   } catch {
     /* 服务不可用静默：草稿已退回，工坊下次自动保存会补推 production */

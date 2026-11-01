@@ -22,10 +22,7 @@ import { describe, expect, it } from "vitest";
 const ROOT = join(process.cwd(), "src", "components");
 
 /** 已归并、不得复活的历史 UI kit 目录（规范 16 §16.2.4 台账）。 */
-const RETIRED_KIT_DIRS = [
-  "studio/ui",
-  "studio/shared",
-];
+const RETIRED_KIT_DIRS = ["studio/ui", "studio/shared"];
 
 /**
  * 允许放「通用 UI」的目录（白名单）。
@@ -37,11 +34,13 @@ const RETIRED_KIT_DIRS = [
 const ALLOWED_UI_DIRS = new Set(["ui"]);
 
 /** 递归收集目录下的所有 `.tsx`（跳过测试与快照）。 */
-function collectTsx(dir: string, out: string[] = []): string[] {
+function collectTsx(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === "__snapshots__" || entry.name === "__tests__") continue;
+      if (entry.name === "__snapshots__" || entry.name === "__tests__") {
+        continue;
+      }
       collectTsx(full, out);
     } else if (entry.name.endsWith(".tsx") && !entry.name.includes(".test.")) {
       out.push(full);
@@ -77,21 +76,26 @@ describe("UI kit 目录只有一处（规范 16 §16.2.4）", () => {
         .filter((name) => !name.includes(".test."))
         .map((name) => name.replace(/\.tsx$/, "")),
     );
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const abs of collectTsx(ROOT)) {
       const rel = relative(ROOT, abs);
       const top = rel.split(sep)[0];
-      if (top && ALLOWED_UI_DIRS.has(top)) continue;
-      const base = rel.split(sep).pop()!.replace(/\.tsx$/, "");
-      if (uiNames.has(base)) offenders.push(rel.split(sep).join("/"));
+      if (top && ALLOWED_UI_DIRS.has(top)) {
+        continue;
+      }
+      const base = rel
+        .split(sep)
+        .pop()!
+        .replace(/\.tsx$/, "");
+      if (uiNames.has(base)) {
+        offenders.push(rel.split(sep).join("/"));
+      }
     }
     expect(offenders).toEqual([]);
   });
 
   it("归并后的 ui/ 不空（判据本身没被绕过）", () => {
-    const entries = readdirSync(join(ROOT, "ui")).filter((n) =>
-      n.endsWith(".tsx"),
-    );
+    const entries = readdirSync(join(ROOT, "ui")).filter((n) => n.endsWith(".tsx"));
     expect(entries.length).toBeGreaterThan(20);
     expect(statSync(join(ROOT, "ui")).isDirectory()).toBe(true);
   });

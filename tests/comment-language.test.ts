@@ -44,7 +44,7 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 跑门禁：直接在本仓库工作区跑（验「仓库里的基线 ⇄ 仓库里的代码」）。 */
-function runInRepo(args: string[] = []): { code: number; output: string } {
+function runInRepo(args: Array<string> = []): { code: number; output: string } {
   try {
     const output = execFileSync(process.execPath, [SCRIPT, ...args], {
       cwd: REPO_ROOT,
@@ -52,8 +52,12 @@ function runInRepo(args: string[] = []): { code: number; output: string } {
       stdio: ["ignore", "pipe", "pipe"],
     });
     return { code: 0, output };
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string };
+  } catch (error) {
+    const e = /* SAFETY: 类型断言已复核 */ error as {
+      status?: number;
+      stderr?: string;
+      stdout?: string;
+    };
     return {
       code: typeof e.status === "number" ? e.status : 1,
       output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
@@ -66,16 +70,15 @@ function runInRepo(args: string[] = []): { code: number; output: string } {
  * `scripts/doc-facts.cjs` 反向解析它。临时工作区里没有那篇文档，因此这里放一份
  * 最小替身（只含被解析的那一行），把「脚本从哪里读名单」这件事在隔离环境里钉住。
  */
-function seedFactsDoc(repo: GateRepo, modules: string[]): void {
+function seedFactsDoc(repo: GateRepo, modules: Array<string>): void {
   const row =
-    `| \`comment.language.asciiOnly\` | ` +
-    modules.map((m) => `\`${m}\``).join("、") +
-    ` | 白名单 | 本行 | 解析本行 |`;
+    `| \`comment.language.asciiOnly\` | ${
+    modules.map((m) => `\`${m}\``).join("、")
+    } | 白名单 | 本行 | 解析本行 |`;
   repo.write("docs/reference-facts.md", `# refs\n\n${row}\n`);
 }
 
-const CHINESE =
-  "/** 组合输入参数：取值失败时回落缺省值。 */\nexport const a = 1;\n";
+const CHINESE = "/** 组合输入参数：取值失败时回落缺省值。 */\nexport const a = 1;\n";
 const ENGLISH =
   "/** Combine the input parameters and fall back to defaults. */\nexport const a = 1;\n";
 
@@ -134,9 +137,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(repo.run().code).toBe(0);
   });
 
-  test("工具指示注释（@vitest-environment / @ts-* / eslint-disable）不参与统计", ({
-    repo,
-  }) => {
+  test("工具指示注释（@vitest-environment / @ts-* / eslint-disable）不参与统计", ({ repo }) => {
     // 它们不是给人读的注释，而是工具按**字面量**解析的指令：
     // 改成中文不是报错，而是静默失效（用例悄悄跑回默认环境）。
     repo.write(
@@ -153,9 +154,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(repo.run().code).toBe(0);
   });
 
-  test("turbopackIgnore 指令行不参与统计（Turbopack 按字面量解析）", ({
-    repo,
-  }) => {
+  test("turbopackIgnore 指令行不参与统计（Turbopack 按字面量解析）", ({ repo }) => {
     // Turbopack 的静态分析豁免指令按字面量解析：改写成中文即静默失效
     // （那一处的静态追踪豁免会丢失）。
     repo.write(
@@ -190,9 +189,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(repo.run().code).toBe(0);
   });
 
-  test("参数名恰好是英文虚词（from / to / at）的结构行不参与统计（实测误报 3 处）", ({
-    repo,
-  }) => {
+  test("参数名恰好是英文虚词（from / to / at）的结构行不参与统计（实测误报 3 处）", ({ repo }) => {
     // 判据的真实缺陷：`@param {string} from` 剥掉类型块后剩 `from`，而 `from` 在
     // 英文虚词表里 —— 于是一条**纯类型语法行**（一个英文说明字都没有）被判成
     // 「英文说明句」。实测全仓 3 处：`scripts/launcher-core/run.mjs` 的
@@ -220,9 +217,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(repo.run().code).toBe(0);
   });
 
-  test("参数名是虚词、后面**真有**英文说明 → 仍被统计（豁免不放过散文）", ({
-    repo,
-  }) => {
+  test("参数名是虚词、后面**真有**英文说明 → 仍被统计（豁免不放过散文）", ({ repo }) => {
     // 上一条的反向锚点：剥参数名之后剩下的若真是说明句，虚词照旧命中。
     repo.write(
       "src/lib/jsdoc-prose-param-name-prose.ts",
@@ -233,9 +228,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.output).toContain("src/lib/jsdoc-prose-param-name-prose.ts");
   });
 
-  test("@property 的**字段名**恰是英文虚词时同样豁免（`@property {string} note`）", ({
-    repo,
-  }) => {
+  test("@property 的**字段名**恰是英文虚词时同样豁免（`@property {string} note`）", ({ repo }) => {
     // 与上面那条同因的另一半：名字位置的剥除原先只覆盖 `@param` / `@arg` /
     // `@argument`，`@property` 漏在外面 —— 于是 `@property {string} note`
     // （`note` 在虚词表里）这条**纯结构行**被判成英文散文。
@@ -259,9 +252,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(repo.run().code).toBe(0);
   });
 
-  test("@property 后面**真有**英文说明 → 仍被统计（豁免不放过散文）", ({
-    repo,
-  }) => {
+  test("@property 后面**真有**英文说明 → 仍被统计（豁免不放过散文）", ({ repo }) => {
     // 上一条的反向锚点：剥掉字段名之后剩下的若真是说明句，虚词照旧命中 ——
     // 豁免面只到「@tag + 类型块 + 名字」那三段为止。
     repo.write(
@@ -308,9 +299,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.output).toContain("src/lib/jsdoc-continuation-prose.ts");
   });
 
-  test("带英文散文的 JSDoc 行仍会被统计（结构行豁免不放过说明句）", ({
-    repo,
-  }) => {
+  test("带英文散文的 JSDoc 行仍会被统计（结构行豁免不放过说明句）", ({ repo }) => {
     // 反向锚点：豁免只剥「@tag + 类型块 + 参数名」三段。
     // 若把「说明句里的每个英文词都当标识符删掉」，就会把这条忘了改的英文说明放过去。
     repo.write(
@@ -322,9 +311,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.output).toContain("src/lib/jsdoc-prose.ts");
   });
 
-  test("说明某个指令的中文注释仍会被统计（豁免只认行首就是指令）", ({
-    repo,
-  }) => {
+  test("说明某个指令的中文注释仍会被统计（豁免只认行首就是指令）", ({ repo }) => {
     // 反向锚点：不设这条，「豁免正则写得太宽」会把正常中文注释一起放行而无人发现。
     repo.write(
       "src/lib/directive-doc.ts",
@@ -372,9 +359,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.code, r.output).toBe(0);
   });
 
-  test("连字符标识符里的 in / on / as 不当成虚词（本条改判据的起因）", ({
-    repo,
-  }) => {
+  test("连字符标识符里的 in / on / as 不当成虚词（本条改判据的起因）", ({ repo }) => {
     // `\bin\b` 会把 `open-in-browser` 拆出 in —— 不整体剥掉连字符标识符，
     // 一整串纯模块名清单就会被判成「含虚词的英文句子」。
     repo.write(
@@ -405,9 +390,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.code, r.output).toBe(0);
   });
 
-  test("剥掉引用后仍是裸写的英文句子 → 照样计入（新豁免不放过散文）", ({
-    repo,
-  }) => {
+  test("剥掉引用后仍是裸写的英文句子 → 照样计入（新豁免不放过散文）", ({ repo }) => {
     repo.write(
       "src/lib/prose.ts",
       [
@@ -423,9 +406,7 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.output).toContain("src/lib/prose.ts");
   });
 
-  test("JSX 注释块（`{/* … */}`）与块注释同判 —— 英文计入、中文不计入", ({
-    repo,
-  }) => {
+  test("JSX 注释块（`{/* … */}`）与块注释同判 —— 英文计入、中文不计入", ({ repo }) => {
     // 反向锚点 + 正向用例：早期判据只认行首 `/*` / `//`，JSX 注释**从未被扫描**，
     // 于是那些英文注释既不被统计、也不被拦下（棘轮数字还显示「很干净」）。
     // fixture 用「含虚词的整句」而不是 `Floating toolbar (center)` 那种纯实词标签：
@@ -475,6 +456,31 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
     expect(r.output).toMatch(/\b3\s+src\/components\/Multi\.tsx/);
   });
 
+  test("表达式容器的前导注释（`{/* SAFETY: … */ (expr)…}`）按 `*/` 收口，其后代码行不进统计", ({
+    repo,
+  }) => {
+    // 阳性对照：anti-slop 的 SAFETY 形态把注释写进 JSX 表达式容器的前导位，
+    // `*/` 后面跟着的是代码不是 `}`。旧口径只认 `*/}` 收口 ⇒ 整份文件被判成
+    // 「块注释内」，其后的英文代码行被当成英文注释（现场：
+    // tests/integration/renderWithProviders.integration.test.tsx，SAFETY 批撞上）。
+    // fixture 刻意让注释后的代码行「含虚词成句英文」——若收口判错，这行必被计入。
+    repo.write(
+      "src/components/SafetyExpr.tsx",
+      [
+        "export function SafetyExpr({ error }: { error: unknown }) {",
+        "  return (",
+        "    <div>",
+        "      {/* SAFETY: 类型断言已复核 */ (error as { message?: string } | null)?.message}",
+        '      {error ? "The message was rendered above the fallback text" : null}',
+        "    </div>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    expect(repo.run().code).toBe(0);
+  });
+
   test("字符串字面量里的英文不被当成注释", ({ repo }) => {
     repo.write(
       "src/lib/str.ts",
@@ -492,35 +498,29 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
 
 describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   test("doc-facts 从 reference-facts 的那一行解析出名单，而不是另存一份", async () => {
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      extractAsciiOnlyModules: () => string[];
-      FACTS: Array<{ key: string; kind: string }>;
-    };
+    const mod =
+      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
+        extractAsciiOnlyModules: () => Array<string>;
+        FACTS: Array<{ key: string; kind: string }>;
+      };
     const paths = mod.extractAsciiOnlyModules();
     expect(paths).toContain("src/lib/db-schema-ready.ts");
     expect(paths).toContain("src/server/db.ts");
     // 名单来源必须是那篇文档：解析结果与文档里写的逐项相同。
-    const doc = readFileSync(
-      join(REPO_ROOT, "docs/reference-facts.md"),
-      "utf8",
-    );
-    const row = doc
-      .split("\n")
-      .find((l) => l.includes("comment.language.asciiOnly"));
-    expect(
-      row,
-      "reference-facts 缺少 comment.language.asciiOnly 登记行",
-    ).toBeTruthy();
-    for (const p of paths) expect(row).toContain(`\`${p}\``);
+    const doc = readFileSync(join(REPO_ROOT, "docs/reference-facts.md"), "utf8");
+    const row = doc.split("\n").find((l) => l.includes("comment.language.asciiOnly"));
+    expect(row, "reference-facts 缺少 comment.language.asciiOnly 登记行").toBeTruthy();
+    for (const p of paths) {
+      expect(row).toContain(`\`${p}\``);
+    }
   });
 
   test("事实已登记在 FACTS 里（有 key 才参与 doc:check 的核对）", async () => {
-    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
-      FACTS: Array<{ key: string }>;
-    };
-    expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(
-      true,
-    );
+    const mod =
+      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
+        FACTS: Array<{ key: string }>;
+      };
+    expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(true);
   });
 
   /**
@@ -535,9 +535,7 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   test("仓库自己的树是干净的（硬闸形态下这一格才是终局）", () => {
     const report = runInRepo(["--report"]);
     expect(report.code, report.output).toBe(0);
-    const header = /疑似英文注释 (\d+) 行,分布在 (\d+) 个文件/.exec(
-      report.output,
-    );
+    const header = /疑似英文注释 (\d+) 行,分布在 (\d+) 个文件/.exec(report.output);
     expect(header, `无法解析 --report 表头：${report.output}`).toBeTruthy();
     expect(
       Number(header![1]),
@@ -548,17 +546,11 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   });
 
   test("规范与启动链路文档都写明了例外的存在（避免「一刀切」被改回去）", () => {
-    const std = readFileSync(
-      join(REPO_ROOT, "docs/standards/12-代码组织与文件结构.md"),
-      "utf8",
-    );
+    const std = readFileSync(join(REPO_ROOT, "docs/standards/12-代码组织与文件结构.md"), "utf8");
     expect(std).toContain("12.4.6");
     expect(std).toContain("纯 ASCII 模块");
     expect(std).toContain("comment.language.asciiOnly");
-    const launch = readFileSync(
-      join(REPO_ROOT, "docs/standards/launch-and-build.md"),
-      "utf8",
-    );
+    const launch = readFileSync(join(REPO_ROOT, "docs/standards/launch-and-build.md"), "utf8");
     expect(launch).toContain("9.6");
   });
 });

@@ -45,15 +45,15 @@ export const CONTRACT_MODE_GROUPS: Array<{
  * 由 `mode-contract-config.test.ts` 双向比对守住（漏项是这张表的失效模式：
  * 某个模式从导航上静默消失，界面其它地方都不会说）。
  */
-export interface ContractModeTreeGroup {
+export type ContractModeTreeGroup = {
   category: "image" | "video" | "audio";
   label: string;
   /** 挂在这一组下的模式（顺序即渲染顺序）。 */
   modes: typeof CONTRACT_MODES;
-}
+};
 
 /** 导航树（按 `CONTRACT_MODE_GROUPS` 的顺序，跳过空组）。 */
-export function contractModeTree(): ContractModeTreeGroup[] {
+export function contractModeTree(): Array<ContractModeTreeGroup> {
   return CONTRACT_MODE_GROUPS.map((group) => ({
     ...group,
     modes: CONTRACT_MODES.filter((t) => t.category === group.category),
@@ -62,9 +62,7 @@ export function contractModeTree(): ContractModeTreeGroup[] {
 
 /** 模式码 → 展示名（工作流类型表里查得到就用它的中文名）。 */
 export function contractModeLabel(mode: string): string {
-  return (
-    ALL_WORKFLOW_TYPES.find((t) => t.code === mode.toUpperCase())?.label ?? mode
-  );
+  return ALL_WORKFLOW_TYPES.find((t) => t.code === mode.toUpperCase())?.label ?? mode;
 }
 
 /** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置现算。
@@ -76,18 +74,20 @@ export function contractModeLabel(mode: string): string {
  *  成品配置 —— 成品配置由 `derivedModeContract` 现算，没有第二处需要查。 */
 export function effectiveModeContract(
   mode: string,
-  stored: readonly ModeContract[],
+  stored: ReadonlyArray<ModeContract>,
 ): { contract: ModeContract; customized: boolean } {
   const code = upperToken(mode);
   const found = stored.find((c) => c.mode === code);
-  if (found) return { contract: found, customized: true };
+  if (found) {
+    return { contract: found, customized: true };
+  }
   return { contract: derivedModeContract(code), customized: false };
 }
 
 /** 某模式是否已被用户改过（「已改」徽标）。 */
 export function isModeContractCustomized(
   mode: string,
-  stored: readonly ModeContract[],
+  stored: ReadonlyArray<ModeContract>,
 ): boolean {
   return effectiveModeContract(mode, stored).customized;
 }
@@ -95,9 +95,7 @@ export function isModeContractCustomized(
 /** 契约里还没有的固定口（供「＋ 添加口」按钮清单）。
  *
  *  参考图不在其中：它不设数量上限，由 `nextReferenceImageId` 逐个追加序号槽。 */
-export function addableContractInputs(
-  inputs: readonly string[],
-): ModeContractInputType[] {
+export function addableContractInputs(inputs: ReadonlyArray<string>): Array<ModeContractInputType> {
   return MODE_CONTRACT_INPUT_TYPES.filter(
     (t) => t.type !== "reference-image" && !inputs.includes(t.type),
   ).map((t) => t.type);
@@ -109,9 +107,9 @@ export function addableContractInputs(
  *  数字。更细的形状（尺寸的组合控件、时长的秒/帧单位）都带语义，需要配套的换算
  *  规则，不是一次配置能说清的，所以不开放给作者自选。 */
 export const CUSTOM_INPUT_KINDS: ReadonlyArray<{
+  hint: string;
   kind: ModeContractCustomKind;
   label: string;
-  hint: string;
 }> = [
   { kind: "text", label: "文本", hint: "单行文本，可落到工作流的文本行" },
   { kind: "image", label: "图片", hint: "选本地图片上传，可落到图片行" },
@@ -129,15 +127,13 @@ export function customInputKindLabel(kind: ModeContractCustomKind): string {
  *  这个给一张**完整**的参数表（已加的也在，标出来），否则用户看不到「一共能有
  *  哪些口」——只看得见剩下的那几个，读起来像「这套系统只支持这些参数」。 */
 export function contractInputCatalog(
-  inputs: readonly string[],
-): Array<{ type: ModeContractInputType; label: string; added: boolean }> {
+  inputs: ReadonlyArray<string>,
+): Array<{ added: boolean; label: string; type: ModeContractInputType }> {
   return MODE_CONTRACT_INPUT_TYPES.map((item) => ({
     type: item.type,
     label: item.label,
     added: inputs.some((id) =>
-      item.type === "reference-image"
-        ? id.startsWith("reference-image")
-        : id === item.type,
+      item.type === "reference-image" ? id.startsWith("reference-image") : id === item.type,
     ),
   }));
 }

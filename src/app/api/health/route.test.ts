@@ -52,9 +52,7 @@ describe("GET /api/health", () => {
     const { GET } = await import("./route");
     const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual(
-      expect.objectContaining({ status: "ok", db: "up" }),
-    );
+    await expect(res.json()).resolves.toEqual(expect.objectContaining({ status: "ok", db: "up" }));
   });
 
   it("表还没建时返回 503 + db: empty（旧实现此处回 db: up，漏报整档）", async () => {
@@ -62,10 +60,10 @@ describe("GET /api/health", () => {
     const { GET } = await import("./route");
     const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
-    const body = (await res.json()) as {
-      status: string;
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       db: string;
       hint: string;
+      status: string;
     };
     expect(body.db).toBe("empty");
     expect(body.status).toBe("error");
@@ -89,9 +87,7 @@ describe("GET /api/health", () => {
     // （UptimeRobot / Grafana / 容器健康检查）对端点的全部信任就在这里。
     // 反向验证：把路由的 `await` 去掉，本条即红（回 200）。
     probeSchemaSync.mockReturnValue("ready");
-    pingDatabase.mockRejectedValueOnce(
-      new Error("SQLITE_CANTOPEN: unable to open"),
-    );
+    pingDatabase.mockRejectedValueOnce(new Error("SQLITE_CANTOPEN: unable to open"));
     const { GET } = await import("./route");
     const res = await GET(new Request("http://127.0.0.1:3000/api/health"));
     expect(res.status).toBe(503);
@@ -123,9 +119,7 @@ describe("GET /api/health 跨域面（D5）", () => {
       "https://tauri.localhost",
     ]) {
       const res = await GET(new Request(url, { headers: { origin } }));
-      expect(res.headers.get("access-control-allow-origin"), origin).toBe(
-        origin,
-      );
+      expect(res.headers.get("access-control-allow-origin"), origin).toBe(origin);
       /* 回显源 + `Vary` 两件都要：只给前者时，链路上的缓存会把第一个访问者的头
        * 复用给所有源（白名单形同虚设，且是静默的）。 */
       expect(res.headers.get("vary"), origin).toBe("Origin");
@@ -154,7 +148,7 @@ describe("GET /api/health 跨域面（D5）", () => {
   it("503 的 hint 不含内部文档路径（响应体不给仓库文档当出口）", async () => {
     probeSchemaSync.mockReturnValue("missing");
     const { GET } = await import("./route");
-    const body = (await (await GET(new Request(url))).json()) as {
+    const body = /* SAFETY: 类型断言已复核 */ (await (await GET(new Request(url))).json()) as {
       hint: string;
     };
     expect(body.hint).not.toContain("docs/");

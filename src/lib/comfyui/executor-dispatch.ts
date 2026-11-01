@@ -57,15 +57,12 @@ import type { Job, LogEntry } from "./runner-state";
 import { executeViaComfyCli } from "./executor-cli";
 import { connect } from "./executor-ws";
 import { finalizeFailure } from "./executor-finalize";
-import {
-  registerQueueAnnounce,
-  registerQueueKick,
-} from "./executor-continuation";
+import { registerQueueAnnounce, registerQueueKick } from "./executor-continuation";
 import type { TaskClaimMode, TaskRepoImpl } from "../core/repository-task-impl";
 
 /** 领取节拍。与 host 侧原 `CLAIM_TICK_MS` 同值（2s）：它是「安全网」的节奏，
  *  正常路径靠提交后与收口后的即时 kick，不靠等这一拍。 */
-export const DISPATCH_TICK_MS = 2_000;
+export const DISPATCH_TICK_MS = 2000;
 
 /** 本模块要的那三条仓储能力（结构化最小，方便宿主注入自己的 impl 实例）。 */
 export type DispatchRepo = Pick<
@@ -79,12 +76,13 @@ let ownerOverride: TaskClaimMode | null = null;
 /** 宿主注入自带的 DB 句柄与归属声明（host 必调；Next 不调，走下方兜底）。
  *  `owner` 与 `createTaskRepoImpl(db, { owner })` 那次声明**必须同源**，
  *  否则领到的行与收口时的守卫判据不一致（同 reaper 那条约束）。 */
-export function configureDispatch(next: {
-  taskRepo?: DispatchRepo;
-  owner?: TaskClaimMode;
-}): void {
-  if (next.taskRepo) repoOverride = next.taskRepo;
-  if (next.owner) ownerOverride = next.owner;
+export function configureDispatch(next: { owner?: TaskClaimMode; taskRepo?: DispatchRepo }): void {
+  if (next.taskRepo) {
+    repoOverride = next.taskRepo;
+  }
+  if (next.owner) {
+    ownerOverride = next.owner;
+  }
 }
 
 let warnedUnconfigured = false;
@@ -92,8 +90,8 @@ let warnedUnconfigured = false;
 /** 返回 `null` = 纯 Node 宿主且尚未注入：本轮跳过（幂等，下一拍还会来），
  *  但留一行——「不注入却安静什么都不领」是最难查的那种死法（规范硬规则 4）。 */
 async function resolveDispatch(): Promise<{
-  repo: DispatchRepo;
   owner: TaskClaimMode;
+  repo: DispatchRepo;
 } | null> {
   if (repoOverride && ownerOverride) {
     return { repo: repoOverride, owner: ownerOverride };
@@ -101,11 +99,11 @@ async function resolveDispatch(): Promise<{
   try {
     const { taskRepository } = await import("../core/repository");
     return { repo: taskRepository, owner: ownerOverride ?? "inline" };
-  } catch (err) {
+  } catch (error) {
     if (!warnedUnconfigured) {
       warnedUnconfigured = true;
       logger.warn(
-        `[comfyui] dispatch 未注入 taskRepo 且 Next barrel 不可达，本轮跳过领取：${errorText(err, "resolveDispatch")}`,
+        `[comfyui] dispatch 未注入 taskRepo 且 Next barrel 不可达，本轮跳过领取：${errorText(error, "resolveDispatch")}`,
       );
     }
     return null;
@@ -122,7 +120,9 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
   try {
     const ids = await repo.listQueuedIds(owner, WAIT_HINT_LIMIT);
     for (const id of ids) {
-      if (s.wsWaitLogged.has(id)) continue;
+      if (s.wsWaitLogged.has(id)) {
+        continue;
+      }
       s.wsWaitLogged.add(id);
       logWhileQueued(
         id,
@@ -130,8 +130,8 @@ async function hintWaitingTasks(repo: DispatchRepo, owner: TaskClaimMode) {
         "⏳ 等待 ComfyUI WebSocket 连接就绪；若 ComfyUI 未运行且已开启自动启动，将自动拉起并在此后继续执行…",
       );
     }
-  } catch (err) {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "等待提示写入失败")}`);
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "等待提示写入失败")}`);
   }
 }
 
@@ -154,7 +154,9 @@ export async function claimAndDispatchOnce(options?: {
 }): Promise<string | null> {
   const s = state();
   const resolved = await resolveDispatch();
-  if (!resolved) return null;
+  if (!resolved) {
+    return null;
+  }
   const { repo, owner } = resolved;
 
   if (!options?.skipReadyGate && s.ws?.readyState !== WebSocket.OPEN) {
@@ -162,24 +164,26 @@ export async function claimAndDispatchOnce(options?: {
     // 用 fireAndForget 而不是 `void connect()`：连接内部自己会重试，但「兜底通道
     // 之外还抛出来」的那一条要有名字地落一行 warn，而不是变成 unhandled rejection。
     fireAndForget(connect(), (err: unknown) => {
-      logger.warn(
-        `[comfyui] ${errorText(err, "就绪探测（连接 ComfyUI）失败")}`,
-      );
+      logger.warn(`[comfyui] ${errorText(err, "就绪探测（连接 ComfyUI）失败")}`);
     });
     await hintWaitingTasks(repo, owner);
     return null;
   }
-  if (s.pendingDispatch.size >= MAX_CONCURRENCY) return null;
+  if (s.pendingDispatch.size >= MAX_CONCURRENCY) {
+    return null;
+  }
 
-  let claimed: string[];
+  let claimed: Array<string>;
   try {
     claimed = await repo.claimNextQueued(owner, 1);
-  } catch (err) {
-    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "领取队列任务失败")}`);
+  } catch (error) {
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(error, "领取队列任务失败")}`);
     return null;
   }
   const taskId = claimed[0];
-  if (!taskId) return null;
+  if (!taskId) {
+    return null;
+  }
 
   markDispatched(taskId);
   /* 领到手 = 这一轮的执行起点，原来在 `enqueue()` 里做的四件记账搬到这里（第二刀）：
@@ -205,10 +209,7 @@ export async function claimAndDispatchOnce(options?: {
     /* 行没有执行载荷 = 建行异常（或本刀之前的历史 host 行）。判失败并留可见原因，
      * 不许变 RUNNING 僵尸——host 片的 reaper 是这条的兜底，主动收口更快也更准。 */
     log(taskId, "error", "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
-    await repo.finalizeFailure(
-      taskId,
-      "任务缺少执行载荷（execPayload），无法提交给 ComfyUI",
-    );
+    await repo.finalizeFailure(taskId, "任务缺少执行载荷（execPayload），无法提交给 ComfyUI");
     releaseDispatchSlot(taskId);
     return taskId;
   }
@@ -217,7 +218,7 @@ export async function claimAndDispatchOnce(options?: {
     taskId,
     workflowName: row.workflowName,
     rawJson: row.execPayload,
-    overrides: (row.params as { workflowInputs?: Job["overrides"] })
+    overrides: /* SAFETY: 类型断言已复核 */ (row.params as { workflowInputs?: Job["overrides"] })
       ?.workflowInputs,
   };
 
@@ -228,25 +229,28 @@ export async function claimAndDispatchOnce(options?: {
     log(
       taskId,
       "info",
-      `输入参数（workflowInputs，${job.overrides.length} 项）：\n` +
-        JSON.stringify(job.overrides, null, 2),
+      `输入参数（workflowInputs，${job.overrides.length} 项）：\n${JSON.stringify(
+        job.overrides,
+        null,
+        2,
+      )}`,
     );
   }
 
   /* fire-and-forget + `.catch`：`executeViaComfyCli` 若 reject（resolveComfyBase
    * throw、writeFile EACCES、spawn ENOENT…），不兜住就是 unhandled rejection，
    * 而在飞记账会永远占着那个槽（界面表现：任务永远 QUEUED 0%）。 */
-  void executeViaComfyCli(job).catch(async (err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err);
+  void executeViaComfyCli(job).catch(async (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
     log(taskId, "error", `工作流启动异常：${msg}`);
     try {
       await finalizeFailure(taskId, "", msg);
-    } catch (inner) {
+    } catch (error) {
       /* finalizeFailure 自己也可能抛（数据库挂了）：不再嵌 catch，只归还槽位。
        * 这里**刻意不再立刻领一次**——走到这一支的含义就是「库此刻写不进去」，
        * 在它上面自旋只会把每一次领取都变成一次失败；下一拍（2s 的常驻循环）
        * 再试才是有退避的推进。 */
-      log(taskId, "error", errorText(inner, "finalizeFailure 二次失败"));
+      log(taskId, "error", errorText(error, "finalizeFailure 二次失败"));
       releaseDispatchSlot(taskId);
     }
   });
@@ -254,9 +258,9 @@ export async function claimAndDispatchOnce(options?: {
   return taskId;
 }
 
-interface DispatchGlobal {
+type DispatchGlobal = {
   handle: ReturnType<typeof setInterval> | null;
-}
+};
 
 declare global {
   var __comfyDispatch_v1: DispatchGlobal | undefined;
@@ -275,12 +279,12 @@ const dispatchState: DispatchGlobal = (globalThis.__comfyDispatch_v1 ??= {
  * `claimAndDispatchOnce`），所以这里不需要很快。
  */
 export function startDispatchLoop(intervalMs = DISPATCH_TICK_MS): void {
-  if (dispatchState.handle) return;
+  if (dispatchState.handle) {
+    return;
+  }
   dispatchState.handle = setInterval(() => {
     fireAndForget(claimAndDispatchOnce(), (err: unknown) => {
-      logger.warn(
-        `[comfyui] ${sqliteAwareErrorText(err, "领取循环异常（下一轮重试）")}`,
-      );
+      logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "领取循环异常（下一轮重试）")}`);
     });
   }, intervalMs);
   /* `unref()`：常驻后台职责不该把事件循环吊住（dev server 关停能自然退出）。 */
@@ -300,9 +304,7 @@ export function stopDispatchLoop(): void {
  * 放在模块体而不是函数里：注册必须先于任何收口发生。 */
 registerQueueKick(() => {
   fireAndForget(claimAndDispatchOnce(), (err: unknown) => {
-    logger.warn(
-      `[comfyui] ${sqliteAwareErrorText(err, "续跑领取失败（下一拍由常驻循环再试）")}`,
-    );
+    logger.warn(`[comfyui] ${sqliteAwareErrorText(err, "续跑领取失败（下一拍由常驻循环再试）")}`);
   });
 });
 
@@ -311,14 +313,15 @@ registerQueueKick(() => {
  *  坏消息在极端积压下变成 N 次整表写。 */
 const ANNOUNCE_LIMIT = 20;
 
-async function announceWaiting(
-  msg: string,
-  level: LogEntry["level"],
-): Promise<void> {
+async function announceWaiting(msg: string, level: LogEntry["level"]): Promise<void> {
   const resolved = await resolveDispatch();
-  if (!resolved) return;
+  if (!resolved) {
+    return;
+  }
   const ids = await resolved.repo.listQueuedIds(resolved.owner, ANNOUNCE_LIMIT);
-  for (const id of ids) logWhileQueued(id, level, msg);
+  for (const id of ids) {
+    logWhileQueued(id, level, msg);
+  }
 }
 
 /* 同一个叶子总线、第二种注册：通道层（executor-ws）在 ComfyUI 自动启动的每个

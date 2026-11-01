@@ -10,11 +10,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import {
-  DEFAULT_SIZE_SPEC,
-  sizeSpecToWxH,
-  type SizeSpec,
-} from "~/lib/media/size-presets";
+import { DEFAULT_SIZE_SPEC, sizeSpecToWxH, type SizeSpec } from "~/lib/media/size-presets";
 import type { Shot } from "~/lib/workshop/types";
 
 const COMPOSE_DIR = path.join(process.cwd(), "data", "workshop-compositions");
@@ -28,40 +24,37 @@ const COMPOSE_SIZE: SizeSpec = { ...DEFAULT_SIZE_SPEC, ratio: "16:9 横屏" };
 /** ffmpeg 的 `scale` 过滤器用 `W:H` 写法（不是 WxH）。 */
 const COMPOSE_SCALE = sizeSpecToWxH(COMPOSE_SIZE, "video").replace("x", ":");
 
-export interface CompositionSegment {
-  order: number;
-  shotId: string;
-  scene: string;
-  shotType: string;
-  prompt: string;
-  imageUrl: string | null;
+export type CompositionSegment = {
   clipUrl: string | null;
-  durationSec: number;
-  motion: string;
-  transition: string;
   dialogue: string;
-}
+  durationSec: number;
+  imageUrl: string | null;
+  motion: string;
+  order: number;
+  prompt: string;
+  scene: string;
+  shotId: string;
+  shotType: string;
+  transition: string;
+};
 
-export interface CompositionPlan {
-  project: string;
+export type CompositionPlan = {
   exportedAt: string;
-  totalShots: number;
+  project: string;
+  segments: Array<CompositionSegment>;
   totalDurationSec: number;
-  segments: CompositionSegment[];
-}
+  totalShots: number;
+};
 
-export interface RenderResult {
+export type RenderResult = {
+  note?: string;
   ok: boolean;
   outputPath?: string;
-  note?: string;
-}
+};
 
 /** 由分镜构建有序合成清单（与界面 FinalComposer.exportPlan 对齐）。 */
-export function buildCompositionPlan(
-  title: string,
-  shots: Shot[],
-): CompositionPlan {
-  const segments: CompositionSegment[] = shots.map((shot, i) => ({
+export function buildCompositionPlan(title: string, shots: Array<Shot>): CompositionPlan {
+  const segments: Array<CompositionSegment> = shots.map((shot, i) => ({
     order: i + 1,
     shotId: shot.id,
     scene: shot.sceneHeading,
@@ -69,10 +62,7 @@ export function buildCompositionPlan(
     prompt: shot.prompt,
     imageUrl: shot.imageUrl ?? null,
     clipUrl: shot.clipUrl ?? null,
-    durationSec:
-      typeof shot.duration === "number" && shot.duration > 0
-        ? shot.duration
-        : 4,
+    durationSec: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
     motion: shot.motion ?? "medium",
     transition: shot.transition ?? "cut",
     dialogue: shot.dialogue ?? "",
@@ -94,14 +84,20 @@ export async function writeCompositionPlan(
 ): Promise<string> {
   await fs.mkdir(COMPOSE_DIR, { recursive: true });
   const file = path.join(COMPOSE_DIR, `${sessionId}.json`);
-  await fs.writeFile(file, JSON.stringify(plan, null, 2), "utf-8");
+  await fs.writeFile(file, JSON.stringify(plan, null, 2), "utf8");
   return file;
 }
 
 function localPathOf(ref: string | null): string | null {
-  if (!ref) return null;
-  if (ref.startsWith("file://")) return ref.slice("file://".length);
-  if (/^https?:\/\//i.test(ref)) return null; // 远程引用暂不处理
+  if (!ref) {
+    return null;
+  }
+  if (ref.startsWith("file://")) {
+    return ref.slice("file://".length);
+  }
+  if (/^https?:\/\//i.test(ref)) {
+    return null;
+  } // 远程引用暂不处理
   return ref;
 }
 
@@ -129,12 +125,14 @@ export async function renderComposition(
   const tmpDir = path.join(COMPOSE_DIR, `.tmp-${outputName}`);
   await fs.mkdir(tmpDir, { recursive: true });
 
-  const segs: string[] = [];
+  const segs: Array<string> = [];
   for (const s of plan.segments) {
     const clip = localPathOf(s.clipUrl);
     const img = localPathOf(s.imageUrl);
     const src = clip ?? img;
-    if (!src) continue;
+    if (!src) {
+      continue;
+    }
     const tmp = path.join(tmpDir, `seg-${s.order}.mp4`);
     const scale = `scale=${COMPOSE_SCALE}`;
     const args = clip
@@ -189,23 +187,19 @@ export async function renderComposition(
   const listFile = path.join(tmpDir, "list.txt");
   await fs.writeFile(
     listFile,
-    segs.map((p) => `file '${p.replace(/'/g, "'\\''")}'`).join("\n"),
-    "utf-8",
+    segs.map((p) => `file '${p.replaceAll("'", String.raw`'\''`)}'`).join("\n"),
+    "utf8",
   );
   const out = path.join(COMPOSE_DIR, `${outputName}.mp4`);
   try {
-    await execFileP(
-      ff,
-      ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out],
-      {
-        timeout: 300_000,
-      },
-    );
-  } catch (e) {
+    await execFileP(ff, ["-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", out], {
+      timeout: 300_000,
+    });
+  } catch (error) {
     await fs.rm(tmpDir, { recursive: true, force: true });
     return {
       ok: false,
-      note: errorText(e, "ffmpeg 合成失败"),
+      note: errorText(error, "ffmpeg 合成失败"),
     };
   }
   await fs.rm(tmpDir, { recursive: true, force: true });

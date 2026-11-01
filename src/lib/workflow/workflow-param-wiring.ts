@@ -16,20 +16,17 @@
  * 写入是**合并式**的：paramMap 里 `source` 之外的命名空间原样保留。
  */
 
-import {
-  parseParamMapping,
-  serializeParamMapping,
-} from "~/lib/workflow/workflow-param-mapping";
+import { parseParamMapping, serializeParamMapping } from "~/lib/workflow/workflow-param-mapping";
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 一条连线动作：把某个对外参数在这个模式下连到 `ioKey`（`null` = 断开）。 */
-export interface ParamWireEdit {
+export type ParamWireEdit = {
   entryId: string;
   /** 目标落点的 ioKey；`null` = 该模式下显式断开。 */
   ioKey: string | null;
   /** 该次编辑归属的模式码。没有模式时无法落库（见下）。 */
   mode: string | null;
-}
+};
 
 /** 这条连线动作是否可落库（两端都成立）。
  *
@@ -44,8 +41,12 @@ export function canApplyWireEdit(
   edit: ParamWireEdit,
   io: WorkflowIOMap | null | undefined,
 ): boolean {
-  if (!edit.mode) return false;
-  if (edit.ioKey === null) return true;
+  if (!edit.mode) {
+    return false;
+  }
+  if (edit.ioKey === null) {
+    return true;
+  }
   return !!io?.[edit.ioKey];
 }
 
@@ -62,10 +63,10 @@ export function applyWireEdit(
   const parsed = parseParamMapping(base);
   /* 先收成局部变量再改：`mapping.manualByMode` 是刚构造的字面量、
    * 类型上却仍是可选字段，直接写它要多补两处 `!`。 */
-  const manualByMode = { ...(parsed.manualByMode ?? {}) };
+  const manualByMode = { ...parsed.manualByMode };
   const mode = edit.mode ?? "";
   manualByMode[mode] = {
-    ...(manualByMode[mode] ?? {}),
+    ...manualByMode[mode],
     [edit.entryId]: edit.ioKey,
     /* 显式断开也落库（`null`）—— 不落的话刷新后就变成「还没连过」。 */
   };
@@ -78,10 +79,12 @@ export function hasWireEdit(
   entryId: string,
   mode: string | null,
 ): boolean {
-  if (!mode) return false;
+  if (!mode) {
+    return false;
+  }
   const parsed = parseParamMapping(paramMap);
   const byEntry = parsed.manualByMode?.[mode];
-  return !!byEntry && Object.prototype.hasOwnProperty.call(byEntry, entryId);
+  return !!byEntry && Object.hasOwn(byEntry, entryId);
 }
 
 /** 撤销某个对外参数在这个模式下的手工线（回到「未配置」）。
@@ -94,13 +97,18 @@ export function clearWireEdit(
   mode: string | null,
 ): Record<string, unknown> {
   const base = paramMap && typeof paramMap === "object" ? paramMap : {};
-  if (!mode) return base;
+  if (!mode) {
+    return base;
+  }
   const parsed = parseParamMapping(base);
-  const byEntry = { ...(parsed.manualByMode?.[mode] ?? {}) };
+  const byEntry = { ...parsed.manualByMode?.[mode] };
   delete byEntry[entryId];
-  const manualByMode = { ...(parsed.manualByMode ?? {}) };
-  if (Object.keys(byEntry).length > 0) manualByMode[mode] = byEntry;
-  else delete manualByMode[mode];
+  const manualByMode = { ...parsed.manualByMode };
+  if (Object.keys(byEntry).length > 0) {
+    manualByMode[mode] = byEntry;
+  } else {
+    delete manualByMode[mode];
+  }
   return serializeParamMapping({ manualByMode }, base);
 }
 
@@ -109,13 +117,13 @@ export function clearWireEdit(
 export const DROP_TOLERANCE = 12;
 
 /** 只保留矩形需要的最小字段（DOMRect 之外也便于单测传普通对象）。 */
-export interface DOMRectLike {
-  left: number;
-  top: number;
-  right: number;
+export type DOMRectLike = {
   bottom: number;
   height: number;
-}
+  left: number;
+  right: number;
+  top: number;
+};
 
 /** 拖线落点解析：一次拖拽在某个位置松开时，命中的宿主落点 ioKey（`null` = 没落上）。
  *
@@ -135,9 +143,9 @@ export interface DOMRectLike {
  *  隔壁行上）。容差随坐标系由调用方按需缩放，这里不做二次换算。 */
 export function resolveDropTarget(
   point: { x: number; y: number },
-  candidates: readonly { ioKey: string; rect: DOMRectLike }[],
+  candidates: ReadonlyArray<{ ioKey: string; rect: DOMRectLike }>,
 ): string | null {
-  let hit: { ioKey: string; height: number } | null = null;
+  let hit: { height: number; ioKey: string } | null = null;
   for (const candidate of candidates) {
     const { rect } = candidate;
     const inside =
@@ -145,7 +153,9 @@ export function resolveDropTarget(
       point.x <= rect.right + DROP_TOLERANCE &&
       point.y >= rect.top - DROP_TOLERANCE &&
       point.y <= rect.bottom + DROP_TOLERANCE;
-    if (!inside) continue;
+    if (!inside) {
+      continue;
+    }
     if (!hit || rect.height < hit.height) {
       hit = { ioKey: candidate.ioKey, height: rect.height };
     }

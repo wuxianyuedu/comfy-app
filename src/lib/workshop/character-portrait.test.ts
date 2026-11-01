@@ -30,13 +30,11 @@ function makeCharacter(patch: Partial<Character> = {}): Character {
   };
 }
 
-function makePortrait(
-  patch: Partial<CharacterPortrait> = {},
-): CharacterPortrait {
+function makePortrait(patch: Partial<CharacterPortrait> = {}): CharacterPortrait {
   return {
     url: "/api/generated/t1/a.png",
     source: "local",
-    createdAt: 1_000,
+    createdAt: 1000,
     ...patch,
   };
 }
@@ -79,7 +77,11 @@ describe("portraitCandidates 读取候选", () => {
   it("无 portraits 字段（旧数据）返回空数组", () => {
     expect(portraitCandidates(makeCharacter())).toEqual([]);
     expect(
-      portraitCandidates(makeCharacter({ portraits: "x" as never })),
+      portraitCandidates(
+        makeCharacter({
+          portraits: /* SAFETY: 类型断言已复核 */ "x" as never,
+        }),
+      ),
     ).toEqual([]);
   });
 
@@ -87,7 +89,7 @@ describe("portraitCandidates 读取候选", () => {
     const character = makeCharacter({
       portraits: [
         makePortrait({ url: "/u/old.png", createdAt: 1 }),
-        { url: "" } as CharacterPortrait,
+        /* SAFETY: 类型断言已复核 */ { url: "" } as CharacterPortrait,
         makePortrait({ url: "/u/new.png", createdAt: 9 }),
       ],
     });
@@ -100,21 +102,12 @@ describe("portraitCandidates 读取候选", () => {
 
 describe("withPortraitCandidate 追加候选", () => {
   it("第一张候选自动成为定妆照，后续候选不抢已定妆照", () => {
-    const first = withPortraitCandidate(
-      makeCharacter(),
-      makePortrait({ url: "/u/a.png" }),
-    );
+    const first = withPortraitCandidate(makeCharacter(), makePortrait({ url: "/u/a.png" }));
     expect(first.portraitUrl).toBe("/u/a.png");
 
-    const second = withPortraitCandidate(
-      first,
-      makePortrait({ url: "/u/b.png", createdAt: 2 }),
-    );
+    const second = withPortraitCandidate(first, makePortrait({ url: "/u/b.png", createdAt: 2 }));
     expect(second.portraitUrl).toBe("/u/a.png");
-    expect(second.portraits?.map((item) => item.url)).toEqual([
-      "/u/b.png",
-      "/u/a.png",
-    ]);
+    expect(second.portraits?.map((item) => item.url)).toEqual(["/u/b.png", "/u/a.png"]);
   });
 
   it("同一地址重复加入只保留一条并提到最新", () => {
@@ -142,9 +135,7 @@ describe("withPortraitCandidate 追加候选", () => {
     );
     expect(character.portraits).toHaveLength(MAX_PORTRAIT_CANDIDATES);
     expect(character.portraits?.[0]?.url).toBe("/u/newest.png");
-    expect(character.portraits?.some((item) => item.url === "/u/0.png")).toBe(
-      false,
-    );
+    expect(character.portraits?.some((item) => item.url === "/u/0.png")).toBe(false);
   });
 });
 
@@ -153,9 +144,7 @@ describe("withSelectedPortrait 挑选定妆照", () => {
     const character = makeCharacter({
       portraits: [makePortrait({ url: "/u/a.png" })],
     });
-    expect(withSelectedPortrait(character, "/u/a.png").portraitUrl).toBe(
-      "/u/a.png",
-    );
+    expect(withSelectedPortrait(character, "/u/a.png").portraitUrl).toBe("/u/a.png");
     expect(withSelectedPortrait(character, "/u/ghost.png")).toBe(character);
   });
 });
@@ -202,6 +191,6 @@ describe("appendPortraitLog 日志上限", () => {
     }
     expect(list).toHaveLength(MAX_PORTRAIT_LOG);
     expect(list[0]?.text).toBe("第 10 条");
-    expect(list[list.length - 1]?.text).toBe(`第 ${MAX_PORTRAIT_LOG + 9} 条`);
+    expect(list.at(-1)?.text).toBe(`第 ${MAX_PORTRAIT_LOG + 9} 条`);
   });
 });

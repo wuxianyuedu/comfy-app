@@ -28,14 +28,16 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
 
-function walk(dir: string, out: string[] = []): string[] {
+function walk(dir: string, out: Array<string> = []): Array<string> {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) {
       walk(full, out);
       continue;
     }
-    if (/\.(ts|tsx)$/.test(name)) out.push(full);
+    if (/\.(ts|tsx)$/.test(name)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -44,11 +46,11 @@ describe("仓储取用只有一个入口（ISSUE #568）", () => {
   // 整树 walk + readFileSync 的判据：开发机并行跑多份工程时，5s 默认超时会因
   // CPU 争用假红（单独跑 <3s）。给足容忍度，断言本身不变。
   it("src/ 下没有任何 container 取用或引用", { timeout: 30_000 }, () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const file of walk(SRC)) {
       const rel = relative(ROOT, file).split("\\").join("/");
       // 注释里说明「为什么没有容器」是允许的（判据只认代码）：整块注释先剥掉。
-      const src = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+      const src = readFileSync(file, "utf8").replaceAll(/\/\*[\s\S]*?\*\//g, "");
       const code = src
         .split("\n")
         .filter((line) => !/^[ \t]*(\/\/|\*)/.test(line))

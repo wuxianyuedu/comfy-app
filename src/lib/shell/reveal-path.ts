@@ -37,14 +37,14 @@ import { spawn } from "node:child_process";
 
 import { errorText } from "~/lib/error-message";
 
-export interface RevealPathResult {
-  /** 是否真的把「打开」指令交给了系统。 */
-  ok: boolean;
+export type RevealPathResult = {
   /** 给用户看的说明（成功也带 —— 一句「已在资源管理器定位」是唯一能看到点了有反应的证据）。 */
   detail: string;
+  /** 是否真的把「打开」指令交给了系统。 */
+  ok: boolean;
   /** 实际被定位的路径（空壳时给出，用户能看出「点的是这段文本」）。 */
   revealed?: string;
-}
+};
 
 /**
  * 探针：某个路径当前存在吗（文件或目录都算）。
@@ -87,20 +87,30 @@ export function resolveExistingPath(
   exists: ExistsProbe = diskExists,
 ): string | null {
   const raw = candidate.trim();
-  if (raw === "") return null;
-  if (exists(raw)) return raw;
+  if (raw === "") {
+    return null;
+  }
+  if (exists(raw)) {
+    return raw;
+  }
 
   /* 最后一段的起点：最后一个分隔符之后。段内逐字符退。 */
   const sepIndex = Math.max(raw.lastIndexOf("/"), raw.lastIndexOf("\\"));
   for (let end = raw.length - 1; end >= sepIndex + 1; end -= 1) {
     const head = raw.slice(0, end);
-    if (head === "") continue;
+    if (head === "") {
+      continue;
+    }
     /* **退到「目录 + 尾分隔符」那一档就停**（`/a/b` 的候选退成 `/a/`）：它在磁盘上
      * 当然存在（父目录），认它就等于「点一个不存在的文件 → 打开了那个目录」——
      * 而用户点的是文件。这正是「跨段退」的坏味道从另一个口子漏回来的形态
      * （实测撞出来：`/workspace/no-such-file.txt` 被解析成 `/workspace/`）。 */
-    if (head.endsWith("/") || head.endsWith("\\")) continue;
-    if (exists(head)) return head;
+    if (head.endsWith("/") || head.endsWith("\\")) {
+      continue;
+    }
+    if (exists(head)) {
+      return head;
+    }
   }
   return null;
 }
@@ -109,10 +119,7 @@ export function resolveExistingPath(
  *  `isDir` 决定「直接打开进入（目录）」还是「选中（文件）」——
  *  对目录若也用 `/select`，窗口会停在父层并选中该目录，用户看到的是
  *  上一层而非 `target` 里面的内容（实测即「打开了但没进到我点的文件夹」）。 */
-function revealCommand(
-  target: string,
-  isDir: boolean,
-): { cmd: string; args: string[] } {
+function revealCommand(target: string, isDir: boolean): { args: Array<string>; cmd: string } {
   const platform = process.platform;
   if (platform === "win32") {
     if (isDir) {
@@ -133,9 +140,7 @@ function revealCommand(
   }
   if (platform === "darwin") {
     /* 目录：`open "<目录>"` 直接进入；文件：`open -R` 在 Finder 里选中。 */
-    return isDir
-      ? { cmd: "open", args: [target] }
-      : { cmd: "open", args: ["-R", target] };
+    return isDir ? { cmd: "open", args: [target] } : { cmd: "open", args: ["-R", target] };
   }
   /* Linux：没有统一的「选中」协议（各文件管理器自定义）。目录直接打开；
    * 文件打开它的**父目录**而不是文件本身 —— 点一个日志文件的意图是「到它那儿
@@ -171,8 +176,7 @@ export async function revealPathInFileManager(
   /* 区分目录（直接打开进入）与文件（在父层选中）：`revealPath` 的探针只答
    * 「存不存在」，不答「是不是目录」，所以这里用一次 stat 补判据。stat 失败
    * （理论上 probe 已答存在，不该发生）按文件处理 —— 退回原来的「选中」语义。 */
-  const isDir =
-    statSync(target, { throwIfNoEntry: false })?.isDirectory() ?? false;
+  const isDir = statSync(target, { throwIfNoEntry: false })?.isDirectory() ?? false;
   const { cmd, args } = revealCommand(target, isDir);
   try {
     await new Promise<void>((resolve, reject) => {

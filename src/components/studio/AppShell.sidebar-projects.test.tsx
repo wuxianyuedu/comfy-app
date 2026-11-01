@@ -57,13 +57,13 @@ function renderShell() {
   const { container } = render(
     <AppShell
       active="home"
-      onSelect={vi.fn()}
-      onOpenSettings={vi.fn()}
-      projects={PROJECTS}
       activeProjectId="proj_a"
-      onOpenProject={onOpenProject}
-      onShowAllProjects={vi.fn()}
       onNewProject={vi.fn()}
+      onOpenProject={onOpenProject}
+      onOpenSettings={vi.fn()}
+      onSelect={vi.fn()}
+      onShowAllProjects={vi.fn()}
+      projects={PROJECTS}
     >
       <div />
     </AppShell>,
@@ -76,7 +76,7 @@ function projectGroup(): HTMLElement {
   const btn = screen.getByRole("button", { name: "查看全部" });
   const group = btn.closest('[data-slot="sidebar-group"]');
   expect(group).not.toBeNull();
-  return group as HTMLElement;
+  return /* SAFETY: 类型断言已复核 */ group as HTMLElement;
 }
 
 describe("侧栏「项目」分组的缩略态", () => {
@@ -85,9 +85,7 @@ describe("侧栏「项目」分组的缩略态", () => {
     /* 这是这一条 bug 的正面判据：`hidden` 在图标档把整组拿掉，用户就没得选了。
        只看「渲染出了几条」不够 —— jsdom 里没有窄窗，那个类在展开态同样不影响
        渲染结果，漏掉它用例照样绿。 */
-    expect(projectGroup().className).not.toContain(
-      "group-data-[collapsible=icon]:hidden",
-    );
+    expect(projectGroup().className).not.toContain("group-data-[collapsible=icon]:hidden");
   });
 
   it("每条项目按钮里都有图标与名字（收起后不是空格子）", () => {
@@ -110,10 +108,9 @@ describe("侧栏「项目」分组的缩略态", () => {
          tooltip 的触发器」这个可观测形态（base-ui 落在触发器上的属性）。
          它同时反证了「名字有第二个出口」：按钮里的 `<span>` 收起后会被基元的
          `[&>span:last-child]:truncate` 压成零宽，鼠标没地方悬停就没名字可读。 */
-      expect(
-        btn.hasAttribute("data-base-ui-tooltip-trigger"),
-        `${project.name} 没接 tooltip`,
-      ).toBe(true);
+      expect(btn.hasAttribute("data-base-ui-tooltip-trigger"), `${project.name} 没接 tooltip`).toBe(
+        true,
+      );
     }
   });
 

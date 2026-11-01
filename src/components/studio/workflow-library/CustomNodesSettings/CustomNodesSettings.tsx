@@ -22,9 +22,9 @@ export function CustomNodesSettings() {
     <>
       <Hint label="从 ComfyUI 安装目录的 custom_nodes 导入自定义节点（服务端只读、绝不修改这些目录里的任何文件）">
         <Button
-          variant="outline"
-          onClick={() => ctrl.setOpen(true)}
           className={`${HEADER_ACTION_BTN} border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright`}
+          onClick={() => ctrl.setOpen(true)}
+          variant="outline"
         >
           <PackagePlus size={13} />
           导入自定义节点
@@ -33,27 +33,25 @@ export function CustomNodesSettings() {
 
       {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘
           遮罩 + `onClick` 关闭，Esc 没接、焦点不锁也不归还。 */}
-      <Dialog open={ctrl.open} onOpenChange={(next) => ctrl.setOpen(next)}>
+      <Dialog onOpenChange={(next) => ctrl.setOpen(next)} open={ctrl.open}>
         <DialogContent
           aria-label="导入自定义节点"
-          showCloseButton={false}
           className="bg-transparent p-0 ring-0"
           popupClassName="max-w-3xl"
+          showCloseButton={false}
         >
           <div
-            ref={dialogRef}
             className="border-border bg-surface w-full max-w-3xl overflow-y-auto rounded-2xl border p-5"
+            ref={dialogRef}
             style={{ maxHeight: "92vh" }}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-ink text-base font-semibold">
-                导入自定义节点
-              </h3>
+              <h3 className="text-ink text-base font-semibold">导入自定义节点</h3>
               <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => ctrl.setOpen(false)}
                 className="text-muted-foreground hover:bg-subtle hover:text-ink rounded-lg px-2 py-1"
+                onClick={() => ctrl.setOpen(false)}
+                size="sm"
+                variant="ghost"
               >
                 关闭
               </Button>
@@ -61,18 +59,17 @@ export function CustomNodesSettings() {
 
             <p className="text-muted-foreground mb-3 text-xs">
               节点目录自动取自 设置 → 创作后端 中配置的 ComfyUI 路径下的{" "}
-              <code className="font-mono">custom_nodes</code>{" "}
-              目录，无需手动填写。
+              <code className="font-mono">custom_nodes</code> 目录，无需手动填写。
             </p>
 
             <NodesTab ctrl={ctrl} />
 
             {/* 实时解析控制台 */}
             <ParseConsole
-              logs={ctrl.logs}
-              parsing={ctrl.parsing}
-              logsRef={ctrl.logsRef}
               consoleRef={ctrl.consoleRef}
+              logs={ctrl.logs}
+              logsRef={ctrl.logsRef}
+              parsing={ctrl.parsing}
             />
 
             {/* 按包的报告卡片 */}

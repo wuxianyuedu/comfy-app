@@ -85,8 +85,8 @@ describe("waitForComfyReady（单一等待循环 + 策略注入）", () => {
 
 describe("createOutputSink（事件回调用具名函数 + 显式依赖）", () => {
   it("按 500 字符截断后写日志与留底（此前闭包不可测）", () => {
-    const logs: string[] = [];
-    const recent: string[] = [];
+    const logs: Array<string> = [];
+    const recent: Array<string> = [];
     const sink = createOutputSink({
       appendRuntimeLog: (l) => logs.push(l),
       pushRecent: (t) => recent.push(t),
@@ -97,7 +97,7 @@ describe("createOutputSink（事件回调用具名函数 + 显式依赖）", () 
   });
 
   it("接受自定义截断上限", () => {
-    const logs: string[] = [];
+    const logs: Array<string> = [];
     const sink = createOutputSink({
       appendRuntimeLog: (l) => logs.push(l),
       pushRecent: () => undefined,
@@ -124,18 +124,20 @@ describe("createRecentOutputLedger（进程秒退时报错来源）", () => {
 
 describe("createChildExitHandler（退出回调可单测）", () => {
   function handler(over: {
+    onBanner?: (b: string) => void;
     stopRequested?: boolean;
     subject?: string;
-    onBanner?: (b: string) => void;
   }) {
-    const lines: string[] = [];
-    const logs: string[] = [];
+    const lines: Array<string> = [];
+    const logs: Array<string> = [];
     let cleared = 0;
     const onExit = createChildExitHandler({
       subject: over.subject ?? "ComfyUI",
       appendRuntimeLog: (l) => {
         lines.push(l);
-        if (l.startsWith("■")) over.onBanner?.(l);
+        if (l.startsWith("■")) {
+          over.onBanner?.(l);
+        }
       },
       log: (m) => logs.push(m),
       clearChild: () => {
@@ -198,9 +200,7 @@ describe("createChildExitHandler（退出回调可单测）", () => {
   it("主语由宿主给：复用这套原语的 Studio 不得被记成 ComfyUI", () => {
     const h = handler({ subject: "Drizzle Studio" });
     h.onExit(1, null);
-    expect(h.banners()[0]).toBe(
-      "■ Drizzle Studio 进程已退出：异常退出（exit 1）",
-    );
+    expect(h.banners()[0]).toBe("■ Drizzle Studio 进程已退出：异常退出（exit 1）");
     expect(h.logs[0]).toBe("Drizzle Studio 进程退出：异常退出（exit 1）");
     // 原语里不留任何写死的主语（落盘行与 pino 行都不能出现 ComfyUI）
     expect(h.lines.join("\n")).not.toContain("ComfyUI");

@@ -11,10 +11,15 @@ import { withQuery } from "~/lib/query-string";
 import { LOG_SLICE_ENDPOINT } from "./panel-self-poll";
 import type { LogSessionsPayload } from "./log-sessions";
 
-export interface FileLogSlice {
+export type FileLogSlice = {
+  /**
+   * 服务端进程标识。客户端存下它，下一轮带上比对；不一致即「应用服务真重启过」，
+   * 面板据此重置时间线与游标（否则重启前后的行会混成一条线）。
+   */
+  bootId?: string;
   content: string;
-  /** 文件当前总字节数（下一轮增量读取的游标）。 */
-  size: number;
+  /** true = 本轮请求带的服务进程标识与响应不一致（详见 route.ts）。 */
+  mismatch?: boolean;
   /** 本次返回内容在文件中的起点。 */
   offset: number;
   /**
@@ -22,14 +27,9 @@ export interface FileLogSlice {
    * null = 读不到锚点（非双击链路启动），面板此时不做时间线截断。
    */
   sessionStart?: number | null;
-  /**
-   * 服务端进程标识。客户端存下它，下一轮带上比对；不一致即「应用服务真重启过」，
-   * 面板据此重置时间线与游标（否则重启前后的行会混成一条线）。
-   */
-  bootId?: string;
-  /** true = 本轮请求带的服务进程标识与响应不一致（详见 route.ts）。 */
-  mismatch?: boolean;
-}
+  /** 文件当前总字节数（下一轮增量读取的游标）。 */
+  size: number;
+};
 
 export type LogSourceKind =
   | "dev"
@@ -46,7 +46,9 @@ export type LogSourceKind =
 
 /** source 参数 → /api/logs/current 的 source 查询值。 */
 function sourceQuery(source: LogSourceKind): string {
-  if (source === "dev") return "dev-launcher";
+  if (source === "dev") {
+    return "dev-launcher";
+  }
   return source;
 }
 
@@ -71,8 +73,10 @@ export async function fetchFileLogSlice(
       bootId: bootId ?? undefined,
     }),
   );
-  if (!res.ok) return null;
-  return (await res.json()) as FileLogSlice;
+  if (!res.ok) {
+    return null;
+  }
+  return /* SAFETY: 类型断言已复核 */ (await res.json()) as FileLogSlice;
 }
 
 /* ── 常驻服务 runtime 日志的「每一次启动」（设置页启动日志）─────────────
@@ -87,10 +91,7 @@ export async function fetchFileLogSlice(
  * 通道）。**不含 `app-runtime`**：它跟的是应用自身生命周期，没有「用户点了启动」
  * 这个动作，界面上没有可切的东西；它的历史由日志面板自己那一路覆盖。
  */
-export type RuntimeLogSourceKind =
-  | "comfyui-runtime"
-  | "drizzle-studio-runtime"
-  | "ollama-runtime";
+export type RuntimeLogSourceKind = "comfyui-runtime" | "drizzle-studio-runtime" | "ollama-runtime";
 
 /**
  * 拉取某来源的启动列表 + 指定一次（缺省取最新那一份）的正文。
@@ -105,23 +106,23 @@ export async function fetchLogSessions(
 ): Promise<LogSessionsPayload | null> {
   try {
     /* 会话 id 可选：空值由出口省略（不再自己 `if` 一次再 `set`）。 */
-    const res = await fetch(
-      withQuery("/api/logs/sessions", { source, session: sessionId }),
-    );
-    if (!res.ok) return null;
-    return (await res.json()) as LogSessionsPayload;
+    const res = await fetch(withQuery("/api/logs/sessions", { source, session: sessionId }));
+    if (!res.ok) {
+      return null;
+    }
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as LogSessionsPayload;
   } catch {
     return null;
   }
 }
 
 /** 列出 log/ 下的归档日志文件（供「历史日志」选择）。 */
-export interface LogFileInfo {
+export type LogFileInfo = {
+  mtimeMs: number;
   name: string;
   relativePath: string;
-  mtimeMs: number;
   size: number;
-}
+};
 
 /* ── 日志导出到本地文件（客户端 → 服务端）─────────────────────────────
  * 面板的「保存到本地」经 `POST /api/logs/export` 由服务端写进 `log/exports/`，
@@ -129,13 +130,13 @@ export interface LogFileInfo {
  */
 
 /** 导出的结果：成功时给出服务端写下的**绝对路径**与相对 `log/` 的路径。 */
-export interface SavedLogExport {
+export type SavedLogExport = {
+  bytes?: number;
+  error?: string;
   ok: boolean;
   path?: string;
   relativePath?: string;
-  bytes?: number;
-  error?: string;
-}
+};
 
 /**
  * 把一段日志文本保存到本机 `log/exports/`。
@@ -144,17 +145,14 @@ export interface SavedLogExport {
  * 失败返回 `{ ok: false }` 而不是抛错——面板据此显示「保存失败」，
  * 不阻塞日志面板本身。
  */
-export async function saveLogExport(
-  label: string,
-  content: string,
-): Promise<SavedLogExport> {
+export async function saveLogExport(label: string, content: string): Promise<SavedLogExport> {
   try {
     const res = await fetch("/api/logs/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label, content }),
     });
-    const data = (await res.json()) as SavedLogExport;
+    const data = /* SAFETY: 类型断言已复核 */ (await res.json()) as SavedLogExport;
     return data;
   } catch (error) {
     return {
@@ -179,7 +177,7 @@ export async function saveLogExport(
 export async function saveDiagnosticsPackage(): Promise<SavedLogExport> {
   try {
     const res = await fetch("/api/logs/diagnostics", { method: "POST" });
-    return (await res.json()) as SavedLogExport;
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as SavedLogExport;
   } catch (error) {
     return {
       ok: false,

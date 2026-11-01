@@ -42,30 +42,14 @@
  * 登记表同时受**反向**检查：条目若没被引擎真解出来，就算红 —— 留着只会变成一条
  * 「有豁免权、没有实物」的通道，而那正是可以拿来放行下一枚死规则的形状。
  */
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  compiledCssPinnedTo,
-  ruleSelectors,
-} from "./helpers/theme-tokens";
+import { compiledCssPinnedTo, ruleSelectors } from "./helpers/theme-tokens";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".next",
-  "dist",
-  "coverage",
-  "__snapshots__",
-]);
+const SKIP_DIRS = new Set(["node_modules", ".next", "dist", "coverage", "__snapshots__"]);
 
 /** 运行期拼候选名：源码里绝不留完整形状，否则这份测试自己就成了死规则的新出处。 */
 function cand(prop: string, value: string): string {
@@ -87,8 +71,7 @@ const REGISTERED: Record<string, string> = {
    * 运行期拼之后也不再供给 —— 于是两条都成了「有豁免权、没有实物」。
    * 别据此认为「紧贴汉字」是一种可依赖的写法：那只是恰好没成形的一个形状，正文里挪一个
    * 分隔符就会翻（真正稳的是方括号内侧留空格），口径见 docs/DESIGN.md 的扫描边界那一条。 */
-  [cand("translate-y", "-1px")]:
-    "DEV-QUERIES 列出的「不进文本 codemod」清单，逐字才有检索价值",
+  [cand("translate-y", "-1px")]: "DEV-QUERIES 列出的「不进文本 codemod」清单，逐字才有检索价值",
   [cand("aspect", "4/3")]: "同上",
   [cand("w", "360px")]: "02 §性能的示例代码（面板宽度就是这一枚 arbitrary）",
   [cand("min-h", "300px")]: "10 §错误处理的示例代码（虚线占位框）",
@@ -102,14 +85,20 @@ const REGISTERED: Record<string, string> = {
     "DESIGN.md 里那是一条 grep 检索式（`[0-9]` 是字符组），加空格会把正则写坏",
 };
 
-function walk(rel: string, out: string[] = []): string[] {
+function walk(rel: string, out: Array<string> = []): Array<string> {
   const abs = path.join(ROOT, rel);
-  if (!existsSync(abs)) return out;
+  if (!existsSync(abs)) {
+    return out;
+  }
   for (const e of readdirSync(abs, { withFileTypes: true })) {
     const child = path.join(abs, e.name);
     if (e.isDirectory()) {
-      if (!SKIP_DIRS.has(e.name)) walk(path.relative(ROOT, child), out);
-    } else out.push(path.relative(ROOT, child).split(path.sep).join("/"));
+      if (!SKIP_DIRS.has(e.name)) {
+        walk(path.relative(ROOT, child), out);
+      }
+    } else {
+      out.push(path.relative(ROOT, child).split(path.sep).join("/"));
+    }
   }
   return out;
 }
@@ -122,7 +111,7 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
  * 带空格的形状 —— 本文件也在扫描面里，写全一枚就多一条死规则，这条判据对自己同样生效）。
  */
 function unescapeSelector(part: string): string {
-  return part.trim().replace(/\\(.)/g, "$1").replace(/^\./, "");
+  return part.trim().replaceAll(/\\(.)/g, "$1").replace(/^\./, "");
 }
 
 /**
@@ -137,12 +126,16 @@ function unescapeSelector(part: string): string {
 function arbitraryCandidates(css: string): Set<string> {
   const out = new Set<string>();
   for (const selector of ruleSelectors(css)) {
-    if (!selector.includes("[")) continue;
+    if (!selector.includes("[")) {
+      continue;
+    }
     /* 逗号只在**未被转义**处分组：任意值里的逗号在产物里是「反斜杠加逗号」，
      * 在那里切开会把一枚候选名（比如网格列数那种重复函数）截成两半、凭空造出误报。 */
     for (const part of selector.split(/(?<!\\),/)) {
       const plain = unescapeSelector(part);
-      for (const c of plain.matchAll(/[-\w]+-\[[^\]]*\]/g)) out.add(c[0]);
+      for (const c of plain.matchAll(/[-\w]+-\[[^\]]*\]/g)) {
+        out.add(c[0]);
+      }
     }
   }
   return out;
@@ -172,14 +165,16 @@ function placeholderCandidates(candidates: Iterable<string>): Set<string> {
       out.add(c);
       continue;
     }
-    if (/[\u4e00-\u9fff]/.test(value)) out.add(c);
+    if (/[\u4e00-\u9fff]/.test(value)) {
+      out.add(c);
+    }
   }
   return out;
 }
 
 /** 文件归属用**带边界**的匹配，别拿子串：短属性名是那枚长候选名的子串，会被算成它的出处。 */
 function spelledIn(text: string, candidate: string): boolean {
-  const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = candidate.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   return new RegExp(`(^|[^\\w-])${escaped}(?![\\w-])`).test(text);
 }
 
@@ -199,7 +194,7 @@ beforeAll(async () => {
   proseFiles = [
     ...walk("docs").filter((f) => f.endsWith(".md")),
     ...walk("tests").filter((f) => /\.(ts|tsx)$/.test(f)),
-  ].map((f) => [f, read(f)] as [string, string]);
+  ].map((f) => /* SAFETY: 类型断言已复核 */ [f, read(f)] as [string, string]);
 
   /* 空跑的形状先挡掉：扫描面钉错（比如把 ../../docs 写成 docs，那会被按 CSS 所在目录
    * 解析成 src/app/docs 而扫到零个文件）时，上面两遍编译会安静地什么也没解出来，
@@ -214,36 +209,38 @@ beforeAll(async () => {
     "把 src 钉成扫描面之后一条 arbitrary 都没解出来 —— 消费侧是空集，" +
       "供给侧差集那条判据会把所有正文候选都当成零消费者报错",
   ).toBeGreaterThan(50);
-  expect(
-    proseFiles.length,
-    "没读到正文与用例文件 —— 归属与反向检查在对空集立法",
-  ).toBeGreaterThan(20);
+  expect(proseFiles.length, "没读到正文与用例文件 —— 归属与反向检查在对空集立法").toBeGreaterThan(
+    20,
+  );
 });
 
 describe("正文与用例不许成为死规则的唯一出处", () => {
   it("只有正文在供给的 arbitrary 候选名，只能留在登记表里", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const candidate of proseCandidates) {
-      if (srcCandidates.has(candidate)) continue; // src 自己也在供给，不是正文造成的死规则
-      if (REGISTERED[candidate]) continue; // 逐字示例 / 检索式，已给理由
-      const where = proseFiles
-        .filter(([, text]) => spelledIn(text, candidate))
-        .map(([f]) => f);
+      if (srcCandidates.has(candidate)) {
+        continue;
+      } // src 自己也在供给，不是正文造成的死规则
+      if (REGISTERED[candidate]) {
+        continue;
+      } // 逐字示例 / 检索式，已给理由
+      const where = proseFiles.filter(([, text]) => spelledIn(text, candidate)).map(([f]) => f);
       offenders.push(`${candidate}  ← ${where.join(" | ") || "(归属未命中)"}`);
     }
     expect(
       offenders,
-      "这些 arbitrary 候选名只有正文/用例在供给 ⇒ 每次构建多一条没人用的规则。" +
-        "改法：方括号内侧各留一个空格（读者看到的仍是同一个类名，扫描器读不出候选名）；" +
-        "确实是逐字示例或检索式的，登记进本文件的 REGISTERED 并写理由：\n" +
-        offenders.sort().map((o) => `  ${o}`).join("\n"),
+      `这些 arbitrary 候选名只有正文/用例在供给 ⇒ 每次构建多一条没人用的规则。` +
+        `改法：方括号内侧各留一个空格（读者看到的仍是同一个类名，扫描器读不出候选名）；` +
+        `确实是逐字示例或检索式的，登记进本文件的 REGISTERED 并写理由：\n${
+        offenders
+          .sort()
+          .map((o) => `  ${o}`)
+          .join("\n")}`,
     ).toEqual([]);
   });
 
   it("登记表不留「有豁免权、没有实物」的条目", () => {
-    const stale = Object.keys(REGISTERED).filter(
-      (candidate) => !proseCandidates.has(candidate),
-    );
+    const stale = Object.keys(REGISTERED).filter((candidate) => !proseCandidates.has(candidate));
     expect(
       stale,
       "这些登记条目指向的候选名并没有被引擎解出来（示例被改写、或那一枚本来就成不了形）—— " +
@@ -256,10 +253,10 @@ describe("正文与用例不许成为死规则的唯一出处", () => {
     const hits = [...placeholderCandidates(placeholders)].sort();
     expect(
       hits,
-      "这些候选名的方括号值不是任何一段 CSS 取值 —— 它是「拿 N / … / <数字> 当占位符」的" +
-        "说明性写法，被扫描面读到就进产物、且永远不会有人用。改法与上一条同：" +
-        "内侧留空格，或直接用文字描述那一枚的形状：\n" +
-        hits.map((h) => `  ${h}`).join("\n"),
+      `这些候选名的方括号值不是任何一段 CSS 取值 —— 它是「拿 N / … / <数字> 当占位符」的` +
+        `说明性写法，被扫描面读到就进产物、且永远不会有人用。改法与上一条同：` +
+        `内侧留空格，或直接用文字描述那一枚的形状：\n${
+        hits.map((h) => `  ${h}`).join("\n")}`,
     ).toEqual([]);
   });
 });

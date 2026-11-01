@@ -12,7 +12,7 @@ import {
 } from "./service-status-row";
 
 /** class 串按空格切词，便于断言「含有某个工具类」而不受顺序影响。 */
-function tokens(cls: string): string[] {
+function tokens(cls: string): Array<string> {
   return cls.split(/\s+/).filter(Boolean);
 }
 
@@ -65,7 +65,7 @@ describe("状态行视图：都接上了这套判据", () => {
   const readViewBody = (rel: string) => {
     const src = readFileSync(path.resolve(__dirname, rel), "utf8");
     const end = src.lastIndexOf("\nimport ");
-    const body = end >= 0 ? src.slice(src.indexOf("\n", end + 1) + 1) : src;
+    const body = end !== -1 ? src.slice(src.indexOf("\n", end + 1) + 1) : src;
     return body;
   };
   const viewBody = [
@@ -76,12 +76,8 @@ describe("状态行视图：都接上了这套判据", () => {
   /* StatusButton 原语单独取：只留 `StatusButton` 的函数体，避免把文档注释里
    * 「这里此前是第二个 `<button>` 实现」这类**说明**当成实现（判据自身的
    * 注释剥离教训见 check-ui-primitives.cjs 的 stripComments）。 */
-  const primitivesSrc = readFileSync(
-    path.resolve(__dirname, "service-status-row.tsx"),
-    "utf8",
-  );
-  const primitivesBody =
-    primitivesSrc.split("export function StatusButton(")[1] ?? "";
+  const primitivesSrc = readFileSync(path.resolve(__dirname, "service-status-row.tsx"), "utf8");
+  const primitivesBody = primitivesSrc.split("export function StatusButton(")[1] ?? "";
 
   it("StatusButton 走 statusButtonClass，且底子是 ui/button 基元", () => {
     /* 排布契约（不许换行 / 不许被压扁）只有 statusButtonClass 一个来源 ——

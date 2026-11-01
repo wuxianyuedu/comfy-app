@@ -48,7 +48,8 @@
  * ## 第二层：颜色（ISSUE #2506 的后半句「提高可读性，还有什么手段都用上」）
  *
  * 三态靠前缀分得开，但**同一屏上十几条判决全是同一种灰**时，眼睛仍然要先读字才知道
- * 哪一条是红的。所以这一层还管颜色 —— 而且只有一处口径：`paint()` / `bandLine()`。
+ * 哪一条是红的。所以这一层还管颜色 —— 而且只有一处口径：`paint()` / `bandLine()`，
+ * 两者的合成点是 `paintLine()`（谁要自己往屏幕上写，就调它，不调第三份）。
  *
  * 颜色的三条边界（缺一条就会变成「本地好看、平台一堆乱码」）：
  *
@@ -58,10 +59,15 @@
  *     `tests/ci-log.test.ts` 判：**着色后的字符串去掉色号必须逐字等于不着色的那一份**
  *     （着色不许动内容）。
  *   · **`NO_COLOR` / 非 TTY 一律不着色**（no-color.org 的通行约定）。判据是
- *     `colorEnabled()` —— 它**不在这里被调用**：本文件是纯排版，编排层（`gatePass` /
- *     `gateSkip` / `gateFail` 的默认 `out`）才决定「这一轮要不要上色」。
+ *     `colorEnabled()`：本文件的纯排版部分（`renderVerdict()` 等）一次也不碰它，
+ *     只有真正写屏幕的那一层（`emit()` 的默认出口、`paintLine()` 的调用方）才决定
+ *     「这一轮要不要上色」。
  *     重定向到文件 / 被别的脚本抓输出时不着色，抓出来的仍是那行干净文本
- *     （`ci-heavy-gates.mjs` 就靠这个读回绿步的结论句）。
+ *     （`ci-heavy-gates.mjs` 读回绿步的结论句靠的是**子进程的管道**，不是这条短路）。
+ *     **唯一的例外**是 `COMFYAPP_CI_COLOR`：平台那一档的 stdout 不是 TTY，而它的日志页
+ *     会渲染色号 —— 那一格落在这条边界的两个判据之外，所以给它一枚**只被本层认**的
+ *     旗标（不用 `FORCE_COLOR`：那枚会连带点亮被捕获解析的子进程输出）。见
+ *     `colorEnabled()` 的次序注释与规范 §13.5.29.1（ISSUE #2755）。
  *   · **颜色是附加，不是判决**：删掉所有色号，三态仍然分得开（前缀 + 结构）。
  *     「看不清红」这件事不许只能靠颜色解决。
  *
@@ -130,19 +136,38 @@ const TAG_RE = /\[([^[^\]\s]{1,12})\]/g;
 const COLOR_BAND = "90";
 
 /**
- * 这一轮要不要上色。
+ * 这一轮要不要上色。四条按**次序**判，次序本身是判据：
  *
- * 两条都成立才上色，缺一条就不上：`NO_COLOR`（no-color.org 的通行约定，值不论）
- * 与**非 TTY**（被重定向 / 被别的脚本抓输出 / 平台抓 stage 输出）。
- * 后者是这一层能安全存在的前提 —— `ci-heavy-gates.mjs` 就是**抓输出读回**判据结论的，
- * 那一路拿到的必须是干净文本，否则它的 90 字压缩与「截断报数」都会把色号算进字数。
+ *   1. `NO_COLOR`（no-color.org 的通行约定，值不论）**一票否决**，压过下面三条；
+ *   2. `FORCE_COLOR` —— 全生态共识旗标，认它的远不止本层（chalk / picocolors /
+ *      oxfmt 的 anstyle 都读它）；
+ *   3. `COMFYAPP_CI_COLOR` —— **只被本层认**的那一枚（ISSUE #2755）。它治的是那一格
+ *      交集之外：平台 stage 的 stdout **不是 TTY**（实测 build `cnb-gig-1k65nb59l`
+ *      的 stage-27 正文 64 行里只有 2 行带 ANSI，而那两行是平台自己的 `Runner` /
+ *      `Finished` 前缀），可它的日志页**会渲染色号**（同一份正文里那枚绿色 `Runner`
+ *      就是证据）⇒ 缺的不是渲染，是「谁在平台上把色号发出来」。**为什么不用
+ *      `FORCE_COLOR` 顶这一格**：那枚会把聚合档**捕获后解析**的那份子进程输出一起
+ *      点亮，`lastLine()` / `looksSkipped()` / 90 字压缩三处都会把色号算进内容。
+ *      挂在 `.cnb.yml` 的**流水线级 env**（它是「这台节点会渲染色号」的事实，不是
+ *      某一格的事实），理由与那条边界同处一篇：规范 §13.5.29.1。
+ *   4. 前三条都没说话 ⇒ 按 **TTY** 判。非 TTY 不上色是这一层能安全存在的前提 ——
+ *      被重定向、被别的脚本抓输出时拿到的必须是干净文本。
  *
  * @param {{env?: Record<string, string | undefined>, isTTY?: boolean}} [io]
  * @returns {boolean}
  */
 export function colorEnabled({ env = process.env, isTTY } = {}) {
-  if (env.NO_COLOR !== undefined) return false;
-  if (env.FORCE_COLOR !== undefined) return true;
+  if (env.NO_COLOR !== undefined) {
+    return false;
+  }
+  if (env.FORCE_COLOR !== undefined) {
+    return true;
+  }
+  const ciColor = env.COMFYAPP_CI_COLOR;
+  /* 「0」按关算：这一枚是本仓私有的旗标，`X=0` 是它最自然的关法。 */
+  if (ciColor !== undefined && ciColor !== "" && ciColor !== "0") {
+    return true;
+  }
   return isTTY ?? Boolean(process.stdout.isTTY);
 }
 
@@ -155,7 +180,9 @@ export function colorEnabled({ env = process.env, isTTY } = {}) {
  * @returns {string}
  */
 export function paint(text, code, enabled) {
-  if (!enabled || !text) return text;
+  if (!enabled || !text) {
+    return text;
+  }
   return `\u001b[${code}m${text}\u001b[0m`;
 }
 
@@ -177,7 +204,9 @@ export function paint(text, code, enabled) {
  */
 export function bandLine(line, { enabled = true, color } = {}) {
   const own = color ?? tagColorOf(line) ?? COLOR_BAND;
-  if (!enabled) return { line, color: own };
+  if (!enabled) {
+    return { line, color: own };
+  }
   return { line: `${paint("▌", own, true)} ${line}`, color: own };
 }
 
@@ -190,7 +219,9 @@ export function bandLine(line, { enabled = true, color } = {}) {
 export function tagColorOf(line) {
   for (const m of String(line ?? "").matchAll(TAG_RE)) {
     const key = `[${m[1]}]`;
-    if (TAG_COLORS[key]) return TAG_COLORS[key];
+    if (TAG_COLORS[key]) {
+      return TAG_COLORS[key];
+    }
   }
   return null;
 }
@@ -208,10 +239,14 @@ export function tagColorOf(line) {
  */
 export function colorizeLine(line, enabled = true) {
   const text = String(line ?? "");
-  if (!enabled || text === "") return text;
+  if (!enabled || text === "") {
+    return text;
+  }
   const state = stateOfLine(text);
-  if (state) return paintByState(text, state);
-  return text.replace(TAG_RE, (whole, word) => {
+  if (state) {
+    return paintByState(text, state);
+  }
+  return text.replaceAll(TAG_RE, (whole, word) => {
     const code = TAG_COLORS[whole];
     return code && word ? paint(whole, code, true) : whole;
   });
@@ -225,7 +260,9 @@ export function colorizeLine(line, enabled = true) {
  * @returns {string}
  */
 function paintByState(text, state) {
-  if (!state) return text;
+  if (!state) {
+    return text;
+  }
   return paint(text, COLORS[state], true);
 }
 
@@ -237,15 +274,27 @@ function paintByState(text, state) {
  */
 export function stateOfLine(line) {
   const text = String(line ?? "").trimStart();
-  if (text.startsWith(TAGS.ok)) return "ok";
-  if (text.startsWith(TAGS.skip)) return "skip";
-  if (text.startsWith(TAGS.red)) return "red";
+  if (text.startsWith(TAGS.ok)) {
+    return "ok";
+  }
+  if (text.startsWith(TAGS.skip)) {
+    return "skip";
+  }
+  if (text.startsWith(TAGS.red)) {
+    return "red";
+  }
   /* 判据自己的话：`✓`（CP936 有字形的是 `√`，`ci-cp936-glyphs.mjs` 会换）
    * 与 `OK` 结尾的结论行按绿算，`×` / `✗` / 「失败」「不合规」按红算。
    * 这一档只影响颜色，**不产生判决** —— 认错了最多是颜色不明显。 */
-  if (/^\[warn\]/.test(text)) return null;
-  if (/^[√✓]|\bOK\b/.test(text)) return "ok";
-  if (/^[×✗]|失败|不合规|违规/.test(text)) return "red";
+  if (text.startsWith("[warn]")) {
+    return null;
+  }
+  if (/^[√✓]|\bOK\b/.test(text)) {
+    return "ok";
+  }
+  if (/^[×✗]|失败|不合规|违规/.test(text)) {
+    return "red";
+  }
   return null;
 }
 
@@ -281,8 +330,9 @@ export function renderTally(tally, { enabled = true } = {}) {
     `${TAGS[state]} 合计 ${total} 条：判过 ${ok.length}、` +
     `没判 ${skip.length}、红 ${red.length}`;
   const lines = [head];
-  for (const name of red)
+  for (const name of red) {
     lines.push(`      ${paint("红", COLORS.red, enabled)}  ${name}`);
+  }
   /* 跳过的那几条用「没判」而不是「跳过」念：词要说明后果（它没有结论），
    * 而「跳过」在中文里读起来像「故意不做」，容易被当成放行。 */
   for (const name of skip) {
@@ -349,26 +399,13 @@ export function indentItems(items, width = 4) {
  * @param {number} [verdict.max] 证据最多打几条（超出写「另有 N 条」）
  * @returns {string[]} 要打印的行（第一行是判决本身）
  */
-export function renderVerdict({
-  state,
-  gate,
-  subject,
-  detail,
-  hint,
-  items,
-  max = 40,
-}) {
-  const list = (items ?? [])
-    .map((x) => String(x ?? ""))
-    .filter((x) => x.trim());
-  const resolved =
-    state ?? (list.length > 0 ? "red" : looksSkipped(detail) ? "skip" : "ok");
+export function renderVerdict({ state, gate, subject, detail, hint, items, max = 40 }) {
+  const list = (items ?? []).map((x) => String(x ?? "")).filter((x) => x.trim());
+  const resolved = state ?? (list.length > 0 ? "red" : looksSkipped(detail) ? "skip" : "ok");
   /* 红的默认读数是**条数**（`命中 N 条`）：读者第一眼要的是「有几处」，
    * 逐条证据在下面几行。调用方给了自己的读数就用它的（例如「超过 400 行 2 个」）。 */
   const resolvedDetail =
-    resolved === "red" && !String(detail ?? "").trim()
-      ? summarize(list)
-      : detail;
+    resolved === "red" && !String(detail ?? "").trim() ? summarize(list) : detail;
   const head = [gate, subject].filter((s) => s && String(s).trim()).join(" · ");
   const tail = String(resolvedDetail ?? "").trim();
   const out = [`${TAGS[resolved]} ${head}${tail ? `（${tail}）` : ""}`];
@@ -382,9 +419,7 @@ export function renderVerdict({
     const shown = max > 0 ? list.slice(0, max) : list;
     out.push(...indentItems(shown));
     if (max > 0 && list.length > max) {
-      out.push(
-        `    …另有 ${list.length - max} 条未展开（共 ${list.length} 条）`,
-      );
+      out.push(`    …另有 ${list.length - max} 条未展开（共 ${list.length} 条）`);
     }
   }
   return out;
@@ -403,10 +438,7 @@ export function renderVerdict({
  */
 export function gatePass(gate, detail, options = {}) {
   const state = looksSkipped(detail) ? "skip" : "ok";
-  emit(
-    renderVerdict({ state, gate, subject: options.subject, detail }),
-    options,
-  );
+  emit(renderVerdict({ state, gate, subject: options.subject, detail }), options);
   return state;
 }
 
@@ -472,12 +504,41 @@ export function summarize(items) {
 }
 
 /**
+ * 一行定稿文本 → 屏幕上的那一行：先按三态上色，再挂色带。
+ *
+ * 这是颜色层的**唯一合成点**：`emit()` 的默认出口，与「自己管写」的跑批（
+ * `ci-heavy-gates.mjs` 把判决转交给自己的 `log`）都走它 —— 上色与色带的先后
+ * 顺序不留第二份。
+ *
+ * `color` 是给「不是判决、却要跟着判决走」的那一行留的：合计行自己不带三态前缀，
+ * 但在红的那一跑里它必须读成红。给了它就整行按它着色，认标签那一步不再参与。
+ *
+ * @param {string} line
+ * @param {{enabled?: boolean, color?: string, band?: boolean}} [options]
+ *   `enabled` 省略 ⇒ 按 `colorEnabled()` 判；`band` 省略 ⇒ 与 `enabled` 同值。
+ * @returns {string}
+ */
+export function paintLine(line, { enabled = colorEnabled(), color, band = enabled } = {}) {
+  const text = String(line ?? "");
+  if (!enabled) {
+    return bandLine(text, { enabled: band, color }).line;
+  }
+  const painted = color ? paint(text, color, true) : colorizeLine(text, true);
+  return bandLine(painted, { enabled: band, color }).line;
+}
+
+/**
  * 把渲染好的几行交给 `out`。
  *
- * **上色与色带只在这一处发生**：`renderVerdict()` 等是纯函数（判据与测试都逐字比它），
- * 而「要不要上色」是一个关于宿主的判断（TTY / `NO_COLOR`），两者不能混在一起。
- * 调用方给了自己的 `out`（测试、以及 `ci-heavy-gates.mjs` 那种要抓回文本的场景）⇒
+ * **上色与色带只在 `paintLine()` 那一处合成**：`renderVerdict()` 等是纯函数（判据与
+ * 测试都逐字比它），而「要不要上色」是一个关于宿主的判断（TTY / `NO_COLOR`），两者
+ * 不能混在一起。
+ * 调用方给了自己的 `out`（测试、以及要抓回文本的场景）⇒
  * **整行原样交出去，不着色、不加色带** —— 抓回去的仍是那一行干净文本。
+ *
+ * ⚠️ 「给了 `out`」过去被读成「要抓文本」，于是**只是换个写法**的转述型跑批
+ * （`ci-heavy-gates.mjs`）也被这一条连带短路，颜色层在它那一屏从不生效
+ * （ISSUE #2748）。它现在自己在新界面上补 `paintLine()`，两边共用同一份口径。
  *
  * @param {string[]} lines
  * @param {{out?: (line: string) => void, color?: boolean, band?: boolean}} [options]
@@ -486,7 +547,9 @@ export function summarize(items) {
 function emit(lines, options = {}) {
   const write = options.out;
   if (write) {
-    for (const line of lines) write(line);
+    for (const line of lines) {
+      write(line);
+    }
     return;
   }
   const enabled = options.color ?? colorEnabled();
@@ -495,9 +558,7 @@ function emit(lines, options = {}) {
     /* 多行内容（`renderTally()` 的那一块）按 `\n` 拆成行重新上色 —— 一行一条，
      * 每一行都要有自己的竖线，否则那一块会在中间「断掉」。 */
     for (const one of String(line).split("\n")) {
-      const colored = colorizeLine(one, enabled);
-      const banded = bandLine(colored, { enabled: band });
-      process.stdout.write(`${banded.line}\n`);
+      process.stdout.write(`${paintLine(one, { enabled, band })}\n`);
     }
   }
 }

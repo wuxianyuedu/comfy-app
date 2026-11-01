@@ -11,10 +11,7 @@ import { TRPCError } from "@trpc/server";
 import SuperJSON from "superjson";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import {
-  createTestTRPC,
-  testTrpcEndpoint,
-} from "../../../../tests/helpers/test-trpc";
+import { createTestTRPC, testTrpcEndpoint } from "../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
 import { z } from "zod";
@@ -24,29 +21,29 @@ import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 import { useModelFolderConfig } from "./use-model-folder-config";
 
 type Folder = {
-  folder: string;
-  type: string;
-  label: string;
-  enabled: boolean;
-  hasConfig: boolean;
   count: number;
+  enabled: boolean;
+  folder: string;
+  hasConfig: boolean;
+  label: string;
+  type: string;
 };
 
-interface Behavior {
-  folders: Folder[];
+type Behavior = {
   comfyReachable?: boolean;
+  /** 非空时 configDelete 抛错 */
+  deleteError?: string;
+  folders: Array<Folder>;
   /** 非空时 configList 抛错 */
   listError?: string;
   /** 非空时 configSave 抛错 */
   saveError?: string;
-  /** 非空时 configDelete 抛错 */
-  deleteError?: string;
   /** 非空时 sync 抛错 */
   syncError?: string;
-}
+};
 
 let behavior: Behavior = { folders: [], comfyReachable: true };
-const saveInputs: Array<{ folder: string; enabled: boolean }> = [];
+const saveInputs: Array<{ enabled: boolean; folder: string }> = [];
 /** 记录 configList 被调用的次数 —— 断言「挂载时加载一次」不随重渲染复发。 */
 let configListCalls = 0;
 const deleteInputs: Array<{ folder: string }> = [];
@@ -97,18 +94,16 @@ const mockRouter = t.router({
         }
         return { ok: true };
       }),
-    configDelete: t.procedure
-      .input(z.object({ folder: z.string() }))
-      .mutation(({ input }) => {
-        deleteInputs.push(input);
-        if (behavior.deleteError) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: behavior.deleteError,
-          });
-        }
-        return { ok: true };
-      }),
+    configDelete: t.procedure.input(z.object({ folder: z.string() })).mutation(({ input }) => {
+      deleteInputs.push(input);
+      if (behavior.deleteError) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: behavior.deleteError,
+        });
+      }
+      return { ok: true };
+    }),
     sync: t.procedure.mutation(() => {
       if (behavior.syncError) {
         throw new TRPCError({
@@ -171,12 +166,8 @@ describe("useModelFolderConfig", () => {
     expect(result.current.loading).toBe(true);
     await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.totalCount).toBe(2);
-    expect(result.current.enabledRows.map((r) => r.folder)).toEqual([
-      "checkpoints",
-    ]);
-    expect(result.current.availableRows.map((r) => r.folder)).toEqual([
-      "loras",
-    ]);
+    expect(result.current.enabledRows.map((r) => r.folder)).toEqual(["checkpoints"]);
+    expect(result.current.availableRows.map((r) => r.folder)).toEqual(["loras"]);
     expect(result.current.comfyReachable).toBe(false);
   });
 
@@ -368,8 +359,6 @@ describe("useModelFolderConfig", () => {
 
     act(() => result.current.setQ("lora"));
     expect(result.current.enabledRows).toEqual([]);
-    expect(result.current.availableRows.map((r) => r.folder)).toEqual([
-      "loras",
-    ]);
+    expect(result.current.availableRows.map((r) => r.folder)).toEqual(["loras"]);
   });
 });

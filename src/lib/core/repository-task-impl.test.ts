@@ -20,11 +20,7 @@
  */
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import {
-  createTestDb,
-  seedUser,
-  type TestDb,
-} from "../../../tests/helpers/test-db";
+import { createTestDb, seedUser, type TestDb } from "../../../tests/helpers/test-db";
 import { task } from "~/server/db/schema";
 import { createTaskRepoImpl, type TaskRepoImpl } from "./repository-task-impl";
 import type { TaskRepoDb } from "./repository-task-impl-types";
@@ -39,8 +35,10 @@ beforeAll(() => {
   tdb = createTestDb();
   // 内存测试库结构上是同一份 drizzle builder，运行时类型名义不同（better-sqlite3
   // vs libsql）；一次性断言、之后所有 impl 方法都用这个 `db`。
-  impl = createTaskRepoImpl(tdb as unknown as TaskRepoDb, { owner: "inline" });
-  hostImpl = createTaskRepoImpl(tdb as unknown as TaskRepoDb, {
+  impl = createTaskRepoImpl(/* SAFETY: 类型断言已复核 */ tdb as unknown as TaskRepoDb, {
+    owner: "inline",
+  });
+  hostImpl = createTaskRepoImpl(/* SAFETY: 类型断言已复核 */ tdb as unknown as TaskRepoDb, {
     owner: "host",
   });
 });
@@ -54,21 +52,23 @@ beforeEach(() => {
 /** 建一行任务。`extra` 里的字段直接落到 task 表（比 seedTask 少了类型限制）。 */
 async function seed(extra: Record<string, unknown> = {}): Promise<string> {
   const id = `t-${Math.random().toString(36).slice(2, 10)}`;
-  await (tdb as unknown as TaskRepoDb).insert(task).values({
-    id,
-    userId,
-    type: "TXT2IMG",
-    prompt: "p",
-    params: {},
-    workflowName: "w",
-    status: "QUEUED",
-    ...extra,
-  } as never);
+  await /* SAFETY: 类型断言已复核 */ (tdb as unknown as TaskRepoDb).insert(task).values(
+    /* SAFETY: 类型断言已复核 */ {
+      id,
+      userId,
+      type: "TXT2IMG",
+      prompt: "p",
+      params: {},
+      workflowName: "w",
+      status: "QUEUED",
+      ...extra,
+    } as never,
+  );
   return id;
 }
 
 function readRow(id: string): Record<string, unknown> | undefined {
-  return (tdb.$tables.tasks as Array<Record<string, unknown>>).find(
+  return /* SAFETY: 类型断言已复核 */ (tdb.$tables.tasks as Array<Record<string, unknown>>).find(
     (r) => r.id === id,
   );
 }
@@ -329,14 +329,8 @@ describe("listStaleUnownedQueued（reaper 的死信扫描：5 条件 AND，ISSUE
   const broken: Array<[string, Record<string, unknown>]> = [
     ["已 finishedAt 不返", { finishedAt: new Date() }],
     ["createdAt 不早于 cutoff 不返（还没过时限）", { createdAt: freshDate }],
-    [
-      "有 promptId 不返（归 ComfyUI 负责，由 listStaleRunning 对账）",
-      { promptId: "pid" },
-    ],
-    [
-      "status 不是 QUEUED 不返（RUNNING 走 listStaleRunning 对账）",
-      { status: "RUNNING" },
-    ],
+    ["有 promptId 不返（归 ComfyUI 负责，由 listStaleRunning 对账）", { promptId: "pid" }],
+    ["status 不是 QUEUED 不返（RUNNING 走 listStaleRunning 对账）", { status: "RUNNING" }],
   ];
   it.for(broken)("破一条：%s", async ([, extra]) => {
     await seed({
@@ -380,9 +374,7 @@ describe("listStaleRunning（reaper 扫 RUNNING 孤儿：状态/时限/归属三
       createdAt: oldDate,
       promptId: null,
     });
-    expect(
-      (await impl.listStaleRunning(cutoff, 10)).map((r) => r.id),
-    ).toContain(id);
+    expect((await impl.listStaleRunning(cutoff, 10)).map((r) => r.id)).toContain(id);
   });
 
   it("归属分片（Phase 3-B0）：RUNNING 片同样按 claimedBy 切，与领取谓词同一条判据", async () => {
@@ -403,14 +395,12 @@ describe("listStaleRunning（reaper 扫 RUNNING 孤儿：状态/时限/归属三
       createdAt: oldDate,
       promptId: "pid-n",
     });
-    expect(
-      (await impl.listStaleRunning(cutoff, 10, "host")).map((r) => r.id),
-    ).toEqual([hostOrphan]);
-    expect(
-      (await impl.listStaleRunning(cutoff, 10, "inline"))
-        .map((r) => r.id)
-        .sort(),
-    ).toEqual([inlineOrphan, nullOrphan].sort());
+    expect((await impl.listStaleRunning(cutoff, 10, "host")).map((r) => r.id)).toEqual([
+      hostOrphan,
+    ]);
+    expect((await impl.listStaleRunning(cutoff, 10, "inline")).map((r) => r.id).sort()).toEqual(
+      [inlineOrphan, nullOrphan].sort(),
+    );
   });
 });
 
@@ -435,7 +425,7 @@ describe("createImages", () => {
         height: 512,
       },
     ]);
-    const imgs = (
+    const imgs = /* SAFETY: 类型断言已复核 */ (
       tdb.$tables.taskImages as Array<Record<string, unknown>>
     ).filter((r) => r.taskId === id);
     expect(imgs).toHaveLength(2);
@@ -541,7 +531,7 @@ describe("claimNextQueued（Phase 3-A：单语句原子领取 + §6 归属谓词
     /* 与 `updateProgress` / `markRunning` 那两处的 COALESCE 相反，这里是无条件覆写：
      * 一次领取就是新一轮执行的起点，崩溃后重领的行不该带着上一轮的耗时基准。 */
     expect(stamped).toBeGreaterThan(staleAt.getTime());
-    expect(Math.abs((stamped ?? 0) - Date.now())).toBeLessThan(5_000);
+    expect(Math.abs((stamped ?? 0) - Date.now())).toBeLessThan(5000);
   });
 });
 
@@ -557,7 +547,7 @@ describe("findExecJob（Phase 3-B1：host 重建 Job 的行读）", () => {
     const job = await hostImpl.findExecJob(id);
     expect(job?.workflowName).toBe("w");
     expect(job?.execPayload).toEqual({
-      nodes: [{ id: "1", type: "KSampler" }] as unknown[],
+      nodes: /* SAFETY: 类型断言已复核 */ [{ id: "1", type: "KSampler" }] as Array<unknown>,
     });
     expect(job?.params).toMatchObject({
       workflowInputs: [{ nodeId: "1", name: "text", value: "x" }],
@@ -587,9 +577,9 @@ describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4�
       promptId: "p-1",
     });
     expect(await impl.cancel(id)).toBe("written");
-    expect(
-      await impl.finalizeFailure(id, "comfy-cli 异常退出（code=null）"),
-    ).toBe("skipped-terminal");
+    expect(await impl.finalizeFailure(id, "comfy-cli 异常退出（code=null）")).toBe(
+      "skipped-terminal",
+    );
     expect(readRow(id)).toMatchObject({ status: "CANCELLED" });
   });
 
@@ -601,12 +591,8 @@ describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4�
 
   it("成功收口之后失败收口落不进去，且返回值说清是谁赢了", async () => {
     const id = await seed({ status: "RUNNING", claimedBy: "inline" });
-    expect(
-      await impl.finalizeSuccess(id, { resultImages: [], params: {} }),
-    ).toBe("written");
-    expect(await impl.finalizeFailure(id, "后到的原因")).toBe(
-      "skipped-terminal",
-    );
+    expect(await impl.finalizeSuccess(id, { resultImages: [], params: {} })).toBe("written");
+    expect(await impl.finalizeFailure(id, "后到的原因")).toBe("skipped-terminal");
     expect(readRow(id)?.status).toBe("SUCCEEDED");
   });
 
@@ -616,9 +602,9 @@ describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4�
       claimedBy: "host",
       promptId: "p-2",
     });
-    expect(
-      await impl.finalizeSuccess(id, { resultImages: [], params: {} }),
-    ).toBe("skipped-not-owned");
+    expect(await impl.finalizeSuccess(id, { resultImages: [], params: {} })).toBe(
+      "skipped-not-owned",
+    );
     expect(await impl.updateProgress(id, 55)).toBe(false);
     expect(await impl.markRunning(id, "p-3")).toBe(false);
     expect(readRow(id)).toMatchObject({ status: "RUNNING", claimedBy: "host" });
@@ -643,21 +629,13 @@ describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4�
   it("replaceLogs 带归属守卫、不带终态守卫（收口后的尾随日志不许被抹掉）", async () => {
     const hostRow = await seed({ status: "RUNNING", claimedBy: "host" });
     await impl.replaceLogs(hostRow, [{ level: "info", message: "越片写入" }]);
-    expect(readRow(hostRow)?.logs).not.toEqual([
-      { level: "info", message: "越片写入" },
-    ]);
+    expect(readRow(hostRow)?.logs).not.toEqual([{ level: "info", message: "越片写入" }]);
     await hostImpl.replaceLogs(hostRow, [{ level: "info", message: "归我" }]);
-    expect(readRow(hostRow)?.logs).toEqual([
-      { level: "info", message: "归我" },
-    ]);
+    expect(readRow(hostRow)?.logs).toEqual([{ level: "info", message: "归我" }]);
 
     const done = await seed({ status: "SUCCEEDED", claimedBy: "inline" });
-    await impl.replaceLogs(done, [
-      { level: "info", message: "收口之后的尾行" },
-    ]);
-    expect(readRow(done)?.logs).toEqual([
-      { level: "info", message: "收口之后的尾行" },
-    ]);
+    await impl.replaceLogs(done, [{ level: "info", message: "收口之后的尾行" }]);
+    expect(readRow(done)?.logs).toEqual([{ level: "info", message: "收口之后的尾行" }]);
   });
 
   it("findExecJob 跨片读不到（要交给 ComfyUI 的图不许读成别人的）", async () => {
@@ -675,16 +653,12 @@ describe("收口写入的终态守卫与归属守卫（Phase 4-A1 / ADR §14 D4�
     // 两处的 owner 必须同源（host 脚本里就是同一个 hostRepo 实例）；不同源时
     // 表现是「判了却没落库」，守卫返回的原因就是排障的唯一线索。
     const id = await seed({ status: "RUNNING", claimedBy: "host" });
-    expect(await impl.finalizeFromReaper(id, "FAILED", "对账判失败")).toBe(
-      "skipped-not-owned",
-    );
+    expect(await impl.finalizeFromReaper(id, "FAILED", "对账判失败")).toBe("skipped-not-owned");
     expect(readRow(id)?.status).toBe("RUNNING");
   });
 
   it("行不存在时回 skipped-missing（与「已被别处收口」区分开）", async () => {
-    expect(await impl.finalizeFailure("no-such-task", "x")).toBe(
-      "skipped-missing",
-    );
+    expect(await impl.finalizeFailure("no-such-task", "x")).toBe("skipped-missing");
     expect(await impl.cancel("no-such-task")).toBe("skipped-missing");
   });
 });

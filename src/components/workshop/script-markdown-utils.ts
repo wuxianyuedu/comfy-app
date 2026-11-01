@@ -1,8 +1,8 @@
-export interface OutlineItem {
+export type OutlineItem = {
   level: number;
-  text: string;
   line: number;
-}
+  text: string;
+};
 
 /* ── Markdown 归一化(编辑器接收内容的入口)────────────────────────────
  * 针对导入 markdown 剧本后常见的空行/换行异常:
@@ -12,8 +12,8 @@ export interface OutlineItem {
  * 4. 标题 / 列表 / 引用 / 分隔线等行的内容不做改写,其余内容原样保留;
  * 5. 围栏代码块(``` 或 ~~~)内部不做任何处理,避免破坏代码内容。 */
 export function normalizeMarkdown(source: string): string {
-  const lines = source.replace(/\r\n?/g, "\n").split("\n");
-  const result: string[] = [];
+  const lines = source.replaceAll(/\r\n?/g, "\n").split("\n");
+  const result: Array<string> = [];
   let inFence = false;
   let fenceMarker = "";
   let index = 0;
@@ -21,18 +21,17 @@ export function normalizeMarkdown(source: string): string {
     /* `at()` 越界即 `undefined`：取元素与循环判据合成一处，
      * 不必再靠 `!` 把索引签名加上的 `undefined` 抹掉。 */
     const raw = lines.at(index);
-    if (raw === undefined) break;
+    if (raw === undefined) {
+      break;
+    }
     const fenceMatch = /^ {0,3}(`{3,}|~{3,})/.exec(raw);
     if (fenceMatch) {
       const markerStr = fenceMatch.at(1) ?? "";
-      const marker = Array.from(markerStr.trim())[0] ?? "";
+      const marker = [...markerStr.trim()][0] ?? "";
       if (!inFence) {
         inFence = true;
         fenceMarker = marker;
-      } else if (
-        marker === fenceMarker &&
-        raw.slice(markerStr.length).trim() === ""
-      ) {
+      } else if (marker === fenceMarker && raw.slice(markerStr.length).trim() === "") {
         inFence = false;
       }
       result.push(raw);
@@ -53,19 +52,25 @@ export function normalizeMarkdown(source: string): string {
     let blankRun = 0;
     while (index < lines.length) {
       const probe = lines.at(index);
-      if (probe === undefined) break;
-      if (probe.replace(/[ \t]+$/u, "") !== "") break;
+      if (probe === undefined) {
+        break;
+      }
+      if (probe.replace(/[ \t]+$/u, "") !== "") {
+        break;
+      }
       blankRun += 1;
       index += 1;
     }
     const kept = blankRun >= 3 ? 1 : blankRun;
-    for (let i = 0; i < kept; i += 1) result.push("");
+    for (let i = 0; i < kept; i += 1) {
+      result.push("");
+    }
   }
   return result.join("\n");
 }
 
-export function buildOutline(value: string): OutlineItem[] {
-  const items: OutlineItem[] = [];
+export function buildOutline(value: string): Array<OutlineItem> {
+  const items: Array<OutlineItem> = [];
   const lines = value.split("\n");
   lines.forEach((line, index) => {
     const match = /^(#{1,3})\s+(.+)$/.exec(line);

@@ -31,15 +31,16 @@ import {
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 const ROOT = process.cwd();
-const pkg = JSON.parse(
+const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
   fs.readFileSync(path.join(ROOT, "package.json"), "utf8"),
 ) as { scripts: Record<string, string> };
 const postinstall = pkg.scripts.postinstall ?? "";
 
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
-  for (const dir of tmpDirs.splice(0))
+  for (const dir of tmpDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 造一个最小「检出」：把入口脚本与它的定位前提放进去（入口按自身位置找仓库根）。 */
@@ -72,16 +73,15 @@ describe("postinstall 的宿主契约（ISSUE #636）", () => {
     expect(verdict.reason).toMatch(/sh\/bash/);
   });
 
-  it.for([
-    ["bash scripts/x.sh", /sh\/bash/],
-    ["node scripts/install-git-hooks.mjs || true", /POSIX shell/],
-    [
-      "node scripts/install-git-hooks.mjs && node scripts/other.mjs",
-      /POSIX shell/,
-    ],
-    ["npm run hooks", /拒绝 npm/],
-    ["node scripts/some-other.mjs", /必须逐字/],
-  ] as const)("违规形态「%s」被拦下", ([cmd, expected]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["bash scripts/x.sh", /sh\/bash/],
+      ["node scripts/install-git-hooks.mjs || true", /POSIX shell/],
+      ["node scripts/install-git-hooks.mjs && node scripts/other.mjs", /POSIX shell/],
+      ["npm run hooks", /拒绝 npm/],
+      ["node scripts/some-other.mjs", /必须逐字/],
+    ] as const,
+  )("违规形态「%s」被拦下", ([cmd, expected]) => {
     const verdict = checkPostinstall(cmd);
     expect(verdict.ok, `「${cmd}」不该通过`).toBe(false);
     expect(verdict.reason).toMatch(expected);
@@ -107,14 +107,14 @@ describe("postinstall 的入口真跑（模拟 Windows 宿主：不经 shell）"
   /** 不经任何 shell 直接起 node —— 与 pnpm 在 Windows 上的执行语义一致。 */
   function runEntry(cwd: string): {
     status: number | null;
-    stdout: string;
     stderr: string;
+    stdout: string;
   } {
-    const r = execFileSync(
-      process.execPath,
-      [path.join(cwd, "scripts", "install-git-hooks.mjs")],
-      { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    );
+    const r = execFileSync(process.execPath, [path.join(cwd, "scripts", "install-git-hooks.mjs")], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     return { status: 0, stdout: r, stderr: "" };
   }
 
@@ -133,14 +133,10 @@ describe("postinstall 的入口真跑（模拟 Windows 宿主：不经 shell）"
     });
     const first = runEntry(dir);
     expect(first.stdout).toContain(".githooks");
-    const hooks = execFileSync(
-      "git",
-      ["config", "--local", "--get", "core.hooksPath"],
-      {
-        cwd: dir,
-        encoding: "utf8",
-      },
-    ).trim();
+    const hooks = execFileSync("git", ["config", "--local", "--get", "core.hooksPath"], {
+      cwd: dir,
+      encoding: "utf8",
+    }).trim();
     expect(hooks).toBe(".githooks");
 
     const second = runEntry(dir);

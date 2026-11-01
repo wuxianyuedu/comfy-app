@@ -16,13 +16,14 @@ function uid(prefix = "id"): string {
 export function parseIdeaToScenes(
   raw: string,
   meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">,
-): Scene[] {
+): Array<Scene> {
   const text = raw.trim();
-  if (!text) return [];
+  if (!text) {
+    return [];
+  }
 
   // 单句短想法 → 用简单的三幕模板扩写
-  const hasStructure =
-    /\n\s*\n/.test(text) || /场景\d|场\s*\d|SCENE/i.test(text);
+  const hasStructure = /\n\s*\n/.test(text) || /场景\d|场\s*\d|SCENE/i.test(text);
   if (!hasStructure && text.length < 120) {
     return expandIdea(text, meta);
   }
@@ -47,10 +48,8 @@ export function parseIdeaToScenes(
     const first = lines[0] ?? "";
     const isHeading = /^(场景|场|SCENE)\s*\d+/i.test(first);
     const heading = isHeading ? first : `场景${i + 1} · ${first.slice(0, 12)}`;
-    const body = isHeading
-      ? lines.slice(1).join("\n")
-      : lines.slice(1).join("\n");
-    const { location, time } = extractMeta(first + " " + body);
+    const body = isHeading ? lines.slice(1).join("\n") : lines.slice(1).join("\n");
+    const { location, time } = extractMeta(`${first} ${body}`);
     return {
       id: uid("scene"),
       heading,
@@ -67,12 +66,12 @@ export function parseIdeaToScenes(
 function expandIdea(
   idea: string,
   meta: Pick<ProjectMeta, "title" | "type" | "tone" | "logline">,
-): Scene[] {
+): Array<Scene> {
   const tone = meta.tone || "温暖治愈";
   const type = meta.type || "short_video";
   const base = idea.replace(/[。.！!？?\s]+$/, "");
 
-  const template: readonly Omit<Scene, "id">[] = [
+  const template: ReadonlyArray<Omit<Scene, "id">> = [
     {
       heading: "场景1 · 开端",
       location: "室内",
@@ -119,8 +118,7 @@ function extractMeta(text: string): { location: string; time: string } {
     /(咖啡馆|办公室|街道|房间|实验室|森林|海边|城市|学校|医院|城堡|太空|车内|室外|室内|山顶|车站)/.exec(
       text,
     );
-  const timeMatch =
-    /(清晨|早晨|上午|中午|下午|黄昏|傍晚|夜晚|深夜|黎明|白天|月夜)/.exec(text);
+  const timeMatch = /(清晨|早晨|上午|中午|下午|黄昏|傍晚|夜晚|深夜|黎明|白天|月夜)/.exec(text);
   return {
     location: locMatch ? locMatch[1]! : "未指定",
     time: timeMatch ? timeMatch[1]! : "未指定",
@@ -129,9 +127,15 @@ function extractMeta(text: string): { location: string; time: string } {
 
 function estimateShots(text: string): number {
   const len = text.length;
-  if (len < 40) return 1;
-  if (len < 100) return 2;
-  if (len < 200) return 3;
+  if (len < 40) {
+    return 1;
+  }
+  if (len < 100) {
+    return 2;
+  }
+  if (len < 200) {
+    return 3;
+  }
   return 4;
 }
 

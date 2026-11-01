@@ -8,25 +8,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const projectListQuery = vi.fn();
-const projectUpsertMutate = vi.fn<(...args: unknown[]) => unknown>();
-const projectDeleteMutate = vi.fn<(...args: unknown[]) => unknown>();
+const projectUpsertMutate = vi.fn<(...args: Array<unknown>) => unknown>();
+const projectDeleteMutate = vi.fn<(...args: Array<unknown>) => unknown>();
 
 vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     project: {
       list: {
-        query: (...args: unknown[]) => projectListQuery(...args) as never,
+        query: (...args: Array<unknown>) =>
+          /* SAFETY: 类型断言已复核 */ projectListQuery(...args) as never,
       },
       /* `Promise.resolve().then(() => …)` 而不是 `Promise.resolve(…)`：
        * 后者会把 mock 的**同步抛错**当成 fulfilled 的值吞下去，
        * 于是「服务端拒收这一份」这条路上永远测不到 —— 而这条镜像链的
        * 缺陷恰恰长在失败分支上（台账 A3 装上归属闸之后才有的那一格）。 */
       upsert: {
-        mutate: (...args: unknown[]) =>
+        mutate: (...args: Array<unknown>) =>
           Promise.resolve().then(() => projectUpsertMutate(...args)),
       },
       delete: {
-        mutate: (...args: unknown[]) =>
+        mutate: (...args: Array<unknown>) =>
           Promise.resolve().then(() => projectDeleteMutate(...args)),
       },
     },
@@ -74,7 +75,7 @@ function trpcError(code: string, message: string): unknown {
   });
 }
 
-function noticesFor(id: string): string[] {
+function noticesFor(id: string): Array<string> {
   return listSyncNotices()
     .filter((notice) => notice.projectId === id)
     .map((notice) => notice.detail);
@@ -119,17 +120,13 @@ describe("reapEmptyProject", () => {
   });
 
   it("旧版 legacy 默认名不再被回收（仅当前默认名是哨兵）", () => {
-    seed([
-      { id: "p1", name: "未命名项目", updatedAt: 1, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "p1", name: "未命名项目", updatedAt: 1, nodes: [], edges: [] }]);
     expect(reapEmptyProject("p1")).toBe(false);
     expect(listProjects()).toHaveLength(1);
   });
 
   it("已被用户命名的空画布不被回收（刻意保存的空白板）", () => {
-    seed([
-      { id: "p1", name: "空白灵感板", updatedAt: 1, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "p1", name: "空白灵感板", updatedAt: 1, nodes: [], edges: [] }]);
     expect(reapEmptyProject("p1")).toBe(false);
     expect(listProjects()).toHaveLength(1);
   });
@@ -243,9 +240,7 @@ describe("清扫要连服务端一起删（ISSUE #1501 的孤儿行）", () => {
   });
 
   it("没有可清的就一条删除都不发", async () => {
-    seed([
-      { id: "keep", name: "我的项目", updatedAt: 1, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "keep", name: "我的项目", updatedAt: 1, nodes: [], edges: [] }]);
     setActive("keep");
     expect(reapAllEmptyDrafts()).toBe(0);
     await settled();
@@ -438,9 +433,7 @@ describe("服务端镜像的失败出口", () => {
   });
 
   it("删除被服务端拒收 → 说的是「没能从服务端删掉」，不是「同步失败」", async () => {
-    seed([
-      { id: "proj_m4", name: "该删的", updatedAt: 1, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "proj_m4", name: "该删的", updatedAt: 1, nodes: [], edges: [] }]);
     projectDeleteMutate.mockImplementationOnce(() => {
       throw trpcError("UNAUTHORIZED", "会话已失效");
     });
@@ -451,9 +444,7 @@ describe("服务端镜像的失败出口", () => {
     /* 后果与「没能存进去」不同：本机已经删了、服务端还留着，
      * 换端口时它会再冒出来 —— 文案必须说得出这一句。 */
     expect(noticesFor("proj_m4")[0]).toContain("没能从服务端删掉");
-    expect(listProjects().map((project) => project.id)).not.toContain(
-      "proj_m4",
-    );
+    expect(listProjects().map((project) => project.id)).not.toContain("proj_m4");
   });
 
   it("重复的自动保存只留一条拒收（每 500ms 撞一次不许刷出一串提示）", async () => {
@@ -490,26 +481,19 @@ describe("setActive", () => {
  */
 describe("listProjectsWithServer（并集 + 出处标注）", () => {
   it("服务端独有行也在列表里，标 origin=server", async () => {
-    seed([
-      { id: "proj_local", name: "本地的", updatedAt: 2, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "proj_local", name: "本地的", updatedAt: 2, nodes: [], edges: [] }]);
     projectListQuery.mockResolvedValue([
       { id: "proj_orphan", name: "未命名", updatedAt: 3, nodes: [], edges: [] },
     ]);
     const { entries, ok } = await listProjectsWithServer();
     expect(ok).toBe(true);
-    expect(entries.map((entry) => entry.id)).toEqual([
-      "proj_orphan",
-      "proj_local",
-    ]);
+    expect(entries.map((entry) => entry.id)).toEqual(["proj_orphan", "proj_local"]);
     expect(entries.find((e) => e.id === "proj_orphan")?.origin).toBe("server");
     expect(entries.find((e) => e.id === "proj_local")?.origin).toBe("local");
   });
 
   it("两侧都有的同一 id 只出现一行，取较新的一侧，标 origin=both", async () => {
-    seed([
-      { id: "proj_both", name: "旧的", updatedAt: 1, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "proj_both", name: "旧的", updatedAt: 1, nodes: [], edges: [] }]);
     projectListQuery.mockResolvedValue([
       { id: "proj_both", name: "新的", updatedAt: 9, nodes: [], edges: [] },
     ]);
@@ -520,9 +504,7 @@ describe("listProjectsWithServer（并集 + 出处标注）", () => {
   });
 
   it("本地更新时以本地为准（不把用户刚改的名字冲回去）", async () => {
-    seed([
-      { id: "proj_b", name: "我刚改的", updatedAt: 9, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "proj_b", name: "我刚改的", updatedAt: 9, nodes: [], edges: [] }]);
     projectListQuery.mockResolvedValue([
       { id: "proj_b", name: "服务端旧的", updatedAt: 1, nodes: [], edges: [] },
     ]);
@@ -532,9 +514,7 @@ describe("listProjectsWithServer（并集 + 出处标注）", () => {
   });
 
   it("拉不到服务端时 ok=false 且照常列本地项目（不是空列表）", async () => {
-    seed([
-      { id: "proj_off", name: "离线也有", updatedAt: 1, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "proj_off", name: "离线也有", updatedAt: 1, nodes: [], edges: [] }]);
     projectListQuery.mockRejectedValue(new Error("ECONNREFUSED"));
     const { entries, ok } = await listProjectsWithServer();
     expect(ok).toBe(false);
@@ -553,9 +533,7 @@ describe("deleteProjectEverywhere（索引里没有那一行也删得掉）", ()
   });
 
   it("索引里有这行时走既有出口：本地清掉 + 服务端也删", async () => {
-    seed([
-      { id: "proj_has", name: "有的", updatedAt: 1, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "proj_has", name: "有的", updatedAt: 1, nodes: [], edges: [] }]);
     projectDeleteMutate.mockResolvedValue({ ok: true });
     deleteProjectEverywhere("proj_has", "有的");
     await settled();
@@ -613,9 +591,7 @@ describe("hydrateProjectFromServer（打开只在服务端的项目的前置）"
   });
 
   it("索引里已经有这一行 → 不碰网络（每次点开项目都发一次请求是另一码事）", async () => {
-    seed([
-      { id: "proj_local", name: "本地的", updatedAt: 3, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "proj_local", name: "本地的", updatedAt: 3, nodes: [], edges: [] }]);
 
     const project = await hydrateProjectFromServer("proj_local");
 
@@ -646,9 +622,7 @@ describe("hydrateProjectFromServer（打开只在服务端的项目的前置）"
   });
 
   it("只并进新增的行：已有条目的 updatedAt 不被这一轮重写", async () => {
-    seed([
-      { id: "proj_keep", name: "已有的", updatedAt: 5, nodes: [], edges: [] },
-    ]);
+    seed([{ id: "proj_keep", name: "已有的", updatedAt: 5, nodes: [], edges: [] }]);
     projectListQuery.mockResolvedValue([
       {
         id: "proj_keep",

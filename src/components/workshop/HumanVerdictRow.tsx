@@ -21,52 +21,48 @@ function RatingStars({
   disabled,
   onPick,
 }: {
-  value: number | null;
   disabled: boolean;
   onPick: (rating: number | null) => void;
+  value: number | null;
 }) {
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
         <Button
+          aria-label={`${star} 星`}
+          disabled={disabled}
           key={star}
+          onClick={() => onPick(value === star ? null : star)}
+          size="icon-sm"
           type="button"
           variant="ghost"
-          size="icon-sm"
-          disabled={disabled}
-          aria-label={`${star} 星`}
-          onClick={() => onPick(value === star ? null : star)}
         >
           <Star
+            className={
+              value !== null && star <= value ? "fill-warning text-warning" : "text-ink-faintest"
+            }
             data-icon="inline-start"
             size={14}
-            className={
-              value !== null && star <= value
-                ? "fill-warning text-warning"
-                : "text-ink-faintest"
-            }
           />
         </Button>
       ))}
-      {value !== null && (
-        <span className="text-ink-faintest text-2xs">{value} / 5</span>
-      )}
+      {value !== null && <span className="text-ink-faintest text-2xs">{value} / 5</span>}
     </div>
   );
 }
 
-export interface HumanVerdictRowProps {
-  /** 已落库的人工裁决（展示「人已拍板」状态）；没裁决过 → null。 */
-  verdict: HumanVerdict | null;
-  /** 已落库的人评分（仅镜头场景给）；缺省 = 该场景不显示星评。 */
-  rating?: number | null;
+export type HumanVerdictRowProps = {
+  /** 弹窗整体在途（AI 评审 / 重生成中）时禁动。 */
+  disabled?: boolean;
   /** 星评变更回调（镜头场景注入 `run.setHumanRating`）；不给 = 不显示星评。 */
   onRatingChange?: (rating: number | null) => Promise<void>;
   /** 裁决提交回调（pass + 一句话理由）。 */
   onSubmit: (pass: boolean, note: string) => Promise<void>;
-  /** 弹窗整体在途（AI 评审 / 重生成中）时禁动。 */
-  disabled?: boolean;
-}
+  /** 已落库的人评分（仅镜头场景给）；缺省 = 该场景不显示星评。 */
+  rating?: number | null;
+  /** 已落库的人工裁决（展示「人已拍板」状态）；没裁决过 → null。 */
+  verdict: HumanVerdict | null;
+};
 
 export function HumanVerdictRow({
   verdict,
@@ -94,8 +90,7 @@ export function HumanVerdictRow({
   }
 
   // 反馈通道（~/lib/async-action 的形状）：成功清掉行内错误块，失败落一句话。
-  const report: ActionReport = (kind, detail) =>
-    setError(kind === "err" ? detail : "");
+  const report: ActionReport = (kind, detail) => setError(kind === "err" ? detail : "");
 
   const submit = (pass: boolean) =>
     busy.run(async () => {
@@ -105,19 +100,25 @@ export function HumanVerdictRow({
         failureText: "裁决失败",
         readResultEnvelope: false,
       });
-      if (result.ok) setNote("");
+      if (result.ok) {
+        setNote("");
+      }
     });
 
   const pickRating = async (value: number | null) => {
     const prev = localRating;
     setLocalRating(value);
-    if (!onRatingChange) return;
+    if (!onRatingChange) {
+      return;
+    }
     const result = await runAsyncAction(() => onRatingChange(value), {
       report,
       failureText: "评分失败",
       readResultEnvelope: false,
     });
-    if (!result.ok) setLocalRating(prev);
+    if (!result.ok) {
+      setLocalRating(prev);
+    }
   };
 
   return (
@@ -126,9 +127,9 @@ export function HumanVerdictRow({
         <span className="text-ink-faint text-xs">人工裁决（优先于 AI）</span>
         {onRatingChange && (
           <RatingStars
-            value={localRating}
             disabled={disabled || busy.busy}
             onPick={(value) => void pickRating(value)}
+            value={localRating}
           />
         )}
       </div>
@@ -142,27 +143,27 @@ export function HumanVerdictRow({
       <div className="flex items-center gap-2">
         <Input
           className="h-7 min-w-0 flex-1 text-xs"
+          disabled={disabled || busy.busy}
+          maxLength={200}
+          onChange={textHandler(setNote)}
           placeholder="一句话理由（可选）"
           value={note}
-          maxLength={200}
-          disabled={disabled || busy.busy}
-          onChange={textHandler(setNote)}
         />
         <Button
-          type="button"
-          variant="outline"
-          size="sm"
           disabled={disabled || busy.busy}
           onClick={() => void submit(true)}
+          size="sm"
+          type="button"
+          variant="outline"
         >
           通过
         </Button>
         <Button
-          type="button"
-          variant="outline"
-          size="sm"
           disabled={disabled || busy.busy}
           onClick={() => void submit(false)}
+          size="sm"
+          type="button"
+          variant="outline"
         >
           否决
         </Button>

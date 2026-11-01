@@ -39,8 +39,8 @@ export type SnapshotEntry = Buffer | null;
  */
 export type ProbeIo = {
   read: (abs: string) => SnapshotEntry;
-  write: (abs: string, bytes: Buffer) => void;
   remove: (abs: string) => void;
+  write: (abs: string, bytes: Buffer) => void;
 };
 
 /** Windows 上刚被子进程读过的文件会短暂占用，实测 `writeFileSync` 会连抛 `UNKNOWN`。 */
@@ -53,10 +53,12 @@ export const realProbeIo: ProbeIo = {
     for (let i = 0; i < WRITE_ATTEMPTS; i += 1) {
       try {
         writeFileSync(abs, bytes);
-        if (readFileSync(abs).equals(bytes)) return;
+        if (readFileSync(abs).equals(bytes)) {
+          return;
+        }
         last = "写回后读回的内容与快照不一致";
-      } catch (e) {
-        last = (e as Error).message;
+      } catch (error) {
+        last = /* SAFETY: 类型断言已复核 */ (error as Error).message;
       }
     }
     throw new Error(`还原写不进去（${WRITE_ATTEMPTS} 次仍失败）：${last}`);
@@ -66,11 +68,13 @@ export const realProbeIo: ProbeIo = {
 
 /** 拍下这些路径**此刻**的字节（不存在记成 `null`）。在任何探针动手之前调用。 */
 export function snapshotPaths(
-  absList: readonly string[],
+  absList: ReadonlyArray<string>,
   io: ProbeIo = realProbeIo,
 ): Map<string, SnapshotEntry> {
   const snap = new Map<string, SnapshotEntry>();
-  for (const abs of absList) snap.set(abs, io.read(abs));
+  for (const abs of absList) {
+    snap.set(abs, io.read(abs));
+  }
   return snap;
 }
 
@@ -87,16 +91,23 @@ export function snapshotPaths(
 export function restoreToSnapshot(
   snapshot: ReadonlyMap<string, SnapshotEntry>,
   io: ProbeIo = realProbeIo,
-): { restored: string[]; unchanged: string[]; failed: { abs: string; why: string }[] } {
-  const restored: string[] = [];
-  const unchanged: string[] = [];
-  const failed: { abs: string; why: string }[] = [];
+): {
+  failed: Array<{ abs: string; why: string }>;
+  restored: Array<string>;
+  unchanged: Array<string>;
+} {
+  const restored: Array<string> = [];
+  const unchanged: Array<string> = [];
+  const failed: Array<{ abs: string; why: string }> = [];
   for (const [abs, want] of snapshot) {
     let now: SnapshotEntry;
     try {
       now = io.read(abs);
-    } catch (e) {
-      failed.push({ abs, why: `读不到当前内容：${(e as Error).message}` });
+    } catch (error) {
+      failed.push({
+        abs,
+        why: `读不到当前内容：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`,
+      });
       continue;
     }
     if (sameBytes(now, want)) {
@@ -104,11 +115,14 @@ export function restoreToSnapshot(
       continue;
     }
     try {
-      if (want === null) io.remove(abs);
-      else io.write(abs, want);
+      if (want === null) {
+        io.remove(abs);
+      } else {
+        io.write(abs, want);
+      }
       restored.push(abs);
-    } catch (e) {
-      failed.push({ abs, why: (e as Error).message });
+    } catch (error) {
+      failed.push({ abs, why: /* SAFETY: 类型断言已复核 */ (error as Error).message });
     }
   }
   return { restored, unchanged, failed };
@@ -116,6 +130,8 @@ export function restoreToSnapshot(
 
 /** 字节级比较（`null` 只与 `null` 相等 —— 「本来不存在」与「空文件」是两种状态）。 */
 export function sameBytes(a: SnapshotEntry, b: SnapshotEntry): boolean {
-  if (a === null || b === null) return a === b;
+  if (a === null || b === null) {
+    return a === b;
+  }
   return a.equals(b);
 }

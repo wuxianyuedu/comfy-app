@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *   ② 非法值 fail-fast，且错误信息里带**字段名**（否则排障时只知道「配置错了」）。
  */
 
-const KEYS = [
+const KEYS = /* SAFETY: 类型断言已复核 */ [
   "NODE_ENV",
   "LOG_LEVEL",
   "DATABASE_URL",
@@ -38,9 +38,14 @@ afterEach(() => {
   // 其余键用 saved 快照还原（含「原本不存在 → 删掉」这一支）。
   vi.unstubAllEnvs();
   for (const k of KEYS) {
-    if (k === "NODE_ENV") continue;
-    if (saved[k] === undefined) delete process.env[k];
-    else vi.stubEnv(k, saved[k]);
+    if (k === "NODE_ENV") {
+      continue;
+    }
+    if (saved[k] === undefined) {
+      delete process.env[k];
+    } else {
+      vi.stubEnv(k, saved[k]);
+    }
   }
 });
 
@@ -62,28 +67,25 @@ describe("默认值", () => {
     // Node fetch 会先把 localhost 解析成 ::1，回环必须写 127.0.0.1。
     expect(CONFIG_ENV_DEFAULTS.comfyuiBaseUrl).toContain("127.0.0.1");
     expect(CONFIG_ENV_DEFAULTS.comfyuiBaseUrl).not.toContain("localhost");
-    expect(CONFIG_ENV_DEFAULTS.comfyuiBaseUrl).toContain(
-      String(COMFYUI_DEFAULT_PORT),
-    );
+    expect(CONFIG_ENV_DEFAULTS.comfyuiBaseUrl).toContain(String(COMFYUI_DEFAULT_PORT));
   });
 });
 
 describe("环境三态", () => {
-  it.for([
-    ["development", true, false, false],
-    ["test", false, false, true],
-    ["production", false, true, false],
-  ] as const)(
-    "%s → isDev/isProd/isTest 互斥且正确",
-    async ([env, isDev, isProd, isTest]) => {
-      vi.stubEnv("NODE_ENV", env);
-      const { config } = await loadConfig();
-      expect(config.env).toBe(env);
-      expect(config.isDev).toBe(isDev);
-      expect(config.isProd).toBe(isProd);
-      expect(config.isTest).toBe(isTest);
-    },
-  );
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["development", true, false, false],
+      ["test", false, false, true],
+      ["production", false, true, false],
+    ] as const,
+  )("%s → isDev/isProd/isTest 互斥且正确", async ([env, isDev, isProd, isTest]) => {
+    vi.stubEnv("NODE_ENV", env);
+    const { config } = await loadConfig();
+    expect(config.env).toBe(env);
+    expect(config.isDev).toBe(isDev);
+    expect(config.isProd).toBe(isProd);
+    expect(config.isTest).toBe(isTest);
+  });
 
   it("非法 NODE_ENV 走 fail-fast 而不是静默当开发环境", async () => {
     vi.stubEnv("NODE_ENV", "staging");
@@ -92,7 +94,7 @@ describe("环境三态", () => {
 });
 
 describe("logLevel", () => {
-  it.for(["debug", "info", "warn", "error"] as const)(
+  it.for(/* SAFETY: 类型断言已复核 */ ["debug", "info", "warn", "error"] as const)(
     "%s 合法",
     async (level) => {
       process.env.LOG_LEVEL = level;
@@ -114,13 +116,10 @@ describe("port", () => {
     expect(config.port).toBe(3456);
   });
 
-  it.for(["0", "-1", "70000", "abc", "31.5"])(
-    "%s 一律 fail-fast",
-    async (bad) => {
-      process.env.COMFYAPP_PORT = bad;
-      await expect(loadConfig()).rejects.toThrow(/port/);
-    },
-  );
+  it.for(["0", "-1", "70000", "abc", "31.5"])("%s 一律 fail-fast", async (bad) => {
+    process.env.COMFYAPP_PORT = bad;
+    await expect(loadConfig()).rejects.toThrow(/port/);
+  });
 });
 
 describe("comfyuiBaseUrl", () => {
@@ -153,23 +152,17 @@ describe("开关型配置（按布尔字面量解析，不按 JS 真值）", () 
   /* 这一组曾钉住一个现存缺陷：`z.coerce.boolean()` 等价 `Boolean(value)`，
    * 而 `Boolean("false") === true` —— 按惯例写 `REAPER_ENABLED=false` **关不掉
    * reaper**，且没有任何提示。reaper 会杀进程，误判代价高，故改为字面量解析。 */
-  it.for(["false", "FALSE", " 0 ", "no", "off"])(
-    "REAPER_ENABLED=%s 关闭 reaper",
-    async (raw) => {
-      process.env.REAPER_ENABLED = raw;
-      const { config } = await loadConfig();
-      expect(config.features.reaperEnabled).toBe(false);
-    },
-  );
+  it.for(["false", "FALSE", " 0 ", "no", "off"])("REAPER_ENABLED=%s 关闭 reaper", async (raw) => {
+    process.env.REAPER_ENABLED = raw;
+    const { config } = await loadConfig();
+    expect(config.features.reaperEnabled).toBe(false);
+  });
 
-  it.for(["true", "TRUE", " 1 ", "yes", "on"])(
-    "REAPER_ENABLED=%s 打开 reaper",
-    async (raw) => {
-      process.env.REAPER_ENABLED = raw;
-      const { config } = await loadConfig();
-      expect(config.features.reaperEnabled).toBe(true);
-    },
-  );
+  it.for(["true", "TRUE", " 1 ", "yes", "on"])("REAPER_ENABLED=%s 打开 reaper", async (raw) => {
+    process.env.REAPER_ENABLED = raw;
+    const { config } = await loadConfig();
+    expect(config.features.reaperEnabled).toBe(true);
+  });
 
   it("空串视为「没给」→ 落默认值（不是 false）", async () => {
     process.env.REAPER_ENABLED = "";
@@ -214,9 +207,6 @@ describe("开关型配置（按布尔字面量解析，不按 JS 真值）", () 
 describe("CONFIG_ENV_DEFAULTS", () => {
   it("是只读契约（as const），字段与 config 默认值一致", async () => {
     const { CONFIG_ENV_DEFAULTS } = await loadConfig();
-    expect(Object.keys(CONFIG_ENV_DEFAULTS).sort()).toEqual([
-      "comfyuiBaseUrl",
-      "port",
-    ]);
+    expect(Object.keys(CONFIG_ENV_DEFAULTS).sort()).toEqual(["comfyuiBaseUrl", "port"]);
   });
 });

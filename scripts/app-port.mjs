@@ -51,30 +51,28 @@ export function normalizeRootForPort(root) {
   // 在 POSIX 上 path.isAbsolute 认不出它们，必须显式判据，否则会被当相对路径
   // 拼上 cwd —— 这正是上面描述的失真来源。盘符判据本体写作 /^[a-z]:\//i
   //（ASCII 盘符不区分大小写，无需再列 A-Z），UNC 另判前导双反斜杠。
-  const isWindowsDrive = /^[a-z]:\//i.test(raw.replace(/\\/g, "/"));
-  const isUnc = raw.startsWith("\\\\");
+  const isWindowsDrive = /^[a-z]:\//i.test(raw.replaceAll("\\", "/"));
+  const isUnc = raw.startsWith(String.raw`\\`);
   const absolute = isWindowsDrive || isUnc || path.isAbsolute(raw);
   const resolved = absolute ? raw : path.resolve(raw);
-  return resolved.replace(/\\/g, "/").toLowerCase().replace(/\/+$/, "");
+  return resolved.replaceAll("\\", "/").toLowerCase().replace(/\/+$/, "");
 }
 
 /** FNV-1a 32 位哈希，输入按 UTF-8 字节处理（与各语言实现按字节对齐）。
  *  @param {string} text @returns {number} */
 export function fnv1a32(text) {
   const bytes = new TextEncoder().encode(text);
-  let h = 0x811c9dc5;
+  let h = 0x81_1c_9d_c5;
   for (const b of bytes) {
     h ^= b;
-    h = Math.imul(h, 0x01000193) >>> 0;
+    h = Math.imul(h, 0x01_00_01_93) >>> 0;
   }
   return h >>> 0;
 }
 
 /** @param {string} root @returns {number} 3200..3999 区间内的稳定端口 */
 export function derivePortFromPath(root) {
-  return (
-    DERIVED_PORT_BASE + (fnv1a32(normalizeRootForPort(root)) % DERIVED_PORT_SPAN)
-  );
+  return DERIVED_PORT_BASE + (fnv1a32(normalizeRootForPort(root)) % DERIVED_PORT_SPAN);
 }
 
 /**
@@ -90,7 +88,9 @@ export function readEnvFileValue(content, key) {
   const line = String(content)
     .split(/\r?\n/)
     .find((l) => new RegExp(`^\\s*${key}\\s*=`).test(l));
-  if (!line) return null;
+  if (!line) {
+    return null;
+  }
   // 去掉行尾注释：只有前导 `#`（前面有空白）才算注释，`abc#def` 里的 `#` 是值的一部分。
   const raw = (line.split("=", 2)[1] ?? "").split(/\s+#/)[0] ?? "";
   const value = raw.trim();
@@ -125,11 +125,15 @@ export function readEnvFileValue(content, key) {
  * @returns {number | null}
  */
 export function parseDotEnvPortValue(value) {
-  if (value === null) return null;
+  if (value === null) {
+    return null;
+  }
   const trimmed = value.trim();
-  if (!/^\+?[0-9]+$/.test(trimmed)) return null;
+  if (!/^\+?[0-9]+$/.test(trimmed)) {
+    return null;
+  }
   const port = Number.parseInt(trimmed, 10);
-  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+  return Number.isInteger(port) && port >= 1 && port <= 65_535 ? port : null;
 }
 
 /** 读 `.env` 的 `COMFYAPP_PORT`；未配置 / 非法 / 文件缺失时返回 null。
@@ -137,7 +141,9 @@ export function parseDotEnvPortValue(value) {
 export function readEnvPort(root) {
   let raw;
   const file = path.join(root, ".env");
-  if (!existsSync(file)) return null;
+  if (!existsSync(file)) {
+    return null;
+  }
   try {
     raw = readFileSync(file, "utf8");
   } catch {
@@ -171,7 +177,9 @@ export function resolveRepoRoot() {
  *  @param {string} root @returns {number} */
 export function resolveAppPort(root) {
   const fromEnv = readEnvPort(root);
-  if (fromEnv !== null) return fromEnv;
+  if (fromEnv !== null) {
+    return fromEnv;
+  }
   try {
     return derivePortFromPath(root);
   } catch {
@@ -189,7 +197,9 @@ export function resolveAppPort(root) {
  * @param {string} root @returns {{ port: number, source: "env" | "derived" | "fallback" }} */
 export function resolveAppPortWithSource(root) {
   const fromEnv = readEnvPort(root);
-  if (fromEnv !== null) return { port: fromEnv, source: "env" };
+  if (fromEnv !== null) {
+    return { port: fromEnv, source: "env" };
+  }
   try {
     return { port: derivePortFromPath(root), source: "derived" };
   } catch {

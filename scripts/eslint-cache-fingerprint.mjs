@@ -27,8 +27,8 @@
 // 也做成命令行入口（`node scripts/eslint-cache-fingerprint.mjs [--check]`），
 // 供自查与用例真跑：`--check` 只报结论、不动缓存。
 
-import { createHash } from "node:crypto";
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import process from "node:process";
 
@@ -75,9 +75,7 @@ export function computeFingerprint(root) {
   for (const rel of FINGERPRINT_INPUTS) {
     const abs = path.join(root, rel);
     try {
-      inputs[rel] = createHash("sha256")
-        .update(fs.readFileSync(abs))
-        .digest("hex");
+      inputs[rel] = crypto.hash("sha256", fs.readFileSync(abs), "hex");
     } catch {
       inputs[rel] = "<missing>";
     }
@@ -93,9 +91,7 @@ export function computeFingerprint(root) {
  */
 export function readStoredFingerprint(root) {
   try {
-    return JSON.parse(
-      fs.readFileSync(path.join(root, FINGERPRINT_REL), "utf8"),
-    );
+    return JSON.parse(fs.readFileSync(path.join(root, FINGERPRINT_REL), "utf8"));
   } catch {
     return null;
   }
@@ -115,8 +111,7 @@ export function fingerprintChanged(stored, current) {
       reason: "没有可比对的旧指纹（首次接线 / 指纹文件缺失）",
     };
   }
-  const prev = /** @type {{ inputs?: Record<string, string> }} */ (stored)
-    .inputs;
+  const prev = /** @type {{ inputs?: Record<string, string> }} */ (stored).inputs;
   if (!prev || typeof prev !== "object") {
     return { changed: true, reason: "旧指纹形状不对（口径变更）" };
   }
@@ -142,17 +137,10 @@ export function fingerprintChanged(stored, current) {
  * @param {{ root?: string, log?: (line: string) => void, check?: boolean }} [opts]
  * @returns {{ changed: boolean, reason: string, cacheDir: string, removed: boolean }}
  */
-export function runFingerprint({
-  root = ROOT,
-  log = () => {},
-  check = false,
-} = {}) {
+export function runFingerprint({ root = ROOT, log = () => {}, check = false } = {}) {
   const cacheDir = path.join(root, CACHE_DIR_REL);
   const current = computeFingerprint(root);
-  const { changed, reason } = fingerprintChanged(
-    readStoredFingerprint(root),
-    current,
-  );
+  const { changed, reason } = fingerprintChanged(readStoredFingerprint(root), current);
 
   let removed = false;
   if (changed && !check) {
@@ -162,8 +150,8 @@ export function runFingerprint({
         fs.rmSync(cacheDir, { recursive: true, force: true });
         removed = true;
       }
-    } catch (err) {
-      log(`[eslint-cache] 删缓存目录失败，跳过：${String(err)}`);
+    } catch (error) {
+      log(`[eslint-cache] 删缓存目录失败，跳过：${String(error)}`);
     }
     // 指纹要在**这一轮依赖树**上落盘：这就是下一次 install 的比对基线。
     try {
@@ -175,8 +163,8 @@ export function runFingerprint({
         `${JSON.stringify(current, null, 2)}\n`,
         "utf8",
       );
-    } catch (err) {
-      log(`[eslint-cache] 写指纹失败，下次会重新判「变了」：${String(err)}`);
+    } catch (error) {
+      log(`[eslint-cache] 写指纹失败，下次会重新判「变了」：${String(error)}`);
     }
   }
 
@@ -198,8 +186,9 @@ function main() {
       check,
       log: (line) => process.stdout.write(`${line}\n`),
     });
-    if (!result.changed)
+    if (!result.changed) {
       process.stdout.write("[eslint-cache] 依赖指纹未变，缓存保留。\n");
+    }
   } catch {
     // 自查入口也不给调用方制造失败：这条判据的失效应表现为「缓存没被清」，
     // 而不是「install 挂了」。
@@ -208,8 +197,6 @@ function main() {
 }
 
 // 被 import 时不做任何事（`tests/*` 直接调函数）；只有作为入口才跑 main。
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === import.meta.filename
-)
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   main();
+}

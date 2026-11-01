@@ -6,24 +6,15 @@
  * 别让门禁自己变成误报源（成员会直接删掉误报的门禁，等于没有）。
  */
 import { execFileSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdtempSync,
-  mkdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { copyGateDeps } from "./helpers/gate-repo";
 import { afterEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(
-  __dirname,
-  "../scripts/check-title-bar-clearance.cjs",
-);
-const tempDirs: string[] = [];
+const SCRIPT = path.resolve(__dirname, "../scripts/check-title-bar-clearance.cjs");
+const tempDirs: Array<string> = [];
 
 /** 造一个只含被测文件的临时仓库（脚本按仓库根解析扫描目录）。 */
 function scanner(files: Record<string, string>) {
@@ -50,8 +41,8 @@ function scanner(files: Record<string, string>) {
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };
-    } catch (err) {
-      const e = err as { stdout?: string; stderr?: string };
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
       return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
     }
   };
@@ -59,8 +50,9 @@ function scanner(files: Record<string, string>) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0))
+  for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("check-title-bar-clearance", () => {

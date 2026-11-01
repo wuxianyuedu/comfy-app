@@ -39,7 +39,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-import { pushSchema } from "./db-push-core.mjs";
+import { describeSpawnFailure, pushSchema } from "./db-push-core.mjs";
 import { pnpmCli, spawnSettled } from "./ci-install-deps.mjs";
 import { rejectUnknownArgs } from "./cli-arg-contract.mjs";
 import { sweepLegacyTimestamps } from "./db-legacy-sweep.mjs";
@@ -70,8 +70,7 @@ const root = path.resolve(import.meta.dirname, "..");
  * 确认那一步，库不动（本轮就是拿这一形在临时副本上复现出 #1956 那个 fail-open 的）。 */
 rejectUnknownArgs({
   command: "db:push",
-  action:
-    "它默认动的是 `drizzle-kit push --force` —— **真的写库**，且自动批准会丢数据的语句。",
+  action: "它默认动的是 `drizzle-kit push --force` —— **真的写库**，且自动批准会丢数据的语句。",
   exits: [
     "一份不写库的待执行语句清单 → pnpm exec drizzle-kit push（不带 --force；" +
       "无 TTY 时它列出语句后停在确认那一步，库不动）；",
@@ -89,7 +88,9 @@ const dbPath = resolveSqlitePath(root);
 
 /** 数一遍库里的用户表（排除 sqlite 内部表）。读不到/不是库 → -1。 */
 function countUserTables() {
-  if (!fs.existsSync(dbPath)) return -1;
+  if (!fs.existsSync(dbPath)) {
+    return -1;
+  }
   try {
     const db = new DatabaseSync(dbPath, { readOnly: true, open: true });
     try {
@@ -98,6 +99,13 @@ function countUserTables() {
           "SELECT count(*) AS c FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
         )
         .get();
+      /* `.get()` 取不到东西 = 驱动/连接不对，**不是**「库里有 0 张表」——
+       * 这一句直接 `row.c` 会抛出去被下面那个大 `catch` 折成 -1（今天的行为），
+       * 写成 `row?.c ?? 0` 就把「取不到」降成了「无表」——那正是本文件下游要区分
+       * 的两件事（0 会让复核报「drizzle-kit 没建表」）。所以判空照旧回 -1。 */
+      if (!row) {
+        return -1;
+      }
       return Number(row.c ?? 0);
     } finally {
       db.close();
@@ -107,6 +115,8 @@ function countUserTables() {
   }
 }
 
+/** 报错并终止 —— 返回类型写 `never`（批 12 那条口径）：它的调用点都在「说完就走」的位置。
+ * @param {string} message @returns {never} */
 function fail(message) {
   process.stderr.write(`\n[db:push] ✗ ${message}\n\n`);
   process.exit(1);
@@ -144,7 +154,12 @@ function syncSchema() {
   const cli = pnpmCli();
   const result = pushSchema(root, {
     force: true,
-    run: (args, { cwd, env, stdio, timeoutMs }) =>
+    /* 两个默认值不是防御，是**照契约写**：这里注入的 `run` 按内核声明是
+     * `typeof runPnpmSync`，而后者自己就是 `runPnpmSync(args = [], {…} = {})`
+     * （`launcher-core/shell.mjs:261`）—— 即「可以裸调」是这份契约的一部分。
+     * 原来这一句两个参数都当必然存在用，于是解构那一步在类型上读不到字段
+     * （6 格红全在这一行）。 */
+    run: (args = [], { cwd, env, stdio, timeoutMs } = {}) =>
       spawnSettled(cli.command, [...cli.prefixArgs, ...args], {
         cwd,
         env,
@@ -160,7 +175,7 @@ function syncSchema() {
   const tables = countUserTables();
   if (tables <= 0) {
     const hint = result.invocationFailed
-      ? `起 pnpm 失败（${result.error?.code ?? "UNKNOWN"}）：${result.error?.message ?? ""}`
+      ? `起 pnpm 失败（${describeSpawnFailure(result.error)}）：${typeof result.error === "string" ? result.error : (result.error?.message ?? "")}`
       : result.blockedByTty
         ? "drizzle-kit 报「Interactive prompts require a TTY terminal」——交互提示被静默吞掉，库原样没动。"
         : "drizzle-kit 没走到 diff 那一步（输出见上），且库里的用户表数为 0。";
@@ -255,8 +270,6 @@ function syncSchema() {
   } else if (writeSchemaFingerprint(root, undefined, fingerprint)) {
     process.stdout.write(`[db:push] ✓ 已登记 schema 指纹 ${fingerprint}\n`);
   } else {
-    process.stdout.write(
-      "[db:push] ⚠ 指纹登记失败（库不可写 / 被占用）——启动时会多跑一次 diff\n",
-    );
+    process.stdout.write("[db:push] ⚠ 指纹登记失败（库不可写 / 被占用）——启动时会多跑一次 diff\n");
   }
 }

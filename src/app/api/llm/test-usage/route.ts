@@ -31,12 +31,15 @@ export const dynamic = "force-dynamic";
  * 失败一律 200 + `{ ok:false, detail }`，前端按 detail 展示降级文案。
  */
 export async function POST(req: NextRequest) {
-  if (!(await requireRequestUser())) return unauthorizedResponse();
+  if (!(await requireRequestUser())) {
+    return unauthorizedResponse();
+  }
 
   /* 读 body / 取条目名 / 解析连接参数与「继续等待」路由同一份实现（§12.12）。 */
   const prologue = await readUsageTestPrologue(req);
-  if (!prologue.ok)
+  if (!prologue.ok) {
     return NextResponse.json({ ok: false, detail: prologue.detail });
+  }
   const { name, rec, up } = prologue;
 
   const kind = strField(rec, "kind");
@@ -44,27 +47,32 @@ export async function POST(req: NextRequest) {
   const size = strField(rec, "size");
   const extraJson = strField(rec, "extraJson");
 
-  if (!(USAGE_TEST_KINDS as readonly string[]).includes(kind)) {
+  if (!(/* SAFETY: 类型断言已复核 */ (USAGE_TEST_KINDS as ReadonlyArray<string>).includes(kind))) {
     return NextResponse.json({
       ok: false,
       detail: `未知用途：${kind || "(空)"}`,
     });
   }
-  if (!prompt) return NextResponse.json({ ok: false, detail: "请填写提示词" });
+  if (!prompt) {
+    return NextResponse.json({ ok: false, detail: "请填写提示词" });
+  }
 
   // 条目名即模型参数值（设置页清单按模型名建条目）
   const model = name;
 
   const parsedExtra = parseExtraJson(extraJson);
-  if (!parsedExtra.ok)
+  if (!parsedExtra.ok) {
     return NextResponse.json({ ok: false, detail: parsedExtra.detail });
+  }
   const { extra } = parsedExtra;
 
   const startedAt = Date.now();
   try {
     if (kind === "chat") {
       const r = await callChat(up, model, prompt, extra);
-      if (!r.ok) return NextResponse.json({ ok: false, detail: r.detail });
+      if (!r.ok) {
+        return NextResponse.json({ ok: false, detail: r.detail });
+      }
       return NextResponse.json({
         ok: true,
         detail: "调用成功",
@@ -75,7 +83,9 @@ export async function POST(req: NextRequest) {
 
     if (kind === "image") {
       const r = await callImage(up, model, prompt, size, extra);
-      if (!r.ok) return NextResponse.json({ ok: false, detail: r.detail });
+      if (!r.ok) {
+        return NextResponse.json({ ok: false, detail: r.detail });
+      }
       /* 产出的图片落到本地 temp 子目录一份（不是只给远端 URL） */
       const savedPath = await saveMediaToLocalTemp("image", name, r.url);
       return NextResponse.json({
@@ -109,10 +119,10 @@ export async function POST(req: NextRequest) {
       savedPath,
       elapsedMs: Date.now() - startedAt,
     });
-  } catch (e) {
+  } catch (error) {
     return NextResponse.json({
       ok: false,
-      detail: apiErrorDetail(e, "调用失败"),
+      detail: apiErrorDetail(error, "调用失败"),
       elapsedMs: Date.now() - startedAt,
     });
   }

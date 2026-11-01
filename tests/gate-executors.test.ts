@@ -52,9 +52,7 @@ function copyGateScripts(repo: { dir: string }): void {
   const dstScripts = join(repo.dir, "scripts");
   mkdirSync(dstScripts, { recursive: true });
   for (const entry of readdirSync(srcScripts)) {
-    const isGate =
-      /\.(cjs|mjs)$/.test(entry) &&
-      GATE_PREFIXES.some((p) => entry.startsWith(p));
+    const isGate = /\.(cjs|mjs)$/.test(entry) && GATE_PREFIXES.some((p) => entry.startsWith(p));
     if (isGate) {
       copyFileSync(join(srcScripts, entry), join(dstScripts, entry));
     }
@@ -85,22 +83,17 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     // 在真仓库根跑（不建临时区）：这条断言的对象是「本仓库当前的判据-执行者关系」，
     // 而临时区里没有 `.githooks/` / `package.json` / `tests/`，所有靠它们当执行者的
     // 脚本都会被判成无执行者 —— 那是用例环境的问题，不是仓库的问题。
-    const output = execFileSync(
-      process.execPath,
-      [join(REPO_ROOT, "scripts", SCRIPT_NAME)],
-      { cwd: REPO_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    );
+    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME)], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     /* 条数从台账现算，不写死：写死一份计数就等于再造一条「加了条目忘了改数」的
      * 会漂的判据（同一族先例见 #2135 那次钩子步数被钉死）。 */
-    const onDemand = JSON.parse(
-      readFileSync(
-        join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"),
-        "utf8",
-      ),
+    const onDemand = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
     ) as { onDemand: Record<string, unknown> };
-    expect(output).toContain(
-      `按需召唤 ${Object.keys(onDemand.onDemand).length}`,
-    );
+    expect(output).toContain(`按需召唤 ${Object.keys(onDemand.onDemand).length}`);
     expect(output).toContain("报告型自称在跑 0");
   });
 
@@ -154,9 +147,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     expect(output).toContain("有执行者");
   });
 
-  test("台账双向误报的锚点：测试只**读**脚本文本不算执行者，真 **spawn** 才算", ({
-    repo,
-  }) => {
+  test("台账双向误报的锚点：测试只**读**脚本文本不算执行者，真 **spawn** 才算", ({ repo }) => {
     // 判据自身的坑：`tests/tw4-canonical-ratchet.test.ts` 用 readFileSync 读两份
     // canonical 脚本、断言 `--check` 分支还在 —— 若「测试里出现脚本名」就算执行者，
     // 那两个棘轮会被判成「有执行者」，台账双向判定把两条正当的按需召唤登记报成负债。
@@ -186,9 +177,7 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
     expect(code).toBe(1);
     expect(output, "只读文本的测试不算执行者").toContain("check-probe-a.cjs");
     // b 有真 spawn 的测试 ⇒ 有执行者 ⇒ 不点名
-    expect(output, "真起子进程的测试算执行者").not.toContain(
-      "check-probe-b.cjs",
-    );
+    expect(output, "真起子进程的测试算执行者").not.toContain("check-probe-b.cjs");
   });
 
   test("台账里的孤儿条目（脚本已不存在）⇒ 红", ({ repo }) => {
@@ -216,20 +205,17 @@ describe("判据执行者台账（ISSUE #1451 要求 2）", () => {
   });
 });
 describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
-  const hook = (): string =>
-    readFileSync(join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
+  const hook = (): string => readFileSync(join(REPO_ROOT, ".githooks", "pre-commit"), "utf8");
 
   /** D 组步骤 = `  run "<标签>" <命令>`（与同族用例同款解析，不许 toContain）。 */
-  const steps = (): { label: string; cmd: string }[] =>
+  const steps = (): Array<{ cmd: string; label: string; }> =>
     [...hook().matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map((m) => ({
       label: m[1] ?? "",
       cmd: m[2] ?? "",
     }));
 
   test("「判据执行者台账」这一步真在 D 组里（被注掉的行不算在场）", () => {
-    expect(
-      steps().find((s) => s.cmd.includes("scripts/check-gate-executors.cjs")),
-    ).toEqual({
+    expect(steps().find((s) => s.cmd.includes("scripts/check-gate-executors.cjs"))).toEqual({
       label: "判据执行者台账",
       cmd: "node scripts/check-gate-executors.cjs",
     });
@@ -241,9 +227,7 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
      * `run-ast-gates.cjs` —— 6 条共享一次解析。判据的**执行者**因此从
      * 「这 6 行」变成「这 1 行」，本用例跟着改靶子（钉的还是同一件事：
      * 这一步的 flag 层面不许漂）。 */
-    expect(
-      steps().find((s) => s.cmd.includes("scripts/run-ast-gates.cjs")),
-    ).toEqual({
+    expect(steps().find((s) => s.cmd.includes("scripts/run-ast-gates.cjs"))).toEqual({
       label: "AST 判据聚合（6 条共享一次解析）",
       // `--staged` = 输入面跳过（按条透传，口径见 §13.5.8.2）。逐字相等的口径
       // 保留（这一族的价值就是「flag 层面也不许漂」）。
@@ -290,41 +274,32 @@ describe("pre-commit D 组的在位判据（ISSUE #1451 要求 2）", () => {
  */
 describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", () => {
   /** 在**真仓库根**跑判据（不经临时区）。 */
-  const runInRepo = (args: string[] = []): string =>
-    execFileSync(
-      process.execPath,
-      [join(REPO_ROOT, "scripts", SCRIPT_NAME), ...args],
-      { cwd: REPO_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    );
+  const runInRepo = (args: Array<string> = []): string =>
+    execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME), ...args], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
 
   /**
    * 门禁链「步骤位置」里出现的 `scripts/<x>` basename（三个来源，与判据同口径）。
    * 只读步骤位置、不读全文 —— 全文会把散文里的 `x.cjs` 占位符也带进来。
    */
-  const chainScripts = (): string[] => {
+  const chainScripts = (): Array<string> => {
     const out = new Set<string>();
     const collect = (text: string): void => {
-      for (const mm of text.matchAll(
-        /scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g,
-      )) {
+      for (const mm of text.matchAll(/scripts[\\/]+([A-Za-z0-9_.-]+\.(?:cjs|mjs))/g)) {
         out.add(mm[1] ?? "");
       }
     };
-    const read = (rel: string): string =>
-      readFileSync(join(REPO_ROOT, rel), "utf8");
-    for (const m of read(".githooks/pre-commit").matchAll(
-      /^ {2}run "[^"]+" (.+)$/gm,
-    )) {
+    const read = (rel: string): string => readFileSync(join(REPO_ROOT, rel), "utf8");
+    for (const m of read(".githooks/pre-commit").matchAll(/^ {2}run "[^"]+" (.+)$/gm)) {
       collect(m[1] ?? "");
     }
-    for (const m of read("scripts/quality-gate.mjs").matchAll(
-      /args:\s*\[([^\]]*)\]/g,
-    )) {
+    for (const m of read("scripts/quality-gate.mjs").matchAll(/args:\s*\[([^\]]*)\]/g)) {
       collect(m[1] ?? "");
     }
-    for (const m of read("scripts/quality-gate.ps1").matchAll(
-      /Args\s*=\s*@\(([^)]*)\)/g,
-    )) {
+    for (const m of read("scripts/quality-gate.ps1").matchAll(/Args\s*=\s*@\(([^)]*)\)/g)) {
       collect(m[1] ?? "");
     }
     return [...out];
@@ -368,25 +343,14 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
     //   ③ 那份自检的名单与这里的名单**逐字同源**（两处各写一份就会漂）。
     const output = runInRepo(["--report"]);
     const total = Number(/判据脚本 (\d+) 份/.exec(output)?.[1] ?? "0");
-    expect(
-      total,
-      "扫描面空转（退成 0 时下面每一条都照样报 OK）",
-    ).toBeGreaterThan(40);
+    expect(total, "扫描面空转（退成 0 时下面每一条都照样报 OK）").toBeGreaterThan(40);
     const listed = readdirSync(join(REPO_ROOT, "scripts"))
       .filter((n) => /\.(cjs|mjs)$/.test(n))
-      .filter(
-        (n) =>
-          chainScripts().includes(n) ||
-          GATE_PREFIXES.some((p) => n.startsWith(p)),
-      );
-    expect(
-      total,
-      "份数 = 「门禁链事实 ∪ 名字族」自己数出来的份数（不写死数字）",
-    ).toBe(listed.length);
-    const gateSrc = readFileSync(
-      join(REPO_ROOT, "scripts", SCRIPT_NAME),
-      "utf8",
+      .filter((n) => chainScripts().includes(n) || GATE_PREFIXES.some((p) => n.startsWith(p)));
+    expect(total, "份数 = 「门禁链事实 ∪ 名字族」自己数出来的份数（不写死数字）").toBe(
+      listed.length,
     );
+    const gateSrc = readFileSync(join(REPO_ROOT, "scripts", SCRIPT_NAME), "utf8");
     for (const name of [
       "x.cjs",
       "xxx.cjs",
@@ -431,21 +395,12 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
       `scripts/${PROBE}`,
       `#!/usr/bin/env node\n// @ts-nocheck -- 探针\nconsole.log("entry");\nprocess.exit(0);\n`,
     );
-  const ledgerWith = (entrypoints: unknown) =>
-    JSON.stringify({ onDemand: {}, entrypoints });
+  const ledgerWith = (entrypoints: unknown) => JSON.stringify({ onDemand: {}, entrypoints });
 
-  test("两形都真有那行命令 ⇒ 不报入口问题（计数那一行由真仓库那条验）", ({
-    repo,
-  }) => {
+  test("两形都真有那行命令 ⇒ 不报入口问题（计数那一行由真仓库那条验）", ({ repo }) => {
     withProbe(repo);
-    repo.write(
-      ".githooks/pre-commit",
-      '  run "窄档" node scripts/' + PROBE + " --staged\n",
-    );
-    repo.write(
-      "package.json",
-      JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }),
-    );
+    repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
+    repo.write("package.json", JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }));
     repo.write(
       "scripts/.gate-executor-ledger.json",
       ledgerWith({
@@ -473,14 +428,8 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
 
   test("登记的某一形在执行者里没有那行命令 ⇒ 红并点名那一形", ({ repo }) => {
     withProbe(repo);
-    repo.write(
-      ".githooks/pre-commit",
-      '  run "窄档" node scripts/' + PROBE + " --staged\n",
-    );
-    repo.write(
-      "package.json",
-      JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }),
-    );
+    repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
+    repo.write("package.json", JSON.stringify({ scripts: { wide: `node scripts/${PROBE}` } }));
     repo.write(
       "scripts/.gate-executor-ledger.json",
       ledgerWith({
@@ -504,15 +453,10 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     expect(output).toContain(".githooks/pre-commit");
   });
 
-  test("「无旗标那一形」不许被带旗标的那行冒充（塌成的另一种写法）", ({
-    repo,
-  }) => {
+  test("「无旗标那一形」不许被带旗标的那行冒充（塌成的另一种写法）", ({ repo }) => {
     withProbe(repo);
     // 唯一的一行调用带着 --staged：窄档确实有人跑，宽档（无旗标）没有。
-    repo.write(
-      ".githooks/pre-commit",
-      '  run "窄档" node scripts/' + PROBE + " --staged\n",
-    );
+    repo.write(".githooks/pre-commit", `  run "窄档" node scripts/${PROBE} --staged\n`);
     repo.write(
       "scripts/.gate-executor-ledger.json",
       ledgerWith({
@@ -535,19 +479,14 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     expect(output).toContain("(无旗标)");
   });
 
-  test("转述型包装器：`--` 之后是别人的命令，那些旗标不算这一形", ({
-    repo,
-  }) => {
+  test("转述型包装器：`--` 之后是别人的命令，那些旗标不算这一形", ({ repo }) => {
     withProbe(repo);
     /* 现场形状（`ci-cp936-exit.mjs -- node 别的脚本 --json`）：包装器把真命令跟在
      * 一个独立的 `--` 之后。按整行收旗标的话，包装器会被数出「--json 那一形」，
      * 而它自己从没带过那个旗标 —— 入口台账就会去要求一堆不存在的登记。
      * 所以这里探针是**外层**：`--` 之前没有旗标 ⇒ 无旗标那一形认得到；
      * 而登记 `--json` 那一形必须认不到。 */
-    repo.write(
-      ".cnb.yml",
-      `      转述=node scripts/${PROBE} -- node scripts/inner.cjs --json\n`,
-    );
+    repo.write(".cnb.yml", `      转述=node scripts/${PROBE} -- node scripts/inner.cjs --json\n`);
     repo.write(
       "scripts/.gate-executor-ledger.json",
       ledgerWith({
@@ -567,9 +506,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     );
     const { code, output } = repo.run();
     expect(code, "--json 那一形不该被算成有执行者").toBe(1);
-    expect(output, "无旗标那一形该被认出来（不该连它一起红）").not.toContain(
-      "(无旗标)",
-    );
+    expect(output, "无旗标那一形该被认出来（不该连它一起红）").not.toContain("(无旗标)");
     expect(output).toContain("--json");
   });
 
@@ -598,10 +535,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
 
   test("只登记一形 ⇒ 红（入口这层的理由就是「多形判的不同」）", ({ repo }) => {
     withProbe(repo);
-    repo.write(
-      "package.json",
-      JSON.stringify({ scripts: { a: `node scripts/${PROBE}` } }),
-    );
+    repo.write("package.json", JSON.stringify({ scripts: { a: `node scripts/${PROBE}` } }));
     repo.write(
       "scripts/.gate-executor-ledger.json",
       ledgerWith({
@@ -613,9 +547,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     expect(output).toContain("一形就别登记");
   });
 
-  test("登记了脚本已不在的入口 ⇒ 红（与 onDemand 同一条反向判据）", ({
-    repo,
-  }) => {
+  test("登记了脚本已不在的入口 ⇒ 红（与 onDemand 同一条反向判据）", ({ repo }) => {
     repo.write(
       "scripts/.gate-executor-ledger.json",
       ledgerWith({
@@ -633,27 +565,19 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("本仓库的台账：登记的每一形都真验得过（不是把红留在下一跳）", () => {
     // 在真仓库根跑：临时区里没有 `.githooks/` / `.cnb.yml` / `package.json` 的**原样**，
     // 而那些正是入口那一层的执行者来源 —— 这里要证的是「此刻这份账对得上」。
-    const ledger = JSON.parse(
-      readFileSync(
-        join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"),
-        "utf8",
-      ),
-    ) as { entrypoints?: Record<string, Array<{ flags?: string[] }>> };
+    const ledger = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      readFileSync(join(REPO_ROOT, "scripts", ".gate-executor-ledger.json"), "utf8"),
+    ) as { entrypoints?: Record<string, Array<{ flags?: Array<string> }>> };
     const entrypoints = ledger.entrypoints ?? {};
-    const forms = Object.values(entrypoints).reduce(
-      (n, list) => n + list.length,
-      0,
-    );
+    const forms = Object.values(entrypoints).reduce((n, list) => n + list.length, 0);
     expect(forms, "入口这层一条都没登记，就是 #2530 没办").toBeGreaterThan(0);
-    const output = execFileSync(
-      process.execPath,
-      [join(REPO_ROOT, "scripts", SCRIPT_NAME)],
-      { cwd: REPO_ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-    );
+    const output = execFileSync(process.execPath, [join(REPO_ROOT, "scripts", SCRIPT_NAME)], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     // 计数从台账现算，不写死（写死一份就等于再造一条会漂的账）。
-    expect(output).toContain(
-      `入口级登记 ${Object.keys(entrypoints).length} 份 ${forms} 形`,
-    );
+    expect(output).toContain(`入口级登记 ${Object.keys(entrypoints).length} 份 ${forms} 形`);
   });
 
   test("--update 不许把入口那一半抹掉", ({ repo }) => {
@@ -667,23 +591,14 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
         ],
       }),
     );
-    repo.write(
-      "package.json",
-      JSON.stringify({ scripts: { a: `node scripts/${PROBE}` } }),
-    );
+    repo.write("package.json", JSON.stringify({ scripts: { a: `node scripts/${PROBE}` } }));
     const { code, output } = repo.run(["--update"]);
     expect(output, output).toContain("台账已重写");
     expect(code).toBe(0);
-    const after = JSON.parse(
-      readFileSync(
-        join(repo.dir, "scripts", ".gate-executor-ledger.json"),
-        "utf8",
-      ),
-    ) as { entrypoints?: Record<string, unknown[]> };
-    expect(
-      after.entrypoints?.[PROBE]?.length,
-      "--update 之后入口条目必须原样还在",
-    ).toBe(2);
+    const after = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      readFileSync(join(repo.dir, "scripts", ".gate-executor-ledger.json"), "utf8"),
+    ) as { entrypoints?: Record<string, Array<unknown>> };
+    expect(after.entrypoints?.[PROBE]?.length, "--update 之后入口条目必须原样还在").toBe(2);
   });
 
   /**
@@ -726,10 +641,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   };
 
   test("钩子里只有超集行 ⇒ 子集那一形红并点名（今天不红的那一格）", ({ repo }) => {
-    twoFlagForms(
-      repo,
-      '  run "超集档" node scripts/' + PROBE + " --staged --json\n",
-    );
+    twoFlagForms(repo, `  run "超集档" node scripts/${PROBE} --staged --json\n`);
     const { output } = repo.run();
     expect(output).toContain("登记了那一形（--staged）");
     /* 反向那一半：超集那一形确实有行，不该跟着报 —— 只报「没被认出来的那一形」，
@@ -738,7 +650,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   });
 
   test("钩子里只有子集行 ⇒ 超集那一形仍然红（这条今天就对，别改坏）", ({ repo }) => {
-    twoFlagForms(repo, '  run "窄档" node scripts/' + PROBE + " --staged\n");
+    twoFlagForms(repo, `  run "窄档" node scripts/${PROBE} --staged\n`);
     const { output } = repo.run();
     expect(output).toContain("登记了那一形（--staged --json）");
     expect(output).not.toContain("登记了那一形（--staged）");
@@ -747,12 +659,12 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
   test("两行都在 ⇒ 两形各自被认成自己那一形", ({ repo }) => {
     twoFlagForms(
       repo,
-      '  run "窄档" node scripts/' +
-        PROBE +
-        " --staged\n" +
-        '  run "窄档出 JSON" node scripts/' +
-        PROBE +
-        " --staged --json\n",
+      `  run "窄档" node scripts/${
+        PROBE
+        } --staged\n` +
+        `  run "窄档出 JSON" node scripts/${
+        PROBE
+        } --staged --json\n`,
     );
     expect(repo.run().output).not.toContain("登记了那一形");
   });
@@ -763,14 +675,14 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(
       ".githooks/pre-commit",
-      '  run "窄档" node scripts/' +
-        PROBE +
-        " --staged\n" +
+      `  run "窄档" node scripts/${
+        PROBE
+        } --staged\n` +
         /* 无旗标那一形也要真有一行 —— 少了它，下面那句「不算包含关系」会被一条
          * 「(无旗标) 那一形没有执行者」的红淹掉，而那条红是本例的**正确答案**。 */
-        '  run "整档" node scripts/' +
-        PROBE +
-        "\n",
+        `  run "整档" node scripts/${
+        PROBE
+        }\n`,
     );
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -800,12 +712,12 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     withProbe(repo);
     repo.write(
       ".githooks/pre-commit",
-      '  run "a" node scripts/' +
-        PROBE +
-        " --staged\n" +
-        '  run "b" node scripts/' +
-        PROBE +
-        " --staged --json\n",
+      `  run "a" node scripts/${
+        PROBE
+        } --staged\n` +
+        `  run "b" node scripts/${
+        PROBE
+        } --staged --json\n`,
     );
     repo.write(
       "scripts/.gate-executor-ledger.json",
@@ -863,14 +775,14 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
       repo.write(`scripts/${reportProbe}`, body);
       repo.write(
         ".githooks/pre-commit",
-        '  run "报告" node scripts/' +
-          reportProbe +
-          " --staged\n" +
+        `  run "报告" node scripts/${
+          reportProbe
+          } --staged\n` +
           /* 两形都得有一行 —— 不然「没有执行者」那条红会先响，本例要判的那条
            * （它根本不是判定型）就被盖在下面。 */
-          '  run "报告出 JSON" node scripts/' +
-          reportProbe +
-          " --json\n",
+          `  run "报告出 JSON" node scripts/${
+          reportProbe
+          } --json\n`,
       );
       repo.write(
         "scripts/.gate-executor-ledger.json",
@@ -901,9 +813,7 @@ describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #
     expect(report).toContain("§11.23");
     /* 同一条登记、同一份执行者，只把脚本换成判定型 ⇒ 这条红必须消失 ——
      * 不然它长得像「登记格式不对」，而报的其实是「它不是一条会判成败的命令」。 */
-    asReport(
-      '#!/usr/bin/env node\nconsole.log("判一下");\nprocess.exit(0);\n',
-    );
+    asReport('#!/usr/bin/env node\nconsole.log("判一下");\nprocess.exit(0);\n');
     expect(repo.run().output).not.toContain("但它是**报告型**");
   });
 });

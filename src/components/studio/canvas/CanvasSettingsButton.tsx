@@ -7,19 +7,19 @@
 import { Hint } from "~/components/ui/hint";
 import { Button } from "~/components/ui/button";
 
-interface ButtonProps {
+type ButtonProps = {
   hasOverrides: boolean;
   onClick: () => void;
-}
+};
 
 export function CanvasSettingsButton({ hasOverrides, onClick }: ButtonProps) {
   return (
     <Hint label="画布设置 · 调整格子 / 坐标尺 / 缩略图 等">
       <Button
-        variant="outline"
-        onClick={onClick}
         aria-label="画布设置"
         className="bg-panel border-border-strong text-ink-soft hover:border-ink-fainter hover:text-ink-bright z-base pointer-events-auto absolute top-12 right-3 h-auto rounded-md px-2.5 py-1 font-medium tracking-tight shadow-lg select-none"
+        onClick={onClick}
+        variant="outline"
       >
         <span aria-hidden className="mr-1 align-baseline text-xs">
           ⚙

@@ -31,11 +31,7 @@ import { useInterval } from "~/components/ui/use-interval";
 import { useCopyFeedback } from "~/components/ui/use-copy-feedback";
 import { useScrollFollow } from "~/components/ui/use-scroll-follow";
 import { fetchRawCli } from "~/lib/comfyui/raw-cli-client";
-import {
-  parseRawCliLine,
-  sameRawCliLines,
-  type ParsedCliLine,
-} from "./raw-cli-lines";
+import { parseRawCliLine, sameRawCliLines, type ParsedCliLine } from "./raw-cli-lines";
 
 const TAG_STYLES: Record<string, string> = {
   原始: "text-info-strong",
@@ -52,11 +48,7 @@ const TAG_STYLES: Record<string, string> = {
  * 下就是「这个界面非常卡」的一半来源（另一半是首屏全量展开，见
  * `ui/json-viewer` 里 `collapsed` 那段注释）。
  */
-const RawCliLineCard = memo(function RawCliLineCard({
-  entry,
-}: {
-  entry: ParsedCliLine;
-}) {
+const RawCliLineCard = memo(function RawCliLineCard({ entry }: { entry: ParsedCliLine }) {
   const tagClass = TAG_STYLES[entry.tag] ?? "text-ink-muted";
 
   if (entry.kind === "json") {
@@ -65,11 +57,7 @@ const RawCliLineCard = memo(function RawCliLineCard({
         <div className={`text-2xs mb-1 font-mono uppercase ${tagClass}`}>
           [comfy-cli {entry.tag}]
         </div>
-        <JsonViewer
-          data={entry.value}
-          title="comfy-cli 输出"
-          initialCollapsedDepth={2}
-        />
+        <JsonViewer data={entry.value} initialCollapsedDepth={2} title="comfy-cli 输出" />
       </div>
     );
   }
@@ -88,14 +76,14 @@ const RawCliLineCard = memo(function RawCliLineCard({
   );
 });
 
-export interface WorkflowRunRawCliModalProps {
-  /** 当前查看的运行；无则禁用入口。 */
-  taskId: string | null;
+export type WorkflowRunRawCliModalProps = {
+  onClose: () => void;
+  open: boolean;
   /** 是否仍在运行（运行期每 1.5s 轮询刷新）。 */
   running?: boolean;
-  open: boolean;
-  onClose: () => void;
-}
+  /** 当前查看的运行；无则禁用入口。 */
+  taskId: string | null;
+};
 
 export function WorkflowRunRawCliModal({
   taskId,
@@ -103,14 +91,16 @@ export function WorkflowRunRawCliModal({
   open,
   onClose,
 }: WorkflowRunRawCliModalProps) {
-  const [lines, setLines] = useState<string[]>([]);
+  const [lines, setLines] = useState<Array<string>>([]);
   const [loaded, setLoaded] = useState(false);
   const [autoscroll, setAutoscroll] = useState(true);
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
     };
   }, []);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -122,19 +112,29 @@ export function WorkflowRunRawCliModal({
   const loadRef = useRef<(background?: boolean) => void>(() => undefined);
 
   useEffect(() => {
-    if (!open || !taskId) return;
+    if (!open || !taskId) {
+      return;
+    }
     let alive = true;
     const doLoad = (background = false) => {
-      if (!alive) return;
-      if (!background) setLoaded(false);
+      if (!alive) {
+        return;
+      }
+      if (!background) {
+        setLoaded(false);
+      }
       void fetchRawCli(taskId)
         .then((l) => {
           /* 逐字比对后才写 state：内容没变时保持旧数组，整棵列表一次都不重渲染。 */
-          if (alive) setLines((prev) => (sameRawCliLines(prev, l) ? prev : l));
+          if (alive) {
+            setLines((prev) => (sameRawCliLines(prev, l) ? prev : l));
+          }
         })
         .catch(() => undefined)
         .finally(() => {
-          if (alive) setLoaded(true);
+          if (alive) {
+            setLoaded(true);
+          }
         });
     };
     loadRef.current = doLoad;
@@ -160,62 +160,66 @@ export function WorkflowRunRawCliModal({
   const copy = useCopyFeedback({
     onSuccess: () => {
       setCopied(true);
-      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      if (copiedTimerRef.current) {
+        clearTimeout(copiedTimerRef.current);
+      }
       copiedTimerRef.current = setTimeout(() => setCopied(false), 1500);
     },
     onFailure: "silent",
   });
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
       <DialogContent
         aria-label="comfy-cli 完整输出"
-        data-testid="wflib-raw-cli-modal"
-        showCloseButton={false}
         className="bg-transparent p-0 ring-0"
+        data-testid="wflib-raw-cli-modal"
         popupClassName="w-5xl"
+        showCloseButton={false}
       >
         <div className="border-border bg-panel flex h-[85vh] w-5xl flex-col overflow-hidden rounded-2xl border shadow-2xl shadow-black/12 dark:shadow-black/60">
           {/* Header */}
           <div className="border-border bg-card flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <FileJson size={16} className="text-primary-strong shrink-0" />
+              <FileJson className="text-primary-strong shrink-0" size={16} />
               <span className="text-ink truncate text-[15px] font-semibold">
                 comfy-cli 完整输出
               </span>
               <span className="text-ink-faint text-2xs">
-                {!loaded ? "加载中…" : `${lines.length} 行`}
+                {loaded ? `${lines.length} 行` : "加载中…"}
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <Hint label="复制全部" accessibleName>
+              <Hint accessibleName label="复制全部">
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => copy(lines.join("\n"))}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                  onClick={() => copy(lines.join("\n"))}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <Copy data-icon="inline-start" size={15} />
                 </Button>
               </Hint>
-              <Hint label="刷新" accessibleName>
+              <Hint accessibleName label="刷新">
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => loadRef.current()}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                  onClick={() => loadRef.current()}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <RefreshCw data-icon="inline-start" size={15} />
                 </Button>
               </Hint>
-              <Hint label="关闭" accessibleName>
+              <Hint accessibleName label="关闭">
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={onClose}
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
+                  onClick={onClose}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <X data-icon="inline-start" size={16} />
                 </Button>
@@ -225,40 +229,32 @@ export function WorkflowRunRawCliModal({
 
           {/* Body */}
           <div
-            ref={scrollerRef}
-            onScroll={scroller.onScroll}
             className="custom-scrollbar bg-panel-deep/60 flex-1 gap-3 overflow-y-auto p-3"
+            onScroll={scroller.onScroll}
+            ref={scrollerRef}
           >
             {lines.length === 0 ? (
               <EmptyState
-                variant="panel"
                 icon={loaded ? FileJson : undefined}
-                title={
-                  loaded
-                    ? "暂无完整输出（旧任务或服务端重启后内存缓冲已清空）"
-                    : "加载中…"
-                }
+                title={loaded ? "暂无完整输出（旧任务或服务端重启后内存缓冲已清空）" : "加载中…"}
+                variant="panel"
               />
             ) : (
               /* 服务端缓冲只从**尾部**追加、到上限后从头部裁，所以除裁切那一轮外
                  下标与行的对应关系稳定；配上行内 `memo`（按 `entry` 身份跳过），
                  追加新行不会牵连已有卡片。 */
-              parsed.map((entry, index) => (
-                <RawCliLineCard key={index} entry={entry} />
-              ))
+              parsed.map((entry, index) => <RawCliLineCard entry={entry} key={index} />)
             )}
           </div>
 
           {/* Footer */}
           <div className="border-border bg-card text-ink-muted flex h-9 shrink-0 items-center justify-between border-t px-4 text-xs">
-            <span>
-              {copied ? "已复制全部" : "完整、未经截断的 comfy-cli 输出"}
-            </span>
+            <span>{copied ? "已复制全部" : "完整、未经截断的 comfy-cli 输出"}</span>
             <FieldLabel className="flex cursor-pointer items-center gap-1.5 select-none">
               <Checkbox
                 checked={autoscroll}
-                onCheckedChange={(c) => setAutoscroll(c === true)}
                 className="cursor-pointer"
+                onCheckedChange={(c) => setAutoscroll(c === true)}
               />
               自动滚动
             </FieldLabel>

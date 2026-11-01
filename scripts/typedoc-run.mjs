@@ -118,9 +118,14 @@ function countFiles(dir) {
       return;
     }
     for (const ent of ents) {
-      if (ent.isSymbolicLink()) continue;
-      if (ent.isDirectory()) rec(path.join(cur, ent.name));
-      else if (ent.isFile()) n += 1;
+      if (ent.isSymbolicLink()) {
+        continue;
+      }
+      if (ent.isDirectory()) {
+        rec(path.join(cur, ent.name));
+      } else if (ent.isFile()) {
+        n += 1;
+      }
     }
   };
   rec(dir);
@@ -147,10 +152,12 @@ export function judgeRun(run, { after, startedAt }) {
     const sig = run.signal ? ` / signal ${run.signal}` : "";
     return { ok: false, reason: `typedoc exit code ${run.status}${sig}` };
   }
-  if (!after.exists)
+  if (!after.exists) {
     return { ok: false, reason: `output dir missing after run` };
-  if (after.files === 0)
+  }
+  if (after.files === 0) {
     return { ok: false, reason: `output dir is empty after run` };
+  }
   if (after.probeMtimeMs === null) {
     return { ok: false, reason: `${PROBE_REL} missing after run` };
   }
@@ -186,7 +193,9 @@ async function spawnTypedoc(entry, outDir, root) {
     const lines = [];
     const keep = (buf) => {
       lines.push(...String(buf).split(/\r?\n/));
-      if (lines.length > 400) lines.splice(0, lines.length - 400);
+      if (lines.length > 400) {
+        lines.splice(0, lines.length - 400);
+      }
     };
     child.stdout?.on("data", (b) => {
       process.stdout.write(b);
@@ -202,12 +211,8 @@ async function spawnTypedoc(entry, outDir, root) {
         .filter(Boolean)
         .slice(-LOG_TAIL_LINES)
         .join("\n");
-    child.on("error", (error) =>
-      resolve({ status: null, signal: null, error, log: tail() }),
-    );
-    child.on("close", (status, signal) =>
-      resolve({ status, signal, error: null, log: tail() }),
-    );
+    child.on("error", (error) => resolve({ status: null, signal: null, error, log: tail() }));
+    child.on("close", (status, signal) => resolve({ status, signal, error: null, log: tail() }));
   });
 }
 
@@ -222,10 +227,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * @param {number} [opts.attempts] 最大尝试次数
  * @param {number[]} [opts.backoff] 两次尝试之间的等待
  * @param {(entry: string, outDir: string, root: string) => Promise<{status: number|null, signal?: string|null, error?: Error|null, log: string}>} [opts.spawnImpl]
- *        起进程的注入缝：typedoc 冷跑实测 31s，契约测试不可能真跑它，于是把
+ *        起进程的注入缝：typedoc 冷跑以百秒计（现值取法见规范 §13.5.17），契约测试不可能真跑它，于是把
  *        「起了但没写」这种现场直接喂进来（见 `tests/typedoc-run.test.ts`）。
  * @param {(msg: string) => void} [opts.onProgress] 每次尝试的结论（默认打到 stderr）
- * @returns {Promise<{ok: boolean, outDir: string, attempt: number, total: number, files: number, reason: string, log: string, before: object, after: object}>} 结论对象：`ok` 成没成、`attempt` 第几次成的（失败时等于最后一次）、`files` 产物文件数、`reason` 没成的原因（成功时是空串）、`log` 日志尾巴、`before` / `after` 跑前与跑后的产物快照。
+ * @returns {Promise<{ok: boolean, outDir: string, attempt: number, total: number, files: number, reason: string, log: string, before: ReturnType<typeof snapshotOutput>, after: ReturnType<typeof snapshotOutput}>} 结论对象：`ok` 成没成、`attempt` 第几次成的（失败时等于最后一次）、`files` 产物文件数、`reason` 没成的原因（成功时是空串）、`log` 日志尾巴、`before` / `after` 跑前与跑后的产物快照。
+ *   两个快照写成 `ReturnType<typeof snapshotOutput>` 而不是 `object`（同文件
+ *   `judgeRun` 的入参早就是这个引用）：`object` 会把快照的三个字段抹掉，消费点
+ *   （`generate-api-docs.mjs` 打 `files before=/after=`）在声明面上取不到自己
+ *   已经在读的字段。
  */
 export async function runTypedoc({
   outDir,
@@ -262,9 +271,7 @@ export async function runTypedoc({
     const verdict = judgeRun(run, { after, startedAt });
     last = { attempt, run, before, after, verdict };
     if (verdict.ok) {
-      onProgress(
-        `attempt ${attempt}/${total} ok: ${after.files} files -> ${outDir}`,
-      );
+      onProgress(`attempt ${attempt}/${total} ok: ${after.files} files -> ${outDir}`);
       return {
         ok: true,
         outDir,

@@ -47,26 +47,26 @@ import { errorMessage } from "~/lib/error-message";
 import { IndexDot } from "~/components/workshop/IndexDot";
 import { paramString } from "~/lib/workshop/param-coerce";
 
-interface Props {
-  shots: Shot[];
-  scenes: Scene[];
-  characters: Character[];
-  styles: StyleRef[];
-  /** 选定的工作流库工作流 id：本地通道的唯一可执行来源（内置模板已移除）。 */
-  workflowId: string;
-  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
-  projectId: string;
+type Props = {
   /** 掩码后的 API 通道配置；图片通道的放行判据来自这里。 */
   apiChannels: ApiChannelsView | null;
-  onOpenModelAdapters: () => void;
-  /** 镜头列表所有者（WorkshopPipeline setShots）—— 欢迎函数式补丁。 */
-  onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>;
-  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
-  onNotice: (message: string) => void;
+  characters: Array<Character>;
   /** 取消一个进行中的本机任务（控制器统一出口）。 */
   onCancelShot: (shot: Shot) => void;
   onNextStage: () => void;
-}
+  /** 写一条用户可见提示（错误 / 警告）：走控制器统一的提示条，不自建通道。 */
+  onNotice: (message: string) => void;
+  onOpenModelAdapters: () => void;
+  /** 镜头列表所有者（WorkshopPipeline setShots）—— 欢迎函数式补丁。 */
+  onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>;
+  /** 当前项目 id（空串 = 尚无活跃项目）：与镜头号一起写进任务行做归属。 */
+  projectId: string;
+  scenes: Array<Scene>;
+  shots: Array<Shot>;
+  styles: Array<StyleRef>;
+  /** 选定的工作流库工作流 id：本地通道的唯一可执行来源（内置模板已移除）。 */
+  workflowId: string;
+};
 
 type Channel = "local" | "api";
 
@@ -79,7 +79,9 @@ function noop(): void {
  *  有限数字 → 用该固定 seed（pin 住以复现）。 */
 function resolveSeed(raw: string): number {
   const trimmed = raw.trim();
-  if (trimmed === "") return randomSeed();
+  if (trimmed === "") {
+    return randomSeed();
+  }
   const n = Number(trimmed);
   return Number.isFinite(n) ? Math.trunc(n) : randomSeed();
 }
@@ -93,9 +95,9 @@ function resolveSeed(raw: string): number {
  *  读最新值（每次渲染后同步），触发源只留 `shots` —— 否则父级任何一次
  *  重渲染都会让它跑一遍 O(N) 扫描（`onShotsChange` 是 setState，引用稳定）。 */
 function useAutoFillPrompts(
-  shots: Shot[],
-  inputs: { scenes: Scene[]; characters: Character[]; styles: StyleRef[] },
-  onShotsChange: React.Dispatch<React.SetStateAction<Shot[]>>,
+  shots: Array<Shot>,
+  inputs: { characters: Array<Character>; scenes: Array<Scene>; styles: Array<StyleRef> },
+  onShotsChange: React.Dispatch<React.SetStateAction<Array<Shot>>>,
   editedRef: React.RefObject<Set<string>>,
 ): void {
   const inputsRef = React.useRef(inputs);
@@ -104,11 +106,15 @@ function useAutoFillPrompts(
   });
   React.useEffect(() => {
     const needsFill = shots.some((s) => !s.prompt.trim() && !editedRef.current.has(s.id));
-    if (!needsFill) return;
+    if (!needsFill) {
+      return;
+    }
     const { scenes, characters, styles } = inputsRef.current;
     onShotsChange((prev) =>
       prev.map((shot) => {
-        if (shot.prompt.trim() || editedRef.current.has(shot.id)) return shot;
+        if (shot.prompt.trim() || editedRef.current.has(shot.id)) {
+          return shot;
+        }
         const scene = scenes.find((sc) => sc.id === shot.sceneId);
         const chars = characters.filter((c) => shot.characterIds.includes(c.id));
         const style = styles.find((st) => st.slug === shot.skillSlug);
@@ -177,8 +183,11 @@ export function ShotStudio({
   function setShotError(id: string, message: string | undefined) {
     setErrors((prev) => {
       const next = { ...prev };
-      if (message) next[id] = message;
-      else delete next[id];
+      if (message) {
+        next[id] = message;
+      } else {
+        delete next[id];
+      }
       return next;
     });
   }
@@ -195,13 +204,17 @@ export function ShotStudio({
         close = watchTask(taskId, {
           onProgress: (p) => reportProgress(shotId, p),
           onOutput: (out) => {
-            if (out.kind !== "video") patchShot(shotId, { imageUrl: out.url });
+            if (out.kind !== "video") {
+              patchShot(shotId, { imageUrl: out.url });
+            }
           },
           onSettled: (r) => {
             /* 落定即写终值（见 VideoStudio 同处注释）。 */
             flushProgress(shotId, 100);
             patchShot(shotId, { status: r.ok ? "done" : "failed" });
-            if (!r.ok) setShotError(shotId, r.message ?? "生成失败");
+            if (!r.ok) {
+              setShotError(shotId, r.message ?? "生成失败");
+            }
             resolve();
           },
         });
@@ -276,7 +289,9 @@ export function ShotStudio({
         /* 没落到任何端口的口本次不生效（工作流用图内默认值）—— 静默就是
          * 「改了没反应」（规范 10 §10.3.1），走控制器提示条说清楚。 */
         const unmatchedWarning = describeUnmatchedInputs(built.unmatched);
-        if (unmatchedWarning) onNotice(unmatchedWarning);
+        if (unmatchedWarning) {
+          onNotice(unmatchedWarning);
+        }
         const input: GenerateInput = built.input;
 
         const taskId = await startLocalGenerate(
@@ -285,25 +300,24 @@ export function ShotStudio({
         patchShot(shot.id, { taskId, status: "running" });
         await runLocalTask(shot.id, taskId);
         return taskId;
-      } else {
-        const url = await apiGenerateImage({
-          prompt: shot.prompt,
-          negative: shot.negativePrompt || undefined,
-          size:
-            shot.params.size !== undefined && shot.params.size !== ""
-              ? paramString(shot.params.size, shotSizeToParam(shotSize))
-              : shotSizeToParam(shotSize),
-          mode: "T2I",
-          /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
-           * （透传"1k" 这类档位名对远端没有意义）。 */
-          ...shotSizeToRelay(shotSize),
-        });
-        patchShot(shot.id, { status: "done", imageUrl: url });
-        return null;
       }
-    } catch (e: unknown) {
+      const url = await apiGenerateImage({
+        prompt: shot.prompt,
+        negative: shot.negativePrompt || undefined,
+        size:
+          shot.params.size !== undefined && shot.params.size !== ""
+            ? paramString(shot.params.size, shotSizeToParam(shotSize))
+            : shotSizeToParam(shotSize),
+        mode: "T2I",
+        /* 远端通道认「宽高比 + 百万像素」：分辨率档也换算成实际总像素再下发
+         * （透传"1k" 这类档位名对远端没有意义）。 */
+        ...shotSizeToRelay(shotSize),
+      });
+      patchShot(shot.id, { status: "done", imageUrl: url });
+      return null;
+    } catch (error: unknown) {
       patchShot(shot.id, { status: "failed" });
-      setShotError(shot.id, errorMessage(e, "生成失败"));
+      setShotError(shot.id, errorMessage(error, "生成失败"));
       return null;
     }
   }
@@ -315,10 +329,12 @@ export function ShotStudio({
   const gachaAction = useItemAction();
   const gachaShot = (shot: Shot, count: number): Promise<void> =>
     gachaAction.run(shot.id, async () => {
-      const taskIds: string[] = [];
+      const taskIds: Array<string> = [];
       for (let i = 0; i < count; i++) {
         const tid = await generateShot(shot);
-        if (tid) taskIds.push(tid);
+        if (tid) {
+          taskIds.push(tid);
+        }
       }
       if (taskIds.length < 2) {
         onNotice("有效候选不足 2 张（生成失败或无任务行），无法优选");
@@ -338,19 +354,23 @@ export function ShotStudio({
           })
           .join(" / ");
         onNotice(`优选完成：…${res.winnerTaskId.slice(-4)} 胜出（${summary}）`);
-      } catch (e: unknown) {
-        onNotice(errorMessage(e, "优选失败"));
+      } catch (error: unknown) {
+        onNotice(errorMessage(error, "优选失败"));
       }
     });
 
   async function generateBatch() {
-    if (pending.length === 0) return;
+    if (pending.length === 0) {
+      return;
+    }
     await batch.run(() =>
       /* 有界并发（见 WORKSHOP_BATCH_CONCURRENCY）：在跑的与排队的同存，
        * 不再「await 一条到底再提交下一条」地空转。 */
       runWithConcurrency([...pending], WORKSHOP_BATCH_CONCURRENCY, async (shot) => {
         // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
-        if (shot.status === "running" || shot.imageUrl) return;
+        if (shot.status === "running" || shot.imageUrl) {
+          return;
+        }
         await generateShot(shot);
       }),
     );
@@ -366,27 +386,27 @@ export function ShotStudio({
             「未选中之外」的那一半，而 `outline` 自带
             `hover:bg-muted hover:text-foreground` —— 划过**已选中**的那一枚
             时悬停档胜出，紫色选中翻成白字灰底。 */}
-        <div role="radiogroup" aria-label="生成通道" className="flex gap-2">
+        <div aria-label="生成通道" className="flex gap-2" role="radiogroup">
           <SelectChip
-            shape="segment"
-            selected={channel === "local"}
             onClick={() => setChannel("local")}
+            selected={channel === "local"}
+            shape="segment"
           >
             本地 · ComfyUI 工作流
           </SelectChip>
           <SelectChip
-            shape="segment"
-            selected={channel === "api"}
             onClick={() => setChannel("api")}
+            selected={channel === "api"}
+            shape="segment"
           >
             API 直连{apiChannels ? (apiReady ? " · 已配置" : " · 未配置") : ""}
           </SelectChip>
         </div>
         <Button
-          variant="ghost"
-          size="xs"
-          onClick={onOpenModelAdapters}
           className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto gap-1 rounded-lg px-3 py-1.5"
+          onClick={onOpenModelAdapters}
+          size="xs"
+          variant="ghost"
         >
           <Icon data-icon="inline-start" name="settings" size={12} />
           模型适配
@@ -395,30 +415,30 @@ export function ShotStudio({
  会被 label 的点击行为抢焦点（弹窗开着、背后的下拉被一起触发）。 */}
         <div className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">尺寸</span>
-          <ShotSizePicker value={shotSize} onChange={setShotSize} disabled={batch.busy} />
+          <ShotSizePicker disabled={batch.busy} onChange={setShotSize} value={shotSize} />
         </div>
         {channel === "local" && (
-          <SeedAdvancedField value={seedInput} onChange={setSeedInput} disabled={batch.busy} />
+          <SeedAdvancedField disabled={batch.busy} onChange={setSeedInput} value={seedInput} />
         )}
         <Button
-          variant="primary-solid"
-          size="xs"
-          onClick={() => void generateBatch()}
+          className="ml-auto h-auto rounded-lg px-3 py-1.5"
           disabled={
             batch.busy ||
             pending.length === 0 ||
             (channel === "local" && !workflowId) ||
             (channel === "api" && !apiReady)
           }
-          className="ml-auto h-auto rounded-lg px-3 py-1.5"
+          onClick={() => void generateBatch()}
+          size="xs"
+          variant="primary-solid"
         >
           {batch.busy ? "批量生成中…" : `批量生图 (${pending.length})`}
         </Button>
         <Button
-          variant="secondary"
-          size="xs"
-          onClick={onNextStage}
           className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+          onClick={onNextStage}
+          size="xs"
+          variant="secondary"
         >
           下一阶段 →
         </Button>
@@ -440,40 +460,40 @@ export function ShotStudio({
 
       {shots.length === 0 ? (
         <EmptyState
-          variant="hint"
-          description="暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 — 镜头提示词会自动带入本阶段。"
           className="py-10 text-sm"
+          description="暂无镜头数据。请先在「场景分镜」阶段提取或生成分镜 — 镜头提示词会自动带入本阶段。"
+          variant="hint"
         />
       ) : (
         <div className="flex flex-col gap-3">
           {/* 胶片带：纵向列表逐镜看很合适，但回答不了「16 镜跑到哪了、哪几镜挂了」。
               点一帧只负责把那张卡滚到眼前，不引入「当前镜头」这个新状态。 */}
           <ShotFilmStrip
-            shots={shots}
             onJump={(shot) => {
               document
                 .querySelector(`[data-shot-index="${shot.index}"]`)
                 ?.scrollIntoView({ behavior: "smooth", block: "center" });
             }}
+            shots={shots}
           />
           {shots.map((shot) => (
             <ShotCardRow
-              key={shot.id}
-              shot={shot}
-              progress={progress[shot.id] ?? 0}
-              error={errors[shot.id]}
+              apiReady={apiReady}
               busyCount={busyCount}
               channel={channel}
-              workflowId={workflowId}
-              apiReady={apiReady}
-              onGenerate={(s) => void generateShot(s)}
-              onGacha={(s, n) => void gachaShot(s, n)}
+              error={errors[shot.id]}
               gachaBusy={gachaAction.isBusy(shot.id)}
+              key={shot.id}
               onCancel={(s) => void onCancelShot(s)}
+              onGacha={(s, n) => void gachaShot(s, n)}
+              onGenerate={(s) => void generateShot(s)}
               onPromptChange={(id, prompt) => {
                 editedRef.current.add(id);
                 patchShot(id, { prompt });
               }}
+              progress={progress[shot.id] ?? 0}
+              shot={shot}
+              workflowId={workflowId}
             />
           ))}
         </div>
@@ -495,10 +515,10 @@ export function ShotStudio({
 function StatusBadge({ status }: { status: Shot["status"] }) {
   return (
     <StatusBadgePrimitive
-      status={status}
-      label={SHOT_STATUS_LABEL[status]}
-      dot={false}
       className="text-3xs px-2 py-0.5"
+      dot={false}
+      label={SHOT_STATUS_LABEL[status]}
+      status={status}
     />
   );
 }
@@ -506,27 +526,27 @@ function StatusBadge({ status }: { status: Shot["status"] }) {
 /** 单个镜头卡片行：状态 / 进度 / 提示词编辑 / 生成按钮 / 成图预览。
  *  从 ShotStudio 主体拆出（规范 §12.13 函数长度）：主组件只留编排与工具行，
  *  「一条镜头长什么样」收在这里。 */
-interface ShotCardRowProps {
-  shot: Shot;
-  /** 本条目的实时进度（0~100）。 */
-  progress: number;
-  /** 本条目的失败原因；undefined = 无错误。 */
-  error: string | undefined;
+type ShotCardRowProps = {
+  apiReady: boolean;
   /** 全表在跑的条目数（>0 且本条在跑时显示百分比 / 排队中）。 */
   busyCount: number;
   channel: Channel;
-  workflowId: string;
-  apiReady: boolean;
-  onGenerate: (shot: Shot) => void;
-  /** 抽卡优选（仅本地通道有任务行可评）：连发 N 张后服务端选最优。 */
-  onGacha: (shot: Shot, count: number) => void;
+  /** 本条目的失败原因；undefined = 无错误。 */
+  error: string | undefined;
   /** 本条抽卡进行中（按钮禁用 + 文案）。 */
   gachaBusy: boolean;
   /** 取消本条进行中的本机任务（有 taskId 才显示按钮）。 */
   onCancel: (shot: Shot) => void;
+  /** 抽卡优选（仅本地通道有任务行可评）：连发 N 张后服务端选最优。 */
+  onGacha: (shot: Shot, count: number) => void;
+  onGenerate: (shot: Shot) => void;
   /** 提示词被手改：父层记入 editedRef（自动预填不再覆盖）并写回镜头。 */
   onPromptChange: (id: string, prompt: string) => void;
-}
+  /** 本条目的实时进度（0~100）。 */
+  progress: number;
+  shot: Shot;
+  workflowId: string;
+};
 
 function ShotCardRow({
   shot,
@@ -544,7 +564,7 @@ function ShotCardRow({
 }: ShotCardRowProps) {
   const [gachaCount, setGachaCount] = React.useState(2);
   return (
-    <div data-shot-index={shot.index} className="border-border bg-surface rounded-xl border p-4">
+    <div className="border-border bg-surface rounded-xl border p-4" data-shot-index={shot.index}>
       <div className="mb-2 flex items-center gap-2">
         <IndexDot index={shot.index} />
         <span className="text-muted-foreground truncate text-xs">{shot.sceneHeading}</span>
@@ -559,27 +579,27 @@ function ShotCardRow({
 
       {shot.status === "running" && (
         <ProgressBar
-          value={progress}
+          className="mb-2"
           /* 同 VideoStudio.parts：起点 0 时留一格可见。 */
           minVisible={4}
           showValue={false}
-          className="mb-2"
           trackClassName="bg-elevated h-1"
+          value={progress}
         />
       )}
 
       <Textarea
-        value={shot.prompt}
-        onChange={(e) => onPromptChange(shot.id, e.target.value)}
-        rows={2}
         className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 rounded-md px-2 py-1.5 text-xs"
+        onChange={(e) => onPromptChange(shot.id, e.target.value)}
         placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
+        rows={2}
+        value={shot.prompt}
       />
       {error && (
         <Alert
-          variant="danger"
           /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
           className="text-2xs mt-1 block rounded-md border-transparent px-2 py-1"
+          variant="danger"
         >
           {error}
         </Alert>
@@ -587,30 +607,30 @@ function ShotCardRow({
 
       <div className="mt-2 flex items-center gap-3">
         <Button
-          variant="primary-solid"
-          size="xs"
-          onClick={() => onGenerate(shot)}
+          className="h-auto rounded-lg px-4 py-1.5"
           disabled={
             shot.status === "running" ||
             !shot.prompt ||
             (channel === "local" && !workflowId) ||
             (channel === "api" && !apiReady)
           }
-          className="h-auto rounded-lg px-4 py-1.5"
+          onClick={() => onGenerate(shot)}
+          size="xs"
+          variant="primary-solid"
         >
           {shot.status === "running" ? "生成中…" : shot.imageUrl ? "重新生成" : "生成此镜头"}
         </Button>
         {channel === "local" && (
           /* 抽卡优选（FR-QA-04④）：本地通道才有任务行可评；N=连发张数。 */
-          <div role="radiogroup" aria-label="抽卡张数" className="flex items-center gap-1">
+          <div aria-label="抽卡张数" className="flex items-center gap-1" role="radiogroup">
             {[2, 3, 4].map((n) => (
               <SelectChip
-                key={n}
-                shape="segment"
-                selected={gachaCount === n}
-                onClick={() => setGachaCount(n)}
-                disabled={gachaBusy || shot.status === "running"}
                 className="text-2xs"
+                disabled={gachaBusy || shot.status === "running"}
+                key={n}
+                onClick={() => setGachaCount(n)}
+                selected={gachaCount === n}
+                shape="segment"
               >
                 ×{n}
               </SelectChip>
@@ -619,16 +639,16 @@ function ShotCardRow({
         )}
         {channel === "local" && (
           <Button
-            variant="secondary"
-            size="xs"
-            onClick={() => onGacha(shot, gachaCount)}
+            className="h-auto rounded-lg px-3 py-1.5"
             disabled={
               gachaBusy ||
               shot.status === "running" ||
               !shot.prompt ||
               (channel === "local" && !workflowId)
             }
-            className="h-auto rounded-lg px-3 py-1.5"
+            onClick={() => onGacha(shot, gachaCount)}
+            size="xs"
+            variant="secondary"
           >
             {gachaBusy ? "优选中…" : "抽卡优选"}
           </Button>
@@ -637,10 +657,10 @@ function ShotCardRow({
           /* 只对本机任务可取消（API 直连没有可取消的任务 id）：
              点击后 task.cancel 置 CANCELLED，观察循环收终态收尾。 */
           <Button
-            variant="secondary"
-            size="xs"
-            onClick={() => onCancel(shot)}
             className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+            onClick={() => onCancel(shot)}
+            size="xs"
+            variant="secondary"
           >
             取消
           </Button>
@@ -652,9 +672,9 @@ function ShotCardRow({
 
       {shot.imageUrl && (
         <MediaThumbnail
-          src={shot.imageUrl}
           alt={shot.sceneHeading}
           className="border-border mt-2 max-h-64 w-auto rounded-lg border"
+          src={shot.imageUrl}
         />
       )}
     </div>

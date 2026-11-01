@@ -66,7 +66,9 @@ function walk(dir, out = []) {
       walk(full, out);
       continue;
     }
-    if (/\.(ts|tsx)$/.test(name) && !SKIP_RE.test(name)) out.push(full);
+    if (/\.(ts|tsx)$/.test(name) && !SKIP_RE.test(name)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -77,7 +79,7 @@ function toPosix(p) {
 
 /** 去掉注释,避免把注释里提到的 import 当成真实依赖。 */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 /**
@@ -89,10 +91,15 @@ function stripComments(src) {
  */
 function resolveSpec(spec, fromFile) {
   let base;
-  if (spec.startsWith("@/")) base = path.join(SRC, spec.slice(2));
-  else if (spec.startsWith("~/")) base = path.join(SRC, spec.slice(2));
-  else if (spec.startsWith(".")) base = path.resolve(path.dirname(fromFile), spec);
-  else return null;
+  if (spec.startsWith("@/")) {
+    base = path.join(SRC, spec.slice(2));
+  } else if (spec.startsWith("~/")) {
+    base = path.join(SRC, spec.slice(2));
+  } else if (spec.startsWith(".")) {
+    base = path.resolve(path.dirname(fromFile), spec);
+  } else {
+    return null;
+  }
   const candidates = [
     `${base}.ts`,
     `${base}.tsx`,
@@ -100,7 +107,9 @@ function resolveSpec(spec, fromFile) {
     path.join(base, "index.tsx"),
   ];
   for (const c of candidates) {
-    if (fs.existsSync(c) && fs.statSync(c).isFile()) return toPosix(path.relative(ROOT, c));
+    if (fs.existsSync(c) && fs.statSync(c).isFile()) {
+      return toPosix(path.relative(ROOT, c));
+    }
   }
   return null;
 }
@@ -119,7 +128,9 @@ function depsOf(file) {
     let m;
     while ((m = re.exec(src))) {
       const resolved = resolveSpec(m[1], file);
-      if (resolved) deps.add(resolved);
+      if (resolved) {
+        deps.add(resolved);
+      }
     }
   }
   return deps;
@@ -152,7 +163,9 @@ function findCycles(graph) {
 
   const nodes = [...graph.keys()].sort();
   for (const start of nodes) {
-    if (index.has(start)) continue;
+    if (index.has(start)) {
+      continue;
+    }
     // 显式栈:[节点, 下一个待访问的邻居下标]
     const work = [[start, 0]];
     index.set(start, counter);
@@ -162,7 +175,7 @@ function findCycles(graph) {
     onStack.add(start);
 
     while (work.length) {
-      const frame = work[work.length - 1];
+      const frame = work.at(-1);
       const [node, i] = frame;
       const neighbors = graph.get(node) || [];
       if (i < neighbors.length) {
@@ -183,7 +196,7 @@ function findCycles(graph) {
       // 邻居访问完:回填 low,必要时弹分量
       work.pop();
       if (work.length) {
-        const parent = work[work.length - 1][0];
+        const parent = work.at(-1)[0];
         low.set(parent, Math.min(low.get(parent), low.get(node)));
       }
       if (low.get(node) === index.get(node)) {
@@ -195,7 +208,9 @@ function findCycles(graph) {
           comp.push(popped);
         } while (popped !== node);
         const selfLoop = comp.length === 1 && (graph.get(comp[0]) || []).includes(comp[0]);
-        if (comp.length > 1 || selfLoop) cycles.push(comp.sort());
+        if (comp.length > 1 || selfLoop) {
+          cycles.push(comp.sort());
+        }
       }
     }
   }
@@ -204,7 +219,9 @@ function findCycles(graph) {
 }
 
 function main() {
-  if (STAGED && !REPORT_ONLY) skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[circular-deps]" });
+  if (STAGED && !REPORT_ONLY) {
+    skipUnlessStagedTouches({ roots: SCAN_DIRS, tag: "[circular-deps]" });
+  }
   const graph = buildGraph();
   const cycles = findCycles(graph);
 
@@ -216,7 +233,9 @@ function main() {
     console.log(`发现 ${cycles.length} 组循环依赖:`);
     for (const c of cycles) {
       console.log(`\n  环(${c.length} 个文件):`);
-      for (const f of c) console.log(`    ${f}`);
+      for (const f of c) {
+        console.log(`    ${f}`);
+      }
     }
     return;
   }
@@ -225,7 +244,9 @@ function main() {
     console.error(`✗ 发现 ${cycles.length} 组模块循环依赖(规范 §12.7 禁止):`);
     for (const c of cycles) {
       console.error(`\n  环(${c.length} 个文件):`);
-      for (const f of c) console.error(`    ${f}`);
+      for (const f of c) {
+        console.error(`    ${f}`);
+      }
     }
     console.error(
       "\n修法:把「谁都不依赖」的公共部分下沉成叶子模块(类型下沉到类型模块,动作改为回调注入)," +

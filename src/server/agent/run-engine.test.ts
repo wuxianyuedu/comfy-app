@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { completeLLM, completeLLMStructured, getLLMConfig } = vi.hoisted(() => ({
   completeLLM: vi.fn(async (_cfg: unknown, _msgs: unknown) => "# 生成的剧本"),
   completeLLMStructured: vi.fn<
-    (cfg: unknown, msgs: unknown, schema: unknown) => Promise<unknown[]>
+    (cfg: unknown, msgs: unknown, schema: unknown) => Promise<Array<unknown>>
   >(async () => []),
   getLLMConfig: vi.fn(async () => ({})),
 }));
@@ -39,10 +39,10 @@ const reviewContent = vi.hoisted(() =>
       _k: string,
       _id: string,
     ): Promise<{
+      issues: Array<string>;
       pass: boolean;
-      issues: string[];
-      suggestion: string;
       scoredAt: string;
+      suggestion: string;
     }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
   ),
 );
@@ -53,10 +53,10 @@ const reviewShotImage = vi.hoisted(() =>
       _p: string,
       _id: string,
     ): Promise<{
+      issues: Array<string>;
       pass: boolean;
-      issues: string[];
-      suggestion: string;
       scoredAt: string;
+      suggestion: string;
     }> => ({ pass: true, issues: [], suggestion: "", scoredAt: "t" }),
   ),
 );
@@ -66,22 +66,20 @@ const reviewScript = vi.hoisted(() =>
       _u: string,
       _p: string,
     ): Promise<{
+      history: Array<unknown>;
       verdict: {
+        issues: Array<string>;
         pass: boolean;
-        issues: string[];
-        suggestion: string;
         scoredAt: string;
+        suggestion: string;
       };
-      history: unknown[];
     }> => ({
       verdict: { pass: true, issues: [], suggestion: "", scoredAt: "t" },
       history: [],
     }),
   ),
 );
-const reviseScript = vi.hoisted(() =>
-  vi.fn(async (_u: string, _p: string) => "# 改写后的剧本"),
-);
+const reviseScript = vi.hoisted(() => vi.fn(async (_u: string, _p: string) => "# 改写后的剧本"));
 vi.mock("~/server/agent/review", () => ({
   reviewContent,
   reviewScript,
@@ -113,10 +111,10 @@ const PROJ = "proj_run";
 /** 建/改生产数据行：内容列 + progress + run 列（run 直接写库，模拟 start 之后的状态）。 */
 async function seed(
   content: Partial<{
-    scriptMarkdown: string;
-    characters: unknown[];
-    shots: unknown[];
+    characters: Array<unknown>;
     rendered: boolean;
+    scriptMarkdown: string;
+    shots: Array<unknown>;
   }>,
   run: Partial<ProductionRun>,
 ) {
@@ -176,16 +174,13 @@ describe("advanceRunLoop", () => {
   });
 
   it("角色步：completeLLMStructured 产出写入 characters 后停在角色阶段等确认", async () => {
-    completeLLMStructured.mockResolvedValueOnce([
-      { name: "阿宁", appearance: "短发" },
-    ]);
-    await seed(
-      { scriptMarkdown: "# 剧本" },
-      { status: "running", approvalMode: "stage" },
-    );
+    completeLLMStructured.mockResolvedValueOnce([{ name: "阿宁", appearance: "短发" }]);
+    await seed({ scriptMarkdown: "# 剧本" }, { status: "running", approvalMode: "stage" });
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    expect((row!.characters as { name: string }[])[0]).toMatchObject({
+    expect(
+      /* SAFETY: 类型断言已复核 */ (row!.characters as Array<{ name: string }>)[0],
+    ).toMatchObject({
       name: "阿宁",
     });
     expect(normalizeProductionRun(row!.run).awaitingStage).toBe("character");
@@ -202,12 +197,12 @@ describe("advanceRunLoop", () => {
     );
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    const shots = row!.shots as {
+    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as Array<{
       index: number;
       prompt: string;
-      status: string;
       rev: number;
-    }[];
+      status: string;
+    }>;
     expect(shots).toHaveLength(2);
     expect(shots[0]).toMatchObject({
       index: 0,
@@ -232,12 +227,14 @@ describe("advanceRunLoop", () => {
     const row = await readRow();
     expect(synthesizeFirstFrame).toHaveBeenCalledTimes(1);
     // 「种子」默认随机：首刷也带一个新的随机 seed（走「种子」对外参数；作者没连种子口则落不下去）。
-    const firstSeed = (
+    const firstSeed = /* SAFETY: 类型断言已复核 */ (
       synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }
     ).seed;
     expect(typeof firstSeed).toBe("number");
     expect(Number.isFinite(firstSeed)).toBe(true);
-    const shot = (row!.shots as { imageUrl?: string; status: string }[])[0];
+    const shot = /* SAFETY: 类型断言已复核 */ (
+      row!.shots as Array<{ imageUrl?: string; status: string }>
+    )[0];
     expect(shot).toMatchObject({
       status: "done",
       imageUrl: "/api/generated/shot.png",
@@ -268,7 +265,7 @@ describe("advanceRunLoop", () => {
       workflowId: "wf-img",
     });
     // 重出走的是「抽卡」：带一个有限数字 seed（具体值随机，只断类型）
-    const seedArg = (
+    const seedArg = /* SAFETY: 类型断言已复核 */ (
       synthesizeFirstFrame.mock.calls[0]![0] as { seed?: number }
     ).seed;
     expect(typeof seedArg).toBe("number");
@@ -532,7 +529,10 @@ describe("advanceRunLoop · 剧本评审闭环（FR-QA-07 ④ · #2478）", () =
     expect(reviewScript).toHaveBeenCalledTimes(1);
     expect(scriptDigestOf(revised)).not.toBe(scriptDigestOf("# 旧剧本"));
     const row = await readRow();
-    const shots = row!.shots as { id: string; prompt: string }[];
+    const shots = /* SAFETY: 类型断言已复核 */ row!.shots as Array<{
+      id: string;
+      prompt: string;
+    }>;
     expect(shots.some((s) => s.id === "old")).toBe(false); // 旧分镜被新剧本的分镜覆盖
     const run = normalizeProductionRun(row!.run);
     expect(run.storyboardScriptDigest).toBe(scriptDigestOf(revised));

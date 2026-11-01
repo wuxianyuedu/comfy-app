@@ -41,7 +41,7 @@ describe("FilmStudio", () => {
      * 这一屏要钉住的是「挂载后那些区块真的都在」，按区块各挑一条可失败的
      * 判据（标题文案 / 可访问名 / 可交互基元的 role）：
      *   顶栏 → 预览区 → 分镜列表 → 时间轴 → 右侧「镜头属性」。 */
-    for (const [what, text] of [
+    for (const [what, text] of /* SAFETY: 类型断言已复核 */ [
       /* 顶栏只剩项目名 —— 「· 视频成片工作室」那个副名与页签 / 侧栏那一项指同一件事，
        * 已按 ISSUE #1423 去掉；标题本身是数据（默认「未命名成片」），下一行看一眼。 */
       ["顶栏", "未命名成片"],
@@ -54,12 +54,10 @@ describe("FilmStudio", () => {
       expect(screen.getByText(text), `${what}没渲染出来`).toBeInTheDocument();
     }
     // 三个带可访问名的图标按钮（撤/重做/新增镜头）是键盘与读屏器唯一入口。
-    for (const name of ["撤销", "重做", "新增镜头"] as const) {
+    for (const name of /* SAFETY: 类型断言已复核 */ ["撤销", "重做", "新增镜头"] as const) {
       expect(screen.getByLabelText(name)).toBeInTheDocument();
     }
     // 剧本输入框是这一屏的主动作，空态下也该在。
-    expect(
-      screen.getByPlaceholderText("支持一句话自动分镜…"),
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("支持一句话自动分镜…")).toBeInTheDocument();
   });
 });

@@ -66,12 +66,12 @@ import { parseJunitXml, failingSuitesFromJunit } from "./precommit-timing.mjs";
  * （`tests/deps-freshness-gate.test.ts:166` 超时 30s）就把后面的
  * `每日生产构建` / `每日浏览器安装` / `每日全量E2E` 三格全部 skip 掉 ——
  * 而那次红是调度排不上，不是断言报错。 */
-import {
-  isTimeoutShaped,
-  waitForLoadToSettle,
-} from "./affected-launch-load-retry.mjs";
+import { isTimeoutShaped, waitForLoadToSettle } from "./affected-launch-load-retry.mjs";
 import { planLaunches } from "./run-affected-tests.mjs";
 import { parseLedgerFlag, writeLedgerNote } from "./daily-run.mjs";
+/* junit 落点的三态诊断（#2697）：抽出来单独成模块——full-suite-run.mjs 已过 900 行硬闸，
+ * 且诊断逻辑是独立职责、值得被单测直接核。 */
+import { junitFileDiag, findJunitReport, junitMissingLine } from "./junit-readout-diag.mjs";
 import {
   abortedAdvice,
   classifyOutcome,
@@ -114,11 +114,7 @@ export const TRACK = freshnessTrack("full");
  *   仓库内，就会被换成相对路径再交给 vitest（原因见 {@link toTransportSafePath}）。
  * @returns {{label: string, args: string[]}}
  */
-export function planRun(
-  extra = [],
-  workers = resolveCiWorkers().workers,
-  junitFile = "",
-) {
+export function planRun(extra = [], workers = resolveCiWorkers().workers, junitFile = "") {
   /* 读数参数只在「调用方给了落点」时才加（与钩子那侧 `--junit-dir` 没递到就一个字都不加
    * 同一条口径 —— 让人自己跑的那档形态与此前逐字相同）。 */
   const junitArg = junitFile ? toTransportSafePath(junitFile) : "";
@@ -135,11 +131,7 @@ export function planRun(
        * 两个 reporter 一起给：只给 junit 会把人类可读的输出顶掉（真红那一屏是唯一能读
        * 的东西）。 */
       ...(junitArg
-        ? [
-            "--reporter=default",
-            "--reporter=junit",
-            `--outputFile.junit=${junitArg}`,
-          ]
+        ? ["--reporter=default", "--reporter=junit", `--outputFile.junit=${junitArg}`]
         : []),
       ...extra,
     ],
@@ -234,8 +226,7 @@ function passthrough(argv) {
  * @returns {{enforce: boolean, reading: string}}
  */
 export function coverageGate(argv, env = process.env) {
-  const enforce =
-    argv.includes("--enforce-coverage") || env.COMFY_COVERAGE_ENFORCE === "1";
+  const enforce = argv.includes("--enforce-coverage") || env.COMFY_COVERAGE_ENFORCE === "1";
   return {
     enforce,
     reading: enforce
@@ -261,16 +252,14 @@ export function coverageGate(argv, env = process.env) {
  *    在日志里必须长得不一样（拿不到测量 ≠ 测量结果是 0，§13.6.4.1 同一条）。
  *
  * @param {string} xmlText junit XML 全文；读不到时调用方给空串
- * @param {{limit?: number, file?: string}} [opts]
+ * @param {{limit?: number, file?: string, diag?: {foundElsewhere?: boolean, actualPath?: string, exists?: boolean, size?: number, mtime?: string|null, dirIsLink?: boolean, realDir?: string}}} [opts]
  * @returns {string[]}
  */
-export function suiteRanking(xmlText, { limit = 10, file = "" } = {}) {
+export function suiteRanking(xmlText, { limit = 10, file = "", diag } = {}) {
   const where = file ? `（落点 ${file}）` : "";
   const entries = parseJunitXml(String(xmlText ?? ""));
   if (entries.length === 0) {
-    return [
-      `[full-suite-run] 分文件耗时读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}`,
-    ];
+    return junitMissingLine("分文件耗时", file, diag);
   }
   const sorted = [...entries].sort((a, b) => b.ms - a.ms);
   const sum = entries.reduce((a, e) => a + e.ms, 0);
@@ -280,9 +269,7 @@ export function suiteRanking(xmlText, { limit = 10, file = "" } = {}) {
   return [
     `[full-suite-run] 分文件耗时：${entries.length} 份、合计 ${(sum / 1000).toFixed(1)}s` +
       `（**只算测试阶段**，用来排序、不当 stage 墙钟）${where}`,
-    ...head.map(
-      (e) => `  ${`${(e.ms / 1000).toFixed(1)}s`.padStart(8)}  ${e.name}`,
-    ),
+    ...head.map((e) => `  ${`${(e.ms / 1000).toFixed(1)}s`.padStart(8)}  ${e.name}`),
     `  中位 ${(mid / 1000).toFixed(1)}s ｜ 其余 ${Math.max(0, entries.length - head.length)} 份合计 ${(
       (sum - headSum) /
       1000
@@ -316,21 +303,25 @@ export function suiteRanking(xmlText, { limit = 10, file = "" } = {}) {
 export function parseJunitPhaseCosts(xml) {
   /** @type {{name: string, totalMs: number, testsMs: number, cases: number}[]} */
   const out = [];
-  for (const m of String(xml ?? "").matchAll(
-    /<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g,
-  )) {
+  for (const m of String(xml ?? "").matchAll(/<testsuite\b([^>]*)>([\s\S]*?)<\/testsuite>/g)) {
     const attrs = m[1] ?? "";
     const body = m[2] ?? "";
     const name = /\bname="([^"]*)"/.exec(attrs)?.[1];
     const total = /\btime="([^"]*)"/.exec(attrs)?.[1];
-    if (!name || total === undefined) continue;
+    if (!name || total === undefined) {
+      continue;
+    }
     const totalSecs = Number(total);
-    if (!Number.isFinite(totalSecs) || totalSecs < 0) continue;
+    if (!Number.isFinite(totalSecs) || totalSecs < 0) {
+      continue;
+    }
     let testsMs = 0;
     let cases = 0;
     for (const c of body.matchAll(/<testcase\b[^>]*?\btime="([0-9.eE+-]+)"/g)) {
       const secs = Number(c[1]);
-      if (!Number.isFinite(secs) || secs < 0) continue;
+      if (!Number.isFinite(secs) || secs < 0) {
+        continue;
+      }
       testsMs += secs * 1000;
       cases += 1;
     }
@@ -357,19 +348,14 @@ export function parseJunitPhaseCosts(xml) {
  * 可能同时被算进两份数里；出现负数就照实打，不夹到 0（夹了就是拿形状掩盖机制）。
  *
  * @param {string} xmlText junit XML 全文；读不到时调用方给空串
- * @param {{limit?: number, file?: string, wallMs?: number | null}} [opts]
+ * @param {{limit?: number, file?: string, wallMs?: number | null, diag?: {foundElsewhere?: boolean, actualPath?: string, exists?: boolean, size?: number, mtime?: string|null, dirIsLink?: boolean, realDir?: string}}} [opts]
  * @returns {string[]}
  */
-export function suitePhaseTax(
-  xmlText,
-  { limit = 10, file = "", wallMs = null } = {},
-) {
+export function suitePhaseTax(xmlText, { limit = 10, file = "", wallMs = null, diag } = {}) {
   const where = file ? `（落点 ${file}）` : "";
   const entries = parseJunitPhaseCosts(String(xmlText ?? ""));
   if (entries.length === 0) {
-    return [
-      `[full-suite-run] 装载税读数：**没有** —— junit 未落盘或这一跑没跑到收尾${where}`,
-    ];
+    return junitMissingLine("装载税", file, diag);
   }
   const withTax = entries.map((e) => ({ ...e, taxMs: e.totalMs - e.testsMs }));
   const sorted = [...withTax].sort((a, b) => b.taxMs - a.taxMs);
@@ -439,14 +425,17 @@ export const FULL_SUITE_TIMEOUT_MS = 30 * 60_000;
 export const RERUN_TIMEOUT_MS = 12 * 60_000;
 
 /**
- * 分文件耗时读数的落点（相对仓库根）。**这一串里不许出现冒号** —— 它会被原样拼进
- * `--outputFile.junit=` 交给 vitest，而那条命令要穿过 PowerShell 宿主（破折号开头的
- * `--x=…` 一旦在 `=` 之后带冒号就会在那里被切成两个参数）。
- * 选 `node_modules/.cache/` 的理由（git 忽略面里、不与覆盖率的清理共用生命周期、
- * 且 CI 的一次性检出与本机 `pnpm test` 都能用同一份代码）写在 `main()` 那一段。
+ * 分文件耗时读数的落点（相对仓库根，会被 `toTransportSafePath` 换成相对路径交给 vitest）。
+ * **这一串里不许出现冒号** —— 它会被原样拼进 `--outputFile.junit=` 交给 vitest，而那条命令
+ * 要穿过 PowerShell 宿主（破折号开头的 `--x=…` 一旦在 `=` 之后带冒号就会在那里被切成两个参数）。
+ * 选 `.comfy-ci/` 的理由（ISSUE #2697）：**不在 `node_modules` 那一侧** —— CI 节点的
+ * `node_modules` 是缓存槽的链接，vitest 按自己的 `config.root` 解析后写到的物理文件，
+ * 与父进程按 `path.join(ROOT, …)` 读到的不一定是同一个（日志里 L815 写、L830 读不到，
+ * 同屏矛盾）。`.comfy-ci/` 是仓库内一份**普通目录（非链接）**，且在 `.gitignore` 里
+ * （不入库、也不与 `coverage/` 共用清理生命周期）。换落点的口径与 `.gitignore` 一起改
+ * （别只改路径）—— 见 `.gitignore` 的 `.comfy-ci/` 条目。
  */
-export const SUITE_JUNIT_RELATIVE =
-  "node_modules/.cache/comfy-full-suite-junit.xml";
+export const SUITE_JUNIT_RELATIVE = ".comfy-ci/comfy-full-suite-junit.xml";
 
 /* 「被预算砍 vs 判据红」的分流在 `launcher-core/shell.mjs` 的 `classifyOutcome()` /
  * `abortedAdvice()` —— **那件事只有一份实现**（§12.12）：本档、`artifact-run` 与
@@ -511,7 +500,9 @@ export function planIsolatedRerun(input) {
  * @returns {"load-flake" | "unverified" | "real-red"}
  */
 export function classifyRerunOutcome(input) {
-  if (input.exitCode === 0) return "load-flake";
+  if (input.exitCode === 0) {
+    return "load-flake";
+  }
   return isTimeoutShaped(input.output) ? "unverified" : "real-red";
 }
 
@@ -532,7 +523,9 @@ export function classifyRerunOutcome(input) {
 export function rerunLaunches(input) {
   const { files } = input;
   const head = ["run", "--no-file-parallelism"];
-  if (files.length === 0) return [head];
+  if (files.length === 0) {
+    return [head];
+  }
   return planLaunches(files).map((chunk) => [...head, ...chunk]);
 }
 
@@ -542,7 +535,9 @@ async function main(argv) {
   /* 两条「不跑」的出路互斥地先处理：给了它们就不该再去起 vitest。 */
   for (const flag of /** @type {const} */ (["--skip", "--dirty"])) {
     const parsed = parseLedgerFlag(argv, flag);
-    if (parsed.mode === "run") continue;
+    if (parsed.mode === "run") {
+      continue;
+    }
     if (parsed.reason === null) {
       process.stderr.write(
         `[full-suite-run] ✗ 理由（"${String(argv[argv.indexOf(flag) + 1] ?? "").trim()}"）` +
@@ -572,10 +567,13 @@ async function main(argv) {
    * ⚠️ 落点在**仓库内**、并且交给 vitest 的是**相对路径** —— 不是随手挑的：CI 那一跑
    * 第一次用 `os.tmpdir()`（= `C:\WINDOWS\TEMP\…`）就 12.6s 红，PowerShell 宿主把
    * `--outputFile.junit=C:` 与剩下的路径切成两个参数（机制、逐形状复现与形状口径都写在
-   * {@link toTransportSafePath} 的头注里）。`node_modules/.cache/` 在被 ignore 的那一侧，
-   * 所以既不会给检出留未跟踪文件（R9 / `.gitignore` 那一套），也不会像 `coverage/`
-   * 那样与覆盖率输出目录**共用生命周期**（覆盖率那一档 clean 时可能把它一起擦掉，
-   * 表现正是「读数没有」—— 与「这一档没跑过文件」同形，最难查的那一种）。 */
+   * {@link toTransportSafePath} 的头注里）。落点选 `.comfy-ci/`（ISSUE #2697）：它
+   * **在 `node_modules` 那一侧之外** —— CI 节点的 `node_modules` 是缓存槽的链接，
+   * vitest 按自己的 `config.root` 解析后写到的物理文件，与父进程按 `path.join(ROOT,…)`
+   * 读到的不一定是同一个（日志里 L815 写、L830 读不到，同屏矛盾）。`.comfy-ci/` 是仓库内
+   * 一份普通目录（非链接）、且在 `.gitignore` 里，所以既不会给检出留未跟踪文件（R9），
+   * 也不会像 `coverage/` 那样与覆盖率输出目录**共用生命周期**。换落点的口径与 `.gitignore`
+   * 那一条一起改（别只改路径）。 */
   const junitFile = path.join(ROOT, SUITE_JUNIT_RELATIVE);
   try {
     fs.mkdirSync(path.dirname(junitFile), { recursive: true });
@@ -585,7 +583,9 @@ async function main(argv) {
      * 真要在意的是「别拿上一轮冒充这一轮」，所以下面打印时把落点一起打出来。 */
   }
   const run = planRun(extra, load.workers, junitFile);
-  if (load.note) process.stderr.write(`[full-suite-run] ${load.note}\n`);
+  if (load.note) {
+    process.stderr.write(`[full-suite-run] ${load.note}\n`);
+  }
   const gate = coverageGate(argv);
   /* 先念档位再起子进程：这一档墙钟是分钟级，起完之后才念等于让读的人在十分钟里
    * 猜「门槛到底算了没有」（#2574 那条「几百 MB 那一跳长得像卡死」是同一件事的另一直角）。 */
@@ -612,20 +612,26 @@ async function main(argv) {
     command: cli,
     timeoutMs: FULL_SUITE_TIMEOUT_MS,
     /* 开关交给子进程（`vitest.config.ts` 末尾那一节读它），本进程不改任何配置文件。 */
-    env: gate.enforce
-      ? { ...process.env, COMFY_COVERAGE_ENFORCE: "1" }
-      : process.env,
+    env: gate.enforce ? { ...process.env, COMFY_COVERAGE_ENFORCE: "1" } : process.env,
   });
   const wallMs = Date.now() - wallStart;
   /* 榜打在**三态分流之前**：红的那一次与被预算砍的那一次，恰恰是最需要知道
-   * 「是哪几份在吃时间」的两次。读不到只打一句「没有」，不抛 —— 它是读数。 */
+   * 「是哪几份在吃时间」的两次。读不到只打一句「没有」，不抛 —— 它是读数。
+   * 但「没有」要能分出三种状态（#2697）：没落盘 / 落了但按原路径读不到（回退找回）/
+   * 落了但解析 0 份。下面先找报告（预期落点缺失时回退到候选目录），再带 diag 进去。 */
+  const found = findJunitReport(junitFile);
   let junitText;
   try {
-    junitText = fs.readFileSync(junitFile, "utf8");
+    junitText = fs.readFileSync(found.path, "utf8");
   } catch {
     junitText = "";
   }
-  for (const line of suiteRanking(junitText, { file: junitFile })) {
+  const diag = {
+    ...junitFileDiag(junitFile),
+    foundElsewhere: found.drifted,
+    actualPath: found.path,
+  };
+  for (const line of suiteRanking(junitText, { file: junitFile, diag })) {
     process.stdout.write(`${line}\n`);
   }
   /* 第二份榜：断言之外的税摊到文件上（vitest 自报的四个相位百分数没有名字，
@@ -633,6 +639,7 @@ async function main(argv) {
   for (const line of suitePhaseTax(junitText, {
     file: junitFile,
     wallMs,
+    diag,
   })) {
     process.stdout.write(`${line}\n`);
   }
@@ -641,14 +648,14 @@ async function main(argv) {
    * 「这批用例红了」，下一个人去查用例、查一整天。 */
   if (classifyOutcome(res) === "aborted") {
     process.stderr.write(
-      "[full-suite-run] ✗ " +
+      `[full-suite-run] ✗ ${
         abortedAdvice({
           label: "全量单测 + 覆盖率",
           timeoutMs: FULL_SUITE_TIMEOUT_MS,
-        }) +
-        `        （读数：退出码 ${res.status ?? "信号"}，` +
+        })
+        }        （读数：退出码 ${res.status ?? "信号"}，` +
         `error=${res.error ? String(res.error.code ?? res.error.message) : "无"}）\n` +
-        "        规范：docs/standards/13-提交与-code-review.md §13.5.4\n",
+        `        规范：docs/standards/13-提交与-code-review.md §13.5.4\n`,
     );
     return 1;
   }
@@ -681,7 +688,9 @@ async function main(argv) {
       /** @type {{status: number, output: string}} */
       const rerun = rerunLaunches({ files: plan.files }).reduce(
         (acc, args) => {
-          if (acc.status !== 0) return acc;
+          if (acc.status !== 0) {
+            return acc;
+          }
           const res2 = runPnpmSync(["exec", "vitest", ...args], {
             cwd: ROOT,
             stdio: "pipe",
@@ -714,12 +723,12 @@ async function main(argv) {
           ? plan.files.map((f) => `    · ${f}\n`).join("")
           : "    · （读不出名单，整档这一跑都没拿到可信读数）\n";
         process.stderr.write(
-          "[full-suite-run] ⚠️ **第 2 遍仍然只是超时形态** —— 这台机器此刻给不出可信读数，\n" +
-            "  本次这些文件记为**未校验**：既不是绿（没有证据说它过），也不是红\n" +
-            "  （失败的是调度，没有一条断言报错）。退 0 放行，**不记账**，逐条点名：\n" +
-            named +
-            "  ⚠️ 这一档**不许**写成「已通过」；它等价于「这次没测」（ISSUE #1747）。\n" +
-            "  **不要**抬 testTimeout，也**不要** --no-verify。\n",
+          `[full-suite-run] ⚠️ **第 2 遍仍然只是超时形态** —— 这台机器此刻给不出可信读数，\n` +
+            `  本次这些文件记为**未校验**：既不是绿（没有证据说它过），也不是红\n` +
+            `  （失败的是调度，没有一条断言报错）。退 0 放行，**不记账**，逐条点名：\n${
+            named
+            }  ⚠️ 这一档**不许**写成「已通过」；它等价于「这次没测」（ISSUE #1747）。\n` +
+            `  **不要**抬 testTimeout，也**不要** --no-verify。\n`,
         );
         return 0;
       }
@@ -735,12 +744,12 @@ async function main(argv) {
     /* **绿了但不记账**：这一跑透传了参数（`--help`、指到单个测试文件），跑的不是整档。
      * 下面那条「✗ 未通过（退出码 0）」是红的话术，拿它打这一拍会自相矛盾。 */
     process.stderr.write(
-      `[full-suite-run] ` +
+      `[full-suite-run] ${
         notWholeTrackNotice({
           label: "全量单测 + 覆盖率",
           command: "pnpm test:coverage:tracked",
           why: isWholeTrackRun(extra).why,
-        }),
+        })}`,
     );
     return 0;
   }
@@ -771,20 +780,13 @@ async function main(argv) {
    * `FRESHNESS_LEDGER_PUSH=1` 时真正推，否则 no-op。 */
   const freshPush = pushFreshnessLedger({ root: ROOT, kinds: ["full"] });
   if (freshPush.pushed) {
-    process.stdout.write(
-      "[full-suite-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n",
-    );
+    process.stdout.write("[full-suite-run] ✓ 新鲜度账已回写机器分支 ci/freshness-ledger\n");
   } else if (freshPush.reason && freshPush.reason !== "opt-out") {
-    process.stdout.write(
-      `[full-suite-run] （新鲜度账回写未执行：${freshPush.reason}）\n`,
-    );
+    process.stdout.write(`[full-suite-run] （新鲜度账回写未执行：${freshPush.reason}）\n`);
   }
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(await main(process.argv.slice(2)));
 }

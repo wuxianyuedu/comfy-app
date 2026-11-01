@@ -50,8 +50,9 @@ const STAGED = ARGS.has("--staged");
 /** 扫描范围：应用源码。 */
 const SCAN_DIR = "src";
 
-if (STAGED && !REPORT_ONLY)
+if (STAGED && !REPORT_ONLY) {
   skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[duplication]" });
+}
 const SOURCE_EXT = /\.(ts|tsx)$/;
 
 /** 判据阈值。
@@ -82,23 +83,19 @@ const MIN_SIMILARITY = 0.75;
  * 所以 `src/` 里那几百份 `.test.ts` 与快照同样不在面上。
  */
 const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) ||
-  /\.snap$/.test(rel) ||
-  rel.includes("/__tests__/");
+  /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.endsWith(".snap") || rel.includes("/__tests__/");
 
 /** 归一化：去首尾空白；丢掉空行与整行注释(缩进/注释差异不构成差异)。 */
 function normalizedLines(text) {
   const out = [];
   for (const raw of text.split("\n")) {
     const t = raw.trim();
-    if (!t) continue;
-    if (
-      t.startsWith("//") ||
-      t.startsWith("/*") ||
-      t.startsWith("*") ||
-      t === "*/"
-    )
+    if (!t) {
       continue;
+    }
+    if (t.startsWith("//") || t.startsWith("/*") || t.startsWith("*") || t === "*/") {
+      continue;
+    }
     out.push(t);
   }
   return out;
@@ -108,9 +105,13 @@ function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === ".next") continue;
+      if (e.name === "node_modules" || e.name === ".next") {
+        continue;
+      }
       walk(p, out);
-    } else out.push(p);
+    } else {
+      out.push(p);
+    }
   }
   return out;
 }
@@ -119,17 +120,23 @@ const relOf = (p) =>
   p
     .split(path.sep)
     .join("/")
-    .replace(ROOT.split(path.sep).join("/") + "/", "");
+    .replace(`${ROOT.split(path.sep).join("/")}/`, "");
 
 /* ── 采集 ────────────────────────────────────────────────── */
 
 const files = [];
 for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
   const rel = relOf(abs);
-  if (!SOURCE_EXT.test(rel) || rel.endsWith(".d.ts")) continue;
-  if (isTestFile(rel)) continue;
+  if (!SOURCE_EXT.test(rel) || rel.endsWith(".d.ts")) {
+    continue;
+  }
+  if (isTestFile(rel)) {
+    continue;
+  }
   const lines = normalizedLines(fs.readFileSync(abs, "utf8"));
-  if (lines.length < MIN_LINES) continue;
+  if (lines.length < MIN_LINES) {
+    continue;
+  }
   files.push({ rel, lines, set: new Set(lines) });
 }
 
@@ -138,7 +145,11 @@ for (const abs of walk(path.join(ROOT, SCAN_DIR))) {
 function similarity(a, b) {
   const [small, big] = a.lines.length <= b.lines.length ? [a, b] : [b, a];
   let hit = 0;
-  for (const line of small.lines) if (big.set.has(line)) hit++;
+  for (const line of small.lines) {
+    if (big.set.has(line)) {
+      hit++;
+    }
+  }
   return {
     ratio: hit / small.lines.length,
     hits: hit,
@@ -150,7 +161,9 @@ const twins = [];
 for (let i = 0; i < files.length; i++) {
   for (let j = i + 1; j < files.length; j++) {
     const { ratio, hits, total } = similarity(files[i], files[j]);
-    if (ratio < MIN_SIMILARITY) continue;
+    if (ratio < MIN_SIMILARITY) {
+      continue;
+    }
     const pair = [files[i].rel, files[j].rel].sort();
     twins.push({ a: pair[0], b: pair[1], ratio, hits, total });
   }

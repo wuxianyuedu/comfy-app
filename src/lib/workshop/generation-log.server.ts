@@ -28,25 +28,29 @@ const log = createLogger("workshop:logs");
 /** 追加一批执行日志（调用方已按环节分组）；失败仅 warn，不抛出。 */
 export async function appendGenerationLogs(
   stage: GenerationLogStage,
-  entries: unknown[],
+  entries: Array<unknown>,
 ): Promise<number> {
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   for (const raw of entries) {
     const entry = normalizeGenerationLogEntry(raw);
-    if (entry) lines.push(JSON.stringify({ stage, ...entry }));
+    if (entry) {
+      lines.push(JSON.stringify({ stage, ...entry }));
+    }
   }
-  if (lines.length === 0) return 0;
+  if (lines.length === 0) {
+    return 0;
+  }
   try {
     const file = path.join(WORKSHOP_LOG_DIR, generationLogFileName(new Date()));
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.appendFile(file, `${lines.join("\n")}\n`, "utf8");
     return lines.length;
-  } catch (e) {
+  } catch (error) {
     // 走唯一日志通道（pino）：脱敏 + ERROR/WARN 镜像进面板可见的 app-runtime。
     log.warn("[workshop-logs] 执行日志落盘失败（不影响生成）", {
       /* 与 `errorText` 同一口径：`String(e)` 对非 Error 抛值产出
        * `[object Object]`，排查时看不出发生了什么。 */
-      err: errorText(e, "写入失败"),
+      err: errorText(error, "写入失败"),
     });
     return 0;
   }
@@ -56,14 +60,14 @@ export async function appendGenerationLogs(
 export async function readGenerationLogs(
   stage: GenerationLogStage,
   limit: number,
-): Promise<GenerationLogEntry[]> {
+): Promise<Array<GenerationLogEntry>> {
   const capped = clampInt(Math.floor(limit) || 100, 1, 500, { mode: "trunc" });
   try {
     const names = (await fs.readdir(WORKSHOP_LOG_DIR))
       .filter((n) => /^generation-\d{4}-\d{2}-\d{2}\.log$/.test(n))
       .sort()
       .reverse();
-    const collected: GenerationLogEntry[] = [];
+    const collected: Array<GenerationLogEntry> = [];
     for (const name of names) {
       let text: string;
       try {
@@ -73,18 +77,26 @@ export async function readGenerationLogs(
       }
       for (const line of text.split("\n")) {
         const trimmed = line.trim();
-        if (!trimmed) continue;
+        if (!trimmed) {
+          continue;
+        }
         try {
-          const raw = JSON.parse(trimmed) as Record<string, unknown>;
+          const raw = /* SAFETY: 类型断言已复核 */ JSON.parse(trimmed) as Record<string, unknown>;
           // 行内 stage 由 append 写入；不匹配的环节直接跳过
-          if (raw.stage !== stage) continue;
+          if (raw.stage !== stage) {
+            continue;
+          }
           const entry = normalizeGenerationLogEntry(raw);
-          if (entry) collected.push(entry);
+          if (entry) {
+            collected.push(entry);
+          }
         } catch {
           // 坏行跳过，不影响其余日志
         }
       }
-      if (collected.length >= capped) break; // 已够最近 limit 条，不再回溯更早的天
+      if (collected.length >= capped) {
+        break;
+      } // 已够最近 limit 条，不再回溯更早的天
     }
     // 文件按新→旧遍历，collected 前段是新条目：取末尾 capped 条即「最近 limit 条」，
     // 并保持时间正序返回

@@ -42,53 +42,50 @@ import { createRequire } from "node:module";
 import path from "node:path";
 
 /** 判据脚本本体（`scripts/check-a11y-rules.cjs`）。 */
-export const SCRIPT = path.resolve(
-  __dirname,
-  "../../scripts/check-a11y-rules.cjs",
-);
+export const SCRIPT = path.resolve(__dirname, "../../scripts/check-a11y-rules.cjs");
 
 /** 真仓库根 —— 判据要读的 `eslint.config.js` 只有真根上有（临时仓库里没有 node_modules）。 */
 export const REAL_ROOT = path.resolve(__dirname, "../..");
 
 /** 判据的导出面（`scripts/check-a11y-rules.cjs` 的 `module.exports`）。 */
 /** 判据归一的台账形状（`readLedger` 的产物，也是 `judge` 的入参）。 */
-export interface Ledger {
-  dialect: { rule: string; decision: string; why: string; keeper: string }[];
-  inlineExemptions: {
-    rule: string;
+export type Ledger = {
+  dialect: Array<{ decision: string; keeper: string; rule: string; why: string; }>;
+  inlineExemptions: Array<{
     file: string;
-    why: string;
     keeper: string;
-  }[];
+    rule: string;
+    why: string;
+  }>;
 }
 
 /** `judge()` 的判决结果（bin 形态再把它翻成退出码）。 */
-export interface JudgeVerdict {
-  /** 问题清单（空 = 通过）。 */
-  problems: string[];
-  /** 那句一行汇总。 */
-  summary: string;
+export type JudgeVerdict = {
   /** 生效的 jsx-a11y 规则表（`--report` 那一支要逐条打印它）。 */
   effective: Record<string, unknown>;
+  /** 问题清单（空 = 通过）。 */
+  problems: Array<string>;
+  /** 那句一行汇总。 */
+  summary: string;
 }
 
-export interface A11yJudgeModule {
-  /** 判一份台账，返回问题清单与汇总 —— bin 形态再用它算退出码。 */
-  judge: (ledger: Ledger) => Promise<JudgeVerdict>;
-  /** 读一份台账文件并归一到 `Ledger`（读不到 = 空台账，`--ledger` 的路径由调用方给）。 */
-  readLedger: (ledgerPath: string) => Ledger;
-  /** 规则档位的归一（`"error"` 与 `["error"]` 同义、`["error", 5]` 不同）。 */
-  normalize: (setting: unknown) => string;
-  /** 读一次真的 `eslint.config.js`（扁平配置数组）。 */
-  loadEslintConfig: () => Promise<unknown[]>;
+export type A11yJudgeModule = {
   /** 生效的 jsx-a11y 规则表（规则名 → 档位）。 */
   effectiveRules: () => Promise<Record<string, unknown>>;
+  /** 判一份台账，返回问题清单与汇总 —— bin 形态再用它算退出码。 */
+  judge: (ledger: Ledger) => Promise<JudgeVerdict>;
+  /** 读一次真的 `eslint.config.js`（扁平配置数组）。 */
+  loadEslintConfig: () => Promise<Array<unknown>>;
+  /** 规则档位的归一（`"error"` 与 `["error"]` 同义、`["error", 5]` 不同）。 */
+  normalize: (setting: unknown) => string;
   /** 官方 recommended 的有效集合（去 off，带每条 options）。 */
   officialRecommended: () => Promise<Record<string, unknown>>;
   /** 插件全部规则 + 废弃标记。 */
   officialRuleMap: () => Promise<Map<string, { deprecated: boolean }>>;
+  /** 读一份台账文件并归一到 `Ledger`（读不到 = 空台账，`--ledger` 的路径由调用方给）。 */
+  readLedger: (ledgerPath: string) => Ledger;
   /** 官方两份配置都没提到的规则名。 */
-  rulesInNeitherConfig: () => Promise<string[]>;
+  rulesInNeitherConfig: () => Promise<Array<string>>;
   /** 本脚本对外公开的面（键 = 上面的函数名），用来核「导出面 ⇄ 执行者」。 */
   VERIFIED_SURFACES: Record<string, string>;
 }
@@ -105,5 +102,5 @@ const requireCjs = createRequire(__filename);
  * 见文件头「失败路径」）。
  */
 export function loadJudgeModule(): A11yJudgeModule {
-  return requireCjs(SCRIPT) as A11yJudgeModule;
+  return /* SAFETY: 类型断言已复核 */ requireCjs(SCRIPT) as A11yJudgeModule;
 }

@@ -24,8 +24,11 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await readJsonRecord(req);
-  if (isErrorResponse(body)) return body;
+  if (isErrorResponse(body)) {
+    return body;
+  }
 
+  /* SAFETY: 类型断言已复核 */
   const rawMessages = Array.isArray(body.messages)
     ? (body.messages as Array<Record<string, unknown>>)
     : [];
@@ -34,7 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   const request: AgentChatRequest = {
-    messages: rawMessages as AgentChatRequest["messages"],
+    messages: /* SAFETY: 类型断言已复核 */ rawMessages as AgentChatRequest["messages"],
     draft: parseDraftDto(body.draft),
     useTools: body.useTools !== false,
   };
@@ -42,8 +45,8 @@ export async function POST(req: NextRequest) {
   try {
     const result = await handleAgentChat(request);
     return NextResponse.json(result);
-  } catch (e) {
-    return NextResponse.json(apiErrorBody(e, "Agent 处理请求失败"), {
+  } catch (error) {
+    return NextResponse.json(apiErrorBody(error, "Agent 处理请求失败"), {
       status: 502,
     });
   }

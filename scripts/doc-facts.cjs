@@ -84,7 +84,9 @@ function exists(p) {
 }
 function splitHostPort(url) {
   const m = url.match(/\/\/([^:/]+):(\d+)/);
-  if (!m) throw new Error(`无法从 URL 提取 host:port: ${url}`);
+  if (!m) {
+    throw new Error(`无法从 URL 提取 host:port: ${url}`);
+  }
   return { host: m[1], port: Number(m[2]) };
 }
 
@@ -140,10 +142,8 @@ function extractFallbackPorts() {
 function extractDerivedAppPort() {
   const { createRequire } = require("node:module");
   const req = createRequire(__filename);
-  const port = req(path.join(ROOT, "scripts", "app-port.mjs")).resolveAppPort(
-    ROOT,
-  );
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  const port = req(path.join(ROOT, "scripts", "app-port.mjs")).resolveAppPort(ROOT);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
     throw new Error(`无法从 scripts/app-port.mjs 解析本检出端口：${port}`);
   }
   return String(port);
@@ -165,16 +165,13 @@ function extractShellAppExe() {
   const src = readText("scripts/launcher-core/shell-ops.mjs");
   const m = src.match(/"(src-tauri\/target\/release\/([^"/]+))\.exe"/);
   if (!m) {
-    throw new Error(
-      "无法从 scripts/launcher-core/shell-ops.mjs 的 defaultShellExe 提取壳文件名",
-    );
+    throw new Error("无法从 scripts/launcher-core/shell-ops.mjs 的 defaultShellExe 提取壳文件名");
   }
   return `${m[2]}.exe`;
 }
 function extractSplash() {
   const conf = readJson("src-tauri/tauri.conf.json");
-  const win =
-    conf.app.windows.find((w) => w.label === "splash") || conf.app.windows[0];
+  const win = conf.app.windows.find((w) => w.label === "splash") || conf.app.windows[0];
   return win.url;
 }
 
@@ -183,7 +180,9 @@ function extractRegistryPort() {
   // shadcn 团队 Registry 服务端口，权威源 tools/scripts/start-shadcn-registry.ps1 的 $Port = <n>。
   const t = readText("tools/scripts/start-shadcn-registry.ps1");
   const m = t.match(/\$Port\s*=\s*(\d+)/);
-  if (!m) throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 Port");
+  if (!m) {
+    throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 Port");
+  }
   return m[1];
 }
 function extractRegistryDir() {
@@ -192,14 +191,18 @@ function extractRegistryDir() {
   // `D:/dev/Comfy-APP-T3/registry`，换机器 / 换用户即失真（ISSUE #1926）。
   const t = readText("tools/scripts/start-shadcn-registry.ps1");
   const m = t.match(/\$RegistryDir\s*=\s*"([^"]+)"/);
-  if (!m) throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 RegistryDir");
+  if (!m) {
+    throw new Error("无法从 tools/scripts/start-shadcn-registry.ps1 提取 RegistryDir");
+  }
   return m[1];
 }
 function extractMcpHttpPort() {
   // Workshop MCP HTTP 服务端口，权威源 tools/workshop-mcp-http.ts 的 MCP_HTTP_PORT ?? 4300。
   const t = readText("tools/workshop-mcp-http.ts");
   const m = t.match(/MCP_HTTP_PORT\s*\?\?\s*(\d+)/);
-  if (!m) throw new Error("无法从 tools/workshop-mcp-http.ts 提取 MCP_HTTP_PORT 默认值");
+  if (!m) {
+    throw new Error("无法从 tools/workshop-mcp-http.ts 提取 MCP_HTTP_PORT 默认值");
+  }
   return m[1];
 }
 /**
@@ -212,7 +215,9 @@ function extractMcpHttpPort() {
 function extractAppVersion() {
   const t = readText("package.json");
   const m = /^\s*"version"\s*:\s*"([^"]*)"/m.exec(t);
-  if (!m) throw new Error("无法从 package.json 提取 version");
+  if (!m) {
+    throw new Error("无法从 package.json 提取 version");
+  }
   return m[1];
 }
 
@@ -224,10 +229,9 @@ function extractComfyUIPort() {
    * 整页 500）。app-settings.ts 只再导出同名，因此这里必须读**定义处**。 */
   const t = readText("src/lib/endpoints.ts");
   const m = t.match(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(\d+)/);
-  if (!m)
-    throw new Error(
-      "无法从 src/lib/endpoints.ts 的 COMFYUI_DEFAULT_PORT 提取 ComfyUI 默认端口",
-    );
+  if (!m) {
+    throw new Error("无法从 src/lib/endpoints.ts 的 COMFYUI_DEFAULT_PORT 提取 ComfyUI 默认端口");
+  }
 
   return m[1];
 }
@@ -252,30 +256,30 @@ const ASCII_ONLY_FACT_DOCS = ["docs/reference-facts.md"];
 /** 解析 reference-facts 里 `comment.language.asciiOnly` 那一行登记的模块路径。 */
 function extractAsciiOnlyModules() {
   for (const doc of ASCII_ONLY_FACT_DOCS) {
-    if (!exists(doc)) continue;
+    if (!exists(doc)) {
+      continue;
+    }
     const text = readText(doc);
     // 取登记行：`| comment.language.asciiOnly | <路径清单> | ... |`
-    const line = text
-      .split("\n")
-      .find((l) => l.includes("comment.language.asciiOnly"));
-    if (!line) continue;
+    const line = text.split("\n").find((l) => l.includes("comment.language.asciiOnly"));
+    if (!line) {
+      continue;
+    }
     // 取「名单」那一格（第 2 列），逐项提取反引号包裹的模块路径。
     // 括号里的理由（「构建期被加载」这类）写在路径的**同一对反引号之外**，
     // 因此 `[^`]+?` 天然不会把它吃进来 —— 不需要按「（」二次切分。
     const cell = line.split("|")[2] ?? "";
     const paths = [
-      ...cell.matchAll(
-        /`((?:src|scripts|e2e|tests)\/[^`]+?\.(?:ts|tsx|mjs|cjs))`/g,
-      ),
+      ...cell.matchAll(/`((?:src|scripts|e2e|tests)\/[^`]+?\.(?:ts|tsx|mjs|cjs))`/g),
     ].map((m) => m[1]);
     // 名单可以为**空**（棘轮基线归零是这条规则的目标形态），但「读不到登记行」
     // 必须报错：一个永远返回空数组的解析器会让所有断言全绿（§12.16 的同款教训）。
     // 判据因此落在「登记行在不在」上，而不是「解析出几项」。
-    if (line) return paths;
+    if (line) {
+      return paths;
+    }
   }
-  throw new Error(
-    "docs/reference-facts.md 里读不到 comment.language.asciiOnly 的登记行",
-  );
+  throw new Error("docs/reference-facts.md 里读不到 comment.language.asciiOnly 的登记行");
 }
 
 /* ── 「声明依赖解析得到吗」的探针清单（ISSUE #1721）─────────────────────
@@ -290,18 +294,24 @@ const RESOLVE_PROBES_FACT_DOCS = ["docs/reference-facts.md"];
 /** 解析 reference-facts 里 `deps.resolveProbes` 那一行登记的包名。 */
 function extractResolveProbes() {
   for (const doc of RESOLVE_PROBES_FACT_DOCS) {
-    if (!exists(doc)) continue;
+    if (!exists(doc)) {
+      continue;
+    }
     const line = readText(doc)
       .split("\n")
       .find((l) => l.includes("deps.resolveProbes"));
-    if (!line) continue;
+    if (!line) {
+      continue;
+    }
     // 取「探针」那一格（第 2 列），逐项提取反引号包裹的包名。括号里的说明
     // （「跑门禁时无论如何都会解析到」这类）写在反引号之外，天然不被吃进来。
     const cell = line.split("|")[2] ?? "";
     const names = [...cell.matchAll(/`([^`]+?)`/g)].map((m) => m[1]);
     // 与 §1.5 同一条口径：名单可以为空不是目标形态，但**读不到登记行**必须报错 ——
     // 一个永远返回空数组的解析器会让「探针清单没人守」这件事静默通过。
-    if (names.length) return names;
+    if (names.length) {
+      return names;
+    }
   }
   throw new Error(
     "docs/reference-facts.md 里读不到 deps.resolveProbes 的登记行（或它没有列出任何包名）",
@@ -405,10 +415,7 @@ const FACTS = [
     placeholder: "{{app.version}}",
     kind: "placeholder",
     extract: extractAppVersion,
-    onlyDocs: [
-      "docs/guides/PRODUCTION-GAPS.md",
-      "docs/standards/Comfy-APP-T3-项目开发规范.md",
-    ],
+    onlyDocs: ["docs/guides/PRODUCTION-GAPS.md", "docs/standards/Comfy-APP-T3-项目开发规范.md"],
   },
   // 注释语言白名单（ISSUE #678 / 规范 12 §12.4.6）：名单本身是权威定义，
   // 由 reference-facts 的一行承载，脚本解析它 —— 两侧只有一份清单。
@@ -489,11 +496,9 @@ const SCOPED_DOC_DIRS = ["docs/standards", "docs/guides", "docs/product"];
  */
 const SCOPED_DOC_EXEMPTIONS = {
   // 文档集索引：只有导航与关系说明，不含值类裸值或可失效的路径引用。
-  "docs/standards/README.md":
-    "文档集索引（导航与章节映射），不含被校验的值类引用",
+  "docs/standards/README.md": "文档集索引（导航与章节映射），不含被校验的值类引用",
   // 评审归档：记录一次性的审查结论与处置，历史快照，不随源码演进。
-  "docs/guides/reviews/2026-08-30-canvasnode-review.md":
-    "代码审查归档，历史快照，不随源码演进",
+  "docs/guides/reviews/2026-08-30-canvasnode-review.md": "代码审查归档，历史快照，不随源码演进",
 };
 
 /** 生成文档输出目录（相对 ROOT） */

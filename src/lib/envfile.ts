@@ -22,9 +22,11 @@ export function readEnvVar(key: string): string | null {
   for (const file of [".env.local", ".env"]) {
     const fullPath = envPath(file);
 
-    if (!fs.existsSync(fullPath)) continue;
+    if (!fs.existsSync(fullPath)) {
+      continue;
+    }
 
-    const text = fs.readFileSync(fullPath, "utf-8");
+    const text = fs.readFileSync(fullPath, "utf8");
 
     for (const line of text.split("\n")) {
       const match = /^\s*([\w.-]+)\s*=\s*(.*?)\s*$/.exec(line);

@@ -33,7 +33,7 @@ beforeEach(() => {
 });
 
 function putRequest(body: unknown) {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     nextUrl: new URL("http://localhost/api/production"),
     json: async () => body,
   } as never;
@@ -78,8 +78,10 @@ describe("PUT /api/production", () => {
 
 function getRequest(project: string | null) {
   const url = new URL("http://localhost/api/production");
-  if (project) url.searchParams.set("project", project);
-  return { nextUrl: url } as never;
+  if (project) {
+    url.searchParams.set("project", project);
+  }
+  return /* SAFETY: 类型断言已复核 */ { nextUrl: url } as never;
 }
 
 describe("GET /api/production", () => {
@@ -108,9 +110,9 @@ describe("GET /api/production", () => {
     });
     const res = await GET(getRequest("proj_1"));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as {
+    const body = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
       exists: boolean;
-      production: { title: string; shots: unknown };
+      production: { shots: unknown; title: string };
     };
     expect(body.exists).toBe(true);
     expect(body.production.title).toBe("我的短剧");

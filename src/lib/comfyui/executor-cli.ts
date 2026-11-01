@@ -1,4 +1,4 @@
-﻿/**
+/**
  * `executor-cli.ts` — comfy-cli 执行路径（**两种格式统一**）
  * ===========================================================================
  *
@@ -52,11 +52,7 @@ import {
 } from "./executor-cli-stream";
 import { prepareGraphForExecution } from "./execution-graph";
 import { stripUiOnlyNodes } from "./raw-ui-only-nodes";
-import {
-  applyApiOverrides,
-  applyRawOverrides,
-  type JsonRecord,
-} from "./raw-overrides";
+import { applyApiOverrides, applyRawOverrides, type JsonRecord } from "./raw-overrides";
 import { trace } from "./trace";
 import { COMFYUI_DEFAULT_PORT, LOOPBACK_HOST } from "../endpoints";
 
@@ -79,8 +75,8 @@ export type ResolveComfyBaseFn = () => Promise<string>;
  *  host 必用）通过 `configureExecutorCli` 覆盖任一条；未覆盖的走 lazy 兜底。 */
 export type ExecutorCliDeps = {
   logger: LoggerLike;
-  taskRepo: TaskRepoForCli;
   resolveComfyBase: ResolveComfyBaseFn;
+  taskRepo: TaskRepoForCli;
 };
 
 let depsOverride: Partial<ExecutorCliDeps> = {};
@@ -109,12 +105,16 @@ function cliWarn(msg: string): void {
  *  import 撞 server-only）→ 让 `executeViaComfyCli` 的 await 直接 reject，
  *  caller（executor-dispatch）感知。 */
 async function resolveTaskRepo(): Promise<TaskRepoForCli> {
-  if (depsOverride.taskRepo) return depsOverride.taskRepo;
+  if (depsOverride.taskRepo) {
+    return depsOverride.taskRepo;
+  }
   return loadRealTaskRepo();
 }
 
 async function resolveBaseFn(): Promise<ResolveComfyBaseFn> {
-  if (depsOverride.resolveComfyBase) return depsOverride.resolveComfyBase;
+  if (depsOverride.resolveComfyBase) {
+    return depsOverride.resolveComfyBase;
+  }
   return loadRealResolveComfyBase();
 }
 
@@ -137,8 +137,10 @@ declare global {
   var __comfyCliProcs_v1: Map<string, ChildProcess> | undefined;
 }
 
-export const cliProcs: Map<string, ChildProcess> =
-  (globalThis.__comfyCliProcs_v1 ??= new Map<string, ChildProcess>());
+export const cliProcs: Map<string, ChildProcess> = (globalThis.__comfyCliProcs_v1 ??= new Map<
+  string,
+  ChildProcess
+>());
 
 const CLI_TIMEOUT_MS = 25 * 60 * 1000;
 
@@ -178,7 +180,7 @@ export async function executeViaComfyCli(job: Job) {
   try {
     const u = new URL(base);
     host = u.hostname === "localhost" ? LOOPBACK_HOST : u.hostname;
-    port = parseInt(u.port) || COMFYUI_DEFAULT_PORT;
+    port = Number.parseInt(u.port) || COMFYUI_DEFAULT_PORT;
   } catch {
     /* keep defaults */
   }
@@ -206,12 +208,8 @@ export async function executeViaComfyCli(job: Job) {
     const prep = prepareGraphForExecution(withOverrides);
     if (!Object.keys(prep.graph).length) {
       log(taskId, "error", "工作流没有可执行的节点（可能全部被禁用）");
-      fireAndForget(
-        fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）"),
-        (e) =>
-          cliWarn(
-            `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 空图收口异常`)}`,
-          ),
+      fireAndForget(fail(taskId, "", "工作流没有可执行的节点（可能全部被禁用）"), (e) =>
+        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 空图收口异常`)}`),
       );
       return;
     }
@@ -219,8 +217,9 @@ export async function executeViaComfyCli(job: Job) {
       log(
         taskId,
         "info",
-        `执行前跳过 ${prep.removed.length} 个禁用/纯前端节点` +
-          (prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : ""),
+        `执行前跳过 ${prep.removed.length} 个禁用/纯前端节点${
+          prep.droppedInputs ? `，丢弃 ${prep.droppedInputs} 个悬空输入` : ""
+        }`,
       );
     }
     patched = prep.graph;
@@ -230,7 +229,7 @@ export async function executeViaComfyCli(job: Job) {
   await fs.mkdir(tmpDir, { recursive: true });
   const tmpFile = path.join(tmpDir, `wf-${taskId}.json`);
   log(taskId, "info", `写入临时工作流文件：${tmpFile}`);
-  await fs.writeFile(tmpFile, JSON.stringify(patched), "utf-8");
+  await fs.writeFile(tmpFile, JSON.stringify(patched), "utf8");
   // 记下本次实际提交出去的工作流：RAW 是（覆盖 + 剔除后的）未展开原件，
   // API 是（剔除/穿透后的）图。任务完成落盘为 workflow.json 供完整复现。
   s.executedWorkflow.set(taskId, patched);
@@ -282,12 +281,8 @@ export async function executeViaComfyCli(job: Job) {
       .catch(() => false);
     const hint = comfyCliMissingHint({ inCheckout });
     log(taskId, "error", `未找到 comfy-cli Python 解释器：${py}\n${hint}`);
-    fireAndForget(
-      fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`),
-      (e) =>
-        cliWarn(
-          `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 缺解释器收口异常`)}`,
-        ),
+    fireAndForget(fail(taskId, "", `未找到 comfy-cli Python 解释器：${py}`), (e) =>
+      cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 缺解释器收口异常`)}`),
     );
     return;
   }
@@ -350,21 +345,19 @@ export async function executeViaComfyCli(job: Job) {
       COMFY_CLI_NO_TELEMETRY: "1",
       PYTHONUNBUFFERED: "1",
       PYTHONUTF8: "1",
-      PYTHONIOENCODING: "utf-8",
+      PYTHONIOENCODING: "utf8",
     },
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
   cliProcs.set(taskId, child);
-  log(
-    taskId,
-    "info",
-    `comfy-cli 进程已启动（pid=${child.pid ?? "?"}，等待 stdout…）`,
-  );
+  log(taskId, "info", `comfy-cli 进程已启动（pid=${child.pid ?? "?"}，等待 stdout…）`);
   trace("cli", taskId, `进程已启动 pid=${child.pid ?? "?"}`);
 
   const guard = setTimeout(() => {
-    if (settled) return;
+    if (settled) {
+      return;
+    }
     settled = true;
     try {
       child.kill("SIGKILL");
@@ -372,12 +365,8 @@ export async function executeViaComfyCli(job: Job) {
       /* ignore */
     }
     cliProcs.delete(taskId);
-    fireAndForget(
-      fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）"),
-      (e) =>
-        cliWarn(
-          `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 看门狗收口异常`)}`,
-        ),
+    fireAndForget(fail(taskId, promptId ?? "", "comfy-cli 执行超时（看门狗）"), (e) =>
+      cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 看门狗收口异常`)}`),
     );
   }, CLI_TIMEOUT_MS);
 
@@ -390,16 +379,16 @@ export async function executeViaComfyCli(job: Job) {
     patched,
     complete: (id, pid) =>
       fireAndForget(complete(id, pid), (e) =>
-        cliWarn(
-          `[comfyui] ${sqliteAwareErrorText(e, `complete(${id}) 收口异常`)}`,
-        ),
+        cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `complete(${id}) 收口异常`)}`),
       ),
     fail: (id, pid, detail, ves) =>
       fireAndForget(fail(id, pid, detail, ves), (e) =>
         cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${id}) 收口异常`)}`),
       ),
     settle: () => {
-      if (settled) return false;
+      if (settled) {
+        return false;
+      }
       settled = true;
       clearTimeout(guard);
       cliProcs.delete(taskId);
@@ -408,7 +397,7 @@ export async function executeViaComfyCli(job: Job) {
     promptId: () => promptId,
   });
 
-  child.stdout?.setEncoding("utf-8");
+  child.stdout?.setEncoding("utf8");
   const stdoutParser = createCliEnvelopeParser({
     taskId,
     log,
@@ -426,32 +415,27 @@ export async function executeViaComfyCli(job: Job) {
       void taskRepository
         .markRunning(taskId, id)
         .then((updated) => {
-          if (!updated)
-            log(
-              taskId,
-              "warn",
-              "任务已由其它路径收口，忽略本次 prompt_id 回传（不再改写终态）",
-            );
+          if (!updated) {
+            log(taskId, "warn", "任务已由其它路径收口，忽略本次 prompt_id 回传（不再改写终态）");
+          }
         })
         .catch(() => undefined);
     },
     onProgress: (
       progress: number,
       node?: {
-        id: string;
-        value: number;
-        max: number;
         classType?: string;
+        id: string;
         label?: string;
+        max: number;
+        value: number;
       },
     ) => {
       /* 进度同样落库（P3 §5 ADR §13-3C D1/D3）：SSE 已单源化走 DB，cli 路径
        *  的进度事件此前只发进程内 emitter——host 模式下界面全程 0% 的根因。
        *  CAS 语义在 updateProgress 内部（终态行不再改写），这里 fire-and-forget，
        *  形态对齐上方 onPromptId 的 markRunning 调用。 */
-      void taskRepository
-        .updateProgress(taskId, progress, node)
-        .catch(() => undefined);
+      void taskRepository.updateProgress(taskId, progress, node).catch(() => undefined);
     },
   });
   child.stdout?.on("data", stdoutParser.sink);
@@ -462,13 +446,15 @@ export async function executeViaComfyCli(job: Job) {
   // 错误堆栈挤出面板。单行截断放宽到 400 字符（traceback 的路径很长）。
   // stderrSink.raw() 始终完整累积，close 时的 tail 汇总不受行数上限影响。
   const stderrSink = createCliStderrSink({ taskId, log, rawCli: appendRawCli });
-  child.stderr?.setEncoding("utf-8");
+  child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", stderrSink.sink);
 
   child.on("close", (code) => {
     clearTimeout(guard);
     cliProcs.delete(taskId);
-    if (settled) return;
+    if (settled) {
+      return;
+    }
     settled = true;
     const noisy = stderrSink.noisyWarningLines();
     if (noisy > 0) {
@@ -486,37 +472,24 @@ export async function executeViaComfyCli(job: Job) {
       stdoutLeftover: stdoutParser.leftover(),
       promptId,
     });
-    log(
-      taskId,
-      "error",
-      `comfy-cli 进程已退出（code=${code}），未收到 envelope 事件`,
-    );
+    log(taskId, "error", `comfy-cli 进程已退出（code=${code}），未收到 envelope 事件`);
     fireAndForget(
-      fail(
-        taskId,
-        promptId ?? "",
-        `comfy-cli 异常退出（code=${code}）\n${tail || "(无 stderr)"}`,
-      ),
-      (e) =>
-        cliWarn(
-          `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 进程退出收口异常`)}`,
-        ),
+      fail(taskId, promptId ?? "", `comfy-cli 异常退出（code=${code}）\n${tail || "(无 stderr)"}`),
+      (e) => cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 进程退出收口异常`)}`),
     );
   });
 
   child.on("error", (err) => {
-    if (settled) return;
+    if (settled) {
+      return;
+    }
     settled = true;
     clearTimeout(guard);
     cliProcs.delete(taskId);
     trace("cli", taskId, "进程启动失败", { error: err });
     log(taskId, "error", errorText(err, "comfy-cli 启动失败"));
-    fireAndForget(
-      fail(taskId, promptId ?? "", errorText(err, "comfy-cli 启动失败")),
-      (e) =>
-        cliWarn(
-          `[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 启动失败收口异常`)}`,
-        ),
+    fireAndForget(fail(taskId, promptId ?? "", errorText(err, "comfy-cli 启动失败")), (e) =>
+      cliWarn(`[comfyui] ${sqliteAwareErrorText(e, `fail(${taskId}) 启动失败收口异常`)}`),
     );
   });
 }

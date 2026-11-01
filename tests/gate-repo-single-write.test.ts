@@ -26,9 +26,11 @@ import { createGateRepo, type GateRepoHandle } from "./helpers/gate-repo";
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 
-const handles: GateRepoHandle[] = [];
+const handles: Array<GateRepoHandle> = [];
 afterEach(() => {
-  while (handles.length > 0) handles.pop()?.dispose();
+  while (handles.length > 0) {
+    handles.pop()?.dispose();
+  }
 });
 
 /** 建一个工作区，并把它记下来给 `afterEach` 收尾。 */
@@ -71,10 +73,7 @@ describe("门禁夹具：同一条路径只写一次", () => {
   });
 
   it("两条来路共用一处落盘（夹具里只有一个 cpSync 调用点）", () => {
-    const helper = readFileSync(
-      path.join(REPO_ROOT, "tests", "helpers", "gate-repo.ts"),
-      "utf8",
-    );
+    const helper = readFileSync(path.join(REPO_ROOT, "tests", "helpers", "gate-repo.ts"), "utf8");
     const callSites = helper.match(/\bcpSync\(/g) ?? [];
     expect(
       callSites.length,

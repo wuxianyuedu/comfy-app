@@ -53,7 +53,9 @@ function seedDb(rows = ["a", "b"]): void {
   try {
     db.exec("PRAGMA journal_mode = WAL");
     db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)");
-    for (const v of rows) db.exec(`INSERT INTO t (v) VALUES ('${v}')`);
+    for (const v of rows) {
+      db.exec(`INSERT INTO t (v) VALUES ('${v}')`);
+    }
   } finally {
     /* 刻意**不**关掉：`db.close()` 会触发 checkpoint，那就测不出「WAL 里有
      * 未合并数据」这一档了。进程退出时无人持有句柄，OS 会释放。 */
@@ -151,16 +153,14 @@ describe("轮转选择（纯函数）", () => {
       "db-backup-20261002-000000.sqlite",
       "db-backup-20261003-000000.sqlite",
     ];
-    expect(selectBackupsToPrune(names, 1, ["db-backup-20261001-000000.sqlite"])).toEqual(
-      ["db-backup-20261002-000000.sqlite"],
-    );
+    expect(selectBackupsToPrune(names, 1, ["db-backup-20261001-000000.sqlite"])).toEqual([
+      "db-backup-20261002-000000.sqlite",
+    ]);
   });
 
   it("份数不够时什么都不删", () => {
     expect(selectBackupsToPrune([], 3)).toEqual([]);
-    expect(selectBackupsToPrune(["db-backup-20261001-000000.sqlite"], 3)).toEqual(
-      [],
-    );
+    expect(selectBackupsToPrune(["db-backup-20261001-000000.sqlite"], 3)).toEqual([]);
   });
 });
 
@@ -169,12 +169,16 @@ describe("createBackup：真的备份，且验得动", () => {
     seedDb(["hello", "world"]);
     const result = createBackup(root, { databaseUrl });
     expect(result.ok, JSON.stringify(result)).toBe(true);
-    if (!result.ok) return;
+    if (!result.ok) {
+      return;
+    }
 
     // ① 判据一：产物能被 integrity_check 读通（不是「文件存在」）
     const verify = verifyBackupFile(result.file);
     expect(verify.ok).toBe(true);
-    if (verify.ok) expect(verify.tables).toBeGreaterThan(0);
+    if (verify.ok) {
+      expect(verify.tables).toBeGreaterThan(0);
+    }
 
     // ② 判据二：-wal / -shm 不进备份
     expect(fs.existsSync(`${result.file}-wal`)).toBe(false);
@@ -194,7 +198,9 @@ describe("createBackup：真的备份，且验得动", () => {
     seedDb();
     const result = createBackup(root, { databaseUrl });
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    if (!result.ok) {
+      return;
+    }
     expect(path.dirname(result.file)).toBe(path.join(root, BACKUP_DIR));
     // 数据库自己在应用根那一层（生产里那就是安装目录，会被升级覆盖）
     expect(path.dirname(dbFile)).toBe(root);
@@ -207,7 +213,9 @@ describe("createBackup：真的备份，且验得动", () => {
     const first = createBackup(root, { databaseUrl, now: at });
     const second = createBackup(root, { databaseUrl, now: at });
     expect(first.ok && second.ok).toBe(true);
-    if (!first.ok || !second.ok) return;
+    if (!first.ok || !second.ok) {
+      return;
+    }
     expect(second.name).not.toBe(first.name);
     expect(second.name).toBe("db-backup-20261010-120000-2.sqlite");
     expect(fs.existsSync(first.file)).toBe(true);
@@ -230,7 +238,9 @@ describe("createBackup：真的备份，且验得动", () => {
   it("数据库文件不存在时如实说「没什么可备份的」，不造一个空壳", () => {
     const result = createBackup(root, { databaseUrl });
     expect(result.ok).toBe(false);
-    if (result.ok) return;
+    if (result.ok) {
+      return;
+    }
     expect(result.reason).toContain("数据库文件还不存在");
     // 目录都不该被建出来
     expect(fs.existsSync(backupDir(root))).toBe(false);
@@ -240,12 +250,12 @@ describe("createBackup：真的备份，且验得动", () => {
     fs.writeFileSync(dbFile, "这根本不是 SQLite 文件");
     const result = createBackup(root, { databaseUrl });
     expect(result.ok).toBe(false);
-    if (result.ok) return;
+    if (result.ok) {
+      return;
+    }
     expect(result.reason).toMatch(/VACUUM INTO 失败|读不通/);
     // 关键：备份目录里不许出现任何 `.sqlite`（`.partial` 残骸也不许留）
-    const leftovers = fs.existsSync(backupDir(root))
-      ? fs.readdirSync(backupDir(root))
-      : [];
+    const leftovers = fs.existsSync(backupDir(root)) ? fs.readdirSync(backupDir(root)) : [];
     expect(leftovers.filter((n) => n.endsWith(".sqlite"))).toEqual([]);
     expect(leftovers.filter((n) => n.endsWith(".partial"))).toEqual([]);
   });
@@ -255,7 +265,9 @@ describe("createBackup：真的备份，且验得动", () => {
     fs.writeFileSync(empty, "");
     const verify = verifyBackupFile(empty);
     expect(verify.ok).toBe(false);
-    if (verify.ok) return;
+    if (verify.ok) {
+      return;
+    }
     expect(verify.reason).toBeTruthy();
   });
 
@@ -266,7 +278,9 @@ describe("createBackup：真的备份，且验得动", () => {
     db.close();
     const verify = verifyBackupFile(bare);
     expect(verify.ok).toBe(false);
-    if (verify.ok) return;
+    if (verify.ok) {
+      return;
+    }
     expect(verify.reason).toContain("一张表都没有");
   });
 });
@@ -283,11 +297,11 @@ describe("pruneBackups：删不动不改变结论，但要说话", () => {
       fs.writeFileSync(path.join(backupDir(root), n), "x");
     }
     const unlink = vi.spyOn(fs, "unlinkSync").mockImplementation(() => {
-      const e = new Error("EBUSY: 被占用") as NodeJS.ErrnoException;
+      const e = /* SAFETY: 类型断言已复核 */ new Error("EBUSY: 被占用") as NodeJS.ErrnoException;
       e.code = "EBUSY";
       throw e;
     });
-    const failures: string[] = [];
+    const failures: Array<string> = [];
     const removed = pruneBackups(root, 1, (name) => failures.push(name));
     unlink.mockRestore();
     expect(removed).toEqual([]);
@@ -300,13 +314,15 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     seedDb();
     const made = createBackup(root, { databaseUrl });
     expect(made.ok).toBe(true);
-    if (!made.ok) return;
+    if (!made.ok) {
+      return;
+    }
 
     // 任意路径 / 穿越 / 绝对路径一律拒
     for (const bad of [
       "../../../etc/passwd",
       "/etc/passwd",
-      "C:\\Windows\\System32\\config\\SAM",
+      String.raw`C:\Windows\System32\config\SAM`,
       "db.sqlite",
       "随便什么.sqlite",
     ]) {
@@ -333,7 +349,9 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     fs.writeFileSync(broken, "垃圾数据");
     const r = requestRestore(root, "db-backup-20261010-120000.sqlite");
     expect(r.ok).toBe(false);
-    if (r.ok) return;
+    if (r.ok) {
+      return;
+    }
     expect(r.reason).toContain("读不通");
     expect(readRestoreRequest(root)).toBeNull();
   });
@@ -342,7 +360,9 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     seedDb(["老数据"]);
     const made = createBackup(root, { databaseUrl });
     expect(made.ok).toBe(true);
-    if (!made.ok) return;
+    if (!made.ok) {
+      return;
+    }
 
     // 备份之后库又长出了新数据 —— 恢复该把它丢掉，但得先留一份退路
     const db = new DatabaseSync(dbFile);
@@ -354,7 +374,9 @@ describe("恢复：只写标记，换文件在下次启动", () => {
 
     const result = applyPendingRestore(root, { databaseUrl });
     expect(result.status, JSON.stringify(result)).toBe("restored");
-    if (result.status !== "restored") return;
+    if (result.status !== "restored") {
+      return;
+    }
     // 退路是一份**备份**（认得出的名字）
     expect(result.safetyBackup).not.toBeNull();
     expect(parseBackupFileName(result.safetyBackup ?? "")).not.toBeNull();
@@ -369,9 +391,7 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     }
 
     // 退路里能找回「备份之后的改动」—— 恢复错了有得退
-    const safety = listBackups(root).find(
-      (b) => b.name === result.safetyBackup,
-    );
+    const safety = listBackups(root).find((b) => b.name === result.safetyBackup);
     expect(safety).toBeTruthy();
     const safetyDb = new DatabaseSync(safety!.file, { readOnly: true, open: true });
     try {
@@ -391,7 +411,9 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     seedDb();
     const made = createBackup(root, { databaseUrl });
     expect(made.ok).toBe(true);
-    if (!made.ok) return;
+    if (!made.ok) {
+      return;
+    }
     // 造两个假的旁文件
     fs.writeFileSync(`${dbFile}-wal`, "stale-wal");
     fs.writeFileSync(`${dbFile}-shm`, "stale-shm");
@@ -407,14 +429,16 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     seedDb(["老数据"]);
     /* 造满保留份数，让「被恢复的那一份」正好是最老的 —— 不保护时它会被
      * 「紧接着做的退路备份」的轮转删掉，而下一次 `copyFileSync` 就 ENOENT。 */
-    const names: string[] = [];
+    const names: Array<string> = [];
     for (let i = 0; i < BACKUP_KEEP; i++) {
       const r = createBackup(root, {
         databaseUrl,
         now: new Date(2026, 9, 10, 12, 0, i),
       });
       expect(r.ok).toBe(true);
-      if (r.ok) names.push(r.name);
+      if (r.ok) {
+        names.push(r.name);
+      }
     }
     const oldest = names[0]!;
     expect(fs.existsSync(path.join(backupDir(root), oldest))).toBe(true);
@@ -447,7 +471,9 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     seedDb(["当前库的数据"]);
     const made = createBackup(root, { databaseUrl });
     expect(made.ok).toBe(true);
-    if (!made.ok) return;
+    if (!made.ok) {
+      return;
+    }
     expect(requestRestore(root, made.name).ok).toBe(true);
 
     // 让「给当前库做退路」这一步失败：`createBackup` 里的 mkdir 抛 EACCES
@@ -455,7 +481,7 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     const before = fs.readFileSync(dbFile);
 
     const mkdir = vi.spyOn(fs, "mkdirSync").mockImplementation(() => {
-      const e = new Error("EACCES: 拒绝访问") as NodeJS.ErrnoException;
+      const e = /* SAFETY: 类型断言已复核 */ new Error("EACCES: 拒绝访问") as NodeJS.ErrnoException;
       e.code = "EACCES";
       throw e;
     });
@@ -464,7 +490,9 @@ describe("恢复：只写标记，换文件在下次启动", () => {
 
     // 退路失败 → 不换文件 → 标记保留（下次启动再试）
     expect(result.status).toBe("failed");
-    if (result.status !== "failed") return;
+    if (result.status !== "failed") {
+      return;
+    }
     expect(result.from).toBe(made.name);
     expect(fs.readFileSync(dbFile).equals(before)).toBe(true);
   });
@@ -473,13 +501,17 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     seedDb();
     const made = createBackup(root, { databaseUrl });
     expect(made.ok).toBe(true);
-    if (!made.ok) return;
+    if (!made.ok) {
+      return;
+    }
     expect(requestRestore(root, made.name).ok).toBe(true);
     fs.rmSync(made.file);
 
     const result = applyPendingRestore(root, { databaseUrl });
     expect(result.status).toBe("failed");
-    if (result.status !== "failed") return;
+    if (result.status !== "failed") {
+      return;
+    }
     expect(result.reason).toContain("读不通");
     expect(readRestoreRequest(root)).not.toBeNull();
   });
@@ -488,20 +520,27 @@ describe("恢复：只写标记，换文件在下次启动", () => {
     seedDb(["只有备份里有"]);
     const made = createBackup(root, { databaseUrl });
     expect(made.ok).toBe(true);
-    if (!made.ok) return;
+    if (!made.ok) {
+      return;
+    }
     expect(requestRestore(root, made.name).ok).toBe(true);
     fs.rmSync(dbFile);
 
     const result = applyPendingRestore(root, { databaseUrl });
     expect(result.status).toBe("restored");
-    if (result.status !== "restored") return;
+    if (result.status !== "restored") {
+      return;
+    }
     // 没有东西会被覆盖掉 → 不需要退路
     expect(result.safetyBackup).toBeNull();
     const db = new DatabaseSync(dbFile, { readOnly: true, open: true });
     try {
-      expect(db.prepare("SELECT v FROM t").all().map((r) => r.v)).toEqual([
-        "只有备份里有",
-      ]);
+      expect(
+        db
+          .prepare("SELECT v FROM t")
+          .all()
+          .map((r) => r.v),
+      ).toEqual(["只有备份里有"]);
     } finally {
       db.close();
     }
@@ -511,7 +550,7 @@ describe("恢复：只写标记，换文件在下次启动", () => {
 describe("启动链出口：结果必落一句话，且不抛", () => {
   it("空转什么都不说（绝大多数启动是这一支）", () => {
     seedDb();
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = applyPendingRestoreAtBoot(root, {
       write: (l) => lines.push(l),
     });
@@ -522,10 +561,12 @@ describe("启动链出口：结果必落一句话，且不抛", () => {
   it("恢复成功说清「从哪来 + 退路在哪」", () => {
     seedDb();
     const made = createBackup(root, { databaseUrl });
-    if (!made.ok) throw new Error("备份失败");
+    if (!made.ok) {
+      throw new Error("备份失败");
+    }
     requestRestore(root, made.name);
 
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = applyPendingRestoreAtBoot(root, {
       write: (l) => lines.push(l),
     });
@@ -543,7 +584,7 @@ describe("启动链出口：结果必落一句话，且不抛", () => {
       path.join(backupDir(root), "restore-request.json"),
       JSON.stringify({ file: "db-backup-20261010-120000.sqlite" }),
     );
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const result = applyPendingRestoreAtBoot(root, {
       write: (l) => lines.push(l),
     });
@@ -556,9 +597,7 @@ describe("启动链出口：结果必落一句话，且不抛", () => {
     fs.mkdirSync(backupDir(root), { recursive: true });
     fs.writeFileSync(path.join(backupDir(root), "restore-request.json"), "{not json");
     expect(readRestoreRequest(root)).toBeNull();
-    expect(applyPendingRestore(root, { databaseUrl }).status).toBe(
-      "nothing-to-do",
-    );
+    expect(applyPendingRestore(root, { databaseUrl }).status).toBe("nothing-to-do");
   });
 });
 

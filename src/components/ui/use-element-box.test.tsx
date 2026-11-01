@@ -27,12 +27,12 @@ function Probe({
   useEffect(() => {
     onBox(box);
   }, [box, onBox]);
-  return unmountTarget ? <div /> : <div ref={ref} data-testid="target" />;
+  return unmountTarget ? <div /> : <div data-testid="target" ref={ref} />;
 }
 
 describe("useElementBox", () => {
   it("元素挂上后量一次（不等到第一次尺寸变化）", () => {
-    const seen: unknown[] = [];
+    const seen: Array<unknown> = [];
     render(<Probe onBox={(b) => seen.push(b)} />);
     /* jsdom 不做布局：`clientWidth` 恒为 0，但盒子对象本身必须已经产出
      * （元素已挂上），这正是「首帧量一次」的可观测面。 */
@@ -41,13 +41,13 @@ describe("useElementBox", () => {
 
   it("ResizeObserver 不可用时量一次就定住（不抛错）", () => {
     vi.stubGlobal("ResizeObserver", undefined);
-    const seen: unknown[] = [];
+    const seen: Array<unknown> = [];
     render(<Probe onBox={(b) => seen.push(b)} />);
     expect(seen.some((b) => b !== null)).toBe(true);
   });
 
   it("元素未挂上时盒子里是 null（不把「未挂载」当成「尺寸为 0」）", () => {
-    const seen: unknown[] = [];
+    const seen: Array<unknown> = [];
     render(<Probe onBox={(b) => seen.push(b)} unmountTarget />);
     expect(seen.every((b) => b === null)).toBe(true);
   });

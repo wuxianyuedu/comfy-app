@@ -54,12 +54,17 @@ const SCAN_DIRS = ["scripts", "tools"];
 const SCRIPT_EXTS = new Set([".mjs", ".cjs"]);
 
 /** 递归收集待扫文件（跳过 `node_modules` 与隐藏目录）。 */
-function collect(dir: string, out: string[] = []): string[] {
+function collect(dir: string, out: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir)) {
-    if (entry.startsWith(".") || entry === "node_modules") continue;
+    if (entry.startsWith(".") || entry === "node_modules") {
+      continue;
+    }
     const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) collect(full, out);
-    else if (SCRIPT_EXTS.has(path.extname(entry))) out.push(full);
+    if (statSync(full).isDirectory()) {
+      collect(full, out);
+    } else if (SCRIPT_EXTS.has(path.extname(entry))) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -183,13 +188,11 @@ const BAD_PATTERNS: Array<{ re: RegExp; what: string }> = [
 
 describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1961）", () => {
   it("`scripts/**` / `tools/**` 里没有一处拿拼接的 file:// 串与 import.meta.url 比", () => {
-    const files = SCAN_DIRS.flatMap((d) =>
-      collect(path.join(ROOT, d)),
-    );
+    const files = SCAN_DIRS.flatMap((d) => collect(path.join(ROOT, d)));
     // 扫描面不许空转：这两个目录合起来几十个入口，扫成 0 个说明路径写错了。
     expect(files.length).toBeGreaterThan(20);
 
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const file of files) {
       const code = stripCommentsAndStrings(readFileSync(file, "utf8"));
       for (const { re, what } of BAD_PATTERNS) {
@@ -200,11 +203,11 @@ describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1
     }
     expect(
       offenders,
-      "拼出来的 file:// 串在 Windows 上恒不等于 import.meta.url（三斜杠 vs 两斜杠、" +
-        "正斜杠 vs 反斜杠），那会让守卫里的 main() 一次都不跑、**退出码恒 0 且零输出**" +
-        "—— 是「这一步没跑」被读成了「这一步过了」。改用两侧都过 path.resolve 的比较" +
-        "（或 pathToFileURL(…).href）。命中：\n" +
-        offenders.map((o) => `  · ${o}`).join("\n"),
+      `拼出来的 file:// 串在 Windows 上恒不等于 import.meta.url（三斜杠 vs 两斜杠、` +
+        `正斜杠 vs 反斜杠），那会让守卫里的 main() 一次都不跑、**退出码恒 0 且零输出**` +
+        `—— 是「这一步没跑」被读成了「这一步过了」。改用两侧都过 path.resolve 的比较` +
+        `（或 pathToFileURL(…).href）。命中：\n${
+        offenders.map((o) => `  · ${o}`).join("\n")}`,
     ).toEqual([]);
   });
 
@@ -224,9 +227,7 @@ describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1
       ).toMatch(/import\.meta\.(dirname|filename)/);
       // 也可以两侧都过 path.resolve；无论哪种，都不许再出现拼串比较。
       for (const { re, what } of BAD_PATTERNS) {
-        expect(re.test(stripCommentsAndStrings(src)), `${rel} 又出现 ${what}`).toBe(
-          false,
-        );
+        expect(re.test(stripCommentsAndStrings(src)), `${rel} 又出现 ${what}`).toBe(false);
       }
     }
   });
@@ -235,12 +236,12 @@ describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1
     /* 这条是本判据的**自证**（本仓既有口径：判据要能反向复算）。造两份最小样例，
      * 走的是与上面同一条判定函数。 */
     const bad = stripCommentsAndStrings(
-      'if (process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1])}`) { main(); }',
+      "if (process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1])}`) { main(); }",
     );
     expect(BAD_PATTERNS.some(({ re }) => re.test(bad))).toBe(true);
 
     const bad2 = stripCommentsAndStrings(
-      'if (import.meta.url === `file://${process.argv[1]}`) { main(); }',
+      "if (import.meta.url === `file://${process.argv[1]}`) { main(); }",
     );
     expect(BAD_PATTERNS.some(({ re }) => re.test(bad2))).toBe(true);
 
@@ -256,7 +257,7 @@ describe("「是不是被直接执行」的守卫：不许拼 file://（ISSUE #1
 
     // 注释里的同形文本要放过（本仓另三处的反面教材注释正是这个形状）。
     const commented = stripCommentsAndStrings(
-      '// 拼 `file://${argv[1]}` 在 Windows 上恒不相等，那会让 main() 一次都不跑\nconst x = 1;\n',
+      "// 拼 `file://${argv[1]}` 在 Windows 上恒不相等，那会让 main() 一次都不跑\nconst x = 1;\n",
     );
     expect(BAD_PATTERNS.some(({ re }) => re.test(commented))).toBe(false);
   });

@@ -4,16 +4,12 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 
 /** seed 模式 —— ComfyUI `control_after_generate` 的映射。每条含
  *  ComfyUI 取值、中文标签，以及浮层里用的两行说明
  *（对应 Ardot「控件后行为」四选项面板）。 */
-const SEED_MODES: { value: string; label: string; hint: string }[] = [
+const SEED_MODES: Array<{ hint: string; label: string; value: string }> = [
   { value: "fixed", label: "固定值", hint: "数值不变" },
   { value: "increment", label: "递增值", hint: "数值+1 或切换到下一个选项" },
   { value: "decrement", label: "递减值", hint: "数值-1 或切换到上一个选项" },
@@ -22,7 +18,7 @@ const SEED_MODES: { value: string; label: string; hint: string }[] = [
 
 /** 是不是 seed 类 widget 输入？（KSampler / 自定义节点的 seed 针脚）。 */
 
-export function isSeedLike(e: { name: string; label?: string }): boolean {
+export function isSeedLike(e: { label?: string; name: string }): boolean {
   return /seed|noise_seed/i.test(`${e.name} ${e.label ?? ""}`);
 }
 
@@ -42,10 +38,10 @@ function SeedModeIcon({ value }: { value: string }) {
     // 📌 图钉（圆角方帽 + 带点的斜杆）。
     return (
       <svg
-        width="22"
+        fill="none"
         height="22"
         viewBox="0 0 22 22"
-        fill="none"
+        width="22"
         xmlns="http://www.w3.org/2000/svg"
       >
         <path
@@ -58,24 +54,24 @@ function SeedModeIcon({ value }: { value: string }) {
   if (value === "increment") {
     return (
       <svg
-        width="22"
+        fill="none"
         height="22"
         viewBox="0 0 22 22"
-        fill="none"
+        width="22"
         xmlns="http://www.w3.org/2000/svg"
       >
         <path
           d="M11 4.5V17.5"
           stroke="var(--color-seed-step)"
-          strokeWidth="2.4"
           strokeLinecap="round"
+          strokeWidth="2.4"
         />
         <path
           d="M6 9.5L11 4.5L16 9.5"
           stroke="var(--color-seed-step)"
-          strokeWidth="2.4"
           strokeLinecap="round"
           strokeLinejoin="round"
+          strokeWidth="2.4"
         />
       </svg>
     );
@@ -83,52 +79,46 @@ function SeedModeIcon({ value }: { value: string }) {
   if (value === "decrement") {
     return (
       <svg
-        width="22"
+        fill="none"
         height="22"
         viewBox="0 0 22 22"
-        fill="none"
+        width="22"
         xmlns="http://www.w3.org/2000/svg"
       >
         <path
           d="M11 17.5V4.5"
           stroke="var(--color-seed-step)"
-          strokeWidth="2.4"
           strokeLinecap="round"
+          strokeWidth="2.4"
         />
         <path
           d="M6 12.5L11 17.5L16 12.5"
           stroke="var(--color-seed-step)"
-          strokeWidth="2.4"
           strokeLinecap="round"
           strokeLinejoin="round"
+          strokeWidth="2.4"
         />
       </svg>
     );
   }
   // 随机（骰子）
   return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 22 22"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg fill="none" height="22" viewBox="0 0 22 22" width="22" xmlns="http://www.w3.org/2000/svg">
       <rect
-        x="2.5"
-        y="2.5"
-        width="17"
+        fill="var(--color-seed-dice-bg)"
         height="17"
         rx="3.5"
-        fill="var(--color-seed-dice-bg)"
         stroke="var(--color-seed-dice-stroke)"
         strokeWidth="1.2"
+        width="17"
+        x="2.5"
+        y="2.5"
       />
-      <circle cx="7" cy="7" r="1.4" fill="var(--color-seed-dice-pip)" />
-      <circle cx="15" cy="7" r="1.4" fill="var(--color-seed-dice-pip)" />
-      <circle cx="11" cy="11" r="1.4" fill="var(--color-seed-dice-pip)" />
-      <circle cx="7" cy="15" r="1.4" fill="var(--color-seed-dice-pip)" />
-      <circle cx="15" cy="15" r="1.4" fill="var(--color-seed-dice-pip)" />
+      <circle cx="7" cy="7" fill="var(--color-seed-dice-pip)" r="1.4" />
+      <circle cx="15" cy="7" fill="var(--color-seed-dice-pip)" r="1.4" />
+      <circle cx="11" cy="11" fill="var(--color-seed-dice-pip)" r="1.4" />
+      <circle cx="7" cy="15" fill="var(--color-seed-dice-pip)" r="1.4" />
+      <circle cx="15" cy="15" fill="var(--color-seed-dice-pip)" r="1.4" />
     </svg>
   );
 }
@@ -155,35 +145,33 @@ export function SeedModeButton({
   onPick: (m: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const current =
-    SEED_MODES.find((item) => item.value === mode)?.label ?? "固定值";
+  const current = SEED_MODES.find((item) => item.value === mode)?.label ?? "固定值";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
-        title="控件后行为 · CONTROL AFTER GENERATE"
         render={
           <Button
-            variant="outline"
             className="nodrag nopan border-border-strong bg-canvas-deep text-ink-soft hover:bg-canvas-deep hover:border-primary/40 hover:text-ink-bright focus-visible:border-primary/40 text-2xs h-auto shrink-0 gap-1 rounded-md px-2 py-0 font-medium"
+            variant="outline"
           />
         }
+        title="控件后行为 · CONTROL AFTER GENERATE"
       >
         <span className="truncate">{current}</span>
-        <ChevronDown size={8} className="opacity-70" />
+        <ChevronDown className="opacity-70" size={8} />
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        side="bottom"
-        sideOffset={6}
         /* 面板自身滚动：窗口再矮也不会把最后一个选项推出视口（基元负责
            `max-height` 与翻转，这里只给形态）。 */
         className="nodrag nopan border-border-strong bg-card w-70 gap-0 overflow-hidden rounded-xl border p-3 shadow-2xl shadow-black/12 dark:shadow-black/60"
+        side="bottom"
+        sideOffset={6}
       >
         <div className="flex flex-col gap-0.5">
           <h4 className="text-ink-bright text-xs font-semibold">
-            控件后行为{" "}
-            <span className="text-ink-muted">· CONTROL AFTER GENERATE</span>
+            控件后行为 <span className="text-ink-muted">· CONTROL AFTER GENERATE</span>
           </h4>
           <p className="text-ink-muted text-2xs leading-relaxed">
             seed / 类似数值 widget 点击数字弹出 4 选 1 切换面板
@@ -194,36 +182,30 @@ export function SeedModeButton({
             const selected = item.value === mode;
             return (
               <Button
-                key={item.value}
-                variant="ghost"
-                role="option"
                 aria-selected={selected}
-                onClick={() => {
-                  onPick(item.value);
-                  setOpen(false);
-                }}
                 className={`nodrag nopan hover:bg-subtle flex h-auto w-full justify-start gap-2.5 rounded-lg border px-2 py-1.5 text-left ${
                   selected
                     ? "border-primary/40 bg-node-accent hover:bg-node-accent"
                     : "border-transparent"
                 }`}
+                key={item.value}
+                onClick={() => {
+                  onPick(item.value);
+                  setOpen(false);
+                }}
+                role="option"
+                variant="ghost"
               >
                 <span className="bg-node-accent flex size-9 shrink-0 items-center justify-center rounded-lg">
                   <SeedModeIcon value={item.value} />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-ink-bright text-xs font-semibold">
-                    {item.label}
-                  </span>
-                  <span className="text-ink-muted text-2xs truncate leading-snug">
-                    {item.hint}
-                  </span>
+                  <span className="text-ink-bright text-xs font-semibold">{item.label}</span>
+                  <span className="text-ink-muted text-2xs truncate leading-snug">{item.hint}</span>
                 </span>
                 <span
                   className={`size-3.5 shrink-0 rounded-full border-2 transition-colors ${
-                    selected
-                      ? "border-primary bg-primary"
-                      : "border-border-strong bg-transparent"
+                    selected ? "border-primary bg-primary" : "border-border-strong bg-transparent"
                   }`}
                 >
                   {selected && (

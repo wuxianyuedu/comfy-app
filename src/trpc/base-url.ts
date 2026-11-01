@@ -10,8 +10,12 @@
  * launch-and-build §1.1），此处只在缺省命中，收一处即可。
  */
 export function getBaseUrl(): string {
-  if (typeof window !== "undefined") return window.location.origin;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
   return `http://127.0.0.1:${process.env.COMFYAPP_PORT ?? process.env.PORT ?? 3100}`;
 }
 
@@ -22,7 +26,7 @@ export function getBaseUrl(): string {
  * （改了它就没有客户端能连上），却散在两个文件里，任一处漏改都是静默 404。
  */
 export function getTrpcEndpoint(): string {
-  return getBaseUrl() + "/api/trpc";
+  return `${getBaseUrl()}/api/trpc`;
 }
 
 /**

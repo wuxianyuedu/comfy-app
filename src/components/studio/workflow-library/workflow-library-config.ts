@@ -8,10 +8,7 @@
 import type { WorkflowPreview as WorkflowPreviewT } from "~/lib/comfyui/workflow";
 import { matchesNeedle, normalizeNeedle } from "~/lib/list-filter";
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
-import {
-  getWorkflowType,
-  normalizeTaskType,
-} from "~/lib/workflow/workflow-types";
+import { getWorkflowType, normalizeTaskType } from "~/lib/workflow/workflow-types";
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 /** 工作流库页头右侧动作按钮的**统一形态基类**：三处只差配色（渐变 vs outline），
@@ -26,21 +23,21 @@ import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 export const HEADER_ACTION_BTN = "shrink-0 gap-1.5 px-3";
 
 /** 服务端 list 返回的本地工作流根目录摘要（只取前端判据用得到的字段）。 */
-export interface LocalWorkflowRoot {
+export type LocalWorkflowRoot = {
   absPath: string;
-  exists: boolean;
   /** 该根下扫到的工作流文件数 */
   count: number;
   /** 读取该根时的错误（权限 / 不是目录等），服务端在无法访问时给出 */
   error?: string;
-}
+  exists: boolean;
+};
 
 /** 列表为空时的「为什么是空」判据（本地工作流目录侧）。
  *  本地侧没有可疑之处（根在、也有文件）时返回 null，空态用默认引导文案。
  *  取服务端一直在返回、前端此前丢弃的 localRoots——没有它，空态只能笼统地说
  *  「还没有工作流」，用户看到的是「工作流全没了」。 */
 export function deriveLocalRootsHint(
-  roots: readonly LocalWorkflowRoot[] | null | undefined,
+  roots: ReadonlyArray<LocalWorkflowRoot> | null | undefined,
 ): string | null {
   if (!roots || roots.length === 0) {
     return "没有解析到本地工作流目录：到「设置 → 创作后端」配置 ComfyUI 安装路径，或用上层目录 .env 里的 LOCAL_WORKFLOWS_PATH 指定目录。";
@@ -55,22 +52,42 @@ export function deriveLocalRootsHint(
   return null;
 }
 
-export interface WorkflowRow {
-  id: string;
-  name: string;
-  taskType: string;
-  /** 一条工作流可以同时声明多个模式。为空或缺省时，
-   *  UI 退回用 `[taskType]` 展示（兼容老数据）。`modes` 与
-   *  `defaultMode` 由 GET /api/workflows 下发，落库在
-   *  `WorkflowTemplate` 的 `modes` / `defaultMode` 两列。 */
-  modes?: string[];
-  /** 规范默认模式码；必须出现在 `modes` 里。
-   *  与 `taskType` 保持同步，供旧版单值筛选用。 */
-  defaultMode?: string | null;
+export type WorkflowRow = {
   /** 落库时间。**是 `Date` 不是字符串**：`workflow.list` 走 tRPC，
    *  `src/server/api/trpc.ts` 挂着 `transformer: superjson` —— `Date` 过线
    *  保持 `Date`（同类错配 `ModelRow.createdAt` 已修）。 */
   createdAt: Date;
+  /** 规范默认模式码；必须出现在 `modes` 里。
+   *  与 `taskType` 保持同步，供旧版单值筛选用。 */
+  defaultMode?: string | null;
+  /** 手动同步支持。`diskDirty = (diskMtimeSec >
+   *  sourceMtimeSec)` 表示磁盘上的文件在上次导入之后被改过；
+   *  卡片据此显示「↻ 同步」动作，POST 到
+   *  /api/workflows/[id]/resync。在线行（没有 sourcePath）
+   *  这四项都为 null/false。 */
+  diskDirty?: boolean;
+  diskMissing?: boolean;
+  diskMtimeSec?: number | null;
+  /** 服务端检测到来源文件
+   *  在磁盘上被改名，已自动把该行重新指到新路径。
+   *  `diskRenamedTo` 是给人读的 "old.json → new.json"
+   *  摘要；UI 弹一次性的提示，让用户知道
+   *  这条链接悄悄挪了位置。其余情况为 null。 */
+  diskRenamed?: boolean;
+  diskRenamedTo?: string | null;
+  /** RAW 原件列有没有内容 —— **只用于如实标注**，不判可执行性（见下 `usable`）。 */
+  hasRaw?: boolean;
+  id: string;
+  /** 挂在这条工作流上的模型标签名（来自用户级全局标签库，
+   *  例如 ["z-image","wan2.2"]）。由 GET /api/workflows 下发。
+   *  驱动库卡片的标签与模型筛选。 */
+  modelTags?: Array<string>;
+  /** 一条工作流可以同时声明多个模式。为空或缺省时，
+   *  UI 退回用 `[taskType]` 展示（兼容老数据）。`modes` 与
+   *  `defaultMode` 由 GET /api/workflows 下发，落库在
+   *  `WorkflowTemplate` 的 `modes` / `defaultMode` 两列。 */
+  modes?: Array<string>;
+  name: string;
   /** 这条工作流的 `paramMap` JSON 列（对外参数落点 / 输出取值行）。
    *  权威类型在 `~/lib/workflow/workflow-param-map`：服务端路由入参与这里
    *  是**同一份**声明。此前这里是 `Record<string, string>`（一层 key →
@@ -78,18 +95,12 @@ export interface WorkflowRow {
    *  没有任何消费点按它读，只靠双跳断言抹平（ISSUE #1460）。 */
   paramMap?: WorkflowParamMap | null;
   preview?: WorkflowPreviewT;
-  /** 用户维护的对外 IO，由 GET /api/workflows 下发。
-   *  没有图谱预览时用它在库里渲染卡片。 */
-  workflowIO?: WorkflowIOMap;
-  /** 挂在这条工作流上的模型标签名（来自用户级全局标签库，
-   *  例如 ["z-image","wan2.2"]）。由 GET /api/workflows 下发。
-   *  驱动库卡片的标签与模型筛选。 */
-  modelTags?: string[];
-  /** RAW 原件列有没有内容 —— **只用于如实标注**，不判可执行性（见下 `usable`）。 */
-  hasRaw?: boolean;
-  /** 这条工作流有没有可执行内容 —— **RAW 原件有内容即可**。
-   *  RAW 由 comfy-cli 直接执行（它按节点类定义做权威转换）。 */
-  usable?: boolean;
+  /** 分类："local" = 绑定磁盘上的文件；"online" = 粘贴导入；
+   *  "local-pending" = 磁盘上有、但还没导入过的占位行。
+   *  由有没有 `sourcePath` 推导（占位行走 `workflow-local-roots` 的
+   *  `LocalPendingRow`）。 */
+  source?: "local" | "online" | "local-pending";
+  sourceMtimeSec?: number | null;
   /** 导入来源在磁盘上的绝对路径。
    *  任何碰到真实文件的导入都会写它（来源本地的 ⤓ 载入
    *  卡片，或后续临时导入）。写入后服务端跟踪该文件，
@@ -102,28 +113,14 @@ export interface WorkflowRow {
    *  （例如在设置
    *  LOCAL_WORKFLOWS_PATH 之前完成的旧导入）。 */
   sourceRoot?: string | null;
-  /** 分类："local" = 绑定磁盘上的文件；"online" = 粘贴导入；
-   *  "local-pending" = 磁盘上有、但还没导入过的占位行。
-   *  由有没有 `sourcePath` 推导（占位行走 `workflow-local-roots` 的
-   *  `LocalPendingRow`）。 */
-  source?: "local" | "online" | "local-pending";
-  /** 手动同步支持。`diskDirty = (diskMtimeSec >
-   *  sourceMtimeSec)` 表示磁盘上的文件在上次导入之后被改过；
-   *  卡片据此显示「↻ 同步」动作，POST 到
-   *  /api/workflows/[id]/resync。在线行（没有 sourcePath）
-   *  这四项都为 null/false。 */
-  diskDirty?: boolean;
-  diskMissing?: boolean;
-  diskMtimeSec?: number | null;
-  sourceMtimeSec?: number | null;
-  /** 服务端检测到来源文件
-   *  在磁盘上被改名，已自动把该行重新指到新路径。
-   *  `diskRenamedTo` 是给人读的 "old.json → new.json"
-   *  摘要；UI 弹一次性的提示，让用户知道
-   *  这条链接悄悄挪了位置。其余情况为 null。 */
-  diskRenamed?: boolean;
-  diskRenamedTo?: string | null;
-}
+  taskType: string;
+  /** 这条工作流有没有可执行内容 —— **RAW 原件有内容即可**。
+   *  RAW 由 comfy-cli 直接执行（它按节点类定义做权威转换）。 */
+  usable?: boolean;
+  /** 用户维护的对外 IO，由 GET /api/workflows 下发。
+   *  没有图谱预览时用它在库里渲染卡片。 */
+  workflowIO?: WorkflowIOMap;
+};
 
 /** 解析「这条工作流可执行吗、RAW 原件在不在」。
  *
@@ -144,9 +141,9 @@ export function deriveFormatFlags(row: WorkflowRow): {
  *  missing，好让卡片显示「📁 文件已不存在」而不是同步按钮。
  *  按钮。 */
 export function deriveSyncFlags(row: WorkflowRow): {
+  canResync: boolean;
   dirty: boolean;
   missing: boolean;
-  canResync: boolean;
 } {
   const dirty = !!row.diskDirty;
   const missing = !!row.diskMissing;
@@ -158,8 +155,12 @@ export function deriveSyncFlags(row: WorkflowRow): {
  *  （等宽字体 + 更亮的颜色），
  *  扫一眼就能读出来。 */
 export function isTechnicalName(name: string): boolean {
-  if (!name) return false;
-  if (name.length > 38) return false; // already a descriptive name
+  if (!name) {
+    return false;
+  }
+  if (name.length > 38) {
+    return false;
+  } // already a descriptive name
   return /^[a-z0-9_]+$/.test(name);
 }
 
@@ -171,13 +172,13 @@ export type SourceFilter = "all" | "local" | "online";
 export type TypeFilter = "all" | "image" | "video" | "audio";
 
 /** 本地待载入项（磁盘扫描到但还没入库的工作流）。 */
-export interface PendingRow {
+export type PendingRow = {
   id: string;
   name: string;
-  sourcePath: string;
-  pendingSize?: number;
   pendingMtime?: number;
-}
+  pendingSize?: number;
+  sourcePath: string;
+};
 
 /** `source` 字段是服务端可选回填的，缺失时按有无 sourcePath 判定。
  *
@@ -186,26 +187,26 @@ export interface PendingRow {
  *  （占位行走独立的 `pending`），这里显式收拢是为了让「三档声明 → 两档筛选」
  *  这条映射写在类型旁边 —— 否则加档时筛选条件会静默漏掉它。 */
 function sourceOf(workflow: WorkflowRow): "local" | "online" {
-  if (workflow.source === "local-pending") return "local";
+  if (workflow.source === "local-pending") {
+    return "local";
+  }
   return workflow.source ?? (workflow.sourcePath ? "local" : "online");
 }
 
-function categoryOf(
-  workflow: Pick<WorkflowRow, "taskType">,
-): string | undefined {
+function categoryOf(workflow: Pick<WorkflowRow, "taskType">): string | undefined {
   return getWorkflowType(normalizeTaskType(workflow.taskType ?? ""))?.category;
 }
 
 /** 三级筛选：来源 → 类型 → 模型标签，最后是名称子串（不区分大小写）。 */
 export function filterWorkflows(
-  workflows: WorkflowRow[],
+  workflows: Array<WorkflowRow>,
   filters: {
-    source: SourceFilter;
-    type: TypeFilter;
     model: string;
     search: string;
+    source: SourceFilter;
+    type: TypeFilter;
   },
-): WorkflowRow[] {
+): Array<WorkflowRow> {
   const needle = normalizeNeedle(filters.search);
   return workflows.filter((workflow) => {
     if (filters.source !== "all" && sourceOf(workflow) !== filters.source) {
@@ -214,10 +215,7 @@ export function filterWorkflows(
     if (filters.type !== "all" && categoryOf(workflow) !== filters.type) {
       return false;
     }
-    if (
-      filters.model !== "all" &&
-      !workflow.modelTags?.includes(filters.model)
-    ) {
+    if (filters.model !== "all" && !workflow.modelTags?.includes(filters.model)) {
       return false;
     }
     /* 本域只搜名称（不搜路径 / 标签）—— 归一化与命中判决走出口。 */
@@ -227,48 +225,46 @@ export function filterWorkflows(
 
 /** 待载入行：切到「在线工作流」时不该出现本地待载入项。 */
 export function filterPending(
-  pending: PendingRow[],
-  filters: { source: SourceFilter; search: string },
-): PendingRow[] {
-  if (filters.source === "online") return [];
+  pending: Array<PendingRow>,
+  filters: { search: string; source: SourceFilter },
+): Array<PendingRow> {
+  if (filters.source === "online") {
+    return [];
+  }
   const needle = normalizeNeedle(filters.search);
-  if (!needle) return pending;
+  if (!needle) {
+    return pending;
+  }
   return pending.filter((row) => matchesNeedle(needle, row.name));
 }
 
-export interface SourceCounts {
+export type SourceCounts = {
   all: number;
   local: number;
   online: number;
-}
+};
 
-export interface TypeCounts {
+export type TypeCounts = {
   all: number;
+  audio: number;
   image: number;
   video: number;
-  audio: number;
-}
+};
 
 /** 来源页签计数。待载入项全部计入 local（它们本来就来自磁盘）。 */
 export function countBySource(
-  workflows: WorkflowRow[],
-  pending: PendingRow[],
+  workflows: Array<WorkflowRow>,
+  pending: Array<PendingRow>,
 ): SourceCounts {
   return {
     all: workflows.length + pending.length,
-    local:
-      workflows.filter((workflow) => sourceOf(workflow) === "local").length +
-      pending.length,
-    online: workflows.filter((workflow) => sourceOf(workflow) === "online")
-      .length,
+    local: workflows.filter((workflow) => sourceOf(workflow) === "local").length + pending.length,
+    online: workflows.filter((workflow) => sourceOf(workflow) === "online").length,
   };
 }
 
 /** 类型页签计数。待载入项没有 taskType，计入 all 但不进具体分类。 */
-export function countByType(
-  workflows: WorkflowRow[],
-  pending: PendingRow[],
-): TypeCounts {
+export function countByType(workflows: Array<WorkflowRow>, pending: Array<PendingRow>): TypeCounts {
   const counts: TypeCounts = {
     all: workflows.length + pending.length,
     image: 0,

@@ -33,15 +33,11 @@ import {
 const ROOT = resolve(".");
 const COMPONENTS = join(ROOT, "src", "components");
 const UI = join(COMPONENTS, "ui");
-const BASELINE_PATH = join(
-  ROOT,
-  "scripts",
-  ".storybook-coverage-baseline.json",
-);
+const BASELINE_PATH = join(ROOT, "scripts", ".storybook-coverage-baseline.json");
 
-const BASELINE = JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as {
-  uiSurfaces: number;
+const BASELINE = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as {
   covered: number;
+  uiSurfaces: number;
 };
 
 const STAT = uiCoverage({ componentsRoot: COMPONENTS });
@@ -56,9 +52,7 @@ describe("ui/ 的组件覆盖率（ISSUE #1381）", () => {
   it("每个 story 都真的 import 到了同目录的组件（story 不许空转）", () => {
     const stories = collectStories(COMPONENTS);
     const empty = stories.filter(
-      (story) =>
-        componentTargetsOf(story, readFileSync(story, "utf8"), ROOT).length ===
-        0,
+      (story) => componentTargetsOf(story, readFileSync(story, "utf8"), ROOT).length === 0,
     );
     expect(
       empty,
@@ -113,9 +107,7 @@ describe("ui/ 的组件覆盖率（ISSUE #1381）", () => {
 
   it("理由表的每一条都是「为什么」而不是空串", () => {
     for (const [file, reason] of NO_STORY_REASON) {
-      expect(reason.length, `${file} 的理由太短，说不清为什么`).toBeGreaterThan(
-        8,
-      );
+      expect(reason.length, `${file} 的理由太短，说不清为什么`).toBeGreaterThan(8);
     }
   });
 

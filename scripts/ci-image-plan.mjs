@@ -57,7 +57,6 @@
  * `cdn.npmmirror.com` 现取（`fetchNodePlan()`）。写死两份的形态是「上游一升，这里还
  * 指着一个已经不存在（或更糟：还存在但已过时）的版本」—— 而那两种在日志里长得一样。
  */
-import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -67,14 +66,12 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import process from "node:process";
 
 /** 仓库根 —— 本脚本住在 `scripts/` 下。 */
-export const ROOT = path.resolve(
-  import.meta.dirname,
-  "..",
-);
+export const ROOT = path.resolve(import.meta.dirname, "..");
 
 /** 镜像标签的**版本**部分。它不是「本仓的版本号」，是「这份声明长自哪一版源码」的锚。 */
 export const IMAGE_TAG = "ci-node-v1";
@@ -167,9 +164,7 @@ export function nodeFloor(range) {
     );
   }
   return /** @type {{major: number, minor: number, patch: number}} */ (
-    floors.sort(
-      (a, b) => a.major - b.major || a.minor - b.minor || a.patch - b.patch,
-    )[0]
+    floors.sort((a, b) => a.major - b.major || a.minor - b.minor || a.patch - b.patch)[0]
   );
 }
 
@@ -187,9 +182,13 @@ export function pickNodeVersion(index, floor) {
   /** @type {{version: string, parts: [number, number, number]}[]} */
   const parsed = [];
   for (const entry of index ?? []) {
-    if (!(entry.files ?? []).includes("linux-x64")) continue;
+    if (!(entry.files ?? []).includes("linux-x64")) {
+      continue;
+    }
     const m = /^v(\d+)\.(\d+)\.(\d+)$/.exec(entry.version);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     parsed.push({
       version: entry.version,
       parts: [Number(m[1]), Number(m[2]), Number(m[3])],
@@ -216,7 +215,7 @@ export function pickNodeVersion(index, floor) {
 
 /** 把一段字面量转成「按字面匹配」的正则片段（`.cjs`/`.mjs` 里同名实现的同一手法）。 */
 export function escapedRegExp(/** @type {string} */ name) {
-  return String(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return String(name).replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /**
@@ -244,15 +243,21 @@ export function toolingVersionsFromLock(lockText, names) {
   const lines = String(lockText ?? "").split("\n");
   const starts = [];
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i] === "importers:") starts.push(i);
+    if (lines[i] === "importers:") {
+      starts.push(i);
+    }
   }
-  if (starts.length === 0) return out;
-  const from = /** @type {number} */ (starts[starts.length - 1]);
+  if (starts.length === 0) {
+    return out;
+  }
+  const from = /** @type {number} */ (starts.at(-1));
   const block = [];
   for (let i = from + 1; i < lines.length; i++) {
     /* 顶格的行 = 又一个顶层键（`packages:` / `settings:` / `snapshots:`）。 */
     const line = String(lines[i] ?? "");
-    if (/^\S/.test(line)) break;
+    if (/^\S/.test(line)) {
+      break;
+    }
     block.push(line);
   }
   const text = block.join("\n");
@@ -261,13 +266,15 @@ export function toolingVersionsFromLock(lockText, names) {
      * 拼出来的 `( +)` 变成 `( ?)`、捕获组随之错位 —— 那一档的表现是「有的包读得到、
      * 有的读不到」，而两种在日志里都像「本仓没有这个依赖」（实测踩过）。 */
     const re = new RegExp(
-      "^( +)['\"]?" +
-        escapedRegExp(name) +
-        "['\"]?:\\s*\\n(?:\\1\\s+.*\\n)*?\\1\\s+version:\\s*([^\\s(]+)",
+      `^( +)['"]?${
+        escapedRegExp(name)
+        }${String.raw`['"]?:\s*\n(?:\1\s+.*\n)*?\1\s+version:\s*([^\s(]+)`}`,
       "m",
     );
     const m = re.exec(text);
-    if (m) out[name] = /** @type {string} */ (m[2]);
+    if (m) {
+      out[name] = /** @type {string} */ (m[2]);
+    }
   }
   return out;
 }
@@ -283,21 +290,12 @@ export function toolingVersionsFromLock(lockText, names) {
  * }} input
  * @returns {{tag: string, dockerfile: string, build: string, cp: string, verify: string}}
  */
-export function imagePlan({
-  nodeVersion,
-  pnpmVersion,
-  tag = IMAGE_TAG,
-  appDir = APP_DIR,
-}) {
+export function imagePlan({ nodeVersion, pnpmVersion, tag = IMAGE_TAG, appDir = APP_DIR }) {
   if (!/^v\d+\.\d+\.\d+$/.test(nodeVersion ?? "")) {
-    throw new Error(
-      `node 版本要带 v 的精确号（拿到的是 ${JSON.stringify(nodeVersion)}）`,
-    );
+    throw new Error(`node 版本要带 v 的精确号（拿到的是 ${JSON.stringify(nodeVersion)}）`);
   }
   if (!/^\d+\.\d+\.\d+/.test(pnpmVersion ?? "")) {
-    throw new Error(
-      `pnpm 版本形状不认（拿到的是 ${JSON.stringify(pnpmVersion)}）`,
-    );
+    throw new Error(`pnpm 版本形状不认（拿到的是 ${JSON.stringify(pnpmVersion)}）`);
   }
   const image = `comfyapp-ci:${tag}`;
   const header = [
@@ -326,7 +324,7 @@ export function imagePlan({
     "RUN cd /tmp \\",
     " && curl -fsSLO https://cdn.npmmirror.com/binaries/node/${NODE_VERSION}/node-${NODE_VERSION}-linux-x64.tar.xz \\",
     " && curl -fsSLO https://cdn.npmmirror.com/binaries/node/${NODE_VERSION}/SHASUMS256.txt \\",
-    " && grep \" node-${NODE_VERSION}-linux-x64.tar.xz$\" SHASUMS256.txt | sha256sum -c - \\",
+    ' && grep " node-${NODE_VERSION}-linux-x64.tar.xz$" SHASUMS256.txt | sha256sum -c - \\',
     " && tar -xJf node-${NODE_VERSION}-linux-x64.tar.xz -C /usr/local --strip-components=1 \\",
     " && rm -f node-${NODE_VERSION}-linux-x64.tar.xz SHASUMS256.txt",
     `RUN npm install -g pnpm@${pnpmVersion} && pnpm --version`,
@@ -354,7 +352,7 @@ export function imagePlan({
   ];
   return {
     tag: image,
-    dockerfile: lines.join("\n") + "\n",
+    dockerfile: `${lines.join("\n")}\n`,
     /* `-f -` 而不是 `-f <(...)`：进程替换是 POSIX shell 的语法，PowerShell 里
      * `-f <(...)` 会被当成一个叫 `<` 的文件、报「The system cannot find the file
      * specified」—— 那条红读起来像「脚本没产出文件」，实际是这两句根本不是同一件事。
@@ -378,7 +376,7 @@ export function selfCheckRunLines() {
   const parts = IMAGE_CHECKS.map((c) =>
     c.kind === "command" ? `${c.name} ${c.arg}` : `test -x ${c.arg}`,
   );
-  return ["RUN " + parts.join(" \\\n && ")];
+  return [`RUN ${parts.join(" \\\n && ")}`];
 }
 
 /**
@@ -466,9 +464,15 @@ export function imagePlanLayersAreOrdered(dockerfile) {
   const install = at(/^RUN pnpm install/m);
   const copyAll = at(/^COPY \. \./m);
   const playwright = at(/^RUN .*playwright install/m);
-  if (copyManifests < 0) problems.push("没有 `COPY package.json …` 那一行（依赖层没有输入）");
-  if (install < 0) problems.push("没有 `RUN pnpm install --frozen-lockfile` 那一行");
-  if (copyAll < 0) problems.push("没有 `COPY . .` 那一行（源码进不去）");
+  if (copyManifests < 0) {
+    problems.push("没有 `COPY package.json …` 那一行（依赖层没有输入）");
+  }
+  if (install < 0) {
+    problems.push("没有 `RUN pnpm install --frozen-lockfile` 那一行");
+  }
+  if (copyAll < 0) {
+    problems.push("没有 `COPY . .` 那一行（源码进不去）");
+  }
   if (copyManifests >= 0 && install >= 0 && copyManifests > install) {
     problems.push(
       "`COPY package.json …` 排在 `pnpm install` 之后 —— 依赖层因此永远拿不到输入，" +
@@ -583,14 +587,28 @@ export function buildTarStream({
 }
 
 /** 一个 ustar 头部块（512 字节）。数值字段用八进制、尾随 NUL + 空格。 */
-export function tarHeader(/** @type {string} */ name, /** @type {string} */ type, /** @type {number} */ mode, /** @type {number} */ size, /** @type {string} */ linkname) {
+export function tarHeader(
+  /** @type {string} */ name,
+  /** @type {string} */ type,
+  /** @type {number} */ mode,
+  /** @type {number} */ size,
+  /** @type {string} */ linkname,
+) {
   const head = Buffer.alloc(512);
-  const put = (/** @type {string} */ text, /** @type {number} */ offset, /** @type {number} */ length) => {
+  const put = (
+    /** @type {string} */ text,
+    /** @type {number} */ offset,
+    /** @type {number} */ length,
+  ) => {
     Buffer.from(text, "utf8").copy(head, offset, 0, length);
   };
-  const num = (/** @type {number} */ value, /** @type {number} */ offset, /** @type {number} */ length) => {
+  const num = (
+    /** @type {number} */ value,
+    /** @type {number} */ offset,
+    /** @type {number} */ length,
+  ) => {
     /* `length - 1` 位八进制 + 尾随 NUL：ustar 的数值字段是「定宽、右补零、以 NUL 收尾」。 */
-    put(value.toString(8).padStart(length - 1, "0") + "\0", offset, length);
+    put(`${value.toString(8).padStart(length - 1, "0")}\0`, offset, length);
   };
   put(name.slice(0, 100), 0, 100);
   num(mode, 100, 8);
@@ -604,15 +622,19 @@ export function tarHeader(/** @type {string} */ name, /** @type {string} */ type
   put("ustar\0" + "00", 257, 8);
   /* 校验和 = 头部全部字节（校验和字段按 8 个空格算）之和。 */
   let sum = 0;
-  for (const byte of head) sum += byte;
-  put(sum.toString(8).padStart(6, "0") + "\0 ", 148, 8);
+  for (const byte of head) {
+    sum += byte;
+  }
+  put(`${sum.toString(8).padStart(6, "0")}\0 `, 148, 8);
   return head;
 }
 
 /** 把内容补到 512 的整数倍。 */
 function pad512(/** @type {Buffer} */ content) {
   const rem = content.length % 512;
-  if (rem === 0) return content;
+  if (rem === 0) {
+    return content;
+  }
   return Buffer.concat([content, Buffer.alloc(512 - rem)]);
 }
 
@@ -625,7 +647,7 @@ function pad512(/** @type {Buffer} */ content) {
  * @param {Buffer} buf
  */
 export function tarballDigest(buf) {
-  return "sha256:" + createHash("sha256").update(buf).digest("hex");
+  return `sha256:${crypto.hash("sha256", buf, "hex")}`;
 }
 
 /* ────────────────────────── 生成与打印 ────────────────────────── */
@@ -700,10 +722,10 @@ export function main({
 } = {}) {
   if (!nodeVersion) {
     throw new Error(
-      "没有拿到精确的 Node 补丁号 —— 用 --node-version vX.Y.Z 给一个，" +
-        "或加 --online 让它从 " +
-        NODE_INDEX_URL +
-        " 现取（fetchNodePlan）。别让这里退回一个猜出来的版本。",
+      `没有拿到精确的 Node 补丁号 —— 用 --node-version vX.Y.Z 给一个，` +
+        `或加 --online 让它从 ${
+        NODE_INDEX_URL
+        } 现取（fetchNodePlan）。别让这里退回一个猜出来的版本。`,
     );
   }
   const plan = imagePlan({ nodeVersion, pnpmVersion: facts.pnpmVersion });
@@ -716,24 +738,20 @@ export function main({
   const layers = imagePlanLayersAreOrdered(plan.dockerfile);
   if (!layers.ok) {
     throw new Error(
-      "生成的 Dockerfile 层序不对（那是这个文件要买的东西被退回去的形态，它不会报错、只会慢）：\n  - " +
-        layers.problems.join("\n  - "),
+      `生成的 Dockerfile 层序不对（那是这个文件要买的东西被退回去的形态，它不会报错、只会慢）：\n  - ${
+        layers.problems.join("\n  - ")}`,
     );
   }
   /** @type {{dockerfile: string, plan: ReturnType<typeof imagePlan>, tarDigest?: string}} */
   const out = { dockerfile: plan.dockerfile, plan };
   if (write) {
     mkdirSync(path.join(root, "docker"), { recursive: true });
-    writeFileSync(
-      path.join(root, "docker", "ci-node.Dockerfile"),
-      plan.dockerfile,
-      "utf8",
-    );
+    writeFileSync(path.join(root, "docker", "ci-node.Dockerfile"), plan.dockerfile, "utf8");
     log(`[ci-image-plan] 已写出 docker/ci-node.Dockerfile（${plan.tag}）`);
   }
   if (tar) {
     const buf = buildTarStream({ root });
-    const file = path.join(root, `comfyapp-ci-${plan.tag.replace(/[:/]/g, "-")}.tar`);
+    const file = path.join(root, `comfyapp-ci-${plan.tag.replaceAll(/[:/]/g, "-")}.tar`);
     writeFileSync(file, buf);
     out.tarDigest = tarballDigest(buf);
     log(
@@ -747,7 +765,9 @@ export function main({
   log("\n# ── 3) 装进宿主机（拷出来，不挂载宿主目录）──");
   log(plan.cp);
   log("\n# ── 4) 逐件核对（与本文件构建期自证同一份清单）──");
-  for (const line of checkCommands()) log(`  ${line}`);
+  for (const line of checkCommands()) {
+    log(`  ${line}`);
+  }
   log("\n# ── 5) 钉成机器级标识（`镜像身份` 那一档读的两个变量）──");
   log(
     `docker image inspect --format "{{index .RepoDigests 0}}" ${plan.tag}` +
@@ -759,8 +779,7 @@ export function main({
 /* 只在被直接执行时跑（`tests/script-main-guard.test.ts` 守着这一形态：
  * 两侧都过 `path.resolve` 比较，别拼 `file://${argv[1]}` —— 它在 Windows 上恒不相等）。 */
 const invokedDirectly =
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename);
 
 if (invokedDirectly) {
   try {
@@ -792,7 +811,7 @@ function argValue(/** @type {string} */ flag) {
   const argv = process.argv.slice(2);
   const i = argv.indexOf(flag);
   const value = argv[i + 1];
-  return i >= 0 && value && !value.startsWith("--") ? value : undefined;
+  return i !== -1 && value && !value.startsWith("--") ? value : undefined;
 }
 
 /** 联网取一版本（`--dockerfile` 没给 `--node-version` 时唯一的来路）。 */

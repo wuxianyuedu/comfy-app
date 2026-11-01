@@ -45,9 +45,9 @@ export function WindowButton({
   onClick,
   danger,
 }: {
+  danger?: boolean;
   kind: WindowButtonKind;
   onClick: () => void;
-  danger?: boolean;
 }) {
   const label = WINDOW_BUTTON_LABELS[kind];
   const icon =
@@ -63,16 +63,16 @@ export function WindowButton({
   return (
     <Hint label={label}>
       <Button
-        variant="ghost"
         aria-label={label}
-        data-no-drag
-        onClick={onClick}
         className={cn(
           "text-ink-soft h-full w-11 rounded-none",
           danger
             ? "hover:bg-destructive hover:text-primary-foreground"
             : "hover:bg-subtle hover:text-ink-bright",
         )}
+        data-no-drag
+        onClick={onClick}
+        variant="ghost"
       >
         {icon}
       </Button>
@@ -95,9 +95,13 @@ export function useWindowMaximized(): [boolean, (next: boolean) => void] {
     let alive = true;
     void (async () => {
       const current = await isWindowMaximized();
-      if (alive) setMaximized(current);
+      if (alive) {
+        setMaximized(current);
+      }
       unlisten = await onWindowResized((next) => {
-        if (alive) setMaximized(next);
+        if (alive) {
+          setMaximized(next);
+        }
       });
     })();
     return () => {
@@ -119,30 +123,37 @@ export function useWindowMaximized(): [boolean, (next: boolean) => void] {
  * 两份 state 必然漂）—— 这里只拿到 setter。
  */
 export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      if (e.button !== 0) return;
-      if (
-        !isDragRegionTarget(
-          e.target as unknown as { closest?: (s: string) => unknown },
-        )
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) {
+      return;
+    }
+    if (
+      !isDragRegionTarget(
+        /* SAFETY: 类型断言已复核 */ e.target as unknown as {
+          closest?: (s: string) => unknown;
+        },
       )
-        return;
-      void startWindowDrag();
-    },
-    [],
-  );
+    ) {
+      return;
+    }
+    void startWindowDrag();
+  }, []);
 
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (
         !isDragRegionTarget(
-          e.target as unknown as { closest?: (s: string) => unknown },
+          /* SAFETY: 类型断言已复核 */ e.target as unknown as {
+            closest?: (s: string) => unknown;
+          },
         )
-      )
+      ) {
         return;
+      }
       void toggleMaximizeWindow().then((next) => {
-        if (next !== null) setMaximized(next);
+        if (next !== null) {
+          setMaximized(next);
+        }
       });
     },
     [setMaximized],
@@ -172,11 +183,13 @@ export function WindowControls({
         kind={resolveMaximizeButtonKind(maximized)}
         onClick={() => {
           void toggleMaximizeWindow().then((next) => {
-            if (next !== null) onMaximizedChange(next);
+            if (next !== null) {
+              onMaximizedChange(next);
+            }
           });
         }}
       />
-      <WindowButton kind="close" danger onClick={() => void closeWindow()} />
+      <WindowButton danger kind="close" onClick={() => void closeWindow()} />
     </div>
   );
 }

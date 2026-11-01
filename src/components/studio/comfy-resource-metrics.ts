@@ -16,19 +16,19 @@ import type { ComfyStatusViewModel } from "./hooks/use-comfy-readiness";
 /** 一档资源指标在视图里的身份。 */
 export type ResourceMetricKey = "smiVram" | "cudaVram" | "ram";
 
-export interface ResourceMetricDescriptor {
+export type ResourceMetricDescriptor = {
   key: ResourceMetricKey;
   /** 行首标签（两处消费点共用）。 */
   label: string;
   /** 口径说明，落进 `title`：用户必须能看出这根条数的是哪一种显存。 */
   title: string;
-}
+};
 
 /**
  * 顺序即渲染顺序（物理显存 → ComfyUI 显存 → 内存）。状态栏历史上就是这个次序，
  * 首页卡沿用，免得同一组数在两个地方以两种顺序出现。
  */
-export const RESOURCE_METRICS: readonly ResourceMetricDescriptor[] = [
+export const RESOURCE_METRICS: ReadonlyArray<ResourceMetricDescriptor> = [
   {
     key: "smiVram",
     label: "显存",
@@ -55,21 +55,23 @@ export const STALE_RESOURCE_NOTE = "ComfyUI 指标暂时读不到，显示的是
 export const WAIT_FIRST_SAMPLE_NOTE = "已连接，占用数据首帧读取中";
 
 /** 一档的完整渲染输入：描述符 + 已算好的读数。 */
-export interface VisibleResourceMetric {
-  descriptor: ResourceMetricDescriptor;
+export type VisibleResourceMetric = {
   bar: NonNullable<ComfyStatusViewModel[ResourceMetricKey]>;
-}
+  descriptor: ResourceMetricDescriptor;
+};
 /**
  * 只留下有读数的档。判据收在这里，两个消费点不再各写一遍 `smiVram && (...)`，
  * 也就不会出现「状态栏隐藏了、首页画成 0」这种半截实现。
  */
 export function selectVisibleResourceMetrics(
   view: Pick<ComfyStatusViewModel, "smiVram" | "cudaVram" | "ram">,
-): VisibleResourceMetric[] {
-  const out: VisibleResourceMetric[] = [];
+): Array<VisibleResourceMetric> {
+  const out: Array<VisibleResourceMetric> = [];
   for (const descriptor of RESOURCE_METRICS) {
     const bar = view[descriptor.key];
-    if (bar) out.push({ descriptor, bar });
+    if (bar) {
+      out.push({ descriptor, bar });
+    }
   }
   return out;
 }

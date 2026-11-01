@@ -57,7 +57,9 @@ describe("hasBrowserStorage", () => {
       expect(writeStorageItem(KEY, "x")).toBe(false);
       expect(removeStorageItem(KEY)).toBe(false);
     } finally {
-      if (original) Object.defineProperty(window, "localStorage", original);
+      if (original) {
+        Object.defineProperty(window, "localStorage", original);
+      }
     }
   });
 });
@@ -148,14 +150,11 @@ describe("JSON 键", () => {
  * 而界面上一切照常 —— 所以这里按**原文**判，而不是判「浏览器里存下了」。 */
 describe("writeCookieItem", () => {
   /** 拦下写入的原文（jsdom 真存一份是另一条用例的事）。 */
-  function captureCookieWrite(body: () => void): string[] {
-    const written: string[] = [];
+  function captureCookieWrite(body: () => void): Array<string> {
+    const written: Array<string> = [];
     const original =
       Object.getOwnPropertyDescriptor(document, "cookie") ??
-      Object.getOwnPropertyDescriptor(
-        Object.getPrototypeOf(document),
-        "cookie",
-      );
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(document), "cookie");
     Object.defineProperty(document, "cookie", {
       configurable: true,
       get: () => "",
@@ -176,9 +175,7 @@ describe("writeCookieItem", () => {
   }
 
   it("写出的是 name=编码值; path=/; max-age=<秒> 三件齐全", () => {
-    const [raw] = captureCookieWrite(() =>
-      writeCookieItem("comfyapp:sidebar", "open", 3600),
-    );
+    const [raw] = captureCookieWrite(() => writeCookieItem("comfyapp:sidebar", "open", 3600));
     expect(raw).toBe("comfyapp:sidebar=open; path=/; max-age=3600");
   });
 
@@ -186,9 +183,7 @@ describe("writeCookieItem", () => {
     /* 不编码的写法（`name=value; path=/`）在 `value = "a; path=/evil"` 时
      * 会写出一条带第二个 path 的 cookie —— 浏览器取最后一份，服务端读到的
      * 就不是本应用那条了。 */
-    const [raw] = captureCookieWrite(() =>
-      writeCookieItem("k", "a; path=/evil =x", 60),
-    );
+    const [raw] = captureCookieWrite(() => writeCookieItem("k", "a; path=/evil =x", 60));
     expect(raw).toBe("k=a%3B%20path%3D%2Fevil%20%3Dx; path=/; max-age=60");
     expect(raw?.split(";")).toHaveLength(3);
   });
@@ -209,7 +204,9 @@ describe("writeCookieItem", () => {
     try {
       expect(writeCookieItem("k", "v", 10)).toBe(false);
     } finally {
-      if (original) Object.defineProperty(globalThis, "document", original);
+      if (original) {
+        Object.defineProperty(globalThis, "document", original);
+      }
     }
   });
 
@@ -225,7 +222,9 @@ describe("writeCookieItem", () => {
     try {
       expect(writeCookieItem("k", "v", 10)).toBe(false);
     } finally {
-      if (original) Object.defineProperty(document, "cookie", original);
+      if (original) {
+        Object.defineProperty(document, "cookie", original);
+      }
     }
   });
 });

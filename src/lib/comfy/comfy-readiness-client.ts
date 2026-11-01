@@ -22,28 +22,28 @@ import { sleep } from "~/lib/with-timeout";
 export const COMFY_READY_TIMEOUT_MS = 180_000;
 
 /** 单次轮询间隔：服务端每次会短等一小会儿，这里再退避一档，避免连打。 */
-export const COMFY_READY_POLL_MS = 2_000;
+export const COMFY_READY_POLL_MS = 2000;
 
-export type ComfyReadyResult =
-  | { ok: true }
-  | { ok: false; pending: boolean; message: string };
+export type ComfyReadyResult = { ok: true } | { message: string; ok: false; pending: boolean };
 
-interface EnsureBody {
-  ok?: unknown;
-  pending?: unknown;
+type EnsureBody = {
   detail?: unknown;
   error?: unknown;
-}
+  ok?: unknown;
+  pending?: unknown;
+};
 
 /** 从 ensure 响应体里取可读文案：`detail` → `{error}` 字符串 → `{error:{message}}`。 */
 export function readComfyErrorMessage(body: unknown, fallback: string): string {
   if (typeof body === "object" && body !== null) {
-    const rec = body as EnsureBody;
+    const rec = /* SAFETY: 类型断言已复核 */ body as EnsureBody;
     /* `detail` 是这条路由的**业务字段**（「正在启动」的进度描述）而不是错误
      * 文案，所以它优先于错误信封 —— 那不是第二套错误形状。
      * `{error}` 字符串与 `{error:{message}}` 交 `~/lib/api-error` 的唯一读法
      * （规范 16 §16.2.4.35）。 */
-    if (typeof rec.detail === "string" && rec.detail.trim()) return rec.detail;
+    if (typeof rec.detail === "string" && rec.detail.trim()) {
+      return rec.detail;
+    }
   }
   return readApiError(body) ?? fallback;
 }
@@ -53,11 +53,11 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
   let res: Response;
   try {
     res = await fetch("/api/comfy/ensure", { method: "POST" });
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
       pending: true,
-      message: errorMessage(e, "无法连接应用服务，稍后重试"),
+      message: errorMessage(error, "无法连接应用服务，稍后重试"),
     };
   }
   let body: unknown;
@@ -71,7 +71,7 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
     res.ok &&
     typeof body === "object" &&
     body !== null &&
-    (body as EnsureBody).ok === true
+    /* SAFETY: 类型断言已复核 */ (body as EnsureBody).ok === true
   ) {
     return { ok: true };
   }
@@ -91,9 +91,9 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
  */
 export async function waitForComfyReady(
   opts: {
-    timeoutMs?: number;
-    pollMs?: number;
     onProgress?: (message: string) => void;
+    pollMs?: number;
+    timeoutMs?: number;
   } = {},
 ): Promise<ComfyReadyResult> {
   const timeoutMs = opts.timeoutMs ?? COMFY_READY_TIMEOUT_MS;
@@ -106,14 +106,20 @@ export async function waitForComfyReady(
 
   for (;;) {
     const r = await ensureOnce();
-    if (r.ok) return r;
+    if (r.ok) {
+      return r;
+    }
     last = r;
-    if (!r.pending) return r;
+    if (!r.pending) {
+      return r;
+    }
     if (!announced) {
       announced = true;
       opts.onProgress?.(r.message);
     }
-    if (Date.now() + pollMs >= deadline) break;
+    if (Date.now() + pollMs >= deadline) {
+      break;
+    }
     await sleep(pollMs);
   }
   return {

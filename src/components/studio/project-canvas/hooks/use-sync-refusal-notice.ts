@@ -36,7 +36,7 @@ const REFUSAL_TOAST_MS = 12_000;
 export function useSyncRefusalNotice(): void {
   const toast = useToast();
   /** 已经提示过的「画布 + 原因」，用于去重。 */
-  const shown = useRef<string[]>([]);
+  const shown = useRef<Array<string>>([]);
 
   useEffect(() => {
     const flush = () => {
@@ -45,7 +45,9 @@ export function useSyncRefusalNotice(): void {
          * 拼出来的键会碰撞（`a|b` 与 `a|`+`b` 同形）——那是「两条不同拒收
          * 只提示一条」这种很难复现的表现。 */
         const key = JSON.stringify([notice.projectId, notice.detail]);
-        if (shown.current.includes(key)) continue;
+        if (shown.current.includes(key)) {
+          continue;
+        }
         shown.current = [...shown.current, key];
         toast.error(
           `画布「${notice.projectName}」没有同步到服务端`,

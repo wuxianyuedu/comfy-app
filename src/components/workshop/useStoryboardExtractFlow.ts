@@ -25,10 +25,7 @@ import {
   parseShotDrafts,
 } from "~/lib/workshop/script-parse";
 import type { ShotEntry } from "~/lib/workshop/script-parse";
-import {
-  parseChannelOption,
-  type ExtractChannel,
-} from "~/lib/workshop/channel-options";
+import { parseChannelOption, type ExtractChannel } from "~/lib/workshop/channel-options";
 import {
   useExtractSession,
   type ExtractSession,
@@ -36,10 +33,7 @@ import {
 } from "~/components/workshop/hooks/use-workshop-pipeline";
 import { streamChat } from "~/lib/llm/browser";
 import type { LLMConfigView } from "~/lib/llm/types";
-import {
-  formatRequestMessages,
-  makeExtractLog,
-} from "~/lib/workshop/extraction-log";
+import { formatRequestMessages, makeExtractLog } from "~/lib/workshop/extraction-log";
 import { errorMessage } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
 
@@ -54,16 +48,16 @@ function channelProvider(channel: ExtractChannel): "local" | "remote" {
 }
 
 export function useStoryboardExtractFlow(input: {
-  shots: Shot[];
-  scenes: Scene[];
-  characters: Character[];
-  styles: StyleRef[];
-  onShotsChange: (s: Shot[]) => void;
-  onCharactersChange?: (c: Character[]) => void;
-  scriptMarkdown?: string;
-  extract?: { session: ExtractSession; actions: ExtractSessionActions };
+  characters: Array<Character>;
   config: LLMConfigView | null;
+  extract?: { actions: ExtractSessionActions; session: ExtractSession };
+  onCharactersChange?: (c: Array<Character>) => void;
+  onShotsChange: (s: Array<Shot>) => void;
   openSettings: () => void;
+  scenes: Array<Scene>;
+  scriptMarkdown?: string;
+  shots: Array<Shot>;
+  styles: Array<StyleRef>;
 }) {
   const {
     shots,
@@ -110,18 +104,11 @@ export function useStoryboardExtractFlow(input: {
   };
 
   const hasScript = !!scriptMarkdown?.trim();
-  const knownNames = characters
-    .map((character) => character.name)
-    .filter(Boolean);
+  const knownNames = characters.map((character) => character.name).filter(Boolean);
 
   /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */
-  function appendShots(entries: ShotEntry[]) {
-    const built = buildShotsFromEntries(
-      entries,
-      shots.length,
-      scenes,
-      characters,
-    );
+  function appendShots(entries: Array<ShotEntry>) {
+    const built = buildShotsFromEntries(entries, shots.length, scenes, characters);
     onShotsChange([...shots, ...built]);
     setExtractState({ status: `已提取 ${built.length} 个镜头` });
   }
@@ -178,14 +165,12 @@ export function useStoryboardExtractFlow(input: {
         });
         return;
       }
-      appendLog(
-        makeExtractLog("result", `解析出 ${entries.length} 个分镜，准备写入`),
-      );
+      appendLog(makeExtractLog("result", `解析出 ${entries.length} 个分镜，准备写入`));
       appendShots(entries);
-    } catch (e: unknown) {
-      appendLog(makeExtractLog("error", errorMessage(e, "提取失败")));
+    } catch (error: unknown) {
+      appendLog(makeExtractLog("error", errorMessage(error, "提取失败")));
       setExtractState({
-        error: `${errorMessage(e, "提取失败")} 可重试,或调整脚本后重跑。`,
+        error: `${errorMessage(error, "提取失败")} 可重试,或调整脚本后重跑。`,
       });
     } finally {
       setExtractState({ busy: false });
@@ -200,18 +185,18 @@ export function useStoryboardExtractFlow(input: {
        * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
       const text = await readFileAsText(file);
       const trimmed = text.trim();
-      if (!trimmed) throw new Error("文件内容为空");
+      if (!trimmed) {
+        throw new Error("文件内容为空");
+      }
       if (looksLikeJson(trimmed)) {
-        let entries: ShotEntry[];
+        let entries: Array<ShotEntry>;
         try {
           entries = parseExtractedShots(trimmed);
         } catch {
           // 非分镜 JSON:尝试按角色卡文件导入(写入角色列表)
           const cards = parseImportedCharacterCards(trimmed);
           if (!onCharactersChange) {
-            throw new Error(
-              "这是角色卡文件,但当前页面未接入角色写入,请到「角色卡」阶段导入",
-            );
+            throw new Error("这是角色卡文件,但当前页面未接入角色写入,请到「角色卡」阶段导入");
           }
           const res = mergeCharacterDrafts(characters, cards, styles);
           if (res.added === 0) {
@@ -224,22 +209,18 @@ export function useStoryboardExtractFlow(input: {
           return;
         }
         if (entries.length === 0) {
-          throw new Error(
-            "JSON 中未解析出任何镜头(需含 sceneHeading 或 description 字段)",
-          );
+          throw new Error("JSON 中未解析出任何镜头(需含 sceneHeading 或 description 字段)");
         }
         appendShots(entries);
         return;
       }
       const drafts = parseShotDrafts(trimmed, knownNames);
       if (drafts.length === 0) {
-        throw new Error(
-          "未在文件中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行",
-        );
+        throw new Error("未在文件中找到场景标题(如「1-1 场景 外 地点(时间)」)或 Δ动作 / Vx台词 行");
       }
       appendShots(drafts.map(draftToShotEntry));
-    } catch (e: unknown) {
-      setExtractState({ error: errorMessage(e, "导入失败") });
+    } catch (error: unknown) {
+      setExtractState({ error: errorMessage(error, "导入失败") });
     } finally {
       setExtractState({ busy: false });
     }

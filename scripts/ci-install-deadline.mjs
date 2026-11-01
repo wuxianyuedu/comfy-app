@@ -122,22 +122,26 @@ export function runInstallWithBudget(io) {
     /** @type {ReturnType<typeof setInterval> | null} */
     let heartbeat = null;
 
-    const finish = (
-      /** @type {{code: number, error: string | null}} */ out,
-    ) => {
-      if (settled) return;
+    const finish = (/** @type {{code: number, error: string | null}} */ out) => {
+      if (settled) {
+        return;
+      }
       settled = true;
-      if (timer) clearTimeout(timer);
-      if (heartbeat) clearInterval(heartbeat);
+      if (timer) {
+        clearTimeout(timer);
+      }
+      if (heartbeat) {
+        clearInterval(heartbeat);
+      }
       resolve({ ...out, timedOut, elapsedMs: now() - started });
     };
 
     let child;
     try {
       child = spawnImpl(command, args, { cwd, stdio: "inherit" });
-    } catch (err) {
+    } catch (error) {
       /* 「起不来」与「跑完但非零」是两档（同 `spawnSettled` 的契约）：前者 stderr 常常是空的。 */
-      finish({ code: UNDECIDED_EXIT, error: messageOf(err) });
+      finish({ code: UNDECIDED_EXIT, error: messageOf(error) });
       return;
     }
     child.on("error", (err) => {
@@ -146,7 +150,9 @@ export function runInstallWithBudget(io) {
     child.on("close", (code, signal) => {
       /* 自己的定时器杀掉的：`code` 是 null ⇒ 那一档已经在超时分支里定过性了，
        * 这里只负责不让它被读成「跑完但非零」。 */
-      if (timedOut) return;
+      if (timedOut) {
+        return;
+      }
       finish({
         code: typeof code === "number" ? code : UNDECIDED_EXIT,
         error: signal ? `被信号 ${signal} 结束` : null,
@@ -172,13 +178,15 @@ export function runInstallWithBudget(io) {
       setTimeout(() => finish({ code: UNDECIDED_EXIT, error: null }), 1000);
     }, budgetMs);
     /* 定时器不该独自把宿主吊在这里：真正的收场由 close / 预算那支决定。 */
-    if (typeof timer.unref === "function") timer.unref();
+    if (typeof timer.unref === "function") {
+      timer.unref();
+    }
 
     heartbeat = setInterval(() => {
-      write(
-        `[ci-install-deps] …已跑 ${secs(now() - started)}（pnpm 尚未收场）\n`,
-      );
+      write(`[ci-install-deps] …已跑 ${secs(now() - started)}（pnpm 尚未收场）\n`);
     }, heartbeatMs);
-    if (typeof heartbeat.unref === "function") heartbeat.unref();
+    if (typeof heartbeat.unref === "function") {
+      heartbeat.unref();
+    }
   });
 }

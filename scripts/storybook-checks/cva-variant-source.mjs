@@ -87,8 +87,7 @@ function variantsAccessBase(node, cvaNames) {
    * @param {ts.Expression} expr
    * @returns {boolean}
    */
-  const isCandidate = (expr) =>
-    ts.isIdentifier(expr) && cvaNames.has(expr.text);
+  const isCandidate = (expr) => ts.isIdentifier(expr) && cvaNames.has(expr.text);
   if (
     ts.isPropertyAccessExpression(node) &&
     node.name.text === "variants" &&
@@ -118,10 +117,14 @@ export function findCvaVariantAccess(source) {
   const cvaNames = new Set([...cvaBindings(source), ...importedNames(source)]);
   /** @type {{ name: string, line: number, text: string }[]} */
   const hits = [];
-  if (cvaNames.size === 0) return hits;
+  if (cvaNames.size === 0) {
+    return hits;
+  }
   walk(source, (node) => {
     const base = variantsAccessBase(node, cvaNames);
-    if (base === null) return;
+    if (base === null) {
+      return;
+    }
     const pos = source.getLineAndCharacterOfPosition(base.getStart(source));
     hits.push({
       name: base.text,
@@ -150,7 +153,9 @@ export function derivedAxisNames(source) {
       return;
     }
     for (const arg of node.type.typeArguments) {
-      if (!ts.isIndexedAccessTypeNode(arg)) continue;
+      if (!ts.isIndexedAccessTypeNode(arg)) {
+        continue;
+      }
       const key = arg.indexType;
       if (ts.isLiteralTypeNode(key) && ts.isStringLiteral(key.literal)) {
         byAlias.set(node.name.text, key.literal.text);
@@ -182,11 +187,10 @@ export function literalArray(name, source) {
     ) {
       return;
     }
-    if (node.initializer === undefined) found = [];
-    else if (ts.isArrayLiteralExpression(node.initializer)) {
-      found = node.initializer.elements.map((el) =>
-        el.getText(source).replace(/^["']|["']$/g, ""),
-      );
+    if (node.initializer === undefined) {
+      found = [];
+    } else if (ts.isArrayLiteralExpression(node.initializer)) {
+      found = node.initializer.elements.map((el) => el.getText(source).replaceAll(/^["']|["']$/g, ""));
     }
   });
   return found;
@@ -210,10 +214,7 @@ export function controlOptionsByAxis(source) {
    */
   const readOptions = (obj) => {
     for (const prop of obj.properties) {
-      if (
-        !ts.isPropertyAssignment(prop) ||
-        !ts.isObjectLiteralExpression(prop.initializer)
-      ) {
+      if (!ts.isPropertyAssignment(prop) || !ts.isObjectLiteralExpression(prop.initializer)) {
         continue;
       }
       const axisName = unquote(prop.name.getText(source));
@@ -229,13 +230,11 @@ export function controlOptionsByAxis(source) {
     }
   };
   walk(source, (node) => {
-    if (
-      ts.isPropertyAssignment(node) &&
-      node.name.getText(source) === "argTypes"
-    ) {
+    if (ts.isPropertyAssignment(node) && node.name.getText(source) === "argTypes") {
       const init = node.initializer;
-      if (ts.isObjectLiteralExpression(init)) readOptions(init);
-      else if (
+      if (ts.isObjectLiteralExpression(init)) {
+        readOptions(init);
+      } else if (
         (ts.isAsExpression(init) || ts.isSatisfiesExpression(init)) &&
         ts.isObjectLiteralExpression(init.expression)
       ) {
@@ -252,7 +251,7 @@ export function controlOptionsByAxis(source) {
  * @returns {string}
  */
 function unquote(text) {
-  return text.replace(/^["']|["']$/g, "");
+  return text.replaceAll(/^["']|["']$/g, "");
 }
 
 /**
@@ -288,15 +287,15 @@ export function cvaVariantTables(source) {
     /* 绑定名：`const X = cva(…)` 取 X；否则退回「cva 的起始行」当键。 */
     const parent = node.parent;
     const binding =
-      parent !== undefined &&
-      ts.isVariableDeclaration(parent) &&
-      ts.isIdentifier(parent.name)
+      parent !== undefined && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)
         ? parent.name.text
         : `#${String(source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1)}`;
     /** @type {Map<string, string[]>} */
     const axes = out.get(binding) ?? new Map();
     for (const arg of node.arguments) {
-      if (!ts.isObjectLiteralExpression(arg)) continue;
+      if (!ts.isObjectLiteralExpression(arg)) {
+        continue;
+      }
       for (const prop of arg.properties) {
         if (
           !ts.isPropertyAssignment(prop) ||
@@ -306,13 +305,17 @@ export function cvaVariantTables(source) {
           continue;
         }
         for (const axis of prop.initializer.properties) {
-          if (!ts.isPropertyAssignment(axis)) continue;
+          if (!ts.isPropertyAssignment(axis)) {
+            continue;
+          }
           const name = unquote(axis.name.getText(source));
           /** @type {string[]} */
           const keys = [];
           if (ts.isObjectLiteralExpression(axis.initializer)) {
             for (const key of axis.initializer.properties) {
-              if (key.name === undefined) continue;
+              if (key.name === undefined) {
+                continue;
+              }
               keys.push(unquote(key.name.getText(source)));
             }
           }
@@ -339,7 +342,9 @@ export function cvaVariantAxes(source) {
   /** @type {Map<string, string>} */
   const axes = new Map();
   for (const table of cvaVariantTables(source).values()) {
-    for (const name of table.keys()) axes.set(name, name);
+    for (const name of table.keys()) {
+      axes.set(name, name);
+    }
   }
   return axes;
 }
@@ -360,7 +365,9 @@ export function cvaVariantKeysByBinding(source, axis) {
   const out = new Map();
   for (const [binding, table] of cvaVariantTables(source)) {
     const keys = table.get(axis);
-    if (keys !== undefined) out.set(binding, keys);
+    if (keys !== undefined) {
+      out.set(binding, keys);
+    }
   }
   return out;
 }

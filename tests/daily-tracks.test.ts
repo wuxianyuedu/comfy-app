@@ -18,13 +18,7 @@
  *   ④ **接线在位**：各档的跑法脚本走同一份记账内核，钩子那一步真判了它们。
  */
 import { execFileSync } from "node:child_process";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -50,11 +44,7 @@ import {
   suitePhaseTax,
   toTransportSafePath,
 } from "../scripts/full-suite-run.mjs";
-import {
-  abortedAdvice,
-  classifyOutcome,
-  hostUnsafeArgs,
-} from "../scripts/launcher-core/shell.mjs";
+import { abortedAdvice, classifyOutcome, hostUnsafeArgs } from "../scripts/launcher-core/shell.mjs";
 import {
   FRESHNESS_TRACKS,
   dirtiesTrack,
@@ -64,11 +54,7 @@ import {
   gitUser,
   gitUserCandidates,
 } from "../scripts/freshness-ledger.mjs";
-import {
-  dirtySinceToday,
-  runGate,
-  trackScopes,
-} from "../scripts/freshness-gate.mjs";
+import { dirtySinceToday, runGate, trackScopes } from "../scripts/freshness-gate.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -97,15 +83,15 @@ const SAME_DAY = new Date("2026-10-09T06:00:00.000Z");
  * （这一族是本仓库的老对手：判据与平台/机器绑定、在别处测不出来。）
  */
 const TODAY_AT = SAME_DAY.toISOString();
-const TWO_DAYS_AGO = new Date(
-  SAME_DAY.getTime() - 48 * 3_600_000,
-).toISOString();
+const TWO_DAYS_AGO = new Date(SAME_DAY.getTime() - 48 * 3_600_000).toISOString();
 
 /** 夹具用的临时仓库（每条用例自建、跑完删掉，不动本仓库的提交历史）。 */
 let workdir = "";
 
 afterEach(() => {
-  if (workdir) rmSync(workdir, { recursive: true, force: true });
+  if (workdir) {
+    rmSync(workdir, { recursive: true, force: true });
+  }
   workdir = "";
 });
 
@@ -130,11 +116,7 @@ function gate(kind: string, ledger: Record<string, unknown>, extra = {}) {
 }
 
 /** 按**当前登记的形状**判一档（真实 `ciStage` ⇒ 本地那一层不该再出声）。 */
-function asRegistered(
-  kind: string,
-  ledger: Record<string, unknown>,
-  extra = {},
-) {
+function asRegistered(kind: string, ledger: Record<string, unknown>, extra = {}) {
   return runGate({
     ledger,
     kind,
@@ -160,17 +142,11 @@ function localTrack(kind: string) {
 
 describe("三档的登记形状（§11.8）", () => {
   it("三档都在，且每一档的六个值都写全", () => {
-    expect(Object.keys(FRESHNESS_TRACKS).sort()).toEqual([
-      "artifact",
-      "e2e",
-      "full",
-    ]);
+    expect(Object.keys(FRESHNESS_TRACKS).sort()).toEqual(["artifact", "e2e", "full"]);
     for (const [kind, track] of Object.entries(FRESHNESS_TRACKS)) {
       // 账文件 / 键 / 名字 / 命令是每条账的存在意义，缺一个这条记录就退化成一句空话。
-      for (const field of ["ledger", "key", "label", "run"] as const) {
-        expect(String(track[field]).length, `${kind}.${field}`).toBeGreaterThan(
-          0,
-        );
+      for (const field of /* SAFETY: 类型断言已复核 */ ["ledger", "key", "label", "run"] as const) {
+        expect(String(track[field]).length, `${kind}.${field}`).toBeGreaterThan(0);
       }
       expect(track.ledger.endsWith(".json"), `${kind}.ledger`).toBe(true);
     }
@@ -194,15 +170,18 @@ describe("三档的登记形状（§11.8）", () => {
         ["pr", "master"],
         `${kind}.subject 写成了「${subject}」—— 只认 pr / master（主体答的是「这一次是谁在判」）`,
       ).toContain(subject);
-      if (subject !== "master") continue;
+      if (subject !== "master") {
+        continue;
+      }
       expect(
-        String(track.ciStage ?? "").trim().startsWith("每日"),
+        String(track.ciStage ?? "")
+          .trim()
+          .startsWith("每日"),
         `${kind}（主体=master）的执行者 ${track.ciStage} 不在每日档上 —— 主干的账只能由` +
           "每日那一跑刷新与判读",
       ).toBe(true);
     }
   });
-
 
   it("三份账**不共用一个文件**，三个键也互不相同", () => {
     // 共用 = 跑 A 档的绿把 B 档的自证覆盖掉，而账面上完全正常（同一个日期、同一个人）。
@@ -307,8 +286,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
      * 现在它把同一份判决作为**待办**打出来（措辞是「欠」不是「✗」），退出码仍为 0：
      * 阻断的那一份在钩子里，两个读者各有各的出口（§13.5.12：别让一条读数线变成必经之路）。 */
     const src = readText("scripts/freshness-gate.mjs");
-    const ledgerBranch =
-      /if \(ledgerOnly\) \{[\s\S]*?\n {4}\}/.exec(src)?.[0] ?? "";
+    const ledgerBranch = /if \(ledgerOnly\) \{[\s\S]*?\n {4}\}/.exec(src)?.[0] ?? "";
     expect(ledgerBranch, "读不出 --ledger 那一支").not.toBe("");
     // ① 判决要进去（`result.exitCode` 或 `problems` 被读出来才算「欠不欠」）
     expect(ledgerBranch).toContain("result.exitCode");
@@ -331,9 +309,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
       verifiedAt: "2026-10-08T00:30:00.000Z",
     };
     // 今天没动过这一档的面 ⇒ 1 天前的自证在 7 天宽限内，放行。
-    expect(gate("e2e", { e2e: yesterday }, { dirtySince: null }).exitCode).toBe(
-      0,
-    );
+    expect(gate("e2e", { e2e: yesterday }, { dirtySince: null }).exitCode).toBe(0);
     // 今天动过面而账停在改动之前 ⇒ 拦，且话说清是哪一面。
     const owed = gate(
       "e2e",
@@ -408,10 +384,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
       now: SAME_DAY,
       dirtySince: new Date(0),
     });
-    expect(
-      problem,
-      "空面档被 dirtySince 免掉了 —— 日历日那条判据已经失效",
-    ).not.toBeNull();
+    expect(problem, "空面档被 dirtySince 免掉了 —— 日历日那条判据已经失效").not.toBeNull();
     expect(problem).toContain("今天还没有自证");
     // 同一份 at / 同一个 dirtySince，换成吃面的档就走宽限那一支（放行）。
     expect(
@@ -435,9 +408,7 @@ describe("「改了就当天跑」：dirty 档的判决（§11.8 / §13.5.4）",
         dirtySince: null,
       }),
     ).toBeNull();
-    expect(
-      freshnessVerdict({ track, at, now: SAME_DAY, dirtySince: null }),
-    ).toBeNull();
+    expect(freshnessVerdict({ track, at, now: SAME_DAY, dirtySince: null })).toBeNull();
     expect(
       freshnessVerdict({
         track,
@@ -534,9 +505,7 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
       mode: "run",
       reason: null,
     });
-    expect(
-      parseLedgerFlag(["--dirty", "本次只改文档，不动产物链"], "--dirty"),
-    ).toEqual({
+    expect(parseLedgerFlag(["--dirty", "本次只改文档，不动产物链"], "--dirty")).toEqual({
       mode: "dirty",
       reason: "本次只改文档，不动产物链",
     });
@@ -544,9 +513,7 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
       expect(parseLedgerFlag(["--skip", bad], "--skip").reason).toBe(null);
     }
     // 两个开关**互不串档**：给了 `--dirty` 时 `--skip` 仍是「没给」。
-    expect(
-      parseLedgerFlag(["--dirty", "本次只改文档，不动产物链"], "--skip").mode,
-    ).toBe("run");
+    expect(parseLedgerFlag(["--dirty", "本次只改文档，不动产物链"], "--skip").mode).toBe("run");
   });
 
   it("账里的两种「不跑」互不等于：豁免与「不吃这一档」各占一栏", () => {
@@ -680,9 +647,7 @@ describe("两条出路：豁免与非输入面（§11.8 豁免不是绕过）", 
       },
     );
     expect(dirtied.exitCode).toBe(1);
-    expect(dirtied.problems.join("\n")).toContain(
-      "今天的提交动过这一档的输入面",
-    );
+    expect(dirtied.problems.join("\n")).toContain("今天的提交动过这一档的输入面");
   });
 });
 
@@ -706,7 +671,7 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
     // 另拼一遍 = 两处各写一条产物链，漏掉「剥私有输入」那一步的表现是构建绿了、
     // 产物里那把刀却没跑（硬规则 17 判过的形态）。
     expect(artifactPlan().args).toEqual(["run", "build"]);
-    const pkg = JSON.parse(readText("package.json")) as {
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(readText("package.json")) as {
       scripts?: Record<string, string>;
     };
     const build = pkg.scripts?.build ?? "";
@@ -736,12 +701,8 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
     for (const record of [suiteRecords, artifactRecords]) {
       expect(record({ exitCode: 0, dryRun: false })).toBe(true);
       expect(record({ exitCode: 0, dryRun: false, extra: [] })).toBe(true);
-      expect(record({ exitCode: 0, dryRun: false, extra: ["--help"] })).toBe(
-        false,
-      );
-      expect(
-        record({ exitCode: 0, dryRun: false, extra: ["tests/x.test.ts"] }),
-      ).toBe(false);
+      expect(record({ exitCode: 0, dryRun: false, extra: ["--help"] })).toBe(false);
+      expect(record({ exitCode: 0, dryRun: false, extra: ["tests/x.test.ts"] })).toBe(false);
       /* 不带 `extra` 的旧形态保持原语义（默认整档）。 */
       expect(record({ exitCode: 0, dryRun: false })).toBe(true);
     }
@@ -758,12 +719,8 @@ describe("跑法各自的命令核（§12.12：同形而不同命令）", () => 
       "scripts/artifact-run.mjs",
     ]) {
       const text = readText(rel);
-      expect(text, `${rel} 没接上三档共用的话术`).toContain(
-        "notWholeTrackNotice",
-      );
-      expect(text, `${rel} 的话术分支没先判退出码 0`).toContain(
-        "exitCode === 0 && !shouldRecord(",
-      );
+      expect(text, `${rel} 没接上三档共用的话术`).toContain("notWholeTrackNotice");
+      expect(text, `${rel} 的话术分支没先判退出码 0`).toContain("exitCode === 0 && !shouldRecord(");
     }
   });
 });
@@ -775,15 +732,11 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
    * 也就是「这批用例红了」；而下一个人据此去查用例，查到的是空气。 */
   it("`classifyOutcome`：没量到（起不来 / 被砍）与量到但非零，是两件事", () => {
     // 被预算砍：`spawnSync` 给 error=ETIMEDOUT、status=null
-    expect(
-      classifyOutcome({ status: null, error: { code: "ETIMEDOUT" } }),
-    ).toBe("aborted");
+    expect(classifyOutcome({ status: null, error: { code: "ETIMEDOUT" } })).toBe("aborted");
     // 被信号打死：error 不在、status 也是 null
     expect(classifyOutcome({ status: null, error: null })).toBe("aborted");
     // 命令压根没起来
-    expect(classifyOutcome({ status: null, error: { code: "ENOENT" } })).toBe(
-      "aborted",
-    );
+    expect(classifyOutcome({ status: null, error: { code: "ENOENT" } })).toBe("aborted");
     // 跑完了、非零 —— 这一个才是「判据红」
     expect(classifyOutcome({ status: 1, error: null })).toBe("ran");
     expect(classifyOutcome({ status: 0, error: null })).toBe("ran");
@@ -792,15 +745,11 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
   it("本档显式给了预算，且大于「实测 10 分钟量级」的并发余量", () => {
     expect(FULL_SUITE_TIMEOUT_MS).toBeGreaterThan(600_000);
     // 读的是**实际传给子进程**的那个数（不是只在常量上写一遍）。
-    expect(readText("scripts/full-suite-run.mjs")).toContain(
-      "timeoutMs: FULL_SUITE_TIMEOUT_MS",
-    );
+    expect(readText("scripts/full-suite-run.mjs")).toContain("timeoutMs: FULL_SUITE_TIMEOUT_MS");
   });
 
   it("产物档走同一条分流（同源同病：缺省 600_000）", () => {
-    expect(readText("scripts/artifact-run.mjs")).toContain(
-      "timeoutMs: ARTIFACT_TIMEOUT_MS",
-    );
+    expect(readText("scripts/artifact-run.mjs")).toContain("timeoutMs: ARTIFACT_TIMEOUT_MS");
     expect(readText("scripts/artifact-run.mjs")).toContain("classifyOutcome");
   });
 
@@ -819,27 +768,21 @@ describe("墙钟预算：**测量没发生**与「判据红」必须分得开（
 
 describe("接线在位（§13.5.12：判据要有人跑）", () => {
   it("`package.json` 的入口真的走这层通道（否则记账这一步没有执行者）", () => {
-    const pkg = JSON.parse(readText("package.json")) as {
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(readText("package.json")) as {
       scripts?: Record<string, string>;
     };
     // 按**入口**判而不是按命令长得像什么：裸 `vitest run --coverage` 也能跑出同样的用例，
     // 只有走这一层才会记账 —— 而「账上有没有日期」正是这一档存在的全部意义。
-    expect(pkg.scripts?.["test:coverage:tracked"]).toContain(
-      "scripts/full-suite-run.mjs",
-    );
-    expect(pkg.scripts?.["build:tracked"]).toContain(
-      "scripts/artifact-run.mjs",
-    );
+    expect(pkg.scripts?.["test:coverage:tracked"]).toContain("scripts/full-suite-run.mjs");
+    expect(pkg.scripts?.["build:tracked"]).toContain("scripts/artifact-run.mjs");
     expect(pkg.scripts?.["test:coverage:dry"]).toContain("--dry-run");
     expect(pkg.scripts?.["build:tracked:dry"]).toContain("--dry-run");
   });
 
   it("钩子那一步真判了这几档（标签要点名 e2e，否则红出来会读成别人的事）", () => {
-    const steps = [
-      ...readText(".githooks/pre-commit").matchAll(
-        /^ {2}run "([^"]+)" (.+)$/gm,
-      ),
-    ].map((m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }));
+    const steps = [...readText(".githooks/pre-commit").matchAll(/^ {2}run "([^"]+)" (.+)$/gm)].map(
+      (m) => ({ label: m[1] ?? "", cmd: m[2] ?? "" }),
+    );
     const hit = steps.find((s) => s.cmd.includes("scripts/freshness-gate.mjs"));
     expect(hit?.cmd).toBe("node scripts/freshness-gate.mjs");
     expect(hit?.label).toContain("e2e");
@@ -866,10 +809,7 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
     // 各写一套时会出现「这一档记的是环境变量、那一档记的是 git config」，
     // 于是同一个人的几条记录名字不一样。
     expect(typeof gitUser("full")).toBe("string");
-    for (const rel of [
-      "scripts/full-suite-run.mjs",
-      "scripts/artifact-run.mjs",
-    ]) {
+    for (const rel of ["scripts/full-suite-run.mjs", "scripts/artifact-run.mjs"]) {
       expect(readText(rel), rel).toContain("gitUser");
     }
   });
@@ -889,21 +829,18 @@ describe("接线在位（§13.5.12：判据要有人跑）", () => {
       process.env.GIT_AUTHOR_NAME = "显式身份";
       process.env.CNB_BUILD_USER_NICKNAME = "月读";
       process.env.CNB_BUILD_USER = "cnb.dQh7kaCfAPA";
-      expect(gitUserCandidates().map((v) => String(v ?? "").trim())[0]).toBe(
-        "显式身份",
-      );
+      expect(gitUserCandidates().map((v) => String(v ?? "").trim())[0]).toBe("显式身份");
       delete process.env.GIT_AUTHOR_NAME;
       expect(gitUser(SUITE_TRACK.key)).toBe("月读");
       delete process.env.CNB_BUILD_USER_NICKNAME;
       expect(gitUser(SUITE_TRACK.key)).toBe("cnb.dQh7kaCfAPA");
     } finally {
-      for (const k of [
-        "GIT_AUTHOR_NAME",
-        "CNB_BUILD_USER_NICKNAME",
-        "CNB_BUILD_USER",
-      ]) {
-        if (saved[k] === undefined) delete process.env[k];
-        else process.env[k] = saved[k];
+      for (const k of ["GIT_AUTHOR_NAME", "CNB_BUILD_USER_NICKNAME", "CNB_BUILD_USER"]) {
+        if (saved[k] === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = saved[k];
+        }
       }
     }
     /* 兜底那一格仍要能答出一个说得清来路的字符串（环境全空时不许回空串 ——
@@ -934,7 +871,7 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
      * 拿它当夹具的用例会在某个平常的提交上自己变红。 */
     const dir = mkdtempSync(join(tmpdir(), "dirty-since-"));
     workdir = dir;
-    const git = (...args: string[]) =>
+    const git = (...args: Array<string>) =>
       execFileSync("git", args, { cwd: dir, encoding: "utf8" });
     git("init", "-q", ".");
     git("config", "user.email", "t@example.com");
@@ -956,32 +893,37 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
     /* 状态机与 `dirtySinceToday` 逐字同源（那条函数读的是真仓库，没法在夹具上跑）。
      * 复刻它的唯一目的是让「空行怎么处理」这条边界**可被执行** —— 它是这段实现里
      * 唯一出错不会红的地方。 */
-    const sinceFor = (prefixes: string[]) => {
+    const sinceFor = (prefixes: Array<string>) => {
       let earliest: Date | null = null;
       let stamp: string | null = null;
       let hit = false;
       const flush = () => {
         if (hit && stamp) {
           const at = new Date(stamp);
-          if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest))
+          if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest)) {
             earliest = at;
+          }
         }
         hit = false;
       };
       for (const line of out.split("\n")) {
         const t = line.trim();
-        if (!t) continue;
+        if (!t) {
+          continue;
+        }
         if (/^\d{4}-\d{2}-\d{2}T/.test(t)) {
           flush();
           stamp = t;
           continue;
         }
-        if (prefixes.some((p) => t.startsWith(p))) hit = true;
+        if (prefixes.some((p) => t.startsWith(p))) {
+          hit = true;
+        }
       }
       flush();
       /* `earliest` 在闭包 `flush()` 里被赋值，TS 的控制流分析看不进去 ——
        * 不显式声明的话 `return` 会被收窄成初值 `null`，调用方的 `.toISOString()` 报 `never`。 */
-      return earliest as Date | null;
+      return /* SAFETY: 类型断言已复核 */ earliest as Date | null;
     };
     /* 两个提交各自命中自己那一行、各自解出一个时刻。
      * ⚠️ **不许拿「两者相等」当判据**：夹具是背靠背两次提交，而 `%cI` 的精度是
@@ -1039,18 +981,12 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
 
   it("读数走 planRun 的第三参，不进 extra —— 否则每一次跑都绿而不记账", () => {
     const withJunit = suitePlan([], 4, IN_REPO);
-    expect(withJunit.args.slice(0, 3)).toEqual([
-      "run",
-      "test:coverage",
-      "--maxWorkers=4",
-    ]);
+    expect(withJunit.args.slice(0, 3)).toEqual(["run", "test:coverage", "--maxWorkers=4"]);
     /* `--reporter=default` 必须在：只给 junit 会把人类可读的输出整个换掉，
      * 而真红那一屏是唯一能读的东西。 */
     expect(withJunit.args).toContain("--reporter=default");
     expect(withJunit.args).toContain("--reporter=junit");
-    expect(withJunit.args).toContain(
-      "--outputFile.junit=node_modules/.cache/x.xml",
-    );
+    expect(withJunit.args).toContain("--outputFile.junit=node_modules/.cache/x.xml");
     // 人给的透传参数仍然排在最后（不被读数参数挤掉）。
     expect(suitePlan(["--foo"], 4, IN_REPO).args.at(-1)).toBe("--foo");
     // 记账判定只看 `extra`：加了读数参数仍然算整档。
@@ -1074,25 +1010,19 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
      * 于是它先被当成相对路径、撞上的是**冒号**那一条（两条话术各指各的下一动作，
      * 这点对得正好）。在 Windows 上同一行会走到「仓库外」。判据原先只认前者 ⇒
      * 整条用例在非 win32 宿主上必红（本地钩子的组 C 就是这么暴露的）。 */
-    expect(() => toTransportSafePath("C:\\WINDOWS\\TEMP\\x.xml")).toThrow(
+    expect(() => toTransportSafePath(String.raw`C:\WINDOWS\TEMP\x.xml`)).toThrow(
       process.platform === "win32" ? /仓库内/ : /冒号/,
     );
-    expect(
-      () => suitePlan([], 4, path.resolve(ROOT, "..", "outside.xml")).args,
-    ).toThrow(/仓库内/);
+    expect(() => suitePlan([], 4, path.resolve(ROOT, "..", "outside.xml")).args).toThrow(/仓库内/);
     /* 仓库内但值里带冒号（相对路径里唯一还能拼出坏形状的东西）⇒ 抛的是**冒号**那一条，
      * 不是「仓库外」—— 两条话术各指各的下一动作，混成一条就会把人支去改目录。 */
     expect(() => toTransportSafePath("a:b.xml")).toThrow(/冒号/);
   });
 
   it("落点常量在仓库内、不含冒号，且**被 git 忽略**（不给检出留未跟踪文件）", () => {
-    expect(
-      hostUnsafeArgs([`--outputFile.junit=${SUITE_JUNIT_RELATIVE}`], true),
-    ).toEqual([]);
+    expect(hostUnsafeArgs([`--outputFile.junit=${SUITE_JUNIT_RELATIVE}`], true)).toEqual([]);
     expect(path.isAbsolute(SUITE_JUNIT_RELATIVE)).toBe(false);
-    expect(toTransportSafePath(path.join(ROOT, SUITE_JUNIT_RELATIVE))).toBe(
-      SUITE_JUNIT_RELATIVE,
-    );
+    expect(toTransportSafePath(path.join(ROOT, SUITE_JUNIT_RELATIVE))).toBe(SUITE_JUNIT_RELATIVE);
     /* 「未跟踪文件」这一格不是形容词：R9 与 `.gitignore` 会真的拦下落在检出里的产物，
      * 所以这里问 git 本人「这个路径你忽略吗」。`check-ignore -q` 忽略→退 0 且不打印，
      * 不忽略→退 1，而 `execFileSync` 对非零退码抛 ⇒ 抛就是这条判据该红的时候。
@@ -1111,27 +1041,19 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
      * 「破折号开头 + `=` + 值里有冒号」这一交集。裸绝对路径与不带破折号的 `k=v:`
      * 都原样到达 —— **把它们也拦下就是拒掉一条本来能跑的命令**（`viaHost: false`
      * 那一半同理：非宿主形态没有这次切分）。 */
-    const split = "--outputFile.junit=C:\\dir\\a.xml";
+    const split = String.raw`--outputFile.junit=C:\dir\a.xml`;
     expect(hostUnsafeArgs([split], true)).toEqual([split]);
     expect(hostUnsafeArgs([split], false)).toEqual([]);
-    expect(
-      hostUnsafeArgs(["--outputFile.junit=node_modules/.cache/a.xml"], true),
-    ).toEqual([]);
+    expect(hostUnsafeArgs(["--outputFile.junit=node_modules/.cache/a.xml"], true)).toEqual([]);
     // 冒号不一定要跟在驱动器字母后面：值里第一个冒号就是切点。
-    expect(hostUnsafeArgs(["--out=1:\\x", "--out=./C:\\x"], true)).toEqual([
-      "--out=1:\\x",
-      "--out=./C:\\x",
+    expect(hostUnsafeArgs([String.raw`--out=1:\x`, String.raw`--out=./C:\x`], true)).toEqual([
+      String.raw`--out=1:\x`,
+      String.raw`--out=./C:\x`,
     ]);
     // 下面三条都是**观察到的安全形状**，一条都不许被挑出来。
     expect(
       hostUnsafeArgs(
-        [
-          "C:\\dir\\a.xml",
-          "out=C:\\dir\\a.xml",
-          "/p=C:\\x",
-          "a=b:c",
-          "--out=C\\dir",
-        ],
+        [String.raw`C:\dir\a.xml`, String.raw`out=C:\dir\a.xml`, String.raw`/p=C:\x`, "a=b:c", String.raw`--out=C\dir`],
         true,
       ),
     ).toEqual([]);
@@ -1193,21 +1115,17 @@ describe("CI 全量档的分文件耗时读数（与钩子那侧共用形状）"
   ].join("\n");
 
   it("税 = 文件总时长 − Σ用例时长，并按税降序排（不是按谁跑得最久）", () => {
-    const byName = new Map(
-      parseJunitPhaseCosts(JUNIT_WITH_CASES).map((c) => [c.name, c]),
-    );
+    const byName = new Map(parseJunitPhaseCosts(JUNIT_WITH_CASES).map((c) => [c.name, c]));
     expect(byName.get("tests/heavy-load.test.ts")).toEqual({
       name: "tests/heavy-load.test.ts",
-      totalMs: 30500,
+      totalMs: 30_500,
       testsMs: 1500,
       cases: 2,
     });
     const text = suitePhaseTax(JUNIT_WITH_CASES, { limit: 10 }).join("\n");
     /* 交税最多的是「总 30.5s / 断言 1.5s」那份，而不是断言最久的 —— 按总时长排就会
      * 把后者顶到第一名，那份榜读的就不再是「谁在交税」。 */
-    expect(text.indexOf("heavy-load")).toBeLessThan(
-      text.indexOf("pure-assert"),
-    );
+    expect(text.indexOf("heavy-load")).toBeLessThan(text.indexOf("pure-assert"));
     expect(text).toContain("33.5s");
     expect(text).toContain("4.8s");
     expect(text).toContain("28.7s");
@@ -1275,9 +1193,7 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
   ].join("\n");
 
   it("绿的那次不复跑（没有要定性的红）", () => {
-    expect(
-      planIsolatedRerun({ exitCode: 0, junitText: TIMEOUT_JUNIT }),
-    ).toEqual({
+    expect(planIsolatedRerun({ exitCode: 0, junitText: TIMEOUT_JUNIT })).toEqual({
       retry: false,
       files: [],
       why: "这一跑是绿的，没有要定性的红",
@@ -1290,9 +1206,7 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
     expect(plan.why).toContain("按真红处置");
     /* 反向复算：把同一个 exitCode 换成带指纹的读数，结论当场变成复跑。
        没有这一句，「不复跑」可能只是判据没接上（恒 false）而不是判对了。 */
-    expect(
-      planIsolatedRerun({ exitCode: 1, junitText: TIMEOUT_JUNIT }).retry,
-    ).toBe(true);
+    expect(planIsolatedRerun({ exitCode: 1, junitText: TIMEOUT_JUNIT }).retry).toBe(true);
   });
 
   it("带指纹时**只复跑失败的那几份**，名单取自 junit（不拖整档重跑）", () => {
@@ -1313,33 +1227,25 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
   });
 
   it("第 2 遍的三态：绿=负载假红 / 仍带指纹=未校验 / 指纹消失=真红", () => {
-    expect(classifyRerunOutcome({ exitCode: 0, output: "" })).toBe(
-      "load-flake",
-    );
+    expect(classifyRerunOutcome({ exitCode: 0, output: "" })).toBe("load-flake");
     expect(
       classifyRerunOutcome({
         exitCode: 1,
         output: "Test timed out in 30000ms",
       }),
     ).toBe("unverified");
-    expect(
-      classifyRerunOutcome({ exitCode: 1, output: "expected 1 to be 2" }),
-    ).toBe("real-red");
+    expect(classifyRerunOutcome({ exitCode: 1, output: "expected 1 to be 2" })).toBe("real-red");
   });
 
   it("复跑命令行带 `--no-file-parallelism` 而**绝不带 `--coverage`**", () => {
     const args = rerunLaunches({ files: ["a.test.ts", "b.test.ts"] });
-    expect(args).toEqual([
-      ["run", "--no-file-parallelism", "a.test.ts", "b.test.ts"],
-    ]);
+    expect(args).toEqual([["run", "--no-file-parallelism", "a.test.ts", "b.test.ts"]]);
     for (const launch of args) {
       expect(launch.join(" ")).not.toContain("--coverage");
     }
     /* 覆盖率门槛（`vitest.config.ts` 的 `coverage.thresholds`）判的是整档的分子分母：
        拿一份子集去跑覆盖率必然跌破，那等于把「负载假红」换成一条**新的假红**。 */
-    expect(rerunLaunches({ files: [] })).toEqual([
-      ["run", "--no-file-parallelism"],
-    ]);
+    expect(rerunLaunches({ files: [] })).toEqual([["run", "--no-file-parallelism"]]);
   });
 
   it("复跑的墙钟预算严格小于整档那一跑（复跑不许比整档更宽）", () => {
@@ -1347,10 +1253,7 @@ describe("每日全量档的超时指纹复跑（档位表与组 C 同一条判�
   });
 
   it("这一档不重写指纹清单：脚本里不许出现第二份超时正则", () => {
-    const src = readFileSync(
-      path.join(ROOT, "scripts/full-suite-run.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts/full-suite-run.mjs"), "utf8");
     expect(src).toContain('from "./affected-launch-load-retry.mjs"');
     /* 「Test timed out」在本仓只能是**被引用**的话术，不该在这里被重新定义成一份正则。
        两份清单漂移的代价由 `tests/hook-affected-launch.test.ts` 钉在组 C 那一侧。 */
@@ -1416,10 +1319,7 @@ describe("覆盖率门槛的档位与接线（ISSUE #2669）", () => {
        `quality-gate.mjs` 的 `test` 条目（`pnpm check:all`，本地按需完整验证档）。
        两处都只**引用**那一个判点（`coverageGate` / 同一个环境变量名），
        不在调用点重抄一份判定（§12.18）。 */
-    const suite = readFileSync(
-      join(ROOT, "scripts/full-suite-run.mjs"),
-      "utf8",
-    );
+    const suite = readFileSync(join(ROOT, "scripts/full-suite-run.mjs"), "utf8");
     expect(suite).toContain('env.COMFY_COVERAGE_ENFORCE === "1"');
     expect(suite).toContain('COMFY_COVERAGE_ENFORCE: "1"');
     expect(suite).toContain("env: gate.enforce");

@@ -75,13 +75,9 @@ import {
  *
  * `messages` / `open` 都由场景决定 —— 见文件头第 3 条（`open` 是场景的一部分）。
  */
-export interface MessageScene {
+export type MessageScene = {
   /** 这个场景解决什么、真机上什么时候会出现（故事读者看这一段才知道在看什么）。 */
   readonly about: string;
-  /** 面板是否打开（`false` 时 `MessageCenterPanel` 不渲染）。 */
-  readonly open: boolean;
-  /** 这一档要 push 的那几条 —— 每条都由**生产方**给出，不在这里手抄文案。 */
-  readonly produced: readonly ProducedMessage[];
   /**
    * push 完之后是否调一次真 action `markAllRead()`。
    *
@@ -91,7 +87,11 @@ export interface MessageScene {
    * **末态**、验不到那个动作本身（「点了没反应」是这类动作最常见的失效形态）。
    */
   readonly markAllRead?: true;
-}
+  /** 面板是否打开（`false` 时 `MessageCenterPanel` 不渲染）。 */
+  readonly open: boolean;
+  /** 这一档要 push 的那几条 —— 每条都由**生产方**给出，不在这里手抄文案。 */
+  readonly produced: ReadonlyArray<ProducedMessage>;
+};
 
 /**
  * 一条消息的**生产方**：`kind` 是渲染分档（`KIND_META` 的取值集合），
@@ -103,10 +103,10 @@ export interface MessageScene {
  *
  * `make()` 而不是字面量：文案住在生产方那一侧，改了它故事跟着变。
  */
-export interface ProducedMessage {
+export type ProducedMessage = {
   readonly kind: MessageKind;
-  readonly make: () => { title: string; body: string };
-}
+  readonly make: () => { body: string; title: string };
+};
 
 /**
  * 陈旧实例的文案 —— 直接从 `CodeUpdateWatcher` 的回调体里取。
@@ -119,7 +119,7 @@ export interface ProducedMessage {
  * 不改它是值得的：这一档就是 `docs/guide-stale-code.md` 讲的「页面落后于源码」，
  * 也是消息中心存在的理由（toast 一闪而过，这句指引的读者正被白屏卡着）。
  */
-function staleStoreNotice(): { title: string; body: string } {
+function staleStoreNotice(): { body: string; title: string } {
   return {
     title: "运行中的页面落后于源码",
     body:
@@ -130,7 +130,7 @@ function staleStoreNotice(): { title: string; body: string } {
 }
 
 /** 更新检查那一处的文案 —— 与 `UpdateCheckProvider.onDirty` 的 push 同源。 */
-function updateNotice(): { title: string; body: string } {
+function updateNotice(): { body: string; title: string } {
   return {
     title: "检测到本地更新，需重启应用",
     body: "3 个包有新版本：next 16.3.8、react 19.4.0、zustand 5.2.1。需重启应用才生效。",
@@ -138,12 +138,12 @@ function updateNotice(): { title: string; body: string } {
 }
 
 /** dev server 重启那一处的文案 —— 直接取生产方自己的导出函数。 */
-function restartNotice(): { title: string; body: string } {
+function restartNotice(): { body: string; title: string } {
   return describeDevServerRestart("restart");
 }
 
 /** 运行期自愈重启那一处（带启动器懒归因给出的人话短句）。 */
-function healRestartNotice(): { title: string; body: string } {
+function healRestartNotice(): { body: string; title: string } {
   return describeDevServerRestart(
     "route-404-heal",
     "本次代码更新改了路由结构（新增 2 / 删除 1，如 api/foo/route.ts）",
@@ -151,7 +151,7 @@ function healRestartNotice(): { title: string; body: string } {
 }
 
 /** 依赖面陈旧那一处的文案 —— 取生产方的导出函数（`drift` 是最常见那一档）。 */
-function depsStaleNotice(): { title: string; body: string } {
+function depsStaleNotice(): { body: string; title: string } {
   return describeDepsStale("drift");
 }
 
@@ -164,12 +164,12 @@ const SERVICE_DOWN_AT = Date.parse("2026-10-12T14:23:05");
 const SERVICE_UP_AT = SERVICE_DOWN_AT + 125_000;
 
 /** 断开那一条（`kind: "offline"` —— 断开与「已重启」在配色上是两件事）。 */
-function serviceDisconnectNotice(): { title: string; body: string } {
+function serviceDisconnectNotice(): { body: string; title: string } {
   return describeAppServiceDisconnect(SERVICE_DOWN_AT);
 }
 
 /** 恢复那一条：带断开时刻、持续时长，以及上一次结束的原因与建议。 */
-function serviceRecoveredNotice(): { title: string; body: string } {
+function serviceRecoveredNotice(): { body: string; title: string } {
   return describeAppServiceStart({
     at: SERVICE_UP_AT,
     offlineAt: SERVICE_DOWN_AT,
@@ -179,8 +179,7 @@ function serviceRecoveredNotice(): { title: string; body: string } {
     notice: {
       why: "本地服务自身退出了（编译失败 / 端口被占 / pnpm 异常都会这样）",
       action: "看 log/nextjs/ 下最新一份输出；重新启动一次通常即可恢复",
-      detail:
-        "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
+      detail: "服务被 SIGKILL 结束：被强制结束（内存不足被系统结束、或任务管理器结束进程都会这样）",
     },
   });
 }
@@ -232,8 +231,7 @@ export const MESSAGE_SCENES = {
    * 合并之后用户实际会看到的样子（而不是「断开 / 恢复 / 重启」三条并排）。
    */
   runtimeSelfHeal: {
-    about:
-      "接口层 404 自愈重启（带归因的那一条）+ 依赖面陈旧（需停服务重装依赖）",
+    about: "接口层 404 自愈重启（带归因的那一条）+ 依赖面陈旧（需停服务重装依赖）",
     open: true,
     produced: [
       { kind: "update", make: healRestartNotice },
@@ -330,11 +328,12 @@ export function messageSceneArgType() {
  * 与 `store-sources.tsx` 的 `sceneEntries()` 同一个位置：`MessageCenterPanel`
  * 自己读 store，不需要这条；它是给「想摆一条真消息、但不吃 store」的 story 留的。
  */
-export function sceneMessages(name: string): {
+export function sceneMessages(name: string): Array<{
+  body: string;
   kind: string;
   title: string;
-  body: string;
-}[] {
+}> {
+  /* SAFETY: 类型断言已复核 */
   const scene: MessageScene | undefined = MESSAGE_SCENES[name as SceneName];
   if (scene === undefined) {
     throw new Error(
@@ -355,6 +354,7 @@ export function sceneMessages(name: string): {
  * 幂等：`clear()` 先跑，所以 StrictMode 的双调用得到同一个末态。
  */
 function seedMessageScene(name: string): MessageScene {
+  /* SAFETY: 类型断言已复核 */
   const scene: MessageScene | undefined = MESSAGE_SCENES[name as SceneName];
   if (scene === undefined) {
     throw new Error(
@@ -364,9 +364,7 @@ function seedMessageScene(name: string): MessageScene {
   const store = useMessageCenterStore.getState();
   store.clear();
   for (const produced of scene.produced) {
-    useMessageCenterStore
-      .getState()
-      .push({ kind: produced.kind, ...produced.make() });
+    useMessageCenterStore.getState().push({ kind: produced.kind, ...produced.make() });
   }
   if (scene.markAllRead === true) {
     useMessageCenterStore.getState().markAllRead();
@@ -396,7 +394,10 @@ function seedMessageScene(name: string): MessageScene {
  * 「按钮在真状态栏里长什么样」那几档要的）。
  */
 export const withMessageScene: Decorator = (Story, context) => {
+  /* SAFETY: 类型断言已复核 */
   const name = (context.parameters as { messageScene?: unknown }).messageScene;
-  if (typeof name === "string") seedMessageScene(name);
+  if (typeof name === "string") {
+    seedMessageScene(name);
+  }
   return <Story />;
 };

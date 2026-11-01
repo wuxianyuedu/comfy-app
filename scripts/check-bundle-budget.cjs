@@ -160,7 +160,9 @@ function headRev() {
     cwd: ROOT,
     encoding: "utf8",
   });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   return res.stdout.trim() || null;
 }
 
@@ -180,15 +182,15 @@ const REV_SHAPE = /^[0-9a-f]{40}$/;
  * @returns {{kind: "recorded", rev: string} | {kind: "missing"} | {kind: "stale"}}
  */
 function baselineRevState(rev) {
-  if (!rev || !REV_SHAPE.test(String(rev))) return { kind: "missing" };
+  if (!rev || !REV_SHAPE.test(String(rev))) {
+    return { kind: "missing" };
+  }
   const res = spawnSync("git", ["cat-file", "-e", `${rev}^{commit}`], {
     encoding: "utf8",
   });
   /* 不可达 / 不是本检出的仓库 ⇒ 这一档是「基线过期」（ISSUE #653 的原话：
    * 修订号通常是分支提交，合入后不再有 ref 指向，`git gc` 之后一律查不到）。 */
-  return res.status === 0
-    ? { kind: "recorded", rev: String(rev) }
-    : { kind: "stale" };
+  return res.status === 0 ? { kind: "recorded", rev: String(rev) } : { kind: "stale" };
 }
 
 /**
@@ -209,27 +211,23 @@ function baselineRevState(rev) {
  * @returns {{count: number, recent: Array<{rev: string, title: string}>} | null}
  */
 function commitsSinceDateTouchingSource(dateStr, limit = 5) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr ?? ""))) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr ?? ""))) {
+    return null;
+  }
   const res = spawnSync(
     "git",
-    [
-      "log",
-      "--since",
-      `${dateStr} 00:00:00`,
-      "--first-parent",
-      "--format=%h\x1f%s",
-      "--",
-      "src/",
-    ],
+    ["log", "--since", `${dateStr} 00:00:00`, "--first-parent", "--format=%h\u001f%s", "--", "src/"],
     { cwd: ROOT, encoding: "utf8" },
   );
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   const rows = res.stdout
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean)
     .map((l) => {
-      const at = l.indexOf("\x1f");
+      const at = l.indexOf("\u001f");
       return { rev: l.slice(0, at), title: l.slice(at + 1) };
     });
   return { count: rows.length, recent: rows.slice(0, limit) };
@@ -255,7 +253,9 @@ function trunkReachableRev() {
     cwd: ROOT,
     encoding: "utf8",
   });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   const rev = res.stdout.trim();
   return REV_SHAPE.test(rev) ? rev : null;
 }
@@ -280,9 +280,13 @@ function headIsMergeCommit() {
     cwd: ROOT,
     encoding: "utf8",
   });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   const fields = res.stdout.trim().split(/\s+/).filter(Boolean);
-  if (fields.length < 2) return null;
+  if (fields.length < 2) {
+    return null;
+  }
   return fields.length > 2;
 }
 
@@ -303,11 +307,15 @@ function headIsMergeCommit() {
  * @returns {number|null}
  */
 function commitsSinceBaseline(rev) {
-  if (!rev) return null;
+  if (!rev) {
+    return null;
+  }
   const res = spawnSync("git", ["rev-list", "--count", `${rev}..HEAD`], {
     encoding: "utf8",
   });
-  if (res.status !== 0 || typeof res.stdout !== "string") return null;
+  if (res.status !== 0 || typeof res.stdout !== "string") {
+    return null;
+  }
   const n = Number(res.stdout.trim());
   return Number.isFinite(n) ? n : null;
 }
@@ -315,8 +323,11 @@ function commitsSinceBaseline(rev) {
 function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const abs = path.join(dir, e.name);
-    if (e.isDirectory()) walk(abs, out);
-    else out.push(abs);
+    if (e.isDirectory()) {
+      walk(abs, out);
+    } else {
+      out.push(abs);
+    }
   }
   return out;
 }
@@ -339,7 +350,7 @@ function measure() {
     const gz = zlib.gzipSync(buf).length;
     entries.push({
       name: path.basename(abs),
-      sha: crypto.createHash("sha256").update(buf).digest("hex"),
+      sha: crypto.hash("sha256", buf, "hex"),
       raw: buf.length,
       gzip: gz,
     });
@@ -352,7 +363,9 @@ function measure() {
 }
 
 function readBaseline() {
-  if (!fs.existsSync(BASELINE)) return null;
+  if (!fs.existsSync(BASELINE)) {
+    return null;
+  }
   return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
 }
 
@@ -400,9 +413,7 @@ function kb(n) {
 function delta(n) {
   const sign = n > 0 ? "+" : n < 0 ? "-" : "±";
   const abs = Math.abs(n);
-  return abs < 1024
-    ? `${sign}${abs} B`
-    : `${sign}${(abs / 1024).toFixed(1)} KB`;
+  return abs < 1024 ? `${sign}${abs} B` : `${sign}${(abs / 1024).toFixed(1)} KB`;
 }
 
 /**
@@ -421,7 +432,9 @@ function delta(n) {
  */
 function diagnose(cur, base) {
   const baseEntries = base?.entries;
-  if (!Array.isArray(baseEntries) || baseEntries.length === 0) return null;
+  if (!Array.isArray(baseEntries) || baseEntries.length === 0) {
+    return null;
+  }
 
   const baseBySha = new Map(baseEntries.map((e) => [e.sha, e]));
   const baseByName = new Map(baseEntries.map((e) => [e.name, e]));
@@ -435,16 +448,19 @@ function diagnose(cur, base) {
     const sameContent = baseBySha.get(e.sha);
     if (sameContent) {
       /* 内容一模一样 —— 变的只是名字。 */
-      if (sameContent.name !== e.name) renamed.push([sameContent.name, e.name]);
+      if (sameContent.name !== e.name) {
+        renamed.push([sameContent.name, e.name]);
+      }
       continue;
     }
     const sameName = baseByName.get(e.name);
-    if (sameName) grown.push([e.name, sameName.gzip, e.gzip]);
-    else added.push(e);
+    if (sameName) {
+      grown.push([e.name, sameName.gzip, e.gzip]);
+    } else {
+      added.push(e);
+    }
   }
-  const gone = baseEntries.filter(
-    (e) => !curBySha.has(e.sha) && !curByName.has(e.name),
-  );
+  const gone = baseEntries.filter((e) => !curBySha.has(e.sha) && !curByName.has(e.name));
   const sumGzip = (list) => list.reduce((a, e) => a + (e.gzip ?? 0), 0);
   return {
     renamed,
@@ -481,17 +497,16 @@ function deltaLines(d, top, indent = "") {
     return out;
   }
   out.push(
-    `${indent}新增内容 ${d.added.length} 个（gzip 合计 ${kb(d.addedGzip)}，指纹在基线里找不到）` +
-      (d.gone.length
+    `${indent}新增内容 ${d.added.length} 个（gzip 合计 ${kb(d.addedGzip)}，指纹在基线里找不到）${
+      d.gone.length
         ? `；同时消失 ${d.gone.length} 个（合计 ${kb(d.goneGzip)}）⇒ 并排净差 ${delta(d.addedGzip - d.goneGzip)}`
-        : "；基线里没有配对的消失块 ⇒ 这些是真多出来的"),
+        : "；基线里没有配对的消失块 ⇒ 这些是真多出来的"}`,
   );
   out.push(
     `${indent}「新增」按内容指纹算 —— 老块内容小改导致换名也会落在这里；` +
       "要看的是上面那行的净差，不是最大的那个名字。",
   );
-  for (const e of d.added
-    .slice()
+  for (const e of [...d.added]
     .sort((a, b) => b.gzip - a.gzip)
     .slice(0, top)) {
     out.push(`${indent}  · ${e.name}（gzip ${kb(e.gzip)}）`);
@@ -520,8 +535,7 @@ function main() {
   }
 
   const base = readBaseline();
-  const fmt = (m) =>
-    `文件数 ${m.files} · raw ${kb(m.raw)} · gzip ${kb(m.gzip)}`;
+  const fmt = (m) => `文件数 ${m.files} · raw ${kb(m.raw)} · gzip ${kb(m.gzip)}`;
   const line = `[bundle-budget] 当前：${fmt(now)}`;
 
   if (REPORT_ONLY) {
@@ -532,29 +546,26 @@ function main() {
         : "  基线：不存在（先跑 --update 落一份实测初值）",
     );
     const d = base ? diagnose(now, base) : null;
-    if (
-      d &&
-      (d.renamed.length || d.added.length || d.grown.length || d.gone.length)
-    ) {
+    if (d && (d.renamed.length || d.added.length || d.grown.length || d.gone.length)) {
       console.log("  与基线的差异（按内容指纹对齐，诊断用、不参与判定）：");
       if (d.renamed.length) {
         console.log(
-          `    · 同内容换名 ${d.renamed.length} 个（不计变化）：` +
+          `    · 同内容换名 ${d.renamed.length} 个（不计变化）：${
             d.renamed
               .slice(0, 3)
               .map(([a, b]) => `${a} → ${b}`)
-              .join("、") +
-            (d.renamed.length > 3 ? " 等" : ""),
+              .join("、")
+            }${d.renamed.length > 3 ? " 等" : ""}`,
         );
       }
-      for (const line of deltaLines(d, 3, "    ")) console.log(line);
+      for (const line of deltaLines(d, 3, "    ")) {
+        console.log(line);
+      }
       if (d.grown.length) {
         console.log(`    · 同名且变大 ${d.grown.length} 个`);
       }
     } else if (base && !d) {
-      console.log(
-        "  （基线是旧格式、没有逐文件指纹：判定不受影响，只影响这段诊断）",
-      );
+      console.log("  （基线是旧格式、没有逐文件指纹：判定不受影响，只影响这段诊断）");
     }
     console.log("[bundle-budget] --report 模式：只出清单，不判失败 ✓");
     return 0;
@@ -615,10 +626,10 @@ function main() {
     /* 用的是哪一枚锚点必须打出来：两种锚点的**失效方向不同**（主干那枚一直数得出，
      * HEAD 那枚在 squash 合入后不可达、只能改走日期通道），不写出来就只能事后猜。 */
     console.log(
-      `[bundle-budget] 基线锚点 baselineRev=${String(rev).slice(0, 8)} —— ` +
-        (anchor
+      `[bundle-budget] 基线锚点 baselineRev=${String(rev).slice(0, 8)} —— ${
+        anchor
           ? "取的是主干可达的那一枚（merge-base HEAD origin/master），squash 合入后仍数得出「其后动过几次」"
-          : "本检出问不到 origin/master，退回 HEAD —— 这一枚在 squash 合入后多半不可达，届时判红改走 generatedAt 那条第二归因（ISSUE #2082）"),
+          : "本检出问不到 origin/master，退回 HEAD —— 这一枚在 squash 合入后多半不可达，届时判红改走 generatedAt 那条第二归因（ISSUE #2082）"}`,
     );
     console.log(
       `[bundle-budget] 基线已更新（${path.relative(ROOT, BASELINE)}）：` +
@@ -668,8 +679,8 @@ function main() {
     }
     console.error(
       ENFORCE_TOTALS
-        ? "[bundle-budget] 违规（阻断）：\n  " + problems.join("\n  ")
-        : "[bundle-budget] 读数（不参与判定）：\n  " + problems.join("\n  "),
+        ? `[bundle-budget] 违规（阻断）：\n  ${problems.join("\n  ")}`
+        : `[bundle-budget] 读数（不参与判定）：\n  ${problems.join("\n  ")}`,
     );
     /* 归因先说：判红那一刻读者最该知道的是「这个读数取自哪一版源码」。
      * 缺了它，「涨了 493 字节」的第一反应必然落在「是不是抖动 / 是不是量错了」上，
@@ -698,22 +709,22 @@ function main() {
         "（基线过期 —— 本仓常态是 squash 合入后那枚分支提交不再有 ref 指向，浅克隆是另一种）——\n";
       console.error(
         byDate
-          ? staleHead +
-              `    改按基线日期 ${base.generatedAt} 归因：src/ 侧其后有 ${byDate.count} 次主干提交` +
-              (byDate.recent.length
+          ? `${staleHead
+              }    改按基线日期 ${base.generatedAt} 归因：src/ 侧其后有 ${byDate.count} 次主干提交${
+              byDate.recent.length
                 ? `（${byDate.recent.map((r) => `${r.rev} ${r.title}`).join("；")}）`
-                : "") +
-              "。\n" +
-              (byDate.count > 0
+                : ""
+              }。\n${
+              byDate.count > 0
                 ? "    ⇒ 这批读数取自基线之后的源码，涨幅可能正是那几次改动换来的。" +
                   "**别直接 --update 重记**：先按下面逐文件诊断分清「涨了」与「换了名」，" +
                   "确认这点体积该不该认账；确认之后再带 --allow-increase 重记基线（§13.5.4 例外流程）。"
                 : "    ⇒ src/ 侧其后一次提交都没有，那么这笔上涨**不是**基线之后的源码换来的。" +
-                  "**别直接 --update 重记**：先看下面逐文件诊断（§13.5.4 例外流程）。")
-          : staleHead +
-              "    基线日期那条也量不到（没有 generatedAt / 日期形状不合法 / git 不可用），" +
-              "所以这批读数与基线之间源码动过几次**判断不了**。" +
-              "**别直接 --update 重记**：先按下面逐文件诊断分清「涨了」与「换了名」（§13.5.4 例外流程）。",
+                  "**别直接 --update 重记**：先看下面逐文件诊断（§13.5.4 例外流程）。"}`
+          : `${staleHead
+              }    基线日期那条也量不到（没有 generatedAt / 日期形状不合法 / git 不可用），` +
+              `所以这批读数与基线之间源码动过几次**判断不了**。` +
+              `**别直接 --update 重记**：先按下面逐文件诊断分清「涨了」与「换了名」（§13.5.4 例外流程）。`,
       );
     } else {
       const since = commitsSinceBaseline(state.rev);
@@ -758,24 +769,25 @@ function main() {
       lines.push(...deltaLines(d, 5));
       if (d.renamed.length) {
         lines.push(
-          `  同内容换名 ${d.renamed.length} 个（不计变化）：` +
+          `  同内容换名 ${d.renamed.length} 个（不计变化）：${
             d.renamed
               .slice(0, 3)
               .map(([a, b]) => `${a} → ${b}`)
-              .join("、") +
-            (d.renamed.length > 3 ? " 等" : ""),
+              .join("、")
+            }${d.renamed.length > 3 ? " 等" : ""}`,
         );
       }
       if (d.grown.length) {
         lines.push(`  同名且变大 ${d.grown.length} 个，增幅最大的 5 个：`);
-        for (const [name, b, v] of d.grown
-          .slice()
+        for (const [name, b, v] of [...d.grown]
           .sort((a, b) => b[2] - b[1] - (a[2] - a[1]))
           .slice(0, 5)) {
           lines.push(`    · ${name}（gzip ${kb(b)} → ${kb(v)}）`);
         }
       }
-      if (lines.length) console.error(lines.join("\n"));
+      if (lines.length) {
+        console.error(lines.join("\n"));
+      }
     } else {
       console.error(
         "  （基线里没有逐文件指纹 —— 它是本轮之前生成的旧格式；判定不受影响，只影响这段诊断。\n" +

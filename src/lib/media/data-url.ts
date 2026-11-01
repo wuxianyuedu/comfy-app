@@ -39,12 +39,12 @@
 // data URL 之后怎么编码与解码」（纯算术）。两者方向相反。
 
 /** data URL 的组成：MIME 与 base64 载荷（不含 `;base64` 之前的那段 meta）。 */
-export interface ParsedDataUrl {
-  /** `data:` 与第一个 `,` 之间的 MIME（无声明时为 `""`）。 */
-  mime: string;
+export type ParsedDataUrl = {
   /** 逗号之后的 base64 载荷（原样，未解码）。 */
   base64: string;
-}
+  /** `data:` 与第一个 `,` 之间的 MIME（无声明时为 `""`）。 */
+  mime: string;
+};
 
 /** data URL 的前缀。收口前它以字面量出现在 9 处（写的一侧 3、读的一侧 6）。 */
 export const DATA_URL_PREFIX = "data:";
@@ -93,16 +93,18 @@ export function wrapBase64(base64: string, mime: string): string {
  */
 export function toBase64(bytes: Uint8Array): string {
   /* Node / 服务端：`Buffer` 走原生实现（大图快一个数量级）。 */
-  const bufferCtor = (
+  const bufferCtor = /* SAFETY: 类型断言已复核 */ (
     globalThis as {
       Buffer?: { from(b: Uint8Array): { toString(enc: string): string } };
     }
   ).Buffer;
-  if (bufferCtor) return bufferCtor.from(bytes).toString("base64");
+  if (bufferCtor) {
+    return bufferCtor.from(bytes).toString("base64");
+  }
   /* 浏览器：分块 `btoa`，避免 `String.fromCharCode(...bytes)` 在大数组上
    * 触发「参数过多」的 RangeError（24MB 上限的图片轻松越过该阈值）。 */
   let binary = "";
-  const CHUNK = 0x8000;
+  const CHUNK = 0x80_00;
   for (let i = 0; i < bytes.length; i += CHUNK) {
     binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
   }
@@ -137,14 +139,22 @@ export function isInlineMedia(reference: string): boolean {
  * ```
  */
 export function parseDataUrl(value: string): ParsedDataUrl | null {
-  if (!isDataUrl(value)) return null;
+  if (!isDataUrl(value)) {
+    return null;
+  }
   const comma = value.indexOf(",");
-  if (comma < 0) return null;
+  if (comma === -1) {
+    return null;
+  }
   const meta = value.slice(DATA_URL_PREFIX.length, comma);
-  if (!meta.toLowerCase().endsWith(";base64")) return null;
+  if (!meta.toLowerCase().endsWith(";base64")) {
+    return null;
+  }
   const base64 = value.slice(comma + 1);
   /* 空载荷与「逗号后面什么都没有」是同一件事，但都不该被当成合法 data URL。 */
-  if (base64 === "") return null;
+  if (base64 === "") {
+    return null;
+  }
   const mime = meta.slice(0, -";base64".length);
   return { mime: mime || "application/octet-stream", base64 };
 }

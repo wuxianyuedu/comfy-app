@@ -78,26 +78,36 @@ export function resolveBlobs(run, specs) {
   const uniq = [...new Set(specs)];
   /** @type {Map<string, string | null>} */
   const out = new Map();
-  if (uniq.length === 0) return out;
+  if (uniq.length === 0) {
+    return out;
+  }
 
-  const raw = run(["cat-file", "--batch-check"], uniq.join("\n") + "\n");
-  if (raw === null) return null;
+  const raw = run(["cat-file", "--batch-check"], `${uniq.join("\n")}\n`);
+  if (raw === null) {
+    return null;
+  }
   const lines = raw.split("\n");
   /* 每个请求恰好一行；对不上说明我们的读法与 git 的格式不一致了 ⇒ 不许继续猜。 */
-  if (lines.length < uniq.length) return null;
+  if (lines.length < uniq.length) {
+    return null;
+  }
 
   for (let i = 0; i < uniq.length; i++) {
     const line = lines[i];
     const spec = uniq[i];
     /* 越界 = 输出比请求少，形状已经不对了 ⇒ 整单判「没跑起来」。 */
-    if (line === undefined || spec === undefined) return null;
+    if (line === undefined || spec === undefined) {
+      return null;
+    }
     if (line.endsWith(" missing")) {
       out.set(spec, null);
       continue;
     }
     const hit = BATCH_LINE.exec(line);
     const blobSha = hit ? hit[1] : undefined;
-    if (!blobSha) return null;
+    if (!blobSha) {
+      return null;
+    }
     out.set(spec, blobSha);
   }
   return out;
@@ -116,7 +126,9 @@ export function resolveBlobs(run, specs) {
 export function historyByFile(run, { ref, files }) {
   /** @type {Map<string, string[]>} */
   const map = new Map(files.map((f) => [f, /** @type {string[]} */ ([])]));
-  if (files.length === 0) return map;
+  if (files.length === 0) {
+    return map;
+  }
 
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
    * 的文件头「口径 ④」）—— 转义过的路径在下面 `set.has(line)` 那一步对不上。 */
@@ -129,12 +141,16 @@ export function historyByFile(run, { ref, files }) {
     "--no-merges",
     ref,
   ]);
-  if (raw === null) return null;
+  if (raw === null) {
+    return null;
+  }
 
   const set = new Set(files);
   let cur = null;
   for (const line of raw.split("\n")) {
-    if (!line) continue;
+    if (!line) {
+      continue;
+    }
     const marker = COMMIT_LINE.exec(line);
     if (marker) {
       cur = marker[1];
@@ -142,7 +158,9 @@ export function historyByFile(run, { ref, files }) {
     }
     if (cur && set.has(line)) {
       const bucket = map.get(line);
-      if (bucket) bucket.push(cur);
+      if (bucket) {
+        bucket.push(cur);
+      }
     }
   }
   return map;

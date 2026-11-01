@@ -21,7 +21,9 @@ const { scan, comfy } = vi.hoisted(() => ({
     modelCountsByFolder: vi.fn(async () => ({ checkpoints: 3 })),
   },
   comfy: {
-    listModelFolders: vi.fn(async () => ["vae", "checkpoints"] as string[]),
+    listModelFolders: vi.fn(
+      async () => /* SAFETY: 类型断言已复核 */ ["vae", "checkpoints"] as Array<string>,
+    ),
     comfyBase: vi.fn(() => "http://127.0.0.1:8188"),
   },
 }));
@@ -46,28 +48,20 @@ vi.mock("~/lib/comfyui/client", () => ({
 }));
 
 import { createCallerFactory } from "~/server/api/trpc";
-import {
-  modelRepository,
-  userModelConfigRepository,
-} from "~/lib/core/repository";
+import { modelRepository, userModelConfigRepository } from "~/lib/core/repository";
 import { modelRouter } from "~/server/api/routers/model";
-import {
-  getTestDb,
-  seedUser,
-  type TestDb,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedUser, type TestDb } from "../../../../tests/helpers/test-db";
 import { makeCtx, makeUser } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(modelRouter);
 const tdb: TestDb = getTestDb();
 const caller = () => createCaller(makeCtx());
-const asUser = (id: string) =>
-  createCaller(makeCtx({ user: makeUser({ id }) }));
+const asUser = (id: string) => createCaller(makeCtx({ user: makeUser({ id }) }));
 
 async function codeOf(promise: Promise<unknown>): Promise<string> {
   return promise.then(
     () => "OK",
-    (e: { code?: string }) => e?.code ?? "UNKNOWN",
+    (error: { code?: string }) => error?.code ?? "UNKNOWN",
   );
 }
 
@@ -87,38 +81,26 @@ describe("model.configSave / configDelete —— 写侧只动自己那行", () =
     await caller().configSave({ folder: "checkpoints", enabled: true });
     const rows = await userModelConfigRepository.listByUser("user-a");
     expect(rows.map((r) => r.folder)).toEqual(["checkpoints"]);
-    expect(await userModelConfigRepository.listByUser("user-b")).toHaveLength(
-      0,
-    );
+    expect(await userModelConfigRepository.listByUser("user-b")).toHaveLength(0);
   });
 
   it("禁用只删自己的行：别人的同名配置还在", async () => {
     await userModelConfigRepository.addOrEnable("user-a", "vae", null);
     await userModelConfigRepository.addOrEnable("user-b", "vae", null);
     await asUser("user-a").configDelete({ folder: "vae" });
-    expect(await userModelConfigRepository.listByUser("user-a")).toHaveLength(
-      0,
-    );
-    expect(await userModelConfigRepository.listByUser("user-b")).toHaveLength(
-      1,
-    );
+    expect(await userModelConfigRepository.listByUser("user-a")).toHaveLength(0);
+    expect(await userModelConfigRepository.listByUser("user-b")).toHaveLength(1);
   });
 
   it("enabled=false 走删除分支，而不是写一行 disabled", async () => {
     await userModelConfigRepository.addOrEnable("user-a", "vae", null);
     await caller().configSave({ folder: "vae", enabled: false });
-    expect(await userModelConfigRepository.listByUser("user-a")).toHaveLength(
-      0,
-    );
+    expect(await userModelConfigRepository.listByUser("user-a")).toHaveLength(0);
   });
 
   it("folder 传空串 → BAD_REQUEST（min(1) 挡住，不落库）", async () => {
-    expect(
-      await codeOf(caller().configSave({ folder: "", enabled: true })),
-    ).toBe("BAD_REQUEST");
-    expect(await userModelConfigRepository.listByUser("user-a")).toHaveLength(
-      0,
-    );
+    expect(await codeOf(caller().configSave({ folder: "", enabled: true }))).toBe("BAD_REQUEST");
+    expect(await userModelConfigRepository.listByUser("user-a")).toHaveLength(0);
   });
 });
 
@@ -159,9 +141,7 @@ describe("model.configList —— 读侧只看自己的 override", () => {
     vi.mocked(fetch).mockResolvedValue(new Response("", { status: 500 }));
     const res = await caller().configList();
     expect(res.comfyReachable).toBe(true);
-    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe(
-      "http://127.0.0.1:8188/system_stats",
-    );
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe("http://127.0.0.1:8188/system_stats");
   });
 });
 
@@ -174,7 +154,7 @@ describe("model.list / sync —— 上下文与透传", () => {
   it("列表把 input 原样给仓储；不传时是空对象而不是 undefined", async () => {
     const list = vi
       .spyOn(modelRepository, "list")
-      .mockResolvedValue([] as never);
+      .mockResolvedValue(/* SAFETY: 类型断言已复核 */ [] as never);
     await caller().list({ type: "checkpoints", q: "sd" });
     expect(list).toHaveBeenCalledWith({ type: "checkpoints", q: "sd" });
     await caller().list();

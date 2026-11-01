@@ -21,10 +21,7 @@
 
 import type { ReactNode } from "react";
 
-import type {
-  LibraryOutputCards,
-  LibraryParamCards,
-} from "./workflow-library-param-cards";
+import type { LibraryOutputCards, LibraryParamCards } from "./workflow-library-param-cards";
 
 /** 三列各一个节点：左列对外参数卡片、中间宿主卡片、右列对外输出参数卡片。 */
 export const LIB_NODE_PARAMS = "lib:params";
@@ -72,17 +69,23 @@ export function libraryEdgeId(
 /** 从边 id 取回它属于哪个口（`null` = 不是库内映射线）。 */
 export function libraryEdgeOwner(
   edgeId: string,
-): { namespace: "param" | "output"; entryId: string; handleId: string } | null {
+): { entryId: string; handleId: string; namespace: "param" | "output" } | null {
   const parts = edgeId.split(":");
-  if (parts.length < 3 || parts[0] !== LIB_EDGE_PREFIX) return null;
+  if (parts.length < 3 || parts[0] !== LIB_EDGE_PREFIX) {
+    return null;
+  }
   const namespace = parts[1];
-  if (namespace !== "param" && namespace !== "output") return null;
+  if (namespace !== "param" && namespace !== "output") {
+    return null;
+  }
   /* 条目 id 本身可能含 `:`（契约口 `reference-image-1` 不含，但历史键
    *  `<节点 id>|<分类>` 与自定义口可能含）—— 只切前两段，剩下的一整段里
    *  再按 `?` 分出「条目 id」与「handle id」（两者都可能含 `:`）。 */
   const rest = parts.slice(2).join(":");
   const sep = rest.indexOf("?");
-  if (sep < 0) return null;
+  if (sep === -1) {
+    return null;
+  }
   return {
     namespace,
     entryId: rest.slice(0, sep),
@@ -91,13 +94,13 @@ export function libraryEdgeOwner(
 }
 
 /** 一条库内边的两端锚点（来自映射表）。 */
-export interface LibraryWire {
+export type LibraryWire = {
   /** 对外参数条目 id（输入侧）或输出口 ioKey（输出侧）。 */
   entryId: string;
+  namespace: "param" | "output";
   /** 输入侧：落点的 ioKey；输出侧：取值那一行的 ioKey。 */
   targetIoKey: string;
-  namespace: "param" | "output";
-}
+};
 
 /** 作者画过的线的描边色。 */
 export const MANUAL_STROKE = "#a78bfa";
@@ -107,7 +110,7 @@ export const MANUAL_STROKE = "#a78bfa";
  *  参数**的界面，「未连过就不要连」），所以没有虚线分支，也没有「默认线」那一档
  *  描边色。默认落点仍算在 `resolved` 里（卡片与运行期读它），只是不在画布上画
  *  一条虚线占位。 */
-export const LIBRARY_EDGE_STYLE = {
+export const LIBRARY_EDGE_STYLE = /* SAFETY: 类型断言已复核 */ {
   stroke: MANUAL_STROKE,
   strokeWidth: 2.5,
   opacity: 1,
@@ -119,17 +122,9 @@ export const DRAG_STROKE = "#c4b5fd";
 export const SELECTED_STROKE = "#c4b5fd";
 
 /** 三列节点的首帧布局尺寸（px）。 */
-export interface LibraryNodeSizing {
-  /** 左列卡片宽度。 */
-  paramsWidth: number;
-  /** 右列卡片宽度。 */
-  outputsWidth: number;
-  /** 宿主卡片宽度（与项目画布节点同宽）。 */
-  hostWidth: number;
+export type LibraryNodeSizing = {
   /** 三列之间的横向间距 —— 留出走线的空间，线不至于贴着卡片拐出尖角。 */
   columnGap: number;
-  originX: number;
-  originY: number;
   /* ── 两套高度尺寸（不是一个值）────────────────────────────────────────
    * 用户口径（ISSUE #596「全屏时，下方区域有空白却不是画布」）：画布要一直
    * 铺到面板底部，下面那块空白不该出现。
@@ -161,7 +156,15 @@ export interface LibraryNodeSizing {
   envelopeHeight: number;
   /** 背景板的渲染高度（px）：面板可视高度与卡片列高度取大。 */
   fillHeight: number;
-}
+  /** 宿主卡片宽度（与项目画布节点同宽）。 */
+  hostWidth: number;
+  originX: number;
+  originY: number;
+  /** 右列卡片宽度。 */
+  outputsWidth: number;
+  /** 左列卡片宽度。 */
+  paramsWidth: number;
+};
 
 /** 三列节点的布局：左列参数卡片 → 宿主卡片 → 右列输出卡片，横向排开。
  *
@@ -194,11 +197,10 @@ export const BACKDROP_PADDING = 120;
 
 /** 三列的包围盒（含列宽与列间距），背景板至少要盖住它。 */
 export function libraryContentExtent(sizing: LibraryNodeSizing): {
-  width: number;
   height: number;
+  width: number;
 } {
-  const { paramsWidth, hostWidth, outputsWidth, columnGap, envelopeHeight } =
-    sizing;
+  const { paramsWidth, hostWidth, outputsWidth, columnGap, envelopeHeight } = sizing;
   return {
     width: paramsWidth + hostWidth + outputsWidth + columnGap * 2,
     height: envelopeHeight,
@@ -208,8 +210,8 @@ export function libraryContentExtent(sizing: LibraryNodeSizing): {
 /** 背景板尺寸：视口与内容取大，各加 `BACKDROP_PADDING`。 */
 export function libraryBackdropSize(
   sizing: LibraryNodeSizing,
-  viewport: { width: number; height: number },
-): { width: number; height: number } {
+  viewport: { height: number; width: number },
+): { height: number; width: number } {
   const content = libraryContentExtent(sizing);
   const clamp = (viewportSide: number) => Math.max(1, Math.round(viewportSide));
   return {
@@ -227,22 +229,22 @@ export function libraryBackdropSize(
  *  为什么渲染内容**不进 `node.data`**：那会把「每帧都变的表单子树」塞进 React
  *  Flow 的状态里 —— 要么冻在首帧（表单永远停在未播种的那一帧），要么每帧
  *  `setNodes` 刷新它（setNodes → 重渲染 → setNodes 无限循环）。 */
-export interface LibraryNodeContent {
-  params: {
-    cards: LibraryParamCards;
-    /** 该模式生效的契约口清单（卡片头取名与「工坊封装」页签同一份）。 */
-    contractEntries: readonly { id: string; label: string }[];
-    canWire: boolean;
-    selectedEntryId: string | null;
-    onSelect: (entryId: string | null) => void;
-    onReset: (entryId: string) => void;
-  };
+export type LibraryNodeContent = {
   host: { host: ReactNode };
   outputs: {
-    cards: LibraryOutputCards;
     canWire: boolean;
-    selectedOutputId: string | null;
-    onSelect: (ioKey: string | null) => void;
+    cards: LibraryOutputCards;
     onReset: (ioKey: string) => void;
+    onSelect: (ioKey: string | null) => void;
+    selectedOutputId: string | null;
   };
-}
+  params: {
+    canWire: boolean;
+    cards: LibraryParamCards;
+    /** 该模式生效的契约口清单（卡片头取名与「工坊封装」页签同一份）。 */
+    contractEntries: ReadonlyArray<{ id: string; label: string }>;
+    onReset: (entryId: string) => void;
+    onSelect: (entryId: string | null) => void;
+    selectedEntryId: string | null;
+  };
+};

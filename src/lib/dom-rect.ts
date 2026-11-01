@@ -45,24 +45,24 @@
 // 的纯函数模块）。
 
 /** 一个元素的盒子（相对视口的矩形 + 内容尺寸）。 */
-export interface ElementBox {
-  /** 视口坐标系里的位置与尺寸（`getBoundingClientRect` 的读数）。 */
-  left: number;
-  top: number;
-  right: number;
+export type ElementBox = {
   bottom: number;
-  width: number;
-  height: number;
+  clientHeight: number;
   /** **布局尺寸**（`clientWidth` / `clientHeight`，不含滚动条、取整）。 */
   clientWidth: number;
-  clientHeight: number;
-  /** **内容尺寸**（`scrollWidth` / `scrollHeight`，含溢出部分）。 */
-  scrollWidth: number;
-  scrollHeight: number;
+  height: number;
+  /** 视口坐标系里的位置与尺寸（`getBoundingClientRect` 的读数）。 */
+  left: number;
   /** 相对**视口**的滚动偏移（`window.scrollX/Y`），用于换算绝对位置。 */
   pageX: number;
   pageY: number;
-}
+  right: number;
+  scrollHeight: number;
+  /** **内容尺寸**（`scrollWidth` / `scrollHeight`，含溢出部分）。 */
+  scrollWidth: number;
+  top: number;
+  width: number;
+};
 
 const EMPTY_RECT: DOMRect = {
   x: 0,
@@ -90,17 +90,21 @@ export function readElementBox(
   el: Element | null | undefined,
   options: { noRect?: boolean } = {},
 ): ElementBox | null {
-  if (!el) return null;
+  if (!el) {
+    return null;
+  }
   /* `Element` 的 `clientWidth` 等只在 `HTMLElement` / `Element` 上都有；
    * 用 `typeof` 守卫而不是 `instanceof HTMLElement`：jsdom 与 SSR 的构造器
    * 可能不是同一个（跨 realm 时 `instanceof` 会假阴性）。 */
-  const box = el as Element & {
-    clientWidth?: number;
+  const box = /* SAFETY: 类型断言已复核 */ el as Element & {
     clientHeight?: number;
-    scrollWidth?: number;
+    clientWidth?: number;
     scrollHeight?: number;
+    scrollWidth?: number;
   };
-  if (typeof box.clientWidth !== "number") return null;
+  if (typeof box.clientWidth !== "number") {
+    return null;
+  }
   const rect =
     options.noRect || typeof box.getBoundingClientRect !== "function"
       ? EMPTY_RECT
@@ -136,11 +140,13 @@ export function offsetWithin(
   inner: Element | null | undefined,
   outer: Element | null | undefined,
 ): number | null {
-  if (!inner || !outer) return null;
+  if (!inner || !outer) {
+    return null;
+  }
   const innerRect = inner.getBoundingClientRect();
   const outerRect = outer.getBoundingClientRect();
   const outerScroll =
-    (outer as unknown as { scrollTop?: number }).scrollTop ?? 0;
+    /* SAFETY: 类型断言已复核 */ (outer as unknown as { scrollTop?: number }).scrollTop ?? 0;
   return innerRect.top - outerRect.top + outerScroll;
 }
 
@@ -154,7 +160,9 @@ export function isWithinViewport(
   inner: Element | null | undefined,
   outer: Element | null | undefined,
 ): boolean {
-  if (!inner || !outer) return false;
+  if (!inner || !outer) {
+    return false;
+  }
   const i = inner.getBoundingClientRect();
   const o = outer.getBoundingClientRect();
   return i.bottom > o.top && i.top < o.bottom;
@@ -168,13 +176,14 @@ export function isWithinViewport(
  * （`el.scrollHeight / lines.length`），而**除数为 0 时给出 `Infinity`**
  * ——那会把 `scrollTo({ top: Infinity })` 交给浏览器。这里量不到就返回 `null`。
  */
-export function readLineHeight(
-  el: Element | null | undefined,
-  lineCount: number,
-): number | null {
-  if (!el || lineCount <= 0) return null;
-  const scrollHeight = (el as { scrollHeight?: number }).scrollHeight;
-  if (typeof scrollHeight !== "number" || scrollHeight <= 0) return null;
+export function readLineHeight(el: Element | null | undefined, lineCount: number): number | null {
+  if (!el || lineCount <= 0) {
+    return null;
+  }
+  const scrollHeight = /* SAFETY: 类型断言已复核 */ (el as { scrollHeight?: number }).scrollHeight;
+  if (typeof scrollHeight !== "number" || scrollHeight <= 0) {
+    return null;
+  }
   return scrollHeight / lineCount;
 }
 
@@ -194,16 +203,16 @@ export function centerLineScrollTop(
 }
 
 /** base-ui 虚拟锚点需要的矩形形状（`getBoundingClientRect` 的返回形状子集）。 */
-export interface AnchorRect {
+export type AnchorRect = {
+  bottom: number;
+  height: number;
+  left: number;
+  right: number;
+  top: number;
+  width: number;
   x: number;
   y: number;
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-}
+};
 
 /**
  * 把 `DOMRect` 归一成**可以冻存的**锚点矩形。

@@ -23,9 +23,11 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 工作区里现存的基线 JSON（递归找 `scripts/` 下 `*.json`）。 */
-function globBaselines(root: string): string[] {
+function globBaselines(root: string): Array<string> {
   const dir = join(root, "scripts");
-  if (!existsSync(dir)) return [];
+  if (!existsSync(dir)) {
+    return [];
+  }
   return readdirSync(dir).filter((name) => name.endsWith(".json"));
 }
 
@@ -35,9 +37,7 @@ function writeSrcFile(repo: GateRepo, rel: string, body: string): void {
 }
 
 describe("check-non-null-assertions AST 判据", () => {
-  test("认 arr[i]! 与 match[N]! 这两种 noUncheckedIndexedAccess 惯用法", ({
-    repo,
-  }) => {
+  test("认 arr[i]! 与 match[N]! 这两种 noUncheckedIndexedAccess 惯用法", ({ repo }) => {
     writeSrcFile(
       repo,
       "lib/sample.ts",
@@ -93,11 +93,14 @@ export function ok(a: string | null): boolean {
      * 这里在临时工作区里原样复刻 `LEGIT_SITES` 的一条登记（变量名 `m`、组号 `1`），
      * 再写一个**没登记**的版本 —— 后者必须被算进去。 */
     const scriptPath = "scripts/check-non-null-assertions.cjs";
-    repo.write(scriptPath, repo.read(scriptPath).replace(
-      "const LEGIT_SITES = new Map([",
-      `const LEGIT_SITES = new Map([
+    repo.write(
+      scriptPath,
+      repo.read(scriptPath).replace(
+        "const LEGIT_SITES = new Map([",
+        `const LEGIT_SITES = new Map([
   ["src/lib/legit.ts|m|1", "exec 第 1 组"],`,
-    ));
+      ),
+    );
     writeSrcFile(
       repo,
       "lib/legit.ts",
@@ -127,8 +130,8 @@ export function ok(a: string | null): boolean {
     writeSrcFile(
       repo,
       "lib/padded.ts",
-      "\n".repeat(30) +
-        `export function grab(re: RegExp, s: string): string {
+      `${"\n".repeat(30)
+        }export function grab(re: RegExp, s: string): string {
   const m = re.exec(s);
   return m ? m[1]! : "";
 }`,
@@ -183,9 +186,7 @@ export const a = arr[0]!;`,
     expect(bad.output).toMatch(/src\/lib\/mod\.ts: 1 处/);
   });
 
-  test("`--update` 这个出口**已经不存在**：传了也照样按判定档判（断头用例）", ({
-    repo,
-  }) => {
+  test("`--update` 这个出口**已经不存在**：传了也照样按判定档判（断头用例）", ({ repo }) => {
     /* 翻硬闸时最容易漏的一件事:把 `--update` 的**分支**删了,却留着它的
      * **参数契约** —— 下一个人照旧跑 `--update` 以为能把违规登记成存量,
      * 而脚本默默按判定档退 1(或更糟:默默退 0)。这里正面钉住:
@@ -203,4 +204,3 @@ export const a = arr[0]!;`,
     expect(globBaselines(repo.dir)).toEqual([]);
   });
 });
-

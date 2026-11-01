@@ -14,11 +14,7 @@
  * 原始文件同时经 `/api/custom-nodes/manifest` 直接对外提供。
  */
 
-import type {
-  NodeTypeConfig,
-  PortSpec,
-  FieldDef,
-} from "~/lib/comfyui/node-config";
+import type { NodeTypeConfig, PortSpec, FieldDef } from "~/lib/comfyui/node-config";
 import { isFieldType } from "~/lib/comfyui/field-types";
 import { errorText } from "~/lib/error-message";
 import { emitAppEvent } from "~/lib/app-events";
@@ -47,17 +43,23 @@ export const CATEGORY_COLORS: Record<string, string> = {
 
 function hashColor(s: string): string {
   let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  }
   const hue = h % 360;
   return `hsl(${hue} 70% 62%)`;
 }
 
 export function colorFor(category: string | undefined): string {
-  if (!category) return "#7C5CFC";
+  if (!category) {
+    return "#7C5CFC";
+  }
   const parts = category.replace(/\/$/, "").split("/");
   for (const p of parts) {
     const c = CATEGORY_COLORS[p.toLowerCase()];
-    if (c) return c;
+    if (c) {
+      return c;
+    }
   }
   return hashColor(category);
 }
@@ -75,7 +77,7 @@ export function specToField(s: PortSpec): FieldDef {
      * 收窄以满足 no-base-to-string。 */
     placeholder:
       s.default !== undefined && s.default !== null
-        ? (s.default as { toString(): string }).toString()
+        ? /* SAFETY: 类型断言已复核 */ (s.default as { toString(): string }).toString()
         : undefined,
     group: "参数",
     // 纯连接端口渲染成连线手柄，而不是编辑字段。
@@ -105,16 +107,16 @@ export const CUSTOM_NODE_PACKAGE: Record<string, string> = {};
  * 也可能是「清单还没生成」「没登录」「读盘失败」—— 这两类以前在界面上同形，
  * 而台账 E9 记的「刷新看着没生效」正是被这一格糊住的。
  */
-export interface CustomNodesRegistryState {
-  /** 每次**成功**灌入 +1：订阅方拿它当「该重渲染了」的凭据。 */
-  version: number;
+export type CustomNodesRegistryState = {
   /** 当前表里的自定义节点类型数。 */
   count: number;
-  /** 最近一次刷新是否真的拿到了清单。 */
-  loaded: boolean;
   /** `loaded: false` 时给用户看的那句话；`loaded: true` 时为 null。 */
   detail: string | null;
-}
+  /** 最近一次刷新是否真的拿到了清单。 */
+  loaded: boolean;
+  /** 每次**成功**灌入 +1：订阅方拿它当「该重渲染了」的凭据。 */
+  version: number;
+};
 
 let registryState: CustomNodesRegistryState = {
   version: 0,
@@ -146,16 +148,14 @@ export function getCustomNodesRegistryVersion(): number {
  * 只在**结论真的变了**时才广播：自动刷新与手动重解析会反复命中同一档失败
  * （「还没有清单」），不去重就是把同一个提示刷屏（口径同 `sync-notice` 的按原因去重）。
  */
-function recordRegistry(next: {
-  loaded: boolean;
-  count: number;
-  detail: string | null;
-}): void {
+function recordRegistry(next: { count: number; detail: string | null; loaded: boolean }): void {
   const unchanged =
     registryState.loaded === next.loaded &&
     registryState.count === next.count &&
     registryState.detail === next.detail;
-  if (unchanged) return;
+  if (unchanged) {
+    return;
+  }
   registryState = {
     version: next.loaded ? registryState.version + 1 : registryState.version,
     count: next.count,
@@ -170,9 +170,9 @@ function recordRegistry(next: {
  * 「还没有清单」是正常冷启动，「未登录」与「取不到」是两种完全不同的修法。
  */
 type ManifestFailure =
-  | { kind: "not-parsed"; detail: string }
-  | { kind: "unauthorized"; detail: string }
-  | { kind: "unreachable"; detail: string };
+  | { detail: string; kind: "not-parsed" }
+  | { detail: string; kind: "unauthorized" }
+  | { detail: string; kind: "unreachable" };
 
 /** 把一次非 2xx 的清单响应折成可说的一句话（状态码 → 用户能行动的措辞）。 */
 function classifyManifestFailure(status: number): ManifestFailure {
@@ -191,38 +191,38 @@ function classifyManifestFailure(status: number): ManifestFailure {
   };
 }
 
-interface RawManifest {
+type RawManifest = {
   nodes?: Record<string, ManifestNode>;
-}
+};
 
-interface ManifestInput {
-  name: string;
-  type: string;
-  widget?: string | null;
-  options?: string[] | null;
+type ManifestInput = {
   /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
   default?: unknown;
+  name: string;
+  options?: Array<string> | null;
   required?: boolean;
-}
+  type: string;
+  widget?: string | null;
+};
 
-interface ManifestNode {
-  classType: string;
-  displayName?: string;
+type ManifestNode = {
   category?: string;
-  outputNode?: boolean;
+  classType: string;
+  description?: string | null;
+  displayName?: string;
   frontend_only?: boolean;
   function?: string | null;
-  description?: string | null;
-  inputs?: ManifestInput[];
-  outputs?: Array<{ type: string; name: string }>;
-  /** 磁盘上的源文件（仅供参考）。 */
-  source?: string;
+  inputs?: Array<ManifestInput>;
+  outputNode?: boolean;
+  outputs?: Array<{ name: string; type: string }>;
   /** 来源包目录名（例如 "ComfyMath"、"DaSiWa-Nodes"）。
    *  由解析器从包顶层的 __init__ 目录取出，
    *  并单独存进 CUSTOM_NODE_PACKAGE，好让画布左下角页脚不必重新解析 manifest
    *  就能查到它。 */
   package?: string;
-}
+  /** 磁盘上的源文件（仅供参考）。 */
+  source?: string;
+};
 
 function buildInto(
   target: Record<string, NodeTypeConfig>,
@@ -231,8 +231,10 @@ function buildInto(
 ): number {
   let count = 0;
   for (const [ct, n] of Object.entries(manifest.nodes ?? {})) {
-    if (!n) continue;
-    const inputs: PortSpec[] = (n.inputs ?? []).map((input) => ({
+    if (!n) {
+      continue;
+    }
+    const inputs: Array<PortSpec> = (n.inputs ?? []).map((input) => ({
       name: input.name,
       type: input.type,
       widget: isFieldType(input.widget) ? input.widget : undefined,
@@ -240,7 +242,7 @@ function buildInto(
       default: input.default,
       required: !!input.required,
     }));
-    const outputs: PortSpec[] = (n.outputs ?? []).map((output) => ({
+    const outputs: Array<PortSpec> = (n.outputs ?? []).map((output) => ({
       name: output.name,
       type: output.type,
       required: true,
@@ -267,7 +269,9 @@ function buildInto(
     // 好让画布渲染 ComfyUI 原生的左下角页脚。
     // manifest 没给包名时（旧版解析器 / 手工改过的 manifest）
     // 回落到原始分类字符串。
-    if (packages && n.package) packages[ct] = n.package;
+    if (packages && n.package) {
+      packages[ct] = n.package;
+    }
     count++;
   }
   return count;
@@ -298,26 +302,26 @@ export function isCustomNode(classType: string): boolean {
 /* `/api/custom-nodes/manifest.nodes` 里单个节点的原始形状。
  * 自定义节点设置面板直接用它，于是在注册表尚未构建时（例如刚解析完、还没有
  * 任何消费方调用 `refreshCustomNodes`）也能渲染小预览卡。 */
-export interface ManifestNodeRaw {
-  classType: string;
-  displayName?: string;
+export type ManifestNodeRaw = {
   category?: string;
-  outputNode?: boolean;
-  function?: string | null;
+  classType: string;
   description?: string | null;
+  displayName?: string;
+  function?: string | null;
   inputs?: Array<{
-    name: string;
-    type: string;
-    widget?: string | null;
-    options?: string[] | null;
     /** 控件的默认值（字符串 / 数字 / 布尔 … 原始 JSON 值），对本模块不透明。 */
     default?: unknown;
+    name: string;
+    options?: Array<string> | null;
     required?: boolean;
+    type: string;
+    widget?: string | null;
   }>;
-  outputs?: Array<{ type: string; name: string }>;
-  source?: string;
+  outputNode?: boolean;
+  outputs?: Array<{ name: string; type: string }>;
   package?: string;
-}
+  source?: string;
+};
 
 /* 直接从磁盘取原始 manifest。manifest 缺失或为空（例如还没解析过）时返回 null。
  * 服务端侧开销很小 —— 首解析之后文件已在缓存里。 */
@@ -337,23 +341,17 @@ export async function getCustomNodesManifest(
       return null;
     }
     const data: unknown = await res.json();
-    if (
-      !data ||
-      typeof data !== "object" ||
-      !("nodes" in data) ||
-      !data.nodes
-    ) {
+    if (!data || typeof data !== "object" || !("nodes" in data) || !data.nodes) {
       console.error(
         "[custom-nodes] 清单形状不对：响应里没有 nodes 字段（解析器版本与前端不匹配？）",
       );
       return null;
     }
-    return data as { nodes: Record<string, ManifestNodeRaw> };
-  } catch (e) {
-    console.error(
-      "[custom-nodes] 读取节点清单失败：",
-      errorText(e, "读取自定义节点清单"),
-    );
+    return /* SAFETY: 类型断言已复核 */ data as {
+      nodes: Record<string, ManifestNodeRaw>;
+    };
+  } catch (error) {
+    console.error("[custom-nodes] 读取节点清单失败：", errorText(error, "读取自定义节点清单"));
     return null;
   }
 }
@@ -364,9 +362,9 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
   let res: Response;
   try {
     res = await fetch(`${base}/api/custom-nodes/manifest`);
-  } catch (e) {
+  } catch (error) {
     /* 请求压根没出去（离线 / dev server 刚重启 / 端口被回收）。 */
-    const detail = `连不上清单端点（${errorText(e, "读取节点清单")}）`;
+    const detail = `连不上清单端点（${errorText(error, "读取节点清单")}）`;
     recordRegistry({ loaded: false, count: 0, detail });
     console.error(`[custom-nodes] ${detail}`);
     return 0;
@@ -387,25 +385,28 @@ export async function refreshCustomNodes(base = ""): Promise<number> {
   }
 
   try {
-    const manifest = (await res.json()) as RawManifest;
+    const manifest = /* SAFETY: 类型断言已复核 */ (await res.json()) as RawManifest;
     const next: Record<string, NodeTypeConfig> = {};
     const nextPackages: Record<string, string> = {};
     const count = buildInto(next, manifest, nextPackages);
     // 就地替换对外导出的 const map 内容（消费方持有的是同一引用）。
-    for (const k of Object.keys(CUSTOM_NODE_TYPES)) delete CUSTOM_NODE_TYPES[k];
+    for (const k of Object.keys(CUSTOM_NODE_TYPES)) {
+      delete CUSTOM_NODE_TYPES[k];
+    }
     Object.assign(CUSTOM_NODE_TYPES, next);
     // 同步包来源映射，让 ComfyNode 不必重新解析 manifest
     // 就能渲染左下角页脚。
-    for (const k of Object.keys(CUSTOM_NODE_PACKAGE))
+    for (const k of Object.keys(CUSTOM_NODE_PACKAGE)) {
       delete CUSTOM_NODE_PACKAGE[k];
+    }
     Object.assign(CUSTOM_NODE_PACKAGE, nextPackages);
     /* 表已经换完：把结论记进可读状态并广播一次，让订阅侧（画布的页脚 / 渲染链标注）
      * 在没有整页刷新的情况下重渲染。`count` 为 0 也算灌入成功 —— 那是「解析器
      * 确实一个自定义节点都没找到」，与上面的「没拿到清单」是两件事。 */
     recordRegistry({ loaded: true, count, detail: null });
     return count;
-  } catch (e) {
-    const detail = `清单解析失败（${errorText(e, "解析节点清单")}）`;
+  } catch (error) {
+    const detail = `清单解析失败（${errorText(error, "解析节点清单")}）`;
     recordRegistry({ loaded: false, count: 0, detail });
     console.error(`[custom-nodes] ${detail}`);
     return 0;

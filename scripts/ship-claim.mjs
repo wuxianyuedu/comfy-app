@@ -21,6 +21,7 @@
  */
 
 import { asArray } from "./ship-build.mjs";
+import { appendComment, readCommentBodies } from "./ship-comment.mjs";
 import { CODE } from "./ship-core.mjs";
 import { cnbJson } from "./ship-exec.mjs";
 import {
@@ -40,9 +41,7 @@ import {
  * @returns {string}
  */
 function commentSentence(kind, handle) {
-  return kind === "claim"
-    ? `开发者 ${handle} 已接单，正在开发中。`
-    : `开发者 ${handle} 开发结束。`;
+  return kind === "claim" ? `开发者 ${handle} 已接单，正在开发中。` : `开发者 ${handle} 开发结束。`;
 }
 
 /**
@@ -80,8 +79,12 @@ export function handleCommentState(bodies, handle) {
   const release = commentSentence("release", handle);
   for (const body of Array.isArray(bodies) ? bodies : []) {
     const text = String(body ?? "");
-    if (text.includes(claim)) return "claim";
-    if (text.includes(release)) return "release";
+    if (text.includes(claim)) {
+      return "claim";
+    }
+    if (text.includes(release)) {
+      return "release";
+    }
   }
   return null;
 }
@@ -176,8 +179,7 @@ export function decideRelease({ number, state, labels, handle }) {
       code: CODE.GREEN,
       others,
       reason:
-        `#${number} 的状态是 ${state || "(取不到)"}，而你名下没有 处理人:${name}` +
-        " ⇒ 无需释放。",
+        `#${number} 的状态是 ${state || "(取不到)"}，而你名下没有 处理人:${name}` + " ⇒ 无需释放。",
     };
   }
   return { act: true, code: null, others, reason: "" };
@@ -200,7 +202,9 @@ export function readIssue({ run, slug, number }) {
     "-v",
   ]);
   const d = got?.json?.data;
-  if (!d || typeof d !== "object" || Array.isArray(d)) return null;
+  if (!d || typeof d !== "object" || Array.isArray(d)) {
+    return null;
+  }
   return {
     number: Number(d.number ?? number),
     state: String(d.state ?? ""),
@@ -211,31 +215,9 @@ export function readIssue({ run, slug, number }) {
 }
 
 /**
- * 评论正文（**新到旧**）。取不到回 null —— 空数组会被读成「查过了、没有」，
- * 而 null 才是「没拿到列表」。
- *
- * @param {{run:any, slug:string, number:number}} ctx
- * @returns {string[] | null}
+ * 评论的**写 + 回读**只有一份（`ship-comment.mjs`）：`--comment` 那一格用的是同一条链，
+ * 各写一份就回到 #2719 收掉之前那种「一边补了回读、另一边没有」。
  */
-export function readCommentBodies({ run, slug, number }) {
-  const got = cnbJson(run, [
-    "issues",
-    "list-issue-comments",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--sort",
-    "-created",
-    "--page-size",
-    "100",
-    "-v",
-  ]);
-  if (!got) return null;
-  const list = asArray(got.json);
-  if (!list) return null;
-  return list.map((c) => String(c?.body ?? ""));
-}
 
 /**
  * 写一条状态评论，并**独立回读**确认它是这个人的最新状态。
@@ -249,9 +231,7 @@ function ensureComment(ctx) {
   const { run, log, slug, number, handle, kind, mkTmp } = ctx;
   const bodies = readCommentBodies({ run, slug, number });
   if (!bodies) {
-    log(
-      `[ship] #${number} 取不到评论列表 ⇒ 不写评论（写出去也证明不了它落地）`,
-    );
+    log(`[ship] #${number} 取不到评论列表 ⇒ 不写评论（写出去也证明不了它落地）`);
     return CODE.NOT_RUN;
   }
   if (handleCommentState(bodies, handle) === kind) {
@@ -262,39 +242,30 @@ function ensureComment(ctx) {
     return CODE.GREEN;
   }
   const text = kind === "claim" ? claimComment(handle) : releaseComment(handle);
-  const file = mkTmp("ship-issue-comment", text);
-  if (!file) {
-    log(
-      `[ship] #${number} 取不到 git 目录 ⇒ 评论正文没有落点，这一格没有执行者`,
-    );
+  const wrote = appendComment({
+    run,
+    log,
+    slug,
+    number,
+    body: text,
+    mkTmp,
+  });
+  if (!wrote.posted) {
+    log(`[ship] #${number} 评论写那一步没跑起来 ⇒ 不念「已评论」`);
     return CODE.NOT_RUN;
   }
-  cnbJson(run, [
-    "issues",
-    "post-issue-comment",
-    "--repo",
-    slug,
-    "--number",
-    String(number),
-    "--body-file",
-    file,
-    "-v",
-  ]);
-  const back = readCommentBodies({ run, slug, number });
-  if (!back) {
+  if (!wrote.bodies) {
     log(`[ship] #${number} 评论写后回读没跑起来 ⇒ 不念「已评论」`);
     return CODE.NOT_RUN;
   }
-  if (handleCommentState(back, handle) !== kind) {
+  if (handleCommentState(wrote.bodies, handle) !== kind) {
     log(
       `[ship] #${number} 评论写后回读里看不到刚写的那条 ⇒ 不念「已评论」` +
         "（可能是并发写了别的状态，先去看一眼评论）",
     );
     return CODE.NOT_RUN;
   }
-  log(
-    `[ship] ✓ #${number} 评论已回读（list-issue-comments）：${commentSentence(kind, handle)}`,
-  );
+  log(`[ship] ✓ #${number} 评论已回读（list-issue-comments）：${commentSentence(kind, handle)}`);
   return CODE.GREEN;
 }
 
@@ -313,12 +284,16 @@ function applyClaimLabels(ctx) {
   const { run, log, slug, number, handle, needHandler, needParticipant } = ctx;
   const label = handlerLabel(handle);
   const participant = participantLabel(handle);
-  if (!label || !participant) return { code: CODE.NOT_RUN, others: [] };
+  if (!label || !participant) {
+    return { code: CODE.NOT_RUN, others: [] };
+  }
   for (const [needed, name] of /** @type {[boolean, string][]} */ ([
     [needHandler, label],
     [needParticipant, participant],
   ])) {
-    if (!needed) continue;
+    if (!needed) {
+      continue;
+    }
     cnbJson(run, [
       "issues",
       "post-issue-labels",
@@ -345,9 +320,7 @@ function applyClaimLabels(ctx) {
     log(`[ship] #${number} 的回读里没有 ${label} ⇒ 不念「已打上」`);
     return { code: CODE.NOT_RUN, others };
   }
-  if (
-    !labelValues(back.labels, ISSUE_LABEL_ROLES.participant).includes(handle)
-  ) {
+  if (!labelValues(back.labels, ISSUE_LABEL_ROLES.participant).includes(handle)) {
     log(`[ship] #${number} 的回读里没有 ${participant} ⇒ 不念「已打上」`);
     return { code: CODE.NOT_RUN, others };
   }
@@ -358,9 +331,7 @@ function applyClaimLabels(ctx) {
     );
     return { code: CODE.RED, others };
   }
-  log(
-    `[ship] ✓ #${number} 已打上 ${label} 与 ${participant}（get-issue 回读：两枚都看得见）`,
-  );
+  log(`[ship] ✓ #${number} 已打上 ${label} 与 ${participant}（get-issue 回读：两枚都看得见）`);
   return { code: CODE.GREEN, others };
 }
 
@@ -373,7 +344,9 @@ function applyClaimLabels(ctx) {
 function dropHandlerLabel(ctx) {
   const { run, log, slug, number, handle } = ctx;
   const label = handlerLabel(handle);
-  if (!label) return CODE.NOT_RUN;
+  if (!label) {
+    return CODE.NOT_RUN;
+  }
   cnbJson(run, [
     "issues",
     "delete-issue-label",
@@ -430,25 +403,19 @@ function runClaim(ctx) {
   const participant = participantLabel(handle);
   /* 两枚标签的生命周期不同：`处理人:` 结束即撤，`参与人:` 只增不删。所以「要不要写」
    * 分开判 —— 旧单（本功能之前领的）只有 `处理人:`，重跑一次要把 `参与人:` 补齐。 */
-  const haveHandler = labelValues(
-    issue.labels,
-    ISSUE_LABEL_ROLES.handler,
-  ).includes(handle);
-  const haveParticipant = labelValues(
-    issue.labels,
-    ISSUE_LABEL_ROLES.participant,
-  ).includes(handle);
+  const haveHandler = labelValues(issue.labels, ISSUE_LABEL_ROLES.handler).includes(handle);
+  const haveParticipant = labelValues(issue.labels, ISSUE_LABEL_ROLES.participant).includes(handle);
   if (dryRun) {
     const planned = [
       ...(haveHandler ? [] : [`打上 ${label}`]),
       ...(haveParticipant ? [] : [`打上 ${participant}`]),
     ];
     log(
-      `[ship] --dry-run：` +
-        (planned.length === 0
+      `[ship] --dry-run：${
+        planned.length === 0
           ? `#${number} 已在 ${label} 与 ${participant} 名下 ⇒ 只会补一条「已接单」评论`
-          : `#${number} 将 ${planned.join("、")}，再评论「开发者 ${handle} 已接单，正在开发中。」`) +
-        "；一条都没写。",
+          : `#${number} 将 ${planned.join("、")}，再评论「开发者 ${handle} 已接单，正在开发中。」`
+        }；一条都没写。`,
     );
     return CODE.GREEN;
   }
@@ -462,11 +429,11 @@ function runClaim(ctx) {
       needHandler: !haveHandler,
       needParticipant: !haveParticipant,
     });
-    if (put.code !== CODE.GREEN) return put.code;
+    if (put.code !== CODE.GREEN) {
+      return put.code;
+    }
   } else {
-    log(
-      `[ship] #${number} 已经挂着 ${label} 与 ${participant} ⇒ 不重复打标签（幂等）`,
-    );
+    log(`[ship] #${number} 已经挂着 ${label} 与 ${participant} ⇒ 不重复打标签（幂等）`);
   }
   return ensureComment({
     run,
@@ -549,7 +516,9 @@ function runRelease(ctx) {
 function runClaims(ctx) {
   const { run, log, slug, handle } = ctx;
   const label = handlerLabel(handle);
-  if (!label) return CODE.NOT_RUN;
+  if (!label) {
+    return CODE.NOT_RUN;
+  }
   const pageSize = 100;
   /** @type {{number:number, priority:string, title:string}[]} */
   const rows = [];
@@ -572,9 +541,7 @@ function runClaims(ctx) {
       "-v",
     ]);
     if (!got) {
-      log(
-        `[ship] 取不到单子列表（第 ${page} 页）⇒ 这一格没有结论，不念「没有领取中的单子」`,
-      );
+      log(`[ship] 取不到单子列表（第 ${page} 页）⇒ 这一格没有结论，不念「没有领取中的单子」`);
       return CODE.NOT_RUN;
     }
     const list = asArray(got.json);
@@ -590,12 +557,16 @@ function runClaims(ctx) {
       });
     }
     pages = page;
-    if (list.length < pageSize) break;
-    if (page === 10) truncated = true;
+    if (list.length < pageSize) {
+      break;
+    }
+    if (page === 10) {
+      truncated = true;
+    }
   }
   log(
-    `[ship] 你领取中的单子（${label} · state=open）：${rows.length} 张` +
-      (truncated ? `（只看了前 ${pages * pageSize} 张，分页到顶）` : ""),
+    `[ship] 你领取中的单子（${label} · state=open）：${rows.length} 张${
+      truncated ? `（只看了前 ${pages * pageSize} 张，分页到顶）` : ""}`,
   );
   if (rows.length === 0) {
     log("[ship] 没有你领取中的单子。");
@@ -616,7 +587,9 @@ function runClaims(ctx) {
  *   · 评论失败就保留标签（与 `runRelease` 同一条顺序理由）。
  *   · 未配留痕是**读数**：不阻断关单，只是这一格没有可留的痕。
  *
- * @param {{run:any, log:(s:string)=>void, slug:string, handle:string|null, number:number, mkTmp:any}} ctx
+ *   `handleExplicit` 是「`handle` 是不是**人填的**」（`resolveDevHandle().explicit`；ISSUE #2833）——
+ *   `false` 时「不代发」那格要念出「取的名字」这条因，不许让它长得像「处理人真是别人」。
+ * @param {{run:any, log:(s:string)=>void, slug:string, handle:string|null, handleExplicit?: boolean, number:number, mkTmp:any}} ctx
  * @returns {number} `CODE` 之一
  */
 export function finishIssueWork(ctx) {
@@ -638,13 +611,22 @@ export function finishIssueWork(ctx) {
         handlers.length > 0 ? `是 ${handlers.join("、")}` : "标签不在场"
       } ⇒ 不代发「开发结束」、不动标签。`,
     );
+    /* 「不代发」背后是**两件不同的事**（ISSUE #2833 的现场）：处理人真是别人，与
+     * 「这份检出的我是谁」落到了**取的**名字上（链接 worktree 不带 `.gitignore` 掉的
+     * `.env` ⇒ 取值链跌到 git config user.name）。后者要修的是留痕通道（回主检出 /
+     * 补 COMFYAPP_DEV_HANDLE），不是「等一个不存在的换名」—— 话术必须把两件分开，
+     * 否则读的人会照着「别人在收尾」那条路走。 */
+    if (ctx.handleExplicit === false) {
+      log(
+        `[ship]   ⚠️ 而这份检出的「我是谁」是**取的**（非显式配置）—— 链接 worktree 不带 .env 时` +
+          `就会落到这一格（ISSUE #2833）：回主检出、或补上 COMFYAPP_DEV_HANDLE 后再跑 --release。`,
+      );
+    }
     return CODE.GREEN;
   }
   const others = handlers.filter((x) => x !== name);
   if (others.length > 0) {
-    log(
-      `[ship] #${number} 同时挂着 处理人:${others.join("、")} —— 只结束你自己的那一份。`,
-    );
+    log(`[ship] #${number} 同时挂着 处理人:${others.join("、")} —— 只结束你自己的那一份。`);
   }
   const said = ensureComment({
     run,
@@ -656,9 +638,7 @@ export function finishIssueWork(ctx) {
     mkTmp,
   });
   if (said !== CODE.GREEN) {
-    log(
-      `[ship] #${number} 的结束评论没有落地 ⇒ **保留** ${handlerLabel(name)} 标签。`,
-    );
+    log(`[ship] #${number} 的结束评论没有落地 ⇒ **保留** ${handlerLabel(name)} 标签。`);
     return said;
   }
   return dropHandlerLabel({ run, log, slug, number, handle: name });
@@ -682,6 +662,7 @@ export function finishIssueWork(ctx) {
  *   opt:any,
  *   mkTmp:(name:string,text:string)=>string|null,
  *   createIssue?:any,
+ *   commentIssue?:any,
  *   dryRun?:boolean,
  * }} ctx
  * @returns {number} `CODE` 之一
@@ -699,44 +680,60 @@ export function runIssueAction(ctx) {
     opt,
     mkTmp,
     createIssue,
+    commentIssue,
     dryRun = false,
   } = ctx;
   const claimBad = /** @type {string[]} */ (opt.claimBad ?? []);
   const releaseBad = /** @type {string[]} */ (opt.releaseBad ?? []);
   const newIssueBad = /** @type {string[]} */ (opt.newIssueBad ?? []);
+  const commentBad = /** @type {string[]} */ (opt.commentBad ?? []);
   const bad = [
     ...claimBad.map((x) => `--claim ${x}`),
     ...releaseBad.map((x) => `--release ${x}`),
     ...newIssueBad.map((x) => `--new-issue ${x}`),
+    ...commentBad.map((x) => `--comment ${x}`),
   ];
   if (bad.length > 0) {
     log(
-      `[ship] [ERROR] --claim / --release 收的是一张单的号（2 位以上数字，可写 #2179）、` +
+      `[ship] [ERROR] --claim / --release / --comment 收的是一张单的号（2 位以上数字，可写 #2179）、` +
         `--new-issue 收的是标题；这一次这些不能当号 / 标题用：${bad.join(" ")}`,
     );
     log("[ship] 一个都不认 ⇒ 不动任何单子，也不去猜是哪一张。");
     return CODE.NOT_RUN;
   }
+  /* `--body-file` 是 `--comment` 的正文，单独出现就是在写一个没有会读它的东西 ——
+   * 静默退回主流程会让人以为评论已经写了（§13.10.12 对 `--issue-body-file` 同一条处置）。 */
+  if (opt.bodyFile != null && opt.comment == null) {
+    log(
+      "[ship] [ERROR] --body-file 只跟 --comment <号> 一起用：" +
+        "它是评论正文；建单的正文旗标是 --issue-body-file。",
+    );
+    return CODE.NOT_RUN;
+  }
   const wantsNewIssue = opt.newIssue != null || newIssueBad.length > 0;
+  const wantsComment = opt.comment != null || commentBad.length > 0;
   const wanted = [
-    opt.claim != null ? "--claim" : null,
-    opt.release != null ? "--release" : null,
+    opt.claim == null ? null : "--claim",
+    opt.release == null ? null : "--release",
     opt.claims ? "--claims" : null,
     wantsNewIssue ? "--new-issue" : null,
+    wantsComment ? "--comment" : null,
   ].filter(Boolean);
   if (wanted.length > 1) {
     log(`[ship] [ERROR] 一次只做一件事：拿到 ${wanted.join(" + ")}`);
     return CODE.NOT_RUN;
   }
-  if (wanted.length === 0) return CODE.NOT_RUN;
+  if (wanted.length === 0) {
+    return CODE.NOT_RUN;
+  }
   const clashes = [
     opt.merge ? "--merge" : null,
     opt.closeIssue ? "--close-issue" : null,
     opt.cleanBranch ? "--clean-branch" : null,
     opt.branch ? "--branch" : null,
-    opt.message != null ? "--message" : null,
-    opt.messageFile != null ? "--message-file" : null,
-    opt.title != null ? "--title" : null,
+    opt.message == null ? null : "--message",
+    opt.messageFile == null ? null : "--message-file",
+    opt.title == null ? null : "--title",
     opt.adds.length > 0 ? "--add" : null,
     opt.only ? "--only" : null,
   ].filter(Boolean);
@@ -760,9 +757,7 @@ export function runIssueAction(ctx) {
    * 调用方显式传空（装配层漏传），话术按「没有来源」念，而不是让照提示做过一遍的人再撞一次墙。 */
   if (wantsNewIssue) {
     if (typeof createIssue !== "function") {
-      log(
-        "[ship] [ERROR] --new-issue 没有接上执行者（装配层漏传）⇒ 没有结论。",
-      );
+      log("[ship] [ERROR] --new-issue 没有接上执行者（装配层漏传）⇒ 没有结论。");
       return CODE.NOT_RUN;
     }
     return createIssue({
@@ -778,6 +773,25 @@ export function runIssueAction(ctx) {
       dryRun,
     });
   }
+  /* `--comment` 不需要「谁」：写一条读数不是「谁在做什么」，未配留痕时署名会写「未配」
+   * 但评论照发（`--new-issue` 同一条边界）。所以它排在下面对 handle 的硬性检查之前。 */
+  if (wantsComment) {
+    if (typeof commentIssue !== "function") {
+      log("[ship] [ERROR] --comment 没有接上执行者（装配层漏传）⇒ 没有结论。");
+      return CODE.NOT_RUN;
+    }
+    return commentIssue({
+      run,
+      log,
+      slug,
+      number: opt.comment,
+      handle,
+      root,
+      opt,
+      mkTmp,
+      dryRun,
+    });
+  }
   const name = String(handle ?? "").trim();
   if (!name) {
     log(
@@ -787,7 +801,9 @@ export function runIssueAction(ctx) {
     );
     return CODE.NOT_RUN;
   }
-  if (opt.claims) return runClaims({ run, log, slug, handle: name });
+  if (opt.claims) {
+    return runClaims({ run, log, slug, handle: name });
+  }
   if (opt.claim != null) {
     return runClaim({
       run,

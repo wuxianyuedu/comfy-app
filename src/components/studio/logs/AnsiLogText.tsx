@@ -48,17 +48,17 @@ const ANSI_STYLE_CLASS: Record<AnsiStyleKey, string> = {
 };
 // p71-allow:end
 
-export function AnsiLogText({ segments }: { segments: AnsiSegment[] }) {
+export function AnsiLogText({ segments }: { segments: Array<AnsiSegment> }) {
   return (
     <>
       {segments.map((seg, i) =>
         seg.styles && seg.styles.length > 0 ? (
           <span
-            key={i}
             className={seg.styles
               .map((style) => ANSI_STYLE_CLASS[style])
               .filter(Boolean)
               .join(" ")}
+            key={i}
           >
             {seg.text}
           </span>

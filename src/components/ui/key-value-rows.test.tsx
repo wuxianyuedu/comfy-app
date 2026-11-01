@@ -29,9 +29,7 @@ describe("值与缺值", () => {
         ]}
       />,
     );
-    const texts = Array.from(container.querySelectorAll("span")).map(
-      (s) => s.textContent,
-    );
+    const texts = [...container.querySelectorAll("span")].map((s) => s.textContent);
     expect(texts.filter((s) => s === "—")).toHaveLength(3);
     /* `0` 是真实值，照常显示（与 displayValue 的口径一致）。 */
     expect(texts).toContain("0");
@@ -39,9 +37,7 @@ describe("值与缺值", () => {
 
   it("value（已渲染节点）原样渲染，不被 displayValue 改写", () => {
     const { container } = render(
-      <KeyValueRows
-        items={[{ key: "k", value: <em data-testid="custom">自定义</em> }]}
-      />,
+      <KeyValueRows items={[{ key: "k", value: <em data-testid="custom">自定义</em> }]} />,
     );
     expect(container.querySelector('[data-testid="custom"]')).not.toBeNull();
     expect(container.textContent).not.toContain("—");
@@ -51,7 +47,7 @@ describe("值与缺值", () => {
 describe("rows 布局（缺省）", () => {
   it("标签左、值右，值走等宽字体", () => {
     const { container } = render(
-      <KeyValueRows bordered striped items={[{ key: "Seed", raw: 12345 }]} />,
+      <KeyValueRows bordered items={[{ key: "Seed", raw: 12_345 }]} striped />,
     );
     const row = container.querySelector("div > div")!;
     expect(row.textContent).toContain("Seed");
@@ -63,7 +59,7 @@ describe("rows 布局（缺省）", () => {
 
   it("mono=false 时值不走等宽（文案类字段）", () => {
     const { container } = render(
-      <KeyValueRows mono={false} items={[{ key: "模型", raw: "anime" }]} />,
+      <KeyValueRows items={[{ key: "模型", raw: "anime" }]} mono={false} />,
     );
     const value = container.querySelector("span:last-child")!;
     expect(value.className).not.toContain("font-mono");
@@ -73,10 +69,7 @@ describe("rows 布局（缺省）", () => {
 describe("stacked 布局", () => {
   it("标签在值上方，hint 渲染在值下面", () => {
     const { container } = render(
-      <KeyValueRows
-        layout="stacked"
-        items={[{ key: "触发词", raw: "abc", hint: "本次真实值" }]}
-      />,
+      <KeyValueRows items={[{ key: "触发词", raw: "abc", hint: "本次真实值" }]} layout="stacked" />,
     );
     expect(container.textContent).toContain("触发词");
     expect(container.textContent).toContain("abc");
@@ -87,12 +80,10 @@ describe("stacked 布局", () => {
 
   it("columns 只影响网格列数", () => {
     const { container, rerender } = render(
-      <KeyValueRows layout="stacked" columns={3} items={[{ key: "a" }]} />,
+      <KeyValueRows columns={3} items={[{ key: "a" }]} layout="stacked" />,
     );
     expect(container.firstElementChild!.className).toContain("sm:grid-cols-3");
-    rerender(
-      <KeyValueRows layout="stacked" columns={1} items={[{ key: "a" }]} />,
-    );
+    rerender(<KeyValueRows columns={1} items={[{ key: "a" }]} layout="stacked" />);
     expect(container.firstElementChild!.className).toContain("grid-cols-1");
   });
 });
@@ -100,7 +91,7 @@ describe("stacked 布局", () => {
 describe("table 布局", () => {
   it("用真实 table 且行表头是 th[scope=row]", () => {
     const { container } = render(
-      <KeyValueRows layout="table" items={[{ key: "seed", value: "12345" }]} />,
+      <KeyValueRows items={[{ key: "seed", value: "12345" }]} layout="table" />,
     );
     expect(container.querySelector("table")).not.toBeNull();
     const th = container.querySelector("th")!;
@@ -113,7 +104,7 @@ describe("table 布局", () => {
 describe("inline 布局与空块", () => {
   it("inline 把标签与值挤在一行", () => {
     const { container } = render(
-      <KeyValueRows layout="inline" items={[{ key: "内存", raw: "1.2 GB" }]} />,
+      <KeyValueRows items={[{ key: "内存", raw: "1.2 GB" }]} layout="inline" />,
     );
     expect(container.firstElementChild!.className).toContain("inline-flex");
     expect(container.textContent).toContain("内存");

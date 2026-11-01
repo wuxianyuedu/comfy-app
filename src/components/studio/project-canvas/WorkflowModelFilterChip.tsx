@@ -5,27 +5,35 @@
  */
 import { OptionListPopover } from "~/components/ui/option-list-popover";
 
-interface WorkflowModelFilterChipProps {
-  value: string;
-  tags: { id: string; name: string; count: number }[];
+type WorkflowModelFilterChipProps = {
   onChange: (v: string) => void;
-}
+  tags: Array<{ count: number; id: string; name: string }>;
+  value: string;
+};
 
-export function WorkflowModelFilterChip({
-  value,
-  tags,
-  onChange,
-}: WorkflowModelFilterChipProps) {
+export function WorkflowModelFilterChip({ value, tags, onChange }: WorkflowModelFilterChipProps) {
   const label = value === "all" ? "全部模型" : value;
 
   return (
     <OptionListPopover
-      value={value}
-      onSelect={onChange}
-      triggerTitle={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
       align="start"
       contentClassName="w-72"
-      triggerClassName="border-accent/35 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs"
+      emptyHint="标签库为空，去工作流库「管理模型」添加"
+      items={[
+        {
+          value: "all",
+          label: "全部模型",
+          prefix: <span className="bg-accent size-1.5 rounded-full" />,
+        },
+        ...tags.map((tag) => ({
+          value: tag.name,
+          label: tag.name,
+          title: tag.name,
+          prefix: <span className="bg-accent-soft size-1.5 rounded-full" />,
+          suffix: <span className="text-ink-muted text-4xs tabular-nums">{tag.count}</span>,
+        })),
+      ]}
+      onSelect={onChange}
       trigger={
         <>
           <span
@@ -41,25 +49,9 @@ export function WorkflowModelFilterChip({
           </span>
         </>
       }
-      emptyHint="标签库为空，去工作流库「管理模型」添加"
-      items={[
-        {
-          value: "all",
-          label: "全部模型",
-          prefix: <span className="bg-accent size-1.5 rounded-full" />,
-        },
-        ...tags.map((tag) => ({
-          value: tag.name,
-          label: tag.name,
-          title: tag.name,
-          prefix: <span className="bg-accent-soft size-1.5 rounded-full" />,
-          suffix: (
-            <span className="text-ink-muted text-4xs tabular-nums">
-              {tag.count}
-            </span>
-          ),
-        })),
-      ]}
+      triggerClassName="border-accent/35 bg-node-accent h-6 shrink-0 rounded-lg border px-2.5 text-xs"
+      triggerTitle={value === "all" ? "按模型筛选" : `已筛选模型：${value}`}
+      value={value}
     />
   );
 }

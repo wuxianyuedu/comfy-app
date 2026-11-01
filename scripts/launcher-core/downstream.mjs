@@ -62,13 +62,17 @@ function describePnpmMiss() {
     `按 ${JSON.stringify(path.delimiter)} 切出 ${entries.length} 条:`,
     ...entries.slice(0, 20).map((e) => `  ${e}`),
   ];
-  if (entries.length > 20) lines.push(`  …（另有 ${entries.length - 20} 条）`);
+  if (entries.length > 20) {
+    lines.push(`  …（另有 ${entries.length - 20} 条）`);
+  }
   /* 键名若不是 `PATH` 而是别的写法，`whichCommand` 在 Windows 上会自己按大小写
    * 不敏感再找一遍；把「表里到底有哪几个近似键」打出来，才能把那一种与「真没装」分开。 */
   const nearKeys = Object.keys(process.env).filter(
     (k) => k.toUpperCase() === "PATH" && k !== "PATH",
   );
-  if (nearKeys.length > 0) lines.push(`⚠️ 近似键: ${nearKeys.join(", ")}`);
+  if (nearKeys.length > 0) {
+    lines.push(`⚠️ 近似键: ${nearKeys.join(", ")}`);
+  }
   return lines.join("\n");
 }
 
@@ -85,7 +89,9 @@ export async function syncDependencies(ctx, root, deps = {}) {
   const status = deps.status ?? null;
   const staleShell = deps.staleShell ?? null;
   const drift = lockfileDrift(root);
-  if (drift.state === "fresh") return null;
+  if (drift.state === "fresh") {
+    return null;
+  }
   if (drift.state === "no-lockfile") {
     return "找不到仓库 pnpm-lock.yaml —— 检出可能不完整，请重新克隆后再试。";
   }
@@ -118,12 +124,10 @@ export async function syncDependencies(ctx, root, deps = {}) {
   );
   if (drift.diff) {
     // 「不一致」只说了一半，用户接着要问的正是「哪儿不一致」（ISSUE #550）。
-    ctx.log(
-      "依赖与 lockfile 的不一致明细（仓库 lockfile 对比最近一次安装用的那份）：",
-      "INFO",
-    );
-    for (const line of renderDriftReport(drift.diff, { maxPerSection: 8 }))
+    ctx.log("依赖与 lockfile 的不一致明细（仓库 lockfile 对比最近一次安装用的那份）：", "INFO");
+    for (const line of renderDriftReport(drift.diff, { maxPerSection: 8 })) {
       ctx.log(line, "INFO");
+    }
   }
   status?.("deps-install", 0.03, "正在补装依赖（pnpm install）…", {
     staleShell,
@@ -131,22 +135,16 @@ export async function syncDependencies(ctx, root, deps = {}) {
 
   const invocation = pnpmInvocation(["install"]);
   if (!invocation) {
-    return (
-      "pnpm 不在 PATH 上，无法补装依赖（先执行 corepack enable）。\n" +
-      describePnpmMiss()
-    );
+    return `pnpm 不在 PATH 上，无法补装依赖（先执行 corepack enable）。\n${describePnpmMiss()}`;
   }
   const result = runSync(invocation.command, invocation.args, {
     cwd: root,
     timeoutMs: 30 * 60_000,
   });
-  const tail = (result.stdout + result.stderr)
-    .trim()
-    .split("\n")
-    .slice(-15)
-    .join("\n");
-  if (tail)
+  const tail = (result.stdout + result.stderr).trim().split("\n").slice(-15).join("\n");
+  if (tail) {
     ctx.log(`pnpm install 输出尾部：\n${tail}`, result.ok ? "INFO" : "ERROR");
+  }
 
   const verdict = verifyInstall(root);
   if (!verdict.ok) {
@@ -155,10 +153,7 @@ export async function syncDependencies(ctx, root, deps = {}) {
       "本次安装的输出可在上方日志里查看；修复后重新启动即可（不要只重试不改动）。"
     );
   }
-  ctx.log(
-    "依赖补装完成并已复核（.modules.yaml + 关键依赖 + lockfile 一致）",
-    "OK",
-  );
+  ctx.log("依赖补装完成并已复核（.modules.yaml + 关键依赖 + lockfile 一致）", "OK");
   return null;
 }
 
@@ -174,21 +169,16 @@ export async function syncDependencies(ctx, root, deps = {}) {
  * @param {string} errFile stderr 落盘路径
  * @param {Record<string, string>} [extraEnv] 追加环境变量
  */
-export function spawnDevServer(
-  ctx,
-  port,
-  host,
-  outFile,
-  errFile,
-  extraEnv = {},
-) {
+export function spawnDevServer(ctx, port, host, outFile, errFile, extraEnv = {}) {
   // 起服务用的是**门禁验过的那个命令形态**（`commandInvocation`）：
   // `pnpm` 在 Windows 上常常只有 shebang shim 而 shim 起不来，此时真正能用的是
   // 同目录的 `pnpm.ps1`（经 PowerShell 宿主）。门禁选出来的形态必须在起服务这一
   // 步复用同一个实现，否则「探测过了、起服务却用另一种方式又失败一次」。
   // 判据只在 shell.mjs 一处（规范 §9.5），这里不自己拼可执行名。
   const candidate = whichCommand("pnpm");
-  if (!candidate) throw new Error("pnpm 不在 PATH 上，无法启动 dev server");
+  if (!candidate) {
+    throw new Error("pnpm 不在 PATH 上，无法启动 dev server");
+  }
   const invocation = commandInvocation(candidate, ["-v"]);
   const child = spawnInGroup({
     command: invocation.command,
@@ -235,7 +225,9 @@ export function spawnExecutorHost(ctx) {
     runTimestamp: ctx.runTimestamp,
     logLine: (message, level = "INFO") => ctx.log(message, level),
   });
-  if (!result) return null;
+  if (!result) {
+    return null;
+  }
   ctx.spawned.push(result.child);
   return result.child;
 }
@@ -263,9 +255,7 @@ export async function concludeDownstreamExit(
 ) {
   clearInterval(heartbeat);
   const markers = readShellMarkers(ctx.root);
-  const shellExited = shell
-    ? shell.exitCode !== null || shell.signalCode !== null
-    : false;
+  const shellExited = shell ? shell.exitCode !== null || shell.signalCode !== null : false;
   const kind = downstreamExitKind({
     shellExited,
     abandoned: markers.abandoned,

@@ -46,9 +46,7 @@ describe("parseExtraModelPathsYaml", () => {
       ].join("\n"),
     );
     expect(parsed.basePath).toBe("D:/somewhere");
-    expect(parsed.entries).toEqual([
-      { key: "extra", basePath: "D:/e", paths: ["models"] },
-    ]);
+    expect(parsed.entries).toEqual([{ key: "extra", basePath: "D:/e", paths: ["models"] }]);
   });
 
   it("多个条目各自成块（收尾的是最后一个块，不是只有它）", () => {
@@ -65,10 +63,7 @@ describe("parseExtraModelPathsYaml", () => {
         "",
       ].join("\n"),
     );
-    expect(parsed.entries.map((entry) => entry.key)).toEqual([
-      "first",
-      "second",
-    ]);
+    expect(parsed.entries.map((entry) => entry.key)).toEqual(["first", "second"]);
   });
 
   it("行内数组与引号值都认，值里的裸 # 不当注释", () => {
@@ -103,18 +98,9 @@ describe("parseExtraModelPathsYaml", () => {
 
   it("坏行与 CRLF 不炸：无法归属的写法跳过", () => {
     const parsed = parseExtraModelPathsYaml(
-      [
-        "随便一行没有冒号",
-        "good:",
-        "  base_path: D:/x",
-        "  paths:",
-        "\t- models",
-        "",
-      ].join("\r\n"),
+      ["随便一行没有冒号", "good:", "  base_path: D:/x", "  paths:", "\t- models", ""].join("\r\n"),
     );
-    expect(parsed.entries).toEqual([
-      { key: "good", basePath: "D:/x", paths: ["models"] },
-    ]);
+    expect(parsed.entries).toEqual([{ key: "good", basePath: "D:/x", paths: ["models"] }]);
   });
 
   it("空文本 → 无条目", () => {
@@ -142,14 +128,7 @@ describe("parseExtraModelPathsYaml", () => {
       {
         key: "comfyui_shared",
         basePath: "D:/Comfy-Desktop/ComfyUI-Shared/models",
-        paths: [
-          "checkpoints/",
-          "loras/",
-          "clip/",
-          "vae/",
-          "clip_vision/",
-          "sensenova/",
-        ],
+        paths: ["checkpoints/", "loras/", "clip/", "vae/", "clip_vision/", "sensenova/"],
       },
     ]);
   });
@@ -172,12 +151,7 @@ describe("parseExtraModelPathsYaml", () => {
       {
         key: "comfyui_shared",
         basePath: "D:/x",
-        paths: [
-          "text_encoders/",
-          "text_encoders/byter/",
-          "vae/",
-          "checkpoints/",
-        ],
+        paths: ["text_encoders/", "text_encoders/byter/", "vae/", "checkpoints/"],
       },
     ]);
   });
@@ -186,7 +160,7 @@ describe("parseExtraModelPathsYaml", () => {
     const parsed = parseExtraModelPathsYaml(
       [
         "sensenova_local:",
-        "  base_path: 'D:\\Comfy-Desktop\\ComfyUI-Shared\\models'",
+        String.raw`  base_path: 'D:\Comfy-Desktop\ComfyUI-Shared\models'`,
         "  sensenova: sensenova/",
         "  checkpoints: checkpoints",
         "",
@@ -195,7 +169,7 @@ describe("parseExtraModelPathsYaml", () => {
     expect(parsed.entries).toEqual([
       {
         key: "sensenova_local",
-        basePath: "D:\\Comfy-Desktop\\ComfyUI-Shared\\models",
+        basePath: String.raw`D:\Comfy-Desktop\ComfyUI-Shared\models`,
         paths: ["sensenova/", "checkpoints"],
       },
     ]);
@@ -242,9 +216,11 @@ describe("parseStorageDirArgs", () => {
   });
 
   it("未给值的flag 与无关参数一律当作没给", () => {
-    expect(
-      parseStorageDirArgs(["--input-directory", "--listen", "0.0.0.0"]),
-    ).toEqual({ baseDir: null, inputDir: null, outputDir: null });
+    expect(parseStorageDirArgs(["--input-directory", "--listen", "0.0.0.0"])).toEqual({
+      baseDir: null,
+      inputDir: null,
+      outputDir: null,
+    });
   });
 
   it("只认这三个目录参数（--temp-directory 不进来）", () => {
@@ -261,11 +237,7 @@ describe("parseStorageDirArgs", () => {
 
   it("同名参数后者覆盖前者", () => {
     expect(
-      parseStorageDirArgs([
-        "--input-directory",
-        "D:/a",
-        "--input-directory=D:/b",
-      ]),
+      parseStorageDirArgs(["--input-directory", "D:/a", "--input-directory=D:/b"]),
     ).toMatchObject({ inputDir: "D:/b" });
   });
 });
@@ -297,8 +269,6 @@ describe("parseExtraModelPathsConfigArgs", () => {
         "D:/x",
       ]),
     ).toEqual(["D:/c/extra.yaml"]);
-    expect(
-      parseExtraModelPathsConfigArgs(["--base-directory", "D:/x"]),
-    ).toEqual([]);
+    expect(parseExtraModelPathsConfigArgs(["--base-directory", "D:/x"])).toEqual([]);
   });
 });

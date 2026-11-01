@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 import { Skeleton } from "~/components/ui/skeleton";
 import { ButtonLink } from "~/components/ui/button";
@@ -32,14 +26,14 @@ export function HomeModelOverview() {
 
   if (m.loading) {
     return (
-      <Card data-component="home-model-overview" className="rounded-2xl">
+      <Card className="rounded-2xl" data-component="home-model-overview">
         <CardHeader>
           <CardTitle className="text-ink-bright">模型概览</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-2">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={`model-overview-skeleton-${i}`} className="h-4" />
+              <Skeleton className="h-4" key={`model-overview-skeleton-${i}`} />
             ))}
           </div>
         </CardContent>
@@ -49,7 +43,7 @@ export function HomeModelOverview() {
 
   if (m.error) {
     return (
-      <Card data-component="home-model-overview" className="rounded-2xl">
+      <Card className="rounded-2xl" data-component="home-model-overview">
         <CardHeader>
           <CardTitle className="text-ink-bright">模型概览</CardTitle>
         </CardHeader>
@@ -69,7 +63,7 @@ export function HomeModelOverview() {
   const folded = m.groups.length - shown.length;
 
   return (
-    <Card data-component="home-model-overview" className="rounded-2xl">
+    <Card className="rounded-2xl" data-component="home-model-overview">
       <CardHeader className="flex-row items-center gap-2">
         <CardTitle className="text-ink-bright flex-1">模型概览</CardTitle>
         <span className="text-ink-muted text-xs tabular-nums">
@@ -79,12 +73,12 @@ export function HomeModelOverview() {
       <CardContent>
         {shown.length > 0 ? (
           <KeyValueRows
-            layout="rows"
-            mono={false}
             items={shown.map((group) => ({
               key: group.label,
               value: `${group.count} 个`,
             }))}
+            layout="rows"
+            mono={false}
           />
         ) : (
           /* 一个模型都没有：说清楚并给出出口，而不是留一个空表格。 */

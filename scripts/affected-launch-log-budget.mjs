@@ -43,7 +43,9 @@ export function resolveQuiet(raw) {
   if (raw === undefined || String(raw).trim() === "") {
     return { quiet: false, note: null };
   }
-  if (String(raw).trim() === "1") return { quiet: true, note: null };
+  if (String(raw).trim() === "1") {
+    return { quiet: true, note: null };
+  }
   return {
     quiet: false,
     note:
@@ -77,7 +79,9 @@ export function reporterArgs(quiet) {
  */
 export function announceQuiet(raw, write) {
   const { quiet, note } = resolveQuiet(raw);
-  if (note) write(`[affected-launch] ${note}\n`);
+  if (note) {
+    write(`[affected-launch] ${note}\n`);
+  }
   write(
     quiet
       ? "[affected-launch] reporter：dot（COMFY_AFFECTED_QUIET=1 —— 逐文件不逐个刷行，" +

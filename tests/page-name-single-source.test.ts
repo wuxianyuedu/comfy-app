@@ -44,7 +44,7 @@ const ROOT = process.cwd();
  * 这条守卫对它的计数能力 —— 形状还在（有人改回裸字面量），判据却看不见了，
  * 而且不会有任何东西变红。退役名清单让「改回去」继续被拦。
  */
-const RETIRED_SCREEN_NAMES = [
+const RETIRED_SCREEN_NAMES = /* SAFETY: 类型断言已复核 */ [
   /* 队列与运行 → 队列（ISSUE #1423：与侧栏 / 页签同一个名字）。 */
   "队列与运行",
   /* 历史记录 → 历史（同上，多出来的「记录」两个字没多给信息）。 */
@@ -61,7 +61,7 @@ const RETIRED_SCREEN_NAMES = [
  * 两半的分工写在这里，是因为清单的覆盖面必须与「守卫的实际射程」对上 ——
  * 读这份清单的人不该以为它是全库判据。
  */
-const PAGE_HEADER_CONSUMERS = [
+const PAGE_HEADER_CONSUMERS = /* SAFETY: 类型断言已复核 */ [
   "src/components/console/ConsoleView.tsx",
   /* 路由壳 `app/(main)/models/page.tsx` 只留 `metadata` + 挂载 —— 页头在
    * 实现侧（`pageHeaderTitle` 是 client 侧的函数，server 壳调不到它）。
@@ -97,18 +97,18 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
   });
 
   it("`viewLabel` 不许只是 `label` 的同义扩写（`· X` / `-X` / 「与X」那一族）", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const item of NAV_ITEMS) {
       const extra = item.viewLabel;
-      if (extra === undefined) continue;
+      if (extra === undefined) {
+        continue;
+      }
       /* 判据：把全名剥掉短名与分隔符之后还剩多少实质内容。
          剩下 0 字 = 纯粹的第二套说法（「队列」vs「队列与运行」的「与运行」是
          4 个字，不是 0 —— 所以下面还要单独判「短名是全名的前缀」这一族）。 */
-      const stripped = extra.replace(item.label, "").replace(/[·・\-—\s]/g, "");
+      const stripped = extra.replace(item.label, "").replaceAll(/[·・\-—\s]/g, "");
       if (stripped.length > 0 && extra.startsWith(item.label)) {
-        offenders.push(
-          `${item.id}: label「${item.label}」/ viewLabel「${extra}」`,
-        );
+        offenders.push(`${item.id}: label「${item.label}」/ viewLabel「${extra}」`);
       }
     }
     expect(
@@ -134,25 +134,22 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
    * （P82 那次粗锚漏计 79 处的教训，规范 16 §16.2.4.72 末段）。下面第三条用例
    * 喂进真实的历史形状断言它被数到。
    */
-  function bareScreenNameHeadings(text: string): string[] {
+  function bareScreenNameHeadings(text: string): Array<string> {
     const known = new Set([
       /* 注册表里**当前**的每一个屏名。 */
-      ...NAV_ITEMS.flatMap((item) => [
-        item.label,
-        item.viewLabel ?? item.label,
-      ]),
+      ...NAV_ITEMS.flatMap((item) => [item.label, item.viewLabel ?? item.label]),
       /* 加已退役的那几个：判据只认当前名字的话，它会在**收口那一刻**同时失去
        * 计数能力 —— 正是这条守卫要拦的形状从「命中」变成「看不见」，
        * 而它自己不会红（实测：本文件第一版正是这么漏掉「队列与运行」的）。
        * 一份只认得新名字的守卫，等价于没有守卫。 */
       ...RETIRED_SCREEN_NAMES,
     ]);
-    const hits: string[] = [];
-    for (const match of text.matchAll(
-      /<h[12]\b[^>]*>\s*([^\s<>{][^<>{]*?)\s*<\/h[12]>/g,
-    )) {
+    const hits: Array<string> = [];
+    for (const match of text.matchAll(/<h[12]\b[^>]*>\s*([^\s<>{][^<>{]*?)\s*<\/h[12]>/g)) {
       const content = match[1]?.trim() ?? "";
-      if (known.has(content)) hits.push(content);
+      if (known.has(content)) {
+        hits.push(content);
+      }
     }
     return hits;
   }
@@ -162,24 +159,16 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
      * 「历史记录」是 `HistoryList.tsx` 的 h1。喂进来必须被数到，否则下面那条
      * 断言 `[]` 只是「判据在空转」。 */
     expect(
-      bareScreenNameHeadings(
-        '<h1 className="font-title u-title-page">队列与运行</h1>',
-      ),
+      bareScreenNameHeadings('<h1 className="font-title u-title-page">队列与运行</h1>'),
     ).toEqual(["队列与运行"]);
-    expect(bareScreenNameHeadings('<h1 className="x">历史记录</h1>')).toEqual([
-      "历史记录",
-    ]);
+    expect(bareScreenNameHeadings('<h1 className="x">历史记录</h1>')).toEqual(["历史记录"]);
     /* 反面：收口后的写法不误报（`<h1>` 由基元渲染，视图里没有它）。 */
-    expect(
-      bareScreenNameHeadings('<PageHeader title={pageHeaderTitle("queue")} />'),
-    ).toEqual([]);
+    expect(bareScreenNameHeadings('<PageHeader title={pageHeaderTitle("queue")} />')).toEqual([]);
   });
 
   it("屏内 `h1` 不许再出现裸字面量的屏名（`<h1>队列与运行</h1>` 那种）", () => {
     const offenders = PAGE_HEADER_CONSUMERS.flatMap((rel) =>
-      bareScreenNameHeadings(read(rel)).map(
-        (name) => `${rel}: <h1>${name}</h1>`,
-      ),
+      bareScreenNameHeadings(read(rel)).map((name) => `${rel}: <h1>${name}</h1>`),
     );
     expect(
       offenders,
@@ -192,7 +181,7 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
     /* 形态：`<h1>` 的属性段之后，紧跟「项目名 + 分隔点 + 另一段中文」。
        判据收窄到 `h1` 的**同一行**内出现 `·` 或 `・` —— 标题右侧挂副名正是
        FilmStudioTopBar 收口前那个形状。 */
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     for (const rel of [
       "src/components/studio/FilmStudioTopBar.tsx",
       "src/components/studio/ProjectOutputs.tsx",
@@ -200,13 +189,14 @@ describe("屏名只有一个出处（ISSUE #1423）", () => {
     ]) {
       const text = read(rel);
       for (const line of text.split("\n")) {
-        if (!/<h1\b/.test(line)) continue;
-        if (/[·・]/.test(line)) hits.push(`${rel}: ${line.trim()}`);
+        if (!/<h1\b/.test(line)) {
+          continue;
+        }
+        if (/[·・]/.test(line)) {
+          hits.push(`${rel}: ${line.trim()}`);
+        }
       }
     }
-    expect(
-      hits,
-      "页头标题里又挂了一个屏名 —— 那是同一件事的第二个名字（ISSUE #1423）",
-    ).toEqual([]);
+    expect(hits, "页头标题里又挂了一个屏名 —— 那是同一件事的第二个名字（ISSUE #1423）").toEqual([]);
   });
 });

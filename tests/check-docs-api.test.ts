@@ -10,7 +10,8 @@
  * 「提交进 git 的那份与源同不同步」这个问题**没有对象**了 —— 判据改成三件能答的事：
  *
  *   1. **触发面**：窄了 = 改了会改产物的东西却没触发（判据白挂）；宽了 = 每个前端提交
- *      付 31s（然后没人愿意用）。它是 typedoc `entryPoints` 的**直接映射** ∪ 闭包叶子集，
+ *      付一整轮重生成（百秒级，然后没人愿意用；现值取法见规范 §13.5.17）。
+ *      它是 typedoc `entryPoints` 的**直接映射** ∪ 闭包叶子集，
  *      不是启发式，所以这里逐条钉住边界（含 `.test.ts` 也在入口 glob 里这件事）。
  *   2. **骨架齐全 + 可移植**：产物缺了默认主题每一页都引用的那几份 = 读者打开就是坏的；
  *      产物里烤进本机绝对路径 = 这份副本换台机器就不成立。
@@ -34,7 +35,7 @@ import {
   walk,
 } from "../scripts/check-docs-api.cjs";
 
-const temps: string[] = [];
+const temps: Array<string> = [];
 
 function tempDir(prefix: string): string {
   const dir = mkdtempSync(path.join(tmpdir(), prefix));
@@ -63,7 +64,9 @@ function productFixture(extra: Record<string, string> = {}): string {
 
 afterEach(() => {
   // `temps.pop()` 在 `while (temps.length)` 下必然有值，用 `!` 比 `as` 更短且不撒谎
-  while (temps.length) rmSync(temps.pop()!, { recursive: true, force: true });
+  while (temps.length) {
+    rmSync(temps.pop()!, { recursive: true, force: true });
+  }
 });
 
 describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
@@ -84,7 +87,7 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
     }
   });
 
-  it("与产物无关的改动不触发（不给普通提交加那 31s）", () => {
+  it("与产物无关的改动不触发（不给普通提交加一整轮重生成）", () => {
     for (const f of [
       "src/components/workshop/WorkshopStageBody.tsx",
       "src/app/page.tsx",
@@ -109,9 +112,7 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
     // 这条看着反直觉，但它是「直接映射」的证据：typedoc 的入口写的是
     // `src/lib/**/!(*.test).ts`，`*` 不跨目录，所以嵌套测试文件本来就在展开集合里。
     // 收窄成「排除 *.test.ts」是**多写的启发式**，与配置脱钩（配置改了它不会跟）。
-    expect(matchedInputs(["src/lib/endpoints.test.ts"])).toEqual([
-      "src/lib/endpoints.test.ts",
-    ]);
+    expect(matchedInputs(["src/lib/endpoints.test.ts"])).toEqual(["src/lib/endpoints.test.ts"]);
     expect(INPUT_RES.some((re) => re.test("src/lib/x.ts"))).toBe(true);
   });
 
@@ -122,14 +123,9 @@ describe("触发面 = typedoc 的输入面（不是启发式收窄）", () => {
   });
 
   it("多文件清单只回命中项，顺序保持", () => {
-    expect(
-      matchedInputs([
-        "README.md",
-        "src/lib/a.ts",
-        "pnpm-lock.yaml",
-        "src/app/x.tsx",
-      ]),
-    ).toEqual(["src/lib/a.ts", "pnpm-lock.yaml"]);
+    expect(matchedInputs(["README.md", "src/lib/a.ts", "pnpm-lock.yaml", "src/app/x.tsx"])).toEqual(
+      ["src/lib/a.ts", "pnpm-lock.yaml"],
+    );
   });
 
   it("产物面 `docs/api/**` 不在面内（产物不再进 git，ISSUE #2231）", () => {
@@ -193,14 +189,10 @@ describe("judgeProduct：骨架齐全 + 可移植（ISSUE #2231 的新判据）"
   it("产物里烤进本机绝对路径 ⇒ 报出来（两种分隔符形态都查）", () => {
     /* 这条不是洁癖：这份副本是要给人读的，而 typedoc 的源码链接 / 搜索索引 /
      * 面包屑里只要有一处烤进了本机路径，读者点开的就不是同一个东西。 */
-    const win = productFixture({ "modules/leak.html": "<p>C:\\repo\\src\\lib\\x.ts</p>" });
-    expect(judgeProduct(win, "C:\\repo", {}).problems.join("\n")).toContain(
-      "本机绝对路径",
-    );
+    const win = productFixture({ "modules/leak.html": String.raw`<p>C:\repo\src\lib\x.ts</p>` });
+    expect(judgeProduct(win, String.raw`C:\repo`, {}).problems.join("\n")).toContain("本机绝对路径");
     const posix = productFixture({ "modules/leak.html": "<p>/repo/src/lib/x.ts</p>" });
-    expect(judgeProduct(posix, "/repo", {}).problems.join("\n")).toContain(
-      "本机绝对路径",
-    );
+    expect(judgeProduct(posix, "/repo", {}).problems.join("\n")).toContain("本机绝对路径");
   });
 
   it("typedoc.json 把 cleanOutputDir 关了 ⇒ 报出来（孤儿页面会留在这一轮里）", () => {
@@ -223,8 +215,8 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
-    } catch (err) {
-      const e = err as { status?: number; stderr?: string };
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as { status?: number; stderr?: string };
       code = e.status ?? -1;
       out = `${e.stderr ?? ""}`;
     }
@@ -241,21 +233,19 @@ describe("--autofix 这一档已经不存在了（ISSUE #2231）", () => {
  */
 describe("judgeTypedocTail：typedoc 收尾日志的结论判读（#2444）", () => {
   it("总结行报了 errors / warnings ⇒ 红，且红话里带数", () => {
-    const log = "\x1b[93m[warning]\x1b[0m 某个死链\n" +
-      "[warning] Found 0 errors and 61 warnings\n";
+    const log =
+      "\u001b[93m[warning]\u001b[0m 某个死链\n" + "[warning] Found 0 errors and 61 warnings\n";
     const got = judgeTypedocTail(log);
     expect(got.problems).toHaveLength(1);
     expect(got.problems[0]).toContain("0 errors / 61 warnings");
   });
 
   it("总结行 0 errors / 0 warnings ⇒ 绿", () => {
-    expect(
-      judgeTypedocTail("[warning] Found 0 errors and 0 warnings\n").problems,
-    ).toEqual([]);
+    expect(judgeTypedocTail("[warning] Found 0 errors and 0 warnings\n").problems).toEqual([]);
   });
 
   it("总结行缺席但 html generated 在场 ⇒ 绿（0 warning 时不打总结行）", () => {
-    const log = "\x1b[96m[info]\x1b[0m html generated at ./docs/api\n";
+    const log = "\u001b[96m[info]\u001b[0m html generated at ./docs/api\n";
     expect(judgeTypedocTail(log).problems).toEqual([]);
   });
 

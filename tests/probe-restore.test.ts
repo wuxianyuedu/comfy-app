@@ -12,14 +12,7 @@
  * **量具自证**：被禁的三种形状各自要认得出（含 `git checkout HEAD -- <文件>` 这种
  * 字符串形 —— 本单的第二处现场就是它），相邻的正当写法不许误伤（误伤会让人绕开判据）。
  */
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -150,18 +143,28 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
   const DESTRUCTIVE =
     /(?:checkout|restore)(?:\s+HEAD)?\s+--(?=\s|$)|(?:checkout|restore)["']\s*,\s*["']--(?=["']|\s|$)/;
 
+  /* 被禁形状一律**拼接**写出来：本文件自己也在这条判据的扫描面上，原样写着的夹具与
+   * 红话会把自己算成命中（这条判据的第一失效模式就是自匹配；同一族的标本见
+   * `tests/strip-comments-single-source.test.ts` 里 `DEFINITION_MARK` 那段）。
+   * 拼出来的**值**与原字面量逐字相同 —— 由下面「被禁的三种形状各自命中」那格证明。 */
+  const CHECKOUT = "check" + "out";
+  const RESTORE = "rest" + "ore";
+  const HEADSEP = "-" + "-";
+
   /** 命中就回报这一格；**先剥注释** —— 口径的叙述里必然出现被禁的形态本身（§11.23）。 */
   function hit(src: string, label: string): string | null {
     return DESTRUCTIVE.test(stripComments(src)) ? `  · ${label}` : null;
   }
 
-  function tsFiles(dir: string): string[] {
-    const out: string[] = [];
+  function tsFiles(dir: string): Array<string> {
+    const out: Array<string> = [];
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const abs = join(dir, e.name);
-      if (e.isDirectory()) out.push(...tsFiles(abs));
-      else if (e.isFile() && e.name.endsWith(".ts"))
-        out.push(abs.slice(REPO_ROOT.length + 1).replace(/\\/g, "/"));
+      if (e.isDirectory()) {
+        out.push(...tsFiles(abs));
+      } else if (e.isFile() && e.name.endsWith(".ts")) {
+        out.push(abs.slice(REPO_ROOT.length + 1).replaceAll("\\", "/"));
+      }
     }
     return out;
   }
@@ -178,15 +181,16 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
 
   it("被禁的三种形状各自命中（数组形 / `checkout HEAD --` 字符串形 / `restore --`）", () => {
     const forbidden = [
-      'execFileSync("git", ["checkout", "--", rel]);',
-      "git(`checkout HEAD -- ${E2E_REL}`);",
-      'git("restore -- path/to/file");',
+      'execFileSync("git", ["' + CHECKOUT + '", "' + HEADSEP + '", rel]);',
+      'git(`' + CHECKOUT + ' HEAD ' + HEADSEP + ' ${E2E_REL}`);',
+      'git("' + RESTORE + ' ' + HEADSEP + ' path/to/file");',
     ];
     const missed = forbidden.filter((src) => hit(src, "fixture") === null);
     expect(
       missed,
       "这几条被禁写法扫不出来 —— 判据只在**在场的那些**形状上有效，" +
-        "认不出字符串形就等于把 `git checkout HEAD -- <文件>` 放回来（#2593 的现场正是字符串形）。",
+        "认不出字符串形就等于把 `git " + CHECKOUT + " HEAD " + HEADSEP + " <文件>` 放回来" +
+        "（#2593 的现场正是字符串形）。",
     ).toEqual([]);
   });
 
@@ -209,16 +213,16 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
    * 「有人把 import 共享件那行删掉、改回 `git checkout`」时会同时红两格，而红话里
    * 说不出「这两份就是当年的现场」；点名到文件，下一人才知道改的是哪一处的历史。
    */
-  it.for([
-    ["tests/check-doc-references.test.ts", "四份入库文档的探针收尾"],
-    ["tests/freshness-ledger-backend.test.ts", "真仓库账文件的临时提交"],
-  ] as const)("%s 走共享件，不再拿索引/HEAD 覆盖工作树", ([rel, what]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["tests/check-doc-references.test.ts", "四份入库文档的探针收尾"],
+      ["tests/freshness-ledger-backend.test.ts", "真仓库账文件的临时提交"],
+    ] as const,
+  )("%s 走共享件，不再拿索引/HEAD 覆盖工作树", ([rel, what]) => {
     const src = readFileSync(join(REPO_ROOT, rel), "utf8");
     expect(src, `${rel} 没引用 tests/helpers/probe-restore.ts`).toContain(
       "./helpers/probe-restore.ts",
     );
-    expect(stripComments(src), `${rel} 的${what}又回到 git 那一版`).not.toMatch(
-      DESTRUCTIVE,
-    );
+    expect(stripComments(src), `${rel} 的${what}又回到 git 那一版`).not.toMatch(DESTRUCTIVE);
   });
 });

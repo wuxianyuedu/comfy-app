@@ -32,11 +32,7 @@ function makeStores(): WFStores {
 }
 
 /** 在 Provider 内读取真实 IOEdit 上下文并注入 SubgraphHeader 的 io prop。 */
-function IoHarness({
-  children,
-}: {
-  children: (io: IOEditContextValue) => ReactNode;
-}) {
+function IoHarness({ children }: { children: (io: IOEditContextValue) => ReactNode }) {
   const io = useIOEditContext();
   return <>{children(io)}</>;
 }
@@ -61,14 +57,11 @@ describe("SubgraphHeader", () => {
     expect(screen.getByText("我的子图")).toBeInTheDocument();
     expect(screen.getByText("S")).toBeInTheDocument();
     expect(screen.getByText("#42")).toBeInTheDocument();
-    expect(screen.getByText("#42").closest("button")).toHaveAttribute(
-      "data-variant",
-      "subgraph",
-    );
+    expect(screen.getByText("#42").closest("button")).toHaveAttribute("data-variant", "subgraph");
   });
 
   it("空 title 回退为「子工作流」", () => {
-    renderHeader(<SubgraphHeader {...base} title="" onToggle={vi.fn()} />);
+    renderHeader(<SubgraphHeader {...base} onToggle={vi.fn()} title="" />);
     expect(screen.getByText("子工作流")).toBeInTheDocument();
   });
 
@@ -88,50 +81,33 @@ describe("SubgraphHeader", () => {
 
   it("标题仅为纯文本，不渲染为可点击按钮（展开只允许右上角图标触发）", () => {
     const onEnter = vi.fn();
-    renderHeader(
-      <SubgraphHeader {...base} onToggle={vi.fn()} onEnter={onEnter} />,
-    );
+    renderHeader(<SubgraphHeader {...base} onEnter={onEnter} onToggle={vi.fn()} />);
     // 标题不再带 role=button，因此整行只剩右上角「展开子工作流」一个 onEnter 入口
-    expect(
-      screen.queryByRole("button", { name: "我的子图" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "我的子图" })).not.toBeInTheDocument();
     expect(screen.getByText("我的子图")).toBeInTheDocument();
   });
 
   it("传入 onEnter 时渲染钻入按钮,点击触发 onEnter", async () => {
     const onEnter = vi.fn();
-    renderHeader(
-      <SubgraphHeader {...base} onToggle={vi.fn()} onEnter={onEnter} />,
-    );
+    renderHeader(<SubgraphHeader {...base} onEnter={onEnter} onToggle={vi.fn()} />);
     await userEvent.click(screen.getByRole("button", { name: "展开子工作流" }));
     expect(onEnter).toHaveBeenCalledOnce();
   });
 
   it("未传 onEnter 时不渲染钻入按钮", () => {
     renderHeader(<SubgraphHeader {...base} onToggle={vi.fn()} />);
-    expect(
-      screen.queryByRole("button", { name: "展开子工作流" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "展开子工作流" })).not.toBeInTheDocument();
   });
 
   it("io 未传时不渲染 IO checkbox(即使提供了 outputRef)", () => {
-    renderHeader(
-      <SubgraphHeader {...base} onToggle={vi.fn()} outputRef={OUTPUT_REF} />,
-    );
+    renderHeader(<SubgraphHeader {...base} onToggle={vi.fn()} outputRef={OUTPUT_REF} />);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
   it("io 传入但 ioEditMode 关闭时不渲染 IO checkbox", () => {
     renderHeader(
       <IoHarness>
-        {(io) => (
-          <SubgraphHeader
-            {...base}
-            onToggle={vi.fn()}
-            io={io}
-            outputRef={OUTPUT_REF}
-          />
-        )}
+        {(io) => <SubgraphHeader {...base} io={io} onToggle={vi.fn()} outputRef={OUTPUT_REF} />}
       </IoHarness>,
     );
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
@@ -142,14 +118,7 @@ describe("SubgraphHeader", () => {
     stores.io.setState({ ioEditMode: true });
     renderHeader(
       <IoHarness>
-        {(io) => (
-          <SubgraphHeader
-            {...base}
-            onToggle={vi.fn()}
-            io={io}
-            outputRef={null}
-          />
-        )}
+        {(io) => <SubgraphHeader {...base} io={io} onToggle={vi.fn()} outputRef={null} />}
       </IoHarness>,
       stores,
     );
@@ -161,14 +130,7 @@ describe("SubgraphHeader", () => {
     stores.io.setState({ ioEditMode: true });
     renderHeader(
       <IoHarness>
-        {(io) => (
-          <SubgraphHeader
-            {...base}
-            onToggle={vi.fn()}
-            io={io}
-            outputRef={OUTPUT_REF}
-          />
-        )}
+        {(io) => <SubgraphHeader {...base} io={io} onToggle={vi.fn()} outputRef={OUTPUT_REF} />}
       </IoHarness>,
       stores,
     );
@@ -176,16 +138,12 @@ describe("SubgraphHeader", () => {
     expect(checkbox).toHaveAttribute("title", "点击将其暴露为工作流输出");
     await userEvent.click(checkbox);
     // key = `${nodeId}::kind::name`,direction/kind 均为 output
-    expect(
-      stores.io.getState().workflowIO["42::output::IMAGE_FINAL"],
-    ).toMatchObject({
+    expect(stores.io.getState().workflowIO["42::output::IMAGE_FINAL"]).toMatchObject({
       name: "IMAGE_FINAL",
       kind: "output",
       /* 显示名不进库：条目只记身份，名字由富化链一处给。 */
     });
-    expect(
-      stores.io.getState().workflowIO["42::output::IMAGE_FINAL"]!.label,
-    ).toBeUndefined();
+    expect(stores.io.getState().workflowIO["42::output::IMAGE_FINAL"]!.label).toBeUndefined();
     expect(checkbox).toHaveAttribute("title", "已暴露为工作流输出");
   });
 });

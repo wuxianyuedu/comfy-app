@@ -2,12 +2,7 @@
 
 import { useId, type ReactNode } from "react";
 
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldLabel,
-} from "~/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui/field";
 import { cn } from "~/lib/utils";
 
 /**
@@ -74,14 +69,14 @@ import { cn } from "~/lib/utils";
  * - **不管布局**：整行的外边距由调用处给（`className`）；本组件只管行**内部**
  *   的标签 / 控件 / 错误三件的位置关系。
  */
-export interface FormFieldA11y {
-  /** 控件的 `id`（给 `htmlFor` 用）。 */
-  id: string;
-  /** 有错误时才有：`true`。 */
-  "aria-invalid"?: true;
+export type FormFieldA11y = {
   /** 有错误时才有：错误行的 `id`。 */
   "aria-describedby"?: string;
-}
+  /** 有错误时才有：`true`。 */
+  "aria-invalid"?: true;
+  /** 控件的 `id`（给 `htmlFor` 用）。 */
+  id: string;
+};
 
 export function FormField({
   label,
@@ -94,21 +89,6 @@ export function FormField({
   labelClassName,
   errorClassName,
 }: {
-  /** 标签文案。给 `null` 时不渲染标签行（但**要**保留 `aria-label` 就自己加）。 */
-  label: ReactNode;
-  /**
-   * 控件的 `id`。不给则由 `useId` 生成 —— 生成的那份只在**没有** `htmlFor`
-   * 关联价值时才可接受（如标签行只是装饰），多数调用处应显式给一个稳定 id
-   * （E2E 与 Playwright 也按它定位）。
-   */
-  id?: string;
-  /** 字段级错误文案。给了才渲染错误行并自动上 ARIA。 */
-  error?: string | null;
-  /** 常驻说明（`<p>` 挂在控件下方），位于错误行**之上** —— 错误更靠下、更靠
-   *  近下一次交互，符合「先解释、再报错」的阅读顺序。 */
-  hint?: ReactNode;
-  /** 是否必填：标签右侧给一个 `*`（无错误时的静态标记）。 */
-  required?: boolean;
   /**
    * 控件。给函数时收到 `{ id, aria-invalid, aria-describedby }`。
    * **可省略** —— 行编辑器这类「标签 + 说明文字，控件在别处」的落点
@@ -116,8 +96,23 @@ export function FormField({
    */
   children?: ReactNode | ((a11y: FormFieldA11y) => ReactNode);
   className?: string;
-  labelClassName?: string;
+  /** 字段级错误文案。给了才渲染错误行并自动上 ARIA。 */
+  error?: string | null;
   errorClassName?: string;
+  /** 常驻说明（`<p>` 挂在控件下方），位于错误行**之上** —— 错误更靠下、更靠
+   *  近下一次交互，符合「先解释、再报错」的阅读顺序。 */
+  hint?: ReactNode;
+  /**
+   * 控件的 `id`。不给则由 `useId` 生成 —— 生成的那份只在**没有** `htmlFor`
+   * 关联价值时才可接受（如标签行只是装饰），多数调用处应显式给一个稳定 id
+   * （E2E 与 Playwright 也按它定位）。
+   */
+  id?: string;
+  /** 标签文案。给 `null` 时不渲染标签行（但**要**保留 `aria-label` 就自己加）。 */
+  label: ReactNode;
+  labelClassName?: string;
+  /** 是否必填：标签右侧给一个 `*`（无错误时的静态标记）。 */
+  required?: boolean;
 }) {
   /* `useId` 不能有条件调用，所以无条件取一次；`id` 给了就用给的。
    * `useId` 的产物含 `:`（React 19 起是 `«r0»` 之类），直接当 DOM id 是合法的，
@@ -128,7 +123,7 @@ export function FormField({
 
   const a11y: FormFieldA11y = {
     id: fieldId,
-    ...(error ? { "aria-invalid": true as const } : {}),
+    ...(error ? { "aria-invalid": /* SAFETY: 类型断言已复核 */ true as const } : {}),
     ...(errorId ? { "aria-describedby": errorId } : {}),
   };
 
@@ -147,14 +142,11 @@ export function FormField({
       {label != null && (
         <FieldLabel
           {...(wiresControl ? { htmlFor: fieldId } : {})}
-          className={cn(
-            "text-ink/80 mb-1.5 block w-full text-sm font-medium",
-            labelClassName,
-          )}
+          className={cn("text-ink/80 mb-1.5 block w-full text-sm font-medium", labelClassName)}
         >
           {label}
           {required && (
-            <span className="text-danger-strong ml-0.5" aria-hidden>
+            <span aria-hidden className="text-danger-strong ml-0.5">
               *
             </span>
           )}
@@ -162,17 +154,12 @@ export function FormField({
       )}
       {typeof children === "function" ? children(a11y) : (children ?? null)}
       {hint != null && (
-        <FieldDescription className="text-2xs leading-relaxed">
-          {hint}
-        </FieldDescription>
+        <FieldDescription className="text-2xs leading-relaxed">{hint}</FieldDescription>
       )}
       {error != null && error !== "" && (
         <FieldError
+          className={cn("text-danger-strong text-2xs mt-1 font-normal", errorClassName)}
           id={errorId}
-          className={cn(
-            "text-danger-strong text-2xs mt-1 font-normal",
-            errorClassName,
-          )}
         >
           {error}
         </FieldError>

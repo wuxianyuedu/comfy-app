@@ -59,11 +59,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -89,15 +85,7 @@ const READERS_LEDGER = path.join(__dirname, ".declaration-readers.json");
  * 类型不收」）：立案那 19 条里有 12 条正是新鲜度内核那三处 JSDoc。
  */
 const SCAN_DIRS = ["src", "scripts", "tests"];
-const SCAN_EXTS = new Set([
-  ".ts",
-  ".tsx",
-  ".mts",
-  ".cts",
-  ".mjs",
-  ".cjs",
-  ".js",
-]);
+const SCAN_EXTS = new Set([".ts", ".tsx", ".mts", ".cts", ".mjs", ".cjs", ".js"]);
 
 /**
  * 台账条目的**下限** —— 它不是「正确值」，是**静默降级的地板**（同 §11.23.3 的
@@ -124,9 +112,9 @@ function readLedger() {
   let parsed;
   try {
     parsed = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
-  } catch (err) {
+  } catch (error) {
     problems.push(
-      `台账不可读（${path.relative(ROOT, LEDGER)}）：${err.message}\n` +
+      `台账不可读（${path.relative(ROOT, LEDGER)}）：${error.message}\n` +
         "      —— 本判据的对象就是它；读不到时**判失败**，不按「没有声明要查」放过（§11.23.3 同款）。",
     );
     return { entries: null, source: null };
@@ -181,7 +169,7 @@ function isDeclarationLine(line) {
  * @returns {string}
  */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^[ \t]*\/\/.*$/gm, "");
 }
 
 /**
@@ -225,7 +213,9 @@ function collectFiles(dir, out) {
  */
 function scanDeclarationSites() {
   const files = [];
-  for (const d of SCAN_DIRS) collectFiles(path.join(ROOT, d), files);
+  for (const d of SCAN_DIRS) {
+    collectFiles(path.join(ROOT, d), files);
+  }
   const counts = new Map();
   for (const full of files) {
     const src = readForScan(full);
@@ -235,7 +225,7 @@ function scanDeclarationSites() {
     }
     const n = countDeclarationSites(src);
     if (n > 0) {
-      counts.set(path.relative(ROOT, full).replace(/\\/g, "/"), n);
+      counts.set(path.relative(ROOT, full).replaceAll("\\", "/"), n);
     }
   }
   return counts;
@@ -264,7 +254,9 @@ if (entries) {
       );
       continue;
     }
-    if (seen.has(e.id)) problems.push(`台账里 id 重复：${e.id}`);
+    if (seen.has(e.id)) {
+      problems.push(`台账里 id 重复：${e.id}`);
+    }
     seen.add(e.id);
 
     /* ③ 声明的落点仍然存在，且仍然真的有声明行 ——
@@ -280,7 +272,9 @@ if (entries) {
       }
       for (const marker of e.markers ?? []) {
         const full = path.join(ROOT, rel);
-        if (!fs.existsSync(full)) continue;
+        if (!fs.existsSync(full)) {
+          continue;
+        }
         if (!fs.readFileSync(full, "utf8").includes(marker)) {
           problems.push(
             `「${e.name}」登记的关键词 \`${marker}\` 在 ${rel} 里已经找不到了 —— ` +
@@ -294,9 +288,7 @@ if (entries) {
      * 否则它只在「碰到它时」才跑，那不是执行者。 */
     const ex = e.executor;
     if (ex.kind !== "fixed-test" && ex.kind !== "hook-step") {
-      problems.push(
-        `「${e.name}」的 executor.kind 只能是 fixed-test / hook-step`,
-      );
+      problems.push(`「${e.name}」的 executor.kind 只能是 fixed-test / hook-step`);
     }
 
     /* **零增量**：新写一处声明就必须同批登记台账。
@@ -313,9 +305,7 @@ if (entries) {
       const now = counts.get(rel) ?? 0;
       if (UPDATE) {
         if (now > e.baseline[rel]) {
-          bloated.push(
-            `${e.id}.baseline["${rel}"]：${e.baseline[rel]} → ${now}`,
-          );
+          bloated.push(`${e.id}.baseline["${rel}"]：${e.baseline[rel]} → ${now}`);
         } else {
           e.baseline[rel] = now;
         }
@@ -364,7 +354,9 @@ if (entries) {
    * 只判「台账这句话在源码里找得到落点」—— 与 §13.5.14 的判据口径同族。 */
   for (const e of entries) {
     const faces = e.verifiedSurfaces;
-    if (faces === undefined) continue;
+    if (faces === undefined) {
+      continue;
+    }
     if (!Array.isArray(faces) || faces.length === 0) {
       problems.push(
         `「${e.name}」的 verifiedSurfaces 必须是非空数组（写了就要核，空数组与没写等价）`,
@@ -376,10 +368,9 @@ if (entries) {
     let readerSrc;
     try {
       readerSrc = fs.readFileSync(readerPath, "utf8");
-    } catch (err) {
+    } catch (error) {
       problems.push(
-        `「${e.name}」的 reader（${e.reader}）读不到（${err.message}）——` +
-          "核验面没有落点可对",
+        `「${e.name}」的 reader（${e.reader}）读不到（${error.message}）——` + "核验面没有落点可对",
       );
       continue;
     }
@@ -392,7 +383,7 @@ if (entries) {
         problems.push(`「${e.name}」的 verifiedSurfaces 里 ${face} 重复了`);
       }
       seenFace.add(face);
-      if (!new RegExp(`\\b${face.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(readerSrc)) {
+      if (!new RegExp(`\\b${face.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}\\b`).test(readerSrc)) {
         problems.push(
           `「${e.name}」声称核过的面 \`${face}\` 在 ${e.reader} 里找不到 —— ` +
             "台账的这句话与事实脱钩之后，它只会让人以为有人在守",
@@ -403,25 +394,20 @@ if (entries) {
 
   /* ① 与姊妹索引逐行同源：本台账**不是第二份真相来源**。
    * 两处各记一份的形态必然会分叉，而分叉之后「哪一份是真的」没有判据能回答。 */
-  if (!fs.existsSync(READERS_LEDGER)) {
-    problems.push(
-      `姊妹索引不存在：${path.relative(ROOT, READERS_LEDGER)} —— ` +
-        "本台账要与它逐行同源核对，读不到对侧时判失败（同 §11.23.3）",
-    );
-  } else {
+  if (fs.existsSync(READERS_LEDGER)) {
     let readers = null;
     try {
       readers = JSON.parse(fs.readFileSync(READERS_LEDGER, "utf8"));
-    } catch (err) {
-      problems.push(`姊妹索引不是合法 JSON：${err.message}`);
+    } catch (error) {
+      problems.push(`姊妹索引不是合法 JSON：${error.message}`);
     }
     const carriers = readers?.carriers;
-    if (!Array.isArray(carriers)) {
-      problems.push("姊妹索引里 `carriers` 不是数组（同源核对没有比对对象）");
-    } else {
+    if (Array.isArray(carriers)) {
       const byId = new Map(carriers.map((c) => [c.id, c]));
       for (const e of entries) {
-        if (!e?.id) continue;
+        if (!e?.id) {
+          continue;
+        }
         const peer = byId.get(e.id);
         if (!peer) {
           problems.push(
@@ -445,7 +431,14 @@ if (entries) {
           report.push(`（姊妹索引另有条目 ${c.id}，不在本台账的判决面内）`);
         }
       }
+    } else {
+      problems.push("姊妹索引里 `carriers` 不是数组（同源核对没有比对对象）");
     }
+  } else {
+    problems.push(
+      `姊妹索引不存在：${path.relative(ROOT, READERS_LEDGER)} —— ` +
+        "本台账要与它逐行同源核对，读不到对侧时判失败（同 §11.23.3）",
+    );
   }
 }
 
@@ -454,18 +447,18 @@ if (entries) {
 if (UPDATE) {
   if (bloated.length > 0) {
     process.stderr.write(
-      "[tsc-diagnostic-executors] ✗ 拒绝写入：下列行的实测值比基线**大** —— " +
-        "--update 只许降不许升（上涨就是「新写了一处没人回答过谁在敲的声明」）：\n" +
-        bloated.map((l) => "  · " + l).join("\n") +
-        "\n",
+      `[tsc-diagnostic-executors] ✗ 拒绝写入：下列行的实测值比基线**大** —— ` +
+        `--update 只许降不许升（上涨就是「新写了一处没人回答过谁在敲的声明」）：\n${
+        bloated.map((l) => `  · ${l}`).join("\n")
+        }\n`,
     );
     process.exit(2);
   }
   if (problems.length > 0) {
     process.stderr.write(
-      "[tsc-diagnostic-executors] ✗ 先修掉这些问题再收紧基线（--update 不代替判决）：\n" +
-        problems.map((p) => "  · " + p).join("\n") +
-        "\n",
+      `[tsc-diagnostic-executors] ✗ 先修掉这些问题再收紧基线（--update 不代替判决）：\n${
+        problems.map((p) => `  · ${p}`).join("\n")
+        }\n`,
     );
     process.exit(1);
   }
@@ -483,9 +476,11 @@ if (UPDATE) {
   }
   for (const e of doc.entries) {
     const fresh = entries.find((x) => x.id === e.id);
-    if (fresh) e.baseline = fresh.baseline;
+    if (fresh) {
+      e.baseline = fresh.baseline;
+    }
   }
-  fs.writeFileSync(LEDGER, JSON.stringify(doc, null, 2) + "\n");
+  fs.writeFileSync(LEDGER, `${JSON.stringify(doc, null, 2)}\n`);
   process.stdout.write(
     `[tsc-diagnostic-executors] ✓ 基线已收紧到当前实测（${entries.length} 条）\n`,
   );
@@ -494,23 +489,23 @@ if (UPDATE) {
 
 if (REPORT_ONLY) {
   process.stdout.write(
-    `类型层声明 ⇄ 执行者（${entries?.length ?? 0} 条）：\n` +
-      report.map((l) => "  " + l).join("\n") +
-      "\n",
+    `类型层声明 ⇄ 执行者（${entries?.length ?? 0} 条）：\n${
+      report.map((l) => `  ${l}`).join("\n")
+      }\n`,
   );
   process.exit(0);
 }
 
 if (problems.length > 0) {
   console.error(
-    `[tsc-diagnostic-executors] 类型层「声明 ⇄ 执行者」有 ${problems.length} 处问题（§13.5.14）：\n` +
-      problems.map((p) => "  · " + p).join("\n") +
-      "\n",
+    `[tsc-diagnostic-executors] 类型层「声明 ⇄ 执行者」有 ${problems.length} 处问题（§13.5.14）：\n${
+      problems.map((p) => `  · ${p}`).join("\n")
+      }\n`,
   );
   process.exit(1);
 }
 
 process.stdout.write(
-  `类型层声明 ⇄ 执行者：${entries?.length ?? 0} 条声明的执行者都在场（零增量）\n` +
-    vanishedNote(vanishedScan),
+  `类型层声明 ⇄ 执行者：${entries?.length ?? 0} 条声明的执行者都在场（零增量）\n${
+    vanishedNote(vanishedScan)}`,
 );

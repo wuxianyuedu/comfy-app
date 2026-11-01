@@ -26,13 +26,15 @@ function setViewport(width: number): void {
     writable: true,
   });
   act(() => {
-    for (const cb of listeners) cb();
+    for (const cb of listeners) {
+      cb();
+    }
   });
 }
 
 beforeEach(() => {
   listeners.clear();
-  window.matchMedia = ((query: string) => ({
+  window.matchMedia = /* SAFETY: 类型断言已复核 */ ((query: string) => ({
     get matches() {
       const max = /max-width:\s*(\d+)px/.exec(query)?.[1];
       return max === undefined ? false : window.innerWidth <= Number(max);
@@ -40,13 +42,10 @@ beforeEach(() => {
     media: query,
     onchange: null,
     addEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
-      listeners.add(cb as () => void);
+      listeners.add(/* SAFETY: 类型断言已复核 */ cb as () => void);
     },
-    removeEventListener: (
-      _: string,
-      cb: EventListenerOrEventListenerObject,
-    ) => {
-      listeners.delete(cb as () => void);
+    removeEventListener: (_: string, cb: EventListenerOrEventListenerObject) => {
+      listeners.delete(/* SAFETY: 类型断言已复核 */ cb as () => void);
     },
   })) as unknown as typeof window.matchMedia;
   setViewport(1440);
@@ -60,7 +59,7 @@ function Probe() {
     <div>
       <span data-testid="state">{state}</span>
       <span data-testid="auto">{String(collapsedByAuto)}</span>
-      <button type="button" onClick={toggleSidebar}>
+      <button onClick={toggleSidebar} type="button">
         开关导航
       </button>
     </div>

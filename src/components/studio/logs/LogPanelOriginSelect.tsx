@@ -72,8 +72,8 @@ function CountColumn({
   tone,
 }: {
   label: string;
-  value: number;
   tone: "muted" | "warn" | "error";
+  value: number;
 }) {
   const color =
     value === 0
@@ -103,17 +103,16 @@ function CountColumn({
  * 索引里去渲染 `undefined`。
  */
 function asOriginFilter(value: unknown): LogOriginFilter {
-  return typeof value === "string" && value in ORIGIN_TEXT
-    ? (value as LogOriginFilter)
-    : "all";
+  /* SAFETY: 类型断言已复核 */
+  return typeof value === "string" && value in ORIGIN_TEXT ? (value as LogOriginFilter) : "all";
 }
 
 /** 下拉候选列表的列宽（列标题与各行共用，列与列才对得上）。 */
-const ORIGIN_COLUMNS: {
+const ORIGIN_COLUMNS: Array<{
   key: LogLevel | "all";
   title: string;
   tone: "muted" | "warn" | "error";
-}[] = [
+}> = [
   { key: "all", title: "条数", tone: "muted" },
   { key: "info", title: "信息", tone: "muted" },
   { key: "warn", title: "警告", tone: "warn" },
@@ -135,7 +134,7 @@ const ORIGIN_COLUMNS: {
  *
  * 文案统一取自 ORIGIN_TEXT（此前下拉里叫「启动」、页脚里叫「开发服务」，
  * 同一个来源两种叫法，用户对不上号）。 */
-const ORIGIN_LABELS: LogOriginFilter[] = [
+const ORIGIN_LABELS: Array<LogOriginFilter> = [
   "all",
   "app-runtime",
   "app",
@@ -191,23 +190,21 @@ function OriginSelect({
   countsByOrigin,
   onChange,
 }: {
-  value: LogOriginFilter;
   countsByOrigin: Record<LogOriginFilter, LogLevelCounts>;
   onChange: (next: LogOriginFilter) => void;
+  value: LogOriginFilter;
 }) {
   return (
-    <Select value={value} onValueChange={(next) => onChange(next ?? "all")}>
+    <Select onValueChange={(next) => onChange(next ?? "all")} value={value}>
       <SelectTrigger
-        size="sm"
         aria-label="按来源筛选"
-        title="按来源筛选：展开后每项都标出该类别的条数与本机上的信息 / 警告 / 错误"
         className="border-border-strong bg-canvas-deep text-ink-field h-8 rounded-lg text-xs"
+        size="sm"
+        title="按来源筛选：展开后每项都标出该类别的条数与本机上的信息 / 警告 / 错误"
       >
         {/* 只写来源名：具体多少条、多少警告在左侧级别按钮与标题徽标上，
             这里再报一遍既不增加信息量，又把本就不宽的行头再挤掉一块。 */}
-        <SelectValue>
-          {(selected) => ORIGIN_TEXT[asOriginFilter(selected)]}
-        </SelectValue>
+        <SelectValue>{(selected) => ORIGIN_TEXT[asOriginFilter(selected)]}</SelectValue>
       </SelectTrigger>
       {/* 弹层必须盖在日志面板之上：面板遮罩走刻度表的 `modal` 档（见本文件底部
           overlayClass 的 z 参数），而 Select 的定位层若低于它——弹层照常画出来，却整块
@@ -221,7 +218,6 @@ function OriginSelect({
           后出现，因此最终生效的是内容宽度（这正是这里要的效果）；反过来若把
           `w-auto` 去掉，弹层会被压到扳机的 90px，四列数字挤成一团。 */}
       <SelectContent
-        positionerClassName={LOG_PANEL_POPUP_Z_CLASS}
         /* 与扳机**底边**对齐（用户要求：「弹出下拉菜单的最上方和下拉按钮的
          * 最下方对齐即可」）。
          *
@@ -233,8 +229,9 @@ function OriginSelect({
          *     上面去，需要时改为**滚动**弹层自身。
          * 于是弹层顶边恒等于扳机底边（sideOffset 4px），与窗口位置无关。 */
         alignItemWithTrigger={false}
-        collisionAvoidance={{ side: "none" }}
         className="border-border-strong bg-card text-ink-field w-auto min-w-max rounded-lg border p-0"
+        collisionAvoidance={{ side: "none" }}
+        positionerClassName={LOG_PANEL_POPUP_Z_CLASS}
       >
         {/* 列标题：把「数字是什么」写在一次，行内就不必每格重复「信息 / 警告」 */}
         <div
@@ -243,7 +240,7 @@ function OriginSelect({
         >
           <span className="shrink-0">来源</span>
           {ORIGIN_COLUMNS.map((column) => (
-            <span key={column.key} className="w-14 shrink-0 text-right">
+            <span className="w-14 shrink-0 text-right" key={column.key}>
               {column.title}
             </span>
           ))}
@@ -253,21 +250,15 @@ function OriginSelect({
             {ORIGIN_LABELS.map((origin) => {
               const counts = countsByOrigin[origin];
               return (
-                <SelectItem
-                  key={origin}
-                  value={origin}
-                  className="gap-0 py-1 pr-7 pl-1.5 text-xs"
-                >
+                <SelectItem className="gap-0 py-1 pr-7 pl-1.5 text-xs" key={origin} value={origin}>
                   <span className="flex items-center gap-3">
-                    <span className="text-ink-bright shrink-0">
-                      {ORIGIN_TEXT[origin]}
-                    </span>
+                    <span className="text-ink-bright shrink-0">{ORIGIN_TEXT[origin]}</span>
                     {ORIGIN_COLUMNS.map((column) => (
                       <CountColumn
                         key={column.key}
                         label={column.title}
-                        value={counts[column.key]}
                         tone={column.tone}
+                        value={counts[column.key]}
                       />
                     ))}
                   </span>

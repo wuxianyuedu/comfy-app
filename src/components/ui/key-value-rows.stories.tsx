@@ -23,7 +23,7 @@ import {
  */
 type Layout = NonNullable<KeyValueLayout>;
 
-const LAYOUTS: Layout[] = ["rows", "stacked", "table", "inline"];
+const LAYOUTS: Array<Layout> = ["rows", "stacked", "table", "inline"];
 
 const meta = {
   title: "UI/KeyValueRows",
@@ -36,7 +36,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** 样本：一份训练参数（四种布局共用同一份数据，才比得出布局差异）。 */
-const PARAMS: KeyValueItem[] = [
+const PARAMS: Array<KeyValueItem> = [
   { key: "base_model", raw: "sd_xl_base_1.0.safetensors" },
   { key: "steps", raw: 2400 },
   { key: "learning_rate", raw: 0.0001 },
@@ -50,16 +50,12 @@ export const Rows: Story = {
   render: () => (
     <div className="flex w-120 flex-col gap-6">
       <div className="flex flex-col gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          rows（默认）
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">rows（默认）</span>
         <KeyValueRows items={PARAMS} />
       </div>
       <div className="flex flex-col gap-1.5">
-        <span className="text-ink-muted font-mono text-[11px]">
-          rows + bordered + striped
-        </span>
-        <KeyValueRows items={PARAMS} bordered striped />
+        <span className="text-ink-muted font-mono text-[11px]">rows + bordered + striped</span>
+        <KeyValueRows bordered items={PARAMS} striped />
       </div>
     </div>
   ),
@@ -70,9 +66,9 @@ export const Rows: Story = {
 export const Stacked: Story = {
   render: () => (
     <KeyValueRows
-      layout="stacked"
       className="w-xl"
       items={PARAMS.map((item) => ({ ...item, hint: "取自最近一次训练" }))}
+      layout="stacked"
     />
   ),
 };
@@ -80,9 +76,7 @@ export const Stacked: Story = {
 /** `table`：真正的 `<table>`，行表头走 `<th scope="row">` ——
  *  两列参数表（左列等宽截断）的形态，语义比一堆 div 强。 */
 export const TableLayout: Story = {
-  render: () => (
-    <KeyValueRows layout="table" className="w-120" items={PARAMS} />
-  ),
+  render: () => <KeyValueRows className="w-120" items={PARAMS} layout="table" />,
 };
 
 /** `inline`：`label value` 挤在一行不换行的内联项 ——
@@ -91,13 +85,13 @@ export const Inline: Story = {
   render: () => (
     <div className="flex flex-wrap items-center gap-4 rounded-lg border px-3 py-2">
       <KeyValueRows
-        layout="inline"
         items={[
           { key: "显存", raw: "6.4 GB" },
           { key: "内存", raw: "11.2 GB" },
           { key: "队列", raw: 2 },
           { key: "错误", raw: null },
         ]}
+        layout="inline"
       />
     </div>
   ),
@@ -109,15 +103,13 @@ export const AllLayouts: Story = {
   render: () => (
     <div className="flex flex-col gap-8">
       {LAYOUTS.map((layout) => (
-        <div key={layout} className="flex flex-col gap-1.5">
-          <span className="text-ink-muted font-mono text-[11px]">
-            layout={layout}
-          </span>
+        <div className="flex flex-col gap-1.5" key={layout}>
+          <span className="text-ink-muted font-mono text-[11px]">layout={layout}</span>
           <KeyValueRows
-            layout={layout}
+            bordered={layout === "rows"}
             className="w-136"
             items={PARAMS}
-            bordered={layout === "rows"}
+            layout={layout}
           />
         </div>
       ))}
@@ -131,8 +123,8 @@ export const AllLayouts: Story = {
 export const ValueVsRaw: Story = {
   render: () => (
     <KeyValueRows
-      className="w-120"
       bordered
+      className="w-120"
       items={[
         { key: "raw: 数字", raw: 42 },
         { key: "raw: null", raw: null },

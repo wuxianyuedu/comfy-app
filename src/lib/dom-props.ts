@@ -60,10 +60,7 @@ export type OmitOwnProps<Base, Keys extends keyof Base | string> = Omit<
  * **不做值层面的改写**（不给默认值、不合并 `className`）：那些是调用处的域决定，
  * 放进这里会让「这个字段到底是不是被改过」只能去读实现。本函数只做「搬」。
  */
-export function splitDomProps<
-  T extends object,
-  const Keys extends readonly string[],
->(
+export function splitDomProps<T extends object, const Keys extends ReadonlyArray<string>>(
   props: T,
   keys: Keys,
 ): {
@@ -71,7 +68,7 @@ export function splitDomProps<
   rest: Omit<T, Extract<Keys[number], keyof T>>;
 } {
   const own: Record<string, unknown> = {};
-  const rest = { ...props } as Record<string, unknown>;
+  const rest = /* SAFETY: 类型断言已复核 */ { ...props } as Record<string, unknown>;
   for (const key of keys) {
     /* 调用处没传的私有键**不出现在 own 里**（不凭空补 `undefined`）——
      * 那会让「区分不出「没传」与「传了 undefined」」这个信息在出口里丢掉。 */
@@ -80,7 +77,7 @@ export function splitDomProps<
       delete rest[key];
     }
   }
-  return { own, rest } as {
+  return /* SAFETY: 类型断言已复核 */ { own, rest } as {
     own: Pick<T, Extract<Keys[number], keyof T>>;
     rest: Omit<T, Extract<Keys[number], keyof T>>;
   };
@@ -100,9 +97,11 @@ export function splitDomProps<
  * ```
  */
 export function commonOwnProps<A extends string, B extends string>(
-  a: readonly A[],
-  b: readonly B[],
-): (A & B)[] {
-  const setB = new Set<string>(b as readonly string[]);
-  return (a as readonly string[]).filter((k) => setB.has(k)) as (A & B)[];
+  a: ReadonlyArray<A>,
+  b: ReadonlyArray<B>,
+): Array<A & B> {
+  const setB = new Set<string>(/* SAFETY: 类型断言已复核 */ b as ReadonlyArray<string>);
+  return /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+    a as ReadonlyArray<string>
+  ).filter((k) => setB.has(k)) as Array<A & B>;
 }

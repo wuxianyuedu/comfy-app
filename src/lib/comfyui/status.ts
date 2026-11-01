@@ -54,16 +54,6 @@ import { logger } from "~/lib/core/logger";
 
 /** 进程/端口事实的快照：拿不到就都为空。 */
 export type ComfyRuntimeSnapshot = {
-  /** 有 ComfyUI 进程在跑（本进程拉起的、配置路径的、或任意解释器起的）。 */
-  running: boolean;
-  /** 从进程表定位到的 PID（拿不到为 null）。 */
-  pid: number | null;
-  /** PID 正在监听的端口（拿不到为 null）。 */
-  port: number | null;
-  /** 该进程用什么起的（中文短语，如「setup 中登记的启动器」），用于状态行提示。 */
-  via: string | null;
-  /** 进程表查询本身是否失败（超时/无权限）：结果不可信，不得当作「没在跑」。 */
-  unverified: boolean;
   /** 本次是否**真的查过**进程表。
    *
    *  与 `unverified` 不同：`unverified` 只说「没有一条事实可信」，而 0 条候选
@@ -73,15 +63,25 @@ export type ComfyRuntimeSnapshot = {
    *  取值同上：命中任一候选（含 bound 子进程 / 配置端口上的实例）即算查过——
    *  「端口有人应答」是比进程表更强的证据，不必再枚举一遍进程。 */
   didQueryProcTable: boolean;
+  /** 从进程表定位到的 PID（拿不到为 null）。 */
+  pid: number | null;
+  /** PID 正在监听的端口（拿不到为 null）。 */
+  port: number | null;
+  /** 有 ComfyUI 进程在跑（本进程拉起的、配置路径的、或任意解释器起的）。 */
+  running: boolean;
   /** 事实来源：bound=本进程持有的子进程；port=配置端口上已有人应答；
    *  process=配置路径进程表命中；launcher=setup 登记启动器；any=按环境反查
    *  （pyvenv.cfg / uv 托管解释器）出来的解释器进程。 */
   source: "bound" | "port" | "process" | "launcher" | "any" | null;
+  /** 进程表查询本身是否失败（超时/无权限）：结果不可信，不得当作「没在跑」。 */
+  unverified: boolean;
+  /** 该进程用什么起的（中文短语，如「setup 中登记的启动器」），用于状态行提示。 */
+  via: string | null;
 };
 
 /** 快照缓存时长：探针自身很快（见探针设计），缓存只为吸收「连点刷新 /
  *  并发查询」的重复 IO，不做长 TTL——外部实例刚起来时最多等这么久被认出来。 */
-export const COMFY_SNAPSHOT_TTL_MS = 1_500;
+export const COMFY_SNAPSHOT_TTL_MS = 1500;
 
 /** 未绑定端口的快照（「进程在、接口还没就绪」）的缓存时长：比普通 TTL 更短。
  *
@@ -111,9 +111,7 @@ function isUnboundPortSnapshot(snap: ComfyRuntimeSnapshot): boolean {
 
 /** 该快照在 `now` 时刻是否已过有效期。 */
 function isStale(snap: ComfyRuntimeSnapshot, at: number, now: number): boolean {
-  const ttl = isUnboundPortSnapshot(snap)
-    ? COMFY_UNBOUND_PORT_TTL_MS
-    : COMFY_SNAPSHOT_TTL_MS;
+  const ttl = isUnboundPortSnapshot(snap) ? COMFY_UNBOUND_PORT_TTL_MS : COMFY_SNAPSHOT_TTL_MS;
   return now - at >= ttl;
 }
 
@@ -153,18 +151,12 @@ function boundChildPid(): number | null {
 
 /** 从进程表里找「命令行含 main.py 的解释器」。仓库里三处启动路径的候选顺序
  *  一致（便携 → venv → 桌面 standalone-env），这里作为兜底再放宽一层。 */
-export function launcherCommandCandidates(pythonExe: string): string[] {
+export function launcherCommandCandidates(pythonExe: string): Array<string> {
   const dir = path.dirname(pythonExe);
-  const exts =
-    process.platform === "win32"
-      ? ["pythonw.exe", "python.exe"]
-      : ["pythonw", "python"];
+  const exts = process.platform === "win32" ? ["pythonw.exe", "python.exe"] : ["pythonw", "python"];
   // 去重：便携版解释器本身就叫 python.exe，枚举结果与候选重复时不必查两遍。
   return [
-    ...new Set([
-      ...exts.map((name) => path.join(...tracingIgnoreArgs(), dir, name)),
-      pythonExe,
-    ]),
+    ...new Set([...exts.map((name) => path.join(...tracingIgnoreArgs(), dir, name)), pythonExe]),
   ];
 }
 
@@ -172,7 +164,9 @@ export function launcherCommandCandidates(pythonExe: string): string[] {
  *  `.venv/Lib/site-packages/comfy_cli/.comfy-cli` 的 setup 节）。只在
  *  comfyuiPath 存在且是目录时读一次，读不到返回 null（纯尽力而为）。 */
 export function readRegisteredLauncher(comfyuiPath: string): string | null {
-  if (!comfyuiPath) return null;
+  if (!comfyuiPath) {
+    return null;
+  }
   const registry = path.join(
     ...tracingIgnoreArgs(),
     comfyuiPath,
@@ -196,9 +190,13 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
   // 取 setup 节的 cmds（形如 "cmds": "C:\...\python.exe main.py"）。走 JSON.parse
   // 而不是正则：cmds 内嵌的引号是 JSON 转义过的（`\"C:\\uv...\"`），正则抓不准。
   const cmds = extractSetupCmds(raw);
-  if (!cmds) return null;
+  if (!cmds) {
+    return null;
+  }
   const first = /^"([^"]+)"/.exec(cmds)?.[1] ?? cmds.trim().split(/\s+/)[0];
-  if (!first || !/\.exe$|python/i.test(first)) return null;
+  if (!first || !/\.exe$|python/i.test(first)) {
+    return null;
+  }
   return first;
 }
 
@@ -206,7 +204,7 @@ export function readRegisteredLauncher(comfyuiPath: string): string | null {
 export function extractSetupCmds(raw: string): string | null {
   try {
     const parsed: unknown = JSON.parse(raw);
-    const setup = (parsed as { setup?: { cmds?: unknown } })?.setup;
+    const setup = /* SAFETY: 类型断言已复核 */ (parsed as { setup?: { cmds?: unknown } })?.setup;
     const cmds = setup?.cmds;
     return typeof cmds === "string" && cmds.trim() ? cmds : null;
   } catch {
@@ -247,7 +245,9 @@ async function resolvePortFast(
   alreadyProbedPort: boolean | null = null,
 ): Promise<number | null> {
   const authoritative = findPidListeningPort(pid);
-  if (!configuredPort) return authoritative;
+  if (!configuredPort) {
+    return authoritative;
+  }
 
   if (alreadyProbedPort === false) {
     /* 配置端口刚被探过且没人应答 → 抢跑这一路已经出局，直接等权威查询。
@@ -258,14 +258,14 @@ async function resolvePortFast(
   const guessed =
     alreadyProbedPort === true
       ? Promise.resolve(configuredPort)
-      : probeComfyAtPort(configuredPort).then((base) =>
-          base ? configuredPort : null,
-        );
+      : probeComfyAtPort(configuredPort).then((base) => (base ? configuredPort : null));
   const winner = await Promise.race([
     authoritative.then((port) => ({ port })),
     guessed.then((port) => ({ port })),
   ]);
-  if (winner.port) return winner.port;
+  if (winner.port) {
+    return winner.port;
+  }
   // 抢跑没结论（配置端口没人应答）→ 仍以权威查询为准。
   return authoritative;
 }
@@ -327,7 +327,9 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
    * 把结论坐实成「未运行」。此前这里是 `return emptySnapshot()`（两项皆假但
    * `didQueryProcTable` 为假），于是状态行被永远按在「ComfyUI 状态检测中…」
    * 上：用户没配路径，却看着一个一直在转的探测（ISSUE #1900）。 */
-  if (!comfyuiPath) return { ...emptySnapshot(), didQueryProcTable: true };
+  if (!comfyuiPath) {
+    return { ...emptySnapshot(), didQueryProcTable: true };
+  }
 
   // 查询失败≠没在跑（高负载 / 冷启动时 PowerShell 常超时）：如实记下来，
   // 最终没命中任何判据时标 unverified，绝不在这里下「未运行」的结论。
@@ -343,29 +345,26 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
       return {
         running: true,
         pid: lookup.pid,
-        port: await resolvePortFast(
-          lookup.pid,
-          configuredPort,
-          configuredPortUp,
-        ),
+        port: await resolvePortFast(lookup.pid, configuredPort, configuredPortUp),
         via: "配置路径的实例",
         unverified: false,
         didQueryProcTable: true,
         source: "process",
       };
     }
-    if (lookup.failed) lookupFailed = true;
+    if (lookup.failed) {
+      lookupFailed = true;
+    }
   }
 
   // 3) 启动器形态：Comfy Desktop 的 standalone-env 由 uv 启动，命令行里没有
   //    main.py（步骤 2 必然落空）；先试 setup 登记的启动器，再试解释器候选。
   const classify = classifyComfyInstall(comfyuiPath);
-  const registered = readRegisteredLauncher(
-    classify.instanceRoot ?? comfyuiPath,
-  );
-  const candidates: { cmd: string; via: string }[] = [];
-  if (registered)
+  const registered = readRegisteredLauncher(classify.instanceRoot ?? comfyuiPath);
+  const candidates: Array<{ cmd: string; via: string }> = [];
+  if (registered) {
     candidates.push({ cmd: registered, via: "setup 中登记的启动器" });
+  }
   if (!("error" in plan)) {
     for (const cmd of launcherCommandCandidates(plan.cmd)) {
       candidates.push({ cmd, via: "配置路径的解释器" });
@@ -376,9 +375,7 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
   //    「实例根下的解释器路径」查表必然落空。这里顺着 `standalone-env\pyvenv.cfg`
   //    的 home/executable 找到真正在跑的解释器，再补一遍 uv 托管目录
   //    （见 env-python.ts）。命中即 source=any，仍不等 HTTP。
-  for (const c of collectComfyPythonCandidates(
-    classify.instanceRoot ?? comfyuiPath,
-  )) {
+  for (const c of collectComfyPythonCandidates(classify.instanceRoot ?? comfyuiPath)) {
     candidates.push({ cmd: c.exe, via: c.via });
   }
 
@@ -393,24 +390,22 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
    *
    * 命中后按候选**原始顺序**取第一个：几路同时命中时，仍由「先声明的判据优先」
    * 决定结论（顺序语义与串行版一致，不会因为谁先返回而改变判定）。 */
-  const lookups = await Promise.all(
-    candidates.map((c) => findPidForMainPyDetailed(c.cmd)),
-  );
+  const lookups = await Promise.all(candidates.map((c) => findPidForMainPyDetailed(c.cmd)));
   /* 两个同长数组按位置配对：`Promise.all` 保序，所以下标一一对应。
    * 用 `entries()` 取候选、`lookups.at(i)` 取结果，省掉两处 `!`。 */
   for (const [i, candidate] of candidates.entries()) {
     const lookup = lookups.at(i);
-    if (!lookup) continue;
-    if (lookup.failed) lookupFailed = true;
+    if (!lookup) {
+      continue;
+    }
+    if (lookup.failed) {
+      lookupFailed = true;
+    }
     if (lookup.pid) {
       return {
         running: true,
         pid: lookup.pid,
-        port: await resolvePortFast(
-          lookup.pid,
-          configuredPort,
-          configuredPortUp,
-        ),
+        port: await resolvePortFast(lookup.pid, configuredPort, configuredPortUp),
         via: candidate.via,
         unverified: false,
         didQueryProcTable: true,
@@ -430,8 +425,12 @@ async function snapshotOnce(): Promise<ComfyRuntimeSnapshot> {
 
 /** 候选来路 → 快照来源标记（供诊断区分「配置路径命中」与「反查命中」）。 */
 function snapshotSourceFor(via: string): ComfyRuntimeSnapshot["source"] {
-  if (via === "setup 中登记的启动器") return "launcher";
-  if (via === "配置路径的解释器") return "process";
+  if (via === "setup 中登记的启动器") {
+    return "launcher";
+  }
+  if (via === "配置路径的解释器") {
+    return "process";
+  }
   // pyvenv.cfg / uv 托管解释器：都是「按环境反查」出来的解释器，即 any。
   return "any";
 }
@@ -458,10 +457,12 @@ export async function getComfyRuntimeSnapshot(
   /* 在途去重只在**非强制**那一档生效：`st.inflight` 回答的是「上一个问的人问的那件事」，
    * 而它可能是动作之前发出的 —— 用户点了启动、查状态、再点一次刷新，
    * 拿到的仍是启动前那一问（`force` 的口径见函数文档）。 */
-  if (!opts.force && st.inflight) return st.inflight;
+  if (!opts.force && st.inflight) {
+    return st.inflight;
+  }
   const task = snapshotOnce()
-    .catch((err: unknown) => {
-      logger.warn(`[comfyui] ${errorText(err, "运行态快照失败")}`);
+    .catch((error: unknown) => {
+      logger.warn(`[comfyui] ${errorText(error, "运行态快照失败")}`);
       // 探测异常不能报成「未运行」：标 unverified 让调用方退回 HTTP 判据。
       return { ...emptySnapshot(), unverified: true };
     })

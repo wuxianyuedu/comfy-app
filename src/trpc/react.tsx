@@ -3,7 +3,7 @@
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { createTRPCClient, type TRPCLink } from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
-import { type inferRouterInputs, type inferRouterOutputs } from "@trpc/server";
+import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 
 import type { AppRouter } from "~/server/api/root";
@@ -47,7 +47,7 @@ export const { TRPCProvider, useTRPC } = createTRPCContext<AppRouter>();
  * `createTRPCClient<AppRouter>` 就得各自 import `AppRouter`（而 `src/**` 的测试
  * import 服务端根是有边界判据的），一处类型参数换七处重复。
  */
-export function createTrpcClient(options: { links: TRPCLink<never>[] }) {
+export function createTrpcClient(options: { links: Array<TRPCLink<never>> }) {
   return createTRPCClient<AppRouter>(options);
 }
 
@@ -79,7 +79,7 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+      <TRPCProvider queryClient={queryClient} trpcClient={trpcClient}>
         {props.children}
       </TRPCProvider>
     </QueryClientProvider>

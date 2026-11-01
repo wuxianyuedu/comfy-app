@@ -27,14 +27,14 @@ const BASE = join(ROOT, "src", "lib", "core", "repository-base.ts");
 /** 去掉块注释与整行 `//` 注释，避免把说明性 import 当成真实依赖。 */
 function stripComments(src: string): string {
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
     .split("\n")
     .filter((line) => !/^\s*\/\//.test(line))
     .join("\n");
 }
 
 /** 模块说明符提取（含动态 import）。 */
-function specifiers(src: string): string[] {
+function specifiers(src: string): Array<string> {
   return [...src.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)]
     .map((m) => m[1])
     .filter((s): s is string => typeof s === "string");
@@ -62,9 +62,7 @@ describe("repository-base 是纯机械 CRUD 基类（ISSUE #565）", () => {
       (s) => s.startsWith("~/server/") || s.startsWith("@/server/"),
     );
     // 唯一允许的 `~/server/` 依赖是表**类型**定义（schema 是数据层的同层成员）
-    const offenders = upward.filter(
-      (s) => !/^[~@]\/server\/db\/schema$/.test(s),
-    );
+    const offenders = upward.filter((s) => !/^[~@]\/server\/db\/schema$/.test(s));
     expect(
       offenders,
       "仓储是数据层，反向依赖 server/** 会让「谁在最底层」成环（规范 §18.2）。\n" +

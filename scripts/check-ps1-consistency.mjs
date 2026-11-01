@@ -109,7 +109,7 @@ function parsePairs() {
   }
   const lines = spec.split("\n");
   const start = lines.findIndex((l) => l.trim().startsWith(PAIR_MARKER));
-  if (start < 0) {
+  if (start === -1) {
     problems.push(`${SPEC_REL} 缺少 ${PAIR_MARKER} 标记（跨平台动作对照表的锚点）`);
     return [];
   }
@@ -121,10 +121,14 @@ function parsePairs() {
      * （与批 6 / 批 8 同一形，不写 cast、不抬严格度）。 */
     const line = (lines[i] ?? "").trim();
     if (!line.startsWith("|")) {
-      if (pairs.length > 0) break;
+      if (pairs.length > 0) {
+        break;
+      }
       continue;
     }
-    if (/^\|[\s|:-]+\|$/.test(line)) continue; // 表头下的分隔行
+    if (/^\|[\s|:-]+\|$/.test(line)) {
+      continue;
+    } // 表头下的分隔行
     // 单元格里可能是裸路径，也可能带补充说明（`a/b.mjs`（`pnpm xxx`））——
     // 用「反引号里的、看起来像仓库内路径的 token」而不是「整格恰好是一个路径」，
     // 否则写清楚用法的那一格会被漏掉，门禁就会对新增动作一声不吭。
@@ -133,7 +137,9 @@ function parsePairs() {
     const files = [...line.matchAll(/`([\w./-]+\.(?:ps1|mjs|cjs|py))`/g)]
       .map((m) => m[1])
       .filter((f) => f !== undefined);
-    if (files.length === 0) continue;
+    if (files.length === 0) {
+      continue;
+    }
     pairs.push(files);
   }
   return pairs;
@@ -199,8 +205,12 @@ function checkSingleSource() {
   }
   for (const dir of ["scripts", "tools"]) {
     for (const rel of walk(dir)) {
-      if (!/\.(ps1|mjs)$/.test(rel)) continue;
-      if (rel === SHARED_REL || rel === SELF_REL) continue;
+      if (!/\.(ps1|mjs)$/.test(rel)) {
+        continue;
+      }
+      if (rel === SHARED_REL || rel === SELF_REL) {
+        continue;
+      }
       const text = read(rel) ?? "";
       if (definesLiteral(text)) {
         problems.push(
@@ -224,11 +234,15 @@ function walk(dir) {
   /** @type {string[]} */
   const out = [];
   const abs = path.join(ROOT, dir);
-  if (!fs.existsSync(abs)) return out;
+  if (!fs.existsSync(abs)) {
+    return out;
+  }
   for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
     const rel = `${dir}/${e.name}`;
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === "__pycache__") continue;
+      if (e.name === "node_modules" || e.name === "__pycache__") {
+        continue;
+      }
       out.push(...walk(rel));
     } else {
       out.push(rel);
@@ -262,17 +276,23 @@ function walk(dir) {
  * @returns {string | null} */
 function readmeSection(title) {
   const text = read(README_REL);
-  if (text === null) return null;
+  if (text === null) {
+    return null;
+  }
   const lines = text.split("\n");
   const start = lines.findIndex((l) => l.trim() === title);
-  if (start < 0) return null;
+  if (start === -1) {
+    return null;
+  }
   const level = title.match(/^#+/)?.[0].length ?? 2;
   /** @type {string[]} */
   const out = [];
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i] ?? "";
     const m = line.match(/^(#+)\s/);
-    if (m && (m[1] ?? "").length <= level) break;
+    if (m && (m[1] ?? "").length <= level) {
+      break;
+    }
     out.push(line);
   }
   return out.join("\n");
@@ -289,9 +309,7 @@ function readmeSection(title) {
  * @param {RegExp} re 必须带一个捕获组，取的就是那一组
  * @returns {string[]} */
 function pathsIn(text, re) {
-  return [...text.matchAll(re)]
-    .map((m) => m[1])
-    .filter((p) => p !== undefined);
+  return [...text.matchAll(re)].map((m) => m[1]).filter((p) => p !== undefined);
 }
 
 /** 收集磁盘上真实存在的双击入口（`tools/**`，排除逻辑层）。 */
@@ -299,9 +317,15 @@ function diskEntries() {
   /** @type {string[]} */
   const out = [];
   for (const rel of walk("tools")) {
-    if (!rel.endsWith(".ps1")) continue;
-    if (rel.startsWith(ENTRY_LOGICS_DIR)) continue; // 逻辑脚本不是入口
-    if (rel.endsWith(LOGIC_SUFFIX)) continue; // `.logic.ps1` 的也是逻辑层
+    if (!rel.endsWith(".ps1")) {
+      continue;
+    }
+    if (rel.startsWith(ENTRY_LOGICS_DIR)) {
+      continue;
+    } // 逻辑脚本不是入口
+    if (rel.endsWith(LOGIC_SUFFIX)) {
+      continue;
+    } // `.logic.ps1` 的也是逻辑层
     out.push(rel);
   }
   return out.sort();
@@ -346,9 +370,7 @@ function checkReadmeEntryList() {
     // 通配形态单列：`tools/build/*.ps1` 必须真的命中脚本，否则那是张空承诺。
     for (const pattern of pathsIn(section, /`(tools\/[\w-]+\/)\*\.ps1`/g)) {
       const dir = path.join(ROOT, pattern);
-      const hit = fs.existsSync(dir)
-        ? fs.readdirSync(dir).filter((f) => f.endsWith(".ps1"))
-        : [];
+      const hit = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".ps1")) : [];
       if (hit.length === 0) {
         problems.push(
           `${README_REL} 的「${label}」用了通配 \`${pattern}*.ps1\`，但该目录下没有脚本` +
@@ -374,7 +396,9 @@ function checkReadmeEntryList() {
   // 本仓的脚本名，照脚本名核会误报（本仓要跑 TypeDoc 时写的是 `pnpm run docs`）。
   const PNPM_BUILTIN = new Set(["install", "dlx", "exec", "run", "docs"]);
   for (const name of pathsIn(cross, /`pnpm\s+([\w:@.-]+)/g)) {
-    if (PNPM_BUILTIN.has(name)) continue;
+    if (PNPM_BUILTIN.has(name)) {
+      continue;
+    }
     // `pnpm run test:coverage` 这类带 `run` 的形态由上面那个 token 吃掉 `run`，
     // 真正的脚本名在它后面 —— 单独再收一遍。
     if (!(name in scripts)) {
@@ -386,7 +410,9 @@ function checkReadmeEntryList() {
   }
   for (const m of cross.matchAll(/`pnpm\s+run\s+([\w:@.-]+)/g)) {
     const [, name] = m;
-    if (!name) continue; // 捕获组不可能缺（正则里它是必选的），这一句是写给检查器的
+    if (!name) {
+      continue;
+    } // 捕获组不可能缺（正则里它是必选的），这一句是写给检查器的
     if (!(name in scripts)) {
       problems.push(
         `${README_REL}「${README_CROSS_SECTION}」写了 \`pnpm run ${name}\`，` +
@@ -397,9 +423,7 @@ function checkReadmeEntryList() {
 
   // ── 3. 磁盘 → 两份清单（+ 豁免逐条给理由）──────────────────────────
   // dailyActions = README 那张表里的入口（我双击它做什么）。
-  const dailyActions = new Set(
-    pathsIn(windows, /`(tools\/[\w./-]+\.ps1)`/g).map((p) => p),
-  );
+  const dailyActions = new Set(pathsIn(windows, /`(tools\/[\w./-]+\.ps1)`/g).map((p) => p));
   // index = `tools/README.md` 的「全目录视图」里的入口（全量，含按用途成组的那些）。
   // 两处的路径写法不同（README 表写 `tools/start/x.ps1`，tools/README.md 的目录表写
   // `start/x.ps1`），所以索引侧按「`tools/` 后面的尾段」认。
@@ -414,8 +438,12 @@ function checkReadmeEntryList() {
       .map((p) => (p.startsWith("tools/") ? p : `tools/${p}`)),
   );
   for (const rel of diskEntries()) {
-    if (dailyActions.has(rel) || indexed.has(rel)) continue;
-    if (rel in ENTRY_LIST_EXEMPT) continue;
+    if (dailyActions.has(rel) || indexed.has(rel)) {
+      continue;
+    }
+    if (rel in ENTRY_LIST_EXEMPT) {
+      continue;
+    }
     problems.push(
       `双击入口 ${rel} 在两份清单里都没有登记（${README_REL} 的「${README_WINDOWS_SECTION}」表、` +
         `${TOOLS_INDEX_REL} 的全目录视图）—— 它现在**可用但没有人知道它存在**` +
@@ -457,9 +485,13 @@ checkReadmeEntryList();
 
 if (problems.length > 0) {
   console.error("[ps1-consistency] 违规：");
-  for (const p of problems) console.error("  - " + p);
+  for (const p of problems) {
+    console.error(`  - ${p}`);
+  }
   console.error("");
-  console.error(`  规范：docs/standards/launch-and-build.md §9（跨平台模式）与 §9.5（跨平台动作对照表）`);
+  console.error(
+    `  规范：docs/standards/launch-and-build.md §9（跨平台模式）与 §9.5（跨平台动作对照表）`,
+  );
   process.exit(1);
 }
 console.log("[ps1-consistency] 跨平台动作对照与单点定义 OK ✓");

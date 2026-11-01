@@ -10,11 +10,7 @@ import type { Edge, FitViewOptions, Node, XYPosition } from "@xyflow/react";
 import { afterNextPaint } from "~/lib/next-frame";
 import { nextId } from "~/lib/unique-id";
 import { lastSegments } from "~/lib/path-display";
-import {
-  type CanvasNodeType,
-  type CanvasNodeData,
-  isCanvasNode,
-} from "./canvas-types";
+import { type CanvasNodeType, type CanvasNodeData, isCanvasNode } from "./canvas-types";
 
 /** 生成画布节点唯一 id（项目画布各创建入口共用，避免散落重复逻辑）。 */
 export function makeNodeId(): string {
@@ -31,16 +27,16 @@ export function viewportCenter(): XYPosition {
 }
 
 /** 落点信息：拖放时的指针位置，或右键菜单的位置（**屏幕**坐标）。 */
-export interface DropPoint {
+export type DropPoint = {
   x: number;
   y: number;
-}
+};
 
 /** 画布节点落地所需的上下文（由调用处从 React Flow 取，出口自己不持 ref）。 */
-export interface CanvasPlacementContext {
+export type CanvasPlacementContext = {
   /** `useReactFlow().screenToFlowPosition` —— 屏幕坐标 → 画布坐标。 */
   screenToFlowPosition: (point: XYPosition) => XYPosition;
-}
+};
 
 /**
  * 把一个画布节点放进项目画布 —— **全库唯一的入口**（规范 16 §16.2.4.38）。
@@ -60,6 +56,16 @@ export interface CanvasPlacementContext {
  * 工作流节点带 `workflowId`），出口只负责**基座**（id / type / position）。
  */
 export function placeCanvasNode(opts: {
+  /** 节点数据 —— 出口会把它铺在 `defaultData` 之上，缺字段由默认值兜住。 */
+  data: CanvasNodeData;
+  /** 画布坐标换算（`useReactFlow().screenToFlowPosition`）。 */
+  flow: CanvasPlacementContext;
+  /** **已经在画布坐标里**的落点 —— 当坐标本身来自画布（如「源节点右侧 340px」）
+   *  时用它，出口就不再换算。与 `point` 二选一。 */
+  flowPosition?: XYPosition | null;
+  /** 显式指定 id —— 只在**调用处需要提前拿到它**时给（自动连线要用同一个
+   *  id 建边：工作流跑完自动孵化下游节点时就是这种情形）。缺省由出口生成。 */
+  id?: string;
   /** 当前节点表（`setNodes` 的 updater 入参）。
    *
    *  ⚠️ 类型刻意取 React Flow 的 `Node[]` 而不是 `CanvasNodeType[]`：
@@ -68,30 +74,19 @@ export function placeCanvasNode(opts: {
    *  而出口**只做追加**、不读节点结构的任何字段 —— 收成 `CanvasNodeType[]`
    *  会逼着每个调用处写一句断言（eslint 又会把「不必要的断言」拦回去，
    *  两边互相打架）。 */
-  nodes: Node[];
+  nodes: Array<Node>;
   /** 落点（**屏幕**坐标）；缺省落在视口中心。 */
   point?: DropPoint | null;
-  /** **已经在画布坐标里**的落点 —— 当坐标本身来自画布（如「源节点右侧 340px」）
-   *  时用它，出口就不再换算。与 `point` 二选一。 */
-  flowPosition?: XYPosition | null;
-  /** 画布坐标换算（`useReactFlow().screenToFlowPosition`）。 */
-  flow: CanvasPlacementContext;
-  /** 节点数据 —— 出口会把它铺在 `defaultData` 之上，缺字段由默认值兜住。 */
-  data: CanvasNodeData;
-  /** 显式指定 id —— 只在**调用处需要提前拿到它**时给（自动连线要用同一个
-   *  id 建边：工作流跑完自动孵化下游节点时就是这种情形）。缺省由出口生成。 */
-  id?: string;
-}): CanvasNodeType[] {
+}): Array<CanvasNodeType> {
   const position =
-    opts.flowPosition ??
-    opts.flow.screenToFlowPosition(opts.point ?? viewportCenter());
+    opts.flowPosition ?? opts.flow.screenToFlowPosition(opts.point ?? viewportCenter());
   const node: CanvasNodeType = {
     id: opts.id ?? makeNodeId(),
     type: "canvasNode",
     position,
     data: opts.data,
   };
-  return [...opts.nodes, node] as CanvasNodeType[];
+  return /* SAFETY: 类型断言已复核 */ [...opts.nodes, node] as Array<CanvasNodeType>;
 }
 
 /** 双 rAF 的 fitView 调度器：等 ReactFlow 完成本轮布局后再 fit，
@@ -116,21 +111,27 @@ export function makeFitViewScheduler(
  *  - 其余节点：按 targetHandle 分派 prompt/negative/steps/cfg/seed/inputImage
  *  workflowArdot 纯视觉节点无数据，直接跳过。 */
 export function applyPropagationToNodes(
-  nodes: CanvasNodeType[],
+  nodes: Array<CanvasNodeType>,
   sourceId: string,
   opts: {
-    srcData: CanvasNodeData;
-    outEdges: Edge[];
     importedFile: string | null;
+    outEdges: Array<Edge>;
+    srcData: CanvasNodeData;
   },
-): CanvasNodeType[] {
+): Array<CanvasNodeType> {
   const { srcData: src, outEdges, importedFile } = opts;
 
   return nodes.map((node) => {
-    if (node.id === sourceId) return node;
-    if (!isCanvasNode(node)) return node;
+    if (node.id === sourceId) {
+      return node;
+    }
+    if (!isCanvasNode(node)) {
+      return node;
+    }
     const edge = outEdges.find((outEdge) => outEdge.target === node.id);
-    if (!edge) return node;
+    if (!edge) {
+      return node;
+    }
     const td = node.data;
 
     // 连线传入自定义工作流节点：按 ioKey 把上游输出写进 workflowInputs，
@@ -138,24 +139,19 @@ export function applyPropagationToNodes(
     if (td.kind === "workflow" && edge.targetHandle) {
       const key = edge.targetHandle;
       let stored: unknown = undefined;
-      if (src.kind === "text" && src.content?.trim()) stored = src.content;
-      else if (
-        (src.kind === "picture" || src.kind === "movie") &&
-        src.mediaPath
-      )
+      if (src.kind === "text" && src.content?.trim()) {
+        stored = src.content;
+      } else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath) {
         stored = src.mediaPath;
-      else if (
-        src.resultPath &&
-        src.resultMediaType !== "video" &&
-        importedFile
-      )
+      } else if (src.resultPath && src.resultMediaType !== "video" && importedFile) {
         stored = importedFile;
+      }
       if (stored !== undefined) {
         return {
           ...node,
           data: {
             ...td,
-            workflowInputs: { ...(td.workflowInputs ?? {}), [key]: stored },
+            workflowInputs: { ...td.workflowInputs, [key]: stored },
             upstreamId: sourceId,
           },
         };
@@ -172,9 +168,7 @@ export function applyPropagationToNodes(
     if (td.kind === "picture" || td.kind === "movie") {
       const incoming: string | undefined =
         importedFile ??
-        (src.kind === "picture" || src.kind === "movie"
-          ? (src.mediaPath ?? undefined)
-          : undefined);
+        (src.kind === "picture" || src.kind === "movie" ? (src.mediaPath ?? undefined) : undefined);
       if (incoming) {
         return {
           ...node,
@@ -193,48 +187,67 @@ export function applyPropagationToNodes(
 
     const next: CanvasNodeData = { ...td };
     switch (edge.targetHandle) {
-      case "prompt":
+      case "prompt": {
         // 文本载体节点喂它自己的自由文本；其它节点则喂 prompt 字段。
         if (src.kind === "text") {
-          if (src.content?.trim()) next.prompt = src.content;
+          if (src.content?.trim()) {
+            next.prompt = src.content;
+          }
         } else if (src.prompt?.trim()) {
           next.prompt = src.prompt;
         }
         break;
-      case "negative":
-        if (src.negative?.trim()) next.negative = src.negative;
+      }
+      case "negative": {
+        if (src.negative?.trim()) {
+          next.negative = src.negative;
+        }
         break;
-      case "steps":
-        if (src.steps != null) next.steps = src.steps;
+      }
+      case "steps": {
+        if (src.steps != null) {
+          next.steps = src.steps;
+        }
         break;
-      case "cfg":
-        if (src.cfg != null) next.cfg = src.cfg;
+      }
+      case "cfg": {
+        if (src.cfg != null) {
+          next.cfg = src.cfg;
+        }
         break;
-      case "seed":
-        if (src.seed?.trim()) next.seed = src.seed;
+      }
+      case "seed": {
+        if (src.seed?.trim()) {
+          next.seed = src.seed;
+        }
         break;
+      }
       case "inputImage":
-      default:
+      default: {
         if (importedFile) {
           next.inputImage = importedFile;
           next.upstreamId = sourceId;
           // 自动切换消费端模式，让喂进来的图片真正被用上
-          if (next.kind === "image" && next.mode === "txt2img")
+          if (next.kind === "image" && next.mode === "txt2img") {
             next.mode = "img2img";
-          if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
-        } else if (
-          (src.kind === "picture" || src.kind === "movie") &&
-          src.mediaPath
-        ) {
+          }
+          if (next.kind === "video" && next.mode === "t2v") {
+            next.mode = "i2v";
+          }
+        } else if ((src.kind === "picture" || src.kind === "movie") && src.mediaPath) {
           // 内容载体本来就住在 ComfyUI 的 input 目录里，
           // 因此不必重新导入 —— 直接接上现成的文件名即可。
           next.inputImage = src.mediaPath;
           next.upstreamId = sourceId;
-          if (next.kind === "image" && next.mode === "txt2img")
+          if (next.kind === "image" && next.mode === "txt2img") {
             next.mode = "img2img";
-          if (next.kind === "video" && next.mode === "t2v") next.mode = "i2v";
+          }
+          if (next.kind === "video" && next.mode === "t2v") {
+            next.mode = "i2v";
+          }
         }
         break;
+      }
     }
     return { ...node, data: next };
   });

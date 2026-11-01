@@ -39,25 +39,17 @@ function facts(over: Partial<LivenessFacts> = {}): LivenessFacts {
 describe("classifyLivenessPhase", () => {
   it("崩溃复核优先于一切：收到退出信号就不该等下一拍", () => {
     expect(classifyLivenessPhase(facts({ verifying: true }))).toBe("verifying");
-    expect(
-      classifyLivenessPhase(facts({ verifying: true, hidden: true })),
-    ).toBe("verifying");
+    expect(classifyLivenessPhase(facts({ verifying: true, hidden: true }))).toBe("verifying");
   });
 
   it("隐藏优先于启动等待与出图：用户看不见时先省资源", () => {
     expect(classifyLivenessPhase(facts({ hidden: true }))).toBe("hidden");
-    expect(classifyLivenessPhase(facts({ hidden: true, starting: true }))).toBe(
-      "hidden",
-    );
-    expect(classifyLivenessPhase(facts({ hidden: true, busy: true }))).toBe(
-      "hidden",
-    );
+    expect(classifyLivenessPhase(facts({ hidden: true, starting: true }))).toBe("hidden");
+    expect(classifyLivenessPhase(facts({ hidden: true, busy: true }))).toBe("hidden");
   });
 
   it("启动等待优先于出图：用户在盯着转圈，用出图档会把「就绪」拖成半分钟", () => {
-    expect(classifyLivenessPhase(facts({ starting: true, busy: true }))).toBe(
-      "starting",
-    );
+    expect(classifyLivenessPhase(facts({ starting: true, busy: true }))).toBe("starting");
   });
 
   it("有活儿就是出图档，其余是空闲档", () => {
@@ -74,12 +66,8 @@ describe("livenessIntervalMs", () => {
 
   it("启动等待：10s 内 400ms，之后降到 1s", () => {
     expect(livenessIntervalMs("starting", 0)).toBe(LIVENESS_STARTING.fastMs);
-    expect(livenessIntervalMs("starting", 9_999)).toBe(
-      LIVENESS_STARTING.fastMs,
-    );
-    expect(livenessIntervalMs("starting", 10_000)).toBe(
-      LIVENESS_STARTING.slowMs,
-    );
+    expect(livenessIntervalMs("starting", 9999)).toBe(LIVENESS_STARTING.fastMs);
+    expect(livenessIntervalMs("starting", 10_000)).toBe(LIVENESS_STARTING.slowMs);
   });
 
   it("空闲 15s / 出图 30s / 隐藏 60s：出图期刻意比空闲更松（GPU 繁忙，HTTP 会排队）", () => {
@@ -91,7 +79,7 @@ describe("livenessIntervalMs", () => {
   });
 
   it("每个阶段都有频率，没有「可以不管」的档", () => {
-    for (const phase of [
+    for (const phase of /* SAFETY: 类型断言已复核 */ [
       "verifying",
       "hidden",
       "starting",

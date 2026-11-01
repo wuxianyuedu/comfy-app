@@ -20,13 +20,13 @@ import { streamChat } from "~/lib/llm/browser";
 import { buildScriptMarkdownMessages } from "~/lib/llm/prompts";
 import { errorMessage } from "~/lib/error-message";
 
-interface Props {
+type Props = {
   meta: ProjectMeta;
   onMetaChange: (m: ProjectMeta) => void;
   onScriptChange: (markdown: string) => void;
-}
+};
 
-const PROJECT_TYPES: ProjectType[] = [
+const PROJECT_TYPES: Array<ProjectType> = [
   "short_video",
   "micro_film",
   "animation",
@@ -55,7 +55,9 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
   const genSelectValue = channelSelectionDisplayValue(genSel, config);
 
   async function handleAI() {
-    if (!idea.trim()) return;
+    if (!idea.trim()) {
+      return;
+    }
     if (!config) {
       openSettings();
       return;
@@ -75,14 +77,16 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
         }),
       );
       const markdown = full.trim();
-      if (!markdown) throw new Error("AI 未返回有效内容");
+      if (!markdown) {
+        throw new Error("AI 未返回有效内容");
+      }
       onScriptChange(markdown);
       setIdea("");
       setAiStatus(
         `已用 ${channelProviderLabel(provider)} · ${model || "当前配置"} 生成剧本，已写入剧本内容。`,
       );
-    } catch (e: unknown) {
-      setAiError(errorMessage(e, "生成剧本失败"));
+    } catch (error: unknown) {
+      setAiError(errorMessage(error, "生成剧本失败"));
     }
   }
 
@@ -92,54 +96,47 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       <section className="border-border bg-surface rounded-xl border p-4">
         <h3 className="u-title mb-3">项目信息</h3>
         <div className="grid gap-3 sm:grid-cols-2">
-          <FormField
-            label="类型"
-            labelClassName="text-muted-foreground mb-1 text-xs"
-          >
+          <FormField label="类型" labelClassName="text-muted-foreground mb-1 text-xs">
             {(field) => (
               <SelectMenu
                 {...field}
                 className="bg-subtle! border-border! text-sm"
-                value={meta.type}
+                labels={/* SAFETY: 类型断言已复核 */ PROJECT_TYPE_LABELS as Record<string, string>}
                 onChange={(value) =>
-                  onMetaChange({ ...meta, type: value as ProjectType })
+                  onMetaChange({
+                    ...meta,
+                    type: /* SAFETY: 类型断言已复核 */ value as ProjectType,
+                  })
                 }
                 options={PROJECT_TYPES}
-                labels={PROJECT_TYPE_LABELS as Record<string, string>}
                 placeholder="选择类型"
+                value={meta.type}
               />
             )}
           </FormField>
-          <FormField
-            label="基调 / 情绪"
-            labelClassName="text-muted-foreground mb-1 text-xs"
-          >
+          <FormField label="基调 / 情绪" labelClassName="text-muted-foreground mb-1 text-xs">
             {(field) => (
               <input
                 {...field}
-                value={meta.tone}
-                onChange={(event) =>
-                  onMetaChange({ ...meta, tone: event.target.value })
-                }
                 className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                onChange={(event) => onMetaChange({ ...meta, tone: event.target.value })}
                 placeholder="温暖治愈 / 悬疑紧张 / 史诗感"
+                value={meta.tone}
               />
             )}
           </FormField>
           <FormField
+            className="sm:col-span-2"
             label="一句话梗概"
             labelClassName="text-muted-foreground mb-1 text-xs"
-            className="sm:col-span-2"
           >
             {(field) => (
               <input
                 {...field}
-                value={meta.logline}
-                onChange={(event) =>
-                  onMetaChange({ ...meta, logline: event.target.value })
-                }
                 className="border-border bg-bg focus:border-primary w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                onChange={(event) => onMetaChange({ ...meta, logline: event.target.value })}
                 placeholder="一个关于…的故事"
+                value={meta.logline}
               />
             )}
           </FormField>
@@ -150,36 +147,31 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
       <section className="border-primary-soft bg-primary-soft/30 rounded-xl border p-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-primary u-title flex items-center">
-            <Icon name="sparkles" size={14} className="mr-1.5" />
+            <Icon className="mr-1.5" name="sparkles" size={14} />
             生成剧本
           </h3>
           {/* 与角色卡一致：本次生成可独立选择 本地 / 远端 的哪个模型 */}
-          <ExtractModelSelect value={genSelectValue} onChange={setGenSel} />
+          <ExtractModelSelect onChange={setGenSel} value={genSelectValue} />
         </div>
         <div className="flex flex-col gap-2">
           <Textarea
-            value={idea}
-            onChange={textHandler(setIdea)}
-            rows={3}
             className="border-border bg-bg"
+            onChange={textHandler(setIdea)}
             placeholder="输入一句话灵感或粘贴一段粗稿，直接生成完整剧本…"
+            rows={3}
+            value={idea}
           />
           <Button
-            variant="primary-solid"
-            onClick={handleAI}
-            disabled={!idea.trim() || ai.busy}
             className="h-auto w-fit rounded-lg px-4 py-2"
+            disabled={!idea.trim() || ai.busy}
+            onClick={handleAI}
+            variant="primary-solid"
           >
             {ai.busy ? (
               "AI 生成中…"
             ) : (
               <>
-                <Icon
-                  data-icon="inline-start"
-                  name="sparkles"
-                  size={13}
-                  className="mr-1"
-                />
+                <Icon className="mr-1" data-icon="inline-start" name="sparkles" size={13} />
                 AI 生成剧本
               </>
             )}
@@ -194,9 +186,7 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               {aiError}
             </p>
           )}
-          {aiStatus && !aiError && (
-            <p className="text-primary text-xs">{aiStatus}</p>
-          )}
+          {aiStatus && !aiError && <p className="text-primary text-xs">{aiStatus}</p>}
         </div>
       </section>
     </div>

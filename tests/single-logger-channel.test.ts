@@ -52,7 +52,7 @@ const SCAN_DIRS = ["src/lib", "src/server"];
 
 /** 去掉注释，避免把注释里提到的 `console.log` 误判成调用。 */
 function stripComments(src: string): string {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^[ \t]*\/\/.*$/gm, "");
 }
 
 /**
@@ -82,26 +82,32 @@ const CLIENT_ONLY = [
   "src/lib/project-canvas/sync-notice.ts",
 ];
 
-function walk(dir: string, out: string[] = []): string[] {
+function walk(dir: string, out: Array<string> = []): Array<string> {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) {
       walk(full, out);
       continue;
     }
-    if (/\.(ts|tsx)$/.test(name)) out.push(full);
+    if (/\.(ts|tsx)$/.test(name)) {
+      out.push(full);
+    }
   }
   return out;
 }
 
 describe("日志实现只有一处（ISSUE #568）", () => {
   it("除日志门面外，服务端库代码里没有直接写 console 的日志实现", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const dir of SCAN_DIRS) {
       for (const file of walk(join(ROOT, dir))) {
         const rel = relative(ROOT, file).split("\\").join("/");
-        if (/\.test\.(ts|tsx)$/.test(rel)) continue; // 用例自己会打点/断言输出
-        if (CLIENT_ONLY.includes(rel)) continue; // 浏览器侧唯一通道，见上方清单
+        if (/\.test\.(ts|tsx)$/.test(rel)) {
+          continue;
+        } // 用例自己会打点/断言输出
+        if (CLIENT_ONLY.includes(rel)) {
+          continue;
+        } // 浏览器侧唯一通道，见上方清单
         const src = stripComments(readFileSync(file, "utf8"));
         if (/\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/.test(src)) {
           offenders.push(rel);
@@ -122,9 +128,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     // 这条豁免就是白挂的，应当从清单里删掉。
     for (const rel of CLIENT_ONLY) {
       const raw = readFileSync(join(ROOT, rel), "utf8");
-      expect(raw.split("\n")[0]?.trim(), `${rel} 首行必须是 "use client"`).toBe(
-        '"use client";',
-      );
+      expect(raw.split("\n")[0]?.trim(), `${rel} 首行必须是 "use client"`).toBe('"use client";');
       expect(stripComments(raw), `${rel} 里应当有 console 调用`).toMatch(
         /\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/,
       );
@@ -156,8 +160,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
   it("日志实现只有一处：pino 工厂与 ERROR 镜像不许在别处重建", () => {
     // 判据落在「实现特征」上，而不是文件清单：谁在 import pino / 谁在定义 redact 路径，
     // 谁就是实现处。两份实现只要出现，这条立刻红。
-    const implementors = walk(join(SRC, "lib"))
-      .concat(walk(join(SRC, "server")))
+    const implementors = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
       .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
       .filter((f) => /from\s+["']pino["']/.test(readFileSync(f, "utf8")))
       .map((f) => relative(ROOT, f).split("\\").join("/"));
@@ -177,12 +180,9 @@ describe("日志实现只有一处（ISSUE #568）", () => {
   });
 
   it("值形状守卫只有一份实现（两条通道都从 core 取）", () => {
-    const files = walk(join(SRC, "lib"))
-      .concat(walk(join(SRC, "server")))
+    const files = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
       .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
-      .filter((f) =>
-        /export\s+function\s+redactSecretShaped/.test(readFileSync(f, "utf8")),
-      )
+      .filter((f) => /export\s+function\s+redactSecretShaped/.test(readFileSync(f, "utf8")))
       .map((f) => relative(ROOT, f).split("\\").join("/"));
     expect(files).toEqual(["src/lib/core/redact-secret.ts"]);
   });

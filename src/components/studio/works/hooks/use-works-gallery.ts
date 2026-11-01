@@ -26,32 +26,30 @@ import {
   type ProjectListEntry,
 } from "~/lib/project-canvas/canvas-store";
 
-export interface WorksGalleryController {
-  /** 要渲染的全部项目行（并集，倒序）。 */
-  projects: ProjectListEntry[];
-  /** 首次取数完成前为真（视图显示加载态，而不是「还没有项目」）。 */
-  loading: boolean;
-  /** 服务端列表这一轮拉到了没有。false ⇒ 视图给一句降级说明。 */
-  serverOk: boolean;
-  /** 打开某个项目（由容器接线到 workspace 的「设为活跃 + 跳主页」）。 */
-  openProject: (id: string) => void;
-  /** 请求删除某个项目（弹确认框；真正删除在 `confirmDelete` 里）。 */
-  requestDelete: (id: string) => void;
-  /** 确认框开关 + 目标行。 */
-  pendingDelete: ProjectListEntry | null;
+export type WorksGalleryController = {
   cancelDelete: () => void;
   /** 确认删除。落定后返回被删那一行的名字（toast 用；没有目标则 null）。 */
   confirmDelete: () => Promise<string | null>;
   /** 正在删（确认框的 spinner 态）。 */
   deleting: boolean;
+  /** 首次取数完成前为真（视图显示加载态，而不是「还没有项目」）。 */
+  loading: boolean;
+  /** 打开某个项目（由容器接线到 workspace 的「设为活跃 + 跳主页」）。 */
+  openProject: (id: string) => void;
+  /** 确认框开关 + 目标行。 */
+  pendingDelete: ProjectListEntry | null;
+  /** 要渲染的全部项目行（并集，倒序）。 */
+  projects: Array<ProjectListEntry>;
   /** 手动重取一次。 */
   refresh: () => void;
-}
+  /** 请求删除某个项目（弹确认框；真正删除在 `confirmDelete` 里）。 */
+  requestDelete: (id: string) => void;
+  /** 服务端列表这一轮拉到了没有。false ⇒ 视图给一句降级说明。 */
+  serverOk: boolean;
+};
 
-export function useWorksGallery(
-  onOpenProject?: (id: string) => void,
-): WorksGalleryController {
-  const [projects, setProjects] = useState<ProjectListEntry[]>([]);
+export function useWorksGallery(onOpenProject?: (id: string) => void): WorksGalleryController {
+  const [projects, setProjects] = useState<Array<ProjectListEntry>>([]);
   const [loading, setLoading] = useState(true);
   const [serverOk, setServerOk] = useState(true);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -99,12 +97,16 @@ export function useWorksGallery(
   }, []);
 
   const cancelDelete = useCallback(() => {
-    if (deleting) return;
+    if (deleting) {
+      return;
+    }
     setPendingDeleteId(null);
   }, [deleting]);
 
   const confirmDelete = useCallback(async (): Promise<string | null> => {
-    if (!pendingDeleteId) return null;
+    if (!pendingDeleteId) {
+      return null;
+    }
     const target = projects.find((project) => project.id === pendingDeleteId);
     const id = pendingDeleteId;
     setDeleting(true);
@@ -124,8 +126,7 @@ export function useWorksGallery(
     }
   }, [pendingDeleteId, projects]);
 
-  const pendingDelete =
-    projects.find((project) => project.id === pendingDeleteId) ?? null;
+  const pendingDelete = projects.find((project) => project.id === pendingDeleteId) ?? null;
 
   return {
     projects,

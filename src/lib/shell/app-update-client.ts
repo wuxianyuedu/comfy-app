@@ -11,30 +11,30 @@ import { errorText } from "~/lib/error-message";
 import { isDesktopShell } from "~/lib/shell/desktop-shell-client";
 
 /** 一次「检测更新」的结果：是否有可用更新及其元信息。 */
-export interface AppUpdateInfo {
+export type AppUpdateInfo = {
+  body?: string;
   currentVersion: string;
+  date?: string;
   /** 远端可用版本；无更新时为 null。 */
   version: string | null;
-  date?: string;
-  body?: string;
-}
+};
 
-export interface AppUpdateCheckResult {
-  ok: boolean;
+export type AppUpdateCheckResult = {
   /** 是否确有可用更新。 */
   available: boolean;
   /** 可读结果 / 失败原因。 */
   detail: string;
+  ok: boolean;
   /** available 为 true 时附带的更新元信息。 */
   update?: AppUpdateInfo;
-}
+};
 
-export interface AppUpdateInstallResult {
+export type AppUpdateInstallResult = {
+  detail: string;
   ok: boolean;
   /** 是否已触发安装/重启（Windows 端 install 后应用即退出）。 */
   triggered: boolean;
-  detail: string;
-}
+};
 
 /** 下载进度回调：已下载字节 / 总字节（contentLength 可能为空）。 */
 export type AppUpdateProgress = (downloaded: number, total?: number) => void;
@@ -70,11 +70,11 @@ export async function checkAppUpdate(): Promise<AppUpdateCheckResult> {
         body: update.body,
       },
     };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
       available: false,
-      detail: `${errorText(e, "检测更新失败")}。请确认已配置更新源与签名公钥。`,
+      detail: `${errorText(error, "检测更新失败")}。请确认已配置更新源与签名公钥。`,
     };
   }
 }
@@ -113,11 +113,11 @@ export async function downloadAndInstallUpdate(
     // Windows 下 install 成功后会退出应用；走到这里说明未自动重启（非 Windows），
     // 成功安装后交由调用方决定是否显式 relaunch。
     return { ok: true, triggered: true, detail: "更新已安装并重启" };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
       triggered: false,
-      detail: errorText(e, "更新失败"),
+      detail: errorText(error, "更新失败"),
     };
   }
 }
@@ -125,7 +125,7 @@ export async function downloadAndInstallUpdate(
 /**
  * 重启应用（不涉及更新）。由「重启应用」按钮调用，也作为更新流程的收尾兜底。
  */
-export async function relaunchApp(): Promise<{ ok: boolean; detail: string }> {
+export async function relaunchApp(): Promise<{ detail: string; ok: boolean }> {
   if (!isDesktopShell()) {
     return { ok: false, detail: NOT_SHELL };
   }
@@ -134,10 +134,10 @@ export async function relaunchApp(): Promise<{ ok: boolean; detail: string }> {
     await relaunch();
     // relaunch 成功即触发进程重启，此调用通常不返回。
     return { ok: true, detail: "已触发重启" };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
-      detail: errorText(e, "重启失败"),
+      detail: errorText(error, "重启失败"),
     };
   }
 }

@@ -12,7 +12,7 @@ async function main() {
   // 进程随 transport 读取 stdin 保持存活；错误走 stderr，不污染协议流。
 }
 
-main().catch((err) => {
-  console.error("[workshop-mcp-stdio] 启动失败:", err);
+main().catch((error) => {
+  console.error("[workshop-mcp-stdio] 启动失败:", error);
   process.exit(1);
 });

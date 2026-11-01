@@ -10,6 +10,10 @@
  * 并各自手写一份形状不一的表。这份脚本把那一次发现固定下来：拿到仓库执行
  * `pnpm qoder:ignore` 就装好，别人不必再猜。
  *
+ * 最后一组（生成态镜像 / 历史归档）**不在上面那句话的量程里**：它们是入库的，`git` 与
+ * `grep` 都碰得到，只是不该在索引里常驻两份。它不影响任何判据的根据换了另一条 ——
+ * 判据读的是 git 清单与源码树，而 `.qoderignore` 只被索引器读。
+ *
  * ── 三条形状约定 ──────────────────────────────────────────────────────────
  *
  *   · **人别手改产物**：`.qoderignore` 由这里渲染；「入库那份 ⇄ 工具会写的那份」由
@@ -85,7 +89,28 @@ export const IGNORE_SECTIONS = [
         why: "TypeDoc 的生成物（几千份 .md；判据那一格会自己重新生成，不进 git）",
       },
       { pattern: "/.qoder/cache/", why: "Qoder 自己的缓存，不需要被索引" },
+      {
+        pattern: "/.codegraph/",
+        why: "codegraph 的本地索引目录（`pnpm agent:index` 里由 `codegraph init` 生成；本机缓存，不入库）",
+      },
+      {
+        pattern: "/.zvec-grep/",
+        why: "zvec-grep 的工作区索引目录（`zg index` 生成；本机缓存，不入库）",
+      },
       { pattern: "*.tsbuildinfo", why: "tsc 的增量构建信息文件" },
+    ],
+  },
+  {
+    section: "入库文字里刻意只出索引的那几份（留在库里给人读，不是漏配）",
+    entries: [
+      {
+        pattern: "/docs/generated/",
+        why: "docs/standards 各章的生成态镜像：入库给人读，而正文与源逐字重复 ⇒ 检索不必常驻两份",
+      },
+      {
+        pattern: "/CHANGELOG-archive.md",
+        why: "并入过的碎片全文归档：入库给人读，查一条历史变更走 grep/git，不必占着语义索引",
+      },
     ],
   },
 ];
@@ -97,8 +122,9 @@ const HEADER = [
   "# 这份文件由 `node scripts/qoder-ignore.mjs` 生成，**不要手改**：",
   "#   pnpm qoder:ignore          写 / 刷新（幂等）",
   "#   pnpm qoder:ignore --check  比对「入库这份 ⇄ 工具会写的那份」，不一致退 1",
-  "# 它只影响索引器的扫描面，**不影响任何判据**：门禁读的是 git 清单与源码树，",
-  "# 这里列的目录本来也都被 .gitignore 忽略着。",
+  "# 它只影响索引器的扫描面，**不影响任何判据**：门禁读的是 git 清单与源码树。",
+  "# 绝大多数条目本来也被 .gitignore 忽略着；最后一组是**入库**文件（生成态镜像、历史归档）：",
+  "# 它们给人读、被配对门禁判同批，只是不该进索引 —— 那是刻意的「只出索引」，不是漏配。",
   "# ⚠️ 改完要重启 Qoder CN 进程才生效（编辑文件本身不会热加载）。",
   "",
 ];
@@ -133,7 +159,9 @@ export function renderIgnore() {
 export function diffIgnore(current, wanted) {
   const a = current.split("\n");
   const b = wanted.split("\n");
-  if (a.join("\n") === b.join("\n")) return { same: true, added: [], removed: [] };
+  if (a.join("\n") === b.join("\n")) {
+    return { same: true, added: [], removed: [] };
+  }
   const setA = new Set(a);
   const setB = new Set(b);
   return {
@@ -168,24 +196,22 @@ export async function main(argv = process.argv.slice(2)) {
   if (argv.includes("--check")) {
     const where = missing ? "文件不存在" : "内容与工具输出不一致";
     process.stderr.write(
-      `${TAG} ✗ ${where}。差 ${delta.added.length} 增 / ${delta.removed.length} 删：\n` +
+      `${TAG} ✗ ${where}。差 ${delta.added.length} 增 / ${delta.removed.length} 删：\n${
         [...delta.added.map((l) => `  + ${l}`), ...delta.removed.map((l) => `  - ${l}`)]
           .slice(0, 20)
-          .join("\n") +
-        `\n  修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）。\n`,
+          .join("\n")
+        }\n  修法：pnpm qoder:ignore 后把结果一并提交（人别手改产物）。\n`,
     );
     return 1;
   }
   try {
     fs.writeFileSync(HERE, wanted, "utf8");
-  } catch (e) {
+  } catch (error) {
     const code =
-      typeof e === "object" && e !== null && "code" in e
-        ? String(/** @type {{code: string}} */ (e).code)
+      typeof error === "object" && error !== null && "code" in error
+        ? String(/** @type {{code: string}} */ (error).code)
         : "UNKNOWN";
-    process.stderr.write(
-      `${TAG} 写不进去（${code}）：${HERE} —— 这是「没跑成」，不是「已装好」\n`,
-    );
+    process.stderr.write(`${TAG} 写不进去（${code}）：${HERE} —— 这是「没跑成」，不是「已装好」\n`);
     return 2;
   }
   process.stdout.write(
@@ -195,9 +221,6 @@ export async function main(argv = process.argv.slice(2)) {
   return 0;
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(await main());
 }

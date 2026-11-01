@@ -5,10 +5,10 @@
 import { Icon } from "~/components/ui/icon";
 import { Spinner } from "~/components/ui/spinner";
 
-interface EmptyCanvasHintProps {
+type EmptyCanvasHintProps = {
   /** true → 水合覆盖层；false → 空画布引导。 */
   loading: boolean;
-}
+};
 
 export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
   if (loading) {
@@ -69,11 +69,7 @@ export function EmptyCanvasHint({ loading }: EmptyCanvasHintProps) {
            *  `vertical-align` 只在这种情形生效（真 Chromium 实测：文本流里 12px 图标的行内偏移
            *  从 5px 变 6px，而 `items-center` 的 flex 容器里带不带它偏移都是 4.5px）。
            *  其余 10 处都坐在 `Button` / `flex` 容器里，那两条声明是零效果的抄来的写法，已删。 */}
-          <Icon
-            name="sparkles"
-            size={12}
-            className="mr-1 inline align-[-2px]"
-          />
+          <Icon className="mr-1 inline align-[-2px]" name="sparkles" size={12} />
           连线节点可把上游输出自动喂给下游
         </p>
       </div>

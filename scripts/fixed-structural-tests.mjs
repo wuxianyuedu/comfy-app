@@ -253,7 +253,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // `docs/api/**` 生成物与源同步的判据（ISSUE #1329 收尾）。同上一族：这一步的
   // 触发面与三向比对都是**下一次新增/删模块**时才响的守卫，而它挂的那一步在钩子里
   // 带 `--staged`（改了 src/lib 才跑）—— 只跟着改动走的话，「有人把 --staged 抹掉、
-  // 让它对每个提交重生成 31s」那次改动恰好落到 `.githooks/**` 上、本脚本放弃收窄，
+  // 让它对每个提交重生成一整轮（百秒级，现值取法见规范 §13.5.17）」那次改动恰好落到 `.githooks/**` 上、本脚本放弃收窄，
   // 于是这条守卫不在清单里。表现是所有人被拖慢，然后开始 `--no-verify`。
   "tests/check-docs-api.test.ts",
   // 「页面内广播通道只剩一端」（台账 E9）：`AppEvents` 表里每一条都必须既有派发方
@@ -417,6 +417,16 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 正是「下一次有人写收尾网时顺手敲 `git checkout`」—— 那种改动不会把这条带进受影响集
   // （它读的是别的文件的文本，import 图追不到），所以必须进固定清单。
   "tests/probe-restore.test.ts",
+  // 探针**隔离**那一半的口径（ISSUE #2665 / `tests/helpers/probe-worktree.ts`）：
+  // #2593 修的是「还原别拿 git 索引当凭据」，本件修的是「别写真实树」—— 写探针与
+  // 并发读者（`comment-language` 直读 `docs/reference-facts.md`）之间那段窗口是另一半。
+  // 三条各钉一格静默失效：脏的四种形状有没有都进克隆（少一种就是「克隆里没有这份」的
+  // 假结论）、`worktree add` 之后中途抛错有没有注销登记（第一版就把登记留在了仓库上）、
+  // 建不出来时有没有**退回真实树**（退回=隔离被静默关掉而账面全绿）。
+  // 为什么要进固定清单（与上面那条不同，别说错）：helper 被谁 import，改它就选得到；
+  // 但这三格防的是**运行期环境**的形状（CI 上 `worktree remove` 失败、临时目录被别的
+  // 进程占着），那种漂移不来自任何一次文件改动 ⇒ 只有每次都跑才看得见。
+  "tests/probe-worktree.test.ts",
   // 「`@theme` 声明的 token 清单」那份**文件快照**（规范 §11.9.1 / #1490 落地）：
   // `toMatchFileSnapshot` 把清单写成一份能独立打开、能单独 diff 的真文件，
   // 而它与源码之间的同步**没有任何机器判据** —— 它自己那条用例读的是
@@ -445,6 +455,14 @@ export const FIXED_STRUCTURAL_TESTS = [
   // 覆盖度账本的执行者（零消费导出 / 两个清单逐字同源）。
   "tests/check-a11y-rules.test.ts",
   "tests/helpers/a11y-effective-config.coverage.test.ts",
+  // 「eslint 文件级豁免台账 ⇄ 真违例」的执行者（规范 §13.5.31 / ISSUE #2607 第 3 条）：
+  // 那份台账自己的注释写着「何时可移除」，而这句话此前没有任何东西在读 ——
+  // 文件改干净了，豁免那一行照样躺在配置上。本层要钉的不是「差集会不会算」，
+  // 而是**取数没跑成时不许冒充结论**：`Linter#verify` 的内联配置写成 eslintrc 形时
+  // 对每一份文件都抛错，而朴素实现照样打「命中 0 处」——那正好等于「台账全部陈旧」
+  // 这个最刺眼的假结论。bin 那一条同时是「平台侧也真跑过一次这份判据」的站点
+  // （本仓的 D 档不进默认提交，平台靠固定清单这一格收住它），故进固定清单。
+  "tests/eslint-exemption-staleness.test.ts",
   // 「被门禁拦下先复算 master 基线」的执行者（规范 §13.6.2 第 1 步）：那段
   // `git worktree add ../.wt-base-check … && node scripts/check-*.cjs … && git worktree
   // remove` 此前只写在文档与注释里，于是「这一条本身还没有机器判据」是 §13.6.2 自己的

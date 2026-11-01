@@ -37,9 +37,11 @@ import {
  */
 const SCRIPT_REL = "scripts/check-test-it-each.cjs";
 
-const handles: GateRepoHandle[] = [];
+const handles: Array<GateRepoHandle> = [];
 afterEach(() => {
-  while (handles.length > 0) handles.pop()?.dispose();
+  while (handles.length > 0) {
+    handles.pop()?.dispose();
+  }
 });
 
 /** 建一个工作区（`afterEach` 收尾），并把那份脚本换成用例指定的子进程源码。 */
@@ -90,10 +92,7 @@ describe("夹具读数：「没跑起来」与「判红」不许同形", () => {
     expect(r.status, r.output).toBe(1);
     expect(r.ran, r.output).toBe(false);
     expect(r.output).toContain("Cannot find module");
-    expect(
-      r.spawnError,
-      `spawn 层没有错误，收到 ${String(r.spawnError)}`,
-    ).toBeNull();
+    expect(r.spawnError, `spawn 层没有错误，收到 ${String(r.spawnError)}`).toBeNull();
     expect(r.signal, `不该是被信号杀，收到 ${String(r.signal)}`).toBeNull();
   });
 

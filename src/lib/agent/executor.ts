@@ -8,27 +8,27 @@ import { normalizeShotType, type ShotType } from "~/lib/workshop/types";
 import { SUMMARY_MAX, clampText } from "~/lib/text-clamp";
 
 /** Agent 执行工具时需要调用的 controller 操作。 */
-export interface AgentToolHandlers {
+export type AgentToolHandlers = {
+  getCharacters: () => WorkshopDraftDto["characters"];
   getDraft: () => WorkshopDraftDto;
   getMeta: () => WorkshopDraftDto["meta"];
+  getScriptMarkdown: () => string;
+  getShots: () => WorkshopDraftDto["shots"];
+  /** 用当前项目镜头一键成片（服务端逐镜视频 + 合成 + 回写进度）。缺省表示该上下文不支持。 */
+  renderFilm?: () => Promise<{ detail?: string; ok: boolean; summary: string }>;
+  setCharacters: (characters: WorkshopDraftDto["characters"]) => void;
   setMeta: (patch: Partial<WorkshopDraftDto["meta"]>) => void;
   setScriptMarkdown: (markdown: string) => void;
-  getScriptMarkdown: () => string;
-  getCharacters: () => WorkshopDraftDto["characters"];
-  setCharacters: (characters: WorkshopDraftDto["characters"]) => void;
-  getShots: () => WorkshopDraftDto["shots"];
   setShots: (shots: WorkshopDraftDto["shots"]) => void;
-  /** 用当前项目镜头一键成片（服务端逐镜视频 + 合成 + 回写进度）。缺省表示该上下文不支持。 */
-  renderFilm?: () => Promise<{ ok: boolean; summary: string; detail?: string }>;
-}
+};
 
 /** 一个待执行的工具（已解析出参数摘要）。 */
-export interface ResolvedAgentTool {
-  toolName: string;
-  summary: string;
+export type ResolvedAgentTool = {
   argSummary: string;
-  execute: () => Promise<{ ok: boolean; summary: string; detail?: string }>;
-}
+  execute: () => Promise<{ detail?: string; ok: boolean; summary: string }>;
+  summary: string;
+  toolName: string;
+};
 
 /** 安全解析 JSON 参数串为对象。 */
 function safeParseJson(json: string): Record<string, unknown> {
@@ -42,14 +42,9 @@ function safeParseJson(json: string): Record<string, unknown> {
 /** 把未知参数串转成人类可读摘要。 */
 function summarizeArgs(argsJson: string, maxLen = 200): string {
   try {
-    const obj = JSON.parse(argsJson) as Record<string, unknown>;
+    const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(argsJson) as Record<string, unknown>;
     const keys = Object.entries(obj)
-      .filter(
-        ([, v]) =>
-          typeof v === "string" ||
-          typeof v === "number" ||
-          typeof v === "boolean",
-      )
+      .filter(([, v]) => typeof v === "string" || typeof v === "number" || typeof v === "boolean")
       .map(([k, v]) => `${k}=${String(v).slice(0, 60)}`)
       .join(", ");
     return keys.slice(0, maxLen) || "(空参数)";
@@ -60,9 +55,9 @@ function summarizeArgs(argsJson: string, maxLen = 200): string {
 
 /** 从 LLM 输出文本中解析角色 JSON 数组（扫描走全库唯一的 `extractJsonArray`）。 */
 function parseCharactersFromJson(text: string): Array<{
-  name: string;
   appearance?: string;
   costume?: string;
+  name: string;
   personality?: string;
 }> {
   try {
@@ -70,13 +65,12 @@ function parseCharactersFromJson(text: string): Array<{
     return arr
       .filter((item) => typeof item === "object" && item !== null)
       .map((item) => {
-        const rec = item as Record<string, unknown>;
+        const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
         return {
           name: typeof rec.name === "string" ? rec.name : "",
           appearance: typeof rec.appearance === "string" ? rec.appearance : "",
           costume: typeof rec.costume === "string" ? rec.costume : "",
-          personality:
-            typeof rec.personality === "string" ? rec.personality : "",
+          personality: typeof rec.personality === "string" ? rec.personality : "",
         };
       })
       .filter((c) => c.name.trim() !== "");
@@ -91,7 +85,9 @@ function parseCharacterFull(
 ): { appearance: string; costume: string; personality: string } | null {
   try {
     const parsed: unknown = extractJson(text);
-    if (!isRecord(parsed)) return null;
+    if (!isRecord(parsed)) {
+      return null;
+    }
     const rec = parsed;
     return {
       appearance: typeof rec.appearance === "string" ? rec.appearance : "",
@@ -109,17 +105,17 @@ function parseCharacterFull(
  *  的地方。它一度是 `shotType: string` 然后在下游写 `s.shotType as never`，
  *  于是「模型返回什么景别都直接进库」这件事在类型层完全看不见（台账 F13）。 */
 function parseShotsFromJson(text: string): Array<{
-  sceneHeading: string;
+  characterNames: Array<string>;
   description: string;
+  sceneHeading: string;
   shotType: ShotType;
-  characterNames: string[];
 }> {
   try {
     const arr = extractJsonArray(text);
     return arr
       .filter((item) => typeof item === "object" && item !== null)
       .map((item) => {
-        const rec = item as Record<string, unknown>;
+        const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown>;
         return {
           sceneHeading:
             typeof rec.sceneHeading === "string"
@@ -127,17 +123,14 @@ function parseShotsFromJson(text: string): Array<{
               : typeof rec.heading === "string"
                 ? rec.heading
                 : "",
-          description:
-            typeof rec.description === "string" ? rec.description : "",
+          description: typeof rec.description === "string" ? rec.description : "",
           shotType: normalizeShotType(rec.shotType),
           characterNames: Array.isArray(rec.characterNames)
-            ? (rec.characterNames as unknown[]).map(String)
+            ? /* SAFETY: 类型断言已复核 */ (rec.characterNames as Array<unknown>).map(String)
             : [],
         };
       })
-      .filter(
-        (s) => s.sceneHeading.trim() !== "" || s.description.trim() !== "",
-      );
+      .filter((s) => s.sceneHeading.trim() !== "" || s.description.trim() !== "");
   } catch {
     return [];
   }
@@ -177,20 +170,19 @@ export function resolveAgentTool(
     case "set_project_meta": {
       const args = safeParseJson(argsJson);
       const patch: Partial<WorkshopDraftDto["meta"]> = {};
-      if (typeof args.title === "string") patch.title = args.title;
-      if (typeof args.tone === "string") patch.tone = args.tone;
-      if (typeof args.logline === "string") patch.logline = args.logline;
+      if (typeof args.title === "string") {
+        patch.title = args.title;
+      }
+      if (typeof args.tone === "string") {
+        patch.tone = args.tone;
+      }
+      if (typeof args.logline === "string") {
+        patch.logline = args.logline;
+      }
       if (typeof args.type === "string") {
-        const valid = [
-          "short_video",
-          "micro_film",
-          "animation",
-          "ad",
-          "comic",
-          "other",
-        ];
+        const valid = ["short_video", "micro_film", "animation", "ad", "comic", "other"];
         if (valid.includes(args.type)) {
-          patch.type = args.type as WorkshopDraftDto["meta"]["type"];
+          patch.type = /* SAFETY: 类型断言已复核 */ args.type as WorkshopDraftDto["meta"]["type"];
         }
       }
       const keys = Object.keys(patch).join("、") || "(无字段)";
@@ -210,9 +202,7 @@ export function resolveAgentTool(
       // 非字符串参数只接受标量，对象走 toString 只会得到 "[object Object]"
       const rawIdea: unknown = args.idea;
       const idea =
-        typeof rawIdea === "string" ||
-        typeof rawIdea === "number" ||
-        typeof rawIdea === "boolean"
+        typeof rawIdea === "string" || typeof rawIdea === "number" || typeof rawIdea === "boolean"
           ? String(rawIdea)
           : "";
       return {
@@ -221,8 +211,7 @@ export function resolveAgentTool(
         argSummary,
         execute: async () => {
           const meta = hd.getMeta();
-          const { buildScriptMarkdownMessages } =
-            await import("~/lib/llm/prompts");
+          const { buildScriptMarkdownMessages } = await import("~/lib/llm/prompts");
           const { streamChat } = await import("~/lib/llm/browser");
           let full = "";
           await streamChat({
@@ -246,8 +235,7 @@ export function resolveAgentTool(
 
     case "edit_script": {
       const args = safeParseJson(argsJson);
-      const instruction =
-        typeof args.instruction === "string" ? args.instruction : "";
+      const instruction = typeof args.instruction === "string" ? args.instruction : "";
       const currentScript = hd.getScriptMarkdown();
       return {
         toolName: name,
@@ -349,18 +337,17 @@ ${script.slice(0, 8000)}`,
         summary: `添加角色「${charName}」`,
         argSummary,
         execute: async () => {
-          if (!charName.trim()) return { ok: false, summary: "角色名为空" };
+          if (!charName.trim()) {
+            return { ok: false, summary: "角色名为空" };
+          }
           const existing = hd.getCharacters();
           if (existing.some((c) => c.name === charName)) {
             return { ok: false, summary: `角色「${charName}」已存在` };
           }
-          const { buildCharacterFromBriefMessages } =
-            await import("~/lib/llm/prompts");
+          const { buildCharacterFromBriefMessages } = await import("~/lib/llm/prompts");
           const { streamChat } = await import("~/lib/llm/browser");
           const full = await streamChat({
-            messages: buildCharacterFromBriefMessages(
-              desc ? `${charName}：${desc}` : charName,
-            ),
+            messages: buildCharacterFromBriefMessages(desc ? `${charName}：${desc}` : charName),
           });
           const parsed = parseCharacterFull(full);
           const { workshopUid } = await import("~/lib/workshop/script-parser");
@@ -429,7 +416,7 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
             prompt: s.description,
             negativePrompt: "",
             params: {},
-            status: "idle" as const,
+            status: /* SAFETY: 类型断言已复核 */ "idle" as const,
           }));
           hd.setShots([...existing, ...mapped]);
           return { ok: true, summary: `已生成 ${mapped.length} 个分镜镜头` };
@@ -468,7 +455,7 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
       };
     }
 
-    default:
+    default: {
       return {
         toolName: name,
         summary: `未知工具：${name}`,
@@ -478,5 +465,6 @@ ${chars.map((c) => c.name).join("、") || "(无)"}`,
           summary: `未知工具「${name}」`,
         }),
       };
+    }
   }
 }

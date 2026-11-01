@@ -34,10 +34,7 @@ import {
 } from "./model-mode-contract";
 
 /** 旧落点（契约曾落在**入库的** `config/` 里，ISSUE #1901 那一版）。 */
-const LEGACY_CONFIG_REL_PATH = path.join(
-  "config",
-  "workshop-mode-contracts.json",
-);
+const LEGACY_CONFIG_REL_PATH = path.join("config", "workshop-mode-contracts.json");
 
 /** 生效的契约注册表：成品配置 + 本机覆盖（覆盖在而不空才整份压过）。
  *
@@ -46,10 +43,12 @@ const LEGACY_CONFIG_REL_PATH = path.join(
  *  两份都只读不搬（读路径不产生副作用，迁不迁由人决定）。 */
 export async function loadModeContracts(
   root: string = process.cwd(),
-): Promise<ModeContract[]> {
+): Promise<Array<ModeContract>> {
   for (const rel of [MODE_CONTRACTS_REL_PATH, LEGACY_CONFIG_REL_PATH]) {
     const override = await readOverrideFile(path.join(root, rel));
-    if (override && override.length > 0) return override;
+    if (override && override.length > 0) {
+      return override;
+    }
   }
   return configuredModeContracts();
 }
@@ -60,25 +59,21 @@ export async function loadModeContracts(
  *  据此回落成品配置），而不是「一台机器上碰巧没有任何契约」—— 契约的清单永远由
  *  成品配置给，空的覆盖不表达任何额外意思。 */
 export async function saveModeContracts(
-  contracts: ModeContract[],
+  contracts: Array<ModeContract>,
   root: string = process.cwd(),
-): Promise<ModeContract[]> {
+): Promise<Array<ModeContract>> {
   const normalized = parseModeContracts(contracts);
   const file = path.join(root, MODE_CONTRACTS_REL_PATH);
   try {
     await fs.mkdir(path.dirname(file), { recursive: true });
-    await fs.writeFile(
-      file,
-      `${JSON.stringify(normalized, null, 2)}\n`,
-      "utf8",
-    );
-  } catch (err) {
+    await fs.writeFile(file, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  } catch (error) {
     /* 失败必须说出来：「保存了但没落盘」是最坏的形态（用户以为配置生效、
      *  实际下一次读取回到旧值），而它唯一的痕迹就是这里。文案走 `errorText`
      * （动作前缀 + 详情的唯一出口，规范 16 §16.2.4.45），并把**文件路径**带上：
      *  它是这条路唯一能定位的东西。 */
-    throw new Error(errorText(err, `模式契约写入失败（${file}）`), {
-      cause: err,
+    throw new Error(errorText(error, `模式契约写入失败（${file}）`), {
+      cause: error,
     });
   }
   return normalized;
@@ -89,7 +84,7 @@ export async function saveModeContracts(
  *  三种情况合起来按「没有覆盖」处理：① 文件不在（没改过 / 换了机器）；② 内容不是
  *  合法 JSON 或形状不对（手改坏了）。覆盖是**可手改的本机文件**，坏文件不该把工坊
  *  整条链路打成 500 —— 它回落成品配置，界面照常可用。 */
-async function readOverrideFile(file: string): Promise<ModeContract[] | null> {
+async function readOverrideFile(file: string): Promise<Array<ModeContract> | null> {
   let raw: string;
   try {
     raw = await fs.readFile(file, "utf8");

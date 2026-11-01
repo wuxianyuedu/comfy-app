@@ -12,12 +12,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const snapshot = vi.fn();
 const subscribers: Array<(s: unknown) => void> = [];
 vi.mock("~/lib/comfyui/liveness-signal", () => ({
-  getLivenessSnapshot: (): unknown => snapshot() as unknown,
+  getLivenessSnapshot: (): unknown => /* SAFETY: 类型断言已复核 */ snapshot() as unknown,
   subscribeComfyExit: (l: (s: unknown) => void) => {
     subscribers.push(l);
     return () => {
       const i = subscribers.indexOf(l);
-      if (i >= 0) subscribers.splice(i, 1);
+      if (i !== -1) {
+        subscribers.splice(i, 1);
+      }
     };
   },
 }));
@@ -50,7 +52,7 @@ describe("GET /api/comfy/liveness", () => {
   it("连上即补发当前快照：崩溃之后才连上来的客户端也能立刻知道", async () => {
     const seen = {
       seq: 7,
-      at: 1_000,
+      at: 1000,
       reason: "异常退出（exit 1）",
       userStopped: false,
     };
@@ -77,15 +79,13 @@ describe("GET /api/comfy/liveness", () => {
     const reader = res.body!.getReader();
     const signal = {
       seq: 1,
-      at: 2_000,
+      at: 2000,
       reason: "被信号终止（SIGKILL）",
       userStopped: false,
     };
     subscribers[0]!(signal);
     const { value } = await reader.read();
-    expect(new TextDecoder().decode(value)).toBe(
-      `data: ${JSON.stringify(signal)}\n\n`,
-    );
+    expect(new TextDecoder().decode(value)).toBe(`data: ${JSON.stringify(signal)}\n\n`);
     reader.releaseLock();
     await res.body!.cancel();
   });

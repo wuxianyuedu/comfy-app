@@ -36,9 +36,13 @@ export function parseEnvFile(content) {
   const out = new Map();
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
     const m = /^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     let value = (m[2] ?? "").trim();
     // 去掉成对引号（.env.example / prepare-local-run.ps1 都写成 KEY="..."）。
     if (
@@ -67,9 +71,7 @@ export function parseEnvFile(content) {
  */
 export function missingEnvKeys({ example, current }) {
   const have = parseEnvFile(current);
-  const fromExample = [...parseEnvFile(example).keys()].filter(
-    (k) => !have.has(k),
-  );
+  const fromExample = [...parseEnvFile(example).keys()].filter((k) => !have.has(k));
   const requiredAbsent = REQUIRED_ENV_KEYS.filter((k) => !have.has(k));
   return [...new Set([...fromExample, ...requiredAbsent])];
 }
@@ -108,7 +110,9 @@ function buildHint({ envPath, missingFile, emptyKeys }) {
  * @returns {{ message: string } | null}
  */
 export function checkEnvFile(root, envVars = process.env) {
-  if (envVars.SKIP_ENV_VALIDATION) return null;
+  if (envVars.SKIP_ENV_VALIDATION) {
+    return null;
+  }
   const envPath = path.join(root, ".env");
   if (!fs.existsSync(envPath)) {
     return { message: buildHint({ envPath, missingFile: true, emptyKeys: [] }) };
@@ -119,7 +123,9 @@ export function checkEnvFile(root, envVars = process.env) {
     const value = envVars[k] ?? parsed.get(k) ?? "";
     return !value.trim();
   });
-  if (emptyKeys.length === 0) return null;
+  if (emptyKeys.length === 0) {
+    return null;
+  }
   return { message: buildHint({ envPath, missingFile: false, emptyKeys }) };
 }
 
@@ -140,12 +146,16 @@ export function checkEnvFile(root, envVars = process.env) {
  * @returns {string | null}
  */
 export function envInitHint(root, envVars = process.env) {
-  if (envVars.SKIP_ENV_VALIDATION) return null;
+  if (envVars.SKIP_ENV_VALIDATION) {
+    return null;
+  }
   try {
     const current = fs.readFileSync(path.join(root, ".env"), "utf8");
     const example = fs.readFileSync(path.join(root, ".env.example"), "utf8");
     const keys = missingEnvKeys({ example, current });
-    if (keys.length === 0) return null;
+    if (keys.length === 0) {
+      return null;
+    }
     return (
       `.env 缺 ${keys.length} 个 \`.env.example\` 里的键：${keys.join(" / ")} ⇒ ` +
       "`pnpm env:init`（只补缺失的键，不覆盖已有配置）"
@@ -170,7 +180,9 @@ export function exitIfEnvNotReady(root, envVars = process.env) {
   const problem = checkEnvFile(root, envVars);
   if (!problem) {
     const hint = envInitHint(root, envVars);
-    if (hint) process.stderr.write(`[env-preflight] ⚠ ${hint}\n`);
+    if (hint) {
+      process.stderr.write(`[env-preflight] ⚠ ${hint}\n`);
+    }
     return;
   }
   process.stderr.write(

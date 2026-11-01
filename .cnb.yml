@@ -332,7 +332,7 @@
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
       镜像身份, 工作区复用读数, 缓存槽读数, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
-      类型检查, 受影响用例, 标题行让位, 文件结构硬规则, 跨平台动作对照,
+      类型检查, 固定结构用例, 受影响用例, 标题行让位, 文件结构硬规则, 跨平台动作对照,
       import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
       函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
       UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 覆盖率上报,
@@ -446,6 +446,23 @@
     # 也**不要**写成容器里那个 `/ms-playwright`：那是给镜像配的，在宿主上不存在，
     # 写了等于让落点判据去一个空目录找东西（判据 `tests/ci-image-identity.test.ts` 守这条）。
     PLAYWRIGHT_BROWSERS_PATH: "G:\\.cache\\ms-playwright"
+    # ── 判决行的颜色：平台日志页那一屏也要带色（ISSUE #2755）──────────────────────
+    #
+    # 为什么**不是** `FORCE_COLOR`：那枚是全生态共识旗标，chalk / picocolors / oxfmt 的
+    # anstyle 都读它 —— 挂上之后被聚合档**捕获后解析**的那份子进程输出会开始带色号，
+    # 而 `lastLine()` / `looksSkipped()` / 90 字压缩三处都会把色号算进内容
+    # （§13.5.29.1 那条边界写明的后果）。所以这枚只被本仓那一层认
+    # （`scripts/ci-log.mjs` 的 `colorEnabled()`），第三方读不到它 ⇒ 子进程那一路
+    # 天然仍是干净文本。
+    #
+    # 为什么写在这**一级**：它说的是「这台节点的日志页会渲染色号」，那是宿主的属性、
+    # 不是某一格的属性 —— 写在某一格里，其余各格的判决行照旧全灰（同一族坑见上面
+    # 「落点」那段：作用面跨格却写在格内 = 装好了，探不到）。
+    #
+    # ⚠️ 它压不过 `NO_COLOR`：`colorEnabled()` 里 `NO_COLOR` 仍是一票否决；`0` 按关算。
+    # 当场读数：绿跑 build `cnb-gig-1k65nb59l` 的 stage-27 正文 64 行里只有 2 行带 ANSI，
+    # 而那两行是平台自己的 `Runner` / `Finished` 前缀 —— 我们的 `[ok]` / `[skip]` 无色。
+    COMFYAPP_CI_COLOR: "1"
 
 # 门禁清单。
 # ⚠️ 它**没有**「清单逐条核对」那类判据捧着 —— `tests/cnb-pipeline-gates.test.ts` 已随
@@ -572,8 +589,10 @@
 .lock-oneshot-unit: &lock_oneshot_unit
   key: oneshot-unit
   cancel-in-progress: true
-# 桌包那一档自己的锁（ISSUE #2503）。它**不与每日档共用**：那一条是 12 格、这一条是
-# 三格，共用一把就等于「手点一次桌包会把当日那一跑的某一格掐掉」—— 而这两件事各自要
+# 桌包那一档自己的锁（ISSUE #2503）。它**不与每日档共用**：两条档各有自己的格子
+# （条数只以这份文件里的 `*daily_gates` 与 `*package_gates` 两个锚点为准，**不在注释里记账数**
+# —— #2878 数到这一行时它写的两个数都已经漂过一轮了），共用一把就等于「手点一次桌包会把
+# 当日那一跑的某一格掐掉」—— 而这两件事各自要
 # 结论。`cancel-in-progress: true` 的语义在这一档上是「同一档连点两次只留最新那一跑」。
 .lock-package: &lock_package
   key: package
@@ -601,7 +620,14 @@
 #   · `安装依赖` 是前提格：`API 文档生成与自检` 要跑 typedoc，而 push 是全新 job 目录、
 #     `node_modules` 恒不在场（与每日档同一形态，理由见 `每日安装依赖` 那段）。
 #     缺了它，这一档会以「找不到 typedoc」的形态红 —— 与每日档当年「找不到 next」同一族。
-#     它**不接槽**（`COMFY_CI_SLOT` 只在 PR 那一格置着，`DAILY_ENV_ONLY_ON_PR` 同款口径）；
+#     **这一格接槽**（ISSUE #2851）。判「哪一档能接」的那条线不是档名，是**后面有没有
+#     `next build`**：接槽把作业的 `node_modules` 整棵接成指向项目根之外的 junction，而
+#     Turbopack 对这一条有硬要求（每日那一档因此不接，理由与两臂读数见 `每日安装依赖` 上面那段）。
+#     push 清单里没有构建格 ⇒ 那条限制与这一档无关。证伪不是靠推的：这四格在搬到 push 档之前
+#     长在**接了槽的 PR 流水线**上，两臂（未命中建槽 / 命中）的逐格原值、以及「哪一格在哪一臂
+#     因 `ifModify` 没被执行到」都记在规范 §13.5.3.4.3 —— 这里不抄数，抄一份就会漂第二次。
+#     ⚠️ 收益的**预估同样不进正文**（§13.5.3.4.3 那条量具纪律）：落地后已按同一格回查，
+#     原值与「两个方向都不许外推」那两句都在规范那一份出处里。
 #   · 四格保持 PR 档时的**同一入口、同一旗标、同一 `ifModify`** —— 撤档不等于换判据。
 #     `ifModify` 在 push 事件上的语义由平台按合并提交的差异面算；平台不认时恒跑，
 #     方向是「多跑」不是「漏跑」，安全侧。
@@ -611,6 +637,14 @@
     # 不改变读数，但让它不依赖「控制台代码页恰好是多少」这个**继承来的**状态。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit
   - name: 安装依赖
+    # 与 PR 那一格 `Install dependencies` 的**命令行 / env / timeout 三样都逐字相同**
+    # （判据 `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS`）。
+    # 同一份脚本长在几条流水线上各配一份 env，就是几条流水线各自漂（§12.12 的孪生形态，
+    # 只是它长在配置里）。墙钟那一行是给 `ci-install-deps.mjs` 自己的 12m 预算留的余量，
+    # 不是「抬 timeout 换绿」（#2360 / §11.13）。
+    env:
+      COMFY_CI_SLOT: "1"
+    timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
       $ErrorActionPreference = "Stop"
@@ -621,9 +655,11 @@
       - "docs/**"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/render-doc-placeholders.cjs --check --autofix
   - name: API 文档生成与自检
-    # 收窄面（17 条）**不是手抄的**：真相由 `scripts/docs-api-input-closure.mjs` 算出，
-    # 由 `tests/ci-incremental-gates.test.ts` 双向核对 —— 闭包里多出任何一个文件、
-    # 而这里没有它 ⇒ 当场红。别在这里手加一条（那正是 ISSUE #2223 的漏判形态）。
+    # 收窄面**不是手抄的，也不在这里记条数**：算的那一份是
+    # `scripts/docs-api-input-closure.mjs`，核的那一份是 `tests/ci-incremental-gates.test.ts`
+    # —— 闭包里多出任何一个文件、而这里没有它 ⇒ 当场红。别在这里手加一条（那正是
+    # ISSUE #2223 的漏判形态）。要条数就问判据，别抄注释：这一行曾写着「17 条」而那份面是 18 条，
+    # 而判据只比「面 ⇄ 闭包」、不读注释里的数字 —— 谁都不会因此红（ISSUE #2878）。
     # ⚠️ 产物面 `docs/api/**` 不在收窄面里（ISSUE #2231）；这一格不带 `--autofix`：
     # 产物不再进 git，没有「自动修完再提交」的对象，而「自动修 + 再判」正是让
     # 「产物陈旧」在 CI 上隐形的那一格（#2231 的现场：master 上差 9 处而平台报绿）。
@@ -786,15 +822,20 @@
       node scripts/ci-cp936-exit.mjs -- node scripts/ci-toolchain-selfcheck.mjs
   # 与 PR 那格同一份实现（`ci-install-deps.mjs`：先自证 pnpm 起得来，再按语义判
   # 要不要装）。判定与命令行**必须与 PR 那格逐字相同** —— 这不是风格：判据
-  # `tests/no-platform-ci-config.test.ts` 比的就是「命令行 + env 赋值」两组字面，
-  # 同一份脚本长在两条流水线上各配一份 env，就是两条流水线各自漂（§12.12 的孪生形态）。
+  # `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS` 比命令行、
+  # env 赋值与 `timeout` 三样，同一份脚本长在两条流水线上各配一份 env，
+  # 就是两条流水线各自漂（§12.12 的孪生形态）。
   #
   # ⚠️ **这一格现在不接槽，而那是那条判据上唯一登记过的例外**（ISSUE #2081，2026-10-21）：
   # 接槽把作业里的 `node_modules` 整体接成**指向项目根之外**的 junction，而 Turbopack 对
   # 这一条有硬要求 —— 每日那一跑后面背着 `每日生产构建`，它当场
   # `Symlink [project]/node_modules is invalid, it points out of the filesystem root`（13.8s 就死，
   # 连带 skip 掉 ESLint / 浏览器 / 全量E2E / 全量单测四格）。PR 那一格不构建，所以同一条链
-  # 在 PR 上从来没有被它的消费者拒绝过。
+  # 在 PR 上从来没有被它的消费者拒绝过（push 那一格同理，#2851 已把开关拨过去）。
+  # ⚠️ **这条限制现在是「没验过」而不是「无解」**：#2521 已把官方
+  # `experimental.turbopackAdditionalRoots` 那扇门装进 `next.config.js`（只在
+  # `COMFY_CI_SLOT=1` 时登记槽根），可这一档从不置那个开关 ⇒ **那份 mitigation 在每日档上
+  # 一次都没有被执行过**。撤这条限制要先拿一次真构建验它承重，不能拿「配置在场」当「验过了」。
   # 两臂读数（同一台机、同一份 master，唯一变量就是这一行 env）见规范 §13.5.3.4.3 与
   # `docs/audits/2026-10-21-timing-baseline-refs-volume.md`：接槽命中 13.8s、不接槽 48.8s（暖）。
   # ⇒ 代价是**每天多付 ~35s**，换来的是整条每日档有一个能构建的工作区 —— 槽是优化不是前提。
@@ -1008,8 +1049,10 @@
   #
   # 为什么要在每日档跑**整档**：本地那一层从 2026-10-19 起不再要求自证（`ciStage`
   # 那一栏，规范 §11.8 / §13.5.23），而 PR 上的 `E2E 关键流程` 只跑 `@critical` 子集 ——
-  # `isWholeTrackRun` 明写子集**不构成整档凭证**。没有这一格，「80 条 spec 今天能不能
+  # `isWholeTrackRun` 明写子集**不构成整档凭证**。没有这一格，「整档 e2e 今天能不能
   # 全过」就从一台有人推代码才判得出来的机器，变成一个谁都不判的空白。
+  # （档里现在有多少条，问 `pnpm exec playwright test --list`，别抄在这里 ——
+  # 这一行曾写「80 条」而 `--list` 报 81，ISSUE #2878。）
   #
   # ⚠️ **不许带任何收窄参数**（`--grep` / 指到单个 spec）：带了就会**绿着不记账**，
   #   而日志与账面看起来与真跑过一模一样 —— 那正是这一族最坏的静默形态。
@@ -1157,6 +1200,18 @@
     timeout: 45m
 .oneshot-unit: &oneshot_unit
   - name: 单跑单测·安装依赖
+    # ⚠️ 这一格的真身是**上面 push 那一档的 `安装依赖`**，不是 `每日安装依赖`
+    # （注册表 `scripts/ci-oneshot-gates.mjs` 里这一行登记了 `source`，#2853）。为什么允许换真身：
+    # 「能不能接依赖缓存槽」判的是**这一档后面有没有会真构建的格子**（#2851 定的那条线，
+    # 执行者是 `BUILD_CONSUMER_MARKERS`），不是档名 —— 这一档后面只有 `单跑单测·全量单测`
+    # （`full-suite-run.mjs`，vitest 不是 Turbopack 消费者；同一类消费者在 PR 档的
+    # `受影响用例` 上早已在接槽形态下每跑都绿 —— **不是 push 档**，那份清单里没有测试格）。
+    # 反过来 `单跑构建` / `打包` 两档**不许**跟着改：它们后面有真构建格
+    # （#2883 把那条按现役配置扫过一遍，`打包·安装依赖` 出现这枚键会当场红）。
+    # 收益的读数不写在这里（跨天不可引用、且并发在场时墙钟不可读）：`pnpm ship --stage-log
+    # <sn> 安装依赖` 现取，规范 §13.5.3.4.3 是那份出处。
+    env:
+      COMFY_CI_SLOT: "1"
     timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
@@ -1193,10 +1248,10 @@
 # ── 桌包那一档（ISSUE #2503）：装依赖 → 打真安装包 → 发布到常驻目录 ────────────────
 #
 # **为什么是独立一条**：业主口径「每日档另开一条独立流水线真打桌面成品包」，而它不进
-# `.daily-gates` 那张表（12 格里没有它，`COMFYAPP_CI_DAILY_GATES` 一个字没改）。两件事
-# 各自要结论：每日那一条答「master 今天能不能构建出来」，这一条答「今天的安装包在哪儿」。
+# `.daily-gates` 那张表（那张表里只有每日自己的格，`COMFYAPP_CI_DAILY_GATES` 一个字没改）。
+# 两件事各自要结论：每日那一条答「master 今天能不能构建出来」，这一条答「今天的安装包在哪儿」。
 # 并成一条的代价不是「慢」，是**每一格每日档都要为一次 cargo 编译排队**，而且桌包红了
-# 会把每日那 12 格一起 skip 掉 —— 那正是 #2114 / #2274 那族「一格带走一片」的形态。
+# 会把同一跑里排在它后面的每日格一起 skip 掉 —— 那正是 #2114 / #2274 那族「一格带走一片」的形态。
 #
 # **这一档不重抄任何判据**（§12.18 复用优先）：`pnpm tauri build` 的 `beforeBuildCommand`
 # 就是 `node scripts/build-desktop.mjs`，而它内部那条 `pnpm build` 链带着产物级两道防线
@@ -1590,11 +1645,14 @@
       # 读数是从它自己的那句话里取的，不是从「这格变快了」倒推的。
       # 该比的两侧在同一格内就有：未命中那一跑量的就是冷装本身，命中那一跳根本没发生
       # （同日三档实测外加一条普通装对照都在规范 §13.5.3.4.3 末那张表里，跨天不可引用）。
-      # ⚠️ **只有这一格置它，每日那一格按策略不接**（ISSUE #2081：每日后面背着
-      # `每日生产构建`，接槽形态下 Turbopack 拒指向项目根之外的 node_modules 链）——
-      # 那是 `tests/no-platform-ci-config.test.ts` 里 `DAILY_ENV_ONLY_ON_PR` 登记的**唯一**
-      # 例外，理由与两臂读数见「每日安装依赖」上面那段。回退 = 摘掉这里这一行**并同批**把
-      # 该键从那份名单里删掉：只动一边会被那条判据当场点名（名单过期）。
+      # ⚠️ **哪几档置它，判的是「这一档后面有没有 `next build`」，不是档名**：PR 这一格与
+      # push 那一格 `安装依赖` 置着；每日那一格按策略不接（ISSUE #2081：它后面背着
+      # `每日生产构建`，接槽形态下 Turbopack 拒指向项目根之外的 node_modules 链；#2521 已把
+      # 官方 `experimental.turbopackAdditionalRoots` 那扇门装上，但**每日那一档还没在它上面
+      # 跑过一次构建**，所以这条限制暂时原样留着 —— 撤它要先验，不是照 #2521 的在场就当我们验过了）。
+      # 每日那一侧的「一个字都不许出现」由 `tests/no-platform-ci-config.test.ts` 的
+      # `DAILY_ENV_ONLY_ON_PR` 登记；回退 = 摘掉这里这一行**并同批**把该键从那份名单里删掉，
+      # 只动一边会被那条判据当场点名（名单过期）。
       COMFY_CI_SLOT: "1"
     # ── 这一格自己带墙钟（ISSUE #2360）──────────────────────────────────────────
     #
@@ -1614,9 +1672,13 @@
     # 这一行的 20m 也是为此：要让**自己的**预算（12m）先到，而不是让平台先掐断。
     # 它不是「抬 timeout 换绿」（§11.13 明令禁止那件事）—— 判据没松，改的是拿不到结论
     # 时的收场方式；20m 仍然远小于平台的 8640s，卡死形态二十分钟内报出来。
-    # ⚠️ **这一行必须与 `每日安装依赖` / `单跑*·安装依赖` 那几格逐字相同**：判据
-    # `tests/no-platform-ci-config.test.ts` 的 `DAILY_SCRIPT_MIRRORS` 比的是「命令行 + env
-    # 赋值」，`timeout` 也在比对面里（三份副本各漂一份就是这条链最难查的形态）。
+    # ⚠️ **这一行必须与 `每日安装依赖` / push 那一格 `安装依赖` 逐字相同**：判据
+    # `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS` 三样都比 ——
+    # 命令行、env 赋值、`timeout`（三份副本各漂一份就是这条链最难查的形态）。
+    # 那几格 `单跑*·安装依赖` / `打包·安装依赖` 不在这一对面里，它们由
+    # `scripts/ci-oneshot-gates.mjs` 逐格登记自己的真身：默认是 `每日安装依赖`（不接槽那一族），
+    # 而 `单跑单测·安装依赖` 登记的是**本格**（接槽那一族 —— 判的是「后面有没有真构建格」，
+    # 不是档名；#2853 换真身的那一步，注册表头注写着整段因果）。
     timeout: 20m
     script: |
       $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc
@@ -1784,6 +1846,37 @@
     # 它没生效时的表现不是报错，是「日志又超长」，所以必须读得回来。
     env:
       COMFY_AFFECTED_QUIET: "1"
+      # 良性 stderr 噪音屏蔽（2026-10-31）：被测源码自己打出、但已知无害的日志
+      # （ECONNREFUSED/:3000、canvas-sync 重试、a11y 故意渲染的 error-boundary/lazy-chunk
+      # 故事）在回吐给平台前按行滤掉，免得它们把 102400 字节的日志预算吃光、把失败原文
+      # 挤出去。不影响任何断言判定与超时指纹（判据见
+      # `scripts/affected-launch-noise-reporter.mjs`）。本地默认关，开发者照常看全量日志。
+      # 2026-10-31 起两张清单：第二批（#2844）收的是**夹具 spawn 的 git / 探针 /
+      # 设计内失败 / storybook 警告块**那一族 stdout 噪音，见同一文件。
+      COMFY_AFFECTED_NOISE_FILTER: "1"
+      # 段开关（#2845）：固定/受影响已拆成两个 stage —— 本格只跑**增量面**；
+      # 静态契约那一半（FIXED_STRUCTURAL_TESTS）在上一格 `固定结构用例`。
+      COMFY_AFFECTED_SEGMENT: "affected"
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-affected-tests.mjs
+    timeout: 45m
+
+  # ── 固定结构用例（ISSUE #2845：从 `受影响用例` 一格拆出来的静态契约那半）──────────
+  #
+  # 拆的理由：`受影响用例` 此前是一条 stage 里的两个块（`第 1/2 块（固定清单）` /
+  # `第 2/2 块（受影响用例）`），平台日志里两段摘要混在一格输出里分不清谁是谁，两个块的
+  # 噪音也互相掺杂。拆成两格后各自有日志、各自的 junit 与收尾复述，红的归属一格点名。
+  #
+  # ⚠️ 本格跑的是 **FIXED_STRUCTURAL_TESTS 静态清单**，**不解析改动面**（PR 三点 diff
+  #   拿不到 / 为空都照跑）—— 固定清单与「这次改了什么」无关，这正是它能独立成一格
+  #   的前提。入口与判据链跟 `受影响用例` 完全同一份（`ci-affected-tests.mjs` →
+  #   `run-affected-tests.mjs`，段开关 `COMFY_AFFECTED_SEGMENT=fixed`）。
+  # ⚠️ quiet / 噪音屏蔽两枚开关与本格族其他格同口径：本地默认关，开发者看全量。
+  # 45m：与 `受影响用例` 同一预算口径（本地 91 份实测约 3.2 分钟，节点冷区留一个量级）。
+  - name: 固定结构用例
+    env:
+      COMFY_AFFECTED_QUIET: "1"
+      COMFY_AFFECTED_NOISE_FILTER: "1"
+      COMFY_AFFECTED_SEGMENT: "fixed"
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-affected-tests.mjs
     timeout: 45m
 

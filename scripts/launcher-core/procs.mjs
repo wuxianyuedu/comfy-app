@@ -57,9 +57,7 @@ export function isWindows(platform = process.platform) {
  *  再与 `/proc/<pid>/fd` 的 `socket:[…]` 求交集。
  *  @param {number} port @returns {Promise<number[]>} */
 export async function listeningPidsOnPort(port) {
-  const raw = isWindows()
-    ? await listeningPidsWindows(port)
-    : await listeningPidsPosix(port);
+  const raw = isWindows() ? await listeningPidsWindows(port) : await listeningPidsPosix(port);
   return [...new Set(raw)].sort((a, b) => a - b);
 }
 
@@ -77,13 +75,11 @@ async function netstatTcpSnapshot() {
   if (Date.now() - netstatSnapshot.at < NETSTAT_SNAPSHOT_TTL_MS) {
     return netstatSnapshot.text;
   }
-  netstatInFlight ??= runCapture("netstat", ["-ano", "-p", "TCP"]).then(
-    (text) => {
-      netstatSnapshot = { at: Date.now(), text };
-      netstatInFlight = null;
-      return text;
-    },
-  );
+  netstatInFlight ??= runCapture("netstat", ["-ano", "-p", "TCP"]).then((text) => {
+    netstatSnapshot = { at: Date.now(), text };
+    netstatInFlight = null;
+    return text;
+  });
   return netstatInFlight;
 }
 
@@ -95,11 +91,16 @@ async function listeningPidsWindows(port) {
   for (const line of out.split(/\r?\n/)) {
     // 形如：TCP    127.0.0.1:3311    0.0.0.0:0    LISTENING    12345
     const cols = line.trim().split(/\s+/);
-    if (cols.length < 5 || cols[0] !== "TCP" || cols[3] !== "LISTENING")
+    if (cols.length < 5 || cols[0] !== "TCP" || cols[3] !== "LISTENING") {
       continue;
-    if (!cols[1]?.endsWith(`:${port}`)) continue;
+    }
+    if (!cols[1]?.endsWith(`:${port}`)) {
+      continue;
+    }
     const pid = Number.parseInt(cols[4] ?? "", 10);
-    if (Number.isInteger(pid) && pid > 0) pids.push(pid);
+    if (Number.isInteger(pid) && pid > 0) {
+      pids.push(pid);
+    }
   }
   return pids;
 }
@@ -117,14 +118,20 @@ async function listeningPidsPosix(port) {
     for (const line of text.split("\n").slice(1)) {
       const cols = line.trim().split(/\s+/);
       // 列：sl local_address rem_address st … inode（st = 0A 即 LISTEN）
-      if (cols.length < 10 || cols[3] !== "0A") continue;
+      if (cols.length < 10 || cols[3] !== "0A") {
+        continue;
+      }
       const local = cols[1] ?? "";
       const localPort = Number.parseInt(local.split(":")[1] ?? "", 16);
-      if (localPort !== port) continue;
+      if (localPort !== port) {
+        continue;
+      }
       inodes.add(cols[9]);
     }
   }
-  if (inodes.size === 0) return [];
+  if (inodes.size === 0) {
+    return [];
+  }
   /** @type {number[]} */
   const pids = [];
   let entries;
@@ -134,7 +141,9 @@ async function listeningPidsPosix(port) {
     return [];
   }
   for (const entry of entries) {
-    if (!/^\d+$/.test(entry)) continue;
+    if (!/^\d+$/.test(entry)) {
+      continue;
+    }
     let fds;
     try {
       fds = fs.readdirSync(path.join("/proc", entry, "fd"));
@@ -166,20 +175,21 @@ async function listeningPidsPosix(port) {
  *  @param {number[]} pids @returns {Promise<Map<number, string>>} */
 export async function processCommandLines(pids) {
   const out = new Map();
-  if (!pids.length) return out;
+  if (!pids.length) {
+    return out;
+  }
   if (!isWindows()) {
-    const text = await runCapture("ps", [
-      "-o",
-      "pid=,args=",
-      "-p",
-      pids.join(","),
-    ]);
+    const text = await runCapture("ps", ["-o", "pid=,args=", "-p", pids.join(",")]);
     for (const line of text.split("\n")) {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (!trimmed) {
+        continue;
+      }
       const cut = trimmed.indexOf(" ");
       const pid = Number.parseInt(cut > 0 ? trimmed.slice(0, cut) : "", 10);
-      if (Number.isInteger(pid)) out.set(pid, trimmed.slice(cut + 1));
+      if (Number.isInteger(pid)) {
+        out.set(pid, trimmed.slice(cut + 1));
+      }
     }
     return out;
   }
@@ -197,10 +207,14 @@ export async function processCommandLines(pids) {
   }
   const rows = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
   for (const row of rows) {
-    if (!row || typeof row !== "object") continue;
+    if (!row || typeof row !== "object") {
+      continue;
+    }
     const pid = Number.parseInt(String(row.ProcessId ?? ""), 10);
     const cmdline = typeof row.CommandLine === "string" ? row.CommandLine : "";
-    if (Number.isInteger(pid) && cmdline) out.set(pid, cmdline);
+    if (Number.isInteger(pid) && cmdline) {
+      out.set(pid, cmdline);
+    }
   }
   return out;
 }
@@ -230,16 +244,20 @@ export async function processCwd(pid) {
  *  @param {number} pid @param {string} root @returns {Promise<boolean>} */
 export async function pidBelongsToRoot(pid, root) {
   const cwd = await processCwd(pid);
-  if (!cwd) return false;
+  if (!cwd) {
+    return false;
+  }
   /** @param {string} value */
-  const norm = (value) => value.replace(/\\/g, "/").toLowerCase();
+  const norm = (value) => value.replaceAll("\\", "/").toLowerCase();
   return norm(cwd).includes(norm(root));
 }
 
 /** 进程是否还活着（尽力而为：探测本身失败时返回 false）。 */
 /** @param {number} pid @returns {Promise<boolean>} */
 export async function pidAlive(pid) {
-  if (!pid || pid <= 0) return false;
+  if (!pid || pid <= 0) {
+    return false;
+  }
   if (!isWindows()) {
     try {
       process.kill(pid, 0);

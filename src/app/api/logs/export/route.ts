@@ -29,14 +29,7 @@ import { toDisplayPath } from "~/lib/path-display";
 const MAX_EXPORT_CHARS = 8 * 1024 * 1024;
 
 /** 允许的导出标签（进文件名，只用于「这是哪一类日志」的可读性）。 */
-const ALLOWED_LABELS = new Set([
-  "all",
-  "app-runtime",
-  "app",
-  "dev",
-  "launcher",
-  "console",
-]);
+const ALLOWED_LABELS = new Set(["all", "app-runtime", "app", "dev", "launcher", "console"]);
 
 /** 本地时间戳文件名（与 runtime 家族日志同口径，本地时区便于用户对照）。
  *
@@ -59,7 +52,9 @@ export async function POST(request: Request) {
    * 被下面的 catch 兜成 500（用户看到的是「服务端错误」，而病因是他的请求体）。
    * 现在格式不对就明确回 400。 */
   const body = await readJsonRecord(request);
-  if (isErrorResponse(body)) return body;
+  if (isErrorResponse(body)) {
+    return body;
+  }
 
   try {
     const content = typeof body.content === "string" ? body.content : "";
@@ -83,11 +78,7 @@ export async function POST(request: Request) {
       recursive: true,
     });
     const file = path.join(LOG_EXPORT_DIR, exportFileName(label));
-    await fs.promises.writeFile(
-      /*turbopackIgnore: true*/ file,
-      content,
-      "utf-8",
-    );
+    await fs.promises.writeFile(/*turbopackIgnore: true*/ file, content, "utf8");
 
     return NextResponse.json({
       ok: true,
@@ -95,12 +86,9 @@ export async function POST(request: Request) {
       path: file,
       /** 相对 log/ 的路径：面板空间窄，展示这一截即可。 */
       relativePath: toDisplayPath(file, LOG_ROOT),
-      bytes: Buffer.byteLength(content, "utf-8"),
+      bytes: Buffer.byteLength(content, "utf8"),
     });
   } catch (error) {
-    return NextResponse.json(
-      apiErrorBody(error, "导出日志失败", { ok: false }),
-      { status: 500 },
-    );
+    return NextResponse.json(apiErrorBody(error, "导出日志失败", { ok: false }), { status: 500 });
   }
 }

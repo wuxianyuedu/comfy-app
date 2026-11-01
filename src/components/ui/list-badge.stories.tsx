@@ -7,17 +7,9 @@ import { ListBadge } from "~/components/ui/list-badge";
  * 变体表的返回值上取枚举）。`title` 是**悬停说明**，不是可访问名 ——
  * 徽标本身有可见文字，名字该由文字自己给（规范 §6.1）。
  */
-type ListBadgeTone = NonNullable<
-  React.ComponentProps<typeof ListBadge>["tone"]
->;
+type ListBadgeTone = NonNullable<React.ComponentProps<typeof ListBadge>["tone"]>;
 
-const TONES: ListBadgeTone[] = [
-  "neutral",
-  "success",
-  "warning",
-  "danger",
-  "primary",
-];
+const TONES: Array<ListBadgeTone> = ["neutral", "success", "warning", "danger", "primary"];
 
 const meta = {
   title: "UI/ListBadge",
@@ -54,7 +46,7 @@ export const InListRow: Story = {
   render: () => (
     <div className="border-border flex w-72 items-center gap-1.5 overflow-hidden border-b py-1.5">
       <span className="truncate text-xs">角色一致性工作流</span>
-      <ListBadge tone="warning" title="未配置：提示词口未落到端口">
+      <ListBadge title="未配置：提示词口未落到端口" tone="warning">
         对外参数未配置
       </ListBadge>
       <ListBadge tone="success">本地</ListBadge>

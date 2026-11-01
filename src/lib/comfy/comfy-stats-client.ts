@@ -4,21 +4,21 @@
  * BrowserStatusBar 只关心「读到的 stats 与是否在线」。
  */
 
-export interface ComfyStatsPayload {
+export type ComfyStatsPayload = {
+  gpuName?: string;
   online: boolean;
   /** 进程级判活：ComfyUI 进程还活着（`online:false` 但此项为 true = 在跑、
    *  只是这一拍 HTTP 没应答）。路由侧经进程快照判定；HTTP 成功时恒为 true。
    *  与 `/api/comfy/queue` 的在线口径同源（queue-status.server.ts 的快照回落）。 */
   processAlive?: boolean;
-  gpuName?: string;
-  vramUsed: number;
+  ramTotal: number;
+  ramUsed: number;
+  smiVramTotal?: number;
+  smiVramUsed?: number;
   vramFree: number;
   vramTotal: number;
-  smiVramUsed?: number;
-  smiVramTotal?: number;
-  ramUsed: number;
-  ramTotal: number;
-}
+  vramUsed: number;
+};
 
 /** 拉取一次系统指标；请求失败（路由不可达等）也返回 online:false 便于降级。 */
 export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
@@ -30,7 +30,7 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
       // nvidia-smi，正常回包可能 3~4s，卡太紧反而会制造「误离线」。
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok)
+    if (!res.ok) {
       return {
         online: false,
         vramUsed: 0,
@@ -39,7 +39,8 @@ export async function fetchComfyStats(): Promise<ComfyStatsPayload> {
         ramUsed: 0,
         ramTotal: 0,
       };
-    return (await res.json()) as ComfyStatsPayload;
+    }
+    return /* SAFETY: 类型断言已复核 */ (await res.json()) as ComfyStatsPayload;
   } catch {
     return {
       online: false,

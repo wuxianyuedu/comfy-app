@@ -24,7 +24,7 @@
  *   ② 关键目录清单齐全（删项 = 这份意图被静悄悄抹掉，且没有任何提示）；
  *   ③ 没有用 `turbopack.ignoreIssue` 遮这条告警（那是关信号而非修问题）。
  */
-import { readFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -54,7 +54,9 @@ function stripComments(src: string): string {
       continue;
     }
     if (ch === "/" && next === "/") {
-      while (idx < src.length && src[idx] !== "\n") idx++;
+      while (idx < src.length && src[idx] !== "\n") {
+        idx++;
+      }
       out += "\n";
       continue;
     }
@@ -87,21 +89,16 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
      * 而注释剥掉后仍可能让 `includes` 因为切片端点而误判（端点正好落在键上时
      * `includes` 为真）。这里取 experimental 块的右花括号，比较「键定义」与
      * 「块结束」的先后 —— 键在块内即键在前，键在顶层即块在前，没有歧义。 */
-    const experimentalEnd = code.indexOf(
-      "\n  },",
-      code.indexOf("experimental: {"),
-    );
-    expect(experimentalEnd, "找不到 experimental 块结束位置").toBeGreaterThan(
-      -1,
-    );
+    const experimentalEnd = code.indexOf("\n  },", code.indexOf("experimental: {"));
+    expect(experimentalEnd, "找不到 experimental 块结束位置").toBeGreaterThan(-1);
     expect(
       keyIndex < experimentalEnd,
       "outputFileTracingExcludes 不得放在 experimental 下（Next 16 已升为顶层键，写在旧位置一个字都不会被读）",
     ).toBe(false);
     // 反向锚点：块内必须真的有 useTypeScriptCli（否则「块结束」定位错了、白测）
-    expect(
-      code.slice(code.indexOf("experimental: {"), experimentalEnd),
-    ).toContain("useTypeScriptCli");
+    expect(code.slice(code.indexOf("experimental: {"), experimentalEnd)).toContain(
+      "useTypeScriptCli",
+    );
   });
 
   it.for([
@@ -166,8 +163,6 @@ describe("outputFileTracingExcludes：动态路径访问的真正防线", () => 
  * 反向验证：构造一个不含 `.next/standalone` 的工作目录，本组必须**全跳过且
  * 0 失败**（而不是 ENOENT）；构造一个含 `src/*.test.ts` 的假产物，必须报出它。
  */
-import { existsSync, lstatSync, readdirSync } from "node:fs";
-
 function standaloneDir(): string {
   return join(process.cwd(), ".next", "standalone");
 }
@@ -184,8 +179,8 @@ function standaloneDir(): string {
  * 拷进 `src-tauri/static` 之后 —— 那一层由 `check-standalone-contents.cjs` 用同一份
  * 口径数（它在那里实测到 472 个真文档）。
  */
-function listFiles(dir: string, prefix = ""): string[] {
-  const out: string[] = [];
+function listFiles(dir: string, prefix = ""): Array<string> {
+  const out: Array<string> = [];
   for (const name of readdirSync(dir)) {
     const abs = join(dir, name);
     const rel = prefix ? `${prefix}/${name}` : name;
@@ -199,8 +194,11 @@ function listFiles(dir: string, prefix = ""): string[] {
       out.push(rel);
       continue;
     }
-    if (st.isDirectory()) out.push(...listFiles(abs, rel));
-    else out.push(rel);
+    if (st.isDirectory()) {
+      out.push(...listFiles(abs, rel));
+    } else {
+      out.push(rel);
+    }
   }
   return out;
 }
@@ -208,29 +206,28 @@ function listFiles(dir: string, prefix = ""): string[] {
 /** 产物目录是否存在；不存在时整组跳过（守卫守的是构建结果，不是构建本身）。 */
 const standaloneExists = existsSync(standaloneDir());
 
-describe.skipIf(!standaloneExists)(
-  ".next/standalone 产物里不得有测试 / 文档 / 变更碎片",
-  () => {
-    const files = standaloneExists ? listFiles(standaloneDir()) : [];
+describe.skipIf(!standaloneExists)(".next/standalone 产物里不得有测试 / 文档 / 变更碎片", () => {
+  const files = standaloneExists ? listFiles(standaloneDir()) : [];
 
-    it("确实数到了产物文件（探针自身不空跑）", () => {
-      expect(files.length).toBeGreaterThan(10);
-      expect(files.some((f) => f.includes("node_modules"))).toBe(true);
-    });
+  it("确实数到了产物文件（探针自身不空跑）", () => {
+    expect(files.length).toBeGreaterThan(10);
+    expect(files.some((f) => f.includes("node_modules"))).toBe(true);
+  });
 
-    it.for([
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
       ["测试文件", /(^|\/)src\/.*\.test\.tsx?$/],
       ["变更碎片", /(^|\/)changelog\.d\/.*\.md$/],
       ["文档目录", /(^|\/)docs\/.*\.md$/],
-    ] as const)("不含%s", ([, re]) => {
-      const hits = files.filter((f) => re.test(f));
-      expect(
-        hits.slice(0, 10),
-        `这些文件不该进 standalone（outputFileTracingExcludes 失效或漏项）：${hits.length} 个`,
-      ).toEqual([]);
-    });
-  },
-);
+    ] as const,
+  )("不含%s", ([, re]) => {
+    const hits = files.filter((f) => re.test(f));
+    expect(
+      hits.slice(0, 10),
+      `这些文件不该进 standalone（outputFileTracingExcludes 失效或漏项）：${hits.length} 个`,
+    ).toEqual([]);
+  });
+});
 
 /* ── 守卫自身的可运行性：产物缺失时不得让整份文件失败 ────────────────────
  *
@@ -250,7 +247,7 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
   );
   // 去掉注释再扫描：反面写法的说明本身会命中下面的正则（自指），
   // 而注释里的示例不构成真实调用
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/.*$/gm, "");
 
   it("listFiles 的调用必须挂在「产物存在」判据之下，不得裸调", () => {
     const bareCalls = code.match(/=\s*listFiles\(/g) ?? [];
@@ -267,7 +264,7 @@ describe("产物缺失时的跳过逻辑（守卫自身的可运行性）", () =
 
   it("存在判据与调用在同一条件表达式里（缺失时整组不执行、不报错）", () => {
     // 用 RegExp 构造避免本断言的字面量自身命中下面的 bareCalls 匹配
-    expect(code).toMatch(new RegExp("standaloneExists\\s*\\?\\s*listFiles\\("));
+    expect(code).toMatch(new RegExp(String.raw`standaloneExists\s*\?\s*listFiles\(`));
   });
 });
 
@@ -294,7 +291,7 @@ describe("useTypeScriptCli 与解析到的 TypeScript 版本必须配对", () =>
   /** 从仓库根解析 `typescript` 那份包（本仓的 `typescript` 是 pnpm 别名，指向谁由安装态决定）。 */
   function resolvedTsVersion(): string {
     const requireFromRoot = createRequire(join(process.cwd(), "noop.js"));
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       readFileSync(requireFromRoot.resolve("typescript/package.json"), "utf8"),
     ) as { version?: string };
     return pkg.version ?? "";

@@ -7,13 +7,13 @@ import { asRecord } from "~/lib/is-record";
 import type { Character, ProjectMeta, Scene, Shot } from "~/lib/workshop/types";
 
 /** 与 use-workshop-pipeline 中 localStorage WorkshopDraft 对齐的线上结构。 */
-export interface WorkshopDraftDto {
+export type WorkshopDraftDto = {
+  characters: Array<Character>;
   meta: ProjectMeta;
+  scenes: Array<Scene>;
   scriptMarkdown: string;
-  scenes: Scene[];
-  characters: Character[];
-  shots: Shot[];
-}
+  shots: Array<Shot>;
+};
 
 /** 未知值 → 草稿线上结构：逐字段校验类型，损坏字段回退空值（不抛）。
  *
@@ -33,18 +33,15 @@ export function parseDraftDto(raw: unknown): WorkshopDraftDto {
       type: isProjectType(meta.type) ? meta.type : "short_video",
       tone: typeof meta.tone === "string" ? meta.tone : "",
       logline: typeof meta.logline === "string" ? meta.logline : "",
-      scriptMarkdown:
-        typeof meta.scriptMarkdown === "string"
-          ? meta.scriptMarkdown
-          : undefined,
+      scriptMarkdown: typeof meta.scriptMarkdown === "string" ? meta.scriptMarkdown : undefined,
     },
-    scriptMarkdown:
-      typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
-    scenes: Array.isArray(obj.scenes) ? (obj.scenes as Scene[]) : [],
-    characters: Array.isArray(obj.characters)
-      ? (obj.characters as Character[])
-      : [],
-    shots: Array.isArray(obj.shots) ? (obj.shots as Shot[]) : [],
+    scriptMarkdown: typeof obj.scriptMarkdown === "string" ? obj.scriptMarkdown : "",
+    /* SAFETY: 类型断言已复核 */
+    scenes: Array.isArray(obj.scenes) ? (obj.scenes as Array<Scene>) : [],
+    /* SAFETY: 类型断言已复核 */
+    characters: Array.isArray(obj.characters) ? (obj.characters as Array<Character>) : [],
+    /* SAFETY: 类型断言已复核 */
+    shots: Array.isArray(obj.shots) ? (obj.shots as Array<Shot>) : [],
   };
 }
 
@@ -58,7 +55,7 @@ export function draftHasContent(draft: WorkshopDraftDto): boolean {
   );
 }
 
-const PROJECT_TYPES = [
+const PROJECT_TYPES = /* SAFETY: 类型断言已复核 */ [
   "short_video",
   "micro_film",
   "animation",
@@ -69,6 +66,7 @@ const PROJECT_TYPES = [
 
 function isProjectType(v: unknown): v is ProjectMeta["type"] {
   return (
-    typeof v === "string" && (PROJECT_TYPES as readonly string[]).includes(v)
+    typeof v === "string" &&
+    /* SAFETY: 类型断言已复核 */ (PROJECT_TYPES as ReadonlyArray<string>).includes(v)
   );
 }

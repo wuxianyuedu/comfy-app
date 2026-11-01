@@ -20,16 +20,16 @@ import { subscribeAppEvent } from "~/lib/app-events";
 import { listProjectsWithServer } from "~/lib/project-canvas/canvas-store";
 
 /** 侧栏里列出的一条项目（与 `AppShell` 的 `SidebarProject` 同形）。 */
-export interface SidebarProjectEntry {
+export type SidebarProjectEntry = {
   id: string;
   name: string;
-}
+};
 
 /** 侧栏「项目」分组最多列几条 —— 列表长了该去「所有项目」那一屏看。 */
 export const SIDEBAR_PROJECT_LIMIT = 8;
 
-export function useSidebarProjects(): SidebarProjectEntry[] {
-  const [projects, setProjects] = useState<SidebarProjectEntry[]>([]);
+export function useSidebarProjects(): Array<SidebarProjectEntry> {
+  const [projects, setProjects] = useState<Array<SidebarProjectEntry>>([]);
 
   useEffect(() => {
     let alive = true;
@@ -37,7 +37,9 @@ export function useSidebarProjects(): SidebarProjectEntry[] {
       void listProjectsWithServer().then(({ entries }) => {
         /* 卸载后落定就别再 setState（`listProjectsWithServer` 是 async，
          * 快速切视图时这一帧可能已经不在）。 */
-        if (!alive) return;
+        if (!alive) {
+          return;
+        }
         setProjects(
           entries
             .slice(0, SIDEBAR_PROJECT_LIMIT)
@@ -48,10 +50,7 @@ export function useSidebarProjects(): SidebarProjectEntry[] {
     compute();
     /* 与画布页 / 「所有项目」屏同一支刷新口径：编辑（upsert / rename / delete）
      * 会广播这一条，重取即可 —— 装配层不重复实现增量更新。 */
-    const unsubscribe = subscribeAppEvent(
-      "comfyapp:canvas-store-changed",
-      compute,
-    );
+    const unsubscribe = subscribeAppEvent("comfyapp:canvas-store-changed", compute);
     return () => {
       alive = false;
       unsubscribe();

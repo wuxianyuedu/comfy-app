@@ -4,22 +4,20 @@
 
 import { readApiError, readJsonBody } from "~/lib/api-error";
 import { isRecord } from "~/lib/is-record";
-import {
-  type ApiChannelSaveInput,
-  type ApiChannelsView,
-  type ApiChannelView,
-} from "./api-channel-shared";
+import type { ApiChannelSaveInput, ApiChannelsView, ApiChannelView } from "./api-channel-shared";
 
 /** POST /api/workshop-api/config 的请求体：两个通道各自可选，只补丁改字段。 */
-export interface ApiChannelSavePayload {
+export type ApiChannelSavePayload = {
   image?: ApiChannelSaveInput;
   video?: ApiChannelSaveInput;
-}
+};
 
 const SAVE_ENDPOINT = "/api/workshop-api/config";
 
 function isChannelView(v: unknown): v is ApiChannelView {
-  if (!isRecord(v)) return false;
+  if (!isRecord(v)) {
+    return false;
+  }
   return (
     typeof v.configured === "boolean" &&
     typeof v.baseUrl === "string" &&
@@ -49,9 +47,7 @@ export function readApiErrorMessage(body: unknown): string | null {
  * 保存 API 通道配置，成功后返回服务端下发的**脱敏视图**（apiKey 永不下发）。
  * 失败时抛出带服务端消息的 Error，由调用方（controller hook）转成提示条。
  */
-export async function saveApiChannels(
-  payload: ApiChannelSavePayload,
-): Promise<ApiChannelsView> {
+export async function saveApiChannels(payload: ApiChannelSavePayload): Promise<ApiChannelsView> {
   let res: Response;
   try {
     res = await fetch(SAVE_ENDPOINT, {
@@ -66,11 +62,13 @@ export async function saveApiChannels(
   }
 
   /* 非法 JSON 按空对象处理（后端 500 可能返回非 JSON）—— 读法收在出口里。 */
-  const data = (await readJsonBody(res)) as {
-    error?: unknown;
+  const data = /* SAFETY: 类型断言已复核 */ (await readJsonBody(res)) as {
     channels?: unknown;
+    error?: unknown;
   };
-  if (!res.ok) throw new Error(readApiErrorMessage(data) ?? "保存失败");
+  if (!res.ok) {
+    throw new Error(readApiErrorMessage(data) ?? "保存失败");
+  }
   if (!isChannelsView(data.channels)) {
     throw new Error("保存失败：服务端返回的通道配置格式不正确");
   }

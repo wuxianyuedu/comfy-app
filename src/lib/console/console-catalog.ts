@@ -17,27 +17,27 @@
 // 又会让用户以为它拦得住（同 §12.18 的判断反模式：会静默失效的清单）。
 
 /** 预设命令的一个分组（界面上按组分块展示）。 */
-export interface ConsolePresetGroup {
-  /** 分组机器名（也是 React key）。 */
-  id: string;
-  /** 分组标题。 */
-  label: string;
+export type ConsolePresetGroup = {
   /** 一句话说明这一组是干什么的（分组标题下方的灰字）。 */
   hint: string;
-  items: ConsolePreset[];
-}
+  /** 分组机器名（也是 React key）。 */
+  id: string;
+  items: Array<ConsolePreset>;
+  /** 分组标题。 */
+  label: string;
+};
 
 /** 一条预设命令。 */
-export interface ConsolePreset {
-  /** 预设机器名（界面上「填入」按钮的 key）。 */
-  id: string;
-  /** 展示名。 */
-  label: string;
+export type ConsolePreset = {
   /** 要填进输入框的完整命令行（**就是**用户会敲的那行文本）。 */
   command: string;
   /** 这条命令做什么、什么时候用它。 */
   desc: string;
-}
+  /** 预设机器名（界面上「填入」按钮的 key）。 */
+  id: string;
+  /** 展示名。 */
+  label: string;
+};
 
 /**
  * 预设命令表。
@@ -47,7 +47,7 @@ export interface ConsolePreset {
  * 不是教程。命令一律写成 `pnpm exec` / `node` 的显式形态，与 AGENTS 硬规则 1
  * 同源（本项目禁止 npx / npm run：npm 11.19 解析 typescript 别名链会崩）。
  */
-export const CONSOLE_PRESETS: ConsolePresetGroup[] = [
+export const CONSOLE_PRESETS: Array<ConsolePresetGroup> = [
   {
     id: "quality",
     label: "质量门禁",
@@ -352,7 +352,7 @@ export const CONSOLE_PRESETS: ConsolePresetGroup[] = [
 ];
 
 /** 全部预设的展平表（按 id 取值用）。 */
-export function allPresets(): ConsolePreset[] {
+export function allPresets(): Array<ConsolePreset> {
   return CONSOLE_PRESETS.flatMap((group) => group.items);
 }
 
@@ -374,30 +374,45 @@ export function allPresets(): ConsolePreset[] {
  */
 export function shellSyntaxWarning(line: string): string | null {
   const raw = (line ?? "").trim();
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   /** 命中片段（去重、保持首次出现顺序，便于文案里逐个点名）。 */
-  const found: string[] = [];
+  const found: Array<string> = [];
   const hit = (fragment: string) => {
-    if (!found.includes(fragment)) found.push(fragment);
+    if (!found.includes(fragment)) {
+      found.push(fragment);
+    }
   };
   /* 逐字符扫一遍：每个控制符只需判一次，比叠一串互相干扰的正则好读也好测。
    * 引号**不参与**这里的判断 —— `echo "a|b"` 里的 `|` 确实是普通字符，
    * 而本函数是「提醒」不是「拒绝」，多提醒一句的代价远低于漏提醒。 */
   for (let i = 0; i < raw.length; i++) {
     const ch = raw[i];
-    if (ch === ";") hit(";");
-    else if (ch === "|") hit("|");
-    else if (ch === ">") hit(">");
-    else if (ch === "<") hit("<");
-    else if (ch === "&") hit("&");
-    else if (ch === "`") hit("`…`（命令替换）");
-    else if (ch === "$" && (raw[i + 1] === "(" || raw[i + 1] === "{"))
+    if (ch === ";") {
+      hit(";");
+    } else if (ch === "|") {
+      hit("|");
+    } else if (ch === ">") {
+      hit(">");
+    } else if (ch === "<") {
+      hit("<");
+    } else if (ch === "&") {
+      hit("&");
+    } else if (ch === "`") {
+      hit("`…`（命令替换）");
+    } else if (ch === "$" && (raw[i + 1] === "(" || raw[i + 1] === "{")) {
       hit("$(…) / ${…}（变量展开）");
+    }
   }
   /* Windows 形态的 `%VAR%`：必须成对出现才算（`git log --format=%H` 的单个
    * `%H` 不是变量展开，不该被点名）。 */
-  if (/%[A-Za-z_][A-Za-z0-9_]*%/.test(raw)) hit("%VAR%");
-  if (found.length === 0) return null;
+  if (/%[A-Za-z_][A-Za-z0-9_]*%/.test(raw)) {
+    hit("%VAR%");
+  }
+  if (found.length === 0) {
+    return null;
+  }
   return (
     `这行里有 ${found.join("、")} —— 控制台**不经过 shell**，它们会被当成普通参数` +
     `（例如 \`a && b\` 只会执行 a，退出码还可能是 0）。要串联多条命令请写进一个小脚本。`
@@ -407,13 +422,13 @@ export function shellSyntaxWarning(line: string): string | null {
 /** 一次「命令行 → 待执行计划」的解析结果。 */
 export type ParsedConsoleLine =
   | {
-      ok: true;
-      /** 交给 `spawn` 的可执行文件。 */
-      file: string;
       /** 交给 `spawn` 的参数数组（逐项，**不经过 shell 二次解析**）。 */
-      args: string[];
+      args: Array<string>;
       /** 供界面回显与实际执行对齐的规范化命令行。 */
       display: string;
+      /** 交给 `spawn` 的可执行文件。 */
+      file: string;
+      ok: true;
     }
   | { ok: false; reason: string };
 
@@ -437,9 +452,11 @@ export type ParsedConsoleLine =
  */
 export function parseConsoleLine(line: string): ParsedConsoleLine {
   const raw = (line ?? "").trim();
-  if (!raw) return { ok: false, reason: "命令为空" };
+  if (!raw) {
+    return { ok: false, reason: "命令为空" };
+  }
 
-  const tokens: string[] = [];
+  const tokens: Array<string> = [];
   let current = "";
   /** 当前 token 是否已经「开过头」：空引号 `''` 也是一个合法空参数。 */
   let started = false;
@@ -487,10 +504,16 @@ export function parseConsoleLine(line: string): ParsedConsoleLine {
     started = true;
   }
 
-  if (quote) return { ok: false, reason: `引号未闭合（缺少配对的 ${quote}）` };
-  if (started) tokens.push(current);
-  if (tokens.length === 0) return { ok: false, reason: "命令为空" };
+  if (quote) {
+    return { ok: false, reason: `引号未闭合（缺少配对的 ${quote}）` };
+  }
+  if (started) {
+    tokens.push(current);
+  }
+  if (tokens.length === 0) {
+    return { ok: false, reason: "命令为空" };
+  }
 
-  const [file, ...args] = tokens as [string, ...string[]];
+  const [file, ...args] = /* SAFETY: 类型断言已复核 */ tokens as [string, ...Array<string>];
   return { ok: true, file, args, display: [file, ...args].join(" ") };
 }

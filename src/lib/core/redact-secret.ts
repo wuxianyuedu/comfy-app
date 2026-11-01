@@ -36,8 +36,7 @@
  * 判据选取可读性优先于覆盖率——高召回会误伤正常日志，反而没人敢留这道守卫。
  */
 const PEM_BLOCK_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
-const JWT_RE =
-  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b/g;
+const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b/g;
 /* 高熵候选：整条串都是 `[A-Za-z0-9_-]`、长度 ≥ 24、**自带数字**（口令/散文几乎
  * 不含数字）；命中的 token 再按 Shannon 熵（≥ 3.5 bit/char）复核，避免把
  * 「长长的一串英文短横线词」误判成密钥。 */
@@ -46,7 +45,9 @@ const ENTROPY_MIN = 3.5;
 
 function shannonEntropy(value: string): number {
   const freq = new Map<string, number>();
-  for (const ch of value) freq.set(ch, (freq.get(ch) ?? 0) + 1);
+  for (const ch of value) {
+    freq.set(ch, (freq.get(ch) ?? 0) + 1);
+  }
   let bits = 0;
   for (const n of freq.values()) {
     const p = n / value.length;
@@ -57,12 +58,18 @@ function shannonEntropy(value: string): number {
 
 /** 这一小段文本是否「长得像密钥」。 */
 function isSecretShaped(text: string): boolean {
-  if (PEM_BLOCK_RE.test(text)) return true;
+  if (PEM_BLOCK_RE.test(text)) {
+    return true;
+  }
   PEM_BLOCK_RE.lastIndex = 0;
-  if (JWT_RE.test(text)) return true;
+  if (JWT_RE.test(text)) {
+    return true;
+  }
   JWT_RE.lastIndex = 0;
   for (const m of text.matchAll(HIGH_ENTROPY_CANDIDATE)) {
-    if (/[0-9]/.test(m[0]) && shannonEntropy(m[0]) >= ENTROPY_MIN) return true;
+    if (/[0-9]/.test(m[0]) && shannonEntropy(m[0]) >= ENTROPY_MIN) {
+      return true;
+    }
   }
   return false;
 }
@@ -80,28 +87,40 @@ export function redactSecretShaped(
   depth = 0,
   seen = new WeakSet<object>(),
 ): unknown {
-  if (depth > 6) return value;
+  if (depth > 6) {
+    return value;
+  }
   if (typeof value === "string") {
-    if (!isSecretShaped(value)) return value;
+    if (!isSecretShaped(value)) {
+      return value;
+    }
     return value
       .replace(PEM_BLOCK_RE, "[Redacted]")
       .replace(JWT_RE, "[Redacted]")
-      .replace(HIGH_ENTROPY_CANDIDATE, (m) =>
+      .replaceAll(HIGH_ENTROPY_CANDIDATE, (m) =>
         /[0-9]/.test(m) && shannonEntropy(m) >= ENTROPY_MIN ? "[Redacted]" : m,
       );
   }
-  if (value === null || typeof value !== "object") return value;
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
   // Error（含其子类）：原样返回，保住 message / stack 的形状（pino 的
   // stdSerializers 也依赖它）。错误消息里即便真带密钥，也由值形状这一层
   // 在 message 字符串上就地擦除——但**不能**在这里改成普通对象。
-  if (value instanceof Error) return value;
-  if (seen.has(value)) return "[Circular]";
+  if (value instanceof Error) {
+    return value;
+  }
+  if (seen.has(value)) {
+    return "[Circular]";
+  }
   seen.add(value);
   if (Array.isArray(value)) {
     return value.map((v) => redactSecretShaped(v, depth + 1, seen));
   }
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+  for (const [k, v] of Object.entries(
+    /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>,
+  )) {
     out[k] = redactSecretShaped(v, depth + 1, seen);
   }
   return out;

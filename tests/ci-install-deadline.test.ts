@@ -33,14 +33,14 @@ class FakeChild extends EventEmitter {
 
 function harness(script: (child: FakeChild) => void) {
   const child = new FakeChild();
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   const pending = runInstallWithBudget({
     command: "pnpm",
     args: ["install", "--frozen-lockfile"],
     /* 假定时器只需「别真等」：预算给 1ms、心跳索性关掉（见各条用例）。 */
     budgetMs: 30,
     heartbeatMs: 1_000_000,
-    spawnImpl: (() => {
+    spawnImpl: /* SAFETY: 类型断言已复核 */ (() => {
       script(child);
       return child;
     }) as never,
@@ -74,10 +74,9 @@ describe("装依赖那一跳的墙钟", () => {
     });
     const out = await pending;
     expect(out.timedOut).toBe(true);
-    expect(
-      out.code,
-      "超时是「没拿到结论」，折成 1 会让人去修一条并不存在的红",
-    ).toBe(UNDECIDED_EXIT);
+    expect(out.code, "超时是「没拿到结论」，折成 1 会让人去修一条并不存在的红").toBe(
+      UNDECIDED_EXIT,
+    );
     expect(child.killed, "光是判红不收子进程，下一次照样挂在那里").toBe(true);
     const text = lines.join("");
     expect(text).toContain("预算用尽");
@@ -101,13 +100,11 @@ describe("装依赖那一跳的墙钟", () => {
     expect(installBudgetMs({ COMFY_INSTALL_BUDGET_MS: "1234" })).toBe(1234);
     /* 配错不是红：这一格的存在是为了早报，不是为了再加一条能被手滑弄红的输入面。 */
     for (const bad of ["", "abc", "0", "-5"]) {
-      expect(installBudgetMs({ COMFY_INSTALL_BUDGET_MS: bad })).toBe(
-        DEFAULT_INSTALL_BUDGET_MS,
-      );
+      expect(installBudgetMs({ COMFY_INSTALL_BUDGET_MS: bad })).toBe(DEFAULT_INSTALL_BUDGET_MS);
     }
     /* 预算必须比心跳大：反过来的话心跳一行都打不出来，这一格又回到「卡住了但没读数」。 */
     expect(DEFAULT_INSTALL_BUDGET_MS).toBeGreaterThan(HEARTBEAT_MS);
     /* 而它必须显著小于平台硬上限（8640s）—— 卡死要在十几分钟报出来，不是两小时。 */
-    expect(DEFAULT_INSTALL_BUDGET_MS).toBeLessThan(86_400_00);
+    expect(DEFAULT_INSTALL_BUDGET_MS).toBeLessThan(8_640_000);
   });
 });

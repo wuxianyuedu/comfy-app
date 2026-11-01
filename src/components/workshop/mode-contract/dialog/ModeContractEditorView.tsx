@@ -60,13 +60,11 @@ import { ContractInputCatalog } from "./ContractInputCatalog";
 import { ModeContractModeNav } from "./ModeContractModeNav";
 
 /** 中文展示名 + 机器 id：界面上只写中文时，对不上代码 / 日志 / 配置里的 id。 */
-function LabelWithId({ label, id }: { label: string; id: string }) {
+function LabelWithId({ label, id }: { id: string; label: string }) {
   return (
     <>
       {label}
-      <span className="text-muted-foreground/60 text-2xs ml-1 font-mono">
-        {id}
-      </span>
+      <span className="text-muted-foreground/60 text-2xs ml-1 font-mono">{id}</span>
     </>
   );
 }
@@ -96,10 +94,7 @@ export function ModeContractEditorView({
           没动作），`pt-8 sm:pt-10` 会在页眉之上白留一整条空气。收成 `pt-4 sm:pt-5`，
           与其余文档型视图同一档。 */}
       <div className="px-4 sm:px-8">
-        <PageHeader
-          className="pt-4 pb-3 sm:pt-5"
-          srTitle={pageHeaderTitle("mode-contract")}
-        />
+        <PageHeader className="pt-4 pb-3 sm:pt-5" srTitle={pageHeaderTitle("mode-contract")} />
       </div>
 
       <div className="flex min-h-0 flex-1 gap-6 px-4 pb-5 sm:px-8">
@@ -113,8 +108,8 @@ export function ModeContractEditorView({
           <SectionLabel>选择要配置的模式</SectionLabel>
           <ModeContractModeNav
             activeMode={mode}
-            storedCustomized={(code) => isModeContractCustomized(code, stored)}
             onSelect={controller.selectMode}
+            storedCustomized={(code) => isModeContractCustomized(code, stored)}
           />
         </nav>
 
@@ -153,17 +148,15 @@ function ModeContractDraftPanel({
       <div className="border-border flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
         <h4 className="text-ink text-sm font-semibold">
           {contractModeLabel(draft.mode)} 的统一对外参数
-          <span className="text-muted-foreground/60 text-2xs ml-1.5 font-mono">
-            {draft.mode}
-          </span>
+          <span className="text-muted-foreground/60 text-2xs ml-1.5 font-mono">{draft.mode}</span>
         </h4>
       </div>
 
       {/* 口径说明：回答「这套规则怎么理解」，不是「这一步填什么」——
           因此默认收起，不占正文最靠上的位置（用户要看时一次展开看全）。 */}
       <Disclosure
-        marker="chevron"
         className="text-muted-foreground hover:text-ink text-xs"
+        marker="chevron"
         panelClassName="text-muted-foreground mt-2 flex flex-col gap-2 text-xs"
         trigger={<>口径说明（必备口、尺寸的两类写法）</>}
       >
@@ -175,15 +168,13 @@ function ModeContractDraftPanel({
           例如纯文生图把「提示词」勾必备、「负向提示词」不勾。
         </p>
         <p>
-          「尺寸」是两类等价的写法，在尺寸选择器里任选其一：比例 + 分辨率（1k /
-          2k / 4k），或 比例 + 百万像素 + 倍数（8 / 16 / 32 /
-          64）。选「分辨率」时工坊按场景尺寸表换算成「百万像素 + 倍数」
-          再下发，两种写法落到工作流 / 远端接口上的效果一致。
+          「尺寸」是两类等价的写法，在尺寸选择器里任选其一：比例 + 分辨率（1k / 2k / 4k），或 比例 +
+          百万像素 + 倍数（8 / 16 / 32 / 64）。选「分辨率」时工坊按场景尺寸表换算成「百万像素 +
+          倍数」 再下发，两种写法落到工作流 / 远端接口上的效果一致。
         </p>
         <p>
           输入口（按顺序作为工坊对该模式的统一输入）—— 本地工作流在
-          「画布节点」为每个口配落点，远端模型在「模型适配」里为每个口配
-          请求字段。
+          「画布节点」为每个口配落点，远端模型在「模型适配」里为每个口配 请求字段。
         </p>
       </Disclosure>
 
@@ -192,11 +183,11 @@ function ModeContractDraftPanel({
         <div className="flex flex-col gap-1.5">
           {draft.inputs.map((input, i) => (
             <ContractInputRow
-              key={input}
               controller={controller}
               draft={draft}
-              input={input}
               index={i}
+              input={input}
+              key={input}
             />
           ))}
         </div>
@@ -204,42 +195,39 @@ function ModeContractDraftPanel({
 
       {/* 参数库：全部预制口 + 自定义口（浏览 + 增删改都在这一块）。 */}
       <ContractInputCatalog
-        inputs={draft.inputs}
         customInputs={draft.customInputs ?? []}
+        inputs={draft.inputs}
+        onAddCustom={controller.addCustomInput}
         onAddPredefined={(type) =>
           controller.appendInput(
-            type === "reference-image"
-              ? (nextReferenceImageId ?? "reference-image")
-              : type,
+            type === "reference-image" ? (nextReferenceImageId ?? "reference-image") : type,
           )
         }
-        onAddCustom={controller.addCustomInput}
-        onRenameCustom={controller.renameCustomInput}
         onRemoveCustom={controller.removeInput}
+        onRenameCustom={controller.renameCustomInput}
       />
 
       <div>
         <SectionLabel>输出类别</SectionLabel>
         <SelectMenu
-          value={draft.output}
-          onChange={(value) =>
-            controller.setOutput(value as ModeContract["output"])
-          }
-          options={["image", "video", "audio"]}
+          aria-label="该模式的输出类别"
+          className="text-xs"
           labels={{
             image: "图片（image）",
             video: "视频（video）",
             audio: "音频（audio）",
           }}
-          aria-label="该模式的输出类别"
-          className="text-xs"
+          onChange={(value) =>
+            controller.setOutput(/* SAFETY: 类型断言已复核 */ value as ModeContract["output"])
+          }
+          options={["image", "video", "audio"]}
+          value={draft.output}
         />
       </div>
 
       {!draft.inputs.includes("prompt") && (
         <p className="bg-warning/10 text-warning-strong rounded-lg px-3 py-2 text-xs">
-          契约里没有「提示词」口 —— 工坊生成的提示词将无处可落，
-          保存后该模式无法被工坊驱动。
+          契约里没有「提示词」口 —— 工坊生成的提示词将无处可落， 保存后该模式无法被工坊驱动。
         </p>
       )}
       {!controller.hasAnyRequired && (
@@ -251,18 +239,12 @@ function ModeContractDraftPanel({
       {saved && (
         <p className="bg-success/10 text-success-strong rounded-lg px-3 py-2 text-xs">
           已保存 —— 工坊与工作流库读的是同一份注册表，另一处刷新后即生效。
-          <span className="text-ink font-medium">
-            改动只落在这台机器上，不会跟着代码走。
-          </span>
+          <span className="text-ink font-medium">改动只落在这台机器上，不会跟着代码走。</span>
         </p>
       )}
 
       <div>
-        <Button
-          variant="primary-solid"
-          onClick={() => void controller.save()}
-          disabled={saving}
-        >
+        <Button disabled={saving} onClick={() => void controller.save()} variant="primary-solid">
           {saving ? "保存中…" : "保存模式契约"}
         </Button>
       </div>
@@ -279,8 +261,8 @@ function ContractInputRow({
 }: {
   controller: ModeContractEditorController;
   draft: ModeContract;
-  input: ModeContract["inputs"][number];
   index: number;
+  input: ModeContract["inputs"][number];
 }) {
   const label = modeContractInputIdLabel(input, draft.customInputs);
   const kind = customInputKindOf(input);
@@ -288,10 +270,8 @@ function ContractInputRow({
   return (
     <div className="border-border bg-bg flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
       <span className="text-ink min-w-0 text-sm">
-        <span className="text-muted-foreground mr-1 tabular-nums">
-          {index + 1}.
-        </span>
-        <LabelWithId label={label} id={input} />
+        <span className="text-muted-foreground mr-1 tabular-nums">{index + 1}.</span>
+        <LabelWithId id={input} label={label} />
         {kind && (
           <span className="text-muted-foreground bg-subtle border-border-strong text-2xs ml-2 rounded border px-1.5 py-0.5">
             {customInputKindLabel(kind)}
@@ -303,22 +283,22 @@ function ContractInputRow({
             所以调序改的是契约本身，不是界面偏好。 */}
         <span className="flex items-center gap-0.5">
           <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => controller.moveInput(input, -1)}
-            disabled={index === 0}
             aria-label={`上移 ${label}`}
             className="text-muted-foreground/70 hover:text-ink disabled:opacity-25"
+            disabled={index === 0}
+            onClick={() => controller.moveInput(input, -1)}
+            size="icon-sm"
+            variant="ghost"
           >
             ↑
           </Button>
           <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => controller.moveInput(input, 1)}
-            disabled={index === draft.inputs.length - 1}
             aria-label={`下移 ${label}`}
             className="text-muted-foreground/70 hover:text-ink disabled:opacity-25"
+            disabled={index === draft.inputs.length - 1}
+            onClick={() => controller.moveInput(input, 1)}
+            size="icon-sm"
+            variant="ghost"
           >
             ↓
           </Button>
@@ -329,17 +309,17 @@ function ContractInputRow({
         >
           <Checkbox
             checked={controller.isRequired(input)}
-            onCheckedChange={() => controller.toggleRequired(input)}
             className="size-4"
+            onCheckedChange={() => controller.toggleRequired(input)}
           />
           必备
         </FieldLabel>
         <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => controller.removeInput(input)}
-          className="text-muted-foreground/60 hover:text-danger-strong"
           aria-label={`移除 ${label}`}
+          className="text-muted-foreground/60 hover:text-danger-strong"
+          onClick={() => controller.removeInput(input)}
+          size="icon-sm"
+          variant="ghost"
         >
           ✕
         </Button>

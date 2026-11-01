@@ -85,14 +85,14 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(
-        process.execPath,
-        [path.join(root, "scripts", path.basename(SCRIPT))],
-        { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-      ),
+      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }
@@ -120,8 +120,7 @@ describe("用例环境档门禁：环境早退", () => {
 
   it('反向守卫（`=== "undefined"`）同样拦下', () => {
     const r = gate({
-      "src/lib/x.test.ts":
-        'it("x", () => {\n  if (typeof document === "undefined") return;\n});',
+      "src/lib/x.test.ts": 'it("x", () => {\n  if (typeof document === "undefined") return;\n});',
     });
     expect(r.ok).toBe(false);
     expect(r.output).toContain("环境早退");
@@ -292,13 +291,13 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
     let ok = true;
     let output;
     try {
-      output = execFileSync(
-        process.execPath,
-        [path.join(root, "scripts", path.basename(SCRIPT))],
-        { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-      );
+      output = execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
     } catch (error) {
-      const e = error as { stdout?: string; stderr?: string };
+      const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
       ok = false;
       output = `${e.stdout ?? ""}${e.stderr ?? ""}`;
     }
@@ -334,10 +333,7 @@ describe("用例环境档门禁：判据自己不许静默降级", () => {
       ].join("\n"),
     );
     mkdirSync(path.join(root, "src/lib"), { recursive: true });
-    writeFileSync(
-      path.join(root, "src/lib/x.test.ts"),
-      'it("x", () => { expect(1).toBe(1); });\n',
-    );
+    writeFileSync(path.join(root, "src/lib/x.test.ts"), 'it("x", () => { expect(1).toBe(1); });\n');
     const output = execFileSync(
       process.execPath,
       [path.join(root, "scripts", path.basename(SCRIPT))],

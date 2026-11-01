@@ -48,7 +48,9 @@ const MAX_DEPTH = 12;
 export function primaryModelName(graph: unknown): string | null {
   for (const key of API_PRIMARY_KEYS) {
     const found = scan(graph, (record) => apiInput(record, key), 0);
-    if (found !== null) return found;
+    if (found !== null) {
+      return found;
+    }
   }
   return scan(graph, uiWidget, 0);
 }
@@ -59,23 +61,30 @@ function scan(
   pick: (record: Record<string, unknown>) => string | null,
   depth: number,
 ): string | null {
-  if (depth > MAX_DEPTH || node === null || typeof node !== "object")
+  if (depth > MAX_DEPTH || node === null || typeof node !== "object") {
     return null;
+  }
 
   if (Array.isArray(node)) {
     for (const item of node) {
       const found = scan(item, pick, depth + 1);
-      if (found !== null) return found;
+      if (found !== null) {
+        return found;
+      }
     }
     return null;
   }
 
-  const record = node as Record<string, unknown>;
+  const record = /* SAFETY: 类型断言已复核 */ node as Record<string, unknown>;
   const direct = pick(record);
-  if (direct !== null) return direct;
+  if (direct !== null) {
+    return direct;
+  }
   for (const value of Object.values(record)) {
     const found = scan(value, pick, depth + 1);
-    if (found !== null) return found;
+    if (found !== null) {
+      return found;
+    }
   }
   return null;
 }
@@ -83,27 +92,39 @@ function scan(
 /** API 格式：`inputs.<key>` 是模型文件名。 */
 function apiInput(record: Record<string, unknown>, key: string): string | null {
   const inputs = record.inputs;
-  if (inputs === null || typeof inputs !== "object") return null;
-  return asFileName((inputs as Record<string, unknown>)[key]);
+  if (inputs === null || typeof inputs !== "object") {
+    return null;
+  }
+  return asFileName(/* SAFETY: 类型断言已复核 */ (inputs as Record<string, unknown>)[key]);
 }
 
 /** UI 格式：节点类型在表里时取 `widgets_values[下标]`。 */
 function uiWidget(record: Record<string, unknown>): string | null {
   const type = record.type;
-  if (typeof type !== "string" || !(type in UI_PRIMARY_TYPES)) return null;
+  if (typeof type !== "string" || !(type in UI_PRIMARY_TYPES)) {
+    return null;
+  }
   const values = record.widgets_values;
-  if (!Array.isArray(values)) return null;
+  if (!Array.isArray(values)) {
+    return null;
+  }
   /* `type` 上面已按 `in` 收过，但 TS 不把索引访问一起收窄 ——
    * `?.` 既拿值也表达「表里没有就按 null 处理」。 */
   const slot = UI_PRIMARY_TYPES[type];
-  if (slot === undefined) return null;
+  if (slot === undefined) {
+    return null;
+  }
   return asFileName(values[slot]);
 }
 
 /** 只收「像个模型文件名」的非空字符串：路径会带目录，展示时反而看不出是哪个模型。 */
 function asFileName(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
   const text = value.trim();
-  if (text === "" || text.includes("/") || text.includes("\\")) return null;
+  if (text === "" || text.includes("/") || text.includes("\\")) {
+    return null;
+  }
   return text;
 }

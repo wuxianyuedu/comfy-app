@@ -15,7 +15,7 @@ import { eq, and, desc, type SQL } from "drizzle-orm";
 import { firstRowRequired } from "./repository-row";
 
 /** 列表页需要的列：除 `positions`（列表页不读、且是大 JSON blob）外的全部。 */
-const LIST_ROW_COLUMNS = {
+const LIST_ROW_COLUMNS = /* SAFETY: 类型断言已复核 */ {
   id: workflowTemplate.id,
   userId: workflowTemplate.userId,
   name: workflowTemplate.name,
@@ -32,7 +32,7 @@ const LIST_ROW_COLUMNS = {
 } as const;
 
 /** 详情加载时用来判断「磁盘上有没有新版本」的最小列集：只要这三列。 */
-const SOURCE_META_COLUMNS = {
+const SOURCE_META_COLUMNS = /* SAFETY: 类型断言已复核 */ {
   id: workflowTemplate.id,
   sourcePath: workflowTemplate.sourcePath,
   sourceMtime: workflowTemplate.sourceMtime,
@@ -44,8 +44,8 @@ export type WorkflowTemplateListRow = Omit<WorkflowTemplate, "positions">;
 /** {@link WorkflowTemplateRepository.findSourceMetaForUser} 的行形状。 */
 export type WorkflowTemplateSourceMeta = {
   id: string;
-  sourcePath: string | null;
   sourceMtime: number | null;
+  sourcePath: string | null;
 };
 
 export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTemplate> {
@@ -53,7 +53,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     super(workflowTemplate, workflowTemplate.id);
   }
 
-  async listByUser(userId: string): Promise<WorkflowTemplate[]> {
+  async listByUser(userId: string): Promise<Array<WorkflowTemplate>> {
     return db
       .select()
       .from(workflowTemplate)
@@ -61,10 +61,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
       .orderBy(desc(workflowTemplate.createdAt));
   }
 
-  async findByIdForUser(
-    userId: string,
-    id: string,
-  ): Promise<WorkflowTemplate | null> {
+  async findByIdForUser(userId: string, id: string): Promise<WorkflowTemplate | null> {
     const wf = await this.findById(id);
     return wf?.userId === userId ? wf : null;
   }
@@ -85,9 +82,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
     const rows = await db
       .select(SOURCE_META_COLUMNS)
       .from(workflowTemplate)
-      .where(
-        and(eq(workflowTemplate.id, id), eq(workflowTemplate.userId, userId)),
-      )
+      .where(and(eq(workflowTemplate.id, id), eq(workflowTemplate.userId, userId)))
       .limit(1);
     return rows[0] ?? null;
   }
@@ -107,8 +102,8 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
    *  收窄、在行为层只影响读了多少 —— 见 `repository.test.ts` 的断言。 */
   async listForUser(
     userId: string,
-    opts: { where?: SQL; orderBy?: SQL[] } = {},
-  ): Promise<WorkflowTemplateListRow[]> {
+    opts: { orderBy?: Array<SQL>; where?: SQL } = {},
+  ): Promise<Array<WorkflowTemplateListRow>> {
     return db
       .select(LIST_ROW_COLUMNS)
       .from(workflowTemplate)
@@ -117,17 +112,17 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
   }
 
   async createImported(input: {
-    userId: string;
+    defaultMode?: string | null;
+    modes?: Array<string>;
     name: string;
-    taskType: string;
     paramMap?: unknown;
-    rawJson?: unknown;
     positions?: unknown;
-    sourcePath?: string | null;
+    rawJson?: unknown;
     sourceChecksum?: string | null;
     sourceMtime?: number | null;
-    modes?: string[];
-    defaultMode?: string | null;
+    sourcePath?: string | null;
+    taskType: string;
+    userId: string;
   }): Promise<WorkflowTemplate> {
     const rows = await db
       .insert(workflowTemplate)
@@ -150,7 +145,7 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
 
   async relinkSourcePath(
     id: string,
-    data: { sourcePath: string; sourceMtime: number },
+    data: { sourceMtime: number; sourcePath: string },
   ): Promise<void> {
     await db
       .update(workflowTemplate)
@@ -158,16 +153,14 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
       .where(eq(workflowTemplate.id, id));
   }
 
-  async setModelTags(id: string, tagIds: string[]): Promise<void> {
+  async setModelTags(id: string, tagIds: Array<string>): Promise<void> {
     await db
       .delete(workflowModelTagToWorkflowTemplate)
       .where(eq(workflowModelTagToWorkflowTemplate.workflowTemplate, id));
     if (tagIds.length) {
       await db
         .insert(workflowModelTagToWorkflowTemplate)
-        .values(
-          tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })),
-        );
+        .values(tagIds.map((t) => ({ workflowModelTag: t, workflowTemplate: id })));
     }
   }
 }

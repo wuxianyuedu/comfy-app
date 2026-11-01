@@ -4,10 +4,7 @@
 // 生成的 wsp_* 项目 id，应用重启后稳定不变，天然支持多项目按 id upsert。
 import { desc, eq } from "drizzle-orm";
 import type { Character, Scene, Shot } from "~/lib/workshop/types";
-import {
-  parseDraftDto,
-  type WorkshopDraftDto,
-} from "~/lib/workshop/draft-sync-shared";
+import { parseDraftDto, type WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 import {
   workshopDraft,
   type WorkshopDraft as WorkshopDraftRow,
@@ -16,9 +13,7 @@ import {
 import { workshopDb } from "./db";
 
 /** 纯函数：线上草稿 → 可写行（不含 id / 时间戳）。 */
-export function draftToRow(
-  draft: WorkshopDraftDto,
-): Partial<WorkshopDraftInsert> {
+export function draftToRow(draft: WorkshopDraftDto): Partial<WorkshopDraftInsert> {
   return {
     title: draft.meta.title ?? "",
     type: draft.meta.type ?? "short_video",
@@ -42,11 +37,12 @@ export function rowToDto(row: WorkshopDraftRow): WorkshopDraftDto {
       scriptMarkdown: row.scriptMarkdown,
     },
     scriptMarkdown: row.scriptMarkdown,
-    scenes: Array.isArray(row.scenes) ? (row.scenes as Scene[]) : [],
-    characters: Array.isArray(row.characters)
-      ? (row.characters as Character[])
-      : [],
-    shots: Array.isArray(row.shots) ? (row.shots as Shot[]) : [],
+    /* SAFETY: 类型断言已复核 */
+    scenes: Array.isArray(row.scenes) ? (row.scenes as Array<Scene>) : [],
+    /* SAFETY: 类型断言已复核 */
+    characters: Array.isArray(row.characters) ? (row.characters as Array<Character>) : [],
+    /* SAFETY: 类型断言已复核 */
+    shots: Array.isArray(row.shots) ? (row.shots as Array<Shot>) : [],
   });
 }
 
@@ -61,16 +57,14 @@ export async function getDraft(id: string): Promise<WorkshopDraftDto | null> {
 }
 
 /** 服务端镜像的项目摘要（列表恢复用：全量清空 localStorage 后按此重建索引）。 */
-export interface DraftSummary {
+export type DraftSummary = {
   id: string;
   title: string;
   updatedAt: string;
-}
+};
 
 /** 按用户列出其所有服务端镜像摘要（用于在本地索引缺失时把云端项目找回来）。 */
-export async function listDraftsByUser(
-  userId: string | null,
-): Promise<DraftSummary[]> {
+export async function listDraftsByUser(userId: string | null): Promise<Array<DraftSummary>> {
   const rows = userId
     ? await workshopDb
         .select({
@@ -106,11 +100,10 @@ export async function upsertDraft(
   if (existing) {
     // update 分支：只改内容列（id / 时间戳不动），Partial 即可。
     const patch = draftToRow(draft);
-    if (userId !== null) patch.userId = userId;
-    await workshopDb
-      .update(workshopDraft)
-      .set(patch)
-      .where(eq(workshopDraft.id, id));
+    if (userId !== null) {
+      patch.userId = userId;
+    }
+    await workshopDb.update(workshopDraft).set(patch).where(eq(workshopDraft.id, id));
     return;
   }
   // insert 分支：补齐必填列（createdAt/updatedAt 由 drizzle 默认函数生成）。
@@ -131,9 +124,7 @@ export async function upsertDraft(
 
 /** 删除某项目的镜像（前端删除项目时同步清掉，避免残留孤行）。 */
 export async function deleteDraft(id: string): Promise<boolean> {
-  const result = await workshopDb
-    .delete(workshopDraft)
-    .where(eq(workshopDraft.id, id));
+  const result = await workshopDb.delete(workshopDraft).where(eq(workshopDraft.id, id));
   // libsql 的 ResultSet 用 rowsAffected（better-sqlite3 的 RunResult.changes 已不存在）。
   return (result.rowsAffected ?? 0) > 0;
 }

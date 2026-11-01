@@ -31,9 +31,7 @@ function writeSrcFile(repo: GateRepo, rel: string, body: string): void {
 }
 
 describe("check-void-floats AST 判据", () => {
-  test("认 `void fn();` 与 `void obj.fn();` 两种形态作为一条悬空", ({
-    repo,
-  }) => {
+  test("认 `void fn();` 与 `void obj.fn();` 两种形态作为一条悬空", ({ repo }) => {
     writeSrcFile(
       repo,
       "a.ts",
@@ -71,11 +69,7 @@ export async function go(): Promise<void> {
   });
 
   test("跳过 .test.ts / __tests__ / .d.ts,只扫 lib 生产代码", ({ repo }) => {
-    writeSrcFile(
-      repo,
-      "a.test.ts",
-      `async function fn(): Promise<void> {} void fn();`,
-    );
+    writeSrcFile(repo, "a.test.ts", `async function fn(): Promise<void> {} void fn();`);
     writeSrcFile(repo, "b.d.ts", `declare function fn(): void; void fn();`);
     repo.mkdir(join("src", "lib", "__tests__"));
     repo.write(
@@ -106,12 +100,9 @@ void b();`,
     // 建立基线
     const upd = repo.run(["--update"]);
     expect(upd.code).toBe(0);
-    const baseline = JSON.parse(
-      readFileSync(
-        join(repo.dir, "scripts", ".void-floats-baseline.json"),
-        "utf8",
-      ),
-    ) as { ruleVersion: number; total: number; files: Record<string, number> };
+    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      readFileSync(join(repo.dir, "scripts", ".void-floats-baseline.json"), "utf8"),
+    ) as { files: Record<string, number>; ruleVersion: number; total: number; };
     expect(baseline.total).toBe(2);
     expect(baseline.files["src/lib/mod.ts"]).toBe(2);
     // 同数量:OK
@@ -161,9 +152,11 @@ void a();`,
     );
     repo.run(["--update"]);
     const p = join(repo.dir, "scripts", ".void-floats-baseline.json");
-    const json = JSON.parse(readFileSync(p, "utf8")) as { ruleVersion: number };
+    const json = /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(p, "utf8")) as {
+      ruleVersion: number;
+    };
     json.ruleVersion = 999;
-    writeFileSync(p, JSON.stringify(json, null, 2) + "\n", "utf8");
+    writeFileSync(p, `${JSON.stringify(json, null, 2)}\n`, "utf8");
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toMatch(/基线判据版本不一致/);

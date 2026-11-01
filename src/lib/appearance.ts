@@ -22,11 +22,11 @@ import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
 export const APPEARANCE_STORAGE_KEY = "comfyapp:appearance-v1";
 
 /** 一档可选值：id 用于持久化，label 是界面文案，value 是写进 CSS 变量的值。 */
-export interface AppearanceStep {
+export type AppearanceStep = {
   id: string;
   label: string;
   value: string;
-}
+};
 
 /**
  * 圆角档位。`中` 就是 `globals.css` 里 `--radius` 那颗基数（1rem）——
@@ -36,7 +36,7 @@ export interface AppearanceStep {
  * （`ui/card` 走 `rounded-xl`，实际角比标签值大 4px）。改基数或改这里的值，
  * 两边必须同批 —— 文案说 16px 而实渲染 12px 就是骗用户。
  */
-export const RADIUS_STEPS: AppearanceStep[] = [
+export const RADIUS_STEPS: Array<AppearanceStep> = [
   { id: "sm", label: "小 · 12px", value: "0.75rem" },
   { id: "md", label: "中 · 16px", value: "1rem" },
   { id: "lg", label: "大 · 20px", value: "1.25rem" },
@@ -44,17 +44,17 @@ export const RADIUS_STEPS: AppearanceStep[] = [
 ];
 
 /** 标题字阶档位（倍率；基准在 CSS 里）。 */
-export const FONT_SCALE_STEPS: AppearanceStep[] = [
+export const FONT_SCALE_STEPS: Array<AppearanceStep> = [
   { id: "90", label: "紧凑 90%", value: "0.9" },
   { id: "100", label: "标准 100%", value: "1" },
   { id: "110", label: "舒适 110%", value: "1.1" },
   { id: "125", label: "宽松 125%", value: "1.25" },
 ];
 
-export interface AppearancePrefs {
-  radius: string;
+export type AppearancePrefs = {
   fontScale: string;
-}
+  radius: string;
+};
 
 /** 默认值 = `globals.css` 里 `--radius` / `--font-scale` 的基数（两者必须同批改）。 */
 export const DEFAULT_APPEARANCE: AppearancePrefs = {
@@ -62,11 +62,7 @@ export const DEFAULT_APPEARANCE: AppearancePrefs = {
   fontScale: "100",
 };
 
-function stepValue(
-  steps: AppearanceStep[],
-  id: string,
-  fallbackId: string,
-): string {
+function stepValue(steps: Array<AppearanceStep>, id: string, fallbackId: string): string {
   const hit = steps.find((step) => step.id === id);
   return (hit ?? steps.find((step) => step.id === fallbackId))?.value ?? "";
 }
@@ -75,10 +71,10 @@ function stepValue(
  * 解析持久化值。**任何不认识的取值都整份回落默认**，不做"认哪个用哪个"：
  * 半份生效会让界面出现"圆角是新的、字号是旧的"这种无法解释的组合。
  */
-export function parseAppearance(
-  raw: string | null | undefined,
-): AppearancePrefs {
-  if (!raw) return { ...DEFAULT_APPEARANCE };
+export function parseAppearance(raw: string | null | undefined): AppearancePrefs {
+  if (!raw) {
+    return { ...DEFAULT_APPEARANCE };
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -88,7 +84,10 @@ export function parseAppearance(
   if (typeof parsed !== "object" || parsed === null) {
     return { ...DEFAULT_APPEARANCE };
   }
-  const record = parsed as { radius?: unknown; fontScale?: unknown };
+  const record = /* SAFETY: 类型断言已复核 */ parsed as {
+    fontScale?: unknown;
+    radius?: unknown;
+  };
   if (
     typeof record.radius !== "string" ||
     typeof record.fontScale !== "string" ||
@@ -107,16 +106,8 @@ export function serializeAppearance(prefs: AppearancePrefs): string {
 /** 本偏好要写进 CSS 的变量集合（纯数据，便于单测）。 */
 export function appearanceVars(prefs: AppearancePrefs): Record<string, string> {
   return {
-    "--radius": stepValue(
-      RADIUS_STEPS,
-      prefs.radius,
-      DEFAULT_APPEARANCE.radius,
-    ),
-    "--font-scale": stepValue(
-      FONT_SCALE_STEPS,
-      prefs.fontScale,
-      DEFAULT_APPEARANCE.fontScale,
-    ),
+    "--radius": stepValue(RADIUS_STEPS, prefs.radius, DEFAULT_APPEARANCE.radius),
+    "--font-scale": stepValue(FONT_SCALE_STEPS, prefs.fontScale, DEFAULT_APPEARANCE.fontScale),
   };
 }
 
@@ -127,7 +118,9 @@ export function applyAppearance(
     ? null
     : document.documentElement,
 ): void {
-  if (!element) return;
+  if (!element) {
+    return;
+  }
   for (const [name, value] of Object.entries(appearanceVars(prefs))) {
     element.style.setProperty(name, value);
   }

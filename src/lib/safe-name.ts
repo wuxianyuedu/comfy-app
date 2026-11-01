@@ -33,8 +33,10 @@
  *  （NFC vs NFD、Windows 的 GBK 回退）下不保证往返一致。ASCII 片段是唯一
  *  确定性的形态。**要给用户看的名字不要走这里**（那走 `safeDisplayName`）。 */
 export function safeFileNameSegment(raw: string | null | undefined): string {
-  if (!raw) return "";
-  return raw.replace(/[^\w.-]+/g, "_");
+  if (!raw) {
+    return "";
+  }
+  return raw.replaceAll(/[^\w.-]+/g, "_");
 }
 
 /** 展示名片段：在 ASCII 片段的基础上**额外保留 CJK**（中文/日文/韩文）。
@@ -43,8 +45,10 @@ export function safeFileNameSegment(raw: string | null | undefined): string {
  *  Lora 训练产物）。保留 CJK 是有意的：把「背景音乐.mp3」存成
  *  「______.mp3」之后，用户在文件管理器里再也认不出它。 */
 export function safeDisplayName(raw: string | null | undefined): string {
-  if (!raw) return "";
+  if (!raw) {
+    return "";
+  }
   /* `\u4e00-\u9fa5` 是「基本汉字区」—— 与全库既有的两处 CJK 判据同口径
    *（收口前 `bgm` 与被删的 `trainer` 各写了一遍这个区间）。 */
-  return raw.replace(/[^\w.\-\u4e00-\u9fa5]+/g, "_");
+  return raw.replaceAll(/[^\w.\-\u4e00-\u9fa5]+/g, "_");
 }

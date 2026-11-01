@@ -55,11 +55,15 @@ const SPECIFIER_RE = /(?:from|import|require|vi\.mock)\s*\(?\s*["']([^"']+)["']/
 /** 把说明符解析到仓库内的实际文件（只处理本仓库的 `~/` 与 `@/` 别名）。 */
 function resolveSpec(spec: string): string | null {
   const m = /^(?:~|@)\/(.+)$/.exec(spec);
-  if (!m?.[1]) return null;
+  if (!m?.[1]) {
+    return null;
+  }
   const base = join(ROOT, "src", m[1]);
   for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
     try {
-      if (statSync(candidate).isFile()) return relative(ROOT, candidate).split("\\").join("/");
+      if (statSync(candidate).isFile()) {
+        return relative(ROOT, candidate).split("\\").join("/");
+      }
     } catch {
       /* 不存在就试下一个形态 */
     }
@@ -67,14 +71,16 @@ function resolveSpec(spec: string): string | null {
   return null;
 }
 
-function walk(dir: string, out: string[] = []): string[] {
+function walk(dir: string, out: Array<string> = []): Array<string> {
   for (const name of readdirSync(dir)) {
     const full = join(dir, name);
     if (statSync(full).isDirectory()) {
       walk(full, out);
       continue;
     }
-    if (/\.tsx?$/.test(name)) out.push(full);
+    if (/\.tsx?$/.test(name)) {
+      out.push(full);
+    }
   }
   return out;
 }
@@ -82,7 +88,7 @@ function walk(dir: string, out: string[] = []): string[] {
 /** 去掉块注释与「整行以 // 开头」的行注释，避免把说明性路径误判成依赖。 */
 function stripComments(src: string): string {
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replaceAll(/\/\*[\s\S]*?\*\//g, "")
     .split("\n")
     .filter((line) => !/^\s*\/\//.test(line))
     .join("\n");
@@ -116,21 +122,25 @@ type Edge = { from: string; to: string };
 const key = (e: Edge) => `${e.from} -> ${e.to}`;
 
 /** 已登记的边集合（由 `REGISTERED` 展开）。 */
-const REGISTERED_EDGES = new Set(
-  Object.entries(REGISTERED).map(([from, to]) => key({ from, to })),
-);
+const REGISTERED_EDGES = new Set(Object.entries(REGISTERED).map(([from, to]) => key({ from, to })));
 
-function collectEdges(): Edge[] {
+function collectEdges(): Array<Edge> {
   const edges = new Map<string, Edge>();
   for (const file of walk(join(ROOT, "src", "lib"))) {
     const rel = relative(ROOT, file).split("\\").join("/");
     const src = stripComments(readFileSync(file, "utf8"));
     for (const match of src.matchAll(SPECIFIER_RE)) {
       const spec = match[1];
-      if (typeof spec !== "string") continue;
+      if (typeof spec !== "string") {
+        continue;
+      }
       const target = resolveSpec(spec);
-      if (!target?.startsWith("src/server/")) continue;
-      if (!SERVER_OWNED_RE.test(target) && !(rel in REGISTERED)) continue;
+      if (!target?.startsWith("src/server/")) {
+        continue;
+      }
+      if (!SERVER_OWNED_RE.test(target) && !(rel in REGISTERED)) {
+        continue;
+      }
       const edge = { from: rel, to: target };
       edges.set(key(edge), edge);
     }
@@ -144,10 +154,10 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
     const report = unregistered.map((e) => `  ✗ ${e.from}\n      → ${e.to}`).join("\n");
     expect(
       unregistered,
-      "src/lib 是被 server / components / app 共同依赖的地基，新增对 src/server/** 的依赖必须先裁决并登记。\n" +
-        "需要日志：改走中立出口 `@/lib/core/logger`（pino 的薄封装，接口一致，实现仍只有一份）；\n" +
-        "需要别的服务端能力：把被依赖的部分下沉到 lib，或由调用方注入（规范 §12.7 依赖倒置）。\n" +
-        report,
+      `src/lib 是被 server / components / app 共同依赖的地基，新增对 src/server/** 的依赖必须先裁决并登记。\n` +
+        `需要日志：改走中立出口 \`@/lib/core/logger\`（pino 的薄封装，接口一致，实现仍只有一份）；\n` +
+        `需要别的服务端能力：把被依赖的部分下沉到 lib，或由调用方注入（规范 §12.7 依赖倒置）。\n${
+        report}`,
     ).toEqual([]);
   });
 
@@ -158,8 +168,8 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
       .map(([from, to]) => `  ✗ ${from} -> ${to}`);
     expect(
       stale,
-      "以下登记项已不再成立（依赖被消除或目标文件被移动），请从 REGISTERED 中删除：\n" +
-        stale.join("\n"),
+      `以下登记项已不再成立（依赖被消除或目标文件被移动），请从 REGISTERED 中删除：\n${
+        stale.join("\n")}`,
     ).toEqual([]);
   });
 
@@ -169,13 +179,9 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
     // 用纯数据复现那个谓词，锁住「新边必须算未登记」。
     // 合成一张登记表（与 REGISTERED 现状解耦：这条守的是**判定谓词**，
     // 不是清单内容），只用于复现「同一文件上新增的依赖必须算未登记」。
-    const registered = new Map([
-      ["src/lib/comfyui/client.ts", "src/server/lib/logger.ts"],
-    ]);
-    const registeredEdges = new Set(
-      [...registered].map(([from, to]) => key({ from, to })),
-    );
-    const sample: Edge[] = [
+    const registered = new Map([["src/lib/comfyui/client.ts", "src/server/lib/logger.ts"]]);
+    const registeredEdges = new Set([...registered].map(([from, to]) => key({ from, to })));
+    const sample: Array<Edge> = [
       { from: "src/lib/comfyui/client.ts", to: "src/server/lib/logger.ts" }, // 已登记
       { from: "src/lib/comfyui/client.ts", to: "src/server/lib/brand-new.ts" }, // 未登记
     ];
@@ -197,15 +203,11 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
       // 曾经这样写：import { logger } from "~/server/lib/logger";
     `;
     const specs = [...stripComments(probe).matchAll(SPECIFIER_RE)].map((m) => m[1]);
-    expect(specs, "解析器必须能认出 from 说明符").toEqual([
-      "~/server/better-auth/server",
-    ]);
+    expect(specs, "解析器必须能认出 from 说明符").toEqual(["~/server/better-auth/server"]);
     // 整行 `//` 注释被剥掉（否则说明性路径会被误判成依赖）
     expect(specs).not.toContain("~/server/lib/logger");
     // 说明符能解析到仓库内的真实文件（不是「永远返回 null」）
-    expect(resolveSpec("~/server/better-auth/server")).toBe(
-      "src/server/better-auth/server.ts",
-    );
+    expect(resolveSpec("~/server/better-auth/server")).toBe("src/server/better-auth/server.ts");
     // 数据层同层引用（`lib/core/**` → `~/server/db/schema`）被 SERVER_OWNED_RE 排除，
     // 不入清单 —— 这条守的是「判据不是一律禁止」
     expect(SERVER_OWNED_RE.test("src/server/db/schema.ts")).toBe(false);

@@ -76,15 +76,13 @@ function readLedger() {
   let parsed;
   try {
     parsed = JSON.parse(fs.readFileSync(LEDGER, "utf8"));
-  } catch (err) {
-    problems.push(`索引不是合法 JSON：${err.message}`);
+  } catch (error) {
+    problems.push(`索引不是合法 JSON：${error.message}`);
     return null;
   }
   const duties = parsed?.duties;
   if (!Array.isArray(duties) || duties.length === 0) {
-    problems.push(
-      "索引里没有 duties（空索引 = 没有任何档要查，等于把门禁关掉）",
-    );
+    problems.push("索引里没有 duties（空索引 = 没有任何档要查，等于把门禁关掉）");
     return null;
   }
   if (duties.length < MIN_DUTIES) {
@@ -95,9 +93,7 @@ function readLedger() {
   }
   for (const [i, d] of duties.entries()) {
     if (!d?.id || !d?.name || !d?.fact?.kind || !d?.executor) {
-      problems.push(
-        `第 ${i + 1} 行缺字段（id / name / fact.kind / executor 都要有）`,
-      );
+      problems.push(`第 ${i + 1} 行缺字段（id / name / fact.kind / executor 都要有）`);
     }
   }
   return duties;
@@ -134,7 +130,9 @@ function qualityGateModes() {
       current = null;
       continue;
     }
-    if (current && /run:\s*false/.test(line)) notInAll.add(current);
+    if (current && /run:\s*false/.test(line)) {
+      notInAll.add(current);
+    }
   }
   /* `display: false` 那一类不在 `--mode` 单选里，但这里不判它 —— 只判「进不进 all」。 */
   return { notInAll, all };
@@ -142,7 +140,9 @@ function qualityGateModes() {
 
 /** 判据执行者台账的「按需召唤」条目（`scripts/.gate-executor-ledger.json`）。 */
 function onDemandLedgerKeys() {
-  if (!fs.existsSync(GATE_EXECUTOR_LEDGER)) return [];
+  if (!fs.existsSync(GATE_EXECUTOR_LEDGER)) {
+    return [];
+  }
   const parsed = JSON.parse(fs.readFileSync(GATE_EXECUTOR_LEDGER, "utf8"));
   return Object.keys(parsed?.onDemand ?? {});
 }
@@ -151,7 +151,9 @@ function onDemandLedgerKeys() {
 
 async function main() {
   const duties = readLedger();
-  if (!duties) return finish();
+  if (!duties) {
+    return finish();
+  }
 
   const [tracks, gates] = [await freshnessKeys(), qualityGateModes()];
   const onDemand = onDemandLedgerKeys();
@@ -159,29 +161,32 @@ async function main() {
   /** 每类事实 → 「它还在不在」的判据。 */
   const factExists = (fact) => {
     switch (fact?.kind) {
-      case "freshness-track":
+      case "freshness-track": {
         return tracks.includes(fact.key);
-      case "gate-not-in-all":
+      }
+      case "gate-not-in-all": {
         return gates.notInAll.has(fact.gate);
-      case "gate-in-all":
+      }
+      case "gate-in-all": {
         return gates.all.has(fact.gate);
-      case "on-demand-ledger":
+      }
+      case "on-demand-ledger": {
         return onDemand.includes(fact.script);
-      case "base-check-chained":
+      }
+      case "base-check-chained": {
         /* 事实从 `scripts/base-check/chained-steps.mjs` 的 `CHAINED_STEPS` 现算
          * （成员写成 `{ script: "…" }`）—— 不在这里抄第二份清单（同 `qualityGateModes`）。 */
         return [
           ...fs
-            .readFileSync(
-              path.join(__dirname, "base-check", "chained-steps.mjs"),
-              "utf8",
-            )
+            .readFileSync(path.join(__dirname, "base-check", "chained-steps.mjs"), "utf8")
             .matchAll(/\{ script: "([^"]+)" \}/g),
         ]
           .map((m) => m[1])
           .includes(fact.script);
-      default:
+      }
+      default: {
         return false;
+      }
     }
   };
 
@@ -221,18 +226,24 @@ async function main() {
 /** 「事实键」的规范写法（`kind` + 标识），用于双向集合比较。 */
 function factKey(fact) {
   switch (fact?.kind) {
-    case "freshness-track":
+    case "freshness-track": {
       return `freshness-track:${fact.key}`;
-    case "gate-not-in-all":
+    }
+    case "gate-not-in-all": {
       return `gate-not-in-all:${fact.gate}`;
-    case "gate-in-all":
+    }
+    case "gate-in-all": {
       return `gate-in-all:${fact.gate}`;
-    case "on-demand-ledger":
+    }
+    case "on-demand-ledger": {
       return `on-demand-ledger:${fact.script}`;
-    case "base-check-chained":
+    }
+    case "base-check-chained": {
       return `base-check-chained:${fact.script}`;
-    default:
+    }
+    default: {
       return `unknown:${JSON.stringify(fact)}`;
+    }
   }
 }
 
@@ -249,8 +260,12 @@ function finish() {
   process.stdout.write(
     `[on-demand-duties] 按需档索引有 ${problems.length} 处问题（规范 §13.5.4）：\n`,
   );
-  for (const p of problems) process.stdout.write(`  · ${p}\n`);
-  if (REPORT_ONLY) return 0;
+  for (const p of problems) {
+    process.stdout.write(`  · ${p}\n`);
+  }
+  if (REPORT_ONLY) {
+    return 0;
+  }
   return 1;
 }
 

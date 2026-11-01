@@ -59,7 +59,9 @@ function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) {
-      if (e.name === "node_modules" || e.name === ".next") continue;
+      if (e.name === "node_modules" || e.name === ".next") {
+        continue;
+      }
       walk(p, out);
     } else if (SOURCE_EXT.test(e.name) && !e.name.endsWith(".d.ts")) {
       out.push(p);
@@ -72,18 +74,24 @@ function scanFile(abs, rel) {
   const text = fs.readFileSync(abs, "utf8");
   const lines = text.split("\n");
   lines.forEach((line, i) => {
-    if (isCommentLine(line)) return;
+    if (isCommentLine(line)) {
+      return;
+    }
     const seen = new Set();
     for (const re of SPEC_PATTERNS) {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(line)) !== null) {
         const spec = m[1] ?? "";
-        if (!spec.startsWith("@/")) continue;
-        if (seen.has(spec)) continue;
+        if (!spec.startsWith("@/")) {
+          continue;
+        }
+        if (seen.has(spec)) {
+          continue;
+        }
         seen.add(spec);
         problems.push(
-          rel + ":" + (i + 1) + " 别名用 @/ 而非 ~/ → " + spec + "\n    → " + line.trim(),
+          `${rel}:${i + 1} 别名用 @/ 而非 ~/ → ${spec}\n    → ${line.trim()}`,
         );
       }
     }
@@ -95,7 +103,9 @@ function scanFile(abs, rel) {
 const args = process.argv.slice(2);
 let root = path.resolve(__dirname, "..");
 const rootIdx = args.indexOf("--root");
-if (rootIdx !== -1 && args[rootIdx + 1]) root = path.resolve(args[rootIdx + 1]);
+if (rootIdx !== -1 && args[rootIdx + 1]) {
+  root = path.resolve(args[rootIdx + 1]);
+}
 
 /* `--staged`：扫描面是 SCAN_DIRS（`src` + `e2e`）；`--root` 是自测用法，不跳过。 */
 if (args.includes("--staged") && rootIdx === -1) {
@@ -104,14 +114,16 @@ if (args.includes("--staged") && rootIdx === -1) {
 
 for (const dir of SCAN_DIRS) {
   const abs = path.join(root, dir);
-  if (!fs.existsSync(abs)) continue;
+  if (!fs.existsSync(abs)) {
+    continue;
+  }
   for (const file of walk(abs)) {
     scanFile(file, path.relative(root, file).split(path.sep).join("/"));
   }
 }
 
 if (problems.length) {
-  console.error("[alias] 违反「统一用 ~ 前缀」(规范 §12.2 / §16.2):\n  " + problems.join("\n  "));
+  console.error(`[alias] 违反「统一用 ~ 前缀」(规范 §12.2 / §16.2):\n  ${problems.join("\n  ")}`);
   console.error(
     "把 `@/…` 改成 `~/…` 即可。`@/*` 只是脚手架留下的 paths 历史项,仍可编译但非本仓库约定;" +
       "`shadcn add` 生成的组件默认写 `@/`,新增后须顺手改(§16.3)。",

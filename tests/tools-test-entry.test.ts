@@ -22,12 +22,11 @@ const entry = readFileSync(ENTRY, "utf8");
 const logic = readFileSync(LOGIC, "utf8");
 const gate = readFileSync(GATE, "utf8");
 
-
 describe("tools 里的 vitest 单跑入口", () => {
   it("入口与逻辑分层齐全（入口归 tools/start/，逻辑归 scripts/）", () => {
     // 规范 §8.2：双击入口在 tools/<分类>/，业务逻辑下沉到 scripts/
-    expect(entry).toContain("scripts\\entry-common.ps1");
-    expect(entry).toContain('"scripts\\run-tests.ps1"');
+    expect(entry).toContain(String.raw`scripts\entry-common.ps1`);
+    expect(entry).toContain(String.raw`"scripts\run-tests.ps1"`);
     expect(logic).toContain('@("exec", "vitest", "run")');
   });
 
@@ -66,10 +65,7 @@ describe("tools 里的 vitest 单跑入口", () => {
   });
 
   it("-Full 保留基线失败文件，默认才排除", () => {
-    const fullBranch = logic.slice(
-      logic.indexOf("if ($Full)"),
-      logic.indexOf("# ── 4)"),
-    );
+    const fullBranch = logic.slice(logic.indexOf("if ($Full)"), logic.indexOf("# ── 4)"));
     expect(fullBranch).toContain("已知基线失败文件一并运行");
     // -Full 分支只打印说明，不追加排除参数
     expect(fullBranch).not.toMatch(/\$vitestArgs \+= @\("-\\-exclude"/);
@@ -83,7 +79,7 @@ describe("tools 里的 vitest 单跑入口", () => {
   });
 
   it("缺失依赖时给出可照做的中文提示，而不是 vitest 的解析报错", () => {
-    expect(logic).toContain("node_modules\\.bin");
+    expect(logic).toContain(String.raw`node_modules\.bin`);
     expect(logic).toContain("pnpm install");
   });
 });
@@ -101,17 +97,18 @@ describe("app-port 跨平台一致性", () => {
   it("盘符路径不喂给平台相关的 path.resolve", () => {
     expect(MJS).toContain("isWindowsDrive");
     // 判据本体在源码里写作 /^[a-z]:\//i，这里按字符串比对避免多层正则转义失真
-    expect(MJS).toContain("/^[a-z]:\\//i");
+    expect(MJS).toContain(String.raw`/^[a-z]:\//i`);
   });
 
   it("盘符路径（Windows 写法）与正斜杠写法推导出同一端口，且与四侧锚点一致", async () => {
     // 锚点 3305 / fnv 0x97ecb3a9 由 node 生成并被 PowerShell / Python / Rust 侧
     // 引用；这条断言在 Linux（CI）上同样成立，正是跨平台修复的意义所在。
-    const { derivePortFromPath } = (await import("../scripts/app-port.mjs")) as {
-      derivePortFromPath: (root: string) => number;
-    };
-    expect(derivePortFromPath("F:\\AI\\Other\\comfy-app-t3-branch")).toBe(3305);
+    const { derivePortFromPath } =
+      /* SAFETY: 类型断言已复核 */ (await import("../scripts/app-port.mjs")) as {
+        derivePortFromPath: (root: string) => number;
+      };
+    expect(derivePortFromPath(String.raw`F:\AI\Other\comfy-app-t3-branch`)).toBe(3305);
     expect(derivePortFromPath("F:/AI/Other/comfy-app-t3-branch")).toBe(3305);
-    expect(derivePortFromPath("F:\\AI\\Other\\comfy-app-t3-branch2")).not.toBe(3305);
+    expect(derivePortFromPath(String.raw`F:\AI\Other\comfy-app-t3-branch2`)).not.toBe(3305);
   });
 });

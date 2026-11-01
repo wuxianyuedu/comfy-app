@@ -143,31 +143,17 @@ function playwrightBrowserJsonCandidates(base) {
   const nm = path.join(base, "node_modules");
   const out = [
     path.join(nm, "playwright-core", "browsers.json"),
-    path.join(
-      nm,
-      "@playwright",
-      "test",
-      "node_modules",
-      "playwright-core",
-      "browsers.json",
-    ),
+    path.join(nm, "@playwright", "test", "node_modules", "playwright-core", "browsers.json"),
     /* pnpm 的 `.pnpm/node_modules/` 那层软链也要试：实测本机从它下面**解析得到**
      * `playwright-core`（见 `.pnpm/node_modules/playwright-core`）。 */
     path.join(nm, ".pnpm", "node_modules", "playwright-core", "browsers.json"),
   ];
   try {
     for (const entry of readdirSync(path.join(nm, ".pnpm"))) {
-      if (!entry.startsWith("playwright-core@")) continue;
-      out.push(
-        path.join(
-          nm,
-          ".pnpm",
-          entry,
-          "node_modules",
-          "playwright-core",
-          "browsers.json",
-        ),
-      );
+      if (!entry.startsWith("playwright-core@")) {
+        continue;
+      }
+      out.push(path.join(nm, ".pnpm", entry, "node_modules", "playwright-core", "browsers.json"));
     }
   } catch {
     /* 没装依赖时 `.pnpm` 根本不在 —— 那不是错误，下面会退回缺省。 */
@@ -195,8 +181,7 @@ function playwrightBrowserJsonCandidates(base) {
  * @returns {{version: string, revision: string, target: string} | null}
  */
 export function readPlaywrightBrowserTarget({ root = undefined } = {}) {
-  const base =
-    root ?? path.resolve(import.meta.dirname, "..");
+  const base = root ?? path.resolve(import.meta.dirname, "..");
   /** @type {string | null} */
   let text = null;
   for (const candidate of playwrightBrowserJsonCandidates(base)) {
@@ -207,15 +192,18 @@ export function readPlaywrightBrowserTarget({ root = undefined } = {}) {
       /* 这个位置上没有，试下一个。 */
     }
   }
-  if (text === null) return null;
+  if (text === null) {
+    return null;
+  }
   try {
     const parsed = JSON.parse(text);
     const entry = (parsed?.browsers ?? []).find(
-      (
-        /** @type {{name?: string, browserVersion?: string, revision?: string}} */ b,
-      ) => b?.name === "chromium-headless-shell",
+      (/** @type {{name?: string, browserVersion?: string, revision?: string}} */ b) =>
+        b?.name === "chromium-headless-shell",
     );
-    if (!entry?.browserVersion || entry.revision === undefined) return null;
+    if (!entry?.browserVersion || entry.revision === undefined) {
+      return null;
+    }
     return {
       version: String(entry.browserVersion),
       revision: String(entry.revision),
@@ -237,9 +225,12 @@ export function readPlaywrightBrowserTarget({ root = undefined } = {}) {
  * @returns {string}
  */
 function platformTargetSuffix() {
-  if (process.platform === "win32") return "win64";
-  if (process.platform === "darwin")
+  if (process.platform === "win32") {
+    return "win64";
+  }
+  if (process.platform === "darwin") {
     return process.arch === "arm64" ? "mac-arm64" : "mac-x64";
+  }
   return process.arch === "arm64" ? "linux-arm64" : "linux64";
 }
 
@@ -260,8 +251,7 @@ function platformTargetSuffix() {
  */
 export function playwrightProbeUrl(root, overrides = {}) {
   const target = readPlaywrightBrowserTarget();
-  const version =
-    overrides.version ?? target?.version ?? PLAYWRIGHT_FALLBACK_BROWSER_VERSION;
+  const version = overrides.version ?? target?.version ?? PLAYWRIGHT_FALLBACK_BROWSER_VERSION;
   const suffix = overrides.target ?? target?.target ?? platformTargetSuffix();
   const base = String(root ?? "").replace(/\/+$/, "");
   return `${base}/builds/cft/${version}/${suffix}/chrome-headless-shell-${suffix}.zip`;
@@ -304,7 +294,9 @@ export function playwrightReachability({
     "  下面量的是**这一趟真要下那件包**（不是 CDN 根 —— 根对这几个地址都回 4xx，",
     "  而包在 2xx/3xx；拿裸根判会得到一句反过来的话，ISSUE #1966）：",
   ];
-  if (updateHost) lines.push(`  当前 PLAYWRIGHT_DOWNLOAD_HOST: ${updateHost}`);
+  if (updateHost) {
+    lines.push(`  当前 PLAYWRIGHT_DOWNLOAD_HOST: ${updateHost}`);
+  }
   for (const r of playwrightReachabilityVerdicts({
     candidates,
     probe,
@@ -386,7 +378,9 @@ export function playwrightReachabilityVerdicts({
  */
 export function isReachableVerdict(verdict) {
   const m = /^HTTP\s+(\d{3})\b/.exec(String(verdict ?? "").trim());
-  if (!m) return false;
+  if (!m) {
+    return false;
+  }
   const code = Number(m[1]);
   return code >= 200 && code < 400;
 }
@@ -455,18 +449,11 @@ export function isReachableVerdict(verdict) {
  */
 export function httpDownloadProbe(
   url,
-  { timeoutMs = 8000, chunkBytes = 65536, maxRedirects = 3 } = {},
+  { timeoutMs = 8000, chunkBytes = 65_536, maxRedirects = 3 } = {},
 ) {
   const r = spawnSync(
     process.execPath,
-    [
-      "-e",
-      DOWNLOAD_PROBE_SCRIPT,
-      url,
-      String(timeoutMs),
-      String(chunkBytes),
-      String(maxRedirects),
-    ],
+    ["-e", DOWNLOAD_PROBE_SCRIPT, url, String(timeoutMs), String(chunkBytes), String(maxRedirects)],
     { encoding: "utf8", windowsHide: true, timeout: timeoutMs + 4000 },
   );
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
@@ -634,9 +621,13 @@ const DOWNLOAD_PROBE_SCRIPT = `
  */
 export function probeGrade(verdict) {
   const text = String(verdict ?? "").trim();
-  if (text.startsWith("超时")) return "timeout";
+  if (text.startsWith("超时")) {
+    return "timeout";
+  }
   const m = /^HTTP\s+(\d{3})\b/.exec(text);
-  if (!m) return "worse";
+  if (!m) {
+    return "worse";
+  }
   const code = Number(m[1]);
   /* 3xx 也算「量得完」：`cdn.playwright.dev` 那一族回的就是 307（它自己再跟一跳）。
    * 与 {@link isReachableVerdict} 同一条口径 —— 两处判「什么算到得了」必须一致。 */

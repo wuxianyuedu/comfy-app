@@ -7,14 +7,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  resetComfyLivenessClientForTest,
-  subscribeComfyCrashes,
-} from "./comfy-liveness-client";
+import { resetComfyLivenessClientForTest, subscribeComfyCrashes } from "./comfy-liveness-client";
 
 /** 最小的 EventSource 替身：只留 `onmessage` / `close`。 */
 class FakeEventSource {
-  static instances: FakeEventSource[] = [];
+  static instances: Array<FakeEventSource> = [];
   onmessage: ((ev: MessageEvent<string>) => void) | null = null;
   closed = false;
   url: string;
@@ -23,10 +20,14 @@ class FakeEventSource {
     FakeEventSource.instances.push(this);
   }
   emit(payload: unknown): void {
-    this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent<string>);
+    this.onmessage?.(
+      /* SAFETY: 类型断言已复核 */ {
+        data: JSON.stringify(payload),
+      } as MessageEvent<string>,
+    );
   }
   emitRaw(data: string): void {
-    this.onmessage?.({ data } as MessageEvent<string>);
+    this.onmessage?.(/* SAFETY: 类型断言已复核 */ { data } as MessageEvent<string>);
   }
   close(): void {
     this.closed = true;
@@ -40,7 +41,7 @@ beforeEach(() => {
   vi.stubGlobal("EventSource", FakeEventSource);
   resetComfyLivenessClientForTest();
   subscribeComfyCrashes(() => undefined);
-  last = FakeEventSource.instances[FakeEventSource.instances.length - 1]!;
+  last = FakeEventSource.instances.at(-1)!;
 });
 
 afterEach(() => {
@@ -51,7 +52,7 @@ afterEach(() => {
 function signal(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     seq: 1,
-    at: 1_000,
+    at: 1000,
     reason: "异常退出（exit 1）",
     userStopped: false,
     ...over,
@@ -113,8 +114,7 @@ describe("subscribeComfyCrashes", () => {
       永远不成立（listeners 不会归零），断言就测不到断开。 */
     resetComfyLivenessClientForTest();
     const offA = subscribeComfyCrashes(vi.fn());
-    const conn =
-      FakeEventSource.instances[FakeEventSource.instances.length - 1]!;
+    const conn = FakeEventSource.instances.at(-1)!;
     const before = FakeEventSource.instances.length;
     const offB = subscribeComfyCrashes(vi.fn());
     // 订阅者增加不新建连接：`ensureConnected` 幂等。

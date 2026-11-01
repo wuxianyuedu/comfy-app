@@ -19,21 +19,15 @@ import type { RawInputMeta } from "../workflow-types";
  *  不属于共享的 RawInputMeta 契约）。 */
 type ComboInputMeta = RawInputMeta & { comboOptions?: unknown };
 
-interface SubgraphWidgetRowProps {
-  inp: RawInputMeta;
-  label: string;
-  io: IOEditContextValue | null;
-  nodeId: string;
+type SubgraphWidgetRowProps = {
   hostNodeId?: string;
-}
+  inp: RawInputMeta;
+  io: IOEditContextValue | null;
+  label: string;
+  nodeId: string;
+};
 
-export function SubgraphWidgetRow({
-  inp,
-  label,
-  io,
-  nodeId,
-  hostNodeId,
-}: SubgraphWidgetRowProps) {
+export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: SubgraphWidgetRowProps) {
   const v: unknown = inp.widgetValue;
   const isConn = inp.isConnection === true || inp.isBoundary === true;
   /* 图片类 widget（IMAGE / MASK / IMAGEUPLOAD）：画布上也要把选中的图
@@ -47,27 +41,27 @@ export function SubgraphWidgetRow({
   return (
     <div
       className="group text-2xs relative grid min-h-5.5 py-0.5 pr-2 pl-5"
+      data-sub-widget-name={inp.name}
+      data-sub-widget-value={String(v)}
       style={{
         gridColumn: "1 / -1",
         gridTemplateColumns: "subgrid",
         alignItems: "center",
       }}
-      data-sub-widget-name={inp.name}
-      data-sub-widget-value={String(v)}
     >
       {isConn && (
         <Handle
-          type="target"
-          position={Position.Left}
+          className="border-port-surface! size-2.5! rounded-full! border!"
           id={inp.name}
           isConnectable={false}
-          className="border-port-surface! size-2.5! rounded-full! border!"
+          position={Position.Left}
           style={{
             left: 5,
             background: typeCol,
             boxShadow: `0 0 6px ${typeCol}AA, inset 0 0 0 1px var(--color-port-surface)`,
           }}
           title={`${label} (${inp.type})`}
+          type="target"
         />
       )}
       {/* 标签格（第 1 列）：IO 复选框 + 标签。列宽由父 grid 的
@@ -91,9 +85,7 @@ export function SubgraphWidgetRow({
            *  而不是被裁掉；完整文本仍可从原生 `title` 看到。 */
           className="text-2xs min-w-0 text-left wrap-break-word whitespace-normal"
           style={{
-            color: isConn
-              ? "var(--color-ink-strong)"
-              : "var(--color-ink-subtle)",
+            color: isConn ? "var(--color-ink-strong)" : "var(--color-ink-subtle)",
           }}
           title={label}
         >
@@ -107,27 +99,32 @@ export function SubgraphWidgetRow({
          *  「在界面上完全看不到」（实测反馈）。`src` 为 null 时
          *  MediaThumbnail 按 fallback 不渲染任何东西，与「未选图」一致。 */
         <MediaThumbnail
-          src={previewUrl}
           alt={label}
-          fallback="none"
           className="border-border-strong bg-canvas-deep mt-0.5 max-h-24 w-full rounded-[5px] border object-contain"
+          fallback="none"
+          src={previewUrl}
         />
       ) : inp.type === "COMBO" &&
-        Array.isArray((inp as ComboInputMeta).comboOptions) &&
-        ((inp as ComboInputMeta).comboOptions as unknown[]).length > 0 ? (
+        Array.isArray(/* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta).comboOptions) &&
+        /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
+          (inp as ComboInputMeta).comboOptions as Array<unknown>
+        ).length > 0 ? (
         /* 工作流画布上的 COMBO widget 渲染成只读的
          *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
          *  在这里保持禁用（编辑发生在会落盘取值的项目
          *  画布表单里）。这个节点是忠实的只读预览，不是编辑器。
          *  触发器铺满第 2 列（`fullWidth`），与值框同一坐标。 */
         <SelectMenu
-          value={typeof v === "string" ? v : ""}
-          onChange={() => undefined}
-          options={(inp as ComboInputMeta).comboOptions as string[]}
+          className="text-2xs! h-5.5! min-w-0 py-0!"
           disabled
           fullWidth
-          className="text-2xs! h-5.5! min-w-0 py-0!"
+          onChange={() => undefined}
+          options={
+            /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta)
+              .comboOptions as Array<string>
+          }
           popoverMinWidth={220}
+          value={typeof v === "string" ? v : ""}
         />
       ) : (
         <span

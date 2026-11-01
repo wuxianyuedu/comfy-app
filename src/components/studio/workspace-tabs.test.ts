@@ -18,9 +18,9 @@ import {
   tabKey,
   type WorkspaceTabsState,
 } from "./workspace-tabs";
-import { type WorkspaceView } from "./NavItems";
+import type { WorkspaceView } from "./NavItems";
 
-const VIEWS: WorkspaceView[] = [
+const VIEWS: Array<WorkspaceView> = [
   "home",
   "project",
   "canvas",
@@ -40,7 +40,7 @@ const VIEWS: WorkspaceView[] = [
 ];
 
 function state(
-  tabs: [WorkspaceView, string | null][],
+  tabs: Array<[WorkspaceView, string | null]>,
   active: [WorkspaceView, string | null],
 ): WorkspaceTabsState {
   const built = tabs.map(([view, projectId]) => makeTab(view, projectId));
@@ -135,17 +135,11 @@ describe("关闭语义", () => {
       ],
       ["queue", null],
     );
-    expect(closeViewTab(s, tabKey("queue", null)).activeKey).toBe(
-      tabKey("home", null),
-    );
+    expect(closeViewTab(s, tabKey("queue", null)).activeKey).toBe(tabKey("home", null));
   });
 
   it("关到只剩首页时状态仍然成立（不塌成另一种布局）", () => {
-    let s = openViewTab(
-      openViewTab(initialWorkspaceTabs(), "queue", null),
-      "models",
-      null,
-    );
+    let s = openViewTab(openViewTab(initialWorkspaceTabs(), "queue", null), "models", null);
     s = closeViewTab(s, tabKey("queue", null));
     s = closeViewTab(s, tabKey("models", null));
     expect(s.tabs).toHaveLength(1);
@@ -172,11 +166,7 @@ describe("瞬时页签：切走即关（最多只有当前页可以是 transient
   it("从设置切到别页：设置那一页退场，不动别的常驻页", () => {
     let s = openViewTab(initialWorkspaceTabs(), "queue", null);
     s = openViewTab(s, "settings", null);
-    expect(s.tabs.map((tab) => tab.view)).toEqual([
-      "home",
-      "queue",
-      "settings",
-    ]);
+    expect(s.tabs.map((tab) => tab.view)).toEqual(["home", "queue", "settings"]);
 
     s = openViewTab(s, "models", null);
     expect(s.tabs.map((tab) => tab.view)).toEqual(["home", "queue", "models"]);
@@ -238,10 +228,7 @@ describe("项目消失后的页签", () => {
   it("当前页正是被关掉的页时落回首页", () => {
     let s = openViewTab(initialWorkspaceTabs(), "workshop", "p1");
     s = openViewTab(s, "queue", null);
-    const after = dropProjectTabs(
-      { tabs: s.tabs, activeKey: tabKey("workshop", "p1") },
-      "p1",
-    );
+    const after = dropProjectTabs({ tabs: s.tabs, activeKey: tabKey("workshop", "p1") }, "p1");
     expect(after.activeKey).toBe(tabKey("home", null));
   });
 
@@ -267,39 +254,41 @@ describe("持久化：整份可用，否则整份放弃", () => {
     expect(out?.tabs.map((tab) => tab.view)).toEqual(["home", "queue"]);
   });
 
-  it.for([
-    ["坏 JSON", "{oops"],
-    ["未知视图", JSON.stringify({ activeKey: "x:", tabs: [["nope", null]] })],
-    [
-      "activeKey 指向不存在的页",
-      JSON.stringify({
-        activeKey: tabKey("models", null),
-        tabs: [["home", null]],
-      }),
-    ],
-    [
-      "重复页签",
-      JSON.stringify({
-        activeKey: tabKey("queue", null),
-        tabs: [
-          ["home", null],
-          ["queue", null],
-          ["queue", null],
-        ],
-      }),
-    ],
-    [
-      "项目类视图丢了项目 id",
-      JSON.stringify({
-        activeKey: tabKey("workshop", null),
-        tabs: [
-          ["home", null],
-          ["workshop", null],
-        ],
-      }),
-    ],
-    ["形状不对", JSON.stringify({ activeKey: "home:", tabs: "queue" })],
-  ] as const)("%s ⇒ 整份放弃（返回 null 由调用方回落初始态）", (_row) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["坏 JSON", "{oops"],
+      ["未知视图", JSON.stringify({ activeKey: "x:", tabs: [["nope", null]] })],
+      [
+        "activeKey 指向不存在的页",
+        JSON.stringify({
+          activeKey: tabKey("models", null),
+          tabs: [["home", null]],
+        }),
+      ],
+      [
+        "重复页签",
+        JSON.stringify({
+          activeKey: tabKey("queue", null),
+          tabs: [
+            ["home", null],
+            ["queue", null],
+            ["queue", null],
+          ],
+        }),
+      ],
+      [
+        "项目类视图丢了项目 id",
+        JSON.stringify({
+          activeKey: tabKey("workshop", null),
+          tabs: [
+            ["home", null],
+            ["workshop", null],
+          ],
+        }),
+      ],
+      ["形状不对", JSON.stringify({ activeKey: "home:", tabs: "queue" })],
+    ] as const,
+  )("%s ⇒ 整份放弃（返回 null 由调用方回落初始态）", (_row) => {
     const [, raw] = _row;
     expect(parseWorkspaceTabs(raw, VIEWS)).toBeNull();
   });

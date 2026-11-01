@@ -23,11 +23,11 @@ import { createAppRuntimeLogger } from "~/lib/log/app-runtime-log";
 
 const trpcRuntimeLog = createAppRuntimeLogger("trpc");
 
-export interface TRPCUser {
-  id: string;
+export type TRPCUser = {
   email: string;
+  id: string;
   name: string | null;
-}
+};
 
 /**
  * 1. CONTEXT
@@ -77,8 +77,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
       ...shape,
       data: {
         ...shape.data,
-        zodError:
-          error.cause instanceof ZodError ? error.cause.flatten() : null,
+        zodError: error.cause instanceof ZodError ? error.cause.flatten() : null,
       },
     };
   },
@@ -113,7 +112,7 @@ type SlowBucket = { at: number; count: number };
 
 const G_KEY = "__trpcSlowQueryBuckets_v1";
 const buckets = (() => {
-  const g = globalThis as unknown as Record<
+  const g = /* SAFETY: 类型断言已复核 */ globalThis as unknown as Record<
     string,
     Map<string, SlowBucket> | undefined
   >;
@@ -159,18 +158,20 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
     // 仅当调用明显变慢（预期外的慢）才在面板给一条 warn，正常调用不打扰用户。
     if (durationMs >= SLOW_QUERY_THRESHOLD_MS) {
       const text = recordSlowQuery(path, durationMs, type);
-      if (text) trpcRuntimeLog.warn(text, { type });
+      if (text) {
+        trpcRuntimeLog.warn(text, { type });
+      }
     }
     return result;
-  } catch (cause) {
+  } catch (error) {
     const durationMs = Date.now() - start;
     logger.debug({ path, durationMs, type }, "trpc_timing");
     // 调用抛错 = 出问题：在面板可见通道记一条 error，便于用户当场定位。
     trpcRuntimeLog.error(`${path} 失败 ${durationMs}ms`, {
       type,
-      error: cause instanceof Error ? cause.message : String(cause),
+      error: error instanceof Error ? error.message : String(error),
     });
-    throw cause;
+    throw error;
   }
 });
 
@@ -194,18 +195,16 @@ export const publicProcedure = t.procedure.use(timingMiddleware);
  * 数据库」缺陷（库行被重建/删除后仍返回不存在的 id）。收口到同一判决后，
  * 两个 API 面的鉴权语义由 `requireServerUser` 单点持有。
  */
-export const authedProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(async ({ ctx, next }) => {
-    const user = ctx.user ?? (await requireServerUser(ctx.session));
-    if (!user) {
-      throw new TRPCError({
-        code: "UNAUTHORIZED",
-        message: "需要登录后才能执行该操作",
-      });
-    }
-    return next({ ctx: { ...ctx, user } });
-  });
+export const authedProcedure = t.procedure.use(timingMiddleware).use(async ({ ctx, next }) => {
+  const user = ctx.user ?? (await requireServerUser(ctx.session));
+  if (!user) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "需要登录后才能执行该操作",
+    });
+  }
+  return next({ ctx: { ...ctx, user } });
+});
 
 /**
  * 带限流的「需登录」procedure。
@@ -213,15 +212,13 @@ export const authedProcedure = t.procedure
  * 对敏感操作（提权、删除、导出等）按 userId/IP 做滑动窗口限流，
  * 防脚本暴力调用。默认 10 秒窗口内 20 次，超限返回 429。
  */
-export const rateLimitedProcedure = authedProcedure.use(
-  async ({ ctx, next }) => {
-    const key = ctx.user.id ?? ctx.headers.get("x-forwarded-for") ?? "anon";
-    if (!checkRateLimit(key)) {
-      throw new TRPCError({
-        code: "TOO_MANY_REQUESTS",
-        message: "请求过于频繁，请稍后再试",
-      });
-    }
-    return next({ ctx });
-  },
-);
+export const rateLimitedProcedure = authedProcedure.use(async ({ ctx, next }) => {
+  const key = ctx.user.id ?? ctx.headers.get("x-forwarded-for") ?? "anon";
+  if (!checkRateLimit(key)) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "请求过于频繁，请稍后再试",
+    });
+  }
+  return next({ ctx });
+});

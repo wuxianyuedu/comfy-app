@@ -90,7 +90,9 @@ export function collectStories(componentsRoot) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === "node_modules") continue;
+        if (entry.name === "node_modules") {
+          continue;
+        }
         walk(full);
       } else if (entry.name.endsWith(".stories.tsx")) {
         out.push(full);
@@ -146,9 +148,15 @@ export function componentTargetsOf(storyFile, source, repoRoot) {
 
 /** 分母内的文件：`ui/` 下、不是故事、不是 `.test.*` 系列、不是 `use-*.ts`。 */
 function isUiSurface(name) {
-  if (name.endsWith(".stories.tsx")) return false;
-  if (name.includes(".test.")) return false;
-  if (name.startsWith("use-") && name.endsWith(".ts")) return false;
+  if (name.endsWith(".stories.tsx")) {
+    return false;
+  }
+  if (name.includes(".test.")) {
+    return false;
+  }
+  if (name.startsWith("use-") && name.endsWith(".ts")) {
+    return false;
+  }
   return true;
 }
 
@@ -169,7 +177,9 @@ export function uiCoverage({ componentsRoot, uiDir }) {
       fs.readFileSync(story, "utf8"),
       path.resolve(componentsRoot, "..", ".."),
     )) {
-      if (path.dirname(target) === ui) covered.add(path.basename(target));
+      if (path.dirname(target) === ui) {
+        covered.add(path.basename(target));
+      }
     }
   }
 
@@ -190,8 +200,6 @@ export function uiCoverage({ componentsRoot, uiDir }) {
       (f) => !files.includes(f) && !fs.existsSync(path.join(ui, f)),
     ),
     // 理由表里的文件其实已经有 story = 该删条目（否则它会静默放行未来的回归）。
-    staleSkip: [...NO_STORY_REASON.keys()].filter(
-      (f) => files.includes(f) && covered.has(f),
-    ),
+    staleSkip: [...NO_STORY_REASON.keys()].filter((f) => files.includes(f) && covered.has(f)),
   };
 }

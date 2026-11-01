@@ -37,7 +37,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * （`log-virtual` 的 `pinPlan` / `pinScrollTop`），语义是「钉住已读水位」而不是
  * 「滚到最底」—— 两者不是同一件事，别把它改成本 hook 的调用方。
  */
-export interface UseScrollFollowOptions {
+export type UseScrollFollowOptions = {
   /**
    * 滚动容器。**由调用处用 `useRef` 建好传进来**，而不是由本 hook 返回 ——
    * `react-hooks/refs` 会把「含 `useRef` 的 hook 的返回值」整体判成 ref 敏感，
@@ -45,16 +45,6 @@ export interface UseScrollFollowOptions {
    * 换成「调用处持有 ref」，返回值里就只有状态与回调，谁都不必写豁免。
    */
   containerRef: React.RefObject<HTMLDivElement | null>;
-  /**
-   * 「内容变了没有」的依赖值：变了就（在跟随态下）重新贴底。
-   *
-   * 传什么由调用处决定（日志条数 / 文本 / 消息数组的引用）。**不要**为了
-   * 让它「更灵敏」而传一个每次渲染都新建的对象 —— 那等于每帧都贴底，
-   * 用户永远滚不上去。
-   */
-  watch: unknown;
-  /** 离底多少像素内仍算「还在跟随」。缺省 `NEAR_BOTTOM_PX`。 */
-  thresholdPx?: number;
   /**
    * 完全受控的跟随态。给了它，hook 不再自持状态 —— 用于**同一份跟随态要跨
    * 多个实例共享**的落点（`RuntimeLogBox` 的小窗口与全屏各挂一个滚动容器，
@@ -64,16 +54,26 @@ export interface UseScrollFollowOptions {
   /** 受控模式下跟随态的变化回调（用户上滚 → `false`；用户点「回到最新」→
    *  `true`）。非受控模式忽略。 */
   onFollowingChange?: (following: boolean) => void;
-}
+  /** 离底多少像素内仍算「还在跟随」。缺省 `NEAR_BOTTOM_PX`。 */
+  thresholdPx?: number;
+  /**
+   * 「内容变了没有」的依赖值：变了就（在跟随态下）重新贴底。
+   *
+   * 传什么由调用处决定（日志条数 / 文本 / 消息数组的引用）。**不要**为了
+   * 让它「更灵敏」而传一个每次渲染都新建的对象 —— 那等于每帧都贴底，
+   * 用户永远滚不上去。
+   */
+  watch: unknown;
+};
 
-export interface ScrollFollow {
-  /** 摊到滚动容器上的 `onScroll` —— 由它判定用户有没有接管滚动。 */
-  onScroll: () => void;
+export type ScrollFollow = {
   /** 当前是否仍在跟随底部。`false` 时调用处必须给出「回到最新」的入口。 */
   following: boolean;
   /** 立刻回到最新（界面上的「回到最新」/「恢复自动滚动」按钮调它）。 */
   jumpToLatest: () => void;
-}
+  /** 摊到滚动容器上的 `onScroll` —— 由它判定用户有没有接管滚动。 */
+  onScroll: () => void;
+};
 
 /** 离底多少像素内仍算「还在跟随」——全库唯一一处定义。 */
 export const NEAR_BOTTOM_PX = 32;
@@ -113,18 +113,26 @@ export function useScrollFollow({
   /* 贴底。`following` 进依赖数组是必须的：用户点「回到最新」把跟随态改回
    * true 之后，即使内容没变也要立刻贴一次（否则要等下一条日志才动）。 */
   useEffect(() => {
-    if (!following) return;
+    if (!following) {
+      return;
+    }
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     el.scrollTop = el.scrollHeight;
   }, [ref, watch, following]);
 
   const setFollowing = useCallback(
     (next: boolean) => {
-      if (followingRef.current === next) return;
+      if (followingRef.current === next) {
+        return;
+      }
       followingRef.current = next;
       /* 受控模式下不自持状态：值由父级给回来，这里只通知。 */
-      if (controlled === undefined) setInternal(next);
+      if (controlled === undefined) {
+        setInternal(next);
+      }
       notifyRef.current?.(next);
     },
     [controlled],
@@ -132,17 +140,19 @@ export function useScrollFollow({
 
   const onScroll = useCallback(() => {
     const el = ref.current;
-    if (!el) return;
-    setFollowing(
-      el.scrollHeight - el.scrollTop - el.clientHeight < thresholdPx,
-    );
+    if (!el) {
+      return;
+    }
+    setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < thresholdPx);
   }, [ref, setFollowing, thresholdPx]);
 
   const jumpToLatest = useCallback(() => {
     const el = ref.current;
     /* 先动 DOM 再改状态：`following` 从 false 变 true 会触发上面那个 effect，
      * 那一轮贴底与这里的写入同解（都是滚到底），不会互相打架。 */
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
     setFollowing(true);
   }, [ref, setFollowing]);
 

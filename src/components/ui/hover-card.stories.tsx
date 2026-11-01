@@ -1,11 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { Button } from "~/components/ui/button";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "~/components/ui/hover-card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "~/components/ui/hover-card";
 
 /**
  * `ui/hover-card` 是 base-ui PreviewCard 的封装（**悬停展开的富信息卡片**）。
@@ -40,9 +36,7 @@ export const Default: Story = {
       <HoverCardContent>
         <div className="flex flex-col gap-1 text-sm">
           <span className="font-medium">基础模型</span>
-          <span className="text-ink-muted">
-            6.9 GB · 本地路径 D:/ComfyUI/models
-          </span>
+          <span className="text-ink-muted">6.9 GB · 本地路径 D:/ComfyUI/models</span>
           <span className="text-ink-muted">上次使用：昨天 13:02</span>
         </div>
       </HoverCardContent>
@@ -56,15 +50,11 @@ export const Default: Story = {
 export const InteractiveContent: Story = {
   render: () => (
     <HoverCard>
-      <HoverCardTrigger render={<Button variant="outline" />}>
-        悬停后挪进卡片里
-      </HoverCardTrigger>
+      <HoverCardTrigger render={<Button variant="outline" />}>悬停后挪进卡片里</HoverCardTrigger>
       <HoverCardContent>
         <div className="flex flex-col gap-2 text-sm">
           <span className="font-medium">角色一致性 · 三视图</span>
-          <p className="text-ink-muted">
-            鼠标挪进来时卡片不会消失，所以下面这个按钮点得到。
-          </p>
+          <p className="text-ink-muted">鼠标挪进来时卡片不会消失，所以下面这个按钮点得到。</p>
           <Button size="xs" variant="outline">
             打开工作流
           </Button>
@@ -79,16 +69,18 @@ export const InteractiveContent: Story = {
 export const Sides: Story = {
   render: () => (
     <div className="flex items-center gap-4">
-      {(["top", "right", "bottom", "left"] as const).map((side) => (
-        <HoverCard key={side}>
-          <HoverCardTrigger render={<Button variant="outline" size="sm" />}>
-            side={side}
-          </HoverCardTrigger>
-          <HoverCardContent side={side}>
-            <p className="text-sm">开在 {side} 这一侧</p>
-          </HoverCardContent>
-        </HoverCard>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
+          <HoverCard key={side}>
+            <HoverCardTrigger render={<Button size="sm" variant="outline" />}>
+              side={side}
+            </HoverCardTrigger>
+            <HoverCardContent side={side}>
+              <p className="text-sm">开在 {side} 这一侧</p>
+            </HoverCardContent>
+          </HoverCard>
+        ))
+      }
     </div>
   ),
 };

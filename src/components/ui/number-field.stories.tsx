@@ -34,29 +34,29 @@ type Story = StoryObj<typeof meta>;
 
 /** 受控包装：story 自己持一份 state，交互才看得出「失焦才提交」。 */
 function Demo(props: {
-  value: number;
-  min?: number;
-  max?: number;
-  step?: number;
   decimalPlaces?: number;
   disabled?: boolean;
+  max?: number;
+  min?: number;
+  step?: number;
+  value: number;
 }) {
   const [value, setValue] = React.useState(props.value);
   return (
     <NumberField
-      value={value}
-      onChange={setValue}
-      min={props.min}
-      max={props.max}
-      step={props.step}
       decimalPlaces={props.decimalPlaces}
       disabled={props.disabled}
+      max={props.max}
+      min={props.min}
+      onChange={setValue}
+      step={props.step}
+      value={value}
     />
   );
 }
 
 export const Default: Story = {
-  render: () => <Demo value={24} min={0} max={100} step={1} />,
+  render: () => <Demo max={100} min={0} step={1} value={24} />,
 };
 
 /** 三档边界并列：常规（整数步进）/ `decimalPlaces` 的小数（0.05 步进的
@@ -64,9 +64,9 @@ export const Default: Story = {
 export const Variants: Story = {
   render: () => (
     <div className="flex flex-col items-start gap-5">
-      <Demo value={24} min={0} max={100} step={1} />
-      <Demo value={0.75} min={0} max={1} step={0.05} decimalPlaces={2} />
-      <Demo value={8} min={6} max={12} step={1} />
+      <Demo max={100} min={0} step={1} value={24} />
+      <Demo decimalPlaces={2} max={1} min={0} step={0.05} value={0.75} />
+      <Demo max={12} min={6} step={1} value={8} />
     </div>
   ),
 };
@@ -76,8 +76,8 @@ export const Variants: Story = {
 export const AtBounds: Story = {
   render: () => (
     <div className="flex flex-col items-start gap-5">
-      <Demo value={0} min={0} max={100} step={1} />
-      <Demo value={100} min={0} max={100} step={1} />
+      <Demo max={100} min={0} step={1} value={0} />
+      <Demo max={100} min={0} step={1} value={100} />
     </div>
   ),
 };
@@ -85,5 +85,5 @@ export const AtBounds: Story = {
 /** 禁用：`disabled` 时 `±` 与输入框一起失效并降透明度 —— 参数被工作流
  *  锁定时（`WorkflowCanvasSettings` 的只读字段）就是这个形态。 */
 export const Disabled: Story = {
-  render: () => <Demo value={24} min={0} max={100} disabled />,
+  render: () => <Demo disabled max={100} min={0} value={24} />,
 };

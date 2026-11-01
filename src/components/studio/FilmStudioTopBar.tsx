@@ -6,13 +6,13 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import type { FilmStudioController } from "./hooks/use-film-studio";
 
-interface FilmStudioTopBarProps {
+type FilmStudioTopBarProps = {
   c: FilmStudioController;
   isPlaying: boolean;
+  onRedo: () => void;
   onTogglePlay: () => void;
   onUndo: () => void;
-  onRedo: () => void;
-}
+};
 
 export function FilmStudioTopBar({
   c,
@@ -31,22 +31,22 @@ export function FilmStudioTopBar({
       <div className="bg-surface-2 h-5 w-px" />
 
       {/* Undo / Redo */}
-      <Hint label="撤销" accessibleName>
+      <Hint accessibleName label="撤销">
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={onUndo}
           className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
+          onClick={onUndo}
+          size="icon"
+          variant="ghost"
         >
           <Undo2 data-icon="inline-start" size={16} />
         </Button>
       </Hint>
-      <Hint label="重做" accessibleName>
+      <Hint accessibleName label="重做">
         <Button
-          variant="ghost"
-          size="icon"
-          onClick={onRedo}
           className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-lg"
+          onClick={onRedo}
+          size="icon"
+          variant="ghost"
         >
           <Redo2 data-icon="inline-start" size={16} />
         </Button>
@@ -58,29 +58,29 @@ export function FilmStudioTopBar({
       {/* Play button */}
       <Hint label={isPlaying ? "暂停" : "播放预览"}>
         <Button
-          variant="primary-solid"
-          size="icon-lg"
-          onClick={onTogglePlay}
           className="rounded-xl shadow-sm hover:scale-[1.03]"
+          onClick={onTogglePlay}
+          size="icon-lg"
+          variant="primary-solid"
         >
           {isPlaying ? (
             <svg
               data-icon="inline-start"
-              width="18"
+              fill="currentColor"
               height="18"
               viewBox="0 0 24 24"
-              fill="currentColor"
+              width="18"
             >
-              <rect x="6" y="4" width="4" height="16" rx="1" />
-              <rect x="14" y="4" width="4" height="16" rx="1" />
+              <rect height="16" rx="1" width="4" x="6" y="4" />
+              <rect height="16" rx="1" width="4" x="14" y="4" />
             </svg>
           ) : (
             <svg
               data-icon="inline-start"
-              width="18"
+              fill="currentColor"
               height="18"
               viewBox="0 0 24 24"
-              fill="currentColor"
+              width="18"
             >
               <path d="M8 5v14l11-7z" />
             </svg>
@@ -93,33 +93,26 @@ export function FilmStudioTopBar({
       {/* 缩放标签 + 导出 */}
       <span className="text-ink-faintest text-2xs">时间轴缩放</span>
       <Button
-        variant="primary"
-        size="sm"
-        onClick={() =>
-          void (c.shotSource === "project" ? c.createFromProject() : c.create())
-        }
+        className="bg-subtle h-auto gap-1.5 rounded-lg px-3.5 py-1.5 font-semibold"
         disabled={
           c.loading ||
           !c.videoWorkflowId ||
-          (c.shotSource === "project" &&
-            (!c.activeProjectId || c.projectShotCount === 0))
+          (c.shotSource === "project" && (!c.activeProjectId || c.projectShotCount === 0))
         }
-        className="bg-subtle h-auto gap-1.5 rounded-lg px-3.5 py-1.5 font-semibold"
+        onClick={() => void (c.shotSource === "project" ? c.createFromProject() : c.create())}
+        size="sm"
+        variant="primary"
       >
-        {c.loading
-          ? "启动中…"
-          : c.shotSource === "project"
-            ? "用项目镜头成片"
-            : "导出成片"}
+        {c.loading ? "启动中…" : c.shotSource === "project" ? "用项目镜头成片" : "导出成片"}
       </Button>
 
       {/* 取消按钮（运行中时） */}
       {c.film && c.running && (
         <Button
-          variant="outline"
-          size="xs"
-          onClick={() => void c.cancel()}
           className="border-border text-ink-strong hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
+          onClick={() => void c.cancel()}
+          size="xs"
+          variant="outline"
         >
           取消
         </Button>

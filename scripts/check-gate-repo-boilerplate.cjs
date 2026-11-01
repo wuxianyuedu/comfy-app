@@ -63,11 +63,7 @@
  * 退出码 0 = 通过，1 = 阻断。
  */
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const ARGS = new Set(process.argv.slice(2));
@@ -100,9 +96,15 @@ function walk(dir) {
  */
 function scanFile(abs) {
   const raw = readForScan(abs);
-  if (raw === null) return null;
-  if (SHARED_IMPORT_RE.test(raw)) return false;
-  if (!raw.includes("tmpdir(")) return false;
+  if (raw === null) {
+    return null;
+  }
+  if (SHARED_IMPORT_RE.test(raw)) {
+    return false;
+  }
+  if (!raw.includes("tmpdir(")) {
+    return false;
+  }
   return SPAWN_FROM_WORKDIR_RE.test(raw);
 }
 
@@ -113,13 +115,17 @@ function main() {
   let vanished = 0;
   for (const abs of files) {
     const rel = path.relative(ROOT, abs).split(path.sep).join("/");
-    if (FIXTURE_SKIP.has(rel)) continue;
+    if (FIXTURE_SKIP.has(rel)) {
+      continue;
+    }
     const hit = scanFile(abs);
     if (hit === null) {
       vanished += 1;
       continue;
     }
-    if (hit) live.set(rel, true);
+    if (hit) {
+      live.set(rel, true);
+    }
   }
   /* 消失数必须进结论：少读一份就把读数报小 —— 看着像「样板在减少」，实际是这一轮
      没读（口径见 `gate-scan-read.cjs`）。 */
@@ -128,10 +134,10 @@ function main() {
   const liveTotal = live.size;
 
   if (REPORT_ONLY) {
-    console.log(
-      `[gate-repo-boilerplate] 盘点：手搓样板 ${liveTotal} 份。` + note,
-    );
-    for (const rel of [...live.keys()].sort()) console.log(`  · ${rel}`);
+    console.log(`[gate-repo-boilerplate] 盘点：手搓样板 ${liveTotal} 份。${note}`);
+    for (const rel of [...live.keys()].sort()) {
+      console.log(`  · ${rel}`);
+    }
     return 0;
   }
 
@@ -150,14 +156,14 @@ function main() {
         "\n  不要把四件套搬回来。\n" +
         "\n  本次点名的（如果你根本没碰过它们，见 §13.6.2 复算 master 基线）：",
     );
-    for (const rel of [...live.keys()].sort()) console.error(`  · ${rel}`);
-    console.error(
-      "\n口径见 docs/standards/11-测试与可观测性.md §11.16.1。" + note,
-    );
+    for (const rel of [...live.keys()].sort()) {
+      console.error(`  · ${rel}`);
+    }
+    console.error(`\n口径见 docs/standards/11-测试与可观测性.md §11.16.1。${note}`);
     return 1;
   }
 
-  console.log(`[gate-repo-boilerplate] OK —— 手搓样板 0 份。` + note);
+  console.log(`[gate-repo-boilerplate] OK —— 手搓样板 0 份。${note}`);
   return 0;
 }
 
@@ -165,4 +171,6 @@ function main() {
  * 它是个纯逻辑，只在临时目录上跑，不拉子进程。只导出扫描函数。 */
 module.exports = { scanFile };
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

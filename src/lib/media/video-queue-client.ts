@@ -49,14 +49,14 @@ export const videoTaskRowSchema = z.object({
 export type VideoTaskRow = z.infer<typeof videoTaskRowSchema>;
 
 /** 视图消费的行（只留它真会读的几样）。 */
-export interface VideoTask {
-  id: string;
-  status: string;
-  prompt: string;
-  workflowName: string;
-  video: string | null;
+export type VideoTask = {
   error: string | null;
-}
+  id: string;
+  prompt: string;
+  status: string;
+  video: string | null;
+  workflowName: string;
+};
 
 /**
  * 把 tRPC 响应里的行收窄成 `VideoTask[]`，**非法行整行丢弃**。
@@ -65,15 +65,21 @@ export interface VideoTask {
  * 「每个任务都没有视频」—— 那是**静默**的那种坏。列表变空看得见。
  * `id` 非法（比如是数字）同样整行丢掉，而不是把 `undefined` 硬塞给视图。
  */
-export function parseVideoRows(raw: unknown): VideoTask[] {
-  if (!Array.isArray(raw)) return [];
-  const out: VideoTask[] = [];
+export function parseVideoRows(raw: unknown): Array<VideoTask> {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: Array<VideoTask> = [];
   for (const item of raw) {
     const parsed = videoTaskRowSchema.safeParse(item);
-    if (!parsed.success) continue;
+    if (!parsed.success) {
+      continue;
+    }
     /* 只要 VIDEO 类任务进这张表（图片任务由画布历史那一路管）。判据在 `type`：
      * 它也在镜像里，因此「过滤」这一步有契约兜着，不是拿视图的猜测。 */
-    if (parsed.data.type !== "VIDEO") continue;
+    if (parsed.data.type !== "VIDEO") {
+      continue;
+    }
     out.push({
       id: parsed.data.id,
       status: parsed.data.status,
@@ -87,7 +93,7 @@ export function parseVideoRows(raw: unknown): VideoTask[] {
 }
 
 /** 拉取当前用户的 VIDEO 类任务（顺序由服务端按创建时间倒序给出）。 */
-export async function fetchVideoTasks(): Promise<VideoTask[]> {
+export async function fetchVideoTasks(): Promise<Array<VideoTask>> {
   const data = await vanillaApi.task.list.query({ take: 200 });
   return parseVideoRows(data.tasks);
 }

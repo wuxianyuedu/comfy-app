@@ -32,31 +32,31 @@
 /** 参与分组的最小形状。刻意不 import 组件层的 `MessageRecord`：
  *  `src/lib/**` 不得依赖 `src/components/**`（eslint boundaries 的 H1），
  *  而分组这件事本身只需要「谁 + 哪一次启动 + 什么时候」。 */
-export interface RunScopedMessage {
+export type RunScopedMessage = {
   /** 消息 id（分组不改写它，只是原样带过去）。 */
   id: string;
   /** 属于哪一次启动；null = 写入时不知道。 */
   runId: string | null;
   /** Unix 毫秒。 */
   time: number;
-}
+};
 
 /** 一组消息 = 一次启动（或「未标记」那一组）。 */
-export interface MessageRunGroup<T extends RunScopedMessage> {
-  /** 组键：这一次启动的 runId；null = 未标记启动。 */
-  runId: string | null;
+export type MessageRunGroup<T extends RunScopedMessage> = {
+  /** 组内条数（= `messages.length`，单列一个字段是为了视图不用再数）。 */
+  count: number;
+  /** 是否正是**当前**这一次启动（`currentRunId` 命中的那一组）。 */
+  isCurrent: boolean;
   /** 组头的语义文案（本次启动 / 上一次启动 / 更早的启动 / 未标记启动）。
    *  只给「该说哪几个字」，时间与条数由视图拼——判据与排版各管一段。 */
   label: string;
-  /** 是否正是**当前**这一次启动（`currentRunId` 命中的那一组）。 */
-  isCurrent: boolean;
-  /** 组内消息，保持传入顺序（调用方传的是最新在前）。 */
-  messages: T[];
   /** 组内最新一条的时刻（组头「这一次启动发生在什么时候」用它）。 */
   latestAt: number;
-  /** 组内条数（= `messages.length`，单列一个字段是为了视图不用再数）。 */
-  count: number;
-}
+  /** 组内消息，保持传入顺序（调用方传的是最新在前）。 */
+  messages: Array<T>;
+  /** 组键：这一次启动的 runId；null = 未标记启动。 */
+  runId: string | null;
+};
 
 /** 「本次启动」——当前这一次，用户正身处其中。 */
 const LABEL_CURRENT = "本次启动";
@@ -68,12 +68,12 @@ const LABEL_EARLIER = "更早的启动";
 const LABEL_UNMARKED = "未标记启动";
 
 /** 内部草稿：定完 label 再交出去，避免把「先占位再回填」的半成品暴露给调用方。 */
-interface Draft<T extends RunScopedMessage> {
-  runId: string | null;
+type Draft<T extends RunScopedMessage> = {
   isCurrent: boolean;
-  messages: T[];
   latestAt: number;
-}
+  messages: Array<T>;
+  runId: string | null;
+};
 
 /**
  * 把消息按「每一次启动」分组。
@@ -83,12 +83,12 @@ interface Draft<T extends RunScopedMessage> {
  * @returns 分组，顺序与输入一致（最新的组在前）。
  */
 export function groupMessagesByRun<T extends RunScopedMessage>(
-  messages: readonly T[],
+  messages: ReadonlyArray<T>,
   currentRunId: string | null,
-): MessageRunGroup<T>[] {
-  const drafts: Draft<T>[] = [];
+): Array<MessageRunGroup<T>> {
+  const drafts: Array<Draft<T>> = [];
   for (const m of messages) {
-    const last = drafts[drafts.length - 1];
+    const last = drafts.at(-1);
     /* 连续同一个 runId → 归进上一组。`last.runId === m.runId` 对两个 null 也成立，
      * 于是所有未标记的消息自然并成一组（它们本来也无法再分）。 */
     if (last?.runId === m.runId) {
@@ -117,7 +117,9 @@ export function groupMessagesByRun<T extends RunScopedMessage>(
         : seenNonCurrent
           ? LABEL_EARLIER
           : LABEL_PREVIOUS;
-    if (!d.isCurrent) seenNonCurrent = true;
+    if (!d.isCurrent) {
+      seenNonCurrent = true;
+    }
     return {
       runId: d.runId,
       label,

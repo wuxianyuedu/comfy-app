@@ -35,11 +35,7 @@ import { disabledCategories, useLogCategoryStore } from "./log-category-store";
 
 /* 格式化口径落在 log-format（视图与 store 共用一份）；这里按原路径转出，
  * 既有导入（测试、面板）逐字不变。 */
-export {
-  formatEntryForClipboard,
-  formatForClipboard,
-  formatTime,
-} from "./log-format";
+export { formatEntryForClipboard, formatForClipboard, formatTime } from "./log-format";
 /* 类型与共享叶子（`log-types`）+ 采集 / 解析 / 过滤纯函数（`log-analysis`）
  * 都从这里进入；主文件只留 store state / actions / selector。类型与函数
  * 通过底部 `export * from` 一并 re-export，消费者
@@ -79,42 +75,34 @@ function welcomeEntry(): LogEntry {
   };
 }
 
-export interface LogStoreState {
-  logs: LogEntry[];
+export type LogStoreState = {
+  addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
   /**
-   * 因内存上限（`LOG_STORE_MAX`）被折叠掉的更早日志**累计**条数。上限是刻意
-   * 恢复的（见 appendFileLogs：真新行才推进 revision、截断不推进，满足文件早先
-   * 「将来若恢复上限须恢复身份判据」的约束）。面板据此显示「更早 N 条已折叠」。
-   */
-  droppedTotal: number;
-  filteredLogs: LogEntry[];
-  filter: LogFilter;
-  /** 来源筛选（#262：启动日志与应用运行日志混在一屏，需要能分开看）。 */
-  origin: LogOriginFilter;
-  search: string;
-  isOpen: boolean;
-  counts: LogLevelCounts;
-  /**
-   * 每个来源各自的级别计数（含 `all` 汇总）：面板在级别按钮与来源下拉上各显示
-   * 一份，用户不必先切来源才知道那边有几个警告（见 computeOriginCounts）。
-   */
-  countsByOrigin: LogOriginCounts;
-  /**
-   * 面板渲染一帧所需的全部状态（见 {@link LogPanelSlice}）。
+   * 第 1 页窗口的**锚点**：用户「正在看的那一段」的头一条 id（null = 不锚定）。
    *
-   * 它随时间线或筛选状态变化而整体重建，面板只订阅这一个字段。视图层因此不必
-   * 自己拼装状态、也就不会出现「某条写入路径忘了带视图状态」的漏项——那正是
-   * 「来源切了、计数还停在切之前」这类 bug 的来源。
+   * 为什么需要它：第 1 页取的是时间线的**尾部 200 条**。日志每 2s 轮询一次，
+   * 每来一条新行，这 200 条的窗口就整体前移一格——React 会卸载掉最上面那一条、
+   * 挂上新的最末一条。用户刚在顶部某一行里框住的文本**随节点一起被卸载**，选区
+   * 于是消失（ISSUE #262 复审：「刚选择就刷新把我的选择弄没了」，在真实浏览器里
+   * 实测到的正是这条）。
+   *
+   * 锚定之后，「用户看过的那一段」钉在原地、新行列在它**之后**：DOM 节点不重建，
+   * 选区自然不会被冲掉；想追最新也可以亲手往下滚。
+   *
+   * 重取时机（= 用户「转到最新」）：打开面板 / 点「回到最新」 / 换页 / 切筛选 /
+   * 搜索 / 用户自己滚到底部。
    */
-  header: LogPanelSlice;
-  /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数。 */
-  page: number;
-  pageSize: number;
+  anchorId: string | null;
+  appendFileLogs: (entries: Array<LogEntry>) => void;
   /**
-   * 本次运行的开始时间（毫秒）；null = 未知（非 launcher 启动）。
-   * 面板只显示本次运行：行时刻早于它即上一次运行的残留（见 dropStaleEntries）。
+   * 贴底看最新（true，默认）：面板停在「已看过的最新一条」处，新日志在下面累积。
+   * false = 用户手动上滚离开了底部，或自己关掉了自动滚动。
+   *
+   * 它同时决定页脚「回到最新」出口是否出现（selectShouldPinToLatest），
+   * 因此必须与 {@link LogStoreState.setFollowBottom} 一起看在 store 里——
+   * 视图只读它，不再各存一份。
    */
-  sessionStart: number | null;
+  autoScroll: boolean;
   /**
    * 当前提供日志的服务端进程标识（bootId）。
    *
@@ -124,29 +112,24 @@ export interface LogStoreState {
    * （ISSUE #360：「应用服务为什么没启动」现场没有任何可引用的标识）。
    */
   bootId: string | null;
+  clear: () => void;
+  /** 复制当前筛选下的全部日志；返回值 = 是否真的进了剪贴板（反馈归面板，§16.2.4.43）。 */
+  copyAll: () => Promise<boolean>;
+  counts: LogLevelCounts;
   /**
-   * 生成 `logs` 切片的生成号（每次时间线变化 +1）。
-   *
-   * 它是「store 有没有新日志」的判据，而不是时间线末条 seq：时间线按时刻排序，
-   * 一条**迟到但时刻更早**的行会插进中间、末条不变——只看末条会漏掉这种新增。
+   * 每个来源各自的级别计数（含 `all` 汇总）：面板在级别按钮与来源下拉上各显示
+   * 一份，用户不必先切来源才知道那边有几个警告（见 computeOriginCounts）。
    */
-  revision: number;
+  countsByOrigin: LogOriginCounts;
+  download: () => void;
   /**
-   * 「已翻过去的历史」：翻到这一页那一刻，窗口之后本来就有多少条。
-   *
-   * 页脚「有 N 条新的日志」= 窗口之后的条数 − 它（见 selectNewLogCount）——
-   * 否则停在第 2 页会一开口就报「有 200 条新的日志」，而那 200 条是用户自己
-   * 翻过去的。第 1 页恒为 0。
+   * 因内存上限（`LOG_STORE_MAX`）被折叠掉的更早日志**累计**条数。上限是刻意
+   * 恢复的（见 appendFileLogs：真新行才推进 revision、截断不推进，满足文件早先
+   * 「将来若恢复上限须恢复身份判据」的约束）。面板据此显示「更早 N 条已折叠」。
    */
-  viewBaselineAfter: number;
-  /**
-   * 「已读水位」：翻到历史位置那一刻**已经看到**的条目。
-   *
-   * 它是投影计数（`selectNewLogCount`）的输入，回答「我看到的之后又来了几条」。
-   * 同时也决定贴底时滚动到哪里（见 LogPanel 的贴底基线）——两者用同一份水位，
-   * 所以「面板说有几条新的」与「实际滚到哪」永远不会各说各话。
-   */
-  viewSeenIds: ReadonlySet<string>;
+  droppedTotal: number;
+  filter: LogFilter;
+  filteredLogs: Array<LogEntry>;
   /**
    * 「贴底基线」：面板开着且用户贴着底看时，**只追到这里**。
    *
@@ -167,6 +150,64 @@ export interface LogStoreState {
    */
   followResetAt: number;
   /**
+   * 面板渲染一帧所需的全部状态（见 {@link LogPanelSlice}）。
+   *
+   * 它随时间线或筛选状态变化而整体重建，面板只订阅这一个字段。视图层因此不必
+   * 自己拼装状态、也就不会出现「某条写入路径忘了带视图状态」的漏项——那正是
+   * 「来源切了、计数还停在切之前」这类 bug 的来源。
+   */
+  header: LogPanelSlice;
+  isOpen: boolean;
+  /** 用户点击「回到最新」：解绑贴底基线并回到第 1 页（见 jumpToLatest）。 */
+  jumpToLatest: () => void;
+  logs: Array<LogEntry>;
+  /** 来源筛选（#262：启动日志与应用运行日志混在一屏，需要能分开看）。 */
+  origin: LogOriginFilter;
+  /** 翻页：当前页（1 起，倒序查看，1 = 最新一页）与每页条数。 */
+  page: number;
+  pageSize: number;
+  /**
+   * 生成 `logs` 切片的生成号（每次时间线变化 +1）。
+   *
+   * 它是「store 有没有新日志」的判据，而不是时间线末条 seq：时间线按时刻排序，
+   * 一条**迟到但时刻更早**的行会插进中间、末条不变——只看末条会漏掉这种新增。
+   */
+  revision: number;
+  /** 打包整份诊断现场（跑 `current/` + 最近几次 `runs/`，见 log-file-client）。 */
+  saveDiagnostics: () => Promise<SavedLogExport>;
+  /**
+   * 把当前筛选下的**全部日志**保存到本机 `log/exports/`（返回落盘路径）。
+   *
+   * 与 `download` 并存而不是替换：浏览器下载在桌面壳里不一定真的落盘，而排障
+   * 现场要的是「文件确实在、路径说得出」（ISSUE #609 反馈第 3 条）。
+   */
+  saveExport: (label: string) => Promise<SavedLogExport>;
+  search: string;
+  /**
+   * 本次运行的开始时间（毫秒）；null = 未知（非 launcher 启动）。
+   * 面板只显示本次运行：行时刻早于它即上一次运行的残留（见 dropStaleEntries）。
+   */
+  sessionStart: number | null;
+  /** 记录当前服务端进程标识；变化时清掉时间线（跨进程的行不可比）。 */
+  setBootId: (bootId: string | null) => void;
+  setFilter: (f: LogFilter) => void;
+  /** 用户滚到底部/离开底部时由视图上报（见 setFollowBottom）。 */
+  setFollowBottom: (follow: boolean) => void;
+  setIsOpen: (open: boolean) => void;
+  setOrigin: (o: LogOriginFilter) => void;
+  setPage: (page: number) => void;
+  setSearch: (s: string) => void;
+  setSessionStart: (sessionStart: number | null) => void;
+  toggleOpen: () => void;
+  /**
+   * 「已翻过去的历史」：翻到这一页那一刻，窗口之后本来就有多少条。
+   *
+   * 页脚「有 N 条新的日志」= 窗口之后的条数 − 它（见 selectNewLogCount）——
+   * 否则停在第 2 页会一开口就报「有 200 条新的日志」，而那 200 条是用户自己
+   * 翻过去的。第 1 页恒为 0。
+   */
+  viewBaselineAfter: number;
+  /**
    * 「已读水位」的生成号：翻到历史页那一刻的 `revision`。
    *
    * 判据是 `revision` 变化（时间线真的变过）而不是「末条变了」：按时刻排序后，
@@ -182,59 +223,14 @@ export interface LogStoreState {
    */
   viewRevision: number;
   /**
-   * 第 1 页窗口的**锚点**：用户「正在看的那一段」的头一条 id（null = 不锚定）。
+   * 「已读水位」：翻到历史位置那一刻**已经看到**的条目。
    *
-   * 为什么需要它：第 1 页取的是时间线的**尾部 200 条**。日志每 2s 轮询一次，
-   * 每来一条新行，这 200 条的窗口就整体前移一格——React 会卸载掉最上面那一条、
-   * 挂上新的最末一条。用户刚在顶部某一行里框住的文本**随节点一起被卸载**，选区
-   * 于是消失（ISSUE #262 复审：「刚选择就刷新把我的选择弄没了」，在真实浏览器里
-   * 实测到的正是这条）。
-   *
-   * 锚定之后，「用户看过的那一段」钉在原地、新行列在它**之后**：DOM 节点不重建，
-   * 选区自然不会被冲掉；想追最新也可以亲手往下滚。
-   *
-   * 重取时机（= 用户「转到最新」）：打开面板 / 点「回到最新」 / 换页 / 切筛选 /
-   * 搜索 / 用户自己滚到底部。
+   * 它是投影计数（`selectNewLogCount`）的输入，回答「我看到的之后又来了几条」。
+   * 同时也决定贴底时滚动到哪里（见 LogPanel 的贴底基线）——两者用同一份水位，
+   * 所以「面板说有几条新的」与「实际滚到哪」永远不会各说各话。
    */
-  anchorId: string | null;
-  /**
-   * 贴底看最新（true，默认）：面板停在「已看过的最新一条」处，新日志在下面累积。
-   * false = 用户手动上滚离开了底部，或自己关掉了自动滚动。
-   *
-   * 它同时决定页脚「回到最新」出口是否出现（selectShouldPinToLatest），
-   * 因此必须与 {@link LogStoreState.setFollowBottom} 一起看在 store 里——
-   * 视图只读它，不再各存一份。
-   */
-  autoScroll: boolean;
-  /** 用户滚到底部/离开底部时由视图上报（见 setFollowBottom）。 */
-  setFollowBottom: (follow: boolean) => void;
-  /** 用户点击「回到最新」：解绑贴底基线并回到第 1 页（见 jumpToLatest）。 */
-  jumpToLatest: () => void;
-  addEntry: (entry: Omit<LogEntry, "id" | "time" | "seq">) => void;
-  appendFileLogs: (entries: LogEntry[]) => void;
-  setSessionStart: (sessionStart: number | null) => void;
-  /** 记录当前服务端进程标识；变化时清掉时间线（跨进程的行不可比）。 */
-  setBootId: (bootId: string | null) => void;
-  setFilter: (f: LogFilter) => void;
-  setOrigin: (o: LogOriginFilter) => void;
-  setSearch: (s: string) => void;
-  setPage: (page: number) => void;
-  setIsOpen: (open: boolean) => void;
-  toggleOpen: () => void;
-  clear: () => void;
-  /** 复制当前筛选下的全部日志；返回值 = 是否真的进了剪贴板（反馈归面板，§16.2.4.43）。 */
-  copyAll: () => Promise<boolean>;
-  download: () => void;
-  /**
-   * 把当前筛选下的**全部日志**保存到本机 `log/exports/`（返回落盘路径）。
-   *
-   * 与 `download` 并存而不是替换：浏览器下载在桌面壳里不一定真的落盘，而排障
-   * 现场要的是「文件确实在、路径说得出」（ISSUE #609 反馈第 3 条）。
-   */
-  saveExport: (label: string) => Promise<SavedLogExport>;
-  /** 打包整份诊断现场（跑 `current/` + 最近几次 `runs/`，见 log-file-client）。 */
-  saveDiagnostics: () => Promise<SavedLogExport>;
-}
+  viewSeenIds: ReadonlySet<string>;
+};
 
 /** 面板渲染一帧需要的全部状态（`LogPanelState` 的别称，视图侧更短的写法）。 */
 export type LogPanelState = LogStoreState;
@@ -246,24 +242,24 @@ export type LogPanelState = LogStoreState;
  * 因此选它不会引入逐帧比较。这样写而不是在视图里用 `useShallow` 现拼对象，
  * 是为了让「面板读哪些状态」这件事只写一遍、只在一个文件里（视图层零状态拼装）。
  */
-export interface LogPanelSlice {
-  filteredLogs: LogEntry[];
-  filter: LogFilter;
-  origin: LogOriginFilter;
-  search: string;
-  isOpen: boolean;
-  counts: LogLevelCounts;
-  countsByOrigin: LogOriginCounts;
-  page: number;
-  pageSize: number;
-  bootId: string | null;
-  /** 贴底看最新（见 {@link LogStoreState.autoScroll}）。 */
-  autoScroll: boolean;
+export type LogPanelSlice = {
   /** 第 1 页窗口的锚点（见 {@link LogStoreState.anchorId}）。 */
   anchorId: string | null;
+  /** 贴底看最新（见 {@link LogStoreState.autoScroll}）。 */
+  autoScroll: boolean;
+  bootId: string | null;
+  counts: LogLevelCounts;
+  countsByOrigin: LogOriginCounts;
+  filter: LogFilter;
+  filteredLogs: Array<LogEntry>;
+  isOpen: boolean;
+  origin: LogOriginFilter;
+  page: number;
+  pageSize: number;
+  search: string;
   /** 「已翻过去的历史」条数（见 {@link LogStoreState.viewBaselineAfter}）。 */
   viewBaselineAfter: number;
-}
+};
 
 /**
  * 派生出「时间线 + 计数」这两件随时间线走的东西。
@@ -297,11 +293,13 @@ export const LOG_STORE_MAX = 5000;
  *
  * 摘键是 O(被折叠条数)，与「重建整张表」的 O(时间线) 差一个量级。
  */
-function capTimeline(logs: LogEntry[]): {
-  logs: LogEntry[];
+function capTimeline(logs: Array<LogEntry>): {
   dropped: number;
+  logs: Array<LogEntry>;
 } {
-  if (logs.length <= LOG_STORE_MAX) return { logs, dropped: 0 };
+  if (logs.length <= LOG_STORE_MAX) {
+    return { logs, dropped: 0 };
+  }
   const cut = logs.length - LOG_STORE_MAX;
   const droppedEntries = logs.slice(0, cut);
   const kept = logs.slice(cut);
@@ -310,7 +308,7 @@ function capTimeline(logs: LogEntry[]): {
   return { logs: kept, dropped: cut };
 }
 
-function derive(logs: LogEntry[], search: string, revision: number) {
+function derive(logs: Array<LogEntry>, search: string, revision: number) {
   return {
     logs,
     counts: computeCounts(logs, search),
@@ -336,18 +334,18 @@ function viewOf(state: LogStoreState): LogPanelView {
 }
 
 /** 视图状态（筛选条件 + 页码 + 收缩状态），`applyView` 的入参。 */
-interface LogPanelView {
+type LogPanelView = {
+  anchorId: string | null;
+  autoScroll: boolean;
+  bootId: string | null;
   filter: LogFilter;
-  origin: LogOriginFilter;
-  search: string;
   isOpen: boolean;
+  origin: LogOriginFilter;
   page: number;
   pageSize: number;
-  bootId: string | null;
-  autoScroll: boolean;
-  anchorId: string | null;
+  search: string;
   viewBaselineAfter: number;
-}
+};
 
 /**
  * 把视图状态与派生字段合成一次 `set` 的载荷。
@@ -444,19 +442,12 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       /* 与 `appendFileLogs` 走**同一支**索引复用版合并：`addEntry` 是
        * 控制台 / 系统行的入口，同样是「一条一条来」，同样不该每轮建两张全表
        * Map（见 `appendFileLogs` 的说明）。 */
-      const merged = mergeTimelineIndexed(
-        state.logs,
-        [full],
-        indexOfTimeline(state.logs),
-      );
+      const merged = mergeTimelineIndexed(state.logs, [full], indexOfTimeline(state.logs));
       const logs = merged.logs;
       rememberTimelineIndex(logs, merged.index);
       const capped = capTimeline(logs);
       return {
-        ...applyView(
-          derive(capped.logs, state.search, state.revision + 1),
-          viewOf(state),
-        ),
+        ...applyView(derive(capped.logs, state.search, state.revision + 1), viewOf(state)),
         droppedTotal: state.droppedTotal + capped.dropped,
       };
     }),
@@ -466,19 +457,19 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       const fresh = dropStaleEntries(entries, state.sessionStart);
       /* 空批次直接原样返回：计数/过滤结果不变（setState 浅合并，不覆盖
        * counts），与「追加空数组时状态保持不变」的既有契约一致。 */
-      if (fresh.length === 0) return { logs: state.logs };
+      if (fresh.length === 0) {
+        return { logs: state.logs };
+      }
       /* 走**索引复用版**：面板每 2s 一轮、六路各写一次，而「这次送来的一两行
        * 是不是新的」若靠就地建两张全表 Map 来判，实测 5000 条时每轮白花
        * 2.27ms（占整次合并的 97%，排序只占 0.11ms）。索引按数组引用缓存在
        * `log-analysis` 里，因此这里只取不建。 */
-      const merged = mergeTimelineIndexed(
-        state.logs,
-        fresh,
-        indexOfTimeline(state.logs),
-      );
+      const merged = mergeTimelineIndexed(state.logs, fresh, indexOfTimeline(state.logs));
       const logs = merged.logs;
       /* 全批是重复行（或全被会话起点裁掉）→ 时间线没变，什么都不推进。 */
-      if (logs === state.logs) return { logs: state.logs };
+      if (logs === state.logs) {
+        return { logs: state.logs };
+      }
       rememberTimelineIndex(logs, merged.index);
       /* mergeTimeline 返回新数组 ⟺ 至少一条新行真正落板 → 推进 revision。
        * 内存上限（LOG_STORE_MAX）的截断放在 mergeTimeline **之后**、独立于
@@ -487,10 +478,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
        * 旧行累计进 droppedTotal，面板据此显示「更早 N 条已折叠」。 */
       const capped = capTimeline(logs);
       return {
-        ...applyView(
-          derive(capped.logs, state.search, state.revision + 1),
-          viewOf(state),
-        ),
+        ...applyView(derive(capped.logs, state.search, state.revision + 1), viewOf(state)),
         droppedTotal: state.droppedTotal + capped.dropped,
       };
     }),
@@ -504,11 +492,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       return {
         sessionStart,
         ...applyView(
-          derive(
-            logs,
-            state.search,
-            changed ? state.revision + 1 : state.revision,
-          ),
+          derive(logs, state.search, changed ? state.revision + 1 : state.revision),
           viewOf(state),
         ),
       };
@@ -519,7 +503,9 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
    * 页脚随后会显示新的标识。 */
   setBootId: (bootId) =>
     set((state) => {
-      if (state.bootId === bootId) return {};
+      if (state.bootId === bootId) {
+        return {};
+      }
       /* 只有「从无到有 / 换了一个」才算换进程：首次拿到标识时时间线里还没有
        * 旧进程的行，不必清。 */
       const changed = state.bootId !== null && state.bootId !== bootId;
@@ -619,13 +605,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
          * 第 1 页恒为 0（窗口就是最新一段，其后本来就没有东西），否则用户一停下
          * 就会被报「有 200 条新的日志」——而那 200 条是他自己刚翻过去的。 */
         viewBaselineAfter:
-          nextPage === 1
-            ? 0
-            : countAfterPage(
-                state.filteredLogs.length,
-                nextPage,
-                state.pageSize,
-              ),
+          nextPage === 1 ? 0 : countAfterPage(state.filteredLogs.length, nextPage, state.pageSize),
         followBaseline: Math.max(0, state.filteredLogs.length - 1),
         followResetAt: 0,
         ...anchorOf(state),
@@ -718,8 +698,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
    * 只是不受分页窗口限制——「全部日志」指的是一整类，不是一页。 */
   copyAll: () => copyLogText(formatForClipboard(get().filteredLogs)),
   download: () => downloadLogText(formatForClipboard(get().filteredLogs)),
-  saveExport: (label) =>
-    saveLogExport(label, formatForClipboard(get().filteredLogs)),
+  saveExport: (label) => saveLogExport(label, formatForClipboard(get().filteredLogs)),
   saveDiagnostics: () => saveDiagnosticsPackage(),
 }));
 
@@ -731,11 +710,11 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
  * 无 DOM 环境（SSR / node 测试）下订阅同样安全：读不到 localStorage 就取默认开启，
  * 且订阅本身不触碰 DOM，只是一次状态重算。 */
 useLogCategoryStore.subscribe((state, prev) => {
-  if (state.enabled === prev.enabled) return;
+  if (state.enabled === prev.enabled) {
+    return;
+  }
   const s = useLogStore.getState();
-  useLogStore.setState(
-    applyView(derive(s.logs, s.search, s.revision), viewOf(s)),
-  );
+  useLogStore.setState(applyView(derive(s.logs, s.search, s.revision), viewOf(s)));
 });
 
 /* ── 已读水位与贴底基线 ─────────────────────────────────────────────── */
@@ -753,9 +732,11 @@ useLogCategoryStore.subscribe((state, prev) => {
  * 身份口径下，新条目（id 新）天然不在水位里，被挤掉多少条旧行都不影响计数，
  * 因此贴底位置也不会被截断反复拉动。
  */
-function watermarkIds(entries: LogEntry[]): ReadonlySet<string> {
+function watermarkIds(entries: Array<LogEntry>): ReadonlySet<string> {
   const ids = new Set<string>();
-  for (const entry of entries) ids.add(entry.id);
+  for (const entry of entries) {
+    ids.add(entry.id);
+  }
   return ids;
 }
 
@@ -807,10 +788,10 @@ function headOfFirstPage(state: LogStoreState): string | null {
  * 「最新一页」总在 page=1，与 `counts.all` 无关。
  */
 export function selectPageLogs(
-  logs: LogEntry[],
+  logs: Array<LogEntry>,
   page: number,
   pageSize: number,
-): { entries: LogEntry[]; page: number; totalPages: number } {
+): { entries: Array<LogEntry>; page: number; totalPages: number } {
   /* 倒序分页的算式收在 `~/lib/page-window`（规范 16 §16.2.4.67）——
    * 同一份账（越界页码钳回、`pageSize` 为 0 不许给出 `Infinity` 页）
    * 此前在这里与视图侧各算一遍。 */
@@ -830,10 +811,10 @@ export function selectPageLogs(
  * DOM 节点不重建，选区自然留住。
  */
 export function selectFirstPageWindow(
-  logs: LogEntry[],
+  logs: Array<LogEntry>,
   anchorId: string | null,
   pageSize: number,
-): { entries: LogEntry[]; truncatedFromEnd: number } {
+): { entries: Array<LogEntry>; truncatedFromEnd: number } {
   const size = Math.max(1, pageSize);
   if (anchorId !== null) {
     const at = logs.findIndex((entry) => entry.id === anchorId);
@@ -849,10 +830,7 @@ export function selectFirstPageWindow(
  * 面板是否「已经不在最新」：不在第 1 页，或用户手动上滚离开了底部。
  * 两者都必须给「回到最新」出口，否则用户会以为日志不再刷新（ISSUE #262）。
  */
-export function selectShouldPinToLatest(
-  page: number,
-  autoScroll: boolean,
-): boolean {
+export function selectShouldPinToLatest(page: number, autoScroll: boolean): boolean {
   return page !== 1 || !autoScroll;
 }
 
@@ -871,8 +849,7 @@ export function selectShouldPinToLatest(
  * 含新行」当成已读，报出 0（用户读到的就是「翻页翻不动、提示不出现」）。
  */
 export function selectNewLogCount(state: {
-  /** 当前窗口之后还有多少条更新的日志。 */
-  unseenAfterView: number;
+  autoScroll: boolean;
   /**
    * 用户翻到这一页那一刻，窗口之后本来就有多少条（「已翻过去的历史」）。
    *
@@ -882,8 +859,11 @@ export function selectNewLogCount(state: {
    */
   baselineAfterView: number;
   page: number;
-  autoScroll: boolean;
+  /** 当前窗口之后还有多少条更新的日志。 */
+  unseenAfterView: number;
 }): number {
-  if (!selectShouldPinToLatest(state.page, state.autoScroll)) return 0;
+  if (!selectShouldPinToLatest(state.page, state.autoScroll)) {
+    return 0;
+  }
   return Math.max(0, state.unseenAfterView - state.baselineAfterView);
 }

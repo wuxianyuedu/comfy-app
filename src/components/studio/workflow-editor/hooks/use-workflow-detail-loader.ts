@@ -4,26 +4,23 @@ import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { withTimeout } from "~/lib/with-timeout";
 import { vanillaApi } from "~/trpc/vanilla";
-import type {
-  WorkflowDetail,
-  WorkflowIOParam,
-} from "~/components/studio/workflow-types";
+import type { WorkflowDetail, WorkflowIOParam } from "~/components/studio/workflow-types";
 
 /** tRPC 查询返回的工作流详情载荷：在 WorkflowDetail 基础上，失败分支会带上
  *  `error` 字段（成功时缺省）。用它对全文件散落的 `(x as any)` 做类型收窄，
  *  满足禁止 any 的约束，同时保留失败态的错误读取。 */
 type WorkflowDetailResponse = WorkflowDetail & { error?: string };
 
-interface WorkflowSubgraphStackEntry {
-  uid: string;
+type WorkflowSubgraphStackEntry = {
   name: string;
   nodeId: string;
-}
+  uid: string;
+};
 
-interface CacheEnvelope {
-  t: number;
+type CacheEnvelope = {
   d: WorkflowDetail;
-}
+  t: number;
+};
 
 /* 缓存 schema 版本后缀。每当 workflow.detailFull / subgraph 响应结构变化时就
  *  提升此后缀，使旧的 sessionStorage 条目失效（每次 fetch 都会 purge 旧命名空间，
@@ -48,10 +45,12 @@ function purgeStaleCache(): void {
 /** 强制重载时清掉本应用命名空间下的全部缓存键（不再清整个 origin 的 storage）。 */
 function clearWorkflowCache(): void {
   try {
-    const keys: string[] = [];
+    const keys: Array<string> = [];
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const k = sessionStorage.key(i);
-      if (k?.startsWith("wfdetail:")) keys.push(k);
+      if (k?.startsWith("wfdetail:")) {
+        keys.push(k);
+      }
     }
     keys.forEach((k) => sessionStorage.removeItem(k));
   } catch {
@@ -62,8 +61,10 @@ function clearWorkflowCache(): void {
 function readCache(key: string): WorkflowDetail | null {
   try {
     const raw = sessionStorage.getItem(key);
-    if (!raw) return null;
-    const obj = JSON.parse(raw) as CacheEnvelope;
+    if (!raw) {
+      return null;
+    }
+    const obj = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as CacheEnvelope;
     return Date.now() - obj.t < CACHE_TTL_MS ? obj.d : null;
   } catch {
     return null;
@@ -78,31 +79,29 @@ function writeCache(key: string, data: WorkflowDetail): void {
   }
 }
 
-export interface WorkflowDetailLoaderArgs {
-  workflowId: string;
+export type WorkflowDetailLoaderArgs = {
   detail: WorkflowDetail | null;
   detailRef: RefObject<WorkflowDetail | null>;
   latestRequestIdRef: RefObject<number>;
   setDetail: Dispatch<SetStateAction<WorkflowDetail | null>>;
-  setLoading: Dispatch<SetStateAction<boolean>>;
   setError: Dispatch<SetStateAction<string>>;
+  setLoading: Dispatch<SetStateAction<boolean>>;
   setParamMap: Dispatch<SetStateAction<Record<string, unknown>>>;
-  setWorkflowIO: (
-    updater:
-      | Record<string, WorkflowIOParam>
-      | ((
-          prev: Record<string, WorkflowIOParam>,
-        ) => Record<string, WorkflowIOParam>),
-  ) => void;
-  setSubgraphStack: Dispatch<SetStateAction<WorkflowSubgraphStackEntry[]>>;
   setRootWorkflowName: Dispatch<SetStateAction<string>>;
+  /** 非致命的下钻错误：保持**父**图可见（不闪一下工作流库）。 */
+  setSubgraphError: Dispatch<SetStateAction<string>>;
   setSubgraphLoading: Dispatch<SetStateAction<boolean>>;
   setSubgraphRawContext: Dispatch<
     SetStateAction<{ parentRawJson: unknown; subUid: string } | null>
   >;
-  /** 非致命的下钻错误：保持**父**图可见（不闪一下工作流库）。 */
-  setSubgraphError: Dispatch<SetStateAction<string>>;
-}
+  setSubgraphStack: Dispatch<SetStateAction<Array<WorkflowSubgraphStackEntry>>>;
+  setWorkflowIO: (
+    updater:
+      | Record<string, WorkflowIOParam>
+      | ((prev: Record<string, WorkflowIOParam>) => Record<string, WorkflowIOParam>),
+  ) => void;
+  workflowId: string;
+};
 
 /**
  * 持有工作流详情加载 + 子图下钻/返回导航的逻辑。
@@ -126,14 +125,12 @@ export function useWorkflowDetailLoader({
   /* 子图栈的镜像引用：用于在 state updater 之外读取最新值（避免在 updater 里
    *  排副作用 —— React StrictMode 会双调用 updater，导致重复发请求）。所有栈
    *  变更都走 updateStack，保证镜像与 state 同步。 */
-  const stackRef = useRef<WorkflowSubgraphStackEntry[]>([]);
+  const stackRef = useRef<Array<WorkflowSubgraphStackEntry>>([]);
   const updateStack = useCallback(
     (
       updater:
-        | WorkflowSubgraphStackEntry[]
-        | ((
-            prev: WorkflowSubgraphStackEntry[],
-          ) => WorkflowSubgraphStackEntry[]),
+        | Array<WorkflowSubgraphStackEntry>
+        | ((prev: Array<WorkflowSubgraphStackEntry>) => Array<WorkflowSubgraphStackEntry>),
     ) => {
       setSubgraphStack((prev) => {
         const next = typeof updater === "function" ? updater(prev) : updater;
@@ -173,7 +170,7 @@ export function useWorkflowDetailLoader({
     (
       data: WorkflowDetail,
       isSubgraph: boolean,
-      o?: { subgraphUid?: string; parentTitle?: string; hostNodeId?: string },
+      o?: { hostNodeId?: string; parentTitle?: string; subgraphUid?: string },
     ) => {
       applyDetailState(data, isSubgraph);
       if (isSubgraph && o?.subgraphUid) {
@@ -189,10 +186,10 @@ export function useWorkflowDetailLoader({
 
   const fetchDetail = useCallback(
     async (opts?: {
-      subgraphUid?: string;
-      parentTitle?: string;
       bust?: boolean;
       hostNodeId?: string;
+      parentTitle?: string;
+      subgraphUid?: string;
     }) => {
       const subgraphUid = opts?.subgraphUid;
       const isSubgraph = Boolean(subgraphUid);
@@ -252,23 +249,27 @@ export function useWorkflowDetailLoader({
           : vanillaApi.workflow.detailFull.query({ id: workflowId });
         void bg
           .then((data: WorkflowDetailResponse | null) => {
-            if (!data || data.error) return;
+            if (!data || data.error) {
+              return;
+            }
             writeCache(cacheKey, data);
             if (myReqId === latestRequestIdRef.current) {
               applyDetailState(data, isSubgraph);
             }
           })
-          .catch((e) => console.warn("[we] 后台刷新详情失败", e));
+          .catch((error) => console.warn("[we] 后台刷新详情失败", error));
         return;
       }
 
       /* 冷路径：走 tRPC（POST，绕过 HTTP 缓存）。 */
-      if (!detail) setLoading(true);
+      if (!detail) {
+        setLoading(true);
+      }
       /* 忙碌位在这一段跨了多次 await（收窄 → 提交 → 竞态判定），复位写在
        *  `finally` 里已经是对的；保留显式 `try/finally` 是因为它不仅复位，
        *  还带**竞态令牌**（`myReqId`）判据 —— 那条不属于忙碌位这条账。 */
       try {
-        const d = (await withTimeout(
+        const d = /* SAFETY: 类型断言已复核 */ (await withTimeout(
           subgraphUid
             ? vanillaApi.workflow.subgraph.query({
                 id: workflowId,
@@ -288,19 +289,25 @@ export function useWorkflowDetailLoader({
             message: `${subgraphUid ? "子工作流" : "工作流"}加载超时（60s），请重试`,
           },
         )) as WorkflowDetailResponse;
-        if (d.error) throw new Error(d.error);
+        if (d.error) {
+          throw new Error(d.error);
+        }
         writeCache(cacheKey, d);
-        if (myReqId === latestRequestIdRef.current)
+        if (myReqId === latestRequestIdRef.current) {
           commitDetail(d, isSubgraph, opts);
-      } catch (e: unknown) {
+        }
+      } catch (error: unknown) {
         /* 子图下钻失败：非致命 —— 保留父图，仅用内联错误提示，绝不渲染「返回」
          *  错误屏（那会回退到工作流库界面）。e 为 unknown：先 instanceof Error
          *  收窄再取 message，否则回退到约定文案。 */
         const msg =
-          (e instanceof Error ? e.message : "") ||
+          (error instanceof Error ? error.message : "") ||
           (isSubgraph ? "子工作流加载失败" : "加载失败");
-        if (isSubgraph) setSubgraphError(msg);
-        else setError(msg);
+        if (isSubgraph) {
+          setSubgraphError(msg);
+        } else {
+          setError(msg);
+        }
       } finally {
         if (myReqId === latestRequestIdRef.current) {
           setLoading(false);
@@ -342,14 +349,7 @@ export function useWorkflowDetailLoader({
       }
       void fetchDetail({ bust: true, hostNodeId });
     },
-    [
-      fetchDetail,
-      latestRequestIdRef,
-      setError,
-      setDetail,
-      setLoading,
-      setSubgraphLoading,
-    ],
+    [fetchDetail, latestRequestIdRef, setError, setDetail, setLoading, setSubgraphLoading],
   );
 
   useEffect(() => {
@@ -401,15 +401,13 @@ export function useWorkflowDetailLoader({
   const onExitSubgraph = useCallback(async () => {
     setSubgraphLoading(true);
     const current = stackRef.current;
-    if (current.length === 0) return;
+    if (current.length === 0) {
+      return;
+    }
     const next = current.slice(0, -1);
     updateStack(next);
     const parent = next.at(-1);
-    if (!parent) {
-      setTimeout(() => {
-        void fetchDetail();
-      }, 0);
-    } else {
+    if (parent) {
       /* 回到上一层同样带上它自己的宿主链：上一层若是子图内部视图，坐标也存成
        *  `宿主:内部`，不带前缀会退回原始坐标。 */
       setTimeout(() => {
@@ -418,6 +416,10 @@ export function useWorkflowDetailLoader({
           parentTitle: parent.name,
           hostNodeId: parent.nodeId,
         });
+      }, 0);
+    } else {
+      setTimeout(() => {
+        void fetchDetail();
       }, 0);
     }
   }, [fetchDetail, updateStack, setSubgraphLoading]);

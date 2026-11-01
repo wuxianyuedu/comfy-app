@@ -20,26 +20,16 @@
  * —— 判据可以随便毁夹具，但不许拿调用方的工作树做实验（那正是被测事故本身的形态）。
  */
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  linkDependencies,
-  unlinkDependencies,
-} from "../scripts/base-check.mjs";
+import { linkDependencies, unlinkDependencies } from "../scripts/base-check.mjs";
 import { gitSandboxEnv } from "./helpers/git-sandbox-env";
 
 /** 本文件造出来的夹具目录；用例失败也一律收尾。 */
-const dirs: string[] = [];
+const dirs: Array<string> = [];
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) {
@@ -57,7 +47,7 @@ afterEach(() => {
 function makeFakeCheckout(name: string): string {
   const dir = mkdtempSync(join(tmpdir(), `base-check-snap-${name}-`));
   dirs.push(dir);
-  const git = (args: string[]) => {
+  const git = (args: Array<string>) => {
     const r = spawnSync("git", args, {
       cwd: dir,
       encoding: "utf8",
@@ -82,10 +72,10 @@ function makeFakeCheckout(name: string): string {
 function addWorktree(
   checkout: string,
   name: string,
-): { path: string; git: (args: string[]) => void } {
+): { git: (args: Array<string>) => void; path: string; } {
   const wt = mkdtempSync(join(tmpdir(), `base-check-snap-${name}-wt-`));
   dirs.push(wt);
-  const run = (args: string[]) => {
+  const run = (args: Array<string>) => {
     const r = spawnSync("git", args, {
       cwd: checkout,
       encoding: "utf8",
@@ -145,9 +135,7 @@ describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
 
     expect(existsSync(shimOf(checkout)), "收尾把本检出的依赖树删穿了").toBe(true);
     expect(readFileSync(shimOf(checkout), "utf8")).toBe("shim\n");
-    expect(existsSync(join(checkout, "tracked.txt")), "根上的受版本控制文件也没了").toBe(
-      true,
-    );
+    expect(existsSync(join(checkout, "tracked.txt")), "根上的受版本控制文件也没了").toBe(true);
   }, 30_000);
 
   it("③`unlinkDependencies(null)` 不许抛（没链成时收尾仍要走下去）", () => {
@@ -161,14 +149,9 @@ describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
     const src = readFileSync("scripts/base-check.mjs", "utf8");
     const unlinkAt = src.indexOf("unlinkDependencies(dependencyLink)");
     const removeAt = src.indexOf('git(["worktree", "remove", "--force"');
-    expect(unlinkAt, "finally 里不再调用 unlinkDependencies —— 链接会被穿删").toBeGreaterThan(
-      -1,
-    );
+    expect(unlinkAt, "finally 里不再调用 unlinkDependencies —— 链接会被穿删").toBeGreaterThan(-1);
     expect(removeAt).toBeGreaterThan(-1);
-    expect(
-      unlinkAt < removeAt,
-      "顺序反了：先摘 worktree 就会穿 junction 删进本检出",
-    ).toBe(true);
+    expect(unlinkAt < removeAt, "顺序反了：先摘 worktree 就会穿 junction 删进本检出").toBe(true);
     expect(src).toContain("dependencyLink = linkDependencies(ROOT, worktreePath)");
   });
 });

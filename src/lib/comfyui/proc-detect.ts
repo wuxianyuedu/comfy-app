@@ -22,19 +22,17 @@ import { readdirSync, readlinkSync, readFileSync } from "node:fs";
  *  「进程不存在」的证据。 */
 async function execFilePTried(
   cmd: string,
-  args: string[],
+  args: Array<string>,
   timeoutMs = 3000,
 ): Promise<{ ok: boolean; out: string }> {
   return new Promise((resolve) => {
-    execFile(
-      cmd,
-      args,
-      { timeout: timeoutMs, windowsHide: true },
-      (err, stdout) => {
-        if (err) resolve({ ok: false, out: "" });
-        else resolve({ ok: true, out: stdout.toString() });
-      },
-    );
+    execFile(cmd, args, { timeout: timeoutMs, windowsHide: true }, (err, stdout) => {
+      if (err) {
+        resolve({ ok: false, out: "" });
+      } else {
+        resolve({ ok: true, out: stdout.toString() });
+      }
+    });
   });
 }
 
@@ -47,11 +45,11 @@ export async function findPidForMainPy(mainPy: string): Promise<number | null> {
 }
 
 export type PidLookup = {
-  /** 命中的进程 PID；未命中为 null。 */
-  pid: number | null;
   /** 查询本身失败（超时 / powershell 无法启动等）：结果不可信，
    *  「pid=null」不能作为「进程不存在」的证据。 */
   failed: boolean;
+  /** 命中的进程 PID；未命中为 null。 */
+  pid: number | null;
 };
 
 /**
@@ -64,12 +62,12 @@ export type PidLookup = {
  * probeComfyUi 随之整体跳过 HTTP 探测——设置页状态行显示「未运行」，
  * 但进程和端口都活着（ISSUE #114：点「打开查看」后状态回退）。
  */
-export async function findPidForMainPyDetailed(
-  mainPy: string,
-): Promise<PidLookup> {
-  if (!mainPy) return { pid: null, failed: false };
+export async function findPidForMainPyDetailed(mainPy: string): Promise<PidLookup> {
+  if (!mainPy) {
+    return { pid: null, failed: false };
+  }
   // 规范化路径用于命令行匹配（Windows 大小写不敏感）
-  const normalized = mainPy.replace(/[\\/]+/g, "/").toLowerCase();
+  const normalized = mainPy.replaceAll(/[\\/]+/g, "/").toLowerCase();
 
   try {
     if (process.platform === "win32") {
@@ -85,7 +83,7 @@ export async function findPidForMainPyDetailed(
       //     拉过来、再让 `Where-Object` 在 PowerShell 侧挑，本机实测 ~2.5s，
       //     冷启动高负载下直接顶到超时。`-Filter` 交给 WMI 仓储层过滤后，
       //     只有命中 `Name LIKE 'python%'` 的少数进程被物化。
-      const safeMain = normalized.replace(/'/g, "''");
+      const safeMain = normalized.replaceAll("'", "''");
       const ps =
         `$q=[char]34; ` +
         `Get-CimInstance Win32_Process -Filter ('Name LIKE '+$q+'python%'+$q) -ErrorAction SilentlyContinue | ` +
@@ -96,23 +94,28 @@ export async function findPidForMainPyDetailed(
         ["-NoProfile", "-NonInteractive", "-Command", ps],
         10_000,
       );
-      if (!ok) return { pid: null, failed: true };
-      const pid = parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
-      return { pid: isNaN(pid) ? null : pid, failed: false };
-    } else {
-      // POSIX：ps 输出包含 main.py 的行 → 提取 PID
-      const { ok, out } = await execFilePTried("ps", ["-eo", "pid,args"]);
-      if (!ok) return { pid: null, failed: true };
-      for (const line of out.split("\n")) {
-        const ll = line.toLowerCase();
-        if (ll.includes(normalized)) {
-          const pidStr = line.trim().split(/\s+/)[0];
-          const pid = parseInt(pidStr ?? "", 10);
-          if (!isNaN(pid)) return { pid, failed: false };
+      if (!ok) {
+        return { pid: null, failed: true };
+      }
+      const pid = Number.parseInt(out.trim().split(/\r?\n/)[0] ?? "", 10);
+      return { pid: Number.isNaN(pid) ? null : pid, failed: false };
+    }
+    // POSIX：ps 输出包含 main.py 的行 → 提取 PID
+    const { ok, out } = await execFilePTried("ps", ["-eo", "pid,args"]);
+    if (!ok) {
+      return { pid: null, failed: true };
+    }
+    for (const line of out.split("\n")) {
+      const ll = line.toLowerCase();
+      if (ll.includes(normalized)) {
+        const pidStr = line.trim().split(/\s+/)[0];
+        const pid = Number.parseInt(pidStr ?? "", 10);
+        if (!Number.isNaN(pid)) {
+          return { pid, failed: false };
         }
       }
-      return { pid: null, failed: false };
     }
+    return { pid: null, failed: false };
   } catch {
     return { pid: null, failed: true };
   }
@@ -128,11 +131,17 @@ export function parseProcNetTcpListeners(content: string): Map<string, number> {
   // 第 0 行是表头，跳过。
   for (let i = 1; i < lines.length; i++) {
     const f = (lines[i] ?? "").trim().split(/\s+/);
-    if (f.length < 10) continue;
-    if (f[3] !== "0A") continue; // 0A = TCP_LISTEN
+    if (f.length < 10) {
+      continue;
+    }
+    if (f[3] !== "0A") {
+      continue;
+    } // 0A = TCP_LISTEN
     const local = f[1] ?? "";
     const colon = local.lastIndexOf(":");
-    if (colon < 0) continue;
+    if (colon === -1) {
+      continue;
+    }
     const port = Number.parseInt(local.slice(colon + 1), 16);
     const inode = f[9] ?? "";
     if (Number.isInteger(port) && port > 0 && inode) {
@@ -147,7 +156,7 @@ export function parseProcNetTcpListeners(content: string): Map<string, number> {
  *  `socket:[<inode>]`）。拿不到（进程已退 / 权限不足 / 非 Linux）时返回空集。 */
 export function socketInodesOfPid(pid: number): Set<string> {
   const set = new Set<string>();
-  let entries: string[];
+  let entries: Array<string>;
   try {
     entries = readdirSync(`/proc/${pid}/fd`);
   } catch {
@@ -157,7 +166,9 @@ export function socketInodesOfPid(pid: number): Set<string> {
     try {
       const target = readlinkSync(`/proc/${pid}/fd/${fd}`);
       const m = /^socket:\[(\d+)\]$/.exec(target);
-      if (m?.[1]) set.add(m[1]);
+      if (m?.[1]) {
+        set.add(m[1]);
+      }
     } catch {
       /* 单个 fd 读不到（如已关闭）不影响其余 */
     }
@@ -170,7 +181,9 @@ export function socketInodesOfPid(pid: number): Set<string> {
  *  返回 null —— 调用方按「探测不可用」处理。 */
 export function findListeningPortViaProc(pid: number): number | null {
   const owned = socketInodesOfPid(pid);
-  if (owned.size === 0) return null;
+  if (owned.size === 0) {
+    return null;
+  }
   let listeners: Map<string, number>;
   try {
     // tcp 与 tcp6 都要读：只监听 IPv6 或双栈的进程只在 tcp6 里有记录。
@@ -182,13 +195,15 @@ export function findListeningPortViaProc(pid: number): number | null {
         return "";
       }
     })();
-    listeners = parseProcNetTcpListeners(tcp + "\n" + tcp6);
+    listeners = parseProcNetTcpListeners(`${tcp}\n${tcp6}`);
   } catch {
     return null;
   }
   for (const inode of owned) {
     const port = listeners.get(inode);
-    if (port) return port;
+    if (port) {
+      return port;
+    }
   }
   return null;
 }
@@ -198,27 +213,32 @@ export function findListeningPortViaProc(pid: number): number | null {
  *  `TCP    127.0.0.1:8188    0.0.0.0:0    LISTENING    12345`
  *  IPv6 行为 `TCP    [::1]:8188   [::]:0  LISTENING  12345` —— 端口分隔符是
  *  **最后一个冒号**，两种形态都靠它切出来。 */
-export function parseNetstatListeningPort(
-  content: string,
-  pid: number,
-): number | null {
+export function parseNetstatListeningPort(content: string, pid: number): number | null {
   for (const line of content.split(/\r?\n/)) {
     const cols = line.trim().split(/\s+/);
-    if (cols.length < 5) continue;
-    if (cols[0] !== "TCP" || cols[3] !== "LISTENING") continue;
-    if (parseInt(cols[4] ?? "", 10) !== pid) continue;
+    if (cols.length < 5) {
+      continue;
+    }
+    if (cols[0] !== "TCP" || cols[3] !== "LISTENING") {
+      continue;
+    }
+    if (Number.parseInt(cols[4] ?? "", 10) !== pid) {
+      continue;
+    }
     const local = cols[1] ?? "";
-    const port = parseInt(local.slice(local.lastIndexOf(":") + 1), 10);
-    if (Number.isInteger(port) && port > 0) return port;
+    const port = Number.parseInt(local.slice(local.lastIndexOf(":") + 1), 10);
+    if (Number.isInteger(port) && port > 0) {
+      return port;
+    }
   }
   return null;
 }
 
 /** 找到指定 PID 正在监听的 TCP 端口号（取第一个 LISTEN 端口）。 */
-export async function findPidListeningPort(
-  pid: number,
-): Promise<number | null> {
-  if (!pid || pid <= 0) return null;
+export async function findPidListeningPort(pid: number): Promise<number | null> {
+  if (!pid || pid <= 0) {
+    return null;
+  }
 
   try {
     if (process.platform === "win32") {
@@ -231,30 +251,27 @@ export async function findPidListeningPort(
        *
        * 与启动器侧同一口径：`scripts/launcher-core/procs.mjs` 的
        * `listeningPidsOnPort()` 也用 `netstat -ano`，理由相同。 */
-      const { ok, out } = await execFilePTried(
-        "netstat.exe",
-        ["-ano", "-p", "TCP"],
-        4000,
-      );
-      if (!ok) return null;
+      const { ok, out } = await execFilePTried("netstat.exe", ["-ano", "-p", "TCP"], 4000);
+      if (!ok) {
+        return null;
+      }
       return parseNetstatListeningPort(out, pid);
-    } else {
-      // POSIX：纯 Node 内建读取监听端口，**不依赖 lsof**。
-      //
-      // 历史实现是 `lsof -Pan -p <pid> -iTCP -sTCP:LISTEN`，但 lsof 在不少
-      // 发行版（含本项目 CI 用的精简镜像）默认不装；静默吞错的版本会把 ENOENT
-      // 变成空串 → 函数返回 null，正是规范 §9.2 第 3 条禁止的「静默失败」。
-      // 文档 §9.1 也曾声称「不依赖 lsof」，但代码实际就是 lsof —— 文档与实现
-      // 互相打架（本次一并纠正）。
-      //
-      // 改用内核接口（零外部依赖）：
-      //   ① /proc/net/tcp（+ tcp6）里 state=0A 的项 = LISTEN，字段 2 是
-      //      `地址:端口`（端口为 4 位大写十六进制），字段 10 是 socket inode；
-      //   ② /proc/<pid>/fd/* 里指向 `socket:[<inode>]` 的链接 → 该 pid 持有的
-      //      socket inode 集合；
-      //   ③ 两者取交集即「该 pid 正在监听的端口」。
-      return findListeningPortViaProc(pid);
     }
+    // POSIX：纯 Node 内建读取监听端口，**不依赖 lsof**。
+    //
+    // 历史实现是 `lsof -Pan -p <pid> -iTCP -sTCP:LISTEN`，但 lsof 在不少
+    // 发行版（含本项目 CI 用的精简镜像）默认不装；静默吞错的版本会把 ENOENT
+    // 变成空串 → 函数返回 null，正是规范 §9.2 第 3 条禁止的「静默失败」。
+    // 文档 §9.1 也曾声称「不依赖 lsof」，但代码实际就是 lsof —— 文档与实现
+    // 互相打架（本次一并纠正）。
+    //
+    // 改用内核接口（零外部依赖）：
+    //   ① /proc/net/tcp（+ tcp6）里 state=0A 的项 = LISTEN，字段 2 是
+    //      `地址:端口`（端口为 4 位大写十六进制），字段 10 是 socket inode；
+    //   ② /proc/<pid>/fd/* 里指向 `socket:[<inode>]` 的链接 → 该 pid 持有的
+    //      socket inode 集合；
+    //   ③ 两者取交集即「该 pid 正在监听的端口」。
+    return findListeningPortViaProc(pid);
   } catch {
     return null;
   }

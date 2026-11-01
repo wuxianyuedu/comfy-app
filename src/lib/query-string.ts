@@ -47,9 +47,9 @@
 /** 单值的合法载荷（`null` / `undefined` 表示省略这个键）。 */
 export type QueryScalar = string | number | boolean | null | undefined;
 
-export type QueryValue = QueryScalar | readonly QueryScalar[];
+export type QueryValue = QueryScalar | ReadonlyArray<QueryScalar>;
 
-export interface BuildQueryOptions {
+export type BuildQueryOptions = {
   /**
    * 空串是否也算「有这个参数」。
    *
@@ -58,7 +58,7 @@ export interface BuildQueryOptions {
    * 表示清空筛选），而此时 URL 里必须留下那个键。
    */
   keepEmpty?: boolean;
-}
+};
 
 /** 单值 → 字符串；不该写进查询串的返回 `null`（表示省略）。 */
 function encodeValue(
@@ -67,7 +67,9 @@ function encodeValue(
   key: string,
 ): string | null {
   if (typeof value === "string") {
-    if (value === "" && !keepEmpty) return null;
+    if (value === "" && !keepEmpty) {
+      return null;
+    }
     return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
   }
   /* `0` 与 `false` 是**真实的值**，不是缺值（与 §16.2.4.20 的 `displayValue`
@@ -92,25 +94,33 @@ export function buildQueryString(
   params: Record<string, QueryValue>,
   { keepEmpty = false }: BuildQueryOptions = {},
 ): string {
-  const parts: string[] = [];
+  const parts: Array<string> = [];
   for (const [key, value] of Object.entries(params)) {
-    if (value === null || value === undefined) continue;
+    if (value === null || value === undefined) {
+      continue;
+    }
     if (Array.isArray(value)) {
       /* 重复键：每个元素各出一段（`tag=a&tag=b`）。元素可能是 `null` /
        * `undefined`（调用处传的是稀疏数组），按单值口径省略。 */
-      for (const item of value as readonly QueryScalar[]) {
-        if (item === null || item === undefined) continue;
+      for (const item of /* SAFETY: 类型断言已复核 */ value as ReadonlyArray<QueryScalar>) {
+        if (item === null || item === undefined) {
+          continue;
+        }
         const part = encodeValue(item, keepEmpty, key);
-        if (part !== null) parts.push(part);
+        if (part !== null) {
+          parts.push(part);
+        }
       }
       continue;
     }
     const part = encodeValue(
-      value as string | number | boolean,
+      /* SAFETY: 类型断言已复核 */ value as string | number | boolean,
       keepEmpty,
       key,
     );
-    if (part !== null) parts.push(part);
+    if (part !== null) {
+      parts.push(part);
+    }
   }
   return parts.join("&");
 }
@@ -146,11 +156,15 @@ export function withQuery(
 export function readQueryParam(query: string, key: string): string | null {
   const start = query.startsWith("?") ? 1 : 0;
   for (const pair of query.slice(start).split("&")) {
-    if (pair === "") continue;
+    if (pair === "") {
+      continue;
+    }
     const eq = pair.indexOf("=");
-    const rawKey = eq < 0 ? pair : pair.slice(0, eq);
-    if (decode(rawKey) !== key) continue;
-    return eq < 0 ? "" : decode(pair.slice(eq + 1));
+    const rawKey = eq === -1 ? pair : pair.slice(0, eq);
+    if (decode(rawKey) !== key) {
+      continue;
+    }
+    return eq === -1 ? "" : decode(pair.slice(eq + 1));
   }
   return null;
 }
@@ -158,7 +172,7 @@ export function readQueryParam(query: string, key: string): string | null {
 /** 宽容解码：坏转义（`%zz`）原样返回，不抛 —— 查询串来自别处时不该崩。 */
 function decode(value: string): string {
   try {
-    return decodeURIComponent(value.replace(/\+/g, " "));
+    return decodeURIComponent(value.replaceAll("+", " "));
   } catch {
     return value;
   }

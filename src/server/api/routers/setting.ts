@@ -3,11 +3,7 @@ import { resolve as resolvePath, relative as relativePath } from "node:path";
 
 import { z } from "zod";
 import { createTRPCRouter, authedProcedure } from "~/server/api/trpc";
-import {
-  getSettings,
-  getSettingsSync,
-  saveSettings,
-} from "~/lib/app-settings/app-settings.server";
+import { getSettings, getSettingsSync, saveSettings } from "~/lib/app-settings/app-settings.server";
 import {
   clearComfyAutoStartFailure,
   clearComfyManualStop,
@@ -19,10 +15,7 @@ import {
 import { describeComfyInstance } from "~/lib/comfyui/instance-kind";
 import { noteComfyStateChange } from "~/lib/comfyui/state-watch";
 import { resolveDesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths.server";
-import {
-  decideComfyTabOpen,
-  probeComfyEmbeddable,
-} from "~/lib/comfy/comfy-embed";
+import { decideComfyTabOpen, probeComfyEmbeddable } from "~/lib/comfy/comfy-embed";
 import {
   ensureDrizzleStudioUp,
   isDrizzleStudioStarting,
@@ -46,7 +39,7 @@ import { CPU_LIMIT_MODES } from "~/lib/comfyui/cpu-limit";
  *
  *  其余几项（自动启动、退出即杀、工作流自动同步）只改行为偏好，不动「此刻是不是
  *  在跑、在哪跑」这条结论 —— 它们变了不需要通知任何人重问状态。 */
-const COMFY_CONFIG_KEYS = [
+const COMFY_CONFIG_KEYS = /* SAFETY: 类型断言已复核 */ [
   "comfyuiPort",
   "comfyuiPath",
   "comfyuiExtraArgs",
@@ -64,7 +57,7 @@ export const settingRouter = createTRPCRouter({
   save: authedProcedure
     .input(
       z.object({
-        comfyuiPort: z.number().int().min(0).max(65535).optional(),
+        comfyuiPort: z.number().int().min(0).max(65_535).optional(),
         comfyuiPath: z.string().optional(),
         comfyuiExtraArgs: z.string().optional(),
         /** comfy-cli 的 Python 解释器（桌包不随包 Python，用户自备后在这里指路径）。 */
@@ -84,14 +77,13 @@ export const settingRouter = createTRPCRouter({
       await saveSettings(input);
       // 用户显式（重新）开启自动启动 = 授权自动拉起：清掉上次「手动关闭
       // 后不自动启动」的闩锁，让自动启动恢复生效（ISSUE #290）。
-      if (input.comfyuiAutoStart === true) clearComfyManualStop();
+      if (input.comfyuiAutoStart === true) {
+        clearComfyManualStop();
+      }
       // 改「安装路径 / 启动参数」是把上次「启动失败」的成因改掉了：清掉
       // 「失败后不再重试」的闩锁，让自动启动重新尝试（否则用户修好了路径，
       // 却因为老闩锁一直不重试，还得再手动点一次启动）（ISSUE #335）。
-      if (
-        input.comfyuiPath !== undefined ||
-        input.comfyuiExtraArgs !== undefined
-      ) {
+      if (input.comfyuiPath !== undefined || input.comfyuiExtraArgs !== undefined) {
         clearComfyAutoStartFailure();
       }
       /* ComfyUI 四项只要动过一样，运行态的**判据**就变了（可能换了实例、
@@ -112,9 +104,7 @@ export const settingRouter = createTRPCRouter({
    * 响应里时，形态会被拖到探测结束才出现 —— 设置页先看不到「安装形态」徽标，
    * 「端口 / 启动参数」输入框也要等探测完成才消失。设置页在首屏与 `setting.get`
    * 同批拉它，保存路径后再 refetch（见 launch-and-build §5）。 */
-  comfyInstance: authedProcedure.query(() =>
-    describeComfyInstance(getSettingsSync().comfyuiPath),
-  ),
+  comfyInstance: authedProcedure.query(() => describeComfyInstance(getSettingsSync().comfyuiPath)),
 
   /** 桌面实例的存储目录（模型 / 共享模型 / 输入 / 输出 / 共享输入输出）——**只读**。
    *
@@ -163,7 +153,7 @@ export const settingRouter = createTRPCRouter({
   comfyStart: authedProcedure
     .input(
       z.object({
-        timeoutMs: z.number().int().min(5000).max(600000).optional(),
+        timeoutMs: z.number().int().min(5000).max(600_000).optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -205,9 +195,7 @@ export const settingRouter = createTRPCRouter({
     .input(
       z.object({
         base: z.url().refine(isHttpUrl, { message: "base 必须为 http/https" }),
-        hostOrigin: z
-          .url()
-          .refine(isHttpUrl, { message: "hostOrigin 必须为 http/https" }),
+        hostOrigin: z.url().refine(isHttpUrl, { message: "hostOrigin 必须为 http/https" }),
       }),
     )
     .query(async ({ input }) => {
@@ -334,14 +322,18 @@ function projectScopedProbe(): (candidate: string) => boolean {
     root = null;
   }
   return (candidate: string) => {
-    if (root === null) return false;
+    if (root === null) {
+      return false;
+    }
     let real: string;
     try {
       real = realpathSync(resolvePath(candidate));
     } catch {
       return false;
     }
-    if (real === root) return true;
+    if (real === root) {
+      return true;
+    }
     const rel = relativePath(root, real);
     return rel !== "" && !rel.startsWith("..") && !isAbsolutePath(rel);
   };

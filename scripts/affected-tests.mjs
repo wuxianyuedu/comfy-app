@@ -60,10 +60,12 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+import ts from "typescript";
+
 import { KNOWN_FAILED_FILES } from "./quality-gate-shared.mjs";
 import { FIXED_STRUCTURAL_TESTS } from "./fixed-structural-tests.mjs";
 import { selectFixedByFace } from "./fixed-gate-input-faces.mjs";
-import { parseDiffEntries } from "./launcher-core/sync-attribution.mjs";
+import { changedPathsFromNameStatus, normalizeRel } from "./git-name-status.mjs";
 import { stripComments } from "./tw4-scan-core.mjs";
 
 const HERE = import.meta.dirname;
@@ -90,10 +92,7 @@ const WIDE_TRIGGERS = [
   { test: (p) => p === "vitest.config.ts", why: WIDE_REASON.config },
   { test: (p) => p === "tests/setup.ts", why: WIDE_REASON.setup },
   {
-    test: (p) =>
-      p === "package.json" ||
-      p === "pnpm-lock.yaml" ||
-      p === "pnpm-workspace.yaml",
+    test: (p) => p === "package.json" || p === "pnpm-lock.yaml" || p === "pnpm-workspace.yaml",
     why: WIDE_REASON.deps,
   },
   { test: (p) => p === "tsconfig.json", why: WIDE_REASON.types },
@@ -111,51 +110,7 @@ const WIDE_TRIGGERS = [
  * @returns {boolean}
  */
 export function isTestPath(rel) {
-  return (
-    (rel.startsWith("src/") || rel.startsWith("tests/")) &&
-    /\.test\.tsx?$/.test(rel)
-  );
-}
-
-/** 仓库相对路径的规范形态：去空白、反斜杠转正斜杠。 */
-/** @param {string} raw @returns {string} */
-function normalizeRel(raw) {
-  return String(raw).trim().replace(/\\/g, "/");
-}
-
-/**
- * `git diff --name-status -M` 的输出 → 改动面。
- *
- * 为什么不用 `--name-only`：改名（`R`）在那一份输出里**只给新路径**，而旧路径才是
- * 「谁按路径消费了它」的线索 —— 用旧路径读文件、又不 import 的用例因此整条漏跑
- * （ISSUE #2226）。`R` 行把新旧两边都收进改动面；`C`（复制）源文件没变，只收新路径。
- * 解析复用 `launcher-core/sync-attribution.mjs` 的 `parseDiffEntries`（运行期陈旧路由
- * 归因也在用它，不另写一份切分）。
- *
- * @param {string} output `git diff --name-status -M` 的原始输出
- * @returns {{paths: string[], renamedFrom: string[]}} `paths` 是改动面（含改名旧路径），
- *   `renamedFrom` 只放 `R` 行的旧路径（读出改名事件用）
- */
-export function changedPathsFromNameStatus(output) {
-  /** @type {string[]} */
-  const paths = [];
-  /** @type {string[]} */
-  const renamedFrom = [];
-  for (const entry of parseDiffEntries(output)) {
-    if (entry.status === "R" && entry.oldPath) {
-      const old = normalizeRel(entry.oldPath);
-      if (old) {
-        paths.push(old);
-        renamedFrom.push(old);
-      }
-    }
-    const next = normalizeRel(entry.path);
-    if (next) paths.push(next);
-  }
-  return {
-    paths: [...new Set(paths)],
-    renamedFrom: [...new Set(renamedFrom)],
-  };
+  return (rel.startsWith("src/") || rel.startsWith("tests/")) && /\.test\.tsx?$/.test(rel);
 }
 
 /** import 说明符不带扩展名，按候选逐个试（含目录形式的 barrel）。 */
@@ -182,25 +137,51 @@ const EXT_CANDIDATES = [
  */
 export function specCandidates(spec, fromFile) {
   const clean = spec.split("?")[0];
-  if (!clean) return [];
+  if (!clean) {
+    return [];
+  }
   let base;
-  if (clean === "~" || clean === "@") base = "src";
-  else if (clean.startsWith("~/") || clean.startsWith("@/"))
-    base = "src/" + clean.slice(2);
-  else if (clean.startsWith("./") || clean.startsWith("../")) {
+  if (clean === "~" || clean === "@") {
+    base = "src";
+  } else if (clean.startsWith("~/") || clean.startsWith("@/")) {
+    base = `src/${clean.slice(2)}`;
+  } else if (clean.startsWith("./") || clean.startsWith("../")) {
     const fromDir = fromFile ? path.posix.dirname(fromFile) : ".";
     base = path.posix.normalize(path.posix.join(fromDir, clean));
-  } else return [];
+  } else {
+    return [];
+  }
   return EXT_CANDIDATES.map((ext) => base + ext);
 }
 
-/** 说明符抽取：`from` / `import` / `require` / `vi.mock` / `jest.mock` 后的字符串字面量。
- *  可选左括号让动态 `import("x")` 与 `require("x")` 也走同一条。 */
-const SPEC_RE =
-  /(?:\bfrom|\bimport|\brequire|vi\.mock|jest\.mock)\s*\(?\s*["']([^"'\n]+)["']/g;
+/** `vi.mock` / `jest.mock` 的说明符：`preProcessFile` 只认 import/require/export
+ *  这几类语法，测试里的模块替身不在它那份结果里，所以这一条单独补。 */
+const MOCK_RE = /(?:vi|jest)\.mock\s*\(\s*["']([^"'\n]+)["']/g;
+
+/** `export * as ns from "x"`：扫描器对这一形态不报（实测 TS 6.0.3），而它确实是
+ *  一条转出口 —— 漏了就是「闭包算少了」那一侧，单独补一条。 */
+const EXPORT_NS_RE = /\bexport\s+(?:type\s+)?\*\s+as\s+[\w$]+\s+from\s*["']([^"'\n]+)["']/g;
+
+/** JSDoc 里的类型引用 `import("x")`（`@param {import("…").T}` / `@type {import("…")}`）：
+ *  扫描器只按 JS 语法走，注释不在它的结果里；而这类引用**是真的依赖** —— tsc 与
+ *  typedoc 都沿它解析类型（`scripts/lockfile/lock-diff.d.mts` 就是 typedoc 输入面闭包
+ *  里唯一一条靠它进图的文件）。所以按「落在注释里」把它补回来。 */
+const TYPE_IMPORT_RE = /\bimport\s*\(\s*["']([^"'\n]+)["']\s*\)/g;
 
 /**
  * 一份源码静态引用到的模块（候选路径集合，含 barrel 的 `dir/index.*` 形态）。
+ *
+ * 说明符由 TypeScript 的**预处理扫描器**（`ts.preProcessFile`）给出：它按词法走
+ * 文件，字符串与模板串里「长得像 import」的那一段不算引用，静态 / 动态 `import()` /
+ * `require` / `export {…} from` / `export * from` 全覆盖。用正则抓这一段会连
+ * **夹具字符串**一起算成依赖（ISSUE #2830：一份门禁自测把源码样例写成字符串，
+ * 于是改样例里提到的那份模块就把整份重档自测拉进无关提交的受影响面）。
+ *
+ * 扫描器没覆盖的三种形态各补一条规则：`vi.mock` 的模块替身、`export * as ns from`、
+ * 以及 JSDoc 里的类型引用 `import("…")`（前两条跑在**剥注释之后**的文本上，第三条
+ * 反过来只认注释里那一份）。已知边界：字符串里**逐字**写出前两种形态时仍会被算成
+ * 依赖（扫描器管不到它们，剥注释也只剥真的注释）—— 偏「多跑几份」而不是「少跑」，
+ * 全仓实测只出现在自测夹具里。
  *
  * **导出的理由**：`scripts/docs-api-input-closure.mjs` 要算 typedoc 输入面的
  * 传递闭包，而它需要的正是这同一份说明符解析 —— 抄第二份正则就会漂（§12.12 / §12.18），
@@ -212,19 +193,44 @@ const SPEC_RE =
  */
 export function specifiersOf(text, fromFile) {
   const out = new Set();
-  for (const m of text.matchAll(SPEC_RE)) {
-    const spec = m[1];
-    if (!spec) continue;
-    for (const cand of specCandidates(spec, fromFile)) out.add(cand);
+  for (const file of ts.preProcessFile(text, true, true).importedFiles) {
+    for (const cand of specCandidates(file.fileName, fromFile)) {
+      out.add(cand);
+    }
+  }
+  const code = stripComments(text);
+  for (const re of [MOCK_RE, EXPORT_NS_RE]) {
+    for (const m of code.matchAll(re)) {
+      for (const cand of specCandidates(m[1], fromFile)) {
+        out.add(cand);
+      }
+    }
+  }
+  /* 类型引用只认**注释里**那一份：`stripComments` 保持长度、把注释字符换成空格，
+   * 所以「同一段在剥完注释的文本里变成空白」= 它落在注释里。代码里的动态
+   * `import("…")` 扫描器已经报过，字符串里的同形文本则原样保留、不会命中这一条。 */
+  for (const m of text.matchAll(TYPE_IMPORT_RE)) {
+    const idx = m.index ?? 0;
+    if (code.slice(idx, idx + m[0].length).trim() !== "") {
+      continue;
+    }
+    for (const cand of specCandidates(m[1] ?? "", fromFile)) {
+      out.add(cand);
+    }
   }
   return out;
 }
 
 /**
+ * 这个路径命中哪一条宽面触发（没命中回 `null`）。导出是为了让「输入面登记」的判据
+ * 用**同一份**宽面清单判死面（`tests/fixed-gate-input-faces.test.ts`）：宽面一命中，
+ * 整档就退回全跑，输入面那一层根本轮不到 —— 面里写一条整条落在宽面上的模式，
+ * 等于写了一个永远不会被问到的条件。
+ *
  * @param {string} rel
  * @returns {string | null}
  */
-function wideReasonFor(rel) {
+export function wideReasonFor(rel) {
   const hit = WIDE_TRIGGERS.find((t) => t.test(rel));
   return hit ? hit.why : null;
 }
@@ -247,11 +253,17 @@ export function buildImportedBy(nodes, readText) {
   const codeTexts = new Map();
   for (const from of nodes) {
     const text = readText(from);
-    if (text === null || text === undefined) continue;
-    if (isTestPath(from)) codeTexts.set(from, stripComments(text));
+    if (text === null || text === undefined) {
+      continue;
+    }
+    if (isTestPath(from)) {
+      codeTexts.set(from, stripComments(text));
+    }
     for (const cand of specifiersOf(text, from)) {
       let bucket = importedBy.get(cand);
-      if (!bucket) importedBy.set(cand, (bucket = new Set()));
+      if (!bucket) {
+        importedBy.set(cand, (bucket = new Set()));
+      }
       bucket.add(from);
     }
   }
@@ -270,16 +282,22 @@ function reachFrom(roots, importedBy) {
   const hops = new Map();
   const queue = [];
   for (const rel of roots) {
-    if (hops.has(rel)) continue;
+    if (hops.has(rel)) {
+      continue;
+    }
     hops.set(rel, 0);
     queue.push(rel);
   }
   while (queue.length > 0) {
     const cur = queue.shift();
-    if (cur === undefined) continue;
+    if (cur === undefined) {
+      continue;
+    }
     const hop = (hops.get(cur) ?? 0) + 1;
     for (const consumer of importedBy.get(cur) ?? []) {
-      if (hops.has(consumer)) continue;
+      if (hops.has(consumer)) {
+        continue;
+      }
       hops.set(consumer, hop);
       queue.push(consumer);
     }
@@ -313,7 +331,9 @@ export function resolveAffectedTests({
    * @param {string} why
    */
   const add = (rel, why) => {
-    if (!testFiles.includes(rel)) return;
+    if (!testFiles.includes(rel)) {
+      return;
+    }
     picked.add(rel);
     reasons[rel] = reasons[rel] ? `${reasons[rel]} + ${why}` : why;
   };
@@ -346,9 +366,7 @@ export function resolveAffectedTests({
       reasons: note ? { __note: note } : reasons,
     };
     if (pickedFixed.skipped.length > 0) {
-      out.reasons.__faceSkipped = pickedFixed.skipped
-        .map((s) => s.test)
-        .join(" ");
+      out.reasons.__faceSkipped = pickedFixed.skipped.map((s) => s.test).join(" ");
     }
     return out;
   };
@@ -358,19 +376,24 @@ export function resolveAffectedTests({
   const wide = [];
   for (const raw of changedPaths) {
     const rel = normalizeRel(raw);
-    if (!rel) continue;
+    if (!rel) {
+      continue;
+    }
     const why = wideReasonFor(rel);
-    if (why) wide.push(`${rel} —— ${why}`);
+    if (why) {
+      wide.push(`${rel} —— ${why}`);
+    }
     changed.add(rel);
   }
-  if (wide.length > 0) return withFixed("all", [], wide.join(" / "));
+  if (wide.length > 0) {
+    return withFixed("all", [], wide.join(" / "));
+  }
 
   const list = [...changed];
   /* 已消失的旧路径：改名旧侧、删除项。它们不在索引/HEAD 的 `ls-files` 里，而按路径
    * 读文件的用例仍可能写着它 —— 整串字面量之外，再用「目录 + 文件名」兜一次。 */
   const trackedSet = tracked === null ? null : new Set(tracked.map(normalizeRel));
-  const vanished =
-    trackedSet === null ? [] : list.filter((rel) => !trackedSet.has(rel));
+  const vanished = trackedSet === null ? [] : list.filter((rel) => !trackedSet.has(rel));
   for (const rel of list) {
     if (isTestPath(rel)) {
       add(rel, "自身");
@@ -379,21 +402,19 @@ export function resolveAffectedTests({
       // 否则 `x.tsx` 会拼成 `x.tsx.test.ts` 这种查无此文件的名字。
       const stem = rel.replace(/\.(ts|tsx|mts|js|jsx|mjs)$/, "");
       if (stem !== rel) {
-        add(stem + ".test.ts", "兄弟测试");
-        add(stem + ".test.tsx", "兄弟测试");
+        add(`${stem}.test.ts`, "兄弟测试");
+        add(`${stem}.test.tsx`, "兄弟测试");
       }
     }
     // 快照文件按其宿主测试算。
     if (rel.endsWith(".snap")) {
       const dir = path.posix.dirname(rel);
-      if (path.posix.basename(dir) === "__snapshots__")
+      if (path.posix.basename(dir) === "__snapshots__") {
         add(
-          path.posix.join(
-            path.posix.dirname(dir),
-            path.posix.basename(rel, ".snap"),
-          ),
+          path.posix.join(path.posix.dirname(dir), path.posix.basename(rel, ".snap")),
           "快照宿主",
         );
+      }
     }
     // 门禁脚本按名字配它的回归测试。
     const script = /^scripts\/(.+)\.(?:cjs|mjs|py)$/.exec(rel);
@@ -417,7 +438,9 @@ export function resolveAffectedTests({
 
   const hops = reachFrom(list, importedBy);
   for (const [file, hop] of hops) {
-    if (hop > 0 && isTestPath(file)) add(file, `反向 import ${hop} 跳`);
+    if (hop > 0 && isTestPath(file)) {
+      add(file, `反向 import ${hop} 跳`);
+    }
   }
 
   /* ── ④ 路径以字面量被引用（闭包抓不到的那类消费）──────────────────────── */
@@ -431,9 +454,13 @@ export function resolveAffectedTests({
    * 拉进增量面（上次账本逐文件读数合计 455.8s，量级参考），而那六份里没有一份在运行期
    * 读那份 `.md`。口径、实测量与判据在 §13.5.8。 */
   for (const testFile of testFiles) {
-    if (picked.has(testFile)) continue;
+    if (picked.has(testFile)) {
+      continue;
+    }
     const text = codeTexts.get(testFile);
-    if (text === undefined) continue;
+    if (text === undefined) {
+      continue;
+    }
     let why = "";
     for (const rel of list) {
       if (rel !== testFile && text.includes(rel)) {
@@ -448,28 +475,29 @@ export function resolveAffectedTests({
         /* 只认「目录与文件名都写了」的那一种：单看 basename（`route.ts` / `index.ts`）
          * 会把半个测试面拉进来，而按路径读的常见形态恰好是 join(ROOT, 目录, 文件名)。
          * 目录名重名时仍可能多报 —— 多跑几份是代价，改名把消费方整条抹掉才是要治的病。 */
-        if (
-          dir !== "." &&
-          base !== "" &&
-          text.includes(dir) &&
-          text.includes(base)
-        ) {
+        if (dir !== "." && base !== "" && text.includes(dir) && text.includes(base)) {
           why = "按旧路径片引用";
           break;
         }
       }
     }
-    if (why !== "") add(testFile, why);
+    if (why !== "") {
+      add(testFile, why);
+    }
   }
 
   /* 已知基线红（`KNOWN_FAILED_FILES` 单点定义，与 `run-tests.mjs` / 一键门禁同一份）：
    * 从**增量**面里剔掉，否则别线的红会让无关提交落不了地。固定清单不受影响 ——
    * 那几条是全库不变量的执行者，没有「先放行」的余地。剔除是被打印出来的，不是静默。 */
   const skipped = [...picked].filter((t) => knownFailed.includes(t));
-  for (const t of skipped) picked.delete(t);
+  for (const t of skipped) {
+    picked.delete(t);
+  }
 
   const out = withFixed("subset", picked);
-  if (skipped.length > 0) out.reasons.__skipped = skipped.join(" ");
+  if (skipped.length > 0) {
+    out.reasons.__skipped = skipped.join(" ");
+  }
   return out;
 }
 
@@ -507,17 +535,13 @@ export function resolveAffectedTests({
  * @returns {{file: string, affected: number, total: number}[]} 按单独影响面**从大到小**排序；
  *   `affected` 是受影响份数（不含固定清单），`total` 是合计（含固定清单）
  */
-export function attributeAffected(
-  changedPaths,
-  graph,
-  testFiles,
-  sourceFiles,
-  tracked = null,
-) {
+export function attributeAffected(changedPaths, graph, testFiles, sourceFiles, tracked = null) {
   const out = [];
   for (const raw of changedPaths) {
-    const rel = String(raw).trim().replace(/\\/g, "/");
-    if (!rel) continue;
+    const rel = String(raw).trim().replaceAll("\\", "/");
+    if (!rel) {
+      continue;
+    }
     /* **逐文件走同一条判定链**（`resolveAffectedTests`），而不是另写一份「这个文件
      * 拉到哪些测试」的复制品 —— 复制品与主链的漂移是静默的，而这条建议的全部价值
      * 就在于它的数**与真正要跑的清单对得上**。图注入进去，所以这么循环不重建图。
@@ -534,18 +558,12 @@ export function attributeAffected(
       graph,
       tracked,
     });
-    const affected = res.tests.filter(
-      (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
-    ).length;
+    const affected = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t)).length;
     out.push({ file: rel, affected, total: res.tests.length });
   }
   // 稳定排序：同份数时按路径字典序，避免同样的改动在不同机器上给出不同顺序。
   return out.sort((a, b) =>
-    b.affected !== a.affected
-      ? b.affected - a.affected
-      : a.file < b.file
-        ? -1
-        : 1,
+    b.affected === a.affected ? a.file < b.file ? -1 : 1 : b.affected - a.affected,
   );
 }
 
@@ -562,9 +580,9 @@ function git(args) {
       encoding: "utf8",
       maxBuffer: 64 << 20,
     });
-  } catch (err) {
+  } catch (error) {
     process.stderr.write(
-      `[affected] git ${args.join(" ")} 失败：${err instanceof Error ? err.message : String(err)}\n`,
+      `[affected] git ${args.join(" ")} 失败：${error instanceof Error ? error.message : String(error)}\n`,
     );
     return null;
   }
@@ -589,7 +607,9 @@ function stagedChanges() {
     "-M",
     "--diff-filter=ACMRD",
   ]);
-  if (out === null) return null;
+  if (out === null) {
+    return null;
+  }
   return changedPathsFromNameStatus(out);
 }
 
@@ -644,7 +664,7 @@ function stdinPaths() {
  */
 export function changedPathsFrom(argv) {
   const ci = argv.indexOf("--changed");
-  if (ci >= 0) {
+  if (ci !== -1) {
     return {
       paths: argv.slice(ci + 1).filter((a) => !a.startsWith("--")),
       renamedFrom: [],
@@ -685,7 +705,9 @@ function trackedPaths() {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
    * 的文件头「口径 ④」）。转义过的路径在图里认不出来 ⇒ 按路径消费的用例会漏跑。 */
   const out = git(["-c", "core.quotePath=false", "ls-files"]);
-  if (out === null) return null;
+  if (out === null) {
+    return null;
+  }
   return out
     .split("\n")
     .map((s) => s.trim())
@@ -711,7 +733,9 @@ function readText(rel) {
  */
 function collectInputs() {
   const tracked = trackedPaths();
-  if (tracked === null) return null;
+  if (tracked === null) {
+    return null;
+  }
   return {
     testFiles: tracked.filter(isTestPath),
     sourceFiles: tracked.filter(isSourcePath),
@@ -743,7 +767,7 @@ export function wideFallbackNote(note, count) {
 function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--fixed-only")) {
-    process.stdout.write(FIXED_STRUCTURAL_TESTS.join(" ") + "\n");
+    process.stdout.write(`${FIXED_STRUCTURAL_TESTS.join(" ")}\n`);
     return 0;
   }
   /* `--attribute`：只回答「这次的受影响面里，每一份是被哪个改动文件拉进来的」，
@@ -757,20 +781,11 @@ function main() {
       process.stdout.write("[]\n");
       return 0;
     }
-    const graph = buildImportedBy(
-      new Set([...inputs.sourceFiles, ...inputs.testFiles]),
-      readText,
-    );
+    const graph = buildImportedBy(new Set([...inputs.sourceFiles, ...inputs.testFiles]), readText);
     process.stdout.write(
-      JSON.stringify(
-        attributeAffected(
-          changed,
-          graph,
-          inputs.testFiles,
-          inputs.sourceFiles,
-          inputs.tracked,
-        ),
-      ) + "\n",
+      `${JSON.stringify(
+        attributeAffected(changed, graph, inputs.testFiles, inputs.sourceFiles, inputs.tracked),
+      )}\n`,
     );
     return 0;
   }
@@ -795,9 +810,7 @@ function main() {
 
   const extra = res.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t));
   if (res.mode === "all") {
-    process.stderr.write(
-      wideFallbackNote(res.reasons.__note ?? "见 --json", res.tests.length),
-    );
+    process.stderr.write(wideFallbackNote(res.reasons.__note ?? "见 --json", res.tests.length));
   } else {
     /* 「固定 N」必须是**这次真跑到的**固定条数，不是清单长度 —— 开了输入面之后两者
      * 可以不同，而这一行是唯一会被读账的数字：拿清单长度冒充实跑，跳过的那几条
@@ -832,8 +845,8 @@ function main() {
   const tests = res.tests.length > 0 ? res.tests : [...FIXED_STRUCTURAL_TESTS];
   process.stdout.write(
     argv.includes("--json")
-      ? JSON.stringify({ ...res, tests }, null, 2) + "\n"
-      : tests.join(" ") + "\n",
+      ? `${JSON.stringify({ ...res, tests }, null, 2)}\n`
+      : `${tests.join(" ")}\n`,
   );
   return 0;
 }

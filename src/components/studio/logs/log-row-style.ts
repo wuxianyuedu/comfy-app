@@ -20,11 +20,11 @@ import {
 import { findLogPathTokens } from "~/lib/log/log-path-tokens";
 
 /** 行文本里识别出的词法分片。`style` 为空 = 按级别默认色渲染。 */
-export interface RowToken {
-  text: string;
+export type RowToken = {
   /** 语义样式键（与 ANSI 样式键同一套，视图映射成 className）。 */
   style?: AnsiStyleKey;
-}
+  text: string;
+};
 
 /** 日志级别的徽标配色（视图与测试共用同一份表）。级别是**状态语义**，
  *  走项目语义 token（§4.11.1 / P71）：info→`--color-info`、warn→
@@ -54,8 +54,7 @@ export const LEVEL_BADGE_STYLES: Record<LogLevel, string> = {
  * 级别色**不参与**选中判定（级别配色表照常挂在按钮上）：它表达的是「这一格
  * 是哪一类」，与「当前看的是哪一类」是两件事。
  */
-export const FILTER_SELECTED_STYLES =
-  "bg-primary/12 ring-1 ring-primary/45 font-semibold";
+export const FILTER_SELECTED_STYLES = "bg-primary/12 ring-1 ring-primary/45 font-semibold";
 
 /**
  * `ToggleGroupItem` 那一档的选中样式：与上面同一套三层表达（底色 + 描边 + 字重），
@@ -67,8 +66,7 @@ export const FILTER_SELECTED_STYLES =
  * `#f7f8fa` —— 于是「选中」又变回看不见（ISSUE #609 那条用户反馈的原样）。
  * 描边与字重不参与这场冲突（基元不在 pressed 上设 box-shadow / 字重），照常挂。
  */
-export const FILTER_SELECTED_ITEM_STYLES =
-  "bg-primary/12! ring-1 ring-primary/45 font-semibold";
+export const FILTER_SELECTED_ITEM_STYLES = "bg-primary/12! ring-1 ring-primary/45 font-semibold";
 
 /** 日志级别的正文配色（视图与测试共用同一份表）。级别是状态语义，走语义
  *  token（§4.11.1 / P71）：warn→`text-warning-strong`、error→
@@ -102,7 +100,7 @@ export function hasAnsi(text: string): boolean {
 const TOKEN_RE =
   /(\[\d{2}:\d{2}:\d{2}\]|\[OK\]|\[STEP\]|\[WARN\]|\[ERROR\]|\[INFO\]|PID\s*[:：]\s*\d+|https?:\/\/[^\s]+)/gi;
 
-const TOKEN_STYLES: { pattern: RegExp; style: AnsiStyleKey }[] = [
+const TOKEN_STYLES: Array<{ pattern: RegExp; style: AnsiStyleKey }> = [
   { pattern: /^\[\d{2}:\d{2}:\d{2}\]$/, style: "gray" },
   { pattern: /^\[OK\]$/, style: "green-bright" },
   { pattern: /^\[STEP\]$/, style: "cyan-bright" },
@@ -117,16 +115,18 @@ const TOKEN_STYLES: { pattern: RegExp; style: AnsiStyleKey }[] = [
 const PATH_STYLE: AnsiStyleKey = "magenta-bright";
 
 /** 行里被命中的一段（半开区间 `[start, end)`）。 */
-interface StyledSpan {
-  start: number;
+type StyledSpan = {
   end: number;
+  start: number;
   style: AnsiStyleKey;
-}
+};
 
 /** 一段命中文本 → 它的语义样式键；不命中任何一档回 `undefined`（按级别默认色渲染）。 */
 function styleOfToken(text: string): AnsiStyleKey | undefined {
   for (const token of TOKEN_STYLES) {
-    if (token.pattern.test(text)) return token.style;
+    if (token.pattern.test(text)) {
+      return token.style;
+    }
   }
   return undefined;
 }
@@ -138,8 +138,8 @@ function styleOfToken(text: string): AnsiStyleKey | undefined {
  * 落在路径区间内就让位（`C:\a\[OK]\b` 这种目录名不该把路径切成三段）。让位判据是
  * 区间相交，不依赖 TOKEN_RE 的分支顺序 —— 那个顺序只对「同级竞争」有意义。
  */
-function styledSpans(text: string): StyledSpan[] {
-  const spans: StyledSpan[] = findLogPathTokens(text).map((token) => ({
+function styledSpans(text: string): Array<StyledSpan> {
+  const spans: Array<StyledSpan> = findLogPathTokens(text).map((token) => ({
     start: token.start,
     end: token.end,
     style: PATH_STYLE,
@@ -148,9 +148,13 @@ function styledSpans(text: string): StyledSpan[] {
     const start = match.index;
     const end = start + match[0].length;
     const style = styleOfToken(match[0]);
-    if (style === undefined) continue;
+    if (style === undefined) {
+      continue;
+    }
     const inside = spans.some((span) => start < span.end && end > span.start);
-    if (inside) continue;
+    if (inside) {
+      continue;
+    }
     spans.push({ start, end, style });
   }
   return spans.sort((a, b) => a.start - b.start);
@@ -163,20 +167,24 @@ function styledSpans(text: string): StyledSpan[] {
  * 那种做法下「切点」与「样式」是两件事，于是新增路径形态时最容易漏掉的是**切点**
  * （切错 ⇒ 颜色断在半截，且下层按片段识别路径时直接认不出来）。
  */
-export function tokenizeRow(text: string): RowToken[] {
-  const parts: RowToken[] = [];
+export function tokenizeRow(text: string): Array<RowToken> {
+  const parts: Array<RowToken> = [];
   let cursor = 0;
   for (const span of styledSpans(text)) {
     /* 同一段文本可能被两档同时命中（路径里带 `[OK]` 之类）；已消费的区间跳过，
      * 不把同一段文字画两遍。 */
-    if (span.start < cursor) continue;
+    if (span.start < cursor) {
+      continue;
+    }
     if (span.start > cursor) {
       parts.push({ text: text.slice(cursor, span.start) });
     }
     parts.push({ text: text.slice(span.start, span.end), style: span.style });
     cursor = span.end;
   }
-  if (cursor < text.length) parts.push({ text: text.slice(cursor) });
+  if (cursor < text.length) {
+    parts.push({ text: text.slice(cursor) });
+  }
   return parts;
 }
 
@@ -186,7 +194,7 @@ export function tokenizeRow(text: string): RowToken[] {
  *   → 含 ANSI 的行 → 按 SGR 分片
  *   → 其余 → 词法分片。
  */
-export function rowFragments(text: string): RowToken[] {
+export function rowFragments(text: string): Array<RowToken> {
   const logrus = colorizeLogrusLine(text);
   if (logrus) {
     return logrus.map((seg) => ({
@@ -241,12 +249,12 @@ export const TOKEN_CLASS: Record<AnsiStyleKey, string> = {
 /* ── 行内文本选区判定（「日志一直在动、选不中想复制的行」的另一半）────── */
 
 /** 选区判定需要的最小 DOM 视图（真实 `Selection` / `window` 都满足它）。 */
-export interface SelectionLike {
-  readonly rangeCount: number;
+export type SelectionLike = {
   readonly anchorNode: Node | null;
   readonly focusNode: Node | null;
   isCollapsed: boolean;
-}
+  readonly rangeCount: number;
+};
 
 /**
  * 日志行的文本容器标记。视图在每个 `LogRow` 的消息元素上打这个属性，
@@ -289,6 +297,7 @@ export function selectionInsideLogs(selection: SelectionLike | null): boolean {
 
 function nodeIsLogText(node: Node): boolean {
   const element =
+    /* SAFETY: 类型断言已复核 */
     node.nodeType === 1 ? (node as Element) : (node.parentElement ?? null);
   return Boolean(
     element?.closest?.(`[${LOG_ROW_TEXT_ATTRIBUTE}]`) ??

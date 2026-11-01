@@ -53,15 +53,7 @@ const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
 
 /** 安装包扩展名（跨平台都收：Windows 的 nsis/msi 是本档主形，其余是同一条链在别的卷上的产物）。 */
-const INSTALLER_EXTENSIONS = new Set([
-  ".exe",
-  ".msi",
-  ".dmg",
-  ".app",
-  ".AppImage",
-  ".deb",
-  ".rpm",
-]);
+const INSTALLER_EXTENSIONS = new Set([".exe", ".msi", ".dmg", ".app", ".AppImage", ".deb", ".rpm"]);
 
 /** 指针文件的名字（不是目录 —— 见上面「三条不可换」的第二条）。 */
 export const LATEST_POINTER_FILE = "latest.txt";
@@ -76,12 +68,7 @@ const STAGING_PREFIX = ".staging-";
 export const DEFAULT_KEEP = 2;
 
 /** 默认从哪儿取成品（`pnpm tauri build` 的 bundle 输出根）。 */
-const DEFAULT_BUNDLE_DIR = path.join(
-  "src-tauri",
-  "target",
-  "release",
-  "bundle",
-);
+const DEFAULT_BUNDLE_DIR = path.join("src-tauri", "target", "release", "bundle");
 
 /**
  * 一份成品的形状（`collectBundles` 的产出、`manifest.files` 的来源）。
@@ -124,7 +111,9 @@ const DEFAULT_BUNDLE_DIR = path.join(
 export function collectBundles(bundleDir) {
   /** @type {{relPath: string, absPath: string, bytes: number}[]} */
   const found = [];
-  if (!fs.existsSync(bundleDir)) return found;
+  if (!fs.existsSync(bundleDir)) {
+    return found;
+  }
   /** @param {string} dir @param {string} rel */
   const walk = (dir, rel) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -134,8 +123,12 @@ export function collectBundles(bundleDir) {
         walk(abs, relPath);
         continue;
       }
-      if (!entry.isFile()) continue;
-      if (!INSTALLER_EXTENSIONS.has(path.extname(abs))) continue;
+      if (!entry.isFile()) {
+        continue;
+      }
+      if (!INSTALLER_EXTENSIONS.has(path.extname(abs))) {
+        continue;
+      }
       found.push({ relPath, absPath: abs, bytes: fs.statSync(abs).size });
     }
   };
@@ -156,9 +149,9 @@ export function buildLabel({ sha, buildId, now = new Date() } = {}) {
   const id = String(buildId ?? "").trim();
   const tail =
     id && !id.includes("(")
-      ? `b${id.replace(/[^0-9A-Za-z._-]/g, "-")}`
-      : now.toISOString().replace(/[-:]/g, "").replace(/\..+$/, "").replace("T", "t");
-  return `${head}-${tail}`.replace(/[^0-9A-Za-z._-]/g, "-");
+      ? `b${id.replaceAll(/[^0-9A-Za-z._-]/g, "-")}`
+      : now.toISOString().replaceAll(/[-:]/g, "").replace(/\..+$/, "").replace("T", "t");
+  return `${head}-${tail}`.replaceAll(/[^0-9A-Za-z._-]/g, "-");
 }
 
 /**
@@ -166,17 +159,7 @@ export function buildLabel({ sha, buildId, now = new Date() } = {}) {
  *
  * @param {{label: string, entries: BundleEntry[], keep: number} & ManifestIdentity} input
  */
-function buildManifest({
-  label,
-  sha,
-  event,
-  buildId,
-  user,
-  builtAt,
-  appVersion,
-  entries,
-  keep,
-}) {
+function buildManifest({ label, sha, event, buildId, user, builtAt, appVersion, entries, keep }) {
   return {
     label,
     sha,
@@ -197,7 +180,9 @@ function buildManifest({
  * @param {string} root @returns {{name: string, dir: string, builtAt: string|null}[]}
  */
 export function listReleases(root) {
-  if (!fs.existsSync(root)) return [];
+  if (!fs.existsSync(root)) {
+    return [];
+  }
   return fs
     .readdirSync(root, { withFileTypes: true })
     .filter((d) => d.isDirectory() && !d.name.startsWith(STAGING_PREFIX))
@@ -205,10 +190,10 @@ export function listReleases(root) {
       const dir = path.join(root, d.name);
       let builtAt = null;
       try {
-        builtAt = String(
-          JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8"))
-            .builtAt ?? "",
-        ) || null;
+        builtAt =
+          String(
+            JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), "utf8")).builtAt ?? "",
+          ) || null;
       } catch {
         /* 没有可读的 manifest —— 交给调用方按 mtime 退档处理，这里不替它编一个时刻。 */
       }
@@ -238,8 +223,8 @@ export function planRotation(releases, keep, log = () => {}) {
   });
   if (unstamped.length > 0) {
     log(
-      `[发布] ⚠ ${unstamped.length} 个目录读不到 manifest 的 builtAt（按目录 mtime 排）：` +
-        unstamped.join(", "),
+      `[发布] ⚠ ${unstamped.length} 个目录读不到 manifest 的 builtAt（按目录 mtime 排）：${
+        unstamped.join(", ")}`,
     );
   }
   const sorted = stamped.sort((a, b) => b.at - a.at || b.name.localeCompare(a.name));
@@ -270,19 +255,15 @@ function resolvePlan(io = {}) {
   const args = new Set(argv);
   const flag = /** @param {string} name */ (name) => {
     const i = argv.indexOf(name);
-    return i >= 0 ? String(argv[i + 1] ?? "") : "";
+    return i !== -1 ? String(argv[i + 1] ?? "") : "";
   };
-  const bundleDir = path.resolve(
-    cwd,
-    flag("--bundle-dir") || DEFAULT_BUNDLE_DIR,
-  );
+  const bundleDir = path.resolve(cwd, flag("--bundle-dir") || DEFAULT_BUNDLE_DIR);
   const keepRaw = flag("--keep");
   const keep = keepRaw ? Number.parseInt(keepRaw, 10) : DEFAULT_KEEP;
   const context = runContext(/** @type {NodeJS.ProcessEnv} */ (env));
   const sha = String(runGit(["rev-parse", "HEAD"]) ?? "").trim();
   const resolved = resolveArtifactRoot({ cwd, env, run: runStore });
-  const label =
-    flag("--label") || buildLabel({ sha, buildId: context.buildId, now });
+  const label = flag("--label") || buildLabel({ sha, buildId: context.buildId, now });
   return {
     bundleDir,
     keep: Number.isFinite(keep) && keep > 0 ? keep : DEFAULT_KEEP,
@@ -305,8 +286,7 @@ function resolvePlan(io = {}) {
 function readAppVersion(cwd) {
   try {
     return String(
-      JSON.parse(fs.readFileSync(path.join(cwd, "package.json"), "utf8")).version ??
-        "",
+      JSON.parse(fs.readFileSync(path.join(cwd, "package.json"), "utf8")).version ?? "",
     );
   } catch {
     return "(读不到)";
@@ -394,15 +374,9 @@ export function main(io = {}) {
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.copyFileSync(e.absPath, dest);
     }
-    fs.writeFileSync(
-      path.join(staging, MANIFEST_FILE),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-    );
+    fs.writeFileSync(path.join(staging, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
     fs.renameSync(staging, target);
-    fs.writeFileSync(
-      path.join(plan.root, LATEST_POINTER_FILE),
-      `${plan.label}\n`,
-    );
+    fs.writeFileSync(path.join(plan.root, LATEST_POINTER_FILE), `${plan.label}\n`);
   } catch (error) {
     fs.rmSync(staging, { recursive: true, force: true });
     log(`[发布] 失败：写盘被拒 —— ${error instanceof Error ? error.message : String(error)}`);
@@ -428,9 +402,6 @@ export function main(io = {}) {
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main());
 }

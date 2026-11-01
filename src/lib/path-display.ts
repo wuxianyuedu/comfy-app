@@ -43,20 +43,27 @@
  * toDisplayPath("src/components/studio/x.tsx"); // 结果同原串的正斜杠形态
  * ```
  */
-export function toDisplayPath(
-  raw: string | null | undefined,
-  base?: string | null,
-): string {
+export function toDisplayPath(raw: string | null | undefined, base?: string | null): string {
   const s = normalizeSlashes(raw);
-  if (!s) return "";
-  if (!base) return s;
+  if (!s) {
+    return "";
+  }
+  if (!base) {
+    return s;
+  }
   const b = normalizeSlashes(base).replace(/\/+$/, "");
-  if (!b) return s;
+  if (!b) {
+    return s;
+  }
   /* 只在**确实是这个前缀**时剥 —— 不做 `path.relative` 的 `..` 推导：
    * 展示层要的是「相对这台机器上的哪个根」，`../../..` 那一串对用户没有信息量，
    * 而且它在两个不同源的路径上会是纯噪声。剥不动就原样返回。 */
-  if (s === b) return "";
-  if (s.startsWith(b + "/")) return s.slice(b.length + 1);
+  if (s === b) {
+    return "";
+  }
+  if (s.startsWith(`${b}/`)) {
+    return s.slice(b.length + 1);
+  }
   return s;
 }
 
@@ -67,11 +74,10 @@ export function toDisplayPath(
  * 与 {@link toDisplayPath} 的分工：那个剥的是「一台机器上的根目录」，本函数剥的是
  * 「一个约定的命名前缀」—— 不需要分隔符语义，也不需要归一。
  */
-export function stripPathPrefix(
-  raw: string | null | undefined,
-  prefix: string,
-): string {
-  if (!raw) return "";
+export function stripPathPrefix(raw: string | null | undefined, prefix: string): string {
+  if (!raw) {
+    return "";
+  }
   return raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
 }
 
@@ -89,14 +95,15 @@ export function stripPathPrefix(
  * lastSegments("a/b/c/d.ts", 0); // 给空串
  * ```
  */
-export function lastSegments(
-  raw: string | null | undefined,
-  n: number,
-): string {
+export function lastSegments(raw: string | null | undefined, n: number): string {
   const s = normalizeSlashes(raw);
-  if (!s || n <= 0) return "";
+  if (!s || n <= 0) {
+    return "";
+  }
   const parts = s.split("/").filter(Boolean);
-  if (parts.length <= n) return parts.join("/");
+  if (parts.length <= n) {
+    return parts.join("/");
+  }
   return parts.slice(parts.length - n).join("/");
 }
 
@@ -120,15 +127,18 @@ export const ELLIPSIS_MIDDLE = "…";
  * // 结果保头保尾、中段换成省略号，末尾的文件名仍在
  * ```
  */
-export function ellipsisMiddle(
-  text: string | null | undefined,
-  maxLength: number,
-): string {
-  if (maxLength <= 0) return "";
+export function ellipsisMiddle(text: string | null | undefined, maxLength: number): string {
+  if (maxLength <= 0) {
+    return "";
+  }
   const s = text ?? "";
-  if (s.length <= maxLength) return s;
+  if (s.length <= maxLength) {
+    return s;
+  }
   const mark = ELLIPSIS_MIDDLE;
-  if (mark.length >= maxLength) return s.slice(0, maxLength);
+  if (mark.length >= maxLength) {
+    return s.slice(0, maxLength);
+  }
   const budget = maxLength - mark.length;
   /* 头部**多留一格**（`ceil`）—— 路径的头是盘符 / `src/` 这类短前缀，
    * 尾部是文件名（通常更长），把奇数余额给头部能让两边都不至于只剩一个字符。 */
@@ -145,6 +155,8 @@ export function ellipsisMiddle(
  * 但请注意：比较键还要 `.toLowerCase()`，那不是本函数的账（大小写在展示上要保留）。
  */
 export function normalizeSlashes(raw: string | null | undefined): string {
-  if (!raw) return "";
-  return raw.replace(/\\/g, "/").replace(/^\.\//, "");
+  if (!raw) {
+    return "";
+  }
+  return raw.replaceAll("\\", "/").replace(/^\.\//, "");
 }

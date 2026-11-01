@@ -26,16 +26,7 @@ import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveSqlitePath } from "../scripts/db-schema-state.mjs";
 import { acquireRepoDrizzle } from "./helpers/repo-drizzle-lock";
 
@@ -49,7 +40,9 @@ let releaseDrizzle: (() => void) | null = null;
 
 /** 把真 `drizzle/` 挪到一边（返回备份路径）；已经在一边时返回 null。 */
 function hideMigrations(): string | null {
-  if (!fs.existsSync(REAL_DRIZZLE)) return null;
+  if (!fs.existsSync(REAL_DRIZZLE)) {
+    return null;
+  }
   const bak = `${REAL_DRIZZLE}.test-bak-${process.pid}`;
   fs.renameSync(REAL_DRIZZLE, bak);
   return bak;
@@ -93,7 +86,7 @@ afterEach(() => {
 });
 
 /** 在真仓库里跑迁移入口（`stdio` 全 pipe：无 TTY，正是要复现的环境）。 */
-function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: string[] = []) {
+function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: Array<string> = []) {
   return spawnSync(
     process.execPath,
     [path.join(process.cwd(), "scripts", "db-migrate.mjs"), ...extraArgs],
@@ -109,7 +102,7 @@ function runMigrate(databaseUrl = `file:${dbFile}`, extraArgs: string[] = []) {
 
 describe("pnpm db:migrate 非交互可用", () => {
   it("package.json 的 db:migrate 经 scripts/db-migrate.mjs，而不是裸 drizzle-kit migrate", () => {
-    const pkg = JSON.parse(
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
       fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
     // 裸 `drizzle-kit migrate` 在前提不成立时「先建库、再退 1、留空壳」（实测）。
@@ -118,10 +111,7 @@ describe("pnpm db:migrate 非交互可用", () => {
   });
 
   it("判定依据是库里的真事实（表数 + 账本），不是 drizzle-kit 的退出码", () => {
-    const src = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "db-migrate.mjs"),
-      "utf8",
-    );
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-migrate.mjs"), "utf8");
     expect(src).toContain("countUserTables");
     expect(src).toContain("appliedMigrations");
     // 退出码在这条链路上不可信（实测：先建 0 字节库、再退 1），源码里必须写明。
@@ -129,10 +119,7 @@ describe("pnpm db:migrate 非交互可用", () => {
   });
 
   it("前置判决按 .sql 筛，而不是「目录在不在」", () => {
-    const src = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "db-migrate.mjs"),
-      "utf8",
-    );
+    const src = fs.readFileSync(path.join(process.cwd(), "scripts", "db-migrate.mjs"), "utf8");
     // 「目录在、但一份迁移都没有」与「目录不在」是同样建不出库的现场，
     // 判据只认前者的话会漏过去。
     expect(src).toContain('.endsWith(".sql")');
@@ -181,9 +168,7 @@ describe("参数契约：未知旗标拦下，且一个字节都不写", () => {
 describe("前提不成立时：非零退出，且不产出 0 字节库", () => {
   it("没有迁移文件 → 前置判决拦下，库文件**根本没被创建**", () => {
     moved = hideMigrations();
-    expect(fs.existsSync(REAL_DRIZZLE), "前置条件：迁移目录已被挪开").toBe(
-      false,
-    );
+    expect(fs.existsSync(REAL_DRIZZLE), "前置条件：迁移目录已被挪开").toBe(false);
 
     const r = runMigrate();
 
@@ -226,7 +211,9 @@ describe("前提不成立时：非零退出，且不产出 0 字节库", () => {
 describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一份", () => {
   /** 数一遍临时库里的用户表（读不到就返回 -1，让断言自己说清是哪种缺件）。 */
   function countTables(file: string): number {
-    if (!fs.existsSync(file)) return -1;
+    if (!fs.existsSync(file)) {
+      return -1;
+    }
     const db = new DatabaseSync(file, { readOnly: true, open: true });
     try {
       const row = db
@@ -245,7 +232,7 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
      * 而盘符那一档要靠**内容里有没有冒号**复现 —— 临时绝对路径在 Windows 上就是
      * `C:\Users\…`，在 Linux 上是 `/tmp/…`，两种都必须被补成带 scheme 的地址。 */
     const abs = dbFile;
-    const cases: [string, string][] = [
+    const cases: Array<[string, string]> = [
       ["file:./db.sqlite", path.resolve(process.cwd(), "db.sqlite")],
       ["./db.sqlite", path.resolve(process.cwd(), "db.sqlite")],
       /* 空串这一档不是假想：`SKIP_ENV_VALIDATION=1` 时它就是会出现（`src/server/db.ts`
@@ -256,21 +243,19 @@ describe("库地址形态：交给 drizzle-kit 的必须是 libsql 认的那一�
       [abs, abs],
     ];
     const previous = process.env.DATABASE_URL;
-    const problems: string[] = [];
+    const problems: Array<string> = [];
     try {
       for (const [value, expectedFile] of cases) {
         process.env.DATABASE_URL = value;
         /* 配置在 **import 时**读环境变量，所以每一档都要重新求值模块，
          * 否则第一档的常量会被 module 缓存带到后面四档去（那是自证式的假绿）。 */
         vi.resetModules();
-        const imported = (await import("../drizzle.config")) as {
+        const imported = /* SAFETY: 类型断言已复核 */ (await import("../drizzle.config")) as {
           default?: { dbCredentials?: { url?: string } };
         };
         const url = imported.default?.dbCredentials?.url;
         if (typeof url !== "string" || url === "") {
-          problems.push(
-            `DATABASE_URL="${value}" → 配置里拿不到 dbCredentials.url`,
-          );
+          problems.push(`DATABASE_URL="${value}" → 配置里拿不到 dbCredentials.url`);
           continue;
         }
         if (!url.startsWith("file:")) {

@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { runNewIssue } from "../scripts/ship-issue-new.mjs";
 
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
   for (const dir of tmpDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -37,7 +37,7 @@ function mkTmpCtx() {
 const TITLE = "fix(x): 测试标题";
 
 /** 建单回读的 issue 形状；labels 由用例给。 */
-function issueJson(labels: unknown[]) {
+function issueJson(labels: Array<unknown>) {
   return JSON.stringify({
     status: 200,
     data: {
@@ -52,10 +52,10 @@ function issueJson(labels: unknown[]) {
 
 function harness(opts: {
   /** get-issue 回读里的 labels。 */
-  backLabels: unknown[];
+  backLabels: Array<unknown>;
 }) {
-  const log: string[] = [];
-  const run = (_cmd: string, args: string[]) => {
+  const log: Array<string> = [];
+  const run = (_cmd: string, args: Array<string>) => {
     if (args[1] === "create-issue") {
       return {
         status: 0,
@@ -89,9 +89,9 @@ function newIssue(
   run: unknown,
   log: (s: string) => void,
   opts: {
+    explicitHandle?: string | null;
     handle: string | null;
     handleSource?: string | null;
-    explicitHandle?: string | null;
   },
 ) {
   const { mkTmp, bodyFile } = mkTmpCtx();

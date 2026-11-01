@@ -41,14 +41,32 @@ import {
   writeSession,
 } from "../scripts/dev-launcher-session.mjs";
 import { killProcessTree } from "../src/lib/process/kill-process-tree";
+import { stripComments as stripJs } from "./helpers/strip-comments";
 import { launcherChainSource } from "./helpers/launcher-source";
+
+/**
+ * 读一份源文件并**剥掉注释**（唯一实现 `./helpers/strip-comments`，`{trailing:true}` 连行尾一起去）。
+ *
+ * 为什么这一族的反向断言必须先剥：`scripts/launcher-core/shell.mjs` 里就有一句
+ * 「写着 `process.platform === "win32" ? "pnpm.cmd" : "pnpm"`。那条判据在 Windows 上…」——
+ * 拿原文去判「编排器不许自己摸 platform」，就会红在**正在解释为什么不该这么写**的那行文档上。
+ *
+ * 为什么不用这份文件里 `describe` 内那一份本地 `stripComments`（`scripts 里的 src/lib 路径字面量`
+ * 那一组里）：那份是台账登记的另一型（`tests/strip-comments-single-source.test.ts`），
+ * 它只服务那一组的说明符扫描，换语言面不同 —— 引它的名字会构成第二份定义。
+ *
+ * ⚠️ 刻意**不**用在 `#` 注释语法上的那两份接收者：`scripts/dev-launcher.ps1` 与
+ * `src-tauri/Cargo.toml`。实测拿 JS 档剥 `.ps1` 前后字符数完全相同（2898 → 2898，等于没剥），
+ * 而那一格自己的口径写着「判据是『不再调用』而不是『不再提及』」—— 加上去只会造出假红。
+ * 那一格缺口归 ISSUE #2934，不在这里补。
+ */
+const readCode = (rel: string): string =>
+  stripJs(fs.readFileSync(path.join(process.cwd(), rel), "utf8"), { trailing: true });
 
 /** 数出「进程组」里还剩几个活着的标记进程（用唯一标记匹配命令行）。 */
 function countMarkedProcesses(marker: string): number {
   const out = execFileSync("ps", ["-eo", "pid,args"], { encoding: "utf8" });
-  return out
-    .split("\n")
-    .filter((line: string) => line.includes(marker) && !line.includes("ps -eo"))
+  return out.split("\n").filter((line: string) => line.includes(marker) && !line.includes("ps -eo"))
     .length;
 }
 
@@ -61,16 +79,13 @@ function countMarkedProcesses(marker: string): number {
  * 所以两边都读同一个 `check`：先轮询等它成立，再把**最终读数**交回调用点
  * （调用点自己仍用 `toBe(true)` 判结论，报错文案里保留各自的语义）。
  */
-async function waitUntil(
-  check: () => boolean,
-  timeoutMs = 5000,
-): Promise<boolean> {
+async function waitUntil(check: () => boolean, timeoutMs = 5000): Promise<boolean> {
   await expect.poll(check, { timeout: timeoutMs, interval: 100 }).toBe(true);
   return check();
 }
 
 describe("跨平台启动编排（dev-launcher.mjs）", () => {
-  const tmpDirs: string[] = [];
+  const tmpDirs: Array<string> = [];
 
   function makeTmp(): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "comfyapp-launcher-"));
@@ -81,7 +96,9 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   afterEach(() => {
     while (tmpDirs.length > 0) {
       const dir = tmpDirs.pop();
-      if (dir) fs.rmSync(dir, { recursive: true, force: true });
+      if (dir) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     }
   });
 
@@ -99,24 +116,17 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
       const marker = `comfyapp-tree-${Date.now()}`;
       const child = spawnInGroup({
         command: "sh",
-        args: [
-          "-c",
-          `sh -c 'sleep 60 # ${marker}' & sh -c 'sleep 60 # ${marker}' & wait`,
-        ],
+        args: ["-c", `sh -c 'sleep 60 # ${marker}' & sh -c 'sleep 60 # ${marker}' & wait`],
         cwd: process.cwd(),
       });
-      expect(
-        await waitUntil(() => countMarkedProcesses(marker) >= 3, 8000),
-      ).toBe(true);
+      expect(await waitUntil(() => countMarkedProcesses(marker) >= 3, 8000)).toBe(true);
 
       const result = await killProcessTree({ pid: child.pid!, detached: true });
       expect(result.ok).toBe(true);
       // 「整组」是判据：信号落到 -pgid，而不只是 leader。
       expect(result.via).toContain("进程组");
 
-      expect(
-        await waitUntil(() => countMarkedProcesses(marker) === 0, 8000),
-      ).toBe(true);
+      expect(await waitUntil(() => countMarkedProcesses(marker) === 0, 8000)).toBe(true);
     },
     20_000,
   );
@@ -163,7 +173,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
     const session = {
       launcher_pid: process.pid,
-      child_pids: [] as number[],
+      child_pids: /* SAFETY: 类型断言已复核 */ [] as Array<number>,
       app_port: 3311,
       mode: "web",
       started_at: new Date().toISOString(),
@@ -179,7 +189,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
     // 心跳新鲜但 PID 不存在（写完心跳立刻被杀）同样算死。
     touchHeartbeat(root);
-    writeSession(root, { ...session, launcher_pid: 0x7ffffffe });
+    writeSession(root, { ...session, launcher_pid: 0x7f_ff_ff_fe });
     expect(isSessionOwnerAlive(root)).toBe(false);
 
     clearSession(root);
@@ -193,8 +203,8 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   it("回收上一次的残留：子进程全已不在时只清锚点、不回报", async () => {
     const root = makeTmp();
     writeSession(root, {
-      launcher_pid: 0x7ffffffe,
-      child_pids: [0x7ffffffd, 0x7ffffffa],
+      launcher_pid: 0x7f_ff_ff_fe,
+      child_pids: [0x7f_ff_ff_fd, 0x7f_ff_ff_fa],
       app_port: 3311,
       mode: "web",
       started_at: new Date().toISOString(),
@@ -217,7 +227,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
     const pid = child.pid;
     expect(pid).toBeGreaterThan(0);
     writeSession(root, {
-      launcher_pid: 0x7ffffffe,
+      launcher_pid: 0x7f_ff_ff_fe,
       child_pids: [pid!],
       app_port: 3311,
       mode: "web",
@@ -241,45 +251,31 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
   it(".next 缓存指纹：配置不变则保留，变了才清；SKIP_CLEAN 强制保留", () => {
     const root = makeTmp();
-    fs.writeFileSync(
-      path.join(root, "package.json"),
-      JSON.stringify({ name: "a" }),
-    );
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "a" }));
     const first = syncNextCache(root, { NODE_ENV: undefined });
     expect(first.cleaned).toBe(false); // 首次：写初始指纹，不「清理」
-    expect(
-      fs.readFileSync(path.join(root, ".next", "config-fingerprint"), "utf8"),
-    ).toBe(configFingerprint(root).hash);
+    expect(fs.readFileSync(path.join(root, ".next", "config-fingerprint"), "utf8")).toBe(
+      configFingerprint(root).hash,
+    );
 
     // 指纹一致 → 保留缓存（不清）
     expect(syncNextCache(root, { NODE_ENV: undefined }).cleaned).toBe(false);
 
     // 配置内容变了 → 清缓存（否则会拿旧 route/旧 chunk 跑）
-    fs.writeFileSync(
-      path.join(root, "package.json"),
-      JSON.stringify({ name: "b" }),
-    );
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "b" }));
     expect(syncNextCache(root, { NODE_ENV: undefined }).cleaned).toBe(true);
 
     // SKIP_CLEAN 明确要求保留
-    fs.writeFileSync(
-      path.join(root, "package.json"),
-      JSON.stringify({ name: "c" }),
-    );
-    expect(
-      syncNextCache(root, { NODE_ENV: undefined, SKIP_CLEAN: "1" }).cleaned,
-    ).toBe(false);
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "c" }));
+    expect(syncNextCache(root, { NODE_ENV: undefined, SKIP_CLEAN: "1" }).cleaned).toBe(false);
     // FORCE_CLEAN 明确要求清
-    expect(
-      syncNextCache(root, { NODE_ENV: undefined, FORCE_CLEAN: "1" }).reason,
-    ).toContain("FORCE_CLEAN");
+    expect(syncNextCache(root, { NODE_ENV: undefined, FORCE_CLEAN: "1" }).reason).toContain(
+      "FORCE_CLEAN",
+    );
   });
 
   it("壳侧不再依赖 Windows：Cargo 的 windows crate 在非 Windows 下不参与编译", () => {
-    const cargo = fs.readFileSync(
-      path.join(process.cwd(), "src-tauri", "Cargo.toml"),
-      "utf8",
-    );
+    const cargo = fs.readFileSync(path.join(process.cwd(), "src-tauri", "Cargo.toml"), "utf8");
     // 无条件依赖 windows crate = Linux/macOS 上编译整棵 windows 树并失败
     // （实测 `error[E0425]: cannot find type IMarshal in windows_core::imp`）。
     expect(cargo).toMatch(/\[target\.'cfg\(windows\)'\.dependencies\]/);
@@ -308,52 +304,64 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
   it("sidecar 的拉起与回收走官方 shell 插件（跨平台机制由它选）", () => {
     const root = process.cwd();
-    const lib = fs.readFileSync(
-      path.join(root, "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
-    const cargo = fs.readFileSync(
-      path.join(root, "src-tauri", "Cargo.toml"),
-      "utf8",
-    );
+    const lib = readCode("src-tauri/src/lib.rs");
+    const cargo = fs.readFileSync(path.join(root, "src-tauri", "Cargo.toml"), "utf8");
     // 插件在 Rust 侧提供跨平台 spawn/kill：写死 std::process::Command + taskkill
     // 时 POSIX 分支等于「什么都不做」（sidecar 活过壳退出，继续占端口）
     expect(cargo).toContain("tauri-plugin-shell");
     expect(lib).toContain(".plugin(tauri_plugin_shell::init())");
     expect(lib).toMatch(/CommandChild/);
     expect(lib).not.toMatch(/Command::new\("taskkill"\)/);
-    // 不向前端暴露执行能力：caps 里不得出现 shell 的 execute/spawn 权限
-    for (const cap of ["default", "remote", "splash"]) {
-      const file = path.join(root, "src-tauri", "capabilities", `${cap}.json`);
-      if (!fs.existsSync(file)) continue;
-      expect(fs.readFileSync(file, "utf8")).not.toMatch(
-        /shell:(allow-execute|allow-spawn)/,
-      );
+    // 不向前端暴露执行能力：caps 里不得出现 shell 的 execute/spawn 权限。
+    // 面**从目录派生**（登记那三份只在下面那格当"不许掉出去"的锚点）：原先这里写的是
+    // `for (const cap of ["default","remote","splash"])` + `if (!existsSync) continue`，
+    // 一份 caps 被改名 ⇒ 那一轮静默少判一份，而"少判"与"三份都干净"读起来逐字相同。
+    const capsDir = path.join(root, "src-tauri", "capabilities");
+    const capsFiles = fs
+      .readdirSync(capsDir, { withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith(".json"))
+      .map((e) => e.name)
+      .sort();
+    for (const name of capsFiles) {
+      expect(
+        fs.readFileSync(path.join(capsDir, name), "utf8"),
+        `capabilities/${name}：不许把执行能力透给前端`,
+      ).not.toMatch(/shell:(allow-execute|allow-spawn)/);
+    }
+  });
+
+  it("capabilities 那一族的面非空，且登记的三份都在面里", () => {
+    const names = fs
+      .readdirSync(path.join(process.cwd(), "src-tauri", "capabilities"))
+      .filter((name) => name.endsWith(".json"))
+      .sort();
+    expect(
+      names.length,
+      "capabilities 目录里一份 .json 都没有 ⇒ 上面那一组反向断言在判一个空面",
+    ).toBeGreaterThan(0);
+    for (const name of ["default.json", "remote.json", "splash.json"]) {
+      expect(
+        names,
+        `面里不见了 ${name} —— 「不许把执行能力透给前端」会静默少判这一份（目录派生的面` +
+          "只认得到的名字，改名 = 掉出去）",
+      ).toContain(name);
     }
   });
 
   it("壳的项目根判据不再绑在 Windows 专属文件上", () => {
-    const lib = fs.readFileSync(
-      path.join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const lib = readCode("src-tauri/src/lib.rs");
     // 旧判据只认 scripts/dev-launcher.ps1 → Linux/macOS 上 resolve_project_root()
     // 恒返回空串：启动页读不到 launch-status、壳日志落不了盘，表现为「一直转圈」。
     // 现在认的是**编排器的唯一实现**（.ps1 只是它的 Windows 调用入口）——
     // 判据绑在入口形态上，换入口时就会再静默失效一次。
     expect(lib).toContain("fn looks_like_project_root");
     expect(lib).toContain('join("dev-launcher.mjs")');
-    expect(lib).not.toMatch(
-      /looks_like_project_root[\s\S]{0,400}dev-launcher\.ps1/,
-    );
+    expect(lib).not.toMatch(/looks_like_project_root[\s\S]{0,400}dev-launcher\.ps1/);
   });
 
   it("统一编排：Windows 走同一份 .mjs，.ps1 只剩调用入口", () => {
     const root = process.cwd();
-    const ps1 = fs.readFileSync(
-      path.join(root, "scripts", "dev-launcher.ps1"),
-      "utf8",
-    );
+    const ps1 = fs.readFileSync(path.join(root, "scripts", "dev-launcher.ps1"), "utf8");
     // 入口只做「定位 + 转交 + 透传退出码」：不再有 Windows 专属的编排调用
     // （taskkill / Get-CimInstance / Job Object / cmd.exe）。
     expect(ps1).toContain("dev-launcher.mjs");
@@ -373,33 +381,18 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
 
   it("编排器不再自己摸 process.platform（平台判据收在 launcher-core 与 kill-process-tree）", () => {
     const root = process.cwd();
-    const launcher = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "dev-launcher.mjs"),
-      "utf8",
-    );
+    const launcher = readCode("scripts/dev-launcher.mjs");
     // 唯一允许出现平台判据的地方是它 import 的两个模块：
     //   · launcher-core/shell.mjs 的 isWindows()（进程组 / 可执行名后缀）
     //   · launch-core/procs.mjs 的 isWindows()（进程与端口探测机制）
     expect(launcher).not.toMatch(/process\.platform === "win32"/);
-    for (const rel of [
-      "shell.mjs",
-      "procs.mjs",
-      "orchestrator.mjs",
-      "log.mjs",
-      "worktree.mjs",
-    ]) {
-      expect(
-        fs.existsSync(path.join(root, "scripts", "launcher-core", rel)),
-      ).toBe(true);
+    for (const rel of ["shell.mjs", "procs.mjs", "orchestrator.mjs", "log.mjs", "worktree.mjs"]) {
+      expect(fs.existsSync(path.join(root, "scripts", "launcher-core", rel))).toBe(true);
     }
   });
 
   it("壳退出时的统一回收走 reap-process.mjs（不在 Rust 里重写平台分支）", () => {
-    const root = process.cwd();
-    const lib = fs.readFileSync(
-      path.join(root, "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const lib = readCode("src-tauri/src/lib.rs");
     // kill_sidecar 除了插件的 kill()，还要补一刀统一回收：Node 之下的
     // next-server / turbopack worker 才是真正会残留成孤儿的那几层。
     expect(lib).toMatch(/fn kill_sidecar\(project_root: &str\)/);
@@ -408,17 +401,11 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   });
 
   it("sidecar 命名按平台判据收口（不再是写死的 node.exe）", () => {
-    const lib = fs.readFileSync(
-      path.join(process.cwd(), "src-tauri", "src", "lib.rs"),
-      "utf8",
-    );
+    const lib = readCode("src-tauri/src/lib.rs");
     // 写死 "node.exe" 时 Linux 启动找不到 sidecar（资源里叫 node，没有后缀）
     expect(lib).not.toMatch(/join\("node\.exe"\)/);
     expect(lib).toContain("sidecar_binary_name");
-    const build = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "build-desktop.mjs"),
-      "utf8",
-    );
+    const build = readCode("scripts/build-desktop.mjs");
     expect(build).toContain("sidecarFileName");
   });
 });
@@ -443,23 +430,42 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
   /* 走**现算的编排链路闭包**（`launcherChainSource()` 从入口按顶层静态 import
    * 递归收），不再手抄一份文件清单：抄了就会随下一刀拆文件再漏一处，而漏的表现
    * 正是这条判据要防的形态 —— `indexOf` 落空、`not.toMatch` 对着空串恒真。 */
-  const launcherSrc = launcherChainSource();
-  const whitelistSrc = fs.readFileSync(
-    path.join(process.cwd(), "scripts", "standalone-private-inputs.mjs"),
-    "utf8",
-  );
+  const launcherSrc = stripJs(launcherChainSource(), { trailing: true });
+  const whitelistSrc = readCode("scripts/standalone-private-inputs.mjs");
   /* 「怎么起宿主」自 ISSUE #1767 起收进这份共用件：编排 6.5 步、scripts/start.mjs
    * 的生产链路都要它，两处各写一份的下场是「某一条忘了起」（host 模式下现场是
    * 任务永远停在队列）。下面几条因此把函数体从 launcher 改到共用件上断。 */
-  const spawnKernelSrc = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      "scripts",
-      "launcher-core",
-      "executor-host-spawn.mjs",
-    ),
-    "utf8",
-  );
+  const spawnKernelSrc = readCode("scripts/launcher-core/executor-host-spawn.mjs");
+
+  /* 前置断言：这个 describe 里几组判据既有反向也有正向，反向那几组的接收者
+   * 一旦变空就恒真（`launcherChainSource()` 拼空、或某份分件搬走只留说明）。
+   * 这一格把"读到了东西"变成显式结论，而不是默认前提。 */
+  it("这一族读的三个接收者都非空（闭包 / 白名单 / 起宿主共用件）", () => {
+    expect(launcherSrc.trim(), "编排链路闭包剥完是空文").not.toHaveLength(0);
+    expect(whitelistSrc.trim(), "白名单那份剥完是空文").not.toHaveLength(0);
+    expect(spawnKernelSrc.trim(), "起宿主的共用件剥完是空文").not.toHaveLength(0);
+    // 闭包必须真的"收到比入口多"：原先那格只判到"入口里有一段"，而 `relativeDeps`
+    // 一旦不再命中（改行动态 import、或说明符换形态），闭包会静默缩成入口一份，
+    // 落在闭包上的反向断言就退化成只判入口 —— 那正是本文件头注点名过的失效方向。
+    const entryAlone = fs.readFileSync(
+      path.join(process.cwd(), "scripts", "dev-launcher.mjs"),
+      "utf8",
+    );
+    expect(
+      launcherSrc.length,
+      "闭包不比入口单独一份大 ⇒ launcherChainSource() 的递归没收到内部分件，" +
+        "下面那几组判的其实只是 dev-launcher.mjs 自己",
+    ).toBeGreaterThan(stripJs(entryAlone, { trailing: true }).length);
+    for (const marker of [
+      "export function spawnExecutorHost(ctx)",
+      "export function maybeSpawnExecutorHost(",
+    ]) {
+      expect(
+        launcherSrc,
+        `闭包里没有 ${marker} —— 它所在的那份内部分件掉出链路了`,
+      ).toContain(marker);
+    }
+  });
 
   it("起宿主的实现在共用件里走 spawnInGroup（平台判据不自己摸 process.platform）", () => {
     const start = spawnKernelSrc.indexOf("export function maybeSpawnExecutorHost(");
@@ -477,7 +483,19 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
      * spawned」，与转发层无关。 */
     const start = launcherSrc.indexOf("export function spawnExecutorHost(ctx)");
     expect(start, "downstream.mjs 里没找到实现").toBeGreaterThan(-1);
-    const body = launcherSrc.slice(start, launcherSrc.indexOf("\n}", start));
+    /* 终点必须先验存在：`indexOf("\n}", start)` 取不到给 -1，`slice(start, -1)` 会给出
+     * "从实现起点到倒数第二个字符"—— 那比整个函数宽得多，下面两条 `toContain` 仍然成立，
+     * 于是判据从"这个包装器记了 child"漂成"后面某处记了 child"。（**已知判不到的那一形**：
+     * 收尾被改成缩进、同时 push 搬到后面的函数里 —— 我拿字符串级模拟试过，
+     * "区间里只许有一个顶层 export function"那种廉价边界断言在那一形下不红，
+     * 所以不留它当装饰；要覆盖它得做配对花括号或 AST 作用域，见 #2660 的批 4 评论。） */
+    const end = launcherSrc.indexOf("\n}", start);
+    expect(
+      end,
+      "从实现起点找不到函数收尾（`\\n}`）—— slice(start, -1) 会把区间放宽到后面整段，" +
+        "下面两条 toContain 就在判别的东西",
+    ).toBeGreaterThan(start);
+    const body = launcherSrc.slice(start, end);
     expect(body).toContain("maybeSpawnExecutorHost(");
     expect(body).toContain("spawned.push(result.child)");
   });
@@ -504,16 +522,11 @@ describe("Phase 2-C：executor-host 接入 launcher", () => {
     // 在共用件里（三条链路同一份），归一化后的值仍由它显式写回子进程 env。
     expect(spawnKernelSrc).toContain("[EXECUTOR_ENV_KEY]: plan.mode");
     // 回读 `.env` 这件事只许有一份实现（纯 Node 层），且复用既有的 parseEnvFile。
-    const kernel = fs.readFileSync(
-      path.join(process.cwd(), "scripts", "launcher-core", "executor-mode.mjs"),
-      "utf8",
-    );
+    const kernel = readCode("scripts/launcher-core/executor-mode.mjs");
     expect(kernel).toContain("parseEnvFile(");
     expect(kernel).toContain('"COMFY_EXECUTOR"');
     // launcher 里不许再留第二份归一化实现（漂移就是这么发生的）
-    expect(launcherSrc).not.toContain(
-      "export function resolveComfyExecutorMode(",
-    );
+    expect(launcherSrc).not.toContain("export function resolveComfyExecutorMode(");
   });
 
   it("RUNTIME_SCRIPTS 含 executor-host.mjs（桌面包用户改 .env 才能试 host）", () => {
@@ -543,30 +556,33 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
 
   /** 剥掉块注释与整行 `//` 注释：注释里解释「为什么用动态 import」不该被当成说明符。 */
   function stripComments(source: string): string {
-    return source
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/^[ \t]*\/\/.*$/gm, "");
+    return source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^[ \t]*\/\/.*$/gm, "");
   }
 
-  function scriptFiles(dir: string): string[] {
-    const out: string[] = [];
+  function scriptFiles(dir: string): Array<string> {
+    const out: Array<string> = [];
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) out.push(...scriptFiles(full));
-      else if (/\.(mjs|cjs|ts)$/.test(entry.name)) out.push(full);
+      if (entry.isDirectory()) {
+        out.push(...scriptFiles(full));
+      } else if (/\.(mjs|cjs|ts)$/.test(entry.name)) {
+        out.push(full);
+      }
     }
     return out;
   }
 
   it("都指向真实存在的文件（模块换子域时必须跟着改）", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     let checked = 0;
     for (const abs of scriptFiles(path.join(ROOT, "scripts"))) {
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       const source = stripComments(fs.readFileSync(abs, "utf8"));
       for (const match of source.matchAll(SPEC_LITERAL_RE)) {
         const specifier = match[1];
-        if (!specifier) continue;
+        if (!specifier) {
+          continue;
+        }
         checked += 1;
         if (!fs.existsSync(path.resolve(path.dirname(abs), specifier))) {
           offenders.push(`${rel} → ${specifier}`);
@@ -575,10 +591,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
     }
     // 清单不能静默变空：`dev-launcher.mjs` 与 `reap-process.mjs` 各有一条，它们是
     // 「回收残留进程树」的唯一入口 —— 扫不到就说明这条判据本身失效了。
-    expect(
-      checked,
-      "没有扫到任何 src/lib 路径字面量——判据失效",
-    ).toBeGreaterThanOrEqual(2);
+    expect(checked, "没有扫到任何 src/lib 路径字面量——判据失效").toBeGreaterThanOrEqual(2);
     expect(offenders).toEqual([]);
   });
 });
@@ -666,7 +679,7 @@ describe("classifyProbe（就绪三态：区分「没起来」与「起来了但
 });
 
 describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
-  const tmpDirs: string[] = [];
+  const tmpDirs: Array<string> = [];
 
   function makeTmp(): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "comfyapp-diag-"));
@@ -675,12 +688,7 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
   }
 
   /** 造一份应用服务转录（mtime 可指定，用来验「只认本次运行」）。 */
-  function writePanel(
-    dir: string,
-    name: string,
-    text: string,
-    mtimeMs: number,
-  ) {
+  function writePanel(dir: string, name: string, text: string, mtimeMs: number) {
     const file = path.join(dir, name);
     fs.writeFileSync(file, text, "utf8");
     fs.utimesSync(file, new Date(mtimeMs), new Date(mtimeMs));
@@ -690,7 +698,9 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
   afterEach(() => {
     while (tmpDirs.length > 0) {
       const dir = tmpDirs.pop();
-      if (dir) fs.rmSync(dir, { recursive: true, force: true });
+      if (dir) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     }
   });
 
@@ -714,9 +724,7 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
     const stdoutFile = path.join(dir, "nextjs-stdout.log");
     fs.writeFileSync(stderrFile, "", "utf8");
     fs.writeFileSync(stdoutFile, "GET /api/health 503\n", "utf8");
-    expect(
-      readDiagnosticsTail({ stderrFile, stdoutFile, panelDir: makeTmp() }),
-    ).toContain("503");
+    expect(readDiagnosticsTail({ stderrFile, stdoutFile, panelDir: makeTmp() })).toContain("503");
   });
 
   it("两个重定向文件都空 → 退到应用服务转录（同步 append，随写随见）", () => {
@@ -751,27 +759,16 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
     const dir = makeTmp();
     const stdoutFile = path.join(dir, "nextjs-stdout.log");
     fs.writeFileSync(stdoutFile, "只有 stdout\n", "utf8");
-    expect(readDiagnosticsTail({ stdoutFile, panelDir: null })).toContain(
-      "只有 stdout",
-    );
+    expect(readDiagnosticsTail({ stdoutFile, panelDir: null })).toContain("只有 stdout");
   });
 
   it("panelSince 之前的转录一律不算 —— 不把上一次的失败现场摆给用户", () => {
     const panelDir = makeTmp();
     const now = Date.now();
-    writePanel(
-      panelDir,
-      "nextjs-panel-1-1.log",
-      "上一次的失败\n",
-      now - 60_000,
-    );
+    writePanel(panelDir, "nextjs-panel-1-1.log", "上一次的失败\n", now - 60_000);
     writePanel(panelDir, "nextjs-panel-2-2.log", "本次的失败\n", now);
-    expect(
-      readDiagnosticsTail({ panelDir, panelSince: now - 5_000 }),
-    ).toContain("本次的失败");
-    expect(readDiagnosticsTail({ panelDir, panelSince: now + 60_000 })).toBe(
-      "",
-    );
+    expect(readDiagnosticsTail({ panelDir, panelSince: now - 5000 })).toContain("本次的失败");
+    expect(readDiagnosticsTail({ panelDir, panelSince: now + 60_000 })).toBe("");
   });
 
   it("latestPanelTranscript：取 mtime 最新的那一份；目录不在时返回 null", () => {
@@ -779,11 +776,7 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
     const now = Date.now();
     writePanel(panelDir, "nextjs-panel-1-1.log", "旧\n", now - 60_000);
     writePanel(panelDir, "nextjs-panel-2-2.log", "新\n", now);
-    fs.writeFileSync(
-      path.join(panelDir, "nextjs-stdout-1.log"),
-      "不是转录",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(panelDir, "nextjs-stdout-1.log"), "不是转录", "utf8");
     expect(latestPanelTranscript(panelDir)).toContain("nextjs-panel-2-2.log");
     expect(latestPanelTranscript(path.join(panelDir, "不存在"))).toBeNull();
   });

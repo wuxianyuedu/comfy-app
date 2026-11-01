@@ -32,7 +32,9 @@ const STORE_SELECTOR_HOOKS = [
  * ConfigError，见 `COMPAT_PLUGIN_NAMES` 那段）。用途见 `a11yRecommendedRules()`。 */
 const jsxA11y = (() => {
   for (const config of next) {
-    if (config.plugins?.["jsx-a11y"]) return config.plugins["jsx-a11y"];
+    if (config.plugins?.["jsx-a11y"]) {
+      return config.plugins["jsx-a11y"];
+    }
   }
   throw new Error(
     "eslint-config-next 没带 jsx-a11y 插件 —— 它换结构了？" +
@@ -47,7 +49,10 @@ const jsxA11y = (() => {
  *      `scripts/**` 那些 `.mjs` / `.cjs` 门禁脚本不套这里的 TS type-checked 规则，
  *      与改造前那两条「ts / tsx」glob 同口径 —— 列宽了会给它们套上 1600+ 个假错）；
  *   ② `package.json` 的 `lint` / `lint:fix` 脚本参数 —— 显式列出要扫的目录
- *      （`eslint src tests scripts e2e tools *.config.*`），**不是** `eslint .`。
+ *      （`eslint src tests scripts e2e tools .storybook *.config.{js,mjs,cjs,ts}`），**不是** `eslint .`。
+ *      ⚠️ 这一行只是**复述**，承重的那一份是 `package.json` 里的 `lint`；改那条脚本要同批改这里。
+ *      （ISSUE #2614 的现场就是这行抄漏了 `.storybook` ⇒ 有人照注释读出「`.storybook` 被扫却不判」，
+ *       而它一直在上面第 ① 处那份 `LINT_FILES` 里列着 —— 声明旧了会自己长出第二张单。）
  *      调用点只有一处口径：本地钩子 B 组、`scripts/quality-gate.mjs`、`quality-gate.ps1`、
  *      以及平台侧的 `ESLint 零警告` 那一格（它曾经写的是 `eslint .` —— 扫描面宽一圈、
  *      又没有 `--cache`，在全仓上跑满 20m 被平台掐断）。
@@ -110,10 +115,7 @@ function a11yRecommendedRules() {
   return Object.fromEntries(
     Object.entries(recommended)
       .filter(([, setting]) => setting !== "off")
-      .map(([name, setting]) => [
-        name,
-        Array.isArray(setting) ? ["error", setting[1]] : "error",
-      ]),
+      .map(([name, setting]) => [name, Array.isArray(setting) ? ["error", setting[1]] : "error"]),
   );
 }
 
@@ -150,13 +152,7 @@ const LINT_FILES = [
  *  为什么不用 `eslint-plugin-import-x` 替换 `eslint-plugin-import`：后者是 next
  *  聚合配置的传递依赖，规则名是 `import/*`，换包名会让 next 里那批规则找不到插件；
  *  在其外包一层 fixup 是等价且更小的改动。 */
-const COMPAT_PLUGIN_NAMES = [
-  "react",
-  "react-hooks",
-  "import",
-  "jsx-a11y",
-  "@next/next",
-];
+const COMPAT_PLUGIN_NAMES = ["react", "react-hooks", "import", "jsx-a11y", "@next/next"];
 
 /** 同一个插件对象只包一次：同名插件在多份 config 里出现时必须指向**同一个**包装
  *  对象，否则又会触发上面那条「重定义」错误。 */
@@ -165,7 +161,9 @@ const compatPluginCache = new WeakMap();
 /** @param {import("@eslint/compat").FixupPluginDefinition} plugin */
 function compatPlugin(plugin) {
   const cached = compatPluginCache.get(plugin);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
   const fixed = fixupPluginRules(plugin);
   compatPluginCache.set(plugin, fixed);
   return fixed;
@@ -183,7 +181,9 @@ function compatPlugin(plugin) {
  *  里是 Babel 专用的 `requireConfigFile` / `babelOptions`，一并摘掉。 */
 /** @param {import("@eslint/compat").FixupConfig} config */
 function stripBabelParser(config) {
-  if (!config.languageOptions?.parser) return config;
+  if (!config.languageOptions?.parser) {
+    return config;
+  }
   const { parser, parserOptions, ...languageOptions } = config.languageOptions;
   return { ...config, languageOptions };
 }
@@ -194,7 +194,9 @@ function stripBabelParser(config) {
 function withCompatPlugins(configs) {
   return configs.map((config) => {
     const patched = stripBabelParser(config);
-    if (!patched.plugins) return patched;
+    if (!patched.plugins) {
+      return patched;
+    }
     return {
       ...patched,
       plugins: Object.fromEntries(
@@ -264,10 +266,7 @@ export default tseslint.config(
         "error",
         { prefer: "type-imports", fixStyle: "inline-type-imports" },
       ],
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        { argsIgnorePattern: "^_" },
-      ],
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/no-misused-promises": [
         "error",
@@ -411,8 +410,7 @@ export default tseslint.config(
           patterns: [
             {
               group: ["drizzle-orm", "drizzle-orm/*"],
-              message:
-                "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。",
+              message: "UI/features 不得直接依赖 Drizzle orm,请经 src/lib/core 仓储访问数据。",
             },
           ],
         },
@@ -533,10 +531,7 @@ export default tseslint.config(
     rules: {
       ...js.configs.recommended.rules,
       "no-undef": "off",
-      "no-unused-vars": [
-        "error",
-        { ignoreRestSiblings: true, argsIgnorePattern: "^_" },
-      ],
+      "no-unused-vars": ["error", { ignoreRestSiblings: true, argsIgnorePattern: "^_" }],
     },
   },
   /* `.d.ts` / `.d.mts` 手写声明文件豁免 no-unused-vars（#2541 第二批）：

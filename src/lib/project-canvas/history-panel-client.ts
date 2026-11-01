@@ -32,27 +32,29 @@ export const historyTaskRowSchema = z.object({
 });
 
 /** 把 tRPC 响应里的行数组收窄成 HistoryTaskRow[]；非法行丢弃。 */
-function parseHistoryRows(raw: unknown): HistoryTaskRow[] {
-  if (!Array.isArray(raw)) return [];
-  const out: HistoryTaskRow[] = [];
+function parseHistoryRows(raw: unknown): Array<HistoryTaskRow> {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const out: Array<HistoryTaskRow> = [];
   for (const item of raw) {
     const parsed = historyTaskRowSchema.safeParse(item);
-    if (parsed.success) out.push(parsed.data);
+    if (parsed.success) {
+      out.push(parsed.data);
+    }
   }
   return out;
 }
 
 export type HistoryListParams = {
-  take?: number;
-  projectId?: string;
   media?: "image" | "video" | "audio";
+  projectId?: string;
+  take?: number;
 };
 
 /** 拉取任务列表。响应行的 mediaType 由服务端 inferMediaType 给出，
  *  但任务表 JSON 列不可信，这里逐条收窄：缺 mediaType 的行按 image 兜底。 */
-export async function fetchHistoryTasks(
-  params: HistoryListParams,
-): Promise<HistoryTaskRow[]> {
+export async function fetchHistoryTasks(params: HistoryListParams): Promise<Array<HistoryTaskRow>> {
   const data = await vanillaApi.task.list.query(params);
   return parseHistoryRows(data.tasks);
 }

@@ -76,7 +76,7 @@ function forceGitQuotePath(on: boolean): void {
 /** 临时仓：一份中文名的文档源 + 它的镜像。 */
 function makeRepo(): string {
   const dir = mkdtempSync(path.join(tmpdir(), "git-path-quoting-"));
-  const git = (...args: string[]) =>
+  const git = (...args: Array<string>) =>
     execFileSync("git", args, { cwd: dir, encoding: "utf8", env: gitSandboxEnv() });
   git("init", "-q");
   mkdirSync(path.join(dir, "docs", "standards"), { recursive: true });
@@ -116,7 +116,9 @@ describe("改动面：机器把非 ASCII 路径转义加引号时仍给出原样
 
     const got = changedFilesForBaseRef("HEAD~1", { cwd: dir });
     expect(got.ok, JSON.stringify(got)).toBe(true);
-    if (!got.ok) return;
+    if (!got.ok) {
+      return;
+    }
     /* 转义过的形态是 `"docs/standards/15-\351\231\204\345\275\225.md"` —— 它与真实路径
      * 对不上，于是「改了文档源、镜像没同批带上」在平台上永远判不出来。 */
     expect(got.files).toContain(CN_SOURCE);
@@ -153,7 +155,7 @@ describe("暂存面：同一台机器上暂存清单也要原样", () => {
 /* ── 静态：读 git 路径的调用必须带守卫（防复发）───────────────────────────────── */
 
 /** 会输出**路径**的 git 旗标（`-z` 那一族天然不加引号，见下）。 */
-const PATH_FLAG_TOKENS = [
+const PATH_FLAG_TOKENS = /* SAFETY: 类型断言已复核 */ [
   "--name-only",
   "--name-status",
   "ls-files",
@@ -167,7 +169,7 @@ const PATH_FLAG_TOKENS = [
  * 登记项是「文件 + 处数」的粒度（与条件性 skip 那套登记同型）：处数对不上就红 ——
  * 偷偷多一处没登记会红，登记了却已经修好也要红（豁免是负债，不是赦免名单）。
  */
-const EXEMPT: Array<{ file: string; count: number; why: string }> = [
+const EXEMPT: Array<{ count: number; file: string; why: string }> = [
   {
     file: "scripts/check-known-failed-stale.mjs",
     count: 1,
@@ -189,8 +191,8 @@ function hasGuard(slice: string): boolean {
  * 这种形态里，旗标与守卫必须在**同一个**数组里 —— 而外层那个数组（`attempts = [ … ]`）
  * 装着好几条命令，不该替其中一条背书。
  */
-function unguardedSites(source: string): string[] {
-  const out: string[] = [];
+function unguardedSites(source: string): Array<string> {
+  const out: Array<string> = [];
   for (const token of PATH_FLAG_TOKENS) {
     const needle = `"${token}"`;
     let at = source.indexOf(needle);
@@ -210,34 +212,37 @@ function unguardedSites(source: string): string[] {
 }
 
 /** `scripts/**` 下的源码文件清单（跳过依赖与产物）。 */
-function scriptFiles(dir: string, found: string[] = []): string[] {
+function scriptFiles(dir: string, found: Array<string> = []): Array<string> {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (["node_modules", ".git", ".next", "target", "dist", "build"].includes(entry.name)) {
       continue;
     }
     const abs = path.join(dir, entry.name);
-    if (entry.isDirectory()) scriptFiles(abs, found);
-    else if (/\.(mjs|cjs|js)$/.test(entry.name)) found.push(abs);
+    if (entry.isDirectory()) {
+      scriptFiles(abs, found);
+    } else if (/\.(mjs|cjs|js)$/.test(entry.name)) {
+      found.push(abs);
+    }
   }
   return found;
 }
 
 describe("静态：读 git 路径的调用必须带守卫（防复发）", () => {
   it("每一处读路径的 git 调用都带 `-c core.quotePath=false` 或 `-z`", () => {
-    const problems: string[] = [];
+    const problems: Array<string> = [];
     for (const abs of scriptFiles(path.join(ROOT, "scripts"))) {
       const rel = path.relative(ROOT, abs).split(path.sep).join("/");
       const exempt = EXEMPT.find((e) => e.file === rel);
       /* 剥注释再扫：注释里正当会出现 `--name-only` 这类字样（那是散文，不是调用）。 */
       const source = stripComments(readFileSync(abs, "utf8"));
       const bad = unguardedSites(source);
-      if (bad.length === 0) continue;
+      if (bad.length === 0) {
+        continue;
+      }
       if (exempt) {
         /* 豁免只覆盖**登记的那几处**：多出来的调用仍然要拦。 */
         if (bad.length !== exempt.count) {
-          problems.push(
-            `${rel}：豁免登记 ${exempt.count} 处，实测 ${bad.length} 处 —— 对不上`,
-          );
+          problems.push(`${rel}：豁免登记 ${exempt.count} 处，实测 ${bad.length} 处 —— 对不上`);
         }
         continue;
       }
@@ -251,7 +256,7 @@ describe("静态：读 git 路径的调用必须带守卫（防复发）", () =>
   });
 
   it("豁免登记里不许有失效的旧账（那一处已经带上守卫了就撤掉）", () => {
-    const stale: string[] = [];
+    const stale: Array<string> = [];
     for (const e of EXEMPT) {
       const abs = path.join(ROOT, e.file);
       if (!existsSync(abs)) {

@@ -42,9 +42,8 @@ export function capDiffstat(diffstat, sampleMax = DIFFSTAT_SAMPLE_MAX) {
     .filter((l) => l.trim() !== "");
   /* 末行是总数那一行（` 2673 files changed, 1 insertion(+), …`）。它必须留下：
    * 被裁之后，「这次到底动了多少」是读者唯一还能直接拿到的量。 */
-  const last = lines[lines.length - 1] ?? "";
-  const hasTotal =
-    lines.length > 0 && /\b\d[\d,]* files? changed\b/.test(last);
+  const last = lines.at(-1) ?? "";
+  const hasTotal = lines.length > 0 && /\b\d[\d,]* files? changed\b/.test(last);
   const totalLine = hasTotal ? last : "";
   const fileLines = hasTotal ? lines.slice(0, -1) : lines;
   const listed = Math.max(0, Math.min(fileLines.length, sampleMax));
@@ -78,10 +77,7 @@ export function capDiffstat(diffstat, sampleMax = DIFFSTAT_SAMPLE_MAX) {
  * @returns {string} 正文
  */
 export function buildPullBody({ root, fragments, diffstat, handle = null }) {
-  const head = [
-    "## 本 PR 带的变更碎片（`changelog.d/`）",
-    "",
-  ];
+  const head = ["## 本 PR 带的变更碎片（`changelog.d/`）", ""];
   for (const f of fragments) {
     // 首行的读法只有一处（`fragmentHead`）：两处各读各的，就会开始对同一份碎片给两种答案。
     head.push(`- \`${f}\` → ${fragmentHead(root, f) || "(读不到)"}`);
@@ -109,7 +105,9 @@ export function buildPullBody({ root, fragments, diffstat, handle = null }) {
       ].join("\n"),
       handle,
     );
-    if (body.length <= PULL_BODY_LIMIT || sampleMax === 0) return body;
+    if (body.length <= PULL_BODY_LIMIT || sampleMax === 0) {
+      return body;
+    }
     sampleMax = Math.floor(sampleMax / 2);
   }
 }

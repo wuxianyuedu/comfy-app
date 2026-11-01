@@ -8,26 +8,22 @@ import { ExternalLink } from "lucide-react";
 import { mixHex, NODE_TITLE_H } from "../workflow-utils";
 import { useCssColorToken } from "../hooks/use-css-color-token";
 import { Button } from "~/components/ui/button";
-import {
-  IoCheckbox,
-  NodeIdChip,
-  type IOEditContextValue,
-} from "./IOEditContext";
+import { IoCheckbox, NodeIdChip, type IOEditContextValue } from "./IOEditContext";
 import { Hint } from "~/components/ui/hint";
 
-export interface SubgraphHeaderProps {
-  title: string;
-  nodeId: string;
+export type SubgraphHeaderProps = {
   accent: string;
-  isCollapsed: boolean;
-  onToggle: () => void;
-  onEnter?: () => void;
   io?: IOEditContextValue;
+  isCollapsed: boolean;
+  nodeId: string;
+  onEnter?: () => void;
+  onToggle: () => void;
   /** First output entry used by the per-node output checkbox（只带端口身份：
    *  显示名不进库，由富化链一处给）。Pass null when the subgraph exposes no
    *  outputs. */
   outputRef?: { name: string } | null;
-}
+  title: string;
+};
 
 export function SubgraphHeader({
   title,
@@ -60,36 +56,36 @@ export function SubgraphHeader({
        *  之后被触发。 */}
       <Hint label={isCollapsed ? "展开" : "折叠"}>
         <Button
-          variant="ghost"
-          size="icon-xs"
-
           aria-label={isCollapsed ? "展开子图" : "折叠子图"}
+          className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
+
           onClick={(event) => {
             event.stopPropagation();
             onToggle();
           }}
           onMouseDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
-          className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
+          size="icon-xs"
           style={{ pointerEvents: "auto" }}
+          variant="ghost"
         >
           <svg
             data-icon="inline-start"
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
             fill="none"
+            height="10"
             style={{
               transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
               transition: "transform 120ms ease",
             }}
+            viewBox="0 0 10 10"
+            width="10"
           >
             <path
               d="M3.5 2 L7 5 L3.5 8"
               stroke="currentColor"
-              strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
+              strokeWidth="1.5"
             />
           </svg>
         </Button>
@@ -131,14 +127,8 @@ export function SubgraphHeader({
       )}
       <NodeIdChip nodeId={String(nodeId)} variant="subgraph" />
       {onEnter && (
-        <Hint label="展开子工作流" accessibleName>
+        <Hint accessibleName label="展开子工作流">
           <Button
-            variant="ghost"
-            size="icon-xs"
-            onClick={(event) => {
-              event.stopPropagation();
-              onEnter();
-            }}
             /* 从 h-4 w-4（16×16）提到 h-6 w-6
              *  （24×24）—— 用户反馈此前这下钻章在
              *  30px 高的标题行上目标太小。24×24 比
@@ -147,12 +137,14 @@ export function SubgraphHeader({
              *  比收起箭头的 h-5 w-5 大一档，
              *  以标记下钻是子图的*主要*动作。 */
             className="text-primary-strong hover:bg-primary/30 text-3xs ml-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded transition-colors hover:text-white"
+            onClick={(event) => {
+              event.stopPropagation();
+              onEnter();
+            }}
+            size="icon-xs"
+            variant="ghost"
           >
-            <ExternalLink
-              data-icon="inline-start"
-              size={12}
-              strokeWidth={2.5}
-            />
+            <ExternalLink data-icon="inline-start" size={12} strokeWidth={2.5} />
           </Button>
         </Hint>
       )}

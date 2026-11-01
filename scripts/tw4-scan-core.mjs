@@ -70,7 +70,9 @@ export function rewriteLiterals(text, rewriteContent) {
   let changed = 0;
   for (const lit of stringLiterals(code)) {
     const next = rewriteContent(lit.content);
-    if (next === null) continue;
+    if (next === null) {
+      continue;
+    }
     out += text.slice(cursor, lit.index) + lit.quote + next + lit.quote;
     cursor = lit.index + 1 + lit.content.length + 1;
     changed += 1;

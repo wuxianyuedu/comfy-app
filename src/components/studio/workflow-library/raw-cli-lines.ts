@@ -34,18 +34,26 @@ const CACHE = new Map<string, ParsedCliLine>();
  */
 export function parseRawCliLine(line: string): ParsedCliLine {
   const hit = CACHE.get(line);
-  if (hit) return hit;
+  if (hit) {
+    return hit;
+  }
   const parsed = parseUncached(line);
-  if (CACHE.size >= CACHE_MAX) CACHE.clear();
+  if (CACHE.size >= CACHE_MAX) {
+    CACHE.clear();
+  }
   CACHE.set(line, parsed);
   return parsed;
 }
 
 function parseUncached(line: string): ParsedCliLine {
   const json = parseCliJsonLine(line);
-  if (json) return { kind: "json", tag: json.tag, value: json.value };
+  if (json) {
+    return { kind: "json", tag: json.tag, value: json.value };
+  }
   const split = splitCliLogLine(line);
-  if (!split) return { kind: "text", tag: "", text: line };
+  if (!split) {
+    return { kind: "text", tag: "", text: line };
+  }
   return { kind: "text", tag: split.tag, text: split.payload };
 }
 
@@ -53,14 +61,17 @@ function parseUncached(line: string): ParsedCliLine {
  * 两轮输出是否逐字相同。运行期轮询多数轮次没有新行，比对比「重新解析 + 重建
  * 整棵树」便宜几个数量级；返回 true 时调用处原样保留旧数组。
  */
-export function sameRawCliLines(
-  a: readonly string[],
-  b: readonly string[],
-): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
+export function sameRawCliLines(a: ReadonlyArray<string>, b: ReadonlyArray<string>): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
   for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) return false;
+    if (a[i] !== b[i]) {
+      return false;
+    }
   }
   return true;
 }

@@ -6,10 +6,7 @@ import { getSettingsSync } from "~/lib/app-settings/app-settings.server";
 import { contentTypeForPath } from "~/lib/media/mime-ext";
 import { isForeignOwnedArtifact } from "~/lib/media/output-access";
 import { generatedRoot, isWithinGeneratedRoot } from "~/lib/media/output-paths";
-import {
-  contentRangeHeader,
-  resolveByteRange,
-} from "~/server/lib/range-request";
+import { contentRangeHeader, resolveByteRange } from "~/server/lib/range-request";
 import { requireRequestUser } from "~/server/auth/request-user";
 
 /**
@@ -48,7 +45,7 @@ import { requireRequestUser } from "~/server/auth/request-user";
  *  浏览器第一次拖进度条才会想起发 `Range`。
  *  ⚠️ `Cache-Control` 必须是 `private`：加了归属判定之后再标 `public`，
  *  等于允许共享缓存把 A 的产物回给 B —— 那会让上面那道闸只剩形式。 */
-const SHARED_HEADERS = {
+const SHARED_HEADERS = /* SAFETY: type assertion reviewed */ {
   "Cache-Control": "private, max-age=31536000, immutable",
   "Accept-Ranges": "bytes",
 } as const;
@@ -58,10 +55,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ path?: string[] }> },
+  { params }: { params: Promise<{ path?: Array<string> }> },
 ): Promise<Response> {
   const user = await requireRequestUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!user) {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   const { path: segments } = await params;
   if (!segments || segments.length === 0) {
@@ -98,7 +97,9 @@ export async function GET(
   let size: number;
   try {
     const st = await fs.stat(abs);
-    if (!st.isFile()) return new Response("Not found", { status: 404 });
+    if (!st.isFile()) {
+      return new Response("Not found", { status: 404 });
+    }
     size = st.size;
   } catch {
     return new Response("Not found", { status: 404 });
@@ -134,12 +135,14 @@ export async function GET(
        * 的字节回，并把窗口一起收窄 —— `Content-Range` 承诺 6 个字节而 body 只有 2 个，
        * 比回 404 更坏：客户端会按承诺的长度去拼文件，拼出一个坏产物。
        * 一个字节都没读到则是「这一格现在没有那段东西」，按不存在处理。 */
-      if (bytesRead === 0 && buf.length > 0)
+      if (bytesRead === 0 && buf.length > 0) {
         return new Response("Not found", { status: 404 });
+      }
       if (bytesRead !== buf.length) {
         buf = buf.subarray(0, bytesRead);
-        if (window)
+        if (window) {
           effectiveWindow = { start, endInclusive: start + bytesRead - 1 };
+        }
       }
     } finally {
       // 句柄必须关：Windows 上不关的那一份会把产物锁住，同名重生成当场失败

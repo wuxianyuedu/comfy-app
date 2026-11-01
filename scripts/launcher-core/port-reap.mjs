@@ -65,9 +65,7 @@ export async function runningAppInstances(root) {
     const session = readSession(root);
     const pids = [
       Number(session?.launcher_pid),
-      ...(Array.isArray(session?.child_pids)
-        ? session.child_pids.map(Number)
-        : []),
+      ...(Array.isArray(session?.child_pids) ? session.child_pids.map(Number) : []),
     ].filter((pid) => Number.isFinite(pid) && pid > 0);
     return {
       running: true,
@@ -79,14 +77,20 @@ export async function runningAppInstances(root) {
   const held = [];
   for (const port of scanPorts(resolveAppPort(root))) {
     const pids = await listeningPidsOnPort(port);
-    if (pids.length === 0) continue;
+    if (pids.length === 0) {
+      continue;
+    }
     // 命令行按一次批量查询取回（Windows 上逐 PID 起 PowerShell 是 0.5~1.5s 的冷启动）。
     const lines = await processCommandLines(pids);
     for (const pid of pids) {
-      if (isAppDevServerCmdline(lines.get(pid) ?? "", root)) held.push(pid);
+      if (isAppDevServerCmdline(lines.get(pid) ?? "", root)) {
+        held.push(pid);
+      }
     }
   }
-  if (held.length === 0) return { running: false, pids: [], via: null };
+  if (held.length === 0) {
+    return { running: false, pids: [], via: null };
+  }
   return {
     running: true,
     pids: [...new Set(held)].sort((a, b) => a - b),
@@ -122,7 +126,9 @@ export async function reapProcessTree(options) {
  */
 export async function reapAll(ctx) {
   for (const child of ctx.spawned) {
-    if (child.exitCode !== null || child.signalCode !== null) continue;
+    if (child.exitCode !== null || child.signalCode !== null) {
+      continue;
+    }
     try {
       if (child.pid) {
         const via = await reapProcessTree({
@@ -156,12 +162,16 @@ export async function reapAll(ctx) {
  *  不接 ctx。
  *  @param {string} [root] @returns {Promise<number[] | null>} 真正回收的 PID */
 export async function reapStaleSession(root = process.cwd()) {
-  if (isSessionOwnerAlive(root)) return null;
+  if (isSessionOwnerAlive(root)) {
+    return null;
+  }
   const session = readSession(root);
-  if (!session) return null;
-  const pids = (
-    Array.isArray(session.child_pids) ? session.child_pids : []
-  ).filter((pid) => typeof pid === "number" && pid > 0);
+  if (!session) {
+    return null;
+  }
+  const pids = (Array.isArray(session.child_pids) ? session.child_pids : []).filter(
+    (pid) => typeof pid === "number" && pid > 0,
+  );
   const alive = pids.filter((pid) => isPidAlive(pid));
   if (alive.length === 0) {
     clearSession(root);
@@ -210,13 +220,21 @@ export async function processCommandLine(pid) {
  *  @param {string} cmdline @param {string} [root] @returns {boolean} */
 export function isAppDevServerCmdline(cmdline, root = process.cwd()) {
   /** @param {string} value */
-  const norm = (value) => value.replace(/\\/g, "/").toLowerCase();
+  const norm = (value) => value.replaceAll("\\", "/").toLowerCase();
   const text = norm(cmdline);
   const base = norm(root).replace(/\/+$/, "");
-  if (!text || !base || !text.includes(base)) return false;
-  if (text.includes(`${base}/scripts/${APP_DEV_SCRIPT_MARKER}`)) return true;
-  if (text.includes(`${base}/scripts/${APP_START_SCRIPT_MARKER}`)) return true;
-  if (/next(\.cmd|\.ps1)?\s+(dev|start)\b/.test(text)) return true;
+  if (!text || !base || !text.includes(base)) {
+    return false;
+  }
+  if (text.includes(`${base}/scripts/${APP_DEV_SCRIPT_MARKER}`)) {
+    return true;
+  }
+  if (text.includes(`${base}/scripts/${APP_START_SCRIPT_MARKER}`)) {
+    return true;
+  }
+  if (/next(\.cmd|\.ps1)?\s+(dev|start)\b/.test(text)) {
+    return true;
+  }
   return false;
 }
 
@@ -235,12 +253,7 @@ export function isAppDevServerCmdline(cmdline, root = process.cwd()) {
  *  @param {number} port @param {string} [root]
  *  @param {{ explicit?: boolean }} [options] explicit = 端口由调用方显式指定
  *  @returns {Promise<string>} 结论摘要 */
-export async function reconcilePort(
-  ctx,
-  port,
-  root = process.cwd(),
-  { explicit = false } = {},
-) {
+export async function reconcilePort(ctx, port, root = process.cwd(), { explicit = false } = {}) {
   const summary = [];
   for (const p of scanPorts(port)) {
     // 自证只对「本次真正要用的那个端口」成立：扫描范围内的 +1/+2 是「Next 会不会
@@ -282,9 +295,7 @@ export async function reconcilePort(
       summary.push(`${p} 已回收自己的残留`);
       continue;
     }
-    summary.push(
-      `${p} 被其它进程占用（PID ${decision.foreignPids.join(", ")}）`,
-    );
+    summary.push(`${p} 被其它进程占用（PID ${decision.foreignPids.join(", ")}）`);
     ctx.log(
       `端口 ${p} 被非本检出的进程占用（PID ${decision.foreignPids.join(", ")}）——多检出并行保护，不清理。` +
         `若与本检出冲突，请改 .env 的 COMFYAPP_PORT。`,

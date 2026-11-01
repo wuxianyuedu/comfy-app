@@ -228,7 +228,7 @@ describe("buildParamEntries — 统一对外参数契约（按模式）", () => 
       mode: "T2I",
     });
     const byId = new Map(entries.map((entry) => [entry.id, entry]));
-    expect(Array.from(byId.keys())).toEqual([
+    expect([...byId.keys()]).toEqual([
       "prompt",
       "negative",
       "size-width",

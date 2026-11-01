@@ -10,11 +10,11 @@
  */
 
 /** 一段带样式的日志文本。text 为原文（不含转义序列）。 */
-export interface AnsiSegment {
-  text: string;
+export type AnsiSegment = {
   /** 活动样式（前景/背景/字重等可同时生效）；空 = 默认样式 */
-  styles?: AnsiStyleKey[];
-}
+  styles?: Array<AnsiStyleKey>;
+  text: string;
+};
 
 export type AnsiStyleKey =
   | "bold"
@@ -74,8 +74,7 @@ const BG: Record<number, AnsiStyleKey> = {
 };
 
 /** 非 SGR 的转义序列：光标移动、清屏、窗口标题等，渲染无意义直接丢弃。 */
-const NON_SGR_RE =
-  /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[?[0-9;]*[A-HJKSTfhlmsu]/g;
+const NON_SGR_RE = /\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?|\u001b\[?[0-9;]*[A-HJKSTfhlmsu]/g;
 
 /* ── 「剥掉 SGR / 问有没有 SGR」的唯一出口 ───────────────────────────
  *
@@ -95,7 +94,7 @@ const NON_SGR_RE =
  */
 
 /** 完整 SGR 序列（含转义符）。带 `g`：`replace` 要一次剥干净。 */
-const SGR_RE = /\x1b\[([0-9;:]*)m/g;
+const SGR_RE = /\u001b\[([0-9;:]*)m/g;
 
 /**
  * 残缺颜色码：转义符丢失、只剩 `[90m` / `[0m` 这类尾巴。
@@ -125,8 +124,8 @@ export function hasSgr(text: string): boolean {
  * 只想要「严格 SGR」时显式写 `false`。
  */
 export function stripSgr(text: string, { includePartial = true } = {}): string {
-  const withoutFull = text.replace(/\x1b\[[0-9;:]*m/g, "");
-  return includePartial ? withoutFull.replace(PARTIAL_SGR_RE, "") : withoutFull;
+  const withoutFull = text.replaceAll(/\u001b\[[0-9;:]*m/g, "");
+  return includePartial ? withoutFull.replaceAll(PARTIAL_SGR_RE, "") : withoutFull;
 }
 
 /* ── 会话横幅的色板曾在这里（ISSUE #1326 之后随写侧一并移除）─────────
@@ -140,17 +139,17 @@ export function stripSgr(text: string, { includePartial = true } = {}): string {
 /** 剥掉全部 ANSI 转义序列（含非 SGR 的光标 / 清屏序列），保留纯文本。 */
 export function stripAnsi(text: string): string {
   return text
-    .replace(NON_SGR_RE, "")
-    .replace(/\x1b\[[0-9;:]*m/g, "")
-    .replace(/\r/g, "");
+    .replaceAll(NON_SGR_RE, "")
+    .replaceAll(/\u001b\[[0-9;:]*m/g, "")
+    .replaceAll("\r", "");
 }
 
 /**
  * 把含 ANSI SGR 序列的日志文本切成带样式片段。
  * 当前活动样式跨片段延续（与终端语义一致），\x1b[0m 复位。
  */
-export function parseAnsiSegments(text: string): AnsiSegment[] {
-  const segments: AnsiSegment[] = [];
+export function parseAnsiSegments(text: string): Array<AnsiSegment> {
+  const segments: Array<AnsiSegment> = [];
   let bold = false;
   let dim = false;
   let italic = false;
@@ -162,9 +161,7 @@ export function parseAnsiSegments(text: string): AnsiSegment[] {
   const flush = () => {
     if (plain) {
       const styles = composeStyles({ bold, dim, italic, underline, fg, bg });
-      segments.push(
-        styles.length > 0 ? { text: plain, styles } : { text: plain },
-      );
+      segments.push(styles.length > 0 ? { text: plain, styles } : { text: plain });
       plain = "";
     }
   };
@@ -204,37 +201,45 @@ export function parseAnsiSegments(text: string): AnsiSegment[] {
 
 /** 汇总当前活动样式：前景/背景/字重可叠加，由视图层逐个映射成 class。 */
 function composeStyles(state: {
+  bg?: AnsiStyleKey;
   bold: boolean;
   dim: boolean;
+  fg?: AnsiStyleKey;
   italic: boolean;
   underline: boolean;
-  fg?: AnsiStyleKey;
-  bg?: AnsiStyleKey;
-}): AnsiStyleKey[] {
-  const styles: AnsiStyleKey[] = [];
-  if (state.fg) styles.push(state.fg);
-  if (state.bg) styles.push(state.bg);
-  if (state.bold) styles.push("bold");
-  if (state.dim) styles.push("dim");
-  if (state.italic) styles.push("italic");
-  if (state.underline) styles.push("underline");
+}): Array<AnsiStyleKey> {
+  const styles: Array<AnsiStyleKey> = [];
+  if (state.fg) {
+    styles.push(state.fg);
+  }
+  if (state.bg) {
+    styles.push(state.bg);
+  }
+  if (state.bold) {
+    styles.push("bold");
+  }
+  if (state.dim) {
+    styles.push("dim");
+  }
+  if (state.italic) {
+    styles.push("italic");
+  }
+  if (state.underline) {
+    styles.push("underline");
+  }
   return styles;
 }
 
-interface SgrState {
+type SgrState = {
+  bg?: AnsiStyleKey;
   bold: boolean;
   dim: boolean;
+  fg?: AnsiStyleKey;
   italic: boolean;
   underline: boolean;
-  fg?: AnsiStyleKey;
-  bg?: AnsiStyleKey;
-}
+};
 
-function applySgr(
-  codes: string,
-  set: (state: SgrState) => void,
-  get: () => SgrState,
-): void {
+function applySgr(codes: string, set: (state: SgrState) => void, get: () => SgrState): void {
   const parts = codes
     .split(/[;:]/)
     .map((p) => (p === "" ? 0 : Number.parseInt(p, 10)))
@@ -304,35 +309,44 @@ const LOGRUS_LEVEL_STYLE: Record<string, AnsiStyleKey> = {
 const LOGRUS_DIM_PREFIX_RE = /^(\[[^\]]*\]\s*)*(time=\S+\s+)?/;
 
 /** 单行 logrus 文本 → 带样式片段；行内没有 level= 字段时返回 null（交回 ANSI 解析）。 */
-export function colorizeLogrusLine(line: string): AnsiSegment[] | null {
+export function colorizeLogrusLine(line: string): Array<AnsiSegment> | null {
   const matched = LOGRUS_LEVEL_RE.exec(line);
-  if (!matched) return null;
+  if (!matched) {
+    return null;
+  }
   const levelToken = `level=${matched[1]}`;
   const levelIdx = line.indexOf(levelToken);
   const head = line.slice(0, levelIdx);
-  const segments: AnsiSegment[] = [];
+  const segments: Array<AnsiSegment> = [];
   const dimLen = LOGRUS_DIM_PREFIX_RE.exec(head)?.[0].length ?? 0;
-  if (dimLen > 0)
+  if (dimLen > 0) {
     segments.push({ text: head.slice(0, dimLen), styles: ["dim"] });
-  if (head.length > dimLen) segments.push({ text: head.slice(dimLen) });
+  }
+  if (head.length > dimLen) {
+    segments.push({ text: head.slice(dimLen) });
+  }
   segments.push({
     text: levelToken,
     styles: [LOGRUS_LEVEL_STYLE[matched[1] ?? "INFO"] ?? "green"],
   });
   const tail = line.slice(levelIdx + levelToken.length);
-  if (tail) segments.push({ text: tail });
+  if (tail) {
+    segments.push({ text: tail });
+  }
   return segments;
 }
 
 /** Ollama 启动日志整段文本 → 片段：含 level= 的行走 logrus 语义上色，
  *  其余行（spawn 参数、空行等）走原 ANSI 解析。 */
-export function parseOllamaLogText(text: string): AnsiSegment[] {
+export function parseOllamaLogText(text: string): Array<AnsiSegment> {
   const lines = text.split("\n");
-  const segments: AnsiSegment[] = [];
+  const segments: Array<AnsiSegment> = [];
   lines.forEach((line, index) => {
     const colored = colorizeLogrusLine(line);
     segments.push(...(colored ?? parseAnsiSegments(line)));
-    if (index < lines.length - 1) segments.push({ text: "\n" });
+    if (index < lines.length - 1) {
+      segments.push({ text: "\n" });
+    }
   });
   return segments;
 }

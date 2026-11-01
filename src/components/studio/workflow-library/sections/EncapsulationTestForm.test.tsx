@@ -18,9 +18,7 @@ import { EncapsulationTestForm } from "./EncapsulationTestForm";
 afterEach(cleanup);
 
 /** 契约口（含落点信息；`targetIoKey: null` = 没连到工作流）。 */
-function entry(
-  over: Partial<EncapsulationEntryStatus> & { id: string },
-): EncapsulationEntryStatus {
+function entry(over: Partial<EncapsulationEntryStatus> & { id: string }): EncapsulationEntryStatus {
   return {
     label: over.id,
     control: "text",
@@ -31,7 +29,7 @@ function entry(
 }
 
 /** 文生图契约口：提示词已落点，负向 / 尺寸都没落点。 */
-const T2I_ENTRIES: EncapsulationEntryStatus[] = [
+const T2I_ENTRIES: Array<EncapsulationEntryStatus> = [
   entry({
     id: "prompt",
     label: "提示词",
@@ -43,7 +41,7 @@ const T2I_ENTRIES: EncapsulationEntryStatus[] = [
 ];
 
 /** 图生视频契约口：多出首帧与时长。 */
-const I2V_ENTRIES: EncapsulationEntryStatus[] = [
+const I2V_ENTRIES: Array<EncapsulationEntryStatus> = [
   entry({
     id: "prompt",
     label: "提示词",
@@ -56,17 +54,17 @@ const I2V_ENTRIES: EncapsulationEntryStatus[] = [
 ];
 
 function renderForm(
-  entries: EncapsulationEntryStatus[],
+  entries: Array<EncapsulationEntryStatus>,
   over: Partial<React.ComponentProps<typeof EncapsulationTestForm>> = {},
 ) {
   const onRun = vi.fn<(values: WorkshopExposedValues) => void>();
   const utils = render(
     <EncapsulationTestForm
-      entries={entries}
-      scene={over.scene ?? "image"}
-      running={false}
       canRun
+      entries={entries}
       onRun={onRun}
+      running={false}
+      scene={over.scene ?? "image"}
       uploadImage={vi.fn().mockResolvedValue("uploaded.png")}
       {...over}
     />,
@@ -81,7 +79,7 @@ describe("EncapsulationTestForm", () => {
     expect(negative).toBeTruthy();
     /* 没连到工作流的口给一句说明，但**不禁用**：值仍可填。 */
     expect(screen.getByText("未连到端口，用工作流默认值")).toBeTruthy();
-    expect((negative as HTMLTextAreaElement).disabled).toBe(false);
+    expect(/* SAFETY: 类型断言已复核 */ (negative as HTMLTextAreaElement).disabled).toBe(false);
   });
 
   it("视频模式的尺寸口没落点也渲染尺寸控件（不再连尺寸都选不了）", () => {
@@ -131,7 +129,9 @@ describe("EncapsulationTestForm", () => {
     /* 原因现在由 `<Hint label wrap>` 承载：`disabled` 的按钮不发指针事件，
      * 提示挂在它外层锚点上（见 `ui/hint` 的 `wrap` 一档），悬停锚点才读得到。 */
     const anchor = button.parentElement;
-    if (!anchor) throw new Error("找不到 <Hint wrap> 的锚点层");
+    if (!anchor) {
+      throw new Error("找不到 <Hint wrap> 的锚点层");
+    }
     await userEvent.hover(anchor);
     expect(await screen.findByText("提示词未落到端口")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("输入负向提示词")).toBeDisabled();
@@ -144,8 +144,7 @@ describe("EncapsulationTestForm", () => {
         throw new Error("ComfyUI 未启动");
       }),
     });
-    const input =
-      document.querySelector<HTMLInputElement>('input[type="file"]');
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input).toBeTruthy();
     const file = new File([new Uint8Array([1, 2, 3])], "f.png", {
       type: "image/png",

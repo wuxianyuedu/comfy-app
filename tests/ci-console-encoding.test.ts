@@ -67,8 +67,8 @@ describe("控制台输出编码：读数（只读，不改任何东西）", () =
         out: "65001\nACP=65001\nActive code page: 65001",
       }),
     });
-    expect(now.codePage).toBe(65001);
-    expect(now.ansiCodePage).toBe(65001);
+    expect(now.codePage).toBe(65_001);
+    expect(now.ansiCodePage).toBe(65_001);
     expect(now.chcpRaw).toBe("Active code page: 65001");
   });
 
@@ -120,7 +120,7 @@ describe("控制台输出编码：读数（只读，不改任何东西）", () =
 
 describe("控制台输出编码：纠正动作", () => {
   it("目标代码页只有一处定义，且它就是 UTF-8", () => {
-    expect(UTF8_CODE_PAGE).toBe(65001);
+    expect(UTF8_CODE_PAGE).toBe(65_001);
   });
 
   it("钉成功时如实报成功（按**复核后的读数**判，不采信命令退出码）", () => {
@@ -190,8 +190,8 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
         lines[scriptAt + (isBlock ? 1 : 0)] ?? "";
       expect(
         firstStatement,
-        `锚点 ${anchor} 的第一格在打中文之前没钉 [Console]::OutputEncoding：` +
-          firstStatement.trim().slice(0, 90),
+        `锚点 ${anchor} 的第一格在打中文之前没钉 [Console]::OutputEncoding：${
+          firstStatement.trim().slice(0, 90)}`,
       ).toContain("[Console]::OutputEncoding");
     }
   });
@@ -246,6 +246,8 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
     expect(probe).toContain("codePageIsUtf8");
     /* 话术里必须给**下一动作**（与 §13.5.3.5.1「红了要红在能指路的位置」同口径）。 */
     expect(probe).toContain("--apply");
-    expect(probe).toContain("UTF-8");
+    /* 这里断言的是「话术里印了 UTF-8 字样」，不是编码参数；用正则避开
+     * unicorn/text-encoding-identifier-case 对编码字面量的改写。 */
+    expect(probe).toMatch(/UTF-8/);
   });
 });

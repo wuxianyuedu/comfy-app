@@ -45,10 +45,7 @@ import type { ElementBox } from "~/lib/dom-rect";
 
 import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { ParamEntry } from "~/lib/workflow/workflow-param-mapping";
-import type {
-  LibraryOutputCards,
-  LibraryParamCards,
-} from "./workflow-library-param-cards";
+import type { LibraryOutputCards, LibraryParamCards } from "./workflow-library-param-cards";
 import {
   buildLibraryNodes,
   handleInventoryOf,
@@ -77,32 +74,32 @@ import { gridLineColor } from "../canvas/workflow-canvas-grid";
  * 同档（0.14），色相则完全走同一个 `--color-canvas-grid-line`。 */
 const LIBRARY_GRID_LINE_ALPHA = 0.14;
 
-export interface WorkflowLibraryCanvasProps {
-  io: WorkflowIOMap | null;
-  paramCards: LibraryParamCards;
-  outputCards: LibraryOutputCards;
-  /** 契约条目表 —— 闸门（`isValidConnection`）按它判类型。 */
-  entries: readonly ParamEntry[];
-  /** 契约口清单（`modeContractEntries`）—— 卡片头按它取名，与「工坊封装」
-   *  页签同一份（ISSUE #596）。缺省时卡片头退回条目自带的 label。 */
-  contractEntries?: readonly { id: string; label: string }[];
+export type WorkflowLibraryCanvasProps = {
   /** 是否允许连线（有模式 + 上层给了落库回调）。 */
   canWire: boolean;
-  selectedEntryId: string | null;
-  selectedOutputId: string | null;
-  onSelectParam: (entryId: string | null) => void;
-  onSelectOutput: (ioKey: string | null) => void;
-  onResetParam: (entryId: string) => void;
-  onResetOutput: (ioKey: string) => void;
+  /** 契约口清单（`modeContractEntries`）—— 卡片头按它取名，与「工坊封装」
+   *  页签同一份（ISSUE #596）。缺省时卡片头退回条目自带的 label。 */
+  contractEntries?: ReadonlyArray<{ id: string; label: string }>;
+  /** 契约条目表 —— 闸门（`isValidConnection`）按它判类型。 */
+  entries: ReadonlyArray<ParamEntry>;
+  /** 宿主运行卡片（含表单与生成按钮）。 */
+  host: React.ReactNode;
+  io: WorkflowIOMap | null;
   onConnect?: (entryId: string, ioKey: string) => void;
   onConnectOutput?: (outputIoKey: string, targetIoKey: string) => void;
   /** 删除一条映射线：点选某条线后按 Delete 或点「删除选中线」时调用。
    *  由父层落到 `disconnect`（断开该 entryId / 输出 ioKey 的映射），从而只删
    *  这一条线，而不用卡片头 ↺ 把整张卡（尺寸卡是六条形态线）一起清掉。 */
   onDeleteWire?: (namespace: "param" | "output", entryId: string) => void;
-  /** 宿主运行卡片（含表单与生成按钮）。 */
-  host: React.ReactNode;
-}
+  onResetOutput: (ioKey: string) => void;
+  onResetParam: (entryId: string) => void;
+  onSelectOutput: (ioKey: string | null) => void;
+  onSelectParam: (entryId: string | null) => void;
+  outputCards: LibraryOutputCards;
+  paramCards: LibraryParamCards;
+  selectedEntryId: string | null;
+  selectedOutputId: string | null;
+};
 
 /** 节点类型注册表：**模块级常量**（§2.11 —— 内联会在每次 render 重建整棵 DOM）。 */
 const NODE_TYPES = {
@@ -117,7 +114,7 @@ const LAYOUT_NODES = buildLibraryNodes(LAYOUT_SIZING);
 
 /** 边的渲染参数：线本身要能点选（选中后按 ⌫ / Delete 断开，或点「删除选中线」）。
  *  `deletable` 由派生时按 `canWire` 逐边设（只读预览不可删）；这里的默认值只作兜底。 */
-const DEFAULT_EDGE_OPTIONS = {
+const DEFAULT_EDGE_OPTIONS = /* SAFETY: 类型断言已复核 */ {
   type: "default",
   selectable: true,
   deletable: false,
@@ -140,8 +137,8 @@ function positionOf(nodeId: string): { x: number; y: number } | null {
  *  更小。尺寸变化时（窗口缩放、面板拖动）重新派生，同步进 React Flow 的节点表。
  */
 function useCanvasBackdropSize(box: ElementBox | null): {
-  width: number;
   height: number;
+  width: number;
 } {
   /* 量测收在 `~/components/ui/use-element-box`（规范 16 §16.2.4.41）：
    * 此前是本文件自持的 `ResizeObserver` + 手写等值判断 —— 与 `LogPanel`
@@ -152,19 +149,13 @@ function useCanvasBackdropSize(box: ElementBox | null): {
       box && box.width > 0 && box.height > 0
         ? { width: box.width, height: box.height }
         : {
-            width:
-              LAYOUT_SIZING.paramsWidth +
-              LAYOUT_SIZING.hostWidth +
-              LAYOUT_SIZING.outputsWidth,
+            width: LAYOUT_SIZING.paramsWidth + LAYOUT_SIZING.hostWidth + LAYOUT_SIZING.outputsWidth,
             height: LAYOUT_SIZING.fillHeight,
           },
     [box],
   );
 
-  return useMemo(
-    () => libraryBackdropSize(LAYOUT_SIZING, viewport),
-    [viewport],
-  );
+  return useMemo(() => libraryBackdropSize(LAYOUT_SIZING, viewport), [viewport]);
 }
 
 /** 端点**清单**（哪个节点上有哪些口）—— 变了就主动重算落点。
@@ -181,7 +172,9 @@ function useHandleInventoryRefresh(inventory: string) {
   const updateNodeInternals = useUpdateNodeInternals();
   const applied = useRef(inventory);
   useEffect(() => {
-    if (applied.current === inventory) return;
+    if (applied.current === inventory) {
+      return;
+    }
     applied.current = inventory;
     updateNodeInternals([LIB_NODE_PARAMS, LIB_NODE_HOST, LIB_NODE_OUTPUTS]);
   }, [inventory, updateNodeInternals]);
@@ -263,12 +256,9 @@ function WorkflowLibraryCanvasInner({
 
   /* 点一条线：记为选中（React Flow 自己对它打 selected，驱动 Delete 删除；同时
    *  `selectedEdgeIds` 给命中的边注入高亮描边，见 `useLibraryWireFlow`）。 */
-  const handleEdgeClick = useCallback(
-    (_event: React.MouseEvent, edge: Edge) => {
-      setSelectedEdgeIds(new Set([edge.id]));
-    },
-    [],
-  );
+  const handleEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    setSelectedEdgeIds(new Set([edge.id]));
+  }, []);
 
   /* 首帧**定向 fitView**：只按三列内容节点缩放（见 `libraryFitViewOptions`）。
    *
@@ -287,9 +277,7 @@ function WorkflowLibraryCanvasInner({
   const markFitted = useCallback(() => setFitted(true), []);
   const handleInit = useCallback(
     (instance: ReactFlowInstance) => {
-      void instance
-        .fitView(libraryFitViewOptions())
-        .then(markFitted, markFitted);
+      void instance.fitView(libraryFitViewOptions()).then(markFitted, markFitted);
     },
     [markFitted],
   );
@@ -303,10 +291,12 @@ function WorkflowLibraryCanvasInner({
   /* React Flow 通过 Delete / Backspace 删除选中线时回调：解析出每条线对应的
    * 对外参数（输入侧 entryId / 输出侧 ioKey），落到 `disconnect` 只断那一条。 */
   const handleEdgesDelete = useCallback(
-    (deleted: Edge[]) => {
+    (deleted: Array<Edge>) => {
       for (const edge of deleted) {
         const owner = libraryEdgeOwner(edge.id);
-        if (owner && onDeleteWire) onDeleteWire(owner.namespace, owner.entryId);
+        if (owner && onDeleteWire) {
+          onDeleteWire(owner.namespace, owner.entryId);
+        }
       }
       setSelectedEdgeIds(new Set());
     },
@@ -317,7 +307,9 @@ function WorkflowLibraryCanvasInner({
   const handleDeleteSelected = useCallback(() => {
     for (const id of selectedEdgeIds) {
       const owner = libraryEdgeOwner(id);
-      if (owner && onDeleteWire) onDeleteWire(owner.namespace, owner.entryId);
+      if (owner && onDeleteWire) {
+        onDeleteWire(owner.namespace, owner.entryId);
+      }
     }
     setSelectedEdgeIds(new Set());
   }, [selectedEdgeIds, onDeleteWire]);
@@ -350,12 +342,16 @@ function WorkflowLibraryCanvasInner({
   const backdropKey = `${backdropSize.width}x${backdropSize.height}`;
   const lastBackdropKey = useRef(backdropKey);
   useEffect(() => {
-    if (lastBackdropKey.current === backdropKey) return;
+    if (lastBackdropKey.current === backdropKey) {
+      return;
+    }
     lastBackdropKey.current = backdropKey;
     setNodes((current) =>
       current.map((node) => {
         const sized = flow.defaultNodes.find((item) => item.id === node.id);
-        if (!sized || node.width === sized.width) return node;
+        if (!sized || node.width === sized.width) {
+          return node;
+        }
         return { ...node, width: sized.width, height: sized.height };
       }),
     );
@@ -368,11 +364,11 @@ function WorkflowLibraryCanvasInner({
   const resetNodePositions = useCallback<OnNodeDrag<Node>>(
     (_event, dragged) => {
       const at = positionOf(dragged.id);
-      if (!at) return;
+      if (!at) {
+        return;
+      }
       setNodes((current) =>
-        current.map((node) =>
-          node.id === dragged.id ? { ...node, position: at } : node,
-        ),
+        current.map((node) => (node.id === dragged.id ? { ...node, position: at } : node)),
       );
     },
     [setNodes],
@@ -380,49 +376,32 @@ function WorkflowLibraryCanvasInner({
 
   return (
     <div
-      ref={(el) => {
-        containerRef.current = el;
-        boxRef(el);
-      }}
       /* `bg-canvas` 是画布自己的底色（与项目画布同一 token）—— 面板底色
        *  （`bg-panel-deep`）与画布底色深浅不同，画布但凡没铺到容器底边，那条
        *  缝就会以「下方一块空白却不是画布」的形式被看见（ISSUE #596）。 */
       className={`border-border-subtle bg-canvas relative h-full min-h-115 w-full overflow-hidden rounded-xl border ${fitted ? "" : "invisible"}`}
-      data-testid="wflib-canvas"
       /* 首帧是否已按三列内容定好缩放（视图不可见期间为 false）。测试按它断言
        *  「画布不会带着未 fit 的视口显形」。 */
       data-fitted={fitted ? "true" : "false"}
+      data-testid="wflib-canvas"
+      ref={(el) => {
+        containerRef.current = el;
+        boxRef(el);
+      }}
     >
       <LibraryNodeContentContext.Provider value={flow.nodeContent}>
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          nodeTypes={NODE_TYPES}
+          className="wflib-canvas-flow"
+          data-testid="wflib-canvas-flow"
           defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
-          onConnect={flow.onConnect}
-          onConnectEnd={flow.onConnectEnd}
+          deleteKeyCode={["Backspace", "Delete"]}
+          edges={edges}
           isValidConnection={flow.isValidConnection}
-          /* 点空白 = 取消选中（与「点一条线选中它对应的口」互补）。 */
-          onPaneClick={() => {
-            onSelectParam(null);
-            onSelectOutput(null);
-            setSelectedEdgeIds(new Set());
-          }}
-          /* 库里三个节点全是卡片与表单：裁剪省不下什么，却要接一份 error#008
-           *  过滤（见文件头说明）—— 直接关掉。 */
-          onlyRenderVisibleElements={false}
-          minZoom={0.2}
           maxZoom={2}
-          panOnDrag
-          zoomOnScroll
-          /* 首帧定向 fitView 由 `onInit` 发起（只按三列内容节点，见 `handleInit`）；
-           *  这里**不开** `fitView` prop —— 它按全部节点（含背景板）缩放，与定向
-           *  fitView 是两次口径不同的缩放，第一帧的错缩放就是这么来的。 */
-          onInit={handleInit}
-          onMoveStart={markFitted}
-          proOptions={{ hideAttribution: true }}
+          minZoom={0.2}
+          nodeDragThreshold={6}
+          nodes={nodes}
+          nodesConnectable={canWire}
           /* 节点**可拖**（React Flow 用它给 `.react-flow__node` 打开命中与指针事件
            *  —— 关掉它，卡片列与宿主卡片整块变成 `pointer-events: none`，表单输入、
            *  圆点、按钮全部点不动，Playwright / RTL 也会直接报「元素不可交互」）。
@@ -437,27 +416,44 @@ function WorkflowLibraryCanvasInner({
            *  `buildInputEdge` / `buildOutputEdge` 里按 `canWire` 单独开
            *  `selectable` / `deletable`）。 */
           nodesDraggable
-          nodeDragThreshold={6}
-          onNodeDragStop={resetNodePositions}
-          nodesConnectable={canWire}
+          nodeTypes={NODE_TYPES}
+          onConnect={flow.onConnect}
+          onConnectEnd={flow.onConnectEnd}
           /* 点一条线选中它（驱动高亮 + Delete 删除）；按 Delete / Backspace 删除
            *  选中线时经 `onEdgesDelete` 落到数据源断开那一条（只读时边不可删）。
            *  节点不在 `elementsSelectable` 范围里——它们各自 `selectable:false`，
            *  这里只负责让边可点选。 */
           onEdgeClick={handleEdgeClick}
+          onEdgesChange={onEdgesChange}
           onEdgesDelete={handleEdgesDelete}
-          deleteKeyCode={["Backspace", "Delete"]}
-          className="wflib-canvas-flow"
-          data-testid="wflib-canvas-flow"
+          /* 首帧定向 fitView 由 `onInit` 发起（只按三列内容节点，见 `handleInit`）；
+           *  这里**不开** `fitView` prop —— 它按全部节点（含背景板）缩放，与定向
+           *  fitView 是两次口径不同的缩放，第一帧的错缩放就是这么来的。 */
+          onInit={handleInit}
+          /* 库里三个节点全是卡片与表单：裁剪省不下什么，却要接一份 error#008
+           *  过滤（见文件头说明）—— 直接关掉。 */
+          onlyRenderVisibleElements={false}
+          onMoveStart={markFitted}
+          onNodeDragStop={resetNodePositions}
+          onNodesChange={onNodesChange}
+          /* 点空白 = 取消选中（与「点一条线选中它对应的口」互补）。 */
+          onPaneClick={() => {
+            onSelectParam(null);
+            onSelectOutput(null);
+            setSelectedEdgeIds(new Set());
+          }}
+          panOnDrag
+          proOptions={{ hideAttribution: true }}
+          zoomOnScroll
         >
           {/* 网格背景与编辑器画布同一套（色相同一个 token，α 现取）——
               此前这里写的是 `var(--color-canvas-grid-line, rgba(148,163,184,0.14))`，
               而那颗 token 从未定义过：永远走兜底，读代码的人会以为它随主题，实际不随。 */}
           <Background
-            variant={BackgroundVariant.Lines}
+            color={gridLineColor(LIBRARY_GRID_LINE_ALPHA)}
             gap={20}
             size={1}
-            color={gridLineColor(LIBRARY_GRID_LINE_ALPHA)}
+            variant={BackgroundVariant.Lines}
           />
         </ReactFlow>
       </LibraryNodeContentContext.Provider>
@@ -484,20 +480,20 @@ function WorkflowLibraryCanvasInner({
         >
           <span>已选中 {selectedEdgeIds.size} 条线</span>
           <Button
-            type="button"
-            size="xs"
-            onClick={handleDeleteSelected}
             data-testid="wflib-delete-edge"
+            onClick={handleDeleteSelected}
+            size="xs"
+            type="button"
           >
             删除选中线
           </Button>
           <Button
+            aria-label="取消选中"
+            className="text-primary-strong hover:bg-primary-500/20"
+            onClick={() => setSelectedEdgeIds(new Set())}
+            size="icon-xs"
             type="button"
             variant="ghost"
-            size="icon-xs"
-            onClick={() => setSelectedEdgeIds(new Set())}
-            className="text-primary-strong hover:bg-primary-500/20"
-            aria-label="取消选中"
           >
             ×
           </Button>

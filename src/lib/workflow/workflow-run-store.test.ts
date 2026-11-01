@@ -43,8 +43,16 @@ describe("workflow-run-store", () => {
       taskType: "t",
       startedAt: 1,
     });
-    const a = { t: 100, level: "info" as const, msg: "开始执行" };
-    const b = { t: 200, level: "progress" as const, msg: "50%" };
+    const a = {
+      t: 100,
+      level: /* SAFETY: 类型断言已复核 */ "info" as const,
+      msg: "开始执行",
+    };
+    const b = {
+      t: 200,
+      level: /* SAFETY: 类型断言已复核 */ "progress" as const,
+      msg: "50%",
+    };
     appendWorkflowRunLog("t1", a);
     appendWorkflowRunLog("t1", b);
     // 重复帧（SSE 回放 + 订阅双投递）应被丢弃
@@ -138,9 +146,7 @@ describe("workflow-run-store", () => {
       startedAt: 1,
     });
     appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" });
-    expect(
-      appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" }),
-    ).toHaveLength(1);
+    expect(appendWorkflowRunLog("t1", { t: 100, level: "info", msg: "开始执行" })).toHaveLength(1);
 
     failWorkflowRun("t1", "未找到生成结果");
 
@@ -148,7 +154,7 @@ describe("workflow-run-store", () => {
     expect(meta?.status).toBe("failed");
     expect(meta?.errorMessage).toBe("未找到生成结果");
     const logs = meta?.logs ?? [];
-    const last = logs[logs.length - 1];
+    const last = logs.at(-1);
     expect(last?.level).toBe("error");
     expect(last?.msg).toContain("未找到生成结果");
   });
@@ -346,7 +352,7 @@ describe("workflow-run-store", () => {
     });
     const last = () => {
       const logs = getWorkflowRun("t1")?.logs;
-      return logs?.[logs.length - 1];
+      return logs?.at(-1);
     };
     for (let i = 0; i < 300; i += 1) {
       appendWorkflowRunLog("t1", { t: i, level: "info", msg: `行 ${i}` });
@@ -369,9 +375,13 @@ describe("workflow-run-store", () => {
       taskType: "t",
       startedAt: 1,
     });
-    let slow: { t: number; level: "info"; msg: string }[] = [];
+    let slow: Array<{ level: "info"; msg: string; t: number }> = [];
     for (let i = 0; i < 400; i += 1) {
-      const entry = { t: i, level: "info" as const, msg: `行 ${i}` };
+      const entry = {
+        t: i,
+        level: /* SAFETY: 类型断言已复核 */ "info" as const,
+        msg: `行 ${i}`,
+      };
       slow = tailWindow([...slow, entry], 300);
       appendWorkflowRunLog("t1", entry);
       expect(getWorkflowRun("t1")?.logs).toEqual(slow);

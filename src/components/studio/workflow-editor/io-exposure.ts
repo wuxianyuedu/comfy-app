@@ -17,10 +17,10 @@ import { sanitizeComboLabel } from "~/components/studio/workflow-utils";
 
 /** 本地勾选态在显示名上真正携带的字段（作者的显式重命名 + 画布透传的类型，
  *  后者缺省时不该把富化类型盖掉）。 */
-export interface ExposedLabelSource {
+export type ExposedLabelSource = {
   label?: string;
   type?: string;
-}
+};
 
 /** 一个已暴露条目的显示名：作者重命名 → 富化名 → 真实 pin 名。 */
 export function resolveExposedLabel(
@@ -62,31 +62,33 @@ export function mergeExposedEntry<T extends WorkflowIOEntry>(
  *  只补「服务端富化查不到」的字段，不覆盖已有值。 */
 export function enrichFromViewNodes(
   nodes:
-    | {
-        id: string;
+    | Array<{
         class_type?: string;
-        raw_inputs?: {
-          name: string;
+        id: string;
+        raw_inputs?: Array<{
+          defaultValue?: unknown;
           label?: string;
           localized?: string;
-          type?: string;
-          defaultValue?: unknown;
           multiline?: boolean;
+          name: string;
+          type?: string;
           widgetValue?: unknown;
-        }[];
-      }[]
+        }>;
+      }>
     | null
     | undefined,
 ): Record<string, WorkflowIOEntry> {
   const out: Record<string, WorkflowIOEntry> = {};
   for (const node of nodes ?? []) {
-    if (!node?.id) continue;
+    if (!node?.id) {
+      continue;
+    }
     for (const input of node.raw_inputs ?? []) {
-      if (!input?.name) continue;
+      if (!input?.name) {
+        continue;
+      }
       const label =
-        sanitizeComboLabel(input.label) ||
-        sanitizeComboLabel(input.localized) ||
-        input.name;
+        sanitizeComboLabel(input.label) || sanitizeComboLabel(input.localized) || input.name;
       const value = input.defaultValue ?? input.widgetValue;
       out[`${node.id}::widget::${input.name}`] = {
         direction: "input",
@@ -95,10 +97,8 @@ export function enrichFromViewNodes(
         name: input.name,
         label,
         type: input.type ?? "*",
-        ...(input.multiline !== undefined
-          ? { multiline: input.multiline }
-          : {}),
-        ...(value !== undefined ? { defaultValue: value } : {}),
+        ...(input.multiline === undefined ? {} : { multiline: input.multiline }),
+        ...(value === undefined ? {} : { defaultValue: value }),
       };
     }
   }

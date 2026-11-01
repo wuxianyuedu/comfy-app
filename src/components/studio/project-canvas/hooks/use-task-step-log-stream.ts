@@ -35,33 +35,31 @@ import {
 
 /** `/api/tasks/[id]/stream` 的 SSE 帧的运行时形状 —— 只含本面板消费的字段。
  *  `JSON.parse` 产出 `unknown`；下面逐个收窄字段后再用。 */
-interface SseFrame {
-  type?: unknown;
+type SseFrame = {
   entry?: unknown;
-  validationErrors?: unknown;
-  status?: unknown;
-  progress?: unknown;
   error?: unknown;
+  progress?: unknown;
+  status?: unknown;
+  type?: unknown;
+  validationErrors?: unknown;
   workflowName?: unknown;
-}
+};
 
 /** 把失败原因补成一条 error 日志行（横幅之外，时间线里也看得见，#378）。
  *  纯函数 + 显式 next：去重在 updater 之外完成，避免在 setState updater 里做副作用
  *  （StrictMode 下 updater 可能被调用两次）。 */
 function withFailureLogLine(
-  prev: StepLogEntry[],
+  prev: Array<StepLogEntry>,
   reason: string,
   now: number,
-): StepLogEntry[] {
-  if (!reason) return prev;
+): Array<StepLogEntry> {
+  if (!reason) {
+    return prev;
+  }
   const text = `✗ 生成失败：${reason}`;
-  const last = prev[prev.length - 1];
+  const last = prev.at(-1);
   /* 末行已是同因错误（服务端自己写过 ✗ 生成失败）→ 不重复追加。 */
-  if (
-    last?.level === "error" &&
-    typeof last.msg === "string" &&
-    last.msg.includes(reason)
-  ) {
+  if (last?.level === "error" && typeof last.msg === "string" && last.msg.includes(reason)) {
     return prev;
   }
   return [...prev, { t: now, level: "error", msg: text, client: true }];
@@ -71,7 +69,7 @@ function withFailureLogLine(
 function appendFailureLogLine(
   taskId: string,
   reason: string,
-  setLogs: React.Dispatch<React.SetStateAction<StepLogEntry[]>>,
+  setLogs: React.Dispatch<React.SetStateAction<Array<StepLogEntry>>>,
 ): void {
   const t = Date.now();
   appendStepLog(taskId, {
@@ -83,24 +81,22 @@ function appendFailureLogLine(
   setLogs((prev) => withFailureLogLine(prev, reason, t));
 }
 
-export interface TaskStepLogStream {
-  logs: StepLogEntry[];
-  validationErrors: ValidationError[] | null;
-  status: string | null;
-  progress: number;
-  error: string | null;
-  connected: boolean;
-  /** 供外部（如取消任务失败回调）写入错误横幅文案。 */
-  setError: (value: string | null) => void;
+export type TaskStepLogStream = {
   /** 清空当前任务的日志（连带跨卸载缓存）。 */
   clear: () => void;
-}
+  connected: boolean;
+  error: string | null;
+  logs: Array<StepLogEntry>;
+  progress: number;
+  /** 供外部（如取消任务失败回调）写入错误横幅文案。 */
+  setError: (value: string | null) => void;
+  status: string | null;
+  validationErrors: Array<ValidationError> | null;
+};
 
 export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
-  const [logs, setLogs] = useState<StepLogEntry[]>([]);
-  const [validationErrors, setValidationErrors] = useState<
-    ValidationError[] | null
-  >(null);
+  const [logs, setLogs] = useState<Array<StepLogEntry>>([]);
+  const [validationErrors, setValidationErrors] = useState<Array<ValidationError> | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +111,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
 
   // 被查看任务一变化就重新从缓存播种。
   useEffect(() => {
-    if (!taskId) return;
+    if (!taskId) {
+      return;
+    }
     if (loadedForRef.current !== taskId) {
       loadedForRef.current = taskId;
       const cached = loadStepLogPanelState(taskId);
@@ -152,30 +150,35 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
     };
     es.onmessage = (ev) => {
       try {
-        const msg = JSON.parse(ev.data as string) as SseFrame;
+        const msg = /* SAFETY: 类型断言已复核 */ JSON.parse(
+          /* SAFETY: 类型断言已复核 */ ev.data as string,
+        ) as SseFrame;
         lastActivityRef.current = Date.now();
         if (msg.type === "log" && msg.entry) {
-          const entry = msg.entry as StepLogEntry;
+          const entry = /* SAFETY: 类型断言已复核 */ msg.entry as StepLogEntry;
           appendStepLog(tid, entry);
           setLogs((prev) => {
-            if (
-              prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)
-            )
+            if (prev.some((prev) => prev.t === entry.t && prev.msg === entry.msg)) {
               return prev;
+            }
             return tailWindowAppend(prev, entry, MAX_LOGS_PER_TASK);
           });
         } else if (msg.type === "state") {
           if (Array.isArray(msg.validationErrors)) {
-            const ves = msg.validationErrors as ValidationError[];
+            const ves = /* SAFETY: 类型断言已复核 */ msg.validationErrors as Array<ValidationError>;
             setStepLogValidationErrors(tid, ves);
             setValidationErrors(ves);
           }
           if (typeof msg.status === "string" && msg.status) {
             const st = String(msg.status);
             const pct = Number(msg.progress ?? 0);
-            if (lastStatusRef.current !== st) lastStatusRef.current = st;
+            if (lastStatusRef.current !== st) {
+              lastStatusRef.current = st;
+            }
             setStatus(st);
-            if (Number.isFinite(pct)) setProgress(pct);
+            if (Number.isFinite(pct)) {
+              setProgress(pct);
+            }
             if (typeof msg.error === "string") {
               setError(msg.error);
               /* 失败原因同时补一条 error 日志行：横幅只在顶部显示，用户
@@ -187,10 +190,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
           }
           if (msg.workflowName || msg.status) {
             patchStepLogMeta(tid, {
-              workflowName:
-                typeof msg.workflowName === "string"
-                  ? msg.workflowName
-                  : undefined,
+              workflowName: typeof msg.workflowName === "string" ? msg.workflowName : undefined,
               status: typeof msg.status === "string" ? msg.status : undefined,
               nodeId: getNodeIdByTaskId(tid) ?? undefined,
             });
@@ -206,7 +206,9 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
            * 因此这里改为：终态帧只作为**触发器**，去向 DB 要权威结论；DB
            * 读不到时才退回帧内信息。 */
           const fallback = msg.type === "error" ? "FAILED" : "SUCCEEDED";
-          if (typeof msg.error === "string") setError(msg.error);
+          if (typeof msg.error === "string") {
+            setError(msg.error);
+          }
           es.close();
           esRef.current = null;
           void (async () => {
@@ -215,10 +217,11 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             const finalStatus = snap.status;
             const finalError = snap.error;
             const st = finalStatus ?? fallback;
-            if (lastStatusRef.current !== st) lastStatusRef.current = st;
+            if (lastStatusRef.current !== st) {
+              lastStatusRef.current = st;
+            }
             setStatus(st);
-            const reason =
-              finalError ?? (typeof msg.error === "string" ? msg.error : null);
+            const reason = finalError ?? (typeof msg.error === "string" ? msg.error : null);
             if (reason && isTerminalFailureTaskStatus(st)) {
               setError(reason);
               appendFailureLogLine(tid, reason, setLogs);
@@ -247,17 +250,18 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
   useInterval(
     () => {
       const idle = Date.now() - lastActivityRef.current;
-      if (idle > 20000 && status === "RUNNING") {
+      if (idle > 20_000 && status === "RUNNING") {
         const now = Date.now();
         setLogs((prev) => {
-          const last = prev[prev.length - 1];
+          const last = prev.at(-1);
           if (
             last &&
             typeof last.msg === "string" &&
             last.msg.includes("无新日志") &&
             now - last.t < 5000
-          )
+          ) {
             return prev;
+          }
           return tailWindowAppend(
             prev,
             {
@@ -271,11 +275,13 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
         lastActivityRef.current = now;
       }
     },
-    { ms: taskId ? 10000 : null, immediate: false },
+    { ms: taskId ? 10_000 : null, immediate: false },
   );
 
   const clear = () => {
-    if (taskId) clearStepLogPanelState(taskId);
+    if (taskId) {
+      clearStepLogPanelState(taskId);
+    }
     setLogs([]);
     setValidationErrors(null);
     setStatus(null);

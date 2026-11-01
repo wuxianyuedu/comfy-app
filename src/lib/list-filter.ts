@@ -42,7 +42,9 @@ export function normalizeNeedle(raw: string): string {
  *  `haystack` 由调用处给：它决定「这一行有哪些字段可搜」。**不要**在调用处
  *  再写 `toLowerCase()` —— 归一化只在本模块做一次。 */
 export function matchesNeedle(needle: string, haystack: string): boolean {
-  if (!needle) return true;
+  if (!needle) {
+    return true;
+  }
   /* 两侧都折小写。**只折 haystack 是不够的**：`needle` 由调用处传进来，
    * 而调用处漏掉归一化正是这条账的成因（`AttributeMultiSelect` 只 `trim()`）。
    * 这里把 `needle` 再折一次是幂等的（`normalizeNeedle` 是幂等函数），
@@ -76,30 +78,32 @@ export function matchesNeedle(needle: string, haystack: string): boolean {
  * 返回新对象数组，原数组不动 —— 调用处直接 `map` 是安全的。
  */
 export function filterGroups<G extends { title: string }, K extends keyof G>(
-  groups: G[],
+  groups: Array<G>,
   needle: string,
   /** 条目数组的字段名（`items` / `options` / …）。 */
   field: K,
   /** 单条是否命中。默认对 `String(item)` 子串匹配（小写化在出口内做）。 */
   hit?: (item: ItemOf<G, K>) => boolean,
-): G[] {
-  if (!needle) return groups;
-  const out: G[] = [];
+): Array<G> {
+  if (!needle) {
+    return groups;
+  }
+  const out: Array<G> = [];
   for (const group of groups) {
-    const all = (group[field] as ItemOf<G, K>[] | undefined) ?? [];
-    const keep =
-      hit ?? ((item: ItemOf<G, K>) => matchesNeedle(needle, String(item)));
+    const all =
+      /* SAFETY: 类型断言已复核 */ (group[field] as Array<ItemOf<G, K>> | undefined) ?? [];
+    const keep = hit ?? ((item: ItemOf<G, K>) => matchesNeedle(needle, String(item)));
     const kept = all.filter(keep);
-    if (kept.length === 0) continue;
+    if (kept.length === 0) {
+      continue;
+    }
     out.push({ ...group, [field]: kept });
   }
   return out;
 }
 
 /** `G[K]` 的元素类型（`G[K]` 必须是数组）。 */
-export type ItemOf<G, K extends keyof G> = G[K] extends readonly (infer I)[]
-  ? I
-  : never;
+export type ItemOf<G, K extends keyof G> = G[K] extends ReadonlyArray<infer I> ? I : never;
 
 /**
  * 「先归一化、再分组过滤」的一步式入口（`AttributeMultiSelect` 那个形态）。
@@ -108,14 +112,11 @@ export type ItemOf<G, K extends keyof G> = G[K] extends readonly (infer I)[]
  * （`AttributeMultiSelect` 归一化了 `trim()` 却没折小写）。要单用其中一步的场景
  * （如先按别的条件筛、最后再按关键字）直接用上面的函数。
  */
-export function filterGroupsByKeyword<
-  G extends { title: string },
-  K extends keyof G,
->(
-  groups: G[],
+export function filterGroupsByKeyword<G extends { title: string }, K extends keyof G>(
+  groups: Array<G>,
   rawKeyword: string,
   field: K,
   hit?: (item: ItemOf<G, K>) => boolean,
-): G[] {
+): Array<G> {
   return filterGroups(groups, normalizeNeedle(rawKeyword), field, hit);
 }

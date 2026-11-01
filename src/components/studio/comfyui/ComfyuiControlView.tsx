@@ -63,10 +63,7 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
   const configHint = comfyConfigHint(c.instance);
 
   return (
-    <DocumentFrame
-      width="medium"
-      className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8"
-    >
+    <DocumentFrame className="px-4 pt-4 pb-6 sm:px-8 sm:pt-5 sm:pb-8" width="medium">
       {/* 屏名由页签给出，页头的可见标题那一行收掉（ISSUE #1693）。 */}
       <PageHeader srTitle={pageHeaderTitle("comfyui")} />
 
@@ -75,25 +72,21 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
       <ViewActions>
         <Hint label="立刻再问一次本机后端的状态">
           <Button
-            variant="outline"
-            size="xs"
-            onClick={() => void c.refreshStatus()}
             aria-label="刷新 ComfyUI 状态"
             className="border-border text-ink-faint hover:text-ink-bright h-auto gap-1.5 rounded-lg px-3 py-1.5"
+            onClick={() => void c.refreshStatus()}
+            size="xs"
+            variant="outline"
           >
-            <RefreshCcw
-              data-icon="inline-start"
-              className="size-3"
-              aria-hidden
-            />
+            <RefreshCcw aria-hidden className="size-3" data-icon="inline-start" />
             刷新
           </Button>
         </Hint>
       </ViewActions>
 
       <SettingsCard
-        title="运行状态"
         description="提交任务时它没在跑，任务不会开始；状态变了自己会刷，不必手动点。"
+        title="运行状态"
       >
         <div
           className={`border-border bg-surface-2 mb-3 rounded-lg border px-3 py-2 ${STATUS_ROW_CLASS}`}
@@ -104,9 +97,9 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
               落没落定」有了一个**不读文案**的稳定锚点 —— 文案里的地址长度会变、
               跨元素分布会给量可见性带来补间窗口（E2E 侧据此等状态落地）。 */}
           <span
-            role="status"
             aria-live="polite"
             className={`text-ink/80 ${STATUS_TEXT_CLASS}`}
+            role="status"
             title={comfyDotTitle(c.status)}
           >
             {comfyStatusText(c.status, flags)}
@@ -116,9 +109,9 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
                 留给「启动 / 关闭」。只在「明确未运行」时禁用 —— 探测进行中也允许
                 点一下，openComfy 会先取一份新鲜状态再打开（ISSUE #339）。 */}
             <StatusButton
+              disabled={c.opening || (!running && !c.status?.probing)}
               onClick={() => void c.openComfy()}
               variant="primary"
-              disabled={c.opening || (!running && !c.status?.probing)}
             >
               {c.opening ? "打开中…" : "打开查看"}
             </StatusButton>
@@ -129,8 +122,8 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
                 `text-muted-foreground` 覆写的次级按钮，三颗次级就长出两种形状，
                 读起来像「这四个按钮各有不同职责」，而它们其实是同一层。 */}
             <StatusButton
-              onClick={() => void c.openComfyInBrowser()}
               disabled={c.browserOpening || (!running && !c.status?.probing)}
+              onClick={() => void c.openComfyInBrowser()}
             >
               {c.browserOpening ? "打开中…" : "在浏览器打开"}
             </StatusButton>
@@ -138,20 +131,18 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
                 实心（未运行时「启动」实心、运行时「关闭」实心），另一颗此时本就被
                 禁用。两颗都实心时一屏里两颗同款主按钮，用户无从判断该点哪个。 */}
             <StatusButton
-              onClick={() => void c.startComfy()}
-              variant={running ? "primary" : "primary-solid"}
               /* 已配置路径才允许启动：`comfyStart` 会拿库里的路径去 spawn，
                 空路径的失败文案（服务端给的）不如这里提前说清去哪配。 */
-              disabled={
-                busy || running || (!!c.instance && !c.instance.pathConfigured)
-              }
+              disabled={busy || running || (!!c.instance && !c.instance.pathConfigured)}
+              onClick={() => void c.startComfy()}
+              variant={running ? "primary" : "primary-solid"}
             >
               {c.starting || c.status?.starting ? "启动中…" : "启动 ComfyUI"}
             </StatusButton>
             <StatusButton
+              disabled={busy || !running}
               onClick={() => void c.stopComfy()}
               variant={running ? "primary-solid" : "primary"}
-              disabled={busy || !running}
             >
               {c.stopping || c.status?.stopping ? "关闭中…" : "关闭 ComfyUI"}
             </StatusButton>
@@ -162,12 +153,9 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
             按钮 —— 那种形态下用户只会反复点它。 */}
         {configHint ? (
           <div className="border-warning/40 bg-warning/10 mb-3 rounded-lg border px-3 py-2">
-            <p className="text-warning-strong text-xs leading-relaxed">
-              {configHint}
-            </p>
+            <p className="text-warning-strong text-xs leading-relaxed">{configHint}</p>
             <Button
-              variant="outline"
-              size="xs"
+              className="border-warning/40 text-warning-strong hover:bg-warning/10 mt-2 h-auto gap-1 rounded-lg px-2.5 py-1"
               onClick={() =>
                 emitAppEvent("workspace:navigate", {
                   view: "settings",
@@ -176,14 +164,11 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
                   section: "comfyui",
                 })
               }
-              className="border-warning/40 text-warning-strong hover:bg-warning/10 mt-2 h-auto gap-1 rounded-lg px-2.5 py-1"
+              size="xs"
+              variant="outline"
             >
               去设置里配置
-              <ArrowRight
-                data-icon="inline-end"
-                className="size-3"
-                aria-hidden
-              />
+              <ArrowRight aria-hidden className="size-3" data-icon="inline-end" />
             </Button>
           </div>
         ) : null}
@@ -193,12 +178,9 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
         <p className="text-ink-muted text-xs leading-relaxed">
           {c.instance
             ? `安装形态：${instanceKindLabel(c.instance.instanceType)}。${
-                c.instance.desktopManaged
-                  ? "端口与启动参数由 Comfy Desktop 实例元数据决定。"
-                  : ""
+                c.instance.desktopManaged ? "端口与启动参数由 Comfy Desktop 实例元数据决定。" : ""
               }`
             : "安装形态判读中…"}
-          {""}
           路径与启动参数在「设置 → 创作后端」里配置。
         </p>
         {/* 「这一点下去会按哪条路径启动」：写的是**库里已保存**的那条，所以用户
@@ -216,15 +198,15 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
           不再是个黑盒（硬规则 4 的用户可见出口）。右上角的下拉按「每次启动」切换
           （服务端按会话横幅切分），全屏按钮铺满标题行下方的内容区。 */}
       <RuntimeLogBox
-        fileName="comfyui-runtime.log"
-        log={c.log}
+        className="mt-4"
         emptyHint={
           <>
             暂无日志 —— 点「启动 ComfyUI」后这里会实时输出拉起过程（spawn
             参数、模型加载与就绪状态）；也可点「刷新」查看最近一次运行日志。
           </>
         }
-        className="mt-4"
+        fileName="comfyui-runtime.log"
+        log={c.log}
       />
     </DocumentFrame>
   );

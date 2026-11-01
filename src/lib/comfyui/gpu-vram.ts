@@ -18,12 +18,12 @@
 import { execFile } from "node:child_process";
 
 /** nvidia-smi 内存查询的一条结果（MiB → 调用方换算字节）。 */
-export interface NvidiaSmiMem {
-  /** 已用（MB） */
-  usedMiB: number;
+export type NvidiaSmiMem = {
   /** 总量（MB） */
   totalMiB: number;
-}
+  /** 已用（MB） */
+  usedMiB: number;
+};
 
 /** 解析 `nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits`
  *  的每行输出（形如 `2048, 8192`），返回首块 GPU 用量。
@@ -34,31 +34,31 @@ export function parseNvidiaSmiOutput(raw: string): NvidiaSmiMem | null {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .find((l) => l.length > 0);
-  if (!line) return null;
+  if (!line) {
+    return null;
+  }
   const parts = line.split(",").map((p) => p.trim());
   const used = Number(parts[0]);
   const total = Number(parts[1]);
-  if (!Number.isFinite(used) || !Number.isFinite(total)) return null;
-  if (used < 0 || total <= 0) return null;
+  if (!Number.isFinite(used) || !Number.isFinite(total)) {
+    return null;
+  }
+  if (used < 0 || total <= 0) {
+    return null;
+  }
   // 已用可能极轻微超过总量（驱动读数抖动），clamp 到总量内。
   return { usedMiB: Math.min(used, total), totalMiB: total };
 }
 
-function execFileP(
-  cmd: string,
-  args: string[],
-  timeoutMs = 3000,
-): Promise<string> {
+function execFileP(cmd: string, args: Array<string>, timeoutMs = 3000): Promise<string> {
   return new Promise((resolve) => {
-    execFile(
-      cmd,
-      args,
-      { timeout: timeoutMs, windowsHide: true },
-      (err, stdout) => {
-        if (err) resolve("");
-        else resolve(stdout.toString());
-      },
-    );
+    execFile(cmd, args, { timeout: timeoutMs, windowsHide: true }, (err, stdout) => {
+      if (err) {
+        resolve("");
+      } else {
+        resolve(stdout.toString());
+      }
+    });
   });
 }
 
@@ -69,7 +69,9 @@ let smiCache: { at: number; value: NvidiaSmiMem | null } | null = null;
  *  MiB→字节换算；查询失败 / 非 NVIDIA 卡返回 null。带 5s 缓存。 */
 export async function queryNvidiaVram(): Promise<NvidiaSmiMem | null> {
   const now = Date.now();
-  if (smiCache && now - smiCache.at < SMI_CACHE_MS) return smiCache.value;
+  if (smiCache && now - smiCache.at < SMI_CACHE_MS) {
+    return smiCache.value;
+  }
 
   const out = await execFileP("nvidia-smi", [
     "--query-gpu=memory.used,memory.total",

@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -88,20 +82,16 @@ describe("encryptLlmKey / decryptLlmKey", () => {
 
     // 篡改密文体：GCM 的认证标签必须拦住它，而不是解出乱码。
     const tamperedCt = Buffer.from(parts[2]!, "base64");
-    tamperedCt[0] = tamperedCt[0]! ^ 0xff;
+    tamperedCt[0] = tamperedCt.at(0)! ^ 0xff;
     expect(
-      decryptLlmKey(
-        `enc:v1:${parts[0]}:${parts[1]}:${tamperedCt.toString("base64")}`,
-      ),
+      decryptLlmKey(`enc:v1:${parts[0]}:${parts[1]}:${tamperedCt.toString("base64")}`),
     ).toBeNull();
 
     // 篡改 tag 同理。
     const tamperedTag = Buffer.from(parts[1]!, "base64");
-    tamperedTag[0] = tamperedTag[0]! ^ 0xff;
+    tamperedTag[0] = tamperedTag.at(0)! ^ 0xff;
     expect(
-      decryptLlmKey(
-        `enc:v1:${parts[0]}:${tamperedTag.toString("base64")}:${parts[2]}`,
-      ),
+      decryptLlmKey(`enc:v1:${parts[0]}:${tamperedTag.toString("base64")}:${parts[2]}`),
     ).toBeNull();
 
     expect(decryptLlmKey("enc:v1:!!!:!!!:!!!")).toBeNull();
@@ -132,7 +122,7 @@ describe("密钥来源", () => {
     encryptLlmKey("x");
     expect(existsSync(keyFile)).toBe(true);
 
-    const content = readFileSync(keyFile, "utf-8").trim();
+    const content = readFileSync(keyFile, "utf8").trim();
     // 文件里放的是随机口令，不是直接可用的密钥字节。
     expect(content.length).toBeGreaterThan(16);
     expect(content).not.toMatch(/\s/);

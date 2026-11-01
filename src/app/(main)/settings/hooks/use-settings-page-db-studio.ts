@@ -32,31 +32,31 @@ import {
   type RuntimeLogController,
 } from "~/components/studio/logs/use-runtime-log-source";
 
-export interface DbStudioStatus {
-  up: boolean;
-  starting: boolean;
+export type DbStudioStatus = {
   port: number;
-}
+  starting: boolean;
+  up: boolean;
+};
 
-export interface UseSettingsDbStudio {
-  dbStudioStatus: DbStudioStatus | null;
-  dbStudioStarting: boolean;
-  dbStudioStopping: boolean;
-  dbStudioOpening: boolean;
+export type UseSettingsDbStudio = {
   dbStudioLog: RuntimeLogController & { active: boolean };
+  dbStudioOpening: boolean;
+  dbStudioStarting: boolean;
+  dbStudioStatus: DbStudioStatus | null;
+  dbStudioStopping: boolean;
+  openDbStudio: () => Promise<void>;
   startDbStudio: () => Promise<void>;
   stopDbStudio: () => Promise<void>;
-  openDbStudio: () => Promise<void>;
-}
+};
 
 export function useSettingsDbStudio({
   statusQueriesEnabled,
   showFlash,
 }: {
-  /** 首屏两份配置就绪前不发探测（同 comfyStatus 的口径）。 */
-  statusQueriesEnabled: boolean;
   /** 整页提示条通道，来自主 hook 的 useFlashLatch。 */
   showFlash: ActionReport;
+  /** 首屏两份配置就绪前不发探测（同 comfyStatus 的口径）。 */
+  statusQueriesEnabled: boolean;
 }): UseSettingsDbStudio {
   const trpc = useTRPC();
   const statusQ = useQuery(

@@ -7,13 +7,15 @@ import {
   attributeAffected,
   buildImportedBy,
   changedPathsFrom,
-  changedPathsFromNameStatus,
   isSourcePath,
   isTestPath,
   resolveAffectedTests,
   specCandidates,
   wideFallbackNote,
 } from "../scripts/affected-tests.mjs";
+/* `--name-status` 的解析住在零依赖模块里（ISSUE #2830：说明符扫描器带上了
+ * `typescript`，沙箱里那份 `changed-scope.mjs` 不能再连带它）。 */
+import { changedPathsFromNameStatus } from "../scripts/git-name-status.mjs";
 /* 清单那一跳的载体住在自己那份文件里 —— 用例按它真实的落点 import，
  * 而不是让机制层再转出一层「看起来还在那儿」的假出口。 */
 import { describeListFailure } from "../scripts/affected-launch-changed-list.mjs";
@@ -28,12 +30,12 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 /** 夹具：`files` 是「仓库相对路径 → 内容」；测试文件当输出候选，其余当 import 图节点。 */
 function harness(
   files: Record<string, string>,
-  opts: { knownFailed?: string[]; tracked?: string[] } = {},
+  opts: { knownFailed?: Array<string>; tracked?: Array<string> } = {},
 ) {
   const keys = Object.keys(files);
   const testFiles = keys.filter(isTestPath);
   const sourceFiles = keys.filter(isSourcePath);
-  return (changedPaths: string[]) =>
+  return (changedPaths: Array<string>) =>
     resolveAffectedTests({
       changedPaths,
       testFiles,
@@ -60,12 +62,8 @@ describe("affected-tests：路径判据", () => {
     // 这一条是判据里最容易写错的地方：拿仓库根当基准时，`../util/helper`
     // 会解析到根外面去，于是「改了被相对 import 的模块」整类静默漏跑。
     const from = "src/deep/x/one.test.ts";
-    expect(specCandidates("../util/helper", from)).toContain(
-      "src/deep/util/helper.ts",
-    );
-    expect(specCandidates("./sibling", from)).toContain(
-      "src/deep/x/sibling.ts",
-    );
+    expect(specCandidates("../util/helper", from)).toContain("src/deep/util/helper.ts");
+    expect(specCandidates("./sibling", from)).toContain("src/deep/x/sibling.ts");
   });
 
   it("别名 ~/ 与 @/ 都落到 src/，裸包名不解析", () => {
@@ -135,23 +133,48 @@ describe("affected-tests：五条命中判据", () => {
 
   it("③'' barrel 只在「出口真的转出去」时才算消费（不是同目录就拉进来）", () => {
     const run = harness({
-      "src/lib/core/index.ts":
-        "export * from './errors';\nexport * from './impl';",
+      "src/lib/core/index.ts": "export * from './errors';\nexport * from './impl';",
       "src/lib/core/impl.ts": "export const a = 1;",
       "src/lib/core/hidden.ts": "export const b = 2;",
       "src/x/uses-barrel.test.ts": "import { a } from '~/lib/core';",
     });
     // `impl` 被 index 转出去 → 改它要跑用 barrel 的那个测试
-    expect(run(["src/lib/core/impl.ts"]).tests).toContain(
-      "src/x/uses-barrel.test.ts",
-    );
+    expect(run(["src/lib/core/impl.ts"]).tests).toContain("src/x/uses-barrel.test.ts");
     // `hidden` 没被转出去 → 按图就该不算它（同目录不是消费关系）
-    expect(run(["src/lib/core/hidden.ts"]).tests).not.toContain(
-      "src/x/uses-barrel.test.ts",
-    );
+    expect(run(["src/lib/core/hidden.ts"]).tests).not.toContain("src/x/uses-barrel.test.ts");
     // 改 barrel 自己也照样算
-    expect(run(["src/lib/core/index.ts"]).tests).toContain(
-      "src/x/uses-barrel.test.ts",
+    expect(run(["src/lib/core/index.ts"]).tests).toContain("src/x/uses-barrel.test.ts");
+  });
+
+  it("③'''' 字符串 / 模板串 / 注释里的 import 不算依赖（ISSUE #2830）", () => {
+    // 门禁自测常把「源码样例」当字符串塞进夹具。按正则取说明符会把它当成真引用，
+    // 于是改样例里提到的那份模块时，整份重档自测被拉进无关提交的受影响面
+    // （现场：`tests/check-ui-primitives.test.ts` 77.6s / `tests/check-format.test.ts`
+    // 44.3s 被两句夹具路径选中）。说明符改由词法扫描器给之后，这一整类边不再成立。
+    const run = harness({
+      "src/lib/clamp.ts": "export const clamp = 1;",
+      "src/a/fixture.test.ts": [
+        "const sample = 'import { clamp } from \"~/lib/clamp\";';",
+        'const tpl = `export * from "~/lib/clamp"`;',
+        "// import { clamp } from '~/lib/clamp';",
+        "it('x', () => { expect(sample + tpl).toBeTruthy(); });",
+      ].join("\n"),
+      "src/a/real.test.ts": "import { clamp } from '~/lib/clamp';",
+      // 扫描器对 `export * as ns from` 这一形态不报，说明符抽取里单独补了一条。
+      // 目标写成不存在的模块：本文件自己的源码里也有一份同形夹具，别让它变成一条真边。
+      "src/a/real-ns.test.ts": "export * as clampNs from '~/lib/clamp-ns';",
+      // JSDoc 里的类型引用是真的依赖（tsc / typedoc 都沿它解析），扫描器不报，
+      // 按「落在注释里」补回来；字符串里的同形文本仍然不算。
+      "src/a/type-ref.test.ts": "/** @type {import('~/lib/clamp-type').T} */\nconst x = 1;",
+      "src/a/type-ref-string.test.ts": "const s = \"import('~/lib/clamp-type-string')\";",
+    });
+    const tests = run(["src/lib/clamp.ts"]).tests;
+    expect(tests).not.toContain("src/a/fixture.test.ts");
+    expect(tests).toContain("src/a/real.test.ts");
+    expect(run(["src/lib/clamp-ns.ts"]).tests).toContain("src/a/real-ns.test.ts");
+    expect(run(["src/lib/clamp-type.ts"]).tests).toContain("src/a/type-ref.test.ts");
+    expect(run(["src/lib/clamp-type-string.ts"]).tests).not.toContain(
+      "src/a/type-ref-string.test.ts",
     );
   });
 
@@ -169,8 +192,7 @@ describe("affected-tests：五条命中判据", () => {
     const run = harness({
       "scripts/check-x.cjs": "console.log(1);",
       "tests/check-x.test.ts": "execFileSync(process.execPath, [SCRIPT]);",
-      "src/a/spawn.test.ts":
-        'execFileSync(process.execPath, ["scripts/check-x.cjs"]);',
+      "src/a/spawn.test.ts": 'execFileSync(process.execPath, ["scripts/check-x.cjs"]);',
       "src/a/plain.test.ts": "it('x', () => {});",
     });
     const res = run(["scripts/check-x.cjs"]);
@@ -205,9 +227,7 @@ describe("affected-tests：改名（ISSUE #2226）", () => {
   });
 
   it("反斜杠与重复路径归一（同一路径只出现一次）", () => {
-    const got = changedPathsFromNameStatus(
-      "M\tsrc\\a.ts\nR100\tsrc/a.ts\tsrc/b.ts\n",
-    );
+    const got = changedPathsFromNameStatus("M\tsrc\\a.ts\nR100\tsrc/a.ts\tsrc/b.ts\n");
     expect(got.paths).toEqual(["src/a.ts", "src/b.ts"]);
     expect(got.renamedFrom).toEqual(["src/a.ts"]);
   });
@@ -229,8 +249,7 @@ describe("affected-tests：改名（ISSUE #2226）", () => {
     const CONSUMER = "tests/joins-old-path.test.ts";
     const files = {
       [CONSUMER]:
-        'const p = path.join(ROOT, "src/lib/old", "endpoints.ts");\n' +
-        'it("x", () => p);\n',
+        'const p = path.join(ROOT, "src/lib/old", "endpoints.ts");\n' + 'it("x", () => p);\n',
     };
     /* 改名旧侧已不在索引里 ⇒ 「目录 + 文件名」两片都对上就入选。 */
     const gone = harness(files, { tracked: [CONSUMER] });
@@ -260,21 +279,14 @@ describe("affected-tests：改名（ISSUE #2226）", () => {
     const CONSUMER = "tests/joins-old-path.test.ts";
     const files: Record<string, string> = {
       [CONSUMER]:
-        'const p = path.join(ROOT, "src/lib/old", "endpoints.ts");\n' +
-        'it("x", () => p);\n',
+        'const p = path.join(ROOT, "src/lib/old", "endpoints.ts");\n' + 'it("x", () => p);\n',
     };
     const testFiles = [CONSUMER];
     const sourceFiles = [CONSUMER];
     const readText = (rel: string) => files[rel] ?? null;
     const graph = buildImportedBy(new Set(testFiles), readText);
     const tracked = [CONSUMER];
-    const [row] = attributeAffected(
-      [FROM],
-      graph,
-      testFiles,
-      sourceFiles,
-      tracked,
-    );
+    const [row] = attributeAffected([FROM], graph, testFiles, sourceFiles, tracked);
     expect(row?.affected).toBe(1);
     expect(row?.affected).toBe(
       resolveAffectedTests({
@@ -323,9 +335,7 @@ describe("affected-tests：兜底方向", () => {
     );
     expect(r.status).toBe(0);
     // 断言「后半句逐字同源」：清单条数与放弃原因都由 CLI 自己算，这里不抄常量。
-    const tail = wideFallbackNote("X", 0)
-      .split("只跑固定清单 0 个。")[1]
-      ?.trim();
+    const tail = wideFallbackNote("X", 0).split("只跑固定清单 0 个。")[1]?.trim();
     expect(tail, "话术构造函数自己变了形").toBeTruthy();
     expect(r.stderr).toContain("放弃收窄");
     expect(r.stderr).toContain(tail ?? "");
@@ -360,8 +370,7 @@ describe("affected-tests：兜底方向", () => {
    */
   it("边④：注释里的路径引用不算消费方（文档提交不再陪跑门禁自测）", () => {
     const run = harness({
-      [UI_TEST]:
-        "/* 规范：docs/standards/13-提交与-code-review.md §13.5 */\nit('x', () => {});\n",
+      [UI_TEST]: "/* 规范：docs/standards/13-提交与-code-review.md §13.5 */\nit('x', () => {});\n",
     });
     const res = run(["docs/standards/13-提交与-code-review.md"]);
     expect(res.reasons[UI_TEST]).toBeUndefined();
@@ -394,20 +403,16 @@ describe("affected-tests：兜底方向", () => {
     expect(res.reasons.__skipped).toContain(RED);
     /* 同样按「该跑的那些」比：`src/a/leaf.ts` 不落在任何一条输入面里（面是各判各的，
      * 见 `tests/fixed-gate-input-faces.test.ts`），所以那几条工具自检此刻本就缺席。 */
-    for (const fixed of selectFixedByFace(FIXED_STRUCTURAL_TESTS, [
-      "src/a/leaf.ts",
-    ]).keep)
+    for (const fixed of selectFixedByFace(FIXED_STRUCTURAL_TESTS, ["src/a/leaf.ts"]).keep) {
       expect(res.tests).toContain(fixed);
+    }
   });
 
   it("固定清单里的文件就算被登记为基线红也不剔除", () => {
     // 那几条是全库不变量的唯一执行者，没有「先放行」的余地。
     const pinned = "tests/single-logger-channel.test.ts";
     expect(FIXED_STRUCTURAL_TESTS).toContain(pinned);
-    const run = harness(
-      { [UI_TEST]: "it('x', () => {});" },
-      { knownFailed: [pinned] },
-    );
+    const run = harness({ [UI_TEST]: "it('x', () => {});" }, { knownFailed: [pinned] });
     expect(run(["docs/README.md"]).tests).toContain(pinned);
   });
 
@@ -425,18 +430,14 @@ describe("affected-tests：兜底方向", () => {
 describe("affected-tests：与仓库现状的漂移守卫", () => {
   it("固定清单里每个文件都真实存在", () => {
     // 用例改名/删掉时，写死的清单会**静默**不再守任何东西 —— 这条就是拦这个。
-    const missing = FIXED_STRUCTURAL_TESTS.filter(
-      (rel) => !fs.existsSync(path.join(ROOT, rel)),
-    );
+    const missing = FIXED_STRUCTURAL_TESTS.filter((rel) => !fs.existsSync(path.join(ROOT, rel)));
     expect(missing).toEqual([]);
   });
 
   it("登记的已知基线红指向真实存在的文件", () => {
     // 写错一个路径 = 这一条**永远命中不了**，于是它挡住的东西悄悄放行，而清单看着
     // 还在。机制本身静默失效比少一条登记更难查，所以按存在性钉住。
-    const missing = KNOWN_FAILED_FILES.filter(
-      (rel) => !fs.existsSync(path.join(ROOT, rel)),
-    );
+    const missing = KNOWN_FAILED_FILES.filter((rel) => !fs.existsSync(path.join(ROOT, rel)));
     expect(missing).toEqual([]);
   });
 
@@ -450,12 +451,12 @@ describe("affected-tests：与仓库现状的漂移守卫", () => {
     const tracked = ["src", "tests", "scripts", "tools"].flatMap((dir) =>
       fs
         .readdirSync(path.join(ROOT, dir), { recursive: true })
-        .map((p) => `${dir}/${String(p).replace(/\\/g, "/")}`),
+        .map((p) => `${dir}/${String(p).replaceAll("\\", "/")}`),
     );
     const testFiles = tracked.filter(isTestPath);
     const sourceFiles = tracked.filter(isSourcePath);
     expect(testFiles).toContain(UI_TEST);
-    const run = (changedPaths: string[]) =>
+    const run = (changedPaths: Array<string>) =>
       resolveAffectedTests({
         changedPaths,
         testFiles,
@@ -488,17 +489,14 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
     const testFiles = keys.filter(isTestPath);
     const sourceFiles = keys.filter(isSourcePath);
     const readText = (rel: string) => files[rel] ?? null;
-    const graph = buildImportedBy(
-      new Set([...sourceFiles, ...testFiles]),
-      readText,
-    );
+    const graph = buildImportedBy(new Set([...sourceFiles, ...testFiles]), readText);
     return {
       graph,
       testFiles,
       sourceFiles,
-      attribute: (changed: string[]) =>
+      attribute: (changed: Array<string>) =>
         attributeAffected(changed, graph, testFiles, sourceFiles),
-      resolve: (changed: string[]) =>
+      resolve: (changed: Array<string>) =>
         resolveAffectedTests({
           changedPaths: changed,
           testFiles,
@@ -519,8 +517,7 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
       "src/lib/hub.test.ts": "import { h } from '../../lib/hub';\n",
       "src/components/ui/wide.tsx": "export const W = 1;\n",
       "src/components/ui/wide.test.tsx": "import { W } from './wide';\n",
-      "src/components/studio/panel.tsx":
-        "import { W } from '../ui/wide';\nexport const P = W;\n",
+      "src/components/studio/panel.tsx": "import { W } from '../ui/wide';\nexport const P = W;\n",
       "src/components/studio/panel.test.tsx": "import { P } from './panel';\n",
     };
     const { attribute, resolve } = attrHarness(files);
@@ -528,12 +525,8 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
     const byFile = attribute(changed);
     for (const entry of byFile) {
       const alone = resolve([entry.file]);
-      const affected = alone.tests.filter(
-        (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
-      ).length;
-      expect(entry.affected, `${entry.file} 的归因数与主链不一致`).toBe(
-        affected,
-      );
+      const affected = alone.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t)).length;
+      expect(entry.affected, `${entry.file} 的归因数与主链不一致`).toBe(affected);
       expect(entry.total).toBe(alone.tests.length);
     }
   });
@@ -550,14 +543,12 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
     };
     const { attribute } = attrHarness(files);
     const sorted = attribute(["src/lib/leaf.ts", "src/lib/hub.ts"]);
-    expect(sorted.map((e) => e.file)).toEqual([
+    expect(sorted.map((e) => e.file)).toEqual(["src/lib/hub.ts", "src/lib/leaf.ts"]);
+    // 顺序稳定：同样的改动、反过来喂，输出必须一致（否则不同机器给出不同建议）
+    expect(attribute(["src/lib/hub.ts", "src/lib/leaf.ts"]).map((e) => e.file)).toEqual([
       "src/lib/hub.ts",
       "src/lib/leaf.ts",
     ]);
-    // 顺序稳定：同样的改动、反过来喂，输出必须一致（否则不同机器给出不同建议）
-    expect(
-      attribute(["src/lib/hub.ts", "src/lib/leaf.ts"]).map((e) => e.file),
-    ).toEqual(["src/lib/hub.ts", "src/lib/leaf.ts"]);
   });
 
   it("归因的数**本身**是对的：拿手工数得出来的夹具硬钉，不靠与主链互证", () => {
@@ -576,8 +567,7 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
       "src/lib/leaf.test.ts": "import { l } from '../../lib/leaf';\n",
       "src/components/ui/mid.tsx": "import { h } from '../../lib/hub';\n",
       "src/components/ui/mid.test.tsx": "import { M } from './mid';\n",
-      "tests/notes.test.ts":
-        'const P = "src/lib/hub.ts";\nexport const n = P;\n',
+      "tests/notes.test.ts": 'const P = "src/lib/hub.ts";\nexport const n = P;\n',
     };
     const { attribute } = attrHarness(files);
     // hub 单独影响：hub.test（自己）+ mid.test（闭包 2 跳）+ notes.test（按路径引用）
@@ -587,9 +577,10 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
     const leafRows = attribute(["src/lib/leaf.ts"]);
     expect(leafRows[0]?.affected).toBe(1);
     // 多文件时两行都在，且 hub 在前
-    expect(
-      attribute(["src/lib/hub.ts", "src/lib/leaf.ts"]).map((e) => e.file),
-    ).toEqual(["src/lib/hub.ts", "src/lib/leaf.ts"]);
+    expect(attribute(["src/lib/hub.ts", "src/lib/leaf.ts"]).map((e) => e.file)).toEqual([
+      "src/lib/hub.ts",
+      "src/lib/leaf.ts",
+    ]);
   });
 
   it("空改动清单 → 空数组（不是抛异常，调用方靠它判「没有归因」）", () => {
@@ -617,10 +608,7 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
         return null;
       }
     };
-    const graph = buildImportedBy(
-      new Set([...sourceFiles, ...testFiles]),
-      readText,
-    );
+    const graph = buildImportedBy(new Set([...sourceFiles, ...testFiles]), readText);
     for (const file of ["src/lib/endpoints.ts", "src/components/ui/hint.tsx"]) {
       const alone = resolveAffectedTests({
         changedPaths: [file],
@@ -629,9 +617,7 @@ describe("affected-tests：改动的**面**归因（拆小的那把尺）", () =
         readText,
         graph,
       });
-      const expected = alone.tests.filter(
-        (t) => !FIXED_STRUCTURAL_TESTS.includes(t),
-      ).length;
+      const expected = alone.tests.filter((t) => !FIXED_STRUCTURAL_TESTS.includes(t)).length;
       const [entry] = attributeAffected([file], graph, testFiles, sourceFiles);
       expect(entry, `${file} 应当有归因行`).toBeTruthy();
       expect(entry?.affected, `${file} 在真仓库上与主链不一致`).toBe(expected);
@@ -665,7 +651,7 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
   const CARRIER = path.join(ROOT, "scripts", "affected-launch-changed-list.mjs");
 
   /** 一份「长到超过 Windows 命令行上限」的改动面（路径都不存在，判决只看形状与条数）。 */
-  function hugeList(n = 900): string[] {
+  function hugeList(n = 900): Array<string> {
     return Array.from(
       { length: n },
       (_, i) => `src/lib/bulk-package-${i}/module-with-a-longer-name-${i}.ts`,
@@ -734,7 +720,9 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
       const dry = after.indexOf("if (dryRun)");
       const entry = after.indexOf(CALL);
       expect(dry, `${anchor} 之后找不到 if (dryRun)`).toBeGreaterThan(-1);
-      if (entry < 0) continue; // 这一支根本不解析入口（更好）
+      if (entry === -1) {
+        continue;
+      } // 这一支根本不解析入口（更好）
       expect(
         dry,
         `${anchor} 那一支里 if (dryRun) 必须排在 resolveVitestEntry() 之前（否则读数档依赖 node_modules）`,
@@ -774,10 +762,7 @@ describe("改动面清单的载体：长清单走 stdin，不走 argv（ISSUE #2
 
   it("清单来源三档互斥且有优先：argv > stdin > 暂存区", () => {
     /* 这一档的纯函数出口：来源只决定「清单从哪来」，不决定「清单怎么算」。 */
-    expect(changedPathsFrom(["--changed", "a.ts", "b.ts"]).paths).toEqual([
-      "a.ts",
-      "b.ts",
-    ]);
+    expect(changedPathsFrom(["--changed", "a.ts", "b.ts"]).paths).toEqual(["a.ts", "b.ts"]);
     expect(changedPathsFrom(["--changed", "a.ts", "--json"]).paths).toEqual(["a.ts"]);
     /* 暂存区那一档要真的起 git（这个仓库有暂存区可读）⇒ 只断言它是个数组。 */
     expect(Array.isArray(changedPathsFrom([]).paths)).toBe(true);

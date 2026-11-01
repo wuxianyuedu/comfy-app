@@ -13,50 +13,50 @@ import { runAsyncAction } from "~/lib/async-action";
 import type { GenerateInput } from "~/lib/workflow/workflow-generate-input";
 
 /** 工作流库里可选的模板（重绘 / 放大都靠它，只展示 id / 名字 / 类型）。 */
-export interface RedrawTemplate {
+export type RedrawTemplate = {
   id: string;
   name: string;
   taskType: string | null;
-}
+};
 
 /** 重绘模式：放大 = 原图整张重出；局部重绘 = 原图 + 蒙版。 */
 export type RedrawMode = "upscale" | "inpaint";
 
-export interface ImageRedrawDeps {
+export type ImageRedrawDeps = {
   /** 工作流库模板清单（调用方接 trpc workflow.list）。 */
-  listTemplates: () => Promise<RedrawTemplate[]>;
+  listTemplates: () => Promise<Array<RedrawTemplate>>;
   /** 图片 → ComfyUI input 目录文件名（复用 prepareLocalInputImage）。 */
   prepareImage: (image: string) => Promise<string>;
-  /** 提交生成任务（复用 startLocalGenerate），返回新 taskId。 */
-  submit: (input: GenerateInput) => Promise<string>;
   /** 动作反馈通道（runAsyncAction 形状，调用处接 toast）。 */
   report: (kind: "ok" | "err", detail: string) => void;
-}
+  /** 提交生成任务（复用 startLocalGenerate），返回新 taskId。 */
+  submit: (input: GenerateInput) => Promise<string>;
+};
 
-export interface ImageRedrawController {
-  mode: RedrawMode;
-  setMode: (mode: RedrawMode) => void;
-  templates: RedrawTemplate[];
-  templatesLoading: boolean;
-  selectedTemplateId: string;
-  selectTemplate: (id: string) => void;
-  prompt: string;
-  setPrompt: (prompt: string) => void;
-  mask: string | null;
-  setMask: (mask: string | null) => void;
-  ensureTemplates: () => Promise<void>;
+export type ImageRedrawController = {
   busy: boolean;
+  ensureTemplates: () => Promise<void>;
+  mask: string | null;
+  mode: RedrawMode;
+  prompt: string;
   resultTaskId: string | null;
   /** 提交重绘 / 放大。originalImageUrl 是产物图的页面内地址。 */
   run: (originalImageUrl: string) => Promise<void>;
-}
+  selectedTemplateId: string;
+  selectTemplate: (id: string) => void;
+  setMask: (mask: string | null) => void;
+  setMode: (mode: RedrawMode) => void;
+  setPrompt: (prompt: string) => void;
+  templates: Array<RedrawTemplate>;
+  templatesLoading: boolean;
+};
 
 export function useImageRedraw(
   deps: ImageRedrawDeps,
-  initial: { prompt: string; projectId?: string | null; parentId: string },
+  initial: { parentId: string; projectId?: string | null; prompt: string },
 ): ImageRedrawController {
   const [mode, setMode] = useState<RedrawMode>("upscale");
-  const [templates, setTemplates] = useState<RedrawTemplate[]>([]);
+  const [templates, setTemplates] = useState<Array<RedrawTemplate>>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [prompt, setPrompt] = useState(initial.prompt);
@@ -65,13 +65,17 @@ export function useImageRedraw(
   const [resultTaskId, setResultTaskId] = useState<string | null>(null);
 
   const ensureTemplates = useCallback(async () => {
-    if (templates.length > 0 || templatesLoading) return;
+    if (templates.length > 0 || templatesLoading) {
+      return;
+    }
     setTemplatesLoading(true);
     try {
       const list = await deps.listTemplates();
       setTemplates(list);
       const first = list[0];
-      if (first) setSelectedTemplateId((prev) => prev || first.id);
+      if (first) {
+        setSelectedTemplateId((prev) => prev || first.id);
+      }
     } finally {
       setTemplatesLoading(false);
     }
@@ -95,15 +99,12 @@ export function useImageRedraw(
         const result = await runAsyncAction(
           async () => {
             const originalName = await deps.prepareImage(originalImageUrl);
-            const maskName =
-              mode === "inpaint" && mask ? await deps.prepareImage(mask) : null;
+            const maskName = mode === "inpaint" && mask ? await deps.prepareImage(mask) : null;
             const taskId = await deps.submit({
               workflow: selectedTemplateId,
               prompt: prompt.trim() || undefined,
               referenceImages:
-                mode === "inpaint" && maskName
-                  ? [originalName, maskName]
-                  : [originalName],
+                mode === "inpaint" && maskName ? [originalName, maskName] : [originalName],
               projectId: initial.projectId ?? undefined,
               parentId: initial.parentId,
             });
@@ -112,26 +113,19 @@ export function useImageRedraw(
           },
           {
             report: deps.report,
-            failureText:
-              mode === "inpaint" ? "局部重绘提交失败" : "放大提交失败",
+            failureText: mode === "inpaint" ? "局部重绘提交失败" : "放大提交失败",
             successText: (r) =>
               `已提交${mode === "inpaint" ? "局部重绘" : "放大"}：新任务 ${r.detail}`,
           },
         );
-        if (result.ok) setResultTaskId(newTaskId);
+        if (result.ok) {
+          setResultTaskId(newTaskId);
+        }
       } finally {
         setBusy(false);
       }
     },
-    [
-      deps,
-      initial.parentId,
-      initial.projectId,
-      mask,
-      mode,
-      prompt,
-      selectedTemplateId,
-    ],
+    [deps, initial.parentId, initial.projectId, mask, mode, prompt, selectedTemplateId],
   );
 
   return {

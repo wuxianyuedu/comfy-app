@@ -33,71 +33,84 @@ export const STAGE_LABEL: Record<ProductionStage, string> = {
 /** 每个阶段的完成判据。**这是本文件的核心判据表**，不是展示数据： */
 function isStageDone(stage: ProductionStage, view: ProductionRunView): boolean {
   switch (stage) {
-    case "script":
+    case "script": {
       return view.hasScript;
-    case "character":
+    }
+    case "character": {
       return view.characterCount > 0;
-    case "storyboard":
+    }
+    case "storyboard": {
       return view.shots.length > 0;
-    case "shots":
+    }
+    case "shots": {
       return view.shots.length > 0 && view.shots.every((s) => s.hasImage);
-    case "video":
+    }
+    case "video": {
       return view.shots.length > 0 && view.shots.every((s) => s.hasClip);
-    case "render":
+    }
+    case "render": {
       return view.filmRendered;
+    }
   }
 }
 
 /** 一个阶段在主页上的展示态。 */
-export interface ProjectStageRow {
-  id: ProductionStage;
-  label: string;
-  done: boolean;
+export type ProjectStageRow = {
   /** 当前游标是否停在这个阶段（未完成时才可能为真）。 */
   current: boolean;
   /** 「3/8 镜」这类计数；无可报计数时为空串（不编造 0/0）。 */
   detail: string;
-}
+  done: boolean;
+  id: ProductionStage;
+  label: string;
+};
 
 function stageDetail(stage: ProductionStage, view: ProductionRunView): string {
   const total = view.shots.length;
   switch (stage) {
-    case "character":
+    case "character": {
       return view.characterCount > 0 ? `${view.characterCount} 个` : "";
-    case "storyboard":
+    }
+    case "storyboard": {
       return total > 0 ? `${total} 镜` : "";
+    }
     case "shots": {
-      if (total === 0) return "";
+      if (total === 0) {
+        return "";
+      }
       return `${view.shots.filter((s) => s.hasImage).length}/${total} 镜`;
     }
     case "video": {
-      if (total === 0) return "";
+      if (total === 0) {
+        return "";
+      }
       return `${view.shots.filter((s) => s.hasClip).length}/${total} 镜`;
     }
-    default:
+    default: {
       return "";
+    }
   }
 }
 
 /** 主页要展示的项目状态总览。 */
-export interface ProjectOverview {
-  /** 六个阶段按流水线顺序。 */
-  stages: ProjectStageRow[];
+export type ProjectOverview = {
+  characterCount: number;
+  clipDoneCount: number;
   /** 已完成阶段数 / 总数（进度条用）。 */
   doneCount: number;
-  totalCount: number;
-  /** 完成度 0..100（等权平均，与工坊 `computeProgressPct` 同口径）。 */
-  progressPct: number;
+  filmRendered: boolean;
+  hasScript: boolean;
+  imageDoneCount: number;
   /** 第一个未完成的阶段；全部完成时为 null。 */
   nextStage: ProductionStage | null;
+  /** 完成度 0..100（等权平均，与工坊 `computeProgressPct` 同口径）。 */
+  progressPct: number;
   /** 镜头口径的计数（主页状态卡直接显示）。 */
   shotCount: number;
-  imageDoneCount: number;
-  clipDoneCount: number;
-  characterCount: number;
-  hasScript: boolean;
-  filmRendered: boolean;
-}
+  /** 六个阶段按流水线顺序。 */
+  stages: Array<ProjectStageRow>;
+  totalCount: number;
+};
 
 /**
  * production 视图 + 持久化进度 → 主页状态总览。
@@ -147,6 +160,8 @@ export function deriveProjectOverview(
  * 永远为假，留着只会变成一行没人能覆盖、也没人能删的死代码。
  */
 export function overviewHeadline(overview: ProjectOverview): string {
-  if (overview.nextStage === null) return "全流程已完成";
+  if (overview.nextStage === null) {
+    return "全流程已完成";
+  }
   return `下一步：${STAGE_LABEL[overview.nextStage]}`;
 }

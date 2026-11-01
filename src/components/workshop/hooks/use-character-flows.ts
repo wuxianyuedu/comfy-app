@@ -19,10 +19,7 @@ import { useBusyAction } from "~/components/ui/use-busy-action";
 import { useItemAction } from "~/components/ui/use-item-action";
 import { useItemErrors } from "~/components/ui/use-item-errors";
 import type { Character, StyleRef } from "~/lib/workshop/types";
-import {
-  buildCharacterPrompt,
-  buildCharacterNegative,
-} from "~/lib/workshop/prompt-builder";
+import { buildCharacterPrompt, buildCharacterNegative } from "~/lib/workshop/prompt-builder";
 import {
   buildExtractCharactersMessages,
   mergeCharacterDrafts,
@@ -34,6 +31,9 @@ import type { ParsedCharacterDraft } from "~/lib/workshop/script-parse";
 import {
   parseChannelOption,
   type ExtractChannel,
+  channelProviderLabel,
+  channelSelectionDisplayValue,
+  resolveChannelSelection,
 } from "~/lib/workshop/channel-options";
 import {
   useExtractSession,
@@ -47,15 +47,7 @@ import {
   parseCharacter,
   parseCharacterFull,
 } from "~/lib/llm/prompts";
-import {
-  channelProviderLabel,
-  channelSelectionDisplayValue,
-  resolveChannelSelection,
-} from "~/lib/workshop/channel-options";
-import {
-  formatRequestMessages,
-  makeExtractLog,
-} from "~/lib/workshop/extraction-log";
+import { formatRequestMessages, makeExtractLog } from "~/lib/workshop/extraction-log";
 import { errorMessage } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
 import type { LLMConfigView } from "~/lib/llm/types";
@@ -86,23 +78,16 @@ export function newCharacter(): Character {
   };
 }
 export function useCharacterExtractFlow(input: {
-  characters: Character[];
-  styles: StyleRef[];
-  onCharactersChange: (list: Character[]) => void;
-  scriptMarkdown?: string;
-  extract?: { session: ExtractSession; actions: ExtractSessionActions };
+  characters: Array<Character>;
   config: LLMConfigView | null;
+  extract?: { actions: ExtractSessionActions; session: ExtractSession };
+  onCharactersChange: (list: Array<Character>) => void;
   openSettings: () => void;
+  scriptMarkdown?: string;
+  styles: Array<StyleRef>;
 }) {
-  const {
-    characters,
-    styles,
-    onCharactersChange,
-    scriptMarkdown,
-    extract,
-    config,
-    openSettings,
-  } = input;
+  const { characters, styles, onCharactersChange, scriptMarkdown, extract, config, openSettings } =
+    input;
 
   // ── 三通道提取(工具 / 本地模型 / 远端API)+ 外部导入 ──
   // 提取的 通道/忙闲/过程/状态/错误/执行日志 已收归工坊 controller（characterExtract）
@@ -123,12 +108,7 @@ export function useCharacterExtractFlow(input: {
     log: extractionLog,
   } = extractSession;
   const extractChannel = parseChannelOption(extractChannelValue).channel;
-  const {
-    patch: cacheExtractPatch,
-    appendProgress,
-    appendLog,
-    setLog,
-  } = extractActions;
+  const { patch: cacheExtractPatch, appendProgress, appendLog, setLog } = extractActions;
 
   const hasScript = !!scriptMarkdown?.trim();
 
@@ -179,12 +159,9 @@ export function useCharacterExtractFlow(input: {
       appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
       const drafts = parseExtractedCharacters(full);
       if (drafts.length === 0) {
-        appendLog(
-          makeExtractLog("error", "模型未返回有效角色卡 JSON，解析失败"),
-        );
+        appendLog(makeExtractLog("error", "模型未返回有效角色卡 JSON，解析失败"));
         cacheExtractPatch({
-          error:
-            "模型未返回有效角色卡 JSON,解析失败。可重试,或调整脚本后重跑。",
+          error: "模型未返回有效角色卡 JSON,解析失败。可重试,或调整脚本后重跑。",
         });
         return;
       }
@@ -206,10 +183,10 @@ export function useCharacterExtractFlow(input: {
       cacheExtractPatch({
         status: `已提取 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
       });
-    } catch (e: unknown) {
-      appendLog(makeExtractLog("error", errorMessage(e, "提取失败")));
+    } catch (error: unknown) {
+      appendLog(makeExtractLog("error", errorMessage(error, "提取失败")));
       cacheExtractPatch({
-        error: `${errorMessage(e, "提取失败")} 可重试,或调整脚本后重跑。`,
+        error: `${errorMessage(error, "提取失败")} 可重试,或调整脚本后重跑。`,
       });
     } finally {
       cacheExtractPatch({ busy: false });
@@ -224,8 +201,10 @@ export function useCharacterExtractFlow(input: {
        * 而「读失败」与「文件为空」在它们那里压成同一个结果。 */
       const text = await readFileAsText(file);
       const trimmed = text.trim();
-      if (!trimmed) throw new Error("文件内容为空");
-      let drafts: ParsedCharacterDraft[];
+      if (!trimmed) {
+        throw new Error("文件内容为空");
+      }
+      let drafts: Array<ParsedCharacterDraft>;
       if (looksLikeJson(trimmed)) {
         drafts = parseImportedCharacterCards(trimmed);
       } else {
@@ -244,8 +223,8 @@ export function useCharacterExtractFlow(input: {
       cacheExtractPatch({
         status: `已导入 ${res.added} 个角色卡${res.skipped > 0 ? `(跳过 ${res.skipped} 个重名)` : ""}`,
       });
-    } catch (e: unknown) {
-      cacheExtractPatch({ error: errorMessage(e, "导入失败") });
+    } catch (error: unknown) {
+      cacheExtractPatch({ error: errorMessage(error, "导入失败") });
     } finally {
       cacheExtractPatch({ busy: false });
     }
@@ -253,8 +232,7 @@ export function useCharacterExtractFlow(input: {
 
   return {
     extractChannelValue,
-    setExtractChannelValue: (value: string) =>
-      cacheExtractPatch({ channelValue: value }),
+    setExtractChannelValue: (value: string) => cacheExtractPatch({ channelValue: value }),
     extractBusy,
     extractStatus,
     extractProgress,
@@ -266,26 +244,18 @@ export function useCharacterExtractFlow(input: {
   };
 }
 export function useCharacterAiFlow(input: {
-  characters: Character[];
-  styles: StyleRef[];
-  onCharactersChange: (list: Character[]) => void;
+  brief: string;
+  characters: Array<Character>;
+  config: LLMConfigView | null;
+  onCharactersChange: (list: Array<Character>) => void;
+  openSettings: () => void;
+  setBrief: (value: string) => void;
+  styles: Array<StyleRef>;
   /** 主组件的既有更新路径：润色结果经它重算提示词。 */
   update: (id: string, patch: Partial<Character>) => void;
-  brief: string;
-  setBrief: (value: string) => void;
-  config: LLMConfigView | null;
-  openSettings: () => void;
 }) {
-  const {
-    characters,
-    styles,
-    onCharactersChange,
-    update,
-    brief,
-    setBrief,
-    config,
-    openSettings,
-  } = input;
+  const { characters, styles, onCharactersChange, update, brief, setBrief, config, openSettings } =
+    input;
   const gen = useBusyAction();
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）：这段 try/catch/finally 此前把
    * 「置忙 → 生成 → 复位」写了一遍，且复位只在 finally 里落一次。 */
@@ -314,7 +284,9 @@ export function useCharacterAiFlow(input: {
   const genSelectValue = channelSelectionDisplayValue(genSel, config);
 
   async function handleAIGenerate() {
-    if (!brief.trim()) return;
+    if (!brief.trim()) {
+      return;
+    }
     if (!config) {
       openSettings();
       return;
@@ -348,8 +320,8 @@ export function useCharacterAiFlow(input: {
       onCharactersChange([...characters, character]);
       setBrief("");
       setGenStatus(`已用 ${modelLabel} · ${model} 生成角色「${r.name}」`);
-    } catch (e: unknown) {
-      setGenError(errorMessage(e, "AI 生成失败"));
+    } catch (error: unknown) {
+      setGenError(errorMessage(error, "AI 生成失败"));
     }
   }
 
@@ -365,9 +337,7 @@ export function useCharacterAiFlow(input: {
     await aiAction.run(character.id, async () => {
       aiErrors.clear(character.id);
       try {
-        const style = styles.find(
-          (style) => style.slug === character.skillSlug,
-        );
+        const style = styles.find((style) => style.slug === character.skillSlug);
         const full = await streamChat({
           messages: buildCharacterMessages({
             name: character.name,
@@ -385,8 +355,8 @@ export function useCharacterAiFlow(input: {
           costume: r.costume || character.costume,
           personality: r.personality || character.personality,
         });
-      } catch (e: unknown) {
-        aiErrors.report(character.id)("err", errorMessage(e, "AI 润色失败"));
+      } catch (error: unknown) {
+        aiErrors.report(character.id)("err", errorMessage(error, "AI 润色失败"));
       }
       /* 忙标记由出口的`finally` 清。 */
     });

@@ -24,7 +24,7 @@
  */
 
 /** 用户内容里**禁止出现**的标签。 */
-export const FORBIDDEN_TAGS: readonly string[] = [
+export const FORBIDDEN_TAGS: ReadonlyArray<string> = [
   /* 表单：钓鱼面。`<input>` 不在其中（GFM 任务列表要用）。 */
   "form",
   "button",
@@ -48,7 +48,7 @@ export const FORBIDDEN_TAGS: readonly string[] = [
 ];
 
 /** 用户内容里**禁止出现**的属性。 */
-export const FORBIDDEN_ATTRS: readonly string[] = [
+export const FORBIDDEN_ATTRS: ReadonlyArray<string> = [
   "style",
   "action",
   "formaction",
@@ -72,7 +72,7 @@ export const FORBIDDEN_ATTRS: readonly string[] = [
  * 前缀匹配发生在 DOMPurify 剥掉控制字符与首尾空白**之后**（它的 `.data` 钩子挂在
  * 剪枝之后），因此 `java\tscript:` 这类绕过面不需要在这里再挡一次。
  */
-export const ALLOWED_URL_SCHEMES: readonly string[] = [
+export const ALLOWED_URL_SCHEMES: ReadonlyArray<string> = [
   "http:",
   "https:",
   "mailto:",
@@ -86,11 +86,11 @@ export const ALLOWED_URL_SCHEMES: readonly string[] = [
 ];
 
 /** 消毒配置：喂给 `DOMPurify.sanitize` 的第三个参数。 */
-export interface SanitizeConfig {
+export type SanitizeConfig = {
+  FORBID_ATTR: Array<string>;
+  FORBID_TAGS: Array<string>;
   USE_PROFILES: { html: true };
-  FORBID_TAGS: string[];
-  FORBID_ATTR: string[];
-}
+};
 
 /** 配置的**唯一出口**。调用方不要就地拼一份自己的。 */
 export function createSanitizeConfig(): SanitizeConfig {
@@ -111,12 +111,14 @@ export function createSanitizeConfig(): SanitizeConfig {
  */
 export function isAllowedUrl(value: string): boolean {
   const normalized = value
-    .replace(/[\t\n\r]/g, "")
+    .replaceAll(/[\t\n\r]/g, "")
     .trimStart()
     .toLowerCase();
   const schemeEnd = normalized.indexOf(":");
   const scheme = schemeEnd === -1 ? "" : normalized.slice(0, schemeEnd + 1);
   /* scheme 里含 `/` 说明 `:` 出现在路径之中（`/a:b`），那仍是相对路径。 */
-  if (scheme.includes("/")) return ALLOWED_URL_SCHEMES.includes("");
+  if (scheme.includes("/")) {
+    return ALLOWED_URL_SCHEMES.includes("");
+  }
   return ALLOWED_URL_SCHEMES.includes(scheme);
 }

@@ -43,20 +43,20 @@ function Demo(props: Partial<React.ComponentProps<typeof ConfirmDialog>>) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button onClick={() => setOpen(true)} variant="outline">
         打开确认弹窗
       </Button>
       <ConfirmDialog
-        open={open}
+        cancelLabel={props.cancelLabel}
+        confirmLabel={props.confirmLabel}
+        danger={props.danger}
+        description={props.description}
+        icon={props.icon}
         onClose={() => setOpen(false)}
         onConfirm={() => setOpen(false)}
-        title={props.title ?? "确认操作"}
-        description={props.description}
-        confirmLabel={props.confirmLabel}
-        cancelLabel={props.cancelLabel}
-        danger={props.danger}
+        open={open}
         pending={props.pending}
-        icon={props.icon}
+        title={props.title ?? "确认操作"}
       />
     </>
   );
@@ -66,9 +66,9 @@ function Demo(props: Partial<React.ComponentProps<typeof ConfirmDialog>>) {
 export const Info: Story = {
   render: () => (
     <Demo
-      title="同步数据库结构？"
-      description={"本机库结构落后于源码。\n同步会按 schema 建表。"}
       confirmLabel="同步"
+      description={"本机库结构落后于源码。\n同步会按 schema 建表。"}
+      title="同步数据库结构？"
     />
   ),
 };
@@ -78,10 +78,10 @@ export const Info: Story = {
 export const Danger: Story = {
   render: () => (
     <Demo
-      title="删除这个项目？"
-      description={"项目产物与运行记录会一起删掉，此操作不可撤销。"}
       confirmLabel="删除"
       danger
+      description="项目产物与运行记录会一起删掉，此操作不可撤销。"
+      title="删除这个项目？"
     />
   ),
 };
@@ -90,13 +90,7 @@ export const Danger: Story = {
  *  注意这个档**只是形态**：真异步流程由调用处把 `pending` 接上。 */
 export const Pending: Story = {
   render: () => (
-    <Demo
-      title="正在删除…"
-      description="这一步可能要几秒钟。"
-      confirmLabel="删除"
-      danger
-      pending
-    />
+    <Demo confirmLabel="删除" danger description="这一步可能要几秒钟。" pending title="正在删除…" />
   ),
 };
 
@@ -104,11 +98,11 @@ export const Pending: Story = {
 export const CustomIcon: Story = {
   render: () => (
     <Demo
-      title="覆盖已存在的文件？"
-      description="同名文件会被替换。"
-      confirmLabel="覆盖"
       cancelLabel="换个名字"
+      confirmLabel="覆盖"
+      description="同名文件会被替换。"
       icon={<span aria-hidden>📄</span>}
+      title="覆盖已存在的文件？"
     />
   ),
 };

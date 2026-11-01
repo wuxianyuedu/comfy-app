@@ -65,12 +65,14 @@ const { execFileSync, spawnSync } = require("node:child_process");
 // 判据模块是 ESM，.cjs 只能动态 import()，故声明为惰性句柄、由 main 先加载。
 let runPnpmSync = null;
 async function loadShell() {
-  if (runPnpmSync) return runPnpmSync;
+  if (runPnpmSync) {
+    return runPnpmSync;
+  }
   try {
     ({ runPnpmSync } = await import("./launcher-core/shell.mjs"));
-  } catch (e) {
+  } catch (error) {
     console.error(
-      `[reformat] 无法加载 pnpm 形态判据模块（scripts/launcher-core/shell.mjs）：${e.message}`,
+      `[reformat] 无法加载 pnpm 形态判据模块（scripts/launcher-core/shell.mjs）：${error.message}`,
     );
     process.exit(2);
   }
@@ -132,7 +134,9 @@ function migrationDeclaration(revRange) {
     .split("\0")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (!commits.length) return { declared: false, commits: 0 };
+  if (!commits.length) {
+    return { declared: false, commits: 0 };
+  }
   return { declared: commits.every((b) => MIGRATION_RE.test(b)), commits: commits.length };
 }
 
@@ -181,20 +185,20 @@ function perCommitShape(range, limit) {
     }
     const parent = parents[0];
     const patch = gitOrEmpty(["diff", "--no-color", "--unified=0", `${parent}..${rev}`]);
-    if (!patch.trim()) continue;
+    if (!patch.trim()) {
+      continue;
+    }
     const files = collectChangedFiles(patch);
-    const pairs = collectPairs(files, parent, (f) =>
-      gitOrEmpty(["show", `${rev}:${f.after}`]),
-    );
+    const pairs = collectPairs(files, parent, (f) => gitOrEmpty(["show", `${rev}:${f.after}`]));
     const reformatOnly = classifyReformatOnly(pairs);
     commits.push({ rev, files: files.length, reformatOnly: reformatOnly.size });
     const clean =
-      reformatOnly.size < limit ||
-      (files.length > 0 && reformatOnly.size === files.length);
-    if (!clean)
+      reformatOnly.size < limit || (files.length > 0 && reformatOnly.size === files.length);
+    if (!clean) {
       offenders.push(
         `${rev.slice(0, 8)}(${files.length} 个源文件里 ${reformatOnly.size} 个纯格式化)`,
       );
+    }
   }
   return { commits, ok: commits.length > 0 && offenders.length === 0, offenders };
 }
@@ -262,11 +266,17 @@ function gitOrEmpty(args) {
 function collectChangedFiles(patch) {
   const out = [];
   for (const line of patch.split("\n")) {
-    if (!line.startsWith("diff --git ")) continue;
+    if (!line.startsWith("diff --git ")) {
+      continue;
+    }
     const m = /^diff --git a\/(.+?) b\/(.+)$/.exec(line);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     const [, before, after] = m;
-    if (!SOURCE_RE.test(after)) continue;
+    if (!SOURCE_RE.test(after)) {
+      continue;
+    }
     out.push({ before, after });
   }
   return out;
@@ -335,7 +345,9 @@ let runner = undefined;
  * 内的 prettier;一路到根都没有时退回 `pnpm exec prettier`。
  */
 function resolveRunner() {
-  if (runner !== undefined) return runner;
+  if (runner !== undefined) {
+    return runner;
+  }
 
   // oxfmt 入口的接缝(与 check-format.cjs 同口径):用例在临时仓库里跑,
   // 那里的 cwd 没有 node_modules,不给这条缝就只能撞「找不到格式化器」。
@@ -350,7 +362,9 @@ function resolveRunner() {
   for (;;) {
     candidates.push(dir);
     const parent = path.dirname(dir);
-    if (parent === dir) break;
+    if (parent === dir) {
+      break;
+    }
     dir = parent;
   }
 
@@ -361,14 +375,18 @@ function resolveRunner() {
       // 包的 `exports` 字段挡住(子路径不导出)。
       const pkg = require.resolve("oxfmt/package.json", { paths: [base] });
       const entry = path.join(path.dirname(pkg), "bin", "oxfmt");
-      if (!fs.existsSync(entry)) throw new Error("oxfmt entry missing");
+      if (!fs.existsSync(entry)) {
+        throw new Error("oxfmt entry missing");
+      }
       runner = { kind: "entry", entry, cwd: base };
       break;
     } catch {
       /* 换下一个基准目录 */
     }
   }
-  if (runner === null) runner = { kind: "pnpm", cwd: HERE };
+  if (runner === null) {
+    runner = { kind: "pnpm", cwd: HERE };
+  }
   return runner;
 }
 
@@ -399,9 +417,7 @@ function runOxfmt(args, cwd, input) {
     });
   }
   if (typeof runPnpmSync !== "function") {
-    throw new Error(
-      "pnpm 形态判据未加载(runPnpmSync 不可用)—— 调用方需先 await loadShell()",
-    );
+    throw new Error("pnpm 形态判据未加载(runPnpmSync 不可用)—— 调用方需先 await loadShell()");
   }
   return runPnpmSync([...head, ...args], {
     cwd,
@@ -427,7 +443,9 @@ function collectRewritten(entries, dir, before) {
   const out = new Map();
   for (const { file } of entries) {
     const after = fs.readFileSync(path.join(dir, file), "utf8");
-    if (after !== before.get(file)) out.set(file, after);
+    if (after !== before.get(file)) {
+      out.set(file, after);
+    }
   }
   return out;
 }
@@ -450,7 +468,7 @@ function formatMany(entries) {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       // 归一化行尾的理由见文件头那段:副本保持 CRLF 会让每个 CRLF 文件都进
       // 「被改写」,等于把成本又放回去。
-      const normalized = text.replace(/\r\n/g, "\n");
+      const normalized = text.replaceAll("\r\n", "\n");
       fs.writeFileSync(target, normalized);
       before.set(file, normalized);
     }
@@ -487,11 +505,12 @@ function formatOne(text, file) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "reformat-one-"));
   try {
     const target = path.join(dir, `probe.${ext}`);
-    fs.writeFileSync(target, text.replace(/\r\n/g, "\n"));
+    fs.writeFileSync(target, text.replaceAll("\r\n", "\n"));
     const { cwd } = runnerPrefix();
     const res = runOxfmt([dir], cwd);
-    if (res.error || res.status !== 0 || typeof res.status !== "number")
+    if (res.error || res.status !== 0 || typeof res.status !== "number") {
       return null;
+    }
     return fs.readFileSync(target, "utf8");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -508,7 +527,7 @@ function formatOne(text, file) {
  * 历史文件(§13.7)—— 把行尾算成差异会让这些文件永远判成「真实改动」。
  */
 function classifyReformatOnly(entries) {
-  const norm = (s) => s.replace(/\r\n/g, "\n").trimEnd();
+  const norm = (s) => s.replaceAll("\r\n", "\n").trimEnd();
   const pending = entries.filter((e) => e.before && e.after);
   const { ok, rewritten, settled } = formatMany(
     pending.map((e) => ({ file: e.file, text: e.before })),
@@ -522,9 +541,15 @@ function classifyReformatOnly(entries) {
     // 一次 stdin,而 stdin 的答案是确定的「原样」(ISSUE #1610 的那 13s)。
     const known = ok && settled.has(e.file);
     let formatted = known ? rewritten.get(e.file) : undefined;
-    if (!known) formatted = formatOne(e.before, e.file) ?? undefined;
-    if (formatted === undefined) continue;
-    if (norm(formatted) === norm(e.after)) reformatOnly.add(e.file);
+    if (!known) {
+      formatted = formatOne(e.before, e.file) ?? undefined;
+    }
+    if (formatted === undefined) {
+      continue;
+    }
+    if (norm(formatted) === norm(e.after)) {
+      reformatOnly.add(e.file);
+    }
   }
   return reformatOnly;
 }
@@ -540,7 +565,9 @@ function collectPairs(files, beforeRev, readAfter) {
   for (const f of files) {
     const before = gitOrEmpty(["show", `${beforeRev}:${f.after}`]);
     const after = readAfter(f);
-    if (!before || !after) continue;
+    if (!before || !after) {
+      continue;
+    }
     out.push({ file: f.after, before, after });
   }
   return out;
@@ -551,22 +578,23 @@ async function main() {
   /* **合并提交豁免**：合并会把上游整批（含它们在别处做的格式化）一次性带进来，
    *  「拆成两次提交」在这里不是可选动作 —— 上游的形态已经定死在历史里，本地
    *  无法把一次 merge 的重排与行为改动分开。判据取 `MERGE_HEAD` 是否存在：
-   *  pre-commit 在合并提交对象生成**之前**运行，此时 `.git/MERGE_HEAD` 由
+   *  pre-commit 在合并提交对象生成**之前**运行，此时 `MERGE_HEAD` 由
    *  `git merge` 写入、合并完成后删除，正是「本次提交是合并提交」的唯一事实源。
-   *  仅当**没有**走 `--range`（CI 盘点按范围判，与合并现场无关）时豁免。 */
-  const mergeHeadPresent = fs.existsSync(path.join(ROOT, ".git", "MERGE_HEAD"));
+   *  仅当**没有**走 `--range`（CI 盘点按范围判，与合并现场无关）时豁免。
+   * ⚠️ 取法必须走 `git-dir.mjs` 的 `hasInProgressMerge`，**不许**硬拼 `<根>/.git/MERGE_HEAD`：
+   *  链接工作树里 `.git` 是个文件而不是目录，拼出来的路径永远读不到 —— 于是这一档豁免
+   *  在那种检出里**永不点火**（ISSUE #2785；同一形状在 `check-format.cjs` 里已经收口过一次）。 */
+  const { hasInProgressMerge } = require("./git-dir.mjs");
+  const mergeHeadPresent = hasInProgressMerge(ROOT);
   if (!process.argv.includes("--range") && mergeHeadPresent) {
-    gateSkip(
-      "格式化提交分离",
-      "合并提交（MERGE_HEAD 存在），「格式化与行为改动分离」不适用",
-    );
+    gateSkip("格式化提交分离", "合并提交（MERGE_HEAD 存在），「格式化与行为改动分离」不适用");
     return;
   }
 
   const args = process.argv.slice(2);
   const limit = args.includes("--strict") ? 1 : LIMIT;
   const rangeIdx = args.indexOf("--range");
-  const range = rangeIdx >= 0 ? args[rangeIdx + 1] : null;
+  const range = rangeIdx !== -1 ? args[rangeIdx + 1] : null;
 
   /* 收窄（`--staged`，见 `STAGED_GATE` 的注释）：暂存里一份源文件都没有时，
    * 下面的每一支都只会得出「没有文件改动，跳过」—— 那就不必先跑一遍 prettier。
@@ -582,29 +610,17 @@ async function main() {
    * pre-commit 在提交对象生成之前运行,`HEAD~1..HEAD` 指向的是上一次提交 ——
    * 判它等于本次提交完全没被检查(见文件头)。`git diff --cached` 正是「本次将要
    * 提交的内容」,且它的 diff 基线是 HEAD,与 `git show HEAD:<path>` 天然对齐。 */
-  const staged = range
-    ? ""
-    : gitOrEmpty(["diff", "--cached", "--no-color", "--unified=0"]);
+  const staged = range ? "" : gitOrEmpty(["diff", "--cached", "--no-color", "--unified=0"]);
 
   if (!range && !staged.trim()) {
     /* 没有暂存改动:回落到「判 HEAD 这一次提交」(本地事后复盘 / CI 之外的用法)。
      * 此时基准是 HEAD~1,与改动前版本一致。 */
     const [afterRev, beforeRev] = ["HEAD", "HEAD~1"];
-    if (
-      gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === ""
-    ) {
-      gateSkip(
-        "格式化提交分离",
-        `无可比父提交（${beforeRev} 不存在，首次提交或浅克隆）`,
-      );
+    if (gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === "") {
+      gateSkip("格式化提交分离", `无可比父提交（${beforeRev} 不存在，首次提交或浅克隆）`);
       return;
     }
-    const patch = gitOrEmpty([
-      "diff",
-      "--no-color",
-      "--unified=0",
-      `${beforeRev}..${afterRev}`,
-    ]);
+    const patch = gitOrEmpty(["diff", "--no-color", "--unified=0", `${beforeRev}..${afterRev}`]);
     if (!patch.trim()) {
       gateSkip("格式化提交分离", "本次提交没有文件改动");
       return;
@@ -633,28 +649,15 @@ async function main() {
 
   /* `--range <before>..<after>` 的两侧:改动前的内容从 `before` 取,改动后的
    * 从 `after` 取。暂存区口径下两者都是 `HEAD`(改动后在 index 里,见下)。 */
-  const [rangeBefore, rangeAfter] = range
-    ? range.split("..")
-    : ["HEAD", "HEAD"];
+  const [rangeBefore, rangeAfter] = range ? range.split("..") : ["HEAD", "HEAD"];
 
-  if (
-    range &&
-    gitOrEmpty(["rev-parse", "--verify", "--quiet", rangeBefore]).trim() === ""
-  ) {
-    gateSkip(
-      "格式化提交分离",
-      `无可比父提交（${rangeBefore} 不存在，首次提交或浅克隆）`,
-    );
+  if (range && gitOrEmpty(["rev-parse", "--verify", "--quiet", rangeBefore]).trim() === "") {
+    gateSkip("格式化提交分离", `无可比父提交（${rangeBefore} 不存在，首次提交或浅克隆）`);
     return;
   }
 
   const patch = range
-    ? gitOrEmpty([
-        "diff",
-        "--no-color",
-        "--unified=0",
-        `${rangeBefore}..${rangeAfter}`,
-      ])
+    ? gitOrEmpty(["diff", "--no-color", "--unified=0", `${rangeBefore}..${rangeAfter}`])
     : staged;
 
   if (!patch.trim()) {
@@ -719,9 +722,9 @@ function report(files, reformatOnly, limit, migration, perCommit) {
         }
       }
       basis.push(
-        "重排的文件（照常点名，可审计）：" +
-          [...reformatOnly].sort().slice(0, 5).join(", ") +
-          (reformatOnly.size > 5 ? " …" : ""),
+        `重排的文件（照常点名，可审计）：${
+          [...reformatOnly].sort().slice(0, 5).join(", ")
+          }${reformatOnly.size > 5 ? " …" : ""}`,
       );
       for (const line of indentItems(basis)) {
         console.log(line);
@@ -730,10 +733,10 @@ function report(files, reformatOnly, limit, migration, perCommit) {
     }
     gateFail("格式化提交分离", [...reformatOnly].sort(), {
       detail:
-        `本次改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）` +
-        (migration?.declared === true
+        `本次改动 ${files.length} 个源文件，其中纯格式化 ${reformatOnly.size} 个（阈值 ${limit}）${
+        migration?.declared === true
           ? `；声明了 \`format-migration:\`，但**逐提交**看有提交把重排与功能改动混在一条里（${perCommit?.offenders.join("、") ?? "重排没有独占本次改动"}）⇒ 不按迁移读`
-          : ""),
+          : ""}`,
       hint:
         "为什么拦:格式化 diff 会把真实的功能改动埋掉 —— `git blame` 失效,\n" +
         "评审也无法从 diff 里看出改了什么（§13.7 的提交噪声口径）。\n" +
@@ -757,22 +760,21 @@ function report(files, reformatOnly, limit, migration, perCommit) {
       `本次改动 ${files.length} 个源文件，纯格式化 ${reformatOnly.size} 个（阈值 ${limit}，未达阈值）`,
     );
     for (const line of indentItems([
-      "放行但不计入噪声的：" +
-        [...reformatOnly].sort().slice(0, 5).join(", ") +
-        (reformatOnly.size > 5 ? " …" : ""),
+      `放行但不计入噪声的：${
+        [...reformatOnly].sort().slice(0, 5).join(", ")
+        }${reformatOnly.size > 5 ? " …" : ""}`,
     ])) {
       console.log(line);
     }
     return 0;
   }
-  gatePass(
-    "格式化提交分离",
-    `本次改动 ${files.length} 个源文件，没有纯格式化的`,
-  );
+  gatePass("格式化提交分离", `本次改动 ${files.length} 个源文件，没有纯格式化的`);
   return 0;
 }
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}
 
 /**
  * 供测试直接引用。

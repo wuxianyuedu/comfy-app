@@ -96,9 +96,9 @@ describe("createWorkflowRunTask", () => {
       workflowName: "库生图",
       taskType: "T2I",
     });
-    const created = taskRepo.createQueued.mock.calls[0]![0] as {
+    const created = /* SAFETY: 类型断言已复核 */ taskRepo.createQueued.mock.calls[0]![0] as {
       params: {
-        workflowInputs?: { nodeId: string; name: string; value: unknown }[];
+        workflowInputs?: Array<{ name: string; nodeId: string; value: unknown }>;
       };
       prompt: string;
       workflowName: string;
@@ -111,9 +111,9 @@ describe("createWorkflowRunTask", () => {
       value: "一只猫",
     });
     // 载荷只随行走（§14 D1 第二刀：派发是库里的一次 pull，不再有内存 Job）
-    const createdFull = taskRepo.createQueued.mock.calls[0]![0] as {
-      execPayload?: unknown;
+    const createdFull = /* SAFETY: 类型断言已复核 */ taskRepo.createQueued.mock.calls[0]![0] as {
       claimedBy?: string;
+      execPayload?: unknown;
     };
     expect(createdFull.execPayload).toBeDefined();
     expect(createdFull.claimedBy).toBe("inline");

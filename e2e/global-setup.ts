@@ -43,14 +43,8 @@
  * **不失败在「真件在跑」上**：8188 上有真 ComfyUI 是**正常状态**，不是故障
  * ——本 ISSUE 的取向就是不要求任何人停它（见上）。这里只判替身自己那个口。
  */
-import {
-  resolveAppPort,
-  resolveRepoRoot,
-} from "../scripts/app-port.mjs";
-import {
-  E2E_PREFLIGHT_ENV_KEY,
-  decodePreflight,
-} from "./support/preflight-ports.mjs";
+import { resolveAppPort, resolveRepoRoot } from "../scripts/app-port.mjs";
+import { E2E_PREFLIGHT_ENV_KEY, decodePreflight } from "./support/preflight-ports.mjs";
 import {
   classifyFakeSlot,
   describeAppReuseConflict,
@@ -62,13 +56,13 @@ import {
 } from "./support/fake-comfyui-endpoint.mjs";
 
 /** 一次探针的观测结果。 */
-export interface FakeSlotObservation {
-  /** HTTP 状态码；连不上（服务不在）是 **0**，不是错误。 */
-  status: number;
-  /** 200 时的响应体（解析不出 JSON 时是 null）。 */
-  payload?: unknown;
+export type FakeSlotObservation = {
   /** 连不上时的原因，仅供日志。 */
   error?: string;
+  /** 200 时的响应体（解析不出 JSON 时是 null）。 */
+  payload?: unknown;
+  /** HTTP 状态码；连不上（服务不在）是 **0**，不是错误。 */
+  status: number;
 }
 
 /**
@@ -93,7 +87,7 @@ export interface FakeSlotObservation {
  * 应答」而不是「端口上有人」）。
  */
 export async function probeFakeComfySlot(
-  options: { url?: string; timeoutMs?: number } = {},
+  options: { timeoutMs?: number; url?: string; } = {},
 ): Promise<FakeSlotObservation> {
   const url = options.url ?? fakeComfyuiStatsUrl();
   /* 1500ms 是**本地回环**上探一个已经起来的服务，本机实测 13ms —— 给两个数量级
@@ -102,7 +96,9 @@ export async function probeFakeComfySlot(
   const timeoutMs = options.timeoutMs ?? 1500;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-    if (res.status !== 200) return { status: res.status };
+    if (res.status !== 200) {
+      return { status: res.status };
+    }
     let payload: unknown = null;
     try {
       payload = await res.json();
@@ -110,9 +106,9 @@ export async function probeFakeComfySlot(
       /* 应答不是 JSON：形状两边都不像，交给 classifyFakeSlot 判 unknown */
     }
     return { status: res.status, payload };
-  } catch (err) {
-    const text = err instanceof Error ? err.message : String(err);
-    return connectionRefused(err)
+  } catch (error) {
+    const text = error instanceof Error ? error.message : String(error);
+    return connectionRefused(error)
       ? /* 连不上 = 端口空着（替身待起）；这是**最常见**的一格，不进 unknown。 */
         { status: 0, error: text }
       : /* 不是「没人」而是「没等到」：归 unknown，让判据拦下并说清。
@@ -131,15 +127,17 @@ export async function probeFakeComfySlot(
  * @param {unknown} err
  */
 function connectionRefused(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
+  if (!err || typeof err !== "object") {
+    return false;
+  }
   /* 预算耗尽（含手动 abort）一律**不算**「空着」—— 它回答不了那个问题。 */
-  const name = (err as { name?: unknown }).name;
-  if (name === "TimeoutError" || name === "AbortError") return false;
-  const code = (err as { cause?: { code?: unknown } }).cause?.code;
+  const name = /* SAFETY: 类型断言已复核 */ (err as { name?: unknown }).name;
+  if (name === "TimeoutError" || name === "AbortError") {
+    return false;
+  }
+  const code = /* SAFETY: 类型断言已复核 */ (err as { cause?: { code?: unknown } }).cause?.code;
   if (typeof code === "string") {
-    return ["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH"].includes(
-      code,
-    );
+    return ["ECONNREFUSED", "ENOTFOUND", "EHOSTUNREACH", "ENETUNREACH"].includes(code);
   }
   /* 拿不到 `cause.code` 时退回文本：Node 在部分路径上把码并进 message
    * （`connect ECONNREFUSED 127.0.0.1:18188`）。**认不出就按「没等到」处理** ——
@@ -171,7 +169,9 @@ export function readAppServerPreflight(
   env: Record<string, string | undefined> = process.env,
 ): { occupiedBefore: boolean } | null {
   const preflight = decodePreflight(env[E2E_PREFLIGHT_ENV_KEY]);
-  if (!preflight) return null;
+  if (!preflight) {
+    return null;
+  }
   return { occupiedBefore: preflight.appOccupied };
 }
 
@@ -189,7 +189,9 @@ export function readFakeSlotPreflight(
   env: Record<string, string | undefined> = process.env,
 ): { occupiedBefore: boolean } | null {
   const preflight = decodePreflight(env[E2E_PREFLIGHT_ENV_KEY]);
-  if (!preflight) return null;
+  if (!preflight) {
+    return null;
+  }
   return { occupiedBefore: preflight.fakeOccupied };
 }
 
@@ -201,9 +203,7 @@ export default async function globalSetup(): Promise<void> {
    * 本轮自己起的那个不算（那正是 ISSUE #1766 的立案形态）。 */
   const appPreflight = readAppServerPreflight();
   if (appPreflight?.occupiedBefore && !process.env.CI) {
-    throw new Error(
-      describeAppReuseConflict({ port: resolveAppPort(resolveRepoRoot()) }),
-    );
+    throw new Error(describeAppReuseConflict({ port: resolveAppPort(resolveRepoRoot()) }));
   }
 
   /* 替身端口这一格分两层：

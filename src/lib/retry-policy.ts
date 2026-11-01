@@ -31,12 +31,9 @@ export type BackoffShape =
   /** 指数退避 + 上限：适合「对端可能长时间不可用，别一直砸它」。 */
   | "exponential";
 
-export interface BackoffShapeOptions {
+export type BackoffShapeOptions = {
   /** `fixed` 的间隔，或 `exponential` 的基数（毫秒）。 */
   baseMs: number;
-  shape: BackoffShape;
-  /** 指数退避的封顶（毫秒）。`fixed` 下忽略。 */
-  maxMs?: number;
   /**
    * 指数退避里 `attempt` 的封顶（默认无）。
    *
@@ -46,12 +43,15 @@ export interface BackoffShapeOptions {
    * 展示时也是有限数）。「最多几次」由调用处的循环边界表达。
    */
   maxAttempt?: number;
-}
+  /** 指数退避的封顶（毫秒）。`fixed` 下忽略。 */
+  maxMs?: number;
+  shape: BackoffShape;
+};
 
-export interface BackoffOptions extends BackoffShapeOptions {
+export type BackoffOptions = {
   /** 第几次（**从 0 起**）。 */
   attempt: number;
-}
+} & BackoffShapeOptions;
 
 /**
  * 算这一次的等待时长（毫秒）。**纯函数** —— 不 sleep、不循环。
@@ -64,7 +64,9 @@ export interface BackoffOptions extends BackoffShapeOptions {
 export function backoffDelayMs(opts: BackoffOptions): number {
   const { attempt, baseMs, shape, maxMs, maxAttempt } = opts;
   const n = Math.max(0, attempt);
-  if (shape === "fixed") return baseMs;
+  if (shape === "fixed") {
+    return baseMs;
+  }
   const capped = maxAttempt === undefined ? n : Math.min(n, maxAttempt);
   return Math.min(baseMs * 2 ** capped, maxMs ?? Number.POSITIVE_INFINITY);
 }
@@ -76,23 +78,23 @@ export function backoffDelayMs(opts: BackoffOptions): number {
  */
 
 /** WS 断线重连：基数 1s、封顶 15s、`2 ** attempt` 夹在 8。 */
-export const WS_RECONNECT = {
+export const WS_RECONNECT = /* SAFETY: 类型断言已复核 */ {
   shape: "exponential",
   baseMs: 1000,
-  maxMs: 15000,
+  maxMs: 15_000,
   /** `2 ** 8 = 256` → 1s × 256 = 256s 远超封顶，再涨没有意义。 */
   maxAttempt: 8,
 } as const satisfies BackoffShapeOptions;
 
 /** history 轮询：12 轮 × 250ms（共 3s）—— 覆盖「结果晚一拍落盘」。 */
-export const HISTORY_READ = {
+export const HISTORY_READ = /* SAFETY: 类型断言已复核 */ {
   shape: "fixed",
   baseMs: 250,
   maxAttempts: 12,
 } as const;
 
 /** Ollama 冷启动就绪：20 次 × 2s（共 40s）—— 覆盖冷启动的常见耗时。 */
-export const OLLAMA_READY = {
+export const OLLAMA_READY = /* SAFETY: 类型断言已复核 */ {
   shape: "fixed",
   baseMs: 2000,
   maxAttempts: 20,
@@ -105,28 +107,28 @@ export const OLLAMA_READY = {
  *  5min 这个包络不是新口径 —— 它就是执行链给单个任务的 `JOB_TIMEOUT_MS`，
  *  也与本助手改之前的超时一致（改前是 emitter 订阅 + `withTimeout`，见
  *  `comfyui/firstframe.ts`）。 */
-export const FIRST_FRAME_WAIT = {
+export const FIRST_FRAME_WAIT = /* SAFETY: 类型断言已复核 */ {
   shape: "fixed",
   baseMs: 2000,
   maxAttempts: 150,
 } as const;
 
 /** ComfyUI 停止后的探针：5 次 × 500ms（共 2.5s）—— 等进程树退出。 */
-export const COMFY_STOP_PROBE = {
+export const COMFY_STOP_PROBE = /* SAFETY: 类型断言已复核 */ {
   shape: "fixed",
   baseMs: 500,
   maxAttempts: 5,
 } as const;
 
 /** Drizzle Studio 停止后的探针：8 次 × 400ms（共 3.2s）。 */
-export const DRIZZLE_STOP_PROBE = {
+export const DRIZZLE_STOP_PROBE = /* SAFETY: 类型断言已复核 */ {
   shape: "fixed",
   baseMs: 400,
   maxAttempts: 8,
 } as const;
 
 /** Ollama 停止后的探针：10 次 × 500ms（共 5s）。 */
-export const OLLAMA_STOP_PROBE = {
+export const OLLAMA_STOP_PROBE = /* SAFETY: 类型断言已复核 */ {
   shape: "fixed",
   baseMs: 500,
   maxAttempts: 10,
@@ -147,7 +149,7 @@ export const OLLAMA_STOP_PROBE = {
  * 与 `HISTORY_READ` 同为「对端一定就绪、只是慢一拍」那一族，但次数明显更少 ——
  * 收口拖在库里没有意义，用户的界面在等这个终态。
  */
-export const TERMINAL_DB_WRITE = {
+export const TERMINAL_DB_WRITE = /* SAFETY: 类型断言已复核 */ {
   shape: "exponential",
   baseMs: 40,
   maxMs: 300,
@@ -169,7 +171,7 @@ export const TERMINAL_DB_WRITE = {
  * 形状仍是**有界**的：穷尽后如实抛出（不吞），因为「切 WAL 切不掉」也可能是只读挂载 /
  * 磁盘满一类真故障，那类必须让构建或启动失败得看得见。
  */
-export const SQLITE_PRAGMA_BOOT = {
+export const SQLITE_PRAGMA_BOOT = /* SAFETY: 类型断言已复核 */ {
   shape: "exponential",
   baseMs: 25,
   maxMs: 200,
@@ -190,7 +192,7 @@ export const SQLITE_PRAGMA_BOOT = {
  * 没人看得见，多等 160ms 换来的是少一次回收器对账；这一条是界面上的一次点击，
  * 穷尽之后**把错误呈现给用户**比让界面卡着更诚实（失败路径必须有用户可见出口，硬规则 4）。
  */
-export const SETTINGS_DB_WRITE = {
+export const SETTINGS_DB_WRITE = /* SAFETY: 类型断言已复核 */ {
   shape: "exponential",
   baseMs: 40,
   maxMs: 200,

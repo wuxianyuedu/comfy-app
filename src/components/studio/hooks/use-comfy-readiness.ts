@@ -15,40 +15,39 @@ import type { ComfyStatsPayload } from "~/lib/comfy/comfy-stats-client";
 import { useComfyStats } from "./use-comfy-stats";
 
 /** 状态栏要展示的一项占用条（显存/内存），null 表示该项应隐藏。 */
-export interface StatBar {
-  /** 已用（字节） */
-  used: number;
-  /** 总量（字节） */
-  total: number;
+export type StatBar = {
   /** 用量百分比（四舍五入取整，clamp 到 100） */
   pct: number;
-}
+  /** 总量（字节） */
+  total: number;
+  /** 已用（字节） */
+  used: number;
+};
 
-export interface ComfyStatusViewModel {
-  stats: ComfyStatsPayload | null;
-  online: boolean;
+export type ComfyStatusViewModel = {
   /** 已连接但首个采样还没回来（轮询空窗），占用条暂不显示但不应报「未连接」 */
   connecting: boolean;
-  /** 数据陈旧：处于迟滞容忍期、当前显示的是上一次好数据（视图据此弱化占用条） */
-  stale: boolean;
   /** ComfyUI CUDA 逻辑口径；非 NVIDIA 卡上仍是唯一可显示的口径 */
   cudaVram: StatBar | null;
-  /** nvidia-smi 物理专用显存口径；非 NVIDIA 卡 / 查询失败时为 null（隐藏，不留空项） */
-  smiVram: StatBar | null;
-  /** 系统内存占用 */
-  ram: StatBar | null;
   /** 降级提示（轮询失败/后端不可达时视图必须可见，不能静默消失） */
   degradedNote: string | null;
-}
+  online: boolean;
+  /** 系统内存占用 */
+  ram: StatBar | null;
+  /** nvidia-smi 物理专用显存口径；非 NVIDIA 卡 / 查询失败时为 null（隐藏，不留空项） */
+  smiVram: StatBar | null;
+  /** 数据陈旧：处于迟滞容忍期、当前显示的是上一次好数据（视图据此弱化占用条） */
+  stale: boolean;
+  stats: ComfyStatsPayload | null;
+};
 
 const DEGRADED_NOTE = "ComfyUI 未运行，显存/内存暂不可用";
 
 /** 已用/总量 → 占用条；总量非法或未用为负则返回 null（该项隐藏）。 */
-function toBar(
-  used: number | undefined,
-  total: number | undefined,
-): StatBar | null {
-  if (!total || total <= 0 || used == null || used < 0) return null;
+function toBar(used: number | undefined, total: number | undefined): StatBar | null {
+  if (!total || total <= 0 || used == null || used < 0) {
+    return null;
+  }
   /* 「已用 / 总量 → 百分比」走 `~/lib/progress` 的 `toPct`（同一条口径的另一
    * 处落点）；`null` 在上面的守卫里已排除，这里落回 0 只为类型收窄。 */
   return {

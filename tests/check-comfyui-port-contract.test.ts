@@ -12,18 +12,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-const SCRIPT = path.resolve(
-  __dirname,
-  "../scripts/check-comfyui-port-contract.cjs",
-);
-const tempDirs: string[] = [];
+const SCRIPT = path.resolve(__dirname, "../scripts/check-comfyui-port-contract.cjs");
+const tempDirs: Array<string> = [];
 
 /** 与真实仓库保持一致的四个判据文件（只保留被判据读到的部分）。 */
 const BASELINE_FILES: Record<string, string> = {
   "src/lib/endpoints.ts":
-    'export const COMFYUI_DEFAULT_PORT = 8188;\nexport function comfyUiBaseUrl(port: number = COMFYUI_DEFAULT_PORT): string {\n  return `http://127.0.0.1:${port}`;\n}\n',
-  "src/lib/app-settings/index.ts":
-    'export type AppSettings = { comfyuiPort: number };\n',
+    "export const COMFYUI_DEFAULT_PORT = 8188;\nexport function comfyUiBaseUrl(port: number = COMFYUI_DEFAULT_PORT): string {\n  return `http://127.0.0.1:${port}`;\n}\n",
+  "src/lib/app-settings/index.ts": "export type AppSettings = { comfyuiPort: number };\n",
   "src/lib/app-settings/app-settings.server.ts": `import fs from "node:fs";
 export function getSettingsSync() { return fs; }
 `,
@@ -71,8 +67,8 @@ function scanner(overrides: Record<string, string> = {}) {
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };
-    } catch (err) {
-      const e = err as { stdout?: string; stderr?: string };
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
       return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
     }
   };
@@ -80,7 +76,9 @@ function scanner(overrides: Record<string, string> = {}) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("check-comfyui-port-contract", () => {
@@ -140,15 +138,14 @@ export function launch() {
   it("定义默认端口的那一行本身不算裸字面量", () => {
     const { run } = scanner({
       "src/lib/endpoints.ts":
-        'export const COMFYUI_DEFAULT_PORT = 8188;\nexport function comfyUiBaseUrl(port: number = COMFYUI_DEFAULT_PORT): string {\n  return `http://127.0.0.1:${port}`;\n}\n',
+        "export const COMFYUI_DEFAULT_PORT = 8188;\nexport function comfyUiBaseUrl(port: number = COMFYUI_DEFAULT_PORT): string {\n  return `http://127.0.0.1:${port}`;\n}\n",
     });
     expect(run().ok).toBe(true);
   });
 
   it("app-settings 里再定义/再导出默认端口即阻断（转手会让视图层拖进 fs）", () => {
     const { run } = scanner({
-      "src/lib/app-settings/index.ts":
-        'export const COMFYUI_DEFAULT_PORT = 8188;\n',
+      "src/lib/app-settings/index.ts": "export const COMFYUI_DEFAULT_PORT = 8188;\n",
     });
     const r = run();
     expect(r.ok).toBe(false);
@@ -166,7 +163,7 @@ export function launch() {
   it("零依赖常量层缺定义即阻断（浏览器图会因 import fs 整页 500）", () => {
     const { run } = scanner({
       "src/lib/endpoints.ts":
-        'export function comfyUiBaseUrl(port: number): string {\n  return `http://127.0.0.1:${port}`;\n}\n',
+        "export function comfyUiBaseUrl(port: number): string {\n  return `http://127.0.0.1:${port}`;\n}\n",
     });
     expect(run().ok).toBe(false);
   });

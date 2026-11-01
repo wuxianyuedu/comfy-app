@@ -29,9 +29,9 @@ import type { ApiChannelsView } from "~/lib/workshop/api-channel-shared";
 import type { WorkshopWorkflowOption } from "~/lib/workshop/generation-client";
 
 export function useWorkshopBootstrapData(input: {
-  setStyles: (styles: StyleRef[]) => void;
   setApiChannels: (channels: ApiChannelsView | null) => void;
-  setWorkflowOptions: (workflows: WorkshopWorkflowOption[]) => void;
+  setStyles: (styles: Array<StyleRef>) => void;
+  setWorkflowOptions: (workflows: Array<WorkshopWorkflowOption>) => void;
 }) {
   const { setStyles, setApiChannels, setWorkflowOptions } = input;
   /* 卸载守卫用 beginStaleRun（规范 16 §16.2.4.34）：本 effect 里三个请求各自
@@ -65,27 +65,21 @@ export function useWorkshopBootstrapData(input: {
 export function useWorkshopTaskRecovery(input: {
   /** 每次渲染后同步的最新草稿（镜头列表从它读，避免闭包捕获旧 state）。 */
   latestDraftRef: { current: WorkshopDraft };
-  setShots: (updater: (prev: Shot[]) => Shot[]) => void;
   setNotice: (message: string | null) => void;
+  setShots: (updater: (prev: Array<Shot>) => Array<Shot>) => void;
   /** 重订阅入口（`useWorkshopGeneration` 的 watchShotTask 原样传入）。 */
-  watchShotTask: (
-    shotId: string,
-    taskId: string,
-    target?: "image" | "video",
-  ) => Promise<void>;
+  watchShotTask: (shotId: string, taskId: string, target?: "image" | "video") => Promise<void>;
 }) {
   const { latestDraftRef, setShots, setNotice, watchShotTask } = input;
   const resumedRef = useRef(false);
 
   useEffect(() => {
-    if (resumedRef.current) return;
+    if (resumedRef.current) {
+      return;
+    }
     resumedRef.current = true;
     /** 恢复一个失联任务：查真值 → 已终态直接回写，仍在跑才重订阅。 */
-    const resumeTask = (
-      shotId: string,
-      taskId: string,
-      target: "image" | "video",
-    ) => {
+    const resumeTask = (shotId: string, taskId: string, target: "image" | "video") => {
       void (async () => {
         const snapshot = await fetchTaskSnapshot(taskId);
         /* 恢复是异步的：期间用户可能对同一镜头重新发起（任务 id 已换）。
@@ -93,26 +87,22 @@ export function useWorkshopTaskRecovery(input: {
         const patchIfOwned = (p: Partial<Shot>) =>
           setShots((prev) =>
             prev.map((item) => {
-              if (item.id !== shotId) return item;
+              if (item.id !== shotId) {
+                return item;
+              }
               const owned =
-                target === "video"
-                  ? item.clipTaskId === taskId
-                  : item.taskId === taskId;
+                target === "video" ? item.clipTaskId === taskId : item.taskId === taskId;
               return owned ? { ...item, ...p } : item;
             }),
           );
         const isVideo = target === "video";
         if (!snapshot) {
-          patchIfOwned(
-            isVideo ? { clipStatus: "failed" } : { status: "failed" },
-          );
+          patchIfOwned(isVideo ? { clipStatus: "failed" } : { status: "failed" });
           return;
         }
         if (snapshot.status === "SUCCEEDED") {
           /* 产物以任务真值回写（SSE 重订阅拿不到已完成任务的产物）。 */
-          const output = snapshot.outputs.find(
-            (o) => o.kind === (isVideo ? "video" : "image"),
-          );
+          const output = snapshot.outputs.find((o) => o.kind === (isVideo ? "video" : "image"));
           if (output) {
             patchIfOwned(
               isVideo
@@ -120,9 +110,7 @@ export function useWorkshopTaskRecovery(input: {
                 : { imageUrl: output.url, status: "done" },
             );
           } else {
-            patchIfOwned(
-              isVideo ? { clipStatus: "failed" } : { status: "failed" },
-            );
+            patchIfOwned(isVideo ? { clipStatus: "failed" } : { status: "failed" });
             setNotice(
               isVideo
                 ? "视频任务已完成但没有产出文件，请重新生成该片段"
@@ -132,13 +120,9 @@ export function useWorkshopTaskRecovery(input: {
           return;
         }
         if (snapshot.status === "FAILED" || snapshot.status === "CANCELLED") {
-          patchIfOwned(
-            isVideo ? { clipStatus: "failed" } : { status: "failed" },
-          );
+          patchIfOwned(isVideo ? { clipStatus: "failed" } : { status: "failed" });
           if (snapshot.error) {
-            setNotice(
-              `${isVideo ? "视频" : "镜头"}生成失败：${snapshot.error}`,
-            );
+            setNotice(`${isVideo ? "视频" : "镜头"}生成失败：${snapshot.error}`);
           }
           return;
         }

@@ -12,7 +12,9 @@ const SHELL_INTERNALS_KEY = "__TAURI_INTERNALS__";
 
 /** 是否运行在 Tauri 壳里（WebView）。浏览器环境无对应全局标记。 */
 export function isDesktopShell(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") {
+    return false;
+  }
   return SHELL_INTERNALS_KEY in window || "__TAURI__" in window;
 }
 
@@ -34,7 +36,9 @@ export function isDesktopShell(): boolean {
  * 「窗口会留在后台」。非壳环境（服务端渲染、浏览器）返回 false。
  */
 export async function shouldActivateWindowOnLaunch(): Promise<boolean> {
-  if (!isDesktopShell()) return false;
+  if (!isDesktopShell()) {
+    return false;
+  }
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     return (await invoke<boolean>("should_activate_on_launch")) === true;
@@ -57,7 +61,9 @@ export async function shouldActivateWindowOnLaunch(): Promise<boolean> {
  * 用户主动点的动作，失败不该打扰用户。
  */
 export async function activateMainWindow(): Promise<boolean> {
-  if (!isDesktopShell()) return false;
+  if (!isDesktopShell()) {
+    return false;
+  }
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("activate_main_window");
@@ -84,8 +90,12 @@ const LOADING_STUB_ID = "__comfyapp_loading_stub";
  * 非壳环境（浏览器）没有占位，静默返回。
  */
 export function clearLaunchLoadingStub(): void {
-  if (typeof window === "undefined") return;
-  const w = window as unknown as { __comfyappStubTimer?: number };
+  if (typeof window === "undefined") {
+    return;
+  }
+  const w = /* SAFETY: 类型断言已复核 */ window as unknown as {
+    __comfyappStubTimer?: number;
+  };
   if (w.__comfyappStubTimer) {
     window.clearInterval(w.__comfyappStubTimer);
     w.__comfyappStubTimer = 0;
@@ -107,7 +117,9 @@ export function clearLaunchLoadingStub(): void {
  * 结果**在一次会话内不变**（feature 是编译期的），所以调用方可以放心缓存。
  */
 export async function devtoolsAvailable(): Promise<boolean> {
-  if (!isDesktopShell()) return false;
+  if (!isDesktopShell()) {
+    return false;
+  }
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     return (await invoke<boolean>("devtools_available")) === true;
@@ -129,7 +141,9 @@ export async function devtoolsAvailable(): Promise<boolean> {
  * 非壳环境 / 未启用该 feature 的壳都返回 false。
  */
 export async function openDevtools(): Promise<boolean> {
-  if (!isDesktopShell()) return false;
+  if (!isDesktopShell()) {
+    return false;
+  }
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("open_devtools");
@@ -162,7 +176,9 @@ export async function openDevtools(): Promise<boolean> {
  * `invoke` 的 catch）。
  */
 export async function readAppServiceExitRecord(): Promise<string | null> {
-  if (!isDesktopShell()) return null;
+  if (!isDesktopShell()) {
+    return null;
+  }
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const raw = await invoke<string | null>("get_app_service_exit");

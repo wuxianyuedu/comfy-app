@@ -15,11 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import {
-  compiledGlobalsCss,
-  themeTokens,
-  withPinnedSources,
-} from "./helpers/theme-tokens";
+import { compiledGlobalsCss, themeTokens, withPinnedSources } from "./helpers/theme-tokens";
 
 const ROOT = process.cwd();
 const GLOBALS = path.join(ROOT, "src", "app", "globals.css");
@@ -28,11 +24,7 @@ const GLOBALS = path.join(ROOT, "src", "app", "globals.css");
 const UTILITY_CLASSES = ["bg-card", "bg-popover", "border-border"];
 
 /** 只有开着全仓扫描才会出现在产物里的默认调色板档（本项目没有把它们钉进输入源）。 */
-const SCAN_ONLY_PROBES = [
-  "--color-red-200",
-  "--color-amber-100",
-  "--color-sky-200",
-];
+const SCAN_ONLY_PROBES = ["--color-red-200", "--color-amber-100", "--color-sky-200"];
 
 let css: string;
 let light: ReturnType<typeof themeTokens>;
@@ -50,21 +42,19 @@ describe("theme 编译的输入源固定住了（#1336 的反向判据）", () =
     // 一旦回到按用法 tree-shake，就会有用例读到「浅色档在、深色档不在」这种半截形状
     // （第一版实测到的正是 `--color-primary-strong`，见 helper 注释）。
     const src = fs.readFileSync(GLOBALS, "utf8");
-    const declared: string[] = [];
-    for (const block of src.matchAll(
-      /@theme(?:\s+inline)?\s*\{([\s\S]*?)\n\}/g,
-    )) {
+    const declared: Array<string> = [];
+    for (const block of src.matchAll(/@theme(?:\s+inline)?\s*\{([\s\S]*?)\n\}/g)) {
       const body = block[1] ?? "";
       for (const decl of body.matchAll(/(--[A-Za-z0-9-]+)\s*:/g)) {
         const name = decl[1];
-        if (name) declared.push(name);
+        if (name) {
+          declared.push(name);
+        }
       }
     }
     // 解析不到名字 = 这条判据在空跑，先钉住「真的解析到了」
     expect(declared.length).toBeGreaterThan(50);
-    const missing = [...new Set(declared)].filter(
-      (name) => !light.has(name) && !dark.has(name),
-    );
+    const missing = [...new Set(declared)].filter((name) => !light.has(name) && !dark.has(name));
     expect(
       missing,
       `这些 @theme token 没进产物，说明按用法 tree-shake 又生效了：${missing.join(", ")}`,
@@ -94,9 +84,7 @@ describe("theme 编译的输入源固定住了（#1336 的反向判据）", () =
   it("globals.css 少掉那行 @import 时抛错，不静默按全量扫描编一遍", () => {
     // helper 里的匹配式与 globals.css 的那一行是**一对**：任何一边改形状而另一边没跟上，
     // 静默放行等于让这条优化悄悄失效。这里直接喂一份没有那行的文本，钉它必须抛。
-    expect(() => withPinnedSources("/* 没有 @import 的假 css */")).toThrow(
-      /tailwindcss/,
-    );
+    expect(() => withPinnedSources("/* 没有 @import 的假 css */")).toThrow(/tailwindcss/);
   });
 });
 
@@ -118,18 +106,13 @@ describe("主题 token 清单（文件快照，人工 review 的对象）", () =
   it("`@theme` 声明的 token 清单与基线一致", async () => {
     const src = fs.readFileSync(GLOBALS, "utf8");
     const declared = new Set<string>();
-    for (const block of src.matchAll(
-      /@theme(?:\s+inline)?\s*\{([\s\S]*?)\n\}/g,
-    )) {
+    for (const block of src.matchAll(/@theme(?:\s+inline)?\s*\{([\s\S]*?)\n\}/g)) {
       for (const decl of (block[1] ?? "").matchAll(/(--[A-Za-z0-9-]+)\s*:/g)) {
         declared.add(decl[1]!);
       }
     }
     /* 一份声明都没有时快照会变成空文件而「照样通过」——先钉住解析本身有效。 */
-    expect(
-      declared.size,
-      "@theme 解析不出声明 —— 这条判据在空跑",
-    ).toBeGreaterThan(50);
+    expect(declared.size, "@theme 解析不出声明 —— 这条判据在空跑").toBeGreaterThan(50);
     await expect([...declared].sort().join("\n")).toMatchFileSnapshot(
       "__snapshots__/theme-tokens.css-theme-surface.txt",
     );

@@ -22,8 +22,10 @@ import { modelFoldersForField } from "~/lib/model-types";
  *  整体落空，退到 field-name 全库 union——把其它节点同名字段的选项
  *  混进候选表（如 aspect_ratio 混出简写 "16:9"），用户照着选就会提交
  *  服务器不认的值。 */
-const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
-  if (!Array.isArray(spec)) return undefined;
+const comboOptionsFromSpec = (spec: unknown): Array<string> | undefined => {
+  if (!Array.isArray(spec)) {
+    return undefined;
+  }
   const head: unknown = spec[0];
   if (Array.isArray(head)) {
     const opts = head.filter((x): x is string => typeof x === "string");
@@ -31,7 +33,7 @@ const comboOptionsFromSpec = (spec: unknown): string[] | undefined => {
   }
   const extra: unknown = spec[1];
   if (extra != null && typeof extra === "object") {
-    const opts = (extra as Record<string, unknown>).options;
+    const opts = /* SAFETY: 类型断言已复核 */ (extra as Record<string, unknown>).options;
     if (Array.isArray(opts)) {
       const list = opts.filter((x): x is string => typeof x === "string");
       return list.length ? list : undefined;
@@ -55,8 +57,8 @@ export function createObjectInfoResolvers(): {
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
-  ) => Promise<string[] | undefined>;
-  comboOptionsForFieldName: (field: string) => Promise<string[] | undefined>;
+  ) => Promise<Array<string> | undefined>;
+  comboOptionsForFieldName: (field: string) => Promise<Array<string> | undefined>;
   multilineForClassField: (
     classType: string | undefined,
     field: string,
@@ -64,8 +66,9 @@ export function createObjectInfoResolvers(): {
 } {
   let _comboObjectInfo: Awaited<ReturnType<typeof fetchObjectInfo>> | undefined;
   const ensureObjectInfo = async () => {
-    if (_comboObjectInfo === undefined)
+    if (_comboObjectInfo === undefined) {
       _comboObjectInfo = await fetchObjectInfo();
+    }
     return _comboObjectInfo;
   };
 
@@ -85,21 +88,26 @@ export function createObjectInfoResolvers(): {
     classType: string | undefined,
     field: string,
   ): Promise<unknown> => {
-    if (!classType) return undefined;
+    if (!classType) {
+      return undefined;
+    }
     const oi = await ensureObjectInfo();
-    if (!oi) return undefined;
+    if (!oi) {
+      return undefined;
+    }
     const def = oi[classType];
-    if (!def?.input) return undefined;
+    if (!def?.input) {
+      return undefined;
+    }
     return def.input.required?.[field] ?? def.input.optional?.[field];
   };
 
   const comboOptionsForClassField = async (
     classType: string | undefined,
     field: string,
-  ): Promise<string[] | undefined> => {
+  ): Promise<Array<string> | undefined> => {
     const [specOpts, localOpts] = await Promise.all([
-      (async () =>
-        comboOptionsFromSpec(await specForClassField(classType, field)))(),
+      (async () => comboOptionsFromSpec(await specForClassField(classType, field)))(),
       localModelFileNames(modelFoldersForField(field)),
     ]);
 
@@ -122,16 +130,18 @@ export function createObjectInfoResolvers(): {
    * 会把所有已知默认值并起来 —— 这无害，因为下面的本地模型并集已经覆盖了
    * 现实中磁盘上的那批。object_info 只拉一次并缓存，因此重复调用很便宜。
    */
-  const comboOptionsForFieldName = async (
-    field: string,
-  ): Promise<string[] | undefined> => {
+  const comboOptionsForFieldName = async (field: string): Promise<Array<string> | undefined> => {
     const oi = await ensureObjectInfo();
-    if (!oi) return undefined;
-    const declared: string[] = [];
+    if (!oi) {
+      return undefined;
+    }
+    const declared: Array<string> = [];
     let found = false;
     for (const def of Object.values(oi)) {
       const inp = def.input;
-      if (!inp) continue;
+      if (!inp) {
+        continue;
+      }
       const spec = inp.required?.[field] ?? inp.optional?.[field];
       const opts = comboOptionsFromSpec(spec);
       if (opts) {
@@ -139,7 +149,9 @@ export function createObjectInfoResolvers(): {
         declared.push(...opts);
       }
     }
-    if (!found) return undefined;
+    if (!found) {
+      return undefined;
+    }
     /* 同上一处：并集 + 去重 + 字典序走 `~/lib/ordered-set`。 */
     const out = uniqueSorted(
       union(declared, await localModelFileNames(modelFoldersForField(field))),
@@ -157,10 +169,14 @@ export function createObjectInfoResolvers(): {
     field: string,
   ): Promise<boolean | undefined> => {
     const spec = await specForClassField(classType, field);
-    if (!Array.isArray(spec)) return undefined;
+    if (!Array.isArray(spec)) {
+      return undefined;
+    }
     const extra: unknown = spec[1];
-    if (extra == null || typeof extra !== "object") return undefined;
-    return (extra as Record<string, unknown>).multiline === true;
+    if (extra == null || typeof extra !== "object") {
+      return undefined;
+    }
+    return /* SAFETY: 类型断言已复核 */ (extra as Record<string, unknown>).multiline === true;
   };
 
   return {

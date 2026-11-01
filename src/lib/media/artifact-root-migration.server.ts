@@ -31,36 +31,31 @@ import { generatedRoot, legacyGeneratedRoot } from "./output-paths";
 const log = createAppRuntimeLogger("artifact-root");
 
 /** 一次迁移的结果形状（调用点据此决定说什么话）。 */
-export interface ArtifactRootMigrationReport {
-  status: "nothing-to-do" | "moved" | "left-behind";
-  /** 成功搬到新根的顶层条目名。 */
-  moved: string[];
-  /** 新根里已有同名条目 ⇒ 原样留在原地，绝不覆盖。 */
-  skipped: string[];
+export type ArtifactRootMigrationReport = {
   /** 没能搬走的条目（被占用 / 权限），名字与 errno 码成对。 */
-  blocked: { name: string; code: string }[];
-}
+  blocked: Array<{ code: string; name: string }>;
+  /** 成功搬到新根的顶层条目名。 */
+  moved: Array<string>;
+  /** 新根里已有同名条目 ⇒ 原样留在原地，绝不覆盖。 */
+  skipped: Array<string>;
+  status: "nothing-to-do" | "moved" | "left-behind";
+};
 
 /** 把一个顶层条目从旧根挪到新根。ENOENT 视为「别的进程已经搬走了」，不算失败。 */
 function moveEntry(
   from: string,
   to: string,
-):
-  | { kind: "moved" }
-  | { kind: "already-gone" }
-  | { kind: "blocked"; code: string } {
+): { kind: "moved" } | { kind: "already-gone" } | { code: string; kind: "blocked" } {
   try {
     fs.renameSync(from, to);
     return { kind: "moved" };
-  } catch (e) {
+  } catch (error) {
     const code =
-      typeof e === "object" && e !== null && "code" in e
-        ? String(e.code)
+      typeof error === "object" && error !== null && "code" in error
+        ? String(error.code)
         : "UNKNOWN";
     // 两个宿主同时起（Next 与执行器宿主）时这条会撞上：先动的那个已经把名字搬走了
-    return code === "ENOENT"
-      ? { kind: "already-gone" }
-      : { kind: "blocked", code };
+    return code === "ENOENT" ? { kind: "already-gone" } : { kind: "blocked", code };
   }
 }
 
@@ -80,10 +75,11 @@ export function migrateLegacyArtifactRoot(
     blocked: [],
   };
 
-  let entries: string[];
+  let entries: Array<string>;
   try {
-    if (!fs.existsSync(legacy) || !fs.statSync(legacy).isDirectory())
+    if (!fs.existsSync(legacy) || !fs.statSync(legacy).isDirectory()) {
       return report;
+    }
     entries = fs.readdirSync(legacy);
   } catch {
     // 读不到旧根（权限 / 正被删）：记成「留在原地」，让调用点有话可说，不阻断启动
@@ -100,9 +96,11 @@ export function migrateLegacyArtifactRoot(
         continue;
       }
       const outcome = moveEntry(path.join(legacy, name), to);
-      if (outcome.kind === "moved") report.moved.push(name);
-      else if (outcome.kind === "blocked")
+      if (outcome.kind === "moved") {
+        report.moved.push(name);
+      } else if (outcome.kind === "blocked") {
         report.blocked.push({ name, code: outcome.code });
+      }
     }
   }
   // 只有「一条都没留下」才试着收掉空壳；留着旧目录不是错误，而是下面这句话的
@@ -118,22 +116,14 @@ export function migrateLegacyArtifactRoot(
       // 空目录删不掉（句柄未释放）：不影响可读性，下一次启动再收
     }
   }
-  if (
-    report.moved.length > 0 ||
-    report.skipped.length > 0 ||
-    report.blocked.length > 0
-  ) {
+  if (report.moved.length > 0 || report.skipped.length > 0 || report.blocked.length > 0) {
     report.status =
-      report.skipped.length > 0 || report.blocked.length > 0
-        ? "left-behind"
-        : "moved";
+      report.skipped.length > 0 || report.blocked.length > 0 ? "left-behind" : "moved";
   }
 
   // 面板可见日志：只在「真的动过盘」或「动不干净」时写，空转不刷屏
   if (report.status === "moved") {
-    log.info(
-      `产物目录已从 public/generated 搬到 generated（${report.moved.length} 项）`,
-    );
+    log.info(`产物目录已从 public/generated 搬到 generated（${report.moved.length} 项）`);
   } else if (report.status === "left-behind") {
     log.error(
       `产物目录搬迁未全部完成：搬走 ${report.moved.length} 项，` +

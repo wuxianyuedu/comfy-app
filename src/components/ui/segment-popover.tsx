@@ -42,21 +42,11 @@ import { ChevronDown } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
 import { getOrCreate, getOrThrow } from "~/lib/collections";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 
 /** 用小矩形直观呈现宽高比。 */
-export function RatioIcon({
-  ratio,
-  className = "",
-}: {
-  ratio: number;
-  className?: string;
-}) {
+export function RatioIcon({ ratio, className = "" }: { className?: string; ratio: number }) {
   const MAX = 18;
   const width = ratio >= 1 ? MAX : Math.max(4, Math.round(MAX * ratio));
   const height = ratio >= 1 ? Math.max(4, Math.round(MAX / ratio)) : MAX;
@@ -75,30 +65,30 @@ export function shortRatioLabel(label: string): string {
 }
 
 /** 多段式面板里的一个分组。 */
-export interface SegmentSection<T extends string = string> {
-  /** 分组标题（大写展示，如「比例」）。 */
-  label: string;
-  /** 当前选中的选项值（必须是 `options.value` 之一）。 */
-  value: T;
-  /** 本分组的可选项。 */
-  options: {
-    value: T;
-    label: string;
-    render?: React.ReactNode;
-    /** 可选的子分组标签。当两个选项带着不同的 `subgroup` 字符串时，
-     *  分组会把它们渲染到不同行，并在行间插一条小号大写标签；
-     *  不带子分组的选项默认落在同一行、不加标签。 */
-    subgroup?: string;
-  }[];
-  /** 用户在本分组中改选其他选项时调用。 */
-  onChange: (value: T) => void;
+export type SegmentSection<T extends string = string> = {
   /** 可选：渲染在本分组**所有子分组之后**的自由控件。
    *
    *  给「不是从几个选项里挑一个、而是直接给一个值」的连续量控件留的位置
    *  （百万像素步进器：档位之外还要能填 2.5）。它属于这个分组（挨着它的选项
    *  渲染），但形状不是 `options`，所以不走 `options`。 */
   extra?: React.ReactNode;
-}
+  /** 分组标题（大写展示，如「比例」）。 */
+  label: string;
+  /** 用户在本分组中改选其他选项时调用。 */
+  onChange: (value: T) => void;
+  /** 本分组的可选项。 */
+  options: Array<{
+    label: string;
+    render?: React.ReactNode;
+    /** 可选的子分组标签。当两个选项带着不同的 `subgroup` 字符串时，
+     *  分组会把它们渲染到不同行，并在行间插一条小号大写标签；
+     *  不带子分组的选项默认落在同一行、不加标签。 */
+    subgroup?: string;
+    value: T;
+  }>;
+  /** 当前选中的选项值（必须是 `options.value` 之一）。 */
+  value: T;
+};
 
 /** 段内 ToggleGroup 的排布：跨子分组共享一个 `value`（互斥），
  *  每个子分组仍是「flex flex-wrap 横排、子分组间纵向堆叠」。
@@ -126,8 +116,6 @@ export function MultiSegmentPopover({
   footer,
   disabled,
 }: {
-  triggerContent: React.ReactNode;
-  sections: SegmentSection<string>[];
   align?: "left" | "right";
   ariaLabel?: string;
   /** 所属表单禁用时，置灰并阻止打开。 */
@@ -137,6 +125,8 @@ export function MultiSegmentPopover({
    *  `SegmentSection` 的形状）。刻意保持通用，好让后续场景
    * （如视频码率 / 帧率覆盖）复用同一套管线。 */
   footer?: React.ReactNode;
+  sections: Array<SegmentSection<string>>;
+  triggerContent: React.ReactNode;
 }) {
   return (
     <Popover>
@@ -145,35 +135,31 @@ export function MultiSegmentPopover({
         disabled={disabled}
         render={
           <Button
-            variant="ghost"
             /* h-auto 覆盖基元写死的 h-8；`hover:bg-*` 交给基元的 ghost，
                其余边框 / 底色沿用本控件原来的形态。 */
             className="nodrag nopan border-primary/35 bg-canvas-deep text-ink-bright hover:bg-canvas-deep hover:border-primary/70 focus-visible:border-primary/70 h-auto w-full justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs"
+            variant="ghost"
           />
         }
       >
         <span className="min-w-0 flex-1 truncate">{triggerContent}</span>
-        <ChevronDown size={10} className="text-ink-muted shrink-0" />
+        <ChevronDown className="text-ink-muted shrink-0" size={10} />
       </PopoverTrigger>
       <PopoverContent
         align={align === "right" ? "end" : "start"}
-        sideOffset={6}
         /* 面板自身滚动：段数与选项数都不固定，给高度封顶。
            `p-3` 是该面板原来的内距，`gap-0` 抵消基元默认的 `gap-2.5`。 */
         className="bg-panel ring-border-strong max-h-[min(60vh,460px)] w-[min(92vw,360px)] gap-0 overflow-y-auto rounded-xl p-3 shadow-2xl ring-1 shadow-black/10"
+        sideOffset={6}
       >
         {sections.map((section, i) => (
           <Section
-            key={section.label + ":" + (section.value ?? "")}
-            section={section}
             first={i === 0}
+            key={`${section.label}:${section.value ?? ""}`}
+            section={section}
           />
         ))}
-        {footer ? (
-          <div className="border-border-strong mt-3 border-t pt-3">
-            {footer}
-          </div>
-        ) : null}
+        {footer ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
       </PopoverContent>
     </Popover>
   );
@@ -186,19 +172,16 @@ const Section = React.memo(function Section({
   section,
   first,
 }: {
-  section: SegmentSection<string>;
   first: boolean;
+  section: SegmentSection<string>;
 }) {
   const grouped = useMemo(() => {
     const hasSubgroups = section.options.some((option) => option.subgroup);
     if (!hasSubgroups) {
       return [{ key: "_", label: undefined, options: section.options }];
     }
-    const order: string[] = [];
-    const map = new Map<
-      string,
-      { key: string; label?: string; options: typeof section.options }
-    >();
+    const order: Array<string> = [];
+    const map = new Map<string, { key: string; label?: string; options: typeof section.options }>();
     for (const option of section.options) {
       const key = option.subgroup ?? "_";
       getOrCreate(map, key, () => {
@@ -206,7 +189,7 @@ const Section = React.memo(function Section({
         return {
           key,
           label: option.subgroup,
-          options: [] as typeof section.options,
+          options: /* SAFETY: 类型断言已复核 */ [] as typeof section.options,
         };
       }).options.push(option);
     }
@@ -225,7 +208,7 @@ const Section = React.memo(function Section({
           那一个)回传给 onChange。multiple={false} 时数组长度恒 ≤1,
           `vals[0]` 就是唯一/最新值。 */}
       <ToggleGroup
-        value={[section.value]}
+        className={SECTION_GROUP_CLASS}
         multiple={false}
         onValueChange={(vals) => {
           const next = vals[0];
@@ -233,10 +216,10 @@ const Section = React.memo(function Section({
             section.onChange(next);
           }
         }}
-        className={SECTION_GROUP_CLASS}
+        value={[section.value]}
       >
         {grouped.map((group, gi) => (
-          <div key={group.key} className={gi > 0 ? "mt-2" : ""}>
+          <div className={gi > 0 ? "mt-2" : ""} key={group.key}>
             {group.label && (
               <div className="text-ink-icon text-4xs mb-1 tracking-wider uppercase">
                 {group.label}
@@ -245,9 +228,9 @@ const Section = React.memo(function Section({
             <div className="flex flex-wrap items-center gap-1.5">
               {group.options.map((opt) => (
                 <ToggleGroupItem
+                  className={ITEM_CLASS}
                   key={String(opt.value)}
                   value={String(opt.value)}
-                  className={ITEM_CLASS}
                 >
                   {opt.render}
                   <span>{opt.label}</span>

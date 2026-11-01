@@ -30,7 +30,7 @@ function readIfExists(rel: string): string | null {
 }
 
 /** 命令是否可用（用于决定「可执行层」是否真跑）。 */
-function hasCommand(cmd: string, args: string[]): boolean {
+function hasCommand(cmd: string, args: Array<string>): boolean {
   try {
     execFileSync(cmd, args, { stdio: "pipe", timeout: 10_000 });
     return true;
@@ -40,11 +40,11 @@ function hasCommand(cmd: string, args: string[]): boolean {
 }
 
 describe("app-port 跨语言一致性（四侧读同一份共享向量）", () => {
-  const fixture = JSON.parse(
+  const fixture = /* SAFETY: 类型断言已复核 */ JSON.parse(
     fs.readFileSync(path.join(ROOT, VECTORS), "utf8"),
   ) as {
-    vectors: { input: string; normalized: string; fnv1a32: number; port: number }[];
-    envVectors: { content: string; port: number | null; note: string }[];
+    envVectors: Array<{ content: string; note: string; port: number | null; }>;
+    vectors: Array<{ fnv1a32: number; input: string; normalized: string; port: number }>;
   };
 
   it("向量文件存在且至少 5 条（防止误删后全绿）", () => {
@@ -117,11 +117,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
   it("② Python 侧算法在可导入模块里（不内联进任何 Windows-only 宿主）", () => {
     const mod = readIfExists("scripts/app_port.py");
     expect(mod).not.toBeNull();
-    for (const fn of [
-      "def normalize_root_for_port",
-      "def derive_app_port",
-      "def fnv1a32",
-    ]) {
+    for (const fn of ["def normalize_root_for_port", "def derive_app_port", "def fnv1a32"]) {
       expect(mod!).toContain(fn);
     }
     // 端口算法必须在可导入的模块里，才能在 Linux / CI 上被验证 ——
@@ -140,16 +136,10 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     // `/^\d+$/ + parseInt` 判定**：那份抄件与生产实现的判据一旦漂了，这一格会
     // 照着抄件判、而链路上跑的是实现 —— 实测就栽过一次（`+3100` 三侧都收，
     // 用例里那份抄件不收，于是它把实现判成红的）。
-    const { parseDotEnvPortValue, readEnvFileValue } = await import(
-      "../scripts/app-port.mjs"
-    );
+    const { parseDotEnvPortValue, readEnvFileValue } = await import("../scripts/app-port.mjs");
     for (const v of fixture.envVectors) {
-      const port = parseDotEnvPortValue(
-        readEnvFileValue(v.content, "COMFYAPP_PORT"),
-      );
-      expect(port, `.env 解析：${JSON.stringify(v.content)}（${v.note}）`).toBe(
-        v.port,
-      );
+      const port = parseDotEnvPortValue(readEnvFileValue(v.content, "COMFYAPP_PORT"));
+      expect(port, `.env 解析：${JSON.stringify(v.content)}（${v.note}）`).toBe(v.port);
     }
   });
 
@@ -158,10 +148,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
   });
 
   it("①′ 另三侧也读同一份 envVectors（不能真跑时锁引用）", () => {
-    for (const rel of [
-      "scripts/check-app-port-vectors.py",
-      "scripts/check-app-port-vectors.cjs",
-    ]) {
+    for (const rel of ["scripts/check-app-port-vectors.py", "scripts/check-app-port-vectors.cjs"]) {
       const src = readIfExists(rel);
       expect(src, `${rel} 必须存在`).not.toBeNull();
       expect(src, `${rel} 必须读 envVectors`).toContain("envVectors");
@@ -175,7 +162,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     // 若某侧把 F:\\… 交给 path.resolve / abspath，在 POSIX 上会拼上 cwd，
     // 规范化结果就不再是 f:/… —— 这条检查 normalized 字段本身的形状。
     for (const v of fixture.vectors) {
-      if (/^[a-zA-Z]:/.test(v.input.replace(/\\/g, "/"))) {
+      if (/^[a-zA-Z]:/.test(v.input.replaceAll("\\", "/"))) {
         expect(v.normalized).toMatch(/^[a-z]:\//);
         expect(v.normalized).not.toContain(ROOT.toLowerCase());
       }

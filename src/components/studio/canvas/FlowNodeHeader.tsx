@@ -3,33 +3,29 @@
  * 收起开关 + 状态圆点 + 标题 + 按节点 IO 复选框 + #id 章
  * + 角色徽标。与 ComfyUI 标题栏一样钉在 NODE_TITLE_H。 */
 import { colorToRgba, NODE_TITLE_H } from "../workflow-utils";
-import {
-  IoCheckbox,
-  NodeIdChip,
-  type IOEditContextValue,
-} from "./IOEditContext";
+import { IoCheckbox, NodeIdChip, type IOEditContextValue } from "./IOEditContext";
 import { Button } from "~/components/ui/button";
 import type { WorkflowNodeData, IoRef } from "../workflow-types";
 import type { NodePalette } from "./workflow-node-palette";
 import { Hint } from "~/components/ui/hint";
 
-export interface FlowNodeRole {
+export type FlowNodeRole = {
+  bg: string;
+  color: string;
   key: string;
   label: string;
-  color: string;
-  bg: string;
-}
+};
 
-interface FlowNodeHeaderProps {
+type FlowNodeHeaderProps = {
   data: WorkflowNodeData;
-  role?: FlowNodeRole;
+  displayTitle: string;
   io: IOEditContextValue | null;
-  outputs: [string, string][];
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
+  outputs: Array<[string, string]>;
   palette: Pick<NodePalette, "headerBg" | "titleColor" | "dotBg">;
-  displayTitle: string;
-}
+  role?: FlowNodeRole;
+};
 
 export function FlowNodeHeader({
   data,
@@ -57,35 +53,35 @@ export function FlowNodeHeader({
        *  朝**下**（点击收起）。 */}
       <Hint label={isCollapsed ? "展开" : "折叠"}>
         <Button
-          variant="ghost"
-          size="icon-xs"
-
           aria-label={isCollapsed ? "展开节点" : "折叠节点"}
+          className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
+
           onClick={(event) => {
             event.stopPropagation();
             onToggleCollapsed();
           }}
           onMouseDown={(event) => event.stopPropagation()}
-          className="text-ink-soft hover:bg-subtle hover:text-ink-bright active:bg-surface-2 size-5 shrink-0 rounded"
+          size="icon-xs"
           style={{ pointerEvents: "auto" }}
+          variant="ghost"
         >
           <svg
             data-icon="inline-start"
-            width="10"
-            height="10"
-            viewBox="0 0 10 10"
             fill="none"
+            height="10"
             style={{
               transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
               transition: "transform 120ms ease",
             }}
+            viewBox="0 0 10 10"
+            width="10"
           >
             <path
               d="M3.5 2 L7 5 L3.5 8"
               stroke="currentColor"
-              strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
+              strokeWidth="1.5"
             />
           </svg>
         </Button>
@@ -100,9 +96,7 @@ export function FlowNodeHeader({
       <span
         className="flex-1 truncate text-xs font-medium tracking-wide"
         style={{ color: palette.titleColor }}
-        title={
-          data.title && data.title !== displayTitle ? data.title : displayTitle
-        }
+        title={data.title && data.title !== displayTitle ? data.title : displayTitle}
       >
         {displayTitle}
       </span>

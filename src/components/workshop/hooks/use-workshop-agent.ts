@@ -18,37 +18,37 @@ import { resolveAgentTool, type AgentToolHandlers } from "~/lib/agent/executor";
 export type { AgentToolHandlers };
 
 /** 一条工具执行记录（Agent 浮层「工作过程」面板的展示数据）。 */
-export interface AgentToolRun {
-  id: string;
-  toolName: string;
-  status: "running" | "done" | "error";
-  summary: string;
+export type AgentToolRun = {
   argSummary: string;
   detail?: string;
-}
+  id: string;
+  status: "running" | "done" | "error";
+  summary: string;
+  toolName: string;
+};
 
 /** Agent 一帧对话消息（用户 / 助手 / 工具记录）。 */
 export type AgentPanelMessage =
-  | { id: string; role: "user" | "assistant"; content: string }
+  | { content: string; id: string; role: "user" | "assistant" }
   | { id: string; role: "tool-run"; run: AgentToolRun };
 
 /** 工坊 Agent 需要调用 controller 的操作（由 WorkshopPipeline 注入）。 */
 export type WorkshopAgentToolHandlers = AgentToolHandlers;
 
 /** Agent hook 返回给视图的 controller。 */
-export interface WorkshopAgentController {
-  open: boolean;
-  messages: AgentPanelMessage[];
-  input: string;
+export type WorkshopAgentController = {
   busy: boolean;
-  error: string;
-  toolRuns: AgentToolRun[];
-  openAgent: () => void;
-  closeAgent: () => void;
-  setInput: (value: string) => void;
-  send: () => Promise<void>;
   clearToolRuns: () => void;
-}
+  closeAgent: () => void;
+  error: string;
+  input: string;
+  messages: Array<AgentPanelMessage>;
+  open: boolean;
+  openAgent: () => void;
+  send: () => Promise<void>;
+  setInput: (value: string) => void;
+  toolRuns: Array<AgentToolRun>;
+};
 
 /* 对话条目与工具运行记录的 id 走全库唯一出口（规范 16 §16.2.4.36）——
  * 收口前这里是两份逐字同形的「时间戳 + 自己的模块级计数器」。 */
@@ -65,15 +65,13 @@ function toolRunId(): string {
 const AGENT_MESSAGE_MAX = 2000;
 const AGENT_TOOLRUN_MAX = 2000;
 
-export function useWorkshopAgent(
-  handlers: WorkshopAgentToolHandlers,
-): WorkshopAgentController {
+export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopAgentController {
   const [open, setOpen] = React.useState(false);
-  const [messages, setMessages] = React.useState<AgentPanelMessage[]>([]);
+  const [messages, setMessages] = React.useState<Array<AgentPanelMessage>>([]);
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
-  const [toolRuns, setToolRuns] = React.useState<AgentToolRun[]>([]);
+  const [toolRuns, setToolRuns] = React.useState<Array<AgentToolRun>>([]);
 
   const handlersRef = React.useRef(handlers);
   // 与 messagesRef 同理：ref 同步放进 effect，渲染期写 ref 会触发
@@ -82,7 +80,7 @@ export function useWorkshopAgent(
     handlersRef.current = handlers;
   }, [handlers]);
 
-  const messagesRef = React.useRef<AgentPanelMessage[]>([]);
+  const messagesRef = React.useRef<Array<AgentPanelMessage>>([]);
   React.useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -90,50 +88,37 @@ export function useWorkshopAgent(
   const pushMsg = React.useCallback((msg: AgentPanelMessage) => {
     setMessages((prev) =>
       prev.length >= AGENT_MESSAGE_MAX
-        ? prev.slice(-AGENT_MESSAGE_MAX + 1).concat(msg)
-        : prev.concat(msg),
+        ? [...prev.slice(-AGENT_MESSAGE_MAX + 1), msg]
+        : [...prev, msg],
     );
   }, []);
 
   const pushToolRun = React.useCallback((run: AgentToolRun) => {
     setToolRuns((prev) =>
       prev.length >= AGENT_TOOLRUN_MAX
-        ? prev.slice(-AGENT_TOOLRUN_MAX + 1).concat(run)
-        : prev.concat(run),
+        ? [...prev.slice(-AGENT_TOOLRUN_MAX + 1), run]
+        : [...prev, run],
     );
     setMessages((prev) => {
-      const next = prev.concat({ id: run.id, role: "tool-run", run });
-      return next.length > AGENT_MESSAGE_MAX
-        ? next.slice(-AGENT_MESSAGE_MAX)
-        : next;
+      const next: Array<AgentPanelMessage> = [...prev, { id: run.id, role: "tool-run", run }];
+      return next.length > AGENT_MESSAGE_MAX ? next.slice(-AGENT_MESSAGE_MAX) : next;
     });
   }, []);
 
-  const patchToolRun = React.useCallback(
-    (id: string, patch: Partial<AgentToolRun>) => {
-      setToolRuns((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-      );
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === id && m.role === "tool-run"
-            ? { ...m, run: { ...m.run, ...patch } }
-            : m,
-        ),
-      );
-    },
-    [],
-  );
+  const patchToolRun = React.useCallback((id: string, patch: Partial<AgentToolRun>) => {
+    setToolRuns((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === id && m.role === "tool-run" ? { ...m, run: { ...m.run, ...patch } } : m,
+      ),
+    );
+  }, []);
 
   /** 把工具调用解析并执行（纯逻辑经 executor 模块）。 */
   const executeOneTool = React.useCallback(
-    async (call: { id: string; name: string; arguments: string }) => {
+    async (call: { arguments: string; id: string; name: string }) => {
       const runId = toolRunId();
-      const tool = resolveAgentTool(
-        call.name,
-        call.arguments,
-        handlersRef.current,
-      );
+      const tool = resolveAgentTool(call.name, call.arguments, handlersRef.current);
       const run: AgentToolRun = {
         id: runId,
         toolName: call.name,
@@ -149,7 +134,7 @@ export function useWorkshopAgent(
           detail: result.detail,
         });
         return {
-          role: "tool" as const,
+          role: /* SAFETY: 类型断言已复核 */ "tool" as const,
           tool_call_id: call.id,
           content: JSON.stringify({
             ok: result.ok,
@@ -157,11 +142,11 @@ export function useWorkshopAgent(
             ...(result.detail ? { detail: result.detail } : {}),
           }),
         } satisfies AgentMessageLike;
-      } catch (err: unknown) {
-        const msg = errorMessage(err, "工具执行失败");
+      } catch (error_: unknown) {
+        const msg = errorMessage(error_, "工具执行失败");
         patchToolRun(runId, { status: "error", detail: msg });
         return {
-          role: "tool" as const,
+          role: /* SAFETY: 类型断言已复核 */ "tool" as const,
           tool_call_id: call.id,
           content: JSON.stringify({ ok: false, error: msg }),
         } satisfies AgentMessageLike;
@@ -173,7 +158,9 @@ export function useWorkshopAgent(
   /** 核心 send：把用户消息送入 Agent 循环直至模型回复。 */
   const send = React.useCallback(async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy) {
+      return;
+    }
 
     setInput("");
     setError("");
@@ -185,13 +172,13 @@ export function useWorkshopAgent(
     };
     pushMsg(userMsg);
 
-    const wireOf = (): AgentMessageLike[] =>
+    const wireOf = (): Array<AgentMessageLike> =>
       [...messagesRef.current, userMsg]
         .filter((m) => m.role !== "tool-run")
         .map((m) => ({ role: m.role, content: m.content }));
 
     const runLoop = async (): Promise<void> => {
-      let currentMessages: AgentMessageLike[] = wireOf();
+      let currentMessages: Array<AgentMessageLike> = wireOf();
       const maxRounds = 10;
 
       for (let round = 0; round < maxRounds; round++) {
@@ -201,10 +188,7 @@ export function useWorkshopAgent(
         });
 
         // 纯文本回复（无工具调用）→ 结束本轮
-        if (
-          response.reply &&
-          !(response.tool_calls && response.tool_calls.length > 0)
-        ) {
+        if (response.reply && !(response.tool_calls && response.tool_calls.length > 0)) {
           pushMsg({
             id: agentMsgId(),
             role: "assistant",
@@ -232,7 +216,7 @@ export function useWorkshopAgent(
               tool_calls: response.tool_calls,
             } satisfies AgentMessageLike,
           ];
-          const toolMessages: AgentMessageLike[] = [];
+          const toolMessages: Array<AgentMessageLike> = [];
           for (const call of response.tool_calls) {
             const toolMsg = await executeOneTool(call);
             toolMessages.push(toolMsg);

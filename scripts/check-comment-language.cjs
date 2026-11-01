@@ -55,11 +55,7 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = process.cwd();
 /* 这里**没有** RULE_VERSION：它是棘轮「判据变了才允许一次性重记」的配套常数，
@@ -137,11 +133,11 @@ const JSDOC_PROSE_WORDS_RE =
 
 /** 剥掉类型块、`[...]` 名字、`@tag`，剩下的就是标识符与标点。 */
 function stripJsdocTypeSyntax(text) {
-  let rest = text
-    .replace(/\{[^{}]*(\{[^{}]*\}[^{}]*)*\}/g, " ")
-    .replace(/\[[^\]]*\]/g, " ");
-  if (rest.includes("{")) rest = rest.slice(0, rest.indexOf("{"));
-  return rest.replace(/@\w+/g, " ").replace(/[{}]/g, " ");
+  let rest = text.replaceAll(/\{[^{}]*(\{[^{}]*\}[^{}]*)*\}/g, " ").replaceAll(/\[[^\]]*\]/g, " ");
+  if (rest.includes("{")) {
+    rest = rest.slice(0, rest.indexOf("{"));
+  }
+  return rest.replaceAll(/@\w+/g, " ").replaceAll(/[{}]/g, " ");
 }
 
 /**
@@ -154,8 +150,7 @@ function stripJsdocTypeSyntax(text) {
  * typedef，ISSUE #2589 批 6 撞上）。可选字段写成 `@property {T} [name]` 时，
  * 方括号那一段已被 `stripJsdocTypeSyntax` 剥掉，这里不需要特判。
  */
-const PARAM_TAG_RE =
-  /@(param|arg|argument|property|prop)\s+(?:\{[^{}]*\}\s+)?([A-Za-z_$][\w$]*)/;
+const PARAM_TAG_RE = /@(param|arg|argument|property|prop)\s+(?:\{[^{}]*\}\s+)?([A-Za-z_$][\w$]*)/;
 
 /**
  * 一行是否**本身就是** JSDoc 结构行（带 `@param` / `@typedef` 等 tag）。
@@ -170,17 +165,18 @@ const PARAM_TAG_RE =
  * 虚词照旧命中 —— 判据的拦截面没有被放宽。
  */
 function jsdocStructuralOnly(text) {
-  if (hasCJK(text)) return false; // 有中文说明 → 本就不计入
+  if (hasCJK(text)) {
+    return false;
+  } // 有中文说明 → 本就不计入
   let rest = stripJsdocTypeSyntax(text);
   const param = PARAM_TAG_RE.exec(text);
   if (param && param[2]) {
     // 剥掉参数名那一处（整词），余下才是说明部分。
-    rest = rest.replace(
-      new RegExp(`(^|\\s)${param[2].replace(/[$]/g, "\\$")}(?=\\s|$)`),
-      " ",
-    );
+    rest = rest.replace(new RegExp(`(^|\\s)${param[2].replaceAll(/[$]/g, String.raw`\$`)}(?=\\s|$)`), " ");
   }
-  if (JSDOC_PROSE_WORDS_RE.test(rest)) return false;
+  if (JSDOC_PROSE_WORDS_RE.test(rest)) {
+    return false;
+  }
   const words = rest.match(/[A-Za-z]{2,}/g) || [];
   return words.length < 3;
 }
@@ -192,12 +188,18 @@ function jsdocStructuralOnly(text) {
  * 仍以「不含英文虚词」为准 —— 说明句一定含虚词。
  */
 function jsdocStructuralContinuation(text) {
-  if (hasCJK(text)) return false;
-  if (text.startsWith("//")) return false;
+  if (hasCJK(text)) {
+    return false;
+  }
+  if (text.startsWith("//")) {
+    return false;
+  }
   const rest = stripJsdocTypeSyntax(text);
-  if (JSDOC_PROSE_WORDS_RE.test(rest)) return false;
+  if (JSDOC_PROSE_WORDS_RE.test(rest)) {
+    return false;
+  }
   // 出现句末标点（`.`/`!`/`?`）说明是句子，不是类型
-  return !/[.!?]\s*$/.test(rest.replace(/[\w)]\.(?=\w)/g, ""));
+  return !/[.!?]\s*$/.test(rest.replaceAll(/[\w)]\.(?=\w)/g, ""));
 }
 
 /**
@@ -262,9 +264,9 @@ async function asciiOnlyModules() {
  */
 function looksEnglish(text) {
   const bare = text
-    .replace(/`[^`]*`/g, " ")
-    .replace(/"[^"]*"|'[^']*'|“[^”]*”/g, " ")
-    .replace(/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g, " ");
+    .replaceAll(/`[^`]*`/g, " ")
+    .replaceAll(/"[^"]*"|'[^']*'|“[^”]*”/g, " ")
+    .replaceAll(/[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+/g, " ");
   if ((bare.match(ENGLISH_WORD_RE) || []).length < ENGLISH_WORDS_THRESHOLD) {
     return false;
   }
@@ -272,9 +274,7 @@ function looksEnglish(text) {
 }
 
 function hasCJK(text) {
-  return /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\uff00-\uffef\u3000-\u303f]/.test(
-    text,
-  );
+  return /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\uff00-\uffef\u3000-\u303f]/.test(text);
 }
 
 /**
@@ -295,25 +295,43 @@ function countEnglishCommentLines(src) {
     let text = null;
     if (inBlock) {
       text = line.replace(/^\*+/, "").trim();
-      if (line.includes("*/")) inBlock = false;
+      if (line.includes("*/")) {
+        inBlock = false;
+      }
     } else if (line.startsWith("/*")) {
       text = line
         .replace(/^\/\*+/, "")
         .replace(/\*\/$/, "")
         .trim();
-      if (!line.includes("*/")) inBlock = true;
+      if (!line.includes("*/")) {
+        inBlock = true;
+      }
     } else if (line.startsWith("//")) {
       text = line.slice(2).trim();
     } else if (line.startsWith("{/*")) {
-      // JSX 里的注释块：`{/* … */}`。剥离包裹的 `{` 与 `*/}` 后与普通块注释同判。
+      // JSX 里的注释：两种形态同判 ——
+      //   ① 独占注释容器 `{/* … */}`（收口是 `*/}`）；
+      //   ② 表达式容器前导注释 `{/* SAFETY: … */ (expr)…}`（anti-slop 的 SAFETY
+      //      形态，`*/` 后面跟着的是代码不是 `}`）。这里若只认 `*/}` 收口，
+      //      形态② 会把整份文件误判成「块注释内」，其后代码行被当成英文注释
+      //      （现场：renderWithProviders.integration.test.tsx，SAFETY 批撞上）。
+      // 收口判 `*/`；`*/` 之后的代码残段留在 text 里，属保守方向（宁可多算）。
       text = line
         .replace(/^\{\/\*+/, "")
         .replace(/\*\/\}$/, "")
+        .replace(/(?<=\S)\*\/.*$/, "")
+        .replace(/\*\/$/, "")
         .trim();
-      if (!line.includes("*/}")) inBlock = true;
+      if (!line.includes("*/")) {
+        inBlock = true;
+      }
     }
-    if (text === null || !text) continue;
-    if (TOOL_DIRECTIVE_RE.test(text)) continue;
+    if (text === null || !text) {
+      continue;
+    }
+    if (TOOL_DIRECTIVE_RE.test(text)) {
+      continue;
+    }
     if (isJsdocStructuralLine(text)) {
       // 整个 JSDoc 块按结构块处理：其续行也只含类型语法时同样豁免
       inJsdocStruct = true;
@@ -324,8 +342,12 @@ function countEnglishCommentLines(src) {
       continue;
     }
     inJsdocStruct = false;
-    if (hasCJK(text)) continue;
-    if (looksEnglish(text)) count += 1;
+    if (hasCJK(text)) {
+      continue;
+    }
+    if (looksEnglish(text)) {
+      count += 1;
+    }
   }
   return count;
 }
@@ -337,11 +359,15 @@ function collect(asciiOnly) {
   let vanished = 0;
   for (const dir of SCAN_DIRS) {
     const abs = path.join(ROOT, dir);
-    if (!fs.existsSync(abs)) continue;
+    if (!fs.existsSync(abs)) {
+      continue;
+    }
     for (const file of walk(abs)) {
       const rel = toPosix(path.relative(ROOT, file));
       // 白名单文件整文件豁免:它们在名单里的原因就是「必须英文 + 纯 ASCII」。
-      if (asciiOnly.has(rel)) continue;
+      if (asciiOnly.has(rel)) {
+        continue;
+      }
       const raw = readForScan(file);
       /* 消失的那一份**不计进 `scanned`**：这条是棘轮，把「没读到」算成「读到且干净」
        * 会让下一轮的基线比这一轮的覆盖面更宽 —— 那是判据在自己没去过的地方报绿。 */
@@ -370,11 +396,11 @@ async function main() {
   if (REPORT_ONLY) {
     const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     console.log(
-      `扫描 ${scanned} 个代码文件:疑似英文注释 ${total} 行,分布在 ${rows.length} 个文件` +
-        note,
+      `扫描 ${scanned} 个代码文件:疑似英文注释 ${total} 行,分布在 ${rows.length} 个文件${note}`,
     );
-    for (const [rel, n] of rows)
+    for (const [rel, n] of rows) {
       console.log(`  ${String(n).padStart(5)}  ${rel}`);
+    }
     return;
   }
 
@@ -383,9 +409,7 @@ async function main() {
    * 而清零后的棘轮只剩两个无事可做的动作 + 一条「手改 JSON 就能把新违规登记成
    * 已知存量」的通道 —— 硬闸类本来没有那个中间态（§13.6.2 的两类对照）。 */
   if (total === 0) {
-    console.log(
-      `✓ 无英文注释（§12.4.6;扫描 ${scanned} 个文件）` + note,
-    );
+    console.log(`✓ 无英文注释（§12.4.6;扫描 ${scanned} 个文件）${note}`);
     return;
   }
 
@@ -393,18 +417,20 @@ async function main() {
   console.error(
     `✗ ${rows.length} 个文件里共 ${total} 行疑似英文注释（规范 §12.4.6:注释一律中文）:`,
   );
-  for (const [rel, n] of rows) console.error(`    ${String(n).padStart(5)}  ${rel}`);
+  for (const [rel, n] of rows) {
+    console.error(`    ${String(n).padStart(5)}  ${rel}`);
+  }
   console.error(
-    "\n修法:把注释改成中文（专有名词 / 命令 / 路径 / 错误原文保留英文）。" +
-      "\n  确实必须写英文的构建期模块 → 登记进 docs/reference-facts.md 的" +
-      "\n  `comment.language.asciiOnly` 一行（规范 launch-and-build §9.6）。" +
-      "\n  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。" +
-      note,
+    `\n修法:把注释改成中文（专有名词 / 命令 / 路径 / 错误原文保留英文）。` +
+      `\n  确实必须写英文的构建期模块 → 登记进 docs/reference-facts.md 的` +
+      `\n  \`comment.language.asciiOnly\` 一行（规范 launch-and-build §9.6）。` +
+      `\n  本判据是硬闸（无基线、无 --update）：存量已清零，新增即阻断。${
+      note}`,
   );
   process.exit(1);
 }
 
-main().catch((err) => {
-  console.error(`✗ 注释语言棘轮执行失败:${err?.message ?? err}`);
+main().catch((error) => {
+  console.error(`✗ 注释语言棘轮执行失败:${error?.message ?? error}`);
   process.exit(1);
 });

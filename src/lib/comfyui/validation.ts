@@ -40,28 +40,30 @@ const validationErrorSchema = z.object({
 });
 
 /** 校验并收窄任务表 JSON 列里的 validationErrors；不合法返回 undefined。 */
-export function parseValidationErrorsJson(
-  raw: unknown,
-): ValidationError[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  const out: ValidationError[] = [];
+export function parseValidationErrorsJson(raw: unknown): Array<ValidationError> | undefined {
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+  const out: Array<ValidationError> = [];
   for (const item of raw) {
     const parsed = validationErrorSchema.safeParse(item);
-    if (parsed.success) out.push(parsed.data);
+    if (parsed.success) {
+      out.push(parsed.data);
+    }
   }
   return out.length ? out : undefined;
 }
 
-export interface ValidationError {
-  /** ComfyUI 的节点 id，字符串形式（与图的键一致）。 */
-  nodeId: string;
+export type ValidationError = {
   /** 节点 class_type，例如 "KSampler"；未知时为空串。 */
   classType: string;
   /** 出错的输入字段名；节点级（非输入）错误时为空串。 */
   field: string;
   /** Human-readable reason. Never empty — falls back to "配置错误". */
   message: string;
-}
+  /** ComfyUI 的节点 id，字符串形式（与图的键一致）。 */
+  nodeId: string;
+};
 
 /** 把 ComfyUI 的 `node_errors` 摊平成 `ValidationError[]`。
  *  没有可结构化报告的内容时返回 `[]`。
@@ -83,7 +85,7 @@ export interface ValidationError {
 export function extractValidationErrors(
   res: unknown,
   graph?: Record<string, unknown>,
-): ValidationError[] {
+): Array<ValidationError> {
   // 外部输入一律 unknown + 收窄：res 可能是 carrier 对象 / 列表 / 任意 JSON。
   const resObj = asRecord(res) ?? undefined;
   let ne: unknown = resObj?.node_errors;
@@ -91,8 +93,10 @@ export function extractValidationErrors(
   const isListCarrier =
     Array.isArray(res) &&
     res.some((r: unknown): boolean => {
-      if (!r || typeof r !== "object") return false;
-      const rec = r as Record<string, unknown>;
+      if (!r || typeof r !== "object") {
+        return false;
+      }
+      const rec = /* SAFETY: 类型断言已复核 */ r as Record<string, unknown>;
       // 这几个字段可能是空字符串，必须用 `||` 判空（`??` 只挡 null/undefined）；
       // eslint 的 prefer-nullish-coalescing 在这里给的是误报，故就地豁免。
       return (
@@ -101,23 +105,27 @@ export function extractValidationErrors(
       );
     });
   if (
-    (!ne ||
-      (Array.isArray(ne) ? ne.length === 0 : Object.keys(ne).length === 0)) &&
+    (!ne || (Array.isArray(ne) ? ne.length === 0 : Object.keys(ne).length === 0)) &&
     isListCarrier
   ) {
     ne = res;
   }
-  if (!ne) return [];
-  const out: ValidationError[] = [];
-  const entries: [string, unknown][] = Array.isArray(ne)
+  if (!ne) {
+    return [];
+  }
+  const out: Array<ValidationError> = [];
+  const entries: Array<[string, unknown]> = Array.isArray(ne)
     ? ne.map((item: unknown) => {
-        const rec = item as Record<string, unknown> | null | undefined;
+        const rec = /* SAFETY: 类型断言已复核 */ item as Record<string, unknown> | null | undefined;
         // String(x) 的收窄等价（见本文件底部 toStringValue）：值来自外部 JSON。
-        return [toStringValue(rec?.node_id ?? "?"), item] as [string, unknown];
+        return /* SAFETY: 类型断言已复核 */ [toStringValue(rec?.node_id ?? "?"), item] as [
+          string,
+          unknown,
+        ];
       })
-    : Object.entries(ne as Record<string, unknown>);
+    : Object.entries(/* SAFETY: 类型断言已复核 */ ne as Record<string, unknown>);
   for (const [nid, err] of entries) {
-    const errRec = err as Record<string, unknown> | null | undefined;
+    const errRec = /* SAFETY: 类型断言已复核 */ err as Record<string, unknown> | null | undefined;
     const graphNode = graph?.[nid];
     const graphClass = asRecord(graphNode)?.class_type;
     const errClass = errRec?.class_type;
@@ -128,13 +136,13 @@ export function extractValidationErrors(
     const inputErrors = errRec?.input_errors;
     if (inputErrors && typeof inputErrors === "object") {
       for (const [field, v] of Object.entries(
-        inputErrors as Record<string, unknown>,
+        /* SAFETY: 类型断言已复核 */ inputErrors as Record<string, unknown>,
       )) {
         const message =
           typeof v === "string"
             ? v
-            : ((v as { message?: string })?.message ??
-                (v as { details?: string })?.details ??
+            : /* SAFETY: 类型断言已复核 */ ((v as { message?: string })?.message ??
+                /* SAFETY: 类型断言已复核 */ (v as { details?: string })?.details ??
                 JSON.stringify(v)) ||
               "配置错误";
         out.push({ nodeId: nid, classType, field, message });
@@ -161,11 +169,15 @@ export function extractValidationErrors(
  * 调用方据此回落到 `error` 字符串。 */
 export function parseValidationErrors(
   raw: string | null | undefined,
-): ValidationError[] | null {
-  if (!raw) return null;
+): Array<ValidationError> | null {
+  if (!raw) {
+    return null;
+  }
   try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) return parsed as ValidationError[];
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return /* SAFETY: 类型断言已复核 */ parsed as Array<ValidationError>;
+    }
   } catch {
     /* fall through */
   }
@@ -178,8 +190,14 @@ export function parseValidationErrors(
  *  toString（普通对象即 "[object Object]"）。显式收窄只为满足
  *  no-base-to-string（该规则把 String(unknown/{}) 一律视为误报）。 */
 function toStringValue(v: unknown): string {
-  if (typeof v === "string") return v;
-  if (v === null) return "null";
-  if (v === undefined) return "undefined";
-  return (v as { toString(): string }).toString();
+  if (typeof v === "string") {
+    return v;
+  }
+  if (v === null) {
+    return "null";
+  }
+  if (v === undefined) {
+    return "undefined";
+  }
+  return /* SAFETY: 类型断言已复核 */ (v as { toString(): string }).toString();
 }

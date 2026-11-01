@@ -46,10 +46,17 @@
  * ── 用法 ──────────────────────────────────────────────────────────────
  *
  *   pnpm check:premerge                 # 各段全跑（复算 = 钩子注册表的全套）
+ *   pnpm check:premerge --full          # 同上，**显式**写出「全套」这一档（行为与默认逐字相同）
  *   pnpm check:premerge --light         # 复算只跑本地形态档那几条（跳过条数会被打印出来）
  *   pnpm check:premerge --json          # 机器可读（逐段给结论）
  *   pnpm check:premerge --skip-claims   # 只跑复算 + 合并面（PR 里还没写合并信息时）
  *   pnpm check:premerge --only=base     # 只跑一段（排查用）
+ *
+ * 认不出的旗标**一律退 2 并点名**，不静默吞：吞掉的旗标在屏幕上不留痕迹，而「我加了
+ * 全套那一档」这句话就是这么变成假绿的（先例：`quality-gate.mjs` 的「未知门禁」同形）。
+ * `--full` 是**显式等价于默认**的那一枚（AGENTS.md / ship Skill 多处写着它，而入口曾经
+ * 静默吞掉它，于是那句话既没生效也没报错）；`--full` 与 `--light` 同时给 ⇒ 退 2
+ * （两个方向的口号同时出现 = 没人知道该跑哪一档）。
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
@@ -63,6 +70,8 @@ import {
 } from "./base-check.mjs";
 import { localTierLabels } from "./base-check/hook-steps.mjs";
 import { renderVerdict } from "./ci-log.mjs";
+import { formatTimingSummary, recordTimingLedger } from "./premerge-timing.mjs";
+import { performance } from "node:perf_hooks";
 
 const HERE = import.meta.dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -202,8 +211,7 @@ function runGit(args, cwd) {
 export function resolveForkBaseline(cwd = ROOT, env = process.env) {
   /** @param {string} ref @returns {boolean} 这个引用在本检出里指得动一个提交 */
   const isCommit = (ref) =>
-    runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd) !==
-    null;
+    runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], cwd) !== null;
   /* ① 平台给的目标 sha：只在它**真的落在这份对象库里**时才用 —— 浅克隆 / 单 ref
    *    之外的那个 sha 会让 merge-base 直接失败，那种「用了但跑不动」比退回 ② 更难读。 */
   const fromEnv = String(env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim();
@@ -228,16 +236,40 @@ export function resolveForkBaseline(cwd = ROOT, env = process.env) {
 
 /**
  * @param {string[]} argv
- * @returns {{json: boolean, only: string | null, skip: Set<string>, light: boolean}}
+ * @returns {{json: boolean, only: string | null, skip: Set<string>, light: boolean, full: boolean, unknown: string[]}}
  */
 function parseArgs(argv) {
-  /** @type {{json: boolean, only: string | null, skip: Set<string>, light: boolean}} */
-  const out = { json: false, only: null, skip: new Set(), light: false };
+  /** @type {{json: boolean, only: string | null, skip: Set<string>, light: boolean, full: boolean, unknown: string[]}} */
+  const out = {
+    json: false,
+    only: null,
+    skip: new Set(),
+    light: false,
+    full: false,
+    unknown: [],
+  };
   for (const a of argv) {
-    if (a === "--json") out.json = true;
-    else if (a === "--light") out.light = true;
-    else if (a.startsWith("--only=")) out.only = a.slice("--only=".length);
-    else if (a.startsWith("--skip-")) out.skip.add(a.slice("--skip-".length));
+    if (a === "--json") {
+      out.json = true;
+    } else if (a === "--light") {
+      out.light = true;
+    }
+    /* `--full` 是**显式**写出默认档的那一枚：行为与不给它逐字相同，但「我加了全套」这句话
+     * 从此有判据可依（AGENTS.md 与 ship Skill 多处写着它 —— 入口不认它却不报错，
+     * 是 #2764 的立案根因）。冲突与档位判定在 `main()` 里做。 */
+    else if (a === "--full") {
+      out.full = true;
+    } else if (a.startsWith("--only=")) {
+      out.only = a.slice("--only=".length);
+    } else if (a.startsWith("--skip-")) {
+      out.skip.add(a.slice("--skip-".length));
+    }
+    /* 没有 else 的那些年：一条拼错的旗标既不报错也不生效，于是「我跑的是全套」这句话
+     * 没有任何依据 —— 而这一档恰恰是被当作「本地全套凭证」用的。退 2 是这里唯一的
+     * 诚实读数：没跑起来 ≠ 跑了且绿。 */
+    else {
+      out.unknown.push(a);
+    }
   }
   return out;
 }
@@ -249,13 +281,21 @@ function parseArgs(argv) {
  * 在中间层再翻译一遍就等于造第二个口径（§12.18）。中间层只负责「把各段的码合成
  * 一个总码」+「把输出都打出来」。
  *
+ * **`cwd` 默认是本文件安装位置**（`ROOT`）—— 既有那几段（`mergeLoss` 等）的判据都
+ * 锚在安装位置那份检出上，行为不动。`claims` 那一格例外：`check-commit-claims.mjs` 的
+ * `ROOT = process.cwd()`，它的「这批」是本入口**自己的 cwd**（本入口能被 `cd` 进
+ * 另一份检出跑）—— 两处各用一处口径的话，锚点与区间端点会来自两个不同的仓库
+ * （ISSUE #2788 的第二个现场：本机绿、平台上报「取不到要审的提交」）。
+ *
  * @param {string} script
  * @param {string[]} args
+ * @param {Record<string, string | undefined>} [extraEnv]
+ * @param {string} [cwd] 子进程的工作目录（默认 `ROOT`）
  * @returns {{code: number, output: string}}
  */
-function runScript(script, args, extraEnv = {}) {
+function runScript(script, args, extraEnv = {}, cwd = ROOT) {
   const r = spawnSync(process.execPath, [path.join(HERE, script), ...args], {
-    cwd: ROOT,
+    cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, CI: "1", ...extraEnv },
@@ -264,10 +304,7 @@ function runScript(script, args, extraEnv = {}) {
    * 由**两路输出全空**（脚本连一行都没打出来）兜一层，再归一成 2。
    * 这条与 `base-check.mjs` 的 `commandTargetState` 是同一族口径（§13.6.2）。 */
   const output = `${r.stdout ?? ""}${r.stderr ?? ""}`;
-  if (
-    typeof r.status !== "number" ||
-    (r.status !== 0 && output.trim() === "")
-  ) {
+  if (typeof r.status !== "number" || (r.status !== 0 && output.trim() === "")) {
     return {
       code: 2,
       output: output || `[premerge] ${script} 没有跑起来（无输出）\n`,
@@ -298,7 +335,9 @@ export function scriptsInCommands(commands) {
   for (const c of commands ?? []) {
     for (const a of c?.argv ?? []) {
       const text = String(a);
-      if (/\.(mjs|cjs|js)$/.test(text)) out.add(text);
+      if (/\.(mjs|cjs|js)$/.test(text)) {
+        out.add(text);
+      }
     }
   }
   return out;
@@ -311,8 +350,12 @@ export function scriptsInCommands(commands) {
  * @returns {number}
  */
 export function combineCodes(codes) {
-  if (codes.includes(2)) return 2;
-  if (codes.includes(1)) return 1;
+  if (codes.includes(2)) {
+    return 2;
+  }
+  if (codes.includes(1)) {
+    return 1;
+  }
   return 0;
 }
 
@@ -321,7 +364,30 @@ export function combineCodes(codes) {
  * @returns {number} 退出码
  */
 function main(argv) {
-  const { json, only, skip, light: lightRecompute } = parseArgs(argv);
+  const { json, only, skip, light: lightRecompute, full, unknown } = parseArgs(argv);
+
+  /* 认不出的旗标 ⇒ 退 2 并**点名**（#2764）。与 `quality-gate.mjs` 的「未知门禁」
+   * 同形：拼错的那一枚在屏幕上不留任何痕迹，而这一档是被当作「本地全套凭证」用的 ——
+   * 「我加了全套那一档」这句话就是这么变成假绿的。2 的读法是「这一步没有结论」，
+   * 不是「跑过了且绿」。 */
+  if (unknown.length > 0) {
+    process.stderr.write(
+      `[premerge] 不认识的参数：${unknown.join(" / ")} —— 本入口认 ` +
+        "--json / --full / --light / --only=<段名> / --skip-<段名>；" +
+        "拼错的旗标不会生效，退 2 表示这一跳没有结论（不是「跑过了且绿」）\n",
+    );
+    return 2;
+  }
+
+  /* `--full` 与 `--light` 同时给 ⇒ 没有人在读的那一档不是「更全」：两个方向的口号
+   * 同时出现时，屏幕上无论跑哪一档，另一个口号都会留在执行者的记忆里当凭证。 */
+  if (full && lightRecompute) {
+    process.stderr.write(
+      "[premerge] `--full` 与 `--light` 同时给 —— 一个要全套、一个要跳重档，" +
+        "入口不替你挑（退 2）；只给其中一枚\n",
+    );
+    return 2;
+  }
 
   if (!isGitCheckout(ROOT)) {
     process.stderr.write(
@@ -331,13 +397,13 @@ function main(argv) {
   }
 
   const wanted = Object.entries(SEGMENTS).filter(([key]) => {
-    if (only) return key === only;
+    if (only) {
+      return key === only;
+    }
     return !skip.has(key);
   });
   if (wanted.length === 0) {
-    process.stderr.write(
-      "[premerge] 各段全被跳过 —— 没有任何东西被复算（退 2）\n",
-    );
+    process.stderr.write("[premerge] 各段全被跳过 —— 没有任何东西被复算（退 2）\n");
     return 2;
   }
 
@@ -347,6 +413,10 @@ function main(argv) {
    * 循环外声明，因为段序是 `base` 在前 —— 后面的段要能读它。 */
   const ranInBase = new Set();
 
+  /* 逐格计时（ISSUE #2832）：收集器喂给 baseCheckMany 的 onTiming + 两个脚本段的墙钟，
+   * 收尾一次性落台账并念 top-5 —— 记账失败不影响任何退出码（§13.5.8.3 口径）。 */
+  const gateTimings = [];
+  let ledgerRef = "n/a";
   for (const [key, seg] of wanted) {
     /* `seg` 的联合类型由 `SEGMENTS` 的 JSDoc 给出；两处用法各自收窄（见下）。 */
     if (seg.kind === "base") {
@@ -364,10 +434,7 @@ function main(argv) {
         });
         continue;
       }
-      const batch = resolveMergeBatch(
-        [],
-        path.join(ROOT, ".githooks", "pre-commit"),
-      );
+      const batch = resolveMergeBatch([], path.join(ROOT, ".githooks", "pre-commit"));
       if (!batch.ok) {
         results.push({
           key,
@@ -391,7 +458,9 @@ function main(argv) {
         : batch.commands;
       const skippedCount = batch.commands.length - commands.length;
       /* 记下这一段**实际**会跑的脚本名（`--light` 筛过之后那一半）。 */
-      for (const s of scriptsInCommands(commands)) ranInBase.add(s);
+      for (const s of scriptsInCommands(commands)) {
+        ranInBase.add(s);
+      }
       if (lightRecompute && skippedCount > 0) {
         process.stdout.write(
           `[premerge] --light：本段只复算本地档那几条，跳过 ${skippedCount} 条重档` +
@@ -407,33 +476,29 @@ function main(argv) {
        * 「干净」这个结论，把它折成 0 等于让一次超时假红**放行**一次合并。它的
        * 归属与下一步由 `base-check` 自己的报告说清（本入口只拿退出码）。 */
 
+      ledgerRef = ref;
       const captured = captureStdout(() =>
         baseCheckMany({
           commands,
           ref,
           keep: false,
           json: false,
+          onTiming: (label, ms) => gateTimings.push({ label, ms }),
         }),
       );
       const summary = lastSummary(captured.output);
       const code =
-        summary === "current-green"
-          ? 0
-          : summary === "inconclusive"
-            ? 2
-            : summary
-              ? 1
-              : 2;
+        summary === "current-green" ? 0 : summary === "inconclusive" ? 2 : summary ? 1 : 2;
       results.push({ key, label: seg.label, code, output: captured.output });
       continue;
     }
-    if (seg.kind === "anchored") {
-      /* 带锚点的两格（`claims` / `mergeLoss`）：锚点**在这里算**，算不出就如实报
-       * 「没跑起来」。早先 `claims` 是裸 `script` + `args: []` ⇒ 只审 HEAD（#2070），
-       * 而 `mergeLoss` 取不到锚点时被折成 0 ⇒ 记成绿 —— 两种都是「没读到」被读成
-       * 「读过了且没问题」，折算只留这一个出口（`anchorMissed`）。 */
-      const { script, shape } =
-        /** @type {{script: string, shape: "baseline" | "range"}} */ (seg);
+    if (seg.kind === "anchored" && key !== "claims") {
+      /* `mergeLoss` 那一格：锚点**在这里算**，算不出就如实报「没跑起来」。它早先
+       * 取不到锚点时被折成 0 ⇒ 记成绿 —— 「没读到」被读成「读过了且没问题」，
+       * 折算只留这一个出口（`anchorMissed`）。
+       * （`claims` 不在这条路上，理由见下面它自己那一格：它的锚点是**一个区间端点**，
+       * 而端点与被审的提交必须在**同一份对象库**里。） */
+      const { script, shape } = /** @type {{script: string, shape: "baseline" | "range"}} */ (seg);
       /* **同一次跑里不判两遍**：`base` 段的第二个来源已经带着 `--range <base>..HEAD`
        * 跑过这份脚本了（`base-check/chained-steps.mjs`）。跳过时必须把「在哪儿判的」
        * 打在读数里 —— 安静地少跑一段，与少跑一段本身同形（§13.5.12 那条纪律）。
@@ -461,11 +526,52 @@ function main(argv) {
              *    早就存在、早就被审过的一笔）。 */
             [`${anchor.baseline}..HEAD`]
           : ["HEAD", "--baseline", anchor.baseline];
+      const t0 = performance.now();
       const r = runScript(script, args);
+      gateTimings.push({ label: `段:${seg.label}`, ms: performance.now() - t0 });
       results.push({ key, label: seg.label, code: r.code, output: r.output });
       continue;
     }
-    /* `base` / `anchored` 都已在上面 `continue`，剩下的是**不需要锚点**的裸脚本段：
+    if (key === "claims") {
+      /* 锚点必须在**这份检出的 cwd** 上算，不是本文件安装位置那一份（`ROOT`）。
+       * 本入口自己能 `cd` 进别的检出跑（用例就是这么用的），而
+       * `check-commit-claims.mjs` 的 `ROOT = process.cwd()` —— 两侧口径必须同一个，
+       * 否则「算出来的分叉点」与「被审的那批」来自两个不同的仓库：实测形态是锚点
+       * 取自安装位置那份检出、子进程却审 cwd 那份，于是区间端点在那儿不存在 /
+       * 完全对不上，红出来的是「取不到要审的提交」或一条假绿。 */
+      const anchor = resolveForkBaseline(process.cwd());
+      if (!anchor.ok) {
+        const missed = anchorMissed("提交信息里的机械可核声明 ⇄ 树事实（§11.23.5）", anchor.reason);
+        results.push({ key, label: "提交信息里的机械可核声明 ⇄ 树事实（§11.23.5）", ...missed });
+        continue;
+      }
+      /* `check-commit-claims.mjs` 的 `ROOT` 是**它自己的 cwd**（`process.cwd()`，
+       * 不是本文件这个锚定在自己安装位置上的 `ROOT`）—— 于是「审哪一批」与「在哪儿审」
+       * 是同一个问题的一半，另一半是：它读不到 `CNB_PULL_REQUEST_TARGET_SHA`。
+       *
+       * ⚠️ 后者在**平台**上会变成一条假红（ISSUE #2788 现场）：那一格跑
+       * `check:premerge --only=claims`，而平台节点不 fetch `origin/master`，本文件
+       * 就用环境里的目标 sha 取到锚点；子进程却拿 `HEAD` 兜底 ⇒ `git log HEAD` 只有
+       * 一笔、也永远绿 —— 判的是「最新那笔」(#2070 之前的老形态)，而不是这一批。
+       * 所以锚点**由本文件算、按显式区间交给它**：区间端点与 `HEAD` 在同一份对象库，
+       * 不依赖它自己能不能读到环境。 */
+      const t0 = performance.now();
+      const r = runScript(
+        "check-commit-claims.mjs",
+        [`${anchor.baseline}..HEAD`],
+        { CNB_PULL_REQUEST_TARGET_SHA: anchor.baseline },
+        process.cwd(),
+      );
+      gateTimings.push({ label: "段:提交信息声明 ⇄ 树事实", ms: performance.now() - t0 });
+      results.push({
+        key,
+        label: "提交信息里的机械可核声明 ⇄ 树事实（§11.23.5）",
+        code: r.code,
+        output: r.output,
+      });
+      continue;
+    }
+    /* `base` / `anchored` / `claims` 都已在上面 `continue`，剩下的是**不需要锚点**的裸脚本段：
      * 目前一段都没有（`claims` 从 #2070 起也要锚点），留着是因为 `SEGMENTS` 的类型
      * 仍然允许 `kind: "script"` —— 将来加一段廉价复查时不必回来改分派。 */
     const scripted = /** @type {{script: string, args: string[]}} */ (seg);
@@ -473,6 +579,18 @@ function main(argv) {
     results.push({ key, label: seg.label, code: r.code, output: r.output });
   }
 
+  const timingOk = recordTimingLedger({
+    at: new Date().toISOString(),
+    ref: ledgerRef,
+    entries: gateTimings,
+  });
+  if (timingOk) {
+    process.stderr.write(formatTimingSummary(gateTimings));
+  } else {
+    process.stderr.write(
+      "[premerge-timing] 台账没落盘（无读数或写失败）—— 只影响记账，不影响结论\n",
+    );
+  }
   const total = combineCodes(results.map((r) => r.code));
 
   if (json) {
@@ -518,11 +636,7 @@ function main(argv) {
   /** @type {"ok" | "red" | "skip"} */
   const state = total === 0 ? "ok" : total === 1 ? "red" : "skip";
   const detail =
-    state === "ok"
-      ? "三段全绿"
-      : state === "red"
-        ? "有段红了"
-        : "有段没跑起来（不构成证据）";
+    state === "ok" ? "三段全绿" : state === "red" ? "有段红了" : "有段没跑起来（不构成证据）";
   for (const line of renderVerdict({ state, gate: "合并前复算", detail })) {
     process.stdout.write(`\n${line}\n`);
   }
@@ -580,18 +694,19 @@ export function lastSummary(output) {
     .split("\n")
     .reverse()
     .find((l) => l.trimStart().startsWith("[base-check] 结论："));
-  if (!line) return null;
+  if (!line) {
+    return null;
+  }
   const word = line.slice(line.indexOf("结论：") + "结论：".length).trim();
   for (const v of ["current-green", "inconclusive", "baseline-red", "yours"]) {
-    if (word.startsWith(v)) return /** @type {never} */ (v);
+    if (word.startsWith(v)) {
+      return /** @type {never} */ (v);
+    }
   }
   return null;
 }
 
 /* 只在被直接执行时跑 main（被 import 时只暴露纯函数给用例）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   process.exit(main(process.argv.slice(2)));
 }

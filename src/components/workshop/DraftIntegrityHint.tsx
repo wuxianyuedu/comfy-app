@@ -32,19 +32,16 @@ const KIND_TAB: Record<DraftElementKind, Tab> = {
   shot: "storyboard",
 };
 
-interface DraftIntegrityHintProps {
-  issues: DraftElementIssue[];
+type DraftIntegrityHintProps = {
+  issues: Array<DraftElementIssue>;
   onGoTo: (tab: Tab) => void;
-}
+};
 
 /** 把「一条元素的多个字段问题」并成一行：`镜头 #2 · 缺 id；镜号不是数字`。 */
 function groupByElement(
-  issues: readonly DraftElementIssue[],
-): Array<{ label: string; reasons: string[]; tab: Tab }> {
-  const lines = new Map<
-    string,
-    { label: string; reasons: string[]; tab: Tab }
-  >();
+  issues: ReadonlyArray<DraftElementIssue>,
+): Array<{ label: string; reasons: Array<string>; tab: Tab }> {
+  const lines = new Map<string, { label: string; reasons: Array<string>; tab: Tab }>();
   for (const issue of issues) {
     const key = `${issue.kind}:${String(issue.index)}`;
     const line = lines.get(key) ?? {
@@ -58,12 +55,11 @@ function groupByElement(
   return [...lines.values()];
 }
 
-export function DraftIntegrityHint({
-  issues,
-  onGoTo,
-}: DraftIntegrityHintProps) {
+export function DraftIntegrityHint({ issues, onGoTo }: DraftIntegrityHintProps) {
   const summary = describeDraftIssues(issues);
-  if (!summary) return null;
+  if (!summary) {
+    return null;
+  }
   const lines = groupByElement(issues);
   const shown = lines.slice(0, MAX_LINES);
   const hiddenCount = lines.length - shown.length;
@@ -72,14 +68,14 @@ export function DraftIntegrityHint({
   return (
     <div className="border-amber/30 bg-amber/10 text-amber mt-4 rounded-xl border px-4 py-2.5 text-xs">
       <div className="flex items-center gap-2">
-        <Icon name="info" size={13} className="shrink-0" />
+        <Icon className="shrink-0" name="info" size={13} />
         <span className="flex-1">{summary}</span>
         <Button
-          type="button"
-          onClick={() => onGoTo(jumpTo)}
-          variant="ghost"
-          size="xs"
           className="bg-amber/15 text-amber hover:bg-amber/25 font-medium"
+          onClick={() => onGoTo(jumpTo)}
+          size="xs"
+          type="button"
+          variant="ghost"
         >
           去看看 →
         </Button>
@@ -88,12 +84,9 @@ export function DraftIntegrityHint({
        *  猜不出是哪一张，最后只会当成界面在瞎忙。 */}
       <ul className="text-amber/80 mt-2 flex flex-col gap-1 pl-5">
         {shown.map((line) => (
-          <li key={line.label} className="list-disc">
+          <li className="list-disc" key={line.label}>
             <span className="font-medium">{line.label}</span>
-            <span className="text-muted-foreground">
-              {" "}
-              · {line.reasons.join("；")}
-            </span>
+            <span className="text-muted-foreground"> · {line.reasons.join("；")}</span>
           </li>
         ))}
         {hiddenCount > 0 && (

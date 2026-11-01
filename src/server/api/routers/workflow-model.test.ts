@@ -30,11 +30,7 @@ vi.mock("~/lib/core/logger", () => ({
 import { createCallerFactory } from "~/server/api/trpc";
 import { workflowModelTagRepository } from "~/lib/core/repository";
 import { workflowModelRouter } from "~/server/api/routers/workflow-model";
-import {
-  getTestDb,
-  seedUser,
-  type TestDb,
-} from "../../../../tests/helpers/test-db";
+import { getTestDb, seedUser, type TestDb } from "../../../../tests/helpers/test-db";
 import { makeCtx, makeUser } from "../../../../tests/helpers/trpc";
 
 const createCaller = createCallerFactory(workflowModelRouter);
@@ -45,7 +41,7 @@ const asB = () => createCaller(makeCtx({ user: makeUser({ id: "user-b" }) }));
 async function envelope(p: Promise<unknown>): Promise<string> {
   return p.then(
     () => "OK",
-    (e: { code?: string }) => e?.code ?? "UNKNOWN",
+    (error: { code?: string }) => error?.code ?? "UNKNOWN",
   );
 }
 
@@ -72,9 +68,7 @@ describe("list / create —— 按用户隔离与幂等", () => {
 
   it("名字空白或超长 → BAD_REQUEST，不落库", async () => {
     expect(await envelope(asA().create({ name: "   " }))).toBe("BAD_REQUEST");
-    expect(await envelope(asA().create({ name: "x".repeat(65) }))).toBe(
-      "BAD_REQUEST",
-    );
+    expect(await envelope(asA().create({ name: "x".repeat(65) }))).toBe("BAD_REQUEST");
     expect((await asA().list()).tags).toHaveLength(0);
   });
 });
@@ -86,19 +80,12 @@ describe("rename —— 三种拒绝各一个码", () => {
   });
 
   it("别人的标签 → NOT_FOUND，与「没这个标签」同形且不改别人的行", async () => {
-    const foreign = await envelope(
-      asA().rename({ oldName: "赛博", newName: "改掉" }),
-    );
-    const missing = await envelope(
-      asA().rename({ oldName: "没这个名字", newName: "改掉" }),
-    );
+    const foreign = await envelope(asA().rename({ oldName: "赛博", newName: "改掉" }));
+    const missing = await envelope(asA().rename({ oldName: "没这个名字", newName: "改掉" }));
     expect(foreign).toBe("NOT_FOUND");
     // 同形：探测方分不清「别人的标签」与「不存在的标签」
     expect(missing).toBe(foreign);
-    const stillThere = await workflowModelTagRepository.findByUserAndName(
-      "user-b",
-      "赛博",
-    );
+    const stillThere = await workflowModelTagRepository.findByUserAndName("user-b", "赛博");
     expect(stillThere).not.toBeNull();
   });
 
@@ -111,15 +98,9 @@ describe("rename —— 三种拒绝各一个码", () => {
 
   it("三种情形给出三个不同的码（界面据此才分得开「不存在 / 重名 / 成功」）", async () => {
     await asA().create({ name: "已占用" });
-    const notFound = await envelope(
-      asA().rename({ oldName: "没有的", newName: "X" }),
-    );
-    const conflict = await envelope(
-      asA().rename({ oldName: "古风", newName: "已占用" }),
-    );
-    const ok = await envelope(
-      asA().rename({ oldName: "古风", newName: "换新了" }),
-    );
+    const notFound = await envelope(asA().rename({ oldName: "没有的", newName: "X" }));
+    const conflict = await envelope(asA().rename({ oldName: "古风", newName: "已占用" }));
+    const ok = await envelope(asA().rename({ oldName: "古风", newName: "换新了" }));
     expect([notFound, conflict, ok]).toEqual(["NOT_FOUND", "CONFLICT", "OK"]);
   });
 
@@ -140,9 +121,7 @@ describe("delete —— 幂等且不越权", () => {
     await workflowModelTagRepository.upsertByName("user-b", "赛博");
     const res = await asA().delete({ name: "赛博" });
     expect(res).toEqual({ ok: true, deleted: false });
-    expect(
-      await workflowModelTagRepository.findByUserAndName("user-b", "赛博"),
-    ).not.toBeNull();
+    expect(await workflowModelTagRepository.findByUserAndName("user-b", "赛博")).not.toBeNull();
   });
 
   it("删不存在的标签同样不报错（重复点删除不该弹错误）", async () => {

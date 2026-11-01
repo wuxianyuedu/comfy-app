@@ -31,13 +31,13 @@ const NOW = 1_800_000_000_000;
  * 记着整条链为什么是 CP936），把新的坏字符补进这里。这条判据要挡的病很具体：**红的时候
  * 最该读的那几行正好是非 ASCII**，而 `⇒` 被打成 `?` 那次就是这一档自己的下一动作读不出来。
  */
-const CP936_UNENCODABLE = [0x21d2, 0x26a0, 0xfe0f];
+const CP936_UNENCODABLE = [0x21_d2, 0x26_a0, 0xfe_0f];
 
-function expectCp936Safe(lines: string[]) {
+function expectCp936Safe(lines: Array<string>) {
   const text = lines.join("\n");
-  const hits = CP936_UNENCODABLE.filter((code) =>
-    text.includes(String.fromCharCode(code)),
-  ).map((code) => `U+${code.toString(16).toUpperCase().padStart(4, "0")}`);
+  const hits = CP936_UNENCODABLE.filter((code) => text.includes(String.fromCharCode(code))).map(
+    (code) => `U+${code.toString(16).toUpperCase().padStart(4, "0")}`,
+  );
   expect(
     hits,
     "这些码位在 CP936 里没有对应字节，平台日志会把它们打成 ? —— 读数读不出等于没有读数",
@@ -64,12 +64,12 @@ const GIT_FACTS: Record<string, string> = {
 };
 
 function fakeRun(facts: Record<string, string> = GIT_FACTS) {
-  return (cmd: string, args: string[]) => {
-    if (cmd !== "git") return { ok: false, out: "" };
+  return (cmd: string, args: Array<string>) => {
+    if (cmd !== "git") {
+      return { ok: false, out: "" };
+    }
     const key = args.join(" ");
-    return key in facts
-      ? { ok: true, out: facts[key] ?? "" }
-      : { ok: false, out: "" };
+    return key in facts ? { ok: true, out: facts[key] ?? "" } : { ok: false, out: "" };
   };
 }
 
@@ -79,17 +79,16 @@ function fakeRun(facts: Record<string, string> = GIT_FACTS) {
  * `ledgerBody` 是账本文件的既有内容（不存在就别给，读它会抛 —— 那正是「第一跑」的形态）。
  * 写进去的内容收在 `written` 里，用例据此判「这一跑到底有没有把对照记下来」。
  */
-function fakeFs(
-  tree: Record<string, { birth?: number; mtime?: number }>,
-  ledgerBody?: string,
-) {
+function fakeFs(tree: Record<string, { birth?: number; mtime?: number }>, ledgerBody?: string) {
   const written = new Map<string, string>();
   /** 记「为账本建过哪些目录」—— 这一档要把账本写在工作区之外，建父目录那一跳得能判。 */
-  const made: string[] = [];
+  const made: Array<string> = [];
   const fsLike = {
     statSync(target: string) {
       const hit = tree[target];
-      if (!hit) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      if (!hit) {
+        throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      }
       return { birthtimeMs: hit.birth ?? 0, mtimeMs: hit.mtime ?? 0 };
     },
     readFileSync(target: string) {
@@ -109,9 +108,7 @@ function fakeFs(
 }
 
 /** 完整工作区：`.git` 30s 前出现，node_modules 与 .next 都在。 */
-function warmTree(
-  overrides: Record<string, { birth?: number; mtime?: number }> = {},
-) {
+function warmTree(overrides: Record<string, { birth?: number; mtime?: number }> = {}) {
   return {
     [CWD]: { birth: NOW - 60_000 },
     [path.join(CWD, ".git")]: { birth: NOW - 30_000 },
@@ -130,10 +127,10 @@ function warmTree(
  */
 function entryOf(
   over: {
-    cwd?: string;
-    gitBornMs?: number;
-    gitAgeS?: number;
     atMs?: number;
+    cwd?: string;
+    gitAgeS?: number;
+    gitBornMs?: number;
   } = {},
 ) {
   return {
@@ -165,10 +162,7 @@ const baseFacts = {
   "playwright-report": factOf(false),
 };
 
-function probe(
-  tree: Record<string, { birth?: number; mtime?: number }>,
-  ledgerBody?: string,
-) {
+function probe(tree: Record<string, { birth?: number; mtime?: number }>, ledgerBody?: string) {
   const { fsLike, written, made } = fakeFs(tree, ledgerBody);
   return {
     lines: workspaceProbeLines({
@@ -213,15 +207,11 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
   it("真的把这一跑记进账本了（下一跑才有对照可查）", () => {
     const { written, made } = probe(warmTree());
     const body = written.get(LEDGER);
-    expect(
-      body,
-      "账本没落盘 ⇒ 这一档每跑一次都是「第一跑」，对照永远不会出现",
-    ).toBeDefined();
-    expect(
-      made,
-      "账本的父目录没建 ⇒ 宿主上第一次写会 ENOENT，读数从此永远只有本次",
-    ).toContain(path.dirname(LEDGER));
-    const entries = JSON.parse(String(body)) as Array<{
+    expect(body, "账本没落盘 ⇒ 这一档每跑一次都是「第一跑」，对照永远不会出现").toBeDefined();
+    expect(made, "账本的父目录没建 ⇒ 宿主上第一次写会 ENOENT，读数从此永远只有本次").toContain(
+      path.dirname(LEDGER),
+    );
+    const entries = /* SAFETY: 类型断言已复核 */ JSON.parse(String(body)) as Array<{
       cwd: string;
       gitBornMs: number | null;
     }>;
@@ -390,16 +380,8 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
   });
 
   it("对照行取得出「是哪一台 job」：只取 basename 时两跑都叫 workspace，那一行等于没读", () => {
-    const run1 = path.join(
-      os.tmpdir(),
-      "cnb-f3v-1k57a1o1l-001~c5g",
-      "workspace",
-    );
-    const run2 = path.join(
-      os.tmpdir(),
-      "cnb-f5b-1k57bgqol-001~ttf",
-      "workspace",
-    );
+    const run1 = path.join(os.tmpdir(), "cnb-f3v-1k57a1o1l-001~c5g", "workspace");
+    const run2 = path.join(os.tmpdir(), "cnb-f5b-1k57bgqol-001~ttf", "workspace");
     expect(jobLabel(run1)).not.toBe(jobLabel(run2));
     expect(jobLabel(run1)).toContain("cnb-f3v-1k57a1o1l-001~c5g");
     expect(path.basename(run1)).toBe(path.basename(run2));
@@ -408,18 +390,9 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
   it("每一支会进日志的文案都能以 CP936 出口（⇒ 与 ⚠️ 实测被打成 ?，正是这一档最该读的那几行）", () => {
     const branches = [
       ...reuseVerdict([], entryOf()),
-      ...reuseVerdict(
-        [entryOf({ cwd: path.join(os.tmpdir(), "job-a") })],
-        entryOf(),
-      ),
-      ...reuseVerdict(
-        [entryOf({ gitBornMs: 1000 })],
-        entryOf({ gitBornMs: 1000 }),
-      ),
-      ...reuseVerdict(
-        [entryOf({ gitBornMs: 7 })],
-        entryOf({ gitBornMs: 1000 }),
-      ),
+      ...reuseVerdict([entryOf({ cwd: path.join(os.tmpdir(), "job-a") })], entryOf()),
+      ...reuseVerdict([entryOf({ gitBornMs: 1000 })], entryOf({ gitBornMs: 1000 })),
+      ...reuseVerdict([entryOf({ gitBornMs: 7 })], entryOf({ gitBornMs: 1000 })),
       ...cacheVerdict({
         ...baseFacts,
         node_modules: factOf(false),
@@ -444,14 +417,14 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
     expect(fmtAge(570)).toBe("10m");
     expect(fmtAge(3599)).toBe("60m");
     expect(fmtAge(3600)).toBe("1h");
-    expect(fmtAge(86399)).toBe("24h");
-    expect(fmtAge(86400)).toBe("1d");
+    expect(fmtAge(86_399)).toBe("24h");
+    expect(fmtAge(86_400)).toBe("1d");
     expect(fmtAge(4_923_662)).toBe("57d");
     expect(fmtAge(null)).toBe("-");
   });
 
   it("文件系统没有 birthtime 时退回 mtime，并如实标出用的是哪一个", () => {
-    const { fsLike } = fakeFs({ [CWD]: { mtime: NOW - 5_000 } });
+    const { fsLike } = fakeFs({ [CWD]: { mtime: NOW - 5000 } });
     expect(dirFact(CWD, NOW, fsLike)).toMatchObject({
       present: true,
       ageS: 5,
@@ -467,9 +440,7 @@ describe("ci-workspace-probe —— 工作区跨构建复用的读数", () => {
       windowsHide: true,
       env: { ...process.env, COMFYAPP_CI_PROBE_DIR: dir },
     });
-    expect(r.stderr, "这一档是读数：任何情况下都不该把故障写成非零退出").toBe(
-      "",
-    );
+    expect(r.stderr, "这一档是读数：任何情况下都不该把故障写成非零退出").toBe("");
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("== 检出与工作区 ==");
     expect(r.stdout).toContain("== 结论（读数，不判红绿）==");

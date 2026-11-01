@@ -34,35 +34,35 @@ const LazyWorkflowCanvasNodePreview = React.lazy(() =>
   })),
 );
 
-interface DetailBodyProps {
-  workflow: WorkflowRow;
-  /** 本面板承载的页签 —— 每个页签各自一个面板（`ui/tabs` 的 Panel）。 */
-  tab: DetailTab;
-  isLoading: boolean;
-  workflowIO: WorkflowIOMap | null;
-  /** 模板 paramMap（对外参数落点），画布节点页签据此标出对外参数与落点。 */
-  paramMap: Record<string, unknown>;
-  sourceData: SourceModalData | null;
-  usable: boolean;
+type DetailBodyProps = {
   /** **两个页签共用的当前模式**（详情层持有，见 `WorkflowLibraryDetailController`
    *  的 `activeMode`）：画布卡片列与工坊封装按同一个模式渲染，用户在两处切换的
    *  是同一件事。 */
   activeMode: string | null;
+  isLoading: boolean;
+  /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
+  meta?: {
+    defaultMode: string;
+    modes: Array<string>;
+    onModeChange: (code: string) => void;
+  };
   /** 切换当前模式（只改查看 / 测试语境，不落库）。 */
   onActiveModeChange: (mode: string) => void;
   /** 在编辑器中打开当前工作流。 */
   onEdit: () => void;
-  /** 多模式工作流的模式切换（画布预览节点的类型 chip 可点选默认模式）。 */
-  meta?: {
-    modes: string[];
-    defaultMode: string;
-    onModeChange: (code: string) => void;
-  };
-  /** seed 类参数的「控件后行为」持久化（画布预览节点与 IO 编辑一致）。 */
-  onSeedModeChange?: (ioKey: string, mode: string) => void;
   /** 对外参数落点持久化（画布预览拖圆点改落点）。 */
   onPatchParamMap?: (next: Record<string, unknown>) => Promise<void>;
-}
+  /** seed 类参数的「控件后行为」持久化（画布预览节点与 IO 编辑一致）。 */
+  onSeedModeChange?: (ioKey: string, mode: string) => void;
+  /** 模板 paramMap（对外参数落点），画布节点页签据此标出对外参数与落点。 */
+  paramMap: Record<string, unknown>;
+  sourceData: SourceModalData | null;
+  /** 本面板承载的页签 —— 每个页签各自一个面板（`ui/tabs` 的 Panel）。 */
+  tab: DetailTab;
+  usable: boolean;
+  workflow: WorkflowRow;
+  workflowIO: WorkflowIOMap | null;
+};
 
 export function DetailBody({
   workflow,
@@ -85,7 +85,9 @@ export function DetailBody({
    * 一遍无参卡片再被真实 IO 顶掉（整块高度改变 → 页面跳一下），参数页签同
    * 理。统一的处理是「还没就绪就不渲染页签内容」——container 用 min-h-0 撑满
    * 父级，切换不会闪出占位文案，也不会出现半渲染的中间态。 */
-  if (isLoading) return null;
+  if (isLoading) {
+    return null;
+  }
 
   return (
     <>
@@ -106,12 +108,12 @@ export function DetailBody({
               画布样式预览（与项目画布节点一致，可直接运行调试）
             </span>
             <Button
-              variant="primary"
-              size="xs"
-              onClick={onEdit}
               className="text-2xs h-auto gap-1 rounded-md px-2 py-1"
+              onClick={onEdit}
+              size="xs"
+              variant="primary"
             >
-              <Maximize2 data-icon="inline-start" className="size-3" />
+              <Maximize2 className="size-3" data-icon="inline-start" />
               在编辑器中打开
             </Button>
           </div>
@@ -129,25 +131,25 @@ export function DetailBody({
                   边界、把整个工作流库打成错误页。 */}
               <ErrorBoundary fallback={chunkFallback}>
                 <LazyWorkflowCanvasNodePreview
+                  /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
+                   * 作为「未切过时的初值」与卡片上的默认标记。 */
+                  defaultMode={activeMode ?? meta?.defaultMode}
                   key={workflow.id}
-                  workflowId={workflow.id}
-                  workflowName={workflow.name}
-                  taskType={workflow.taskType}
-                  workflowIO={workflowIO}
+                  modes={meta?.modes}
+                  onModeChange={(code) => {
+                    meta?.onModeChange(code);
+                  }}
+                  onPatchParamMap={onPatchParamMap}
+                  onSeedModeChange={onSeedModeChange}
                   paramMap={paramMap}
+                  taskType={workflow.taskType}
                   usable={usable}
                   /* 页签即视图模式：「实际使用」页签可生成、可看结果，
                    * 「编辑对外参数」页签是参数落点编辑画布。 */
                   viewMode={tab === "use" ? "use" : "edit"}
-                  modes={meta?.modes}
-                  /* 生效模式取详情层那一份（两个页签共用）；`defaultMode` 仍传，
-                   * 作为「未切过时的初值」与卡片上的默认标记。 */
-                  defaultMode={activeMode ?? meta?.defaultMode}
-                  onModeChange={(code) => {
-                    meta?.onModeChange(code);
-                  }}
-                  onSeedModeChange={onSeedModeChange}
-                  onPatchParamMap={onPatchParamMap}
+                  workflowId={workflow.id}
+                  workflowIO={workflowIO}
+                  workflowName={workflow.name}
                 />
               </ErrorBoundary>
             </div>
@@ -157,11 +159,8 @@ export function DetailBody({
 
       {tab === "params" && (
         <WorkshopEncapsulationPanel
-          key={workflow.id}
-          workflowId={workflow.id}
           displayName={workflow.modelTags?.[0] ?? workflow.name}
-          workflowIO={workflowIO}
-          paramMap={paramMap}
+          key={workflow.id}
           /* 模式取详情层的当前模式（与画布节点页签同一份），并通过
            * `onModeChange` 让用户在本页直接换模式跑流程测试 —— 多模式工作流
            * 以前在这里只能测默认模式（ISSUE #720 第 3 条）。 */
@@ -170,29 +169,26 @@ export function DetailBody({
            * （`metaEditor.modes`：缺省回退 [taskType]，兼容旧行）。 */
           modes={meta?.modes ?? []}
           onModeChange={onActiveModeChange}
+          paramMap={paramMap}
+          workflowId={workflow.id}
+          workflowIO={workflowIO}
         />
       )}
 
       {tab === "source" && (
         <div className="border-border bg-panel-deep rounded-2xl border p-1">
           <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-ink-faint text-xs font-medium">
-              工作流(RAW)格式原件
-            </span>
+            <span className="text-ink-faint text-xs font-medium">工作流(RAW)格式原件</span>
           </div>
-          <div
-            className={`bg-canvas-deep ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl`}
-          >
-            {sourceData?.source != null ? (
+          <div className={`bg-canvas-deep ${EMBEDDED_SCROLL_MAX_HEIGHT} overflow-auto rounded-xl`}>
+            {sourceData?.source == null ? (
+              <p className="text-ink-fainter px-4 py-10 text-center text-xs">暂无源文件数据</p>
+            ) : (
               <LazyJsonViewer
                 data={sourceData.source}
-                title="工作流(RAW)格式"
                 initialCollapsedDepth={2}
+                title="工作流(RAW)格式"
               />
-            ) : (
-              <p className="text-ink-fainter px-4 py-10 text-center text-xs">
-                暂无源文件数据
-              </p>
             )}
           </div>
         </div>

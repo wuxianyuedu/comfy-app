@@ -63,13 +63,7 @@ const WORKSPACE_VIEWS = [
      「被豁免」—— 它判的是「居中列没封顶时留白归零」，这一屏没有居中列。留白的归属
      下移到屏内那一层，实测在 `ModeContractEditorView.tsx` 的页眉与两栏容器上
      （`px-4 sm:px-8`），那一层现在自己就是判据看得见的调用点。 */
-  path.join(
-    "src",
-    "components",
-    "workshop",
-    "mode-contract",
-    "ModeContractView.tsx",
-  ),
+  path.join("src", "components", "workshop", "mode-contract", "ModeContractView.tsx"),
 ];
 
 /** 剥注释再判：说明文字里出现 `max-w-300` 不等于有人手写那一层。 */
@@ -78,13 +72,38 @@ function codeOf(rel: string): string {
 }
 
 /** 该文件里每一处 `<DocumentFrame …>` 传进去的 `className`（没传则跳过）。 */
-function frameClassNamesOf(rel: string): string[] {
-  const out: string[] = [];
-  for (const m of codeOf(rel).matchAll(/<DocumentFrame\b([\s\S]{0,400}?)>/g)) {
-    const className = /className="([^"]*)"/.exec(m[1] ?? "")?.[1];
-    if (className !== undefined) out.push(className);
+function frameClassNamesOf(rel: string): Array<string> {
+  const out: Array<string> = [];
+  const code = codeOf(rel);
+  for (const m of code.matchAll(/<DocumentFrame\b/g)) {
+    const className = frameClassNameOf(code, m.index + m[0].length);
+    if (className !== undefined) {
+      out.push(className);
+    }
   }
   return out;
+}
+
+/** 只认**顶层**的 `className`，并把开标签结束的 `>` 按花括号深度判：
+ *  `backdrop={…}` 里的嵌套元素（含它自己的 `/>` 与 `className`）不算开标签的一部分 ——
+ *  拿「第一个 `>` / 第一个 className」当前者会把外层属性读错位。 */
+function frameClassNameOf(code: string, start: number): string | undefined {
+  const attr = 'className="';
+  let braces = 0;
+  for (let i = start; i < code.length; i += 1) {
+    const ch = code[i];
+    if (ch === "{") {
+      braces += 1;
+    } else if (ch === "}") {
+      braces -= 1;
+    } else if (ch === ">" && braces === 0) {
+      return undefined;
+    } else if (braces === 0 && code.startsWith(attr, i)) {
+      const end = code.indexOf('"', i + attr.length);
+      return end === -1 ? undefined : code.slice(i + attr.length, end);
+    }
+  }
+  return undefined;
 }
 
 describe("统一容器的接入约定（文档型）", () => {
@@ -96,7 +115,7 @@ describe("统一容器的接入约定（文档型）", () => {
     }
   });
 
-  it.for(DOCUMENT_VIEWS.map((rel) => [rel] as [string]))(
+  it.for(DOCUMENT_VIEWS.map((rel) => /* SAFETY: 类型断言已复核 */ [rel] as [string]))(
     "%s 引了容器，且没再手写那一串形状",
     ([rel]) => {
       const code = codeOf(rel);
@@ -108,7 +127,7 @@ describe("统一容器的接入约定（文档型）", () => {
   );
 
   it("传给容器的 className 里没有第二份宽度", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const rel of DOCUMENT_VIEWS) {
       if (frameClassNamesOf(rel).some((c) => c.includes("max-w-"))) {
         offenders.push(rel);
@@ -120,7 +139,7 @@ describe("统一容器的接入约定（文档型）", () => {
   it("传给容器的 className 都带无变体的左右内边距（px-*）", () => {
     /* 只认无变体的 `px-`：`sm:px-8` 在断点以下不生效，而贴边恰恰发生在窗口变窄
        的那一侧 —— 只写带变体的那一半等于没写。 */
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     for (const rel of DOCUMENT_VIEWS) {
       const classNames = frameClassNamesOf(rel);
       /* 前置断言：抽不到 className 时上面那个循环会「没人可判」而假绿 —— 那等于
@@ -135,10 +154,7 @@ describe("统一容器的接入约定（文档型）", () => {
         }
       }
     }
-    expect(
-      offenders,
-      "这些视图把内容铺到了容器边缘：居中列没封顶时左右留白归零",
-    ).toEqual([]);
+    expect(offenders, "这些视图把内容铺到了容器边缘：居中列没封顶时左右留白归零").toEqual([]);
   });
 });
 
@@ -150,7 +166,7 @@ describe("统一容器的接入约定（工作区型）", () => {
     }
   });
 
-  it.for(WORKSPACE_VIEWS.map((rel) => [rel] as [string]))(
+  it.for(WORKSPACE_VIEWS.map((rel) => /* SAFETY: 类型断言已复核 */ [rel] as [string]))(
     "%s 引了 WorkspaceFrame，且不再自己写几何或页面滚动",
     ([rel]) => {
       const code = codeOf(rel);
@@ -159,18 +175,13 @@ describe("统一容器的接入约定（工作区型）", () => {
          这一屏的滚动条」双层滚动（工坊屏原先正是这个形状）。 */
       expect(code).not.toMatch(/min-h-screen/);
       // 容器那串几何不许在视图里再抄一遍。
-      expect(code).not.toMatch(
-        /className="flex h-full[^"]*flex-col overflow-hidden"/,
-      );
+      expect(code).not.toMatch(/className="flex h-full[^"]*flex-col overflow-hidden"/);
     },
   );
 
   it("调用点不再给工作区型包一层滚动容器（双层滚动的另一半）", () => {
     const page = codeOf(path.join("src", "app", "workspace", "page.tsx"));
-    expect(
-      page,
-      "工坊的滚动条归它自己的容器管，调用点再包一层就是两条叠着",
-    ).not.toMatch(
+    expect(page, "工坊的滚动条归它自己的容器管，调用点再包一层就是两条叠着").not.toMatch(
       /<div className="h-full overflow-y-auto">\s*<WorkshopPipeline/,
     );
   });

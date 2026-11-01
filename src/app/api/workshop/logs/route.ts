@@ -12,10 +12,7 @@ import {
   GENERATION_LOG_STAGE_LABELS,
   parseGenerationLogStage,
 } from "~/lib/workshop/generation-log";
-import {
-  appendGenerationLogs,
-  readGenerationLogs,
-} from "~/lib/workshop/generation-log.server";
+import { appendGenerationLogs, readGenerationLogs } from "~/lib/workshop/generation-log.server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +26,9 @@ export async function POST(req: NextRequest) {
    * 展开成 `typeof body === "object" && body !== null` —— 与别处同一条判据、
    * 写出来却看不出是同一件事。 */
   const rec = await readJsonRecord(req);
-  if (isErrorResponse(rec)) return rec;
+  if (isErrorResponse(rec)) {
+    return rec;
+  }
   const stage = parseGenerationLogStage(rec.stage);
   if (!stage) {
     return NextResponse.json(
@@ -39,9 +38,7 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  const entries: unknown[] = Array.isArray(rec.entries)
-    ? rec.entries.slice(0, 200)
-    : [];
+  const entries: Array<unknown> = Array.isArray(rec.entries) ? rec.entries.slice(0, 200) : [];
   const saved = await appendGenerationLogs(stage, entries);
   return NextResponse.json({ saved });
 }
@@ -61,9 +58,6 @@ export async function GET(req: NextRequest) {
     );
   }
   const limit = Number(req.nextUrl.searchParams.get("limit") ?? "100");
-  const entries = await readGenerationLogs(
-    stage,
-    Number.isFinite(limit) ? limit : 100,
-  );
+  const entries = await readGenerationLogs(stage, Number.isFinite(limit) ? limit : 100);
   return NextResponse.json({ entries });
 }

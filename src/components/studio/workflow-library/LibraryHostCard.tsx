@@ -20,38 +20,38 @@ import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 import { StatusDot } from "~/components/ui/status-dot";
 import { SelectMenu } from "~/components/ui/select-menu";
 import { modeLabel } from "./workflow-library-config";
-import { WorkflowNodeOutputsRow } from "~/components/studio/workflow-form/WorkflowNodeParts";
-import { PortHandle } from "~/components/studio/workflow-form/WorkflowPortHandle";
 import {
+  WorkflowNodeOutputsRow,
   WorkflowNodeCardShell,
   WorkflowNodeDivider,
   WorkflowNodeHeader,
   WorkflowNodePill,
   WorkflowStaticChip,
 } from "~/components/studio/workflow-form/WorkflowNodeParts";
+import { PortHandle } from "~/components/studio/workflow-form/WorkflowPortHandle";
 
-export interface LibraryHostCardProps {
-  workflowName: string;
-  /** 状态胶囊文案（待开始 / 提交中… / 生成中 n% / 已完成 / 失败）。 */
-  statusLabel: string;
-  running: boolean;
-  /** 运行阶段（决定状态点配色）。 */
-  phaseKind: "idle" | "starting" | "running" | "done" | "failed";
-  modes?: string[];
-  effectiveMode: string | null;
-  taskType: string;
-  effectiveModeLabel: string;
-  onModeChange?: (code: string) => void;
-  /** 宿主卡片的 DOM 引用（落点可达性收集用它，见 `reachableKeys`）。 */
-  hostRef?: RefObject<HTMLDivElement | null>;
-  /** 参数表单（`DynamicWorkflowForm` compact —— 端点由它自己渲染）。 */
-  form: React.ReactNode;
-  /** 工作流的输出行（`splitWorkflowIO` 的结果）。 */
-  outputs: readonly (WorkflowIOEntry & { ioKey: string })[];
-  inputs: readonly (WorkflowIOEntry & { ioKey: string })[];
+export type LibraryHostCardProps = {
   /** 生成按钮。 */
   actions: React.ReactNode;
-}
+  effectiveMode: string | null;
+  effectiveModeLabel: string;
+  /** 参数表单（`DynamicWorkflowForm` compact —— 端点由它自己渲染）。 */
+  form: React.ReactNode;
+  /** 宿主卡片的 DOM 引用（落点可达性收集用它，见 `reachableKeys`）。 */
+  hostRef?: RefObject<HTMLDivElement | null>;
+  inputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
+  modes?: Array<string>;
+  onModeChange?: (code: string) => void;
+  /** 工作流的输出行（`splitWorkflowIO` 的结果）。 */
+  outputs: ReadonlyArray<WorkflowIOEntry & { ioKey: string }>;
+  /** 运行阶段（决定状态点配色）。 */
+  phaseKind: "idle" | "starting" | "running" | "done" | "failed";
+  running: boolean;
+  /** 状态胶囊文案（待开始 / 提交中… / 生成中 n% / 已完成 / 失败）。 */
+  statusLabel: string;
+  taskType: string;
+  workflowName: string;
+};
 
 export function LibraryHostCard({
   workflowName,
@@ -70,13 +70,14 @@ export function LibraryHostCard({
   actions,
 }: LibraryHostCardProps) {
   return (
-    <div ref={hostRef} className="relative">
+    <div className="relative" ref={hostRef}>
       <WorkflowNodeCardShell>
         <WorkflowNodeHeader
-          title={workflowName}
           right={
             <WorkflowNodePill>
               <StatusDot
+                pulse={running}
+                sizeClass="size-1.5"
                 state={
                   running
                     ? "busy"
@@ -86,8 +87,6 @@ export function LibraryHostCard({
                         ? "down"
                         : "probing"
                 }
-                sizeClass="size-1.5"
-                pulse={running}
               />
               <span
                 className="text-ink-soft text-3xs font-medium"
@@ -97,6 +96,7 @@ export function LibraryHostCard({
               </span>
             </WorkflowNodePill>
           }
+          title={workflowName}
         />
 
         <WorkflowNodeDivider />
@@ -107,14 +107,10 @@ export function LibraryHostCard({
           <div className="flex h-7 min-w-0 items-center gap-1">
             <WorkflowStaticChip>
               <span className="bg-success-strong size-1.5 rounded-full" />
-              <span className="text-success-strong text-2xs font-semibold">
-                本机
-              </span>
+              <span className="text-success-strong text-2xs font-semibold">本机</span>
             </WorkflowStaticChip>
             <WorkflowStaticChip className="min-w-0 flex-1">
-              <span className="text-ink-bright text-2xs truncate font-semibold">
-                全部模型
-              </span>
+              <span className="text-ink-bright text-2xs truncate font-semibold">全部模型</span>
             </WorkflowStaticChip>
           </div>
           <div className="flex h-7 min-w-0 items-center gap-1">
@@ -126,15 +122,13 @@ export function LibraryHostCard({
             {modes && modes.length > 1 && onModeChange ? (
               /* 多模式：类型 chip 变成模式切换下拉（与工作流库「类型」同码表） */
               <SelectMenu
-                value={effectiveMode ?? taskType}
-                onChange={(code) => onModeChange(code)}
-                options={modes}
-                labels={Object.fromEntries(
-                  modes.map((code) => [code, modeLabel(code)]),
-                )}
-                popoverMinWidth={150}
                 autoFitFromOptions={false}
                 className="border-border-strong! text-2xs shrink-0 bg-transparent!"
+                labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
+                onChange={(code) => onModeChange(code)}
+                options={modes}
+                popoverMinWidth={150}
+                value={effectiveMode ?? taskType}
               />
             ) : (
               <WorkflowStaticChip>
@@ -157,21 +151,21 @@ export function LibraryHostCard({
           <div className="border-border-subtle border-t">
             {outputs.map((output) => (
               <WorkflowNodeOutputsRow
-                key={output.nodeId + ":" + output.name}
-                output={output}
                 inputs={[...inputs]}
+                key={`${output.nodeId}:${output.name}`}
+                output={output}
                 outputs={[...outputs]}
                 renderHandle={({ id, dir, type }) => (
                   <PortHandle
-                    id={id}
                     dir={dir}
-                    type={type}
+                    id={id}
                     style={{
                       right: -6,
                       top: 14,
                       transform: "translateY(-50%)",
                       boxShadow: "none",
                     }}
+                    type={type}
                   />
                 )}
               />

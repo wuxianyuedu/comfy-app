@@ -22,44 +22,38 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { NODE_META, type NodeKind } from "~/lib/project-canvas/canvas-types";
 
-interface CanvasContextMenuProps {
-  x: number;
-  y: number;
+type CanvasContextMenuProps = {
+  onClose: () => void;
   onPick: (kind: NodeKind) => void;
   /** 放一个纯视觉的 Ardot 风测试节点（无运行时）。 */
   onPickTest: () => void;
-  onClose: () => void;
-}
+  x: number;
+  y: number;
+};
 
-export function CanvasContextMenu({
-  x,
-  y,
-  onPick,
-  onPickTest,
-  onClose,
-}: CanvasContextMenuProps) {
+export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasContextMenuProps) {
   return (
-    <DropdownMenu open onOpenChange={(open) => !open && onClose()}>
+    <DropdownMenu onOpenChange={(open) => !open && onClose()} open>
       {/* 零尺寸定位锚点：菜单开在右键那个点上，而不是某个可见控件旁边。 */}
       <DropdownMenuTrigger
         aria-hidden
-        tabIndex={-1}
         className="pointer-events-none fixed size-0"
         style={{ left: x, top: y }}
+        tabIndex={-1}
       />
       <DropdownMenuContent
-        side="bottom"
         align="start"
-        sideOffset={0}
         /* 锚点是零尺寸，`w-(--anchor-width)` 会算成 0，这里给回原来的固定宽。 */
         className="border-border-strong bg-panel w-52 overflow-hidden rounded-xl border p-1.5 shadow-2xl shadow-black/20 dark:shadow-black/60"
+        side="bottom"
+        sideOffset={0}
       >
         {/* ── 测试节点（纯视觉，对齐 Ardot 稿）── */}
         <DropdownMenuGroup>
           <DropdownMenuItem
+            className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 border-primary/30 flex items-center gap-2 rounded-lg border bg-linear-to-r px-2 py-1.5 text-left text-xs"
             data-canvas-node-kind="workflow-ardot"
             onClick={onPickTest}
-            className="from-primary/15 to-accent/10 text-ink-bright focus:from-primary/25 focus:to-accent/15 border-primary/30 flex items-center gap-2 rounded-lg border bg-linear-to-r px-2 py-1.5 text-left text-xs"
           >
             <span
               className="text-3xs flex size-5 items-center justify-center rounded-md font-bold text-white"
@@ -72,9 +66,7 @@ export function CanvasContextMenu({
             </span>
             <span className="flex flex-col">
               <span className="font-medium">测试自定义工作流</span>
-              <span className="text-ink-muted text-3xs">
-                纯视觉 · 对齐 Ardot 稿（无运行时）
-              </span>
+              <span className="text-ink-muted text-3xs">纯视觉 · 对齐 Ardot 稿（无运行时）</span>
             </span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -84,27 +76,25 @@ export function CanvasContextMenu({
           <DropdownMenuLabel className="text-ink-muted text-3xs px-2 py-1 tracking-wider uppercase">
             创建节点
           </DropdownMenuLabel>
-          {(Object.keys(NODE_META) as NodeKind[]).map((kind) => {
-            const meta = NODE_META[kind];
-            return (
-              <DropdownMenuItem
-                key={kind}
-                data-canvas-node-kind={kind}
-                onClick={() => onPick(kind)}
-                className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
-              >
-                <Icon
-                  name={meta.icon}
-                  size={15}
-                  className="text-primary-strong"
-                />
-                <span className="flex flex-col">
-                  <span className="font-medium">{meta.label}</span>
-                  <span className="text-ink-muted text-3xs">{meta.desc}</span>
-                </span>
-              </DropdownMenuItem>
-            );
-          })}
+          {
+            /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as Array<NodeKind>).map((kind) => {
+              const meta = NODE_META[kind];
+              return (
+                <DropdownMenuItem
+                  className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+                  data-canvas-node-kind={kind}
+                  key={kind}
+                  onClick={() => onPick(kind)}
+                >
+                  <Icon className="text-primary-strong" name={meta.icon} size={15} />
+                  <span className="flex flex-col">
+                    <span className="font-medium">{meta.label}</span>
+                    <span className="text-ink-muted text-3xs">{meta.desc}</span>
+                  </span>
+                </DropdownMenuItem>
+              );
+            })
+          }
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

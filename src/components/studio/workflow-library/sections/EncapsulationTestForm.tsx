@@ -33,10 +33,7 @@ import { readFileAsDataUrl } from "~/lib/file-io";
 import { NumberField } from "~/components/ui/number-field";
 import { useFilePicker } from "~/components/ui/file-picker";
 import { ShotSizePicker } from "~/components/workshop/ShotSizePicker";
-import {
-  DEFAULT_SHOT_SIZE,
-  type ShotSizeState,
-} from "~/components/workshop/shot-size-config";
+import { DEFAULT_SHOT_SIZE, type ShotSizeState } from "~/components/workshop/shot-size-config";
 import type { SizeScene } from "~/lib/media/size-presets";
 import type { EncapsulationEntryStatus } from "~/lib/workshop/workshop-encapsulation-status";
 import {
@@ -56,18 +53,18 @@ const DEFAULT_TEST_DURATION = 5;
 /** 该口没连到工作流时的一句提示（值仍可填，只是不参与下发）。 */
 const UNWIRED_HINT = "未连到端口，用工作流默认值";
 
-interface EncapsulationTestFormProps {
+type EncapsulationTestFormProps = {
+  canRun: boolean;
   /** 该模式的契约口清单（`status.entries`：含落点 / 必备信息，但**不过滤**）。 */
-  entries: EncapsulationEntryStatus[];
+  entries: Array<EncapsulationEntryStatus>;
+  onRun: (values: WorkshopExposedValues) => void;
+  runDisabledReason?: string;
+  running: boolean;
   /** 尺寸表口径（随模式：生图 / 视频）。 */
   scene: SizeScene;
-  running: boolean;
-  canRun: boolean;
-  runDisabledReason?: string;
-  onRun: (values: WorkshopExposedValues) => void;
   /** 上传本地图片到 ComfyUI 输入目录，返回文件名（IO 在 hooks 层）。 */
   uploadImage: (file: File) => Promise<string>;
-}
+};
 
 export function EncapsulationTestForm({
   entries,
@@ -125,7 +122,9 @@ export function EncapsulationTestForm({
           },
           {
             report: (kind, detail) => {
-              if (kind === "err") setError(detail);
+              if (kind === "err") {
+                setError(detail);
+              }
             },
             failureText: "上传失败",
           },
@@ -141,7 +140,7 @@ export function EncapsulationTestForm({
      * 值已经在那里面收好了，这里只补上「数字」口那一批。 */
     const pruned = pruneEmptyExposedValues(texts);
     const custom: Record<string, string | number> = {
-      ...(pruned.custom ?? {}),
+      ...pruned.custom,
     };
     for (const entry of entries) {
       const value = numbers[entry.id];
@@ -153,9 +152,7 @@ export function EncapsulationTestForm({
       ...pruned,
       ...(Object.keys(custom).length > 0 ? { custom } : {}),
       ...(entries.some((entry) => entry.control === "size") ? { size } : {}),
-      ...(entries.some((entry) => entry.control === "duration")
-        ? { duration }
-        : {}),
+      ...(entries.some((entry) => entry.control === "duration") ? { duration } : {}),
     };
     setError("");
     onRun(payload);
@@ -166,30 +163,25 @@ export function EncapsulationTestForm({
       {entries.map((entry) => {
         if (entry.control === "size") {
           return (
-            <div key={entry.id} className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1" key={entry.id}>
               <FieldLabel label={entry.label} />
-              <ShotSizePicker
-                value={size}
-                onChange={setSize}
-                scene={scene}
-                disabled={disabled}
-              />
+              <ShotSizePicker disabled={disabled} onChange={setSize} scene={scene} value={size} />
             </div>
           );
         }
         if (entry.control === "duration") {
           return (
-            <div key={entry.id} className="flex-col gap-1">
+            <div className="flex-col gap-1" key={entry.id}>
               <FieldLabel label={entry.label} />
               <div className="flex items-center gap-2">
                 <NumberField
-                  value={duration}
-                  onChange={setDuration}
-                  min={1}
-                  max={30}
-                  step={1}
-                  disabled={disabled}
                   className="h-7 w-28"
+                  disabled={disabled}
+                  max={30}
+                  min={1}
+                  onChange={setDuration}
+                  step={1}
+                  value={duration}
                 />
                 <span className="text-muted-foreground/70 text-3xs">秒</span>
               </div>
@@ -200,18 +192,13 @@ export function EncapsulationTestForm({
          * 工作流那一端决定，这里只按工坊口径给一个数）。 */
         if (entry.control === "number") {
           return (
-            <div key={entry.id} className="flex flex-col gap-1">
-              <FieldLabel
-                label={entry.label}
-                unwired={entry.targetIoKey === null}
-              />
+            <div className="flex flex-col gap-1" key={entry.id}>
+              <FieldLabel label={entry.label} unwired={entry.targetIoKey === null} />
               <NumberField
-                value={numbers[entry.id] ?? 0}
-                onChange={(value) =>
-                  setNumbers((prev) => ({ ...prev, [entry.id]: value }))
-                }
-                disabled={disabled}
                 className="h-7 w-28"
+                disabled={disabled}
+                onChange={(value) => setNumbers((prev) => ({ ...prev, [entry.id]: value }))}
+                value={numbers[entry.id] ?? 0}
               />
             </div>
           );
@@ -220,54 +207,45 @@ export function EncapsulationTestForm({
         if (entry.control === "image") {
           return (
             <ImageField
-              key={entry.id}
+              disabled={disabled}
               entry={entry}
-              value={text}
+              key={entry.id}
+              onPick={pickImage}
               previewSrc={previews[entry.id]}
               uploading={uploadingId === entry.id}
-              disabled={disabled}
-              onPick={pickImage}
+              value={text}
             />
           );
         }
         return (
-          <div key={entry.id} className="flex flex-col gap-1">
-            <FieldLabel
-              label={entry.label}
-              unwired={entry.targetIoKey === null}
-            />
+          <div className="flex flex-col gap-1" key={entry.id}>
+            <FieldLabel label={entry.label} unwired={entry.targetIoKey === null} />
             <Textarea
-              value={text}
-              onChange={textHandler((value) => patchText(entry.id, value))}
-              rows={entry.id === "prompt" ? 2 : 1}
               className="border-border bg-bg text-xs"
-              placeholder={
-                entry.id === "prompt" ? "测试提示词" : `输入${entry.label}`
-              }
               disabled={disabled}
+              onChange={textHandler((value) => patchText(entry.id, value))}
+              placeholder={entry.id === "prompt" ? "测试提示词" : `输入${entry.label}`}
+              rows={entry.id === "prompt" ? 2 : 1}
+              value={text}
             />
           </div>
         );
       })}
 
       {error && (
-        <p className="bg-destructive/10 text-destructive text-2xs rounded-lg px-3 py-2">
-          {error}
-        </p>
+        <p className="bg-destructive/10 text-destructive text-2xs rounded-lg px-3 py-2">{error}</p>
       )}
       <div className="flex items-center gap-2">
         <Hint label={runDisabledReason} wrap>
           <Button
-            onClick={submit}
-            disabled={disabled}
             className="h-auto rounded-lg px-3 py-1.5 text-xs font-medium"
+            disabled={disabled}
+            onClick={submit}
           >
             {running ? "测试中…" : "执行流程测试"}
           </Button>
         </Hint>
-        <span className="text-muted-foreground text-2xs">
-          会真实调用本机 ComfyUI 生成一张图
-        </span>
+        <span className="text-muted-foreground text-2xs">会真实调用本机 ComfyUI 生成一张图</span>
       </div>
     </div>
   );
@@ -278,11 +256,7 @@ function FieldLabel({ label, unwired }: { label: string; unwired?: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-ink-muted text-2xs">{label}</span>
-      {unwired && (
-        <span className="text-muted-foreground/70 text-3xs">
-          {UNWIRED_HINT}
-        </span>
-      )}
+      {unwired && <span className="text-muted-foreground/70 text-3xs">{UNWIRED_HINT}</span>}
     </div>
   );
 }
@@ -296,18 +270,15 @@ function ImageField({
   disabled,
   onPick,
 }: {
+  disabled: boolean;
   entry: EncapsulationEntryStatus;
-  value: string;
+  onPick: (entryId: string, file: File) => void;
   previewSrc?: string;
   uploading: boolean;
-  disabled: boolean;
-  onPick: (entryId: string, file: File) => void;
+  value: string;
 }) {
   const entryId = entry.id;
-  const handlePick = useCallback(
-    (file: File) => onPick(entryId, file),
-    [onPick, entryId],
-  );
+  const handlePick = useCallback((file: File) => onPick(entryId, file), [onPick, entryId]);
   const picker = useFilePicker({ accept: "image/*", onPick: handlePick });
   /* 预览优先用本地 data URL（用户刚选的图，不依赖 ComfyUI）；没有才回退到
    * 按值算出的 ComfyUI 代理地址（`~/lib/media/media-url` 出口，空引用给 null）。 */
@@ -321,9 +292,9 @@ function ImageField({
           {displayValue(value)}
         </span>
         <Button
-          onClick={picker.open}
-          disabled={disabled || uploading}
           className="text-2xs h-auto rounded-md px-2 py-1"
+          disabled={disabled || uploading}
+          onClick={picker.open}
         >
           {uploading ? "上传中…" : "选择图片"}
         </Button>
@@ -331,10 +302,10 @@ function ImageField({
       </div>
       {previewUrl && (
         <MediaThumbnail
-          src={previewUrl}
           alt={entry.label}
-          fallback="none"
           className="border-border bg-surface max-h-40 w-full rounded-lg border object-contain"
+          fallback="none"
+          src={previewUrl}
         />
       )}
     </div>

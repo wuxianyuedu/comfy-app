@@ -61,10 +61,11 @@ const ENDPOINTS = "src/lib/endpoints.ts";
  * 服务端与拉起侧读取，而 app-settings.ts 顶层 import fs —— 走那条路会让设置有
  * 默认端口的页面整页 500（ISSUE #282/#317）。app-settings.ts 只**再导出**同名。 */
 const endpointsSrc = read(ENDPOINTS);
-if (endpointsSrc == null) fail(`找不到 ${ENDPOINTS}`);
+if (endpointsSrc == null) {
+  fail(`找不到 ${ENDPOINTS}`);
+}
 const decl =
-  endpointsSrc &&
-  /export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(\d+)\s*;/.exec(endpointsSrc);
+  endpointsSrc && /export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*(\d+)\s*;/.exec(endpointsSrc);
 if (!decl) {
   fail(
     `${ENDPOINTS} 里找不到 \`export const COMFYUI_DEFAULT_PORT = <数字>;\` —— ` +
@@ -88,7 +89,9 @@ for (const [file, src] of [
   [SETTINGS_PURE, settingsPureSrc],
   [SETTINGS_IO, settingsIoSrc],
 ]) {
-  if (src == null) continue;
+  if (src == null) {
+    continue;
+  }
   if (
     /export\s+const\s+COMFYUI_DEFAULT_PORT\s*=/.test(src) ||
     /export\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from/.test(src)
@@ -103,11 +106,12 @@ for (const [file, src] of [
 /* ── ② 拉起侧：spawn 参数对端口的口径 ───────────────────────────────────── */
 
 const deriveSrc = read(DERIVE);
-if (deriveSrc == null) fail(`找不到 ${DERIVE}`);
-else {
+if (deriveSrc == null) {
+  fail(`找不到 ${DERIVE}`);
+} else {
   // buildSpawnArgs 必须"只在有效端口与默认端口不同时"才补 --port。
   const fnAt = deriveSrc.indexOf("export function buildSpawnArgs");
-  if (fnAt < 0) {
+  if (fnAt === -1) {
     fail(`${DERIVE} 里找不到 buildSpawnArgs —— 拉起侧端口口径的判据点被改名/挪走`);
   } else {
     const body = deriveSrc.slice(fnAt, fnAt + 1400);
@@ -130,8 +134,11 @@ else {
 }
 
 const lifecycleSrc = read(LIFECYCLE);
-if (lifecycleSrc == null) fail(`找不到 ${LIFECYCLE}`);
-else if (!/buildSpawnArgs\(\{[\s\S]{0,400}?defaultPort:\s*COMFYUI_DEFAULT_PORT/.test(lifecycleSrc)) {
+if (lifecycleSrc == null) {
+  fail(`找不到 ${LIFECYCLE}`);
+} else if (
+  !/buildSpawnArgs\(\{[\s\S]{0,400}?defaultPort:\s*COMFYUI_DEFAULT_PORT/.test(lifecycleSrc)
+) {
   fail(
     `${LIFECYCLE} 的 buildSpawnArgs 调用不再注入 defaultPort: COMFYUI_DEFAULT_PORT —— ` +
       `注入别的值（或各自写死）会让「拉起端口」与「连接端口」各有一套默认值`,
@@ -140,18 +147,25 @@ else if (!/buildSpawnArgs\(\{[\s\S]{0,400}?defaultPort:\s*COMFYUI_DEFAULT_PORT/.
 /* 模块路径自 ISSUE #569 第 5 项起是 `../app-settings/app-settings.server`（原
  * 单文件拆成目录后 IO 部分带 `.server.ts` 后缀）；断言的是「从应用设置那一侧取」，
  * 不把具体的中间路径写死 —— 写死会让一次目录调整变成门禁的红灯。 */
-if (lifecycleSrc && !/import\s*\{[\s\S]*?COMFYUI_DEFAULT_PORT[\s\S]*?\}\s*from\s*"\.\.\/endpoints"/.test(lifecycleSrc)) {
+if (
+  lifecycleSrc &&
+  !/import\s*\{[\s\S]*?COMFYUI_DEFAULT_PORT[\s\S]*?\}\s*from\s*"\.\.\/endpoints"/.test(lifecycleSrc)
+) {
   fail(`${LIFECYCLE} 不再从 ../endpoints 导入 COMFYUI_DEFAULT_PORT —— 默认端口必须共用同一常量`);
 }
 
 /* ── ③ 拉起侧与连接侧对「未配置端口」给同一个默认值 ─────────────────────── */
 
 const clientSrc = read(CLIENT);
-if (clientSrc == null) fail(`找不到 ${CLIENT}`);
+if (clientSrc == null) {
+  fail(`找不到 ${CLIENT}`);
+}
 /* 连接侧与拉起侧自 ISSUE #569 第 5 项起都**直接从零依赖常量层**取默认端口
  * （app-settings 拆成目录后不再转手它：转手会让「只想要一个常量」的视图层
  * 拖进 fs）。断言的是「两侧取的是同一个常量」这件事本身，路径跟着唯一出口走。 */
-else if (!/import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/endpoints"/.test(clientSrc)) {
+else if (
+  !/import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/endpoints"/.test(clientSrc)
+) {
   fail(
     `${CLIENT} 不再从 ../endpoints 导入 COMFYUI_DEFAULT_PORT —— ` +
       `连接侧的「未配置端口」兜底值必须与拉起侧同一个常量（曾经硬编码 8188，两处从未对过）`,
@@ -159,7 +173,9 @@ else if (!/import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/endpoints
 }
 
 const desktopSrc = read(DESKTOP);
-if (desktopSrc == null) fail(`找不到 ${DESKTOP}`);
+if (desktopSrc == null) {
+  fail(`找不到 ${DESKTOP}`);
+}
 
 /* ── ④ 默认地址拼装收口到 endpoints.ts（§12.14） ───────────────────────── */
 
@@ -178,7 +194,9 @@ function collectSourceFiles(dir, out = []) {
     const abs = path.join(dir, name);
     const st = fs.statSync(abs);
     if (st.isDirectory()) {
-      if (name === "node_modules" || name === "__snapshots__") continue;
+      if (name === "node_modules" || name === "__snapshots__") {
+        continue;
+      }
       collectSourceFiles(abs, out);
     } else if (/\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name)) {
       out.push(abs);
@@ -192,21 +210,27 @@ for (const abs of collectSourceFiles(path.join(ROOT, "src"))) {
   const rel = path.relative(ROOT, abs).split(path.sep).join("/");
   const lines = fs.readFileSync(abs, "utf8").split("\n");
   lines.forEach((line, idx) => {
-    if (!/8188/.test(line)) return;
+    if (!/8188/.test(line)) {
+      return;
+    }
     const trimmed = line.trim();
     // 注释行不算（解释历史口径是允许的）
-    if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) return;
+    if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+      return;
+    }
     // 定义默认端口的那一行不算（它就是数字本身）
-    if (/COMFYUI_DEFAULT_PORT\s*=\s*8188/.test(line)) return;
+    if (/COMFYUI_DEFAULT_PORT\s*=\s*8188/.test(line)) {
+      return;
+    }
     // 反引号里作为"文档示例"出现在字符串中的地址（如错误文案里举的 :8188）
     rawPortHits.push(`${rel}:${idx + 1}  ${trimmed.slice(0, 120)}`);
   });
 }
 if (rawPortHits.length > 0) {
   fail(
-    `源码里出现裸 8188 字面量（默认端口必须走 COMFYUI_DEFAULT_PORT，规范 §12.14）：\n  ` +
-      rawPortHits.slice(0, 10).join("\n  ") +
-      (rawPortHits.length > 10 ? `\n  …（其余 ${rawPortHits.length - 10} 处省略）` : ""),
+    `源码里出现裸 8188 字面量（默认端口必须走 COMFYUI_DEFAULT_PORT，规范 §12.14）：\n  ${
+      rawPortHits.slice(0, 10).join("\n  ")
+      }${rawPortHits.length > 10 ? `\n  …（其余 ${rawPortHits.length - 10} 处省略）` : ""}`,
   );
 }
 
@@ -221,7 +245,9 @@ if (problems.length === 0) {
 }
 
 console.error("[comfyui-port] ComfyUI 端口口径不一致（规范 §5 / §12.14，ISSUE #534）：");
-for (const p of problems) console.error(`  · ${p}`);
+for (const p of problems) {
+  console.error(`  · ${p}`);
+}
 console.error(
   "\n「配置端口为空」两侧都以默认端口为准；出现分叉时用户读到的是上传失败 / 端口漂移，" +
     "根因（连到了另一个实例）被现象埋掉。修法见 scripts/check-comfyui-port-contract.cjs 头注释。",

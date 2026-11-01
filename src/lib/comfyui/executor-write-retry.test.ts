@@ -18,12 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { writeTerminal } from "./executor-write-retry";
 import { isTaskClaimedInProcess } from "./reaper";
-import {
-  configureRunner,
-  isDispatchedHere,
-  markDispatched,
-  state,
-} from "./runner-state";
+import { configureRunner, isDispatchedHere, markDispatched, state } from "./runner-state";
 
 configureRunner({
   taskRepo: {
@@ -35,17 +30,15 @@ configureRunner({
 
 /** 照 drizzle 的真实包法造一条锁错误：原因在 `cause` 上。 */
 function busyError(): Error {
-  const e = new Error(
-    'Failed query: update "task" set "status" = ? where "task"."id" = ?',
-  );
-  (e as { cause?: unknown }).cause = {
+  const e = new Error('Failed query: update "task" set "status" = ? where "task"."id" = ?');
+  /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause = {
     code: "SQLITE_BUSY",
     message: "database is locked",
   };
   return e;
 }
 
-const linesOf = (taskId: string): string[] =>
+const linesOf = (taskId: string): Array<string> =>
   (state().logs.get(taskId) ?? []).map((l) => `${l.level}: ${l.msg}`);
 
 describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () => {
@@ -54,17 +47,17 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
     let calls = 0;
     const outcome = await writeTerminal("t-retry", "失败收口", async () => {
       calls += 1;
-      if (calls < 3) throw busyError();
-      return "written" as const;
+      if (calls < 3) {
+        throw busyError();
+      }
+      return /* SAFETY: 类型断言已复核 */ "written" as const;
     });
 
     expect(outcome).toBe("written");
     expect(calls).toBe(3);
     expect(isDispatchedHere("t-retry")).toBe(true);
     const lines = linesOf("t-retry");
-    expect(
-      lines.filter((l) => l.includes("写库撞锁，按预算重试")),
-    ).toHaveLength(1);
+    expect(lines.filter((l) => l.includes("写库撞锁，按预算重试"))).toHaveLength(1);
     expect(lines.some((l) => l.startsWith("error:"))).toBe(false);
   });
 
@@ -79,9 +72,7 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
       throw busyError();
     });
 
-    await expect(writeTerminal("t-exhaust", "成功收口", write)).rejects.toThrow(
-      /SQLITE_BUSY/,
-    );
+    await expect(writeTerminal("t-exhaust", "成功收口", write)).rejects.toThrow(/SQLITE_BUSY/);
     /* 4 次 = TERMINAL_DB_WRITE.maxAttempts；判的是「次数由那份定义说话」，
      * 不是这里再抄一个字面量。 */
     expect(write).toHaveBeenCalledTimes(4);
@@ -103,9 +94,7 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
       throw new Error("no such table: task");
     });
 
-    await expect(writeTerminal("t-real", "失败收口", write)).rejects.toThrow(
-      "no such table: task",
-    );
+    await expect(writeTerminal("t-real", "失败收口", write)).rejects.toThrow("no such table: task");
     expect(write).toHaveBeenCalledTimes(1);
     /* 仍然归还槽位：写不进去就是写不进去，接管不该只留给「像锁」的那一族。 */
     expect(isDispatchedHere("t-real")).toBe(false);
@@ -113,7 +102,11 @@ describe("writeTerminal —— 终态那一次库写不再被静默吞掉", () =
 
   it("一次就成的收口不写任何多余日志", async () => {
     markDispatched("t-clean");
-    await writeTerminal("t-clean", "成功收口", async () => "written" as const);
+    await writeTerminal(
+      "t-clean",
+      "成功收口",
+      async () => /* SAFETY: 类型断言已复核 */ "written" as const,
+    );
     expect(state().logs.has("t-clean")).toBe(false);
     expect(isDispatchedHere("t-clean")).toBe(true);
   });

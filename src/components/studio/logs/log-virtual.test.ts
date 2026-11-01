@@ -26,7 +26,7 @@ import {
 } from "./log-virtual";
 
 /** 造一批等高行（不换行），几何断言才可手算。 */
-function flat(count: number, size = LOG_ROW_SINGLE): RowLayout[] {
+function flat(count: number, size = LOG_ROW_SINGLE): Array<RowLayout> {
   return Array.from({ length: count }, (_, i) => ({
     start: i * size,
     size,
@@ -43,12 +43,8 @@ describe("行高估算", () => {
 
   it("换行时按显式换行符加高", () => {
     expect(estimateRowHeight("一行", true)).toBe(LOG_ROW_SINGLE);
-    expect(estimateRowHeight("一行\n两行", true)).toBe(
-      LOG_ROW_SINGLE + LOG_ROW_LINE,
-    );
-    expect(estimateRowHeight("a\nb\nc\nd", true)).toBe(
-      LOG_ROW_SINGLE + 3 * LOG_ROW_LINE,
-    );
+    expect(estimateRowHeight("一行\n两行", true)).toBe(LOG_ROW_SINGLE + LOG_ROW_LINE);
+    expect(estimateRowHeight("a\nb\nc\nd", true)).toBe(LOG_ROW_SINGLE + 3 * LOG_ROW_LINE);
   });
 
   it("量不到宽度（首帧 / jsdom）时只数显式换行，不瞎估软换行", () => {
@@ -240,7 +236,7 @@ describe("贴底该不该动", () => {
   });
 
   it("用户已把位置滚到别处 → 不动（滚到底看最新不被按回顶部）", () => {
-    expect(pinPlan({ ...base, scrollTop: 53482 })).toBeNull();
+    expect(pinPlan({ ...base, scrollTop: 53_482 })).toBeNull();
   });
 
   it("容差 1px：浏览器取整造成的分毫差不算「用户接管」", () => {

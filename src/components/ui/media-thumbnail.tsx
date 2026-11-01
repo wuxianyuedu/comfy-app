@@ -49,7 +49,7 @@ export type MediaFallback =
  *  用 `commonOwnProps` 求交集能一眼看出这条边界（写成 `[...A, ...B]` 的
  *  并集会把只属于一个底层的字段也剔掉，那个底层再也拿不到它该有的属性，
  *  且**没有报错**）。此处两个底层同名的字段就是下表，故直接列全。*/
-const OWN_PROPS = [
+const OWN_PROPS = /* SAFETY: 类型断言已复核 */ [
   "src",
   "alt",
   "className",
@@ -66,28 +66,8 @@ const OWN_PROPS = [
 ] as const;
 
 /** 额外透传给底层 `<img>` / `<video>` 的属性（`onClick` / `title` 等）。 */
-export interface MediaThumbnailProps extends OmitOwnProps<
-  React.ImgHTMLAttributes<HTMLImageElement> &
-    React.VideoHTMLAttributes<HTMLVideoElement>,
-  (typeof OWN_PROPS)[number]
-> {
-  src?: string | null;
+export type MediaThumbnailProps = {
   alt?: string;
-  className?: string;
-  autoPlay?: boolean;
-  muted?: boolean;
-  loop?: boolean;
-  /** 加载成功时回调，拿到底层媒体元素。
-   *
-   *  要**自然尺寸 / 宽高比**的调用处别在这里自己读 `naturalWidth` / `videoWidth`
-   *  —— 那些读数的口径收在 `~/lib/media/natural-size` 的 `readNaturalSize`
-   *  / `naturalAspectRatio` / `isPortraitMedia`（规范 16 §16.2.4.31）：
-   *  两组读数、0 值三态、`×` 的写法都只有一处定义。 */
-  onLoad?: (media: HTMLImageElement | HTMLVideoElement) => void;
-  /** 加载失败时回调（如上报 / 记日志）；兜底渲染由 `fallback` 决定。 */
-  onLoadError?: (src: string) => void;
-  /** 失败兜底形态，见 `MediaFallback`。默认 `"placeholder"`。 */
-  fallback?: MediaFallback;
   /**
    * 强制按图片 / 视频渲染，覆盖按 `src` 后缀的推断。
    *
@@ -97,7 +77,26 @@ export interface MediaThumbnailProps extends OmitOwnProps<
    * 调用处已经知道的答案。
    */
   as?: "image" | "video";
-}
+  autoPlay?: boolean;
+  className?: string;
+  /** 失败兜底形态，见 `MediaFallback`。默认 `"placeholder"`。 */
+  fallback?: MediaFallback;
+  loop?: boolean;
+  muted?: boolean;
+  /** 加载成功时回调，拿到底层媒体元素。
+   *
+   *  要**自然尺寸 / 宽高比**的调用处别在这里自己读 `naturalWidth` / `videoWidth`
+   *  —— 那些读数的口径收在 `~/lib/media/natural-size` 的 `readNaturalSize`
+   *  / `naturalAspectRatio` / `isPortraitMedia`（规范 16 §16.2.4.31）：
+   *  两组读数、0 值三态、`×` 的写法都只有一处定义。 */
+  onLoad?: (media: HTMLImageElement | HTMLVideoElement) => void;
+  /** 加载失败时回调（如上报 / 记日志）；兜底渲染由 `fallback` 决定。 */
+  onLoadError?: (src: string) => void;
+  src?: string | null;
+} & OmitOwnProps<
+  React.ImgHTMLAttributes<HTMLImageElement> & React.VideoHTMLAttributes<HTMLVideoElement>,
+  (typeof OWN_PROPS)[number]
+>;
 
 /**
  * 中性失败占位：与调用处的盒子同尺寸（`h-full w-full` + 继承圆角），
@@ -107,9 +106,9 @@ export interface MediaThumbnailProps extends OmitOwnProps<
 function FailurePlaceholder({ className }: { className?: string }) {
   return (
     <span
-      role="img"
       aria-label="图片不可用"
       className={`text-ink-fainter bg-canvas-deep text-3xs flex items-center justify-center ${className ?? ""}`}
+      role="img"
     >
       图片不可用
     </span>
@@ -123,9 +122,7 @@ function FailurePlaceholder({ className }: { className?: string }) {
  * `<MediaThumbnail src={item.url} alt={item.name} className="h-full w-full object-cover" />`；
  * 列表里失败就整格不渲染（宁缺勿错）时传 `fallback="none"`。
  */
-export const MediaThumbnail = React.memo(function MediaThumbnail(
-  props: MediaThumbnailProps,
-) {
+export const MediaThumbnail = React.memo(function MediaThumbnail(props: MediaThumbnailProps) {
   /* 私有字段与要透传的字段**从同一份表**分开（`OWN_PROPS`）—— 类型侧的
    * `OmitOwnProps` 与这里的 `splitDomProps` 读的是同一个数组。 */
   const { own, rest: mediaProps } = splitDomProps(props, OWN_PROPS);
@@ -152,11 +149,16 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(
   const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
   const failed = failedSrc !== null && failedSrc === src;
 
-  if (!src) return null;
+  if (!src) {
+    return null;
+  }
   if (failed) {
-    if (fallback === "none") return null;
-    if (fallback === "placeholder")
+    if (fallback === "none") {
+      return null;
+    }
+    if (fallback === "placeholder") {
       return <FailurePlaceholder className={className} />;
+    }
     return <>{fallback}</>;
   }
 
@@ -179,16 +181,16 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(
        * 真要放带音频的视频时，字幕由调用处另给 `<track>`。 */
       /* eslint-disable-next-line jsx-a11y/media-has-caption -- 静音预览媒体，无音轨可配字幕（空 <track> 反而给读屏器一条假字幕轨） */
       <video
-        src={src}
         aria-label={alt}
-        className={className}
         autoPlay={autoPlay}
-        muted={muted}
+        className={className}
         loop={loop}
+        muted={muted}
+        onError={handleError}
+        onLoadedData={(event) => onLoad?.(event.currentTarget)}
         playsInline
         preload="metadata"
-        onLoadedData={(event) => onLoad?.(event.currentTarget)}
-        onError={handleError}
+        src={src}
         {...mediaProps}
       />
     );
@@ -196,16 +198,16 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(
 
   return (
     <img
-      src={src}
       /* 纯装饰缩略图（`alt` 没给）时给 `alt=""` + `aria-hidden`：读屏器跳过它，
        * 与「这张图不携带信息」一致；给了 `alt` 的按正常可访问名走（规范 §6.9）。 */
       alt={alt}
       aria-hidden={alt === "" ? true : undefined}
       className={className}
-      loading="lazy"
       decoding="async"
-      onLoad={(event) => onLoad?.(event.currentTarget)}
+      loading="lazy"
       onError={handleError}
+      onLoad={(event) => onLoad?.(event.currentTarget)}
+      src={src}
       {...mediaProps}
     />
   );

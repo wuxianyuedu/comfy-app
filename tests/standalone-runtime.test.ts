@@ -14,6 +14,7 @@
  */
 import { DatabaseSync } from "node:sqlite";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -22,7 +23,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -38,44 +38,36 @@ const read = (rel: string) => readFileSync(path.join(ROOT, rel), "utf8");
  * 判据的形状必须由用例自己写清楚，否则模块改签名时用例会静默变宽。
  */
 type StaticAllowModule = {
+  BUILT_RUNTIME_SCRIPTS: Array<string>;
   isStaticPathAllowed: (rel: string) => boolean;
-  pruneStaticToAllowList: (
-    dir: string,
-    onRemoved?: (name: string) => void,
-  ) => string[];
-  RUNTIME_SRC: string[];
-  PREBUNDLED_SRC_ROOTS: string[];
-  RUNTIME_SCRIPTS: string[];
-  BUILT_RUNTIME_SCRIPTS: string[];
-  PRIVATE_INPUTS: string[];
-  stripPrivateInputs: (
-    dir: string,
-    onRemoved?: (name: string) => void,
-  ) => string[];
+  PREBUNDLED_SRC_ROOTS: Array<string>;
+  PRIVATE_INPUTS: Array<string>;
+  pruneStaticToAllowList: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
+  RUNTIME_SCRIPTS: Array<string>;
+  RUNTIME_SRC: Array<string>;
+  stripPrivateInputs: (dir: string, onRemoved?: (name: string) => void) => Array<string>;
 };
 type RuntimeEnvModule = {
-  OAUTH_PLACEHOLDER: string;
   AUTH_SECRET_FILE_REL: string;
-  readOrCreateAuthSecret: (appRoot: string) => string;
-  standaloneDbFile: (appRoot: string) => string;
   buildStandaloneRuntimeEnv: (input: {
     appRoot: string;
-    port: number;
     env?: NodeJS.ProcessEnv;
+    port: number;
   }) => NodeJS.ProcessEnv;
   ensureStandaloneSchema: (input: { appRoot: string; dbFile?: string }) => {
     applied: boolean;
-    tablesBefore: number;
     tablesAfter: number;
+    tablesBefore: number;
   };
+  OAUTH_PLACEHOLDER: string;
+  readOrCreateAuthSecret: (appRoot: string) => string;
+  standaloneDbFile: (appRoot: string) => string;
 };
 
 const load = <T>(rel: string): Promise<T> =>
-  import(pathToFileURL(path.join(ROOT, rel)).href) as Promise<T>;
-const loadStatic = () =>
-  load<StaticAllowModule>("scripts/standalone-private-inputs.mjs");
-const loadEnv = () =>
-  load<RuntimeEnvModule>("scripts/launcher-core/standalone-runtime-env.mjs");
+  /* SAFETY: 类型断言已复核 */ import(pathToFileURL(path.join(ROOT, rel)).href) as Promise<T>;
+const loadStatic = () => load<StaticAllowModule>("scripts/standalone-private-inputs.mjs");
+const loadEnv = () => load<RuntimeEnvModule>("scripts/launcher-core/standalone-runtime-env.mjs");
 
 /** 只含结构的最小 DDL（真实 DDL 由 §首启建表 每轮构建现生成）。 */
 const FIXTURE_DDL = [
@@ -143,9 +135,7 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     expect(RUNTIME_SRC).toContain("lib/process/kill-process-tree.ts");
     expect(isStaticPathAllowed("src")).toBe(true);
     expect(isStaticPathAllowed("src/lib")).toBe(true);
-    expect(isStaticPathAllowed("src/lib/process/kill-process-tree.ts")).toBe(
-      true,
-    );
+    expect(isStaticPathAllowed("src/lib/process/kill-process-tree.ts")).toBe(true);
     expect(isStaticPathAllowed("src/lib/comfyui/host-runtime.ts")).toBe(false);
     expect(isStaticPathAllowed("src/server/db.ts")).toBe(false);
   });
@@ -176,32 +166,35 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     /** 说明符 → 相对 `src/` 的路径（不含 `.ts`，落在 `src/` 之外返回 null）。 */
     const toSrcRel = (spec: string, fromFile: string): string | null => {
       const rel = path
-        .relative(
-          path.join(ROOT, "src"),
-          path.resolve(path.dirname(fromFile), spec),
-        )
+        .relative(path.join(ROOT, "src"), path.resolve(path.dirname(fromFile), spec))
         .split(path.sep)
         .join("/");
-      if (rel === "" || rel.startsWith("..")) return null;
+      if (rel === "" || rel.startsWith("..")) {
+        return null;
+      }
       return rel.replace(/\.ts$/, "");
     };
     /** 一份 TS 里 `./x.ts` / `./x` 两种写法都要认（本仓 TS 侧惯例是省略扩展名，
      *  而 `.mjs` 侧必须带 —— 那正是 `platform.ts` 被拆出来的理由）。 */
-    const relativeSpecifiers = (abs: string): string[] => {
+    const relativeSpecifiers = (abs: string): Array<string> => {
       const code = stripCommentLines(readFileSync(abs, "utf8"));
       return [...code.matchAll(/from "(\.[^"]+)"/g)]
         .map((m) => m[1])
         .filter((spec): spec is string => typeof spec === "string");
     };
     /** 从几个 `src/` 根出发，顺着它们自己的 import 走到底。 */
-    const closureFrom = (seeds: string[]): Set<string> => {
+    const closureFrom = (seeds: Array<string>): Set<string> => {
       const seen = new Set(seeds);
       const queue = [...seeds];
       while (queue.length > 0) {
         const rel = queue.shift();
-        if (rel === undefined) break;
+        if (rel === undefined) {
+          break;
+        }
         const abs = path.join(ROOT, "src", `${rel}.ts`);
-        if (!existsSync(abs)) continue;
+        if (!existsSync(abs)) {
+          continue;
+        }
         for (const spec of relativeSpecifiers(abs)) {
           const next = toSrcRel(spec, abs);
           if (next !== null && !seen.has(next)) {
@@ -213,20 +206,20 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
       return seen;
     };
 
-    const entries = registry.RUNTIME_SCRIPTS.filter((name) =>
-      name.endsWith(".mjs"),
-    )
+    const entries = registry.RUNTIME_SCRIPTS.filter((name) => name.endsWith(".mjs"))
       .map((name) => path.join(ROOT, "scripts", name))
       .filter((abs) => existsSync(abs));
     /* 入口侧按「文件里出现 `../src/…` 的字符串」收，是因为回收链那两处是**常量中转**
      * 的动态 import（`const specifier = "../src/lib/process/kill-process-tree.ts"`，
      * 见 `scripts/reap-process.mjs` 文件头）—— 只认 `from "…"` 会把整条链漏掉。 */
-    const seeds: string[] = [];
+    const seeds: Array<string> = [];
     for (const abs of entries) {
       const code = stripCommentLines(readFileSync(abs, "utf8"));
       for (const m of code.matchAll(/"((?:\.\.\/)+src\/[^"]+)"/g)) {
         const rel = m[1] === undefined ? null : toSrcRel(m[1], abs);
-        if (rel !== null && !seeds.includes(rel)) seeds.push(rel);
+        if (rel !== null && !seeds.includes(rel)) {
+          seeds.push(rel);
+        }
       }
     }
     const reachable = closureFrom(seeds);
@@ -254,19 +247,13 @@ describe("桌包载荷的顶层白名单（默认拒绝）", () => {
     mkdirSync(path.join(workdir, "changelog.d"), { recursive: true });
     writeFileSync(path.join(workdir, "server.js"), "//", "utf8");
     writeFileSync(path.join(workdir, "src/lib/comfyui/x.ts"), "x", "utf8");
-    writeFileSync(
-      path.join(workdir, "src/lib/process/kill-process-tree.ts"),
-      "k",
-      "utf8",
-    );
+    writeFileSync(path.join(workdir, "src/lib/process/kill-process-tree.ts"), "k", "utf8");
     writeFileSync(path.join(workdir, "changelog.d/1.md"), "m", "utf8");
     const removed = pruneStaticToAllowList(workdir);
     expect(removed).toContain("changelog.d");
     expect(existsSync(path.join(workdir, "changelog.d"))).toBe(false);
     expect(existsSync(path.join(workdir, "src/lib/comfyui"))).toBe(false);
-    expect(
-      existsSync(path.join(workdir, "src/lib/process/kill-process-tree.ts")),
-    ).toBe(true);
+    expect(existsSync(path.join(workdir, "src/lib/process/kill-process-tree.ts"))).toBe(true);
     expect(existsSync(path.join(workdir, "server.js"))).toBe(true);
   });
 });
@@ -279,11 +266,7 @@ describe("开发机私有输入：data 下的密钥与设置不许随包", () =>
     // 首启写进载荷根的会话密钥：重装后直接 bundle（不重装配）也会一起带出去。
     expect(PRIVATE_INPUTS).toContain("data/runtime-secret.json");
     mkdirSync(path.join(workdir, "data"), { recursive: true });
-    writeFileSync(
-      path.join(workdir, "data/llm-secret.key"),
-      "SECRET-ISH",
-      "utf8",
-    );
+    writeFileSync(path.join(workdir, "data/llm-secret.key"), "SECRET-ISH", "utf8");
     writeFileSync(path.join(workdir, ".env"), "A=1", "utf8");
     const removed = stripPrivateInputs(workdir);
     expect(removed).toContain("data/llm-secret.key");
@@ -295,12 +278,8 @@ describe("开发机私有输入：data 下的密钥与设置不许随包", () =>
 describe("入口的运行期环境装配（分发产物不含 .env）", () => {
   it("少 PORT / 坏 PORT 都大声失败：缺省端口等于让 server 与壳各认一个", async () => {
     const { buildStandaloneRuntimeEnv } = await loadEnv();
-    expect(() =>
-      buildStandaloneRuntimeEnv({ appRoot: workdir, port: Number.NaN }),
-    ).toThrow(/PORT/);
-    expect(() =>
-      buildStandaloneRuntimeEnv({ appRoot: workdir, port: 0 }),
-    ).toThrow(/PORT/);
+    expect(() => buildStandaloneRuntimeEnv({ appRoot: workdir, port: Number.NaN })).toThrow(/PORT/);
+    expect(() => buildStandaloneRuntimeEnv({ appRoot: workdir, port: 0 })).toThrow(/PORT/);
   });
 
   it("必填项逐个给值，数据库是绝对路径，回环是 127.0.0.1", async () => {
@@ -341,12 +320,10 @@ describe("入口的运行期环境装配（分发产物不含 .env）", () => {
   it("BETTER_AUTH_SECRET 跨调用稳定（变了等于把用户登出）", async () => {
     const { buildStandaloneRuntimeEnv, AUTH_SECRET_FILE_REL } = await loadEnv();
     const first = String(
-      buildStandaloneRuntimeEnv({ appRoot: workdir, port: 4124 })
-        .BETTER_AUTH_SECRET,
+      buildStandaloneRuntimeEnv({ appRoot: workdir, port: 4124 }).BETTER_AUTH_SECRET,
     );
     const again = String(
-      buildStandaloneRuntimeEnv({ appRoot: workdir, port: 4124 })
-        .BETTER_AUTH_SECRET,
+      buildStandaloneRuntimeEnv({ appRoot: workdir, port: 4124 }).BETTER_AUTH_SECRET,
     );
     expect(again).toBe(first);
     expect(first.length).toBeGreaterThanOrEqual(32);
@@ -356,11 +333,7 @@ describe("入口的运行期环境装配（分发产物不含 .env）", () => {
   it("密钥文件坏掉时报错，不悄悄换一把", async () => {
     const { readOrCreateAuthSecret } = await loadEnv();
     mkdirSync(path.join(workdir, "data"), { recursive: true });
-    writeFileSync(
-      path.join(workdir, "data/runtime-secret.json"),
-      "{ not json",
-      "utf8",
-    );
+    writeFileSync(path.join(workdir, "data/runtime-secret.json"), "{ not json", "utf8");
     expect(() => readOrCreateAuthSecret(workdir)).toThrow(/not valid JSON/);
     writeFileSync(
       path.join(workdir, "data/runtime-secret.json"),
@@ -394,9 +367,7 @@ describe("首启建表（载荷里没有 drizzle-kit）", () => {
 
     const db = new DatabaseSync(standaloneDbFile(workdir));
     expect(
-      db
-        .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table'")
-        .get(),
+      db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table'").get(),
     ).toMatchObject({ n: 2 });
     db.close();
   });
@@ -411,9 +382,7 @@ describe("首启建表（载荷里没有 drizzle-kit）", () => {
     expect(result.applied).toBe(false);
     expect(result.tablesBefore).toBe(1);
     const check = new DatabaseSync(path.join(workdir, "db.sqlite"));
-    expect(
-      check.prepare("SELECT COUNT(*) AS n FROM `keepme`").get(),
-    ).toMatchObject({
+    expect(check.prepare("SELECT COUNT(*) AS n FROM `keepme`").get()).toMatchObject({
       n: 1,
     });
     check.close();
@@ -421,9 +390,7 @@ describe("首启建表（载荷里没有 drizzle-kit）", () => {
 
   it("零表且缺 DDL ⇒ 大声失败并指回装配步", async () => {
     const { ensureStandaloneSchema } = await loadEnv();
-    expect(() => ensureStandaloneSchema({ appRoot: workdir })).toThrow(
-      /build-desktop/,
-    );
+    expect(() => ensureStandaloneSchema({ appRoot: workdir })).toThrow(/build-desktop/);
   });
 });
 
@@ -433,9 +400,13 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
    *  拷进来，不覆盖就会真起一个宿主）；给 `null` = 载荷里**没有**宿主入口。 */
   function stagePayload(serverBody: string, host?: string | null) {
     for (const name of registry.RUNTIME_SCRIPTS) {
-      if (registry.BUILT_RUNTIME_SCRIPTS.includes(name)) continue; // 构建期产物，桩里没有
+      if (registry.BUILT_RUNTIME_SCRIPTS.includes(name)) {
+        continue;
+      } // 构建期产物，桩里没有
       const src = path.join(ROOT, "scripts", name);
-      if (!existsSync(src)) continue; // 缺源由 §10.2 的断言负责，不在这里判
+      if (!existsSync(src)) {
+        continue;
+      } // 缺源由 §10.2 的断言负责，不在这里判
       const dest = path.join(workdir, "scripts", name);
       mkdirSync(path.dirname(dest), { recursive: true });
       cpSync(src, dest);
@@ -453,24 +424,27 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
       writeFileSync(path.join(workdir, "server.js"), serverBody, "utf8");
     }
     const hostPath = path.join(workdir, "scripts", "executor-host.mjs");
-    if (host === null) rmSync(hostPath, { force: true });
-    else if (host !== undefined) writeFileSync(hostPath, host, "utf8");
+    if (host === null) {
+      rmSync(hostPath, { force: true });
+    } else if (host !== undefined) {
+      writeFileSync(hostPath, host, "utf8");
+    }
   }
 
-  const entryPath = () =>
-    path.join(workdir, "scripts", "standalone-runtime.mjs");
+  const entryPath = () => path.join(workdir, "scripts", "standalone-runtime.mjs");
   const runWith = (port: string, extraEnv: Record<string, string> = {}) =>
     spawnSync(process.execPath, [entryPath()], {
       encoding: "utf8",
       env: { ...process.env, PORT: port, ...extraEnv },
       timeout: 90_000,
     });
-  const both = (r: { stdout?: string; stderr?: string }) =>
-    `${r.stdout ?? ""}${r.stderr ?? ""}`;
+  const both = (r: { stderr?: string; stdout?: string; }) => `${r.stdout ?? ""}${r.stderr ?? ""}`;
   /** 宿主自己的输出通道内容（入口把这两份路径写在 `host pid=` 那一行里）。 */
   function hostStdout() {
     const dir = path.join(workdir, "log", "current", "services");
-    if (!existsSync(dir)) return "";
+    if (!existsSync(dir)) {
+      return "";
+    }
     return readdirSync(dir)
       .filter((n) => n.startsWith("executor-host-stdout-"))
       .map((n) => readFileSync(path.join(dir, n), "utf8"))
@@ -491,13 +465,9 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     for (const name of names) {
       expect(name, name).not.toMatch(/[: ]/);
     }
-    const stdoutName = names.find((n) =>
-      n.startsWith("standalone-server-stdout-"),
-    );
+    const stdoutName = names.find((n) => n.startsWith("standalone-server-stdout-"));
     expect(stdoutName, names.join(",")).toBeTruthy();
-    expect(readFileSync(path.join(dir, String(stdoutName)), "utf8")).toContain(
-      "stub server up",
-    );
+    expect(readFileSync(path.join(dir, String(stdoutName)), "utf8")).toContain("stub server up");
     // 库与日志都落在载荷根，而不是调用者的 cwd。
     expect(existsSync(path.join(workdir, "db.sqlite"))).toBe(true);
   });
@@ -536,10 +506,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     "setInterval(() => {}, 500);\n";
 
   it("COMFY_EXECUTOR=host ⇒ 起宿主，env 带着归一化值 / 绝对库 / boot id，退出时收两棵树", () => {
-    stagePayload(
-      "console.log('stub server up'); process.exit(0);\n",
-      STUB_HOST_ALIVE,
-    );
+    stagePayload("console.log('stub server up'); process.exit(0);\n", STUB_HOST_ALIVE);
     const out = runWith("4220", { COMFY_EXECUTOR: "host" });
     const text = both(out);
     expect(out.status, text).toBe(0);
@@ -560,10 +527,9 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(echoed).toContain("node=production");
     const stamp = /executor-host-stdout-(\S+?)\.log/.exec(text)?.[1];
     expect(stamp, `入口没打出宿主输出通道：${text}`).toBeTruthy();
-    expect(
-      echoed,
-      `boot id 必须与本次日志同名（跨进程 grep 的唯一线索）：${echoed}`,
-    ).toContain(`boot=${stamp}`);
+    expect(echoed, `boot id 必须与本次日志同名（跨进程 grep 的唯一线索）：${echoed}`).toContain(
+      `boot=${stamp}`,
+    );
     // 退出时先收宿主（server 已自己退了，不该出现它的假 reap）
     expect(text).toContain(`reap pid=${hostPid}`);
     expect(text).not.toMatch(/reap FAILED/);
@@ -576,9 +542,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
     expect(out.status, text).toBe(0);
     expect(text).toMatch(/executor mode=inline/);
     expect(text).not.toMatch(/host pid=/);
-    expect(existsSync(path.join(workdir, "log", "current", "services"))).toBe(
-      false,
-    );
+    expect(existsSync(path.join(workdir, "log", "current", "services"))).toBe(false);
   });
 
   it("设了 host 而载荷里没有宿主入口 ⇒ 大声说明并留在 host 归属，不偷偷降级", () => {
@@ -592,10 +556,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
   });
 
   it("宿主中途退出 ⇒ 大声一行、server 继续跑、退出码仍由 server 定，且不再补刀", () => {
-    stagePayload(
-      "setTimeout(() => process.exit(0), 1500);\n",
-      "process.exit(7);\n",
-    );
+    stagePayload("setTimeout(() => process.exit(0), 1500);\n", "process.exit(7);\n");
     const out = runWith("4223", { COMFY_EXECUTOR: "host" });
     const text = both(out);
     expect(out.status, text).toBe(0);
@@ -621,7 +582,7 @@ describe("入口真起一次（桩 server：验 boot / 建表 / 退出码 / 大�
 
 describe("装配、打包配置与产物判据三者同形", () => {
   it("tauri.conf.json 声明的 resources 落点 == 壳拼的载荷根", () => {
-    const conf = read("src-tauri/tauri.conf.json").replace(/\s+/g, "");
+    const conf = read("src-tauri/tauri.conf.json").replaceAll(/\s+/g, "");
     expect(conf).toContain('"resources":["static/"]');
     const shell = read("src-tauri/src/lib.rs");
     expect(shell).toContain('let app_root = res_dir.join("static");');
@@ -645,7 +606,7 @@ describe("装配、打包配置与产物判据三者同形", () => {
     // 「这不是载荷」与「真要桌包请跑 build-standalone」。
     expect(script).toContain("build-standalone.ps1");
     // resources 声明一旦挪走，这条补齐步就成了死代码：两侧同形。
-    expect(read("src-tauri/tauri.conf.json").replace(/\s+/g, "")).toContain(
+    expect(read("src-tauri/tauri.conf.json").replaceAll(/\s+/g, "")).toContain(
       '"resources":["static/"]',
     );
   });
@@ -675,14 +636,9 @@ describe("装配、打包配置与产物判据三者同形", () => {
   });
 
   it("入口与其环境模块登记进两侧白名单（漏一侧 = 被剪掉，或检查瞎掉）", () => {
-    for (const name of [
-      "standalone-runtime.mjs",
-      "launcher-core/standalone-runtime-env.mjs",
-    ]) {
+    for (const name of ["standalone-runtime.mjs", "launcher-core/standalone-runtime-env.mjs"]) {
       expect(registry.RUNTIME_SCRIPTS, name).toContain(name);
-      expect(read("scripts/check-standalone-contents.cjs"), name).toContain(
-        name,
-      );
+      expect(read("scripts/check-standalone-contents.cjs"), name).toContain(name);
     }
   });
 

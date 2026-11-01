@@ -23,7 +23,7 @@ import type { NodeKind } from "~/lib/project-canvas/canvas-types";
 
 /** 项目画布所有节点共用的渲染链路（不随 kind 变化）。
  *  scope: canvas=画布级（容器/编排/状态层），node=节点级（节点渲染/类型）。 */
-const CANVAS_COMMON: RenderChainModule[] = [
+const CANVAS_COMMON: Array<RenderChainModule> = [
   {
     file: "src/components/studio/ProjectCanvas.tsx",
     label: "ProjectCanvas",
@@ -47,7 +47,7 @@ const CANVAS_COMMON: RenderChainModule[] = [
 ];
 
 /** 按 kind 追加的渲染链路（不含公共链路） */
-const KIND_CHAIN: Record<NodeKind, RenderChainModule[]> = {
+const KIND_CHAIN: Record<NodeKind, Array<RenderChainModule>> = {
   workflow: [
     {
       file: "src/components/studio/project-canvas/WorkflowNode.tsx",
@@ -115,10 +115,10 @@ const KIND_CHAIN: Record<NodeKind, RenderChainModule[]> = {
  * 返回项目画布中指定 kind 节点卡片的渲染链路模块列表。
  * 未知 kind 只返回公共链路（设计文档错误处理：未知 kind → 只显示公共链路）。
  */
-export function getProjectCanvasRenderChain(
-  kind: NodeKind,
-): RenderChainModule[] {
+export function getProjectCanvasRenderChain(kind: NodeKind): Array<RenderChainModule> {
   const extra = KIND_CHAIN[kind];
-  if (!extra) return [...CANVAS_COMMON];
+  if (!extra) {
+    return [...CANVAS_COMMON];
+  }
   return [...CANVAS_COMMON, ...extra];
 }

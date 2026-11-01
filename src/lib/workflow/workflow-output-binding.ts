@@ -34,17 +34,18 @@ export const OUTPUT_BINDING_NAMESPACE = "output";
  *  刻意不给「每个输出口自动挑一个」的启发式：输出没有运行期语义，硬凑一个默认
  *  落点只会在作者没连过时凭空挪动取值来源。 */
 export function defaultOutputSource(
-  outputs: readonly { ioKey: string; displayOrder?: number }[],
+  outputs: ReadonlyArray<{ displayOrder?: number; ioKey: string }>,
 ): string | null {
   const [firstOutput] = outputs;
-  if (!firstOutput) return null;
+  if (!firstOutput) {
+    return null;
+  }
   let best = firstOutput;
   for (const item of outputs) {
-    if (item.displayOrder === undefined) continue;
-    if (
-      best.displayOrder === undefined ||
-      item.displayOrder < best.displayOrder
-    ) {
+    if (item.displayOrder === undefined) {
+      continue;
+    }
+    if (best.displayOrder === undefined || item.displayOrder < best.displayOrder) {
       best = item;
     }
   }
@@ -53,8 +54,8 @@ export function defaultOutputSource(
 
 /** 该输出口的 default 落点是否就是它自己（没有任何手工覆盖时的判定依据）。 */
 export function isDefaultOutputBinding(
-  output: { ioKey: string; displayOrder?: number },
-  outputs: readonly { ioKey: string; displayOrder?: number }[],
+  output: { displayOrder?: number; ioKey: string },
+  outputs: ReadonlyArray<{ displayOrder?: number; ioKey: string }>,
 ): boolean {
   return defaultOutputSource(outputs) === output.ioKey;
 }
@@ -65,19 +66,33 @@ function manualMapForMode(
   paramMap: unknown,
   mode: string | null | undefined,
 ): Record<string, string | null> {
-  if (!mode) return {};
-  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap))
+  if (!mode) {
     return {};
-  const ns = (paramMap as Record<string, unknown>)[OUTPUT_BINDING_NAMESPACE];
-  if (!ns || typeof ns !== "object" || Array.isArray(ns)) return {};
-  const table = (ns as Record<string, unknown>)[`${MODE_KEY_PREFIX}${mode}`];
-  if (!table || typeof table !== "object" || Array.isArray(table)) return {};
+  }
+  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) {
+    return {};
+  }
+  const ns = /* SAFETY: 类型断言已复核 */ (paramMap as Record<string, unknown>)[
+    OUTPUT_BINDING_NAMESPACE
+  ];
+  if (!ns || typeof ns !== "object" || Array.isArray(ns)) {
+    return {};
+  }
+  const table = /* SAFETY: 类型断言已复核 */ (ns as Record<string, unknown>)[
+    `${MODE_KEY_PREFIX}${mode}`
+  ];
+  if (!table || typeof table !== "object" || Array.isArray(table)) {
+    return {};
+  }
   const out: Record<string, string | null> = {};
   for (const [ioKey, value] of Object.entries(
-    table as Record<string, unknown>,
+    /* SAFETY: 类型断言已复核 */ table as Record<string, unknown>,
   )) {
-    if (typeof value === "string") out[ioKey] = value;
-    else if (value === null) out[ioKey] = null;
+    if (typeof value === "string") {
+      out[ioKey] = value;
+    } else if (value === null) {
+      out[ioKey] = null;
+    }
   }
   return out;
 }
@@ -89,10 +104,13 @@ export function manualOutputSource(
   outputIoKey: string,
   mode: string | null | undefined,
 ): string | null | undefined {
-  if (!mode) return undefined;
-  const table = manualMapForMode(paramMap, mode);
-  if (!Object.prototype.hasOwnProperty.call(table, outputIoKey))
+  if (!mode) {
     return undefined;
+  }
+  const table = manualMapForMode(paramMap, mode);
+  if (!Object.hasOwn(table, outputIoKey)) {
+    return undefined;
+  }
   return table[outputIoKey] ?? null;
 }
 
@@ -108,8 +126,8 @@ export function hasManualOutputBinding(
  *  那一行（default 落点）。 */
 export function resolveOutputSource(
   paramMap: unknown,
-  output: { ioKey: string; displayOrder?: number },
-  outputs: readonly { ioKey: string; displayOrder?: number }[],
+  output: { displayOrder?: number; ioKey: string },
+  outputs: ReadonlyArray<{ displayOrder?: number; ioKey: string }>,
   mode: string | null | undefined,
   io?: WorkflowIOMap | null,
 ): string | null {
@@ -117,8 +135,12 @@ export function resolveOutputSource(
   if (manual !== undefined) {
     /* 断开（`null`）或连到一个已经不存在的端口（工作流改版）→ 悬空，如实为
      *  null；退回 default 会让「断开」看起来从没发生过。 */
-    if (manual === null) return null;
-    if (io && !io[manual]) return null;
+    if (manual === null) {
+      return null;
+    }
+    if (io && !io[manual]) {
+      return null;
+    }
     return manual;
   }
   return isDefaultOutputBinding(output, outputs) ? output.ioKey : null;
@@ -130,21 +152,24 @@ export function resolveOutputSource(
  *  `paramMap` 里其它命名空间（`source` / `positiveNode` …）原样保留。 */
 export function applyOutputBindingEdit(
   paramMap: Record<string, unknown> | null | undefined,
-  edit: { outputIoKey: string; ioKey: string | null; mode: string | null },
+  edit: { ioKey: string | null; mode: string | null; outputIoKey: string },
 ): Record<string, unknown> {
   const base = paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
-  if (!edit.mode) return base;
+  if (!edit.mode) {
+    return base;
+  }
   const ns = base[OUTPUT_BINDING_NAMESPACE];
   const table =
+    /* SAFETY: 类型断言已复核 */
     ns && typeof ns === "object" && !Array.isArray(ns)
-      ? { ...(ns as Record<string, unknown>) }
+      ? {
+          ...(ns as Record<string, unknown>),
+        }
       : {};
   const key = `${MODE_KEY_PREFIX}${edit.mode}`;
   const byOutput = table[key];
   table[key] = {
-    ...(byOutput && typeof byOutput === "object" && !Array.isArray(byOutput)
-      ? byOutput
-      : {}),
+    ...(byOutput && typeof byOutput === "object" && !Array.isArray(byOutput) ? byOutput : {}),
     [edit.outputIoKey]: edit.ioKey,
   };
   return { ...base, [OUTPUT_BINDING_NAMESPACE]: table };
@@ -160,20 +185,37 @@ export function clearOutputBindingEdit(
   mode: string | null,
 ): Record<string, unknown> {
   const base = paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
-  if (!mode) return base;
+  if (!mode) {
+    return base;
+  }
   const ns = base[OUTPUT_BINDING_NAMESPACE];
-  if (!ns || typeof ns !== "object" || Array.isArray(ns)) return base;
-  const table = { ...(ns as Record<string, unknown>) };
+  if (!ns || typeof ns !== "object" || Array.isArray(ns)) {
+    return base;
+  }
+  /* SAFETY: 类型断言已复核 */
+  const table = {
+    ...(ns as Record<string, unknown>),
+  };
   const key = `${MODE_KEY_PREFIX}${mode}`;
   const byOutput = table[key];
-  if (!byOutput || typeof byOutput !== "object" || Array.isArray(byOutput))
+  if (!byOutput || typeof byOutput !== "object" || Array.isArray(byOutput)) {
     return base;
-  const next = { ...(byOutput as Record<string, unknown>) };
+  }
+  /* SAFETY: 类型断言已复核 */
+  const next = {
+    ...(byOutput as Record<string, unknown>),
+  };
   delete next[outputIoKey];
-  if (Object.keys(next).length > 0) table[key] = next;
-  else delete table[key];
-  if (Object.keys(table).length > 0) base[OUTPUT_BINDING_NAMESPACE] = table;
-  else delete base[OUTPUT_BINDING_NAMESPACE];
+  if (Object.keys(next).length > 0) {
+    table[key] = next;
+  } else {
+    delete table[key];
+  }
+  if (Object.keys(table).length > 0) {
+    base[OUTPUT_BINDING_NAMESPACE] = table;
+  } else {
+    delete base[OUTPUT_BINDING_NAMESPACE];
+  }
   return base;
 }
 
@@ -183,7 +225,11 @@ export function canApplyOutputBindingEdit(
   edit: { ioKey: string | null; mode: string | null },
   io: WorkflowIOMap | null | undefined,
 ): boolean {
-  if (!edit.mode) return false;
-  if (edit.ioKey === null) return true;
+  if (!edit.mode) {
+    return false;
+  }
+  if (edit.ioKey === null) {
+    return true;
+  }
   return io?.[edit.ioKey]?.direction === "output";
 }

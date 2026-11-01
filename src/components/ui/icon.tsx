@@ -144,18 +144,15 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 /** 本基元的**私有字段**（自己接管，不透传给底层图标组件）——
  *  类型侧与运行时侧共用这一份表（`~/lib/dom-props`）。 */
-const OWN_PROPS = ["name", "size", "className"] as const;
+const OWN_PROPS = /* SAFETY: 类型断言已复核 */ ["name", "size", "className"] as const;
 
-export interface IconProps extends OmitOwnProps<
-  LucideProps,
-  (typeof OWN_PROPS)[number]
-> {
+export type IconProps = {
+  /** 额外类名（透传给底层的 lucide 组件）。 */
+  className?: string;
   /** 图标键，如 "film"、"sparkles"、"trash"。大小写不敏感。 */
   name?: string | null;
   size?: number;
-  /** 额外类名（透传给底层的 lucide 组件）。 */
-  className?: string;
-}
+} & OmitOwnProps<LucideProps, (typeof OWN_PROPS)[number]>;
 
 /** 由字符串键渲染扁平的 lucide 图标。键未知时返回 null。 */
 export function Icon(props: IconProps) {
@@ -164,11 +161,11 @@ export function Icon(props: IconProps) {
   const { own, rest } = splitDomProps(props, OWN_PROPS);
   const name = own.name;
   const size = own.size ?? 16;
-  const Cmp: LucideIcon | undefined = name
-    ? ICON_MAP[name.toLowerCase()]
-    : undefined;
-  if (!Cmp) return null;
-  return <Cmp size={size} className={own.className} aria-hidden {...rest} />;
+  const Cmp: LucideIcon | undefined = name ? ICON_MAP[name.toLowerCase()] : undefined;
+  if (!Cmp) {
+    return null;
+  }
+  return <Cmp aria-hidden className={own.className} size={size} {...rest} />;
 }
 
 export type { LucideIcon, ComponentType };

@@ -14,7 +14,7 @@
 import type { SkillSeed } from "~/lib/core/repository-skill";
 
 /** 内置技能种子数据。 */
-export const BUILTIN_SKILLS: SkillSeed[] = [
+export const BUILTIN_SKILLS: Array<SkillSeed> = [
   // ── Style / Art ──────────────────────────────────────
   {
     name: "皮克斯动画风格",
@@ -24,8 +24,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "style",
     promptTemplate:
       "Pixar-style 3D animation, cute big-eyed character, warm cinematic lighting, subsurface scattering, Octane render, vibrant colors, Disney Pixar aesthetic, high detail 8K",
-    negativePrompt:
-      "ugly, deformed, noisy, blurry, low quality, realistic, photograph, anime 2d",
+    negativePrompt: "ugly, deformed, noisy, blurry, low quality, realistic, photograph, anime 2d",
     defaultParams: {
       steps: 30,
       cfg: 7,
@@ -45,8 +44,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "video",
     promptTemplate:
       "{subject}, viral video aesthetic, trending visual style, high contrast color grading, cinematic composition, social media viral quality, eye-catching thumbnail composition",
-    negativePrompt:
-      "boring, dull, flat lighting, low saturation, amateur, blurry",
+    negativePrompt: "boring, dull, flat lighting, low saturation, amateur, blurry",
     defaultParams: {
       steps: 28,
       cfg: 7.5,
@@ -66,8 +64,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "style",
     promptTemplate:
       "Neo-Chinese aesthetic, traditional ink painting fusion, cyan-green landscape, elegant minimalism, Eastern artistic conception, contemporary Chinese design, poetic atmosphere, muted earth tones with accent colors",
-    negativePrompt:
-      "western, neon, cyberpunk, loud colors, cluttered, modern pop",
+    negativePrompt: "western, neon, cyberpunk, loud colors, cluttered, modern pop",
     defaultParams: {
       steps: 35,
       cfg: 8,
@@ -107,8 +104,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "style",
     promptTemplate:
       "Japanese anime illustration, Makoto Shinkai style, clean line art, soft pastel colors, detailed background, Kyoto Animation quality, beautiful sky with clouds, emotional atmosphere, light rays",
-    negativePrompt:
-      "3D render, realistic, photo, western cartoon, ugly, deformed",
+    negativePrompt: "3D render, realistic, photo, western cartoon, ugly, deformed",
     defaultParams: {
       steps: 28,
       cfg: 7,
@@ -128,8 +124,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "style",
     promptTemplate:
       "Oil painting impasto technique, thick visible brushstrokes, Rembrandt chiaroscuro lighting, museum-quality fine art, classical portrait texture, rich color palette, canvas texture visible, Baroque composition",
-    negativePrompt:
-      "digital, smooth, airbrushed, anime, cartoon, photo, modern",
+    negativePrompt: "digital, smooth, airbrushed, anime, cartoon, photo, modern",
     defaultParams: {
       steps: 40,
       cfg: 8,
@@ -191,8 +186,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "photo",
     promptTemplate:
       "Cinematic Hasselblad portrait photography, shallow depth of field bokeh, natural window lighting, skin texture detail, magazine cover quality, professional color grading, 85mm lens look, film grain subtle",
-    negativePrompt:
-      "cartoon, anime, painting, deformed eyes, blurry, oversaturated",
+    negativePrompt: "cartoon, anime, painting, deformed eyes, blurry, oversaturated",
     defaultParams: {
       steps: 28,
       cfg: 7,
@@ -254,8 +248,7 @@ export const BUILTIN_SKILLS: SkillSeed[] = [
     category: "design",
     promptTemplate:
       "Professional concept art, game/film key art, environment design, character sheet, industrial design sketch, detailed annotation, multiple views, neutral background, artstation trending, matte painting quality",
-    negativePrompt:
-      "final render, finished illustration, photo, casual, low effort",
+    negativePrompt: "final render, finished illustration, photo, casual, low effort",
     defaultParams: {
       steps: 35,
       cfg: 8,

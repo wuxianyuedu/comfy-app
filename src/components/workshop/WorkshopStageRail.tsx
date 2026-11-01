@@ -23,12 +23,12 @@ import {
 } from "~/components/workshop/stage-config";
 import { WorkshopStageItem } from "~/components/workshop/WorkshopStageItem";
 
-interface WorkshopStageRailProps {
-  tab: Tab;
-  stageRatios: StageRatios;
-  viewContext: StageViewContext;
+type WorkshopStageRailProps = {
   onTabChange: (tab: Tab) => void;
-}
+  stageRatios: StageRatios;
+  tab: Tab;
+  viewContext: StageViewContext;
+};
 
 export function WorkshopStageRail({
   tab,
@@ -45,14 +45,14 @@ export function WorkshopStageRail({
     >
       {STAGE_DEFS.map((stage, index) => (
         <WorkshopStageItem
-          key={stage.id}
           className="w-full min-w-0"
+          isCurrent={tab === stage.id}
+          key={stage.id}
           label={stage.label}
+          onSelect={() => onTabChange(stage.id)}
           ordinal={index + 1}
           ratio={stageRatios[stage.id]}
           subtitle={stageSubtitle(stage.id, tab, stageRatios, viewContext)}
-          isCurrent={tab === stage.id}
-          onSelect={() => onTabChange(stage.id)}
         />
       ))}
     </nav>

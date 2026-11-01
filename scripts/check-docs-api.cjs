@@ -110,7 +110,7 @@ const CLOSURE_LEAVES = [
 
 /** 把一个路径变成「逐字匹配它自己」的正则（点号等元字符要转义）。 */
 function exactPathRe(p) {
-  return new RegExp(`^${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+  return new RegExp(`^${p.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}$`);
 }
 
 /**
@@ -202,15 +202,13 @@ function matchedInputs(files) {
 function stagedFiles() {
   /* `-c core.quotePath=false`：路径要原样（ISSUE #2272，机制见 `scripts/changed-scope.mjs`
    * 的文件头「口径 ④」）。 */
-  const out = spawnSync(
-    "git",
-    ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-    },
-  );
-  if (out.status !== 0) return [];
+  const out = spawnSync("git", ["-c", "core.quotePath=false", "diff", "--cached", "--name-only"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (out.status !== 0) {
+    return [];
+  }
   return out.stdout.split(/\r?\n/).filter(Boolean);
 }
 
@@ -224,15 +222,22 @@ function stagedFiles() {
 function walk(dir) {
   /** @type {Map<string, string>} */
   const out = new Map();
-  if (!fs.existsSync(dir)) return out;
+  if (!fs.existsSync(dir)) {
+    return out;
+  }
   /** @param {string} cur 当前绝对路径 @param {string} rel 相对前缀 */
   const rec = (cur, rel) => {
     for (const ent of fs.readdirSync(cur, { withFileTypes: true })) {
       const abs = path.join(cur, ent.name);
       const r = rel ? `${rel}/${ent.name}` : ent.name;
-      if (ent.isSymbolicLink()) continue;
-      if (ent.isDirectory()) rec(abs, r);
-      else if (ent.isFile()) out.set(r, abs);
+      if (ent.isSymbolicLink()) {
+        continue;
+      }
+      if (ent.isDirectory()) {
+        rec(abs, r);
+      } else if (ent.isFile()) {
+        out.set(r, abs);
+      }
     }
   };
   rec(dir, "");
@@ -299,20 +304,22 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
   const files = walk(outDir);
 
   for (const rel of SKELETON) {
-    if (!files.has(rel)) problems.push(`缺少骨架文件：${rel}`);
+    if (!files.has(rel)) {
+      problems.push(`缺少骨架文件：${rel}`);
+    }
   }
 
   let modulePages = 0;
   for (const rel of files.keys()) {
-    if (rel.startsWith("modules/") && rel.endsWith(".html")) modulePages += 1;
+    if (rel.startsWith("modules/") && rel.endsWith(".html")) {
+      modulePages += 1;
+    }
   }
   if (modulePages === 0) {
-    problems.push(
-      "产物里没有任何模块页（modules/ 下没有 .html）—— 这份 API 文档没有内容",
-    );
+    problems.push("产物里没有任何模块页（modules/ 下没有 .html）—— 这份 API 文档没有内容");
   }
 
-  const needles = [root, root.replace(/\\/g, "/")].filter((n) => n !== "");
+  const needles = [root, root.replaceAll("\\", "/")].filter((n) => n !== "");
   for (const [rel, abs] of files) {
     let text;
     try {
@@ -321,9 +328,7 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
       continue;
     }
     if (needles.some((n) => text.includes(n))) {
-      problems.push(
-        `产物里烤进了本机绝对路径（${rel}）—— 这份副本换台机器就不成立`,
-      );
+      problems.push(`产物里烤进了本机绝对路径（${rel}）—— 这份副本换台机器就不成立`);
       break;
     }
   }
@@ -354,7 +359,7 @@ function judgeProduct(outDir, root = ROOT, typedocCfg = {}) {
  * @returns {{problems: string[]}}
  */
 function judgeTypedocTail(log) {
-  const cleanLog = (log ?? "").replace(/\x1b\[[0-9;]*m/g, "");
+  const cleanLog = (log ?? "").replaceAll(/\u001b\[[0-9;]*m/g, "");
   const summary = /Found (\d+) errors and (\d+) warnings/.exec(cleanLog);
   const generated = /\[info\] html generated/.test(cleanLog);
   if (summary) {
@@ -384,16 +389,14 @@ function reportTypedocFailure(reason, log) {
   /* 诊断（「退出码不可信」那条注 + typedoc 自己的日志）**打在上面**，判决扫一眼就在
    * 最后一行 —— 三态出口的规矩是「一条判决一行」，而这里给读者的第一动作是「先跑一遍
    * generate-api-docs.mjs 看真因」，所以 `hint` 跟着判决走。 */
-  console.error(
-    `${TAG} 注：typedoc 的退出码不可信 —— 退出 0 而产物一个没更新是见过的现场。`,
-  );
-  if (log) console.error(log);
+  console.error(`${TAG} 注：typedoc 的退出码不可信 —— 退出 0 而产物一个没更新是见过的现场。`);
+  if (log) {
+    console.error(log);
+  }
   gateFail("API 文档生成与自检", [reason], {
     subject: "docs/api/**",
     detail: "typedoc 生成失败（拿不到可用的产物）",
-    hint:
-      "先 node scripts/generate-api-docs.mjs 单独跑一遍看真因" +
-      "（占用类失败等一等就过）。",
+    hint: "先 node scripts/generate-api-docs.mjs 单独跑一遍看真因" + "（占用类失败等一等就过）。",
   });
 }
 
@@ -406,9 +409,7 @@ async function main() {
     console.error(
       `${TAG} 而「自动修 + 再判」这个形状，正是让「产物陈旧」在 CI 上隐形的那一格（#2231 的现场）。`,
     );
-    console.error(
-      `${TAG} 现在这一格是「生成一份 + 自检」，判的是产物本身可不可用。`,
-    );
+    console.error(`${TAG} 现在这一格是「生成一份 + 自检」，判的是产物本身可不可用。`);
     process.exit(1);
   }
 
@@ -418,10 +419,7 @@ async function main() {
     if (!hits.length) {
       /* 「未触及输入面」是**这一轮没判**，不是「判过且干净」—— 三态里它是 `skip`
        * （判据的读数里带「按面未触及」时 `gatePass()` 也会自动降级，这里显式打）。 */
-      gateSkip(
-        "API 文档生成与自检",
-        "按面未触及：本次改动不在 typedoc 输入面里",
-      );
+      gateSkip("API 文档生成与自检", "按面未触及：本次改动不在 typedoc 输入面里");
       return;
     }
     info(
@@ -447,11 +445,7 @@ async function main() {
   }
 
   const typedocCfg = await loadTypedocConfig();
-  const { problems, files, modulePages } = judgeProduct(
-    OUT_ABS,
-    ROOT,
-    typedocCfg,
-  );
+  const { problems, files, modulePages } = judgeProduct(OUT_ABS, ROOT, typedocCfg);
   if (problems.length > 0) {
     gateFail("API 文档生成与自检", problems, {
       subject: "docs/api/**",
@@ -468,8 +462,8 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((err) => {
-    console.error(`${TAG} ✗ 判据自身异常：`, err);
+  main().catch((error) => {
+    console.error(`${TAG} ✗ 判据自身异常：`, error);
     process.exit(1);
   });
 }

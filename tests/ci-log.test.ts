@@ -38,6 +38,7 @@ import {
   indentItems,
   looksSkipped,
   paint,
+  paintLine,
   renderTally,
   renderVerdict,
   stateOfLine,
@@ -60,9 +61,7 @@ describe("三条判决的形状", () => {
       gate: "生成态文档与源同步",
       detail: "暂存区是空的 ⇒ 没有要判的东西",
     });
-    expect(head).toBe(
-      "[skip] 生成态文档与源同步（暂存区是空的 ⇒ 没有要判的东西）",
-    );
+    expect(head).toBe("[skip] 生成态文档与源同步（暂存区是空的 ⇒ 没有要判的东西）");
     expect(head?.startsWith(TAGS.ok)).toBe(false);
   });
 
@@ -83,17 +82,13 @@ describe("三条判决的形状", () => {
   });
 
   it("没有任何对象 / 读数时不留悬空的分隔符", () => {
-    expect(renderVerdict({ gate: "镜像身份", detail: " " })[0]).toBe(
-      "[ok] 镜像身份",
-    );
+    expect(renderVerdict({ gate: "镜像身份", detail: " " })[0]).toBe("[ok] 镜像身份");
   });
 });
 
 describe("降级：读数里说「这一轮没判」的自动成 skip", () => {
   it.for(SKIP_MARKERS.map((m) => [m]))("「%s」触发降级", ([marker]) => {
-    expect(looksSkipped(`[doc-mirror] ${marker} ⇒ 这一批没有要判的东西`)).toBe(
-      true,
-    );
+    expect(looksSkipped(`[doc-mirror] ${marker} ⇒ 这一批没有要判的东西`)).toBe(true);
     expect(gatePass("某判据", `${marker} ⇒ 这一批没有要判的东西`)).toBe("skip");
   });
 
@@ -102,7 +97,7 @@ describe("降级：读数里说「这一轮没判」的自动成 skip", () => {
   });
 
   it("降级后那一行带的是 [skip]，不是 [ok]", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     gatePass("镜像同批", "暂存区是空的 ⇒ 没有要判的东西", {
       out: (line: string) => lines.push(line),
     });
@@ -150,7 +145,7 @@ describe("三个动词都只排版、不判", () => {
   });
 
   it("gateFail 的 detail 可以覆盖默认读数", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     gateFail("函数长度", ["f:1"], {
       detail: "超过 400 行 2 个",
       out: (line: string) => lines.push(line),
@@ -161,7 +156,7 @@ describe("三个动词都只排版、不判", () => {
 
 describe("没有证据就不打红（屏幕上不许出现「命中 0 条」的红）", () => {
   it("gateFail 收到空清单时什么都不打，并如实回 ok", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     expect(
       gateFail("文件结构硬规则", [], {
         out: (line: string) => lines.push(line),
@@ -185,14 +180,12 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     const text = "[红] 跨文件重复块 · src/**（命中 2 条）";
     const colored = paint(text, COLORS.red, true);
     expect(colored).not.toBe(text);
-    expect(colored.replace(/\u001b\[[\d;]*m/g, "")).toBe(text);
+    expect(colored.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe(text);
   });
 
   it("色带只加一个前导竖线与一格空白，不动行内任何一格", () => {
     const { line } = bandLine("[skip] 生成态文档与源同步（没判）");
-    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe(
-      "▌ [skip] 生成态文档与源同步（没判）",
-    );
+    expect(line.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe("▌ [skip] 生成态文档与源同步（没判）");
   });
 
   it("色带认三态前缀取色，认不出的行用中性灰（不沿用上一条的颜色）", () => {
@@ -216,11 +209,32 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     expect(colorEnabled({ env: {}, isTTY: false })).toBe(false);
   });
 
+  it("colorEnabled：`COMFYAPP_CI_COLOR` 只被本层认，且压不过 `NO_COLOR`（ISSUE #2755）", () => {
+    /* 平台那一档的 stdout **不是** TTY（实测绿跑 build cnb-gig-1k65nb59l 的 stage-27：
+     * 正文 64 行里只有平台自己那 2 行带 ANSI），而它的日志页会渲染色号 ——
+     * 那一格落在「TTY / 抓文本」两个判据之外，这枚就是为它开的。 */
+    expect(
+      colorEnabled({ env: { COMFYAPP_CI_COLOR: "1" }, isTTY: false }),
+    ).toBe(true);
+    expect(
+      colorEnabled({
+        env: { NO_COLOR: "", COMFYAPP_CI_COLOR: "1" },
+        isTTY: false,
+      }),
+    ).toBe(false);
+    /* `0` 与空串按关算：它是本仓私有的旗标，关法要有形状（`NO_COLOR` 那条「值不论」
+     * 是通行约定的语义，不往这里抄）。 */
+    expect(
+      colorEnabled({ env: { COMFYAPP_CI_COLOR: "0" }, isTTY: false }),
+    ).toBe(false);
+    expect(
+      colorEnabled({ env: { COMFYAPP_CI_COLOR: "" }, isTTY: false }),
+    ).toBe(false);
+  });
+
   it("逐行上色只染标签，不改变「这一行是不是判决」", () => {
     const line = colorizeLine("[info] 命中输入面 3 个文件，生成并自检中…");
-    expect(line.replace(/\u001b\[[\d;]*m/g, "")).toBe(
-      "[info] 命中输入面 3 个文件，生成并自检中…",
-    );
+    expect(line.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe("[info] 命中输入面 3 个文件，生成并自检中…");
     expect(line).not.toBe("[info] 命中输入面 3 个文件，生成并自检中…");
   });
 
@@ -233,8 +247,38 @@ describe("颜色：只是附加，删掉色号必须逐字等于不着色的那�
     expect(stateOfLine("[warn] 只是读得出来")).toBeNull();
   });
 
+  it("paintLine 是颜色层的唯一合成点：三态各自上色，删光色号仍是那一行", () => {
+    /* 这一条钉的是「三态在屏幕上分得开」这件事本身。此前它只在 `emit()` 的默认出口
+     * 成立，而**自己管写**的跑批（转述型那一族）拿不到 —— 于是它那一屏里
+     * `[ok]` 与 `[skip]` 逐字同灰（ISSUE #2748）。 */
+    for (const state of ["ok", "skip", "red"] as const) {
+      const text = `${TAGS[state]} 某判据（读数）`;
+      const painted = paintLine(text, { enabled: true });
+      expect(painted).toContain(`\u001b[${COLORS[state]}m${text}\u001b[0m`);
+      expect(painted.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe(`▌ ${text}`);
+    }
+  });
+
+  it("paintLine 关掉着色时一个字节都不加（注入 log / NO_COLOR / 非 TTY 那一档）", () => {
+    expect(paintLine("[ok] x", { enabled: false })).toBe("[ok] x");
+    expect(paintLine("[重档] x", { enabled: false })).toBe("[重档] x");
+  });
+
+  it("paintLine 的 color 覆盖：不带三态前缀的那一行也能跟着判决走（合计行）", () => {
+    const text = "[重档] 合计：红 1、没判 0、判过 58（共 59 条）";
+    const painted = paintLine(text, { enabled: true, color: COLORS.red });
+    expect(painted.startsWith(`\u001b[${COLORS.red}m▌`)).toBe(true);
+    expect(painted).toContain(`\u001b[${COLORS.red}m${text}\u001b[0m`);
+    expect(painted.replaceAll(/\u001b\[[\d;]*m/g, "")).toBe(`▌ ${text}`);
+    /* 不给 `color` 时它仍是一行认不出态的普通文本（中性灰带）——
+     * 覆盖口只给点名要它的那一行，不默认把整屏染起来。 */
+    expect(paintLine(text, { enabled: true })).toBe(
+      `\u001b[90m▌\u001b[0m ${text}`,
+    );
+  });
+
   it("调用方给了 out ⇒ 交出去的仍是干净文本（跑批靠它读回结论句）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     gatePass("a", "命中 0 条", { out: (l: string) => lines.push(l) });
     expect(lines).toEqual(["[ok] a（命中 0 条）"]);
   });

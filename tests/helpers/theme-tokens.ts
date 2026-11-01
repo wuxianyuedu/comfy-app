@@ -35,11 +35,11 @@ import { createRequire } from "node:module";
 import postcss, { type Declaration } from "postcss";
 
 const require = createRequire(import.meta.url);
-const twModule = require("@tailwindcss/postcss") as {
+const twModule = /* SAFETY: 类型断言已复核 */ require("@tailwindcss/postcss") as {
   default?: () => postcss.AcceptedPlugin;
 };
-const tailwind =
-  twModule.default ?? (twModule as unknown as () => postcss.AcceptedPlugin);
+/* SAFETY: 类型断言已复核 */
+const tailwind = twModule.default ?? (twModule as unknown as () => postcss.AcceptedPlugin);
 
 const GLOBALS_CSS = path.resolve(__dirname, "../../src/app/globals.css");
 
@@ -57,10 +57,14 @@ const GLOBALS_CSS = path.resolve(__dirname, "../../src/app/globals.css");
 function selectsHtml(selector: string): boolean {
   return selector.split(",").some((raw) => {
     const p = raw.trim();
-    if (!p) return false;
+    if (!p) {
+      return false;
+    }
     // 去掉 `:not(.dark)` 这段后，余下必须是**单个**「挂在根上」的简单选择器
-    const stripped = p.replace(/:not\([^)]*\)/g, "");
-    if (!/^(:root|:host|\.dark)$/.test(stripped)) return false;
+    const stripped = p.replaceAll(/:not\([^)]*\)/g, "");
+    if (!/^(:root|:host|\.dark)$/.test(stripped)) {
+      return false;
+    }
     return true;
   });
 }
@@ -69,15 +73,21 @@ function selectsHtml(selector: string): boolean {
 function matchesTheme(selector: string, dark: boolean): boolean {
   return selector.split(",").some((raw) => {
     const p = raw.trim();
-    if (!selectsHtml(p)) return false;
+    if (!selectsHtml(p)) {
+      return false;
+    }
     const excludesDark = p.includes(":not(.dark)");
-    if (excludesDark) return !dark;
-    if (p.includes(".dark")) return dark;
+    if (excludesDark) {
+      return !dark;
+    }
+    if (p.includes(".dark")) {
+      return dark;
+    }
     return true; // 裸 `:root` / `:host`
   });
 }
 
-export interface ThemeTokens {
+export type ThemeTokens = {
   /** 取值：解析完整的自定义属性值；未定义为 `undefined`。 */
   get(name: string): string | undefined;
   /** 该 token 是否在某一态下被声明过。 */
@@ -101,7 +111,7 @@ const pinnedCompiles = new Map<string, Promise<string>>();
  * ⚠️ 新增一条「某个 utility 编成了什么」的断言时，**来这里补一行类名**，否则那条判据会因为
  * 产物里没有这个类而红 —— 那是正确形态的红（它在告诉你：这条断言依赖的类没被固定住）。
  */
-const PINNED_UTILITY_CLASSES = [
+const PINNED_UTILITY_CLASSES = /* SAFETY: 类型断言已复核 */ [
   "bg-card",
   "bg-popover",
   "border-border",
@@ -120,7 +130,7 @@ const PINNED_UTILITY_CLASSES = [
  * 差集判据当场失效；而 #1336 那份「固定输入源」也会退回全量级的耗时与不可复现。
  */
 export function stripSourceDirectives(cssText: string): string {
-  return cssText.replace(/^\s*@source\b[^\n]*\n/gm, "");
+  return cssText.replaceAll(/^\s*@source\b[^\n]*\n/gm, "");
 }
 
 /**
@@ -170,19 +180,14 @@ function disableAutoScan(cssText: string): string {
  */
 export function withPinnedSources(cssText: string): string {
   const noAutoScan = disableAutoScan(stripSourceDirectives(cssText));
-  const pins = PINNED_UTILITY_CLASSES.map(
-    (cls) => `@source inline("${cls}");`,
-  ).join("\n");
+  const pins = PINNED_UTILITY_CLASSES.map((cls) => `@source inline("${cls}");`).join("\n");
   // 把项目自己写的 `@theme` 改成 `@theme static`：v4 默认会**按用法 tree-shake** 主题变量
   // ——「某个 token 有没有进产物」取决于全仓哪里用到了它，而这批用例读的是 token 的取值与
   // 级联，不该被这件事左右（实测反例：关掉扫描后 `--color-primary-strong` 的浅色档消失，
   // `sidebar-state-contrast` 的「浅色：选中底上的正文与指示条都够亮」当场红，而深色档因为
   // 是手写在 `.dark {}` 里的所以还在 —— 这种「一半在、一半被摇掉」的形状比全红更难归因）。
   // static 只**加**声明、不改任何已有值（逐条比对过两态产物：同名不同值 = 0 条）。
-  const staticTheme = noAutoScan.replace(
-    /@theme(\s+inline)?\s*\{/g,
-    "@theme$1 static {",
-  );
+  const staticTheme = noAutoScan.replaceAll(/@theme(\s+inline)?\s*\{/g, "@theme$1 static {");
   return `${staticTheme}\n${pins}\n`;
 }
 
@@ -222,8 +227,8 @@ export function compiledGlobalsCss(): Promise<string> {
  * （这条边界由 `docs-candidate-hygiene` 的空跑挡板兜着）。绝对路径也收（临时目录探针在用）。
  */
 export function compiledCssPinnedTo(
-  dirs: readonly string[],
-  inlineClasses: readonly string[] = [],
+  dirs: ReadonlyArray<string>,
+  inlineClasses: ReadonlyArray<string> = [],
 ): Promise<string> {
   const key = `${dirs.join("|")}#${inlineClasses.join("|")}`;
   let job = pinnedCompiles.get(key);
@@ -248,8 +253,8 @@ export function compiledCssPinnedTo(
  * 就会有两套转义/分组口径。要「哪些类真的被编进产物」那一类判据一律走这里。
  * ⚠️ 选择器里的 CSS 转义**没**还原（产物里怎么写就怎么给）—— 还原属于判据自己的口径。
  */
-export function ruleSelectors(cssText: string): string[] {
-  const out: string[] = [];
+export function ruleSelectors(cssText: string): Array<string> {
+  const out: Array<string> = [];
   postcss.parse(cssText).walkRules((rule: { selector: string }) => {
     out.push(rule.selector);
   });
@@ -258,9 +263,9 @@ export function ruleSelectors(cssText: string): string[] {
 
 /** 一次拿到浅色 / 深色两态的取值器（`beforeAll` 里 `await` 用）。 */
 export async function loadThemeTokens(): Promise<{
-  light: ThemeTokens;
-  dark: ThemeTokens;
   css: string;
+  dark: ThemeTokens;
+  light: ThemeTokens;
 }> {
   const css = await compiledGlobalsCss();
   return {
@@ -271,56 +276,61 @@ export async function loadThemeTokens(): Promise<{
 }
 
 /** 为指定主题构建 token 取值器。 */
-export function themeTokens(
-  theme: "light" | "dark",
-  cssText: string,
-): ThemeTokens {
+export function themeTokens(theme: "light" | "dark", cssText: string): ThemeTokens {
   const dark = theme === "dark";
   const root = postcss.parse(cssText);
 
-  interface Entry {
-    value: string;
+  type Entry = {
     layered: boolean;
     order: number;
+    value: string;
   }
   const values = new Map<string, Entry>();
   let order = 0;
 
   root.walkDecls((decl: Declaration) => {
     const parent = decl.parent;
-    if (parent?.type !== "rule") return;
+    if (parent?.type !== "rule") {
+      return;
+    }
     const rule = parent;
-    if (!matchesTheme(rule.selector, dark)) return;
+    if (!matchesTheme(rule.selector, dark)) {
+      return;
+    }
     order += 1;
     // `@layer` 内的声明优先级低于层外声明；同一层内**后写胜出**。
     const atrule = rule.parent;
-    const layered =
-      atrule?.type === "atrule" && /^layer/i.test(atrule.name ?? "");
+    const layered = atrule?.type === "atrule" && /^layer/i.test(atrule.name ?? "");
     const prev = values.get(decl.prop);
     const wins =
-      !prev ||
-      (prev.layered && !layered) ||
-      (prev.layered === layered && prev.order < order);
-    if (wins) values.set(decl.prop, { value: decl.value, layered, order });
+      !prev || (prev.layered && !layered) || (prev.layered === layered && prev.order < order);
+    if (wins) {
+      values.set(decl.prop, { value: decl.value, layered, order });
+    }
   });
 
   /** 解析 `var()` 链。 */
   function resolve(name: string, seen: Set<string>): string | undefined {
     const entry = values.get(name);
-    if (!entry) return undefined;
-    if (seen.has(name))
+    if (!entry) {
+      return undefined;
+    }
+    if (seen.has(name)) {
       throw new Error(`token 引用成环：${[...seen, name].join(" → ")}`);
+    }
     const next = new Set(seen).add(name);
     return resolveValue(entry.value, next);
   }
 
   function resolveValue(value: string, seen: Set<string>): string {
     // 逐个替换 `var(--name[, fallback])`
-    return value.replace(
+    return value.replaceAll(
       /var\(\s*(--[a-zA-Z0-9-]+)\s*(?:,\s*([^()]*(?:\([^()]*\)[^()]*)*))?\)/g,
       (_all, ref: string, fallback?: string) => {
         const v = resolve(ref, seen);
-        if (v !== undefined && v !== "") return v;
+        if (v !== undefined && v !== "") {
+          return v;
+        }
         return (fallback ?? "").trim();
       },
     );

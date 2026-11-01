@@ -29,8 +29,7 @@ export type SqliteBusyRetryPolicy = BackoffShapeOptions & {
   maxAttempts: number;
 };
 
-export interface SqliteBusyRetryOptions {
-  policy: SqliteBusyRetryPolicy;
+export type SqliteBusyRetryOptions = {
   /**
    * 每次「还要再试」之前回调一次（`attempt` 从 0 起）。
    * 只用来念一行给人看的话，**不参与判决**——所以回调的返回值被忽略。
@@ -42,7 +41,8 @@ export interface SqliteBusyRetryOptions {
    * **先摘账再留痕**，这样即使那行日志也写不出去，回收器已经能把这一行判掉。
    */
   onGiveUp?: (error: unknown, tries: number) => void;
-}
+  policy: SqliteBusyRetryPolicy;
+};
 
 /**
  * 跑一次可能撞锁的操作，撞锁就按预算重试。

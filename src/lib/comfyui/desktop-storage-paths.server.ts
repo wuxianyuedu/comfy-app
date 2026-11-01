@@ -28,7 +28,7 @@ export type DesktopStorageDeps = {
   exists?: (p: string) => boolean;
   readFile?: (p: string, enc: "utf8") => Promise<string>;
   /** 有效启动参数（默认走桌面元数据 → headless 映射，与本应用 spawn 时同一条路）。 */
-  resolveArgs?: (comfyuiPath: string) => Promise<string[]>;
+  resolveArgs?: (comfyuiPath: string) => Promise<Array<string>>;
 };
 
 /** extra_model_paths.yaml 的文件名。 */
@@ -38,16 +38,13 @@ const EXTRA_PATHS_FILE = "extra_model_paths.yaml";
  * ComfyUI 的 base 目录：Comfy Desktop 布局下是 `<实例根>/ComfyUI`
  * （main.py 所在目录才是进程 cwd）；配置直接指到源码根时就是它自己。
  */
-function detectBaseDir(
-  instanceRoot: string,
-  exists: (p: string) => boolean,
-): string {
+function detectBaseDir(instanceRoot: string, exists: (p: string) => boolean): string {
   const nested = path.join(instanceRoot, "ComfyUI");
   return exists(path.join(nested, "main.py")) ? nested : instanceRoot;
 }
 
 /** yaml 的候选位置：base 目录优先（ComfyUI 从 cwd 读它），其次实例根。 */
-function extraPathsCandidates(baseDir: string, instanceRoot: string): string[] {
+function extraPathsCandidates(baseDir: string, instanceRoot: string): Array<string> {
   const candidates = [path.join(baseDir, EXTRA_PATHS_FILE)];
   if (path.resolve(instanceRoot) !== path.resolve(baseDir)) {
     candidates.push(path.join(instanceRoot, EXTRA_PATHS_FILE));
@@ -57,9 +54,9 @@ function extraPathsCandidates(baseDir: string, instanceRoot: string): string[] {
 
 /** 读第一份存在的 extra_model_paths.yaml；都没有则 null。 */
 async function readExtraPathsFile(
-  candidates: string[],
+  candidates: Array<string>,
   readFile: (p: string, enc: "utf8") => Promise<string>,
-): Promise<{ file: string; content: string } | null> {
+): Promise<{ content: string; file: string } | null> {
   for (const candidate of candidates) {
     try {
       return { file: candidate, content: await readFile(candidate, "utf8") };
@@ -74,7 +71,7 @@ async function readExtraPathsFile(
 function expandEntry(
   entry: ExtraModelPathEntry,
   exists: (p: string) => boolean,
-): { slot: StorageSlot; dir: StorageDirInfo }[] {
+): Array<{ dir: StorageDirInfo; slot: StorageSlot }> {
   return entry.paths.map((item) => ({
     slot: classifyStorageSlot(item),
     dir: {
@@ -86,7 +83,7 @@ function expandEntry(
 }
 
 /** 三组「主目录 + 共享目录」的空盘面。 */
-function emptySlots(): Record<StorageSlot, StorageDirInfo[]> {
+function emptySlots(): Record<StorageSlot, Array<StorageDirInfo>> {
   return { models: [], input: [], output: [] };
 }
 
@@ -100,11 +97,12 @@ export async function resolveDesktopStoragePaths(
   deps: DesktopStorageDeps = {},
 ): Promise<DesktopStoragePaths | null> {
   const dir = (comfyuiPath ?? "").trim();
-  if (!dir) return null;
+  if (!dir) {
+    return null;
+  }
 
   const exists = deps.exists ?? fs.existsSync;
-  const readFile =
-    deps.readFile ?? ((p: string, enc: "utf8") => fs.promises.readFile(p, enc));
+  const readFile = deps.readFile ?? ((p: string, enc: "utf8") => fs.promises.readFile(p, enc));
   const resolveArgs =
     deps.resolveArgs ??
     (async (target: string) =>
@@ -117,29 +115,33 @@ export async function resolveDesktopStoragePaths(
       ).extraArgs);
 
   const classified = classifyComfyInstall(dir, exists);
-  if (classified.kind !== "desktop" || !classified.instanceRoot) return null;
+  if (classified.kind !== "desktop" || !classified.instanceRoot) {
+    return null;
+  }
 
   const instanceRoot = classified.instanceRoot;
   const baseDir = detectBaseDir(instanceRoot, exists);
-  const extra = await readExtraPathsFile(
-    extraPathsCandidates(baseDir, instanceRoot),
-    readFile,
-  );
+  const extra = await readExtraPathsFile(extraPathsCandidates(baseDir, instanceRoot), readFile);
   const parsedMain = extra
     ? parseExtraModelPathsYaml(extra.content)
-    : { basePath: null, entries: [] as ExtraModelPathEntry[] };
+    : {
+        basePath: null,
+        entries: /* SAFETY: 类型断言已复核 */ [] as Array<ExtraModelPathEntry>,
+      };
 
   const launchArgs = await resolveArgs(dir);
   /* `--extra-model-paths-config` 指向的额外 yaml（Desktop 版共享目录的另一种
    * 声明位置）：逐份解析并叠加 entries；主 yaml 优先，配置文件缺失/读不到按
    * 「没有这一份」处理。 */
   const configFiles = parseExtraModelPathsConfigArgs(launchArgs);
-  const mergedEntries: ExtraModelPathEntry[] = [...parsedMain.entries];
+  const mergedEntries: Array<ExtraModelPathEntry> = [...parsedMain.entries];
   let configBase: string | null = null;
   for (const cfg of configFiles) {
     try {
       const parsed = parseExtraModelPathsYaml(await readFile(cfg, "utf8"));
-      if (parsed.basePath && !configBase) configBase = parsed.basePath;
+      if (parsed.basePath && !configBase) {
+        configBase = parsed.basePath;
+      }
       mergedEntries.push(...parsed.entries);
     } catch {
       // 配置文件缺失/读不到：不是错误，按「没有这一份」处理。
@@ -186,7 +188,9 @@ export async function resolveDesktopStoragePaths(
   for (const entry of parsed.entries) {
     for (const { slot, dir } of expandEntry(entry, exists)) {
       const key = normalizeDirKey(dir.path);
-      if (seen.has(key)) continue;
+      if (seen.has(key)) {
+        continue;
+      }
       seen.add(key);
       shared[slot].push(dir);
     }

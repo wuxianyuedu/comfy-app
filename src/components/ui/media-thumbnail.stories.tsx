@@ -1,9 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
 
-import {
-  MediaThumbnail,
-  type MediaThumbnailProps,
-} from "~/components/ui/media-thumbnail";
+import { MediaThumbnail, type MediaThumbnailProps } from "~/components/ui/media-thumbnail";
 import {
   resolveSource,
   sourceNameArgType,
@@ -24,23 +21,18 @@ import {
  * 名字（`missing.png`）—— 后者才是这张 story 的主角。
  */
 /** Args 的形状 = 可调的那几个（`src` 由注入层给，不进 Args）。 */
-interface StoryArgs {
-  /** 注入层的数据源旋钮（真文件的名字，见 `.storybook/data-sources.tsx`）。 */
-  sourceName: MediaSourceName;
+type StoryArgs = {
   alt?: string;
   className?: string;
   /** 失败兜底形态：`placeholder`（默认）/ `none`；自定义节点走 `render`。 */
   fallback?: MediaThumbnailProps["fallback"];
-}
+  /** 注入层的数据源旋钮（真文件的名字，见 `.storybook/data-sources.tsx`）。 */
+  sourceName: MediaSourceName;
+};
 
 /** 适配件：把 `sourceName` 经注入层解析成真地址再交给真组件（见 `data-sources.tsx`）。 */
 function ThumbnailWithSource({ sourceName, ...rest }: StoryArgs) {
-  return (
-    <MediaThumbnail
-      {...rest}
-      src={String(resolveSource("media", sourceName))}
-    />
-  );
+  return <MediaThumbnail {...rest} src={String(resolveSource("media", sourceName))} />;
 }
 
 const meta = {
@@ -56,8 +48,7 @@ const meta = {
     fallback: {
       control: { type: "select" },
       options: ["placeholder", "none"],
-      description:
-        "失败兜底形态：占位（默认）/ 不渲染；自定义 ReactNode 走 render，不进 Args",
+      description: "失败兜底形态：占位（默认）/ 不渲染；自定义 ReactNode 走 render，不进 Args",
     },
   },
 } satisfies Meta<StoryArgs>;
@@ -74,18 +65,16 @@ export const RealSources: Story = {
   args: { className: "h-40 w-64 rounded-lg object-cover" },
   render: (args) => (
     <div className="flex flex-wrap items-start gap-4">
-      {(
-        [
-          "sample-landscape.svg",
-          "sample-portrait.svg",
-          "sample-wide.svg",
-        ] as const
-      ).map((name) => (
-        <div key={name} className="flex flex-col items-center gap-1.5">
-          <ThumbnailWithSource {...args} sourceName={name} alt={name} />
-          <span className="text-ink-muted font-mono text-[11px]">{name}</span>
-        </div>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (
+          ["sample-landscape.svg", "sample-portrait.svg", "sample-wide.svg"] as const
+        ).map((name) => (
+          <div className="flex flex-col items-center gap-1.5" key={name}>
+            <ThumbnailWithSource {...args} alt={name} sourceName={name} />
+            <span className="text-ink-muted font-mono text-[11px]">{name}</span>
+          </div>
+        ))
+      }
     </div>
   ),
 };
@@ -102,29 +91,23 @@ export const LoadFailure: Story = {
     <div className="flex items-start gap-6">
       <div className="flex flex-col items-center gap-1.5">
         <ThumbnailWithSource {...args} alt="默认占位" />
-        <span className="text-ink-muted font-mono text-[11px]">
-          fallback=placeholder
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">fallback=placeholder</span>
       </div>
       <div className="flex flex-col items-center gap-1.5">
         <div className="border-border-subtle h-40 w-64 rounded-lg border border-dashed" />
-        <span className="text-ink-muted font-mono text-[11px]">
-          fallback=none
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">fallback=none</span>
       </div>
       <div className="flex flex-col items-center gap-1.5">
         <ThumbnailWithSource
           {...args}
+          alt="自定义兜底"
           fallback={
             <span className="text-ink-muted bg-canvas-deep flex h-40 w-64 items-center justify-center rounded-lg text-[11px]">
               自定义兜底节点
             </span>
           }
-          alt="自定义兜底"
         />
-        <span className="text-ink-muted font-mono text-[11px]">
-          fallback=自定义
-        </span>
+        <span className="text-ink-muted font-mono text-[11px]">fallback=自定义</span>
       </div>
     </div>
   ),
@@ -136,10 +119,8 @@ export const NoSource: Story = {
   render: (args) => (
     <div className="flex items-center gap-3">
       <div className="border-border-subtle h-40 w-64 rounded-lg border border-dashed" />
-      <MediaThumbnail {...args} src={null} alt="空 src" />
-      <span className="text-ink-muted text-[11px]">
-        右边是 `src=null`（组件返回 null）
-      </span>
+      <MediaThumbnail {...args} alt="空 src" src={null} />
+      <span className="text-ink-muted text-[11px]">右边是 `src=null`（组件返回 null）</span>
     </div>
   ),
 };

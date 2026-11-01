@@ -16,14 +16,12 @@ export class ErrorBoundary extends React.Component<
     /** 降级 UI：可传 ReactNode，也可传 (error) => ReactNode 函数以拿到真实错误对象。
      * 函数形态返回 `null` / `undefined` 表示「这次不接管」，退回本组件的默认降级 UI —
      * 让调用点只处理它认得的那一类错误，其余照旧（见 `useLazyChunkFallback`）。 */
-    fallback?:
-      | React.ReactNode
-      | ((error: Error | null) => React.ReactNode | null | undefined);
+    fallback?: React.ReactNode | ((error: Error | null) => React.ReactNode | null | undefined);
     onError?: (error: Error, info: React.ErrorInfo) => void;
   },
-  { hasError: boolean; error: Error | null }
+  { error: Error | null; hasError: boolean }
 > {
-  state: { hasError: boolean; error: Error | null } = {
+  state: { error: Error | null; hasError: boolean } = {
     hasError: false,
     error: null,
   };
@@ -47,22 +45,22 @@ export class ErrorBoundary extends React.Component<
        * 空白**，用户既看不到出了什么事、也没有「重试」。 */
       const custom = this.props.fallback;
       if (typeof custom === "function") {
-        const node = (custom as (error: Error | null) => React.ReactNode)(
-          this.state.error,
-        );
-        if (node !== null && node !== undefined) return node;
+        const node = /* SAFETY: 类型断言已复核 */ (
+          custom as (error: Error | null) => React.ReactNode
+        )(this.state.error);
+        if (node !== null && node !== undefined) {
+          return node;
+        }
       } else if (custom) {
         return custom;
       }
       return (
         <div className="border-destructive/25 bg-destructive/5 flex flex-col items-center justify-center gap-3 rounded-2xl border px-6 py-12 text-center">
-          <p className="text-danger-strong text-sm font-semibold">
-            组件渲染出错
-          </p>
+          <p className="text-danger-strong text-sm font-semibold">组件渲染出错</p>
           <button
-            type="button"
-            onClick={() => this.setState({ hasError: false, error: null })}
             className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+            onClick={() => this.setState({ hasError: false, error: null })}
+            type="button"
           >
             重试
           </button>

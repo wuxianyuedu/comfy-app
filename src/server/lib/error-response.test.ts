@@ -55,7 +55,7 @@ describe("errorResponse", () => {
 
 describe("REST route 不再手写错误信封（防回潮）", () => {
   it("src/app/api 下无 { error: { code: ... } } 字面量", () => {
-    const offenders: string[] = [];
+    const offenders: Array<string> = [];
     const walk = (dir: string) => {
       for (const name of readdirSync(dir)) {
         const full = join(dir, name);
@@ -63,9 +63,13 @@ describe("REST route 不再手写错误信封（防回潮）", () => {
           walk(full);
           continue;
         }
-        if (!name.endsWith(".ts") || name.endsWith(".test.ts")) continue;
+        if (!name.endsWith(".ts") || name.endsWith(".test.ts")) {
+          continue;
+        }
         const src = readFileSync(full, "utf8");
-        if (/error:\s*\{\s*code:/.test(src)) offenders.push(full);
+        if (/error:\s*\{\s*code:/.test(src)) {
+          offenders.push(full);
+        }
       }
     };
     walk(join(process.cwd(), "src/app/api"));

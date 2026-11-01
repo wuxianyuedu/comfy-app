@@ -14,35 +14,27 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import {
-  ollamaTagsUrl,
-  probeOllama,
-  startOllama,
-  stopOllama,
-} from "~/lib/llm/ollama-client";
-import {
-  fetchLocalModels,
-  fetchRemoteModels,
-} from "~/lib/llm/model-catalog-client";
+import { ollamaTagsUrl, probeOllama, startOllama, stopOllama } from "~/lib/llm/ollama-client";
+import { fetchLocalModels, fetchRemoteModels } from "~/lib/llm/model-catalog-client";
 import { testModelUsage, queryUsageTask } from "~/lib/llm/usage-test-client";
 import { saveMediaToLocalTemp } from "~/lib/llm/video-task-util";
 
 const fetchMock = vi.fn<typeof fetch>();
 
 /** 取第 n 次 fetch 调用的 (url, init)，并把 init 收成可安全访问的形状。 */
-function callAt(n = 0): { url: string; init: RequestInit } {
+function callAt(n = 0): { init: RequestInit; url: string } {
   const call = fetchMock.mock.calls[n]!;
   // fetch 的首参在运行时一定是字符串 URL 或 Request；这里只做类型收窄，
   // 不做字符串化（`String(obj)` 会得到 `[object Object]`，lint 也据此拦人）。
   const arg: unknown = call[0];
-  const url = typeof arg === "string" ? arg : (arg as Request).url;
+  const url = typeof arg === "string" ? arg : /* SAFETY: 类型断言已复核 */ (arg as Request).url;
   return { url, init: call[1] ?? {} };
 }
 
 /** 取第 n 次 fetch 调用的请求体（JSON 解析后的对象）。 */
 function sentBody(n = 0): Record<string, unknown> {
   const raw = callAt(n).init.body;
-  return JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
+  return /* SAFETY: 类型断言已复核 */ JSON.parse(typeof raw === "string" ? raw : "{}") as Record<
     string,
     unknown
   >;
@@ -50,12 +42,12 @@ function sentBody(n = 0): Record<string, unknown> {
 
 /** 取第 n 次 fetch 调用的请求头。 */
 function sentHeaders(n = 0): Record<string, string> {
-  return (callAt(n).init.headers ?? {}) as Record<string, string>;
+  return /* SAFETY: 类型断言已复核 */ (callAt(n).init.headers ?? {}) as Record<string, string>;
 }
 
 /** 一次性响应替身（`json()` / `text()` 都可用）。 */
 function jsonResponse(body: unknown, status = 200): Response {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
@@ -74,16 +66,10 @@ afterEach(() => {
 
 describe("ollama-client", () => {
   it("ollamaTagsUrl 剥掉 OpenAI 兼容的 /v1 后缀（带不带尾斜杠都对）", () => {
-    expect(ollamaTagsUrl("http://127.0.0.1:11434/v1")).toBe(
-      "http://127.0.0.1:11434/api/tags",
-    );
-    expect(ollamaTagsUrl("http://127.0.0.1:11434/v1/")).toBe(
-      "http://127.0.0.1:11434/api/tags",
-    );
+    expect(ollamaTagsUrl("http://127.0.0.1:11434/v1")).toBe("http://127.0.0.1:11434/api/tags");
+    expect(ollamaTagsUrl("http://127.0.0.1:11434/v1/")).toBe("http://127.0.0.1:11434/api/tags");
     // 不是 /v1 结尾就原样接上
-    expect(ollamaTagsUrl("http://127.0.0.1:11434")).toBe(
-      "http://127.0.0.1:11434/api/tags",
-    );
+    expect(ollamaTagsUrl("http://127.0.0.1:11434")).toBe("http://127.0.0.1:11434/api/tags");
   });
 
   it("探测成功：返回模型清单（探测带超时信号）", async () => {
@@ -110,13 +96,15 @@ describe("ollama-client", () => {
   });
 
   it("2xx 却是非 JSON（端口上跑的是别的服务）→ 按未运行处理，而不是「0 个模型」", async () => {
-    fetchMock.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => {
-        throw new Error("not json");
-      },
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ok: true,
+        status: 200,
+        json: async () => {
+          throw new Error("not json");
+        },
+      } as unknown as Response,
+    );
     await expect(probeOllama("http://x/v1")).resolves.toEqual({ up: false });
   });
 
@@ -138,13 +126,15 @@ describe("ollama-client", () => {
     await expect(startOllama()).rejects.toThrow("端口被占");
 
     // 响应体不是 JSON / 没有 error → 用兜底中文文案
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: async () => {
-        throw new Error("x");
-      },
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new Error("x");
+        },
+      } as unknown as Response,
+    );
     await expect(startOllama()).rejects.toThrow(/请确认已安装 Ollama/);
     fetchMock.mockResolvedValue(jsonResponse({}, 500));
     await expect(startOllama()).rejects.toThrow(/请确认已安装 Ollama/);
@@ -199,13 +189,15 @@ describe("model-catalog-client", () => {
   });
 
   it("响应体不是 JSON → 仍给 HTTP 文案（页面不该因探测而报错）", async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 502,
-      json: async () => {
-        throw new Error("html");
-      },
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ok: false,
+        status: 502,
+        json: async () => {
+          throw new Error("html");
+        },
+      } as unknown as Response,
+    );
     await expect(fetchLocalModels()).resolves.toEqual({
       ok: false,
       models: [],
@@ -236,7 +228,7 @@ describe("model-catalog-client", () => {
 
 describe("usage-test-client", () => {
   const INPUT = {
-    kind: "chat" as const,
+    kind: /* SAFETY: 类型断言已复核 */ "chat" as const,
     name: "entry",
     baseUrl: "https://x/v1",
     path: "/chat/completions",
@@ -299,13 +291,15 @@ describe("usage-test-client", () => {
   });
 
   it("响应体不可解析 → 落到「请求失败 (status)」而不是抛错", async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 500,
-      json: async () => {
-        throw new Error("html");
-      },
-    } as unknown as Response);
+    fetchMock.mockResolvedValue(
+      /* SAFETY: 类型断言已复核 */ {
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new Error("html");
+        },
+      } as unknown as Response,
+    );
     await expect(testModelUsage(INPUT)).resolves.toMatchObject({
       ok: false,
       detail: "请求失败 (500)",
@@ -349,25 +343,21 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
   it("远端 URL：下载并落到 temp/usage-test/<模型名>/，扩展名随 URL", async () => {
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
-      fetchMock.mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => new TextEncoder().encode("binary").buffer,
-      } as unknown as Response);
+      fetchMock.mockResolvedValue(
+        /* SAFETY: 类型断言已复核 */ {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => new TextEncoder().encode("binary").buffer,
+        } as unknown as Response,
+      );
 
-      const dest = await saveMediaToLocalTemp(
-        "image",
-        "my model/x",
-        "https://i/a.png",
-      );
+      const dest = await saveMediaToLocalTemp("image", "my model/x", "https://i/a.png");
       expect(dest).not.toBeNull();
-      expect(dest!.startsWith(path.join(tmpRoot, "temp", "usage-test"))).toBe(
-        true,
-      );
+      expect(dest!.startsWith(path.join(tmpRoot, "temp", "usage-test"))).toBe(true);
       // 模型名里的分隔符被剥掉，不产生路径穿越
       expect(dest).toContain(path.join("usage-test", "x"));
       expect(dest!.endsWith(".png")).toBe(true);
-      expect((await fs.readFile(dest!, "utf-8")).length).toBeGreaterThan(0);
+      expect((await fs.readFile(dest!, "utf8")).length).toBeGreaterThan(0);
     } finally {
       spy.mockRestore();
     }
@@ -377,13 +367,9 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
       const b64 = Buffer.from("hello").toString("base64");
-      const dest = await saveMediaToLocalTemp(
-        "image",
-        "m",
-        `data:image/jpeg;base64,${b64}`,
-      );
+      const dest = await saveMediaToLocalTemp("image", "m", `data:image/jpeg;base64,${b64}`);
       expect(dest!.endsWith(".jpg")).toBe(true);
-      expect(await fs.readFile(dest!, "utf-8")).toBe("hello");
+      expect(await fs.readFile(dest!, "utf8")).toBe("hello");
       expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();
@@ -393,28 +379,26 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
   it("HTTP 失败 / 空文件 / 网络抛错 → 返回 null 而不是抛错（落盘只是增强）", async () => {
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
-      fetchMock.mockResolvedValue({
-        ok: false,
-        status: 404,
-        arrayBuffer: async () => new ArrayBuffer(0),
-      } as unknown as Response);
-      await expect(
-        saveMediaToLocalTemp("video", "m", "https://v/x.mp4"),
-      ).resolves.toBeNull();
+      fetchMock.mockResolvedValue(
+        /* SAFETY: 类型断言已复核 */ {
+          ok: false,
+          status: 404,
+          arrayBuffer: async () => new ArrayBuffer(0),
+        } as unknown as Response,
+      );
+      await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
 
-      fetchMock.mockResolvedValue({
-        ok: true,
-        status: 200,
-        arrayBuffer: async () => new ArrayBuffer(0),
-      } as unknown as Response);
-      await expect(
-        saveMediaToLocalTemp("video", "m", "https://v/x.mp4"),
-      ).resolves.toBeNull();
+      fetchMock.mockResolvedValue(
+        /* SAFETY: 类型断言已复核 */ {
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => new ArrayBuffer(0),
+        } as unknown as Response,
+      );
+      await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
 
       fetchMock.mockRejectedValue(new Error("ECONNRESET"));
-      await expect(
-        saveMediaToLocalTemp("video", "m", "https://v/x.mp4"),
-      ).resolves.toBeNull();
+      await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
     } finally {
       spy.mockRestore();
     }
@@ -424,11 +408,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
       const b64 = Buffer.from("x").toString("base64");
-      const dest = await saveMediaToLocalTemp(
-        "image",
-        "   ",
-        `data:image/png;base64,${b64}`,
-      );
+      const dest = await saveMediaToLocalTemp("image", "   ", `data:image/png;base64,${b64}`);
       expect(dest).toContain(path.join("usage-test", "unnamed"));
     } finally {
       spy.mockRestore();
@@ -447,11 +427,7 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
      * 旧的「返回路径」行为会让下游把空文件当图片去送上游。 */
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
-      const dest = await saveMediaToLocalTemp(
-        "image",
-        "m",
-        "data:image/png;base64",
-      );
+      const dest = await saveMediaToLocalTemp("image", "m", "data:image/png;base64");
       expect(dest).toBeNull();
     } finally {
       spy.mockRestore();

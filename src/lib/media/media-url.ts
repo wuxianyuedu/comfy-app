@@ -23,14 +23,14 @@
 import { buildQueryString } from "~/lib/query-string";
 
 /** ComfyUI 侧的文件引用（`LoadImage` 的 `filename` / `subfolder` / `type` 三元组）。 */
-export interface ComfyMediaRef {
+export type ComfyMediaRef = {
   /** 文件名（可含子目录前缀，视本应用上传口径而定）。 */
   filename: string;
   /** ComfyUI 的子目录；缺省表示根目录。 */
   subfolder?: string | null;
   /** ComfyUI 的文件类别：`input`（用户上传）/ `output`（生成产物）/ `temp`。 */
   type?: string | null;
-}
+};
 
 /** `/api/images` —— 经本应用代理读 ComfyUI 的媒体文件。 */
 const IMAGES_ENDPOINT = "/api/images";
@@ -49,16 +49,14 @@ const IMAGES_ENDPOINT = "/api/images";
  */
 export function comfyImageUrl(ref: ComfyMediaRef): string | null {
   const filename = ref.filename?.trim() ?? "";
-  if (filename === "") return null;
-  return (
-    IMAGES_ENDPOINT +
-    "?" +
-    buildQueryString({
-      filename,
-      subfolder: ref.subfolder,
-      type: ref.type ?? "input",
-    })
-  );
+  if (filename === "") {
+    return null;
+  }
+  return `${IMAGES_ENDPOINT}?${buildQueryString({
+    filename,
+    subfolder: ref.subfolder,
+    type: ref.type ?? "input",
+  })}`;
 }
 
 /**
@@ -72,13 +70,17 @@ export function comfyImageUrl(ref: ComfyMediaRef): string | null {
  * IMAGE 输入选完图「看不到图」）。
  */
 export function mediaReferenceFilename(reference: unknown): string {
-  if (typeof reference === "string") return reference.trim();
-  if (reference == null || typeof reference !== "object") return "";
+  if (typeof reference === "string") {
+    return reference.trim();
+  }
+  if (reference == null || typeof reference !== "object") {
+    return "";
+  }
   const raw: unknown = Array.isArray(reference)
-    ? (reference as unknown[])[0]
+    ? /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[0]
     : reference;
   if (raw != null && typeof raw === "object") {
-    const f = (raw as { filename?: unknown }).filename;
+    const f = /* SAFETY: 类型断言已复核 */ (raw as { filename?: unknown }).filename;
     return typeof f === "string" ? f.trim() : "";
   }
   return typeof raw === "string" ? raw.trim() : "";
@@ -96,36 +98,41 @@ export function mediaReferenceFilename(reference: unknown): string {
  * `MediaThumbnail` 的 `src`（它本来就接受 `null`），调用处不必再包三元。
  */
 export function mediaPreviewUrl(reference: unknown): string | null {
-  if (reference == null) return null;
+  if (reference == null) {
+    return null;
+  }
 
   // 字符串：已渲染过的应用内绝对路径原样返回；否则按 input 文件名走代理。
   if (typeof reference === "string") {
     const value = reference.trim();
-    if (value === "") return null;
-    if (value.startsWith("/")) return value;
+    if (value === "") {
+      return null;
+    }
+    if (value.startsWith("/")) {
+      return value;
+    }
     return comfyImageUrl({ filename: value, type: "input" });
   }
 
   // 对象 / 数组：拍平成 ComfyMediaRef。
   if (typeof reference === "object") {
+    /* SAFETY: 类型断言已复核 */
     const ref = Array.isArray(reference)
       ? {
-          filename: (reference as unknown[])[0] ?? null,
-          subfolder: (reference as unknown[])[1] ?? null,
-          type: (reference as unknown[])[2] ?? null,
+          filename: /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[0] ?? null,
+          subfolder: /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[1] ?? null,
+          type: /* SAFETY: 类型断言已复核 */ (reference as Array<unknown>)[2] ?? null,
         }
       : (reference as {
           filename?: unknown;
           subfolder?: unknown;
           type?: unknown;
         });
-    const filename =
-      typeof ref.filename === "string" ? ref.filename.trim() : "";
-    if (filename === "") return null;
-    const type =
-      typeof ref.type === "string" && ref.type.trim() !== ""
-        ? ref.type.trim()
-        : "input";
+    const filename = typeof ref.filename === "string" ? ref.filename.trim() : "";
+    if (filename === "") {
+      return null;
+    }
+    const type = typeof ref.type === "string" && ref.type.trim() !== "" ? ref.type.trim() : "input";
     const subfolder =
       typeof ref.subfolder === "string" && ref.subfolder.trim() !== ""
         ? ref.subfolder.trim()

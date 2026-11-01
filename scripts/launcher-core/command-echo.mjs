@@ -33,9 +33,13 @@ const SHELL_SPECIAL = /[\s"'`$&|<>^(){};*?[\]!#%]/;
  */
 function quoteArg(value) {
   const text = String(value);
-  if (text === "") return '""';
-  if (!SHELL_SPECIAL.test(text)) return text;
-  return `"${text.replace(/"/g, '\\"')}"`;
+  if (text === "") {
+    return '""';
+  }
+  if (!SHELL_SPECIAL.test(text)) {
+    return text;
+  }
+  return `"${text.replaceAll("\"", String.raw`\"`)}"`;
 }
 
 /**
@@ -69,13 +73,11 @@ function echoEnabled(env) {
 export function echoCommandLine(
   command,
   args = [],
-  {
-    label = null,
-    sink = (text) => process.stdout.write(text),
-    env = process.env,
-  } = {},
+  { label = null, sink = (text) => process.stdout.write(text), env = process.env } = {},
 ) {
-  if (!echoEnabled(env)) return null;
+  if (!echoEnabled(env)) {
+    return null;
+  }
   const line = `>>> ${label ? `[${label}] ` : ""}${formatCommandLine(command, args)}`;
   sink(`${line}\n`);
   return line;

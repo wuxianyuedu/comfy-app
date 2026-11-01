@@ -8,10 +8,7 @@ import { unauthorizedResponse } from "~/server/lib/error-response";
 
 export const runtime = "nodejs";
 
-export async function GET(
-  req: NextRequest,
-  ctx: { params: Promise<{ id: string }> },
-) {
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const params = await ctx.params;
   const id = params.id;
 
@@ -34,7 +31,7 @@ export async function GET(
        * `sentLogCount`：已发出的日志条数——日志是**追加数组**，轮询按它做
        * 增量 diff 发 log 帧（P3 §5 ADR §13-3C：SSE 单源化，log/state 都以
        * DB 为准；初始回放读内存是为了接住 persistLogs 200ms 防抖窗口）。 */
-      const lastSent: { status: string; progress: number; nodeKey: string } = {
+      const lastSent: { nodeKey: string; progress: number; status: string } = {
         status: "",
         progress: 0,
         nodeKey: "",
@@ -47,9 +44,7 @@ export async function GET(
         .then((task) => {
           if (task) {
             // logs 是任务表的 JSON 列(运行时为 LogEntry[];send 收 unknown,无需断言)。
-            const existing: unknown[] = Array.isArray(task.logs)
-              ? task.logs
-              : [];
+            const existing: Array<unknown> = Array.isArray(task.logs) ? task.logs : [];
             // 优先回放 runner 内存日志（state().logs），它是每次 log() 写入的完整
             // 现场、也是持久化到 DB 的源，恒为 DB 日志的超集。提交与领取
             // （`kickQueue` → `claimAndDispatchOnce`）在 startGenerate 返回前、
@@ -91,7 +86,9 @@ export async function GET(
             /*  回放之前任务就已终态：轮询那条「与上次发出的快照不同才动作」的判据
              * 刚被这次回放喂成了恒假，于是再没有别的退出路径 —— 只能在这里收口
              * （日志与终态 state 都已回放完毕，此时关闭不丢数据）。 */
-            if (isTerminalTaskStatus(task.status)) cleanup();
+            if (isTerminalTaskStatus(task.status)) {
+              cleanup();
+            }
           }
         })
         .catch(() => {
@@ -109,10 +106,16 @@ export async function GET(
       } = {};
       let closed = false;
       const cleanup = () => {
-        if (closed) return;
+        if (closed) {
+          return;
+        }
         closed = true;
-        if (handles.heartbeat !== undefined) clearInterval(handles.heartbeat);
-        if (handles.poll !== undefined) clearInterval(handles.poll);
+        if (handles.heartbeat !== undefined) {
+          clearInterval(handles.heartbeat);
+        }
+        if (handles.poll !== undefined) {
+          clearInterval(handles.poll);
+        }
         try {
           controller.close();
         } catch {
@@ -132,9 +135,11 @@ export async function GET(
           controller.enqueue(encoder.encode(`: hb ${Date.now()}\n\n`));
         } catch {
           /* controller 已关闭 —— 清掉定时器并退出 */
-          if (handles.heartbeat !== undefined) clearInterval(handles.heartbeat);
+          if (handles.heartbeat !== undefined) {
+            clearInterval(handles.heartbeat);
+          }
         }
-      }, 15000);
+      }, 15_000);
 
       /* 数据库轮询 = SSE 的唯一事件源（P3 §5 ADR §13-3C，D2 定 3s）。
        * 此前它是「emitter 之外的兜底」（取消只写库、外部对账改状态等路径
@@ -147,15 +152,19 @@ export async function GET(
        * 同时最多一次轮询在途，abort 时关闭。 */
       let polling = false;
       handles.poll = setInterval(() => {
-        if (polling) return;
+        if (polling) {
+          return;
+        }
         polling = true;
         taskRepository
           .findSseSnapshot(id)
           .then((cur) => {
-            if (!cur) return;
+            if (!cur) {
+              return;
+            }
             // 日志是 unknown 列：Array.isArray 收窄到 any[] 会踩
             // no-unsafe-assignment，标注成 unknown[] 保住类型纪律。
-            const logs: unknown[] = Array.isArray(cur.logs) ? cur.logs : [];
+            const logs: Array<unknown> = Array.isArray(cur.logs) ? cur.logs : [];
             const nodeKey = JSON.stringify(cur.progressNode ?? null);
             const changed =
               cur.status !== lastSent.status ||
@@ -165,7 +174,9 @@ export async function GET(
               /* 日志增量：追加数组按游标切。DB 数组只会变长（persistLogs
                * 整包重写同一序列）；万一看到变短（异常形态），只把游标
                * 归正、不重发历史，宁缺勿重。 */
-              if (logs.length < sentLogCount) sentLogCount = logs.length;
+              if (logs.length < sentLogCount) {
+                sentLogCount = logs.length;
+              }
               for (const entry of logs.slice(sentLogCount)) {
                 send({ type: "log", entry });
               }
@@ -185,9 +196,7 @@ export async function GET(
                   /* 只在终态附带产出清单（与初始回放的 state 帧同形）：
                    * host 执行的任务没有进程内 done 帧，客户端靠这份 images
                    * 收口成功态（#1151）；非终态不带上，轮询帧保持轻量。 */
-                  ...(isTerminalTaskStatus(cur.status)
-                    ? { images: cur.resultImages }
-                    : {}),
+                  ...(isTerminalTaskStatus(cur.status) ? { images: cur.resultImages } : {}),
                 });
               }
             } catch {
@@ -197,7 +206,9 @@ export async function GET(
               cleanup();
               return;
             }
-            if (isTerminalTaskStatus(cur.status)) cleanup();
+            if (isTerminalTaskStatus(cur.status)) {
+              cleanup();
+            }
           })
           .catch(() => {
             /* 数据库抖了一下 —— 下一个 tick 再试 */

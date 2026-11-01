@@ -9,58 +9,79 @@
  */
 
 /* ── 关键字匹配器（名字 + 标签，忽略大小写）── */
-export function isDimWidth(e: { name?: string; label?: string }): boolean {
+export function isDimWidth(e: { label?: string; name?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
-  if (name.includes("width")) return true;
-  if (label === "宽度" || label === "横" || label === "横向") return true;
-  if (name === "宽") return true;
+  if (name.includes("width")) {
+    return true;
+  }
+  if (label === "宽度" || label === "横" || label === "横向") {
+    return true;
+  }
+  if (name === "宽") {
+    return true;
+  }
   return false;
 }
-export function isDimHeight(e: { name?: string; label?: string }): boolean {
+export function isDimHeight(e: { label?: string; name?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
   /* NOTE: a bare "高" inside a 画质 label like "高清" must NOT count as the
    *  height pin — we only accept the exact Chinese shape 高度/纵向/纵 or the
    *      *  英文名字，绝不能是某个无关标签的子串。 */
-  if (/height|heigth/.test(name)) return true;
-  if (label === "高度" || label === "纵" || label === "纵向") return true;
-  if (name === "高") return true;
+  if (/height|heigth/.test(name)) {
+    return true;
+  }
+  if (label === "高度" || label === "纵" || label === "纵向") {
+    return true;
+  }
+  if (name === "高") {
+    return true;
+  }
   return false;
 }
-export function isDimAspect(e: { name?: string; label?: string }): boolean {
+export function isDimAspect(e: { label?: string; name?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
-  if (/\baspect_ratio\b/.test(name) || /\baspect\b|\bratio\b/.test(name))
+  if (/\baspect_ratio\b/.test(name) || /\baspect\b|\bratio\b/.test(name)) {
     return true;
-  if (label === "宽高比" || label.includes("比例") || label.includes("纵横"))
+  }
+  if (label === "宽高比" || label.includes("比例") || label.includes("纵横")) {
     return true;
+  }
   return false;
 }
-export function isDimMegapixels(e: { name?: string; label?: string }): boolean {
+export function isDimMegapixels(e: { label?: string; name?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = (e.label ?? "").toLowerCase();
-  if (name.includes("megapixel")) return true;
-  if (label.includes("百万像素") || label.includes("像素")) return true;
+  if (name.includes("megapixel")) {
+    return true;
+  }
+  if (label.includes("百万像素") || label.includes("像素")) {
+    return true;
+  }
   return false;
 }
-export function isDimMultiple(e: { name?: string; label?: string }): boolean {
+export function isDimMultiple(e: { label?: string; name?: string }): boolean {
   const name = (e.name ?? "").toLowerCase();
   const label = e.label ?? "";
-  if (/multiple|upscale_factor|upscale_by|upscale_amount/.test(name))
+  if (/multiple|upscale_factor|upscale_by|upscale_amount/.test(name)) {
     return true;
-  if (label.includes("倍数") || label.includes("倍率")) return true;
+  }
+  if (label.includes("倍数") || label.includes("倍率")) {
+    return true;
+  }
   return false;
 }
-export function isVideoLength(e: { name?: string; label?: string }): boolean {
+export function isVideoLength(e: { label?: string; name?: string }): boolean {
   const searchText = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
   return /length|duration|时长|帧数|frames|seconds|秒/.test(searchText);
 }
-export function isVideoAspect(e: { name?: string; label?: string }): boolean {
+export function isVideoAspect(e: { label?: string; name?: string }): boolean {
   const searchText = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
   return /aspect|ratio|比例|纵横/.test(searchText);
 }
-export function isVideoQuality(e: { name?: string; label?: string }): boolean {
+export function isVideoQuality(e: { label?: string; name?: string }): boolean {
   const searchText = `${e.name ?? ""} ${e.label ?? ""}`.toLowerCase();
   return /quality|clarity|清晰|画质/.test(searchText);
 }

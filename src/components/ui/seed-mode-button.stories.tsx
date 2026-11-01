@@ -20,7 +20,7 @@ import { SeedModeButton } from "~/components/ui/seed-mode-button";
  */
 type SeedMode = "fixed" | "increment" | "decrement" | "random";
 
-const MODES: SeedMode[] = ["fixed", "increment", "decrement", "random"];
+const MODES: Array<SeedMode> = ["fixed", "increment", "decrement", "random"];
 
 const meta = {
   title: "UI/SeedModeButton",
@@ -47,10 +47,8 @@ export const AllModes: Story = {
   render: () => (
     <div className="flex flex-col gap-3">
       {MODES.map((mode) => (
-        <div key={mode} className="flex items-center gap-3">
-          <span className="text-ink-muted w-20 font-mono text-[11px]">
-            {mode}
-          </span>
+        <div className="flex items-center gap-3" key={mode}>
+          <span className="text-ink-muted w-20 font-mono text-[11px]">{mode}</span>
           <SeedModeButton mode={mode} onPick={() => undefined} />
         </div>
       ))}
@@ -79,13 +77,11 @@ export const InCanvasRow: Story = {
       <span className="border-border-strong bg-canvas-deep text-ink-soft flex-1 rounded-md border px-2 py-0.5 font-mono text-[11px]">
         486920135724881
       </span>
-      {([null, ...MODES] as const).map((mode) => (
-        <SeedModeButton
-          key={mode ?? "unset"}
-          mode={mode ?? undefined}
-          onPick={() => undefined}
-        />
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ ([null, ...MODES] as const).map((mode) => (
+          <SeedModeButton key={mode ?? "unset"} mode={mode ?? undefined} onPick={() => undefined} />
+        ))
+      }
     </div>
   ),
 };

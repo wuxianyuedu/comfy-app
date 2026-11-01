@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { familyOfClass } from "./workflow-param-classes";
 import { exposedClassOf, exposedParamLabel, exposedParamsForMode } from "./workflow-exposed-params";
 
-function ids(mode: string | null): string[] {
+function ids(mode: string | null): Array<string> {
   return exposedParamsForMode(mode).map((def) => def.id);
 }
 

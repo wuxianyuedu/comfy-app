@@ -57,7 +57,10 @@ const SCAN_DIR = "src/lib";
 /* `--staged`（钩子用）＝ 输入面跳过，口径见 §13.5.8.2。
  * 短路点在 `require("typescript")` 之前 —— 那一步 ≈180ms，放后面就白跳过。 */
 if (STAGED && !REPORT_ONLY && !UPDATE) {
-  require("./gate-scan-read.cjs").skipUnlessStagedTouches({ roots: [SCAN_DIR], tag: "[void-floats]" });
+  require("./gate-scan-read.cjs").skipUnlessStagedTouches({
+    roots: [SCAN_DIR],
+    tag: "[void-floats]",
+  });
 }
 
 const ts = require("typescript");
@@ -69,21 +72,28 @@ const ts = require("typescript");
  */
 const RULE_VERSION = 1;
 
-const isTestFile = (rel) =>
-  /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
+const isTestFile = (rel) => /\.test\.[cm]?[jt]sx?$/.test(rel) || rel.includes("/__tests__/");
 
 function collectFiles(dir, out = []) {
   const abs = path.join(ROOT, dir);
-  if (!fs.existsSync(abs)) return out;
+  if (!fs.existsSync(abs)) {
+    return out;
+  }
   for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
     const rel = path.join(dir, entry.name).split(path.sep).join("/");
     if (entry.isDirectory()) {
       collectFiles(rel, out);
       continue;
     }
-    if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-    if (entry.name.endsWith(".d.ts")) continue;
-    if (isTestFile(rel)) continue;
+    if (!/\.(ts|tsx)$/.test(entry.name)) {
+      continue;
+    }
+    if (entry.name.endsWith(".d.ts")) {
+      continue;
+    }
+    if (isTestFile(rel)) {
+      continue;
+    }
     out.push(rel);
   }
   return out;
@@ -112,9 +122,10 @@ function countTree(sf) {
       // 不属于「悄悄悬空」的病灶;跳过。`void someFn().finally(...)` 不接住
       // rejection（`.finally` 只是"无论成败都跑"）,仍然计入。
       const isCatchChain =
-        ts.isPropertyAccessExpression(call.expression) &&
-        call.expression.name.text === "catch";
-      if (!isCatchChain) count += 1;
+        ts.isPropertyAccessExpression(call.expression) && call.expression.name.text === "catch";
+      if (!isCatchChain) {
+        count += 1;
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -133,7 +144,9 @@ function countTree(sf) {
  */
 function countFor(rel, parsed) {
   const shared = parsed && parsed.get(rel);
-  if (shared) return countTree(shared);
+  if (shared) {
+    return countTree(shared);
+  }
   const abs = path.join(ROOT, rel);
   const src = fs.readFileSync(abs, "utf8");
   return countTree(
@@ -148,11 +161,13 @@ function countFor(rel, parsed) {
 }
 
 function readBaseline() {
-  if (!fs.existsSync(BASELINE)) return null;
+  if (!fs.existsSync(BASELINE)) {
+    return null;
+  }
   try {
     return JSON.parse(fs.readFileSync(BASELINE, "utf8"));
-  } catch (e) {
-    console.error(`[void-floats] 基线文件损坏: ${e.message}`);
+  } catch (error) {
+    console.error(`[void-floats] 基线文件损坏: ${error.message}`);
     process.exit(1);
   }
 }
@@ -165,7 +180,7 @@ function writeBaseline(files, total) {
     total,
     files,
   };
-  fs.writeFileSync(BASELINE, JSON.stringify(payload, null, 2) + "\n");
+  fs.writeFileSync(BASELINE, `${JSON.stringify(payload, null, 2)}\n`);
 }
 
 function main(parsed) {
@@ -184,9 +199,7 @@ function main(parsed) {
     console.log(
       `[void-floats] src/lib \`void someFn(...)\` 共 ${total} 处,分布 ${Object.keys(current).length} 个文件`,
     );
-    for (const [rel, n] of Object.entries(current).sort(
-      (a, b) => b[1] - a[1],
-    )) {
+    for (const [rel, n] of Object.entries(current).sort((a, b) => b[1] - a[1])) {
       console.log(`  · ${n} 处  ${rel}`);
     }
     return;
@@ -195,11 +208,7 @@ function main(parsed) {
   const baseline = readBaseline();
 
   if (UPDATE) {
-    if (
-      baseline &&
-      baseline.ruleVersion === RULE_VERSION &&
-      total > baseline.total
-    ) {
+    if (baseline && baseline.ruleVersion === RULE_VERSION && total > baseline.total) {
       console.error(
         `[void-floats] 拒绝 --update: 当前 ${total} > 基线 ${baseline.total}。棘轮只许降不许升,\n` +
           `  新增的先改用 fireAndForget(p, onError),或在评审里说明「被调方内部已 catch、\n` +
@@ -209,9 +218,7 @@ function main(parsed) {
       process.exit(1);
     }
     writeBaseline(current, total);
-    console.log(
-      `[void-floats] 基线已重写: 总 ${total} 处 / ${Object.keys(current).length} 文件`,
-    );
+    console.log(`[void-floats] 基线已重写: 总 ${total} 处 / ${Object.keys(current).length} 文件`);
     return;
   }
 
@@ -243,13 +250,13 @@ function main(parsed) {
   }
   if (problems.length > 0) {
     console.error(
-      "[void-floats] src/lib 里新增 `void someFn(...)` 语句(§18 lib 规范 + 类型安全审查 src/lib H-6):\n" +
-        problems.join("\n") +
-        "\n  默认修法:改用 `fireAndForget(someFn(), (e) => { /* 明确失败通道 */ })` ——\n" +
-        "  见 src/lib/async-action.ts。若被调函数**内部已经 catch**、这里就是刻意悬空,\n" +
-        "  也请在评审里说明这一点再 `--update` 收紧基线,不要悄悄写下。\n" +
-        "  `void fetch(...)` / `void someFn().catch(...)` 这类形态不在本判据内,\n" +
-        "  但同样是 fire-and-forget —— 优先迁到 fireAndForget。",
+      `[void-floats] src/lib 里新增 \`void someFn(...)\` 语句(§18 lib 规范 + 类型安全审查 src/lib H-6):\n${
+        problems.join("\n")
+        }\n  默认修法:改用 \`fireAndForget(someFn(), (e) => { /* 明确失败通道 */ })\` ——\n` +
+        `  见 src/lib/async-action.ts。若被调函数**内部已经 catch**、这里就是刻意悬空,\n` +
+        `  也请在评审里说明这一点再 \`--update\` 收紧基线,不要悄悄写下。\n` +
+        `  \`void fetch(...)\` / \`void someFn().catch(...)\` 这类形态不在本判据内,\n` +
+        `  但同样是 fire-and-forget —— 优先迁到 fireAndForget。`,
     );
     process.exit(1);
   }
@@ -259,24 +266,31 @@ function main(parsed) {
     .filter(([, cur, base]) => cur < base);
   if (dropped.length > 0) {
     const msg =
-      `[void-floats] 检测到 ${dropped.length} 个文件下降,请收紧基线:\n  ` +
-      dropped
-        .map(([rel, cur, base]) => `${rel}: ${base} → ${cur}`)
-        .join("\n  ") +
-      "\n  执行 node scripts/check-void-floats.cjs --update";
+      `[void-floats] 检测到 ${dropped.length} 个文件下降,请收紧基线:\n  ${
+      dropped.map(([rel, cur, base]) => `${rel}: ${base} → ${cur}`).join("\n  ")
+      }\n  执行 node scripts/check-void-floats.cjs --update`;
     if (STRICT) {
       console.error(msg);
       process.exit(1);
     }
-    console.log(msg + " (当前非 --strict,仅提示)");
+    console.log(`${msg} (当前非 --strict,仅提示)`);
   }
-  console.log(
-    `[void-floats] src/lib \`void someFn()\` 总数 ${total}(基线 ${baseline.total})`,
-  );
+  console.log(`[void-floats] src/lib \`void someFn()\` 总数 ${total}(基线 ${baseline.total})`);
   console.log("[void-floats] OK");
 }
 
 /* 规则本体导出给聚合档 `run-ast-gates.cjs`（单条脚本行为不变）。 */
-module.exports = { countTree, countFor, collectFiles, main, RULE_VERSION, BASELINE, SCAN_DIR, isTestFile };
+module.exports = {
+  countTree,
+  countFor,
+  collectFiles,
+  main,
+  RULE_VERSION,
+  BASELINE,
+  SCAN_DIR,
+  isTestFile,
+};
 
-if (require.main === module) main();
+if (require.main === module) {
+  main();
+}

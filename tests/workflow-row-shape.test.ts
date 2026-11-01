@@ -31,14 +31,12 @@ import type { WorkflowRow } from "~/components/studio/workflow-library/workflow-
 import type { WorkflowParamMap } from "~/lib/workflow/workflow-param-map";
 
 const ROOT = path.resolve(__dirname, "..");
-const CONFIG =
-  "src/components/studio/workflow-library/workflow-library-config.ts";
-const LIST_HOOK =
-  "src/components/studio/workflow-library/hooks/use-workflow-library.ts";
+const CONFIG = "src/components/studio/workflow-library/workflow-library-config.ts";
+const LIST_HOOK = "src/components/studio/workflow-library/hooks/use-workflow-library.ts";
 const ROUTE = "src/server/api/routers/workflow-list.ts";
 
 function readSource(rel: string): string {
-  return stripComments(readFileSync(path.join(ROOT, rel), "utf-8"));
+  return stripComments(readFileSync(path.join(ROOT, rel), "utf8"));
 }
 
 /* ── ① 类型层：视图声明必须接得住服务端行（编译期判据）──
@@ -67,9 +65,10 @@ describe("工作流库行形状：视图声明与服务端一致（ISSUE #1460�
   it("视图 hook 落 state 时不再有双跳断言", () => {
     const code = readSource(LIST_HOOK);
     expect(code).toContain("setWorkflows(listQ.data.workflows ?? []);");
-    /* `as unknown as WorkflowRow` / `as WorkflowRow[]` 都不许出现 —— 单跳断言
-     * 同样是「这里别查我」，只是少了一次 `unknown` 洗白。 */
-    expect(code).not.toMatch(/as\s+(unknown\s+as\s+)?WorkflowRow\[\]/);
+    /* `as unknown as WorkflowRow` / `as WorkflowRow[]`（及切泛形后的
+     * `Array<WorkflowRow>` 写法）都不许出现 —— 单跳断言同样是「这里别查我」，
+     * 只是少了一次 `unknown` 洗白。 */
+    expect(code).not.toMatch(/as\s+(unknown\s+as\s+)?(?:WorkflowRow\[\]|Array<WorkflowRow>)/);
   });
 
   it("`createdAt` 声明为 Date（superjson 过线保真，不是 ISO 串）", () => {
@@ -94,6 +93,10 @@ describe("工作流库行形状：视图声明与服务端一致（ISSUE #1460�
 
   it("服务端出口按共用行类型声明，不靠对象字面量推宽", () => {
     const route = readSource(ROUTE);
-    expect(route).toContain("const enriched: WorkflowListRow[]");
+    /* 泛形（`Array<WorkflowListRow>`）是 oxlint array-type 切 generic 后的仓内
+       唯一口径（#2685 预设 default:"generic"）；旧 `WorkflowListRow[]` 形态
+       反而不许回潮。 */
+    expect(route).toContain("const enriched: Array<WorkflowListRow>");
+    expect(route).not.toContain("WorkflowListRow[]");
   });
 });

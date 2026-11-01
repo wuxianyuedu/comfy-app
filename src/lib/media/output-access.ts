@@ -46,11 +46,13 @@ async function isForeignProjectScope(scope: string, userId: string) {
 /** 这条产物**能否被确定属于请求者之外的人**（`true` 就不该给读）。
  *  `segments` 是相对于产物根（`generatedRoot()`）的路径片段（已经过 URL 解码）。 */
 export async function isForeignOwnedArtifact(
-  segments: string[],
+  segments: Array<string>,
   userId: string,
 ): Promise<boolean> {
   const [first, second] = segments;
-  if (!first) return false;
+  if (!first) {
+    return false;
+  }
 
   if (first === "materials") {
     // materials/<scope>/<folder>/<file>：scope 就是项目 id（或 _shared）
@@ -61,7 +63,9 @@ export async function isForeignOwnedArtifact(
     return second ? isForeignProjectScope(second, userId) : false;
   }
   if (first === "films") {
-    if (!second || UNSCOPED_PREFIXES.has(`films/${second}`)) return false;
+    if (!second || UNSCOPED_PREFIXES.has(`films/${second}`)) {
+      return false;
+    }
     const row = await filmRepository.findById(filmIdOf(second));
     return !!row && row.userId !== userId;
   }

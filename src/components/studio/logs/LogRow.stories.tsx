@@ -3,10 +3,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { LogRow } from "~/components/studio/logs/LogRow";
 import { useExpansionSet } from "~/components/ui/expansion-set";
 import { LOG_ROW_SINGLE } from "~/components/studio/logs/log-virtual";
-import {
-  sceneEntries,
-  type SceneName,
-} from "../../../../.storybook/store-sources";
+import { sceneEntries, type SceneName } from "../../../../.storybook/store-sources";
 
 /**
  * 一行日志 —— 面板里被读得最多的那一格。
@@ -51,33 +48,29 @@ function LogRowHarness({
   keyword = "",
   expandFirst = false,
 }: {
+  expandFirst?: boolean;
+  keyword?: string;
   scene?: SceneName;
   wrap?: boolean;
-  keyword?: string;
-  expandFirst?: boolean;
 }) {
   const entries = sceneEntries(scene);
-  const expansion = useExpansionSet(
-    expandFirst && entries[0] ? { [entries[0].id]: true } : {},
-  );
+  const expansion = useExpansionSet(expandFirst && entries[0] ? { [entries[0].id]: true } : {});
   if (entries.length === 0) {
     return (
-      <div className="text-ink-muted p-4 text-sm">
-        场景「{scene}」没有条目 —— 换一个场景。
-      </div>
+      <div className="text-ink-muted p-4 text-sm">场景「{scene}」没有条目 —— 换一个场景。</div>
     );
   }
   return (
     <div className="bg-canvas-deep border-border-strong w-225 max-w-full overflow-hidden rounded-md border">
       {entries.map((entry) => (
         <LogRow
-          key={entry.id}
           entry={entry}
-          wrap={wrap}
-          keyword={keyword}
           expanded={expansion.isExpanded(entry.id)}
+          key={entry.id}
+          keyword={keyword}
           onToggleExpand={expansion.toggle}
           style={{ minHeight: LOG_ROW_SINGLE }}
+          wrap={wrap}
         />
       ))}
     </div>
@@ -119,7 +112,7 @@ export const CliRowsCollapsed: Story = {
  * 展开集合是多选集合，不是单选，行高按 id 各自算（对不齐时滚动会错开）。
  */
 export const CliRowsExpanded: Story = {
-  render: () => <LogRowHarness scene="cliExpandable" expandFirst />,
+  render: () => <LogRowHarness expandFirst scene="cliExpandable" />,
 };
 
 /** 同一毫秒的多行：`(time, seq)` 邻近行的级别徽标与正文并排的真实负载。 */

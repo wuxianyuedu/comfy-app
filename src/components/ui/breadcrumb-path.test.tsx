@@ -22,7 +22,7 @@ const SEGMENTS = [
 
 describe("BreadcrumbPath", () => {
   it("用 nav + ol/li 的层级语义，且当前段带 aria-current", () => {
-    render(<BreadcrumbPath segments={SEGMENTS} onNavigate={() => undefined} />);
+    render(<BreadcrumbPath onNavigate={() => undefined} segments={SEGMENTS} />);
     expect(screen.getByRole("navigation")).toBeInTheDocument();
     const current = screen.getByText("小夜");
     expect(current).toHaveAttribute("aria-current", "page");
@@ -30,7 +30,7 @@ describe("BreadcrumbPath", () => {
 
   it("中间段可点并回调 key；末段是纯展示（点它不重入同一层）", async () => {
     const onNavigate = vi.fn();
-    render(<BreadcrumbPath segments={SEGMENTS} onNavigate={onNavigate} />);
+    render(<BreadcrumbPath onNavigate={onNavigate} segments={SEGMENTS} />);
     await userEvent.click(screen.getByRole("button", { name: "角色参考" }));
     expect(onNavigate).toHaveBeenCalledWith("characters");
     /* 末段与首段（key=null）都不是按钮。 */
@@ -39,20 +39,12 @@ describe("BreadcrumbPath", () => {
   });
 
   it("navigable=false（搜索态）时全部段都不可点", () => {
-    render(
-      <BreadcrumbPath
-        segments={SEGMENTS}
-        onNavigate={() => undefined}
-        navigable={false}
-      />,
-    );
+    render(<BreadcrumbPath navigable={false} onNavigate={() => undefined} segments={SEGMENTS} />);
     expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("空数组不渲染任何东西（调用处不必先判长度）", () => {
-    const { container } = render(
-      <BreadcrumbPath segments={[]} onNavigate={() => undefined} />,
-    );
+    const { container } = render(<BreadcrumbPath onNavigate={() => undefined} segments={[]} />);
     expect(container.firstChild).toBeNull();
   });
 });

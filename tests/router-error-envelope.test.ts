@@ -27,7 +27,7 @@ const CONFIG = path.join(ROOT, "eslint.config.js");
 /** 被拦的形状：`throw new 任何非 TRPCError`。 */
 const BARE_THROW = /throw\s+new\s+(?!TRPCError\b)[A-Za-z_$][\w$]*\s*\(/;
 
-function routerSources(): string[] {
+function routerSources(): Array<string> {
   return readdirSync(ROUTER_DIR)
     .filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"))
     .map((f) => path.join(ROUTER_DIR, f));
@@ -37,11 +37,13 @@ describe("① 存量为零：router 里不许有裸 throw", () => {
   it("扫描面非空（路径写错时「零命中」是假绿，不是好消息）", () => {
     const files = routerSources();
     expect(files.length).toBeGreaterThan(5);
-    for (const f of files) expect(statSync(f).isFile()).toBe(true);
+    for (const f of files) {
+      expect(statSync(f).isFile()).toBe(true);
+    }
   });
 
   it("每个 router 源文件都没有 `throw new 非 TRPCError`", () => {
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     for (const file of routerSources()) {
       const code = stripComments(readFileSync(file, "utf8"));
       code.split("\n").forEach((line, idx) => {
@@ -65,9 +67,7 @@ describe("② + ③ 配置在写，且 selector 真的会响", () => {
   });
 
   it("从配置里取出的 selector：裸 Error 报、TRPCError 不报", () => {
-    const selector =
-      /selector:\s*\n?\s*'([^']*NewExpression[^']*)'/.exec(configSrc)?.[1] ??
-      "";
+    const selector = /selector:\s*\n?\s*'([^']*NewExpression[^']*)'/.exec(configSrc)?.[1] ?? "";
     expect(selector).toContain("ThrowStatement");
     expect(selector).toContain('callee.name!="TRPCError"');
 
@@ -81,20 +81,16 @@ describe("② + ③ 配置在写，且 selector 真的会响", () => {
       });
 
     expect(
-      verify(`export const a = () => {\n  throw new Error("x");\n};`).map(
-        (m) => m.ruleId,
-      ),
+      verify(`export const a = () => {\n  throw new Error("x");\n};`).map((m) => m.ruleId),
     ).toContain("no-restricted-syntax");
     expect(
-      verify(
-        `export const a = () => {\n  throw new TRPCError({ code: "NOT_FOUND" });\n};`,
-      ).map((m) => m.ruleId),
+      verify(`export const a = () => {\n  throw new TRPCError({ code: "NOT_FOUND" });\n};`).map(
+        (m) => m.ruleId,
+      ),
     ).not.toContain("no-restricted-syntax");
     // TypeError / 自定义错误名同样在拦的范围里（不只是 `Error` 这一个词）
     expect(
-      verify(`export const a = () => {\n  throw new TypeError("x");\n};`).map(
-        (m) => m.ruleId,
-      ),
+      verify(`export const a = () => {\n  throw new TypeError("x");\n};`).map((m) => m.ruleId),
     ).toContain("no-restricted-syntax");
   });
 });

@@ -45,7 +45,9 @@ describe("模式契约口 id 值域", () => {
   it("两套 id 互不接受：适配器侧的细分类型不会混进契约", () => {
     const bothSides = ["prompt", "negative", "first-frame", "last-frame", "duration", "seed"];
     for (const t of WORKSHOP_INPUT_TYPES) {
-      if (bothSides.includes(t.type)) continue;
+      if (bothSides.includes(t.type)) {
+        continue;
+      }
       expect(isModeContractInputId(t.type), t.type).toBe(false);
     }
   });
@@ -174,7 +176,7 @@ describe("自定义口：id 形状与序号", () => {
 
   it("序号在整个自定义口空间里递增（不是每种类型各排一列）", () => {
     expect(nextCustomInputId([], "text")).toBe("custom-text-1");
-    const first: ModeContractInputId[] = ["prompt", "custom-text-1"];
+    const first: Array<ModeContractInputId> = ["prompt", "custom-text-1"];
     /* 下一个图片口拿 2 —— 与文本口共用序号空间，删掉一个再加不会立刻复用
      *  同一个 id（映射表按 id 存，复用会让旧落点线落到新口上）。 */
     expect(nextCustomInputId(first, "image")).toBe("custom-image-2");
@@ -185,13 +187,17 @@ describe("自定义口：id 形状与序号", () => {
 describe("自定义口：往返与归一化", () => {
   const contract = {
     mode: "T2I",
-    inputs: ["prompt", "custom-text-1", "size"] as ModeContractInputId[],
-    output: "image" as const,
+    inputs: /* SAFETY: 类型断言已复核 */ [
+      "prompt",
+      "custom-text-1",
+      "size",
+    ] as Array<ModeContractInputId>,
+    output: /* SAFETY: 类型断言已复核 */ "image" as const,
     customInputs: [
       {
-        id: "custom-text-1" as ModeContractInputId,
+        id: /* SAFETY: 类型断言已复核 */ "custom-text-1" as ModeContractInputId,
         label: "水彩风格",
-        kind: "text" as const,
+        kind: /* SAFETY: 类型断言已复核 */ "text" as const,
       },
     ],
   };
@@ -255,7 +261,7 @@ describe("自定义口：往返与归一化", () => {
 });
 
 describe("调序：顺序就是工坊对外的参数顺序", () => {
-  const inputs: ModeContractInputId[] = ["prompt", "negative", "size"];
+  const inputs: Array<ModeContractInputId> = ["prompt", "negative", "size"];
 
   it("上移 / 下移交换相邻两项", () => {
     expect(moveContractInput(inputs, "negative", -1)).toEqual(["negative", "prompt", "size"]);

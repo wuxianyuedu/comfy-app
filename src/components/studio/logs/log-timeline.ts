@@ -36,9 +36,7 @@ function entryKey(entry: Pick<LogEntry, "time" | "level" | "message">): string {
  * 「按身份记账」这件事在调用处读起来是它自己的概念（计数 / 过滤 / 去重共用），
  * 而不是又一次内联模板字符串——三处各写一遍时，改一处忘两处的漂移必然发生。
  */
-export function logEntryKey(
-  entry: Pick<LogEntry, "time" | "level" | "message">,
-): string {
+export function logEntryKey(entry: Pick<LogEntry, "time" | "level" | "message">): string {
   return entryKey(entry);
 }
 
@@ -55,22 +53,22 @@ export function logEntryKey(
  * `arrivalKey → LogEntry` 是「同一秒内同级别同正文」的副本表，用于把后到来源
  * 并进已落板那一行。两张表都只持有**引用**，与 `current` 同生命周期。
  */
-export interface TimelineIndex {
-  seen: Map<string, LogEntry>;
+export type TimelineIndex = {
   sameArrival: Map<string, LogEntry>;
-}
+  seen: Map<string, LogEntry>;
+};
 
 /** 为一条已落板的时间线建索引（O(n)：只在形状变化时调用）。 */
-export function buildTimelineIndex(
-  entries: readonly LogEntry[],
-): TimelineIndex {
+export function buildTimelineIndex(entries: ReadonlyArray<LogEntry>): TimelineIndex {
   const seen = new Map<string, LogEntry>();
   const sameArrival = new Map<string, LogEntry>();
   for (const entry of entries) {
     seen.set(entryKey(entry), entry);
     /* 同毫秒同正文的副本行（`seq` 只差几个数）视为同一条日志的另一次读取。 */
     const near = arrivalKey(entry);
-    if (!sameArrival.has(near)) sameArrival.set(near, entry);
+    if (!sameArrival.has(near)) {
+      sameArrival.set(near, entry);
+    }
   }
   return { seen, sameArrival };
 }
@@ -93,11 +91,13 @@ export function buildTimelineIndex(
  */
 export function trimTimelineIndex(
   index: TimelineIndex,
-  droppedEntries: readonly LogEntry[],
+  droppedEntries: ReadonlyArray<LogEntry>,
 ): void {
   for (const entry of droppedEntries) {
     const key = entryKey(entry);
-    if (index.seen.get(key) === entry) index.seen.delete(key);
+    if (index.seen.get(key) === entry) {
+      index.seen.delete(key);
+    }
     const near = arrivalKey(entry);
     if (index.sameArrival.get(near) === entry) {
       index.sameArrival.delete(near);
@@ -132,12 +132,14 @@ export function trimTimelineIndex(
  * 反复建表；WeakMap 让「这一份时间线」的索引自然随它一起被回收，不会留下
  * 永不释放的强引用（面板生命周期内时间线可能换很多次引用）。
  */
-const timelineIndexCache = new WeakMap<LogEntry[], TimelineIndex>();
+const timelineIndexCache = new WeakMap<Array<LogEntry>, TimelineIndex>();
 
 /** 取（或惰性建）某份时间线的索引 —— 热路径的唯一入口。 */
-export function indexOfTimeline(entries: LogEntry[]): TimelineIndex {
+export function indexOfTimeline(entries: Array<LogEntry>): TimelineIndex {
   const cached = timelineIndexCache.get(entries);
-  if (cached) return cached;
+  if (cached) {
+    return cached;
+  }
   const built = buildTimelineIndex(entries);
   timelineIndexCache.set(entries, built);
   return built;
@@ -151,10 +153,7 @@ export function indexOfTimeline(entries: LogEntry[]): TimelineIndex {
  * `mergeTimeline` 的路径。别处（`derive` / `clear` / `setBootId`）产出的数组
  * 由 `indexOfTimeline` 惰性补建，登记早了反而是让缓存持有已经过期的表。
  */
-export function rememberTimelineIndex(
-  entries: LogEntry[],
-  index: TimelineIndex,
-): void {
+export function rememberTimelineIndex(entries: Array<LogEntry>, index: TimelineIndex): void {
   timelineIndexCache.set(entries, index);
 }
 
@@ -175,33 +174,34 @@ export function rememberTimelineIndex(
  * 并 origin 那一步**不改 key**（`entryKey` 不含 origin），因此索引在新行登记
  * 之前就已经是最终形态——这正是「索引可以跨轮复用」成立的前提。
  */
-export function mergeTimeline(
-  current: LogEntry[],
-  fresh: LogEntry[],
-): LogEntry[] {
-  if (fresh.length === 0) return current;
-  const { logs, index } = mergeTimelineIndexed(
-    current,
-    fresh,
-    indexOfTimeline(current),
-  );
+export function mergeTimeline(current: Array<LogEntry>, fresh: Array<LogEntry>): Array<LogEntry> {
+  if (fresh.length === 0) {
+    return current;
+  }
+  const { logs, index } = mergeTimelineIndexed(current, fresh, indexOfTimeline(current));
   /* 合并产出的是新数组：把索引挂在它名下，下一轮就不必再建一次表。 */
-  if (logs !== current) rememberTimelineIndex(logs, index);
+  if (logs !== current) {
+    rememberTimelineIndex(logs, index);
+  }
   return logs;
 }
 
 export function mergeTimelineIndexed(
-  current: LogEntry[],
-  fresh: LogEntry[],
+  current: Array<LogEntry>,
+  fresh: Array<LogEntry>,
   index: TimelineIndex,
-): { logs: LogEntry[]; index: TimelineIndex } {
-  if (fresh.length === 0) return { logs: current, index };
+): { index: TimelineIndex; logs: Array<LogEntry> } {
+  if (fresh.length === 0) {
+    return { logs: current, index };
+  }
   const { seen, sameArrival } = index;
-  const added: LogEntry[] = [];
+  const added: Array<LogEntry> = [];
   let changed = false;
   for (const entry of fresh) {
     const key = entryKey(entry);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) {
+      continue;
+    }
     /* 已经有一条「同一毫秒写下的同一段正文」在板上：并进它的 origin，
      * 不再单独落一份。 */
     const existing = sameArrival.get(arrivalKey(entry));
@@ -217,26 +217,24 @@ export function mergeTimelineIndexed(
     added.push(entry);
   }
   if (added.length === 0) {
-    return { logs: changed ? current.slice() : current, index };
+    return { logs: changed ? [...current] : current, index };
   }
   const merged =
     current.length === 0 || changed
       ? [...current.map((e) => ({ ...e })), ...added]
       : [...current, ...added];
-  merged.sort((a, b) => (a.time !== b.time ? a.time - b.time : a.seq - b.seq));
+  merged.sort((a, b) => (a.time === b.time ? a.seq - b.seq : a.time - b.time));
   return { logs: merged, index };
 }
 
 /** 同一秒内的副本判据：时刻取整到秒 + 级别 + 正文（`entryKey` 的毫秒容忍版）。 */
-function arrivalKey(
-  entry: Pick<LogEntry, "time" | "level" | "message">,
-): string {
+function arrivalKey(entry: Pick<LogEntry, "time" | "level" | "message">): string {
   return `${Math.floor(entry.time / 1000)}\u0000${entry.level}\u0000${entry.message}`;
 }
 
 /** 时间线的**真实**末条（最新一条）——「已读水位」「有无新内容」「跳最新」都用它。 */
-export function lastSeqOf(logs: LogEntry[]): number {
-  return logs[logs.length - 1]?.seq ?? 0;
+export function lastSeqOf(logs: Array<LogEntry>): number {
+  return logs.at(-1)?.seq ?? 0;
 }
 
 /**
@@ -282,9 +280,7 @@ const SESSION_SCOPED_ORIGINS = new Set<NonNullable<LogEntry["origin"]>>([]);
  * 留成导出函数是为了让「哪类来源该裁」这条契约有唯一事实来源：视图/store 与
  * 测试都问它，而不是各自抄一份字符串判断。
  */
-export function isSessionScopedOrigin(
-  origin: LogEntry["origin"] | undefined,
-): boolean {
+export function isSessionScopedOrigin(origin: LogEntry["origin"] | undefined): boolean {
   return origin !== undefined && SESSION_SCOPED_ORIGINS.has(origin);
 }
 
@@ -303,11 +299,11 @@ export function isSessionScopedOrigin(
  * @param cutoffMs 会话起点（毫秒）；null/undefined = 不启用该过滤
  */
 export function dropStaleEntries(
-  entries: LogEntry[],
+  entries: Array<LogEntry>,
   cutoffMs: number | null | undefined,
-): LogEntry[] {
-  if (cutoffMs === null || cutoffMs === undefined) return entries;
-  return entries.filter(
-    (entry) => !isSessionScopedOrigin(entry.origin) || entry.time >= cutoffMs,
-  );
+): Array<LogEntry> {
+  if (cutoffMs === null || cutoffMs === undefined) {
+    return entries;
+  }
+  return entries.filter((entry) => !isSessionScopedOrigin(entry.origin) || entry.time >= cutoffMs);
 }

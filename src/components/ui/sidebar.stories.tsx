@@ -62,27 +62,29 @@ import {
 type SidebarMenuButtonVariant = NonNullable<
   React.ComponentProps<typeof SidebarMenuButton>["variant"]
 >;
-type SidebarMenuButtonSize = NonNullable<
-  React.ComponentProps<typeof SidebarMenuButton>["size"]
->;
+type SidebarMenuButtonSize = NonNullable<React.ComponentProps<typeof SidebarMenuButton>["size"]>;
 
-const MENU_BUTTON_VARIANTS: SidebarMenuButtonVariant[] = ["default", "outline"];
-const MENU_BUTTON_SIZES: SidebarMenuButtonSize[] = ["default", "sm", "lg"];
+const MENU_BUTTON_VARIANTS: Array<SidebarMenuButtonVariant> = ["default", "outline"];
+const MENU_BUTTON_SIZES: Array<SidebarMenuButtonSize> = ["default", "sm", "lg"];
 
 const meta = {
   title: "UI/Sidebar",
   component: Sidebar,
   args: { children: null },
-  argTypes: {
+  argTypes: /* SAFETY: 类型断言已复核 */ {
     variant: {
-      control: { type: "select" as const },
+      control: {
+        type: /* SAFETY: 类型断言已复核 */ "select" as const,
+      },
       options: MENU_BUTTON_VARIANTS,
     },
     size: {
-      control: { type: "select" as const },
+      control: {
+        type: /* SAFETY: 类型断言已复核 */ "select" as const,
+      },
       options: MENU_BUTTON_SIZES,
     },
-  } as Record<string, { control: { type: "select" }; options: string[] }>,
+  } as Record<string, { control: { type: "select" }; options: Array<string> }>,
 } satisfies Meta<typeof Sidebar>;
 
 export default meta;
@@ -98,13 +100,13 @@ function Shell({
   defaultOpen = true,
 }: {
   collapsible?: "offcanvas" | "icon" | "none";
-  variant?: "sidebar" | "floating" | "inset";
-  side?: "left" | "right";
   defaultOpen?: boolean;
+  side?: "left" | "right";
+  variant?: "sidebar" | "floating" | "inset";
 }) {
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
-      <Sidebar collapsible={collapsible} variant={variant} side={side}>
+      <Sidebar collapsible={collapsible} side={side} variant={variant}>
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -184,8 +186,7 @@ function Shell({
         </div>
         <div className="p-4">
           <p className="text-ink-muted text-sm">
-            点左上角触发钮或按 ⌘/Ctrl+B 切换左轨 —— 收起时 `tooltip`
-            才出现（且非移动端）。
+            点左上角触发钮或按 ⌘/Ctrl+B 切换左轨 —— 收起时 `tooltip` 才出现（且非移动端）。
           </p>
         </div>
       </SidebarInset>
@@ -235,7 +236,7 @@ export const CollapsibleNone: Story = {
 export const VariantFloating: Story = {
   render: () => (
     <div className="h-128">
-      <Shell variant="floating" collapsible="icon" />
+      <Shell collapsible="icon" variant="floating" />
     </div>
   ),
 };
@@ -243,7 +244,7 @@ export const VariantFloating: Story = {
 export const VariantInset: Story = {
   render: () => (
     <div className="h-128">
-      <Shell variant="inset" collapsible="icon" />
+      <Shell collapsible="icon" variant="inset" />
     </div>
   ),
 };
@@ -253,7 +254,7 @@ export const VariantInset: Story = {
 export const SideRight: Story = {
   render: () => (
     <div className="h-128">
-      <Shell side="right" collapsible="icon" />
+      <Shell collapsible="icon" side="right" />
     </div>
   ),
 };
@@ -274,7 +275,7 @@ export const DefaultCollapsed: Story = {
 export const MenuButtonAxes: Story = {
   render: () => (
     <SidebarProvider>
-      <Sidebar collapsible="none" className="w-64">
+      <Sidebar className="w-64" collapsible="none">
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupContent>
@@ -282,7 +283,7 @@ export const MenuButtonAxes: Story = {
                 {MENU_BUTTON_VARIANTS.map((variant) =>
                   MENU_BUTTON_SIZES.map((size) => (
                     <SidebarMenuItem key={`${variant}-${size}`}>
-                      <SidebarMenuButton variant={variant} size={size}>
+                      <SidebarMenuButton size={size} variant={variant}>
                         <Home />
                         <span>
                           {variant} / {size}

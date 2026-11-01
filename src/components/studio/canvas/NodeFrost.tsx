@@ -2,6 +2,7 @@
 import { Z } from "~/lib/shell/overlay-z";
 import { useStore } from "@xyflow/react";
 import { pseudoFrostPalette, hexToRgba } from "../workflow-utils";
+
 export const PSEUDO_FROST_NOISE_URL =
   // 180×180 的湍流噪声 tile；透明度约 0.55；内联 SVG ⇒ 不额外增加 HTTP 请求。
   "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.7' numOctaves='2' seed='9'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>";
@@ -10,14 +11,14 @@ export const PSEUDO_FROST_NOISE_URL =
  * 位置与尺寸都用百分比，所以这层会随节点被 React Flow 施加的 `minWidth`
  * 自然重排，不必做任何布局上的小动作。每个色块各用自己的 `filter: blur(Npx)`，
  * 于是即使父级缩放施加了 CSS `transform: scale(...)`，轮廓仍然是柔和的。 */
-export const PSEUDO_FROST_BLOBS: {
+export const PSEUDO_FROST_BLOBS: Array<{
+  alphaKey: "primary" | "secondary" | "cool" | "warm" | "shadow";
+  blurPx: number;
+  h: string;
   left: string;
   top: string;
   w: string;
-  h: string;
-  alphaKey: "primary" | "secondary" | "cool" | "warm" | "shadow";
-  blurPx: number;
-}[] = [
+}> = [
   {
     left: "6%",
     top: "10%",
@@ -50,7 +51,9 @@ export const PSEUDO_FROST_BLOBS: {
  * 禁用态偏灰、绕过态偏粉紫；冷 / 暖 / 阴影三个通道保持不变，
  * 因此无论哪种模式，面板读起来都是一块连贯的玻璃面。 */
 export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
-  if (!modeColor) return null;
+  if (!modeColor) {
+    return null;
+  }
   const palette = pseudoFrostPalette(modeColor);
   return (
     <div
@@ -60,8 +63,8 @@ export function PseudoFrostLayer({ modeColor }: { modeColor: string | null }) {
     >
       {PSEUDO_FROST_BLOBS.map((blob, idx) => (
         <div
-          key={`blob-${idx}`}
           className="absolute rounded-full"
+          key={`blob-${idx}`}
           style={{
             left: blob.left,
             top: blob.top,
@@ -108,11 +111,13 @@ export function NodeFrost({
   color,
   nodeMode,
 }: {
-  zoom: number;
   color: string | null;
   nodeMode: number;
+  zoom: number;
 }) {
-  if (!color || nodeMode === 0) return null;
+  if (!color || nodeMode === 0) {
+    return null;
+  }
   // 让屏幕占位不小于节点 zoom=1 时的尺寸。
   const scale = Math.max(1, 1 / Math.max(zoom, 0.01));
   const blur = 6 / scale; // 不论缩放多少，屏幕上的模糊都保持在约 6px
@@ -145,15 +150,9 @@ export function NodeFrost({
  *  就只有真的渲染毛玻璃层的节点会响应缩放变化
  *（它们的屏幕毛玻璃尺寸必须跟随视口），普通节点在缩放时纹丝不动。
  * ------------------------------------------------------------------------- */
-export function FrostLayer({
-  color,
-  nodeMode,
-}: {
-  color: string | null;
-  nodeMode: number;
-}) {
+export function FrostLayer({ color, nodeMode }: { color: string | null; nodeMode: number }) {
   const zoom = useStore((state) => state.transform[2]);
-  return <NodeFrost zoom={zoom} color={color} nodeMode={nodeMode} />;
+  return <NodeFrost color={color} nodeMode={nodeMode} zoom={zoom} />;
 }
 
 /* ---------------------------------------------------------------------------

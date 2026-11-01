@@ -98,7 +98,9 @@ export const DECLARED_SHA_ENVS = ["CNB_PULL_REQUEST_MERGE_SHA", "CNB_COMMIT"];
 export function writerPrefixes(duties = AUTOFIX_DUTIES) {
   const out = [];
   for (const duty of duties) {
-    for (const prefix of duty.outputs ?? []) out.push(prefix);
+    for (const prefix of duty.outputs ?? []) {
+      out.push(prefix);
+    }
   }
   return [...new Set(out)];
 }
@@ -115,9 +117,7 @@ export function writerPrefixes(duties = AUTOFIX_DUTIES) {
  * @returns {boolean}
  */
 export function underWriter(file, prefixes) {
-  return prefixes.some(
-    (p) => file === p.replace(/\/$/, "") || file.startsWith(p),
-  );
+  return prefixes.some((p) => file === p.replace(/\/$/, "") || file.startsWith(p));
 }
 
 /**
@@ -143,9 +143,14 @@ export function parseStatus(raw) {
     /* 重命名 / 复制是 `R  new\0orig` 与 `C  new\0orig`：`XY` 两个字符里任一个可能是
      * 那个字母（`R ` 暂存、` R` 未暂存、`D R` 之类），所以按「含 R/C」判而不是等值比。
      * 源路径那一段不需要 —— 要登记的是**结果**（被改动的面是它，判据也按结果面判）。 */
-    if (xy.includes("R") || xy.includes("C")) i++;
-    if (xy === "??") untracked.push(file);
-    else trackedDirty.push(file);
+    if (xy.includes("R") || xy.includes("C")) {
+      i++;
+    }
+    if (xy === "??") {
+      untracked.push(file);
+    } else {
+      trackedDirty.push(file);
+    }
   }
   return { trackedDirty, untracked };
 }
@@ -194,9 +199,7 @@ export function provenanceVerdict(input) {
         `「不知道」不等于「不一致」，也不等于「一致」`,
     );
   } else if (want === have) {
-    lines.push(
-      `出处·ok HEAD == ${have}（就是 ${declaredFrom} 声明的那一份）·${shapeReadout}`,
-    );
+    lines.push(`出处·ok HEAD == ${have}（就是 ${declaredFrom} 声明的那一份）·${shapeReadout}`);
   } else if (contains === true) {
     lines.push(
       `出处·ok HEAD=${have} **含**声明的那一份 ${want}` +
@@ -221,17 +224,15 @@ export function provenanceVerdict(input) {
   if (offenders.length > 0) {
     red = true;
     lines.push(
-      `写脏·红 ${offenders.length} 处 tracked 改动不在登记过的写者名单里：` +
-        offenders.slice(0, 10).join(", ") +
-        (offenders.length > 10 ? ` …另 ${offenders.length - 10} 处` : ""),
+      `写脏·红 ${offenders.length} 处 tracked 改动不在登记过的写者名单里：${
+        offenders.slice(0, 10).join(", ")
+        }${offenders.length > 10 ? ` …另 ${offenders.length - 10} 处` : ""}`,
     );
     lines.push(
       `  允许名单（派生自 AUTOFIX_DUTIES 的 outputs）：${prefixes.join(", ") || "（空）"}`,
     );
   } else if (trackedDirty.length > 0) {
-    lines.push(
-      `写脏·ok ${trackedDirty.length} 处 tracked 改动，全部落在登记过的写者前缀下`,
-    );
+    lines.push(`写脏·ok ${trackedDirty.length} 处 tracked 改动，全部落在登记过的写者前缀下`);
   } else {
     lines.push("写脏·ok tracked 面干净");
   }
@@ -278,7 +279,9 @@ function gitStatus(cwd, spawn = defaultSpawn) {
     encoding: "utf8",
     windowsHide: true,
   });
-  if (r.error || r.status !== 0) return null;
+  if (r.error || r.status !== 0) {
+    return null;
+  }
   return String(r.stdout ?? "");
 }
 
@@ -305,15 +308,15 @@ function headSha(cwd, runCmd) {
  */
 function declaredContainedInHead(cwd, declared, runCmd) {
   const sha = (declared ?? "").trim();
-  if (!sha) return null;
-  const exists = runCmd(
-    "git",
-    ["rev-parse", "--verify", "--quiet", `${sha}^0`],
-    {
-      cwd,
-    },
-  );
-  if (!exists.ok) return null;
+  if (!sha) {
+    return null;
+  }
+  const exists = runCmd("git", ["rev-parse", "--verify", "--quiet", `${sha}^0`], {
+    cwd,
+  });
+  if (!exists.ok) {
+    return null;
+  }
   return runCmd("git", ["merge-base", "--is-ancestor", sha, "HEAD"], {
     cwd,
   }).ok;
@@ -343,12 +346,10 @@ export function main(io = {}) {
   const prefixes = writerPrefixes();
 
   const status = gitStatus(cwd, io.spawn);
-  const parsed =
-    status === null ? { trackedDirty: [], untracked: [] } : parseStatus(status);
+  const parsed = status === null ? { trackedDirty: [], untracked: [] } : parseStatus(status);
   /* 按形态取第一个非空者（顺序的理由见 `DECLARED_SHA_ENVS` 那段）：PR 事件先认 merge 面，
    * push / 每日档没有那个键 ⇒ 退回源 head。 */
-  const declaredFrom =
-    DECLARED_SHA_ENVS.find((key) => (env[key] ?? "").trim() !== "") ?? null;
+  const declaredFrom = DECLARED_SHA_ENVS.find((key) => (env[key] ?? "").trim() !== "") ?? null;
   /** @type {string | null} */
   const declared = declaredFrom ? (env[declaredFrom] ?? null) : null;
   const head = headSha(cwd, runCmd);
@@ -365,13 +366,12 @@ export function main(io = {}) {
 
   /* `git status` 自己没跑起来：三格全部失去依据，按「未校验」说出口，不冒充结论。 */
   if (status === null) {
-    verdict.lines.unshift(
-      "出处·未校验 `git status --porcelain -z` 没跑起来 —— 本档没有结论",
-    );
+    verdict.lines.unshift("出处·未校验 `git status --porcelain -z` 没跑起来 —— 本档没有结论");
   }
 
-  for (const line of verdict.lines)
+  for (const line of verdict.lines) {
     process.stdout.write(`[工作区出处] ${line}\n`);
+  }
 
   const file = path.join(io.ledgerDir ?? ledgerRoot(env), LEDGER_FILE);
   try {
@@ -394,9 +394,6 @@ export function main(io = {}) {
   return verdict.red ? 1 : 0;
 }
 
-if (
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(main());
 }

@@ -36,23 +36,21 @@ import {
   resolveOutputSource,
 } from "~/lib/workflow/workflow-output-binding";
 
-export interface LibraryParamCards {
+export type LibraryParamCards = {
   /** 对外参数条目（稳定顺序）。 */
-  entries: ParamEntry[];
+  entries: Array<ParamEntry>;
   /** 派生用的 IO 表（卡片列渲染端口类型读它）。 */
   io: WorkflowIOMap | null;
   /** 该对外参数在当前模式下是否被作者改过（决定卡片头 ↺ 的可用性）。 */
   isManual: (entryId: string) => boolean;
-  /** 当前模式下「条目 → 目标 ioKey」的生效落点（**只来自作者画的线**）。 */
-  resolved: Record<string, string | null>;
+  /** 对外**输出**参数在当前模式下的落点（输出口 ioKey → 取值的那一行 ioKey）。
+   *  卡片与连线都要读这一份：与 `resolved` 对输入侧的作用对称。 */
+  outputResolved?: Record<string, string | null>;
   /** 每个被落到的一行（ioKey）→ 落到它的对外参数名，按条目顺序取第一个。
    *  宿主卡片的参数行据此在行尾标出「这一行属于哪个对外参数」。 */
   ownersByPin: Record<string, string>;
-  /** 卡片圆点端点 → 宿主行 的只读连线（卡片列右侧的小圆点与宿主卡片上被落
-   *  到的那一行之间）。连线一律是作者画的那条（库里不给「猜出来的」线），
-   *  与编辑器画布同一套语义 —— 库里不画线的话，圆点就只是一颗装饰点，
-   *  读者答不出它连到哪。 */
-  wires: ParamCardWire[];
+  /** 当前模式下「条目 → 目标 ioKey」的生效落点（**只来自作者画的线**）。 */
+  resolved: Record<string, string | null>;
   /** **真的画出了线**的那些卡片圆点（`<条目 id>?<handle id>`）。
    *
    *  与 `wires` 同一份事实的另一面：视图据此判断「这颗圆点该不该画成已连接」
@@ -60,26 +58,28 @@ export interface LibraryParamCards {
    *  上色，带线的圆点看着反而是断的（用户口径：「这里连线断开了是什么原因」，
    *  ISSUE #355）。 */
   wiredDotKeys: Set<string>;
-  /** 对外**输出**参数在当前模式下的落点（输出口 ioKey → 取值的那一行 ioKey）。
-   *  卡片与连线都要读这一份：与 `resolved` 对输入侧的作用对称。 */
-  outputResolved?: Record<string, string | null>;
-}
+  /** 卡片圆点端点 → 宿主行 的只读连线（卡片列右侧的小圆点与宿主卡片上被落
+   *  到的那一行之间）。连线一律是作者画的那条（库里不给「猜出来的」线），
+   *  与编辑器画布同一套语义 —— 库里不画线的话，圆点就只是一颗装饰点，
+   *  读者答不出它连到哪。 */
+  wires: Array<ParamCardWire>;
+};
 
 /** 库内一条只读映射连线。 */
-export interface ParamCardWire {
+export type ParamCardWire = {
   entryId: string;
-  targetIoKey: string;
+  /** 被连的端口落在**组合控件**上（宽/高、比例/像素这类没有独立行的端口），
+   *  端点锚在整块控件上，线指向那一格。 */
+  grouped: boolean;
+  /** 被连的**输出端口 handle id** —— 一个对外参数可能有多颗圆点（每个候选
+   *  一颗），线必须从被落到的那一颗出发。 */
+  handleId: string;
   /** 线的两端在哪一侧（见 `WorkflowParamWires` 的 `ParamWireKind`）：
    *  缺省 = 输入侧（卡片 → 宿主参数行），`"hostToParam"` = 输出侧
    *  （宿主输出行 → 对外输出参数卡片）。 */
   kind?: "paramToHost" | "hostToParam";
-  /** 被连的**输出端口 handle id** —— 一个对外参数可能有多颗圆点（每个候选
-   *  一颗），线必须从被落到的那一颗出发。 */
-  handleId: string;
-  /** 被连的端口落在**组合控件**上（宽/高、比例/像素这类没有独立行的端口），
-   *  端点锚在整块控件上，线指向那一格。 */
-  grouped: boolean;
-}
+  targetIoKey: string;
+};
 
 /** 从 workflowIO + paramMap 派生库内画布所需的归属数据。
  *
@@ -87,17 +87,17 @@ export interface ParamCardWire {
  *  才成立（`source.mode:<模式>`）。没有模式时不承认任何线 —— 落点全空，
  *  卡片如实显示成「未配置」。 */
 export function deriveLibraryParamCards(args: {
-  io: WorkflowIOMap | null | undefined;
-  paramMap: Record<string, unknown> | null | undefined;
-  mode: string | null | undefined;
-  /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列；连线仍指向那块控件）。 */
-  groupedKeys?: ReadonlySet<string>;
   /** **该模式生效的契约口清单**（`modeContractEntries` 的 id；未改过的模式不用
    *  传 —— 不传即内置默认）。
    *
    *  卡片列必须与「模式契约」编辑器说同一份清单（用户报的就是两者的差集：
    *  画布按内置默认列出「时长」，而契约里那一口已被删掉）。 */
-  contractIds?: readonly string[];
+  contractIds?: ReadonlyArray<string>;
+  /** 宿主表单把哪些端口交给了组合控件（卡片不再重复列；连线仍指向那块控件）。 */
+  groupedKeys?: ReadonlySet<string>;
+  io: WorkflowIOMap | null | undefined;
+  mode: string | null | undefined;
+  paramMap: Record<string, unknown> | null | undefined;
 }): LibraryParamCards {
   const { io, paramMap, mode, groupedKeys, contractIds } = args;
   /* 卡片列 = 该模式统一对外暴露的参数（提示词 / 负向提示词 / 尺寸 / 首帧…），
@@ -118,7 +118,9 @@ export function deriveLibraryParamCards(args: {
     const target = resolved[entry.id];
     /* 未连线 / 作者显式断开（`null`）→ 不画线：圆点悬空本身就在说「没连上」，
      *  画一条通向某处的线反而误导。 */
-    if (!target) continue;
+    if (!target) {
+      continue;
+    }
     /* 能走到这里说明 `resolveMapping` 给了落点，而落点**只可能来自作者画的线**
      *  —— 所以这条线一定是「作者连的」。用 `resolved` 而不是直接查键：解析时已把
      *  作者画的线归到契约 id 上（含 `<节点 id>|<分类>` 历史键），按裸键查会把作者
@@ -137,7 +139,9 @@ export function deriveLibraryParamCards(args: {
         handleId: entry.id,
         grouped: groupedKeys?.has(wired.ioKey) ?? false,
       });
-      if (ownersByPin[wired.ioKey]) continue;
+      if (ownersByPin[wired.ioKey]) {
+        continue;
+      }
       ownersByPin[wired.ioKey] = entry.label;
     }
   }
@@ -175,21 +179,21 @@ export function deriveLibraryParamCards(args: {
  *  默认取值来源（`resolved` 里的那个回落值）仍然保留：卡片与运行期要读它；只是
  *  画布上不再拿一条虚线表示「这是默认线」—— 未连过就是没有线。 */
 /** 对外**输出**参数卡片列与它的连线（`deriveLibraryOutputCards` 的产物）。 */
-export interface LibraryOutputCards {
-  outputs: (WorkflowIOEntry & { ioKey: string })[];
-  wires: ParamCardWire[];
-  /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 断开）。 */
-  resolved: Record<string, string | null>;
+export type LibraryOutputCards = {
   /** 某个输出口在当前模式下是否被作者改过（决定「恢复默认」可用性）。 */
   isManual: (ioKey: string) => boolean;
+  outputs: Array<WorkflowIOEntry & { ioKey: string }>;
+  /** 输出口 ioKey → 当前取值的那一行 ioKey（`null` = 悬空 / 断开）。 */
+  resolved: Record<string, string | null>;
   /** 某个输出口是否存在任何取值来源（宿主那一行真的画得出来）。 */
   wired: boolean;
-}
+  wires: Array<ParamCardWire>;
+};
 
 export function deriveLibraryOutputCards(args: {
   io: WorkflowIOMap | null | undefined;
-  paramMap?: Record<string, unknown> | null;
   mode?: string | null;
+  paramMap?: Record<string, unknown> | null;
 }): LibraryOutputCards {
   const { io, paramMap, mode } = args;
   /* 顺序与宿主卡片上的输出行**同一份**（`splitWorkflowIO` 里按作者拖出的
@@ -197,7 +201,7 @@ export function deriveLibraryOutputCards(args: {
    *  配对谁是谁。 */
   const outputs = splitWorkflowIO(io).outputs;
   const resolved: Record<string, string | null> = {};
-  const wires: ParamCardWire[] = [];
+  const wires: Array<ParamCardWire> = [];
   /* 「取值行」必须是一叠真实存在的**输出**行：作者连到一个已经不存在的端口
    *  （工作流改版）或连成输入口（非法）时，按悬空处理 —— 画不出线也不谎报来源。 */
   const outputKeys = new Set(outputs.map((item) => item.ioKey));
@@ -207,14 +211,17 @@ export function deriveLibraryOutputCards(args: {
   }
   for (const output of outputs) {
     const target = resolved[output.ioKey];
-    if (!target) continue;
+    if (!target) {
+      continue;
+    }
     /* 未连过（作者没改过这个输出口的取值行）→ **不画线**。
      *
      * 用户口径：这是**编辑对外参数**的界面，未连过就不要连 —— 默认取值来源仍算在
      * `resolved` 里（卡片与运行期读它），但画布上不再画一条虚线占位。库里因此
      * 只剩作者真连过的实线（见 `LIBRARY_EDGE_STYLE`）。 */
-    if (manualOutputSource(paramMap, output.ioKey, mode) === undefined)
+    if (manualOutputSource(paramMap, output.ioKey, mode) === undefined) {
       continue;
+    }
     wires.push({
       entryId: output.ioKey,
       targetIoKey: target,
@@ -230,16 +237,15 @@ export function deriveLibraryOutputCards(args: {
     outputs,
     wires,
     resolved,
-    isManual: (ioKey: string) =>
-      manualOutputSource(paramMap, ioKey, mode) !== undefined,
+    isManual: (ioKey: string) => manualOutputSource(paramMap, ioKey, mode) !== undefined,
     wired: outputs.length > 0,
   };
 }
 
 /** 输出侧的「恢复默认」是否可用（该模式下有任何输出口被改过）。 */
 export function hasManualLibraryOutput(args: {
-  paramMap?: Record<string, unknown> | null;
   mode?: string | null;
+  paramMap?: Record<string, unknown> | null;
 }): boolean {
   return hasManualOutputBinding(args.paramMap, args.mode);
 }

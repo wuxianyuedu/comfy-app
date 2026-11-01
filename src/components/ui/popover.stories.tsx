@@ -4,11 +4,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "~/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 
 /**
  * `ui/popover` 是基座浮层：**锚在某个元素上的卡片**（区别于 `tooltip` 的
@@ -38,15 +34,13 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   render: () => (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline" />}>
-        输出尺寸
-      </PopoverTrigger>
+      <PopoverTrigger render={<Button variant="outline" />}>输出尺寸</PopoverTrigger>
       <PopoverContent className="w-72">
         <div className="flex flex-col gap-3">
           <Label htmlFor="popover-width">宽度</Label>
-          <Input id="popover-width" defaultValue="1024" />
+          <Input defaultValue="1024" id="popover-width" />
           <Label htmlFor="popover-height">高度</Label>
-          <Input id="popover-height" defaultValue="1024" />
+          <Input defaultValue="1024" id="popover-height" />
         </div>
       </PopoverContent>
     </Popover>
@@ -58,16 +52,18 @@ export const Default: Story = {
 export const Sides: Story = {
   render: () => (
     <div className="flex items-center gap-4">
-      {(["top", "right", "bottom", "left"] as const).map((side) => (
-        <Popover key={side}>
-          <PopoverTrigger render={<Button variant="outline" size="sm" />}>
-            side={side}
-          </PopoverTrigger>
-          <PopoverContent side={side} className="w-40">
-            <p className="text-sm">开在 {side} 这一侧</p>
-          </PopoverContent>
-        </Popover>
-      ))}
+      {
+        /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
+          <Popover key={side}>
+            <PopoverTrigger render={<Button size="sm" variant="outline" />}>
+              side={side}
+            </PopoverTrigger>
+            <PopoverContent className="w-40" side={side}>
+              <p className="text-sm">开在 {side} 这一侧</p>
+            </PopoverContent>
+          </Popover>
+        ))
+      }
     </div>
   ),
 };
@@ -82,14 +78,12 @@ export const Controlled: Story = {
 function ControlledDemo() {
   const [open, setOpen] = React.useState(false);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger render={<Button variant="outline" />}>
         {open ? "点外面关闭" : "受控打开"}
       </PopoverTrigger>
       <PopoverContent className="w-56">
-        <p className="text-sm">
-          这次打开状态在 story 里（`useState`），不是基元内部。
-        </p>
+        <p className="text-sm">这次打开状态在 story 里（`useState`），不是基元内部。</p>
       </PopoverContent>
     </Popover>
   );

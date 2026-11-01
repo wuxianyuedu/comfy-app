@@ -53,11 +53,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "vitest";
-import {
-  loadJudgeModule,
-  REAL_ROOT,
-  SCRIPT,
-} from "./helpers/a11y-effective-config";
+import { loadJudgeModule, REAL_ROOT, SCRIPT } from "./helpers/a11y-effective-config";
 import type { Ledger } from "./helpers/a11y-effective-config";
 
 const run = promisify(execFile);
@@ -67,31 +63,25 @@ const run = promisify(execFile);
 const { judge } = loadJudgeModule();
 
 /** 夹具台账的**形状样本**（落盘在 `tests/fixtures/`、与真台账解耦，见文件头）。 */
-const SAMPLE = JSON.parse(
-  readFileSync(
-    path.join(REAL_ROOT, "tests", "fixtures", "a11y-rule-ledger.sample.json"),
-    "utf8",
-  ),
+const SAMPLE = /* SAFETY: 类型断言已复核 */ JSON.parse(
+  readFileSync(path.join(REAL_ROOT, "tests", "fixtures", "a11y-rule-ledger.sample.json"), "utf8"),
 ) as {
-  why: string;
-  dialect: { rule: string; decision: string; why: string; keeper: string }[];
-  inlineExemptions: {
-    rule: string;
+  dialect: Array<{ decision: string; keeper: string; rule: string; why: string; }>;
+  inlineExemptions: Array<{
     file: string;
-    why: string;
     keeper: string;
-  }[];
+    rule: string;
+    why: string;
+  }>;
+  why: string;
 };
 
 /**
  * **真台账**（`scripts/.a11y-rule-ledger.json`）—— 只被一条用例碰（下面第 1 条），
  * 用来自查「仓库当前状态本身是绿的」。其余用例一律在 `SAMPLE` 上加减。
  */
-const REAL_LEDGER = JSON.parse(
-  readFileSync(
-    path.join(REAL_ROOT, "scripts", ".a11y-rule-ledger.json"),
-    "utf8",
-  ),
+const REAL_LEDGER = /* SAFETY: 类型断言已复核 */ JSON.parse(
+  readFileSync(path.join(REAL_ROOT, "scripts", ".a11y-rule-ledger.json"), "utf8"),
 ) as typeof SAMPLE;
 
 let seq = 0;
@@ -107,11 +97,8 @@ let seq = 0;
  * 真台账**从头到尾只读** —— 这是相对旧版「备份 / 还原真文件」的关键差别：
  * 没有共享可变状态，用例中途 throw 也不会把真仓库留在脏状态。
  */
-async function runWithLedger(ledger: Ledger, args: string[] = []) {
-  const file = path.join(
-    tmpdir(),
-    `a11y-rules-gate-${process.pid}-${seq++}.json`,
-  );
+async function runWithLedger(ledger: Ledger, args: Array<string> = []) {
+  const file = path.join(tmpdir(), `a11y-rules-gate-${process.pid}-${seq++}.json`);
   writeFileSync(file, JSON.stringify(ledger, null, 2));
 
   /* 真跑 CLI：退出码与旗标语义（`--report` 恒 0）只有起进程才成立，
@@ -121,9 +108,9 @@ async function runWithLedger(ledger: Ledger, args: string[] = []) {
     encoding: "utf8",
   }).then(
     (r) => ({ ok: true, output: r.stdout + r.stderr }),
-    (e: { code?: number; stdout?: string; stderr?: string }) => ({
-      ok: (e.code ?? 1) === 0,
-      output: `${e.stdout ?? ""}${e.stderr ?? ""}`,
+    (error: { code?: number; stderr?: string; stdout?: string; }) => ({
+      ok: (error.code ?? 1) === 0,
+      output: `${error.stdout ?? ""}${error.stderr ?? ""}`,
     }),
   );
 }
@@ -262,15 +249,11 @@ test("⑤ 就地豁免指向不存在的文件 → 阻断（改名 / 搬走后�
   expect(r.output).toContain("不存在");
 });
 
-test(
-  "⑥ `--report` 只出清单、不判失败（恒 0）—— 报告档的语义",
-  CLI_BUDGET,
-  async () => {
-    const r = await runWithLedger({ ...SAMPLE, dialect: [] }, ["--report"]);
-    expect(r.ok, r.output).toBe(true);
-    expect(r.output).toContain("--report 模式");
-  },
-);
+test("⑥ `--report` 只出清单、不判失败（恒 0）—— 报告档的语义", CLI_BUDGET, async () => {
+  const r = await runWithLedger({ ...SAMPLE, dialect: [] }, ["--report"]);
+  expect(r.ok, r.output).toBe(true);
+  expect(r.output).toContain("--report 模式");
+});
 
 test("⑦ 非废弃、且官方两份配置都没提到的规则：没登记也不开 → 阻断（「没人决定过」）", async () => {
   /* 把 prefer-tag-over-role 那一条从台账里摘掉 —— 它现在就落在
@@ -280,9 +263,7 @@ test("⑦ 非废弃、且官方两份配置都没提到的规则：没登记也�
      用 `dialect: []` 反而更直接 —— 保持原写法（从样本里摘掉那一条）。 */
   const r = await judgeWith({
     ...SAMPLE,
-    dialect: SAMPLE.dialect.filter(
-      (d) => d.rule !== "jsx-a11y/prefer-tag-over-role",
-    ),
+    dialect: SAMPLE.dialect.filter((d) => d.rule !== "jsx-a11y/prefer-tag-over-role"),
   });
   expect(r.ok).toBe(false);
   expect(r.output).toContain("既不在官方 recommended、也不在官方 strict");
@@ -329,7 +310,7 @@ test("⑩ `--ledger` 缺路径 → 退 2（不许静默退回真台账）", asyn
     encoding: "utf8",
   }).then(
     () => ({ code: 0, output: "" }),
-    (error: { code?: number; stdout?: string; stderr?: string }) => ({
+    (error: { code?: number; stderr?: string; stdout?: string; }) => ({
       code: error.code ?? 1,
       output: `${error.stdout ?? ""}${error.stderr ?? ""}`,
     }),

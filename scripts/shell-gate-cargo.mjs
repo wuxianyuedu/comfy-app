@@ -71,10 +71,7 @@ import { whichCommand } from "./launcher-core/shell.mjs";
  *   造出来，不碰真用户的 `~/.cargo` / `~/.rustup`
  * @returns {CargoLookup} `path` = cargo 的绝对路径（PATH 与各安装位都没有 = `null`）
  */
-export function findCargoLookup({
-  env = process.env,
-  home = os.homedir(),
-} = {}) {
+export function findCargoLookup({ env = process.env, home = os.homedir() } = {}) {
   /** @type {CargoProbe[]} */
   const probes = [];
 
@@ -131,13 +128,13 @@ export function findCargoLookup({
       let versions;
       try {
         versions = fs.readdirSync(dir).sort().reverse();
-      } catch (err) {
+      } catch (error) {
         // 目录不存在 = 这一处没有，接着看下一处（不是「探到但不可用」）；
         // 读不了（没权限 / 不是目录）必须分开记 —— 那要人去查权限，不是去装 rustup。
         probes.push(
-          isAbsentError(err)
+          isAbsentError(error)
             ? { where, result: "absent" }
-            : { where, result: "unreadable", detail: errorCode(err) },
+            : { where, result: "unreadable", detail: errorCode(error) },
         );
         continue;
       }
@@ -194,14 +191,16 @@ export function findCargoLookup({
  */
 export function probeCargoIn(dir) {
   const exe = path.join(dir, cargoExeName());
-  if (fs.existsSync(exe)) return { ok: true, path: exe, detail: exe };
+  if (fs.existsSync(exe)) {
+    return { ok: true, path: exe, detail: exe };
+  }
   /** @type {string[]} */
   let names;
   try {
     names = fs.readdirSync(dir);
-  } catch (err) {
-    const code = errorCode(err);
-    return isAbsentError(err)
+  } catch (error) {
+    const code = errorCode(error);
+    return isAbsentError(error)
       ? { ok: false, result: "absent", detail: `${exe}（目录不在）` }
       : {
           ok: false,
@@ -251,7 +250,9 @@ export function cargoHomeValue(env) {
     .trim()
     .replace(/^"(.*)"$/, "$1")
     .trim();
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
   return path.resolve(raw);
 }
 
@@ -281,7 +282,9 @@ export function cargoBinHomes({ env, home }) {
   const push = (base, where) => {
     const dir = path.join(base, ".cargo", "bin");
     const key = dir.toLowerCase();
-    if (seen.has(key)) return;
+    if (seen.has(key)) {
+      return;
+    }
     seen.add(key);
     out.push({ dir, where });
   };
@@ -295,7 +298,9 @@ export function cargoBinHomes({ env, home }) {
   ];
   for (const [name, label] of envHomes) {
     const raw = (env[name] ?? "").trim().replace(/^"(.*)"$/, "$1");
-    if (!raw) continue;
+    if (!raw) {
+      continue;
+    }
     push(path.resolve(raw), `$${label}/.cargo/bin`);
   }
   return out;
@@ -317,10 +322,7 @@ export function cargoBinHomes({ env, home }) {
  * @param {{env?: Record<string, string | undefined>, home?: string}} [deps]
  * @returns {string | null} 绝对路径，或 `null`
  */
-export function rustupCargoHomeValue({
-  env = process.env,
-  home = os.homedir(),
-} = {}) {
+export function rustupCargoHomeValue({ env = process.env, home = os.homedir() } = {}) {
   const rustupHomeRaw = (env.RUSTUP_HOME ?? "")
     .trim()
     .replace(/^"(.*)"$/, "$1")
@@ -337,7 +339,9 @@ export function rustupCargoHomeValue({
     return null;
   }
   const line = text.split(/\r?\n/).find((l) => /^\s*cargo_home\s*=/.test(l));
-  if (!line) return null;
+  if (!line) {
+    return null;
+  }
   const raw = line
     .slice(line.indexOf("=") + 1)
     .trim()

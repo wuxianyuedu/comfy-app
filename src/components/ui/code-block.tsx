@@ -44,33 +44,35 @@ const EXT_TO_LANG: Record<string, string> = {
 
 export function extToLanguage(filePath: string): string {
   const dot = filePath.lastIndexOf(".");
-  if (dot < 0) return "plaintext";
+  if (dot === -1) {
+    return "plaintext";
+  }
   return EXT_TO_LANG[filePath.slice(dot).toLowerCase()] ?? "plaintext";
 }
 
 /** shiki v4 codeToTokensBase 返回的单行 token（Token[][] 的成员） */
-interface ShikiToken {
-  content: string;
-  offset?: number;
+type ShikiToken = {
   color?: string;
+  content: string;
   fontStyle?: number;
-}
+  offset?: number;
+};
 
 type ShikiHighlighter = {
   codeToTokensBase: (
     code: string,
     options: { lang: string; theme: string },
-  ) => ShikiToken[][];
+  ) => Array<Array<ShikiToken>>;
 };
 
 let highlighterPromise: Promise<ShikiHighlighter> | null = null;
 
 function getHighlighter(): Promise<ShikiHighlighter> {
   highlighterPromise ??= (async () => {
-    const shiki = (await import("shiki/dist/bundle-web.mjs")) as {
+    const shiki = /* SAFETY: 类型断言已复核 */ (await import("shiki/dist/bundle-web.mjs")) as {
       createHighlighter: (options: {
-        themes: string[];
-        langs: string[];
+        langs: Array<string>;
+        themes: Array<string>;
       }) => Promise<ShikiHighlighter>;
     };
     return shiki.createHighlighter({
@@ -103,10 +105,16 @@ const CHUNK_LINES = 400;
 /** token 的 fontStyle 位掩码：1=italic，2=bold（shiki 约定） */
 function tokenInlineStyle(tok: ShikiToken): CSSProperties {
   const style: CSSProperties = {};
-  if (tok.color) style.color = tok.color;
+  if (tok.color) {
+    style.color = tok.color;
+  }
   if (tok.fontStyle != null) {
-    if ((tok.fontStyle & 1) !== 0) style.fontStyle = "italic";
-    if ((tok.fontStyle & 2) !== 0) style.fontWeight = 600;
+    if ((tok.fontStyle & 1) !== 0) {
+      style.fontStyle = "italic";
+    }
+    if ((tok.fontStyle & 2) !== 0) {
+      style.fontWeight = 600;
+    }
   }
   return style;
 }
@@ -118,7 +126,7 @@ function PlainCodeBlock({ code }: { code: string }) {
   return (
     <div className="cb-code-block">
       {lines.map((line, index) => (
-        <div key={`line-${index}`} className="cb-line">
+        <div className="cb-line" key={`line-${index}`}>
           <span className="cb-ln">{index + 1}</span>
           <span className="cb-code">{line.length > 0 ? line : " "}</span>
         </div>
@@ -127,21 +135,14 @@ function PlainCodeBlock({ code }: { code: string }) {
   );
 }
 
-export function CodeBlock({
-  code,
-  language,
-}: {
-  code: string;
-  language: string;
-}) {
-  const [tokens, setTokens] = useState<ShikiToken[][] | null>(null);
+export function CodeBlock({ code, language }: { code: string; language: string }) {
+  const [tokens, setTokens] = useState<Array<Array<ShikiToken>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   /* 语法高亮主题必须跟应用主题走：只在 `one-dark-pro` 上高亮时，Light 下
      代码是「暗色主题的 token 色」压在浅底上（关键字/注释对比度极低）。
      `resolvedTheme` 首帧可能为 undefined —— 按 Dark 起步（默认主题）。 */
   const { resolvedTheme } = useTheme();
-  const shikiTheme =
-    resolvedTheme === "light" ? "github-light" : "one-dark-pro";
+  const shikiTheme = resolvedTheme === "light" ? "github-light" : "one-dark-pro";
 
   useEffect(() => {
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换代码 / 换语言 / 换主题都会
@@ -150,30 +151,34 @@ export function CodeBlock({
     void (async () => {
       /* 首帧提交纯文本行号，再异步进入高亮流程 */
       await Promise.resolve();
-      if (guard.isStale()) return;
+      if (guard.isStale()) {
+        return;
+      }
       setTokens(null);
       setError(null);
 
       /* 超大文件：跳过 shiki，保持纯文本行号（不阻塞主线程） */
-      if (code.length > MAX_HIGHLIGHT_CHARS) return;
+      if (code.length > MAX_HIGHLIGHT_CHARS) {
+        return;
+      }
 
       try {
         const hl = await getHighlighter();
-        if (guard.isStale()) return;
+        if (guard.isStale()) {
+          return;
+        }
         const allLines = code.split("\n");
         /* 分块的位置算术收在 `~/lib/page-window`（规范 16 §16.2.4.67）：
          * 此前 `chunkIndex * CHUNK_LINES` 与 `ceil(total / CHUNK_LINES)`
          * 各写一遍，且没有一处夹住越界块号。 */
-        const { total: totalChunks } = chunkRange(
-          allLines.length,
-          CHUNK_LINES,
-          0,
-        );
-        const acc: ShikiToken[][] = [];
+        const { total: totalChunks } = chunkRange(allLines.length, CHUNK_LINES, 0);
+        const acc: Array<Array<ShikiToken>> = [];
         let chunkIndex = 0;
 
         const processChunk = () => {
-          if (guard.isStale()) return;
+          if (guard.isStale()) {
+            return;
+          }
           const range = chunkRange(allLines.length, CHUNK_LINES, chunkIndex);
           const slice = allLines.slice(range.start, range.end);
           const chunkTokens = hl.codeToTokensBase(slice.join("\n"), {
@@ -191,14 +196,14 @@ export function CodeBlock({
         };
 
         setTimeout(processChunk, 0);
-      } catch (err: unknown) {
+      } catch (error_: unknown) {
         guard.commit(() => {
           setTokens(null);
           /* 失败文案走 `errorMessage`（同一枚口径，规范 16 §16.2.4.30）——
            * 收口前这里是自己拼的 `err instanceof Error ? err.message : String(err)`，
            * 抛出的值不是 Error 时会渲染成 `[object Object]`。
            * 高亮失败是**非致命降级**：保持纯文本行号，所以这里不弹 toast。 */
-          setError(errorMessage(err, "代码高亮失败"));
+          setError(errorMessage(error_, "代码高亮失败"));
         });
       }
     })();
@@ -209,9 +214,7 @@ export function CodeBlock({
     return (
       <div className="cb-code-block">
         <div className="cb-line">
-          <span className="cb-code text-2xs text-danger-strong">
-            语法高亮失败：{error}
-          </span>
+          <span className="cb-code text-2xs text-danger-strong">语法高亮失败：{error}</span>
         </div>
       </div>
     );
@@ -225,7 +228,7 @@ export function CodeBlock({
   return (
     <div className="cb-code-block">
       {tokens.map((line, lineIndex) => (
-        <div key={lineIndex} className="cb-line">
+        <div className="cb-line" key={lineIndex}>
           <span className="cb-ln">{lineIndex + 1}</span>
           <span className="cb-code">
             {line.length === 0

@@ -28,12 +28,12 @@
 import type { Section } from "~/app/(main)/settings/hooks/use-settings-page";
 
 /** 导航树的一个分组：一个父行 + 挂在它下面的若干分区项（**顺序即渲染顺序**）。 */
-export const TREE_GROUPS: {
+export const TREE_GROUPS: Array<{
   /** 父行文案（弱一档、不是可点目标）。 */
   label: string;
   /** 挂在这一组下的分区（顺序即渲染顺序）。 */
-  sections: Section[];
-}[] = [
+  sections: Array<Section>;
+}> = [
   { label: "模型", sections: ["llmLocal", "llmRemote"] },
   { label: "后端", sections: ["comfyui"] },
   { label: "数据", sections: ["database", "backup"] },
@@ -52,9 +52,7 @@ export const TREE_GROUPS: {
  * 两项约束仍由 `SettingsShell.test.tsx` 守住：① 并集恰好等于 `SETTINGS_SECTIONS`
  *（不许漏 / 不许重）；② 每个分组至少一项（空的父行没有意义）。
  */
-export const SETTINGS_SCROLL_ORDER: Section[] = TREE_GROUPS.flatMap(
-  (group) => group.sections,
-);
+export const SETTINGS_SCROLL_ORDER: Array<Section> = TREE_GROUPS.flatMap((group) => group.sections);
 
 /** 分区 → 一句话说明（导航行右侧那句）。 */
 const SECTION_SUMMARY: Record<Section, string> = {

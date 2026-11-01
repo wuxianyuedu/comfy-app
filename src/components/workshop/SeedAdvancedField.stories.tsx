@@ -35,21 +35,11 @@ type Story = StoryObj<typeof meta>;
  * 受控适配：`value` 与「随机」按钮都要真发生（点随机应清空），
  * 所以 story 自己持一份状态 —— 这与真机上的控制方式一致。
  */
-function InteractiveSeed({
-  initial,
-  disabled,
-}: {
-  initial: string;
-  disabled?: boolean;
-}) {
+function InteractiveSeed({ initial, disabled }: { disabled?: boolean; initial: string }) {
   const [value, setValue] = useState(initial);
   return (
     <div className="flex w-72 flex-col gap-2">
-      <SeedAdvancedField
-        value={value}
-        onChange={setValue}
-        disabled={disabled}
-      />
+      <SeedAdvancedField disabled={disabled} onChange={setValue} value={value} />
       <p className="text-ink-muted font-mono text-[11px]">
         value = {JSON.stringify(value)}
         {value === "" ? "  ← 自动随机" : "  ← 已 pin"}
@@ -70,5 +60,5 @@ export const Pinned: Story = {
 
 /** 禁用态（生成进行中）：输入框与「随机」按钮都不可点。 */
 export const Disabled: Story = {
-  render: () => <InteractiveSeed initial="" disabled />,
+  render: () => <InteractiveSeed disabled initial="" />,
 };

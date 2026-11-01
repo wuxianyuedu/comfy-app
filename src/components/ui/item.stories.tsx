@@ -29,13 +29,11 @@ import {
  */
 type ItemVariant = NonNullable<React.ComponentProps<typeof Item>["variant"]>;
 type ItemSize = NonNullable<React.ComponentProps<typeof Item>["size"]>;
-type ItemMediaVariant = NonNullable<
-  React.ComponentProps<typeof ItemMedia>["variant"]
->;
+type ItemMediaVariant = NonNullable<React.ComponentProps<typeof ItemMedia>["variant"]>;
 
-const VARIANTS: ItemVariant[] = ["default", "outline", "muted"];
-const SIZES: ItemSize[] = ["default", "sm", "xs"];
-const MEDIA_KINDS: ItemMediaVariant[] = ["default", "icon", "image"];
+const VARIANTS: Array<ItemVariant> = ["default", "outline", "muted"];
+const SIZES: Array<ItemSize> = ["default", "sm", "xs"];
+const MEDIA_KINDS: Array<ItemMediaVariant> = ["default", "icon", "image"];
 
 const meta = {
   title: "UI/Item",
@@ -64,10 +62,10 @@ export const Default: Story = {
           <ItemDescription>27 个节点 · 昨天更新</ItemDescription>
         </ItemContent>
         <ItemActions>
-          <Button size="icon-sm" variant="ghost" aria-label="运行">
+          <Button aria-label="运行" size="icon-sm" variant="ghost">
             <Play />
           </Button>
-          <Button size="icon-sm" variant="ghost" aria-label="删除">
+          <Button aria-label="删除" size="icon-sm" variant="ghost">
             <Trash2 />
           </Button>
         </ItemActions>
@@ -92,7 +90,7 @@ export const Variants: Story = {
   render: () => (
     <div className="flex w-120 flex-col gap-3">
       {VARIANTS.map((variant) => (
-        <Item key={variant} variant={variant} size="default">
+        <Item key={variant} size="default" variant={variant}>
           <ItemContent>
             <ItemTitle>variant={variant}</ItemTitle>
             <ItemDescription>底色与边框是这三档唯一的差别</ItemDescription>
@@ -119,9 +117,7 @@ export const Sizes: Story = {
           <ItemContent>
             <ItemTitle>size={size}</ItemTitle>
             <ItemDescription>
-              {size === "xs"
-                ? "给浮层里的列表项用（更紧、字号更小）"
-                : "常规列表项"}
+              {size === "xs" ? "给浮层里的列表项用（更紧、字号更小）" : "常规列表项"}
             </ItemDescription>
           </ItemContent>
         </Item>
@@ -161,9 +157,7 @@ export const WithHeaderAndFooter: Story = {
         <ItemDescription>12:04:31</ItemDescription>
       </ItemHeader>
       <ItemContent>
-        <ItemDescription>
-          提示词：a lone lighthouse on a basalt cliff …
-        </ItemDescription>
+        <ItemDescription>提示词：a lone lighthouse on a basalt cliff …</ItemDescription>
       </ItemContent>
       <ItemFooter>
         <ItemDescription>耗时 42.8s</ItemDescription>

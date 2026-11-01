@@ -11,9 +11,9 @@
  * 注意：匿名限流依赖 `x-forwarded-for`（反代注入），本地直连时回退 "anon"。
  */
 
-interface SlidingWindowEntry {
-  timestamps: number[];
-}
+type SlidingWindowEntry = {
+  timestamps: Array<number>;
+};
 
 const buckets = new Map<string, SlidingWindowEntry>();
 
@@ -23,11 +23,7 @@ const MAX_BUCKETS = 10_000;
  * 检查并记录一次请求。窗口内超过 max 次则拒绝。
  * @returns true = 放行；false = 超限拒绝
  */
-export function checkRateLimit(
-  key: string,
-  max = 20,
-  windowMs = 10_000,
-): boolean {
+export function checkRateLimit(key: string, max = 20, windowMs = 10_000): boolean {
   const now = Date.now();
 
   let entry = buckets.get(key);
@@ -37,9 +33,7 @@ export function checkRateLimit(
   }
 
   // 滑出窗口的旧时间戳剔除
-  entry.timestamps = entry.timestamps.filter(
-    (timestamp) => now - timestamp < windowMs,
-  );
+  entry.timestamps = entry.timestamps.filter((timestamp) => now - timestamp < windowMs);
 
   if (entry.timestamps.length >= max) {
     return false;
@@ -50,10 +44,10 @@ export function checkRateLimit(
   // 防御：桶数量过大时做一次全量清理
   if (buckets.size > MAX_BUCKETS) {
     for (const [k, v] of buckets) {
-      v.timestamps = v.timestamps.filter(
-        (timestamp) => now - timestamp < windowMs,
-      );
-      if (v.timestamps.length === 0) buckets.delete(k);
+      v.timestamps = v.timestamps.filter((timestamp) => now - timestamp < windowMs);
+      if (v.timestamps.length === 0) {
+        buckets.delete(k);
+      }
     }
   }
 

@@ -25,17 +25,17 @@ beforeAll(async () => {
 });
 
 /** 解析 `rgb(r g b / a)` 或 `#rrggbb`（本仓 token 的两种写法）。 */
-function parseColor(value: string): { rgb: [number, number, number]; a: number } {
+function parseColor(value: string): { a: number; rgb: [number, number, number]; } {
   const v = value.trim();
   const hex = /^#([0-9a-f]{6})$/i.exec(v);
   if (hex) {
     const n = Number.parseInt(hex[1]!, 16);
     return { rgb: [(n >> 16) & 255, (n >> 8) & 255, n & 255], a: 1 };
   }
-  const m = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*(?:\/\s*([\d.]+)\s*)?\)$/.exec(
-    v,
-  );
-  if (!m) throw new Error(`期望 rgb(r g b / a) 或 #rrggbb，实际是 ${JSON.stringify(value)}`);
+  const m = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*(?:\/\s*([\d.]+)\s*)?\)$/.exec(v);
+  if (!m) {
+    throw new Error(`期望 rgb(r g b / a) 或 #rrggbb，实际是 ${JSON.stringify(value)}`);
+  }
   return {
     rgb: [Number(m[1]), Number(m[2]), Number(m[3])],
     a: m[4] === undefined ? 1 : Number(m[4]),
@@ -44,7 +44,7 @@ function parseColor(value: string): { rgb: [number, number, number]; a: number }
 
 /** WCAG 相对亮度（0~1）。 */
 function luminance([r, g, b]: [number, number, number]): number {
-  const lin = [r, g, b].map((c) => {
+  const lin = /* SAFETY: 类型断言已复核 */ [r, g, b].map((c) => {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   }) as [number, number, number];
@@ -52,10 +52,7 @@ function luminance([r, g, b]: [number, number, number]): number {
 }
 
 /** WCAG 对比度，1:1 ~ 21:1。 */
-function contrast(
-  a: [number, number, number],
-  b: [number, number, number],
-): number {
+function contrast(a: [number, number, number], b: [number, number, number]): number {
   const [x, y] = [luminance(a), luminance(b)];
   const [hi, lo] = x > y ? [x, y] : [y, x];
   return (hi + 0.05) / (lo + 0.05);
@@ -63,23 +60,18 @@ function contrast(
 
 /** 把半透明遮罩 `src`（α）合成到底色 `bg` 上，返回合成后的 sRGB。 */
 function over(
-  src: { rgb: [number, number, number]; a: number },
+  src: { a: number; rgb: [number, number, number]; },
   bg: [number, number, number],
 ): [number, number, number] {
-  return src.rgb.map((c, i) => Math.round(c * src.a + bg[i]! * (1 - src.a))) as [
-    number,
-    number,
-    number,
-  ];
+  return /* SAFETY: 类型断言已复核 */ src.rgb.map((c, i) =>
+    Math.round(c * src.a + bg[i]! * (1 - src.a)),
+  ) as [number, number, number];
 }
 
 /** 某态下某 token 的解析值；未定义即失败（给出比 `!` 更好的报错）。 */
 function token(t: ThemeTokens, name: string): string {
   const v = t.get(name);
-  expect(
-    v,
-    `${name} 未解析出值（未声明 / 被 tree-shake / var 链断裂）`,
-  ).toBeTruthy();
+  expect(v, `${name} 未解析出值（未声明 / 被 tree-shake / var 链断裂）`).toBeTruthy();
   return v!;
 }
 
@@ -91,7 +83,7 @@ function token(t: ThemeTokens, name: string): string {
 const MIN_DIM = 1.35;
 
 /** 弹窗会盖住的常见表面（取最亮的那个做判据，避免挑一个最暗的凑合过）。 */
-const SURFACES = [
+const SURFACES = /* SAFETY: 类型断言已复核 */ [
   "--color-bg",
   "--color-canvas",
   "--color-panel",
@@ -108,20 +100,20 @@ describe("模态遮罩在真编译产物里足够可见（ISSUE #1742）", () =>
     ).toBe(true);
   });
 
-  it.for([
-    ["浅色", () => light],
-    ["深色", () => dark],
-  ] as const)("%s：遮罩把应用背景压暗到能分辨", ([, get]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["浅色", () => light],
+      ["深色", () => dark],
+    ] as const,
+  )("%s：遮罩把应用背景压暗到能分辨", ([, get]) => {
     const t = get();
     const scrim = parseColor(token(t, "--color-scrim"));
     /* 取这一态里**最亮**的常见表面：它是最容易「亮着、像能点」的那块，
        遮罩若连它都压不下去，弹窗背后就还是亮的。 */
     const candidates = SURFACES.map(
-      (name) => [name, parseColor(token(t, name)).rgb] as const,
+      (name) => /* SAFETY: 类型断言已复核 */ [name, parseColor(token(t, name)).rgb] as const,
     );
-    const [name, bg] = candidates.reduce((a, b) =>
-      luminance(a[1]) >= luminance(b[1]) ? a : b,
-    );
+    const [name, bg] = candidates.reduce((a, b) => (luminance(a[1]) >= luminance(b[1]) ? a : b));
 
     const dimmed = over(scrim, bg);
     expect(
@@ -131,14 +123,11 @@ describe("模态遮罩在真编译产物里足够可见（ISSUE #1742）", () =>
   });
 
   it("两态各自取值（不是一个值复印两份）", () => {
-    expect(token(light, "--color-scrim")).not.toBe(
-      token(dark, "--color-scrim"),
-    );
+    expect(token(light, "--color-scrim")).not.toBe(token(dark, "--color-scrim"));
   });
 
   it("dialogBackdropClass() 走的是 bg-scrim 这条语义 token，且让出标题行", async () => {
-    const { dialogBackdropClass } =
-      await import("~/components/ui/dialog-overlay");
+    const { dialogBackdropClass } = await import("~/components/ui/dialog-overlay");
     const cls = dialogBackdropClass();
     expect(cls).toContain("bg-scrim");
     // 标题行让位的硬规则（ISSUE #310）：判据 `check-title-bar-clearance.cjs` 的同源形态。

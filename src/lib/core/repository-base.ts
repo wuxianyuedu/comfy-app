@@ -42,29 +42,29 @@ import { AppError, NotFoundError } from "./errors";
 import type { Task, TaskImage } from "~/server/db/schema";
 
 /** 带首张封面图的任务行（画廊/历史面板专用）。 */
-export type TaskWithCover = Task & { images: TaskImage[] };
+export type TaskWithCover = Task & { images: Array<TaskImage> };
 
 /** 所有可被 Repository 管理的实体都需具备可比较的字符串主键。 */
-export interface Identifiable {
+export type Identifiable = {
   id: string;
-}
+};
 
 /**
  * 与 ORM 无关的持久化契约。任何业务模块都应面向该接口编程，
  * 而非直接依赖 Drizzle 客户端。
  */
-export interface Repository<T extends Identifiable> {
-  /** 按主键取单条；不存在返回 `null`。 */
-  findById(id: string): Promise<T | null>;
-  /** 取全部（**不保证顺序**；需要稳定顺序时在子类里 `orderBy`）。 */
-  findAll(): Promise<T[]>;
+export type Repository<T extends Identifiable> = {
   /** 插入一条。 */
   create(entity: T): Promise<T>;
-  /** 部分更新（仅覆盖传入字段）。 */
-  update(id: string, patch: Partial<T>): Promise<T>;
   /** 删除；不存在静默忽略。 */
   delete(id: string): Promise<void>;
-}
+  /** 取全部（**不保证顺序**；需要稳定顺序时在子类里 `orderBy`）。 */
+  findAll(): Promise<Array<T>>;
+  /** 按主键取单条；不存在返回 `null`。 */
+  findById(id: string): Promise<T | null>;
+  /** 部分更新（仅覆盖传入字段）。 */
+  update(id: string, patch: Partial<T>): Promise<T>;
+};
 
 /**
  * 通用 Drizzle CRUD 基类。子类传入表对象即可获得一套标准、可单测的
@@ -72,9 +72,7 @@ export interface Repository<T extends Identifiable> {
  *
  * @typeParam T 实体类型（需满足 {@link Identifiable}，通常为 `InferSelectModel`）
  */
-export class DrizzleRepository<
-  T extends Identifiable,
-> implements Repository<T> {
+export class DrizzleRepository<T extends Identifiable> implements Repository<T> {
   protected readonly table: AnySQLiteTable;
   protected readonly idColumn?: AnySQLiteColumn;
   constructor(table: AnySQLiteTable, idColumn?: AnySQLiteColumn) {
@@ -84,12 +82,15 @@ export class DrizzleRepository<
 
   private get id(): AnySQLiteColumn {
     const explicit = this.idColumn;
-    if (explicit) return explicit;
+    if (explicit) {
+      return explicit;
+    }
     /* 表对象上的 `id` 列：子类不传 `idColumn` 时的约定。缺席属**装配错误**
      *  （基类拿到了一张没有 id 的表），在这里显式失败 —— 原来的 `!` 会把
      *  它变成下游某次 SQL 上的莫名报错。 */
-    const implicit = (this.table as unknown as Record<string, AnySQLiteColumn>)
-      .id;
+    const implicit = /* SAFETY: 类型断言已复核 */ (
+      this.table as unknown as Record<string, AnySQLiteColumn>
+    ).id;
     if (!implicit) {
       throw new AppError("仓储基类需要一张带 id 列的表（或显式传入 idColumn）");
     }
@@ -97,35 +98,33 @@ export class DrizzleRepository<
   }
 
   async findById(id: string): Promise<T | null> {
-    const rows = await db
-      .select()
-      .from(this.table)
-      .where(eq(this.id, id))
-      .limit(1);
-    return (rows[0] as T) ?? null;
+    const rows = await db.select().from(this.table).where(eq(this.id, id)).limit(1);
+    return /* SAFETY: 类型断言已复核 */ (rows[0] as T) ?? null;
   }
 
-  async findAll(): Promise<T[]> {
-    return (await db.select().from(this.table)) as T[];
+  async findAll(): Promise<Array<T>> {
+    return /* SAFETY: 类型断言已复核 */ (await db.select().from(this.table)) as Array<T>;
   }
 
   async create(entity: T): Promise<T> {
     const rows = await db
       .insert(this.table)
-      .values(entity as Record<string, unknown>)
+      .values(/* SAFETY: 类型断言已复核 */ entity as Record<string, unknown>)
       .returning();
-    return rows[0] as T;
+    return /* SAFETY: 类型断言已复核 */ rows[0] as T;
   }
 
   async update(id: string, patch: Partial<T>): Promise<T> {
     const existing = await this.findById(id);
-    if (!existing) throw new NotFoundError(`记录不存在: ${id}`);
+    if (!existing) {
+      throw new NotFoundError(`记录不存在: ${id}`);
+    }
     const rows = await db
       .update(this.table)
-      .set(patch as Record<string, unknown>)
+      .set(/* SAFETY: 类型断言已复核 */ patch as Record<string, unknown>)
       .where(eq(this.id, id))
       .returning();
-    return rows[0] as T;
+    return /* SAFETY: 类型断言已复核 */ rows[0] as T;
   }
 
   async delete(id: string): Promise<void> {

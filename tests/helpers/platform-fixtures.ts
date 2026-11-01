@@ -34,11 +34,7 @@
 import { test as base, expect } from "vitest";
 
 /** 平台维度：这台机器的真平台 + 「切成某个平台跑一段」的能力。 */
-export interface PlatformFixtures {
-  /**
-   * 真实平台。**只读**，由宿主决定；判据要的是「这台机器上这条能不能跑」。
-   */
-  realPlatform: NodeJS.Platform;
+export type PlatformFixtures = {
   /**
    * 把 `process.platform` 切成指定值跑一段。
    *
@@ -48,10 +44,14 @@ export interface PlatformFixtures {
   asPlatform: (value: NodeJS.Platform) => void;
   /** 这台机器是不是 Windows（`realPlatform` 的派生，避免各处重打 `=== "win32"`）。 */
   onWindows: boolean;
+  /**
+   * 真实平台。**只读**，由宿主决定；判据要的是「这台机器上这条能不能跑」。
+   */
+  realPlatform: NodeJS.Platform;
 }
 
 /** 宿主形态维度：被测代码问「这个命令能不能起」时，谁回答。 */
-export interface HostFixtures {
+export type HostFixtures = {
   /**
    * POSIX 语义的宿主探针：名单里的路径带执行位且真起得来。
    *
@@ -61,7 +61,7 @@ export interface HostFixtures {
    * 于是「没有执行位」与「内核解析 shebang」这两档在 Windows 上造不出来 ——
    * 注入之后这张表在两端机器上判同一个结论。
    */
-  makeHost: (usable: string[]) => {
+  makeHost: (usable: Array<string>) => {
     access: (candidate: string) => void;
     spawn: (cmd: string) => string | null;
   };
@@ -84,7 +84,7 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
    * no-empty-pattern 在此属误报（台账见 tests/helpers/gate-repo.ts 那处）。
    */
   // eslint-disable-next-line no-empty-pattern
-  realPlatform: async ({ }, use) => {
+  realPlatform: async ({}, use) => {
     await use(process.platform);
   },
 
@@ -93,13 +93,15 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
   },
 
   // eslint-disable-next-line no-empty-pattern -- 同上：vitest fixture 第一参必须解构
-  asPlatform: async ({ }, use) => {
+  asPlatform: async ({}, use) => {
     /* 一次用例里可能切多次（`withWindows` 的调用点就是「切一段、跑、恢复、再跑」），
      * 所以维护一份「原值」，由本 fixture 自己负责在收尾时回滚到位 —— 用例中途
      * throw 也一样（这正是用它替代手写 try/finally 的那个收益）。 */
     const original = Object.getOwnPropertyDescriptor(process, "platform");
     const restore = () => {
-      if (original) Object.defineProperty(process, "platform", original);
+      if (original) {
+        Object.defineProperty(process, "platform", original);
+      }
     };
     const becomes = (value: NodeJS.Platform) => {
       Object.defineProperty(process, "platform", {
@@ -113,8 +115,8 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
   },
 
   // eslint-disable-next-line no-empty-pattern -- 同上：vitest fixture 第一参必须解构
-  makeHost: async ({ }, use) => {
-    await use((usable: string[]) => {
+  makeHost: async ({}, use) => {
+    await use((usable: Array<string>) => {
       const set = new Set(usable);
       return {
         access: (candidate: string) => {

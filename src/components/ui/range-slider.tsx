@@ -50,22 +50,22 @@ import { Slider } from "~/components/ui/slider";
  * / slider-track / slider-range / slider-thumb` 五层）—— 这是**预期**的
  * 快照漂移、不是回归，用 `pnpm exec vitest run -u` 更新。
  */
-export interface RangeSliderProps {
-  /** 当前值（受控）。 */
-  value: number;
-  min: number;
-  max: number;
-  step?: number;
-  /** 取新值（已换算成 number）。 */
-  onChange: (value: number) => void;
-  /** 轨道额外类名（shadcn Slider 是 `data-horizontal:w-full`，一般不用给）。 */
-  className?: string;
-  /** DOM id（给 label `htmlFor` / Playwright 定位用）。 */
-  id?: string;
-  disabled?: boolean;
+export type RangeSliderProps = {
   "aria-label"?: string;
   "aria-labelledby"?: string;
-}
+  /** 轨道额外类名（shadcn Slider 是 `data-horizontal:w-full`，一般不用给）。 */
+  className?: string;
+  disabled?: boolean;
+  /** DOM id（给 label `htmlFor` / Playwright 定位用）。 */
+  id?: string;
+  max: number;
+  min: number;
+  /** 取新值（已换算成 number）。 */
+  onChange: (value: number) => void;
+  step?: number;
+  /** 当前值（受控）。 */
+  value: number;
+};
 
 export function RangeSlider({
   value,
@@ -78,14 +78,10 @@ export function RangeSlider({
 }: RangeSliderProps) {
   return (
     <Slider
-      /* base-ui Slider 的 value 是数组（多把手）；单把手用长度 1 的数组，
-       * 这也是 shadcn wrapper 里 `_values.length` 判据用来渲染 Thumb 数量
-       * 的根据——不能传裸 number，否则走 `[min, max]` 兜底变双把手。 */
-      value={[value]}
-      min={min}
+      className={className}
       max={max}
-      step={step}
-      onValueChange={(v: number | readonly number[]) => {
+      min={min}
+      onValueChange={(v: number | ReadonlyArray<number>) => {
         /* shadcn 官方 `<Slider>` 的 wrapper 不转发 base-ui Slider 的 `Value`
          * 泛型,onValueChange 回调参数在 TS 侧被推成 `any`——这里显式标
          * `number | readonly number[]` 与 base-ui 内部约定**完全一致**
@@ -102,9 +98,15 @@ export function RangeSlider({
          * `typeof n === "number"` 再兜底 narrow。单把手场景 v 恒为长度
          * 1 的数组、不会拿到 undefined;判据只是把 TS 契约钉严。 */
         const n = typeof v === "number" ? v : v[0];
-        if (typeof n === "number") onChange(n);
+        if (typeof n === "number") {
+          onChange(n);
+        }
       }}
-      className={className}
+      step={step}
+      /* base-ui Slider 的 value 是数组（多把手）；单把手用长度 1 的数组，
+       * 这也是 shadcn wrapper 里 `_values.length` 判据用来渲染 Thumb 数量
+       * 的根据——不能传裸 number，否则走 `[min, max]` 兜底变双把手。 */
+      value={[value]}
       {...rest}
     />
   );

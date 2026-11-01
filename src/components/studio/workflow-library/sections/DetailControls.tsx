@@ -17,25 +17,25 @@ export function ActionButton({
   disabled,
   variant = "default",
 }: {
-  onClick: () => void;
+  disabled?: boolean;
   icon: ReactNode;
   label: string;
+  onClick: () => void;
   title?: string;
-  disabled?: boolean;
   variant?: "default" | "danger";
 }) {
   return (
     <Hint label={title ?? label} wrap>
       <Button
-        variant={variant === "danger" ? "danger" : "outline"}
-        onClick={onClick}
-        disabled={disabled}
         className={[
           "text-2xs h-auto gap-1.5 rounded-lg border px-2.5 py-1.5 font-medium",
           variant === "danger"
             ? "border-destructive/20 disabled:opacity-40"
             : "border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright disabled:opacity-40",
         ].join(" ")}
+        disabled={disabled}
+        onClick={onClick}
+        variant={variant === "danger" ? "danger" : "outline"}
       >
         {icon}
         {label}

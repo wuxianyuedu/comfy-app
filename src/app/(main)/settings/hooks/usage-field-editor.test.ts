@@ -17,10 +17,10 @@ import { describe, expect, it } from "vitest";
 import { createUsageFieldEditor } from "./usage-field-editor";
 import { makeUsageField, type UsageField } from "~/lib/llm/usage-test-config";
 
-interface State {
+type State = {
+  fields: Array<UsageField>;
   kind: "chat" | "image" | "video";
-  fields: UsageField[];
-}
+};
 
 function useEditor(initial: State) {
   const [state, setState] = useState<State | null>(initial);
@@ -30,9 +30,7 @@ function useEditor(initial: State) {
 
 describe("字段行的稳定 id", () => {
   it("新增的每一行都带 id（缺了它视图就退回「下标当 key」）", () => {
-    const { result } = renderHook(() =>
-      useEditor({ kind: "chat", fields: [] }),
-    );
+    const { result } = renderHook(() => useEditor({ kind: "chat", fields: [] }));
     act(() => result.current.editor.addField("seed"));
     act(() => result.current.editor.addPresetField("duration"));
     const ids = result.current.state.fields.map((f) => f.id);
@@ -45,11 +43,7 @@ describe("字段行的稳定 id", () => {
     const { result } = renderHook(() =>
       useEditor({
         kind: "chat",
-        fields: [
-          makeUsageField("a", "1"),
-          makeUsageField("b", "2"),
-          makeUsageField("c", "3"),
-        ],
+        fields: [makeUsageField("a", "1"), makeUsageField("b", "2"), makeUsageField("c", "3")],
       }),
     );
     const before = result.current.state.fields.map((f) => f.id);
@@ -72,9 +66,7 @@ describe("字段行的稳定 id", () => {
   });
 
   it("视频预填的 mode 行也带 id", () => {
-    const { result } = renderHook(() =>
-      useEditor({ kind: "video", fields: [] }),
-    );
+    const { result } = renderHook(() => useEditor({ kind: "video", fields: [] }));
     act(() => result.current.editor.setVideoMode("keyframe"));
     const [row] = result.current.state.fields;
     expect(row).toMatchObject({ key: "mode", value: "keyframe" });
@@ -89,9 +81,7 @@ describe("字段行的稳定 id", () => {
       }),
     );
     const modeId = result.current.state.fields[0]!.id;
-    act(() =>
-      result.current.editor.rescueMediaFromMode(0, "https://a.example/x.png"),
-    );
+    act(() => result.current.editor.rescueMediaFromMode(0, "https://a.example/x.png"));
     const fields = result.current.state.fields;
     const images = fields.find((f) => f.key === "images");
     expect(images?.value).toBe("https://a.example/x.png");

@@ -55,8 +55,15 @@ export function isTimeoutShaped(output) {
 }
 
 /**
- * 一次运行的**三种状态**（不是两种）—— 见 `runState()`。
- * @typedef {"ran" | "did-not-run" | "unknown"} RunState
+ * 一次运行的**四种状态**（不是两种，也不是三种）—— 见 `runState()`。
+ *
+ * `no-conclusion` 与 `did-not-run` 分开是有内容的：前者是**判据自己声明**「这一跳
+ * 没有结论」（本仓三态口径的退出码 `2`：0 绿 / 1 事实红 / 2 没跑起来，且 2 压 1），
+ * 后者是判据**没机会**声明（127 找不到命令、或一条用例都没收集到）。两者的
+ * `judge()` 处置相同（都归 `inconclusive`），但**下一动作不同** —— 所以报告里必须
+ * 说得出是哪一种（`didNotRunSide()`），否则"清掉环境里串进来的变量再跑一次"这种
+ * 只属于前者的出口就没地方写（ISSUE #2791）。
+ * @typedef {"ran" | "did-not-run" | "no-conclusion" | "unknown"} RunState
  */
 
 /**
@@ -118,9 +125,22 @@ const DID_NOT_RUN_SIGNATURES = [
  */
 export function runState(run) {
   const text = String(run.output ?? "");
-  if (DID_NOT_RUN_SIGNATURES.some((re) => re.test(text))) return "did-not-run";
-  if (run.code === 127) return "did-not-run";
-  if (run.code === 0 || run.code === 1 || run.code === 2) return "ran";
+  if (DID_NOT_RUN_SIGNATURES.some((re) => re.test(text))) {
+    return "did-not-run";
+  }
+  if (run.code === 127) {
+    return "did-not-run";
+  }
+  /* 三态口径的那个 **2**：判据**跑了**，但它自己答「这一跳没有结论」（前提不成立 /
+   * 取不到读数 / 没收集到可判的东西）。它与 1 在「非零」这一层逐字同权过一次，
+   * 于是被读成 `baseline-red` ⇒ 下一动作变成「就地修或登记进历史」，而事实是
+   * 什么都没判（ISSUE #2791）。放在 127 与指纹**之后**：判序仍是「指纹优先于退出码」。 */
+  if (run.code === 2) {
+    return "no-conclusion";
+  }
+  if (run.code === 0 || run.code === 1) {
+    return "ran";
+  }
   /* 其余退出码（含 `-1` / 信号打死 / 别的工具自己的码）—— 这一侧看不出状态。
    * 与 `ran` 同处置：`judge()` 仍按退出码/指纹走，不额外降档。 */
   return "unknown";
@@ -143,14 +163,18 @@ export function isDidNotRunShaped(output) {
 /**
  * 判决 —— **纯函数**（好让两向都能被用例钉住）。
  *
- * **「跑不起来」不是「判据红了」**：判据没跑起来时非零退出码与「跑了且红」同形 ——
+ * **「跑不起来」也不是「判据红了」**：判据没跑起来时非零退出码与「跑了且红」同形 ——
  * 只读退出码必然把后者读成前者，而这两件事的下一动作完全相反（一个去修代码，一个去
- * 查命令/环境为什么不对）。所以先判这一档，且**两条入口都要**：
+ * 查命令/环境为什么不对）。所以先判这一档，且**三条入口都要**：
  *   · 退出码 127（找不到模块 / 命令）；
  *   · **一条用例都没收集到**（`runState()` 的指纹，ISSUE #1652）—— 它退的是 **1**，
  *     与「判据跑了且红」逐字同形，而静态的「目标存不存在」看不见它（目标在、是它
  *     运行时的依赖链断了）。基线快照里 `@testing-library/jest-dom` →
  *     `Cannot find package '@adobe/css-tools'` ⇒ `Tests  no tests` 就是这一格。
+ *   · 退出码 **2**（ISSUE #2791）—— 判据**跑了**，但它按本仓三态口径自己答
+ *     「这一跳没有结论」（前提不成立 / 取不到读数）。它和 1 只差一个码位，
+ *     而 `baseline-red` 的处置是「把这条红记进历史」（修掉或登记 `KNOWN_FAILED_FILES`）
+ *     —— 拿一个「什么都没判」的读数去登记，登记的是一条不存在的账。
  *
  * **「等超了」也不是「判据红了」**（ISSUE #1641）：两侧都红、且**两侧的输出都是
  * 超时形态**时，报 `load-flake` 而不是 `baseline-red` —— 因为负载假红恰好长这样，
@@ -173,23 +197,26 @@ export function judge({ currentCode, baseCode, currentOutput, baseOutput }) {
    * 两侧都要看 —— 本检出那一侧收集不到时，这一次复算问的根本不是「谁的红」。 */
   const current = runState({ code: currentCode, output: currentOutput });
   const base = runState({ code: baseCode ?? 0, output: baseOutput });
-  if (current === "did-not-run" || base === "did-not-run") {
+  if (
+    current === "did-not-run" ||
+    base === "did-not-run" ||
+    current === "no-conclusion" ||
+    base === "no-conclusion"
+  ) {
     return "inconclusive";
   }
   /* `baseCode === null` = **这一条只在单侧跑**（`baseSide: false`）：它的对象是本检出
    * 这条线上的提交对象，基线快照里没有它们，所以「没比较过」不是「别线上也红」。
    * 它红的时候唯一的可能是「这次提交的声明与它自己的树矛盾」⇒ 纯粹的 `yours`。 */
-  if (baseCode === null) return "yours";
+  if (baseCode === null) {
+    return "yours";
+  }
   /* 两侧都红、且**两侧的输出都带超时指纹** ⇒ 负载假红优先于 `baseline-red`。
    * 只在单侧超时形态不降这一档（那更像「你让它变慢了」，归 `yours`）。 */
-  if (
-    baseCode !== 0 &&
-    isTimeoutShaped(currentOutput) &&
-    isTimeoutShaped(baseOutput)
-  ) {
+  if (baseCode !== 0 && isTimeoutShaped(currentOutput) && isTimeoutShaped(baseOutput)) {
     return "load-flake";
   }
-  return baseCode !== 0 ? "baseline-red" : "yours";
+  return baseCode === 0 ? "yours" : "baseline-red";
 }
 
 /**
@@ -201,14 +228,12 @@ export function judge({ currentCode, baseCode, currentOutput, baseOutput }) {
  */
 export function nextSteps(verdict, { ref }) {
   if (verdict === "current-green") {
-    return [
-      "你的检出上这条判据已经是绿的（已修 / 或它只在别的输入面上触发）—— 无需复算。",
-    ];
+    return ["你的检出上这条判据已经是绿的（已修 / 或它只在别的输入面上触发）—— 无需复算。"];
   }
   if (verdict === "inconclusive") {
     return [
-      "命令在其中一侧**没跑起来**，不是「判据红了」——这次不构成「别线的红」的证据。",
-      "两种形态（判据会点名「哪一侧、哪一种」那一行）：",
+      "命令在其中一侧**没跑起来 / 没结论**，不是「判据红了」——这次不构成「别线的红」的证据。",
+      "三种形态（判据会点名「哪一侧、哪一种」那一行）：",
       "  · **一条用例都没收集到**（`Tests  no tests` / `Cannot find package|module` /",
       "    `ERR_MODULE_NOT_FOUND`）—— 它退的是 1，与「判据跑了且红」同形，所以只读",
       "    退出码必然误判。最常见于 ① 那条判据只存在**本检出的未提交改动**里",
@@ -218,7 +243,12 @@ export function nextSteps(verdict, { ref }) {
       "    或把 worktree 建到与目标侧**同一个盘 / 同一个根**下（`--keep` 会把路径打出来）；",
       "  · **127**（找不到模块 / 命令）—— 命令写错、路径相对本检出，或 Windows 上写的是",
       "    `pnpm exec …`（`pnpm` 是 `.cmd` 垫片；改用 `node node_modules/<pkg>/<bin>` 形态）。",
-      "先让它在本检出里真能跑（提交或修正命令），再复算。",
+      "  · **退 2**（ISSUE #2791）—— 判据**跑了**，但它按本仓三态口径自己答「这一跳没有结论」",
+      "    （前提不成立 / 取不到读数；它自己的输出里通常逐字写着「不算绿也不算红」那一类话）。",
+      "    下一动作**不是**修代码、更不是登记 `KNOWN_FAILED_FILES`（那等于把一条没判过的账",
+      "    记进历史）：照它打印的那句去清前置 —— 例如环境里串进来的 `npm_config_*`、缺失的",
+      "    引用或没装上的依赖 —— **然后重跑这一次复算**。",
+      "先让它在本检出里真能跑出结论（提交或修正命令 / 清掉前置），再复算。",
     ];
   }
   if (verdict === "load-flake") {

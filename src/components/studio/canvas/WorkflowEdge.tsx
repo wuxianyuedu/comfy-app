@@ -77,46 +77,40 @@ const FOCUS_LIGHTEN_RATIO = 0.45;
 
 function focusColor(color: string): string {
   const rgb = parseHexColor(color);
-  if (!rgb) return "#ffffff";
-  const mix = (channel: number) =>
-    Math.round(channel + (255 - channel) * FOCUS_LIGHTEN_RATIO);
+  if (!rgb) {
+    return "#ffffff";
+  }
+  const mix = (channel: number) => Math.round(channel + (255 - channel) * FOCUS_LIGHTEN_RATIO);
   return `rgb(${mix(rgb[0])}, ${mix(rgb[1])}, ${mix(rgb[2])})`;
 }
 
 /** 解析 `#rgb` / `#rrggbb`；其它写法（`url(#grad)`、`rgb(...)`）返回 null。 */
 function parseHexColor(color: string): [number, number, number] | null {
   const hex = color.trim();
-  if (!hex.startsWith("#")) return null;
+  if (!hex.startsWith("#")) {
+    return null;
+  }
   const body = hex.slice(1);
   if (body.length === 3) {
     const [r, g, b] = body.split("");
-    if (!r || !g || !b) return null;
-    return [
-      Number.parseInt(r + r, 16),
-      Number.parseInt(g + g, 16),
-      Number.parseInt(b + b, 16),
-    ];
+    if (!r || !g || !b) {
+      return null;
+    }
+    return [Number.parseInt(r + r, 16), Number.parseInt(g + g, 16), Number.parseInt(b + b, 16)];
   }
   if (body.length === 6) {
     const value = Number.parseInt(body, 16);
-    if (Number.isNaN(value)) return null;
+    if (Number.isNaN(value)) {
+      return null;
+    }
     return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
   }
   return null;
 }
 
 export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
-  const {
-    id,
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-    style,
-    data,
-  } = props;
+  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, style, data } =
+    props;
 
   const sPos = sourcePosition ?? Position.Right;
   const tPos = targetPosition ?? Position.Left;
@@ -132,16 +126,7 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
   const c2y = targetY + tOut[1] * offset;
 
   const edgePath = `M ${sourceX},${sourceY} C ${c1x},${c1y} ${c2x},${c2y} ${targetX},${targetY}`;
-  const [labelX, labelY] = bezierMidpoint(
-    sourceX,
-    sourceY,
-    c1x,
-    c1y,
-    c2x,
-    c2y,
-    targetX,
-    targetY,
-  );
+  const [labelX, labelY] = bezierMidpoint(sourceX, sourceY, c1x, c1y, c2x, c2y, targetX, targetY);
 
   /* 选中节点的相关连线：加粗 + 提亮，其余连线在选中态下降噪，让「这个节点连到
    * 哪里」一眼可读。关注级别由 `useRelatedEdgesHighlight` 写在 edge.data 上；
@@ -192,16 +177,16 @@ export const WorkflowEdge = React.memo(function WorkflowEdge(props: EdgeProps) {
       <circle
         cx={labelX}
         cy={labelY}
-        r={focused ? 5 : 4}
         /* 中点圆点两态都必须可见：原写死 `#ffffff` / `rgba(255,255,255,0.85)`
            （focused 纯白）在浅色画布上与背景几乎同色，标记整条消失。
            改随主题 token（浅色 = 深中性点、深色 = 白点）。focus/dim 的
            强弱区分仍由 `r` 与 `opacity` 承担，不靠填充色的明暗。 */
         fill="var(--color-edge-hub-dot)"
-        stroke={focused ? focusStroke : "rgba(167,139,250,0.9)"}
-        strokeWidth={focused ? 2 : 1}
         opacity={focused ? 1 : dimmed ? 0.5 : 1}
         pointerEvents="none"
+        r={focused ? 5 : 4}
+        stroke={focused ? focusStroke : "rgba(167,139,250,0.9)"}
+        strokeWidth={focused ? 2 : 1}
       />
     </>
   );

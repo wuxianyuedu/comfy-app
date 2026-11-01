@@ -2,11 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { RefreshCcw } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import {
-  SlotContent,
-  SlotOutlet,
-  SlotOutletProvider,
-} from "~/components/ui/slot-outlet";
+import { SlotContent, SlotOutlet, SlotOutletProvider } from "~/components/ui/slot-outlet";
 
 /**
  * `SlotOutlet` —— 「把子树渲染到别处的一个落点」的**全库唯一实现**
@@ -37,8 +33,8 @@ export const WithOutlet: Story = {
         <SlotOutlet className="ml-auto gap-2" />
       </div>
       <SlotContent>
-        <Button variant="outline" size="sm">
-          <RefreshCcw className="size-3.5" aria-hidden />
+        <Button size="sm" variant="outline">
+          <RefreshCcw aria-hidden className="size-3.5" />
           刷新
         </Button>
       </SlotContent>
@@ -51,8 +47,8 @@ export const WithoutOutlet: Story = {
   render: () => (
     <SlotOutletProvider>
       <SlotContent>
-        <Button variant="outline" size="sm">
-          <RefreshCcw className="size-3.5" aria-hidden />
+        <Button size="sm" variant="outline">
+          <RefreshCcw aria-hidden className="size-3.5" />
           刷新
         </Button>
       </SlotContent>

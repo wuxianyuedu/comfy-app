@@ -31,13 +31,13 @@ let dbFile: string;
 let databaseUrl: string;
 
 type PushResult = {
-  converged: boolean;
   alreadyCurrent: boolean;
-  invocationFailed: boolean;
   blockedByTty: boolean;
+  converged: boolean;
   error: Error | null;
-  firstOutput: string;
   finalOutput: string;
+  firstOutput: string;
+  invocationFailed: boolean;
 };
 
 /** drizzle-kit 被 TTY 挡下时的真实输出形态（含它接在后面的报错堆栈）。 */
@@ -88,8 +88,8 @@ Error: Interactive prompts require a TTY terminal (process.stdin.isTTY or proces
 `;
 
 function pushStub(options: {
-  dryOutput: string;
   applyChanges?: () => void;
+  dryOutput: string;
 }): (root: string, opts?: Record<string, unknown>) => PushResult {
   return (_root, opts) => {
     if (opts?.force !== true) {
@@ -133,11 +133,11 @@ function makeDb(file: string, extraSql = ""): void {
   );
 }
 
-function columnsOf(file: string, table: string): string[] {
+function columnsOf(file: string, table: string): Array<string> {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
-    return (
-      db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    return /* SAFETY: 类型断言已复核 */ (
+      db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
     ).map((row) => row.name);
   } finally {
     db.close();
@@ -148,8 +148,9 @@ function readUserVersion(file: string): number {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     return Number(
-      (db.prepare("PRAGMA user_version").get() as { user_version: number })
-        .user_version,
+      /* SAFETY: 类型断言已复核 */ (
+        db.prepare("PRAGMA user_version").get() as { user_version: number }
+      ).user_version,
     );
   } finally {
     db.close();
@@ -169,9 +170,7 @@ afterEach(() => {
 describe("pendingStatements —— 只认 SQL 行", () => {
   it("从 dry-run 输出里取出待执行语句，不把报错堆栈当成语句", async () => {
     const { pendingStatements } = await import("../scripts/db-push-core.mjs");
-    expect(pendingStatements(DRY_RUN_OUTPUT)).toEqual([
-      "ALTER TABLE `user` ADD `color` text;",
-    ]);
+    expect(pendingStatements(DRY_RUN_OUTPUT)).toEqual(["ALTER TABLE `user` ADD `color` text;"]);
   });
 
   it("没有语句列表时给空数组（调用方据此判「不认识 → 交人工」）", async () => {
@@ -194,23 +193,16 @@ describe("canAutoApply —— 白名单", () => {
   });
 
   it("删列 / 重建表不在白名单里（判据的失败方向必须是「不自动应用」）", async () => {
-    const { canAutoApply, riskyStatements } =
-      await import("../scripts/db-push-core.mjs");
-    const drop = [
-      "ALTER TABLE `user` DROP COLUMN `color`;",
-      "DROP TABLE `task`;",
-    ];
+    const { canAutoApply, riskyStatements } = await import("../scripts/db-push-core.mjs");
+    const drop = ["ALTER TABLE `user` DROP COLUMN `color`;", "DROP TABLE `task`;"];
     expect(canAutoApply(drop)).toBe(false);
     expect(riskyStatements(drop)).toEqual(drop);
     /* 混在一起也要挡住：只要有一条危险语句，整批交人工。 */
-    expect(
-      canAutoApply(["ALTER TABLE `user` ADD `a` text;", ...drop.slice(0, 1)]),
-    ).toBe(false);
+    expect(canAutoApply(["ALTER TABLE `user` ADD `a` text;", ...drop.slice(0, 1)])).toBe(false);
   });
 
   it("describeRiskyChanges 把危险语句翻成「哪个表哪列会丢」，完整列出", async () => {
-    const { describeRiskyChanges } =
-      await import("../scripts/db-push-core.mjs");
+    const { describeRiskyChanges } = await import("../scripts/db-push-core.mjs");
     expect(
       describeRiskyChanges([
         "ALTER TABLE `user` DROP COLUMN `color`;",
@@ -231,8 +223,7 @@ describe("canAutoApply —— 白名单", () => {
   });
 
   it("describeRiskyChanges：认不出的语句原样列出（描述不出来 ≠ 不列出来）", async () => {
-    const { describeRiskyChanges } =
-      await import("../scripts/db-push-core.mjs");
+    const { describeRiskyChanges } = await import("../scripts/db-push-core.mjs");
     expect(describeRiskyChanges(["UPDATE `user` SET `a` = 1;"])).toEqual([
       "「UPDATE `user` SET `a` = 1」",
     ]);
@@ -272,10 +263,9 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
       }),
     });
     expect(state.state).toBe("synced");
-    expect(
-      readUserVersion(dbFile),
-      "建完必须登记指纹，否则每次启动都要再跑一轮 drizzle",
-    ).toBe(schemaFingerprint(root));
+    expect(readUserVersion(dbFile), "建完必须登记指纹，否则每次启动都要再跑一轮 drizzle").toBe(
+      schemaFingerprint(root),
+    );
   });
 
   it("0 字节空库（drizzle-kit 在无 TTY 上留下的形态）同样自动建起来", async () => {
@@ -294,8 +284,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
   });
 
   it("自动建表没落地（报了 applied 但库没变）→ missing，且不登记指纹", async () => {
-    const { ensureSchemaCurrent } =
-      await import("../scripts/db-schema-state.mjs");
+    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
     fs.writeFileSync(dbFile, "");
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -307,8 +296,7 @@ describe("ensureSchemaCurrent —— 空库（一张表都没有）", () => {
   });
 
   it("空库 + 认不出待执行语句 → missing，绝不猜着执行", async () => {
-    const { ensureSchemaCurrent } =
-      await import("../scripts/db-schema-state.mjs");
+    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
     fs.writeFileSync(dbFile, "");
     const applyChanges = vi.fn();
     const state = ensureSchemaCurrent(root, {
@@ -344,9 +332,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     );
 
     const push = vi.fn();
-    expect(ensureSchemaCurrent(root, { databaseUrl, push }).state).toBe(
-      "ready",
-    );
+    expect(ensureSchemaCurrent(root, { databaseUrl, push }).state).toBe("ready");
     expect(push, "指纹一致时不该有任何 drizzle 调用").not.toHaveBeenCalled();
   });
 
@@ -398,10 +384,7 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
       push: pushStub({
-        dryOutput: DRY_RUN_OUTPUT.replace(
-          "ADD `color` text;",
-          "DROP COLUMN `color`;",
-        ),
+        dryOutput: DRY_RUN_OUTPUT.replace("ADD `color` text;", "DROP COLUMN `color`;"),
         applyChanges,
       }),
     });
@@ -412,14 +395,11 @@ describe("ensureSchemaCurrent —— 三条出口", () => {
     expect(applyChanges, "危险变更不许走到应用那一步").not.toHaveBeenCalled();
     /* 这条是这次改动真正要保住的东西：数据没被启动链路悄悄删掉。 */
     expect(columnsOf(dbFile, "user")).toContain("color");
-    expect(readUserVersion(dbFile), "没成功就不许登记指纹").not.toBe(
-      schemaFingerprint(root),
-    );
+    expect(readUserVersion(dbFile), "没成功就不许登记指纹").not.toBe(schemaFingerprint(root));
   });
 
   it("drizzle 说「已应用」但库结构没变时判 stale（不许错写指纹）", async () => {
-    const { ensureSchemaCurrent } =
-      await import("../scripts/db-schema-state.mjs");
+    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -512,8 +492,7 @@ describe("ensureSchemaCurrent —— force 路径（状态栏「立即同步」�
   });
 
   it("报了 applied 但库结构没动、指纹也没登记 → stale（不许错写「已同步」）", async () => {
-    const { ensureSchemaCurrent } =
-      await import("../scripts/db-schema-state.mjs");
+    const { ensureSchemaCurrent } = await import("../scripts/db-schema-state.mjs");
     makeDb(dbFile);
     const state = ensureSchemaCurrent(root, {
       databaseUrl,
@@ -548,8 +527,6 @@ describe("schemaNotice —— 只在该说话时说话", () => {
     expect(notice?.level).toBe("warn");
     const text = notice?.lines.join("\n") ?? "";
     expect(text).toContain("pnpm db:push");
-    expect(text, "建表是启动链路自己试过的，别把责任推给用户").toContain(
-      "自动建表",
-    );
+    expect(text, "建表是启动链路自己试过的，别把责任推给用户").toContain("自动建表");
   });
 });

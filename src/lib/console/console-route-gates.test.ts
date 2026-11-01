@@ -19,10 +19,10 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
 const ROUTE = join(ROOT, "src/app/api/console/run/route.ts");
-const source = readFileSync(ROUTE, "utf-8");
+const source = readFileSync(ROUTE, "utf8");
 
 /** 剥掉注释再判形态：注释里出现「allow」这类词不该被当成代码。 */
-const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+const code = source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
 
 /** 某个片段的出现位置；-1 = 没出现。 */
 const at = (needle: string) => code.indexOf(needle);
@@ -31,10 +31,7 @@ describe("/api/console/run 的三道闸", () => {
   it("① 回环闸在最前：非本机的请求**先**被挡下，连会话都不查", () => {
     const loopback = at("isLoopbackRequest(req.headers)");
     const auth = at("requireRequestUser()");
-    expect(
-      loopback,
-      "回环闸不见了 —— 这条路由会对着局域网敞开任意命令执行",
-    ).toBeGreaterThan(-1);
+    expect(loopback, "回环闸不见了 —— 这条路由会对着局域网敞开任意命令执行").toBeGreaterThan(-1);
     expect(auth).toBeGreaterThan(-1);
     expect(loopback).toBeLessThan(auth);
     // 挡下时回 403（不是 401 —— 「不是本机」与「没登录」是两件事，

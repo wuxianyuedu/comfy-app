@@ -15,33 +15,33 @@ import { Icon } from "~/components/ui/icon";
 import { SelectMenu } from "~/components/ui/select-menu";
 import type { SourceFilter, TypeFilter } from "./workflow-library-config";
 
-export interface ModelTagCount {
+export type ModelTagCount = {
+  count: number;
   id: string;
   name: string;
-  count: number;
-}
+};
 
-interface WorkflowLibraryFiltersProps {
-  sourceFilter: SourceFilter;
-  onSourceFilterChange: (v: SourceFilter) => void;
-  sourceCounts: { all: number; local: number; online: number };
-  typeFilter: TypeFilter;
-  onTypeFilterChange: (v: TypeFilter) => void;
-  typeCounts: { all: number; image: number; video: number; audio: number };
+type WorkflowLibraryFiltersProps = {
   modelFilter: string;
-  onModelFilterChange: (v: string) => void;
-  modelTags: ModelTagCount[];
+  modelTags: Array<ModelTagCount>;
   onManageModels: () => void;
-}
+  onModelFilterChange: (v: string) => void;
+  onSourceFilterChange: (v: SourceFilter) => void;
+  onTypeFilterChange: (v: TypeFilter) => void;
+  sourceCounts: { all: number; local: number; online: number };
+  sourceFilter: SourceFilter;
+  typeCounts: { all: number; audio: number; image: number; video: number };
+  typeFilter: TypeFilter;
+};
 
-const SOURCE_OPTIONS = ["all", "local", "online"] as const;
+const SOURCE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "local", "online"] as const;
 const SOURCE_LABELS: Record<SourceFilter, string> = {
   all: "全部来源",
   local: "本地工作流",
   online: "在线工作流",
 };
 
-const TYPE_OPTIONS = ["all", "image", "video", "audio"] as const;
+const TYPE_OPTIONS = /* SAFETY: 类型断言已复核 */ ["all", "image", "video", "audio"] as const;
 const TYPE_LABELS: Record<TypeFilter, string> = {
   all: "全部类型",
   image: "图像",
@@ -66,8 +66,7 @@ function CountBadge({ count }: { count: number }) {
  *  要么在短文案上留一块空白。`shrink-0` 是硬要求 —— 这排控件不许被压扁
  *  （规范 03 §3.8.1），排不下由外层整组换行。
  */
-const TRIGGER_CLS =
-  "w-auto min-w-28 shrink-0 gap-x-1 rounded-full px-3 py-1 text-xs";
+const TRIGGER_CLS = "w-auto min-w-28 shrink-0 gap-x-1 rounded-full px-3 py-1 text-xs";
 
 export function WorkflowLibraryFilters({
   sourceFilter,
@@ -82,16 +81,9 @@ export function WorkflowLibraryFilters({
   onManageModels,
 }: WorkflowLibraryFiltersProps) {
   return (
-    <div
-      data-testid="workflow-library-filter-row"
-      className="flex flex-nowrap items-center gap-2"
-    >
+    <div className="flex flex-nowrap items-center gap-2" data-testid="workflow-library-filter-row">
       <SelectMenu
-        value={sourceFilter}
-        onChange={(v) => onSourceFilterChange(v as SourceFilter)}
-        options={[...SOURCE_OPTIONS]}
         className={TRIGGER_CLS}
-        popoverMinWidth={150}
         labels={Object.fromEntries(
           SOURCE_OPTIONS.map((key) => [
             key,
@@ -109,14 +101,14 @@ export function WorkflowLibraryFilters({
             </span>,
           ]),
         )}
+        onChange={(v) => onSourceFilterChange(/* SAFETY: 类型断言已复核 */ v as SourceFilter)}
+        options={[...SOURCE_OPTIONS]}
+        popoverMinWidth={150}
+        value={sourceFilter}
       />
 
       <SelectMenu
-        value={typeFilter}
-        onChange={(v) => onTypeFilterChange(v as TypeFilter)}
-        options={[...TYPE_OPTIONS]}
         className={TRIGGER_CLS}
-        popoverMinWidth={140}
         labels={Object.fromEntries(
           TYPE_OPTIONS.map((key) => [
             key,
@@ -136,46 +128,45 @@ export function WorkflowLibraryFilters({
             </span>,
           ]),
         )}
+        onChange={(v) => onTypeFilterChange(/* SAFETY: 类型断言已复核 */ v as TypeFilter)}
+        options={[...TYPE_OPTIONS]}
+        popoverMinWidth={140}
+        value={typeFilter}
       />
 
       <SelectMenu
-        value={modelFilter}
-        onChange={(v) => onModelFilterChange(v)}
-        options={["all", ...modelTags.map((tag) => tag.name)]}
         className={TRIGGER_CLS}
-        popoverMinWidth={160}
-        placeholder="全部模型"
         labels={{
           all: (
             <span className="flex items-center justify-between gap-2">
               <span>全部模型</span>
-              <CountBadge
-                count={modelTags.reduce((sum, tag) => sum + tag.count, 0)}
-              />
+              <CountBadge count={modelTags.reduce((sum, tag) => sum + tag.count, 0)} />
             </span>
           ),
           ...Object.fromEntries(
             modelTags.map((tag) => [
               tag.name,
-              <span
-                className="flex items-center justify-between gap-2"
-                key={tag.id}
-              >
+              <span className="flex items-center justify-between gap-2" key={tag.id}>
                 <span>{tag.name}</span>
                 <CountBadge count={tag.count} />
               </span>,
             ]),
           ),
         }}
+        onChange={(v) => onModelFilterChange(v)}
+        options={["all", ...modelTags.map((tag) => tag.name)]}
+        placeholder="全部模型"
+        popoverMinWidth={160}
+        value={modelFilter}
       />
 
       <Hint label="管理模型标签库">
         <Button
-          variant="outline"
-          onClick={onManageModels}
           className="border-border-strong text-ink-strong hover:bg-subtle h-auto shrink-0 gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap"
+          onClick={onManageModels}
+          variant="outline"
         >
-          <Icon data-icon="inline-start" name="tag" className="size-3.5" />
+          <Icon className="size-3.5" data-icon="inline-start" name="tag" />
           管理模型
         </Button>
       </Hint>

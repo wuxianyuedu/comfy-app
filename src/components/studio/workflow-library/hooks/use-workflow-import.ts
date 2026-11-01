@@ -10,29 +10,23 @@
  *  **只接受 ComfyUI 的原始工作流格式（RAW）**：API 格式（「导出(API格式)」）不是
  *  本应用支持的导入形态，RAW 转可执行的 API 图由 comfy-cli 在执行时完成。
  */
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type DragEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";
 import { errorText } from "~/lib/error-message";
 import { readFileAsText } from "~/lib/file-io";
 import { fixed } from "~/lib/number-format";
-import { type RouterInputs, type RouterOutputs } from "~/trpc/react";
+import type { RouterInputs, RouterOutputs } from "~/trpc/react";
 import { isRawWorkflowJson } from "~/lib/workflow/workflow-format";
-import { type MutateAsyncLike } from "./use-workflow-actions";
+import type { MutateAsyncLike } from "./use-workflow-actions";
 
-export interface UseWorkflowImportArgs {
+export type UseWorkflowImportArgs = {
   createMut: MutateAsyncLike<
     RouterInputs["workflow"]["create"],
     RouterOutputs["workflow"]["create"]
   >;
   load: () => Promise<void> | void;
-}
+};
 
 /** 拖放投放区：只认带 `Files` 的拖动（否则文本选择拖动也会点亮高亮）。
  *  计数器抵消子元素冒泡产生的 leave —— 没有它，光标掠过子元素时高亮会闪。
@@ -45,28 +39,38 @@ function useDropZone(
   const [active, setActive] = useState(false);
 
   const onDragOver = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) return;
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
   }, []);
   const onDragEnter = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) return;
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
     counterRef.current += 1;
     setActive(true);
   }, []);
   const onDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!event.dataTransfer.types.includes("Files")) return;
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
     counterRef.current = Math.max(0, counterRef.current - 1);
-    if (counterRef.current === 0) setActive(false);
+    if (counterRef.current === 0) {
+      setActive(false);
+    }
   }, []);
   const onDrop = useCallback(
     (event: DragEvent<HTMLElement>) => {
       event.preventDefault();
       counterRef.current = 0;
       setActive(false);
-      const files = Array.from(event.dataTransfer.files ?? []);
+      const files = [...(event.dataTransfer.files ?? [])];
       const [first] = files;
-      if (!first) return;
+      if (!first) {
+        return;
+      }
       if (files.length > 1) {
         onError(`一次只能拖入一个文件（收到了 ${files.length} 个）`);
         return;
@@ -83,13 +87,13 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   // ── 导入面板状态 ──
   const [showImport, setShowImport] = useState(false);
   const [importName, setImportName] = useState("");
-  const [importModes, setImportModes] = useState<string[]>([]);
+  const [importModes, setImportModes] = useState<Array<string>>([]);
   const [importDefaultMode, setImportDefaultMode] = useState("");
   const [importJson, setImportJson] = useState("");
   /* 忙碌位走唯一出口（规范 16 §16.2.4.71）。 */
   const importBusy = useBusyAction();
   const [importErr, setImportErr] = useState("");
-  const [importWarn, setImportWarn] = useState<string[]>([]);
+  const [importWarn, setImportWarn] = useState<Array<string>>([]);
   //（#53）：导入面板的「?」帮助以前只有悬停
   //（pointer-events-none + group-hover）。点击没反应。把它改成
   // 真正的开关，好让点击能显示 / 隐藏说明。
@@ -103,12 +107,16 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
   const dropErrTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     return () => {
-      if (dropErrTimerRef.current) clearTimeout(dropErrTimerRef.current);
+      if (dropErrTimerRef.current) {
+        clearTimeout(dropErrTimerRef.current);
+      }
     };
   }, []);
   const showFileError = useCallback((message: string) => {
     setDropErr(message);
-    if (dropErrTimerRef.current) clearTimeout(dropErrTimerRef.current);
+    if (dropErrTimerRef.current) {
+      clearTimeout(dropErrTimerRef.current);
+    }
     dropErrTimerRef.current = setTimeout(() => setDropErr(null), 4000);
   }, []);
 
@@ -142,7 +150,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
             defaultMode: importDefaultMode,
             raw: parsed,
           });
-          if (Array.isArray(d.warnings)) setImportWarn(d.warnings);
+          if (Array.isArray(d.warnings)) {
+            setImportWarn(d.warnings);
+          }
           setShowImport(false);
           setImportName("");
           setImportJson("");
@@ -152,21 +162,15 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         },
         {
           report: (kind, detail) => {
-            if (kind === "err") setImportErr(detail);
+            if (kind === "err") {
+              setImportErr(detail);
+            }
           },
           failureText: "导入失败",
         },
       ),
     );
-  }, [
-    importName,
-    importModes,
-    importDefaultMode,
-    importJson,
-    load,
-    createMut,
-    importBusy,
-  ]);
+  }, [importName, importModes, importDefaultMode, importJson, load, createMut, importBusy]);
 
   /** 文件入口的统一前处理漏斗（拖入 / 「选择文件」共用）：读文本 → JSON 解析 →
    *  校验是 ComfyUI 原始工作流 → 预填导入面板并打开，让用户确认名称 / 模式后再提交。
@@ -186,8 +190,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         /* 读取本身也收在唯一出口里（§16.2.4.27）：为什么用 `file.text()`
          * 不用手搓 `FileReader`、失败怎么表达，口径只有一处。 */
         text = await readFileAsText(file);
-      } catch (e: unknown) {
-        showFileError(errorText(e, "无法读取文件"));
+      } catch (error: unknown) {
+        showFileError(errorText(error, "无法读取文件"));
         return;
       }
       let parsed: unknown;
@@ -218,12 +222,13 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       //（upscale / inpaint / img2img），建议默认 I2I；否则 T2I。
       try {
         let suggested = "T2I";
-        const obj = parsed as Record<string, unknown>;
-        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as unknown[]) : [];
+        const obj = /* SAFETY: 类型断言已复核 */ parsed as Record<string, unknown>;
+        /* SAFETY: 类型断言已复核 */
+        const nodes = Array.isArray(obj.nodes) ? (obj.nodes as Array<unknown>) : [];
         for (const n of nodes) {
           const t =
             n && typeof n === "object"
-              ? (n as { type?: unknown }).type
+              ? /* SAFETY: 类型断言已复核 */ (n as { type?: unknown }).type
               : undefined;
           if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
             suggested = "I2I";

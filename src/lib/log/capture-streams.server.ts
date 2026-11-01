@@ -38,7 +38,9 @@ let target: string | null = null;
 
 /** 面板读取本次运行转录文件的路径（服务端路由用）。 */
 export function panelCaptureLogPath(): string {
-  if (target) return target;
+  if (target) {
+    return target;
+  }
   let boot = "unknown";
   try {
     // 进程启动标识：与 log-store 的会话边界配合，文件按次命名不覆盖旧的。
@@ -71,11 +73,9 @@ export function panelCaptureLogPath(): string {
  * 策略增长，代价也跟着长）。逐份 `stat` 的语义一字未改：读不到就跳过
  * （正在被轮转删掉那一格），全部读不到才回 null。
  */
-export async function latestPanelLogFile(
-  dir = NEXTJS_LOG_DIR,
-): Promise<string | null> {
+export async function latestPanelLogFile(dir = NEXTJS_LOG_DIR): Promise<string | null> {
   let best: { file: string; mtimeMs: number } | null = null;
-  let names: string[];
+  let names: Array<string>;
   try {
     names = await fs.promises.readdir(/*turbopackIgnore: true*/ dir);
   } catch {
@@ -93,7 +93,9 @@ export async function latestPanelLogFile(
     } catch {
       continue; // 正在被轮转删掉
     }
-    if (!best || mtimeMs > best.mtimeMs) best = { file, mtimeMs };
+    if (!best || mtimeMs > best.mtimeMs) {
+      best = { file, mtimeMs };
+    }
   }
   return best?.file ?? null;
 }
@@ -112,14 +114,11 @@ const KEEP_FILES = 5;
  * 「取错最新一份」的机会就越大（见 `latestPanelLogFile`）。
  */
 function pruneOldFiles(): void {
-  let entries: { file: string; mtimeMs: number }[];
+  let entries: Array<{ file: string; mtimeMs: number }>;
   try {
     entries = fs
       .readdirSync(/*turbopackIgnore: true*/ NEXTJS_LOG_DIR)
-      .filter(
-        (name) =>
-          name.startsWith(NEXTJS_PANEL_LOG_PREFIX) && name.endsWith(".log"),
-      )
+      .filter((name) => name.startsWith(NEXTJS_PANEL_LOG_PREFIX) && name.endsWith(".log"))
       .flatMap((name) => {
         const file = path.join(NEXTJS_LOG_DIR, name);
         try {
@@ -148,7 +147,7 @@ function pruneOldFiles(): void {
 
 function safeAppend(filePath: string, text: string): void {
   try {
-    fs.appendFileSync(/*turbopackIgnore: true*/ filePath, text, "utf-8");
+    fs.appendFileSync(/*turbopackIgnore: true*/ filePath, text, "utf8");
   } catch {
     /* 面板日志写失败绝不影响应用 */
   }
@@ -172,7 +171,9 @@ function flushBuffer(filePath: string): void {
     clearTimeout(flushTimer);
     flushTimer = null;
   }
-  if (!buffer) return;
+  if (!buffer) {
+    return;
+  }
   const text = buffer;
   buffer = "";
   safeAppend(filePath, text);
@@ -199,7 +200,9 @@ let installed = false;
  * redirect 文件 / 上一轮包装器）原样保留。重复调用幂等。
  */
 export function installStreamCapture(): void {
-  if (installed) return;
+  if (installed) {
+    return;
+  }
   installed = true;
 
   const filePath = panelCaptureLogPath();
@@ -229,15 +232,17 @@ export function installStreamCapture(): void {
       cb?: (err?: Error | null) => void,
     ): boolean {
       try {
-        const text =
-          typeof chunk === "string"
-            ? chunk
-            : Buffer.from(chunk).toString("utf-8");
+        const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
         bufferedAppend(filePath, text);
       } catch {
         /* 转录失败不吞掉输出本身 */
       }
-      return original.call(stream, chunk, encodingOrCb as never, cb as never);
+      return original.call(
+        stream,
+        chunk,
+        /* SAFETY: 类型断言已复核 */ encodingOrCb as never,
+        /* SAFETY: 类型断言已复核 */ cb as never,
+      );
     };
     stream.write = patched;
   };

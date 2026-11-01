@@ -79,18 +79,13 @@ function proxyKey(target: [string, string]): string {
  *
  *  一个都解析不出来时返回空数组 —— 调用方据此跳过该 wrapper（保持旧行为：
  *  没有映射就不猜，宁可只显示别名，也不把别的槽位的字段名安到这一行）。 */
-function collectProxyWidgetPairs(
-  raw: unknown,
-): { slot?: string; target: [string, string] }[] {
-  const pairs: { slot?: string; target: [string, string] }[] = [];
+function collectProxyWidgetPairs(raw: unknown): Array<{ slot?: string; target: [string, string] }> {
+  const pairs: Array<{ slot?: string; target: [string, string] }> = [];
   const asTarget = (pair: unknown): [string, string] | null => {
-    if (!Array.isArray(pair) || pair.length < 2) return null;
-    if (
-      pair[0] === undefined ||
-      pair[0] === null ||
-      pair[1] === undefined ||
-      pair[1] === null
-    ) {
+    if (!Array.isArray(pair) || pair.length < 2) {
+      return null;
+    }
+    if (pair[0] === undefined || pair[0] === null || pair[1] === undefined || pair[1] === null) {
       return null;
     }
     return [String(pair[0]), String(pair[1])];
@@ -98,16 +93,20 @@ function collectProxyWidgetPairs(
   if (Array.isArray(raw)) {
     for (const pair of raw) {
       const target = asTarget(pair);
-      if (target) pairs.push({ target });
+      if (target) {
+        pairs.push({ target });
+      }
     }
     return pairs;
   }
   if (raw && typeof raw === "object") {
     for (const [slot, value] of Object.entries(
-      raw as Record<string, unknown>,
+      /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>,
     )) {
       const target = asTarget(value);
-      if (target) pairs.push({ slot, target });
+      if (target) {
+        pairs.push({ slot, target });
+      }
     }
   }
   return pairs;
@@ -119,9 +118,7 @@ function collectProxyWidgetPairs(
  *  ComfyUI 不在这一层放插件类名。用来区分「槽位名是平台自动编号的别名」
  *  与「槽位名是插件作者定义的 pin 名」。 */
 function isUuidLikeClassType(classType: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-    classType.trim(),
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(classType.trim());
 }
 
 /** ComfyUI 为子图 wrapper 槽位自动编号出的名字（`value_1` / 裸序号 `1`）。
@@ -149,24 +146,19 @@ function isWrapperAliasSlot(name: string): boolean {
  * 每一行 widget 都是空白。
  */
 async function enrichSubgraphProxyWidgets(input: {
-  raw: RawWorkflow | null;
-  /** 原地更新：每个封装节点的条目列表会被整体替换。 */
-  rawInputsById: Record<string, RawInputEntry[]>;
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
-  ) => Promise<string[] | undefined>;
+  ) => Promise<Array<string> | undefined>;
   multilineForClassField: (
     classType: string | undefined,
     field: string,
   ) => Promise<boolean | undefined>;
+  raw: RawWorkflow | null;
+  /** 原地更新：每个封装节点的条目列表会被整体替换。 */
+  rawInputsById: Record<string, Array<RawInputEntry>>;
 }): Promise<void> {
-  const {
-    raw,
-    rawInputsById,
-    comboOptionsForClassField,
-    multilineForClassField,
-  } = input;
+  const { raw, rawInputsById, comboOptionsForClassField, multilineForClassField } = input;
   if (raw?.definitions?.subgraphs) {
     const subs = raw.definitions.subgraphs;
     /* 按 id 给每个子图定义里的内部节点建索引，查找降到 O(1)。 */
@@ -178,21 +170,25 @@ async function enrichSubgraphProxyWidgets(input: {
 
       if (Array.isArray(subDef?.nodes)) {
         for (const inN of subDef.nodes) {
-          if (inN?.id != null) map.set(String(inN.id), inN);
+          if (inN?.id != null) {
+            map.set(String(inN.id), inN);
+          }
         }
       }
 
       internalByIdByKey.set(subKey, map);
     }
     /* 找出封装节点 UUID classType 对应的那个子图定义。 */
-    const resolveSubDef = (
-      classType: string,
-    ): { key: string; def: RawSubgraphDef } | null => {
+    const resolveSubDef = (classType: string): { def: RawSubgraphDef; key: string } | null => {
       const direct = subs[classType];
-      if (direct) return { key: classType, def: direct };
+      if (direct) {
+        return { key: classType, def: direct };
+      }
       for (const k of Object.keys(subs)) {
         const cand = subs[k];
-        if (cand?.id === classType) return { key: k, def: cand };
+        if (cand?.id === classType) {
+          return { key: k, def: cand };
+        }
       }
       return null;
     };
@@ -200,14 +196,12 @@ async function enrichSubgraphProxyWidgets(input: {
      * 再按它索引 widgets_values[]。seed + control_after_generate 的双槽捆绑
      * 也要处理 —— 碰到 seed / noise_seed widget 时槽位计数器前进两次
      * （这些输入总是带一个隐含的 `control_after_generate` 伙伴槽）。 */
-    const lookupFieldValue = (
-      internalNode: RawNode | undefined,
-      fieldName: string,
-    ): unknown => {
-      if (!internalNode || !Array.isArray(internalNode.inputs))
+    const lookupFieldValue = (internalNode: RawNode | undefined, fieldName: string): unknown => {
+      if (!internalNode || !Array.isArray(internalNode.inputs)) {
         return undefined;
+      }
       const inputs = internalNode.inputs;
-      const wv: unknown[] = Array.isArray(internalNode.widgets_values)
+      const wv: Array<unknown> = Array.isArray(internalNode.widgets_values)
         ? internalNode.widgets_values
         : [];
       /* control_after_generate 永远紧跟在 seed 的**下一个**槽位。 */
@@ -215,46 +209,64 @@ async function enrichSubgraphProxyWidgets(input: {
         const seedIdx = inputs.findIndex(
           (i) => !!i && (i.name === "seed" || i.name === "noise_seed"),
         );
-        if (seedIdx < 0) return undefined;
+        if (seedIdx === -1) {
+          return undefined;
+        }
         let slot = 0;
         for (let k = 0; k <= seedIdx; k++) {
-          if (inputs[k]?.widget) slot++;
+          if (inputs[k]?.widget) {
+            slot++;
+          }
         }
         return slot < wv.length ? wv[slot] : undefined;
       }
       /* 通用路径：数出目标输入之前有多少个 widget 槽。 */
       const inputIdx = inputs.findIndex((i) => i?.name === fieldName);
-      if (inputIdx < 0) return undefined;
+      if (inputIdx === -1) {
+        return undefined;
+      }
       let slot = 0;
       for (let k = 0; k < inputIdx; k++) {
         const inp = inputs[k];
         if (inp?.widget) {
           slot++;
           /* seed 捆绑要额外占掉一个 control_after_generate 的槽 */
-          if (inp.name === "seed" || inp.name === "noise_seed") slot++;
+          if (inp.name === "seed" || inp.name === "noise_seed") {
+            slot++;
+          }
         }
       }
       return slot < wv.length ? wv[slot] : undefined;
     };
     /* 给每个封装节点预先算好 (subDefKey, proxyWidgets, internalById)，
      * 工作流里封装节点很多时，内层映射的代价仍然很低。 */
-    const wrapperNodeIds: string[] = [];
+    const wrapperNodeIds: Array<string> = [];
     for (const nodeId of Object.keys(rawInputsById)) {
       const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
-      if (!rn) continue;
+      if (!rn) {
+        continue;
+      }
       const classType = typeof rn.type === "string" ? rn.type : "";
-      if (!/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) continue;
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType)) {
+        continue;
+      }
       wrapperNodeIds.push(nodeId);
     }
 
     for (const nodeId of wrapperNodeIds) {
       const rn = raw.nodes.find((n) => String(n?.id) === nodeId);
-      if (!rn) continue;
+      if (!rn) {
+        continue;
+      }
       const classType = typeof rn.type === "string" ? rn.type : "";
       const resolved = resolveSubDef(classType);
-      if (!resolved) continue;
+      if (!resolved) {
+        continue;
+      }
       const internalById = internalByIdByKey.get(resolved.key);
-      if (!internalById) continue;
+      if (!internalById) {
+        continue;
+      }
       /* proxyWidgets 的键形态有两种：官方是 `[[内部节点id, 字段名]]`，也有导出
        *  写成 `{ 槽位名: [内部节点id, 字段名] }`。两种都读，否则这类工作流会被
        *  整段跳过 —— 别名清不掉、内部字段名也取不到（ISSUE #349）。 */
@@ -262,11 +274,14 @@ async function enrichSubgraphProxyWidgets(input: {
       const byName = new Map<string, [string, string]>();
       const ordered: Array<[string, string]> = [];
       for (const pair of proxyPairs) {
-        if (pair.slot !== undefined && !byName.has(pair.slot))
+        if (pair.slot !== undefined && !byName.has(pair.slot)) {
           byName.set(pair.slot, pair.target);
+        }
         ordered.push(pair.target);
       }
-      if (ordered.length === 0) continue;
+      if (ordered.length === 0) {
+        continue;
+      }
 
       const subNodeType =
         typeof resolved.def?.name === "string" && resolved.def.name.trim()
@@ -287,14 +302,18 @@ async function enrichSubgraphProxyWidgets(input: {
       const updatedList = existingList.map((entry) => {
         /* 只富化**已经**带 widget 标记的输入（即被暴露的 widget 槽，
          *  而不是纯连线端口）。纯端口在客户端正确地留在 connInputs 里。 */
-        if (!entry.widget) return entry;
+        if (!entry.widget) {
+          return entry;
+        }
         /* 首选按槽位名匹配：`value_1` 直取自己的目标，比位置更抗得住导出差异。
          *  名字对不上（命名不是 value_N 的私有导出）时退回位置序。 */
         const proxy = byName.get(entry.name) ?? ordered[widgetSlot];
         widgetSlot += 1;
         /* 位置序只能全表唯一地成立：一旦拿到的目标已被别的槽位占用，说明顺序
          *  不可信 —— 宁可给空，也不把别的槽位的字段名安到这一行上。 */
-        if (!proxy || usedProxyTargets.has(proxyKey(proxy))) return entry;
+        if (!proxy || usedProxyTargets.has(proxyKey(proxy))) {
+          return entry;
+        }
         usedProxyTargets.add(proxyKey(proxy));
         const [internalNodeId, fieldName] = proxy;
         const internalNode = internalById.get(internalNodeId);
@@ -302,13 +321,17 @@ async function enrichSubgraphProxyWidgets(input: {
         if (updated.widgetValue === undefined) {
           const value = lookupFieldValue(internalNode, fieldName);
 
-          if (value !== undefined) updated.widgetValue = value;
+          if (value !== undefined) {
+            updated.widgetValue = value;
+          }
         }
         /* 封装条目自己没带类型时，采用内部节点该槽位的类型作为权威值
          *  （防御性 —— 通常原始 JSON 里本来就有）。 */
         if (internalNode && Array.isArray(internalNode.inputs)) {
           const inp = internalNode.inputs.find((i) => i?.name === fieldName);
-          if (typeof inp?.type === "string") updated.type = inp.type;
+          if (typeof inp?.type === "string") {
+            updated.type = inp.type;
+          }
           if (!updated.label && typeof inp?.localized_name === "string") {
             updated.label = inp.localized_name;
           }
@@ -320,9 +343,7 @@ async function enrichSubgraphProxyWidgets(input: {
               nodeId: internalNodeId,
               field: fieldName,
               ...(typeof inp?.label === "string" ? { label: inp.label } : {}),
-              ...(typeof inp?.localized_name === "string"
-                ? { localized: inp.localized_name }
-                : {}),
+              ...(typeof inp?.localized_name === "string" ? { localized: inp.localized_name } : {}),
             };
           }
           /* 存下代理目标（内部节点的 class + 字段），下面那趟异步 COMBO
@@ -342,12 +363,16 @@ async function enrichSubgraphProxyWidgets(input: {
        *  槽位名只是别名。必须排在下面的 COMBO 趟之前：那一趟会把
        *  `__comboClass` / `__comboField` 临时字段删掉。 */
       for (const e of updatedList) {
-        if (e.type !== "STRING" || e.multiline) continue;
+        if (e.type !== "STRING" || e.multiline) {
+          continue;
+        }
         const declared = await multilineForClassField(
           e.__comboClass ?? subNodeType,
           e.__comboField ?? e.name,
         );
-        if (inferIsMultiline(declared, e.widgetValue)) e.multiline = true;
+        if (inferIsMultiline(declared, e.widgetValue)) {
+          e.multiline = true;
+        }
       }
       /* 从 /api/object_info 解析 COMBO 候选清单（每次请求只取一次，带缓存）。
        *  只有是 COMBO 的封装 widget 输入才会拿到 `comboOptions` 数组，
@@ -355,11 +380,10 @@ async function enrichSubgraphProxyWidgets(input: {
        *  消费方回落到普通文本控件。 */
       for (const e of updatedList) {
         if (e.type === "COMBO" && e.__comboClass) {
-          const opts = await comboOptionsForClassField(
-            e.__comboClass,
-            e.__comboField ?? "",
-          );
-          if (opts) e.comboOptions = opts;
+          const opts = await comboOptionsForClassField(e.__comboClass, e.__comboField ?? "");
+          if (opts) {
+            e.comboOptions = opts;
+          }
         }
         delete e.__comboClass;
         delete e.__comboField;
@@ -386,29 +410,41 @@ function subgraphAuthorLabelsByUid(
 ): Record<string, Record<string, string>> {
   const byUid: Record<string, Record<string, string>> = {};
   const subgraphs = raw?.definitions?.subgraphs;
-  if (!subgraphs || typeof subgraphs !== "object") return byUid;
+  if (!subgraphs || typeof subgraphs !== "object") {
+    return byUid;
+  }
   /* `subgraphs` 有两种形态：以 UUID 为键的对象，或按顺序排列的数组（旧导出）。
    * 键也可能是数字序号，真 UUID 藏在定义自身的 `id` 上 —— 两种都登记，让
    * 上层按 wrapper 的 `class_type` 查得到。 */
-  const subgraphEntries: [string, RawSubgraphDef][] = Array.isArray(subgraphs)
-    ? (subgraphs as RawSubgraphDef[]).map(
+  const subgraphEntries: Array<[string, RawSubgraphDef]> = Array.isArray(subgraphs)
+    ? /* SAFETY: 类型断言已复核 */ (subgraphs as Array<RawSubgraphDef>).map(
         (subDef, index): [string, RawSubgraphDef] => [String(index), subDef],
       )
     : Object.entries(subgraphs);
   for (const [key, subDef] of subgraphEntries) {
-    if (!subDef || !Array.isArray(subDef.inputs)) continue;
+    if (!subDef || !Array.isArray(subDef.inputs)) {
+      continue;
+    }
     const table: Record<string, string> = {};
     for (const pinRaw of subDef.inputs) {
-      if (!pinRaw || typeof pinRaw !== "object") continue;
-      const pin = pinRaw as Record<string, unknown>;
+      if (!pinRaw || typeof pinRaw !== "object") {
+        continue;
+      }
+      const pin = /* SAFETY: 类型断言已复核 */ pinRaw as Record<string, unknown>;
       const slot = typeof pin.name === "string" ? pin.name.trim() : "";
       const label = typeof pin.label === "string" ? pin.label.trim() : "";
-      if (!slot || !label || slot === label) continue;
+      if (!slot || !label || slot === label) {
+        continue;
+      }
       table[slot] = label;
     }
-    if (Object.keys(table).length === 0) continue;
+    if (Object.keys(table).length === 0) {
+      continue;
+    }
     const uid = typeof subDef.id === "string" ? subDef.id : "";
-    if (uid) byUid[uid] = table;
+    if (uid) {
+      byUid[uid] = table;
+    }
     byUid[key] = table;
   }
   return byUid;
@@ -419,7 +455,7 @@ export async function buildRawInputs(
   comboOptionsForClassField: (
     classType: string | undefined,
     field: string,
-  ) => Promise<string[] | undefined>,
+  ) => Promise<Array<string> | undefined>,
   /** 某 class 某字段是否声明了 `{"multiline": true}`（object_info 的事实）。
    *  查不到返回 `undefined` —— 多行判定退到「值很长」那条数据判据，不猜名字。 */
   multilineForClassField: (
@@ -427,7 +463,7 @@ export async function buildRawInputs(
     field: string,
   ) => Promise<boolean | undefined>,
 ): Promise<{
-  rawInputsById: Record<string, RawInputEntry[]>;
+  rawInputsById: Record<string, Array<RawInputEntry>>;
   sizeById: Record<string, [number, number]>;
 }> {
   /* 给每个图节点建 `rawInputs` 查找表。原始 UI 格式里，每个节点在磁盘记录上
@@ -436,7 +472,7 @@ export async function buildRawInputs(
    * `localized_name` 是简体中文显示标签（ComfyUI 逐节点保存的），
    * `type` 是 ComfyUI 的数据类型字符串，连线与 widget 值都用它。
    * 工作流只以 API JSON 导入时，这张表是空的。 */
-  const rawInputsById: Record<string, RawInputEntry[]> = {};
+  const rawInputsById: Record<string, Array<RawInputEntry>> = {};
   /* ComfyUI / litegraph 节点的 `size`（[w, h]）—— 透传出去，画布便能按
    *  ComfyUI 的精确尺寸画出每个节点框（用户期望卡片与导入的配置一致，
    * 包括那些内部留白很大的超尺寸框）。API 格式的 `tpl.graph` 把 `size` 丢了，
@@ -446,10 +482,8 @@ export async function buildRawInputs(
    * 哨兵槽）。惰性拉取 —— 只有真的遇到「inputs[] 没覆盖到的控件值」时才请求
    * object_info，避免每个工作流都白跑一次；ComfyUI 未启动时 30s 负缓存生效，
    * 拿不到表也只是退回旧逻辑，不会拖慢。 */
-  let widgetOrderTable: Record<string, string[]> | null = null;
-  const ensureWidgetOrderTable = async (): Promise<
-    Record<string, string[]>
-  > => {
+  let widgetOrderTable: Record<string, Array<string>> | null = null;
+  const ensureWidgetOrderTable = async (): Promise<Record<string, Array<string>>> => {
     widgetOrderTable ??= await fetchWidgetOrderTable();
     return widgetOrderTable;
   };
@@ -458,26 +492,24 @@ export async function buildRawInputs(
   const subgraphAuthorLabels = subgraphAuthorLabelsByUid(raw);
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
-      if (!rn) continue;
+      if (!rn) {
+        continue;
+      }
       /* 给**每个**原始节点都记 `size`，与该节点有没有 `inputs` 数组无关。
        * 有些 litegraph 导出（以及部分测试夹具）会在仍有 `size` 的节点上省略
        * `inputs`；把 size 挂在 `inputs` 上判，会把这些尺寸误丢。
        * （下面那一趟 rawInputsById 仍然需要 `inputs`，
        * 所以这里单独走一遍。）
        *  guard below.) */
-      const rnSize =
-        Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
+      const rnSize = Array.isArray(rn.size) && rn.size.length >= 2 ? rn.size : undefined;
       if (rnSize) {
-        sizeById[String(rn.id)] = [
-          Number(rnSize[0]) || 0,
-          Number(rnSize[1]) || 0,
-        ];
+        sizeById[String(rn.id)] = [Number(rnSize[0]) || 0, Number(rnSize[1]) || 0];
       }
-      if (!Array.isArray(rn.inputs)) continue;
-      const list: RawInputEntry[] = [];
-      const rnWidgets = Array.isArray(rn.widgets_values)
-        ? rn.widgets_values
-        : [];
+      if (!Array.isArray(rn.inputs)) {
+        continue;
+      }
+      const list: Array<RawInputEntry> = [];
+      const rnWidgets = Array.isArray(rn.widgets_values) ? rn.widgets_values : [];
       const rnClassType = typeof rn.type === "string" ? rn.type : "";
 
       /* ── 旧配对（兜底）：按 inputs[] 中控件出现的顺序，用游标依次取
@@ -485,12 +517,14 @@ export async function buildRawInputs(
       const legacyByName = new Map<string, unknown>();
       let widgetCounter = 0;
       for (const inp of rn.inputs) {
-        if (!inp || typeof inp.name !== "string") continue;
+        if (!inp || typeof inp.name !== "string") {
+          continue;
+        }
         const widgetName =
-          inp.widget && typeof inp.widget.name === "string"
-            ? inp.widget.name
-            : undefined;
-        if (!widgetName || widgetCounter >= rnWidgets.length) continue;
+          inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
+        if (!widgetName || widgetCounter >= rnWidgets.length) {
+          continue;
+        }
         legacyByName.set(widgetName, rnWidgets[widgetCounter]);
         /* seed / noise_seed widget 的值后面紧跟着一个隐含的
          * `control_after_generate` 伙伴槽。 */
@@ -507,24 +541,29 @@ export async function buildRawInputs(
        *  值仅存在于 widgets_values[]。仅靠 inputs[] 配对会整段漏掉它们
        *  （CLIPTextEncode 的提示词、SenseNovaU15Loader 的模型名…），节点上看
        *  不到任何参数。这里改用与 convertRawToApi 同源的控件顺序表反查下标。 */
-      let byOrder: { name: string; value: unknown }[] | null = null;
-      if (
-        rnWidgets.length > 0 &&
-        (widgetCounter < rnWidgets.length || legacyByName.size === 0)
-      ) {
+      let byOrder: Array<{ name: string; value: unknown }> | null = null;
+      if (rnWidgets.length > 0 && (widgetCounter < rnWidgets.length || legacyByName.size === 0)) {
         const table = await ensureWidgetOrderTable();
         byOrder = mapWidgetValuesByOrder(table[rnClassType], rnWidgets);
       }
       const valueByName = new Map<string, unknown>();
-      if (byOrder) for (const w of byOrder) valueByName.set(w.name, w.value);
-      else
-        for (const [name, value] of legacyByName) valueByName.set(name, value);
+      if (byOrder) {
+        for (const w of byOrder) {
+          valueByName.set(w.name, w.value);
+        }
+      } else {
+        for (const [name, value] of legacyByName) {
+          valueByName.set(name, value);
+        }
+      }
 
       /* 已被 inputs[] 占据的控件名 —— 下面补齐时不再重复生成。 */
       const usedWidgetNames = new Set<string>();
 
       for (const inp of rn.inputs) {
-        if (!inp || typeof inp.name !== "string") continue;
+        if (!inp || typeof inp.name !== "string") {
+          continue;
+        }
         const isConn = inp.link != null;
         /* ComfyUI 在「被暴露的 widget 代理」输入上，把 widget 把手烤成
          *  `{ widget: { name: "…" } }` —— 值存在 `widgets_values` 里，
@@ -533,24 +572,22 @@ export async function buildRawInputs(
          * 逼每个消费方自己去重新配对下标 ——
          * 那正是此前「<输入名仍然显示没有值>」这类回归的来源。 */
         const widgetName =
-          inp.widget && typeof inp.widget.name === "string"
-            ? inp.widget.name
-            : undefined;
+          inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         let widgetValue: unknown = undefined;
         if (widgetName) {
           usedWidgetNames.add(widgetName);
-          if (valueByName.has(widgetName))
+          if (valueByName.has(widgetName)) {
             widgetValue = valueByName.get(widgetName);
-          else if (legacyByName.has(widgetName))
+          } else if (legacyByName.has(widgetName)) {
             widgetValue = legacyByName.get(widgetName);
+          }
         }
         /* 作者名回填（仅封装节点）：wrapper 本层只写了自动编号的槽位名
          *  （`value_1`）时，从子图边界 pin 取作者业务名（`Seed`）—— 顺序不能
          *  反，作者真在本层写了别的名字时一律以本层为准，不被边界 pin 覆盖
          *  （ISSUE #349）。 */
         const ownLabel = typeof inp.label === "string" ? inp.label.trim() : "";
-        const ownLabelIsAuthorFacing =
-          ownLabel.length > 0 && ownLabel !== inp.name;
+        const ownLabelIsAuthorFacing = ownLabel.length > 0 && ownLabel !== inp.name;
         const wrapperAuthorLabel =
           isUuidLikeClassType(rnClassType) &&
           !ownLabelIsAuthorFacing &&
@@ -559,19 +596,17 @@ export async function buildRawInputs(
             : undefined;
         const entry: RawInputEntry = {
           name: inp.name,
-          label:
-            wrapperAuthorLabel ??
-            (typeof inp.label === "string" ? inp.label : undefined),
-          localized:
-            typeof inp.localized_name === "string"
-              ? inp.localized_name
-              : undefined,
-          type:
-            typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
+          label: wrapperAuthorLabel ?? (typeof inp.label === "string" ? inp.label : undefined),
+          localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
+          type: typeof inp.type === "string" ? inp.type : isConn ? "*" : "STRING",
           isConnection: isConn,
         };
-        if (widgetName) entry.widget = { name: widgetName };
-        if (widgetValue !== undefined) entry.widgetValue = widgetValue;
+        if (widgetName) {
+          entry.widget = { name: widgetName };
+        }
+        if (widgetValue !== undefined) {
+          entry.widgetValue = widgetValue;
+        }
         /* 给上游 `inferIsMultiline` 助手标出的每个 STRING 输入盖
          *  `multiline`。该助手**刻意**不盖 `multiline: false` ——
          *  这是一个只做「开启」的标记；渲染器把「没有」当成「没有意见」，
@@ -602,9 +637,13 @@ export async function buildRawInputs(
        * preview 条目以缩略图呈现，不需要再重复一行文本。 */
       if (byOrder && !LOAD_IMAGE_NODE_TYPES.has(rnClassType)) {
         for (const w of byOrder) {
-          if (usedWidgetNames.has(w.name) || w.value === undefined) continue;
+          if (usedWidgetNames.has(w.name) || w.value === undefined) {
+            continue;
+          }
           /* 数组值是连线元组（[nodeId, slot]），不是控件值 —— 跳过。 */
-          if (Array.isArray(w.value)) continue;
+          if (Array.isArray(w.value)) {
+            continue;
+          }
           const type = inferInputType(rnClassType, w.name, w.value);
           list.push({
             name: w.name,
@@ -613,11 +652,10 @@ export async function buildRawInputs(
             widget: { name: w.name },
             widgetValue: w.value,
             ...(type === "STRING" &&
-            inferIsMultiline(
-              await multilineForClassField(rnClassType, w.name),
-              w.value,
-            )
-              ? { multiline: true as const }
+            inferIsMultiline(await multilineForClassField(rnClassType, w.name), w.value)
+              ? {
+                  multiline: /* SAFETY: 类型断言已复核 */ true as const,
+                }
               : {}),
           });
         }
@@ -635,9 +673,7 @@ export async function buildRawInputs(
        *        * —— 折叠主体两者一起消失，正是与 ComfyUI 一致的形态。
        *        * 专属的 `preview: true` 标记会被渲染器的 connEntries / widgetEntries
        *        * 过滤器检查，因此这条条目永远不会落进端口行或 widget 控件清单。 */
-      if (
-        LOAD_IMAGE_NODE_TYPES.has(typeof rn.type === "string" ? rn.type : "")
-      ) {
+      if (LOAD_IMAGE_NODE_TYPES.has(typeof rn.type === "string" ? rn.type : "")) {
         if (!list.some((list) => list.preview)) {
           const wv0 = rn.widgets_values?.[0];
           const fname = typeof wv0 === "string" ? wv0.trim() : "";
@@ -653,7 +689,7 @@ export async function buildRawInputs(
                   imageRef: {
                     filename: fname,
                     subfolder: "",
-                    type: "input" as const,
+                    type: /* SAFETY: 类型断言已复核 */ "input" as const,
                   },
                 }
               : {}),

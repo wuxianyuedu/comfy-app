@@ -41,7 +41,7 @@ const SERVER_SUFFIX = ".server.ts";
  * @returns {string}
  */
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 /** 抽出模块的 import 列表（值导入与 type-only 分开标注）。
@@ -58,7 +58,7 @@ function parseImports(src) {
     /* 两个捕获组都是正则要求成立的（`from` 与引号内说明符都在模式里），
      * 解构默认值只是把这件事写给类型检查器 —— 不是运行期分支。 */
     const [, clause = "", spec = ""] = m;
-    out.push({ clause: clause.replace(/\s+/g, " ").trim(), spec });
+    out.push({ clause: clause.replaceAll(/\s+/g, " ").trim(), spec });
   }
   const bareRe = /(?:^|\n)\s*import\s+["']([^"']+)["']/g;
   while ((m = bareRe.exec(src))) {
@@ -76,9 +76,13 @@ function parseImports(src) {
  */
 function resolveLocal(fromFile, spec) {
   let base;
-  if (spec.startsWith("~/") || spec.startsWith("@/")) base = path.join(SRC, spec.slice(2));
-  else if (spec.startsWith(".")) base = path.resolve(path.dirname(fromFile), spec);
-  else return null;
+  if (spec.startsWith("~/") || spec.startsWith("@/")) {
+    base = path.join(SRC, spec.slice(2));
+  } else if (spec.startsWith(".")) {
+    base = path.resolve(path.dirname(fromFile), spec);
+  } else {
+    return null;
+  }
   const candidates = [
     base,
     `${base}.ts`,
@@ -102,7 +106,9 @@ function listModules(dir, out = []) {
       listModules(full, out);
       continue;
     }
-    if (!/\.(ts|tsx)$/.test(name) || /\.test\.(ts|tsx)$/.test(name)) continue;
+    if (!/\.(ts|tsx)$/.test(name) || /\.test\.(ts|tsx)$/.test(name)) {
+      continue;
+    }
     out.push(full);
   }
   return out;
@@ -137,9 +143,15 @@ const IN_SCOPE = (file) => rel(file).startsWith("src/lib/");
  * @returns {"server-only" | "server-suffix" | "use-client" | "none"}
  */
 function declarationOf(file, raw) {
-  if (/^\s*import\s+["']server-only["']/m.test(raw)) return "server-only";
-  if (rel(file).endsWith(SERVER_SUFFIX)) return "server-suffix";
-  if (/^\s*["']use client["']/m.test(raw)) return "use-client";
+  if (/^\s*import\s+["']server-only["']/m.test(raw)) {
+    return "server-only";
+  }
+  if (rel(file).endsWith(SERVER_SUFFIX)) {
+    return "server-suffix";
+  }
+  if (/^\s*["']use client["']/m.test(raw)) {
+    return "use-client";
+  }
   return "none";
 }
 
@@ -155,7 +167,9 @@ function analyze() {
     const hasNode = parseImports(src).some(
       (im) => !/^type\s/.test(im.clause) && NODE_BUILTINS.test(im.spec),
     );
-    if (hasNode) nodeImports.add(file);
+    if (hasNode) {
+      nodeImports.add(file);
+    }
   }
 
   /* 边界判据：模块**自己**声明了「只用我」时，从它继续向下走会把整个服务端图
@@ -188,22 +202,32 @@ function analyze() {
      * @param {string[]} chain
      */
     const walk = (file, chain) => {
-      if (seen.has(file)) return;
+      if (seen.has(file)) {
+        return;
+      }
       seen.add(file);
       if (isTarget(file, chain)) {
         hits.set(rel(file), [...chain, rel(file)]);
         return;
       }
       /* 顺序不能反：先判边界再往下走，否则目标永远不可达、判据静默变成「永远为 0」。 */
-      if (isServerBoundary(file) && chain.length > 0) return;
+      if (isServerBoundary(file) && chain.length > 0) {
+        return;
+      }
       const src = stripComments(fs.readFileSync(file, "utf8"));
       for (const im of parseImports(src)) {
-        if (/^type\s/.test(im.clause)) continue;
+        if (/^type\s/.test(im.clause)) {
+          continue;
+        }
         const next = resolveLocal(file, im.spec);
-        if (next) walk(next, [...chain, rel(file)]);
+        if (next) {
+          walk(next, [...chain, rel(file)]);
+        }
       }
     };
-    for (const e of entries) walk(e, []);
+    for (const e of entries) {
+      walk(e, []);
+    }
     return [...hits.entries()].map(([module, chain]) => ({ module, chain }));
   }
 
@@ -214,9 +238,7 @@ function analyze() {
    * 引到 `server-only` 物是正常的，只有**客户端可能引到的**那条路径才该判。
    * 判据因此是「契约语义」而不是目录名：被 `"use client"` 组件静态引到的
    * lib 模块，就是那条路径的起点。 */
-  const clientDeclared = new Set(
-    files.filter((f) => decls.get(f) === "use-client").map((f) => f),
-  );
+  const clientDeclared = new Set(files.filter((f) => decls.get(f) === "use-client").map((f) => f));
   const clientReachablePure = new Set();
   {
     const seenEntry = new Set();
@@ -225,21 +247,33 @@ function analyze() {
      * @param {boolean} isRoot 入口自身（是起点，不算「被引到」）
      */
     const walkEntry = (file, isRoot) => {
-      if (seenEntry.has(file)) return;
+      if (seenEntry.has(file)) {
+        return;
+      }
       seenEntry.add(file);
       // 入口自身是客户端组件，但它**是**那条路径的起点；从它的依赖开始才算「被引到」。
-      if (!isRoot) clientReachablePure.add(file);
+      if (!isRoot) {
+        clientReachablePure.add(file);
+      }
       // 服务端边界之后不属于客户端图；`"use client"` 不在此列（它是同一张图里的
       // 另一个节点，从它继续走才拿得到完整的客户端可达集，见 `isServerBoundary`）。
-      if (isServerBoundary(file) && !isRoot) return;
+      if (isServerBoundary(file) && !isRoot) {
+        return;
+      }
       const src = stripComments(fs.readFileSync(file, "utf8"));
       for (const im of parseImports(src)) {
-        if (/^type\s/.test(im.clause)) continue;
+        if (/^type\s/.test(im.clause)) {
+          continue;
+        }
         const next = resolveLocal(file, im.spec);
-        if (next) walkEntry(next, false);
+        if (next) {
+          walkEntry(next, false);
+        }
       }
     };
-    for (const e of clientDeclared) walkEntry(e, true);
+    for (const e of clientDeclared) {
+      walkEntry(e, true);
+    }
   }
   const libEntries = files.filter(
     (f) => rel(f).startsWith("src/lib/") && decls.get(f) === "none" && clientReachablePure.has(f),

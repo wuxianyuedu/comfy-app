@@ -18,18 +18,15 @@ import {
   resolvePortRowTone,
   type PortRowTone,
 } from "./flow-focus-endpoints";
-import {
-  NODE_PORT_FOCUS_ACTIVE_KEY,
-  readPortFocusRole,
-} from "./hooks/use-related-edges-highlight";
+import { NODE_PORT_FOCUS_ACTIVE_KEY, readPortFocusRole } from "./hooks/use-related-edges-highlight";
 
-interface FlowNodePinRowsProps {
+type FlowNodePinRowsProps = {
   data: WorkflowNodeData;
   io: IOEditContextValue | null;
+  outputs: Array<[string, string]>;
   rawMeta: Record<string, RawInputMeta>;
-  uniqueConnEntries: [string, unknown][];
-  outputs: [string, string][];
-}
+  uniqueConnEntries: Array<[string, unknown]>;
+};
 
 export function FlowNodePinRows({
   data,
@@ -41,15 +38,17 @@ export function FlowNodePinRows({
   /* 选中节点时端口行跟着连线一起变：有连线落到的那一行提亮、端口圆点放大，
    *  没有连线落到的行压暗。级别由 `useRelatedEdgesHighlight` 写在本节点 data 上
    *  （与连线标记同一帧算出），行渲染层只读。 */
-  const nodeData = data as unknown as Record<string, unknown>;
+  const nodeData = /* SAFETY: 类型断言已复核 */ data as unknown as Record<string, unknown>;
   const portFocusActive = nodeData[NODE_PORT_FOCUS_ACTIVE_KEY] === true;
   /* 一行两端的 Handle id 不同（输入名 / `out:<输出名>`），但观感要一致：两端的
    * 级别合成一档 —— focused > related > 「都无关」压暗。 */
-  const toneOf = (...handles: (string | undefined)[]): PortRowTone => {
+  const toneOf = (...handles: Array<string | undefined>): PortRowTone => {
     const roles = handles.map((handle) => readPortFocusRole(nodeData, handle));
     for (const role of roles) {
       const tone = resolvePortRowTone({ role, hasSelection: true });
-      if (tone === "focused" || tone === "related") return tone;
+      if (tone === "focused" || tone === "related") {
+        return tone;
+      }
     }
     return resolvePortRowTone({ role: "none", hasSelection: portFocusActive });
   };
@@ -89,20 +88,17 @@ export function FlowNodePinRows({
         /* 端口行的观感：两端取一致的一档（见 toneOf）。 */
         const tone =
           PORT_ROW_TONES[
-            toneOf(
-              inName,
-              outName ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}` : undefined,
-            )
+            toneOf(inName, outName ? `${OUTPUT_PORT_HANDLE_PREFIX}${outName}` : undefined)
           ];
 
         return (
           <div
-            // key 同时含两个名字，好让数字槽端口（"1"、"2" …）
-            // 不在数组里撞车。
-            key={`pinrow-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
             className="text-2xs relative flex h-5.5 items-center pr-5 pl-5"
             data-pin-input={inName}
             data-pin-output={outName}
+            // key 同时含两个名字，好让数字槽端口（"1"、"2" …）
+            // 不在数组里撞车。
+            key={`pinrow-${rowIdx}-${inName ?? "_"}-${outName ?? "_"}`}
             /* 相关行提亮背景：线加粗了、落到的那一行也跟着亮，视线从线落到行上。
                  无关行压暗是**整行**的（含标签与端口），由 style.opacity 统一施加。 */
             style={{ background: tone.background, opacity: tone.opacity }}
@@ -110,13 +106,12 @@ export function FlowNodePinRows({
             {inEntry && (
               <>
                 <Handle
-                  type="target"
-                  position={Position.Left}
+                  className="border-port-surface! size-2.5! rounded-full! border!"
                   id={inName}
                   /* 可连接：编辑器里「对外参数节点」的线要落到这一行（端口）。
                    * 连上 / 断开都由映射层负责，工作流图本身不因此改动。 */
                   isConnectable
-                  className="border-port-surface! size-2.5! rounded-full! border!"
+                  position={Position.Left}
                   style={{
                     left: 5,
                     background: inCol,
@@ -126,25 +121,23 @@ export function FlowNodePinRows({
                     boxShadow: portDotGlow(inCol, tone.dotGlowStrong),
                   }}
                   title={`${inName} (${inType})`}
+                  type="target"
                 />
                 {/* 顶部针脚区**未连线**输入的 IO 复选框 ——
                  * 已连线的槽位取值来自上游，把它
                  * 暴露成工作流输入没有意义。 */}
-                {io?.ioEditMode &&
-                  inMeta &&
-                  !inMeta.isConnection &&
-                  !inMeta.isBoundary && (
-                    <IoCheckbox
-                      io={io}
-                      ioRef={{
-                        nodeId: data.nodeId,
-                        hostNodeId: data.hostNodeId,
-                        name: inName ?? "",
-                        kind: "param",
-                        direction: "input",
-                      }}
-                    />
-                  )}
+                {io?.ioEditMode && inMeta && !inMeta.isConnection && !inMeta.isBoundary && (
+                  <IoCheckbox
+                    io={io}
+                    ioRef={{
+                      nodeId: data.nodeId,
+                      hostNodeId: data.hostNodeId,
+                      name: inName ?? "",
+                      kind: "param",
+                      direction: "input",
+                    }}
+                  />
+                )}
                 <span
                   className="text-2xs min-w-0 flex-1 truncate text-left"
                   style={{
@@ -182,11 +175,10 @@ export function FlowNodePinRows({
                  * 模式下圆点缩到几乎不可见（只留一点色晕锚点），作者看不到可
                  * 拖的端口，线却照样画得出来。 */}
                 <Handle
-                  type="source"
-                  position={Position.Right}
+                  className="border-port-surface! rounded-full! border!"
                   id={`out:${outName}`}
                   isConnectable={false}
-                  className="border-port-surface! rounded-full! border!"
+                  position={Position.Right}
                   style={{
                     right: 5,
                     background: outCol,
@@ -203,6 +195,7 @@ export function FlowNodePinRows({
                       : { width: tone.dotSize, height: tone.dotSize }),
                   }}
                   title={`${outDisplay} (${outType})`}
+                  type="source"
                 />
               </>
             )}

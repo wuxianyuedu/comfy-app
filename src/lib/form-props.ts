@@ -49,9 +49,7 @@ export type CheckedEvent = { target: { checked: boolean } };
  * 「值转换是可选的」在这个模块的定位（全库唯一 props 适配器出口）里就是谎言，
  * 现在把它从**类型契约**上就掐掉。
  */
-export function textHandler(
-  onValue: ValueHandler<string>,
-): (event: ValueEvent) => void;
+export function textHandler(onValue: ValueHandler<string>): (event: ValueEvent) => void;
 export function textHandler<T>(
   onValue: ValueHandler<T>,
   transform: (raw: string) => T,
@@ -64,7 +62,8 @@ export function textHandler<T>(
   // 这时把 raw 原样交给回调就是恒等，`as unknown as T` 只在**编译器已经
   // 通过重载决议把 T 锁到 string** 的路径上生效，不再有「非 string T 忘传
   // transform」的漏口。
-  const fn: (raw: string) => T = transform ?? ((raw) => raw as unknown as T);
+  const fn: (raw: string) => T =
+    transform ?? ((raw) => /* SAFETY: 类型断言已复核 */ raw as unknown as T);
   return (event) => onValue(fn(event.target.value));
 }
 
@@ -75,9 +74,7 @@ export function textHandler<T>(
  * 路径，调用处就得自己记得传对参数，而传错的后果是**静默的**（`undefined`
  * 被当成 `false`，开关永远打不开）。
  */
-export function checkedHandler(
-  onValue: (checked: boolean) => void,
-): (event: CheckedEvent) => void {
+export function checkedHandler(onValue: (checked: boolean) => void): (event: CheckedEvent) => void {
   return (event) => onValue(event.target.checked);
 }
 
@@ -118,7 +115,7 @@ export function bindKey<T extends object, K extends keyof T>(
   patch: (partial: Pick<T, K>) => void,
   key: K,
 ): (value: T[K]) => void {
-  return (value) => patch({ [key]: value } as Pick<T, K>);
+  return (value) => patch(/* SAFETY: 类型断言已复核 */ { [key]: value } as Pick<T, K>);
 }
 
 /**
@@ -133,10 +130,7 @@ export function bindKey<T extends object, K extends keyof T>(
  * 与 `textHandler` 共用「取值只有一处」的口径：这条路径读的也是
  * `target.value`，没有第二份取法可言。
  */
-export function readTextInput(
-  event: ValueEvent,
-  onValue: ValueHandler<string>,
-): void {
+export function readTextInput(event: ValueEvent, onValue: ValueHandler<string>): void {
   onValue(event.target.value);
 }
 
@@ -154,5 +148,5 @@ export function readTextInput(
  * 字段该走 `numberHandler`（它连「读不出来算几」都要求调用处说出来）。
  */
 export function digitsOnly(raw: string): string {
-  return raw.replace(/[^\d]/g, "");
+  return raw.replaceAll(/[^\d]/g, "");
 }

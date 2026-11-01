@@ -38,7 +38,7 @@ const noResolve = () => null;
 
 /** 造一个「只有这些命令答得上」的世界（键是 `命令 + 参数` 的拼接）。 */
 function fakeRun(ok: Record<string, string>) {
-  return (cmd: string, args: string[]) => {
+  return (cmd: string, args: Array<string>) => {
     const key = [cmd, ...args].join(" ");
     const out = ok[key];
     return out === undefined ? { ok: false, out: "" } : { ok: true, out };
@@ -50,10 +50,8 @@ function fakeRun(ok: Record<string, string>) {
  * 判据不能把期望值写成某一边的字面量，否则这条用例会随「跑判据的宿主」变红变绿
  * （§13.5.3.5.1 的第三类：把「这台宿主长什么样」写成恒真性质）。
  */
-const CANDIDATES: readonly string[] =
-  process.platform === "win32"
-    ? ["python", "py", "python3"]
-    : ["python3", "python"];
+const CANDIDATES: ReadonlyArray<string> =
+  process.platform === "win32" ? ["python", "py", "python3"] : ["python3", "python"];
 
 describe("python-probe：逐个候选答「起不起得来」", () => {
   it("候选**全部**列出，可用的那几行带上版本号", () => {
@@ -74,9 +72,7 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
       ).toBe(true);
     }
     // 可用的那一行打的是**带版本号**的读数（人要拿它在构建之间比对）。
-    expect(lines.some((l) => l.startsWith("ok") && l.includes("3.12.2"))).toBe(
-      true,
-    );
+    expect(lines.some((l) => l.startsWith("ok") && l.includes("3.12.2"))).toBe(true);
     expect(lines.join("\n")).toContain("门禁链要的解释器在这台机器上");
   });
 
@@ -114,16 +110,11 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
     // 取证那份开头就在这句话上（`pythonForensics` 的唯一出处）。
     expect(text).toContain("python 探测现场");
     // 下一动作要能直接复制着跑。
-    expect(text).toContain(
-      "node scripts/ci-toolchain-selfcheck.mjs --python-only",
-    );
+    expect(text).toContain("node scripts/ci-toolchain-selfcheck.mjs --python-only");
   });
 
   it("它不许自己再写一份候选表 —— 候选与探测都取自 `ci-toolchain-python.mjs`", () => {
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "python-probe.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "python-probe.mjs"), "utf8");
     expect(src).toContain('from "./ci-toolchain-python.mjs"');
     expect(src).toContain("findPython");
     /* 反向：它自己**不许**起子进程（那等于绕过 `findPython`，在同一台机器上问出
@@ -132,10 +123,7 @@ describe("python-probe：逐个候选答「起不起得来」", () => {
   });
 
   it("探「哪些候选」是可注入的 —— `findPython` 的候选表因此没有第二份", () => {
-    const src = readFileSync(
-      path.join(ROOT, "scripts", "ci-toolchain-python.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts", "ci-toolchain-python.mjs"), "utf8");
     // 两个入参（探谁、每个带什么参数）是 `probeLines` 复用同一份实现的依据。
     expect(src).toMatch(/candidates = PY_CANDIDATES/);
     expect(src).toMatch(/probeArgs = PY_PROBE_ARGS/);

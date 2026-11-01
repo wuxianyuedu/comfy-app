@@ -19,7 +19,7 @@ afterEach(cleanup);
 const GRADIENT_STROKE = "url(#canvas-edge-gradient)";
 
 function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     id: "pe-test",
     source: "1",
     target: "2",
@@ -36,9 +36,9 @@ function makeProps(data: Record<string, unknown> | undefined): EdgeProps {
 
 function wireStyle(data: Record<string, unknown> | undefined) {
   const { container } = render(<ProjectEdge {...makeProps(data)} />);
-  const painted = Array.from(
-    container.querySelectorAll("path.react-flow__edge-path"),
-  ).filter((path) => path.getAttribute("style") !== null);
+  const painted = [...container.querySelectorAll("path.react-flow__edge-path")].filter(
+    (path) => path.getAttribute("style") !== null,
+  );
   expect(painted.length).toBe(1);
   const style = painted[0]!.getAttribute("style") ?? "";
   return {

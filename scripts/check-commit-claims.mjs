@@ -130,7 +130,7 @@ const STANDARDS_DIR = "docs/standards";
  * 语序 A 里 `§` 与关键词之间的窗口；语序 B 同理（保留 → `§`）。
  */
 const SECTION_CONNECTOR =
-  "(?:[\\s/、与和及]|§\\s*[0-9]+(?:\\.[0-9]+)*|两|三|四|各|一|处|节|章|条|插记|照旧|原文|该|这|那|的|新增|master)";
+  String.raw`(?:[\s/、与和及]|§\s*[0-9]+(?:\.[0-9]+)*|两|三|四|各|一|处|节|章|条|插记|照旧|原文|该|这|那|的|新增|master)`;
 
 /** 语序 A：`§<号>` …（连接物）… `保留` / `不出现`。 */
 const SECTION_KEEP_AFTER_RE = new RegExp(
@@ -198,15 +198,10 @@ function commitFiles(commit) {
   /* `-c core.quotePath=false`：路径要原样（同本文件 `sectionInTree()` 那条，机制见
    * `scripts/changed-scope.mjs` 的文件头「口径 ④」—— git 默认把非 ASCII 路径转义加引号，
    * 本仓有 38 份文件名带非 ASCII 的文件，全在 `docs/` 下）。 */
-  const out = git([
-    "-c",
-    "core.quotePath=false",
-    "show",
-    "--name-only",
-    "--format=",
-    commit,
-  ]);
-  if (out === null) return null;
+  const out = git(["-c", "core.quotePath=false", "show", "--name-only", "--format=", commit]);
+  if (out === null) {
+    return null;
+  }
   return new Set(
     out
       .split("\n")
@@ -251,20 +246,26 @@ function sectionInTree(commit, num) {
     commit,
     STANDARDS_DIR,
   ]);
-  if (listing === null) return { ok: false, files: [] };
+  if (listing === null) {
+    return { ok: false, files: [] };
+  }
   const docs = listing
     .split("\n")
     .map((l) => l.trim())
     .filter((f) => f.startsWith(`${STANDARDS_DIR}/`) && f.endsWith(".md"));
   /* **地板**：规范目录一份都读不出 = 上面那条解析退化了，不是「这一节不在」。
    * 判据不许静默降级（§11.23.3 的同族口径）—— 报 `ok: false` 让人看见。 */
-  if (docs.length === 0) return { ok: false, files: [] };
+  if (docs.length === 0) {
+    return { ok: false, files: [] };
+  }
   /* 标题形态：`#… 13.6.3 ` —— 号后面必须是空白，免得 `13.6.30` 命中 `13.6.3`。 */
-  const re = new RegExp(`^#+\\s+${num.replace(/\./g, "\\.")}\\s`, "m");
+  const re = new RegExp(`^#+\\s+${num.replaceAll(".", String.raw`\.`)}\\s`, "m");
   const hits = [];
   for (const f of docs) {
     const body = git(["show", `${commit}:${f}`]);
-    if (body !== null && re.test(body)) hits.push(f);
+    if (body !== null && re.test(body)) {
+      hits.push(f);
+    }
   }
   return { ok: true, files: hits };
 }
@@ -280,21 +281,19 @@ function sectionInTree(commit, num) {
  * @returns {boolean}
  */
 function pathExistsInTree(commit, target) {
-  const listing = git([
-    "-c",
-    "core.quotePath=false",
-    "ls-tree",
-    "-r",
-    "--name-only",
-    commit,
-  ]);
-  if (listing === null) return false;
+  const listing = git(["-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", commit]);
+  if (listing === null) {
+    return false;
+  }
   const prefix = target.replace(/\*+$/, "");
   for (const f of listing.split("\n")) {
     const file = f.trim();
-    if (!file) continue;
-    if (file === target || file === prefix || file.startsWith(prefix))
+    if (!file) {
+      continue;
+    }
+    if (file === target || file === prefix || file.startsWith(prefix)) {
       return true;
+    }
   }
   return false;
 }
@@ -310,7 +309,9 @@ function pathExistsInTree(commit, target) {
 function gateLineCount(target) {
   const argv = /\.(cjs|mjs|js)$/.test(target) ? ["node", target] : [target];
   const cmd = argv[0];
-  if (cmd === undefined) return null;
+  if (cmd === undefined) {
+    return null;
+  }
   try {
     const out = execFileSync(cmd, argv.slice(1), {
       cwd: ROOT,
@@ -384,11 +385,17 @@ function quotedMask(text) {
     let from = 0;
     for (;;) {
       const a = text.indexOf(open, from);
-      if (a < 0) break;
+      if (a === -1) {
+        break;
+      }
       const b = text.indexOf(close, a + open.length);
-      if (b < 0) break;
+      if (b === -1) {
+        break;
+      }
       const end = Math.min(b + close.length - 1, text.length - 1);
-      for (let i = a; i <= end; i++) mask[i] = true;
+      for (let i = a; i <= end; i++) {
+        mask[i] = true;
+      }
       from = b + close.length;
     }
   }
@@ -446,37 +453,57 @@ export function extractClaims(message, commit) {
    */
   const pushSection = (raw, head, absent) => {
     const nums = [...head.matchAll(SECTION_HEAD_RE)].map((n) => n[1]);
-    if (nums.length === 0) return;
+    if (nums.length === 0) {
+      return;
+    }
     for (const num of nums) {
-      if (num === undefined) continue;
+      if (num === undefined) {
+        continue;
+      }
       const key = `${raw}\u0000${num}\u0000${absent}`;
-      if (sectionSeen.has(key)) continue;
+      if (sectionSeen.has(key)) {
+        continue;
+      }
       sectionSeen.add(key);
       claims.push({ kind: "section", raw, target: num, expectAbsent: absent });
     }
   };
   for (const m of body.matchAll(SECTION_KEEP_AFTER_RE)) {
-    if (quoted(m)) continue;
+    if (quoted(m)) {
+      continue;
+    }
     /* `… 不出现` 是**反向**断言（「那节一次都不出现」），与「保留」不是同一件事。 */
     pushSection(m[0], m[0], SECTION_ABSENT_HINT.test(m[2] ?? ""));
   }
   for (const m of body.matchAll(SECTION_KEEP_BEFORE_RE)) {
-    if (quoted(m)) continue;
+    if (quoted(m)) {
+      continue;
+    }
     pushSection(m[0], m[0], false);
   }
   /* 路径声明要过「该提交的树里存在」这一关（理由见 `PATH_UNTOUCHED_RE` 那段）。 */
   const paths = body.matchAll(PATH_UNTOUCHED_RE);
   for (const m of paths) {
-    if (quoted(m)) continue;
+    if (quoted(m)) {
+      continue;
+    }
     const target = m[1];
-    if (target === undefined) continue;
-    if (!pathExistsInTree(commit, target)) continue;
+    if (target === undefined) {
+      continue;
+    }
+    if (!pathExistsInTree(commit, target)) {
+      continue;
+    }
     claims.push({ kind: "path", raw: m[0].trim(), target });
   }
   for (const m of body.matchAll(COUNT_ZERO_RE)) {
-    if (quoted(m)) continue;
+    if (quoted(m)) {
+      continue;
+    }
     const target = m[1];
-    if (target === undefined || m[2] === undefined) continue;
+    if (target === undefined || m[2] === undefined) {
+      continue;
+    }
     claims.push({ kind: "count", raw: m[0], target, count: Number(m[2]) });
   }
   return claims;
@@ -536,8 +563,7 @@ export function checkClaim(claim, { commit }) {
       return { verdict: "unverifiable", detail: "取不到该提交的文件名单" };
     }
     const hit = [...files].some(
-      (f) =>
-        f === claim.target || f.startsWith(claim.target.replace(/\*+$/, "")),
+      (f) => f === claim.target || f.startsWith(claim.target.replace(/\*+$/, "")),
     );
     return hit
       ? {
@@ -572,10 +598,14 @@ export function checkClaim(claim, { commit }) {
  */
 export function auditCommit(commit) {
   const message = git(["log", "-1", "--format=%B", commit]);
-  if (message === null) return null;
+  if (message === null) {
+    return null;
+  }
   const subject = git(["log", "-1", "--format=%s", commit]) ?? "";
   const full = git(["rev-parse", commit]);
-  if (full === null) return null;
+  if (full === null) {
+    return null;
+  }
   /** @type {AuditRow[]} */
   const rows = [];
   for (const claim of extractClaims(message, commit)) {
@@ -597,7 +627,9 @@ export function auditCommit(commit) {
  */
 export function resolveCommits(spec) {
   const out = git(["log", "--format=%H", spec]);
-  if (out === null) return null;
+  if (out === null) {
+    return null;
+  }
   return out
     .split("\n")
     .map((l) => l.trim())
@@ -613,7 +645,9 @@ export function resolveCommits(spec) {
  * @param {boolean} jsonOut
  */
 function printAudit(audit, jsonOut) {
-  if (jsonOut) return;
+  if (jsonOut) {
+    return;
+  }
   const short = audit.commit.slice(0, 8);
   if (audit.rows.length === 0) {
     process.stdout.write(`[commit-claims] ${short} 没有可机械核对的声明\n`);
@@ -621,8 +655,7 @@ function printAudit(audit, jsonOut) {
   }
   process.stdout.write(`[commit-claims] ${short} ${audit.subject}\n`);
   for (const r of audit.rows) {
-    const mark =
-      r.verdict === "holds" ? "✔" : r.verdict === "contradicted" ? "✘" : "?";
+    const mark = r.verdict === "holds" ? "✔" : r.verdict === "contradicted" ? "✘" : "?";
     process.stdout.write(`  ${mark} ${r.detail}\n`);
   }
 }
@@ -654,17 +687,13 @@ function main(argv) {
         })();
 
   if (commits === null) {
-    process.stderr.write(
-      `[commit-claims] 取不到要审的提交：「${commitArg}」\n`,
-    );
+    process.stderr.write(`[commit-claims] 取不到要审的提交：「${commitArg}」\n`);
     return 2;
   }
   /* 区间跑通了、里面一笔都没有 —— 那是「这批没带新的提交」，不是核对失败。
    * 报成 2 会让人以为判据坏了；报成「审过 N 笔且都一致」又是假绿。 */
   if (commits.length === 0) {
-    process.stdout.write(
-      `[commit-claims] 「${commitArg}」里没有提交 —— 无可审，**不是判过**\n`,
-    );
+    process.stdout.write(`[commit-claims] 「${commitArg}」里没有提交 —— 无可审，**不是判过**\n`);
     return 0;
   }
 
@@ -682,9 +711,7 @@ function main(argv) {
   const contradicted = audits.flatMap((a) =>
     a.rows.filter((r) => r.verdict === "contradicted").map((r) => ({ a, r })),
   );
-  const unverifiable = audits.flatMap((a) =>
-    a.rows.filter((r) => r.verdict === "unverifiable"),
-  );
+  const unverifiable = audits.flatMap((a) => a.rows.filter((r) => r.verdict === "unverifiable"));
 
   if (JSON_OUT) {
     /* **`--json` 的输出是自足的一份**：结论（`contradicted` / `ok`）也在里面，
@@ -710,19 +737,23 @@ function main(argv) {
    * 「这是盘点档」。盘点档（`--list` / `--report`）要的恰恰是**把命中列出来**，
    * 传 `LIST_ONLY` 进去会让 `printAudit` 立刻 return ⇒ 盘点档一个字都不打印
    * （正是 §11.23.1 第二种入口：声明在跑、输出是空的）。 */
-  for (const a of audits) printAudit(a, false);
-  if (LIST_ONLY) return 0;
+  for (const a of audits) {
+    printAudit(a, false);
+  }
+  if (LIST_ONLY) {
+    return 0;
+  }
 
   if (contradicted.length > 0) {
     process.stderr.write(
-      `[commit-claims] ${contradicted.length} 处声明与事实矛盾（规范 §11.23）：\n` +
+      `[commit-claims] ${contradicted.length} 处声明与事实矛盾（规范 §11.23）：\n${
         contradicted
           .map(
             ({ a, r }) =>
               `  · ${a.commit.slice(0, 8)}：${r.detail}\n     原句：${r.claim.raw.trim()}`,
           )
-          .join("\n") +
-        "\n",
+          .join("\n")
+        }\n`,
     );
     return 1;
   }
@@ -731,15 +762,10 @@ function main(argv) {
       `[commit-claims] ${unverifiable.length} 处声明无从复算（脚本不在 / 取不到事实）—— 不构成「说反话」的证据\n`,
     );
   }
-  process.stdout.write(
-    `[commit-claims] ${audits.length} 次提交的声明都与事实一致\n`,
-  );
+  process.stdout.write(`[commit-claims] ${audits.length} 次提交的声明都与事实一致\n`);
   return 0;
 }
 
-if (
-  process.argv[1] &&
-  import.meta.filename === path.resolve(process.argv[1])
-) {
+if (process.argv[1] && import.meta.filename === path.resolve(process.argv[1])) {
   process.exit(main(process.argv.slice(2)));
 }

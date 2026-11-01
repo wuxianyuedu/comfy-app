@@ -36,10 +36,7 @@ import {
   LIBRARY_CONTENT_NODE_IDS,
 } from "./hooks/use-library-wire-flow";
 import { applyWireEdit } from "~/lib/workflow/workflow-param-wiring";
-import {
-  deriveLibraryParamCards,
-  type ParamCardWire,
-} from "./workflow-library-param-cards";
+import { deriveLibraryParamCards, type ParamCardWire } from "./workflow-library-param-cards";
 
 const io: WorkflowIOMap = {
   "9::widget::positive_prompt": {
@@ -143,12 +140,9 @@ describe("边的两端与 handle 取值", () => {
   it("库里的线一律实线（未连过的不画线，见 param-cards 的用例）", () => {
     /* 用户口径：这里是编辑对外参数的界面，「未连过就不要连」—— 所以库里没有
      *  「默认线」这一档样式，两条边都按实线画。 */
-    for (const edge of [
-      buildInputEdge(inputWire, true),
-      buildOutputEdge(outputWire, true),
-    ]) {
+    for (const edge of [buildInputEdge(inputWire, true), buildOutputEdge(outputWire, true)]) {
       expect(
-        (edge.style as { strokeDasharray?: string }).strokeDasharray,
+        /* SAFETY: 类型断言已复核 */ (edge.style as { strokeDasharray?: string }).strokeDasharray,
       ).toBeUndefined();
       expect(edge.style).toMatchObject({ strokeWidth: 2.5, opacity: 1 });
     }
@@ -168,8 +162,8 @@ describe("边的两端与 handle 取值", () => {
 describe("类型闸门（libraryConnectionAllowed）", () => {
   const allowed = (connection: {
     source: string;
-    target: string;
     sourceHandle: string;
+    target: string;
     targetHandle: string;
   }) => libraryConnectionAllowed(connection, { io, entries });
 
@@ -264,8 +258,8 @@ describe("落点被拒的原因（libraryConnectionRefusal）", () => {
    * 报 —— 用户报「连不上也没有提示」，一半是这样「有提示但说错因」的提示。 */
   const why = (connection: {
     source: string;
-    target: string;
     sourceHandle: string;
+    target: string;
     targetHandle: string;
   }) => libraryConnectionRefusal(connection, { io, entries });
 
@@ -428,9 +422,7 @@ describe("首帧 fitView 只按三列内容缩放", () => {
       LIB_NODE_HOST,
       LIB_NODE_OUTPUTS,
     ]);
-    expect(options.nodes.map((node) => node.id)).not.toContain(
-      LIB_NODE_BACKDROP,
-    );
+    expect(options.nodes.map((node) => node.id)).not.toContain(LIB_NODE_BACKDROP);
     expect(options.padding).toBeGreaterThan(0);
   });
 

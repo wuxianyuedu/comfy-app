@@ -20,14 +20,12 @@ import path from "node:path";
 /* 临时目录必须与实现同源构造：实现用 path.join(NEXTJS_LOG_DIR, …)（Windows 拼
  * 反斜杠），若这里用 `/tmp` 这类 POSIX 字符串当 mock 目录，startsWith 前缀比对
  * 必因分隔符不一致而假失败。os.tmpdir() + realpath 归一化后两边同为真实绝对路径。 */
-const tmp = fs.realpathSync(
-  fs.mkdtempSync(path.join(os.tmpdir(), "capture-streams-")),
-);
+const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "capture-streams-")));
 
 vi.mock("~/lib/log/log-paths", async () => {
   const actual = await vi.importActual("~/lib/log/log-paths");
   return {
-    ...(actual as Record<string, unknown>),
+    .../* SAFETY: 类型断言已复核 */ (actual as Record<string, unknown>),
     NEXTJS_LOG_DIR: tmp,
     SERVICES_LOG_DIR: tmp,
   };
@@ -61,7 +59,7 @@ function readCapture(path: string): string {
 async function readCaptureWhenFilled(
   filePath: string,
   needle: string,
-  timeoutMs = 3_000,
+  timeoutMs = 3000,
 ): Promise<string> {
   /* 轮询用 `expect.poll`（规范 §11.14）：读的是同一份文件，条件成立即返回。
    * 超时这一档**刻意不抛** —— 老版本的语义是「原样返回，让调用点的断言读成红」，
@@ -113,10 +111,7 @@ describe("installStreamCapture", () => {
     process.stdout.write("首屏编译错误：Module not found\n");
     process.stderr.write("FATAL: An unexpected Turbopack error occurred\n");
 
-    const text = await readCaptureWhenFilled(
-      file,
-      "FATAL: An unexpected Turbopack error occurred",
-    );
+    const text = await readCaptureWhenFilled(file, "FATAL: An unexpected Turbopack error occurred");
     expect(text).toContain("首屏编译错误：Module not found");
     expect(text).toContain("FATAL: An unexpected Turbopack error occurred");
   });
@@ -132,13 +127,11 @@ describe("installStreamCapture", () => {
      * `app-runtime-<时刻>.log` —— 两者都不该由本模块产出（它只转录 nextjs
      * 面板那一份）。 */
     await freshInstall();
-    expect(
-      fs.readdirSync(tmp).filter((n) => n.startsWith("app-runtime")),
-    ).toEqual([]);
+    expect(fs.readdirSync(tmp).filter((n) => n.startsWith("app-runtime"))).toEqual([]);
   });
 
   it("原输出行为不变（转录是额外落一份，不接管）", async () => {
-    const writes: string[] = [];
+    const writes: Array<string> = [];
     process.stdout.write = (chunk: string | Uint8Array) => {
       writes.push(String(chunk));
       return true;
@@ -150,9 +143,9 @@ describe("installStreamCapture", () => {
     // 原实现仍被调用
     expect(writes.join("")).toContain("业务输出");
     // 同时落了盘（走缓冲，要等到落盘再读）
-    expect(
-      await readCaptureWhenFilled(mod.panelCaptureLogPath(), "业务输出"),
-    ).toContain("业务输出");
+    expect(await readCaptureWhenFilled(mod.panelCaptureLogPath(), "业务输出")).toContain(
+      "业务输出",
+    );
   });
 });
 
@@ -196,16 +189,14 @@ describe("转录文件的取最新与轮转（ISSUE #1365）", () => {
     }
     const base = Date.now();
     const older = writePanel(9876, base - 60_000, "上一次运行\n");
-    const newer = writePanel(12345, base, "本次运行\n");
+    const newer = writePanel(12_345, base, "本次运行\n");
     expect(await mod.latestPanelLogFile(tmp)).toBe(newer);
     expect(await mod.latestPanelLogFile(tmp)).not.toBe(older);
   });
 
   it("目录不存在时返回 null（不是抛错）", async () => {
     const mod = await freshInstall();
-    expect(
-      await mod.latestPanelLogFile(path.join(tmp, "no-such-dir")),
-    ).toBeNull();
+    expect(await mod.latestPanelLogFile(path.join(tmp, "no-such-dir"))).toBeNull();
   });
 
   it("轮转按 mtime 保留最近 5 份，跨 bootId 也算同族", async () => {

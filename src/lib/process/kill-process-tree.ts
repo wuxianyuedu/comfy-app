@@ -39,9 +39,7 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
 
 /** 回收目标的描述。pid <= 0 一律视为「没有可回收目标」，直接返回 ok。 */
-export interface KillProcessTreeOptions {
-  /** 目标进程 PID（通常是 leader）。 */
-  pid: number;
+export type KillProcessTreeOptions = {
   /** 子进程是否以 detached 方式拉起。仅作为「连 ps 都拿不到 PGID」时的
    *  兜底提示：为 true 且 pid 恰好是组长时仍可尝试 `kill(-pid)`。
    *  **不再是主判据** —— 组长归属由 OS 回答（见文件头）。 */
@@ -52,6 +50,8 @@ export interface KillProcessTreeOptions {
    *  （Windows `/IM <name>`、POSIX `pkill -x <name>`）。`image` 用于目标不是
    *  本进程的直接子进程、只拿得到名字的场景（如外部拉起的 Ollama serve）。 */
   mode?: KillProcessTreeMode;
+  /** 目标进程 PID（通常是 leader）。 */
+  pid: number;
   /** 派发回收命令后是否**等到它真正结束**（默认 false = 只派发）。
    *
    *  服务生命周期不需要等：回收是尽力而为，随后由各自的「探测确认」收口。
@@ -60,21 +60,19 @@ export interface KillProcessTreeOptions {
    *  **打印了命令、退出码 0、目标进程却还在**（命令行入口
    *  `scripts/reap-process.mjs` 正是这种形态）。 */
   wait?: boolean;
-}
+};
 
 /** 回收模式（见 `KillProcessTreeOptions.mode`）。 */
 export type KillProcessTreeMode = "tree" | "image";
 
-export interface KillProcessTreeResult {
+export type KillProcessTreeResult = {
   ok: boolean;
   /** 实际使用的命令 / 信号，便于写进运行日志与断言。 */
   via: string;
-}
+};
 
 /** 当前平台是否是 Windows（进程树机制的分叉点）。 */
-export function isWindowsPlatform(
-  platform: NodeJS.Platform = process.platform,
-): boolean {
+export function isWindowsPlatform(platform: NodeJS.Platform = process.platform): boolean {
   return platform === "win32";
 }
 
@@ -85,21 +83,15 @@ export function isWindowsPlatform(
  * 用 `ps -o pgid= -p <pid>`：`=` 去掉表头，输出只剩一个数字。
  * 这是 POSIX 必备命令，不像 `lsof` / `pstree` 属于发行版可选。
  */
-export function readPgid(
-  pid: number,
-  timeoutMs = 2000,
-): Promise<number | null> {
+export function readPgid(pid: number, timeoutMs = 2000): Promise<number | null> {
   return new Promise((resolve) => {
-    execFile(
-      "ps",
-      ["-o", "pgid=", "-p", String(pid)],
-      { timeout: timeoutMs },
-      (err, stdout) => {
-        if (err) return resolve(null);
-        const pgid = Number.parseInt(stdout.trim().split(/\s+/)[0] ?? "", 10);
-        resolve(Number.isInteger(pgid) && pgid > 0 ? pgid : null);
-      },
-    );
+    execFile("ps", ["-o", "pgid=", "-p", String(pid)], { timeout: timeoutMs }, (err, stdout) => {
+      if (err) {
+        return resolve(null);
+      }
+      const pgid = Number.parseInt(stdout.trim().split(/\s+/)[0] ?? "", 10);
+      resolve(Number.isInteger(pgid) && pgid > 0 ? pgid : null);
+    });
   });
 }
 
@@ -131,14 +123,14 @@ function readPgidSync(pid: number): number | null {
 type PosixSignal = "SIGTERM" | "SIGKILL";
 
 /** POSIX 一次回收的**决策**（不含发信号本身）。 */
-interface PosixKillPlan {
-  /** 要发的信号（Windows 侧不用它）。 */
-  sig: PosixSignal;
-  /** 首选目标：负数 = 进程组；null = 不冒组的风险，直接兜底。 */
-  primary: { target: number; via: string } | null;
+type PosixKillPlan = {
   /** 首选被拒、或本来就不走组时的兜底目标。 */
   fallback: { target: number; via: string };
-}
+  /** 首选目标：负数 = 进程组；null = 不冒组的风险，直接兜底。 */
+  primary: { target: number; via: string } | null;
+  /** 要发的信号（Windows 侧不用它）。 */
+  sig: PosixSignal;
+};
 
 /**
  * 「该向谁发信号」这张表**唯一的定义处**。
@@ -154,16 +146,15 @@ interface PosixKillPlan {
  * 也不冒「应用把自己整组杀掉」这种无法补救的风险。
  */
 function planPosixKill(input: {
-  pid: number;
-  pgid: number | null;
-  ownPgid: number | null;
   detached: boolean;
   force: boolean;
+  ownPgid: number | null;
+  pgid: number | null;
+  pid: number;
 }): PosixKillPlan {
   const { pid, pgid, ownPgid, detached, force } = input;
   const sig: PosixSignal = force ? "SIGKILL" : "SIGTERM";
-  const sharesCallerGroup =
-    pgid !== null && (ownPgid === null || ownPgid === pgid);
+  const sharesCallerGroup = pgid !== null && (ownPgid === null || ownPgid === pgid);
 
   const fallback: PosixKillPlan["fallback"] = sharesCallerGroup
     ? {
@@ -243,14 +234,14 @@ function executePosixPlan(plan: PosixKillPlan): {
  * 而**回调到本模块**才能让 Windows 与 POSIX 走同一份判据与日志（`via`）。
  * 壳主线程把句柄以原始整数转交过来（`CommandChild` 非 Send，不能跨线程移动）。
  */
-export interface KillHostedChildOptions {
+export type KillHostedChildOptions = {
   /** 供 shell 插件按 id 寻址的任意整数（壳侧通常传 `CommandChild::pid()`）。 */
   handle: number;
   /** 句柄的真实形态由宿主注入：不同 tauri 版本里 `CommandChild::kill` 的
    *  调用形态不同（`self` / `&mut self`），因此变换由壳侧提供、本模块只负责
    *  调用与记账。 */
   kill: () => void;
-}
+};
 
 /** 按**映像名**回收整棵树（目标不是本进程直接子进程、只拿得到名字时用）。
  *
@@ -260,10 +251,10 @@ export interface KillHostedChildOptions {
  *  与 `killProcessTree` 同属硬规则 3 的执行面：散在业务路由里各写一遍平台判据
  *  与命令，才是历史「单杀留孤儿」反复出现的原因。
  */
-export async function killProcessTreeByImage(
-  image: string,
-): Promise<KillProcessTreeResult> {
-  if (!image.trim()) return { ok: false, via: "无映像名（跳过）" };
+export async function killProcessTreeByImage(image: string): Promise<KillProcessTreeResult> {
+  if (!image.trim()) {
+    return { ok: false, via: "无映像名（跳过）" };
+  }
   if (isWindowsPlatform()) {
     return { ok: true, via: spawnTaskkill(windowsKillArgs(image, "image")) };
   }
@@ -297,13 +288,8 @@ export function windowsTaskkillPath(): string {
 }
 
 /** 构造 Windows 的回收命令参数（tree = `/PID <pid> /T /F`，image = `/IM <name> /T /F`）。 */
-export function windowsKillArgs(
-  target: string,
-  mode: KillProcessTreeMode,
-): string[] {
-  return mode === "image"
-    ? ["/IM", target, "/T", "/F"]
-    : ["/PID", target, "/T", "/F"];
+export function windowsKillArgs(target: string, mode: KillProcessTreeMode): Array<string> {
+  return mode === "image" ? ["/IM", target, "/T", "/F"] : ["/PID", target, "/T", "/F"];
 }
 
 /** 发起一次 taskkill（异步派发，不阻塞；调用方随后自行探测确认）。
@@ -311,10 +297,7 @@ export function windowsKillArgs(
  *  spawn 会**同步抛错**的情形（目标不是可执行映像，如注入了一个批处理；
  *  或命令名取不到）在这里一并收成 `onDone(false)`：本模块对外承诺「回收失败
  *  不抛错」，让调用方按同一条路径处理（记 via、走自己的探测兜底）。 */
-export function spawnTaskkill(
-  args: string[],
-  onDone?: (ok: boolean) => void,
-): string {
+export function spawnTaskkill(args: Array<string>, onDone?: (ok: boolean) => void): string {
   const exe = windowsTaskkillPath();
   const via = `${exe} ${args.join(" ")}`;
   try {
@@ -354,26 +337,21 @@ export async function killProcessTree(
  */
 export async function killProcessTreeWith(
   opts: KillProcessTreeOptions,
-  {
-    windows = isWindowsPlatform(),
-    image = "",
-  }: { windows?: boolean; image?: string },
+  { windows = isWindowsPlatform(), image = "" }: { image?: string; windows?: boolean },
 ): Promise<KillProcessTreeResult> {
-  const {
-    pid,
-    detached = false,
-    force = false,
-    mode = "tree",
-    wait = false,
-  } = opts;
-  if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
+  const { pid, detached = false, force = false, mode = "tree", wait = false } = opts;
+  if (!pid || pid <= 0) {
+    return { ok: false, via: "无有效 PID（跳过）" };
+  }
 
   if (windows) {
     // taskkill 是异步派发：默认不等它退出，调用方随后用「探测确认」收尾
     // （与同步入口同一语义）。命令原文写进 via，便于运行日志给出可复现线索。
     const target = mode === "image" ? image : String(pid);
     const args = windowsKillArgs(target, mode);
-    if (!wait) return { ok: true, via: spawnTaskkill(args) };
+    if (!wait) {
+      return { ok: true, via: spawnTaskkill(args) };
+    }
 
     // 等它结束（`wait: true`）：给「派发完立刻 exit」的调用方用 —— 否则那条命令
     // 可能随父进程一起消失，让人以为已经回收。退出码同时写进 via（taskkill 对
@@ -393,11 +371,11 @@ export async function killProcessTreeWith(
  * 同步版本：给「已经拿到子进程句柄、只差发一个信号」的收尾路径用
  * （如 spawn 之后立刻失败要清理）。
  */
-export function killProcessTreeSync(
-  opts: KillProcessTreeOptions,
-): KillProcessTreeResult {
+export function killProcessTreeSync(opts: KillProcessTreeOptions): KillProcessTreeResult {
   const { pid, detached = false, force = false, mode = "tree" } = opts;
-  if (!pid || pid <= 0) return { ok: false, via: "无有效 PID（跳过）" };
+  if (!pid || pid <= 0) {
+    return { ok: false, via: "无有效 PID（跳过）" };
+  }
   /* `mode: "image"` 在同步入口上**没法兑现**：这张签名里只有一个 pid，没有映像名。
    * 照字面走下去会得到 `/IM 4321 /T /F`（去杀一个名字恰好叫「4321」的映像），
    * 在 POSIX 侧则静默退化成单杀 leader —— 两边都不是调用方要的那件事。

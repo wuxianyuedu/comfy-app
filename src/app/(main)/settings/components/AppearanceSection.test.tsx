@@ -22,11 +22,11 @@ import { AppearanceSection } from "./AppearanceSection";
 afterEach(cleanup);
 
 /** 本分区只消费 `theme` / `setTheme` 两个字段，其余字段与本节无关。 */
-function controller(
-  theme: "light" | "dark",
-  setTheme = vi.fn(),
-): ReadySettingsPageController {
-  return { theme, setTheme } as unknown as ReadySettingsPageController;
+function controller(theme: "light" | "dark", setTheme = vi.fn()): ReadySettingsPageController {
+  return /* SAFETY: 类型断言已复核 */ {
+    theme,
+    setTheme,
+  } as unknown as ReadySettingsPageController;
 }
 
 /** 主题外观那一组（本分区还有「圆角」「标题字阶」两组，同为 radiogroup）。 */
@@ -34,14 +34,18 @@ function themeGroup(): HTMLElement {
   const group = screen
     .getAllByRole("radiogroup")
     .find((g) => g.getAttribute("aria-label") === "主题外观");
-  if (!group) throw new Error("找不到「主题外观」radiogroup");
+  if (!group) {
+    throw new Error("找不到「主题外观」radiogroup");
+  }
   return group;
 }
 
 /** 组内的第 n 个 radio —— `getAllByRole` 的元素带 `undefined`，逐个取要显式收窄。 */
 function radioAt(n: number): HTMLElement {
   const radio = within(themeGroup()).getAllByRole("radio")[n];
-  if (!radio) throw new Error(`「主题外观」组里没有第 ${n} 个 radio`);
+  if (!radio) {
+    throw new Error(`「主题外观」组里没有第 ${n} 个 radio`);
+  }
   return radio;
 }
 
@@ -71,9 +75,7 @@ describe("AppearanceSection 的单选组键盘契约", () => {
 
   it("三组都带可访问名（否则读屏只念出一串 radio）", () => {
     render(<AppearanceSection c={controller("dark")} />);
-    const labels = screen
-      .getAllByRole("radiogroup")
-      .map((g) => g.getAttribute("aria-label"));
+    const labels = screen.getAllByRole("radiogroup").map((g) => g.getAttribute("aria-label"));
     expect(labels).toEqual(["主题外观", "圆角", "标题字阶"]);
   });
 });
@@ -116,9 +118,7 @@ describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
         expect(cls).toContain("data-checked:hover:text-primary");
         expect(cls).toContain("data-checked:hover:border-primary");
         /* 未选中档的悬停也仍在，且**不含**选中档的底色 —— 两档不能互相串。 */
-        expect(tokensOf(radio).has("data-checked:hover:bg-primary-soft")).toBe(
-          true,
-        );
+        expect(tokensOf(radio).has("data-checked:hover:bg-primary-soft")).toBe(true);
       }
     }
   });

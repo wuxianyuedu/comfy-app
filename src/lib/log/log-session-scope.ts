@@ -49,7 +49,9 @@ export function resolveSessionStart(
   anchorMtimeMs: number | null,
   explicitStartMs: number | null = null,
 ): number | null {
-  if (explicitStartMs !== null) return explicitStartMs;
+  if (explicitStartMs !== null) {
+    return explicitStartMs;
+  }
   return anchorMtimeMs;
 }
 

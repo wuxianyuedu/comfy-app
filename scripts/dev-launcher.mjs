@@ -32,18 +32,8 @@ import { writeAppServiceExit } from "./app-service-exit.mjs";
 import { applyPendingRestoreAtBoot } from "./db-backup-core.mjs";
 import { spawnSchemaSync } from "./db-schema-state.mjs";
 import { checkEnvFile, envInitHint } from "./env-preflight.mjs";
-import {
-  createLogSink,
-  currentDirOf,
-  runtimeStamp,
-  runStamp,
-} from "./launcher-core/log.mjs";
-import {
-  pruneRuns,
-  recordPid,
-  recoverStaleCurrent,
-  startRun,
-} from "./launcher-core/run.mjs";
+import { createLogSink, currentDirOf, runtimeStamp, runStamp } from "./launcher-core/log.mjs";
+import { pruneRuns, recordPid, recoverStaleCurrent, startRun } from "./launcher-core/run.mjs";
 import {
   classifyProbe,
   usesExplicitPort,
@@ -59,10 +49,7 @@ import {
 // launcher-core/downstream-exit.mjs（入口文件长度的约束，§12.6 R5 的姊妹档）。
 // 主流程在这里 import 调用；**不再从本文件再导出**——调用方直接 import 那个
 // 模块，少一层转发就少一处要同步的面（没有任何仓内调用方走本文件这道门）。
-import {
-  describeDownstreamExit,
-  runtimeExitRecord,
-} from "./launcher-core/downstream-exit.mjs";
+import { describeDownstreamExit, runtimeExitRecord } from "./launcher-core/downstream-exit.mjs";
 import { isWindows } from "./launcher-core/shell.mjs";
 import {
   concludeDownstreamExit,
@@ -76,7 +63,13 @@ import {
   runToolchainGate as preflightRunToolchainGate,
   shellStaleWarning,
 } from "./launcher-core/preflight.mjs";
-import { defaultShellExe, resetShellPidFile } from "./launcher-core/shell-ops.mjs";
+import {
+  defaultShellExe,
+  ensureSplashResource as shellOpsEnsureSplash,
+  killShellFromPidFile as shellOpsKillShell,
+  resetShellPidFile,
+  spawnShell as shellOpsSpawnShell,
+} from "./launcher-core/shell-ops.mjs";
 import { startShellStage } from "./launcher-core/shell-stage.mjs";
 import { runStartupGates } from "./launcher-core/startup-gates.mjs";
 import { bootDevServerStage } from "./launcher-core/dev-boot.mjs";
@@ -87,29 +80,20 @@ import {
 } from "./launcher-core/misc-ops.mjs";
 import {
   reapAll as portReapReapAll,
+  reapProcessTree,
   reapStaleSession as portReapReapStale,
   reconcilePort as portReapReconcilePort,
+  scanPorts,
 } from "./launcher-core/port-reap.mjs";
-import {
-  ensureSplashResource as shellOpsEnsureSplash,
-  killShellFromPidFile as shellOpsKillShell,
-  spawnShell as shellOpsSpawnShell,
-} from "./launcher-core/shell-ops.mjs";
 // `COMFY_EXECUTOR` 判据的纯 Node 侧唯一定义（与 executor-host.mjs 共用，ADR §14 D5）
 import { resolveExecutorMode } from "./launcher-core/executor-mode.mjs";
-import {
-  pruneTimestampedLogs,
-  syncNextCache,
-} from "./launcher-core/worktree.mjs";
+import { pruneTimestampedLogs, syncNextCache } from "./launcher-core/worktree.mjs";
 import {
   createRuntimeRouteWatch,
   describeRuntimeHealCause,
   readGitHead,
 } from "./launcher-core/runtime-heal.mjs";
-import {
-  touchHeartbeat,
-  writeSession,
-} from "./dev-launcher-session.mjs";
+import { touchHeartbeat, writeSession } from "./dev-launcher-session.mjs";
 
 const ROOT = resolveRepoRoot();
 
@@ -117,11 +101,7 @@ const ROOT = resolveRepoRoot();
 // 既让测试与其它调用方有一个稳定的门面（编排器就是这套能力的入口），也避免
 // 调用方各自去 import 内部模块造成路径散布。
 export { spawnInGroup, whichCommand } from "./launcher-core/shell.mjs";
-export {
-  orchestratePnpm,
-  probePnpm,
-  packageManagerVersion,
-} from "./launcher-core/corepack.mjs";
+export { orchestratePnpm, probePnpm, packageManagerVersion } from "./launcher-core/corepack.mjs";
 
 /** 工具链门禁留下的 pnpm 修复提示（供启动页横幅 / 测试取值）。 */
 /** @returns {string | null} */
@@ -145,15 +125,11 @@ export {
   fileHasMarker,
   writeLaunchStatus,
 } from "./launcher-core/orchestrator.mjs";
-export {
-  listeningPidsOnPort,
-  pidBelongsToRoot,
-  processCwd,
-} from "./launcher-core/procs.mjs";
+export { listeningPidsOnPort, pidBelongsToRoot, processCwd } from "./launcher-core/procs.mjs";
 
 /** 心跳间隔：必须明显小于 dev-launcher-session 的孤儿判定阈值（30s），
  *  否则正常运行的 launcher 会被下一次启动误判成已死。 */
-const HEARTBEAT_INTERVAL_MS = 5_000;
+const HEARTBEAT_INTERVAL_MS = 5000;
 
 // ── 日志：log/current/<分区>/（路径固定，退出时整目录归档到 runs/）──
 // 顺序很重要：先 recoverStaleCurrent 收走上一次崩掉的残留，再 startRun 写新
@@ -192,11 +168,7 @@ const logSink = createLogSink(ROOT, {
 });
 // 供壳侧 get_launch_log 的 sentinel 机制定位本次运行日志（与 .ps1 版同文件）。
 try {
-  fs.writeFileSync(
-    path.join(launcherLogDir, "dev-launcher-current.txt"),
-    currentLog,
-    "utf8",
-  );
+  fs.writeFileSync(path.join(launcherLogDir, "dev-launcher-current.txt"), currentLog, "utf8");
 } catch {
   /* 见 log 模块注释 */
 }
@@ -229,8 +201,6 @@ const spawned = [];
  *  无法把提示交出去；而这条提示恰恰是「服务起不来」现场里最该被看到的一句。
  *  落进 launch-status 的 stale_shell 通道（启动页已有的横幅），用户不必先去翻日志。 */
 let lastPnpmTip = /** @type {string | null} */ (null);
-
-
 
 // ── 预检 ────────────────────────────────────────────────────────────────────
 // 实现搬到 `launcher-core/preflight.mjs`（ISSUE #1811 拆 R5 超限文件），这里只做
@@ -274,8 +244,6 @@ const preflightCtx = {
 // 桌面壳层与收尾路径共用的**唯一整树回收出口**，所以仍从本文件导出（薄包装在
 // 下方 `shellOpsCtx` 里也引用它，同一份实现、不抄第二遍）。
 
-import { reapProcessTree, scanPorts } from "./launcher-core/port-reap.mjs";
-
 export { reapProcessTree, scanPorts };
 
 /** 回收本次会话拉起的整棵进程树（实现见 `launcher-core/port-reap.mjs`）。 */
@@ -289,10 +257,7 @@ export function reapStaleSession(root = ROOT) {
   return portReapReapStale(root);
 }
 
-export {
-  processCommandLine,
-  isAppDevServerCmdline,
-} from "./launcher-core/port-reap.mjs";
+export { processCommandLine, isAppDevServerCmdline } from "./launcher-core/port-reap.mjs";
 
 /** 端口归属与残留回收（实现见 `launcher-core/port-reap.mjs`）。
  * @param {number} port @param {string} [root]
@@ -368,10 +333,6 @@ export async function shutdown(code) {
   return miscOpsShutdown(miscOpsCtx, code);
 }
 
-
-
-
-
 // ── 依赖与 lockfile 对齐（启动前的补装）─────────────────────────────────────
 // 实现搬到 `launcher-core/downstream.mjs`（ISSUE #1811 拆 R5 超限文件），这里只做
 // **同名薄包装**。`syncDependencies` 被 `tests/dev-launcher-dependency-sync.test.ts`
@@ -399,14 +360,7 @@ export function syncDependencies(root, deps = {}) {
  * @param {string} outFile @param {string} errFile
  * @param {Record<string, string>} [extraEnv] */
 export function spawnDevServer(port, host, outFile, errFile, extraEnv = {}) {
-  return downstreamSpawnDevServer(
-    downstreamCtx,
-    port,
-    host,
-    outFile,
-    errFile,
-    extraEnv,
-  );
+  return downstreamSpawnDevServer(downstreamCtx, port, host, outFile, errFile, extraEnv);
 }
 
 /** 拉起 executor host（实现见 `launcher-core/downstream.mjs`）。 */
@@ -422,9 +376,6 @@ export function parseArgs(argv) {
   return miscOpsParseArgs(argv);
 }
 
-
-
-
 /**
  * 主流程：回收孤儿 → 预检 → 端口 → 缓存 → 起服务 →（可选）起壳 → 等就绪 → 常驻。
  * @param {string[]} [argv] @returns {Promise<number>} 退出码（0 正常，非 0 已打印可行动作）
@@ -437,8 +388,7 @@ export async function run(argv = process.argv.slice(2)) {
    * git 不可用 / 非检出 → null（文案退化为「无法归因」，自愈照常）。 */
   const headAtBoot = readGitHead(ROOT);
   const explicitPort = Number.parseInt(args.port ?? "", 10);
-  const portOrNull =
-    Number.isInteger(explicitPort) && explicitPort > 0 ? explicitPort : null;
+  const portOrNull = Number.isInteger(explicitPort) && explicitPort > 0 ? explicitPort : null;
   /** 进度快照 + 提醒字段（一次运行内共享）。 */
   /**
    * 写一次进度快照。
@@ -489,9 +439,7 @@ export async function run(argv = process.argv.slice(2)) {
   // 3) 桌面壳（prebuilt 模式最先拉起：用户双击后第一件事是看见窗口）
   // 这一段在 `launcher-core/shell-stage.mjs`（ISSUE #1811 拆 R5 超限文件）；
   // 主文件只把壳层动作与日志出口注进去，并接「找不到壳」这个提前返回。
-  let shell = /** @type {import("node:child_process").ChildProcess | null} */ (
-    null
-  );
+  let shell = /** @type {import("node:child_process").ChildProcess | null} */ (null);
   let staleShell = null;
   if (args.mode === "prebuilt") {
     const staged = startShellStage(
@@ -578,10 +526,7 @@ export async function run(argv = process.argv.slice(2)) {
   const nextOut = booted.nextOut;
   const nextErr = booted.nextErr;
   staleShell = booted.staleShell;
-  const heartbeat = setInterval(
-    () => touchHeartbeat(ROOT),
-    HEARTBEAT_INTERVAL_MS,
-  );
+  const heartbeat = setInterval(() => touchHeartbeat(ROOT), HEARTBEAT_INTERVAL_MS);
   clearIntervalGuard(heartbeat);
   // 9) 等就绪（dev server 先退出则立刻定性；检测到路由表 404 则自愈一次）
   // 循环本体在 `launcher-core/ready-wait.mjs`（ISSUE #1811 拆 R5 超限文件，
@@ -605,10 +550,11 @@ export async function run(argv = process.argv.slice(2)) {
   /** 把「dev 退出」接到常驻收尾的解析器上（每次换 dev 都要重新接一次）。
    * @param {import("node:child_process").ChildProcess} child */
   function watchDevChild(child) {
-    if (devWatch) devWatch.child.off("exit", devWatch.listener);
+    if (devWatch) {
+      devWatch.child.off("exit", devWatch.listener);
+    }
     /** @type {(code: number | null) => void} */
-    const listener = (code) =>
-      resolveLaunchEnd?.({ who: "dev", code: code ?? 0 });
+    const listener = (code) => resolveLaunchEnd?.({ who: "dev", code: code ?? 0 });
     devWatch = { child, listener };
     child.once("exit", listener);
   }
@@ -649,14 +595,14 @@ export async function run(argv = process.argv.slice(2)) {
     syncNextCache(ROOT, { FORCE_CLEAN: "1" });
     /** @type {Record<string, string>} */
     const extraEnv = { COMFYAPP_RESTART_REASON: reason };
-    if (detail) extraEnv.COMFYAPP_RESTART_DETAIL = detail;
+    if (detail) {
+      extraEnv.COMFYAPP_RESTART_DETAIL = detail;
+    }
     dev = spawnDevServer(port, args.host, nextOut, nextErr, extraEnv);
     watchDevChild(dev);
     writeSession(ROOT, {
       launcher_pid: process.pid,
-      child_pids: spawned
-        .map((c) => c.pid)
-        .filter((pid) => typeof pid === "number"),
+      child_pids: spawned.map((c) => c.pid).filter((pid) => typeof pid === "number"),
       app_port: port,
       mode: args.mode,
       started_at: new Date(startedAt).toISOString(),
@@ -726,8 +672,7 @@ export async function run(argv = process.argv.slice(2)) {
     log,
     armedInitially: true,
     probeHealth: () => classifyProbe({ port, host: args.host }),
-    probeRoot: async () =>
-      (await classifyProbe({ port, host: args.host, path: "/" })) === "ready",
+    probeRoot: async () => (await classifyProbe({ port, host: args.host, path: "/" })) === "ready",
     onHeal: async () => {
       const detail = describeRuntimeHealCause(ROOT, headAtBoot);
       log(`陈旧路由表自愈归因：${detail ?? "（无法归因）"}`, detail ? "INFO" : "WARN");
@@ -767,10 +712,7 @@ export async function run(argv = process.argv.slice(2)) {
   });
   if (record) {
     writeAppServiceExit(ROOT, record);
-    log(
-      "dev server 已退出：结束原因已记进 run/app-service-exit.json（界面恢复后会读它）",
-      "WARN",
-    );
+    log("dev server 已退出：结束原因已记进 run/app-service-exit.json（界面恢复后会读它）", "WARN");
     log(
       describeDownstreamExit("dev-server", {
         devCode: dev.exitCode,
@@ -791,18 +733,21 @@ export async function run(argv = process.argv.slice(2)) {
   return ended.code;
 }
 
-
 /** 心跳定时器的引用遮蔽（避免被 tree-shaking 式的误读当成未使用）。 */
 /** @param {NodeJS.Timeout} timer */
 function clearIntervalGuard(timer) {
-  if (process.env.COMFYAPP_LAUNCHER_NO_HEARTBEAT === "1") clearInterval(timer);
+  if (process.env.COMFYAPP_LAUNCHER_NO_HEARTBEAT === "1") {
+    clearInterval(timer);
+  }
 }
 
 // 信号处理：任何中断都要先回收整棵进程树再退出（硬规则 3）。
 let shuttingDown = false;
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
   process.on(signal, () => {
-    if (shuttingDown) return;
+    if (shuttingDown) {
+      return;
+    }
     shuttingDown = true;
     log(`收到 ${signal}：回收子进程树后退出`, "WARN");
     void shutdown(signal === "SIGINT" ? 130 : 143);
@@ -810,10 +755,7 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
 }
 
 // 直跑（被 import 时不执行）：供测试复用上面这些纯函数。
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   if (process.env.COMFYAPP_LAUNCHER_DRY_RUN === "1") {
     process.stdout.write("dry-run：未启动任何进程\n");
   } else {

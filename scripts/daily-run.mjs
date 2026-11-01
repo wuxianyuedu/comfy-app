@@ -44,7 +44,9 @@ import {
  */
 export function parseLedgerFlag(argv, flag) {
   const index = argv.indexOf(flag);
-  if (index === -1) return { mode: "run", reason: null };
+  if (index === -1) {
+    return { mode: "run", reason: null };
+  }
   const mode = flag === "--skip" ? "skip" : "dirty";
   const raw = argv[index + 1];
   return { mode, reason: isUsableSkipReason(raw) ? String(raw).trim() : null };
@@ -74,10 +76,8 @@ export function writeLedgerNote({ root, kind, mode, reason, platform }) {
     process.stdout.write(`[daily-run] ✓ 已记一条${mode === "dirty" ? "「不吃这一档」" : "豁免"}\n`);
     process.stdout.write(`[daily-run] ${note}\n`);
     return 0;
-  } catch (err) {
-    process.stderr.write(
-      `[daily-run] ✗ ${err instanceof Error ? err.message : String(err)}\n`,
-    );
+  } catch (error) {
+    process.stderr.write(`[daily-run] ✗ ${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
   }
 }

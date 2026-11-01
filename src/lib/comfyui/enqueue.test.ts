@@ -49,7 +49,7 @@ describe("configureEnqueue 接缝", () => {
   it("接受 Partial<EnqueueDeps>、两次调用是合并语义", () => {
     const fakeRepo = {
       findStatusAndPromptById: async () => null,
-      cancel: async () => "written" as const,
+      cancel: async () => /* SAFETY: 类型断言已复核 */ "written" as const,
     };
     expect(() => mod.configureEnqueue({ taskRepo: fakeRepo })).not.toThrow();
     // 再来一次空 Partial：合法、只是没覆盖任何东西。
@@ -74,7 +74,7 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
   let seq = 0;
 
   function setup(
-    row: { status: string; promptId: string | null } | null,
+    row: { promptId: string | null; status: string } | null,
     options: {
       cancelOutcome?: TaskWriteOutcome;
       /** true = 本进程握着该任务的 comfy-cli 子进程（正在执行）。 */
@@ -93,8 +93,11 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
     runnerState.configureRunner({ taskRepo: repo, log: runnerLog });
     vi.mocked(client.interrupt).mockReset().mockResolvedValue(undefined);
     const kill = vi.fn();
-    if (inFlight) cli.cliProcs.set(taskId, { kill } as never);
-    else cli.cliProcs.delete(taskId);
+    if (inFlight) {
+      cli.cliProcs.set(taskId, /* SAFETY: 类型断言已复核 */ { kill } as never);
+    } else {
+      cli.cliProcs.delete(taskId);
+    }
     return { taskId, repo, kill };
   }
 
@@ -127,10 +130,7 @@ describe("cancelTask 的条件性中断（ADR §14 D2）", () => {
   });
 
   it("中断请求失败：取消仍然落库，并告诉用户这一轮还会跑完", async () => {
-    const { taskId, repo } = setup(
-      { status: "RUNNING", promptId: "p-d" },
-      { inFlight: true },
-    );
+    const { taskId, repo } = setup({ status: "RUNNING", promptId: "p-d" }, { inFlight: true });
     vi.mocked(client.interrupt).mockRejectedValue(new Error("ECONNREFUSED"));
 
     await mod.cancelTask(taskId);

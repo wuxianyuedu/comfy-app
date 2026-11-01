@@ -47,12 +47,14 @@ const UNVERIFIED: EmbedVerdict = {
 };
 
 /** `X-Frame-Options` 的取值语义：只有 DENY / SAMEORIGIN 是拒绝。 */
-export function parseXFrameOptions(
-  value: string | null,
-): "deny" | "sameorigin" | "allow" {
+export function parseXFrameOptions(value: string | null): "deny" | "sameorigin" | "allow" {
   const token = (value ?? "").split(",")[0]?.trim().toLowerCase() ?? "";
-  if (token.startsWith("deny")) return "deny";
-  if (token.startsWith("sameorigin")) return "sameorigin";
+  if (token.startsWith("deny")) {
+    return "deny";
+  }
+  if (token.startsWith("sameorigin")) {
+    return "sameorigin";
+  }
   return "allow";
 }
 
@@ -63,16 +65,21 @@ export function parseXFrameOptions(
  * 不做通配符子域/端口展开 —— 探测这一层宁可判「没放行」（回退独立窗口），
  * 也不要猜出一个错的允许。
  */
-export function frameAncestorsAllows(
-  csp: string | null,
-  hostOrigin: string,
-): boolean | null {
-  if (!csp) return null;
+export function frameAncestorsAllows(csp: string | null, hostOrigin: string): boolean | null {
+  if (!csp) {
+    return null;
+  }
   const directive = /frame-ancestors([^;]*)/i.exec(csp);
-  if (!directive) return null;
+  if (!directive) {
+    return null;
+  }
   const sources = directive[1]!.trim().split(/\s+/).filter(Boolean);
-  if (sources.length === 0) return null;
-  if (sources.includes("*")) return true;
+  if (sources.length === 0) {
+    return null;
+  }
+  if (sources.includes("*")) {
+    return true;
+  }
   const normalized = hostOrigin.replace(/\/$/, "").toLowerCase();
   return sources.some((s) => s.replace(/\/$/, "").toLowerCase() === normalized);
 }
@@ -82,11 +89,7 @@ export function isSameOrigin(a: string, b: string): boolean {
   try {
     const ua = new URL(a);
     const ub = new URL(b);
-    return (
-      ua.protocol === ub.protocol &&
-      ua.hostname === ub.hostname &&
-      ua.port === ub.port
-    );
+    return ua.protocol === ub.protocol && ua.hostname === ub.hostname && ua.port === ub.port;
   } catch {
     return false;
   }
@@ -116,14 +119,14 @@ export function isHttpOrigin(origin: string): boolean {
  *      自己拦下」写进 reason。
  */
 export function judgeEmbeddable(input: {
-  base: string;
-  hostOrigin: string;
-  xFrameOptions: string | null;
-  contentSecurityPolicy: string | null;
-  /** 探测响应的 HTTP 状态码：403 即 ComfyUI 的 origin-only 中间件拦下了跨源。 */
-  status?: number;
   /** 探测响应的 `Access-Control-Allow-Origin`：有值即说明 CORS 已放行。 */
   allowOrigin?: string | null;
+  base: string;
+  contentSecurityPolicy: string | null;
+  hostOrigin: string;
+  /** 探测响应的 HTTP 状态码：403 即 ComfyUI 的 origin-only 中间件拦下了跨源。 */
+  status?: number;
+  xFrameOptions: string | null;
 }): EmbedVerdict {
   /* 非 http(s) 的地址（壳里宿主页是 `about:blank`，见 lib.rs 的 main 窗初始
    * URL）既不是同源、也探不出跨源放行与否。**必须先于 isSameOrigin 处理**：
@@ -155,10 +158,7 @@ export function judgeEmbeddable(input: {
       reason: "ComfyUI 已开启 CORS（响应带 Access-Control-Allow-Origin）",
     };
   }
-  const ancestors = frameAncestorsAllows(
-    input.contentSecurityPolicy,
-    input.hostOrigin,
-  );
+  const ancestors = frameAncestorsAllows(input.contentSecurityPolicy, input.hostOrigin);
   if (ancestors === true) {
     return {
       embeddable: true,
@@ -245,7 +245,7 @@ export function shouldUseBrowserTab(isDesktop: boolean): boolean {
  */
 
 /** 探测用的超时：ComfyUI 在环回地址上应答是毫秒级，1.5s 足够。 */
-export const EMBED_PROBE_TIMEOUT_MS = 1_500;
+export const EMBED_PROBE_TIMEOUT_MS = 1500;
 
 /**
  * 探一次 `base` 是否可以由 `hostOrigin` 内嵌。
@@ -276,10 +276,10 @@ export async function probeComfyEmbeddable(
       headers: { Origin: hostOrigin },
       signal: AbortSignal.timeout(EMBED_PROBE_TIMEOUT_MS),
     });
-  } catch (e) {
+  } catch (error) {
     return {
       embeddable: false,
-      reason: errorText(e, "无法探测 ComfyUI 的内嵌策略"),
+      reason: errorText(error, "无法探测 ComfyUI 的内嵌策略"),
     };
   }
   return judgeEmbeddable({

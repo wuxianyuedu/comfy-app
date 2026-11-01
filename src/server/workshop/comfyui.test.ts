@@ -33,12 +33,13 @@ import {
   resolveComfyBase,
 } from "./comfyui";
 
-const tmpDirs: string[] = [];
+const tmpDirs: Array<string> = [];
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  for (const dir of tmpDirs.splice(0))
+  for (const dir of tmpDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** fetch 替身：按路径分发。probe（/system_stats）与业务端点分开计数。 */
@@ -46,12 +47,14 @@ function stubFetch(handler: (url: URL) => Response | Promise<Response>) {
   const counts = { probe: 0, prompt: 0 };
   const mock = vi.fn(async (input: RequestInfo | URL) => {
     const url =
-      input instanceof URL
-        ? input
-        : new URL(typeof input === "string" ? input : input.url);
+      input instanceof URL ? input : new URL(typeof input === "string" ? input : input.url);
     const isProbe = url.pathname === "/system_stats";
-    if (isProbe) counts.probe += 1;
-    if (url.pathname === "/api/prompt") counts.prompt += 1;
+    if (isProbe) {
+      counts.probe += 1;
+    }
+    if (url.pathname === "/api/prompt") {
+      counts.prompt += 1;
+    }
     return await handler(url);
   });
   vi.stubGlobal("fetch", mock);
@@ -73,11 +76,7 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
 
     /* 用户照本模块话术手改文件（绕过 save）。mtime 可能同毫秒 ⇒ 指纹里带 size：
      * 这里连内容带体积一起改，任一变化都足以让指纹失配。 */
-    writeFileSync(
-      file,
-      JSON.stringify({ checkpoint: "hand_edited.safetensors" }, null, 2),
-      "utf-8",
-    );
+    writeFileSync(file, JSON.stringify({ checkpoint: "hand_edited.safetensors" }, null, 2), "utf8");
     expect(memo.load().checkpoint).toBe("hand_edited.safetensors");
   });
 
@@ -85,12 +84,12 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
     const dir = mkdtempSync(path.join(tmpdir(), "comfy-memo-"));
     tmpDirs.push(dir);
     const file = path.join(dir, "workshop-comfy-settings.json");
-    writeFileSync(file, '{"checkpoint":"a.safetensors"}', "utf-8");
+    writeFileSync(file, '{"checkpoint":"a.safetensors"}', "utf8");
     let reads = 0;
     const memo = createSettingsFileMemo(file, {
       read: (f) => {
         reads += 1;
-        return readFileSyncSync(f, "utf-8");
+        return readFileSyncSync(f, "utf8");
       },
       fingerprint: (f) => {
         try {
@@ -100,7 +99,7 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
           return null;
         }
       },
-      write: async (f, content) => writeFileSync(f, content, "utf-8"),
+      write: async (f, content) => writeFileSync(f, content, "utf8"),
     });
     expect(memo.load().checkpoint).toBe("a.safetensors");
     rmSync(file);
@@ -118,10 +117,10 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
     const memo = createSettingsFileMemo(file, {
       read: (f) => {
         reads += 1;
-        return readFileSyncSync(f, "utf-8");
+        return readFileSyncSync(f, "utf8");
       },
       fingerprint: () => null,
-      write: async (f, content) => writeFileSync(f, content, "utf-8"),
+      write: async (f, content) => writeFileSync(f, content, "utf8"),
     });
     await memo.save({ checkpoint: "a.safetensors" });
     memo.load();
@@ -142,7 +141,9 @@ describe("base 缓存的失效语义（网络失败复位 / HTTP 失败不复位
     let promptShouldFailWithNetwork = false;
     const { counts } = stubFetch((url) => {
       if (url.pathname === "/api/prompt") {
-        if (promptShouldFailWithNetwork) throw connectionRefused();
+        if (promptShouldFailWithNetwork) {
+          throw connectionRefused();
+        }
         return Response.json({ prompt_id: "p1" });
       }
       return Response.json({}); // /system_stats：连上即存活（#685 口径）
@@ -163,10 +164,7 @@ describe("base 缓存的失效语义（网络失败复位 / HTTP 失败不复位
     let promptStatus = 200;
     const { counts } = stubFetch((url) => {
       if (url.pathname === "/api/prompt") {
-        return Response.json(
-          { error: "CUDA out of memory" },
-          { status: promptStatus },
-        );
+        return Response.json({ error: "CUDA out of memory" }, { status: promptStatus });
       }
       return Response.json({});
     });

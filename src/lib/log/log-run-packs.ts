@@ -38,8 +38,7 @@ import type { LogSessionMeta } from "./log-sessions";
 const PACK_SEP = "/";
 
 /** 包目录名里的日期与时分秒（形态与 `run.mjs` 的 `runDirName` 同源）。 */
-const PACK_NAME_RE =
-  /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})-([0-9a-f]+)$/;
+const PACK_NAME_RE = /^(\d{4})-(\d{2})-(\d{2})_(\d{2})(\d{2})(\d{2})-([0-9a-f]+)$/;
 
 /**
  * 运行包目录名 → 毫秒时刻（本地时区）；形态不符返回 null。
@@ -50,7 +49,9 @@ const PACK_NAME_RE =
  */
 export function packNameToMs(name: string): number | null {
   const m = PACK_NAME_RE.exec(name);
-  if (!m) return null;
+  if (!m) {
+    return null;
+  }
   const value = new Date(
     Number(m[1]),
     Number(m[2]) - 1,
@@ -68,50 +69,54 @@ export function packScopedId(packName: string, fileName: string): string {
 }
 
 /** 解析归档份 id（不是这个形态时返回 null —— `current/` 的份就是裸文件名）。 */
-export function parsePackScopedId(
-  id: string,
-): { packName: string; fileName: string } | null {
+export function parsePackScopedId(id: string): { fileName: string; packName: string } | null {
   const at = id.indexOf(PACK_SEP);
-  if (at <= 0) return null;
+  if (at <= 0) {
+    return null;
+  }
   const packName = id.slice(0, at);
   const fileName = id.slice(at + 1);
   /* 包名必须是**真实存在过的**包名形态：`dev-launcher.log` 这类裸文件名里也
    * 可能有 `/`？不会（文件名不含路径分隔符），但客户端缓存过一个畸形 id 时
    * 这里必须能判出来并回落，而不是拿它去拼路径。 */
-  if (!PACK_NAME_RE.test(packName) || fileName.length === 0) return null;
-  if (fileName.includes(PACK_SEP)) return null;
+  if (!PACK_NAME_RE.test(packName) || fileName.length === 0) {
+    return null;
+  }
+  if (fileName.includes(PACK_SEP)) {
+    return null;
+  }
   return { packName, fileName };
 }
 
 /** `runs/` 里的一个运行包（读目录与 `run.json` 归 `log-run-packs.server.ts`）。 */
-export interface RunPack {
+export type RunPack = {
+  /** `run.json` 的 `crashed` —— 崩溃现场恰恰最值得看，界面上要标出来。 */
+  crashed: boolean;
+  /** 这一包里该来源的份（新→旧）；空数组 = 那次运行没启动过这个服务。 */
+  files: Array<PackLogFile>;
   /** 目录名（`<日期>_<时分秒>-<runId>`），字典序即时间序。 */
   name: string;
   /** `run.json` 的 `startedAt`（毫秒）；读不到时退回名字里的时刻，再读不到为 null。 */
   startedAt: number | null;
-  /** `run.json` 的 `crashed` —— 崩溃现场恰恰最值得看，界面上要标出来。 */
-  crashed: boolean;
-  /** 这一包里该来源的份（新→旧）；空数组 = 那次运行没启动过这个服务。 */
-  files: PackLogFile[];
-}
+};
 
 /** 包内的一份启动日志。 */
-export interface PackLogFile {
+export type PackLogFile = {
   /** 包内相对文件名（如 `comfyui-runtime-20261005-093612.log`）。 */
   name: string;
   /** 该份的启动时刻（毫秒）；迁移前的旧固定名读不出时刻，为 null。 */
   startedAt: number | null;
   /** 下拉文案的时刻段（调用方把它视作 `LogSessionMeta.title`）。 */
   title: string;
-}
+};
 
 /** 下拉的一项：跨包之后每条都带「它属于哪一次运行」。 */
-export interface RunScopedOption extends LogSessionMeta {
-  /** `current` = 正在写的本次运行；`runs` = 已归档的历史包。 */
-  scope: "current" | "runs";
+export type RunScopedOption = {
   /** 该次运行异常退出（`run.json` 的 `crashed`）；`current` 恒为 false。 */
   crashed: boolean;
-}
+  /** `current` = 正在写的本次运行；`runs` = 已归档的历史包。 */
+  scope: "current" | "runs";
+} & LogSessionMeta;
 
 /**
  * 把「本次运行的份」与「各历史包里的份」拼成一条时间线（新→旧）。
@@ -136,14 +141,14 @@ export interface RunScopedOption extends LogSessionMeta {
  * @param total 该来源跨包一共有几份（不受 `max` 影响；界面据此说明被截断）
  */
 export function buildRunScopedOptions(
-  current: PackLogFile[],
-  packs: RunPack[],
+  current: Array<PackLogFile>,
+  packs: Array<RunPack>,
   max: number,
   total: number,
-): { sessions: RunScopedOption[]; total: number } {
-  const out: RunScopedOption[] = [];
+): { sessions: Array<RunScopedOption>; total: number } {
+  const out: Array<RunScopedOption> = [];
   /* 本次运行：倒序（最新那次启动在最上面，与整条列表同向）。 */
-  for (const file of current.slice().reverse()) {
+  for (const file of [...current].reverse()) {
     out.push({
       id: file.name,
       title: formatScopedLabel(file.title, "本次运行", null),
@@ -186,16 +191,14 @@ export function formatScopedLabel(
   exitPart: string,
   runId: string | null,
 ): string {
-  const parts = [timePart, exitPart, runId ?? ""].filter(
-    (part) => part.length > 0,
-  );
+  const parts = [timePart, exitPart, runId ?? ""].filter((part) => part.length > 0);
   return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
 /** 归档目录名尾段的 runId（`…-a1b2c3` → `a1b2c3`）。 */
 function stripRunId(packName: string): string | null {
   const dash = packName.lastIndexOf("-");
-  return dash >= 0 ? packName.slice(dash + 1) : null;
+  return dash !== -1 ? packName.slice(dash + 1) : null;
 }
 
 /** 退出形态文案（`crashed` 只回答「崩没崩」，两个文案都在这里写一次）。 */
@@ -211,7 +214,9 @@ function exitText(crashed: boolean): string {
  * 会让 `runtime-log-file` 依赖「包」这个概念，而它本该对包一无所知。
  */
 export function formatFileTime(startedAt: number | null): string {
-  if (startedAt === null) return "更早的日志";
+  if (startedAt === null) {
+    return "更早的日志";
+  }
   return `${formatShortDate(startedAt)} ${formatClock(startedAt)}`;
 }
 
@@ -220,6 +225,6 @@ export function formatFileTime(startedAt: number | null): string {
  * 不用 `startedAt`：`.zip` 包或缺 `run.json` 时它是 null，而名字永远在。
  * 比较器走 `~/lib/ordered-set` 的唯一出口（§16.2.4.57 P51）。
  */
-export function sortPackNames(names: string[]): string[] {
-  return names.slice().sort(compareText);
+export function sortPackNames(names: Array<string>): Array<string> {
+  return [...names].sort(compareText);
 }

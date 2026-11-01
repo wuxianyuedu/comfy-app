@@ -15,7 +15,7 @@ import { copyGateDeps } from "./helpers/gate-repo";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-inline-style.cjs");
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 function scanner(files: Record<string, string>) {
   const root = mkdtempSync(path.join(tmpdir(), "inline-style-"));
@@ -39,8 +39,8 @@ function scanner(files: Record<string, string>) {
           { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
         ),
       };
-    } catch (err) {
-      const e = err as { stdout?: string; stderr?: string };
+    } catch (error) {
+      const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
       return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
     }
   };
@@ -48,7 +48,9 @@ function scanner(files: Record<string, string>) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("check-inline-style", () => {

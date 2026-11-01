@@ -43,16 +43,16 @@ function modeLabel(code: string): string {
   return ALL_WORKFLOW_TYPES.find((type) => type.code === code)?.label ?? code;
 }
 
-export interface WorkflowIoPreviewPanelProps {
-  workflowIO: Record<string, WorkflowIOParam>;
+export type WorkflowIoPreviewPanelProps = {
+  defaultMode: string | null;
   detailIOMap: WorkflowIOMap | null;
   /** 工作流支持的模式（模板 modes 列，与库详情「类型」同源）。 */
-  modes: string[];
-  defaultMode: string | null;
-  /** 模式集合 / 默认模式变更（编辑器落库并同步本地 detail）。 */
-  onModesChange: (modes: string[], defaultMode: string) => void;
+  modes: Array<string>;
   onClose: () => void;
-}
+  /** 模式集合 / 默认模式变更（编辑器落库并同步本地 detail）。 */
+  onModesChange: (modes: Array<string>, defaultMode: string) => void;
+  workflowIO: Record<string, WorkflowIOParam>;
+};
 
 export function WorkflowIoPreviewPanel({
   workflowIO,
@@ -70,8 +70,12 @@ export function WorkflowIoPreviewPanel({
    * defaultMode → 第一个模式。没有模式 = 表单禁用（禁止配置参数）。 */
   const [activeMode, setActiveMode] = useState<string | null>(null);
   const effectiveMode = useMemo(() => {
-    if (activeMode && modes.includes(activeMode)) return activeMode;
-    if (defaultMode && modes.includes(defaultMode)) return defaultMode;
+    if (activeMode && modes.includes(activeMode)) {
+      return activeMode;
+    }
+    if (defaultMode && modes.includes(defaultMode)) {
+      return defaultMode;
+    }
     return modes[0] ?? null;
   }, [activeMode, modes, defaultMode]);
 
@@ -79,9 +83,13 @@ export function WorkflowIoPreviewPanel({
    * 详见文件头)。 */
   const previewIO = useMemo<WorkflowIOMap>(() => {
     const out: WorkflowIOMap = {};
-    if (!detailIOMap) return out;
+    if (!detailIOMap) {
+      return out;
+    }
     for (const [key, local] of Object.entries(workflowIO)) {
-      if (!local) continue;
+      if (!local) {
+        continue;
+      }
       const e = detailIOMap[key];
       if (e) {
         /* 本地条目整体覆盖在富化结果上（label 的兜底顺序见 io-exposure）。 */
@@ -96,10 +104,7 @@ export function WorkflowIoPreviewPanel({
     return out;
   }, [workflowIO, detailIOMap]);
 
-  const editableEntries = useMemo(
-    () => splitWorkflowIO(previewIO).inputs,
-    [previewIO],
-  );
+  const editableEntries = useMemo(() => splitWorkflowIO(previewIO).inputs, [previewIO]);
 
   /* 当前模式是否落过覆盖（驱动「恢复默认」按钮）。 */
   const hasModeOverrides = useMemo(
@@ -119,8 +124,12 @@ export function WorkflowIoPreviewPanel({
    *  仅 widget 输入可调必填（与服务端富化迁移语义一致）。 */
   const setRequiredForMode = useCallback(
     (key: string, required: boolean) => {
-      if (!effectiveMode) return;
-      if (workflowIO[key]?.kind !== "widget") return;
+      if (!effectiveMode) {
+        return;
+      }
+      if (workflowIO[key]?.kind !== "widget") {
+        return;
+      }
       ioApi.getState().setIOModeOverride(key, effectiveMode, { required });
     },
     [effectiveMode, workflowIO, ioApi],
@@ -130,19 +139,16 @@ export function WorkflowIoPreviewPanel({
    * （modes[mode].seedMode），使不同模式可有独立的 seed 行为。 */
   const setSeedModeForMode = useCallback(
     (key: string, seedBehavior: string) => {
-      if (!effectiveMode) return;
-      ioApi
-        .getState()
-        .setIOModeOverride(key, effectiveMode, { seedMode: seedBehavior });
+      if (!effectiveMode) {
+        return;
+      }
+      ioApi.getState().setIOModeOverride(key, effectiveMode, { seedMode: seedBehavior });
     },
     [effectiveMode, ioApi],
   );
   const reorderIO = useCallback(
-    (
-      fromKey: string,
-      targetKey: string | null,
-      position: WorkflowIODropPosition,
-    ) => ioApi.getState().reorderIO(fromKey, targetKey, position),
+    (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) =>
+      ioApi.getState().reorderIO(fromKey, targetKey, position),
     [ioApi],
   );
 
@@ -150,13 +156,15 @@ export function WorkflowIoPreviewPanel({
    *  通用页签一并移除。只写真正变化的键，避免一进页签就给所有参数落满覆盖。 */
   const handleFormChange = useCallback(
     (next: Record<string, unknown>) => {
-      if (!effectiveMode) return;
+      if (!effectiveMode) {
+        return;
+      }
       const current = defaultInputValues(previewIO, effectiveMode);
       for (const [key, value] of Object.entries(next)) {
-        if (current[key] === value) continue;
-        ioApi
-          .getState()
-          .setIOModeOverride(key, effectiveMode, { defaultValue: value });
+        if (current[key] === value) {
+          continue;
+        }
+        ioApi.getState().setIOModeOverride(key, effectiveMode, { defaultValue: value });
       }
     },
     [effectiveMode, ioApi, previewIO],
@@ -164,7 +172,9 @@ export function WorkflowIoPreviewPanel({
 
   const toggleModeVisibility = useCallback(
     (key: string, visible: boolean) => {
-      if (!effectiveMode) return;
+      if (!effectiveMode) {
+        return;
+      }
       ioApi.getState().setIOModeOverride(key, effectiveMode, { visible });
     },
     [effectiveMode, ioApi],
@@ -172,7 +182,9 @@ export function WorkflowIoPreviewPanel({
 
   /* 恢复默认 = 清掉当前模式的全部覆盖（回到通用默认 + 默认可见）。 */
   const resetActiveModeOverrides = useCallback(() => {
-    if (!effectiveMode) return;
+    if (!effectiveMode) {
+      return;
+    }
     for (const key of Object.keys(workflowIO)) {
       ioApi.getState().setIOModeOverride(key, effectiveMode, null);
     }
@@ -190,7 +202,9 @@ export function WorkflowIoPreviewPanel({
   const seedModes: Record<string, string> = {};
   for (const entry of editableEntries) {
     const resolved = resolveEntrySeedMode(entry, effectiveMode);
-    if (resolved) seedModes[entry.ioKey] = resolved;
+    if (resolved) {
+      seedModes[entry.ioKey] = resolved;
+    }
   }
 
   return (
@@ -200,33 +214,29 @@ export function WorkflowIoPreviewPanel({
         <div className="border-border-strong flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="size-2 shrink-0 rounded-full bg-sky-400" />
-            <span className="text-ink-bright truncate text-xs font-semibold">
-              IO 预览
-            </span>
+            <span className="text-ink-bright truncate text-xs font-semibold">IO 预览</span>
             <span className="bg-subtle text-ink-soft text-3xs rounded-full px-1.5 py-px font-mono">
               {Object.keys(workflowIO).length}
             </span>
           </div>
           {hasModeOverrides && (
-            <Hint
-              label={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}
-            >
+            <Hint label={`把模式「${modeLabel(effectiveMode ?? "")}」的全部参数恢复到通用默认值`}>
               <Button
-                variant="outline"
-                size="xs"
-                onClick={resetActiveModeOverrides}
                 className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs h-auto rounded-md px-1.5 py-0.5"
+                onClick={resetActiveModeOverrides}
+                size="xs"
+                variant="outline"
               >
                 恢复默认
               </Button>
             </Hint>
           )}
-          <Hint label="关闭预览" accessibleName>
+          <Hint accessibleName label="关闭预览">
             <Button
-              variant="outline"
-              size="icon-xs"
-              onClick={onClose}
               className="border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright text-2xs rounded-md"
+              onClick={onClose}
+              size="icon-xs"
+              variant="outline"
             >
               ✕
             </Button>
@@ -236,30 +246,27 @@ export function WorkflowIoPreviewPanel({
         {/* ── 模式页签：来自工作流 modes（与库「类型」同源）＋右侧模式管理 ── */}
         <div className="border-border-strong flex shrink-0 flex-wrap items-center gap-1 border-b px-3 py-1.5">
           {modes.map((code) => (
-            <span key={code} className="flex shrink-0 items-center gap-0.5">
+            <span className="flex shrink-0 items-center gap-0.5" key={code}>
               <Hint label={code}>
                 <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => setActiveMode(code)}
                   className={`${tabClass(effectiveMode === code)} h-auto`}
+                  onClick={() => setActiveMode(code)}
+                  size="xs"
+                  variant="ghost"
                 >
                   {modeLabel(code)}
                 </Button>
               </Hint>
               {modes.length > 1 && (
-                <Hint
-                  label={`从工作流模式中移除「${modeLabel(code)}」`}
-                  accessibleName
-                >
+                <Hint accessibleName label={`从工作流模式中移除「${modeLabel(code)}」`}>
                   <Button
-                    variant="ghost"
-                    size="icon-xs"
+                    className="text-ink-muted hover:text-danger-strong text-3xs rounded"
                     onClick={() => {
                       const next = modes.filter((m) => m !== code);
                       onModesChange(next, next[0] ?? "");
                     }}
-                    className="text-ink-muted hover:text-danger-strong text-3xs rounded"
+                    size="icon-xs"
+                    variant="ghost"
                   >
                     ×
                   </Button>
@@ -269,9 +276,9 @@ export function WorkflowIoPreviewPanel({
           ))}
           <span className="ml-auto shrink-0">
             <MultiModeSelect
-              modes={modes}
               defaultMode={defaultMode ?? modes[0] ?? ""}
               hideExtraBadge
+              modes={modes}
               onChange={onModesChange}
             />
           </span>
@@ -286,40 +293,37 @@ export function WorkflowIoPreviewPanel({
             </div>
           ) : modes.length === 0 ? (
             <div className="border-warning/30 bg-warning/5 text-warning-strong/80 text-2xs rounded-lg border border-dashed px-3 py-4 text-center leading-relaxed">
-              该工作流还没有配置模式 —— 请先在上方「模式」里勾选 （文生图 /
-              图生图 / …），之后才能在这里配置参数。
+              该工作流还没有配置模式 —— 请先在上方「模式」里勾选 （文生图 / 图生图 /
+              …），之后才能在这里配置参数。
             </div>
           ) : (
-            <div
-              className={effectiveMode ? "" : "pointer-events-none opacity-50"}
-            >
+            <div className={effectiveMode ? "" : "pointer-events-none opacity-50"}>
               <DynamicWorkflowForm
-                io={previewIO}
-                values={defaultInputValues(previewIO, effectiveMode)}
-                onChange={handleFormChange}
-                mode={effectiveMode}
                 compact
-                showOutputs
-                showHiddenInMode
-                seedModes={seedModes}
-                onSeedModeChange={setSeedModeForMode}
+                emptyHint={null}
+                io={previewIO}
+                mode={effectiveMode}
+                onChange={handleFormChange}
                 onLabelChange={setIOLabel}
-                /* 必填 / 可选 toggle：按当前模式写覆盖（modes[mode].required）。 */
-                onRequiredChange={setRequiredForMode}
-                /* 每行 👁：该参数在当前模式下是否可见（按模式分别保留）。 */
-                visibilityMode={effectiveMode}
-                onVisibilityChange={toggleModeVisibility}
                 /* drag-to-reorder：仅编辑态的 IO 预览暴露。 */
                 onReorder={reorderIO}
-                emptyHint={null}
+                /* 必填 / 可选 toggle：按当前模式写覆盖（modes[mode].required）。 */
+                onRequiredChange={setRequiredForMode}
+                onSeedModeChange={setSeedModeForMode}
+                onVisibilityChange={toggleModeVisibility}
+                seedModes={seedModes}
+                showHiddenInMode
+                showOutputs
+                values={defaultInputValues(previewIO, effectiveMode)}
+                /* 每行 👁：该参数在当前模式下是否可见（按模式分别保留）。 */
+                visibilityMode={effectiveMode}
               />
             </div>
           )}
         </div>
         <div className="border-border-strong text-ink-muted text-3xs shrink-0 border-t px-3 py-1.5">
           <span className="opacity-80">
-            点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 /
-            可选」切换是否在运行时强校验。
+            点击变量名称即可重命名；👁 按当前模式保留可见性；「必填 / 可选」切换是否在运行时强校验。
           </span>
           <RequiredSummary io={previewIO} mode={effectiveMode} />
         </div>

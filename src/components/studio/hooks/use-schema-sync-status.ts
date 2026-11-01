@@ -27,35 +27,29 @@ export const SCHEMA_SYNC_POLL_MS = 2000;
 export const SCHEMA_SYNC_IDLE_MS = 30_000;
 
 /** 与 `scripts/db-schema-state.mjs` 的 `ensureSchemaCurrent` 返回值一一对应。 */
-export type SchemaSyncPhase =
-  | "syncing"
-  | "ready"
-  | "synced"
-  | "missing"
-  | "stale"
-  | "unknown";
+export type SchemaSyncPhase = "syncing" | "ready" | "synced" | "missing" | "stale" | "unknown";
 
-export interface SchemaSyncStatus {
-  phase: SchemaSyncPhase;
-  /** 失败原因（`stale` / `missing` 时有），给提示的 tooltip 用。 */
-  detail: string | null;
+export type SchemaSyncStatus = {
   /** 执行件（`scripts/db-sync.mjs`）在不在：桌包载荷刻意不带它（那里没有
    * drizzle-kit），`false` 时 missing / stale 回落成「跑 pnpm db:push」的
    * 纯提示，不给一个点了必然失败的按钮。 */
   canPush: boolean;
-}
+  /** 失败原因（`stale` / `missing` 时有），给提示的 tooltip 用。 */
+  detail: string | null;
+  phase: SchemaSyncPhase;
+};
 
 /** 状态栏那一格该说什么（纯函数，组件只管把 tone 映射成颜色）。 */
-export interface SchemaSyncNotice {
-  tone: "info" | "ok" | "error";
-  text: string;
-  title: string;
-  /** `ok` 那档是「点一下刷新」的按钮（同步完是一次性事件）。 */
-  refreshable: boolean;
+export type SchemaSyncNotice = {
   /** `stale` / `missing` 且本机有执行件：渲染成「立即同步」按钮（点击后仍要
    * 过确认弹窗 —— 那批变更会丢数据，按钮只是发起、不是授权）。 */
   actionable: boolean;
-}
+  /** `ok` 那档是「点一下刷新」的按钮（同步完是一次性事件）。 */
+  refreshable: boolean;
+  text: string;
+  title: string;
+  tone: "info" | "ok" | "error";
+};
 
 /**
  * 相位 → 提示内容。返回 `null` = **不占位**。
@@ -68,11 +62,9 @@ export interface SchemaSyncNotice {
  *   · `ready`（指纹一致，最常见）/ `unknown`（还没探到）不占位 —— 状态栏不该
  *     常驻一个「一切正常」的格子。
  */
-export function schemaSyncNotice(
-  status: SchemaSyncStatus,
-): SchemaSyncNotice | null {
+export function schemaSyncNotice(status: SchemaSyncStatus): SchemaSyncNotice | null {
   switch (status.phase) {
-    case "syncing":
+    case "syncing": {
       return {
         tone: "info",
         text: "数据库同步中…",
@@ -81,7 +73,8 @@ export function schemaSyncNotice(
         refreshable: false,
         actionable: false,
       };
-    case "synced":
+    }
+    case "synced": {
       return {
         tone: "ok",
         text: "数据库已同步 · 点此刷新",
@@ -89,6 +82,7 @@ export function schemaSyncNotice(
         refreshable: true,
         actionable: false,
       };
+    }
     case "missing":
     case "stale": {
       const missing = status.phase === "missing";
@@ -115,12 +109,13 @@ export function schemaSyncNotice(
         actionable: status.canPush,
       };
     }
-    default:
+    default: {
       return null;
+    }
   }
 }
 
-const PHASES: readonly SchemaSyncPhase[] = [
+const PHASES: ReadonlyArray<SchemaSyncPhase> = [
   "syncing",
   "ready",
   "synced",
@@ -150,7 +145,9 @@ const SYNCED_FRESH_MS = 120_000;
 /** 状态文件里的 `at`（ISO）距现在是否还在有效期内；解析不了当作过期。
  *  写成类型守卫：调用处据此把 `at` 收窄成非空，下面才敢落 sessionStorage。 */
 function isFresh(at: string | null): at is string {
-  if (at === null) return false;
+  if (at === null) {
+    return false;
+  }
   const t = Date.parse(at);
   return Number.isFinite(t) && Date.now() - t < SYNCED_FRESH_MS;
 }
@@ -190,9 +187,13 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
         cache: "no-store",
         signal: AbortSignal.timeout(2500),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        return;
+      }
       const data: unknown = await res.json();
-      if (stoppedRef.current) return;
+      if (stoppedRef.current) {
+        return;
+      }
       const record = isRecord(data) ? data : {};
       const phase = toPhase(record.phase);
       const at = typeof record.at === "string" ? record.at : null;
@@ -238,7 +239,9 @@ export function useSchemaSyncStatus(): SchemaSyncStatus {
    * 负担；仍有事要办（syncing / missing / stale / 刚探到）时才保持 2s。 */
   const schemaPollMs = useCallback<() => number | null>(() => {
     const phase = phaseRef.current;
-    if (phase === "ready") return SCHEMA_SYNC_IDLE_MS;
+    if (phase === "ready") {
+      return SCHEMA_SYNC_IDLE_MS;
+    }
     if (phase === "unknown") {
       return resolvedRef.current ? SCHEMA_SYNC_IDLE_MS : SCHEMA_SYNC_POLL_MS;
     }

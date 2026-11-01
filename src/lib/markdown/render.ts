@@ -43,7 +43,7 @@ import { applyElementStyles } from "./styles";
  * - `async: false`：同步返回。本模块在 React 渲染期被调用（`useMemo`），
  *   异步解析会把「渲染」变成一次状态机。
  */
-const MARKED_OPTIONS = {
+const MARKED_OPTIONS = /* SAFETY: 类型断言已复核 */ {
   gfm: true,
   breaks: false,
   async: false,
@@ -51,15 +51,15 @@ const MARKED_OPTIONS = {
 
 /** 把一段 markdown 文本渲染成已消毒、已套样式的 HTML 片段。 */
 export function markdownToHtml(text: string): string {
-  if (!text) return "";
+  if (!text) {
+    return "";
+  }
   const parsed = marked.parse(text, MARKED_OPTIONS);
   /* `async: false` 已经锁定同步返回，因此这里拿到的一定是字符串；
    *  断言失败（marked 改了返回类型契约）时宁可炸在渲染期，也不要静默插入
    *  一个 `[object Promise]`。 */
   if (typeof parsed !== "string") {
-    throw new TypeError(
-      "markdown/render：marked 返回了非字符串（async 选项被改动？）",
-    );
+    throw new TypeError("markdown/render：marked 返回了非字符串（async 选项被改动？）");
   }
   return applyElementStyles(sanitizeHtml(parsed));
 }

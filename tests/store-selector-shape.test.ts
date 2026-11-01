@@ -32,23 +32,27 @@ const SRC = path.join(ROOT, "src");
 const CONFIG = path.join(ROOT, "eslint.config.js");
 
 /** 递归收集 `src/**` 下的全部 `.ts` / `.tsx`（跳过用例与 story）。 */
-function sourceFiles(dir = SRC): string[] {
-  const out: string[] = [];
+function sourceFiles(dir = SRC): Array<string> {
+  const out: Array<string> = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       out.push(...sourceFiles(full));
       continue;
     }
-    if (!/\.tsx?$/.test(entry.name)) continue;
-    if (/\.(test|stories)\.tsx?$/.test(entry.name)) continue;
+    if (!/\.tsx?$/.test(entry.name)) {
+      continue;
+    }
+    if (/\.(test|stories)\.tsx?$/.test(entry.name)) {
+      continue;
+    }
     out.push(full);
   }
   return out;
 }
 
 /** 仓库里真实的 zustand store hook 名（`export const useXxx = create<...>()`）。 */
-function realStoreHooks(): string[] {
+function realStoreHooks(): Array<string> {
   const names = new Set<string>();
   for (const file of sourceFiles()) {
     const code = stripComments(readFileSync(file, "utf8"));
@@ -56,7 +60,9 @@ function realStoreHooks(): string[] {
       /export\s+const\s+(use[A-Za-z0-9_]+)\s*=\s*create(?:Store)?\s*[<(]/g,
     )) {
       const name = m[1];
-      if (name) names.add(name);
+      if (name) {
+        names.add(name);
+      }
     }
   }
   return [...names].sort();
@@ -70,10 +76,12 @@ const EXTRA_SUBSCRIBERS = [
 ];
 
 /** 从 `eslint.config.js` 源码取 `STORE_SELECTOR_HOOKS` 清单（不在此重抄一份）。 */
-function configuredHooks(): string[] {
+function configuredHooks(): Array<string> {
   const src = readFileSync(CONFIG, "utf8");
   const block = /const STORE_SELECTOR_HOOKS = \[([\s\S]*?)\];/.exec(src)?.[1];
-  if (!block) return [];
+  if (!block) {
+    return [];
+  }
   return [...block.matchAll(/"([^"]+)"/g)]
     .map((m) => m[1] ?? "")
     .filter((n) => n.length > 0)
@@ -84,7 +92,9 @@ describe("① 存量为零：视图层没有现拼对象 / 现造新数组的 st
   it("扫描面非空（路径写错时「零命中」是假绿）", () => {
     const files = sourceFiles();
     expect(files.length).toBeGreaterThan(200);
-    for (const f of files.slice(0, 5)) expect(statSync(f).isFile()).toBe(true);
+    for (const f of files.slice(0, 5)) {
+      expect(statSync(f).isFile()).toBe(true);
+    }
   });
 
   it("没有 store selector 造新引用的调用点", () => {
@@ -94,14 +104,14 @@ describe("① 存量为零：视图层没有现拼对象 / 现造新数组的 st
     // ⚠️ 判据必须容忍**换行**：真实代码里 `useMessageCenterStore((s) =>\n
     // s.messages.filter(...))` 是常见写法，只按单行匹配会整片漏掉
     // （实测：单行版对注入的反模式毫无反应）。所以先把源码压成单行再匹配。
-    const oneLine = (code: string) => code.replace(/\s+/g, " ");
+    const oneLine = (code: string) => code.replaceAll(/\s+/g, " ");
     const objLiteral = new RegExp(
       `\\b(?:${names})\\s*\\(\\s*\\(?[A-Za-z_$][\\w$]*\\)?\\s*=>\\s*[({[]`,
     );
     const newArray = new RegExp(
       `\\b(?:${names})\\s*\\(\\s*\\(?[A-Za-z_$][\\w$]*\\)?\\s*=>\\s*[^)]*?\\.(?:map|filter|slice|concat|sort)\\(`,
     );
-    const hits: string[] = [];
+    const hits: Array<string> = [];
     for (const file of sourceFiles()) {
       const flat = oneLine(stripComments(readFileSync(file, "utf8")));
       for (const re of [objLiteral, newArray]) {
@@ -137,7 +147,7 @@ describe("③ selector 真的会响", () => {
   const src = readFileSync(CONFIG, "utf8");
 
   /** 从配置里取出两条真实 selector（模板变量换成清单内容），不在此重抄定义。 */
-  function realSelectors(): string[] {
+  function realSelectors(): Array<string> {
     const hooks = configuredHooks().join("|");
     return src
       .split("\n")
@@ -170,28 +180,19 @@ describe("③ selector 真的会响", () => {
           ],
         },
       });
-    const flagged = (code: string) =>
-      verify(code).some((m) => m.ruleId === "no-restricted-syntax");
+    const flagged = (code: string) => verify(code).some((m) => m.ruleId === "no-restricted-syntax");
 
     // 反模式：对象字面量 / 造新数组
     expect(
-      flagged(
-        `const a = useShellTabs((s) => ({ tabs: s.tabs, active: s.activeTabId }));`,
-      ),
+      flagged(`const a = useShellTabs((s) => ({ tabs: s.tabs, active: s.activeTabId }));`),
     ).toBe(true);
     expect(
-      flagged(
-        `const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`,
-      ),
+      flagged(`const b = useMessageCenterStore((s) => s.messages.filter((m) => !m.read));`),
     ).toBe(true);
 
     // 合法：原始值 / store 里已固化的引用 / reduce 成原始值
-    expect(flagged(`const c = useShellTabs((s) => s.activeTabId);`)).toBe(
-      false,
-    );
-    expect(flagged(`const d = useLogCategoryStore((s) => s.enabled);`)).toBe(
-      false,
-    );
+    expect(flagged(`const c = useShellTabs((s) => s.activeTabId);`)).toBe(false);
+    expect(flagged(`const d = useLogCategoryStore((s) => s.enabled);`)).toBe(false);
     expect(
       flagged(
         `const e = useMessageCenterStore((s) => s.messages.reduce((n, m) => n + (m.read ? 0 : 1), 0));`,

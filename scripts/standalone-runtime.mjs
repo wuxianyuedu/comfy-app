@@ -43,10 +43,7 @@ import {
  *  （`server.js` / `package.json` / `.next/` / `node_modules/`）都在这一层。
  *  自定位而不是信传入的 cwd——Next 的 server 启动即 `process.chdir(__dirname)`，
  *  任何依赖 cwd 的锚点在它手里都会漂。 */
-const APP_ROOT = path.resolve(
-  import.meta.dirname,
-  "..",
-);
+const APP_ROOT = path.resolve(import.meta.dirname, "..");
 const SERVER = path.join(APP_ROOT, "server.js");
 const REAP_ENTRY = path.join(APP_ROOT, "scripts", "reap-process.mjs");
 /** 执行宿主的入口（3-E2b）。与 `server.js` 不同，它是**可选**的一路：开关没设
@@ -73,11 +70,7 @@ function fail(message) {
 function openServerLogFiles(stamp) {
   const dir = path.join(APP_ROOT, "log", "current", "nextjs");
   mkdirSync(dir, { recursive: true });
-  pruneTimestampedLogs(
-    dir,
-    ["standalone-server-stdout-", "standalone-server-stderr-"],
-    5,
-  );
+  pruneTimestampedLogs(dir, ["standalone-server-stdout-", "standalone-server-stderr-"], 5);
   return {
     stdoutFile: path.join(dir, `standalone-server-stdout-${stamp}.log`),
     stderrFile: path.join(dir, `standalone-server-stderr-${stamp}.log`),
@@ -91,11 +84,7 @@ function openServerLogFiles(stamp) {
 function openHostLogFiles(stamp) {
   const dir = path.join(APP_ROOT, "log", "current", "services");
   mkdirSync(dir, { recursive: true });
-  pruneTimestampedLogs(
-    dir,
-    ["executor-host-stdout-", "executor-host-stderr-"],
-    5,
-  );
+  pruneTimestampedLogs(dir, ["executor-host-stdout-", "executor-host-stderr-"], 5);
   return {
     stdoutFile: path.join(dir, `executor-host-stdout-${stamp}.log`),
     stderrFile: path.join(dir, `executor-host-stderr-${stamp}.log`),
@@ -105,18 +94,19 @@ function openHostLogFiles(stamp) {
 /** 回收一棵树：走命令行入口而不是在这里拼 `taskkill` / `process.kill`（硬规则 3）。
  *  默认等待结果，`via` 落日志——「打了命令、退出 0、进程还在」是这类兜底最坏的形态。 */
 function reapTree(pid) {
-  if (!pid) return;
-  const run = spawnSync(
-    process.execPath,
-    [REAP_ENTRY, String(pid), "--force"],
-    {
-      encoding: "utf8",
-      windowsHide: true,
-    },
-  );
+  if (!pid) {
+    return;
+  }
+  const run = spawnSync(process.execPath, [REAP_ENTRY, String(pid), "--force"], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
   const out = `${run.stdout ?? ""}${run.stderr ?? ""}`.trim();
-  if (run.status === 0) line(`reap pid=${pid} ${out}`);
-  else line(`reap FAILED pid=${pid} exit=${run.status ?? "?"} ${out}`);
+  if (run.status === 0) {
+    line(`reap pid=${pid} ${out}`);
+  } else {
+    line(`reap FAILED pid=${pid} exit=${run.status ?? "?"} ${out}`);
+  }
 }
 
 /** 按开关拉起执行宿主（3-E2b，ISSUE #1216 收口的那一半）。返回 child，或 null = 没起
@@ -129,13 +119,13 @@ function reapTree(pid) {
 function spawnExecutorHost(childEnv, stamp) {
   const { mode, unknown } = resolveExecutorMode({ procEnv: process.env });
   if (unknown !== null) {
-    line(
-      `executor mode=inline unknown=${JSON.stringify(unknown)}（只认 inline|host）`,
-    );
+    line(`executor mode=inline unknown=${JSON.stringify(unknown)}（只认 inline|host）`);
     return null;
   }
   line(`executor mode=${mode}`);
-  if (mode !== "host") return null;
+  if (mode !== "host") {
+    return null;
+  }
   if (!existsSync(HOST_ENTRY)) {
     // 设了开关而入口不在：行会被写成 host 归属然后安静留在队列（#1204 之后的既定
     // 形态）。**不**退回 inline——那时已经写下的归属片没人领，现场只会更难查。
@@ -170,8 +160,8 @@ function main() {
   let childEnv;
   try {
     childEnv = buildStandaloneRuntimeEnv({ appRoot: APP_ROOT, port });
-  } catch (err) {
-    fail(`cannot assemble runtime env: ${err?.message ?? err}`);
+  } catch (error) {
+    fail(`cannot assemble runtime env: ${error?.message ?? error}`);
   }
   // 首启建表：桌包既没有 pnpm 也没有 drizzle-kit（那是构建依赖），库里一张表都没有时
   // 应用随包的 DDL（§构建期由 build-desktop.mjs 现生成，只含结构）。不先做这一步，
@@ -184,8 +174,8 @@ function main() {
         ? `schema bootstrap tables=${schema.tablesBefore}->${schema.tablesAfter}`
         : `schema ready tables=${schema.tablesAfter}`,
     );
-  } catch (err) {
-    fail(`schema bootstrap failed: ${err?.message ?? err}`);
+  } catch (error) {
+    fail(`schema bootstrap failed: ${error?.message ?? error}`);
   }
   const stamp = runStamp();
   const { stdoutFile, stderrFile } = openServerLogFiles(stamp);
@@ -199,9 +189,7 @@ function main() {
     stdoutFile,
     stderrFile,
   });
-  line(
-    `boot pid=${process.pid} server=${server.pid ?? "?"} port=${port} appRoot=${APP_ROOT}`,
-  );
+  line(`boot pid=${process.pid} server=${server.pid ?? "?"} port=${port} appRoot=${APP_ROOT}`);
   let host = spawnExecutorHost(childEnv, stamp);
   if (host) {
     host.on("exit", (code, signal) => {
@@ -222,17 +210,21 @@ function main() {
 
   let closing = false;
   const close = (reason, exitCode) => {
-    if (closing) return;
+    if (closing) {
+      return;
+    }
     closing = true;
     line(`closing (${reason})`);
     // 先收宿主再收 server：宿主是「还会往外发任务」的那一侧，先让它停，避免 server
     // 已经没了而宿主还在提交。两处都只在「还活着」时回收——child 已退出再补一刀，
     // taskkill 报的是「没有找到进程」，于是每条正常退出路径都会在日志里留一行假的
     // reap FAILED（判据与 dev-launcher 的 reapAll 同一形态：exitCode/signalCode 都判）。
-    if (host && host.exitCode === null && host.signalCode === null)
+    if (host && host.exitCode === null && host.signalCode === null) {
       reapTree(host.pid);
-    if (server.exitCode === null && server.signalCode === null)
+    }
+    if (server.exitCode === null && server.signalCode === null) {
       reapTree(server.pid);
+    }
     process.exit(exitCode);
   };
 
@@ -241,10 +233,7 @@ function main() {
   });
   server.on("exit", (code, signal) => {
     // server 走了这个入口就没有存在的理由：退出码原样上抛，壳据此写它的失败出口。
-    close(
-      `server exited code=${code ?? "null"} signal=${signal ?? "null"}`,
-      code ?? 1,
-    );
+    close(`server exited code=${code ?? "null"} signal=${signal ?? "null"}`, code ?? 1);
   });
   for (const sig of ["SIGTERM", "SIGINT", "SIGBREAK"]) {
     process.on(sig, () => close(`signal ${sig}`, 0));

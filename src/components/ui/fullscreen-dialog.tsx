@@ -26,17 +26,17 @@ import { cn } from "~/lib/utils";
 import { FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS } from "~/lib/full-screen-layer";
 import { dialogBackdropClass } from "~/components/ui/dialog-overlay";
 
-export interface FullScreenDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** 无障碍名称：渲染成只读屏器可见的标题，并自动接到弹窗的 `aria-labelledby`。 */
-  label: string;
-  /** 面板内定位层的 z-index 工具类，须高于它要盖住的那层浮层（默认 `z-100`）。 */
-  zClass?: string;
+export type FullScreenDialogProps = {
+  children: ReactNode;
   /** 该视图自身的布局 class（`bg-bg` 之外的补充）。 */
   className?: string;
-  children: ReactNode;
-}
+  /** 无障碍名称：渲染成只读屏器可见的标题，并自动接到弹窗的 `aria-labelledby`。 */
+  label: string;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  /** 面板内定位层的 z-index 工具类，须高于它要盖住的那层浮层（默认 `z-100`）。 */
+  zClass?: string;
+};
 
 export function FullScreenDialog({
   open,
@@ -51,11 +51,7 @@ export function FullScreenDialog({
         默认「点弹窗外即关闭」，于是用户点标题栏（想拖动窗口的肌肉记忆）
         会把整个全屏视图关掉（用户实测反馈）。全屏视图只该由显式出口
         （退出按钮 / Esc）关闭，故禁掉指针关闭，Esc 不受影响。 */
-    <DialogPrimitive.Root
-      open={open}
-      onOpenChange={onOpenChange}
-      disablePointerDismissal
-    >
+    <DialogPrimitive.Root disablePointerDismissal onOpenChange={onOpenChange} open={open}>
       <DialogPrimitive.Portal>
         {/* 遮罩与 `ui/dialog` / `ui/sheet` **同一份**（`dialog-overlay.ts` 的
             默认档）：它同时满足「让出标题行」的硬判据（ISSUE #310），另写一份必然
@@ -63,7 +59,6 @@ export function FullScreenDialog({
             且不随主题（同一件事两套底色，ISSUE #1742 收口成 `--color-scrim`）。 */}
         <DialogPrimitive.Backdrop className={dialogBackdropClass()} />
         <DialogPrimitive.Popup
-          data-slot="fullscreen-dialog"
           className={cn(
             /* 定位不铺到 bottom-0：底部状态栏是 z-toast 的固定悬浮层，会把
                面板最后 24px 压住（日志全屏视图实测「最后几行看不到」）。 */
@@ -71,10 +66,9 @@ export function FullScreenDialog({
             "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 duration-100",
             className,
           )}
+          data-slot="fullscreen-dialog"
         >
-          <DialogPrimitive.Title className="sr-only">
-            {label}
-          </DialogPrimitive.Title>
+          <DialogPrimitive.Title className="sr-only">{label}</DialogPrimitive.Title>
           {children}
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>

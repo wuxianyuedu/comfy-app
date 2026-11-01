@@ -12,8 +12,8 @@
 export type WorkflowPreviewNodeKind = "input" | "process" | "output";
 
 export type WorkflowPreviewNode = {
-  id: string;
   class_type: string;
+  id: string;
   kind: WorkflowPreviewNodeKind;
   /** 从左到右的层级下标（0 = 最左，越大越靠右）。 */
   level: number;
@@ -27,15 +27,15 @@ export type WorkflowPreviewEdge = {
 };
 
 export type WorkflowPreview = {
-  nodes: WorkflowPreviewNode[];
-  edges: WorkflowPreviewEdge[];
+  edges: Array<WorkflowPreviewEdge>;
+  height: number;
+  nodes: Array<WorkflowPreviewNode>;
   /** 节点总数（被截断时可能大于 nodes.length）。 */
   total: number;
-  /** SVG viewBox 的宽 / 高（单位 px）。 */
-  width: number;
-  height: number;
   /** 为真时表示 nodes[] 只展示了全部节点里有代表性的一部分。 */
   truncated: boolean;
+  /** SVG viewBox 的宽 / 高（单位 px）。 */
+  width: number;
 };
 
 /**
@@ -54,9 +54,7 @@ export type WorkflowGraphNode = {
  * 因此只要对象有字符串类型的 `class_type` 就接受；
  * `inputs` 只在真正读取它的地方做结构校验。
  */
-export function isWorkflowGraphNode(
-  value: unknown,
-): value is WorkflowGraphNode {
+export function isWorkflowGraphNode(value: unknown): value is WorkflowGraphNode {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -71,7 +69,9 @@ export function isWorkflowGraphNode(
  * undefined.
  */
 export function linkTargetId(value: unknown): string | undefined {
-  if (!Array.isArray(value) || value.length < 1) return undefined;
+  if (!Array.isArray(value) || value.length < 1) {
+    return undefined;
+  }
   return typeof value[0] === "string" ? value[0] : undefined;
 }
 
@@ -114,8 +114,12 @@ const OUTPUT_CLASSES = new Set([
 ]);
 
 function classifyNode(classType: string): WorkflowPreviewNodeKind {
-  if (INPUT_CLASSES.has(classType)) return "input";
-  if (OUTPUT_CLASSES.has(classType)) return "output";
+  if (INPUT_CLASSES.has(classType)) {
+    return "input";
+  }
+  if (OUTPUT_CLASSES.has(classType)) {
+    return "output";
+  }
   return "process";
 }
 
@@ -123,10 +127,10 @@ function classifyNode(classType: string): WorkflowPreviewNodeKind {
 type GraphTopology = {
   /** 每个节点的入边来源；`Record` 形态便于调用点直接索引。 */
   incoming: Record<string, Set<string>>;
-  /** 每个节点的出边去向。 */
-  outAdj: Record<string, Set<string>>;
   /** 节点 id → 层级下标（无入边为 0）。成环节点兜底为 0。 */
   level: Record<string, number>;
+  /** 每个节点的出边去向。 */
+  outAdj: Record<string, Set<string>>;
 };
 
 /**
@@ -137,9 +141,7 @@ type GraphTopology = {
  * `arr[id]!` 的取值（`noUncheckedIndexedAccess` 下 `Record` 索引恒为
  * `V | undefined`，两处都靠 `!` 抹平），顺带把这段孪生收成一份。
  */
-function buildGraphTopology(
-  entries: [string, WorkflowGraphNode][],
-): GraphTopology {
+function buildGraphTopology(entries: Array<[string, WorkflowGraphNode]>): GraphTopology {
   const incoming: Record<string, Set<string>> = {};
   const outAdj: Record<string, Set<string>> = {};
   for (const [id] of entries) {
@@ -149,9 +151,13 @@ function buildGraphTopology(
   // 连线值是形如 [nodeId, outputIndex] 的二元组；只认两端都已知的那些。
   for (const [id, node] of entries) {
     const inputs = node.inputs;
-    if (!inputs || typeof inputs !== "object") continue;
+    if (!inputs || typeof inputs !== "object") {
+      continue;
+    }
     const ownIncoming = incoming[id];
-    if (!ownIncoming) continue;
+    if (!ownIncoming) {
+      continue;
+    }
     for (const v of Object.values(inputs)) {
       const src = linkTargetId(v);
       const srcOut = src ? outAdj[src] : undefined;
@@ -163,10 +169,8 @@ function buildGraphTopology(
   }
 
   const level: Record<string, number> = {};
-  const remaining = new Map<string, number>(
-    Object.entries(incoming).map(([k, v]) => [k, v.size]),
-  );
-  const queue: string[] = [];
+  const remaining = new Map<string, number>(Object.entries(incoming).map(([k, v]) => [k, v.size]));
+  const queue: Array<string> = [];
   for (const [id, deg] of remaining) {
     if (deg === 0) {
       level[id] = 0;
@@ -175,18 +179,28 @@ function buildGraphTopology(
   }
   while (queue.length > 0) {
     const id = queue.shift();
-    if (id === undefined) break;
+    if (id === undefined) {
+      break;
+    }
     const ownOut = outAdj[id];
-    if (!ownOut) continue;
+    if (!ownOut) {
+      continue;
+    }
     const ownLevel = level[id] ?? 0;
     for (const nxt of ownOut) {
       level[nxt] = Math.max(level[nxt] ?? 0, ownLevel + 1);
       remaining.set(nxt, (remaining.get(nxt) ?? 0) - 1);
-      if ((remaining.get(nxt) ?? 0) === 0) queue.push(nxt);
+      if ((remaining.get(nxt) ?? 0) === 0) {
+        queue.push(nxt);
+      }
     }
   }
   // 仍未分到层的节点（成环）—— 一律放到第 0 层。
-  for (const id of Object.keys(incoming)) if (!(id in level)) level[id] = 0;
+  for (const id of Object.keys(incoming)) {
+    if (!(id in level)) {
+      level[id] = 0;
+    }
+  }
 
   return { incoming, outAdj, level };
 }
@@ -196,12 +210,9 @@ function buildGraphTopology(
  * 纯数据汇排在最右。随后按拓扑序裁剪到前约 14 个节点，让卡片保持可读；
  * 被裁剪时 `truncated` 会被置上。
  */
-export function buildWorkflowPreview(
-  graph: Record<string, unknown>,
-): WorkflowPreview {
-  const entries = Object.entries(graph).filter(
-    (entry): entry is [string, WorkflowGraphNode] =>
-      isWorkflowGraphNode(entry[1]),
+export function buildWorkflowPreview(graph: Record<string, unknown>): WorkflowPreview {
+  const entries = Object.entries(graph).filter((entry): entry is [string, WorkflowGraphNode] =>
+    isWorkflowGraphNode(entry[1]),
   );
   const total = entries.length;
   if (total === 0) {
@@ -225,34 +236,35 @@ export function buildWorkflowPreview(
   let truncated = false;
   if (visible.length > 14) {
     truncated = true;
-    const kindOf = (id: string) =>
-      classifyNode(nodeById.get(id)?.class_type ?? "Unknown");
+    const kindOf = (id: string) => classifyNode(nodeById.get(id)?.class_type ?? "Unknown");
     const sinks = visible.filter((id) => kindOf(id) === "output");
     const sources = visible.filter((id) => kindOf(id) === "input");
-    const mid = visible.filter(
-      (id) => !sinks.includes(id) && !sources.includes(id),
-    );
+    const mid = visible.filter((id) => !sinks.includes(id) && !sources.includes(id));
     mid.sort((left, right) => (level[left] ?? 0) - (level[right] ?? 0));
     const midKeep = Math.max(0, 14 - sources.length - sinks.length);
     visible = [...sources, ...mid.slice(0, midKeep), ...sinks];
   }
 
   // 给每个层内的节点分配行号，用于纵向定位。
-  const byLevel: Record<number, string[]> = {};
+  const byLevel: Record<number, Array<string>> = {};
   for (const id of visible) {
     const lv = level[id] ?? 0;
     (byLevel[lv] ||= []).push(id);
   }
-  for (const arr of Object.values(byLevel)) arr.sort();
+  for (const arr of Object.values(byLevel)) {
+    arr.sort();
+  }
 
   // Layout constants.
   const width = 280;
   const height = 80;
 
-  const nodes: WorkflowPreviewNode[] = [];
+  const nodes: Array<WorkflowPreviewNode> = [];
   for (const id of visible) {
     const node = nodeById.get(id);
-    if (!node) continue;
+    if (!node) {
+      continue;
+    }
     const lv = level[id] ?? 0;
     nodes.push({
       id,
@@ -265,10 +277,12 @@ export function buildWorkflowPreview(
 
   // 连线：只在可见节点之间保留。
   const visibleSet = new Set(visible);
-  const edges: WorkflowPreviewEdge[] = [];
+  const edges: Array<WorkflowPreviewEdge> = [];
   for (const id of visible) {
     for (const nxt of outAdj[id] ?? []) {
-      if (visibleSet.has(nxt)) edges.push({ from: id, to: nxt });
+      if (visibleSet.has(nxt)) {
+        edges.push({ from: id, to: nxt });
+      }
     }
   }
 
@@ -287,12 +301,9 @@ export const FULL_PREVIEW_MARGIN = 32;
  * 与 `buildWorkflowPreview` 不同：这里保留所有节点，
  * 并按更宽、更易读的网格排布，让用户能审视完整的画布拓扑。
  */
-export function buildWorkflowPreviewFull(
-  graph: Record<string, unknown>,
-): WorkflowPreview {
-  const entries = Object.entries(graph).filter(
-    (entry): entry is [string, WorkflowGraphNode] =>
-      isWorkflowGraphNode(entry[1]),
+export function buildWorkflowPreviewFull(graph: Record<string, unknown>): WorkflowPreview {
+  const entries = Object.entries(graph).filter((entry): entry is [string, WorkflowGraphNode] =>
+    isWorkflowGraphNode(entry[1]),
   );
   const total = entries.length;
   if (total === 0) {
@@ -308,14 +319,16 @@ export function buildWorkflowPreviewFull(
 
   const { outAdj, level } = buildGraphTopology(entries);
 
-  const byLevel: Record<number, string[]> = {};
+  const byLevel: Record<number, Array<string>> = {};
   for (const [id] of entries) {
     const lv = level[id] ?? 0;
     (byLevel[lv] ||= []).push(id);
   }
-  for (const arr of Object.values(byLevel)) arr.sort();
+  for (const arr of Object.values(byLevel)) {
+    arr.sort();
+  }
 
-  const nodes: WorkflowPreviewNode[] = entries.map(([id, node]) => {
+  const nodes: Array<WorkflowPreviewNode> = entries.map(([id, node]) => {
     const lv = level[id] ?? 0;
     const arr = byLevel[lv] ?? [];
     const row = arr.indexOf(id);
@@ -328,7 +341,7 @@ export function buildWorkflowPreviewFull(
     };
   });
 
-  const edges: WorkflowPreviewEdge[] = [];
+  const edges: Array<WorkflowPreviewEdge> = [];
   for (const [id] of entries) {
     for (const nxt of outAdj[id] ?? []) {
       edges.push({ from: id, to: nxt });
@@ -339,8 +352,7 @@ export function buildWorkflowPreviewFull(
   const maxRowPerLevel = Object.values(byLevel).map((arr) => arr.length - 1);
   const maxRow = Math.max(0, ...maxRowPerLevel);
 
-  const width =
-    (maxLevel + 1) * FULL_PREVIEW_LEVEL_GAP + FULL_PREVIEW_MARGIN * 2;
+  const width = (maxLevel + 1) * FULL_PREVIEW_LEVEL_GAP + FULL_PREVIEW_MARGIN * 2;
   const height = (maxRow + 1) * FULL_PREVIEW_ROW_GAP + FULL_PREVIEW_MARGIN * 2;
 
   return { nodes, edges, total, width, height, truncated: false };

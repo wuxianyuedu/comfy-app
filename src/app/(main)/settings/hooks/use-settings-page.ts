@@ -44,6 +44,7 @@ import type {
 /* 分区白名单是**值**（不是类型），`export *` 不会把它带进本文件作用域，
  * 跳转落点的收敛要用到它，所以单独再值导入一条。 */
 import { SETTINGS_SECTIONS } from "./use-settings-page-types";
+
 export * from "./use-settings-page-types";
 
 /** 提示条停留时长。 */
@@ -69,8 +70,10 @@ const SETTINGS_CACHE_KEY = "settingsPage.lastGoodConfig.v1";
 function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
   try {
     const raw = sessionStorage.getItem(SETTINGS_CACHE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as {
+    if (!raw) {
+      return {};
+    }
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as {
       llm?: QueryLlmConfig;
       settings?: Settings;
     };
@@ -80,10 +83,7 @@ function readSettingsCache(): { llm?: QueryLlmConfig; settings?: Settings } {
   }
 }
 
-function writeSettingsCache(value: {
-  llm?: QueryLlmConfig;
-  settings?: Settings;
-}): void {
+function writeSettingsCache(value: { llm?: QueryLlmConfig; settings?: Settings }): void {
   try {
     sessionStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(value));
   } catch {
@@ -93,9 +93,8 @@ function writeSettingsCache(value: {
 
 /** 目标分区（来自跳转载荷）的合法性收敛：不在白名单里就当作没给。 */
 function readInitialSection(raw: string | null | undefined): Section | null {
-  return SETTINGS_SECTIONS.some((item) => item.id === raw)
-    ? (raw as Section)
-    : null;
+  /* SAFETY: 类型断言已复核 */
+  return SETTINGS_SECTIONS.some((item) => item.id === raw) ? (raw as Section) : null;
 }
 
 /** 设置页全部状态与动作 —— 见文件头注释的分层说明。 */
@@ -123,7 +122,9 @@ export function useSettingsPage(options?: {
   );
   useEffect(() => {
     const requested = readInitialSection(initialSection);
-    if (!requested) return;
+    if (!requested) {
+      return;
+    }
     /* 设置是**瞬时页签**（切走即退场），通常挂载时的初值就够。这一条 effect 只
      * 覆盖「设置已挂载时又跳进来一次」：登记待落定的目标，仍不在这里消费。 */
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -142,8 +143,7 @@ export function useSettingsPage(options?: {
    * `./use-settings-page-app-update` sub-hook 里；主 hook 只调一次、把
    * 返回值直接接进 controller 的 `appUpdate / checkAppUpdate /
    * installAppUpdate / relaunchApp` 四个字段。 */
-  const { appUpdate, checkAppUpdate, installAppUpdate, relaunchApp } =
-    useSettingsAppUpdate();
+  const { appUpdate, checkAppUpdate, installAppUpdate, relaunchApp } = useSettingsAppUpdate();
 
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmDraft, setLlmDraft] = useState<LlmConfig | null>(null);
@@ -188,9 +188,7 @@ export function useSettingsPage(options?: {
    * 改路径 / 启动参数后由 savePrefs、startComfy 手动 refetch（形态依赖路径）。 */
   /* ComfyUI 的状态查询 / 启动关闭打开动作 / 运行时日志整体沉在
    * `./use-settings-page-comfy`（与 ollama / db-studio 同族的 sub-hook）。 */
-  const openExternalM = useMutation(
-    trpc.setting.openExternal.mutationOptions(),
-  );
+  const openExternalM = useMutation(trpc.setting.openExternal.mutationOptions());
 
   /* 设置页的整页提示条：亮起 3.5s 自动收起。定时器管理（连点清旧、
    * 卸载清掉）由 `useFlashLatch` 收口 —— 此前这里是手写的 `flashTimerRef`，
@@ -217,7 +215,9 @@ export function useSettingsPage(options?: {
    * 关闭再打开时 prev 初值被缓存命中，分支永不触发，草稿一直为空，页面
    * 会落到「配置数据未就绪」。 */
   const llmChanged = llmConfig !== prevLlmConfig;
-  if (llmChanged) setPrevLlmConfig(llmConfig);
+  if (llmChanged) {
+    setPrevLlmConfig(llmConfig);
+  }
   if (llmConfig && (llmChanged || !llmDraft)) {
     const split = splitExtraModels(llmConfig.extraModels);
     setLlmDraft({
@@ -225,9 +225,7 @@ export function useSettingsPage(options?: {
       apiKey: null,
       /* 本地候选（字符串）与远端独立模型（对象）从同一下发清单里拆开存，互不混写 */
       localCandidates: split.localNames.filter((n) => n !== llmConfig.model),
-      extraModels: split.remoteEntries.filter(
-        (e) => e.name !== llmConfig.model,
-      ),
+      extraModels: split.remoteEntries.filter((e) => e.name !== llmConfig.model),
       temperatureByTask: llmConfig.temperatureByTask ?? undefined,
     });
   }
@@ -238,7 +236,9 @@ export function useSettingsPage(options?: {
   const [prevSettingsData, setPrevSettingsData] = useState(settingsData);
   /* 同 llm 播种：缓存命中 / refetch 两种情形都要能落到草稿，避免落到降级 UI。 */
   const settingsChanged = settingsData !== prevSettingsData;
-  if (settingsChanged) setPrevSettingsData(settingsData);
+  if (settingsChanged) {
+    setPrevSettingsData(settingsData);
+  }
   if (settingsData && (settingsChanged || !settingsDraft)) {
     setSettingsDraft(settingsData);
   }
@@ -268,7 +268,9 @@ export function useSettingsPage(options?: {
    * 写外部存储是**副作用**，必须留在 effect 里（P2 渲染期副作用）：放在渲染体
    * 会让每次 render 都写一遍，StrictMode 双渲染下重复写。 */
   useEffect(() => {
-    if (lastGood.llm ?? lastGood.settings) writeSettingsCache(lastGood);
+    if (lastGood.llm ?? lastGood.settings) {
+      writeSettingsCache(lastGood);
+    }
   }, [lastGood]);
 
   /* ── Ollama 探测 / 拉起 / 关闭 / 运行时日志（沉在 sub-hook）────────
@@ -295,12 +297,8 @@ export function useSettingsPage(options?: {
    * 便携版）与桌面实例的六个存储目录。运行态、启动 / 关闭 / 打开与启动日志
    * 整块搬去了侧栏「ComfyUI」页（`~/components/studio/comfyui`）——两件事各有
    * 自己的屏之后，改路径的人不必等秒级探测、看日志的人不必滚过一屏输入框。 */
-  const {
-    comfyInstance,
-    comfyStorage,
-    refetchComfyInstance,
-    refetchComfyStorage,
-  } = useSettingsComfy({ statusQueriesEnabled });
+  const { comfyInstance, comfyStorage, refetchComfyInstance, refetchComfyStorage } =
+    useSettingsComfy({ statusQueriesEnabled });
 
   /* ── Drizzle Studio：状态查询 + 启动 / 关闭 / 打开 + 运行时日志 ──
    * 状态与动作沉在 sub-hook；enabled 门控与 comfyStatus 同口径（首屏两份配置
@@ -402,10 +400,7 @@ export function useSettingsPage(options?: {
 
   /* 两份草稿齐了才算「可渲染表单」；只有一份时仍走错误/加载态，避免
    * 半份草稿导致视图里到处判空。 */
-  const drafts =
-    llmDraft && settingsDraft
-      ? { llm: llmDraft, settings: settingsDraft }
-      : null;
+  const drafts = llmDraft && settingsDraft ? { llm: llmDraft, settings: settingsDraft } : null;
 
   return {
     /* ComfyUI 默认端口（未配置端口时的兜底）。视图的 placeholder 与说明文案
@@ -417,8 +412,7 @@ export function useSettingsPage(options?: {
     ackJumpSection,
     theme: theme === "light" ? "light" : "dark",
     setTheme: (value: "light" | "dark") => setTheme(value),
-    isInitialLoad:
-      isInitialLoad && !queryFailed && !settingsQ.data && !llmQ.data,
+    isInitialLoad: isInitialLoad && !queryFailed && !settingsQ.data && !llmQ.data,
     hasError: queryFailed && !drafts,
     /* 既没在加载、也没失败，草稿却仍为空——正常状态机不可达。视图据此给
      * 可操作出口（重试 + 日志面板），不再渲染冻住用户的死胡同文案。 */

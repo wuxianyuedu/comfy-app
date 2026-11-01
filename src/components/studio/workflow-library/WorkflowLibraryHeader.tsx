@@ -18,26 +18,22 @@ import { Button } from "~/components/ui/button";
 import { ModeContractSettings } from "./ModeContractSettings";
 import { CustomNodesSettings } from "./CustomNodesSettings";
 import { WorkflowLibraryFilters } from "./WorkflowLibraryFilters";
-import {
-  HEADER_ACTION_BTN,
-  type SourceFilter,
-  type TypeFilter,
-} from "./workflow-library-config";
+import { HEADER_ACTION_BTN, type SourceFilter, type TypeFilter } from "./workflow-library-config";
 import type { ModelTagCount } from "./WorkflowLibraryFilters";
 
-interface WorkflowLibraryHeaderProps {
-  onToggleImport: () => void;
-  sourceFilter: SourceFilter;
-  onSourceFilterChange: (v: SourceFilter) => void;
-  sourceCounts: { all: number; local: number; online: number };
-  typeFilter: TypeFilter;
-  onTypeFilterChange: (v: TypeFilter) => void;
-  typeCounts: { all: number; image: number; video: number; audio: number };
+type WorkflowLibraryHeaderProps = {
   modelFilter: string;
-  onModelFilterChange: (v: string) => void;
-  modelTags: ModelTagCount[];
+  modelTags: Array<ModelTagCount>;
   onManageModels: () => void;
-}
+  onModelFilterChange: (v: string) => void;
+  onSourceFilterChange: (v: SourceFilter) => void;
+  onToggleImport: () => void;
+  onTypeFilterChange: (v: TypeFilter) => void;
+  sourceCounts: { all: number; local: number; online: number };
+  sourceFilter: SourceFilter;
+  typeCounts: { all: number; audio: number; image: number; video: number };
+  typeFilter: TypeFilter;
+};
 
 export function WorkflowLibraryHeader({
   onToggleImport,
@@ -63,20 +59,20 @@ export function WorkflowLibraryHeader({
 
       {/* 紧凑筛选下拉：紧跟标题右侧，组内不换行（三个下拉是一组，拆行会错位） */}
       <div
-        data-testid="workflow-library-header-filters"
         className="flex shrink-0 flex-nowrap items-center gap-2"
+        data-testid="workflow-library-header-filters"
       >
         <WorkflowLibraryFilters
-          sourceFilter={sourceFilter}
-          onSourceFilterChange={onSourceFilterChange}
-          sourceCounts={sourceCounts}
-          typeFilter={typeFilter}
-          onTypeFilterChange={onTypeFilterChange}
-          typeCounts={typeCounts}
           modelFilter={modelFilter}
-          onModelFilterChange={onModelFilterChange}
           modelTags={modelTags}
           onManageModels={onManageModels}
+          onModelFilterChange={onModelFilterChange}
+          onSourceFilterChange={onSourceFilterChange}
+          onTypeFilterChange={onTypeFilterChange}
+          sourceCounts={sourceCounts}
+          sourceFilter={sourceFilter}
+          typeCounts={typeCounts}
+          typeFilter={typeFilter}
         />
       </div>
 
@@ -85,11 +81,7 @@ export function WorkflowLibraryHeader({
             而这圈 `shadow-lg shadow-primary-500/*` 是扁平规范明确不发的
             「渐变发光」（DESIGN.md §Elevation：纯色、无阴影、无模糊、无渐变发光）。
             剧本侧那两颗同款渐变按钮上的同一圈发光此前已刻意撤掉。 */}
-        <Button
-          onClick={onToggleImport}
-          variant="gradient"
-          className={HEADER_ACTION_BTN}
-        >
+        <Button className={HEADER_ACTION_BTN} onClick={onToggleImport} variant="gradient">
           <FolderInput data-icon="inline-start" size={13} />
           导入工作流
         </Button>

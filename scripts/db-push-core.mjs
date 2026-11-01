@@ -52,8 +52,7 @@ export function pushBlockedByTty(output) {
  * 换了输出格式、我们漏认了某类语句时，黑名单会把它当安全语句**直接执行**，
  * 白名单只会让用户多跑一次命令。
  */
-const SAFE_STATEMENT =
-  /^(ALTER TABLE `[^`]+` ADD|CREATE TABLE\b|CREATE (UNIQUE )?INDEX\b)/i;
+const SAFE_STATEMENT = /^(ALTER TABLE `[^`]+` ADD|CREATE TABLE\b|CREATE (UNIQUE )?INDEX\b)/i;
 
 /**
  * 「这一行看起来是一条 SQL」—— 只收这些行。
@@ -80,20 +79,20 @@ const SQL_LINE = /^(ALTER|CREATE|DROP|INSERT|UPDATE|DELETE|PRAGMA|RENAME)\b/i;
 export function pendingStatements(output) {
   const lines = String(output).split("\n");
   const start = lines.findIndex((line) => /about to execute/i.test(line));
-  if (start === -1) return [];
+  if (start === -1) {
+    return [];
+  }
   const out = [];
   for (const line of lines.slice(start + 1)) {
     const text = line.trim();
     /* 状态行（`[✓] Changes applied` / `[i] No changes detected` /
      * 下一次 `Reading config`）是这段列表的结束标志；空行只是分隔。 */
-    if (
-      /^(\[|Reading config|Warning\b|No changes detected|Changes applied)/i.test(
-        text,
-      )
-    ) {
+    if (/^(\[|Reading config|Warning\b|No changes detected|Changes applied)/i.test(text)) {
       break;
     }
-    if (SQL_LINE.test(text)) out.push(text);
+    if (SQL_LINE.test(text)) {
+      out.push(text);
+    }
   }
   return out;
 }
@@ -102,9 +101,7 @@ export function pendingStatements(output) {
  *  @param {string[]} statements `pendingStatements` 的结果
  *  @returns {boolean} */
 export function canAutoApply(statements) {
-  return (
-    statements.length > 0 && statements.every((s) => SAFE_STATEMENT.test(s))
-  );
+  return statements.length > 0 && statements.every((s) => SAFE_STATEMENT.test(s));
 }
 
 /** 白名单之外的语句（给人看的原因）。
@@ -138,20 +135,20 @@ export function describeRiskyChanges(statements) {
   const recreated = new Set();
   for (const s of statements) {
     const m = s.match(/^CREATE\s+TABLE\s+`__new_([^`]+)`/i);
-    if (m) recreated.add(m[1]);
+    if (m) {
+      recreated.add(m[1]);
+    }
   }
   /** @type {string[]} */
   const out = [];
   for (const raw of statements) {
-    if (SAFE_STATEMENT.test(raw)) continue;
+    if (SAFE_STATEMENT.test(raw)) {
+      continue;
+    }
     const sql = raw.replace(/;+\s*$/, "");
     let desc = null;
     let m;
-    if (
-      (m = sql.match(
-        /^ALTER\s+TABLE\s+`([^`]+)`\s+DROP\s+COLUMN\s+`([^`]+)`$/i,
-      ))
-    ) {
+    if ((m = sql.match(/^ALTER\s+TABLE\s+`([^`]+)`\s+DROP\s+COLUMN\s+`([^`]+)`$/i))) {
       desc = `${m[1]}.${m[2]}（删列，该列的数据会丢）`;
     } else if ((m = sql.match(/^DROP\s+TABLE\s+`([^`]+)`$/i))) {
       desc = recreated.has(m[1])
@@ -163,9 +160,44 @@ export function describeRiskyChanges(statements) {
     if (desc === null) {
       desc = `「${sql.length > 80 ? `${sql.slice(0, 77)}…` : sql}」`;
     }
-    if (!out.includes(desc)) out.push(desc);
+    if (!out.includes(desc)) {
+      out.push(desc);
+    }
   }
   return out;
+}
+
+/**
+ * 一次子进程「落定的结果」—— 注入点 `run` 的返回契约（ISSUE #2724）。
+ *
+ * 契约 = **内核实际读的那几件**（`stdout` / `stderr` / `error`；`status` 与
+ * `command` / `args` 内核从不读），不是「某个具体实现的全部字段」：
+ * `runPnpmSync` 的 `error` 是 `NodeJS.ErrnoException`，`spawnSettled` 的是
+ * `code` 字符串 —— 两份现成实现都满足本形，注入者不再需要伪造没人读的字段。
+ *
+ * @typedef {{status: number | null, stdout: string, stderr: string,
+ *            error: NodeJS.ErrnoException | string | null}} RunOutcome
+ */
+
+/**
+ * 把一次「没起来」的原因翻成给人看的一句话 —— **唯一一份**（ISSUE #2724）。
+ *
+ * 此前两个消费点各自读 `error?.code ?? "UNKNOWN"`：注入者给的是**串**（如
+ * `"ENOENT"`，`spawnSettled` 的形状）时 `.code` / `.message` 都是 undefined，
+ * 两个 `??` 双双兜底 ⇒ 屏幕上就成了 `（UNKNOWN）：` —— 命令压根没起来的原因
+ * 被丢掉（ISSUE #576 的形态）。串就用串、对象取 `.code`、都没有才 UNKNOWN。
+ *
+ * @param {NodeJS.ErrnoException | string | null | undefined} error
+ * @returns {string}
+ */
+export function describeSpawnFailure(error) {
+  if (!error) {
+    return "UNKNOWN";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return error.code ?? error.message ?? "UNKNOWN";
 }
 
 /**
@@ -174,7 +206,7 @@ export function describeRiskyChanges(statements) {
  * @param {string} root 项目根（作为 drizzle-kit 的 cwd）
  * @param {{ databaseUrl?: string, force?: boolean,
  *           verifyConvergence?: boolean, timeoutMs?: number,
- *           run?: typeof runPnpmSync,
+ *           run?: (args: string[], opts?: {cwd?: string, env?: Record<string, string | undefined>, stdio?: "pipe" | "inherit" | "ignore", timeoutMs?: number}) => RunOutcome,
  *           forward?: (chunk: string) => void }} [options]
  *   `force` 为 true 时带 `--force`（自动批准「会丢数据」的语句，`pnpm db:push`
  *   的口径）；启动链路的自动同步**必须**用 false —— 那种变更要由人决定。
@@ -186,7 +218,7 @@ export function describeRiskyChanges(statements) {
  *   （`canAutoApply`：只认建表 / 建索引 / 加列，见本文件顶部）。死选项随本次
  *   一并删掉（§12.16 零消费），判据仍留在原处、不分叉。
  * @returns {{ converged: boolean, alreadyCurrent: boolean, invocationFailed: boolean,
- *             blockedByTty: boolean, error: NodeJS.ErrnoException | null,
+ *             blockedByTty: boolean, error: NodeJS.ErrnoException | string | null,
  *             firstOutput: string, finalOutput: string }}
  */
 export function pushSchema(root, options = {}) {
@@ -200,11 +232,11 @@ export function pushSchema(root, options = {}) {
   } = options;
 
   const args = ["exec", "drizzle-kit", "push"];
-  if (force) args.push("--force");
+  if (force) {
+    args.push("--force");
+  }
   const env =
-    databaseUrl === undefined
-      ? process.env
-      : { ...process.env, DATABASE_URL: databaseUrl };
+    databaseUrl === undefined ? process.env : { ...process.env, DATABASE_URL: databaseUrl };
 
   const first = run(args, { cwd: root, env, stdio: "pipe", timeoutMs });
   const firstOutput = `${first.stdout}\n${first.stderr}`;

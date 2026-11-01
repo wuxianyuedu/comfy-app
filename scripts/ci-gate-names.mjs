@@ -63,21 +63,31 @@ function foldedScalar(text, key) {
   let keyIndent = 0;
   for (let i = 0; i < lines.length; i += 1) {
     const m = keyRe.exec(lines[i] ?? "");
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     start = i;
     keyIndent = (m[1] ?? "").length;
     break;
   }
-  if (start < 0) return null;
+  if (start < 0) {
+    return null;
+  }
   /** @type {string[]} */
   const body = [];
   for (let i = start + 1; i < lines.length; i += 1) {
     const line = lines[i] ?? "";
     /* 空行与注释行都收口（YAML 折叠标量的正文里不会出现这两种行）。 */
-    if (!/\S/.test(line)) break;
-    if (/^\s*#/.test(line)) break;
+    if (!/\S/.test(line)) {
+      break;
+    }
+    if (/^\s*#/.test(line)) {
+      break;
+    }
     const indent = (/^[ \t]*/.exec(line)?.[0] ?? "").length;
-    if (indent <= keyIndent) break;
+    if (indent <= keyIndent) {
+      break;
+    }
     body.push(line);
   }
   return body.length > 0 ? body.join("\n") : null;
@@ -91,7 +101,9 @@ function foldedScalar(text, key) {
  */
 export function registeredGateOrder(text) {
   const body = foldedScalar(text, "COMFYAPP_CI_GATES");
-  if (body === null) return [];
+  if (body === null) {
+    return [];
+  }
   return body
     .split(",")
     .map((n) => n.trim())
@@ -108,7 +120,9 @@ export function registeredGateOrder(text) {
  */
 export function registeredDisabledGates(text) {
   const body = foldedScalar(text, "COMFYAPP_CI_DISABLED_GATES");
-  if (body === null) return [];
+  if (body === null) {
+    return [];
+  }
   return body
     .split(",")
     .map((n) => n.trim())
@@ -129,13 +143,15 @@ export function registeredElsewhereGates(text) {
   /** @type {Map<string, string[]>} */
   const out = new Map();
   const body = foldedScalar(text, "COMFYAPP_CI_GATES_ELSEWHERE");
-  if (body === null) return out;
+  if (body === null) {
+    return out;
+  }
   for (const item of body
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)) {
     const eq = item.indexOf("=");
-    if (eq < 0) {
+    if (eq === -1) {
       out.set(item, []);
       continue;
     }
@@ -161,7 +177,9 @@ export function commentedStageNames(text) {
   const out = new Set();
   for (const line of String(text ?? "").split("\n")) {
     const m = /^\s*#\s*-\s+name:\s*(\S.*?)\s*$/.exec(line);
-    if (m?.[1]) out.add(m[1]);
+    if (m?.[1]) {
+      out.add(m[1]);
+    }
   }
   return out;
 }
@@ -178,9 +196,7 @@ export function commentedStageNames(text) {
 export function scriptPaths(text) {
   return [
     ...new Set(
-      String(text ?? "").match(
-        /(?:scripts|tools|tests)\/[A-Za-z0-9._/-]+\.[A-Za-z0-9]+/g,
-      ) ?? [],
+      String(text ?? "").match(/(?:scripts|tools|tests)\/[A-Za-z0-9._/-]+\.[A-Za-z0-9]+/g) ?? [],
     ),
   ];
 }
@@ -198,13 +214,7 @@ export function scriptPaths(text) {
  * @returns {string[]} 逐条不一致（人读的话术）；空数组 = 通过
  */
 export function gateNameExecutorProblems(deps) {
-  const {
-    cnbText,
-    liveStages = [],
-    heavyGates = [],
-    fixedTests = [],
-    hookSteps = [],
-  } = deps;
+  const { cnbText, liveStages = [], heavyGates = [], fixedTests = [], hookSteps = [] } = deps;
   /** @type {string[]} */
   const problems = [];
 
@@ -216,19 +226,25 @@ export function gateNameExecutorProblems(deps) {
   /* 执行面三处：复合档条目 / 固定清单用例 / 钩子步骤行。 */
   const heavyPaths = new Set();
   for (const g of heavyGates) {
-    for (const p of scriptPaths(g.argv.join(" "))) heavyPaths.add(p);
+    for (const p of scriptPaths(g.argv.join(" "))) {
+      heavyPaths.add(p);
+    }
   }
   const fixedSet = new Set(fixedTests);
   const hookPaths = new Set();
   for (const s of hookSteps) {
-    for (const p of scriptPaths(s.argv.join(" "))) hookPaths.add(p);
+    for (const p of scriptPaths(s.argv.join(" "))) {
+      hookPaths.add(p);
+    }
   }
   /** @param {string} p */
   const known = (p) => heavyPaths.has(p) || fixedSet.has(p) || hookPaths.has(p);
 
   /* ① 清单里的每个名字都要有执行者。 */
   for (const name of gates) {
-    if (live.has(name)) continue;
+    if (live.has(name)) {
+      continue;
+    }
     if (elsewhere.has(name)) {
       const paths = elsewhere.get(name) ?? [];
       if (paths.length === 0) {
@@ -247,9 +263,7 @@ export function gateNameExecutorProblems(deps) {
       continue;
     }
     if (disabled.has(name)) {
-      problems.push(
-        `「${name}」既在 PR 清单里、又在停用登记里 —— 既跑又停，两个判据各说各话`,
-      );
+      problems.push(`「${name}」既在 PR 清单里、又在停用登记里 —— 既跑又停，两个判据各说各话`);
       continue;
     }
     problems.push(
@@ -261,9 +275,7 @@ export function gateNameExecutorProblems(deps) {
   /* ② 登记表自己也要被核（三条反向）。 */
   for (const [name, paths] of elsewhere) {
     if (!gates.includes(name)) {
-      problems.push(
-        `「${name}」登记了「执行者在别处」，但它不在 PR 清单里 —— 登记与清单对不上`,
-      );
+      problems.push(`「${name}」登记了「执行者在别处」，但它不在 PR 清单里 —— 登记与清单对不上`);
     }
     if (live.has(name)) {
       problems.push(
@@ -284,9 +296,15 @@ export function gateNameExecutorProblems(deps) {
   /* ③ 停用与换执行者都登记不到的「注释形态残留」：既不是停用，也不是在跑。 */
   const commented = commentedStageNames(cnbText);
   for (const name of commented) {
-    if (gates.includes(name)) continue;
-    if (disabled.has(name)) continue;
-    if (elsewhere.has(name)) continue;
+    if (gates.includes(name)) {
+      continue;
+    }
+    if (disabled.has(name)) {
+      continue;
+    }
+    if (elsewhere.has(name)) {
+      continue;
+    }
     problems.push(
       `「${name}」在配置里以注释形态留着，却既不在 PR 清单、也不在停用登记、` +
         "也不在「执行者在别处」那张表里 —— 它既不是停用也不是在跑（这是「删掉了但没人说」那种形态）",

@@ -48,18 +48,18 @@ import { useCallback, useRef } from "react";
  * `exit()` 之前一律拿 `false`。它表达的是「这一刻这件事是不是已经在跑了」，
  * 而 `useState` 的忙碌位表达的是「界面该显示成什么样」—— 前者不能是异步的。
  */
-export interface ReentrancyLock {
+export type ReentrancyLock = {
+  /** 离开临界区 —— 必须在 `finally` 里调（提前 `return` 的分支也要走到）。 */
+  exit: () => void;
+  /** 当前是否在临界区里（只读，给「要不要禁用按钮」这类展示判断用）。 */
+  isLocked: () => boolean;
   /**
    * 尝试进入临界区：已经在跑时返回 `false`（调用处直接 `return`），
    * 拿到 `true` 的那一次**必须**在结束（成功 / 失败 / 提前返回）时调
    * {@link ReentrancyLock.exit}。
    */
   tryEnter: () => boolean;
-  /** 离开临界区 —— 必须在 `finally` 里调（提前 `return` 的分支也要走到）。 */
-  exit: () => void;
-  /** 当前是否在临界区里（只读，给「要不要禁用按钮」这类展示判断用）。 */
-  isLocked: () => boolean;
-}
+};
 
 /**
  * 就地造一把闸门（模块级 / 组件级都能用）。
@@ -71,7 +71,9 @@ export function createReentrancyLock(): ReentrancyLock {
   let locked = false;
   return {
     tryEnter: () => {
-      if (locked) return false;
+      if (locked) {
+        return false;
+      }
       locked = true;
       return true;
     },
@@ -114,7 +116,9 @@ export function useReentrancyLock(): ReentrancyLock {
    * 同一次事件循环里读不到刚写进去的值（React 只在提交后才更新它）。 */
   const lockedRef = useRef(false);
   const tryEnter = useCallback(() => {
-    if (lockedRef.current) return false;
+    if (lockedRef.current) {
+      return false;
+    }
     lockedRef.current = true;
     return true;
   }, []);

@@ -36,13 +36,12 @@ export const MAX_LISTED = 200;
  * @returns {string} 要打到日志里的正文；不 quiet 时是空串
  */
 export function fileListReport(files, input) {
-  if (!input.quiet) return "";
+  if (!input.quiet) {
+    return "";
+  }
   /* 行数由调用点注入（用例给小的值就能钉住截断那一档）；不给或不合法就按封顶值。 */
   const raw = input.max;
-  const max =
-    typeof raw === "number" && Number.isInteger(raw) && raw > 0
-      ? raw
-      : MAX_LISTED;
+  const max = typeof raw === "number" && Number.isInteger(raw) && raw > 0 ? raw : MAX_LISTED;
   const total = files.length;
   if (total === 0) {
     /* 空清单在这条链上**本来就不许发生**（`main` 会拦住它）。真到了这一句，说明清单是在
@@ -52,11 +51,11 @@ export function fileListReport(files, input) {
   const shown = files.slice(0, max);
   return (
     `[affected-launch] 本次清单：${total} 份用例（reporter 是 dot ⇒ 这 ${shown.length} 行是\n` +
-    "  **这一跑跑了哪些**的唯一出处；不 quiet 时由默认 reporter 逐文件打，故此处不打）：\n" +
-    shown.map((f) => `    · ${f}\n`).join("") +
-    (total > shown.length
+    `  **这一跑跑了哪些**的唯一出处；不 quiet 时由默认 reporter 逐文件打，故此处不打）：\n${
+    shown.map((f) => `    · ${f}\n`).join("")
+    }${total > shown.length
       ? `  ……另有 ${total - shown.length} 份未列出（日志预算；要完整清单就本地跑\n` +
         "    `node scripts/affected-tests.mjs` 或看 vitest 自己的默认 reporter）\n"
-      : "")
+      : ""}`
   );
 }

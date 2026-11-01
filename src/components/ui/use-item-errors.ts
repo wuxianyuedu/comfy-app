@@ -36,7 +36,11 @@ import { useCallback, useMemo, useState } from "react";
 /** 一次动作的 scope：`null` 表示「不属于任何一条」（整表级别的错误）。 */
 export type ErrorScope = string | null;
 
-export interface ItemErrors {
+export type ItemErrors = {
+  /** 手动清掉某一条（如用户重新打开该行的编辑器）。 */
+  clear: (key: ErrorScope) => void;
+  /** 清掉全部（如整表刷新 / 关闭弹窗）。 */
+  clearAll: () => void;
   /**
    * 取某一条的错误文案；没有则该条不标红。
    *
@@ -53,11 +57,7 @@ export interface ItemErrors {
    * 同时清掉无 key 那档（整表错误在任一条成功后即失效）。
    */
   report: (key: ErrorScope) => (kind: "ok" | "err", detail: string) => void;
-  /** 手动清掉某一条（如用户重新打开该行的编辑器）。 */
-  clear: (key: ErrorScope) => void;
-  /** 清掉全部（如整表刷新 / 关闭弹窗）。 */
-  clearAll: () => void;
-}
+};
 
 /**
  * 按条目挂错误的错误表。
@@ -69,7 +69,7 @@ export interface ItemErrors {
  * 传 `undefined` 表示「条目集合不固定」（如新增框：新增前还没有这一条），
  * 这时不做收敛，错误靠 `clear` / `clearAll` 显式清。
  */
-export function useItemErrors(keys?: readonly string[]): ItemErrors {
+export function useItemErrors(keys?: ReadonlyArray<string>): ItemErrors {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   /* key 集合的内容指纹 —— 按**内容**比较而非数组引用：调用处几乎都是
@@ -78,12 +78,16 @@ export function useItemErrors(keys?: readonly string[]): ItemErrors {
   const keyPrint = keys === undefined ? null : keys.join("\u0000");
 
   const visible = useMemo(() => {
-    if (keyPrint === null) return errors;
+    if (keyPrint === null) {
+      return errors;
+    }
     const allow = new Set(keyPrint === "" ? [] : keyPrint.split("\u0000"));
     const out: Record<string, string> = {};
     for (const [k, v] of Object.entries(errors)) {
       /* 无 key 那档（整表错误）不受收敛影响：它的作用域本来就是整块。 */
-      if (k === SCOPE_NONE || allow.has(k)) out[k] = v;
+      if (k === SCOPE_NONE || allow.has(k)) {
+        out[k] = v;
+      }
     }
     return out;
     /* `errors` 进依赖；`keyPrint` 是它的过滤器，故一并列出。 */
@@ -94,10 +98,15 @@ export function useItemErrors(keys?: readonly string[]): ItemErrors {
     setErrors((prev) => {
       /* 清一条时若它本来就没错，返回原引用 —— 这个函数会被挂在 effect /
        * 回调里调用，多一次引用变化就多一次级联渲染。 */
-      if (detail === null && !(bucket in prev)) return prev;
+      if (detail === null && !(bucket in prev)) {
+        return prev;
+      }
       const next = { ...prev };
-      if (detail === null) delete next[bucket];
-      else next[bucket] = detail;
+      if (detail === null) {
+        delete next[bucket];
+      } else {
+        next[bucket] = detail;
+      }
       return next;
     });
   }, []);
@@ -121,10 +130,7 @@ export function useItemErrors(keys?: readonly string[]): ItemErrors {
     setErrors((prev) => (Object.keys(prev).length === 0 ? prev : {}));
   }, []);
 
-  const get = useCallback(
-    (key: ErrorScope) => visible[scopeKey(key)] ?? null,
-    [visible],
-  );
+  const get = useCallback((key: ErrorScope) => visible[scopeKey(key)] ?? null, [visible]);
 
   return useMemo(
     () => ({

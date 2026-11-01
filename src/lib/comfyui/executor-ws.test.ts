@@ -76,7 +76,9 @@ describe("进度帧认节点类名（ISSUE #1202）", () => {
   afterEach(() => {
     const s = state();
     // handleMessage 会续看门狗（5 分钟硬超时），用例不跑它，清掉免得吊住进程。
-    for (const t of s.timers.values()) clearTimeout(t);
+    for (const t of s.timers.values()) {
+      clearTimeout(t);
+    }
     s.timers.clear();
     s.promptToTask.clear();
     s.executedWorkflow.clear();
@@ -181,9 +183,7 @@ describe("进度帧认节点类名（ISSUE #1202）", () => {
  * 刷成噪声）、类型数有上限（免得被异常服务刷成一个无界集合）。 */
 describe("不带 prompt_id 的帧也要留证（ISSUE #1315）", () => {
   const traceCalls = () =>
-    vi
-      .mocked(traceMock)
-      .mock.calls.filter((c) => c[2] === "WS 帧不带 prompt_id（跳过归属）");
+    vi.mocked(traceMock).mock.calls.filter((c) => c[2] === "WS 帧不带 prompt_id（跳过归属）");
 
   it("每类只落第一帧，且不碰执行侧", async () => {
     const updateProgress = vi.fn(async () => true);
@@ -191,9 +191,7 @@ describe("不带 prompt_id 的帧也要留证（ISSUE #1315）", () => {
     vi.mocked(traceMock).mockClear();
 
     const frame = (type: string) =>
-      mod.handleMessage(
-        JSON.stringify({ type, data: { probe: { exec_info: [] } } }),
-      );
+      mod.handleMessage(JSON.stringify({ type, data: { probe: { exec_info: [] } } }));
 
     await frame("p1315-first");
     expect(traceCalls()).toHaveLength(1);
@@ -217,9 +215,7 @@ describe("不带 prompt_id 的帧也要留证（ISSUE #1315）", () => {
   it("类型数到上限后停止留证（这个集合不许无界增长）", async () => {
     vi.mocked(traceMock).mockClear();
     for (let i = 0; i < 40; i++) {
-      await mod.handleMessage(
-        JSON.stringify({ type: `p1315-cap-${i}`, data: { x: 1 } }),
-      );
+      await mod.handleMessage(JSON.stringify({ type: `p1315-cap-${i}`, data: { x: 1 } }));
     }
     // 前面那条用例已经占掉两个类型，这里再灌 40 种 ⇒ 只补到上限 32。
     expect(traceCalls()).toHaveLength(30);

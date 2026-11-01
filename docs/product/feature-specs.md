@@ -811,9 +811,11 @@
 
 > 北极星「多剧集影视动漫」的结构承载（[overview §1.2 / §5.2](overview.md)）。
 > **容器层已实现（#2477）**：`series` / `season` / `episode` 三表 + `episode.projectId`
-> 外链 + tRPC `series` router + 项目主页「系列/季/集」面板。角色库（`character` 实体表）
-> 已在 schema 落地，**系列角色库 router + UI + 与 `production.characters` 双向同步**为下一切片。
-> 角色与镜头目前仍是 `production` 的 JSON 列（破坏性抽取走 `db:migrate`，单列处理）。
+> 外链 + tRPC `series` router + 项目主页「系列/季/集」面板。
+> **系列角色库已实现（#2508）**：`character` / `episode_character` 两表 + 系列角色库 router
+> （角色 CRUD / 本集关联）+ 项目主页「系列角色库」面板 + 与 `production.characters` 的
+> 双向同步（提升 / 注入，按 `name` 幂等合并）。
+> 镜头目前仍是 `production` 的 JSON 列（破坏性抽取走 `db:migrate`，单列处理）。
 
 #### FR-SR-01 系列（Series）实体与层级
 
@@ -821,12 +823,15 @@
 - 需求：一部作品 = 一个系列；层级为 **系列 → 季 → 集 → 创作链路**（剧本 / 角色 /
   分镜 / 镜头）。系列持有跨集共享的东西（角色库、风格锚、场景设定）。
 - 行为与验收：① schema 里有 `series` 表，且 `episode` 经外键链到它（不是靠名字匹配）；
-  ② 新建一集时可直接**引用**所属系列的角色与风格，不需要重新生成（角色引用待 PR2 角色库）；
+  ② 新建一集时可直接**引用**所属系列的角色与风格，不需要重新生成（角色引用已随 #2508 系列角色库
+  落地：集经 `episode_character` 引用系列角色，不是拷贝）；
   ③ 删除系列时，其它系列的资产不受影响（`onDelete: "cascade"` 仅清本系列子树，不波及他系列）；
   ④ 现有数据可迁移：既有的 `project` / `production` 归入一个默认系列，迁移后**不丢**（未做自动回填，
   由用户在新面板手动归属，零数据风险）。
-- 落点（现状）：`src/server/db/schema.ts`（`series` / `season` / `episode` 三表）、
-  `src/server/api/routers/series.ts`、`src/components/studio/project-home/SeriesOrganizer.tsx`
+- 落点（现状）：`src/server/db/schema.ts`（`series` / `season` / `episode` / `character` /
+  `episode_character` 表）、`src/server/api/routers/series.ts`、
+  `src/components/studio/project-home/SeriesOrganizer.tsx`（系列 / 季 / 集面板）、
+  `src/components/studio/project-home/SeriesCharacterLibrary.tsx`（系列角色库面板）
 
 #### FR-SR-02 季（Season）与集（Episode）
 
@@ -841,15 +846,24 @@
 
 #### FR-SR-03 跨集资产复用（角色库 / 风格锚 / 场景库）
 
-- 状态：计划中（实体表已落地，库 router + UI + 双向同步待 #2477 后续切片）
+- 状态：已实现（#2508 角色库实体化 + #2801 引用提示 / 反向查询）
 - 需求：角色、风格、场景成为**可被多集引用**的实体（引用，不是拷贝）。
 - 行为与验收：① 在 B 集引用 A 集的角色后，改 A 集角色卡时给出「该角色被 N 集引用」的提示，
-  **不静默改**（改了别的集会跟着变，这件事必须让操作者看见）；
-  ② 引用关系可查（能列出「这个角色被哪些集用了」）；
-  ③ **拷贝即失去一致性**：以「复制一份到本集」实现的复用不算本条达标。
-- 落点（现状）：`character` 实体表与 `episode_character` 关联表已在 `src/server/db/schema.ts`
-  落地（`series` 级角色库，字段对齐 `Character`）；系列角色库的 tRPC router + UI 面板 +
-  与 `production.characters` 的双向同步为下一切片（#2477 续）。当前仍靠 `production.characters` JSON 列。
+  **不静默改**（改了别的集会跟着变，这件事必须让操作者看见）；**已达标**：角色库面板聚焦
+  某角色即显示「该角色被 N 集引用（改动会影响这些集）：S1E1 …」，N 取自 `characterEpisodes`；
+  ② 引用关系可查（能列出「这个角色被哪些集用了」）；**已达标**：`series.characterEpisodes`
+  反向查询返回该角色被引用的集（含季号 / 集号 / 标题 / 在本集的定位），与正向的
+  `episodeCharacters`（某集关联了哪些角色）互为反向；
+  ③ **拷贝即失去一致性**：以「复制一份到本集」实现的复用不算本条达标。**已达标**：集经
+  `episode_character` 引用系列角色实体，不复制 JSON。
+- 落点（现状）：`character` 实体表与 `episode_character` 关联表（`series` 级角色库，字段对齐
+  `Character`）；系列角色库 tRPC router（`characters` / `createCharacter` / `updateCharacter` /
+  `deleteCharacter` / `episodeCharacters` / `characterEpisodes` / `linkCharacter` /
+  `unlinkCharacter` / `promoteFromProduction` / `injectToProduction`，
+  见 `src/server/api/routers/series.ts`）、
+  UI 面板 `src/components/studio/project-home/SeriesCharacterLibrary.tsx`；与 `production.characters`
+  双向同步：提升 = 项目角色按 `name` 幂等并入系列库并关联本集，注入 = 本集关联角色按 `name`
+  合并回项目（同名覆盖字段、不同名追加）。镜头仍走 `production.shots` JSON 列。
 
 #### FR-SR-04 剧集级排期与批量（整季调度 / 断点续跑）
 

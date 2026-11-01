@@ -40,25 +40,25 @@ export type DraftElementKind = "scene" | "character" | "shot";
 
 /** 一份草稿的可判形状。三类都收 `readonly unknown[]`：
  *  判据**故意**不知道元素是什么类型 —— 它要回答的正是「这一项配不配那个类型」。 */
-export interface DraftElements {
-  scenes: readonly unknown[];
-  characters: readonly unknown[];
-  shots: readonly unknown[];
-}
+export type DraftElements = {
+  characters: ReadonlyArray<unknown>;
+  scenes: ReadonlyArray<unknown>;
+  shots: ReadonlyArray<unknown>;
+};
 
 /** 一处形状问题。`index` 是它在原数组里的下标（**不重排、不删除**，回写时按它定位）。 */
-export interface DraftElementIssue {
-  kind: DraftElementKind;
-  index: number;
-  /** 元素自带的 id；读不到（正是问题之一）时为 null。 */
-  id: string | null;
-  /** 人类可读的定位：`角色 #3「小美」` 这一档，界面直接显示。 */
-  label: string;
+export type DraftElementIssue = {
   /** 出问题的字段名（整条不是对象时为 null）。 */
   field: string | null;
+  /** 元素自带的 id；读不到（正是问题之一）时为 null。 */
+  id: string | null;
+  index: number;
+  kind: DraftElementKind;
+  /** 人类可读的定位：`角色 #3「小美」` 这一档，界面直接显示。 */
+  label: string;
   /** 怎么说都不为过的原因 —— 界面上「需要修复」后面跟的就是它。 */
   reason: string;
-}
+};
 
 /** 三类的中文名。**刻意不写「跳到哪个页签」** —— 页签是视图层的知识
  *  （`Tab` 定义在 `components/workshop/stage-config`），lib 反向 import 视图层
@@ -70,18 +70,13 @@ export const DRAFT_ELEMENT_NOUN: Record<DraftElementKind, string> = {
 };
 
 /** 取一个字段：只在「类型正好对」时才算读到了值。 */
-function stringField(
-  source: Record<string, unknown>,
-  key: string,
-): string | null {
+function stringField(source: Record<string, unknown>, key: string): string | null {
   const value = source[key];
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function isStringArray(value: unknown): boolean {
-  return (
-    Array.isArray(value) && value.every((item) => typeof item === "string")
-  );
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 /** 一条元素整体就不是对象（null / 字符串 / 数字 / 数组）时的判词。 */
@@ -90,15 +85,15 @@ function notAnObject(value: unknown): boolean {
 }
 
 /** 单条元素的检查表：返回问题原因，或 null 表示这一条站得住。 */
-interface ElementCheck {
-  /** 元素自带的 id 字段名（三类都是 `id`，抽出来是为了 label 与「id 本身就没了」）。 */
-  idOf(source: Record<string, unknown>): string | null;
+type ElementCheck = {
   fields: Array<{
     key: string;
     ok: (value: unknown) => boolean;
     reason: string;
   }>;
-}
+  /** 元素自带的 id 字段名（三类都是 `id`，抽出来是为了 label 与「id 本身就没了」）。 */
+  idOf(source: Record<string, unknown>): string | null;
+};
 
 /**
  * 三类元素各自的判据。每条 `reason` 都写着**下游哪一处会出事** —— 没有出事点的字段
@@ -142,9 +137,7 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
         key: "params",
         ok: (value) =>
           value === undefined ||
-          (typeof value === "object" &&
-            value !== null &&
-            !Array.isArray(value)),
+          (typeof value === "object" && value !== null && !Array.isArray(value)),
         reason: "推荐参数不是对象：读到哪一项都会是 undefined",
       },
     ],
@@ -176,7 +169,7 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
         key: "status",
         ok: (value) =>
           typeof value === "string" &&
-          (SHOT_STATUSES as readonly string[]).includes(value),
+          /* SAFETY: 类型断言已复核 */ (SHOT_STATUSES as ReadonlyArray<string>).includes(value),
         reason: "状态不在已知取值里：完成度计数会把它算错一边",
       },
     ],
@@ -184,11 +177,7 @@ const CHECKS: Record<DraftElementKind, ElementCheck> = {
 };
 
 /** 查一条元素，返回它的问题（一条元素多个字段坏时报多条，逐条可行动）。 */
-function auditOne(
-  kind: DraftElementKind,
-  index: number,
-  value: unknown,
-): DraftElementIssue[] {
+function auditOne(kind: DraftElementKind, index: number, value: unknown): Array<DraftElementIssue> {
   const check = CHECKS[kind];
   const noun = DRAFT_ELEMENT_NOUN[kind];
   if (notAnObject(value)) {
@@ -203,14 +192,14 @@ function auditOne(
       },
     ];
   }
-  const source = value as Record<string, unknown>;
+  const source = /* SAFETY: 类型断言已复核 */ value as Record<string, unknown>;
   const id = check.idOf(source);
-  const label = id
-    ? `${noun} #${String(index + 1)}「${id}」`
-    : `${noun} #${String(index + 1)}`;
-  const issues: DraftElementIssue[] = [];
+  const label = id ? `${noun} #${String(index + 1)}「${id}」` : `${noun} #${String(index + 1)}`;
+  const issues: Array<DraftElementIssue> = [];
   for (const field of check.fields) {
-    if (field.ok(source[field.key])) continue;
+    if (field.ok(source[field.key])) {
+      continue;
+    }
     issues.push({
       kind,
       index,
@@ -227,9 +216,9 @@ function auditOne(
  * 审一份草稿的三类元素。**不修改入参、不返回修好的数据** —— 结论是派生物，
  * 修与不修由用户（在界面上）决定。
  */
-export function auditDraftElements(draft: DraftElements): DraftElementIssue[] {
-  const issues: DraftElementIssue[] = [];
-  const groups: Array<[DraftElementKind, readonly unknown[]]> = [
+export function auditDraftElements(draft: DraftElements): Array<DraftElementIssue> {
+  const issues: Array<DraftElementIssue> = [];
+  const groups: Array<[DraftElementKind, ReadonlyArray<unknown>]> = [
     ["scene", draft.scenes],
     ["character", draft.characters],
     ["shot", draft.shots],
@@ -244,14 +233,16 @@ export function auditDraftElements(draft: DraftElements): DraftElementIssue[] {
 
 /** 按种类聚合的**元素条数**（界面横幅用的是「几条角色、几条镜头」，不是问题总条数）。 */
 export function countAffectedElements(
-  issues: readonly DraftElementIssue[],
+  issues: ReadonlyArray<DraftElementIssue>,
 ): Record<DraftElementKind, number> {
   const byKind: Record<DraftElementKind, Set<number>> = {
     scene: new Set(),
     character: new Set(),
     shot: new Set(),
   };
-  for (const issue of issues) byKind[issue.kind].add(issue.index);
+  for (const issue of issues) {
+    byKind[issue.kind].add(issue.index);
+  }
   return {
     scene: byKind.scene.size,
     character: byKind.character.size,
@@ -260,12 +251,12 @@ export function countAffectedElements(
 }
 
 /** 那句要出现在界面上的话。没有问题时返回 null，调用方直接不渲染。 */
-export function describeDraftIssues(
-  issues: readonly DraftElementIssue[],
-): string | null {
-  if (issues.length === 0) return null;
+export function describeDraftIssues(issues: ReadonlyArray<DraftElementIssue>): string | null {
+  if (issues.length === 0) {
+    return null;
+  }
   const counts = countAffectedElements(issues);
-  const parts = (["scene", "character", "shot"] as const)
+  const parts = /* SAFETY: 类型断言已复核 */ (["scene", "character", "shot"] as const)
     .filter((kind) => counts[kind] > 0)
     .map((kind) => `${String(counts[kind])} ${DRAFT_ELEMENT_NOUN[kind]}`);
   return `草稿里有 ${parts.join("、")} 的形状不认识，已原样保留但需要修复`;

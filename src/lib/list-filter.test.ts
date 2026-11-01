@@ -15,12 +15,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import {
-  filterGroups,
-  filterGroupsByKeyword,
-  matchesNeedle,
-  normalizeNeedle,
-} from "./list-filter";
+import { filterGroups, filterGroupsByKeyword, matchesNeedle, normalizeNeedle } from "./list-filter";
 
 describe("normalizeNeedle", () => {
   it("去两侧空白并折成小写", () => {
@@ -57,12 +52,12 @@ describe("matchesNeedle", () => {
   });
 });
 
-interface Group {
+type Group = {
+  options: Array<string>;
   title: string;
-  options: string[];
-}
+};
 
-const GROUPS: Group[] = [
+const GROUPS: Array<Group> = [
   { title: "中式", options: ["唐装", "汉服", "旗袍"] },
   { title: "日韩", options: ["和服", "JK制服"] },
   { title: "西式", options: ["风衣", "燕尾服"] },
@@ -111,9 +106,7 @@ describe("filterGroups", () => {
   });
 
   it("命中判据可换成「看多个字段」——那是调用处的域判据", () => {
-    const rows = [
-      { title: "组", items: [{ name: "a", file: "x.safetensors" }] },
-    ];
+    const rows = [{ title: "组", items: [{ name: "a", file: "x.safetensors" }] }];
     const out = filterGroups(rows, "safeten", "items", (item) =>
       matchesNeedle("safeten", `${item.name} ${item.file}`),
     );

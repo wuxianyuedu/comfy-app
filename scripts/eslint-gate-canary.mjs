@@ -110,6 +110,14 @@ const CLEAN_TS = "export const add = (a: number, b: number): number => a + b;\n"
 const NO_UNDEF_SRC = "export const home = process.env.HOME;\n";
 
 let SABOTAGE = "";
+/**
+ * 这一趟起了几次 eslint —— **打出来**，由用例钉住次数。
+ *
+ * 为什么一个内部计数要露面：这一格的全部墙钟都长在「冷启动次数」上（单次约 30s），
+ * 而"把两批文件并成一次调用"这件事在功能测试里**看不出来** —— 拆回去照样全绿，
+ * 只是每次提交多付 30~50s。读数不露面，就会有人在半年后把它拆回去而没人知道。
+ */
+let ESLINT_CALLS = 0;
 if (process.argv.includes("--sabotage")) {
   SABOTAGE = process.argv[process.argv.indexOf("--sabotage") + 1] ?? "";
   if (!SABOTAGE) {
@@ -125,13 +133,16 @@ if (process.argv.includes("--sabotage")) {
  * @returns {{diagnostics: {filePath: string, messages?: readonly {ruleId?: string}[]}[], status: number | null}}
  */
 function runEslint(files) {
+  ESLINT_CALLS += 1;
   const cliRules = SABOTAGE ? ["--rule", JSON.stringify({ [SABOTAGE]: "off" })] : [];
   const res = spawnSync(
     process.execPath,
     [ESLINT_BIN, "--format", "json", "--no-warn-ignored", ...cliRules, ...files],
     { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
-  if (res.error) throw new Error(`eslint 起不来：${res.error.message}`);
+  if (res.error) {
+    throw new Error(`eslint 起不来：${res.error.message}`);
+  }
   const text = (res.stdout ?? "").trim();
   let parsed;
   try {
@@ -163,8 +174,9 @@ function main() {
 
   try {
     /* `--sabotage` 是给「这一格自己」做阳性对照用的，只跑**最小集** ——
-     * eslint 每次调用的 project service 冷启动才是开销大头（沙箱实测单跑
-     * 一次 ~24s），全量 6 次会让这条判据变成「受影响用例」格的新重夹具。
+     * eslint 每次调用的 project service 冷启动才是开销大头（单次约 30s，量具与
+     * 那一轮 A/B 只记在 `changelog.d/2862-*`，别往这里抄第二份），多付一次冷启动
+     * 会让这条判据变成「受影响用例」格的新重夹具。
      * 规则在样本里 ⇒ 只跑那一组（要它红）；不在样本里 ⇒ 只跑 TS 组第一条
      * （要它照旧绿，证明闸门不误伤）。 */
     const inTs = TS_SAMPLES.find((s) => s.rule === SABOTAGE);
@@ -176,7 +188,9 @@ function main() {
     const tsSet = SABOTAGE ? [inTs ?? firstTs] : TS_SAMPLES;
     const scriptSet = SABOTAGE ? (inScripts ? SCRIPTS_SAMPLES : []) : SCRIPTS_SAMPLES;
 
-    for (const dir of dirs) fs.mkdirSync(dir, { recursive: true });
+    for (const dir of dirs) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
 
     const tsFiles = [];
     for (const s of tsSet) {
@@ -196,22 +210,34 @@ function main() {
       scriptFiles.push({ ...s, abs: p });
     }
 
-    /* TS 面一次调用（含干净样本）；scripts 面一次调用（含 no-undef 阴性样本）。
-     * sabotage 模式下 scripts 组通常是空集 ⇒ 这一跳直接跳过。 */
-    const tsRun = runEslint([...tsFiles.map((f) => f.abs), cleanAbs]);
-    const scriptRun = scriptFiles.length
-      ? runEslint([...scriptFiles.map((f) => f.abs), noUndefAbs])
-      : { diagnostics: [], status: 0 };
+    /* TS 面与 scripts 面**并成一次 eslint 调用**（ISSUE #2862）。
+     * 为什么这值得一刀：这一格的开销大头是 eslint 每次调用的 project service 冷启动
+     * （本机非并发实测单次 30~40s —— 原写法默认档要付两次），而两批文件在 flat config 里
+     * 各按自己的 `files` 面解析 —— 合成一次调用**不改变任何一份文件的判定**，只省掉一次冷启动。
+     * 两份对照的落点照旧：`clean.ts` 永远跟着 TS 面进（它今天就在这一支里），
+     * `node-global.mjs` 只在 scripts 面非空时进（sabotage 打的是 TS 侧规则时 scripts 集是空的，
+     * 原实现也是直接跳过那一跳 —— 逐字保持原语义，不顺手放宽也不顺手收窄）。 */
+    const lintTargets = [
+      ...tsFiles.map((f) => f.abs),
+      ...(tsFiles.length ? [cleanAbs] : []),
+      ...scriptFiles.map((f) => f.abs),
+      ...(scriptFiles.length ? [noUndefAbs] : []),
+    ];
+    const run = lintTargets.length
+      ? runEslint(lintTargets)
+      : { diagnostics: [], status: 0, files: 0 };
 
     const byFile = new Map();
-    for (const entry of [...tsRun.diagnostics, ...scriptRun.diagnostics]) {
+    for (const entry of run.diagnostics) {
       byFile.set(path.resolve(entry.filePath), rulesOf(entry));
     }
 
     for (const f of [...tsFiles, ...scriptFiles]) {
       const rules = byFile.get(path.resolve(f.abs));
       if (!rules || !rules.has(f.rule)) {
-        misses.push(`${f.name}：期望命中 ${f.rule}，实际命中 ${rules ? [...rules].join(", ") || "（无）" : "（文件不在输出里 —— 规则面没覆盖到样本目录）"}`);
+        misses.push(
+          `${f.name}：期望命中 ${f.rule}，实际命中 ${rules ? [...rules].join(", ") || "（无）" : "（文件不在输出里 —— 规则面没覆盖到样本目录）"}`,
+        );
       }
     }
 
@@ -227,12 +253,20 @@ function main() {
     const total = tsFiles.length + scriptFiles.length;
     if (misses.length > 0) {
       console.error(`[eslint-canary] ✗ ${misses.length}/${total} 条对照没守住：`);
-      for (const m of misses) console.error(`  · ${m}`);
-      console.error("[eslint-canary] 读数含义：上面的规则**现在不会拦下它本该拦的东西** —— 全仓 0 警不能当成「这些规则在工作」。");
+      for (const m of misses) {
+        console.error(`  · ${m}`);
+      }
+      console.error(
+        `[eslint-canary] 读数含义：上面的规则**现在不会拦下它本该拦的东西** —— 全仓 0 警不能当成「这些规则在工作」。（eslint 调用 ${ESLINT_CALLS} 次）`,
+      );
       return 1;
     }
-    console.log(`[eslint-canary] ✓ ${total} 条阳性对照全部命中 + 反向/阴性对照干净（samples=${total}）`);
-    for (const f of [...tsFiles, ...scriptFiles]) console.log(`  · ${f.name} → ${f.rule}`);
+    console.log(
+      `[eslint-canary] ✓ ${total} 条阳性对照全部命中 + 反向/阴性对照干净（samples=${total}，eslint 调用 ${ESLINT_CALLS} 次）`,
+    );
+    for (const f of [...tsFiles, ...scriptFiles]) {
+      console.log(`  · ${f.name} → ${f.rule}`);
+    }
     return 0;
   } finally {
     for (const dir of dirs) {

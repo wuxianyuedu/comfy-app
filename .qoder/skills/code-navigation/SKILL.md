@@ -19,7 +19,10 @@ description: 用 codegraph / zvec-grep 两个 MCP 做代码检索与影响面分
 2. 门禁给不出结论、需要「跨文件的语义化检索」时，再用 MCP：
    - 找定义 / 引用 / 评估改动影响面 → `codegraph`；
    - 按正则 / 文本 / 关键字跨文件搜 → `zvec-grep`。
-3. **用之前先判就绪**：`codegraph status` 与 `zg status` 任一条报未初始化，这次检索就**只能当加速不可用**处理——
+3. **用之前先跑 `pnpm agent:index` 判就绪**：它把两个工具**自己的读数**原样交出来——
+   codegraph 取 `codegraph status -j` 的 `initialized`（未建索引时它**退出码仍是 0**，
+   所以不能拿退出码当结论），zvec-grep 取 `zg status --check-ready` 的退出码（非零即没就绪，
+   输出原样转发）。任一条没就绪，这次检索就**只能当加速不可用**处理——
    未建索引时语义查询**返回空而不报错**，所以**「查不到」不等于「仓库里没有」**。要下「没有现成实现」的结论
    （AGENTS 硬规则 24 的复用优先），必须再用 Grep / Read 复核一遍，并说明用了哪一遍。
 4. 二者都是**导航加速**，不作为提交前的独立校验源，也不替代机器判据。
@@ -41,7 +44,11 @@ description: 用 codegraph / zvec-grep 两个 MCP 做代码检索与影响面分
 - 两者都带**本地索引**，没索引时语义查询没有结果，而工具自己会给出下一步：
   `codegraph status` 报 `Not initialized` → `codegraph init`（全量重建 `codegraph index`、
   增量 `codegraph sync`、删索引 `codegraph uninit`）；`zg status` 报
-  `Workspace index is not configured` → `zg index`。
+  `Workspace index is not configured` → `zg index`。**读与建都收在一个入口上**：
+  `pnpm agent:index`（默认只读诊断，不改任何索引）/ `pnpm agent:index --init`
+  （只对明确报「没就绪」的工具动手，随后**重新取一遍**状态再报）。它的退出码
+  0 = 两个工具都报就绪、1 = 有工具明确报没就绪、2 = 没取到读数（工具不在 / 输出解析不了，
+  这一档不是绿）。
 - `zvec-grep` 的语义索引涉及 embedding provider 选择与凭据，要不要配由你选的 embedding
   形态决定（自查入口 `zg config` / `zg auth status`）；不配索引也能用受管 ripgrep：
   `zg query --rg <pattern> <path>` 不依赖索引。

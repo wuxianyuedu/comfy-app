@@ -125,10 +125,7 @@ describe("环境前提：解释器版本下限（低于下限时没有任何一�
       "setup-comfy-cli-venv.mjs 里不应另抄下限数字（引用 PYTHON_MIN_VERSION 即可）",
     ).toBe(false);
     const ps1 = read("scripts/setup-comfy-cli-venv.ps1");
-    expect(
-      ps1.includes("3.10"),
-      "薄壳 .ps1 里也不许另抄下限数字",
-    ).toBe(false);
+    expect(ps1.includes("3.10"), "薄壳 .ps1 里也不许另抄下限数字").toBe(false);
   });
 
   it("三档取值分得开：达标 / 不达标 / 解析不出（「不知道」不是「不达标」）", () => {
@@ -184,7 +181,7 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
   });
 
   it("红侧：解释器低于下限 ⇒ 非零退出", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = envProbe(
       greenPorts({
         findPythonImpl: () => ({
@@ -202,7 +199,7 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
   });
 
   it("红侧：`.cnb.yml` 里出现 host 认不了的语法 ⇒ 非零退出（且能指到那一行）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = envProbe(
       greenPorts({
         config: [
@@ -225,7 +222,7 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
   });
 
   it("红侧：读不到配置也红（它判的就是那份配置，读不到 = 一条都没判）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = envProbe(
       greenPorts({
         config: null,
@@ -237,7 +234,7 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
   });
 
   it("读数：控制台输出编码非 UTF-8 时**只记读数**、点出下一动作，不退非零", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = envProbe(
       greenPorts({
         readEncodingImpl: () => ({ codePage: 936, chcpRaw: "活动代码页: 936" }),
@@ -253,7 +250,7 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
   });
 
   it("读数：量不到代码页时也**不**退非零，且不当成「不合格」", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = envProbe(
       greenPorts({
         readEncodingImpl: () => ({ codePage: null, chcpRaw: null }),
@@ -265,11 +262,11 @@ describe("环境前提：判定面的两个方向（红了要红在「几秒就�
   });
 
   it("读数：已经是 UTF-8 时说的是「对齐」，不给下一动作（免得话术自相矛盾）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     envProbe(
       greenPorts({
         readEncodingImpl: () => ({
-          codePage: 65001,
+          codePage: 65_001,
           chcpRaw: "Active code page: 65001",
         }),
         log: (l: string) => lines.push(l),
@@ -337,14 +334,11 @@ describe("环境前提：浏览器那一格的前提（晚红的最后一格要�
     expect(code).toBe(0);
     /* 这一条不是「省流量」——它是**这一格在断网时仍然绿**的依据：长期存在的机器上，
      * 浏览器一旦落地就一直在那儿，而这一趟根本不需要网络。 */
-    expect(
-      probed,
-      "已有落点时不该去碰网（那会让它白红在一条本来不缺的链路上）",
-    ).toBe(0);
+    expect(probed, "已有落点时不该去碰网（那会让它白红在一条本来不缺的链路上）").toBe(0);
   });
 
   it("落点空 + 全部下载根不可达 ⇒ 非零退出（这就是「别等三十分钟」那一格）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = envProbe(
       basePorts({
         browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
@@ -403,15 +397,14 @@ describe("环境前提：浏览器那一格的前提（晚红的最后一格要�
   });
 
   it("给了 `PLAYWRIGHT_DOWNLOAD_HOST` 就**只量它**（与 `浏览器安装` 同一条语义）", () => {
-    const seen: Array<string[] | undefined> = [];
+    const seen: Array<Array<string> | undefined> = [];
     envProbe(
       basePorts({
         env: {
-          PLAYWRIGHT_DOWNLOAD_HOST:
-            "https://cdn.npmmirror.com/binaries/playwright",
+          PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright",
         },
         browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
-        reachabilityImpl: ({ candidates }: { candidates?: string[] } = {}) => {
+        reachabilityImpl: ({ candidates }: { candidates?: Array<string> } = {}) => {
           seen.push(candidates);
           return [
             {
@@ -431,7 +424,7 @@ describe("环境前提：浏览器那一格的前提（晚红的最后一格要�
   });
 
   it("探测本身出错 ⇒ **不**退非零（「不知道」不是「不达标」）", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = envProbe(
       basePorts({
         browserPresentImpl: () => {
@@ -454,17 +447,14 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
     expect(isReachableVerdict("HTTP 404")).toBe(false);
     expect(isReachableVerdict("HTTP 403")).toBe(false);
     expect(isReachableVerdict("超时（8000ms 内没有响应）")).toBe(false);
-    expect(isReachableVerdict("ENOTFOUND：getaddrinfo ENOTFOUND x")).toBe(
-      false,
-    );
+    expect(isReachableVerdict("ENOTFOUND：getaddrinfo ENOTFOUND x")).toBe(false);
     expect(isReachableVerdict("（子进程没有输出）")).toBe(false);
   });
 
   it("打印那一份与三态那一份**同源**（同一次探测的两种形态）", () => {
     /* 一次注入的探测喂进两边，断言「打印出来的行」与「三态的 url/结论」逐项对得上
      * —— 这条是防「两份实现会漂」的那一天（§12.12）。 */
-    const probe = (url: string) =>
-      url.includes("ok") ? "HTTP 200" : "超时（1ms）";
+    const probe = (url: string) => (url.includes("ok") ? "HTTP 200" : "超时（1ms）");
     const probeUrlOf = (root: string) => `${root}/builds/cft/T/win64/p.zip`;
     const candidates = ["https://a/ok", "https://b/dead"];
     const verdicts = playwrightReachabilityVerdicts({
@@ -477,9 +467,7 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
     for (const v of verdicts) {
       expect(lines.join("\n")).toContain(`${v.url} → ${v.verdict}`);
     }
-    expect(
-      playwrightReachabilityVerdicts({ candidates, probe, probeUrlOf }),
-    ).toEqual(verdicts);
+    expect(playwrightReachabilityVerdicts({ candidates, probe, probeUrlOf })).toEqual(verdicts);
   });
 
   it("量的是**真资源**不是裸根：根回 4xx 而资源 2xx/3xx ⇒ 判通（ISSUE #1966）", () => {
@@ -492,12 +480,11 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
      * `https://cdn.playwright.dev` 同理（裸根 400 / 真资源 307）。
      * 所以这里钉住两件事：探测打到的是**带资源路径**的 URL，且**根自己的结论
      * 不参与 `ok`**。 */
-    const asked: string[] = [];
+    const asked: Array<string> = [];
     const root = "https://cdn.npmmirror.com/binaries/playwright";
     const verdicts = playwrightReachabilityVerdicts({
       candidates: [root],
-      probeUrlOf: (r) =>
-        `${r}/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip`,
+      probeUrlOf: (r) => `${r}/builds/cft/153.0.8010.12/win64/chrome-headless-shell-win64.zip`,
       probe: (url) => {
         asked.push(url);
         /* 裸根 404（现场读数），带资源路径 200 —— 判据只看后者。 */
@@ -514,10 +501,7 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
     ).toBe(true);
     const first = verdicts[0];
     expect(first, "三态里必须有一条").toBeDefined();
-    expect(
-      first?.ok,
-      "真资源通 ⇒ 这一格必须判通（这正是那次误报反过来的一格）",
-    ).toBe(true);
+    expect(first?.ok, "真资源通 ⇒ 这一格必须判通（这正是那次误报反过来的一格）").toBe(true);
     /* 两个面都要留：`root` 是配置面（人会照着配 PLAYWRIGHT_DOWNLOAD_HOST），
      * `url` 是实测面 —— 缺了 `root`，人对着一个资源路径不知道该改哪一行。 */
     expect(first?.root).toBe(root);
@@ -527,16 +511,10 @@ describe("环境前提：浏览器那一格的两个消费者不许各写一份�
 describe("环境前提：流水线上真的在跑它，且排在装依赖之前", () => {
   it("`COMFYAPP_CI_GATES` 里登记了它，且它排在 `Install dependencies` 之前", () => {
     const order = registeredGateOrder(read(".cnb.yml"));
-    expect(
-      order.length,
-      "解析不出 COMFYAPP_CI_GATES —— 键被删了？",
-    ).toBeGreaterThan(0);
+    expect(order.length, "解析不出 COMFYAPP_CI_GATES —— 键被删了？").toBeGreaterThan(0);
     const at = order.indexOf("环境前提");
     const depsAt = order.indexOf("Install dependencies");
-    expect(
-      at,
-      "`环境前提` 不在清单里 —— 那一步因此没有任何执行者",
-    ).toBeGreaterThan(-1);
+    expect(at, "`环境前提` 不在清单里 —— 那一步因此没有任何执行者").toBeGreaterThan(-1);
     expect(depsAt).toBeGreaterThan(-1);
     expect(
       at,
@@ -561,16 +539,9 @@ describe("环境前提：流水线上真的在跑它，且排在装依赖之前"
       command,
       "「环境前提」的脚本里没有给 PowerShell 设 UTF-8 输出编码 —— 平台日志会全是乱码",
     ).toContain("[Console]::OutputEncoding");
-    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(
-      unwrapCp936(command),
-    )?.[1];
-    expect(entry, `解析不出「环境前提」点名的入口：${command}`).toBe(
-      "scripts/ci-env-probe.mjs",
-    );
-    expect(
-      read(entry ?? "").length,
-      "「环境前提」点名的入口不在盘上",
-    ).toBeGreaterThan(0);
+    const entry = /(?:^|;)\s*(?:node\s+)?(scripts\/[^\s;]+)/.exec(unwrapCp936(command))?.[1];
+    expect(entry, `解析不出「环境前提」点名的入口：${command}`).toBe("scripts/ci-env-probe.mjs");
+    expect(read(entry ?? "").length, "「环境前提」点名的入口不在盘上").toBeGreaterThan(0);
   });
 });
 
@@ -609,10 +580,9 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
 
   it("摘 stage 块那一段与门禁判据**逐项同一份答案**", () => {
     for (const name of ["环境前提", BROWSER_INSTALL_STAGE]) {
-      expect(
-        stageBlockIn(YML, name),
-        `两份 stageBlock 的文本副本漂了（${name}）`,
-      ).toBe(stageBlockGate(YML, name));
+      expect(stageBlockIn(YML, name), `两份 stageBlock 的文本副本漂了（${name}）`).toBe(
+        stageBlockGate(YML, name),
+      );
     }
     /* 两边都得**真的命中**（不然这条用例是空转）。 */
     expect(stageBlockIn(YML, BROWSER_INSTALL_STAGE)).not.toBeNull();
@@ -637,9 +607,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     for (const name of [BROWSER_INSTALL_STAGE, "Install dependencies"]) {
       const active = stageBlockIn(live, name);
       expect(active, `${name} 解析不出内容`).toBeTruthy();
-      expect(active, `活的形态下两份解析漂了（${name}）`).toBe(
-        stageBlockGate(live, name),
-      );
+      expect(active, `活的形态下两份解析漂了（${name}）`).toBe(stageBlockGate(live, name));
     }
     const disabledFixture = [
       ".gates: &gates",
@@ -660,20 +628,14 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   });
 
   it("`env` 的取值去引号；找不到的键 / stage 回 `null`（那是「不知道」，不判红）", () => {
+    expect(stageEnvValue(YML, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST")).toBe(
+      "https://m/root",
+    );
     expect(
-      stageEnvValue(YML, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_HOST"),
-    ).toBe("https://m/root");
-    expect(
-      stageEnvValue(
-        YML,
-        BROWSER_INSTALL_STAGE,
-        "PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT",
-      ),
+      stageEnvValue(YML, BROWSER_INSTALL_STAGE, "PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT"),
     ).toBe("120000");
     expect(stageEnvValue(YML, BROWSER_INSTALL_STAGE, "没有这个键")).toBeNull();
-    expect(
-      stageEnvValue(YML, "没有这一步", "PLAYWRIGHT_DOWNLOAD_HOST"),
-    ).toBeNull();
+    expect(stageEnvValue(YML, "没有这一步", "PLAYWRIGHT_DOWNLOAD_HOST")).toBeNull();
     /* 现役 `.cnb.yml` 里那一步真的配了它 —— 判据指着的那一行必须是**真的存在**的。
      * 名字取 `BROWSER_INSTALL_STAGE`（与被测实现同一个常量）：2026-10-19 那一格撤到
      * 每日档、名字加了前缀，判据与实现各写一份字符串就会在下次挪档时**同时指错** ——
@@ -687,8 +649,8 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   });
 
   it("配置里那个根取不回字节 ⇒ **当场红**，并点名该换哪一行", () => {
-    const lines: string[] = [];
-    const asked: Array<string[] | undefined> = [];
+    const lines: Array<string> = [];
+    const asked: Array<Array<string> | undefined> = [];
     const code = envProbe({
       root: ROOT,
       config: YML,
@@ -699,7 +661,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
       }),
       runImpl: () => ({ ok: true, out: "12.4.1" }),
       browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
-      reachabilityImpl: ({ candidates }: { candidates?: string[] } = {}) => {
+      reachabilityImpl: ({ candidates }: { candidates?: Array<string> } = {}) => {
         asked.push(candidates);
         return [
           {
@@ -793,7 +755,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
     });
 
     it("配了 `image:` ⇒ 当场红，并点名那几格与「删掉那一行」这条下一动作", () => {
-      const lines: string[] = [];
+      const lines: Array<string> = [];
       const code = envProbe({
         root: ROOT,
         config: WITH_IMAGE,
@@ -818,19 +780,13 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
        * 夹具里写的 `浏览器安装`」。判的是「红话里要点名出事的那一格」，名字跟着夹具走。 */
       expect(said).toContain("浏览器安装");
       expect(said).toContain("Runner does not enable Docker");
-      expect(
-        said,
-        "红要红在能指路的位置：说清下一动作是把那一行删掉",
-      ).toContain("删掉");
+      expect(said, "红要红在能指路的位置：说清下一动作是把那一行删掉").toContain("删掉");
     });
 
     it("不带 `image:` 的同一份配置 ⇒ 这一条不拦（绿要绿得住）", () => {
       const code = envProbe({
         root: ROOT,
-        config: WITH_IMAGE.replace(
-          "    image: mcr.microsoft.com/playwright:v1.63.0-noble\n",
-          "",
-        ),
+        config: WITH_IMAGE.replace("    image: mcr.microsoft.com/playwright:v1.63.0-noble\n", ""),
         findPythonImpl: () => ({
           command: "python",
           path: null,
@@ -849,7 +805,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
   });
 
   it("配置里**没**给根时照旧铺开候选那一族（那时「出得去这类域吗」才是要答的问题）", () => {
-    const asked: Array<string[] | undefined> = [];
+    const asked: Array<Array<string> | undefined> = [];
     envProbe({
       root: ROOT,
       config: [
@@ -865,7 +821,7 @@ describe("环境前提：浏览器那一格量的是「配置里那个根」（I
       }),
       runImpl: () => ({ ok: true, out: "12.4.1" }),
       browserPresentImpl: () => ({ ok: false, out: "落点根读不到：/pw" }),
-      reachabilityImpl: ({ candidates }: { candidates?: string[] } = {}) => {
+      reachabilityImpl: ({ candidates }: { candidates?: Array<string> } = {}) => {
         asked.push(candidates);
         return [
           {

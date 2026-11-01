@@ -33,6 +33,7 @@
  *     不是「跑了且红」。两者混成一个数，下一次就会有人拿「没跑」当「判过了」。
  * 刻意**不退回 `shell: true`**：`spawn-shell-scan.mjs` 那条判据就在守这件事。
  */
+import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 
@@ -64,12 +65,36 @@ if (!name) {
 
 const entry = resolveBinEntryByName(name, { root });
 if (entry === null) {
+  /* 话术分两档（ISSUE #2720）：本入口的搜索面是**仓内** `node_modules/.bin`
+   * （#2572 的设计面）。解析不到有两种成因，下一动作完全不同——
+   *   · 名字在仓内依赖清单里 ⇒ 那才是「没装」，出口 `pnpm install`；
+   *   · 名字压根不在仓内（全局 CLI，如 `cnb` 住在 pnpm 全局 bin）⇒ 说「没装」
+   *     会把人引去白跑一次 install 并长出「本机跑不了平台」的误判——正确通道是
+   *     `ship-exec.mjs` 的 `pnpmInvocation(args, { name })`（经 PowerShell 宿主）。
+   * 用 package.json 的依赖声明区分这两档，而不是猜。 */
+  let inManifest;
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+    const deps = {
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
+    };
+    inManifest = Object.hasOwn(deps, name);
+  } catch {
+    inManifest = false;
+  }
   process.stderr.write(
-    `[ci-run-tool] 解析不到垫片「${name}」指向的包真身入口 —— ` +
-      "要么没装（先 `pnpm install`，别当成「本机跑不了」），要么 pnpm 换了垫片的写法。" +
-      "自查：`node scripts/package-bin-entry.mjs --by-name " +
-      name +
-      "`\n",
+    inManifest
+      ? `[ci-run-tool] 解析不到垫片「${name}」指向的包真身入口 —— ` +
+          `仓内声明了这个依赖但 \`.bin\` 里没有垫片：要么没装（先 \`pnpm install\`，` +
+          `别当成「本机跑不了」），要么 pnpm 换了垫片的写法。` +
+          `自查：\`node scripts/package-bin-entry.mjs --by-name ${
+          name
+          }\`\n`
+      : `[ci-run-tool] 「${name}」不在仓内 \`node_modules/.bin\` 的面里 —— ` +
+          "本入口只管仓内垫片；全局 CLI（cnb 那一族）走 `scripts/ship-exec.mjs` 的 " +
+          "`pnpmInvocation(args, { name })`（实测经 PowerShell 宿主起得来），" +
+          "不要跑 `pnpm install`——那治不了面外。\n",
   );
   process.exit(NOT_RUN_EXIT);
 }

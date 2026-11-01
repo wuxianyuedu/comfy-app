@@ -88,10 +88,15 @@ function judgeCoverage(diskRel, tiers) {
     for (const t of tiers) {
       const included = matchesAny(rel, t.include);
       const excluded = matchesAny(rel, t.exclude);
-      if (included && !excluded) hits.push(t.name);
+      if (included && !excluded) {
+        hits.push(t.name);
+      }
     }
-    if (hits.length === 0) dead.push(rel);
-    else if (hits.length > 1) overlap.push({ rel, tiers: hits });
+    if (hits.length === 0) {
+      dead.push(rel);
+    } else if (hits.length > 1) {
+      overlap.push({ rel, tiers: hits });
+    }
   }
   return { dead, overlap };
 }
@@ -114,7 +119,7 @@ function main() {
   if (configText === null || found < EXPECTED_TIERS) {
     console.error(
       `${TAG} [ERROR] 解析 \`vitest.config.ts\` 的 \`projects\` 失败` +
-        `（读到 ${configText === null ? "0 份配置" : found + " 个档"}，期望 ${EXPECTED_TIERS}）。\n` +
+        `（读到 ${configText === null ? "0 份配置" : `${found} 个档`}，期望 ${EXPECTED_TIERS}）。\n` +
         `${TAG}   本判据的收集面就是那两个档的 \`include\` / \`exclude\`；\n` +
         `${TAG}   配置形状改了就要同批改这里 —— 静默退回「没有档」等于这条判据消失。`,
     );
@@ -141,10 +146,7 @@ function main() {
     exclude: g.exclude,
   }));
   const { dead, overlap } = judgeCoverage(listed, tierList);
-  const globCount = tierList.reduce(
-    (n, t) => n + t.include.length + t.exclude.length,
-    0,
-  );
+  const globCount = tierList.reduce((n, t) => n + t.include.length + t.exclude.length, 0);
   const problems = dead.length + overlap.length;
 
   if (problems === 0) {
@@ -175,9 +177,7 @@ function main() {
   }
   for (const o of overlap) {
     emit(`  · ${o.rel}  [重叠：${o.tiers.join(" + ")}]`);
-    emit(
-      `      两个档都接住了它 —— 同一条用例会被收集两遍（或 glob 写重了）。`,
-    );
+    emit(`      两个档都接住了它 —— 同一条用例会被收集两遍（或 glob 写重了）。`);
   }
   emit(
     "\n修法：" +

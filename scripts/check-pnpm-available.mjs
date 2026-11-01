@@ -34,10 +34,7 @@ import path from "node:path";
 import { orchestratePnpm, preparePnpm, probePnpm } from "./launcher-core/corepack.mjs";
 import { pnpmInvocation, powershellHost } from "./launcher-core/shell.mjs";
 import { checkNodeModules } from "./launcher-core/worktree.mjs";
-import {
-  collectDependencyFloors,
-  describeNodeAgainstFloor,
-} from "./node-engines.mjs";
+import { collectDependencyFloors, describeNodeAgainstFloor } from "./node-engines.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -51,8 +48,7 @@ const depsRootArgIndex = process.argv.indexOf("--deps-root");
 /* 取一次再判：`process.argv[i+1]` 在 noUncheckedIndexedAccess 下是 `string | undefined`，
  * 而真值判据已经把它收进「非空串」那一支（同一形见批 8 / 批 10 —— 判的是旗标缺值，
  * 缺值就退回默认的 `root`，不猜、也不用 cast）。 */
-const depsRootArg =
-  depsRootArgIndex >= 0 ? process.argv[depsRootArgIndex + 1] : undefined;
+const depsRootArg = depsRootArgIndex !== -1 ? process.argv[depsRootArgIndex + 1] : undefined;
 const depsRoot = depsRootArg ? path.resolve(depsRootArg) : root;
 
 /** 打印一行结论（纯 ASCII 前缀 + 原文，便于日志检索）。
@@ -67,7 +63,9 @@ function say(prefix, message) {
  * `result.expected`，两样都可能缺 —— 所以判据第一句就是 `!a || !b`）。
  * @param {string | null | undefined} a @param {string | null | undefined} b @returns {boolean} */
 function sameVersion(a, b) {
-  if (!a || !b) return false;
+  if (!a || !b) {
+    return false;
+  }
   return a.replace(/^v/, "") === b.replace(/^v/, "");
 }
 
@@ -85,16 +83,10 @@ function sameVersion(a, b) {
  */
 function describePnpmProbe() {
   const invocation = pnpmInvocation(["-v"]);
-  const raw = invocation
-    ? invocation.pathRaw
-    : String(process.env.PATH ?? "");
-  const entries = invocation
-    ? invocation.pathEntries
-    : raw.split(path.delimiter).filter(Boolean);
+  const raw = invocation ? invocation.pathRaw : String(process.env.PATH ?? "");
+  const entries = invocation ? invocation.pathEntries : raw.split(path.delimiter).filter(Boolean);
   const onDisk = invocation ? invocation.onDisk : [];
-  const host = invocation
-    ? invocation.osHost
-    : powershellHost({ platform: process.platform });
+  const host = invocation ? invocation.osHost : powershellHost({ platform: process.platform });
   const lines = ["---- pnpm 探测现场（供定位，非报错）----"];
   lines.push(`platform: ${process.platform}`);
   lines.push(
@@ -103,13 +95,19 @@ function describePnpmProbe() {
       : "PATH 原文: （空 —— 这个进程的环境变量表里没有 PATH，或键名是别的写法）",
   );
   lines.push(`PATH 条目（按 ${JSON.stringify(path.delimiter)} 切）: ${entries.length} 条`);
-  for (const e of entries.slice(0, 20)) lines.push(`  ${e}`);
-  if (entries.length > 20) lines.push(`  …（另有 ${entries.length - 20} 条）`);
+  for (const e of entries.slice(0, 20)) {
+    lines.push(`  ${e}`);
+  }
+  if (entries.length > 20) {
+    lines.push(`  …（另有 ${entries.length - 20} 条）`);
+  }
   lines.push("PATH 各目录里 pnpm* 的命中:");
   if (onDisk.length === 0) {
     lines.push("  （一个都没命中 —— 这些条目里没有 pnpm 的任何形态）");
   } else {
-    for (const hit of onDisk) lines.push(`  ${hit}`);
+    for (const hit of onDisk) {
+      lines.push(`  ${hit}`);
+    }
   }
   lines.push(
     host
@@ -154,7 +152,9 @@ function corepackShippedDir(env = process.env) {
          * 由 `/^\d+\.\d+\.\d+/` 保证至少三段，取不到只能是那三段之外）。 */
         for (let i = 0; i < 3; i += 1) {
           const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-          if (diff !== 0) return diff;
+          if (diff !== 0) {
+            return diff;
+          }
         }
         return 0;
       })
@@ -164,7 +164,9 @@ function corepackShippedDir(env = process.env) {
   }
   for (const v of versions) {
     const dir = path.join(store, v);
-    if (fs.existsSync(path.join(dir, "pnpm-native.exe"))) return dir;
+    if (fs.existsSync(path.join(dir, "pnpm-native.exe"))) {
+      return dir;
+    }
   }
   return null;
 }
@@ -183,7 +185,9 @@ if (!result.probe.ok) {
   }
   say("[ERROR]", "pnpm 不可用 —— 启动链路会在工具链门禁处停下。");
   process.stdout.write("\n");
-  process.stdout.write(result.tip ?? "（没有可用的修复提示，请检查 launcher-core/corepack.mjs 的 buildTip）\n");
+  process.stdout.write(
+    result.tip ?? "（没有可用的修复提示，请检查 launcher-core/corepack.mjs 的 buildTip）\n",
+  );
   process.stdout.write("\n");
   /* 探不到的时候，**这一份进程读到的 PATH** 就是唯一可核对的事实（ISSUE #2281）。
    * 反面现场：一份平台日志写着「（一个都没命中）」，而同一台机上 `where pnpm` /
@@ -215,7 +219,10 @@ if (result.probe.command) {
   const invocation = pnpmInvocation(["-v"]);
   say("[INFO]", `选中的 pnpm：${result.probe.command}`);
   if (invocation?.viaHost) {
-    say("[INFO]", `经宿主执行：${invocation.command} ${invocation.args.join(" ")} → ${invocation.candidate}`);
+    say(
+      "[INFO]",
+      `经宿主执行：${invocation.command} ${invocation.args.join(" ")} → ${invocation.candidate}`,
+    );
   } else if (invocation && invocation.command === process.execPath) {
     say("[INFO]", `经 JS 入口执行：${invocation.command} ${invocation.args.join(" ")}`);
   }
@@ -224,22 +231,35 @@ if (result.probe.command) {
  * 原来 `result.repaired || result.tip` 那一支里，`tip` 为 null 时会把字面词
  * `null` 当成一行提示打出去（"[INFO] null"）。条件换成只看 `tip` ——
  * 有tip才念，没 tip 就什么都不念（repaired 本身在这不带来任何可读信息）。 */
-if (result.tip) say("[INFO]", result.tip);
+if (result.tip) {
+  say("[INFO]", result.tip);
+}
 
 // 版本一致性：先按启动器的口径**试一次自动对齐**，复核通过才算「一致」。
 if (result.expected && !sameVersion(result.probe.version, result.expected)) {
   const before = result.probe.version;
-  say("[WARN]", `版本与 package.json 要求不一致（本机 ${before}，要求 ${result.expected}）—— 尝试 corepack 自动对齐…`);
+  say(
+    "[WARN]",
+    `版本与 package.json 要求不一致（本机 ${before}，要求 ${result.expected}）—— 尝试 corepack 自动对齐…`,
+  );
   const prepare = preparePnpm({ root, expected: result.expected });
   const after = probePnpm({ root });
   if (after.ok && sameVersion(after.version, result.expected)) {
     say("[OK]  ", `已对齐：pnpm ${before} → ${after.version}（${prepare.description}）。`);
   } else {
-    say("[WARN]", `自动对齐未生效（${prepare.description}，当前 ${after.ok ? after.version : "不可用"}）。`);
-    say("[INFO]", "版本漂移先查上面「选中的 pnpm」：PATH 上并存了另一个 pnpm" +
-      "（独立安装 / 另一个 corepack 副本）时，用到的就是它，与本目录的 package.json 无关。");
+    say(
+      "[WARN]",
+      `自动对齐未生效（${prepare.description}，当前 ${after.ok ? after.version : "不可用"}）。`,
+    );
+    say(
+      "[INFO]",
+      "版本漂移先查上面「选中的 pnpm」：PATH 上并存了另一个 pnpm" +
+        "（独立安装 / 另一个 corepack 副本）时，用到的就是它，与本目录的 package.json 无关。",
+    );
     say("[INFO]", "启动器对此只 WARN、不阻断启动；要手动对齐：");
-    process.stdout.write(`         corepack enable && corepack prepare pnpm@${result.expected} --activate\n`);
+    process.stdout.write(
+      `         corepack enable && corepack prepare pnpm@${result.expected} --activate\n`,
+    );
   }
 } else if (result.expected) {
   say("[OK]  ", `版本与 package.json 的 packageManager 一致（pnpm@${result.expected}）。`);
@@ -259,37 +279,50 @@ const declaredFloor =
 /* `collectDependencyFloors` 给的是一个**可分辨联合**（`{ok:true, floors}` 或
  * `{ok:false, reason}`），而原来这一句直接 `.floors ?? []` —— 类型上读不到那个字段
  * （`TS2339`，本批那格红的就是它），行为上等于「采集没跑起来 ⇒ 当成没有下限」。
- * 这里**先把这一支如实窄一次、保持原行为**（空数组），因为「没跑起来该不该被念出来」
- * 是改输出不是改类型：处置记在 ISSUE #2722 —— 内核（`node-engines.mjs:356-363`）对采集失败
- * 本有 `kind:"unparsable"` 的正确出口，而这里传了一个非 `undefined` 的值，把下面那条
- * 已经写好的 WARN 话术变得结构上不可达。 */
-const floorCollection = collectDependencyFloors(root);
-const floorVerdict = describeNodeAgainstFloor({
-  version: nodeVersion,
-  range: declaredFloor,
-  floors: floorCollection.ok ? floorCollection.floors : [],
-});
+ * 处置记在 ISSUE #2722：内核对采集失败本有 `kind:"unparsable"` 的正确出口，而这里
+ * 传了一个非 `undefined` 的值，把已经写好的 WARN 话术变得结构上不可达 —— 且把三件事
+ * 折成一件：「没有依赖」「没读到依赖」「没跑起来」。
+ *
+ * #2722 落地（两处）：
+ *   ① 采集改用 `depsRoot` —— `--deps-root` 的契约本来就是「只换依赖检查的根」，
+ *      地板采集是依赖检查；此前写死真仓 root，让 `--deps-root` 的用例永远测不到失败档。
+ *   ② 采集失败 ⇒ 只念 WARN（带采集器的那句 `reason` —— 五条话术第一次被取用），
+ *      **不进版本判定**：判定继续算，[OK] 会照出，那正是本单的病
+ *      （「没跑起来」被印成「在声明范围内」）。退出码不变（这一档不是拦截项）。 */
+const floorCollection = collectDependencyFloors(depsRoot);
 if (!declaredFloor) {
   say("[WARN]", "package.json 没有 engines.node —— Node 下限无人声明（见规范 §2.1.8）。");
-} else if (floorVerdict.kind === "unparsable") {
-  say("[WARN]", `Node 下限这条判据没跑起来：本机 ${nodeVersion} 或 engines.node 读不懂。`);
-} else if (floorVerdict.ok) {
-  say("[OK]  ", `Node ${floorVerdict.version} 在声明范围内（engines.node = ${declaredFloor}）。`);
+} else if (floorCollection.ok) {
+  const floorVerdict = describeNodeAgainstFloor({
+    version: nodeVersion,
+    range: declaredFloor,
+    floors: floorCollection.floors,
+  });
+  if (floorVerdict.kind === "unparsable") {
+    say("[WARN]", `Node 下限这条判据没跑起来：本机 ${nodeVersion} 或 engines.node 读不懂。`);
+  } else if (floorVerdict.ok) {
+    say("[OK]  ", `Node ${floorVerdict.version} 在声明范围内（engines.node = ${declaredFloor}）。`);
+  } else {
+    say(
+      "[WARN]",
+      `Node ${floorVerdict.version} 不在声明范围内（engines.node = ${declaredFloor}）。`,
+    );
+    const next = floorVerdict.recommend ? ` 建议升到 ${floorVerdict.recommend}` : "";
+    say(
+      "[INFO]",
+      `越界会踩到的档：${floorVerdict.violated?.join(" / ") || "（依赖侧未点名）"}。${next}`,
+    );
+    process.stdout.write(
+      [
+        "         [判据] 低版本 Node 上 `next dev` / `next build` 照常，",
+        "                坏的是测试档（vitest / jsdom / msw 的下限都高于 next 自己的）。",
+        "         [动作] 按 engines.node 换版本（nvm use 读 .nvmrc；桌面 sidecar 同版本线）。",
+        "",
+      ].join("\n"),
+    );
+  }
 } else {
-  say("[WARN]", `Node ${floorVerdict.version} 不在声明范围内（engines.node = ${declaredFloor}）。`);
-  const next = floorVerdict.recommend ? ` 建议升到 ${floorVerdict.recommend}` : "";
-  say(
-    "[INFO]",
-    `越界会踩到的档：${floorVerdict.violated?.join(" / ") || "（依赖侧未点名）"}。${next}`,
-  );
-  process.stdout.write(
-    [
-      "         [判据] 低版本 Node 上 `next dev` / `next build` 照常，",
-      "                坏的是测试档（vitest / jsdom / msw 的下限都高于 next 自己的）。",
-      "         [动作] 按 engines.node 换版本（nvm use 读 .nvmrc；桌面 sidecar 同版本线）。",
-      "",
-    ].join("\n"),
-  );
+  say("[WARN]", `Node 下限这条判据没跑起来：${floorCollection.reason}。`);
 }
 
 // node_modules：启动器的**另一道**门禁，自检不把它藏起来。
@@ -303,9 +336,15 @@ if (!declaredFloor) {
 // 可跑）。所以这一段要正面回答那个被误判的问题：能装、装多久、装完能跑什么。
 const modules = checkNodeModules(depsRoot);
 if (modules.healthy) {
-  say("[OK]  ", "node_modules 已装（.modules.yaml + 关键依赖齐全）—— tsc / eslint / vitest 都能跑。");
+  say(
+    "[OK]  ",
+    "node_modules 已装（.modules.yaml + 关键依赖齐全）—— tsc / eslint / vitest 都能跑。",
+  );
 } else {
-  say("[WARN]", `node_modules 未装或不完整（${modules.reasons.join("；")}）—— 启动器会在「完整依赖预检」拦下。`);
+  say(
+    "[WARN]",
+    `node_modules 未装或不完整（${modules.reasons.join("；")}）—— 启动器会在「完整依赖预检」拦下。`,
+  );
   process.stdout.write(
     [
       "         [判据] 依赖**可装**：本仓库依赖全部来自公开 registry，无私有源；",

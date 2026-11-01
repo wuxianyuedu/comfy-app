@@ -18,26 +18,30 @@ const GLOBALS = join(process.cwd(), "src", "app", "globals.css");
 function readToken(name: string): number {
   const css = readFileSync(GLOBALS, "utf8");
   const m = new RegExp(`--z-index-${name}:\\s*(\\d+)`).exec(css);
-  if (!m) throw new Error(`globals.css 里找不到 --z-index-${name}`);
+  if (!m) {
+    throw new Error(`globals.css 里找不到 --z-index-${name}`);
+  }
   return Number(m[1]);
 }
 
 describe("浮层刻度表（规范 16 §16.2.5）", () => {
-  it.for([
-    ["base", Z.base],
-    ["canvas-ui", Z.canvasUi],
-    ["canvas-max", Z.canvasMax],
-    ["modal", Z.modal],
-    ["popup", Z.popup],
-    ["overlay", Z.overlay],
-    ["toast", Z.toast],
-    ["chrome", Z.chrome],
-  ] as const)("globals.css 的 --z-index-%s 与 Z 常量一致", ([token, value]) => {
+  it.for(
+    /* SAFETY: 类型断言已复核 */ [
+      ["base", Z.base],
+      ["canvas-ui", Z.canvasUi],
+      ["canvas-max", Z.canvasMax],
+      ["modal", Z.modal],
+      ["popup", Z.popup],
+      ["overlay", Z.overlay],
+      ["toast", Z.toast],
+      ["chrome", Z.chrome],
+    ] as const,
+  )("globals.css 的 --z-index-%s 与 Z 常量一致", ([token, value]) => {
     expect(readToken(token)).toBe(value);
   });
 
   it("档与档之间严格递增（相邻相等 = 层叠顺序由 DOM 决定，即『时灵时不灵』）", () => {
-    const scale: number[] = [
+    const scale: Array<number> = [
       Z.base,
       Z.canvasUi,
       Z.canvasMax,

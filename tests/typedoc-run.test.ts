@@ -8,7 +8,7 @@
  *
  * 三条要钉的东西，各自都能「看起来还在、实际不判」：
  *   1. **验的是产物、不是退出码**：退出 0 但探针 mtime 早于本次开始 = 失败；
- *   2. **失败了要重试**：typedoc 冷跑实测 31s，用例不可能真跑它 —— 用 `spawnImpl`
+ *   2. **失败了要重试**：typedoc 冷跑以百秒计（现值取法见规范 §13.5.17），用例不可能真跑它 —— 用 `spawnImpl`
  *      注入缝把「起了但没写」这个现场直接喂进来，验它真的会重试到用完次数；
  *   3. **重试能救回来**：第二次才写出来的场景要判**成功**，且报第 2 次 ——
  *      重试若把「失败过一次」记成失败，就等于白重试。
@@ -28,7 +28,7 @@ import {
   snapshotOutput,
 } from "../scripts/typedoc-run.mjs";
 
-const temps: string[] = [];
+const temps: Array<string> = [];
 
 function tempDir(prefix: string): string {
   const dir = mkdtempSync(path.join(tmpdir(), prefix));
@@ -37,7 +37,9 @@ function tempDir(prefix: string): string {
 }
 
 afterEach(() => {
-  while (temps.length) rmSync(temps.pop()!, { recursive: true, force: true });
+  while (temps.length) {
+    rmSync(temps.pop()!, { recursive: true, force: true });
+  }
 });
 
 /** 造一份「刚刚写过」的产物：探针文件存在且 mtime 是现在。 */
@@ -87,22 +89,15 @@ describe("judgeRun：结论来自产物，不来自退出码", () => {
     const dir = tempDir("typedoc-run-fresh-");
     const startedAt = Date.now();
     writeProbe(dir);
-    expect(
-      judgeRun(silentRun(), { after: snapshotOutput(dir), startedAt }).ok,
-    ).toBe(true);
+    expect(judgeRun(silentRun(), { after: snapshotOutput(dir), startedAt }).ok).toBe(true);
   });
 
   it("起不来 / 非零退出：这两种失败有声音，别让它们挤掉上面那条", () => {
     const after = { exists: true, files: 1, probeMtimeMs: Date.now() };
-    expect(
-      judgeRun(
-        { status: null, error: new Error("EINVAL") },
-        { after, startedAt: 0 },
-      ).ok,
-    ).toBe(false);
-    expect(
-      judgeRun({ status: 1, error: null }, { after, startedAt: 0 }).ok,
-    ).toBe(false);
+    expect(judgeRun({ status: null, error: new Error("EINVAL") }, { after, startedAt: 0 }).ok).toBe(
+      false,
+    );
+    expect(judgeRun({ status: 1, error: null }, { after, startedAt: 0 }).ok).toBe(false);
   });
 
   it("目录不存在 / 空目录 / 缺探针文件：三种「没写出来」都要判失败", () => {
@@ -113,19 +108,14 @@ describe("judgeRun：结论来自产物，不来自退出码", () => {
       { exists: true, files: 0, probeMtimeMs: null },
       snapshotOutput(dir), // 目录存在但没有 index.html
     ]) {
-      expect(
-        judgeRun(silentRun(), { after, startedAt }).ok,
-        JSON.stringify(after),
-      ).toBe(false);
+      expect(judgeRun(silentRun(), { after, startedAt }).ok, JSON.stringify(after)).toBe(false);
     }
   });
 });
 
 describe("snapshotOutput", () => {
   it("目录不存在时三件事都是空（不抛）", () => {
-    expect(
-      snapshotOutput(path.join(tempDir("typedoc-run-missing-"), "nope")),
-    ).toEqual({
+    expect(snapshotOutput(path.join(tempDir("typedoc-run-missing-"), "nope"))).toEqual({
       exists: false,
       files: 0,
       probeMtimeMs: null,
@@ -165,7 +155,9 @@ describe("runTypedoc：静默失败会重试，救回来算成功", () => {
       backoff: [0, 0],
       spawnImpl: async (_bin: string, dir: string) => {
         calls += 1;
-        if (calls >= 2) writeProbe(dir);
+        if (calls >= 2) {
+          writeProbe(dir);
+        }
         return silentRun();
       },
       onProgress: quiet,
@@ -211,18 +203,15 @@ describe("resolveTypedocEntry", () => {
     expect(entry).toBeTruthy();
     /* ISSUE #2445：起的是包真身（`typedoc/bin/typedoc`），不是 `node_modules/.bin`
      * 下的垫片 —— 垫片要 shell 层（DEP0190），真身用 `process.execPath` 直起。 */
-    expect(entry!.replace(/\\/g, "/")).toContain("typedoc/bin/typedoc");
-    expect(entry!.replace(/\\/g, "/")).not.toContain(".bin/");
+    expect(entry!.replaceAll("\\", "/")).toContain("typedoc/bin/typedoc");
+    expect(entry!.replaceAll("\\", "/")).not.toContain(".bin/");
     expect(resolveTypedocEntry(tempDir("typedoc-run-bare-"))).toBeNull();
   });
 });
 
 describe("spawnTypedoc 不经 shell 层（ISSUE #2445）", () => {
   it("模块源码里不再有 shell 选项与手工括引号（DEP0190 的形状判据）", () => {
-    const source = readFileSync(
-      path.resolve(process.cwd(), "scripts/typedoc-run.mjs"),
-      "utf8",
-    );
+    const source = readFileSync(path.resolve(process.cwd(), "scripts/typedoc-run.mjs"), "utf8");
     /* spawn 的 args 数组 + shell:true 是 Node 26 的 DEP0190 弃用形态；且 shell 一开
      * Node 就不转义参数，引号要自己括。两个形状都不许回来 —— 用例层测不到真 spawn
      * 的选项面，源码形状是那层覆盖的唯一口径（#2444 同款）。 */

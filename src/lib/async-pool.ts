@@ -22,7 +22,7 @@
 import { clamp } from "~/lib/clamp";
 
 export async function runWithConcurrency<T>(
-  items: readonly T[],
+  items: ReadonlyArray<T>,
   limit: number,
   worker: (item: T, index: number) => Promise<void>,
 ): Promise<void> {
@@ -36,7 +36,9 @@ export async function runWithConcurrency<T>(
       /* noUncheckedIndexedAccess 下索引访问返回 `T | undefined`；
        * `index < items.length` 时不会发生，守卫只为过判据。 */
       const item = items[index];
-      if (item === undefined) return;
+      if (item === undefined) {
+        return;
+      }
       await worker(item, index);
     }
   });

@@ -18,8 +18,8 @@ import { rejectUnknownArgs } from "../scripts/cli-arg-contract.mjs";
  * 用注入的 `fail` 收正文：`blocked` 是「拦没拦」，`body` 是交出去的正文（没拦时为空串）。
  * 之所以不让调用方读返回值判「拦没拦」—— 退不退是 `fail` 的事，正文只是它的输入。
  */
-function collect(argv: string[], recognized: string[] = []) {
-  const captured: string[] = [];
+function collect(argv: Array<string>, recognized: Array<string> = []) {
+  const captured: Array<string> = [];
   const unknown = rejectUnknownArgs({
     argv,
     recognized,

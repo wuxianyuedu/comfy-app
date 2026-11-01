@@ -48,7 +48,7 @@ import { stageBlock } from "./no-platform-ci-config.test";
 const CNB = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
 
 /** 一份最小的、形态合法的流水线夹具（用来做「改坏了会红」的反向复算）。 */
-const fixture = (over: { namespace?: string; tags?: string[] } = {}) =>
+const fixture = (over: { namespace?: string; tags?: Array<string> } = {}) =>
   [
     "master:",
     "  pull_request:",
@@ -80,9 +80,7 @@ describe("runner 形态：自托管与平台池只差一行，而那一行会静
   });
 
   it("漏掉 `namespace: group` ⇒ 平台池（那正是静默回落的那一形态）", () => {
-    expect(runnerShape(fixture({ namespace: "public" })).verdict).toBe(
-      "platform-pool",
-    );
+    expect(runnerShape(fixture({ namespace: "public" })).verdict).toBe("platform-pool");
   });
 
   it("`runner:` 整块缺掉 ⇒ missing（「没写」与「写明平台池」是两件事）", () => {
@@ -109,11 +107,7 @@ describe("runner 形态：自托管与平台池只差一行，而那一行会静
   });
 
   it("注释里的 `namespace:` 不算（本仓注释量极大，一段注释里出现这个键是常态）", () => {
-    const text = [
-      "# 以下是反例，别照抄：",
-      "#        namespace: public",
-      fixture(),
-    ].join("\n");
+    const text = ["# 以下是反例，别照抄：", "#        namespace: public", fixture()].join("\n");
     expect(runnerShape(text).verdict).toBe("self-hosted");
   });
 });
@@ -129,29 +123,20 @@ describe("runner 形态：自托管与平台池只差一行，而那一行会静
  * @param {{ bridge?: string[] }} [over] 哪几格挂卷（缺省 = 两格都挂同一份落点）
  * @returns {string}
  */
-const containerFixture = ({ bridge }: { bridge?: string[] } = {}) => {
+const containerFixture = ({ bridge }: { bridge?: Array<string> } = {}) => {
   const vols = bridge ?? ["A", "B"];
   const one = (name: string) => [
     `        - name: ${name}`,
-    "          script: echo " + name,
+    `          script: echo ${name}`,
     "          jobs:",
     `            - name: ${name}`,
     "              image: mcr.microsoft.com/playwright:v1.63.0-noble",
     ...(vols.includes(name)
-      ? [
-          "              volumes:",
-          `                - comfyapp-ms-playwright:${BROWSERS_VOLUME}`,
-        ]
+      ? ["              volumes:", `                - comfyapp-ms-playwright:${BROWSERS_VOLUME}`]
       : []),
     "",
   ];
-  return [
-    "master:",
-    "  pull_request:",
-    "    - stages:",
-    ...one("A"),
-    ...one("B"),
-  ].join("\n");
+  return ["master:", "  pull_request:", "    - stages:", ...one("A"), ...one("B")].join("\n");
 };
 
 describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行者", () => {
@@ -168,10 +153,7 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
       expect(p.missing).toEqual([]);
       return;
     }
-    expect(
-      p.bridge,
-      `没挂 ${BROWSERS_VOLUME} 的格：${p.missing.join(" / ")}`,
-    ).toBe("complete");
+    expect(p.bridge, `没挂 ${BROWSERS_VOLUME} 的格：${p.missing.join(" / ")}`).toBe("complete");
     expect(p.missing).toEqual([]);
   });
 
@@ -215,9 +197,7 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
       "                - v:/data",
       "",
     ].join("\n");
-    expect(containerStages(text)).toEqual([
-      { name: "Y", image: "node:24", volumes: ["v:/data"] },
-    ]);
+    expect(containerStages(text)).toEqual([{ name: "Y", image: "node:24", volumes: ["v:/data"] }]);
   });
 
   it("`volumes:` 写在 `image:` 之前也认（键的先后不该改变判定）", () => {
@@ -295,18 +275,24 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
       /** @type {number | null} */
       let envKeyIndent = null;
       for (const raw of String(block).split("\n")) {
-        if (raw.trim() === "") continue;
+        if (raw.trim() === "") {
+          continue;
+        }
         const indent = raw.length - raw.trimStart().length;
         const body = raw.trim();
         /* stage 块尾会带上**下一个 stage 之前那一段注释**（`stageBlock()` 只按缩进与
          * 顶格键收尾），它不属于本项的任何一层 —— 跳过，否则深度判据会对着注释开火。 */
-        if (body.startsWith("#")) continue;
+        if (body.startsWith("#")) {
+          continue;
+        }
         if (body.startsWith("- name:")) {
           keyIndent = indent + 2;
           envKeyIndent = null;
           continue;
         }
-        if (keyIndent === null) continue;
+        if (keyIndent === null) {
+          continue;
+        }
         /* 列表项（`volumes:` 的 `- <卷名>:<路径>`）：它比 `volumes:` 深一层，
          * 是**合法**的更深层键 —— 只有当 `env` 正在收键时越过它才算挂错层。 */
         if (body.startsWith("- ")) {
@@ -321,10 +307,10 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
          * ⚠️ 这一支必须排在「比项自己的键更浅 ⇒ 结束」**之前**：挂错层时它们的缩进
          * 恰好等于项自己那一层，先判「结束」会悄悄放过去。 */
         if (envKeyIndent !== null) {
-          if (indent >= envKeyIndent) continue;
-          offenders.push(
-            `${name}：${body.slice(0, 30)}（缩进 ${indent}，该在 ${envKeyIndent}）`,
-          );
+          if (indent >= envKeyIndent) {
+            continue;
+          }
+          offenders.push(`${name}：${body.slice(0, 30)}（缩进 ${indent}，该在 ${envKeyIndent}）`);
           envKeyIndent = null;
           continue;
         }
@@ -337,15 +323,15 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
           /* `env:` 的键与项自己的键**同一层**（这是 YAML 的形态：`env:` 深一层，
            * 它的键再深一层 —— 正好落在项自己的键那一层上）。 */
           envKeyIndent = keyIndent;
-          if (indent !== keyIndent)
-            offenders.push(
-              `${name}：env:（缩进 ${indent}，该在 ${keyIndent}）`,
-            );
+          if (indent !== keyIndent) {
+            offenders.push(`${name}：env:（缩进 ${indent}，该在 ${keyIndent}）`);
+          }
           continue;
         }
         /* 不在 `env` 里：`timeout` 该在 `keyIndent` 那一层。 */
-        if (body.startsWith("timeout:") && indent !== keyIndent)
+        if (body.startsWith("timeout:") && indent !== keyIndent) {
           offenders.push(`${name}：${body}`);
+        }
       }
     }
     expect(
@@ -379,11 +365,7 @@ describe("容器格：卷声明是「别每格重下 120 MiB」的唯一执行�
 
 describe("解析器的两处细节：注释与卷写法", () => {
   it("剥整行注释与行尾注释，但引号里的 `#` 不剥", () => {
-    expect(stripYamlComments('a: "x#y" # 行尾\n# 整行\nb: 1')).toEqual([
-      'a: "x#y" ',
-      "",
-      "b: 1",
-    ]);
+    expect(stripYamlComments('a: "x#y" # 行尾\n# 整行\nb: 1')).toEqual(['a: "x#y" ', "", "b: 1"]);
   });
 
   it("卷声明只认 `<卷名>:<容器内路径>` 那一形态（宿主路径不是本仓的口径）", () => {
@@ -398,8 +380,9 @@ describe("解析器的两处细节：注释与卷写法", () => {
   it("读数是人读的三行，且断桥那一档**点名**（不是一句「有问题」）", () => {
     const lines = describePlan(CNB);
     expect(lines[0]).toContain("self-hosted");
-    if (plan(CNB).containers.length > 0)
+    if (plan(CNB).containers.length > 0) {
       expect(lines.join("\n")).toContain(BROWSERS_VOLUME);
+    }
     const broken = describePlan(containerFixture({ bridge: [] }));
     expect(broken.join("\n")).toContain("重下");
     /* 点名到格：两格都要出现，不是一句「有格没挂卷」。 */

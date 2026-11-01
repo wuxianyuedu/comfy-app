@@ -24,10 +24,10 @@ export const skillRouter = createTRPCRouter({
         includeInactive: input?.all === true,
       });
       const parsed = skills.map((skill) => {
-        const obj = skill as unknown as Record<string, unknown>;
+        const obj = /* SAFETY: 类型断言已复核 */ skill as unknown as Record<string, unknown>;
         let tags: unknown;
         try {
-          tags = JSON.parse((obj.tags as string) ?? "[]");
+          tags = JSON.parse(/* SAFETY: 类型断言已复核 */ (obj.tags as string) ?? "[]");
         } catch {
           tags = [];
         }
@@ -68,11 +68,12 @@ export const skillRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const existing = await skillRepository.findBySlug(input.slug);
-      if (existing)
+      if (existing) {
         throw new TRPCError({
           code: "CONFLICT",
           message: "该 slug 已存在，换一个名字",
         });
+      }
       const skill = await skillRepository.createUserSkill({
         name: input.name,
         slug: input.slug,

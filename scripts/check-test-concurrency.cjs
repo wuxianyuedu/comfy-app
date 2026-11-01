@@ -94,11 +94,7 @@
  * 退出码 0 = 通过，1 = 阻断。
  */
 const path = require("node:path");
-const {
-  readForScan,
-  walkForScan,
-  vanishedNote,
-} = require("./gate-scan-read.cjs");
+const { readForScan, walkForScan, vanishedNote } = require("./gate-scan-read.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
 const REPORT_ONLY = new Set(process.argv.slice(2)).has("--report");
@@ -116,8 +112,7 @@ const TEST_FILE_RE = /\.test\.tsx?$/;
  * 就是因为只认字面量而整片漏出扫描面，计数从 27 掉到 26 而判据照样报 OK）。
  * 这里按「标识符 + `.concurrent` + 可选空白 + `(`」判，跨行由 `\s` 覆盖。
  */
-const CONCURRENT_SITE_RE =
-  /(?<![\w.$])(?:it|test|describe)\s*\.\s*concurrent\s*\(/g;
+const CONCURRENT_SITE_RE = /(?<![\w.$])(?:it|test|describe)\s*\.\s*concurrent\s*\(/g;
 
 /** `expect.poll` 站点（折行形态同款，见 §11.18.3.1）。 */
 const EXPECT_POLL_RE = /expect\s*\.\s*poll\s*\(/g;
@@ -192,8 +187,11 @@ function maskNonCode(src) {
     const next = src[i + 1];
 
     if (mode === "line") {
-      if (ch === "\n") mode = "code";
-      else out[i] = " ";
+      if (ch === "\n") {
+        mode = "code";
+      } else {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
@@ -204,7 +202,9 @@ function maskNonCode(src) {
         i += 2;
         mode = "code";
       } else {
-        if (ch !== "\n") out[i] = " ";
+        if (ch !== "\n") {
+          out[i] = " ";
+        }
         i += 1;
       }
       continue;
@@ -256,16 +256,19 @@ function maskNonCode(src) {
         mode = "code";
         continue;
       }
-      if (ch !== "\n") out[i] = " ";
+      if (ch !== "\n") {
+        out[i] = " ";
+      }
       i += 1;
       continue;
     }
 
     /* code 态 —— 但可能正处在一层插值里，要数花括号 */
-    const inInterp = stack[stack.length - 1] === "interp";
+    const inInterp = stack.at(-1) === "interp";
     if (inInterp) {
-      if (ch === "{") braceDepth += 1;
-      else if (ch === "}") {
+      if (ch === "{") {
+        braceDepth += 1;
+      } else if (ch === "}") {
         if (braceDepth === 0) {
           /* 这一层插值收口：回到模板态继续吃字面量 */
           out[i] = " ";
@@ -313,7 +316,11 @@ function maskNonCode(src) {
 /** 第几行（1 起）：数到某个字符偏移为止的换行数。 */
 function lineOf(src, index) {
   let n = 1;
-  for (let i = 0; i < index; i++) if (src[i] === "\n") n += 1;
+  for (let i = 0; i < index; i++) {
+    if (src[i] === "\n") {
+      n += 1;
+    }
+  }
   return n;
 }
 
@@ -325,7 +332,9 @@ function lineOf(src, index) {
  */
 function scanFile(abs) {
   const raw = readForScan(abs);
-  if (raw === null) return null;
+  if (raw === null) {
+    return null;
+  }
   const masked = maskNonCode(raw);
 
   const concurrentSites = [];
@@ -341,7 +350,9 @@ function scanFile(abs) {
   const isolationNotes = [];
   for (const m of raw.matchAll(/\/\/.*$/gm)) {
     const hit = ISOLATION_DECL_RE.exec(m[0]);
-    if (hit) isolationNotes.push(hit[1].trim());
+    if (hit) {
+      isolationNotes.push(hit[1].trim());
+    }
   }
 
   return { concurrentSites, pollSites, isolationNotes };
@@ -363,7 +374,9 @@ function main() {
       continue;
     }
     const { concurrentSites: sites, pollSites, isolationNotes } = hit;
-    if (sites.length === 0) continue;
+    if (sites.length === 0) {
+      continue;
+    }
 
     concurrentSites += sites.length;
     concurrentFiles.push({ rel, sites: sites.length });
@@ -397,19 +410,21 @@ function main() {
   if (problems.length === 0) {
     console.log(
       `[concurrency] OK —— ${concurrentSites} 处并发站点 / ${concurrentFiles.length} 份文件，` +
-        "隔离声明齐全、无 `expect.poll` 冲突。" +
+        `隔离声明齐全、无 \`expect.poll\` 冲突。${
         /* 消失数必须进结论：它等于「这几份文件这一轮没被读过」。 */
-        vanishedNote(vanished),
+        vanishedNote(vanished)}`,
     );
     return 0;
   }
 
   console.error(
-    (REPORT_ONLY
+    `${REPORT_ONLY
       ? `[concurrency] 盘点：${problems.length} 处待办（--report 不判失败）`
-      : `[ERROR] 有 ${problems.length} 处并发档用法不合口径`) + "：\n",
+      : `[ERROR] 有 ${problems.length} 处并发档用法不合口径`}：\n`,
   );
-  for (const p of problems) console.error(`  · ${p}\n`);
+  for (const p of problems) {
+    console.error(`  · ${p}\n`);
+  }
   console.error(
     "口径见 docs/standards/11-测试与可观测性.md §11.19。" +
       "\n一句话：`it.concurrent` 不是免费的旋钮 —— 同步阻塞的用例改它零收益，" +
@@ -425,4 +440,6 @@ function main() {
 module.exports = { maskNonCode };
 
 /* 被 import 时（自测）只导出、不执行；被当脚本跑时（钩子）才判。 */
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  process.exit(main());
+}

@@ -144,10 +144,7 @@ import {
   commandInvocation,
   resolveCommandInvocation,
 } from "../src/lib/process/executable-resolve.ts";
-import {
-  describeGlyphReplacements,
-  normalizeCp936Glyphs,
-} from "./ci-cp936-glyphs.mjs";
+import { describeGlyphReplacements, normalizeCp936Glyphs } from "./ci-cp936-glyphs.mjs";
 
 /* 这两个别名只为一件事：模块里那两兄弟的名字都长，而它们各自要表达的是**收什么**——
  * `resolveCommandInvocation` 收**名字**（PATH 查找 + 形态），`commandInvocation`
@@ -233,14 +230,11 @@ export function encodeCp936Plan(codePage = CP936_CODE_PAGE) {
  */
 export function writeCp936(
   text,
-  {
-    platform = process.platform,
-    run,
-    spawnImpl = spawnSync,
-    stdio = "inherit",
-  } = {},
+  { platform = process.platform, run, spawnImpl = spawnSync, stdio = "inherit" } = {},
 ) {
-  if (platform !== "win32") return { ok: false };
+  if (platform !== "win32") {
+    return { ok: false };
+  }
   const { script } = encodeCp936Plan();
   const exec =
     run ??
@@ -286,11 +280,7 @@ export function writeCp936(
       });
       return { status: r.status };
     });
-  const r = exec(
-    "powershell",
-    ["-NoProfile", "-NonInteractive", "-Command", script],
-    text,
-  );
+  const r = exec("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], text);
   return { ok: r.status === 0 };
 }
 
@@ -334,9 +324,7 @@ export function parseInvocation(argv) {
  * @returns {string}
  */
 export function unwrapCp936(command) {
-  const m = /(?:^|;)\s*node\s+scripts\/ci-cp936-exit\.mjs\s+--\s+(.*)$/.exec(
-    command.trim(),
-  );
+  const m = /(?:^|;)\s*node\s+scripts\/ci-cp936-exit\.mjs\s+--\s+(.*)$/.exec(command.trim());
   return m?.[1]?.trim() ?? command;
 }
 
@@ -369,7 +357,9 @@ export function unwrapCp936(command) {
 export function splitStreamChunk(carry, chunk) {
   const joined = carry + chunk;
   const lastBreak = joined.lastIndexOf("\n");
-  if (lastBreak === -1) return { text: "", carry: joined };
+  if (lastBreak === -1) {
+    return { text: "", carry: joined };
+  }
   return {
     text: joined.slice(0, lastBreak + 1),
     carry: joined.slice(lastBreak + 1),
@@ -440,12 +430,10 @@ function isPathLike(token) {
  * @returns {{command: string, args: string[], resolved: boolean}}
  */
 export function resolveShellInvocation(command, args, options = {}) {
-  if (!isPathLike(command)) return resolveByName(command, args, options);
-  const { command: c, prefixArgs } = resolveByPath(
-    path.resolve(command),
-    ["--version"],
-    options,
-  );
+  if (!isPathLike(command)) {
+    return resolveByName(command, args, options);
+  }
+  const { command: c, prefixArgs } = resolveByPath(path.resolve(command), ["--version"], options);
   return { command: c, args: [...prefixArgs, ...args], resolved: true };
 }
 
@@ -483,10 +471,10 @@ export function formatSpawnFailure({ err, command, realCommand, cwd }) {
   const where = cwd ? `（当前目录 ${cwd}）` : "";
   const lines = [
     `[cp936-exit] 起不了这条命令：${command}${where}`,
-    `  失败码 ${code} —— ` +
-      (code === "ENOENT"
+    `  失败码 ${code} —— ${
+      code === "ENOENT"
         ? "盘上没有这个文件（名字 / 入参对不上？）"
-        : "文件在、但起不来（形态不对？见 resolveCommandInvocation）"),
+        : "文件在、但起不来（形态不对？见 resolveCommandInvocation）"}`,
   ];
   /* 解析口交回的那一份只在**解析真的发生过**时才有意义：路径原样交出去时
    * `realCommand` 就是原文，再打一遍只是噪音。 */
@@ -519,11 +507,13 @@ export const UNKNOWN_TERMINATION_EXIT = 128;
  * @returns {number}
  */
 export function exitCodeFromTermination(code, signal) {
-  if (typeof code === "number") return code;
-  if (!signal) return UNKNOWN_TERMINATION_EXIT;
-  const table = /** @type {Record<string, number | undefined>} */ (
-    os.constants.signals
-  );
+  if (typeof code === "number") {
+    return code;
+  }
+  if (!signal) {
+    return UNKNOWN_TERMINATION_EXIT;
+  }
+  const table = /** @type {Record<string, number | undefined>} */ (os.constants.signals);
   return 128 + (table[signal] ?? 0);
 }
 
@@ -648,7 +638,9 @@ export function runWithCp936Exit(
      * @param {string} text
      */
     const flush = (text) => {
-      if (!text) return;
+      if (!text) {
+        return;
+      }
       if (platform !== "win32") {
         /* 非 Windows：CP936 这一跳不存在，原样转出（不假装转过了）。 */
         emit(text);
@@ -674,7 +666,9 @@ export function runWithCp936Exit(
             count: (prev?.count ?? 0) + item.count,
           });
           /* 第一次出现的字符才打即时读数：重复的那个只进总数。 */
-          if (!prev) fresh.push(item);
+          if (!prev) {
+            fresh.push(item);
+          }
         }
         if (fresh.length > 0) {
           /* ⚠️ **读数必须走 `write`（CP936 那一跳），不能走 `emit`** ——
@@ -688,7 +682,9 @@ export function runWithCp936Exit(
           if (said !== "") {
             const line = `${said}\n`;
             const { ok } = write(line, { stdio: "inherit" });
-            if (!ok) emit(line);
+            if (!ok) {
+              emit(line);
+            }
           }
         }
       }
@@ -696,7 +692,9 @@ export function runWithCp936Exit(
        * 直接接到本进程的 stdout 上了（`stdio: "inherit"`）。这里只在没做成时
        * 兜底把原文照打一遍。 */
       const { ok } = write(normalized.text, { stdio: "inherit" });
-      if (ok) return;
+      if (ok) {
+        return;
+      }
       if (!warnedTranscodeFailure) {
         warnedTranscodeFailure = true;
         emit(
@@ -731,12 +729,12 @@ export function runWithCp936Exit(
        * `module.exports` 的 shim 还是真的可执行文件，看路径就看得出）、以及
        * 调用方自己写的那份原文（相对路径与绝对路径在这里长得一样，分不开）。 */
       emit(
-        formatSpawnFailure({
+        `${formatSpawnFailure({
           err,
           command,
           realCommand,
           cwd: process.cwd(),
-        }) + "\n",
+        })}\n`,
       );
       settle(127);
     });
@@ -762,16 +760,15 @@ export function runWithCp936Exit(
        * 子进程被终止时这一条**照样打**（`close` 会来，见上面那段）—— 只有外壳
        * 自己被杀那一档才没有它，而那一档本来就没有任何一行是外壳写的。 */
       if (glyphTotals.size > 0) {
-        const said = describeGlyphReplacements(
-          [...glyphTotals.values()],
-          "这一跑",
-        );
+        const said = describeGlyphReplacements([...glyphTotals.values()], "这一跑");
         /* 与逐块那条同判据：只有落了 `\uXXXX` 兜底的才值得出声（ISSUE #2326）。
          * 一整跑都在登记表里 ⇒ 这一行也不发 —— 登记表的形状就应该是「安静地按设计跑完」。 */
         if (said !== "") {
           const summary = `${said}\n`;
           const { ok } = write(summary, { stdio: "inherit" });
-          if (!ok) emit(summary);
+          if (!ok) {
+            emit(summary);
+          }
         }
       }
       const exitCode = exitCodeFromTermination(code, signal);
@@ -784,10 +781,11 @@ export function runWithCp936Exit(
       if (code === null) {
         const how = signal ? `子进程被 ${signal} 终止` : "子进程没有交代结束方式";
         const line =
-          `${how}（没有跑到结论）⇒ 外壳退出 ${exitCode}；` +
-          "这不是那条命令自己退的码\n";
+          `${how}（没有跑到结论）⇒ 外壳退出 ${exitCode}；` + "这不是那条命令自己退的码\n";
         const { ok } = write(line, { stdio: "inherit" });
-        if (!ok) emit(line);
+        if (!ok) {
+          emit(line);
+        }
       }
       settle(exitCode);
     });
@@ -797,10 +795,7 @@ export function runWithCp936Exit(
 /* 「是不是被直接执行」用**两侧都过 `path.resolve`** 的比较 —— 拼 `file://${argv[1]}`
  * 在 Windows 上恒不相等，那段就一次都不跑（与 `ci-toolchain-selfcheck.mjs`
  * /`python-probe.mjs` 同一条处置，它们的头注记着这个形态）。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(import.meta.filename)
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const code = await runWithCp936Exit(process.argv.slice(2));
   /* 退出码**必须**转出去：外壳吞掉它等于把被包那条命令的结论一起吞掉
    * （`ci-toolchain-selfcheck.mjs` 的 `main()` 返回值被丢那一次就是这么红的）。 */

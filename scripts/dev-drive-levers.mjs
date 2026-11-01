@@ -11,11 +11,7 @@
  */
 import path from "node:path";
 
-import {
-  compareTargets,
-  formatThroughput,
-  thirdPartyEngineUsage,
-} from "./dev-drive-bench.mjs";
+import { compareTargets, formatThroughput, thirdPartyEngineUsage } from "./dev-drive-bench.mjs";
 
 /**
  * @typedef {import("./dev-drive-probe.mjs").ProbeReport} ProbeReport
@@ -90,13 +86,25 @@ export function buildLevers(report) {
   levers.push(blockCloneLever(volume, caps, drive));
   levers.push(defenderLever(volume, report.defender ?? { known: false }));
   levers.push(filtersLever(volume, report.bench ?? null));
-  if (report.bench && report.bench.ran) levers.push(ioBenchLever(report.bench));
-  levers.push(searchIndexLever(drive, report.indexMarking ?? { known: false, sampled: 0, marked: 0, ratio: null }));
+  if (report.bench && report.bench.ran) {
+    levers.push(ioBenchLever(report.bench));
+  }
+  levers.push(
+    searchIndexLever(
+      drive,
+      report.indexMarking ?? { known: false, sampled: 0, marked: 0, ratio: null },
+    ),
+  );
   levers.push(gitIndexLever(git));
   levers.push(cacheLever("temp", "构建期临时目录（TEMP / TMP）", cache.temp, drive));
   levers.push(cacheLever("cargo-home", "Rust 依赖缓存（CARGO_HOME）", cache.cargoHome, drive));
   levers.push(
-    cacheLever("playwright", "Playwright 浏览器（PLAYWRIGHT_BROWSERS_PATH）", cache.playwright, drive),
+    cacheLever(
+      "playwright",
+      "Playwright 浏览器（PLAYWRIGHT_BROWSERS_PATH）",
+      cache.playwright,
+      drive,
+    ),
   );
   levers.push(cacheLever("npm-cache", "npm 缓存（npm_config_cache）", cache.npmCache, drive));
   levers.push(sparseLever(caps));
@@ -114,7 +122,9 @@ export function summarizeLevers(levers) {
   /** @type {LeverSummary} */
   const summary = { ok: 0, actionable: 0, blocked: 0, na: 0, total: levers.length };
   for (const lever of levers) {
-    if (lever.status in summary) summary[lever.status] += 1;
+    if (lever.status in summary) {
+      summary[lever.status] += 1;
+    }
   }
   return summary;
 }
@@ -198,10 +208,9 @@ function workdirLever(workdirs) {
     id: "workdir",
     title: "构建与依赖目录的真实落点（软链接要解开再判）",
     status: "actionable",
-    detail:
-      `这些目录的真实路径不在开发盘上：${offVolume
-        .map((entry) => `${entry.name} → ${entry.realPath}`)
-        .join("；")} → 它们每次读写都要跨卷。`,
+    detail: `这些目录的真实路径不在开发盘上：${offVolume
+      .map((entry) => `${entry.name} → ${entry.realPath}`)
+      .join("；")} → 它们每次读写都要跨卷。`,
     actions: [
       {
         label: "把链接指向开发盘上的目录（或删掉软链接直接放在检出里）",
@@ -301,7 +310,7 @@ function blockCloneLever(volume, caps, drive) {
   if (volume.devDrive !== "yes") {
     actions.push({
       label: "把该卷按 Dev Drive 格式化（破坏性：会清空该卷，先备份）",
-      command: `Format-Volume -DriveLetter ${drive.replace(/[:\\]/g, "")} -DevDrive`,
+      command: `Format-Volume -DriveLetter ${drive.replaceAll(/[:\\]/g, "")} -DevDrive`,
       scope: "admin",
     });
   }
@@ -363,7 +372,7 @@ function defenderLever(volume, defender) {
       actions: [
         {
           label: "把这块卷标为受信任（管理员）",
-          command: `fsutil devdrv trust ${drive.replace(/[:\\]/g, "")}:`,
+          command: `fsutil devdrv trust ${drive.replaceAll(/[:\\]/g, "")}:`,
           scope: "admin",
         },
       ],
@@ -382,7 +391,7 @@ function defenderLever(volume, defender) {
       actions: [
         {
           label: "用管理员查一下信任状态（只读）",
-          command: `fsutil devdrv query ${drive.replace(/[:\\]/g, "")}:`,
+          command: `fsutil devdrv query ${drive.replaceAll(/[:\\]/g, "")}:`,
           scope: "admin",
         },
       ],
@@ -434,8 +443,7 @@ function filtersLever(volume, bench) {
       id: "dev-drive-filters",
       title: "开发卷上挂的文件系统筛选器（谁能看见这块卷上的文件）",
       status: "na",
-      detail:
-        "读不到筛选器清单（`fsutil devdrv query` 需要管理员），本条不判。",
+      detail: "读不到筛选器清单（`fsutil devdrv query` 需要管理员），本条不判。",
       actions: [],
     };
   }
@@ -445,8 +453,7 @@ function filtersLever(volume, bench) {
       id: "dev-drive-filters",
       title: "开发卷上挂的文件系统筛选器（谁能看见这块卷上的文件）",
       status: "ok",
-      detail:
-        `只挂了 Defender（${volume.filters.join("、")}）→ Defender 的性能模式覆盖到整块卷，没有第三方扫描源。`,
+      detail: `只挂了 Defender（${volume.filters.join("、")}）→ Defender 的性能模式覆盖到整块卷，没有第三方扫描源。`,
       actions: [],
     };
   }
@@ -464,7 +471,7 @@ function filtersLever(volume, bench) {
       actions: [
         {
           label: "更精准：在那个第三方客户端里把开发卷加进它的排除/信任列表",
-          command: "（在联想电脑管家 / Lenovo Windows Security Center 的设置里排除 G:\\）",
+          command: String.raw`（在联想电脑管家 / Lenovo Windows Security Center 的设置里排除 G:\）`,
           scope: "user",
         },
         {
@@ -607,8 +614,7 @@ function searchIndexLever(drive, marking) {
         scope: "user",
       },
       {
-        label:
-          "只标某一棵子树时也能用 attrib（注意尾部必须带 \\*，否则它什么也不做）",
+        label: String.raw`只标某一棵子树时也能用 attrib（注意尾部必须带 \*，否则它什么也不做）`,
         command: `attrib +I /S /D "${drive}\\*"`,
         scope: "user",
       },
@@ -623,15 +629,22 @@ function searchIndexLever(drive, marking) {
  */
 function gitIndexLever(git) {
   const missing = [];
-  if (git.untrackedCache !== "true") missing.push("core.untrackedCache");
-  if (Number(git.indexVersion ?? "2") < 4) missing.push("index.version");
-  if (git.commitGraph !== "true") missing.push("core.commitGraph");
+  if (git.untrackedCache !== "true") {
+    missing.push("core.untrackedCache");
+  }
+  if (Number(git.indexVersion ?? "2") < 4) {
+    missing.push("index.version");
+  }
+  if (git.commitGraph !== "true") {
+    missing.push("core.commitGraph");
+  }
   if (missing.length === 0) {
     return {
       id: "git-index",
       title: "git 索引格式与提交图（状态查询与历史查询）",
       status: "ok",
-      detail: "未跟踪缓存已开、索引已是 v4（路径前缀压缩）、提交图已开 → git 状态与历史查询都走快路径。",
+      detail:
+        "未跟踪缓存已开、索引已是 v4（路径前缀压缩）、提交图已开 → git 状态与历史查询都走快路径。",
       actions: [],
     };
   }
@@ -706,10 +719,9 @@ function sparseLever(caps) {
     id: "sparse",
     title: "稀疏文件（大文件只占实际写入的块）",
     status: "na",
-    detail:
-      caps.sparse
-        ? "该卷已启用稀疏文件；本仓没有大体积可变文件，不需要额外动作。"
-        : "该卷未启用稀疏文件；它的收益面是 VHDX 形态的开发盘与大体积可变文件，本仓两者都不占，暂不动作。",
+    detail: caps.sparse
+      ? "该卷已启用稀疏文件；本仓没有大体积可变文件，不需要额外动作。"
+      : "该卷未启用稀疏文件；它的收益面是 VHDX 形态的开发盘与大体积可变文件，本仓两者都不占，暂不动作。",
     actions: [],
   };
 }
@@ -723,9 +735,7 @@ function sqliteLever() {
     id: "sqlite-refs",
     title: "SQLite 库文件在 ReFS 上的行为（WAL / 建表 / 读写）",
     status: "ok",
-    detail:
-      "实测：WAL 模式可开、表可建、读写与检查点都正常 → 应用数据库放在开发盘上没有已知问题。",
+    detail: "实测：WAL 模式可开、表可建、读写与检查点都正常 → 应用数据库放在开发盘上没有已知问题。",
     actions: [],
   };
 }
-

@@ -18,10 +18,7 @@ import { useRefreshTicket } from "~/components/ui/use-refresh-ticket";
 import { useInterval } from "~/components/ui/use-interval";
 import { errorMessage } from "~/lib/error-message";
 import { beginStaleRun } from "~/lib/stale-run";
-import {
-  fetchHistoryTasks,
-  probeGlobalTaskCount,
-} from "~/lib/project-canvas/history-panel-client";
+import { fetchHistoryTasks, probeGlobalTaskCount } from "~/lib/project-canvas/history-panel-client";
 import {
   countActive,
   type DisplayMode,
@@ -36,38 +33,34 @@ const TAKE = 80;
 /** 有任务在跑时的轮询间隔。 */
 const POLL_MS = 4000;
 
-export interface UseHistoryPanelArgs {
+export type UseHistoryPanelArgs = {
   /** 当前画布项目 id；有值时默认只看本项目记录。 */
   projectId?: string | null;
-}
+};
 
-export interface HistoryPanelController {
-  tasks: HistoryTaskRow[];
-  loading: boolean;
-  error: string | null;
-  scope: HistoryScope;
-  filter: HistoryFilter;
-  display: DisplayMode;
+export type HistoryPanelController = {
   /** 进行中任务数（>0 时轮询开启）。 */
   activeCount: number;
+  display: DisplayMode;
+  error: string | null;
+  filter: HistoryFilter;
   /** 全局记录数；null = 未探测/探测失败，不显示「查看全部」引导。 */
   globalCount: number | null;
-  setScope: (scope: HistoryScope) => void;
-  setFilter: (filter: HistoryFilter) => void;
-  setDisplay: (display: DisplayMode) => void;
+  loading: boolean;
   refresh: () => void;
-}
+  scope: HistoryScope;
+  setDisplay: (display: DisplayMode) => void;
+  setFilter: (filter: HistoryFilter) => void;
+  setScope: (scope: HistoryScope) => void;
+  tasks: Array<HistoryTaskRow>;
+};
 
-export function useHistoryPanel({
-  projectId,
-}: UseHistoryPanelArgs): HistoryPanelController {
+export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPanelController {
   const [filter, setFilter] = useState<HistoryFilter>("all");
-  const [scope, setScope] = useState<HistoryScope>(
-    projectId ? "project" : "all",
-  );
+  const [scope, setScope] = useState<HistoryScope>(projectId ? "project" : "all");
   const [display, setDisplay] = useState<DisplayMode>("list");
 
-  const [tasks, setTasks] = useState<HistoryTaskRow[]>([]);
+  const [tasks, setTasks] = useState<Array<HistoryTaskRow>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /* 「按需求重跑一遍取数」走唯一出口（规范 16 §16.2.4.70）。 */
@@ -86,20 +79,24 @@ export function useHistoryPanel({
       setLoading(true);
       setError(null);
       const params: {
-        take: number;
-        projectId?: string;
         media?: TaskMediaType;
+        projectId?: string;
+        take: number;
       } = { take: TAKE };
-      if (scope === "project" && projectId) params.projectId = projectId;
+      if (scope === "project" && projectId) {
+        params.projectId = projectId;
+      }
       /* "all" 不是服务端认识的 media 枚举，只在筛选非全部时才带上。 */
-      if (filter !== "all") params.media = filter;
+      if (filter !== "all") {
+        params.media = filter;
+      }
       try {
         const rows = await fetchHistoryTasks(params);
         guard.commit(() => setTasks(rows));
-      } catch (e) {
+      } catch (error_) {
         /* 错误文案与清空列表都属于「这一轮的结论」，一起过守卫。 */
         guard.commit(() => {
-          setError(errorMessage(e, "读取历史记录失败"));
+          setError(errorMessage(error_, "读取历史记录失败"));
           setTasks([]);
         });
       } finally {
@@ -112,13 +109,9 @@ export function useHistoryPanel({
 
   /* ── 本项目为空时探一次全局，以便给出「查看全部」引导 ── */
   useEffect(() => {
-    if (
-      scope !== "project" ||
-      loading ||
-      tasks.length > 0 ||
-      globalCount !== null
-    )
+    if (scope !== "project" || loading || tasks.length > 0 || globalCount !== null) {
       return;
+    }
     const guard = beginStaleRun();
     void probeGlobalTaskCount().then((count) => {
       guard.commit(() => setGlobalCount(count));

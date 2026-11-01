@@ -48,15 +48,11 @@ describe("路径：解析器与读取侧共用同一个字面量", () => {
     expect(CUSTOM_NODES_MANIFEST_REL).toBe(
       path.join("src", "generated", "customNodes.manifest.json"),
     );
-    expect(customNodesManifestPath("/repo")).toBe(
-      path.join("/repo", CUSTOM_NODES_MANIFEST_REL),
-    );
+    expect(customNodesManifestPath("/repo")).toBe(path.join("/repo", CUSTOM_NODES_MANIFEST_REL));
   });
 
   it("默认根是 process.cwd()（生产调用不传参）", () => {
-    expect(customNodesManifestPath()).toBe(
-      path.join(process.cwd(), CUSTOM_NODES_MANIFEST_REL),
-    );
+    expect(customNodesManifestPath()).toBe(path.join(process.cwd(), CUSTOM_NODES_MANIFEST_REL));
   });
 });
 
@@ -89,7 +85,9 @@ describe("相 2 · ok —— 本层只读原文，解析是调用方的事", () 
     writeManifest('{"nodes":{"Foo":{}}}');
     const read = readCustomNodesManifest(root);
     expect(read.kind).toBe("ok");
-    if (read.kind !== "ok") return;
+    if (read.kind !== "ok") {
+      return;
+    }
     expect(read.text).toBe('{"nodes":{"Foo":{}}}');
   });
 
@@ -100,7 +98,9 @@ describe("相 2 · ok —— 本层只读原文，解析是调用方的事", () 
     writeManifest("{这不是 JSON");
     const read = readCustomNodesManifest(root);
     expect(read.kind).toBe("ok");
-    if (read.kind !== "ok") return;
+    if (read.kind !== "ok") {
+      return;
+    }
     expect(read.text).toBe("{这不是 JSON");
     // 用块体：`() => JSON.parse(…)` 会把 `any` 返回出去（判据不吃 any 的返回值）
     expect(() => {
@@ -120,7 +120,9 @@ describe("相 2 · ok —— 本层只读原文，解析是调用方的事", () 
     const expected = `${st.size}:${Math.trunc(st.mtimeMs)}`;
     expect(customNodesManifestStamp(root)).toBe(expected);
     const read = readCustomNodesManifest(root);
-    if (read.kind !== "ok") throw new Error("应该是 ok 相");
+    if (read.kind !== "ok") {
+      throw new Error("应该是 ok 相");
+    }
     expect(read.stamp).toBe(expected);
   });
 
@@ -142,7 +144,9 @@ describe("相 3 · unreadable —— 文件在但读不出来，是真故障", (
     fs.mkdirSync(file, { recursive: true });
     const read = readCustomNodesManifest(root);
     expect(read.kind).toBe("unreadable");
-    if (read.kind !== "unreadable") return;
+    if (read.kind !== "unreadable") {
+      return;
+    }
     expect(read.detail).toBe("EISDIR");
   });
 
@@ -152,7 +156,9 @@ describe("相 3 · unreadable —— 文件在但读不出来，是真故障", (
     const file = customNodesManifestPath(root);
     fs.mkdirSync(file, { recursive: true });
     const read = readCustomNodesManifest(root);
-    if (read.kind !== "unreadable") throw new Error("应该是 unreadable 相");
+    if (read.kind !== "unreadable") {
+      throw new Error("应该是 unreadable 相");
+    }
     expect(read.detail).not.toContain(file);
     expect(read.detail).not.toContain("illegal operation");
   });
@@ -175,7 +181,9 @@ describe("相 3 · unreadable —— 文件在但读不出来，是真故障", (
       writeManifest("{}");
       const read = readCustomNodesManifest(root);
       expect(read.kind).toBe("unreadable");
-      if (read.kind !== "unreadable") return;
+      if (read.kind !== "unreadable") {
+        return;
+      }
       expect(read.detail).toBe("unknown");
     } finally {
       spy.mockRestore();
@@ -185,7 +193,7 @@ describe("相 3 · unreadable —— 文件在但读不出来，是真故障", (
 
 describe("三相互斥：同一份磁盘只可能给出一个结论", () => {
   it("kind 只可能是 missing / ok / unreadable 三者之一", () => {
-    const cases: string[] = [];
+    const cases: Array<string> = [];
     // 空根 → missing
     cases.push(readCustomNodesManifest(root).kind);
     // 正常文件 → ok
@@ -206,8 +214,8 @@ describe("三相互斥：同一份磁盘只可能给出一个结论", () => {
     let kind;
     try {
       kind = readCustomNodesManifest(root).kind;
-    } catch (e) {
-      throw new Error(`不该抛出：${String(e)}`, { cause: e });
+    } catch (error) {
+      throw new Error(`不该抛出：${String(error)}`, { cause: error });
     }
     expect(["missing", "unreadable"]).toContain(kind);
   });

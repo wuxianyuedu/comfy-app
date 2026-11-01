@@ -18,10 +18,7 @@ import { spawnSync } from "node:child_process";
 
 import { describe, expect, it } from "vitest";
 
-import {
-  localTierLabels,
-  readHookSteps,
-} from "../scripts/base-check/hook-steps.mjs";
+import { localTierLabels, readHookSteps } from "../scripts/base-check/hook-steps.mjs";
 import {
   DECLARED_D0_STEPS,
   DECLARED_STEPS,
@@ -55,10 +52,7 @@ describe("档位：注册表与边界", () => {
   it("删一步（把降档做成删步骤）⇒ 红，并点名缺的是哪一条", () => {
     const all = readHookSteps();
     const [removed = { label: "", argv: [] }] = all;
-    expect(
-      removed.label,
-      "钩子解析为空 ⇒ 解析器或行形状坏了，这条断言没有对象",
-    ).toBeTruthy();
+    expect(removed.label, "钩子解析为空 ⇒ 解析器或行形状坏了，这条断言没有对象").toBeTruthy();
     const problems = registryProblems(
       all.filter((s) => s.label !== removed.label),
       localTierLabels(),
@@ -103,14 +97,14 @@ describe("档位：跳过必须被说出来", () => {
      * （原先这里直接在 `hookText` 上匹配那句话；把判据钉在行形状上，等于钉住一个
      *  随时该搬走的实现 —— 语义是「有人念」，不是「念的那行住在哪个文件」。） */
     expect(hookText).toContain("scripts/gate-tier-summary.cjs");
-    expect(
-      readFileSync(path.join(ROOT, "scripts/gate-tier-summary.cjs"), "utf8"),
-    ).toMatch(/本次提交本地\*\*没跑\*\*：/);
+    expect(readFileSync(path.join(ROOT, "scripts/gate-tier-summary.cjs"), "utf8")).toMatch(
+      /本次提交本地\*\*没跑\*\*：/,
+    );
   });
 
   it("四组重档仍然以 run_group 形态在场（A/B/C/D 一条都没被搬走）", () => {
     for (const id of ["A", "B", "C", "D"]) {
-      expect(hookText).toMatch(new RegExp("^run_group " + id + " ", "m"));
+      expect(hookText).toMatch(new RegExp(`^run_group ${id} `, "m"));
     }
   });
 
@@ -122,20 +116,14 @@ describe("档位：跳过必须被说出来", () => {
      * 这里钉两件：① premerge 段表里**没有** `unitTests`（留一段恒跳过会让 `--json`
      * 的读数里永远有一格「没跑起来」，而那一格不构成证据，§13.6.2）；② 新执行者的
      * 三个事实都在场（GATES 里有名字、跑法脚本走同一条判决链、改动面经 env 传入）。 */
-    const src = readFileSync(
-      path.join(ROOT, "scripts/premerge-check.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts/premerge-check.mjs"), "utf8");
     expect(src).not.toContain("unitTests:");
     expect(src).not.toContain('kind: "changed"');
     // `base` 段仍读钩子注册表（localTierLabels），`--light` 那一档的跳过条数照旧要说出来。
     expect(src).toContain("localTierLabels");
     expect(src).toContain("--light");
 
-    const ci = readFileSync(
-      path.join(ROOT, "scripts/ci-affected-tests.mjs"),
-      "utf8",
-    );
+    const ci = readFileSync(path.join(ROOT, "scripts/ci-affected-tests.mjs"), "utf8");
     // 同一条判决链：跑法脚本起的是 run-affected-tests.mjs，改动面经 env 递进去。
     expect(ci).toContain("run-affected-tests.mjs");
     expect(ci).toContain("COMFY_AFFECTED_CHANGED");
@@ -144,7 +132,9 @@ describe("档位：跳过必须被说出来", () => {
 
     const cnb = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
     expect(cnb).toContain("- name: 受影响用例");
-    expect(cnb).toContain("类型检查, 受影响用例,");
+    /* #2845 起固定/受影响拆成两格：名单里两格相邻、且各有自己的 stage 块。 */
+    expect(cnb).toContain("类型检查, 固定结构用例, 受影响用例,");
+    expect(cnb).toContain("- name: 固定结构用例");
     // 拿不到改动面 / 清单为空必须退 2（没判 ≠ 绿）。
     expect(ci).toMatch(/files\.length === 0[\s\S]{0,400}return 2/);
   });
@@ -164,7 +154,15 @@ describe("档位：跳过必须被说出来", () => {
         {
           cwd: ROOT,
           encoding: "utf8",
-          env: { ...process.env, COMFY_AFFECTED_CHANGED: changed },
+          env: {
+            ...process.env,
+            COMFY_AFFECTED_CHANGED: changed,
+            /* 显式抹平段开关（ISSUE #2845）：这条用例判的是「面 → 判决链」那一路，
+             * 它是 both/affected 段的行为；固定结构用例那格的 `SEGMENT=fixed` 会经
+             * process.env 漏进子进程，把 collectList 整段旁路掉（实测 cnb-lpr-1k68pquq6：
+             * 两次都数出 106，`> 106` 的负控制永远不成立）。 */
+            COMFY_AFFECTED_SEGMENT: "",
+          },
         },
       );
       expect(r.status, r.stderr ?? "").toBe(0);
@@ -175,18 +173,13 @@ describe("档位：跳过必须被说出来", () => {
     // 改一份被大量用例真实 import 的源文件（`src/lib/endpoints.ts` —— 默认地址与端口的
     // 唯一出处，硬规则 20），面必须**严格大于**只改文档那一档：相等就说明 env 根本没进
     // 判决链，只是被读了个名字。
-    expect(countOf(runLauncher("src/lib/endpoints.ts"))).toBeGreaterThan(
-      countOf(docsOnly),
-    );
+    expect(countOf(runLauncher("src/lib/endpoints.ts"))).toBeGreaterThan(countOf(docsOnly));
   });
 });
 
 describe("CI 那一格：读同一份注册表，且三态分得开", () => {
   it("重档 runner 不抄清单（它 import 的就是钩子那份注册表）", () => {
-    const src = readFileSync(
-      path.join(ROOT, "scripts/ci-heavy-gates.mjs"),
-      "utf8",
-    );
+    const src = readFileSync(path.join(ROOT, "scripts/ci-heavy-gates.mjs"), "utf8");
     expect(src).toContain("readHookSteps");
     expect(src).not.toMatch(/const GATES = \[/);
   });
@@ -205,7 +198,7 @@ describe("CI 那一格：读同一份注册表，且三态分得开", () => {
   });
 
   it("注册表读不出来 ⇒ 退 2（「没跑起来」），不许退 0 冒充「没有档要跑」", () => {
-    const lines: string[] = [];
+    const lines: Array<string> = [];
     const code = heavyMain({
       cwd: process.env.TEMP ?? "/tmp",
       argv: [],

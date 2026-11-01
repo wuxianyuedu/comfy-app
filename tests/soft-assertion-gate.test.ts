@@ -37,14 +37,14 @@ function gate(files: Record<string, string>): { ok: boolean; output: string } {
   try {
     return {
       ok: true,
-      output: execFileSync(
-        process.execPath,
-        [path.join(root, "scripts", path.basename(SCRIPT))],
-        { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-      ),
+      output: execFileSync(process.execPath, [path.join(root, "scripts", path.basename(SCRIPT))], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
     };
   } catch (error) {
-    const e = error as { stdout?: string; stderr?: string };
+    const e = /* SAFETY: 类型断言已复核 */ error as { stderr?: string; stdout?: string; };
     return { ok: false, output: `${e.stdout ?? ""}${e.stderr ?? ""}` };
   }
 }

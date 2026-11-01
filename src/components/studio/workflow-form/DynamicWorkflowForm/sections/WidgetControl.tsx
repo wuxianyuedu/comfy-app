@@ -4,11 +4,7 @@
 // 纯展示：值由外部传入，变更通过 onValueChange 上抛。compact 走画布节点的
 // 压缩尺寸，宽版走 CreatePanel / IO-edit 预览的尺寸。
 
-import {
-  isInputFilled,
-  numericBounds,
-  type EnrichedWidget,
-} from "~/components/studio/workflow-io";
+import { isInputFilled, numericBounds, type EnrichedWidget } from "~/components/studio/workflow-io";
 import {
   AutoResizeTextarea,
   isSeedLike,
@@ -22,22 +18,22 @@ import { MediaThumbnail } from "~/components/ui/media-thumbnail";
 import { mediaPreviewUrl, mediaReferenceFilename } from "~/lib/media/media-url";
 import { inputCls } from "../constants";
 
-interface WidgetControlProps {
+type WidgetControlProps = {
+  compact: boolean;
+  disabled: boolean;
   entry: EnrichedWidget;
   /** 行标签 —— 参与 placeholder（输入 / 选择 / 上传 + 必填后缀）。 */
   label: string;
-  value: unknown;
-  compact: boolean;
-  disabled: boolean;
-  /** 该行正在上传（image 行显示「上传中…」）。 */
-  uploading: boolean;
-  seedMode?: string;
+  onPickFile: () => void;
   onSeedModeChange?: (mode: string) => void;
   onValueChange: (value: unknown) => void;
-  onPickFile: () => void;
   /** 用户刚选过这张图时的本地预览地址（data URL）；有则优先于按值算的 ComfyUI 代理地址。 */
   previewSrc?: string;
-}
+  seedMode?: string;
+  /** 该行正在上传（image 行显示「上传中…」）。 */
+  uploading: boolean;
+  value: unknown;
+};
 
 export function WidgetControl({
   entry,
@@ -62,42 +58,39 @@ export function WidgetControl({
       if (compact) {
         return (
           <AutoResizeTextarea
-            value={typeof value === "string" ? value : ""}
-            placeholder={placeholder}
-            onChange={onValueChange}
-            minHeight={28}
             maxHeight={80}
+            minHeight={28}
+            onChange={onValueChange}
+            placeholder={placeholder}
+            value={typeof value === "string" ? value : ""}
           />
         );
       }
       return (
         <textarea
-          className={`${inputCls} mt-1.5 min-h-13 ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
-          rows={4}
           aria-label={`${label}${requiredHint}`}
-          value={typeof value === "string" ? value : ""}
+          className={`${inputCls} mt-1.5 min-h-13 ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
           disabled={disabled}
-          placeholder={placeholder}
           onChange={textHandler(onValueChange)}
+          placeholder={placeholder}
+          rows={4}
+          value={typeof value === "string" ? value : ""}
         />
       );
     }
 
-    case "text":
+    case "text": {
       return (
         <input
-          className={`${inputCls} ${compact ? "" : "mt-1"} ${missingRequired ? "border-destructive/50" : ""}`}
-          value={
-            typeof value === "string" || typeof value === "number"
-              ? String(value)
-              : ""
-          }
-          disabled={disabled}
           aria-label={`${label}${requiredHint}`}
-          placeholder={`输入 ${label}${requiredHint}`}
+          className={`${inputCls} ${compact ? "" : "mt-1"} ${missingRequired ? "border-destructive/50" : ""}`}
+          disabled={disabled}
           onChange={textHandler(onValueChange)}
+          placeholder={`输入 ${label}${requiredHint}`}
+          value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
         />
       );
+    }
 
     case "int":
     case "float": {
@@ -108,26 +101,17 @@ export function WidgetControl({
       const randomSeed = isSeed && seedMode === "random";
       const stepper = (
         <NumberField
-          value={
-            randomSeed
-              ? -1
-              : typeof value === "number"
-                ? value
-                : Number(value) || bounds.min
-          }
-          onChange={onValueChange}
-          min={bounds.min}
-          max={bounds.max}
-          step={bounds.step}
           decimalPlaces={entry.control === "float" ? bounds.decimalPlaces : 0}
           disabled={disabled || randomSeed}
+          max={bounds.max}
+          min={bounds.min}
+          onChange={onValueChange}
+          step={bounds.step}
+          value={randomSeed ? -1 : typeof value === "number" ? value : Number(value) || bounds.min}
         />
       );
       const seedButton = isSeed ? (
-        <SeedModeButton
-          mode={seedMode}
-          onPick={(mode) => onSeedModeChange?.(mode)}
-        />
+        <SeedModeButton mode={seedMode} onPick={(mode) => onSeedModeChange?.(mode)} />
       ) : null;
 
       if (compact) {
@@ -148,17 +132,17 @@ export function WidgetControl({
       );
     }
 
-    case "switch":
+    case "switch": {
       return (
         <Button
-          variant="ghost"
-          role="switch"
           aria-checked={value === true}
-          disabled={disabled}
-          onClick={() => onValueChange(!value)}
           className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep ${compact ? "h-[28px] px-2.5" : "mt-1 h-7.5 px-3"} w-full justify-between rounded-md text-xs ${
             value ? "text-success-strong" : "text-ink-muted"
           } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
+          disabled={disabled}
+          onClick={() => onValueChange(!value)}
+          role="switch"
+          variant="ghost"
         >
           <span>{value ? "开启" : "关闭"}</span>
           <span
@@ -173,6 +157,7 @@ export function WidgetControl({
           </span>
         </Button>
       );
+    }
 
     case "image": {
       /* 文件名与预览地址都走 `~/lib/media/media-url` 的出口（§16.2.4.32）：
@@ -185,12 +170,12 @@ export function WidgetControl({
       return (
         <div className={compact ? "" : "mt-1"}>
           <Button
-            variant="ghost"
             className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright text-2xs gap-1.5 rounded-md px-2.5 ${
               compact ? "h-[28px] w-full" : "h-auto py-1.5"
             } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
             disabled={disabled || uploading}
             onClick={onPickFile}
+            variant="ghost"
           >
             {uploading
               ? "上传中…"
@@ -202,33 +187,35 @@ export function WidgetControl({
             /* 缩略图不可点（点它等于点「换一张」是另一种语义）：换图仍走上面
                那个按钮，这里只负责把「选了哪张」显示出来。 */
             <MediaThumbnail
-              src={previewUrl}
               alt={label}
-              fallback="none"
               className="border-border bg-canvas-deep mt-1.5 max-h-32 w-full rounded-md border object-contain"
+              fallback="none"
+              src={previewUrl}
             />
           )}
         </div>
       );
     }
 
-    case "select":
+    case "select": {
       return (
         <SelectMenu
-          value={typeof value === "string" ? value : ""}
-          onChange={onValueChange}
-          options={Array.isArray(entry.options) ? entry.options : []}
-          disabled={disabled}
-          placeholder={`选择 ${label}${requiredHint}`}
-          fullWidth
           className={`${compact ? "" : "mt-1"} ${
             missingRequired ? "ring-destructive/50 rounded-md ring-1" : ""
           }`}
+          disabled={disabled}
+          fullWidth
+          onChange={onValueChange}
+          options={Array.isArray(entry.options) ? entry.options : []}
+          placeholder={`选择 ${label}${requiredHint}`}
           popoverMinWidth={compact ? 220 : 260}
+          value={typeof value === "string" ? value : ""}
         />
       );
+    }
 
-    default:
+    default: {
       return null;
+    }
   }
 }

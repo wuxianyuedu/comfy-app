@@ -45,7 +45,7 @@ const impl: TaskRepoImpl = createTaskRepoImpl(db, { owner: "inline" });
 
 /** 把「不限条数」作为 limit 传下去（run-time 是 `sql` 片段，见 NO_LIMIT 注释）。 */
 function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
-  return (q as unknown as { limit(n: unknown): Q }).limit(NO_LIMIT);
+  return /* SAFETY: 类型断言已复核 */ (q as unknown as { limit(n: unknown): Q }).limit(NO_LIMIT);
 }
 
 /**
@@ -55,8 +55,10 @@ function limitAll<Q extends { limit(n: number): unknown }>(q: Q): Q {
  * query 表达不了无 limit 的 offset），但对外仍要返回带 images 的行 —— 与其在
  * 两处分头拼 `with`，不如把「按 id 装载」收到这里，保证两种取法给出同一形状。
  */
-async function attachImages(rows: Task[]): Promise<TaskWithCover[]> {
-  if (!rows.length) return [];
+async function attachImages(rows: Array<Task>): Promise<Array<TaskWithCover>> {
+  if (!rows.length) {
+    return [];
+  }
   const ids = rows.map((r) => r.id);
   const images = await db
     .select()
@@ -78,17 +80,6 @@ export class TaskRepository extends DrizzleRepository<Task> {
   }
 
   async createQueued(input: {
-    userId: string;
-    type: string;
-    prompt: string;
-    negativePrompt?: string | null;
-    params: unknown;
-    workflowName: string;
-    projectId?: string | null;
-    /** 工坊镜头号（归属用；NULL = 不是按镜生成，或归属未知）。 */
-    shotId?: string | null;
-    referenceImages?: unknown;
-    workflowSnapshot?: unknown;
     /** 执行归属（P3 §5 ADR §6）：提交侧按 `resolveExecutorClaim()` 显式传
      *  `'inline'|'host'`；缺省 null 只服务「调用方尚未接入灰度」的兼容路径
      *  （NULL 语义归 inline 片，领取/回收两侧等价）。 */
@@ -96,8 +87,19 @@ export class TaskRepository extends DrizzleRepository<Task> {
     /** 提交时刻的 RAW 执行载荷（ADR §13-3B1 决定 1）：host 由它重建 Job，
      *  不经 workflowName 回查模板（模板改/删不影响在队任务）。 */
     execPayload?: unknown;
+    negativePrompt?: string | null;
+    params: unknown;
     /** 来源任务（#2483 FR-QA-09）：重绘 / 放大指回原任务，只作追溯。 */
     parentId?: string | null;
+    projectId?: string | null;
+    prompt: string;
+    referenceImages?: unknown;
+    /** 工坊镜头号（归属用；NULL = 不是按镜生成，或归属未知）。 */
+    shotId?: string | null;
+    type: string;
+    userId: string;
+    workflowName: string;
+    workflowSnapshot?: unknown;
   }): Promise<Task> {
     const rows = await db
       .insert(task)
@@ -124,44 +126,42 @@ export class TaskRepository extends DrizzleRepository<Task> {
   async listByUser(
     userId: string,
     opts: {
-      projectId?: string;
-      take?: number;
-      skip?: number;
-      statusList?: string[];
       includeImages: true;
+      projectId?: string;
+      skip?: number;
+      statusList?: Array<string>;
+      take?: number;
     },
-  ): Promise<Array<TaskCardRow & { images: TaskImage[] }>>;
+  ): Promise<Array<TaskCardRow & { images: Array<TaskImage> }>>;
   async listByUser(
     userId: string,
     opts?: {
-      projectId?: string;
-      take?: number;
-      skip?: number;
-      statusList?: string[];
       includeImages?: boolean;
+      projectId?: string;
+      skip?: number;
+      statusList?: Array<string>;
+      take?: number;
     },
-  ): Promise<Task[]>;
+  ): Promise<Array<Task>>;
   async listByUser(
     userId: string,
     opts?: {
-      projectId?: string;
-      take?: number;
-      skip?: number;
-      statusList?: string[];
       includeImages?: boolean;
+      projectId?: string;
+      skip?: number;
+      statusList?: Array<string>;
+      take?: number;
     },
   ): Promise<
-    Task[] | TaskWithCover[] | Array<TaskCardRow & { images: TaskImage[] }>
+    Array<Task> | Array<TaskWithCover> | Array<TaskCardRow & { images: Array<TaskImage> }>
   > {
     const where = and(
       eq(task.userId, userId),
       opts?.projectId ? eq(task.projectId, opts.projectId) : undefined,
-      opts?.statusList?.length
-        ? inArray(task.status, opts.statusList)
-        : undefined,
+      opts?.statusList?.length ? inArray(task.status, opts.statusList) : undefined,
     );
     if (opts?.includeImages) {
-      const withImages = (rows: Task[]) => attachImages(rows);
+      const withImages = (rows: Array<Task>) => attachImages(rows);
       // 分页口径与下面普通 select 分支**必须一致**：drizzle 的 relational
       // query 只认 `limit`（`limit: -1` 会被整个丢掉，实测），所以「只给 skip」
       // 那条路走不了它 —— 先用普通 select 取到这一页的 id，再按 id 装载图片。
@@ -175,7 +175,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
       const rows = await db.query.task.findMany({
         where,
         orderBy: [desc(task.createdAt)],
-        ...(opts.take !== undefined ? { limit: opts.take } : {}),
+        ...(opts.take === undefined ? {} : { limit: opts.take }),
         /* 列表卡只要十来个字段：`workflowSnapshot` 与 `logs` 单行可达数 MB，
          * take=60 时是几十 MB 的白拉白反序列化（router 只映射卡片字段）。
          * 详情查询（findByIdWithImages）不受影响，仍取全列。 */
@@ -190,13 +190,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
     }
     const q = db.select().from(task).where(where).orderBy(desc(task.createdAt));
     if (opts?.skip === undefined) {
-      return opts?.take !== undefined ? q.limit(opts.take) : q;
+      return opts?.take === undefined ? q : q.limit(opts.take);
     }
     // `skip` 单独给时补 `LIMIT -1`（见上方 NO_LIMIT 的注释：不能写数字 -1，
     // drizzle 的 offset() 会把数字 limit 丢掉）。此前这条路径生成的是不带
     // limit 的 `… offset ?`，better-sqlite3 抛 `near "offset": syntax error`
     // —— 调用方拿到的是一次 500，而不是「第二页」。
-    const paged = opts.take !== undefined ? q.limit(opts.take) : limitAll(q);
+    const paged = opts.take === undefined ? limitAll(q) : q.limit(opts.take);
     return paged.offset(opts.skip);
   }
 
@@ -212,14 +212,14 @@ export class TaskRepository extends DrizzleRepository<Task> {
     extra?: Partial<Task>,
   ): Promise<Task> {
     const existing = await this.findByIdForUser(userId, id);
-    if (!existing) throw new NotFoundError(`任务不存在: ${id}`);
+    if (!existing) {
+      throw new NotFoundError(`任务不存在: ${id}`);
+    }
     const data: Partial<Task> = { status };
-    if (extra) Object.assign(data, extra);
-    const rows = await db
-      .update(task)
-      .set(data)
-      .where(eq(task.id, id))
-      .returning();
+    if (extra) {
+      Object.assign(data, extra);
+    }
+    const rows = await db.update(task).set(data).where(eq(task.id, id)).returning();
     return firstRowOfExisting(rows, `任务不存在: ${id}`);
   }
 
@@ -245,7 +245,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   async findSnapshotById(
     id: string,
-  ): Promise<{ workflowSnapshot: unknown; projectId: string | null } | null> {
+  ): Promise<{ projectId: string | null; workflowSnapshot: unknown } | null> {
     const rows = await db
       .select({
         workflowSnapshot: task.workflowSnapshot,
@@ -268,8 +268,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
   /** 12 个 exec-chain 方法 delegate 到共享 impl（P3 §5 Phase 2-A-1）。签名走
    *  `TaskRepoImpl["method"]` 反推、与 impl 单点绑定；SQL 主体见
    *  `./repository-task-impl.ts`。 */
-  findExecutionMeta: TaskRepoImpl["findExecutionMeta"] = (taskId) =>
-    impl.findExecutionMeta(taskId);
+  findExecutionMeta: TaskRepoImpl["findExecutionMeta"] = (taskId) => impl.findExecutionMeta(taskId);
 
   /** 等一条任务跑到终态时的最小读面：状态 + 进度 + 产出清单 + 失败原因。
    *
@@ -278,10 +277,10 @@ export class TaskRepository extends DrizzleRepository<Task> {
    *  `status=FAILED`，用户拿到的解释就从「显存不足」退化成「首帧生成失败」——
    *  一条 text 列的代价，换回的是排障时唯一有用的那句话。 */
   async findExecutionProgress(taskId: string): Promise<{
-    status: string;
+    error: string | null;
     progress: number;
     resultImages: unknown;
-    error: string | null;
+    status: string;
   } | null> {
     const rows = await db
       .select({
@@ -302,15 +301,17 @@ export class TaskRepository extends DrizzleRepository<Task> {
    * 往返（N = 镜头数），跑满 240 轮是上万次查询；批量版一轮只发一条 `IN`。
    * 这里连 `resultImages` 一起取（成片镜头要从中挑视频路径），避免调用方
    * 为拿它再查一遍。 */
-  async findExecutionProgressMany(taskIds: string[]): Promise<
+  async findExecutionProgressMany(taskIds: Array<string>): Promise<
     Array<{
       id: string;
-      status: string;
       progress: number;
       resultImages: unknown;
+      status: string;
     }>
   > {
-    if (!taskIds.length) return [];
+    if (!taskIds.length) {
+      return [];
+    }
     return db
       .select({
         id: task.id,
@@ -328,14 +329,14 @@ export class TaskRepository extends DrizzleRepository<Task> {
    *  `workflowSnapshot`（整份工作流 JSON）与 `logs`（全量日志）单行可达数 MB，
    *  拉回来只为了读状态和进度。 */
   async findSseSnapshot(id: string): Promise<{
-    status: string;
-    progress: number;
     error: string | null;
+    logs: unknown;
+    progress: number;
+    progressNode: unknown;
+    resultImages: unknown;
+    status: string;
     validationErrors: string | null;
     workflowName: string | null;
-    resultImages: unknown;
-    progressNode: unknown;
-    logs: unknown;
   } | null> {
     const rows = await db
       .select({
@@ -378,13 +379,13 @@ export class TaskRepository extends DrizzleRepository<Task> {
    *  行没有开始时刻，用提交时刻近似总好过让状态栏那一格空着（新写的 RUNNING 行
    *  一律带 `claimedAt`——领取与 `markRunning` / 首条进度帧都会定格它）。 */
   async findRunningForStatusBar(): Promise<{
-    id: string;
-    workflowName: string;
-    progress: number;
-    progressNode: unknown;
     claimedAt: Date | null;
     createdAt: Date;
     execPayload: unknown;
+    id: string;
+    progress: number;
+    progressNode: unknown;
+    workflowName: string;
   } | null> {
     const rows = await db
       .select({
@@ -405,10 +406,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
 
   /** 本应用排队中的任务数（同样跨归属——见上，这一格答的是「前面还堵几个」）。 */
   async countQueuedForStatusBar(): Promise<number> {
-    const rows = await db
-      .select({ c: count() })
-      .from(task)
-      .where(eq(task.status, "QUEUED"));
+    const rows = await db.select({ c: count() }).from(task).where(eq(task.status, "QUEUED"));
     return rows[0]?.c ?? 0;
   }
 
@@ -428,33 +426,25 @@ export class TaskRepository extends DrizzleRepository<Task> {
   finalizeSuccess: TaskRepoImpl["finalizeSuccess"] = (taskId, data) =>
     impl.finalizeSuccess(taskId, data);
 
-  finalizeFailure: TaskRepoImpl["finalizeFailure"] = (
-    taskId,
-    error,
-    validationErrors,
-  ) => impl.finalizeFailure(taskId, error, validationErrors);
+  finalizeFailure: TaskRepoImpl["finalizeFailure"] = (taskId, error, validationErrors) =>
+    impl.finalizeFailure(taskId, error, validationErrors);
 
   cancel: TaskRepoImpl["cancel"] = (taskId) => impl.cancel(taskId);
 
-  finalizeFromReaper: TaskRepoImpl["finalizeFromReaper"] = (
-    taskId,
-    status,
-    error,
-  ) => impl.finalizeFromReaper(taskId, status, error);
+  finalizeFromReaper: TaskRepoImpl["finalizeFromReaper"] = (taskId, status, error) =>
+    impl.finalizeFromReaper(taskId, status, error);
 
   findStatusAndPromptById: TaskRepoImpl["findStatusAndPromptById"] = (taskId) =>
     impl.findStatusAndPromptById(taskId);
 
-  replaceLogs: TaskRepoImpl["replaceLogs"] = (taskId, logs) =>
-    impl.replaceLogs(taskId, logs);
+  replaceLogs: TaskRepoImpl["replaceLogs"] = (taskId, logs) => impl.replaceLogs(taskId, logs);
 
   replaceRawCli: TaskRepoImpl["replaceRawCli"] = (taskId, lines) =>
     impl.replaceRawCli(taskId, lines);
 
   findRawCli: TaskRepoImpl["findRawCli"] = (taskId) => impl.findRawCli(taskId);
 
-  listQueuedIds: TaskRepoImpl["listQueuedIds"] = (owner, take) =>
-    impl.listQueuedIds(owner, take);
+  listQueuedIds: TaskRepoImpl["listQueuedIds"] = (owner, take) => impl.listQueuedIds(owner, take);
 
   /* 领取与载荷读也 delegate 进类（P3 §5 ADR §14 D1 第二刀）：此前只有 host 一条
    * pull，所以留在 impl 层「直接调 impl」；现在 Next 也是领取宿主，两侧都经由
@@ -463,13 +453,10 @@ export class TaskRepository extends DrizzleRepository<Task> {
   claimNextQueued: TaskRepoImpl["claimNextQueued"] = (mode, take) =>
     impl.claimNextQueued(mode, take);
 
-  findExecJob: TaskRepoImpl["findExecJob"] = (taskId) =>
-    impl.findExecJob(taskId);
+  findExecJob: TaskRepoImpl["findExecJob"] = (taskId) => impl.findExecJob(taskId);
 
-  listStaleUnownedQueued: TaskRepoImpl["listStaleUnownedQueued"] = (
-    cutoff,
-    take,
-  ) => impl.listStaleUnownedQueued(cutoff, take);
+  listStaleUnownedQueued: TaskRepoImpl["listStaleUnownedQueued"] = (cutoff, take) =>
+    impl.listStaleUnownedQueued(cutoff, take);
 
   listStaleRunning: TaskRepoImpl["listStaleRunning"] = (cutoff, take, owner) =>
     impl.listStaleRunning(cutoff, take, owner);
@@ -478,8 +465,7 @@ export class TaskRepository extends DrizzleRepository<Task> {
     impl.createImages(taskId, images);
 
   /** 按 id 读一张产物图（连带 task 归属校验用）；不存在 → null。（#2480） */
-  findImageById: TaskRepoImpl["findImageById"] = (imageId) =>
-    impl.findImageById(imageId);
+  findImageById: TaskRepoImpl["findImageById"] = (imageId) => impl.findImageById(imageId);
 
   patchImageFeedback: TaskRepoImpl["patchImageFeedback"] = (imageId, data) =>
     impl.patchImageFeedback(imageId, data);

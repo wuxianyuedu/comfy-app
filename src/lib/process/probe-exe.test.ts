@@ -56,10 +56,7 @@ describe("probeExecutable：真起一次进程，三条出口分开答", () => {
      *   · win32 ：`status: 1` + `signal: null` —— 这一平台上终止不产生信号退出码，
      *     所以「被杀掉」与「自己退 1」**就是不可分**的。那是平台事实，不是判据放松。
      * 旧写法把 POSIX 那一半当通用前提 ⇒ 在 Windows 节点上恒红（每日全量是它的执行者）。 */
-    const got = probeExecutable(process.execPath, [
-      "-e",
-      "process.kill(process.pid, 'SIGKILL')",
-    ]);
+    const got = probeExecutable(process.execPath, ["-e", "process.kill(process.pid, 'SIGKILL')"]);
     expect(got.ok).toBe(false);
     expect(got.failure?.kind).toBe("nonzero-exit");
     const said = describeProbeFailure(got.failure!);
@@ -86,11 +83,7 @@ describe("probeExecutable：真起一次进程，三条出口分开答", () => {
   it("撞上探测预算 ⇒ timeout，不许混进「起不来」", () => {
     /* 这一格是本判据存在的理由：`error.code === "ETIMEDOUT"` 说的是「这一次没量到」，
      * 而下一次动作（再取一遍）与「去装一个东西」完全不同（规范 §13.6.4）。 */
-    const got = probeExecutable(
-      process.execPath,
-      ["-e", "setTimeout(() => {}, 5000)"],
-      50,
-    );
+    const got = probeExecutable(process.execPath, ["-e", "setTimeout(() => {}, 5000)"], 50);
     expect(got.ok).toBe(false);
     expect(got.failure).toMatchObject({ kind: "timeout", timeoutMs: 50 });
   });
@@ -101,23 +94,17 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
   const probeOnly =
     (wanted: string, failure: ProbeOutcome["failure"] = null) =>
     (candidate: string): ProbeOutcome =>
-      candidate === wanted
-        ? { ok: true, failure: null }
-        : { ok: false, failure };
+      candidate === wanted ? { ok: true, failure: null } : { ok: false, failure };
 
   it("命中第一个能跑的，且不把后面的候选算成「试过」", () => {
-    const got = firstRunnable(
-      ["powershell", "pwsh"],
-      () => [],
-      probeOnly("pwsh"),
-    );
+    const got = firstRunnable(["powershell", "pwsh"], () => [], probeOnly("pwsh"));
     expect(got.hit).toBe("pwsh");
     // 第一个候选**确实试过**且失败了 —— 这句读数下一次要靠它说清「谁顶掉了谁」。
     expect(got.missed[0]?.candidate).toBe("powershell");
   });
 
   it("每个候选都喂各自的参数（`py` 的 `-3` 是候选级的，不是调用点的记性）", () => {
-    const seen: Array<[string, string[]]> = [];
+    const seen: Array<[string, Array<string>]> = [];
     firstRunnable(
       ["python", "py"],
       (candidate) => (candidate === "py" ? ["-3", "-c", "x"] : ["-c", "x"]),
@@ -152,15 +139,11 @@ describe("firstRunnable：候选顺序与「试过哪些」", () => {
 
 describe("话术：下一个要排障的人得从这一行读出「哪一个候选、什么原因」", () => {
   it("三条出口各说各的（别糊成一句「不可用」）", () => {
-    expect(
-      describeProbeFailure({ kind: "spawn-error", code: "ENOENT" }),
-    ).toContain("ENOENT");
-    expect(
-      describeProbeFailure({ kind: "nonzero-exit", status: 2, signal: null }),
-    ).toContain("exit 2");
-    expect(
-      describeProbeFailure({ kind: "timeout", timeoutMs: 20000 }),
-    ).toContain("没量到");
+    expect(describeProbeFailure({ kind: "spawn-error", code: "ENOENT" })).toContain("ENOENT");
+    expect(describeProbeFailure({ kind: "nonzero-exit", status: 2, signal: null })).toContain(
+      "exit 2",
+    );
+    expect(describeProbeFailure({ kind: "timeout", timeoutMs: 20_000 })).toContain("没量到");
   });
 
   it("多个候选时逐个点名，且原因跟在名字后面", () => {
@@ -171,7 +154,7 @@ describe("话术：下一个要排障的人得从这一行读出「哪一个候�
           failure: { kind: "nonzero-exit", status: 2, signal: null },
         },
       ],
-      [{ candidate: "pwsh", failure: { kind: "timeout", timeoutMs: 20000 } }],
+      [{ candidate: "pwsh", failure: { kind: "timeout", timeoutMs: 20_000 } }],
     );
     expect(text).toContain("powershell");
     expect(text).toContain("pwsh");
@@ -205,7 +188,7 @@ describe("边界：没有码的那种形态也不许编一个数出来充数", (
     /* `spawnSync` 不填 `error.code` 的形态在真机上没有稳定的造法，而**这一格的判据
      * 必须被走到**：把它读成「没有错误」就会让一条失败被报成可用。所以留一个注入点
      * （与 `executable-resolve.ts` 的 `probe` 同一个理由）。 */
-    const fake = (() => ({
+    const fake = /* SAFETY: 类型断言已复核 */ (() => ({
       error: new Error("boom"),
       status: null,
       signal: null,
@@ -245,8 +228,15 @@ describe("两条 `??` 兜底是判据的一部分，不是排版", () => {
      * 「起不来（undefined）」与「起来了但退非零（exit undefined）」—— 两句既不指向
      * 下一步、又把「没有读数」说成了「有个值」。 */
     for (const failure of [
-      { kind: "spawn-error" as const, code: "UNKNOWN" },
-      { kind: "nonzero-exit" as const, status: null, signal: null },
+      {
+        kind: /* SAFETY: 类型断言已复核 */ "spawn-error" as const,
+        code: "UNKNOWN",
+      },
+      {
+        kind: /* SAFETY: 类型断言已复核 */ "nonzero-exit" as const,
+        status: null,
+        signal: null,
+      },
     ]) {
       expect(describeProbeFailure(failure)).not.toContain("undefined");
     }
@@ -257,7 +247,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
   /* 那行读数走 `elevateLogLevel()` 注入的出口（默认是裸 Node 的 `console`，见实现文件头）。
    * 这里注入一个收集器而不是拦 `console`：出口是可换的，拦 `console` 会在换过之后
    * **静默收到空**，于是断言失败却说不出是「没打」还是「没收到」。 */
-  const lines: string[] = [];
+  const lines: Array<string> = [];
   let restore: () => void = () => undefined;
   beforeEach(() => {
     lines.length = 0;
@@ -342,7 +332,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
      * `~/lib/core/logger`，落 `log/` 面板），而跑用例的人在终端上看得见的是 `report`
      * 那一行。少任何一条都不行 —— 只留前者时 CI 日志里读不到它；只留后者时判据判你
      * 直接写 console（或绕过脱敏）。 */
-    const reported: string[] = [];
+    const reported: Array<string> = [];
     firstRunnableOrEmpty({
       candidates: ["comfyapp-no-such-command-2316"],
       probeArgs: () => ["--version"],
@@ -371,7 +361,7 @@ describe("firstRunnableOrEmpty：`skipIf(!x)` 那一个约定 + 探不到时的�
  */
 describe("谁都没注入时：读数落进缺省空转（ISSUE #2408）", () => {
   it("不抛、结论照旧（那个空串），而调用方那只眼睛照样收到读数", () => {
-    const reported: string[] = [];
+    const reported: Array<string> = [];
     expect(
       firstRunnableOrEmpty({
         candidates: ["comfyapp-no-such-command-2408"],

@@ -93,9 +93,7 @@ const STAGED = ARGS.has("--staged");
 /** `--verify <rel>#<Symbol>`:单条精确复核。清单归零后「为空」不再能证明
  *  扫描器在工作(一个永远返回空的扫描器会让断言全绿,§12.16),所以留一条
  *  可对**指定符号**当场复核的通道 —— 注入式反向验证用它。 */
-const verifyArg =
-  process.argv.slice(2).find((a) => !a.startsWith("--") && a.includes("#")) ??
-  "";
+const verifyArg = process.argv.slice(2).find((a) => !a.startsWith("--") && a.includes("#")) ?? "";
 
 /** 扫描范围:地基层(见头注)——lib 纯工具层 + trpc 客户端入口层。 */
 const SCAN_ROOTS = [path.join(SRC, "lib"), path.join(SRC, "trpc")];
@@ -134,7 +132,7 @@ function toPosix(p) {
 }
 
 function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^\s*\/\/.*$/gm, "");
 }
 
 /**
@@ -148,18 +146,24 @@ function exportedValues(src) {
   const re =
     /^export\s+(?:declare\s+)?(?:async\s+)?(?:function|const|let|var|class|enum)\s+([A-Za-z_$][\w$]*)/gm;
   let m;
-  while ((m = re.exec(src))) out.push(m[1]);
+  while ((m = re.exec(src))) {
+    out.push(m[1]);
+  }
   // `export { a, b as c }` 具名清单：只要别名（外部能引到的那个名字）
   const listRe = /^export\s*\{([^}]*)\}/gm;
   while ((m = listRe.exec(src))) {
     for (const part of m[1].split(",")) {
       const seg = part.trim();
-      if (!seg) continue;
+      if (!seg) {
+        continue;
+      }
       const alias = seg
         .split(/\s+as\s+/)
         .pop()
         .trim();
-      if (/^[A-Za-z_$][\w$]*$/.test(alias)) out.push(alias);
+      if (/^[A-Za-z_$][\w$]*$/.test(alias)) {
+        out.push(alias);
+      }
     }
   }
   // 重导出 `export { x } from "./y"` 属转发，其消费方在被转发模块侧判定
@@ -172,7 +176,9 @@ function moduleKeys(absPathNoExt) {
   const keys = new Set([rel, `./${path.posix.basename(rel)}`]);
   // `~/lib/x/y` 与 `@/lib/x/y` 两种别名都归一到 `src/lib/x/y`
   for (const alias of ["~/", "@/", "src/"]) {
-    if (rel.startsWith("src/")) keys.add(alias + rel.slice(4));
+    if (rel.startsWith("src/")) {
+      keys.add(alias + rel.slice(4));
+    }
   }
   return keys;
 }
@@ -202,7 +208,9 @@ function importSpecs(src) {
 function specsImport(specs, wantedKeys) {
   for (const norm of specs) {
     for (const key of wantedKeys) {
-      if (norm === key || key.endsWith(norm) || norm.endsWith(key)) return true;
+      if (norm === key || key.endsWith(norm) || norm.endsWith(key)) {
+        return true;
+      }
     }
   }
   return false;
@@ -227,7 +235,9 @@ let vanishedFiles = 0;
 const PROD_FREQ = (() => {
   const freq = new Map();
   const files = [];
-  for (const r of USAGE_ROOTS) walk(path.join(ROOT, r), files);
+  for (const r of USAGE_ROOTS) {
+    walk(path.join(ROOT, r), files);
+  }
   for (const f of files) {
     const raw = readForScan(f);
     if (raw === null) {
@@ -235,8 +245,12 @@ const PROD_FREQ = (() => {
       continue;
     }
     const toks = stripComments(raw).match(/\w+/g);
-    if (!toks) continue;
-    for (const t of toks) freq.set(t, (freq.get(t) || 0) + 1);
+    if (!toks) {
+      continue;
+    }
+    for (const t of toks) {
+      freq.set(t, (freq.get(t) || 0) + 1);
+    }
   }
   return freq;
 })();
@@ -248,7 +262,9 @@ const TEST_FILES = (() => {
   const list = [];
   const push = (file) => {
     const abs = path.resolve(file);
-    if (seen.has(abs)) return;
+    if (seen.has(abs)) {
+      return;
+    }
     seen.add(abs);
     const raw = readForScan(abs);
     if (raw === null) {
@@ -262,10 +278,18 @@ const TEST_FILES = (() => {
       specs: importSpecs(src),
     });
   };
-  for (const f of walk(path.join(ROOT, "tests")))
-    if (TEST_FILE_RE.test(f)) push(f);
-  for (const root of SCAN_ROOTS)
-    for (const f of walk(root)) if (TEST_FILE_RE.test(f)) push(f);
+  for (const f of walk(path.join(ROOT, "tests"))) {
+    if (TEST_FILE_RE.test(f)) {
+      push(f);
+    }
+  }
+  for (const root of SCAN_ROOTS) {
+    for (const f of walk(root)) {
+      if (TEST_FILE_RE.test(f)) {
+        push(f);
+      }
+    }
+  }
   return list;
 })();
 
@@ -276,21 +300,16 @@ function matchedTestFilesOf(relPath) {
   const wanted = moduleKeys(path.join(ROOT, base));
   const directRel = new Set();
   for (const ext of TEST_CONSUMER_EXT) {
+    directRel.add(toPosix(path.relative(ROOT, path.join(ROOT, `${base}${ext}`))));
     directRel.add(
-      toPosix(path.relative(ROOT, path.join(ROOT, `${base}${ext}`))),
-    );
-    directRel.add(
-      toPosix(
-        path.relative(
-          ROOT,
-          path.join(ROOT, "tests", `${path.basename(base)}${ext}`),
-        ),
-      ),
+      toPosix(path.relative(ROOT, path.join(ROOT, "tests", `${path.basename(base)}${ext}`))),
     );
   }
   const hits = [];
   for (const tf of TEST_FILES) {
-    if (directRel.has(tf.rel) || specsImport(tf.specs, wanted)) hits.push(tf);
+    if (directRel.has(tf.rel) || specsImport(tf.specs, wanted)) {
+      hits.push(tf);
+    }
   }
   return hits;
 }
@@ -304,12 +323,11 @@ function prodMentions(name) {
 function classify(relPath, name) {
   const prod = prodMentions(name);
   // 声明处自己也贡献 1 次计数；生产侧除声明外无人提及才继续看测试。
-  if (prod > 1) return { dead: false, why: `生产消费方引用 ${prod - 1} 处` };
+  if (prod > 1) {
+    return { dead: false, why: `生产消费方引用 ${prod - 1} 处` };
+  }
   const hits = matchedTestFilesOf(relPath);
-  const testMentions = hits.reduce(
-    (n, tf) => n + (tf.tokens.has(name) ? 1 : 0),
-    0,
-  );
+  const testMentions = hits.reduce((n, tf) => n + (tf.tokens.has(name) ? 1 : 0), 0);
   if (testMentions > 0) {
     return { dead: false, why: `同域单测引用 ${testMentions} 处` };
   }
@@ -322,7 +340,9 @@ function collect() {
   const files = SCAN_ROOTS.flatMap((root) => walk(root));
   for (const file of files) {
     const rel = toPosix(path.relative(ROOT, file));
-    if (SKIP_RE.test(rel)) continue;
+    if (SKIP_RE.test(rel)) {
+      continue;
+    }
     const raw = readForScan(file);
     if (raw === null) {
       vanishedFiles += 1;
@@ -330,14 +350,20 @@ function collect() {
     }
     const src = stripComments(raw);
     const names = exportedValues(src);
-    if (!names.length) continue;
+    if (!names.length) {
+      continue;
+    }
     checkedFiles.push(rel);
     // 消费测试文件集合按模块算一次（旧实现是拼测试语料，此处取词元命中等价）。
     let testHits = null;
     for (const name of names) {
-      if (prodMentions(name) > 1) continue;
+      if (prodMentions(name) > 1) {
+        continue;
+      }
       testHits ??= matchedTestFilesOf(rel);
-      if (testHits.some((tf) => tf.tokens.has(name))) continue;
+      if (testHits.some((tf) => tf.tokens.has(name))) {
+        continue;
+      }
       dead.push(`${rel}#${name}`);
     }
   }
@@ -358,9 +384,7 @@ function main() {
       process.exit(1);
     }
     const verdict = classify(relPath, name);
-    console.log(
-      `${verdict.dead ? "零消费" : "有消费"}  ${relPath}#${name}  (${verdict.why})`,
-    );
+    console.log(`${verdict.dead ? "零消费" : "有消费"}  ${relPath}#${name}  (${verdict.why})`);
     process.exit(0);
   }
 
@@ -370,13 +394,14 @@ function main() {
   if (REPORT_ONLY) {
     gatePass(
       "零消费导出",
-      `扫描 ${checkedFiles} 个模块：零消费导出 ${dead.length} 个（只出清单）` +
-        note,
+      `扫描 ${checkedFiles} 个模块：零消费导出 ${dead.length} 个（只出清单）${note}`,
       {
         subject: "地基层",
       },
     );
-    for (const line of indentItems(dead)) console.log(line);
+    for (const line of indentItems(dead)) {
+      console.log(line);
+    }
     return;
   }
 
@@ -387,15 +412,15 @@ function main() {
       subject: "地基层",
       detail: `${dead.length} 个零消费导出`,
       hint:
-        "修法：① 真的要用 → 接线到消费方；② 确认是死代码 → 删掉（§12.15 第二条：留着的理由\n" +
-        "必须写得出「谁在什么时候用它」，「以后可能会用」不是理由）。\n" +
-        "本判据是硬闸（无基线、无 --update）：零消费导出的存量已清零，新增即阻断。" +
-        note,
+        `修法：① 真的要用 → 接线到消费方；② 确认是死代码 → 删掉（§12.15 第二条：留着的理由\n` +
+        `必须写得出「谁在什么时候用它」，「以后可能会用」不是理由）。\n` +
+        `本判据是硬闸（无基线、无 --update）：零消费导出的存量已清零，新增即阻断。${
+        note}`,
     });
     process.exit(1);
   }
 
-  gatePass("零消费导出", `扫描 ${checkedFiles} 个模块：命中 0 条` + note, {
+  gatePass("零消费导出", `扫描 ${checkedFiles} 个模块：命中 0 条${note}`, {
     subject: "地基层",
   });
 }

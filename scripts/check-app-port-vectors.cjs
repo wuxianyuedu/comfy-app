@@ -52,9 +52,7 @@ const NO_EXEC = "EACCES";
  * 而 `python3` 在 Windows 上多半只是 Store 的占位别名（`--version` 退非零）。
  */
 const PYTHON_CANDIDATES =
-  process.platform === "win32"
-    ? ["python", "py", "python3"]
-    : ["python3", "python"];
+  process.platform === "win32" ? ["python", "py", "python3"] : ["python3", "python"];
 /** 每个候选的启动参数：裸 `py` 是「列出已装版本」并退非零，必须带 `-3`。 */
 const PYTHON_PROBE_ARGS = { py: ["-3", "--version"] };
 /** Python 侧真跑的预算。话术里的秒数跟着它走，别写死一个会过期的数。 */
@@ -93,7 +91,9 @@ const unverified = [];
  * 或只在 `message` 里带 `ETIMEDOUT` / `timed out`。两个都认，漏一个就又把超时读成内容失败。
  */
 function isTimeoutLike(e) {
-  if (!e) return false;
+  if (!e) {
+    return false;
+  }
   const code = String(e.code ?? "");
   const msg = String(e.message ?? "");
   return code === "ETIMEDOUT" || /ETIMEDOUT|timed out/i.test(msg);
@@ -127,9 +127,13 @@ function probeCommand(cmd, args) {
   try {
     execFileSync(cmd, args, { stdio: "pipe", timeout: PROBE_TIMEOUT_MS });
     return "ok";
-  } catch (e) {
-    if (isTimeoutLike(e)) return "timeout";
-    if (e && (e.code === NOT_FOUND || e.code === NO_EXEC)) return "missing";
+  } catch (error) {
+    if (isTimeoutLike(error)) {
+      return "timeout";
+    }
+    if (error && (error.code === NOT_FOUND || error.code === NO_EXEC)) {
+      return "missing";
+    }
     return "present-but-nonzero";
   }
 }
@@ -169,18 +173,11 @@ function measurePythonOnce(pyChecker) {
     probeCommand(c, PYTHON_PROBE_ARGS[c] ?? ["--version"]),
   ]);
   const timedOut = probed.filter(([, s]) => s === "timeout").map(([c]) => c);
-  const malformed = probed
-    .filter(([, s]) => s === "present-but-nonzero")
-    .map(([c]) => c);
+  const malformed = probed.filter(([, s]) => s === "present-but-nonzero").map(([c]) => c);
   const found = probed.find(([, s]) => s === "ok");
   if (!found) {
     // 超时优先：它是唯一会触发「当场再取一遍」的形态（见 main 里的二次取证）。
-    const state =
-      timedOut.length > 0
-        ? "timeout"
-        : malformed.length > 0
-          ? "malformed"
-          : "missing";
+    const state = timedOut.length > 0 ? "timeout" : malformed.length > 0 ? "malformed" : "missing";
     return {
       state,
       python: malformed.length > 0 ? malformed[0] : null,
@@ -197,18 +194,16 @@ function measurePythonOnce(pyChecker) {
     return {
       state: "answered",
       python,
-      problems: out.includes("OK")
-        ? []
-        : [`Python 侧自检未通过：${out.trim()}`],
+      problems: out.includes("OK") ? [] : [`Python 侧自检未通过：${out.trim()}`],
     };
-  } catch (e) {
-    if (isTimeoutLike(e)) return { state: "timeout", python, problems: [] };
+  } catch (error) {
+    if (isTimeoutLike(error)) {
+      return { state: "timeout", python, problems: [] };
+    }
     return {
       state: "answered",
       python,
-      problems: [
-        `Python 侧自检失败：${(e.stdout || e.message || "").toString().trim()}`,
-      ],
+      problems: [`Python 侧自检失败：${(error.stdout || error.message || "").toString().trim()}`],
     };
   }
 }
@@ -222,8 +217,9 @@ function measurePythonOnce(pyChecker) {
  */
 function decidePythonVerdict(first, second) {
   const sec = second ?? first;
-  if (sec.state === "answered")
+  if (sec.state === "answered") {
     return { problems: sec.problems, unverified: [] };
+  }
   if (sec.state === "missing") {
     return {
       problems: [],
@@ -263,37 +259,31 @@ async function main() {
   let fixture;
   try {
     fixture = JSON.parse(fs.readFileSync(path.join(ROOT, REL_VECTORS), "utf8"));
-  } catch (e) {
-    problems.push(`共享向量不可读（${REL_VECTORS}）：${e.message}`);
+  } catch (error) {
+    problems.push(`共享向量不可读（${REL_VECTORS}）：${error.message}`);
     report();
     return;
   }
   const vectors = Array.isArray(fixture.vectors) ? fixture.vectors : [];
   if (vectors.length < 5) {
-    problems.push(
-      `共享向量不足（${vectors.length} < 5）—— 防止误删后检查静默全绿`,
-    );
+    problems.push(`共享向量不足（${vectors.length} < 5）—— 防止误删后检查静默全绿`);
   }
   // 向量内自洽
   for (const v of vectors) {
     if (v.port !== 3200 + (v.fnv1a32 % 800)) {
-      problems.push(
-        `向量内不自洽：${JSON.stringify(v.input)} port ≠ 3200 + fnv % 800`,
-      );
+      problems.push(`向量内不自洽：${JSON.stringify(v.input)} port ≠ 3200 + fnv % 800`);
     }
   }
 
   // ── ① Node 侧真跑 ──
   try {
     const mod = await import(
-      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replace(/\\/g, "/")
+      `file://${path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")}`
     );
     for (const v of vectors) {
       const norm = mod.normalizeRootForPort(v.input);
       if (norm !== v.normalized) {
-        problems.push(
-          `Node 规范化 ${JSON.stringify(v.input)}：${norm} ≠ ${v.normalized}`,
-        );
+        problems.push(`Node 规范化 ${JSON.stringify(v.input)}：${norm} ≠ ${v.normalized}`);
       }
       if (mod.fnv1a32(norm) !== v.fnv1a32) {
         problems.push(`Node FNV ${JSON.stringify(v.input)} 与向量不符`);
@@ -302,8 +292,8 @@ async function main() {
         problems.push(`Node 端口 ${JSON.stringify(v.input)} 与向量不符`);
       }
     }
-  } catch (e) {
-    problems.push(`Node 侧实现不可导入：${e.message}`);
+  } catch (error) {
+    problems.push(`Node 侧实现不可导入：${error.message}`);
   }
 
   // ── ①′ `.env` 单值解析（ISSUE #821）──
@@ -311,17 +301,13 @@ async function main() {
   // 「壳必须自己读 .env」这条承诺的判据在**四侧解析同一份 .env 得出同一个值**上：
   // 任一侧对「带引号 / 行尾注释 / 注释行」的理解不一致，用户写死的端口就只对一部分
   // 进程可见，剩下的按路径推导去等另一个端口（现象：启动页卡在「等 dev server」）。
-  const envVectors = Array.isArray(fixture.envVectors)
-    ? fixture.envVectors
-    : [];
+  const envVectors = Array.isArray(fixture.envVectors) ? fixture.envVectors : [];
   if (envVectors.length < 4) {
-    problems.push(
-      `envVectors 不足（${envVectors.length} < 4）—— 防止误删后检查静默全绿`,
-    );
+    problems.push(`envVectors 不足（${envVectors.length} < 4）—— 防止误删后检查静默全绿`);
   }
   try {
     const mod = await import(
-      "file://" + path.join(ROOT, "scripts", "app-port.mjs").replace(/\\/g, "/")
+      `file://${path.join(ROOT, "scripts", "app-port.mjs").replaceAll("\\", "/")}`
     );
     for (const v of envVectors) {
       // 判定走生产同一条出口 `parseDotEnvPortValue`，**不在门禁里另抄一份**
@@ -329,24 +315,20 @@ async function main() {
       // 是实现。实测栽过一次 —— `+3100` 三侧都收，抄件不收，于是它把实现判成红的
       // （ISSUE #1941 第二处：Node 侧 `readEnvPort` 曾用 `Number.parseInt` 吃前缀，
       // 把 `3100abc` 读成 3100，与另三侧的「未配置」分叉）。
-      const port = mod.parseDotEnvPortValue(
-        mod.readEnvFileValue(v.content, "COMFYAPP_PORT"),
-      );
+      const port = mod.parseDotEnvPortValue(mod.readEnvFileValue(v.content, "COMFYAPP_PORT"));
       if (port !== v.port) {
         problems.push(
           `Node .env 解析 ${JSON.stringify(v.content)}：${port} ≠ ${v.port}（${v.note}）`,
         );
       }
     }
-  } catch (e) {
-    problems.push(`Node 侧 .env 解析不可导入：${e.message}`);
+  } catch (error) {
+    problems.push(`Node 侧 .env 解析不可导入：${error.message}`);
   }
 
   // ── ② Python 侧取证（两遍，形态说话）──
   const pyChecker = "scripts/check-app-port-vectors.py";
-  if (!fs.existsSync(path.join(ROOT, pyChecker))) {
-    problems.push(`缺少 Python 侧自检脚本：${pyChecker}`);
-  } else {
+  if (fs.existsSync(path.join(ROOT, pyChecker))) {
     const first = measurePythonOnce(pyChecker);
     let second = null;
     if (first.state === "timeout") {
@@ -359,22 +341,24 @@ async function main() {
     }
     const verdict = decidePythonVerdict(first, second);
     problems.push(...verdict.problems);
-    for (const note of verdict.unverified) unverified.push(note);
+    for (const note of verdict.unverified) {
+      unverified.push(note);
+    }
+  } else {
+    problems.push(`缺少 Python 侧自检脚本：${pyChecker}`);
   }
 
   // ── ③ Rust / PowerShell 侧锁引用（无法在此环境执行）──
   const rust = readIfExists("src-tauri/src/single_instance.rs");
-  if (!rust)
+  if (rust) {
+    if (!rust.includes("fn normalize_root_for_port")) {
+      problems.push("Rust 侧 normalize_root_for_port 缺失（端口推导实现被删？）");
+    }
+    if (!rust.includes("app-port-vectors.json")) {
+      problems.push("Rust 侧测试未引用共享向量 app-port-vectors.json（四侧一致失效）");
+    }
+  } else {
     problems.push("缺少 Rust 侧实现：src-tauri/src/single_instance.rs");
-  else {
-    if (!rust.includes("fn normalize_root_for_port"))
-      problems.push(
-        "Rust 侧 normalize_root_for_port 缺失（端口推导实现被删？）",
-      );
-    if (!rust.includes("app-port-vectors.json"))
-      problems.push(
-        "Rust 侧测试未引用共享向量 app-port-vectors.json（四侧一致失效）",
-      );
   }
 
   // Rust 侧：`.env` 解析必须与 resolve 出口同源（否则壳又会按路径推导去等另一个端口）
@@ -386,39 +370,35 @@ async function main() {
       "fn port_source_for_root",
     ]) {
       if (!rust.includes(needle)) {
-        problems.push(
-          `Rust 侧缺少 ${needle}（.env 优先的端口解析被改回「只做路径推导」？）`,
-        );
+        problems.push(`Rust 侧缺少 ${needle}（.env 优先的端口解析被改回「只做路径推导」？）`);
       }
     }
     if (!rust.includes("envVectors")) {
-      problems.push(
-        "Rust 侧测试未引用共享向量的 envVectors（.env 解析四侧一致失效）",
-      );
+      problems.push("Rust 侧测试未引用共享向量的 envVectors（.env 解析四侧一致失效）");
     }
   }
 
   const ps = readIfExists("scripts/app-port.ps1");
-  if (!ps) problems.push("缺少 PowerShell 侧实现：scripts/app-port.ps1");
-  else if (!ps.includes("Get-NormalizedRootForPort"))
-    problems.push(
-      "PowerShell 侧 Get-NormalizedRootForPort 缺失（端口推导实现被删？）",
-    );
-  if (!readIfExists("scripts/check-app-port-vectors.ps1"))
-    problems.push(
-      "缺少 PowerShell 侧自检脚本：scripts/check-app-port-vectors.ps1",
-    );
+  if (!ps) {
+    problems.push("缺少 PowerShell 侧实现：scripts/app-port.ps1");
+  } else if (!ps.includes("Get-NormalizedRootForPort")) {
+    problems.push("PowerShell 侧 Get-NormalizedRootForPort 缺失（端口推导实现被删？）");
+  }
+  if (!readIfExists("scripts/check-app-port-vectors.ps1")) {
+    problems.push("缺少 PowerShell 侧自检脚本：scripts/check-app-port-vectors.ps1");
+  }
 
   const pyMod = readIfExists("scripts/app_port.py");
-  if (!pyMod) problems.push("缺少 Python 侧可导入模块：scripts/app_port.py");
-  else if (!pyMod.includes("def normalize_root_for_port"))
-    problems.push(
-      "Python 侧 normalize_root_for_port 缺失（端口推导实现被删？）",
-    );
+  if (!pyMod) {
+    problems.push("缺少 Python 侧可导入模块：scripts/app_port.py");
+  } else if (!pyMod.includes("def normalize_root_for_port")) {
+    problems.push("Python 侧 normalize_root_for_port 缺失（端口推导实现被删？）");
+  }
   // Python 侧的使用者现在只剩这个可导入模块本身与其自检脚本
   //（原先还有 Windows-only 的 start_tauri_launcher.py，已随 ISSUE #784 移除）。
-  if (!readIfExists("scripts/check-app-port-vectors.py"))
+  if (!readIfExists("scripts/check-app-port-vectors.py")) {
     problems.push("缺少 Python 侧自检脚本：scripts/check-app-port-vectors.py");
+  }
 
   report();
 }
@@ -434,23 +414,23 @@ function report() {
      * 标题、逐条内容与「这一侧本轮没参与比对」都要说清，否则读者会以为四侧真比对过了。
      * 已经复跑过一次是这一步的前提（见 main 里那趟 Python 二次取证），不是给人留的作业。 */
     console.log("[app-port-vectors] 通过，但**未完全取证**（放行）：");
-    for (const u of unverified) console.log("  - [未校验] " + u);
+    for (const u of unverified) {
+      console.log(`  - [未校验] ${u}`);
+    }
     console.log("");
-    console.log(
-      "  这一趟仍然判了的：Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用。",
-    );
-    console.log(
-      "        下次取证到之后 Python 侧会重新参与比对；本步以退出码 0 结束。",
-    );
+    console.log("  这一趟仍然判了的：Node 侧逐条真跑、Rust / PowerShell 侧对共享向量的锁引用。");
+    console.log("        下次取证到之后 Python 侧会重新参与比对；本步以退出码 0 结束。");
     return;
   }
   console.error("[app-port-vectors] 四语言端口推导一致性失败：");
-  for (const p of problems) console.error("  - " + p);
-  for (const u of unverified) console.error("  - [未校验·附带] " + u);
+  for (const p of problems) {
+    console.error(`  - ${p}`);
+  }
+  for (const u of unverified) {
+    console.error(`  - [未校验·附带] ${u}`);
+  }
   console.error("");
-  console.error(
-    "  规范：docs/standards/launch-and-build.md §1.1（推导算法是跨语言约定，",
-  );
+  console.error("  规范：docs/standards/launch-and-build.md §1.1（推导算法是跨语言约定，");
   console.error("        四侧实现必须逐字节一致，任一侧改动须四处同步）");
   process.exit(1);
 }
@@ -459,8 +439,8 @@ function report() {
  * （`tests/app-port-vectors-timeout-classification.test.ts`）。少了这道守卫，
  * 任何 `require` 这份文件的用例都会现场跑一次四侧取证并可能 `process.exit`。 */
 if (require.main === module) {
-  main().catch((e) => {
-    console.error("[app-port-vectors] 检查脚本异常：" + (e && e.message));
+  main().catch((error) => {
+    console.error(`[app-port-vectors] 检查脚本异常：${error && error.message}`);
     process.exit(1);
   });
 }

@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { afterNextPaint, onNextFrame } from "./next-frame";
 
-let frames: FrameRequestCallback[] = [];
+let frames: Array<FrameRequestCallback> = [];
 let nextId = 1;
 
 beforeEach(() => {
@@ -46,7 +46,9 @@ function flushFrame(): void {
   frames = [];
   for (const [i, cb] of pending.entries()) {
     /* 编号从 1 开始，与 push 顺序一致 —— 用例里只用一层，够用。 */
-    if (!cancelled.has(i + 1)) cb(0);
+    if (!cancelled.has(i + 1)) {
+      cb(0);
+    }
   }
 }
 

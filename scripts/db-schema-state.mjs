@@ -21,6 +21,7 @@ import { echoCommandLine } from "./launcher-core/command-echo.mjs";
 import {
   canAutoApply,
   describeRiskyChanges,
+  describeSpawnFailure,
   pendingStatements,
   pushSchema,
   riskyStatements,
@@ -44,11 +45,7 @@ const SCHEMA_DIR = ["src", "server", "db"];
  * @returns {string} 绝对路径
  */
 export function resolveSqlitePath(root, databaseUrl) {
-  const candidates = [
-    databaseUrl,
-    process.env.DATABASE_URL,
-    "file:./db.sqlite",
-  ];
+  const candidates = [databaseUrl, process.env.DATABASE_URL, "file:./db.sqlite"];
   let url = "";
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate !== "") {
@@ -67,14 +64,14 @@ export function resolveSqlitePath(root, databaseUrl) {
  */
 export function probeSchemaSync(root, databaseUrl) {
   const file = resolveSqlitePath(root, databaseUrl);
-  if (!fs.existsSync(file)) return "unknown";
+  if (!fs.existsSync(file)) {
+    return "unknown";
+  }
   try {
     const db = new DatabaseSync(file, { readOnly: true, open: true });
     try {
       const row = db
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-        )
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
         .get(SENTINEL_TABLE);
       return row ? "ready" : "missing";
     } finally {
@@ -110,12 +107,12 @@ export function schemaFingerprint(root) {
       .readdirSync(dir)
       .filter((name) => name.endsWith(".ts"))
       .sort();
-    if (files.length === 0) return null;
-    const bytes = Buffer.concat(
-      files.map((name) => fs.readFileSync(path.join(dir, name))),
-    );
-    const digest = crypto.createHash("sha256").update(bytes).digest();
-    return digest.readUInt32BE(0) & 0x7fffffff;
+    if (files.length === 0) {
+      return null;
+    }
+    const bytes = Buffer.concat(files.map((name) => fs.readFileSync(path.join(dir, name))));
+    const digest = Buffer.from(crypto.hash("sha256", bytes, "hex"), "hex");
+    return digest.readUInt32BE(0) & 0x7f_ff_ff_ff;
   } catch {
     return null;
   }
@@ -133,7 +130,9 @@ export function schemaFingerprint(root) {
  */
 export function readSchemaFingerprint(root, databaseUrl) {
   const file = resolveSqlitePath(root, databaseUrl);
-  if (!fs.existsSync(file)) return null;
+  if (!fs.existsSync(file)) {
+    return null;
+  }
   try {
     const db = new DatabaseSync(file, { readOnly: true, open: true });
     try {
@@ -157,7 +156,9 @@ export function readSchemaFingerprint(root, databaseUrl) {
  */
 export function writeSchemaFingerprint(root, databaseUrl, value) {
   const file = resolveSqlitePath(root, databaseUrl);
-  if (!fs.existsSync(file)) return false;
+  if (!fs.existsSync(file)) {
+    return false;
+  }
   try {
     const db = new DatabaseSync(file, { open: true });
     try {
@@ -195,17 +196,17 @@ export function probeSchemaFresh(root, databaseUrl) {
   if (tables !== "ready") {
     return {
       state: "unknown",
-      detail:
-        tables === "missing"
-          ? "库里还没有表"
-          : "读不到库（文件不存在 / 不是库）",
+      detail: tables === "missing" ? "库里还没有表" : "读不到库（文件不存在 / 不是库）",
     };
   }
   const want = schemaFingerprint(root);
-  if (want === null)
+  if (want === null) {
     return { state: "unknown", detail: "读不到 schema 源文件" };
+  }
   const have = readSchemaFingerprint(root, databaseUrl);
-  if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
+  if (have === null) {
+    return { state: "unknown", detail: "读不到库里的指纹" };
+  }
   /* `0` = 从没登记过（`PRAGMA user_version` 的初值，见 `readSchemaFingerprint`）。
    * 它与「登记过、但对不上」是两件事：**没有基线**时不构成「库落后了」的结论 ——
    * 与 `ensureSchemaCurrent` 对空库跳过指纹闸门同一条口径。 */
@@ -253,9 +254,7 @@ export function schemaDigest(root, databaseUrl) {
         .all();
       return crypto
         .createHash("sha256")
-        .update(
-          rows.map((r) => `${r.type}|${r.name}|${r.sql ?? ""}`).join("\n"),
-        )
+        .update(rows.map((r) => `${r.type}|${r.name}|${r.sql ?? ""}`).join("\n"))
         .digest("hex");
     } finally {
       db.close();
@@ -311,11 +310,16 @@ export function ensureSchemaCurrent(root, options = {}) {
   let want = null;
   if (tablesReady) {
     want = schemaFingerprint(root);
-    if (want === null)
+    if (want === null) {
       return { state: "unknown", detail: "读不到 schema 源文件" };
+    }
     const have = readSchemaFingerprint(root, databaseUrl);
-    if (have === null) return { state: "unknown", detail: "读不到库里的指纹" };
-    if (have === want) return { state: "ready" };
+    if (have === null) {
+      return { state: "unknown", detail: "读不到库里的指纹" };
+    }
+    if (have === want) {
+      return { state: "ready" };
+    }
 
     /* 同步前讲一句：drizzle 每次 diff 要十几秒，不说清楚的话用户看到的是
      * 「启动卡住了」。 */
@@ -331,9 +335,7 @@ export function ensureSchemaCurrent(root, options = {}) {
   const notSynced = (detail) => ({
     /* 字面量联合必须显式钉住：不加注时 TS 会把它放宽成 `string`，与
      * `ensureSchemaCurrent` 声明的返回类型对不上（`.mjs` 同样在 tsc 扫描范围内）。 */
-    state: /** @type {"stale" | "missing"} */ (
-      tablesReady ? "stale" : "missing"
-    ),
+    state: /** @type {"stale" | "missing"} */ (tablesReady ? "stale" : "missing"),
     detail,
   });
 
@@ -356,7 +358,9 @@ export function ensureSchemaCurrent(root, options = {}) {
     /* 本来就没差异（点按钮与启动同步并发的窗口里另一个进程先做完了）：
      * 登记指纹、判 ready —— 用户没有需要做的事。 */
     if (applied.alreadyCurrent) {
-      if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+      if (want !== null) {
+        writeSchemaFingerprint(root, databaseUrl, want);
+      }
       return { state: "ready" };
     }
     const after = schemaDigest(root, databaseUrl);
@@ -371,8 +375,12 @@ export function ensureSchemaCurrent(root, options = {}) {
     if (!applied.converged || after === null) {
       return notSynced(staleReason(applied));
     }
-    if (want === null) want = schemaFingerprint(root);
-    if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+    if (want === null) {
+      want = schemaFingerprint(root);
+    }
+    if (want !== null) {
+      writeSchemaFingerprint(root, databaseUrl, want);
+    }
     return { state: "synced" };
   }
 
@@ -385,7 +393,9 @@ export function ensureSchemaCurrent(root, options = {}) {
   if (probe.converged) {
     /* 库本来就是对的，只是指纹没登记（登记失败，或上一个版本还没登记过）。
      * 不提示 —— 用户没有需要做的事。 */
-    if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+    if (want !== null) {
+      writeSchemaFingerprint(root, databaseUrl, want);
+    }
     return { state: "ready" };
   }
 
@@ -393,7 +403,9 @@ export function ensureSchemaCurrent(root, options = {}) {
   if (!canAutoApply(pending)) {
     if (pending.length > 0) {
       forward("\n这批变更需要人工确认，启动链路不自动执行：\n");
-      for (const statement of pending) forward(`  ${statement}\n`);
+      for (const statement of pending) {
+        forward(`  ${statement}\n`);
+      }
       forward("\n");
     }
     if (pending.length === 0) {
@@ -431,21 +443,19 @@ export function ensureSchemaCurrent(root, options = {}) {
     forward,
   });
   const after = schemaDigest(root, databaseUrl);
-  if (
-    !applied.converged ||
-    after === null ||
-    (existedBefore && after === before)
-  ) {
+  if (!applied.converged || after === null || (existedBefore && after === before)) {
     return notSynced(
-      applied.converged
-        ? "drizzle-kit 报「已应用」，但库的结构没有变化"
-        : staleReason(applied),
+      applied.converged ? "drizzle-kit 报「已应用」，但库的结构没有变化" : staleReason(applied),
     );
   }
   /* 空库这一档进来时 `want` 还没取过（闸门被跳过）—— 现在库已经建好了，
    * 取一次指纹登记上，下一次启动就走毫秒级的快路径。 */
-  if (want === null) want = schemaFingerprint(root);
-  if (want !== null) writeSchemaFingerprint(root, databaseUrl, want);
+  if (want === null) {
+    want = schemaFingerprint(root);
+  }
+  if (want !== null) {
+    writeSchemaFingerprint(root, databaseUrl, want);
+  }
   return { state: "synced" };
 }
 
@@ -454,7 +464,7 @@ export function ensureSchemaCurrent(root, options = {}) {
  *  @returns {string} */
 function staleReason(result) {
   if (result.invocationFailed) {
-    return `起 pnpm 失败（${result.error?.code ?? "UNKNOWN"}）`;
+    return `起 pnpm 失败（${describeSpawnFailure(result.error)}）`;
   }
   if (result.blockedByTty) {
     return "这次的变更里有「会丢数据」的语句（删列 / 重建表），drizzle-kit 要求人工确认";
@@ -473,14 +483,16 @@ function staleReason(result) {
  */
 export function schemaNotice(result) {
   switch (result.state) {
-    case "ready":
+    case "ready": {
       return null;
-    case "synced":
+    }
+    case "synced": {
       return {
         level: "info",
         lines: ["数据库 schema 已自动同步到当前版本（这次改动不涉及丢数据）。"],
       };
-    case "missing":
+    }
+    case "missing": {
       return {
         level: "warn",
         lines: [
@@ -488,7 +500,8 @@ export function schemaNotice(result) {
           "先执行：pnpm db:push（见 docs/standards/launch-and-build.md §9.1）",
         ],
       };
-    case "stale":
+    }
+    case "stale": {
       return {
         level: "warn",
         lines: [
@@ -497,7 +510,8 @@ export function schemaNotice(result) {
           "请先确认这次 schema 变更确实可以丢弃那些数据）",
         ],
       };
-    default:
+    }
+    default: {
       return {
         level: "warn",
         lines: [
@@ -505,6 +519,7 @@ export function schemaNotice(result) {
           "必要时手动跑一次：pnpm db:push",
         ],
       };
+    }
   }
 }
 
@@ -513,12 +528,7 @@ export function schemaNotice(result) {
  *  归 `log/current/tools/`：它的写入方是本工具链，读取者是 Next 服务端。
  *  与 `src/lib/log/log-paths.ts` 的 `SCHEMA_SYNC_STATUS_FILE` **同形**（那一份
  *  是 TS 侧的唯一出处，`db-schema-state.test.ts` 钉住两侧不漂）。 */
-export const SCHEMA_SYNC_STATUS_FILE = path.join(
-  "log",
-  "current",
-  "tools",
-  "schema-sync.json",
-);
+export const SCHEMA_SYNC_STATUS_FILE = path.join("log", "current", "tools", "schema-sync.json");
 
 /**
  * 写同步状态（`{ phase, detail, at }`）。
@@ -597,15 +607,11 @@ export function spawnSchemaSync(root, options = {}) {
     // 后台同步是「看不见的 15~30 秒」：先回显要跑的那条命令，出问题时至少知道
     // 谁在后台动数据库（输出落在 log/schema-sync.log，命令行则留在当前终端/编排日志）。
     echoCommandLine(process.execPath, force ? [script, "--force"] : [script]);
-    const child = spawn(
-      process.execPath,
-      force ? [script, "--force"] : [script],
-      {
-        cwd: root,
-        detached: true,
-        stdio,
-      },
-    );
+    const child = spawn(process.execPath, force ? [script, "--force"] : [script], {
+      cwd: root,
+      detached: true,
+      stdio,
+    });
     child.unref();
     return { started: true };
   } catch (error) {

@@ -38,17 +38,11 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-function FilePickerDemo({
-  accept,
-  multiple,
-}: {
-  accept?: string;
-  multiple?: boolean;
-}) {
-  const [picked, setPicked] = useState<string[]>([]);
+function FilePickerDemo({ accept, multiple }: { accept?: string; multiple?: boolean }) {
+  const [picked, setPicked] = useState<Array<string>>([]);
   const picker = useFilePicker({
     onPick: (file, files) => {
-      setPicked(multiple ? Array.from(files).map((f) => f.name) : [file.name]);
+      setPicked(multiple ? [...files].map((f) => f.name) : [file.name]);
     },
     accept,
     multiple,
@@ -56,7 +50,7 @@ function FilePickerDemo({
   return (
     <div className="flex w-120 flex-col gap-3">
       <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={picker.open}>
+        <Button onClick={picker.open} variant="outline">
           选择文件
         </Button>
         {/* 隐藏 input 挂在树里，ref 转发由出口负责 —— 调用处不用管。 */}

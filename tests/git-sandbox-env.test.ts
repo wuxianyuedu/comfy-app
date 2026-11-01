@@ -15,6 +15,11 @@
  * ① 用的是本测试**自己 mkdtemp 出来的一份仓库**，不是运行它的那个仓库 ——
  * 判据可以随便污染夹具，但绝不许碰调用方的检出（这正是被测事故本身的形态）。
  *
+ * 第四档（④，ISSUE #2787）：平台那一跑的改动面变量（`CNB_PULL_REQUEST_TARGET_SHA` 一族）
+ * 同样进不来。判的是同一件事——「只对当前那一跑成立的读数」不许被子进程继承——只是
+ * 这一族不是 git 导出的，第一类清单收不到，而它会一路走进用例 spawn 的判据脚本，
+ * 让沙箱拿**真仓库的 sha** 去算自己的改动面（现场见 `git-sandbox-env.ts` 文件头第三类）。
+ *
  * 第三档（③）：宿主开着 `core.autocrlf=true` 时，夹具的 `git add` **一条 advice 都不打**。
  * 那一行 `LF will be replaced by CRLF` 不改变任何结论，却是 CI 里最像「真红」的噪音；
  * 反向锚点同样是「先证明宿主那一档确实会叫」——不先造一次带噪的 `git add`，
@@ -28,22 +33,25 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   GIT_INHERITED_ENV_KEYS,
+  PLATFORM_RUN_ENV_KEYS,
   gitSandboxEnv,
+  stripInheritedGitEnv,
 } from "./helpers/git-sandbox-env";
 
 /** 本文件造出来的夹具仓库；收尾全删，用例中途失败也不把临时目录留在 `tmpdir`。 */
-const dirs: string[] = [];
+const dirs: Array<string> = [];
 
 afterEach(() => {
-  for (const dir of dirs.splice(0))
+  for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 /** 起一个夹具仓库：一次提交、干净工作区，返回根目录。 */
 function makeRepo(name: string): string {
   const dir = mkdtempSync(join(tmpdir(), `git-sandbox-${name}-`));
   dirs.push(dir);
-  const git = (args: string[]) => {
+  const git = (args: Array<string>) => {
     const r = spawnSync("git", args, {
       cwd: dir,
       encoding: "utf8",
@@ -71,7 +79,9 @@ function makeRepo(name: string): string {
  */
 function bareEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const key of GIT_INHERITED_ENV_KEYS) delete env[key];
+  for (const key of GIT_INHERITED_ENV_KEYS) {
+    delete env[key];
+  }
   return env;
 }
 
@@ -87,12 +97,11 @@ function addProbeWithEnv(scratch: string, env: NodeJS.ProcessEnv): string {
 }
 
 /** 读那份仓库**索引**里的路径（按 `--git-dir` 指名，不依赖环境）。 */
-function indexPaths(repoDir: string): string[] {
-  const r = spawnSync(
-    "git",
-    ["--git-dir", join(repoDir, ".git"), "ls-files", "--stage"],
-    { encoding: "utf8", env: gitSandboxEnv() },
-  );
+function indexPaths(repoDir: string): Array<string> {
+  const r = spawnSync("git", ["--git-dir", join(repoDir, ".git"), "ls-files", "--stage"], {
+    encoding: "utf8",
+    env: gitSandboxEnv(),
+  });
   expect(r.status, `读索引失败: ${r.stderr}`).toBe(0);
   return (r.stdout ?? "")
     .split("\n")
@@ -106,7 +115,9 @@ describe("临时仓库夹具的 git 环境隔离", () => {
     const scratch = makeRepo("scratch");
     expect(indexPaths(victim)).toEqual(["tracked.txt"]);
 
-    /* 这就是钩子里的真实形态：`GIT_DIR` 指向调用方的仓库，cwd 在别处。 */
+    /* 这就是钩子里的真实形态：`GIT_DIR` 指向调用方的仓库，cwd 在别处。
+     * 它走**继承**那条路（`process.env` 那一档），不是 `gitSandboxEnv(extra)` ——
+     * 后者是「调用方显式要的」，剥完之后照传（口径见 `gitSandboxEnv()` 那段与 #2799）。 */
     const output = addProbeWithEnv(scratch, {
       ...process.env,
       GIT_DIR: join(victim, ".git"),
@@ -130,11 +141,27 @@ describe("临时仓库夹具的 git 环境隔离", () => {
     /* 清理**之前**那份环境里确实带着 `GIT_DIR`（否则这一档只是在判空气）。 */
     expect(poisoned.GIT_DIR).toBeTruthy();
 
-    addProbeWithEnv(scratch, gitSandboxEnv(poisoned));
+    /* 走「继承」那条路：把它放进 `process.env` 再让 `gitSandboxEnv()` 去剥 ——
+     * 这正是钩子里发生的事，也正是这一档要判的。 */
+    const saved = { dir: process.env.GIT_DIR, tree: process.env.GIT_WORK_TREE };
+    process.env.GIT_DIR = poisoned.GIT_DIR;
+    process.env.GIT_WORK_TREE = poisoned.GIT_WORK_TREE;
+    try {
+      addProbeWithEnv(scratch, gitSandboxEnv());
+    } finally {
+      if (saved.dir === undefined) {
+        delete process.env.GIT_DIR;
+      } else {
+        process.env.GIT_DIR = saved.dir;
+      }
+      if (saved.tree === undefined) {
+        delete process.env.GIT_WORK_TREE;
+      } else {
+        process.env.GIT_WORK_TREE = saved.tree;
+      }
+    }
 
-    expect(indexPaths(victim), "清理无效：目标仓库索引被写进了探针").toEqual([
-      "tracked.txt",
-    ]);
+    expect(indexPaths(victim), "清理无效：目标仓库索引被写进了探针").toEqual(["tracked.txt"]);
     /* 探针进的是**自己**的索引 —— 清理没有把命令变成空操作，只是换了归属。 */
     expect(indexPaths(scratch)).toContain("probe.txt");
   });
@@ -199,13 +226,70 @@ describe("临时仓库夹具的 git 环境隔离", () => {
     );
   });
 
+  it("④ 平台那一跑的改动面变量进不了沙箱（两个出口都要剥）", () => {
+    /* 三个键都是「指向某一个具体提交」的读数：`resolveBaseRef()` 优先认第一个，
+     * 另外两个进 `reconcileSyntheticMergeFace()` 的合成提交对账。 */
+    for (const key of ["CNB_PULL_REQUEST_TARGET_SHA", "CNB_PULL_REQUEST_MERGE_SHA", "CNB_COMMIT"]) {
+      expect(PLATFORM_RUN_ENV_KEYS, `清单里没有 ${key}`).toContain(key);
+    }
+    const poisoned: Record<string, string> = {
+      CNB_PULL_REQUEST_TARGET_SHA: "deadbeef".repeat(5),
+      CNB_PULL_REQUEST_MERGE_SHA: "feedface".repeat(5),
+      CNB_COMMIT: "abad1dea".repeat(5),
+    };
+    /* 判的是**继承**那条路（`process.env` → `gitSandboxEnv()`），所以就地注入再剥。
+     * `gitSandboxEnv(extra)` 是另一件事：调用方显式给的要照传（#2799 现场就是它）。 */
+    const saved: Record<string, string | undefined> = {};
+    for (const [k, v] of Object.entries(poisoned)) {
+      saved[k] = process.env[k];
+      process.env[k] = v;
+    }
+    let viaSpawn: NodeJS.ProcessEnv;
+    try {
+      viaSpawn = gitSandboxEnv();
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
+      }
+    }
+    for (const key of PLATFORM_RUN_ENV_KEYS) {
+      expect(viaSpawn[key], `gitSandboxEnv() 没剥掉继承来的 ${key}`).toBeUndefined();
+    }
+    /* 反向那一半：显式给的**照传** —— 剥的是继承，不是调用方的意图。
+     * 少了这条，`gitSandboxEnv({ CNB_PULL_REQUEST_TARGET_SHA })` 会被静默吞掉，
+     * 而「我明明传了」与「它说没有」可以同时成立（#2799 的第二个现场）。 */
+    const explicit = gitSandboxEnv(poisoned);
+    for (const [key, value] of Object.entries(poisoned)) {
+      expect(explicit[key], `显式给的 ${key} 被吞掉了`).toBe(value);
+    }
+    /* 另一条出口：`tests/setup.ts` 在 worker 启动时改的是 `process.env` 本身。
+     * 两个出口剥的必须是**同一张清单** —— 只改一处时，另一处会静默漏掉新增的键。 */
+    const marker = "[sandbox-env-probe]";
+    expect(poisoned.CNB_COMMIT).toBeTruthy();
+    process.env.CNB_COMMIT = "abad1dea".repeat(5);
+    process.env.CNB_PULL_REQUEST_TARGET_SHA = "deadbeef".repeat(5);
+    try {
+      stripInheritedGitEnv();
+      expect(process.env.CNB_COMMIT, `${marker} stripInheritedGitEnv() 没剥掉 CNB_COMMIT`).toBe(
+        undefined,
+      );
+      expect(process.env.CNB_PULL_REQUEST_TARGET_SHA).toBe(undefined);
+    } finally {
+      /* 全局那一档是**就地改** `process.env` 的，用例必须自己收拾（同文件 `dirs` 的理由）。 */
+      delete process.env.CNB_COMMIT;
+      delete process.env.CNB_PULL_REQUEST_TARGET_SHA;
+    }
+  });
+
   it("全局那一档挂在 `tests/setup.ts` 上（否则 20 份自起仓库的用例各扫各的）", () => {
     /* `vitest.config.ts` 的 `setupFiles` 指向它，且两档 project 都继承（文件里已注明）。
      * 这里判的是**接线**：那一档一旦被删，本文件 ② 的清理仍绿、而 20 份用例全部回到
      * 污染状态 —— 单靠行为用例看不见这件事。 */
     const setup = readFileSync("tests/setup.ts", "utf8");
-    expect(setup, "tests/setup.ts 里没有那次全局剥离").toContain(
-      "stripInheritedGitEnv();",
-    );
+    expect(setup, "tests/setup.ts 里没有那次全局剥离").toContain("stripInheritedGitEnv();");
   });
 });

@@ -34,53 +34,48 @@ import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /** 工坊控件形态：尺寸在工坊里是「比例 + 分辨率 / 比例 + 百万像素 + 倍数」组合控件，
  *  时长是秒数选择。`number` 是自定义口的「数字」类型（普通数值输入框）。 */
-export type EncapsulationControl =
-  | "text"
-  | "size"
-  | "image"
-  | "duration"
-  | "number";
+export type EncapsulationControl = "text" | "size" | "image" | "duration" | "number";
 
-export interface EncapsulationEntryStatus {
+export type EncapsulationEntryStatus = {
+  control: EncapsulationControl;
   /** 契约内稳定键（prompt / negative / size / first-frame / reference-image…）。 */
   id: string;
   /** 展示名（size 与模式契约编辑器同一份措辞，见 `modeContractInputLabel`）。 */
   label: string;
-  control: EncapsulationControl;
-  /** 生效落点（IO 端口键）；null = 还没落到任何端口（未配置）。 */
-  targetIoKey: string | null;
   /** 该口在**这一模式**下是否必备（随模式契约配置，见 `ModeContract.required`）。
    *
    *  必备与否只影响「能不能跑」的判据与界面上的一句提示：非必备口没有落点时工坊
    *  照跑（缺的值由工作流图内的默认值兜底），不是「配置没做完」。 */
   required: boolean;
-}
+  /** 生效落点（IO 端口键）；null = 还没落到任何端口（未配置）。 */
+  targetIoKey: string | null;
+};
 
-export interface EncapsulationStatus {
-  entries: EncapsulationEntryStatus[];
+export type EncapsulationStatus = {
+  entries: Array<EncapsulationEntryStatus>;
+  /** 还没落到端口的**全部**口子名（含非必备），供「未配置」清单一览。 */
+  missingLabels: Array<string>;
+  /** 还没落到端口的必备口名（徽标 tooltip / 未配置提示用）。
+   *  未配置的非必备口不算「不能跑」，不在这里 —— 那是提示，不是闸门。 */
+  missingRequired: Array<string>;
   /** **该模式的必备口全部已有落点** → 工坊可直接驱动这条工作流。
    *
    *  必备口随模式契约配置（见 `ModeContract.required`）；没配任何必备口的模式
    *  恒为 ready（没有「缺了它就不能用」的口）。 */
   ready: boolean;
-  /** 还没落到端口的必备口名（徽标 tooltip / 未配置提示用）。
-   *  未配置的非必备口不算「不能跑」，不在这里 —— 那是提示，不是闸门。 */
-  missingRequired: string[];
-  /** 还没落到端口的**全部**口子名（含非必备），供「未配置」清单一览。 */
-  missingLabels: string[];
   resolvedCount: number;
-}
+};
 
 /** 契约口 → 工坊控件形态（没有生效契约时的回落路径；自定义口一律来自契约，
  *  所以这里只处理预制口）。 */
 function controlFor(id: string): EncapsulationControl {
-  if (id === "size") return "size";
-  if (id === "duration") return "duration";
-  if (
-    id.startsWith("reference-image") ||
-    id === "first-frame" ||
-    id === "last-frame"
-  ) {
+  if (id === "size") {
+    return "size";
+  }
+  if (id === "duration") {
+    return "duration";
+  }
+  if (id.startsWith("reference-image") || id === "first-frame" || id === "last-frame") {
     return "image";
   }
   return "text";
@@ -97,7 +92,9 @@ function controlFor(id: string): EncapsulationControl {
  *  **自定义口是唯一的例外**：预制口的措辞有统一出处，自定义口没有 —— 它的名字
  *  只存在契约里，按「类」取会张冠李戴（把 `custom-text-1` 显示成「提示词」）。 */
 function displayLabel(id: string, contractLabel?: string): string {
-  if (exposedCustomKindOf(id) && contractLabel) return contractLabel;
+  if (exposedCustomKindOf(id) && contractLabel) {
+    return contractLabel;
+  }
   return exposedParamDisplayLabel(id);
 }
 
@@ -109,15 +106,15 @@ function displayLabel(id: string, contractLabel?: string): string {
  *  requiredInputs：该模式的**必备口**（同样可配置，见 `ModeContract.required`）。
  *  未传时回落内置默认（提示词）。「能不能用」= 这些口是否都有落点。 */
 export function deriveEncapsulationStatus(args: {
-  io: WorkflowIOMap | null | undefined;
-  paramMap: Record<string, unknown> | null | undefined;
-  mode: string | null | undefined;
   contractEntries?: Array<{
+    control: EncapsulationControl;
     id: string;
     label: string;
-    control: EncapsulationControl;
   }>;
-  requiredInputs?: readonly string[];
+  io: WorkflowIOMap | null | undefined;
+  mode: string | null | undefined;
+  paramMap: Record<string, unknown> | null | undefined;
+  requiredInputs?: ReadonlyArray<string>;
 }): EncapsulationStatus {
   const { io, paramMap, mode, contractEntries, requiredInputs } = args;
   /* 调用方（封装面板 / 库列表 / 生成前预检）传的是**存库原始形状**
@@ -137,9 +134,9 @@ export function deriveEncapsulationStatus(args: {
    * 但「未配置」恰恰要在这里现形（否则用户看不到缺了什么、也不知道为什么
    * 工坊驱动不了）。按契约清单补齐缺失口（落点 null）。 */
   const canonical: Array<{
+    control: EncapsulationControl;
     id: string;
     label: string;
-    control: EncapsulationControl;
   }> =
     contractEntries ??
     exposedParamsForMode(mode ?? null).map((d) => ({
@@ -162,7 +159,9 @@ export function deriveEncapsulationStatus(args: {
   const sizeSubTarget = (): string | null => {
     for (const id of SIZE_SUB_IDS) {
       const hit = sizeWired[id];
-      if (hit) return hit;
+      if (hit) {
+        return hit;
+      }
     }
     return null;
   };
@@ -179,14 +178,14 @@ export function deriveEncapsulationStatus(args: {
     )
   ).filter((id) => canonicalIds.has(id));
   const requiredSet = new Set<string>(required);
-  const mapped: EncapsulationEntryStatus[] = canonical.map((slot) => {
+  const mapped: Array<EncapsulationEntryStatus> = canonical.map((slot) => {
     const manual = manualTargetFor(mapping, slot.id, mode ?? null);
     const isSizeSlot = slot.id === "size";
     const target = isSizeSlot
       ? sizeDetermined
         ? (sizeSubTarget() ?? manual ?? null)
         : null
-      : (resolved[slot.id] ?? (manual !== undefined ? manual : null));
+      : (resolved[slot.id] ?? (manual === undefined ? null : manual));
     return {
       id: slot.id,
       label: displayLabel(slot.id, slot.label),
@@ -195,7 +194,7 @@ export function deriveEncapsulationStatus(args: {
       required: requiredSet.has(slot.id),
     };
   });
-  const ordered = Array.from(new Map(mapped.map((e) => [e.id, e])).values());
+  const ordered = [...new Map(mapped.map((e) => [e.id, e])).values()];
   const resolvedCount = ordered.filter((e) => e.targetIoKey !== null).length;
   const missingRequired = ordered
     .filter((e) => required.includes(e.id) && e.targetIoKey === null)
@@ -208,11 +207,7 @@ export function deriveEncapsulationStatus(args: {
    *  图内的默认值兜底），把它算成「不能跑」会让「非必填参数不必连到工作流」这条
    *  口径失效（用户口径，ISSUE #720 第 2 条）。 */
   const sizeSlot = ordered.find((e) => e.id === "size");
-  if (
-    sizeSlot?.required &&
-    !sizeDetermined &&
-    !missingRequired.includes(sizeSlot.label)
-  ) {
+  if (sizeSlot?.required && !sizeDetermined && !missingRequired.includes(sizeSlot.label)) {
     missingRequired.push(sizeSlot.label);
   }
   return {
@@ -220,8 +215,6 @@ export function deriveEncapsulationStatus(args: {
     ready: missingRequired.length === 0,
     missingRequired,
     resolvedCount,
-    missingLabels: ordered
-      .filter((e) => e.targetIoKey === null)
-      .map((e) => e.label),
+    missingLabels: ordered.filter((e) => e.targetIoKey === null).map((e) => e.label),
   };
 }

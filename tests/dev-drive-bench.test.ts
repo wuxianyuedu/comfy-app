@@ -18,29 +18,29 @@ import {
 
 /** 实测结果里的一侧。 */
 type Target = {
-  label: string;
-  dir: string;
-  bigWriteMbps: number | null;
   bigReadMbps: number | null;
+  bigWriteMbps: number | null;
+  cpuTop: Array<{ name: string; seconds: number }>;
+  dir: string;
+  elapsedMs: number;
+  label: string;
   smallCreatePerSec: number | null;
   smallReadPerSec: number | null;
-  elapsedMs: number;
-  cpuTop: { name: string; seconds: number }[];
-  watched: {
+  watched: Array<{
     filter: string;
-    process: string;
+    known: boolean;
     label: string;
     present: boolean;
+    process: string;
     seconds: number;
-    known: boolean;
-  }[];
+  }>;
 };
 
 /** 造一侧的实测结果。 */
 function makeTarget(overrides: Partial<Target> = {}): Target {
   return {
     label: "开发卷",
-    dir: "G:\\.workbuddy\\dev-drive-bench",
+    dir: String.raw`G:\.workbuddy\dev-drive-bench`,
     bigWriteMbps: 2900,
     bigReadMbps: 7300,
     smallCreatePerSec: 2553,
@@ -83,9 +83,7 @@ describe("吞吐渲染", () => {
   });
 
   it("缺项就不写那一项（不写 0）", () => {
-    const text = formatThroughput(
-      makeTarget({ bigReadMbps: null, smallReadPerSec: null }),
-    );
+    const text = formatThroughput(makeTarget({ bigReadMbps: null, smallReadPerSec: null }));
     expect(text).not.toContain("顺序读");
     expect(text).not.toContain("小文件读");
   });
@@ -124,10 +122,7 @@ describe("两块卷逐项比", () => {
   });
 
   it("参考卷那一项读数为 0 → 不比那一项（不拿 0 当分母）", () => {
-    const compare = compareTargets(
-      makeTarget(),
-      makeTarget({ label: "参考卷", bigWriteMbps: 0 }),
-    );
+    const compare = compareTargets(makeTarget(), makeTarget({ label: "参考卷", bigWriteMbps: 0 }));
     expect(compare.ratios.bigWrite).toBeNull();
   });
 });

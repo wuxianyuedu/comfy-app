@@ -10,13 +10,13 @@ import { workshopDb } from "./db";
 import { OLLAMA_DEFAULT_BASE_URL } from "~/lib/endpoints";
 import { INLINE_SNIPPET_MAX, clampText } from "~/lib/text-clamp";
 
-export interface WorkshopLLMConfig {
-  baseUrl: string;
-  model: string;
+export type WorkshopLLMConfig = {
   apiKey: string | null;
-  temperature: number;
+  baseUrl: string;
   maxTokens: number;
-}
+  model: string;
+  temperature: number;
+};
 
 function envDefaults(): WorkshopLLMConfig {
   return {
@@ -35,11 +35,21 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
     const rows = await workshopDb.select().from(llmConfig).limit(1);
     const row = rows[0];
     if (row) {
-      if (row.baseUrl) cfg.baseUrl = row.baseUrl;
-      if (row.model) cfg.model = row.model;
-      if (row.apiKey) cfg.apiKey = decryptLlmKey(row.apiKey);
-      if (row.temperature != null) cfg.temperature = row.temperature;
-      if (row.maxTokens != null) cfg.maxTokens = row.maxTokens;
+      if (row.baseUrl) {
+        cfg.baseUrl = row.baseUrl;
+      }
+      if (row.model) {
+        cfg.model = row.model;
+      }
+      if (row.apiKey) {
+        cfg.apiKey = decryptLlmKey(row.apiKey);
+      }
+      if (row.temperature != null) {
+        cfg.temperature = row.temperature;
+      }
+      if (row.maxTokens != null) {
+        cfg.maxTokens = row.maxTokens;
+      }
     }
   } catch {
     // 表不存在 / 连接异常 → 使用 env 默认
@@ -49,14 +59,16 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
 
 function headersFor(cfg: WorkshopLLMConfig): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.apiKey) h.Authorization = `Bearer ${cfg.apiKey}`;
+  if (cfg.apiKey) {
+    h.Authorization = `Bearer ${cfg.apiKey}`;
+  }
   return h;
 }
 
 /** 一次性（非流式）补全。 */
 export async function completeWorkshopLLM(
   cfg: WorkshopLLMConfig,
-  messages: LLMMessage[],
+  messages: Array<LLMMessage>,
 ): Promise<string> {
   if (!cfg.model?.trim()) {
     throw new Error(
@@ -77,32 +89,26 @@ export async function completeWorkshopLLM(
       }),
       signal: AbortSignal.timeout(180_000),
     });
-  } catch (e) {
-    const msg = errorMessage(e, String(e));
+  } catch (error) {
+    const msg = errorMessage(error, String(error));
     const cause =
-      e instanceof TypeError && e.cause instanceof Error
-        ? String(e.cause.message)
-        : "";
-    const reach =
-      /ECONNREFUSED|ECONNRESET/.test(cause) || /fetch failed/i.test(msg);
+      error instanceof TypeError && error.cause instanceof Error ? String(error.cause.message) : "";
+    const reach = /ECONNREFUSED|ECONNRESET/.test(cause) || /fetch failed/i.test(msg);
     throw new Error(
       reach
         ? `连不上 LLM 服务（${cfg.baseUrl}）：请确认本地服务已启动或 Base URL 正确（${cause || "连接被拒绝"}）。`
         : `LLM 请求失败：${msg}`,
-      { cause: e },
+      { cause: error },
     );
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    const hint =
-      res.status === 401 || res.status === 403
-        ? "（API Key 无效或未授权）"
-        : "";
+    const hint = res.status === 401 || res.status === 403 ? "（API Key 无效或未授权）" : "";
     throw new Error(
       `LLM 请求失败 (${res.status})${hint}${detail.trim() ? `：${clampText(detail, { maxLength: INLINE_SNIPPET_MAX, marker: "" })}` : ""}`,
     );
   }
-  const json = (await res.json()) as {
+  const json = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
   return json.choices?.[0]?.message?.content ?? "";

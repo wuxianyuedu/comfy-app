@@ -29,13 +29,13 @@ import { withTimeoutResult } from "~/lib/with-timeout";
 import type { Character, Shot } from "~/lib/workshop/types";
 
 /** 每个镜头节点的实时生成进度（pct + 当前 ComfyUI 节点类别）。 */
-export type ShotProgressMap = Record<string, { pct: number; label?: string }>;
+export type ShotProgressMap = Record<string, { label?: string; pct: number }>;
 
-export interface WorkshopGenerationDeps {
-  /** 本地链路的唯一可执行来源（空串 = 未选工作流）。 */
-  workflowId: string;
+export type WorkshopGenerationDeps = {
   /** 角色卡表：镜头相关角色选了定妆照时，按它取参考图下发（流程 §4）。 */
-  characters: Character[];
+  characters: Array<Character>;
+  /** 需要引起用户注意的失败/阻断文案通道（由主管线决定怎么渲染，不用 alert）。 */
+  notify: (message: string | null) => void;
   /**
    * 当前项目 id（空串 = 还没有活跃项目）。与镜头号一起写进任务行，让「这一镜出过图吗」
    * 能由数据库回答，而不是只信草稿里那个 `imageUrl` 字符串。
@@ -45,19 +45,19 @@ export interface WorkshopGenerationDeps {
    */
   projectId: string;
   /** 回写目标镜头的 status / taskId / imageUrl —— 镜头数据仍归主管线持有。 */
-  setShots: React.Dispatch<React.SetStateAction<Shot[]>>;
-  /** 需要引起用户注意的失败/阻断文案通道（由主管线决定怎么渲染，不用 alert）。 */
-  notify: (message: string | null) => void;
-}
+  setShots: React.Dispatch<React.SetStateAction<Array<Shot>>>;
+  /** 本地链路的唯一可执行来源（空串 = 未选工作流）。 */
+  workflowId: string;
+};
 
-export interface WorkshopGenerationApi {
+export type WorkshopGenerationApi = {
+  generateShot: (shot: Shot) => Promise<void>;
   generating: boolean;
   shotProgress: ShotProgressMap;
-  generateShot: (shot: Shot) => Promise<void>;
   /** 观察一个本地任务直到落定，结果回写对应镜头（生图 / 视频共用）。
    *  主管线的「恢复失联任务」也走它 —— 重挂载后要有人重新订阅那条 SSE。 */
   watchShotTask: (shotId: string, taskId: string, target?: "image" | "video") => Promise<void>;
-}
+};
 
 export function useWorkshopGeneration({
   workflowId,
@@ -135,7 +135,9 @@ export function useWorkshopGeneration({
       const patchIfOwned = (p: Partial<Shot>) =>
         setShots((prev) =>
           prev.map((item) => {
-            if (item.id !== shotId) return item;
+            if (item.id !== shotId) {
+              return item;
+            }
             const owned = target === "video" ? item.clipTaskId === taskId : item.taskId === taskId;
             return owned ? { ...item, ...p } : item;
           }),
@@ -146,7 +148,9 @@ export function useWorkshopGeneration({
             onProgress: (pct, node) => {
               /* 高频回调：按条目独立节流（规范 16 §16.2.4.68）。这条的值是
                * 「百分比 + 当前节点名」的复合体，故只用闸门、不用 hook。 */
-              if (!progressGate.current.allow(shotId)) return;
+              if (!progressGate.current.allow(shotId)) {
+                return;
+              }
               setShotProgress((prev) => ({
                 ...prev,
                 [shotId]: {
@@ -158,7 +162,9 @@ export function useWorkshopGeneration({
             onOutput: (out) => {
               /* 生图只要图片产物、视频只要视频产物（另一种是别的阶段的）。 */
               const wanted = target === "video" ? out.kind !== "image" : out.kind !== "video";
-              if (!wanted) return;
+              if (!wanted) {
+                return;
+              }
               patchIfOwned(target === "video" ? { clipUrl: out.url } : { imageUrl: out.url });
             },
             onSettled: (result) => {
@@ -221,7 +227,9 @@ export function useWorkshopGeneration({
       try {
         const { input, unmatchedWarning } = await buildShotInput(shot);
         /* 未生效的口在发起前提示：生成要跑几十秒到几十分钟，事后说就晚了。 */
-        if (unmatchedWarning) notify(unmatchedWarning);
+        if (unmatchedWarning) {
+          notify(unmatchedWarning);
+        }
         /* 归属在这里补，不进 `buildLibraryWorkflowInput`：那个封装同时服务封装页签的
          * 流程测试，那边既没有项目也没有镜头，塞进去会让它长出一个多数调用方都得传
          * null 的参数。 */
@@ -230,11 +238,11 @@ export function useWorkshopGeneration({
         );
         setShots((prev) => prev.map((item) => (item.id === shot.id ? { ...item, taskId } : item)));
         await watchShotTask(shot.id, taskId);
-      } catch (err: unknown) {
+      } catch (error: unknown) {
         setShots((prev) =>
           prev.map((item) => (item.id === shot.id ? { ...item, status: "failed" } : item)),
         );
-        const message = errorMessage(err, "生成失败");
+        const message = errorMessage(error, "生成失败");
         console.error(message);
         notify(message);
       } finally {

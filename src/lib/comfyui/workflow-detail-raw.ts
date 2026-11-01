@@ -38,29 +38,28 @@ export type {
  * 以及喂给子图 UI 节点（它们需要 widget_values 给字段打标签）。
  * 便签节点排除在外。
  */
-export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
-  const rawNodeMeta: RawNodeMeta[] = [];
+export function buildRawNodeMeta(raw: RawWorkflow | null): Array<RawNodeMeta> {
+  const rawNodeMeta: Array<RawNodeMeta> = [];
   if (raw && Array.isArray(raw.nodes)) {
     for (const rn of raw.nodes) {
-      if (!rn || rn.type === "Note" || rn.type === "MarkdownNote") continue;
-      const outputs: RawOutputEntry[] = [];
+      if (!rn || rn.type === "Note" || rn.type === "MarkdownNote") {
+        continue;
+      }
+      const outputs: Array<RawOutputEntry> = [];
       if (Array.isArray(rn.outputs)) {
         for (const o of rn.outputs) {
-          if (!o || typeof o.name !== "string") continue;
+          if (!o || typeof o.name !== "string") {
+            continue;
+          }
           outputs.push({
             name: o.name,
-            localized:
-              typeof o.localized_name === "string"
-                ? o.localized_name
-                : undefined,
+            localized: typeof o.localized_name === "string" ? o.localized_name : undefined,
             /* 业务标签（如 `FRAMES` / `IMAGE_FINAL`）。透传出去，
              *  父级 WorkflowSubgraphNode 的输出条与内层 WorkflowIoPortNode
              *  的显示才能一致。 */
             label: typeof o.label === "string" ? o.label : undefined,
             type: typeof o.type === "string" ? o.type : "*",
-            links: Array.isArray(o.links)
-              ? o.links.map((n) => Number(n) || 0)
-              : [],
+            links: Array.isArray(o.links) ? o.links.map((n) => Number(n) || 0) : [],
           });
         }
       }
@@ -69,22 +68,17 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
       //  rgthree Compact 等会用的 ComfyUI LiteGraph 状态）。
       //  只保留纯对象形态的 flags，其余一律丢掉 ——
       //  避免把类实例泄漏进 JSON 载荷。
-      const flags =
-        rn && typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {};
+      const flags = rn && typeof rn.flags === "object" && rn.flags !== null ? rn.flags : {};
       rawNodeMeta.push({
         id: String(rn.id),
-        widgets_values: Array.isArray(rn.widgets_values)
-          ? rn.widgets_values
-          : [],
+        widgets_values: Array.isArray(rn.widgets_values) ? rn.widgets_values : [],
         outputs,
         flags,
         /* 自定义节点的 `properties`。透传出去，画布便能复现由 properties
          *  驱动的运行期 UI —— 最典型的例子是 rgthree 的
          *  `Fast Groups Bypasser`。 */
         properties:
-          rn && typeof rn.properties === "object" && rn.properties !== null
-            ? rn.properties
-            : {},
+          rn && typeof rn.properties === "object" && rn.properties !== null ? rn.properties : {},
         mode: typeof rn.mode === "number" ? rn.mode : 0,
       });
     }
@@ -94,14 +88,13 @@ export function buildRawNodeMeta(raw: RawWorkflow | null): RawNodeMeta[] {
 
 /** 节点 id → ComfyUI class type 的映射（取自 raw.nodes）。
  *  workflowIO 富化用它解析**直接**（非封装）节点的 COMBO 候选值。 */
-export function buildNodeTypeMap(
-  raw: RawWorkflow | null,
-): Record<string, string> {
+export function buildNodeTypeMap(raw: RawWorkflow | null): Record<string, string> {
   const nodeTypeById: Record<string, string> = {};
   if (raw && Array.isArray(raw.nodes)) {
     for (const n of raw.nodes) {
-      if (n?.id != null)
+      if (n?.id != null) {
         nodeTypeById[String(n.id)] = typeof n.type === "string" ? n.type : "";
+      }
     }
   }
   return nodeTypeById;
@@ -119,40 +112,40 @@ export function buildNodeTypeMap(
  *  （ComfyUI 内部节点 id 在工作流内唯一，实际不会冲突）。 */
 export function buildInnerNodeInputs(
   raw: RawWorkflow | null,
-): Record<string, RawInputEntry[]> {
-  const innerInputsById: Record<string, RawInputEntry[]> = {};
+): Record<string, Array<RawInputEntry>> {
+  const innerInputsById: Record<string, Array<RawInputEntry>> = {};
   const subgraphs = raw?.definitions?.subgraphs;
-  if (!subgraphs) return innerInputsById;
+  if (!subgraphs) {
+    return innerInputsById;
+  }
   for (const subKey of Object.keys(subgraphs)) {
     const subDef = subgraphs[subKey];
-    if (!subDef || !Array.isArray(subDef.nodes)) continue;
+    if (!subDef || !Array.isArray(subDef.nodes)) {
+      continue;
+    }
     for (const node of subDef.nodes) {
-      if (node?.id == null) continue;
+      if (node?.id == null) {
+        continue;
+      }
       const inputs = Array.isArray(node.inputs) ? node.inputs : [];
-      if (inputs.length === 0) continue;
-      const widgetValues: unknown[] = Array.isArray(node.widgets_values)
+      if (inputs.length === 0) {
+        continue;
+      }
+      const widgetValues: Array<unknown> = Array.isArray(node.widgets_values)
         ? node.widgets_values
         : [];
-      const list: RawInputEntry[] = [];
+      const list: Array<RawInputEntry> = [];
       for (const inp of inputs) {
-        if (!inp || typeof inp.name !== "string") continue;
+        if (!inp || typeof inp.name !== "string") {
+          continue;
+        }
         const widgetName =
-          inp.widget && typeof inp.widget.name === "string"
-            ? inp.widget.name
-            : undefined;
+          inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;
         const entry: RawInputEntry = {
           name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
-          localized:
-            typeof inp.localized_name === "string"
-              ? inp.localized_name
-              : undefined,
-          type:
-            typeof inp.type === "string"
-              ? inp.type
-              : inp.link != null
-                ? "*"
-                : "STRING",
+          localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
+          type: typeof inp.type === "string" ? inp.type : inp.link == null ? "STRING" : "*",
           isConnection: inp.link != null,
         };
         if (widgetName) {
@@ -160,13 +153,14 @@ export function buildInnerNodeInputs(
           /* 内部节点的值按「inputs[] 中控件出现顺序」对齐 widgets_values，
            *  seed 家族多占一个 control_after_generate 槽位（与顶层解析同口径）。 */
           const slot = list.reduce((count, prev) => {
-            if (!prev.widget) return count;
-            return prev.name === "seed" || prev.name === "noise_seed"
-              ? count + 2
-              : count + 1;
+            if (!prev.widget) {
+              return count;
+            }
+            return prev.name === "seed" || prev.name === "noise_seed" ? count + 2 : count + 1;
           }, 0);
-          if (slot < widgetValues.length)
+          if (slot < widgetValues.length) {
             entry.widgetValue = widgetValues[slot];
+          }
         }
         list.push(entry);
       }
@@ -186,50 +180,41 @@ export function buildInnerNodeInputs(
  * 也**不是**格式转换（见该模块文件头）。 */
 export function buildRawView(
   raw: RawWorkflow | null,
-  rawInputsById: Record<string, RawInputEntry[]>,
+  rawInputsById: Record<string, Array<RawInputEntry>>,
   sizeById: Record<string, [number, number]>,
 ): RawViewPacket | null {
   let rawView: RawViewPacket | null = null;
   if (raw && Array.isArray(raw.nodes)) {
     const rawGraph = buildRawViewGraph(raw);
-    const rawViewNodes: DetailNodeView[] = Object.entries(rawGraph).map(
-      ([nodeId, n]) => {
-        /* 与旧 `n?.class_type || (n?.type as string) || "?"` 语义逐值等价
-         *  （`a || b` ≡ `a ? a : b`）：class_type/type 为空串时同样回退。 */
-        const classType: string = n?.class_type
-          ? n.class_type
-          : n?.type
-            ? (n.type as string)
-            : "?";
-        const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
-        let resolvedTitle: string | undefined;
-        if (isUuidClass && raw?.definitions?.subgraphs) {
-          const subs = raw.definitions.subgraphs;
-          let def = subs[classType];
-          if (!def) {
-            const matchKey = Object.keys(subs).find(
-              (key) => subs[key]?.id === classType,
-            );
-            if (matchKey) def = subs[matchKey];
-          }
-          if (def && typeof def.name === "string" && def.name.trim()) {
-            resolvedTitle = def.name.trim();
+    const rawViewNodes: Array<DetailNodeView> = Object.entries(rawGraph).map(([nodeId, n]) => {
+      /* 与旧 `n?.class_type || (n?.type as string) || "?"` 语义逐值等价
+       *  （`a || b` ≡ `a ? a : b`）：class_type/type 为空串时同样回退。 */
+      /* SAFETY: 类型断言已复核 */
+      const classType: string = n?.class_type ? n.class_type : n?.type ? (n.type as string) : "?";
+      const isUuidClass = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(classType);
+      let resolvedTitle: string | undefined;
+      if (isUuidClass && raw?.definitions?.subgraphs) {
+        const subs = raw.definitions.subgraphs;
+        let def = subs[classType];
+        if (!def) {
+          const matchKey = Object.keys(subs).find((key) => subs[key]?.id === classType);
+          if (matchKey) {
+            def = subs[matchKey];
           }
         }
-        return {
-          id: nodeId,
-          class_type: classType,
-          title:
-            resolvedTitle ??
-            n?._meta?.title ??
-            (isUuidClass ? "" : classType) ??
-            nodeId,
-          is_subgraph: isUuidClass,
-          raw_inputs: rawInputsById[nodeId] ?? [],
-          size: sizeById[nodeId],
-        };
-      },
-    );
+        if (def && typeof def.name === "string" && def.name.trim()) {
+          resolvedTitle = def.name.trim();
+        }
+      }
+      return {
+        id: nodeId,
+        class_type: classType,
+        title: resolvedTitle ?? n?._meta?.title ?? (isUuidClass ? "" : classType) ?? nodeId,
+        is_subgraph: isUuidClass,
+        raw_inputs: rawInputsById[nodeId] ?? [],
+        size: sizeById[nodeId],
+      };
+    });
     const rawViewPositions = extractPositions(raw);
     rawView = {
       nodes: rawViewNodes,

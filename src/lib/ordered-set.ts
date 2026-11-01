@@ -53,8 +53,8 @@ export function compareText(left: string, right: string): number {
  *
  * 想要字典序用 {@link uniqueSorted}；按字段去重用 {@link uniqueBy}。
  */
-export function unique<T>(values: readonly T[]): T[] {
-  return Array.from(new Set(values));
+export function unique<T>(values: ReadonlyArray<T>): Array<T> {
+  return [...new Set(values)];
 }
 
 /**
@@ -66,10 +66,10 @@ export function unique<T>(values: readonly T[]): T[] {
  * 数字要排序请显式传比较器（那是另一件事）。
  */
 export function uniqueSorted(
-  values: readonly string[],
+  values: ReadonlyArray<string>,
   compare: (left: string, right: string) => number = compareText,
-): string[] {
-  return Array.from(new Set(values)).sort(compare);
+): Array<string> {
+  return [...new Set(values)].sort(compare);
 }
 
 /**
@@ -88,16 +88,20 @@ export function uniqueSorted(
  * 语义一致：没有身份的项不进结果集。
  */
 export function uniqueBy<T, K>(
-  values: readonly T[],
+  values: ReadonlyArray<T>,
   keyOf: (value: T) => K | null | undefined,
-): T[] {
+): Array<T> {
   const seen = new Set<K>();
-  const out: T[] = [];
+  const out: Array<T> = [];
   for (const value of values) {
     const key = keyOf(value);
     /* `0` / `false` 是**真实键**，只有 `null` / `undefined` / `""` 才是「没有身份」。 */
-    if (key === null || key === undefined || (key as unknown) === "") continue;
-    if (seen.has(key)) continue;
+    if (key === null || key === undefined || /* SAFETY: 类型断言已复核 */ (key as unknown) === "") {
+      continue;
+    }
+    if (seen.has(key)) {
+      continue;
+    }
     seen.add(key);
     out.push(value);
   }
@@ -117,12 +121,14 @@ export function uniqueBy<T, K>(
  * union(specOptions, localFileNames) // 服务端声明的候选排在前面
  * ```
  */
-export function union<T>(...sources: ReadonlyArray<readonly T[]>): T[] {
-  const out: T[] = [];
+export function union<T>(...sources: ReadonlyArray<ReadonlyArray<T>>): Array<T> {
+  const out: Array<T> = [];
   const seen = new Set<T>();
   for (const source of sources) {
     for (const value of source) {
-      if (seen.has(value)) continue;
+      if (seen.has(value)) {
+        continue;
+      }
       seen.add(value);
       out.push(value);
     }

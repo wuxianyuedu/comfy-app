@@ -23,10 +23,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  COMFY_QUEUE_POLL_MS,
-  useComfyQueue,
-} from "~/components/studio/hooks/use-comfy-queue";
+import { COMFY_QUEUE_POLL_MS, useComfyQueue } from "~/components/studio/hooks/use-comfy-queue";
 import { useCopyResult } from "~/components/ui/use-copy-feedback";
 import { useItemAction } from "~/components/ui/use-item-action";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
@@ -48,46 +45,46 @@ import {
 } from "../queue-monitor-config";
 
 /** 正在跑那条的展示卡（数值都已算成字符串或百分比，视图只渲染）。 */
-export interface RunningCardView {
+export type RunningCardView = {
+  elapsedText: string;
   id: string;
-  workflowName: string;
   modelText: string;
   nodeText: string;
-  elapsedText: string;
-  remainingText: string;
   progressPct: number;
-}
+  remainingText: string;
+  workflowName: string;
+};
 
-export interface QueueMonitorController {
+export type QueueMonitorController = {
+  cancel: (id: string, label: string) => Promise<void>;
+  closeLog: () => void;
+  copyForReprint: (row: QueueRow) => Promise<void>;
+  /** 这一条正在被操作吗（判据在出口里，视图不再自己比 id）。 */
+  isBusy: (id: string) => boolean;
+  /** 拉取失败的一句话；null 表示查询本身没问题（动作失败走 toast，不落这里）。 */
+  loadError: string | null;
+  loading: boolean;
+  /** 正在查看执行日志的那条；null = 弹窗关着。 */
+  logRow: QueueTaskLogTarget | null;
   /** ComfyUI 是否可达。false 时列表照常渲染（数据来自本地库），只多一条
    * 「未连接」横幅说明队列不会开始。 */
   online: boolean;
+  openFolder: (row: QueueRow) => Promise<void>;
+  openLog: (task: QueueTaskLogTarget) => void;
+  /** 排队项，`position` 从 1 起（1 = 下一个开跑）。 */
+  queued: Array<{ position: number; row: QueueRow }>;
+  /** 最近结果（已截到窗口上限，新的在前）。 */
+  recent: Array<QueueRow>;
+  refresh: () => void;
   /** 正在跑的那条（富卡片：来自 `/api/comfy/queue`）；没有在跑时为 null。 */
   running: RunningCardView | null;
   /** 库里 status=RUNNING 的行。`running` 为 null 而这里非空 = ComfyUI 没连上
    * （富卡片的数据源不可达），离线兜底卡用它渲染。 */
-  runningRows: QueueRow[];
-  /** 排队项，`position` 从 1 起（1 = 下一个开跑）。 */
-  queued: Array<{ row: QueueRow; position: number }>;
-  /** 最近结果（已截到窗口上限，新的在前）。 */
-  recent: QueueRow[];
+  runningRows: Array<QueueRow>;
   /** 本应用排队 + ComfyUI 自己排队，与状态栏那格同一算法；离线时退回
    * 「库里在跑 + 排队的行数」（`/api/comfy/queue` 读不到，不能报 0）。 */
   waitingCount: number;
-  loading: boolean;
-  /** 拉取失败的一句话；null 表示查询本身没问题（动作失败走 toast，不落这里）。 */
-  loadError: string | null;
-  /** 正在查看执行日志的那条；null = 弹窗关着。 */
-  logRow: QueueTaskLogTarget | null;
-  /** 这一条正在被操作吗（判据在出口里，视图不再自己比 id）。 */
-  isBusy: (id: string) => boolean;
-  refresh: () => void;
-  cancel: (id: string, label: string) => Promise<void>;
-  openFolder: (row: QueueRow) => Promise<void>;
-  copyForReprint: (row: QueueRow) => Promise<void>;
-  openLog: (task: QueueTaskLogTarget) => void;
-  closeLog: () => void;
-}
+};
 
 /** 队列与运行的全部逻辑。容器与视图只消费这一份 controller。 */
 export function useQueueMonitor(): QueueMonitorController {
@@ -112,14 +109,8 @@ export function useQueueMonitor(): QueueMonitorController {
     ),
   );
 
-  const buckets = useMemo(
-    () => bucketQueueRows(listQ.data?.tasks ?? []),
-    [listQ.data?.tasks],
-  );
-  const queued = useMemo(
-    () => queuedWithPosition(buckets.queued),
-    [buckets.queued],
-  );
+  const buckets = useMemo(() => bucketQueueRows(listQ.data?.tasks ?? []), [listQ.data?.tasks]);
+  const queued = useMemo(() => queuedWithPosition(buckets.queued), [buckets.queued]);
 
   /* 「同一条不能重复点」与忙标记的落 / 清走全库唯一出口（规范 16 §16.2.4.40）。
    * 传键集合是为了收敛生命周期：条目从列表里消失后忙标记随之丢掉，否则
@@ -135,18 +126,16 @@ export function useQueueMonitor(): QueueMonitorController {
   const action = useItemAction(visibleIds);
 
   const report = useCallback<ActionReport>(
-    (kind, detail) =>
-      kind === "ok" ? toast.info(detail) : toast.error(detail),
+    (kind, detail) => (kind === "ok" ? toast.info(detail) : toast.error(detail)),
     [toast],
   );
 
   const running = useMemo<RunningCardView | null>(() => {
     const task = queue.running;
-    if (task === null) return null;
-    const remainingMs = estimateRemainingMs(
-      queue.elapsedMs ?? 0,
-      task.progress,
-    );
+    if (task === null) {
+      return null;
+    }
+    const remainingMs = estimateRemainingMs(queue.elapsedMs ?? 0, task.progress);
     return {
       id: task.taskId,
       workflowName: task.workflowName ?? "（未知工作流）",
@@ -199,8 +188,7 @@ export function useQueueMonitor(): QueueMonitorController {
         await runAsyncAction(async () => copied, {
           report,
           failureText: "复制失败，请检查是否允许访问剪贴板",
-          successText:
-            "后端没有重试接口，已复制本次提交内容 —— 回画布改完参数再投一次",
+          successText: "后端没有重试接口，已复制本次提交内容 —— 回画布改完参数再投一次",
         });
       });
     },

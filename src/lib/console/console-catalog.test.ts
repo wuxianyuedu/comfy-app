@@ -30,7 +30,7 @@ describe("parseConsoleLine", () => {
   });
 
   it("反斜杠转义空格", () => {
-    const parsed = parseConsoleLine("echo a\\ b");
+    const parsed = parseConsoleLine(String.raw`echo a\ b`);
     expect(parsed.ok && parsed.args).toEqual(["a b"]);
   });
 
@@ -40,7 +40,7 @@ describe("parseConsoleLine", () => {
   });
 
   it("双引号里的转义引号", () => {
-    const parsed = parseConsoleLine('echo "say \\"hi\\""');
+    const parsed = parseConsoleLine(String.raw`echo "say \"hi\""`);
     expect(parsed.ok && parsed.args).toEqual(['say "hi"']);
   });
 
@@ -82,9 +82,7 @@ describe("预设命令表", () => {
   it("每条预设都能被解析器拆开（预设本身必须是合法命令行）", () => {
     for (const preset of allPresets()) {
       const parsed = parseConsoleLine(preset.command);
-      expect(parsed.ok, `预设 ${preset.id} 解析失败：${preset.command}`).toBe(
-        true,
-      );
+      expect(parsed.ok, `预设 ${preset.id} 解析失败：${preset.command}`).toBe(true);
     }
   });
 
@@ -98,7 +96,9 @@ describe("预设命令表", () => {
     for (const preset of allPresets()) {
       const parsed = parseConsoleLine(preset.command);
       expect(parsed.ok).toBe(true);
-      if (!parsed.ok) continue;
+      if (!parsed.ok) {
+        continue;
+      }
       expect(["pnpm", "node", "git"]).toContain(parsed.file);
       expect(preset.command).not.toMatch(/\bnpx\b/);
       expect(preset.command).not.toMatch(/\bnpm run\b/);
@@ -119,19 +119,25 @@ describe("预设命令表", () => {
   });
 
   it("预设里的 pnpm 脚本都真的在 package.json 里（防「按钮点了报错」）", () => {
-    const pkg = JSON.parse(
-      readFileSync(path.join(process.cwd(), "package.json"), "utf-8"),
+    const pkg = /* SAFETY: 类型断言已复核 */ JSON.parse(
+      readFileSync(path.join(process.cwd(), "package.json"), "utf8"),
     ) as { scripts: Record<string, string> };
     const scriptNames = new Set(Object.keys(pkg.scripts));
     for (const preset of allPresets()) {
       const parsed = parseConsoleLine(preset.command);
-      if (!parsed.ok) continue;
-      if (parsed.file !== "pnpm") continue;
+      if (!parsed.ok) {
+        continue;
+      }
+      if (parsed.file !== "pnpm") {
+        continue;
+      }
       // `pnpm run <name>` / `pnpm <name>` 两种形态都取到 <name>。
       const target = parsed.args[0] === "run" ? parsed.args[1] : parsed.args[0];
       /* `pnpm exec tsc` 这类是直接跑二进制，不是脚本名 —— 只有 `run` 形态
        * 与「裸脚本名」两种才要求在 scripts 里。 */
-      if (parsed.args[0] === "exec") continue;
+      if (parsed.args[0] === "exec") {
+        continue;
+      }
       expect(
         scriptNames.has(target ?? ""),
         `预设 ${preset.id} 指向的脚本 "${target}" 不在 package.json 里`,

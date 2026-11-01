@@ -75,18 +75,15 @@ import {
   type AppServiceEventCursor,
 } from "~/lib/shell/app-service-message";
 
-import {
-  useMessageCenterStore,
-  type NewMessage,
-} from "../message-center-store";
+import { useMessageCenterStore, type NewMessage } from "../message-center-store";
 
-export interface AppServiceMessageLogInput {
-  /** 应用服务四态（`~/lib/shell/dev-server-status` 的判据结果）。 */
-  state: DevServerState;
-  /** 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；刷新不算）。 */
-  processIsNew: boolean;
+export type AppServiceMessageLogInput = {
   /** 当前是哪一次启动（runId）；null = 拿不到（手工 `pnpm dev` 等）。 */
   currentRunId: string | null;
+  /** 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；刷新不算）。 */
+  processIsNew: boolean;
+  /** 应用服务四态（`~/lib/shell/dev-server-status` 的判据结果）。 */
+  state: DevServerState;
   /**
    * 最后一拍之前**没人在探测**的那一段（毫秒，0 = 紧接上一拍）。
    *
@@ -96,7 +93,7 @@ export interface AppServiceMessageLogInput {
    * `~/lib/shell/app-service-message` 的 `unprobedMs`）。
    */
   unprobedMs: number;
-}
+};
 
 /** 卸载守卫：`fetchAppServiceExit` 是异步的，卸载后它仍可能回来。 */
 type StoppedFlag = { readonly current: boolean };
@@ -117,7 +114,9 @@ async function recordDisconnect(
   /* 全程不抛（`fetchCurrentDisconnectExit` 自带兜底）：这一刻刚出过一次故障，
    * 任何异常都只会让现场更难查。 */
   const record = await fetchCurrentDisconnectExit(runId, Date.now());
-  if (stopped.current) return;
+  if (stopped.current) {
+    return;
+  }
   const { title, body } = describeAppServiceDisconnect(
     at,
     record === null ? null : describeAppServiceExit(record),
@@ -134,7 +133,9 @@ async function recordStart(
   /* 全程不抛（`fetchAppServiceExit` 自带兜底）：这一刻刚出过一次故障，
    * 任何异常都只会让现场更难查。 */
   const probe = await fetchAppServiceExit();
-  if (stopped.current) return;
+  if (stopped.current) {
+    return;
+  }
   /* 只认「说的是上一次运行」的记录——判据见 `isPreviousRunExit`，
    * 同一份记录形状与 `use-dev-server-liveness` 的读回侧一致。 */
   const record =
@@ -190,7 +191,9 @@ export function useAppServiceMessageLog({
       Date.now(),
     );
     cursorRef.current = cursor;
-    if (event === null) return;
+    if (event === null) {
+      return;
+    }
     if (event.type === "disconnect") {
       /* 断开那一刻就**尽量**把原因带上（ISSUE #1915）：记录早就在进程结束那一刻
        * 落在盘上了，只是经 HTTP 读不到（那条通道正是没了的服务自己在应答）。壳内

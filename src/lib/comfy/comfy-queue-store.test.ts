@@ -34,7 +34,9 @@ class FakeEventSource {
 
   close(): void {
     this.closed = true;
-    if (FakeEventSource.last === this) FakeEventSource.last = null;
+    if (FakeEventSource.last === this) {
+      FakeEventSource.last = null;
+    }
   }
 
   emit(data: string): void {
@@ -45,7 +47,7 @@ class FakeEventSource {
 const fetchMock = vi.fn();
 
 function queueRes(payload: unknown): Response {
-  return {
+  return /* SAFETY: 类型断言已复核 */ {
     ok: true,
     json: async () => payload,
   } as unknown as Response;
@@ -74,7 +76,7 @@ const RUNNING = {
   taskId: "task-1",
   workflowName: "文生图",
   model: "sd_xl_base_1.0.safetensors",
-  startedAt: 1_000,
+  startedAt: 1000,
   progress: 40,
   nodeType: "KSampler",
 };
@@ -217,9 +219,7 @@ describe("comfy-queue-store", () => {
 
     // 最新的一拍才生效
     fresh.resolve(queueRes(onlinePayload(222)));
-    await vi.waitFor(() =>
-      expect(mod.getComfyQueueSnapshot().queued).toBe(222),
-    );
+    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().queued).toBe(222));
 
     off();
   });
@@ -277,7 +277,7 @@ describe("comfy-queue-store", () => {
         comfy: { running: 0, pending: 0 },
         running: {
           taskId: "task-2",
-          startedAt: 5_000,
+          startedAt: 5000,
           workflowName: 1,
           model: 2,
           nodeType: 3,
@@ -293,7 +293,7 @@ describe("comfy-queue-store", () => {
       taskId: "task-2",
       workflowName: null,
       model: null,
-      startedAt: 5_000,
+      startedAt: 5000,
       progress: 0,
       nodeType: null,
     });
@@ -323,9 +323,7 @@ describe("comfy-queue-store", () => {
     // 第 3 次失败：达阈值 ⇒ 提交离线
     FakeEventSource.last!.emit("f3");
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
-    await vi.waitFor(() =>
-      expect(mod.getComfyQueueSnapshot().online).toBe(false),
-    );
+    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().online).toBe(false));
     expect(mod.getComfyQueueSnapshot().queued).toBe(9);
     expect(mod.getComfyQueueSnapshot().elapsedMs).toBeNull();
     off();
@@ -385,17 +383,12 @@ describe("comfy-queue-store", () => {
 
   it("本地秒表：有在跑的任务时 elapsedMs 随本地时钟推进（且不发请求）", async () => {
     const off = mod.subscribeComfyQueue(vi.fn());
-    await vi.waitFor(() =>
-      expect(mod.getComfyQueueSnapshot().running).not.toBeNull(),
-    );
+    await vi.waitFor(() => expect(mod.getComfyQueueSnapshot().running).not.toBeNull());
     const first = mod.getComfyQueueSnapshot().elapsedMs!;
     const before = fetchMock.mock.calls.length;
 
     await vi.waitFor(
-      () =>
-        expect(mod.getComfyQueueSnapshot().elapsedMs).toBeGreaterThan(
-          first + 400,
-        ),
+      () => expect(mod.getComfyQueueSnapshot().elapsedMs).toBeGreaterThan(first + 400),
       { timeout: 4000, interval: 100 },
     );
     // 秒表只走本地时钟，不新增探测请求

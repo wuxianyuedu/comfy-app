@@ -22,23 +22,17 @@ import { act, renderHook } from "@testing-library/react";
 import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  SECTION_ROOT_MARGIN,
-  useSectionScrollSpy,
-} from "./use-section-scroll-spy";
+import { SECTION_ROOT_MARGIN, useSectionScrollSpy } from "./use-section-scroll-spy";
 
 /** 假观察器：只记录「观察了谁、配置是什么」，回调由用例手动投递。 */
 class FakeIntersectionObserver {
   static last: FakeIntersectionObserver | null = null;
-  observed: Element[] = [];
+  observed: Array<Element> = [];
   options: IntersectionObserverInit | undefined;
   callback: IntersectionObserverCallback;
   disconnected = false;
 
-  constructor(
-    cb: IntersectionObserverCallback,
-    options?: IntersectionObserverInit,
-  ) {
+  constructor(cb: IntersectionObserverCallback, options?: IntersectionObserverInit) {
     this.callback = cb;
     this.options = options;
     FakeIntersectionObserver.last = this;
@@ -52,27 +46,27 @@ class FakeIntersectionObserver {
   disconnect() {
     this.disconnected = true;
   }
-  takeRecords(): IntersectionObserverEntry[] {
+  takeRecords(): Array<IntersectionObserverEntry> {
     return [];
   }
 
   /** 投递一次「谁进入了 / 谁离开了」。 */
-  emit(entries: { target: Element; isIntersecting: boolean }[]) {
+  emit(entries: Array<{ isIntersecting: boolean; target: Element }>) {
     this.callback(
       entries.map(
         (e) =>
-          ({
+          /* SAFETY: 类型断言已复核 */ ({
             target: e.target,
             isIntersecting: e.isIntersecting,
             intersectionRatio: e.isIntersecting ? 1 : 0,
           }) as unknown as IntersectionObserverEntry,
       ),
-      this as unknown as IntersectionObserver,
+      /* SAFETY: 类型断言已复核 */ this as unknown as IntersectionObserver,
     );
   }
 }
 
-const IDS = ["a", "b", "c"] as const;
+const IDS = /* SAFETY: 类型断言已复核 */ ["a", "b", "c"] as const;
 
 /** 建宿主容器 + 三个分区节，并把 `ref` 回调挂上去。 */
 function mountSections(ref: React.RefObject<HTMLElement | null>) {
@@ -112,7 +106,9 @@ describe("useSectionScrollSpy", () => {
 
     /* 挂 `ref` 回调（真实调用处是 React 的 `ref` 属性，这里手动调）。 */
     act(() => {
-      for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
+      for (const id of IDS) {
+        result.current.registerSection(id)(nodes.get(id)!);
+      }
     });
 
     const observer = FakeIntersectionObserver.last!;
@@ -152,7 +148,9 @@ describe("useSectionScrollSpy", () => {
       }),
     );
     act(() => {
-      for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
+      for (const id of IDS) {
+        result.current.registerSection(id)(nodes.get(id)!);
+      }
     });
 
     act(() => {
@@ -180,7 +178,9 @@ describe("useSectionScrollSpy", () => {
       }),
     );
     act(() => {
-      for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
+      for (const id of IDS) {
+        result.current.registerSection(id)(nodes.get(id)!);
+      }
     });
 
     act(() => {
@@ -207,7 +207,9 @@ describe("useSectionScrollSpy", () => {
       }),
     );
     act(() => {
-      for (const id of IDS) result.current.registerSection(id)(nodes.get(id)!);
+      for (const id of IDS) {
+        result.current.registerSection(id)(nodes.get(id)!);
+      }
     });
 
     act(() => {

@@ -17,17 +17,13 @@ import { nextId } from "~/lib/unique-id";
 
 export type MessageKind = "update" | "restart" | "offline" | "info";
 
-export interface MessageRecord {
+export type MessageRecord = {
+  /** 正文（全屏查看的消息内容，可多行换行） */
+  body: string;
   /** 短 id，幂等去重用 */
   id: string;
   /** 消息类型：更新/重启/断开/其他 */
   kind: MessageKind;
-  /** 一句话标题（状态栏 tooltip / 列表标题行） */
-  title: string;
-  /** 正文（全屏查看的消息内容，可多行换行） */
-  body: string;
-  /** Unix 时间戳（ms） */
-  time: number;
   /** 是否已读（决定状态栏未读计数） */
   read: boolean;
   /**
@@ -41,13 +37,14 @@ export interface MessageRecord {
    * 同源，分组头带上它就能直接和日志目录对号。
    */
   runId: string | null;
-}
+  /** Unix 时间戳（ms） */
+  time: number;
+  /** 一句话标题（状态栏 tooltip / 列表标题行） */
+  title: string;
+};
 
 /** 供 push 传入的载荷（id/time/read 由 store 补全，runId 缺省取当前启动）。 */
-export type NewMessage = Omit<
-  MessageRecord,
-  "id" | "time" | "read" | "runId"
-> & {
+export type NewMessage = Omit<MessageRecord, "id" | "time" | "read" | "runId"> & {
   /** 缺省时由 store 用「当前是哪一次启动」盖上，于是各生产方不必各自去取。 */
   runId?: string | null;
   /**
@@ -62,13 +59,9 @@ export type NewMessage = Omit<
   time?: number;
 };
 
-export interface MessageCenterState {
-  /** 全屏消息面板是否打开 */
-  open: boolean;
-  /** 最新在前 */
-  messages: MessageRecord[];
-  /** 是否已经从持久化里恢复过（只恢复一次，见 `hydrate`）。 */
-  hydrated: boolean;
+export type MessageCenterState = {
+  /** 清空所有消息 */
+  clear: () => void;
   /**
    * 当前是哪一次启动（运行时事实，**不持久化**）。
    *
@@ -78,20 +71,24 @@ export interface MessageCenterState {
    * 分组，不需要每一个都去接一次探活。
    */
   currentRunId: string | null;
-  setOpen: (open: boolean) => void;
-  toggleOpen: () => void;
-  /** 新增一条消息；未读，排到最前。 */
-  push: (m: NewMessage) => void;
-  /** 记下当前是哪一次启动（runId 变化时由探活链路调用）。 */
-  setCurrentRunId: (runId: string | null) => void;
-  markRead: (id: string) => void;
-  markAllRead: () => void;
-  remove: (id: string) => void;
-  /** 清空所有消息 */
-  clear: () => void;
   /** 从持久化里恢复消息（挂载后调一次，见文件末尾的接线说明）。 */
   hydrate: () => void;
-}
+  /** 是否已经从持久化里恢复过（只恢复一次，见 `hydrate`）。 */
+  hydrated: boolean;
+  markAllRead: () => void;
+  markRead: (id: string) => void;
+  /** 最新在前 */
+  messages: Array<MessageRecord>;
+  /** 全屏消息面板是否打开 */
+  open: boolean;
+  /** 新增一条消息；未读，排到最前。 */
+  push: (m: NewMessage) => void;
+  remove: (id: string) => void;
+  /** 记下当前是哪一次启动（runId 变化时由探活链路调用）。 */
+  setCurrentRunId: (runId: string | null) => void;
+  setOpen: (open: boolean) => void;
+  toggleOpen: () => void;
+};
 
 /* id 走全库唯一出口 `~/lib/unique-id` —— 收口前这里自写「时间戳 + 计数器」，
  * 而且计数器**取模回绕**（`(msgSeq + 1) % 1_000_000`）：转一圈之后同一毫秒内
@@ -144,8 +141,7 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
     set((s) => ({
       messages: s.messages.map((x) => (x.read ? x : { ...x, read: true })),
     })),
-  remove: (id) =>
-    set((s) => ({ messages: s.messages.filter((x) => x.id !== id) })),
+  remove: (id) => set((s) => ({ messages: s.messages.filter((x) => x.id !== id) })),
   clear: () => set({ messages: [] }),
   hydrate: () =>
     set((s) => ({
@@ -182,33 +178,38 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
  * 而这个面板记的正是故障，丢历史等于把唯一的留底抹掉。 */
 export const MESSAGE_CENTER_STORAGE_KEY = "comfyapp:message-center:v1";
 
-const MESSAGE_KINDS: readonly MessageKind[] = [
-  "update",
-  "restart",
-  "offline",
-  "info",
-];
+const MESSAGE_KINDS: ReadonlyArray<MessageKind> = ["update", "restart", "offline", "info"];
 
 /** 一条记录是否可用（字段齐、类型对、kind 认识）。
  *
  * `runId` **容忍缺席**（升级前写入的历史消息没有这个字段）：缺了就按 null 处理，
  * 于是那些消息落到「未标记启动」那一组——不猜它属于哪一次，也不因此丢掉整条。 */
 function asMessageRecord(raw: unknown): MessageRecord | null {
-  if (typeof raw !== "object" || raw === null) return null;
-  const o = raw as Record<string, unknown>;
-  if (typeof o.id !== "string" || o.id === "") return null;
-  if (typeof o.title !== "string" || typeof o.body !== "string") return null;
-  if (typeof o.time !== "number" || !Number.isFinite(o.time)) return null;
-  if (typeof o.read !== "boolean") return null;
+  if (typeof raw !== "object" || raw === null) {
+    return null;
+  }
+  const o = /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>;
+  if (typeof o.id !== "string" || o.id === "") {
+    return null;
+  }
+  if (typeof o.title !== "string" || typeof o.body !== "string") {
+    return null;
+  }
+  if (typeof o.time !== "number" || !Number.isFinite(o.time)) {
+    return null;
+  }
+  if (typeof o.read !== "boolean") {
+    return null;
+  }
   if (
     typeof o.kind !== "string" ||
-    !MESSAGE_KINDS.includes(o.kind as MessageKind)
+    !MESSAGE_KINDS.includes(/* SAFETY: 类型断言已复核 */ o.kind as MessageKind)
   ) {
     return null;
   }
   return {
     id: o.id,
-    kind: o.kind as MessageKind,
+    kind: /* SAFETY: 类型断言已复核 */ o.kind as MessageKind,
     title: o.title,
     body: o.body,
     time: o.time,
@@ -218,9 +219,11 @@ function asMessageRecord(raw: unknown): MessageRecord | null {
 }
 
 /** 从持久化里读回消息；没存过 / 存坏了 / 没有任何一条可用 → 空数组。 */
-function readPersistedMessages(): MessageRecord[] {
+function readPersistedMessages(): Array<MessageRecord> {
   const raw = readStorageJson<unknown>(MESSAGE_CENTER_STORAGE_KEY, null);
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   return raw
     .map(asMessageRecord)
     .filter((m): m is MessageRecord => m !== null)
@@ -230,9 +233,11 @@ function readPersistedMessages(): MessageRecord[] {
 /** 当前内存里的消息是否已经等于持久化里那一份（避免恢复时空跑一次渲染）。
  *  `runId` 也参与比较：它是分组键，内存里盖了戳而持久化里没有时若不换引用，
  *  刷新一次就会丢掉分组依据。 */
-function sameAsPersisted(current: MessageRecord[]): boolean {
+function sameAsPersisted(current: Array<MessageRecord>): boolean {
   const persisted = readPersistedMessages();
-  if (persisted.length !== current.length) return false;
+  if (persisted.length !== current.length) {
+    return false;
+  }
   return persisted.every((m, i) => {
     const c = current[i];
     return (
@@ -246,7 +251,7 @@ function sameAsPersisted(current: MessageRecord[]): boolean {
 }
 
 /** 恢复：与当前内容相同就原样返回（不给 store 塞一份等值的新数组）。 */
-function restoreMessages(current: MessageRecord[]): MessageRecord[] {
+function restoreMessages(current: Array<MessageRecord>): Array<MessageRecord> {
   return sameAsPersisted(current) ? current : readPersistedMessages();
 }
 

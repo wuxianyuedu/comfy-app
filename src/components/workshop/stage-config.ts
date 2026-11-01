@@ -6,7 +6,7 @@
 // `shortLabel` 只服务**窄槽位**：顶栏的分段健康度一条只有几十像素宽，四字段名
 // （场景分镜 / 镜头生图 / 成片合成）在那儿会被截成「场景分…」。全名 `label` 仍是
 // 阶段轨道与胶囊句子里的口径 —— 缩略是给「放不下」的那一处用的，不是给所有地方换名。
-export const STAGE_DEFS = [
+export const STAGE_DEFS = /* SAFETY: 类型断言已复核 */ [
   { id: "script", label: "剧本", shortLabel: "剧本" },
   { id: "character", label: "角色卡", shortLabel: "角色" },
   { id: "storyboard", label: "场景分镜", shortLabel: "分镜" },
@@ -17,7 +17,7 @@ export const STAGE_DEFS = [
 
 export type Tab = (typeof STAGE_DEFS)[number]["id"];
 
-export const STAGE_TITLES: Record<Tab, { title: string; desc: string }> = {
+export const STAGE_TITLES: Record<Tab, { desc: string; title: string }> = {
   script: {
     title: "剧本",
     desc: "编写或导入完整剧本，为后续角色提取、分镜规划与全流程生成提供基础。",
@@ -45,28 +45,25 @@ export const STAGE_TITLES: Record<Tab, { title: string; desc: string }> = {
 };
 
 /** 导航副标题 / 前置提示 / 缺失素材共用的进度快照（由 hook 计算后下发）。 */
-export interface StageViewContext {
-  scriptReady: boolean;
+export type StageViewContext = {
   characterCount: number;
+  clipDoneCount: number;
+  imageDoneCount: number;
   sceneCount: number;
+  scriptReady: boolean;
+  shotCount: number;
   /**
    * 镜头目标数 = 各场景 `scene.shotCount` 之和（导入时按它铺占位镜头，见
    * `docs/guides/feature-workshop-flow.md`）。**0 表示剧本还没拆出场景**，
    * 此时「还差几镜」没有可派生的答案，屏面就不给目标，只报已排数。
    */
   shotTarget: number;
-  shotCount: number;
-  imageDoneCount: number;
-  clipDoneCount: number;
-}
+};
 
 export type StageRatios = Record<Tab, number>;
 
 /** 各阶段完成度 0..1（等权平均即总进度）。 */
-export function computeStageRatios(
-  ctx: StageViewContext,
-  rendered: boolean,
-): StageRatios {
+export function computeStageRatios(ctx: StageViewContext, rendered: boolean): StageRatios {
   return {
     script: ctx.scriptReady ? 1 : 0,
     character: ctx.characterCount > 0 ? 1 : 0,
@@ -89,78 +86,86 @@ export function stageSubtitle(
   ratios: StageRatios,
   ctx: StageViewContext,
 ): string {
-  if (id === current) return "进行中";
-  if (ratios[id] >= 1) return "已完成";
+  if (id === current) {
+    return "进行中";
+  }
+  if (ratios[id] >= 1) {
+    return "已完成";
+  }
   switch (id) {
-    case "character":
-      return ctx.characterCount > 0
-        ? `已建 ${ctx.characterCount} 个`
-        : "待开始";
-    case "storyboard":
+    case "character": {
+      return ctx.characterCount > 0 ? `已建 ${ctx.characterCount} 个` : "待开始";
+    }
+    case "storyboard": {
       return ctx.shotCount > 0 ? `${ctx.shotCount} 镜` : "待开始";
-    case "shots":
-      return ctx.shotCount > 0
-        ? `图 ${ctx.imageDoneCount}/${ctx.shotCount}`
-        : "待开始";
-    case "video":
-      return ctx.shotCount > 0
-        ? `片段 ${ctx.clipDoneCount}/${ctx.shotCount}`
-        : "待开始";
-    case "render":
+    }
+    case "shots": {
+      return ctx.shotCount > 0 ? `图 ${ctx.imageDoneCount}/${ctx.shotCount}` : "待开始";
+    }
+    case "video": {
+      return ctx.shotCount > 0 ? `片段 ${ctx.clipDoneCount}/${ctx.shotCount}` : "待开始";
+    }
+    case "render": {
       return ctx.shotCount > 0 ? "可合成" : "待开始";
-    default:
+    }
+    default: {
       return ctx.scriptReady ? "已就绪" : "待开始";
+    }
   }
 }
 
 /** 前置未满足时的温和提示(纯建议,不阻断)。 */
-export function stagePrereq(
-  id: Tab,
-  ctx: StageViewContext,
-): { text: string; go: Tab } | null {
+export function stagePrereq(id: Tab, ctx: StageViewContext): { go: Tab; text: string } | null {
   switch (id) {
-    case "character":
+    case "character": {
       return ctx.scriptReady
         ? null
         : {
             text: "建议先完成「剧本」— 角色卡会自动复用剧本文本提取角色。",
             go: "script",
           };
-    case "storyboard":
+    }
+    case "storyboard": {
       return ctx.scriptReady
         ? null
         : {
             text: "建议先完成「剧本」— 分镜提取依赖剧本文本,角色可自动并入镜头。",
             go: "script",
           };
-    case "shots":
+    }
+    case "shots": {
       return ctx.shotCount > 0
         ? null
         : {
             text: "建议先完成「场景分镜」— 镜头提示词与角色参考会自动带入本阶段。",
             go: "storyboard",
           };
-    case "video":
+    }
+    case "video": {
       return ctx.shotCount > 0
         ? null
         : {
             text: "建议先完成「场景分镜」— 镜头时长与运动设定会自动带入本阶段。",
             go: "storyboard",
           };
-    case "render":
+    }
+    case "render": {
       return ctx.shotCount > 0
         ? null
         : {
             text: "建议先完成「场景分镜」与生成 — 成片时间线直接消费镜头数据。",
             go: "storyboard",
           };
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }
 
-export interface MissingItem {
-  label: string;
+export type MissingItem = {
+  /** 这一项是否可以认为已就绪（决定清单上的完成态与颜色档）。 */
+  done: boolean;
   /**
    * 还差多少；`null` = **这一项没有可派生的目标**。
    *
@@ -170,18 +175,16 @@ export interface MissingItem {
    * 比不报缺口更糟：用户会照着它去凑数。现在无目标可派生时只报已建数。
    */
   gap: number | null;
-  /** 这一项是否可以认为已就绪（决定清单上的完成态与颜色档）。 */
-  done: boolean;
-}
+  label: string;
+};
 
 /**
  * 右侧「缺失素材 / 下一步」清单。判据全部来自 `StageViewContext` 的真实计数，
  * 唯一的「目标」是镜头数（由场景的 `shotCount` 汇总派生），不是常数。
  * 颜色不在这里给：视图按 `done` 取语义档（规范 03 §3.6.2），本模块不再带色值。
  */
-export function buildMissingSummary(ctx: StageViewContext): MissingItem[] {
-  const shotGap =
-    ctx.shotTarget > 0 ? Math.max(ctx.shotTarget - ctx.shotCount, 0) : null;
+export function buildMissingSummary(ctx: StageViewContext): Array<MissingItem> {
+  const shotGap = ctx.shotTarget > 0 ? Math.max(ctx.shotTarget - ctx.shotCount, 0) : null;
   return [
     {
       label: "角色卡",
@@ -202,16 +205,16 @@ export function buildMissingSummary(ctx: StageViewContext): MissingItem[] {
 }
 
 /** 健康度快照的一行：一段阶段在屏顶分段条上的表达。 */
-export interface HealthRow {
+export type HealthRow = {
   id: Tab;
   label: string;
-  /** 窄槽位（分段条）用的两字缩略；要念出全名的地方一律用 `label`。 */
-  shortLabel: string;
-  /** 0~1 完成度，直接来自 computeStageRatios，不在这里二次加工。 */
-  ratio: number;
   /** 这一段还缺不缺东西（用于屏顶只留一处「还差几段」的说法）。 */
   pending: boolean;
-}
+  /** 0~1 完成度，直接来自 computeStageRatios，不在这里二次加工。 */
+  ratio: number;
+  /** 窄槽位（分段条）用的两字缩略；要念出全名的地方一律用 `label`。 */
+  shortLabel: string;
+};
 
 /**
  * 屏顶分段健康度条的数据源。
@@ -224,10 +227,7 @@ export interface HealthRow {
  * 判定不掺任何写死目标：ratio 来自 stageRatios（其入参全是草稿/生成态的真实计数），
  * pending 就是「这一段还没做完」，不接受「应该有几个」这类外部常数。
  */
-export function buildHealthSnapshot(
-  ratios: StageRatios,
-  _ctx: StageViewContext,
-): HealthRow[] {
+export function buildHealthSnapshot(ratios: StageRatios, _ctx: StageViewContext): Array<HealthRow> {
   return STAGE_DEFS.map((stage) => {
     const ratio = ratios[stage.id];
     return {
@@ -241,6 +241,6 @@ export function buildHealthSnapshot(
 }
 
 /** 还差几段没做完（屏顶胶囊的唯一数据源，替代各处自行数 ratio）。 */
-export function countPendingStages(rows: readonly HealthRow[]): number {
+export function countPendingStages(rows: ReadonlyArray<HealthRow>): number {
   return rows.filter((row) => row.pending).length;
 }

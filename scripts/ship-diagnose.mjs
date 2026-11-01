@@ -67,8 +67,10 @@ export const DIAGNOSE_STATE_DIR = "comfy-diagnose-last";
  */
 function diagnoseStatePath(root, sn, resolve) {
   const dir = gitScratchPath(root, DIAGNOSE_STATE_DIR, resolve);
-  if (!dir || !sn) return null;
-  return path.join(dir, `${sn.replace(/[^\w.-]/g, "_")}.json`);
+  if (!dir || !sn) {
+    return null;
+  }
+  return path.join(dir, `${sn.replaceAll(/[^\w.-]/g, "_")}.json`);
 }
 
 /**
@@ -79,7 +81,9 @@ function diagnoseStatePath(root, sn, resolve) {
  */
 function readDiagnoseState(root, sn, resolve) {
   const p = diagnoseStatePath(root, sn, resolve);
-  if (!p) return null;
+  if (!p) {
+    return null;
+  }
   try {
     const got = JSON.parse(fs.readFileSync(p, "utf8"));
     return typeof got?.signature === "string" && Number.isFinite(got?.atMs)
@@ -100,7 +104,9 @@ function readDiagnoseState(root, sn, resolve) {
  */
 function writeDiagnoseState(root, sn, signature, atMs, resolve) {
   const p = diagnoseStatePath(root, sn, resolve);
-  if (!p) return false;
+  if (!p) {
+    return false;
+  }
   try {
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, JSON.stringify({ signature, atMs }), "utf8");
@@ -133,9 +139,7 @@ export function stallReadout({
     ];
   }
   if (previous.signature !== signature) {
-    return [
-      `${tag}   上一眼 ${previous.signature} → 这一眼 ${signature} ⇒ 在推进，继续等`,
-    ];
+    return [`${tag}   上一眼 ${previous.signature} → 这一眼 ${signature} ⇒ 在推进，继续等`];
   }
   if (flying.count > 0) {
     return [
@@ -204,21 +208,18 @@ export function runDiagnose({
   resolveGit = undefined,
 }) {
   if (!slug) {
-    log(
-      "[ship] --diagnose 取不到仓库路径 ⇒ 没有结论（不猜一个仓库名去读别人的构建）。",
-    );
+    log("[ship] --diagnose 取不到仓库路径 ⇒ 没有结论（不猜一个仓库名去读别人的构建）。");
     return CODE.NOT_RUN;
   }
   if (dryRun) {
-    for (const line of diagnosePlan(slug, sn))
+    for (const line of diagnosePlan(slug, sn)) {
       log(`[ship] --dry-run 计划：${line}`);
+    }
     log("[ship] --dry-run：只打印计划，一条都没执行。");
     return CODE.GREEN;
   }
   if (!cnbOk) {
-    log(
-      "[ship] --diagnose 没有执行者（cnb 不在）⇒ 没有结论，不猜这一跑绿没绿。",
-    );
+    log("[ship] --diagnose 没有执行者（cnb 不在）⇒ 没有结论，不猜这一跑绿没绿。");
     return CODE.NOT_RUN;
   }
   /* 「要读哪一跑」与 `--stage-log` 共用一份归属算法（`resolveBuildSn`）—— 两个入口
@@ -231,7 +232,9 @@ export function runDiagnose({
     headSha,
     command: "pnpm ship --diagnose",
   });
-  if (!target) return CODE.NOT_RUN;
+  if (!target) {
+    return CODE.NOT_RUN;
+  }
   const rawStatus = fetchBuildStatus(run, slug, target);
   if (!rawStatus) {
     log(`[ship] 构建 ${target} 取不到状态 ⇒ 没有结论（不念绿也不念红）。`);
@@ -266,16 +269,8 @@ export function runDiagnose({
        三件同时成立才念「疑似派发未出勤」：签名不变 + 到 `DIAGNOSE_STALL_MINUTES` + 没一格在飞。 */
     const progress = progressReadout(statusJson, target);
     const previous = readDiagnoseState(root, target, resolveGit);
-    const elapsedMinutes = previous
-      ? Math.max(0, Math.floor((nowMs - previous.atMs) / 60_000))
-      : 0;
-    const stored = writeDiagnoseState(
-      root,
-      target,
-      progress.signature,
-      nowMs,
-      resolveGit,
-    );
+    const elapsedMinutes = previous ? Math.max(0, Math.floor((nowMs - previous.atMs) / 60_000)) : 0;
+    const stored = writeDiagnoseState(root, target, progress.signature, nowMs, resolveGit);
     for (const line of stallReadout({
       signature: progress.signature,
       flying: { count: progress.flyingCount, names: progress.flyingNames },

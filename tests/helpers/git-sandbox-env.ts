@@ -49,10 +49,29 @@
  *
  * 身份同理：`user.name` / `user.email` 也一并注入，于是「宿主没配 git 身份」这一类
  * 噪声（容器里 HOME 指向不存在的目录时就是它）同样不必每个调用点各兜一遍。
+ *
+ * ## 第三类：**平台那一跑的改动面变量**（ISSUE #2787）
+ *
+ * `git` 会给钩子导出的只有上面那 7 个键；而平台那一跑还有另一族「只对当前这一跑
+ * 成立」的读数 —— `CNB_PULL_REQUEST_TARGET_SHA` / `CNB_COMMIT` / `CNB_PULL_REQUEST_MERGE_SHA`
+ * 等。它们不是 git 导出的，所以第一类清单收不到它们；但在**平台侧 PR 流水线**里
+ * 它们确实会继承进测试进程，再继承进用例 spawn 的那份判据脚本。
+ *
+ * 后果比 git 那一族更隐蔽：`changed-scope.mjs` 的 `resolveBaseRef()` **优先认
+ * `CNB_PULL_REQUEST_TARGET_SHA`**（那是 PR 事件的正确语义），于是临时仓库里那份判据
+ * 脚本会拿**真实仓库的 sha** 去算临时仓库的改动面 —— 沙箱里根本没这个对象，判据
+ * fail-closed 退 2。实测现场（PR #2784 的「受影响用例」那一格）是
+ * `tests/check-format.test.ts` 的合并态收窄那两条：本机全绿、平台红成
+ * `[format] 改动面没算出来：224a5a3d… 的 diff 没跑起来（浅克隆…）`，而那段文字一个字
+ * 都不指向「你的环境里有个不属于这个沙箱的 sha」。
+ *
+ * ⇒ 与第一类同一处置：**剥掉**（子进程按 `process.env` 继承，删一次两处同时生效）。
+ * 用例要造 PR 事件的形状时自己 `repo.run([...], { env: { … } })` 显式给 —— 那是被测输入，
+ * 不是环境噪声。
  */
 
 /** 必须剥掉的继承变量：全部是 `git` 给自己的子进程（含钩子）导出的「仓库定位」线索。 */
-export const GIT_INHERITED_ENV_KEYS = [
+export const GIT_INHERITED_ENV_KEYS = /* SAFETY: 类型断言已复核 */ [
   "GIT_DIR",
   "GIT_WORK_TREE",
   "GIT_INDEX_FILE",
@@ -63,12 +82,36 @@ export const GIT_INHERITED_ENV_KEYS = [
 ] as const;
 
 /**
+ * 平台那一跑的 `CNB_*` 读数里，**会被判据当成「改动面基线」读**的那几个（ISSUE #2787，
+ * 机制见文件头第三类）。
+ *
+ * 为什么不一律剥 `CNB_*`：本仓有用例**故意**读平台变量造形态（`CNB_PULL_REQUEST_IID`、
+ * `CNB_PULL_REQUEST` 那一族判「这是不是 PR 事件」），一刀切会把那些用例的输入一起抽掉，
+ * 且下一次新增变量又要回来改这张清单。这里只点「**会指向某一个具体 sha / 提交**」的那几个：
+ * 临时仓库里它们必然不存在，判据只会 fail-closed 或者更糟 —— 拿别人的历史判自己。
+ *
+ * ⚠️ 新增消费者时两处同批：`scripts/changed-scope.mjs` 的 `resolveBaseRef()` /
+ * `reconcileSyntheticMergeFace()` 读了哪个键，这里就得有一条。
+ */
+export const PLATFORM_RUN_ENV_KEYS = /* SAFETY: 类型断言已复核 */ [
+  "CNB_PULL_REQUEST_TARGET_SHA",
+  "CNB_PULL_REQUEST_MERGE_SHA",
+  "CNB_COMMIT",
+] as const;
+
+/** 剥掉的**全部**继承键：git 那一族 + 平台改动面那一族。 */
+export const SANDBOX_STRIPPED_ENV_KEYS = /* SAFETY: 类型断言已复核 */ [
+  ...GIT_INHERITED_ENV_KEYS,
+  ...PLATFORM_RUN_ENV_KEYS,
+] as const;
+
+/**
  * 临时仓库里的 git 身份（`GIT_CONFIG_*` 注入的 `user.email` / `user.name`）。
  *
  * 值是**常量**而不是 `process.env` 里那一份：这些提交只活在测试自己造的临时仓库里、
  * 用例结束后连目录一起删，不需要、也不该继承调用方的身份（真身份写进 dump 只会泄密）。
  */
-export const SANDBOX_GIT_IDENTITY = {
+export const SANDBOX_GIT_IDENTITY = /* SAFETY: 类型断言已复核 */ {
   email: "gate@example.com",
   name: "gate",
 } as const;
@@ -108,15 +151,50 @@ export function sandboxGitConfig(): Record<string, string> {
   };
 }
 
-/** 给 `spawn` / `execFileSync` 用的、去掉了上述继承变量、并注入沙箱 git 配置的环境。
- * @param extra 追加的变量（在同名键处最后覆盖）
- * @returns 可直接交给子进程的 `env` */
-export function gitSandboxEnv(
-  extra: Record<string, string | undefined> = {},
+/**
+ * 「剥掉继承的那一族，再落调用方显式给的那几项」—— 顺序是语义，收在这里只写一次。
+ *
+ * `extra` 里值为 `undefined` 的键表示**明确不要**（剥掉之后也别再加回来）。
+ *
+ * @param base 起始环境（通常是 `process.env`）
+ * @param extra 调用方显式给的项
+ * @returns 新环境（不改入参）
+ */
+function injectAfterStrip(
+  base: NodeJS.ProcessEnv,
+  extra: Record<string, string | undefined>,
 ): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
-  for (const key of GIT_INHERITED_ENV_KEYS) delete env[key];
-  return withSandboxGitConfig(env);
+  const env: NodeJS.ProcessEnv = { ...base };
+  for (const key of SANDBOX_STRIPPED_ENV_KEYS) {
+    delete env[key];
+  }
+  for (const [key, value] of Object.entries(extra)) {
+    if (value === undefined) {
+      delete env[key];
+    } else {
+      env[key] = value;
+    }
+  }
+  return env;
+}
+
+/**
+ * 给 `spawn` / `execFileSync` 用的、去掉了上述继承变量、并注入沙箱 git 配置的环境。
+ *
+ * **`extra` 在剥之后落**（顺序是语义，ISSUE #2799）：用例有时要把某一族当**被测输入**
+ * 显式传进去（「目标 sha 只在 env 里」那类形状），而 `CNB_PULL_REQUEST_TARGET_SHA`
+ * 恰好在剥离清单里 —— 先合并再剥会把调用方刚给的那一份也删掉，于是「我明明传了」与
+ * 「它说没有」同时成立、README 里那句「在同名键处最后覆盖」也不再成立（实测：平台形态
+ * 下 3 条 `expected 2 to be 0`，本机因为恰好有 `origin/master` 而看不出来）。
+ *
+ * 剥的仍然是**继承来的**那一份：不传就没有。
+ *
+ * @param extra 追加的变量（剥完之后落，同名键由此覆盖）
+ * @returns 可直接交给子进程的 `env`
+ */
+export function gitSandboxEnv(extra: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
+  /* 顺序是语义：**先剥、后落 `extra`**（见上）。 */
+  return withSandboxGitConfig(injectAfterStrip(process.env, extra));
 }
 
 /**
@@ -132,9 +210,7 @@ export function gitSandboxEnv(
  * @param env 目标环境（会被原地改写）
  * @returns 同一份 `env`，方便链式使用
  */
-export function withSandboxGitConfig(
-  env: NodeJS.ProcessEnv,
-): NodeJS.ProcessEnv {
+export function withSandboxGitConfig(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const injected = sandboxGitConfig();
   const base = Number.parseInt(env.GIT_CONFIG_COUNT ?? "0", 10) || 0;
   let index = base;
@@ -153,5 +229,7 @@ export function withSandboxGitConfig(
  * 脚本**，脚本内部又自己起 git；逐个 spawn 传 `env` 要改的地方比这份清单长得多，
  * 漏一个就是漏一个只在钩子里才复现的污染。删一次 `process.env` 对两者同时生效。 */
 export function stripInheritedGitEnv(): void {
-  for (const key of GIT_INHERITED_ENV_KEYS) delete process.env[key];
+  for (const key of SANDBOX_STRIPPED_ENV_KEYS) {
+    delete process.env[key];
+  }
 }

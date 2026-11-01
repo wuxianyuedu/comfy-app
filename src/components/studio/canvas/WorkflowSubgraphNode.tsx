@@ -19,10 +19,7 @@ import { useHoverElevation } from "../workflow-editor/HoverElevation";
 import { SubgraphCollapsedAnchors } from "./SubgraphCollapsedAnchors";
 import { SubgraphPinRows } from "./SubgraphPinRows";
 import { SubgraphWidgetRow } from "./SubgraphWidgetRow";
-import {
-  SubgraphWidgetStackedString,
-  stackedStringRow,
-} from "./SubgraphWidgetStackedString";
+import { SubgraphWidgetStackedString, stackedStringRow } from "./SubgraphWidgetStackedString";
 
 /* 暴露口的显示名。wrapper 本层槽位名是 ComfyUI 自动编号的别名
  * （`value_1`），业务名在内部真实字段上（proxyField，服务端由
@@ -67,8 +64,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
   /*  子图封装节点与 WorkflowNode 一样，经 <NodeFrost> 用**真实**的
    *  `backdrop-filter` —— 按 1/缩放 反向缩放，避开 Chromium 在低缩放下的
    *  重复平铺伪影。<PseudoFrostLayer> 仍是不启用的兜底。 */
-  const accent =
-    nodeMode === 4 ? "#ec4899" : nodeMode === 2 ? "#6b7280" : "#7C5CFC"; // subgraph default purple identity (mode 0)
+  const accent = nodeMode === 4 ? "#ec4899" : nodeMode === 2 ? "#6b7280" : "#7C5CFC"; // subgraph default purple identity (mode 0)
 
   /* 外框语义与 WorkflowNode 相同：导入的配置带显式尺寸时，
    *  根 div 被强制成 width/height: 100%（见下面的 `style` 块），
@@ -81,9 +77,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
    *  `userCollapsed` 的初值取自导入的 `flags.collapsed`，
    *  这样一开始就折叠的子图仍能靠开关展开（与 WorkflowNode 同一个
    *  `true || 任何值` 的坑 —— 两者**不能**做或运算）。 */
-  const [userCollapsed, setUserCollapsed] = useState<boolean>(
-    data.flags?.collapsed === true,
-  );
+  const [userCollapsed, setUserCollapsed] = useState<boolean>(data.flags?.collapsed === true);
   const isCollapsed = userCollapsed;
 
   /* 过滤掉显示标签为空的那些行，再把封装节点的输入拆成
@@ -121,19 +115,12 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
       .map((out) => ({
         out,
         display:
-          sanitizeComboLabel(out.label) ||
-          sanitizeComboLabel(out.localized) ||
-          out.name ||
-          "",
+          sanitizeComboLabel(out.label) || sanitizeComboLabel(out.localized) || out.name || "",
       }))
       .filter(({ display }) => display.trim().length > 0);
     return {
-      connInputs: cleanedInputs.filter(
-        ({ inp }) => !inp.widget && !inp.isConnection,
-      ),
-      widgetInputs: cleanedInputs.filter(
-        ({ inp }) => !!inp.widget || inp.isConnection === true,
-      ),
+      connInputs: cleanedInputs.filter(({ inp }) => !inp.widget && !inp.isConnection),
+      widgetInputs: cleanedInputs.filter(({ inp }) => !!inp.widget || inp.isConnection === true),
       cleanedOutputs,
     };
   }, [data.inputs, data.outputs]);
@@ -144,10 +131,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
   return (
     <div
       className={`relative flex flex-col rounded-lg border shadow-[0_6px_22px_var(--color-shadow-strong)] ${
-        nodeMode !== 0 ? "bg-transparent" : "bg-node"
+        nodeMode === 0 ? "bg-node" : "bg-transparent"
       }`}
-      ref={hoverRef}
       data-node-id={data.nodeId}
+      ref={hoverRef}
       {...hoverHandlers}
       style={{
         // 有 ComfyUI 保存的 `size.w` 时宽度就跟随它（固定宽度框，
@@ -184,30 +171,28 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         outlineOffset: selected ? "2px" : undefined,
       }}
     >
-      {accent && nodeMode !== 0 && (
-        <FrostLayer color={accent} nodeMode={nodeMode} />
-      )}
+      {accent && nodeMode !== 0 && <FrostLayer color={accent} nodeMode={nodeMode} />}
       {/* 头部 —— 紫色强调（子图身份）。与普通 WorkflowNode 头部同一个
        *  NODE_TITLE_H，好让带标题的节点在网格上对齐。 */}
       <SubgraphHeader
-        title={data.title}
-        nodeId={String(data.nodeId)}
         accent={accent}
-        isCollapsed={isCollapsed}
-        onToggle={() => setUserCollapsed((value) => !value)}
-        onEnter={data.onEnter}
         io={io}
+        isCollapsed={isCollapsed}
+        nodeId={String(data.nodeId)}
+        onEnter={data.onEnter}
+        onToggle={() => setUserCollapsed((value) => !value)}
         outputRef={firstOutputName ? { name: firstOutputName } : null}
+        title={data.title}
       />
 
       {/* 折叠态句柄锚点：连线型边界输入在左一根圆柱、声明了输出就在右一根，
        *  底下坐着不可见的每端口 <Handle>，让活连线几何在切换前后保持不变。 */}
       {isCollapsed && (
         <SubgraphCollapsedAnchors
-          connInputs={connInputs}
-          outputs={cleanedOutputs}
           connectedInputs={data.connectedInputs}
           connectedOutputs={data.connectedOutputs}
+          connInputs={connInputs}
+          outputs={cleanedOutputs}
         />
       )}
 
@@ -216,10 +201,10 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
       {!isCollapsed && (
         <SubgraphPinRows
           connInputs={connInputs}
-          outputs={cleanedOutputs}
+          hostNodeId={data.hostNodeId}
           io={io}
           nodeId={data.nodeId}
-          hostNodeId={data.hostNodeId}
+          outputs={cleanedOutputs}
         />
       )}
 
@@ -245,9 +230,7 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
             /* STRING 堆叠行的轨道给 `1fr`：定尺寸节点上吸收剩余高度，
              *  textarea 继续铺满；其余行轨道按内容收紧。 */
             gridTemplateRows: widgetInputs
-              .map(({ inp }) =>
-                stackedStringRow(inp) ? "minmax(0, 1fr)" : "max-content",
-              )
+              .map(({ inp }) => (stackedStringRow(inp) ? "minmax(0, 1fr)" : "max-content"))
               .join(" "),
             columnGap: 8,
             alignContent: "start",
@@ -256,22 +239,22 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
           {widgetInputs.map(({ inp, label }, i) =>
             stackedStringRow(inp) ? (
               <SubgraphWidgetStackedString
-                key={`sub-w-${inp.name}-${i}`}
-                inp={inp}
-                label={label}
-                io={io}
-                nodeId={data.nodeId}
-                hostNodeId={data.hostNodeId}
                 hasSize={hasSize}
+                hostNodeId={data.hostNodeId}
+                inp={inp}
+                io={io}
+                key={`sub-w-${inp.name}-${i}`}
+                label={label}
+                nodeId={data.nodeId}
               />
             ) : (
               <SubgraphWidgetRow
-                key={`sub-w-${inp.name}-${i}`}
-                inp={inp}
-                label={label}
-                io={io}
-                nodeId={data.nodeId}
                 hostNodeId={data.hostNodeId}
+                inp={inp}
+                io={io}
+                key={`sub-w-${inp.name}-${i}`}
+                label={label}
+                nodeId={data.nodeId}
               />
             ),
           )}

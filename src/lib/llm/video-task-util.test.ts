@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
@@ -17,15 +11,20 @@ import { join, relative } from "node:path";
 const originalCwd = process.cwd();
 let sandbox: string;
 
-function localFiles(): string[] {
+function localFiles(): Array<string> {
   const root = join(sandbox, "temp", "usage-test");
-  if (!existsSync(root)) return [];
-  const out: string[] = [];
+  if (!existsSync(root)) {
+    return [];
+  }
+  const out: Array<string> = [];
   const walk = (dir: string) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else out.push(relative(root, full));
+      if (entry.isDirectory()) {
+        walk(full);
+      } else {
+        out.push(relative(root, full));
+      }
     }
   };
   walk(root);
@@ -47,17 +46,11 @@ afterEach(() => {
 describe("saveMediaToLocalTemp · 路径落点", () => {
   it("图片按模型名建子目录落盘，返回绝对路径", async () => {
     const { saveMediaToLocalTemp } = await import("./video-task-util");
-    const dest = await saveMediaToLocalTemp(
-      "image",
-      "my-model",
-      "data:image/png;base64,aGVsbG8=",
-    );
+    const dest = await saveMediaToLocalTemp("image", "my-model", "data:image/png;base64,aGVsbG8=");
 
     expect(dest).not.toBeNull();
-    expect(
-      dest!.startsWith(join(sandbox, "temp", "usage-test", "my-model")),
-    ).toBe(true);
-    expect(readFileSync(dest!, "utf-8")).toBe("hello");
+    expect(dest!.startsWith(join(sandbox, "temp", "usage-test", "my-model"))).toBe(true);
+    expect(readFileSync(dest!, "utf8")).toBe("hello");
     expect(localFiles()).toHaveLength(1);
   });
 
@@ -66,15 +59,11 @@ describe("saveMediaToLocalTemp · 路径落点", () => {
 
     for (const evil of [
       "../../../../etc/passwd",
-      "..\\..\\windows\\system32\\evil",
+      String.raw`..\..\windows\system32\evil`,
       "/absolute/path/model",
       "normal/../../../escape",
     ]) {
-      const dest = await saveMediaToLocalTemp(
-        "image",
-        evil,
-        "data:image/png;base64,aGVsbG8=",
-      );
+      const dest = await saveMediaToLocalTemp("image", evil, "data:image/png;base64,aGVsbG8=");
       expect(dest).not.toBeNull();
       const rel = relative(join(sandbox, "temp", "usage-test"), dest!);
       // 不许出现 `..`，且只应有一层子目录 + 文件名。
@@ -87,37 +76,25 @@ describe("saveMediaToLocalTemp · 路径落点", () => {
     const { saveMediaToLocalTemp } = await import("./video-task-util");
     const dest = await saveMediaToLocalTemp(
       "image",
-      'a<b>c:d"e|f?g*h' + "\u0000" + "i".repeat(200),
+      `a<b>c:d"e|f?g*h` + `\u0000${"i".repeat(200)}`,
       "data:image/png;base64,aGVsbG8=",
     );
     expect(dest).not.toBeNull();
-    const dirName = relative(join(sandbox, "temp", "usage-test"), dest!).split(
-      /[\\/]/,
-    )[0]!;
+    const dirName = relative(join(sandbox, "temp", "usage-test"), dest!).split(/[\\/]/)[0]!;
     expect(dirName).not.toMatch(/[<>:"|?*\u0000]/);
     expect(dirName.length).toBeLessThanOrEqual(80);
   });
 
   it("模型名为空白时回落到 unnamed，不产出无名路径", async () => {
     const { saveMediaToLocalTemp } = await import("./video-task-util");
-    const dest = await saveMediaToLocalTemp(
-      "image",
-      "   ",
-      "data:image/png;base64,aGVsbG8=",
-    );
+    const dest = await saveMediaToLocalTemp("image", "   ", "data:image/png;base64,aGVsbG8=");
     expect(dest).not.toBeNull();
-    expect(
-      relative(join(sandbox, "temp", "usage-test"), dest!).split(/[\\/]/)[0],
-    ).toBe("unnamed");
+    expect(relative(join(sandbox, "temp", "usage-test"), dest!).split(/[\\/]/)[0]).toBe("unnamed");
   });
 
   it("data URL 的扩展名跟随 mime，不再一律 png", async () => {
     const { saveMediaToLocalTemp } = await import("./video-task-util");
-    const jpeg = await saveMediaToLocalTemp(
-      "image",
-      "m",
-      "data:image/jpeg;base64,aGVsbG8=",
-    );
+    const jpeg = await saveMediaToLocalTemp("image", "m", "data:image/jpeg;base64,aGVsbG8=");
     expect(jpeg!.endsWith(".jpg")).toBe(true);
 
     // 无 mime 的 data URL 回落到该 kind 的默认扩展名。
@@ -137,9 +114,7 @@ describe("saveMediaToLocalTemp · 失败一律静默", () => {
       vi.fn(async () => new Response("nope", { status: 500 })),
     );
     const { saveMediaToLocalTemp } = await import("./video-task-util");
-    expect(
-      await saveMediaToLocalTemp("video", "m", "https://cdn.example/a.mp4"),
-    ).toBeNull();
+    expect(await saveMediaToLocalTemp("video", "m", "https://cdn.example/a.mp4")).toBeNull();
   });
 
   it("空文件返回 null（不留下 0 字节产物）", async () => {
@@ -148,9 +123,7 @@ describe("saveMediaToLocalTemp · 失败一律静默", () => {
       vi.fn(async () => new Response(new Uint8Array(0), { status: 200 })),
     );
     const { saveMediaToLocalTemp } = await import("./video-task-util");
-    expect(
-      await saveMediaToLocalTemp("video", "m", "https://cdn.example/a.mp4"),
-    ).toBeNull();
+    expect(await saveMediaToLocalTemp("video", "m", "https://cdn.example/a.mp4")).toBeNull();
     expect(localFiles()).toHaveLength(0);
   });
 
@@ -170,16 +143,10 @@ describe("saveMediaToLocalTemp · 失败一律静默", () => {
   it("远端 URL 正常时按 URL 扩展名落盘", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
-      ),
+      vi.fn(async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 })),
     );
     const { saveMediaToLocalTemp } = await import("./video-task-util");
-    const dest = await saveMediaToLocalTemp(
-      "video",
-      "m",
-      "https://cdn.example/a.mp4?token=1",
-    );
+    const dest = await saveMediaToLocalTemp("video", "m", "https://cdn.example/a.mp4?token=1");
     expect(dest).not.toBeNull();
     expect(dest!.endsWith(".mp4")).toBe(true);
     expect(readFileSync(dest!).length).toBe(3);
@@ -209,13 +176,11 @@ describe("pollRemoteVideoTask", () => {
     await vi.advanceTimersByTimeAsync(5000);
     await expect(p).resolves.toBe("https://cdn.example/out.mp4");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0]![0]).toBe(
-      "https://api.example/v1/videos/task-1",
-    );
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.example/v1/videos/task-1");
   });
 
   it("首个地址无 URL 时换下一个候选（agnes 形状）", async () => {
-    const seen: string[] = [];
+    const seen: Array<string> = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
@@ -235,13 +200,7 @@ describe("pollRemoteVideoTask", () => {
     );
     const { pollRemoteVideoTask } = await import("./video-task-util");
     vi.useFakeTimers();
-    const p = pollRemoteVideoTask(
-      "https://api.example",
-      "/v1/videos/generations",
-      "m",
-      "t2",
-      {},
-    );
+    const p = pollRemoteVideoTask("https://api.example", "/v1/videos/generations", "m", "t2", {});
     await vi.advanceTimersByTimeAsync(5000);
     await expect(p).resolves.toBe("https://cdn.example/agnes.mp4");
     expect(seen.some((u) => u.includes("/v1/videos/t2"))).toBe(true);
@@ -255,24 +214,21 @@ describe("pollRemoteVideoTask", () => {
       "fetch",
       vi.fn(async () => {
         call += 1;
-        if (call === 1) throw new Error("connection reset"); // 连接被重置
-        if (call === 2) return new Response("not json", { status: 200 });
+        if (call === 1) {
+          throw new Error("connection reset");
+        } // 连接被重置
+        if (call === 2) {
+          return new Response("not json", { status: 200 });
+        }
         // 第三轮起返回真实媒体键（`video_url`）—— 只有 `MEDIA_URL_KEYS` 里的键才被认。
-        return new Response(
-          JSON.stringify({ video_url: "https://cdn.example/late.mp4" }),
-          { status: 200 },
-        );
+        return new Response(JSON.stringify({ video_url: "https://cdn.example/late.mp4" }), {
+          status: 200,
+        });
       }),
     );
     const { pollRemoteVideoTask } = await import("./video-task-util");
     vi.useFakeTimers();
-    const p = pollRemoteVideoTask(
-      "https://api.example",
-      "/v1/videos/generations",
-      "m",
-      "t3",
-      {},
-    );
+    const p = pollRemoteVideoTask("https://api.example", "/v1/videos/generations", "m", "t3", {});
 
     await vi.advanceTimersByTimeAsync(5000);
     expect(call).toBe(2); // 首轮两候选都失败，但循环没退出
@@ -283,21 +239,11 @@ describe("pollRemoteVideoTask", () => {
   it("窗口耗尽仍未就绪返回 null（调用方据此报 pending）", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ status: "pending" }), { status: 200 }),
-      ),
+      vi.fn(async () => new Response(JSON.stringify({ status: "pending" }), { status: 200 })),
     );
-    const { pollRemoteVideoTask, VIDEO_POLL_TOTAL_MS } =
-      await import("./video-task-util");
+    const { pollRemoteVideoTask, VIDEO_POLL_TOTAL_MS } = await import("./video-task-util");
     vi.useFakeTimers();
-    const p = pollRemoteVideoTask(
-      "https://api.example",
-      "/v1/videos/generations",
-      "m",
-      "t4",
-      {},
-    );
+    const p = pollRemoteVideoTask("https://api.example", "/v1/videos/generations", "m", "t4", {});
     await vi.advanceTimersByTimeAsync(VIDEO_POLL_TOTAL_MS + 10_000);
     await expect(p).resolves.toBeNull();
   });
@@ -312,21 +258,14 @@ describe("pollRemoteVideoTask", () => {
           // 首次两个候选都 404，轮空之后第二轮给结果。
           return new Response("missing", { status: 404 });
         }
-        return new Response(
-          JSON.stringify({ url: "https://cdn.example/after-404.mp4" }),
-          { status: 200 },
-        );
+        return new Response(JSON.stringify({ url: "https://cdn.example/after-404.mp4" }), {
+          status: 200,
+        });
       }),
     );
     const { pollRemoteVideoTask } = await import("./video-task-util");
     vi.useFakeTimers();
-    const p = pollRemoteVideoTask(
-      "https://api.example",
-      "/v1/videos/generations",
-      "m",
-      "t5",
-      {},
-    );
+    const p = pollRemoteVideoTask("https://api.example", "/v1/videos/generations", "m", "t5", {});
     await vi.advanceTimersByTimeAsync(5000 * 3);
     await expect(p).resolves.toBe("https://cdn.example/after-404.mp4");
   });
@@ -341,13 +280,9 @@ describe("pollRemoteVideoTask", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { pollRemoteVideoTask } = await import("./video-task-util");
     vi.useFakeTimers();
-    const p = pollRemoteVideoTask(
-      "https://api.example",
-      "/v1/videos/generations",
-      "m",
-      "t6",
-      { Authorization: "Bearer k" },
-    );
+    const p = pollRemoteVideoTask("https://api.example", "/v1/videos/generations", "m", "t6", {
+      Authorization: "Bearer k",
+    });
     await vi.advanceTimersByTimeAsync(5000);
     await p;
     expect(fetchMock.mock.calls[0]![1]!.headers).toEqual({

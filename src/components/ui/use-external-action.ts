@@ -45,17 +45,17 @@ import { useReentrancyLock } from "~/components/ui/use-reentrancy-lock";
  * **这是调用处的表现层选择**，不是本 hook 的判据。所以 `report` 由调用处给，
  * 本 hook 只负责「什么时候报、报什么」。
  */
-export interface ExternalActionOptions {
-  /** 动作目标类别（决定失败文案里的动词，`~/lib/external-open`）。 */
-  target: ExternalTarget;
+export type ExternalActionOptions = {
   /**
    * 反馈通道。`kind` 为 `"ok"` / `"err"`，`detail` 是**已经归一化并翻译过**的
    * 可读文案 —— 调用处直接渲染即可，不必再判一次。
    */
   report: (kind: "ok" | "err", detail: string) => void;
-}
+  /** 动作目标类别（决定失败文案里的动词，`~/lib/external-open`）。 */
+  target: ExternalTarget;
+};
 
-export interface ExternalActionResult {
+export type ExternalActionResult = {
   /** 当前是否正在执行（调用处据此禁用按钮 / 显示「打开中…」）。 */
   busy: boolean;
   /**
@@ -69,10 +69,10 @@ export interface ExternalActionResult {
    */
   run: (
     action: () => Promise<{
-      ok?: boolean;
-      triggered?: boolean;
       detail?: string | null;
       error?: string | null;
+      ok?: boolean;
+      triggered?: boolean;
     }>,
     guard?: () => Promise<boolean>,
   ) => Promise<void>;
@@ -83,18 +83,15 @@ export interface ExternalActionResult {
   runWithTarget: (
     target: string | null | undefined,
     action: (target: string) => Promise<{
-      ok?: boolean;
-      triggered?: boolean;
       detail?: string | null;
       error?: string | null;
+      ok?: boolean;
+      triggered?: boolean;
     }>,
   ) => Promise<void>;
-}
+};
 
-export function useExternalAction({
-  target,
-  report,
-}: ExternalActionOptions): ExternalActionResult {
+export function useExternalAction({ target, report }: ExternalActionOptions): ExternalActionResult {
   const [busy, setBusy] = useState(false);
   /* 重入判据收在唯一出口里（规范 16 §16.2.4.69）—— 用同步 ref 而不是读
    * `busy` 状态：同一次事件循环里连点两下时，`setBusy(true)` 还没提交，
@@ -104,10 +101,14 @@ export function useExternalAction({
 
   const run = useCallback<ExternalActionResult["run"]>(
     async (action, guard) => {
-      if (!lock.tryEnter()) return;
+      if (!lock.tryEnter()) {
+        return;
+      }
       setBusy(true);
       try {
-        if (guard && !(await guard())) return;
+        if (guard && !(await guard())) {
+          return;
+        }
         const raw = await action();
         const result = toExternalResult(raw);
         report(result.ok ? "ok" : "err", result.detail);

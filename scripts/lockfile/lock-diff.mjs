@@ -102,7 +102,7 @@
 export function stripBundledSection(text) {
   const marker = "\n---\n";
   const i = text.lastIndexOf(marker);
-  return i >= 0 ? text.slice(i + marker.length) : text;
+  return i !== -1 ? text.slice(i + marker.length) : text;
 }
 
 /** 顶层段落标记：只有行首、无缩进的 `key:` 才算段落起点。 */
@@ -126,7 +126,9 @@ export function splitTopSections(text) {
     if (m) {
       const [, name = ""] = m;
       if (sections.has(name)) {
-        if (!duplicates.includes(name)) duplicates.push(name);
+        if (!duplicates.includes(name)) {
+          duplicates.push(name);
+        }
         current = sections.get(name); // 合并到既有段落，避免后写的覆盖先写的
         continue;
       }
@@ -134,7 +136,9 @@ export function splitTopSections(text) {
       sections.set(name, current);
       continue;
     }
-    if (current) current.push(line);
+    if (current) {
+      current.push(line);
+    }
   }
   return { sections, duplicates };
 }
@@ -147,9 +151,13 @@ export function splitTopSections(text) {
 function indentOf(line) {
   let n = 0;
   for (const ch of line) {
-    if (ch === " ") n += 1;
-    else if (ch === "\t") n += 2;
-    else break;
+    if (ch === " ") {
+      n += 1;
+    } else if (ch === "\t") {
+      n += 2;
+    } else {
+      break;
+    }
   }
   return n;
 }
@@ -191,30 +199,42 @@ export function splitTopKeys(lines) {
   const entries = new Map();
   let minIndent = Infinity;
   for (const line of lines) {
-    if (!line.trim() || /^\s*#/.test(line)) continue;
+    if (!line.trim() || /^\s*#/.test(line)) {
+      continue;
+    }
     const m = KEY_RE.exec(line.trim());
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     minIndent = Math.min(minIndent, indentOf(line));
   }
-  if (minIndent === Infinity) return entries;
+  if (minIndent === Infinity) {
+    return entries;
+  }
   /** @type {string | null} */
   let cur = null;
   for (const line of lines) {
     if (!line.trim()) {
       const bucket = cur ? entries.get(cur) : undefined;
-      if (bucket) bucket.push(line);
+      if (bucket) {
+        bucket.push(line);
+      }
       continue;
     }
     const ind = indentOf(line);
     if (ind === minIndent) {
       const m = KEY_RE.exec(line.trim());
       const name = unquote(m ? (m[2] ?? "") : line.trim());
-      if (!entries.has(name)) entries.set(name, []);
+      if (!entries.has(name)) {
+        entries.set(name, []);
+      }
       cur = name;
       continue;
     }
     const bucket = cur ? entries.get(cur) : undefined;
-    if (bucket) bucket.push(line);
+    if (bucket) {
+      bucket.push(line);
+    }
   }
   return entries;
 }
@@ -232,10 +252,14 @@ export function flatEntries(lines) {
   const out = new Map();
   for (const line of lines) {
     const m = /^\s*([^\s:#][^:]*):\s*(.*?)\s*$/.exec(line);
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     const [, rawKey = "", rawVal = ""] = m;
     const key = unquote(rawKey.trim());
-    if (!rawVal) continue; // 「键:」后面跟子块（如 importers 的 .:），不是扁平表
+    if (!rawVal) {
+      continue;
+    } // 「键:」后面跟子块（如 importers 的 .:），不是扁平表
     out.set(key, unquote(rawVal));
   }
   return out;
@@ -262,7 +286,9 @@ export function parseDependencyTable(lines) {
   let nameIndent = Infinity;
   for (const line of lines) {
     const body = line.trim();
-    if (!body || !body.endsWith(":")) continue;
+    if (!body || !body.endsWith(":")) {
+      continue;
+    }
     nameIndent = Math.min(nameIndent, indentOf(line));
   }
   /** @type {string | null} */
@@ -270,7 +296,9 @@ export function parseDependencyTable(lines) {
   for (const line of lines) {
     const ind = indentOf(line);
     const body = line.trim();
-    if (!body) continue;
+    if (!body) {
+      continue;
+    }
     if (ind === nameIndent) {
       if (body.endsWith(":")) {
         name = unquote(body.slice(0, -1));
@@ -278,21 +306,31 @@ export function parseDependencyTable(lines) {
       } else {
         // `name: version`（pnpm 简写形态，snapshots 里常见；dependencies 段一般是块形式）
         const idx = body.indexOf(":");
-        out.set(unquote(body.slice(0, idx)), { specifier: "", version: unquote(body.slice(idx + 1)) });
+        out.set(unquote(body.slice(0, idx)), {
+          specifier: "",
+          version: unquote(body.slice(idx + 1)),
+        });
         name = null;
       }
       continue;
     }
-    if (!name) continue;
+    if (!name) {
+      continue;
+    }
     const m = /^(specifier|version):\s*(.*)$/.exec(body);
     const entry = out.get(name);
-    if (!m || !entry) continue;
+    if (!m || !entry) {
+      continue;
+    }
     const [, field, value = ""] = m;
     /* 正则那两个分支就是键名的全部取值，这里显式收窄 —— 原来那句
      * `out.get(name)[m[1]] = …` 是拿一个 `string` 去索引 `{specifier, version}`，
      * 类型面收进来之后它报的正是「这一格本来就是错的」那一类（行为逐字不变）。 */
-    if (field === "specifier") entry.specifier = unquote(value);
-    else entry.version = unquote(value);
+    if (field === "specifier") {
+      entry.specifier = unquote(value);
+    } else {
+      entry.version = unquote(value);
+    }
   }
   return out;
 }
@@ -384,7 +422,9 @@ export function diffLockfiles(oldText, newText) {
   };
   const va = a.lockfileVersion;
   const vb = b.lockfileVersion;
-  if (va !== vb) result.lockfileVersion = `${va || "(无)"} → ${vb || "(无)"}`;
+  if (va !== vb) {
+    result.lockfileVersion = `${va || "(无)"} → ${vb || "(无)"}`;
+  }
 
   /* 条目级两段各写一次：原来是 `[["packages","packages"],["snapshots","snapshots"]]`
    * 那样一圈 `for (const [sectionName, key] of …)` 再用 `result[key]` 落回去 ——
@@ -396,11 +436,22 @@ export function diffLockfiles(oldText, newText) {
     const sb = sectionKeys(b.sections.get(name));
     const added = [];
     const removed = [];
-    for (const k of sb.keys()) if (!sa.has(k)) added.push(k);
-    for (const k of sa.keys()) if (!sb.has(k)) removed.push(k);
+    for (const k of sb.keys()) {
+      if (!sa.has(k)) {
+        added.push(k);
+      }
+    }
+    for (const k of sa.keys()) {
+      if (!sb.has(k)) {
+        removed.push(k);
+      }
+    }
     const entry = { added: added.sort(), removed: removed.sort() };
-    if (name === "packages") result.packages = entry;
-    else result.snapshots = entry;
+    if (name === "packages") {
+      result.packages = entry;
+    } else {
+      result.snapshots = entry;
+    }
   }
 
   return result;
@@ -422,10 +473,17 @@ function mergeFlatDiff(oldSection, newSection) {
   /** @type {FieldChange[]} */
   const changed = [];
   for (const [k, v] of b) {
-    if (!a.has(k)) added.push({ key: k, value: v });
-    else if (a.get(k) !== v) changed.push({ key: k, from: a.get(k), to: v });
+    if (!a.has(k)) {
+      added.push({ key: k, value: v });
+    } else if (a.get(k) !== v) {
+      changed.push({ key: k, from: a.get(k), to: v });
+    }
   }
-  for (const [k, v] of a) if (!b.has(k)) removed.push({ key: k, value: v });
+  for (const [k, v] of a) {
+    if (!b.has(k)) {
+      removed.push({ key: k, value: v });
+    }
+  }
   return { added, removed, changed };
 }
 
@@ -454,18 +512,33 @@ function diffImporters(a, b) {
       /** @type {DepChange[]} */
       const changed = [];
       for (const [pkg, val] of db) {
-        if (!da.has(pkg)) added.push({ name: pkg, value: val });
-        else {
+        if (da.has(pkg)) {
           const old = da.get(pkg);
           if (old.version !== val.version || old.specifier !== val.specifier) {
-            changed.push({ name: pkg, specifier: val.specifier, from: old.version, to: val.version, fromSpecifier: old.specifier });
+            changed.push({
+              name: pkg,
+              specifier: val.specifier,
+              from: old.version,
+              to: val.version,
+              fromSpecifier: old.specifier,
+            });
           }
+        } else {
+          added.push({ name: pkg, value: val });
         }
       }
-      for (const [pkg, val] of da) if (!db.has(pkg)) removed.push({ name: pkg, value: val });
-      if (added.length || removed.length || changed.length) groups[group] = { added, removed, changed };
+      for (const [pkg, val] of da) {
+        if (!db.has(pkg)) {
+          removed.push({ name: pkg, value: val });
+        }
+      }
+      if (added.length || removed.length || changed.length) {
+        groups[group] = { added, removed, changed };
+      }
     }
-    if (Object.keys(groups).length) out[name] = groups;
+    if (Object.keys(groups).length) {
+      out[name] = groups;
+    }
   }
   return out;
 }

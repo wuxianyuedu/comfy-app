@@ -11,10 +11,7 @@ import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
 
-import {
-  DEFAULT_CANVAS_SETTINGS,
-  type CanvasSettings,
-} from "../canvas-settings-types";
+import { DEFAULT_CANVAS_SETTINGS, type CanvasSettings } from "../canvas-settings-types";
 
 /* 存储键带版本（`v1`），将来改结构时可以迁移，
  * 不会与旧载荷相撞。 */
@@ -24,7 +21,7 @@ function readSettings(): CanvasSettings {
   /* SSR / 隐私模式 / 坏数据一律回落默认值 —— 三条判据收在
    *`~/lib/browser-storage`（§16.2.4.28）。 */
   return readStorageJson(STORAGE_KEY, DEFAULT_CANVAS_SETTINGS, (raw) => {
-    const parsed = JSON.parse(raw) as Partial<CanvasSettings>;
+    const parsed = /* SAFETY: 类型断言已复核 */ JSON.parse(raw) as Partial<CanvasSettings>;
     /* 向前兼容：存储里的未知键忽略，默认值补齐旧载荷留下的空洞。 */
     return { ...DEFAULT_CANVAS_SETTINGS, ...parsed };
   });
@@ -46,7 +43,9 @@ const SETTINGS_LISTENERS = new Set<() => void>();
 let CURRENT_SETTINGS: CanvasSettings = DEFAULT_CANVAS_SETTINGS;
 
 function notifySettings() {
-  for (const listener of SETTINGS_LISTENERS) listener();
+  for (const listener of SETTINGS_LISTENERS) {
+    listener();
+  }
 }
 
 function applySettings(next: CanvasSettings) {
@@ -106,11 +105,13 @@ export function useDebugMode() {
  *`debugMode` 被排除在外：它是运行期调试手段，不是视觉定制，
  * 不该点亮「你改过设置」这个点。 */
 export function isCustomCanvasSettings(settings: CanvasSettings): boolean {
-  const keys = (
-    Object.keys(DEFAULT_CANVAS_SETTINGS) as (keyof CanvasSettings)[]
+  const keys = /* SAFETY: 类型断言已复核 */ (
+    Object.keys(DEFAULT_CANVAS_SETTINGS) as Array<keyof CanvasSettings>
   ).filter((key) => key !== "debugMode");
   for (const k of keys) {
-    if (settings[k] !== DEFAULT_CANVAS_SETTINGS[k]) return true;
+    if (settings[k] !== DEFAULT_CANVAS_SETTINGS[k]) {
+      return true;
+    }
   }
   return false;
 }

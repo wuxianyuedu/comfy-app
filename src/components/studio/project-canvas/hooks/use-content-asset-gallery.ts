@@ -19,26 +19,23 @@ import { useEffect, useState } from "react";
 
 import { beginStaleRun } from "~/lib/stale-run";
 import type { Dispatch, SetStateAction } from "react";
-import {
-  fetchTaskImages,
-  type TaskGalleryImage,
-} from "~/lib/media/task-images-client";
+import { fetchTaskImages, type TaskGalleryImage } from "~/lib/media/task-images-client";
 
-export interface UseContentAssetGalleryArgs {
-  taskId?: string | null;
+export type UseContentAssetGalleryArgs = {
   /** 只有 picture 节点启用相册；movie / text 不拉。 */
   enabled: boolean;
-}
+  taskId?: string | null;
+};
 
-export interface ContentAssetGallery {
+export type ContentAssetGallery = {
   /** 多图时的图片列表（长度 > 1），单图 / 无图为 null。 */
-  images: TaskGalleryImage[] | null;
-  open: boolean;
+  images: Array<TaskGalleryImage> | null;
   index: number;
-  setOpen: (open: boolean) => void;
+  open: boolean;
   /** 传函数式更新：翻页要基于「上一张」算，视图里直接 `(i) => (i + 1) % n`。 */
   setIndex: Dispatch<SetStateAction<number>>;
-}
+  setOpen: (open: boolean) => void;
+};
 
 export function useContentAssetGallery({
   taskId,
@@ -52,13 +49,15 @@ export function useContentAssetGallery({
    * 上下文变了就当作这一轮还没有图 —— 与原先在渲染期 `setImages(null)` 等价：
    * 新任务的首帧不会渲染上一任务的缩略图。 */
   const [gallery, setGallery] = useState<{
+    images: Array<TaskGalleryImage> | null;
     key: string;
-    images: TaskGalleryImage[] | null;
   }>({ key: ctxKey, images: null });
   const images = gallery.key === ctxKey ? gallery.images : null;
 
   useEffect(() => {
-    if (!taskId || !enabled) return;
+    if (!taskId || !enabled) {
+      return;
+    }
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换任务 / 关掉开关会重开一轮，
      * 旧轮次的图集一律不落地（否则会短暂显示上一个任务的图）。 */
     const guard = beginStaleRun();

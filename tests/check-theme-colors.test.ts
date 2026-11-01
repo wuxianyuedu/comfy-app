@@ -32,7 +32,7 @@ import { copyGateDeps } from "./helpers/gate-repo";
 import { stripComments } from "./helpers/strip-comments";
 
 const SCRIPT = path.resolve(__dirname, "../scripts/check-theme-colors.cjs");
-const tempDirs: string[] = [];
+const tempDirs: Array<string> = [];
 
 /**
  * 造一个临时仓库：脚本按自身位置解析仓库根，故必须把脚本复制进去，
@@ -55,7 +55,7 @@ function scanner(files: Record<string, string>) {
   }
   /* stdout + stderr 都要拼进 output：告警走 console.warn（stderr），而成功分支
    * 只拿得到 stdout —— 不拼就等于「负债只提醒」那条判据永远测不到。 */
-  const run = (args: string[] = []): { ok: boolean; output: string } => {
+  const run = (args: Array<string> = []): { ok: boolean; output: string } => {
     const res = spawnSync(
       process.execPath,
       [path.join(root, "scripts", path.basename(SCRIPT)), ...args],
@@ -70,8 +70,9 @@ function scanner(files: Record<string, string>) {
 }
 
 afterEach(() => {
-  for (const dir of tempDirs.splice(0))
+  for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("check-theme-colors", () => {
@@ -166,8 +167,7 @@ describe("check-theme-colors", () => {
     expect(badRun.output).toContain("存在未豁免的写死色值");
 
     const good = scanner({
-      "src/components/studio/Thing.tsx":
-        "// 设计稿引了 ISSUE #346 与 #262\nexport const x = 1;\n",
+      "src/components/studio/Thing.tsx": "// 设计稿引了 ISSUE #346 与 #262\nexport const x = 1;\n",
     });
     const goodRun = good.run();
     expect(goodRun.ok).toBe(true);
@@ -191,8 +191,7 @@ describe("check-theme-colors", () => {
 
   it("--report 只出清单，不判失败", () => {
     const { run } = scanner({
-      "src/components/studio/Thing.tsx":
-        'export const s = { color: "#ff0000" };\n',
+      "src/components/studio/Thing.tsx": 'export const s = { color: "#ff0000" };\n',
     });
     const { ok, output } = run(["--report"]);
     expect(ok).toBe(true);
@@ -247,8 +246,7 @@ describe("check-theme-colors", () => {
 
   it("--report 下负债只提醒，不判失败", () => {
     const { run } = scanner({
-      "src/lib/comfyui/types.ts":
-        "// 类型色：MODEL #7C5CFF\nexport const x = 1;\n",
+      "src/lib/comfyui/types.ts": "// 类型色：MODEL #7C5CFF\nexport const x = 1;\n",
     });
     const { ok, output } = run(["--report"]);
     expect(ok).toBe(true);
@@ -343,10 +341,7 @@ describe("幽灵 token（引用了从未定义的 --color-*）", () => {
   /* 收口的锚点：色相只许在 globals.css 定义一次，任何调用处再写回 rgba 都算退化。 */
   it("真实仓库：网格线三处画布共用同一个 token", () => {
     const grid = readFileSync(
-      path.resolve(
-        __dirname,
-        "../src/components/studio/canvas/workflow-canvas-grid.ts",
-      ),
+      path.resolve(__dirname, "../src/components/studio/canvas/workflow-canvas-grid.ts"),
       "utf8",
     );
     expect(grid).toContain("var(--color-canvas-grid-line)");
@@ -364,10 +359,7 @@ describe("幽灵 token（引用了从未定义的 --color-*）", () => {
   });
 
   it("真实仓库：seed 图标的 5 颗 token 有定义（事故不复发的锚点）", () => {
-    const css = readFileSync(
-      path.resolve(__dirname, "../src/app/globals.css"),
-      "utf8",
-    );
+    const css = readFileSync(path.resolve(__dirname, "../src/app/globals.css"), "utf8");
     for (const name of [
       "--color-seed-fixed",
       "--color-seed-step",
@@ -480,18 +472,16 @@ describe("主题色豁免台账", () => {
       const reason = /reason:\s*([\s\S]*?),\n {2}\},$/.exec(entry)?.[1] ?? "";
       // 理由必须说清「为什么这行色值是内容自己的颜色」，不能是一句「类型色」了事。
       expect(
-        reason.replace(/\s+/g, "").length,
+        reason.replaceAll(/\s+/g, "").length,
         `豁免理由过短（等于没写）：${file}`,
       ).toBeGreaterThan(20);
     }
   });
 
   it("翻闸后不再有基线文件（未豁免须为 0，由判据本身守）", () => {
-    expect(
-      existsSync(
-        path.resolve(__dirname, "../scripts/.theme-color-baseline.json"),
-      ),
-    ).toBe(false);
+    expect(existsSync(path.resolve(__dirname, "../scripts/.theme-color-baseline.json"))).toBe(
+      false,
+    );
   });
 });
 
@@ -535,11 +525,7 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
     const dest = path.join(root, "scripts", path.basename(SCRIPT));
     copyFileSync(SCRIPT, dest);
     copyGateDeps(dest);
-    const exemptionsPath = path.join(
-      root,
-      "scripts",
-      "theme-color-exemptions.cjs",
-    );
+    const exemptionsPath = path.join(root, "scripts", "theme-color-exemptions.cjs");
     const exemptions = readFileSync(exemptionsPath, "utf8").replace(
       "const EXEMPT_TABLES = [",
       "const EXEMPT_TABLES = [\n" +
@@ -580,8 +566,7 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
     const { run } = scanner({
       "src/components/studio/Follow.tsx":
         'export const S = { outline: "2px solid var(--color-primary)" };\n',
-      "src/app/globals.css":
-        "@theme {\n  --color-primary: #8557de;\n  --color-node: #2b2b36;\n}\n",
+      "src/app/globals.css": "@theme {\n  --color-primary: #8557de;\n  --color-node: #2b2b36;\n}\n",
     });
     expect(run().ok).toBe(true);
   });
@@ -600,8 +585,7 @@ describe("跨面相等主张（给裸色值背书的「与品牌 token 同值」
   it("`#609` 这种行号/ISSUE 号不与主张混为一谈（判据认的是句子，不是井号）", () => {
     const { run } = scanner({
       "src/components/ui/IssueRef.tsx":
-        "export const A = 1;\n" +
-        "/* 见 #609：这颗紫与 `--color-node` 无关，只是历史遗留。 */\n",
+        "export const A = 1;\n" + "/* 见 #609：这颗紫与 `--color-node` 无关，只是历史遗留。 */\n",
       "src/app/globals.css": "@theme {\n  --color-primary: #8557de;\n}\n",
     });
     expect(run().ok).toBe(true);
@@ -613,8 +597,7 @@ describe("属性前缀 + 裸 CSS 变量（bg-(--color-…) 这一族，规范 §
     const { run } = scanner({
       "src/components/studio/BareVar.tsx":
         'export const cls = "flex bg-(--color-node) text-ink";\n',
-      "src/app/globals.css":
-        "@theme {\n  --color-node: #2b2b36;\n  --color-ink: #ededf2;\n}\n",
+      "src/app/globals.css": "@theme {\n  --color-node: #2b2b36;\n  --color-ink: #ededf2;\n}\n",
     });
     const { ok, output } = run();
     expect(ok).toBe(false);
@@ -624,10 +607,8 @@ describe("属性前缀 + 裸 CSS 变量（bg-(--color-…) 这一族，规范 §
 
   it("对照：同一行改成类名便不再红（这条闸只挡「越过语义层」那一族写法）", () => {
     const { run } = scanner({
-      "src/components/studio/BareVar.tsx":
-        'export const cls = "flex bg-node text-ink";\n',
-      "src/app/globals.css":
-        "@theme {\n  --color-node: #2b2b36;\n  --color-ink: #ededf2;\n}\n",
+      "src/components/studio/BareVar.tsx": 'export const cls = "flex bg-node text-ink";\n',
+      "src/app/globals.css": "@theme {\n  --color-node: #2b2b36;\n  --color-ink: #ededf2;\n}\n",
     });
     expect(run().ok).toBe(true);
   });
@@ -637,8 +618,7 @@ describe("属性前缀 + 裸 CSS 变量（bg-(--color-…) 这一族，规范 §
      * 写全一枚 square-bracket 候选名就会被 docs-candidate-hygiene 那条差集判据点名。 */
     const varName = "canvas";
     const { run } = scanner({
-      "src/components/studio/Calcish.tsx":
-        `export const cls = "w-[calc(100%-var(--color-${varName}))]";\n`,
+      "src/components/studio/Calcish.tsx": `export const cls = "w-[calc(100%-var(--color-${varName}))]";\n`,
       "src/app/globals.css": `@theme {\n  --color-${varName}: #0a0a0f;\n}\n`,
     });
     expect(run().ok).toBe(true);
@@ -671,8 +651,7 @@ describe("属性前缀 + 裸 CSS 变量（bg-(--color-…) 这一族，规范 §
 });
 
 describe("已定义 token 上的装饰性兜底（var(--color-x, #hex)，§3.6.1.1）", () => {
-  const FIXTURE_CSS =
-    "@theme {\n  --color-canvas: #0a0a0f;\n  --color-ink: #ededf2;\n}\n";
+  const FIXTURE_CSS = "@theme {\n  --color-canvas: #0a0a0f;\n  --color-ink: #ededf2;\n}\n";
 
   it("token 有定义却带色值兜底 → 阻断，且**豁免文件里也照判**（「未豁免写死色值」在那儿是闭嘴的）", () => {
     /* 夹具挑一份**整文件豁免**的类型色表（water-fill-progress）：第一行那颗裸 hex 由豁免层放行
@@ -707,8 +686,7 @@ describe("已定义 token 上的装饰性兜底（var(--color-x, #hex)，§3.6.1
 
   it("对照：删掉兜底就绿 —— 这条闸判的是那个取不到的第二来源，不是 var() 本身", () => {
     const { run } = scanner({
-      "src/components/studio/Fallback.tsx":
-        'export const S = { color: "var(--color-ink)" };\n',
+      "src/components/studio/Fallback.tsx": 'export const S = { color: "var(--color-ink)" };\n',
       "src/app/globals.css": FIXTURE_CSS,
     });
     expect(run().ok).toBe(true);

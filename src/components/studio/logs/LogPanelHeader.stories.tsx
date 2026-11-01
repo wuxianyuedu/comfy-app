@@ -56,27 +56,26 @@ function HeaderHarness({ wrapInitial = false }: { wrapInitial?: boolean }) {
   const panel = useWidePanel("log-panel-header-story", modalWidth("max-w-4xl"));
 
   const origin = header.origin;
-  const originCounts =
-    header.countsByOrigin[origin] ?? header.countsByOrigin.all;
+  const originCounts = header.countsByOrigin[origin] ?? header.countsByOrigin.all;
 
   return (
     <div className="w-240 max-w-full">
       <LogPanelHeader
-        originCounts={originCounts}
-        countsByOrigin={header.countsByOrigin}
-        origin={origin}
-        setOrigin={setOrigin}
-        wrap={wrapInitial}
-        setWrap={() => undefined}
-        copyFailed={false}
-        copyDone={false}
-        copyAllAction={() => void copyAll()}
-        scopeLabel="全部来源 · 全部级别"
-        total={header.filteredLogs.length}
-        download={download}
         clear={clear}
+        copyAllAction={() => void copyAll()}
+        copyDone={false}
+        copyFailed={false}
+        countsByOrigin={header.countsByOrigin}
+        download={download}
+        origin={origin}
+        originCounts={originCounts}
         panel={panel}
+        scopeLabel="全部来源 · 全部级别"
         setIsOpen={setIsOpen}
+        setOrigin={setOrigin}
+        setWrap={() => undefined}
+        total={header.filteredLogs.length}
+        wrap={wrapInitial}
       />
     </div>
   );
