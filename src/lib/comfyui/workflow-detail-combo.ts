@@ -32,6 +32,7 @@ const comboOptionsFromSpec = (spec: unknown): Array<string> | undefined => {
     return opts.length ? opts : undefined;
   }
   const extra: unknown = spec[1];
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (extra != null && typeof extra === "object") {
     const opts = /* SAFETY: 类型断言已复核 */ (extra as Record<string, unknown>).options;
     if (Array.isArray(opts)) {
@@ -173,6 +174,7 @@ export function createObjectInfoResolvers(): {
       return undefined;
     }
     const extra: unknown = spec[1];
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (extra == null || typeof extra !== "object") {
       return undefined;
     }

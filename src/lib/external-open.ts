@@ -108,6 +108,7 @@ export function emptyTargetText(target: ExternalTarget): string {
 
 /** 目标是否为空（空串 / 全空白 / null）。 */
 export function isEmptyTarget(value: string | null | undefined): boolean {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   return value == null || value.trim() === "";
 }
 

@@ -262,6 +262,7 @@ export function recordPid(root, name, pid) {
     return;
   }
   const pids = { .../** @type {Record<string, number>} */ (meta.pids) };
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (pid == null) {
     delete pids[name];
   } else {

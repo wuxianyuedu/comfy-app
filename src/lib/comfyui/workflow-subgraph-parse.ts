@@ -332,6 +332,7 @@ export function extractSubgraphAnnotations(
   /* 位置：用户拖出来的覆盖值优先于原始坐标。
    *  `host:inner` 与裸内部 id 两种键写法都会读 —— 见上面 `hostId` 的说明。 */
   const innerNodeIdSet = new Set(
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     innerNodes.filter((rn) => rn?.id != null).map((rn) => String(rn.id)),
   );
   const draggedByInnerId: Record<string, [number, number]> = {};

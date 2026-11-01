@@ -131,6 +131,7 @@ function LLMSettingsModal({
   }, [initial]);
 
   async function handleSave() {
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (draftModel == null && draftProvider == null) {
       onClose();
       return;
@@ -299,13 +300,15 @@ function LLMSettingsModal({
             </Button>
             <Button
               className="h-auto flex-1 rounded-lg px-4 py-2 text-sm"
+              // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
               disabled={saving || (draftModel == null && draftProvider == null)}
               onClick={handleSave}
               variant="primary-solid"
             >
               {saving
                 ? "保存中…"
-                : draftModel == null && draftProvider == null
+                : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+                  draftModel == null && draftProvider == null
                   ? "使用当前配置"
                   : "保存并生效"}
             </Button>

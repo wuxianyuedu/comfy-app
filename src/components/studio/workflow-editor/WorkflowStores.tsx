@@ -216,6 +216,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       set((state) => {
         const hit = codes.filter((code) =>
           Object.values(state.workflowIO).some(
+            // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
             (entry) => entry?.modeOverrides != null && code in entry.modeOverrides,
           ),
         );

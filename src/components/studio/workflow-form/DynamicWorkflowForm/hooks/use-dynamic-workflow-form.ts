@@ -294,6 +294,7 @@ export function useDynamicWorkflowForm(
   const set = useCallback(
     (ioKey: string, value: unknown) => {
       /* 清空某格 → 撤掉它的本地预览，避免「值已空却还显示旧图」。 */
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (value === "" || value == null) {
         setPreviews((prev) => {
           if (prev[ioKey] === undefined) {

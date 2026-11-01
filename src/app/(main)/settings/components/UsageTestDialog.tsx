@@ -244,6 +244,7 @@ function UsageVideoModeQuickPick({
    * 才回填 ToggleGroup，否则给空数组（全不选）。 */
   const modeValue = usageTest.fields.find((f) => f.key === "mode")?.value;
   const trimmedModeValue = modeValue?.trim();
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   const modeValueIsBroken = modeValue != null && isModeValueBroken(modeValue);
   const modeToggleValue =
     trimmedModeValue && !modeValueIsBroken && VIDEO_MODE_PRESETS.some((p) => p === trimmedModeValue)
@@ -443,6 +444,7 @@ function UsageTestResultPanel({
           <>
             <p className="bg-success/10 text-success-strong mb-2 rounded-lg px-3 py-2 text-xs">
               {result.detail}
+              {/* oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined */}
               {result.elapsedMs != null && ` · 耗时 ${fixed(result.elapsedMs / 1000, 1) ?? "0"}s`}
             </p>
             {result.chatText && (

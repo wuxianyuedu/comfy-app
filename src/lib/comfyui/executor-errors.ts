@@ -23,6 +23,7 @@ import { TASK_ERROR_MAX, clampText } from "~/lib/text-clamp";
 // 用户看到的就不是真实原因了。本函数递归剥出已知字段，兜底再打印 JSON ——
 // 保证 `task.error` 里**总有**可读的信息。
 export function friendlyError(raw: unknown): string {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (raw == null) {
     return "";
   }

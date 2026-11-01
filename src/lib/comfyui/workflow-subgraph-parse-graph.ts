@@ -420,6 +420,7 @@ export function buildSubgraphGraph(
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         const isConn = inp.link != null;
         const widgetName =
           inp.widget && typeof inp.widget.name === "string" ? inp.widget.name : undefined;

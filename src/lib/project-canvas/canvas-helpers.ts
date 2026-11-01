@@ -205,12 +205,14 @@ export function applyPropagationToNodes(
         break;
       }
       case "steps": {
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         if (src.steps != null) {
           next.steps = src.steps;
         }
         break;
       }
       case "cfg": {
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         if (src.cfg != null) {
           next.cfg = src.cfg;
         }

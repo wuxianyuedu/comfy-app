@@ -449,6 +449,7 @@ export async function enrichWorkflowIO(
     const modeOverridesSource = v.modeOverrides;
     let cleanedModes: Record<string, WorkflowIOModeOverride> | undefined;
     if (
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       modeOverridesSource != null &&
       typeof modeOverridesSource === "object" &&
       options &&
@@ -457,6 +458,7 @@ export async function enrichWorkflowIO(
       let touched = false;
       const next: Record<string, WorkflowIOModeOverride> = {};
       for (const [mode, override] of Object.entries(modeOverridesSource)) {
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         if (override == null || typeof override !== "object") {
           /* 畸形覆盖（PATCH 原样落库可能带 null/标量）：原样透传不清洗。 */
           next[mode] = override ?? {};

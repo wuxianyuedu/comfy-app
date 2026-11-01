@@ -203,6 +203,7 @@ const mockRouter = t.router({
         await neverSettle();
       }
       return {
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         up: behavior.comfyBase != null,
         base: behavior.comfyBase ?? null,
         starting: false,

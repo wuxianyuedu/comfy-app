@@ -83,6 +83,7 @@ export function findNodeErrorsCarrier(root: unknown, depth = 5): unknown {
     seen.add(node);
     const ne = node.node_errors;
     if (
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       ne != null &&
       (Array.isArray(ne) ? ne.length > 0 : typeof ne === "object" && Object.keys(ne).length > 0)
     ) {
@@ -115,10 +116,12 @@ export function extractEnvelopeValidationErrors(
 /** envelope 里错误消息的取值：message → hint → 兜底文案。 */
 export function envelopeErrorMessage(env: unknown): string {
   const err =
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     env != null && typeof env === "object"
       ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
       : undefined;
   const str = (o: unknown, key: string): string | undefined => {
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (o == null || typeof o !== "object") {
       return undefined;
     }
@@ -137,10 +140,12 @@ export function envelopeErrorMessage(env: unknown): string {
  *
  *  返回 `null` 表示不是这种错误（交给下方兜底逻辑按原样落盘）。 */
 export function translateWorkflowUnknownNodesError(env: unknown): string | null {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (env == null || typeof env !== "object") {
     return null;
   }
   const err = /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error;
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (err == null || typeof err !== "object") {
     return null;
   }
@@ -149,6 +154,7 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
   }
   const details = /* SAFETY: 类型断言已复核 */ (err as JsonRecord).details;
   const list =
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     details != null && typeof details === "object"
       ? /* SAFETY: 类型断言已复核 */ (details as JsonRecord).errors
       : undefined;
@@ -548,10 +554,12 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         // 一句「Workflow has N validation error(s)」。
         const rawMsg = msg;
         const err =
+          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           env != null && typeof env === "object"
             ? /* SAFETY: 类型断言已复核 */ (env as JsonRecord).error
             : undefined;
         const errCode =
+          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           err != null && typeof err === "object"
             ? /* SAFETY: 类型断言已复核 */ (err as JsonRecord).code
             : undefined;

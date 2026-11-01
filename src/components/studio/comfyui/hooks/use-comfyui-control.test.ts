@@ -131,6 +131,7 @@ const mockRouter = t.router({
     comfyStatus: t.procedure.query(async () => {
       comfyStatusCalls += 1;
       return {
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         up: behavior.comfyBase != null,
         base: behavior.comfyBase ?? null,
         starting: false,

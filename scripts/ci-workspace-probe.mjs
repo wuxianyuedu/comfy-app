@@ -274,6 +274,7 @@ export function jobLabel(cwd) {
 export function dirFact(target, nowMs, fsLike = realFs) {
   /** @type {DirFact} */
   const absent = { present: false, ageS: null, bornMs: null, from: "-" };
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (target == null) {
     return absent;
   }

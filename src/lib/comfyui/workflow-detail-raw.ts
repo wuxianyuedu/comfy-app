@@ -92,6 +92,7 @@ export function buildNodeTypeMap(raw: RawWorkflow | null): Record<string, string
   const nodeTypeById: Record<string, string> = {};
   if (raw && Array.isArray(raw.nodes)) {
     for (const n of raw.nodes) {
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (n?.id != null) {
         nodeTypeById[String(n.id)] = typeof n.type === "string" ? n.type : "";
       }
@@ -124,6 +125,7 @@ export function buildInnerNodeInputs(
       continue;
     }
     for (const node of subDef.nodes) {
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (node?.id == null) {
         continue;
       }
@@ -145,7 +147,9 @@ export function buildInnerNodeInputs(
           name: inp.name,
           label: typeof inp.label === "string" ? inp.label : undefined,
           localized: typeof inp.localized_name === "string" ? inp.localized_name : undefined,
+          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           type: typeof inp.type === "string" ? inp.type : inp.link == null ? "STRING" : "*",
+          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           isConnection: inp.link != null,
         };
         if (widgetName) {

@@ -265,6 +265,7 @@ export async function runEnsureLaunch(input: {
       PYTHONIOENCODING: "utf8",
       PYTHONUTF8: "1",
     },
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     deadline: input.timeoutMs == null ? null : Date.now() + input.timeoutMs,
     timeoutDetail: `ComfyUI 启动超过 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 仍未就绪，继续留在后台观察；详见 log/services/comfyui-runtime.log`,
     cpuLimitMode: resolveCpuLimitMode({
@@ -321,6 +322,7 @@ export async function waitForExistingInstanceReady(input: {
   const { host, settings, note } = input;
   let goneStreak = 0;
   const result = await waitForComfyReady({
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     deadline: input.timeoutMs == null ? null : Date.now() + input.timeoutMs,
     timeoutDetail: `已有 ComfyUI 实例持续未响应（等待 ${Math.round((input.timeoutMs ?? 0) / 1000)}s 后放弃）；可能正忙或已卡死，详见 log/services/comfyui-runtime.log`,
     readyDetail: "ComfyUI 已就绪（接管已在运行的实例）",

@@ -37,6 +37,7 @@ export function NodePreviewCard({
   const inputs = data?.inputs ?? [];
   const outputs = data?.outputs ?? [];
   const typed = inputs.filter((input) => !input.widget);
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   const widgets = inputs.filter((input) => input.widget != null);
   // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串同义「无值」需回退 fallbackName，刻意用 ||
   const title = data?.displayName || fallbackName;

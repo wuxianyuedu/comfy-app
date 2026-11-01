@@ -109,6 +109,7 @@ export function WorkflowIoPreviewPanel({
   /* 当前模式是否落过覆盖（驱动「恢复默认」按钮）。 */
   const hasModeOverrides = useMemo(
     () =>
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       effectiveMode != null &&
       Object.values(workflowIO).some(
         (entry) => entry?.modeOverrides?.[effectiveMode] !== undefined,

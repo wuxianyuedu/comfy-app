@@ -133,6 +133,7 @@ export function readBuild(repo, sn, call = cnbCall) {
     return emptyReading(sn, `响应不是 JSON（前 120 字：${raw.slice(0, 120)}）`);
   }
   const data = parsed?.data;
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (data == null || typeof data !== "object") {
     return emptyReading(sn, "响应里没有 data");
   }
@@ -246,6 +247,7 @@ function emptyReading(sn, note) {
  * @returns {number | null}
  */
 export function toMs(value) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (value == null || value === "") {
     return null;
   }
@@ -281,10 +283,12 @@ export function overlap(a, b, now = Date.now()) {
   const span = (x) => {
     const start = toMs(x.startTime) ?? toMs(x.createTime);
     const end = toMs(x.endTime);
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     return { start, end: end ?? now, stillRunning: end == null };
   };
   const sa = span(a);
   const sb = span(b);
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (sa.start == null || sb.start == null) {
     return { verdict: "取不到时间线", seconds: 0, stillRunning: false };
   }
@@ -386,6 +390,7 @@ export function probeConfig(opts) {
   const { event, key, cancelInProgress, wait, stageLock, jobLock, seconds } = opts;
   const timeout = opts.timeout ?? "20m";
   const pipelineLock = [`  lock:`, `    key: ${key}`];
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (cancelInProgress != null) {
     pipelineLock.push(`    cancel-in-progress: ${cancelInProgress}`);
   }
@@ -400,12 +405,15 @@ export function probeConfig(opts) {
   const lockBlock = (indent, l) => {
     const pad = " ".repeat(indent);
     const out = [`${pad}lock:`, `${pad}  key: ${l.key}`];
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (l.wait != null) {
       out.push(`${pad}  wait: ${l.wait}`);
     }
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (l.timeout != null) {
       out.push(`${pad}  timeout: ${l.timeout}`);
     }
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (l.expires != null) {
       out.push(`${pad}  expires: ${l.expires}`);
     }
@@ -540,6 +548,7 @@ function parseFlags(argv) {
     }
     const k = a.slice(2);
     const next = argv[i + 1];
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (next != null && !next.startsWith("--")) {
       out[k] = next;
       i += 1;
@@ -567,6 +576,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
      * @returns {boolean | undefined}
      */
     const bool = (v) =>
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       v === true ? true : v === "false" ? false : v == null ? undefined : v === "true";
     process.stdout.write(
       probeConfig({

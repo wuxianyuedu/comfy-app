@@ -228,6 +228,7 @@ export const workflowListProcedures = {
         let diskMissing = false;
         if (list.sourcePath) {
           const diskMs = diskMtimeByPath.get(pathKey(list.sourcePath));
+          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           if (diskMs == null) {
             diskMissing = true;
           } else {

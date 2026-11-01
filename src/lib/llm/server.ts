@@ -89,6 +89,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       if (row.apiKey) {
         cfg.apiKey = row.apiKey;
       }
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (row.temperature != null) {
         cfg.temperature = row.temperature;
       }
@@ -100,6 +101,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
           number
         >;
       }
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (row.maxTokens != null) {
         cfg.maxTokens = row.maxTokens;
       }
@@ -136,6 +138,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       overrides: cfg.temperatureByTask ?? null,
       fallback: cfg.temperature,
     });
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (override.maxTokens != null) {
       cfg.maxTokens = override.maxTokens;
     }
@@ -224,7 +227,8 @@ export function describeFetchFailure(e: unknown, cfg: LLMConfig): string {
   const causeMsg =
     cause instanceof Error
       ? String(cause.message)
-      : cause == null
+      : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+        cause == null
         ? ""
         : typeof cause === "string"
           ? cause

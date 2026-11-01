@@ -71,6 +71,7 @@ export function startPollTimer(
   /* 固定间隔与函数间隔走**两条装表路径**：固定值用 `setInterval`（最省事、语义
    * 也最直白），函数值必须用 `setTimeout` 链 —— 每拍跑完才知道下一拍等多久。 */
   const dynamic = typeof ms === "function";
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (!dynamic && (ms == null || ms <= 0)) {
     return () => undefined;
   }

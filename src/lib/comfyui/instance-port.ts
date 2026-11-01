@@ -160,6 +160,7 @@ async function withPort(
  * 场景下端口事实没有意义——返回 null，由调用方走既有的探测链路。
  */
 export function baseForLocalPort(port: number | null): string | null {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (port == null || !Number.isInteger(port) || port <= 0 || port > 65_535) {
     return null;
   }

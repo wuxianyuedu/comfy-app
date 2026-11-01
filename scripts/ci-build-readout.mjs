@@ -144,6 +144,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 export function normalizeStageContent(content) {
   const raw = Array.isArray(content)
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     ? content.map((x) => (typeof x === "string" ? x : x == null ? "" : String(x))).join("\n")
     : typeof content === "string"
       ? content

@@ -186,6 +186,7 @@ export async function resolveComfyBase(): Promise<string> {
   if (comfyuiPath) {
     const found = await queryInstanceByPath(comfyuiPath);
     const portBase = baseForLocalPort(found.port);
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (found.port != null && portBase) {
       _resolvedBase = portBase;
       logger.info(
@@ -532,7 +533,9 @@ export async function getSystemStats(): Promise<ComfySystemStats | null> {
       vramUsed,
       vramFree,
       vramTotal,
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       smiVramUsed: smi?.usedMiB == null ? undefined : smi.usedMiB * 1024 * 1024,
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       smiVramTotal: smi?.totalMiB == null ? undefined : smi.totalMiB * 1024 * 1024,
       ramUsed: ramTotal > 0 ? Math.max(0, ramTotal - ramFree) : 0,
       ramTotal,

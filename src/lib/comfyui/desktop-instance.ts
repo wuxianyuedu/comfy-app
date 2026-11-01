@@ -80,6 +80,7 @@ export function findInstallationById(
 }
 
 function deepFindById(node: unknown, id: string, depth = 0): Record<string, unknown> | null {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (depth > 12 || node == null) {
     return null;
   }

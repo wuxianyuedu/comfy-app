@@ -635,6 +635,7 @@ export function planCommands(st) {
    * 这里的计划只服务于「源码里每一个 cnb 工具都有一条对应的计划行」那本账：
    * 对账用例把三个旗标一起拨上，任何一侧新增调用而另一侧没跟都会红。
    * 写标签 / 评论一律**后跟独立回读** —— 回执不算结论。 */
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (st.claim != null) {
     const who = st.handle ?? "<短名>";
     p.push(`cnb issues get-issue --repo ${st.slug} --number ${st.claim} -v`);
@@ -654,6 +655,7 @@ export function planCommands(st) {
       `cnb issues list-issue-comments --repo ${st.slug} --number ${st.claim} --sort -created --page-size 100 -v`,
     );
   }
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (st.release != null) {
     const who = st.handle ?? "<短名>";
     p.push(`cnb issues get-issue --repo ${st.slug} --number ${st.release} -v`);

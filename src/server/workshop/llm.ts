@@ -44,9 +44,11 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
       if (row.apiKey) {
         cfg.apiKey = decryptLlmKey(row.apiKey);
       }
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (row.temperature != null) {
         cfg.temperature = row.temperature;
       }
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (row.maxTokens != null) {
         cfg.maxTokens = row.maxTokens;
       }

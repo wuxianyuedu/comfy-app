@@ -215,6 +215,7 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
               return true;
             }
             const payload = tpl.rawJson ?? null;
+            // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
             if (payload == null) {
               toast.error("下载失败", "该工作流没有可下载的内容");
               return true;

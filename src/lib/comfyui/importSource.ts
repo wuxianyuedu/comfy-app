@@ -214,6 +214,7 @@ export async function reimportFromSource(tpl: {
 
   const mtimeSec = Math.floor(stat.mtimeMs / 1000);
   // 快路径：mtime（秒）没变 → 内容几乎可以肯定也没变。
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (tpl.sourceMtime != null && mtimeSec === tpl.sourceMtime) {
     return { unchanged: true };
   }

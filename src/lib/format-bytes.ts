@@ -4,6 +4,7 @@ import { fixed } from "~/lib/number-format";
  *  GB 取 1 位小数（Task Manager 风格），MB/KB 逐级降档；非法/空值返回 null
  *  （由调用方决定隐藏）。 */
 export function fmtBytes(n?: number | null): string | null {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (n == null || !Number.isFinite(n) || n < 0) {
     return null;
   }

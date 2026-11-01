@@ -703,6 +703,7 @@ export function runIssueAction(ctx) {
   }
   /* `--body-file` 是 `--comment` 的正文，单独出现就是在写一个没有会读它的东西 ——
    * 静默退回主流程会让人以为评论已经写了（§13.10.12 对 `--issue-body-file` 同一条处置）。 */
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (opt.bodyFile != null && opt.comment == null) {
     log(
       "[ship] [ERROR] --body-file 只跟 --comment <号> 一起用：" +
@@ -710,10 +711,14 @@ export function runIssueAction(ctx) {
     );
     return CODE.NOT_RUN;
   }
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   const wantsNewIssue = opt.newIssue != null || newIssueBad.length > 0;
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   const wantsComment = opt.comment != null || commentBad.length > 0;
   const wanted = [
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     opt.claim == null ? null : "--claim",
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     opt.release == null ? null : "--release",
     opt.claims ? "--claims" : null,
     wantsNewIssue ? "--new-issue" : null,
@@ -731,8 +736,11 @@ export function runIssueAction(ctx) {
     opt.closeIssue ? "--close-issue" : null,
     opt.cleanBranch ? "--clean-branch" : null,
     opt.branch ? "--branch" : null,
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     opt.message == null ? null : "--message",
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     opt.messageFile == null ? null : "--message-file",
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     opt.title == null ? null : "--title",
     opt.adds.length > 0 ? "--add" : null,
     opt.only ? "--only" : null,
@@ -804,6 +812,7 @@ export function runIssueAction(ctx) {
   if (opt.claims) {
     return runClaims({ run, log, slug, handle: name });
   }
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (opt.claim != null) {
     return runClaim({
       run,

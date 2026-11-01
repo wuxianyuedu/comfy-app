@@ -127,6 +127,7 @@ export function useSimulatedProgress(tasks: Array<TaskItem>) {
             next[task.id] = Math.min(95, cur + Math.random() * 5);
             dirty = true;
           } else {
+            // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
             if (prev[task.id] != null) {
               delete next[task.id];
               dirty = true;

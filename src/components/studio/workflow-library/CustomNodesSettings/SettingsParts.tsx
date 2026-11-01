@@ -73,6 +73,7 @@ export function PortRow({
  * 「空值显示什么」由调用处经`displayValue` 决定 —— 这里只负责「有值时
  * 怎么成文本」，返回空串即表示「没值」。 */
 function widgetValueToText(v: unknown): string {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (v == null) {
     return "";
   }

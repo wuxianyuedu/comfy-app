@@ -657,6 +657,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   const positionsCount = Object.keys(savedPositions ?? {}).length;
 
   const useSavedPositions =
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     savedPositions != null && positionsCount > 0 && positionsCount >= realNodes.length;
   if (useSavedPositions && savedPositions) {
     const positionsById = savedPositions;

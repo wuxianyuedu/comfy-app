@@ -134,6 +134,7 @@ function indexRawNodes(raw: RawWorkflow): Map<string, IndexedNode> {
         slots.push({
           name: inp.name,
           type: typeof inp.type === "string" ? inp.type : undefined,
+          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           link: inp.link == null ? null : Number(inp.link),
         });
       }
@@ -194,6 +195,7 @@ export function buildRawViewGraph(raw: RawWorkflow): Record<string, ApiWorkflowN
   for (const idx of index.values()) {
     const inputs: Record<string, unknown> = {};
     for (const slot of idx.inputs) {
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       if (slot.link == null) {
         continue;
       }

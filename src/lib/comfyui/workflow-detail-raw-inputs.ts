@@ -170,6 +170,7 @@ async function enrichSubgraphProxyWidgets(input: {
 
       if (Array.isArray(subDef?.nodes)) {
         for (const inN of subDef.nodes) {
+          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           if (inN?.id != null) {
             map.set(String(inN.id), inN);
           }
@@ -564,6 +565,7 @@ export async function buildRawInputs(
         if (!inp || typeof inp.name !== "string") {
           continue;
         }
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         const isConn = inp.link != null;
         /* ComfyUI 在「被暴露的 widget 代理」输入上，把 widget 把手烤成
          *  `{ widget: { name: "…" } }` —— 值存在 `widgets_values` 里，

@@ -118,6 +118,7 @@ function readVersion(src) {
     return { error: `读不到 ${src.file}（${error.code ?? error.message}）` };
   }
   const value = src.extract(text);
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (value == null) {
     return { error: `${src.file} 里提取不出 ${src.label} —— 字段被改名 / 挪位了？` };
   }

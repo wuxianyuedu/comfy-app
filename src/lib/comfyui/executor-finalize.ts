@@ -126,6 +126,7 @@ function executionErrorMessageOf(msg: unknown): unknown {
   }
   // Array.isArray 把 unknown 收窄为 any[]，索引取值后立即断言收口。
   const payload = /* SAFETY: 类型断言已复核 */ msg[1] as Record<string, unknown> | null | undefined;
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   return payload != null && typeof payload === "object" ? payload.exception_message : undefined;
 }
 
@@ -397,6 +398,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // workflow 一并写进 Task.workflowSnapshot，使「任务」与「模板当前版本」彻底
   // 解耦、可独立复现。`source: "execution"` 标记这是执行时自动捕获的独立副本。
   const workflowSnapshot =
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     executedWorkflow == null
       ? undefined
       : {
@@ -472,6 +474,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
   // manifest.seed + TaskImage.seed 持久化，工作流模板后续改动时凭这份快照即可
   // 完整复现本次生成结果。raw 路径为 liblib subgraph 格式（未展开），api 路径为
   // 已展开 graph。
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (executedWorkflow != null) {
     await fs
       .writeFile(path.join(dir, "workflow.json"), JSON.stringify(executedWorkflow, null, 2), "utf8")

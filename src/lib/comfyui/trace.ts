@@ -84,6 +84,7 @@ function localTimestamp(): string {
 
 /** 把任意值转成可读文本（对齐规范 07 §7.10：Error 取 stack，循环引用兜底）。 */
 export function traceStringify(value: unknown): string {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (value == null) {
     return "null";
   }

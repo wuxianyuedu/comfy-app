@@ -34,6 +34,7 @@ export const UI_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
 
 /** Read a string field off an unknown payload（非 string → undefined）。 */
 function strField(o: unknown, key: string): string | undefined {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (o == null || typeof o !== "object") {
     return undefined;
   }
@@ -54,6 +55,7 @@ function pickOutUiOnlyNodes(nodes: Array<unknown>): {
   const kept: Array<unknown> = [];
   const removedIds = new Set<string>();
   for (const n of nodes) {
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (n == null || typeof n !== "object") {
       kept.push(n);
       continue;
@@ -90,6 +92,7 @@ function dropLinksTo(container: Record<string, unknown>, removedIds: Set<string>
     if (Array.isArray(link)) {
       return !removedIds.has(idOf(link[1])) && !removedIds.has(idOf(link[3]));
     }
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (link != null && typeof link === "object") {
       const l = /* SAFETY: 类型断言已复核 */ link as Record<string, unknown>;
       return !removedIds.has(idOf(l.origin_id)) && !removedIds.has(idOf(l.target_id));
@@ -125,15 +128,18 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
 
   const defs = raw.definitions;
   const subs =
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     defs != null && typeof defs === "object"
       ? /* SAFETY: 类型断言已复核 */ (defs as Record<string, unknown>).subgraphs
       : undefined;
   const list: Array<unknown> = Array.isArray(subs)
     ? subs
-    : subs != null && typeof subs === "object"
+    : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      subs != null && typeof subs === "object"
       ? Object.values(subs)
       : [];
   for (const sub of list) {
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (sub == null || typeof sub !== "object") {
       continue;
     }

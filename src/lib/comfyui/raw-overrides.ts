@@ -176,7 +176,8 @@ function seedWidgetSlot(node: RawUiNode): number {
       /* SAFETY: 类型断言已复核 */
       typeof w === "string"
         ? w
-        : w != null && typeof w === "object"
+        : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+          w != null && typeof w === "object"
           ? ((w as JsonRecord).name ?? inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
@@ -198,7 +199,8 @@ function seedWidgetName(node: RawUiNode): string | null {
       /* SAFETY: 类型断言已复核 */
       typeof w === "string"
         ? w
-        : w != null && typeof w === "object"
+        : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+          w != null && typeof w === "object"
           ? ((w as JsonRecord).name ?? inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
@@ -264,12 +266,14 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
   const out = new Map<string, RawSubgraph>();
   const defs = raw.definitions;
   const subs =
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     defs != null && typeof defs === "object"
       ? /* SAFETY: 类型断言已复核 */ (defs as JsonRecord).subgraphs
       : undefined;
   const list: Array<unknown> = Array.isArray(subs)
     ? subs
-    : subs != null && typeof subs === "object"
+    : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      subs != null && typeof subs === "object"
       ? Object.values(subs)
       : [];
   for (const sg of list) {
@@ -337,6 +341,7 @@ function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTa
 
   const linksById = new Map<string, SubgraphLink>();
   for (const l of Array.isArray(sub.links) ? sub.links : []) {
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (l == null || typeof l !== "object") {
       continue;
     }
@@ -349,6 +354,7 @@ function collectSubgraphTargets(raw: JsonRecord, wrapper: RawUiNode): SubgraphTa
 
   const defInputs: Array<SubgraphPin> = [];
   for (const i of Array.isArray(sub.inputs) ? sub.inputs : []) {
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (i == null || typeof i !== "object") {
       continue;
     }
@@ -468,6 +474,7 @@ function applySubgraphInteriorOverrides(
  * 只改深拷贝出来的载荷，库里的工作流不受影响。
  */
 function neutralizePromotedHostDrift(raw: JsonRecord): void {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
     return;
   }
@@ -589,7 +596,8 @@ function mapInputSlotToWidgetSlot(node: RawUiNode, inputIndex: number): number {
       /* SAFETY: 类型断言已复核 */
       typeof inp.widget === "string"
         ? inp.widget
-        : inp.widget != null && typeof inp.widget === "object"
+        : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+          inp.widget != null && typeof inp.widget === "object"
           ? ((inp.widget as JsonRecord).name ?? inp.name)
           : inp.name;
     if (typeof wname === "string" && /seed|noise_seed/i.test(wname)) {
@@ -633,6 +641,7 @@ export function applyApiOverrides(
   graph: unknown,
   overrides?: Array<RawWorkflowOverride>,
 ): JsonRecord {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (graph == null || typeof graph !== "object" || Array.isArray(graph)) {
     return {};
   }
@@ -646,10 +655,12 @@ export function applyApiOverrides(
       continue;
     }
     const nodeRaw = out[ov.nodeId];
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (nodeRaw == null || typeof nodeRaw !== "object" || Array.isArray(nodeRaw)) {
       continue;
     }
     const inputsRaw = /* SAFETY: 类型断言已复核 */ (nodeRaw as JsonRecord).inputs;
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (inputsRaw == null || typeof inputsRaw !== "object" || Array.isArray(inputsRaw)) {
       continue;
     }
