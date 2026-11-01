@@ -139,7 +139,9 @@ export default function LoginPage() {
           >
             <SelectChip
               className="flex-1 justify-center px-4 py-2"
-              onClick={() => switchMode("signin")}
+              onClick={() => {
+                switchMode("signin");
+              }}
               selected={mode === "signin"}
               shape="segment"
             >
@@ -147,7 +149,9 @@ export default function LoginPage() {
             </SelectChip>
             <SelectChip
               className="flex-1 justify-center px-4 py-2"
-              onClick={() => switchMode("register")}
+              onClick={() => {
+                switchMode("register");
+              }}
               selected={mode === "register"}
               shape="segment"
             >
@@ -171,7 +175,9 @@ export default function LoginPage() {
                 <Button
                   aria-label="关闭提示"
                   className="text-primary/70 hover:text-primary"
-                  onClick={() => setNotice(null)}
+                  onClick={() => {
+                    setNotice(null);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >
@@ -209,7 +215,9 @@ export default function LoginPage() {
                 <Button
                   aria-label={showPassword ? "隐藏密码" : "显示密码"}
                   className="text-ink-fainter hover:bg-surface-2 hover:text-ink rounded-md"
-                  onClick={() => setShowPassword((value) => !value)}
+                  onClick={() => {
+                    setShowPassword((value) => !value);
+                  }}
                   size="icon-sm"
                   tabIndex={-1}
                   variant="ghost"
@@ -231,7 +239,9 @@ export default function LoginPage() {
               <div className="text-right">
                 <Button
                   className="text-primary/90 hover:text-primary h-auto p-0 text-sm"
-                  onClick={() => setNotice("本地账号密码重置功能即将上线，如需帮助请联系管理员")}
+                  onClick={() => {
+                    setNotice("本地账号密码重置功能即将上线，如需帮助请联系管理员");
+                  }}
                   variant="link"
                 >
                   忘记密码?
@@ -258,14 +268,18 @@ export default function LoginPage() {
           <div className="grid grid-cols-2 gap-3">
             <Button
               className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter h-auto rounded-xl py-2.5"
-              onClick={() => setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录")}
+              onClick={() => {
+                setNotice("GitHub 第三方登录即将上线，当前请使用邮箱账号登录");
+              }}
               variant="outline"
             >
               GitHub
             </Button>
             <Button
               className="border-border-strong bg-subtle text-ink-soft hover:text-ink hover:border-ink-fainter h-auto rounded-xl py-2.5"
-              onClick={() => setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录")}
+              onClick={() => {
+                setNotice("Google 第三方登录即将上线，当前请使用邮箱账号登录");
+              }}
               variant="outline"
             >
               Google

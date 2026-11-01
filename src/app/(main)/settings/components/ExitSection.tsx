@@ -30,11 +30,11 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
           <Checkbox
             checked={c.drafts.settings.exitKillComfyui ?? false}
             id="exit-kill-comfyui"
-            onCheckedChange={(next) =>
+            onCheckedChange={(next) => {
               c.patchSettings({
                 exitKillComfyui: next === true,
-              })
-            }
+              });
+            }}
           />
           <FieldLabel className="text-ink/80 text-sm" htmlFor="exit-kill-comfyui">
             关闭应用时连带关闭 ComfyUI
@@ -52,11 +52,11 @@ export function ExitSection({ c }: { c: ReadySettingsPageController }) {
           <Checkbox
             checked={c.drafts.settings.exitKillOllama ?? true}
             id="exit-kill-ollama"
-            onCheckedChange={(next) =>
+            onCheckedChange={(next) => {
               c.patchSettings({
                 exitKillOllama: next === true,
-              })
-            }
+              });
+            }}
           />
           <FieldLabel className="text-ink/80 text-sm" htmlFor="exit-kill-ollama">
             关闭应用时连带关闭 Ollama

@@ -51,7 +51,9 @@ export function UpdateCheckSection() {
         <Checkbox
           checked={updateCheckEnabled}
           id="local-update-check-enabled"
-          onCheckedChange={(next) => useUpdateCheckStore.getState().setEnabled(next === true)}
+          onCheckedChange={(next) => {
+            useUpdateCheckStore.getState().setEnabled(next === true);
+          }}
         />
         <FieldLabel className="text-ink/80 text-sm" htmlFor="local-update-check-enabled">
           开启运行期「本地更新需重启」检测

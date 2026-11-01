@@ -45,7 +45,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
     <SettingsCard title="创作后端（ComfyUI）">
       <Field
         label="ComfyUI 路径（源码根或桌面版实例根）"
-        onChange={(value) => c.patchSettings({ comfyuiPath: value })}
+        onChange={(value) => {
+          c.patchSettings({ comfyuiPath: value });
+        }}
         placeholder="例如 D:\\ComfyUI 或 D:\\Comfy-Desktop\\ComfyUI-Installs\\ComfyUI2"
         value={c.drafts.settings.comfyuiPath}
       />
@@ -59,7 +61,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
       </p>
       <Field
         label="comfy-cli 解释器（Python 绝对路径）"
-        onChange={(value) => c.patchSettings({ comfyCliPython: value })}
+        onChange={(value) => {
+          c.patchSettings({ comfyCliPython: value });
+        }}
         placeholder="例如 D:\\tools\\python-venv\\comfy-cli\\Scripts\\python.exe"
         value={c.drafts.settings.comfyCliPython}
       />
@@ -92,11 +96,11 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         <>
           <Field
             label="ComfyUI 端口"
-            onChange={(value) =>
+            onChange={(value) => {
               c.patchSettings({
                 comfyuiPort: Math.max(0, Number(value) || 0),
-              })
-            }
+              });
+            }}
             placeholder={`留空使用默认 ${c.comfyDefaultPort}`}
             value={c.drafts.settings.comfyuiPort > 0 ? String(c.drafts.settings.comfyuiPort) : ""}
           />
@@ -107,7 +111,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
           </p>
           <Field
             label="ComfyUI 启动参数（可选）"
-            onChange={(value) => c.patchSettings({ comfyuiExtraArgs: value })}
+            onChange={(value) => {
+              c.patchSettings({ comfyuiExtraArgs: value });
+            }}
             placeholder="例如 --input-directory D:\\ComfyUI-Shared\\input"
             value={c.drafts.settings.comfyuiExtraArgs}
           />
@@ -126,7 +132,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         <Checkbox
           checked={c.drafts.settings.comfyuiAutoStart ?? true}
           id="comfyui-autostart"
-          onCheckedChange={(next) => c.patchSettings({ comfyuiAutoStart: next === true })}
+          onCheckedChange={(next) => {
+            c.patchSettings({ comfyuiAutoStart: next === true });
+          }}
         />
         <FieldLabel className="text-ink/80 text-sm" htmlFor="comfyui-autostart">
           提交任务时 ComfyUI 未运行则自动启动
@@ -136,7 +144,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         <Checkbox
           checked={c.drafts.settings.autoSyncLocalWorkflow ?? false}
           id="auto-sync-local-workflow"
-          onCheckedChange={(next) => c.patchSettings({ autoSyncLocalWorkflow: next === true })}
+          onCheckedChange={(next) => {
+            c.patchSettings({ autoSyncLocalWorkflow: next === true });
+          }}
         />
         <FieldLabel className="text-ink/80 text-sm" htmlFor="auto-sync-local-workflow">
           查看本地文件工作流时自动同步最新内容
@@ -158,7 +168,9 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         </p>
         <Button
           className="border-border text-ink-muted hover:text-ink mt-2 h-auto gap-1 rounded-lg px-2.5 py-1"
-          onClick={() => emitAppEvent("workspace:navigate", { view: "comfyui" })}
+          onClick={() => {
+            emitAppEvent("workspace:navigate", { view: "comfyui" });
+          }}
           size="xs"
           variant="outline"
         >

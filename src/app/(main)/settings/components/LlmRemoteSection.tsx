@@ -41,7 +41,9 @@ export function LlmRemoteSection({
           <span className="text-ink-fainter text-2xs tabular-nums">{entries.length}</span>
           <Button
             className="text-muted-foreground hover:text-ink text-2xs ml-auto h-auto rounded-md px-2 py-1"
-            onClick={() => d.openAddDialog(kind)}
+            onClick={() => {
+              d.openAddDialog(kind);
+            }}
             size="xs"
             variant="outline"
           >
@@ -80,7 +82,9 @@ export function LlmRemoteSection({
                     <Hint label="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）">
                       <Button
                         className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
-                        onClick={() => d.openUsageTest(kind, entry)}
+                        onClick={() => {
+                          d.openUsageTest(kind, entry);
+                        }}
                         size="xs"
                         variant="outline"
                       >
@@ -90,7 +94,9 @@ export function LlmRemoteSection({
                     <Hint label="编辑接口地址 / 密钥 / 名称">
                       <Button
                         className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
-                        onClick={() => d.openEditDialog(entry)}
+                        onClick={() => {
+                          d.openEditDialog(entry);
+                        }}
                         size="xs"
                         variant="outline"
                       >
