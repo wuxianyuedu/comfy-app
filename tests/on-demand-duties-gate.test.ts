@@ -137,6 +137,17 @@ function ledgerDuties(overrides: { extra?: Array<DutyRow> } = {}): {
         fact: { kind: "gate-not-in-all", gate: "dailyAttendance" },
         executor: "pnpm check:daily-attendance",
       },
+      {
+        /* 同上：跟着真 `quality-gate.mjs` 的 `mirrorAttendance`（`run: false`）走。
+         * ISSUE #3046 —— 它问的是「GitHub 那一侧收到过没有」，也是上网问平台，
+         * 所以同属**按需入口**而不是 `all` 的一档。夹具的索引必须跟着真注册表长：
+         * 少这一行，方向②（机器事实没被登记）就会把这条判据自己念成红。 */
+        id: "mirror-attendance",
+        name: "GitHub 镜像那一格的出勤",
+        notInHook: "要上网问平台（一次构建列表 + 至多三跑的逐格正文）",
+        fact: { kind: "gate-not-in-all", gate: "mirrorAttendance" },
+        executor: "pnpm check:mirror-attendance",
+      },
       ...(overrides.extra ?? []),
     ],
   };

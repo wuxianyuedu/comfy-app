@@ -4338,6 +4338,7 @@ e2e」变成「先花十分钟构建」。要那一档的人用 `PNPM_START=1` �
 | 依赖漏洞扫描（`check-dependency-audit.mjs`）     | 网络请求（离线 / registry 抖动不该变成提交失败）                                                                                                                                                   | `pnpm check:all` 的默认档（`quality-gate.mjs` 的 `dependencyAudit`）                                                                                                                                                                              | `quality-gate.mjs` 的 `dependencyAudit`                                                                          |
 | `tw4-canonical-report` / `tw4-spacing-canonical` | 起 Tailwind 引擎（~6s），判的是 CSS 等价改写而非正确性                                                                                                                                             | 按需召唤 + `--check` 棘轮                                                                                                                                                                                                                         | `.gate-executor-ledger.json` 的 `onDemand`                                                                       |
 | **每日档的出勤**（`check-daily-attendance.mjs`） | 要上网问平台（一次 `get-build-logs` + 至多三跑逐格详情）。把网络请求放进每次提交的编辑循环是另一回事 —— 同 §13.5.13 那条「`git fetch` 是人的动作，判据自身不做网络请求」                           | 按需召唤：`pnpm check:daily-attendance`（0 出勤 / 1 缺勤 / **2 没结论或取不到读数 —— 退 2 不算绿**）。谁在什么时候该跑：任何一次拿「平台那一档在跑」当本地豁免理由的争论现场，以及换时刻 / 撤档之后第一次核对（ISSUE #2114 / §13.5.23 末节）      | `quality-gate.mjs` 的 `GATES.dailyAttendance`（`run: false`）+ `.on-demand-duties.json` 的 `daily-attendance` 行 |
+| **GitHub 镜像的出勤**（`check-mirror-attendance.mjs`） | 同样是上网问平台（一次构建列表 + 至多三跑的逐格正文）；而且它问的是**外部仓库收到没有**，一次 PR 改不动出网与令牌（ISSUE #3046）                                                            | 按需召唤：`pnpm check:mirror-attendance`（0 出勤 / 1 缺勤 / **2 没结论 —— 退 2 不算绿**）。⚠️ 那一格是**读数档**（#3051 的 `--readout`），它的 `status` 不承载判决 ⇒ 出勤只从正文那句三态原值认；七类形状各有下一动作，不许念成同一句（详见 §13.5.4 同族那一节） | `quality-gate.mjs` 的 `GATES.mirrorAttendance`（`run: false`）+ `.on-demand-duties.json` 的 `mirror-attendance` 行 |
 | 提交信息里的声明 ⇄ 事实（§11.23.5）              | **本地钩子连形态都看不到**（丢失发生在平台侧 squash）                                                                                                                                              | `pnpm check:base:batch` 的 `CHAINED_STEPS`（合并前 / 事后盘点，人点一次）                                                                                                                                                                         | `base-check/chained-steps.mjs` 的 `CHAINED_STEPS`                                                                |
 | **合并前的固定动作**（`pnpm check:premerge`）    | 平台侧 squash 合并**不跑本地钩子**、本地看不到那次合并；单次分钟级（钩子内三次实测 116 / 84 / 83 秒、单独跑 336 秒，见 §13.6.2.1），挂进每次提交是拿它换一个不会天天变的结论（§13.6.2 / §11.23.5） | `.githooks/pre-push` 在 HEAD 或上游引用变动时自动跑（§13.6.2.1）；人仍可手工敲一次，或在 PR 里 `@` 评审 NPC 唤起一轮                                                                                                                              | `quality-gate.mjs` 的 `GATES.premerge`（`run: false`）+ `scripts/premerge-proof.mjs`                             |
 
@@ -5169,6 +5170,48 @@ CI 去执行」。答成「能，但**不是挪到 PR 那一条**」，理由有
 见 #2114 出路 2）。第一次 `0 0` 派发的真读数（2026-10-23 00:00:17，
 `cnb-hk7-1k5i5euak`，10 格全 success）跑出来的就是这一档的绿：
 `出勤 ✓ … 在 0.8 小时前跑完`。
+
+**同一族的第二个入口：`pnpm check:mirror-attendance`（ISSUE #3046）**
+
+上面那一档问的是「每日那一跑执行了没有」，这一档问的是「**GitHub 那一侧有没有 receiving**」——
+双远端（cnb 主）这条线要把一部分格从 cnb 挪去 GitHub Actions，而「能不能挪」的前置不是
+「格名在不在清单里」，是「镜像那一跳到底通过没有」。这句话此前没有只读出口：镜像仓是私有的
+（匿名 `GET /repos/wuxianyuedu/comfy-app` = 404），唯一的证据躺在 cnb 那一格的日志正文里。
+
+⚠️ **为什么只能从正文认，不能从格状态认**（这是 #3051 换来的一个必然后果，不是实现偷懒）：
+那一格自 #3051 起在主列，但形态是**读数档**（`ci-github-mirror-push.mjs --readout`，恒不退非零 ——
+主列某格 `error` 会把排在它后面的格整片 `skipped`，而 GitHub 那一跳坏了既不该拦合并、也不该被
+记成门禁的红）。于是它的 `status` 不再承载判决：实测 `cnb-vj3-1k6ddf69d` 那一格写的是
+`status=success`，正文却是 `推送失败（exit 128）：schannel: server closed abruptly`。
+拿 status 判出勤会把「推不通」念成「天天出勤」。
+
+- **判什么**：窗口内（默认 24h）PR 那些跑里，`GitHub 镜像同步` 这一格有没有至少一次
+  「已推 · 已派发」；没有的话各是什么形状。形状是**七类**、各有自己的下一动作，
+  **不许念成同一句**（#3046 记的实测教训：TCP 连不上被念成「令牌活不活」，人就当真去查令牌）——
+  `egress` / `repo-missing` / `token-scope` / `push-failed`（含 Schannel 断流这一形）/
+  `dispatch-rejected` / `missing-prereq` / `no-cell`（这一跑里根本没有这一格 ⇒ 前移未生效
+  或不是 PR 档，**不算缺勤**）/ `unreadable`（格子找到而正文取不到 ⇒ 也不构成「它没跑」的证据）；
+- **不判什么**：GitHub 那侧的 workflow 跑成什么 —— 那要令牌与仓库侧读权，本仓够不着，
+  归「按同一笔 sha 回读判决」那一单（#3051 期望第 3 条：那一步之后这一格才翻成 fail-closed）；
+- **三态退码**与取数纪律逐字沿用上面那一档：`0` 出勤 / `1` 缺勤 / **`2` 没结论**
+  （列表取不到、窗口没盖满、一格正文都没取到 —— 退 2 不算绿也不算红）；覆盖自证照念
+  「N 页 / 最早一条 <时刻>」；逐格判定与取数全部复用 `ci-build-readout.mjs` 那一份
+  （`classifyBuildOutcome` / `findStageMatches` / `fetchStageDetail`），这里不写第二份；
+- **什么时候跑**：决定「从 `COMFYAPP_CI_GATES` 摘哪一格」之前一次，通道形状每变一次之后一次
+  （业主口径 2026-11-02：先打通通道 + 建回读格，再摘格 —— **在此之前 GATES 里的名字一个不许摘**）。
+  第一次真读数里带出一条**要一起记的教训**：默认 `--limit 3` 那一跑念的是
+  `缺勤 ✗ 窗口 48h 内 2 跑有这一格、零次推成（egress×1、push-failed×1、no-cell×1）`
+  （覆盖自证「8 页 / 480 条 · 最早 2026-10-30T15:30:03Z」），而把面放到 4 跑就撞到
+  `cnb-8uu-1k6dbf7oc` 那句「已推 · 已派发」——**那句「零次推成」是取数面比结论窄造出来的假缺勤**
+  （#2392 那一族在一个新入口上当场复发）。于是默认放到 8 跑，headline 的主语也从「窗口内」改成
+  「最近读的 N 跑」并明写「未逐跑读 M 跑」。现在的默认读数（24h、读 8 跑）：
+  `出勤 ✓ 最近读的 8 跑里 1/6 跑「已推 · 已派发」（最近：cnb-8uu-1k6dbf7oc）· 窗口 24h 内共 189 跑`，
+  形状分布 `egress×1 / push-failed×3 / token-scope×1 / no-cell×2` —— 即通道**至少真通过过一次**，
+  失败是间歇的，断点会在写那一跳（Schannel）或更早的出网层；「摘格」的前置仍不成立。
+- 登记同样两处：`quality-gate.mjs` 的 `GATES.mirrorAttendance`（`run: false`）+
+  `.on-demand-duties.json` 的 `mirror-attendance` 行（`fact.kind = gate-not-in-all`），
+  理由与「谁在什么时候跑」在那两处；也**不**进 `.gate-executor-ledger.json` 的 `onDemand`
+  （那条口径是「没有任何执行者」，而它在 `check:all` 注册表里有名字）。
 
 这张表里**原本还有一行**「R5 行数棘轮 → `@` 跑 `check-file-structure.cjs --strict`」，随
 ISSUE #1404 摘掉：基线 `total: 0`（那句「本地保持只提醒」的前提「挂着 11 个存量」不再成立）之后，
