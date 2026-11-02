@@ -19,18 +19,8 @@
  * `production.characters` 工作副本做双向同步时形状一致。
  */
 
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
-import {
-  relations,
-  type InferInsertModel,
-  type InferSelectModel,
-} from "drizzle-orm";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { relations, type InferInsertModel, type InferSelectModel } from "drizzle-orm";
 import { cuid, dateNotNull, user } from "./schema-common";
 
 export const series = sqliteTable(
@@ -177,19 +167,16 @@ export const episodeRelations = relations(episode, ({ one, many }) => ({
 export const characterRelations = relations(character, ({ many }) => ({
   episodeLinks: many(episodeCharacter),
 }));
-export const episodeCharacterRelations = relations(
-  episodeCharacter,
-  ({ one }) => ({
-    episode: one(episode, {
-      fields: [episodeCharacter.episodeId],
-      references: [episode.id],
-    }),
-    character: one(character, {
-      fields: [episodeCharacter.characterId],
-      references: [character.id],
-    }),
+export const episodeCharacterRelations = relations(episodeCharacter, ({ one }) => ({
+  episode: one(episode, {
+    fields: [episodeCharacter.episodeId],
+    references: [episode.id],
   }),
-);
+  character: one(character, {
+    fields: [episodeCharacter.characterId],
+    references: [character.id],
+  }),
+}));
 
 export type Series = InferSelectModel<typeof series>;
 export type Season = InferSelectModel<typeof season>;

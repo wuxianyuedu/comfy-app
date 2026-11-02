@@ -20,9 +20,7 @@ import { expect, test } from "@playwright/test";
  * 不写 if 分支 —— 分支型断言在另一支上会静默不跑。
  */
 test.describe("模型库 @critical", () => {
-  test("这一屏装配起来了：页头、顶栏动作与内容区（空态或筛选排）都在", async ({
-    page,
-  }) => {
+  test("这一屏装配起来了：页头、顶栏动作与内容区（空态或筛选排）都在", async ({ page }) => {
     await page.goto("/models");
     /* 页头名字**只有一处能改**：注册表 `NavItems.tsx` 里这一项
      * `label: "模型"`（`viewLabel` 缺省），`pageHeaderTitle()` 出的就是它。
@@ -34,12 +32,8 @@ test.describe("模型库 @critical", () => {
     /* 顶栏动作（`ViewActions`；本页不在 AppShell 里，它退化成屏内右对齐一行）：
      * 目录配置入口与搜索框。空库与有数据两种状态下这两颗**都在** —— 找不到
      * 目录是配置问题，入口不能跟着数据一起消失。 */
-    await expect(
-      page.getByRole("button", { name: "模型目录配置" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("textbox", { name: "搜索模型名称" }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "模型目录配置" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "搜索模型名称" })).toBeVisible();
 
     /* 内容区的形状随库状态分两支，`or()` 让两支都写进断言、哪支在场判哪支
      * （不写 if —— 分支型断言在另一支上会静默不跑）：
@@ -54,9 +48,7 @@ test.describe("模型库 @critical", () => {
     ).toBeVisible();
   });
 
-  test("页面上不存在指向 /models/xxx 的链接（那条路由不存在）", async ({
-    page,
-  }) => {
+  test("页面上不存在指向 /models/xxx 的链接（那条路由不存在）", async ({ page }) => {
     await page.goto("/models");
     /* 有数据时卡片是按钮、没数据时压根没有卡 —— 两种库状态下这条都该成立。
      * `studio/ModelLibrary` 的卡片同样不下发 `/models/<id>` 链接

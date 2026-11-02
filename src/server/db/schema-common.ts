@@ -8,12 +8,7 @@
  * 则不同：它在 `() => user.id` 惰性回调里才被触碰，留在 schema.ts 没有问题。
  */
 
-import {
-  customType,
-  integer,
-  sqliteTable,
-  text,
-} from "drizzle-orm/sqlite-core";
+import { customType, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { createId } from "@paralleldrive/cuid2";
 
 export const dateNotNull = customType<{ data: Date; driverData: string }>({
@@ -39,9 +34,7 @@ export const user = sqliteTable("user", {
   id: cuid(),
   name: text("name"),
   email: text("email").notNull().unique(),
-  emailVerified: integer("emailVerified", { mode: "boolean" })
-    .notNull()
-    .default(false),
+  emailVerified: integer("emailVerified", { mode: "boolean" }).notNull().default(false),
   image: text("image"),
   password: text("password"),
   createdAt: dateNotNull("createdAt")

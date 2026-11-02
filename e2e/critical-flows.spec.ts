@@ -1121,7 +1121,9 @@ test.describe("应用页签与全屏视图 @critical", () => {
        *      （面板的拦截器把浏览器的 console 一起接了），用同名文本会让夹具
        *      与真实噪声撞在一起，计数随机器/时序漂。 */
       for (let i = 1; i <= 3; i += 1) {
-        await page.evaluate((n) => console.error(`e2e 控制台样本 ${n}`), i);
+        await page.evaluate((n) => {
+          console.error(`e2e 控制台样本 ${n}`);
+        }, i);
       }
       /* 拦截器经 `queueMicrotask` 入库，而面板一页 200 条、窗口**锚定**在打开
        * 面板那一刻（真实日志文件同时在往里灌行），所以「这批行马上可见」不成立

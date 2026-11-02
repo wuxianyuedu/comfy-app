@@ -99,7 +99,9 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
           return null;
         }
       },
-      write: async (f, content) => writeFileSync(f, content, "utf8"),
+      write: async (f, content) => {
+        writeFileSync(f, content, "utf8");
+      },
     });
     expect(memo.load().checkpoint).toBe("a.safetensors");
     rmSync(file);
@@ -120,7 +122,9 @@ describe("settings 文件的指纹 memo（手改文件要能被发现）", () =>
         return readFileSyncSync(f, "utf8");
       },
       fingerprint: () => null,
-      write: async (f, content) => writeFileSync(f, content, "utf8"),
+      write: async (f, content) => {
+        writeFileSync(f, content, "utf8");
+      },
     });
     await memo.save({ checkpoint: "a.safetensors" });
     memo.load();

@@ -588,7 +588,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
       /* 识别出的根因（pip/uv 缺失、缺依赖）拼进文案：让失败直接说「该动哪个
        * 环境」，而不是只留一句「进程未出现」让人翻日志。识别不出就回落固定文案。 */
       const diag = diagnoseFromRedirectLogs();
-      return diag === null ? `${head}${common}` : `${head}${diag}。${common}`;
+      return diag !== null ? `${head}${diag}。${common}` : `${head}${common}`;
     },
   });
   if (!result.ok) {
@@ -873,7 +873,7 @@ async function launchBoundMode(host: LaunchHost, ctx: EnsureCtx): Promise<Ensure
 export async function probeChildReady(child: ReturnType<typeof spawn>): Promise<string | null> {
   const childPid = child.pid;
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  const listenPort = childPid == null ? null : await findPidListeningPort(childPid);
+  const listenPort = childPid != null ? await findPidListeningPort(childPid) : null;
   if (listenPort === null) {
     return null;
   }

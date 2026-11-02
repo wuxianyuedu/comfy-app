@@ -27,15 +27,11 @@ const GATE = path.resolve(__dirname, "../scripts/quality-gate.mjs");
 
 describe("quality-gate 失败路径（ISSUE #2588）", () => {
   it("未知门禁（--mode）⇒ 红话点名可选值并退 2，不是 ReferenceError", () => {
-    const r = spawnSync(
-      process.execPath,
-      [GATE, "--mode", "definitely-not-a-gate"],
-      {
-        encoding: "utf8",
-        windowsHide: true,
-        timeout: 60_000,
-      },
-    );
+    const r = spawnSync(process.execPath, [GATE, "--mode", "definitely-not-a-gate"], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 60_000,
+    });
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(out).toContain("未知门禁：definitely-not-a-gate");
     expect(out).toContain("all");
@@ -55,19 +51,13 @@ describe("quality-gate 失败路径（ISSUE #2588）", () => {
    * stderr 里必须在，**stdout 里必须不在**（只断前者，红行同时出现在两条流也算过）。
    */
   it("红的判决行走 stderr、不留在 stdout（`2>` 捞出来的那一屏要完整）", () => {
-    const r = spawnSync(
-      process.execPath,
-      [GATE, "--mode", "definitely-not-a-gate"],
-      {
-        encoding: "utf8",
-        windowsHide: true,
-        timeout: 60_000,
-      },
-    );
+    const r = spawnSync(process.execPath, [GATE, "--mode", "definitely-not-a-gate"], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 60_000,
+    });
     expect(r.status, `${r.stdout ?? ""}${r.stderr ?? ""}`).toBe(2);
-    expect(r.stderr).toContain(
-      "[红] quality-gate（未知门禁：definitely-not-a-gate",
-    );
+    expect(r.stderr).toContain("[红] quality-gate（未知门禁：definitely-not-a-gate");
     expect(r.stdout ?? "").not.toContain("[红]");
   });
 
@@ -82,11 +72,11 @@ describe("quality-gate 失败路径（ISSUE #2588）", () => {
    * 它在不在，就是这个入口有没有真的开始跑的行为证据。
    */
   it("--mode=<不存在的档名> ⇒ 退 2 走未知门禁，且不跑任何一档（旧形态是静默全量）", () => {
-    const r = spawnSync(
-      process.execPath,
-      [GATE, "--mode=definitely-not-a-gate"],
-      { encoding: "utf8", windowsHide: true, timeout: 60_000 },
-    );
+    const r = spawnSync(process.execPath, [GATE, "--mode=definitely-not-a-gate"], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: 60_000,
+    });
     const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
     expect(r.status, out).toBe(2);
     expect(out).toContain("未知门禁：definitely-not-a-gate");

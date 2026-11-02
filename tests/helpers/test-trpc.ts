@@ -49,7 +49,6 @@ export function createTestTRPC() {
  * —— 它在 DOM 宿主下同样取 `window.location.origin`，这里是它的测试版对偶。
  */
 export function testTrpcEndpoint(): string {
-  const origin =
-    typeof window === "undefined" ? "http://localhost" : window.location.origin;
+  const origin = typeof window === "undefined" ? "http://localhost" : window.location.origin;
   return `${origin}/api/trpc`;
 }

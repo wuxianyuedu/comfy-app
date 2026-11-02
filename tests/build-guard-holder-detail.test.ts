@@ -19,10 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const SRC = fs.readFileSync(
-  path.resolve(__dirname, "../tools/scripts/Build-Guard.ps1"),
-  "utf8",
-);
+const SRC = fs.readFileSync(path.resolve(__dirname, "../tools/scripts/Build-Guard.ps1"), "utf8");
 
 describe("Build-Guard.ps1 占用者清单补充命令行/父PID", () => {
   it("用 CIM(Win32_Process) 取命令行与父 PID（Get-Process 拿不到）", () => {

@@ -53,9 +53,7 @@ describe("前缀锚定类：出现即红（不看熵）", () => {
 
   it("形状清单不会命中写它自己的那行源码（自指面）", () => {
     // 脚本与用例文件里都有这些字面正则；`--all` 那档要能扫过它们自己。
-    expect(
-      shapesOf("const PEM_BLOCK_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;"),
-    ).toEqual([]);
+    expect(shapesOf("const PEM_BLOCK_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;")).toEqual([]);
     expect(shapesOf(String.raw`re: /\bghp_[0-9A-Za-z]{36,}\b/g`)).toEqual([]);
   });
 });
@@ -68,17 +66,13 @@ describe("PEM：头 + 足够长的实体才算私钥", () => {
 
   it("负控制：redaction 自己的假夹具（正文 6 字符）⇒ 不红", () => {
     expect(
-      shapesOf(
-        "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----",
-      ),
+      shapesOf("-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----"),
     ).toEqual([]);
   });
 
   it("负控制：中文占位正文 ⇒ 不红", () => {
     expect(
-      shapesOf(
-        "-----BEGIN PRIVATE KEY-----\n<示例私钥内容>\n-----END PRIVATE KEY-----",
-      ),
+      shapesOf("-----BEGIN PRIVATE KEY-----\n<示例私钥内容>\n-----END PRIVATE KEY-----"),
     ).toEqual([]);
   });
 
@@ -110,11 +104,10 @@ describe("赋值式：长度与字符类别两道都要过", () => {
   });
 
   it("负控制：CI 占位值（全小写 + 连字符 = 只有两类）⇒ 不红", () => {
-    const line =
-      'BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"';
-    expect(
-      charClasses("ci-placeholder-secret-not-for-production-use"),
-    ).toBeLessThan(MIN_VALUE_CLASSES);
+    const line = 'BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"';
+    expect(charClasses("ci-placeholder-secret-not-for-production-use")).toBeLessThan(
+      MIN_VALUE_CLASSES,
+    );
     expect(shapesOf(line)).toEqual([]);
   });
 
@@ -129,11 +122,9 @@ describe("赋值式：长度与字符类别两道都要过", () => {
 
 describe("URL 内嵌凭据", () => {
   it("真口令 ⇒ 命中", () => {
-    expect(
-      shapesOf(
-        `endpoint: https://admin:${FAKE_URL_PASS}@10.0.0.5:8188/history`,
-      ),
-    ).toContain("URL 内嵌凭据");
+    expect(shapesOf(`endpoint: https://admin:${FAKE_URL_PASS}@10.0.0.5:8188/history`)).toContain(
+      "URL 内嵌凭据",
+    );
   });
 
   it("负控制：教学写法（user:pass@host / user:password@host）⇒ 不红", () => {
@@ -146,9 +137,7 @@ describe("URL 内嵌凭据", () => {
   });
 
   it("负控制：模板形态的口令（`${TOKEN}` / `{{ token }}`）⇒ 不红 —— 真泄漏落的是展开后的值", () => {
-    expect(
-      shapesOf("url = `https://admin:${DATABASE_PASSWORD}@db.internal:3306`"),
-    ).toEqual([]);
+    expect(shapesOf("url = `https://admin:${DATABASE_PASSWORD}@db.internal:3306`")).toEqual([]);
     expect(shapesOf("endpoint: https://user:{{ token }}@host/x")).toEqual([]);
   });
 });
@@ -183,9 +172,7 @@ describe("出口：只点名位置与形状，绝不回显内容", () => {
 
   it("scanText 的返回形状里没有内容（偏移 + 形状名而已）", () => {
     const hits = scanText(`x = "${FAKE_GHP}"`);
-    expect(JSON.stringify(hits)).not.toContain(
-      "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8",
-    );
+    expect(JSON.stringify(hits)).not.toContain("A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8");
     expect(hits[0]).toHaveProperty("shape");
     expect(hits[0]).not.toHaveProperty("text");
     expect(hits[0]).not.toHaveProperty("matched");
@@ -194,8 +181,7 @@ describe("出口：只点名位置与形状，绝不回显内容", () => {
   it("出路那段只教「怎么写占位」，不含任何跳过旗标", () => {
     let out = "";
     main(["--staged"], {
-      stagedLines: () =>
-        new Map([["a.md", [{ line: 1, text: `key: ${FAKE_SK}` }]]]),
+      stagedLines: () => new Map([["a.md", [{ line: 1, text: `key: ${FAKE_SK}` }]]]),
       write: (s: string) => {
         out += s;
       },
@@ -283,9 +269,7 @@ describe("真仓自证：今天的存量与那个分母", () => {
   it("全仓被跟踪文本 0 命中，且分母不是空（排除名单没把整个仓排掉）", () => {
     const { texts } = trackedTexts();
     expect(
-      scanInputs(
-        texts.map((t) => ({ file: t.file, rows: rowsOfText(t.text) })),
-      ),
+      scanInputs(texts.map((t) => ({ file: t.file, rows: rowsOfText(t.text) }))),
       "今天全仓有命中 —— 这条判据「0 命中的存量」前提已经变了，先立案再改判据（§13.10.9）",
     ).toEqual([]);
     expect(texts.length).toBeGreaterThan(2000);
