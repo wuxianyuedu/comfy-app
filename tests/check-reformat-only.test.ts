@@ -507,6 +507,31 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(r.output).toContain("格式化提交分离");
   });
 
+  /* **空提交不参与护栏 ①**（ISSUE #3034）。
+   *
+   * 现场：`pnpm ship --rerun-ci` 推的那笔空提交正文固定为
+   * `ci: rerun (ship --rerun-ci)`、不带任何尾注，而它进的是 PR 区间。PR #2990
+   * 重跑三次之后，一个原本合规的迁移 PR 被 `166 份里 118 份纯格式化` 判红
+   * （构建 `cnb-4ig-1k6csckqj`）；同一个区间把三笔 rerun 摘掉就 `[ok] 按迁移放行`。
+   * 空提交一份文件都没碰，对「这次重排有没有独占」不提供任何信息 ⇒ 不许它否决
+   * 整个人证（护栏 ② 那边空提交天然是 0/0、自动干净，两处口径由此一致）。 */
+  test("区间里夹着没尾注的**空提交**（如 --rerun-ci）⇒ 仍按迁移放行", ({ repo }) => {
+    seedDirty(repo, 12);
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("migrate the formatter"));
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+    // 重派生流水线的那一笔：零文件改动、也没有尾注。
+    repo.git("commit", "--allow-empty", "-q", "-m", "ci: rerun (ship --rerun-ci)");
+
+    const r = repo.run(["--range", "HEAD~3..HEAD"]);
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
+  });
+
   /* 平台侧那条流水线跑的是**合并预览**：`HEAD` 是合并提交，于是 `HEAD~1..HEAD`
    * 覆盖的是**整个 PR 区间**而不是「一条提交」（这正是 CI 那一格的现场 —— 不带
    * `--range`、也没有暂存区，脚本落到「判 HEAD~1..HEAD」那一支）。

@@ -83,7 +83,7 @@ const { discernRoots } = require("./gate-scan-read.cjs");
 const { gateFail, gatePass, gateSkip, indentItems } = require("./ci-log.mjs");
 /* 逐提交护栏（护栏 ②）的**机制层**（`reformat-per-commit.mjs`）：它按**职责**切出去
  * —— 取数与判定在那边，判决话术与三态出口仍在本文件（`report()`）。 */
-const { perCommitShape, perCommitShapeOf } = require("./reformat-per-commit.mjs");
+const { perCommitShape, perCommitShapeOf, commitBodies } = require("./reformat-per-commit.mjs");
 
 /* git 按 cwd 解析仓库(与 check-circular-deps.cjs 同口径):门禁在仓库根被调用。
  * prettier 则按**脚本自身所在仓库**解析 —— 见 formatFile 的注释。 */
@@ -134,21 +134,26 @@ const perCommitDeps = {
  * 声明:声明了就按「这是一次格式化器迁移」读,不阻断,但清单照打、读数照报(可审计)。
  *
  * 两道护栏(不许拿它当万能钥匙):
- *   ① 区间里**每个**提交都要声明(漏一个就不认 —— 迁移是整件事的性质,不是某一笔的);
+ *   ① 区间里**每个有内容**的提交都要声明(漏一个就不认 —— 迁移是整件事的性质,
+ *      不是某一笔的);
  *   ② 区间里**每个**提交本身都满足「重排独占」:要么纯格式化不到阈值(顺手那几份),
  *      要么这一条提交**整条都是重排**(`reformatOnly.size === files.length`)。
  * 想借声明把重排与功能改动埋进同一条提交,第 ② 关会把你拦回 `gateFail` 那一支
  * (这里不留「占比 90% 就放行」那种缝 —— 那条缝等于允许每 10 份重排夹带 1 份功能改动)。
+ *
+ * **空提交不参与护栏 ①**（ISSUE #3034）：它一份文件都没碰,对「这次重排有没有独占」
+ * 不提供任何信息,让它否决整个人證是拿一个恒真的读数去否掉别人。而它又**经常出现**：
+ * `pnpm ship --rerun-ci` 就是推一笔空提交重派生流水线,正文固定为
+ * `ci: rerun (ship --rerun-ci)`、不带任何尾注（`scripts/ship-local.mjs` 的
+ * `runRerunCiStage()`）。不算这一条的代价是实测出来的：PR #2990 在重跑三次之后，
+ * 一个原本合规的迁移 PR 被 `166 份里 118 份纯格式化` 判红（构建 `cnb-4ig-1k6csckqj`），
+ * 而同一个区间把三笔 rerun 摘掉就 `[ok] 按迁移放行`。护栏 ② 那边空提交天然是
+ * `0/0`、自动干净,两处口径由此一致。
  */
 function migrationDeclaration(revRange) {
-  /* `--no-merges`:平台侧跑的是**合并预览**(HEAD 是合并提交),而合并提交那一条
-   * 自动生成的正文不会带尾注 —— 把它算进「每个提交都要声明」等于这条门在 CI 上
-   * 永远不成立。合并提交本来就是本门禁豁免的那一档(见 `perCommitShape` 的头注)。*/
-  const bodies = gitOrEmpty(["log", "--no-merges", "--format=%B%x00", revRange]);
-  const commits = bodies
-    .split("\0")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  /* 取数在机制层（`reformat-per-commit.mjs` 的 `commitBodies`）—— 判断留在这一侧：
+   * 空提交不进名单的理由写在那份的头注里（ISSUE #3034）。 */
+  const commits = commitBodies(ROOT, revRange);
   if (!commits.length) {
     return { declared: false, commits: 0 };
   }
@@ -723,7 +728,10 @@ async function main() {
    * 没有可判的改动面。它必须是 `skip`，不能落进下面那条「配对为空 ⇒ 没有纯格式化」
    * 的出口（ISSUE #3026：那两句在屏幕上一模一样，而一句是「判过了」、一句是「没判」）。 */
   if (range && rangeBefore === rangeAfter) {
-    gateSkip("格式化提交分离", `区间两侧是同一个提交（${rangeBefore.slice(0, 8)}），没有可判的改动面`);
+    gateSkip(
+      "格式化提交分离",
+      `区间两侧是同一个提交（${rangeBefore.slice(0, 8)}），没有可判的改动面`,
+    );
     return;
   }
 

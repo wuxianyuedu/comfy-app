@@ -194,3 +194,47 @@ export function perCommitShapeOf(rev, spec) {
    * 永远到不了。所以把这一条提交**直接**交给 `perCommitShape` 的 entries 形态。 */
   return perCommitShape("", limit, root, deps, [{ rev, parents: [parent] }]);
 }
+
+/**
+ * 区间里每个提交的正文（**空提交不进这份名单**，ISSUE #3034）。
+ *
+ * 这是护栏 ①（迁移声明）的取数：它判的是「区间里每个**有内容**的提交都带
+ * `format-migration:` 尾注」。空提交一份文件都没碰，对「这次重排有没有独占」
+ * 不提供任何信息 —— 而它又经常出现：`pnpm ship --rerun-ci` 推的就是一笔空提交，
+ * 正文固定为 `ci: rerun (ship --rerun-ci)`、不带任何尾注。把它数进来，代价是
+ * 「重跑一次 CI」这个动作本身会改变门禁读数：PR #2990 重跑三次之后，一个原本合规的
+ * 迁移 PR 被 `166 份里 118 份纯格式化` 判红（构建 `cnb-4ig-1k6csckqj`），
+ * 同一区间摘掉那三笔就 `[ok] 按迁移放行`。
+ *
+ * 与 `perCommitShape()` 同一个切面、同一条理由留在这里（§12.6 R5 / §12.13）。
+ *
+ * @param {string} root 工作区
+ * @param {string} revRange `A..B` 区间
+ * @returns {Array<string>} 每个有内容提交的正文（`commits.length` 可直接当计数用）
+ */
+export function commitBodies(root, revRange) {
+  /* `--no-merges`：平台侧跑的是**合并预览**（HEAD 是合并提交），而合并提交那一条
+   * 自动生成的正文不会带尾注 —— 把它算进「每个提交都要声明」等于这条门在 CI 上
+   * 永远不成立。合并提交本来就是本门禁豁免的那一档（见 `perCommitShape()` 的头注）。
+   *
+   * 正文与文件清单一次取回（`%x01` 起头、`%x00` 分隔）：判「空提交」只需要
+   * 「这一笔有没有文件名」，而多起一次 `git show` 是逐提交一次进程。 */
+  const raw = runGit(root, ["log", "--no-merges", "--format=%x01%B%x00", "--name-only", revRange]);
+  if (raw === null) {
+    return [];
+  }
+  const bodies = [];
+  for (const chunk of raw.split("\u0001")) {
+    const text = chunk.trim();
+    if (!text) {
+      continue;
+    }
+    const [body = "", ...rest] = text.split("\u0000");
+    const files = rest.join("\u0000").split("\n").filter(Boolean);
+    if (!files.length) {
+      continue;
+    }
+    bodies.push(body.trim());
+  }
+  return bodies;
+}
