@@ -236,12 +236,20 @@ export function groupSteps(hookPath = HOOK) {
  *     仍是暂存集**（它自己的文件头写着「不带它判的也是暂存集」：镜像与源是否**同批**
  *     是提交的属性，不是仓库的属性）⇒ 剥旗标这一手对它**无效**；
  *   · `known-failed-selftest-gate.mjs` —— 同样**连旗标都没有**（钩子行是
- *     `node scripts/known-failed-selftest-gate.mjs`），它自己读暂存区。
+ *     `node scripts/known-failed-selftest-gate.mjs`），它自己读暂存区；
+ *   · `check-reformat-only.cjs` —— **带了 `--staged`，但那个旗标不是可剥的**（ISSUE #3032）。
+ *     它在钩子行上的 `--staged` 同时是「输入面跳过」的开关与「判哪一份面」的开关：剥掉
+ *     之后判据回落到 `HEAD~1..HEAD`，而平台上是合并预览（HEAD 是合并提交、`HEAD~1` 是
+ *     它第一父）⇒ 那个区间就是**整个 PR**，于是「重排独占一条」这种正确形态被自己的
+ *     逐提交护栏（护栏 ②）判成夹带，红得与本次改动是什么无关（现场：PR #2990 的
+ *     `cnb-kf6-1k6bvdese`：162 份源文件里 120 份被判纯格式化）。它认的是
+ *     `--range <基线>..HEAD`，与 `shell-gate` 的 `--base <ref>` 是同一件事的两种旗标。
  *
- * 后两条在平台那一格（干净快照、没有暂存区）上**恒绿**：
- *   · 前者自认「暂存区是空的 —— 没有什么可判（这不是「已通过」）」并退 0；
- *   · 后者**一个字都不打**就退 0。
- * ⇒ 两条都登记进来，让复合档给它们 `--base <ref>`（换判决面），
+ * 后三条在平台那一格（干净快照、没有暂存区）上**恒绿**：
+ *   · 第一条自认「暂存区是空的 —— 没有什么可判（这不是「已通过」）」并退 0；
+ *   · 第二条**一个字都不打**就退 0；
+ *   · 第三条落到 `HEAD~1..HEAD` 那一支 —— 判的是**另一个区间**，读数与本次改动的形态无关。
+ * ⇒ 三条都登记进来，让复合档给它们换判决面（`--base <ref>` / `--range <基线>..HEAD`），
  * 也让合并前复算**不收**它们（`mayDecideOnCleanSnapshot`）—— 那条复算在干净快照上
  * 同样没有暂存区，收进去只会多一行恒绿。
  */
@@ -249,6 +257,7 @@ export const CHANGED_SCOPED = [
   "scripts/shell-gate.mjs",
   "scripts/check-doc-mirror-pairing.cjs",
   "scripts/known-failed-selftest-gate.mjs",
+  "scripts/check-reformat-only.cjs",
 ];
 
 /**

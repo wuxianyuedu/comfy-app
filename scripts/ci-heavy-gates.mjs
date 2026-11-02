@@ -201,13 +201,37 @@ export function fullTreeArgv(argv) {
  * 带 `--staged`，但**剥掉那个旗标之后它判的仍是暂存集**（镜像与源是否**同批**是提交的
  * 属性，不是仓库的属性）⇒ 剥旗标这一手对它**不成立**，它会自认「暂存区是空的 ——
  * 没有什么可判」并退 0，被计成绿。
- * ⇒ 这一族**连 `--staged` 一起剥掉**再挂 `--base <ref>`：判据只该看到**一个**
- * 判决面来源（`--base` 优先于暂存区），两个都挂着会让「到底按哪个面判」变成读代码的事。
+ * ⇒ 这一族**连 `--staged` 一起剥掉**再换判决面：判据只该看到**一个**判决面来源
+ * （显式区间优先于暂存区），两个都挂着会让「到底按哪个面判」变成读代码的事。
+ * 换发的形态**逐条**不同（`--base <ref>` 与 `--range <基线>..HEAD` 不是同一件事）——
+ * 见下面 `RANGE_SCOPED` 与 `heavyGateArgv()` 里那两支。
  *
  * @param {string[]} argv 钩子那一步的命令
  * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
  * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]} | {ok: false, reason: string}}
  */
+/**
+ * 换判决面时要换成**显式区间**（而不是 `--base <ref>`）的那几条。
+ *
+ * 判据是「它的基线语义是不是区间」：`shell-gate` / `check-doc-mirror-pairing` 问的是
+ * 「相对基线改了什么」，一个 ref 就够；而 `check-reformat-only` 的读数**逐提交**展开
+ * （护栏 ② 要的是「这一条提交里重排占不占得住」），它只认 `<before>..<after>`
+ * —— 给它一个裸 ref，那一支会把它当成区间去 `split("..")`，拿到的两侧都是 undefined。
+ *
+ * ⚠️ 两条都要挂在 `CHANGED_SCOPED` 上（ISSUE #3032）：名单回答「它的判决面是不是只在
+ * 本次改动上」，本表只回答「换面时用哪种旗标」。只加在这里而不加名单 ⇒ 它走「剥旗标
+ * 进全量档」那一支，而那正是那一支对它无效的形态（剥完之后判的是 `HEAD~1..HEAD`）。
+ *
+ * @type {ReadonlyArray<{script: string, flag: string, rewrite: (argv: readonly string[], ref: string) => string[]}>}
+ */
+const RANGE_SCOPED = [
+  {
+    script: "scripts/check-reformat-only.cjs",
+    flag: "--range",
+    rewrite: (argv, ref) => [...argv.filter((a) => a !== "--staged"), "--range", `${ref}..HEAD`],
+  },
+];
+
 export function heavyGateArgv(argv, deps = {}) {
   const joined = argv.join(" ");
   /* ⚠️ `check-format.cjs --staged` 在这一档**换发 `--changed`**，不剥旗标进全库
@@ -236,11 +260,12 @@ export function heavyGateArgv(argv, deps = {}) {
   if (!base.ok) {
     return { ok: false, reason: base.reason };
   }
+  /* 换发成哪种旗标是**逐条**的事（见 `RANGE_SCOPED`）：区间语义那一条要
+   * `<基线>..HEAD`，其余给裸 ref。两支都**先剥 `--staged`** —— 这一族只认一个判决面来源。 */
+  const ranged = RANGE_SCOPED.find((r) => joined.includes(r.script));
   return {
     ok: true,
-    /* `fullTreeArgv()` 先剥掉 `--staged`：这一族**只认一个判决面来源**，
-     * 而 `--base` 是这一档唯一拿得到的那一个（平台侧没有暂存区）。 */
-    argv: [...fullTreeArgv(argv), "--base", base.ref],
+    argv: ranged ? ranged.rewrite(argv, base.ref) : [...fullTreeArgv(argv), "--base", base.ref],
     via: `以基线为判决面（${base.via}）`,
     /* 这一族自己把「没跑起来」报成 **2**（仓库三态：0 绿 / 1 红 / 2 没跑起来），
      * 而这一档的既有约定是 **127**（命令找不到）。两个码都归「没跑起来」——

@@ -1036,6 +1036,13 @@ describe("base-check --base —— 合并前面从钩子现算（不抄第二份
     );
     /* 它的判决**依赖暂存改动**：干净快照里它立刻返回 0，那行绿是假绿。 */
     expect(mayDecideOnCleanSnapshot(["node", "scripts/shell-gate.mjs"])).toBe(false);
+    /* 带 `--staged`、但那个旗标**不是可剥的**（ISSUE #3030）：剥掉之后它判的是
+     * `HEAD~1..HEAD`，与「本次改动」无关 —— 所以它进的是 `CHANGED_SCOPED` 那一列，
+     * 不是「剥旗标判全仓」那一列。 */
+    expect(
+      mayDecideOnCleanSnapshot(["node", "scripts/check-reformat-only.cjs", "--staged"]),
+    ).toBe(false);
+    expect(mayDecideOnCleanSnapshot(["node", "scripts/check-reformat-only.cjs"])).toBe(false);
     /* 复算里再复算会递归。 */
     expect(mayDecideOnCleanSnapshot(["node", "scripts/base-check.mjs", "x"])).toBe(false);
     /* 全仓判据留下。 */

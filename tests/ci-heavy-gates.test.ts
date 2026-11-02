@@ -390,12 +390,40 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
     ]);
   });
 
-  it("登记表是**一处**出处：三条都在 `CHANGED_SCOPED` 里", () => {
-    /* 反查：这两条判据若没登记，复合档就会对它们走「剥旗标 ⇒ 判全仓」那一手，
-     * 而那对它们**无效**（剥掉旗标之后判的仍是暂存集）。 */
+  it("`格式化提交分离` 换发 `--range <基线>..HEAD`，不剥成 `HEAD~1..HEAD`（ISSUE #3032）", () => {
+    /* 现场（PR #2990 的 `cnb-kf6-1k6bvdese`）：这一条在平台上红在「162 个源文件里
+     * 120 个纯格式化」，而那 120 份逐条验过是「重排独占一整条提交」的正确形态 ——
+     * 红的来由是**区间取错了**：钩子行上的 `--staged` 被剥掉之后，判据回落到
+     * `HEAD~1..HEAD`，而平台上是合并预览（HEAD 是合并提交、`HEAD~1` 是第一父），
+     * 那个区间就是整个 PR ⇒ 汇总口径下护栏 ② 自己自锁。
+     *
+     * 所以这一条的换发形态与 `shell-gate` 的 `--base` **不同**：它只认区间。
+     * 若这里退化成 `--base <ref>`，判据那一侧 `range.split("..")` 会拿到
+     * `[ref, undefined]` —— 「判了但面是错的」，比不判更糟。 */
+    const got = heavyGateArgv(["node", "scripts/check-reformat-only.cjs", "--staged"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+    });
+    expect(got.ok).toBe(true);
+    if (!got.ok) {
+      return;
+    }
+    expect(got.argv).toEqual([
+      "node",
+      "scripts/check-reformat-only.cjs",
+      "--range",
+      "abc123..HEAD",
+    ]);
+    /* `--staged` 必须不在：这一族只认一个判决面来源。 */
+    expect(got.argv).not.toContain("--staged");
+  });
+
+  it("登记表是**一处**出处：四条都在 `CHANGED_SCOPED` 里", () => {
+    /* 反查：这几条判据若没登记，复合档就会对它们走「剥旗标 ⇒ 判全仓」那一手，
+     * 而那对它们**无效**（剥掉旗标之后判的仍是暂存集 / 仍是 `HEAD~1..HEAD`）。 */
     expect(CHANGED_SCOPED).toContain("scripts/check-doc-mirror-pairing.cjs");
     expect(CHANGED_SCOPED).toContain("scripts/known-failed-selftest-gate.mjs");
     expect(CHANGED_SCOPED).toContain("scripts/shell-gate.mjs");
+    expect(CHANGED_SCOPED).toContain("scripts/check-reformat-only.cjs");
   });
 
   it("绿步一个字都不打 ⇒ 那一格**没判**（退 2，不许计入绿）", () => {
