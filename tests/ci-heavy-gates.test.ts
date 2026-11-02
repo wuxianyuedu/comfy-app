@@ -408,7 +408,9 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
    * 自己的最后一笔（现场 `cnb-o9p-1k6d5ohhj`：`170 个源文件里 118 个纯格式化`，
    * 而那 118 份散在 27 笔里、没有一笔独占）。
    *
-   * ⇒ 它的换发是**自己那一支**（`syntheticMergeRange()`）：区间两端取合成提交的两个父。
+   * ⇒ 它的换发是**自己那一支**（`syntheticMergeRange()`）：区间是「另一父 .. 本 PR 那一侧
+   * 的 tip」。**终点取 tip、不取合成提交** —— `另一父..合成提交` 正好是整个 PR 区间，
+   * 主干那一批会与本 PR 混成一段（SUMMARY 口径按整段算分母，正是那个 170/118 的来源）。
    * 认不出合成提交 ⇒ 这一条**没判**（不许给一个与本次改动无关的面，那等于恒绿）。
    *
    * 反向验证：把这一支删掉，下面那句 `--range` 当场红。
@@ -416,7 +418,7 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
   it("`check-reformat-only.cjs` 换发成合并预览的两个父，认不出就不许跑（#3048）", () => {
     expect(CHANGED_SCOPED).not.toContain("scripts/check-reformat-only.cjs");
     /* 三条形态各判一次，一条都不许落回「剥旗标 ⇒ 判 HEAD~1..HEAD」：
-     *   ① 认得出合成提交 ⇒ `--range <另一父>..<HEAD>`
+     *   ① 认得出合成提交 ⇒ `--range <另一父>..<CNB_COMMIT>`（终点是 tip，不是 HEAD）
      *   ② 没有 CNB_COMMIT / HEAD 不是合并提交 ⇒ `ok: false`（没判，不是绿） */
     const mergeRange = syntheticMergeRange({
       cwd: process.cwd(),

@@ -209,7 +209,6 @@ export function syntheticMergeRange(deps) {
     });
     return r.status === 0 ? String(r.stdout ?? "").trim() : "";
   };
-  const head = git(["rev-parse", "HEAD"]);
   const row = git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(/\s+/).filter(Boolean);
   if (row.length < 3) {
     return {
@@ -230,5 +229,10 @@ export function syntheticMergeRange(deps) {
       reason: `HEAD 的父提交里认不出本 PR（CNB_COMMIT ${source.slice(0, 8)}）⇒ 没有可用的判决面`,
     };
   }
-  return { ok: true, range: `${other}..${head}` };
+  /* ⚠️ **终点取 `source`（本 PR 那一侧的 tip），不是 `HEAD`（合成提交）**：
+   * `另一父..HEAD` 正好是**整个 PR 区间** —— 逐提交口径看不出问题（合成提交自己被
+   * `--no-merges` 摘掉），可它把「本 PR 那条线」与「这次合并带进来的主干那一批」混成
+   * 一段，`report()` 的汇总口径按整段算分母（现场 `cnb-o9p-1k6d5ohhj`：170 份里 118 份
+   * 被判纯格式化，而同一区间逐提交复算只有一条 offender）。 */
+  return { ok: true, range: `${other}..${source}` };
 }
