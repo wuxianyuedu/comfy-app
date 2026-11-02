@@ -79,6 +79,28 @@ async function loadShell() {
   return runPnpmSync;
 }
 
+/* 合并预览的「本次改动从哪算起」不在这里另算一份：父关系取自 `changed-scope.mjs`
+ * （`shell-gate --base` 走的是同一个函数），判定收在 `reformat-preview-range.mjs`。
+ * 两份都是 ESM，`.cjs` 只能动态 `import()` —— 与 `launcher-core/shell.mjs` 同一档
+ * 惰性句柄，由 `main()` 先加载。 */
+let resolveBaseRef = null;
+let reconcileSyntheticMergeFace = null;
+let previewRangeEnds = null;
+async function loadChangedScope() {
+  if (resolveBaseRef && reconcileSyntheticMergeFace && previewRangeEnds) {
+    return;
+  }
+  try {
+    ({ resolveBaseRef, reconcileSyntheticMergeFace } = await import("./changed-scope.mjs"));
+    ({ previewRangeEnds } = await import("./reformat-preview-range.mjs"));
+  } catch (error) {
+    console.error(
+      `[reformat] 无法加载改动面判据模块（scripts/changed-scope.mjs）：${error.message}`,
+    );
+    process.exit(2);
+  }
+}
+
 const { discernRoots } = require("./gate-scan-read.cjs");
 const { gateFail, gatePass, gateSkip, indentItems } = require("./ci-log.mjs");
 /* 逐提交护栏（护栏 ②）的**机制层**（`reformat-per-commit.mjs`）：它按**职责**切出去
@@ -590,32 +612,26 @@ function collectPairs(files, beforeRev, readAfter) {
 }
 
 /**
- * 合并预览下「本次改动」的基线（ISSUE #3022）。少一件就回 `null`。
+ * 「没有 `--range`、也没有暂存改动」那一支的**区间两侧** —— 平台合并预览下「本次改动」
+ * 到底从哪算起（ISSUE #3022 / #3035 / #3038）。
  *
- * 平台那一跑**没有暂存区**，于是判据落到「判 HEAD 这一次提交」那一支，而
- * `HEAD~1` 是**第一父** —— 合并预览那一笔的第一父是哪一侧由平台拼法决定
- * （实测现场：第一父 = 本分支侧），于是 `HEAD~1..HEAD` 覆盖**整条主干**带来的
- * 20+ 条提交。它们没有 `format-migration:` 尾注 ⇒ 声明恒 false、护栏 ② 恒
- * 「不干净」，判据红得与本次改动是什么无关（#3022：162 份里 120 份判纯格式化，
- * 而那 120 份没有一份是「顺手全库格式化」）。
- *
- * 成立条件两件：**HEAD 是合并提交**（父提交数 ≥ 2）**且**平台给了目标分支 sha
- * （`CNB_PULL_REQUEST_TARGET_SHA`，与 `changed-scope.mjs` 同一份来源）。
- * 有了它，区间就是「目标 sha..HEAD」= 本 PR 带来的提交 —— 平台合进来的主干那边
- * 本来就以它为起点，不在区间里。少一件就退回 `HEAD~1`：本地事后复盘那一档 HEAD
- * 是普通提交，两者等价，行为与改动前一致。
+ * 取数与判定整段在 `reformat-preview-range.mjs`（本文件贴近 900 行硬闸，而那一截与
+ * 「哪些文件是纯格式化」毫不相干 —— 拆的是职责，不是行数）。判决行留在这一侧：
+ * 对不上账时念一句 `[skip]`，普通提交形态与改动前逐字一致。
  */
-function mergePreviewBase() {
-  const parents = gitOrEmpty(["rev-list", "--parents", "-n", "1", "HEAD"]).trim().split(/\s+/);
-  if (parents.length < 3) {
-    return null;
-  }
-  const target = String(process.env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim();
-  return target === "" ? null : target;
+function headRangeEnds() {
+  return previewRangeEnds({
+    gitOrEmpty,
+    env: process.env,
+    resolveBaseRef,
+    reconcile: reconcileSyntheticMergeFace,
+    warn: (reason) => gateSkip("格式化提交分离", reason),
+  });
 }
 
 async function main() {
   await loadShell();
+  await loadChangedScope();
   /* **合并提交豁免**：合并会把上游整批（含它们在别处做的格式化）一次性带进来，
    *  「拆成两次提交」在这里不是可选动作 —— 上游的形态已经定死在历史里，本地
    *  无法把一次 merge 的重排与行为改动分开。判据取 `MERGE_HEAD` 是否存在：
@@ -655,9 +671,9 @@ async function main() {
 
   if (!range && !staged.trim()) {
     /* 没有暂存改动:回落到「判 HEAD 这一次提交」(本地事后复盘 / CI 之外的用法)。
-     * 基准怎么取见 `mergePreviewBase()`：平台那一跑 HEAD 是**合并预览**，
-     * `HEAD~1` 是第一父（是哪一侧由平台拼法决定），区间会整条跨过主干。 */
-    const [afterRev, beforeRev] = ["HEAD", mergePreviewBase() ?? "HEAD~1"];
+     * 基准怎么取见 `headRangeEnds()`：平台那一跑 HEAD 是**合并预览**，`HEAD~1` 是
+     * 它的第一父（是哪一侧由平台拼法决定），照 `HEAD~1..HEAD` 判会整条跨过主干。 */
+    const { before: beforeRev, after: afterRev } = headRangeEnds();
     if (gitOrEmpty(["rev-parse", "--verify", "--quiet", beforeRev]).trim() === "") {
       gateSkip("格式化提交分离", `无可比父提交（${beforeRev} 不存在，首次提交或浅克隆）`);
       return;
@@ -677,11 +693,10 @@ async function main() {
         classifyReformatOnly(pairs),
         limit,
         migrationDeclaration(`${beforeRev}..${afterRev}`),
-        /* 这一支也要**逐提交**取数，不能拿汇总当分母：`HEAD~1..HEAD` 在**合并预览**
-         * 那一档（平台侧 PR 流水线把分支合进主干后跑判据，此时 HEAD 是合并提交）
-         * 覆盖的是**整个 PR 的区间**，而不是「一条提交」—— 汇总口径下切换那一笔
-         * 的判据脚本 / 文档 / 依赖清单照样进分母（实测 32/56），护栏 ② 会把
-         * 「重排独占一条」这个正确形态判成夹带。区间口径同一把尺，见
+        /* 这一支也要**逐提交**取数，不能拿汇总当分母：合并预览下这个区间覆盖的是
+         * **整个 PR**（起点由 `headRangeEnds()` 收窄，终点仍是第一父名下那个 sha），
+         * 汇总口径下切换那一笔的判据脚本 / 文档 / 依赖清单照样进分母（实测 32/56），
+         * 护栏 ② 会把「重排独占一条」这个正确形态判成夹带。区间口径同一把尺，见
          * `perCommitShape` 的头注。 */
         perCommitShape(`${beforeRev}..${afterRev}`, limit, ROOT, perCommitDeps),
       ),

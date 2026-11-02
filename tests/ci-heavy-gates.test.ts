@@ -390,12 +390,37 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
     ]);
   });
 
-  it("登记表是**一处**出处：三条都在 `CHANGED_SCOPED` 里", () => {
+  it("登记表是**一处**出处：这三条都在 `CHANGED_SCOPED` 里", () => {
     /* 反查：这两条判据若没登记，复合档就会对它们走「剥旗标 ⇒ 判全仓」那一手，
      * 而那对它们**无效**（剥掉旗标之后判的仍是暂存集）。 */
     expect(CHANGED_SCOPED).toContain("scripts/check-doc-mirror-pairing.cjs");
     expect(CHANGED_SCOPED).toContain("scripts/known-failed-selftest-gate.mjs");
     expect(CHANGED_SCOPED).toContain("scripts/shell-gate.mjs");
+  });
+
+  /**
+   * `check-reformat-only.cjs` **不在**这一族（ISSUE #3035）。
+   *
+   * 它在平台上的判决面由判据自己换（`headRangeEnds()` 走合成提交的父关系），
+   * 而复合档这一侧的换发只有 `--base <ref>` 一种形态 —— 把它登记进来，落到的
+   * 就是「剥掉 `--staged` ⇒ 判 `HEAD~1..HEAD`」或「换发一条它不认的旗标」两支，
+   * 两支都判不准（#3032 那条 `--range <基线>..HEAD` 在平台上连红三轮：
+   * 平台拼法不保证本分支在第一父，区间整段跨过主干）。
+   *
+   * 反向验证：它若被重新登记，这一条当场红 —— 而红的时候下一动作不是改这里，
+   * 是先想清楚「平台那一跑的 HEAD 到底是谁的第一父」。
+   */
+  it("`check-reformat-only.cjs` 不再登记（它的判决面在判据那一侧，ISSUE #3035）", () => {
+    expect(CHANGED_SCOPED).not.toContain("scripts/check-reformat-only.cjs");
+    const got = heavyGateArgv(["node", "scripts/check-reformat-only.cjs", "--staged"], {
+      env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
+    });
+    expect(got.ok).toBe(true);
+    if (!got.ok) {
+      return;
+    }
+    /* 剥旗标那一档：判据自己认得平台合并预览，不许在这里再换一副旗标给它。 */
+    expect(got.argv).toEqual(["node", "scripts/check-reformat-only.cjs"]);
   });
 
   it("绿步一个字都不打 ⇒ 那一格**没判**（退 2，不许计入绿）", () => {

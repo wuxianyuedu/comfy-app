@@ -130,6 +130,20 @@ const { test, expect } = defineGateRepo({
       from: "src/lib/process/version-compare.ts",
       to: "src/lib/process/version-compare.ts",
     },
+    /* 合并预览那一支的「本次改动从哪算起」走的不是本脚本自己那份逻辑，而是
+     * `changed-scope.mjs`（`shell-gate --base` 同一个函数）。`.cjs` 只能动态
+     * `import()`，缺了它脚本以 exit 2 结束 —— 而那条链上的每一份都要在
+     * （`git-name-status` 又静态 import `launcher-core/sync-attribution.mjs`）。 */
+    { from: "scripts/changed-scope.mjs", to: "scripts/changed-scope.mjs" },
+    /* 区间两侧的判定收在机制层（`reformat-preview-range.mjs`，`.cjs` 动态 import 它）——
+     * 拆出去的是「与平台拓扑打交道」那一段，判据本体不动。 */
+    { from: "scripts/reformat-preview-range.mjs", to: "scripts/reformat-preview-range.mjs" },
+    { from: "scripts/git-name-status.mjs", to: "scripts/git-name-status.mjs" },
+    { from: "scripts/base-check/git-ref.mjs", to: "scripts/base-check/git-ref.mjs" },
+    {
+      from: "scripts/launcher-core/sync-attribution.mjs",
+      to: "scripts/launcher-core/sync-attribution.mjs",
+    },
   ],
   setup: (repo) => {
     /* 临时仓库也要能解析 oxfmt：真实场景里门禁在**源码仓库**里跑
@@ -171,6 +185,12 @@ function headSha(repo: GateRepo): string {
 function commitAll(repo: GateRepo, message: string): void {
   repo.git("add", "-A");
   repo.commit(message);
+}
+
+/** 同 `commitAll`，但把那个提交的 sha 交回来（造合并预览那两条要它当 `CNB_COMMIT`）。 */
+function commitAllReturningSha(repo: GateRepo, message: string): string {
+  commitAll(repo, message);
+  return headSha(repo);
 }
 
 /**
@@ -417,8 +437,8 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
 
   /* **区间两侧是同一个提交 ⇒ 必须是 `skip`，不是「没有纯格式化」**（ISSUE #3026）。
    *
-   * 现场：平台那一跑的命令是 `--range <merge-sha>..<merge-sha>`（`mergePreviewBase()`
-   * 取的端点恒等于 HEAD），于是每一份配对的 `before` / `after` 都取不到、
+   * 现场：平台那一跑给的区间两侧取成了**同一个 sha**（`#3022` 那条修法里起点用的
+   * 目标 sha 恰是 HEAD），于是每一份配对的 `before` / `after` 都取不到、
    * `classifyReformatOnly` 连 oxfmt 都没起过 —— 屏幕上却是一句
    * `[ok] 本次改动 N 个源文件，没有纯格式化的`。那两句在终端里一模一样，而一句是
    * 「判过了」、一句是「没判」，三态口径（§13.5.25）在这里塌成了两态。 */
@@ -648,18 +668,30 @@ describe("pre-commit 现场：必须判「暂存区」而不是上一次提交",
     expect(r.output).toContain("合并提交");
   });
 
-  /* 合并**预览**（ISSUE #3022）：平台那一格没有暂存区，判据落到「判 HEAD 这一次
-   * 提交」那一支，而 `HEAD~1` 是**第一父** —— 合并预览那一笔的第一父是哪一侧由平台
-   * 拼法决定（实测现场是第一父 = 本分支侧），于是 `HEAD~1..HEAD` 覆盖**整条主干**
-   * 带来的 20+ 条提交。它们没有 `format-migration:` 尾注 ⇒ 声明恒 false、护栏 ②
-   * 恒「不干净」，判据红得与本次改动是什么无关（现场：162 份里 120 份判纯格式化）。
+  /* 合并**预览**（ISSUE #3022 / #3035）：平台那一格没有暂存区，判据落到「判 HEAD
+   * 这一次提交」那一支，而那个区间的两侧不能是 `HEAD~1..HEAD`。
    *
-   * 修法是这一档先问平台要基线（`CNB_PULL_REQUEST_TARGET_SHA`，与 `changed-scope.mjs`
-   * 同一份来源）：给了 ⇒ 区间是「目标 sha..HEAD」= 本 PR 带来的提交。
-   * 场景按真实 PR 搭：分支从主干顶端分出 → 分支上重排（带尾注）→ 主干那边另有
-   * 别人一笔没有尾注的重排 → 平台把主干合进来当第一父。 */
-  test("合并预览：区间取自平台的目标 sha（不把主干那批算进分母）", ({ repo }) => {
-    seedDirty(repo, 12); // 自带一次提交 ⇒ 未格式化版本进历史，这个 sha 当初的主干顶端
+   * ## 为什么是一对用例，而不是一条
+   *
+   * 平台拼出来的合并提交**不保证把本分支放在第一父**：现场（`cnb-3lk-1k6d2lm2l`）
+   * 第一父是**目标分支**那一侧，于是 `HEAD~1..HEAD` 里全是主干带来的提交（它们没有
+   * `format-migration:` 尾注），日志是一屏「声明了但重排没独占」，而本次改动是什么
+   * 与那条红毫无关系。而 #3022 早先的修法是「起点换成平台给的目标 sha、终点仍是
+   * `HEAD`」—— 那条只在「第一父 = 本 PR」时对，反过来就把**主干那批**算进分母
+   * （两种拼法各红过好几十次）。
+   *
+   * ⇒ 现在两侧都取自合成提交的父关系（`changed-scope.mjs` 的
+   * `reconcileSyntheticMergeFace()`）：区间恒为「第一父..第一父名下的那个 sha」，
+   * 与拼法无关。两条用例各演一种拼法。
+   *
+   * ## 场景（两种拼法共用）
+   *
+   * 主干那边有一笔**别的**重排（没有尾注），本分支上是「声明了迁移的重排」，
+   * 平台把两者合成一个合并提交。真结论只有一个：按迁移放行。
+   */
+  /** 造出「主干一笔无尾注重排 + 分支一笔声明了迁移的重排」，返回两个 sha。 */
+  function twoSidedHistory(repo: GateRepo) {
+    seedDirty(repo, 12); // 自带一次提交 ⇒ 未格式化版本进历史
     const fork = headSha(repo);
     /* 主干那边：别人一笔没有尾注的重排（它不该进本 PR 的分母）。 */
     repo.write("src/lib/main-only.ts", "export const M={a:1,b:'y'};\n");
@@ -672,15 +704,55 @@ describe("pre-commit 现场：必须判「暂存区」而不是上一次提交",
       repo,
       Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
     );
-    commitAll(repo, "format only\n\nformat-migration: 用例声明");
-    /* 平台把主干合进来，落成合并提交（不留 MERGE_HEAD）。 */
-    repo.git("merge", "--no-ff", "-q", "-m", "merge preview", mainHead);
+    const branchSha = commitAllReturningSha(repo, "format only\n\nformat-migration: 用例声明");
+    return { fork, mainHead, branchSha };
+  }
 
-    /* 没有基线（退回 `HEAD~1` = 第一父）⇒ 主干那条没有尾注的提交进区间 ⇒ 不按迁移读。 */
-    const withoutBase = repo.run([], { env: { CNB_PULL_REQUEST_TARGET_SHA: undefined } });
-    expect(withoutBase.output).not.toContain("按迁移放行");
+  test("合并预览（第一父 = 目标分支侧）⇒ 区间只含本 PR 那批提交", ({ repo }) => {
+    const { fork, mainHead, branchSha } = twoSidedHistory(repo);
+    /* 平台拼法之一：先落在主干上（分叉点那一笔）、再把 PR 那侧合进来 ⇒ 第一父是**主干**。 */
+    repo.git("checkout", "-q", "branch-side");
+    repo.git("reset", "--hard", "-q", fork);
+    repo.git("merge", "--no-ff", "-q", "-m", "merge preview", branchSha);
+    /* `CNB_COMMIT` 是源分支 head（平台侧恒给），父关系认得出这次合成。 */
+    const r = repo.run([], {
+      env: {
+        CNB_PULL_REQUEST_TARGET_SHA: mainHead,
+        CNB_COMMIT: branchSha,
+      },
+    });
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
+    /* 主干那笔没有尾注的提交**不许**进区间 —— 它进去就会把声明判成 false。 */
+    expect(r.output).not.toContain("不按迁移读");
+  });
 
-    /* 给了基线 ⇒ 区间收回本 PR 带来的提交、尾注都在 ⇒ 按迁移读。 */
+  test("合并预览（第一父 = 本分支侧）⇒ 同一份改动给同一个答案", ({ repo }) => {
+    const { mainHead, branchSha } = twoSidedHistory(repo);
+    /* 平台拼法之二：先切到 PR 那侧、再把主干合进来 ⇒ 第一父是**本分支**。
+     * 这一形态下 `HEAD~1..HEAD` 恰好是对的那个区间，而 `#3022` 那条「起点换目标
+     * sha」恰好是错的 —— 两条用例合起来才钉得住「与拼法无关」。 */
+    repo.git("checkout", "-q", "branch-side");
+    repo.git("merge", "--no-ff", "-q", "-m", "merge main", mainHead);
+    const r = repo.run([], {
+      env: {
+        CNB_PULL_REQUEST_TARGET_SHA: mainHead,
+        CNB_COMMIT: branchSha,
+      },
+    });
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
+  });
+
+  test("认不出合成提交（没有 CNB_COMMIT）⇒ 按拓扑钉区间，不落回 HEAD~1", ({ repo }) => {
+    const { fork, mainHead, branchSha } = twoSidedHistory(repo);
+    repo.git("checkout", "-q", "branch-side");
+    repo.git("reset", "--hard", "-q", fork);
+    repo.git("merge", "--no-ff", "-q", "-m", "merge preview", branchSha);
+    /* 没有 `CNB_COMMIT` ⇒ `reconcileSyntheticMergeFace()` 认不出这次合成，但它们
+     * **仍然是**一次合并预览。此时退回 `HEAD~1..HEAD` 就是红过的那个形状（第一父是
+     * 主干 ⇒ 主干那批进分母）—— 所以按拓扑挑起点：`merge-base(目标 sha, HEAD)`
+     * 的 `first-parent` 计数与总数相等 ⇒ 它是干净的分叉点。 */
     const r = repo.run([], { env: { CNB_PULL_REQUEST_TARGET_SHA: mainHead } });
     expect(r.code).toBe(0);
     expect(r.output).toContain("按迁移放行");
