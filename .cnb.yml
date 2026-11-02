@@ -371,7 +371,7 @@
       镜像身份, 工作区复用读数, 缓存槽读数, GitHub 镜像同步, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照, import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块,
       函数长度 TS, 函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 零消费导出, 重档静态判据
+      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 零消费导出, 重档静态判据, GitHub 判决回读
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 2026-10-28 起这一档从「只有合并形态复核一格」扩成「树级校验档」：判的是**合并后的
     # 树**一致不一致、这次运行的事实是什么，不是「这次改动能不能过」（那由 PR 档判），
@@ -2332,6 +2332,33 @@
     # 平台单 stage 默认预算 20m 是硬上限（实测强杀形态见上面那段），而这一格装的是原先
     # 那几条各自独立跑的东西 —— 它的**合理**墙钟应当与原几格的总和同级。
     timeout: 45m
+
+  # ── GitHub 判决回读：主列末尾的**读数档**（ISSUE #3051 期望第 3 条的前半步）──
+  #
+  # 它回答一个问题：镜像格（主列开头那一格 `GitHub 镜像同步`）派发出去的那一笔
+  # head_sha，GitHub Actions 那边跑完了没有、各 check 的结论是什么。轮询的是
+  # `GET /repos/{owner}/{repo}/commits/{sha}/check-runs`，sha 的推导与镜像格同源
+  # （同一笔 `CNB_PULL_REQUEST_IID` → 同一镜像 ref → 同一 head_sha）。
+  #
+  # 为什么排在**主列末尾**：镜像格一跑完 GitHub 那边才起跑，回读放得越靠后，
+  # 留给 GitHub 完成的窗口越大；且本格只做 API 读数、零构建，挂在最后不会挡住
+  # 任何一格的墙钟。轮询总预算 45 分钟（`POLL_BUDGET_MS`，取法见脚本文件头）——
+  # 正常情况第一读就接近完整，预算耗尽按「没跑起来」exit 2 交账，**不判红**。
+  #
+  # ⚠️ **读数档**（`--readout`）：三态照常打点，退码恒 0 —— 它坏了既不许把门禁的
+  # 红洗成绿，也不许把自己的红叠进门禁的账（与镜像格同一条规矩）。翻成承重档
+  # 与摘镜像格的 `--readout` 同属 #3051 期望第 3 条，是另一批。
+  #
+  # ⚠️ 两件外部前提不落地，这一格永远只能交「没跑起来」（话术在脚本里会点名）：
+  #   ① `GITHUB_MIRROR_TOKEN`（fine-grained PAT）追加 `checks: read`（只读）权限，
+  #      并把新值同步进密钥仓库 `moon-read/GITHUB_MIRROR_TOKEN`（本流水线从那里
+  #      imports）；
+  #   ② 自托管节点到 `api.github.com:443` 的出网（与镜像格同一条 egress，它通这一格
+  #      才有意义）。
+  - name: GitHub 判决回读
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs --readout
+    # 包住 45m 轮询预算 + 进程开销；与 GitHub 侧最重格的外框同级。
+    timeout: 60m
 
   # ── 构建与产物：**这一格 2026-10-18 起不在 PR 上跑了**（口径见 §13.5.23）──
   #
