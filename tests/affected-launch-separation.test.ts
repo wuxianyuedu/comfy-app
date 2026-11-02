@@ -164,7 +164,7 @@ describe("耗时台账的量纲：批跑墙钟当不了单份成本（ISSUE #303
      * 按字面比较会把前者排在前面 —— 而它是 1.8s 的那一份。 */
     const ledger = ledgerOf({
       "tests/check-commit-claims.test.ts": { ms: 169_100, source: "batch" },
-      "tests/a11y-axe-stories.test.ts": { ms: 8_300, source: "isolated" },
+      "tests/a11y-axe-stories.test.ts": { ms: 8300, source: "isolated" },
     });
     /* `isolated` 那一份先（8.3s 是真实成本），`batch` 那一份退到上界那一档。
      * 注意这里比的是**量纲**，不是数字：169.1s > 8.3s 反而排后，正是因为前者不知道
@@ -225,7 +225,7 @@ describe("耗时台账的量纲：批跑墙钟当不了单份成本（ISSUE #303
         path.join(dir, "scripts", ".test-file-timing.json"),
         JSON.stringify({
           generatedAt: "old",
-          files: { "tests/a.test.ts": { ms: 1_800, source: "isolated" } },
+          files: { "tests/a.test.ts": { ms: 1800, source: "isolated" } },
         }),
       );
       const got = mergeTimingLedger(dir, [
@@ -235,7 +235,7 @@ describe("耗时台账的量纲：批跑墙钟当不了单份成本（ISSUE #303
       expect(got.written).toBe(true);
       expect(got.rejected).toEqual(["tests/a.test.ts"]);
       const after = readTimingLedger(dir);
-      expect(after.get("tests/a.test.ts")).toEqual({ ms: 1_800, source: "isolated" });
+      expect(after.get("tests/a.test.ts")).toEqual({ ms: 1800, source: "isolated" });
       expect(after.get("tests/b.test.ts")).toEqual({ ms: 900, source: "batch" });
       /* 反方向可以：isolated 是更强的量纲，它盖掉 batch 是对的。 */
       expect(

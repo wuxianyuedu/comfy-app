@@ -367,7 +367,7 @@
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
-      镜像身份, 工作区复用读数, 缓存槽读数, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
+      镜像身份, 工作区复用读数, 缓存槽读数, GitHub 镜像同步, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
       类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照, import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块,
       函数长度 TS, 函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
       UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 零消费导出, 重档静态判据
@@ -1486,18 +1486,12 @@
     - name: 令牌权限读数
       script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
       timeout: 5m
-    # ── GitHub 镜像同步（ISSUE #2978）：把这一跑判的那份树同步到镜像仓库并派发 ──────
+    # ── `GitHub 镜像同步` 不在这一档了（ISSUE #3051）───────────────────────────────
     #
-    # 双远端镜像（cnb 主）的推送跳：推 HEAD 到 `wuxianyuedu/comfy-app` 的 `cnb-pr-<IID>`
-    # 专属 ref + `repository_dispatch` 派发，GitHub 侧 workflow 按**同一笔 sha** 起跑
-    # —— 两边判同一份树，读数才对得上账。为什么放 endStages：它坏了既不许把门禁的红
-    # 洗成绿，也不许把自己的红叠进门禁的账（与立案格同一档语义）；可见性是它自己的读数。
-    #
-    # fail-closed：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席 ⇒ 退 2 留读数，
-    # 不冒充成功。令牌值一个字节都不回显（脚本内先脱敏，硬规则 17）。
-    - name: GitHub 镜像同步
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs
-      timeout: 5m
+    # 它前移进主列（`.gates` 里 `缓存槽读数` 之后），为什么搬与「搬的是位置、不是那句不承重」
+    # 都写在那一格的锚点上。这里留一行是因为这一档剩下的两格**必须留在 `endStages`**：
+    # 它们的本职是「红也要跑」（平台 grammar：无论 stages 是否成功，endStages 都将执行），
+    # 挪进主列就会被那一次红一起 skip 掉 —— 而立案格要的正是红的时候才有用。
 
 # ── 桌面成品包那一档的失败立案（ISSUE #2550）──────────────────────────────────────
 #
@@ -1646,6 +1640,41 @@
   - name: 缓存槽读数
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-cache-slot.mjs
     # 与上面那格同量级（几次 stat）。秒级的事给 5m 只为「卡死要早报」。
+    timeout: 5m
+
+  # ── GitHub 镜像同步（**读数，恒不退非零**；ISSUE #2978 / #3051）──
+  #
+  # 双远端镜像（cnb 主）的推送跳：推 HEAD 到 `wuxianyuedu/comfy-app` 的 `cnb-pr-<IID>` 专属
+  # ref + `repository_dispatch` 派发，GitHub 侧 workflow 按**同一笔 sha** 起跑 —— 两边判同一份
+  # 树，读数才对得上账。
+  #
+  # ⚠️ 它从 `endStages` 前移到这里（#3051），改的是**起跑时机**：平台对 endStages 的语义是
+  # 「stages 跑完才执行」，而这条流水线实测整跑 **2546s**（全绿跑 `cnb-aju-1k6bpjnrk` 的逐格
+  # 读数：`固定结构用例` 873.2s / `Install dependencies` 446.4s / `受影响用例` 350.2s /
+  # `重档静态判据` 345.3s），于是 GitHub 那一跑最早只能在一个多小时之后开始 —— 等
+  # 「按同一笔 sha 读回 GitHub 判决」那一格上线，两条远端就成了串行。前移到
+  # `Install dependencies` **之前**，它吃的是 `Prepare` 之后那份已就位的树。
+  #
+  # ⚠️ 前移**不许顺带改掉承重性**：主列的退码是承重的 —— 某一格 `error` 会把排在它后面的格
+  # 整片 `skipped`（本仓把同一条约束写成判据：「每日链里必须有一格排在所有可能红的格之前」，
+  # `tests/no-platform-ci-config.test.ts`）。而 GitHub 这一跳今天还不通（实测
+  # `Failed to connect to github.com port 443 after 21114 ms`，另有 #3014 的令牌被拒、
+  # #3003 的 LFS 缺件、#3027 的自家钩子拦下四形），所以这一格带 `--readout`：内部三态照旧
+  # 打点、对外恒不退非零，与上面 `镜像身份` / `工作区复用读数` / `缓存槽读数` 同一族。
+  # 原来那句「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进门禁的账」**搬的正是这个语义**
+  # —— 搬的是位置，不是那句话。
+  #
+  # 什么时候翻成 fail-closed：等回读那一格上线之后（那时「推不出去」=「这一跑没判过」），
+  # 条件写在 #3051 期望第 3 条；不在本批。
+  #
+  # 令牌那一系一字未动：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席 ⇒ 内部照旧判
+  # 「没跑起来」并留下读数，只是读数档不把它折成流水线的红；令牌值一个字节都不回显
+  # （脚本内先脱敏，硬规则 17）。
+  - name: GitHub 镜像同步
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --readout
+    # 两跳 git 调用各自带超时（`scripts/ci-github-mirror-push.mjs` 的 REMOTE_PROBE_TIMEOUT_MS /
+    # PUSH_TIMEOUT_MS —— 没有它们就得吃 git 自己那个 21s 的 connect 超时，而那一形过去只被
+    # 念成「令牌活不活」）。5m 是外框，与它原在 endStages 时同一档。
     timeout: 5m
 
   # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
@@ -2551,7 +2580,8 @@ master:
     - <<: [*common, *pr_fail_stage]
       name: 质量门禁
       # GitHub 镜像令牌（ISSUE #2978）：从密钥仓库 `moon-read/GITHUB_MIRROR_TOKEN`
-      # 导入，供 endStage「GitHub 镜像同步」的推送与派发读取。密钥文件里必须声明
+      # 导入，供主列那一格「GitHub 镜像同步」的推送与派发读取（#3051 起它在 `.gates` 里，
+      # 不在 `endStages` 了 —— 但取令牌这一跳仍然只有 PR 那条流水线需要）。密钥文件里必须声明
       # `allow_slugs: [moon-read/comfy-app-t3]` —— 默认只有密钥仓库管理员触发的
       # 流水线才读得到，而 PR 的触发者是各 PR 作者；声明后按规则校验、忽略触发者角色。
       imports:

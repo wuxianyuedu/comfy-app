@@ -1363,6 +1363,124 @@ describe("findStageMatches：格名反查只认逐字，认不出就停手", () 
   });
 });
 
+/**
+ * `endStages` 那一族（`PR 失败立案` / `令牌权限读数` / 桌包档的 `桌包失败立案`）平台记的 id 是
+ * `stage-endStages-<n>`，掉在 `CONFIGURED_STAGE_ID`（`/^(stage-\d+|prepare)$/`）那条口径外面
+ * ⇒ 它红了而 `--diagnose` 一个字不念、`--stage-log` 按名按 id 都退 2（ISSUE #3047 的现场：
+ * build `cnb-61a-1k6d4na5o` 的 `stage-endStages-2`，那是当时还在这一档的镜像格，正文
+ * `Failed to connect to github.com port 443`；它已于 #3051 前移进主列按读数档跑，
+ * 下面用同一个格名只是**那份平台读数的原样形状**）。
+ *
+ * 两个面不许混：**可见性**（诊断念得出、日志取得到）与**判决**（流水线级结论、出勤读数）
+ * 是分开的两支 —— 平台自己也不把 endStages 计入流水线状态，而本仓把立案格/令牌读数放在这一档
+ * 正是为了「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进门禁的账」。
+ * 所以每一条都同时钉两侧：这一族进得了反查与展开，**但不改 `state`、不改 `configured`**。
+ */
+describe("endStages 在可见性面里、不在判决面里（ISSUE #3047）", () => {
+  const SN = "cnb-61a-1k6d4na5o";
+  const WITH_ENDSTAGE = {
+    status: 200,
+    data: {
+      status: "success",
+      pipelinesStatus: {
+        [`${SN}-001`]: {
+          id: `${SN}-001`,
+          name: "质量门禁",
+          status: "success",
+          stages: [
+            { status: "success", name: "Prepare", id: "prepare" },
+            { status: "success", name: "类型检查", id: "stage-8" },
+            { status: "success", name: "UI/逻辑分离", id: "stage-24" },
+            { status: "success", name: "PR 失败立案", id: "stage-endStages-0" },
+            { status: "success", name: "令牌权限读数", id: "stage-endStages-1" },
+            { status: "error", name: "GitHub 镜像同步", id: "stage-endStages-2", duration: 30_500 },
+          ],
+        },
+      },
+    },
+  };
+  const outcome = classifyBuildOutcome(WITH_ENDSTAGE);
+
+  it("判决面不收它：`configured` 与 `state` 都不因 endStage 的红而改", () => {
+    expect(outcome.configured.map((s) => s.id)).toEqual(["prepare", "stage-8", "stage-24"]);
+    expect(outcome.state).toBe("green");
+    expect(outcome.failed).toEqual([]);
+  });
+
+  it("可见性面收它：`diagnosable` / `endStages` / `endFailed` 三张都点得到名", () => {
+    expect(outcome.diagnosable.map((s) => s.id)).toEqual([
+      "prepare",
+      "stage-8",
+      "stage-24",
+      "stage-endStages-0",
+      "stage-endStages-1",
+      "stage-endStages-2",
+    ]);
+    expect(outcome.endStages).toHaveLength(3);
+    expect(outcome.endFailed.map((s) => s.name)).toEqual(["GitHub 镜像同步"]);
+  });
+
+  it("按格名与按格 id 都反查得到（修之前两条路都退 2）", () => {
+    expect(findStageMatches(outcome, "GitHub 镜像同步").hits).toHaveLength(1);
+    expect(findStageMatches(outcome, "stage-endStages-2").hits[0]?.stage.name).toBe(
+      "GitHub 镜像同步",
+    );
+    // 「比过 N 格」念的是可见性面那一张：念成判决面的 3 格会把「这一跑明明有这一格」盖住。
+    expect(findStageMatches(outcome, "GitHub 镜像同步").examined).toBe(6);
+  });
+
+  it("念得出这一格，且明说它不计入流水线判决", () => {
+    const text = formatOutcome(outcome, { sn: SN, slug: "org/repo" }).join("\n");
+    expect(text).toContain("红在 endStage：GitHub 镜像同步（stage-endStages-2，status=error）");
+    expect(text).toContain("不计入流水线判决");
+    // 绿跑不许被这一行改口成红：结论那一句仍是「绿」。
+    expect(text).toContain("结论：绿（这一跑有结论）");
+    expect(text).not.toContain("红的那一格：GitHub 镜像同步");
+  });
+
+  it("展开这一格时按它自己的流水线 id 取日志（不另起一套取数）", () => {
+    const calls: Array<Array<string>> = [];
+    const log: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>) => {
+      calls.push(args);
+      if (args[1] === "get-build-stage") {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            status: 200,
+            data: {
+              status: "error",
+              duration: 30_500,
+              error: "",
+              content: [
+                "[mirror] 推送前这一读没通（exit 128）",
+                "Failed to connect to github.com port 443 after 21114 ms",
+              ],
+            },
+          }),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    const noted = describeFailedStages(run, {
+      slug: "org/repo",
+      sn: SN,
+      outcome,
+      log: (s) => log.push(s),
+    });
+    expect(noted).toBe(1);
+    const asked = calls.find((a) => a[1] === "get-build-stage");
+    expect(asked?.slice(0, 2)).toEqual(["build", "get-build-stage"]);
+    expect(asked).toContain(`${SN}-001`);
+    expect(asked).toContain("stage-endStages-2");
+    const text = log.join("\n");
+    expect(text).toContain("endStage，不计入流水线判决");
+    expect(text).toContain("L2 Failed to connect to github.com port 443");
+  });
+});
+
 describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（两个入口共用）", () => {
   const SHA = "d02ec96364d5f3713b77c91b0d3fe789878f1747";
   const fake = (rows: unknown) => {

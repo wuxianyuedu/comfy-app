@@ -20,8 +20,14 @@
  *    不冒充成功。第 5 条那一跳让「目标仓库还没有」也落进这一类 —— 它是**外部前提**
  *    没落地，不是这一格判出了红。
  * 2. **不打令牌值**（硬规则 17）：令牌只出现在进程参数里；一切回显先过脱敏。
- * 3. **这一格是 endStage**：成败不影响流水线状态 —— 它坏了**不许**把质量门禁的红
- *    洗成绿，也不许把自己的红叠进门禁的账；可见性就是它自己的读数。
+ * 3. **它在主列，但按读数档跑**（ISSUE #2978 立案时放 `endStages`；#3051 前移进主列）：
+ *    平台的 `endStages` 语义是「stages 跑完才执行」，而这条流水线实测整跑 2546s ⇒ GitHub
+ *    那一跑最早只能在一个多小时后起跑，等「读回 GitHub 对同一笔 sha 的判决」那一格上线就
+ *    成了串行。前移是为了并行；而主列的退码**承重**（某格 `error` 会把后面的格整片
+ *    `skipped`），所以 `.cnb.yml` 给它的是 `--readout`：三态照旧打点、对外恒不退非零，
+ *    与 `镜像身份` / `工作区复用读数` 同一族。**搬的是位置，不是那句「它坏了既不许把门禁的
+ *    红洗成绿，也不许把自己的红叠进门禁的账」。** 翻成 fail-closed 的条件写在 #3051 期望
+ *    第 3 条（等回读格上线），不在这一批。
  * 4. 推送用 `--force` 不用 `--force-with-lease`：lease 需要 expected 值（要先
  *    `ls-remote` 再推，两跳网络 + 竞态窗），而 ref 按 IID 专属、由并发锁保证
  *    同一 PR 同时只有一跑在推 —— 覆盖自己的旧值正是幂等语义。
@@ -50,8 +56,9 @@
  * ## 用法
  *
  * ```text
- * node scripts/ci-github-mirror-push.mjs            # 推 HEAD + 派发（读环境变量）
- * node scripts/ci-github-mirror-push.mjs --dry-run  # 只打印计划与 payload，不发任何请求
+ * node scripts/ci-github-mirror-push.mjs               # 三态退码（本地自查 / 将来承重那一档）
+ * node scripts/ci-github-mirror-push.mjs --readout     # 读数档：三态照打点，退码恒 0（CI 主列那一格）
+ * node scripts/ci-github-mirror-push.mjs --dry-run     # 只打印计划与 payload，不发任何请求
  * ```
  *
  * 环境变量：`GITHUB_MIRROR_TOKEN`（必填）、`GITHUB_MIRROR_REPO`（缺省
@@ -63,6 +70,25 @@ import process from "node:process";
 
 /** 三态退码与仓内其余档同口径（`0` 有结论 / `1` 有事实是红 / `2` 没跑起来）。 */
 export const CODE = { FAIL: 1, NO_FACT: 2, OK: 0 };
+
+/**
+ * 推送前那一问（`git ls-remote`）的墙钟上限（ISSUE #3051）。
+ *
+ * 为什么必须换成**本仓给的数**：不给就得等 git 自己的 connect 超时，而那一形的实测是
+ * `Failed to connect to github.com port 443 after 21114 ms` —— 二十一秒全花在这一格上，
+ * 且这一格从 #3051 起排在主列（`Install dependencies` 之前），每条 PR 都要付一次。
+ * 15s 的取法：通的时候这一读实测 0.4–9.2s（#3014 记的几跑），不通的时候早点说完早点让路。
+ */
+export const REMOTE_PROBE_TIMEOUT_MS = 15_000;
+
+/**
+ * `git push` 的墙钟上限（同一格，但这一跳是真在写）。
+ *
+ * 4 分钟留在 `.cnb.yml` 那一格 `timeout: 5m` 的外框之内：到点由本仓念「超时」，而不是让
+ * 平台把整格掐掉、一个字读数都不留（§13.6.4 那一族 —— 「拿不到测量」不许被读成「测量是红的」，
+ * 也不许被读成「什么都没发生」）。首次推整棵对象库可以很久，所以这一支给得宽。
+ */
+export const PUSH_TIMEOUT_MS = 240_000;
 
 /** 镜像仓库缺省坐标（`GITHUB_MIRROR_REPO` 可覆盖）。 */
 export const DEFAULT_REPO = "wuxianyuedu/comfy-app";
@@ -174,7 +200,7 @@ export function resolveContext(io) {
   }
   const iid = (env.CNB_PULL_REQUEST_IID ?? "").trim();
   if (!/^\d+$/.test(iid)) {
-    reasons.push("`CNB_PULL_REQUEST_IID` 不是纯数字（本格只挂在 PR 流水线的 endStages 上）");
+    reasons.push("`CNB_PULL_REQUEST_IID` 不是纯数字（本格只挂在 PR 流水线的质量门禁那一档上）");
   }
   const headSha = runGit(["rev-parse", "HEAD"]);
   if (headSha.code !== 0 || !/^[0-9a-f]{40}$/i.test(headSha.stdout.trim())) {
@@ -196,18 +222,78 @@ export function resolveContext(io) {
 }
 
 /**
+ * 找出这一次 git 调用的**子命令**。
+ *
+ * 不能拿 `args[0]` 判：`pushArgs()` 为了不带本仓钩子，前面挂着 `-c core.hooksPath=`，
+ * 于是推送那一跳的 `args[0]` 是 `-c`。按 `args[0]` 写会让推送**拿不到超时**而账面看不出
+ * 来（限时的缺席不会红，只会退回「吃平台外框那一刀」的旧形态）。
+ *
+ * @param {string[]} args git 参数表
+ * @returns {string} 子命令（`push` / `ls-remote` / `rev-parse`…）；一个都没有就回空串
+ */
+export function gitSubcommand(args) {
+  for (let i = 0; i < args.length; i += 1) {
+    const a = String(args[i] ?? "");
+    /* `-c` 吃下一个参数（`core.hooksPath=` 那一形态），跳过它才能走到真子命令。 */
+    if (a === "-c") {
+      i += 1;
+      continue;
+    }
+    if (!a.startsWith("-")) {
+      return a;
+    }
+  }
+  return "";
+}
+
+/**
+ * 这一跳该给多大墙钟：`ls-remote` 短、`push` 长，本地那几跳（`rev-parse`）不限。
+ *
+ * @param {string[]} args git 参数表
+ * @returns {number | undefined} 交给 `spawnSync` 的 timeout（毫秒）；不给 = 不限
+ */
+export function gitTimeoutFor(args) {
+  const sub = gitSubcommand(args);
+  if (sub === "ls-remote") {
+    return REMOTE_PROBE_TIMEOUT_MS;
+  }
+  if (sub === "push") {
+    return PUSH_TIMEOUT_MS;
+  }
+  return undefined;
+}
+
+/**
  * 真身：git 子进程执行器（测试注入点同形的假件在用例里给）。
+ *
+ * ⚠️ 超时不是「git 回了个非零」：`spawnSync` 到点是**本仓把它杀了**，`status` 变 `null`、
+ * `error.code` 是 `ETIMEDOUT`。原样交出去只会读成一句「exit -1」，所以这里补一句回话，
+ * 让 `explainRemoteProbeFailure()` 把它归进 egress 那一类（#3051 之前这一形被念成
+ * 「令牌活不活 / 仓库在不在」，把人指到错的下一动作上）。
  *
  * @param {string[]} args git 参数表
  * @returns {{code: number, stderr: string, stdout: string}}
  */
 function realRunGit(args) {
-  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv() });
-  return {
-    code: r.status ?? -1,
-    stderr: String(r.stderr ?? ""),
-    stdout: String(r.stdout ?? ""),
-  };
+  const timeout = gitTimeoutFor(args);
+  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", env: gitEnv(), timeout });
+  /* 念出来的是子命令而不是 `args[0]` —— 推送那一跳的 `args[0]` 是 `-c`。 */
+  const sub = gitSubcommand(args);
+  if ((r.error ?? null) !== null || r.status === null) {
+    /* Node 把 `spawnSync` 的 `error` 标成 `Error`，而超时那一支实际带 `code: "ETIMEDOUT"`，
+     * 类型里没申出来 ⇒ 按形状读一次（不覆盖平台原值，也不假设它一定在）。 */
+    const code = /** @type {{ code?: string } | null | undefined} */ (r.error)?.code;
+    const why =
+      code === "ETIMEDOUT"
+        ? `git ${sub} 超时（>${String(timeout)} ms）：这一跳没拿到任何回话 —— 是没通，不是判出的红`
+        : `git ${sub} 连上都没连上：${String(r.error ?? "拿不到退出码")}`;
+    return {
+      code: -1,
+      stderr: `${String(r.stderr ?? "")}\n${why}`,
+      stdout: String(r.stdout ?? ""),
+    };
+  }
+  return { code: r.status, stderr: String(r.stderr ?? ""), stdout: String(r.stdout ?? "") };
 }
 
 /**
@@ -227,14 +313,31 @@ export function hasRemoteRefs(stdout) {
 /**
  * 把 `git ls-remote` 的失败回话翻成**具体那一句**（回话本身不判红，它只被念出来）。
  *
- * 两形态逐字不同，读的人不必自己去猜：`Repository not found` 是**仓库层面**没通
- * （没建 / 令牌对它没有读权），其余认证回话则更可能落在令牌值上。这一函数**不改变退码** ——
- * 两种都落「前提没落地」，改的只是下一动作能不能被照着做。
+ * 三形态各有各的下一动作，读的人不必自己去猜：
+ *
+ * · `Repository not found` 是**仓库层面**没通（没建 / 令牌对它没有读权）；
+ * · 其余认证回话更可能落在**令牌值 / 身份范围**上；
+ * · `Failed to connect` / `Could not connect to server` / `Connection reset` / DNS 失败 /
+ *   本仓自己给的超时（`gitTimeoutFor` 那两支）都是 **egress 层** —— 网络根本没到 GitHub。
+ *
+ * 第三支是 #3051 补的：它缺席时那一形会落到下面那句通用话术上，把「节点连不上
+ * github.com:443」念成「令牌活不活 / 仓库在不在」—— 那句把人往令牌上查，而令牌是好的
+ * （实测 `cnb-61a-1k6d4na5o` 的 `stage-endStages-2`：`Failed to connect to github.com
+ * port 443 after 21114 ms`）。
+ *
+ * 这一函数**不改变退码** —— 三种都落「前提没落地」，改的只是下一动作能不能被照着做。
  *
  * @param {string} text `ls-remote` 的 stdout + stderr（未脱敏）
  * @returns {string} 一句中文读数
  */
 export function explainRemoteProbeFailure(text) {
+  if (
+    /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection reset|connection timed out|name resolution|getaddrinfo|empty reply from server|超时/i.test(
+      text,
+    )
+  ) {
+    return "到 github.com 这一跳没通（TCP / DNS / 代理层）⇒ 出网问题在节点侧（白名单 / 代理 / 换 runner），与令牌值和这一格的判据都无关";
+  }
   if (/repository not found|does not appear to be a git repository/i.test(text)) {
     return "目标仓库在 GitHub 上不存在（或以这枚令牌的身份看不见它）⇒ 先去建仓库，再重跑这一格";
   }
@@ -299,7 +402,7 @@ export async function runMirror(io) {
         log(`[mirror]   ${line}`);
       }
     }
-    log("[mirror] 结论：exit 2 —— 目标仓库 / 令牌这一层的前提没落地（不是这一格判出的红）");
+    log("[mirror] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）");
     return CODE.NO_FACT;
   }
   const push = runGit(pushArgs(url, `refs/heads/${ctx.ref}`));
@@ -341,7 +444,29 @@ export async function runMirror(io) {
   return CODE.OK;
 }
 
+/**
+ * 退码出口：读数档与承重档之间的那**唯一一道**分界（ISSUE #3051）。
+ *
+ * `--readout` 只折「对外那一位数」：上面每一行照旧念自己的三态原值（`结论：exit 2 —— …`），
+ * 所以「这一格没判成事」与「这一格是被折成 0 的、因为它不承重」在读数里分得开。
+ * 什么时候摘掉这个旗标（让它拦合并）见 #3051 期望第 3 条：等「读回 GitHub 同一笔 sha 的
+ * 判决」那一格上线 —— 在那之前先接进判决，就是把一条还没通的外部件挂在必经之路上
+ * （#3025 / #3027 那两次事故的同形）。
+ *
+ * @param {number} code `runMirror()` 给出的三态
+ * @param {boolean} readout 读数档（`.cnb.yml` 主列那一格用的形态）
+ * @returns {number} 交给进程的退出码
+ */
+export function exitCodeFor(code, readout) {
+  return readout ? CODE.OK : code;
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const dryRun = process.argv.includes("--dry-run");
-  process.exit(await runMirror({ dryRun, env: process.env }));
+  const readout = process.argv.includes("--readout");
+  const code = await runMirror({ dryRun, env: process.env });
+  if (readout && code !== CODE.OK) {
+    console.log("[mirror] 读数档：上面那一行是三态原值；这一格不折进流水线判决（--readout，#3051）");
+  }
+  process.exit(exitCodeFor(code, readout));
 }
