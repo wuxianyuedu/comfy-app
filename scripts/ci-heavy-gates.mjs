@@ -222,6 +222,11 @@ export function fullTreeArgv(argv) {
  *    认不出合成提交 / 父关系对不上 ⇒ 这一条**没判**（`notRunCodes` 收 2，单列退 2，
  *    不计入「绿」）—— 不给判决面就等于恒绿，那是本仓最贵的形态。
  *
+ * ⚠️ 下面这两个 `@param` 与 `@returns` **必须贴着函数本体**：ISSUE #3032 的落地笔把两个
+ * doc 块次序写反了 —— 标签落在另一条 `@type` 上，函数自己一个参数类型都
+ * 没有 ⇒ 参数全是 implicit any，`tsc --noEmit` 与脚本档类型检查在 master 上当场红。
+ * 挪任何一块之前先确认标签仍贴着它要描述的那个声明。
+ *
  * @param {string[]} argv 钩子那一步的命令
  * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
  * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]}
