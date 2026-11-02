@@ -325,9 +325,7 @@
     # 在配置里分不开，账面全绿（这正是 ISSUE #2227 的现场）。
     COMFYAPP_CI_GATES_ELSEWHERE: >-
       格式化提交分离=scripts/check-reformat-only.cjs,
-      零消费导出=scripts/check-dead-exports.cjs,
-      core 骨架单一事实源=tests/core-spine-single-source.test.ts,
-      core 出口纪律与基类纯度=tests/core-barrel-entry-discipline.test.ts
+      零消费导出=scripts/check-dead-exports.cjs
     # 恢复动作照旧三步：`.gates` 里取消注释 → 名字挪回 `GATES` → 从本清单删掉。
     # `ESLint 零警告` 的**两段历史别读混**：
     #   · 2026-10-16 停过一次，理由是「本地 B 组每条提交都在跑同一条 lint」；那条前提随
@@ -370,17 +368,16 @@
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
       镜像身份, 工作区复用读数, 缓存槽读数, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
-      类型检查, 固定结构用例, 受影响用例, 标题行让位, 文件结构硬规则, 跨平台动作对照,
-      import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
-      函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 覆盖率上报,
-      core 骨架单一事实源, 零消费导出, core 出口纪律与基类纯度, 重档静态判据
+      类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照, import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块,
+      函数长度 TS, 函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
+      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 零消费导出, 重档静态判据
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 2026-10-28 起这一档从「只有合并形态复核一格」扩成「树级校验档」：判的是**合并后的
     # 树**一致不一致、这次运行的事实是什么，不是「这次改动能不能过」（那由 PR 档判），
     # 也不是「今天的 master 全量健康」（那由每日档判）。撤进来的四格入口与旗标一字未改，
-    # 只是换了档位。`覆盖率上报` 刻意**不**在挪动名单里：它读的是同跑 `受影响用例` 产出的
-    # coverage/lcov.info，push 档不跑测试 ⇒ 挪过去就是「报告不在 → 自己跳过」的静默空转。
+    # 只是换了档位。`覆盖率上报` 不在 push 档（push 不跑测试，挪过去只会静默空转）；
+    # 它 2026-11-02 从 PR 档挪到了**每日档**：每日单元测试 跑 `pnpm run test:coverage` 产出
+    # lcov，这一格接在它后面上报（见 `COMFYAPP_CI_DAILY_GATES` 与 `*daily_gates` 末尾）。
     # 名字在这儿 = 那一格必须一字不差地出现在 `master 合并复核` 流水线里（判据
     # `tests/no-platform-ci-config.test.ts` 双向核对：缺一格红、多一格红）。
     COMFYAPP_CI_PUSH_GATES: >-
@@ -449,7 +446,7 @@
     COMFYAPP_CI_DAILY_GATES: >-
       每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日 Python 可用性,
       每日 Python 探针读数, 每日同步数据库表结构, 每日新鲜度账, 每日生产构建,
-      每日 ESLint 零警告, 每日浏览器安装, 每日全量E2E, 每日单元测试
+      每日 ESLint 零警告, 每日浏览器安装, 每日全量E2E, 每日单元测试, 覆盖率上报
     # ⚠️ `每日浏览器安装` 与 `每日全量E2E` 的相对顺序不许动：装那一件要下 ~120 MiB
     #   （分钟级），而判「装没装成」是零成本的。2026-10-19 起这一格是**唯一**的执行者
     #   （PR 上那一格同日撤到这里）—— 撤的理由是 PR 上再没有任何一步用浏览器
@@ -1114,14 +1111,15 @@
     timeout: 45m
   # ── 全量单测（每天一次；为什么不在 PR 上跑，见上面 `COMFYAPP_CI_DAILY_GATES` 那段）──
   #
-  # ⚠️ **它排在整份清单的最后**（业主口径：「最容易出问题的放最后，然后执行过的就不用
-  # 重复执行了」）。这一格是这条流水线上唯一会因**这台机的负载**而单条超时的格子 ——
+  # ⚠️ **它排在整份清单里所有「会红的格」的最后**（业主口径：「最容易出问题的放最后，然后
+  # 执行过的就不用重复执行了」）。这一格是这条流水线上唯一会因**这台机的负载**而单条超时的格子 ——
   # 实测 `cnb-b0l-1k59op66t`：775 份里只 1 份红，红在 `Test timed out in 30000ms`，
   # 而同一时刻另一份检出（`comfy-app-t3-branch2`）在跑全量 vitest、又一份在跑全量 eslint。
   # 它排在中间时，那一单条抖动就把 `每日生产构建` / `每日浏览器安装` / `每日全量E2E`
   # 三格一起 skip 掉（那三格至今零执行记录）。挪到最后之后，同一跑里那三格先拿到结论，
   # 不必为了单测的抖动把前面几格重付一次。
-  # 顺序有判据：`tests/no-platform-ci-config.test.ts` 钉「这一格是每日清单的最后一条」。
+  # 顺序有判据：`tests/no-platform-ci-config.test.ts` 钉「每日单元测试 之后只允许跟
+  # 覆盖率上报（报告型尾巴）」—— 它后面的那一格是报告型、非关键，不会因它 skip 掉前面的格。
   - name: 每日单元测试
     # 入口是**跑法脚本**，不是裸 vitest（ISSUE #1979 的口径，与 `每日生产构建` 同一条
     # 理由）：它内部就是 `pnpm run test:coverage`，外面那一跳是**记账** ——
@@ -1152,6 +1150,17 @@
     #   这一格排到最后之后，被掐的代价不再是「后面三格没了」，但仍要修（见任务：
     #   `full-suite-run.mjs` 的 timeoutMs 在 Windows 上是否真收得掉子树）。
     timeout: 45m
+
+  # ── 覆盖率上报：2026-11-02 从 PR 档挪到每日档（接在 每日单元测试 之后）──────────
+  #
+  # PR 档上的 `受影响用例` / `固定结构用例` 两测试格撤到每日全量单测后，PR 上不再有产出
+  # coverage/lcov.info 的格子，这一格在 PR 上只会「报告不在 → 自己跳过」静默空转；而
+  # 每日档的 `每日单元测试` 跑 `pnpm run test:coverage`，同一 job、同一工作区产出 lcov，
+  # 这一格接在它后面把它交给平台的上报通道。它是**报告型**（不判任何东西，报告不在时跳过
+  # 而不判红），没有 `ifModify`。顺序：必须落在 每日单元测试 之后（见上面那条注释与
+  # `tests/no-platform-ci-config.test.ts`「每日单元测试 之后只允许跟 覆盖率上报」那条判据）。
+  - name: 覆盖率上报
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
 
 # ── 单跑口：三档重档各自一条，前提自动带上 ────────────────────────────────
 #
@@ -1847,95 +1856,17 @@
   - name: 类型检查
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs tsc --noEmit
 
-  # ── 受影响用例（2026-10-20 新增；它的两个本地执行者同日撤销）──────────────
+  # ── 受影响用例 / 固定结构用例：2026-11-02 从本档（PR）撤到每日全量单测 ──────────
   #
-  # 判的是「固定清单 + 这个 PR 改动牵扯到的用例」（`scripts/affected-tests.mjs` 的
-  # 清单 + `run-affected-tests.mjs` 的启动与超时话术）——**判决链一个字没改**，
-  # 换的只是执行者：`.githooks/pre-commit` 的 C 组与 `.githooks/pre-push` 的
-  # `unitTests` 段同日撤掉（理由见那一格脚本的头注：本地这一跳在共享机上的失效形态
-  # 是 forks worker 调度超时，不是用例红；实测拦下一次、隔离复跑 1116 条全绿）。
-  #
-  # ⚠️ 它**不是** `单元测试` 那一格（全量 + 覆盖率 + 整档凭证）的替代：那一格按
-  #   §13.5.21 仍在每日档（`每日单元测试`），这一格跑的是**增量面**（本检出实测
-  #   88 个用例文件 / 1116 条、几分钟量级），不刷 `整档凭证`、也不判覆盖率门槛。
-  #
-  # ⚠️ 入口是**跑法脚本**（`ci-affected-tests.mjs`），不是裸 vitest：它负责算改动面
-  #   （PR 事件用平台给的 `CNB_PULL_REQUEST_TARGET_SHA` 三点 diff）、按
-  #   `ci-load.mjs` 的现场核数收敛并发（`COMFY_PRECOMMIT_MAX_WORKERS`）、把退出码
-  #   三态转出去。拿不到改动面 ⇒ 退 2（没判 ≠ 绿，§13.6.2）。
-  #
-  # ⚠️ 与其它格一样带 `ci-cp936-exit.mjs`：这一格红的时候要读的正是 vitest 的
-  #   中文输出（哪几条超时、哪几条未校验）。
-  #
-  # ⚠️ **`AggregateError` 不是「这次改动有回归」**：那一屏（一串 `Error:` + 一段
-  #   `AggregateError`）是 worker / 模块装载阶段就炸了 —— 依赖没装上、原生模块版本
-  #   对不上、或环境里串进来的 `npm_config_*` 把解析带歪。一条断言都没红，所以它
-  #   不该被当作用例红去查代码。现在有两道守卫把它分开说清楚：
-  #     · `scripts/ci-affected-tests.mjs` 起跑前先体检（`scripts/ci-worktree-deps.mjs`：
-  #       `node_modules/.modules.yaml` 在不在 + `npm_config_*` 干净不干净）⇒ 不成立退 2；
-  #     · 装载指纹（`isLaunchFailureShaped`）⇒ 那一遍记「没跑起来」、退 2，并把
-  #       「先 `pnpm install`、再清 `npm_config_*`、再重跑」写在脸上。
-  #   两处都是「未判定」而不是红：§13.6.2 那条口径 —— 没判 ≠ 绿，也不等于红。
-  #
-  # 45m：本地同一条链 4 worker 实测约 3.5 分钟，而节点是冷工作区 + 现场编译，
-  # 且并行 PR 会叠加（`lock` 只掐同一 PR 的旧跑）。与 `每日单元测试` 同档预算口径
-  # —— 卡死要早报，而真跑得完的形态离它还有一个量级。
-  #
-  # ⚠️ `timeout` 只是**兜底**，不是这一格真正承重的界：`run-affected-tests.mjs` 自带一份
-  #   墙钟预算（`affected-launch-wallclock.mjs` 的 `STAGE_WALL_CLOCK_MS`，25m），它的作用是
-  #   「自己掐断并把原因说清」，而不是等平台强杀（强杀那一屏一个用例名都没有）。
-  #   `cnb-53r-1k6b6besn` 的现场正是后者：那一跑 26 分 41 秒，而预算只有 25 分钟 ——
-  #   超出的那一段就是「自己那一条上界没生效」（判据 `tests/hook-affected-launch.test.ts`
-  #   「墙钟预算必须真的到得了第一遍」钉着它：界必须交到起进程的那一层、且在第一块之前）。
-  - name: 受影响用例
-    # ── 日志预算（平台硬上限 102400 字节，超了只留一句「The log length exceeds the limit」）──
-    #
-    # 这一格的输出量由 **vitest 的 reporter** 决定：默认 reporter 会**逐个文件**打一行
-    # 测试清单（`❯ tests/x.test.ts (12 tests)`），一跑 100+ 行是常态，而平台对超长日志
-    # 保留的是尾部 —— 被截掉的恰是**开头**，也就是「跑了哪些、哪份失败、失败原文」那一段。
-    # 现场读到的第 2 行就是 `The log length exceeds the limit(102400)`，然后整屏不可读。
-    #
-    # 处置**只换 reporter，不动任何判据**：`COMFY_AFFECTED_QUIET=1` ⇒
-    # `--reporter=dot`（每行 60~80 个点，失败用例与原文照样打）。退出码、复跑面、
-    # 超时指纹一个字不变（复跑面由 junit 给，本来就不靠这屏文本）。
-    # 开关默认关着：本地人跑这一档时要看逐文件清单（口径同 `COMFYAPP_QUIET_COVERAGE`）。
-    # 「quiet 了没有」在日志里有一行读数（`[affected-launch] reporter：…`）——
-    # 它没生效时的表现不是报错，是「日志又超长」，所以必须读得回来。
-    env:
-      COMFY_AFFECTED_QUIET: "1"
-      # 良性 stderr 噪音屏蔽（2026-10-31）：被测源码自己打出、但已知无害的日志
-      # （ECONNREFUSED/:3000、canvas-sync 重试、a11y 故意渲染的 error-boundary/lazy-chunk
-      # 故事）在回吐给平台前按行滤掉，免得它们把 102400 字节的日志预算吃光、把失败原文
-      # 挤出去。不影响任何断言判定与超时指纹（判据见
-      # `scripts/affected-launch-noise-reporter.mjs`）。本地默认关，开发者照常看全量日志。
-      # 2026-10-31 起两张清单：第二批（#2844）收的是**夹具 spawn 的 git / 探针 /
-      # 设计内失败 / storybook 警告块**那一族 stdout 噪音，见同一文件。
-      COMFY_AFFECTED_NOISE_FILTER: "1"
-      # 段开关（#2845）：固定/受影响已拆成两个 stage —— 本格只跑**增量面**；
-      # 静态契约那一半（FIXED_STRUCTURAL_TESTS）在上一格 `固定结构用例`。
-      COMFY_AFFECTED_SEGMENT: "affected"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-affected-tests.mjs
-    timeout: 45m
+  # 两格在 PR 上慢且性价比低：本地实测 3.2~3.5 分钟，但冷节点 + 并发 PR 叠加会跑到
+  # 25m+（自带墙钟预算 25m、stage 预算 45m），且偶发 `AggregateError` 假红（worker /
+  # 模块装载炸了 ≠ 改动有回归）。判据面整份被 `每日单元测试` 全量套件覆盖（固定结构契约
+  # 测试那几个文件本就在全量套件里），与 §13.5.21「全量单测只留每日档」同口径：共享节点上
+  # PR 级测试读数不可信，每日档空机才可信。附带：`core 骨架单一事实源` / `core 出口纪律与
+  # 基类纯度` 两格的执行者正是这一族的固定清单，随之记成 retired（每日全量单测覆盖）。
+  # 降级登记见 `tests/no-platform-ci-config.test.ts` 的 `GATE_TIER_LEDGER`。执行者
+  # `scripts/ci-affected-tests.mjs` 保留（仍可手动 / 单跑口复用）。
 
-  # ── 固定结构用例（ISSUE #2845：从 `受影响用例` 一格拆出来的静态契约那半）──────────
-  #
-  # 拆的理由：`受影响用例` 此前是一条 stage 里的两个块（`第 1/2 块（固定清单）` /
-  # `第 2/2 块（受影响用例）`），平台日志里两段摘要混在一格输出里分不清谁是谁，两个块的
-  # 噪音也互相掺杂。拆成两格后各自有日志、各自的 junit 与收尾复述，红的归属一格点名。
-  #
-  # ⚠️ 本格跑的是 **FIXED_STRUCTURAL_TESTS 静态清单**，**不解析改动面**（PR 三点 diff
-  #   拿不到 / 为空都照跑）—— 固定清单与「这次改了什么」无关，这正是它能独立成一格
-  #   的前提。入口与判据链跟 `受影响用例` 完全同一份（`ci-affected-tests.mjs` →
-  #   `run-affected-tests.mjs`，段开关 `COMFY_AFFECTED_SEGMENT=fixed`）。
-  # ⚠️ quiet / 噪音屏蔽两枚开关与本格族其他格同口径：本地默认关，开发者看全量。
-  # 45m：与 `受影响用例` 同一预算口径（本地 91 份实测约 3.2 分钟，节点冷区留一个量级）。
-  - name: 固定结构用例
-    env:
-      COMFY_AFFECTED_QUIET: "1"
-      COMFY_AFFECTED_NOISE_FILTER: "1"
-      COMFY_AFFECTED_SEGMENT: "fixed"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-affected-tests.mjs
-    timeout: 45m
 
   # ── ESLint 零警告（ISSUE #2022 起恢复；停用期间的历史与两条恢复条件见下面这段）──
   # 停用期的理由（2026-10-16）：它跑得通，但那一轮它在每一格 E2E 调绿的提交里都重跑一遍，
@@ -2246,32 +2177,31 @@
   # 「**合并后的树**」一致不一致，不是「这次改动」⇒ 每次合并判一次就够，不必每个 PR
   # 各判一遍。三格原文（入口、旗标、`ifModify`）整体搬到 `.push-stages` 锚点
   # （清单在 `COMFYAPP_CI_PUSH_GATES`，判据双向核对），判据一字未改。
-  # ⚠️ `覆盖率上报` **不挪**：它读的是同跑 `受影响用例` 产出的 coverage/lcov.info，
-  # push 档不跑测试 ⇒ 挪过去是「报告不在 → 自己跳过」的静默空转。
-  # 覆盖率上报是**报告型**（它不判任何东西，只把 coverage/lcov.info 交给平台的上报通道；
-  # 报告不在时它自己跳过而不判红）。它没有 `ifModify`：它读的不是「本次改动」，
-  # 收窄它等于「只在某类改动上才记覆盖率」。
-  - name: 覆盖率上报
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
+  # ⚠️ `覆盖率上报` 从本档（PR）**挪到了每日档**（见 `*daily_gates` 末尾）：原来它读同跑
+  # `受影响用例` 产出的 coverage/lcov.info，而 `受影响用例` / `固定结构用例` 两测试格
+  # 2026-11-02 撤到每日全量单测后，PR 上不再有产出 lcov 的格子 ⇒ 这一格在 PR 上只会
+  # 静默空转。每日档的 `每日单元测试` 跑 `pnpm run test:coverage`，同一 job 产出 lcov，
+  # 这一格接在它后面上报。它仍是**报告型**（不判任何东西，报告不在时跳过而不判红），
+  # 没有 `ifModify`。
   # ── 下面这几格**没有自己的 stage**：它们的执行者在别处 ──────────────────────
   #
   # 「停用 ≠ 删除」机制在**页内**的第四种形态（前三种见 `COMFYAPP_CI_DISABLED_GATES`
   # 那两条注释与上面那段「收进聚合档」）：这几格的名字**仍在 `COMFYAPP_CI_GATES` 里**
   # （它们没被停用，是换了执行者），但它们的原文是注释形态 —— 因为执行者是：
   #   · `格式化提交分离` / `零消费导出` ⇒ 复合档 `重档静态判据` 里的条目
-  #     （执行面 = 钩子注册表，见 `scripts/ci-heavy-gates.mjs` 的头注）；
-  #   · `core 骨架单一事实源` / `core 出口纪律与基类纯度` ⇒ 「受影响用例」那一格的
-  #     固定清单（`scripts/fixed-structural-tests.mjs`），那 5 个用例文件每次 PR 都跑。
+  #     （执行面 = 钩子注册表，见 `scripts/ci-heavy-gates.mjs` 的头注）。
+  #   · `core 骨架单一事实源` / `core 出口纪律与基类纯度` 已在 2026-11-02 随固定结构用例
+  #     一道 retired（见 `GATE_TIER_LEDGER`）：它们的执行者正是固定结构清单，撤档后由
+  #     `每日单元测试` 全量套件覆盖，不再有 PR 执行者，故这一条不再列在这里。
   # 恢复动作（真要拆回独立 stage）：取消注释 → 从复合档的条目表删掉同名条目。
   #
   # - name: 格式化提交分离
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
-  # - name: core 骨架单一事实源
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
   # - name: 零消费导出
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
-  # - name: core 出口纪律与基类纯度
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+  # （`core 骨架单一事实源` / `core 出口纪律与基类纯度` 曾以同样的注释形态留在这里，
+  #  2026-11-02 随固定结构用例一道 retired —— 它们不再是 PR 档的「换执行者」形态，
+  #  改由 `每日单元测试` 全量套件覆盖，故此处不再列示例；见 `GATE_TIER_LEDGER`。）
 
   # ⚠️ **执行面是钩子注册表，不是条目表**（两轮合并之后的口径）：这一格跑的命令是
   # `node scripts/ci-heavy-gates.mjs`，而它读的正是 `.githooks/pre-commit` 里那些
