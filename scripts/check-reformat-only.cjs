@@ -105,7 +105,9 @@ const { discernRoots } = require("./gate-scan-read.cjs");
 const { gateFail, gatePass, gateSkip, indentItems } = require("./ci-log.mjs");
 /* 逐提交护栏（护栏 ②）的**机制层**（`reformat-per-commit.mjs`）：它按**职责**切出去
  * —— 取数与判定在那边，判决话术与三态出口仍在本文件（`report()`）。 */
-const { perCommitShape, perCommitShapeOf, commitBodies } = require("./reformat-per-commit.mjs");
+/* 护栏 ② 的取数 / 读数 / 判定都在机制层（`reformat-per-commit.mjs`），本文件只留出口。 */
+const pcm = require("./reformat-per-commit.mjs");
+const { perCommitShape, perCommitShapeOf, commitBodies } = pcm;
 
 /* git 按 cwd 解析仓库(与 check-circular-deps.cjs 同口径):门禁在仓库根被调用。
  * prettier 则按**脚本自身所在仓库**解析 —— 见 formatFile 的注释。 */
@@ -783,14 +785,11 @@ function report(files, reformatOnly, limit, migration, perCommit) {
    * ⚠️ 两条分支**都要交回退出码**，调用点是 `process.exit(report(…))`：从前红的那
    * 一支就地 `process.exit(1)`，搬进出口之后若就地退，`report()` 之后的收尾就再没有
    * 执行者 —— 退 0 = 判据恒绿（这一条在把红那一支改成 `return 1` 时当场验过）。 */
-  /* **取不到的读数要念出来**（ISSUE #2990 的 `cnb-rmn-1k6bqsdfg`）：护栏 ② 的结论只有
-   * 「通过 / 不通过」两个出口，于是一屏全是「声明了但重排没独占」而一个 offender 都
-   * 不点名 —— 现场那些指纹（哪条提交没读到、为什么）一个字都没出现，读者只能去猜。
-   * 这一格只加**读数**，不改任何判决：`ok` 仍由 `perCommitShape` 的 `offenders` 决定。 */
-  if (perCommit && perCommit.offenders.length > 0) {
-    for (const line of indentItems([`护栏 ② 没通过：${perCommit.offenders.join("、")}`])) {
-      console.log(line);
-    }
+  /* 护栏 ② 的读数（ISSUE #2990 / #3038）：两种结论都要念，措辞与取数都在机制层 ——
+   * 「取不到的提交」与「重排散在几十条提交里」从前与「真的干净」逐字同形，读者只能猜。
+   * 这一格只加**读数**：`ok` 仍由 `perCommitShape` 的 `offenders` 决定。 */
+  for (const line of indentItems([pcm.perCommitReading(perCommit)].filter(Boolean))) {
+    console.log(line);
   }
   if (reformatOnly.size >= limit) {
     /* 「格式化迁移」声明成立 ⇒ 按迁移读（不阻断），但清单与读数照打（可审计）。

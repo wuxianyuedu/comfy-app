@@ -179,7 +179,26 @@ export function previewRangeEnds(deps) {
  * `reconcileSyntheticMergeFace()` 同一个判据；这边要的是**区间**而不是文件清单，
  * 所以不借它的返回值另算一份。
  *
- * 认不出（`HEAD` 不是合并提交 / 没有 `CNB_COMMIT` / 父关系对不上）⇒ `ok: false`，
+ * ## 平台有**两种**检出形态，两种都要给得出判决面（ISSUE #3038 现场）
+ *
+ * 同一格在不同的平台拼法下截然不同，`HEAD` 的父提交数就是那条分界线：
+ *
+ *   · **合成合并预览**（`HEAD` 的父提交 ≥ 2、`CNB_COMMIT` 是其中一父）⇒ 区间取
+ *     「另一父 .. `CNB_COMMIT`」，见上面那一段；
+ *   · **PR 头检出**（`HEAD` 只有一个父、`HEAD` 就是 `CNB_COMMIT`）⇒ 区间取
+ *     「平台目标 sha 与 `HEAD` 的**分叉点** .. `HEAD`」，即三点口径。
+ *
+ * 第二种形态是实测现场：`cnb-2f9-1k6d890pk` / `cnb-o9p-1k6d5ohhj` 两跑都是
+ * `HEAD = 源分支 tip`、父提交只有一条，而判据自己那一侧（`previewRangeEnds()`）
+ * 还认得出该把 `HEAD~1` 换成什么 —— 是**这一支**先把它记成「没判」的：
+ * 读数上于是既不红也不绿，这一格在平台上从来没有真正判过这个 PR。
+ *
+ * 两种形态都用**同一把尺**收两端，因为「本次改动从哪算起」只有一个答案：
+ * 起点是**分叉点**（`merge-base(目标, HEAD)`），不是目标 sha 自己 —— 目标分支在
+ * 分叉点之后落过的提交不该进这个 PR 的分母；终点是**本 PR 那一侧的 tip**，不是合成
+ * 提交（`父..合成提交` 是整个 PR 区间，把主干那一批与本 PR 混成一段）。
+ *
+ * 三种形态都认不出（`HEAD` 与 `CNB_COMMIT` 对不上 / 不在一部历史里）⇒ `ok: false`，
  * 由调用方把这一条**记成没判**。刻意不退回「检出的 `HEAD~1..HEAD`」——
  * 那条路的读数与「这个 PR 是什么」无关，而**恒绿的判据比红更贵**。
  *
@@ -210,29 +229,70 @@ export function syntheticMergeRange(deps) {
     return r.status === 0 ? String(r.stdout ?? "").trim() : "";
   };
   const row = git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(/\s+/).filter(Boolean);
-  if (row.length < 3) {
-    return {
-      ok: false,
-      reason: "HEAD 不是合并提交（这一跑没有平台合成的目标侧）⇒ 没有可用的判决面",
-    };
-  }
+  const head = row[0] ?? "";
+  const parents = row.slice(1);
   if (source === "") {
     return {
       ok: false,
       reason: "没有 CNB_COMMIT，判不出这一跑是不是平台合成的合并预览 ⇒ 没有可用的判决面",
     };
   }
-  const other = row.slice(1).find((sha) => sha !== source);
-  if (!other || !row.slice(1).includes(source)) {
-    return {
-      ok: false,
-      reason: `HEAD 的父提交里认不出本 PR（CNB_COMMIT ${source.slice(0, 8)}）⇒ 没有可用的判决面`,
-    };
+  /* 平台给的目标 sha 是**唯一**能算分叉点的东西（`resolveBaseRef()` 在本地会退到
+   * `origin/master` 的分叉点 —— 那是「我提交到哪儿」的读法，不是「这个 PR 并进哪儿」）。
+   * 两种形态都拿它当起点那一侧的定位件，所以缺了它就没有可信的判决面。 */
+  const target = String(env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim();
+  /**
+   * 起点：目标 sha 与本 PR 那一侧的**分叉点**。目标 sha 自己不能当起点 —— 它在分叉点
+   * 之后落过的提交（别人的 PR）不该进这个 PR 的分母。算不出来（浅克隆 / 对象不全）⇒ 空串。
+   */
+  /** @param {string} tip @returns {string} */
+  const forkPointOf = (tip) => (target === "" ? "" : git(["merge-base", target, tip]));
+
+  /* ── 形态一：合成合并预览（两个父，`CNB_COMMIT` 是其中一父）── */
+  if (parents.length >= 2) {
+    const other = parents.find((sha) => sha !== source);
+    if (!other || !parents.includes(source)) {
+      return {
+        ok: false,
+        reason: `HEAD 的父提交里认不出本 PR（CNB_COMMIT ${source.slice(0, 8)}）⇒ 没有可用的判决面`,
+      };
+    }
+    /* ⚠️ **终点取 `source`（本 PR 那一侧的 tip），不是 `HEAD`（合成提交）**：
+     * `另一父..HEAD` 正好是**整个 PR 区间** —— 逐提交口径看不出问题（合成提交自己被
+     * `--no-merges` 摘掉），可它把「本 PR 那条线」与「这次合并带进来的主干那一批」混成
+     * 一段，`report()` 的汇总口径按整段算分母（现场 `cnb-o9p-1k6d5ohhj`：170 份里 118 份
+     * 被判纯格式化，而同一区间逐提交复算只有一条 offender）。 */
+    const forkPoint = forkPointOf(source);
+    return { ok: true, range: `${forkPoint !== "" ? forkPoint : other}..${source}` };
   }
-  /* ⚠️ **终点取 `source`（本 PR 那一侧的 tip），不是 `HEAD`（合成提交）**：
-   * `另一父..HEAD` 正好是**整个 PR 区间** —— 逐提交口径看不出问题（合成提交自己被
-   * `--no-merges` 摘掉），可它把「本 PR 那条线」与「这次合并带进来的主干那一批」混成
-   * 一段，`report()` 的汇总口径按整段算分母（现场 `cnb-o9p-1k6d5ohhj`：170 份里 118 份
-   * 被判纯格式化，而同一区间逐提交复算只有一条 offender）。 */
-  return { ok: true, range: `${other}..${source}` };
+
+  /* ── 形态二：PR 头检出（`HEAD` 就是本 PR 那一侧的 tip）── */
+  if (head !== "" && head === source) {
+    if (target === "") {
+      return {
+        ok: false,
+        reason:
+          "PR 头检出（HEAD 只有一个父）但没有 CNB_PULL_REQUEST_TARGET_SHA，算不出这个 PR 的区间 ⇒ 没有可用的判决面",
+      };
+    }
+    const forkPoint = forkPointOf(head);
+    if (forkPoint === "") {
+      return {
+        ok: false,
+        reason: `算不出 ${target.slice(0, 8)} 与 HEAD 的分叉点（浅克隆 / 不在同一部历史里）⇒ 没有可用的判决面`,
+      };
+    }
+    if (git(["rev-parse", "--verify", "--quiet", `${head}^{commit}`]) === "") {
+      return {
+        ok: false,
+        reason: `HEAD（${head.slice(0, 8)}）不是一个提交对象 ⇒ 没有可用的判决面`,
+      };
+    }
+    return { ok: true, range: `${forkPoint}..${head}` };
+  }
+
+  return {
+    ok: false,
+    reason: `HEAD（${head.slice(0, 8)}）与 CNB_COMMIT（${source.slice(0, 8)}）对不上，认不出这一跑的形态 ⇒ 没有可用的判决面`,
+  };
 }

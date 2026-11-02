@@ -238,3 +238,50 @@ export function commitBodies(root, revRange) {
   }
   return bodies;
 }
+
+/**
+ * 护栏 ② 的**读数**（一行；`null` = 这一档没有逐提交读数，不必念）。
+ *
+ * ## 它治的是哪一件事
+ *
+ * 护栏 ② 只有「通过 / 不通过」两个出口，于是两种**下一动作截然相反**的形态在屏幕上
+ * 逐字相同：
+ *
+ *   · 某条提交**整条都是重排**、只是没带 `format-migration:` 声明 ⇒ 补声明；
+ *   · 重排散在几十条提交里、没有一条独占 ⇒ 形态就有问题，该拆历史。
+ *
+ * 现场（ISSUE #3038）连着两跑只有一张 `118 份` 的名单，一个「哪条提交是怎么读的」
+ * 都没有 —— 读者只能去猜是哪一种。这一格把**极值**念出来，那一句就足以分开两种形态。
+ *
+ * ## 为什么留在这里
+ *
+ * 本文件是护栏 ② 的机制层，而 `check-reformat-only.cjs` 已到 900 行硬闸（§12.6 R5）——
+ * 判决话术留在 `report()`，取数与措辞在这里。它**不改任何判定**：`ok` 仍由
+ * `perCommitShape()` 的 `offenders` 决定。
+ *
+ * @param {PerCommitReport | null | undefined} perCommit 逐提交读数
+ * @returns {string | null}
+ */
+export function perCommitReading(perCommit) {
+  if (!perCommit) {
+    return null;
+  }
+  if (perCommit.offenders.length > 0) {
+    return `护栏 ② 没通过：${perCommit.offenders.join("、")}`;
+  }
+  if (perCommit.commits.length === 0) {
+    return null;
+  }
+  const max = perCommit.commits.reduce(
+    (acc, c) => (c.reformatOnly >= acc.reformatOnly && c.reformatOnly > 0 ? c : acc),
+    { rev: "", files: 0, reformatOnly: 0 },
+  );
+  if (max.rev === "") {
+    return null;
+  }
+  const share = max.files ? `（${((max.reformatOnly / max.files) * 100).toFixed(0)}%）` : "";
+  return (
+    `护栏 ② 没拦：区间 ${perCommit.commits.length} 个提交里，单条纯格式化最多的是 ` +
+    `${max.rev.slice(0, 8)} 的 ${max.reformatOnly}/${max.files} 个${share}（逐提交读数，不参与判决）`
+  );
+}

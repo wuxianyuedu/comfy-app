@@ -30,6 +30,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { execFileSync } from "node:child_process";
 import { CHANGED_SCOPED } from "../scripts/base-check/hook-steps.mjs";
 import { COLORS } from "../scripts/ci-log.mjs";
 import {
@@ -39,6 +40,7 @@ import {
   narrowingDecision,
 } from "../scripts/ci-heavy-gates.mjs";
 import { syntheticMergeRange } from "../scripts/reformat-preview-range.mjs";
+import { createGateRepo, type GateRepo } from "./helpers/gate-repo";
 import {
   faceTouched,
   INCREMENTAL_GATES,
@@ -46,6 +48,17 @@ import {
 } from "../scripts/ci-incremental-gates.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+/** 沙箱仓库的起步形态：`master` 上一笔有内容的提交（两种检出形态都从这里分叉）。 */
+function initSandboxRepo(repo: GateRepo): void {
+  repo.git("init", "-q", "-b", "master", ".");
+  repo.git("config", "user.email", "gate@example.com");
+  repo.git("config", "user.name", "gate");
+  repo.git("config", "commit.gpgsign", "false");
+  repo.write("a.txt", "1\n");
+  repo.git("add", ".");
+  repo.commit("base");
+}
 const HOOK = path.join(ROOT, ".githooks", "pre-commit");
 
 const temps: Array<string> = [];
@@ -435,6 +448,76 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
     expect(got.reason).toContain("判决面");
     /* 「没判」的两个退出码都在这条上：判据自己的 2 与命令找不到的 127。 */
     expect(got.notRunCodes).toEqual(expect.arrayContaining([2, 127]));
+  });
+
+  /**
+   * **平台两种检出形态都要给判决面**（ISSUE #3038 的现场：`cnb-2f9-1k6d890pk`）。
+   *
+   * 只认「合成合并预览」的代价实测过：平台那一跑转的是 **PR 头检出**（`HEAD` 就是源分支
+   * tip、父提交只有一条），于是 `syntheticMergeRange()` 判「HEAD 不是合并提交 ⇒ 没有可用
+   * 的判决面」，这一条**既不红也不绿** —— 那一格在平台上从来没有判过这个 PR。
+   *
+   * 这一条钉的是「头检出也要算得出区间」：起点 `merge-base(目标 sha, HEAD)`、终点 `HEAD`。
+   * 反向验证：把形态二那一支删掉，下面 `expect(face.ok).toBe(true)` 当场红。
+   */
+  it("PR 头检出（HEAD 就是源分支 tip）也递得出判决面（#3038）", () => {
+    const { repo } = createGateRepo({
+      script: "check-reformat-only.cjs",
+      workdir: "head-face",
+      setup: initSandboxRepo,
+    });
+    repo.git("checkout", "-q", "-b", "pr");
+    repo.write("a.txt", "2\n");
+    repo.git("add", ".");
+    repo.commit("change");
+    const head = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    }).trim();
+    /* 目标分支在分叉点之后自己又落了一笔 —— 它**不该**进这个 PR 的分母，
+     * 所以起点必须是分叉点而不是目标 sha 自己。 */
+    repo.git("checkout", "-q", "master");
+    repo.write("b.txt", "theirs\n");
+    repo.git("add", ".");
+    repo.commit("target moves on");
+    const target = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    }).trim();
+    /* 平台那一跑的形态：**检出本 PR 那一侧**（HEAD = 源分支 tip，父提交只有一条）。 */
+    repo.git("checkout", "-q", "pr");
+
+    const face = syntheticMergeRange({
+      cwd: repo.dir,
+      env: { CNB_COMMIT: head, CNB_PULL_REQUEST_TARGET_SHA: target },
+    });
+    expect(face.ok, JSON.stringify(face)).toBe(true);
+    if (!face.ok) {
+      return;
+    }
+    const forkPoint = execFileSync("git", ["merge-base", target, head], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    }).trim();
+    expect(face.range).toBe(`${forkPoint}..${head}`);
+  });
+
+  it("认不出形态时仍然记成「没判」，不退回 HEAD~1..HEAD（#3038）", () => {
+    const { repo } = createGateRepo({
+      script: "check-reformat-only.cjs",
+      workdir: "head-face-bad",
+      setup: initSandboxRepo,
+    });
+    const head = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+    }).trim();
+    /* `CNB_COMMIT` 与 HEAD 对不上（并行会话推的另一种拼法）⇒ 不给面。 */
+    const face = syntheticMergeRange({ cwd: repo.dir, env: { CNB_COMMIT: "f".repeat(40) } });
+    expect(face.ok).toBe(false);
+    /* 没有目标 sha（本地手跑）也拿不到可信的面 —— 恒绿的判据比红更贵。 */
+    const noTarget = syntheticMergeRange({ cwd: repo.dir, env: { CNB_COMMIT: head } });
+    expect(noTarget.ok).toBe(false);
   });
 
   it("绿步一个字都不打 ⇒ 那一格**没判**（退 2，不许计入绿）", () => {
