@@ -208,7 +208,7 @@ export function fullTreeArgv(argv) {
  * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
  * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]} | {ok: false, reason: string}}
  */
-export function heavyGateArgv(argv, deps = {}) {
+export function heavyGateArgv(argv, deps) {
   const joined = argv.join(" ");
   /* ⚠️ `check-format.cjs --staged` 在这一档**换发 `--changed`**，不剥旗标进全库
    * （ISSUE #2729，printWidth 80 → 100 迁移期，#2710）：全库档对还没迁到 100 列的
@@ -232,7 +232,10 @@ export function heavyGateArgv(argv, deps = {}) {
       notRunCodes: [],
     };
   }
-  const base = resolveBaseRef({ cwd: deps.cwd, env: deps.env });
+  /* `deps` 可缺 ⇒ 这里读不到时给 `undefined`，由 `resolveBaseRef()` 自己回落到
+   * `process.env` 与仓库根（它本来就是这么写的）。**不给形参挂 `= {}`**：那会让
+   * TS 把整个形参推成 `{}`，`checkJs` 下 `deps.cwd` 直接 TS2339（平台那一跑实测）。 */
+  const base = resolveBaseRef({ cwd: deps?.cwd, env: deps?.env });
   if (!base.ok) {
     return { ok: false, reason: base.reason };
   }
