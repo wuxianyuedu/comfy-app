@@ -34,6 +34,16 @@ import { resolveGitDir } from "./git-dir.mjs";
 /** 退出码三态（与 `premerge-check.mjs` 逐字同口径）。 */
 export const CODE = { GREEN: 0, RED: 1, NOT_RUN: 2 };
 
+/* 清单类平台接口（`list-pulls` / `get-build-logs`）的翻页口径：**一份**，两处共用 ——
+ * `ship-platform.mjs` 的 `scanPullPages`（复用/落地判定，ISSUE #2964）与
+ * `ci-build-readout.mjs` 的 `resolveBuildSn`（按 HEAD 归属，ISSUE #2950）。
+ * 语义是「有界扫，扫不到照实回，不假装没有」；改这里同时动两处，正是要的效果 ——
+ * 分开各写一份时，下次调一处漏一处的形状已经撞过两次。 */
+/** 每页条数。 */
+export const LIST_PAGE_SIZE = 20;
+/** 翻页上界：5 页 = 100 条。到顶会明说「已翻 N 页」，不把截断念成全部。 */
+export const LIST_MAX_PAGES = 5;
+
 /** 阶段顺序表。**可反转**：新增/摘掉一段只改这张表 + 对应的 `run*`，不动判决逻辑。
  * `clean-branch` 排在最后：它要的是「合并已经验真」这件事，而那是 `merge` 那一段的产物。 */
 export const PHASES = [
@@ -242,20 +252,29 @@ export function classifyPushFailure(stdout, stderr) {
  *
  * 优先级（每一档都是可反转的一处，加旗标不改其余）：
  *   ① `--title` —— 人是权威：标题是判断，不该由拓扑决定；
- *   ② 这条分支相对主干带进来的**第一笔非常规提交** —— 一次 PR 一件事，那件事在
+ *   ② **平台上这条 PR 的现标题**（合并那一跳才给得到，ISSUE #2806）—— 复用一条
+ *      已在平台上改过标题的 PR 时，branch-first 推导与 PR 的实际内容早已分家，
+ *      squash 那一行照它写，主干上就落一条「标题与内容不符」的历史。平台上读者
+ *      第一眼读的就是 PR 标题，它与 squash 那一行本该是同一句；
+ *   ③ 这条分支相对主干带进来的**第一笔非常规提交** —— 一次 PR 一件事，那件事在
  *      分支开口那一笔就说清了；后面的碎片补笔 / 复核样本都是它的尾巴；
- *   ③ HEAD 那一笔 —— 分支上只剩合并节点时的退路，**读得出是退的**；
- *   ④ 空串 —— 两处都没有，交回空由调用方按「没跑起来」处理（不许编一个标题，
+ *   ④ HEAD 那一笔 —— 分支上只剩合并节点时的退路，**读得出是退的**；
+ *   ⑤ 空串 —— 两处都没有，交回空由调用方按「没跑起来」处理（不许编一个标题，
  *      也不许把 `--title ""` 发给平台建出一条没有标题的 PR）。
  *
- * @param {{subjects?: string[], head?: string, explicit?: string | null}} input
- *   `subjects` 是按 `git log --no-merges --reverse` 排好的分支自带提交 subject
- * @returns {{title: string, source: "flag" | "branch-first" | "head" | "none"}} 标题与它的来源
+ * @param {{subjects?: string[], head?: string, explicit?: string | null, platform?: string | null}} input
+ *   `subjects` 是按 `git log --no-merges --reverse` 排好的分支自带提交 subject；
+ *   `platform` 是平台上这条 PR 的现标题（只有合并那一跳会回读它，建 PR 时没有）
+ * @returns {{title: string, source: "flag" | "platform" | "branch-first" | "head" | "none"}} 标题与它的来源
  */
-export function deriveTitle({ subjects = [], head = "", explicit = null }) {
+export function deriveTitle({ subjects = [], head = "", explicit = null, platform = null }) {
   const flag = (explicit ?? "").trim();
   if (flag) {
     return { title: flag, source: "flag" };
+  }
+  const plat = (platform ?? "").trim();
+  if (plat) {
+    return { title: plat, source: "platform" };
   }
   const first = subjects.map((s) => (s || "").trim()).filter(Boolean)[0] ?? "";
   if (first) {
@@ -437,8 +456,9 @@ export function readFreshnessState(res) {
 /**
  * 读 PR JSON 的判决字段（同样只读 `data.*`）。
  *
- * @param {{data?:{number?:number|string,mergeable_state?:string,blocked_on?:string,is_merged?:boolean,state?:string}} | null} json 解析结果
- * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,state:string}} 归一后的字段
+ * @param {{data?:{number?:number|string,mergeable_state?:string,blocked_on?:string,is_merged?:boolean,state?:string,title?:string}} | null} json 解析结果
+ * @returns {{number:number|null,mergeableState:string,blockedOn:string,isMerged:boolean,state:string,title:string}} 归一后的字段
+ *   `title` 是平台上这条 PR 的**现标题**（合并那一跳取 squash 标题要用它，ISSUE #2806）
  */
 export function readPullVerdict(json) {
   const d = json?.data ?? {};
@@ -448,6 +468,7 @@ export function readPullVerdict(json) {
     blockedOn: String(d.blocked_on ?? ""),
     isMerged: d.is_merged === true,
     state: String(d.state ?? "unknown"),
+    title: String(d.title ?? ""),
   };
 }
 

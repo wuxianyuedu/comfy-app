@@ -170,7 +170,7 @@ export function stallReadout({
 export function diagnosePlan(slug, sn) {
   const target = sn ?? "<sn>";
   return [
-    `cnb build get-build-logs --repo ${slug} -v（未点名构建号时，按 HEAD 的 sha 在 pull_request 构建里归属）`,
+    `cnb build get-build-logs --repo ${slug} --page <p> --page-size 20 -v（未点名构建号时，按 HEAD 的 sha 在 pull_request 构建里归属；逐页扫到命中或到顶，ISSUE #2950）`,
     `cnb build get-build-status --repo ${slug} --sn ${target} -v`,
     `cnb build get-build-stage --repo ${slug} --sn ${target} --pipelineId <pipelineId> --stageId <stageId> -v（只对红格逐格取）`,
   ];

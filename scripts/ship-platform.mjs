@@ -39,6 +39,8 @@ import {
   deriveTitle,
   findMergedPullForHeadSha,
   findPullForBranch,
+  LIST_MAX_PAGES,
+  LIST_PAGE_SIZE,
   readPullCreateError,
   readPullVerdict,
 } from "./ship-core.mjs";
@@ -81,10 +83,13 @@ import { DEV_HANDLE_ENV_KEY, handlerLabel } from "./ship-ticket.mjs";
  *   log: PlatformIO["log"],
  *   baseRef: string | null,
  *   explicit?: string | null,
+ *   platform?: string | null,
  * }} ctx
+ *   `platform` 是平台上这条 PR 的现标题（只有合并那一跳回读得到，建 PR 时没有；
+ *   给了它，它排在 branch-first 推导之前，ISSUE #2806）
  * @returns {{title:string,source:string}} 标题与它的来源
  */
-function pickTitle({ run, log, baseRef, explicit = null }) {
+function pickTitle({ run, log, baseRef, explicit = null, platform = null }) {
   const subjects = baseRef
     ? run("git", [
         "log",
@@ -95,7 +100,7 @@ function pickTitle({ run, log, baseRef, explicit = null }) {
       ]).stdout.split("\n")
     : [];
   const head = run("git", ["log", "-1", "--pretty=%s"]).stdout.trim();
-  const t = deriveTitle({ subjects, head, explicit });
+  const t = deriveTitle({ subjects, head, explicit, platform });
   log(
     `[ship] 标题取自 ${t.source}${baseRef ? `（比的是 ${baseRef}..HEAD）` : ""}：${
       t.title || "(空)"
@@ -183,7 +188,9 @@ function stampHandlerLabel({ run, log, slug, number, handle, root }) {
  * @returns {{hit: number | null, scanned: number, ran: boolean}} `ran` = 至少拿到过一页
  */
 function scanPullPages(ctx, step) {
-  const { pages = 5, pageSize = 20, run, slug } = ctx;
+  /* 页界取自 ship-core 那份共用的（`LIST_MAX_PAGES` / `LIST_PAGE_SIZE`）—— 与
+   * `resolveBuildSn` 同一口径，两处只留一份常量，改一处即两处（ISSUE #2964/#2950）。 */
+  const { pages = LIST_MAX_PAGES, pageSize = LIST_PAGE_SIZE, run, slug } = ctx;
   let ran = false;
   let scanned = 0;
   for (let p = 1; p <= pages; p += 1) {
@@ -477,9 +484,13 @@ export function reportVerdict(ctx) {
  *   merge: boolean,
  *   buildState: "green"|"red"|"cancelled"|"running"|"unknown",
  *   explicitTitle?: string | null,
+ *   branch?: string | null,
  *   landed?: {title: string, sha: string, verified: boolean} | null,
  *   cleanBranch?: boolean,
  * }} ctx
+ *   `branch` 是 preflight 钉住的分支名：给了它，合并动作前会再复核一次当前分支
+ *   （跑期内漂移的第二道；第一道在 ship.mjs 进平台段前，ISSUE #2812）。
+ *   不给（老的调用形状）就跳过这一格 —— 本函数唯一的调用方是 ship.mjs，那里会给。
  *   `landed` 是「落进主干的那一行」的快照，由本函数在**验真之后**填 —— 阶段 7（关单）
  *   要的标题本体取自它，不在那里回推（原因见成功路径上那处注释）。
  *   `cleanBranch` 只是「人这一跳给了哪个旗标」的读数 —— 判断不在这里，本函数只把它念对。
@@ -502,6 +513,8 @@ export function mergeAndVerify(ctx) {
     landed = null,
     /* 同上：不传按「没要清理」念，与旗标默认关的口径一致。 */
     cleanBranch = false,
+    /* preflight 钉住的分支名（见 JSDoc）：不传则跳过合并前的漂移复核。 */
+    branch = null,
   } = ctx;
   if (!merge) {
     log("[ship] 未给 --merge ⇒ 停在判决处。合并是显式动作。");
@@ -515,15 +528,59 @@ export function mergeAndVerify(ctx) {
     );
     return CODE.RED;
   }
+  /* 跑期内漂移的**第二道**复核（第一道在 ship.mjs 进平台段前，ISSUE #2812）：
+   * 第一道拦在轮询之前，而轮询最长 45 分钟 —— 期间一次 `git checkout`，
+   * squash 合进去的就是**新分支的头**，这条 PR 的读数却全是旧分支的。
+   * 合并是不可回退动作，所以在它之前再读一次分支名；本地读，成本近零。
+   * 与第一道不会重复触发成误报：第一道命中就停在那里，走不到这里；
+   * 这里命中说明切换发生在第一道之后。 */
+  if (branch) {
+    const branchNow = run("git", ["rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim();
+    if (branchNow !== branch) {
+      log(
+        `[ship] 合并前复核：跑期内分支被切换（${branch} → ${branchNow || "(取不到)"}）⇒ 不合并：` +
+          "合进去的头已经不是这一轮读数记的那条分支。" +
+          "回到原来的分支重跑（PR 已存在会复用，CI 结论沿用，不会白烧）。",
+      );
+      return CODE.NOT_RUN;
+    }
+  }
+  /* squash 标题的权威顺序：人给的 `--title` > **平台上这条 PR 的现标题** > branch-first
+   * 推导（ISSUE #2806）。复用一条已在平台上改过标题的 PR 时，照 branch-first 写 squash
+   * 那一行，主干上就落一条「标题与内容不符」的历史 —— 评审在平台上读到的标题与
+   * `git log` 里那一行本该是同一句。没给 `--title` 才回读：给了就以人为准，省一次往返。 */
+  let platformTitle = null;
+  if (!(explicitTitle ?? "").trim()) {
+    const prNow = cnbJson(run, [
+      "pulls",
+      "get-pull",
+      "--repo",
+      slug,
+      "--number",
+      String(number),
+      "-v",
+    ]);
+    platformTitle = prNow ? readPullVerdict(prNow.json).title : null;
+    if (!prNow) {
+      /* 「回读没跑起来」与「这条 PR 没在平台上改过标题」必须在屏幕上长得不一样：
+       * 前者是读数缺失（退回 branch-first 是权宜，标题可能真的被人改过），
+       * 后者退回 branch-first 就是正确结论。混成一格，出问题时人无法分辨走的是什么。 */
+      log(
+        "[ship] 平台标题回读没跑起来（get-pull 取不到）⇒ squash 标题退回 branch-first 推导；" +
+          "这一句是**读数缺失**，不是「这条 PR 没在平台上改过标题」。",
+      );
+    }
+  }
   const { title } = pickTitle({
     run,
     log,
     baseRef,
     explicit: explicitTitle,
+    platform: platformTitle,
   });
   if (!title) {
     log(
-      "[ship] 标题两处都取不到 ⇒ 不合并：squash 那一行是主干上读者第一眼读到的东西，" +
+      "[ship] 标题几处都取不到 ⇒ 不合并：squash 那一行是主干上读者第一眼读到的东西，" +
         "给它一个空串等于留下一行没有内容的历史。这一格按「没有执行者」处理。",
     );
     return CODE.NOT_RUN;
