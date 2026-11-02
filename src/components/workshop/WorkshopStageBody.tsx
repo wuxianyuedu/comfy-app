@@ -93,6 +93,27 @@ type WorkshopStageBodyProps = {
   controller: WorkshopPipelineController;
 };
 
+/** 前置阶段未就绪的提示：五个 stage 入口共用同一块，收在这里（§12.13 函数长度闸）。 */
+function StagePrereqHint({
+  prereq,
+  setTab,
+}: {
+  prereq: WorkshopPipelineController["prereq"];
+  setTab: WorkshopPipelineController["setTab"];
+}) {
+  if (!prereq) {
+    return null;
+  }
+  return (
+    <StageHint
+      onGo={() => {
+        setTab(prereq.go);
+      }}
+      text={prereq.text}
+    />
+  );
+}
+
 export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
   const {
     /* 任务归属：这一屏的生成要落到哪个项目（镜头号在每条生成路径上现取） */
@@ -291,14 +312,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Character ── */}
       {tab === "character" && (
         <>
-          {prereq && (
-            <StageHint
-              onGo={() => {
-                setTab(prereq.go);
-              }}
-              text={prereq.text}
-            />
-          )}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <h3 className="text-ink u-title mb-3">角色工具</h3>
             <StageBoundary label="角色工具">
@@ -327,14 +341,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Storyboard ── */}
       {tab === "storyboard" && (
         <>
-          {prereq && (
-            <StageHint
-              onGo={() => {
-                setTab(prereq.go);
-              }}
-              text={prereq.text}
-            />
-          )}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <div className="mt-4 flex justify-end">
             <Button
               className="text-ink bg-subtle hover:bg-surface-2 h-auto rounded-xl px-6 py-3 text-sm font-semibold"
@@ -375,14 +382,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Shot images (镜头生图) ── */}
       {tab === "shots" && (
         <>
-          {prereq && (
-            <StageHint
-              onGo={() => {
-                setTab(prereq.go);
-              }}
-              text={prereq.text}
-            />
-          )}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">生图工具</h3>
@@ -416,14 +416,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Video generation (视频生成) ── */}
       {tab === "video" && (
         <>
-          {prereq && (
-            <StageHint
-              onGo={() => {
-                setTab(prereq.go);
-              }}
-              text={prereq.text}
-            />
-          )}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-ink u-title">视频工具</h3>
@@ -457,14 +450,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
       {/* ── Tab: Final composition (成片合成) ── */}
       {tab === "render" && (
         <>
-          {prereq && (
-            <StageHint
-              onGo={() => {
-                setTab(prereq.go);
-              }}
-              text={prereq.text}
-            />
-          )}
+          <StagePrereqHint prereq={prereq} setTab={setTab} />
           <section className="border-border bg-surface mt-4 rounded-2xl border p-5">
             <StageBoundary label="成片合成">
               <LazyFinalComposer
