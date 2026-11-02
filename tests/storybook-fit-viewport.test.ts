@@ -99,7 +99,7 @@ type CanvasUsage = {
   readonly hasNodeTypes: boolean;
   /** `scene={… canvasScene("名字") …}` 里的场景名（读不到就是 null）。 */
   readonly sceneName: string | null;
-}
+};
 
 /** 扫一个文件里的所有 `<StorybookFlowCanvas>` 用法。 */
 function canvasUsagesIn(file: string): Array<CanvasUsage> {

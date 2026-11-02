@@ -31,6 +31,23 @@ import {
   type GateRepo,
 } from "./helpers/gate-repo";
 import { symlinkDir } from "./helpers/symlink-dir";
+/* 区间两端的取法直接单测机制层（见「区间两端」那条用例的理由）。 */
+import { previewRangeEnds } from "../scripts/reformat-preview-range.mjs";
+
+/** `perCommitShapeOf` 是判据的**自测入口**（理由见那一条用例的头注）。判据是 `.cjs`，
+ * 所以只能 `require` —— 与 `check-format.test.ts` 同形。 */
+/* SAFETY: 类型断言已复核 */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { perCommitShapeOf } = require("../scripts/check-reformat-only.cjs") as {
+  perCommitShapeOf: (
+    rev: string,
+    spec?: { root?: string; limit?: number },
+  ) => {
+    ok: boolean;
+    offenders: Array<string>;
+    commits: Array<{ rev: string; unknown?: boolean }>;
+  };
+};
 
 /* 每条用例都要在临时仓库里真跑 git（init / add / commit / merge）+ 真起 oxfmt
  * （门禁按「整批一次 oxfmt」调用，但建库 / 提交 / 判定的固定成本仍在）：默认
@@ -93,6 +110,9 @@ const { test, expect } = defineGateRepo({
   dirs: ["src/lib", "scripts", "docs", "changelog.d"],
   copy: [
     { from: "scripts/launcher-core", to: "scripts/launcher-core" },
+    /* 逐提交护栏（护栏 ②）的机制层 —— 判据 `require` 它，少一份就是
+     * `MODULE_NOT_FOUND`（`copyGateDeps` 只追**同目录**依赖）。 */
+    { from: "scripts/reformat-per-commit.mjs", to: "scripts/reformat-per-commit.mjs" },
     {
       from: "src/lib/process/executable-resolve.ts",
       to: "src/lib/process/executable-resolve.ts",
@@ -111,6 +131,20 @@ const { test, expect } = defineGateRepo({
     {
       from: "src/lib/process/version-compare.ts",
       to: "src/lib/process/version-compare.ts",
+    },
+    /* 合并预览那一支的「本次改动从哪算起」走的不是本脚本自己那份逻辑，而是
+     * `changed-scope.mjs`（`shell-gate --base` 同一个函数）。`.cjs` 只能动态
+     * `import()`，缺了它脚本以 exit 2 结束 —— 而那条链上的每一份都要在
+     * （`git-name-status` 又静态 import `launcher-core/sync-attribution.mjs`）。 */
+    { from: "scripts/changed-scope.mjs", to: "scripts/changed-scope.mjs" },
+    /* 区间两侧的判定收在机制层（`reformat-preview-range.mjs`，`.cjs` 动态 import 它）——
+     * 拆出去的是「与平台拓扑打交道」那一段，判据本体不动。 */
+    { from: "scripts/reformat-preview-range.mjs", to: "scripts/reformat-preview-range.mjs" },
+    { from: "scripts/git-name-status.mjs", to: "scripts/git-name-status.mjs" },
+    { from: "scripts/base-check/git-ref.mjs", to: "scripts/base-check/git-ref.mjs" },
+    {
+      from: "scripts/launcher-core/sync-attribution.mjs",
+      to: "scripts/launcher-core/sync-attribution.mjs",
     },
   ],
   setup: (repo) => {
@@ -153,6 +187,12 @@ function headSha(repo: GateRepo): string {
 function commitAll(repo: GateRepo, message: string): void {
   repo.git("add", "-A");
   repo.commit(message);
+}
+
+/** 同 `commitAll`，但把那个提交的 sha 交回来（造合并预览那两条要它当 `CNB_COMMIT`）。 */
+function commitAllReturningSha(repo: GateRepo, message: string): string {
+  commitAll(repo, message);
+  return headSha(repo);
 }
 
 /**
@@ -371,10 +411,119 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     expect(r.output).toContain("不按迁移读");
   });
 
-  test("漏了一个提交没声明 ⇒ 不按迁移读（护栏 ①）", ({ repo }) => {
+  /* **三点区间（`A...B`）必须与两点判出同一个答案**（ISSUE #3024）。
+   *
+   * 现场：平台 `重档静态判据` 那一格红在「格式化提交分离 —— 本次改动 162 个源文件，
+   * 其中纯格式化 120 个」，而**同一批改动**在本地按两点区间判也是 120 个。判据没报错，
+   * 报得也对 —— 错的是另一处：CI 盘点是按 `A...B` 调的，而入口按 `".."` 裸切，
+   * 切出 `["A", ".B"]`，于是每一份文件的「改动后」都取不到，**全部**被
+   * `collectPairs` 按「任一侧取不到」跳过。它既不报错也不说「没判」，屏幕上是一句
+   * 干干净净的 `[ok] 本次改动 … 没有纯格式化的` —— 恒绿的判据。
+   *
+   * 这一条把两个区间形式钉成同一份判决：三点若不等于两点，说明 `after` 那一侧又丢了。 */
+  test("三点区间（`A...B`）与两点区间判出同一个结论", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("feature"));
+
+    const twoDots = repo.run(["--range", "HEAD~2..HEAD"]);
+    const threeDots = repo.run(["--range", "HEAD~2...HEAD"]);
+    expect(threeDots.code).toBe(twoDots.code);
+    expect(threeDots.output).toContain("纯格式化 12 个");
+  });
+
+  /* **区间两侧是同一个提交 ⇒ 必须是 `skip`，不是「没有纯格式化」**（ISSUE #3026）。
+   *
+   * 现场：平台那一跑给的区间两侧取成了**同一个 sha**（`#3022` 那条修法里起点用的
+   * 目标 sha 恰是 HEAD），于是每一份配对的 `before` / `after` 都取不到、
+   * `classifyReformatOnly` 连 oxfmt 都没起过 —— 屏幕上却是一句
+   * `[ok] 本次改动 N 个源文件，没有纯格式化的`。那两句在终端里一模一样，而一句是
+   * 「判过了」、一句是「没判」，三态口径（§13.5.25）在这里塌成了两态。 */
+  test("区间两侧是同一个提交 ⇒ 报「没判」，不冒充「没有纯格式化」", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+
+    const head = headSha(repo);
+    const r = repo.run(["--range", `${head}..${head}`]);
+    expect(r.code).toBe(0);
+    /* 空 patch 那一支先命中（也是 `skip`）—— 这里钉的是**它不许冒充「判过了」**。 */
+    expect(r.output).toContain("[skip]");
+    expect(r.output).not.toContain("没有纯格式化的");
+  });
+
+  /* 「逐提交的读数取不到」≠「这条提交干净」（ISSUE #2990 的 `cnb-rmn-1k6bqsdfg`）。
+   *
+   * 现场：平台那一格判的是**合成合并预览**，护栏 ② 一个 offender 都没点名（屏幕上是
+   * 空的），而汇总仍报一批纯格式化 ⇒ 判决落进「声明了但重排没独占」那一支 ——
+   * 话术指着一件没发生的事，读者只能去猜。
+   *
+   * 根因在取数：**「这条提交没改文件」与「这条提交的 diff 没读到」折成同一支**（空
+   * patch 就 `continue`）—— 后者是**没测**，却被 `offenders` 读成了「干净」。`ok`
+   * 只看 `offenders`，于是护栏 ② 在「一条都没读到」时照样说通过。
+   *
+   * ⚠️ 这一条打的是判据导出的 `perCommitShapeOf`：`--range` 那一跳会先
+   * `git diff <A>..<B>`，而区间两端都要能解析成**提交**，这一档的父恰恰读不到
+   * （`fatal: Invalid revision range`）—— 于是那一格在进程外根本没有入口。入口本身是
+   * 薄的：它把这条提交交给同一份逐提交循环。
+   *
+   * 变异证明：撤掉「父对象读不到 ⇒ unknown」那条判定之后这一条当场红。 */
+  test("逐提交取不到 diff → 记 unknown，不许被读成干净（护栏 ②）", ({ repo }) => {
     seedDirty(repo, 12);
     repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
-    commitAll(repo, "migrate the formatter"); // 这一条**没**写尾注
+    commitAll(repo, declared("migrate the formatter"));
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+
+    const dirt = (args: Array<string>) =>
+      execFileSync("git", args, { cwd: repo.dir, encoding: "utf8" }).trim();
+
+    /* 取一条**父提交不存在**的提交：`cat-file` 读得到它自己（不解析父），而它与父的
+     * diff 取不到 —— 这正是「历史形状在、对象不全」那一档。
+     * ⚠️ 父哈希是**定长 40 位**：换成更短的会让 `cat-file commit` 当场 bad object，
+     * 那时连这条提交本身都读不到，判的就变成另一件事了。 */
+    const raw = dirt(["cat-file", "commit", "HEAD"]).replace(
+      /^parent .*$/m,
+      `parent ${"1".repeat(40)}`,
+    );
+    const orphan = execFileSync("git", ["hash-object", "-t", "commit", "-w", "--stdin"], {
+      cwd: repo.dir,
+      encoding: "utf8",
+      input: `${raw}\n`,
+    })
+      .toString()
+      .trim();
+
+    /* 前提：这条提交**本身**读得到（`cat-file` 不解析父），而与父的 diff 取不到。 */
+    expect(dirt(["cat-file", "commit", orphan])).toContain("parent 1111");
+    expect(() => dirt(["diff", "--name-only", `${"1".repeat(40)}..${orphan}`])).toThrow();
+
+    const got = perCommitShapeOf(orphan, { root: repo.dir });
+    expect(got.ok, "取不到 diff 的提交不许被读成干净").toBe(false);
+    expect(got.offenders.join("、")).toContain("取不到与父提交的 diff");
+  });
+
+  /* 护栏 ① 只问**含重排**的提交（ISSUE #3054）：与迁移无关的功能提交不该被它判。
+   *
+   * 现场：PR #2990 是 `printWidth` 迁移，而它的生命周期里追加了 5 笔**修判据本身**的
+   * 功能提交（2~8 个文件、零重排）。`every()` 口径要求它们也写 `format-migration:`，
+   * 于是一个合规的迁移 PR 被 `172 份里 118 份` 判红（本格平台的现场读数）。
+   * 那 5 笔没碰重排、也不该撒谎写迁移尾注 ⇒ 它们不参与这一关。 */
+  test("功能提交没声明、但**含重排**的那几笔都声明了 ⇒ 按迁移放行（护栏 ①）", ({ repo }) => {
+    seedDirty(repo, 12);
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, "migrate the formatter"); // 零重排的功能提交：不参与护栏 ①
     formatInPlace(
       repo,
       Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
@@ -382,8 +531,46 @@ describe("格式化器迁移的声明（`format-migration:`）", { timeout: 300_
     commitAll(repo, declared("reformat"));
 
     const r = repo.run(["--range", "HEAD~2..HEAD"]);
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
+  });
+
+  test("**含重排**的提交漏了声明 ⇒ 不按迁移读（护栏 ① 不放宽）", ({ repo }) => {
+    seedDirty(repo, 12);
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, "reformat"); // 这一条是重排，却**没**写尾注
+
+    const r = repo.run(["--range", "HEAD~1..HEAD"]);
     expect(r.code).toBe(1);
     expect(r.output).toContain("格式化提交分离");
+  });
+
+  /* **空提交不参与护栏 ①**（ISSUE #3034）。
+   *
+   * 现场：`pnpm ship --rerun-ci` 推的那笔空提交正文固定为
+   * `ci: rerun (ship --rerun-ci)`、不带任何尾注，而它进的是 PR 区间。PR #2990
+   * 重跑三次之后，一个原本合规的迁移 PR 被 `166 份里 118 份纯格式化` 判红
+   * （构建 `cnb-4ig-1k6csckqj`）；同一个区间把三笔 rerun 摘掉就 `[ok] 按迁移放行`。
+   * 空提交一份文件都没碰，对「这次重排有没有独占」不提供任何信息 ⇒ 不许它否决
+   * 整个人证（护栏 ② 那边空提交天然是 0/0、自动干净，两处口径由此一致）。 */
+  test("区间里夹着没尾注的**空提交**（如 --rerun-ci）⇒ 仍按迁移放行", ({ repo }) => {
+    seedDirty(repo, 12);
+    repo.write("src/lib/feature.ts", "export const FEATURE = 1;\n");
+    commitAll(repo, declared("migrate the formatter"));
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    commitAll(repo, declared("reformat"));
+    // 重派生流水线的那一笔：零文件改动、也没有尾注。
+    repo.git("commit", "--allow-empty", "-q", "-m", "ci: rerun (ship --rerun-ci)");
+
+    const r = repo.run(["--range", "HEAD~3..HEAD"]);
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
   });
 
   /* 平台侧那条流水线跑的是**合并预览**：`HEAD` 是合并提交，于是 `HEAD~1..HEAD`
@@ -500,6 +687,149 @@ describe("pre-commit 现场：必须判「暂存区」而不是上一次提交",
     const r = repo.run();
     expect(r.code).toBe(0);
     expect(r.output).toContain("合并提交");
+  });
+
+  /* 合并**预览**（ISSUE #3022 / #3035）：平台那一格没有暂存区，判据落到「判 HEAD
+   * 这一次提交」那一支，而那个区间的两侧不能是 `HEAD~1..HEAD`。
+   *
+   * ## 为什么是一对用例，而不是一条
+   *
+   * 平台拼出来的合并提交**不保证把本分支放在第一父**：现场（`cnb-3lk-1k6d2lm2l`）
+   * 第一父是**目标分支**那一侧，于是 `HEAD~1..HEAD` 里全是主干带来的提交（它们没有
+   * `format-migration:` 尾注），日志是一屏「声明了但重排没独占」，而本次改动是什么
+   * 与那条红毫无关系。而 #3022 早先的修法是「起点换成平台给的目标 sha、终点仍是
+   * `HEAD`」—— 那条只在「第一父 = 本 PR」时对，反过来就把**主干那批**算进分母
+   * （两种拼法各红过好几十次）。
+   *
+   * ⇒ 现在两侧都取自合成提交的父关系（`changed-scope.mjs` 的
+   * `reconcileSyntheticMergeFace()`）：区间恒为「第一父..第一父名下的那个 sha」，
+   * 与拼法无关。两条用例各演一种拼法。
+   *
+   * ## 场景（两种拼法共用）
+   *
+   * 主干那边有一笔**别的**重排（没有尾注），本分支上是「声明了迁移的重排」，
+   * 平台把两者合成一个合并提交。真结论只有一个：按迁移放行。
+   */
+  /** 造出「主干一笔无尾注重排 + 分支一笔声明了迁移的重排」，返回两个 sha。 */
+  function twoSidedHistory(repo: GateRepo) {
+    seedDirty(repo, 12); // 自带一次提交 ⇒ 未格式化版本进历史
+    const fork = headSha(repo);
+    /* 主干那边：别人一笔没有尾注的重排（它不该进本 PR 的分母）。 */
+    repo.write("src/lib/main-only.ts", "export const M={a:1,b:'y'};\n");
+    formatInPlace(repo, ["src/lib/main-only.ts"]);
+    commitAll(repo, "主干：另一批重排（没有尾注）");
+    const mainHead = headSha(repo);
+    /* 分支从分叉点分出，在分支上做重排并声明迁移。 */
+    repo.git("checkout", "-q", "-b", "branch-side", fork);
+    formatInPlace(
+      repo,
+      Array.from({ length: 12 }, (_, i) => `src/lib/dirty-${i}.ts`),
+    );
+    const branchSha = commitAllReturningSha(repo, "format only\n\nformat-migration: 用例声明");
+    return { fork, mainHead, branchSha };
+  }
+
+  /**
+   * 区间**终点**不许取合成提交（ISSUE #3038 的第二处，现场 `cnb-o9p-1k6d5ohhj`）。
+   *
+   * `第一父..合成提交` 在「第一父 = 目标分支」那种拼法下正好是**整个 PR 区间**：
+   * 逐提交口径看不出问题（合成提交自己会被 `--no-merges` 摘掉），可它把「本 PR 那条线」
+   * 与「这次合并带进来的主干那一批」混成一段，`report()` 的汇总口径按整段算分母 ——
+   * 实测 170 份里 118 份被判纯格式化，而同一区间逐提交复算只有一条 offender。
+   * ⇒ 终点取**第二父**（本 PR 那一侧的 tip）。
+   *
+   * 造法：主干上有一笔**没有尾注的重排**（它只该出现在「整段」口径里），本分支上是一笔
+   * 声明了迁移的重排。若终点错取合成提交，主干那一笔会进分母 ⇒ 判成「不按迁移读」。
+   */
+  /**
+   * 区间**两端**的取法（ISSUE #3038 的第二处，现场 `cnb-o9p-1k6d5ohhj`）。
+   *
+   * 这一条**直接钉机制层的返回值**，不走端到端：端到端只能看出「绿了没有」，而这里
+   * 要钉的是「区间是哪两个端点」—— 取错了可能照样绿（主干那批恰好没跨过阈值），
+   * 那种绿正是这次事故的形状（平台上 170 份里 118 份被判纯格式化，而逐提交复算
+   * 只有一条 offender）。
+   */
+  test("区间两端：起点取分叉点、终点取第二父（不取合成提交）", () => {
+    const calls: Array<string> = [];
+    const gitMap: Record<string, string> = {
+      "rev-list --parents -n 1 HEAD": "HEAD_SHA FIRST_PARENT SECOND_PARENT",
+      "rev-list --parents SECOND_PARENT..HEAD": "SECOND_PARENT",
+      "rev-list --first-parent SECOND_PARENT..HEAD": "SECOND_PARENT",
+      "merge-base FIRST_PARENT SECOND_PARENT": "FORK_POINT",
+    };
+    const r = previewRangeEnds({
+      gitOrEmpty: (args: string[]) => {
+        calls.push(args.join(" "));
+        return gitMap[args.join(" ")] ?? "";
+      },
+      env: { CNB_COMMIT: "SECOND_PARENT", CNB_PULL_REQUEST_TARGET_SHA: "TARGET" },
+      resolveBaseRef: () => ({ ok: true, ref: "TARGET", via: "用例" }),
+      reconcile: () => ({
+        used: true,
+        firstParent: "FIRST_PARENT",
+        head: "HEAD_SHA",
+        files: [],
+        renamedFrom: [],
+        deduped: [],
+        base: "TARGET",
+      }),
+      warn: (line: string) => calls.push(`warn:${line}`),
+    });
+    /* 终点**不是**合成提交（`HEAD_SHA`）：`第一父..合成提交` 会连主干那一批一起算进来。 */
+    expect(r.after).toBe("SECOND_PARENT");
+    /* 起点**不是**第一父：第一父是「目标分支那一刻的顶端」，它自己也落过提交。 */
+    expect(r.before).toBe("FORK_POINT");
+    expect(calls).toContain("merge-base FIRST_PARENT SECOND_PARENT");
+  });
+
+  test("合并预览（第一父 = 目标分支侧）⇒ 区间只含本 PR 那批提交", ({ repo }) => {
+    const { fork, mainHead, branchSha } = twoSidedHistory(repo);
+    /* 平台拼法之一：先落在主干上（分叉点那一笔）、再把 PR 那侧合进来 ⇒ 第一父是**主干**。 */
+    repo.git("checkout", "-q", "branch-side");
+    repo.git("reset", "--hard", "-q", fork);
+    repo.git("merge", "--no-ff", "-q", "-m", "merge preview", branchSha);
+    /* `CNB_COMMIT` 是源分支 head（平台侧恒给），父关系认得出这次合成。 */
+    const r = repo.run([], {
+      env: {
+        CNB_PULL_REQUEST_TARGET_SHA: mainHead,
+        CNB_COMMIT: branchSha,
+      },
+    });
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
+    /* 主干那笔没有尾注的提交**不许**进区间 —— 它进去就会把声明判成 false。 */
+    expect(r.output).not.toContain("不按迁移读");
+  });
+
+  test("合并预览（第一父 = 本分支侧）⇒ 同一份改动给同一个答案", ({ repo }) => {
+    const { mainHead, branchSha } = twoSidedHistory(repo);
+    /* 平台拼法之二：先切到 PR 那侧、再把主干合进来 ⇒ 第一父是**本分支**。
+     * 这一形态下 `HEAD~1..HEAD` 恰好是对的那个区间，而 `#3022` 那条「起点换目标
+     * sha」恰好是错的 —— 两条用例合起来才钉得住「与拼法无关」。 */
+    repo.git("checkout", "-q", "branch-side");
+    repo.git("merge", "--no-ff", "-q", "-m", "merge main", mainHead);
+    const r = repo.run([], {
+      env: {
+        CNB_PULL_REQUEST_TARGET_SHA: mainHead,
+        CNB_COMMIT: branchSha,
+      },
+    });
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
+  });
+
+  test("认不出合成提交（没有 CNB_COMMIT）⇒ 按拓扑钉区间，不落回 HEAD~1", ({ repo }) => {
+    const { fork, mainHead, branchSha } = twoSidedHistory(repo);
+    repo.git("checkout", "-q", "branch-side");
+    repo.git("reset", "--hard", "-q", fork);
+    repo.git("merge", "--no-ff", "-q", "-m", "merge preview", branchSha);
+    /* 没有 `CNB_COMMIT` ⇒ `reconcileSyntheticMergeFace()` 认不出这次合成，但它们
+     * **仍然是**一次合并预览。此时退回 `HEAD~1..HEAD` 就是红过的那个形状（第一父是
+     * 主干 ⇒ 主干那批进分母）—— 所以按拓扑挑起点：`merge-base(目标 sha, HEAD)`
+     * 的 `first-parent` 计数与总数相等 ⇒ 它是干净的分叉点。 */
+    const r = repo.run([], { env: { CNB_PULL_REQUEST_TARGET_SHA: mainHead } });
+    expect(r.code).toBe(0);
+    expect(r.output).toContain("按迁移放行");
   });
 
   test("合并提交豁免不掩盖 CI 的 --range 盘点（按范围判，不受现场影响）", ({ repo }) => {

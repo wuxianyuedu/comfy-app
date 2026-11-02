@@ -97,6 +97,7 @@ import process from "node:process";
 
 import { CHANGED_SCOPED, readHookSteps, runGate } from "./base-check/hook-steps.mjs";
 import { resolveBaseRef, resolveChangedFiles } from "./changed-scope.mjs";
+import { syntheticMergeRange } from "./reformat-preview-range.mjs";
 import { faceTouched, narrowingEntryForScript } from "./ci-incremental-gates.mjs";
 import {
   COLORS,
@@ -184,28 +185,6 @@ export function fullTreeArgv(argv) {
 }
 
 /**
- * 换判决面时要换成**显式区间**（而不是 `--base <ref>`）的那几条。
- *
- * 判据是「它的基线语义是不是区间」：`shell-gate` / `check-doc-mirror-pairing` 问的是
- * 「相对基线改了什么」，一个 ref 就够；而 `check-reformat-only` 的读数**逐提交**展开
- * （护栏 ② 要的是「这一条提交里重排占不占得住」），它只认 `<before>..<after>`
- * —— 给它一个裸 ref，那一支会把它当成区间去 `split("..")`，拿到的两侧都是 undefined。
- *
- * ⚠️ 两条都要挂在 `CHANGED_SCOPED` 上（ISSUE #3032）：名单回答「它的判决面是不是只在
- * 本次改动上」，本表只回答「换面时用哪种旗标」。只加在这里而不加名单 ⇒ 它走「剥旗标
- * 进全量档」那一支，而那正是那一支对它无效的形态（剥完之后判的是 `HEAD~1..HEAD`）。
- *
- * @type {ReadonlyArray<{script: string, flag: string, rewrite: (argv: readonly string[], ref: string) => string[]}>}
- */
-const RANGE_SCOPED = [
-  {
-    script: "scripts/check-reformat-only.cjs",
-    flag: "--range",
-    rewrite: (argv, ref) => [...argv.filter((a) => a !== "--staged"), "--range", `${ref}..HEAD`],
-  },
-];
-
-/**
  * 这一步在**这一档**（平台侧、干净快照、没有暂存区）该怎么跑。
  *
  * 两族的分界在**能不能剥**：
@@ -223,21 +202,37 @@ const RANGE_SCOPED = [
  * 带 `--staged`，但**剥掉那个旗标之后它判的仍是暂存集**（镜像与源是否**同批**是提交的
  * 属性，不是仓库的属性）⇒ 剥旗标这一手对它**不成立**，它会自认「暂存区是空的 ——
  * 没有什么可判」并退 0，被计成绿。
- * ⇒ 这一族**连 `--staged` 一起剥掉**再换判决面：判据只该看到**一个**判决面来源
- * （显式区间优先于暂存区），两个都挂着会让「到底按哪个面判」变成读代码的事。
- * 换发的形态**逐条**不同（`--base <ref>` 与 `--range <基线>..HEAD` 不是同一件事）——
- * 见下面 `RANGE_SCOPED` 与 `heavyGateArgv()` 里那两支。
+ * ⇒ 这一族**连 `--staged` 一起剥掉**再挂 `--base <ref>`：判据只该看到**一个**
+ * 判决面来源（`--base` 优先于暂存区），两个都挂着会让「到底按哪个面判」变成读代码的事。
+ *
+ * ⚠️ **曾经还有第二支 `--range <基线>..HEAD`**（ISSUE #3032 给 `check-reformat-only.cjs`
+ * 加的），现已撤销（ISSUE #3038）：那条路的判决面来自平台给的基线，而**基线是不是
+ * 分叉点取决于平台的合并拼法** ⇒ 一种拼法上对、另一种上又错回来（同一格连红三轮）。
+ * 同一个问题收口在判据那一侧（它自己按合成提交的父关系取区间），那条判据因此退出了
+ * `CHANGED_SCOPED`。**不留一张只为一条目的存在的表** —— 再出现同族时按那张单子的口径重立。
+ *
+ * ⚠️ **但「退出 CHANGED_SCOPED」不等于「在平台上判得对」**（ISSUE #3048，PR #2990 的
+ * `cnb-o9p-1k6d5ohhj` 现场）：那一支走下来，这一档只剥 `--staged`、**不给任何判决面**，
+ * 而平台侧没有暂存区 ⇒ 判据回落到「判 HEAD 这一次提交」，那里的 `HEAD` 是**检出**而不是
+ * 平台合成的合并预览 —— `HEAD~1..HEAD` 于是只含检出自己的最后一笔，读数是
+ * `170 个源文件里 118 个纯格式化`（那 118 份散在 27 笔里，没有一笔独占）。
+ * 判据本体是对的，错的是**没人把判决面递给它**。
+ * ⇒ 合成提交的形态这一档自己看得见（`HEAD` 的父提交 + `CNB_COMMIT`），递过去的判决面
+ *    就是那两个父：`--range <第一父>..<第一父名下的那个 sha>`（见 `syntheticMergeRange()`）。
+ *    认不出合成提交 / 父关系对不上 ⇒ 这一条**没判**（`notRunCodes` 收 2，单列退 2，
+ *    不计入「绿」）—— 不给判决面就等于恒绿，那是本仓最贵的形态。
  *
  * ⚠️ 下面这两个 `@param` 与 `@returns` **必须贴着函数本体**：ISSUE #3032 的落地笔把两个
- * doc 块次序写反了 —— 标签落在 `RANGE_SCOPED` 那条 `@type` 上，函数自己一个参数类型都
+ * doc 块次序写反了 —— 标签落在另一条 `@type` 上，函数自己一个参数类型都
  * 没有 ⇒ 参数全是 implicit any，`tsc --noEmit` 与脚本档类型检查在 master 上当场红。
  * 挪任何一块之前先确认标签仍贴着它要描述的那个声明。
  *
  * @param {string[]} argv 钩子那一步的命令
  * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
- * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]} | {ok: false, reason: string}}
+ * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]}
+ *   | {ok: false, reason: string, notRunCodes?: number[]}}
  */
-export function heavyGateArgv(argv, deps = {}) {
+export function heavyGateArgv(argv, deps) {
   const joined = argv.join(" ");
   /* ⚠️ `check-format.cjs --staged` 在这一档**换发 `--changed`**，不剥旗标进全库
    * （ISSUE #2729，printWidth 80 → 100 迁移期，#2710）：全库档对还没迁到 100 列的
@@ -253,6 +248,26 @@ export function heavyGateArgv(argv, deps = {}) {
       notRunCodes: [],
     };
   }
+  /* ⚠️ `check-reformat-only.cjs` 的 `--staged` 在这一档**换发成它唯一的另一个判决面**
+   * （`--range <起>..<止>`，ISSUE #3048）：剥掉旗标之后它回落到「判 HEAD 这一次提交」，
+   * 而平台侧没有暂存区、又没有合并预览的父关系 ⇒ `HEAD~1..HEAD` 只是**检出**的最后一笔，
+   * 读数（`170 个源文件里 118 个纯格式化`）与「这个 PR 是什么」毫无关系。
+   * 区间两端取合成提交的两个父（`syntheticMergeRange()`）—— 不给面就**不许**跑，
+   * 那是「剥旗标判全仓」这个默认口径唯一的例外。 */
+  if (joined.includes("check-reformat-only.cjs") && argv.includes("--staged")) {
+    const face = syntheticMergeRange({ cwd: deps?.cwd, env: deps?.env });
+    if (!face.ok) {
+      /* `notRunCodes` 收 2：那一条判据自己用 2 表示「拿不到判决面」。两个码都归「没判」，
+       * 于是它不会被读成「判红」（§13.5.25 的三态口径）。 */
+      return { ok: false, reason: face.reason, notRunCodes: [2, 127] };
+    }
+    return {
+      ok: true,
+      argv: [...fullTreeArgv(argv), "--range", face.range],
+      via: `以合并预览的两个父为判决面（${face.range}）`,
+      notRunCodes: [2],
+    };
+  }
   if (!CHANGED_SCOPED.some((p) => joined.includes(p))) {
     return {
       ok: true,
@@ -261,16 +276,18 @@ export function heavyGateArgv(argv, deps = {}) {
       notRunCodes: [],
     };
   }
-  const base = resolveBaseRef({ cwd: deps.cwd, env: deps.env });
+  /* `deps` 可缺 ⇒ 这里读不到时给 `undefined`，由 `resolveBaseRef()` 自己回落到
+   * `process.env` 与仓库根（它本来就是这么写的）。**不给形参挂 `= {}`**：那会让
+   * TS 把整个形参推成 `{}`，`checkJs` 下 `deps.cwd` 直接 TS2339（平台那一跑实测）。 */
+  const base = resolveBaseRef({ cwd: deps?.cwd, env: deps?.env });
   if (!base.ok) {
     return { ok: false, reason: base.reason };
   }
-  /* 换发成哪种旗标是**逐条**的事（见 `RANGE_SCOPED`）：区间语义那一条要
-   * `<基线>..HEAD`，其余给裸 ref。两支都**先剥 `--staged`** —— 这一族只认一个判决面来源。 */
-  const ranged = RANGE_SCOPED.find((r) => joined.includes(r.script));
   return {
     ok: true,
-    argv: ranged ? ranged.rewrite(argv, base.ref) : [...fullTreeArgv(argv), "--base", base.ref],
+    /* `fullTreeArgv()` 先剥掉 `--staged`：这一族**只认一个判决面来源**，
+     * 而 `--base` 是这一档唯一拿得到的那一个（平台侧没有暂存区）。 */
+    argv: [...fullTreeArgv(argv), "--base", base.ref],
     via: `以基线为判决面（${base.via}）`,
     /* 这一族自己把「没跑起来」报成 **2**（仓库三态：0 绿 / 1 红 / 2 没跑起来），
      * 而这一档的既有约定是 **127**（命令找不到）。两个码都归「没跑起来」——
@@ -346,7 +363,7 @@ export function narrowingDecision(step, changed) {
  * 跑完整张注册表。
  *
  * @param {{cwd?: string, only?: string | null, env?: Record<string, string | undefined>, changedFiles?: {files: readonly string[]} | null}} [io]
- * @returns {{runs: {label: string, code: number, output: string, ms: number, notRunCodes: number[], noJudgement?: boolean}[], skipped: {label: string, stage: string, globs: readonly string[]}[], notJudged: {label: string, reason: string}[], unreadable: boolean}}
+ * @returns {{runs: {label: string, code: number, output: string, ms: number, notRunCodes: number[], noJudgement?: boolean}[], skipped: {label: string, stage: string, globs: readonly string[]}[], notJudged: {label: string, reason: string, notRunCodes?: number[]}[], unreadable: boolean}}
  *   `unreadable` = 注册表本身没读出来（钩子文件不在 / 解析零条）—— 那是
  *   「本档不构成证据」，不是「没有档要跑」。
  *   `notJudged` = **没有判决面**的那些步骤（它们在这一档恒绿且无声）——
@@ -375,7 +392,7 @@ export function runHeavyGates(io = {}) {
   const runs = [];
   /** @type {{label: string, stage: string, globs: readonly string[]}[]} */
   const skipped = [];
-  /** @type {{label: string, reason: string}[]} */
+  /** @type {{label: string, reason: string, notRunCodes?: number[]}[]} */
   const notJudged = [];
   for (const step of steps) {
     /* 按面跳过（ISSUE #2255）：面取自收窄登记表，与平台那一格同一份 glob。 */
@@ -395,7 +412,12 @@ export function runHeavyGates(io = {}) {
     }
     const resolved = heavyGateArgv(step.argv, { cwd, env: io.env });
     if (!resolved.ok) {
-      notJudged.push({ label: step.label, reason: resolved.reason });
+      notJudged.push({
+        label: step.label,
+        reason: resolved.reason,
+        /* 判据自己的「2 = 拿不到判决面」码也归这一档（见 `main()`）。 */
+        notRunCodes: resolved.notRunCodes ?? [],
+      });
       continue;
     }
     const started = Date.now();
@@ -695,6 +717,7 @@ export function main(io = {}) {
           notJudged: notJudged.map((n) => ({
             label: n.label,
             reason: n.reason,
+            notRunCodes: n.notRunCodes ?? [],
           })),
           /* 「按面未触及」那一档（ISSUE #2255）：跳过**不是**判过 ⇒ 单独列出来，
            * 不许混进「绿」里冒充「跑过」。 */

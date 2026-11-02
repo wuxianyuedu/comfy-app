@@ -35,10 +35,7 @@ async function openAtWidth(browser: Browser, width: number) {
 
 /* 客户端判据到位：窄窗这一档必须先能看到 `data-narrow="true"`。 */
 async function expectNarrow(wrapper: Locator, narrow: boolean) {
-  await expect(wrapper).toHaveAttribute(
-    "data-narrow",
-    narrow ? "true" : "false",
-  );
+  await expect(wrapper).toHaveAttribute("data-narrow", narrow ? "true" : "false");
 }
 
 test.describe("左轨按窗宽自动让位 @critical", () => {
@@ -60,22 +57,15 @@ test.describe("左轨按窗宽自动让位 @critical", () => {
     const narrowWidth = (await narrow.sidebar.boundingBox())?.width ?? 0;
     await narrow.ctx.close();
 
-    expect(
-      wideWidth - narrowWidth,
-      "收起没有真的让出宽度",
-    ).toBeGreaterThanOrEqual(150);
+    expect(wideWidth - narrowWidth, "收起没有真的让出宽度").toBeGreaterThanOrEqual(150);
   });
 
-  test("窄窗里用户点开导航就按他的选择展开，再点回收起", async ({
-    browser,
-  }) => {
+  test("窄窗里用户点开导航就按他的选择展开，再点回收起", async ({ browser }) => {
     const { ctx, page, sidebar, wrapper } = await openAtWidth(browser, 1100);
     await expectNarrow(wrapper, true);
     await expect(sidebar).toHaveAttribute("data-state", "collapsed");
 
-    const trigger = page
-      .getByRole("button", { name: "Toggle Sidebar" })
-      .first();
+    const trigger = page.getByRole("button", { name: "Toggle Sidebar" }).first();
     await trigger.click();
     await expect(sidebar).toHaveAttribute("data-state", "expanded");
     /* 同一档窗宽内不回到自动 —— 用户刚表过态；再点一次仍按他的选择收起。 */

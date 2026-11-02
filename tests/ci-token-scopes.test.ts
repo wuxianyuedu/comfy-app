@@ -38,9 +38,9 @@ type FetchResult = {
   status: number;
 };
 type FetchFn = (
-  ctx: { base: string; repo: string; token: string; },
+  ctx: { base: string; repo: string; token: string },
   subPath: string,
-  extra?: { body?: string; method?: string; },
+  extra?: { body?: string; method?: string },
 ) => Promise<FetchResult>;
 
 /** 平台真实的响应原文（字段名与嵌套都照抄，别自己编形状）。 */
@@ -124,7 +124,7 @@ describe("probeAll：每一条探针都只读，且只用平台无条件注入�
   });
 
   it("OIDC 那一问默认不发；`oidc: true` 才进清单，且它是唯一带请求体的一条", async () => {
-    const seen: Array<{ hasBody: boolean; path: string; }> = [];
+    const seen: Array<{ hasBody: boolean; path: string }> = [];
     const fn: FetchFn = async (_ctx, subPath, extra) => {
       seen.push({ path: subPath, hasBody: Boolean(extra?.body) });
       return reply(ok(), 200);

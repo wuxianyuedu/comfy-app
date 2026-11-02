@@ -453,7 +453,7 @@ async function buildWorkflowDetailJson(input: {
     sourceOutdated,
     sourceMissing,
     /** 分类：绑定到磁盘文件时为 "local"，否则 "online"。 */
-    source: sourcePath === null ? "online" : "local",
+    source: sourcePath !== null ? "local" : "online",
   });
 }
 

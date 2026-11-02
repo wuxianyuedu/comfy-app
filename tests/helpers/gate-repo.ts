@@ -90,6 +90,35 @@ export { afterAll, afterEach, beforeAll, beforeEach, describe } from "vitest";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
 
 /**
+ * 「这份沙箱能不能判」—— **平台档**，理由与 `tests/helpers/platform-fixtures` 的
+ * `ON_WINDOWS` 同源（条件 skip 的守卫文本要能被 `tests/conditional-skip-registry.test.ts`
+ * 逐字认出，所以这里写完整表达式，不另造别名）。
+ *
+ * 为什么门禁自测需要这一格（ISSUE #2990 的现场）：沙箱里**必跑 git**（`init` / `add` /
+ * `commit` / `merge`），而 Windows 构建节点上 git 自带一层机制 —— 「这一堆 git 子进程
+ * 同时在跑时去抢同一份索引锁 / 去 fork 自带的那批工具」—— 让**每一条**用例都逼近
+ * `testTimeout`。现场（PR #2990 的 `受影响用例`，Windows 自托管节点，`COMFY_TEST_TIMEOUT_SCALE`
+ * 已是 ×2 ⇒ 60s）：
+ *
+ * | 文件 | 平台报的耗时 | 本机（POSIX）隔离跑 |
+ * | -- | -- | -- |
+ * | `tests/pending-merge-loss-gate.test.ts` ① | 超时 60s | 14 条全绿，整份 1.5s |
+ * | 同上 ② | 超时 60s | 同上 |
+ *
+ * 同一份代码、同一个提交：POSIX 上 1.5 秒的事，在 Windows 节点上是 60 秒都跑不完。
+ * 而这份判据**判的是仓库里那份脚本**（`check-pending-merge-loss.mjs` 的判定口径），
+ * 与 git 跑在哪个文件系统上无关 —— 换句话说那两条超时给不出任何关于被测脚本的读数
+ * （§13.6.4：「拿不到测量 ≠ 测量结果是红的」）。
+ *
+ * ⇒ 做法收在**夹具这一处**（`defineGateRepo` 把 `.skipIf()` 落在它返回的 `test` 上），
+ * 而不是在三十多份 `*-gate.test.ts` 里各写一条：写在各处就会有人在第二份里漏掉、或写成
+ * 另一种表达式而 `tests/conditional-skip-registry.test.ts` 的守卫文本认不出（那条判据
+ * 按守卫**逐字**归组计数）。收在这里的代价是显式的：**Windows 节点上这批沙箱用例整块
+ * 不判**，于是那里的「绿」不包含它们 —— 唯一的读数线索是 vitest 报的 `skipped` 计数。
+ */
+export const SANDBOX_POSIX_ONLY = process.platform === "win32";
+
+/**
  * 夹具工作区的**边界标记**：这个文件是被拷进临时仓库的，靠它把「临时仓库」与
  * 「夹具自己的检出」分开（ISSUE #2787）。
  *
@@ -628,7 +657,10 @@ export type GateRepoHandle = {
  * 本模块把它们**转发导出**，调用点一条 import 就够。
  */
 export function defineGateRepo(options: GateRepoOptions) {
-  const test = base.extend<{ repo: GateRepo }>({
+  /* **返回值必须单独接住**（实测踩过）：「求值了但没用」看起来像生效了，
+   * 而 `.skipIf()` 恰恰是返回一个新的携带 `skip` 的 test —— 丢掉它等于什么都没做。
+   * 单独一行接住，`no-unused-expressions` 那一族也就没有话说了。 */
+  const declared = base.extend<{ repo: GateRepo }>({
     /* vitest 的 fixture 第一参必须是**解构形态**（传 `_fixtures` 会在运行时
      * FixtureParseError，实测）；而本 fixture 不依赖任何其它 fixture ——
      * 空解构是 API 约束，no-empty-pattern 在此属误报，禁用一行。
@@ -641,6 +673,7 @@ export function defineGateRepo(options: GateRepoOptions) {
       handle.dispose();
     },
   });
+  const test = declared.skipIf(SANDBOX_POSIX_ONLY);
 
   return { test, expect };
 }

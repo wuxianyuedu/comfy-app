@@ -59,48 +59,27 @@ describe("check-circular-deps.cjs（提交门槛）", () => {
   });
 
   test("type-only 回引也算环（类型不构成「谁依赖谁」的例外）", ({ repo }) => {
-    repo.write(
-      "src/a.ts",
-      'import type { B } from "./b";\nexport type A = B;\n',
-    );
-    repo.write(
-      "src/b.ts",
-      'import type { A } from "./a";\nexport type B = A;\n',
-    );
+    repo.write("src/a.ts", 'import type { B } from "./b";\nexport type A = B;\n');
+    repo.write("src/b.ts", 'import type { A } from "./a";\nexport type B = A;\n');
     expect(repo.run().code).toBe(1);
   });
 
   test("别名 @/ 与省略扩展名按 TS 口径解析（环仍能被认出）", ({ repo }) => {
-    repo.write(
-      "src/lib/a.ts",
-      'import { b } from "@/lib/b";\nexport const a = b;\n',
-    );
-    repo.write(
-      "src/lib/b.ts",
-      'import { a } from "@/lib/a";\nexport const b = a;\n',
-    );
+    repo.write("src/lib/a.ts", 'import { b } from "@/lib/b";\nexport const a = b;\n');
+    repo.write("src/lib/b.ts", 'import { a } from "@/lib/a";\nexport const b = a;\n');
     expect(repo.run().code).toBe(1);
   });
 
   test("经 index.ts 目录导入的环也能认出", ({ repo }) => {
     repo.write("src/a.ts", 'import { b } from "./sub";\nexport const a = b;\n');
     repo.write("src/sub/index.ts", 'export { b } from "./b";\n');
-    repo.write(
-      "src/sub/b.ts",
-      'import { a } from "../a";\nexport const b = a;\n',
-    );
+    repo.write("src/sub/b.ts", 'import { a } from "../a";\nexport const b = a;\n');
     expect(repo.run().code).toBe(1);
   });
 
   test("注释里提到的 import 不算依赖（不误报）", ({ repo }) => {
-    repo.write(
-      "src/a.ts",
-      '// import { b } from "./b";\nexport const a = 1;\n',
-    );
-    repo.write(
-      "src/b.ts",
-      '/* import { a } from "./a"; */\nexport const b = 1;\n',
-    );
+    repo.write("src/a.ts", '// import { b } from "./b";\nexport const a = 1;\n');
+    repo.write("src/b.ts", '/* import { a } from "./a"; */\nexport const b = 1;\n');
     expect(repo.run().code).toBe(0);
   });
 

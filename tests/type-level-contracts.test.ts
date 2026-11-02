@@ -39,14 +39,8 @@
 import { describe, expectTypeOf, it } from "vitest";
 
 import type { RemoteModelKind, REMOTE_MODEL_KINDS } from "~/lib/llm/types";
-import type {
-  ProductionStage,
-  PRODUCTION_STAGES,
-} from "~/lib/production/progress";
-import type {
-  WindowButtonKind,
-  WINDOW_BUTTON_LABELS,
-} from "~/lib/shell/title-bar-derive";
+import type { ProductionStage, PRODUCTION_STAGES } from "~/lib/production/progress";
+import type { WindowButtonKind, WINDOW_BUTTON_LABELS } from "~/lib/shell/title-bar-derive";
 import type { ShotStatus, SHOT_STATUSES } from "~/lib/workshop/types";
 
 describe("as const 元组 → 派生联合：宽化成 string 必须编译不过", () => {
@@ -66,9 +60,7 @@ describe("as const 元组 → 派生联合：宽化成 string 必须编译不过
   });
 
   it("RemoteModelKind 恰好是那三种用途", () => {
-    expectTypeOf<RemoteModelKind>().toEqualTypeOf<
-      "chat" | "image" | "video"
-    >();
+    expectTypeOf<RemoteModelKind>().toEqualTypeOf<"chat" | "image" | "video">();
     expectTypeOf<RemoteModelKind>().not.toEqualTypeOf<string>();
   });
 
@@ -76,9 +68,7 @@ describe("as const 元组 → 派生联合：宽化成 string 必须编译不过
     // 全部写成 `expectTypeOf<typeof X>()` 这一侧：断言**只活在类型空间**，
     // 连运行时值都不需要 import（`expectTypeOf(值)` 会要求真值在场，
     // 而本文件要钉的恰恰是「类型层」这件事）。
-    expectTypeOf<typeof REMOTE_MODEL_KINDS>().toEqualTypeOf<
-      readonly ["chat", "image", "video"]
-    >();
+    expectTypeOf<typeof REMOTE_MODEL_KINDS>().toEqualTypeOf<readonly ["chat", "image", "video"]>();
     expectTypeOf<(typeof SHOT_STATUSES)[number]>().toEqualTypeOf<ShotStatus>();
     expectTypeOf<(typeof PRODUCTION_STAGES)[number]>().toEqualTypeOf<ProductionStage>();
   });
@@ -94,15 +84,11 @@ describe("用派生联合当索引键的 Record：宽化会让「漏成员」静
    * 漏成员的守卫**当场退化成装饰品**，而 tsc 一个字都不说。
    */
   it("WindowButtonKind 是四个字面量（Record 守卫才有意义）", () => {
-    expectTypeOf<WindowButtonKind>().toEqualTypeOf<
-      "minimize" | "maximize" | "restore" | "close"
-    >();
+    expectTypeOf<WindowButtonKind>().toEqualTypeOf<"minimize" | "maximize" | "restore" | "close">();
     expectTypeOf<WindowButtonKind>().not.toEqualTypeOf<string>();
   });
 
   it("键集恰好等于四个按钮（漏一个就该红）", () => {
-    expectTypeOf<keyof typeof WINDOW_BUTTON_LABELS>().toEqualTypeOf<
-      WindowButtonKind
-    >();
+    expectTypeOf<keyof typeof WINDOW_BUTTON_LABELS>().toEqualTypeOf<WindowButtonKind>();
   });
 });

@@ -133,7 +133,7 @@ describe("fetchPullsForBranches：取不到就是取不到", () => {
 });
 
 /** `main()` 那一层需要的最小 io（形状同 `tests/ship.test.ts` 的 `issueMainIo`）。 */
-function branchesMainIo(opts: { branchList: string; pulls: Array<unknown>; }) {
+function branchesMainIo(opts: { branchList: string; pulls: Array<unknown> }) {
   const calls: Array<string> = [];
   const log: Array<string> = [];
   const ok = (stdout: string): FakeResult => ({

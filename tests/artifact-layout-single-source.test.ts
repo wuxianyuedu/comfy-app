@@ -222,8 +222,7 @@ describe("产物布局单一出处（台账 A8 第二段）", () => {
       path.resolve(scriptsDir, ...allowedRootSegments(ps1)!);
 
     // ① 旧的写法：一条带分隔符的相对路径字面量 —— 正是 Linux 上恒红的那一版
-    const windowsLiteral =
-      String.raw`$allowedRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\generated"))`;
+    const windowsLiteral = String.raw`$allowedRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\generated"))`;
     expect(
       flagged(windowsLiteral),
       String.raw`旧的「..\generated」字面量没能被照出来 —— 判据挡不住这条非跨平台写法`,
