@@ -67,7 +67,7 @@ export function useProjectPersistence({
       edges: liveEdges,
       projectName: liveName,
     } = ref.current;
-    if (!pid) {
+    if (pid === null || pid === "") {
       return;
     }
 
@@ -96,7 +96,7 @@ export function useProjectPersistence({
 
   /* 500ms debounce：内容变化（含重命名）后落盘。 */
   useEffect(() => {
-    if (!projectId || !loaded) {
+    if (projectId === null || projectId === "" || !loaded) {
       return;
     }
     const t = setTimeout(() => persistNow(), 500);
@@ -108,7 +108,7 @@ export function useProjectPersistence({
     if (!loaded) {
       return;
     }
-    if (!ref.current.projectId) {
+    if (ref.current.projectId === null || ref.current.projectId === "") {
       return;
     }
     if (firstMutationRef.current) {

@@ -102,7 +102,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       if (tm) {
         clearTimeout(tm);
       }
-      if (duration && duration > 0) {
+      if (duration !== undefined && duration > 0) {
         timers.current.set(
           id,
           setTimeout(() => dismiss(id), duration),
@@ -171,7 +171,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-ink-bright text-sm font-semibold">{item.title}</p>
-                {item.description && (
+                {item.description !== undefined && item.description !== "" && (
                   <p className="text-ink-soft mt-0.5 text-xs wrap-break-word">{item.description}</p>
                 )}
               </div>

@@ -64,7 +64,7 @@ const tmpDirs: Array<string> = [];
 function driftOneOverride(real: string, key: string): string {
   const escaped = key.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   const hit = new RegExp(`^  ${escaped}: (\\S+)$`, "m").exec(real);
-  if (!hit?.[1]) {
+  if (hit?.[1] === undefined || hit?.[1] === "") {
     throw new Error(
       `pnpm-lock.yaml 的 overrides 里找不到 "${key}" —— 变异点必须由内容现取，` +
         "写死版本号会在依赖升级后静默 no-op（把这条用例改成用别的键，或从现存的键里挑）",
@@ -92,7 +92,7 @@ function makeFakeRepo(
     /** 改写假检出里那份 `quality-gate.ps1`（验运行器自身的形状时用）。 */
     patchGateText?: (src: string) => string;
   } = {},
-): { installedLock: string; root: string; } {
+): { installedLock: string; root: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dep-precheck-"));
   tmpDirs.push(root);
   fs.mkdirSync(path.join(root, "scripts", "lockfile"), { recursive: true });
@@ -126,7 +126,7 @@ function makeFakeRepo(
 }
 
 /** 跑假检出的预检：拿退出码 + 合并后的输出。 */
-function runGate(root: string): { out: string; status: number; } {
+function runGate(root: string): { out: string; status: number } {
   const r = spawnSync(
     psExe,
     [
@@ -316,7 +316,10 @@ describe.skipIf(!hasPs)("运行器真跑：判决必须来自子进程真的执�
     // 返回值就只剩退出码一个元素。 stdout 被吞那半由上面 `[dep-audit]` 那条钉。
     const { root } = makeFakeRepo({
       patchGateText: (src) =>
-        src.replace(NOEXEC_MUTATION.from, String.raw`Cmd = "node"; Args = @("scripts\no-such-gate.mjs")`),
+        src.replace(
+          NOEXEC_MUTATION.from,
+          String.raw`Cmd = "node"; Args = @("scripts\no-such-gate.mjs")`,
+        ),
     });
     const r = runGate(root);
     expect(r.out).toContain("（退出码 1）");

@@ -57,7 +57,7 @@ export function LocalComputeCard() {
           <StatusDot pulse={connecting} state={dotState} />
           <span className="text-ink-bright text-sm font-medium">ComfyUI</span>
           {/* 设备名来自同一份采样：读不到就不占一行，不写「未知设备」这种废话占位。 */}
-          {stats?.gpuName && (
+          {stats !== null && stats.gpuName !== undefined && stats.gpuName !== "" && (
             <span
               className="text-ink-fainter min-w-0 flex-1 truncate font-mono text-[11.5px]"
               title={stats.gpuName}
@@ -90,11 +90,13 @@ export function LocalComputeCard() {
 
         {/* 三条互斥的可见说明：未运行 / 首帧未到 / 显示的是上一次数据。
             只留 title 不给正文 = 用户看不出「读不到」和「没用」的区别。 */}
-        {degradedNote && <p className="text-ink-muted mt-2.5 text-xs">{degradedNote}</p>}
-        {!degradedNote && connecting && (
+        {degradedNote !== null && degradedNote !== "" && (
+          <p className="text-ink-muted mt-2.5 text-xs">{degradedNote}</p>
+        )}
+        {(degradedNote === null || degradedNote === "") && connecting && (
           <p className="text-ink-muted mt-2.5 text-xs">{WAIT_FIRST_SAMPLE_NOTE}</p>
         )}
-        {!degradedNote && !connecting && stale && (
+        {(degradedNote === null || degradedNote === "") && !connecting && stale && (
           <p className="text-warning-strong mt-2.5 text-xs">{STALE_RESOURCE_NOTE}</p>
         )}
       </CardContent>

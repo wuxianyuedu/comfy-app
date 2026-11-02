@@ -380,12 +380,12 @@ export function AspectMegapixelControl({
     <div className="flex-col gap-2.5">
       <div
         className={
-          narrow
+          narrow === true
             ? "flex items-start justify-end gap-3"
             : "border-accent/30 bg-accent/4 rounded-lg border p-2.5"
         }
       >
-        {narrow ? (
+        {narrow === true ? (
           /* 窄版（画布节点 / 库内）：组合控件**右对齐**，左侧腾出来的区域摆这三个
            * 参数本身 —— 一行一个，端点骑跨卡片左缘，与节点上其他参数行长得一样
            * （12px 大端点 + 参数名 + 类型徽章），不是控件框里那排「· 小点 + 名字」。

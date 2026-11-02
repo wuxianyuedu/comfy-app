@@ -210,7 +210,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
           async () => {
             const d = await queryClient.fetchQuery(trpc.workflow.detail.queryOptions({ id }));
             const tpl = d?.template;
-            if (!tpl) {
+            /* template 在类型上非空（恒真对象），防御「没取到」用 Boolean 保判空语义。 */
+            if (!Boolean(tpl)) {
               toast.error("获取工作流失败", "未知错误");
               return true;
             }
@@ -242,11 +243,11 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
         await runAsyncAction(
           async () => {
             const d = await resyncMut.mutateAsync({ id });
-            if (d?.missing) {
+            if (d?.missing === true) {
               toast.error("同步失败", "磁盘文件已不存在，无法同步（请检查路径或重新载入）");
-            } else if (d?.unchanged) {
+            } else if (d?.unchanged === true) {
               toast.info("磁盘文件未变化", name);
-            } else if (d?.updated) {
+            } else if (d?.updated === true) {
               toast.success("已同步磁盘内容", name);
               await load();
             }

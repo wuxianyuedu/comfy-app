@@ -167,8 +167,8 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         //  普通子图用 `bg-node` 的实心面板（跟随主题）。
         isolation: "isolate",
         // ComfyUI 会给当前激活的节点画一圈亮色选中矩形。
-        outline: selected ? "2px solid rgba(56,189,248,0.9)" : "none",
-        outlineOffset: selected ? "2px" : undefined,
+        outline: selected === true ? "2px solid rgba(56,189,248,0.9)" : "none",
+        outlineOffset: selected === true ? "2px" : undefined,
       }}
     >
       {accent && nodeMode !== 0 && <FrostLayer color={accent} nodeMode={nodeMode} />}
@@ -181,7 +181,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         nodeId={String(data.nodeId)}
         onEnter={data.onEnter}
         onToggle={() => setUserCollapsed((value) => !value)}
-        outputRef={firstOutputName ? { name: firstOutputName } : null}
+        outputRef={
+          firstOutputName !== undefined && firstOutputName !== "" ? { name: firstOutputName } : null
+        }
         title={data.title}
       />
 

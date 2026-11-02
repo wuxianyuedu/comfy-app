@@ -57,6 +57,15 @@ export type ManagedSpawnResult =
   | { child: ChildProcess; error?: never }
   | { child?: never; error: string };
 
+/** 两个重定向文件是否都给了：路径来自调用方的 path.join 产物（不会是空串），
+ *  「有没有」按 undefined 判。stdout / stderr 必须成对给（stdin 保持 ignore）。
+ *  用类型谓词让两个路径在分支内收窄成 string（函数返回 boolean 收不了窄）。 */
+function hasRedirectPair(
+  opts: ManagedSpawnOptions,
+): opts is ManagedSpawnOptions & { redirectStdoutFile: string; redirectStderrFile: string } {
+  return opts.redirectStdoutFile !== undefined && opts.redirectStderrFile !== undefined;
+}
+
 export type ManagedSpawnOptions = {
   args: Array<string>;
   command: string;
@@ -115,6 +124,7 @@ export function buildStartProcessArgumentList(args: Array<string>): string {
  * 每个可见字符间夹 \x00 的乱码。这里剥 BOM 后按 utf16le 解码。
  */
 export function decodePowerShellOutput(buf: Buffer): string {
+  // oxlint-disable-next-line strict-boolean-expressions -- 类型上恒为 Buffer，但守卫顺带挡住跨语言调用侧的空值，防御性判空保留
   if (!buf || buf.length === 0) {
     return "";
   }
@@ -235,7 +245,7 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
       // 有重定向文件时把文件描述符直接交给 stdio（脱离进程树后依然落盘），
       // 父进程侧的副本用完即关。
       let stdio: Array<"ignore" | number> = ["ignore", "ignore", "ignore"];
-      if (opts.redirectStdoutFile && opts.redirectStderrFile) {
+      if (hasRedirectPair(opts)) {
         outFd = openSync(opts.redirectStdoutFile, "w");
         errFd = openSync(opts.redirectStderrFile, "w");
         stdio = ["ignore", outFd, errFd];
@@ -270,12 +280,12 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
    * 拿不到时（例如 `pnpm tauri dev`：那时没有 job 要逃）退回下面的中介。
    * 两侧契约一致：中介立即退出，退出码非 0 表示拉起被拒，stderr 带原因。 */
   const shellExe = process.env.COMFYAPP_SHELL_EXE?.trim();
-  if (shellExe) {
+  if (shellExe !== undefined && shellExe !== "") {
     const cliArgs = ["--spawn-detached", "--cmd", command, ...args.flatMap((a) => ["--arg", a])];
-    if (opts.cwd) {
+    if (opts.cwd !== undefined && opts.cwd !== "") {
       cliArgs.push("--cwd", opts.cwd);
     }
-    if (opts.redirectStdoutFile && opts.redirectStderrFile) {
+    if (hasRedirectPair(opts)) {
       cliArgs.push("--out", opts.redirectStdoutFile, "--err", opts.redirectStderrFile);
     }
     try {
@@ -306,12 +316,14 @@ export function spawnManaged(opts: ManagedSpawnOptions): ManagedSpawnResult {
 
   // 退回：powershell Start-Process 孤儿中介。stderr 用 pipe 带出
   // （调用方经 waitForDetachMediator 读），拉起被拒时才有可行动的报错。
-  const cwdArg = opts.cwd ? ` -WorkingDirectory ${escapePwshSingle(opts.cwd)}` : "";
-  const redirectArg =
-    opts.redirectStdoutFile && opts.redirectStderrFile
-      ? ` -RedirectStandardOutput ${escapePwshSingle(opts.redirectStdoutFile)}` +
-        ` -RedirectStandardError ${escapePwshSingle(opts.redirectStderrFile)}`
+  const cwdArg =
+    opts.cwd !== undefined && opts.cwd !== ""
+      ? ` -WorkingDirectory ${escapePwshSingle(opts.cwd)}`
       : "";
+  const redirectArg = hasRedirectPair(opts)
+    ? ` -RedirectStandardOutput ${escapePwshSingle(opts.redirectStdoutFile)}` +
+      ` -RedirectStandardError ${escapePwshSingle(opts.redirectStderrFile)}`
+    : "";
   const ps =
     `Start-Process -FilePath ${escapePwshSingle(command)}` +
     ` -ArgumentList ${buildStartProcessArgumentList(args)}` +

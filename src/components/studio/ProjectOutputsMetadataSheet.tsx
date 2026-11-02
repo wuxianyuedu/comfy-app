@@ -126,7 +126,7 @@ export function ProjectOutputsMetadataSheet({
                       {displayValue(selected.prompt)}
                     </div>
                   </div>
-                  {selected.negativePrompt && (
+                  {selected.negativePrompt !== null && selected.negativePrompt !== "" && (
                     <div>
                       <p className="text-ink-soft mb-1 text-xs font-semibold">反向提示词</p>
                       <div className="border-border-strong bg-subtle text-ink-muted max-h-24 overflow-y-auto rounded-lg border p-2.5 text-xs leading-relaxed whitespace-pre-wrap">

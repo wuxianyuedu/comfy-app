@@ -55,7 +55,7 @@ export function useContentAssetGallery({
   const images = gallery.key === ctxKey ? gallery.images : null;
 
   useEffect(() => {
-    if (!taskId || !enabled) {
+    if (taskId === undefined || taskId === null || taskId === "" || !enabled) {
       return;
     }
     /* 这一轮的作废守卫（规范 16 §16.2.4.34）：换任务 / 关掉开关会重开一轮，
@@ -67,7 +67,7 @@ export function useContentAssetGallery({
         guard.commit(() =>
           setGallery({
             key: ctxKey,
-            images: list && list.length > 1 ? list : null,
+            images: list !== null && list.length > 1 ? list : null,
           }),
         );
       } catch {

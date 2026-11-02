@@ -107,7 +107,7 @@ export const workflowMutationProcedures = {
         };
       }
 
-      if (!body.raw || typeof body.raw !== "object" || Array.isArray(body.raw)) {
+      if (typeof body.raw !== "object" || body.raw === null || Array.isArray(body.raw)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "缺少工作流 JSON。请粘贴 ComfyUI「导出 (工作流格式)」的 JSON",
@@ -252,8 +252,8 @@ export const workflowMutationProcedures = {
         patch.positions = undefined;
         /* SAFETY: 类型断言已复核 */
         const cur =
-          existing.positions &&
           typeof existing.positions === "object" &&
+          existing.positions !== null &&
           !Array.isArray(existing.positions)
             ? (existing.positions as Record<string, unknown>)
             : {};
@@ -294,8 +294,8 @@ export const workflowMutationProcedures = {
       // 位置的合并 / 替换，以及把分组与便签写回 rawJson
       let nextRawJson: Record<string, unknown> | null = null;
       if (
-        existing.rawJson &&
         typeof existing.rawJson === "object" &&
+        existing.rawJson !== null &&
         !Array.isArray(existing.rawJson)
       ) {
         nextRawJson = /* SAFETY: 类型断言已复核 */ existing.rawJson as Record<string, unknown>;
@@ -315,13 +315,11 @@ export const workflowMutationProcedures = {
           >;
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
-            if (!nd || typeof nd !== "object") {
+            if (typeof nd !== "object" || nd === null) {
               continue;
             }
             const rawId =
-              nd && "id" in nd
-                ? /* SAFETY: 类型断言已复核 */ (nd as { id?: unknown }).id
-                : undefined;
+              "id" in nd ? /* SAFETY: 类型断言已复核 */ (nd as { id?: unknown }).id : undefined;
             const pid =
               typeof rawId === "string" ? rawId : typeof rawId === "number" ? String(rawId) : "";
             if (pid && posMap?.[pid]) {
@@ -340,13 +338,13 @@ export const workflowMutationProcedures = {
         }
         patch.rawJson = nextRawJson;
         if (writePositions) {
-          if (mergePositions) {
+          if (mergePositions === true) {
             // 合并进已有的 positions 列（从子图 / RAW 视图拖单个键时，
             // 不能把另一个命名空间一起抹掉）。
             /* SAFETY: 类型断言已复核 */
             const cur =
-              existing.positions &&
               typeof existing.positions === "object" &&
+              existing.positions !== null &&
               !Array.isArray(existing.positions)
                 ? (existing.positions as Record<string, [number, number]>)
                 : {};
@@ -415,10 +413,10 @@ export const workflowMutationProcedures = {
       sourceChecksum: existing.sourceChecksum,
       existingTaskType: existing.taskType,
     });
-    if (result.missing) {
+    if (result.missing === true) {
       return { missing: true };
     }
-    if (result.unchanged) {
+    if (result.unchanged === true) {
       return { unchanged: true };
     }
     if (!result.update) {

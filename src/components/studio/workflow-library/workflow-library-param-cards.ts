@@ -118,7 +118,7 @@ export function deriveLibraryParamCards(args: {
     const target = resolved[entry.id];
     /* 未连线 / 作者显式断开（`null`）→ 不画线：圆点悬空本身就在说「没连上」，
      *  画一条通向某处的线反而误导。 */
-    if (!target) {
+    if (target === null || target === undefined || target === "") {
       continue;
     }
     /* 能走到这里说明 `resolveMapping` 给了落点，而落点**只可能来自作者画的线**
@@ -139,7 +139,8 @@ export function deriveLibraryParamCards(args: {
         handleId: entry.id,
         grouped: groupedKeys?.has(wired.ioKey) ?? false,
       });
-      if (ownersByPin[wired.ioKey]) {
+      const owner = ownersByPin[wired.ioKey];
+      if (owner !== undefined && owner !== "") {
         continue;
       }
       ownersByPin[wired.ioKey] = entry.label;
@@ -154,7 +155,10 @@ export function deriveLibraryParamCards(args: {
     entries,
     io: io ?? null,
     /* 有落点 = 作者画过线（以 `resolveMapping` 的解析结果为准）。 */
-    isManual: (entryId: string) => !!resolved[entryId],
+    isManual: (entryId: string) => {
+      const hit = resolved[entryId];
+      return hit !== null && hit !== undefined && hit !== "";
+    },
     resolved,
     ownersByPin,
     wires,
@@ -207,11 +211,12 @@ export function deriveLibraryOutputCards(args: {
   const outputKeys = new Set(outputs.map((item) => item.ioKey));
   for (const output of outputs) {
     const target = resolveOutputSource(paramMap, output, outputs, mode, io);
-    resolved[output.ioKey] = target && outputKeys.has(target) ? target : null;
+    resolved[output.ioKey] =
+      target !== null && target !== "" && outputKeys.has(target) ? target : null;
   }
   for (const output of outputs) {
     const target = resolved[output.ioKey];
-    if (!target) {
+    if (target === null || target === undefined || target === "") {
       continue;
     }
     /* 未连过（作者没改过这个输出口的取值行）→ **不画线**。

@@ -107,7 +107,7 @@ export function readElementBox(
     return null;
   }
   const rect =
-    options.noRect || typeof box.getBoundingClientRect !== "function"
+    options.noRect === true || typeof box.getBoundingClientRect !== "function"
       ? EMPTY_RECT
       : box.getBoundingClientRect();
   const view = typeof window === "undefined" ? null : window;

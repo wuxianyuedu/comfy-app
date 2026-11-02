@@ -88,7 +88,7 @@ function getPaths(): Array<string> {
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
-  return derived ? [derived, ...extra] : extra;
+  return derived !== null && derived !== "" ? [derived, ...extra] : extra;
 }
 
 /* 本地工作流扫描器的「伴随根目录」—— 即工作流文件从哪些目录加载。
@@ -102,7 +102,7 @@ function getLocalWorkflowPaths(): Array<string> {
     .split(/[\n,]/)
     .map((part) => part.trim())
     .filter(Boolean);
-  return derived ? [derived, ...extra] : extra;
+  return derived !== null && derived !== "" ? [derived, ...extra] : extra;
 }
 
 /* manifest 摘要的短路缓存：GET 每次都读 + 解析整份 manifest（自定义节点包一多
@@ -132,7 +132,7 @@ function manifestStamp() {
  */
 function readManifestSummary() {
   const stamp = manifestStamp();
-  if (stamp && manifestSummaryCache?.stamp === stamp) {
+  if (stamp !== null && stamp !== "" && manifestSummaryCache?.stamp === stamp) {
     return manifestSummaryCache.summary;
   }
   if (!fs.existsSync(MANIFEST)) {
@@ -559,7 +559,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
         "--report-out",
         REPORT,
       ];
-      if (onlyPkgs?.length) {
+      if (onlyPkgs !== undefined && onlyPkgs.length > 0) {
         scriptArgs.push("--only-pkgs", onlyPkgs.join(","));
       } else {
         scriptArgs.push("--paths", paths.join(","));
@@ -667,7 +667,7 @@ function streamParse(paths: Array<string>, onlyPkgs?: Array<string>): Response {
           }
           send({
             type: "done",
-            ok: !!report,
+            ok: Boolean(report),
             /* SAFETY: 类型断言已复核 */
             report: report as ParseReport | null,
             stderr: "",
@@ -729,7 +729,7 @@ async function buildGetResponse(): Promise<Response> {
     paths.length > 0 &&
     paths.every((path) => {
       const c = discoverCache.get(path);
-      return c && Date.now() - c.at < 5000;
+      return c !== undefined && Date.now() - c.at < 5000;
     });
   // 两条分支都带上 localWorkflowPaths，
   // 好让设置对话框在没配 CUSTOM_NODES_PATH 时（冷路径）
@@ -835,7 +835,7 @@ export async function POST(req: NextRequest) {
     const paths = getPaths();
     const rawPkgs = Array.isArray(rec.packages) ? rec.packages : undefined;
     let onlyPkgs: Array<string> | undefined;
-    if (rawPkgs?.length) {
+    if (rawPkgs !== undefined && rawPkgs.length > 0) {
       const sanitized: Array<string> = [];
       for (const p of rawPkgs) {
         const s = safeSpawnArg(p);
@@ -846,7 +846,7 @@ export async function POST(req: NextRequest) {
       }
       onlyPkgs = sanitized;
     }
-    if (onlyPkgs?.length) {
+    if (onlyPkgs !== undefined && onlyPkgs.length > 0) {
       // 子集解析 —— 不必先设置 CUSTOM_NODES_PATH
       return streamParse(paths, onlyPkgs);
     }

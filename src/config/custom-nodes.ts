@@ -51,13 +51,13 @@ function hashColor(s: string): string {
 }
 
 export function colorFor(category: string | undefined): string {
-  if (!category) {
+  if (category === undefined || category === "") {
     return "#7C5CFC";
   }
   const parts = category.replace(/\/$/, "").split("/");
   for (const p of parts) {
     const c = CATEGORY_COLORS[p.toLowerCase()];
-    if (c) {
+    if (c !== undefined && c !== "") {
       return c;
     }
   }
@@ -231,7 +231,10 @@ function buildInto(
 ): number {
   let count = 0;
   for (const [ct, n] of Object.entries(manifest.nodes ?? {})) {
-    if (!n) {
+    /* manifest 是外部 JSON：类型上 `n` 恒非空，运行期仍可能混进 null 条目 ——
+     * 显式转换保留原 `!n` 的防御口径（直接写条件会被恒真判据拦下）。 */
+    const nodePresent = Boolean(n);
+    if (!nodePresent) {
       continue;
     }
     const inputs: Array<PortSpec> = (n.inputs ?? []).map((input) => ({
@@ -240,7 +243,7 @@ function buildInto(
       widget: isFieldType(input.widget) ? input.widget : undefined,
       options: input.options ?? undefined,
       default: input.default,
-      required: !!input.required,
+      required: input.required === true,
     }));
     const outputs: Array<PortSpec> = (n.outputs ?? []).map((output) => ({
       name: output.name,
@@ -256,8 +259,8 @@ function buildInto(
       custom: true,
       // ⚠️ 概念澄清：OUTPUT_NODE（终端节点，后端仍执行）与 properties.frontend_only
       // （纯前端节点，后端不执行）是**两个不同概念**，此处必须分开。
-      outputNode: !!n.outputNode,
-      frontendOnly: !!n.frontend_only,
+      outputNode: n.outputNode === true,
+      frontendOnly: n.frontend_only === true,
       description: n.description ?? undefined,
       width: 240,
       height: 90,
@@ -269,7 +272,7 @@ function buildInto(
     // 好让画布渲染 ComfyUI 原生的左下角页脚。
     // manifest 没给包名时（旧版解析器 / 手工改过的 manifest）
     // 回落到原始分类字符串。
-    if (packages && n.package) {
+    if (packages && n.package !== undefined && n.package !== "") {
       packages[ct] = n.package;
     }
     count++;
@@ -341,7 +344,10 @@ export async function getCustomNodesManifest(
       return null;
     }
     const data: unknown = await res.json();
-    if (!data || typeof data !== "object" || !("nodes" in data) || !data.nodes) {
+    const nodesField =
+      typeof data === "object" && data !== null && "nodes" in data ? data.nodes : undefined;
+    const hasNodes = Boolean(nodesField);
+    if (!hasNodes) {
       console.error(
         "[custom-nodes] 清单形状不对：响应里没有 nodes 字段（解析器版本与前端不匹配？）",
       );

@@ -268,7 +268,7 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   /* 卸载时撤掉可能还排着的那一帧（弹窗在拖拽中被关掉）。 */
   useEffect(() => () => panFrameRef.current?.(), []);
 
-  if (!src) {
+  if (src === null || src === "") {
     return null;
   }
 
@@ -475,14 +475,14 @@ export function ViewableImage({
   title = "点击查看大图",
 }: ViewableImageProps) {
   const [open, setOpen] = useState(false);
-  if (!src) {
+  if (src === undefined || src === null || src === "") {
     return null;
   }
   const name = firstText(label, alt);
   return (
     <>
       <Button
-        aria-label={name ? `查看大图：${name}` : "查看大图"}
+        aria-label={name !== null && name !== "" ? `查看大图：${name}` : "查看大图"}
         /* `h-full` 而不是 `h-auto`：调用处常在**有确定高度**的盒子里塞它
            （`aspect-square` 网格、定高缩略图位），缩略图的 `h-full` 要有参照
            才撑得满；父级高度是 auto 时 `h-full` 计算为 auto，行为不变。 */

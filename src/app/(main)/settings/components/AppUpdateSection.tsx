@@ -23,7 +23,9 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
     <p className="text-muted-foreground mb-3 text-xs leading-relaxed">
       当前版本：
       <span className="text-ink tabular-nums">{c.appUpdate.currentVersion ?? "尚未读取"}</span>
-      {c.appUpdate.currentVersion ? "" : "（点「检测更新」后由本机应用信息读取）"}
+      {c.appUpdate.currentVersion !== null && c.appUpdate.currentVersion !== ""
+        ? ""
+        : "（点「检测更新」后由本机应用信息读取）"}
     </p>
   );
 
@@ -38,7 +40,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
             <code className="text-ink/80">plugins.updater</code> 配置；
             未配置更新源时「检测更新」会提示未配置。
           </p>
-          {c.appUpdate.message && (
+          {c.appUpdate.message !== null && c.appUpdate.message !== "" && (
             <p
               className={`mb-4 rounded-lg border px-3 py-2 text-sm ${
                 c.appUpdate.available
@@ -98,7 +100,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
                      * （§2.7 布局属性动画）。轨道 overflow-hidden 把右侧裁成圆角，
                      * 可见左端仍是填充自身的圆角。 */
                     transform: `translateX(${
-                      (c.appUpdate.progress.total
+                      (c.appUpdate.progress.total !== undefined && c.appUpdate.progress.total !== 0
                         ? Math.min(
                             100,
                             Math.round(
@@ -112,7 +114,7 @@ export function AppUpdateSection({ c }: { c: ReadySettingsPageController }) {
               </div>
               <p className="text-muted-foreground mt-1.5 text-xs">
                 正在下载更新…（
-                {c.appUpdate.progress.total
+                {c.appUpdate.progress.total !== undefined && c.appUpdate.progress.total !== 0
                   ? `${fmtBytes(c.appUpdate.progress.downloaded)} / ${fmtBytes(c.appUpdate.progress.total)}`
                   : fmtBytes(c.appUpdate.progress.downloaded)}
                 ）

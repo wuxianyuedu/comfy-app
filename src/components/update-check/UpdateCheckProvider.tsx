@@ -42,7 +42,7 @@ function bodyOf(
   groups: Array<{ files?: Array<string>; hint?: string; key: string; label: string }>,
 ): string {
   const parts = groups.map((g) => {
-    const head = `${g.label}${g.hint ? `（${g.hint}）` : ""}`;
+    const head = `${g.label}${g.hint !== undefined && g.hint !== "" ? `（${g.hint}）` : ""}`;
     const files =
       g.files && g.files.length > 0
         ? `

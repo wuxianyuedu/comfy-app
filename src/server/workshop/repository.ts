@@ -178,7 +178,7 @@ export async function getSession(id: string): Promise<WorkshopSessionState | nul
   const state = rowToState(row);
   // 桥（#2482）：绑定过的会话，内容权威读在 production——人在界面改了，
   // AI 下一次 get 读到的就是新的（FR-AG-01①「人改 AI 见」）。
-  if (row.projectId) {
+  if (row.projectId !== null) {
     const content = await readProductionContent(row.projectId);
     if (content) {
       return applyContentToState(state, content);
@@ -206,7 +206,7 @@ export async function updateState(id: string, state: WorkshopSessionState): Prom
     return;
   } // 既有语义：无行不写（编排器先 load，正常到不了这里）。
   let projectId = row.projectId;
-  if (!projectId) {
+  if (projectId === null) {
     // 遗留会话（桥之前建的）首次写 → 桥接：以当前内容为初始值新建项目，
     // 此后与界面同一份真值；只读不写的遗留会话保持原样、不凭空长出项目。
     const ownerId = await resolveOwnerUserId(row.userId);

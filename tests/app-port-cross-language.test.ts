@@ -62,7 +62,7 @@ describe("app-port 跨语言一致性（四侧读同一份共享向量）", () =
     const script = "scripts/check-app-port-vectors.py";
     expect(fs.existsSync(path.join(ROOT, script))).toBe(true);
     const python = ["python3", "python"].find((c) => hasCommand(c, ["--version"]));
-    if (!python) {
+    if (python === undefined || python === "") {
       // 无 Python 环境（罕见）：跳过可执行层，参考层仍会断言脚本引用向量。
       return;
     }

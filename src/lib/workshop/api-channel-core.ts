@@ -173,7 +173,7 @@ function upstreamError(label: string, status: number, payload: unknown): Error {
 
 /** 按点分字段路径取一个字符串（适配器的 outputField；未指定/未命中返回 null）。 */
 function pickStringByPath(payload: unknown, fieldPath?: string): string | null {
-  if (!fieldPath) {
+  if (fieldPath === undefined || fieldPath === "") {
     return null;
   }
   let cur: unknown = payload;
@@ -272,7 +272,7 @@ export async function callImageGeneration(
    * 同名字段）。命中即返回，未命中回落通配提取——与既有行为一致。 */
   const picked = pickStringByPath(payload, options.outputField);
   const url = picked ?? extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
-  if (!url) {
+  if (url === null) {
     throw new Error("API 生图响应中未找到图片 URL / b64 数据");
   }
   return url;
@@ -303,11 +303,11 @@ export async function callVideoSubmit(
     throw upstreamError("API 视频提交失败", res.status, payload);
   }
   const url = extractMediaUrl(payload);
-  if (url) {
+  if (url !== null) {
     return { url };
   }
   const remoteTaskId = extractRemoteTaskId(payload);
-  if (remoteTaskId) {
+  if (remoteTaskId !== null) {
     return { remoteTaskId };
   }
   throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
@@ -337,7 +337,7 @@ export async function callVideoPoll(
     throw upstreamError("API 视频轮询失败", res.status, payload);
   }
   const mediaUrl = extractMediaUrl(payload);
-  if (mediaUrl) {
+  if (mediaUrl !== null) {
     return { url: mediaUrl, pending: false };
   }
   return { pending: true };

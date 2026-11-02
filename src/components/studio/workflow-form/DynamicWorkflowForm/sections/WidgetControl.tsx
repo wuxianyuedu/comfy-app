@@ -49,8 +49,8 @@ export function WidgetControl({
   previewSrc,
 }: WidgetControlProps) {
   /* 标记必填但仍为空 → 红框，提醒作者补齐后再发布。 */
-  const missingRequired = !!entry.required && !isInputFilled(value);
-  const requiredHint = entry.required ? "（必填）" : "";
+  const missingRequired = entry.required === true && !isInputFilled(value);
+  const requiredHint = entry.required === true ? "（必填）" : "";
 
   switch (entry.control) {
     case "textarea": {
@@ -137,22 +137,22 @@ export function WidgetControl({
         <Button
           aria-checked={value === true}
           className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep ${compact ? "h-[28px] px-2.5" : "mt-1 h-7.5 px-3"} w-full justify-between rounded-md text-xs ${
-            value ? "text-success-strong" : "text-ink-muted"
+            Boolean(value) ? "text-success-strong" : "text-ink-muted"
           } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
           disabled={disabled}
-          onClick={() => onValueChange(!value)}
+          onClick={() => onValueChange(!Boolean(value))}
           role="switch"
           variant="ghost"
         >
-          <span>{value ? "开启" : "关闭"}</span>
+          <span>{Boolean(value) ? "开启" : "关闭"}</span>
           <span
             className={`relative h-3.5 w-7 rounded-full transition-colors ${
-              value ? "bg-success/70" : "bg-surface-2"
+              Boolean(value) ? "bg-success/70" : "bg-surface-2"
             }`}
           >
             <span
               className="absolute top-0.5 size-2.5 rounded-full bg-white transition-all"
-              style={{ left: value ? 14 : 3 }}
+              style={{ left: Boolean(value) ? 14 : 3 }}
             />
           </span>
         </Button>
@@ -183,7 +183,7 @@ export function WidgetControl({
                 ? `已选：${filename}`
                 : `上传 ${label}${requiredHint}`}
           </Button>
-          {previewUrl && (
+          {previewUrl !== null && previewUrl !== "" && (
             /* 缩略图不可点（点它等于点「换一张」是另一种语义）：换图仍走上面
                那个按钮，这里只负责把「选了哪张」显示出来。 */
             <MediaThumbnail

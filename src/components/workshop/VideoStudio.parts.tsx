@@ -208,7 +208,7 @@ export function ShotCard({
       <div className="flex flex-wrap items-center gap-3">
         {/* First frame (auto-prefilled from 镜头生图) */}
         <div className="bg-elevated border-border h-16 w-24 shrink-0 overflow-hidden rounded-lg border">
-          {shot.imageUrl ? (
+          {shot.imageUrl !== undefined && shot.imageUrl !== "" ? (
             <MediaThumbnail
               alt={shot.sceneHeading}
               className="h-full w-full object-cover"
@@ -268,9 +268,13 @@ export function ShotCard({
           size="xs"
           variant="primary-solid"
         >
-          {clipStatus === "running" ? "生成中…" : shot.clipUrl ? "重新生成" : "生成片段"}
+          {clipStatus === "running"
+            ? "生成中…"
+            : shot.clipUrl !== undefined && shot.clipUrl !== ""
+              ? "重新生成"
+              : "生成片段"}
         </Button>
-        {clipStatus === "running" && shot.clipTaskId && (
+        {clipStatus === "running" && shot.clipTaskId !== undefined && shot.clipTaskId !== "" && (
           /* 只对本机任务可取消：API 直连的 remoteTaskId 是另一套体系，没有
              可取消的本机任务 id。 */
           <Button
@@ -284,7 +288,7 @@ export function ShotCard({
         )}
       </div>
 
-      {error && (
+      {error !== undefined && error !== "" && (
         <Alert
           /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
           className="text-2xs mt-2 block rounded-md border-transparent px-2 py-1"
@@ -293,13 +297,14 @@ export function ShotCard({
           {error}
         </Alert>
       )}
-      {!shot.imageUrl && !error && (
-        <p className="text-muted-foreground text-2xs mt-2">
-          该镜头暂无画面 — 将以文生视频方式生成;可回「镜头生图」阶段补图后自动变为图生视频。
-        </p>
-      )}
+      {(shot.imageUrl === undefined || shot.imageUrl === "") &&
+        (error === undefined || error === "") && (
+          <p className="text-muted-foreground text-2xs mt-2">
+            该镜头暂无画面 — 将以文生视频方式生成;可回「镜头生图」阶段补图后自动变为图生视频。
+          </p>
+        )}
 
-      {shot.clipUrl && (
+      {shot.clipUrl !== undefined && shot.clipUrl !== "" && (
         <MediaThumbnail
           className="border-border mt-2 max-h-64 w-auto rounded-lg border"
           controls

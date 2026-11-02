@@ -126,7 +126,10 @@ export function useHistoryList(): HistoryListController {
   const closeDetail = useCallback(() => setDetailId(null), []);
 
   const detailQ = useQuery(
-    trpc.task.detail.queryOptions({ id: detailId ?? "" }, { enabled: !!detailId }),
+    trpc.task.detail.queryOptions(
+      { id: detailId ?? "" },
+      { enabled: detailId !== null && detailId !== "" },
+    ),
   );
   /* 详情直接派生自查询结果：detailId 切换时 isPending 自动为 true、data 为 null，
      open 清空逻辑不再需要本地镜像 state。 */
@@ -140,7 +143,7 @@ export function useHistoryList(): HistoryListController {
   const ioQ = useQuery(
     trpc.workflow.detail.queryOptions(
       { id: detailWorkflowId ?? "" },
-      { enabled: !!detailWorkflowId },
+      { enabled: detailWorkflowId !== null && detailWorkflowId !== "" },
     ),
   );
   const workflowIO = useMemo<WorkflowIOMap>(
@@ -151,7 +154,7 @@ export function useHistoryList(): HistoryListController {
    * 封装页、工作流库画布卡片同一份口径）。只在打开详情时拉，列表态不空跑。 */
   const contractsQ = useQuery(
     trpc.llm.modeContractsGet.queryOptions(undefined, {
-      enabled: !!detailId,
+      enabled: detailId !== null && detailId !== "",
     }),
   );
   /* SAFETY: 类型断言已复核 */

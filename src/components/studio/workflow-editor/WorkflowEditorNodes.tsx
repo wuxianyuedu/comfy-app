@@ -35,7 +35,7 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
   const border = hexToRgba(data.color, 0.55);
   const titleBg = hexToRgba(data.color, 0.3);
   const titleCol = lightenHex(data.color, 0.4);
-  const draggable = !!data.draggable;
+  const draggable = data.draggable === true;
   return (
     <div
       className={`relative h-full w-full rounded-md ${draggable ? "cursor-move" : ""}`}
@@ -105,7 +105,8 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
   const isBoth = data.direction === "both";
   /* handle 圆点的颜色跟随端口类型，与画布其它地方的行圆点约定一致。
    * 类型缺失时回落到中性偏白的圆点。 */
-  const dotColor = data.type ? portColor(data.type) : "var(--color-ink-faint)";
+  const dotColor =
+    data.type !== undefined && data.type !== "" ? portColor(data.type) : "var(--color-ink-faint)";
   const rawValue = data.value;
   let valueStr: string | null = null;
   if (
@@ -136,7 +137,7 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
         background: "transparent",
         border: "none",
       }}
-      title={`${hoverLabel}${data.type ? ` · ${data.type}` : ""}${valueStr ? ` · ${valueStr}` : ""}`}
+      title={`${hoverLabel}${data.type !== undefined && data.type !== "" ? ` · ${data.type}` : ""}${valueStr !== null && valueStr !== "" ? ` · ${valueStr}` : ""}`}
     >
       {/* 边界针脚信号模型：
           针脚朝向画布*中心*，好让连线短而直。
@@ -165,14 +166,14 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
          *  字体族与 `font-medium` **刻意不动** —— 这一列只有 11px（行上是 `text-2xs`），
          *  500 字重正是合适的光学重量；渲染收拢之后再抬到 600 会显得过重。 */
         style={{
-          maxWidth: IO_PORT_WIDTH - (valueStr ? 56 : 24),
+          maxWidth: IO_PORT_WIDTH - (valueStr !== null && valueStr !== "" ? 56 : 24),
           textRendering: "geometricPrecision",
           letterSpacing: "-0.01em",
         }}
       >
         {data.title}
       </span>
-      {valueStr ? (
+      {valueStr !== null && valueStr !== "" ? (
         <span className="text-warning-strong/90 text-3xs shrink-0 font-mono tabular-nums">
           {valueStr}
         </span>

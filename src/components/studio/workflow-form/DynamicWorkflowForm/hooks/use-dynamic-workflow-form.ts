@@ -31,7 +31,7 @@ const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]
  *  的分离节点）时退回 before。 */
 const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
   const rect = event.currentTarget?.getBoundingClientRect?.();
-  if (!rect || rect.height <= 0) {
+  if (!Boolean(rect) || rect.height <= 0) {
     return "before";
   }
   return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
@@ -127,7 +127,7 @@ export function useDynamicWorkflowForm(
    *  ComfyUI 的 payload 不会因为「当前模式不显示」就缺字段。
    *  `showHiddenInMode`（IO 编辑预览）不过滤：隐藏行置灰呈现，作者靠
    *  行内 👁 恢复显示——否则隐藏后眼睛跟着消失，永远改不回来。 */
-  const visibilityFilterMode = props.showHiddenInMode ? null : mode;
+  const visibilityFilterMode = props.showHiddenInMode === true ? null : mode;
   const shownWireInputs = useMemo(
     () => filterVisibleInMode(wireInputs, visibilityFilterMode),
     [wireInputs, visibilityFilterMode],
@@ -251,7 +251,7 @@ export function useDynamicWorkflowForm(
       },
       onDragOver: (ioKey: string) => (event: DragEvent<HTMLDivElement>) => {
         const fromKey = dragFromRef.current;
-        if (!fromKey || fromKey === ioKey) {
+        if (fromKey === null || fromKey === "" || fromKey === ioKey) {
           return;
         }
         event.preventDefault();
@@ -273,7 +273,7 @@ export function useDynamicWorkflowForm(
         const toKey = rowKeyOf(event.target) ?? ioKey;
         const pos = positionOf(event);
         endDrag();
-        if (!fromKey || fromKey === toKey) {
+        if (fromKey === null || fromKey === "" || fromKey === toKey) {
           return;
         }
         onReorder(fromKey, toKey, pos);
@@ -331,7 +331,7 @@ export function useDynamicWorkflowForm(
   const onFile = useCallback(
     async (file: File) => {
       const target = uploadTarget;
-      if (!target) {
+      if (target === null || target === "") {
         return;
       }
       setUploading(true);

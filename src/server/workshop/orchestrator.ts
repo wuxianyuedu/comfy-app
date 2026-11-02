@@ -87,7 +87,7 @@ export function rebuildShotPrompts(
 }
 
 function extractRemoteTaskId(clipUrl: string | undefined): string | null {
-  if (!clipUrl) {
+  if (clipUrl === undefined) {
     return null;
   }
   return clipUrl.startsWith("task:") ? clipUrl.slice("task:".length) : null;
@@ -184,7 +184,7 @@ export async function setScript(id: string, markdown: string, parse = true) {
 
 export async function extractCharacters(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) {
+  if (state.meta.scriptMarkdown === undefined || state.meta.scriptMarkdown.trim() === "") {
     throw new Error("请先生成 / 设置脚本再提取角色");
   }
   const cfg = await getWorkshopLLMConfig();
@@ -212,7 +212,7 @@ export async function setCharacters(id: string, characters: Array<Character>) {
 
 export async function buildStoryboard(id: string) {
   const state = await load(id);
-  if (!state.meta.scriptMarkdown?.trim()) {
+  if (state.meta.scriptMarkdown === undefined || state.meta.scriptMarkdown.trim() === "") {
     throw new Error("请先生成 / 设置脚本再拆分分镜");
   }
   const names = state.characters.map((c) => c.name);
@@ -258,10 +258,12 @@ export async function generateImage(id: string, input: GenerateImageInput) {
   const channel = input.channel ?? "api";
   let prompt: string;
   let negative: string | undefined;
-  const shot = input.shotId ? state.shots.find((s) => s.id === input.shotId) : undefined;
-  const character = input.characterId
-    ? state.characters.find((c) => c.id === input.characterId)
-    : undefined;
+  const shot =
+    input.shotId !== undefined ? state.shots.find((s) => s.id === input.shotId) : undefined;
+  const character =
+    input.characterId !== undefined
+      ? state.characters.find((c) => c.id === input.characterId)
+      : undefined;
   if (shot) {
     prompt = shot.prompt || shot.description;
     negative = shot.negativePrompt || undefined;
@@ -323,7 +325,7 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
   }
   if (input.channel === "comfyui") {
     let imageDataUrl: string | undefined;
-    if (input.useFirstFrame && shot.imageUrl) {
+    if (input.useFirstFrame === true && shot.imageUrl !== undefined && shot.imageUrl !== "") {
       imageDataUrl = await resolveMediaDataUrl(shot.imageUrl);
     }
     const r = await submitVideoViaComfyUI({
@@ -332,7 +334,7 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
       imageDataUrl,
       sessionId: id,
     });
-    if (r.url) {
+    if (r.url !== undefined && r.url !== "") {
       shot.clipUrl = r.url;
       shot.clipStatus = "done";
     }
@@ -340,7 +342,7 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
     return { url: r.url, channel: "comfyui" };
   }
   let imageDataUrl: string | undefined;
-  if (input.useFirstFrame && shot.imageUrl) {
+  if (input.useFirstFrame === true && shot.imageUrl !== undefined && shot.imageUrl !== "") {
     imageDataUrl = await resolveMediaDataUrl(shot.imageUrl);
   }
   const result = await submitVideoViaApi({
@@ -350,10 +352,10 @@ export async function submitVideo(id: string, input: SubmitVideoInput) {
     frames: input.frames,
     fps: input.fps,
   });
-  if (result.url) {
+  if (result.url !== undefined && result.url !== "") {
     shot.clipUrl = result.url;
     shot.clipStatus = "done";
-  } else if (result.remoteTaskId) {
+  } else if (result.remoteTaskId !== undefined && result.remoteTaskId !== "") {
     shot.clipUrl = `task:${result.remoteTaskId}`;
     shot.clipStatus = "running";
   }
@@ -368,7 +370,7 @@ export async function pollVideo(id: string, shotId: string) {
     throw new Error(`镜头不存在：${shotId}`);
   }
   const taskId = extractRemoteTaskId(shot.clipUrl);
-  if (!taskId) {
+  if (taskId === null || taskId === "") {
     return {
       pending: false,
       url: shot.clipUrl,
@@ -376,7 +378,7 @@ export async function pollVideo(id: string, shotId: string) {
     };
   }
   const r = await pollVideoViaApi(taskId);
-  if (!r.pending && r.url) {
+  if (!r.pending && r.url !== undefined && r.url !== "") {
     shot.clipUrl = r.url;
     shot.clipStatus = "done";
     await repo.updateState(id, state);
@@ -408,9 +410,9 @@ export async function composeFinal(
   const planPath = await writeCompositionPlan(id, plan);
   let outputPath: string | undefined;
   let renderNote: string | undefined;
-  if (input.render) {
+  if (input.render === true) {
     const r = await renderComposition(plan, `${id}-final`);
-    if (r.ok && r.outputPath) {
+    if (r.ok && r.outputPath !== undefined && r.outputPath !== "") {
       outputPath = r.outputPath;
     }
     renderNote = r.note;

@@ -164,7 +164,7 @@ export function FilmStudio() {
       </footer>
 
       {/* AI 评审弹窗：镜头行「评审」按钮打开；重生成后刷新左栏镜头列表。 */}
-      {reviewShot && c.activeProjectId && (
+      {reviewShot && c.activeProjectId !== null && c.activeProjectId !== "" && (
         <ShotReviewDialog
           onOpenChange={(next) => {
             if (!next) {

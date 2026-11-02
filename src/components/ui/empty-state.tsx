@@ -123,7 +123,7 @@ export function EmptyState({
     ) : (
       <Icon aria-hidden size={32} />
     );
-  } else if (icon) {
+  } else if (Boolean(icon)) {
     renderedIcon = icon;
   }
 
@@ -153,22 +153,22 @@ export function EmptyState({
       )}
     >
       <EmptyHeader>
-        {renderedIcon && (
+        {Boolean(renderedIcon) && (
           <EmptyMedia className={cn(error ? "text-destructive" : "text-primary")}>
             {renderedIcon}
           </EmptyMedia>
         )}
-        {title && (
+        {title !== undefined && title !== "" && (
           <EmptyTitle className={cn(error ? "text-destructive" : "text-ink-strong")}>
             {title}
           </EmptyTitle>
         )}
-        {description && (
+        {Boolean(description) && (
           <EmptyDescription className="text-ink-muted mt-1 text-xs leading-relaxed">
             {description}
           </EmptyDescription>
         )}
-        {action && (
+        {Boolean(action) && (
           // EmptyContent 默认 flex-col + max-w-sm，操作按钮要横向排；
           // 覆盖 layout 到 flex-row，不动 variant 语义。
           <EmptyContent className="mt-3 flex-row justify-center gap-2">{action}</EmptyContent>

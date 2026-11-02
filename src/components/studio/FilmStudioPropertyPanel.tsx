@@ -119,7 +119,9 @@ export function FilmStudioPropertyPanel({
         >
           <ToggleGroupItem
             className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs"
-            disabled={!c.activeProjectId || c.projectShotCount === 0}
+            disabled={
+              c.activeProjectId === null || c.activeProjectId === "" || c.projectShotCount === 0
+            }
             value="project"
           >
             当前项目镜头
@@ -221,13 +223,13 @@ export function FilmStudioPropertyPanel({
             }}
             type="file"
           />
-          {c.bgmName && (
+          {c.bgmName !== null && c.bgmName !== "" && (
             <p className="text-primary-strong text-2xs mt-1 truncate">已选：{c.bgmName}</p>
           )}
         </div>
 
         {/* Error display */}
-        {c.film?.error && (
+        {c.film !== null && c.film.error !== null && c.film.error !== "" && (
           <div className="border-destructive/30 bg-destructive/10 text-destructive text-2xs rounded-lg border px-3 py-2 leading-relaxed">
             {c.film.error}
             {c.film.status === "FAILED" &&

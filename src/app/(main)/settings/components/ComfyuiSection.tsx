@@ -39,7 +39,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
   /* ComfyUI 安装形态（fs-only 的 comfyInstance，供路径徽标 + 是否隐藏端口/启动参数）。
    * 刻意不取自 comfyStatus：那份要等秒级运行态探测，徽标与输入框显隐会被一起拖着走。 */
   const instanceType = c.comfyInstance?.instanceType ?? null;
-  const desktopManaged = !!c.comfyInstance?.desktopManaged;
+  const desktopManaged = c.comfyInstance?.desktopManaged === true;
 
   return (
     <SettingsCard title="创作后端（ComfyUI）">
@@ -55,7 +55,7 @@ export function ComfyuiSection({ c }: { c: ReadySettingsPageController }) {
         桌面版（ComfyUI Desktop）请直接配置实例根目录（含 ComfyUI/ 子目录与
         standalone-env/），便携版配置含 main.py 的源码根。自动识别 python_embeded / standalone-env /
         .venv 解释器，多个环境并存时优先选用装了依赖（torch）的那个。
-        {c.comfyInstance?.pathConfigured
+        {c.comfyInstance?.pathConfigured === true
           ? "已配置——这里只管路径；启动 / 关闭与启动日志在侧栏「ComfyUI」页。"
           : "未配置——ComfyUI 未运行时任务会失败，侧栏「ComfyUI」页也启动不了它。"}
       </p>

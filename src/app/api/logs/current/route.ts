@@ -248,7 +248,7 @@ async function resolveSourceFile(
   /* 「应用服务输出」：Next dev server 的 stdout/stderr 转录（本次进程一份）。 */
   if (source === "app") {
     const file = await latestPanelLogFile();
-    return file ? { file, resumable: true } : null;
+    return file !== null && file !== "" ? { file, resumable: true } : null;
   }
   /* 壳侧两路（shell = 壳自持日志；shell-launch = 壳侧编排链路）：双击启动的
    * 最早一段现场（exe / 项目根 / 启动报告）只在这两份里，应用运行后面板此前

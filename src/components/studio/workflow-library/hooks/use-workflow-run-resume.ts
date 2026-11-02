@@ -132,7 +132,7 @@ export function useWorkflowRunResume({
     /* 恢复路径也要**同步登记表**：done / failed 的恢复不该反过来改写状态，
      * 只有「还在跑」那一支要继续写（进度与终态由 watchWorkflowRun 负责）。 */
     if (run.status === "done") {
-      if (run.resultUrl) {
+      if (run.resultUrl !== undefined && run.resultUrl !== "") {
         handlersRef.current.onOutput(run.taskId, {
           url: run.resultUrl,
           kind: "image",

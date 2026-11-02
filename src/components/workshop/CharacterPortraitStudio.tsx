@@ -74,17 +74,18 @@ export function CharacterPortraitStudio({ character, portrait }: Props) {
   const tagCounts = new Map<string, number>();
   for (const w of localWorkflows) {
     const tag = w.modelTags[0];
-    if (tag) {
+    if (tag !== undefined && tag !== "") {
       tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
     }
   }
   for (const w of localWorkflows) {
     const tag = w.modelTags[0];
-    localOptionLabels[w.id] = tag
-      ? (tagCounts.get(tag) ?? 0) > 1
-        ? `${tag} · ${w.name}`
-        : tag
-      : w.name;
+    localOptionLabels[w.id] =
+      tag !== undefined && tag !== ""
+        ? (tagCounts.get(tag) ?? 0) > 1
+          ? `${tag} · ${w.name}`
+          : tag
+        : w.name;
   }
   const localOptions = localWorkflows.map((w) => w.id);
   const localBlocked = session.channel === "local" && !session.localWorkflowId;

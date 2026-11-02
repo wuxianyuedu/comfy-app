@@ -206,7 +206,7 @@ export function ZoomIndicator({
       const st = dragRef.current;
       dragRef.current = null;
       setDragging(false);
-      if (st?.moved) {
+      if (st?.moved === true) {
         justDraggedRef.current = true;
       } else if (st) {
         beginEdit();

@@ -112,7 +112,7 @@ function rowTitle(port: ParamOutputPort, side: "right" | "left"): string {
     return head;
   }
   const target =
-    port.targetType && port.targetType !== port.type
+    port.targetType !== undefined && port.targetType !== "" && port.targetType !== port.type
       ? `${port.ioKey}（声明 ${port.targetType}）`
       : port.ioKey;
   return `${head} → 落到 ${target}`;
@@ -191,7 +191,7 @@ export function WorkflowParamCard({
           title={`${classLabel} · ${hostNodeId}`}
         >
           {label}
-          {idLabel && (
+          {idLabel !== undefined && idLabel !== "" && (
             <span className="text-ink-faint text-3xs ml-1 font-mono font-normal">{idLabel}</span>
           )}
         </span>
@@ -284,7 +284,7 @@ export function WorkflowParamCard({
           没有这段说明，卡片上就只剩一颗圆点：「默认线」「作者改过的线」「一个候选
           都落不上」三种状态读起来一模一样（ISSUE #355：「对外参数卡片连不了线，
           点击端点拉线会出现禁用标记」）。 */}
-      {!readOnly && footNote && (
+      {!readOnly && footNote !== undefined && footNote !== "" && (
         <div
           className={`px-2 pb-1.5 text-[9.5px] leading-relaxed ${
             wired ? "text-ink-fainter" : "text-warning-strong/90"

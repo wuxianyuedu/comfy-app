@@ -127,7 +127,10 @@ function LLMSettingsModal({
   /* 候选列表 = 已配置的 extraModels + 当前生效模型（保证至少一项可选） */
   const candidates = React.useMemo(() => {
     const list = initial?.extraModels ?? [];
-    return initial?.model && !list.includes(initial.model) ? [initial.model, ...list] : list;
+    const initialModel = initial?.model;
+    return initialModel !== undefined && initialModel !== "" && !list.includes(initialModel)
+      ? [initialModel, ...list]
+      : list;
   }, [initial]);
 
   async function handleSave() {

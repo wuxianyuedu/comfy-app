@@ -123,7 +123,7 @@ function sourceFiles(): Array<string> {
   };
   for (const layer of LAYERS) {
     const abs = path.join(ROOT, layer);
-    if (statSync(abs, { throwIfNoEntry: false })?.isDirectory()) {
+    if (statSync(abs, { throwIfNoEntry: false })?.isDirectory() === true) {
       walk(abs);
     }
   }
@@ -202,7 +202,7 @@ describe("stripComments 的唯一实现（§12.18 复用优先）", () => {
     expect(globbed).toContain("cleanup(PATTERNS)");
 
     const REGEX_INPUT = [
-      'const RE = /["\']/gm;',
+      "const RE = /[\"']/gm;",
       '/* 这一段是注释，里面写着 spawnSync("pnpm", {shell:true}) */',
       "const realCode = pnpmInvocation(args);",
     ].join("\n");

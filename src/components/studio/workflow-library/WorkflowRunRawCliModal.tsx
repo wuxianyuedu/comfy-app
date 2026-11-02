@@ -112,7 +112,7 @@ export function WorkflowRunRawCliModal({
   const loadRef = useRef<(background?: boolean) => void>(() => undefined);
 
   useEffect(() => {
-    if (!open || !taskId) {
+    if (!open || taskId === null) {
       return;
     }
     let alive = true;

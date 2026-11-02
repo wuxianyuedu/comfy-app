@@ -55,7 +55,7 @@ const SPECIFIER_RE = /(?:from|import|require|vi\.mock)\s*\(?\s*["']([^"']+)["']/
 /** 把说明符解析到仓库内的实际文件（只处理本仓库的 `~/` 与 `@/` 别名）。 */
 function resolveSpec(spec: string): string | null {
   const m = /^(?:~|@)\/(.+)$/.exec(spec);
-  if (!m?.[1]) {
+  if (m === null || m[1] === undefined || m[1] === "") {
     return null;
   }
   const base = join(ROOT, "src", m[1]);
@@ -135,7 +135,7 @@ function collectEdges(): Array<Edge> {
         continue;
       }
       const target = resolveSpec(spec);
-      if (!target?.startsWith("src/server/")) {
+      if (target === null || !target.startsWith("src/server/")) {
         continue;
       }
       if (!SERVER_OWNED_RE.test(target) && !(rel in REGISTERED)) {
@@ -157,7 +157,8 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
       `src/lib 是被 server / components / app 共同依赖的地基，新增对 src/server/** 的依赖必须先裁决并登记。\n` +
         `需要日志：改走中立出口 \`@/lib/core/logger\`（pino 的薄封装，接口一致，实现仍只有一份）；\n` +
         `需要别的服务端能力：把被依赖的部分下沉到 lib，或由调用方注入（规范 §12.7 依赖倒置）。\n${
-        report}`,
+          report
+        }`,
     ).toEqual([]);
   });
 
@@ -168,8 +169,9 @@ describe("lib → server 的越界依赖逐个登记，清单只许变短（ISSU
       .map(([from, to]) => `  ✗ ${from} -> ${to}`);
     expect(
       stale,
-      `以下登记项已不再成立（依赖被消除或目标文件被移动），请从 REGISTERED 中删除：\n${
-        stale.join("\n")}`,
+      `以下登记项已不再成立（依赖被消除或目标文件被移动），请从 REGISTERED 中删除：\n${stale.join(
+        "\n",
+      )}`,
     ).toEqual([]);
   });
 

@@ -101,7 +101,7 @@ vi.mock("node:fs", async (importOriginal) => {
       if (hit) {
         /* 「在不在」都问不出来（挂载点失效 / 权限）是路由那层 try/catch 存在的理由，
          * 所以这一档要能造出来 —— 不能让假 fs 只会返回布尔值。 */
-        if (hit.existsFails) {
+        if (hit.existsFails === true || hit.existsFails === "silent") {
           if (hit.existsFails === "silent") {
             throw new Error("");
           }
@@ -109,7 +109,7 @@ vi.mock("node:fs", async (importOriginal) => {
             code: "EACCES",
           });
         }
-        return !hit.missing;
+        return hit.missing !== true;
       }
       return real.existsSync(p);
     },
@@ -120,14 +120,14 @@ vi.mock("node:fs", async (importOriginal) => {
         /* SAFETY: 类型断言已复核 */
         return (real.readFileSync as (a: unknown, b: unknown) => unknown)(p, options);
       }
-      if (hit.missing || hit.readFails) {
+      if (hit.missing === true || hit.readFails === true) {
         /* SAFETY: 类型断言已复核 */
         const e = new Error(
-          hit.missing
+          hit.missing === true
             ? `ENOENT: no such file or directory, open '${k}'`
             : `EIO: i/o error, read '${k}'`,
         ) as NodeJS.ErrnoException;
-        e.code = hit.missing ? "ENOENT" : "EIO";
+        e.code = hit.missing === true ? "ENOENT" : "EIO";
         throw e;
       }
       fsState.reads.set(k, (fsState.reads.get(k) ?? 0) + 1);
@@ -140,14 +140,14 @@ vi.mock("node:fs", async (importOriginal) => {
         /* SAFETY: 类型断言已复核 */
         return (real.statSync as (a: unknown) => unknown)(p);
       }
-      if (hit.missing || hit.statFails) {
+      if (hit.missing === true || hit.statFails === true) {
         /* SAFETY: 类型断言已复核 */
         const e = new Error(
-          hit.missing
+          hit.missing === true
             ? `ENOENT: no such file or directory, stat '${k}'`
             : `EACCES: permission denied, stat '${k}'`,
         ) as NodeJS.ErrnoException;
-        e.code = hit.missing ? "ENOENT" : "EACCES";
+        e.code = hit.missing === true ? "ENOENT" : "EACCES";
         throw e;
       }
       return {
@@ -629,7 +629,7 @@ function scriptDiscover(
   opts: { code?: number; spawnThrows?: boolean } = {},
 ): void {
   spawnMock.mockImplementationOnce(() => {
-    if (opts.spawnThrows) {
+    if (opts.spawnThrows === true) {
       throw Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" });
     }
     const child: FakeChild = { proc: {}, out: {}, err: {} };
@@ -1162,7 +1162,7 @@ function queueChild(plan: ChildPlan): void {
           }),
         );
       }
-      if (!plan.noClose && (!plan.error || plan.closeCode !== undefined)) {
+      if (plan.noClose !== true && (!plan.error || plan.closeCode !== undefined)) {
         /* `closeCode: null` 是**真机那一形**（spawn 失败时 Node 给的是 null，不是 0），
          * 所以这里不能写 `?? 0` —— 那样 `null` 会被折成 0，「退出码为空」这一档
          * 在夹具里就永远造不出来了。 */

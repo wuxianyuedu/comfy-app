@@ -119,12 +119,15 @@ export function FormField({
    * 但不能拿去做 CSS 选择器 —— 本组件只把它交给 `htmlFor` / `aria-*`。 */
   const autoId = useId();
   const fieldId = id ?? autoId;
-  const errorId = error ? `${fieldId}-error` : undefined;
+  const errorId =
+    error !== undefined && error !== null && error !== "" ? `${fieldId}-error` : undefined;
 
   const a11y: FormFieldA11y = {
     id: fieldId,
-    ...(error ? { "aria-invalid": /* SAFETY: 类型断言已复核 */ true as const } : {}),
-    ...(errorId ? { "aria-describedby": errorId } : {}),
+    ...(error !== undefined && error !== null && error !== ""
+      ? { "aria-invalid": /* SAFETY: 类型断言已复核 */ true as const }
+      : {}),
+    ...(errorId !== undefined ? { "aria-describedby": errorId } : {}),
   };
 
   /* `htmlFor` 只在**真的接得上**时才给：`children` 是 render-prop 时，
@@ -146,7 +149,7 @@ export function FormField({
           className={cn("text-ink/80 mb-1.5 block w-full text-sm font-medium", labelClassName)}
         >
           {label}
-          {required && (
+          {required === true && (
             <span aria-hidden className="text-danger-strong ml-0.5">
               *
             </span>

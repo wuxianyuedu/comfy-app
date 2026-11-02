@@ -54,14 +54,14 @@ function PaginationLink({ className, isActive, size = "icon", ...props }: Pagina
       nativeButton={false}
       render={
         <a
-          aria-current={isActive ? "page" : undefined}
+          aria-current={isActive === true ? "page" : undefined}
           data-active={isActive}
           data-slot="pagination-link"
           {...props}
         />
       }
       size={size}
-      variant={isActive ? "outline" : "ghost"}
+      variant={isActive === true ? "outline" : "ghost"}
     />
   );
 }

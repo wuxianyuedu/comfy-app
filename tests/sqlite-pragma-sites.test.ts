@@ -219,7 +219,7 @@ const RACE_CONTROL_ROUNDS = 6;
 const RACE_CASE_TIMEOUT_MS = RACE_CONTROL_ROUNDS * (ARRIVAL_DEADLINE_MS + 20_000) + 30_000;
 
 /** 一轮竞态的读数：每个进程的结论 + **实际到位数**（后者是 #1337 补的那一格）。 */
-type RaceRound = { arrived: number; outcomes: Array<string>; };
+type RaceRound = { arrived: number; outcomes: Array<string> };
 
 /**
  * `applySqlitePragmas` 的**撞锁重试**当场量出来（ISSUE #1282，形状重定于 #1337）。
@@ -268,7 +268,8 @@ describe("开机 PRAGMA 撞锁有界重试，当场量出来", () => {
             ? ` 没齐的那几轮量到的是「错开起跑」而不是「抢不到锁」—— 先查 tsx 冷启与机器负载` +
               `（到位上限 ${ARRIVAL_DEADLINE_MS}ms；本机冷启实测 7.4s、满载更久），别去放宽下面的断言。`
             : ` 每轮都齐步发令却没人撞锁 —— 那才是「WAL 转换不再互斥」这一前提真的变了，` +
-              `要按 ISSUE #1337 重新定性这条对照，而不是把它删掉。`}`,
+              `要按 ISSUE #1337 重新定性这条对照，而不是把它删掉。`
+        }`,
       ).toBeGreaterThan(0);
     },
     RACE_CASE_TIMEOUT_MS,
@@ -318,7 +319,10 @@ function scriptedTarget(
     async execute(sql: string): Promise<unknown> {
       target.calls.push(sql);
       if (target.calls.length <= failures) {
-        throw Object.assign(new Error(err.message), err.code ? { code: err.code } : {});
+        throw Object.assign(
+          new Error(err.message),
+          err.code !== undefined && err.code !== "" ? { code: err.code } : {},
+        );
       }
       return { rows: [] };
     },

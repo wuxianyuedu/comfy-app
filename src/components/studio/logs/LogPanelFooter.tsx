@@ -83,7 +83,7 @@ export function LogPanelFooter(input: {
         )}
         {/* 服务端进程标识：用户报障时能说清「日志来自哪个应用服务进程」，
           也让面板在服务真重启后能自证（时间线已重置）。 */}
-        {bootId && (
+        {bootId !== null && bootId !== "" && (
           <span
             className="border-border-strong text-ink-muted text-2xs shrink-0 rounded border px-1.5 py-px"
             title={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}

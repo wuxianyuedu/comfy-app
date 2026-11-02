@@ -102,7 +102,7 @@ function mountTable(source: string): Record<string, string> {
   const mounts: Record<string, string> = {};
   for (const m of source.matchAll(/^\s{2}(\w+):\s*(\w+),$/gm)) {
     const file = varToFile[m[2]!];
-    if (file) {
+    if (file !== undefined && file !== "") {
       mounts[m[1]!] = file;
     }
   }
@@ -121,7 +121,7 @@ function routerClosure(entry: string, sources: Map<string, string>): Set<string>
     }
     closure.add(current);
     const text = sources.get(current);
-    if (!text) {
+    if (text === undefined || text === "") {
       continue;
     }
     for (const m of text.matchAll(/from\s+"(?:~\/server\/api\/routers|\.)\/?([\w-]+)"/g)) {
@@ -230,7 +230,9 @@ describe("tRPC 挂载面：每条 procedure 都要有执行者（台账 E3）", 
   });
 
   it("每个挂载的命名空间都在 root.ts 登记了源文件", () => {
-    const unmounted = procedurePaths.filter((p) => !mounts[p.split(".")[0]!]);
+    const unmounted = procedurePaths.filter(
+      (p) => mounts[p.split(".")[0]!] === undefined || mounts[p.split(".")[0]!] === "",
+    );
     expect(unmounted).toEqual([]);
   });
 

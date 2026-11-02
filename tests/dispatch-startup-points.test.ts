@@ -30,10 +30,7 @@ const code = (rel: string): string => {
     trailing: true,
   });
   // 这一族全是反向断言，前提是"读到了东西"：剥完是空文 ⇒ `not.toMatch` 恒真。
-  expect(
-    stripped.trim(),
-    `${rel}：剥完注释是空文，落在它身上的反向断言恒真`,
-  ).not.toHaveLength(0);
+  expect(stripped.trim(), `${rel}：剥完注释是空文，落在它身上的反向断言恒真`).not.toHaveLength(0);
   return stripped;
 };
 
@@ -65,7 +62,7 @@ function scanRepoSources(): Array<string> {
     }
   };
   for (const layer of SCAN_LAYERS) {
-    if (statSync(path.join(ROOT, layer), { throwIfNoEntry: false })?.isDirectory()) {
+    if (statSync(path.join(ROOT, layer), { throwIfNoEntry: false })?.isDirectory() === true) {
       walk(path.join(ROOT, layer));
     }
   }
@@ -79,21 +76,21 @@ const REPO_SOURCES = scanRepoSources();
 function loopCallSites(): Array<string> {
   /* 先按原文粗筛（实测：面 1371 份、读 + prefilter 188ms、命中 3 份），
    * 只对幸存者剥注释再判形状 —— 这一格的语义不变，成本也不变成 1371 次正则。 */
-  return REPO_SOURCES
-    .filter(
-      (rel) =>
-        readFileSync(path.join(ROOT, rel), "utf8").includes("startDispatchLoop"),
+  return (
+    REPO_SOURCES.filter((rel) =>
+      readFileSync(path.join(ROOT, rel), "utf8").includes("startDispatchLoop"),
     )
-    /* 只数**调用点**：声明行（`export function startDispatchLoop(`）与 barrel 的
-     * 再导出列表都带这个名字，把它们算进来会把 dispatch 自己报成第二个启动点。 */
-    .filter((rel) =>
-      code(rel)
-        .split("\n")
-        .some(
-          (line) =>
-            line.includes("startDispatchLoop(") && !line.includes("function startDispatchLoop"),
-        ),
-    );
+      /* 只数**调用点**：声明行（`export function startDispatchLoop(`）与 barrel 的
+       * 再导出列表都带这个名字，把它们算进来会把 dispatch 自己报成第二个启动点。 */
+      .filter((rel) =>
+        code(rel)
+          .split("\n")
+          .some(
+            (line) =>
+              line.includes("startDispatchLoop(") && !line.includes("function startDispatchLoop"),
+          ),
+      )
+  );
 }
 
 describe("派发循环的启动点：每宿主一处，且只一处", () => {
@@ -109,8 +106,7 @@ describe("派发循环的启动点：每宿主一处，且只一处", () => {
     ]) {
       expect(
         REPO_SOURCES,
-        `面里不见了 ${rel} —— 派生的层或扩展名改了，` +
-          "「全仓」会退化成只判剩下那些文件",
+        `面里不见了 ${rel} —— 派生的层或扩展名改了，「全仓」会退化成只判剩下那些文件`,
       ).toContain(rel);
     }
   });
@@ -136,7 +132,7 @@ describe("派发循环的启动点：每宿主一处，且只一处", () => {
     const edgeAt = src.indexOf('process.env.NEXT_RUNTIME === "edge"');
     expect(
       edgeAt,
-      'src/instrumentation.ts 里找不到 edge 分支的起点标记 —— slice(-1) 会切成最后一个字符，' +
+      "src/instrumentation.ts 里找不到 edge 分支的起点标记 —— slice(-1) 会切成最后一个字符，" +
         "下面两条「Edge 里不许出现」就在判空文",
     ).not.toBe(-1);
     const edge = src.slice(edgeAt);

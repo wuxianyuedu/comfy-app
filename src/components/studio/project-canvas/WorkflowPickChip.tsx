@@ -53,15 +53,20 @@ export function WorkflowPickChip({
         prefix: (
           <span
             className={`size-1.5 shrink-0 rounded-full ${
-              option.sourcePath ? "bg-status-online" : "bg-primary-strong"
+              option.sourcePath !== undefined &&
+              option.sourcePath !== null &&
+              option.sourcePath !== ""
+                ? "bg-status-online"
+                : "bg-primary-strong"
             }`}
           />
         ),
-        suffix: option.taskType ? (
-          <span className="bg-subtle text-ink-muted shrink-0 rounded px-1.5 py-0.5 text-[9.5px]">
-            {option.taskType}
-          </span>
-        ) : undefined,
+        suffix:
+          option.taskType !== undefined && option.taskType !== "" ? (
+            <span className="bg-subtle text-ink-muted shrink-0 rounded px-1.5 py-0.5 text-[9.5px]">
+              {option.taskType}
+            </span>
+          ) : undefined,
       }))}
       onSelect={onSelect}
       trigger={

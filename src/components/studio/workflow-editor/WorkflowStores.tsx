@@ -136,7 +136,9 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
               /* 下钻到子图内部勾选时，画布把「从哪一层钻进来」的宿主节点 id 一并
                * 带上：内部节点 id（`1670`）在顶层画布上不存在，运行期 comfy-cli
                * 展开后的 id 是 `4:1670`，两个 id 都存下来才能确定性还原。 */
-              ...(ref.hostNodeId ? { hostNodeId: ref.hostNodeId } : {}),
+              ...(ref.hostNodeId !== undefined && ref.hostNodeId !== ""
+                ? { hostNodeId: ref.hostNodeId }
+                : {}),
             },
           },
         };
@@ -176,7 +178,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         return {
           workflowIO: {
             ...state.workflowIO,
-            [key]: { ...cur, required: !cur.required },
+            [key]: { ...cur, required: cur.required !== true },
           },
         };
       }),
@@ -288,7 +290,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         const movingGroup = groupOf(fromEntry);
         const ordered = Object.entries(prev)
           .map(([entryKey, entry]) => ({ entryKey, entry }))
-          .filter(({ entry }) => entry && groupOf(entry) === movingGroup)
+          .filter(({ entry }) => Boolean(entry) && groupOf(entry) === movingGroup)
           .sort((itemA, itemB) => {
             const ao = itemA.entry.displayOrder;
             const bo = itemB.entry.displayOrder;
@@ -305,7 +307,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
           });
         const without = ordered.filter(({ entryKey }) => entryKey !== fromKey);
         let targetIdx = without.length;
-        if (targetKey) {
+        if (targetKey !== null && targetKey !== "") {
           const i = without.findIndex(({ entryKey }) => entryKey === targetKey);
           if (i !== -1) {
             targetIdx = position === "after" ? i + 1 : i;
@@ -462,7 +464,7 @@ export function createRgthreeGroupsStore(
         return override;
       }
       const g = get().detail?.groups?.find((x: WorkflowGroup) => x.id === groupId);
-      return !!g?.bypass;
+      return g?.bypass === true;
     },
 
     setBypass: (groupId, bypass) => {
@@ -550,7 +552,9 @@ export function createNodeJsonViewerStore(
       }
       const entry: unknown = detail.graph[nodeId];
       /* SAFETY: 类型断言已复核 */
-      return entry && typeof entry === "object" ? (entry as Record<string, unknown>) : null;
+      return Boolean(entry) && typeof entry === "object"
+        ? (entry as Record<string, unknown>)
+        : null;
     },
 
     getNodeView: (nodeId) => {
@@ -561,9 +565,11 @@ export function createNodeJsonViewerStore(
       const rawEntry: unknown = detail.graph?.[nodeId];
       const entry =
         /* SAFETY: 类型断言已复核 */
-        rawEntry && typeof rawEntry === "object" ? (rawEntry as Record<string, unknown>) : null;
+        Boolean(rawEntry) && typeof rawEntry === "object"
+          ? (rawEntry as Record<string, unknown>)
+          : null;
       let rawNodesSource: Array<Record<string, unknown>> | null = null;
-      const isSubView = subgraphStackLength > 0 && subgraphRawContext;
+      const isSubView = subgraphStackLength > 0 && subgraphRawContext !== null;
       if (isSubView) {
         /* SAFETY: 类型断言已复核 */
         const subs = (
@@ -588,7 +594,7 @@ export function createNodeJsonViewerStore(
                   targetUid,
               )
             : undefined;
-          if (matchKey && subs) {
+          if (matchKey !== undefined && matchKey !== "" && subs !== undefined) {
             /* SAFETY: 类型断言已复核 */
             subDef = subs[matchKey] as RawSubgraphDef;
           }

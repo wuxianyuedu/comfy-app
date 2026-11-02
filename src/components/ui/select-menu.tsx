@@ -261,7 +261,7 @@ export function SelectMenu({
                 </SelectPrimitive.Item>
               ))}
             </SelectPrimitive.List>
-            {footer ? (
+            {Boolean(footer) ? (
               <div className="border-border-strong mt-1 border-t pt-1">{footer}</div>
             ) : null}
           </SelectPrimitive.Popup>

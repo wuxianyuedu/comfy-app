@@ -14,14 +14,14 @@
 export type RadiusDerivation = {
   coef: number;
   offset: number;
-}
+};
 
 export type RadiusScale = {
   /** `:root` 里那颗基数，换算成 px（只认 rem/px 两种形态）。 */
   basePx: number;
   /** 档位名（`--radius-sm` … 含 `--radius-node`）→ 派生式。 */
   derivations: Map<string, RadiusDerivation>;
-}
+};
 
 /**
  * 解出所有由 `--radius` 派生的档位（不要求输入里带基数声明，便于反向验证）。支持三种写法：
@@ -33,7 +33,7 @@ export function parseDerivations(css: string): Map<string, RadiusDerivation> {
   for (const m of css.matchAll(
     /^\s*(--radius-[a-z0-9]+)\s*:\s*(?:var\(--radius\)|calc\(var\(--radius\)\s*(?:(\*)\s*([0-9.]+)|([+-])\s*([0-9.]+)px)\))\s*;/gm,
   )) {
-    if (!m[1]) {
+    if (m[1] === undefined || m[1] === "") {
       continue;
     }
     if (m[2] === "*") {
@@ -41,7 +41,7 @@ export function parseDerivations(css: string): Map<string, RadiusDerivation> {
         coef: Number.parseFloat(m[3] ?? "1"),
         offset: 0,
       });
-    } else if (m[4]) {
+    } else if (m[4] !== undefined && m[4] !== "") {
       const magnitude = Number.parseFloat(m[5] ?? "0");
       derivations.set(m[1], {
         coef: 1,
@@ -57,7 +57,13 @@ export function parseDerivations(css: string): Map<string, RadiusDerivation> {
 /** 基数 + 派生表一起解出来（`css` 必须是 globals.css 全文）。 */
 export function parseRadiusScale(css: string): RadiusScale {
   const baseMatch = /^\s*--radius\s*:\s*([0-9.]+)(rem|px)\s*;/m.exec(css);
-  if (!baseMatch?.[1] || !baseMatch[2]) {
+  if (
+    baseMatch === null ||
+    baseMatch[1] === undefined ||
+    baseMatch[1] === "" ||
+    baseMatch[2] === undefined ||
+    baseMatch[2] === ""
+  ) {
     throw new Error("globals.css 里找不到 --radius 基数");
   }
   const basePx =

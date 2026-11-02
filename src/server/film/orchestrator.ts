@@ -163,7 +163,7 @@ async function parseScriptToShots(
       const cam = CAMERA_KEYWORDS[order % CAMERA_KEYWORDS.length];
       const base = sc.action.trim() || raw.trim();
       const parts = [base, cam];
-      if (stylePrompt) {
+      if (stylePrompt !== undefined && stylePrompt !== "") {
         parts.push(stylePrompt);
       }
       const prompt = parts.filter(Boolean).join(", ");
@@ -240,7 +240,7 @@ export async function createFilm(input: CreateFilmInput) {
 
   let stylePrompt: string | undefined;
   let styleNegative: string | undefined;
-  if (input.styleSlug) {
+  if (input.styleSlug !== undefined && input.styleSlug !== null && input.styleSlug !== "") {
     const skill = await skillRepository.findBySlug(input.styleSlug);
     if (skill) {
       stylePrompt = skill.promptTemplate || undefined;
@@ -383,7 +383,7 @@ async function generateVideoShot(
     workflowId: videoWorkflowId,
     values: {
       prompt: shot.prompt,
-      ...(shot.negative ? { negativePrompt: shot.negative } : {}),
+      ...(shot.negative !== null && shot.negative !== "" ? { negativePrompt: shot.negative } : {}),
       firstFrame: inputImage,
       /* SAFETY: 类型断言已复核 */
       frames: (params.frames ?? 81) as number,
@@ -469,7 +469,7 @@ async function watchFilm(id: string, opts: { resumed?: boolean } = {}) {
 }
 
 async function watchLoop(id: string, opts: { resumed?: boolean }) {
-  if (opts.resumed) {
+  if (opts.resumed === true) {
     /* 续跑要在行日志里留痕：否则用户看到的是「重启之后它自己动起来了」，
      * 而支持现场需要据这一行判断「是 boot 扫描接上的，还是原循环还活着」。 */
     await appendFilmLog(id, "info", `进程重启后续跑监看（本轮预算 ${WATCH_BUDGET_MIN} 分钟）`);
@@ -522,7 +522,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
         }
         continue;
       }
-      if (!shot.taskId) {
+      if (shot.taskId === null || shot.taskId === "") {
         pending++;
         continue;
       }
@@ -531,7 +531,7 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
 
     const taskIds: Array<string> = [];
     for (const shot of awaiting) {
-      if (shot.taskId) {
+      if (shot.taskId !== null && shot.taskId !== "") {
         taskIds.push(shot.taskId);
       }
     }
@@ -543,7 +543,8 @@ async function watchLoop(id: string, opts: { resumed?: boolean }) {
     );
 
     for (const shot of awaiting) {
-      const task = shot.taskId ? progressById.get(shot.taskId) : undefined;
+      const task =
+        shot.taskId !== null && shot.taskId !== "" ? progressById.get(shot.taskId) : undefined;
       if (!task) {
         pending++;
         continue;
@@ -691,7 +692,7 @@ export async function cancelFilm(id: string) {
   }
   const shots = await filmShotRepository.listActiveWithTask(id);
   for (const s of shots) {
-    if (s.taskId) {
+    if (s.taskId !== null && s.taskId !== "") {
       await cancelTask(s.taskId).catch(() => undefined);
     }
   }

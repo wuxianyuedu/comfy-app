@@ -205,9 +205,11 @@ export function openRuntimeLogWriter(
   dir: string = SERVICES_LOG_DIR,
   options: OpenRuntimeLogWriterOptions = {},
 ): RuntimeLogWriter {
-  const file = options.reuse
-    ? path.join(dir, options.reuse)
-    : allocateRuntimeLogFile(source, dir, at);
+  /* 复用的文件名是「按次命名」产物，不会是空串 */
+  const file =
+    options.reuse === undefined
+      ? allocateRuntimeLogFile(source, dir, at)
+      : path.join(dir, options.reuse);
   try {
     /* `flag: "a"` 的第一次写就会建文件；这里显式建目录是因为 `mkdir` 的失败
      * 要自己咽掉（日志子系统绝不阻塞业务，见各县志模块的硬约束）。 */

@@ -76,11 +76,13 @@ export function buildCharacterMessages(c: {
 }): Array<LLMMessage> {
   const brief = [
     c.name ? `名字：${c.name}` : "",
-    c.appearance ? `已有外貌：${c.appearance}` : "",
-    c.costume ? `已有服装：${c.costume}` : "",
-    c.personality ? `已有性格：${c.personality}` : "",
-    c.styleTags?.length ? `风格标签：${c.styleTags.join("、")}` : "",
-    c.skillName ? `艺术风格：${c.skillName}` : "",
+    c.appearance !== undefined && c.appearance !== "" ? `已有外貌：${c.appearance}` : "",
+    c.costume !== undefined && c.costume !== "" ? `已有服装：${c.costume}` : "",
+    c.personality !== undefined && c.personality !== "" ? `已有性格：${c.personality}` : "",
+    c.styleTags !== undefined && c.styleTags.length > 0
+      ? `风格标签：${c.styleTags.join("、")}`
+      : "",
+    c.skillName !== undefined && c.skillName !== "" ? `艺术风格：${c.skillName}` : "",
   ]
     .filter(Boolean)
     .join("\n");

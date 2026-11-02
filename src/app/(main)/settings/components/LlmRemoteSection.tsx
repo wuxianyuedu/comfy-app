@@ -60,23 +60,27 @@ export function LlmRemoteSection({
                   <div className="border-border flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
                     <span className="min-w-0 flex-1 truncate">
                       <span className="text-ink">{entry.name}</span>
-                      {entry.baseUrl && (
-                        <span className="text-muted-foreground text-3xs ml-2">独立接口</span>
-                      )}
-                      {entry.apiKey && (
-                        <span className="text-muted-foreground text-3xs ml-1.5">独立密钥</span>
-                      )}
+                      {entry.baseUrl !== null &&
+                        entry.baseUrl !== undefined &&
+                        entry.baseUrl !== "" && (
+                          <span className="text-muted-foreground text-3xs ml-2">独立接口</span>
+                        )}
+                      {entry.apiKey !== null &&
+                        entry.apiKey !== undefined &&
+                        entry.apiKey !== "" && (
+                          <span className="text-muted-foreground text-3xs ml-1.5">独立密钥</span>
+                        )}
                     </span>
                     <Hint label="按该条目配置探测接口连通性（不生成、不耗额度）" wrap>
                       <Button
                         className="text-muted-foreground text-2xs h-auto rounded px-1.5 py-0.5"
-                        disabled={!!thisProbe?.running}
+                        disabled={thisProbe?.running === true}
                         // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                         onClick={() => void d.runEntryConnectionTest(entry)}
                         size="xs"
                         variant="outline"
                       >
-                        {thisProbe?.running ? "连接测试中…" : "测试连接"}
+                        {thisProbe?.running === true ? "连接测试中…" : "测试连接"}
                       </Button>
                     </Hint>
                     <Hint label="按实际用法发起一次真实生成调用（参数可在弹窗内自定义）">

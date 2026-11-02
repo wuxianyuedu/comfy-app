@@ -254,7 +254,7 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
         </div>
       )}
 
-      {run.status === "failed" && run.error ? (
+      {run.status === "failed" && run.error !== null && run.error !== "" ? (
         <p className="text-destructive text-xs">{run.error}</p>
       ) : null}
       {c.error ? <p className="text-destructive text-xs">{c.error}</p> : null}

@@ -96,7 +96,7 @@ export function productionShotsToShotList(shots: Array<unknown>): Array<ShotList
       id: raw.id,
       name,
       duration,
-      mode: raw.imageUrl ? "img2video" : "txt2img",
+      mode: Boolean(raw.imageUrl) ? "img2video" : "txt2img",
       status: shotStatusToFilmStatus(raw.status),
       thumbnailUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : undefined,
     });

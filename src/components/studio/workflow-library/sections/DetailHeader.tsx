@@ -91,7 +91,7 @@ export function DetailHeader({
                 label={
                   modes.length > 1
                     ? "该工作流支持多种模式，点击查看全部"
-                    : modes[0]
+                    : modes[0] !== undefined && modes[0] !== ""
                       ? `${modeLabel(modes[0])}（${modes[0]}）`
                       : undefined
                 }

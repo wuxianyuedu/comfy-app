@@ -66,20 +66,21 @@ function manualMapForMode(
   paramMap: unknown,
   mode: string | null | undefined,
 ): Record<string, string | null> {
-  if (!mode) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (mode == null || mode === "") {
     return {};
   }
-  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) {
+  if (typeof paramMap !== "object" || paramMap === null || Array.isArray(paramMap)) {
     return {};
   }
   /* SAFETY: 类型断言已复核 */
   const ns = (paramMap as Record<string, unknown>)[OUTPUT_BINDING_NAMESPACE];
-  if (!ns || typeof ns !== "object" || Array.isArray(ns)) {
+  if (typeof ns !== "object" || ns === null || Array.isArray(ns)) {
     return {};
   }
   /* SAFETY: 类型断言已复核 */
   const table = (ns as Record<string, unknown>)[`${MODE_KEY_PREFIX}${mode}`];
-  if (!table || typeof table !== "object" || Array.isArray(table)) {
+  if (typeof table !== "object" || table === null || Array.isArray(table)) {
     return {};
   }
   const out: Record<string, string | null> = {};
@@ -102,7 +103,8 @@ export function manualOutputSource(
   outputIoKey: string,
   mode: string | null | undefined,
 ): string | null | undefined {
-  if (!mode) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (mode == null || mode === "") {
     return undefined;
   }
   const table = manualMapForMode(paramMap, mode);
@@ -152,14 +154,14 @@ export function applyOutputBindingEdit(
   paramMap: Record<string, unknown> | null | undefined,
   edit: { ioKey: string | null; mode: string | null; outputIoKey: string },
 ): Record<string, unknown> {
-  const base = paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
-  if (!edit.mode) {
+  const base = typeof paramMap === "object" && paramMap !== null ? { ...paramMap } : {};
+  if (edit.mode === null || edit.mode === "") {
     return base;
   }
   const ns = base[OUTPUT_BINDING_NAMESPACE];
   const table =
     /* SAFETY: 类型断言已复核 */
-    ns && typeof ns === "object" && !Array.isArray(ns)
+    typeof ns === "object" && ns !== null && !Array.isArray(ns)
       ? {
           ...(ns as Record<string, unknown>),
         }
@@ -167,7 +169,9 @@ export function applyOutputBindingEdit(
   const key = `${MODE_KEY_PREFIX}${edit.mode}`;
   const byOutput = table[key];
   table[key] = {
-    ...(byOutput && typeof byOutput === "object" && !Array.isArray(byOutput) ? byOutput : {}),
+    ...(typeof byOutput === "object" && byOutput !== null && !Array.isArray(byOutput)
+      ? byOutput
+      : {}),
     [edit.outputIoKey]: edit.ioKey,
   };
   return { ...base, [OUTPUT_BINDING_NAMESPACE]: table };
@@ -182,12 +186,12 @@ export function clearOutputBindingEdit(
   outputIoKey: string,
   mode: string | null,
 ): Record<string, unknown> {
-  const base = paramMap && typeof paramMap === "object" ? { ...paramMap } : {};
-  if (!mode) {
+  const base = typeof paramMap === "object" && paramMap !== null ? { ...paramMap } : {};
+  if (mode === null || mode === "") {
     return base;
   }
   const ns = base[OUTPUT_BINDING_NAMESPACE];
-  if (!ns || typeof ns !== "object" || Array.isArray(ns)) {
+  if (typeof ns !== "object" || ns === null || Array.isArray(ns)) {
     return base;
   }
   /* SAFETY: 类型断言已复核 */
@@ -196,7 +200,7 @@ export function clearOutputBindingEdit(
   };
   const key = `${MODE_KEY_PREFIX}${mode}`;
   const byOutput = table[key];
-  if (!byOutput || typeof byOutput !== "object" || Array.isArray(byOutput)) {
+  if (typeof byOutput !== "object" || byOutput === null || Array.isArray(byOutput)) {
     return base;
   }
   /* SAFETY: 类型断言已复核 */
@@ -223,7 +227,7 @@ export function canApplyOutputBindingEdit(
   edit: { ioKey: string | null; mode: string | null },
   io: WorkflowIOMap | null | undefined,
 ): boolean {
-  if (!edit.mode) {
+  if (edit.mode === null || edit.mode === "") {
     return false;
   }
   if (edit.ioKey === null) {

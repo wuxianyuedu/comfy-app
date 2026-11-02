@@ -96,7 +96,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   afterEach(() => {
     while (tmpDirs.length > 0) {
       const dir = tmpDirs.pop();
-      if (dir) {
+      if (dir !== undefined && dir !== "") {
         fs.rmSync(dir, { recursive: true, force: true });
       }
     }
@@ -580,7 +580,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
       const source = stripComments(fs.readFileSync(abs, "utf8"));
       for (const match of source.matchAll(SPEC_LITERAL_RE)) {
         const specifier = match[1];
-        if (!specifier) {
+        if (specifier === undefined || specifier === "") {
           continue;
         }
         checked += 1;
@@ -698,7 +698,7 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
   afterEach(() => {
     while (tmpDirs.length > 0) {
       const dir = tmpDirs.pop();
-      if (dir) {
+      if (dir !== undefined && dir !== "") {
         fs.rmSync(dir, { recursive: true, force: true });
       }
     }

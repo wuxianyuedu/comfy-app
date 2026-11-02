@@ -63,8 +63,10 @@ function register(over: {
     source: over.source ?? "canvas-node",
     ...(over.status ? { status: over.status } : {}),
     ...(over.progress === undefined ? {} : { progress: over.progress }),
-    ...(over.resultUrl ? { resultUrl: over.resultUrl } : {}),
-    ...(over.errorMessage ? { errorMessage: over.errorMessage } : {}),
+    ...(over.resultUrl !== undefined && over.resultUrl !== "" ? { resultUrl: over.resultUrl } : {}),
+    ...(over.errorMessage !== undefined && over.errorMessage !== ""
+      ? { errorMessage: over.errorMessage }
+      : {}),
   });
 }
 

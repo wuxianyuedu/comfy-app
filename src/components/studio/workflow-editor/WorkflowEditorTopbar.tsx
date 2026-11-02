@@ -248,8 +248,10 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               </>
             )}
           </p>
-          {detail.sourcePath ? (
-            detail.sourceMissing ? (
+          {detail.sourcePath !== undefined &&
+          detail.sourcePath !== null &&
+          detail.sourcePath !== "" ? (
+            detail.sourceMissing === true ? (
               <p className="border-destructive/30 bg-destructive/10 text-danger-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">本地文件已丢失：</span>
                 <span className="truncate font-mono" title={detail.sourcePath}>
@@ -259,7 +261,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   · 修改保存后刷新将自动重连
                 </span>
               </p>
-            ) : detail.sourceOutdated ? (
+            ) : detail.sourceOutdated === true ? (
               <p className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">磁盘文件有更新</span>
                 <span className="opacity-80">· 回工作流库点「同步」拉取最新内容</span>
@@ -363,9 +365,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         <Hint label="查看当前工作流的 RAW 源码（基于磁盘已保存版本，未保存的画布修改不在内）" wrap>
           <Button
             className={topBarButtonClass("outline", "compact", "disabled:opacity-40")}
-            disabled={!detail}
+            disabled={!Boolean(detail)}
             onClick={() => {
-              if (!detail) {
+              if (!Boolean(detail)) {
                 toast.info("工作流尚未加载完成");
                 return;
               }

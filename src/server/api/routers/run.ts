@@ -331,7 +331,7 @@ export const runRouter = createTRPCRouter({
           item !== null &&
           /* SAFETY: 类型断言已复核 */ (item as { id?: unknown }).id === input.targetId,
       );
-      if (!rec) {
+      if (rec === undefined) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,

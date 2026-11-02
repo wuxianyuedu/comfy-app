@@ -82,7 +82,7 @@ export function WorkflowOutputParamCardColumn({
         const portLabel = outputPortLabel(output);
         const handleId = output.ioKey;
         const type = output.type ?? "*";
-        const manual = !!isManual?.(output.ioKey);
+        const manual = isManual?.(output.ioKey) === true;
         return (
           <WorkflowParamCard
             canReset={canWire && manual}

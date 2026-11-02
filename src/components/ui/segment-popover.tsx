@@ -159,7 +159,9 @@ export function MultiSegmentPopover({
             section={section}
           />
         ))}
-        {footer ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
+        {Boolean(footer) ? (
+          <div className="border-border-strong mt-3 border-t pt-3">{footer}</div>
+        ) : null}
       </PopoverContent>
     </Popover>
   );
@@ -176,7 +178,9 @@ const Section = React.memo(function Section({
   section: SegmentSection;
 }) {
   const grouped = useMemo(() => {
-    const hasSubgroups = section.options.some((option) => option.subgroup);
+    const hasSubgroups = section.options.some(
+      (option) => option.subgroup !== undefined && option.subgroup !== "",
+    );
     if (!hasSubgroups) {
       return [{ key: "_", label: undefined, options: section.options }];
     }
@@ -221,7 +225,7 @@ const Section = React.memo(function Section({
       >
         {grouped.map((group, gi) => (
           <div className={gi > 0 ? "mt-2" : ""} key={group.key}>
-            {group.label && (
+            {group.label !== undefined && group.label !== "" && (
               <div className="text-ink-icon text-4xs mb-1 tracking-wider uppercase">
                 {group.label}
               </div>
@@ -241,7 +245,7 @@ const Section = React.memo(function Section({
           </div>
         ))}
       </ToggleGroup>
-      {section.extra ? <div className="mt-2">{section.extra}</div> : null}
+      {Boolean(section.extra) ? <div className="mt-2">{section.extra}</div> : null}
     </div>
   );
 });

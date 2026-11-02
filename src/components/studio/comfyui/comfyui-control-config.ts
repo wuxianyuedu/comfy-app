@@ -37,7 +37,11 @@ export function isComfyBusy(
   flags: { opening: boolean; starting: boolean; stopping: boolean },
 ): boolean {
   return (
-    flags.opening || flags.starting || flags.stopping || !!status?.starting || !!status?.stopping
+    flags.opening ||
+    flags.starting ||
+    flags.stopping ||
+    status?.starting === true ||
+    status?.stopping === true
   );
 }
 
@@ -51,13 +55,13 @@ export function comfyDotState(
   status: ComfyRuntimeStatus | null,
   flags: { starting: boolean; stopping: boolean },
 ): StatusDotState {
-  if (status?.up) {
+  if (status?.up === true) {
     return "up";
   }
-  if (flags.starting || flags.stopping || status?.starting || status?.stopping) {
+  if (flags.starting || flags.stopping || status?.starting === true || status?.stopping === true) {
     return "busy";
   }
-  if (status?.probing) {
+  if (status?.probing === true) {
     return "probing";
   }
   return "down";
@@ -73,18 +77,18 @@ export function comfyStatusText(
   status: ComfyRuntimeStatus | null,
   flags: { starting: boolean; stopping: boolean },
 ): string {
-  if (status?.up) {
-    const base = status.base ? `（${status.base}）` : "";
-    const via = status.via ? `·${status.via}` : "";
+  if (status !== null && status.up) {
+    const base = status.base !== null && status.base !== "" ? `（${status.base}）` : "";
+    const via = status.via !== null && status.via !== "" ? `·${status.via}` : "";
     return `ComfyUI 运行中${base}${via}`;
   }
-  if (flags.stopping || status?.stopping) {
+  if (flags.stopping || status?.stopping === true) {
     return "ComfyUI 关闭中…";
   }
-  if (flags.starting || status?.starting) {
+  if (flags.starting || status?.starting === true) {
     return "ComfyUI 正在启动…";
   }
-  if (status?.probing) {
+  if (status?.probing === true) {
     return "ComfyUI 状态检测中…";
   }
   return "ComfyUI 未运行";
@@ -97,7 +101,7 @@ export function comfyStatusText(
  * 都比不给更坏（悬停出来的东西看起来就是权威结论）。
  */
 export function comfyDotTitle(status: ComfyRuntimeStatus | null): string | undefined {
-  if (!status?.up) {
+  if (status?.up !== true) {
     return undefined;
   }
   return comfyStatusText(status, { starting: false, stopping: false });
@@ -146,7 +150,7 @@ export function comfyConfigHint(
     pathConfigured: boolean;
   } | null,
 ): string | null {
-  if (instance?.pathConfigured) {
+  if (instance?.pathConfigured === true) {
     return null;
   }
   return "还没配置 ComfyUI 路径 —— 在「设置 → 创作后端」里填源码根或桌面实例根，再回来启动。";

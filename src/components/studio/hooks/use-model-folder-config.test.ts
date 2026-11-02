@@ -64,7 +64,7 @@ const mockRouter = t.router({
   model: t.router({
     configList: t.procedure.query(() => {
       configListCalls += 1;
-      if (behavior.listError) {
+      if (behavior.listError !== undefined && behavior.listError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.listError,
@@ -86,7 +86,7 @@ const mockRouter = t.router({
       )
       .mutation(({ input }) => {
         saveInputs.push(input);
-        if (behavior.saveError) {
+        if (behavior.saveError !== undefined && behavior.saveError !== "") {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: behavior.saveError,
@@ -96,7 +96,7 @@ const mockRouter = t.router({
       }),
     configDelete: t.procedure.input(z.object({ folder: z.string() })).mutation(({ input }) => {
       deleteInputs.push(input);
-      if (behavior.deleteError) {
+      if (behavior.deleteError !== undefined && behavior.deleteError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.deleteError,
@@ -105,7 +105,7 @@ const mockRouter = t.router({
       return { ok: true };
     }),
     sync: t.procedure.mutation(() => {
-      if (behavior.syncError) {
+      if (behavior.syncError !== undefined && behavior.syncError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.syncError,

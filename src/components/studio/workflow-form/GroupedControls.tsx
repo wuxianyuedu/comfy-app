@@ -83,11 +83,11 @@ function GroupedControls({
    *
    *`collapseGrouped={false}` 保留组合控件的完整录入能力（宽版表单 / CreatePanel
    * 的既有观感：作者在那里要的是整块录入，不是收窄控件）。 */
-  const narrow = compact && keys.size > 0 && collapseGrouped !== false;
+  const narrow = compact === true && keys.size > 0 && collapseGrouped !== false;
 
   return (
     <>
-      {!compact && <SectionHeader accent={SECTION_ACCENT} count={count} label="组合参数" />}
+      {compact !== true && <SectionHeader accent={SECTION_ACCENT} count={count} label="组合参数" />}
       <div className="flex-col gap-3">
         {dimension && (
           <DimensionControl

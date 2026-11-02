@@ -156,7 +156,7 @@ export function ExtractToolbar({
         <importPicker.Input />
       </div>
       {/* 实时流式输出（提取中单独展示，便于跟随 token 累积） */}
-      {busy && progressText && (
+      {busy && progressText !== undefined && progressText !== "" && (
         <Disclosure
           className="text-primary bg-bg/60 text-2xs mt-2 rounded-lg px-3 py-2"
           defaultOpen
@@ -168,13 +168,17 @@ export function ExtractToolbar({
           </pre>
         </Disclosure>
       )}
-      {statusText && !errorText && <p className="text-primary mt-2 text-xs">{statusText}</p>}
-      {errorText && (
+      {statusText !== undefined &&
+        statusText !== "" &&
+        (errorText === undefined || errorText === "") && (
+          <p className="text-primary mt-2 text-xs">{statusText}</p>
+        )}
+      {errorText !== undefined && errorText !== "" && (
         <p className="bg-destructive/10 text-destructive mt-2 rounded-lg px-3 py-2 text-xs">
           {errorText}
         </p>
       )}
-      {extractDisabled && !busy && !errorText && (
+      {extractDisabled && !busy && (errorText === undefined || errorText === "") && (
         <p className="text-muted-foreground text-2xs mt-2">
           {extractDisabledReason ?? "从剧本提取暂不可用"}
         </p>
@@ -210,7 +214,7 @@ export function ExtractToolbar({
                         {formatClock(entry.ts)}
                       </span>
                     </div>
-                    {entry.detail && (
+                    {entry.detail !== undefined && entry.detail !== "" && (
                       <pre className="bg-bg/70 text-ink-subtle text-2xs mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 leading-relaxed break-all whitespace-pre-wrap">
                         {entry.detail}
                       </pre>
@@ -253,7 +257,7 @@ export function ExtractToolbar({
                           {formatClock(entry.ts)}
                         </span>
                       </div>
-                      {entry.detail && (
+                      {entry.detail !== undefined && entry.detail !== "" && (
                         <pre className="bg-bg/70 text-ink-subtle text-2xs mt-1.5 max-h-32 overflow-y-auto rounded px-2 py-1.5 leading-relaxed break-all whitespace-pre-wrap">
                           {entry.detail}
                         </pre>

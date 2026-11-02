@@ -80,7 +80,7 @@ function touch(id: string, next: StepLogPanelState) {
   cache.set(id, next);
   if (cache.size > MAX_ENTRIES) {
     const oldest = cache.keys().next().value;
-    if (oldest) {
+    if (oldest !== undefined) {
       cache.delete(oldest);
     }
   }
@@ -88,7 +88,7 @@ function touch(id: string, next: StepLogPanelState) {
 
 /* 载入某个 taskId 的持久化状态；没有则为 null。 */
 export function loadStepLogPanelState(taskId: string | null | undefined): StepLogPanelState | null {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return null;
   }
   return cache.get(taskId) ?? null;
@@ -98,7 +98,7 @@ export function loadStepLogPanelState(taskId: string | null | undefined): StepLo
  * 面板想主动重置时也用（例如用户选了新工作流 —— 目前没有这条路径，
  * 但把出口留着）。 */
 export function saveStepLogPanelState(taskId: string, next: StepLogPanelState): void {
-  if (!taskId) {
+  if (taskId === "") {
     return;
   }
   touch(taskId, next);
@@ -107,7 +107,7 @@ export function saveStepLogPanelState(taskId: string, next: StepLogPanelState): 
 /* 丢掉某个 taskId 的条目。用于「任务真结束后，用户不希望下次点同一节点时
  * 又冒出旧界面状态」的场景 —— 目前还没这么做，但接口先备着。 */
 export function clearStepLogPanelState(taskId: string | null | undefined): void {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return;
   }
   cache.delete(taskId);
@@ -119,7 +119,7 @@ export function appendStepLog(
   taskId: string | null | undefined,
   entry: StepLogEntry,
 ): StepLogPanelState | null {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return null;
   }
   const prev = cache.get(taskId) ?? {
@@ -160,7 +160,7 @@ export function setStepLogValidationErrors(
   taskId: string | null | undefined,
   errs: Array<ValidationError> | null,
 ): void {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return;
   }
   const prev = cache.get(taskId) ?? {
@@ -179,7 +179,7 @@ export function patchStepLogMeta(
   taskId: string | null | undefined,
   meta: { nodeId?: string; status?: string; workflowName?: string },
 ): void {
-  if (!taskId) {
+  if (taskId === null || taskId === undefined || taskId === "") {
     return;
   }
   const prev = cache.get(taskId) ?? {

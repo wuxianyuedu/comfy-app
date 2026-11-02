@@ -121,7 +121,7 @@ export function useWorkshopTaskRecovery(input: {
         }
         if (snapshot.status === "FAILED" || snapshot.status === "CANCELLED") {
           patchIfOwned(isVideo ? { clipStatus: "failed" } : { status: "failed" });
-          if (snapshot.error) {
+          if (snapshot.error !== undefined && snapshot.error !== "") {
             setNotice(`${isVideo ? "视频" : "镜头"}生成失败：${snapshot.error}`);
           }
           return;
@@ -131,9 +131,13 @@ export function useWorkshopTaskRecovery(input: {
       })();
     };
     for (const shot of latestDraftRef.current.shots) {
-      if (shot.status === "running" && shot.taskId) {
+      if (shot.status === "running" && shot.taskId !== undefined && shot.taskId !== "") {
         resumeTask(shot.id, shot.taskId, "image");
-      } else if (shot.clipStatus === "running" && shot.clipTaskId) {
+      } else if (
+        shot.clipStatus === "running" &&
+        shot.clipTaskId !== undefined &&
+        shot.clipTaskId !== ""
+      ) {
         resumeTask(shot.id, shot.clipTaskId, "video");
       }
     }

@@ -130,7 +130,7 @@ export type CopyController = {} & CopyRunner & CopyProducer;
  * 有 5 种说法，其中一处还漏了字。
  */
 export function copyFailureText(target?: string): string {
-  const where = target ? `${target}后复制` : "后复制";
+  const where = target !== undefined && target !== "" ? `${target}后复制` : "后复制";
   return `复制失败：剪贴板不可用，请手动选中${where}`;
 }
 

@@ -93,7 +93,7 @@ function emptyPayload(error?: string): LogSessionsPayload & { error?: string } {
     windowed: false,
     size: 0,
     total: 0,
-    ...(error ? { error } : {}),
+    ...(error !== undefined && error !== "" ? { error } : {}),
   };
 }
 
@@ -244,7 +244,7 @@ export async function GET(request: Request) {
     const file =
       currentEntries.find((entry) => entry.name === selected.id)?.file ??
       resolveArchivedFile(selected.id, root);
-    if (!file) {
+    if (file === null || file === "") {
       return NextResponse.json(emptyPayload());
     }
 

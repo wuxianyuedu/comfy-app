@@ -114,7 +114,7 @@ export function validateRemoteModelFields(
     if (typeof key !== "string") {
       continue;
     }
-    if (out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues]) {
+    if (out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues] !== undefined) {
       continue;
     }
     out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues] = issue.message;

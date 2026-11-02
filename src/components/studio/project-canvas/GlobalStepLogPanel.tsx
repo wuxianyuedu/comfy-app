@@ -77,7 +77,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   /* 没有显式钉住时，视图重置到活跃任务。 */
   const taskId = viewTaskId ?? activeTaskId;
   useEffect(() => {
-    if (activeTaskId && !viewTaskId) {
+    if (activeTaskId !== null && activeTaskId !== "" && viewTaskId === null) {
       setViewTaskId(activeTaskId);
     }
   }, [activeTaskId, viewTaskId]);
@@ -95,7 +95,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   });
   const onCancelFromPanel = () => {
     // 无任务时按钮本就禁用（下方 disabled），这里只是防重复点击的兜底。
-    if (!taskId) {
+    if (taskId === null) {
       return;
     }
     return cancelFromPanel();
@@ -202,7 +202,8 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                {taskId &&
+                {taskId !== null &&
+                taskId !== "" &&
                 status !== "SUCCEEDED" &&
                 status !== "FAILED" &&
                 status !== "CANCELLED" ? (
@@ -291,7 +292,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
               emptySlot={
                 <EmptyState
                   icon={FileText}
-                  title={taskId ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
+                  title={taskId !== null ? "等待日志…" : "运行生成后此处会显示执行步骤日志"}
                   variant="panel"
                 />
               }
@@ -319,7 +320,7 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
                     </div>
                   )}
 
-                  {!valErrs.length && error && (
+                  {!valErrs.length && error !== null && error !== "" && (
                     <div className="border-destructive/30 bg-destructive/6 text-destructive/90 mb-2 flex flex-col gap-1 rounded border p-2 text-sm">
                       <div className="wrap-break-word whitespace-pre-wrap">{error}</div>
                     </div>

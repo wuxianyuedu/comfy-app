@@ -24,8 +24,8 @@ export function SubgraphCollapsedAnchors({
   connectedInputs,
   connectedOutputs,
 }: SubgraphCollapsedAnchorsProps) {
-  const wiredInputs = connInputs.filter(({ inp }) => connectedInputs?.has(inp.name));
-  const wiredOutputs = outputs.filter(({ out }) => connectedOutputs?.has(out.name));
+  const wiredInputs = connInputs.filter(({ inp }) => connectedInputs?.has(inp.name) === true);
+  const wiredOutputs = outputs.filter(({ out }) => connectedOutputs?.has(out.name) === true);
   /* 锚柱跟主题联动（浅色下白描白会让锚柱整个消失）。 */
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);

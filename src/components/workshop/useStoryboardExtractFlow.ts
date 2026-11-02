@@ -103,7 +103,7 @@ export function useStoryboardExtractFlow(input: {
     setExtractState({ channelValue: value });
   };
 
-  const hasScript = !!scriptMarkdown?.trim();
+  const hasScript = scriptMarkdown !== undefined && scriptMarkdown.trim() !== "";
   const knownNames = characters.map((character) => character.name).filter(Boolean);
 
   /** 条目 → 既有 Shot 结构(场景/角色关联与提示词重算复用既有链路) */

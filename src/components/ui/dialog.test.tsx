@@ -36,7 +36,7 @@ import {
 
 beforeEach(() => {
   /* base-ui 的浮层要用 matchMedia，jsdom 不给。与 `sheet.test.tsx` 同款兜底。 */
-  if (!window.matchMedia) {
+  if (!Boolean(window.matchMedia)) {
     window.matchMedia = (query: string): MediaQueryList => ({
       matches: false,
       media: query,

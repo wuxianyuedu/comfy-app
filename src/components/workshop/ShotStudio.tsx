@@ -168,9 +168,11 @@ export function ShotStudio({
 
   const apiReady = apiChannels?.image.configured === true;
   const busyCount = shots.filter((s) => s.status === "running").length;
-  const doneCount = shots.filter((s) => !!s.imageUrl).length;
+  const doneCount = shots.filter((s) => s.imageUrl !== undefined && s.imageUrl !== "").length;
   const pending = shots.filter(
-    (s) => !s.imageUrl && (s.status === "idle" || s.status === "failed"),
+    (s) =>
+      (s.imageUrl === undefined || s.imageUrl === "") &&
+      (s.status === "idle" || s.status === "failed"),
   );
 
   // ── 自动预填：分镜输出 → 图片提示词（逻辑收在 useAutoFillPrompts）──
@@ -183,7 +185,7 @@ export function ShotStudio({
   function setShotError(id: string, message: string | undefined) {
     setErrors((prev) => {
       const next = { ...prev };
-      if (message) {
+      if (message !== undefined && message !== "") {
         next[id] = message;
       } else {
         delete next[id];
@@ -269,12 +271,12 @@ export function ShotStudio({
          * （多角色链式加载另立）；工作流没连 lora 口 → unmatched 提示。 */
         const loraChar = characters
           .filter((c) => shot.characterIds.includes(c.id))
-          .find((c) => c.loraName);
+          .find((c) => c.loraName !== undefined && c.loraName !== "");
         const built = await buildLibraryWorkflowInput(workflowId, {
           prompt: shot.prompt,
           negativePrompt: shot.negativePrompt || undefined,
           size: sizeSpec,
-          ...(loraChar?.loraName
+          ...(loraChar !== undefined && loraChar.loraName !== undefined && loraChar.loraName !== ""
             ? {
                 loraName: loraChar.loraName,
                 ...(loraChar.loraStrength === undefined
@@ -289,7 +291,7 @@ export function ShotStudio({
         /* 没落到任何端口的口本次不生效（工作流用图内默认值）—— 静默就是
          * 「改了没反应」（规范 10 §10.3.1），走控制器提示条说清楚。 */
         const unmatchedWarning = describeUnmatchedInputs(built.unmatched);
-        if (unmatchedWarning) {
+        if (unmatchedWarning !== null && unmatchedWarning !== "") {
           onNotice(unmatchedWarning);
         }
         const input: GenerateInput = built.input;
@@ -332,7 +334,7 @@ export function ShotStudio({
       const taskIds: Array<string> = [];
       for (let i = 0; i < count; i++) {
         const tid = await generateShot(shot);
-        if (tid) {
+        if (tid !== null && tid !== "") {
           taskIds.push(tid);
         }
       }
@@ -368,7 +370,7 @@ export function ShotStudio({
        * 不再「await 一条到底再提交下一条」地空转。 */
       runWithConcurrency([...pending], WORKSHOP_BATCH_CONCURRENCY, async (shot) => {
         // 每轮重新检查存活 —— 用户可能在运行中编辑 / 删除。
-        if (shot.status === "running" || shot.imageUrl) {
+        if (shot.status === "running" || (shot.imageUrl !== undefined && shot.imageUrl !== "")) {
           return;
         }
         await generateShot(shot);
@@ -599,7 +601,7 @@ function ShotCardRow({
         rows={2}
         value={shot.prompt}
       />
-      {error && (
+      {error !== undefined && error !== "" && (
         <Alert
           /* 行内错误行：紧凑尺寸 + 无可见边框（同 CharacterPortraitStudio）。 */
           className="text-2xs mt-1 block rounded-md border-transparent px-2 py-1"
@@ -622,7 +624,11 @@ function ShotCardRow({
           size="xs"
           variant="primary-solid"
         >
-          {shot.status === "running" ? "生成中…" : shot.imageUrl ? "重新生成" : "生成此镜头"}
+          {shot.status === "running"
+            ? "生成中…"
+            : shot.imageUrl !== undefined && shot.imageUrl !== ""
+              ? "重新生成"
+              : "生成此镜头"}
         </Button>
         {channel === "local" && (
           /* 抽卡优选（FR-QA-04④）：本地通道才有任务行可评；N=连发张数。 */
@@ -657,7 +663,7 @@ function ShotCardRow({
             {gachaBusy ? "优选中…" : "抽卡优选"}
           </Button>
         )}
-        {shot.status === "running" && shot.taskId && (
+        {shot.status === "running" && shot.taskId !== undefined && shot.taskId !== "" && (
           /* 只对本机任务可取消（API 直连没有可取消的任务 id）：
              点击后 task.cancel 置 CANCELLED，观察循环收终态收尾。 */
           <Button
@@ -669,12 +675,12 @@ function ShotCardRow({
             取消
           </Button>
         )}
-        {shot.taskId && (
+        {shot.taskId !== undefined && shot.taskId !== "" && (
           <span className="text-faint text-3xs truncate">任务 {shot.taskId.slice(0, 12)}…</span>
         )}
       </div>
 
-      {shot.imageUrl && (
+      {shot.imageUrl !== undefined && shot.imageUrl !== "" && (
         <MediaThumbnail
           alt={shot.sceneHeading}
           className="border-border mt-2 max-h-64 w-auto rounded-lg border"

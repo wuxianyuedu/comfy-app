@@ -14,7 +14,7 @@ import { TopBar } from "./TopBar";
 /* jsdom 没有 `matchMedia`，而 `ui/sidebar` 的窄窗判据（`use-mobile` /
  * `use-narrow-nav`）在挂载时就要读它 —— 缺了会当场抛。桩只回答「不窄」：
  * 本文件判的是「标题在哪、名称行还在不在」，与窗口宽度无关。 */
-if (!window.matchMedia) {
+if (!Boolean(window.matchMedia)) {
   window.matchMedia = (query: string): MediaQueryList => ({
     matches: false,
     media: query,

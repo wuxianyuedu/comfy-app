@@ -90,7 +90,7 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .from(workshopSession)
       .where(eq(workshopSession.id, sessionId));
     const prodId = rows[0]?.projectId;
-    if (!prodId) {
+    if (prodId === undefined || prodId === null) {
       throw new Error("绑定失败：会话行没有 projectId");
     }
     const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));
@@ -120,7 +120,7 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .where(eq(workshopSession.id, sessionId));
     const row = rows[0]!;
     const prodId = row.projectId;
-    if (!prodId) {
+    if (prodId === undefined || prodId === null) {
       throw new Error("绑定失败：会话行没有 projectId");
     }
     const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));
@@ -163,7 +163,7 @@ describe("会话桥：create / update / get 与界面同一份真值", () => {
       .from(workshopSession)
       .where(eq(workshopSession.id, "sess-legacy"));
     const prodId = rows[0]?.projectId;
-    if (!prodId) {
+    if (prodId === undefined || prodId === null) {
       throw new Error("绑定失败：会话行没有 projectId");
     }
     const prod = await workshopDb.select().from(production).where(eq(production.id, prodId));

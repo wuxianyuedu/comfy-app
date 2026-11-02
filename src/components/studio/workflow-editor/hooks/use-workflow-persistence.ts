@@ -255,7 +255,8 @@ export function useWorkflowPersistence({
        *  无标题备注、wfGroup 与 wfIoPort 没有标题栏，
        *  它们的 `position` 本就等于 ComfyUI 的左上角；
        *  带标题的备注见下一分支。 */
-      const back = node.type ? (NODE_TITLE_ANCHOR[node.type] ?? 0) : 0;
+      const back =
+        node.type !== undefined && node.type !== "" ? (NODE_TITLE_ANCHOR[node.type] ?? 0) : 0;
       const y = Math.round(node.position.y + back);
       if (node.id.startsWith("note:")) {
         const noteId = node.id.replace(/^note:/, "");

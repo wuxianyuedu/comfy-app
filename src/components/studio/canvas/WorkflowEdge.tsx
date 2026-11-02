@@ -93,7 +93,7 @@ function parseHexColor(color: string): [number, number, number] | null {
   const body = hex.slice(1);
   if (body.length === 3) {
     const [r, g, b] = body.split("");
-    if (!r || !g || !b) {
+    if (r === undefined || r === "" || g === undefined || g === "" || b === undefined || b === "") {
       return null;
     }
     return [Number.parseInt(r + r, 16), Number.parseInt(g + g, 16), Number.parseInt(b + b, 16)];

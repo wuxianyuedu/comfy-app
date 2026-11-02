@@ -162,13 +162,13 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
   );
   writeFileSync(join(work, "seed.txt"), "seed\n");
   /* 「违规已经落进主干」那一档：基线上就带着 marker ⇒ 两侧都红。 */
-  if (opts.markerOnBase) {
+  if (opts.markerOnBase === true) {
     writeFileSync(join(work, "marker.txt"), "x\n");
   }
   /* 「基线侧一条用例都没收集到」那一档（ISSUE #1652）：判据脚本在**基线之后**被
    * 改成会收集用例的形态，于是基线那一版的 `node gate.cjs` 打印一段
    * vitest 形态的 `Tests  no tests` 并退 **1** —— 与「判据跑了且红」逐字同形。 */
-  if (opts.noTestsOnBase) {
+  if (opts.noTestsOnBase === true) {
     writeFileSync(
       join(work, "gate.cjs"),
       [
@@ -183,7 +183,7 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
   git(work, "push", "-q", "up", "master");
   /* 净检出：baseline = 远端 master，然后切一条跟踪它的特性分支。 */
   git(work, "checkout", "-q", "-b", "feat", "up/master");
-  if (opts.markerOnBase) {
+  if (opts.markerOnBase === true) {
     /* 基线上已经有 marker：这一支只是「无关改动」，两侧都红。 */
     writeFileSync(join(work, "unrelated.txt"), "y\n");
     git(work, "add", ".");
@@ -193,7 +193,7 @@ function makeRepo(opts: { markerOnBase?: boolean; noTestsOnBase?: boolean } = {}
     git(work, "add", ".");
     git(work, "commit", "-qm", "feat: marker");
   }
-  if (opts.noTestsOnBase) {
+  if (opts.noTestsOnBase === true) {
     /* 本检出这一版的判据**真跑**（收集到用例、断言真红）：基线那版收集不到、
      * 这一版真红 ⇒ 两侧退出码同为 1，只有输出分得开。 */
     writeFileSync(
@@ -1177,7 +1177,7 @@ describe("base-check --base —— 真仓库上的端到端", () => {
         "",
       ].join("\n"),
     );
-    if (opts.baselineRed) {
+    if (opts.baselineRed === true) {
       writeFileSync(join(work, "marker.txt"), "x\n");
     }
     writeFileSync(join(work, "seed.txt"), "seed\n");

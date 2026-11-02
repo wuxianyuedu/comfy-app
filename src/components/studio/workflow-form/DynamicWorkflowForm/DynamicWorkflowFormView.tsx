@@ -105,7 +105,9 @@ export function DynamicWorkflowFormView({
     /* 多模式：行内「必填 / 可选」与 seed「控件后行为」按当前 mode 解析，
      * 显示模式覆盖值而非条目全局值。mode 为空时 rowEntry === entry（旧行为）。 */
     const rowEntry: EnrichedWidget =
-      mode &&
+      mode !== undefined &&
+      mode !== null &&
+      mode !== "" &&
       (entry.modeOverrides?.[mode]?.required !== undefined ||
         entry.modeOverrides?.[mode]?.seedMode !== undefined)
         ? {
@@ -118,7 +120,12 @@ export function DynamicWorkflowFormView({
       <WidgetInputRow
         allPins={allPins}
         compact={compact}
-        dimmed={!!visibilityMode && rowEntry.modeOverrides?.[visibilityMode]?.visible === false}
+        dimmed={
+          visibilityMode !== undefined &&
+          visibilityMode !== null &&
+          visibilityMode !== "" &&
+          rowEntry.modeOverrides?.[visibilityMode]?.visible === false
+        }
         disabled={disabled}
         entry={rowEntry}
         /* 画布上 handle id 必须唯一：同一个 pin 名可能同时出现在两个节点上（自定义
@@ -140,7 +147,10 @@ export function DynamicWorkflowFormView({
         }
         onValueChange={(next: unknown) => set(entry.ioKey, next)}
         onVisibilityChange={
-          onVisibilityChange && visibilityMode
+          onVisibilityChange !== undefined &&
+          visibilityMode !== undefined &&
+          visibilityMode !== null &&
+          visibilityMode !== ""
             ? (visible: boolean) => onVisibilityChange(entry.ioKey, visible)
             : undefined
         }
@@ -150,7 +160,9 @@ export function DynamicWorkflowFormView({
         uploading={uploading && uploadTarget === entry.ioKey}
         value={values[entry.ioKey]}
         visible={
-          visibilityMode ? (entry.modeOverrides?.[visibilityMode]?.visible ?? true) : undefined
+          visibilityMode !== undefined && visibilityMode !== null && visibilityMode !== ""
+            ? (entry.modeOverrides?.[visibilityMode]?.visible ?? true)
+            : undefined
         }
         withHandle={withHandle}
       />
@@ -163,7 +175,7 @@ export function DynamicWorkflowFormView({
 
       {/* 上传失败的可读出口：ComfyUI 未运行 / 启动超时 / 素材不合规时给出原因，
  用户才知道该重试还是该去设置页启动（ISSUE #345）。 */}
-      {uploadError && (
+      {uploadError !== null && uploadError !== "" && (
         <div className="border-destructive/30 bg-destructive/10 text-destructive text-2xs flex items-start justify-between gap-2 rounded-md border px-2.5 py-2 leading-relaxed">
           <span className="min-w-0 flex-1">上传失败：{uploadError}</span>
           <Button
@@ -189,7 +201,10 @@ export function DynamicWorkflowFormView({
 
             const isDragging = draggingKey === entry.ioKey;
             const isDropTarget =
-              dragOverKey === entry.ioKey && !!draggingKey && draggingKey !== entry.ioKey;
+              dragOverKey === entry.ioKey &&
+              draggingKey !== null &&
+              draggingKey !== "" &&
+              draggingKey !== entry.ioKey;
 
             return (
               <div

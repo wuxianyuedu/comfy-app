@@ -37,7 +37,7 @@ export function getWorkflowRenderChainModules(classType: string): Array<RenderCh
     const pkg = getCustomNodePackage(classType);
     chain.push({
       file: "src/config/custom-nodes.ts",
-      label: pkg ? `custom:${pkg}` : "customNodes",
+      label: pkg !== undefined && pkg !== "" ? `custom:${pkg}` : "customNodes",
     });
     chain.push({
       file: "src/app/api/custom-nodes/route.ts",

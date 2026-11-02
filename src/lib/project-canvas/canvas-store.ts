@@ -318,7 +318,8 @@ export const EMPTY_DRAFT_NAME = EMPTY_DRAFT_NAMES[0];
 /* 当且仅当 `name` 是空草稿哨兵名时为真。用它代替在每个回收判据里
  * 硬编码「未命名」，让默认名只有一处事实源、不会漂移。 */
 export function isEmptyDraftName(name: string | undefined | null): boolean {
-  if (!name) {
+  /* 哨兵名非空，空串与缺省在最后的全等比较里同样判 false */
+  if (name === undefined || name === null) {
     return false;
   }
   return name === EMPTY_DRAFT_NAME;
@@ -508,7 +509,8 @@ export function reapAllEmptyDrafts(): number {
    * 那种悬空 active 指向谁都不存在，留着只会让上层以为「我有项目」而六个
    * 项目页签点进去全落空。是活跃项目就保留，否则清掉。 */
   const survivors = readIndex();
-  if (activeId && !survivors.some((survivor) => survivor.id === activeId)) {
+  /* 活跃 id 是持久化里的项目 id，不会是空串 */
+  if (activeId !== null && !survivors.some((survivor) => survivor.id === activeId)) {
     removeStorageItem(ACTIVE_KEY);
   }
   return doomed.length;

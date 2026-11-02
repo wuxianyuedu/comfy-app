@@ -49,7 +49,7 @@ const mockRouter = t.router({
   model: t.router({
     list: t.procedure.query(({ input }) => {
       listInputs.push(input);
-      if (behavior.listError) {
+      if (behavior.listError !== undefined && behavior.listError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.listError,
@@ -59,7 +59,7 @@ const mockRouter = t.router({
     }),
     sync: t.procedure.mutation(() => {
       syncCalls += 1;
-      if (behavior.syncError) {
+      if (behavior.syncError !== undefined && behavior.syncError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.syncError,

@@ -106,7 +106,7 @@ export function ContentAssetBody({
 
   return (
     <div className="relative">
-      {mediaSrc ? (
+      {mediaSrc !== null ? (
         isPic ? (
           <MediaThumbnail
             alt={data.mediaName ?? "参考图"}
@@ -197,7 +197,7 @@ export function ContentAssetBody({
       </Hint>
 
       {/* 多图数量标签（右上角） */}
-      {imageCount > 1 && mediaSrc && (
+      {imageCount > 1 && mediaSrc !== null && (
         <Hint label={`查看全部 ${imageCount} 张图片`}>
           <Button
             className="hover:bg-primary/80 text-3xs absolute top-2.5 right-2.5 h-auto min-w-5 rounded-full bg-black/70 px-1.5 font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 hover:text-white"

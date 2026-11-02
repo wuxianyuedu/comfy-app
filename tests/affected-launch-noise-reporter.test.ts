@@ -107,7 +107,7 @@ describe("resolveNoiseFilter —— 只认 1 / true", () => {
 describe("spawnVitest end-to-end —— 真起 node 验证过滤写入", () => {
   let dir: string | undefined;
   afterEach(() => {
-    if (dir) {
+    if (dir !== undefined && dir !== "") {
       rmSync(dir, { recursive: true, force: true });
     }
     dir = undefined;
@@ -195,7 +195,7 @@ describe("FIXTURE_NOISE_PATTERN —— 夹具 / 探针输出的良性形态", ()
     "[ci-install-deps] √ 跳过安装：依赖面（pnpm-lock.yaml / package.json / pnpm-workspace.yaml / next.config.js）一项都没碰，且 node_modules 就是照这一份装的",
     "[ci-install-deps] 安装：依赖面被碰过：pnpm-lock.yaml",
     // storybook extensionless 警告块（触发行 / 框线行 / 超链接包装）
-    "▲  One or more extensionless imports detected: \"./app-origin-defaults\" in",
+    '▲  One or more extensionless imports detected: "./app-origin-defaults" in',
     "│  file",
     String.raw`│  "G:\runner\…\.storybook\main.ts".`,
     "│  For more information on how to resolve the issue:",

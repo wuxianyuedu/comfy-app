@@ -108,16 +108,20 @@ export function WidgetInputRow({
           避免一进入改名输入态按钮就跑到输入框旁边。 */}
       <span className="flex shrink-0 items-center gap-1.5">
         {onRequiredChange && (
-          <Hint label={entry.required ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}>
+          <Hint
+            label={entry.required === true ? "已标记为必填，点击切换为可选" : "点击将其标记为必填"}
+          >
             <Button
               className={`nodrag nopan text-3xs h-auto shrink-0 rounded px-1.5 py-px font-medium ${
-                entry.required ? "" : "border-border-strong bg-subtle text-ink-muted border"
+                entry.required === true
+                  ? ""
+                  : "border-border-strong bg-subtle text-ink-muted border"
               }`}
-              onClick={() => onRequiredChange(!entry.required)}
+              onClick={() => onRequiredChange(entry.required !== true)}
               onMouseDown={(event) => event.stopPropagation()}
-              variant={entry.required ? "danger" : "ghost"}
+              variant={entry.required === true ? "danger" : "ghost"}
             >
-              {entry.required ? "必填" : "可选"}
+              {entry.required === true ? "必填" : "可选"}
             </Button>
           </Hint>
         )}

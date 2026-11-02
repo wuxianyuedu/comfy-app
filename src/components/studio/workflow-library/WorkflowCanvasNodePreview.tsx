@@ -155,7 +155,7 @@ export function WorkflowCanvasNodePreview({
     const map: Record<string, string> = {};
     for (const [ioKey, entry] of Object.entries(workflowIO ?? {})) {
       const resolved = resolveEntrySeedMode(entry, effectiveMode);
-      if (resolved) {
+      if (resolved !== undefined && resolved !== "") {
         map[ioKey] = resolved;
       }
     }
@@ -206,7 +206,10 @@ export function WorkflowCanvasNodePreview({
 
   const statusLabel = phase.kind === "running" ? `生成中 ${phase.pct}%` : STATUS_LABEL[phase.kind];
   const pct = phase.kind === "running" ? phase.pct : 0;
-  const nodeLabel = phase.kind === "running" && phase.node?.label ? phase.node.label : null;
+  const nodeLabel =
+    phase.kind === "running" && phase.node?.label !== undefined && phase.node.label !== ""
+      ? phase.node.label
+      : null;
 
   /* 模式契约口清单 —— 卡片头的话术与「工坊封装」页签**同一份**
    * （`modeContractEntries`：用户改过的模式走注册表，未改过的回落内置默认）。
@@ -275,7 +278,7 @@ export function WorkflowCanvasNodePreview({
   /* 生效模式名（chip 上显示的那个）。卡片刻的名字、表单按它解析的 required /
    * seed 行为、「在编辑器中打开」带过去的模式，全都取自同一个生效模式。 */
   const effectiveModeLabel = useMemo(
-    () => (effectiveMode ? modeLabel(effectiveMode) : modeLabel(taskType)),
+    () => (effectiveMode !== null ? modeLabel(effectiveMode) : modeLabel(taskType)),
     [effectiveMode, taskType],
   );
   const outputWiring = useOutputWiring({
@@ -317,7 +320,7 @@ export function WorkflowCanvasNodePreview({
       {/* ── edit 模式：参数连线画布（三列 React Flow） ── */}
       {viewMode === "edit" && (
         <WorkflowLibraryCanvas
-          canWire={!!effectiveMode && !!onPatchParamMap}
+          canWire={effectiveMode !== null && !!onPatchParamMap}
           contractEntries={contractEntries}
           /* 闸门（`isValidConnection`）按它判类型 —— 必须与卡片列**同一份**
              契约（含作者自定义的口），否则自定义口的圆点拖到宿主行上会被判成
@@ -372,10 +375,12 @@ export function WorkflowCanvasNodePreview({
             />
           }
           io={workflowIO}
-          onConnect={effectiveMode && onPatchParamMap ? wiring.connect : undefined}
-          onConnectOutput={effectiveMode && onPatchParamMap ? outputWiring.connect : undefined}
+          onConnect={effectiveMode !== null && onPatchParamMap ? wiring.connect : undefined}
+          onConnectOutput={
+            effectiveMode !== null && onPatchParamMap ? outputWiring.connect : undefined
+          }
           onDeleteWire={
-            effectiveMode && onPatchParamMap
+            effectiveMode !== null && onPatchParamMap
               ? (namespace, entryId) => {
                   if (namespace === "param") {
                     wiring.disconnect(entryId);
@@ -391,13 +396,13 @@ export function WorkflowCanvasNodePreview({
           }}
           onSelectOutput={(id) => {
             setSelectedOutputId(id);
-            if (id) {
+            if (id !== null) {
               setSelectedParamId(null);
             }
           }}
           onSelectParam={(id) => {
             setSelectedParamId(id);
-            if (id) {
+            if (id !== null) {
               setSelectedOutputId(null);
             }
           }}

@@ -88,7 +88,11 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
         if (wfRes.status === "fulfilled") {
           data.wfList = wfRes.value.workflows ?? [];
         }
-        if (tagRes.status === "fulfilled" && tagRes.value && Array.isArray(tagRes.value.tags)) {
+        if (
+          tagRes.status === "fulfilled" &&
+          Boolean(tagRes.value) &&
+          Array.isArray(tagRes.value.tags)
+        ) {
           data.modelTagLib = tagRes.value.tags;
         }
         return data;
@@ -138,13 +142,14 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
   useEffect(() => {
     if (
       (d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") ||
-      !d.workflowId
+      d.workflowId === undefined ||
+      d.workflowId === ""
     ) {
       return;
     }
     let alive = true;
     const t = setTimeout(() => {
-      if (!d.workflowId) {
+      if (d.workflowId === undefined || d.workflowId === "") {
         return;
       }
       setWfIOLoading(true);
@@ -157,7 +162,7 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
       void vanillaApi.workflow.detailFull
         .query({ id: d.workflowId })
         .then((tpl) => {
-          if (!alive || !tpl) {
+          if (!alive || !Boolean(tpl)) {
             return;
           }
           setWfIO(tpl.workflowIO ?? null);
@@ -177,10 +182,12 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           const dbModes = parseModesJson(tpl.availableModes);
           const dbDefault = typeof tpl.defaultMode === "string" ? tpl.defaultMode : null;
           const inferredMode =
-            typeof tpl.taskType === "string" && tpl.taskType ? tpl.taskType : null;
-          const modes = dbModes.length > 0 ? dbModes : inferredMode ? [inferredMode] : [];
+            typeof tpl.taskType === "string" && tpl.taskType !== "" ? tpl.taskType : null;
+          const modes = dbModes.length > 0 ? dbModes : inferredMode !== null ? [inferredMode] : [];
           const defaultMode =
-            dbDefault && modes.includes(dbDefault) ? dbDefault : (modes[0] ?? null);
+            dbDefault !== null && dbDefault !== "" && modes.includes(dbDefault)
+              ? dbDefault
+              : (modes[0] ?? null);
           setWfModes({ modes, defaultMode });
         })
         .catch(() => {
@@ -233,7 +240,11 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
    *  复用 WorkflowNode 同款过滤谓词（sourceFilter + modelFilter）。wfList 为空
    *  视为「仍在加载」而非「被过滤」，避免挂载瞬间误清空已选工作流。 */
   useEffect(() => {
-    if ((d.kind !== "workflow" && d.kind !== "picture") || !d.workflowId) {
+    if (
+      (d.kind !== "workflow" && d.kind !== "picture") ||
+      d.workflowId === undefined ||
+      d.workflowId === ""
+    ) {
       return;
     }
     if (wfList.length === 0) {
@@ -250,7 +261,11 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           if (sourceFilter === "local") {
             return Boolean(workflow.sourcePath);
           }
-          return !workflow.sourcePath;
+          return (
+            workflow.sourcePath === undefined ||
+            workflow.sourcePath === null ||
+            workflow.sourcePath === ""
+          );
         })
         .filter((workflow) => {
           if (modelFilter === "all") {

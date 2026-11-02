@@ -205,7 +205,9 @@ function Section({
     <section className="mb-5 last:mb-0">
       <header className="mb-2">
         <h3 className="text-ink-soft text-2xs font-semibold tracking-wider uppercase">{title}</h3>
-        {subtitle && <p className="text-ink-muted text-2xs mt-0.5">{subtitle}</p>}
+        {subtitle !== undefined && subtitle !== "" && (
+          <p className="text-ink-muted text-2xs mt-0.5">{subtitle}</p>
+        )}
       </header>
       <div className="border-border-strong bg-subtle flex flex-col gap-2.5 rounded-lg border p-3">
         {children}

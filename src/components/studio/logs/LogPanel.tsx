@@ -71,7 +71,7 @@ function useVirtualWindow(input: {
   const expandedIds = useMemo(() => {
     const ids = new Set<string>();
     for (const key of Object.keys(expansionMap)) {
-      if (expansionMap[key]) {
+      if (expansionMap[key] === true) {
         ids.add(key);
       }
     }

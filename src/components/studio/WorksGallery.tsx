@@ -190,7 +190,7 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
                   </Button>
 
                   {/* 出处标：只给「只在一侧」的行。`both` 是正常行，标出来是噪声。 */}
-                  {badge && (
+                  {badge !== undefined && badge !== "" && (
                     <span
                       className="text-ink-fainter border-border-subtle bg-surface-2 text-3xs absolute bottom-2.5 left-3.5 rounded-md border px-1.5 py-0.5"
                       title={hint}
@@ -273,7 +273,7 @@ export function WorksGallery({ onOpenTask, onOpenCanvasProject }: WorksGalleryPr
         onClose={cancelDelete}
         onConfirm={() => {
           void confirmDelete().then((name) => {
-            if (name) {
+            if (name !== null && name !== "") {
               toast.success(`已删除项目「${name}」`);
             }
           });

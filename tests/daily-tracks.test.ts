@@ -901,7 +901,7 @@ describe("dirtySince 的取证（问不出来 ≠ 没动过）", () => {
       let stamp: string | null = null;
       let hit = false;
       const flush = () => {
-        if (hit && stamp) {
+        if (hit && stamp !== null && stamp !== "") {
           const at = new Date(stamp);
           if (!Number.isNaN(at.getTime()) && (!earliest || at < earliest)) {
             earliest = at;

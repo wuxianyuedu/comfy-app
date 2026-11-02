@@ -65,7 +65,7 @@ export function SettingsView({ fillHeight, initialSection, onConsumeSection }: S
      * 不会消费载荷；就绪壳挂上后再滚到目标分区。 */
     jumpSection: c.pendingJump,
     onJumpApplied: c.ackJumpSection,
-    ...(fillHeight ? { className: "h-full" } : { title: "设置" }),
+    ...(fillHeight === true ? { className: "h-full" } : { title: "设置" }),
   };
 
   /* 打开即先渲染「外壳 + 分区导航」，内容区走三态；不再用整屏 loading 挡导航。 */
@@ -111,7 +111,7 @@ export function SettingsView({ fillHeight, initialSection, onConsumeSection }: S
   return (
     <SettingsPageView
       c={{ ...c, drafts: c.drafts }}
-      {...(fillHeight ? { className: "h-full" } : { title: "设置" })}
+      {...(fillHeight === true ? { className: "h-full" } : { title: "设置" })}
     />
   );
 }

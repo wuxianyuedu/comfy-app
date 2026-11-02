@@ -94,7 +94,7 @@ function activeShellCommands(source: string): Array<string> {
   return source
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#"));
+    .filter((line) => line !== "" && !line.startsWith("#"));
 }
 
 /**
@@ -303,7 +303,7 @@ describe("@font-face 与 --font-* 必须指向同一个名字", () => {
       // 四者同名：扩展名 / format() / 磁盘文件 / LFS 属性。任何一处单独漂开都
       // **不报错** —— format() 写错时浏览器照嗅探照解码（它只是「要不要下载」的门），
       // 所以只有这里能拦。
-      const carrier = FONT_CARRIERS.find((c) => url?.endsWith(c.ext));
+      const carrier = FONT_CARRIERS.find((c) => url !== undefined && url.endsWith(c.ext));
       expect(carrier, `${face.family} 指向 ${url}，那不是本仓库认的字体载体`).toBeTruthy();
       expect(
         declaredFormat,

@@ -47,7 +47,7 @@ function FitHarness({
       return;
     }
     const scheduler = schedulerRef.current;
-    if (!scheduler?.markPending(graphKey)) {
+    if (scheduler?.markPending(graphKey) !== true) {
       return;
     }
     /* 与 WorkflowEditorInner 的同一条约定：视口下发后**且测量收敛**才记账。 */

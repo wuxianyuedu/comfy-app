@@ -20,7 +20,7 @@ vi.mock("~/server/db", () => ({
       values: () => {
         /* SAFETY: 类型断言已复核 */
         const rejectNow = (globalThis as { __REJECT_INSERT__?: boolean }).__REJECT_INSERT__;
-        return rejectNow ? Promise.reject(new Error("db down")) : Promise.resolve();
+        return rejectNow === true ? Promise.reject(new Error("db down")) : Promise.resolve();
       },
     })),
   },

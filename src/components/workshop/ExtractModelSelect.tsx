@@ -41,10 +41,10 @@ export function ExtractModelSelect({
   const probeStarted = React.useRef<Record<string, boolean>>({});
 
   React.useEffect(() => {
-    if (!selKey) {
+    if (selKey === "") {
       return;
     }
-    if (probeStarted.current[selKey]) {
+    if (probeStarted.current[selKey] === true) {
       return;
     }
     probeStarted.current[selKey] = true;

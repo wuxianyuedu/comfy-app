@@ -630,7 +630,7 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
     // insertInto 报 no column named updatedAt，14 个用例全红）
     createdAt: input.createdAt ?? new Date(),
   });
-  if (input.modelTags?.length) {
+  if (input.modelTags !== undefined && input.modelTags.length > 0) {
     for (const tag of input.modelTags) {
       insertInto("workflowModelTag", {
         id: tag.id,

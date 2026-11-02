@@ -26,7 +26,7 @@ export function viewTabLabel(view: WorkspaceView, projectName?: string | null): 
   const name = projectName?.trim();
   // 项目类视图带上项目名（原型里就是「工坊·雾中来信」）—— 同一视图开两页时，
   // 只有视图名的话用户分不清哪一页是哪个项目。
-  return name ? `${base}·${name}` : base;
+  return name !== undefined && name !== "" ? `${base}·${name}` : base;
 }
 
 export type ViewTabStripProps = {

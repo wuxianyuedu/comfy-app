@@ -175,7 +175,7 @@ export async function ensureDrizzleStudioUp(
   }
 
   const bin = resolveDrizzleKitBin();
-  if (!bin) {
+  if (bin === null) {
     return {
       ok: false,
       port,
@@ -279,7 +279,7 @@ export async function stopDrizzleStudio(
   const child = st.child;
   const pid = child?.pid;
   const stillUp = await probeDrizzleStudio(port);
-  if (!pid) {
+  if (pid === undefined) {
     return stillUp
       ? {
           ok: false,

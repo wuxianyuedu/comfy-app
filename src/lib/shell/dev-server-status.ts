@@ -81,7 +81,7 @@ export function deriveDevServerStatus(input: DevServerStatusInput): DevServerSta
 
   /* 探活端点答了 404：服务活着，坏的是路由表。**排在连通性两档之前**——它比
    * 「不可达」更具体（我们确实拿到了一个应答），也比「连接中」更贴事实。 */
-  if (input.routeTableStale && !reachable) {
+  if (input.routeTableStale === true && !reachable) {
     return {
       state: "stale",
       label: "应用服务路由异常",

@@ -50,7 +50,7 @@ export class ErrorBoundary extends React.Component<
         if (node !== null && node !== undefined) {
           return node;
         }
-      } else if (custom) {
+      } else if (Boolean(custom)) {
         return custom;
       }
       return (

@@ -69,7 +69,8 @@ function pickUnderlyingMessage(e: object): string | null {
   const shapeStr =
     shape && typeof shape.message === "string" && shape.message.length > 0 ? shape.message : null;
   // 服务端原文更能说明问题；与顶层重复时不必替换。
-  if (shapeStr && shapeStr !== topStr) {
+  /* shapeStr 的产出端已过滤空串，非 null 即非空 */
+  if (shapeStr !== null && shapeStr !== topStr) {
     return shapeStr;
   }
   return topStr;
@@ -79,7 +80,8 @@ function pickUnderlyingMessage(e: object): string | null {
 export function errorMessage(e: unknown, fallback: string): string {
   if (typeof e === "object" && e !== null && "message" in e) {
     const underlying = pickUnderlyingMessage(e);
-    if (underlying) {
+    /* pickUnderlyingMessage 的产出端已过滤空串，非 null 即非空 */
+    if (underlying !== null) {
       /* 顶层是传输层包装且服务端另有原文 → 直接用原文（它是根因描述）。 */
       if (
         /* SAFETY: 类型断言已复核 */
@@ -199,13 +201,15 @@ export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
       parts.push(obj.name);
     }
     const message = typeof obj.message === "string" && obj.message ? obj.message : null;
-    if (message) {
+    /* message 产出端已过滤空串，非 null 即非空 */
+    if (message !== null) {
       parts.push(message);
     }
     /* 码的取值链与 {@link errorCode} 同一条（两份实现会漂移：一处认 `shape.code`、
      * 另一处不认，日志里就查不到那个码，而分支代码看不见同一个错误）。 */
     const code = errorCode(e);
-    if (code) {
+    /* errorCode 产出端已过滤空串，非 null 即非空 */
+    if (code !== null) {
       parts.push(`code=${code}`);
     }
     if (typeof obj.data?.httpStatus === "number") {
@@ -217,7 +221,7 @@ export function rawErrorDetail(e: unknown, maxLen = LOG_DETAIL_MAX): string {
     }
     if (typeof obj.stack === "string" && obj.stack) {
       const head = obj.stack.split("\n").slice(0, 3).join(" | ");
-      if (head && !message?.includes(head)) {
+      if (head && message?.includes(head) !== true) {
         parts.push(head);
       }
     }

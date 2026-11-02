@@ -174,7 +174,9 @@ export function WorkflowImportPanel({ state, onClose, onImport }: WorkflowImport
       </div>
 
       {/* 文件入口（拖入 / 选择）失败的可读原因，与粘贴路径的 importErr 分开两条。 */}
-      {dropErr && <p className="text-destructive mt-2 text-xs">⚠ {dropErr}</p>}
+      {dropErr !== null && dropErr !== "" && (
+        <p className="text-destructive mt-2 text-xs">⚠ {dropErr}</p>
+      )}
       {importErr && <p className="text-destructive mt-2 text-xs">{importErr}</p>}
       {importWarn.length > 0 && (
         <div className="border-warning/30 bg-warning/6 text-warning-strong mt-2 rounded-md border p-2 text-xs">

@@ -665,7 +665,7 @@ function stagesWithBuildConsumer(scripts: Map<string, Array<string>>): Array<str
  */
 function stageEnvAssignments(text: string, name: string): Array<string> {
   const block = stageBlock(text, name);
-  if (!block) {
+  if (block === null || block === "") {
     return [];
   }
   const lines = block.split(/\r?\n/);
@@ -698,7 +698,7 @@ function stageEnvAssignments(text: string, name: string): Array<string> {
  */
 function stageScriptLine(text: string, name: string): string {
   const block = stageBlock(text, name);
-  if (!block) {
+  if (block === null || block === "") {
     return "";
   }
   const lines = block.split(/\r?\n/);
@@ -1885,7 +1885,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "`.cnb.yml` 的 env 里没有 COMFYAPP_CI_PYTHON_PROBE —— 缺 Python 时「跳过的是哪几条」" +
         "又变成只能靠人自己拼（`scripts/python-probe.mjs` 因此没有调用方）",
     ).toBeTruthy();
-    if (!declared) {
+    if (declared === undefined || declared === "") {
       throw new Error("解析不出探测入口");
     }
     /* 它必须是**盘上真有的**文件：`env` 的值不经过 shell，写错了不会报任何错，

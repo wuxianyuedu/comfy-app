@@ -53,7 +53,7 @@ function readTabsState(): WorkspaceTabsState | null {
     return null;
   }
   const raw = sessionStorage.getItem(WS_TABS_KEY);
-  if (!raw) {
+  if (raw === null || raw === "") {
     return null;
   }
   return parseWorkspaceTabs(raw, WORKSPACE_VIEWS);

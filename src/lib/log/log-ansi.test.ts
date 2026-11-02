@@ -49,7 +49,7 @@ describe("parseAnsiSegments", () => {
 
   it("38;5;n / 38;2;r;g;b 不误染后续文本", () => {
     const segs = parseAnsiSegments("\u001b[38;5;208mhi\u001b[0m|tail");
-    expect(segs.every((s) => !s.styles?.includes("red"))).toBe(true);
+    expect(segs.every((s) => s.styles?.includes("red") !== true)).toBe(true);
     expect(segs.at(-1)).toEqual({ text: "|tail" });
   });
 
@@ -68,22 +68,22 @@ describe("parseOllamaLogText（logrus 纯文本语义上色）", () => {
     const segments = parseOllamaLogText(
       '[2026-09-06 14:27:22] [err] time=2026-09-06T14:27:22+08:00 level=INFO source=routes.go:2008 msg="Listening on 127.0.0.1:11434"',
     );
-    const dim = segments.find((s) => s.styles?.includes("dim"));
+    const dim = segments.find((s) => s.styles?.includes("dim") === true);
     expect(dim?.text).toContain("[2026-09-06 14:27:22]");
-    const green = segments.find((s) => s.styles?.includes("green"));
+    const green = segments.find((s) => s.styles?.includes("green") === true);
     expect(green?.text).toBe("level=INFO");
     expect(segments.some((s) => s.text.includes("Listening on"))).toBe(true);
   });
 
   it("level=ERROR 行标红；无 level= 的行走原样解析", () => {
     const segments = parseOllamaLogText('[err] level=ERROR msg="boom"\nplain line without level');
-    expect(segments.find((s) => s.styles?.includes("red"))?.text).toBe("level=ERROR");
+    expect(segments.find((s) => s.styles?.includes("red") === true)?.text).toBe("level=ERROR");
     expect(segments.some((s) => s.text.includes("plain line"))).toBe(true);
   });
 
   it("level=WARN 黄色；行间保留换行", () => {
     const segments = parseOllamaLogText('level=WARN msg="a"\nlevel=WARN msg="b"');
-    expect(segments.filter((s) => s.styles?.includes("yellow"))).toHaveLength(2);
+    expect(segments.filter((s) => s.styles?.includes("yellow") === true)).toHaveLength(2);
     expect(segments.filter((s) => s.text === "\n")).toHaveLength(1);
   });
 });
