@@ -84,8 +84,12 @@ function projectFaceOf(args, cwd) {
   let given = null;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
+    if (typeof a !== "string") continue;
     if (a === "-p" || a === "--project") {
-      given = typeof args[i + 1] === "string" ? args[i + 1] : "";
+      /* 索引访问每次都是独立表达式，`typeof` 判完还要存进局部量才算窄化
+       * （`noUncheckedIndexedAccess` 下 `args[i + 1]` 是 `string | undefined`）。 */
+      const next = args[i + 1];
+      given = typeof next === "string" ? next : "";
       break;
     }
     if (a.startsWith("--project=")) {
@@ -100,7 +104,7 @@ function projectFaceOf(args, cwd) {
   if (given === null || given === "") {
     return { face: path.join(cwd, "tsconfig.json"), explicit: false };
   }
-  const abs = path.resolve(cwd, given);
+  const abs = path.resolve(cwd, given ?? "");
   return path.extname(abs) === ".json"
     ? { face: abs, explicit: true }
     : { face: path.join(abs, "tsconfig.json"), explicit: true };
@@ -174,7 +178,7 @@ function includeSummaryOf(faceFile) {
     const noTrail = noComments.replaceAll(/,(\s*[}\]])/g, "$1");
     const parsed = JSON.parse(noTrail);
     if (!Array.isArray(parsed.include) || parsed.include.length === 0) return "";
-    return parsed.include.map((item) => String(item)).join(", ");
+    return parsed.include.map((/** @type {unknown} */ item) => String(item)).join(", ");
   } catch {
     return null;
   }
