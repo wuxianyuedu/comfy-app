@@ -197,10 +197,13 @@ export function useWorkflowPersistence({
            * 工作流界面，不再 onClose 退出 —— 用户通常还要继续调整），失败是
            * **行内错误块**（保存失败时往往要重试或去改配置，需要一个留着不走的
            * 出口）。通道差异由 `report` 表达，文案归一由出口负责。 */
-          report: ((kind, detail) =>
-            kind === "ok"
-              ? toast.success("已保存", "画布修改与 IO 配置已落库，可继续编辑")
-              : setError(detail)) satisfies ActionReport,
+          report: ((kind, detail) => {
+            if (kind === "ok") {
+              toast.success("已保存", "画布修改与 IO 配置已落库，可继续编辑");
+            } else {
+              setError(detail);
+            }
+          }) satisfies ActionReport,
           failureText: "保存失败",
         },
       );

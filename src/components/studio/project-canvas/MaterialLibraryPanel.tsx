@@ -108,7 +108,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           下划线两层），两枚同高同基线。 */}
       <Tabs
         className="gap-0"
-        onValueChange={(value) => setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope)}
+        onValueChange={(value) => {
+          setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope);
+        }}
         value={scope}
       >
         <TabsList
@@ -153,7 +155,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
             <Hint accessibleName label="清空">
               <Button
                 className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
-                onClick={() => setSearch("")}
+                onClick={() => {
+                  setSearch("");
+                }}
                 size="icon-xs"
                 variant="ghost"
               >
@@ -200,7 +204,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
         {showItems && !searching && folder && (
           <Button
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft text-2xs ml-auto h-auto shrink-0 gap-1 rounded-md px-2 py-1 font-normal"
-            onClick={() => enterFolder(null)}
+            onClick={() => {
+              enterFolder(null);
+            }}
             variant="ghost"
           >
             <ChevronLeft data-icon="inline-start" size={11} strokeWidth={2.5} />

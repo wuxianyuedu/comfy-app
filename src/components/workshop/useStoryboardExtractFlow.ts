@@ -154,7 +154,9 @@ export function useStoryboardExtractFlow(input: {
           provider: channelProvider(extractChannel),
           model: parseChannelOption(extractChannelValue).model,
         },
-        onToken: (token) => setExtractAppendProgress(token),
+        onToken: (token) => {
+          setExtractAppendProgress(token);
+        },
       });
       appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
       const entries = parseExtractedShots(full);

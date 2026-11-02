@@ -497,7 +497,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
         `{"name":"${name}","version":"${version}"}\n`,
       );
     },
-    remove: (rel) => rmSync(abs(rel), { recursive: true, force: true }),
+    remove: (rel) => {
+      rmSync(abs(rel), { recursive: true, force: true });
+    },
     read: (rel) => readFileSync(abs(rel), "utf8"),
     exists: (rel) => existsSync(abs(rel)),
     git: (...args) => {
@@ -600,7 +602,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
 
   return {
     repo: api,
-    dispose: () => rmSync(root, { recursive: true, force: true }),
+    dispose: () => {
+      rmSync(root, { recursive: true, force: true });
+    },
   };
 }
 

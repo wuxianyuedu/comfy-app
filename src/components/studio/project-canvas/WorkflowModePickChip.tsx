@@ -69,7 +69,13 @@ export function WorkflowModePickChip({
 
   return (
     <>
-      {open && <PopoverAutoClose onClose={() => setOpen(false)} />}
+      {open && (
+        <PopoverAutoClose
+          onClose={() => {
+            setOpen(false);
+          }}
+        />
+      )}
       <OptionListPopover
         align="start"
         contentClassName="w-60 rounded-xl"

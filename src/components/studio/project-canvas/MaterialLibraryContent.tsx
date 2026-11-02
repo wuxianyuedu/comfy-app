@@ -157,7 +157,9 @@ export function MaterialLibraryContent({
                     <Hint accessibleName label="加入画布">
                       <Button
                         className="text-ink-soft rounded bg-black/70 hover:bg-black/60 hover:text-white"
-                        onClick={() => onUse(item)}
+                        onClick={() => {
+                          onUse(item);
+                        }}
                         size="icon-xs"
                         variant="ghost"
                       >
@@ -221,7 +223,9 @@ export function MaterialLibraryContent({
                     <Hint accessibleName label="加入画布">
                       <Button
                         className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
-                        onClick={() => onUse(item)}
+                        onClick={() => {
+                          onUse(item);
+                        }}
                         size="icon-sm"
                         variant="ghost"
                       >
@@ -261,7 +265,9 @@ export function MaterialLibraryContent({
             <Button
               className="border-border-strong bg-subtle hover:bg-surface-2 hover:border-ink-fainter group flex h-auto flex-col items-center gap-2 rounded-lg border py-4 font-normal transition-colors"
               key={folder.id}
-              onClick={() => enterFolder(folder.id)}
+              onClick={() => {
+                enterFolder(folder.id);
+              }}
               variant="ghost"
             >
               <div
@@ -284,7 +290,9 @@ export function MaterialLibraryContent({
             <Button
               className="hover:bg-subtle group flex h-auto w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left font-normal transition-colors"
               key={folder.id}
-              onClick={() => enterFolder(folder.id)}
+              onClick={() => {
+                enterFolder(folder.id);
+              }}
               variant="ghost"
             >
               <div

@@ -109,7 +109,9 @@ export function LogPanelHeader(input: {
                   ? `${FILTER_SELECTED_STYLES} text-ink-bright`
                   : "text-ink-muted hover:bg-subtle hover:text-ink"
               }`}
-              onClick={() => setWrap((prev) => !prev)}
+              onClick={() => {
+                setWrap((prev) => !prev);
+              }}
               size="icon"
               variant="ghost"
             >
@@ -180,7 +182,9 @@ export function LogPanelHeader(input: {
           <Hint accessibleName label="关闭 (Ctrl+Shift+L)">
             <Button
               className="text-ink-muted hover:bg-subtle hover:text-ink rounded-md"
-              onClick={() => setIsOpen(false)}
+              onClick={() => {
+                setIsOpen(false);
+              }}
               size="icon"
               variant="ghost"
             >

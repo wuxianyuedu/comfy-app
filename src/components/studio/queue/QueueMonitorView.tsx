@@ -155,13 +155,13 @@ export function QueueMonitorView({
                   <Button
                     aria-label="查看正在跑这条的执行日志"
                     className="h-auto gap-1"
-                    onClick={() =>
+                    onClick={() => {
                       c.openLog({
                         id: running.id,
                         workflowName: running.workflowName,
                         status: "RUNNING",
-                      })
-                    }
+                      });
+                    }}
                     size="xs"
                     variant="ghost"
                   >
@@ -198,14 +198,14 @@ export function QueueMonitorView({
                       <Button
                         aria-label="查看正在跑这条的执行日志"
                         className="h-auto gap-1"
-                        onClick={() =>
+                        onClick={() => {
                           c.openLog({
                             id: row.id,
                             workflowName: row.workflowName,
                             status: row.status,
                             error: row.error,
-                          })
-                        }
+                          });
+                        }}
                         size="xs"
                         variant="ghost"
                       >
@@ -253,7 +253,9 @@ export function QueueMonitorView({
                       onCopy={() => void c.copyForReprint(row)}
                       // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                       onOpenFolder={() => void c.openFolder(row)}
-                      onOpenLog={() => c.openLog(row)}
+                      onOpenLog={() => {
+                        c.openLog(row);
+                      }}
                       row={row}
                     />
                   </li>
@@ -281,7 +283,9 @@ export function QueueMonitorView({
                       onCopy={() => void c.copyForReprint(row)}
                       // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
                       onOpenFolder={() => void c.openFolder(row)}
-                      onOpenLog={() => c.openLog(row)}
+                      onOpenLog={() => {
+                        c.openLog(row);
+                      }}
                       row={row}
                     />
                   </li>

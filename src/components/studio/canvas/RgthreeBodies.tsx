@@ -73,9 +73,15 @@ export function RgthreeFastGroupsBypasserBody({
                * 后面的类赢，所以底色 / 圆角 / 内边距 / 悬停底都由这里接管
                *（§16.2.4.2 第 5 条：基元默认值「成套 + 讲顺序」地覆盖）。 */
               className="border-0 bg-transparent p-0 hover:bg-transparent"
-              onMouseDown={(event) => event.stopPropagation()}
-              onPointerDown={(event) => event.stopPropagation()}
-              onPressedChange={() => ctx.setBypass(group.id, !bypass)}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onPressedChange={() => {
+                ctx.setBypass(group.id, !bypass);
+              }}
               pressed={bypass}
               style={{
                 marginLeft: 6,

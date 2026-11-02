@@ -29,7 +29,7 @@ type Behavior = {
   delayMs?: number;
   listError?: string;
   tags: Array<string>;
-}
+};
 let behavior: Behavior = { tags: [] };
 
 const t = createTestTRPC();
@@ -80,13 +80,17 @@ function renderTagDemo(ui: ReactElement) {
   );
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 afterEach(() => {
   cleanup();
   behavior = { tags: [] };
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 /* ---------- 本地 harness：消费 trpc.tag.list / .add（新集成：options 工厂） ---------- */
 function TagDemo() {

@@ -100,7 +100,9 @@ export function FinalComposer({
       const next = timeline[idx + 1];
       if (next && !next.shot.clipUrl && next.shot.imageUrl) {
         // 静止帧兜底：按住该镜头时长。
-        imageTimerRef.current = setTimeout(() => advance(), next.duration * 1000);
+        imageTimerRef.current = setTimeout(() => {
+          advance();
+        }, next.duration * 1000);
       }
       return idx + 1;
     });
@@ -117,7 +119,9 @@ export function FinalComposer({
     setCurrentIdx(0);
     setPlaying(true);
     if (first && !first.shot.clipUrl && first.shot.imageUrl) {
-      imageTimerRef.current = setTimeout(() => advance(), first.duration * 1000);
+      imageTimerRef.current = setTimeout(() => {
+        advance();
+      }, first.duration * 1000);
     }
   }
 
@@ -313,11 +317,11 @@ export function FinalComposer({
                       className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
                       max={20}
                       min={1}
-                      onChange={(event) =>
+                      onChange={(event) => {
                         updateShot(shot.id, {
                           duration: clamp(Number(event.target.value) || 4, 1, 20),
-                        })
-                      }
+                        });
+                      }}
                       type="number"
                       value={entry.duration}
                     />
@@ -329,12 +333,12 @@ export function FinalComposer({
                       {...field}
                       className="bg-subtle! border-border! text-xs"
                       labels={TRANSITION_LABELS}
-                      onChange={(value) =>
+                      onChange={(value) => {
                         updateShot(shot.id, {
                           /* SAFETY: 类型断言已复核 */
                           transition: value as Transition,
-                        })
-                      }
+                        });
+                      }}
                       options={TRANSITIONS}
                       placeholder="转场"
                       value={shot.transition ?? "cut"}
@@ -347,12 +351,12 @@ export function FinalComposer({
                       {...field}
                       className="bg-subtle! border-border! text-xs"
                       labels={MOTION_LABELS}
-                      onChange={(value) =>
+                      onChange={(value) => {
                         updateShot(shot.id, {
                           /* SAFETY: 类型断言已复核 */
                           motion: value as MotionLevel,
-                        })
-                      }
+                        });
+                      }}
                       options={MOTIONS}
                       placeholder="运动"
                       value={shot.motion ?? "medium"}

@@ -202,7 +202,9 @@ export function ShotStudio({
     return withTimeoutResult(
       new Promise<void>((resolve) => {
         close = watchTask(taskId, {
-          onProgress: (p) => reportProgress(shotId, p),
+          onProgress: (p) => {
+            reportProgress(shotId, p);
+          },
           onOutput: (out) => {
             if (out.kind !== "video") {
               patchShot(shotId, { imageUrl: out.url });
@@ -388,14 +390,18 @@ export function ShotStudio({
             时悬停档胜出，紫色选中翻成白字灰底。 */}
         <div aria-label="生成通道" className="flex gap-2" role="radiogroup">
           <SelectChip
-            onClick={() => setChannel("local")}
+            onClick={() => {
+              setChannel("local");
+            }}
             selected={channel === "local"}
             shape="segment"
           >
             本地 · ComfyUI 工作流
           </SelectChip>
           <SelectChip
-            onClick={() => setChannel("api")}
+            onClick={() => {
+              setChannel("api");
+            }}
             selected={channel === "api"}
             shape="segment"
           >
@@ -485,8 +491,9 @@ export function ShotStudio({
               error={errors[shot.id]}
               gachaBusy={gachaAction.isBusy(shot.id)}
               key={shot.id}
-              // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-              onCancel={(s) => void onCancelShot(s)}
+              onCancel={(s) => {
+                onCancelShot(s);
+              }}
               // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
               onGacha={(s, n) => void gachaShot(s, n)}
               // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
@@ -594,7 +601,9 @@ function ShotCardRow({
 
       <Textarea
         className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 min-h-0 rounded-md px-2 py-1.5 text-xs"
-        onChange={(e) => onPromptChange(shot.id, e.target.value)}
+        onChange={(e) => {
+          onPromptChange(shot.id, e.target.value);
+        }}
         placeholder="生图提示词(自动预填自分镜与角色卡,可手动修改)"
         rows={2}
         value={shot.prompt}
@@ -618,7 +627,9 @@ function ShotCardRow({
             (channel === "local" && !workflowId) ||
             (channel === "api" && !apiReady)
           }
-          onClick={() => onGenerate(shot)}
+          onClick={() => {
+            onGenerate(shot);
+          }}
           size="xs"
           variant="primary-solid"
         >
@@ -632,7 +643,9 @@ function ShotCardRow({
                 className="text-2xs"
                 disabled={gachaBusy || shot.status === "running"}
                 key={n}
-                onClick={() => setGachaCount(n)}
+                onClick={() => {
+                  setGachaCount(n);
+                }}
                 selected={gachaCount === n}
                 shape="segment"
               >
@@ -650,7 +663,9 @@ function ShotCardRow({
               !shot.prompt ||
               (channel === "local" && !workflowId)
             }
-            onClick={() => onGacha(shot, gachaCount)}
+            onClick={() => {
+              onGacha(shot, gachaCount);
+            }}
             size="xs"
             variant="secondary"
           >
@@ -662,7 +677,9 @@ function ShotCardRow({
              点击后 task.cancel 置 CANCELLED，观察循环收终态收尾。 */
           <Button
             className="text-muted-foreground hover:text-ink bg-subtle hover:bg-surface-2 h-auto rounded-lg px-3 py-1.5"
-            onClick={() => onCancel(shot)}
+            onClick={() => {
+              onCancel(shot);
+            }}
             size="xs"
             variant="secondary"
           >

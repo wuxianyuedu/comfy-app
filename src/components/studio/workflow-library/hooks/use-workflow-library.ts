@@ -216,8 +216,12 @@ export function useWorkflowLibrary(
     if (!awaitingData || listQ.data) {
       return;
     }
-    const timer = setTimeout(() => setLoadStalled(true), LIST_STALL_MS);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setLoadStalled(true);
+    }, LIST_STALL_MS);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [awaitingData, listQ.data]);
   useEffect(() => {
     /* 数据到达（或失败）后立刻撤下「加载较久」提示——它是瞬时的等待出口，
@@ -227,8 +231,12 @@ export function useWorkflowLibrary(
     if (!listQ.data && !listQ.isError) {
       return;
     }
-    const timer = setTimeout(() => setLoadStalled(false), 0);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      setLoadStalled(false);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [listQ.data, listQ.isError]);
 
   /** react-query 的数据要落进本地 state（列表是乐观更新 + 服务端回填混合）。
@@ -334,12 +342,15 @@ export function useWorkflowLibrary(
     load();
   }, [load]);
 
-  const toggleImport = useCallback(
-    () => importState.setShowImport((value) => !value),
-    [importState],
-  );
-  const closeImport = useCallback(() => importState.setShowImport(false), [importState]);
-  const cancelDelete = useCallback(() => setPendingDelete(null), []);
+  const toggleImport = useCallback(() => {
+    importState.setShowImport((value) => !value);
+  }, [importState]);
+  const closeImport = useCallback(() => {
+    importState.setShowImport(false);
+  }, [importState]);
+  const cancelDelete = useCallback(() => {
+    setPendingDelete(null);
+  }, []);
 
   const handleUse = useCallback(
     (id: string, meta?: { name: string; taskType: string }) => {

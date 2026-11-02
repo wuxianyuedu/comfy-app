@@ -114,8 +114,12 @@ function runFFmpeg(
   cp.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
   return withTimeoutResult(
     new Promise<{ code: number; stderr: string }>((resolve) => {
-      cp.on("close", (code) => resolve({ code: code ?? -1, stderr }));
-      cp.on("error", () => resolve({ code: -2, stderr: "spawn error" }));
+      cp.on("close", (code) => {
+        resolve({ code: code ?? -1, stderr });
+      });
+      cp.on("error", () => {
+        resolve({ code: -2, stderr: "spawn error" });
+      });
     }),
     timeout,
     /* 超时不是「一种结果」而是「放弃等待」：`code: -1` + `"timeout"` 是调用处

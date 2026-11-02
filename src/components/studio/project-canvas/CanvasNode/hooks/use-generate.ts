@@ -91,29 +91,31 @@ export function useGenerate({
           return;
         }
         if (t.status === "SUCCEEDED") {
-          guard.commit(() =>
+          guard.commit(() => {
             patch({
               status: "done",
               error: undefined,
               progress: 100,
               ...(t.resultImages ? { resultImages: t.resultImages } : {}),
-            }),
-          );
+            });
+          });
         } else if (t.status === "FAILED" || t.status === "CANCELLED") {
-          guard.commit(() =>
+          guard.commit(() => {
             patch({
               status: "error",
               error: t.error ?? (t.status === "CANCELLED" ? "已取消" : "生成失败"),
               progress: 0,
-            }),
-          );
+            });
+          });
         }
       } catch {
         /* 网络抖动 —— 静默忽略；用户重触发 / runner 恢复后，
          *  GlobalStepLogPanel 的实时 SSE 会自己追上。 */
       }
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
     /* patch 是稳定的（setNodes setter + id）—— 故意省略以避免
      * 重复触发；每个 (status="running", taskId) 只对账一次。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -149,7 +151,9 @@ export function useGenerate({
         const taskId = await startGenerate(payload);
         patch({ taskId });
         setActiveTaskId(taskId, id);
-        const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
+        const result = await pollTask(taskId, undefined, (progress) => {
+          patch({ progress });
+        });
         if (isTaskSuccess(result)) {
           // picture 节点 = 图片资产本身，生成结果直接
           //  写回本节点 mediaPath（ContentAssetBody 据此预览），不另起下游节点。
@@ -306,7 +310,9 @@ export function useGenerate({
       const taskId = await startGenerate(parsed.input);
       patch({ taskId });
       setActiveTaskId(taskId, id);
-      const result = await pollTask(taskId, undefined, (progress) => patch({ progress }));
+      const result = await pollTask(taskId, undefined, (progress) => {
+        patch({ progress });
+      });
       if (isTaskSuccess(result)) {
         patch({
           status: "done",

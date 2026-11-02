@@ -444,7 +444,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     }
     // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     const timer = setTimeout(() => void fetchSettings(), 0);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [open, fetchSettings]);
 
   // 打开时 + 每次解析后（report state 在解析完成事件落地时更新）拉取原始 manifest。
@@ -461,7 +463,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     }
     // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     const timer = setTimeout(() => void fetchManifest(), 0);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [open, fetchManifest]);
   useEffect(() => {
     if (!report) {
@@ -469,7 +473,9 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
     }
     // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     const timer = setTimeout(() => void fetchManifest(), 0);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [report, fetchManifest]);
 
   async function readNdjson(

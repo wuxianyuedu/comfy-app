@@ -67,7 +67,9 @@ export function ShotRow({
         <Button
           aria-label="删除镜头"
           className="text-muted-foreground hover:text-danger-strong ml-auto"
-          onClick={() => onRemove(shot.id)}
+          onClick={() => {
+            onRemove(shot.id);
+          }}
           size="icon-sm"
           variant="ghost"
         >
@@ -83,12 +85,12 @@ export function ShotRow({
               {...field}
               className="bg-subtle! border-border! text-xs"
               labels={/* SAFETY: 类型断言已复核 */ SHOT_TYPE_LABELS as Record<string, string>}
-              onChange={(value) =>
+              onChange={(value) => {
                 onUpdate(shot.id, {
                   /* SAFETY: 类型断言已复核 */
                   shotType: value as ShotType,
-                })
-              }
+                });
+              }}
               /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是
                * 可变 `string[]` —— 这一份浅拷贝是两边口径的接缝，不是新的真相。 */
               options={[...SHOT_TYPES]}
@@ -107,7 +109,9 @@ export function ShotRow({
               labels={Object.fromEntries(
                 styles.map((style) => [style.slug, `${style.icon} ${style.name}`]),
               )}
-              onChange={(value) => onUpdate(shot.id, { skillSlug: value || undefined })}
+              onChange={(value) => {
+                onUpdate(shot.id, { skillSlug: value || undefined });
+              }}
               options={styles.map((style) => style.slug)}
               placeholder="跟随角色/默认"
               value={shot.skillSlug ?? ""}
@@ -119,7 +123,9 @@ export function ShotRow({
       {/* Description */}
       <Textarea
         className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 mt-2 min-h-0 rounded-md px-2 py-1.5 text-xs"
-        onChange={(event) => onUpdate(shot.id, { description: event.target.value })}
+        onChange={(event) => {
+          onUpdate(shot.id, { description: event.target.value });
+        }}
         placeholder="画面描述（留空则使用场景动作描述）"
         rows={2}
         value={shot.description}
@@ -136,13 +142,13 @@ export function ShotRow({
                 <Button
                   className="h-auto rounded-full px-2 py-0.5"
                   key={character.id}
-                  onClick={() =>
+                  onClick={() => {
                     onUpdate(shot.id, {
                       characterIds: on
                         ? shot.characterIds.filter((id) => id !== character.id)
                         : [...shot.characterIds, character.id],
-                    })
-                  }
+                    });
+                  }}
                   size="xs"
                   variant={on ? "default" : "outline"}
                 >
@@ -200,7 +206,9 @@ export function ShotRow({
       <Button
         className="mt-2 h-auto w-full rounded-lg py-2"
         disabled={shot.status === "running" || generating || !shot.prompt}
-        onClick={() => onGenerate(shot)}
+        onClick={() => {
+          onGenerate(shot);
+        }}
         size="xs"
         variant="primary-solid"
       >

@@ -37,7 +37,9 @@ export function useScriptReview(
   const guardRef = useRef<StaleRunGuard>(beginStaleRun());
   useEffect(() => {
     const guard = guardRef.current;
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, []);
 
   const review = useCallback(async () => {

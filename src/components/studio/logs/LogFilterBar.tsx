@@ -165,7 +165,9 @@ export function LogFilterBar({
         {search && (
           <Button
             className="text-ink-muted hover:text-ink absolute right-2"
-            onClick={() => setSearch("")}
+            onClick={() => {
+              setSearch("");
+            }}
             size="icon-xs"
             variant="ghost"
           >

@@ -62,7 +62,9 @@ export function useShotReview(projectId: string, onRegenerated?: () => void): Sh
   const guardRef = useRef<StaleRunGuard>(beginStaleRun());
   useEffect(() => {
     const guard = guardRef.current;
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, []);
 
   const review = useCallback(
@@ -77,7 +79,9 @@ export function useShotReview(projectId: string, onRegenerated?: () => void): Sh
       await reviewBusy.run(async () => {
         try {
           const v = await reviewShot(projectId, shotId);
-          guard.commit(() => setVerdict(v));
+          guard.commit(() => {
+            setVerdict(v);
+          });
         } catch (error_) {
           // 失败也走守卫：卸载后到达的错误不往界面写。原文交 errorMessage 翻译。
           guard.commit(() => {

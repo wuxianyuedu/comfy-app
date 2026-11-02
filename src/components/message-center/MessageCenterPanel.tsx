@@ -145,10 +145,16 @@ export function MessageCenterPanel() {
 
   /* Esc 关闭全屏面板。`filterInput: false` —— 用户在消息正文里选中文本后
    * 按 Esc，期望的是关掉面板而不是「因为焦点在文本里所以没反应」。 */
-  useHotkey({ key: "Escape" }, () => setOpen(false), {
-    enabled: open,
-    filterInput: false,
-  });
+  useHotkey(
+    { key: "Escape" },
+    () => {
+      setOpen(false);
+    },
+    {
+      enabled: open,
+      filterInput: false,
+    },
+  );
 
   if (!open) {
     return null;
@@ -203,7 +209,9 @@ export function MessageCenterPanel() {
           <Button
             aria-label="关闭消息中心"
             className="text-ink-soft hover:bg-subtle hover:text-ink ml-1 rounded-md"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+            }}
             size="icon"
             variant="ghost"
           >
@@ -256,7 +264,9 @@ export function MessageCenterPanel() {
                            * 叠在一起，tsc / eslint / 构建全绿。同文件另外两颗按钮也带
                            * `h-auto`，这里此前漏了。 */
                           className="flex h-auto min-w-0 flex-1 items-start justify-start gap-3 rounded-lg p-0 text-left font-normal whitespace-normal hover:bg-transparent"
-                          onClick={() => markRead(m.id)}
+                          onClick={() => {
+                            markRead(m.id);
+                          }}
                           variant="ghost"
                         >
                           <span
@@ -284,7 +294,9 @@ export function MessageCenterPanel() {
                         <Button
                           aria-label="删除该消息"
                           className="text-ink-fainter hover:bg-subtle hover:text-ink-soft shrink-0 rounded"
-                          onClick={() => remove(m.id)}
+                          onClick={() => {
+                            remove(m.id);
+                          }}
                           size="icon-xs"
                           variant="ghost"
                         >
@@ -304,7 +316,9 @@ export function MessageCenterPanel() {
         <span>底部状态栏铃铛实时汇总未读消息，点此可全屏查看。</span>
         <Button
           className="bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink rounded px-2 py-0.5"
-          onClick={() => setOpen(false)}
+          onClick={() => {
+            setOpen(false);
+          }}
           size="xs"
           variant="secondary"
         >

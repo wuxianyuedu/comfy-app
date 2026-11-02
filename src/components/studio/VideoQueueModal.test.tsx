@@ -40,7 +40,9 @@ describe("VideoQueueModal：队列只读视图（批量提交已整格撤掉，#
   it("弹窗里不再有「批量提交」入口 —— 无 radiogroup、无草稿行、无提交按钮", async () => {
     renderModal();
     // 等首轮加载落地，避免「还没渲染完」被误读成「不存在」。
-    await waitFor(() => expect(fetchVideoTasksMock).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(fetchVideoTasksMock).toHaveBeenCalled();
+    });
     expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(screen.queryByRole("radio", { name: /批量提交/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /开始生成/ })).toBeNull();

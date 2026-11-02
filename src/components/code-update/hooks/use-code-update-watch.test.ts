@@ -72,7 +72,9 @@ describe("useCodeUpdateWatch", () => {
     vi.useFakeTimers();
     probeMock.mockReturnValue(probe("build-1"));
 
-    renderHook(() => useCodeUpdateWatch());
+    renderHook(() => {
+      useCodeUpdateWatch();
+    });
     await settle();
     expect(probeMock).toHaveBeenCalled();
     expect(hasCodeUpdatedSinceLoad()).toBe(false);
@@ -82,7 +84,9 @@ describe("useCodeUpdateWatch", () => {
     vi.useFakeTimers();
     probeMock.mockReturnValueOnce(probe("build-1")).mockReturnValueOnce(probe("build-2"));
 
-    renderHook(() => useCodeUpdateWatch());
+    renderHook(() => {
+      useCodeUpdateWatch();
+    });
     await settle();
     expect(hasCodeUpdatedSinceLoad()).toBe(false);
 
@@ -95,7 +99,9 @@ describe("useCodeUpdateWatch", () => {
     vi.useFakeTimers();
     probeMock.mockReturnValue(probe("build-1"));
 
-    renderHook(() => useCodeUpdateWatch());
+    renderHook(() => {
+      useCodeUpdateWatch();
+    });
     await settle();
     await vi.advanceTimersByTimeAsync(BUILD_ID_POLL_MS * 3);
     await settle();
@@ -107,7 +113,9 @@ describe("useCodeUpdateWatch", () => {
     vi.useFakeTimers();
     probeMock.mockReturnValue(probe(null));
 
-    renderHook(() => useCodeUpdateWatch());
+    renderHook(() => {
+      useCodeUpdateWatch();
+    });
     await settle();
     await vi.advanceTimersByTimeAsync(BUILD_ID_POLL_MS * 3);
     await settle();
@@ -121,7 +129,9 @@ describe("useCodeUpdateWatch", () => {
       .mockReturnValueOnce(probe("b1", { bootId: "boot-A" }))
       .mockReturnValueOnce(probe("b2", { bootId: "boot-B" }));
 
-    renderHook(() => useCodeUpdateWatch({ onDevServerRestart: onRestart }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDevServerRestart: onRestart });
+    });
     await settle();
     expect(onRestart).not.toHaveBeenCalled();
 
@@ -146,7 +156,9 @@ describe("useCodeUpdateWatch", () => {
       }),
     );
 
-    renderHook(() => useCodeUpdateWatch({ onDevServerRestart: onRestart }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDevServerRestart: onRestart });
+    });
     await settle();
     expect(onRestart).not.toHaveBeenCalled();
 
@@ -163,7 +175,9 @@ describe("useCodeUpdateWatch", () => {
       probe("b1", { bootId: "boot-A", restartReason: "stale-route-table" }),
     );
 
-    renderHook(() => useCodeUpdateWatch({ onDevServerRestart: onRestart }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDevServerRestart: onRestart });
+    });
     await settle();
     expect(onRestart).toHaveBeenCalledTimes(1);
     expect(onRestart).toHaveBeenCalledWith("stale-route-table", null);
@@ -176,13 +190,17 @@ describe("useCodeUpdateWatch", () => {
     );
 
     const first = vi.fn();
-    renderHook(() => useCodeUpdateWatch({ onDevServerRestart: first }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDevServerRestart: first });
+    });
     await settle();
     expect(first).toHaveBeenCalledTimes(1);
 
     // 模拟刷新：重挂一个 watcher，bootId 与原因不变 → 不该再提示。
     const second = vi.fn();
-    renderHook(() => useCodeUpdateWatch({ onDevServerRestart: second }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDevServerRestart: second });
+    });
     await settle();
     expect(second).not.toHaveBeenCalled();
     expect(localStorage.getItem(DEV_RESTART_NOTIFIED_KEY)).toBe("boot-A");
@@ -194,7 +212,9 @@ describe("useCodeUpdateWatch", () => {
     // buildId 取不到（服务端还没就绪）：这条依赖面判定仍必须发出。
     probeMock.mockReturnValue(probe(null, { depsStale: true, depsState: "drift" }));
 
-    renderHook(() => useCodeUpdateWatch({ onDepsStale }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDepsStale });
+    });
     await settle();
     expect(onDepsStale).toHaveBeenCalledTimes(1);
     expect(onDepsStale).toHaveBeenCalledWith("drift");
@@ -205,12 +225,16 @@ describe("useCodeUpdateWatch", () => {
     probeMock.mockReturnValue(probe("b1", { depsStale: true, depsState: "no-install" }));
 
     const first = vi.fn();
-    renderHook(() => useCodeUpdateWatch({ onDepsStale: first }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDepsStale: first });
+    });
     await settle();
     expect(first).toHaveBeenCalledTimes(1);
 
     const second = vi.fn();
-    renderHook(() => useCodeUpdateWatch({ onDepsStale: second }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDepsStale: second });
+    });
     await settle();
     expect(second).not.toHaveBeenCalled();
     expect(localStorage.getItem(DEPS_STALE_NOTIFIED_KEY)).toBe("no-install");
@@ -224,7 +248,9 @@ describe("useCodeUpdateWatch", () => {
       .mockReturnValueOnce(probe("b1", { depsStale: false, depsState: "fresh" }))
       .mockReturnValueOnce(probe("b1", { depsStale: true, depsState: "drift" }));
 
-    renderHook(() => useCodeUpdateWatch({ onDepsStale }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDepsStale });
+    });
     await settle();
     expect(onDepsStale).toHaveBeenCalledTimes(1);
 
@@ -243,7 +269,9 @@ describe("useCodeUpdateWatch", () => {
     // stale 为 true 却没有 depsState：文案分不了流，宁可不说。
     probeMock.mockReturnValue(probe("b1", { depsStale: true }));
 
-    renderHook(() => useCodeUpdateWatch({ onDepsStale }));
+    renderHook(() => {
+      useCodeUpdateWatch({ onDepsStale });
+    });
     await settle();
     expect(onDepsStale).not.toHaveBeenCalled();
   });

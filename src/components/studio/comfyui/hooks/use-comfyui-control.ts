@@ -84,7 +84,9 @@ export function useComfyuiControl() {
     /* 刻意不另开日志：这条失败（重问状态没成）自己就有可见出口 —— 状态行留在
      * 上一次的结论上、30s 兜底轮询随后再试一次，用户看得到结果；而它最常见的
      * 成因（服务正在重启）每重启一次打一行只是噪声。 */
-    onChange: () => fireAndForget(comfyStatusQ.refetch(), () => undefined),
+    onChange: () => {
+      fireAndForget(comfyStatusQ.refetch(), () => undefined);
+    },
   });
 
   /* ── 启动 / 关闭 ───────────────────────────────────────── */
@@ -103,8 +105,7 @@ export function useComfyuiControl() {
           return result;
         },
         {
-          report: (kind, text) =>
-            kind === "ok" ? toast.success(text) : toast.error(text),
+          report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
           failureText: "启动 ComfyUI 失败",
         },
       );
@@ -123,8 +124,7 @@ export function useComfyuiControl() {
           return result;
         },
         {
-          report: (kind, text) =>
-            kind === "ok" ? toast.success(text) : toast.error(text),
+          report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
           failureText: "关闭 ComfyUI 失败",
         },
       );
@@ -191,8 +191,7 @@ export function useComfyuiControl() {
             label: "ComfyUI",
             url: decision.embedUrl,
             closable: true,
-            blockedReason:
-              decision.target === "blocked" ? decision.detail : null,
+            blockedReason: decision.target === "blocked" ? decision.detail : null,
             /* 不可嵌时把地址一并带进说明：用户能复制到浏览器自查，也能判断
              * 是外壳拦的还是 ComfyUI 自己拦的（ISSUE #310）。 */
             blockedUrl: decision.target === "blocked" ? decision.base : null,
@@ -203,8 +202,7 @@ export function useComfyuiControl() {
           };
         },
         {
-          report: (kind, text) =>
-            kind === "ok" ? toast.success(text) : toast.error(text),
+          report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
           failureText: "打开 ComfyUI 失败",
         },
       );
@@ -226,8 +224,7 @@ export function useComfyuiControl() {
    * 与 openComfy 一样先 refetch 一次状态，避免拿几秒前的旧结论误报「未运行」。 */
   const openComfyInBrowserAction = useExternalAction({
     target: "browser",
-    report: (kind, text) =>
-      kind === "ok" ? toast.success(text) : toast.error(text),
+    report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
   });
   const openComfyInBrowser = useCallback(async () => {
     await openComfyInBrowserAction.run(async () => {

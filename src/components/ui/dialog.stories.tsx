@@ -121,7 +121,12 @@ function ControlledDemo() {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button onClick={() => setOpen(true)} variant="outline">
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+        variant="outline"
+      >
         受控打开
       </Button>
       <Dialog onOpenChange={setOpen} open={open}>

@@ -99,11 +99,15 @@ describe("夹具读数：「没跑起来」与「判红」不许同形", () => {
   it("④ expectGateRan 只在这一格抛，真判红那一格不抛 ⇒ 两半没被同一条规则一起判掉", () => {
     const notRan = repoWith("process.exitCode = 0;\n");
     notRan.remove(SCRIPT_REL);
-    expect(() => expectGateRan(notRan.run())).toThrow(/没跑起来/);
+    expect(() => {
+      expectGateRan(notRan.run());
+    }).toThrow(/没跑起来/);
 
     const red = repoWith(
       'process.stderr.write("ONLY-ON-STDERR 越界站点\\n"); process.exitCode = 1;\n',
     );
-    expect(() => expectGateRan(red.run())).not.toThrow();
+    expect(() => {
+      expectGateRan(red.run());
+    }).not.toThrow();
   });
 });

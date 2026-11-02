@@ -72,7 +72,9 @@ export function ContentAssetBody({
       <div className="relative">
         <Textarea
           className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 focus-visible:border-primary/40 h-65 w-full resize-none rounded-xl border px-3 py-2.5 text-xs leading-relaxed transition-colors"
-          onChange={textHandler((content) => onPatch({ content }))}
+          onChange={textHandler((content) => {
+            onPatch({ content });
+          })}
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           ref={textareaRef}
           value={data.content ?? ""}
@@ -172,8 +174,12 @@ export function ContentAssetBody({
               void onUploadFile(f);
             }
           }}
-          onMouseDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
         >
           <Icon className="opacity-60" name={isPic ? "image" : "film"} size={38} />
           <span className="text-xs">{isPic ? "拖入上传图片" : "拖入上传视频"}</span>
@@ -187,7 +193,9 @@ export function ContentAssetBody({
       <Hint accessibleName label={isPic ? "上传图片" : "上传视频"}>
         <Button
           className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
-          onClick={() => onPickMedia(isPic ? "picture" : "movie")}
+          onClick={() => {
+            onPickMedia(isPic ? "picture" : "movie");
+          }}
           size="icon-lg"
           style={{ background: accent }}
           variant="ghost"
@@ -218,7 +226,9 @@ export function ContentAssetBody({
           `aria-modal` / 遮罩点击都手写齐了，但 Esc 与焦点锁仍缺 —— 键盘用户
           进得来出不去。 */}
       <Dialog
-        onOpenChange={(next) => !next && gallery.setOpen(false)}
+        onOpenChange={(next) => {
+          if (!next) gallery.setOpen(false);
+        }}
         open={gallery.open && galleryImages.length > 0}
       >
         <DialogContent
@@ -246,7 +256,9 @@ export function ContentAssetBody({
           <MediaThumbnail
             alt={`图片 ${gallery.index + 1}/${galleryImages.length}`}
             className={`border-border-strong ${OVERLAY_MAX_HEIGHT} max-w-[85vw] rounded-lg border object-contain shadow-2xl`}
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
             src={comfyImageUrl({
               filename: galleryImages[gallery.index]?.localPath ?? "",
             })}

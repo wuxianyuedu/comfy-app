@@ -47,7 +47,9 @@ export function useViewportSize(): ViewportSize | null {
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+    };
   }, []);
 
   return size;

@@ -264,7 +264,9 @@ export function CharacterDesigner({
         extractDisabled={!hasScript}
         extractDisabledReason="未获取到剧本文本(在「剧本」阶段编写后可提取)。仍可用「外部导入」载入角色卡 JSON 或人物清单。"
         logStage="character"
-        onChannelValueChange={(value) => setExtractChannelValue(value)}
+        onChannelValueChange={(value) => {
+          setExtractChannelValue(value);
+        }}
         onExtract={() => {
           void handleExtract();
         }}
@@ -290,7 +292,9 @@ export function CharacterDesigner({
                 <IndexDot index={i + 1} />
                 <input
                   className="text-ink hover:border-border focus:border-primary flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-medium outline-none"
-                  onChange={(event) => update(character.id, { name: event.target.value })}
+                  onChange={(event) => {
+                    update(character.id, { name: event.target.value });
+                  }}
                   placeholder="角色名"
                   value={character.name}
                 />
@@ -316,7 +320,9 @@ export function CharacterDesigner({
                 <Button
                   aria-label="删除角色"
                   className="text-muted-foreground hover:text-danger-strong"
-                  onClick={() => remove(character.id)}
+                  onClick={() => {
+                    remove(character.id);
+                  }}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -327,7 +333,9 @@ export function CharacterDesigner({
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field
                   label="年龄/性别"
-                  onChange={(value) => update(character.id, { ageGender: value })}
+                  onChange={(value) => {
+                    update(character.id, { ageGender: value });
+                  }}
                   placeholder="25岁 女性"
                   value={character.ageGender}
                 />
@@ -336,35 +344,45 @@ export function CharacterDesigner({
                 <AttributeMultiSelect
                   groups={attrSet("costume").groups}
                   label={attrSet("costume").label}
-                  onChange={(items) => update(character.id, { costume: joinAttr(items) })}
+                  onChange={(items) => {
+                    update(character.id, { costume: joinAttr(items) });
+                  }}
                   placeholder="如：唐装、风衣…"
                   value={splitAttr(character.costume)}
                 />
                 <AttributeMultiSelect
                   groups={attrSet("appearance").groups}
                   label={attrSet("appearance").label}
-                  onChange={(items) => update(character.id, { appearance: joinAttr(items) })}
+                  onChange={(items) => {
+                    update(character.id, { appearance: joinAttr(items) });
+                  }}
                   placeholder="如：短发、双眼皮…"
                   value={splitAttr(character.appearance)}
                 />
                 <AttributeMultiSelect
                   groups={attrSet("personality").groups}
                   label={attrSet("personality").label}
-                  onChange={(items) => update(character.id, { personality: joinAttr(items) })}
+                  onChange={(items) => {
+                    update(character.id, { personality: joinAttr(items) });
+                  }}
                   placeholder="如：冷静、开朗…"
                   value={splitAttr(character.personality)}
                 />
                 <AttributeMultiSelect
                   groups={attrSet("temperament").groups}
                   label={attrSet("temperament").label}
-                  onChange={(items) => update(character.id, { temperament: joinAttr(items) })}
+                  onChange={(items) => {
+                    update(character.id, { temperament: joinAttr(items) });
+                  }}
                   placeholder="如：清冷孤傲、知性…"
                   value={splitAttr(character.temperament)}
                 />
                 <AttributeMultiSelect
                   groups={attrSet("styleTags").groups}
                   label={attrSet("styleTags").label}
-                  onChange={(items) => update(character.id, { styleTags: items })}
+                  onChange={(items) => {
+                    update(character.id, { styleTags: items });
+                  }}
                   placeholder="如：厚涂、国风…"
                   value={character.styleTags ?? []}
                 />
@@ -378,7 +396,9 @@ export function CharacterDesigner({
                   labels={Object.fromEntries(
                     styles.map((style) => [style.slug, `${style.icon} ${style.name}`]),
                   )}
-                  onChange={(value) => update(character.id, { skillSlug: value || undefined })}
+                  onChange={(value) => {
+                    update(character.id, { skillSlug: value || undefined });
+                  }}
                   options={styles.map((style) => style.slug)}
                   placeholder="不指定（使用风格标签）"
                   value={character.skillSlug ?? ""}
@@ -395,12 +415,12 @@ export function CharacterDesigner({
                   </span>
                   <SelectMenu
                     className="border-border! bg-subtle! text-sm"
-                    onChange={(value) =>
+                    onChange={(value) => {
                       update(character.id, {
                         loraName: value || undefined,
                         ...(value ? {} : { loraStrength: undefined }),
-                      })
-                    }
+                      });
+                    }}
                     options={loraFiles}
                     placeholder={lorasLoading ? "加载中…" : "不绑定（用工作流图内配置）"}
                     value={character.loraName ?? ""}
@@ -412,13 +432,11 @@ export function CharacterDesigner({
                     <Input
                       disabled={!character.loraName}
                       inputMode="decimal"
-                      onChange={numberHandler(
-                        (v) =>
-                          update(character.id, {
-                            loraStrength: clamp(v, 0, 2),
-                          }),
-                        1,
-                      )}
+                      onChange={numberHandler((v) => {
+                        update(character.id, {
+                          loraStrength: clamp(v, 0, 2),
+                        });
+                      }, 1)}
                       value={
                         character.loraStrength === undefined ? "1" : String(character.loraStrength)
                       }

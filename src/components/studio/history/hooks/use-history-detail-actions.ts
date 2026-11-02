@@ -93,9 +93,9 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
             path: result.absolutePath ?? "",
             helperMissing: false,
           });
-          const helper = detectFolderHelper(() =>
-            setFolderPopover((prev) => (prev ? { ...prev, helperMissing: false } : prev)),
-          );
+          const helper = detectFolderHelper(() => {
+            setFolderPopover((prev) => (prev ? { ...prev, helperMissing: false } : prev));
+          });
           window.location.href = result.comfyappUrl;
           const state = await helper.settle();
           if (state === "missing") {
@@ -162,7 +162,9 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
     [deps, report, downloadAction],
   );
 
-  const dismissFolderPopover = useCallback(() => setFolderPopover(null), []);
+  const dismissFolderPopover = useCallback(() => {
+    setFolderPopover(null);
+  }, []);
 
   return {
     folderPopover,

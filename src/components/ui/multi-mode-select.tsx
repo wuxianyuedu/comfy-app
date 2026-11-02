@@ -218,7 +218,9 @@ export function MultiModeSelect({
         {plusN > 0 && !hideExtraBadge && (
           <Button
             className="text-ink-faint bg-primary-500/10 hover:bg-primary-500/20 hover:text-primary-strong text-2xs h-auto rounded-md px-1.5 py-0.5 font-medium"
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              setOpen(true);
+            }}
             title={`还有 ${plusN} 种其他模式，点击管理`}
             variant="ghost"
           >
@@ -263,7 +265,9 @@ export function MultiModeSelect({
                       : "text-ink-muted hover:text-ink-strong"
                   }`}
                   key={cat}
-                  onClick={() => setActiveTab(cat)}
+                  onClick={() => {
+                    setActiveTab(cat);
+                  }}
                   variant="ghost"
                 >
                   {CATEGORY_LABEL[cat]}
@@ -310,8 +314,12 @@ export function MultiModeSelect({
                    * 键判据走 `simpleKeyHandler`（§16.2.4.57 的唯一出口：归一
                    * 键名 + `preventDefault` 显式），不在这里手写第二份
                    * `event.key === " "` —— 那正是这条账要消除的形态。 */
-                  onClick={() => toggle(item.code)}
-                  {...simpleKeyHandler(["Space", "Enter"], () => toggle(item.code))}
+                  onClick={() => {
+                    toggle(item.code);
+                  }}
+                  {...simpleKeyHandler(["Space", "Enter"], () => {
+                    toggle(item.code);
+                  })}
                   aria-checked={isSelected}
                   role="checkbox"
                   tabIndex={0}
@@ -369,7 +377,9 @@ export function MultiModeSelect({
         <div className="border-border-subtle flex items-center gap-2 border-t p-2">
           <Button
             className="h-auto flex-1 rounded-md px-3 py-1.5 text-sm"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+            }}
             variant="secondary"
           >
             取消

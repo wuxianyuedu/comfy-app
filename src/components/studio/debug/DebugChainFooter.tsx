@@ -109,7 +109,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
       setCopyFailed(false);
       copyOutcome.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
 
   /* 弹窗内容只在 openFile 非空时渲染；提起为局部常量让内部的类型收窄
@@ -181,7 +183,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
           <Hint key={module.file} label={`${module.file}（点击查看源码）`}>
             <Button
               className="h-auto gap-0 px-0 font-normal hover:bg-transparent"
-              onClick={(event) => pillClick(event, module)}
+              onClick={(event) => {
+                pillClick(event, module);
+              }}
               style={PILL_STYLE}
               variant="ghost"
             >
@@ -199,9 +203,15 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
           `stopPropagation` / `preventDefault` **守卫**，不是交互。 */}
       {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- 三个都是守卫，不是交互 */}
       <div
-        onDragStart={(event) => event.preventDefault()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
+        onDragStart={(event) => {
+          event.preventDefault();
+        }}
+        onMouseDown={(event) => {
+          event.stopPropagation();
+        }}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
         style={{
           display: "flex",
           flexDirection: "column",
@@ -215,12 +225,21 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
         {renderGroup("节点级", nodeModules)}
       </div>
 
-      <Dialog onOpenChange={(next) => !next && closeModal()} open={openFile !== null}>
+      <Dialog
+        onOpenChange={(next) => {
+          if (!next) closeModal();
+        }}
+        open={openFile !== null}
+      >
         <DialogContent
           className="border-border-strong bg-panel w-[min(860px,92vw)] gap-0 p-0"
-          onMouseDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
           // 调试弹窗挂在 ReactFlow 节点内，需阻断指针事件冒泡以免触发节点拖拽。
-          onPointerDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
           popupClassName={`flex ${OVERLAY_MAX_HEIGHT} flex-col overflow-hidden rounded-2xl`}
           showCloseButton={false}
         >
@@ -245,7 +264,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
                 <Button
                   className="h-auto rounded-md px-2.5 py-1"
                   disabled={!source}
-                  onClick={() => source && openInVscode(source.absolutePath)}
+                  onClick={() => {
+                    if (source) openInVscode(source.absolutePath);
+                  }}
                   size="xs"
                   variant="info"
                 >
@@ -259,7 +280,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
                       ? "border-destructive/40 text-danger-strong"
                       : "border-border-strong bg-subtle text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
                   }`}
-                  onClick={() => onCopyText(viewedFile)}
+                  onClick={() => {
+                    onCopyText(viewedFile);
+                  }}
                   size="xs"
                   variant="outline"
                 >
@@ -270,7 +293,9 @@ export function DebugChainFooter({ modules }: { modules: Array<RenderChainModule
                 <Button
                   className="h-auto rounded-md px-2.5 py-1"
                   disabled={!source}
-                  onClick={() => source && onCopyText(source.content)}
+                  onClick={() => {
+                    if (source) onCopyText(source.content);
+                  }}
                   size="xs"
                   variant="warning"
                 >

@@ -61,7 +61,9 @@ export function FilmStudioShotListPanel({
             >
               <Button
                 className="group flex h-auto min-w-0 flex-1 items-center gap-3 rounded-xl p-2.5 text-left font-normal"
-                onClick={() => onSelectShot(shot.id)}
+                onClick={() => {
+                  onSelectShot(shot.id);
+                }}
                 variant="ghost"
               >
                 {/* Thumbnail：项目镜头有产出图则显缩略图，否则占位 */}
@@ -110,7 +112,9 @@ export function FilmStudioShotListPanel({
                   <Hint accessibleName label="AI 评审这一镜（不合格可抽卡 / 改提示词重生成）">
                     <Button
                       className="text-ink-soft hover:bg-primary/15 shrink-0"
-                      onClick={() => onReviewShot(shot)}
+                      onClick={() => {
+                        onReviewShot(shot);
+                      }}
                       size="icon-xs"
                       variant="ghost"
                     >

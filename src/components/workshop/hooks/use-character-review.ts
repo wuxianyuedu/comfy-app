@@ -29,7 +29,9 @@ export function useCharacterReview(projectId: string): CharacterReviewController
   const guardRef = useRef<StaleRunGuard>(beginStaleRun());
   useEffect(() => {
     const guard = guardRef.current;
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, []);
 
   const review = useCallback(
@@ -44,7 +46,9 @@ export function useCharacterReview(projectId: string): CharacterReviewController
       await reviewBusy.run(async () => {
         try {
           const v = await reviewCharacter(projectId, characterId);
-          guard.commit(() => setVerdict(v));
+          guard.commit(() => {
+            setVerdict(v);
+          });
         } catch (error_) {
           guard.commit(() => {
             setVerdict(null);
