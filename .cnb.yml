@@ -2336,8 +2336,10 @@
   # ── GitHub 判决回读：主列末尾的**读数档**（ISSUE #3051 期望第 3 条的前半步）──
   #
   # 它回答一个问题：镜像格（主列开头那一格 `GitHub 镜像同步`）派发出去的那一笔
-  # head_sha，GitHub Actions 那边跑完了没有、各 check 的结论是什么。轮询的是
-  # `GET /repos/{owner}/{repo}/commits/{sha}/check-runs`，sha 的推导与镜像格同源
+  # head_sha，GitHub Actions 那边跑完了没有、结论是什么。**主路径**轮询
+  # `GET /repos/{owner}/{repo}/actions/runs?head_sha=<sha>` 按 workflow run 的
+  # `conclusion` 判定；主路径读不到任何 run（Actions 权限缺 / head_sha 无匹配）时
+  # **回落** `GET .../commits/{sha}/check-runs`。sha 的推导与镜像格同源
   # （同一笔 `CNB_PULL_REQUEST_IID` → 同一镜像 ref → 同一 head_sha）。
   #
   # 为什么排在**主列末尾**：镜像格一跑完 GitHub 那边才起跑，回读放得越靠后，
@@ -2350,9 +2352,9 @@
   # 与摘镜像格的 `--readout` 同属 #3051 期望第 3 条，是另一批。
   #
   # ⚠️ 两件外部前提不落地，这一格永远只能交「没跑起来」（话术在脚本里会点名）：
-  #   ① `GITHUB_MIRROR_TOKEN`（fine-grained PAT）追加 `checks: read`（只读）权限，
-  #      并把新值同步进密钥仓库 `moon-read/GITHUB_MIRROR_TOKEN`（本流水线从那里
-  #      imports）；
+  #   ① `GITHUB_MIRROR_TOKEN`（fine-grained PAT）追加 `actions: read`（优先，主路径）
+  #      或 `checks: read`（兜底）—— 任一即可、两条都给最稳，并把新值同步进密钥
+  #      仓库 `moon-read/GITHUB_MIRROR_TOKEN`（本流水线从那里 imports）；
   #   ② 自托管节点到 `api.github.com:443` 的出网（与镜像格同一条 egress，它通这一格
   #      才有意义）。
   - name: GitHub 判决回读

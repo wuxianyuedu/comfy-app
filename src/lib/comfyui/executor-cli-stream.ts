@@ -119,8 +119,8 @@ export function extractEnvelopeValidationErrors(
 /** envelope 里错误消息的取值：message → hint → 兜底文案。 */
 export function envelopeErrorMessage(env: unknown): string {
   const err =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     env != null && typeof env === "object" ? (env as JsonRecord).error : undefined;
   const str = (o: unknown, key: string): string | undefined => {
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
@@ -160,8 +160,8 @@ export function translateWorkflowUnknownNodesError(env: unknown): string | null 
   /* SAFETY: 类型断言已复核 */
   const details = (err as JsonRecord).details;
   const list =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     details != null && typeof details === "object" ? (details as JsonRecord).errors : undefined;
   if (Array.isArray(list) && list.length > 0) {
     const lines = list.slice(0, 12).map((raw) => {
@@ -564,12 +564,12 @@ export function createCliFinisher(deps: CliFinisherDeps): CliFinisher {
         // 一句「Workflow has N validation error(s)」。
         const rawMsg = msg;
         const err =
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           env != null && typeof env === "object" ? (env as JsonRecord).error : undefined;
         const errCode =
-          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           err != null && typeof err === "object" ? (err as JsonRecord).code : undefined;
         if (/validation error/i.test(rawMsg) || errCode === "prompt_rejected") {
           try {
