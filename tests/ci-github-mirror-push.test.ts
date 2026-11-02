@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   CODE,
   DEFAULT_REPO,
+  MASTER_REF,
   PUSH_TIMEOUT_MS,
   REMOTE_PROBE_TIMEOUT_MS,
   buildPushUrl,
@@ -18,6 +19,8 @@ import {
   mirrorRefFor,
   pushArgs,
   resolveContext,
+  resolveMasterContext,
+  runMasterMirror,
   runMirror,
   sanitize,
 } from "../scripts/ci-github-mirror-push.mjs";
@@ -358,5 +361,139 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(calls).toHaveLength(0);
     expect(heard.join("\n")).toContain("DRY-RUN");
     expect(heard.join("\n")).toContain("cnb-pr-2649");
+  });
+});
+
+describe("resolveMasterContext（push 档：没有 IID，ref 恒为 master）", () => {
+  it("令牌缺席 ⇒ 不通过，并点名缺什么", () => {
+    const got = resolveMasterContext({ env: {}, runGit: gitOk });
+    expect(got.ok).toBe(false);
+    if (!got.ok) {
+      expect(got.reasons.join("\n")).toContain("GITHUB_MIRROR_TOKEN");
+    }
+  });
+
+  it("HEAD 取不到 ⇒ 不通过", () => {
+    const got = resolveMasterContext({
+      env: { GITHUB_MIRROR_TOKEN: TOKEN },
+      runGit: () => ({ code: 128, stderr: "not a repo", stdout: "" }),
+    });
+    expect(got.ok).toBe(false);
+  });
+
+  it("齐了 ⇒ ok：ref 恒为 master（不读 IID），repo 可被 GITHUB_MIRROR_REPO 覆盖", () => {
+    const got = resolveMasterContext({ env: { GITHUB_MIRROR_TOKEN: TOKEN }, runGit: gitOk });
+    expect(got).toMatchObject({ headSha: SHA, ok: true, ref: MASTER_REF, repo: DEFAULT_REPO });
+    const overridden = resolveMasterContext({
+      env: { GITHUB_MIRROR_REPO: "other/repo", GITHUB_MIRROR_TOKEN: TOKEN },
+      runGit: gitOk,
+    });
+    expect(overridden).toMatchObject({ ok: true, repo: "other/repo" });
+  });
+});
+
+describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
+  /** 与 runMirror 那套同形的假件；这一支根本没有 fetch 面（不派发是签名级的）。 */
+  function harness(
+    opts: {
+      env?: Record<string, string | undefined>;
+      probeCode?: number;
+      probeStderr?: string;
+      probeStdout?: string;
+      pushCode?: number;
+      pushStderr?: string;
+    } = {},
+  ) {
+    const pushes: Array<Array<string>> = [];
+    const heard: Array<string> = [];
+    const runGit = (args: Array<string>) => {
+      if (args[0] === "ls-remote") {
+        return {
+          code: opts.probeCode ?? 0,
+          stdout: opts.probeStdout ?? `${REMOTE_REF}\n`,
+          stderr: opts.probeStderr ?? "",
+        };
+      }
+      if (args.includes("push")) {
+        pushes.push(args);
+        if ((opts.pushCode ?? 0) !== 0) {
+          return {
+            code: opts.pushCode ?? 1,
+            stdout: "",
+            stderr: opts.pushStderr ?? `remote: rejected (token ${TOKEN})`,
+          };
+        }
+        return { code: 0, stdout: "", stderr: "" };
+      }
+      return gitOk(args);
+    };
+    const io = {
+      env: opts.env ?? { GITHUB_MIRROR_TOKEN: TOKEN },
+      log: (line: string) => heard.push(line),
+      runGit,
+    };
+    return { heard, io, pushes };
+  }
+
+  it("推成 ⇒ 退 0；--force 打到 refs/heads/master，且日志里没有任何「已派发」", async () => {
+    const { heard, io, pushes } = harness();
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.OK);
+    expect(pushes[0]?.[0]).toBe("-c");
+    expect(pushes[0]?.[1]).toBe("core.hooksPath=");
+    expect(pushes[0]).toContain("--force");
+    expect(pushes[0]).toContain(`HEAD:refs/heads/${MASTER_REF}`);
+    expect(pushes[0]).toContain(buildPushUrl(DEFAULT_REPO, TOKEN));
+    expect(heard.some((l) => l.includes("已推") && l.includes(MASTER_REF))).toBe(true);
+    /* schedule 那一族（daily / package-desktop）跑默认分支，推完即就位 ——
+     * 多一句「已派发」就是冒充 PR 那一格的出勤（check-mirror-attendance 只认 [mirror]）。 */
+    expect(heard.join("\n")).not.toContain("已派发");
+    expect(heard.every((l) => l.startsWith("[mirror-master]"))).toBe(true);
+  });
+
+  it("推送前那一读失败 ⇒ 退 2，一次推都不发", async () => {
+    const { heard, io, pushes } = harness({
+      probeCode: 128,
+      probeStderr: "remote: Repository not found.\nfatal: Authentication failed",
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.NO_FACT);
+    expect(pushes).toHaveLength(0);
+    expect(heard.join("\n")).toContain("先去建仓库");
+  });
+
+  it("目标仓库是空的（零条 ref）⇒ 照样推，读成「空仓库」而不是失败", async () => {
+    const { heard, io, pushes } = harness({ probeStdout: "" });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.OK);
+    expect(pushes).toHaveLength(1);
+    expect(heard.join("\n")).toContain("目标仓库是空的");
+  });
+
+  it("推送失败 ⇒ 退 1；硬规则 17：回显里不许出现令牌原值", async () => {
+    const { heard, io } = harness({ pushCode: 128 });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    const all = heard.join("\n");
+    expect(all).toContain("推送失败");
+    expect(all).not.toContain(TOKEN);
+    expect(all).toContain("***");
+  });
+
+  it("令牌缺席 ⇒ 退 2，git 一次都不碰", async () => {
+    const { heard, io, pushes } = harness({ env: {} });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.NO_FACT);
+    expect(pushes).toHaveLength(0);
+    expect(heard.join("\n")).toContain("GITHUB_MIRROR_TOKEN");
+  });
+
+  it("dry-run ⇒ 退 0，计划打出来，但一次推送都不发", async () => {
+    const { heard, io, pushes } = harness();
+    const code = await runMasterMirror({ ...io, dryRun: true });
+    expect(code).toBe(CODE.OK);
+    expect(pushes).toHaveLength(0);
+    expect(heard.join("\n")).toContain("DRY-RUN");
+    expect(heard.join("\n")).toContain(MASTER_REF);
   });
 });
