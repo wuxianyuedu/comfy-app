@@ -97,6 +97,7 @@ import process from "node:process";
 
 import { CHANGED_SCOPED, readHookSteps, runGate } from "./base-check/hook-steps.mjs";
 import { resolveBaseRef, resolveChangedFiles } from "./changed-scope.mjs";
+import { syntheticMergeRange } from "./reformat-preview-range.mjs";
 import { faceTouched, narrowingEntryForScript } from "./ci-incremental-gates.mjs";
 import {
   COLORS,
@@ -210,9 +211,21 @@ export function fullTreeArgv(argv) {
  * 同一个问题收口在判据那一侧（它自己按合成提交的父关系取区间），那条判据因此退出了
  * `CHANGED_SCOPED`。**不留一张只为一条目的存在的表** —— 再出现同族时按那张单子的口径重立。
  *
+ * ⚠️ **但「退出 CHANGED_SCOPED」不等于「在平台上判得对」**（ISSUE #3048，PR #2990 的
+ * `cnb-o9p-1k6d5ohhj` 现场）：那一支走下来，这一档只剥 `--staged`、**不给任何判决面**，
+ * 而平台侧没有暂存区 ⇒ 判据回落到「判 HEAD 这一次提交」，那里的 `HEAD` 是**检出**而不是
+ * 平台合成的合并预览 —— `HEAD~1..HEAD` 于是只含检出自己的最后一笔，读数是
+ * `170 个源文件里 118 个纯格式化`（那 118 份散在 27 笔里，没有一笔独占）。
+ * 判据本体是对的，错的是**没人把判决面递给它**。
+ * ⇒ 合成提交的形态这一档自己看得见（`HEAD` 的父提交 + `CNB_COMMIT`），递过去的判决面
+ *    就是那两个父：`--range <第一父>..<第一父名下的那个 sha>`（见 `syntheticMergeRange()`）。
+ *    认不出合成提交 / 父关系对不上 ⇒ 这一条**没判**（`notRunCodes` 收 2，单列退 2，
+ *    不计入「绿」）—— 不给判决面就等于恒绿，那是本仓最贵的形态。
+ *
  * @param {string[]} argv 钩子那一步的命令
  * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
- * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]} | {ok: false, reason: string}}
+ * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]}
+ *   | {ok: false, reason: string, notRunCodes?: number[]}}
  */
 export function heavyGateArgv(argv, deps) {
   const joined = argv.join(" ");
@@ -228,6 +241,26 @@ export function heavyGateArgv(argv, deps) {
       argv: argv.map((a) => (a === "--staged" ? "--changed" : a)),
       via: "改动面（printWidth 迁移期：全库档对存量恒红，#2710）",
       notRunCodes: [],
+    };
+  }
+  /* ⚠️ `check-reformat-only.cjs` 的 `--staged` 在这一档**换发成它唯一的另一个判决面**
+   * （`--range <起>..<止>`，ISSUE #3048）：剥掉旗标之后它回落到「判 HEAD 这一次提交」，
+   * 而平台侧没有暂存区、又没有合并预览的父关系 ⇒ `HEAD~1..HEAD` 只是**检出**的最后一笔，
+   * 读数（`170 个源文件里 118 个纯格式化`）与「这个 PR 是什么」毫无关系。
+   * 区间两端取合成提交的两个父（`syntheticMergeRange()`）—— 不给面就**不许**跑，
+   * 那是「剥旗标判全仓」这个默认口径唯一的例外。 */
+  if (joined.includes("check-reformat-only.cjs") && argv.includes("--staged")) {
+    const face = syntheticMergeRange({ cwd: deps?.cwd, env: deps?.env });
+    if (!face.ok) {
+      /* `notRunCodes` 收 2：那一条判据自己用 2 表示「拿不到判决面」。两个码都归「没判」，
+       * 于是它不会被读成「判红」（§13.5.25 的三态口径）。 */
+      return { ok: false, reason: face.reason, notRunCodes: [2, 127] };
+    }
+    return {
+      ok: true,
+      argv: [...fullTreeArgv(argv), "--range", face.range],
+      via: `以合并预览的两个父为判决面（${face.range}）`,
+      notRunCodes: [2],
     };
   }
   if (!CHANGED_SCOPED.some((p) => joined.includes(p))) {
@@ -325,7 +358,7 @@ export function narrowingDecision(step, changed) {
  * 跑完整张注册表。
  *
  * @param {{cwd?: string, only?: string | null, env?: Record<string, string | undefined>, changedFiles?: {files: readonly string[]} | null}} [io]
- * @returns {{runs: {label: string, code: number, output: string, ms: number, notRunCodes: number[], noJudgement?: boolean}[], skipped: {label: string, stage: string, globs: readonly string[]}[], notJudged: {label: string, reason: string}[], unreadable: boolean}}
+ * @returns {{runs: {label: string, code: number, output: string, ms: number, notRunCodes: number[], noJudgement?: boolean}[], skipped: {label: string, stage: string, globs: readonly string[]}[], notJudged: {label: string, reason: string, notRunCodes?: number[]}[], unreadable: boolean}}
  *   `unreadable` = 注册表本身没读出来（钩子文件不在 / 解析零条）—— 那是
  *   「本档不构成证据」，不是「没有档要跑」。
  *   `notJudged` = **没有判决面**的那些步骤（它们在这一档恒绿且无声）——
@@ -354,7 +387,7 @@ export function runHeavyGates(io = {}) {
   const runs = [];
   /** @type {{label: string, stage: string, globs: readonly string[]}[]} */
   const skipped = [];
-  /** @type {{label: string, reason: string}[]} */
+  /** @type {{label: string, reason: string, notRunCodes?: number[]}[]} */
   const notJudged = [];
   for (const step of steps) {
     /* 按面跳过（ISSUE #2255）：面取自收窄登记表，与平台那一格同一份 glob。 */
@@ -374,7 +407,12 @@ export function runHeavyGates(io = {}) {
     }
     const resolved = heavyGateArgv(step.argv, { cwd, env: io.env });
     if (!resolved.ok) {
-      notJudged.push({ label: step.label, reason: resolved.reason });
+      notJudged.push({
+        label: step.label,
+        reason: resolved.reason,
+        /* 判据自己的「2 = 拿不到判决面」码也归这一档（见 `main()`）。 */
+        notRunCodes: resolved.notRunCodes ?? [],
+      });
       continue;
     }
     const started = Date.now();
@@ -674,6 +712,7 @@ export function main(io = {}) {
           notJudged: notJudged.map((n) => ({
             label: n.label,
             reason: n.reason,
+            notRunCodes: n.notRunCodes ?? [],
           })),
           /* 「按面未触及」那一档（ISSUE #2255）：跳过**不是**判过 ⇒ 单独列出来，
            * 不许混进「绿」里冒充「跑过」。 */

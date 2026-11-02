@@ -38,6 +38,7 @@ import {
   main,
   narrowingDecision,
 } from "../scripts/ci-heavy-gates.mjs";
+import { syntheticMergeRange } from "../scripts/reformat-preview-range.mjs";
 import {
   faceTouched,
   INCREMENTAL_GATES,
@@ -399,28 +400,39 @@ describe("复合档 —— 形态档的判决面（ISSUE #2265）", () => {
   });
 
   /**
-   * `check-reformat-only.cjs` **不在**这一族（ISSUE #3035）。
+   * `check-reformat-only.cjs` **不在 `CHANGED_SCOPED`**，但它也不是「剥旗标判全仓」
+   * 那一条（ISSUE #3035 / #3048）。
    *
-   * 它在平台上的判决面由判据自己换（`headRangeEnds()` 走合成提交的父关系），
-   * 而复合档这一侧的换发只有 `--base <ref>` 一种形态 —— 把它登记进来，落到的
-   * 就是「剥掉 `--staged` ⇒ 判 `HEAD~1..HEAD`」或「换发一条它不认的旗标」两支，
-   * 两支都判不准（#3032 那条 `--range <基线>..HEAD` 在平台上连红三轮：
-   * 平台拼法不保证本分支在第一父，区间整段跨过主干）。
+   * 它只认两种判决面：暂存区，或显式 `--range`。剥掉 `--staged` 之后它回落到
+   * 「判 `HEAD~1..HEAD`」，而**平台侧转的是检出、不是合并预览** —— 那个区间只含检出
+   * 自己的最后一笔（现场 `cnb-o9p-1k6d5ohhj`：`170 个源文件里 118 个纯格式化`，
+   * 而那 118 份散在 27 笔里、没有一笔独占）。
    *
-   * 反向验证：它若被重新登记，这一条当场红 —— 而红的时候下一动作不是改这里，
-   * 是先想清楚「平台那一跑的 HEAD 到底是谁的第一父」。
+   * ⇒ 它的换发是**自己那一支**（`syntheticMergeRange()`）：区间两端取合成提交的两个父。
+   * 认不出合成提交 ⇒ 这一条**没判**（不许给一个与本次改动无关的面，那等于恒绿）。
+   *
+   * 反向验证：把这一支删掉，下面那句 `--range` 当场红。
    */
-  it("`check-reformat-only.cjs` 不再登记（它的判决面在判据那一侧，ISSUE #3035）", () => {
+  it("`check-reformat-only.cjs` 换发成合并预览的两个父，认不出就不许跑（#3048）", () => {
     expect(CHANGED_SCOPED).not.toContain("scripts/check-reformat-only.cjs");
+    /* 三条形态各判一次，一条都不许落回「剥旗标 ⇒ 判 HEAD~1..HEAD」：
+     *   ① 认得出合成提交 ⇒ `--range <另一父>..<HEAD>`
+     *   ② 没有 CNB_COMMIT / HEAD 不是合并提交 ⇒ `ok: false`（没判，不是绿） */
+    const mergeRange = syntheticMergeRange({
+      cwd: process.cwd(),
+      env: { CNB_COMMIT: "1111111111111111111111111111111111111111" },
+    });
+    expect(mergeRange.ok).toBe(false);
     const got = heavyGateArgv(["node", "scripts/check-reformat-only.cjs", "--staged"], {
       env: { CNB_PULL_REQUEST_TARGET_SHA: "abc123" },
     });
-    expect(got.ok).toBe(true);
-    if (!got.ok) {
+    expect(got.ok).toBe(false);
+    if (got.ok) {
       return;
     }
-    /* 剥旗标那一档：判据自己认得平台合并预览，不许在这里再换一副旗标给它。 */
-    expect(got.argv).toEqual(["node", "scripts/check-reformat-only.cjs"]);
+    expect(got.reason).toContain("判决面");
+    /* 「没判」的两个退出码都在这条上：判据自己的 2 与命令找不到的 127。 */
+    expect(got.notRunCodes).toEqual(expect.arrayContaining([2, 127]));
   });
 
   it("绿步一个字都不打 ⇒ 那一格**没判**（退 2，不许计入绿）", () => {
