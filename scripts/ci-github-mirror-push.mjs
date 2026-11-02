@@ -285,7 +285,9 @@ export function resolveMasterContext(io) {
   const reasons = [];
   const token = env.GITHUB_MIRROR_TOKEN ?? "";
   if (!token.trim()) {
-    reasons.push("`GITHUB_MIRROR_TOKEN` 未配置（push 流水线经 imports 注入；本地自查用 --dry-run）");
+    reasons.push(
+      "`GITHUB_MIRROR_TOKEN` 未配置（push 流水线经 imports 注入；本地自查用 --dry-run）",
+    );
   }
   const headSha = runGit(["rev-parse", "HEAD"]);
   if (headSha.code !== 0 || !/^[0-9a-f]{40}$/i.test(headSha.stdout.trim())) {
@@ -486,7 +488,11 @@ export function explainRemoteProbeFailure(text) {
  */
 export async function runMirror(io) {
   const { dryRun = false, env } = io;
-  const log = io.log ?? ((line) => console.log(line));
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
   const fetchImpl = io.fetchImpl ?? fetch;
   const runGit = io.runGit ?? realRunGit;
   const sleep = io.sleep ?? realSleep;
@@ -542,7 +548,9 @@ export async function runMirror(io) {
         log(`[mirror]   ${line}`);
       }
     }
-    log("[mirror] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）");
+    log(
+      "[mirror] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）",
+    );
     return CODE.NO_FACT;
   }
   /* 推送同样只对 egress 类失败重试一次（PUSH_MAX_ATTEMPTS）；认证 / 权限类一次就交账。 */
@@ -603,7 +611,11 @@ export async function runMirror(io) {
  */
 export async function runMasterMirror(io) {
   const { dryRun = false, env } = io;
-  const log = io.log ?? ((line) => console.log(line));
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
   const runGit = io.runGit ?? realRunGit;
   const sleep = io.sleep ?? realSleep;
   const ctx = resolveMasterContext({ env, runGit });
@@ -644,7 +656,9 @@ export async function runMasterMirror(io) {
         log(`[mirror-master]   ${line}`);
       }
     }
-    log("[mirror-master] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）");
+    log(
+      "[mirror-master] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）",
+    );
     return CODE.NO_FACT;
   }
   /* 与 PR 模式同一套：egress 类失败重试一次，认证 / 权限类一次就交账。 */

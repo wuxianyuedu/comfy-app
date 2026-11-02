@@ -175,7 +175,9 @@ export function runInstallWithBudget(io) {
         /* 子进程可能已经没了：杀不掉不影响结论，结论来自「预算用尽」这件事本身。 */
       }
       /* 杀不掉也要收场：`unref` 之后父进程不必等它（它的 stdout 已经不进我们的判断）。 */
-      setTimeout(() => finish({ code: UNDECIDED_EXIT, error: null }), 1000);
+      setTimeout(() => {
+        finish({ code: UNDECIDED_EXIT, error: null });
+      }, 1000);
     }, budgetMs);
     /* 定时器不该独自把宿主吊在这里：真正的收场由 close / 预算那支决定。 */
     if (typeof timer.unref === "function") {

@@ -609,7 +609,9 @@ export function main(io = {}) {
    * @param {string} line
    * @param {string} [color] 只给合计那一行用（它自己不带三态前缀）
    */
-  const log = (line, color) => writeLine(paintLine(line, { enabled: paintOn, color }));
+  const log = (line, color) => {
+    writeLine(paintLine(line, { enabled: paintOn, color }));
+  };
   const onlyArg = argv.find((a) => a.startsWith("--only="));
   const only = onlyArg ? onlyArg.slice("--only=".length) : null;
   const cwd = io.cwd ?? ROOT;
@@ -740,7 +742,9 @@ export function main(io = {}) {
      * 现在每条判决都过 `gatePass` / `gateSkip` / `gateFail`，三态用同一列前缀，
      * 而「没判」的那一档有自己的名字。 */
     /** @param {string} line */
-    const say = (line) => log(line);
+    const say = (line) => {
+      log(line);
+    };
     for (const s of skipped) {
       gateSkip(s.label, `按面未触及：面 ${s.globs.join(" / ")}（平台那一格：${s.stage}）`, {
         out: say,

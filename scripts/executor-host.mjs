@@ -397,7 +397,9 @@ let claimHandle = null;
 if (runtimeMode) {
   claimHandle = setInterval(() => {
     claimTickOnce().catch((error) => {
-      writeLine(`claim-tick 异常（下轮重试）：${error instanceof Error ? error.message : String(error)}`);
+      writeLine(
+        `claim-tick 异常（下轮重试）：${error instanceof Error ? error.message : String(error)}`,
+      );
     });
   }, CLAIM_TICK_MS);
 }
@@ -416,5 +418,9 @@ function shutdown(sig) {
   process.exit(0);
 }
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM");
+});
+process.on("SIGINT", () => {
+  shutdown("SIGINT");
+});

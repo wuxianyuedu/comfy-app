@@ -73,5 +73,5 @@ export const config = {
    * `proxy()` 里的判据一次都不会执行，而且不报错。
    * `/generated` 不带斜杠那条也要匹配：它会解析成产物根目录本身，交给 route 回 404，
    * 而不是在这里替它决定。 */
-  matcher: ["/((?!_next|.*\\..*).*)", "/generated", "/generated/:path*"],
+  matcher: [String.raw`/((?!_next|.*\..*).*)`, "/generated", "/generated/:path*"],
 };

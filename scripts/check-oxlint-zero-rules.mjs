@@ -43,6 +43,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 import awesomeness from "oxlint-config-awesomeness";
@@ -153,21 +154,63 @@ function buildRulesObject() {
 }
 
 /**
+ * ZERO_RULES 里挂在 oxlint **非内建** namespace 下的规则需要的 ESLint 插件包。
+ * `eslint` / `typescript` / `unicorn` / `react` / `import` 是 oxlint 内建 namespace，
+ * 不需要 jsPlugins；`perfectionist` 是 ESLint 插件，必须显式挂上（否则探针配置
+ * 解析都不通过 —— `Plugin 'perfectionist' not found`）。
+ */
+const NON_NATIVE_PLUGINS = [{ prefix: "perfectionist", pkg: "eslint-plugin-perfectionist" }];
+
+/**
+ * 解析探针需要的 jsPlugins，返回写进配置的那几行（不需要时是空串）。
+ *
+ * specifier 写**绝对路径**：oxlint 按「配置文件位置」向上找 `node_modules` 来解析
+ * npm 包名形态，而 pnpm 隔离布局下这些插件只存在于 `.pnpm` 子级 —— 顶层没有链接，
+ * 从任何配置位置都够不到（实测包名形态恒 `Cannot find module`）。解析基准取
+ * `oxlint-config-awesomeness` 的真身位置：它是这些插件的直接依赖（预设自己的
+ * `jsPlugins` 也在用它们），从它所在的那层 `node_modules` resolve 恰好可达。
+ * 解析不到就不写那一行 —— 让 oxlint 自己把「插件缺失」报出来（退 2 的形态），
+ * 不在这里编一个静默降级。
+ */
+function jsPluginsLines() {
+  const presetPkg = createRequire(import.meta.url).resolve(
+    "oxlint-config-awesomeness/package.json",
+  );
+  const req = createRequire(presetPkg);
+  const entries = [];
+  for (const { prefix, pkg } of NON_NATIVE_PLUGINS) {
+    if (!ZERO_RULES.some(({ rule }) => rule.startsWith(`${prefix}/`))) continue;
+    const abs = req.resolve(pkg).replaceAll("\\", "/");
+    entries.push(`{ name: ${JSON.stringify(prefix)}, specifier: ${JSON.stringify(abs)} }`);
+  }
+  if (entries.length === 0) return "";
+  return `  jsPlugins: [${entries.join(", ")}],\n`;
+}
+
+/**
  * 探针配置每次运行现生成。落点是 `node_modules/.cache/`：gitignored、且 oxlint
- * 默认不扫 node_modules（放仓库根会被当成待扫源码）；extends 直接 import 预设对象，
- * 与仓级 `oxlint.config.ts` 同一份预设，预设升级时两边一起变。
+ * 默认不扫 node_modules（放仓库根会被当成待扫源码）。
+ *
+ * ⚠️ 探针**不 extends 预设**（判据侧 `toErrorEntry()` 走的是 Node 侧对预设对象的
+ * 读取，与这里无关）：extends 会把预设的整组 `jsPlugins`（`@nkzw/eslint-plugin`
+ * 那一批）拖进来，而它们按**配置文件位置**解析 specifier，pnpm 隔离布局下
+ * 顶层没有链接 ⇒ 从任何配置位置都够不到 ⇒ extends 挂在探针上等于让这一格
+ * **永远停在「配置加载失败」（退 2）**。判据要判的是 ZERO_RULES 那 41 条
+ * 有没有回潮：categories 全关 + 只抬清单内规则已经把预设的其余负载全部关掉了，
+ * extends 在这里不带来任何在场诊断，只带来插件解析这个失败面 —— 等价化简掉；
+ * 清单内**非内建** namespace 的插件由 `jsPluginsLines()` 按绝对路径显式挂上。
  */
 function writeProbeConfig() {
   const cacheDir = path.join(ROOT, "node_modules", ".cache");
   mkdirSync(cacheDir, { recursive: true });
   const configPath = path.join(cacheDir, "oxlint-zero-rules.config.mjs");
   const body = `// 本文件由 scripts/check-oxlint-zero-rules.mjs 每次运行现生成，勿手改。
-import awesomeness from "oxlint-config-awesomeness";
+// 不 extends 预设（jsPlugins 的 specifier 从配置位置解析，pnpm 隔离布局下够不到
+// @nkzw —— 见生成方 check-oxlint-zero-rules.mjs 的 writeProbeConfig 注释）。
 import { defineConfig } from "oxlint";
 
 export default defineConfig({
-  extends: [awesomeness],
-  categories: {
+${jsPluginsLines()}  categories: {
     correctness: "off",
     suspicious: "off",
     perf: "off",

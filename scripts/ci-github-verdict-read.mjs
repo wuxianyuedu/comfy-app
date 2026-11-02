@@ -151,7 +151,9 @@ export function isRetryableRequestFailure(error) {
   const code = String(e?.cause?.code ?? "");
   return (
     isEgressFailure(text) ||
-    /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(text) ||
+    /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(
+      text,
+    ) ||
     /^(ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN)$/i.test(code)
   );
 }
@@ -168,7 +170,9 @@ export function isRetryableRequestFailure(error) {
  */
 async function fetchWithTimeout(fetchImpl, url, token) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CHECK_RUNS_TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, CHECK_RUNS_TIMEOUT_MS);
   try {
     return await fetchImpl(url, {
       headers: {
@@ -181,9 +185,12 @@ async function fetchWithTimeout(fetchImpl, url, token) {
     });
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(`check-runs 读数超时（>${String(CHECK_RUNS_TIMEOUT_MS)} ms）：这一跳没拿到任何回话`, {
-        cause: error,
-      });
+      throw new Error(
+        `check-runs 读数超时（>${String(CHECK_RUNS_TIMEOUT_MS)} ms）：这一跳没拿到任何回话`,
+        {
+          cause: error,
+        },
+      );
     }
     throw error;
   } finally {
@@ -217,7 +224,7 @@ async function requestCheckRuns(io, ctx) {
       if (!isRetryableRequestFailure(error) || attempt === REQUEST_MAX_ATTEMPTS) {
         break;
       }
-      const wait = RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS[RETRY_BACKOFF_MS.length - 1] ?? 5_000;
+      const wait = RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
       log(
         `[verdict] 读数第 ${String(attempt)}/${String(REQUEST_MAX_ATTEMPTS)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt + 1)} 次（网络抖动重试；认证 / 权限类不重试）`,
       );
@@ -258,7 +265,13 @@ export function summarizeCheckRuns(runs) {
       ok.push(`${name}（${conclusion}）`);
     }
   }
-  return { completed: runs.length > 0 && pending.length === 0, failing, ok, pending, total: runs.length };
+  return {
+    completed: runs.length > 0 && pending.length === 0,
+    failing,
+    ok,
+    pending,
+    total: runs.length,
+  };
 }
 
 /**
@@ -269,7 +282,11 @@ export function summarizeCheckRuns(runs) {
  */
 export async function runVerdict(io) {
   const { dryRun = false, env } = io;
-  const log = io.log ?? ((line) => console.log(line));
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
   const fetchImpl = io.fetchImpl ?? fetch;
   const runGit = io.runGit ?? realRunGit;
   const sleep = io.sleep ?? realSleep;
@@ -310,18 +327,18 @@ export async function runVerdict(io) {
         log("[verdict] 结论：exit 2 —— 有一步没跑起来（请求本身被拒，看上面那句）");
         return CODE.NO_FACT;
       }
-      log(`[verdict] 读数没跑起来（egress 类，${String(REQUEST_MAX_ATTEMPTS)} 次都没通）：${res.error}`);
-      log("[verdict] 结论：exit 2 —— 节点到 api.github.com 这一跳没通（出网问题在节点侧），与判据无关");
+      log(
+        `[verdict] 读数没跑起来（egress 类，${String(REQUEST_MAX_ATTEMPTS)} 次都没通）：${res.error}`,
+      );
+      log(
+        "[verdict] 结论：exit 2 —— 节点到 api.github.com 这一跳没通（出网问题在节点侧），与判据无关",
+      );
       return CODE.NO_FACT;
     }
     const summary = summarizeCheckRuns(res.runs);
     if (summary.total === 0) {
       log("[verdict] 这一笔 sha 上还没有任何 check-run（GitHub 侧可能还没起跑）—— 继续等");
-    } else if (!summary.completed) {
-      log(
-        `[verdict] ${String(summary.total)} 个 check：${String(summary.pending.length)} 个还在跑（${summary.pending.join("、")}）—— 继续等`,
-      );
-    } else {
+    } else if (summary.completed) {
       for (const line of summary.ok) {
         log(`[verdict]   ✓ ${line}`);
       }
@@ -338,6 +355,10 @@ export async function runVerdict(io) {
         `[verdict] ✓ 结论：exit 0 —— GitHub 对同一笔 sha 的 ${String(summary.total)} 个 check 全部完成且没有红`,
       );
       return CODE.OK;
+    } else {
+      log(
+        `[verdict] ${String(summary.total)} 个 check：${String(summary.pending.length)} 个还在跑（${summary.pending.join("、")}）—— 继续等`,
+      );
     }
     if (now() >= deadline) {
       log(
