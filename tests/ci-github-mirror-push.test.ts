@@ -11,6 +11,7 @@ import {
   explainRemoteProbeFailure,
   hasRemoteRefs,
   mirrorRefFor,
+  pushArgs,
   resolveContext,
   runMirror,
   sanitize,
@@ -59,6 +60,17 @@ describe("纯函数", () => {
     expect(buildPushUrl(DEFAULT_REPO, TOKEN, "f-win")).toBe(
       `https://f-win:${TOKEN}@github.com/${DEFAULT_REPO}.git`,
     );
+  });
+
+  it("pushArgs：这一次推送不经过本仓的 pre-push（-c core.hooksPath=）", () => {
+    /* 平台侧检出是一棵工作区，`.githooks/pre-push` 会跟着每一次 `git push` 跑 ——
+     * 而它判的是「这条分支要不要合进本仓 master」，对镜像仓库这一推没有对象（文件头第 6 条）。 */
+    const args = pushArgs("https://example.invalid/x.git", "refs/heads/cnb-pr-1");
+    expect(args.slice(0, 2)).toEqual(["-c", "core.hooksPath="]);
+    expect(args[2]).toBe("push");
+    expect(args).toContain("HEAD:refs/heads/cnb-pr-1");
+    /* `-c` 必须排在子命令**之前**，否则它会被 git 当参数吞掉、钩子照跑。 */
+    expect(args.indexOf("-c")).toBeLessThan(args.indexOf("push"));
   });
 
   it("hasRemoteRefs：非空仓库认 refs 行，空仓库零行不算「在」", () => {
@@ -158,7 +170,8 @@ describe("runMirror（git 与 fetch 全假件）", () => {
           stderr: opts.probeStderr ?? "",
         };
       }
-      if (args[0] === "push") {
+      /* 推送那一条现在带 `-c core.hooksPath=`（文件头第 6 条）⇒ 子命令不在第 0 位。 */
+      if (args.includes("push")) {
         pushes.push(args);
         if ((opts.pushCode ?? 0) !== 0) {
           return {
@@ -197,10 +210,11 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     const { io, pushes, calls, heard } = harness();
     const code = await runMirror(io);
     expect(code).toBe(CODE.OK);
-    expect(pushes[0]?.[0]).toBe("push");
+    expect(pushes[0]?.[0]).toBe("-c");
+    expect(pushes[0]?.[1]).toBe("core.hooksPath=");
     expect(pushes[0]).toContain("--force");
-    expect(pushes[0]?.[3]).toBe(`HEAD:refs/heads/cnb-pr-2649`);
-    expect(pushes[0]?.[2]).toBe(buildPushUrl(DEFAULT_REPO, TOKEN));
+    expect(pushes[0]).toContain(`HEAD:refs/heads/cnb-pr-2649`);
+    expect(pushes[0]).toContain(buildPushUrl(DEFAULT_REPO, TOKEN));
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe(`https://api.github.com/repos/${DEFAULT_REPO}/dispatches`);
     const body = JSON.parse(calls[0]?.bodyText ?? "") as {

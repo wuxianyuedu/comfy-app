@@ -133,8 +133,12 @@ export const INPUT_FACES = [
   },
   {
     test: "tests/changed-scope.test.ts",
-    face: ["scripts/changed-scope.mjs", "tests/changed-scope.test.ts"],
-    why: "输入只有被测模块与临时 git 夹具（预置的 diff 形状与环境变量），不读仓库里任何别的文件 —— 「算法被改软」就是这份脚本被改",
+    face: [
+      "scripts/changed-scope.mjs",
+      "tests/changed-scope.test.ts",
+      "tests/helpers/git-sandbox-env.ts",
+    ],
+    why: "输入是被测模块、临时 git 夹具（预置的 diff 形状与环境变量），以及合成提交那一族用的沙箱 git 环境（`gitSandboxEnv()` / `sandboxGitConfig()` —— 继承来的 `GIT_DIR` 会让 `-C <临时仓库>` 静默失效）—— 「算法被改软」就是这份脚本被改",
   },
   {
     test: "tests/a11y-axe-stories.test.ts",

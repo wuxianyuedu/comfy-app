@@ -130,6 +130,9 @@ const LAUNCHER_PATH = "scripts/run-affected-tests.mjs";
  * 出列到这一份 —— 判据按**真实落点**读，机制层不转假出口（转一层的话「搬走了」与
  * 「还能用」长得一样）。启动器那一层留下的仍是判决链。 */
 const SPAWN_LAYER_PATH = "scripts/affected-launch-spawn.mjs";
+/* 显式全量档（`--full`）那一整格出列后的真实落点（ISSUE #3030：那一层已贴住 900 行硬闸，
+ * 整档搬进自己那份文件）—— 判据按**真实落点**读，不要求内容留在启动器里。 */
+const FULL_RUN_PATH = "scripts/affected-launch-full-run.mjs";
 
 /**
  * 把一段代码跑起来期间 `process.stderr` 的写入**收在手里**（随返回值交出 `text`）。
@@ -1179,7 +1182,9 @@ describe("受影响用例的启动器 —— 显式全量档（--full）", () =>
        `runChunk` 走 —— 所以这条形状判据把 `quiet` 也算进同一行里。 */
     /* `exclude` 是同一个 `runChunk` 的第二个入参（停用台账，ISSUE #2948）—— 它也落在
        这一行里，同样不改判决链。 */
-    expect(src).toMatch(
+    /* 这一档的正文住在 `FULL_RUN_PATH`（ISSUE #3030 起）—— 按真实落点读：搬走了与
+     * 「还能用」在旧写法下长得一样，而那正是这条判据要拦的方向。 */
+    expect(readFileSync(FULL_RUN_PATH, "utf8")).toMatch(
       /return await runChunk\(\[\], \{ entry, workers, quiet: \w+, exclude: \w+ \}\)/,
     );
   });
@@ -2035,8 +2040,9 @@ describe("日志预算：quiet 档换 reporter，但清单要单独念", () => {
     const launcher = readFileSync(LAUNCHER_PATH, "utf8");
     expect(launcher).toMatch(/fileListReport\(segFiles, \{ quiet \}\)/);
     /* `--full` 那一档没有清单可列（vitest 自己收集），但也不许静默：
-     * 「这一档本来就不列」与「列清单这件事坏了」必须读得出区别。 */
-    expect(launcher).toMatch(/全量档由 vitest 自行收集，故不逐份列出/);
+     * 「这一档本来就不列」与「列清单这件事坏了」必须读得出区别。正文住在 `FULL_RUN_PATH`
+     * （ISSUE #3030 起），所以按真实落点读。 */
+    expect(readFileSync(FULL_RUN_PATH, "utf8")).toMatch(/全量档由 vitest 自行收集，故不逐份列出/);
   });
 });
 

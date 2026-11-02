@@ -204,6 +204,12 @@ export function fullTreeArgv(argv) {
  * ⇒ 这一族**连 `--staged` 一起剥掉**再挂 `--base <ref>`：判据只该看到**一个**
  * 判决面来源（`--base` 优先于暂存区），两个都挂着会让「到底按哪个面判」变成读代码的事。
  *
+ * ⚠️ **曾经还有第二支 `--range <基线>..HEAD`**（ISSUE #3032 给 `check-reformat-only.cjs`
+ * 加的），现已撤销（ISSUE #3038）：那条路的判决面来自平台给的基线，而**基线是不是
+ * 分叉点取决于平台的合并拼法** ⇒ 一种拼法上对、另一种上又错回来（同一格连红三轮）。
+ * 同一个问题收口在判据那一侧（它自己按合成提交的父关系取区间），那条判据因此退出了
+ * `CHANGED_SCOPED`。**不留一张只为一条目的存在的表** —— 再出现同族时按那张单子的口径重立。
+ *
  * @param {string[]} argv 钩子那一步的命令
  * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
  * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]} | {ok: false, reason: string}}
