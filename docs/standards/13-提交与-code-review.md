@@ -310,6 +310,9 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
    # 实测把 13 量成 42），读台账复用 `check-a11y-rules.cjs` 导出的 `loadEslintConfig()`。
    # ⚠️ **任何一份没判成 ⇒ 退 2（没结论）**，既不判红也不判绿：`verify` 的内联配置写成
    # eslintrc 形时它对每份文件都抛错，而朴素实现照样打「命中 0 处」= 「台账全部陈旧」
+✅ node scripts/check-oxlint-zero-rules.mjs # 已清零 oxlint 规则集防回潮（见下 13.5.32，ISSUE #3016）：
+   # `ZERO_RULES` 在册清单（41 条）全仓 `--type-aware` 复扫判 0 命中，命中逐条列位置退 1；
+   # 实测约 155s，只在重档付
 ```
 
 > **本地钩子没接的判据**（`test:coverage` / `build` / E2E `@critical` / `db:push`）：
@@ -9319,6 +9322,24 @@ PR 档随之卸下这四格。判据面：新增 push 档「声明与事实双�
   （§13.5.21：纵向被否；横向在单机上无增量）。
 - **复评触发**：runner group 扩容出第二个构建节点。到那天方案 2 的全部前置（含库隔离）
   已就绪，改动面 = shard 维度。
+
+**#3016 判空三元的写法口径：肯定侧在前（`x === undefined ? 兜底 : 主路`）；「已清零规则集」落成在册清单 + 防回潮闸。**
+- 互斥现场：`typescript/strict-boolean-expressions`（type-aware，要求显式 `x !== undefined`）
+  与 `unicorn/no-negated-condition`（要求非否定条件）在判空三元上互斥 —— 满足一条就触犯
+  另一条，#2917 一族的清污批每批带回 12 处量级的漂移（#2977 清零 → #3015 续清 12 处 →
+  #3016 再清 14 处）。拍板（方案 A）：判空三元一律写 `x === undefined ? 兜底 : 主路`
+  —— 条件取等号判空、**肯定侧在前**，只交换真/假分支、条件本身不动，两条规则同时满足；
+  `no-negated-condition` 的配置不动。本批 14 处按此形态改完（`src/lib/comfyui` 9 份 10 处、
+  `scripts/reformat-preview-range.mjs` 3 处、`src/lib/comfyui/firstframe.test.ts` 1 处），
+  与 #2977 已清零形态逐字一致。
+- 防回潮：已清零规则此前是「人工复扫惯例」、无在册清单 —— 清零批落地之后没人守，下一批
+  落地就把同形态带回来。现落成 `scripts/check-oxlint-zero-rules.mjs` 的 `ZERO_RULES`
+  （41 条 = #2775 批 39 条 + #2776 的 `eqeqeq` / `no-void`），**清单是唯一登记面：
+  每清零一条新规则就往那里加一行**。闸的形态是探针而非根级 config 条目（理由见脚本
+  文件头：extends 同一预设、categories 全关、只抬清单内规则为 error 的全仓
+  `--type-aware` 扫描，判 0 命中，命中逐条列位置退 1）；挂载在 `.githooks/pre-commit`
+  D 组尾部与 `quality-gate` 的 `oxlintZeroRules`（实测约 155s，只在重档付；
+  契约测试 `tests/check-oxlint-zero-rules.test.ts`）。
 
 #### 13.6.1 master 只接受「分支开发 → PR → 合并」（机器强制）
 

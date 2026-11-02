@@ -44,6 +44,7 @@
     "check:scripts-types": "node scripts/check-scripts-typecheck.cjs",
     "check:all": "node scripts/quality-gate.mjs",
     "check:deps-freshness": "node scripts/check-deps-freshness.mjs",
+    "check:oxlint-zero-rules": "node scripts/check-oxlint-zero-rules.mjs",
     "check:freshness": "node scripts/freshness-gate.mjs --ledger",
     "check:daily-attendance": "node scripts/check-daily-attendance.mjs",
     "check:mirror-attendance": "node scripts/check-mirror-attendance.mjs",

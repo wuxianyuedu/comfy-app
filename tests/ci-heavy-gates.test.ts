@@ -16,7 +16,7 @@
  * 同一份 glob）⇒ 那 13 条「在平台那一格被 `ifModify` 跳过」的判据不再在这一格照跑全量。
  * 收窄的两条边界在这里钉住：**改动面取不到 ⇒ 一条都不跳**、**跳过的逐条点名且不计入绿**。
  */
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   appendFileSync,
   copyFileSync,
@@ -30,7 +30,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { execFileSync } from "node:child_process";
 import { CHANGED_SCOPED } from "../scripts/base-check/hook-steps.mjs";
 import { COLORS } from "../scripts/ci-log.mjs";
 import {

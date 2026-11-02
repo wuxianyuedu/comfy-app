@@ -61,9 +61,9 @@ const succeeded = (localPath: string | null): ProgressRow => ({
   status: "SUCCEEDED",
   progress: 100,
   resultImages:
-    localPath !== null
-      ? [{ localPath, mediaType: "image" }]
-      : [{ localPath: "/api/generated/ff-task/vid_0.mp4", mediaType: "video" }],
+    localPath === null
+      ? [{ localPath: "/api/generated/ff-task/vid_0.mp4", mediaType: "video" }]
+      : [{ localPath, mediaType: "image" }],
   error: null,
 });
 
