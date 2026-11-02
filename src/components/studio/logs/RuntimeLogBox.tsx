@@ -69,7 +69,9 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
                 <Button
                   aria-label="全屏查看"
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-                  onClick={() => setFullscreen(true)}
+                  onClick={() => {
+                    setFullscreen(true);
+                  }}
                   size="icon-sm"
                   variant="ghost"
                 >
@@ -106,7 +108,9 @@ export function RuntimeLogBox({ fileName, log, emptyHint, className }: RuntimeLo
               <Button
                 aria-label="退出全屏"
                 className="text-ink-muted hover:bg-subtle hover:text-ink-strong rounded-md"
-                onClick={() => setFullscreen(false)}
+                onClick={() => {
+                  setFullscreen(false);
+                }}
                 size="icon-sm"
                 variant="ghost"
               >
@@ -194,7 +198,9 @@ function LogToolbar({
         {!follow && (
           <Button
             className="text-2xs h-auto rounded px-2 py-0.5 font-medium"
-            onClick={() => onFollowChange(true)}
+            onClick={() => {
+              onFollowChange(true);
+            }}
             size="xs"
           >
             恢复自动滚动

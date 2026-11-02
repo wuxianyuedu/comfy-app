@@ -38,7 +38,9 @@ export function DeleteWorkflowModal({
           onCancel();
         }
       }}
-      onConfirm={() => pendingDelete && onConfirm(pendingDelete.id)}
+      onConfirm={() => {
+        if (pendingDelete) onConfirm(pendingDelete.id);
+      }}
       open={pendingDelete !== null}
       pending={deleting}
       title="删除工作流"

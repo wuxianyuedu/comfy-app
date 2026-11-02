@@ -122,7 +122,12 @@ export function WorkflowRunLogModal({
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="执行日志"
         className="bg-transparent p-0 ring-0"
@@ -187,7 +192,9 @@ export function WorkflowRunLogModal({
                       }`,
                     ]),
                   )}
-                  onChange={(v) => onViewTaskIdChange(v || null)}
+                  onChange={(v) => {
+                    onViewTaskIdChange(v || null);
+                  }}
                   options={runs.map((r) => r.taskId)}
                   value={viewTaskId ?? ""}
                 />
@@ -197,7 +204,9 @@ export function WorkflowRunLogModal({
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs rounded-md px-2 py-0.5"
                   data-testid="wflib-log-raw"
                   disabled={!viewTaskId}
-                  onClick={() => setRawOpen(true)}
+                  onClick={() => {
+                    setRawOpen(true);
+                  }}
                   variant="ghost"
                 >
                   查看完整输出
@@ -239,7 +248,9 @@ export function WorkflowRunLogModal({
         </div>
       </DialogContent>
       <WorkflowRunRawCliModal
-        onClose={() => setRawOpen(false)}
+        onClose={() => {
+          setRawOpen(false);
+        }}
         open={rawOpen}
         running={status === "running"}
         taskId={viewTaskId}

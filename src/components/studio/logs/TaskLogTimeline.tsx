@@ -129,7 +129,9 @@ export function TaskLogTimeline({
               <SelectChip
                 className="px-2.5 py-1 text-sm"
                 key={option.value}
-                onClick={() => setFilter(option.value)}
+                onClick={() => {
+                  setFilter(option.value);
+                }}
                 selected={filter === option.value}
                 shape="compact"
               >
@@ -143,7 +145,9 @@ export function TaskLogTimeline({
           <Checkbox
             checked={autoscroll}
             className="accent-primary size-3.5 cursor-pointer"
-            onCheckedChange={(checked) => setAutoscroll(checked === true)}
+            onCheckedChange={(checked) => {
+              setAutoscroll(checked === true);
+            }}
           />
           自动滚动
         </FieldLabel>

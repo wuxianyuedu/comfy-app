@@ -81,15 +81,17 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
    *  绕过动作直接写状态就会留下「没有勾选框的预览面板」，或反过来留下
    *  「面板已消失、勾选框还挂在节点上」的半截状态。 */
   const setIoEditMode = useCallback(
-    (v: boolean | ((prev: boolean) => boolean)) =>
-      ioApi.getState().setIoEditMode(typeof v === "function" ? v(ioApi.getState().ioEditMode) : v),
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      ioApi.getState().setIoEditMode(typeof v === "function" ? v(ioApi.getState().ioEditMode) : v);
+    },
     [ioApi],
   );
   const setIoPreviewOpen = useCallback(
-    (v: boolean | ((prev: boolean) => boolean)) =>
+    (v: boolean | ((prev: boolean) => boolean)) => {
       ioApi
         .getState()
-        .setIoPreviewOpen(typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v),
+        .setIoPreviewOpen(typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v);
+    },
     [ioApi],
   );
   const toast = useToast();
@@ -225,7 +227,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             <Hint label="强制重载（清 sessionStorage + 跳过 server LRU + 重拉数据）">
               <Button
                 className="text-2xs ml-1 h-auto rounded-md px-2 py-0.5"
-                onClick={() => forceReloadDetail(viewHostNodeId)}
+                onClick={() => {
+                  forceReloadDetail(viewHostNodeId);
+                }}
                 variant="danger"
               >
                 <RotateCw data-icon="inline-start" size={10} strokeWidth={2.5} />
@@ -319,7 +323,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         <Hint label="进入 IO 编辑模式：在每个节点参数前显示勾选框，勾选即把该参数暴露为工作流的外部输入或输出。退出编辑模式时会一并关闭 IO 预览">
           <Button
             className={topBarButtonClass(ioEditMode ? "ioOn" : "outline", "compact")}
-            onClick={() => setIoEditMode((value) => !value)}
+            onClick={() => {
+              setIoEditMode((value) => !value);
+            }}
             variant="ghost"
           >
             {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
@@ -351,7 +357,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               "disabled:opacity-40",
             )}
             disabled={!ioEditMode && !ioPreviewOpen && Object.keys(workflowIO).length === 0}
-            onClick={() => setIoPreviewOpen((value) => !value)}
+            onClick={() => {
+              setIoPreviewOpen((value) => !value);
+            }}
             variant="ghost"
           >
             {ioPreviewOpen ? "👁 关闭预览" : "👁 预览 IO"}

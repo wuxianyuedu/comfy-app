@@ -178,7 +178,9 @@ function WorkflowEditorBody({
    *  而不必让每个节点各自发一次 /api 请求。
    *  manifest 在首次解析后已经在服务端缓存，因此每次打开页面只花一次廉价往返。 */
   useEffect(() => {
-    refreshCustomNodes().catch((error_) => console.warn("[we] 节点清单刷新失败", error_));
+    refreshCustomNodes().catch((error_) => {
+      console.warn("[we] 节点清单刷新失败", error_);
+    });
   }, []);
   /* 子工作流导航栈。查看顶层工作流时为空。
    *  每一项是 {uid, name}，供面包屑显示；点某一级会退回到那一层。 */
@@ -365,7 +367,9 @@ function WorkflowEditorBody({
     setError,
     /* 重置布局之后重新拉当前视图：服务端已经把坐标覆盖删掉，重拉拿到的就是
      * 工作流自带的原始布局。 */
-    reloadView: () => forceReloadDetail(viewHostNodeId, true),
+    reloadView: () => {
+      forceReloadDetail(viewHostNodeId, true);
+    },
     /* 子图视图下把宿主链路传进去：内部节点 id 要拼成 `宿主:内部` 才与
      *  `positions` 列里的键同口径（见 use-workflow-persistence 的说明）。 */
     hostNodeId: viewHostNodeId,
@@ -414,7 +418,12 @@ function WorkflowEditorBody({
         {subgraphLoading && <SubgraphLoadingOverlay />}
         {ioEditMode && <IoEditModeBanner />}
         {subgraphError && (
-          <SubgraphErrorToast error={subgraphError} onDismiss={() => setSubgraphError("")} />
+          <SubgraphErrorToast
+            error={subgraphError}
+            onDismiss={() => {
+              setSubgraphError("");
+            }}
+          />
         )}
         {/* IO 预览侧栏。渲染 CreatePanel / 画布工作流节点
          *  消费的同一个 DynamicWorkflowForm，数据来自**实时的**
@@ -445,7 +454,9 @@ function WorkflowEditorBody({
             defaultMode={detail.defaultMode ?? null}
             detailIOMap={ioDetailMap}
             modes={detail.availableModes ?? []}
-            onClose={() => setIoPreviewOpen(false)}
+            onClose={() => {
+              setIoPreviewOpen(false);
+            }}
             onModesChange={handleModesChange}
             workflowIO={workflowIO}
           />
@@ -460,7 +471,9 @@ function WorkflowEditorBody({
           onMiniMapJump={onMiniMapJump}
           onNodeDragStop={onNodeDragStop}
           onNodesChange={onNodesChange}
-          onOpenSettings={() => setCanvasSettingsOpen(true)}
+          onOpenSettings={() => {
+            setCanvasSettingsOpen(true);
+          }}
           onRecenter={recenterCanvas}
           /* 选中节点后由画布把「相关连线」与「相关端口行」标记分别写回 edges /
            * 节点 data（连线加粗提亮，落到的端口行同步提亮）。 */
@@ -474,7 +487,9 @@ function WorkflowEditorBody({
          *  点击齿轮按钮时渲染。 */}
         {canvasSettingsOpen && (
           <CanvasSettingsPanel
-            onClose={() => setCanvasSettingsOpen(false)}
+            onClose={() => {
+              setCanvasSettingsOpen(false);
+            }}
             reset={resetCanvasSettings}
             settings={canvasSettings}
             update={updateCanvasSetting}
@@ -489,7 +504,12 @@ function WorkflowEditorBody({
                 definitions.subgraphs[uid] 这一项
             关闭则清空 viewJsonOpen。 */}
         {viewJsonOpen && sourceModalData && (
-          <SourceModal data={sourceModalData} onClose={() => setViewJsonOpen(false)} />
+          <SourceModal
+            data={sourceModalData}
+            onClose={() => {
+              setViewJsonOpen(false);
+            }}
+          />
         )}
       </div>
     </FullScreenLayer>

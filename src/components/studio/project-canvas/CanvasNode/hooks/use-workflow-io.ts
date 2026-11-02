@@ -272,7 +272,9 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
         });
       }
     }, 0);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+    };
     /* `patch` / `d` / `setTimeout` 之外还读了 `seededFor`（ref，稳定引用）——
      * 三个筛选条件的变化才是本 effect 的触发点；`d` 是渲染期新对象，
      * 挂进依赖会让每次节点数据变动都重跑一遍 `setTimeout(0)` 的重置。 */

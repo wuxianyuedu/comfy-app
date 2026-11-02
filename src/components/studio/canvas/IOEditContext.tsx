@@ -100,9 +100,15 @@ export function NodeIdChip({ nodeId, variant }: { nodeId: string; variant: "node
         data-node-id-chip={nodeId}
         data-variant={variant}
         onClick={handleOpen}
-        onDoubleClick={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+        }}
+        onMouseDown={(event) => {
+          event.stopPropagation();
+        }}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
         ref={ref}
         variant="outline"
       >
@@ -125,9 +131,15 @@ export function IoCheckbox({ ioRef, io }: { io: IOEditContextValue; ioRef: IoRef
     <Checkbox
       checked={checked}
       className="size-3.5"
-      onCheckedChange={() => io.toggleIO(ioRef)}
-      onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
+      onCheckedChange={() => {
+        io.toggleIO(ioRef);
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+      }}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+      }}
       style={{
         width: 13,
         height: 13,

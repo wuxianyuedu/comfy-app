@@ -159,12 +159,16 @@ export function LogPanel() {
       setCopyFailed(false);
       copyOutcome.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
 
   /* 「复制全部」的文本要到点击那一刻才从 store 取（当前筛选 × 所有页），
    * 所以走出口的**现算**形态。 */
-  const copyAllAction = useCallback(() => copyAll(() => copyAllRaw()), [copyAll, copyAllRaw]);
+  const copyAllAction = useCallback(() => {
+    copyAll(() => copyAllRaw());
+  }, [copyAll, copyAllRaw]);
 
   const bodyRef = useRef<HTMLDivElement>(null);
   /* 滚动视口的**元素本身**进 state：下面「量视口」的 effect 必须等到这个元素
@@ -365,7 +369,13 @@ export function LogPanel() {
      * 面板打开时仍可见可点，仅靠 z-index 只保住了鼠标命中、没保住 a11y 可见）。日志面板
      * 本就是「开着还能继续用页签」的非阻塞工具窗，用非模态正好。关闭路径不变（Esc +
      * onOpenChange + Ctrl+Shift+L + 关闭按钮）。 */
-    <Dialog modal={false} onOpenChange={(next) => !next && setIsOpen(false)} open>
+    <Dialog
+      modal={false}
+      onOpenChange={(next) => {
+        if (!next) setIsOpen(false);
+      }}
+      open
+    >
       <DialogContent
         aria-label="应用日志"
         className="bg-transparent p-0 ring-0"

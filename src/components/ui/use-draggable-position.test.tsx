@@ -220,7 +220,9 @@ describe("useDraggablePosition", () => {
 
     /* 第二态：元素挂上 —— 位置**不该跳变**（这一条正是第一版丢掉记住位置时
      * 会红的地方：挂上后它拿默认值去夹，图标倏地跳回右下角）。 */
-    act(() => attach(true));
+    act(() => {
+      attach(true);
+    });
     await expect.poll(() => controller().offset).toEqual({ right: 500, bottom: 300 });
   });
 

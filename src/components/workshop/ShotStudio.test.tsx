@@ -152,7 +152,9 @@ beforeEach(() => {
   mockedWatch.mockReset();
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+});
 
 describe("ShotStudio 门禁", () => {
   it("本地通道未选工作流：点单镜生成被行内门禁拦下，不发起请求", async () => {

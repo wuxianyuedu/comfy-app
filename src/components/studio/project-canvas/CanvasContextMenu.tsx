@@ -33,7 +33,12 @@ type CanvasContextMenuProps = {
 
 export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasContextMenuProps) {
   return (
-    <DropdownMenu onOpenChange={(open) => !open && onClose()} open>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      open
+    >
       {/* 零尺寸定位锚点：菜单开在右键那个点上，而不是某个可见控件旁边。 */}
       <DropdownMenuTrigger
         aria-hidden
@@ -84,7 +89,9 @@ export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasC
                   className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
                   data-canvas-node-kind={kind}
                   key={kind}
-                  onClick={() => onPick(kind)}
+                  onClick={() => {
+                    onPick(kind);
+                  }}
                 >
                   <Icon className="text-primary-strong" name={meta.icon} size={15} />
                   <span className="flex flex-col">

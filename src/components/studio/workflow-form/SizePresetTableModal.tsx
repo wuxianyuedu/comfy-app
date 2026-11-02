@@ -66,7 +66,12 @@ export function SizePresetTableModal({
        与 `ui/dialog` 是同一个能力的第二份实现（Esc / 点遮罩关闭、焦点归还
        只在基元那边有）。尺寸表弹窗要的是「大一点的居中卡片」，这属于形态，
        经 `popupClassName` 覆盖即可。 */
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label={`${title}配置`}
         className="max-w-3xl"
@@ -131,12 +136,12 @@ export function SizePresetTableModal({
                             className="w-24"
                             max={TABLE_MAX}
                             min={TABLE_MIN}
-                            onChange={(width) =>
+                            onChange={(width) => {
                               handleChange(preset.label, tier, {
                                 width,
                                 height: dims.height,
-                              })
-                            }
+                              });
+                            }}
                             step={8}
                             value={dims.width}
                           />
@@ -145,12 +150,12 @@ export function SizePresetTableModal({
                             className="w-24"
                             max={TABLE_MAX}
                             min={TABLE_MIN}
-                            onChange={(height) =>
+                            onChange={(height) => {
                               handleChange(preset.label, tier, {
                                 width: dims.width,
                                 height,
-                              })
-                            }
+                              });
+                            }}
                             step={8}
                             value={dims.height}
                           />
@@ -168,7 +173,9 @@ export function SizePresetTableModal({
           <Button
             className="text-2xs h-auto px-2.5 py-1"
             disabled={!modified}
-            onClick={() => resetScene(scene)}
+            onClick={() => {
+              resetScene(scene);
+            }}
             variant="outline"
           >
             恢复默认（{SIZE_SCENE_LABELS[scene]}）

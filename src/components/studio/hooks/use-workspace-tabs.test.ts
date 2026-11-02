@@ -31,10 +31,7 @@ function Probe() {
 
 /** 存储里的键还是不是那份项目页 —— 恢复没被初始态反冲的唯一判据。 */
 function storedTabsSurvive(): boolean {
-  const parsed = parseWorkspaceTabs(
-    sessionStorage.getItem(WS_TABS_KEY),
-    WORKSPACE_VIEWS,
-  );
+  const parsed = parseWorkspaceTabs(sessionStorage.getItem(WS_TABS_KEY), WORKSPACE_VIEWS);
   return parsed?.activeKey === "project:p1";
 }
 
@@ -42,7 +39,9 @@ describe("页签恢复不被落盘反冲", () => {
   beforeEach(() => {
     sessionStorage.clear();
   });
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+  });
 
   it("挂载即恢复：存储里的项目页仍在，且没被初始态冲掉", async () => {
     sessionStorage.setItem(WS_TABS_KEY, STORED);

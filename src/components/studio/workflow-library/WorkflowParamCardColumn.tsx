@@ -122,7 +122,13 @@ export function WorkflowParamCardColumn({
                *  `resetMany`。在这里逐个上抛的话，消费方每收到一个就落一次库，
                *  后一次会把前一次的删除覆盖回去（用户口径：「重置也清不掉」）。 */
               onReset={canWire ? () => onReset?.("size") : undefined}
-              onSelect={onSelect ? () => onSelect("size") : undefined}
+              onSelect={
+                onSelect
+                  ? () => {
+                      onSelect("size");
+                    }
+                  : undefined
+              }
               /* 行 = 形态（「尺寸 · 宽高比」），不是候选端口：形态由作者从哪一行
                * 拖出去声明，handle id 就是子口 id（连线层按它反查条目）。 */
               outputPorts={forms.map((item) => {
@@ -177,7 +183,13 @@ export function WorkflowParamCardColumn({
             key={entry.id}
             label={cardLabel}
             onReset={canWire ? () => onReset?.(entry.id) : undefined}
-            onSelect={onSelect ? () => onSelect(entry.id) : undefined}
+            onSelect={
+              onSelect
+                ? () => {
+                    onSelect(entry.id);
+                  }
+                : undefined
+            }
             /* **一个口一颗点**：卡片只说「这个口对外是什么」（名字 + 类型），
              *  落点由线的另一端声明（拖到宿主哪一行就是哪一行）。 */
             outputPorts={paramOutputPorts(entry, io, resolved[entry.id], cardLabel)}

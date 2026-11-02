@@ -180,7 +180,9 @@ export const WorkflowSubgraphNode = React.memo(function WorkflowSubgraphNode({
         isCollapsed={isCollapsed}
         nodeId={String(data.nodeId)}
         onEnter={data.onEnter}
-        onToggle={() => setUserCollapsed((value) => !value)}
+        onToggle={() => {
+          setUserCollapsed((value) => !value);
+        }}
         outputRef={firstOutputName ? { name: firstOutputName } : null}
         title={data.title}
       />

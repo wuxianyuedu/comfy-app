@@ -82,7 +82,9 @@ export function useElementBox(initial: Element | null = null): [ElementBoxRef, E
     }
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
   }, [el]);
 
   /* 元素**卸载后**在渲染期直接回 `null`，不靠 effect 去清（在 effect 体里

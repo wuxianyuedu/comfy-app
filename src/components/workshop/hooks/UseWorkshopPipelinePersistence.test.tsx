@@ -41,7 +41,9 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+});
 
 function requestUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") {

@@ -64,17 +64,19 @@ export function useContentAssetGallery({
     void (async () => {
       try {
         const list = await fetchTaskImages(taskId);
-        guard.commit(() =>
+        guard.commit(() => {
           setGallery({
             key: ctxKey,
             images: list && list.length > 1 ? list : null,
-          }),
-        );
+          });
+        });
       } catch {
         /* 静默：单图模式仍正常显示，见文件头 */
       }
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [taskId, enabled, ctxKey]);
 
   return { images, open, index, setOpen, setIndex };

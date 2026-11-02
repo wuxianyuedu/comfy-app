@@ -74,7 +74,9 @@ export function WorkflowLibraryDetailView({
 
       <Tabs
         className="min-h-0 flex-1 gap-0"
-        onValueChange={(value) => setActiveTab(/* SAFETY: 类型断言已复核 */ value as DetailTab)}
+        onValueChange={(value) => {
+          setActiveTab(/* SAFETY: 类型断言已复核 */ value as DetailTab);
+        }}
         value={activeTab}
       >
         <TabsList

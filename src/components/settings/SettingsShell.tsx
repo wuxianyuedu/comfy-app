@@ -320,7 +320,9 @@ function SettingsSectionNav({
                         : "text-ink-muted hover:text-ink",
                     )}
                     key={item.id}
-                    onClick={() => onSelect(item.id)}
+                    onClick={() => {
+                      onSelect(item.id);
+                    }}
                     size="sm"
                     variant="ghost"
                   >

@@ -79,7 +79,9 @@ export function ModeContractModeNav({
             className="hover:text-ink mb-3 gap-1 px-2 text-xs font-medium"
             key={group.category}
             marker="caret"
-            onOpenChange={() => categoryExpansion.toggle(group.category)}
+            onOpenChange={() => {
+              categoryExpansion.toggle(group.category);
+            }}
             /* 受控：展开态就是**哪些类别折着**这份集合（§16.2.4.17）。
                交给基元的那部分只有「父行怎么折」——`aria-expanded` /
                `aria-controls` / 键盘 / `hidden="until-found"` 都在它里头。 */
@@ -113,7 +115,9 @@ export function ModeContractModeNav({
                        找会随文案变，code 才是身份）。 */
                     data-mode={t.code}
                     key={t.code}
-                    onClick={() => onSelect(t.code)}
+                    onClick={() => {
+                      onSelect(t.code);
+                    }}
                     role="radio"
                     variant="ghost"
                   >

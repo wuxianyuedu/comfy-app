@@ -271,8 +271,12 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
     setBusy(false);
   }, [input, busy, pushMsg, executeOneTool]);
 
-  const openAgent = React.useCallback(() => setOpen(true), []);
-  const closeAgent = React.useCallback(() => setOpen(false), []);
+  const openAgent = React.useCallback(() => {
+    setOpen(true);
+  }, []);
+  const closeAgent = React.useCallback(() => {
+    setOpen(false);
+  }, []);
   const clearToolRuns = React.useCallback(() => {
     setToolRuns([]);
     setMessages((prev) => prev.filter((m) => m.role !== "tool-run"));

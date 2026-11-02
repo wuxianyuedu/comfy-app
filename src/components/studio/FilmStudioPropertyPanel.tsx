@@ -44,7 +44,9 @@ export function FilmStudioPropertyPanel({
             <input
               {...field}
               className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
-              onChange={textHandler((name) => onPatchShot(selectedShotId, { name }))}
+              onChange={textHandler((name) => {
+                onPatchShot(selectedShotId, { name });
+              })}
               value={selectedShot.name}
             />
           )}
@@ -58,11 +60,11 @@ export function FilmStudioPropertyPanel({
               className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
               max="30"
               min="0.5"
-              onChange={(event) =>
+              onChange={(event) => {
                 onPatchShot(selectedShotId, {
                   duration: formatShotDuration(Number(event.target.value)),
-                })
-              }
+                });
+              }}
               step="0.1"
               type="number"
               value={Number.parseFloat(selectedShot.duration)}
@@ -202,7 +204,9 @@ export function FilmStudioPropertyPanel({
           <Checkbox
             checked={c.subtitleOn}
             className="accent-primary"
-            onCheckedChange={(checked) => c.setSubtitleOn(checked === true)}
+            onCheckedChange={(checked) => {
+              c.setSubtitleOn(checked === true);
+            }}
           />
         </FieldLabel>
 

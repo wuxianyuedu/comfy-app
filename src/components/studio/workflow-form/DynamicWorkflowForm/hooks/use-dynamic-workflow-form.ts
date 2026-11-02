@@ -287,7 +287,9 @@ export function useDynamicWorkflowForm(
   /* 上传失败的原因（可读文案）：此前只在 console 留一行，表单里没有任何
    * 出口，用户看到的是「点了没反应 / 图片没进来」（ISSUE #345）。 */
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const dismissUploadError = useCallback(() => setUploadError(null), []);
+  const dismissUploadError = useCallback(() => {
+    setUploadError(null);
+  }, []);
   /* 本地图片预览（ioKey → data URL）：选完立刻显示，不依赖 ComfyUI 上传成功或
    * 是否运行。上传失败 / 未启动时值不会回填，但用户选的那张图仍应看得见。 */
   const [previews, setPreviews] = useState<Record<string, string>>({});
@@ -340,7 +342,9 @@ export function useDynamicWorkflowForm(
        * **不 await** —— 它是附带效果，读文件的异步不该推迟真正的上传时序；读失败
        * 也只是没有本地预览，不阻断上传。 */
       void readFileAsDataUrl(file)
-        .then((dataUrl) => setPreviews((prev) => ({ ...prev, [target]: dataUrl })))
+        .then((dataUrl) => {
+          setPreviews((prev) => ({ ...prev, [target]: dataUrl }));
+        })
         .catch(() => undefined);
       try {
         /* ComfyUI 未运行 / 正在启动时由客户端自动等就绪后重试；等待期间

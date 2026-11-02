@@ -48,13 +48,24 @@ function Demo(props: { body: string; label: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button onClick={() => setOpen(true)} variant="outline">
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+        variant="outline"
+      >
         打开全屏视图
       </Button>
       <FullScreenDialog className="bg-bg" label={props.label} onOpenChange={setOpen} open={open}>
         <div className="flex items-center justify-between border-b p-3">
           <span className="text-sm font-medium">{props.label}</span>
-          <Button onClick={() => setOpen(false)} size="sm" variant="ghost">
+          <Button
+            onClick={() => {
+              setOpen(false);
+            }}
+            size="sm"
+            variant="ghost"
+          >
             退出全屏
           </Button>
         </div>

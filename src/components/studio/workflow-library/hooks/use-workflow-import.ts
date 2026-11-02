@@ -117,7 +117,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     if (dropErrTimerRef.current) {
       clearTimeout(dropErrTimerRef.current);
     }
-    dropErrTimerRef.current = setTimeout(() => setDropErr(null), 4000);
+    dropErrTimerRef.current = setTimeout(() => {
+      setDropErr(null);
+    }, 4000);
   }, []);
 
   const handleImport = useCallback(async () => {

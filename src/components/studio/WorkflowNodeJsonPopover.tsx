@@ -161,7 +161,9 @@ export function NodeJsonPopover({
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
   const accent = request.kind === "subgraph" ? "var(--color-primary)" : "var(--color-info)";
   /** 带透明度的 accent —— `var()` 不能拼 hex alpha，走 color-mix。 */
@@ -191,13 +193,21 @@ export function NodeJsonPopover({
        此前用 `ui/dialog` 配 `top-24 left-1/2` 是**丢掉了锚点定位**：dialog 的
        基类自带 `top-1/2 -translate-y-1/2`，与 `top-24` 叠加后浮层被推到视口之上
        （实测 `top: -174`），头部与 JSON 开头被裁在视口外（ISSUE #717）。 */
-    <Popover modal onOpenChange={(next) => !next && onDismiss()} open>
+    <Popover
+      modal
+      onOpenChange={(next) => {
+        if (!next) onDismiss();
+      }}
+      open
+    >
       <PopoverContent
         anchor={anchorElement}
         aria-label={`节点 #${request.nodeId} 的原始 JSON`}
         className="w-115 max-w-[calc(100vw-2rem)] gap-0 border-0 bg-transparent p-0 shadow-none ring-0"
         collisionPadding={12}
-        onMouseDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => {
+          event.stopPropagation();
+        }}
         positionerClassName="max-h-[60vh]"
       >
         <span className="sr-only">节点 #{request.nodeId} 的原始 JSON</span>
@@ -281,7 +291,9 @@ export function NodeJsonPopover({
             <Hint label={copyFailed ? copyFailureText() : "复制 JSON 到剪贴板"}>
               <Button
                 className="font-normal"
-                onClick={() => handleCopy(pretty)}
+                onClick={() => {
+                  handleCopy(pretty);
+                }}
                 size="xs"
                 style={{
                   background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
@@ -339,7 +351,9 @@ export function NodeJsonPopover({
                     <Button
                       aria-selected={active}
                       className="h-auto font-normal"
-                      onClick={() => setTab(key)}
+                      onClick={() => {
+                        setTab(key);
+                      }}
                       role="tab"
                       style={{
                         fontFamily: "var(--font-mono)",

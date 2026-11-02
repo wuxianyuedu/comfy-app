@@ -59,7 +59,9 @@ describe("useHistoryPanel", () => {
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.loading).toBe(false);
 
-    act(() => result.current.setScope("all"));
+    act(() => {
+      result.current.setScope("all");
+    });
     await expect
       .poll(() => mockedFetch)
       .toHaveBeenLastCalledWith(expect.not.objectContaining({ projectId: "p-1" }));
@@ -70,7 +72,9 @@ describe("useHistoryPanel", () => {
     await expect.poll(() => result.current.loading).toBe(false);
     expect(mockedFetch).toHaveBeenLastCalledWith(expect.not.objectContaining({ media: "all" }));
 
-    act(() => result.current.setFilter("video"));
+    act(() => {
+      result.current.setFilter("video");
+    });
     await expect
       .poll(() => mockedFetch)
       .toHaveBeenLastCalledWith(expect.objectContaining({ media: "video" }));
@@ -173,7 +177,9 @@ describe("useHistoryPanel", () => {
 
     /* SAFETY: 类型断言已复核 */
     mockedFetch.mockResolvedValue([row()] as never);
-    act(() => result.current.refresh());
+    act(() => {
+      result.current.refresh();
+    });
     /* 先等 tasks 落定再断言 error：error 在拉取**开始时**就被清掉，
      * 只等 error 的话可能在数据回来之前就通过（局部绿 / 全量红的时序坑）。 */
     await expect.poll(() => result.current.tasks).toHaveLength(1);
@@ -185,7 +191,9 @@ describe("useHistoryPanel", () => {
     await expect.poll(() => result.current.loading).toBe(false);
     const before = mockedFetch.mock.calls.length;
 
-    act(() => result.current.setDisplay("grid"));
+    act(() => {
+      result.current.setDisplay("grid");
+    });
     expect(result.current.display).toBe("grid");
     expect(mockedFetch.mock.calls.length).toBe(before);
   });

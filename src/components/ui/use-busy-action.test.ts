@@ -69,9 +69,13 @@ describe("useBusyAction", () => {
 
   it("`set` 可以手动置忙 / 复位（跨多段 await 的落点）", () => {
     const { result } = renderHook(() => useBusyAction());
-    act(() => result.current.set(true));
+    act(() => {
+      result.current.set(true);
+    });
     expect(result.current.busy).toBe(true);
-    act(() => result.current.set(false));
+    act(() => {
+      result.current.set(false);
+    });
     expect(result.current.busy).toBe(false);
   });
 
