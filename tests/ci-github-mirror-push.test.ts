@@ -148,19 +148,19 @@ describe("runMirror（git 与 fetch 全假件）", () => {
   /** 收口假件与日志的量具。 */
   function harness(
     opts: {
-      pushCode?: number;
-      pushStderr?: string;
+      dispatchBody?: string;
+      dispatchStatus?: number;
+      env?: Record<string, string | undefined>;
+      fetchThrows?: boolean;
       probeCode?: number;
       probeStderr?: string;
       probeStdout?: string;
-      dispatchStatus?: number;
-      dispatchBody?: string;
-      fetchThrows?: boolean;
-      env?: Record<string, string | undefined>;
+      pushCode?: number;
+      pushStderr?: string;
     } = {},
   ) {
     const pushes: Array<Array<string>> = [];
-    const calls: Array<{ url: string; init: RequestInit; bodyText: string }> = [];
+    const calls: Array<{ bodyText: string; init: RequestInit; url: string }> = [];
     const heard: Array<string> = [];
     const runGit = (args: Array<string>) => {
       if (args[0] === "ls-remote") {
@@ -218,8 +218,8 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe(`https://api.github.com/repos/${DEFAULT_REPO}/dispatches`);
     const body = JSON.parse(calls[0]?.bodyText ?? "") as {
-      event_type?: string;
       client_payload?: { head_sha?: string };
+      event_type?: string;
     };
     expect(body.event_type).toBe("cnb-pr-sync");
     expect(body.client_payload?.head_sha).toBe(SHA);
