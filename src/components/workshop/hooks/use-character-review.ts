@@ -6,12 +6,12 @@
 // 性格），不合格的修法就是照建议改这些字段、再用既有「定妆照」通道重出 —— 不像镜头那样有独立的
 // 抽卡 / 改提示词重生成端点。所以本 hook 只承载判定与在途态，IO 走 `run-client.reviewCharacter`
 // （视图/hook 不碰 vanillaApi，§17），评审在途用 `beginStaleRun` 作废守卫（弹窗中途关即不落地）。
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";
+import { useReviewGuard } from "~/components/ui/use-review-guard";
 import { reviewCharacter } from "~/lib/production/run-client";
 import type { ReviewVerdict } from "~/lib/production/review-types";
-import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
 export type CharacterReviewController = {
   error: string;
@@ -23,26 +23,15 @@ export type CharacterReviewController = {
 
 export function useCharacterReview(projectId: string): CharacterReviewController {
   const [verdict, setVerdict] = useState<ReviewVerdict | null>(null);
-  const [error, setError] = useState("");
   const reviewBusy = useBusyAction();
-
-  const guardRef = useRef<StaleRunGuard>(beginStaleRun());
-  useEffect(() => {
-    const guard = guardRef.current;
-    return () => {
-      guard.dispose();
-    };
-  }, []);
+  const { begin, clearError, error, fail } = useReviewGuard();
 
   const review = useCallback(
     async (characterId: string) => {
       if (!projectId) {
         return;
       }
-      guardRef.current.dispose();
-      const guard = beginStaleRun();
-      guardRef.current = guard;
-      setError("");
+      const guard = begin();
       await reviewBusy.run(async () => {
         try {
           const v = await reviewCharacter(projectId, characterId);
@@ -52,18 +41,18 @@ export function useCharacterReview(projectId: string): CharacterReviewController
         } catch (error_) {
           guard.commit(() => {
             setVerdict(null);
-            setError(error_ instanceof Error ? error_.message : "评审失败");
           });
+          fail(guard, error_, "评审失败");
         }
       });
     },
-    [projectId, reviewBusy],
+    [projectId, reviewBusy, begin, fail],
   );
 
   const reset = useCallback(() => {
     setVerdict(null);
-    setError("");
-  }, []);
+    clearError();
+  }, [clearError]);
 
   return {
     verdict,
