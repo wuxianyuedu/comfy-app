@@ -381,8 +381,12 @@
     # lcov，这一格接在它后面上报（见 `COMFYAPP_CI_DAILY_GATES` 与 `*daily_gates` 末尾）。
     # 名字在这儿 = 那一格必须一字不差地出现在 `master 合并复核` 流水线里（判据
     # `tests/no-platform-ci-config.test.ts` 双向核对：缺一格红、多一格红）。
+    #
+    # 2026-11-02 起加 `GitHub master 镜像` 一格：它不是校验，是这一档的出口动作 ——
+    # GitHub 侧的 schedule（daily / package-desktop）跑镜像仓的默认分支，CNB 的
+    # master 不推过去它们就每天跑一棵旧树（理由全文在 `.push-stages` 里那格的注释上）。
     COMFYAPP_CI_PUSH_GATES: >-
-      合并形态复核, 安装依赖, 生成态文档与源同步, API 文档生成与自检, 文档引用与权威源一致, 工作区出处
+      合并形态复核, GitHub master 镜像, 安装依赖, 生成态文档与源同步, API 文档生成与自检, 文档引用与权威源一致, 工作区出处
     # 定时那一跑（`master."crontab: …"`）自己的 stage 清单 —— **另一个流水线，另一份清单**。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
     # 而这两问的答案如今分在两处：会自己起一堆子进程的那两档（全量单测、`next build`）
@@ -650,9 +654,13 @@
 # 2026-10-28 起扩格（此前整条只有 `合并形态复核` 一格、20~35 秒）。撤进来的四格判的都是
 # 「**合并后的树**一致不一致 / 这次运行的事实是什么」，不是「这次 PR 改了什么」——
 # 那一类留在 PR 档（判据面在 `ci-incremental-gates.mjs` 的登记里逐条写着为什么收窄安全）。
+# 2026-11-02 起的 `GitHub master 镜像` 是这一档里唯一的例外：它不校验树，是出口动作
+# （把 master 镜像到 GitHub，那边的 schedule 才跑得到新树），取舍写在那格的注释里。
 # 顺序有讲究：
 #   · `合并形态复核` 排最前：形态不对（非合并提交）时后面全部 skipped，
 #     别在没资格的工作区上花 typedoc 的钱；
+#   · `GitHub master 镜像` 紧随其后：它不吃 node_modules，排在前提格之前没有成本；
+#     排在它后面反而会让「文档链红了」连带「镜像不推」—— 那不是想要的对偶；
 #   · `安装依赖` 是前提格：`API 文档生成与自检` 要跑 typedoc，而 push 是全新 job 目录、
 #     `node_modules` 恒不在场（与每日档同一形态，理由见 `每日安装依赖` 那段）。
 #     缺了它，这一档会以「找不到 typedoc」的形态红 —— 与每日档当年「找不到 next」同一族。
@@ -672,6 +680,31 @@
     # 这一格曾有「唯一没钉控制台编码」的历史（规范 §13.5.3.9）：补上那层 `$enc=…`
     # 不改变读数，但让它不依赖「控制台代码页恰好是多少」这个**继承来的**状态。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit
+  # ── GitHub master 镜像：这一档唯一的**出口动作**（不校验树）──────────────────
+  #
+  # 它要回答的事：GitHub 侧的 schedule（`.github/workflows/daily.yml` /
+  # `package-desktop.yml`）跑的是镜像仓的**默认分支** —— CNB 的 master 不推过去，
+  # 它们每天跑的就是一棵停在旧 SHA 的树，绿灯与「今天的 master 行不行」无关。
+  # 所以每一次 master push 都要把 HEAD 推成那边的 `refs/heads/master`（`--force`：
+  # 镜像语义是「跟住」，漏推之后下一推自己追平）。
+  #
+  # 排位：在 `合并形态复核` **之后**（形态不对的工作区整档 fail-stop，没资格的树不推）、
+  # 在 `安装依赖` **之前**（推送只吃 git 与令牌，不吃 node_modules —— 早推早就位，
+  # 也让后面几格校验红掉时镜像不跟着陪葬：树级校验红 ≠ master 不该被镜像）。
+  #
+  # `--readout` 与 PR 那一格 `GitHub 镜像同步` 同族同理由（#3051）：egress / 仓库 /
+  # 令牌是**外部前提**，实测这条链路上撞过 `Failed to connect to github.com port 443`，
+  # 前提没落地不许叠进树级校验的红；三态原值照旧逐行打在日志里。脚本那一侧的形态
+  # （不派发、不需要 IID、`[mirror-master]` 前缀）见 `scripts/ci-github-mirror-push.mjs`
+  # 文件头「--master」一节。令牌经 push 流水线的 `imports:` 注入（与 PR 那条同一枚）。
+  - name: GitHub master 镜像
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --master --readout
+    # 与 PR 那一格同一档外框：探活 30s×至多 3 次、推送 240s×至多 2 次都在脚本里各自
+    # 限时并对 egress 类失败带退避重试（REMOTE_PROBE_TIMEOUT_MS / PUSH_TIMEOUT_MS /
+    # PROBE_MAX_ATTEMPTS，2026-11-02 起 —— `cnb-pe2-1k6e1uhj8` 连续两跑死在探活 15s
+    # 无回话，同日 19:47 同 runner 却探活通过，是间歇抖动不是硬阻断）。10m 是包住
+    # 最坏墙钟（探活 ≈105s + 推送 ≈485s）与节点冷启动的余量。
+    timeout: 10m
   - name: 安装依赖
     # 与 PR 那一格 `Install dependencies` 的**命令行 / env / timeout 三样都逐字相同**
     # （判据 `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS`）。
@@ -1673,10 +1706,11 @@
   # （脚本内先脱敏，硬规则 17）。
   - name: GitHub 镜像同步
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --readout
-    # 两跳 git 调用各自带超时（`scripts/ci-github-mirror-push.mjs` 的 REMOTE_PROBE_TIMEOUT_MS /
-    # PUSH_TIMEOUT_MS —— 没有它们就得吃 git 自己那个 21s 的 connect 超时，而那一形过去只被
-    # 念成「令牌活不活」）。5m 是外框，与它原在 endStages 时同一档。
-    timeout: 5m
+    # 两跳 git 调用各自带超时并对 egress 类失败带退避重试（`scripts/ci-github-mirror-push.mjs`
+    # 的 REMOTE_PROBE_TIMEOUT_MS 30s×3 / PUSH_TIMEOUT_MS 240s×2 —— 没有限时就得吃 git 自己
+    # 那个 21s 的 connect 超时，而那一形过去只被念成「令牌活不活」；重试的立案依据见
+    # 脚本文件头第 8 条）。10m 是外框，包住最坏墙钟（≈105s + ≈485s）与冷启动余量。
+    timeout: 10m
 
   # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
   #
@@ -2600,6 +2634,11 @@ master:
     - <<: *common
       name: master 合并复核
       lock: *lock_push
+      # 与 PR 那条同一枚镜像令牌（`GitHub master 镜像` 那一格要读它）。密钥文件里已声明
+      # `allow_slugs: [moon-read/comfy-app-t3]`（声明理由见 `pull_request` 那条上面的注释），
+      # push 事件的触发者按同一规则校验。
+      imports:
+        - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
       stages: *push_stages
 
   # 每天一次的定时任务（官方 `zh/build/crontab.md`）：`0 0 * * *` = 每天 01:00

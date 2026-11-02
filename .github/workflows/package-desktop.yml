@@ -1,0 +1,84 @@
+# 桌面成品包（镜像档）—— 对位 `.cnb.yml` 的「桌面成品包」（crontab 0 3 * * *，北京时间）
+#
+# 承接的格（命令逐字对位 CNB 桌包档）：
+#   安装依赖 → 桌包工具预置（tauri-tools-cache.mjs）→ 桌面成品构建（pnpm tauri build）。
+#
+# 刻意不承接 / 不同形：
+#   · `打包·壳工具链自证`（--rust-only）是自托管宿主机事实读数；windows-latest 镜像
+#     自带 Rust 工具链，无需自证，cargo 缓存由 swatinem/rust-cache 承担。
+#   · ⚠️ **发布落点不同形（待确认的决策点）**：CNB 那一格 `publish-desktop-bundle.mjs`
+#     发布到**本机常驻目录**（留 2 份）；GitHub runner 是即弃机，等价物是
+#     `upload-artifact`（下方最后一步）。要 GitHub Releases / 仍回写那台机的常驻目录 /
+#     两者都要，是单独一次决定 —— 决定落地前这里先出 artifact。
+#   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层；GitHub Windows runner
+#     的 pwsh 输出 UTF-8，直跑真命令。
+#
+# ⚠️ schedule 只跑在**镜像仓默认分支**上（同 daily.yml 那段前提，#3064 起已接上）。
+# `workflow_dispatch`（可指 sha）仍是手动入口。GitHub cron 是 UTC：北京 03:00 = UTC 19:00。
+# `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 与 rust-cache
+# 的最新主版本分别是 v6 与 v2）。
+name: Package desktop (mirror)
+
+on:
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: 要打包的那一笔 sha（留空 = 默认分支 HEAD）
+        required: false
+        default: ""
+
+concurrency:
+  # 对位 CNB 的 `.lock-package`：桌包档全局一把锁。
+  group: package
+  cancel-in-progress: true
+
+env:
+  SKIP_ENV_VALIDATION: "1"
+  BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
+  CI: "true"
+
+jobs:
+  package:
+    # 桌包的目标平台是 Windows（tauri.conf.json targets: nsis + msi）⇒ 只能 Windows runner。
+    # 钉 2022 不跟 `windows-latest` 浮动标签，理由同 pr-gate.yml 的镜像钉版口径。
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - name: 检出
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: cargo 缓存
+        uses: swatinem/rust-cache@v2
+
+      - name: 安装依赖（冷装约 8 分钟；better-sqlite3 原生编译吃 VS 生成工具，镜像自带）
+        run: pnpm install --frozen-lockfile
+
+      - name: 桌包工具预置（cnb 同款入口一字不改）
+        run: node scripts/tauri-tools-cache.mjs
+
+      - name: 桌面成品构建（cnb 同款判据一字不改）
+        run: pnpm tauri build
+
+      # upload-artifact v4 → v7（2026-11-02 核过 tag）：v5 起 node24 运行时，v6 起要求
+      # runner ≥ 2.327.1（托管 runner 恒满足），v7 新增 `archive` 输入（缺省 true ⇒
+      # 本步的 name/path/retention-days 用法不变）。
+      - name: 上传桌面成品（artifact；发布落点的最终决定见文件头）
+        uses: actions/upload-artifact@v7
+        with:
+          name: comfyapp-desktop-bundle
+          path: src-tauri/target/release/bundle/
+          retention-days: 14
