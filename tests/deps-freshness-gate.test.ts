@@ -350,18 +350,18 @@ describe("check-deps-freshness 契约", () => {
     // 权威定义（`scripts/doc-facts.cjs` 反向解析它），判据里的字面量必须与它逐项相等。
     // 这条用例同时挡住了「解析器失灵 ⇒ 读出空清单 ⇒ 一切照旧绿」那一档
     // （§12.16 的同款教训：一个永远返回空数组的解析器会让所有断言全绿）。
-    const facts =
-      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-        FACTS: Array<{ extract: () => unknown; key: string }>;
-      };
+    /* SAFETY: 类型断言已复核 */
+    const facts = (await import("../scripts/doc-facts.cjs")) as unknown as {
+      FACTS: Array<{ extract: () => unknown; key: string }>;
+    };
     const probesFact = facts.FACTS.find((f) => f.key === "deps.resolveProbes");
     expect(probesFact, "FACTS 里缺 deps.resolveProbes 登记项").toBeDefined();
     const declared = probesFact?.extract();
     expect(Array.isArray(declared)).toBe(true);
-    const worktree =
-      /* SAFETY: 类型断言已复核 */ (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
-        RESOLVE_PROBES: Array<string>;
-      };
+    /* SAFETY: 类型断言已复核 */
+    const worktree = (await import("../scripts/launcher-core/worktree.mjs")) as unknown as {
+      RESOLVE_PROBES: Array<string>;
+    };
     expect(worktree.RESOLVE_PROBES).toEqual(declared);
     // 清单非空也是判据的一部分：空的探针清单会让解析层**永远判绿**，
     // 而那正是它要拦的那件事。

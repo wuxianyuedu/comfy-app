@@ -135,8 +135,8 @@ function normalizeExtraModelItem(item: unknown): RemoteModelEntry | null {
     ...(apiKey === undefined ? {} : { apiKey }),
     /* SAFETY: 类型断言已复核 */
     kind:
-      typeof kind === "string" &&
-      /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(kind)
+      /* SAFETY: 类型断言已复核 */
+      typeof kind === "string" && (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(kind)
         ? (kind as RemoteModelKind)
         : null,
   };

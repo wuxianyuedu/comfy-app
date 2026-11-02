@@ -263,7 +263,8 @@ describe("on-demand-duties —— 判据自己不许静默降级", () => {
     /* SAFETY: 类型断言已复核 */
     const broken = { ...led.duties[0] } as Partial<DutyRow>;
     delete broken.executor;
-    led.duties = [/* SAFETY: 类型断言已复核 */ broken as DutyRow, ...led.duties.slice(1)];
+    /* SAFETY: 类型断言已复核 */
+    led.duties = [broken as DutyRow, ...led.duties.slice(1)];
     repo.write("scripts/.on-demand-duties.json", JSON.stringify(led, null, 2));
     const { code, output } = repo.run();
     expect(code).toBe(1);

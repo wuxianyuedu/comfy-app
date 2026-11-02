@@ -143,7 +143,8 @@ describe("两个纯 Node 宿主不许再各写一份归一化", () => {
   /* 「编排器」这一侧读**现算的链路闭包**而不是主文件：R5 拆刀（ISSUE #1811）后
    * 门控那一段住 `launcher-core/dev-boot.mjs`，只读主文件会让 `toContain` 落空
    * 而 `not.toMatch` 对着空串恒真 —— 那正是这条判据要防的形态。 */
-  for (const [label, file] of /* SAFETY: 类型断言已复核 */ [
+  /* SAFETY: 类型断言已复核 */
+  for (const [label, file] of [
     ["dev-launcher.mjs", LAUNCHER],
     ["executor-host.mjs", HOST],
   ] as const) {

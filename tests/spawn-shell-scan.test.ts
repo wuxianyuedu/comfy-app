@@ -384,7 +384,8 @@ describe("scripts/package-bin-entry.mjs — 按垫片名字解析（#2572）", (
     expect(a.pkg.bin?.tsc6 ?? null, "两份的键撞了：tsc 那份也有 tsc6").toBeNull();
     expect(b.pkg.bin?.tsc ?? null, "两份的键撞了：tsc6 那份也有 tsc").toBeNull();
     /* 入口路径与包自己申报的那条一致（垫片没指到别处去）。 */
-    for (const [name, entry] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [name, entry] of [
       ["tsc", tsc!],
       ["tsc6", tsc6!],
     ] as const) {

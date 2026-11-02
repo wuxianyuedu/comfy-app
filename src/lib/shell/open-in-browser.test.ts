@@ -72,17 +72,16 @@ describe("openUrlInBrowser 的协议闸门", () => {
   });
 
   /* 每一条都能过 `z.url()`，也每一条都必须在这里被拦下。 */
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["file:///C:/Users/me/.env"],
-      ["file:///etc/passwd"],
-      ["javascript:alert(1)"],
-      ["data:text/html,<script>alert(1)</script>"],
-      ["comfyapp://open?path=C:/"],
-      ["search-ms:query=x"],
-      ["about:blank"],
-    ] as const,
-  )("拒绝 %j 且一次都不 spawn", async ([url]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["file:///C:/Users/me/.env"],
+    ["file:///etc/passwd"],
+    ["javascript:alert(1)"],
+    ["data:text/html,<script>alert(1)</script>"],
+    ["comfyapp://open?path=C:/"],
+    ["search-ms:query=x"],
+    ["about:blank"],
+  ] as const)("拒绝 %j 且一次都不 spawn", async ([url]) => {
     const res = await openUrlInBrowser(url);
     expect(res.ok).toBe(false);
     expect(res.detail).toContain("http/https");
@@ -101,10 +100,8 @@ describe("openUrlInBrowser 的协议闸门", () => {
 describe("openUrlInBrowser 的命令形态", () => {
   it("命令与参数分开发给 spawn，URL 是独立的一个 argv 元素（不拼整串）", async () => {
     await openUrlInBrowser("http://127.0.0.1:8188?a=1&b=2");
-    const [cmd, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [
-      string,
-      Array<string>,
-    ];
+    /* SAFETY: 类型断言已复核 */
+    const [cmd, args] = spawnMock.mock.calls[0] as [string, Array<string>];
     if (platform === "win32") {
       // `start` 是 cmd 内建命令，必须由 cmd /c 承载；空串是窗口标题（防 & 被吞）
       expect(cmd).toBeTruthy();

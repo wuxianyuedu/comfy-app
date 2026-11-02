@@ -95,7 +95,9 @@ describe("常驻根（resolveArtifactRoot）", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
       name?: string;
     };
-    expect(derived.root).toBe(path.join(volumeRoot, "ci-artifacts", String(pkg.name).toLowerCase()));
+    expect(derived.root).toBe(
+      path.join(volumeRoot, "ci-artifacts", String(pkg.name).toLowerCase()),
+    );
   });
 
   it("成品根不许落在缓存槽的根里（那边按键位淘汰会删掉安装包）", () => {
@@ -202,9 +204,11 @@ describe("发布那一跑（main）", () => {
     expect(manifest.label).toBe("r1");
     expect(manifest.sha).toBe("cafe1234567890");
     expect(manifest.keep).toBe(DEFAULT_KEEP);
-    expect(
-      /* SAFETY: 类型断言已复核 */ (manifest.files as Array<{ path: string }>).map((f) => f.path),
-    ).toEqual(["msi/app.msi", "nsis/app-setup.exe"]);
+    /* SAFETY: 类型断言已复核 */
+    expect((manifest.files as Array<{ path: string }>).map((f) => f.path)).toEqual([
+      "msi/app.msi",
+      "nsis/app-setup.exe",
+    ]);
     expect(fs.readFileSync(path.join(root, LATEST_POINTER_FILE), "utf8").trim()).toBe("r1");
     /* 指针是**文件**：`<root>/latest` 长成一个目录就是本单禁掉的那个形态。 */
     expect(fs.statSync(path.join(root, LATEST_POINTER_FILE)).isFile()).toBe(true);

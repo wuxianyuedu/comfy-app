@@ -183,11 +183,12 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
     isIgnored: (rel: string) => boolean;
   };
 
+  /* SAFETY: 类型断言已复核 */
   test.for(
     /* 表里的路径只是**分类样例**，一律用不存在的夹具路径（ISSUE #2830）：写成真路径时，
      * 「按路径引用」那一档会把整份自测算成它们的消费方 —— 改一个 `src/**` 业务文件就拉起
      * 这 40 多秒的一跑。被测脚本自己（`scripts/check-format.cjs`）照旧写真实路径，那是消费关系。 */
-    /* SAFETY: 类型断言已复核 */ [
+    [
       ["scripts/check-format.cjs", true],
       ["tests/anything.test.ts", true],
       ["e2e/fixture.spec.ts", true],

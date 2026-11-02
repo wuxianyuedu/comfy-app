@@ -37,7 +37,8 @@ function channels(value: string): [number, number, number] {
 
 /** WCAG 相对亮度（sRGB 线性化后加权）。 */
 function luminance(value: string): number {
-  const [r, g, b] = /* SAFETY: 类型断言已复核 */ channels(value).map((c) => {
+  /* SAFETY: 类型断言已复核 */
+  const [r, g, b] = channels(value).map((c) => {
     const s = c / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   }) as [number, number, number];
@@ -72,12 +73,11 @@ const MIN_SELECTED_VS_BASE = 1.35;
 const MIN_SELECTED_VS_HOVER = 1.15;
 
 describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）", () => {
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["浅色", () => light],
-      ["深色", () => dark],
-    ] as const,
-  )("%s：悬停 / 选中底色都明显区别于侧栏底", ([, get]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)("%s：悬停 / 选中底色都明显区别于侧栏底", ([, get]) => {
     const t = get();
     const base = token(t, "--color-panel-deep");
     const hover = token(t, "--color-nav-hover");
@@ -99,12 +99,11 @@ describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）",
     ).toBeGreaterThanOrEqual(MIN_SELECTED_VS_HOVER);
   });
 
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["浅色", () => light],
-      ["深色", () => dark],
-    ] as const,
-  )("%s：别名确实落到侧栏专用的两级 token 上", ([, get]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)("%s：别名确实落到侧栏专用的两级 token 上", ([, get]) => {
     const t = get();
     // 悬停档必须**不再**是通用表面 token `--color-subtle`：那是本 ISSUE 的根因，
     // 哪天有人「图省事合回去」，这条会当场红。
@@ -117,12 +116,11 @@ describe("侧栏导航项三态在真编译产物里可分辨（ISSUE #1291）",
     expect(token(light, "--color-nav-selected")).not.toBe(token(dark, "--color-nav-selected"));
   });
 
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["浅色", () => light],
-      ["深色", () => dark],
-    ] as const,
-  )("%s：选中底上的正文与指示条都够亮", ([, get]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)("%s：选中底上的正文与指示条都够亮", ([, get]) => {
     const t = get();
     const selected = token(t, "--color-nav-selected");
     // 正文：底色不是「越亮越好」，压在它上面的文字必须还读得清（WCAG 4.5:1）。

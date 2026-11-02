@@ -52,16 +52,18 @@ class FakeIntersectionObserver {
 
   /** 投递一次「谁进入了 / 谁离开了」。 */
   emit(entries: Array<{ isIntersecting: boolean; target: Element }>) {
+    /* SAFETY: 类型断言已复核 */
     this.callback(
       entries.map(
+        /* SAFETY: 类型断言已复核 */
         (e) =>
-          /* SAFETY: 类型断言已复核 */ ({
+          ({
             target: e.target,
             isIntersecting: e.isIntersecting,
             intersectionRatio: e.isIntersecting ? 1 : 0,
           }) as unknown as IntersectionObserverEntry,
       ),
-      /* SAFETY: 类型断言已复核 */ this as unknown as IntersectionObserver,
+      this as unknown as IntersectionObserver,
     );
   }
 }

@@ -114,11 +114,8 @@ export function buildQueryString(
       }
       continue;
     }
-    const part = encodeValue(
-      /* SAFETY: 类型断言已复核 */ value as string | number | boolean,
-      keepEmpty,
-      key,
-    );
+    /* SAFETY: 类型断言已复核 */
+    const part = encodeValue(value as string | number | boolean, keepEmpty, key);
     if (part !== null) {
       parts.push(part);
     }

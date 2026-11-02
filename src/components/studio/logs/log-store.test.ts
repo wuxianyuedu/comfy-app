@@ -988,13 +988,8 @@ describe("日志分类开关过滤", () => {
       makeEntry({ id: "x2", origin: "app" }),
     ];
     const open = computeFiltered(base, "all", "", "all");
-    const hidden = computeFiltered(
-      base,
-      "all",
-      "",
-      "all",
-      /* SAFETY: 类型断言已复核 */ ["app"] as Array<LogCategoryFilter>,
-    );
+    /* SAFETY: 类型断言已复核 */
+    const hidden = computeFiltered(base, "all", "", "all", ["app"] as Array<LogCategoryFilter>);
     expect(idsOf(open)).toEqual(["x1", "x2"]);
     expect(idsOf(hidden)).toEqual(["x1"]);
   });

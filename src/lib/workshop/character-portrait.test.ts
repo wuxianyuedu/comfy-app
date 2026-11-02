@@ -88,9 +88,10 @@ describe("portraitCandidates 读取候选", () => {
 
   it("按时间倒序返回，坏条目被剔除", () => {
     const character = makeCharacter({
+      /* SAFETY: 类型断言已复核 */
       portraits: [
         makePortrait({ url: "/u/old.png", createdAt: 1 }),
-        /* SAFETY: 类型断言已复核 */ { url: "" } as CharacterPortrait,
+        { url: "" } as CharacterPortrait,
         makePortrait({ url: "/u/new.png", createdAt: 9 }),
       ],
     });

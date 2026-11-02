@@ -59,10 +59,10 @@ type Fact = {
 };
 
 async function loadFacts(): Promise<Array<Fact>> {
-  const mod =
-    /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-      FACTS: Array<Fact>;
-    };
+  /* SAFETY: 类型断言已复核 */
+  const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+    FACTS: Array<Fact>;
+  };
   return mod.FACTS;
 }
 
@@ -184,10 +184,10 @@ function restoreText(abs: string, text: string): void {
  * 「哪条判据在哪跑」写在 SCOPED_DOCS 之外的那几份文件里，不显式并入就没人核（§13.5.10 第 ② 条）。
  */
 async function gateDocs(): Promise<Array<string>> {
-  const mod =
-    /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-      SCOPED_DOCS: Array<string>;
-    };
+  /* SAFETY: 类型断言已复核 */
+  const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+    SCOPED_DOCS: Array<string>;
+  };
   return [
     ...new Set([
       "AGENTS.md",
@@ -306,8 +306,8 @@ describe("校验范围守卫（SCOPED_DOC_DIRS / SCOPED_DOC_EXEMPTIONS）", () =
   };
 
   async function loadScope(): Promise<ScopeMod> {
-    const mod =
-      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
+    /* SAFETY: 类型断言已复核 */
+    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as ScopeMod;
     return mod;
   }
 
@@ -543,10 +543,10 @@ describe("AGENTS.md ↔ standards 漂移守卫", () => {
   });
 
   it("AGENTS.md 由 checkLedgerCommands 显式并入遍历（不进 SCOPED_DOCS、避免生成冗余副本）", async () => {
-    const mod =
-      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-        SCOPED_DOCS: Array<string>;
-      };
+    /* SAFETY: 类型断言已复核 */
+    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+      SCOPED_DOCS: Array<string>;
+    };
     // AGENTS.md 刻意不入 SCOPED_DOCS：进则被 render-doc-placeholders 复制成
     // docs/generated/AGENTS.md，产物里没有占位符替换、只是同一份内容，反而
     // 让读者以为可以改产物（规范 §13.5.5 明确「禁止手改生成物」）。

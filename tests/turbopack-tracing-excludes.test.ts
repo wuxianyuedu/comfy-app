@@ -214,13 +214,12 @@ describe.skipIf(!standaloneExists)(".next/standalone 产物里不得有测试 / 
     expect(files.some((f) => f.includes("node_modules"))).toBe(true);
   });
 
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["测试文件", /(^|\/)src\/.*\.test\.tsx?$/],
-      ["变更碎片", /(^|\/)changelog\.d\/.*\.md$/],
-      ["文档目录", /(^|\/)docs\/.*\.md$/],
-    ] as const,
-  )("不含%s", ([, re]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["测试文件", /(^|\/)src\/.*\.test\.tsx?$/],
+    ["变更碎片", /(^|\/)changelog\.d\/.*\.md$/],
+    ["文档目录", /(^|\/)docs\/.*\.md$/],
+  ] as const)("不含%s", ([, re]) => {
     const hits = files.filter((f) => re.test(f));
     expect(
       hits.slice(0, 10),

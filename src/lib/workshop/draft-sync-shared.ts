@@ -60,7 +60,7 @@ const PROJECT_TYPES = ["short_video", "micro_film", "animation", "ad", "comic", 
 
 function isProjectType(v: unknown): v is ProjectMeta["type"] {
   return (
-    typeof v === "string" &&
-    /* SAFETY: 类型断言已复核 */ (PROJECT_TYPES as ReadonlyArray<string>).includes(v)
+    /* SAFETY: 类型断言已复核 */
+    typeof v === "string" && (PROJECT_TYPES as ReadonlyArray<string>).includes(v)
   );
 }

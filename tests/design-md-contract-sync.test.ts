@@ -551,7 +551,8 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const tiers = parseTextTiers(readFileSync(GLOBALS_PATH, "utf8"), TSHIRT_NAME);
     /* 先验量具：这条是「等式为 0」的判据，档表解空了会永远绿（比红更糟）。
      * 六颗都是本仓真实在用、且**必须**能被类名表达的档。 */
-    for (const [px, name] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [px, name] of [
       [9, "4xs"],
       [10, "3xs"],
       [11, "2xs"],
@@ -773,9 +774,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const offenders = scanProduct(smallLiteral);
     expect(
       offenders,
-      `这些调用点又写了字面 12px / 13px —— 用 text-xs / text-sm（行高要不同就再加 leading-*）：\n${
-        [...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n")
-      }`,
+      `这些调用点又写了字面 12px / 13px —— 用 text-xs / text-sm（行高要不同就再加 leading-*）：\n${[
+        ...new Set(offenders.map((o) => o.file)),
+      ]
+        .map((f) => `  ${f}`)
+        .join("\n")}`,
     ).toEqual([]);
     /* 反向：两档真的都还是 Tailwind 默认的 12 / 14px（否则上面那条会因为「这档没了」
        而空绿，而下一轮的人会搞错每档到底多大）。 */
@@ -805,9 +808,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const offenders = scanProduct(driftLiteral);
     expect(
       offenders,
-      `这些调用点又写了 10.5px —— 那是「比 2xs 小半像素」的漂移值，不是档；要改密度请先在 @theme 动 --text-2xs（\n${
-        [...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n")
-      }`,
+      `这些调用点又写了 10.5px —— 那是「比 2xs 小半像素」的漂移值，不是档；要改密度请先在 @theme 动 --text-2xs（\n${[
+        ...new Set(offenders.map((o) => o.file)),
+      ]
+        .map((f) => `  ${f}`)
+        .join("\n")}`,
     ).toEqual([]);
     /* 反向：2xs 必须还是 11px —— 否则上面那条「并进来」的落点就变了，
        而这批调用点的像素变化量全靠这颗档的值来定（读法与判据共用同一份 helper）。 */
@@ -826,7 +831,8 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
      * 产物）：xs 12/16、sm 14/20、lg 18/28、2xs 11/16.5、3xs 10/15 —— 后两档的
      * 16.5 / 15 是**继承来的 1.5 倍**，不是配对。 */
     const tiers = parseTextTiers(readFileSync(GLOBALS_PATH, "utf8"), TSHIRT_NAME);
-    for (const [name, px] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [name, px] of [
       ["xs", 16],
       ["sm", 20],
       ["lg", 28],
@@ -874,9 +880,11 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const offenders = scanProduct(titleClass);
     expect(
       offenders,
-      `这些调用点挂了标题档的同名 class —— 屏级标题走 \`.u-title-page\`、段级走 \`.u-title-stage\`、卡片标题走 \`.u-title\`（它们不是 utility，是 components 层的类）：\n${
-        [...new Set(offenders.map((o) => o.file))].map((f) => `  ${f}`).join("\n")
-      }`,
+      `这些调用点挂了标题档的同名 class —— 屏级标题走 \`.u-title-page\`、段级走 \`.u-title-stage\`、卡片标题走 \`.u-title\`（它们不是 utility，是 components 层的类）：\n${[
+        ...new Set(offenders.map((o) => o.file)),
+      ]
+        .map((f) => `  ${f}`)
+        .join("\n")}`,
     ).toEqual([]);
   });
 
@@ -930,9 +938,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const vhOffenders = vhHits.filter((h) => !VH_OWNERS.has(h.file));
     expect(
       vhOffenders,
-      `这些调用点又写了浮层上限的字面量 —— 用 ui/overlay-max-height 的 OVERLAY_MAX_HEIGHT / EMBEDDED_SCROLL_MAX_HEIGHT：\n${
-        vhOffenders.map((o) => `  ${o.file}  max-h-[${o.value}vh]`).join("\n")
-      }`,
+      `这些调用点又写了浮层上限的字面量 —— 用 ui/overlay-max-height 的 OVERLAY_MAX_HEIGHT / EMBEDDED_SCROLL_MAX_HEIGHT：\n${vhOffenders
+        .map((o) => `  ${o.file}  max-h-[${o.value}vh]`)
+        .join("\n")}`,
     ).toEqual([]);
 
     const ALIGN_OWNERS = new Set(["src/components/studio/project-canvas/EmptyCanvasHint.tsx"]);
@@ -945,9 +953,9 @@ describe("调用点必须走档位（§Shapes / §Typography 的实现侧）", (
     const alignOffenders = alignHits.filter((h) => !ALIGN_OWNERS.has(h.file));
     expect(
       alignOffenders,
-      `这些调用点又抄了一枚 \`align-[ -Npx ]\` —— 先确认父级是不是 flex：是的话它零效果；真要基线微调就写进 EmptyCanvasHint 那一处的形态并补理由：\n${
-        alignOffenders.map((o) => `  ${o.file}  align-[-${o.value}px]`).join("\n")
-      }`,
+      `这些调用点又抄了一枚 \`align-[ -Npx ]\` —— 先确认父级是不是 flex：是的话它零效果；真要基线微调就写进 EmptyCanvasHint 那一处的形态并补理由：\n${alignOffenders
+        .map((o) => `  ${o.file}  align-[-${o.value}px]`)
+        .join("\n")}`,
     ).toEqual([]);
   });
 

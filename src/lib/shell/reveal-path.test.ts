@@ -122,10 +122,8 @@ describe("命令与参数形态", () => {
     const result = await revealPathInFileManager(target, probeFor(target));
     expect(result.ok).toBe(true);
     expect(spawnMock).toHaveBeenCalledTimes(1);
-    const [cmd, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [
-      string,
-      Array<string>,
-    ];
+    /* SAFETY: 类型断言已复核 */
+    const [cmd, args] = spawnMock.mock.calls[0] as [string, Array<string>];
     if (process.platform === "win32") {
       expect(cmd).toMatch(/cmd(\.exe)?$/i);
       /* `/select,"<路径>"` 必须是**一个**参数：拆成 `/select,` + 路径两个时，
@@ -144,7 +142,8 @@ describe("命令与参数形态", () => {
   it("spawn 的是命令 + 参数数组，不是拼好的整串（不走 shell）", async () => {
     const target = "/var/log/app.log";
     await revealPathInFileManager(target, probeFor(target));
-    const [, args, options] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [
+    /* SAFETY: 类型断言已复核 */
+    const [, args, options] = spawnMock.mock.calls[0] as [
       string,
       Array<string>,
       { stdio?: string },
@@ -178,10 +177,8 @@ describe("命令与参数形态", () => {
     try {
       const result = await revealPathInFileManager(tmp, () => true);
       expect(result.ok).toBe(true);
-      const [, args] = /* SAFETY: 类型断言已复核 */ spawnMock.mock.calls[0] as [
-        string,
-        Array<string>,
-      ];
+      /* SAFETY: 类型断言已复核 */
+      const [, args] = spawnMock.mock.calls[0] as [string, Array<string>];
       /* 目录不加 `/select`：否则窗口停在父层、只选中该文件夹，看不到里面产物。 */
       expect(args.at(-1)).toBe(tmp);
       expect(args.at(-1)).not.toContain("/select");

@@ -103,7 +103,8 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
         <Tabs
           className="gap-0"
           onValueChange={(value) => {
-            setScope(/* SAFETY: 类型断言已复核 */ value as HistoryScope);
+            /* SAFETY: 类型断言已复核 */
+            setScope(value as HistoryScope);
           }}
           value={scope}
         >

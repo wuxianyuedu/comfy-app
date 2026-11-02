@@ -124,9 +124,8 @@ const REFUSAL_PHRASES: Partial<Record<TRPC_ERROR_CODE_KEY, string>> = {
 function refusalDetail(action: string, e: unknown): string {
   const code = errorCode(e);
   const phrase =
-    code === null
-      ? undefined
-      : REFUSAL_PHRASES[/* SAFETY: 类型断言已复核 */ code as TRPC_ERROR_CODE_KEY];
+    /* SAFETY: 类型断言已复核 */
+    code === null ? undefined : REFUSAL_PHRASES[code as TRPC_ERROR_CODE_KEY];
   return phrase ? `${action}：${phrase}` : errorText(e, action);
 }
 

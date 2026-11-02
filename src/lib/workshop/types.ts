@@ -95,9 +95,9 @@ export const DEFAULT_SHOT_TYPE: ShotType = "medium";
  *  但也不放它进类型系统。 */
 export function normalizeShotType(raw: unknown): ShotType {
   /* SAFETY: 类型断言已复核 */
+  /* SAFETY: 类型断言已复核 */
   return (SHOT_TYPES as ReadonlyArray<string>).includes(typeof raw === "string" ? raw : "")
-    ? /* SAFETY: 类型断言已复核 */
-      (raw as ShotType)
+    ? (raw as ShotType)
     : DEFAULT_SHOT_TYPE;
 }
 

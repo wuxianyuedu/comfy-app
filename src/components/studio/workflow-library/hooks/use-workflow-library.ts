@@ -271,8 +271,9 @@ export function useWorkflowLibrary(
   );
 
   const modelTags = useMemo(
+    /* SAFETY: 类型断言已复核 */
     () =>
-      /* SAFETY: 类型断言已复核 */ (tagsQ.data?.tags ?? []) as Array<{
+      (tagsQ.data?.tags ?? []) as Array<{
         count: number;
         id: string;
         name: string;

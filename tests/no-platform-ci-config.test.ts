@@ -93,10 +93,7 @@ const CI_CONFIG_PATHS = [".github/workflows", ".buildkite/pipeline.yml"];
  * 它与 `.cnb.yml` 并行在场，退役时两处同批收。
  */
 const REGISTERED_CI_CONFIG = ".cnb.yml";
-const REGISTERED_CI_CONFIGS: ReadonlyArray<string> = [
-  REGISTERED_CI_CONFIG,
-  ".github/workflows",
-];
+const REGISTERED_CI_CONFIGS: ReadonlyArray<string> = [REGISTERED_CI_CONFIG, ".github/workflows"];
 
 const CI_NAMES = new Set([...CI_CONFIG_FILES, ...CI_CONFIG_PATHS]);
 
@@ -2641,7 +2638,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       expect(cron, `cron 表达式不是五段：${event.cron}`).toHaveLength(5);
       const [minute, hour, dom, month, dow] = cron;
       /* 每天一次 = 分钟固定、小时固定，日 / 月 / 周都是通配。 */
-      for (const [field, name] of /* SAFETY: 类型断言已复核 */ [
+      /* SAFETY: 类型断言已复核 */
+      for (const [field, name] of [
         [minute, "分钟"],
         [hour, "小时"],
       ] as const) {
@@ -2651,7 +2649,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
             `写成 \`*\` / 列表 / 区间都意味着一天跑多次`,
         ).toBe(true);
       }
-      for (const [field, name] of /* SAFETY: 类型断言已复核 */ [
+      /* SAFETY: 类型断言已复核 */
+      for (const [field, name] of [
         [dom, "日"],
         [month, "月"],
         [dow, "周"],
@@ -3495,7 +3494,8 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
           `注册表里的「${pair.daily}」不在每日档的清单里 —— 单跑口引用的是一个每日根本不跑的格`,
         ).toContain(pair.daily);
       }
-      for (const [ev, pipeline] of /* SAFETY: 类型断言已复核 */ [
+      /* SAFETY: 类型断言已复核 */
+      for (const [ev, pipeline] of [
         [target.eventWeb, target.pipelineWeb],
         [target.eventApi, target.pipelineApi],
       ] as const) {

@@ -97,7 +97,8 @@ export type RawCharacter = {
 };
 
 export function parseCharacter(text: string): RawCharacter {
-  const obj = /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<string, unknown>) ?? {};
+  /* SAFETY: 类型断言已复核 */
+  const obj = (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
     appearance: asText(obj.appearance),
@@ -126,7 +127,8 @@ export type RawCharacterFull = {
 } & RawCharacter;
 
 export function parseCharacterFull(text: string): RawCharacterFull {
-  const obj = /* SAFETY: 类型断言已复核 */ (extractJson(text) as Record<string, unknown>) ?? {};
+  /* SAFETY: 类型断言已复核 */
+  const obj = (extractJson(text) as Record<string, unknown>) ?? {};
 
   return {
     name: asText(obj.name, "未命名角色"),
@@ -176,15 +178,17 @@ export type RawShot = {
 export function parseStoryboard(text: string): Array<RawShot> {
   const data = extractJsonArray(text);
   return data.map((datum) => {
-    const obj = /* SAFETY: 类型断言已复核 */ (datum ?? {}) as Record<string, unknown>;
+    /* SAFETY: 类型断言已复核 */
+    const obj = (datum ?? {}) as Record<string, unknown>;
 
     return {
       shotType: normalizeShotType(obj.shotType),
 
       description: asText(obj.description, ""),
 
+      /* SAFETY: 类型断言已复核 */
       characterNames: Array.isArray(obj.characterNames)
-        ? /* SAFETY: 类型断言已复核 */ (obj.characterNames as Array<unknown>).map(String)
+        ? (obj.characterNames as Array<unknown>).map(String)
         : [],
     };
   });
@@ -416,7 +420,8 @@ export function buildShotImageReviewMessages(
     ...input.portraitUrls
       .filter((url) => url.trim() !== "")
       .map((url) => ({
-        type: /* SAFETY: 类型断言已复核 */ "image_url" as const,
+        /* SAFETY: 类型断言已复核 */
+        type: "image_url" as const,
         image_url: { url },
       })),
   ];

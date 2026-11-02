@@ -84,7 +84,8 @@ export function ShotRow({
             <SelectMenu
               {...field}
               className="bg-subtle! border-border! text-xs"
-              labels={/* SAFETY: 类型断言已复核 */ SHOT_TYPE_LABELS as Record<string, string>}
+              /* SAFETY: 类型断言已复核 */
+              labels={SHOT_TYPE_LABELS as Record<string, string>}
               onChange={(value) => {
                 onUpdate(shot.id, {
                   /* SAFETY: 类型断言已复核 */

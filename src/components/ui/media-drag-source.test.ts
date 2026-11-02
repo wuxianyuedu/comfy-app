@@ -55,19 +55,19 @@ describe("载荷形状由出口定义（源端与落点共用一份）", () => {
 
   it("effectAllowed 是 copy（拖拽是「加一份」，不是搬走）", () => {
     const event = dragEvent();
-    mediaDragSourceProps({ url: "/a.png", kind: "image" }).onDragStart(
-      /* SAFETY: 类型断言已复核 */ event as never,
-    );
+    /* SAFETY: 类型断言已复核 */
+    mediaDragSourceProps({ url: "/a.png", kind: "image" }).onDragStart(event as never);
     expect(event.effectAllowed).toBe("copy");
   });
 
   it("显式给的 displayName 优先于从 URL 推导", () => {
     const event = dragEvent();
+    /* SAFETY: 类型断言已复核 */
     mediaDragSourceProps({
       url: "/x/a.png",
       displayName: "素材：封面",
       kind: "image",
-    }).onDragStart(/* SAFETY: 类型断言已复核 */ event as never);
+    }).onDragStart(event as never);
     /* SAFETY: 类型断言已复核 */
     const payload = JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
       displayName: string;
@@ -148,9 +148,8 @@ describe("可拖与光标类是同一个判据", () => {
 describe("audio / doc 也能拖（落点给「暂不支持」的提示）", () => {
   it("mediaType 原样透传", () => {
     const event = dragEvent();
-    mediaDragSourceProps({ url: "/a.mp3", kind: "audio" }).onDragStart(
-      /* SAFETY: 类型断言已复核 */ event as never,
-    );
+    /* SAFETY: 类型断言已复核 */
+    mediaDragSourceProps({ url: "/a.mp3", kind: "audio" }).onDragStart(event as never);
     /* SAFETY: 类型断言已复核 */
     const payload = JSON.parse(event.data.get(MEDIA_DRAG_MIME)!) as {
       mediaType: string;

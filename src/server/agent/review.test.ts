@@ -68,10 +68,8 @@ async function seed(content: {
 async function rows(col: "shots" | "characters"): Promise<Array<Record<string, unknown>>> {
   const row = await productionRepository.getForUser(USER, PROJ);
   const raw = row?.[col];
-  return Array.isArray(raw)
-    ? /* SAFETY: 类型断言已复核 */
-      (raw as Array<Record<string, unknown>>)
-    : [];
+  /* SAFETY: 类型断言已复核 */
+  return Array.isArray(raw) ? (raw as Array<Record<string, unknown>>) : [];
 }
 
 beforeEach(() => {
@@ -109,9 +107,8 @@ describe("reviewContent", () => {
     expect(shot?.review).toEqual(verdict);
     // 只写内容列，没碰 run（run 仍是 upsert 默认的空对象，无 status）
     const row = await productionRepository.getForUser(USER, PROJ);
-    expect(
-      /* SAFETY: 类型断言已复核 */ (row?.run as Record<string, unknown> | undefined)?.status,
-    ).toBeUndefined();
+    /* SAFETY: 类型断言已复核 */
+    expect((row?.run as Record<string, unknown> | undefined)?.status).toBeUndefined();
   });
 
   it("评审角色卡：判定写回 character.review", async () => {
@@ -381,8 +378,8 @@ describe("reviewShotImage（P8-2 生图视觉评审）", () => {
     // 视觉评审走独立视觉模型配置通道
     expect(getVisionLLMConfig).toHaveBeenCalledWith({ taskType: "review" });
     // 消息里带图：镜头图 + 定妆照都进了 image_url 块
-    const [, userMsg] = /* SAFETY: 类型断言已复核 */ completeLLMStructured.mock
-      .calls[0]![1] as Array<{
+    /* SAFETY: 类型断言已复核 */
+    const [, userMsg] = completeLLMStructured.mock.calls[0]![1] as Array<{
       content: unknown;
       role: string;
     }>;
@@ -484,9 +481,8 @@ describe("autoselectShotImage", () => {
     // 赢家判定落 shot.imageReview（与 reviewShotImage 同一落点）；镜头的
     // imageUrl / taskId 不被服务端动（草稿回写口径，字段所有权见 #2615）。
     const shot = (await rows("shots"))[0]!;
-    expect(
-      /* SAFETY: 类型断言已复核 */ (shot.imageReview as { scores: unknown }).scores,
-    ).toBeTruthy();
+    /* SAFETY: 类型断言已复核 */
+    expect((shot.imageReview as { scores: unknown }).scores).toBeTruthy();
     expect(shot.imageUrl).toBe("/generated/task-a/1.png");
   });
 

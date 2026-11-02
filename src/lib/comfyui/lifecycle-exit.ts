@@ -260,7 +260,8 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   /* 监督器不该成为「进程退不出去」的原因（Node 里未 unref 的 interval 会吊住
    * 事件循环）。 */
   if (typeof handle === "object" && handle !== null && "unref" in handle) {
-    /* SAFETY: 类型断言已复核 */ (handle as { unref: () => void }).unref();
+    /* SAFETY: 类型断言已复核 */
+    (handle as { unref: () => void }).unref();
   }
 
   return { stop };

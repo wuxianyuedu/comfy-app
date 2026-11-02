@@ -447,7 +447,8 @@ describe("组 C 的分文件读数：自带分母与对账，否则它只是另�
     );
     const dir = makeCDir(many, {
       "comfy-c-0-1.xml": many.map(
-        (name, i) => /* SAFETY: 类型断言已复核 */ [name, i + 1] as [string, number],
+        /* SAFETY: 类型断言已复核 */
+        (name, i) => [name, i + 1] as [string, number],
       ),
     });
     run(

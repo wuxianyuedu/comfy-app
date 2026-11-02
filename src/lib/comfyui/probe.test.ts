@@ -4,8 +4,9 @@ import { probeBaseOnce } from "./probe";
 /** 造一个 fetch 桩：给定状态码即返回对应 Response（默认 2xx 为 ok）。 */
 function fetchStub(status: number, ok = status >= 200 && status < 300) {
   return vi.fn(
+    /* SAFETY: 类型断言已复核 */
     async () =>
-      /* SAFETY: 类型断言已复核 */ ({
+      ({
         ok,
         status,
       }) as unknown as Response,

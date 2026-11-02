@@ -133,9 +133,8 @@ describe("上游失败要分相", () => {
     getView.mockRejectedValueOnce(new FakeViewError(404, "getView failed: 404"));
     const res = await GET(get("?filename=gone.png"));
     expect(res.status).toBe(404);
-    expect(
-      /* SAFETY: 类型断言已复核 */ ((await res.json()) as { error?: string }).error,
-    ).toBeTruthy();
+    /* SAFETY: 类型断言已复核 */
+    expect(((await res.json()) as { error?: string }).error).toBeTruthy();
   });
 
   it("ComfyUI 回别的状态 → 502，不伪装成 500", async () => {

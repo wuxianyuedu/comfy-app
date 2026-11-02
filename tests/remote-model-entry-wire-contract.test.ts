@@ -133,7 +133,8 @@ describe("远端模型条目 ⇄ configSave 的入参判据", () => {
     const drifted = { model: "gpt-x", baseUrl: "https://api.example/v1" };
     await expect(
       createCaller(makeCtx()).configSave({
-        extraModels: [/* SAFETY: 类型断言已复核 */ drifted as never],
+        /* SAFETY: 类型断言已复核 */
+        extraModels: [drifted as never],
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(tdb.$tables.remoteModels).toHaveLength(0);

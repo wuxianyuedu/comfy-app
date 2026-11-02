@@ -187,10 +187,8 @@ export function installJsdomCapabilityGate(
     detach: () => {
       console_.removeAllListeners("jsdomError");
       for (const listener of originals) {
-        console_.on(
-          "jsdomError",
-          /* SAFETY: 类型断言已复核 */ listener as (error: JsdomErrorLike) => void,
-        );
+        /* SAFETY: 类型断言已复核 */
+        console_.on("jsdomError", listener as (error: JsdomErrorLike) => void);
       }
       installed.delete(console_);
     },

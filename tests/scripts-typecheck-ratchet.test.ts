@@ -87,7 +87,8 @@ function runCheck(args: Array<string>, root = fixture): { code: number; output: 
     });
     return { code: 0, output };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as {
+    /* SAFETY: 类型断言已复核 */
+    const e = error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -134,7 +135,8 @@ function baselinePath(): string {
   return join(fixture, "scripts", ".scripts-typecheck-baseline.json");
 }
 function readFixtureBaseline(): Ledger {
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
 }
 
 beforeAll(() => {
@@ -349,7 +351,8 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
           .filter(Boolean),
       );
     } catch (error) {
-      return `；git 清单取不到，定位不了是哪几份：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`;
+      /* SAFETY: 类型断言已复核 */
+      return `；git 清单取不到，定位不了是哪几份：${(error as Error).message}`;
     }
     const stray = face.map((p) => String(p).replaceAll("\\", "/")).filter((p) => !tracked.has(p));
     return `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）${
@@ -400,9 +403,8 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
      * 一天修了 8 次），改成判据自己对齐之后又变成「判定档写文件」，与「判定档只读」
      * 的那一半轮流红。现在的口径最简：份数每次现算（判据自己的 `trackedMjs()` +
      * `splitTrackedFace()`），账本里**不存在**这个数，于是不存在「两份口径」。 */
-    const judge = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
-      "../scripts/check-scripts-typecheck.cjs",
-    ) as {
+    /* SAFETY: 类型断言已复核 */
+    const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
       configFace: (ts: unknown) => {
         excludes?: Array<string>;
         mjs?: Array<string>;
@@ -422,7 +424,8 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
      * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
      * 所以落成 `unknown`，不在用例这一侧再抄一份 TS 的类型面。 */
-    const ts = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)("typescript") as unknown;
+    /* SAFETY: 类型断言已复核 */
+    const ts = createRequire(import.meta.url)("typescript") as unknown;
     const cfg = judge.configFace(ts);
     expect(cfg.ok, "reason" in cfg ? cfg.reason : "").toBe(true);
     /* 面取**判据自己那一份求交结果**：账本记的是「这份提交里有多少脚本」，
@@ -451,7 +454,8 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       strays,
       `磁盘上有、git 清单里没有的这几份不该出现在真仓库的工作区里：${strays.join("、")}`,
     ).toEqual([]);
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
     ) as { files: Record<string, Record<string, number>>; total: number };
     expect(

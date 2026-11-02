@@ -226,18 +226,20 @@ describe("「没量到」≠ 「这个命令不存在」（ISSUE #1961）", () =
    * 这一组把「起了一次、明确失败」（`ENOENT` / `EACCES` / `EINVAL` / `ENOEXEC`）与
    * 「这一次没量到」（超时 + 资源类）分开钉住：前者照旧算不可用，后者必须当可用
    * （否则一台满机上的判据会齐刷刷误报「工具没装」—— 让人去装一个本就装好的东西）。 */
-  it.for(
-    /* SAFETY: 类型断言已复核 */ ["ETIMEDOUT", "EAGAIN", "EMFILE", "ENOMEM", "UNKNOWN"] as const,
-  )("「没量到」的码（%s）按**可用**算，不再被跳过", (code) => {
-    const dir = freshDir();
-    writeCandidate(path.join(dir, "python3"));
-    const hit = resolvePython({
-      env: { PATH: dir },
-      platform: "linux",
-      probe: { access: () => undefined, spawn: () => code },
-    });
-    expect(hit?.command).toBe("python3");
-  });
+  /* SAFETY: 类型断言已复核 */
+  it.for(["ETIMEDOUT", "EAGAIN", "EMFILE", "ENOMEM", "UNKNOWN"] as const)(
+    "「没量到」的码（%s）按**可用**算，不再被跳过",
+    (code) => {
+      const dir = freshDir();
+      writeCandidate(path.join(dir, "python3"));
+      const hit = resolvePython({
+        env: { PATH: dir },
+        platform: "linux",
+        probe: { access: () => undefined, spawn: () => code },
+      });
+      expect(hit?.command).toBe("python3");
+    },
+  );
 
   it("同一条链上「明确起不来」照旧算不可用 —— 别把两件事混成一件", () => {
     const dir = freshDir();

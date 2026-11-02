@@ -18,8 +18,8 @@ function streamReturns(text: string) {
 }
 
 vi.mock("~/lib/llm/browser", () => ({
-  streamChat: (...args: Array<unknown>): Promise<string> =>
-    /* SAFETY: 类型断言已复核 */ streamChat(...args) as Promise<string>,
+  /* SAFETY: 类型断言已复核 */
+  streamChat: (...args: Array<unknown>): Promise<string> => streamChat(...args) as Promise<string>,
 }));
 vi.mock("~/lib/llm/prompts", () => ({
   buildScriptMarkdownMessages: () => [],
@@ -218,7 +218,8 @@ describe("resolveAgentTool — 需要模型的工具（streamChat 打桩）", ()
 
   it("add_character：重名 → 拒绝，且不产生第二张卡", async () => {
     const { state, handlers } = makeMockContext();
-    state.characters = [/* SAFETY: 类型断言已复核 */ { id: "c1", name: "阿宁" } as never];
+    /* SAFETY: 类型断言已复核 */
+    state.characters = [{ id: "c1", name: "阿宁" } as never];
     const res = await resolveAgentTool("add_character", '{"name":"阿宁"}', handlers).execute();
     expect(res.ok).toBe(false);
     expect(state.characters).toHaveLength(1);

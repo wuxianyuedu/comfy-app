@@ -104,8 +104,9 @@ export function useSettingsSave(input: {
             successText: "LLM 配置已保存",
           },
         );
+        /* SAFETY: 类型断言已复核 */
         return result.ok
-          ? { ok: /* SAFETY: 类型断言已复核 */ true as const }
+          ? { ok: true as const }
           : {
               /* SAFETY: 类型断言已复核 */
               ok: false as const,
