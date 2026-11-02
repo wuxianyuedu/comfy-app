@@ -53,16 +53,34 @@
  *    `export GIT_DIR=…` 的做法（本仓 `scripts/ci-*.mjs` 就有几处），那一形态下子进程里的
  *    `git push` 会推到别的树上 —— 这一格的每一条 git 调用都显式清掉这两个变量，只吃 `cwd`。
  *
+ * ## `--master`：push 档（`master 合并复核`）的主干镜像
+ *
+ * 同一枚令牌、同一条推送链（探活 → `--force` 推），三件事与 PR 模式不同：
+ *
+ *   1. **没有 IID**：push 事件上没有 `CNB_PULL_REQUEST_IID`，上下文集换成
+ *      `resolveMasterContext()`（只要令牌与 HEAD 两件，ref 恒为 `master`）；
+ *   2. **不派发**：`repository_dispatch` 是给 PR 门禁那一跑的起跑枪；master 这一推
+ *      服务的对象是 GitHub 侧的 schedule（`daily.yml` / `package-desktop.yml`）——
+ *      它们跑默认分支，推完即就位，没有要叫醒的 workflow；
+ *   3. **日志前缀是 `[mirror-master]`**：与 PR 那一格的 `[mirror]` 分开 ——
+ *      `check-mirror-attendance.mjs` 按格名 + `[mirror]` 正文认 PR 档那一格，
+ *      两边各念各的，互不冒充出勤。
+ *
+ * 推 `HEAD:refs/heads/master` 仍带 `--force`：镜像的语义是「跟住 CNB 的 master」，
+ * 这一格红过几跑（漏推）之后，下一推必须能自己追平，不需要人去镜像仓手工对齐。
+ *
  * ## 用法
  *
  * ```text
  * node scripts/ci-github-mirror-push.mjs               # 三态退码（本地自查 / 将来承重那一档）
  * node scripts/ci-github-mirror-push.mjs --readout     # 读数档：三态照打点，退码恒 0（CI 主列那一格）
  * node scripts/ci-github-mirror-push.mjs --dry-run     # 只打印计划与 payload，不发任何请求
+ * node scripts/ci-github-mirror-push.mjs --master      # push 档那一格：推 master，不派发
  * ```
  *
  * 环境变量：`GITHUB_MIRROR_TOKEN`（必填）、`GITHUB_MIRROR_REPO`（缺省
- * `wuxianyuedu/comfy-app`）、`CNB_PULL_REQUEST_IID`、`CNB_PULL_REQUEST_TARGET_SHA`。
+ * `wuxianyuedu/comfy-app`）、`CNB_PULL_REQUEST_IID`、`CNB_PULL_REQUEST_TARGET_SHA`
+ * （后两件只属 PR 模式；`--master` 不读它们）。
  */
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -92,6 +110,9 @@ export const PUSH_TIMEOUT_MS = 240_000;
 
 /** 镜像仓库缺省坐标（`GITHUB_MIRROR_REPO` 可覆盖）。 */
 export const DEFAULT_REPO = "wuxianyuedu/comfy-app";
+
+/** `--master` 模式推的目标分支（GitHub 侧的默认分支；CNB `master` 的唯一镜像出口）。 */
+export const MASTER_REF = "master";
 
 /** 派发的事件名，与 `.github/workflows/pr-gate.yml` 的 `types:` 逐字配对。 */
 export const EVENT_TYPE = "cnb-pr-sync";
@@ -216,6 +237,36 @@ export function resolveContext(io) {
     iid,
     ok: true,
     ref: mirrorRefFor(iid),
+    repo: (env.GITHUB_MIRROR_REPO ?? DEFAULT_REPO).trim(),
+    token: token.trim(),
+  };
+}
+
+/**
+ * `--master` 模式的上下文收口：push 事件上没有 `CNB_PULL_REQUEST_IID`，要的两件
+ * 只有令牌与 HEAD；ref 恒为 {@link MASTER_REF}（文件头「--master」一节）。
+ *
+ * @param {{env: Record<string, string | undefined>, runGit: (args: string[]) => {code: number, stdout: string, stderr: string}}} io
+ * @returns {{ok: true, repo: string, token: string, ref: string, headSha: string} | {ok: false, reasons: string[]}}
+ */
+export function resolveMasterContext(io) {
+  const { env, runGit } = io;
+  const reasons = [];
+  const token = env.GITHUB_MIRROR_TOKEN ?? "";
+  if (!token.trim()) {
+    reasons.push("`GITHUB_MIRROR_TOKEN` 未配置（push 流水线经 imports 注入；本地自查用 --dry-run）");
+  }
+  const headSha = runGit(["rev-parse", "HEAD"]);
+  if (headSha.code !== 0 || !/^[0-9a-f]{40}$/i.test(headSha.stdout.trim())) {
+    reasons.push(`git rev-parse HEAD 取不到（exit ${headSha.code}）`);
+  }
+  if (reasons.length > 0) {
+    return { ok: false, reasons };
+  }
+  return {
+    headSha: headSha.stdout.trim(),
+    ok: true,
+    ref: MASTER_REF,
     repo: (env.GITHUB_MIRROR_REPO ?? DEFAULT_REPO).trim(),
     token: token.trim(),
   };
@@ -445,6 +496,67 @@ export async function runMirror(io) {
 }
 
 /**
+ * `--master` 模式的执行面：探活 → 推 `HEAD:refs/heads/master`，**没有派发那一跳**
+ * （这一推服务的是 GitHub 侧的 schedule workflow —— 它们跑默认分支，推完即就位，
+ * 没有要叫醒的对象）。探活与推送两跳的话术与 {@link runMirror} 同一族，
+ * 前缀换成 `[mirror-master]`（文件头「--master」一节第 3 条）。
+ *
+ * @param {{env: Record<string, string | undefined>, runGit?: typeof realRunGit, dryRun?: boolean, log?: (line: string) => void}} io
+ * @returns {Promise<number>} 仓内三态退码
+ */
+export async function runMasterMirror(io) {
+  const { dryRun = false, env } = io;
+  const log = io.log ?? ((line) => console.log(line));
+  const runGit = io.runGit ?? realRunGit;
+  const ctx = resolveMasterContext({ env, runGit });
+  if (!ctx.ok) {
+    for (const reason of ctx.reasons) {
+      log(`[mirror-master] 没跑起来的原因：${reason}`);
+    }
+    log("[mirror-master] 结论：exit 2 —— 有一步没跑起来（不等于通过，也不等于「没有要同步的」）");
+    return CODE.NO_FACT;
+  }
+  const url = buildPushUrl(ctx.repo, ctx.token, (env.GITHUB_MIRROR_USER ?? "").trim() || "oauth2");
+  log(`[mirror-master] 计划：HEAD ${ctx.headSha.slice(0, 8)} → ${ctx.repo}:${ctx.ref}（不派发）`);
+  if (dryRun) {
+    log("[mirror-master] DRY-RUN：没推，计划如上");
+    return CODE.OK;
+  }
+  /* 推送前那一问与 PR 模式同一跳、同一份判读（文件头第 5 条）。 */
+  const probe = runGit(["ls-remote", url]);
+  const probeText = sanitize(`${probe.stdout}\n${probe.stderr}`, ctx.token);
+  log(
+    probe.code === 0
+      ? "[mirror-master] 推送前这一读：通（空仓库 ⇒ 零条 ref 也是通的）"
+      : `[mirror-master] 推送前这一读没通（exit ${probe.code}）：${explainRemoteProbeFailure(probeText)}`,
+  );
+  if (probe.code === 0 && !hasRemoteRefs(probe.stdout)) {
+    log("[mirror-master]   目标仓库是空的（零条 ref）—— `--force` 推 master 正是它该有的第一笔");
+  }
+  if (probe.code !== 0) {
+    for (const line of probeText.split("\n")) {
+      if (line.trim()) {
+        log(`[mirror-master]   ${line}`);
+      }
+    }
+    log("[mirror-master] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）");
+    return CODE.NO_FACT;
+  }
+  const push = runGit(pushArgs(url, `refs/heads/${ctx.ref}`));
+  if (push.code !== 0) {
+    log(`[mirror-master] 推送失败（exit ${push.code}）：`);
+    for (const line of `${push.stdout}\n${push.stderr}`.split("\n")) {
+      if (line.trim()) {
+        log(`[mirror-master]   ${sanitize(line, ctx.token)}`);
+      }
+    }
+    return CODE.FAIL;
+  }
+  log(`[mirror-master] ✓ 已推 ${ctx.repo}:${ctx.ref} @ ${ctx.headSha.slice(0, 8)}`);
+  return CODE.OK;
+}
+
+/**
  * 退码出口：读数档与承重档之间的那**唯一一道**分界（ISSUE #3051）。
  *
  * `--readout` 只折「对外那一位数」：上面每一行照旧念自己的三态原值（`结论：exit 2 —— …`），
@@ -464,9 +576,14 @@ export function exitCodeFor(code, readout) {
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
   const dryRun = process.argv.includes("--dry-run");
   const readout = process.argv.includes("--readout");
-  const code = await runMirror({ dryRun, env: process.env });
+  const master = process.argv.includes("--master");
+  const code = master
+    ? await runMasterMirror({ dryRun, env: process.env })
+    : await runMirror({ dryRun, env: process.env });
   if (readout && code !== CODE.OK) {
-    console.log("[mirror] 读数档：上面那一行是三态原值；这一格不折进流水线判决（--readout，#3051）");
+    console.log(
+      `[${master ? "mirror-master" : "mirror"}] 读数档：上面那一行是三态原值；这一格不折进流水线判决（--readout，#3051）`,
+    );
   }
   process.exit(exitCodeFor(code, readout));
 }
