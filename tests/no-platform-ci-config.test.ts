@@ -446,8 +446,9 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "格式化提交分离", tier: "PR" },
   { name: "零消费导出", tier: "PR" },
   { name: "重档静态判据", tier: "PR" },
-  // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档）──
+  // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档 + 镜像出口格）──
   { name: "合并形态复核", tier: "push" },
+  { name: "GitHub master 镜像", tier: "push" },
   { name: "安装依赖", tier: "push" },
   { name: "生成态文档与源同步", tier: "push" },
   { name: "API 文档生成与自检", tier: "push" },
@@ -828,7 +829,9 @@ export function registeredDailyGateOrder(text: string): Array<string> {
  *
  * 2026-10-28 起 push 档从「只有合并形态复核一格」扩成「树级校验档」（形态 + 前提安装 +
  * 文档链三格 + 工作区出处），判的是**合并后的树**，不是「这次改动」（PR 档）也不是
- * 「今天的 master 全量健康」（每日档）。与每日清单同一份解析形态、同一个坑：
+ * 「今天的 master 全量健康」（每日档）。2026-11-02 起多一格 `GitHub master 镜像`：
+ * 它是这一档唯一的**出口动作**（把 master 推到 GitHub 镜像仓，那边的 schedule 才跑得到
+ * 新树），不校验树，排在 `合并形态复核` 之后、`安装依赖` 之前。与每日清单同一份解析形态、同一个坑：
  * 声明与事实（`pipelineStageNames(text, "master 合并复核")`）双向核对，只读一份时
  * 另一份漂了没人红。
  *
