@@ -184,6 +184,28 @@ export function fullTreeArgv(argv) {
 }
 
 /**
+ * 换判决面时要换成**显式区间**（而不是 `--base <ref>`）的那几条。
+ *
+ * 判据是「它的基线语义是不是区间」：`shell-gate` / `check-doc-mirror-pairing` 问的是
+ * 「相对基线改了什么」，一个 ref 就够；而 `check-reformat-only` 的读数**逐提交**展开
+ * （护栏 ② 要的是「这一条提交里重排占不占得住」），它只认 `<before>..<after>`
+ * —— 给它一个裸 ref，那一支会把它当成区间去 `split("..")`，拿到的两侧都是 undefined。
+ *
+ * ⚠️ 两条都要挂在 `CHANGED_SCOPED` 上（ISSUE #3032）：名单回答「它的判决面是不是只在
+ * 本次改动上」，本表只回答「换面时用哪种旗标」。只加在这里而不加名单 ⇒ 它走「剥旗标
+ * 进全量档」那一支，而那正是那一支对它无效的形态（剥完之后判的是 `HEAD~1..HEAD`）。
+ *
+ * @type {ReadonlyArray<{script: string, flag: string, rewrite: (argv: readonly string[], ref: string) => string[]}>}
+ */
+const RANGE_SCOPED = [
+  {
+    script: "scripts/check-reformat-only.cjs",
+    flag: "--range",
+    rewrite: (argv, ref) => [...argv.filter((a) => a !== "--staged"), "--range", `${ref}..HEAD`],
+  },
+];
+
+/**
  * 这一步在**这一档**（平台侧、干净快照、没有暂存区）该怎么跑。
  *
  * 两族的分界在**能不能剥**：
@@ -206,32 +228,15 @@ export function fullTreeArgv(argv) {
  * 换发的形态**逐条**不同（`--base <ref>` 与 `--range <基线>..HEAD` 不是同一件事）——
  * 见下面 `RANGE_SCOPED` 与 `heavyGateArgv()` 里那两支。
  *
+ * ⚠️ 下面这两个 `@param` 与 `@returns` **必须贴着函数本体**：ISSUE #3032 的落地笔把两个
+ * doc 块次序写反了 —— 标签落在 `RANGE_SCOPED` 那条 `@type` 上，函数自己一个参数类型都
+ * 没有 ⇒ 参数全是 implicit any，`tsc --noEmit` 与脚本档类型检查在 master 上当场红。
+ * 挪任何一块之前先确认标签仍贴着它要描述的那个声明。
+ *
  * @param {string[]} argv 钩子那一步的命令
  * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
  * @returns {{ok: true, argv: string[], via: string, notRunCodes: number[]} | {ok: false, reason: string}}
  */
-/**
- * 换判决面时要换成**显式区间**（而不是 `--base <ref>`）的那几条。
- *
- * 判据是「它的基线语义是不是区间」：`shell-gate` / `check-doc-mirror-pairing` 问的是
- * 「相对基线改了什么」，一个 ref 就够；而 `check-reformat-only` 的读数**逐提交**展开
- * （护栏 ② 要的是「这一条提交里重排占不占得住」），它只认 `<before>..<after>`
- * —— 给它一个裸 ref，那一支会把它当成区间去 `split("..")`，拿到的两侧都是 undefined。
- *
- * ⚠️ 两条都要挂在 `CHANGED_SCOPED` 上（ISSUE #3032）：名单回答「它的判决面是不是只在
- * 本次改动上」，本表只回答「换面时用哪种旗标」。只加在这里而不加名单 ⇒ 它走「剥旗标
- * 进全量档」那一支，而那正是那一支对它无效的形态（剥完之后判的是 `HEAD~1..HEAD`）。
- *
- * @type {ReadonlyArray<{script: string, flag: string, rewrite: (argv: readonly string[], ref: string) => string[]}>}
- */
-const RANGE_SCOPED = [
-  {
-    script: "scripts/check-reformat-only.cjs",
-    flag: "--range",
-    rewrite: (argv, ref) => [...argv.filter((a) => a !== "--staged"), "--range", `${ref}..HEAD`],
-  },
-];
-
 export function heavyGateArgv(argv, deps = {}) {
   const joined = argv.join(" ");
   /* ⚠️ `check-format.cjs --staged` 在这一档**换发 `--changed`**，不剥旗标进全库

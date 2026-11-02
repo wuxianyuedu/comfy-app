@@ -7,6 +7,11 @@
 #
 # 定位：并行双跑期的**旁路验证档**，不阻塞 cnb 侧合并；一格试通后其余格逐步加。
 # 并发：同一 PR 的重复派发互相取消（对位 cnb 的 `pr-$IID` 锁）；手动触发按 run 各算。
+#
+# 三条 `uses:` 钉在「第一个声明 `node24` 的主版本」上：GitHub 2026-09-23 起已从 runner
+# 移除 node20 运行时，`@v4` 会被强制挪到 node24 并在 run 页面刷弃用告警。不继续往 v6/v7
+# 跳：checkout v6 起改了 fork PR 的检出默认（默认拒绝检出）、setup-node v6 起对 npm 项目
+# 自动开缓存 —— 都不是这一格要的行为。要跳是单独一次决定，别顺手跟随。
 name: PR gate (mirror)
 
 on:
@@ -25,10 +30,12 @@ concurrency:
 
 jobs:
   ui-logic-separation:
-    runs-on: ubuntu-latest
+    # `ubuntu-latest` 2026-10-19 ~ 11-19 正从 24.04 分批迁往 26.04：跟着浮动标签跑，等于让
+    # 这一格的机器由平台排期决定。钉版本 → 换镜像是单独一次决定（先按 `ubuntu-26.04` 试跑）。
+    runs-on: ubuntu-24.04
     steps:
       - name: 检出（按镜像 payload 的 sha）
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # repository_dispatch 的 payload 里是合成 merge 的 sha；手动触发走 inputs。
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
@@ -36,10 +43,10 @@ jobs:
           fetch-depth: 0
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 26
           cache: pnpm
