@@ -57,8 +57,8 @@ export function findInstallationById(
   if (Array.isArray(data)) {
     for (const item of data) {
       if (
-        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         /* SAFETY: 类型断言已复核 */
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         item != null &&
         typeof item === "object" &&
         (item as Record<string, unknown>).id === instanceId

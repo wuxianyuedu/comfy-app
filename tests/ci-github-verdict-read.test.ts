@@ -1,5 +1,8 @@
 /** `ci-github-verdict-read.mjs` 的用例（ISSUE #3051 期望第 3 条的前置：回读格先按读数档上线）。
  *
+ *  双路径版：主路径 runs API（head_sha 过滤）读不到任何 run 时回落兜底 checks API。
+ *  假件按 URL 分流（`/actions/runs` → 主路径，其余 → 兜底），两条路径的回话可以分别编排。
+ *
  *  全部走注入面：fetch / git / sleep / now 都是假件，**一次真网络请求都不发、
  *  一次真墙钟都不付**；令牌脱敏那条是硬规则 17 在这一格的落点。 */
 import { describe, expect, it } from "vitest";
@@ -12,26 +15,33 @@ import {
   isRetryableRequestFailure,
   runVerdict,
   summarizeCheckRuns,
+  summarizeWorkflowRuns,
+  workflowRunsUrl,
 } from "../scripts/ci-github-verdict-read.mjs";
 import { CODE, RETRY_BACKOFF_MS, exitCodeFor } from "../scripts/ci-github-mirror-push.mjs";
 
 const TOKEN = "gh-token-secret-value";
 const SHA = "26a3c3ed06deb679974200d68005ff583178d63f";
+const REPO = "wuxianyuedu/comfy-app";
 
 const okEnv = {
   GITHUB_MIRROR_TOKEN: TOKEN,
   CNB_PULL_REQUEST_IID: "2649",
 };
 
-/** 假 check-run（GitHub API 形状的最小面）。 */
+/** 假条目（workflow run / check-run 的判定最小面同构）。 */
 const run = (name: string, status: string, conclusion: string | null = null) => ({
   conclusion,
   name,
   status,
 });
 
-/** 假 200 回话体。 */
-const bodyOf = (runs: Array<unknown>) =>
+/** 主路径假 200 回话体（runs API）。 */
+const runsBodyOf = (runs: Array<unknown>) =>
+  JSON.stringify({ total_count: runs.length, workflow_runs: runs });
+
+/** 兜底路径假 200 回话体（check-runs API）。 */
+const checksBodyOf = (runs: Array<unknown>) =>
   JSON.stringify({ check_runs: runs, total_count: runs.length });
 
 const ALL_GREEN = [
@@ -48,15 +58,21 @@ const gitOk = (args: Array<string>) => {
 };
 
 describe("纯函数", () => {
-  it("checkRunsUrl：按同一笔 sha 读 check-runs，单页 100 条", () => {
-    expect(checkRunsUrl("wuxianyuedu/comfy-app", SHA)).toBe(
-      `https://api.github.com/repos/wuxianyuedu/comfy-app/commits/${SHA}/check-runs?per_page=100`,
+  it("workflowRunsUrl：主路径按 head_sha 过滤读 workflow runs，单页 100 条", () => {
+    expect(workflowRunsUrl(REPO, SHA)).toBe(
+      `https://api.github.com/repos/${REPO}/actions/runs?head_sha=${SHA}&per_page=100`,
+    );
+  });
+
+  it("checkRunsUrl：兜底路径按同一笔 sha 读 check-runs，单页 100 条", () => {
+    expect(checkRunsUrl(REPO, SHA)).toBe(
+      `https://api.github.com/repos/${REPO}/commits/${SHA}/check-runs?per_page=100`,
     );
   });
 
   it("isRetryableRequestFailure：网络类认、其余不认", () => {
     expect(isRetryableRequestFailure(new Error("fetch failed"))).toBe(true);
-    expect(isRetryableRequestFailure(new Error("check-runs 读数超时（>30000 ms）"))).toBe(true);
+    expect(isRetryableRequestFailure(new Error("主路径（runs API）读数超时（>30000 ms）"))).toBe(true);
     expect(isRetryableRequestFailure(new Error("Connection reset by peer"))).toBe(true);
     expect(
       isRetryableRequestFailure(Object.assign(new Error("boom"), { cause: { code: "ENOTFOUND" } })),
@@ -66,62 +82,84 @@ describe("纯函数", () => {
     expect(isRetryableRequestFailure(new Error("Invalid username or token"))).toBe(false);
   });
 
-  it("summarizeCheckRuns：completed 全绿/中立/跳过 ⇒ 没红；零条 ⇒ 不算跑完", () => {
-    const s = summarizeCheckRuns(ALL_GREEN);
+  it("summarizeWorkflowRuns：success/neutral/skipped 算绿；零条 ⇒ 不算跑完", () => {
+    const s = summarizeWorkflowRuns(ALL_GREEN);
     expect(s.completed).toBe(true);
     expect(s.failing).toHaveLength(0);
     expect(s.total).toBe(3);
     /* 零条是「GitHub 侧还没起跑」，不是「全绿」—— 必须继续等。 */
-    expect(summarizeCheckRuns([]).completed).toBe(false);
+    expect(summarizeWorkflowRuns([]).completed).toBe(false);
   });
 
-  it("summarizeCheckRuns：failure/timed_out/cancelled/action_required 才算红，还在跑的不算完", () => {
-    const red = summarizeCheckRuns([
+  it("summarizeWorkflowRuns：failure/timed_out/cancelled/action_required/startup_failure 才算红，还在跑的不算完", () => {
+    const red = summarizeWorkflowRuns([
       run("static-gates", "completed", "success"),
       run("fixed-structural-tests", "completed", "failure"),
       run("heavy-gates", "completed", "timed_out"),
       run("affected-tests", "completed", "cancelled"),
       run("typecheck-db-format", "completed", "action_required"),
+      /* startup_failure：GitHub 侧连起跑都没起成 —— 平台侧的事故，也算红（主路径词表比兜底多这一条）。 */
+      run("pr-gate", "completed", "startup_failure"),
     ]);
     expect(red.completed).toBe(true);
-    expect(red.failing).toHaveLength(4);
-    const pending = summarizeCheckRuns([run("static-gates", "in_progress"), run("heavy-gates", "queued")]);
+    expect(red.failing).toHaveLength(5);
+    const pending = summarizeWorkflowRuns([run("static-gates", "in_progress"), run("heavy-gates", "queued")]);
     expect(pending.completed).toBe(false);
     expect(pending.pending).toHaveLength(2);
+  });
+
+  it("summarizeCheckRuns：兜底词表不变（不含 startup_failure）；零条 ⇒ 不算跑完", () => {
+    const s = summarizeCheckRuns(ALL_GREEN);
+    expect(s.completed).toBe(true);
+    expect(s.failing).toHaveLength(0);
+    expect(s.total).toBe(3);
+    expect(summarizeCheckRuns([]).completed).toBe(false);
+    const red = summarizeCheckRuns([run("heavy-gates", "completed", "failure")]);
+    expect(red.failing).toHaveLength(1);
   });
 
   it("预算与节奏：间隔 × 轮数压在 45m 预算内，单次请求上限与镜像格探活同量级", () => {
     expect(POLL_INTERVAL_MS).toBe(30_000);
     expect(POLL_BUDGET_MS).toBe(45 * 60_000);
     expect(CHECK_RUNS_TIMEOUT_MS).toBe(30_000);
-    /* 最坏一轮（3 次请求 + 退避）远在轮询间隔量级之内 ⇒ 节奏不会被重试自己打乱。 */
+    /* 最坏一轮（一条路径 3 次请求 + 退避）远在轮询间隔量级之内 ⇒ 节奏不会被重试自己打乱。 */
     const worstRound = REQUEST_MAX_ATTEMPTS * CHECK_RUNS_TIMEOUT_MS + RETRY_BACKOFF_MS[0]! + RETRY_BACKOFF_MS[1]!;
     expect(worstRound).toBeLessThan(POLL_BUDGET_MS);
   });
 });
 
-describe("runVerdict（fetch / git / sleep / now 全假件）", () => {
-  /** 收口假件与量具；`steps` 按调用次序出假回话/假异常，耗尽后落 `fallback`。 */
+describe("runVerdict（fetch / git / sleep / now 全假件，按 URL 分流两条路径）", () => {
+  /** 收口假件与量具；`runsSteps` / `checksSteps` 按各自路径的调用次序出假回话/假异常，耗尽后落各自的 `fallback`。 */
   function harness(
     opts: {
+      checksFallback?: Response;
+      checksSteps?: Array<Response | Error>;
       env?: Record<string, string | undefined>;
-      fallback?: Response;
       nowStep?: number;
-      steps?: Array<Response | Error>;
+      runsFallback?: Response;
+      runsSteps?: Array<Response | Error>;
     } = {},
   ) {
     const calls: Array<string> = [];
     const heard: Array<string> = [];
     const sleeps: Array<number> = [];
-    const steps = opts.steps ? [...opts.steps] : null;
+    const runsSteps = opts.runsSteps ? [...opts.runsSteps] : null;
+    const checksSteps = opts.checksSteps ? [...opts.checksSteps] : null;
     let clock = 0;
     const fetchImpl = (async (url: string | URL) => {
       calls.push(String(url));
-      const head = steps?.shift();
+      const isRuns = String(url).includes("/actions/runs");
+      const head = (isRuns ? runsSteps : checksSteps)?.shift();
       if (head instanceof Error) {
         throw head;
       }
-      return head ?? opts.fallback ?? new Response(bodyOf(ALL_GREEN), { status: 200 });
+      /* 缺省形态：主路径零条（⇒ 回落），兜底全绿 —— 只关心兜底行为的老用例不用改造。 */
+      return (
+        head ??
+        (isRuns
+          ? opts.runsFallback ?? new Response(runsBodyOf([]), { status: 200 })
+          : opts.checksFallback ?? new Response(checksBodyOf(ALL_GREEN), { status: 200 }))
+      );
     }) as unknown as typeof fetch;
     const io = {
       env: opts.env ?? okEnv,
@@ -143,22 +181,85 @@ describe("runVerdict（fetch / git / sleep / now 全假件）", () => {
     return { calls, heard, io, sleeps };
   }
 
-  it("全绿 ⇒ 退 0；读的是同一笔 sha，结论行把账念全", async () => {
-    const { calls, heard, io } = harness();
+  it("主路径全绿 ⇒ 退 0：一跳拿全，根本不发兜底请求", async () => {
+    const { calls, heard, io } = harness({ runsFallback: new Response(runsBodyOf(ALL_GREEN), { status: 200 }) });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toBe(checkRunsUrl("wuxianyuedu/comfy-app", SHA));
+    expect(calls).toEqual([workflowRunsUrl(REPO, SHA)]);
     const all = heard.join("\n");
     expect(all).toContain("cnb-pr-2649");
+    expect(all).toContain("主路径（runs API）");
     expect(all).toContain("全部完成且没有红");
     expect(all).toContain("结论：exit 0");
   });
 
-  it("有红 ⇒ 退 1，红的那几个逐条念出来", async () => {
+  it("主路径有红（含 startup_failure）⇒ 退 1，红的逐条念出来", async () => {
     const { heard, io } = harness({
-      fallback: new Response(
-        bodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "completed", "failure")]),
+      runsFallback: new Response(
+        runsBodyOf([
+          run("static-gates", "completed", "success"),
+          run("pr-gate", "completed", "startup_failure"),
+          run("heavy-gates", "completed", "failure"),
+        ]),
+        { status: 200 },
+      ),
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.FAIL);
+    const all = heard.join("\n");
+    expect(all).toContain("✗ pr-gate（startup_failure）");
+    expect(all).toContain("✗ heavy-gates（failure）");
+    expect(all).toContain("结论：exit 1");
+    /* `--readout` 折的是对外那一位数，三态原值上面已逐行念过（读数档恒退 0）。 */
+    expect(exitCodeFor(code, true)).toBe(0);
+    expect(exitCodeFor(code, false)).toBe(1);
+  });
+
+  it("主路径 pending 跨轮询转 completed ⇒ 退 0：有 run 就不回落，间隔按 POLL_INTERVAL 等", async () => {
+    const { calls, heard, io, sleeps } = harness({
+      runsSteps: [
+        new Response(
+          runsBodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "in_progress")]),
+          { status: 200 },
+        ),
+        new Response(runsBodyOf(ALL_GREEN), { status: 200 }),
+      ],
+    });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.OK);
+    expect(calls).toEqual([workflowRunsUrl(REPO, SHA), workflowRunsUrl(REPO, SHA)]);
+    expect(sleeps).toEqual([POLL_INTERVAL_MS]);
+    expect(heard.join("\n")).toContain("还在跑");
+  });
+
+  it("主路径零条 run ⇒ 同轮回落兜底，兜底全绿 ⇒ 退 0；日志点名两条路径与回落原因", async () => {
+    const { calls, heard, io } = harness();
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.OK);
+    expect(calls).toEqual([workflowRunsUrl(REPO, SHA), checkRunsUrl(REPO, SHA)]);
+    const all = heard.join("\n");
+    expect(all).toContain("没读到任何 workflow run");
+    expect(all).toContain("本轮回落兜底（checks API）");
+    expect(all).toContain("兜底（checks API）");
+    expect(all).toContain("全部完成且没有红");
+    expect(all).toContain("结论：exit 0");
+  });
+
+  it("主路径 403（缺 actions: read）⇒ 同轮回落兜底，兜底全绿 ⇒ 退 0；日志点名缺的权限", async () => {
+    const { calls, heard, io } = harness({ runsFallback: new Response("no", { status: 403 }) });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.OK);
+    expect(calls).toEqual([workflowRunsUrl(REPO, SHA), checkRunsUrl(REPO, SHA)]);
+    const all = heard.join("\n");
+    expect(all).toContain("令牌没给 actions: read");
+    expect(all).toContain("本轮回落兜底（checks API）");
+    expect(all).toContain("结论：exit 0");
+  });
+
+  it("兜底有红 ⇒ 退 1，红的那几个逐条念出来", async () => {
+    const { heard, io } = harness({
+      checksFallback: new Response(
+        checksBodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "completed", "failure")]),
         { status: 200 },
       ),
     });
@@ -167,30 +268,33 @@ describe("runVerdict（fetch / git / sleep / now 全假件）", () => {
     const all = heard.join("\n");
     expect(all).toContain("✗ heavy-gates（failure）");
     expect(all).toContain("结论：exit 1");
-    /* `--readout` 折的是对外那一位数，三态原值上面已逐行念过（读数档恒退 0）。 */
-    expect(exitCodeFor(code, true)).toBe(0);
-    expect(exitCodeFor(code, false)).toBe(1);
   });
 
-  it("pending 跨轮询转 completed ⇒ 退 0：第二轮拿到完整结论，间隔按 POLL_INTERVAL 等", async () => {
+  it("兜底 pending 跨轮询转 completed ⇒ 退 0：每轮都先试主路径，第二轮拿到完整结论", async () => {
     const { calls, heard, io, sleeps } = harness({
-      steps: [
-        new Response(bodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "in_progress")]), {
-          status: 200,
-        }),
-        new Response(bodyOf(ALL_GREEN), { status: 200 }),
+      checksSteps: [
+        new Response(
+          checksBodyOf([run("static-gates", "completed", "success"), run("heavy-gates", "in_progress")]),
+          { status: 200 },
+        ),
+        new Response(checksBodyOf(ALL_GREEN), { status: 200 }),
       ],
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
-    expect(calls).toHaveLength(2);
+    expect(calls).toEqual([
+      workflowRunsUrl(REPO, SHA),
+      checkRunsUrl(REPO, SHA),
+      workflowRunsUrl(REPO, SHA),
+      checkRunsUrl(REPO, SHA),
+    ]);
     expect(sleeps).toEqual([POLL_INTERVAL_MS]);
     expect(heard.join("\n")).toContain("还在跑");
   });
 
-  it("一直没有 check-run（零条）⇒ 预算耗尽退 2：没跑起来 ≠ 判红", async () => {
+  it("两条路径都零条 ⇒ 预算耗尽退 2：没跑起来 ≠ 判红", async () => {
     const { heard, io } = harness({
-      fallback: new Response(bodyOf([]), { status: 200 }),
+      checksFallback: new Response(checksBodyOf([]), { status: 200 }),
       nowStep: POLL_BUDGET_MS,
     });
     const code = await runVerdict(io);
@@ -203,7 +307,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件）", () => {
 
   it("一直 pending ⇒ 预算耗尽退 2（GitHub 侧卡住不许被读成红）", async () => {
     const { heard, io } = harness({
-      fallback: new Response(bodyOf([run("heavy-gates", "queued")]), { status: 200 }),
+      checksFallback: new Response(checksBodyOf([run("heavy-gates", "queued")]), { status: 200 }),
       nowStep: POLL_BUDGET_MS,
     });
     const code = await runVerdict(io);
@@ -213,47 +317,64 @@ describe("runVerdict（fetch / git / sleep / now 全假件）", () => {
 
   it("读数第一次 egress 抖动、第二次通 ⇒ 退 0：网络类失败消耗一次重试", async () => {
     const { calls, heard, io, sleeps } = harness({
-      steps: [new Error("fetch failed"), new Response(bodyOf(ALL_GREEN), { status: 200 })],
+      checksSteps: [new Error("fetch failed"), new Response(checksBodyOf(ALL_GREEN), { status: 200 })],
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.OK);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
     expect(heard.join("\n")).toContain(`读数第 1/${REQUEST_MAX_ATTEMPTS} 次没通（egress 类）`);
   });
 
-  it("egress 连挂到上限 ⇒ 退 2，重试账留全", async () => {
+  it("兜底 egress 连挂到上限 ⇒ 退 2，重试账留全", async () => {
     const down = new Error("Connection reset by peer");
-    const { calls, heard, io, sleeps } = harness({ steps: [down, down, down] });
+    const { calls, heard, io, sleeps } = harness({ checksSteps: [down, down, down] });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
-    expect(calls).toHaveLength(REQUEST_MAX_ATTEMPTS);
+    /* 主路径一跳（零条）+ 兜底三次尝试。 */
+    expect(calls).toHaveLength(1 + REQUEST_MAX_ATTEMPTS);
     expect(sleeps).toEqual([...RETRY_BACKOFF_MS]);
     expect(heard.join("\n")).toContain("api.github.com 这一跳没通");
   });
 
-  it("401/403 ⇒ 一次就交账（不重试），退 2 并指明下一动作：PAT 加 checks: read 并同步密钥仓库", async () => {
+  it("主路径 egress 连挂到上限 ⇒ 退 2，不回落（节点出网挂了，兜底一样不通）", async () => {
+    const down = new Error("Connection reset by peer");
+    const { calls, heard, io, sleeps } = harness({ runsSteps: [down, down, down] });
+    const code = await runVerdict(io);
+    expect(code).toBe(CODE.NO_FACT);
+    expect(calls).toHaveLength(REQUEST_MAX_ATTEMPTS);
+    expect(sleeps).toEqual([...RETRY_BACKOFF_MS]);
+    const all = heard.join("\n");
+    expect(all).toContain("主路径（runs API）");
+    expect(all).toContain("api.github.com 这一跳没通");
+  });
+
+  it("两条路径都 401/403 ⇒ 一次就交账（不重试），退 2 并同时点名两条权限与密钥仓库", async () => {
     for (const status of [401, 403]) {
-      const { calls, heard, io, sleeps } = harness({ fallback: new Response("no", { status }) });
+      const { calls, heard, io, sleeps } = harness({
+        checksFallback: new Response("no", { status }),
+        runsFallback: new Response("no", { status }),
+      });
       const code = await runVerdict(io);
       expect(code).toBe(CODE.NO_FACT);
-      /* 「再试一百次也一样」⇒ 一个请求都不许多发。 */
-      expect(calls).toHaveLength(1);
+      /* 每条路径各一跳：「再试一百次也一样」⇒ 一个请求都不许多发。 */
+      expect(calls).toEqual([workflowRunsUrl(REPO, SHA), checkRunsUrl(REPO, SHA)]);
       expect(sleeps).toHaveLength(0);
       const all = heard.join("\n");
       expect(all).toContain(`HTTP ${String(status)}`);
+      expect(all).toContain("actions: read");
       expect(all).toContain("checks: read");
       expect(all).toContain("moon-read/GITHUB_MIRROR_TOKEN");
     }
   });
 
-  it("其余 HTTP 错误（422：sha 没到 / 形状不对）⇒ 不重试，退 2，body 脱敏后回显", async () => {
+  it("其余 HTTP 错误（422：sha 没到 / 形状不对）⇒ 不重试、不回落，退 2，body 脱敏后回显", async () => {
     const { calls, heard, io, sleeps } = harness({
-      fallback: new Response(`{"message":"No commit found for ${TOKEN}"}`, { status: 422 }),
+      runsFallback: new Response(`{"message":"No commit found for ${TOKEN}"}`, { status: 422 }),
     });
     const code = await runVerdict(io);
     expect(code).toBe(CODE.NO_FACT);
-    expect(calls).toHaveLength(1);
+    expect(calls).toEqual([workflowRunsUrl(REPO, SHA)]);
     expect(sleeps).toHaveLength(0);
     /* 硬规则 17：任何回显都不许出现令牌原值。 */
     expect(heard.join("\n")).not.toContain(TOKEN);
@@ -268,7 +389,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件）", () => {
     expect(heard.join("\n")).toContain("GITHUB_MIRROR_TOKEN");
   });
 
-  it("dry-run ⇒ 退 0，计划打出来，一次请求都不发", async () => {
+  it("dry-run ⇒ 退 0，计划打出两条路径，一次请求都不发", async () => {
     const { calls, heard, io } = harness();
     const code = await runVerdict({ ...io, dryRun: true });
     expect(code).toBe(CODE.OK);
@@ -276,5 +397,7 @@ describe("runVerdict（fetch / git / sleep / now 全假件）", () => {
     const all = heard.join("\n");
     expect(all).toContain("DRY-RUN");
     expect(all).toContain("cnb-pr-2649");
+    expect(all).toContain("runs API");
+    expect(all).toContain("checks API");
   });
 });
