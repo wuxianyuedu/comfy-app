@@ -41,11 +41,11 @@ import { previewRangeEnds } from "../scripts/reformat-preview-range.mjs";
 const { perCommitShapeOf } = require("../scripts/check-reformat-only.cjs") as {
   perCommitShapeOf: (
     rev: string,
-    spec?: { root?: string; limit?: number },
+    spec?: { limit?: number; root?: string },
   ) => {
-    ok: boolean;
-    offenders: Array<string>;
     commits: Array<{ rev: string; unknown?: boolean }>;
+    offenders: Array<string>;
+    ok: boolean;
   };
 };
 

@@ -264,6 +264,19 @@ export const GATES = {
     args: ["../scripts/check-mirror-attendance.mjs"],
     run: false,
   },
+  /**
+   * 已清零 oxlint 规则集的回潮硬闸（ISSUE #3016，规范 §13.5.32 的 #2638 条目）。
+   *
+   * 与 `format` / `depsFreshness` 同属「会随时间变坏」的那一类：机械清零批把规则
+   * 清到 0 之后**没有东西在守**，下一批落地顺手就把同一形态带回来（nnc 在 #2977
+   * 清零后被 #3015 / #3016 各续清过一次）。清单在脚本内的 `ZERO_RULES`（41 条，
+   * 每清零一条新规则就往那里加一行）；判据形态是探针（临时配置只抬清单内规则为
+   * error），不是改根级 config —— 理由见脚本文件头。
+   */
+  oxlintZeroRules: {
+    label: "Oxlint zero-cleared rules set (41 rules, repo-wide 0 hits)",
+    args: ["../scripts/check-oxlint-zero-rules.mjs"],
+  },
   premerge: {
     label: "Pre-merge fixed action (base recompute + commit claims + merge side loss)",
     args: ["../scripts/premerge-check.mjs"],

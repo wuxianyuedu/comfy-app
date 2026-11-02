@@ -937,6 +937,16 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # `conditional-skip-registry` 与 `check-test-todo.cjs`。
   run "用例存量（磁盘 ⇄ vitest.config.ts 收集面）" node scripts/check-test-inventory.cjs
   run "类型层声明 ⇄ 执行者（tsc 判决面，§13.5.14）" node scripts/check-tsc-diagnostic-executors.cjs
+  # 已清零 oxlint 规则集防回潮（ISSUE #3016，台账 #2777，规范 §13.5.32）。这类规则
+  # 的病与 `it.each`（见本组前面那条）同族：清零批落地之后**没人守**，下一次批量
+  # 改动就把同类漂移带回来 —— `no-negated-condition` 在 #2977 清零之后，
+  # #3015 / #3016 各自又扫出一批（判空三元那一族，12 处量级/批）。
+  # 判的是 `scripts/check-oxlint-zero-rules.mjs` 里 `ZERO_RULES` 登记的每一条
+  # **全仓 0 命中**（命中逐条列位置退 1）；清单是唯一登记面，清零一条就往那里加一行。
+  # 成本实测：oxlint type-aware 全仓档约 155s —— 远超 §13.5.4 的钩子预算，它在这里
+  # 的唯一理由是「防回潮判据没有别的自动执行者」：本组整体只在重档那一跑
+  # （`COMFY_HEAVY_GATES=1` / `pnpm check:all`）里付，默认提交档整组跳过。
+  run "已清零 oxlint 规则集（41 条全仓 0 命中）" node scripts/check-oxlint-zero-rules.mjs
 '
 
 # ── 汇总：等所有组结束，任一非零即阻断，并回吐失败组的日志（保留可读性）──────
