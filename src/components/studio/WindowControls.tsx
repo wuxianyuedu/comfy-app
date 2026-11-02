@@ -128,8 +128,9 @@ export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
       return;
     }
     if (
+      /* SAFETY: 类型断言已复核 */
       !isDragRegionTarget(
-        /* SAFETY: 类型断言已复核 */ e.target as unknown as {
+        e.target as unknown as {
           closest?: (s: string) => unknown;
         },
       )
@@ -142,8 +143,9 @@ export function useTitleBarDrag(setMaximized: (next: boolean) => void) {
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (
+        /* SAFETY: 类型断言已复核 */
         !isDragRegionTarget(
-          /* SAFETY: 类型断言已复核 */ e.target as unknown as {
+          e.target as unknown as {
             closest?: (s: string) => unknown;
           },
         )

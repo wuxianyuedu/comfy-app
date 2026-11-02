@@ -169,9 +169,10 @@ describe("工坊 MCP 工具面", () => {
     expect(result.isError, textOf(result)).toBeFalsy();
     const target = TOOL_TARGETS[tool];
     const fn =
+      /* SAFETY: 类型断言已复核 */
       target === "saveComfySettings"
         ? saveComfySettings
-        : orchestrator[/* SAFETY: 类型断言已复核 */ target as keyof typeof orchestrator];
+        : orchestrator[target as keyof typeof orchestrator];
     expect(fn).toHaveBeenCalledTimes(1);
   });
 

@@ -123,7 +123,8 @@ export function FormField({
 
   const a11y: FormFieldA11y = {
     id: fieldId,
-    ...(error ? { "aria-invalid": /* SAFETY: 类型断言已复核 */ true as const } : {}),
+    /* SAFETY: 类型断言已复核 */
+    ...(error ? { "aria-invalid": true as const } : {}),
     ...(errorId ? { "aria-describedby": errorId } : {}),
   };
 

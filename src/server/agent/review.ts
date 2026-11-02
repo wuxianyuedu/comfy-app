@@ -218,10 +218,9 @@ async function scoreShotImage(
   imageUrl: string,
 ): Promise<ReviewVerdict> {
   // 出场角色的生效定妆照（角色一致性对照用）。
+  /* SAFETY: 类型断言已复核 */
   const characterIds = Array.isArray(rec.characterIds)
-    ? /* SAFETY: 类型断言已复核 */ (rec.characterIds as Array<unknown>).filter(
-        (x): x is string => typeof x === "string",
-      )
+    ? (rec.characterIds as Array<unknown>).filter((x): x is string => typeof x === "string")
     : [];
   const characters = Array.isArray(row.characters) ? row.characters : [];
   const portraitUrls: Array<string> = [];

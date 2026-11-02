@@ -33,6 +33,7 @@ type CanvasContextMenuProps = {
 
 export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasContextMenuProps) {
   return (
+    /* SAFETY: 类型断言已复核 */
     <DropdownMenu
       onOpenChange={(open) => {
         if (!open) onClose();
@@ -81,27 +82,25 @@ export function CanvasContextMenu({ x, y, onPick, onPickTest, onClose }: CanvasC
           <DropdownMenuLabel className="text-ink-muted text-3xs px-2 py-1 tracking-wider uppercase">
             创建节点
           </DropdownMenuLabel>
-          {
-            /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as Array<NodeKind>).map((kind) => {
-              const meta = NODE_META[kind];
-              return (
-                <DropdownMenuItem
-                  className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
-                  data-canvas-node-kind={kind}
-                  key={kind}
-                  onClick={() => {
-                    onPick(kind);
-                  }}
-                >
-                  <Icon className="text-primary-strong" name={meta.icon} size={15} />
-                  <span className="flex flex-col">
-                    <span className="font-medium">{meta.label}</span>
-                    <span className="text-ink-muted text-3xs">{meta.desc}</span>
-                  </span>
-                </DropdownMenuItem>
-              );
-            })
-          }
+          {(Object.keys(NODE_META) as Array<NodeKind>).map((kind) => {
+            const meta = NODE_META[kind];
+            return (
+              <DropdownMenuItem
+                className="text-ink-bright focus:bg-subtle flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+                data-canvas-node-kind={kind}
+                key={kind}
+                onClick={() => {
+                  onPick(kind);
+                }}
+              >
+                <Icon className="text-primary-strong" name={meta.icon} size={15} />
+                <span className="flex flex-col">
+                  <span className="font-medium">{meta.label}</span>
+                  <span className="text-ink-muted text-3xs">{meta.desc}</span>
+                </span>
+              </DropdownMenuItem>
+            );
+          })}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

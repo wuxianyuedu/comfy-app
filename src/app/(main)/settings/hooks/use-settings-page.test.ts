@@ -575,17 +575,17 @@ describe("useSettingsPage", () => {
 
   /* 回归 #273：设置加载失败只体现在降级 UI，不经过 console/unhandledrejection，
    * 日志面板里什么也没有。现在失败会主动落 app-runtime 错误日志（面板轮询可见）。 */
+  /* SAFETY: 类型断言已复核 */
   it("查询失败时把错误落 app-runtime 日志且同一错误只记一次", async () => {
     behavior.llmError = "数据库被锁";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    (runtimeLogCalls as unknown as Array<unknown>).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
+    /* SAFETY: 类型断言已复核 */
     await expect
       .poll(() =>
-        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
+        (runtimeLogCalls as unknown as Array<{ level: string }>).some((c) => c.level === "error"),
       )
       .toBe(true);
     /* llm.configGet 失败、setting.get 成功 → 草稿仍为空（一份都不齐）。
@@ -673,18 +673,18 @@ describe("useSettingsPage", () => {
   /* 回归 ISSUE #304：补记日志时把原始报错（tRPC code / 服务端原文 / 堆栈首行）
    * 一并落盘。此前只记翻译后的可读文案，服务端真实报错在面板里彻底丢失，
    * 拿着「请求被中断」的提示无从排查。 */
+  /* SAFETY: 类型断言已复核 */
   it("补记 app-runtime 时带上原始报错（raw 字段）", async () => {
     behavior.llmError = "no such table: llmConfig";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    (runtimeLogCalls as unknown as Array<unknown>).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
+    /* SAFETY: 类型断言已复核 */
     await expect
       .poll(() =>
-        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
+        (runtimeLogCalls as unknown as Array<{ level: string }>).some((c) => c.level === "error"),
       )
       .toBe(true);
 
@@ -702,19 +702,19 @@ describe("useSettingsPage", () => {
 
   /* 回归 ISSUE #304：两个查询同批失败时，日志字段要把**两个**查询名都记上，
    * 否则只看得到其中一条，另一条的失败在面板里无从对应。 */
+  /* SAFETY: 类型断言已复核 */
   it("两个查询都失败时，日志字段记全两条查询名", async () => {
     behavior.llmError = "llm 炸了";
     behavior.settingsError = "settings 炸了";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    (runtimeLogCalls as unknown as Array<unknown>).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
+    /* SAFETY: 类型断言已复核 */
     await expect
       .poll(() =>
-        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
+        (runtimeLogCalls as unknown as Array<{ level: string }>).some((c) => c.level === "error"),
       )
       .toBe(true);
 

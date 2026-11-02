@@ -29,7 +29,8 @@ type RuntimeExitRecord = {
   signal: string | null;
 };
 
-const { runtimeExitRecord } = /* SAFETY: 类型断言已复核 */ (await import(
+/* SAFETY: 类型断言已复核 */
+const { runtimeExitRecord } = (await import(
   pathToFileURL(join(process.cwd(), "scripts", "launcher-core", "downstream-exit.mjs")).href
 )) as { runtimeExitRecord: (input: RuntimeExitInput) => RuntimeExitRecord };
 

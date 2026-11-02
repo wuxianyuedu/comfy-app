@@ -3742,7 +3742,8 @@ describe("findMergedPullForHeadSha：这一笔是不是已经随某条已合并�
     expect(findMergedPullForHeadSha(CLOSED, "ff99ee88")).toBeNull();
     expect(findMergedPullForHeadSha(CLOSED, "")).toBeNull();
     expect(
-      findMergedPullForHeadSha(CLOSED, /* SAFETY: 类型断言已复核 */ undefined as never),
+      /* SAFETY: 类型断言已复核 */
+      findMergedPullForHeadSha(CLOSED, undefined as never),
     ).toBeNull();
   });
 

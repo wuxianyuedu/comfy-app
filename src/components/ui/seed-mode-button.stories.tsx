@@ -72,16 +72,15 @@ export const Unset: Story = {
  */
 export const InCanvasRow: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="border-border-subtle bg-canvas-deep flex w-80 items-center gap-2 rounded-lg border p-2.5">
       <span className="text-ink-muted text-[11px]">seed</span>
       <span className="border-border-strong bg-canvas-deep text-ink-soft flex-1 rounded-md border px-2 py-0.5 font-mono text-[11px]">
         486920135724881
       </span>
-      {
-        /* SAFETY: 类型断言已复核 */ ([null, ...MODES] as const).map((mode) => (
-          <SeedModeButton key={mode ?? "unset"} mode={mode ?? undefined} onPick={() => undefined} />
-        ))
-      }
+      {([null, ...MODES] as const).map((mode) => (
+        <SeedModeButton key={mode ?? "unset"} mode={mode ?? undefined} onPick={() => undefined} />
+      ))}
     </div>
   ),
 };

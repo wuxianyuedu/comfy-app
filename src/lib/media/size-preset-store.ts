@@ -34,8 +34,10 @@ function isValidDims(value: unknown): value is SizeDims {
   if (!value || typeof value !== "object") {
     return false;
   }
-  const width = /* SAFETY: 类型断言已复核 */ (value as { width?: unknown }).width;
-  const height = /* SAFETY: 类型断言已复核 */ (value as { height?: unknown }).height;
+  /* SAFETY: 类型断言已复核 */
+  const width = (value as { width?: unknown }).width;
+  /* SAFETY: 类型断言已复核 */
+  const height = (value as { height?: unknown }).height;
   return (
     typeof width === "number" &&
     typeof height === "number" &&
@@ -52,14 +54,15 @@ function mergeScene(fallback: SceneResolutionTable, raw: unknown): SceneResoluti
   for (const preset of SIZE_RATIO_PRESETS) {
     const fallbackRow = fallback[preset.label];
     const rawRow =
-      raw && typeof raw === "object"
-        ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>)[preset.label]
-        : undefined;
-    const row = /* SAFETY: 类型断言已复核 */ {} as Record<ResolutionTier, SizeDims>;
+      /* SAFETY: 类型断言已复核 */
+      raw && typeof raw === "object" ? (raw as Record<string, unknown>)[preset.label] : undefined;
+    /* SAFETY: 类型断言已复核 */
+    const row = {} as Record<ResolutionTier, SizeDims>;
     for (const tier of RESOLUTION_TIERS) {
       const candidate =
+        /* SAFETY: 类型断言已复核 */
         rawRow && typeof rawRow === "object"
-          ? /* SAFETY: 类型断言已复核 */ (rawRow as Record<string, unknown>)[tier]
+          ? (rawRow as Record<string, unknown>)[tier]
           : undefined;
       row[tier] = isValidDims(candidate)
         ? {

@@ -65,9 +65,8 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       // 两类候选分开存：`llmConfig.extraModels` 是本地 ollama 候选（纯名字，无
       // apiKey），远端独立模型在 `remoteModel` 表。读取时合并两者，保证下游
       //（运行时按名找 baseUrl/apiKey、设置页候选清单、工坊分组）行为不变。
-      const split = splitExtraModels(
-        /* SAFETY: 类型断言已复核 */ (row as Record<string, unknown>).extraModels,
-      );
+      /* SAFETY: 类型断言已复核 */
+      const split = splitExtraModels((row as Record<string, unknown>).extraModels);
       const remoteRows = await remoteModelRepository.list();
       const remoteEntries = remoteRows.map((r) => ({
         name: r.name,
@@ -162,9 +161,8 @@ export async function getConfigForClient() {
   const row = await llmConfigRepository.findSingleton();
   let extra: Array<string | RemoteModelEntry> = [];
   if (row) {
-    const split = splitExtraModels(
-      /* SAFETY: 类型断言已复核 */ (row as Record<string, unknown>).extraModels,
-    );
+    /* SAFETY: 类型断言已复核 */
+    const split = splitExtraModels((row as Record<string, unknown>).extraModels);
     const remoteRows = await remoteModelRepository.list();
     const tableEntries: Array<RemoteModelEntry> = remoteRows.map((r) => ({
       name: r.name,

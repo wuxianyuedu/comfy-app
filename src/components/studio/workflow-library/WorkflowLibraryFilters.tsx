@@ -104,7 +104,8 @@ export function WorkflowLibraryFilters({
           ]),
         )}
         onChange={(v) => {
-          onSourceFilterChange(/* SAFETY: 类型断言已复核 */ v as SourceFilter);
+          /* SAFETY: 类型断言已复核 */
+          onSourceFilterChange(v as SourceFilter);
         }}
         options={[...SOURCE_OPTIONS]}
         popoverMinWidth={150}
@@ -133,7 +134,8 @@ export function WorkflowLibraryFilters({
           ]),
         )}
         onChange={(v) => {
-          onTypeFilterChange(/* SAFETY: 类型断言已复核 */ v as TypeFilter);
+          /* SAFETY: 类型断言已复核 */
+          onTypeFilterChange(v as TypeFilter);
         }}
         options={[...TYPE_OPTIONS]}
         popoverMinWidth={140}

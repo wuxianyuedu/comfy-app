@@ -83,11 +83,9 @@ const edgeTypes = {
 /* MiniMap 颜色表提到模块级 Map —— 好让 `nodeColor` 回调保持引用稳定：
  * MiniMap 只在绘制时调用它，不会因为拖拽 / 状态抖动期间回调换了引用
  * 而重新渲染。 */
+/* SAFETY: 类型断言已复核 */
 const MINIMAP_COLOR_BY_KIND = new Map(
-  /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as Array<NodeKind>).map((k) => [
-    k,
-    NODE_META[k].color,
-  ]),
+  (Object.keys(NODE_META) as Array<NodeKind>).map((k) => [k, NODE_META[k].color]),
 );
 
 /* 默认连线选项与 proOptions 提到模块级常量 —— 内联对象字面量每次渲染都重建，

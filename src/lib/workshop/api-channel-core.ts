@@ -159,8 +159,9 @@ export function pollEndpointFor(baseUrl: string, remoteTaskId: string): string {
 /** 上游响应 → JSON。默认 `res.json()`；Next 侧另有更严的实现（非 JSON 报错）。 */
 export type UpstreamJsonReader = (res: Response) => Promise<unknown>;
 
+/* SAFETY: 类型断言已复核 */
 const defaultJsonReader: UpstreamJsonReader = (res) =>
-  /* SAFETY: 类型断言已复核 */ res.json().catch(() => ({})) as Promise<unknown>;
+  res.json().catch(() => ({})) as Promise<unknown>;
 
 /** 上游返回非 2xx 时统一的错误文案（截断响应体，避免把整页 HTML 灌进日志）。 */
 function upstreamError(label: string, status: number, payload: unknown): Error {

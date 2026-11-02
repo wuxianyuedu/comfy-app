@@ -88,9 +88,8 @@ const KIND_CONFIG: Record<"canvas" | "generation" | "workflow" | "video", KindCo
  *  下恒为 `T|undefined`，逼出一串 `!`）。 */
 function kindConfigOf(kind: string | null | undefined): KindConfig {
   const key = kind ?? "generation";
-  return key in KIND_CONFIG
-    ? KIND_CONFIG[/* SAFETY: 类型断言已复核 */ key as keyof typeof KIND_CONFIG]
-    : KIND_CONFIG.generation;
+  /* SAFETY: 类型断言已复核 */
+  return key in KIND_CONFIG ? KIND_CONFIG[key as keyof typeof KIND_CONFIG] : KIND_CONFIG.generation;
 }
 
 /** 把类别色按给定透明度档降为背景（`color-mix` 现取，不硬编码透明色）。 */
@@ -158,7 +157,8 @@ function ResumeProjectCard({
             style={{
               color: cfg.color,
               backgroundColor: kindTint(cfg.color, 15),
-              [/* SAFETY: 类型断言已复核 */ "--tw-ring-color" as string]: kindTint(cfg.color, 30),
+              /* SAFETY: 类型断言已复核 */
+              ["--tw-ring-color" as string]: kindTint(cfg.color, 30),
             }}
           >
             {cfg.label}
@@ -293,7 +293,8 @@ export function HomePage({
           <Button
             className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto flex-col items-start gap-2.5 rounded-2xl border p-4 text-left font-normal transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
             key={card.id}
-            onClick={() => onNavigate?.(/* SAFETY: 类型断言已复核 */ card.id as WorkspaceView)}
+            /* SAFETY: 类型断言已复核 */
+            onClick={() => onNavigate?.(card.id as WorkspaceView)}
             variant="ghost"
           >
             <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex size-10 items-center justify-center rounded-xl transition-colors">
@@ -383,10 +384,8 @@ export function HomePage({
                           style={{
                             color: cfg.color,
                             backgroundColor: kindTint(cfg.color, 15),
-                            [/* SAFETY: 类型断言已复核 */ "--tw-ring-color" as string]: kindTint(
-                              cfg.color,
-                              30,
-                            ),
+                            /* SAFETY: 类型断言已复核 */
+                            ["--tw-ring-color" as string]: kindTint(cfg.color, 30),
                           }}
                         >
                           {cfg.label}

@@ -43,7 +43,8 @@ describe("splitDomProps", () => {
 
   it("空 keys 时 rest 是全部、own 为空", () => {
     const props = { id: "a" };
-    const { own, rest } = splitDomProps(props, /* SAFETY: 类型断言已复核 */ [] as const);
+    /* SAFETY: 类型断言已复核 */
+    const { own, rest } = splitDomProps(props, [] as const);
     expect(own).toEqual({});
     expect(rest).toEqual({ id: "a" });
   });

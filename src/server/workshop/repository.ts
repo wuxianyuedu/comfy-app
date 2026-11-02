@@ -29,8 +29,8 @@ const VALID_STAGES: ReadonlyArray<PipelineStageId> = [
 
 export function isStage(v: unknown): v is PipelineStageId {
   return (
-    typeof v === "string" &&
-    /* SAFETY: 类型断言已复核 */ (VALID_STAGES as ReadonlyArray<string>).includes(v)
+    /* SAFETY: 类型断言已复核 */
+    typeof v === "string" && (VALID_STAGES as ReadonlyArray<string>).includes(v)
   );
 }
 

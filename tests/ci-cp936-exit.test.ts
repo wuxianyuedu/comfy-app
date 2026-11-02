@@ -895,7 +895,8 @@ describe("CP936 出口：编排与退出码", () => {
       platform: "win32",
       /* SAFETY: 类型断言已复核 */
       spawnImpl: ((_cmd: string, _args: Array<string>, opts: never) => {
-        calls.push({ stdio: /* SAFETY: 类型断言已复核 */ (opts as { stdio: unknown }).stdio });
+        /* SAFETY: 类型断言已复核 */
+        calls.push({ stdio: (opts as { stdio: unknown }).stdio });
         return { status: 0 };
       }) as never,
     });

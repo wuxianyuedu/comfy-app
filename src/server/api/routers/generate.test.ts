@@ -94,9 +94,10 @@ describe("generate.generate（工作流库工作流）", () => {
     // 派发不再经内存 Job（§14 D1 第二刀）：载荷只随行走（上面两条断言：
     // claimedBy=inline 与 execPayload），这里踢一次只是省掉等 2s 节拍。
     expect(kickMock).toHaveBeenCalledTimes(1);
-    expect(
-      /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown }).workflowInputs,
-    ).toEqual([{ nodeId: "1", name: "text", value: "a cat" }]);
+    /* SAFETY: 类型断言已复核 */
+    expect((row?.params as { workflowInputs?: unknown }).workflowInputs).toEqual([
+      { nodeId: "1", name: "text", value: "a cat" },
+    ]);
   });
 
   /**
@@ -200,9 +201,10 @@ describe("generate.generate（RAW 原件执行路径）", () => {
     // 「不再走 /prompt」这条口径现在由 dispatch 只读 execPayload 保证
     // （见 executor-dispatch.test.ts 的「两种载荷都只交 comfy-cli」组）。
     expect(row?.execPayload).toEqual(rawJson);
-    expect(
-      /* SAFETY: 类型断言已复核 */ (row?.params as { workflowInputs?: unknown }).workflowInputs,
-    ).toEqual([{ nodeId: "1", name: "text", value: "hi" }]);
+    /* SAFETY: 类型断言已复核 */
+    expect((row?.params as { workflowInputs?: unknown }).workflowInputs).toEqual([
+      { nodeId: "1", name: "text", value: "hi" },
+    ]);
   });
 
   it("边界：模板 rawJson 为空 → 报「没有可执行内容」", async () => {

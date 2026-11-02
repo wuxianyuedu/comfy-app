@@ -114,17 +114,19 @@ export function validateRemoteModelFields(
     if (typeof key !== "string") {
       continue;
     }
-    if (out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues]) {
+    /* SAFETY: 类型断言已复核 */
+    if (out[key as keyof RemoteModelFieldValues]) {
       continue;
     }
-    out[/* SAFETY: 类型断言已复核 */ key as keyof RemoteModelFieldValues] = issue.message;
+    /* SAFETY: 类型断言已复核 */
+    out[key as keyof RemoteModelFieldValues] = issue.message;
   }
   return out;
 }
 
 function isKind(value: unknown): value is RemoteModelKind {
   return (
-    typeof value === "string" &&
-    /* SAFETY: 类型断言已复核 */ (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(value)
+    /* SAFETY: 类型断言已复核 */
+    typeof value === "string" && (REMOTE_MODEL_KINDS as ReadonlyArray<string>).includes(value)
   );
 }

@@ -109,7 +109,8 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       <Tabs
         className="gap-0"
         onValueChange={(value) => {
-          setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope);
+          /* SAFETY: 类型断言已复核 */
+          setScope(value as MaterialScope);
         }}
         value={scope}
       >

@@ -35,8 +35,8 @@ export const MAX_LOG_DETAIL_CHARS = 12_000;
 
 function isGenerationLogStage(v: unknown): v is GenerationLogStage {
   return (
-    typeof v === "string" &&
-    /* SAFETY: 类型断言已复核 */ (GENERATION_LOG_STAGES as ReadonlyArray<string>).includes(v)
+    /* SAFETY: 类型断言已复核 */
+    typeof v === "string" && (GENERATION_LOG_STAGES as ReadonlyArray<string>).includes(v)
   );
 }
 

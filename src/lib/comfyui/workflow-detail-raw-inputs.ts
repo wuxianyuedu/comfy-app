@@ -101,9 +101,8 @@ function collectProxyWidgetPairs(raw: unknown): Array<{ slot?: string; target: [
   }
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (raw != null && typeof raw === "object") {
-    for (const [slot, value] of Object.entries(
-      /* SAFETY: 类型断言已复核 */ raw as Record<string, unknown>,
-    )) {
+    /* SAFETY: 类型断言已复核 */
+    for (const [slot, value] of Object.entries(raw as Record<string, unknown>)) {
       const target = asTarget(value);
       if (target) {
         pairs.push({ slot, target });
@@ -421,10 +420,12 @@ function subgraphAuthorLabelsByUid(
   /* `subgraphs` 有两种形态：以 UUID 为键的对象，或按顺序排列的数组（旧导出）。
    * 键也可能是数字序号，真 UUID 藏在定义自身的 `id` 上 —— 两种都登记，让
    * 上层按 wrapper 的 `class_type` 查得到。 */
+  /* SAFETY: 类型断言已复核 */
   const subgraphEntries: Array<[string, RawSubgraphDef]> = Array.isArray(subgraphs)
-    ? /* SAFETY: 类型断言已复核 */ (subgraphs as Array<RawSubgraphDef>).map(
-        (subDef, index): [string, RawSubgraphDef] => [String(index), subDef],
-      )
+    ? (subgraphs as Array<RawSubgraphDef>).map((subDef, index): [string, RawSubgraphDef] => [
+        String(index),
+        subDef,
+      ])
     : Object.entries(subgraphs);
   for (const [key, subDef] of subgraphEntries) {
     // oxlint-disable-next-line strict-boolean-expressions -- subDef 来自外部 JSON（数组元素类型收窄不保证运行期非 null），防御性判空

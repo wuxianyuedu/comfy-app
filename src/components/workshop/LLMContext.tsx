@@ -203,6 +203,7 @@ function LLMSettingsModal({
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写`onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
   return (
+    /* SAFETY: 类型断言已复核 */
     <Dialog
       onOpenChange={(next) => {
         if (!next) onClose();
@@ -247,20 +248,18 @@ function LLMSettingsModal({
           <FormField className="mb-3" label="提供方">
             {/* 一排里选一个 → `ui/select-chip`（规范 16 §16.2.4.75）。 */}
             <div aria-label="提供方" className="flex gap-2" role="radiogroup">
-              {
-                /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map((p) => (
-                  <SelectChip
-                    key={p}
-                    onClick={() => {
-                      setDraftProvider(p);
-                    }}
-                    selected={provider === p}
-                    shape="segment"
-                  >
-                    {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
-                  </SelectChip>
-                ))
-              }
+              {(["local", "remote"] as const).map((p) => (
+                <SelectChip
+                  key={p}
+                  onClick={() => {
+                    setDraftProvider(p);
+                  }}
+                  selected={provider === p}
+                  shape="segment"
+                >
+                  {p === "local" ? "本地（Ollama）" : "远程（OpenAI 兼容）"}
+                </SelectChip>
+              ))}
             </div>
           </FormField>
 

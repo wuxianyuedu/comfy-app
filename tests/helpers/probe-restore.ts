@@ -109,7 +109,8 @@ export function restoreToSnapshot(
     } catch (error) {
       failed.push({
         abs,
-        why: `读不到当前内容：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`,
+        /* SAFETY: 类型断言已复核 */
+        why: `读不到当前内容：${(error as Error).message}`,
       });
       continue;
     }
@@ -125,7 +126,8 @@ export function restoreToSnapshot(
       }
       restored.push(abs);
     } catch (error) {
-      failed.push({ abs, why: /* SAFETY: 类型断言已复核 */ (error as Error).message });
+      /* SAFETY: 类型断言已复核 */
+      failed.push({ abs, why: (error as Error).message });
     }
   }
   return { restored, unchanged, failed };

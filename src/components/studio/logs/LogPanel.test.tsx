@@ -800,10 +800,8 @@ describe("LogPanel 日志面板", () => {
         }),
       );
       expect(await screen.findByText(/exports\//)).toBeInTheDocument();
-      const [url, init] = /* SAFETY: 类型断言已复核 */ fetchMock.mock.calls[0] as unknown as [
-        string,
-        { body: string },
-      ];
+      /* SAFETY: 类型断言已复核 */
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, { body: string }];
       expect(url).toBe("/api/logs/export");
       /* SAFETY: 类型断言已复核 */
       const sent = JSON.parse(init.body) as {
@@ -837,7 +835,8 @@ describe("LogPanel 日志面板", () => {
       const user = userEvent.setup();
       await user.click(screen.getByRole("button", { name: "打包诊断现场到本地文件" }));
       expect(await screen.findByText(/diagnostics-/)).toBeInTheDocument();
-      const [url] = /* SAFETY: 类型断言已复核 */ fetchMock.mock.calls[0] as unknown as [string];
+      /* SAFETY: 类型断言已复核 */
+      const [url] = fetchMock.mock.calls[0] as unknown as [string];
       expect(url).toBe("/api/logs/diagnostics");
     } finally {
       vi.unstubAllGlobals();

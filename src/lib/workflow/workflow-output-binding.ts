@@ -83,9 +83,8 @@ function manualMapForMode(
     return {};
   }
   const out: Record<string, string | null> = {};
-  for (const [ioKey, value] of Object.entries(
-    /* SAFETY: 类型断言已复核 */ table as Record<string, unknown>,
-  )) {
+  /* SAFETY: 类型断言已复核 */
+  for (const [ioKey, value] of Object.entries(table as Record<string, unknown>)) {
     if (typeof value === "string") {
       out[ioKey] = value;
     } else if (value === null) {

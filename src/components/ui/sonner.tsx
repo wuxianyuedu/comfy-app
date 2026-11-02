@@ -23,15 +23,17 @@ function Toaster({ ...props }: ToasterProps) {
         error: <OctagonXIcon className="size-4" />,
         loading: <Loader2Icon className="size-4 animate-spin" />,
       }}
+      /* SAFETY: 类型断言已复核 */
       style={
-        /* SAFETY: 类型断言已复核 */ {
+        {
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }
-      theme={/* SAFETY: 类型断言已复核 */ theme as ToasterProps["theme"]}
+      /* SAFETY: 类型断言已复核 */
+      theme={theme as ToasterProps["theme"]}
       toastOptions={{
         classNames: {
           toast: "cn-toast",

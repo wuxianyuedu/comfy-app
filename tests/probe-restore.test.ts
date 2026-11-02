@@ -213,12 +213,11 @@ describe("口径要有执行者 —— 拿索引/HEAD 清工作区这种写法�
    * 「有人把 import 共享件那行删掉、改回 `git checkout`」时会同时红两格，而红话里
    * 说不出「这两份就是当年的现场」；点名到文件，下一人才知道改的是哪一处的历史。
    */
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["tests/check-doc-references.test.ts", "四份入库文档的探针收尾"],
-      ["tests/freshness-ledger-backend.test.ts", "真仓库账文件的临时提交"],
-    ] as const,
-  )("%s 走共享件，不再拿索引/HEAD 覆盖工作树", ([rel, what]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["tests/check-doc-references.test.ts", "四份入库文档的探针收尾"],
+    ["tests/freshness-ledger-backend.test.ts", "真仓库账文件的临时提交"],
+  ] as const)("%s 走共享件，不再拿索引/HEAD 覆盖工作树", ([rel, what]) => {
     const src = readFileSync(join(REPO_ROOT, rel), "utf8");
     expect(src, `${rel} 没引用 tests/helpers/probe-restore.ts`).toContain(
       "./helpers/probe-restore.ts",

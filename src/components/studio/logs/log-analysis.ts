@@ -733,9 +733,8 @@ export function computeFiltered(
     /* 分类开关：被关掉的分类（无论当前在看「全部来源」还是某个具体来源）一律隐藏。
      * 计数维度（`computeOriginCounts`）不读这里——下拉里仍显示真实条数，开关只
      * 影响「显示哪些行」，与「来源筛选下拉」是两条正交的轴。 */
-    const categoryOk = disabledSet
-      ? /* SAFETY: 类型断言已复核 */ !disabledSet.has(bucketOf(entry) as LogCategoryFilter)
-      : true;
+    /* SAFETY: 类型断言已复核 */
+    const categoryOk = disabledSet ? !disabledSet.has(bucketOf(entry) as LogCategoryFilter) : true;
     return levelOk && originOk && categoryOk && matchesSearch(entry, search);
   });
 }

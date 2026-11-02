@@ -106,14 +106,13 @@ describe("useHistoryPanel", () => {
   });
 
   it("activeCount 只数 RUNNING / QUEUED", async () => {
-    mockedFetch.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ [
-        row({ id: "a", status: "RUNNING" }),
-        row({ id: "b", status: "QUEUED" }),
-        row({ id: "c", status: "SUCCEEDED" }),
-        row({ id: "d", status: "FAILED" }),
-      ] as never,
-    );
+    /* SAFETY: 类型断言已复核 */
+    mockedFetch.mockResolvedValue([
+      row({ id: "a", status: "RUNNING" }),
+      row({ id: "b", status: "QUEUED" }),
+      row({ id: "c", status: "SUCCEEDED" }),
+      row({ id: "d", status: "FAILED" }),
+    ] as never);
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.tasks).toHaveLength(4);
     expect(result.current.activeCount).toBe(2);
@@ -145,9 +144,8 @@ describe("useHistoryPanel", () => {
     const clearSpy = vi.spyOn(globalThis, "clearInterval");
     const setSpy = vi.spyOn(globalThis, "setInterval");
 
-    mockedFetch.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ [row({ status: "RUNNING" })] as never,
-    );
+    /* SAFETY: 类型断言已复核 */
+    mockedFetch.mockResolvedValue([row({ status: "RUNNING" })] as never);
     const { result } = renderHook(() => useHistoryPanel({ projectId: "p-1" }));
     await expect.poll(() => result.current.activeCount).toBe(1);
 
@@ -155,9 +153,8 @@ describe("useHistoryPanel", () => {
     expect(started).toHaveLength(1);
 
     // 轮询推进 → 拉到「已完成」→ 定时器被清掉
-    mockedFetch.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ [row({ status: "SUCCEEDED" })] as never,
-    );
+    /* SAFETY: 类型断言已复核 */
+    mockedFetch.mockResolvedValue([row({ status: "SUCCEEDED" })] as never);
     act(() => {
       /* SAFETY: 类型断言已复核 */
       const tick = started[0]?.[0] as () => void;

@@ -76,8 +76,9 @@ export function specToField(s: PortSpec): FieldDef {
     /* 与 String(s.default) 运行时一致（default 来自 manifest JSON，无 symbol），
      * 收窄以满足 no-base-to-string。 */
     placeholder:
+      /* SAFETY: 类型断言已复核 */
       s.default !== undefined && s.default !== null
-        ? /* SAFETY: 类型断言已复核 */ (s.default as { toString(): string }).toString()
+        ? (s.default as { toString(): string }).toString()
         : undefined,
     group: "参数",
     // 纯连接端口渲染成连线手柄，而不是编辑字段。

@@ -147,7 +147,8 @@ describe("Storybook 消息中心注入层的契约（ISSUE #1381）", () => {
   });
 
   it("两个组件都有 story，且都接的是真组件", () => {
-    for (const [story, name] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [story, name] of [
       [panelStory, "MessageCenterPanel"],
       [buttonStory, "MessageCenterButton"],
     ] as const) {

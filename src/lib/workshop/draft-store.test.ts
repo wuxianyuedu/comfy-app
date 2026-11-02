@@ -34,8 +34,9 @@ describe("readWorkshopDraft / writeWorkshopDraft", () => {
     const draft = {
       ...emptyWorkshopDraft(),
       scriptMarkdown: "# 开场",
+      /* SAFETY: 类型断言已复核 */
       shots: [
-        /* SAFETY: 类型断言已复核 */ {
+        {
           id: "a",
           status: "done",
         } as never,

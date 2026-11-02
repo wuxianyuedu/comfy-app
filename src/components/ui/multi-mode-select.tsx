@@ -187,6 +187,7 @@ export function MultiModeSelect({
   const plusN = Math.max(0, modes.length - 1);
 
   return (
+    /* SAFETY: 类型断言已复核 */
     <Popover onOpenChange={setOpen} open={open}>
       <span
         className={`inline-flex items-center gap-1 ${disabled ? "pointer-events-none opacity-50" : ""}`}
@@ -251,38 +252,34 @@ export function MultiModeSelect({
 
         {/* tabs — switchable 图像 / 视频 / 音频 */}
         <div className="border-border-subtle flex items-center gap-1 border-b px-2 pt-2">
-          {
-            /* SAFETY: 类型断言已复核 */ (
-              ["image", "video", "audio"] as Array<WorkflowCategory>
-            ).map((cat) => {
-              const selCount = (grouped[cat] ?? []).filter((type) => draft.has(type.code)).length;
-              const isActive = activeTab === cat;
-              return (
-                <Button
-                  className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
-                    isActive
-                      ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
-                      : "text-ink-muted hover:text-ink-strong"
-                  }`}
-                  key={cat}
-                  onClick={() => {
-                    setActiveTab(cat);
-                  }}
-                  variant="ghost"
-                >
-                  {CATEGORY_LABEL[cat]}
-                  {selCount > 0 && (
-                    <span className={`text-3xs ml-1 ${CATEGORY_TEXT[cat]}`}>{selCount}</span>
-                  )}
-                  {isActive && (
-                    <span
-                      className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
-                    />
-                  )}
-                </Button>
-              );
-            })
-          }
+          {(["image", "video", "audio"] as Array<WorkflowCategory>).map((cat) => {
+            const selCount = (grouped[cat] ?? []).filter((type) => draft.has(type.code)).length;
+            const isActive = activeTab === cat;
+            return (
+              <Button
+                className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
+                  isActive
+                    ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
+                    : "text-ink-muted hover:text-ink-strong"
+                }`}
+                key={cat}
+                onClick={() => {
+                  setActiveTab(cat);
+                }}
+                variant="ghost"
+              >
+                {CATEGORY_LABEL[cat]}
+                {selCount > 0 && (
+                  <span className={`text-3xs ml-1 ${CATEGORY_TEXT[cat]}`}>{selCount}</span>
+                )}
+                {isActive && (
+                  <span
+                    className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
+                  />
+                )}
+              </Button>
+            );
+          })}
         </div>
 
         {/* 列表 —— 只列当前页签分类下的项 */}
