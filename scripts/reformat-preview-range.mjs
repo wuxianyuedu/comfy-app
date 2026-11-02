@@ -28,9 +28,9 @@
  *      另算一份父关系）：区间是「第一父 .. 第一父名下的那个 sha」。只挪起点不够 ——
  *      `#3022` 早先终点留 `HEAD`，两个父的对称差就漏进来了。
  *   ② 认不出 ⇒ 按**拓扑**挑起点：`merge-base(目标 sha, HEAD)`（平台给了基线时它才是
- *      分叉点，第一父未必是）或第一父，取第一个「`--first-parent` 计数 = 总数」的
- *      （= 拿掉合并提交之后历史单调，于是区间不含「已经并进起点又被再合一次」的提交）。
- *      都过不了才退回 `HEAD~1`，并**把这件事念出来** —— 静默换一个面比多说一句更贵。
+ *      分叉点，第一父未必是）或第一父，取第一个「区间里不含合并提交**或**历史单调」的
+ *      （两条口径各治一形，见 `clean()`）。都过不了才退回 `HEAD~1`，并**把这件事念出来**
+ *      —— 静默换一个面比多说一句更贵。
  *
  * ⚠️ **这一档不许豁免**：合并提交本身已由 `perCommitShape` 的 `--no-merges` 摘出
  * 逐提交那张表，汇总口径只在「重排独占**整段**」时才放行，所以这里给的是「PR 带来的
@@ -63,19 +63,41 @@ export function previewRangeEnds(deps) {
   /** 普通提交形态：与改动前逐字一致。 */
   const plain = { before: "HEAD~1", after: "HEAD" };
   /**
-   * `A..HEAD` 里「拿掉合并提交之后历史是否单调」（见文件头 ② 的口径）。
+   * `A..HEAD` 能不能当「本次改动」—— 两条口径，**任一成立即可**。
+   *
+   *   ① **区间里不含合并提交**：每一条都落在这条分支自己的一线上，那就是「PR 带来的
+   *      提交」；有合并就说明这段跨过了别的分支，带进来的东西是不是本 PR 做的分不出来
+   *      （平台合预览时会把主干整批带进去）。
+   *   ② **`--first-parent` 计数 = 全长**：拿掉合并提交之后历史是单调的 —— 于是区间里
+   *      **没有**「已经并进起点、又被再合一次」的提交（那种提交会让「本 PR 带来的」
+   *      被读成翻倍）。这一条同时覆盖「先同步 master、再自己提交」这种**正确形态**：
+   *      它有合并，但合进来的那一侧全在分叉点之前。
+   *
+   * 两条各治一形，缺一个就有一批正确形态被误判成「对不上账」（实测：只看 ① 时，
+   * 一条带过 8 次同步的 PR 被判成对不上账而退回 `HEAD~1`，退回的正是红过的形状）。
+   * 点名的 `A` 自身是合并提交不算 —— 它正是分叉点，不在 `A..HEAD` 里。
    *
    * @param {string} candidate 区间起点
    * @returns {boolean}
    */
-  const monotonic = (candidate) => {
+  const clean = (candidate) => {
     if (candidate === "") {
       return false;
     }
-    /** @param {string[]} args git 参数 */
-    const count = (args) => gitOrEmpty(args).split("\n").filter(Boolean).length;
-    const all = count(["rev-list", `${candidate}..HEAD`]);
-    return all > 0 && all === count(["rev-list", "--first-parent", `${candidate}..HEAD`]);
+    const rows = gitOrEmpty(["rev-list", "--parents", `${candidate}..HEAD`])
+      .split("\n")
+      .map((line) => line.trim().split(/\s+/).filter(Boolean))
+      .filter((row) => row.length > 0);
+    if (rows.length === 0) {
+      return false;
+    }
+    if (rows.every((row) => row.length <= 2)) {
+      return true;
+    }
+    const firstParent = gitOrEmpty(["rev-list", "--first-parent", `${candidate}..HEAD`])
+      .split("\n")
+      .filter(Boolean).length;
+    return firstParent === rows.length;
   };
   /**
    * 合并预览、但对不上账：按拓扑把区间钉成「PR 引入的那一段」。
@@ -94,7 +116,7 @@ export function previewRangeEnds(deps) {
     }
     candidates.push(parents[1] ?? "");
     for (const candidate of candidates) {
-      if (monotonic(candidate)) {
+      if (clean(candidate)) {
         return { before: candidate, after: "HEAD" };
       }
     }
