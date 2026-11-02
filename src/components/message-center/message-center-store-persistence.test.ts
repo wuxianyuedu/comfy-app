@@ -100,13 +100,17 @@ describe("消息中心持久化：恢复", () => {
   });
 
   it("没存过 → 恢复后仍是空，不抛错", () => {
-    expect(() => useMessageCenterStore.getState().hydrate()).not.toThrow();
+    expect(() => {
+      useMessageCenterStore.getState().hydrate();
+    }).not.toThrow();
     expect(useMessageCenterStore.getState().messages).toEqual([]);
   });
 
   it("存的是坏 JSON → 当作没存过（面板仍打得开）", () => {
     window.localStorage.setItem(MESSAGE_CENTER_STORAGE_KEY, "{不是 JSON");
-    expect(() => useMessageCenterStore.getState().hydrate()).not.toThrow();
+    expect(() => {
+      useMessageCenterStore.getState().hydrate();
+    }).not.toThrow();
     expect(useMessageCenterStore.getState().messages).toEqual([]);
   });
 

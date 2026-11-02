@@ -44,13 +44,21 @@ export function WorkshopPipeline() {
       shots: controller.shots,
     }),
     getMeta: () => controller.meta,
-    setMeta: (patch) => controller.setMeta((prev) => ({ ...prev, ...patch })),
-    setScriptMarkdown: (markdown) => controller.setScriptMarkdown(markdown),
+    setMeta: (patch) => {
+      controller.setMeta((prev) => ({ ...prev, ...patch }));
+    },
+    setScriptMarkdown: (markdown) => {
+      controller.setScriptMarkdown(markdown);
+    },
     getScriptMarkdown: () => controller.scriptMarkdown,
     getCharacters: () => controller.characters,
-    setCharacters: (characters) => controller.setCharacters(characters),
+    setCharacters: (characters) => {
+      controller.setCharacters(characters);
+    },
     getShots: () => controller.shots,
-    setShots: (shots) => controller.setShots(shots),
+    setShots: (shots) => {
+      controller.setShots(shots);
+    },
     // Phase 5：Agent 用当前项目镜头一键成片（走服务端成片管线，含逐镜视频 + 合成 + 回写）。
     renderFilm: () =>
       renderProjectFilm({
@@ -102,7 +110,9 @@ export function WorkshopPipeline() {
               clipDoneCount={controller.clipDoneCount}
               imageDoneCount={controller.imageDoneCount}
               missing={controller.missing}
-              onGoScript={() => controller.setTab("script")}
+              onGoScript={() => {
+                controller.setTab("script");
+              }}
               onVideoWorkflowChange={controller.setVideoWorkflowId}
               onWorkflowChange={controller.setWorkflowId}
               videoWorkflowId={controller.videoWorkflowId}

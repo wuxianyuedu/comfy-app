@@ -17,11 +17,7 @@ import { act, render, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ModalWidth } from "./dialog-width";
-import {
-  resetWidePanelsForTest,
-  useWidePanel,
-  WidePanelToggle,
-} from "./wide-panel";
+import { resetWidePanelsForTest, useWidePanel, WidePanelToggle } from "./wide-panel";
 
 const WIDTHS: ModalWidth = { base: "w-5xl", wide: "w-[calc(100vw-16px)]" };
 
@@ -40,7 +36,9 @@ describe("useWidePanel", () => {
 
   it("toggle 切到加宽档，宽度类与文案同步变化", () => {
     const { result } = renderHook(() => useWidePanel("p2", WIDTHS));
-    act(() => result.current.toggle());
+    act(() => {
+      result.current.toggle();
+    });
     expect(result.current.wide).toBe(true);
     expect(result.current.widthClass).toBe(WIDTHS.wide);
     expect(result.current.toggleLabel).toBe("收缩");
@@ -48,8 +46,12 @@ describe("useWidePanel", () => {
 
   it("set 是显式设置，不翻转", () => {
     const { result } = renderHook(() => useWidePanel("p3", WIDTHS));
-    act(() => result.current.set(true));
-    act(() => result.current.set(true));
+    act(() => {
+      result.current.set(true);
+    });
+    act(() => {
+      result.current.set(true);
+    });
     expect(result.current.wide).toBe(true);
   });
 
@@ -61,14 +63,14 @@ describe("useWidePanel", () => {
 
   it("localStorage 不可用时静默降级（记忆是增强，不是功能）", () => {
     /* 隐私模式 / 配额满 / storage 被禁用：本会话仍然可用，只是丢了记忆。 */
-    const getItem = vi
-      .spyOn(Storage.prototype, "getItem")
-      .mockImplementation(() => {
-        throw new Error("storage disabled");
-      });
+    const getItem = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage disabled");
+    });
     const { result } = renderHook(() => useWidePanel("p0", WIDTHS));
     expect(result.current.wide).toBe(false);
-    act(() => result.current.toggle());
+    act(() => {
+      result.current.toggle();
+    });
     expect(result.current.wide).toBe(true);
     getItem.mockRestore();
   });
@@ -82,7 +84,9 @@ describe("useWidePanel", () => {
   describe("记忆（这是三份实现此前共同欠着的那件事）", () => {
     it("加宽态跨挂载保持：关掉面板再打开仍是用户选过的档", () => {
       const first = renderHook(() => useWidePanel("p5", WIDTHS));
-      act(() => first.result.current.toggle());
+      act(() => {
+        first.result.current.toggle();
+      });
       first.unmount();
 
       const second = renderHook(() => useWidePanel("p5", WIDTHS));
@@ -92,7 +96,9 @@ describe("useWidePanel", () => {
     it("不同面板各记各的（id 就是记忆的键）", () => {
       const a = renderHook(() => useWidePanel("p6a", WIDTHS));
       const b = renderHook(() => useWidePanel("p6b", WIDTHS));
-      act(() => a.result.current.toggle());
+      act(() => {
+        a.result.current.toggle();
+      });
       expect(a.result.current.wide).toBe(true);
       expect(b.result.current.wide).toBe(false);
     });
@@ -100,15 +106,21 @@ describe("useWidePanel", () => {
     it("同一次会话内两份实例同步（按钮在标题栏、面板体在 Portal 里）", () => {
       const a = renderHook(() => useWidePanel("p7", WIDTHS));
       const b = renderHook(() => useWidePanel("p7", WIDTHS));
-      act(() => a.result.current.toggle());
+      act(() => {
+        a.result.current.toggle();
+      });
       expect(b.result.current.wide).toBe(true);
     });
 
     it("localStorage 里存的是可读的载体（不是直接把对象塞进去）", () => {
       const a = renderHook(() => useWidePanel("p8", WIDTHS));
-      act(() => a.result.current.set(true));
+      act(() => {
+        a.result.current.set(true);
+      });
       expect(window.localStorage.getItem("comfyapp:wide-panel:p8")).toBe("1");
-      act(() => a.result.current.set(false));
+      act(() => {
+        a.result.current.set(false);
+      });
       expect(window.localStorage.getItem("comfyapp:wide-panel:p8")).toBe("0");
     });
   });

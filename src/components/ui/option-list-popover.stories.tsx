@@ -73,7 +73,9 @@ function ControlledOpenSample() {
     <div className="flex flex-col items-start gap-3">
       <OptionListPopover
         items={ITEMS}
-        onOpenChange={(open) => setOpenNote(open ? "已开" : "已关")}
+        onOpenChange={(open) => {
+          setOpenNote(open ? "已开" : "已关");
+        }}
         onSelect={() => undefined}
         trigger={<ChipTrigger count={3} label="形态" />}
         triggerClassName="border-border-strong bg-canvas-deep shrink-0 rounded-lg border px-2 py-0.5"

@@ -269,7 +269,9 @@ export function useConsole(): ConsoleController {
     setPhase((prev) => (prev === "running" ? prev : "idle"));
   }, []);
 
-  const fill = useCallback((next: string) => setCommand(next), []);
+  const fill = useCallback((next: string) => {
+    setCommand(next);
+  }, []);
 
   const canRun = useMemo(
     () => phase !== "running" && command.trim().length > 0 && command.length <= MAX_COMMAND_CHARS,

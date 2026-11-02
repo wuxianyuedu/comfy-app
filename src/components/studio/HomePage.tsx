@@ -121,7 +121,9 @@ function ResumeProjectCard({
     <Button
       aria-label={`继续编辑 ${proj.name}`}
       className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 mt-6 flex h-auto w-full items-stretch gap-4 rounded-xl border p-4 text-left font-normal active:scale-[0.995]"
-      onClick={() => onOpen(proj)}
+      onClick={() => {
+        onOpen(proj);
+      }}
       variant="ghost"
     >
       {/* 左：缩略图条；一张图都没有时落回类别图标块（不留空洞） */}
@@ -354,7 +356,9 @@ export function HomePage({
                   <Button
                     className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto items-start gap-3 rounded-lg border p-3.5 text-left font-normal active:scale-[0.98]"
                     key={proj.id}
-                    onClick={() => openRecent(proj)}
+                    onClick={() => {
+                      openRecent(proj);
+                    }}
                     variant="ghost"
                   >
                     {/* Kind icon */}

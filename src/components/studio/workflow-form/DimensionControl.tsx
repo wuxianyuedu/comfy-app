@@ -276,7 +276,9 @@ function DimensionSizeControl({
           label: shortRatioLabel(preset.label),
           render: <RatioIcon ratio={preset.ratio} />,
         })),
-        onChange: (value) => applyPreset(value, clarity),
+        onChange: (value) => {
+          applyPreset(value, clarity);
+        },
       },
       {
         label: "像素",
@@ -288,14 +290,18 @@ function DimensionSizeControl({
           label: preset.label,
           subgroup: CLARITY_SUBGROUP_OF_KIND[preset.kind],
         })),
-        onChange: (value) => applyPreset(ratio, value),
+        onChange: (value) => {
+          applyPreset(ratio, value);
+        },
         /* 百万像素是连续量：档位之外再给一个能填任意值的步进器（挨着「百万像素」
          * 那一组渲染）。写出去的 label 与档位同形（"2.5M"），`applyPreset` 经
          *`clarityPresetFor` 认出它。 */
         extra: (
           <MegapixelStepper
             disabled={disabled}
-            onChange={(megapixels) => applyPreset(ratio, megapixelLabel(megapixels))}
+            onChange={(megapixels) => {
+              applyPreset(ratio, megapixelLabel(megapixels));
+            }}
             value={currentMegapixels}
           />
         ),
@@ -310,7 +316,9 @@ function DimensionSizeControl({
           value: String(option),
           label: String(option),
         })),
-        onChange: (value) => handleAlignChange(Number(value)),
+        onChange: (value) => {
+          handleAlignChange(Number(value));
+        },
       });
     }
     return list;
@@ -350,7 +358,9 @@ function DimensionSizeControl({
                   extra={
                     <span className="text-ink-faint text-3xs">{CLARITY_HINT[clarityKind]}</span>
                   }
-                  onOpen={() => setTableOpen(true)}
+                  onOpen={() => {
+                    setTableOpen(true);
+                  }}
                   scene={scene}
                 />
               }
@@ -399,7 +409,14 @@ function DimensionSizeControl({
         </div>
       )}
 
-      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
+      {tableOpen && (
+        <SizePresetTableModal
+          onClose={() => {
+            setTableOpen(false);
+          }}
+          scene={scene}
+        />
+      )}
     </div>
   );
 }

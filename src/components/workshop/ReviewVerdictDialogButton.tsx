@@ -143,7 +143,9 @@ export function ReviewVerdictDialogButton({
         <Button
           aria-label={label}
           className="text-ink-soft hover:bg-primary/15"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            setOpen(true);
+          }}
           size="icon-sm"
           type="button"
           variant="ghost"

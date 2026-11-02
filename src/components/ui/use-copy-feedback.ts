@@ -191,7 +191,12 @@ export function useCopyFeedback({
   /* 两种调用形态共用同一条重入判据与同一份反馈：
    *   · `copy("文本")` —— 最常见；
    *   · `copy(() => copyAllFromStore())` —— 文本由点击那一刻现算（日志面板）。 */
-  const run = useCallback((text: string) => report(() => copyText(text)), [report]);
+  const run = useCallback(
+    (text: string) => {
+      report(() => copyText(text));
+    },
+    [report],
+  );
   return useCallback(
     (arg: string | (() => Promise<boolean>)) => {
       if (typeof arg === "string") {

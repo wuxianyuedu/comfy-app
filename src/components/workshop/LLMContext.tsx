@@ -56,8 +56,12 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       remoteImageModels,
       loading,
       settingsOpen,
-      openSettings: () => setSettingsOpen(true),
-      closeSettings: () => setSettingsOpen(false),
+      openSettings: () => {
+        setSettingsOpen(true);
+      },
+      closeSettings: () => {
+        setSettingsOpen(false);
+      },
       refresh,
     }),
     [config, localModels, remoteModels, remoteImageModels, loading, settingsOpen, refresh],
@@ -69,7 +73,9 @@ export function LLMProvider({ children }: { children: React.ReactNode }) {
       {settingsOpen && (
         <LLMSettingsModal
           initial={config}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false);
+          }}
           onSaved={() => {
             refresh();
             setSettingsOpen(false);
@@ -148,7 +154,9 @@ function LLMSettingsModal({
         onSaved(cfg);
       },
       {
-        report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
+        report: (kind, detail) => {
+          setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail });
+        },
         failureText: "保存失败",
       },
     );
@@ -182,7 +190,9 @@ function LLMSettingsModal({
           /* 成功文案是**动作结果**的函数（回显模型的前 60 个字符）——
            *`successText` 支持函数形式正是为这类落点（同`use-external-action`
            * 的`detail` 由端点给）。 */
-          report: (kind, detail) => setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail }),
+          report: (kind, detail) => {
+            setMsg({ kind: kind === "ok" ? "ok" : "err", text: detail });
+          },
           failureText: "连接失败",
           successText: (result) => `连接成功：${result.detail}`,
         },
@@ -193,7 +203,12 @@ function LLMSettingsModal({
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写`onClick` 关闭，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="模型选择"
         className="bg-transparent p-0 ring-0"
@@ -236,7 +251,9 @@ function LLMSettingsModal({
                 /* SAFETY: 类型断言已复核 */ (["local", "remote"] as const).map((p) => (
                   <SelectChip
                     key={p}
-                    onClick={() => setDraftProvider(p)}
+                    onClick={() => {
+                      setDraftProvider(p);
+                    }}
                     selected={provider === p}
                     shape="segment"
                   >
@@ -255,7 +272,9 @@ function LLMSettingsModal({
                 <SelectChip
                   className="w-full justify-start gap-2 px-3 py-2 text-left text-sm"
                   key={name}
-                  onClick={() => setDraftModel(name)}
+                  onClick={() => {
+                    setDraftModel(name);
+                  }}
                   selected={activeModel === name}
                   shape="compact"
                 >

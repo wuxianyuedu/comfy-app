@@ -225,7 +225,9 @@ export function WirePortRows({
                   decimalPlaces={wireInput.control === "float" ? b.decimalPlaces : 0}
                   max={b.max}
                   min={b.min}
-                  onChange={(value) => set(wireInput.ioKey, value)}
+                  onChange={(value) => {
+                    set(wireInput.ioKey, value);
+                  }}
                   step={b.step}
                   value={(typeof v === "number" ? v : Number(v)) || b.min}
                 />
@@ -233,7 +235,9 @@ export function WirePortRows({
               {isSeed && onSeedModeChange && (
                 <SeedModeButton
                   mode={seedModes?.[wireInput.ioKey]}
-                  onPick={(mode) => onSeedModeChange(wireInput.ioKey, mode)}
+                  onPick={(mode) => {
+                    onSeedModeChange(wireInput.ioKey, mode);
+                  }}
                 />
               )}
               <TypeChip size="md" style={chipStyle} tone="none">
@@ -299,7 +303,9 @@ export function WirePortRows({
               <div className="mt-1.5 min-h-0 min-w-0 flex-1 overflow-hidden pr-3.5 pl-3.5">
                 {wireInput.control === "textarea" && (
                   <AutoResizeTextarea
-                    onChange={(val) => set(wireInput.ioKey, val)}
+                    onChange={(val) => {
+                      set(wireInput.ioKey, val);
+                    }}
                     placeholder={`输入 ${label}`}
                     value={typeof v === "string" ? v : ""}
                   />
@@ -308,7 +314,9 @@ export function WirePortRows({
                   <input
                     aria-label={`输入 ${label}`}
                     className="nodrag nopan bg-canvas-deep text-ink-soft placeholder:text-ink-placeholder h-full w-full rounded-md px-2.5 py-2 text-sm outline-none"
-                    onChange={textHandler((value) => set(wireInput.ioKey, value))}
+                    onChange={textHandler((value) => {
+                      set(wireInput.ioKey, value);
+                    })}
                     placeholder={`输入 ${label}`}
                     style={{ fontFamily: "var(--font-sans)" }}
                     value={typeof v === "string" || typeof v === "number" ? String(v) : ""}
@@ -318,7 +326,9 @@ export function WirePortRows({
                   <Button
                     className="nodrag nopan bg-canvas-deep hover:bg-canvas-deep text-ink-soft hover:text-ink-bright h-full gap-1.5 rounded-md px-2.5 py-1.5 text-sm"
                     disabled={uploading}
-                    onClick={() => pickFile(wireInput.ioKey)}
+                    onClick={() => {
+                      pickFile(wireInput.ioKey);
+                    }}
                     variant="ghost"
                   >
                     {uploading && uploadTarget === wireInput.ioKey

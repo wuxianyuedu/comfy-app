@@ -259,11 +259,12 @@ export function useExtractSession(
           ) => Partial<
             Pick<ExtractSession, "channelValue" | "busy" | "status" | "progress" | "error">
           >),
-    ) =>
+    ) => {
       setSession((prev) => ({
         ...prev,
         ...(typeof p === "function" ? p(prev) : p),
-      })),
+      }));
+    },
     [],
   );
   const appendProgress = React.useCallback((text: string) => {
@@ -391,7 +392,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       // Phase 3b-2：额外写穿一份「生产数据」到 production 表，供画布读取物化（3c）。
       void pushProduction(activeProjectId, buildProductionPayload(draft, tab, rendered));
     }, 600);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [activeProjectId, currentDraft, tab, rendered]);
 
   /* 卸载兜底保存 —— 工坊常作为 workspace 的一个页签渲染，切走其它页签时本组件
@@ -471,7 +474,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         }
       });
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, []);
 
   /* 首挂载三路拉取（技能列表 / API 通道 / 工作流库清单）——沉在
@@ -584,26 +589,28 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   /* 切到全局的「模型适配」视图页签。走 `workspace:navigate` 这条已收口的广播
      （与 `WorkshopAside` 的「在资源库中打开」同一条、同一份载荷类型），不在这里
      穿两层 props 去够 workspace 的 `navigateTo`。 */
-  const openModelAdapters = React.useCallback(
-    () => emitAppEvent("workspace:navigate", { view: "model-adapters" }),
-    [],
-  );
+  const openModelAdapters = React.useCallback(() => {
+    emitAppEvent("workspace:navigate", { view: "model-adapters" });
+  }, []);
 
   /* 阶段⑥「去成片合成 MP4」出口：复用上一条广播，view 换成 "film"。 */
-  const goToFilm = React.useCallback(
-    () => emitAppEvent("workspace:navigate", { view: "film" }),
-    [],
-  );
+  const goToFilm = React.useCallback(() => {
+    emitAppEvent("workspace:navigate", { view: "film" });
+  }, []);
 
   const handleApiChannelsSaved = React.useCallback((channels: ApiChannelsView) => {
     setApiChannels(channels);
   }, []);
 
-  const dismissNotice = React.useCallback(() => setNotice(null), []);
+  const dismissNotice = React.useCallback(() => {
+    setNotice(null);
+  }, []);
   const showNotice = React.useCallback((message: string) => {
     setNotice(message);
   }, []);
-  const markRendered = React.useCallback(() => setRendered(true), []);
+  const markRendered = React.useCallback(() => {
+    setRendered(true);
+  }, []);
 
   return {
     tab,

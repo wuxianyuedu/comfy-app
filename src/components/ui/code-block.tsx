@@ -193,7 +193,9 @@ export function CodeBlock({ code, language }: { code: string; language: string }
             /* 让出主线程一帧，长文件高亮期间 UI 保持可点 */
             setTimeout(processChunk, 0);
           } else {
-            guard.commit(() => setTokens(acc));
+            guard.commit(() => {
+              setTokens(acc);
+            });
           }
         };
 
@@ -209,7 +211,9 @@ export function CodeBlock({ code, language }: { code: string; language: string }
         });
       }
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [code, language, shikiTheme]);
 
   if (error) {

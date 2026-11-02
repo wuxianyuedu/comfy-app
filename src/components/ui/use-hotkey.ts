@@ -162,7 +162,8 @@ export function useHotkey(
     };
 
     host.addEventListener("keydown", /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener);
-    return () =>
+    return () => {
       host.removeEventListener("keydown", /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener);
+    };
   }, [enabled, filterInput, preventDefault, target, key, mod, ctrl, meta, shift, alt]);
 }

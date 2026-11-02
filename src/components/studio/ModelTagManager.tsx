@@ -62,7 +62,12 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘遮罩
      + `role`/`aria-modal` 手写，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="管理模型标签"
         className="bg-transparent p-0 ring-0"
@@ -142,12 +147,17 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                       <input
                         autoFocus
                         maxLength={64}
-                        onChange={(event) => setEditingDraft(event.target.value)}
-                        onFocus={(event) => event.currentTarget.select()}
+                        onChange={(event) => {
+                          setEditingDraft(event.target.value);
+                        }}
+                        onFocus={(event) => {
+                          event.currentTarget.select();
+                        }}
                         value={editingDraft}
                         {...enterCommit({
-                          // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
-                          onCommit: () => void commitEdit(tag.id, tag.name),
+                          onCommit: () => {
+                            commitEdit(tag.id, tag.name);
+                          },
                           onCancel: cancelEdit,
                         })}
                         className="bg-canvas-deep text-ink-bright border-primary/50 focus:border-primary min-w-0 flex-1 rounded-md border px-2 py-0.5 text-sm outline-none"
@@ -157,7 +167,9 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                         // 保存必须走 Enter（唯一有意的保存路径），
                         // 否则两次提交会竞速（例如 Enter + blur 都触发，
                         // 第二个看到一个已重命名的标签而报 404）。
-                        onBlur={() => cancelEdit()}
+                        onBlur={() => {
+                          cancelEdit();
+                        }}
                       />
                     ) : (
                       /* 改名此前只有「双击」这一条路径 —— 双击是鼠标专属手势，
@@ -166,10 +178,14 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
                        *  作为快捷方式，同时补上焦点与 Enter/F2 —— F2 是各平台通用
                        *  的「重命名」键，Enter 是 `role="button"` 的默认激活键。 */
                       <span
-                        onDoubleClick={() => beginEdit(tag.id, tag.name)}
+                        onDoubleClick={() => {
+                          beginEdit(tag.id, tag.name);
+                        }}
                         role="button"
                         tabIndex={0}
-                        {...simpleKeyHandler(["Enter", "F2"], () => beginEdit(tag.id, tag.name))}
+                        {...simpleKeyHandler(["Enter", "F2"], () => {
+                          beginEdit(tag.id, tag.name);
+                        })}
                         className="text-ink-bright hover:bg-subtle hover:text-ink-bright focus-visible:ring-primary/40 cursor-text truncate rounded-sm px-0.5 text-sm select-none focus-visible:ring-2 focus-visible:outline-none"
                         title="双击（或 Enter / F2）重命名"
                       >

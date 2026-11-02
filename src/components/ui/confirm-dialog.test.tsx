@@ -14,7 +14,9 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { ConfirmDialog } from "~/components/ui/confirm-dialog";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+});
 
 /** 遮罩层的定位判据类（full-screen-layer 的 OVERLAY_POSITION_CLASS.modal）。 */
 const OVERLAY_POSITION_MARKS = ["top-title-bar", "inset-x-0", "bottom-0"];

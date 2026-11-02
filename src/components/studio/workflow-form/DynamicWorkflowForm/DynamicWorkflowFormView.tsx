@@ -127,21 +127,37 @@ export function DynamicWorkflowFormView({
         handleId={entry.ioKey}
         key={rowEntry.ioKey}
         onLabelChange={
-          onLabelChange ? (label: string) => onLabelChange(entry.ioKey, label) : undefined
+          onLabelChange
+            ? (label: string) => {
+                onLabelChange(entry.ioKey, label);
+              }
+            : undefined
         }
-        onPickFile={() => pickFile(entry.ioKey)}
+        onPickFile={() => {
+          pickFile(entry.ioKey);
+        }}
         onRequiredChange={
           onRequiredChange
-            ? (required: boolean) => onRequiredChange(entry.ioKey, required)
+            ? (required: boolean) => {
+                onRequiredChange(entry.ioKey, required);
+              }
             : undefined
         }
         onSeedModeChange={
-          onSeedModeChange ? (mode: string) => onSeedModeChange(entry.ioKey, mode) : undefined
+          onSeedModeChange
+            ? (mode: string) => {
+                onSeedModeChange(entry.ioKey, mode);
+              }
+            : undefined
         }
-        onValueChange={(next: unknown) => set(entry.ioKey, next)}
+        onValueChange={(next: unknown) => {
+          set(entry.ioKey, next);
+        }}
         onVisibilityChange={
           onVisibilityChange && visibilityMode
-            ? (visible: boolean) => onVisibilityChange(entry.ioKey, visible)
+            ? (visible: boolean) => {
+                onVisibilityChange(entry.ioKey, visible);
+              }
             : undefined
         }
         previewSrc={localPreviewUrl(entry.ioKey)}

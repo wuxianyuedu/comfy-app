@@ -81,7 +81,9 @@ export function useProjectHome(): ProjectHomeController {
         setLoading(false);
       });
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [projectId]);
 
   /* run 跑动 / 待确认时顺带刷新项目状态：引擎每一步都会改 production，

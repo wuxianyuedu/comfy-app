@@ -93,7 +93,12 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
   /* 关闭语义交给`ui/dialog`：此前这里**既没有点遮罩关闭、也没有 Esc** ——
  只能用右上角的 ✕ 关掉，键盘用户尤其难退出。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="视频生成队列"
         className="bg-transparent p-0 ring-0"

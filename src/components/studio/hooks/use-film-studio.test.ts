@@ -141,7 +141,9 @@ describe("useFilmStudio", () => {
 
   it("脚本为空时直接短路：不发请求、提示请先输入剧本", async () => {
     const { result } = renderHook(() => useFilmStudio());
-    act(() => result.current.setScript("   "));
+    act(() => {
+      result.current.setScript("   ");
+    });
     await act(async () => {
       await result.current.create();
     });
@@ -204,7 +206,9 @@ describe("useFilmStudio", () => {
       await act(async () => {
         vi.advanceTimersByTime(3100);
       });
-      await waitFor(() => expect(result.current.running).toBe(false));
+      await waitFor(() => {
+        expect(result.current.running).toBe(false);
+      });
 
       const callsAfterDone = vanilla.film.detail.query.mock.calls.length;
       await act(async () => {

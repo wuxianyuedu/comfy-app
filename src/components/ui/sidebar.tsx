@@ -134,7 +134,11 @@ function SidebarProvider({
 
   /* 开关侧栏。窄窗下官方形态是浮层，所以两档各有自己的开合态。 */
   const toggleSidebar = React.useCallback(() => {
-    return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
+    if (isMobile) {
+      setOpenMobile((open) => !open);
+    } else {
+      setOpen((open) => !open);
+    }
   }, [isMobile, setOpen, setOpenMobile]);
 
   /* ⌘/Ctrl+B 开关侧栏 —— 走 P20 的唯一出口 `useHotkey`。官方那段自己

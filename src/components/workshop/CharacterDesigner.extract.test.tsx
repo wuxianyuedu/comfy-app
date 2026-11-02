@@ -49,7 +49,9 @@ const SCRIPT = `# 剧本
 beforeEach(() => {
   vi.restoreAllMocks();
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+});
 
 describe("CharacterDesigner 提取后回写角色列表", () => {
   it("模型通道提取成功后将并入的角色写入 onCharactersChange", async () => {

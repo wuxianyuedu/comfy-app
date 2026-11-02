@@ -76,7 +76,9 @@ describe("useMaterialLibrary", () => {
     await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.showItems).toBe(false);
 
-    act(() => result.current.enterFolder("ref"));
+    act(() => {
+      result.current.enterFolder("ref");
+    });
     await expect
       .poll(() => mockedList)
       .toHaveBeenLastCalledWith(expect.objectContaining({ folder: "ref" }));
@@ -85,10 +87,14 @@ describe("useMaterialLibrary", () => {
 
   it("搜索态：查询带 q 且不带 folder，showItems 为 true", async () => {
     const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
-    act(() => result.current.enterFolder("ref"));
+    act(() => {
+      result.current.enterFolder("ref");
+    });
     await expect.poll(() => result.current.loading).toBe(false);
 
-    act(() => result.current.setSearch("角色"));
+    act(() => {
+      result.current.setSearch("角色");
+    });
     await expect
       .poll(() => mockedList)
       .toHaveBeenLastCalledWith(expect.objectContaining({ q: "角色" }));
@@ -100,10 +106,14 @@ describe("useMaterialLibrary", () => {
 
   it("切换 scope 时退回到分类列表（避免停在已消失的分类）", async () => {
     const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
-    act(() => result.current.enterFolder("ref"));
+    act(() => {
+      result.current.enterFolder("ref");
+    });
     await expect.poll(() => result.current.folder).toBe("ref");
 
-    act(() => result.current.setScope("cross"));
+    act(() => {
+      result.current.setScope("cross");
+    });
     expect(result.current.folder).toBeNull();
     expect(result.current.scope).toBe("cross");
   });
@@ -130,7 +140,9 @@ describe("useMaterialLibrary", () => {
     mockedUpload.mockResolvedValue();
     const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
     await expect.poll(() => result.current.loading).toBe(false);
-    act(() => result.current.enterFolder("scenes"));
+    act(() => {
+      result.current.enterFolder("scenes");
+    });
 
     const a = new File(["a"], "a.png");
     const b = new File(["b"], "b.png");
@@ -172,7 +184,9 @@ describe("useMaterialLibrary", () => {
 
     // 上传失败本身不触发刷新；这里再模拟一次并发的后台拉取成功，
     // 拉取成功只清拉取错误，动作错误必须保留到用户点「重试」。
-    act(() => result.current.refresh());
+    act(() => {
+      result.current.refresh();
+    });
     await expect.poll(() => result.current.error).toBeNull();
   });
 
@@ -216,14 +230,18 @@ describe("useMaterialLibrary", () => {
     await expect.poll(() => result.current.loading).toBe(false);
     expect(result.current.breadcrumbSegments).toEqual([{ label: "全部", key: null }]);
 
-    act(() => result.current.enterFolder("ref"));
+    act(() => {
+      result.current.enterFolder("ref");
+    });
     await expect.poll(() => result.current.folder).toBe("ref");
     expect(result.current.breadcrumbSegments).toEqual([
       { label: "全部", key: null },
       { label: "参考素材", key: "ref" },
     ]);
 
-    act(() => result.current.setSearch("a"));
+    act(() => {
+      result.current.setSearch("a");
+    });
     await expect.poll(() => result.current.searching).toBe(true);
     expect(result.current.breadcrumbSegments[0]?.label).toContain("搜索结果");
   });
@@ -232,7 +250,9 @@ describe("useMaterialLibrary", () => {
     const { result } = renderHook(() => useMaterialLibrary({ projectId: "p-1" }));
     await expect.poll(() => result.current.loading).toBe(false);
     const before = mockedList.mock.calls.length;
-    act(() => result.current.refresh());
+    act(() => {
+      result.current.refresh();
+    });
     await expect.poll(() => mockedList.mock.calls.length).toBeGreaterThan(before);
   });
 });

@@ -95,7 +95,9 @@ export function ContractInputCatalog({
                    是改版前它读起来像「坏了」而不是「已经在里面了」的原因。 */
                 className="disabled:opacity-100"
                 disabled={item.added}
-                onClick={() => onAddPredefined(item.type)}
+                onClick={() => {
+                  onAddPredefined(item.type);
+                }}
                 selected={item.added}
                 shape="compact"
               >
@@ -140,7 +142,9 @@ export function ContractInputCatalog({
               <Button
                 aria-label={`删除自定义参数 ${def.label}`}
                 className="text-muted-foreground/60 hover:text-danger-strong shrink-0"
-                onClick={() => onRemoveCustom(def.id)}
+                onClick={() => {
+                  onRemoveCustom(def.id);
+                }}
                 size="icon-sm"
                 variant="ghost"
               >
@@ -159,8 +163,12 @@ export function ContractInputCatalog({
                  *`preventDefault` 与输入法组字态（中文拼音未上屏时的 Enter
                  * 是「确认候选」，不是提交）。 */
                 {...enterCommit({
-                  onCommit: () => submitCustom(),
-                  onCancel: () => setAdding(false),
+                  onCommit: () => {
+                    submitCustom();
+                  },
+                  onCancel: () => {
+                    setAdding(false);
+                  },
                 })}
                 aria-label="自定义参数名称"
                 className="h-7 w-44 text-xs"
@@ -170,7 +178,9 @@ export function ContractInputCatalog({
                 {CUSTOM_INPUT_KINDS.map((item) => (
                   <Hint key={item.kind} label={item.hint}>
                     <SelectChip
-                      onClick={() => setDraftKind(item.kind)}
+                      onClick={() => {
+                        setDraftKind(item.kind);
+                      }}
                       selected={draftKind === item.kind}
                       shape="compact"
                     >
@@ -190,7 +200,9 @@ export function ContractInputCatalog({
               </Button>
               <Button
                 className="text-muted-foreground h-7 rounded-lg px-2 text-xs"
-                onClick={() => setAdding(false)}
+                onClick={() => {
+                  setAdding(false);
+                }}
                 size="xs"
                 variant="ghost"
               >
@@ -200,7 +212,9 @@ export function ContractInputCatalog({
           ) : (
             <SelectChip
               className="self-start px-2.5 py-1 text-xs"
-              onClick={() => setAdding(true)}
+              onClick={() => {
+                setAdding(true);
+              }}
               selected={false}
               shape="dashed"
             >

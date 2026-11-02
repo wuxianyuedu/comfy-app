@@ -138,7 +138,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             <span className="text-ink-faint">确认粒度</span>
             <SelectMenu
               labels={Object.fromEntries(APPROVAL_OPTIONS.map((o) => [o.value, o.label]))}
-              onChange={(v) => c.setApprovalMode(/* SAFETY: 类型断言已复核 */ v as ApprovalMode)}
+              onChange={(v) => {
+                c.setApprovalMode(/* SAFETY: 类型断言已复核 */ v as ApprovalMode);
+              }}
               options={APPROVAL_OPTIONS.map((o) => o.value)}
               value={c.approvalMode}
             />
@@ -146,7 +148,9 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
           <FieldLabel className="border-border bg-subtle text-ink-field flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 text-xs">
             <Checkbox
               checked={c.autoReview}
-              onCheckedChange={(checked) => c.setAutoReview(checked === true)}
+              onCheckedChange={(checked) => {
+                c.setAutoReview(checked === true);
+              }}
             />
             <span>生图后自动评审</span>
           </FieldLabel>

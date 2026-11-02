@@ -418,7 +418,9 @@ export function WorkflowCanvasNodePreview({
           missingLabels={missingLabels}
           modes={modes}
           onModeChange={onModeChange}
-          onOpenLog={() => setLogOpen(true)}
+          onOpenLog={() => {
+            setLogOpen(true);
+          }}
           onSeedModeChange={onSeedModeChange}
           onUploadNotice={setUploadNotice}
           onValuesChange={setValuesAndClearFailure}
@@ -438,7 +440,9 @@ export function WorkflowCanvasNodePreview({
       <WorkflowPreviewRunFeedback
         missingLabels={missingLabels}
         nodeLabel={nodeLabel}
-        onDismissUploadNotice={() => setUploadNotice(null)}
+        onDismissUploadNotice={() => {
+          setUploadNotice(null);
+        }}
         pct={pct}
         phase={phase}
         resultUrl={resultUrl}
@@ -448,7 +452,9 @@ export function WorkflowCanvasNodePreview({
         workflowName={workflowName}
       />
       <WorkflowRunLogModal
-        onClose={() => setLogOpen(false)}
+        onClose={() => {
+          setLogOpen(false);
+        }}
         onViewTaskIdChange={setLogTaskId}
         open={logOpen}
         source="canvas-node"

@@ -113,7 +113,9 @@ export function LogPanelFooter(input: {
                 <Button
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                   disabled={safePage <= 1}
-                  onClick={() => setPage(safePage - 1)}
+                  onClick={() => {
+                    setPage(safePage - 1);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >
@@ -130,7 +132,9 @@ export function LogPanelFooter(input: {
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
                   data-testid="logpanel-origin-chip"
                   disabled={!origin || origin === "all"}
-                  onClick={() => setOrigin("all")}
+                  onClick={() => {
+                    setOrigin("all");
+                  }}
                   size="xs"
                   variant="ghost"
                 >
@@ -142,7 +146,9 @@ export function LogPanelFooter(input: {
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
                   data-testid="logpanel-level-chip"
                   disabled={filter === "all"}
-                  onClick={() => setFilter("all")}
+                  onClick={() => {
+                    setFilter("all");
+                  }}
                   size="xs"
                   variant="ghost"
                 >
@@ -153,7 +159,9 @@ export function LogPanelFooter(input: {
                 <Hint label="清空搜索">
                   <Button
                     className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
-                    onClick={() => setSearch("")}
+                    onClick={() => {
+                      setSearch("");
+                    }}
                     size="xs"
                     variant="ghost"
                   >
@@ -167,7 +175,9 @@ export function LogPanelFooter(input: {
                 <Button
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                   disabled={safePage >= totalPages}
-                  onClick={() => setPage(safePage + 1)}
+                  onClick={() => {
+                    setPage(safePage + 1);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >

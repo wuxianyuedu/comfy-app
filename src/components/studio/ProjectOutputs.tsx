@@ -48,7 +48,9 @@ function OutputCard({
           ? "border-primary-500/70 ring-primary-500/40 ring-1"
           : "border-border-strong hover:border-ink-fainter"
       } bg-subtle`}
-      onClick={() => onSelect(output.id)}
+      onClick={() => {
+        onSelect(output.id);
+      }}
       variant="ghost"
     >
       <div className="bg-canvas-deep relative aspect-square w-full">
@@ -336,7 +338,9 @@ export function ProjectOutputs() {
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
   const handleCopy = useCallback(() => {
     if (!metaJson) {
@@ -449,7 +453,9 @@ export function ProjectOutputs() {
       <ProjectOutputsMetadataSheet
         copyFailed={copyFailed}
         copySucceeded={copied.on}
-        onClose={() => setSelectedId(null)}
+        onClose={() => {
+          setSelectedId(null);
+        }}
         onCopy={handleCopy}
         onExport={handleExport}
         projectId={projectId}
