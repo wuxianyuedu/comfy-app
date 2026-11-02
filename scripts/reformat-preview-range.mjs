@@ -44,6 +44,10 @@
  * @module scripts/reformat-preview-range.mjs — 判据机制层（取数 + 判定，输出交回入口）
  */
 
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import process from "node:process";
+
 /**
  * 区间两侧 —— 「这一次要判哪一段」。
  *
@@ -138,4 +142,77 @@ export function previewRangeEnds(deps) {
     }
   }
   return adopted(parents);
+}
+
+/**
+ * 平台**合成合并预览**的两个父 —— 「这个 PR 带来的那一段」的判决面（ISSUE #3048）。
+ *
+ * ## 它治的是哪一件事
+ *
+ * 聚合档 `重档静态判据` 跑的是钩子注册表里的 `check-reformat-only.cjs --staged`，而那条
+ * 判据**只认两种面**：暂存区（pre-commit 现场）或显式 `--range`。平台侧转给这一档的是
+ * **检出**而不是合并预览（现场 `cnb-o9p-1k6d5ohhj`：`HEAD = 7aa8a74b`、父提交只有一条，
+ * PR head 却是 `45e6592c`）⇒ 剥掉 `--staged` 之后它回落到「判 `HEAD~1..HEAD`」，
+ * 只含检出的最后一笔 —— 一条与这个 PR 毫无关系的读数。
+ *
+ * ## 判据：`HEAD` 的两个父都在
+ *
+ * `CNB_COMMIT`（源分支 head）是 `HEAD` 的**某一父**时，另一父就是目标分支那一侧。
+ * 区间恒为「那个父 .. `HEAD`」—— 与平台把本 PR 放在哪一侧无关（两种拼法各红过三轮的
+ * 现场见本文件头）。父关系这一步与 `changed-scope.mjs` 的
+ * `reconcileSyntheticMergeFace()` 同一个判据；这边要的是**区间**而不是文件清单，
+ * 所以不借它的返回值另算一份。
+ *
+ * 认不出（`HEAD` 不是合并提交 / 没有 `CNB_COMMIT` / 父关系对不上）⇒ `ok: false`，
+ * 由调用方把这一条**记成没判**。刻意不退回「检出的 `HEAD~1..HEAD`」——
+ * 那条路的读数与「这个 PR 是什么」无关，而**恒绿的判据比红更贵**。
+ *
+ * ## 为什么住在这个文件里
+ *
+ * 它与 `previewRangeEnds()` 回答的是同一个问题（「这次改动从哪算起」），只是问法不同：
+ * 那一支问「判据自己回落到 `HEAD~1..HEAD` 时该换成什么区间」，这一支问「执行者递过来的
+ * 区间该是什么」。两份分开写就会各漂一次。
+ *
+ * @param {{cwd?: string, env?: Record<string, string | undefined>}} [deps]
+ *   `cwd` 缺省是**本模块所在仓库**（与 `previewRangeEnds()` 的注入面同一条约定）
+ * @returns {{ok: true, range: string} | {ok: false, reason: string}}
+ */
+export function syntheticMergeRange(deps) {
+  const cwd = deps?.cwd ?? path.resolve(import.meta.dirname, "..");
+  const env = deps?.env ?? process.env;
+  const source = String(env.CNB_COMMIT ?? "").trim();
+  /**
+   * @param {string[]} args
+   * @returns {string} 取不到（非零退出）⇒ 空串，由调用方按「没拿到」处理
+   */
+  const git = (args) => {
+    const r = spawnSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return r.status === 0 ? String(r.stdout ?? "").trim() : "";
+  };
+  const head = git(["rev-parse", "HEAD"]);
+  const row = git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(/\s+/).filter(Boolean);
+  if (row.length < 3) {
+    return {
+      ok: false,
+      reason: "HEAD 不是合并提交（这一跑没有平台合成的目标侧）⇒ 没有可用的判决面",
+    };
+  }
+  if (source === "") {
+    return {
+      ok: false,
+      reason: "没有 CNB_COMMIT，判不出这一跑是不是平台合成的合并预览 ⇒ 没有可用的判决面",
+    };
+  }
+  const other = row.slice(1).find((sha) => sha !== source);
+  if (!other || !row.slice(1).includes(source)) {
+    return {
+      ok: false,
+      reason: `HEAD 的父提交里认不出本 PR（CNB_COMMIT ${source.slice(0, 8)}）⇒ 没有可用的判决面`,
+    };
+  }
+  return { ok: true, range: `${other}..${head}` };
 }
