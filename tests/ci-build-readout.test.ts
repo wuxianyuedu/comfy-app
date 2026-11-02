@@ -1568,6 +1568,62 @@ describe("resolveBuildSn：点名照点名，没点名按 HEAD 逐字归属（�
     expect(out).toContain("pnpm ship --stage-log <sn>");
     expect(out).not.toContain("--diagnose");
   });
+
+  it("ISSUE #2950：目标构建被挤出首页 ⇒ 翻到第 2 页命中，不念「CI 还没起」", () => {
+    /* 首页被 20 条别人的构建占满（= 页大小，触发续翻），我的那条在第 2 页 ——
+     * 只看第一页的版本在这里回 null 并念「还没推 / CI 还没起」，而构建明明在。 */
+    const calls: Array<string> = [];
+    const others = Array.from({ length: 20 }, (_, i) => ({
+      sn: `cnb-other-${i}`,
+      sha: "1111111111111111111111111111111111111111",
+      event: "pull_request",
+      createTime: `2026-10-27T09:${String(i).padStart(2, "0")}:00Z`,
+    }));
+    const pages: Record<string, unknown> = {
+      "1": others,
+      "2": [
+        {
+          sn: "cnb-mine-1k5q00009",
+          sha: SHA,
+          event: "pull_request",
+          createTime: "2026-10-27T02:00:00Z",
+        },
+      ],
+    };
+    const run = (cmd: string, args: Array<string>) => {
+      calls.push([cmd, ...args].join(" "));
+      const page = args[args.indexOf("--page") + 1] ?? "1";
+      return {
+        status: 0,
+        stdout: JSON.stringify({ status: 200, data: pages[page] ?? [] }),
+        stderr: "",
+        error: null,
+      };
+    };
+    const h = hear();
+    expect(resolveBuildSn({ run, log: h.log, slug: "a/b", headSha: SHA })).toBe(
+      "cnb-mine-1k5q00009",
+    );
+    expect(calls.some((c) => c.includes("--page 2"))).toBe(true);
+    expect(h.lines.join("\n")).toContain("命中在第 2 页");
+  });
+
+  it("ISSUE #2950（负控制）：翻满上界也没有 ⇒ 照实念「已翻 N 页」，不假装「没有」", () => {
+    /* 每页都满（20 条别人的）⇒ 翻够 5 页停手：上界存在的理由是「归属」不该变成
+     * 无界扫；而这一格的话术必须说清「扫了多大面」，否则「没找到」与「没扫」同形。 */
+    const full = Array.from({ length: 20 }, (_, i) => ({
+      sn: `cnb-other-${i}`,
+      sha: "1111111111111111111111111111111111111111",
+      event: "pull_request",
+      createTime: "2026-10-27T09:00:00Z",
+    }));
+    const f = fake(full);
+    const h = hear();
+    expect(resolveBuildSn({ run: f.run, log: h.log, slug: "a/b", headSha: SHA })).toBeNull();
+    expect(h.lines.join("\n")).toContain("已翻 5 页");
+    /* 上界真的被走到：发了 5 次列表请求（fake 对每次调用都回同一页满的）。 */
+    expect(f.calls.filter((c) => c.includes("get-build-logs"))).toHaveLength(5);
+  });
 });
 
 /**
