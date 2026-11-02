@@ -52,6 +52,14 @@
  * 7. **`GIT_DIR` / `GIT_WORK_TREE` 一律不从环境继承**（同上）：平台 `prepare` 里有
  *    `export GIT_DIR=…` 的做法（本仓 `scripts/ci-*.mjs` 就有几处），那一形态下子进程里的
  *    `git push` 会推到别的树上 —— 这一格的每一条 git 调用都显式清掉这两个变量，只吃 `cwd`。
+ * 8. **网络抖动的韧性**（2026-11-02，build `cnb-pe2-1k6e1uhj8`）：镜像格两次跑都死在
+ *    探活那一跳 —— `git ls-remote` 15s 无回话；而同日 19:47 同一台 runner（orange-connector）
+ *    探活通过并成功推过 PR ref ⇒ 节点到 github.com:443 是**间歇抖动**不是硬阻断，且令牌 /
+ *    仓库 / 配置三层都被那次成功证好。所以：探活单次上限放宽到 30s、至多试 3 次
+ *    （退避 5s / 10s）；推送**只对 egress 类失败**（与 `explainRemoteProbeFailure` 同一组
+ *    判据）重试 1 次。认证 / 权限 / 仓库不存在类**一律不重试** —— 重试它们只是把真问题
+ *    拖慢几分钟，还把「令牌坏了」读成「网络不好」。三态退码与 `--readout` 语义一字未动：
+ *    重试耗尽仍是原来的 exit 2 / exit 1，读数档照旧不折进流水线判决。
  *
  * ## `--master`：push 档（`master 合并复核`）的主干镜像
  *
@@ -95,9 +103,32 @@ export const CODE = { FAIL: 1, NO_FACT: 2, OK: 0 };
  * 为什么必须换成**本仓给的数**：不给就得等 git 自己的 connect 超时，而那一形的实测是
  * `Failed to connect to github.com port 443 after 21114 ms` —— 二十一秒全花在这一格上，
  * 且这一格从 #3051 起排在主列（`Install dependencies` 之前），每条 PR 都要付一次。
- * 15s 的取法：通的时候这一读实测 0.4–9.2s（#3014 记的几跑），不通的时候早点说完早点让路。
+ * 30s 的取法（2026-11-02 从 15s 放宽）：通的时候这一读实测 0.4–9.2s（#3014 记的几跑）；
+ * 而 `cnb-pe2-1k6e1uhj8` 连续两跑 15s 无回话、同日 19:47 同 runner 却探活通过 ——
+ * 15s 把「慢但活着」的抖动截成了「没通」。单次上限放宽 + 有限次重试（{@link PROBE_MAX_ATTEMPTS}）
+ * 配套给：最坏墙钟 3×30s + 退避 15s ≈ 105s，远在 `.cnb.yml` 那一格 10m 外框之内。
  */
-export const REMOTE_PROBE_TIMEOUT_MS = 15_000;
+export const REMOTE_PROBE_TIMEOUT_MS = 30_000;
+
+/**
+ * 探活（`ls-remote`）的尝试上限：首跳 + 2 次重试（文件头第 8 条）。
+ *
+ * 只有 egress 类失败（`isEgressFailure` 那组判据）才消耗重试；认证 / 权限 / 仓库不存在
+ * 这类「再试一百次也一样」的回话一次就交账。
+ */
+export const PROBE_MAX_ATTEMPTS = 3;
+
+/**
+ * 推送（`git push`）的尝试上限：首跳 + 1 次重试，且同样只对 egress 类失败（文件头第 8 条）。
+ * 给 2 不给更多：推送是真在写的一跳，连挂两次基本不是「抖一下」能解释的。
+ */
+export const PUSH_MAX_ATTEMPTS = 2;
+
+/**
+ * 重试之间的退避表（毫秒）：第 n 次重试前等 `RETRY_BACKOFF_MS[n-2]`，超出表长按末项取。
+ * 5s / 10s 的量级：够节点侧的抖动（TCP 重传窗 / 代理重连）过去，又不至于把整格外框吃光。
+ */
+export const RETRY_BACKOFF_MS = [5_000, 10_000];
 
 /**
  * `git push` 的墙钟上限（同一格，但这一跳是真在写）。
@@ -348,6 +379,43 @@ function realRunGit(args) {
 }
 
 /**
+ * 真身的退避等待（测试注入 `io.sleep` 的假件，用例一次真墙钟都不付）。
+ *
+ * @param {number} ms 等多久
+ * @returns {Promise<void>}
+ */
+const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 带有限重试的一跳（文件头第 8 条）：**只有 egress 类失败**才消耗重试 ——
+ * 认证 / 权限 / 仓库不存在这类回话「再试一百次也一样」，一次就交账，不拖时间也不
+ * 把真问题读成网络抖动。
+ *
+ * 每一次重试都留一行读数（第几次、等多久），重试耗尽后交回**最后一次**的结果 ——
+ * 退码与后续话术与没有重试时逐字同形（探活仍是 exit 2、推送仍是 exit 1）。
+ *
+ * @param {string[]} args git 参数表
+ * @param {{runGit: typeof realRunGit, sleep: (ms: number) => Promise<void>, log: (line: string) => void, prefix: string, label: string, maxAttempts: number}} ctx
+ * @returns {Promise<{code: number, stderr: string, stdout: string}>} 最后一次尝试的结果
+ */
+async function runGitWithRetry(args, ctx) {
+  const { label, log, maxAttempts, prefix, runGit, sleep } = ctx;
+  let result = runGit(args);
+  for (let attempt = 2; attempt <= maxAttempts && result.code !== 0; attempt += 1) {
+    if (!isEgressFailure(`${result.stdout}\n${result.stderr}`)) {
+      break;
+    }
+    const wait = RETRY_BACKOFF_MS[attempt - 2] ?? RETRY_BACKOFF_MS[RETRY_BACKOFF_MS.length - 1] ?? 5_000;
+    log(
+      `[${prefix}] ${label}第 ${String(attempt - 1)}/${String(maxAttempts)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动重试；认证 / 权限类不重试）`,
+    );
+    await sleep(wait);
+    result = runGit(args);
+  }
+  return result;
+}
+
+/**
  * `git ls-remote` 的输出里有没有**任何一条** ref —— 有 ⇒ 那枚令牌认到了目标仓库。
  *
  * 只看「有没有 refs 行」、不看 ref 名：空仓库的 `ls-remote` 回**零行且退 0**，非空仓库
@@ -359,6 +427,22 @@ function realRunGit(args) {
  */
 export function hasRemoteRefs(stdout) {
   return stdout.split("\n").some((line) => /^[0-9a-f]{40}\s+\S+\s*$/i.test(line.trim()));
+}
+
+/**
+ * egress 类失败的判据（TCP / DNS / 代理层，含本仓自己给的超时那一句）。
+ *
+ * 这一组判据有两个消费面，必须同源：`explainRemoteProbeFailure()` 拿它选话术，
+ * `runGitWithRetry()` 拿它决定**值不值得再试一次** —— 两处各写一份正则，迟早漂成
+ * 「话术说是 egress、重试却不认」的孪生形态。
+ *
+ * @param {string} text git 那一跳的 stdout + stderr（未脱敏）
+ * @returns {boolean} true ⇒ 网络根本没到 GitHub，重试有意义
+ */
+export function isEgressFailure(text) {
+  return /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection reset|connection timed out|name resolution|getaddrinfo|empty reply from server|超时/i.test(
+    text,
+  );
 }
 
 /**
@@ -382,11 +466,7 @@ export function hasRemoteRefs(stdout) {
  * @returns {string} 一句中文读数
  */
 export function explainRemoteProbeFailure(text) {
-  if (
-    /failed to connect|could not connect to server|couldn't connect to host|could not resolve host|connection reset|connection timed out|name resolution|getaddrinfo|empty reply from server|超时/i.test(
-      text,
-    )
-  ) {
+  if (isEgressFailure(text)) {
     return "到 github.com 这一跳没通（TCP / DNS / 代理层）⇒ 出网问题在节点侧（白名单 / 代理 / 换 runner），与令牌值和这一格的判据都无关";
   }
   if (/repository not found|does not appear to be a git repository/i.test(text)) {
@@ -401,7 +481,7 @@ export function explainRemoteProbeFailure(text) {
 /**
  * 执行镜像：先问「仓库在不在」→ 推 HEAD → 派发。每一跳各自独立成读数，前一跳没通后一跳不发。
  *
- * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, dryRun?: boolean, log?: (line: string) => void}} io
+ * @param {{env: Record<string, string | undefined>, fetchImpl?: typeof fetch, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void}} io
  * @returns {Promise<number>} 仓内三态退码
  */
 export async function runMirror(io) {
@@ -409,6 +489,7 @@ export async function runMirror(io) {
   const log = io.log ?? ((line) => console.log(line));
   const fetchImpl = io.fetchImpl ?? fetch;
   const runGit = io.runGit ?? realRunGit;
+  const sleep = io.sleep ?? realSleep;
   const ctx = resolveContext({ env, runGit });
   if (!ctx.ok) {
     for (const reason of ctx.reasons) {
@@ -435,8 +516,16 @@ export async function runMirror(io) {
     log(JSON.stringify(payload, null, 2));
     return CODE.OK;
   }
-  /* 推送前那一问：目标仓库没建时 git 的回话与「令牌坏了」逐字同形（见文件头第 5 条）。 */
-  const probe = runGit(["ls-remote", url]);
+  /* 推送前那一问：目标仓库没建时 git 的回话与「令牌坏了」逐字同形（见文件头第 5 条）。
+   * egress 类的单次抖动不直接交账：至多 PROBE_MAX_ATTEMPTS 次、带退避（文件头第 8 条）。 */
+  const probe = await runGitWithRetry(["ls-remote", url], {
+    label: "探活",
+    log,
+    maxAttempts: PROBE_MAX_ATTEMPTS,
+    prefix: "mirror",
+    runGit,
+    sleep,
+  });
   const probeText = sanitize(`${probe.stdout}\n${probe.stderr}`, ctx.token);
   /* 两种形态先分开念：读失败是「前提没落地」，零条 ref 是**空仓库**（合法，继续推）。 */
   log(
@@ -456,7 +545,15 @@ export async function runMirror(io) {
     log("[mirror] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）");
     return CODE.NO_FACT;
   }
-  const push = runGit(pushArgs(url, `refs/heads/${ctx.ref}`));
+  /* 推送同样只对 egress 类失败重试一次（PUSH_MAX_ATTEMPTS）；认证 / 权限类一次就交账。 */
+  const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {
+    label: "推送",
+    log,
+    maxAttempts: PUSH_MAX_ATTEMPTS,
+    prefix: "mirror",
+    runGit,
+    sleep,
+  });
   if (push.code !== 0) {
     log(`[mirror] 推送失败（exit ${push.code}）：`);
     for (const line of `${push.stdout}\n${push.stderr}`.split("\n")) {
@@ -501,13 +598,14 @@ export async function runMirror(io) {
  * 没有要叫醒的对象）。探活与推送两跳的话术与 {@link runMirror} 同一族，
  * 前缀换成 `[mirror-master]`（文件头「--master」一节第 3 条）。
  *
- * @param {{env: Record<string, string | undefined>, runGit?: typeof realRunGit, dryRun?: boolean, log?: (line: string) => void}} io
+ * @param {{env: Record<string, string | undefined>, runGit?: typeof realRunGit, sleep?: (ms: number) => Promise<void>, dryRun?: boolean, log?: (line: string) => void}} io
  * @returns {Promise<number>} 仓内三态退码
  */
 export async function runMasterMirror(io) {
   const { dryRun = false, env } = io;
   const log = io.log ?? ((line) => console.log(line));
   const runGit = io.runGit ?? realRunGit;
+  const sleep = io.sleep ?? realSleep;
   const ctx = resolveMasterContext({ env, runGit });
   if (!ctx.ok) {
     for (const reason of ctx.reasons) {
@@ -522,8 +620,15 @@ export async function runMasterMirror(io) {
     log("[mirror-master] DRY-RUN：没推，计划如上");
     return CODE.OK;
   }
-  /* 推送前那一问与 PR 模式同一跳、同一份判读（文件头第 5 条）。 */
-  const probe = runGit(["ls-remote", url]);
+  /* 推送前那一问与 PR 模式同一跳、同一份判读、同一套重试（文件头第 5 / 8 条）。 */
+  const probe = await runGitWithRetry(["ls-remote", url], {
+    label: "探活",
+    log,
+    maxAttempts: PROBE_MAX_ATTEMPTS,
+    prefix: "mirror-master",
+    runGit,
+    sleep,
+  });
   const probeText = sanitize(`${probe.stdout}\n${probe.stderr}`, ctx.token);
   log(
     probe.code === 0
@@ -542,7 +647,15 @@ export async function runMasterMirror(io) {
     log("[mirror-master] 结论：exit 2 —— 前提没落地（egress / 目标仓库 / 令牌这三层之一，看上面那句是哪一种；不是这一格判出的红）");
     return CODE.NO_FACT;
   }
-  const push = runGit(pushArgs(url, `refs/heads/${ctx.ref}`));
+  /* 与 PR 模式同一套：egress 类失败重试一次，认证 / 权限类一次就交账。 */
+  const push = await runGitWithRetry(pushArgs(url, `refs/heads/${ctx.ref}`), {
+    label: "推送",
+    log,
+    maxAttempts: PUSH_MAX_ATTEMPTS,
+    prefix: "mirror-master",
+    runGit,
+    sleep,
+  });
   if (push.code !== 0) {
     log(`[mirror-master] 推送失败（exit ${push.code}）：`);
     for (const line of `${push.stdout}\n${push.stderr}`.split("\n")) {

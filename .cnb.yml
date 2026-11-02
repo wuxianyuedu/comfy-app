@@ -699,9 +699,12 @@
   # 文件头「--master」一节。令牌经 push 流水线的 `imports:` 注入（与 PR 那条同一枚）。
   - name: GitHub master 镜像
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --master --readout
-    # 与 PR 那一格同一档外框：探活 15s + 推送 240s 都在脚本里各自限时（REMOTE_PROBE_
-    # TIMEOUT_MS / PUSH_TIMEOUT_MS），5m 是包住两跳与节点冷启动的余量。
-    timeout: 5m
+    # 与 PR 那一格同一档外框：探活 30s×至多 3 次、推送 240s×至多 2 次都在脚本里各自
+    # 限时并对 egress 类失败带退避重试（REMOTE_PROBE_TIMEOUT_MS / PUSH_TIMEOUT_MS /
+    # PROBE_MAX_ATTEMPTS，2026-11-02 起 —— `cnb-pe2-1k6e1uhj8` 连续两跑死在探活 15s
+    # 无回话，同日 19:47 同 runner 却探活通过，是间歇抖动不是硬阻断）。10m 是包住
+    # 最坏墙钟（探活 ≈105s + 推送 ≈485s）与节点冷启动的余量。
+    timeout: 10m
   - name: 安装依赖
     # 与 PR 那一格 `Install dependencies` 的**命令行 / env / timeout 三样都逐字相同**
     # （判据 `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS`）。
@@ -1703,10 +1706,11 @@
   # （脚本内先脱敏，硬规则 17）。
   - name: GitHub 镜像同步
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --readout
-    # 两跳 git 调用各自带超时（`scripts/ci-github-mirror-push.mjs` 的 REMOTE_PROBE_TIMEOUT_MS /
-    # PUSH_TIMEOUT_MS —— 没有它们就得吃 git 自己那个 21s 的 connect 超时，而那一形过去只被
-    # 念成「令牌活不活」）。5m 是外框，与它原在 endStages 时同一档。
-    timeout: 5m
+    # 两跳 git 调用各自带超时并对 egress 类失败带退避重试（`scripts/ci-github-mirror-push.mjs`
+    # 的 REMOTE_PROBE_TIMEOUT_MS 30s×3 / PUSH_TIMEOUT_MS 240s×2 —— 没有限时就得吃 git 自己
+    # 那个 21s 的 connect 超时，而那一形过去只被念成「令牌活不活」；重试的立案依据见
+    # 脚本文件头第 8 条）。10m 是外框，包住最坏墙钟（≈105s + ≈485s）与冷启动余量。
+    timeout: 10m
 
   # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
   #
