@@ -120,17 +120,28 @@ export async function pollUntilTerminal(ctx) {
       return { buildState, buildSn, stop: CODE.NOT_RUN };
     }
     const picked = pickBuildForSha(builds, newSha);
-    /** 这一眼的状态 JSON；没解析到 build 时为 null（签名照样成立）。 */
-    let statusJson = null;
     if (picked) {
       buildSn = picked.sn;
+    }
+    /* 列表只看得到当前这一页，而已钉住的 build 会被更新的构建挤出窗口（与 ISSUE #2950
+     * 同一条根因：master 构建一密，旧构建就落到首页之外）。此前这一形被念成
+     * 「还没解析到 build（平台可能尚未开跑）」—— 构建明明在跑，读数却倒退回「没起」，
+     * 断流计数还会被这种假「没变」喂满。所以：曾经钉住过 ⇒ 列表里看不到就按钉住的 sn
+     * 继续读状态；**从来没钉住过**才走「还没解析到」那一格。 */
+    const sn = picked ? picked.sn : buildSn;
+    /** 这一眼的状态 JSON；没解析到 build 时为 null（签名照样成立）。 */
+    let statusJson = null;
+    if (sn) {
+      if (!picked) {
+        log(`[ship] 列表这一页看不到已钉住的 build ${sn}（被更新的构建挤出窗口）⇒ 按它继续读状态`);
+      }
       const st = cnbJson(run, [
         "build",
         "get-build-status",
         "--repo",
         slug,
         "--sn",
-        picked.sn,
+        sn,
         "-v",
       ]);
       statusJson = st ? st.json : null;
@@ -140,15 +151,13 @@ export async function pollUntilTerminal(ctx) {
        * ⚠️ 分界那句**原话**只在 `get-build-stage -v` 的 `data.error` 里，`get-build-status`
        * 的 `stages[]` 没有这一栏 ⇒ 分类之前先补（ISSUE #2406）。这一跳只对**非绿非 skipped**
        * 的那几格发请求，且**只在逐格读数已到终态时**才有意义 —— 在飞那几格还没原话。 */
-      const outcome = st
-        ? classifyBuildOutcome(picked ? enrichStageErrors(run, slug, picked.sn, st.json) : st.json)
-        : null;
+      const outcome = st ? classifyBuildOutcome(enrichStageErrors(run, slug, sn, st.json)) : null;
       /** @type {{state:"green"|"red"|"cancelled"|"running"|"unknown",raw:string|null}} */
       const v = outcome
         ? { state: toShipBuildState(outcome.state), raw: outcome.raw }
         : { state: "unknown", raw: null };
       buildState = v.state;
-      log(`[ship] build ${picked.sn} → data.status = ${v.raw ?? "(取不到)"}`);
+      log(`[ship] build ${sn} → data.status = ${v.raw ?? "(取不到)"}`);
       if (v.state === "cancelled" && outcome) {
         const first = outcome.cancelled[0];
         const skipped = downstreamSkipped(outcome).map((s) => s.name || s.id);
@@ -201,7 +210,7 @@ export async function pollUntilTerminal(ctx) {
         }
       }
     }
-    const sig = buildSignature(statusJson, picked ? picked.sn : "");
+    const sig = buildSignature(statusJson, sn ?? "");
     /* 「同签名」只是**没产生新计数**，不等于「没在动」：一格长 stage 在内部推进时签名逐字不变
      * （ISSUE #2184 实测 `…/pending/0-1+11/33` 连着 10 眼，而 `受影响用例` 正在跑；几分钟后
      * 同一条构建是 28/33）。所以停滞要同时满足两件：签名不变 **且** 此刻没有任何一格在飞。

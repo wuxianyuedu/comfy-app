@@ -87,7 +87,7 @@ import path from "node:path";
 import process from "node:process";
 
 import { asArray, pickBuildForSha } from "./ship-build.mjs";
-import { parseSlug } from "./ship-core.mjs";
+import { LIST_MAX_PAGES, LIST_PAGE_SIZE, parseSlug } from "./ship-core.mjs";
 import { cnbJson, makeRunner, short } from "./ship-exec.mjs";
 /* 时长档位用 `~/lib/time-format` 那一份定义（与 ComfyUI 退出记录同一件事）。
    本文件此前把平台的 `duration` 字段**当秒**印（`${duration}s`），而它是毫秒 ——
@@ -450,6 +450,12 @@ export function fetchBuildList(run, slug, event, limit, opts = {}) {
  * ⚠️ 归属不到就回 `null` 并念出原因，**不拿「最新那条」顶上** —— 那会把别人的绿灯 /
  * 红灯读成自己的（与 `ship-build.mjs` 的 `pickBuildForSha` 同一条纪律）。
  *
+ * ⚠️ 列表是**分页**的，只看第一页的归属在 master 构建密集时静默失效（ISSUE #2950）：
+ * 平台按 createTime 新→旧返回，主干每日档与别的 PR 把这条 sha 的构建挤出首页之后，
+ * 归属照不到它，失败被念成「还没推 / CI 还没起」—— 而构建明明在第二页。所以这里
+ * 逐页扫（与 `ship-platform.mjs` 的 `scanPullPages` 同一口径：有界扫，扫不到照实回，
+ * 不假装「没有」）。
+ *
  * @param {object} io
  * @param {(cmd: string, args: string[]) => import("./ship-exec.mjs").ExecResult} io.run 执行者
  * @param {(line: string) => void} io.log 输出通道
@@ -473,26 +479,71 @@ export function resolveBuildSn({
   if (target) {
     return target;
   }
-  const got = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
-  const list = got ? asArray(got.json) : null;
-  if (!list) {
+  /* 逐页扫（ISSUE #2950）：只看第一页的归属在「这条 sha 的构建被更新的构建挤出首页」时
+   * 静默失效 —— master 构建一密，PR 构建就落到第 2 页之后，归属失败被念成「CI 还没起」。
+   * 页界与 `ship-platform.mjs` 的 `scanPullPages` 同一口径；列表按 createTime 新→旧，
+   * 第一个命中页里的命中就是最新一条，不必继续往后翻。 */
+  /* 页界取自 ship-core 那份共用的（`LIST_PAGE_SIZE` / `LIST_MAX_PAGES`）—— 与
+   * `scanPullPages` 同一口径：两处只留一份常量，改一处即两处，不再各写一份。 */
+  const PAGE_SIZE = LIST_PAGE_SIZE;
+  const MAX_PAGES = LIST_MAX_PAGES;
+  /** @type {{sn: string, createTime: string} | null} */
+  let hit = null;
+  /** 命中的页码（>1 时念出来：归属绕过了首页，这件事本身值得留痕）。 */
+  let hitPage = 0;
+  /** 至少拿到过一页 —— 一页都拿不到是「没跑起来」，不是「没有构建」。 */
+  let sawPage = false;
+  /** 真翻了几页（念「已翻 N 页」用：空页也算翻过，取不到的那次不算）。 */
+  let pagesScanned = 0;
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const got = cnbJson(run, [
+      "build",
+      "get-build-logs",
+      "--repo",
+      slug,
+      "--page",
+      String(page),
+      "--page-size",
+      String(PAGE_SIZE),
+      "-v",
+    ]);
+    const list = got ? asArray(got.json) : null;
+    if (!list) {
+      break; // 取不到 —— 与「拿到了但是空的」是两件事，不许并成一格。
+    }
+    sawPage = true;
+    pagesScanned = page;
+    if (list.length === 0) {
+      break; // 拿到了，是空的：那就是「没有构建」，不必再往后翻。
+    }
+    hit = pickBuildForSha(list, headSha);
+    if (hit) {
+      hitPage = page;
+      break;
+    }
+    if (list.length < PAGE_SIZE) {
+      break;
+    }
+  }
+  if (!sawPage) {
     log(
       `${prefix} 取不到 build 列表 ⇒ 没有结论（不是「没有构建」）；` +
         `要读哪一跑就点名：${command} <sn>`,
     );
     return null;
   }
-  const hit = pickBuildForSha(list, headSha);
   if (!hit) {
     log(
-      `${prefix} 按 HEAD ${short(headSha)} 没找到 pull_request 构建（还没推 / CI 还没起 / 构建挂在别的 sha 上）` +
+      `${prefix} 按 HEAD ${short(headSha)} 没找到 pull_request 构建（已翻 ${pagesScanned} 页${pagesScanned >= MAX_PAGES ? " 到顶" : ""}；还没推 / CI 还没起 / 构建挂在别的 sha 上）` +
         " ⇒ 没有结论。",
     );
     log(`${prefix} 下一动作：在 PR 上确认构建已创建后重跑，或点名构建号：${command} <sn>`);
     return null;
   }
   log(
-    `${prefix} 按 HEAD ${short(headSha)} 归属到构建 ${hit.sn}（列表里 sha 逐字相同，取最新一条）。`,
+    `${prefix} 按 HEAD ${short(headSha)} 归属到构建 ${hit.sn}（列表里 sha 逐字相同，取最新一条${
+      hitPage > 1 ? `；命中在第 ${hitPage} 页` : ""
+    }）。`,
   );
   return hit.sn;
 }
