@@ -45,8 +45,9 @@ function ToggleGroup({
       data-slot="toggle-group"
       data-spacing={spacing}
       data-variant={variant}
+      /* SAFETY: 类型断言已复核 */
       style={
-        /* SAFETY: 类型断言已复核 */ {
+        {
           "--gap": spacing,
         } as React.CSSProperties
       }

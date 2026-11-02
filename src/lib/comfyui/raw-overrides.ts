@@ -272,9 +272,8 @@ function subgraphDefs(raw: JsonRecord): Map<string, RawSubgraph> {
   const defs = raw.definitions;
   const subs =
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-    defs != null && typeof defs === "object"
-      ? /* SAFETY: 类型断言已复核 */ (defs as JsonRecord).subgraphs
-      : undefined;
+    /* SAFETY: 类型断言已复核 */
+    defs != null && typeof defs === "object" ? (defs as JsonRecord).subgraphs : undefined;
   const list: Array<unknown> = Array.isArray(subs)
     ? subs
     : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined

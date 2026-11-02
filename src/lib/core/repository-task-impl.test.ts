@@ -55,18 +55,17 @@ beforeEach(() => {
 async function seed(extra: Record<string, unknown> = {}): Promise<string> {
   const id = `t-${Math.random().toString(36).slice(2, 10)}`;
   /* SAFETY: 类型断言已复核 */
-  await (tdb as unknown as TaskRepoDb).insert(task).values(
-    /* SAFETY: 类型断言已复核 */ {
-      id,
-      userId,
-      type: "TXT2IMG",
-      prompt: "p",
-      params: {},
-      workflowName: "w",
-      status: "QUEUED",
-      ...extra,
-    } as never,
-  );
+  /* SAFETY: 类型断言已复核 */
+  await (tdb as unknown as TaskRepoDb).insert(task).values({
+    id,
+    userId,
+    type: "TXT2IMG",
+    prompt: "p",
+    params: {},
+    workflowName: "w",
+    status: "QUEUED",
+    ...extra,
+  } as never);
   return id;
 }
 

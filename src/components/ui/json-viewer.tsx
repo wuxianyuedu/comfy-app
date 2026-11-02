@@ -391,7 +391,8 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
     }
     if (e.key === "Escape") {
       setQuery("");
-      /* SAFETY: 类型断言已复核 */ (e.target as HTMLInputElement).blur();
+      /* SAFETY: 类型断言已复核 */
+      (e.target as HTMLInputElement).blur();
     }
   };
 

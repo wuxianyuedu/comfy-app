@@ -45,8 +45,9 @@ const STATUS_META: Record<"QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCE
 /** 按任务状态取展示元数据。`task.status` 是宽字符串（来自后端），这里收口
  *  「未知状态 → 排队中」这一条兜底判据，返回**非空**，调用点不再各自 `!`。 */
 function statusMetaFor(status: string): StatusMeta {
+  /* SAFETY: 类型断言已复核 */
   return status in STATUS_META
-    ? STATUS_META[/* SAFETY: 类型断言已复核 */ status as keyof typeof STATUS_META]
+    ? STATUS_META[status as keyof typeof STATUS_META]
     : STATUS_META.QUEUED;
 }
 

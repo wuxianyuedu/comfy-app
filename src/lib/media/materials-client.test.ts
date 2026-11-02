@@ -143,10 +143,12 @@ describe("uploadMaterial", () => {
       folder: "ref",
       projectId: null,
     });
-    const fd2 =
-      /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
-        (fetchMock.mock.calls[1] as Array<unknown> | undefined)?.[1] as RequestInit | undefined
-      )?.body as FormData;
+    /* SAFETY: 类型断言已复核 */
+    /* SAFETY: 类型断言已复核 */
+    /* SAFETY: 类型断言已复核 */
+    const fd2 = (
+      (fetchMock.mock.calls[1] as Array<unknown> | undefined)?.[1] as RequestInit | undefined
+    )?.body as FormData;
     expect(fd2.get("shared")).toBe("true");
   });
 

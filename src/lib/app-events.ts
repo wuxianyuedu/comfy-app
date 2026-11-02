@@ -163,10 +163,9 @@ export function subscribeAppEvent<K extends AppEventName>(
     return noop;
   }
   const listener = (event: Event) => {
-    handler(
-      /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (event as CustomEvent)
-        .detail as AppEvents[K],
-    );
+    /* SAFETY: 类型断言已复核 */
+    /* SAFETY: 类型断言已复核 */
+    handler((event as CustomEvent).detail as AppEvents[K]);
   };
   window.addEventListener(name, listener);
   return () => {

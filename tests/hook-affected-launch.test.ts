@@ -1078,7 +1078,8 @@ describe("钩子档并发：兜底由调用点注入（唯一出处 ci-load）�
        两格、本地那一跳照旧铺开。默认值撤掉之后，漏传必须**响**。 */
     for (const bad of [undefined, null, 0, -1, 2.5, Number.NaN, "2"]) {
       expect(
-        () => resolveMaxWorkers("2", /* SAFETY: 类型断言已复核 */ bad as unknown as number),
+        /* SAFETY: 类型断言已复核 */
+        () => resolveMaxWorkers("2", bad as unknown as number),
         `兜底 ${String(bad)} 必须停手`,
       ).toThrow(/兜底/);
     }

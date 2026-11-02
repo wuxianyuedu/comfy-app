@@ -195,10 +195,9 @@ describe("依赖面指纹：记的是「这次装用的输入」，不是「文�
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
+  /* SAFETY: 类型断言已复核 */
   const readPkg = () =>
-    /* SAFETY: 类型断言已复核 */ JSON.parse(
-      fs.readFileSync(path.join(tmp, "package.json"), "utf8"),
-    ) as {
+    JSON.parse(fs.readFileSync(path.join(tmp, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
       scripts: Record<string, string>;
     };
@@ -464,14 +463,15 @@ describe("pnpm 落点发现：服务账号的 PATH 上没它就是没装吗", ()
   });
 
   const LOCAL = path.join("C:", "Users", "svc", "AppData", "Local");
+  /* SAFETY: 类型断言已复核 */
   const baseEnv = () =>
-    /* SAFETY: 类型断言已复核 */ ({
+    ({
       LOCALAPPDATA: LOCAL,
       PATH: "",
     }) as unknown as NodeJS.ProcessEnv;
   /** 只造得出 `isDirectory` 的那几项 —— 被测判据只用它，别的字段与结论无关。 */
-  const dirEntry = (name: string) =>
-    /* SAFETY: 类型断言已复核 */ ({ name, isDirectory: () => true }) as unknown as Dirent;
+  /* SAFETY: 类型断言已复核 */
+  const dirEntry = (name: string) => ({ name, isDirectory: () => true }) as unknown as Dirent;
 
   it("PATH 上本来就能跑 ⇒ 不动 PATH（不许无条件前插）", () => {
     dirs.clear();

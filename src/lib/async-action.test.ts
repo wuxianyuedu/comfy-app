@@ -105,7 +105,8 @@ describe("runAsyncAction", () => {
       { report, failureText: "保存失败" },
     );
     expect(r.ok).toBe(false);
-    const [kind, detail] = /* SAFETY: 类型断言已复核 */ report.mock.calls[0] as [string, string];
+    /* SAFETY: 类型断言已复核 */
+    const [kind, detail] = report.mock.calls[0] as [string, string];
     expect(kind).toBe("err");
     /* `errorMessage` 把网络层原文翻译成人话（`~/lib/error-message`）。 */
     expect(detail).toContain("应用服务");

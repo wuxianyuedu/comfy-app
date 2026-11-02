@@ -95,31 +95,30 @@ export const PanelsSlideBetweenTriggers: Story = {
  *  —— 两档并排放在一个窄容器里才看得出差别（宽容器下两者几乎重合）。 */
 export const Alignments: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex w-72 flex-col gap-6">
-      {
-        /* SAFETY: 类型断言已复核 */ (["start", "center"] as const).map((align) => (
-          <div className="flex flex-col gap-1.5" key={align}>
-            <span className="text-ink-muted font-mono text-[11px]">align={align}</span>
-            <NavigationMenu align={align} className="justify-start">
-              <NavigationMenuList>
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger>菜单</NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <ul className="grid w-64 gap-1 p-2">
-                      <li>
-                        <NavigationMenuLink href="#">第一项</NavigationMenuLink>
-                      </li>
-                      <li>
-                        <NavigationMenuLink href="#">第二项</NavigationMenuLink>
-                      </li>
-                    </ul>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
-              </NavigationMenuList>
-            </NavigationMenu>
-          </div>
-        ))
-      }
+      {(["start", "center"] as const).map((align) => (
+        <div className="flex flex-col gap-1.5" key={align}>
+          <span className="text-ink-muted font-mono text-[11px]">align={align}</span>
+          <NavigationMenu align={align} className="justify-start">
+            <NavigationMenuList>
+              <NavigationMenuItem>
+                <NavigationMenuTrigger>菜单</NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <ul className="grid w-64 gap-1 p-2">
+                    <li>
+                      <NavigationMenuLink href="#">第一项</NavigationMenuLink>
+                    </li>
+                    <li>
+                      <NavigationMenuLink href="#">第二项</NavigationMenuLink>
+                    </li>
+                  </ul>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+            </NavigationMenuList>
+          </NavigationMenu>
+        </div>
+      ))}
     </div>
   ),
 };

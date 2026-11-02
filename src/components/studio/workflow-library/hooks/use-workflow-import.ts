@@ -230,9 +230,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         const nodes = Array.isArray(obj.nodes) ? (obj.nodes as Array<unknown>) : [];
         for (const n of nodes) {
           const t =
-            n && typeof n === "object"
-              ? /* SAFETY: 类型断言已复核 */ (n as { type?: unknown }).type
-              : undefined;
+            /* SAFETY: 类型断言已复核 */
+            n && typeof n === "object" ? (n as { type?: unknown }).type : undefined;
           if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
             suggested = "I2I";
             break;

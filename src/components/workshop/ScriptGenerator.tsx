@@ -103,7 +103,8 @@ export function ScriptGenerator({ meta, onMetaChange, onScriptChange }: Props) {
               <SelectMenu
                 {...field}
                 className="bg-subtle! border-border! text-sm"
-                labels={/* SAFETY: 类型断言已复核 */ PROJECT_TYPE_LABELS as Record<string, string>}
+                /* SAFETY: 类型断言已复核 */
+                labels={PROJECT_TYPE_LABELS as Record<string, string>}
                 onChange={(value) => {
                   onMetaChange({
                     ...meta,

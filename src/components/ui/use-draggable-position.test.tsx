@@ -147,14 +147,13 @@ function drag(
   to: { x: number; y: number },
 ) {
   act(() => {
-    handleProps.onPointerDown(
-      /* SAFETY: 类型断言已复核 */ {
-        button: 0,
-        pointerId: 1,
-        clientX: from.x,
-        clientY: from.y,
-      } as unknown as React.PointerEvent<HTMLElement>,
-    );
+    /* SAFETY: 类型断言已复核 */
+    handleProps.onPointerDown({
+      button: 0,
+      pointerId: 1,
+      clientX: from.x,
+      clientY: from.y,
+    } as unknown as React.PointerEvent<HTMLElement>);
   });
   const steps = 8;
   act(() => {
@@ -289,14 +288,13 @@ describe("useDraggablePosition", () => {
     await expect.poll(() => controller().offset).not.toBeNull();
     const before = controller().offset;
     act(() => {
-      controller().handleProps.onPointerDown(
-        /* SAFETY: 类型断言已复核 */ {
-          button: 2,
-          pointerId: 1,
-          clientX: 900,
-          clientY: 700,
-        } as unknown as React.PointerEvent<HTMLElement>,
-      );
+      /* SAFETY: 类型断言已复核 */
+      controller().handleProps.onPointerDown({
+        button: 2,
+        pointerId: 1,
+        clientX: 900,
+        clientY: 700,
+      } as unknown as React.PointerEvent<HTMLElement>);
     });
     act(() => {
       window.dispatchEvent(

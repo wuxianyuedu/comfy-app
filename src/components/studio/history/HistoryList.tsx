@@ -102,7 +102,8 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
           className="text-xs"
           labels={{ newest: "时间倒序", oldest: "时间正序" }}
           onChange={(value) => {
-            c.setSort(/* SAFETY: 类型断言已复核 */ value as SortKey);
+            /* SAFETY: 类型断言已复核 */
+            c.setSort(value as SortKey);
           }}
           options={["newest", "oldest"]}
           value={c.sort}

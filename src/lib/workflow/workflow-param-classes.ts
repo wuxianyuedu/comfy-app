@@ -170,7 +170,8 @@ export function sizeGroupIds(id: string | null | undefined): ReadonlyArray<Param
   if (!id) {
     return [];
   }
-  return id === "size" ? SIZE_SUB_IDS : [/* SAFETY: 类型断言已复核 */ id as ParamClass];
+  /* SAFETY: 类型断言已复核 */
+  return id === "size" ? SIZE_SUB_IDS : [id as ParamClass];
 }
 
 /* ── 端口分类：只看**声明类型** ──

@@ -64,8 +64,9 @@ type RuntimeEnvModule = {
   standaloneDbFile: (appRoot: string) => string;
 };
 
+/* SAFETY: 类型断言已复核 */
 const load = <T>(rel: string): Promise<T> =>
-  /* SAFETY: 类型断言已复核 */ import(pathToFileURL(path.join(ROOT, rel)).href) as Promise<T>;
+  import(pathToFileURL(path.join(ROOT, rel)).href) as Promise<T>;
 const loadStatic = () => load<StaticAllowModule>("scripts/standalone-private-inputs.mjs");
 const loadEnv = () => load<RuntimeEnvModule>("scripts/launcher-core/standalone-runtime-env.mjs");
 

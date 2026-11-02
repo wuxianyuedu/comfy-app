@@ -589,9 +589,8 @@ export function createNodeJsonViewerStore(
         if (!subDef || !Array.isArray(subDef.nodes)) {
           const matchKey = subs
             ? Object.keys(subs).find(
-                (key) =>
-                  /* SAFETY: 类型断言已复核 */ (subs[key] as RawSubgraphDef | undefined)?.id ===
-                  targetUid,
+                /* SAFETY: 类型断言已复核 */
+                (key) => (subs[key] as RawSubgraphDef | undefined)?.id === targetUid,
               )
             : undefined;
           if (matchKey && subs) {

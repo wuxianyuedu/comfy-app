@@ -148,10 +148,9 @@ function columnsOf(file: string, table: string): Array<string> {
 function readUserVersion(file: string): number {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
+    /* SAFETY: 类型断言已复核 */
     return Number(
-      /* SAFETY: 类型断言已复核 */ (
-        db.prepare("PRAGMA user_version").get() as { user_version: number }
-      ).user_version,
+      (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version,
     );
   } finally {
     db.close();

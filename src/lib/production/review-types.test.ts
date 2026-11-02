@@ -143,9 +143,8 @@ describe("applyReview", () => {
     expect(out[1]).not.toBe(entities[1]);
     expect(out[1]!.review).toEqual(verdict);
     // 不改原入参（不可变）
-    expect(
-      /* SAFETY: 类型断言已复核 */ (entities[1] as Record<string, unknown>).review,
-    ).toBeUndefined();
+    /* SAFETY: 类型断言已复核 */
+    expect((entities[1] as Record<string, unknown>).review).toBeUndefined();
   });
 
   it("无命中 / 非记录项 → 原样返回入参引用（调用方据此判断无需落库）", () => {
@@ -185,9 +184,8 @@ describe("applyReview", () => {
   it("轮次历史：旧判定无效（缺 pass）时不塞垃圾；历史超上限从头裁剪", () => {
     let entities: Array<unknown> = [{ id: "a", review: { nope: true } }];
     entities = applyReview(entities, "a", verdict);
-    expect(
-      /* SAFETY: 类型断言已复核 */ (entities[0] as Record<string, unknown>).reviewHistory,
-    ).toBeUndefined();
+    /* SAFETY: 类型断言已复核 */
+    expect((entities[0] as Record<string, unknown>).reviewHistory).toBeUndefined();
 
     let chain: Array<unknown> = [{ id: "a" }];
     for (let i = 0; i < 12; i++) {
@@ -395,15 +393,13 @@ describe("人工裁决 / 人评分（#2480）", () => {
 
   it("applyHumanRating：写 / 清（null）；无命中原样返回入参引用", () => {
     const entities = [{ id: "a" }];
+    /* SAFETY: 类型断言已复核 */
     expect(
-      /* SAFETY: 类型断言已复核 */ (
-        applyHumanRating(entities, "a", 4) as Array<Record<string, unknown>>
-      )[0]?.humanRating,
+      (applyHumanRating(entities, "a", 4) as Array<Record<string, unknown>>)[0]?.humanRating,
     ).toBe(4);
+    /* SAFETY: 类型断言已复核 */
     expect(
-      /* SAFETY: 类型断言已复核 */ (
-        applyHumanRating(entities, "a", null) as Array<Record<string, unknown>>
-      )[0]?.humanRating,
+      (applyHumanRating(entities, "a", null) as Array<Record<string, unknown>>)[0]?.humanRating,
     ).toBeNull();
     expect(applyHumanRating(entities, "missing", 4)).toBe(entities);
   });

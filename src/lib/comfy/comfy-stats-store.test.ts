@@ -21,10 +21,8 @@ vi.mock("~/lib/comfy/comfy-stats-client", () => ({
 /* 进程退出事件的订阅回调（`subscribeComfyCrashes` 的替身）：jsdom 里没有
    `EventSource`，直接驱动 store 注册进来的那一个回调比造一条假连接确定。 */
 const crashListeners = vi.hoisted(
-  () =>
-    /* SAFETY: 类型断言已复核 */ [] as Array<
-      (s: { at: number; reason: string; seq: number; userStopped: boolean }) => void
-    >,
+  /* SAFETY: 类型断言已复核 */
+  () => [] as Array<(s: { at: number; reason: string; seq: number; userStopped: boolean }) => void>,
 );
 vi.mock("~/lib/comfy/comfy-liveness-client", () => ({
   subscribeComfyCrashes: (l: (typeof crashListeners)[number]) => {

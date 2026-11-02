@@ -273,16 +273,14 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
       /* 与 `gridLineColor()` 同一套取整口径：α 换算成百分数，不丢一位小数。 */
       const percent = Math.round(alpha * 1000) / 10;
       const expr = `color-mix(in srgb, var(--color-canvas-grid-line) ${percent}%, transparent)`;
+      /* SAFETY: 类型断言已复核 */
       const seen: Record<"light" | "dark", { color: Color; ratio: number; stroke: string }> =
-        /* SAFETY: 类型断言已复核 */ {} as never;
+        {} as never;
 
       for (const dark of [false, true]) {
         await setTheme(page, dark);
-        const key = dark
-          /* SAFETY: 类型断言已复核 */
-          ? ("dark" as const)
-          /* SAFETY: 类型断言已复核 */
-          : ("light" as const);
+        /* SAFETY: 类型断言已复核 */
+        const key = dark ? ("dark" as const) : ("light" as const);
         const got = await page.evaluate(
           ({ expr: e, token }) => {
             const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -316,7 +314,8 @@ test.describe("主题 token 在真产物里可解析（§3.6.1.1 产物侧）", 
         light: [0, 0, 0],
         dark: [148, 163, 184],
       };
-      for (const key of /* SAFETY: 类型断言已复核 */ ["light", "dark"] as const) {
+      /* SAFETY: 类型断言已复核 */
+      for (const key of ["light", "dark"] as const) {
         const c = seen[key].color;
         const [r, g, b] = expected[key];
         const got2 = [Math.round(c.r), Math.round(c.g), Math.round(c.b)];

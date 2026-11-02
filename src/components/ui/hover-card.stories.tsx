@@ -68,19 +68,18 @@ export const InteractiveContent: Story = {
  *  —— 四条并排同时悬停很难，逐条试更实际。 */
 export const Sides: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex items-center gap-4">
-      {
-        /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
-          <HoverCard key={side}>
-            <HoverCardTrigger render={<Button size="sm" variant="outline" />}>
-              side={side}
-            </HoverCardTrigger>
-            <HoverCardContent side={side}>
-              <p className="text-sm">开在 {side} 这一侧</p>
-            </HoverCardContent>
-          </HoverCard>
-        ))
-      }
+      {(["top", "right", "bottom", "left"] as const).map((side) => (
+        <HoverCard key={side}>
+          <HoverCardTrigger render={<Button size="sm" variant="outline" />}>
+            side={side}
+          </HoverCardTrigger>
+          <HoverCardContent side={side}>
+            <p className="text-sm">开在 {side} 这一侧</p>
+          </HoverCardContent>
+        </HoverCard>
+      ))}
     </div>
   ),
 };

@@ -29,8 +29,8 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
     useMutation: () => ({
       /* SAFETY: 类型断言已复核 */
       mutate: (...args: Array<unknown>) => mutate(...args) as never,
-      mutateAsync: (...args: Array<unknown>) =>
-        /* SAFETY: 类型断言已复核 */ mutateAsync(...args) as never,
+      /* SAFETY: 类型断言已复核 */
+      mutateAsync: (...args: Array<unknown>) => mutateAsync(...args) as never,
       isPending: false,
       isIdle: true,
       isSuccess: false,

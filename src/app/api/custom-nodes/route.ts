@@ -295,10 +295,8 @@ async function runDiscover(parentDirs: ReadonlyArray<unknown>): Promise<Array<un
   const args = [
     "-u",
     "scripts/parse_custom_nodes.py",
-    ...parentDirs.flatMap((parentDir) => [
-      "--discover-parent",
-      /* SAFETY: 类型断言已复核 */ parentDir as string,
-    ]),
+    /* SAFETY: 类型断言已复核 */
+    ...parentDirs.flatMap((parentDir) => ["--discover-parent", parentDir as string]),
   ];
   /* 候选名与顺序**不在这里写**（台账 A14）：字面量表一旦落在调用点，`py` 就少一个 `-3`，
    * 而 Windows 上的第一候选也不是 `python3`。见 `~/lib/process/python-run`。 */

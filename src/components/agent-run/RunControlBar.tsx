@@ -139,7 +139,8 @@ export function RunControlBarView({ c }: { c: AgentRunController }) {
             <SelectMenu
               labels={Object.fromEntries(APPROVAL_OPTIONS.map((o) => [o.value, o.label]))}
               onChange={(v) => {
-                c.setApprovalMode(/* SAFETY: 类型断言已复核 */ v as ApprovalMode);
+                /* SAFETY: 类型断言已复核 */
+                c.setApprovalMode(v as ApprovalMode);
               }}
               options={APPROVAL_OPTIONS.map((o) => o.value)}
               value={c.approvalMode}

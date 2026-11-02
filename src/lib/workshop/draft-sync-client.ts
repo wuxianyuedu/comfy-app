@@ -17,9 +17,10 @@ export async function fetchServerDraft(projectId: string): Promise<WorkshopDraft
     }
     const data: unknown = await res.json();
     if (
+      /* SAFETY: 类型断言已复核 */
       typeof data === "object" &&
       data !== null &&
-      /* SAFETY: 类型断言已复核 */ (data as { exists?: unknown }).exists === true
+      (data as { exists?: unknown }).exists === true
     ) {
       /* SAFETY: 类型断言已复核 */
       return (data as { draft: WorkshopDraftDto }).draft;

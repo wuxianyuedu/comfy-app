@@ -179,8 +179,9 @@ function SidebarProvider({
         data-narrow={narrow ? "true" : "false"}
         data-narrow-crossings={crossings}
         data-slot="sidebar-wrapper"
+        /* SAFETY: 类型断言已复核 */
         style={
-          /* SAFETY: 类型断言已复核 */ {
+          {
             "--sidebar-width": SIDEBAR_WIDTH,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
             ...style,
@@ -234,8 +235,9 @@ function Sidebar({
           data-slot="sidebar"
           dir={dir}
           side={side}
+          /* SAFETY: 类型断言已复核 */
           style={
-            /* SAFETY: 类型断言已复核 */ {
+            {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             } as React.CSSProperties
           }
@@ -682,8 +684,9 @@ function SidebarMenuSkeleton({
       <Skeleton
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
+        /* SAFETY: 类型断言已复核 */
         style={
-          /* SAFETY: 类型断言已复核 */ {
+          {
             "--skeleton-width": width,
           } as React.CSSProperties
         }

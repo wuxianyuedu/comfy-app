@@ -45,7 +45,8 @@ export function StyleSwitcher({
         fullWidth={!narrow}
         labels={Object.fromEntries(options.map((option) => [option.value, option.label]))}
         onChange={(value) => {
-          onChange(/* SAFETY: 类型断言已复核 */ value as GroupStyle);
+          /* SAFETY: 类型断言已复核 */
+          onChange(value as GroupStyle);
         }}
         options={options.map((option) => option.value)}
         value={style}

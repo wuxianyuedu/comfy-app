@@ -47,7 +47,8 @@ const DEP = path.join(SCRIPTS_DIR, "check-test-concurrency.cjs");
  * 读不到的路径返回什么，而临时仓库 + 子进程那条路造不出「列到名字、读时已没」
  * 这个时刻（造得出就只能靠删文件，那是一次概率窗口，不是判据）。
  */
-const { scanFile, walk } = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(SCRIPT) as {
+/* SAFETY: 类型断言已复核 */
+const { scanFile, walk } = createRequire(import.meta.url)(SCRIPT) as {
   scanFile: (abs: string) => Array<unknown> | null;
   walk: (dir: string, out?: Array<string>) => Array<string>;
 };
