@@ -3337,11 +3337,10 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     expect(f.log.join("\n")).toContain("(未解析到 build)");
   });
 
-  it("已钉住的 build 被挤出列表这一页 ⇒ 按钉住的 sn 继续读，不倒退回「还没解析到」", async () => {
-    /* 与 ISSUE #2950 同一条根因的轮询侧：列表只给当前一页，master 构建一密，
-     * 已钉住的那条就落到页外。此前这一形被念成「还没解析到 build（平台可能尚未开跑）」
-     * —— 构建明明在跑，读数却倒退成「没起」，断流计数还会被这种假「没变」喂满。
-     * 这里第一眼列表里有 b1，第二眼起只剩别人的 b2。 */
+  it("ISSUE #3070：钉住 sn 之后不再拉列表 —— 第二眼起 get-build-logs 调用为 0", async () => {
+    /* 签名序列论证：签名只看 (statusJson, sn)，列表从来不是输入；sha 已钉死（#2812）、
+     * sn 是平台分配的 ⇒ 钉住后再拉列表只是重复确认同一件事。这里第一眼钉住 b1，
+     * 之后列表**即便一直在变**也不该再被问 —— 读数只许来自钉住的那一条。 */
     const log: Array<string> = [];
     const statusCalls: Array<string> = [];
     let logsCalls = 0;
@@ -3377,11 +3376,53 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
     expect(out.stop).toBeNull();
     expect(out.buildState).toBe("green");
     expect(out.buildSn).toBe("b1");
-    const all = log.join("\n");
-    expect(all).toContain("挤出窗口");
-    expect(all).not.toContain("还没解析到 build");
+    expect(logsCalls, "钉住之后还在拉列表").toBe(1);
+    expect(log.join("\n")).not.toContain("还没解析到 build");
     // 第二眼起读的都是钉住的那一条，不是列表里新来的 b2。
     expect(statusCalls.every((c) => c.includes("--sn b1"))).toBe(true);
+  });
+
+  it("ISSUE #3070：钉住之后列表的瞬时失败不再有话语权（不再把整跑掐成 NOT_RUN）", async () => {
+    /* 改前：钉住之后每一轮仍先拉列表，列表一抖（取不到）整跑退 2 —— 那一拉本来
+     * 就是冗余的。这条把列表做成**第一次之后必炸**的饵：只要钉住后还去问它，
+     * 这条就红。 */
+    const log: Array<string> = [];
+    let logsCalls = 0;
+    let statusReads = 0;
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-logs") {
+        logsCalls += 1;
+        if (logsCalls > 1) {
+          return { status: 1, stdout: "boom", stderr: "boom", error: "boom" };
+        }
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: { data: [{ sn: "b1", sha: SHA, event: "pull_request", createTime: "t" }] },
+          }),
+        );
+      }
+      if (args[1] === "get-build-status") {
+        statusReads += 1;
+        return ok(
+          JSON.stringify({
+            status: 200,
+            data: { sn: "b1", status: statusReads === 1 ? "running" : "success" },
+          }),
+        );
+      }
+      return ok("");
+    };
+    const out = await pollUntilTerminal({
+      run,
+      log: (s) => log.push(s),
+      ...base,
+      now: () => 0,
+      sleep: async () => undefined,
+    });
+    expect(out.stop).toBeNull();
+    expect(out.buildState).toBe("green");
+    expect(logsCalls).toBe(1);
   });
 
   it("buildSignature：四件原值进签名，缺 data / 缺 sn / 缺 stages 都各有稳定形状", () => {

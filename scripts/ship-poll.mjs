@@ -87,9 +87,9 @@ export function toShipBuildState(state) {
  *   （`mergeable_state=conflict` 的 PR 平台不派生构建），那一句能把人从「再等等 /
  *   换分支名」那条冤枉路上拽回来。没给（例如只是轮询、还不知道 PR 号）就只念旧文案。
  * @returns {Promise<{buildState:"green"|"red"|"cancelled"|"running"|"unknown",buildSn:string|null,stop:number|null}>}
- *   `stop` 非 null 时调用方直接以此码收尾 —— 两种形状都落这里：执行者不在（取不到列表），
- *   以及**同签名断流**（连着 `POLL_STALL_MAX` 眼读数没变、**且此刻没有任何一格在飞**，
- *   再等下去只是重复同一句话）。
+ *   `stop` 非 null 时调用方直接以此码收尾 —— 两种形状都落这里：执行者不在（**还没钉住
+ *   build 时**取不到列表；钉住之后不再拉列表，ISSUE #3070），以及**同签名断流**
+ *   （连着 `POLL_STALL_MAX` 眼读数没变、**且此刻没有任何一格在飞**，再等下去只是重复同一句话）。
  */
 export async function pollUntilTerminal(ctx) {
   const { run, log, slug, newSha, now, sleep, number } = ctx;
@@ -113,28 +113,33 @@ export async function pollUntilTerminal(ctx) {
   /** 「这一轮已经因为格数续过命」的标记：每轮只念一次那句说明（见下面计数那一段）。 */
   let announcedFlight = false;
   for (;;) {
-    const logs = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
-    const builds = logs ? asArray(logs.json) : null;
-    if (!builds) {
-      log("[ship] 取不到 build 列表 ⇒ 没跑起来，不当成「还在跑」也不当成「绿」");
-      return { buildState, buildSn, stop: CODE.NOT_RUN };
+    /* ISSUE #3070：sha→sn 的映射一旦钉住就不再变（sha 在进平台段前已钉死，ISSUE #2812；
+     * sn 是平台分配的）—— 钉住之后每 20 秒再拉一次全量列表，只是在重复确认同一件事，
+     * 请求量翻倍而读数不变。所以列表只在**还没钉住**时拉；钉住之后直接按 sn 读状态。
+     * 签名序列不受影响：签名只看 (statusJson, sn) 两件，列表从来不是签名的输入 ——
+     * 断流 / 在飞归零 / #2645 冲突信号的触发时机逐字不变（它们全挂在「有没有 sn」上）。
+     * 捎带消掉一个故障点：钉住之后列表的瞬时失败此前会把整跑掐成 NOT_RUN ——
+     * 那一拉本来就是冗余的，它的失败不该有话语权。 */
+    if (!buildSn) {
+      const logs = cnbJson(run, ["build", "get-build-logs", "--repo", slug, "-v"]);
+      const builds = logs ? asArray(logs.json) : null;
+      if (!builds) {
+        log("[ship] 取不到 build 列表 ⇒ 没跑起来，不当成「还在跑」也不当成「绿」");
+        return { buildState, buildSn, stop: CODE.NOT_RUN };
+      }
+      const picked = pickBuildForSha(builds, newSha);
+      if (picked) {
+        buildSn = picked.sn;
+      }
+      /* 钉住即不再看列表 ⇒ ISSUE #2950 那条「掉出列表窗口就按钉住的 sn 续读」的回退
+       * 自然消解：它防的是「钉住了却被列表读数倒退回没起」，而钉住之后根本没有列表
+       * 读数可倒退 —— 不留走不到的分支。「取不到列表」与「还没解析到」两格只在
+       * 未钉住时可达，话术与退码不变。 */
     }
-    const picked = pickBuildForSha(builds, newSha);
-    if (picked) {
-      buildSn = picked.sn;
-    }
-    /* 列表只看得到当前这一页，而已钉住的 build 会被更新的构建挤出窗口（与 ISSUE #2950
-     * 同一条根因：master 构建一密，旧构建就落到首页之外）。此前这一形被念成
-     * 「还没解析到 build（平台可能尚未开跑）」—— 构建明明在跑，读数却倒退回「没起」，
-     * 断流计数还会被这种假「没变」喂满。所以：曾经钉住过 ⇒ 列表里看不到就按钉住的 sn
-     * 继续读状态；**从来没钉住过**才走「还没解析到」那一格。 */
-    const sn = picked ? picked.sn : buildSn;
+    const sn = buildSn;
     /** 这一眼的状态 JSON；没解析到 build 时为 null（签名照样成立）。 */
     let statusJson = null;
     if (sn) {
-      if (!picked) {
-        log(`[ship] 列表这一页看不到已钉住的 build ${sn}（被更新的构建挤出窗口）⇒ 按它继续读状态`);
-      }
       const st = cnbJson(run, [
         "build",
         "get-build-status",
