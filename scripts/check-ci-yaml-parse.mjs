@@ -88,8 +88,8 @@ export function checkYamlFile(root, rel) {
   let value;
   try {
     value = doc.toJS(); // 锚点 / 别名在这一跳真正展开，断引用在这里抛错。
-  } catch (err) {
-    problems.push(`${rel}: 锚点 / 别名解析失败 —— ${String(err).split("\n")[0]}`);
+  } catch (error) {
+    problems.push(`${rel}: 锚点 / 别名解析失败 —— ${String(error).split("\n")[0]}`);
     return problems;
   }
   for (const stages of findStagesArrays(value)) {
