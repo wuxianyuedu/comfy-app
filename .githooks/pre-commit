@@ -152,9 +152,11 @@ run_group() {
   # 自己的分支 + 多个 dev server 抢核时，pre-push 的受影响用例档被这种调度超时拦下，
   # 而隔离复跑 88 个用例文件 / 1116 条全绿。也就是说本地这一跳在最需要它给出结论的
   # 机器上，给的恰是最不可信的读数。
-  # 新执行者：`.cnb.yml` 的 `受影响用例` 那一格（`scripts/ci-affected-tests.mjs` →
+  # 新执行者：先是 `.cnb.yml` 的 `受影响用例` 那一格（`scripts/ci-affected-tests.mjs` →
   # `run-affected-tests.mjs` + `COMFY_AFFECTED_CHANGED`，**同一条判决链**；并发按
-  # `ci-load.mjs` 的现场核数收敛，超时形态的隔离复跑话术仍由启动器自己负责）。
+  # `ci-load.mjs` 的现场核数收敛，超时形态的隔离复跑话术仍由启动器自己负责）；
+  # 2026-11-02 那一格也随 ISSUE #3052 撤到每日全量单测（增量面是全量子集），
+  # 判决链脚本保留，仍可手动 / 复验时跑。
   # ⚠️ 这一段**留着不删**：`tests/hook-affected-launch.test.ts` 钉的就是这个入口形状
   # （C 组必须走 `run-affected-tests.mjs`，不许退回 `pnpm exec vitest run $files`）。
   # 本地要跑受影响面：`pnpm check:all`（全量）或手工
@@ -461,8 +463,9 @@ run_group A "tsc --noEmit" sh -c 'pnpm exec tsc --noEmit'
 run_group B "eslint（零警告，范围见 package.json lint）" sh -c 'pnpm run lint'
 
 # ── C：结构守护测试（固定清单 + 本次改动牵扯到的用例）──────────────────────
-# ⚠️ **2026-10-20 起这一组本地不再执行**：执行者是 `.cnb.yml` 的 `受影响用例` 一格
-# （`scripts/ci-affected-tests.mjs` → `run-affected-tests.mjs`，同一条判决链）。
+# ⚠️ **2026-10-20 起这一组本地不再执行**：执行者先是 `.cnb.yml` 的 `受影响用例` 一格
+# （`scripts/ci-affected-tests.mjs` → `run-affected-tests.mjs`，同一条判决链）；
+# 2026-11-02 那一格随 ISSUE #3052 撤到每日全量单测（增量面是全量子集，覆盖不丢）。
 # 理由与边界记在 `run_group()` 里组 C 那段：共享机上它的失效形态是 forks worker
 # 调度超时而不是用例红。**这一行留着不删** ——
 # `tests/hook-affected-launch.test.ts` 钉的就是入口形状，且它是这份钩子里唯一一处
@@ -905,7 +908,7 @@ run_group D "静态判据（结构/复用/棘轮/文档）" sh -c '
   # 规范 §13.5.31）。另一半方向（有命中而没登记）由 `pnpm run lint` 本体执行，这里不重复判。
   # 成本实测：端到端本机 10.4–11.6s，大头是 `eslint.config.js` 自己那一次求值
   # （复用 a11y 那份件的 `loadEslintConfig()` 单飞，不另写第二份加载器）⇒ 与 a11y 同档，
-  # 只在重档那一跑（`COMFY_HEAVY_GATES=1` / `pnpm check:all` / 平台的固定结构用例）里付。
+  # 只在重档那一跑（`COMFY_HEAVY_GATES=1` / `pnpm check:all` / 平台每日档的全量单测）里付。
   run "eslint 文件级豁免台账⇄真违例（§13.5.31）" node scripts/check-eslint-exemptions.cjs
   # 类型层「声明 ⇄ 执行者」（规范 §13.5.14 / ISSUE #1591）。立案现场：19 条 tsc 错落进
   # master，逐条扒下来**共同根因只有一个** —— 声明（JSDoc / 类型注解）落后于实现
