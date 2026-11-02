@@ -43,7 +43,7 @@ const mockRouter = t.router({
         });
       }
       // sleep-ok: mock 内部延迟：tRPC mock 的 delayMs 是给用例制造「接口慢一拍」的现场（行为开关），不是等条件。
-      if (Boolean(behavior.delayMs)) {
+      if (behavior.delayMs !== undefined && behavior.delayMs !== 0) {
         await new Promise((r) => setTimeout(r, behavior.delayMs));
       }
       return { tags: behavior.tags };

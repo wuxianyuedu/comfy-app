@@ -91,12 +91,13 @@ export function useGenerate({
           return;
         }
         if (t.status === "SUCCEEDED") {
+          const hasImages = Boolean(t.resultImages);
           guard.commit(() =>
             patch({
               status: "done",
               error: undefined,
               progress: 100,
-              ...(Boolean(t.resultImages) ? { resultImages: t.resultImages } : {}),
+              ...(hasImages ? { resultImages: t.resultImages } : {}),
             }),
           );
         } else if (t.status === "FAILED" || t.status === "CANCELLED") {

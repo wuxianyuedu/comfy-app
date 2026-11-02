@@ -77,7 +77,7 @@ export function comfyStatusText(
   status: ComfyRuntimeStatus | null,
   flags: { starting: boolean; stopping: boolean },
 ): string {
-  if (status !== null && status.up) {
+  if (status?.up === true) {
     const base = status.base !== null && status.base !== "" ? `（${status.base}）` : "";
     const via = status.via !== null && status.via !== "" ? `·${status.via}` : "";
     return `ComfyUI 运行中${base}${via}`;

@@ -65,10 +65,11 @@ type HexRow = {
 /** 单元格必须是**单独一颗**且**形如** `shape` 的行内代码。 */
 function singleCodeSpan(cell: string, shape: RegExp): string | null {
   const match = /^`([^`]+)`$/.exec(cell);
-  if (match === null || match[1] === undefined || match[1] === "") {
+  const span = match?.[1];
+  if (span === undefined || span === "") {
     return null;
   }
-  return shape.test(match[1]) ? match[1] : null;
+  return shape.test(span) ? span : null;
 }
 
 function parseHexCell(cell: string): string | null {
@@ -128,12 +129,14 @@ function normalizeCssHex(value: string | undefined): string | null {
   }
   const raw = value.trim().toLowerCase();
   const six = /^#([0-9a-f]{6})$/.exec(raw);
-  if (six !== null && six[1] !== undefined && six[1] !== "") {
-    return `#${six[1]}`;
+  const sixHex = six?.[1];
+  if (sixHex !== undefined && sixHex !== "") {
+    return `#${sixHex}`;
   }
   const three = /^#([0-9a-f]{3})$/.exec(raw);
-  if (three !== null && three[1] !== undefined && three[1] !== "") {
-    return `#${[...three[1]].map((c) => c + c).join("")}`;
+  const threeHex = three?.[1];
+  if (threeHex !== undefined && threeHex !== "") {
+    return `#${[...threeHex].map((c) => c + c).join("")}`;
   }
   return null;
 }

@@ -211,7 +211,8 @@ export function useWorkflowActions(args: UseWorkflowActionsArgs) {
             const d = await queryClient.fetchQuery(trpc.workflow.detail.queryOptions({ id }));
             const tpl = d?.template;
             /* template 在类型上非空（恒真对象），防御「没取到」用 Boolean 保判空语义。 */
-            if (!Boolean(tpl)) {
+            const tplPresent = Boolean(tpl);
+            if (!tplPresent) {
               toast.error("获取工作流失败", "未知错误");
               return true;
             }

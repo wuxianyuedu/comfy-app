@@ -122,7 +122,8 @@ function parseSettingsBlob(
   paths: Array<string>;
   summary: SettingsResp["summary"];
 } {
-  if (!Boolean(data.settings)) {
+  const settingsPresent = Boolean(data.settings);
+  if (!settingsPresent) {
     const err = data.error;
     const detail = typeof err === "string" ? err : (err?.message ?? `HTTP ${status}`);
     throw new Error(detail || `读取配置失败（HTTP ${status}）`);

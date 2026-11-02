@@ -133,26 +133,28 @@ export function WidgetControl({
     }
 
     case "switch": {
+      /* value 是 unknown：开关态只收一次真值，下面五处统一用它。 */
+      const on = Boolean(value);
       return (
         <Button
           aria-checked={value === true}
           className={`nodrag nopan bg-canvas-deep hover:bg-canvas-deep ${compact ? "h-[28px] px-2.5" : "mt-1 h-7.5 px-3"} w-full justify-between rounded-md text-xs ${
-            Boolean(value) ? "text-success-strong" : "text-ink-muted"
+            on ? "text-success-strong" : "text-ink-muted"
           } ${missingRequired ? "ring-destructive/50 ring-1" : ""}`}
           disabled={disabled}
-          onClick={() => onValueChange(!Boolean(value))}
+          onClick={() => onValueChange(!on)}
           role="switch"
           variant="ghost"
         >
-          <span>{Boolean(value) ? "开启" : "关闭"}</span>
+          <span>{on ? "开启" : "关闭"}</span>
           <span
             className={`relative h-3.5 w-7 rounded-full transition-colors ${
-              Boolean(value) ? "bg-success/70" : "bg-surface-2"
+              on ? "bg-success/70" : "bg-surface-2"
             }`}
           >
             <span
               className="absolute top-0.5 size-2.5 rounded-full bg-white transition-all"
-              style={{ left: Boolean(value) ? 14 : 3 }}
+              style={{ left: on ? 14 : 3 }}
             />
           </span>
         </Button>

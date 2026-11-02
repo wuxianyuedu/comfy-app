@@ -422,7 +422,8 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   > = [];
   const outputs: Array<WorkflowIOEntry & { ioKey: string }> = [];
   for (const [ioKey, entry] of Object.entries(io ?? {})) {
-    if (!Boolean(entry) || typeof entry !== "object") {
+    const entryPresent = Boolean(entry);
+    if (!entryPresent || typeof entry !== "object") {
       continue;
     }
     if (entry.direction === "output") {
@@ -711,7 +712,8 @@ export function getMissingRequiredInputs(
   }
   const out: Array<string> = [];
   for (const [key, entry] of Object.entries(io)) {
-    if (!Boolean(entry) || typeof entry !== "object") {
+    const entryPresent = Boolean(entry);
+    if (!entryPresent || typeof entry !== "object") {
       continue;
     }
     if (entry.direction !== "input") {

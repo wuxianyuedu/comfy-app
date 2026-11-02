@@ -42,7 +42,7 @@ beforeAll(() => {
       void 0;
     };
   }
-  if (!Boolean(window.matchMedia)) {
+  if (typeof window.matchMedia !== "function") {
     window.matchMedia = (query: string): MediaQueryList => ({
       matches: false,
       media: query,

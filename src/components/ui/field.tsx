@@ -173,7 +173,8 @@ function FieldError({
   errors?: Array<{ message?: string } | undefined>;
 }) {
   const content = useMemo(() => {
-    if (Boolean(children)) {
+    const hasChildren = Boolean(children);
+    if (hasChildren) {
       return children;
     }
 
@@ -189,17 +190,16 @@ function FieldError({
 
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
-        {uniqueErrors.map(
-          (error, index) =>
-            error !== undefined &&
-            error.message !== undefined &&
-            error.message !== "" && <li key={index}>{error.message}</li>,
-        )}
+        {uniqueErrors.map((error, index) => {
+          const message = error?.message;
+          return message !== undefined && message !== "" ? <li key={index}>{message}</li> : null;
+        })}
       </ul>
     );
   }, [children, errors]);
 
-  if (!Boolean(content)) {
+  const hasContent = Boolean(content);
+  if (!hasContent) {
     return null;
   }
 

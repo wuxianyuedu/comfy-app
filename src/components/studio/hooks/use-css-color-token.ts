@@ -85,17 +85,19 @@ export function normalizeCssColor(value: string): string | null {
     return `#${full.toLowerCase()}`;
   }
   const rgb = /^rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i.exec(value);
+  const r1 = rgb?.[1];
+  const r2 = rgb?.[2];
+  const r3 = rgb?.[3];
   if (
-    rgb !== null &&
-    rgb[1] !== undefined &&
-    rgb[1] !== "" &&
-    rgb[2] !== undefined &&
-    rgb[2] !== "" &&
-    rgb[3] !== undefined &&
-    rgb[3] !== ""
+    r1 !== undefined &&
+    r1 !== "" &&
+    r2 !== undefined &&
+    r2 !== "" &&
+    r3 !== undefined &&
+    r3 !== ""
   ) {
     const toHex = (part: string) => Number(part).toString(16).padStart(2, "0");
-    return `#${toHex(rgb[1])}${toHex(rgb[2])}${toHex(rgb[3])}`;
+    return `#${toHex(r1)}${toHex(r2)}${toHex(r3)}`;
   }
   return null;
 }

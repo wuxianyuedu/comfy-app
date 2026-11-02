@@ -92,11 +92,12 @@ export function productionShotsToShotList(shots: Array<unknown>): Array<ShotList
       `镜头 ${list.length + 1}`;
     const duration =
       typeof raw.duration === "number" ? `${fixed(raw.duration, 1)}s` : EMPTY_PLACEHOLDER;
+    const hasImage = Boolean(raw.imageUrl);
     list.push({
       id: raw.id,
       name,
       duration,
-      mode: Boolean(raw.imageUrl) ? "img2video" : "txt2img",
+      mode: hasImage ? "img2video" : "txt2img",
       status: shotStatusToFilmStatus(raw.status),
       thumbnailUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : undefined,
     });

@@ -104,7 +104,8 @@ export function WirePortRows({
   const [portDropPosition, setPortDropPosition] = useState<WorkflowIODropPosition>("before");
   const positionOf = (e: React.DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
     const rect = e.currentTarget?.getBoundingClientRect?.();
-    if (!Boolean(rect) || rect.height <= 0) {
+    const rectPresent = Boolean(rect);
+    if (!rectPresent || rect.height <= 0) {
       return "before";
     }
     return e.clientY < rect.top + rect.height / 2 ? "before" : "after";

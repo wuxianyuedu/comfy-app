@@ -101,17 +101,17 @@ export function useWorkshopGeneration({
       const loraChar = characters
         .filter((c) => shot.characterIds.includes(c.id))
         .find((c) => c.loraName !== undefined && c.loraName !== "");
+      const loraName = loraChar?.loraName;
+      const loraStrength = loraChar?.loraStrength;
       const { input, unmatched } = await buildLibraryWorkflowInput(workflowId, {
         prompt: shot.prompt,
         negativePrompt: shot.negativePrompt || undefined,
         size: sizeSpec,
         ...(refs.files.length > 0 ? { referenceImages: refs.files } : {}),
-        ...(loraChar !== undefined && loraChar.loraName !== undefined && loraChar.loraName !== ""
+        ...(loraName !== undefined && loraName !== ""
           ? {
-              loraName: loraChar.loraName,
-              ...(loraChar.loraStrength === undefined
-                ? {}
-                : { loraStrength: loraChar.loraStrength }),
+              loraName,
+              ...(loraStrength === undefined ? {} : { loraStrength }),
             }
           : {}),
       });
@@ -151,13 +151,12 @@ export function useWorkshopGeneration({
               if (!progressGate.current.allow(shotId)) {
                 return;
               }
+              const label = node?.label;
               setShotProgress((prev) => ({
                 ...prev,
                 [shotId]: {
                   pct,
-                  ...(node !== undefined && node.label !== undefined && node.label !== ""
-                    ? { label: node.label }
-                    : {}),
+                  ...(label !== undefined && label !== "" ? { label } : {}),
                 },
               }));
             },

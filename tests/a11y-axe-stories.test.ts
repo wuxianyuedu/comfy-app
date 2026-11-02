@@ -222,7 +222,8 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
         if (storyName === "default") {
           continue;
         }
-        if (!Boolean(raw) || typeof raw !== "object") {
+        const hasStory = Boolean(raw);
+        if (!hasStory || typeof raw !== "object") {
           continue;
         }
         /* SAFETY: 类型断言已复核 */

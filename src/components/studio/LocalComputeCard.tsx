@@ -41,6 +41,7 @@ export function LocalComputeCard() {
     useComfyReadiness();
 
   const metrics = selectVisibleResourceMetrics({ cudaVram, smiVram, ram });
+  const gpuName = stats?.gpuName;
 
   /* 圆点档位与状态栏同一套语义：连着且新鲜 = up，连着但这一轮没读到 = busy（迟滞容忍期），
      连着而首帧未到 = probing（正在探），不在线 = down。 */
@@ -57,12 +58,12 @@ export function LocalComputeCard() {
           <StatusDot pulse={connecting} state={dotState} />
           <span className="text-ink-bright text-sm font-medium">ComfyUI</span>
           {/* 设备名来自同一份采样：读不到就不占一行，不写「未知设备」这种废话占位。 */}
-          {stats !== null && stats.gpuName !== undefined && stats.gpuName !== "" && (
+          {gpuName !== undefined && gpuName !== "" && (
             <span
               className="text-ink-fainter min-w-0 flex-1 truncate font-mono text-[11.5px]"
-              title={stats.gpuName}
+              title={gpuName}
             >
-              {stats.gpuName}
+              {gpuName}
             </span>
           )}
         </div>

@@ -55,10 +55,11 @@ const SPECIFIER_RE = /(?:from|import|require|vi\.mock)\s*\(?\s*["']([^"']+)["']/
 /** 把说明符解析到仓库内的实际文件（只处理本仓库的 `~/` 与 `@/` 别名）。 */
 function resolveSpec(spec: string): string | null {
   const m = /^(?:~|@)\/(.+)$/.exec(spec);
-  if (m === null || m[1] === undefined || m[1] === "") {
+  const inner = m?.[1];
+  if (inner === undefined || inner === "") {
     return null;
   }
-  const base = join(ROOT, "src", m[1]);
+  const base = join(ROOT, "src", inner);
   for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
     try {
       if (statSync(candidate).isFile()) {
@@ -135,7 +136,7 @@ function collectEdges(): Array<Edge> {
         continue;
       }
       const target = resolveSpec(spec);
-      if (target === null || !target.startsWith("src/server/")) {
+      if (target?.startsWith("src/server/") !== true) {
         continue;
       }
       if (!SERVER_OWNED_RE.test(target) && !(rel in REGISTERED)) {

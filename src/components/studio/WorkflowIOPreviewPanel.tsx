@@ -87,7 +87,8 @@ export function WorkflowIoPreviewPanel({
       return out;
     }
     for (const [key, local] of Object.entries(workflowIO)) {
-      if (!Boolean(local)) {
+      const localPresent = Boolean(local);
+      if (!localPresent) {
         continue;
       }
       const e = detailIOMap[key];

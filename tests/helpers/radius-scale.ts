@@ -57,17 +57,13 @@ export function parseDerivations(css: string): Map<string, RadiusDerivation> {
 /** 基数 + 派生表一起解出来（`css` 必须是 globals.css 全文）。 */
 export function parseRadiusScale(css: string): RadiusScale {
   const baseMatch = /^\s*--radius\s*:\s*([0-9.]+)(rem|px)\s*;/m.exec(css);
-  if (
-    baseMatch === null ||
-    baseMatch[1] === undefined ||
-    baseMatch[1] === "" ||
-    baseMatch[2] === undefined ||
-    baseMatch[2] === ""
-  ) {
+  const baseValue = baseMatch?.[1];
+  const baseUnit = baseMatch?.[2];
+  if (baseValue === undefined || baseValue === "" || baseUnit === undefined || baseUnit === "") {
     throw new Error("globals.css 里找不到 --radius 基数");
   }
   const basePx =
-    baseMatch[2] === "rem" ? Number.parseFloat(baseMatch[1]) * 16 : Number.parseFloat(baseMatch[1]);
+    baseUnit === "rem" ? Number.parseFloat(baseValue) * 16 : Number.parseFloat(baseValue);
 
   return { basePx, derivations: parseDerivations(css) };
 }

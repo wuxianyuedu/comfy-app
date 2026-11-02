@@ -31,7 +31,8 @@ const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]
  *  的分离节点）时退回 before。 */
 const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
   const rect = event.currentTarget?.getBoundingClientRect?.();
-  if (!Boolean(rect) || rect.height <= 0) {
+  const rectPresent = Boolean(rect);
+  if (!rectPresent || rect.height <= 0) {
     return "before";
   }
   return event.clientY < rect.top + rect.height / 2 ? "before" : "after";

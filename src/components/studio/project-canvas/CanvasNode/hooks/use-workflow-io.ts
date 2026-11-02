@@ -162,7 +162,8 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
       void vanillaApi.workflow.detailFull
         .query({ id: d.workflowId })
         .then((tpl) => {
-          if (!alive || !Boolean(tpl)) {
+          const tplReady = Boolean(tpl);
+          if (!alive || !tplReady) {
             return;
           }
           setWfIO(tpl.workflowIO ?? null);

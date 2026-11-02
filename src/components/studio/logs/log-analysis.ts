@@ -676,7 +676,8 @@ export function computeOriginCounts(logs: Array<LogEntry>, search = ""): LogOrig
      * 任何情况下都成立，不会再出现「只在全部页签才显示、哪个分类都进不去」
      * 的行（ISSUE #262 六审）。 */
     const bucket = table[bucketOf(entry)];
-    if (!Boolean(bucket)) {
+    const bucketPresent = Boolean(bucket);
+    if (!bucketPresent) {
       continue;
     }
     bucket.all += 1;

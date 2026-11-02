@@ -128,6 +128,7 @@ export function MultiSegmentPopover({
   sections: Array<SegmentSection>;
   triggerContent: React.ReactNode;
 }) {
+  const hasFooter = Boolean(footer);
   return (
     <Popover>
       <PopoverTrigger
@@ -159,9 +160,7 @@ export function MultiSegmentPopover({
             section={section}
           />
         ))}
-        {Boolean(footer) ? (
-          <div className="border-border-strong mt-3 border-t pt-3">{footer}</div>
-        ) : null}
+        {hasFooter ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
       </PopoverContent>
     </Popover>
   );
@@ -201,6 +200,7 @@ const Section = React.memo(function Section({
     return order.map((key) => getOrThrow(map, key, "子组桶缺失"));
   }, [section]);
 
+  const hasExtra = Boolean(section.extra);
   return (
     <div className={first ? "" : "mt-3"}>
       <div className="text-ink-muted text-3xs mb-1.5 font-semibold tracking-wider uppercase">
@@ -245,7 +245,7 @@ const Section = React.memo(function Section({
           </div>
         ))}
       </ToggleGroup>
-      {Boolean(section.extra) ? <div className="mt-2">{section.extra}</div> : null}
+      {hasExtra ? <div className="mt-2">{section.extra}</div> : null}
     </div>
   );
 });

@@ -76,6 +76,8 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const debugMode = useDebugStore((state) => state.debugMode);
   const toggleDebugMode = useDebugStore((state) => state.toggleDebugMode);
+  /* detail 类型上恒真（WorkflowDetail），这里保运行期「尚未就绪」的防御判据。 */
+  const detailReady = Boolean(detail);
   /* 开关编辑模式 / 预览一律走 store 动作（不要再手写 `ioApi.setState(...)`）：
    *  关编辑模式连带走预览、关预览连带走编辑模式，两层耦合都落在 store 里。
    *  绕过动作直接写状态就会留下「没有勾选框的预览面板」，或反过来留下
@@ -365,9 +367,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         <Hint label="查看当前工作流的 RAW 源码（基于磁盘已保存版本，未保存的画布修改不在内）" wrap>
           <Button
             className={topBarButtonClass("outline", "compact", "disabled:opacity-40")}
-            disabled={!Boolean(detail)}
+            disabled={!detailReady}
             onClick={() => {
-              if (!Boolean(detail)) {
+              if (!detailReady) {
                 toast.info("工作流尚未加载完成");
                 return;
               }

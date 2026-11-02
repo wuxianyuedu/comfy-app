@@ -48,7 +48,7 @@ function clearWorkflowCache(): void {
     const keys: Array<string> = [];
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const k = sessionStorage.key(i);
-      if (k !== null && k.startsWith("wfdetail:")) {
+      if (k?.startsWith("wfdetail:") === true) {
         keys.push(k);
       }
     }

@@ -272,16 +272,16 @@ export function ShotStudio({
         const loraChar = characters
           .filter((c) => shot.characterIds.includes(c.id))
           .find((c) => c.loraName !== undefined && c.loraName !== "");
+        const loraName = loraChar?.loraName;
+        const loraStrength = loraChar?.loraStrength;
         const built = await buildLibraryWorkflowInput(workflowId, {
           prompt: shot.prompt,
           negativePrompt: shot.negativePrompt || undefined,
           size: sizeSpec,
-          ...(loraChar !== undefined && loraChar.loraName !== undefined && loraChar.loraName !== ""
+          ...(loraName !== undefined && loraName !== ""
             ? {
-                loraName: loraChar.loraName,
-                ...(loraChar.loraStrength === undefined
-                  ? {}
-                  : { loraStrength: loraChar.loraStrength }),
+                loraName,
+                ...(loraStrength === undefined ? {} : { loraStrength }),
               }
             : {}),
           // 高级 · 种子：默认随机（留空每次新 seed），填数字则 pin 住（见 resolveSeed）。

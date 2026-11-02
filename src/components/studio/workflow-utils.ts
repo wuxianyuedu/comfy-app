@@ -548,7 +548,8 @@ export function buildEdges(
   const edges: Array<Edge> = [];
   let i = 0;
   for (const [nodeId, raw] of Object.entries(detail.graph ?? {})) {
-    if (!Boolean(raw) || typeof raw !== "object") {
+    const rawPresent = Boolean(raw);
+    if (!rawPresent || typeof raw !== "object") {
       continue;
     }
     const inputs = asRecord(raw.inputs);

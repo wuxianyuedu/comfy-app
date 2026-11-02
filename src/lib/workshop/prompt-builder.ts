@@ -41,8 +41,9 @@ export function buildCharacterNegative(_c: Character, style?: StyleRef): string 
     "watermark",
     "text",
   ];
-  if (style !== undefined && style.negativePrompt !== undefined && style.negativePrompt !== "") {
-    base.push(style.negativePrompt);
+  const styleNegative = style?.negativePrompt;
+  if (styleNegative !== undefined && styleNegative !== "") {
+    base.push(styleNegative);
   }
   return base.join(", ");
 }
@@ -107,8 +108,9 @@ export function buildShotNegative(characters: Array<Character>, style?: StyleRef
       neg.push(character.negativePrompt);
     }
   });
-  if (style !== undefined && style.negativePrompt !== undefined && style.negativePrompt !== "") {
-    neg.push(style.negativePrompt);
+  const styleNegative = style?.negativePrompt;
+  if (styleNegative !== undefined && styleNegative !== "") {
+    neg.push(styleNegative);
   }
   return [...new Set(neg)].join(", ");
 }

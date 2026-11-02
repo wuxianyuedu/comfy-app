@@ -153,10 +153,12 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
         runAsyncAction(
           async () => {
             const result = await deps.fetchWorkflow(taskId);
-            if (result === null || !Boolean(result.workflow)) {
+            const workflow = result?.workflow;
+            const hasWorkflow = Boolean(workflow);
+            if (!hasWorkflow) {
               return false;
             }
-            downloadJson(result.workflow, "workflow.json");
+            downloadJson(workflow, "workflow.json");
             return true;
           },
           { report, failureText: "下载失败" },
