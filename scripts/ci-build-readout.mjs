@@ -260,11 +260,7 @@ export function enrichStageErrors(run, slug, sn, json) {
  * @returns {ReturnType<typeof classifyBuildOutcome>["pipelines"][number] | null}
  */
 export function pipelineForStage(outcome, stageId) {
-  return (
-    outcome.pipelines.find((p) =>
-      [...p.configured, ...p.failed, ...p.cancelled, ...p.skipped].some((s) => s.id === stageId),
-    ) ?? null
-  );
+  return outcome.pipelines.find((p) => p.diagnosable.some((s) => s.id === stageId)) ?? null;
 }
 
 /** 一次最多展开几格失败日志（再多就该直接看完整日志了）。 */
@@ -294,7 +290,12 @@ export function describeFailedStages(
   { slug, sn, outcome, log = console.log, prefix = "[build-readout]" },
 ) {
   let detailed = 0;
-  const shown = outcome.failed.slice(0, MAX_DETAIL_STAGES);
+  /* 红在 endStage 的那几格与判决面的红走**同一个展开路径**（同一份取数、同一份摘要），
+   * 只是念的时候把「它不计入流水线判决」标出来（ISSUE #3047：`GitHub 镜像同步` 红了而
+   * `--diagnose` 一个字不念，因为这一族掉在 `configured` 那条 id 口径外面）。
+   * 展开上限两边共用 —— 超出的照旧只给完整日志链接，不假装展开了。 */
+  const reds = [...outcome.failed, ...outcome.endFailed];
+  const shown = reds.slice(0, MAX_DETAIL_STAGES);
   for (const s of shown) {
     const pipeline = pipelineForStage(outcome, s.id);
     if (!pipeline) {
@@ -310,8 +311,10 @@ export function describeFailedStages(
     const status = detail?.status || s.status;
     const duration =
       detail && detail.duration !== null ? ` · ${formatDurationMs(detail.duration) ?? "未知"}` : "";
+    /* 两个面共用这一行，差别只在中间那句「它属于哪一面」—— 不另起一套话术。 */
+    const face = outcome.endFailed.includes(s) ? " · endStage，不计入流水线判决" : "";
     log(
-      `${prefix}   ── 失败格：${s.name || s.id}（${s.id} · ${pipeline.name || pipeline.id} · status=${status}${duration}）`,
+      `${prefix}   ── 失败格：${s.name || s.id}（${s.id} · ${pipeline.name || pipeline.id}${face} · status=${status}${duration}）`,
     );
     if (!detail) {
       log(`${prefix}      取不到这一格的日志正文 ⇒ 没有结论（不是「日志里没有失败行」）。`);
@@ -345,9 +348,9 @@ export function describeFailedStages(
       log(`${prefix}      L${l.line} ${l.text}`);
     }
   }
-  if (outcome.failed.length > shown.length) {
+  if (reds.length > shown.length) {
     log(
-      `${prefix}   另有 ${outcome.failed.length - shown.length} 格也红了，此处没展开；完整日志：https://cnb.cool/${slug}/-/build/logs/${sn}`,
+      `${prefix}   另有 ${reds.length - shown.length} 格也红了，此处没展开；完整日志：https://cnb.cool/${slug}/-/build/logs/${sn}`,
     );
   }
   return detailed;
