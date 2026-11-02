@@ -227,7 +227,7 @@ async function completeInner(taskId: string, promptId: string, executedWorkflow:
     `ComfyUI history 摘要：status=${verdict.statusStr ?? "(无)"} completed=${
       verdict.completed ?? "(无)"
     } 输出节点=${verdict.outputNodeCount}${
-      verdict.executionError !== undefined ? ` 执行错误=${verdict.executionError}` : ""
+      verdict.executionError === undefined ? "" : ` 执行错误=${verdict.executionError}`
     }`,
   );
   const outputKeys = historyOutputKeys({ [promptId]: entry }, promptId);
@@ -553,9 +553,9 @@ export async function finalizeFailure(
    * 「它一上来就死了」。 */
   const startedAt = s.startedAt.get(taskId);
   const elapsedSuffix =
-    startedAt !== undefined
-      ? `（已运行 ${Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10)}s）`
-      : "";
+    startedAt === undefined
+      ? ""
+      : `（已运行 ${Math.max(0, Math.round((Date.now() - startedAt) / 100) / 10)}s）`;
   log(taskId, "error", `✗ 生成失败：${friendly}${elapsedSuffix}`);
 
   const outcome = await writeTerminal(taskId, "失败收口", () =>

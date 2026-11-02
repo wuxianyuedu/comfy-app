@@ -128,7 +128,7 @@ export const PUSH_MAX_ATTEMPTS = 2;
  * 重试之间的退避表（毫秒）：第 n 次重试前等 `RETRY_BACKOFF_MS[n-2]`，超出表长按末项取。
  * 5s / 10s 的量级：够节点侧的抖动（TCP 重传窗 / 代理重连）过去，又不至于把整格外框吃光。
  */
-export const RETRY_BACKOFF_MS = [5_000, 10_000];
+export const RETRY_BACKOFF_MS = [5000, 10_000];
 
 /**
  * `git push` 的墙钟上限（同一格，但这一跳是真在写）。
@@ -405,7 +405,7 @@ async function runGitWithRetry(args, ctx) {
     if (!isEgressFailure(`${result.stdout}\n${result.stderr}`)) {
       break;
     }
-    const wait = RETRY_BACKOFF_MS[attempt - 2] ?? RETRY_BACKOFF_MS[RETRY_BACKOFF_MS.length - 1] ?? 5_000;
+    const wait = RETRY_BACKOFF_MS[attempt - 2] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
     log(
       `[${prefix}] ${label}第 ${String(attempt - 1)}/${String(maxAttempts)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt)} 次（网络抖动重试；认证 / 权限类不重试）`,
     );
