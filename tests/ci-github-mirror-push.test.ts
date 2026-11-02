@@ -6,9 +6,14 @@ import { describe, expect, it } from "vitest";
 import {
   CODE,
   DEFAULT_REPO,
+  PUSH_TIMEOUT_MS,
+  REMOTE_PROBE_TIMEOUT_MS,
   buildPushUrl,
   dispatchPayload,
+  exitCodeFor,
   explainRemoteProbeFailure,
+  gitSubcommand,
+  gitTimeoutFor,
   hasRemoteRefs,
   mirrorRefFor,
   pushArgs,
@@ -84,6 +89,53 @@ describe("纯函数", () => {
       explainRemoteProbeFailure("remote: Repository not found.\nfatal: Authentication failed"),
     ).toContain("先去建仓库");
     expect(explainRemoteProbeFailure("fatal: could not read Username")).toContain("ls-remote");
+  });
+
+  it("explainRemoteProbeFailure：egress 那一形不许被念成令牌问题（ISSUE #3051）", () => {
+    /* 实测原话（build `cnb-61a-1k6d4na5o` 的 `stage-endStages-2`）。补这一支之前它落到默认
+     * 那句上，把人的下一动作指到令牌去 —— 而令牌是好的，坏的是节点到 443 的出网。 */
+    const egress = explainRemoteProbeFailure(
+      "fatal: unable to access 'https://github.com/wuxianyuedu/comfy-app.git/': " +
+        "Failed to connect to github.com port 443 after 21114 ms: Could not connect to server",
+    );
+    expect(egress).toContain("这一跳没通");
+    expect(egress).not.toContain("令牌活不活");
+    /* 本仓自己给的超时（`gitTimeoutFor` 那两支）归同一类，而不是「git 回了个非零」。 */
+    expect(explainRemoteProbeFailure("git ls-remote 超时（>15000 ms）：这一跳没拿到任何回话")).toContain(
+      "这一跳没通",
+    );
+    expect(explainRemoteProbeFailure("fatal: unable to access: Could not resolve host")).toContain(
+      "这一跳没通",
+    );
+    /* 反控制：真·仓库 / 真·身份那两形不许被 egress 分支一口吞掉。 */
+    expect(explainRemoteProbeFailure("remote: Repository not found.")).toContain("先去建仓库");
+    expect(explainRemoteProbeFailure("remote: Repository access blocked")).toContain("身份够不到");
+  });
+
+  it("gitTimeoutFor：网络两跳各给一个数，本地那跳不限", () => {
+    expect(gitTimeoutFor(["ls-remote", "https://github.com/x/y"])).toBe(REMOTE_PROBE_TIMEOUT_MS);
+    /* 推送那一跳的参数表以 `-c core.hooksPath=` 开头 ⇒ 子命令不在 args[0] 上。按 args[0] 判
+     * 会给出一份**不限时**的推送，而「限时的缺席」不会红，只会退回吃平台外框那一刀的旧形态。 */
+    expect(gitSubcommand(pushArgs("https://oauth2:t@github.com/x/y", "refs/heads/cnb-pr-1"))).toBe(
+      "push",
+    );
+    expect(gitTimeoutFor(pushArgs("https://oauth2:t@github.com/x/y", "refs/heads/cnb-pr-1"))).toBe(
+      PUSH_TIMEOUT_MS,
+    );
+    expect(gitTimeoutFor(["rev-parse", "HEAD"])).toBeUndefined();
+    /* 探针那个数必须**小于** git 自己那一次实测的 connect 超时（21114 ms）：前移到主列之后，
+     * 不比它小就等于每条 PR 白付二十一秒（#3051 的当场读数）。 */
+    expect(REMOTE_PROBE_TIMEOUT_MS).toBeLessThan(21_114);
+  });
+
+  it("exitCodeFor：读数档折的是退码那一位数，三态原值另说", () => {
+    expect(exitCodeFor(CODE.NO_FACT, true)).toBe(0);
+    expect(exitCodeFor(CODE.FAIL, true)).toBe(0);
+    expect(exitCodeFor(CODE.OK, true)).toBe(0);
+    /* 摘掉 `--readout` 就是承重档：1 / 2 原样出去。这一步留给「回读那一格上线」那单 ——
+     * 现在先接进判决，就是把一条还没通的外部件挂在必经之路上（#3025 / #3027 的同形）。 */
+    expect(exitCodeFor(CODE.NO_FACT, false)).toBe(2);
+    expect(exitCodeFor(CODE.FAIL, false)).toBe(1);
   });
 
   it("dispatchPayload：event_type 与 client_payload 逐键对应 workflow 的消费面", () => {

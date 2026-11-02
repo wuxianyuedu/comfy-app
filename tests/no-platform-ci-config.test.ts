@@ -415,6 +415,11 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "镜像身份", tier: "PR" },
   { name: "工作区复用读数", tier: "PR" },
   { name: "缓存槽读数", tier: "PR" },
+  /* #3051 从 `endStages` 前移进主列（为的是起跑时机，不是判决），形态是**读数格**：
+   * 带 `--readout`，恒不退非零。总账里它就在 `缓存槽读数` 之后、`环境前提` 之前 ——
+   * 与 `.gates` 的实际执行序同处（下面那条「双向相等」判据比的是名字集合，顺序由
+   * `registeredGateOrder` 与 stage 序另一条判据钉）。 */
+  { name: "GitHub 镜像同步", tier: "PR" },
   { name: "环境前提", tier: "PR" },
   { name: "Install dependencies", tier: "PR" },
   { name: "分支守卫", tier: "PR" },

@@ -72,6 +72,10 @@ const CONFIGURED_STAGE_ID = /^(stage-\d+|prepare)$/;
  * 所以这里单开一支**可见性面**（`endStages` / `diagnosable` / `endFailed`），不动 `configured`：
  * 出勤与在飞的读数（`check-daily-attendance.mjs` 念的 `configured.length`、轮询那行的
  * 「在飞 N 格」）口径一字不变 —— 把 endStages 一刀塞进 `configured` 会让那些数顺带多算几格。
+ *
+ * 2026-11-02 之后这一族的成员变了：`GitHub 镜像同步` 前移进主列、按读数档跑（ISSUE #3051），
+ * 留在这一档的是立案格与令牌读数 —— 它们的本职是「红也要跑」，前移反而破坏它。上面那段
+ * 现场读数是它还在 `endStages` 时取的，作为**为什么要有这一支**的理由仍然成立。
  */
 const ENDSTAGE_ID = /^stage-endStages-\d+$/;
 

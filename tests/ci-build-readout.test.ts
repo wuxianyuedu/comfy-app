@@ -1364,13 +1364,15 @@ describe("findStageMatches：格名反查只认逐字，认不出就停手", () 
 });
 
 /**
- * `endStages` 那一族（`PR 失败立案` / `令牌权限读数` / **`GitHub 镜像同步`**）平台记的 id 是
+ * `endStages` 那一族（`PR 失败立案` / `令牌权限读数` / 桌包档的 `桌包失败立案`）平台记的 id 是
  * `stage-endStages-<n>`，掉在 `CONFIGURED_STAGE_ID`（`/^(stage-\d+|prepare)$/`）那条口径外面
  * ⇒ 它红了而 `--diagnose` 一个字不念、`--stage-log` 按名按 id 都退 2（ISSUE #3047 的现场：
- * build `cnb-61a-1k6d4na5o` 的 `stage-endStages-2`，正文是 `Failed to connect to github.com port 443`）。
+ * build `cnb-61a-1k6d4na5o` 的 `stage-endStages-2`，那是当时还在这一档的镜像格，正文
+ * `Failed to connect to github.com port 443`；它已于 #3051 前移进主列按读数档跑，
+ * 下面用同一个格名只是**那份平台读数的原样形状**）。
  *
  * 两个面不许混：**可见性**（诊断念得出、日志取得到）与**判决**（流水线级结论、出勤读数）
- * 是分开的两支 —— 平台自己也不把 endStages 计入流水线状态，而本仓把立案格/镜像格放在这一档
+ * 是分开的两支 —— 平台自己也不把 endStages 计入流水线状态，而本仓把立案格/令牌读数放在这一档
  * 正是为了「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进门禁的账」。
  * 所以每一条都同时钉两侧：这一族进得了反查与展开，**但不改 `state`、不改 `configured`**。
  */

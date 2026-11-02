@@ -10811,9 +10811,12 @@ pnpm ship --diagnose --dry-run           # 只打印它会读的那三条命令
   github.com port 443 after 21114 ms`，而 `--diagnose` 只念了 `类型检查` 一格）。
   修法把两面分开、不许混：`diagnosable`（判决面的工作格 ∪ `endStages`）服务「按名反查」与
   「补平台原话」，`endFailed` 服务上面那一行；**`state` 与 `configured` 一字未改** —— 平台自己
-  也不把 endStages 计入流水线状态（`.cnb.yml` 里引的官方 grammar 原文），而这一档放的就是
-  立案格 / 令牌读数 / 镜像格，语义是「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进
-  门禁的账」。连带一条口径：`check-daily-attendance` 念的 `configured.length` 仍是判决面那个数，
+  也不把 endStages 计入流水线状态（`.cnb.yml` 里引的官方 grammar 原文），而这一档放的是
+  「红也要跑才有用」的那几格（`PR 失败立案` / `令牌权限读数` / 桌包档的 `桌包失败立案`），
+  语义是「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进门禁的账」。上面那句「修之前
+  一个字都没有」的现场 `GitHub 镜像同步` 已于 ISSUE #3051 前移进主列、按**读数档**跑（挪的是
+  起跑时机；那句不承重的语义一字没改，靠的是 `--readout` 而不是靠位置）。连带一条口径：
+  `check-daily-attendance` 念的 `configured.length` 仍是判决面那个数，
   不因为这一族进了可见性面而多算几格。
 - 完整日志链接 `https://cnb.cool/<组织>/<仓库>/-/build/logs/<sn>`。
 
