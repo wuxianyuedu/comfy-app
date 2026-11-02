@@ -248,8 +248,8 @@ export function historyOutputKeys(
   return Object.entries(outputs).map(([nodeId, v]) => ({
     nodeId,
     keys:
-      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       /* SAFETY: 类型断言已复核 */
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       v != null && typeof v === "object" ? Object.keys(v as object) : [],
   }));
 }
