@@ -9,7 +9,10 @@
   `#3022` / `#3032` 两次都只挪「起点」（换成平台给的 `CNB_PULL_REQUEST_TARGET_SHA` /
   换发 `--range <基线>..HEAD`），而基线是不是分叉点本身取决于拼法 —— 一种拼法上对、
   另一种上又错回来。现在两侧都由 `changed-scope.mjs` 的 `reconcileSyntheticMergeFace()`
-  给出（与 `shell-gate --base` 同一个函数）：区间恒为「第一父 .. 第一父名下的那个 sha」；
+  给出（与 `shell-gate --base` 同一个函数）认这次合成，两端再各收一次 —— **起点取分叉点**
+  （目标分支在分叉点之后落过的提交不该进本 PR 的分母）、**终点取第二父**（本 PR 那一侧的
+  tip）。终点取合成提交时，`第一父..合成提交` 正好是整个 PR 区间，主干那批与本 PR 混成一段
+  （现场 cnb-o9p-1k6d5ohhj：170 份里 118 份被判纯格式化，而逐提交复算只有一条 offender）；
   认不出合成提交时按拓扑挑起点（`--first-parent` 计数 = 总数），都过不了才退回
   `HEAD~1` 并用 `[skip]` 把「读数与本次改动对不上账」念出来。
   `check-reformat-only.cjs` 同时退出 `CHANGED_SCOPED`，复合档那张只为它一条存在的

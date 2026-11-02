@@ -134,7 +134,23 @@ export function previewRangeEnds(deps) {
   if (base.ok) {
     const face = deps.reconcile(base.ref, { env });
     if (face.used) {
-      return { before: face.firstParent, after: face.head };
+      /* ⚠️ **终点不许取 `face.head`（= 合成提交）**：合成提交的另一个父就是目标分支，
+       * 于是 `第一父..合成提交` 正好是**整个 PR 区间** —— 逐提交口径下它没问题（合并
+       * 自身被 `--no-merges` 摘掉），可它把「PR 自己那条线」与「这次合并带进来的主干
+       * 那一批」混成一段，`report()` 的汇总口径就按整段算分母（实测 170 份里 118 份
+       * 被判纯格式化，而逐提交复算只有 `8d052468` 一条 offender）。
+       *
+       * 该判的是**本 PR 自己那条线**：`第一父 .. 第二父`（源分支 tip）。平台给的
+       * `CNB_COMMIT` 通常就是它；认不出时退回「HEAD 的两个父里不是第一父的那个」
+       * （拓扑上就是本 PR 那一侧），拿不到才用 `face.head`（至少不比 `HEAD~1` 更糟）。 */
+      const tip = String(env.CNB_COMMIT ?? "").trim();
+      const other = parents.find((p) => p !== face.firstParent && p !== "") ?? "";
+      const after = tip !== "" ? tip : other || face.head;
+      /* 起点取**分叉点**：`第一父` 是「目标分支那一刻的顶端」，它自己也可能在分叉点
+       * 之后落过提交（主干那批）—— 拿它当起点会把那批算进本 PR 的分母。分叉点算不出来
+       * 才退回 `第一父`。 */
+      const forkPoint = gitOrEmpty(["merge-base", face.firstParent, after]).trim();
+      return { before: forkPoint !== "" ? forkPoint : face.firstParent, after };
     }
   }
   return adopted(parents);

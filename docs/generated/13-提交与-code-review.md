@@ -565,8 +565,12 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 
    现在的取法（`headRangeEnds()`，分两档，都不猜）：
    - 认得出合成提交（`CNB_COMMIT` 是 HEAD 的某一父）⇒ 走 `changed-scope.mjs` 的
-     `reconcileSyntheticMergeFace()`（与 `shell-gate --base` **同一个函数**），区间是
-     「第一父..第一父名下的那个 sha」—— 与拼法无关，两种拼法给同一个答案；
+     `reconcileSyntheticMergeFace()`（与 `shell-gate --base` **同一个函数**）认这次合成，
+     区间两端再各收一次：**起点取分叉点**（`merge-base(第一父, 第二父)`，不是第一父自己
+     —— 目标分支在分叉点之后落过的提交不该进本 PR 的分母）、**终点取第二父**（本 PR 那一侧
+     的 tip，不是合成提交：`第一父..合成提交` 正好是整个 PR 区间，把主干那一批与本 PR
+     混成一段）。现场 `cnb-o9p-1k6d5ohhj`：终点取了合成提交 ⇒ 170 份里 118 份被判纯格式化，
+     而同一区间逐提交复算只有一条 offender；
    - 认不出（没有 `CNB_COMMIT` / 父关系对不上）⇒ 按拓扑挑起点：`merge-base(目标 sha, HEAD)`
      或第一父，取第一个「`--first-parent` 计数 = 总数」的（= 拿掉合并提交之后历史单调）；
      都过不了才退回 `HEAD~1`，并用 `[skip]` 把「这一档读数与本次改动对不上账」念出来。

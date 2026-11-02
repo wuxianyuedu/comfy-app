@@ -31,6 +31,8 @@ import {
   type GateRepo,
 } from "./helpers/gate-repo";
 import { symlinkDir } from "./helpers/symlink-dir";
+/* 区间两端的取法直接单测机制层（见「区间两端」那条用例的理由）。 */
+import { previewRangeEnds } from "../scripts/reformat-preview-range.mjs";
 
 /** `perCommitShapeOf` 是判据的**自测入口**（理由见那一条用例的头注）。判据是 `.cjs`，
  * 所以只能 `require` —— 与 `check-format.test.ts` 同形。 */
@@ -707,6 +709,59 @@ describe("pre-commit 现场：必须判「暂存区」而不是上一次提交",
     const branchSha = commitAllReturningSha(repo, "format only\n\nformat-migration: 用例声明");
     return { fork, mainHead, branchSha };
   }
+
+  /**
+   * 区间**终点**不许取合成提交（ISSUE #3038 的第二处，现场 `cnb-o9p-1k6d5ohhj`）。
+   *
+   * `第一父..合成提交` 在「第一父 = 目标分支」那种拼法下正好是**整个 PR 区间**：
+   * 逐提交口径看不出问题（合成提交自己会被 `--no-merges` 摘掉），可它把「本 PR 那条线」
+   * 与「这次合并带进来的主干那一批」混成一段，`report()` 的汇总口径按整段算分母 ——
+   * 实测 170 份里 118 份被判纯格式化，而同一区间逐提交复算只有一条 offender。
+   * ⇒ 终点取**第二父**（本 PR 那一侧的 tip）。
+   *
+   * 造法：主干上有一笔**没有尾注的重排**（它只该出现在「整段」口径里），本分支上是一笔
+   * 声明了迁移的重排。若终点错取合成提交，主干那一笔会进分母 ⇒ 判成「不按迁移读」。
+   */
+  /**
+   * 区间**两端**的取法（ISSUE #3038 的第二处，现场 `cnb-o9p-1k6d5ohhj`）。
+   *
+   * 这一条**直接钉机制层的返回值**，不走端到端：端到端只能看出「绿了没有」，而这里
+   * 要钉的是「区间是哪两个端点」—— 取错了可能照样绿（主干那批恰好没跨过阈值），
+   * 那种绿正是这次事故的形状（平台上 170 份里 118 份被判纯格式化，而逐提交复算
+   * 只有一条 offender）。
+   */
+  test("区间两端：起点取分叉点、终点取第二父（不取合成提交）", () => {
+    const calls: Array<string> = [];
+    const gitMap: Record<string, string> = {
+      "rev-list --parents -n 1 HEAD": "HEAD_SHA FIRST_PARENT SECOND_PARENT",
+      "rev-list --parents SECOND_PARENT..HEAD": "SECOND_PARENT",
+      "rev-list --first-parent SECOND_PARENT..HEAD": "SECOND_PARENT",
+      "merge-base FIRST_PARENT SECOND_PARENT": "FORK_POINT",
+    };
+    const r = previewRangeEnds({
+      gitOrEmpty: (args: string[]) => {
+        calls.push(args.join(" "));
+        return gitMap[args.join(" ")] ?? "";
+      },
+      env: { CNB_COMMIT: "SECOND_PARENT", CNB_PULL_REQUEST_TARGET_SHA: "TARGET" },
+      resolveBaseRef: () => ({ ok: true, ref: "TARGET", via: "用例" }),
+      reconcile: () => ({
+        used: true,
+        firstParent: "FIRST_PARENT",
+        head: "HEAD_SHA",
+        files: [],
+        renamedFrom: [],
+        deduped: [],
+        base: "TARGET",
+      }),
+      warn: (line: string) => calls.push(`warn:${line}`),
+    });
+    /* 终点**不是**合成提交（`HEAD_SHA`）：`第一父..合成提交` 会连主干那一批一起算进来。 */
+    expect(r.after).toBe("SECOND_PARENT");
+    /* 起点**不是**第一父：第一父是「目标分支那一刻的顶端」，它自己也落过提交。 */
+    expect(r.before).toBe("FORK_POINT");
+    expect(calls).toContain("merge-base FIRST_PARENT SECOND_PARENT");
+  });
 
   test("合并预览（第一父 = 目标分支侧）⇒ 区间只含本 PR 那批提交", ({ repo }) => {
     const { fork, mainHead, branchSha } = twoSidedHistory(repo);
