@@ -252,6 +252,18 @@ export const GATES = {
     args: ["../scripts/check-daily-attendance.mjs"],
     run: false,
   },
+  /**
+   * GitHub 镜像那一格的出勤（ISSUE #3046）。与 `dailyAttendance` 同一族、同一理由：
+   * 它要上网问平台，所以不进编辑循环。差别在问的对象 —— 那一格自 #3051 起是主列的
+   * **读数档**（恒不退非零），它的 `status` 不再是判决 ⇒ 出勤只能从正文里的三态原值认。
+   * 什么时候该跑：决定「能不能从 `COMFYAPP_CI_GATES` 摘格」之前，以及每次通道形状变了之后。
+   * 出口：`pnpm check:mirror-attendance` / `pnpm check:all --mode mirrorAttendance`。
+   */
+  mirrorAttendance: {
+    label: "GitHub mirror push attendance (did the mirror cell actually push + dispatch)",
+    args: ["../scripts/check-mirror-attendance.mjs"],
+    run: false,
+  },
   premerge: {
     label: "Pre-merge fixed action (base recompute + commit claims + merge side loss)",
     args: ["../scripts/premerge-check.mjs"],
