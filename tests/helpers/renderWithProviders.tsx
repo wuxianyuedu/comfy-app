@@ -18,16 +18,8 @@
  * @module tests/helpers/renderWithProviders — 前端集成测试的渲染入口
  */
 import React from "react";
-import {
-  render,
-  type RenderOptions,
-  type RenderResult,
-} from "@testing-library/react";
-import {
-  QueryClient,
-  QueryClientProvider,
-  type QueryClientConfig,
-} from "@tanstack/react-query";
+import { render, type RenderOptions, type RenderResult } from "@testing-library/react";
+import { QueryClient, QueryClientProvider, type QueryClientConfig } from "@tanstack/react-query";
 import { httpBatchStreamLink } from "@trpc/client";
 import SuperJSON from "superjson";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
@@ -49,25 +41,18 @@ export type ProvidersOptions = {
   queryClient?: QueryClient;
   /** 包在 QueryClient/trpc 之外的自定义 Provider（如 ToastProvider）。 */
   wrapper?: React.ComponentType<{ children: React.ReactNode }>;
-}
+};
 
 type Options = Omit<RenderOptions, "wrapper"> & ProvidersOptions;
 
-export function renderWithProviders(
-  ui: React.ReactElement,
-  options: Options = {},
-): RenderResult {
+export function renderWithProviders(ui: React.ReactElement, options: Options = {}): RenderResult {
   const { queryClient, wrapper, ...renderOptions } = options;
   const qc = queryClient ?? createTestQueryClient();
   const trpcClient = createTrpcClient({
-    links: [
-      httpBatchStreamLink({ transformer: SuperJSON, url: testTrpcEndpoint() }),
-    ],
+    links: [httpBatchStreamLink({ transformer: SuperJSON, url: testTrpcEndpoint() })],
   });
 
-  const Outer =
-    wrapper ??
-    (({ children }: { children: React.ReactNode }) => <>{children}</>);
+  const Outer = wrapper ?? (({ children }: { children: React.ReactNode }) => <>{children}</>);
 
   function CombinedWrapper({ children }: { children: React.ReactNode }) {
     return (

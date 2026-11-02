@@ -48,10 +48,7 @@ afterEach(() => {
 
 describe("syncSplashAssets：副本有哪几份只在一处定义", () => {
   it("清单里两个名字都要（少一个就是清单被改窄了）", () => {
-    expect([...SPLASH_ASSET_NAMES].sort()).toEqual([
-      "index.html",
-      "splash.html",
-    ]);
+    expect([...SPLASH_ASSET_NAMES].sort()).toEqual(["index.html", "splash.html"]);
   });
 
   it("目标目录不存在时创建，并把**全部**副本写成与源逐字一致", () => {
@@ -59,26 +56,17 @@ describe("syncSplashAssets：副本有哪几份只在一处定义", () => {
     expect(result.status).toBe("ok");
     expect([...result.written].sort()).toEqual([...SPLASH_ASSET_NAMES].sort());
     for (const name of SPLASH_ASSET_NAMES) {
-      const text = fs.readFileSync(
-        path.join(splashAssetsDir(tmp), name),
-        "utf8",
-      );
+      const text = fs.readFileSync(path.join(splashAssetsDir(tmp), name), "utf8");
       expect(text).toBe(SOURCE);
     }
   });
 
   it("只有一个副本坏掉时只重写它（而不是两份一起写）", () => {
     syncSplashAssets(tmp);
-    fs.writeFileSync(
-      path.join(splashAssetsDir(tmp), "index.html"),
-      "旧版画面",
-      "utf8",
-    );
+    fs.writeFileSync(path.join(splashAssetsDir(tmp), "index.html"), "旧版画面", "utf8");
     const result = syncSplashAssets(tmp);
     expect(result.written).toEqual(["index.html"]);
-    expect(
-      fs.readFileSync(path.join(splashAssetsDir(tmp), "index.html"), "utf8"),
-    ).toBe(SOURCE);
+    expect(fs.readFileSync(path.join(splashAssetsDir(tmp), "index.html"), "utf8")).toBe(SOURCE);
   });
 
   it("内容没变就不写盘：mtime 不推进（壳时效判据依赖它）", () => {
@@ -92,9 +80,7 @@ describe("syncSplashAssets：副本有哪几份只在一处定义", () => {
     expect(result.status).toBe("unchanged");
     expect(result.written).toEqual([]);
     for (const name of SPLASH_ASSET_NAMES) {
-      expect(fs.statSync(path.join(splashAssetsDir(tmp), name)).mtimeMs).toBe(
-        pinned.getTime(),
-      );
+      expect(fs.statSync(path.join(splashAssetsDir(tmp), name)).mtimeMs).toBe(pinned.getTime());
     }
   });
 
@@ -117,10 +103,7 @@ describe("真仓库：清单与目录内容对得上，且两个调用方都经�
   });
 
   it("dev-launcher 与 build-desktop 都调共享实现，且启动编排里不再有第二份副本名清单", () => {
-    for (const rel of [
-      "scripts/dev-launcher.mjs",
-      "scripts/build-desktop.mjs",
-    ]) {
+    for (const rel of ["scripts/dev-launcher.mjs", "scripts/build-desktop.mjs"]) {
       const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
       expect(src).toMatch(/syncSplashAssets\(|ensureSplashResource\(/);
     }
@@ -141,9 +124,7 @@ describe("真仓库：清单与目录内容对得上，且两个调用方都经�
     const chain = launcherChainSource();
     /* 清单形状 = `SPLASH_ASSET_NAMES` 那一行（两个名字同现）。数它出现几次：
      * 回潮的形态是「接线层又手写一份只同步 `splash.html` 的清单」，那时这里会 >1。 */
-    const listLines = chain
-      .split("\n")
-      .filter((line) => /"(?:splash|index)\.html"/.test(line));
+    const listLines = chain.split("\n").filter((line) => /"(?:splash|index)\.html"/.test(line));
     expect(
       listLines.length,
       `编排链路上列出副本名的地方只有共享实现那一处，实际 ${listLines.length} 处：\n${listLines.join("\n")}`,

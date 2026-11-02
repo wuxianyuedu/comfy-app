@@ -30,11 +30,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import {
-  COMFYUI_DEFAULT_PORT,
-  LOOPBACK_HOST,
-  comfyUiBaseUrl,
-} from "~/lib/endpoints";
+import { COMFYUI_DEFAULT_PORT, LOOPBACK_HOST, comfyUiBaseUrl } from "~/lib/endpoints";
 import { buildSpawnArgs } from "~/lib/comfyui/lifecycle-derive";
 
 const root = process.cwd();
@@ -49,9 +45,7 @@ describe("默认端口是单一事实源", () => {
 
   it("常量只定义在零依赖的 endpoints.ts；app-settings 不再转手它", () => {
     const endpoints = read("src/lib/endpoints.ts");
-    expect(endpoints).toMatch(
-      /export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*\d+\s*;/,
-    );
+    expect(endpoints).toMatch(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=\s*\d+\s*;/);
     // app-settings 带 fs：它的定义进不了浏览器图（ISSUE #282/#317）
     expect(endpoints).not.toMatch(/^import\s/m);
     // 端口常量只有一个出口；应用设置那一侧（含它的 IO 拆件）不得转手
@@ -61,9 +55,7 @@ describe("默认端口是单一事实源", () => {
     ]) {
       const settings = read(file);
       expect(settings).not.toMatch(/export\s+const\s+COMFYUI_DEFAULT_PORT\s*=/);
-      expect(settings).not.toMatch(
-        /export\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from/,
-      );
+      expect(settings).not.toMatch(/export\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from/);
     }
   });
 
@@ -71,10 +63,7 @@ describe("默认端口是单一事实源", () => {
    * `scripts/check-comfyui-port-contract.cjs`）：转手一次就多一条「只想要一个
    * 常量却拖进 fs」的路径，而那条路径正是设置页整页 500 的成因。 */
   it("连接侧（client.ts）与拉起侧（lifecycle-launch.ts）都从常量层取默认端口", () => {
-    for (const file of [
-      "src/lib/comfyui/client.ts",
-      "src/lib/comfyui/lifecycle-launch.ts",
-    ]) {
+    for (const file of ["src/lib/comfyui/client.ts", "src/lib/comfyui/lifecycle-launch.ts"]) {
       const src = read(file);
       expect(src, `${file} 应从 ../endpoints 取 COMFYUI_DEFAULT_PORT`).toMatch(
         /import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/endpoints"/,
@@ -144,26 +133,18 @@ describe("「未配置端口」在两侧落到同一个默认端口", () => {
     // 拉起侧不传 --port ⇒ ComfyUI 以它自己的默认端口启动 = COMFYUI_DEFAULT_PORT
     // ⇒ 连接侧必须用同一个值兜底，否则「配置留空」就会连到另一个实例上。
     expect(launchedNeedsPort).toBe(true);
-    expect(comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)).toContain(
-      String(COMFYUI_DEFAULT_PORT),
-    );
+    expect(comfyUiBaseUrl(COMFYUI_DEFAULT_PORT)).toContain(String(COMFYUI_DEFAULT_PORT));
   });
 });
 
 describe("源码里不再有第二份默认端口口径（§12.14）", () => {
   it("config.ts 的 ComfyUI 兜底地址走端点模块，不写裸地址", () => {
     const src = read("src/lib/core/config.ts");
-    expect(src).toMatch(
-      /import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/endpoints"/,
-    );
-    expect(src).toMatch(
-      /import\s*\{[^}]*comfyUiBaseUrl[^}]*\}\s*from\s*"\.\.\/endpoints"/,
-    );
+    expect(src).toMatch(/import\s*\{[^}]*COMFYUI_DEFAULT_PORT[^}]*\}\s*from\s*"\.\.\/endpoints"/);
+    expect(src).toMatch(/import\s*\{[^}]*comfyUiBaseUrl[^}]*\}\s*from\s*"\.\.\/endpoints"/);
     /* 默认值走 `CONFIG_ENV_DEFAULTS`（ISSUE #568）：裸地址/裸端口在 config.ts 里
      * 仍只有一处，且那一处本身取自 endpoints.ts —— 等价于原来的直接字面量写法。 */
-    expect(src).toMatch(
-      /comfyuiBaseUrl:\s*comfyUiBaseUrl\(COMFYUI_DEFAULT_PORT\)/,
-    );
+    expect(src).toMatch(/comfyuiBaseUrl:\s*comfyUiBaseUrl\(COMFYUI_DEFAULT_PORT\)/);
     expect(src).toMatch(/default\(CONFIG_ENV_DEFAULTS\.comfyuiBaseUrl\)/);
     expect(src).not.toMatch(/127\.0\.0\.1:8188/);
   });

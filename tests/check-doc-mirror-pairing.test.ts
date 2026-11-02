@@ -40,9 +40,7 @@ const { test, expect } = defineGateRepo({
 });
 
 describe("check-doc-mirror-pairing.cjs（D0 形态档）", () => {
-  test("改了源、没带上镜像 → 拦，并点名是哪一对、出路是哪条命令", ({
-    repo,
-  }) => {
+  test("改了源、没带上镜像 → 拦，并点名是哪一对、出路是哪条命令", ({ repo }) => {
     repo.write(SOURCE, "# 附录\n\n改了正文。\n");
     repo.git("add", "--", SOURCE);
     const r = repo.run(["--staged"]);
@@ -63,18 +61,14 @@ describe("check-doc-mirror-pairing.cjs（D0 形态档）", () => {
     expect(r.code).toBe(0);
   });
 
-  test("只改镜像、没改源 → 不判（重渲染产物可以因任何原因单独提交）", ({
-    repo,
-  }) => {
+  test("只改镜像、没改源 → 不判（重渲染产物可以因任何原因单独提交）", ({ repo }) => {
     repo.write(TWIN, "<!-- 生成态镜像 -->\n\n改了产物。\n");
     repo.git("add", "--", TWIN);
     const r = repo.run(["--staged"]);
     expect(r.code, r.output).toBe(0);
   });
 
-  test("不在 SCOPED_DOCS 里的 .md 改了 → 不判（误报一片的判据活不过一次评审）", ({
-    repo,
-  }) => {
+  test("不在 SCOPED_DOCS 里的 .md 改了 → 不判（误报一片的判据活不过一次评审）", ({ repo }) => {
     repo.write(UNSCOPED, "# 过程文件\n\n又改了一段。\n");
     repo.git("add", "--", UNSCOPED);
     const r = repo.run(["--staged"]);
@@ -82,9 +76,7 @@ describe("check-doc-mirror-pairing.cjs（D0 形态档）", () => {
     expect(r.output).not.toContain(UNSCOPED);
   });
 
-  test("删掉源而镜像没同批处理（改名 / 从 SCOPED_DOCS 摘登记那一形）同样拦", ({
-    repo,
-  }) => {
+  test("删掉源而镜像没同批处理（改名 / 从 SCOPED_DOCS 摘登记那一形）同样拦", ({ repo }) => {
     repo.git("rm", "-q", SOURCE);
     const r = repo.run(["--staged"]);
     expect(r.code, r.output).toBe(1);
@@ -114,9 +106,7 @@ describe("check-doc-mirror-pairing.cjs（D0 形态档）", () => {
     expect(r.output).toContain(TWIN);
   });
 
-  test("--base 形态：判决**不因机器的 git 配置而变**（强制 core.quotePath=true）", ({
-    repo,
-  }) => {
+  test("--base 形态：判决**不因机器的 git 配置而变**（强制 core.quotePath=true）", ({ repo }) => {
     /* 这一条是 ISSUE #2272 的现场：机器之间本来就有差别 —— runner 的 git 是**全默认**
      * （`core.quotePath=true`，路径被转义加引号），本机全局配了 `false` ⇒ 同一份代码
      * 在平台上是「OK：本次没有……」（绿），在本机是红的。
@@ -154,9 +144,7 @@ describe("check-doc-mirror-pairing.cjs（D0 形态档）", () => {
     expect(r.output).not.toContain("✗");
   });
 
-  test("--base 形态：相对基线什么都没改 ⇒ 那是「测得没有改动」，绿并说清楚", ({
-    repo,
-  }) => {
+  test("--base 形态：相对基线什么都没改 ⇒ 那是「测得没有改动」，绿并说清楚", ({ repo }) => {
     const r = repo.run(["--base", "HEAD"]);
     /* 基线取到了、diff 跑成功了、结果是空 ⇒ 「这次什么都没改」⇒ 没有可判的内容。
      * 把它读成「不知道」会让 master 上的本地复算永远退 2 —— 那正是
@@ -178,8 +166,7 @@ describe("接线", () => {
   });
 
   test("映射只有一处：渲染器与这条判据都取 `doc-facts` 的 `generatedPathFor`", () => {
-    const read = (rel: string) =>
-      readFileSync(path.join(import.meta.dirname, "..", rel), "utf8");
+    const read = (rel: string) => readFileSync(path.join(import.meta.dirname, "..", rel), "utf8");
     const facts = read("scripts/doc-facts.cjs");
     const renderer = read("scripts/render-doc-placeholders.cjs");
     const pairing = read("scripts/check-doc-mirror-pairing.cjs");

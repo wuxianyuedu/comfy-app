@@ -53,14 +53,14 @@ export type ProbeTree = {
   carried: Array<string>;
   dir: string;
   dispose: () => void;
-}
+};
 
 /** `git status --porcelain=v1 -z` 的一条记录。 */
 type StatusEntry = {
   path: string;
   /** 两格状态码（`??` = 未跟踪） */
   xy: string;
-}
+};
 
 /**
  * 解析 `-z` 形的工作树状态。
@@ -122,10 +122,12 @@ function git(cwd: string, args: Array<string>): string {
  */
 export type ProbeTreeIo = {
   copyFile: (src: string, dst: string) => void;
-}
+};
 
 const realIo: ProbeTreeIo = {
-  copyFile: (src, dst) => copyFileSync(src, dst),
+  copyFile: (src, dst) => {
+    copyFileSync(src, dst);
+  },
 };
 
 /** 把一份文件拷进克隆（父目录按需建；目标落在克隆外一律抛）。 */
@@ -155,8 +157,9 @@ export function createProbeTree(realRoot: string, io: ProbeTreeIo = realIo): Pro
   } catch (error) {
     rmSync(parent, { recursive: true, force: true });
     throw new Error(
-      `建一次性工作树克隆失败 —— 本件**不退回真实树**（那等于把隔离关掉而账面照样绿）：${
-        String(error instanceof Error ? error.message : error)}`,
+      `建一次性工作树克隆失败 —— 本件**不退回真实树**（那等于把隔离关掉而账面照样绿）：${String(
+        error instanceof Error ? error.message : error,
+      )}`,
       /* cause 留着：这一句要说的是「不退回」这件事，而**为什么**建不出来是 git 的原文，
        * 少了 cause 排查的人只能去手跑一次 worktree add。 */
       { cause: error },

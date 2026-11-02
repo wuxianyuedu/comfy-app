@@ -56,9 +56,7 @@ describe("读数取不到时的那句原因要念在结论同一行", () => {
   });
 
   it("正向：`report()` 打出的那一行末尾带得上那句原因", () => {
-    const spy = vi
-      .spyOn(console, "log")
-      .mockImplementation(() => undefined);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     for (const { reading } of UNAVAILABLE) {
       report("moon-read/comfy-app-t3", [reading.sn], () => reading);
     }
@@ -77,13 +75,9 @@ describe("读数取不到时的那句原因要念在结论同一行", () => {
   it("反向锚点：成功那一路（note 是空串）行尾不出现空括号", () => {
     // 豁免不放过散文、拼接不许造出一对空括号 —— 后者会让「有原因」与「没原因」
     // 在屏幕上长得一样，而那正是本件要修的那个读感。
-    const spy = vi
-      .spyOn(console, "log")
-      .mockImplementation(() => undefined);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     report("moon-read/comfy-app-t3", [OK.sn], () => OK);
-    const line = spy.mock.calls
-      .map((c) => String(c[0]))
-      .find((l) => l.includes(OK.sn));
+    const line = spy.mock.calls.map((c) => String(c[0])).find((l) => l.includes(OK.sn));
     expect(line).toBeDefined();
     expect(line).not.toContain("（）");
     expect(line).toContain("title=质量门禁");
@@ -103,9 +97,7 @@ describe("读数取不到时的那句原因要念在结论同一行", () => {
 
   it("逐对相交与「还没到终态」那两行照旧打：本次只动第一行的拼接", () => {
     // 反向钉住改动面：注入两行仍在跑的读数，除了原因那半句，其余输出形状不许变。
-    const spy = vi
-      .spyOn(console, "log")
-      .mockImplementation(() => undefined);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const running = { ...OK, status: "running", endTime: "" };
     report("moon-read/comfy-app-t3", ["a1", "a2"], (sn) => ({
       ...running,

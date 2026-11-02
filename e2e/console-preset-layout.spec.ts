@@ -20,16 +20,9 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function openConsole(page: Page): Promise<void> {
   await page.goto("/workspace");
-  await expect(
-    page.getByRole("tablist", { name: "已打开的视图" }),
-  ).toBeVisible();
-  await page
-    .getByRole("button", { name: "控制台", exact: true })
-    .first()
-    .click();
-  await expect(
-    page.getByRole("tab", { name: /控制台/ }),
-  ).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tablist", { name: "已打开的视图" })).toBeVisible();
+  await page.getByRole("button", { name: "控制台", exact: true }).first().click();
+  await expect(page.getByRole("tab", { name: /控制台/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("console-preset-list")).toBeVisible();
 }
 
@@ -43,9 +36,7 @@ test.describe("控制台 · 常用命令分组头排布 @critical", () => {
     const list = presetList(page);
     const listWidth = (await list.boundingBox())!.width;
 
-    const headers = page.locator(
-      '[data-view]:not(.hidden) [data-slot="disclosure-trigger"]',
-    );
+    const headers = page.locator('[data-view]:not(.hidden) [data-slot="disclosure-trigger"]');
     const count = await headers.count();
     expect(count).toBeGreaterThan(3);
 
@@ -60,18 +51,15 @@ test.describe("控制台 · 常用命令分组头排布 @critical", () => {
       ).toBeGreaterThan(listWidth * 0.5);
       /* 竖排时一个 4 字标题就能撑到 100px 以上；正常的「组名 + 两行说明」
          封顶在 70px 上下。给到 80 留一点字体差异的余地，但仍能拦住竖排。 */
-      expect(
-        box.height,
-        `第 ${i + 1} 个组头高 ${box.height}px —— 文字多半在按字竖排`,
-      ).toBeLessThan(80);
+      expect(box.height, `第 ${i + 1} 个组头高 ${box.height}px —— 文字多半在按字竖排`).toBeLessThan(
+        80,
+      );
     }
   });
 
   test("展开的那一组落回组头下方（向下展开，不是横着铺）", async ({ page }) => {
     await openConsole(page);
-    const first = page
-      .locator('[data-view]:not(.hidden) [data-slot="disclosure"]')
-      .first();
+    const first = page.locator('[data-view]:not(.hidden) [data-slot="disclosure"]').first();
     const trigger = first.locator('[data-slot="disclosure-trigger"]');
     const panel = first.locator('[data-slot="disclosure-panel"]');
 
@@ -86,9 +74,7 @@ test.describe("控制台 · 常用命令分组头排布 @critical", () => {
     expect(p.width).toBeGreaterThan(listWidth * 0.8);
   });
 
-  test("整列折起时七组一屏放得下（不再是一条滚不到底的流水账）", async ({
-    page,
-  }) => {
+  test("整列折起时七组一屏放得下（不再是一条滚不到底的流水账）", async ({ page }) => {
     await openConsole(page);
     const list = presetList(page);
     const { scrollHeight, clientHeight } = await list.evaluate((el) => ({

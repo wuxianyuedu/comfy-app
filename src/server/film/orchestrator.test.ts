@@ -145,7 +145,9 @@ vi.mock("child_process", async (importOriginal) => ({
     kill: vi.fn(),
     on: vi.fn((event: string, cb: (code: number) => void) => {
       if (event === "close") {
-        queueMicrotask(() => cb(0));
+        queueMicrotask(() => {
+          cb(0);
+        });
       }
     }),
   })),

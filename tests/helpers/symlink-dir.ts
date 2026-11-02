@@ -17,9 +17,5 @@ import { symlinkSync } from "node:fs";
 
 /** 把 `target`（绝对路径的目录）链到 `linkPath`，Windows 走 junction。 */
 export function symlinkDir(target: string, linkPath: string): void {
-  symlinkSync(
-    target,
-    linkPath,
-    process.platform === "win32" ? "junction" : "dir",
-  );
+  symlinkSync(target, linkPath, process.platform === "win32" ? "junction" : "dir");
 }
