@@ -256,9 +256,9 @@ function nodeTag(evt: JsonRecord, patched: Record<string, unknown> | undefined):
     typeof evt.class_type === "string" && evt.class_type ? evt.class_type : undefined;
   const classType =
     fromEvent ?? (node && node !== "?" ? classTypeForNode(patched, node) : undefined);
-  return classType !== undefined
-    ? ` [${node}] ${nodeLabel(classType)}（${classType}）`
-    : ` [${node}]`;
+  return classType === undefined
+    ? ` [${node}]`
+    : ` [${node}] ${nodeLabel(classType)}（${classType}）`;
 }
 
 /**
@@ -386,7 +386,7 @@ export function createCliEnvelopeParser(deps: EnvelopeParserDeps): CliEnvelopePa
               id: nodeId,
               value: evt.completed,
               max: evt.total,
-              ...(classType !== undefined ? { classType, label: nodeLabel(classType) } : {}),
+              ...(classType === undefined ? {} : { classType, label: nodeLabel(classType) }),
             }
           : undefined,
       );

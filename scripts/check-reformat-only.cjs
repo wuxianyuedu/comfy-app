@@ -107,6 +107,7 @@ const { gateFail, gatePass, gateSkip, indentItems } = require("./ci-log.mjs");
  * —— 取数与判定在那边，判决话术与三态出口仍在本文件（`report()`）。 */
 /* 护栏 ② 的取数 / 读数 / 判定都在机制层（`reformat-per-commit.mjs`），本文件只留出口。 */
 const pcm = require("./reformat-per-commit.mjs");
+
 const { perCommitShape, perCommitShapeOf, migrationDeclaration: migrationDeclarationOf } = pcm;
 
 /* git 按 cwd 解析仓库(与 check-circular-deps.cjs 同口径):门禁在仓库根被调用。

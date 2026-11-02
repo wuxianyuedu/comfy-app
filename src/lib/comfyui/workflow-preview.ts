@@ -160,7 +160,7 @@ function buildGraphTopology(entries: Array<[string, WorkflowGraphNode]>): GraphT
     }
     for (const v of Object.values(inputs)) {
       const src = linkTargetId(v);
-      const srcOut = src !== undefined ? outAdj[src] : undefined;
+      const srcOut = src === undefined ? undefined : outAdj[src];
       if (src !== undefined && srcOut) {
         ownIncoming.add(src);
         srcOut.add(id);
