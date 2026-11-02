@@ -47,6 +47,8 @@ import path from "node:path";
 
 import awesomeness from "oxlint-config-awesomeness";
 
+import { resolveBinEntryByName } from "./package-bin-entry.mjs";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
@@ -97,7 +99,11 @@ const ZERO_RULES = [
   { rule: "perfectionist/sort-object-types", issue: "#2775；#3037 续清" },
   // ── #2776 清零（2 条，台账禁用形态见各自碎片）───────────────────
   { rule: "eslint/eqeqeq", issue: "#2776 / #2922（159 处 `== null` 台账禁用）" },
-  { rule: "eslint/no-void", issue: "#2776 / #2923（110 处台账禁用）", options: { allowAsStatement: true } },
+  {
+    rule: "eslint/no-void",
+    issue: "#2776 / #2923（110 处台账禁用）",
+    options: { allowAsStatement: true },
+  },
 ];
 
 /** 诊断码形如 `plugin(rule)`（实测 `unicorn(no-negated-condition)`），按它过滤。
@@ -180,7 +186,18 @@ export default defineConfig({
 function main() {
   const paths = process.argv.slice(2);
   const configPath = writeProbeConfig();
-  const bin = path.join(ROOT, "node_modules", ".bin", process.platform === "win32" ? "oxlint.cmd" : "oxlint");
+  /* 直起包真身（#2572 同一条路）：`.bin/oxlint.cmd` 只有 cmd.exe 解释得动，
+   * 挂 `shell: true` 去起它撞的是 Node 26 的 DEP0190（spawn-shell-scan 那条
+   * 硬闸当场红 —— 这一笔修的正是它）。`resolveBinEntryByName("oxlint")` 按垫片名
+   * 解析（不按依赖名：oxlint 的 bin 键与依赖名同名，这里两者恰好一致，
+   * 但口径上仍按名字走，与 ci-run-tool 同一份地基）。 */
+  const entry = resolveBinEntryByName("oxlint", { root: ROOT });
+  if (entry === null) {
+    console.error(
+      "[没跑起来] 解析不到 oxlint 的包真身入口 —— 要么没装（先 `pnpm install`），要么 pnpm 换了垫片写法。自查：`node scripts/package-bin-entry.mjs --by-name oxlint`",
+    );
+    process.exit(2);
+  }
   const args = ["--config", configPath, "--format", "json"];
   // 全仓档（不传路径）才挂 --type-aware，与历次复扫口径一致；契约自测档扫的是
   // 仓外临时夹具，没有 tsconfig 可挂，且负控只选语法级规则（见文件头）。
@@ -189,10 +206,9 @@ function main() {
   } else {
     args.push(...paths);
   }
-  const res = spawnSync(bin, args, {
+  const res = spawnSync(process.execPath, [entry, ...args], {
     cwd: ROOT,
     encoding: "utf8",
-    shell: process.platform === "win32",
     maxBuffer: 64 * 1024 * 1024,
   });
   if (res.error !== undefined && res.error !== null) {
@@ -219,16 +235,23 @@ function main() {
     codes.has(/** @type {string} */ (d.code)),
   );
   if (hits.length > 0) {
-    console.error(`已清零 oxlint 规则集回潮：${hits.length} 处命中（清单 ${ZERO_RULES.length} 条，溯源见 scripts/check-oxlint-zero-rules.mjs 的 ZERO_RULES）：`);
+    console.error(
+      `已清零 oxlint 规则集回潮：${hits.length} 处命中（清单 ${ZERO_RULES.length} 条，溯源见 scripts/check-oxlint-zero-rules.mjs 的 ZERO_RULES）：`,
+    );
     for (const d of hits) {
       const span = Array.isArray(d.labels) && d.labels.length > 0 ? d.labels[0].span : undefined;
-      const where = span === undefined ? String(d.filename) : `${d.filename}:${span.line}:${span.column}`;
+      const where =
+        span === undefined ? String(d.filename) : `${d.filename}:${span.line}:${span.column}`;
       console.error(`  ${where}  ${String(d.code)}  ${String(d.message).split("\n")[0]}`);
     }
-    console.error("修法：按该规则清零批的既有形态改写（读数与形态见对应 changelog 碎片），不是抬基线、不是加禁用。");
+    console.error(
+      "修法：按该规则清零批的既有形态改写（读数与形态见对应 changelog 碎片），不是抬基线、不是加禁用。",
+    );
     process.exit(1);
   }
-  console.log(`[ok] 已清零 oxlint 规则集 ${ZERO_RULES.length} 条全仓 0 命中（扫描 ${files} 份文件）。`);
+  console.log(
+    `[ok] 已清零 oxlint 规则集 ${ZERO_RULES.length} 条全仓 0 命中（扫描 ${files} 份文件）。`,
+  );
 }
 
 main();
