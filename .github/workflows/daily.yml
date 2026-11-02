@@ -17,8 +17,9 @@
 #   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层，这里原生 UTF-8，直跑。
 #
 # ⚠️ schedule 只跑在**镜像仓默认分支**上：它成立的前提是默认分支跟着 CNB `master`
-# 走（master 镜像推送目前不存在，见迁移结论的待确认清单）。在此之前本条以
-# `workflow_dispatch`（可指 sha）为可用入口。
+# 走 —— 2026-11-02 起 CNB push 档有了「GitHub master 镜像」格（#3064），前提已接上。
+# `workflow_dispatch`（可指 sha）仍是手动入口。
+# `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 最新只到 v6）。
 # GitHub cron 是 UTC：北京 01:00 = UTC 17:00（前一日）。
 name: Daily (mirror)
 
@@ -55,16 +56,16 @@ jobs:
     timeout-minutes: 300
     steps:
       - name: 检出
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: pnpm

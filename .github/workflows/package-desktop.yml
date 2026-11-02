@@ -13,8 +13,10 @@
 #   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层；GitHub Windows runner
 #     的 pwsh 输出 UTF-8，直跑真命令。
 #
-# ⚠️ schedule 只跑在**镜像仓默认分支**上（同 daily.yml 那段前提）。在此之前以
-# `workflow_dispatch`（可指 sha）为可用入口。GitHub cron 是 UTC：北京 03:00 = UTC 19:00。
+# ⚠️ schedule 只跑在**镜像仓默认分支**上（同 daily.yml 那段前提，#3064 起已接上）。
+# `workflow_dispatch`（可指 sha）仍是手动入口。GitHub cron 是 UTC：北京 03:00 = UTC 19:00。
+# `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 与 rust-cache
+# 的最新主版本分别是 v6 与 v2）。
 name: Package desktop (mirror)
 
 on:
@@ -45,16 +47,16 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: 检出
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: pnpm
@@ -71,11 +73,11 @@ jobs:
       - name: 桌面成品构建（cnb 同款判据一字不改）
         run: pnpm tauri build
 
-      # upload-artifact 主线上 v4 是当前最新主版本（node20 运行时，会被平台强制挪到
-      # node24 并刷一条弃用告警 —— 仅告警，行为不变）。出 v5 后按仓库钉版口径单独评估，
-      # 别顺手跟随。
+      # upload-artifact v4 → v7（2026-11-02 核过 tag）：v5 起 node24 运行时，v6 起要求
+      # runner ≥ 2.327.1（托管 runner 恒满足），v7 新增 `archive` 输入（缺省 true ⇒
+      # 本步的 name/path/retention-days 用法不变）。
       - name: 上传桌面成品（artifact；发布落点的最终决定见文件头）
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: comfyapp-desktop-bundle
           path: src-tauri/target/release/bundle/

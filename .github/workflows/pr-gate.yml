@@ -22,10 +22,16 @@
 # 定位：并行双跑期与 cnb 侧同一份判据互相对账；谁转承重是单独一次决定。
 # 并发：同一 PR 的重复派发互相取消（对位 cnb 的 `pr-$IID` 锁）；手动触发按 run 各算。
 #
-# 三条 `uses:` 钉在「第一个声明 `node24` 的主版本」上：GitHub 2026-09-23 起已从 runner
-# 移除 node20 运行时，`@v4` 会被强制挪到 node24 并在 run 页面刷弃用告警。不继续往 v6/v7
-# 跳：checkout v6 起改了 fork PR 的检出默认（默认拒绝检出）、setup-node v6 起对 npm 项目
-# 自动开缓存 —— 都不是这一格要的行为。要跳是单独一次决定，别顺手跟随。
+# `uses:` 版本口径：有 v7 上 v7，没有就用该 action 的最新主版本（2026-11-02 按
+# `git ls-remote --tags` 逐仓核过，不是凭记忆）。背景：GitHub 2026-09-23 起已从 runner
+# 移除 node20 运行时，旧主版本会被强制挪到 node24 并在 run 页面刷弃用告警。
+#   · checkout v5 → v7：v6 起凭据改存独立文件、v7 起拒检 `pull_request_target` /
+#     `workflow_run` 的 fork PR —— 本文件只用 `repository_dispatch` / `workflow_dispatch`，
+#     两个行为变化都不沾；v6/v7 均为 node24。
+#   · setup-node v5 → v7：v6 的破坏性变更只是「自动缓存只对 npm 默认开」，
+#     这里 `cache: pnpm` 是显式输入，不受影响；v7 为 ESM 化与 NODE_AUTH_TOKEN 修正。
+#   · pnpm/action-setup v5 → v6：没有 v7（主版本序列 v1 → v4 → v5 → v6），v6 即最新；
+#     node24，新增 pnpm v11 支持，输入面不变。
 name: PR gate (mirror)
 
 on:
@@ -72,7 +78,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: 检出（按镜像 payload 的 sha）
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           # repository_dispatch 的 payload 里是合成 merge 的 sha；手动触发走 inputs。
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
@@ -81,7 +87,7 @@ jobs:
           fetch-depth: 0
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
 
@@ -140,16 +146,16 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: 检出（按镜像 payload 的 sha）
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: pnpm
@@ -179,16 +185,16 @@ jobs:
       COMFY_AFFECTED_SEGMENT: "fixed"
     steps:
       - name: 检出（按镜像 payload 的 sha）
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: pnpm
@@ -209,16 +215,16 @@ jobs:
       COMFY_AFFECTED_SEGMENT: "affected"
     steps:
       - name: 检出（按镜像 payload 的 sha）
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: pnpm
@@ -233,22 +239,22 @@ jobs:
   # `.cnb.yml` 那一格带 `.cargo-env` 锚点是自托管 Windows 的 rustup 代理路径
   # （G:\.cargo + C:\Users\yuedu\.rustup）；ubuntu-24.04 镜像自带 Rust 工具链，
   # 不需要那一对变量。cargo 依赖缓存由 swatinem/rust-cache 承担（钉 v2：
-  # 与上面三条同一口径 —— 第一个声明 node24 运行时的主版本，不追新）。
+  # `git ls-remote --tags` 核过它只有一个主版本，v2 即最新，且已是 node24 运行时）。
   heavy-gates:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: 检出（按镜像 payload 的 sha）
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}
           fetch-depth: 0
 
       - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
 
       - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: pnpm
