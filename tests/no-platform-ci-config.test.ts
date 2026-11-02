@@ -446,6 +446,10 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "格式化提交分离", tier: "PR" },
   { name: "零消费导出", tier: "PR" },
   { name: "重档静态判据", tier: "PR" },
+  /* 主列末尾的读数档（`--readout`，ISSUE #3051 期望第 3 条前半步）：镜像格派发的
+   * 同一笔 head_sha，GitHub Actions 跑完没有、结论是什么。无跨档对应物，
+   * 不进 CROSS_LANE_SCRIPT_MIRRORS。 */
+  { name: "GitHub 判决回读", tier: "PR" },
   // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档 + 镜像出口格）──
   { name: "合并形态复核", tier: "push" },
   { name: "GitHub master 镜像", tier: "push" },
@@ -2227,6 +2231,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "ESLint 零警告",
       "单元测试",
       "重档静态判据",
+      /* `GitHub 判决回读` 墙钟上限就是它的轮询预算（45m）—— 零构建但**不**是秒级，
+       * 节点 egress 抖动的现场它会顶满预算跑，预算缺席时卡死要等满 2h 才有人知道。 */
+      "GitHub 判决回读",
       // 2026-11-02 `受影响用例` / `固定结构用例` 从 PR 撤到每日全量单测（见 GATE_TIER_LEDGER
       // 的 retired 段）：这两个 PR stage 不再存在，预算要求随之解除。
     ].filter((name) => !disabled.includes(name));
