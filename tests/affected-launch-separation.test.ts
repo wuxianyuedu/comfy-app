@@ -20,9 +20,11 @@ import {
 } from "../scripts/affected-launch-segments.mjs";
 import { runChunk } from "../scripts/run-affected-tests.mjs";
 import {
+  BATCH_SORT_TIER,
   mergeTimingLedger,
   orderByKnownDuration,
   readTimingLedger,
+  sortTier,
 } from "../scripts/affected-launch-duration-order.mjs";
 import { isNoiseLine } from "../scripts/affected-launch-noise-reporter.mjs";
 
@@ -57,13 +59,23 @@ describe("planSeparatedLaunches 的固定段分块帽（ISSUE #2863）", () => {
   });
 });
 
+/** 台账一条读数的形状（与 `readTimingLedger()` 的产出同一个）—— `new Map([...])` 会把
+ * 对象字面量的 `source` 拓宽成 `string`，所以这里给出**具名**的构造口，别在每个用例里
+ * 各写一遍类型断言。 */
+type TimingEntry = { ms: number; source: "isolated" | "batch" };
+
+/** 造一份台账（纯内存，不碰盘）。 */
+function ledgerOf(entries: Record<string, TimingEntry>): Map<string, TimingEntry> {
+  return new Map(Object.entries(entries));
+}
+
 describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
   it("known 按毫秒降序排前，unknown 保持原相对顺序垫后", () => {
-    const ledger = new Map([
-      ["tests/a.test.ts", 100],
-      ["tests/b.test.ts", 500],
-      ["tests/c.test.ts", 250],
-    ]);
+    const ledger = ledgerOf({
+      "tests/a.test.ts": { ms: 100, source: "isolated" },
+      "tests/b.test.ts": { ms: 500, source: "isolated" },
+      "tests/c.test.ts": { ms: 250, source: "isolated" },
+    });
     expect(
       orderByKnownDuration(
         [
@@ -92,34 +104,144 @@ describe("耗时台账排序（ISSUE #2863 的 ③：重块排前）", () => {
   it("台账读写闭环：不在账的键新增、同名覆盖、本跑没跑的保留、坏文件从空建起", () => {
     const dir = mkdtempSync(path.join(tmpdir(), "timing-"));
     try {
-      expect(mergeTimingLedger(dir, [])).toBe(false); // 空读数不落盘
+      expect(mergeTimingLedger(dir, []).written).toBe(false); // 空读数不落盘
       fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
       fs.writeFileSync(
         path.join(dir, "scripts", ".test-file-timing.json"),
         JSON.stringify({
           generatedAt: "old",
+          /* 老形状（裸数字）⇒ 回读成 `batch`；两种形状混在一份台账里要能各读各的。 */
           files: { "tests/old.test.ts": 999, "tests/a.test.ts": 5 },
         }),
       );
       expect(
         mergeTimingLedger(dir, [
-          { name: "tests/a.test.ts", ms: 7.4 },
-          { name: "tests/new.test.ts", ms: 0.2 },
+          { name: "tests/a.test.ts", ms: 7.4, source: "batch" },
+          { name: "tests/new.test.ts", ms: 0.2, source: "batch" },
           { name: "tests/broken.test.ts", ms: Number.NaN },
-        ]),
+        ]).written,
       ).toBe(true);
       /* SAFETY: 类型断言已复核 */
       const j = JSON.parse(
         fs.readFileSync(path.join(dir, "scripts", ".test-file-timing.json"), "utf8"),
-      ) as { files: Record<string, number> };
-      expect(j.files["tests/a.test.ts"]).toBe(7); // 覆盖 + 取整
-      expect(j.files["tests/new.test.ts"]).toBe(0);
-      expect(j.files["tests/old.test.ts"]).toBe(999); // 保留
+      ) as { files: Record<string, { ms: number; source: string }> };
+      expect(j.files["tests/a.test.ts"]).toEqual({ ms: 7, source: "batch" }); // 覆盖 + 取整
+      expect(j.files["tests/new.test.ts"]).toEqual({ ms: 0, source: "batch" });
+      expect(j.files["tests/old.test.ts"]).toEqual({ ms: 999, source: "batch" }); // 保留（老形状按 batch 读）
       expect(j.files["tests/broken.test.ts"]).toBeUndefined(); // 脏读数不进账
-      // 回读面与排序面同一个源
+      /* 回读面与排序面同一个源；而这两份此刻都是 `batch`（老形状）⇒ 并列、保持原序
+       * —— 「不知道谁更重」不许被排成一个序（ISSUE #3030）。 */
       expect(
         orderByKnownDuration(["tests/a.test.ts", "tests/old.test.ts"], readTimingLedger(dir)),
-      ).toEqual(["tests/old.test.ts", "tests/a.test.ts"]);
+      ).toEqual(["tests/a.test.ts", "tests/old.test.ts"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+/* 量纲那一格（ISSUE #3030）。这组钉的不是数值，是**两个量纲不同的数不许直接比较**
+ * 这条 —— 而它的失效形态是静默的：排序照旧在跑，只是把便宜的文件供到了前面。
+ *
+ * 现场读数（同一批文件、同一台机）：`tests/check-commit-claims.test.ts` 批跑入账 169.1s、
+ * 隔离单跑 1.8s；`tests/gate-executors.test.ts` 48.1s / 2.7s。前者在整段里排第三，
+ * 实测它是最便宜的一份 —— 判据反了。 */
+describe("耗时台账的量纲：批跑墙钟当不了单份成本（ISSUE #3030）", () => {
+  it("`isolated` 给实测档位，`batch` 落在**比任何实测都低**的那一档", () => {
+    expect(sortTier({ ms: 1800, source: "isolated" })).toBe(1800);
+    expect(sortTier({ ms: 169_100, source: "batch" })).toBe(BATCH_SORT_TIER);
+    /* 关键：它不是「一个更大的数」。第一版取上界常数，结果「批跑的 169.1s」照样压过
+     * 「单跑的 8.3s」—— 判据反了的形态只是换了方向回来（本单自己的用例把它推翻的）。 */
+    expect(BATCH_SORT_TIER).toBeLessThan(0);
+    expect(
+      sortTier({ ms: 169_100, source: "batch" }),
+      "batch 不许压过任何 isolated（含最便宜的一份）",
+    ).toBeLessThan(sortTier({ ms: 1, source: "isolated" }));
+  });
+
+  it("一笔便宜的 batch 读数不许把贵的 isolated 记录顶到后面（这就是判据反了的那个形态）", () => {
+    /* 现场形状：同一块里 check-commit-claims 记 169.1s「批跑」、a11y-axe-stories 记 8.3s「单跑」。
+     * 按字面比较会把前者排在前面 —— 而它是 1.8s 的那一份。 */
+    const ledger = ledgerOf({
+      "tests/check-commit-claims.test.ts": { ms: 169_100, source: "batch" },
+      "tests/a11y-axe-stories.test.ts": { ms: 8_300, source: "isolated" },
+    });
+    /* `isolated` 那一份先（8.3s 是真实成本），`batch` 那一份退到上界那一档。
+     * 注意这里比的是**量纲**，不是数字：169.1s > 8.3s 反而排后，正是因为前者不知道
+     * 「这一份自己要多久」。 */
+    expect(
+      orderByKnownDuration(
+        ["tests/a11y-axe-stories.test.ts", "tests/check-commit-claims.test.ts"],
+        ledger,
+      ),
+    ).toEqual(["tests/a11y-axe-stories.test.ts", "tests/check-commit-claims.test.ts"]);
+    /* 反过来给也一样 —— 判决跟着量纲走，不跟着入参顺序走。 */
+    expect(
+      orderByKnownDuration(
+        ["tests/check-commit-claims.test.ts", "tests/a11y-axe-stories.test.ts"],
+        ledger,
+      ),
+    ).toEqual(["tests/a11y-axe-stories.test.ts", "tests/check-commit-claims.test.ts"]);
+  });
+
+  it("全是 batch 时不假装知道谁更重：保持原序（不知道不许被排成一个序）", () => {
+    const ledger = ledgerOf({
+      "tests/a.test.ts": { ms: 500, source: "batch" },
+      "tests/b.test.ts": { ms: 100, source: "batch" },
+    });
+    expect(orderByKnownDuration(["tests/a.test.ts", "tests/b.test.ts"], ledger)).toEqual([
+      "tests/a.test.ts",
+      "tests/b.test.ts",
+    ]);
+    /* 但「已知的排在未知的前面」仍成立：那一位信息是真的。 */
+    expect(orderByKnownDuration(["tests/z.test.ts", "tests/a.test.ts"], ledger)).toEqual([
+      "tests/a.test.ts",
+      "tests/z.test.ts",
+    ]);
+  });
+
+  it("老形状（裸数字）按 `batch` 读 —— 它是 junit 抄来的，量纲就是批跑墙钟", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "timing-legacy-"));
+    try {
+      fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "scripts", ".test-file-timing.json"),
+        JSON.stringify({ generatedAt: "old", files: { "tests/a.test.ts": 169_100 } }),
+      );
+      expect(readTimingLedger(dir).get("tests/a.test.ts")).toEqual({
+        ms: 169_100,
+        source: "batch",
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("一笔 batch 读数不许覆盖已有的 isolated 记录（且那一次要被点名）", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "timing-mix-"));
+    try {
+      fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, "scripts", ".test-file-timing.json"),
+        JSON.stringify({
+          generatedAt: "old",
+          files: { "tests/a.test.ts": { ms: 1_800, source: "isolated" } },
+        }),
+      );
+      const got = mergeTimingLedger(dir, [
+        { name: "tests/a.test.ts", ms: 169_100, source: "batch" },
+        { name: "tests/b.test.ts", ms: 900, source: "batch" },
+      ]);
+      expect(got.written).toBe(true);
+      expect(got.rejected).toEqual(["tests/a.test.ts"]);
+      const after = readTimingLedger(dir);
+      expect(after.get("tests/a.test.ts")).toEqual({ ms: 1_800, source: "isolated" });
+      expect(after.get("tests/b.test.ts")).toEqual({ ms: 900, source: "batch" });
+      /* 反方向可以：isolated 是更强的量纲，它盖掉 batch 是对的。 */
+      expect(
+        mergeTimingLedger(dir, [{ name: "tests/b.test.ts", ms: 700, source: "isolated" }]).rejected,
+      ).toEqual([]);
+      expect(readTimingLedger(dir).get("tests/b.test.ts")).toEqual({ ms: 700, source: "isolated" });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

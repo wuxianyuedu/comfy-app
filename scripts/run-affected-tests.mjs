@@ -154,6 +154,18 @@ export { collectFileTimings };
  * 判决粒度（第 2 遍那份红按文件分开）住在隔壁那份里（`affected-launch-retry-verdict.mjs`）——
  * 取数按文件而判决按块，粗的那一份会把细的那一份的真红一起吞掉（ISSUE #2225）。 */
 import { retryScope } from "./affected-launch-retry-scope.mjs";
+/* 「逐份单跑取台账读数」那一档（ISSUE #3030）—— 只产读数、不参与判决，所以出列到
+ * 自己那份文件里（本层贴住 900 行硬闸，三条边界见那份文件头）。 */
+import {
+  ORPHAN_ISOLATED_FLAG_NOTE,
+  dryRunReading,
+  planOrderedChunks,
+  recordBatchTiming,
+  runIsolatedTiming,
+} from "./affected-launch-isolated-timing.mjs";
+/* 显式全量档（`--full`）那一整格 —— 与增量档几乎不共用任何东西，所以是**一条整档**
+ * 而不是一段（判据一个字没搬：退出码仍由 `runChunk` 给）。 */
+import { runFullSuite } from "./affected-launch-full-run.mjs";
 import {
   classifyFirstPass,
   classifyRetry,
@@ -253,56 +265,27 @@ async function main(argv) {
   const dryRun = argv.includes("--dry-run");
   /* 把本跑的逐份用时并进入库台账（人为跑；CI 不自动写 —— 平台工作区的改动进不了库）。 */
   const updateTiming = argv.includes("--update-timing");
+  /* `--isolated` 只与 `--update-timing` 连用（ISSUE #3030）：junit 的 `time` 是批跑墙钟，
+   * 量纲弱于逐份单跑的读数，而「记哪一档」这件事必须跟读数一起说清。分开用没有出口。 */
+  const isolatedTiming = argv.includes("--isolated");
+  if (isolatedTiming && !updateTiming) {
+    process.stderr.write(ORPHAN_ISOLATED_FLAG_NOTE);
+  }
   /* ── 显式全量档（`--full`）───────────────────────────────────────────────
-   * 这一档**不是**增量解析的兜底，是它的**反面**：增量档把筛出来的清单当位置参数
-   * 交给 vitest，而这里由调用方**按名字**点名要全部（`vitest run` 不带位置参数即
-   * 全量收集）。两者在退出码与代价上完全不同，所以必须能分辨「我要全量」与
-   * 「谁都没筛过」—— 后者仍然是阻断（见下面那条空清单守卫）。
-   *
-   * 为什么需要它（ISSUE #1393 的签字）：`affected-tests.mjs` 命中公共地基时会
-   * **放弃收窄**，只跑固定清单，而这条兜底此前**没有具名出口** —— 规范里那句
-   * 「翻兜底的前置是先造一条显式的全量通道」说的就是这个洞。档位在场之后，
-   * wide 话术与钩子日志才能指向一条**跑得响**的命令，而不是让提交者自己去猜。
-   */
-  const full = argv.includes("--full");
-  if (full) {
-    process.stderr.write(
-      "[affected-launch] --full：按名字要全量（**不经**暂存区解析、不拼位置参数，\n" +
-        "  由 vitest 自己收集全部用例）。这一档买的是「没人能替你保证」的那部分，\n" +
-        "  代价是整份套件的墙钟 —— 常态提交仍走增量档。\n",
-    );
-    /* ⚠️ `--dry-run` 必须排在 `resolveVitestEntry()` **之前**：那是本文件里第一个
-     * 依赖 `node_modules` 的调用（解析不到就 `throw`），而「不起 vitest 的读数档」
-     * 反过来成了唯一必须装好依赖的一档 —— 干净检出 / 只读沙箱上 `--dry-run` 直接红在
-     * 「解析不到 vitest 入口」，而它的全部用途（对账清单份数、问一句跑得起来吗）
-     * 一个都用不上。判据 `tests/affected-tests.test.ts` 的「干净检出」一条真起进程判这条顺序。 */
-    const { reading, excludes } = applySuspension([], "full");
-    process.stderr.write(reading);
-    if (dryRun) {
-      process.stdout.write("[affected-launch] --full：会跑全部用例（vitest 自行收集）\n");
-      return 0;
-    }
-    const entry = resolveVitestEntry();
-    const { workers, note } = resolveMaxWorkers(
-      process.env.COMFY_PRECOMMIT_MAX_WORKERS,
-      resolveCiWorkers().workers,
-    );
-    if (note) {
-      process.stderr.write(`[affected-launch] ${note}\n`);
-    }
-    const quietFull = announceQuiet(process.env.COMFY_AFFECTED_QUIET, (t) =>
-      process.stderr.write(t),
-    );
-    /* 这一档的「清单」不是一张表而是 vitest 自己收集出来的全集 —— 逐份列出来只会把
-     * 日志预算吃光，所以这里只念一句「没有清单可列」。不静默：quiet 档读的人要能分辨
-     * 「这一档本来就不列」与「列清单这件事坏了」。 */
-    process.stderr.write(
-      quietFull
-        ? "[affected-launch] 本次清单：全量档由 vitest 自行收集，故不逐份列出（quiet 只换 reporter）\n"
-        : "",
-    );
-    // 空清单在这里是**明确意图**（全量），所以复用同一条判决链（超时形态仍会隔离复跑）。
-    return await runChunk([], { entry, workers, quiet: quietFull, exclude: excludes });
+   * 这一档**不是**增量解析的兜底，是它的**反面**（判据与话术都住
+   * `affected-launch-full-run.mjs`，理由见那份文件头）。返回 `null` = 本跑不是 --full。 */
+  if (argv.includes("--full")) {
+    return await runFullSuite({
+      dryRun,
+      deps: {
+        applySuspension,
+        resolveVitestEntry,
+        resolveMaxWorkers,
+        resolveCiWorkers,
+        announceQuiet,
+        runChunk,
+      },
+    });
   }
   const seg = resolveAffectedSegment(process.env.COMFY_AFFECTED_SEGMENT);
   if (seg.note) {
@@ -356,29 +339,41 @@ async function main(argv) {
     );
     return 1;
   }
-  let chunks;
-  try {
-    /* 固定清单与受影响用例**分开分块**：固定清单（含最吵的 a11y 故事测试）先跑、受影响用例
-     * 后跑，噪音被收进固定清单那一段里隔离，受影响用例的失败落在日志尾部（平台保留尾部）。
-     * 段开关下 `segFiles` 本来就只剩一段，这里天然产出该段的块。 */
-    /* 重块排前（ISSUE #2863 的 ③）：按入库耗时台账降序（known 前排、未知垫后保持原序）。
-     * 台账是启发式不是判决 —— 过期只损失排序最优性，不影响任何判定（见该模块文件头）。 */
-    segFiles = orderByKnownDuration(segFiles, readTimingLedger(process.cwd()));
-    chunks = planSeparatedLaunches(segFiles);
-  } catch (error) {
-    process.stderr.write(`[affected-launch] ${error instanceof Error ? error.message : String(error)}\n`);
+  /* 重块排前 + 分开分块（固定清单先跑、受影响用例后跑，噪音收进前者的日志里；
+   * 段开关下这里天然只产出该段的块）。规划那一跳住 `planOrderedChunks()` —— 它是
+   * **纯规划**，与这一层的执行编排变化方向不同（本层贴住 900 行硬闸）。 */
+  const planned = planOrderedChunks(segFiles, {
+    order: orderByKnownDuration,
+    readLedger: readTimingLedger,
+    plan: planSeparatedLaunches,
+    cwd: process.cwd(),
+  });
+  if (!planned.ok) {
+    process.stderr.write(`[affected-launch] ${planned.message}\n`);
     return 1;
   }
-  /* 同上：读数档不碰 `node_modules`。它要的信息（清单份数 / 启动次数 / 最长一块）
-   * 全部来自 `collectList()` 与 `planSeparatedLaunches()`，两者都是纯计算。 */
+  segFiles = planned.files;
+  const chunks = planned.chunks;
+  /* 同上：读数档不碰 `node_modules` —— 它要的三件事（份数 / 启动次数 / 最长一块）
+   * 全是 `collectList()` 与 `planSeparatedLaunches()` 的纯计算结果。 */
   if (dryRun) {
-    process.stdout.write(
-      `[affected-launch] ${segFiles.length} 个用例 / ${chunks.length} 次启动，` +
-        `最长一块 ${chunks.reduce((m, c) => Math.max(m, c.files.join(" ").length), 0)} 字符\n`,
-    );
+    process.stdout.write(dryRunReading(segFiles, chunks));
     return 0;
   }
   const entry = resolveVitestEntry();
+  /* `--update-timing --isolated`：台账要的是「这一份自己多久」，而 junit 只有批跑墙钟。
+   * 编排（起进程 / 打读数 / 落盘话术）住 `affected-launch-isolated-timing.mjs` —— 那一档
+   * 只产读数、不参与判决，与这一层的判决链变化方向不同（本层贴住 900 行硬闸）。 */
+  if (isolatedTiming) {
+    return runIsolatedTiming({
+      files: segFiles,
+      entry,
+      spawn,
+      merge: mergeTimingLedger,
+      cwd: process.cwd(),
+      write: (text) => process.stderr.write(text),
+    });
+  }
   const { workers, note } = resolveMaxWorkers(
     process.env.COMFY_PRECOMMIT_MAX_WORKERS,
     resolveCiWorkers().workers,
@@ -468,11 +463,11 @@ async function main(argv) {
    * 「真红时更该看到这个数」—— 放在 return 之后就是永不打字的死账）。 */
   const flush = () => {
     if (updateTiming && junitDir) {
-      const ok = mergeTimingLedger(process.cwd(), junitReadings());
+      /* 记账那一格住 `affected-launch-isolated-timing.mjs` 的 `recordBatchTiming()` ——
+       * 与 `--isolated` 那一档同一处，因为它们是同一件事的两个来源（量纲与记账话术
+       * 必须一起改，分开写就会漂）。 */
       process.stderr.write(
-        ok
-          ? "[affected-launch] 逐份用时已并进入库台账（scripts/.test-file-timing.json）—— 提交它，下次排块就按这次的实测耗时来\n"
-          : "[affected-launch] 台账没落盘（无读数或写失败）—— 排序退化为原序，不阻断\n",
+        recordBatchTiming({ readings: junitReadings(), cwd: process.cwd(), merge: mergeTimingLedger }),
       );
     }
     /* 逐份用时（`fileTimingReport`）：从这一跑写出的 junit 里读回来。它必须是**收尾**
