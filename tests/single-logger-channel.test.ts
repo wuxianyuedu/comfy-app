@@ -24,10 +24,17 @@
  *
  * 允许的形态：`console` 出现在**测试**与**启动/浏览器侧**（`src/app/api` 之外的
  * 客户端代码本来就在浏览器控制台）。因此本用例只扫服务端可达的库代码。
+ *
+ * 判据一律**先剥注释再判**（唯一实现 `./helpers/strip-comments`，本文件统一用
+ * `{trailing:true}` 那一档）。为什么连行尾一起去：这些文件里正当写着反面举例
+ * （「旧实现自己 `console.log` 拼行」就是一句解释），拿原文判 `not.toMatch` 会红在那句
+ * 解释上；正向那半反过来 —— 针脚只住在注释里时它照样念绿。两边都是「判据在判解释文字」。
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
+
+import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
@@ -50,10 +57,8 @@ const SRC = join(ROOT, "src");
  */
 const SCAN_DIRS = ["src/lib", "src/server"];
 
-/** 去掉注释，避免把注释里提到的 `console.log` 误判成调用。 */
-function stripComments(src: string): string {
-  return src.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/^[ \t]*\/\/.*$/gm, "");
-}
+/** 这一族判据的统一前置：`{trailing:true}` 这一档在本文件里只写在这一处。 */
+const codeOf = (src: string): string => stripComments(src, { trailing: true });
 
 /**
  * 浏览器侧唯一通道的豁免清单。判据必须满足**全部**三条，缺一不可：
@@ -108,7 +113,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
         if (CLIENT_ONLY.includes(rel)) {
           continue;
         } // 浏览器侧唯一通道，见上方清单
-        const src = stripComments(readFileSync(file, "utf8"));
+        const src = codeOf(readFileSync(file, "utf8"));
         if (/\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/.test(src)) {
           offenders.push(rel);
         }
@@ -129,32 +134,32 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     for (const rel of CLIENT_ONLY) {
       const raw = readFileSync(join(ROOT, rel), "utf8");
       expect(raw.split("\n")[0]?.trim(), `${rel} 首行必须是 "use client"`).toBe('"use client";');
-      expect(stripComments(raw), `${rel} 里应当有 console 调用`).toMatch(
+      expect(codeOf(raw), `${rel} 里应当有 console 调用`).toMatch(
         /\bconsole\s*\.\s*(log|info|warn|error|debug)\s*\(/,
       );
     }
   });
 
   it("core/logger 是唯一实现：日志配置全在这里，且不再自研拼行", () => {
-    const src = readFileSync(join(SRC, "lib", "core", "logger.ts"), "utf8");
-    // 正向：实现（pino 工厂 + 脱敏路径 + 镜像）确实在本文件里
-    expect(src).toContain("createPinoLogger");
-    expect(src).toContain("REDACT_PATHS");
-    expect(src).toMatch(/from\s+["']pino["']/);
+    const code = codeOf(readFileSync(join(SRC, "lib", "core", "logger.ts"), "utf8"));
+    // 正向：实现（pino 工厂 + 脱敏路径 + 镜像）确实在本文件的**代码**里
+    expect(code).toContain("createPinoLogger");
+    expect(code).toContain("REDACT_PATHS");
+    expect(code).toMatch(/from\s+["']pino["']/);
     // 反向：不再自带实现（旧实现的两个特征）
-    expect(stripComments(src)).not.toMatch(/console\s*\./);
-    expect(stripComments(src)).not.toMatch(/JSON\.stringify\(fields\)/);
+    expect(code).not.toMatch(/console\s*\./);
+    expect(code).not.toMatch(/JSON\.stringify\(fields\)/);
   });
 
   it("服务端出口是转发层，不再自带第二份实现", () => {
-    const src = readFileSync(join(SRC, "server", "lib", "logger.ts"), "utf8");
+    const code = codeOf(readFileSync(join(SRC, "server", "lib", "logger.ts"), "utf8"));
     // 正向：确实从地基侧取实现
-    expect(src).toMatch(/from\s+["']~\/lib\/core\/logger["']/);
+    expect(code).toMatch(/from\s+["']~\/lib\/core\/logger["']/);
     // 反向：pino 的构造与脱敏路径不许在本文件里再来一份
-    expect(src).not.toMatch(/from\s+["']pino["']/);
-    expect(src).not.toMatch(/createPinoLogger\s*\(/);
-    expect(src).not.toContain("REDACT_PATHS =");
-    expect(stripComments(src)).not.toMatch(/console\s*\./);
+    expect(code).not.toMatch(/from\s+["']pino["']/);
+    expect(code).not.toMatch(/createPinoLogger\s*\(/);
+    expect(code).not.toContain("REDACT_PATHS =");
+    expect(code).not.toMatch(/console\s*\./);
   });
 
   it("日志实现只有一处：pino 工厂与 ERROR 镜像不许在别处重建", () => {
@@ -162,7 +167,7 @@ describe("日志实现只有一处（ISSUE #568）", () => {
     // 谁就是实现处。两份实现只要出现，这条立刻红。
     const implementors = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
       .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
-      .filter((f) => /from\s+["']pino["']/.test(readFileSync(f, "utf8")))
+      .filter((f) => /from\s+["']pino["']/.test(codeOf(readFileSync(f, "utf8"))))
       .map((f) => relative(ROOT, f).split("\\").join("/"));
     expect(
       implementors,
@@ -172,17 +177,17 @@ describe("日志实现只有一处（ISSUE #568）", () => {
   it("trace 直写通道也过值形状守卫（唯一脱敏实现的第二个消费者）", () => {
     // 判据：`comfyui/trace.ts` 直写文件、不经 pino —— 它必须自己调用共享守卫，
     // 否则「原始回执里的密钥明文落盘」这条在 §7.18.2.1 之后仍然成立。
-    const src = readFileSync(join(SRC, "lib", "comfyui", "trace.ts"), "utf8");
-    expect(src).toMatch(/from\s+["']~\/lib\/core\/redact-secret["']/);
-    expect(stripComments(src)).toMatch(/redactSecretShaped\(/);
+    const code = codeOf(readFileSync(join(SRC, "lib", "comfyui", "trace.ts"), "utf8"));
+    expect(code).toMatch(/from\s+["']~\/lib\/core\/redact-secret["']/);
+    expect(code).toMatch(/redactSecretShaped\(/);
     // 反向：路径上不许再出现第二份守卫实现（PEM/JWT 判据各写一份 = 孪生对）
-    expect(src).not.toMatch(/BEGIN \[A-Z \]\*PRIVATE KEY/);
+    expect(code).not.toMatch(/BEGIN \[A-Z \]\*PRIVATE KEY/);
   });
 
   it("值形状守卫只有一份实现（两条通道都从 core 取）", () => {
     const files = [...walk(join(SRC, "lib")), ...walk(join(SRC, "server"))]
       .filter((f) => !/\.test\.(ts|tsx)$/.test(f))
-      .filter((f) => /export\s+function\s+redactSecretShaped/.test(readFileSync(f, "utf8")))
+      .filter((f) => /export\s+function\s+redactSecretShaped/.test(codeOf(readFileSync(f, "utf8"))))
       .map((f) => relative(ROOT, f).split("\\").join("/"));
     expect(files).toEqual(["src/lib/core/redact-secret.ts"]);
   });
