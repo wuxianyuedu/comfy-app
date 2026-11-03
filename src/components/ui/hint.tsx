@@ -4,55 +4,11 @@ import { cloneElement, type ReactElement, type ReactNode } from "react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "~/components/ui/tooltip";
 
-/**
- * Hint —— 「给一个控件配悬停提示」的**全库唯一出口**（规范 16 §16.2.3 P82 /
- * shadcn `composition.md`：icon-only 与「悬停看解释」走 Tooltip，不走原生 `title=`）。
- *
- * **为什么不直接写 `<Tooltip>` 三件套**：形态固定（Trigger 必用 Base UI 的
- * `render` prop 接管子元素，不用 `asChild`），逐点手写会在视图里长出几十份
- * 近似结构（§12.12 孪生判据）。这里收一次，调用点只多一对标签。
- *
- * **原生 `title=` 的三个短板**（本出口要替掉它的原因）：
- *   · 读屏器对 `title` 的支持长期不一致（Safari + VoiceOver 直接忽略），
- *     可见文案与可访问名因此两套；
- *   · 显示延迟与样式都不受主题控制（浏览器灰底、移动端不显示）；
- *   · 不能挂 `kbd` / 富文本。
- *
- * **两条与规范 §6.1 的接缝**（原生 `title` 在图标按钮上兼职充当可访问名，
- * 搬走文案不等于搬走名字）：
- *   · 有可见文字的按钮**不要**给 `aria-label` —— 名字已由文字给出，另写一份
- *     会撞 WCAG 2.5.3「label in name」；
- *   · 纯图标按钮（`<X />`、`✕`、`⋮` 这类**不含字母与数字**的字形）传
- *     `accessibleName`，由本组件把 `label` 同时写成子元素的 `aria-label`
- *     （子元素已自带时不覆盖）；
- *   · 带字母或数字的就是**可见文字**（`A-`、`5×`、「错误」），一律不补名 ——
- *     名字该由文字自己给，另写一份会让读屏念出的与屏幕上看到的不一致
- *     （WCAG 2.5.3「label in name」，语音控制用户念屏幕上那个词就点不到）。
- *
- * **禁用态按钮**：trigger 落在 `disabled` 元素上时浏览器根本不发指针事件、提示
- * 不会弹（原生 `title` 反而会弹）。传 `wrap` 让提示挂在一层 `inline-flex` 锚点
- * 上，「为什么不能点」就还能说出口；代价是键盘聚焦不再触发提示 —— 与原生
- * `title=` 的既有行为一致，不算退化。
- *
- * **一个副作用要说清**：`data-slot` 会被 trigger 接管 —— 被包的 `<Button>` 上
- * 那个 `data-slot="button"` 变成 `data-slot="tooltip-trigger"`（同一个属性写两遍，
- * trigger 侧后施加、把它盖掉了）。全库没有任何样式或门禁按 `[data-slot=button]`
- * 取元素（`ui/button-group` 用的是 `button-group` / `select-trigger` 两个别的
- * 名字），所以不影响外观；但**按 `data-slot` 断言「这是不是基元按钮」的用例要
- * 同时接受 `tooltip-trigger`**，别把它当成手写 `<button>` 的残留。
- *
- * **不要拿本组件当别的触发器的 `render` 承载体**（ISSUE #1384）。`Hint` 只吃上面
- * 那五个 props、**不转发任意 props**，而 menu / popover / select 那批基元的
- * `Trigger` 是靠把自身触发 props（`aria-haspopup` / pointerdown / keyboard 处理）
- * 灌进 `render` 收到的元素来接管子元素的。于是
- * `render={<Hint label="…"><Button/></Hint>}` 这种写法会把那串 props 丢在 `Hint`
- * 门口 —— 按钮长着按钮的样子却点不开浮层（`aria-haspopup` 也不在），`data-slot`
- * 反而照旧是 `tooltip-trigger`，很容易被误读成「接管成功」。
- * 正确顺序只能是**别的 trigger 在内、`Hint` 在外**：两层 `render` 会**合并**到
- * 同一颗子元素上（`<Hint><DropdownMenuTrigger render={<Button/>} /></Hint>`），
- * 互不吞并。回归判据：`TopBar.test.tsx` 的 `aria-haspopup` 断言（jsdom 能判，
- * 因为它是渲染结果）+ `e2e/top-bar-app-menu.spec.ts`（菜单真的弹出来只能真浏览器判）。
- */
+/** Hint —— 「给一个控件配悬停提示」的全库唯一出口（规范 16 §16.2.3 P82 / shadcn `composition.md`：icon-only 与「悬停看解释」走 Tooltip，不走原生 `title=`）。
+ * 不直接写 `<Tooltip>` 三件套：形态固定（Trigger 必用 Base UI 的 `render` prop 接管子元素，不用 `asChild`），逐点手写会在视图里长出几十份近似结构（§12.12 孪生判据）。原生 `title=` 的三个短板：读屏器支持长期不一致（Safari + VoiceOver 忽略，可见文案与可访问名两套）、显示延迟与样式不受主题控制、不能挂 kbd / 富文本。
+ * §6.1 接缝：① 有可见文字的按钮不要给 `aria-label`（另写一份会撞 WCAG 2.5.3「label in name」）；② 纯图标按钮（`<X />`、`✕`、`⋮` 这类不含字母与数字的字形）传 `accessibleName`，本组件把 `label` 同时写进子元素 `aria-label`（自带则不覆盖）；③ 带字母或数字的就是可见文字（`A-`、`5×`、「错误」），一律不补名。禁用态 trigger 落在 disabled 元素上时不发指针事件、提示不弹，传 `wrap` 挂到 inline-flex 锚点才能说「为什么不能点」，代价是键盘聚焦不再触发（与原生 title= 一致，不算退化）。
+ * 副作用：`data-slot` 会被 trigger 接管（`data-slot="button"` → `"tooltip-trigger"`，同属性后写覆盖）；全库没有按 `[data-slot=button]` 取元素的样式或门禁，但按 `data-slot` 断言「是不是基元按钮」的用例要同时接受 `tooltip-trigger`。
+ * 不要拿本组件当别的触发器的 `render` 承载体（ISSUE #1384）：`Hint` 只吃五个 props、不转发任意 props，而 menu / popover / select 的 Trigger 靠灌入自身触发 props（aria-haspopup / pointerdown / keyboard）接管子元素；`render={<Hint ...><Button/></Hint>}` 会把这串 props 丢在门口（按钮点不开浮层、aria-haspopup 也不在）。正确顺序是别的 trigger 在内、`Hint` 在外（两层 render 合并到同一子元素，互不吞并）；回归判据 `TopBar.test.tsx` 的 aria-haspopup 断言 + `e2e/top-bar-app-menu.spec.ts`。 */
 export type HintProps = {
   /** 纯图标按钮：把 `label` 同时写进子元素的 `aria-label`（已有则不覆盖）。 */
   accessibleName?: boolean;

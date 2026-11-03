@@ -3,30 +3,10 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { Button } from "~/components/ui/button";
 import { Toaster } from "~/components/ui/sonner";
 
-/**
- * `ui/sonner` 的 `Toaster` 是**浮层消息容器**（sonner 的封装）。
- *
- * 这一件与其它基元不同：它**自己不画任何东西** —— 它挂一次、监听全局的
- * `toast(...)` 调用，有消息时才在视口角落渲染一条卡片。所以它的形态没法靠
- * props 摆出来，只能**真的弹一条**。
- *
- * 三条只有真弹才看得出的口径：
- *
- * 1. **主题跟随应用**：`useTheme()` 的 `theme` 传给 sonner（`system` 兜底）
- *    —— 用工具栏切明暗，弹出的卡片应一起换；
- * 2. **图标与语义档一一对应**：`success` / `info` / `warning` / `error`
- *    各配一个 lucide 图标，`loading` 是旋转的 `Loader2`；
- * 3. **颜色全走语义 token**（`--normal-bg` / `--normal-text` /
- *    `--normal-border` / `--border-radius` 四个 CSS 变量指向 `--popover` /
- *    `--border` / `--radius`）—— 这是它「看起来属于这个应用」的原因。
- *
- * ## 与 `ToastProvider` 的关系
- *
- * 项目里业务侧发消息**不走 sonner 的直接调用**，而走
- * `~/components/studio/ToastProvider` 的 `useToast()`（那是全库唯一出口，
- * 注入层 `withAppProviders` 已给每个 story 挂上）。本件是那个出口底下真正
- * 渲染消息的容器 —— 所以两者都要在，本 story 才能弹得出来。
- */
+/** `ui/sonner` 的 `Toaster` 是浮层消息容器（sonner 封装）：它**自己不画任何东西** —— 挂一次、监听全局 `toast(...)`，
+ * 有消息才在视口角落渲染卡片，所以只能**真的弹一条**才看得出形态。三条口径：① 主题跟随应用（`useTheme()` 的 `theme`
+ * 传给 sonner，`system` 兜底）；② 图标与语义档一一对应（`loading` 是旋转 `Loader2`）；③ 颜色全走语义 token（`--normal-bg` 等
+ * 指向 `--popover` / `--border` / `--radius`）。业务侧发消息走 `ToastProvider` 的 `useToast()`（全库唯一出口），本件是它底下的渲染容器。 */
 const meta = {
   title: "UI/Sonner",
   component: Toaster,

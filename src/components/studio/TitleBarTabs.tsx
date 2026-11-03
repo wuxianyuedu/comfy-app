@@ -1,26 +1,9 @@
 "use client";
 
 /* ── TitleBarTabs · 把页签搬到窗口「标题行」的自定义标题栏 ────────────
- *
- * 背景（ISSUE #310 / #200）：此前的应用级页签虽然解决了「另弹独立窗口」，
- * 但页签栏渲染在原生标题栏**下方**，等于在应用内又占掉一条 40px 区域。
- * 用户要的是「像文件资源管理器那样」——页签直接显示在窗口标题行。
- *
- * 做法：主窗口关闭原生装饰（`decorations: false`），标题行由本组件接管，
- * 同一条横条里并列「页签 + 拖拽空白区 + 最小化/最大化/关闭」。浏览器 / dev
- * 环境没有原生标题栏可让位（窗口由系统浏览器提供），调用方（ShellTabs）
- * 会退回应用内页签栏——判据见 `shouldUseTitleBarTabs`。
- *
- * 分层（规范 17 §17.2）：
- *  - 本组件是第③层「视图」：只渲染 props + 转发动作，不含 IO；
- *  - 窗口控制（拖拽/最小化/关闭）与最大化状态订阅都走
- *    `src/lib/shell/window-controls-client.ts`（第②层），视图不直接 invoke。
- *
- * 交互细节：
- *  - 拖拽区铺满标题栏，用 `data-no-drag` 标记排除页签与窗口按钮，
- *    否则点击会被拖拽吞掉（判据在 `isDragRegionTarget`）。
- *  - 双击标题栏空白处 = 最大化/还原，与系统标题栏一致。
- */
+ * 背景（ISSUE #310 / #200）：页签栏此前渲染在原生标题栏**下方**、又占一条 40px；用户要的「像文件资源管理器那样」= 页签直接在标题行。做法：主窗口关原生装饰（`decorations: false`），本组件接管标题行，同一条横条并列「页签 + 拖拽空白区 + 三颗窗口按钮」；浏览器 / dev 无原生标题栏可让位，调用方 `ShellTabs` 退回应用内页签栏（判据 `shouldUseTitleBarTabs`）。
+ * 第③层视图（规范 17 §17.2）：只渲染 props + 转发动作，窗口控制走 `src/lib/shell/window-controls-client.ts`（第②层），视图不直接 invoke。
+ * 拖拽区铺满标题栏，用 `data-no-drag` 标记排除页签与窗口按钮（否则点击会被拖拽吞掉，判据 `isDragRegionTarget`）；双击空白 = 最大化 / 还原（与系统标题栏一致）。 */
 
 import { X } from "lucide-react";
 import type { ShellTab } from "~/lib/shell/shell-tabs-store";

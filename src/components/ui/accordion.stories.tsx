@@ -8,19 +8,8 @@ import {
 } from "~/components/ui/accordion";
 
 /**
- * `ui/accordion` 是 base-ui Accordion 的封装（**列表式折叠**）。
- *
- * 与 `ui/disclosure` 的差别值得说清，两者很容易被混为一谈：
- * - `Disclosure` 是**单个**折叠区（一行 + 一段内容），且形态由调用处拼；
- * - 本件是**一组**带 `AccordionItem` 分隔线的折叠区，`AccordionTrigger`
- *   自带上下两个 chevron（按 `aria-expanded` 互斥显示），
- *   `AccordionContent` 自带 `--accordion-panel-height` 驱动的展开动画。
- *
- * 于是 story 要看的是**组内联动**（`openMultiple`）与**分隔线**
- * （`not-last:border-b`）—— 这两件事在单项里都看不出来。
- *
- * 与 `ui/disclosure` 同源的口径：`AccordionContent` 也是
- * `hidden="until-found"` 那一路（浏览器页内查找会自动展开命中内容）。
+ * `ui/accordion` 是 base-ui Accordion 的封装（**列表式折叠**）：一组带 `AccordionItem` 分隔线的折叠区，`AccordionTrigger` 自带上下两个 chevron（按 `aria-expanded` 互斥显示），`AccordionContent` 自带 `--accordion-panel-height` 展开动画。
+ * 与 `ui/disclosure`（单个折叠区）的差别：组内联动（`openMultiple`）与分隔线（`not-last:border-b`）只在多项时成立；`AccordionContent` 同为 `hidden="until-found"`（页内查找会自动展开命中内容）。
  */
 const meta = {
   title: "UI/Accordion",

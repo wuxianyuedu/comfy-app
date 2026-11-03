@@ -54,15 +54,8 @@ export type OpenableView = {
 };
 
 /**
- * 视图页签条 —— 桌面壳内嵌进窗口标题行，浏览器/dev 里单独一条。
- *
- * 为什么两种形态共用一个组件：这是同一件事的两种摆放位置，不是两件事。分成两份
- * 渲染，「当前项高亮 / 可关闭 / 键盘激活」迟早只在一边修（`ShellTabs` 与
- * `TitleBarTabs` 此前对 iframe 页签就是这么各写一遍键判据，后来才收进
- * `simpleKeyHandler`）。
- *
- * 语义用 `tablist`/`tab` + `aria-selected`：这里的选中态是真的存在（当前视图），
- * 与「镜头胶片带」那种只有跳转、没有选中态的控件刻意不同。
+ * 视图页签条 —— 桌面壳内嵌进窗口标题行，浏览器/dev 里单独一条。两种形态共用一个组件，因为这是同一件事的两种摆放位置：「当前项高亮 / 可关闭 / 键盘激活」分两份写迟早只修一边（`ShellTabs` 与 `TitleBarTabs` 对 iframe 页签就曾各写一遍键判据，后收进 `simpleKeyHandler`）。
+ * 语义用 `tablist`/`tab` + `aria-selected`：这里的选中态真的存在（当前视图），与「镜头胶片带」那种只有跳转、没有选中态的控件刻意不同。
  */
 export function ViewTabStrip({
   tabs,

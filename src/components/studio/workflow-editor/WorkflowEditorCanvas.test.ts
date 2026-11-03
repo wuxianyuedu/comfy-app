@@ -1,10 +1,8 @@
 // 画布 error#008 假告警过滤器（纯函数）—— ISSUE #374
-//
-// 本画布开着 `onlyRenderVisibleElements`：节点裁剪按每个节点各自与视口求交，
-// 而边的裁剪按两端节点的并集包围盒求交。横跨整个画布的长边会因此「可见」，
-// 但两端节点各自都在视口外、没有挂载 —— handleBounds 为空，React Flow 打出
-// error#008。这类告警该忽略（用户滚过去线就正常了）；而两端都挂载还报错，
-// 说明渲染的 handle id 与边引用的 id 不同名，是真 bug，必须继续暴露。
+// 本画布开着 `onlyRenderVisibleElements`：节点裁剪按各自与视口求交，边的裁剪按两端
+// 节点的并集包围盒求交。横跨画布的长边因此「可见」，但两端节点都在视口外、没有挂载
+// → handleBounds 为空 → error#008，这类告警该忽略（滚过去就正常）；两端都挂载还报错
+// 说明渲染的 handle id 与边引用的不同名，是真 bug，必须暴露。
 
 import { describe, expect, it } from "vitest";
 

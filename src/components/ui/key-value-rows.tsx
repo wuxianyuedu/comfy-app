@@ -6,77 +6,8 @@ import { displayValue } from "~/lib/display-value";
 import { cn } from "~/lib/utils";
 
 /**
- * KeyValueRows —— 「把一个对象渲染成键值行」的唯一出口（规范 16 §16.2.4.20）。
- *
- * 此前全库有 5 处各写一遍「标签 + 值 + 空值占位」的行，形态各不相同：
- *
- * | 落点 | 形态 |
- * | --- | --- |
- * | `ProjectOutputs` 的参数表 | 行内左右分布 + 隔行底色 + 外层圆角边框 |
- * | `HistoryDetailModal` 的生成参数卡 | 网格卡片 + 标签在值左侧 + 行下 `hint` |
- * | `HistoryDetailModal` 的参数表 | HTML `<table>` 两列（左列等宽截断） |
- * | `BrowserStatusBar` 的显存 / 内存 | 行内 label + value + 尾注 |
- *
- * 同一件事（一行键值）有四种布局语言、五份 `map`，而**「空值显示什么」**
- * 早由 `~/lib/display-value` 的 `displayValue` 收口（P8）—— 也就是说
- * 剩下的只有**布局**这一层没有被说出来。本组件收的就是这一层。
- *
- * ## 四种 layout
- *
- * - `rows`（缺省）：一行一对，标签左、值右，值走等宽字体；整块可加外框与
- *   隔行底色（`bordered` / `striped`）。适合参数表这类「扫一眼读数值」。
- * - `stacked`：标签在值**上方**，多列网格；`hint` 落在值下面一行。
- *   适合仪表盘指标（训练步数 / 触发词 / 底模）。`itemClassName` 可把它
- *   改回「标签在值左侧」（传 `flex-row items-baseline`）。
- * - `table`：真正的 `<table>`，`<th scope="row">` 声明行表头。
- *   适合两列参数表（左列等宽截断）。
- * - `inline`：`label value` 挤在一行不换行的内联项，用于状态栏。
- *
- * ## 值与缺值
- *
- * `value` 支持两种写法：
- * - **已渲染的节点**（`ReactNode`）—— 调用方自己决定怎么显示（含链接、徽章）；
- * - **原始值**（`raw`）—— 交给 `displayValue`，`null` / `undefined` / `""`
- *   自动给占位符 `—`。**这两个字段互斥**：本来就是「值怎么来」的单选题，
- *   留两个可选字段即可，不必再包一层。
- *
- * 形态：`<KeyValueRows bordered striped items={…} />`，`items` 的每一项是
- * 「`key` + `value`」或「`key` + `raw`」—— 前者给**已渲染好的值**（可含徽标 /
- * 链接，例如 `displayValue(o.seed)`），后者给**原始值**（缺值交给
- * `displayValue` 处理）。
- *
- * ## 为什么没合到 shadcn `Item`（P67 §12.18 中间地带 · 已评估保留）
- *
- * `ui/item.tsx` 是「列表项 + 前缀 media + 主内容 title / description
- * + 右侧 actions」的复合行容器（`ItemMedia` / `ItemContent` /
- * `ItemTitle` / `ItemDescription` / `ItemActions` 五个 slot）。
- * **形状只贴本件 4 layout 中的 `rows` 一档**、其余三档超出它的模型：
- *
- *   - `rows`：label 左 + value 右 + 可选外框与隔行底色 —— Item 的
- *     `ItemTitle` + `ItemContent` 结构确实能凑出，但需要把 Item 默认的
- *     `line-clamp-1` / `text-sm` / `font-medium` 都覆盖掉、把本件的
- *     `bordered` / `striped` 逻辑（外层 `Item` + 每行 `Item` + `bg-subtle`
- *     隔行）手写一遍。凑出来比直接用 `<div>` 复杂；
- *   - `stacked`：label 在值**上方**、多列网格 —— Item 的 media/content
- *     是横排语义，网格靠 `grid-cols-*` 在 Item 外面套；`hint` 又要走
- *     ItemDescription 的 line-clamp-2（本件是自由 ReactNode、可能塞
- *     徽标 / 链接、不该被裁），语义硬拧；
- *   - `table`：真正的 `<table>` + `<th scope="row">` 行表头，是无障碍
- *     语义强要求（表头单元格必须用 `th` + `scope`）。Item 全 `<div>`
- *     系、撑不住 `<table>`；
- *   - `inline`：`<span>` 里 label + value 挤一行不换行（状态栏 /
- *     指标条），Item 是 `flex w-full flex-wrap`、块级 + 撑满整行；
- *     硬套会破坏内联语义。
- *
- * 结论：合 Item 只能覆盖 4/1 档、还得覆盖 Item 默认样式；拆四档
- * API 又与本件「统一 items 契约、只 layout 切换」的初衷相反。**收益
- * 1/4、代价 4/4 拆 API**，保留自绘更清晰（§12.18「只有 1 个又看不出
- * 第二个的，先就地写、别急着抽象」的镜像：这里已经是 5 处消费共用
- * 一档形状、抽象层已经在，缺的是**这四种 layout 的基元**、Item 提供
- * 不了）。
- *
- * ⚠️ **它不管「取哪些字段」**：那是域判据（哪些参数该露、哪些被过滤掉），
- * 留在调用处的派生函数里（如 `history-detail-derive` 的 `deriveParamRows`）。
+ * KeyValueRows —— 「把一个对象渲染成键值行」的唯一出口（规范 16 §16.2.4.20）。`items` 每项是 `key` + `value`（已渲染节点，可含徽标 / 链接）或 `key` + `raw`（原始值交 `displayValue`，缺值给 `—`），互斥。
+ * 四档 `layout`：`rows`（标签左值右，可 `bordered` / `striped`）、`stacked`（标签在上、多列网格、`hint` 在下）、`table`（真 `<table>` + `<th scope="row">`）、`inline`（状态栏内联）。不合到 `Item`：四档只有 `rows` 能凑，其余超出其模型（P67 §12.18 已评估保留）。取哪些字段是域判据，留在调用处的派生函数。
  */
 
 export type KeyValueItem = {

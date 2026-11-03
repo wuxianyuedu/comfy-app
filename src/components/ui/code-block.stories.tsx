@@ -2,24 +2,10 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { CodeBlock, extToLanguage } from "~/components/ui/code-block";
 
-/**
- * `CodeBlock` 是 shiki（VSCode 同款高亮引擎）驱动的源码展示块。
- *
- * 两处值得单独说：
- *
- * 1. **`language` 是显式 prop，不由组件猜**。调用处一般从文件路径派生，
- *    而「按扩展名 → 高亮语言」这张表**只有一处**：导出的 `extToLanguage()`。
- *    本件的 story 因此把它一并覆盖 —— 五档并排才看得出「哪一档没配上」
- *    （未知扩展名落 `plaintext`）。
- * 2. **首帧先渲染纯文本行号，再整体换成高亮**：按 `CHUNK_LINES` 分片高亮、
- *    片间让出主线程；超过 `MAX_HIGHLIGHT_CHARS` 时**整块走纯文本**，
- *    宁可不高亮也不卡住主线程。所以打开瞬间没高亮是**分片的表现**、不是闪烁。
- *    行号本身改用 `codeToTokensBase` 的结构化 token 由 React 渲染
- *    （不再正则注入 shiki 的 HTML），因此每行左边必有一个数字。
- *
- * 高亮主题跟应用主题走（`resolvedTheme`：light → `github-light`，
- * 否则 `one-dark-pro`）—— 用工具栏切明暗，代码块的底色与 token 色应一起换。
- */
+/** `CodeBlock` 是 shiki（VSCode 同款高亮引擎）驱动的源码展示块；高亮主题跟 `resolvedTheme` 走（light → `github-light`，否则 `one-dark-pro`）。
+ * `language` 是显式 prop、不由组件猜：扩展名→高亮语言表只有一处（导出的 `extToLanguage()`），本件把它一并覆盖，五档并排才看得出哪档没配上（未知扩展名落 `plaintext`）。
+ * 首帧先渲染纯文本行号再整体换成高亮：按 `CHUNK_LINES` 分片、片间让出主线程；超过 `MAX_HIGHLIGHT_CHARS` 整块走纯文本，宁可不卡主线程 —— 打开瞬间没高亮是分片表现、不是闪烁。
+ * 行号由 `codeToTokensBase` 的结构化 token 交给 React 渲染（不再正则注入 shiki 的 HTML），所以每行左边必有一个数字。 */
 const meta = {
   title: "UI/CodeBlock",
   component: CodeBlock,

@@ -1,12 +1,9 @@
 "use client";
 
 /**
- * StoryboardPlanner 的状态与全部业务逻辑抽离为 hook。
- * 主组件（StoryboardPlanner.tsx）仅负责渲染，本文件负责：
- *   - 三通道提取（工具 / 本地模型 / 配置 API）+ 外部导入
- *   - 从剧本导入 / AI 智能拆镜 / 批量生成 / 清空
- *   - 镜头字段更新、删除、提示词重算
- * 行为与原组件内联实现逐值一致。
+ * StoryboardPlanner 的状态与全部业务逻辑抽离为 hook：三通道提取 + 外部导入、
+ * 从剧本导入 / AI 智能拆镜 / 批量生成 / 清空、镜头字段更新与提示词重算。
+ * 主组件仅负责渲染；行为与原组件内联实现逐值一致。
  */
 
 import { useState } from "react";

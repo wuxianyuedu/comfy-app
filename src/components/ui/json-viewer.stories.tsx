@@ -8,32 +8,11 @@ import {
   type JsonSourceName,
 } from "../../../.storybook/data-sources";
 
-/**
- * `JsonViewer` 是这一批里第一个**真的需要数据源**的组件：它的入参是
- * `data: unknown`，而「这份 JSON 长什么样」决定了它要回答的问题 ——
- *
- * - 几百个节点的 `prompt_preview` 首屏会不会卡（`collapseObjectsAfterLength`
- *   那段注释里的事故现场）；
- * - 搜索命中在深嵌套里怎么高亮、命中计数对不对；
- * - 长字符串（prompt 那条 150 字符的）折叠成什么样。
- *
- * 所以载荷不在 story 里现编：走注入层的 `json` 值源（真报文形状），
- * `sourceName` 那条下拉可以现场换一份。**为什么不 mock**：见
- * `.storybook/data-sources.tsx` 的模块头 —— 假形态的截图会被当成真证据。
- */
+/** `JsonViewer` 是这一批里第一个真的需要数据源的组件：入参是 `data: unknown`，而「这份 JSON 长什么样」决定了它要回答的问题 —— 几百个节点的 `prompt_preview` 首屏会不会卡（`collapseObjectsAfterLength` 那段注释里的事故现场）、搜索命中在深嵌套里怎么高亮与计数、长字符串（prompt 那条 150 字符的）折叠成什么样。
+ * 所以载荷不在 story 里现编：走注入层的 `json` 值源（真报文形状），`sourceName` 那条下拉可以现场换一份；为什么不 mock 见 `.storybook/data-sources.tsx` 的模块头 —— 假形态的截图会被当成真证据。 */
 
-/**
- * Args 的形状 = **可调的那几个**（面板上真会出现的东西）。
- *
- * 逐个列而不是 `Omit<JsonViewerProps, "data">`：`data` 由注入层给，它不该出现在
- * story 的 Args 里；而「哪几个是可调的」本来就是这一组 story 要回答的问题，
- * 逐行写出来是它的答案，不是从别处减出来的余数。
- *
- * 另外，`Omit<React.ComponentProps<…>, "…">` 这个**形状**恰好撞上
- * `scripts/check-ui-primitives.cjs` 的 P57（「自写剔掉私有 prop 再透传的剔除表」）
- * —— 那条判据锚的形态是对的（那种表真该收进 `~/lib/dom-props`），这里只是长得像。
- * 不用豁免去绕，改成逐项列，两边都清楚。
- */
+/** Args 的形状 = 可调的那几个（面板上真会出现的东西）。逐个列而不是 `Omit<JsonViewerProps, "data">`：`data` 由注入层给，不该出现在 story 的 Args 里；而「哪几个是可调的」本来就是这一组 story 要回答的问题，逐行写出来是它的答案。
+ * 另外 `Omit<React.ComponentProps<…>, "…">` 这个形状恰好撞上 `scripts/check-ui-primitives.cjs` 的 P57（「自写剔掉私有 prop 再透传的剔除表」）—— 那条判据锚的形态是对的（那种表真该收进 `~/lib/dom-props`），这里只是长得像；不用豁免去绕，改成逐项列，两边都清楚。 */
 type StoryArgs = {
   /** 首屏折叠档位：0 = 全展开；>=1 时项数超过 `30 + N*40` 的容器折成 `…`。 */
   initialCollapsedDepth?: number;
@@ -43,15 +22,8 @@ type StoryArgs = {
   title?: string;
 };
 
-/**
- * Storybook 要的「组件」在这里是个**适配件**：它不改变渲染，只把
- * `args.sourceName` 经注入层解析成 `data` 再交给真组件。
- *
- * 为什么不直接 `component: JsonViewer` 再把 `sourceName` 塞进 Args：
- * `Meta<typeof JsonViewer>` 的 Args 就是 `JsonViewerProps`，多一个键过不了类型；
- * 而 `Meta<StoryArgs>` 又要求 `component` 能接住 `StoryArgs`（少了必填的 `data`，
- * 同样过不了）。适配件把两件事一次说清 —— 而且它读起来就是这一层在干的事。
- */
+/** Storybook 要的「组件」在这里是个适配件：它不改变渲染，只把 `args.sourceName` 经注入层解析成 `data` 再交给真组件。
+ * 为什么不直接 `component: JsonViewer` 再把 `sourceName` 塞进 Args：`Meta<typeof JsonViewer>` 的 Args 就是 `JsonViewerProps`，多一个键过不了类型；而 `Meta<StoryArgs>` 又要求 `component` 能接住 `StoryArgs`（少了必填的 `data`，同样过不了）。适配件把两件事一次说清，读起来就是这一层在干的事。 */
 function JsonViewerWithSource({ sourceName, ...rest }: StoryArgs) {
   return <JsonViewer {...rest} data={resolveSource("json", sourceName)} />;
 }
@@ -95,14 +67,8 @@ export const WorkflowList: Story = {
   args: { sourceName: "workflow-list", title: "workflow.list" },
 };
 
-/**
- * `data === undefined` 时组件自己画 `(empty)` —— 一个真实的空态分支
- *（真机上出现在「还没产出」的那一刻）。
- *
- * 这一条**刻意绕过**注入层（直接给 `undefined`）：它要看的不是「哪份报文」，
- * 而是「没有报文」。给注入层加一个「空载荷」的名字是行不通的 —— 那会让「名字
- * 写错了」和「就是没有」变成同一件事，而前者正是这一层要暴露的。
- */
+/** `data === undefined` 时组件自己画 `(empty)` —— 一个真实的空态分支（真机上出现在「还没产出」的那一刻）。
+ * 这一条刻意绕过注入层（直接给 `undefined`）：它要看的不是「哪份报文」，而是「没有报文」。给注入层加一个「空载荷」的名字行不通 —— 那会让「名字写错了」和「就是没有」变成同一件事，而前者正是这一层要暴露的。 */
 export const Empty: Story = {
   render: (args) => (
     <JsonViewer
@@ -113,18 +79,8 @@ export const Empty: Story = {
   ),
 };
 
-/**
- * `LazyJsonViewer` —— 同一个组件的**按需**入口（`ui/lazy-json-viewer.tsx`）。
- *
- * 它和上面那几条讲的是同一件渲染，差在**什么时候加载模块**：`React.lazy` 之下
- * 它会先渲染一帧 `fallback`（「展开中…」），模块到位后换成真组件。这条 story 的
- * 价值恰恰在那**一帧**上 —— 它是日志面板展开一行时用户实际看到的第一眼，
- * 而 `react18-json-view` 只在这一刻才被下载（规范 §12.19 / 02 §2.9）。
- *
- * 为什么不是「多一条冗余 story」：`ui/lazy-json-viewer.tsx` 是 `ui/` 下**独立
- * 一个可预览文件**，组件覆盖率的分母按文件数计；而它确实有一个可看的形态
- *（fallback 那一帧 + 加载完成后的切换），不是「没有 story 可讲」的那一类。
- */
+/** `LazyJsonViewer` —— 同一个组件的按需入口（`ui/lazy-json-viewer.tsx`）。它与上面几条讲的是同一件渲染，差在什么时候加载模块：`React.lazy` 之下先渲染一帧 fallback（「展开中…」），模块到位后换成真组件 —— 这条 story 的价值恰恰在那一帧（日志面板展开一行时用户实际看到的第一眼，而 `react18-json-view` 只在这一刻才被下载，规范 §12.19 / 02 §2.9）。
+ * 为什么不是「多一条冗余 story」：`ui/lazy-json-viewer.tsx` 是 `ui/` 下独立一个可预览文件，组件覆盖率的分母按文件数计；而它确实有一个可看的形态（fallback 那一帧 + 加载完成后的切换）。 */
 export const LazyWrapped: Story = {
   render: (args) => (
     <LazyJsonViewer

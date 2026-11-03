@@ -1,15 +1,9 @@
 "use client";
 
-/** 从 WorkflowLibrary 抽出的导入面板状态 +
- *  JSON 导入 / 拖放逻辑。该 hook 拥有全部导入面板 UI
- *  状态（name / modes / json / errors / 帮助提示）、手动的
- *  「粘贴 JSON」提交路径，以及预填同一面板的
- *  拖放漏斗。组件只保留状态对象
- *  和 JSX。
- *
- *  **只接受 ComfyUI 的原始工作流格式（RAW）**：API 格式（「导出(API格式)」）不是
- *  本应用支持的导入形态，RAW 转可执行的 API 图由 comfy-cli 在执行时完成。
- */
+/** 从 WorkflowLibrary 抽出的导入面板状态 + JSON 导入 / 拖放逻辑。hook 拥有全部
+ *  面板 UI 状态（name / modes / json / errors / 帮助提示）、手动「粘贴 JSON」提交
+ *  与拖放漏斗；组件只留状态对象和 JSX。**只接受 ComfyUI 原始工作流格式（RAW）**：
+ *  API 格式不是本应用支持的导入形态，RAW 转可执行 API 图由 comfy-cli 执行时完成。 */
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import { useBusyAction } from "~/components/ui/use-busy-action";
 import { runAsyncAction } from "~/lib/async-action";

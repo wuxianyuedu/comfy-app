@@ -29,19 +29,8 @@ export { ModelLibrary } from "./ModelLibrary";
 export { WorkflowLibrary } from "./workflow-library/WorkflowLibrary";
 
 /* ── 三个带重依赖的一级视图：**刻意不从本 barrel 转出** ───────────────────
- * `WorkflowCanvasEditor` / `FilmStudio` / `ProjectCanvas` 都吃 `@xyflow/react`
- * （画布引擎 + 它那份样式）。它们一旦在这里转出，任何**静态** import 本 barrel
- * 的模块都会把画布引擎拖进自己的静态图 —— 而入口 `src/app/workspace/page.tsx`
- * 正是静态 import 本 barrel 取 `HomePage` / `AppShell` 那几件的。
- *
- * 实测（`node scripts/check-barrel-heavy-deps.cjs`）：转出这三个时入口的静态可达
- * 图里会有 38 个模块直接或间接依赖 `@xyflow/react`；改走深路径 + `dynamic()` 后
- * 只剩 1 个（`~/lib/project-canvas/canvas-store`，它只借一个 `Edge` 类型）。
- *
- * 所以消费方一律写**深路径**：
- *   const ProjectCanvas = dynamic(() => import("~/components/studio/ProjectCanvas")…)
- * 这条由 `scripts/check-barrel-heavy-deps.cjs`（规范 §12.19）守着 —— 在入口补一层
- * `dynamic()` 不算修好，静态边还在（正是本案立案时的现场）。 */
+ * `WorkflowCanvasEditor` / `FilmStudio` / `ProjectCanvas` 都吃 `@xyflow/react`；一旦在此转出，任何**静态** import 本 barrel 的模块都会把画布引擎拖进静态图 —— 入口 `src/app/workspace/page.tsx` 正是静态 import 它取 `HomePage` / `AppShell`。
+ * 实测（`node scripts/check-barrel-heavy-deps.cjs`）：转出这三个时静态可达图有 38 个模块依赖 `@xyflow/react`，改走深路径 + `dynamic()` 后只剩 1 个（只借一个 `Edge` 类型）；消费方一律写深路径，由该脚本（规范 §12.19）守着 —— 在入口补一层 `dynamic()` 不算修好，静态边还在。 */
 
 /* 项目主页（进入项目后的落点）：状态总览 + AI 自主成片操纵台。
  * 走自己的 barrel（`project-home/index.ts`）—— 它与 `ProjectCanvas` 一样是

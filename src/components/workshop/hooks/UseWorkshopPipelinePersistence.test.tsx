@@ -1,15 +1,8 @@
 //
-// 工坊持久化回归测试（Phase 2 重写）。
-//
-// 历史根因（仍要守住）：loadWorkshopDraftOnce() 只在缓存 === undefined 时从
-// localStorage 重读，而卸载时 invalidateDraftCache() 把缓存置 null —— null !==
-// undefined，重挂载会跳过重读、返回 null，导致切页签后剧本被清空。本测试覆盖
-// 「导入剧本 → 卸载(切页签) → 重挂载(切回)」内容应保留。
-//
-// Phase 2 变更：工坊不再有自建的 wsp_* 多项目，当前项目 = 画布活跃 proj_*
-// （canvas-store.getActiveId）。所以测试先经 canvas-store 建一个真实项目，
-// 再验证工坊按该 proj_* 键持久化。原「工坊内建第二个项目 / 切换 / 定妆照期换
-// 项目」的用例随该能力移除而删除——项目切换统一在首页发生，不在工坊内。
+// 工坊持久化回归测试（Phase 2 重写）。守住的根因：loadWorkshopDraftOnce() 只在
+// 缓存 === undefined 时重读，而卸载时 invalidateDraftCache() 置 null —— null !==
+// undefined，重挂载会跳过重读返回 null（切页签后剧本被清空）。当前项目 = 画布
+// 活跃 proj_*（canvas-store.getActiveId），测试先建真实项目再验按该键持久化。
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, cleanup } from "@testing-library/react";
 import { useWorkshopPipeline } from "~/components/workshop/hooks/use-workshop-pipeline";

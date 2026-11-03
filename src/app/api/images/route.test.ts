@@ -1,20 +1,7 @@
 /**
- * `/api/images` 的闸门用例 —— 本机代理 ComfyUI `/api/view` 的那道门。
- *
- * 这条口此前**根本没有 handler**：`comfyImageUrl()` 把地址收成了一处（那是好的），
- * 而落点在基线迁移时没带过来，于是「地址写得很像真的」配上 404，再被调用点一句
- * `catch {}` 咽成「没有图」—— 界面常年空态、判据全绿（台账 E3‴）。
- * 所以这里的断言不只测映射，还逐条钉住「什么形状该在**碰上游之前**被挡下」：
- *
- *   · **会话闸**（口径同台账 A13）：响应取决于「你是谁」，`public` 就等于让共享缓存代读；
- *   · **形状闸**：`filename` / `subfolder` 里出现目录成分、`type` 不在三个值之内 → 400，
- *     而且一次上游都不能被调（把垃圾交给 ComfyUI 去猜，等于把判据外包给另一个进程）；
- *   · **失败要分相**：上游 404 / 上游别的状态 / 连不上，三种三个答案，
- *     最后一种带 `hint` 让界面能显示「未连接」而不是画一个碎图标。
- *
- * mock 边界：`~/server/auth/request-user`（鉴权两态）、`~/lib/comfyui/client`
- * （`getView` 会真发 HTTP 请求到本机 ComfyUI；`ComfyViewError` 用同一份实现造出来，
- * 好让路由里的 `instanceof` 判的是同一个类）。
+ * `/api/images` 的闸门用例 —— 本机代理 ComfyUI `/api/view` 的那道门。此前根本没有 handler，`comfyImageUrl()` 把地址收在一处
+ * 而落点没带过来，404 再被调用点 `catch {}` 咽成「没有图」，界面常年空态、判据全绿（台账 E3‴）。断言钉「碰上游之前被挡下」：
+ * 会话闸（同台账 A13）→ 形状闸（`filename`/`subfolder` 目录成分、`type` 不在三值内 → 400 且一次上游都不调）→ 失败分相（上游 404 / 别的状态 / 连不上，后者带 `hint`）。
  */
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";

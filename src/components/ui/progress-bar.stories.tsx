@@ -3,11 +3,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { ProgressBar } from "~/components/ui/progress-bar";
 
 /**
- * `value` 收的是**算好的百分比**（0..100），`null` 表示不确定态。数值怎么算
- * 归 `~/lib/progress`，本件只管形态：轨道 / 填充 / 百分比文字 / ARIA。
- *
- * 有一组边界只在这里看得见（`0` / `0 < p < minVisible` / 超范围 / 非有限数），
- * 所以下面按「谁消费它」分组，而不是按数值档分组。
+ * `value` 收的是算好的百分比（0..100），`null` 表示不确定态；数值怎么算归 `~/lib/progress`，本件只管形态：
+ * 轨道 / 填充 / 百分比文字 / ARIA。有一组边界只在这里看得见（`0` / `0 < p < minVisible` / 超范围 /
+ * 非有限数），故按「谁消费它」分组。
  */
 const meta = {
   title: "UI/ProgressBar",

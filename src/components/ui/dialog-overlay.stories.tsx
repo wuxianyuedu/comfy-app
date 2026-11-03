@@ -2,26 +2,10 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { dialogBackdropClass } from "~/components/ui/dialog-overlay";
 
-/**
- * `dialogBackdropClass()` 是 `ui/dialog` / `ui/sheet` 两份遮罩（Backdrop）的
- * **class 串唯一出处**。
- *
- * 为什么它值得单独一份 story：遮罩的样式是「**删掉 JSX 还能跑的判据**」
- * （规范 17 §17.2 第①层），可以脱离 React 单测 —— 而它同时要满足一条硬规则：
- *
- * > **遮罩必须让出应用级标题行**（ISSUE #310）。遮罩曾铺满整个视口，
- * > 把页签与右上角窗口按钮一起盖住 —— 用户关不掉、也切不回其它页签。
- *
- * 判据 `check-title-bar-clearance.cjs` 描到「铺满视口」的定位声明时，
- * 要求**同一行**必须有 `top-title-bar`；而「同一段 class 串里既有铺满视口、
- * 又有 `top-title-bar`」是自相矛盾的写法（后写的 `top` 覆盖前者），
- * 所以它统一走 `overlayClass("modal", …)` 这个常量函数 ——
- * 静态判据与运行时形态由此是同一个来源。
- *
- * 所以这份 story 展示的是**它算出来的字符串**（这是本模块的全部对外面），
- * 以及带上调用处 `className` 之后的结果。真形态请在 `Dialog` / `Sheet`
- * 的 story 里看遮罩。
- */
+/** `dialogBackdropClass()` 是 `ui/dialog` / `ui/sheet` 两份遮罩（Backdrop）的 class 串唯一出处；遮罩样式是「删掉 JSX 还能跑」的判据（规范 17 §17.2 第①层），可脱离 React 单测。
+ * 硬规则：遮罩必须让出应用级标题行（ISSUE #310）—— 曾铺满整个视口、盖住页签与右上角窗口按钮，用户关不掉也切不回其它页签。
+ * 判据 `check-title-bar-clearance.cjs` 描到「铺满视口」定位声明时要求同一行有 `top-title-bar`；而同一 class 串里既有铺满又有 `top-title-bar` 会互相覆盖，故统一走 `overlayClass("modal", …)`，静态判据与运行时形态同源。
+ * 本 story 展示它算出的字符串（模块全部对外面）与带上调用处 `className` 的结果；真形态请看 `Dialog` / `Sheet` 的 story。 */
 const meta = {
   title: "UI/DialogOverlay",
   component: OverlayClassDemo,
@@ -52,8 +36,8 @@ function OverlayClassDemo() {
         </pre>
       </div>
       <p className="text-ink-muted text-xs">
-        两行里都同时有「铺满视口」与 <code>top-title-bar</code> ——
-        后者覆盖前者的 顶部偏移，遮罩因此从标题行下方开始。这也是
+        两行里都同时有「铺满视口」与 <code>top-title-bar</code> —— 后者覆盖前者的
+        顶部偏移，遮罩因此从标题行下方开始。这也是
         <code>check-title-bar-clearance.cjs</code> 要求的同一行形态。
       </p>
     </div>
@@ -79,8 +63,8 @@ export const WithCustomClass: Story = {
         </pre>
       </div>
       <p className="text-ink-muted text-xs">
-        真形态：打开任意一条 <code>Dialog</code> 或 <code>Sheet</code> 的
-        story， 看遮罩是否让出了页面顶部的标题行。
+        真形态：打开任意一条 <code>Dialog</code> 或 <code>Sheet</code> 的 story，
+        看遮罩是否让出了页面顶部的标题行。
       </p>
     </div>
   ),

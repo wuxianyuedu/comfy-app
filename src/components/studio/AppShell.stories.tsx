@@ -7,20 +7,8 @@ import { tabKey, type ViewTab } from "~/components/studio/workspace-tabs";
 
 /**
  * 应用外壳 —— 第三层注入（整屏容器）的主现场。
- *
- * 它本身是纯 props 的，难点不在 props 而在**壳里装什么**：`children` 摆一个
- * `<div>内容</div>`，画布上看到的是「外壳围着一块占位符」—— 那证明不了任何事。
- * 所以这份 story 装的是**真视图** `WorksGallery`（它真读 `canvas-store`），
- * 侧栏那份项目列表也来自**真 action** 建出来的项目（`useSeededProjects`，
- * 与用户点「新建项目」同一条路）。
- *
- * 要看的是整屏才看得出来的三件事：
- *
- *  · **侧栏两段的分界**：顶部全局项常驻，底部「项目」是折叠分组 —— 项目多了之后
- *    分组会不会把侧栏吃掉；
- *  · **页签条挂在内容列最顶端**：浏览器 / dev 形态下 `viewTabs` 由外壳在
- *    `SidebarInset` 顶部渲染（TopBar 之上）；桌面壳里由标题行承载。
- *  · **一整屏只有一条 `<main>`**：外壳的 `SidebarInset` 是它，视图容器不再套。
+ * `children` 装的是**真视图** `WorksGallery`（真读 `canvas-store`），项目列表来自真 action
+ * （`useSeededProjects`）；看整屏才看得出的三件事：侧栏两段分界、页签条挂内容列顶端、只有一条 `<main>`。
  */
 const meta = {
   title: "Studio/AppShell",
@@ -33,14 +21,9 @@ export default meta;
 type Story = StoryObj<typeof ShellHarness>;
 
 /**
- * 真项目 + 真视图：侧栏项目分组与内容列同时有东西可看。
- *
- * `children` 走 props 而不是写在 JSX 里 —— 外壳的 `children` 就是「壳里装什么」，
- * 而那正是这份 story 的**主变量**（§16.2.3.8 的故事面判据按「文件里有没有这个名字
- * 的赋值点」认必填 props：不给它，判据读到的是「story 没回答壳里装什么」）。
- *
- * 它必须是真的：`WorksGallery` 真读 `canvas-store`，不是占位 `<div>`
- *（理由见 `.storybook/screen-frame.tsx` 的第一条口径）。
+ * 真项目 + 真视图：`children` 走 props 而不是写在 JSX 里 —— 它是这份 story 的主变量
+ * （§16.2.3.8 按「文件里有没有这个名字的赋值点」认必填 props）。必须是真的：
+ * `WorksGallery` 真读 `canvas-store`，不是占位 `<div>`（理由见 `.storybook/screen-frame.tsx` 第一条口径）。
  */
 function ShellHarness({
   extraProjects,

@@ -3,15 +3,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { TaskTypeChip } from "~/components/ui/task-type-chip";
 import { VALID_TASK_TYPE_CODES } from "~/lib/workflow/workflow-types";
 
-/**
- * 三档类型色**刻意保留 Tailwind 字面量**（violet / sky / amber，规范 03
- * §3.6.1 的类型色例外）：它们表达「这是哪一种媒体」，是分类锚点而不是表面
- * 色 —— 改品牌色对它不生效是有意的。
- *
- * 候选值不手写：`VALID_TASK_TYPE_CODES` 是 `~/lib/workflow/workflow-types`
- * 导出的**唯一一份**类型码集合，这里直接铺它 —— 新增一类媒体这一屏自动跟上
- * （从 props 派生不出这张表，它就是「枚举只写一份」的那一份）。
- */
+/** 三档类型色**刻意保留 Tailwind 字面量**（violet / sky / amber，规范 03 §3.6.1 的类型色例外）：它们表达「这是哪一种
+ * 媒体」，是分类锚点而非表面色，改品牌色对它不生效是有意的。候选值不手写：`VALID_TASK_TYPE_CODES` 是
+ * `~/lib/workflow/workflow-types` 导出的唯一一份类型码集合，这里直接铺它 —— 新增一类媒体这一屏自动跟上。 */
 const CODES = [...VALID_TASK_TYPE_CODES];
 
 const meta = {

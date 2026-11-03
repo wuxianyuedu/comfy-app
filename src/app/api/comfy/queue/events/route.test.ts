@@ -1,10 +1,7 @@
 /**
- * `GET /api/comfy/queue/events` —— ComfyUI 队列/运行变化事件的推送通道（ISSUE #1351 同族）。
- *
- * 钉三件事（与 liveness 路由同口径）：
- *   1. 帧形态是 SSE（`text/event-stream` + `no-cache` + 关反代缓冲）；
- *   2. 连上时**先推一帧** —— 客户端可能在「队列早就变了」之后才连上来，必须能立刻拉一次；
- *   3. 变化事件一到就推、不被缓冲（否则帧会攒到连接关闭才到客户端）。
+ * `GET /api/comfy/queue/events` —— ComfyUI 队列/运行变化事件推送通道的契约测试（ISSUE #1351 同族）。
+ * 钉三件事（与 liveness 路由同口径）：SSE 帧形态（`text/event-stream` + `no-cache` + 关反代缓冲）；
+ * 连上先推一帧（客户端可能在「队列早就变了」之后才连上）；事件即到即推、不被缓冲。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

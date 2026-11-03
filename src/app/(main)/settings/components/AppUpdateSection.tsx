@@ -2,9 +2,8 @@
 
 /**
  * 应用自更新分区（规范 17 §17.2 第③层）。
- *
- * 桌面壳内走 Tauri updater 检测 / 下载 / 重启，浏览器与 dev 环境降级为提示。
- * 全部状态与动作由 controller 的 `appUpdate` 承载，视图只渲染与触发。
+ * 桌面壳内走 Tauri updater，浏览器 / dev 降级为提示；状态与动作由 controller
+ * 的 `appUpdate` 承载。
  */
 
 import { fmtBytes } from "~/lib/format-bytes";

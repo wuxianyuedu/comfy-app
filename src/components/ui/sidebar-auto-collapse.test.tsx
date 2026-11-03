@@ -1,15 +1,7 @@
-/**
- * 左轨自动收起的接线判据（窄窗判据 → provider 生效态 → 提示文案的自动/手动之分）。
- *
- * 纯推导部分在 `src/lib/layout-budget.test.ts`；这里只钉「接起来对不对」：
- *   · 窄窗首屏就收起，且**不写 cookie**（纪律不能把用户偏好写脏 —— 写了下次启动
- *     就变成用户自己的选择了）；
- *   · 用户在窄窗里点开 → 生效态跟随用户，且提示要说「已按你的选择」而不是自动；
- *   · 窗口跨越阈值后回到纪律 —— 那条表态不该永久否决让位。
- *
- * 判据用 `innerWidth` 驱动 `matchMedia` 存根，与真浏览器同源（`use-narrow-nav`
- * 与 `use-mobile` 都读同一个数），不 mock 到「永远不窄」那种自洽状态。
- */
+/** 左轨自动收起的接线判据（窄窗判据 → provider 生效态 → 提示文案的自动/手动之分）；
+ * 纯推导在 `src/lib/layout-budget.test.ts`。窄窗首屏即收起且**不写 cookie**（纪律不能
+ * 把用户偏好写脏），用户窄窗里点开则跟随用户并提示「已按你的选择」，窗口跨越阈值后回到
+ * 纪律。判据用 `innerWidth` 驱动 `matchMedia` 存根，与真浏览器同源（两边读同一个数）。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 
@@ -117,18 +109,11 @@ describe("窄窗下左轨自动让位", () => {
     expect(isAuto()).toBe("true");
   });
 
-  /* ISSUE #1267 回归：首帧对账不能被「订阅周期」绑住。
-   *
-   * 现场是 React 开发态的**双挂载**（挂载 → 卸载 → 再挂载）：旧实现把
-   * `setTimeout(0)` 补的那次通知挂在订阅的清理函数上，卸载时的 `clearTimeout`
-   * 把它取消了 —— 于是「进页面时窗口就已经是窄窗」这件事再也没有人通知，
-   * `data-state` 停在服务端那份「展开」上，只能等某个无关的重渲染顺带纠正。
-   * 并发跑 E2E 时那次重渲染晚到 5s 之后 ⇒ `e2e/nav-auto-collapse.spec.ts`
-   * 两条在默认并发下必红（`--workers=1` 串行则绿，与报告一致）。
-   *
-   * 这里把「卸载 → 再挂载」显式跑一遍，并**只**让模块级那次通知来做对账：
-   * 期间不派发任何 `change`（模拟「进页面就已经是窄窗」，媒体查询不会再 change）。
-   */
+  /* ISSUE #1267 回归：首帧对账不能被订阅周期绑住。React 开发态双挂载（挂载 → 卸载 →
+   * 再挂载）时，旧实现把 `setTimeout(0)` 的通知挂在订阅清理函数上，卸载的 `clearTimeout`
+   * 取消了它 —— 「进页面时已是窄窗」无人通知，`data-state` 停在服务端「展开」，并发 E2E
+   * 里要等无关重渲染（晚到 5s+）才纠正（`--workers=1` 串行则绿）。这里显式跑「卸载 →
+   * 再挂载」，且只让模块级那次通知对账：期间不派发任何 `change`。 */
   it("订阅被卸载再挂载后，首帧对账仍由 store 自己的通知落地", async () => {
     mount();
     expect(state()).toBe("expanded");

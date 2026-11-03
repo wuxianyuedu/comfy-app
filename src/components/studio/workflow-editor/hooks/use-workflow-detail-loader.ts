@@ -201,16 +201,9 @@ export function useWorkflowDetailLoader({
       const subgraphUid = opts?.subgraphUid;
       const isSubgraph = Boolean(subgraphUid);
       const hostId = opts?.hostNodeId ?? "";
-      /* 缓存键 = 这次请求的身份（顶层只有 id，子图再加 uid 与 hostId 链）。
-       *
-       * 这里原先拼的是 `` `/api/workflows/${id}[/subgraph]` `` 加 `withQuery(...)`，
-       * 而**那条 REST 路根本不存在** —— 真实请求走 `vanillaApi.workflow.detailFull`
-       * / `subgraph`，只剩这个键还长得像地址。形状留着不会出错，但会骗两个人：
-       * 读代码的人以为有一条 HTTP 路可走，而「客户端地址必须有落点」那条判据
-       * （`tests/rest-endpoint-targets.test.ts`）会一直红在这个假阳性上。
-       *
-       * `hostId` 是累积的「宿主:内部」链，必须进键：① 嵌套子图坐标按该前缀读回
-       * （否则拖过的位置退回原始坐标）；② 同名子图在不同层级下不串用。 */
+      /* 缓存键 = 请求身份（顶层只有 id，子图再加 uid 与累积的 hostId 链）；别拼成
+       *  `/api/...` 地址 —— 那条 REST 路不存在，还会让 `tests/rest-endpoint-targets.test.ts` 假阳性常红。
+       *  hostId 必须进键：嵌套子图坐标按该前缀读回，同名子图在不同层级下也不串用。 */
       const cacheKey =
         subgraphUid !== undefined && subgraphUid !== ""
           ? `${CACHE_KEY_PREFIX}${workflowId}|subgraph:${subgraphUid}|host:${hostId}`

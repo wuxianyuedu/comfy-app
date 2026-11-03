@@ -5,16 +5,8 @@ import { Input } from "~/components/ui/input";
 import { SelectMenu } from "~/components/ui/select-menu";
 
 /**
- * `FormField` 是「标签 + 控件 + 校验错误」的三件套（规范 16 §16.2.4.26）。
- *
- * 它的入参里 `label` / `hint` / `children` **都可以是 ReactNode**，`children`
- * 还支持 render-prop（`(a11y) => <Input {...a11y} />`）—— 这正是它此前没 story 的
- * 真实原因：Args 面板装不下 React 节点。按注入层的口径，这类参数由 story 的
- * `render` 给，Args 里只留可调的布尔与文案（见 `.storybook/data-sources.tsx`）。
- *
- * 要看的是 **ARIA 关联**（`htmlFor` / `aria-invalid` / `aria-describedby`）
- * 与「错误行比 hint 更靠下」这个阅读顺序 —— 两者都有单测（`form-field.test.tsx`），
- * 这里看的是**形态**：它们拼在一起时的间距与层级对不对。
+ * `FormField` 是「标签 + 控件 + 校验错误」的三件套（规范 16 §16.2.4.26）。入参 `label` / `hint` / `children` **都可以是 ReactNode**，`children` 还支持 render-prop —— 这正是它此前没 story 的真实原因：Args 面板装不下 React 节点；这类参数由 story 的 `render` 给，Args 里只留可调的布尔与文案（见 `.storybook/data-sources.tsx`）。
+ * 要看的是 **ARIA 关联**（`htmlFor` / `aria-invalid` / `aria-describedby`）与「错误行比 hint 更靠下」的阅读顺序（两者都有单测 `form-field.test.tsx`），这里看**形态**：拼在一起时的间距与层级对不对。
  */
 const meta = {
   title: "UI/FormField",

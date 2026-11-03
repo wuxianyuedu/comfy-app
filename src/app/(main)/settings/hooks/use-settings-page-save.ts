@@ -1,18 +1,9 @@
 "use client";
 
 /**
- * 设置页「保存」分区的sub-hook（`use-settings-page` 的拆分件，与
- * `use-settings-page-comfy` / `-ollama` / `-db-studio` / `-remote-models` /
- * `-app-update` 同族）。
- *
- * 收口：三件事 —— LLM 配置落库（含远程模型的即时保存入口）、偏好落库、以及
- * 「偏好落库后要连带重取的实例元数据」（安装形态与桌面实例的六个存储目录：
- * 两者都是刚保存的 `comfyuiPath` 的函数，必须在同一次保存里重取，否则界面上
- * 留着改路径之前的旧结论）。
- *
- * 这一块是自洽的「保存」职责 —— 只依赖两份草稿、保存指示器、反馈通道与
- * 四个 tRPC 实例，与 ComfyUI / DbStudio / Ollama 的运行态没有共享 state。
- * 对外形状逐字段不变（`persistLlmDraft` / `saveLlm` / `savePrefs` 原样透出）。
+ * 设置页「保存」分区 sub-hook（`use-settings-page` 的拆分件）：LLM 配置与偏好落库，并在同一次保存里
+ * 连带重取安装形态与六个存储目录 —— 两者都是刚保存的 `comfyuiPath` 的函数，不重取会留着改路径前的旧结论。
+ * 对外形状（`persistLlmDraft` / `saveLlm` / `savePrefs`）原样透出不变。
  */
 import { useCallback } from "react";
 

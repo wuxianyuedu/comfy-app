@@ -2,10 +2,8 @@
 
 /**
  * 「实际使用」测试弹窗（规范 17 §17.2 第③层）。
- *
- * 按用途（chat / 生图 / 生视频）真实调用一次；路径 / 提示词 / 尺寸 / 额外字段
- * 均可自定义输入。图片 / 视频会消耗提供方额度，弹窗内有预告。交互状态与动作
- * 由 `useRemoteModelDialogs`（第②层）承载。
+ * 按用途真实调用一次，路径 / 提示词 / 尺寸 / 额外字段均可自定义；图片 / 视频
+ * 消耗提供方额度（弹窗内有预告）。交互态与动作由 `useRemoteModelDialogs` 承载。
  */
 
 import {
@@ -367,12 +365,9 @@ function UsageFieldEditor({
 
       <div className="mb-2 flex flex-col gap-2">
         {d.usageFieldsToSend(usageTest).map((f) => {
-          /* `i` 是给动作（`patchField` / `setVideoMode`）用的**当下下标**，
-           * 每次渲染现算都正确；但**不能拿它当 React 的 `key`** ——
-           * 删中间一行会让后面所有行的下标整体左移，React 于是复用错误的
-           * DOM 节点，用户在某行刚输入的内容会闪到隔壁字段。`key` 用
-           * `f.id`（字段自带的稳定标识，见 `usage-test-config` 的
-           * `makeUsageField`）。 */
+          /* `i` 是给动作用的**当下下标**，不能当 React 的 `key`：删中间一行会让
+           * 后面行的下标整体左移，React 复用错误 DOM 节点，输入内容会闪到隔壁
+           * 字段。`key` 用 `f.id`（字段自带的稳定标识，见 `usage-test-config`）。 */
           const i = usageTest.fields.indexOf(f);
           return (
             <div className="flex flex-col gap-1.5" key={f.id}>

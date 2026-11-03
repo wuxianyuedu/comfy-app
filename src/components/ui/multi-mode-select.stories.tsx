@@ -4,29 +4,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { MultiModeSelect } from "~/components/ui/multi-mode-select";
 
 /**
- * `MultiModeSelect` 是工作流卡片右上角的**多选 chip**：主 chip（按默认模式的
- * 分类着色）+ `+N` 附加模式占位，点任一个打开同一个多选 popover。
- *
- * ## 它为什么是一份单独的复合件（而不是 Combobox 的包装）
- *
- * 这一点值得写在 story 里，因为从形状看它与「搜索 + 多选」的 Combobox 很像 ——
- * 但本件有**三条 Combobox 撑不住的复合语义**（`multi-mode-select.tsx` 文件头
- * 逐条论证过，那是「已评估保留」的结论、与磁盘上是否装有 combobox 无关）：
- *
- * 1. **draft / apply 事务**：面板内起一份草稿，只有点「保存」才 `onChange`
- *    回父层；点「取消」直接关、不改动。Combobox 是「即时选中即回调」的单向流，
- *    要实现草稿就得在外层再手写一份 —— 那时其实已经**不是复用、而是二次包装**。
- * 2. **`defaultMode` 指针**：`modes` 里额外标一位「哪个是默认」，显示在 chip
- *    主色上；保存时若默认项被取消勾选，会回退到 `arr[0]` 保证
- *    `defaultMode ⊆ modes`。
- * 3. **分类页签**（图像 / 视频 / 音频）：面板顶部切段，每段独立展示该分类的
- *    候选 —— Combobox 是单一搜索列表，没有页签维度。
- *
- * ## story 的看点在「事务」与「约束」
- *
- * - 打开面板、勾几个、点**取消** → chip 与 props 完全没变（草稿被丢弃）；
- * - 打开面板、勾几个、点**保存** → chip 更新、且默认模式那张分类色跟着换；
- * - 把「默认模式」取消勾选再保存 → 默认回退到剩余项之首。
+ * `MultiModeSelect` 是工作流卡片右上角的多选 chip（主 chip 按默认模式着色 + `+N` 占位），点任一个打开同一多选 popover。它不是 Combobox 的包装：draft / apply 事务（取消不改动，保存才 `onChange`）、`defaultMode` 指针（默认项被取消勾选时回退 `arr[0]`）与分类页签三条复合语义撑不住。
+ * 故事看点即这三条约束：取消丢弃草稿、保存后颜色跟随、默认指针始终 `defaultMode ⊆ modes`。
  */
 const meta = {
   title: "UI/MultiModeSelect",

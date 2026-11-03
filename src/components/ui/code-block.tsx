@@ -1,21 +1,9 @@
 "use client";
 
 /**
- * CodeBlock — shiki（VSCode 同款语法高亮引擎）驱动的源码展示块。
- *
- * 实现要点（重构，修复「行号不显示」+「大文件高亮卡死 UI」）：
- *  1. 行号可靠性：不再对 shiki 的 HTML 字符串做正则注入，改用
- *     codeToTokensBase 拿结构化 token 后由 React 直接渲染，每行固定
- *     「行号列 + 代码列」两段 span，样式由本组件自己的 CSS 类控制，
- *     不依赖 shiki 输出的 DOM 结构，行号 100% 可见。
- *  2. 不阻塞主线程：按 CHUNK_LINES 行分片高亮，片间 setTimeout 让出
- *     主线程；首帧先渲染纯文本行号，高亮完成后再整体替换。打开
- *     38KB 级源码文件时 UI 始终保持响应，不再出现「点不动」。
- *  3. 超大文件阈值：超过 MAX_HIGHLIGHT_CHARS 直接走纯文本行号渲染，
- *     避免 shiki 高亮数万字符白耗主线程。
- *
- * 按需懒加载：首次打开时动态 import shiki 的 web bundle，之后缓存单例
- * highlighter，避免重复初始化。
+ * CodeBlock — shiki（VSCode 同款语法高亮引擎）驱动的源码展示块。行号不再对 shiki HTML 做正则注入，而用 codeToTokensBase 的结构化 token 由 React 渲染（每行「行号列 + 代码列」两段 span，样式自管、不依赖 shiki DOM），行号 100% 可见。
+ * 按 CHUNK_LINES 分片高亮，片间 setTimeout 让出主线程，首帧先渲染纯文本行号；超过 MAX_HIGHLIGHT_CHARS 直接走纯文本行号，避免数万字符白耗主线程。
+ * 首次打开时动态 import shiki 的 web bundle，之后缓存单例 highlighter，避免重复初始化。
  */
 
 import { useEffect, useState, type CSSProperties } from "react";

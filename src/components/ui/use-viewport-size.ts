@@ -4,26 +4,8 @@ import { useEffect, useState } from "react";
 
 /**
  * useViewportSize —— 「当前视口多大」的唯一出口。
- *
- * 为什么要有这个 hook：**渲染期直接读 `window.innerWidth` / `innerHeight` 是错的**，
- * 而它错得没有声音 ——
- *
- *   · **SSR / 首帧拿不到**：`window` 在服务端不存在，判空之后只能给个兜底值，
- *     于是服务端渲染一份、客户端水合又是另一份，React 报 hydration mismatch；
- *   · **窗口缩放不会重渲染**：读到的值在整段渲染里只对当下那一帧成立，用户把
- *     窗口拉窄之后，按旧值算出来的浮层位置就一直错着，且没有任何东西会通知它；
- *   · **同一帧里读两遍可能不一致**（滚动时移动端浏览器的 `innerHeight` 会随
- *     地址栏收放变化）。
- *
- * 收在这里之后，浮层定位这类「要跟着视口走」的判据有一个可信来源：首帧为
- * `null`（调用处据此**先不摆位**，而不是拿一个假数字去摆），挂载后由
- * `resize` 事件（含软键盘弹起 / 地址栏收放触发的视口变化）驱动更新。
- *
- * ⚠️ **值的单位是 CSS 像素**（`window.innerWidth` / `innerHeight` 的口径），
- * 与 `dvh` 在多数情况下一致；但**滚动引起的高度变化不会触发 `resize`**
- *（移动端地址栏收起时 `innerHeight` 会变、部分浏览器不发事件）—— 需要严格
- * 跟随时用 CSS 的 `dvh` 表达，本 hook 是给「必须在 JS 里知道视口尺寸」的
- * 判据（二选一的分支、像素级夹取）用的。
+ * 渲染期直接读 `window.innerWidth` / `innerHeight` 是错的且错得没声音：SSR/首帧拿不到（hydration mismatch）；窗口缩放不会重渲染（旧值一直错着）；同一帧读两遍可能不一致（移动端地址栏收放）。
+ * 收在这里后：首帧为 `null`（调用处先不摆位，而不是拿假数字去摆），挂载后由 `resize`（含软键盘弹起 / 地址栏收放）驱动。⚠️ 单位是 CSS 像素；滚动引起的高度变化不触发 `resize`，需要严格跟随时用 CSS 的 `dvh`。
  */
 export type ViewportSize = {
   height: number;

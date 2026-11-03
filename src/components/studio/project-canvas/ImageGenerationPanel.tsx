@@ -22,18 +22,10 @@ import {
 import { setActiveTaskId } from "./activeTask";
 import { useCancelTask } from "./hooks/use-cancel-task";
 
-/* ── 生成面板（生图 / 生成视频 / 图片资产共用）· ──
- * 抽自 CanvasNode 的 image/video 分支（原 ~1071–1287）。把「类型 → 模型 →
- * 工作流」三步级联 + DynamicWorkflowForm + 生成 CTA 整段复用为独立组件，
- * 让 picture 节点在选中时也能挂载同一套生成器（生图节点与图片资产合并为整体）。
- * 对于 image/video 仍渲染顶部 ResultCard；picture 不渲染（生成结果直接显示在
- * 节点主体 ContentAssetBody 上）。
- *
- * 执行步骤日志不再显示在节点上（节点空间太小，且按
- * 节点单独加开关无法统一）。改为统一「调试模式」开关（设置抽屉）+ 底部独立
- * GlobalStepLogPanel 呈现。本组件在生成开始（d.taskId 就绪）时通过
- * setActiveTaskId() 把当前任务交给全局面板。后端管道（runner.log() →
- * Task.logs JSON + SSE /stream）已就绪。
+/* 生成面板：生图 / 生成视频 / 图片资产共用（抽自 CanvasNode 的 image/video 分支）。
+ * image/video 顶部渲染 ResultCard；picture 不渲染（结果显示在节点主体上）。
+ * 步骤日志不在节点内展示（空间小、逐节点开关无法统一）：生成开始 setActiveTaskId() 交给
+ * 底部 GlobalStepLogPanel。
  */
 
 export type ImageGenerationPanelProps = {
@@ -104,12 +96,9 @@ export function ImageGenerationPanel({
 
   const isVideo = kind === "video";
   const typeList = isVideo ? VIDEO_WORKFLOW_TYPES : IMAGE_WORKFLOW_TYPES;
-  /* 启发式兜底分类 — 早期导入的旧
-   * 工作流 taskType 可能为空或误判，导致「文生图」筛选下混入 I2V
-   * 等其他类型。这里按 wf.name 后缀关键字补一个最可能的类型，留空
-   * 让上层 drop。
-   * 扩 Chinese 关键字（"图生视频"/"文生视频"/
-   *"视频"）—— 全中文命名（无 I2V/T2V 等英文 marker）也能识别。 */
+  /* 启发式兜底分类：早期导入的旧工作流 taskType 可能为空或误判（把 I2V 混进文生图），
+   * 故按 wf.name 关键字补最可能的类型（含中文「图生视频」/「文生视频」，无英文 marker 也能识别）；
+   * 推断不出返回空串，由上层 drop。 */
   const inferTypeByName = (rawName: string): string => {
     const up = upperToken(rawName);
     // ── VIDEO 类（更具体优先；Chinese"图生视频" 出现在 I2V 之前，
@@ -402,15 +391,9 @@ export function ImageGenerationPanel({
                   ? "↻ 重新执行"
                   : "▶ 用此工作流生成"}
             </Button>
-            {/* 卡住任务的逃生通道。
-             * 当 runner 的 raw 路径把在飞槽位占着不放时，
-             * 图片节点曾永远卡在「生成中…」（早前的修复
-             * 堵上了泄漏，但更早的在途任务仍靠
-             * 这个按钮恢复）。调用 POST /api/tasks/{id}/cancel，
-             * 它把 DB 行标为 CANCELLED + 调
-             * runner.cancelTask() 释放活跃槽位。
-             * SSE`error` 事件会在约 100ms 内跟上，并经处理
-             * 普通失败的同一条路径把`d.status` patch 成"error"。 */}
+            {/* 卡住任务的逃生通道：raw 路径占着在飞槽位时节点会永远停在「生成中…」。
+                调用 POST /api/tasks/{id}/cancel 标 CANCELLED 并释放活跃槽位，
+                SSE error 事件随后经普通失败路径把 d.status patch 成 "error"。 */}
             {d.status === "running" && d.taskId !== undefined && d.taskId !== "" ? (
               <Hint label="强制终止当前任务并释放活动槽位" wrap>
                 <Button

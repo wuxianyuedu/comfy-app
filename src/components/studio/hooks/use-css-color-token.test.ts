@@ -23,13 +23,10 @@ describe("normalizeCssColor", () => {
 
 describe("readCssColorToken", () => {
   it("服务端（无 window）返回 null，由调用方兜底", () => {
-    /* ⚠️ **不要**写成 `if (typeof window !== "undefined") return;`。
-     * 那种写法把「本用例的结论」挂在了**运行环境的一个全局默认值**上：
-     * 检出里把默认档换成 jsdom（或本文件哪天被加进 jsdom 档）之后，
-     * 它照样报绿 —— 但一条断言都没跑。绿有两种含义，而这一条恰好是坏的那种。
+    /* ⚠️ **不要**写成 `if (typeof window !== "undefined") return;`：那把结论挂在了
+     * 运行环境的全局默认值上，换成 jsdom 档后照样报绿但一条断言都没跑。
      * 正确形状是**把条件造出来**（`vi.stubGlobal` 显式抹掉 `window`），
-     * 于是无论默认档是什么，被覆盖的都是同一个分支。
-     * 同款做法见 src/lib/app-events.test.ts 的「无 `window` 时…」那条。 */
+     * 无论默认档是什么覆盖的都是同一分支。同款见 src/lib/app-events.test.ts。 */
     vi.stubGlobal("window", undefined);
     expect(typeof window).toBe("undefined");
     expect(readCssColorToken("--color-note-tint-base")).toBeNull();

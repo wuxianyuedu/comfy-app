@@ -4,10 +4,7 @@ import { Bold, Italic, Underline } from "lucide-react";
 import { Toggle } from "~/components/ui/toggle";
 
 /**
- * 两轴候选清单从 `Toggle` 的 props 派生 —— 写法与理由与
- * `button.stories.tsx` 一致（`cva()` 的返回值运行时没有 `.variants`）。
- *
- * `pressed` 是**受控状态**、不是变体，所以它不列进 `argTypes.options`。
+ * 两轴候选清单从 `Toggle` 的 props 派生，写法与理由见 `button.stories.tsx`（`cva()` 返回值运行时没有 `.variants`）。`pressed` 是受控状态、不是变体，故不列进 `argTypes.options`。
  */
 type ToggleVariant = NonNullable<React.ComponentProps<typeof Toggle>["variant"]>;
 type ToggleSize = NonNullable<React.ComponentProps<typeof Toggle>["size"]>;

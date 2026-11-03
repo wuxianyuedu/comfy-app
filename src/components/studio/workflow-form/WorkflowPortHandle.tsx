@@ -4,12 +4,9 @@ import { upperToken } from "~/lib/upper-token";
 import React from "react";
 import { Handle, Position, useNodeId } from "@xyflow/react";
 
-/* ── 工作流画布端点样式（紧凑画布模式） ──
- * 端口配色按已定稿的设计规范：STRING/INT → 中性灰，
- * IMAGE → 紫，VIDEO → 粉，连线型（MODEL/CLIP/LATENT）→ 青。
- * 描边是中灰，在卡片（#16161C）与
- * 页面（#0A0A0F）背景上都读得出来。句柄 12px，骑在卡片
- * 边框上，一半露在节点外，与工作流画布完全一致。 */
+/* ── 工作流画布端点样式（紧凑画布模式）── 端口配色按定稿规范：STRING/INT 中性灰、IMAGE 紫、
+ * VIDEO 粉、连线型（MODEL/CLIP/LATENT）青。描边中灰，在卡片（#16161C）与页面（#0A0A0F）上都读得出。
+ * 句柄 12px，骑在卡片边框上、一半露在节点外，与工作流画布完全一致。 */
 const PORT_STROKE = "#4D4D59";
 const PORT_IMG = new Set(["IMAGE", "MASK"]);
 const PORT_VID = new Set(["VIDEO", "VHS_FILENAMES", "VHS_VIDEOINFO", "VHS_AUDIO", "AUDIO"]);
@@ -31,19 +28,11 @@ function portColorFor(type?: string): string {
   return "#5BC6FF";
 }
 
-/** 端口行标签（每行右侧）的类型章样式。
- *  对齐 Ardot v2：STRING/INT/FLOAT → 中性表面 + `#9A9AAD` 文字；
- *  IMAGE/MASK → `--color-chip-type-image-bg` + `#7C5CFC` 0.4 描边 + `#7C5CFC` 文字；
- *  VIDEO/AUDIO → `--color-chip-type-video-bg` + `#FF5CA8` 0.4 描边 + `#FF5CA8` 文字。
- *  底色随主题（浅色档见 globals.css 的 `--color-chip-type-*-bg`）。
- *
- *  `type` 同时会提前归一化：当工作流原件里缺少声明、富化回落到 JS 类型推导时，
- *  原始的 `e.type` 可能漏出非 ComfyUI 的
- *  值（`"*"`、`""`，或历史上残留的
- *  `control_after_generate` 字符串如 `"fixed"`/`"randomize"`）。
- *  调用方已归类为数值的行（紧凑 WirePortRows 路径）上出现任何
- *  非 {INT,FLOAT,NUMBER} 类型，
- *  都强制成 INT，好让章对该行的编辑语义保持诚实。 */
+/** 端口行标签的类型章样式，对齐 Ardot v2：STRING/INT/FLOAT → 中性表面 + #9A9AAD；
+ *  IMAGE/MASK → --color-chip-type-image-bg + #7C5CFC 0.4 描边/文字；VIDEO/AUDIO → --color-chip-type-video-bg
+ *  + #FF5CA8 0.4 描边/文字；底色随主题（浅色档见 globals.css 的 --color-chip-type-*-bg）。
+ *  `type` 会提前归一化：原件缺声明、富化回落到 JS 推导时可能漏出非 ComfyUI 值（"*"、""、
+ *  残留的 control_after_generate 字符串如 "fixed"/"randomize"）；数值行上出现非 {INT,FLOAT,NUMBER} 一律强制 INT。 */
 /** 章视为已知 ComfyUI 数据类型的类型集合。任何别的已声明类型
  *（自定义节点的 `IMAGEUPLOAD`、厂商枚举 …）也**原样**渲染 ——
  * 用户规则：「type 是什么就显示什么类型」。`fallback` 只在

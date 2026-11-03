@@ -12,18 +12,8 @@ import {
 } from "~/components/ui/empty";
 
 /**
- * `ui/empty` 是 shadcn 的**空态基元族**（`Empty` / `EmptyHeader` / `EmptyMedia`
- * / `EmptyTitle` / `EmptyDescription` / `EmptyContent`）。
- *
- * 它与 `ui/empty-state` 的关系要说清，否则两边都会被误当成「重复实现」：
- * `empty-state` 是**业务出口**（三档 `page` / `error` / `hint`，props 是
- * `{title, description, icon, action}`），它的 `page` / `error` 两档内部就渲染
- * 这一族；本件是**基元**，多出来的是 `EmptyMedia` 的 `variant` 轴与「拼装自由」。
- * 给基元写 story 的意义正是把那一轴与拼装形态定下来 —— 业务出口的 story
- * （`EmptyState`）看不到 `variant=icon` 那档。
- *
- * `EmptyMedia` 是这一族**唯一有变体轴**的部件，枚举从 props 派生
- * （规范 16 §16.2.3.4）。
+ * `ui/empty` 是 shadcn 的**空态基元族**（`Empty` / `EmptyHeader` / `EmptyMedia` / `EmptyTitle` / `EmptyDescription` / `EmptyContent`）。与 `ui/empty-state` 的关系：后者是**业务出口**（三档 `page` / `error` / `hint`，props 为 `{title, description, icon, action}`），`page` / `error` 内部就渲染这一族；本件是**基元**，多出 `EmptyMedia` 的 `variant` 轴与拼装自由。
+ * `EmptyMedia` 是这一族**唯一有变体轴**的部件，枚举从 props 派生（规范 16 §16.2.3.4）。
  */
 type EmptyMediaVariant = NonNullable<React.ComponentProps<typeof EmptyMedia>["variant"]>;
 

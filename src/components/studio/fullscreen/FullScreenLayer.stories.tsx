@@ -4,32 +4,17 @@ import { FullScreenLayer } from "~/components/studio/fullscreen/FullScreenLayer"
 import { titleBarHeightPx } from "~/lib/full-screen-layer";
 import { zClass } from "~/lib/shell/overlay-z";
 
-/**
- * 全屏视图层 —— 应用内「全屏」的统一容器（设置页、工作流编辑器、脚本编辑器、
- * 消息中心…都铺在它里面）。
- *
- * 纯 props（`zClass` + 布局 class + 三个 a11y 属性），但它铺在哪儿**是判据**：
- * 注意这里给的是 `top-title-bar` 而不是 `inset-0` —— 让出标题行，页签与右上角
- * 窗口按钮才一直看得见、点得动。所以下面那个假标题行不是装饰，它是这条 story
- * 唯一要表达的关系：**铺满的是「标题行下方的内容区」，不是整个窗口**。
- *
- * 三条历史事故都收在这件组件与它的判据模块（`~/lib/full-screen-layer`）里：
- *   ① 第一次用 `inset-0` 盖住页签 → 用户再也切不回别的页签；
- *   ② 几何让位了但仍被 base-ui 的 `InternalBackdrop` 压在命中测试之后 →
- *      「看得见、点不动」，所以标题行还必须抬到 `z-chrome`；
- *   ③ 铺到 `bottom-0` 的浮层最后 24px 被底部状态栏压住 → 日志最下方几行看不全。
- * 三件事在 story 里各有一档（前两档看「让出顶部」，第三档看「让出底部」）。
- *
- * `zClass` 由调用处从浮层刻度表取（`zClass("modal")`，调试类视图可下探到
- * `Z.base`）—— 本件不猜层级。
- */
+/** 全屏视图层 story —— 应用内「全屏」统一容器（设置、工作流编辑器、脚本编辑器、消息中心…）。
+ * 纯 props（zClass + 布局 class + 三个 a11y 属性），但铺在哪儿是判据：用 `top-title-bar` 而非 `inset-0`，
+ * 让出标题行，页签与窗口按钮始终可见可点 —— 铺满的是标题行下方内容区，不是整个窗口。
+ * 三起事故各一档：① inset-0 盖住页签；② 让位后被 InternalBackdrop 压住命中测试（标题行须抬到 z-chrome）；
+ * ③ 铺到 bottom-0 被状态栏压住 24px。zClass 由调用处从刻度表取，本件不猜层级。 */
 const TITLE_BAR_PX = titleBarHeightPx();
 
 /**
- * 假 chrome 的层级也**取自刻度表**（`~/lib/shell/overlay-z`），不写裸数字：
- * 标题行走 `chrome`（应用级 chrome，恒在其余所有档之上）、底部状态栏走 `toast`
- * —— 真机上就是这两档。`check-overlay-z` 的硬闸会拦下裸 `z-<数字>`，
- * 而这条报错是对的：假 chrome 用别处的层级，这条 story 就演示了一个不存在的世界。
+ * 假 chrome 的层级也取自刻度表（~/lib/shell/overlay-z），不写裸数字：
+ * 标题行走 chrome（应用级，恒在其余档之上）、底部状态栏走 toast。
+ * `check-overlay-z` 硬闸会拦裸 z-<数字>，报错是对的：假 chrome 用别处层级就演示了不存在的世界。
  */
 const Z_CHROME = zClass("chrome");
 const Z_TOAST = zClass("toast");
@@ -66,15 +51,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * 模拟 chrome：**它是浮在 story 容器之上的**，不是容器里的一个 div ——
- * 因为 `FullScreenLayer` 自己写的是 `fixed`（相对视口定位），本件唯一的真实
- * 形态就是「铺满整个视口、顶端让出那一条」。
- *
- * 早先的版本把假标题行放在一个 `relative` 容器里，结果是假 chrome 与真浮层
- * **不在同一个坐标系**：画布上看着「浮层把容器盖住了」，而真机上的让位关系
- *（盖住谁、让出谁）完全没被表达出来。所以这里改成与 `fixed` 同级的定位，
- * 并显式说明它就是 `titleBarHeightPx()` 那一条。
- */
+ * 模拟 chrome：它浮在 story 容器之上，不是容器里的 div —— FullScreenLayer 自己写 `fixed`（相对视口），
+ * 本件唯一真实形态就是「铺满视口、顶端让出一条」。
+ * 早先放在 relative 容器里导致假 chrome 与真浮层不在同一坐标系，让位关系完全没被表达；
+ * 现在与 fixed 同级定位，并显式说明它就是 titleBarHeightPx() 那一条。 */
 function ChromeFrame({
   showStatusBar = false,
   children,
@@ -111,15 +91,9 @@ function ChromeFrame({
 }
 
 /**
- * 把 `fixed` 换回 `absolute` 的展示壳。
- *
- * 判据模块算出来的 class 串里第一条就是 `fixed` —— 真机上那是对的（相对视口
- * 定位）。而 story 画布本身也是一个视口，直接用它会把浮层铺满整个工作台、
- * 把它外面的参照物全盖掉（连「让出了多少」都看不见）。
- *
- * 所以这里只做一件事：**在 story 内部**把 `fixed` 换成 `absolute`，让它的
- * 定位祖先变成那个容器。`top-title-bar right-0 bottom-0 left-0` 那三段一条不动
- * —— 要验的正是它们。视图自身布局仍由调用处给（`className`）。
+ * 把 `fixed` 换回 `absolute` 的展示壳。判据模块 class 串第一条是 `fixed`（真机相对视口是对的），
+ * 但 story 画布本身也是视口，直接用会铺满工作台、盖掉参照物。
+ * 所以只在 story 内把 fixed 换成 absolute，让定位祖先变成该容器；`top-title-bar right-0 bottom-0 left-0` 一条不动。
  */
 function InContainer({
   zClass: z,
@@ -177,12 +151,8 @@ export const MaskedPanel: Story = {
 };
 
 /**
- * 底边让位：铺到 `bottom-0` 的那一档会被状态栏压住最后 24px。
- *
- * 打开底栏再对比一眼 —— 这正是「日志最下方几行看不全」那条事故的形状；
- * 需要让出底边的浮层应改用 `full-screen-layer` 的
- * `FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS`（`bottom-6`），
- * 那是另一档定位，不归本件管。
+ * 底边让位：铺到 `bottom-0` 会被状态栏压住最后 24px（「日志最下方几行看不全」事故的形状）。
+ * 需要让出底边的浮层应改用 FULL_SCREEN_LAYER_ABOVE_STATUS_BAR_CLASS（bottom-6），那属另一档，不归本件管。
  */
 export const StatusBarOverlap: Story = {
   render: (args) => (

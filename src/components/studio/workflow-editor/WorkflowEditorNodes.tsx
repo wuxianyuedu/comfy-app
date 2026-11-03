@@ -17,20 +17,11 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
 }: {
   data: WorkflowGroupData;
 }) {
-  /* 标题现在是框内左上角的一个「页签」（原先浮在框**上方**的
-   *  `top-[-16px]`，看着像脱了节，还和相邻便签的标题打架）。
-   *  页签底色取分组色并压到 0.12 alpha，视觉上挂住它所属的框；
-   *  主体填充降到 0.04，让内部节点仍是视觉焦点。
-   *
-   *  0.12 一开始被用户反馈「在画布上太淡」——「Step2 · Image size」页签
-   *  与周围的线框几乎看不出对比、像透明的。页签因此抬到 0.30：
-   *  清楚可读，又仍像一枚贴着框边的轻量「页签芯片」
-   *  （WorkflowNote 那种 0.65 混色的整条标题栏会显得像另一张卡片）。
-   *
-   *  同一个问题随后又落到**框体**上：「红框处的背景也很透明」
-   *  （分组内部右上角）。框体原本是 0.04，在暗色画布网格上实际不可见。
-   *  抬到 0.12 后分组空间边界一眼可辨，但仍比 0.30 的页签轻 2.5 倍 ——
-   *  标题保持视觉锚点，内部节点不被这层色淹掉。 */
+  /* 标题是框内左上角的「页签」（原浮在框上方的 `top-[-16px]` 像脱节，还与相邻便签
+   *  标题打架），底色取分组色：页签 0.30、框体 0.12。页签从 0.12 抬到 0.30 是因为
+   *  用户反馈太淡（「Step2 · Image size」与线框几乎看不出对比）；框体从 0.04 抬到
+   *  0.12 是因为「红框处背景也很透明」，0.04 在暗色网格上实际不可见。框体仍比页签
+   *  轻 2.5 倍，标题保持视觉锚点，内部节点不被这层色淹掉。 */
   const fill = hexToRgba(data.color, 0.12);
   const border = hexToRgba(data.color, 0.55);
   const titleBg = hexToRgba(data.color, 0.3);
@@ -63,23 +54,11 @@ export const WorkflowGroupNode = React.memo(function WorkflowGroupNode({
     </div>
   );
 });
-/* ── IO 边界端口节点 ──
- * 给位于子图 INPUTS / OUTPUTS 边界上的节点（即输入由 -10 哨兵馈入、
- * 或输出被 -20 哨兵消费的节点）用的紧凑纯标签渲染。用户口径：
- * 这些边界节点要画成内层画布**左侧**（输入）/ **右侧**（输出）的小标签行 ——
- * 没有卡片外壳、没有标题栏、没有输出条 ——
- * 而不是现在「完整的 FlowNode 撒在画布上」那样。
- *
- * Visual contract:
- *   - 无背景卡片、无边框，只有标签文字 + handle 圆点。
- *   - 宽度约 110px（够放常见端口名；上限 200，
- *     免得一个 "thisIsAnExtremelyLongWrapperInputName" 把整列撑爆）。
- *   - INPUT 变体：handle 在**左**（哨兵 -10 的线从这里进）。
- *   - OUTPUT 变体：handle 在**右**（哨兵 -20 的线从这里出）。
- *   - 有值时值列用琥珀色 tabular-nums 渲染（封装输入的默认值，如 seed `41`），
- *     与参考截图里 "noise_seed  41  ▶" 那一行的样式一致。
- *   - `parentNodeTitle` 放在 `title` 属性里当 tooltip，
- *     用户悬停时仍能认出底下是哪个节点。 */
+/* ── IO 边界端口节点 ── 给子图 INPUTS / OUTPUTS 边界上的节点（输入由 -10 哨兵
+ * 馈入、输出被 -20 哨兵消费）用的紧凑纯标签渲染：没有卡片外壳/标题栏/输出条，
+ * 宽度约 110px（上限 200，免得超长端口名撑爆整列）；INPUT 的 handle 在左、OUTPUT
+ * 在右；有值时值列用琥珀色 tabular-nums（如 seed `41`）；`parentNodeTitle` 放进
+ * `title` 当 tooltip，悬停仍能认出底层节点。 */
 export const IO_PORT_WIDTH = 160;
 export const IO_PORT_HEIGHT = 28;
 export const PORT_ROW_GAP = 4;
@@ -125,12 +104,10 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
   const hoverLabel = data.parentNodeTitle ? `${data.parentNodeTitle} · ${data.title}` : data.title;
   return (
     <div
-      /* 输入面板的标签右对齐，名字紧贴右边的 handle 圆点（`noise_seed  ●`、
-       *  `noise_seed 1  ●` 等），与用户给的参考图一致；输出面板保持左对齐，
-       *  标签紧贴**左**边的 handle 圆点（`● noise_seed`）。
-       *  React Flow 用 `Position` 属性把 Handle 绝对定位，
-       *  所以改 flex 的 `justify-…` 只挪得动可见的标签 / 值 ——
-       *  圆点始终钉在 wfGroup 的那一侧。 */
+      /* 输入面板标签右对齐、紧贴右边的 handle（`noise_seed  ●`），输出面板左对齐、
+       *  紧贴**左**边的 handle（`● noise_seed`），与参考图一致。React Flow 用
+       *  `Position` 把 Handle 绝对定位，改 flex 的 `justify-…` 只挪得动可见标签/值，
+       *  圆点始终钉在 wfGroup 那一侧。 */
       className={`relative flex items-center ${isInput ? "justify-end" : "justify-start"} text-ink-bright/90 text-2xs gap-1 px-1.5 py-0.25 leading-[1.4]`}
       style={{
         width: IO_PORT_WIDTH,
@@ -139,16 +116,10 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
       }}
       title={`${hoverLabel}${data.type !== undefined && data.type !== "" ? ` · ${data.type}` : ""}${valueStr !== null && valueStr !== "" ? ` · ${valueStr}` : ""}`}
     >
-      {/* 边界针脚信号模型：
-          针脚朝向画布*中心*，好让连线短而直。
-          INPUT 针脚（"in"）把数据带**入**子图
-         （React Flow `type="source"` —— 它供应内部节点的
-          目标句柄），所以它的句柄坐在标签的**右**边缘
-         （朝向中间列）。OUTPUT 针脚（"out"）接收
-          从子图流出的数据（`type="target"`），所以它的
-          句柄坐在标签的**左**边缘（同样朝向
-          中间列）。"in" / "out" 这两个 id 保留，好让
-          `buildEdges` 里的边能解析出稳定的句柄名。 */}
+      {/* 边界针脚信号模型：针脚朝向画布**中心**，线才短而直。INPUT（"in"）把数据
+          带**入**子图（React Flow `type="source"`，供应内部节点的目标句柄），句柄坐在
+          标签**右**缘；OUTPUT（"out"）接收流出数据（`type="target"`），句柄在**左**缘。
+          "in" / "out" 这两个 id 保留，`buildEdges` 靠它解析稳定的句柄名。 */}
       {!isInput || isBoth ? (
         <Handle
           id="out"
@@ -159,12 +130,10 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
       ) : null}
       <span
         className="truncate font-medium"
-        /* 边界 pin 标签上的「字距被拉开」问题：画布缩得很小时，
-         *  浏览器默认的文字渲染会产生柔化的抗锯齿字形，看起来像字符之间有空隙
-         *  （"s a m p l e s"）。`geometricPrecision` 加一点点负字距把字形收拢，
-         *  任何缩放级别下都读作一个完整的词。
-         *  字体族与 `font-medium` **刻意不动** —— 这一列只有 11px（行上是 `text-2xs`），
-         *  500 字重正是合适的光学重量；渲染收拢之后再抬到 600 会显得过重。 */
+        /* 边界 pin 标签的「字距被拉开」：画布缩得很小时浏览器默认文字渲染产生柔化
+         *  抗锯齿，读成「s a m p l e s」。`geometricPrecision` + 一点负字距收拢字形。
+         *  字体族与 `font-medium` **刻意不动**：这一列只有 11px，500 字重正是合适的
+         *  光学重量，收拢后再抬到 600 会过重。 */
         style={{
           maxWidth: IO_PORT_WIDTH - (valueStr !== null && valueStr !== "" ? 56 : 24),
           textRendering: "geometricPrecision",
@@ -189,34 +158,20 @@ export const WorkflowIoPortNode = React.memo(function WorkflowIoPortNode({
     </div>
   );
 });
-/* ── 便签 / MarkdownNote 注释节点 ──
- * ComfyUI 的便签 widget 上下叠着两部分：
- *   1. **标题栏** —— 一枚带小圆点图标的彩色芯片，标题取显式的 `title`
- *      属性，或正文第一行 `# 标题`。
- *   2. **主体** —— markdown 文本按便签宽度折行，配周围的底色。
- * 便签可拖动（整张节点就是拖拽把手），用户可以自由挪动注释；
- * markdown 主体仍能渲染链接与滚动，且在便签没覆盖到的地方不会挡住下面的图。 */
+/* ── 便签 / MarkdownNote 注释节点 ── ComfyUI 便签叠着两部分：① 标题栏 —— 带小圆点
+ * 图标的彩色芯片，标题取显式 `title` 或正文首行 `# 标题`；② 主体 —— markdown 按
+ * 便签宽度折行 + 周围底色。整张节点即拖拽把手，用户可自由挪动注释；markdown 仍能
+ * 渲染链接与滚动，且不挡下面的图。 */
 export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
   data,
 }: {
   data: WorkflowNoteData;
 }) {
-  /* 便签背景是**全不透明**的 —— 把 `data.color` 烤进画布底色后的结果。
-   *  底色很关键：若便签与画布共用同一底色，`#432` 这样的深色便签算出来的
-   *  背景只比画布高约 12 个 RGB 单位 —— 便签在视觉上溶进背景，
-   *  只剩 React Flow 的选中圈看得见。底色比画布**错开一档**，
-   *  任意便签色都能保证约 25 个单位的对比，连最深的 `#432` 也轮廓清楚。
-   *
-   *  那一档就是 `--color-note-tint-base` token（浅色模式为白，暗色为 `#22222c`），
-   *  跟主题走而不写死：对比论证在两种模式下都成立，浅色模式也不会再拿到一片深色。
-   *  `data.color` 是用户给的内容色本身，不动。
-   *
-   *  低缩放下的可见性：像 DaSiWa Wan 2.2 这种宽工作流（130 个节点，
-   *  fitView 后缩放落在约 0.15），便签的包围盒在屏幕上只有约 5~15px，
-   *  1.5px 的实线边框在那里还不到一个像素。所以额外画一圈强外发光
-   *  （boxShadow + 4px 环）—— 即使文字已经读不清，
-   *  用户仍能按颜色环**数出**那 17 条便签；再加高 z-index
-   *  让便签浮在普通节点之上，不被分组遮住。 */
+  /* 便签背景是**全不透明**的：把 `data.color` 烤进 `--color-note-tint-base`（浅色白、
+   *  暗色 `#22222c`），底色比画布错开一档。共用画布底色时 `#432` 只高约 12 个 RGB
+   *  单位，便签溶进背景；错开一档后任意便签色都有约 25 单位对比。`data.color` 是用户
+   *  给的内容色，不动。低缩放下（DaSiWa 130 节点 fitView ≈0.15，便签只有 5~15px）再
+   *  画 4px 强外发光并抬 z-index：文字读不清时仍能按色环数出 17 条便签。 */
   const noteTintBase = useCssColorToken("--color-note-tint-base", "#ffffff");
   const bg = mixHex(noteTintBase, data.color, 0.2);
   const border = mixHex(noteTintBase, data.color, 0.65);
@@ -271,18 +226,14 @@ export const WorkflowNoteNode = React.memo(function WorkflowNoteNode({
   );
 });
 
-/* ── 子图封装节点（ComfyUI 的扩展显示节点）──
- * ComfyUI 的子图实例序列化后 class_type === UUID，并带一组来自内部图
- * **暴露端口**（`proxyWidgets`）的合成输入。每个输入带一个 `localized_name`
- * 中文标签（如「正面提示词」）与一个英文 widget 名（如 "text"）。
- * 本组件把它们渲染成一枚紧凑的、类表单的节点，
- * 让用户不必展开子图就能看到里面有什么。 */
-/* 节点类型注册表 = **工作流自身的图**：普通节点 / 备注 / 分组 / 子图封装 /
- *  子图边界口。这里**没有**「对外参数卡片」这一类：卡片会浮在图节点之上（`zIndex`
- *  比图节点高、贴着宿主节点左右各排一列）把工作流本身挡掉一片，且落点映射编辑
- *  已收敛到工作流库详情的「画布节点」页签（卡片列 + 连线层，见
- *  workflow-library/WorkflowParamCardColumn 与 WorkflowParamWires）。勾选 IO
- *  只写 workflowIO / paramMap，不再产生任何画布节点。 */
+/* ── 子图封装节点（ComfyUI 扩展显示节点）── 子图实例序列化后 class_type === UUID，
+ * 并带一组来自内部图**暴露端口**（`proxyWidgets`）的合成输入，每个输入有
+ * `localized_name` 中文标签（如「正面提示词」）与英文 widget 名（如 "text"）。
+ * 本组件渲染成紧凑的类表单节点，不必展开子图就能看到里面有什么。 */
+/* 节点类型注册表 = **工作流自身的图**：普通节点 / 备注 / 分组 / 子图封装 / 子图边界
+ *  口。这里**没有**「对外参数卡片」：卡片会浮在图节点之上遮掉一片，且落点映射编辑已
+ *  收敛到库详情「画布节点」页签（见 workflow-library/WorkflowParamCardColumn 与
+ *  WorkflowParamWires）。勾选 IO 只写 workflowIO / paramMap，不产生画布节点。 */
 export const workflowNodeTypes = {
   wfNode: FlowNode,
   wfNote: WorkflowNoteNode,

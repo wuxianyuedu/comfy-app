@@ -77,15 +77,10 @@ export const STATUS_STYLE: Record<string, StatusStyle> = {
   },
 };
 
-/** 失败原因 → 一行可行动建议。
- *
- * 规则表本体收在 `~/lib/comfyui/error-advice`（规范 16 §16.2.4.37）——
- * 收口前这里与画布节点错误面板**各写一份词表**，同一句 ComfyUI 报错在两处
- * 会给出不同建议（`out of memory` 一处提「拆批次」、另一处提「降分辨率」），
- * 且两边的告警词表互相漏项（「队列满了」在画布节点上根本没有建议）。
- *
- * 这里用 `adviseWithFallback` 而不是 `adviseOnError`：本卡片的建议是失败原因
- * 下方**位置固定**的一行，给不出建议就会跳一次布局。 */
+/** 失败原因 → 一行可行动建议。规则表收在 ~/lib/comfyui/error-advice ——
+ * 收口前这里与画布节点错误面板各写词表，同一报错两处建议不同（out of memory 一处「拆批次」一处「降分辨率」），
+ * 且两边词表互相漏项。
+ * 用 adviseWithFallback 而非 adviseOnError：建议是失败原因下方位置固定的一行，给不出就会跳布局。 */
 export function suggestFix(err?: string | null): string {
   return `建议：${adviseWithFallback(err)}`;
 }

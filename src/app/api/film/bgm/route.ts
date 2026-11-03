@@ -42,13 +42,9 @@ export async function POST(req: NextRequest) {
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
-  /* 扩展名与展示名各自走唯一出口（规范 16 §16.2.4.51 / §16.2.4.53）。
-   * 展示名保留 CJK：用户在文件管理器里要按它认人。
-   *
-   * **顺手修掉一处后缀重复**：收口前写的是 `${safe}${ext}` 而 `safe` 仍是
-   * 含后缀的整名（`bgm.mp3` + `.mp3` → `bgm.mp3.mp3`）—— 只在 `file.name`
-   * **没有点**时那个 `|| ".mp3"` 才会被用上，所以这条一直在但没人看见。
-   * 现在后缀只由 `ext` 一处给出，展示名先剥掉原名里的后缀。 */
+  /* 扩展名与展示名各自走唯一出口（规范 16 §16.2.4.51/§16.2.4.53），展示名保留 CJK。
+   * 修掉后缀重复：`safe` 曾是含后缀整名，`${safe}${ext}` 会产出 `bgm.mp3.mp3`；现在后缀
+   * 只由 `ext` 一处给出，展示名先剥掉原名后缀。 */
   const ext = extOfPath(file.name) || "mp3";
   const safe = safeDisplayName(stemOfPath(file.name)).slice(0, 60) || "audio";
   /* 落盘文件名走全库唯一出口（规范 16 §16.2.4.36）—— 收口前这里是手拼的

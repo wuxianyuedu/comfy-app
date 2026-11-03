@@ -1,12 +1,8 @@
 "use client";
-/* ── 画布偏好的状态与持久化（设置的字段声明见 `../canvas-settings-types.ts`，
+/* ── 画布偏好状态与持久化（字段声明见 ../canvas-settings-types.ts，
  * 渲染出口是 <CanvasSettingsPanel> / <CanvasSettingsButton>）──
- *
- * 设置由 CanvasGrid / CanvasRulers / ZoomIndicator 经 props 读取
- * （工作流编辑器根组件调一次`useCanvasSettings()` 再分发）。
- * 这样就避免了任何 React Context 跨越`<ReactFlow>` 边界 ——
- * 那会干扰编辑器内部的选择器订阅。
- */
+ * CanvasGrid / CanvasRulers / ZoomIndicator 经 props 读取；根组件调一次 `useCanvasSettings()` 再分发，
+ * 避免 React Context 跨越 <ReactFlow> 边界干扰内部选择器订阅。 */
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 import { readStorageJson, writeStorageJson } from "~/lib/browser-storage";
@@ -34,12 +30,10 @@ function writeSettings(settings: CanvasSettings): void {
   writeStorageJson(STORAGE_KEY, settings);
 }
 
-/* 画布偏好的唯一事实源。挂载时从 localStorage 读入；
- * 变更会自动落盘，并经模块级监听器集合（useSyncExternalStore）
- * 广播给**每一个**`useCanvasSettings()` 实例。
- * 这一点很要紧：设置抽屉与 GlobalStepLogPanel 是两个独立组件 ——
- * 在抽屉里切换「调试模式」必须立刻让面板重渲染，
- * 而不是靠 props 一路穿过 React Flow 边界传下去。 */
+/* 画布偏好唯一事实源：挂载时从 localStorage 读入，变更自动落盘并经模块级监听器集合
+ *（useSyncExternalStore）广播给每个 `useCanvasSettings()` 实例。
+ * 设置抽屉与 GlobalStepLogPanel 是独立组件 —— 在抽屉切换「调试模式」必须立刻让面板重渲染，
+ * 而不是靠 props 穿过 React Flow 边界。 */
 const SETTINGS_LISTENERS = new Set<() => void>();
 let CURRENT_SETTINGS: CanvasSettings = DEFAULT_CANVAS_SETTINGS;
 

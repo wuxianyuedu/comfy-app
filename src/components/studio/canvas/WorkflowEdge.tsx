@@ -7,28 +7,10 @@ import { shouldDimEdge, type EdgeFocusRole } from "./flow-focus-endpoints";
 import { readEdgeFocusRole } from "./hooks/use-related-edges-highlight";
 
 /**
- * WorkflowEdge —— ComfyUI 风格的贝塞尔连线。
- *
- * 为什么**不用** React Flow 自带的 `getBezierPath`：
- *
- *   自带算法把控制点偏移写成源与目标之间**距离**的函数。
- *   对于短距离的 L→R 或 T→B
- *   连线，偏移植会塌缩到几个像素，于是曲线读起来就是
- *   一条直线 —— 视觉上等于完全没有边样式。
- *
- *   ComfyUI 的 lit-renderer 则一律按**句柄朝向**拉一个
- *   近乎固定的偏移量，与距离无关。
- *   我们这里照做。
- *
- *   结果：
- *     • L→R / R→L 的边得到干净的 S 形曲线，两端各锚出 100 px。
- *     • T→B / B→T（竖向）的边**同样**弯曲，因为偏移落在
- *       *句柄*方向上（竖向），而不是源→目标轴上。
- *     • 斜向的边把偏移在 x 与 y 之间分摊。
- *
- * 数据模型（id / source / target / handles / style）不动
- * —— 本组件只决定曲线怎么画。
- */
+ * WorkflowEdge —— ComfyUI 风格贝塞尔连线。
+ * 不用 React Flow 的 getBezierPath：它把控制点偏移写成两端距离的函数，短 L→R / T→B 线会塌成直线。
+ * ComfyUI lit-renderer 一律按句柄朝向给近乎固定偏移（本组件照做）：L→R/R→L 为两端各锚 100px 的 S 曲线，
+ * 竖向同样弯曲，斜向在 x/y 分摊；数据模型不动，本组件只决定曲线怎么画。 */
 const HANDLE_OUT: Record<Position, [number, number]> = {
   [Position.Left]: [-1, 0],
   [Position.Right]: [1, 0],

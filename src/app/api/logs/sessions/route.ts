@@ -23,49 +23,9 @@ import {
 import { listRuntimeLogFiles, type RuntimeLogFileEntry } from "~/lib/log/runtime-log-pack.server";
 
 /**
- * `GET /api/logs/sessions` —— 列出某个来源**每一次启动**的日志（**跨运行包**），
- * 并回指定一次的正文。
- *
- * 供设置页「启动日志」小窗口与它的全屏视图：那里要的是「切到某一次启动」。
- *
- * ## 用户原话（ISSUE #1587）：「日志会归档到 runs 中，但应用内缺少入口查看」
- *
- * 应用**退出时**会把整个 `log/current/` 归档进 `log/runs/<日期>_<时分秒>-<runId>/`
- * （`archiveCurrent`），于是「上一次运行的启动日志」在归档之后**没有任何界面能打开**
- * —— 用户只能自己去文件管理器里翻 `log/runs/`。本端点因此列**两处**：
- *
- *   - 本次运行：`log/current/services/` 下该来源的份（新→旧，恒在最前）；
- *   - 历史归档：各运行包里这一来源的份（包名倒序 = 时间倒序）。
- *
- * ## 这一层只有一处判据：**文件是谁**
- *
- * 上一版按**应用运行包**列表、正文用「当前包 − 前一包」的长度减法去切（依赖
- * 「包 N ⊇ 包 N-1」这条来自归档复制语义的性质）。改成一次启动一份文件之后，
- * 「文件是谁」不依赖任何假设 —— 跨包这一层**复用的正是这条**，一条减法都没加回来：
- * 归档是整目录复制，**包内结构与 `current/` 逐字同构**，所以跨包就是「把各包里的
- * 文件排成一条时间线」，与包内那层共用同一份顺序判据（`compareRuntimeLogFiles`）。
- *
- * ## 跨包那几件判据不在本文件里
- *
- * 包目录名怎么解析、id 怎么编码、下拉怎么排、文案怎么拼在 `lib/log/log-run-packs.ts`
- * （纯判据，能脱离磁盘单测）；列 `runs/` 与读 `run.json` 在
- * `lib/log/log-run-packs.server.ts`。端点只做四件必须在这里做的事：判来源白名单、
- * 取两处路径、定位选中那一份、读正文（尾部窗口）。
- *
- * ## 路径不在端点里拼（§12.14）
- *
- * `current/` 那边取 `log-paths` 的 `SERVICES_LOG_DIR` 与 `listRuntimeLogFiles()`；
- * `runs/` 那边取 `run.mjs` 的 `runsDir()`（归档写方的唯一定义），包内相对目录与
- * `run.json` 的名字分别取 `log.mjs` 的 `LOG_DIRS.services` 与 `run.mjs` 的
- * `LOG_LAYOUT.runJson`。读方自己拼一遍，两边一旦漂开表现是「归档了但界面看不到」
- * ——而两边各自都「看起来是对的」。
- *
- * ## 参数
- *
- *   - `source`：`RUNTIME_LOG_SOURCES` 里的一项；
- *   - `session`（可选）：要读的份。两种**已登记**形态 —— `current/` 的份是裸文件名
- *     （`comfyui-runtime-20261005-093612.log`），归档份是 `<包名>/<文件名>`。
- *     其余形态（含 `..` 一类穿越形态）一律回落最新那一份，不拿它去拼路径。
+ * `GET /api/logs/sessions` —— 列出某个来源**每一次启动**的日志（跨运行包）并回指定一次的正文。ISSUE #1587：应用退出会把 `log/current/` 归档进
+ * `log/runs/<日期>_<时分秒>-<runId>/`，此前「上一次运行的启动日志」没有任何界面能打开。列表两处：本次运行 `log/current/services/` 的份（新→旧恒在最前）
+ * + 各历史包的份（包名倒序）。判据只有「文件是谁」——归档整目录复制、包内结构与 `current/` 逐字同构，跨包即把各包文件排成时间线（`compareRuntimeLogFiles`）；参数 `source` 须在白名单内、`session` 只认两种已登记形态、绝不拿去拼路径。
  */
 
 /** 单次请求最多返回的正文字节数（约 40 万字符量级）。 */
@@ -75,11 +35,8 @@ const MAX_TEXT_BYTES = 400_000;
 const MAX_FILES = 30;
 
 /**
- * 最多翻几个运行包。
- *
- * 与 `MAX_FILES` 同一量级：跨包 + 包内很容易超出 30 条，反正最终列表会被
- * `MAX_FILES` 裁到 30 条（`buildRunScopedOptions` 的 `max`），这里只管「别为了
- * 凑满 30 条去读上百个包的目录」。`runs/` 的保留策略本来就只留 20 包。
+ * 最多翻几个运行包：与 `MAX_FILES` 同一量级，反正最终列表会被裁到 30 条（`buildRunScopedOptions` 的 `max`），
+ * 这里只管「别为了凑满 30 条去读上百个包的目录」；`runs/` 的保留策略本来就只留 20 包。
  */
 const MAX_PACKS = 20;
 
@@ -98,17 +55,9 @@ function emptyPayload(error?: string): LogSessionsPayload & { error?: string } {
 }
 
 /**
- * 读文件尾部窗口（超过 `maxBytes` 时**掐头对齐到行边界**）。
- *
- * 「对齐」是必需的：日志文件可能几十 MB，而窗口起点落在半行上时面板会解析出
- * 乱码行（同 `GET /api/logs/current` 的尾部窗口规则）。一次启动一份文件之后
- * 正文不再需要「减去前一份」，但**窗口**这条约束不变 —— 一次很长的启动
- * （挂着 ComfyUI 跑一下午）照样能写出几 MB。
- *
- * 异步（ISSUE #2193）：本端点与 `GET /api/logs/current` 共用「最新那一份」那条
- * 判据，而同步 `stat` / `open` / `read` 压的是事件循环线程。读取契约（窗口大小、
- * 掐头对齐、`windowed` / `size` 的语义）一字未改 —— 钉它的 `route.test.ts` 是
- * 这一轮改动的**判据**，不是要绕过去的东西。
+ * 读文件尾部窗口（超过 `maxBytes` 时**掐头对齐到行边界**）：日志可能几十 MB，窗口起点落在半行上时面板会解析出乱码行
+ *（同 `GET /api/logs/current` 的规则）。一次启动一份文件之后正文不再需要「减去前一份」，但窗口这条约束不变。
+ * 异步（ISSUE #2193）：同步 `stat` / `open` / `read` 压的是事件循环线程；读取契约（窗口大小、掐头对齐、`windowed` / `size` 语义）一字未改。
  */
 async function readTail(
   file: string,
@@ -151,11 +100,8 @@ async function readTail(
   };
 }
 
-/** `current/` 下的一份 → 跨包列表的一项。
- *
- * 旧固定名（迁移前留下的 `<来源>.log`）解析不出时刻：它**必须**有一个说得通的
- * 文案，不能退回文件名 —— 在那条下拉里 `comfyui-runtime.log` 读起来像是「现在的
- * 那一份」，而它实际是所有新份之前的全部历史。`runtimeLogFileLabel` 对
+/** `current/` 下的一份 → 跨包列表的一项。旧固定名（迁移前留下的 `<来源>.log`）解析不出时刻，它**必须**有个说得通的文案、不能退回文件名 ——
+ * 在那条下拉里 `comfyui-runtime.log` 读起来像「现在的那一份」，实际是所有新份之前的全部历史；`runtimeLogFileLabel` 对
  * `startedAt: null` 给「更早的日志」，正好是它的语义。 */
 function toPackFile(entry: RuntimeLogFileEntry): PackLogFile {
   const parsed = parseRuntimeLogFileName(entry.name);
@@ -167,11 +113,8 @@ function toPackFile(entry: RuntimeLogFileEntry): PackLogFile {
 }
 
 /**
- * 归档份的绝对路径：`<包名>/<文件名>` → `runs/<包名>/<来源目录>/<文件名>`。
- *
- * 形态判据走 `parsePackScopedId`（包名必须是真实包名形态、文件名不许再含分隔符），
- * 端点**不自己拆** —— 脏 id（客户端缓存过、或人手敲的）必须在这里被挡掉，而不是
- * 拿它去拼路径。拆不出来时返回 null，调用方回落最新那一份。
+ * 归档份的绝对路径：`<包名>/<文件名>` → `runs/<包名>/<来源目录>/<文件名>`。形态判据走 `parsePackScopedId`（包名须是真实包名形态、
+ * 文件名不许再含分隔符），端点**不自己拆** —— 脏 id（客户端缓存过或人手敲的）必须在这里被挡掉，而不是拿它去拼路径；拆不出来返回 null，调用方回落最新那份。
  */
 function resolveArchivedFile(sessionId: string, root: string): string | null {
   const parsed = parsePackScopedId(sessionId);

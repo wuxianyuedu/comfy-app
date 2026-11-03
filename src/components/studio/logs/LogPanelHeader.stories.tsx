@@ -7,24 +7,10 @@ import { useWidePanel } from "~/components/ui/wide-panel";
 import { modalWidth } from "~/components/ui/dialog-width";
 
 /**
- * 日志面板的行头 —— 标题 + 级别筛选 + 来源下拉 + 一排操作按钮。
- *
- * 这一份是**第三层注入（store）**的现场：行头里三块控件（`LogFilterBar` 的
- * 级别与计数、`OriginSelect` 的候选列表、`SaveExportButton`）**自己从 store
- * 取状态**，不经过 props。所以 story 不能「给几个 props 摆上去完事」——
- * 它得先让 store 里真的有一段时间线（`parameters.storeScene`），
- * 再由适配件把行头要的那几项从**真切片**里读出来。
- *
- * 为什么计数值不能手抄：`originCounts` 是 `countsByOrigin[origin]` 的派生值
- * （「当前来源下的各级别条数」），而 `countsByOrigin` 是 store 按真时间线算的
- * 二维计数表。手抄一个 `{ all: 5, warn: 1, … }` 在日志文案或分桶规则改了之后
- * 仍然看着正常 —— 那就成了「画布上是对的、真机上不对」。
- *
- * 要看三件在真机上容易分叉的事：
- *  · 级别按钮上的计数随**当前来源**变（与来源下拉同口径，两边永远对得上）；
- *  · 窄窗口下筛选器整组折到第二行（判据是容器自己的 `min-w-fit`（内容固有宽度）），标签不被切成竖排单字；
- *  · 操作按钮的成败反馈（复制失败是原地换文案，不是静静不变）。
- */
+ * 日志面板的行头 —— 标题 + 级别筛选 + 来源下拉 + 一排操作按钮。第三层注入（store）现场：
+ * `LogFilterBar` / `OriginSelect` / `SaveExportButton` 都自己从 store 取状态，story 先
+ * `parameters.storeScene` 写入时间线，再由适配件从真切片读 props。计数不能手抄：
+ * `originCounts` 是 `countsByOrigin[origin]` 的派生值。要看：计数随来源变、窄窗口整组折行、按钮成败反馈。 */
 const meta = {
   title: "Studio/Logs/LogPanelHeader",
   component: LogPanelHeader,
@@ -41,10 +27,8 @@ type Story = StoryObj<typeof HeaderHarness>;
 
 /**
  * 适配件：把行头要的 props 从**真 store 切片**里读出来。
- *
- * 这正是 `LogPanel` 里那几行的写法（同一个 `useLogPanel`、同一个派生），
- * 不另写一份「story 版状态」。`log-scene` 一类的旋钮留在 `parameters` 上
- * （见 `store-sources.tsx` 的说明）。
+ * 与 `LogPanel` 里那几行同一写法（同一个 `useLogPanel`、同一派生），不另写「story 版状态」；
+ * `log-scene` 一类旋钮留在 `parameters` 上（见 `store-sources.tsx`）。
  */
 function HeaderHarness({ wrapInitial = false }: { wrapInitial?: boolean }) {
   const header = useLogPanel((state) => state.header);

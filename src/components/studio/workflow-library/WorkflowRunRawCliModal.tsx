@@ -1,20 +1,9 @@
 "use client";
 
 /**
- * WorkflowRunRawCliModal —— 工作流库「查看完整 comfy-cli 输出」弹窗。
- *
- * 执行日志面板会把每一行 `[comfy-cli 原始]` 折成一行（并按行数封顶保留），所以本
- * 弹窗是「拿全量」的出口：从 /api/tasks/[id]/raw-cli 取某次任务完整、未截断的
- * comfy-cli stdout/stderr 行并渲染——JSON 负载（`[comfy-cli 原始]` / `stdout`
- * 那些行）走可折叠、带语法高亮的 JsonViewer，其余按原始文本展示。只读：网络调用
- * 收在 lib/comfyui/raw-cli-client（UI/逻辑分离）。
- *
- * 运行期每 1.5s 轮询一次完整输出（服务端上限 5000 行），所以这里刻意不做
- * 「整份重建」—— 三条防线合起来让轮询只在**真的来了新行**时付代价：
- *   1. 逐行解析走 `./raw-cli-lines` 的缓存 → 未变的行保持同一个对象身份；
- *   2. 行组件是 `memo` 的 → 身份没变就不重渲染（连带它内部那棵 JSON 树）；
- *   3. 两轮内容逐字相同时连 setState 都不发（见 `sameRawCliLines`）。
- * 少了任何一条，每 1.5s 都会把整份输出重新解析 + 全部 JsonViewer 重建一遍。
+ * WorkflowRunRawCliModal —— 「查看完整 comfy-cli 输出」弹窗：从/api/tasks/[id]/raw-cli 取未截断的 stdout/stderr（服务端上限 5000 行），JSON 负载
+ * 走 JsonViewer，其余按原文展示；只读，网络调用收在 raw-cli-client。每 1.5s 轮询：
+ * 逐行解析带缓存、行组件 memo、两轮内容相同则不发 setState —— 缺任一条都会每轮把整份输出重新解析并重建 JsonViewer。
  */
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
@@ -40,13 +29,9 @@ const TAG_STYLES: Record<string, string> = {
 };
 
 /**
- * 一行原文的卡片。
- *
- * `memo` 是这里的关键：轮询拿到新数组时，只有**真的新增**的行会换掉 `entry`
- * （其余行由 `parseRawCliLine` 的缓存给出同一个引用），于是旧行连同它内部那棵
- * JsonViewer 树一个都不重建。没有它时每 1.5s 整份输出全量重渲染 —— 大 payload
- * 下就是「这个界面非常卡」的一半来源（另一半是首屏全量展开，见
- * `ui/json-viewer` 里 `collapsed` 那段注释）。
+ * 一行原文的卡片。`memo` 是关键：轮询时只有真的新增的行会换 `entry`（其余由
+ * `parseRawCliLine` 缓存给同一引用），旧行连同内部 JsonViewer 树不重建。没有它
+ * 每 1.5s 全量重渲染 —— 大 payload 下就是「界面非常卡」的来源之一。
  */
 const RawCliLineCard = memo(function RawCliLineCard({ entry }: { entry: ParsedCliLine }) {
   const tagClass = TAG_STYLES[entry.tag] ?? "text-ink-muted";

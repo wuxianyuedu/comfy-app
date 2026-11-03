@@ -1,13 +1,6 @@
-//
-// FinalComposer 行为测试：纯客户端合成 stage 的用户可见契约。
-//
-// 钉死的四组行为：
-//   ① 时间线的真实呈现 —— 每镜时长缺省 4s、片段计数、缺片段时的静帧占位提示；
-//   ② 导出合成清单 —— 产物字段与镜头顺序、onRendered 的完成记账；
-//   ③ 逐镜编辑 —— 时长输入的 1~20 钳取写回 onShotsChange；
-//   ④ 门禁与完成态 —— 空镜头列表的引导空态、rendered 的完成横幅。
-//
-// `downloadJson` 是唯一需要替身的边界（它真会触发浏览器下载），其余全走真组件。
+// FinalComposer 行为测试：纯客户端合成 stage 的用户可见契约。钉死四组：① 时间线真实呈现（每镜缺省 4s、片段计数、缺片段静帧占位提示）；
+// ② 导出合成清单（产物字段与镜头顺序、onRendered 完成记账）；③ 逐镜编辑（时长 1~20 钳取写回 onShotsChange）；④ 门禁与完成态。
+// `downloadJson` 是唯一需要替身的边界（真会触发浏览器下载），其余全走真组件。
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

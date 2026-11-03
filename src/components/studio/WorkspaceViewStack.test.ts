@@ -1,22 +1,7 @@
 /**
- * 懒加载视图**必须经同一个出口**（ISSUE #1900）。
- *
- * ## 为什么这一条值得机械化
- *
- * `WorkspaceViewStack` 里每一屏都靠 `next/dynamic` 懒加载，而「分块加载失败」
- * 的自愈（判定 + 本会话刷一次）只在 `~/lib/shell/lazy-chunk-recovery` 一处实现。
- * 这条判据钉的是**穷尽性**：只要还有一份 `dynamic(...)` 没走 `lazyView`，那一屏
- * 撞上分块加载失败时就会绕过自愈、整屏崩成「页面出错了」—— 而漏掉的那一份在
- * 正常构建下**完全看不出**（12 屏里 11 屏好、1 屏坏，且只在 dev 重建后偶发）。
- * 正是「漏一个 = 那一个分块仍是裸的」这句，把它做成机器判据。
- *
- * ## 口径
- *
- * - 先过 `stripComments`：文件头大段解释里提到 `next/dynamic` 是在讲历史，
- *   不是一次声明。
- * - 只认这一份文件的**源码形状**（`dynamic(` 的调用点计数），不认运行行为 ——
- *   `next/dynamic` 真正的加载/失败行为在 jsdom 里搭不出来，而这里要防的是
- *   「新加一屏时忘了走出口」，那件事的形状就在源码里。
+ * 懒加载视图**必须经同一个出口** `lazyView`（ISSUE #1900）：分块加载失败的自愈只在
+ * `~/lib/shell/lazy-chunk-recovery` 一处实现，漏一份 `dynamic(...)` 那屏就绕过自愈整屏崩，
+ * 且正常构建下完全看不出（12 屏坏 1 屏、仅 dev 重建后偶发）。先过 `stripComments`，只认源码形状的 `dynamic(` 计数。
  */
 
 import fs from "node:fs";
@@ -26,10 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import { stripComments } from "../../../tests/helpers/strip-comments";
 
-const FILE = path.join(
-  process.cwd(),
-  "src/components/studio/WorkspaceViewStack.tsx",
-);
+const FILE = path.join(process.cwd(), "src/components/studio/WorkspaceViewStack.tsx");
 
 describe("WorkspaceViewStack — 懒加载视图都走分块失败自愈出口", () => {
   const code = stripComments(fs.readFileSync(FILE, "utf8"));

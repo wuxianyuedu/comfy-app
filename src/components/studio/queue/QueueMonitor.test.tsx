@@ -1,9 +1,6 @@
-// 容器渲染单测：锁的都是**只有看屏幕才能发现**的问题。
-//   · 位次显示的是不是那一行（顺序错位在读屏时最难发现，用户却据此决定要不要再提交）；
-//   · 离线且还有任务时列表不许消失——任务记录在本地库，整页被「未连接」空态替换
-//     会让人以为任务丢了（横幅只负责说「不会开始」，列表照常铺开）；
-//   · 失败行必须把原因写出来（只有一个红色徽标等于没说）；
-//   · 屏面上不出现「重试」——后端没有这个端点，画出来就是个会失败的按钮。
+// 容器渲染单测：锁只有看屏幕才能发现的问题 —— 位次是否对应那一行；离线且还有任务时列表不许消失
+//（任务在本地库，整页换「未连接」空态会让人以为丢了，横幅只说「不会开始」）；
+// 失败行必须写出原因；屏面不出现「重试」（后端无此端点）。
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,17 +19,13 @@ vi.mock("./hooks/use-queue-monitor", () => ({
  * 自己的 hook 测试覆盖，这里只锁「容器把它挂上 / 传对任务」。mock 刻意带上
  * 完整签名：从 mock.calls 取 handlers 时才有类型，不必写 any 断言。 */
 const watchTaskMock = vi.hoisted(() =>
-  vi.fn<(taskId: string, handlers: TaskWatchHandlers) => () => void>(
-    () => () => undefined,
-  ),
+  vi.fn<(taskId: string, handlers: TaskWatchHandlers) => () => void>(() => () => undefined),
 );
 vi.mock("~/lib/workshop/generation-client", () => ({
   watchTask: watchTaskMock,
 }));
 
-function row(
-  over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">,
-): QueueRow {
+function row(over: Partial<QueueRow> & Pick<QueueRow, "id" | "status">): QueueRow {
   return {
     type: "IMAGE",
     workflowName: `工作流 ${over.id}`,
@@ -49,9 +42,7 @@ function row(
   };
 }
 
-function controller(
-  over: Partial<QueueMonitorController> = {},
-): QueueMonitorController {
+function controller(over: Partial<QueueMonitorController> = {}): QueueMonitorController {
   return {
     online: true,
     running: null,
@@ -91,10 +82,7 @@ describe("QueueMonitor", () => {
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     const lines = screen.getAllByText(/^工作流 (early|late)$/);
-    expect(lines.map((el) => el.textContent)).toEqual([
-      "工作流 early",
-      "工作流 late",
-    ]);
+    expect(lines.map((el) => el.textContent)).toEqual(["工作流 early", "工作流 late"]);
     expect(screen.getByText("第 1 位")).toBeInTheDocument();
     expect(screen.getByText("第 2 位")).toBeInTheDocument();
   });
@@ -111,9 +99,7 @@ describe("QueueMonitor", () => {
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     /* 横幅与启动出口都在，但不是整页空态那套「ComfyUI 未运行」标题。 */
     expect(screen.getByText("ComfyUI 未连接")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /去「ComfyUI」页启动/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /去「ComfyUI」页启动/ })).toBeInTheDocument();
     expect(screen.queryByText("ComfyUI 未运行")).not.toBeInTheDocument();
     /* 三段列表都在：排队位次、跑动中段标题、最近结果行。 */
     expect(screen.getByText("第 1 位")).toBeInTheDocument();
@@ -163,13 +149,9 @@ describe("QueueMonitor", () => {
     expect(logButtons).toHaveLength(2);
     /* 读屏顺序：排队段在前、最近结果在后 —— 每个按钮各归属那一行。 */
     logButtons[0]!.click();
-    expect(openLog).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "q1", status: "QUEUED" }),
-    );
+    expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "q1", status: "QUEUED" }));
     logButtons[1]!.click();
-    expect(openLog).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "bad", status: "FAILED" }),
-    );
+    expect(openLog).toHaveBeenCalledWith(expect.objectContaining({ id: "bad", status: "FAILED" }));
   });
 
   it("logRow 非空时挂载执行日志弹窗，关闭回调交还 controller", () => {
@@ -204,12 +186,8 @@ describe("QueueMonitor", () => {
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText("CUDA out of memory")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /复制这一条的提交内容/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /重试/ }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /复制这一条的提交内容/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /重试/ })).not.toBeInTheDocument();
   });
 
   it("进度未回报时剩余时间写「估算中」，不给一个看起来像数的值", () => {
@@ -228,15 +206,11 @@ describe("QueueMonitor", () => {
     );
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText("估算中")).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: /正在跑的工作流/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /正在跑的工作流/ })).toBeInTheDocument();
   });
 
   it("读不到任务记录时说明读不到，而不是显示一套空的列表当作准数", () => {
-    monitorMock.mockReturnValue(
-      controller({ loadError: "读不到任务记录，后端可能刚重启" }),
-    );
+    monitorMock.mockReturnValue(controller({ loadError: "读不到任务记录，后端可能刚重启" }));
     render(<QueueMonitor onOpenComfyui={vi.fn()} />);
     expect(screen.getByText(/^读不到任务记录/)).toBeInTheDocument();
   });

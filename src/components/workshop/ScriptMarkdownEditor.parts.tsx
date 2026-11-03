@@ -310,14 +310,10 @@ export function EditorBody({
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   value: string;
 }) {
-  /* Tab 缩进的键动作走`~/components/ui/simple-key-handler`（规范 16
-   * §16.2.4.57）：键判别与`preventDefault` 此前混在同一个`if` 里，
-   * 看不出「吞掉焦点转移」是谁决定的。
-   *
-   * 它必须**在事件处理器里**调（而不是在 render 时展开成 props）：动作闭包
-   * 要读`textareaRef.current`，而 render 期读 ref 会被
-   *`react-hooks/refs` 拦下。因此这里是`onKeyDown={(event) => …}` ——
-   * 元素上仍然只有一个`onKeyDown`，键判据仍然只有一处定义。 */
+  /* Tab 缩进的键动作走`~/components/ui/simple-key-handler`（规范 16 §16.2.4.57）。
+   * 它必须**在事件处理器里**调：动作闭包要读`textareaRef.current`，render 期读
+   * ref 会被`react-hooks/refs` 拦下 —— 因此这里是`onKeyDown={(event) => …}`，
+   * 元素上仍只有一个`onKeyDown`，键判据仍只有一处定义。 */
   return (
     <main className="relative flex min-w-0 flex-1 flex-col">
       {showPreview ? (

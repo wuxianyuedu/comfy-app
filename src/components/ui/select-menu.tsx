@@ -2,62 +2,9 @@
 /* ui-customized: 覆盖前先看 docs/standards/16 §16.8（本文件在 shadcn 官方版之上有改动） */
 
 /**
- * SelectMenu —— 深色主题的下拉选择（替换原生 `<select>`）。
- *
- * 为什么不能直接用原生控件：Chromium / Windows 上原生 `<option>` 忽略
- * CSS `background-color`（它是 OS 级控件），深色主题里会闪出一块白底列表。
- *
- * ## 浮层与 a11y 都交给 base-ui Select 原语（P67 §12.18 系列尾单）
- *
- * 此前这里用 `~/components/ui/popover` 手写了 combobox 语义
- * （`role="combobox"` + `aria-controls` + `role="listbox"` + `role="option"`
- * + `aria-selected` + 键盘 ←/→ / Enter + 高亮滚入 + mouseenter 高亮 +
- * 局部 open state 与滚动 ref），与 `~/components/ui/select`（shadcn
- * Select、base-ui 版）**是同一件事的第二份实现**——popover 只是浮层，
- * combobox 语义还得本件自己拼。base-ui Select 的 Trigger 天生就是
- * combobox（`role="combobox"` + `aria-expanded` + `aria-controls`），
- * List / Item 带 `role="listbox"` / `role="option"` / `aria-selected`，
- * 键盘 ←/→ / Home / End / Enter 与滚入视野都是内置；`data-highlighted`
- * / `data-selected` / `data-disabled` 三条数据属性把视觉状态从 JS 里
- * 挪进 CSS。本件因此从 285 行降到 ~130 行、且读屏器与浏览器兼容性
- * 都比手拼更稳。
- *
- * ## 富 ReactNode 标签（原文件头的核心动机、依然成立且被基元原生支持）
- *
- * `labels` 是 `Record<string, ReactNode>`（不是 `string`），调用处才能在
- * 每行挂彩色圆点 /「本机」/「在线」徽标 —— `string` 本身是合法 ReactNode，
- * 因此这个签名向后兼容。**base-ui 对这一档原生支持**：
- *   · 触发器显示：`<SelectPrimitive.Value>{ReactNode}</SelectPrimitive.Value>`
- *     或 render prop `(value: string | null) => ReactNode`（其 .d.ts 行 28
- *     的官方示例正是 `{(v) => v ? labels[v] : 'No value'}`）；
- *   · 选项行：`<SelectPrimitive.Item value={opt}><SelectPrimitive.ItemText>
- *     {ReactNode}</SelectPrimitive.ItemText></SelectPrimitive.Item>`；
- *   · Root 的 `items?: Record<string, ReactNode>` 还能整表映射（本件不用、
- *     直接走 children 更贴合 `labels[value] ?? value` 的回退语义）。
- * 之前**没有**迁到 Select 的顾虑「富 ReactNode 撑不住」实证不成立。
- *
- * ## 视觉契约（33 处消费点的观感与 PR 之前完全一致）
- *
- * 深色定制定向覆盖到 base-ui 各件：
- *   · Trigger：`border-border bg-subtle text-ink-bright rounded-md px-2.5
- *     py-1.5 text-xs` + 自定义 chevron（`group-data-open:rotate-180`）；
- *     默认 `w-auto`（**刻意不 `w-full`**，见 `TRIGGER_BASE` 上方原注释——
- *     一排筛选控件里 `w-auto` 覆盖 `w-full` 会被 Tailwind 输出顺序决胜、
- *     导致每个都铺满整行；工作流库页头三个下拉曾撞这条）。
- *   · Content：`bg-card border-border-strong shadow-lg` +
- *     `p-1 max-h-60 overflow-y-auto`（List 层滚动）；`min-w` 走原
- *     `autoFitFromOptions` 算法（按最长字符串标签估宽、上限 720）；
- *   · Item：`text-xs rounded-sm px-2.5 py-1` + 三态样式
- *     （`text-ink-faint` 默认 / `data-[highlighted]` 高亮 /
- *     `data-[selected]` 选中；同现时 selected 后写胜、与旧三元一致）。
- *     **无 check 图标**（旧实现就没有、base-ui 允许不引 ItemIndicator）。
- *   · Footer：与旧一致，作为 List 的**兄弟节点**渲染在 Popup 底部
- *     （`mt-1 border-t pt-1`）、不参与滚动。
- *
- * 外部 props 一字未改（`value` / `onChange` / `options` / `labels` /
- * `placeholder` / `disabled` / `className` / `fullWidth` 四个常用项 /
- * `popoverMinWidth` 弹层最小宽 / `autoFitFromOptions` / `footer` / `onOpenChange`
- * 全保留），33 处消费点 0 改动。
+ * SelectMenu —— 深色主题的下拉选择（替换原生 `<select>`；Chromium / Windows 上原生 `<option>` 忽略 CSS 背景色，深色主题会闪白底）。浮层与 a11y 交给 base-ui Select：Trigger 天生 combobox，List / Item 带 listbox / option / aria-selected，键盘与滚入内置，`data-*` 把视觉挪进 CSS。
+ * `labels` 是 `Record<string, ReactNode>`（可挂圆点 / 徽标，`string` 向后兼容）。Trigger 刻意 `w-auto`（`w-full` 会被 Tailwind 输出顺序决胜、铺满整行）；Content `max-h-60` + `autoFitFromOptions`（上限 720）。
+ * 外部 props 全保留（`value` / `onChange` / `options` / `labels` / `placeholder` / `disabled` / `className` / `fullWidth` / `popoverMinWidth` / `autoFitFromOptions` / `footer` / `onOpenChange`），33 处消费点零改动。
  */
 
 import { Select as SelectPrimitive } from "@base-ui/react/select";
@@ -89,11 +36,8 @@ type SelectMenuProps = {
    */
   fullWidth?: boolean;
   /**
-   * a11y 转发口 · 挂在 Trigger（真正可交互的按钮元素）上。
-   * `<FormField>` 的 render prop 会 spread `{ id, "aria-describedby",
-   * "aria-invalid" }` 给控件、`<label htmlFor>` 也靠 `id` 关联；此前调用点
-   * 用原生 `<select>` 天然吃这些属性、迁 SelectMenu 需要显式开这一层。
-   * `title` 也一并转（虽然不推荐用它替代 Tooltip · 存量调用点保留行为）。
+   * a11y 转发口 · 挂在 Trigger（真正可交互的按钮元素）上。`<FormField>` 的 render prop 会 spread `{ id, "aria-describedby", "aria-invalid" }` 给控件、`<label htmlFor>` 也靠 `id` 关联。
+   * 此前调用点用原生 `<select>` 天然吃这些属性、迁 SelectMenu 需要显式开这一层；`title` 也一并转（不推荐用它替代 Tooltip · 存量调用点保留行为）。
    */
   id?: string;
   /** 选项值 → 显示文案的映射；缺省时回退到原始值。 */
@@ -107,15 +51,8 @@ type SelectMenuProps = {
   options: Array<string>;
   placeholder?: string;
   /**
-   * 浮层最小宽度（px），默认 480 —— 装饰较丰富的行
-   *（圆点 + 名称 + 任务类型 + 本机/在线徽标）在窄触发器里也能舒展；
-   *  触发器本身比这个下限宽时，浮层仍会回落到 `--anchor-width`。
-   *  并按视口做上限裁剪 + 自动左移，保证不会溢出右边缘。
-   *
-   * 开启 `autoFitFromOptions` 时，**生效**的下限为
-   * `max(popoverMinWidth, 最长标签字符数 × 8 + 56)`，好让较长的模型文件名 /
-   * workflowIO 标签在窄画布节点里也放得下，不必每个调用处各调一遍；
-   *  上限封顶 720，免得单个异常长的字符串把浮层顶出屏幕。
+   * 浮层最小宽度（px），默认 480 —— 装饰较丰富的行（圆点 + 名称 + 任务类型 + 本机/在线徽标）在窄触发器里也能舒展。触发器比下限宽时回落 `--anchor-width`，并按视口裁剪 + 左移。
+   * 开启 `autoFitFromOptions` 时生效下限为 `max(popoverMinWidth, 最长标签字符数 × 8 + 56)`，上限封顶 720，免得单个异常长字符串把浮层顶出屏幕。
    */
   popoverMinWidth?: number;
   title?: string;

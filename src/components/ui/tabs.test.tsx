@@ -1,19 +1,6 @@
 /**
- * `ui/tabs` 的交互契约与命名钩子。
- *
- * 这份封装此前**没有同名用例**（`docs/DESIGN.md` 的 Known Gaps 记的就是这一格：
- * 故事面全覆盖，但故事不比断言）。它本身只是薄封装，所以这里钉的三件事都不是
- * 「base-ui 会不会动」，而是**这个仓库依赖的东西**：
- *
- * 1. **`data-slot` / `data-orientation` / `data-variant` 四个名字与两根轴在位** ——
- *    下游全靠它们找元素：`globals.css` 末尾的 `prefers-reduced-motion` 降级块按
- *    `data-slot` 选浮层，样式里那一串 `group-data-[variant=*]/tabs-list` 与
- *    `group-data-vertical/tabs:*` 按另两根轴分叉。名字改一个字，样式与降级同时
- *    静默失效（界面上「还在」，只是不再响应）。
- * 2. **键盘换页签**（方向键 + Home/End）—— 页签是 `role="tab"` 的**非原生交互元素**，
- *    鼠标能点不等于键盘能用；这条也是规范 06 的 roving tabindex 口径。
- * 3. **两档形态互斥**：`default` 出药丸底、`line` 必须透明底（否则详情页顶部那条
- *    「线」会骑在一颗灰胶囊上）。
+ * `ui/tabs` 的交互契约与命名钩子。三件事不是「base-ui 会不会动」，而是本仓库依赖的：① `data-slot` / `data-orientation` / `data-variant` 四个名字与两根轴在位（`globals.css` 的 reduced-motion 降级块按 `data-slot` 选、样式按轴分叉，改名即静默失效）；
+ * ② 键盘换页签（方向键 + Home/End，规范 06 的 roving tabindex 口径）；③ 两档形态互斥（`default` 出药丸底、`line` 必须透明底，否则详情页顶部的线会骑在灰胶囊上）。
  */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -128,11 +115,7 @@ describe("ui/tabs 的命名钩子", () => {
 
 describe("ui/tabs 的键盘换页签", () => {
   /**
-   * 实测出来的口径（base-ui 1.8，本仓不传任何 activation 类 prop）：
-   * **方向键只移动焦点、不换选中，选中要 Enter**（Space 实测不接管）—— 即 ARIA 的
-   * manual activation。这条值得钉，因为它对用户的表现是「方向键按了没反应」，
-   * 只有鼠标与键盘不对称；哪天有人把「自动激活」加回来（或基元升版改了默认），
-   * 这条会红，而那是一次**需要签字的交互变化**，不是顺手的小优化。
+   * 实测口径（base-ui 1.8，本仓不传任何 activation 类 prop）：方向键只移动焦点、不换选中，选中要 Enter（Space 实测不接管），即 ARIA 的 manual activation。它对用户表现为「方向键按了没反应」；若有人加回自动激活或基元升版改默认，此条会红，那是需要签字的交互变化。
    */
   it("方向键只移动焦点：选中与面板都不跟着换", async () => {
     const user = userEvent.setup();

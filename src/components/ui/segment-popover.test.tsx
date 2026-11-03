@@ -1,17 +1,6 @@
 /**
- * `MultiSegmentPopover` 的**选中态契约**：面板照常开关、点击照常有回调的
- * 前提下，选中高亮是唯一会「静默消失」的一环 —— 它完全由 Tailwind 的
- * 属性选择器表达，而属性名由 base-ui 的 Toggle 决定。
- *
- * base-ui 的 Toggle 输出的是 **`data-pressed`**（`@base-ui/react/toggle` 的
- * `ToggleDataAttributes` 里写着 `const pressed = 'data-pressed'`），不是
- * Radix 时代的 `data-state=on`。写成后者时**没有任何报错**：面板能开、能点、
- * 能回调，只有高亮整体不见（用户实测「尺寸菜单点击选中效果丢失」）。
- *
- * jsdom 不编译 Tailwind，「高亮有没有真的画出来」判不了；能钉的是这对名字
- * 是否一致 —— ① 选项上确实带 `data-pressed`（基元侧），② 选项类名用的是
- * `data-pressed:` 而不是永不匹配的 `data-[state=on]:`（我们这侧）。
- * 两条各自拦住一半回归：换基元、或把选择器写回 Radix 口径。
+ * `MultiSegmentPopover` 的选中态契约：选中高亮完全由 Tailwind 属性选择器表达，而属性名由 base-ui 的 Toggle 决定。base-ui 输出的是 `data-pressed`（不是 Radix 的 `data-state=on`），写错时没有报错，只有高亮整体消失（用户实测「尺寸菜单点击选中效果丢失」）。
+ * jsdom 不编译 Tailwind，只能钉名字一致：选项上带 `data-pressed`，类名用 `data-pressed:` 而不是永不匹配的 `data-[state=on]:`。
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";

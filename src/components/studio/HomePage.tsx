@@ -18,21 +18,8 @@ import { HomeModelOverview } from "./HomeModelOverview";
 import type { WorkspaceView } from "./NavItems";
 
 /* ── 首页 —— Updream 风全屏仪表盘（对齐 Ardot） ─
-  深色主题首页，左侧栏导航 + 顶栏 + 极光背景。
+  深色主题首页：左侧栏导航（72px）+ 顶栏 + 极光背景；内容依次为标题、输入框+工具栏、快捷动作药丸、本机算力卡（在线/显存/内存）、最近项目栅格，极光光斑叠在所有内容之后。
   对齐 Ardot 设计规范：深色极光（#0a0a0f）+ 紫 #8B5CF6 强调。
-
-  布局：
-  ┌────┬──────────────────────────────────────────┐
-  │    │  ╔══ 顶栏（搜索 · 铃铛 · 头像） ════╗ │
-  │ 左  │  ╚═══════════════════════════════════╝ │
-  │ 侧  │  标题：灵感从这里开始!                  │
-  │ 栏  │  输入框 + 工具栏                         │
-  │    │  快捷动作药丸                      │
-  │(72│  本机算力卡（在线 / 显存 / 内存）      │
-  │px)│  最近项目栅格                    │
-  │px)│                                          │
-  │    │  [极光光斑在所有内容之后]        │
-  └────┴──────────────────────────────────────────┘
 */
 
 export type RecentProject = {
@@ -47,16 +34,8 @@ export type RecentProject = {
 };
 
 /* 卡片类型徽标文案与图标 */
-/* 项目类别色 + 图标。
- *
- * 色值仍是 hex，但**只作为内联 style，不再走 Tailwind 任意值类**：Tailwind
- * 的 JIT 扫不到 `bg-[${cfg.color}/15]` 这种运行时模板，此前那条写法从来就没
- * 生效过（图标方块一直是无底色）。`bg()` 给它配上当前色 15%/18% 的透明度 ——
- * 「同一个色相、不同的透明度档」用 `color-mix` 表达，不必再手写一份透明色。
- *
- * 色值本身属规范 03 §3.6.1 的**类型色例外**（项目类别色与
- * `lib/project-canvas/canvas-types.ts` 的 `NODE_META.color` 同构），
- * 已在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
+/* 项目类别色 + 图标。色值仍是 hex，但**只作为内联 style，不走 Tailwind 任意值类**：JIT 扫不到 `bg-[${cfg.color}/15]` 这种运行时模板（此前那条写法从没生效，图标方块一直无底色）；透明档交给 `color-mix`（`kindTint`），不必再手写一份透明色。
+ * 色值本身属规范 03 §3.6.1 的**类型色例外**（与 `lib/project-canvas/canvas-types.ts` 的 `NODE_META.color` 同构），已在 `scripts/check-theme-colors.cjs` 的 `EXEMPT_TABLES` 登记。 */
 type KindConfig = { color: string; icon: React.ReactNode; label: string };
 
 const KIND_CONFIG: Record<"canvas" | "generation" | "workflow" | "video", KindConfig> = {
@@ -98,14 +77,8 @@ function kindTint(color: string, percent: number): string {
 }
 
 /**
- * 「继续最近项目」大卡 —— 最近动过的那一个，给一整个位置。
- *
- * 为什么值得单独一块：小卡栅格回答的是「我有哪些项目」，而回到首页的人第一句
- * 通常是「我上次做到哪儿了」。前者要扫，后者要一键回去。
- *
- * 刻意留在本文件内：它要用 `KIND_CONFIG` / `kindConfigOf` / `kindTint` 这份类别
- * 色表（已按 §3.6.1 在 `check-theme-colors` 登记），搬出去要么把内部表导出、
- * 要么再抄一份色表 —— 两条都是 §12.12 的孪生对。
+ * 「继续最近项目」大卡 —— 最近动过的那一个，给一整个位置。小卡栅格回答「我有哪些项目」，而回到首页的人第一句通常是「我上次做到哪儿了」：前者要扫，后者要一键回去。
+ * 刻意留在本文件内：它要用 `KIND_CONFIG` / `kindConfigOf` / `kindTint` 这份类别色表（已按 §3.6.1 在 `check-theme-colors` 登记），搬出去要么把内部表导出、要么再抄一份色表 —— 两条都是 §12.12 的孪生对。
  */
 function ResumeProjectCard({
   proj,
@@ -201,15 +174,8 @@ export function HomePage({
   onShowAllProjects,
 }: HomePageProps) {
   /**
-   * 打开一个最近项目 —— 一律落到项目主页。
-   *
-   * 「其余走 /create/{id}」这条岔路随独立详情路由一起退役（#2422）：
-   * 最近项目的 kind 恒为 "canvas"（Task.type 不收画布项目），非 canvas 分支
-   * 现在也落在项目主页 —— 两条回调只是历史分工，在役落点已经并轨。
-   *
-   * 收成一处是因为现在有两个入口会用这条规则（「继续最近项目」大卡与下面的小卡
-   * 栅格）：此前它内联在小卡的 onClick 里，大卡要复用就得再抄一遍 —— 而两个入口
-   * 对同一个项目做出不同行为，是最难被发现的一类漂移。
+   * 打开一个最近项目 —— 一律落到项目主页。「其余走 /create/{id}」这条岔路随独立详情路由一起退役（#2422）：最近项目的 kind 恒为 "canvas"（Task.type 不收画布项目），非 canvas 分支现在也落在项目主页 —— 两条回调只是历史分工，在役落点已经并轨。
+   * 收成一处是因为有两个入口会用这条规则（「继续最近项目」大卡与小卡栅格）：此前内联在小卡的 onClick 里，大卡复用就得再抄一遍 —— 而两个入口对同一个项目做出不同行为，是最难被发现的一类漂移。
    */
   const openRecent = (proj: RecentProject) =>
     proj.kind === "canvas" ? onOpenCanvasProject?.(proj.id) : onOpenProject?.(proj.id);
@@ -222,12 +188,8 @@ export function HomePage({
     <DocumentFrame
       backdrop={
         /* ── 顶部渐隐带（替代原先两团极光光斑）────────────────────
-           换掉的理由不是审美偏好，是两条实测：
-             · 那两团是 `mix-blend-screen` + 饱和色，**没有浅色回落** —— 浅色主题下
-               右上角会糊成一块粉，而首页是浅色态最常落的屏；
-             · 首页本来就有标题、四个入口与两张状态卡，装饰性光斑压低的是内容可读性。
-           新做法不给颜色、只给纵深（surface → canvas 的单向渐隐），深浅两态同一份
-           令牌，不需要各写一套。 */
+           换掉不是审美偏好：那两团是 `mix-blend-screen` + 饱和色、**没有浅色回落**（浅色主题下右上角糊成一块粉，而首页是浅色态最常落的屏）；且首页已有标题、四个入口与两张状态卡，装饰性光斑压低内容可读性。
+           新做法不给颜色、只给纵深（surface → canvas 单向渐隐），深浅两态同一份令牌。 */
         <div
           aria-hidden
           className="from-surface-1 pointer-events-none absolute inset-x-0 top-0 h-56 bg-linear-to-b to-transparent"
@@ -239,17 +201,9 @@ export function HomePage({
       width="narrow"
     >
       {/* ── 主内容区 ────────────────────────
-          侧栏（`ui/sidebar`）与顶栏（`TopBar`）由 `AppShell` 统一提供 ——
-          壳负责「导航 + 工具条 + 滚动容器」，首页只管自己的内容。
-          此前这里的搜索框是个 `<div>` 假实现（连 input 都不是）、铃铛与头像
-          只弹一句 toast 占位，三者本轮一并移除；消息入口改由顶栏复用状态栏
-          那个 `MessageCenterButton`。 */}
+          侧栏与顶栏由 `AppShell` 统一提供（壳负责「导航 + 工具条 + 滚动容器」，首页只管自己的内容）。此前这里的搜索框是 `<div>` 假实现（连 input 都不是）、铃铛与头像只弹 toast 占位，三者本轮一并移除；消息入口改由顶栏复用状态栏的 `MessageCenterButton`。 */}
       {/* ── 快捷入口卡片 ──
-          原先这里还有一块「灵感从这里开始 + 用本地 AI 模型，自由创作图像、视频与
-          专属模型」的欢迎区。移除它的理由只有一条：**它一个信息都不给**。
-          标题是句口号、副标题把四张卡片的说明重说了一遍，两者加起来占掉首屏上沿
-          约 150px（含下方 40px 间距），而首页整屏要回答的问题只有「继续哪个项目 /
-          开哪个入口」—— 首屏上沿正是那一块该在的地方。 */}
+          原先这里还有一块「灵感从这里开始 + 用本地 AI 模型，自由创作图像、视频与专属模型」的欢迎区，移除理由只有一条：**它一个信息都不给**（标题是口号、副标题把四张卡片的说明重说一遍），却占掉首屏上沿约 150px（含下方 40px 间距）；首页整屏要回答的只有「继续哪个项目 / 开哪个入口」。 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           {

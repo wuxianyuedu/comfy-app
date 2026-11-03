@@ -1,24 +1,10 @@
 "use client";
 
-/* 工作流库「画布节点」预览右侧的**对外输出参数卡片列**。
- *
- * 左侧那列说「这个工作流对外**要**什么」（提示词 / 尺寸 / 首帧 → 落到节点的哪一行），
- * 右侧这列说「它对外**给**什么」（images / video…）—— 两端对称，读者不必点开别的
- * 页签才知道这个工作流产出的是什么。
- *
- * 卡片视觉与左侧输入卡片共用同一份本体（`WorkflowParamCard` 的 `side="left"`）：
- * 圆点骑跨卡片**左**缘，线从宿主卡片上**取值那一行**的圆点出发收在它上面。差别
- * 只在端点所在的一侧，几何常量与行高完全一致，不会一边贴边一边内缩。
- *
- * **可拖**（ISSUE #355）：输出的连线也在库里改 —— 拖卡片左缘那颗圆点到宿主卡片的
- * 另一行输出端口上，即把「这个输出口从哪一行取值」改到那一行；卡片头的 ↺ 恢复它
- * 自带的那一行。落点覆盖写 `paramMap.output.mode:<模式>`（见
- * `~/lib/workflow-output-binding`），与输入侧的 `paramMap.source.mode:<模式>`
- * 同构、**不同键空间**。
- *
- * 端点由消费方注入（`endpoint`）：库里那层注入 React Flow 的 `<Handle>`
- * （ISSUE #529）—— 手势与命中半径都由画布承担，卡片列本身不碰 React Flow。
- */
+/* 工作流库「画布节点」预览右侧的对外输出参数卡片列：左侧说「要什么」，
+ * 右侧说「给什么」，两端对称。视觉与几何复用 `WorkflowParamCard`（`side="left"`）：
+ * 圆点骑跨卡片左缘，线从宿主取值行进来。**可拖**（ISSUE #355）：改「从哪一行
+ * 取值」写 `paramMap.output.mode:<模式>`（与输入侧同构、不同键空间）。端点由
+ * 消费方注入 React Flow `<Handle>`（ISSUE #529），卡片列本身不碰 React Flow。 */
 
 import type { WorkflowIOEntry } from "~/components/studio/workflow-io";
 import type { ReactNode } from "react";

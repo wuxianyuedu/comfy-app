@@ -57,13 +57,9 @@ export type MetaEditorController = {
 export type WorkflowLibraryDetailController = {
   actions: WorkflowLibraryDetailActions;
   /** **两个页签共用的当前模式**（画布节点卡片列与工坊封装都按它渲染）。
-   *
-   *  初值取工作流的默认模式（`resolveWorkflowMode`：defaultMode → modes[0] →
-   *  taskType）。详情页原来的口径是「每个页签各算一次当前模式」——工坊封装页签
-   *  写死默认模式、画布页签自己解析，于是多模式工作流在封装页**没法换模式测试**
-   *  （ISSUE #720 第 3 条）。收成一处后两页签同说一个模式。
-   *
-   *  换工作流时重置回该工作流的默认模式（不把上一条工作流的查看模式带过来）。 */
+   *  初值取默认模式（`resolveWorkflowMode`：defaultMode → modes[0] → taskType）。
+   *  此前两个页签各算一次（封装页写死默认模式），多模式工作流在封装页没法换模式
+   *  测试（ISSUE #720 第 3 条）。换工作流时重置回该工作流的默认模式。 */
   activeMode: string | null;
   activeTab: DetailTab;
   busyDownload: boolean;
@@ -103,12 +99,10 @@ export type WorkflowLibraryDetailController = {
 };
 
 /** 生效模式：用户在这条工作流上切过就用切过的，否则用默认模式解析值。
- *
- *  抽成纯函数（而不是组件里一个三元表达式）的两个理由：
- *   · **判空顺序**：没选中工作流时 `modeOverride` 与 `workflow.id` 都为空，
- *     写成 `modeOverride?.workflowId === workflow?.id` 会让两者相等
- *     （`undefined === undefined`）从而去读一个空的 `modeOverride` —— 直接抛错；
- *   · 分支（切过 / 没切过 / 换过工作流）可以单测，不必挂载整个详情面板。 */
+ *  抽成纯函数而不是三元表达式的两个理由：① 判空顺序 —— 没选中时 `modeOverride`
+ *  与 `workflow.id` 都为空，`modeOverride?.workflowId === workflow?.id` 会是
+ *  `undefined === undefined`，从而去读空的 `modeOverride` 直接抛错；② 分支可单测，
+ *  不必挂载整个详情面板。 */
 export function resolveActiveMode(
   override: { mode: string | null; workflowId: string } | null,
   workflowId: string | null,
@@ -145,18 +139,11 @@ export function useWorkflowLibraryDetail(
    *  那张表里写一次，这里不另抄一个页签键，否则重排页签时默认值会偷偷留在旧档
    *  （见 `DETAIL_TABS` 的说明：默认落重型页签会让打开工作流就拉起画布引擎）。 */
   const [activeTab, setActiveTab] = useState<DetailTab>(DEFAULT_DETAIL_TAB);
-  /* 「画布预览那一份常驻实例该不该挂载」的判据 —— 值为**已经访问过画布页签的
-   *  工作流 id**（`null` = 还没在任何工作流上访问过）。
-   *
-   *  为什么需要一个「记着」的位：编辑对外参数 / 实际使用两页共用同一个常驻实例
-   *  （切页签不重建，表单值不丢），但这份实例**不该在默认页签（工坊封装）上就
-   *  挂载** —— 它下面挂着整个画布引擎 `@xyflow/react`，打开一条只想看封装口径的
-   *  工作流就等于把它整包拉起来。所以「首次真的切到画布页签」才挂载，之后常驻。
-   *
-   *  维护点在 `setActiveTab`（唯一的切换入口）而不是 effect：状态变化只由用户
-   *  点页签触发，一条事件路径一个写点，也就不存在「effect 里 setState」那一类
-   *  循环风险。`selectTab` 是把两件事（切页签 + 记下画布已被访问）合成一个动作
-   *  的出口，视图仍然只调 `setActiveTab`。 */
+  /* 「画布预览那一份常驻实例该不该挂载」的判据：值为**已经访问过画布页签**的
+   *  工作流 id（`null` = 还没访问过）。两页共用常驻实例（切页签不重建），但不该
+   *  在默认页签（工坊封装）就挂载 —— 它下面挂着整个画布引擎。维护点在
+   *  `setActiveTab`（唯一入口）：状态只由用户点页签触发，避免 effect 里 setState
+   *  的循环风险；`selectTab` 把「切页签 + 记录访问」合成一个动作。 */
   const [canvasVisitedFor, setCanvasVisitedFor] = useState<string | null>(null);
   const isCanvasTab = (tab: DetailTab) => tab === "canvas" || tab === "use";
   const handleTabChange = useCallback(

@@ -1,23 +1,8 @@
-/* 悬浮节点置顶 —— 被鼠标指着的节点必须压住连线。
- *
- *  背景（ISSUE #400）：画布连线不参与「浮到最上层」，节点与线各自在不同层级
- *  绘制。一条横穿画布的线只是「恰好路过」某个节点时，用户悬停到该节点上，看到
- *  的仍是线压着卡片 —— 与「选中后节点浮到最上层」的观感不一致，节点参数基本
- *  没法读。
- *
- *  做法：节点渲染器把悬浮态写成 `data-hovered="true"`，抬升幅度交给 CSS
- *  （见 globals.css 的 `.react-flow__node[data-hovered="true"]`）。这样
- *  「鼠标进出」只让被指的那个节点重渲染，画布其余部分零成本 —— 比改节点数据
- *  （会触发整张 store 表更新、拖慢大图）划算得多。
- *
- *  ⚠️ 属性必须落在 **React Flow 自己的节点外壳**（`.react-flow__node`）上，
- *  不能落在节点组件渲染的卡片本体上：外壳带 `position:absolute` + 行内
- *  `z-index`，自成一个层叠上下文，卡片无论怎么抬 z-index 都抬不出外壳。
- *  因此这里用 ref 从卡片元素向上找到最近的外壳再写属性（见 useHoverElevation）。
- *
- *  钩子自己管鼠标事件，而不是复用 React Flow 的 `<ReactFlow onNodeMouseEnter>`：
- *  后者会把事件冒到宿主画布、再经 props 传回每个节点 —— 那是一次画布级状态更新，
- *  整张图一起重渲染。钩子挂在节点元素上，React 只会重渲染该节点。 */
+/* 悬浮节点置顶 —— 被指着的节点必须压住连线（ISSUE #400）。节点与线分层绘制，
+ *  横穿的线只是路过也会压住卡片。渲染器写 `data-hovered="true"`，抬升交给 CSS，
+ *  只重渲染被指的节点。⚠️ 属性必须落在 `.react-flow__node` 外壳上：外壳带
+ *  `position:absolute` + 行内 z-index、自成层叠上下文，落在卡片里抬不出去壳，
+ *  故用 ref 向上找外壳；钩子自管鼠标事件，避免 `onNodeMouseEnter` 整图重渲染。 */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DOMAttributes } from "react";
 

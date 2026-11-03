@@ -3,15 +3,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { SelectChip } from "~/components/ui/select-chip";
 
 /**
- * `ui/select-chip` 是「一排里选一个」的 chip。
- *
- * 形态清单从 `SelectChipProps` 的 props 派生（`cva()` 的返回值运行时没有
- * `.variants`，写法与 `button.stories.tsx` / `badge.stories.tsx` 一致）。
- *
- * **最值得看的一根轴是「选中 × 悬停」**：这是本件存在的理由 —— `Button
- * variant="outline"` 自带 `hover:text-foreground`，收口前的选中分支没钉住
- * 悬停值，于是划到已选中的 chip 上字色翻白。storybook 里把鼠标移到
- * `Selected` 那一枚上就能看出它**不变**（ISSUE #1423）。
+ * `ui/select-chip` 是「一排里选一个」的 chip。形态清单从 `SelectChipProps` 的 props 派生（`cva()` 的返回值运行时没有 `.variants`，与 `button.stories.tsx` / `badge.stories.tsx` 一致）。
+ * 最值得看的是「选中 × 悬停」：收口前选中分支没钉住悬停值，`Button variant="outline"` 自带的 `hover:text-foreground` 会让已选中的 chip 翻白；storybook 里移到 `Selected` 那枚可见它不变（ISSUE #1423）。
  */
 type ChipShape = NonNullable<React.ComponentProps<typeof SelectChip>["shape"]>;
 

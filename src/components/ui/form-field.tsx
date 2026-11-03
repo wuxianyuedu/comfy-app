@@ -6,68 +6,9 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "~/components/ui
 import { cn } from "~/lib/utils";
 
 /**
- * FormField —— 「标签 + 控件 + 校验错误」这一行的唯一出口
- * （规范 16 §16.2.4.26；本次 PR-2 起改为 `~/components/ui/field`
- * 官方基元的薄封装）。
- *
- * 为什么收口：收口时全库有 **15 处**各写一份「一行表单」，三件套一样、**四套
- * 度量语言**：
- *
- * | 落点 | 标签类 | 错误行 |
- * | --- | --- | --- |
- * | 设置页（`UsageTestDialog` / `RemoteModelDialog` / `LlmLocalSection` / `SettingsPrimitives`） | `text-ink/80 mb-1.5 block text-sm font-medium` | 字段错误挂在控件下方 |
- * | 工作流导入面板 | `text-ink-soft mb-1 block text-xs font-medium` | 无 |
- * | 工坊模型适配弹窗 | `text-muted-foreground mb-1 block text-3xs` | 无 |
- *
- * 而**真正的病灶不是字号不一致**，是三件事在不同落点被漏掉：
- *
- * 1. **`htmlFor` / `id` 关联** —— 15 处里**没有一处**把 `<label>` 与控件关联
- *    起来（设置页的 label 全是裸 `<label>`，点标签不聚焦输入框；读屏器把标签
- *    读成孤立文本）。表单行不只要「长得像」，还要「点得上、读得出」。
- * 2. **`aria-invalid` + `aria-describedby`** —— 错误文案渲染出来了，但**没有
- *    一处**把控件标记成无效、也没有一处把错误文案的 id 关联给控件：读屏器
- *    完全不知道「这个输入框现在是错的、错在哪」。设置页只有
- *    `RemoteModelDialog` 的模型名一栏写了 `aria-invalid`（占全部字段的 1/15）。
- * 3. **错误行必须给用户看得见的位置**（硬规则 4）—— 有一处把整表错误挂在
- *    提交按钮上方，用户改了下面某一行也**没有任何标记**指出是哪一行错（校验函数
- *    明明返回的是逐字段判据，却只在末尾报一句）。
- *
- * ## 三件本组件一次给全的事
- *
- * 1. **`htmlFor` 由 `id` 派生**（`useId` 兜底），点标签即聚焦控件；
- * 2. **错误态自动上 `aria-invalid` 与 `aria-describedby`** —— 这两个属性由
- *    `error` 的存在性决定，调用处**不可能**忘记其中一个（此前正是「写了
- *    `aria-invalid` 却忘了关联错误文案」）；
- * 3. **错误行有稳定 id**，与 `aria-describedby` 同源（改名不会漏一处）。
- *
- * ## P67 治理（§16.2.3 / §12.18）
- *
- * 此前内部是**裸 `<label htmlFor>` + `<p id>` + `<p>` 手拼三件套**（P67 e
- * 判据的锚点形态）；`pnpm dlx shadcn@latest add field` 装上官方基元后，
- * 三件分别换成 `FieldLabel` / `FieldDescription` / `FieldError`，外层
- * `<div>` 换成 `<Field>`（带 `role="group"`、语义更完整）。
- * **外部 API 完全不变**（`label` / `id` / `error` / `hint` / `required`
- * / `children` render-prop 渲染函数 / `className` / `labelClassName` /
- * `errorClassName`）——调用点零改动。
- *
- * **保留的自绘细节**（`Field` 基元不管这两档）：
- *   · 必填 `*` 标记（`<span className="text-danger-strong ml-0.5">*</span>`）
- *     挂在 FieldLabel 内、`aria-hidden`；
- *   · 项目色板 `text-ink/80` 与 `text-danger-strong`（shadcn `text-muted-foreground`
- *     / `text-destructive` 是通用档，项目两档色更贴主题）；
- *   · `errorId` 由 `fieldId + "-error"` 派生，`FieldError` 通过 props 拿
- *     `id` 落到 DOM。
- *
- * ## 它不做的事
- *
- * - **不接管控件**：`children` 是任意节点（`Input` / `SelectMenu` / 自定义
- *   复合控件都行）。要拿到 `aria-invalid` 等 ARIA 属性，用 render-prop 形式
- *   的 `children`（`(a11y) => <Input {...a11y} />`）—— 硬包一层 `<Input>`
- *   会把 `SelectMenu` 这类非 input 控件挡在门外。
- * - **不判校验**：字段级规则住在 `~/lib/<domain>/*-schema.ts` 的纯函数里
- *   （§16.2.4.8），集合级规则住在 controller。本组件只负责**把结果渲染出来**。
- * - **不管布局**：整行的外边距由调用处给（`className`）；本组件只管行**内部**
- *   的标签 / 控件 / 错误三件的位置关系。
+ * FormField —— 「标签 + 控件 + 校验错误」这一行的唯一出口（规范 16 §16.2.4.26），`~/components/ui/field` 官方基元的薄封装。收口时全库 15 处各写一份，三件套一样但度量语言四套，且**没有一处**把 `<label>` 与控件关联、**没有一处**把错误文案 id 关联给控件、错误行位置也不稳定。
+ * 本组件一次给全：`htmlFor` 由 `id` 派生（`useId` 兜底），错误态自动上 `aria-invalid` 与 `aria-describedby`（由 `error` 存在性决定），错误行有稳定 id（与 `aria-describedby` 同源）；保留项目色板与必填 `*`，**外部 API 完全不变**。
+ * 不做的事：不接管控件（`children` 可为任意节点，要 ARIA 用 render-prop）；不判校验（字段级规则住 `~/lib/<domain>/*-schema.ts`，集合级住 controller）；不管布局（整行外边距由调用处 `className` 给）。
  */
 export type FormFieldA11y = {
   /** 有错误时才有：错误行的 `id`。 */
@@ -131,14 +72,8 @@ export function FormField({
     ...(errorId === undefined ? {} : { "aria-describedby": errorId }),
   };
 
-  /* `htmlFor` 只在**真的接得上**时才给：`children` 是 render-prop 时，
-   * `fieldId` 由调用处 spread 到控件上，箭头指得到；否则箭头会悬空
-   * （标签点不动、读屏器读出孤立标签文本），比不给 `htmlFor` 更坏。
-   *
-   * 这一档存在的理由是「标签行 + 说明文字，控件在别处」——如
-   * `FilmStudioPropertyPanel` 的只读展示行、`LLMContext` 的按钮组
-   * （控件是多个按钮，没有一个能被 `htmlFor` 指到）。这类场景的
-   * `label` 是**小标题**不是字段标签，语义上也不该带 `htmlFor`。 */
+  /* `htmlFor` 只在**真的接得上**时才给：`children` 是 render-prop 时，`fieldId` 由调用处 spread 到控件上，箭头指得到；否则标签点不动、读屏器读出孤立标签文本，比不给 `htmlFor` 更坏。
+   * 这一档的理由是「标签行 + 说明文字，控件在别处」（如 `FilmStudioPropertyPanel` 的只读展示行、`LLMContext` 的按钮组：多个按钮没有一个能被 `htmlFor` 指到）；这类场景的 `label` 是**小标题**不是字段标签，语义上也不该带 `htmlFor`。 */
   const wiresControl = typeof children === "function";
 
   return (

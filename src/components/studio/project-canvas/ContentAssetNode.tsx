@@ -15,16 +15,10 @@ import { Dialog, DialogContent } from "~/components/ui/dialog";
 import { Textarea } from "~/components/ui/textarea";
 import { OVERLAY_MAX_HEIGHT } from "~/components/ui/overlay-max-height";
 
-/* 项目画布 · 内容载体节点主体（text / picture / movie）
- * 对齐 Ardot 稿 715394877779066 v2 + icon 迭代（/ -D-v2 / -D-icon）：
- *  - 边框内 ~100% 预览区：图片/视频填满（object-cover）、文本 textarea 填满，
- *    空状态居中类型图标 + helper 文案，呼应「整个节点边框内几乎 100% 区域显示内容」。
- *  - 右下 36×36 圆 FAB（类型色填充 + 白色图标）：图片/视频=上传、文本=编辑聚焦。
- *  - 端口 Handle 仍由 CanvasNode 渲染（picture 左侧 inputImage + 三类型右侧 output），
- *    本组件只负责「内容区 + FAB」，不碰 Handle，避免破坏连线 / 选择行为。
- * 类型配色（**独立的内容色表**，不与品牌 token 取齐）：图=紫 / 文=粉 / 视频=橙。
- * 那支紫历史上与旧品牌值同值，此后各自演化 —— 语义来源是「内容类型」，不是品牌。
- * 标题由 CanvasNode 既有 NodeChip 头承载（与画布其它节点一致，不浮出边框）。 */
+/* 项目画布 · 内容载体节点主体（text / picture / movie）。
+ * 只负责「内容区 + 右下 36×36 类型色 FAB」；端口 Handle 仍由 CanvasNode 渲染，
+ * 避免破坏连线 / 选择行为。类型配色是独立内容色表（图紫 / 文粉 / 视频橙），
+ * 不与品牌 token 取齐：语义来源是「内容类型」，不是品牌。 */
 
 const ASSET_ACCENT: Record<"text" | "picture" | "movie", string> = {
   text: "#FF5CA8",
@@ -109,16 +103,9 @@ export function ContentAssetBody({
   return (
     <div className="relative">
       {mediaSrc === null ? (
-        /* 虚线大区改为 drop-only。
-         *  - 不再是按钮元素，所以点击**不会**触发文件选择器（用户要的就是这点）。
-         *  - 仍然需要 `nodrag nopan` + onPointerDown/onMouseDown stopPropagation，
-         *    否则 React Flow v12 节点 wrapper 在 mousedown 时进入 drag-suspect
-         *    状态会吞掉 drop 事件。
-         *  - onDragOver 主动 preventDefault() 是让 drop 真正可触发的必要条件
-         *    （HTML5 drag-and-drop 规范要求）。
-         *  - dragover 高亮 + 加深边框颜色给用户视觉反馈。
-         *  文件选择器现在**只**能从右下角 FAB 触发（onPickMedia）。
-         *  历史：曾用 button + nodrag 三件套做点击触发；本次反向修复。 */
+        /* 虚线区只接受拖放，点击不触发文件选择器（选择器只在右下角 FAB）。
+         *  必须 `nodrag nopan` + onPointerDown/onMouseDown stopPropagation，否则 React Flow v12
+         *  节点 wrapper 会进入 drag-suspect 状态吞掉 drop；onDragOver 必须 preventDefault。 */
         /* 拖放落点（`onDrop` / `onDragOver` / `onDragLeave`）—— HTML5 DnD 规范
            要求的是**提供替代路径**（右下角 FAB 选文件），不是给容器加个键。 */
         /* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- DnD 落点，不是点击交互 */

@@ -1,26 +1,6 @@
 /**
- * 加载态基元的形态契约。
- *
- * 本件断言的是 `~/components/ui/spinner`（官方 shadcn 基元：`Loader2Icon` +
- * `animate-spin` + `role="status"` + `aria-label="Loading"`）。历史上
- * `~/components/ui/page-loading` 薄 re-export 过一份 `Spinner`（ISSUE #720
- * 迁移期为了不打破既有消费点），后续一次性把 15 处 import 全迁到
- * 直连 ui/spinner 之后，re-export 撤除、本测试也从 `./page-loading` 改到
- * `./spinner`。文件名保留在这里是历史沿革，断言对象是 ui/spinner 基元本身。
- *
- * **历史 ISSUE #720 的现场**：旧 `Spinner` 是自绘 `<span class="border-2
- * animate-spin rounded-full">`，`<span>` 默认 `display: inline`、`size-*`
- * 对行内盒不生效；`EmptyState` 的图标位是 `<span class="block">`（非
- * flex），画出来成「2px 上下边框叠在一个行内盒上」——约 4px 宽、20px 高的
- * 竖线。当时的解法是给 `<span>` 自带 `inline-block`。
- *
- * 换成 lucide `Loader2Icon`（`<svg>`）之后**这条坑天然不存在**——`<svg>`
- * 是 replaced element、`width` / `height` 直接生效、不依赖调用处的
- * `display`。所以旧的 `inline-block` 断言删掉，改成断言**新契约**：
- *   · a11y 三件套由基元给出：`data-slot="spinner"` /
- *     `role="status"` / `aria-label="Loading"`；
- *   · `size-6` 在调用处生效（jsdom 无布局、只能验类名）；
- *   · `animate-spin` 走基元而非调用处自写（P3 判据的合规方向）。
+ * 加载态基元的形态契约。断言对象是 `~/components/ui/spinner`（`Loader2Icon` + `animate-spin` + `role="status"` + `aria-label="Loading"`）；`page-loading` 的 re-export 已在迁移后撤除，文件名保留是历史沿革。
+ * 旧自绘 `<span>` 依赖调用处 `display`，画成约 4px 宽竖线（ISSUE #720）；换成 lucide `<svg>`（replaced element）后宽度直接生效。新契约：`data-slot="spinner"` / `role` / `aria-label`，`size-6` 在调用处生效，`animate-spin` 走基元。
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";

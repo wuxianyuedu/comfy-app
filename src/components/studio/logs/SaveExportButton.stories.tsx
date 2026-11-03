@@ -4,19 +4,9 @@ import { SaveExportButton } from "~/components/studio/logs/SaveExportButton";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
 
 /**
- * 「保存到本机 `log/exports/`」按钮（第三层注入 · store 的现场）。
- *
- * 它自己从 store 取 `saveExport` action（这是 props 给不了的东西），所以 story
- * 走 `parameters.storeScene` 先把时间线写进 store。按钮的**成败回执是按钮本地
- * 自持**的 —— 那正是这份 story 要摆的两档：
- *
- *  · **成功**：按钮改口「已保存」并在旁边标出 `log/exports/<名>.txt`（那句路径
- *    就是排障现场要的「文件在哪」）；
- *  · **失败**：改口「保存失败」——**不谎报成功**，否则用户会去一个不存在的路径找文件。
- *
- * 画布上默认看到的是**初始态**（没点过）。真去点它需要服务端在跑（跨源那道门槛
- * 与 `data-sources.tsx` 的 tRPC 一节同源），所以这支按钮的成败回执以「初始态 +
- * 悬停提示说清存下来的是哪一类」为主 —— 那正是它在真机上大多数时候的样子。
+ * 「保存到本机 `log/exports/`」按钮（第三层注入 · store 的现场）：它自己从 store 取 `saveExport`，
+ * story 用 `parameters.storeScene` 先写入时间线。回执本地自持两档：成功改口「已保存」并标出
+ * `log/exports/<名>.txt`、失败改口「保存失败」（不谎报）。真点需服务端在跑，画布以初始态 + 悬停提示为主。
  */
 const meta = {
   title: "Studio/Logs/SaveExportButton",

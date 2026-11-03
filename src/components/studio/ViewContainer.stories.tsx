@@ -4,27 +4,13 @@ import { DocumentFrame, WorkspaceFrame } from "~/components/studio/ViewContainer
 import { cn } from "~/lib/utils";
 
 /**
- * 视图容器（`ViewContainer`）—— 两种框架形态，各屏按「怎么滚」选一种。
- *
- * 这两件没有数据依赖，但它们**几乎是纯布局**，所以「长得对」这件事在 story 里
- * 特别值得看：一屏用哪个框架决定了整屏会不会出现**双层滚动条**。
- *
- *   · **`DocumentFrame`**：整屏滚动 + 居中列，`width` 四档（`narrow` / `medium` /
- *     `wide` 三档有宽度令牌，`full` 不封顶）。`backdrop` 挂在**外框**里、是滚动层的
- *     兄弟（铺底若塞进 `children` 就成了居中列的第一个子节点，位置语义会变）——所以
- *     story 里给了带 `backdrop` 的那一档，它是唯一能看出那层关系的地方。
- *   · **`WorkspaceFrame`**：吃满父级、**不**产生页面级滚动条（内部怎么分栏、哪一栏
- *     自己滚，是视图的事）。它写死 `overflow-hidden`，于是内部那层才会真的出滚动条
- *     —— 这正是「整屏滚 + 画布也滚」那条历史事故的形状。
- *
- * 各层都是 `<div>` 而不是 `<main>`：外壳的 `SidebarInset` 才是这些屏唯一的
- * `<main>`（语义标签规范），再套一个会破坏地标导航 —— 所以 story 里也不套 `<main>`。
+ * 视图容器（`ViewContainer`）—— 两种框架形态，各屏按「怎么滚」选一种；一屏用哪个框架决定会不会出现**双层滚动条**：
+ * `DocumentFrame` 整屏滚动 + 居中列，`backdrop` 挂**外框**里、是滚动层兄弟（塞进 `children` 会变居中列首个子节点）；
+ * `WorkspaceFrame` 吃满父级、**不**产生页面级滚动条（内部才滚，正是「整屏滚 + 画布也滚」事故的形状）；各层用 `<div>` 不用 `<main>`（地标唯一在外壳 `SidebarInset`）。
  */
 /**
- * 这两件的入参里有 `children`，直接拿组件当 `Meta` 的泛型会让每个 story 都必须
- * 给一份 `children`（而它正是每个 story 要自己摆的东西）。所以口径与
- * `WorkshopStageRail` / `ViewTabStrip` 那几份一致：**声明一份 story 自己的 Args**，
- * `component` 指向一个把 `children` 收进去的适配件。
+ * 这两件的入参里有 `children`，直接拿组件当 `Meta` 泛型会逼每个 story 都给一份 `children`（而它正是 story
+ * 要自己摆的东西）。故口径与 `WorkshopStageRail` / `ViewTabStrip` 一致：声明一份 story 自己的 Args，`component` 指向把 `children` 收进去的适配件。
  */
 type StoryArgs = {
   width: NonNullable<React.ComponentProps<typeof DocumentFrame>["width"]>;

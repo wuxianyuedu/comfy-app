@@ -1,18 +1,10 @@
 "use client";
 
 // ── 读取「随主题的 CSS 颜色 token」的解析值 ──
-// 有些位置的颜色不写进 class 交给 Tailwind，而是要在 JS 里参与色彩运算
-// （`mixHex(base, data.color, t)` 这类「用户内容色叠在主题表面上」的混色）。
-// `mixHex` 只吃具体色值，不能直接喂 `var(--color-…)`，所以在运行时把 token
-// 解析成 `#rrggbb`。
-//
-// 实现走 `useSyncExternalStore`：`getComputedStyle` 是同步 API，但它的结果在
-// **主题变化**时必须重取，而主题变化是「外部系统（<html> 的 class）变了」。
-// 用 useSyncExternalStore + MutationObserver 订阅 `.class`，正好对上这个模型，
-// 也避开 `set-state-in-effect` / 「render 期读 ref」两条 React 19 硬规则
-// （见规范 08 §8.6 与 02 §2.4）。
-//
-// 服务端渲染 / 挂载前 `getServerSnapshot` 返回 fallback。
+// 有些颜色要在 JS 里参与运算（`mixHex(base, data.color, t)`），而 mixHex 只吃具体色值，
+// 不能直接喂 `var(--color-…)`，所以在运行时把 token 解析成 `#rrggbb`。
+// 实现走 useSyncExternalStore + MutationObserver 订阅 `<html>` 的 class：主题变化必须
+// 重取，也避开 React 19 两条硬规则；服务端渲染 / 挂载前 getServerSnapshot 返回 fallback。
 
 import { useCallback, useSyncExternalStore } from "react";
 
@@ -103,11 +95,9 @@ export function normalizeCssColor(value: string): string | null {
 }
 
 /**
- * 按当前主题返回 `--<name>` 的 `#rrggbb` 解析值。主题（`<html>` 的 `.dark`）
- * 一变，MutationObserver 触发重读。
- *
- * `name` 传完整 token 名（含 `--` 前缀），如 `--color-note-tint-base`；
- * `fallback` 在挂载前 / token 读不到时使用。
+ * 按当前主题返回 `--<name>` 的 `#rrggbb` 解析值；主题（`<html>` 的 `.dark`）一变，
+ * MutationObserver 触发重读。`name` 传完整 token 名（含 `--` 前缀），`fallback` 在
+ * 挂载前 / token 读不到时使用。
  */
 export function useCssColorToken(name: string, fallback: string): string {
   /* getSnapshot 必须返回**原始值**（字符串）—— React 用 Object.is 比较，字符串

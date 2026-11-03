@@ -1,19 +1,7 @@
 /**
- * 「查看源文件」弹窗的关闭语义回归。
- *
- * 用户报的现场：工作流编辑画布点「📋 查看 JSON」后，弹窗右上角出现**两个**
- * 关闭按钮（`ui/dialog` 内置的 XIcon + 本组件自绘的 ✕），点了关不掉。
- *
- * 根因是重复实现：`ui/dialog` 的 `DialogContent` 默认 `showCloseButton = true`，
- * 会自渲染一枚 `absolute top-2 right-2` 的关闭按钮；本弹窗又在 header 里自绘了
- * 一枚 —— 两枚位置几乎重合，点下去命中的是 DOM 靠后 + 绝对定位的内置那枚，
- * 两枚之间的空隙还成了「点了没反应」的死区。
- *
- * 本守卫锁四件事：
- *   ① 关闭控件只有一个（复用 `ui/dialog` 内置那枚也算违规：本弹窗形态要自绘）；
- *   ② 点它调用 `onClose`；
- *   ③ 受控调用方（父层持开关）点关闭后弹窗真的从 DOM 移除；
- *   ④ Esc 走 `ui/dialog` 的关闭语义，同样调用 `onClose`。
+ * 「查看源文件」弹窗的关闭语义回归。现场：画布点「📋 查看 JSON」后弹窗右上角出现**两个**关闭按钮，点了关不掉 —— 根因是重复实现：`ui/dialog` 的 `DialogContent` 默认 `showCloseButton = true` 会自渲染一枚 `absolute top-2 right-2` 的按钮，本弹窗又在 header 里自绘一枚，两枚位置几乎重合、中间还成了「点了没反应」的死区。
+ * 锁四件事：① 关闭控件只有一个（复用内置那枚也算违规：本弹窗形态要自绘）；② 点它调用 `onClose`；③ 受控调用方（父层持开关）点关闭后弹窗真的从 DOM 移除。
+ * ④ Esc 走 `ui/dialog` 的关闭语义，同样调用 `onClose`。
  */
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";

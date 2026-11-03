@@ -83,13 +83,9 @@ describe("ConsolePresetList", () => {
 });
 
 /* ── 按分组折叠（ISSUE #1902 评论）──────────────────────────────
- * 七组三十多条排成一列长清单，「找一条命令」要先滚过别人那一组。分组头改成
- * 折叠开关之后，这几条用例守的是折叠的**语义**而不是「有没有一个箭头」：
- * 默认折起、开合只动自己那一组、折起时组名与分组说明仍在。
- *
- * 折起的那一侧怎么判：面板走 `ui/disclosure`，而它用 `hidden="until-found"`
- * 隐藏（不是卸载 DOM，页内查找命中时浏览器会自己展开它）。所以「折起来了」
- * 在 DOM 上的判据是**那个 hidden 属性**，不是「节点在不在」。 */
+ * 这几条用例守折叠的语义：默认折起、开合只动自己那一组、折起时组名与分组
+ * 说明仍在。折起的 DOM 判据是面板的 hidden 属性（`ui/disclosure` 用
+ * `hidden="until-found"` 隐藏、不是卸载 DOM），不是「节点在不在」。 */
 describe("ConsolePresetList · 按分组折叠", () => {
   /** 某一组的折叠开关（`ui/disclosure` 的 trigger 是个 `<button>`）。 */
   function groupTrigger(groupId: string) {
@@ -142,21 +138,11 @@ describe("ConsolePresetList · 按分组折叠", () => {
 
   it("`basis-full` 的面板必须配 `flex-wrap` 的行（ISSUE #1902）", () => {
     renderList();
-    /* 这条是那次「组头被挤成一条竖线」的**类名侧**判据。
-     *
-     * 病因：`panelClassName` 给了 `basis-full`，而 Root 只有 `flex`、没有
-     * `flex-wrap`。`basis-full` 的语义依赖同一容器上有 `flex-wrap` —— 有它才是
-     * 「面板换到下一行」（向下展开），没有它就是「面板横着占满这一行」，于是
-     * 240px 的侧栏被面板吃掉、组名只剩几十像素按字竖排。
-     *
-     * 为什么类名判据也要留一条：宽度塌陷那件事只有真浏览器量得出来
-     * （`e2e/console-preset-layout.spec.ts`），但那条跑得慢、也不在单测档里，
-     * 而「两个类名有没有配对」在 jsdom 里就看得见 —— 它是**这条 bug 的最小
-     * 复现条件**，留着能在改这个文件时就近红。
-     *
-     * 不改基元（让 `Disclosure` 自己补 wrap）：`rootClassName` 是调用处的排布
-     * 决定，基元不替调用处猜「你要横向排还是换行排」。规范 16 §16.2.4.13 的
-     * 迁移口径本来就把这一对写在一起。 */
+    /* 那次「组头被挤成一条竖线」的类名侧判据（ISSUE #1902）：`basis-full` 的
+     * 语义依赖同一容器上有 `flex-wrap`，没有它面板会横占整行、吃掉侧栏。宽度
+     * 塌陷只有真浏览器量得出（`e2e/console-preset-layout.spec.ts` 慢、不在单测
+     * 档），类名配对在 jsdom 就看得见，是这条 bug 的最小复现条件。不改基元：
+     * `rootClassName` 是调用处的排布决定（规范 16 §16.2.4.13）。 */
     for (const group of CONSOLE_PRESETS) {
       const trigger = groupTrigger(group.id);
       const root = trigger.closest('[data-slot="disclosure"]');

@@ -17,24 +17,9 @@ import {
 import { useComfyReadiness } from "./hooks/use-comfy-readiness";
 
 /**
- * 首页「本机算力」总览卡。
- *
- * 为什么在首页放一份、而不是让人滚到底部状态栏去看：状态栏那一格是**结果**（三个百分比
- * 数字），用户在决定「现在能不能开跑一条镜头」时问的是**原因** —— 后端在不在线、显存还
- * 够不够、读不到的是「没启动」还是「暂时读不到」。这三种情形的处置完全不同，卡片把它们
- * 分开说（徽标 + 状态行 + 一句可见的降级说明），而不是混成一个百分比。
- *
- * 数据来源**只有** `useComfyReadiness()`：它已经把 ComfyUI `/system_stats` 的轮询收在
- * `src/lib/comfy/comfy-stats-store.ts` 这一个持有者里（首页挂这份不会多一路轮询，与状态栏
- * 共用同一条）。视图层这里零 IO（规范 §17）。
- *
- * 刻意没搬原型里的两块：
- *   · **队列 / 历史计数** —— `useComfyQueue` 的轮询已经收进
- *     `src/lib/comfy/comfy-queue-store.ts` 这一个持有者（与状态栏共用同一条），在首页
- *     再挂一处也不会多一路轮询。把它放上首页只是产品决策，不是技术债。
- *   · **Ollama 与显存不足建议** —— 前者的运行态与模型清单只在设置页作用域内取（
- *     `src/app/(main)/settings/hooks/use-settings-page-ollama.ts`），后者需要一条真实的
- *     失败镜头数据源；两者都没有现成出口，凭原型的样子写一份假数据比不写更糟。
+ * 首页「本机算力」总览卡。放在首页而非让人滚到底部状态栏去看：状态栏那一格是**结果**（三个百分比数字），用户问的却是**原因** —— 后端在不在线、显存够不够、读不到是「没启动」还是「暂时读不到」，三种情形处置完全不同，卡片把它们分开说（徽标 + 状态行 + 一句可见降级说明）。数据来源**只有** `useComfyReadiness()`：轮询收在 `src/lib/comfy/comfy-stats-store.ts` 这一个持有者里（与状态栏共用同一条，首页挂这份不会多一路轮询），视图层零 IO（规范 §17）。
+ * 刻意没搬原型里的「队列 / 历史计数」（`useComfyQueue` 的轮询已收在 `~/lib/comfy/comfy-queue-store.ts`）与「Ollama / 显存不足建议」（两者都没有现成出口，凭原型写假数据比不写更糟）。
+ * 圆点档位与状态栏同一套语义：连着且新鲜 = up，连着但这一轮没读到 = busy（迟滞容忍期），连着而首帧未到 = probing，不在线 = down。
  */
 export function LocalComputeCard() {
   const { stats, online, stale, connecting, degradedNote, cudaVram, smiVram, ram } =

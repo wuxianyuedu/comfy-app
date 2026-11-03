@@ -13,27 +13,8 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 /**
- * 「一段路径 A / B / 当前 C」的**唯一实现**（规范 16 §16.2.4.72）。
- *
- * ## 这条账的形状
- *
- * 素材库抽屉（`MaterialLibraryPanel`）与资源库页（`ResourceLibrary`）各自
- * 手写了一遍**同一段**渲染：`breadcrumbSegments.map` + `i > 0 && "/"` +
- * `isLast || searching ? <span> : <Button>`。两处的 class 串逐字相同，
- * 差别只在分隔符的 `mx` 档（`mx-1` / `mx-1.5`）—— 这类差异没有报错、
- * 没有告警，只能靠「同一件事只允许一处实现」从结构上消除。
- *
- * 更关键的是它同时**绕开了已装的 `ui/breadcrumb`**：整套基元（`nav` +
- * `ol` + `li` + `Separator` + `Page`）躺在库里零引用，而两处各写一份
- * `span` / `div` 的等价物 —— 语义（`ol` / `li` 的层级、`aria-current="page"`
- * 的当前项）随之丢掉。
- *
- * ## 收什么、不收什么
- *
- * **收**：路径行的排版与语义（`ui/breadcrumb` 的整套 slot）、
- * 「末段不可点 / 中间段可点」这条交互契约、分隔符。
- * **不收**：段从哪来（归各自的 controller）、点中间段做什么（归 `onNavigate`）、
- * 末段是否要换成一枚「当前态」药丸（那属于页头，见「不迁的一类」）。
+ * 「一段路径 A / B / 当前 C」的**唯一实现**（规范 16 §16.2.4.72）：素材库抽屉与资源库页曾各手写一份同一渲染并绕开 `ui/breadcrumb`，丢掉 `ol` / `li` 层级与 `aria-current="page"`。
+ * **收**：路径行的排版与语义（`ui/breadcrumb` 整套 slot）、「末段不可点 / 中间段可点」契约、分隔符；**不收**：段从哪来（归 controller）、点中间段做什么（归 `onNavigate`）、末段是否换成当前态药丸（属页头）。
  */
 
 /** 路径的一段：`key` 为 `null` 表示不可导航（末段常为当前项）。 */
@@ -43,10 +24,8 @@ export type BreadcrumbSegment = {
 };
 
 /**
- * 路径行（`A / B / 当前 C`）。
- *
- * `navigable` 为 `false` 时**全部段**都渲染成不可点（搜索结果态：此时
- * 层级已无意义，回退由「清空搜索」那一处承担）。
+ * 路径行（`A / B / 当前 C`）。`navigable` 为 `false` 时**全部段**都渲染成不可点
+ * （搜索结果态：层级已无意义，回退由「清空搜索」那一处承担）。
  */
 export function BreadcrumbPath({
   segments,
@@ -69,14 +48,10 @@ export function BreadcrumbPath({
       <BreadcrumbList className="gap-0 text-xs">
         {segments.map((seg, i) => {
           const isLast = i === segments.length - 1;
-          /* 末段（当前所在处）与「整体不可导航」都渲染成纯展示：
-           * 前者点它会重入同一层，后者层级已失效。
-           *
-           * 可导航性收进一个**带类型谓词的局部常量**，而不是在 onClick 里用
-           * `seg.key!`：断言会把「判过有值」与「取用时假定有值」拆到两处，
-           * 改一处漏一处就是运行时 `undefined`。收成 `navKey` 之后
-           * `typeof navKey === "string"` 既是渲染分支的判据、也是取值的来源
-           * （与 `ui/` 别的基元同款，见 §18 的类型安全口径）。 */
+          /* 末段（当前所在处）与「整体不可导航」都渲染成纯展示：前者点它会重入同一层，后者层级已失效。
+           * 可导航性收进带类型谓词的局部常量 `navKey`，而非在 onClick 里用 `seg.key!`：断言会把
+           * 「判过有值」与「取用时假定有值」拆到两处，改一处漏一处就是运行时 `undefined`；
+           * 收成 `navKey` 后 `typeof` 判据与取值同源（§18 类型安全口径）。 */
           const navKey = navigable && !isLast && typeof seg.key === "string" ? seg.key : null;
           return (
             <React.Fragment key={seg.key ?? `seg-${String(i)}`}>

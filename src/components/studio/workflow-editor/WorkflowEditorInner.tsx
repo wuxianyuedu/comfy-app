@@ -1,14 +1,9 @@
 "use client";
-/* 拆出来的 WorkflowEditorInner —— 内层编辑器，必须住在
- * ReactFlowProvider 里面。节点渲染器与注册表已移到 wf-editor-nodes.tsx
- *（分组节点、IO 端口节点、便签节点，以及节点类型表、连线类型表与共享布局常量）。
- * 它原本在 WorkflowCanvasEditor.tsx 里。
- *
- * 本组件是容器：纯逻辑编排收在 hooks/ ——
- * • hooks/use-workflow-viewport-fit.ts  画布聚焦（调度 + 收敛 + 居中出口）
- * • hooks/use-workflow-graph-derivation.ts  detail → 视图元数据 → 图节点
- * • hooks/use-io-modes-commit.ts        IO 模式集合变更的落库编排
- * 过渡屏与画布浮层在 WorkflowEditorCanvasOverlays.tsx。 */
+/* 拆出来的 WorkflowEditorInner —— 内层编辑器，必须住在 ReactFlowProvider 里面。
+ * 节点渲染器与注册表已移到 wf-editor-nodes.tsx（分组/IO 端口/便签节点、节点类型
+ * 表、连线类型表与共享布局常量）。本组件是容器，纯逻辑编排收在 hooks/：
+ * use-workflow-viewport-fit（画布聚焦）、use-workflow-graph-derivation（detail →
+ * 图节点）、use-io-modes-commit（IO 模式落库）；过渡屏与浮层在 Overlays。 */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNodesState, useEdgesState, useReactFlow, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -55,33 +50,11 @@ import {
   WorkflowEditorLoadingScreen,
 } from "./WorkflowEditorCanvasOverlays";
 
-/* ── 画布网格 ──
- *  两层叠起来用原生 <Background> 实现，让网格随视口平移 / 缩放
- *（早先那版是给 `.react-flow__pane` 加 CSS 网格，结果是静态的 ——
- * 因为 pane 是不做变换的交互层）：
- *
- *    · 细线 —— 每 GRID_CELL 像素一条（即 1 格）
- *    · 粗线 —— 每 10 格一条，略粗且更亮
- *
- *  一格 = 10 个画布单位，因此常见节点宽度（例如 230px 的 MarkdownNote）
- *  正好落在整数格上（23 格），让「每 N 格对齐一次」有意义，而不是一个零头分数。
- *
- *  `BackgroundVariant.Lines` 每个图案 tile 会画一条贯通全高 / 全宽的线段，
- *  所以 tile 拼接起来就是连续的十字网格线 —— 不是本文件早先那条注释所说的
- *  「`+` 星座」形状。
- *
- *  层序要紧：粗线网格最后渲染，因此会盖在细线之上。
- *  只有细线层带 `bgColor`；粗线层必须保持 `transparent`，
- *  否则会把下面那层整个刷白。
- *
- *  缩放低于约 0.65 时，10px 的格子会缩到屏幕 6.5px 以下，细网格就变成噪点，
- *  于是它的透明度淡出，而 10 格一条的粗线留在原地，让画布仍可读。
- *  选择器返回的是**已经量化过的**透明度，因此平移 / 缩放只在淡出真的跨档时才重渲染。
- *
- *  按用户要求：视口缩到 60% 及以下时整个网格（细线 + 粗线）隐藏。
- *  在这个尺度下画布读起来是一张全流程地图，网格只是添乱，
- *  于是直接短路、什么都不渲染。注意 <ReactFlow> 的 minZoom 是 0.15
- *（见 ZoomIndicator），所以我们不会遇到「还想要网格、却因技术原因拿不到」的缩放档。 */
+/* ── 画布网格 ── 两层都原生 <Background>，网格才随视口平移/缩放（给
+ *  `.react-flow__pane` 加 CSS 网格是静态的，pane 不做变换）。一格 = 10 画布单位，
+ *  常见节点宽度落在整数格上；每 10 格一条粗线，最后绘制盖住细线，粗线层必须
+ *  transparent（带 bgColor 会把下层刷白）。缩到约 0.65 以下细线淡出（返回量化后的
+ *  透明度，只在跨档时重渲），60% 及以下整层隐藏；minZoom 是 0.15，不会拿不到档。 */
 
 /* 外层：创建 3 个 per-instance Zustand store（经 createIOEditStore 等工厂），
  * 再经 <WFStoresProvider> 下发。状态判断逻辑与渲染子树都在这之下。 */
@@ -145,13 +118,10 @@ function WorkflowEditorBody({
   const ioEditMode = useIOEditStore(selectIoEditMode);
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const savePatch = useWorkflowSaveMutation();
-  /* IO 预览的侧栏开关。默认关闭 —— 画布本身信息量已经很大，
-   *  用户没主动要之前，不宜再叠一个浮动面板上去。
-   *
-   *  与 `ioEditMode` 是双向耦合：开预览一并进编辑模式（勾选框要可用），
-   *  关预览一并退出编辑模式（面板没了就不该再留一排勾选框）；反方向同样
-   *  成立 —— 关编辑模式一并关预览。两层耦合都写在 store 的
-   *  `setIoEditMode` / `setIoPreviewOpen` 里，见那里的注释。 */
+  /* IO 预览的侧栏开关。默认关闭 —— 画布信息量已经很大，用户没主动要之前不宜再叠
+   *  浮动面板。与 `ioEditMode` 双向耦合：开预览一并进编辑模式，关预览一并退出；
+   *  反方向成立（关编辑模式一并关预览）。耦合写在 store 的 `setIoEditMode` /
+   *  `setIoPreviewOpen` 里。 */
   /* 画布设置面板的开关 —— 与 ioPreviewOpen / viewJsonOpen 并列，
    * 由画布外框上的齿轮按钮打开。默认关闭。 */
   const [canvasSettingsOpen, setCanvasSettingsOpen] = useState(false);
@@ -187,34 +157,19 @@ function WorkflowEditorBody({
   const [subgraphStack, setSubgraphStack] = useState<
     Array<{ name: string; nodeId: string; uid: string }>
   >([]);
-  /* 根工作流的显示名在**第一次**顶层拉取时记下，之后跨越子工作流导航一直保留，
-   *  于是面包屑总能渲染成「<根工作流> / <子工作流 1> / <子工作流 2> …」。
-   *  没有它的话，钻进子图会把最前面那一级改写成子图自己的名字
-   *（因为 `detail.name` 变成了子图的标题），
-   *  既会出现令人困惑的「subA / subA」重名，
-   *  又会触发「点子图名字 → 又进一层」的递归 bug。 */
+  /* 根工作流的显示名在**第一次**顶层拉取时记下，之后跨子工作流导航一直保留，
+   *  于是面包屑总能渲染成「<根工作流> / <子图> …」。否则钻进子图会把首段改写成
+   *  子图自己的名字，出现「subA / subA」重名，并触发「点子图名字 → 再进一层」的
+   *  递归 bug。 */
   const [rootWorkflowName, setRootWorkflowName] = useState<string>("");
   const [subgraphLoading, setSubgraphLoading] = useState(false);
   const [subgraphError, setSubgraphError] = useState("");
 
-  /* 子工作流「查看 JSON」要支持 RAW。
-   *
-   * 后端 `/api/workflows/:id/subgraph?uid=...` 返回的 sub-detail 只携带
-   * sub 自己的 API graph (`graph`)，**不带 rawJson** —— 因为 sub 的
-   * LiteGraph json 物理上存放在父 `rawJson.definitions.subgraphs[uid]`
-   * 里，没有独立的"sub rawJson"概念。
-   *
-   * 所以我们在 drill-in 进 sub 的那一瞬把**父 rawJson + 当前 sub uid**
-   * 缓存进 `subgraphRawContext`；SourceModal 在 sub 视图下用这个 state
-   * 拼出 `parentRawJson.definitions.subgraphs[subUid]` 喂给 JsonViewer。
-   * 顶层 detail 视图下此 state 为 null，SourceModal 直接读 `detail.rawJson`。
-   *
-   * 为什么不把 sub rawJson 直接灌到 `detail.rawJson`?
-   *  - detail 是 WorkflowDetail 形状，rawJson 字段语义是"该工作流本身的
-   *    原始格式"，sub 视图下注入父 rawJson 会污染 detail 语义；
-   *  - 保留 `subgraphRawContext` 这个独立槽位，fetchDetail 内部清/设，
-   *    配合 `detailRef` 抓"drill-in 那一瞬的父 detail"，时序最稳。
-   */
+  /* 「查看 JSON」在子视图要支持 RAW：sub-detail 只有 API graph，**不带 rawJson** ——
+   *  sub 的 LiteGraph json 存在父 `rawJson.definitions.subgraphs[uid]`，没有独立的
+   *  sub rawJson。所以 drill-in 的一瞬缓存**父 rawJson + 当前 sub uid**，SourceModal
+   *  据此拼出该项；顶层视图下该 state 为 null、直读 `detail.rawJson`。不注入
+   *  `detail.rawJson`：detail 的语义是工作流本身的原始格式，注入父图会污染语义。 */
   const [subgraphRawContext, setSubgraphRawContext] = useState<{
     parentRawJson: unknown;
     subUid: string;
@@ -292,15 +247,10 @@ function WorkflowEditorBody({
   });
 
   /* ── 对外参数映射：编辑器不碰 ──
-   *
-   * 勾选 IO 只做一件事：把 pin 暴露成「对外参数」（写 workflowIO 落库）。
-   * 「对外参数 → 节点端口」的落点映射**完全不在本编辑器里编辑**：画布上没有卡片，
-   * 连线与落点都在工作流库详情的「画布节点」页签（卡片列 + 连线层，见
-   * workflow-library/WorkflowParamCardColumn 与 WorkflowParamWires）。
-   *
-   * 编辑器也不再提供「恢复默认映射」：那条线归库内那一层管，编辑器只管把当前
-   * `paramMap` **原样**保存回去（保存路径见 useWorkflowPersistence）—— 库内改过的
-   * 落点不会因为在这里按一次保存就被抹掉。 */
+   * 勾选 IO 只把 pin 暴露成对外参数（写 workflowIO 落库）。「对外参数 → 节点端口」
+   * 的落点映射完全不在本编辑器编辑：画布上没有卡片，连线与落点在库详情「画布节点」
+   * 页签。编辑器也不提供「恢复默认映射」，只把当前 `paramMap` **原样**保存回去
+   * （见 useWorkflowPersistence），库内改过的落点不会被这里的一次保存抹掉。 */
 
   /* useNodesState 只接受挂载首帧的初值；后续同步统一走下面的 effect（初始图节点
    * 即为这一帧的初值，detail 就绪后才会补上）。 */
@@ -425,30 +375,11 @@ function WorkflowEditorBody({
             }}
           />
         )}
-        {/* IO 预览侧栏。渲染 CreatePanel / 画布工作流节点
-         *  消费的同一个 DynamicWorkflowForm，数据来自**实时的**
-         *  `workflowIO` 状态（不是服务端缓存的富化结果）。这让作者在
-         *  画布上勾一个复选框，就能立刻在预览里看到新行出现，
-         *  还能重命名任何行的显示标签并看到它
-         *  回写到已落盘的选择里。紧凑模式以
-         *  匹配用户在运行时会看到的画布内渲染。
-         *
-         *  位置：右上角，约 360px 宽，max-h 会避开
-         *  底部工具栏。`z-canvas-max`，压在 MiniMap + Controls
-         *  之上、保存 toast 之下。面板自身的指针事件
-         *  是开着的；包裹层只在面板外侧的留白上等效于
-         *  pointer-events:none（我们用一个 flex
-         *  容器，所以整块都是可交互的）。
-         *
-         *  数据合并。本地 `workflowIO` 状态只
-         *  带 toggleIO 写的那四个身份字段 —— 它
-         *  **没有** type/defaultValue/nodeTitle/multiline，那些
-         *  来自 `api/workflows/[id].route.ts` 的服务端富化。
-         *  不合并时，每个新切换的针脚都会渲染成只读的 `link` 占位
-         *  （controlForEntry 对没有标量值的 type "*" 会落到 "link"）。
-         *  解法：对本地状态里的每个 key，优先取
-         *  `detail.workflowIO[key]`（已富化），再把本地 `label`
-         *  叠上去，这样未保存的重命名立即生效。 */}
+        {/* IO 预览侧栏：与 CreatePanel / 画布节点消费同一个 DynamicWorkflowForm，
+            数据来自**实时**的 `workflowIO`，勾一个复选框立刻看到新行。本地状态只有
+            toggleIO 写的身份字段（无 type/defaultValue/nodeTitle/multiline），必须叠加
+            `detail.workflowIO[key]` 的服务端富化，否则新勾的针脚退化成只读 `link`；
+            再叠本地 `label` 让未保存的重命名立即生效。 */}
         {ioPreviewOpen && (
           <WorkflowIoPreviewPanel
             defaultMode={detail.defaultMode ?? null}
@@ -497,12 +428,9 @@ function WorkflowEditorBody({
         )}
         {/* 工作流编辑画布是纯配置界面（不存在执行），不再挂执行日志入口；
          *  执行期的日志仍由项目画布的 GlobalStepLogPanel 承担。 */}
-        {/* 顶部「📋 查看 JSON」触发的全屏 modal。
-            派生数据由 `sourceModalData` (useMemo) 给出:
-              - 顶层 detail: graph/rawJson 来自 detail
-              - sub 视图: graph 来自 sub-detail, rawJson 切自父级的
-                definitions.subgraphs[uid] 这一项
-            关闭则清空 viewJsonOpen。 */}
+        {/* 顶部「📋 查看 JSON」触发的全屏 modal：派生数据由 `sourceModalData` 给出 ——
+            顶层 detail 用 detail 的 graph/rawJson；sub 视图用 sub-detail 的 graph，
+            rawJson 切自父级 `definitions.subgraphs[uid]`。关闭即清空 viewJsonOpen。 */}
         {viewJsonOpen && sourceModalData && (
           <SourceModal
             data={sourceModalData}

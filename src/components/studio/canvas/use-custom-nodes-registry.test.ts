@@ -1,15 +1,9 @@
 // @vitest-environment jsdom
 /**
  * `useCustomNodesRegistryVersion()` —— 注册表灌入到「画布节点该重算了」的那一跳。
- *
- * 为什么单独测这一格：`FlowNode` 是 `React.memo` 的，父层重渲染穿不进它的记忆化，
- * 而它下面的包名页脚与调试态渲染链读的是 `~/config/custom-nodes` 里**就地替换**的
- * 可变 map。表换了、读它的组件没被告知 —— 「解析完不重进页面就不更新」（台账 E9）
- * 就是这么来的。所以这里判的不是「hook 返回什么」，而是**订阅真的能把 memo 叫醒**。
- *
- * 灌入走真的 `refreshCustomNodes()`（只桩 `fetch`）：这一条同时验事件名、
- * 版本号语义与 `useSyncExternalStore` 的挂载首读，任何一环拼错都会红。
- */
+ * FlowNode 是 React.memo，父层重渲染穿不进；它读 `~/config/custom-nodes` 里就地替换的 map，
+ * 表换了但组件未被告知即「解析完不重进页面不更新」（E9）。本测判订阅真能叫醒 memo。
+ * 灌入走真 `refreshCustomNodes()`（只桩 fetch），同时验事件名、版本语义与 useSyncExternalStore 首读。 */
 import { renderHook, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

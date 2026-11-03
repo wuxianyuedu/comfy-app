@@ -1,10 +1,6 @@
 /**
- * 历史任务卡的键盘可达性（规范 06 §6.11）。
- *
- * 钉的是收口前后的差别：主体信息块此前是 `div + onClick`（打开详情）——
- * 左侧缩略图是同一个动作的 `<Button>`，而这一块只是鼠标专属，
- * 同一件事的两条路径里有一条键盘不通。收口改成原生 `<Button>` 后，
- * Enter/Space 与焦点语义是免费给的。
+ * 历史任务卡的键盘可达性（规范 06 §6.11）。收口前主体信息块是 div + onClick（打开详情），
+ * 左侧缩略图是 Button，同一动作只有鼠标那条通；改原生 <Button> 后 Enter/Space 与焦点语义免费。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";

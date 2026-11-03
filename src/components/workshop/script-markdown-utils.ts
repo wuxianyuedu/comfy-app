@@ -5,12 +5,9 @@ export type OutlineItem = {
 };
 
 /* ── Markdown 归一化(编辑器接收内容的入口)────────────────────────────
- * 针对导入 markdown 剧本后常见的空行/换行异常:
- * 1. CRLF / 孤立 CR 统一为 LF;
- * 2. 去除每行行尾空白(空格/制表符),只含空白的行视为空行;
- * 3. 连续 3 个及以上空行折叠为 1 个空行(1~2 个空行保持原样);
- * 4. 标题 / 列表 / 引用 / 分隔线等行的内容不做改写,其余内容原样保留;
- * 5. 围栏代码块(``` 或 ~~~)内部不做任何处理,避免破坏代码内容。 */
+ * 针对导入剧本后的空行/换行异常: ① CRLF / 孤立 CR 统一为 LF; ② 去行尾空白,
+ * 只含空白的行视为空行; ③ 连续 3+ 空行折叠为 1 个(1~2 个保持); ④ 标题/列表/
+ * 引用/分隔线不改写; ⑤ 围栏代码块内部不做任何处理。 */
 export function normalizeMarkdown(source: string): string {
   const lines = source.replaceAll(/\r\n?/g, "\n").split("\n");
   const result: Array<string> = [];

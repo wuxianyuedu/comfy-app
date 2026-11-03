@@ -13,20 +13,9 @@ import {
 } from "../../../../.storybook/workflow-run-sources";
 
 /**
- * 任务执行日志的**时间线主体**（级别页签 + 自动滚动 + 虚拟列表 + 底栏计数）。
- *
- * 它是**纯 props** 的，而它吃的那份 `logs` 在真机上来自 `workflow-run-store`
- *（`WorkflowRunLogModal` / `QueueTaskLogModal` 都从 `useSyncExternalStore` 读到
- * 再传下来）。所以 story 不手捏数组：走 `parameters.runScene`，由注入层调**真
- * action**（`registerWorkflowRun` + `appendWorkflowRunLog` + `failWorkflowRun`）
- * 把那条链路落板 —— 去重与 `MAX_LOGS` 截尾照常由生产代码算。
- *
- * 要看的是这一块自己的四件事，它们在真机上各有一种「画布看着正常」的坏法：
- *
- *  · **级别页签的计数**从 `logs` 现算（各档为 0 时说「0」而不是消失）；
- *  · **底栏**那行「显示最近 N 条」的截尾口（`LOG_MODAL_MAX_ROWS`）；
- *  · **失败横幅与时间线里的 error 行成对**（`failWorkflowRun` 同时写两处）；
- *  · **空态占位**由消费方给（组件自己不编文案）。
+ * 任务执行日志的**时间线主体**（级别页签 + 自动滚动 + 虚拟列表 + 底栏计数）。它是**纯 props** 的；
+ * `logs` 真机来自 `workflow-run-store`，story 走 `parameters.runScene` 调真 action 落板，
+ * 去重与截尾照常由生产代码算。要看：页签计数、底栏截尾、失败横幅与 error 行成对、空态占位。
  */
 const meta = {
   title: "Studio/Logs/TaskLogTimeline",
@@ -40,12 +29,9 @@ export default meta;
 type Story = StoryObj<typeof TaskLogTimelineHarness>;
 
 /**
- * 适配件：照 `WorkflowRunLogModal` 的接线读真 store（同一个
- * `useSyncExternalStore` 三元组），日志从那次运行里取。
- *
- * 不走 `runSceneLogs()` 直接拿数组 —— 那样摆出来的时间线绕过了 store 的去重与
- * 截尾，只在「摆得好看」这一件事上像真的。这里读的是 store 落板之后的末态，
- * 与真弹窗里看到的是同一份。
+ * 适配件：照 `WorkflowRunLogModal` 的接线读真 store（同一个 `useSyncExternalStore`
+ * 三元组），日志从那次运行里取。
+ * 不走 `runSceneLogs()` 直接拿数组——那样会绕过 store 的去重与截尾；这里读的是落板后的末态。
  */
 function TaskLogTimelineHarness({
   scene = "completed",

@@ -4,22 +4,9 @@ import { WorkflowPreviewRunFeedback } from "~/components/studio/workflow-library
 import type { Phase } from "~/components/studio/workflow-library/hooks/use-generation-runner";
 
 /**
- * 工作流预览底部的运行反馈条（两种视图模式通用）。
- *
- * 纯 props：`phase` 是 `use-generation-runner` 的状态机投影（五档：
- * idle / starting / running / done / failed），其余是几个可空值。它值得有 story
- * 的地方是**「哪些档位在哪种视图模式下出现」这条交叉判据**：
- *
- *   进度条         —— 两种模式通用（`running` 时才画）；
- *   结果图 / 失败原因 / 缺参提醒 —— **只在 `viewMode="use"` 显示**。
- *
- * 后一条是刻意的：编辑对外参数是配置界面，不该在那儿展示「上一次运行的结果与错误」
- * ——那样用户会以为改完参数结果就跟着变了。所以下面把两档视图 × 若干 phase
- * 逐组摆出来，单摆一档看不出这条规则在做减法。
- *
- * `uploadNotice` 是**素材上传的可见出口**（ComfyUI 未运行 / 正在启动 / 启动超时
- * 都落这里）：上传位自身没有错误区，只记 console 用户看不到任何原因（ISSUE #345）
- * —— 所以下面给了「有提示」与「无提示」两档，那条提示是它可以修掉的事故形状。
+ * 工作流预览底部的运行反馈条（两种视图模式通用）。纯 props：`phase` 是
+ * `use-generation-runner` 五档状态机投影。核心是交叉判据：进度条两种模式通用；
+ * 结果图 / 失败原因 / 缺参提醒只在 `viewMode="use"` 显示（编辑页签是配置界面）；`uploadNotice` 是素材上传的可见出口（ISSUE #345）。
  */
 const PHASES: Record<string, Phase> = {
   idle: { kind: "idle" },
@@ -38,13 +25,9 @@ const PHASES: Record<string, Phase> = {
 };
 
 /**
- * 「两档视图 × 三条 phase」的矩阵行。
- *
- * 写成具名常量而不是 `PHASES[key]`：`PHASES` 是 `Record<string, Phase>`，
- * 在 `noUncheckedIndexedAccess` 下索引结果是 `Phase | undefined`，而这里要的
- * 是三档**确定存在**的 phase。用 `!` 或 `as` 都会被既有硬闸拦下
- *（`check-non-null-assertions.cjs` 与 `non-nullable-type-assertion-style`），
- * 所以直接给一份显式清单。
+ * 「两档视图 × 三条 phase」的矩阵行。写成具名常量而不是 `PHASES[key]`：
+ * `PHASES` 是 `Record<string, Phase>`，`noUncheckedIndexedAccess` 下索引结果是
+ * `Phase | undefined`，而 `!` / `as` 会被既有硬闸拦下，故显式列出确定存在的三档。
  */
 const MATRIX_ROWS: ReadonlyArray<readonly [string, Phase]> = [
   [
@@ -131,10 +114,9 @@ export const UploadNotice: Story = {
 };
 
 /**
- * **两档视图模式的交叉**：同一批 phase，`use` 模式显示结果/错误，`edit` 模式只留进度。
- *
- * 这是本件唯一「做减法」的规则，也是最容易在改动里被抹掉的一条 ——
- * 编辑对外参数时看到上一次运行的结果，会让人以为参数改完结果就跟着变了。
+ * **两档视图模式的交叉**：同一批 phase，`use` 模式显示结果/错误，`edit` 只留进度。
+ * 这是本件唯一「做减法」的规则：编辑对外参数时看到上一次运行结果，会让人以为
+ * 改完参数结果就跟着变了。
  */
 export const ViewModeMatrix: Story = {
   render: (args) => (

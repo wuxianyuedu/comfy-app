@@ -1,14 +1,9 @@
 "use client";
 
 /**
- * 远程模型（OpenAI 兼容）管理的交互状态与动作（规范 17 §17.2 第②层）。
- *
- * 网络侧动作（`probeRemote` / `testModelUsage` / `queryUsageTask` / 增删改
- * 模型）本就在 controller，这里只收拢**弹窗交互状态**——表单草稿、进行态、
- * 测试结果、额外字段行编辑——让视图只消费字段、只渲染 JSX。
- *
- * 模块级草稿仓库（`usageTestDrafts`）一并搬来：它按 `kind + 条目名` 保留
- * 「关闭再重开」的表单内容，是纯视图偏好，不入库。
+ * 远程模型（OpenAI 兼容）管理的弹窗交互状态与动作（规范 17 §17.2 第②层）。
+ * 网络动作在 controller，这里只收拢弹窗交互态（表单草稿 / 进行态 / 测试结果 / 额外字段行编辑）；
+ * 模块级草稿仓库 `usageTestDrafts` 按 `kind + 条目名` 保留「关闭再重开」的表单内容，纯视图偏好、不入库。
  */
 
 import { useEffect, useState } from "react";
