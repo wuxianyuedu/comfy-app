@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @ts-nocheck -- oxfmt 格式判据(判定型;执行者 = .githooks/pre-commit 的 D0(带 --staged) 与平台侧 .cnb.yml 的「oxfmt 格式」(全量),第三个出口 pnpm check:all)
+// @ts-nocheck -- oxfmt 格式判据(判定型;执行者 = .githooks/pre-commit 的 D0(带 --staged)、平台侧 .cnb.yml 的「oxfmt 格式」(带 --changed) 与 pnpm check:all(带 --changed),第四个出口 pnpm format:report(全量盘点))
 /**
  * prettier 格式判据（**硬闸**）—— 规范见 docs/standards/13-提交与-code-review.md §13.5.1。
  *
@@ -168,7 +168,7 @@ const REPORT_ONLY = ARGS.has("--report");
 const STAGED = ARGS.has("--staged");
 const CHANGED = ARGS.has("--changed");
 
-/** 扫描范围与 package.json 的 format:check 逐字一致。 */
+/** 扫描范围与 package.json 的 format:write（以及 .oxfmtrc.json 的纳入面）逐字一致。 */
 const GLOBS = ["**/*.{ts,tsx,js,jsx,mdx}"];
 
 /** oxfmt 的扫描根：`GLOBS` 减白名单后收口出的面就是 `src/**` + `.storybook/**`

@@ -349,7 +349,7 @@ CHANGELOG 写**对外差异**。完整细则见
 |---|---|---|
 | 类型 | `pnpm typecheck`（tsc --noEmit） | 零错误 |
 | Lint | `pnpm lint`（eslint 9） | 零 error |
-| 格式 | `pnpm format:check`（prettier，全量）／`pnpm format:ratchet`（门禁口径） | 新增文件零 diff；存量 576 个走棘轮（只减不增），见文档集 13 §13.5.1 |
+| 格式 | `pnpm format:check`（oxfmt，改动面）／`pnpm format:report`（全量盘点） | 改动面零 diff；printWidth 迁移存量用 `report` 查，见文档集 13 §13.5.1.1 |
 | 单测 | `pnpm test`（vitest） | 全绿；纯函数必须覆盖 |
 | 生产构建 | `pnpm build`（next build） | 涉及构建链改动时必跑 |
 
