@@ -131,8 +131,8 @@ export function stripUiOnlyNodes(raw: Record<string, unknown>): {
 
   const defs = raw.definitions;
   const subs =
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     defs != null && typeof defs === "object"
       ? (defs as Record<string, unknown>).subgraphs
       : undefined;

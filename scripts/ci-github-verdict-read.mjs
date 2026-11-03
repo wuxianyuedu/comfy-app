@@ -217,7 +217,7 @@ async function requestCheckRuns(io, ctx) {
       if (!isRetryableRequestFailure(error) || attempt === REQUEST_MAX_ATTEMPTS) {
         break;
       }
-      const wait = RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS[RETRY_BACKOFF_MS.length - 1] ?? 5_000;
+      const wait = RETRY_BACKOFF_MS[attempt - 1] ?? RETRY_BACKOFF_MS.at(-1) ?? 5000;
       log(
         `[verdict] 读数第 ${String(attempt)}/${String(REQUEST_MAX_ATTEMPTS)} 次没通（egress 类）⇒ ${String(wait / 1000)}s 后试第 ${String(attempt + 1)} 次（网络抖动重试；认证 / 权限类不重试）`,
       );
@@ -317,11 +317,7 @@ export async function runVerdict(io) {
     const summary = summarizeCheckRuns(res.runs);
     if (summary.total === 0) {
       log("[verdict] 这一笔 sha 上还没有任何 check-run（GitHub 侧可能还没起跑）—— 继续等");
-    } else if (!summary.completed) {
-      log(
-        `[verdict] ${String(summary.total)} 个 check：${String(summary.pending.length)} 个还在跑（${summary.pending.join("、")}）—— 继续等`,
-      );
-    } else {
+    } else if (summary.completed) {
       for (const line of summary.ok) {
         log(`[verdict]   ✓ ${line}`);
       }
@@ -338,6 +334,10 @@ export async function runVerdict(io) {
         `[verdict] ✓ 结论：exit 0 —— GitHub 对同一笔 sha 的 ${String(summary.total)} 个 check 全部完成且没有红`,
       );
       return CODE.OK;
+    } else {
+      log(
+        `[verdict] ${String(summary.total)} 个 check：${String(summary.pending.length)} 个还在跑（${summary.pending.join("、")}）—— 继续等`,
+      );
     }
     if (now() >= deadline) {
       log(
