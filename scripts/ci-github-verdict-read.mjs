@@ -210,7 +210,9 @@ export function isRetryableRequestFailure(error) {
   const code = String(e?.cause?.code ?? "");
   return (
     isEgressFailure(text) ||
-    /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(text) ||
+    /fetch failed|network|socket|econnreset|econnrefused|enotfound|etimedout|eai_again/i.test(
+      text,
+    ) ||
     /^(ENOTFOUND|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN)$/i.test(code)
   );
 }
@@ -228,7 +230,9 @@ export function isRetryableRequestFailure(error) {
  */
 async function fetchWithTimeout(fetchImpl, url, token, label) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), CHECK_RUNS_TIMEOUT_MS);
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, CHECK_RUNS_TIMEOUT_MS);
   try {
     return await fetchImpl(url, {
       headers: {
@@ -321,7 +325,13 @@ function summarizeItems(runs, redConclusions) {
       ok.push(`${name}（${conclusion}）`);
     }
   }
-  return { completed: runs.length > 0 && pending.length === 0, failing, ok, pending, total: runs.length };
+  return {
+    completed: runs.length > 0 && pending.length === 0,
+    failing,
+    ok,
+    pending,
+    total: runs.length,
+  };
 }
 
 /**
@@ -443,7 +453,11 @@ function reportEgressDown(log, label, error) {
  */
 export async function runVerdict(io) {
   const { dryRun = false, env } = io;
-  const log = io.log ?? ((line) => console.log(line));
+  const log =
+    io.log ??
+    ((line) => {
+      console.log(line);
+    });
   const fetchImpl = io.fetchImpl ?? fetch;
   const runGit = io.runGit ?? realRunGit;
   const sleep = io.sleep ?? realSleep;

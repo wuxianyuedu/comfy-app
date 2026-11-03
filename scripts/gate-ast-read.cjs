@@ -169,7 +169,9 @@ function parseSources({
  */
 function visitEach(node, visit) {
   visit(node);
-  node.forEachChild((child) => visitEach(child, visit));
+  node.forEachChild((child) => {
+    visitEach(child, visit);
+  });
 }
 
 module.exports = {

@@ -308,7 +308,7 @@ export function classifyReply(raw, transport = {}) {
     return {
       state: "unknown",
       status: status ?? undefined,
-      why: `平台回了 ${status ?? "?"}：${errmsg[1]?.replaceAll("\"", "'")}`,
+      why: `平台回了 ${status ?? "?"}：${errmsg[1]?.replaceAll('"', "'")}`,
     };
   }
   return {
@@ -353,9 +353,7 @@ export async function probeAll(opts) {
   /** @type {Probe[]} */
   const probes = opts.oidc ? [...PROBES, OIDC_PROBE] : PROBES;
   const only = opts.only ?? [];
-  const picked = only.length
-    ? probes.filter((p) => only.includes(p.domain))
-    : probes;
+  const picked = only.length ? probes.filter((p) => only.includes(p.domain)) : probes;
   const ctx = { base: opts.base, token: opts.token, repo: opts.repo };
   /* **并发跑，不是串行**（第五跑的现场：读数全跑完了却撞上 2m 的平台预算）。十四条探针
    * 互不依赖，串行只把「一次慢请求」乘成十四条；而平台那一格的预算是整跑算的。
@@ -369,9 +367,7 @@ export async function probeAll(opts) {
     for (let probe = queue.shift(); probe; probe = queue.shift()) {
       /* `oidc` 那一问的请求体含令牌 ⇒ 只有它带 `body`，且**只从 env 取、不回显**。 */
       const extra =
-        probe === OIDC_PROBE
-          ? { method: "POST", body: '{"aud":"ci-token-scopes"}' }
-          : {};
+        probe === OIDC_PROBE ? { method: "POST", body: '{"aud":"ci-token-scopes"}' } : {};
       const r = await opts.fetchFact(ctx, probe.path, extra);
       rows.push({
         domain: probe.domain,
@@ -442,9 +438,12 @@ export function whereItLives(ctx) {
   ];
   const lane = lanes.find((l) => l.match(event));
   return (
-    `在哪看：${lane ? lane.where : `按事件名 ${event || "（不在场）"} 找到这一跑的流水线，` +
-      "在它的 stage 列表里找「令牌权限读数」/「每日令牌权限读数」那一格"}` +
-    " · 平台不把每一格的日志摊在流水线首页，要点进那一格才看得见"
+    `在哪看：${
+      lane
+        ? lane.where
+        : `按事件名 ${event || "（不在场）"} 找到这一跑的流水线，` +
+          "在它的 stage 列表里找「令牌权限读数」/「每日令牌权限读数」那一格"
+    }` + " · 平台不把每一格的日志摊在流水线首页，要点进那一格才看得见"
   );
 }
 
@@ -490,14 +489,13 @@ export function formatReadout(rows, ctx) {
             : `部分答得清（${granted.length}/${list.length} 条有明确答复，其余没量到）`;
     lines.push(`  ${domain.padEnd(20)} ${verdict}`);
     for (const r of list) {
-      const mark =
-        r.reply.state === "denied" ? "×  " : r.reply.state === "granted" ? "ok " : "?  ";
+      const mark = r.reply.state === "denied" ? "×  " : r.reply.state === "granted" ? "ok " : "?  ";
       const tail =
         r.reply.state === "denied"
           ? `缺 ${r.reply.scope}`
           : r.reply.state === "granted"
             ? "平台认了这次请求"
-            : r.reply.why ?? "没拿到答复";
+            : (r.reply.why ?? "没拿到答复");
       const note = r.note ? `（${r.note}）` : "";
       lines.push(`    ${mark}${r.why} → ${tail}${note}`);
     }
@@ -512,10 +510,9 @@ export function formatReadout(rows, ctx) {
   lines.push(
     `耗时：${rows.length} 条探针合计 ${totalMs}ms${
       slowest.length
-        ? `，最慢的 ${slowest.length} 条 ${slowest
-            .map((r) => `${r.path}=${r.ms}ms`)
-            .join(" · ")}`
-        : ""}`,
+        ? `，最慢的 ${slowest.length} 条 ${slowest.map((r) => `${r.path}=${r.ms}ms`).join(" · ")}`
+        : ""
+    }`,
   );
   lines.push(
     "读数不做判据：这一格量的是平台怎么给权限，红了不构成任何结论（恒退 0）。" +
@@ -546,7 +543,11 @@ export function formatReadout(rows, ctx) {
 export async function main(opts = {}) {
   const argv = opts.argv ?? process.argv.slice(2);
   const env = opts.env ?? process.env;
-  const log = opts.log ?? ((/** @type {string} */ s) => console.log(s));
+  const log =
+    opts.log ??
+    ((/** @type {string} */ s) => {
+      console.log(s);
+    });
   const fetchOne = opts.fetchFact ?? fetchFact;
 
   /** @param {string} name 旗标名 @returns {boolean} */
@@ -620,9 +621,6 @@ export async function main(opts = {}) {
 
 /* 判「是不是直接执行」的写法与 `ci-workspace-probe.mjs` 末尾逐字相同：拼 `file://${argv[1]}`
  * 在 Windows 上恒不相等，于是本脚本一行都不打就退 0 —— 而它存在的意义正是把这一格打出来。 */
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === import.meta.filename
-) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
   process.exit(await main());
 }

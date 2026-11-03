@@ -77,9 +77,15 @@ export function probePortOccupied(port, options = {}) {
       resolve(occupied);
     };
     socket.setTimeout(timeoutMs);
-    socket.on("connect", () => done(true));
-    socket.on("timeout", () => done(false));
-    socket.on("error", () => done(false));
+    socket.on("connect", () => {
+      done(true);
+    });
+    socket.on("timeout", () => {
+      done(false);
+    });
+    socket.on("error", () => {
+      done(false);
+    });
   });
 }
 

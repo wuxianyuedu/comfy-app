@@ -236,7 +236,9 @@ function main() {
     close(`server exited code=${code ?? "null"} signal=${signal ?? "null"}`, code ?? 1);
   });
   for (const sig of ["SIGTERM", "SIGINT", "SIGBREAK"]) {
-    process.on(sig, () => close(`signal ${sig}`, 0));
+    process.on(sig, () => {
+      close(`signal ${sig}`, 0);
+    });
   }
 }
 
