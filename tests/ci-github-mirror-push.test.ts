@@ -13,6 +13,7 @@ import {
   REMOTE_PROBE_TIMEOUT_MS,
   RETRY_BACKOFF_MS,
   buildPushUrl,
+  classifyLfsPushFailure,
   dispatchPayload,
   exitCodeFor,
   explainLfsPushFailure,
@@ -21,9 +22,12 @@ import {
   gitTimeoutFor,
   hasRemoteRefs,
   isEgressFailure,
+  LFS_FAILURE_KINDS,
   lfsPushArgs,
   mirrorRefFor,
+  parseLfsObjectCount,
   pushArgs,
+  renderMirrorSummary,
   resolveContext,
   resolveMasterContext,
   runMasterMirror,
@@ -115,6 +119,100 @@ describe("纯函数", () => {
     ).toContain("Settings");
     /* 不认得的形态 ⇒ 不编理由，叫人看 git-lfs 原话。 */
     expect(explainLfsPushFailure("lock verify failed")).toContain("原话");
+  });
+
+  it("classifyLfsPushFailure：六类 + 本地 ref 一档各有 label 与下一动作（ISSUE #3106）", () => {
+    /* 这一形是用户截图里的**实测现场**（CNB build `cnb-c92-1k6gk1ry00`）：旧话术把它归进
+     * 「其他」，人判不出该动哪一层。现在它单独成类，下一动作指向检出形态而不是网络。 */
+    const localRefs = classifyLfsPushFailure("exit status 1\nError getting local refs.");
+    expect(localRefs.kind).toBe("LOCAL_REFS");
+    expect(localRefs.label).toBe(LFS_FAILURE_KINDS.LOCAL_REFS);
+    expect(localRefs.next).toContain("检出形态");
+    expect(localRefs.next).toContain("--object-id");
+    /* 每一类都带**原文那一行**（脱敏后，最后一条非空行）。 */
+    expect(localRefs.evidence).toBe("Error getting local refs.");
+
+    const missing = classifyLfsPushFailure("git: 'lfs' is not a git command. See 'git --help'.");
+    expect(missing.kind).toBe("LFS_MISSING");
+    expect(missing.label).toBe(LFS_FAILURE_KINDS.LFS_MISSING);
+    expect(missing.next).toContain("装 git-lfs");
+
+    const auth = classifyLfsPushFailure(
+      "fatal: Authentication failed for 'https://github.com/x/y.git/'",
+    );
+    expect(auth.kind).toBe("AUTH");
+    expect(auth.label).toBe(LFS_FAILURE_KINDS.AUTH);
+    expect(auth.next).toContain("GITHUB_MIRROR_TOKEN");
+
+    const quota = classifyLfsPushFailure("batch response: This repository is over its data quota.");
+    expect(quota.kind).toBe("QUOTA");
+    expect(quota.label).toBe(LFS_FAILURE_KINDS.QUOTA);
+    expect(quota.next).toContain("Billing");
+
+    const disabled = classifyLfsPushFailure(
+      "batch request: Repository or object not found: exit status 404",
+    );
+    expect(disabled.kind).toBe("LFS_DISABLED");
+    expect(disabled.label).toBe(LFS_FAILURE_KINDS.LFS_DISABLED);
+    expect(disabled.next).toContain("Settings");
+
+    const egress = classifyLfsPushFailure(
+      "fatal: unable to access 'https://github.com/x/y.git/': Failed to connect to github.com port 443 after 21114 ms",
+    );
+    expect(egress.kind).toBe("EGRESS");
+    expect(egress.label).toBe(LFS_FAILURE_KINDS.EGRESS);
+    expect(egress.next).toContain("节点侧");
+
+    const other = classifyLfsPushFailure("lock verify failed");
+    expect(other.kind).toBe("OTHER");
+    expect(other.label).toBe(LFS_FAILURE_KINDS.OTHER);
+    expect(other.next).toContain("原话");
+    /* 空回话也不许判成 egress（它会让「没拿到任何回话」被读成网络抖动）。 */
+    expect(classifyLfsPushFailure("").kind).toBe("OTHER");
+  });
+
+  it("parseLfsObjectCount：读得到就给 n/m，读不到给 null（不编数字）", () => {
+    expect(parseLfsObjectCount("Uploading LFS objects: 100% (3/3), 8.6 MB | 0 B/s, done.")).toBe("3/3");
+    expect(parseLfsObjectCount("exit status 1\nError getting local refs.")).toBeNull();
+    expect(parseLfsObjectCount("LFS objects already present")).toBeNull();
+  });
+
+  it("renderMirrorSummary：三件结论并排；读数档标注写在**同一行**里", () => {
+    const line = renderMirrorSummary({
+      dispatch: null,
+      elapsedMs: 1200,
+      failure: classifyLfsPushFailure("Error getting local refs."),
+      lfs: false,
+      objects: null,
+      prefix: "mirror",
+      readout: false,
+      retries: 1,
+      wire: "通（refs/heads/cnb-pr-2649 @ 26a3c3ed）",
+    });
+    expect(line.startsWith("[mirror] 小结（判决）：")).toBe(true);
+    expect(line).toContain("wire=通（refs/heads/cnb-pr-2649 @ 26a3c3ed）");
+    expect(line).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.LOCAL_REFS}）`);
+    expect(line).toContain("对象数=未读到");
+    expect(line).toContain("耗时=1.2s");
+    expect(line).toContain("重试=1 次");
+    expect(line).toContain("下一步=");
+    /* 读数档：**折的是退码**，类别与下一动作照旧在，标注也在同一行。 */
+    const readout = renderMirrorSummary({
+      elapsedMs: 800,
+      failure: classifyLfsPushFailure("remote: Permission denied"),
+      lfs: false,
+      prefix: "mirror",
+      readout: true,
+      wire: "通（refs/heads/cnb-pr-2649 @ 26a3c3ed）",
+    });
+    expect(readout).toContain("读数档：不影响流水线结论");
+    expect(readout).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.AUTH}）`);
+    /* 通那一档不给「下一步」编动作。 */
+    const ok = renderMirrorSummary({ elapsedMs: 300, lfs: true, objects: "2/2", prefix: "mirror-master", wire: "通（refs/heads/master @ 26a3c3ed）" });
+    expect(ok).toContain("LFS=通");
+    expect(ok).toContain("对象数=2/2");
+    expect(ok).toContain("下一步=无需");
+    expect(ok.startsWith("[mirror-master]")).toBe(true);
   });
 
   it("hasRemoteRefs：非空仓库认 refs 行，空仓库零行不算「在」", () => {
@@ -261,7 +359,9 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       env?: Record<string, string | undefined>;
       fetchThrows?: boolean;
       lfsCode?: number;
+      lfsResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       lfsStderr?: string;
+      lfsStdout?: string;
       probeCode?: number;
       probeResults?: Array<{ code: number; stderr?: string; stdout?: string }>;
       probeStderr?: string;
@@ -279,6 +379,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     let probeCalls = 0;
     const probeSeq = opts.probeResults ? [...opts.probeResults] : null;
     const pushSeq = opts.pushResults ? [...opts.pushResults] : null;
+    const lfsSeq = opts.lfsResults ? [...opts.lfsResults] : null;
     const runGit = (args: Array<string>) => {
       if (args[0] === "ls-remote") {
         probeCalls += 1;
@@ -295,10 +396,14 @@ describe("runMirror（git 与 fetch 全假件）", () => {
       /* LFS 那一跳（`lfs push`）参数表里也有 "push"，必须先于内容推送分流，各记各的账。 */
       if (args.includes("lfs")) {
         lfsPushes.push(args);
-        if ((opts.lfsCode ?? 0) !== 0) {
-          return { code: opts.lfsCode ?? 1, stdout: "", stderr: opts.lfsStderr ?? "" };
+        const lfsHead = lfsSeq?.shift();
+        if (lfsHead) {
+          return { code: lfsHead.code, stdout: lfsHead.stdout ?? "", stderr: lfsHead.stderr ?? "" };
         }
-        return { code: 0, stdout: "LFS objects already present", stderr: "" };
+        if ((opts.lfsCode ?? 0) !== 0) {
+          return { code: opts.lfsCode ?? 1, stdout: opts.lfsStdout ?? "", stderr: opts.lfsStderr ?? "" };
+        }
+        return { code: 0, stdout: opts.lfsStdout ?? "LFS objects already present", stderr: "" };
       }
       /* 推送那一条现在带 `-c core.hooksPath=`（文件头第 6 条）⇒ 子命令不在第 0 位。 */
       if (args.includes("push")) {
@@ -409,6 +514,68 @@ describe("runMirror（git 与 fetch 全假件）", () => {
     expect(code).toBe(CODE.FAIL);
     expect(calls).toHaveLength(0);
     expect(heard.join("\n")).toContain("Settings");
+  });
+
+  it("LFS 失败全形（实测 `Error getting local refs.`）⇒ 类别单列，原文与小结都在，结尾是判词", async () => {
+    const { io, heard } = harness({
+      lfsCode: 1,
+      lfsStderr: "exit status 1\nError getting local refs.",
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    const all = heard.join("\n");
+    expect(all).toContain(`类别=${LFS_FAILURE_KINDS.LOCAL_REFS}`);
+    expect(all).toContain("原文：Error getting local refs.");
+    expect(all).toContain("最终错因=Error getting local refs.");
+    /* 判读成本（用户第 5 条）：最关键的一行在结尾 —— CNB UI 只显示最后 N 行。 */
+    const last = heard.at(-1) ?? "";
+    expect(last).toContain("小结（判决）");
+    expect(last).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.LOCAL_REFS}）`);
+    expect(last).toContain("下一步=");
+    expect(last).toContain("--object-id");
+  });
+
+  it("读数档：退码折成 0，但失败类别与下一动作照旧打印，标注在同一行（ISSUE #3106 第 2 条）", async () => {
+    const { io, heard } = harness({ lfsCode: 1, lfsStderr: "Error getting local refs." });
+    const code = await runMirror({ ...io, readout: true });
+    /* 内部三态原值不变（FAIL），对外那一位被 `--readout` 折成 0。 */
+    expect(code).toBe(CODE.FAIL);
+    expect(exitCodeFor(code, true)).toBe(0);
+    const all = heard.join("\n");
+    expect(all).toContain("读数档：不影响流水线结论");
+    expect(all).toContain(`类别=${LFS_FAILURE_KINDS.LOCAL_REFS}`);
+    expect(all).toContain("不派发");
+    const last = heard.at(-1) ?? "";
+    expect(last).toContain("读数档：不影响流水线结论");
+    expect(last).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.LOCAL_REFS}）`);
+  });
+
+  it("LFS egress 重试耗尽 ⇒ 小结带重试次数与最终错因，退 1", async () => {
+    const down = { code: 128, stderr: "Connection reset by peer" };
+    const { io, heard, sleeps } = harness({ lfsResults: [down, down] });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    expect(sleeps).toEqual([RETRY_BACKOFF_MS[0]]);
+    const all = heard.join("\n");
+    expect(all).toContain(`类别=${LFS_FAILURE_KINDS.EGRESS}`);
+    expect(all).toContain("重试 1 次");
+    expect(all).toContain("最终错因=Connection reset by peer");
+    const last = heard.at(-1) ?? "";
+    expect(last).toContain("重试=1 次");
+    expect(last).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.EGRESS}）`);
+  });
+
+  it("LFS 通 ⇒ 小结并排 wire / LFS / 派发，对象数从 git-lfs 的进度行读出来", async () => {
+    const { io, heard } = harness({
+      lfsStdout: "Uploading LFS objects: 100% (3/3), 8.6 MB | 0 B/s, done.",
+    });
+    const code = await runMirror(io);
+    expect(code).toBe(CODE.OK);
+    const last = heard.at(-1) ?? "";
+    expect(last.startsWith("[mirror] 小结（判决）：")).toBe(true);
+    expect(last).toContain("LFS=通");
+    expect(last).toContain("对象数=3/3");
+    expect(last).toContain("派发=通");
   });
 
   it("硬规则 17：任何回显（含推送报错）都不许出现令牌原值", async () => {
@@ -800,5 +967,20 @@ describe("runMasterMirror（探活 + 推送，没有派发那一跳）", () => {
     const all = heard.join("\n");
     expect(all).toContain("[mirror-master] LFS 推送失败");
     expect(all).toContain("Billing");
+  });
+
+  it("master 档 LFS 失败 ⇒ 收尾小结在结尾，前缀仍是 [mirror-master]，不冒充派发", async () => {
+    const { heard, io } = harness({
+      lfsCode: 1,
+      lfsStderr: "exit status 1\nError getting local refs.",
+    });
+    const code = await runMasterMirror(io);
+    expect(code).toBe(CODE.FAIL);
+    const last = heard.at(-1) ?? "";
+    expect(last.startsWith("[mirror-master] 小结（判决）：")).toBe(true);
+    expect(last).toContain(`LFS=败（类别：${LFS_FAILURE_KINDS.LOCAL_REFS}）`);
+    expect(last).not.toContain("派发=");
+    /* 类别行与结尾小结**两处都有**：翻到结尾不必回滚，翻不到结尾也能读到类。 */
+    expect(heard.join("\n")).toContain(`类别=${LFS_FAILURE_KINDS.LOCAL_REFS}`);
   });
 });
