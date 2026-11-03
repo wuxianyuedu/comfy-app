@@ -11,10 +11,14 @@
  *     命中扫描面后判的是**暂存的那一批**，不再回落全库；
  *   · `.cnb.yml` 的「oxfmt 格式」与 `pnpm check:all` 带 `--changed`：判**改动面**
  *     （`changed-scope.mjs` 的 `resolveChangedFiles`，基线 = `CNB_PULL_REQUEST_TARGET_SHA`
- *     三点 diff，本地退回各 remote/本地 master 的分叉点）∩ 扫描面；
+ *     三点 diff，本地退回各 remote/本地 master 的分叉点）∩ `GLOBS`；
  *   · **默认（不带旗标）照旧全库**——硬闸语义「未过 oxfmt 的文件一个都不许有」
  *     仍由这一档背书（`--report` 盘点也是全库）。
  * 三处都由 `tests/doc-check-hook-wiring.test.ts` 钉（钩子里有 + 平台侧有 + 都指这一份脚本）。
+ *
+ * ⚠️ **两份扫描面，各管各的**（ISSUE #2979）：改动面两档（`--staged` / `--changed`）
+ * 的扫描面 = **改动面 ∩ `GLOBS`**，不过 `IGNORE_GLOBS`；`IGNORE_GLOBS` 只对全量档生效
+ * —— 它是「存量迁移」的白名单，不是「这些文件不用管格式」的白名单。
  *
  * ── 为什么判面要收窄（printWidth 80 → 100 的增量迁移）──────────────────
  *
@@ -87,37 +91,41 @@
  *
  * 用法:
  *   node scripts/check-format.cjs             # 全库检查(硬闸:命中即退 1) —— 裸调用的硬闸语义
- *   node scripts/check-format.cjs --changed   # 只判改动面 ∩ 扫描面 —— 平台侧与 check:all 用这一档
+ *   node scripts/check-format.cjs --changed   # 只判改动面 ∩ GLOBS —— 平台侧与 check:all 用这一档
  *   node scripts/check-format.cjs --report    # 只出清单不判失败(盘点用,照旧全库)
  *   node scripts/check-format.cjs --staged    # 判暂存面(人的动作:提交前自查)
  *                                           #   合并态(MERGE_HEAD 在场)下暂存面 = 相对第一父的
  *                                           #   全量差异,会收窄到本分支带来的那份(ISSUE #2747)
  *
- * ── `--staged`：全库扫描的「白付」与它的输入面 ────────────────────────────────
+ * ── `--staged` / `--changed` 的输入面：两份扫描面怎么分（ISSUE #2979）─────────
  *
  * 全库扫描实测 **17.6s**(热缓存,本机 8 核) —— 它在钩子的 D 组里曾是**单项最贵**的
  * 一步(这个读数正是 ISSUE #2010 里"挪到 CI"那笔账的一半)。
  *
- * 而它的扫描面其实**远小于全库**,且这两件事都不是这里手写的取舍、是既有配置
- * 算出来的(实测:`git ls-files` 跟踪 5940 份,落在扫描面内的只有 **1596** 份):
- *   · `GLOBS` 只收 `.ts/.tsx/.js/.jsx/.mdx` —— 连 `.md` 都不在其内,所以
+ * 全量档的扫描面由既有配置算出来(实测:`git ls-files` 跟踪 5940 份,落在扫描面内的
+ * 只有 **1596** 份):
+ *   · `GLOBS` 收 `.ts/.tsx/.js/.jsx/.mjs/.cjs/.mdx` —— 连 `.md` 都不在其内,所以
  *     `docs/**` `changelog.d/**` `README.md` **本来就一份都不扫**;
- *   · `IGNORE_GLOBS` 又把 `scripts/` `tests/` `tools/` `e2e/` `public/`
+ *   · `IGNORE_GLOBS` 在全量档上把 `scripts/` `tests/` `tools/` `e2e/` `public/`
  *     `docs/api/**` `docs/generated/**` `src-tauri/target/**` 与根级 `*.js` /
  *     `*.config.*` 整类剔掉;
  *   · 剩下的是 **`src/**`(1586 份)+ `.storybook/**`(10 份)**。
  *
- * 于是「只加了 changelog 碎片 / 只改文档 / 只动 `scripts/` / 只碰 `tests/`」
- * 这一大类提交,在这一步上**白付**:那些文件根本不在 prettier 的靶子里,扫多少遍
+ * 「只加了 changelog 碎片 / 只改文档 / 只动 `scripts/` / 只碰 `tests/`」
+ * 这一大类提交,在**全量档**上是白付:那些文件根本不在 oxfmt 的靶子里,扫多少遍
  * 结论都一样(这一层收窄是 ISSUE #1747 加的,手法与 `check-docs-api.cjs --staged`
- * 逐字同源)。**而它省不掉的另一半正是这次挪执行者的理由**:`src/**` 是最常见的提交类别,
- * 命中即扫全库 —— `--staged` 只买到了「不命中时 ~30ms」那半。
- * 所以这一档现在归平台侧(不带 `--staged`),`--staged` 留给人的提交前自查。
+ * 逐字同源)。改动面两档(`--staged` / `--changed`)进一步把「判面」收窄到
+ * 「这次改动带来的那批」—— 收窄后判**点名的那个批次**,不回落全库。
  *
- * 判据面由 **`IGNORE_GLOBS` 自己现算**(`GLOBS` 展成的候选文件逐个过
- * `isIgnored`),**不另抄第二份「哪些目录算输入面」的清单** —— 抄一份就会与
- * `IGNORE_GLOBS` 漂移(§12.12 / §12.18 的口径),而漂移的形态是静默的:白名单
- * 多收一个目录,这里就永远不触发、那类文件的格式从此没人查。
+ * ⚠️ **`IGNORE_GLOBS` 不进改动面两档**（ISSUE #2979）：它的立论是「高频 churn 路径
+ * 纳入棘轮会让每次排障都产生格式 diff」—— 那是**棘轮时代**的话；翻成硬闸之后
+ * （§13.5.1，#1811）改动面两档对存量本来就不红，白名单在那两档上剩下的唯一效果
+ * 是「`scripts/**` 的格式没有任何一个判决面能拦到」（本地那步说「跳过」、平台那格
+ * `ifModify` 不含 ⇒ 根本不执行，两处都不红 —— #2942 重跑现场点名的三份
+ * `.mjs`/`.cjs` 全在 `scripts/`，说明判据面本该含它）。所以两档的扫描面是
+ * **改动面 ∩ `GLOBS`**（`isChangedFaceFile()`，同一份 `GLOBS` 展开，不另抄清单），
+ * `IGNORE_GLOBS` 只对全量档生效 —— 它是「存量迁移」的白名单，不是
+ * 「这些文件不用管格式」的白名单。
  *
  * **跳过是结论,不是沉默放行**:未命中时打印一行「本次提交未触及扫描面,跳过」,
  * 与真正扫过之后的 `[format] OK` 在输出上可分辨(§11.23 的「声明 ⇄ 读者」口径)。
@@ -168,16 +176,27 @@ const REPORT_ONLY = ARGS.has("--report");
 const STAGED = ARGS.has("--staged");
 const CHANGED = ARGS.has("--changed");
 
-/** 扫描范围与 package.json 的 format:write（以及 .oxfmtrc.json 的纳入面）逐字一致。 */
-const GLOBS = ["**/*.{ts,tsx,js,jsx,mdx}"];
+/** 扫描范围与 package.json 的 format:write（以及 .oxfmtrc.json 的纳入面）逐字一致。
+ * `mjs` / `cjs` 是 ISSUE #2979 加的：`scripts/**` 的入口与判据本来就是这两个扩展名，
+ * 它们不进面 = 「这一仓自己的脚本从来没被格式判据看过」。 */
+const GLOBS = ["**/*.{ts,tsx,js,jsx,mjs,cjs,mdx}"];
 
 /** oxfmt 的扫描根：`GLOBS` 减白名单后收口出的面就是 `src/**` + `.storybook/**`
  * （根上的 `*.config.*` / `scripts/**` / `tests/**` 等都在 IGNORE_GLOBS 里）。
+ * ⚠️ 这一半**只管全量档**（默认 / `--report`，ISSUE #2979）：它是「存量迁移」的白名单，
+ * 不是「这些文件不用管格式」的白名单 —— 改动面两档（`--staged` / `--changed`）的
+ * 扫描面是**改动面 ∩ `GLOBS`**，不过 `IGNORE_GLOBS`（见 `isChangedFaceFile()`）。
  * 传目录而非 glob：oxfmt 认 glob，但 glob 形态会把白名单里的目录也带进来，
  * 交给下面的 `isScanned()` 收口更直白（同一份真源，不另抄一份名单）。 */
 const SCAN_ROOTS = ["src", ".storybook"];
 
-/** 白名单(glob,相对仓库根):① 高频 churn 路径;② 非源码产物(构建输出)。见文件头注释。 */
+/** 白名单(glob,相对仓库根):① 高频 churn 路径;② 非源码产物(构建输出)。见文件头注释。
+ * ⚠️ 它**只对全量档生效**（默认 / `--report`，ISSUE #2979）：改这两档立论的时候
+ * （棘轮时代「高频 churn 不想每次排障都带格式 diff」）硬闸还没来；翻成硬闸之后
+ * （§13.5.1，ISSUE #1811）这条理由对「判本次改动」的两档已经不成立 —— 那两档
+ * 对存量本来就不红（改动面收窄），把 `scripts/**` 整目录列在这里的净效果是
+ * 「本仓自己的脚本从来没被格式判据看过」。所以改动面两档（`--staged` /
+ * `--changed`）的扫描面不过这一份（`isChangedFaceFile()`），全量档照旧。 */
 const IGNORE_GLOBS = [
   "scripts/**",
   "tests/**",
@@ -223,14 +242,11 @@ function globToRegExp(glob) {
         out += String.raw`\{`;
         continue;
       }
-      out +=
-        `(?:${
-        glob
-          .slice(i + 1, close)
-          .split(",")
-          .map(escapeRe)
-          .join("|")
-        })`;
+      out += `(?:${glob
+        .slice(i + 1, close)
+        .split(",")
+        .map(escapeRe)
+        .join("|")})`;
       i = close;
     } else if (c === "/") {
       out += "/";
@@ -251,10 +267,29 @@ function isIgnored(rel) {
 /**
  * 扫描面的**正形态**:先由 `GLOBS` 认出「prettier 会看的文件」,再剔掉
  * `IGNORE_GLOBS`。两者是同一份白名单的两个方向,所以这里不重复任何目录名。
+ * ⚠️ 只服务**全量档**（`SCAN_ROOTS` 的收口）；改动面两档走 `isChangedFaceFile()`。
  * @param {string} rel 仓库根相对 POSIX 路径
  */
 function isScanned(rel) {
   return GLOB_RES.some((re) => re.test(rel)) && !isIgnored(rel);
+}
+
+/**
+ * **改动面两档**（`--staged` / `--changed`）的扫描面：改动面 ∩ `GLOBS`，
+ * **不过 `IGNORE_GLOBS`**（ISSUE #2979）。
+ *
+ * 为什么是两份判面：`IGNORE_GLOBS` 的立论是「高频 churn 路径纳入棘轮会让每次
+ * 排障都产生格式 diff」—— 那是**棘轮时代**（存量冻结、`--write` 带整文件重排）的话。
+ * 翻成硬闸之后，改动面两档对存量本来就不红（只判「这次改动带来的那批」），
+ * 白名单在那两档上剩下的唯一效果就是「本仓自己的脚本 / 用例从来没被格式判据看过」
+ * —— 而平台那一格真点到过 `scripts/**` 的文件（#2942 重跑现场：三份 `.mjs`/`.cjs`
+ * 被点名），说明判据面**本该**含它。全量档照旧（存量迁移另有 #2710 的账，
+ * 本仓实测 136 份：scripts/tests/tools/e2e 134 + 根级 config 2 —— 谁碰谁迁）。
+ *
+ * @param {string} rel 仓库根相对 POSIX 路径
+ */
+function isChangedFaceFile(rel) {
+  return GLOB_RES.some((re) => re.test(rel));
 }
 
 /** 本次提交是不是一个**待落地的合并提交**（`$GIT_DIR/MERGE_HEAD` 在场）。
@@ -515,7 +550,7 @@ async function main() {
           "（ISSUE #2747）。",
       );
     }
-    const hits = face.filter(isScanned);
+    const hits = face.filter(isChangedFaceFile);
     if (!hits.length) {
       console.log(
         `[format] ✓ 本次提交未触及扫描面（${face.length} 个暂存文件中 0 个在 prettier 靶子内），跳过。`,
@@ -537,7 +572,7 @@ async function main() {
     /* 改动面走共通壳（`changedFaceOrExit()`：基线选取 / 三点 diff / quotePath /
      * 改名两侧都收都在 `changed-scope.mjs` 那一份里，这里不抄第二份，§12.18）。 */
     const changed = changedFaceOrExit();
-    const hits = changed.files.filter(isScanned);
+    const hits = changed.files.filter(isChangedFaceFile);
     if (!hits.length) {
       console.log(
         `[format] ✓ 本次改动未触及扫描面（${changed.files.length} 个改动文件中 0 个在 oxfmt 靶子内，基线：${changed.via}），跳过。`,
@@ -585,6 +620,7 @@ if (require.main === module) {
 module.exports = {
   globToRegExp,
   isIgnored,
+  isChangedFaceFile,
   isScanned,
   collectUnformatted,
   resolveOxfmtEntry,
