@@ -131,6 +131,46 @@ export default defineConfig({
       },
     },
     {
+      /* `src/lib/**` 关掉 `awesomeness/no-novel-comments`（ISSUE #2924 第二步）。
+       *
+       * 同样先抽样再定策：锁定基线 `82c2a23e`，按 20 个子树等比例分层抽 **100 条**，
+       * 逐条判「复述代码行为」vs「为什么 / 契约 / JSDoc 类型 / 模块头」，
+       * 结果**复述型 0/100（0%）**：why/约束 71%、模块头 27%、JSDoc 类型 2%。
+       * 与 scripts 的差别只在 JSDoc 类型占比（TS 的类型在签名里，长注释几乎全在讲「为什么」）。
+       *
+       * 例外**按子树逐个登记**（下面每条 glob 后面是「该层抽样 n / 复述 0」与该层实测处数），
+       * 不写成一条 `src/lib/**`：新增子树**不自动继承**这条例外 —— 先抽样、再登记，
+       * 复述型占比高于 0 的子树走「删复述」而不是登记。
+       *
+       * ⚠️ 这是**证据支撑的例外，不是永久豁免**：新增代码仍按既定口径写注释；
+       * 评审发现复述型即删；任何子树复述型回升到 30% 以上时，撤掉它那一行 glob。 */
+      files: [
+        "src/lib/comfyui/**", // 抽样 29 / 复述 0（421 处）
+        "src/lib/*.ts", // 抽样 18 / 复述 0（253 处，根文件）
+        "src/lib/log/**", // 抽样 6 / 复述 0（97 处）
+        "src/lib/process/**", // 抽样 6 / 复述 0（91 处）
+        "src/lib/shell/**", // 抽样 6 / 复述 0（86 处）
+        "src/lib/core/**", // 抽样 5 / 复述 0（80 处）
+        "src/lib/workflow/**", // 抽样 5 / 复述 0（71 处）
+        "src/lib/workshop/**", // 抽样 5 / 复述 0（70 处）
+        "src/lib/media/**", // 抽样 4 / 复述 0（60 处）
+        "src/lib/project-canvas/**", // 抽样 3 / 复述 0（44 处）
+        "src/lib/comfy/**", // 抽样 2 / 复述 0（34 处）
+        "src/lib/llm/**", // 抽样 2 / 复述 0（31 处）
+        "src/lib/app-settings/**", // 抽样 2 / 复述 0（12 处）
+        "src/lib/console/**", // 抽样 1 / 复述 0（22 处）
+        "src/lib/production/**", // 抽样 1 / 复述 0（18 处）
+        "src/lib/markdown/**", // 抽样 1 / 复述 0（16 处）
+        "src/lib/drizzle-studio/**", // 抽样 1 / 复述 0（5 处）
+        "src/lib/agent/**", // 抽样 1 / 复述 0（4 处）
+        "src/lib/film/**", // 抽样 1 / 复述 0（2 处）
+        "src/lib/db-backup/**", // 抽样 1 / 复述 0（1 处）
+      ],
+      rules: {
+        "awesomeness/no-novel-comments": "off",
+      },
+    },
+    {
       files: ["src/server/api/routers/**/*.ts"],
       rules: {
         "eslint-js/no-restricted-syntax": [
