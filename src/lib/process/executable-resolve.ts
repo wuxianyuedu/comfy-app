@@ -279,7 +279,8 @@ export function whichCommand(
       // 全都不可用时返回 null（= 按「没找到」处理）—— 比返回一个注定失败、
       // 且会把真实原因掩盖成「未知错误」的路径更有用（Issue #576 的现场）。
     }
-    if (result) {
+    /* 命中结果是拼出来的绝对路径，空串不可能出现 */
+    if (result !== null) {
       break;
     }
   }
@@ -471,7 +472,8 @@ export function usableCommand(
   // 「找到了但起不来」。
   if (isWindows(platform) && isPs1(candidate)) {
     const host = powershellHost({ env, platform });
-    if (host) {
+    /* 宿主路径是解析出来的绝对路径，空串不可能出现 */
+    if (host !== null) {
       return {
         ok: true,
         command: host,
@@ -547,7 +549,8 @@ function siblingFallback(
     return null;
   }
   const host = powershellHost({ env, platform });
-  if (!host) {
+  /* 宿主路径是解析出来的绝对路径，空串不可能出现 */
+  if (host === null) {
     return null;
   }
   return {

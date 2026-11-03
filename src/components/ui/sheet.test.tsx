@@ -11,7 +11,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./sheet";
 
 beforeAll(() => {
-  if (!window.matchMedia) {
+  if (typeof window.matchMedia !== "function") {
     window.matchMedia = (query: string): MediaQueryList => ({
       matches: false,
       media: query,

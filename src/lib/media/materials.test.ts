@@ -70,7 +70,7 @@ function put(
   const dir = path.join(root, scope, folder);
   fs.mkdirSync(dir, { recursive: true });
   const target = path.join(dir, name);
-  if (opts.asDir) {
+  if (opts.asDir === true) {
     fs.mkdirSync(target, { recursive: true });
   } else {
     fs.writeFileSync(target, "x");

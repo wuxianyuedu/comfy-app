@@ -98,9 +98,13 @@ async function resolveOllamaExe(): Promise<string> {
   }
   /* SAFETY: 类型断言已复核 */
   const candidates = [
-    process.env.LOCALAPPDATA ? `${process.env.LOCALAPPDATA}\\Programs\\Ollama\\ollama.exe` : null,
-    process.env.ProgramFiles ? `${process.env.ProgramFiles}\\Ollama\\ollama.exe` : null,
-    process.env["ProgramFiles(x86)"]
+    process.env.LOCALAPPDATA !== undefined && process.env.LOCALAPPDATA !== ""
+      ? `${process.env.LOCALAPPDATA}\\Programs\\Ollama\\ollama.exe`
+      : null,
+    process.env.ProgramFiles !== undefined && process.env.ProgramFiles !== ""
+      ? `${process.env.ProgramFiles}\\Ollama\\ollama.exe`
+      : null,
+    process.env["ProgramFiles(x86)"] !== undefined && process.env["ProgramFiles(x86)"] !== ""
       ? `${process.env["ProgramFiles(x86)"]}\\Ollama\\ollama.exe`
       : null,
   ].filter(Boolean) as Array<string>;
@@ -159,7 +163,7 @@ async function spawnOllamaServe(
       windowsHide: true,
       mode: "keepAlive",
     });
-    if (!launched.child || launched.error) {
+    if (launched.child === undefined || launched.error !== undefined) {
       const msg = launched.error ?? "未知错误";
       const hint =
         /enoent|not find|cannot find/i.test(msg) || msg.includes("EACCES")

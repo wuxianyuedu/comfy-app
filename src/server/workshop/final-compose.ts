@@ -89,7 +89,7 @@ export async function writeCompositionPlan(
 }
 
 function localPathOf(ref: string | null): string | null {
-  if (!ref) {
+  if (ref === null || ref === "") {
     return null;
   }
   if (ref.startsWith("file://")) {
@@ -130,44 +130,45 @@ export async function renderComposition(
     const clip = localPathOf(s.clipUrl);
     const img = localPathOf(s.imageUrl);
     const src = clip ?? img;
-    if (!src) {
+    if (src === null) {
       continue;
     }
     const tmp = path.join(tmpDir, `seg-${s.order}.mp4`);
     const scale = `scale=${COMPOSE_SCALE}`;
-    const args = clip
-      ? [
-          "-i",
-          src,
-          "-t",
-          String(s.durationSec),
-          "-vf",
-          scale,
-          "-c:v",
-          "libx264",
-          "-pix_fmt",
-          "yuv420p",
-          "-an",
-          tmp,
-        ]
-      : [
-          "-loop",
-          "1",
-          "-i",
-          src,
-          "-t",
-          String(s.durationSec),
-          "-r",
-          "25",
-          "-vf",
-          scale,
-          "-c:v",
-          "libx264",
-          "-pix_fmt",
-          "yuv420p",
-          "-an",
-          tmp,
-        ];
+    const args =
+      clip === null
+        ? [
+            "-loop",
+            "1",
+            "-i",
+            src,
+            "-t",
+            String(s.durationSec),
+            "-r",
+            "25",
+            "-vf",
+            scale,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            tmp,
+          ]
+        : [
+            "-i",
+            src,
+            "-t",
+            String(s.durationSec),
+            "-vf",
+            scale,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-an",
+            tmp,
+          ];
     try {
       await execFileP(ff, args, { timeout: 120_000 });
       segs.push(tmp);

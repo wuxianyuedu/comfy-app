@@ -58,15 +58,11 @@ export function ErrorPanel({
   workflowName,
   onRetry,
 }: ErrorPanelProps) {
-  /* 错误面板状态 —— 默认收起（只有一行摘要），
-   * 可展开查看后端原始错误（含 ComfyUI traceback）。
-   * 每次新运行开始时重置为收起，好让下一次失败
-   * 以干净状态呈现，用户不会看到上次残留的展开态。
-   *
-   * 错误信息里出现 ComfyUI 的
-   *"Node X not found" /"OOM" /"Cannot find model" / 5xx 形态时，
-   * 面板自动展开，让用户能看到可行动的
-   * 上下文（taskId、请求 payload、建议）。 */
+  /* 错误面板状态 —— 默认收起（只有一行摘要），可展开查看后端原始错误
+   * （含 ComfyUI traceback）。每次新运行开始时重置为收起，下一次失败以干净
+   * 状态呈现。错误信息出现 ComfyUI 的 "Node X not found" / "OOM" /
+   * "Cannot find model" / 5xx 形态时面板自动展开，让可行动的上下文
+   * （taskId、请求 payload、建议）直接可见。 */
   const [errExpanded, setErrExpanded] = useState(false);
   /* 每次新运行开始时重置为收起（渲染期间调整，
    * React 19 模式）。 */
@@ -123,13 +119,13 @@ export function ErrorPanel({
     if (trimmed && trimmed !== "[object Object]" && trimmed !== "[unserializable error]") {
       errText = trimmed;
     }
-  } else if (raw && typeof raw === "object") {
+  } else if (raw !== undefined && typeof raw === "object") {
     errText = jsonOrString(raw, true);
   }
 
   const rawTs = errorContext?.timestamp;
   let ts: string | null = null;
-  if (rawTs) {
+  if (rawTs !== undefined && rawTs !== "") {
     const dt = new Date(rawTs);
     ts = Number.isNaN(dt.getTime()) ? rawTs : formatLocalStamp(dt);
   }
@@ -140,7 +136,9 @@ export function ErrorPanel({
    * （而不是在父级拦住挂载），好让展开 / 重置生命周期
    * 每次渲染都跑一遍，与原来的
    * 内联块完全一致。 */
-  if (!(status === "error" && (error || (validationErrors?.length ?? 0) > 0))) {
+  const hasVisibleError =
+    (error !== undefined && error !== "") || (validationErrors?.length ?? 0) > 0;
+  if (status !== "error" || !hasVisibleError) {
     return null;
   }
 
@@ -164,7 +162,7 @@ export function ErrorPanel({
               </span>
             </span>
             <div className="flex shrink-0 items-center gap-1">
-              {kind === "workflow" && workflowName && (
+              {kind === "workflow" && workflowName !== undefined && workflowName !== "" && (
                 <span
                   className="border-destructive/15 bg-destructive/10 text-danger-strong/80 rounded border px-1.5 py-0.5 font-mono text-[9.5px]"
                   title="执行的工作流"
@@ -180,7 +178,7 @@ export function ErrorPanel({
               {/* 用同一份参数重跑。仅当有 taskId（即任务真的跑过）且不是
                * 预检阶段的校验错误时才出现。用 Boolean() 包一层是为了让 TS
                * 满意 ——`d.errorContext?.request` 的类型是`unknown`。 */}
-              {Boolean(errorContext?.request) && taskId && (
+              {Boolean(errorContext?.request) && taskId !== undefined && taskId !== "" && (
                 <Hint label="用相同参数重跑一次">
                   <Button
                     className="border-destructive/20 text-danger-strong/90 hover:bg-destructive/10 text-3xs h-auto rounded border px-1.5 py-0.5"
@@ -278,7 +276,7 @@ export function ErrorPanel({
               {/* 1) 任务上下文：taskId（可点击复制）+ 时间 */}
               {hasCtx && (
                 <div className="bg-canvas-deep border-destructive/15 text-3xs grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 rounded border px-1.5 py-1">
-                  {taskId && (
+                  {taskId !== undefined && taskId !== "" && (
                     <>
                       <span className="text-danger-strong/60">taskId</span>
                       <Hint label="点击复制 taskId">
@@ -294,7 +292,7 @@ export function ErrorPanel({
                       </Hint>
                     </>
                   )}
-                  {ts && (
+                  {ts !== null && ts !== "" && (
                     <>
                       <span className="text-danger-strong/60">时间</span>
                       <span className="text-danger-strong/80 truncate">{ts}</span>
@@ -304,7 +302,7 @@ export function ErrorPanel({
               )}
 
               {/* 2) 自动建议 — 正则推断的纠错提示 */}
-              {errorSuggestion && (
+              {errorSuggestion !== null && errorSuggestion !== "" && (
                 <Alert
                   className="text-3xs block rounded px-2 py-1 leading-relaxed"
                   variant="warning"
@@ -315,7 +313,7 @@ export function ErrorPanel({
               )}
 
               {/* 3) 请求参数快照 */}
-              {errorContext?.request ? (
+              {errorContext !== undefined && Boolean(errorContext.request) ? (
                 <Disclosure
                   className="text-danger-strong text-3xs hover:brightness-110"
                   defaultOpen

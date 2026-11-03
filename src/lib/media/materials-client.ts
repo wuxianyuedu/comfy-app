@@ -99,7 +99,7 @@ export async function fetchMaterials(query: MaterialListQuery): Promise<Material
       projectId: query.projectId,
       scope: query.scope,
       q: query.q,
-      folder: query.q ? undefined : query.folder,
+      folder: query.q !== undefined && query.q !== "" ? undefined : query.folder,
     }),
   );
   const body = await readJsonBody(res);
@@ -117,7 +117,7 @@ async function postMaterial(
   const fd = new FormData();
   fd.append("file", file);
   fd.append("folder", opts.folder);
-  if (opts.projectId) {
+  if (opts.projectId !== undefined && opts.projectId !== null && opts.projectId !== "") {
     fd.append("projectId", opts.projectId);
   } else {
     fd.append("shared", "true");

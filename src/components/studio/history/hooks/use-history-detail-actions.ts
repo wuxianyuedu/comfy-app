@@ -79,7 +79,11 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
       openFolderAction.set(true);
       try {
         const result = await deps.openFolder(taskId);
-        if (result.comfyappUrl) {
+        if (
+          result.comfyappUrl !== undefined &&
+          result.comfyappUrl !== null &&
+          result.comfyappUrl !== ""
+        ) {
           /* 本机自定义协议方案：服务端已校验目录存在且在白名单内，返回
            * comfyapp://open?path=... URL。这里直接导航（user-initiated 点击），
            * 浏览器弹「是否打开外部应用」确认 → OS 调起 handler 用 explorer
@@ -149,10 +153,12 @@ export function useHistoryDetailActions(deps: HistoryDetailActionsDeps): History
         runAsyncAction(
           async () => {
             const result = await deps.fetchWorkflow(taskId);
-            if (!result?.workflow) {
+            const workflow = result?.workflow;
+            const hasWorkflow = Boolean(workflow);
+            if (!hasWorkflow) {
               return false;
             }
-            downloadJson(result.workflow, "workflow.json");
+            downloadJson(workflow, "workflow.json");
             return true;
           },
           { report, failureText: "下载失败" },

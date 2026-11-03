@@ -60,11 +60,11 @@ const mockRouter = t.router({
   workflow: t.router({
     list: t.procedure.query(async () => {
       listCalls += 1;
-      if (behavior.listDelayMs && behavior.listDelayMs > 0) {
+      if (behavior.listDelayMs !== undefined && behavior.listDelayMs > 0) {
         // sleep-ok: mock 内部延迟：tRPC mock 的 listDelayMs 是给用例制造「列表慢一拍」的现场（行为开关），不是等条件。
         await new Promise((resolve) => setTimeout(resolve, behavior.listDelayMs));
       }
-      if (behavior.listError) {
+      if (behavior.listError !== undefined && behavior.listError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.listError,
@@ -77,7 +77,7 @@ const mockRouter = t.router({
     }),
     create: t.procedure.mutation(() => ({ id: "new", warnings: [] })),
     update: t.procedure.mutation(() => {
-      if (behavior.updateError) {
+      if (behavior.updateError !== undefined && behavior.updateError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.updateError,
@@ -86,7 +86,7 @@ const mockRouter = t.router({
       return { ok: true };
     }),
     delete: t.procedure.mutation(() => {
-      if (behavior.deleteError) {
+      if (behavior.deleteError !== undefined && behavior.deleteError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.deleteError,

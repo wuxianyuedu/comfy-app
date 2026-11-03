@@ -52,7 +52,7 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
 
   if (src.startsWith("/")) {
     const abs = localPathFor(src);
-    if (!abs) {
+    if (abs === null) {
       throw new Error(`无法定位本地生成文件: ${src}`);
     }
     const buffer = await fs.readFile(abs);
@@ -84,7 +84,10 @@ export async function resolveMediaBytes(src: string, _origin: string): Promise<R
       buffer,
       /* 类型头说不是图（网关错误页的 text/html、空类型头）时按 URL 的扩展名回落 ——
        * 同样要先取扩展名再查表，见上面本地分支那条注释。 */
-      mime: mime?.startsWith("image/") ? mime : (mimeForExt(extOfPath(src)) ?? DEFAULT_IMAGE_MIME),
+      mime:
+        mime?.startsWith("image/") === true
+          ? mime
+          : (mimeForExt(extOfPath(src)) ?? DEFAULT_IMAGE_MIME),
     };
   }
 

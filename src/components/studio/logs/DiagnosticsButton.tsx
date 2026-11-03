@@ -67,7 +67,7 @@ export function DiagnosticsButton() {
         </Button>
       </Hint>
       {/* 路径就是这次打包的「回执」：没有它，用户只能自己去猜文件在哪。 */}
-      {savedPath && (
+      {savedPath !== null && savedPath !== "" && (
         <span className="text-ink-fainter text-2xs max-w-56 truncate" title={savedPath}>
           已打包 {savedPath}
         </span>

@@ -207,7 +207,7 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
     return "text";
   }
   if (type === "STRING") {
-    if (e.multiline) {
+    if (e.multiline === true) {
       return "textarea";
     }
     /* 当前值很长，是「这是提示词框」的强信号 ——
@@ -218,7 +218,7 @@ export function controlForEntry(e: WorkflowIOEntry): ControlKind {
     return "text";
   }
   if (type === "*") {
-    if (e.multiline) {
+    if (e.multiline === true) {
       return "textarea";
     }
     /* 当前值很长，是「这是提示词框」的强信号。 */
@@ -304,7 +304,7 @@ function isSamePin(a: WorkflowIOEntry, b: WorkflowIOEntry): boolean {
  *  实现：它只回答「撞名时能不能拿这个名字当区分标记」，不需要知道宿主类名。 */
 function isMachineAliasName(name: string | undefined): boolean {
   const slot = name?.trim();
-  if (!slot) {
+  if (slot === undefined || slot === "") {
     return false;
   }
   return /^value_\d+$/.test(slot) || /^\d+$/.test(slot);
@@ -347,7 +347,7 @@ export function ioLabel(e: WorkflowIOEntry, allEntries?: ReadonlyArray<WorkflowI
         return e.name;
       }
       const title = e.nodeTitle?.trim();
-      if (title && title !== candidate) {
+      if (title !== undefined && title !== "" && title !== candidate) {
         return `${candidate} · ${title}`;
       }
       return candidate;
@@ -422,7 +422,8 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   > = [];
   const outputs: Array<WorkflowIOEntry & { ioKey: string }> = [];
   for (const [ioKey, entry] of Object.entries(io ?? {})) {
-    if (!entry || typeof entry !== "object") {
+    const entryPresent = Boolean(entry);
+    if (!entryPresent || typeof entry !== "object") {
       continue;
     }
     if (entry.direction === "output") {
@@ -489,7 +490,7 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
 export function filterVisibleInMode<
   T extends { modeOverrides?: Record<string, WorkflowIOModeOverride> },
 >(entries: Array<T>, mode?: string | null): Array<T> {
-  if (!mode) {
+  if (mode === undefined || mode === null || mode === "") {
     return entries;
   }
   return entries.filter((entry) => isVisibleInMode(entry, mode));
@@ -568,7 +569,7 @@ export function defaultInputValues(
        *  ComfyUI 在线 / 离线两种状态下得到不同 payload（「结果不一致」的实锤）。
        *  声明了类型（INT / FLOAT）的条目照旧给 numericBounds 默认值，行为不变；
        *  没类型的只交给图内默认值 / 用户填写，本函数不替它下发明文数字。 */
-      if (!entry.controlInferred) {
+      if (entry.controlInferred !== true) {
         out[entry.ioKey] = numericBounds(entry).min;
       }
     } else if (entry.control === "textarea" || entry.control === "text") {
@@ -711,13 +712,14 @@ export function getMissingRequiredInputs(
   }
   const out: Array<string> = [];
   for (const [key, entry] of Object.entries(io)) {
-    if (!entry || typeof entry !== "object") {
+    const entryPresent = Boolean(entry);
+    if (!entryPresent || typeof entry !== "object") {
       continue;
     }
     if (entry.direction !== "input") {
       continue;
     }
-    if (!resolveEntryRequired(entry, mode)) {
+    if (resolveEntryRequired(entry, mode) !== true) {
       continue;
     }
     if (entry.kind !== "widget") {

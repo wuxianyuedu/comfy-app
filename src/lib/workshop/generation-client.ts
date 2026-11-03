@@ -55,8 +55,12 @@ export function withGenerationAttribution(
 ): GenerateInput {
   return {
     ...input,
-    ...(attribution.projectId ? { projectId: attribution.projectId } : {}),
-    ...(attribution.shotId ? { shotId: attribution.shotId } : {}),
+    ...(attribution.projectId /* oxlint-disable-line strict-boolean-expressions -- 空 projectId 有意不落字段（见上注释：「没有归属」不写成空串），按任意真值判 */
+      ? { projectId: attribution.projectId }
+      : {}),
+    ...(attribution.shotId /* oxlint-disable-line strict-boolean-expressions -- 同上：空 shotId 有意不落字段，按任意真值判 */
+      ? { shotId: attribution.shotId }
+      : {}),
   };
 }
 
@@ -300,7 +304,8 @@ export async function buildLibraryWorkflowInput(
     ? detail.availableModes.filter((mode): mode is string => typeof mode === "string")
     : [];
   const mode =
-    requestedMode && requestedMode.trim() !== ""
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    requestedMode != null && requestedMode.trim() !== ""
       ? requestedMode
       : (detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null);
   const { workflowInputs, unmatched } = buildEncapsulatedInputs({
@@ -631,15 +636,19 @@ export async function apiGenerateImage(req: {
     prompt: req.prompt,
     negative: req.negative,
     size: req.size,
-    ...(req.model ? { model: req.model } : {}),
-    ...(req.mode ? { mode: req.mode } : {}),
-    ...(req.aspectRatio ? { aspectRatio: req.aspectRatio } : {}),
-    ...(req.megapixels ? { megapixels: req.megapixels } : {}),
+    ...(req.model !== undefined && req.model !== "" ? { model: req.model } : {}),
+    ...(req.mode !== undefined && req.mode !== "" ? { mode: req.mode } : {}),
+    ...(req.aspectRatio !== undefined && req.aspectRatio !== ""
+      ? { aspectRatio: req.aspectRatio }
+      : {}),
+    ...(req.megapixels !== undefined && req.megapixels !== ""
+      ? { megapixels: req.megapixels }
+      : {}),
     ...(req.multiple === undefined ? {} : { multiple: req.multiple }),
-    ...(req.image ? { image: req.image } : {}),
+    ...(req.image !== undefined && req.image !== "" ? { image: req.image } : {}),
   });
   const url = data && typeof data.url === "string" && data.url ? data.url : null;
-  if (!url) {
+  if (url === null) {
     throw new Error("API 生图响应中未找到图片 URL");
   }
   return url;
@@ -675,7 +684,7 @@ export async function apiSubmitVideo(req: {
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
   const remoteTaskId =
     typeof data.remoteTaskId === "string" && data.remoteTaskId ? data.remoteTaskId : undefined;
-  if (!url && !remoteTaskId) {
+  if (url === undefined && remoteTaskId === undefined) {
     throw new Error("API 视频响应中未找到视频 URL 或任务 ID");
   }
   return { url, remoteTaskId };
@@ -690,7 +699,7 @@ export async function apiPollVideo(
     return { pending: true };
   }
   const url = typeof data.url === "string" && data.url ? data.url : undefined;
-  return { url, pending: !url };
+  return { url, pending: url === undefined };
 }
 
 /* 把生成出/参考用的图片上传进本机 ComfyUI 的 input 目录，
@@ -709,7 +718,7 @@ export async function prepareLocalInputImage(image: string): Promise<string> {
   }
   const filename =
     isRecord(data) && typeof data.filename === "string" && data.filename ? data.filename : null;
-  if (!res.ok || !filename) {
+  if (!res.ok || filename === null) {
     throw new Error(res.ok ? "参考图准备失败" : relayErrorMessage(data, res.status));
   }
   return filename;
@@ -744,7 +753,7 @@ export async function preparePortraitReferences(
   let failedCount = 0;
   for (const url of urls) {
     const cached = portraitRefCache.get(url);
-    if (cached) {
+    if (cached !== undefined) {
       files.push(cached);
       continue;
     }

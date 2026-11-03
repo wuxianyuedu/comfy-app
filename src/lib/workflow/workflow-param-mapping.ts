@@ -229,7 +229,7 @@ function legacyEntryIds(entry: ParamEntry): Array<string> {
   }
   for (const pin of entry.pins) {
     const raw = pin.ioKey.split("::")[0];
-    if (raw) {
+    if (raw !== undefined && raw !== "") {
       nodeIds.add(raw);
     }
   }
@@ -298,7 +298,8 @@ export function resolveMapping(
   const out: Record<string, string | null> = {};
   /* 只读一份（本函数不再给任何旧键补位，没有要写回的东西）。 */
   const manual: Record<string, string | null> =
-    (mode ? mapping?.manualByMode?.[mode] : undefined) ?? {};
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    (mode != null && mode !== "" ? mapping?.manualByMode?.[mode] : undefined) ?? {};
   for (const entry of entries) {
     const hit = manualTargetForEntryRaw(manual, entry);
     if (!hit.found) {
@@ -320,7 +321,8 @@ export function manualTargetFor(
   entryId: string,
   mode?: string | null,
 ): string | null | undefined {
-  if (!mode) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (mode == null || mode === "") {
     return undefined;
   }
   const byEntry = mapping?.manualByMode?.[mode];
@@ -351,12 +353,12 @@ const LEGACY_SIZE_ENTRY_ID = "size";
 export function parseParamMapping(paramMap: unknown): ParamMapping {
   const manualByMode: Record<string, Record<string, string | null>> = {};
   const out: ParamMapping = { manualByMode, labels: {} };
-  if (!paramMap || typeof paramMap !== "object" || Array.isArray(paramMap)) {
+  if (typeof paramMap !== "object" || paramMap === null || Array.isArray(paramMap)) {
     return out;
   }
   /* SAFETY: 类型断言已复核 */
   const sourceRaw = (paramMap as Record<string, unknown>).source;
-  if (!sourceRaw || typeof sourceRaw !== "object" || Array.isArray(sourceRaw)) {
+  if (typeof sourceRaw !== "object" || sourceRaw === null || Array.isArray(sourceRaw)) {
     return out;
   }
   /* SAFETY: 类型断言已复核 */
@@ -365,10 +367,10 @@ export function parseParamMapping(paramMap: unknown): ParamMapping {
       continue;
     }
     const mode = key.slice(MODE_KEY_PREFIX.length);
-    if (!mode) {
+    if (mode === "") {
       continue;
     }
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
       continue;
     }
     const byEntry: Record<string, string | null> = {};
@@ -437,7 +439,8 @@ export function hasManualWiring(
   mapping: ParamMapping | null | undefined,
   mode?: string | null,
 ): boolean {
-  if (!mode) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (mode == null || mode === "") {
     return false;
   }
   return Object.keys(mapping?.manualByMode?.[mode] ?? {}).length > 0;
@@ -450,7 +453,8 @@ export function clearModeWiring(
   mode?: string | null,
 ): ParamMapping {
   const manualByMode = { ...mapping?.manualByMode };
-  if (mode) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (mode != null && mode !== "") {
     delete manualByMode[mode];
   }
   return { manualByMode, labels: { ...mapping?.labels } };
@@ -481,7 +485,8 @@ export function handleIdForIoKey(
   io: WorkflowIOMap | null | undefined,
   ioKey: string | null | undefined,
 ): string | null {
-  if (!ioKey) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (ioKey == null || ioKey === "") {
     return null;
   }
   const name = io?.[ioKey]?.name;
@@ -499,7 +504,8 @@ export function ioKeyForHandle(
   nodeId: string,
   handleId: string | null | undefined,
 ): string | null {
-  if (!nodeId || !handleId) {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (!nodeId || handleId == null || handleId === "") {
     return null;
   }
   for (const [ioKey, entry] of Object.entries(io ?? {})) {
@@ -548,7 +554,7 @@ export type MappedInput = {
  *  没生效」），拼出来的 id 才是确定性事实。 */
 export function runtimeNodeId(entry: { hostNodeId?: string; nodeId: string }): string {
   /* 已经是拼接形式（旧数据或嵌套场景已带冒号）→ 不重复拼。 */
-  if (entry.nodeId.includes(":") || !entry.hostNodeId) {
+  if (entry.nodeId.includes(":") || entry.hostNodeId === undefined || entry.hostNodeId === "") {
     return entry.nodeId;
   }
   return `${entry.hostNodeId}:${entry.nodeId}`;
@@ -682,7 +688,8 @@ export function applyParamMapping(args: {
      *  **落点那一行**的值才属于这个口子 —— 否则用户在参数面板改了「步数」，会被
      *  当成「尺寸 · 宽」写进宽度那一行。 */
     const target = resolved[entry.id];
-    const byPinKeys = target ? values[target] : undefined;
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    const byPinKeys = target == null ? undefined : values[target];
     const supplied = byContract ?? byPinKeys;
     if (supplied === undefined) {
       continue;

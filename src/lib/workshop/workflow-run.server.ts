@@ -46,7 +46,8 @@ export async function createWorkflowRunTask(
   const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;
   const io =
     /* SAFETY: 类型断言已复核 */
-    tpl.workflowIO && typeof tpl.workflowIO === "object" && !Array.isArray(tpl.workflowIO)
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    tpl.workflowIO != null && typeof tpl.workflowIO === "object" && !Array.isArray(tpl.workflowIO)
       ? (tpl.workflowIO as unknown as WorkflowIOMap)
       : {};
   /* 该模式生效的契约口清单：作者改过的模式按注册表（含自定义口），没改过的

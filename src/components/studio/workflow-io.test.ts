@@ -28,7 +28,7 @@ function pin(name: string, label: string, type?: string): WorkflowIOEntry {
     nodeId: "7",
     name,
     label,
-    ...(type ? { type } : {}),
+    ...(type !== undefined && type !== "" ? { type } : {}),
   };
 }
 
@@ -171,7 +171,7 @@ describe("splitWorkflowIO — kind 决定分组，客户端无 legacy 特判", (
     kind,
     nodeId: "7",
     name,
-    ...(type ? { type } : {}),
+    ...(type !== undefined && type !== "" ? { type } : {}),
   });
 
   it("kind=param 一律归 wireInputs（连线端口行）", () => {

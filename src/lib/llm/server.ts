@@ -89,7 +89,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
         ...remoteEntries,
         ...split.remoteEntries,
       ];
-      if (row.apiKey) {
+      if (typeof row.apiKey === "string" && row.apiKey !== "") {
         cfg.apiKey = row.apiKey;
       }
       // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
@@ -99,6 +99,7 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
       // temperatureByTask 是 json 列，读出来是 unknown —— 形状由 resolveTaskTemperature 消费，
       /* SAFETY: 类型断言已复核 */
       const raw = row as Record<string, unknown>;
+      // oxlint-disable-next-line strict-boolean-expressions -- temperatureByTask 是 DB json 列读出的 unknown，形状不保证，按任意真值判「有没有配」
       if (raw.temperatureByTask) {
         /* SAFETY: 类型断言已复核 */
         cfg.temperatureByTask = raw.temperatureByTask as Record<TaskType, number>;
@@ -116,20 +117,20 @@ export async function getLLMConfig(override?: LLMRequestOptions): Promise<LLMCon
     if (override.provider) {
       cfg.provider = override.provider;
     }
-    if (override.baseUrl) {
+    if (typeof override.baseUrl === "string" && override.baseUrl !== "") {
       cfg.baseUrl = override.baseUrl;
     }
-    if (override.model) {
+    if (typeof override.model === "string" && override.model !== "") {
       cfg.model = override.model;
       // 工坊 / 设置页按名字切换模型：命中带独立连接参数的候选条目时改走该条目
       const entry = cfg.extraModels?.find(
-        (e) => e.name === override.model && !!(e.baseUrl ?? e.apiKey),
+        (e) => e.name === override.model && Boolean(e.baseUrl ?? e.apiKey),
       );
       if (entry) {
-        if (entry.baseUrl) {
+        if (typeof entry.baseUrl === "string" && entry.baseUrl !== "") {
           cfg.baseUrl = entry.baseUrl;
         }
-        if (entry.apiKey) {
+        if (typeof entry.apiKey === "string" && entry.apiKey !== "") {
           cfg.apiKey = entry.apiKey;
         }
       }
@@ -211,7 +212,7 @@ function maskRemoteEntryForClient(e: RemoteModelEntry): RemoteModelEntry {
 
 function headersFor(cfg: LLMConfig): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.provider === "remote" && cfg.apiKey) {
+  if (cfg.provider === "remote" && typeof cfg.apiKey === "string" && cfg.apiKey !== "") {
     h.Authorization = `Bearer ${cfg.apiKey}`;
   }
   return h;
@@ -297,7 +298,7 @@ function messagesToWire(
     if (m.tool_calls) {
       base.tool_calls = m.tool_calls;
     }
-    if (m.tool_call_id) {
+    if (typeof m.tool_call_id === "string" && m.tool_call_id !== "") {
       base.tool_call_id = m.tool_call_id;
     }
     return base;
@@ -315,7 +316,9 @@ export async function getVisionLLMConfig(override?: LLMRequestOptions): Promise<
   if (visionModel === cfg.model) {
     return cfg;
   }
-  const entry = cfg.extraModels?.find((e) => e.name === visionModel && !!(e.baseUrl ?? e.apiKey));
+  const entry = cfg.extraModels?.find(
+    (e) => e.name === visionModel && Boolean(e.baseUrl ?? e.apiKey),
+  );
   return {
     ...cfg,
     model: visionModel,
@@ -530,7 +533,13 @@ export async function completeLLMTools(
   // filter 回调的类型谓词推断不一致，显式守卫在两种版本下都能收窄。
   const toolCalls = rawCalls.flatMap((call) => {
     const fn = call?.function;
-    if (!call?.id || !fn?.name || typeof fn.arguments !== "string") {
+    if (
+      typeof call?.id !== "string" ||
+      call.id === "" ||
+      typeof fn?.name !== "string" ||
+      fn.name === "" ||
+      typeof fn.arguments !== "string"
+    ) {
       return [];
     }
     return [

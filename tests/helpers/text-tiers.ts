@@ -44,12 +44,20 @@ const LINE_HEIGHT_RE = /^\s*--text-([a-z0-9]+)--line-height\s*:\s*([^;]+);\s*$/g
 /** 解一条行高声明成比值（乘字号得像素）。支持 `calc(a / b)` 与裸数值两种形状。 */
 function parseLineRatio(raw: string, where: string): number {
   const calc = /^calc\(\s*([0-9.]+)\s*\/\s*([0-9.]+)\s*\)$/.exec(raw.trim());
-  if (calc?.[1] && calc[2]) {
-    return Number.parseFloat(calc[1]) / Number.parseFloat(calc[2]);
+  const numerator = calc?.[1];
+  const denominator = calc?.[2];
+  if (
+    numerator !== undefined &&
+    numerator !== "" &&
+    denominator !== undefined &&
+    denominator !== ""
+  ) {
+    return Number.parseFloat(numerator) / Number.parseFloat(denominator);
   }
   const bare = /^([0-9.]+)$/.exec(raw.trim());
-  if (bare?.[1]) {
-    return Number.parseFloat(bare[1]);
+  const bareNumber = bare?.[1];
+  if (bareNumber !== undefined && bareNumber !== "") {
+    return Number.parseFloat(bareNumber);
   }
   throw new Error(
     `认不出的 --text-${where}--line-height 形状：${raw}（新增写法要同步这里的解法，不许静默跳过）`,
@@ -96,7 +104,14 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   ];
   for (const { text, fromProject } of sources) {
     for (const m of text.matchAll(TEXT_DECL_RE)) {
-      if (!m[1] || !m[2] || !m[3]) {
+      if (
+        m[1] === undefined ||
+        m[1] === "" ||
+        m[2] === undefined ||
+        m[2] === "" ||
+        m[3] === undefined ||
+        m[3] === ""
+      ) {
         continue;
       }
       if (fromProject && !fromProjectIsUsable(m[1], tshirt, defaults)) {
@@ -112,7 +127,7 @@ export function parseTextTiers(globalsCss: string, tshirt: RegExp): TextTiers {
   const lineRatios = new Map<string, number>();
   for (const { text } of sources) {
     for (const m of text.matchAll(LINE_HEIGHT_RE)) {
-      if (!m[1] || !m[2]) {
+      if (m[1] === undefined || m[1] === "" || m[2] === undefined || m[2] === "") {
         continue;
       }
       lineRatios.set(m[1], parseLineRatio(m[2], m[1]));

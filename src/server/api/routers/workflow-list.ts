@@ -56,9 +56,9 @@ export const workflowListProcedures = {
       const userId = ctx.user.id;
       const whereConditions: Array<SQL> = [];
 
-      if (input?.type) {
+      if (input?.type !== undefined && input.type !== "") {
         whereConditions.push(eq(workflowTemplate.taskType, normalizeTaskType(input.type)));
-      } else if (input?.category) {
+      } else if (input?.category !== undefined && input.category !== "") {
         const category =
           input.category === "image" || input.category === "video" || input.category === "audio"
             ? input.category
@@ -74,7 +74,7 @@ export const workflowListProcedures = {
         }
       }
 
-      if (input?.model) {
+      if (input?.model !== undefined && input.model !== "") {
         const names = input.model
           .split(",")
           .map((part) => part.trim())
@@ -179,7 +179,7 @@ export const workflowListProcedures = {
           }
         }
         for (const w of list) {
-          if (!w.sourcePath || !w.sourceChecksum) {
+          if (w.sourcePath === null || w.sourceChecksum === null) {
             continue;
           }
           if (diskMtimeByPath.has(pathKey(w.sourcePath))) {
@@ -226,7 +226,7 @@ export const workflowListProcedures = {
         let diskMtimeSec: number | null = null;
         let diskDirty = false;
         let diskMissing = false;
-        if (list.sourcePath) {
+        if (list.sourcePath !== null) {
           const diskMs = diskMtimeByPath.get(pathKey(list.sourcePath));
           // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
           if (diskMs == null) {
@@ -250,7 +250,7 @@ export const workflowListProcedures = {
            * 路由只负责把它收窄，不在出口再抄一份声明（ISSUE #1460）。 */
           paramMap: parseWorkflowParamMap(list.paramMap),
           sourcePath: list.sourcePath,
-          source: list.sourcePath ? "local" : "online",
+          source: list.sourcePath === null ? "online" : "local",
           typeLabel: def?.label ?? list.taskType,
           typeCategory: def?.category ?? "image",
           typeDescription: def?.description ?? "",
@@ -273,7 +273,7 @@ export const workflowListProcedures = {
       if (localRoots.length > 0) {
         const existingByPath = new Set<string>();
         for (const w of enriched) {
-          if (!w.sourcePath) {
+          if (w.sourcePath === null) {
             continue;
           }
           existingByPath.add(pathKey(w.sourcePath));
@@ -323,7 +323,7 @@ export const workflowListProcedures = {
       const enrichedWithRoot = enriched.map((enriched) => ({
         ...enriched,
         sourceRoot:
-          enriched.sourcePath && localRootsList.length
+          enriched.sourcePath !== null && localRootsList.length > 0
             ? findRootFor(enriched.sourcePath, localRootsList)
             : undefined,
       }));

@@ -112,7 +112,7 @@ export function withoutPortraitCandidate(character: Character, url: string): Cha
   const portraits = portraitCandidates(character).filter((item) => item.url !== url);
   const next = { ...character, portraits };
   const portraitUrl = character.portraitUrl === url ? portraits[0]?.url : character.portraitUrl;
-  if (portraitUrl) {
+  if (portraitUrl !== undefined && portraitUrl !== "") {
     next.portraitUrl = portraitUrl;
   } else {
     delete next.portraitUrl;

@@ -340,7 +340,7 @@ function DimensionSizeControl({
  窄版（画布节点 / 库内）卡按内容收窄：`w-fit` + 上限，长度跟内容走。 */}
       <div
         className={
-          narrow
+          narrow === true
             ? "border-accent/30 bg-accent/4 w-fit max-w-full rounded-lg border p-2"
             : "border-accent/30 bg-accent/4 rounded-lg border p-2.5"
         }
@@ -349,7 +349,7 @@ function DimensionSizeControl({
           <span className="text-accent text-3xs shrink-0 font-semibold tracking-wider uppercase">
             比例 + 像素
           </span>
-          <div className={narrow ? "w-28 min-w-0" : "min-w-0 flex-1"}>
+          <div className={narrow === true ? "w-28 min-w-0" : "min-w-0 flex-1"}>
             <MultiSegmentPopover
               align="right"
               ariaLabel="选择比例与像素"
@@ -384,7 +384,7 @@ function DimensionSizeControl({
  NumberField 会实时更新。步进器 +/- 遵循
  用户钉住的对齐倍数，好让手动微调 W/H 落在
  与百万像素清晰度同一张网格上。 */}
-      {!narrow && (
+      {narrow !== true && (
         <div className="grid grid-cols-2 gap-2">
           <Field label="宽度">
             <NumberField

@@ -100,7 +100,7 @@ export async function pollRemoteVideoTask(
   headers: Record<string, string>,
 ): Promise<string | null> {
   const { rest, agnes } = buildVideoPollUrls(baseUrl, path, model, taskId);
-  const pollUrls = [rest, ...(agnes ? [agnes] : [])];
+  const pollUrls = [rest, ...(agnes === null ? [] : [agnes])];
   const deadline = Date.now() + VIDEO_POLL_TOTAL_MS;
   while (Date.now() < deadline) {
     await sleep(VIDEO_POLL_INTERVAL_MS);
@@ -113,7 +113,7 @@ export async function pollRemoteVideoTask(
         const pollPayload: unknown = await pollRes.json().catch(() => null);
         if (pollRes.ok) {
           const url = extractMediaUrl(pollPayload);
-          if (url) {
+          if (url !== null) {
             return url;
           }
         }

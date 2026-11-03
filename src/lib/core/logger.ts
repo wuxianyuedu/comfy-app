@@ -120,7 +120,8 @@ function resolveMirrorTarget(mirror?: PinoLoggerOptions["mirror"]) {
     return mirror;
   }
   // `process.env.VITEST` 由 vitest 自己设置（不用 NODE_ENV：本仓库另有它用）。
-  if (process.env.VITEST) {
+  // 环境变量可能被置成空串，空串与未设置同义。
+  if (process.env.VITEST !== undefined && process.env.VITEST !== "") {
     return { error: () => undefined };
   }
   return appRuntimeLog;
@@ -242,7 +243,8 @@ function renderServerLogEntry(
   const secondString = typeof second === "string" ? second : undefined;
   const payload =
     /* SAFETY: 类型断言已复核 */
-    first && typeof first === "object" ? (first as Record<string, unknown>) : undefined;
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    first != null && typeof first === "object" ? (first as Record<string, unknown>) : undefined;
 
   // 空串按「没取到」处理：`??` 只挡 null/undefined，挡不住 ""（会写出空行）
   const firstNonEmpty = (...candidates: Array<string | undefined>) =>

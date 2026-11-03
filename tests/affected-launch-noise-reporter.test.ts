@@ -107,7 +107,7 @@ describe("resolveNoiseFilter —— 只认 1 / true", () => {
 describe("spawnVitest end-to-end —— 真起 node 验证过滤写入", () => {
   let dir: string | undefined;
   afterEach(() => {
-    if (dir) {
+    if (dir !== undefined && dir !== "") {
       rmSync(dir, { recursive: true, force: true });
     }
     dir = undefined;

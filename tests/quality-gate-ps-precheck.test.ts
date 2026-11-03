@@ -64,7 +64,7 @@ const tmpDirs: Array<string> = [];
 function driftOneOverride(real: string, key: string): string {
   const escaped = key.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
   const hit = new RegExp(`^  ${escaped}: (\\S+)$`, "m").exec(real);
-  if (!hit?.[1]) {
+  if (hit?.[1] === undefined || hit?.[1] === "") {
     throw new Error(
       `pnpm-lock.yaml 的 overrides 里找不到 "${key}" —— 变异点必须由内容现取，` +
         "写死版本号会在依赖升级后静默 no-op（把这条用例改成用别的键，或从现存的键里挑）",

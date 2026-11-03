@@ -113,7 +113,7 @@ export function resolveActiveMode(
   workflowId: string | null,
   defaultMode: string | null,
 ): string | null {
-  if (!workflowId || !override) {
+  if (workflowId === null || workflowId === "" || !override) {
     return defaultMode;
   }
   return override.workflowId === workflowId ? override.mode : defaultMode;
@@ -240,7 +240,7 @@ export function useWorkflowLibraryDetail(
   const paramMap = useMemo<Record<string, unknown>>(() => {
     const raw = template?.paramMap;
     /* SAFETY: 类型断言已复核 */
-    return raw && typeof raw === "object" && !Array.isArray(raw)
+    return typeof raw === "object" && raw !== null && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
       : {};
   }, [template]);

@@ -70,7 +70,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
        *  `max-content` 轨道按**所有行里最长的参数名**统一裁决，
        *  值框因此共享同一起点 x。 */}
       <div className="flex min-w-0 items-center gap-1.5">
-        {io?.ioEditMode && !isConn && (
+        {io?.ioEditMode === true && !isConn && (
           <IoCheckbox
             io={io}
             ioRef={{

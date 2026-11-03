@@ -34,7 +34,9 @@ export function artifactUrl(segments: ReadonlyArray<string | number>): string {
 /** 布局的唯一形状：project 任务在 `projects/<projectId>/<taskId>` 下，其余直接在 `<taskId>` 下。
  *  磁盘与 URL 两条出口都由它派生。 */
 export function taskOutputSegments(taskId: string, projectId?: string | null): Array<string> {
-  return projectId ? [PROJECTS_SUBDIR, projectId, taskId] : [taskId];
+  return projectId !== undefined && projectId !== null && projectId !== ""
+    ? [PROJECTS_SUBDIR, projectId, taskId]
+    : [taskId];
 }
 
 /** 浏览器地址前缀：写进 `TaskImage.localPath` / `resultImages` 的那一段。 */

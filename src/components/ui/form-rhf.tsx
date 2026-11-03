@@ -66,7 +66,8 @@ function useFormField() {
 
   const fieldState = getFieldState(fieldContext.name, formState);
 
-  if (!fieldContext) {
+  const hasFieldContext = Boolean(fieldContext);
+  if (!hasFieldContext) {
     throw new Error("useFormField should be used within <FormField>");
   }
 
@@ -134,7 +135,8 @@ function FormMessage({ className, ...props }: React.ComponentProps<"p">) {
   const { error, formMessageId } = useFormField();
   const body = error ? String(error?.message ?? "") : props.children;
 
-  if (!body) {
+  const hasBody = Boolean(body);
+  if (!hasBody) {
     return null;
   }
 

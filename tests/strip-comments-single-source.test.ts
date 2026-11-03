@@ -123,7 +123,7 @@ function sourceFiles(): Array<string> {
   };
   for (const layer of LAYERS) {
     const abs = path.join(ROOT, layer);
-    if (statSync(abs, { throwIfNoEntry: false })?.isDirectory()) {
+    if (statSync(abs, { throwIfNoEntry: false })?.isDirectory() === true) {
       walk(abs);
     }
   }

@@ -103,7 +103,7 @@ function readEventTable(source: string): Array<string> {
   const names: Array<string> = [];
   for (const match of block.matchAll(/^\s{2}(?:"([^"]+)"|([A-Za-z_$][\w$]*))\s*:/gm)) {
     const name = match[1] ?? match[2];
-    if (name) {
+    if (name !== undefined && name !== "") {
       names.push(name);
     }
   }
@@ -123,7 +123,7 @@ function readNameConstants(sources: Array<SourceFile>): Map<string, string> {
     )) {
       const identifier = match[1];
       const name = match[2];
-      if (identifier && name) {
+      if (identifier !== undefined && identifier !== "" && name !== undefined && name !== "") {
         map.set(identifier, name);
       }
     }
@@ -169,7 +169,7 @@ function sidesOf(
       new RegExp(`\\b${fn}\\s*\\(\\s*(?:"([^"]+)"|([A-Za-z_$][\\w$]*))`, "g"),
     )) {
       const name = resolveEventName(match[1], match[2], names);
-      if (name) {
+      if (name !== null && name !== "") {
         bucket.push(name);
       }
     }

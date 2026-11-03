@@ -426,7 +426,7 @@ export function CharacterDesigner({
                     value={character.loraName ?? ""}
                   />
                 </div>
-                {character.loraName && (
+                {character.loraName !== undefined && character.loraName !== "" && (
                   <div>
                     <span className="text-muted-foreground mb-1 block text-xs">强度</span>
                     <Input

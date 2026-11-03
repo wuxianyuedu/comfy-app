@@ -43,7 +43,7 @@ export function collectDataSlots(): { files: number; slots: Set<string> } {
   for (const file of files) {
     const text = readFileSync(file, "utf8");
     for (const m of text.matchAll(/data-slot="([^"]+)"/g)) {
-      if (m[1]) {
+      if (m[1] !== undefined && m[1] !== "") {
         slots.add(m[1]);
       }
     }

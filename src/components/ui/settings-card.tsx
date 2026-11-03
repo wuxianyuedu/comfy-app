@@ -57,6 +57,7 @@ export function SettingsCard({
   description?: React.ReactNode;
   title: string;
 }) {
+  const hasDescription = Boolean(description);
   return (
     <ShadcnCard
       className={cn(
@@ -68,7 +69,7 @@ export function SettingsCard({
           差距（16px vs 14px 的差距在同一屏里读不出来）。 */}
       <CardHeader className="border-border-subtle border-b py-3">
         <CardTitle className="u-title">{title}</CardTitle>
-        {description ? <p className="text-ink-muted text-xs">{description}</p> : null}
+        {hasDescription ? <p className="text-ink-muted text-xs">{description}</p> : null}
       </CardHeader>
       <CardContent className="py-4">{children}</CardContent>
     </ShadcnCard>

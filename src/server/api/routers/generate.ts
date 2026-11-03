@@ -47,7 +47,7 @@ export const generateRouter = createTRPCRouter({
       workflowName,
       projectId: data.projectId ?? null,
       shotId: data.shotId ?? null,
-      referenceImages: data.referenceImages?.length ? data.referenceImages : undefined,
+      referenceImages: (data.referenceImages?.length ?? 0) > 0 ? data.referenceImages : undefined,
       claimedBy: executorClaim,
       execPayload: tpl.rawJson,
       parentId: data.parentId ?? null,

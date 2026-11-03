@@ -59,7 +59,7 @@ export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowD
       const overrides: Record<string, [number, number]> = {};
       const dp = detail.positions ?? {};
       for (const [k, position] of Object.entries(dp)) {
-        if (position && rawIds.has(k)) {
+        if (Boolean(position) && rawIds.has(k)) {
           overrides[k] = position;
         }
       }

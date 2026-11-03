@@ -26,7 +26,7 @@ const UNAUTHORIZED = () => unauthorizedResponse();
 
 function projectIdFrom(q: string | null): string | null {
   const trimmed = q?.trim();
-  if (trimmed) {
+  if (trimmed !== undefined && trimmed !== "") {
     return trimmed;
   }
   return null;
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
   try {
     // 不带 project → 返回该用户全部服务端项目摘要（本地索引被清空时用来重建）。
-    if (!project) {
+    if (project === null || project === "") {
       const drafts = await listDraftsByUser(user.id);
       return NextResponse.json({ drafts });
     }
@@ -67,7 +67,7 @@ export async function PUT(req: NextRequest) {
     return body;
   }
   const project = typeof body.project === "string" && body.project ? body.project : null;
-  if (!project) {
+  if (project === null || project === "") {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
   const draft = parseDraftDto(body.draft);
@@ -87,7 +87,7 @@ export async function DELETE(req: NextRequest) {
     return UNAUTHORIZED();
   }
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
-  if (!project) {
+  if (project === null || project === "") {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
   try {

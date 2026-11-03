@@ -157,7 +157,7 @@ export function useWorkflowViewportFit(params: {
      * 掉还没触发的那一帧 rAF。排程即记账会把这次聚焦吃掉（视口留在上一份图，
      * 表现就是「打开子工作流没聚焦到」，ISSUE #394）。 */
     const scheduler = fitSchedulerRef.current;
-    if (!scheduler?.markPending(fitKey)) {
+    if (scheduler?.markPending(fitKey) !== true) {
       return;
     }
     /* 节点是**分批**测量的：React Flow 先挂载再量 DOM，首帧里只有视口内

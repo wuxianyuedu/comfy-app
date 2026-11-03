@@ -57,12 +57,13 @@ export const taskRouter = createTRPCRouter({
         .default({ take: 60 }),
     )
     .query(async ({ ctx, input }) => {
-      const statusList = input.status
-        ? input.status
-            .split(",")
-            .map((status) => upperToken(status))
-            .filter(Boolean)
-        : undefined;
+      const statusList =
+        input.status !== undefined && input.status !== ""
+          ? input.status
+              .split(",")
+              .map((status) => upperToken(status))
+              .filter(Boolean)
+          : undefined;
 
       const PAGE = input.take;
       /* media 过滤的判据（`inferMediaType`）依赖首图扩展名等应用层解析，
@@ -185,6 +186,7 @@ export const taskRouter = createTRPCRouter({
         message: "任务还在排队或执行中，不需要重试（可在队列监视里观察）",
       });
     }
+    // oxlint-disable-next-line strict-boolean-expressions -- execPayload 是库里读出的外部数据，任何缺值形态（null/undefined/空串）都按「无执行载荷」防御性收口
     if (!original.execPayload) {
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
@@ -226,7 +228,7 @@ export const taskRouter = createTRPCRouter({
        * 旧写法在本处内联拼路径 + 内联白名单，与 `delete` 那份已经分叉，见
        * `~/lib/media/output-paths.ts` 的模块注释。 */
       const dir = taskOutputDir(input.id, task.projectId);
-      if (!dir) {
+      if (dir === null) {
         logger.warn(
           `[task.openFolder] 产物目录越界，已拒绝：taskId=${input.id} projectId=${task.projectId}`,
         );
@@ -294,16 +296,16 @@ export const taskRouter = createTRPCRouter({
        * 越界（id / projectId 形状会把结果甩出产物根）时只删库行并把原因落日志，
        * 不允许把一个根外路径交给 `fs.rm(..., { recursive: true })`。 */
       const dir = taskOutputDir(input.id, task.projectId);
-      if (dir) {
+      if (dir === null) {
+        logger.warn(
+          `[task.delete] 产物目录越界，只删库行不动磁盘：taskId=${input.id} projectId=${task.projectId}`,
+        );
+      } else {
         fsPromises.rm(dir, { recursive: true, force: true }).catch((error: unknown) => {
           logger.warn(
             `[task.delete] 产物目录没删掉（库行照删）：${dir} — ${errorMessage(error, String(error))}`,
           );
         });
-      } else {
-        logger.warn(
-          `[task.delete] 产物目录越界，只删库行不动磁盘：taskId=${input.id} projectId=${task.projectId}`,
-        );
       }
       await taskRepository.delete(input.id);
       return { ok: true };

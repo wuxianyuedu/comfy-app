@@ -53,7 +53,7 @@ export default function WorkspacePage() {
         if (!target) {
           return;
         }
-        if (target === "settings" && section) {
+        if (target === "settings" && section !== undefined && section !== "") {
           setPendingSettingsSection(section);
         }
         navigateTo(target);
@@ -242,7 +242,9 @@ export default function WorkspacePage() {
   /** 项目 id → 项目名（页签标题用「工坊·项目名」区分同一视图的多页）。 */
   const projectNameOf = useCallback(
     (projectId: string | null) =>
-      projectId ? (recentProjects.find((project) => project.id === projectId)?.name ?? null) : null,
+      projectId !== null && projectId !== ""
+        ? (recentProjects.find((project) => project.id === projectId)?.name ?? null)
+        : null,
     [recentProjects],
   );
 
@@ -260,7 +262,7 @@ export default function WorkspacePage() {
   const openableViews = useMemo(
     () => [
       ...globalNavItems().map((item) => ({ view: item.id, label: item.label })),
-      ...(activeProjectId
+      ...(activeProjectId !== null && activeProjectId !== ""
         ? projectTabs().map((item) => ({ view: item.id, label: item.label }))
         : []),
     ],

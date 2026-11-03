@@ -92,7 +92,7 @@ function loadWorkshopDraftOnce(): WorkshopDraft | null {
   /* invalidateDraftCache() 卸载时把缓存置 null 标记「需从 localStorage 重读」，
    * 这里须用 ??=（null / undefined 都重读），否则重挂载读回旧缓存 → 切页签丢内容。 */
   const pid = getActiveId();
-  if (!pid) {
+  if (pid === null || pid === "") {
     return null;
   }
   workshopDraftCache ??= readDraft(pid);
@@ -508,7 +508,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    *  说清（任务可能恰好已结束）。 */
   const cancelShotTask = React.useCallback(async (shot: Shot, target: "image" | "video") => {
     const taskId = target === "video" ? shot.clipTaskId : shot.taskId;
-    if (!taskId) {
+    if (taskId === undefined || taskId === "") {
       setNotice("该任务无法取消（非本机任务，或已经结束）");
       return;
     }
@@ -530,8 +530,12 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     watchShotTask: generation.watchShotTask,
   });
 
-  const imageDoneCount = shots.filter((item) => !!item.imageUrl).length;
-  const clipDoneCount = shots.filter((item) => !!item.clipUrl).length;
+  const imageDoneCount = shots.filter(
+    (item) => item.imageUrl !== undefined && item.imageUrl !== "",
+  ).length;
+  const clipDoneCount = shots.filter(
+    (item) => item.clipUrl !== undefined && item.clipUrl !== "",
+  ).length;
   const scriptReady = !!scriptMarkdown.trim() || scenes.length > 0;
 
   /* 草稿里「形状不认识但仍要留着」的那些元素（台账 F13″）。

@@ -297,10 +297,11 @@ describe("spawnManaged —— bound（挂在应用进程树里）", () => {
       },
     ];
     for (const path of paths) {
-      if (path.shellExe) {
-        process.env.COMFYAPP_SHELL_EXE = path.shellExe;
-      } else {
+      /* 夹具里的 shellExe 要么缺省要么是真实路径，只判缺省 */
+      if (path.shellExe === undefined) {
         delete process.env.COMFYAPP_SHELL_EXE;
+      } else {
+        process.env.COMFYAPP_SHELL_EXE = path.shellExe;
       }
       spawnMock.mockImplementationOnce(() => hostileThrow(`${path.name} 抛的字符串`));
       expect(path.run(), path.name).toBe(`${path.name} 抛的字符串`);

@@ -154,7 +154,7 @@ function citedBaselineNames(line: string): Array<string> {
   const out = new Set<string>();
   for (const m of line.matchAll(/(\.?[A-Za-z0-9_-]*baseline[A-Za-z0-9_-]*\.json)/g)) {
     const name = m[1];
-    if (name) {
+    if (name !== undefined && name !== "") {
       out.add(name.startsWith(".") ? name : `.${name}`);
     }
   }

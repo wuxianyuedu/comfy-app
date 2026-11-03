@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const res = await uploadImage(buf, filename, "input");
-    if (!res.name) {
+    if (res.name === undefined || res.name === "") {
       return NextResponse.json({ error: "上传失败" }, { status: 500 });
     }
     return NextResponse.json({ name: res.name });

@@ -72,7 +72,9 @@ function serializeOne(a: unknown): string {
     return "null";
   }
   if (a instanceof Error) {
-    return a.stack ? `${a.name}: ${a.message}\n${a.stack}` : `${a.name}: ${a.message}`;
+    return a.stack !== undefined && a.stack !== ""
+      ? `${a.name}: ${a.message}\n${a.stack}`
+      : `${a.name}: ${a.message}`;
   }
   // 保留可能来自序列化错误对象的类栈字符串。
   if (
@@ -368,7 +370,7 @@ const GET_REQUEST_TARGET = /^\s*GET\s+(\S+)/;
 export function isPanelSelfPollingLine(line: string): boolean {
   const match = GET_REQUEST_TARGET.exec(line);
   const target = match?.[1];
-  if (!target) {
+  if (target === undefined || target === "") {
     return false;
   }
   return PANEL_SELF_POLL_ENDPOINTS.some((endpoint) => {
@@ -478,7 +480,7 @@ export function parseFileLogs(
         Number(ss),
         Number(ms),
       );
-      const msgText = withRest((ns ? `[${ns}] ` : "") + (msg ?? ""));
+      const msgText = withRest((ns !== undefined && ns !== "" ? `[${ns}] ` : "") + (msg ?? ""));
       push({
         id: nextId(d.getTime()),
         time: d.getTime(),
@@ -674,7 +676,8 @@ export function computeOriginCounts(logs: Array<LogEntry>, search = ""): LogOrig
      * 任何情况下都成立，不会再出现「只在全部页签才显示、哪个分类都进不去」
      * 的行（ISSUE #262 六审）。 */
     const bucket = table[bucketOf(entry)];
-    if (!bucket) {
+    const bucketPresent = Boolean(bucket);
+    if (!bucketPresent) {
       continue;
     }
     bucket.all += 1;

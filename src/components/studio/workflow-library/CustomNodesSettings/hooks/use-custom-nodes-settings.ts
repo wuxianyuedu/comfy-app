@@ -122,18 +122,21 @@ function parseSettingsBlob(
   paths: Array<string>;
   summary: SettingsResp["summary"];
 } {
-  if (!data.settings) {
+  const settingsPresent = Boolean(data.settings);
+  if (!settingsPresent) {
     const err = data.error;
     const detail = typeof err === "string" ? err : (err?.message ?? `HTTP ${status}`);
     throw new Error(detail || `读取配置失败（HTTP ${status}）`);
   }
-  const paths = data.settings.paths || [];
+  /* `??` 而非 `||`：对象 / 数组在声明域内恒真，回退只在运行期 null/undefined
+   * （接口缺字段）时触发 —— 与原 `||` 在该域内逐值等价。 */
+  const paths = data.settings.paths ?? [];
   return {
     paths,
     summary: data.summary,
     lastReport: data.lastReport,
-    discoveredByParent: data.discoveredByParent || {},
-    byPath: data.byPath || {},
+    discoveredByParent: data.discoveredByParent ?? {},
+    byPath: data.byPath ?? {},
   };
 }
 async function consumeSettingsStream(
@@ -205,7 +208,7 @@ async function consumeSettingsStream(
           if (ev.phase) {
             next.phase = ev.phase;
           }
-          if (ev.msg) {
+          if (ev.msg !== undefined && ev.msg !== "") {
             next.msg = ev.msg;
           }
           if (ev.discovered !== undefined) {
@@ -459,7 +462,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
   const fetchManifest = useCallback(async () => {
     const manifest = await getCustomNodesManifest();
     if (manifest) {
-      setManifestByNode(manifest.nodes || {});
+      setManifestByNode(manifest.nodes ?? {});
     }
   }, []);
   useEffect(() => {
@@ -512,7 +515,7 @@ export function useCustomNodesSettings(): CustomNodesSettingsController {
               ),
             );
           } else if (obj.type === "done") {
-            void onDone(obj.report ?? null, !!obj.ok);
+            void onDone(obj.report ?? null, obj.ok === true);
           }
         } catch {
           // 忽略非 JSON 行

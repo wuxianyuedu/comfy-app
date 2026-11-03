@@ -354,7 +354,7 @@ export function createConsoleRunner(): ConsoleRunner {
  */
 async function terminate(child: ReturnType<typeof spawn>): Promise<void> {
   const pid = child.pid;
-  if (!pid) {
+  if (pid === undefined) {
     return;
   }
   await killProcessTree({

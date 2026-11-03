@@ -38,7 +38,7 @@ export function SectionLabel({ children, hint, className }: SectionLabelProps) {
       data-slot="section-label"
     >
       <h4 className="text-ink text-sm font-semibold">{children}</h4>
-      {hint && <span className="text-muted-foreground text-xs">{hint}</span>}
+      {Boolean(hint) && <span className="text-muted-foreground text-xs">{hint}</span>}
     </div>
   );
 }

@@ -70,7 +70,7 @@ export function HistoryDetailModal({
   const redrawReport: ActionReport = (kind, detail) =>
     kind === "ok" ? toast.success(detail) : toast.error(detail);
 
-  if (!detailId) {
+  if (detailId === null || detailId === "") {
     return null;
   }
   // 局部 const 让闭包 / IIFE 内的空值窄化在 TS 中稳定成立。
@@ -124,9 +124,9 @@ export function HistoryDetailModal({
               >
                 <Button
                   className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto gap-1.5 rounded-md px-2.5 py-1"
-                  disabled={!current?.id || actions.openFolderBusy}
+                  disabled={current === null || current.id === "" || actions.openFolderBusy}
                   onClick={() => {
-                    if (!current?.id) {
+                    if (current === null || current.id === "") {
                       return;
                     }
                     void actions.openFolder(current.id);
@@ -199,7 +199,7 @@ export function HistoryDetailModal({
                   </div>
                 </div>
               )}
-              {firstImage?.localPath && (
+              {firstImage !== undefined && firstImage.localPath !== "" && (
                 <div className="flex items-center gap-2">
                   <Hint
                     label="下载本次执行实际用到的工作流 JSON（含当时的节点与参数，工作流模板后续改动也不影响复现）"
@@ -209,7 +209,7 @@ export function HistoryDetailModal({
                       className="border-border text-ink-strong hover:border-border-strong hover:text-ink text-2xs h-auto rounded-md px-2.5 py-1"
                       disabled={actions.downloading}
                       onClick={() => {
-                        if (!current?.id) {
+                        if (current === null || current.id === "") {
                           return;
                         }
                         void actions.downloadWorkflow(current.id);
@@ -313,7 +313,7 @@ export function HistoryDetailModal({
  种子这类也一样 —— 单独再摆一份只会与参数表重复，而那份卡片
  还会把种子从参数表里过滤掉（用户实测：「参数乱糟糟的」）。 */}
 
-                {current.error && (
+                {current.error !== undefined && current.error !== null && current.error !== "" && (
                   <div className="bg-destructive/10 text-destructive rounded-lg p-2.5 text-xs">
                     错误：{current.error}
                   </div>

@@ -62,7 +62,7 @@ function scanRepoSources(): Array<string> {
     }
   };
   for (const layer of SCAN_LAYERS) {
-    if (statSync(path.join(ROOT, layer), { throwIfNoEntry: false })?.isDirectory()) {
+    if (statSync(path.join(ROOT, layer), { throwIfNoEntry: false })?.isDirectory() === true) {
       walk(path.join(ROOT, layer));
     }
   }
@@ -106,7 +106,7 @@ describe("派发循环的启动点：每宿主一处，且只一处", () => {
     ]) {
       expect(
         REPO_SOURCES,
-        `面里不见了 ${rel} —— 派生的层或扩展名改了，` + "「全仓」会退化成只判剩下那些文件",
+        `面里不见了 ${rel} —— 派生的层或扩展名改了，「全仓」会退化成只判剩下那些文件`,
       ).toContain(rel);
     }
   });

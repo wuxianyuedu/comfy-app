@@ -151,7 +151,9 @@ export function ManifestSummary({ summary }: { summary: NonNullable<SettingsResp
   return (
     <div className="border-border bg-bg text-muted-foreground mb-4 rounded-lg border px-3 py-2 text-xs">
       当前清单：共 <b className="text-ink">{summary.totalNodes}</b> 个节点类型
-      {summary.generatedAt ? ` · 生成于 ${summary.generatedAt}` : ""}
+      {summary.generatedAt !== null && summary.generatedAt !== ""
+        ? ` · 生成于 ${summary.generatedAt}`
+        : ""}
       {summary.missingPaths?.length ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到` : ""}
     </div>
   );

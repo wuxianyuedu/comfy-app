@@ -260,14 +260,14 @@ function discoveredBaselines(): Array<{ baseline: string; script: string }> {
     )) {
       const name = m[1];
       const baseline = /"(\.[^"]+\.json)"/.exec(m[2] ?? "")?.[1];
-      if (name && baseline) {
+      if (name !== undefined && name !== "" && baseline !== undefined && baseline !== "") {
         declared.set(name, baseline);
       }
     }
     /** 真被当作写入目标的变量名。 */
     const writeTargets = new Set<string>();
     for (const m of src.matchAll(/(?:fs\.)?write(?:File|FileSync)\(\s*([A-Za-z0-9_$]+)/g)) {
-      if (m[1]) {
+      if (m[1] !== undefined && m[1] !== "") {
         writeTargets.add(m[1]);
       }
     }
@@ -281,7 +281,7 @@ function discoveredBaselines(): Array<{ baseline: string; script: string }> {
       /(?:fs\.)?write(?:File|FileSync)\(\s*path\.join\([^;]{0,300}?"(\.[^"]+\.json)"/g,
     )) {
       const baseline = m[1];
-      if (baseline) {
+      if (baseline !== undefined && baseline !== "") {
         push(script, baseline);
       }
     }
@@ -412,10 +412,10 @@ describe("棘轮的 --update 拒涨（台账 E5 的横切判据）", () => {
         .filter(
           (b) =>
             !rowByBaseline(b) &&
-            !COVERED_LOCALLY[b] &&
-            !PENDING[b] &&
-            !RETIRED_RATCHETS[b] &&
-            !NOT_A_RATCHET[b],
+            (COVERED_LOCALLY[b] === undefined || COVERED_LOCALLY[b] === "") &&
+            (PENDING[b] === undefined || PENDING[b] === "") &&
+            (RETIRED_RATCHETS[b] === undefined || RETIRED_RATCHETS[b] === "") &&
+            (NOT_A_RATCHET[b] === undefined || NOT_A_RATCHET[b] === ""),
         );
       expect(
         unclassified,

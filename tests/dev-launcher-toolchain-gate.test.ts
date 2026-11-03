@@ -95,11 +95,11 @@ function makeWindowsPnpmDir(
     fs.writeFileSync(shim, `#!${process.execPath}\nconsole.log("12.4.1");\n`);
     fs.chmodSync(shim, 0o755);
   }
-  if (options.ps1) {
+  if (options.ps1 === true) {
     // .ps1 回退形态：宿主不存在时它也不可用，所以这里只在需要时造出来。
     fs.writeFileSync(path.join(dir, "pnpm.ps1"), "Write-Output '12.4.1'\n");
   }
-  if (options.cmd) {
+  if (options.cmd === true) {
     fs.writeFileSync(path.join(dir, "pnpm.CMD"), "@ECHO off\r\necho 12.4.1\r\n");
   }
   return dir;

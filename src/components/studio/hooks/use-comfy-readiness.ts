@@ -46,7 +46,7 @@ const DEGRADED_NOTE = "ComfyUI 未运行，显存/内存暂不可用";
 /** 已用/总量 → 占用条；总量非法或未用为负则返回 null（该项隐藏）。 */
 function toBar(used: number | undefined, total: number | undefined): StatBar | null {
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-  if (!total || total <= 0 || used == null || used < 0) {
+  if (total === undefined || Number.isNaN(total) || total <= 0 || used == null || used < 0) {
     return null;
   }
   /* 「已用 / 总量 → 百分比」走 `~/lib/progress` 的 `toPct`（同一条口径的另一

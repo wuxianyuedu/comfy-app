@@ -206,7 +206,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
         )}
         <div className="mt-3 flex items-center justify-between text-xs">
           <div className="text-muted-foreground flex flex-wrap items-center gap-2">
-            {saveErr && <span className="text-destructive">⚠ {saveErr}</span>}
+            {saveErr !== null && saveErr !== "" && (
+              <span className="text-destructive">⚠ {saveErr}</span>
+            )}
             {/* 目录总览章 —— 检测到任何子包时显示总数 + 过期数。 */}
             {totalAcrossParents.total > 0 && (
               <>
@@ -225,7 +227,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                 )}
               </>
             )}
-            {!saveErr && loading && (
+            {(saveErr === null || saveErr === "") && loading && (
               <span className="text-muted-foreground flex items-center gap-1.5">
                 <Spinner className="size-3" />
                 加载中…
@@ -396,7 +398,10 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   className="text-3xs px-2 py-0.5"
                                   dot={false}
                                   label={
-                                    state.kind === "loaded" && saved?.parsedAt
+                                    state.kind === "loaded" &&
+                                    saved?.parsedAt !== undefined &&
+                                    saved?.parsedAt !== null &&
+                                    saved.parsedAt !== ""
                                       ? `已加载 ${saved.parsedAt.split("T")[1]?.slice(0, 5) ?? ""}`
                                       : preset.label
                                   }
@@ -457,7 +462,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                   preset.btn,
                                 )}
                                 disabled={
-                                  !!perPkgParsing[sub.path] ||
+                                  perPkgParsing[sub.path] === true ||
                                   parsing ||
                                   state.kind === "missing" ||
                                   state.kind === "empty"
@@ -465,7 +470,7 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                                 onClick={() => onParseSingle(sub.path)}
                                 variant="ghost"
                               >
-                                {perPkgParsing[sub.path] ? "解析中…" : preset.btnLabel}
+                                {perPkgParsing[sub.path] === true ? "解析中…" : preset.btnLabel}
                               </Button>
                             </div>
                           </div>

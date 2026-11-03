@@ -22,7 +22,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { AppShell } from "./AppShell";
 
 /* jsdom 没有 `matchMedia`，`ui/sidebar` 挂载时就读它（与既有测试同一份桩）。 */
-if (!window.matchMedia) {
+if (typeof window.matchMedia !== "function") {
   window.matchMedia = (query: string): MediaQueryList => ({
     matches: false,
     media: query,

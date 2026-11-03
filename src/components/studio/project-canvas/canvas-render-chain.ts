@@ -117,7 +117,9 @@ const KIND_CHAIN: Record<NodeKind, Array<RenderChainModule>> = {
  */
 export function getProjectCanvasRenderChain(kind: NodeKind): Array<RenderChainModule> {
   const extra = KIND_CHAIN[kind];
-  if (!extra) {
+  /* 运行期防御：kind 可能来自外部 JSON，落在 NodeKind 联合之外时
+   * 索引结果为 undefined（类型层面不可达，但保留既有兜底语义）。 */
+  if (extra === undefined) {
     return [...CANVAS_COMMON];
   }
   return [...CANVAS_COMMON, ...extra];

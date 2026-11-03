@@ -1440,7 +1440,7 @@ describe("启动页窗口即内容（紧凑 + 展开日志两档，无边框自�
     expect(new Set(texts).size).toBe(1);
     const html = texts[0];
     expect(html).toBeDefined();
-    if (!html) {
+    if (html === undefined || html === "") {
       return;
     }
     // 页面只报「紧凑 / 展开」，尺寸常量只在壳里一份（避免两处常量漂移）

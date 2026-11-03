@@ -89,7 +89,7 @@ export function useExpansionSet(
     /* 函数式 updater：连点两次不会因为闭包里的旧 `map` 而互相盖掉
      * （规范 13 的 React 函数式 updater 纯净性硬规则；`check-react-updater-purity`
      * 也认这条 —— updater 里没有副作用、只读 `prev`）。 */
-    setMap((prev) => ({ ...prev, [key]: !prev[key] }));
+    setMap((prev) => ({ ...prev, [key]: prev[key] !== true }));
   }, []);
 
   const set = useCallback((key: string, open: boolean) => {

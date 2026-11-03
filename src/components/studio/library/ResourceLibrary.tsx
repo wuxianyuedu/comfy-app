@@ -136,7 +136,9 @@ export function ResourceLibrary() {
           <Input
             className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
             onChange={textHandler(library.setSearch)}
-            placeholder={library.folder ? "在当前分类搜索" : "搜索全部素材"}
+            placeholder={
+              library.folder !== null && library.folder !== "" ? "在当前分类搜索" : "搜索全部素材"
+            }
             type="text"
             value={library.search}
           />
@@ -169,7 +171,7 @@ export function ResourceLibrary() {
       )}
 
       {/* ── 错误条：拉取与动作失败共用一条（控制器已保证动作错误优先）── */}
-      {library.error && (
+      {library.error !== null && library.error !== "" && (
         <div className="border-destructive/30 bg-destructive/10 mb-4 flex items-start gap-2 rounded-lg border px-3 py-2">
           <span className="text-destructive min-w-0 flex-1 text-xs wrap-break-word">
             {library.error}

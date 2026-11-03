@@ -66,7 +66,7 @@ export function parseXFrameOptions(value: string | null): "deny" | "sameorigin" 
  * 也不要猜出一个错的允许。
  */
 export function frameAncestorsAllows(csp: string | null, hostOrigin: string): boolean | null {
-  if (!csp) {
+  if (csp === null || csp === "") {
     return null;
   }
   const directive = /frame-ancestors([^;]*)/i.exec(csp);
@@ -152,7 +152,7 @@ export function judgeEmbeddable(input: {
   }
   /* 有 `Access-Control-Allow-Origin` 即 ComfyUI 已开 CORS：跨源放行的确证，
    * 优先于「头读不到」的判断。 */
-  if (input.allowOrigin) {
+  if (input.allowOrigin !== undefined && input.allowOrigin !== null && input.allowOrigin !== "") {
     return {
       embeddable: true,
       reason: "ComfyUI 已开启 CORS（响应带 Access-Control-Allow-Origin）",

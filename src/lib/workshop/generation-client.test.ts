@@ -24,7 +24,7 @@ function makeCharacter(id: string, portraitUrl?: string): Character {
     positivePrompt: "a cat",
     negativePrompt: "",
     params: {},
-    ...(portraitUrl ? { portraitUrl } : {}),
+    ...(portraitUrl !== undefined && portraitUrl !== "" ? { portraitUrl } : {}),
   };
 }
 

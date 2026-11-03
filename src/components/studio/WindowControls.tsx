@@ -66,7 +66,7 @@ export function WindowButton({
         aria-label={label}
         className={cn(
           "text-ink-soft h-full w-11 rounded-none",
-          danger
+          danger === true
             ? "hover:bg-destructive hover:text-primary-foreground"
             : "hover:bg-subtle hover:text-ink-bright",
         )}

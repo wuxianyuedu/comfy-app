@@ -73,7 +73,9 @@ function FieldLabelRow({ label, id }: { id?: string; label: string }) {
   return (
     <span className="text-ink/80 text-xs font-medium">
       {label}
-      {id && <span className="text-muted-foreground/60 text-2xs ml-1 font-mono">{id}</span>}
+      {id !== undefined && id !== "" && (
+        <span className="text-muted-foreground/60 text-2xs ml-1 font-mono">{id}</span>
+      )}
     </span>
   );
 }

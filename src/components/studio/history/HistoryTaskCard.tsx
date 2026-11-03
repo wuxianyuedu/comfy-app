@@ -63,7 +63,7 @@ export function HistoryTaskCard({
           }}
           variant="ghost"
         >
-          {task.cover ? (
+          {task.cover !== null && task.cover !== "" ? (
             <MediaThumbnail
               alt=""
               autoPlay
@@ -122,31 +122,34 @@ export function HistoryTaskCard({
           <span className="text-ink-strong mt-1 line-clamp-1 block text-sm">
             {task.prompt || "（无提示词）"}
           </span>
-          {task.status === "FAILED" && task.error && (
-            <div className="border-destructive/20 bg-destructive/6 mt-2 rounded-md border px-2.5 py-1.5">
-              <p className="text-destructive text-2xs leading-relaxed">
-                <span className="font-semibold">错误：</span>
-                {task.error}
-              </p>
-              {st.failureSuggestion && (
-                <p className="text-warning-strong/90 text-2xs mt-1 leading-relaxed">
-                  {st.failureSuggestion(task.error)}
+          {task.status === "FAILED" &&
+            task.error !== undefined &&
+            task.error !== null &&
+            task.error !== "" && (
+              <div className="border-destructive/20 bg-destructive/6 mt-2 rounded-md border px-2.5 py-1.5">
+                <p className="text-destructive text-2xs leading-relaxed">
+                  <span className="font-semibold">错误：</span>
+                  {task.error}
                 </p>
-              )}
-              {/* 结构化校验错误逐字段列表 */}
-              {task.validationErrors && task.validationErrors.length > 0 && (
-                <div className="bg-canvas-deep border-destructive/20 mt-1.5 rounded border px-2 py-1.5">
-                  <div className="text-destructive text-3xs mb-1 font-semibold">
-                    节点配置校验（{task.validationErrors.length} 项）
+                {st.failureSuggestion && (
+                  <p className="text-warning-strong/90 text-2xs mt-1 leading-relaxed">
+                    {st.failureSuggestion(task.error)}
+                  </p>
+                )}
+                {/* 结构化校验错误逐字段列表 */}
+                {task.validationErrors && task.validationErrors.length > 0 && (
+                  <div className="bg-canvas-deep border-destructive/20 mt-1.5 rounded border px-2 py-1.5">
+                    <div className="text-destructive text-3xs mb-1 font-semibold">
+                      节点配置校验（{task.validationErrors.length} 项）
+                    </div>
+                    <ValidationErrorList
+                      className="text-destructive/90"
+                      errors={task.validationErrors}
+                    />
                   </div>
-                  <ValidationErrorList
-                    className="text-destructive/90"
-                    errors={task.validationErrors}
-                  />
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
         </Button>
 
         {/* ── 操作按钮（永远可见） ── */}

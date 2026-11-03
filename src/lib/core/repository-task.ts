@@ -158,10 +158,15 @@ export class TaskRepository extends DrizzleRepository<Task> {
   > {
     const where = and(
       eq(task.userId, userId),
-      opts?.projectId ? eq(task.projectId, opts.projectId) : undefined,
-      opts?.statusList?.length ? inArray(task.status, opts.statusList) : undefined,
+      /* 过滤值空串与缺省同义 = 不加该条件（查询参数可能出现空串） */
+      opts?.projectId !== undefined && opts.projectId !== ""
+        ? eq(task.projectId, opts.projectId)
+        : undefined,
+      opts?.statusList !== undefined && opts.statusList.length > 0
+        ? inArray(task.status, opts.statusList)
+        : undefined,
     );
-    if (opts?.includeImages) {
+    if (opts?.includeImages === true) {
       const withImages = (rows: Array<Task>) => attachImages(rows);
       // 分页口径与下面普通 select 分支**必须一致**：drizzle 的 relational
       // query 只认 `limit`（`limit: -1` 会被整个丢掉，实测），所以「只给 skip」

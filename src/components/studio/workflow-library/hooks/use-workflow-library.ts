@@ -257,7 +257,12 @@ export function useWorkflowLibrary(
     setWorkflows(listQ.data.workflows ?? []);
     setLocalPending(listQ.data.localPending ?? []);
     for (const workflow of listQ.data.workflows ?? []) {
-      if (workflow.diskRenamed && workflow.diskRenamedTo) {
+      if (
+        workflow.diskRenamed &&
+        workflow.diskRenamedTo !== undefined &&
+        workflow.diskRenamedTo !== null &&
+        workflow.diskRenamedTo !== ""
+      ) {
         toast.success("已自动重新链接", workflow.diskRenamedTo);
       }
     }
@@ -377,7 +382,7 @@ export function useWorkflowLibrary(
   const handleEditorClose = useCallback(() => {
     const id = editingId;
     setEditingId(null);
-    if (!id) {
+    if (id === null || id === "") {
       return;
     }
     void queryClient.invalidateQueries(trpc.workflow.detail.queryFilter({ id }));
@@ -424,7 +429,7 @@ export function useWorkflowLibrary(
       : tagsQ.error
         ? errorText(tagsQ.error, "模型标签库加载失败")
         : null,
-    loading: listQ.isLoading && !listQ.data && !listQ.isError,
+    loading: listQ.isLoading && listQ.data === undefined && !listQ.isError,
     loadStalled,
     localRootsHint,
     load,

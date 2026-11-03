@@ -64,7 +64,9 @@ function VideoControl({
 
   if (style === "split") {
     return (
-      <div className={narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}>
+      <div
+        className={narrow === true ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}
+      >
         <StyleSwitcher
           narrow={narrow}
           onChange={onStyle}
@@ -166,7 +168,9 @@ function VideoControl({
   const summary = sections.map((section) => section.value).join(" ·");
 
   return (
-    <div className={narrow ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}>
+    <div
+      className={narrow === true ? "flex w-fit max-w-full flex-col gap-2" : "flex flex-col gap-2"}
+    >
       <StyleSwitcher
         narrow={narrow}
         onChange={onStyle}
@@ -176,7 +180,7 @@ function VideoControl({
         ]}
         style={style}
       />
-      <div className={narrow ? "w-42 max-w-full" : undefined}>
+      <div className={narrow === true ? "w-42 max-w-full" : undefined}>
         <MultiSegmentPopover
           ariaLabel="选择时长、画质与比例"
           sections={sections}

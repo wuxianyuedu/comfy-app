@@ -281,7 +281,7 @@ describe("runMirror（git 与 fetch 全假件）", () => {
         init: init ?? {},
         bodyText: typeof init?.body === "string" ? init.body : "",
       });
-      if (opts.fetchThrows) {
+      if (opts.fetchThrows === true) {
         throw new Error("network down");
       }
       return new Response(opts.dispatchBody ?? null, {
