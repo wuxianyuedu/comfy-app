@@ -2,10 +2,8 @@
 
 /**
  * 数据库备份 / 恢复分区（规范 17 §17.2 第③层）。
- *
- * 状态与动作来自 controller（`use-settings-page-backup`）；视图只渲染，不持
- * 业务状态。「选哪一份」这件事用 `pendingRestore` 现推，不另开一处本地 state ——
- * 服务端已经是那一份的持有者，视图再记一遍就会出现「登记了 A、界面高亮 B」。
+ * 「选哪一份」用 `pendingRestore` 现推，不另开本地 state —— 服务端已是持有者，
+ * 视图再记一遍会出现「登记了 A、界面高亮 B」。
  */
 
 import { useState } from "react";

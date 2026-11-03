@@ -32,11 +32,9 @@ export function useLogPanel<T>(selector: (state: LogStoreState) => T): T {
 }
 
 /* ── 全局未捕获错误进面板（规范 07：操作出问题在日志里要能看到）──────────
- * window.onerror / unhandledrejection 此前没有任何钩子：页面级异常
- * （如设置页 tRPC 拿到 HTML 报 "Unexpected token '<'"）只会出现在浏览器
- * devtools，用户反馈问题时日志面板一片空白。这里统一捕获进面板
- * （source: "system"），与既有 console 拦截、Tauri 事件两条来源并列。
- * 只序列化、不再调用 addEntry 外的 store 动作，保证监听器自身零副作用。 */
+ * window.onerror / unhandledrejection 此前没有任何钩子：页面级异常（如设置页 tRPC 拿到 HTML 报
+ * "Unexpected token '<'"）只出现在 devtools，用户反馈时面板一片空白。这里统一捕获进面板
+ * （source: "system"），与 console 拦截、Tauri 事件并列；监听器只调 addEntry，自身零副作用。 */
 
 /** unknown 抛值 → 可读文本（Error 带堆栈；对象取 message；其余 JSON/String 兜底）。 */
 export function describeGlobalError(reason: unknown): string {
@@ -72,22 +70,9 @@ export function describeUnhandledRejection(reason: unknown): string {
 }
 
 /**
- * 面板轮询的日志来源与顺序。顺序即请求顺序，也决定同一批轮询的入库先后。
- *
- * - `dev` / `launcher`：启动链路（dev-launcher.log / dev-launcher-stderr.log，
- *   后者是壳写下的诊断与 `[orchestrator] …` 转发）；
- * - `shell-launch` / `shell`：壳侧启动链路（log/launcher/shell-launch.log /
- *   log/shell/shell.log，双击启动的最早一段现场——启动报告、壳的诊断——只
- *   在这两份里，应用运行后此前完全看不到）；
- * - `app`：**应用服务自身输出**（Next dev server 的 stdout / stderr 转录，
- *   见 `src/lib/log/capture-streams.server.ts`）——首屏编译错误、Turbopack FATAL、
- *   未捕获的服务端异常都在这里，此前不在任何被轮询的文件里，导致「应用服务
- *   没起来」时面板一片空白（ISSUE #360）；
- * - `app-runtime`：应用运行期业务操作（见 src/lib/app-runtime-log.ts）。
- *
- * 各路的行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，因此到达顺序
- * 不影响面板的时间序（ISSUE #262）。
- */
+ * 面板轮询的日志来源与顺序。顺序即请求顺序，也决定同一批轮询的入库先后：`dev` / `launcher` 是启动链路（dev-launcher.log 及其 stderr）；`shell-launch` / `shell` 是壳侧启动链路（双击启动最早的现场只在这两份里）。
+ * `app` 是应用服务自身输出（Next dev server 转录，首屏编译错误 / Turbopack FATAL / 未捕获的服务端异常，ISSUE #360）；`app-runtime` 是运行期业务操作。
+ * 各行都带写入时刻，合并后由 `mergeTimeline` 按时刻排序，到达顺序不影响时间序（ISSUE #262）。 */
 /* SAFETY: 类型断言已复核 */
 const POLL_SOURCES = ["launcher", "shell-launch", "shell", "dev", "app", "app-runtime"] as const;
 type PollSource = (typeof POLL_SOURCES)[number];
@@ -186,13 +171,10 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
           addEntry({ level, message, source: "tauri" });
         });
       } catch (error) {
-        /* 不在 Tauri 里运行是**正常形态**（浏览器 / 纯 web），静默即可。
-           但「在壳里却监听失败」不是正常形态，最常见的原因是 CSP 的 connect-src
-           漏了 `ipc: http://ipc.localhost`（事件监听走 fetch 到 ipc:// 通道，
-           而 invoke 走 postMessage 不受影响）—— 于是表现为「命令能调通、壳日志
-           却始终进不了面板」，且控制台只有一条 CSP 报错，很容易被归咎成
-           「日志功能本来就这样」。因此这里把失败**落进面板**：排查时不必再去
-           翻控制台才知道监听压根没建立。 */
+        /* 不在 Tauri 里运行是**正常形态**（浏览器 / 纯 web），静默即可。但「在壳里却监听失败」不是正常
+           形态：最常见是 CSP 的 connect-src 漏了 `ipc: http://ipc.localhost`（事件监听走 fetch 到 ipc://
+           通道，invoke 走 postMessage 不受影响），表现为「命令能调通、壳日志却进不了面板」且控制台只有
+           一条 CSP 报错。因此把失败**落进面板**，排查时不必再翻控制台。 */
         if (isDesktopShell()) {
           addEntry({
             level: "warn",
@@ -231,20 +213,10 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
   }, [addEntry]);
 
   // ── 加载启动器日志文件：启动日志 + 持续的 dev-server 输出 ──
-  //
-  // 增量读取靠服务端回传的字节游标（`data.size`）。此前把「本轮新增」错当成
-  // 游标（`offsetsRef.current[source] = data.size` 看似对，但服务端在文件超出
-  // 首屏窗口时会把 offset 归零并要求重读整文件），于是每次轮询都在重读整段、
-  // 重复行反复入库——面板看起来「一直在刷同一批内容」，2000 条的环形缓冲被
-  // 重复行占满，真正的新内容反而进不来（ISSUE #262）。
-  //
-  // 现在服务端返回的 `offset` 就是「本段内容在文件里的起点」，游标只能推进到
-  // `size`，并且**回退重读**由面板侧的去重（mergeTimeline）兜底：重复行不会
-  // 被计入时间线，也不会挤掉真正的新日志。
-  //
-  // 面板只显示「本次运行」：`dev`（dev-launcher.log）每次启动被覆盖重建；
-  // `app-runtime` 是追加不轮转的——上一次运行的行会随整段重读混进来。服务端在
-  // 轮询响应里带回会话起点，这里用行时刻裁掉（log-store 的 dropStaleEntries）。
+  // 增量读取靠服务端回传的字节游标（`data.size`）。此前把「本轮新增」错当游标，而服务端在文件超出
+  // 首屏窗口时会把 offset 归零并要求重读整文件，于是每轮都在重读整段、重复行反复入库（ISSUE #262）。
+  // 现在 `offset` 是「本段在文件里的起点」，游标只推进到 `size`，回退重读由 mergeTimeline 去重兜底。
+  // 面板只显示本次运行：`dev` 每次覆盖重建、`app-runtime` 追加不轮转，服务端带回会话起点、按行时刻裁掉。
   const offsetsRef = useRef<Partial<Record<PollSource, number>>>({
     dev: 0,
     launcher: 0,
@@ -353,23 +325,11 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    /* 六路来源**串行**拉取（此前是 `Promise.all` 六路并行）。
-     *
-     * 为什么从并行改回串行：浏览器对同源 HTTP/1.1 只有 **6 条**连接预算，而六路
-     * 并行一轮就把整份预算占满 —— 叠加同一时刻的其它来源（`/api/dev/server-id`
-     * 探活、`/api/comfy/state` 长轮询、`/api/comfy/liveness` SSE、tRPC 批量请求、
-     * 按需编译的分块），浏览器网络栈当场报资源不足，把**与日志无关**的请求也打成
-     * `net::ERR_INSUFFICIENT_RESOURCES`（本机 3885 实测：同一时刻的
-     * `/api/comfy/state`、`/api/dev/build-id`、`/api/update-check` 一并中招）。
-     * 其中就有用户点「去设置里配置」时才**按需**发出的设置分块 `import()`：它失败
-     * 后走 `lazy-chunk-recovery` 的整页刷新，在飞的 tRPC 被中断（`Failed to fetch`），
-     * 刷新后连续两拍探活失败即翻成「应用服务已断开」。
-     *
-     * 串行把「任何时刻至多 1 条在途日志请求」变成不变量，连接预算让给真正按需发出
-     * 的请求；一轮耗时（六路各 50~200ms）仍远小于 `POLL_MS`，面板的「实时感」没有
-     * 可感差别。各源已在 pollSource 内自行 try/catch（网络失败只记一次「不可达」），
-     * 单源出错不会中断整轮；`roundBusyRef` 另给一条背压闸 —— 一轮超过间隔时原来会
-     * 直接叠出第二轮（六路变十二路），现在跳过这一拍。 */
+    /* 六路来源**串行**拉取（此前 `Promise.all` 并行）。浏览器对同源 HTTP/1.1 只有 **6 条**连接预算，
+     * 六路并行一轮就占满——叠加 server-id 探活、comfy 长轮询 / SSE、tRPC 与按需编译分块，网络栈当场
+     * 报 `net::ERR_INSUFFICIENT_RESOURCES`（本机 3885 实测，连按需设置的 `import()` 都失败并触发整页刷新）。
+     * 串行把「任何时刻至多 1 条在途日志请求」变成不变量，一轮耗时仍远小于 `POLL_MS`；单源 try/catch
+     * 不中断整轮，`roundBusyRef` 另给背压闸（超间隔时跳过一拍，不再叠第二轮）。 */
     if (roundBusyRef.current) {
       return;
     }

@@ -51,11 +51,9 @@ function noop(): void {
 }
 
 /**
- * 视频生成 stage：消费上游产出的镜头图片（自动用作
- * I2V 首帧）与镜头的运动 / 时长（从
- * 分镜方案自动预填）。本地通道跑 ComfyUI 的 img2video/txt2video
- * 工作流；API 通道中转到配置的视频端点（同步 URL 或
- * 异步任务）。结果写回 Shot.clipUrl，供成片合成。
+ * 视频生成 stage：消费上游镜头图片（自动用作 I2V 首帧）与运动/时长（分镜预填）。
+ * 本地通道跑 ComfyUI img2video/txt2video 工作流；API 通道中转到配置的端点
+ *（同步 URL 或异步任务）。结果写回 Shot.clipUrl，供成片合成。
  */
 export function VideoStudio({
   shots,

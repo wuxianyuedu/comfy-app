@@ -1,15 +1,6 @@
 /**
- * 镜头状态的展示口径（文案 + 帧条配色）。
- *
- * 文案这份表此前长在 `ShotStudio.tsx` 里，被 `StoryboardPlanner.parts.tsx` 与
- * `VideoStudio.parts.tsx` 反向 import（三处共用，是 §16.2.4.5 收口的成果）。搬到
- * 这里的原因很具体：镜头胶片带要用它，而胶片带会被 `ShotStudio` import —— 再从
- * `ShotStudio` 取就成了一组循环依赖（`check-circular-deps` 的判据）。
- *
- * 文案与配色是**两张表**，不是同一件事写两遍：
- *   · 文案给读屏与徽标（`ui/status-badge` 自己管徽标的色调）；
- *   · 配色给胶片带底部那一根 1px 状态条 —— 那里没有徽标容器，只能自己上 token。
- * 两者都按 `Shot["status"]` 穷举，新增一档会当场在类型上红。
+ * 镜头状态的展示口径（文案 + 帧条配色）。从 `ShotStudio.tsx` 搬来：胶片带要用它，而胶片带会被 `ShotStudio` import —— 再从那里取就成了循环依赖
+ *（check-circular-deps）。文案与配色是**两张表**：文案给读屏与徽标；配色给胶片带那根 1px 状态条（那里没有徽标容器）。两者都按 `Shot["status"]` 穷举，新增一档当场类型红。
  */
 import type { Shot } from "~/lib/workshop/types";
 

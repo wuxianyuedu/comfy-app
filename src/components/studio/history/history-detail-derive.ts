@@ -1,16 +1,8 @@
-// ── 历史详情弹窗：派生计算（规范 17 §17.2 第①层：纯函数，无 React）────────────
-// 原先这些计算内联在 HistoryDetailModal 的 JSX 里（三个 IIFE 共 ~200 行），
-// 既无法单测也让视图无法重生成。抽到这里后：视图只负责排版，规则改动有测试兜底。
-//
-// 参数区的口径（本次整理）：
-//   · **不再有「独立」的提示词块与「生成参数」卡** —— 它们显示的东西与下面的
-//     参数表重复（同一句提示词出现两次），且卡片只认一小撮硬编码键名；
-//   · **按来源分块**：工坊发起的任务把「工坊参数」（工坊对外值）单独摆一块，
-//     工作流下发的 IO 参数摆另一块；工作流直接发起的任务只有后者；
-//   · **参数名要可读**：历史里存的只有 pin 名（`text` / `aspect_ratio` /
-//     `megapixels`），那是 ComfyUI 的程序名；作者在工作流库里改过的名字
-//     （「宽高比」「百万像素」）存在 `workflowIO` 的 `label` 上，任务本身没有
-//     快照它，只能按 `params.workflow` 现查（见 `resolveParamLabel`）。
+// ── 历史详情弹窗派生计算（规范 17 §17.2 第①层：纯函数，无 React）──
+// 原为 HistoryDetailModal JSX 里的三个 IIFE（约 200 行），无法单测；抽出后视图只排版、规则有测试兜底。
+// 参数口径：不再有独立提示词块/生成参数卡（与参数表重复且只认硬编码键名）；按来源分块
+//（工坊对外值 vs 工作流 IO 参数）；参数名可读 —— 历史只存 pin 名，作者标签在 workflowIO.label，
+// 任务本身无快照，只能按 params.workflow 现查（resolveParamLabel）。
 
 import { asRecord } from "~/lib/is-record";
 import { modeContractEntries, type ModeContract } from "~/lib/workshop/model-mode-contract";
@@ -58,12 +50,9 @@ export function taskWorkflowId(detail: TaskDetail | null): string | null {
 export type TaskOrigin = "workshop" | "workflow";
 
 /**
- * 工坊链路的**对外值**会作为顶层键落进 `params` —— 这是「工坊发起」与
- * 「工作流直接发起」在现有数据里唯一的形状差异（DB 没有来源列：
- * `generate.generate` 把整个入参对象直接当 `params` 落库）。
- *
- * 反面：工作流库的就地运行只带 `workflow` + `workflowInputs`；画布节点运行
- * 再多个 `projectId`。两者都算「工作流直接发起」，只显示工作流参数。
+ * 工坊链路的对外值会作为顶层键落进 `params` —— 这是「工坊发起」与「工作流直接发起」现有数据里唯一的形状差异
+ *（DB 没有来源列：generate.generate 把整个入参对象直接当 params 落库）。
+ * 反面：工作流库就地运行只带 workflow + workflowInputs，画布节点运行再多个 projectId，都算工作流直接发起。
  */
 /* SAFETY: 类型断言已复核 */
 const WORKSHOP_TOP_LEVEL_KEYS = [
@@ -175,13 +164,8 @@ export type WorkflowParamRow = {
 
 /**
  * pin 名 → 可读名：按 `nodeId::widget::name` 在工作流 IO 里查作者标签。
- *
- * 三档匹配，逐档放宽：精确 ioKey → 同 `name` 的任意节点 → 原始 `name`。
- * 放宽是必要的：子图里的条目在运行期用的是 `host:inner` 形态的节点 id，
- * 与落库时写进 `workflowInputs[].nodeId` 的那个未必逐字相同。
- *
- * `io` 可能为 `null`（工作流已被删除 / 详情还没回来）—— 此时**不能编**，
- * 如实显示 pin 名。
+ * 三档逐级放宽：精确 ioKey → 同 name 任意节点 → 原始 name —— 子图运行期用 host:inner 节点 id，未必与落库的逐字相同。
+ * `io` 可能为 null（工作流已删/详情未回），此时如实显示 pin 名，不能编。
  */
 export function resolveParamLabel(
   input: { name: string; nodeId?: string },
@@ -217,11 +201,8 @@ function findIoEntry(
 }
 
 /**
- * 工作流参数表 + 原始 JSON 区块的数据。
- *
- * **不再过滤 `seed` / `steps` / `cfg` 这类键**：那条过滤是为了躲开上面那张
- * 「生成参数卡」的重复（卡已删除），而过滤本身会让种子这类关键参数从参数表里
- * 凭空消失。
+ * 工作流参数表 + 原始 JSON 区块的数据。不再过滤 seed / steps / cfg 等键 ——
+ * 那条过滤是为躲开已删除的「生成参数卡」重复，却会让种子这类关键参数从表中凭空消失。
  */
 export function deriveWorkflowParams(
   detail: TaskDetail | null,

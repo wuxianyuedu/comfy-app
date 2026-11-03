@@ -1,12 +1,9 @@
 "use client";
 
-/* ── 日志分类开关的跨组件共享状态（纯状态 + 持久化，无副作用）────
- * 「设置 → 日志」里每个分类一个开关；关掉的分类在日志面板里不再显示
- * （仅隐藏显示，不删除 log/ 下的真实文件）。多个非嵌套 chrome 都要读它：
- * 设置页写、日志面板读，用 zustand 单例收口，避免 React context 层层透传。
- *
- * 持久化走 `~/lib/browser-storage`（localStorage，SSR 安全：无浏览器时返回兜底、
- * 写失败静默）。默认值全部开启——「没设过」与「全开」同义。 */
+/* ── 日志分类开关的跨组件共享状态（纯状态 + 持久化）────────────────
+ * 「设置 → 日志」每类一个开关；关掉只隐藏面板显示，不删除 log/ 下的真实文件。
+ * 设置页写、日志面板读，用 zustand 单例避免 context 透传；持久化走
+ * `~/lib/browser-storage`（SSR 安全、写失败静默），默认全开＝「没设过」。 */
 
 import { create } from "zustand";
 
@@ -29,9 +26,8 @@ function defaultEnabled(): CategoryEnabled {
 
 /**
  * 从 localStorage 水合开关；坏数据 / 没存过 / 缺字段一律回落默认（不抛）。
- *
- * 用「合并」而非「整体替换」：日后新增分类时，旧存储里没有的键自动取默认开启，
- * 不会因为读到的对象缺字段而把新分类卡在 `undefined`（那样 `!enabled[c]` 会误判成关闭）。
+ * 用「合并」而非整体替换：新增分类时旧存储缺的键取默认开启，否则
+ * `!enabled[c]` 会把 `undefined` 误判成关闭。
  */
 function readEnabled(): CategoryEnabled {
   const stored = readStorageJson<Partial<CategoryEnabled>>(STORAGE_KEY, {});

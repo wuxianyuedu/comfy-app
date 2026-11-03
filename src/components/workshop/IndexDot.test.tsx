@@ -1,13 +1,6 @@
 /**
- * 序号圆 —— 从工坊五个界面里逐字相同的那一枚抽出来的件。
- *
- * 判三件事，都是「抽取会不会改变渲染」这一类：
- *   · 内容就是传进来的序号（不是组件自己算的 —— 调用点有 `i + 1` 也有 `shot.index`，
- *     两种编号来源必须都能原样落进圆里）；
- *   · 两档尺寸各自落在 `size-6` / `size-7` 上，且**默认是 sm**（五处里四处是 24px）；
- *   · 必须自带 `grid`：契约 §Components「基元纪律 2」——`size-*` 对 `display: inline`
- *     不生效，丢了 grid 这个圆会变成一条约 4×20px 的竖线，而五处原来都恰好嵌在
- *     flex 容器里才「碰巧」成立，看不出问题。
+ * 序号圆 —— 从工坊五个界面里逐字相同的那一枚抽出来的件。判三件事：内容就是传进来的序号（`i + 1` 与 `shot.index` 两种来源都要原样落进圆里）；
+ * 两档尺寸落在 `size-6` / `size-7` 且默认 sm；必须自带 `grid`（契约 §Components「基元纪律 2」：`size-*` 对 `display: inline` 不生效，丢了会画成 4×20px 竖线）。
  */
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 /**
  * `~/components/ui/use-busy-action` 的契约（ISSUE #672 / 规范 16 §16.2.4.71）。
- *
- * 这条账的实质是「先置忙、跑完复位」的执行态各写一份，而复位写在哪一处
- * 决定了「失败之后按钮还能不能点」：写在 `await` 之后的 9 处只要动作抛错，
- * 忙碌位就永远停在 true。用例因此按**复位时机**写。
+ * 实质是「先置忙、跑完复位」的执行态各写一份，而复位写在哪决定「失败之后按钮还能不能点」：
+ * 写在 `await` 之后的 9 处只要动作抛错，忙碌位就永远停在 true。用例按**复位时机**写。
  */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";

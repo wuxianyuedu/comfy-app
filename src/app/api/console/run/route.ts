@@ -15,37 +15,9 @@ import { consoleSlot, recordConsoleHistory } from "~/lib/console/console-registr
 export const runtime = "nodejs";
 
 /**
- * 端点：POST /api/console/run
- *
- * 应用内控制台的唯一执行入口（ISSUE #1327）。体 `{ command: string }`，
- * 回一条 **SSE 流**（`start` → 若干 `out` → `exit`），流结束即命令结束。
- *
- * ## 为什么是「POST 回流」而不是「POST 起任务 + GET 轮询/订阅」
- *
- * 命令的输出是**一次性的、有头有尾的**：它没有「后来的订阅者要回放历史」这条
- * 需求（对比任务的 SSE —— 那条要回放，因为用户可能中途才打开面板）。拆成两个
- * 端点只会多出一份「runId → 输出缓冲」的服务端状态与它的清理时机；合并成一条
- * 流则连「命令已经结束、这条订阅还在吗」都不必判 —— 流一关就是结束。
- *
- * 代价是「流中断 = 看不见结果」，所以中断时**命令会被回收**（见下方 close 处理）：
- * 用户关掉界面/切走视图不该留下一条没人管的 `pnpm test` 占着 CPU。
- *
- * ## 安全：这条链能执行任意本机命令，守卫因此是「谁能到达」
- *
- * 三道闸，缺一不可（顺序即成本：先便宜的后贵的）：
- *   1. **回环检查**（`isLoopbackRequest`）—— 只有从本机发起的请求才放行。
- *      应用服务**本来就绑回环**，但「应用服务绑回环」是启动编排的行为、不是
- *      本路由的性质：有人把 `-H 0.0.0.0` 换个值启动，或将来加一层反代，这条
- *      路由就会对着局域网敞开一个任意命令执行口。**判据写在这一层**（同
- *      §12.14 的「端点收口」精神：安全判据贴着它的作用域）。
- *   2. **会话**（`requireRequestUser`）—— 与其余 REST 面同一条闸（`loginRequired`
- *      打开时无会话即 401）。
- *   3. **入参形态**（`parseConsoleLine`）—— 只拆命令，不经过平台 shell
- *      （理由见 `console-catalog.ts` 的文件头）。
- *
- * **刻意不做**「危险命令黑名单」：它拦不住 `node -e`、`sh -c`、`pnpm exec x`，
- * 却会让读到它的人以为拦得住 —— 这类会静默失效的清单在本仓是被点名过的反模式
- * （§12.18 判定反模式）。真正的边界是「本机 + 有会话的用户」，说清楚即可。
+ * 端点：POST /api/console/run —— 应用内控制台唯一执行入口（ISSUE #1327）：体 `{ command: string }`，回 SSE 流 `start`→`out`→`exit`，
+ * 流结束即命令结束（一次性输出无需回放，代价是流中断即回收命令）。守卫三道缺一不可：回环 `isLoopbackRequest`（判据贴本层）
+ * → 会话 `requireRequestUser` → `parseConsoleLine`（不经平台 shell）；**刻意不做**危险命令黑名单（拦不住 `node -e`，只会让人以为拦得住）。
  */
 export async function POST(req: NextRequest) {
   if (!isLoopbackRequest(req.headers)) {

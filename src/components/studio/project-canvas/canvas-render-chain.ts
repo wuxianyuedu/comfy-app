@@ -1,21 +1,7 @@
 /**
  * canvas-render-chain — 项目画布（ProjectCanvas + canvas/*）的「渲染链路模块」规则。
- *
- * 为 CanvasNode（项目画布节点卡片）列出该节点卡片对应的本项目代码模块，
- * 并按节点 kind 区分链路：
- *  - 公共链路（所有节点）：ProjectCanvas.tsx（画布容器）、CanvasNode/CanvasNode.tsx
- *    （节点渲染器）、src/lib/project-canvas/canvas-types.ts（节点类型/元数据）、
- *    src/lib/project-canvas/canvas-store.ts（项目数据持久化）
- *  - workflow：追加 WorkflowNode.tsx + shared/workflow-io.ts
- *  - image / video：追加 ImageGenerationPanel.tsx +
- *    src/lib/project-canvas/canvas-helpers.ts（startGenerate / pollTask）
- *  - script：追加 src/lib/project-canvas/canvas-helpers.ts（runScript）
- *  - agent：追加 src/lib/agent/agentic.ts +
- *  例如 src/lib/project-canvas/canvas-helpers.ts
- *  - text / picture / movie：追加 ContentAssetNode.tsx
- *  - 未知 kind：只显示公共链路
- *
- * 供 DebugChainFooter 渲染调试标签：点击复制完整相对路径、title 显示完整路径。
+ * 公共链路所有节点共用（ProjectCanvas / CanvasNode / canvas-types / canvas-store）；各 kind 追加 workflow / image-video / script / agent / text-picture-movie 模块，未知 kind 只显示公共链路；
+ * 供 DebugChainFooter 渲染调试标签。
  */
 
 import type { RenderChainModule } from "../debug/DebugChainFooter";

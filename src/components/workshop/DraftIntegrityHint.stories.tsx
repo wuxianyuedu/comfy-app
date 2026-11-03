@@ -4,16 +4,8 @@ import { DraftIntegrityHint } from "~/components/workshop/DraftIntegrityHint";
 import { auditDraftElements } from "~/lib/workshop/draft-integrity";
 
 /**
- * 草稿「形状不认识、但已原样保留」的提示条（台账 F13″）。
- *
- * **它吃的数据是真判据算出来的**：story 先摆一份「坏在哪」的草稿，再调
- * `auditDraftElements()`（`~/lib/workshop/draft-integrity` 的纯函数，服务端镜像与
- * 浏览器缓存两扇门共用它）拿到结论。手抄一份 `DraftElementIssue[]` 是这一批要
- * 消掉的那类假形态 —— 看着对，而它与真实判据无关，判据改了 story 会继续显示旧口径。
- *
- * 这一条幅最该看的两件事都只有在真数据下才成立：
- *   · **结论句里的条数是按元素聚合的**（「2 条角色、1 条镜头」），不是问题总条数；
- *   · **清单最多列 5 条**，再多折成「另有 N 条」—— 把整份问题清单钉在页首会挡住正文。
+ * 草稿「形状不认识、但已原样保留」的提示条（台账 F13″）：story 摆一份坏草稿后调 `auditDraftElements()`（`~/lib/workshop/draft-integrity` 的真判据）
+ * 拿结论，不手抄 `DraftElementIssue[]`（判据改了 story 不能继续显示旧口径）。真数据下才成立的两件事：结论句条数按元素聚合；清单最多列 5 条，再多折成「另有 N 条」。
  */
 const BAD_CHARACTER_NUMBER = {
   id: "ch_1",
@@ -32,10 +24,7 @@ const BAD_SHOT_INDEX = {
 /** 3 条元素各有问题：结论句里三类都出现，能验聚合口径。 */
 const MIXED_DRAFT = {
   scenes: [{ id: "sc_1", heading: "", shotCount: 4 }],
-  characters: [
-    BAD_CHARACTER_NUMBER,
-    { id: "ch_2", name: "阿岚", styleTags: "「护目镜」" },
-  ],
+  characters: [BAD_CHARACTER_NUMBER, { id: "ch_2", name: "阿岚", styleTags: "「护目镜」" }],
   shots: [{ id: "sh_1", index: 1, description: "起幅" }, BAD_SHOT_INDEX],
 };
 
@@ -50,11 +39,7 @@ const MANY_BAD_SHOTS = {
   })),
 };
 
-function HintSample({
-  draft,
-}: {
-  draft: Parameters<typeof auditDraftElements>[0];
-}) {
+function HintSample({ draft }: { draft: Parameters<typeof auditDraftElements>[0] }) {
   const issues = auditDraftElements(draft);
   return (
     <div className="w-2xl">
@@ -90,9 +75,8 @@ export const MoreThanMaxLines: Story = {
 
 /**
  * 没有问题时**不渲染**（`describeDraftIssues()` 给 `null`）。
- *
- * 这一档要验的是「不占位」：坏数据修好之后这条幅应该整个消失，而不是留一个空壳。
- * 同一个容器里放一条正常的提示对照，能看出前者确实一点位置都没占。
+ * 验的是「不占位」：坏数据修好之后这条幅应整个消失、不留空壳；
+ * 同一容器里放一条正常提示对照，能看出前者确实一点位置都没占。
  */
 export const CleanDraftRendersNothing: Story = {
   args: {

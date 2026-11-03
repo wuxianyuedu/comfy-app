@@ -4,27 +4,11 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 
-/**
- * `Hint` 是「给一个控件配悬停提示」的**全库唯一出口**（规范 16 §16.2.3 P82）。
- *
- * 为什么不直接写 `<Tooltip>` 三件套：形态固定（Trigger 必用 base-ui 的
- * `render` prop 接管子元素，不用 `asChild`），逐点手写会在视图里长出几十份
- * 近似结构（§12.12 孪生判据）。这里收一次，调用点只多一对标签。
- *
- * 它替掉原生 `title=`，因为后者有三个短板：读屏器支持长期不一致
- * （Safari + VoiceOver 直接忽略）、显示延迟与样式不受主题控制、不能挂 kbd /
- * 富文本。
- *
- * ## 三条与规范 §6.1 的接缝（本 story 要看的正是它们）
- *
- * 1. **有可见文字的按钮不要给 `aria-label`** —— 名字已由文字给出，另写一份会撞
- *    WCAG 2.5.3「label in name」；
- * 2. **纯图标按钮**（`<X />` / `✕` / `⋮` 这类**不含字母与数字**的字形）传
- *    `accessibleName`，由本组件把 `label` 同时写成子元素的 `aria-label`；
- * 3. **带字母或数字的就是可见文字**（`A-` / `5×` /「错误」）—— 一律不补名。
- *
- * ⚠️ 提示要**悬停**才出现；禁用态那条要看 `wrap` 的现场（见下）。
- */
+/** `Hint` 是「给一个控件配悬停提示」的全库唯一出口（规范 16 §16.2.3 P82）。
+ * 不直接写 `<Tooltip>` 三件套：形态固定（Trigger 必用 base-ui 的 `render` prop 接管子元素，不用 `asChild`），逐点手写会在视图里长出几十份近似结构（§12.12 孪生判据）；这里收一次，调用点只多一对标签。
+ * 它替掉原生 `title=`，因为后者有三个短板：读屏器支持长期不一致（Safari + VoiceOver 直接忽略）、显示延迟与样式不受主题控制、不能挂 kbd / 富文本。
+ * 三条与规范 §6.1 的接缝：① 有可见文字的按钮不要给 `aria-label`（名字已由文字给出，另写一份会撞 WCAG 2.5.3「label in name」）；② 纯图标按钮（`<X />` / `✕` / `⋮` 这类不含字母与数字的字形）传 `accessibleName`，由本组件把 `label` 同时写成子元素的 `aria-label`；③ 带字母或数字的就是可见文字（`A-` / `5×` /「错误」），一律不补名。
+ * ⚠️ 提示要悬停才出现；禁用态那条要看 `wrap` 的现场（见下）。 */
 const meta = {
   title: "UI/Hint",
   component: Hint,

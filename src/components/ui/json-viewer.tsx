@@ -1,25 +1,8 @@
 "use client";
 
-/**
- * JsonViewer — 重构
- *
- * 之前 自写的纯客户端 JSON 查看器 (660+ 行) 已有结构性问题：
- *   - PrimitiveRow 用 `<div>` 渲染值，block-in-block 把 key-value 拆两行
- *   - 嵌套 paddingLeft 在深 indent 处把值挤到右侧 → 视觉错位
- *   - primitive string 整段渲染，没有 substring 着色 → active hit 看不出来
- *
- * 改用 react18-json-view 处理渲染层 (语法着色 / 容器折叠 / 长 string
- * 折叠 / 暗黑主题 / clipboard / 多主题 + URL 识别)。我们只负责：
- *   1. 搜索 (collectHits 遍历 + 计数 + Enter/Shift+Enter/箭头/Esc)
- *   2. scroll-into-view (active hit 居中)
- *   3. DOM 后处理 (text node 内 substring 高亮 + active hit 行标 + data-jv-active-hit)
- *
- * 选 react18-json-view 的理由:
- *   - 0.2.10, 4 月前发布, 仍维护, React 18+ 兼容声明
- *   - 零业务依赖 + 7 主题 + CSS 变量覆盖
- *   - 我们自己的搜索/计数/跳转逻辑还是自写 (50 行 wrapper),
- *     但渲染结构、外观、长 string 折叠、clipboard 全交给 lib。
- */
+/** JsonViewer — 重构：此前自写的纯客户端 JSON 查看器（660+ 行）有结构性问题 —— PrimitiveRow 用 `<div>` 渲染值、block-in-block 把 key-value 拆成两行；嵌套 paddingLeft 在深 indent 处把值挤到右侧造成视觉错位；primitive string 整段渲染、没有 substring 着色，active hit 看不出来。
+ * 现改用 react18-json-view 处理渲染层（语法着色 / 容器折叠 / 长 string 折叠 / 暗黑主题 / clipboard / 多主题 + URL 识别）；本模块只负责：① 搜索（collectHits 遍历 + 计数 + Enter/Shift+Enter/箭头/Esc）；② scroll-into-view（active hit 居中）；③ DOM 后处理（text node 内 substring 高亮 + active hit 行标 + data-jv-active-hit）。
+ * 选该库的理由：0.2.10 仍维护、React 18+ 兼容声明、零业务依赖 + 7 主题 + CSS 变量覆盖；我们自己的搜索 / 计数 / 跳转逻辑仍是自写（约 50 行 wrapper），渲染结构、外观、长 string 折叠、clipboard 全交给 lib。 */
 
 import {
   memo,
@@ -513,13 +496,7 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
         ) : (
           <MemoJsonView
             className="jv-theme-comfy"
-            /* 这里**不能**传 `collapsed`：库的 isCollapsed() 第一句就是
-               `if (typeof collapsed === 'boolean') return collapsed;` —— 传
-               `collapsed={false}` 会让它「每个容器都返回 false」，下面的
-               `collapseObjectsAfterLength` 阈值**永远不生效**，整棵树（含几百
-               个键的 prompt）首屏全量展开。comfy-cli 的 prompt_preview 因此能把
-               「查看完整输出」弹窗卡死。省略它才走阈值分支：小容器展开、项数
-               超过 `collapseThreshold` 的容器折成 `…`，点开才渲染。 */
+            /* 这里不能传 `collapsed`：库的 isCollapsed() 第一句就是 `if (typeof collapsed === 'boolean') return collapsed;` —— 传 `collapsed={false}` 会让它「每个容器都返回 false」，下面的 `collapseObjectsAfterLength` 阈值永远不生效，整棵树（含几百个键的 prompt）首屏全量展开；comfy-cli 的 prompt_preview 因此能把「查看完整输出」弹窗卡死。省略它才走阈值分支：小容器展开、项数超过 `collapseThreshold` 的容器折成 `…`，点开才渲染。 */
             collapseObjectsAfterLength={collapseThreshold}
             collapseStringMode="word"
             collapseStringsAfterLength={80}

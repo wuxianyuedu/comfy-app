@@ -14,34 +14,13 @@ import { FilmStudioTimeline } from "./FilmStudioTimeline";
 import { FilmStudioPropertyPanel } from "./FilmStudioPropertyPanel";
 
 /* ── 影片工坊 —— Updream 风视频剪辑器（对齐 Ardot） ─
- 深色主题的**时间线**视频剪辑工坊。
- 对齐 Ardot 设计规范：深色极光（#0a0a0f）+ 紫 #8B5CF6 强调。
- 渲染在 WorkspaceNav 父壳内部（侧栏由外部提供）。
-
- 布局（壳内）：
- ┌──────────────────────────────────────────────────────────┐
- │ 顶部工具栏：[项目名] [撤销|重做] … [▶] [导出成片] │
- ├──────────┬───────────────────────────────┬───────────────┤
- │ 镜头列表 │ 预览画布（16:9） │ 属性面板 │
- │ (260px) │ ┌─────────────────────┐ │ (280px) │
- │ · 镜头1 │ │ ▶ 播放覆盖层 │ │ 镜头名称 │
- │ · 镜头2 │ └─────────────────────┘ │ 时长 │
- │ · 镜头3 │ 时间线 │ 生成模式 │
- │ [+ 添加] │ 标尺 + 视频/字幕/BGM 轨道 │ 转场效果 │
- ├──────────┴───────────────────────────────┴───────────────┤ │ 提示词 │
- │ 状态栏：● ComfyUI 本地已连接 · GPU 可用 │
- └──────────────────────────────────────────────────────────┘
-*/
+ 深色主题的**时间线**视频剪辑工坊：深色极光（#0a0a0f）+ 紫 #8B5CF6 强调；渲染在 WorkspaceNav 父壳内部
+ （侧栏由外部提供）。壳内布局：顶部工具栏 / 左镜头列表(260px) / 中预览画布 16:9 + 时间线 / 右属性面板(280px) / 底部状态栏。 */
 
 /**
- * 成片工作室 —— 视图层（规范 17 §17.2 第③层）。
- * 成片流程、轮询与 BGM 上传在 hooks/use-film-studio.ts + lib/film/bgm-client.ts，
- * 常量与类型在 film-studio-config.ts。本文件只做渲染与上抛事件。
- * 对外导出名与组件签名保持不变，消费方（app/workspace/page.tsx）零改动。
- *
- * 视觉区域拆在同目录（本组件只持有时间轴编辑器的本地状态与组合）：
- * FilmStudioTopBar / FilmStudioShotListPanel / FilmStudioPreviewPanel /
- * FilmStudioTimeline / FilmStudioPropertyPanel。
+ * 成片工作室 —— 视图层（规范 17 §17.2 第③层）。成片流程、轮询与 BGM 上传在 hooks/use-film-studio.ts
+ * + lib/film/bgm-client.ts，常量与类型在 film-studio-config.ts。本文件只做渲染与上抛事件，对外导出名
+ * 与组件签名保持不变（消费方 app/workspace/page.tsx 零改动）。视觉区域拆在同目录（本组件只持有时间轴本地状态与组合）。
  */
 export function FilmStudio() {
   const { info } = useToast();

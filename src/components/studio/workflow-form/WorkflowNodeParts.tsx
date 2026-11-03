@@ -1,19 +1,10 @@
 "use client";
 
-/**
- * workflow-node-parts.tsx — 工作流节点卡片的共享视觉部件（唯一事实源）。
- *
- * 项目画布（project-canvas/WorkflowNode.tsx）与工作流库
- * （workflow-library/WorkflowCanvasNodePreview.tsx）都必须从这里取卡片部件。
- * 此前工作流库手搓了一份「画布样式预览」，宽度（340 vs 380）、状态胶囊、
- * outputs 行、按钮圆角全部漂移——用户要求「工作流库中的节点展示与项目画布
- * 完全一致」，故把卡片部件收敛到这里，两侧只允许组合、不允许复刻。
- *
- * 视觉 token（Ardot 714503087315759 v5）：
- *   卡片宽 380 / 圆角 14 / 边框与底色走语义 token
- *   Header h-8 · W 图标 #2A1F4A r14 28×28 + 右侧胶囊
- *   ActionBtn h-43 渐变 --color-primary→--color-accent，rounded-b-node
- */
+/** workflow-node-parts.tsx — 工作流节点卡片共享视觉部件（唯一事实源）。项目画布与工作流库预览都从
+ * 这里取部件：此前库内手搓预览，宽度 340 vs 380、状态胶囊、outputs 行、按钮圆角全部漂移，
+ * 用户要求「完全一致」，故收敛到此，两侧只许组合、不许复刻。
+ * 视觉 token（Ardot 714503087315759 v5）：卡片宽 380 / 圆角 14 / 边框与底色走语义 token；
+ * Header h-8 · W 图标 #2A1F4A r14 28×28 + 右侧胶囊；ActionBtn h-43 渐变 --color-primary→--color-accent，rounded-b-node。 */
 
 import React from "react";
 
@@ -80,13 +71,10 @@ export function WorkflowNodeDivider() {
   return <div className="bg-border-strong h-px" />;
 }
 
-/** 右侧胶囊（h-5 r11 bg --color-node-accent px-2），内容由调用方给。
- *
- * 形状在这里、**底色不在**：画布节点用的是 `--color-overlay-accent-surface`
- * （「浮层/chip 强调底」）、库卡与 Ardot 还原件用 `--color-node-accent`
- * （「节点强调底」）。两档浅色只差 1/255（`#f2eeff` vs `#f1edff`）、暗色差得明显
- * （`#1e1a2e` vs `#241f38`），是两颗语义不同的 token，不该借「去重」并成一颗 ——
- * 所以差异用 `className` 补，实测 `cn()` 认 `bg-<名>` 为同一组、后写的赢。 */
+/** 右侧胶囊（h-5 r11 bg --color-node-accent px-2），内容由调用方给。形状在此、底色不在：
+ *  画布节点用 --color-overlay-accent-surface、库卡与 Ardot 还原件用 --color-node-accent（两档浅色差 1/255，
+ *  暗色差得明显，是两颗语义不同的 token，不该借去重并成一颗）；差异用 className 补，
+ *  cn() 认 bg-<名> 为同一组、后写的赢。 */
 export function WorkflowNodePill({
   children,
   title,
@@ -130,19 +118,11 @@ export function WorkflowStaticChip({
   );
 }
 
-/**
- * 底部那枚「▶ 用此工作流生成」（Ardot ActionBtn 340×43：全宽渐变
- * `--color-primary`→`--color-accent` + 跟品牌走的投影）。
- *
- * **它是这个形状的唯一出处**：画布的功能版、画布的视觉稿、工作流库的卡片预览与
- * 「实际使用」面板此前各写一份（高度一枚写成 43px 的字面量、两枚 `h-10.75`；投影一枚进 class
- * 一枚进 `style`、hover 一档 95 一档 90、variant 一枚 ghost 两枚 primary-solid），
- * 逐行重合度已在 §12.12 的孪生判据射程内。调用点只允许组合，不允许复刻 ——
- * 契约 §Components 那条「被抽走的形状只许有一个出处」按标记集合钉着这件事。
- *
- * `hint` 传与不传**不只是有没有气泡**：`wrap` 的那层 `inline-flex` 锚点会让内部的
- * `w-full` 按钮按内容宽定尺寸。所以没文案时给裸按钮、有文案时才套锚点，两态宽度一致。
- */
+/** 底部「▶ 用此工作流生成」（Ardot ActionBtn 340×43：全宽渐变 --color-primary→--color-accent + 品牌投影）。
+ * 它是这个形状的唯一出处：画布功能版/视觉稿、库卡片预览与「实际使用」面板此前各写一份
+ *（高度 43px vs h-10.75、投影进 class vs style、hover 95 vs 90、variant ghost vs primary-solid），
+ * 调用点只许组合、不许复刻（契约 §Components 按标记集合钉着）。
+ * hint 传与不传不只是气泡：wrap 的 inline-flex 锚点会让内部 w-full 按钮按内容宽定尺寸 —— 无文案给裸按钮、有文案才套锚点。 */
 export function WorkflowNodeActionButton({
   label,
   disabled = false,

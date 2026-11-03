@@ -4,20 +4,10 @@ import { LogFilterBar } from "~/components/studio/logs/LogFilterBar";
 import { useLogPanel } from "~/components/studio/logs/LogProvider";
 
 /**
- * 日志面板行头里的「级别筛选 + 搜索」一组控件（第三层注入 · store 的现场）。
- *
- * `LogFilterBar` 只收一个 prop（`originCounts`，当前来源下各级别的条数），
- * 而它**自己**从 store 取 `filter` / `search` / 两个 setter —— 所以 story 得先
- * 让 store 里有一段时间线（`parameters.storeScene`），再把那个计数从**真切片**
- * 里读出来。
- *
- * 为什么计数不能手抄：它是 `countsByOrigin[origin]` 的派生值，而那张二维表是
- * store 按真时间线算的。手抄一份在分桶规则或计数口径改了之后仍然看着正常。
- *
- * 要看的是：**选中态不能只靠基元的 `data-pressed:bg-muted`**
- *（它解析到 `--color-subtle`，浅色主题下与行头底色同值 —— 那正是 ISSUE #609），
- * 以及**窄容器下整组折行、标签不被切成竖排单字**（判据是容器自己的 `min-w-fit`（内容固有宽度））。
- */
+ * 日志面板行头里的「级别筛选 + 搜索」一组控件（第三层注入 · store 的现场）：`LogFilterBar` 自己
+ * 从 store 取 `filter` / `search` 与 setter，story 用 `parameters.storeScene` 写入时间线，计数从
+ * **真切片**派生（手抄会在规则改动后继续显示旧值）。要看：选中态不能只靠基元的
+ * `data-pressed:bg-muted`（浅色下与行头同值，ISSUE #609）；窄容器下整组折行、标签不被竖排。 */
 const meta = {
   title: "Studio/Logs/LogFilterBar",
   component: LogFilterBar,
@@ -33,8 +23,7 @@ type Story = StoryObj<typeof FilterBarHarness>;
 function FilterBarHarness() {
   const header = useLogPanel((state) => state.header);
   const origin = header.origin;
-  const originCounts =
-    header.countsByOrigin[origin] ?? header.countsByOrigin.all;
+  const originCounts = header.countsByOrigin[origin] ?? header.countsByOrigin.all;
   return (
     <div className="border-border-strong bg-surface-1 flex min-h-14 w-240 max-w-full flex-wrap items-center gap-y-1.5 border-b px-4 py-2">
       <LogFilterBar originCounts={originCounts} />

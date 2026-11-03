@@ -5,26 +5,8 @@ import { useLogPanel } from "~/components/studio/logs/LogProvider";
 import { useEffect } from "react";
 
 /**
- * 日志面板的**整块** —— 第三层注入（store）最有分量的一份。
- *
- * 它一个 prop 都不收（`LogPanel()` 从 store 读全部状态），所以「摆上去」这件事
- * 只有一条路可走：先让 store 里真的有一段时间线。这正是
- * `parameters.storeScene` 干的事 —— 原文由 store 自己的 `parseFileLogs()` 解析、
- * 经真 action `appendFileLogs()` 落板，于是**计数、来源分桶、时间线排序、行高
- * 窗口全由生产代码算出来**。
- *
- * 为什么不直接 `useLogStore.setState({ logs: [...] })`：那样画布也会出现内容，
- * 但它把「解析 + 派生」两条链路整个跳过 —— 验的成了「store 能不能存数组」，
- * 不是「面板长什么样」。
- *
- * 要看的是这一块里几处真机上容易分叉、构建与门禁全都看不出来的东西：
- *
- *  · **同一毫秒的排序**（`(time, seq)` 次键，`rowShapes` 那一段刻意挤在同一秒）；
- *  · **来源分桶的守恒**（四处文件来源 + 控制台 = 全部，切一个来源时计数跟着变）；
- *  · **来源下拉的弹层不被面板遮罩压住**（`log-panel-layers` 那条严格大于的契约 ——
- *    jsdom 不做层叠与命中测试，只有真浏览器里点得中才知道）；
- *  · **贴底与「用户上滚后不被按回底部」**（`use-log-panel-pin` 的基线）。
- */
+ * 日志面板的**整块** —— 第三层注入（store）最有分量的一份：它一个 prop 都不收，只能先让 store 里真有一段时间线，`parameters.storeScene` 用 `parseFileLogs()` 解析、经 `appendFileLogs()` 落板，计数/分桶/排序/行高窗口全由生产代码算。
+ * 要看：同毫秒排序（`(time, seq)`）、来源分桶守恒、下拉弹层不被遮罩压住、贴底与上滚不回底。 */
 const meta = {
   title: "Studio/Logs/LogPanel",
   component: LogPanel,
@@ -69,10 +51,8 @@ export const Empty: Story = {
 };
 
 /**
- * 同一毫秒十几行：排序要看 `(time, seq)` **次键**。
- *
- * 只按 `time` 排时同一毫秒内谁在前是不稳定的（每轮重渲染都可能换位），而这条
- * 时间线上恰恰全是同刻行 —— 那是真机上一轮 ComfyUI 提交打出子步骤行的形态。
+ * 同一毫秒十几行：排序要看 `(time, seq)` 次键。
+ * 只按 `time` 排时同毫秒内顺序不稳定（每轮重渲染都可能换位），而这条时间线全是同刻行。
  */
 export const SameMillisecond: Story = {
   parameters: { storeScene: "sameMillisecond" },

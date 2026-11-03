@@ -22,11 +22,9 @@ export type WorkflowDerivedData = {
 };
 
 /**
- * 工作流编辑器画布的派生查表：
- *  - rawMetaById：原始节点元数据表（widgets / outputs / flags …）
- *  - scopeDetail：视图作用域的 detail（RAW 视图把 node/graph/position
- *    的来源换成 `detail.rawView`，包装层数据保持不变）
- *  - outSlotNameById：按节点的输出槽名推导
+ * 工作流编辑器画布的派生查表：`rawMetaById`（原始节点元数据：widgets / outputs /
+ * flags…）、`scopeDetail`（视图作用域的 detail —— RAW 视图把 node/graph/position 的
+ * 来源换成 `detail.rawView`，包装层数据不变）、`outSlotNameById`（按节点输出槽名推导）。
  */
 export function useWorkflowDerivedData(detail: WorkflowDetail | null): WorkflowDerivedData {
   const rawMetaById: Record<string, RawNodeMeta> = useMemo(() => {

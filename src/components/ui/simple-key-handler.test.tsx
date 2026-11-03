@@ -1,11 +1,7 @@
 /**
- * 「非输入框元素上按某个键就做一件事」的判据（规范 16 §16.2.4.57）。
- *
- * 与 `use-enter-commit` 同族：**不是重复代码，是判据**。全库 3 处各写一遍
- * 键判别，而它们对三件事各判各的：
- *   · **键名叫什么** —— `" "` 还是 `"Space"`、要不要大小写归一；
- *   · **要不要 `preventDefault`** —— 混在同一个 `if` 里，看不出谁决定的；
- *   · **`event.repeat` 收不收** —— 按住空格会连发，对「切换一次」等于按了十几次。
+ * 「非输入框元素上按键就做一件事」的判据（规范 16 §16.2.4.57），与 `use-enter-commit` 同族。
+ * 全库 3 处各写一遍键判别，各自裁量：键名（`" "` / `"Space"` / 大小写归一）、是否
+ * `preventDefault`、是否收 `event.repeat`（按住空格会连发，对「切换一次」等于按十几次）。
  */
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";

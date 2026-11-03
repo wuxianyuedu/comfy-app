@@ -8,34 +8,9 @@ import type { ModalWidth } from "~/components/ui/dialog-width";
 import { readStorageItem, writeStorageItem } from "~/lib/browser-storage";
 
 /**
- * 「面板的加宽档」与它的触发钮——**唯一出口**（规范 16 §16.2.4.18）。
- *
- * 这条账的形状与 `dialog-width` 相邻但**不是同一件事**：那个模块管的是
- * 「宽度写成 `w-*` 而不是 `max-w-*`」（ISSUE #720 的加宽按钮点了没反应的
- * 静默失效），本模块管的是**加宽这个动作在三个日志面板里被各写一遍**：
- *
- * ```tsx
- * /* 三份逐字同形（`LogPanel` / `GlobalStepLogPanel` / `WorkflowRunLogModal`）*\/
- * 档位状态：`const [wide, setWide] = useState(false);`
- * 宽度档：`popupClassName={wide ? W.wide : W.base}`
- * 同一文件里第二处：`className={`…h-[85vh]… ${wide ? W.wide : W.base}`}`
- * 触发钮：`<Button onClick={() => setWide((w) => !w)} title={wide ? "收缩" : "加宽"}>`
- * 图标：`{wide ? <Minimize2 data-icon="inline-start" size={16}/> : <Maximize2 data-icon="inline-start" size={16}/>}`
- * 闭合：`</Button>`
- * ```
- *
- * 实测三份各自欠着同一件事：**「加宽」这个选择没有任何记忆**。
- * 用户把执行日志加宽、关掉、再打开 —— 又变回窄档；三个面板都是如此，
- * 而这不是「设计如此」，是**没有人负责持久化**（三份实现都只写了
- * `useState`）。所以本出口除了收掉重复，还把「记忆」补上：加宽态按
- * `storageKey` 落 `localStorage`，同一面板下次打开仍是用户选过的档。
- *
- * ── 为什么不复用 `use-flash-state` / `use-expansion-set` 的 `useState` 形态 ──
- * 那两个是**组件内**的一次性状态（亮一下就复位、树形展开随视图生命周期走）；
- * 加宽档是**跨会话的偏好**，与 `useCanvasSettings` 的「画布偏好」
- * 同类。所以这里走「模块级 store + `useSyncExternalStore`」——与
- * `useCanvasSettings` 同一套机制（同一面板可能同时挂两份实例：按钮在标题栏、
- * 面板体在 Portal 里），纯 `useState` 会让两边各有一份真相。
+ * 「面板的加宽档」与它的触发钮 —— 唯一出口（规范 16 §16.2.4.18）。
+ * 与 `dialog-width` 相邻但不是同一件事：那个管「宽度写 `w-*` 而不是 `max-w-*`」（ISSUE #720 静默失效），本模块管「加宽这个动作在三个日志面板里被各写一遍」。实测三份都欠着同一件事 ——「加宽」没有任何记忆，关掉再开又变窄（没人负责持久化）。
+ * 所以收掉重复之外补上记忆：加宽态按 `storageKey` 落 localStorage。加宽档是跨会话偏好（同 `useCanvasSettings`），故走模块级 store + `useSyncExternalStore`：同一面板可能同时挂两份实例（按钮在标题栏、面板体在 Portal），纯 useState 会让两边各有一份真相。
  */
 
 const WIDE_PANELS = new Map<string, boolean>();
@@ -96,17 +71,8 @@ export type WidePanel = {
 
 /**
  * 面板加宽档的出口。
- *
- * ```tsx
- * 取出口：`const panel = useWidePanel("exec-log", EXEC_LOG_WIDTH);`
- * 弹窗外壳用它：`<DialogContent popupClassName={panel.widthClass}>`
- * 弹窗内容也用它：`<div className={`… ${panel.widthClass}`}>…</div>`
- * 触发钮：`<WidePanelToggle panel={panel} className="…" />`
- * ```
- *
- * `id` 是**记忆的键**，必须跨挂载稳定（面板 id，不是组件实例）。
- * `fallback` 让调用处表达「这个面板默认就该多宽」——
- * `modalWidth(base)` 的返回结构原样传进来即可。
+ * 用法：`const panel = useWidePanel("exec-log", EXEC_LOG_WIDTH);`；弹窗外壳 `<DialogContent popupClassName={panel.widthClass}>`，内容同样用它；触发钮 `<WidePanelToggle panel={panel} className="…" />`。
+ * `id` 是记忆的键，必须跨挂载稳定（面板 id，不是组件实例）。`fallback` 让调用处表达「这个面板默认就该多宽」——`modalWidth(base)` 的返回结构原样传进来即可。
  */
 export function useWidePanel(
   id: string,
@@ -143,13 +109,8 @@ export function useWidePanel(
 
 /**
  * 加宽触发钮（标题栏里那个 ⤢）。
- *
- * 收掉的不只是「图标与文案」：三个面板的 `title` / `aria-label` / 图标
- * 此前各写一遍，而它们是**同一件事的三种表达**——改名时漏一处，用户悬停看到
- * 的就与图标的含义不一致。现在由 `panel.toggleLabel` 一处给出。
- *
- * 外观（尺寸、圆角、hover）仍由调用处经 `className` 给 —— 与
- * §16.2.4.2 第 9 条一致：验收标准是渲染结果不变。
+ * 收掉的不只是图标与文案：三个面板的 `title` / `aria-label` / 图标此前各写一遍，它们是同一件事的三种表达，改名漏一处就会不一致。现在由 `panel.toggleLabel` 一处给出。
+ * 外观（尺寸、圆角、hover）仍由调用处经 `className` 给 —— 与 §16.2.4.2 第 9 条一致：验收标准是渲染结果不变。
  */
 export function WidePanelToggle({ panel, className }: { className?: string; panel: WidePanel }) {
   return (

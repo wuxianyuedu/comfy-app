@@ -13,13 +13,9 @@ export const dynamic = "force-dynamic";
 const PROBE_TIMEOUT_MS = 6000;
 
 /**
- * POST /api/llm/test —— 测试 OpenAI 兼容接口连通性（设置页「添加模型」弹窗用）。
- *
- * body 的 baseUrl / apiKey 省略或为空白时回落到已保存的全局配置，支撑
- * 「留空则使用全局」的语义。成功时顺带返回服务端模型清单（GET {base}/models），
- * 供弹窗内点选填入模型名称。
- *
- * 探测失败不是硬错误：一律 200 + { ok, detail }，前端按 detail 展示降级文案。
+ * POST /api/llm/test —— 测试 OpenAI 兼容接口连通性（设置页「添加模型」弹窗用）。body 的
+ * baseUrl/apiKey 省略或空白时回落到已保存全局配置（「留空则使用全局」）；成功时顺带返回
+ * 服务端模型清单。探测失败不是硬错误：一律 200 + { ok, detail }，前端按 detail 降级展示。
  */
 export async function POST(req: NextRequest) {
   if (!(await requireRequestUser())) {

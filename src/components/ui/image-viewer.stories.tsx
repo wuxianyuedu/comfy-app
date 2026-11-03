@@ -10,19 +10,9 @@ import {
 } from "../../../.storybook/data-sources";
 
 /**
- * `ImageViewer` 是「把一张图看全」的通用出口（规范 16 §16.2.3）。
- *
- * 它要回答的都是**尺寸**问题 —— 而尺寸只有真文件给得出：
- *
- * - 「适应窗口」按图片的**自然尺寸**折算（`readNaturalSize` 读的就是文件的
- *   `width`/`height`），`data:` URL 里看不出这件事；
- * - 竖图与超宽图走的是折算的两个极端分支（`use-image-zoom` 的
- *   `viewportWidth` / `viewportHeight` 谁先触底）；
- * - `ViewableImage` 的缩略图盒子 + `1:1` 档的滚动条长度，都取决于真尺寸。
- *
- * 所以图仍走注入层的 `media` 值源（`scripts/storybook-assets.mjs` 现生成的三张
- * 真 SVG）。`missing.png` 在这里也有用：它是**加载失败**时 `ViewableImage`
- * 的 fallback 现场。
+ * `ImageViewer` 是「把一张图看全」的通用出口（规范 16 §16.2.3）。尺寸问题只有真文件给得出：
+ * 「适应窗口」按自然尺寸折算，竖图 / 超宽图走 `use-image-zoom` 的两个极端分支，缩略图盒子与
+ * `1:1` 滚动条长度也取决于真尺寸。图走注入层 `media` 值源；`missing.png` 是加载失败的现场。
  */
 
 /** 受控弹窗：`ImageViewer` 要求 `src` 有值时渲染，所以 story 自己持开关。 */
@@ -92,11 +82,8 @@ export const Wide: Story = {
 };
 
 /**
- * 缩略图 + 点开查看的组合形态（真机上多数落点用的是这个）。
- *
- * 左边能加载、右边指向不存在的文件 —— 后者走的是 `MediaThumbnail` 的失败兜底，
- * 是「图没了时用户看到什么」的现场。图失败与查看器是两件事：缩略图失败时**不**
- * 该点开一个空查看器。
+ * 缩略图 + 点开查看的组合形态（真机多数落点）。左边能加载、右边指向不存在的文件，后者走
+ * `MediaThumbnail` 的失败兜底。图失败与查看器是两件事：缩略图失败时不该点开空查看器。
  */
 export const ViewableImageGrid: Story = {
   parameters: { layout: "centered" },

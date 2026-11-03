@@ -1,13 +1,7 @@
 /**
- * `AppearanceSection` 的单选组键盘契约（规范 06 §6.12 的「复合控件 ⇄ 键盘契约」）。
- *
- * 本批之前这里手写 `role="radiogroup"` + `role="radio"`：读屏知道「这是个
- * 单选组」，但**组内方向键没人给**（Tab 进得来、聚焦得到、Arrow 没反应），
- * 而 ARIA 的 radiogroup 契约要求方向键在组内移动并选中、且只有选中项
- * 留在 Tab 序列里（roving tabindex）。
- *
- * 断言对齐可见行为：`role` / `aria-checked` / `tabindex` / 方向键后的选中变化，
- * 不锁样式类。
+ * `AppearanceSection` 的单选组键盘契约（规范 06 §6.12）：手写 `role="radiogroup"` + `role="radio"` 时
+ * 组内方向键没人给；ARIA radiogroup 契约要求方向键组内移动选中、且只有选中项留在 Tab 序列（roving tabindex）。
+ * 断言对齐可见行为，不锁样式类。
  */
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -82,16 +76,9 @@ describe("AppearanceSection 的单选组键盘契约", () => {
 });
 
 /**
- * 三组的选中档都缺过同一半「悬停值」（ISSUE #1925 第五批）。
- *
- * 底是 `Button variant="ghost"`，它自带**无条件**的 `hover:bg-muted
- * hover:text-foreground`；而 `data-checked:*` 编译出的选择器带 `:where()`、
- * 特异性只有 `(0,1,0)`，`hover:` 是 `(0,2,0)` —— 悬停档稳赢。于是划过
- * **已选中**的那一枚时，「选中」被改写回「未选中」。修法是就地钉
- * `data-checked:hover:*`（与 `ui/select-chip` 的 `aria-checked:hover:*` 同款）。
- *
- * 判的是**裸 token 的存在**，不是「读起来像不像」——上一批那几处正是
- * 因为「三元读起来是完整的」才漏过去的。
+ * 三组的选中档都缺过「悬停值」（ISSUE #1925 第五批）：底是 `Button variant="ghost"` 自带无条件 `hover:`（(0,2,0)），
+ * 而 `data-checked:*` 经 `:where()` 只有 (0,1,0) —— 悬停档稳赢，划过已选中项会被改回「未选中」；修法是就地钉
+ * `data-checked:hover:*`。判的是裸 token 的存在，不是「读起来像不像」。
  */
 describe("AppearanceSection 选中档的悬停值（ISSUE #1925）", () => {
   /** 从 className 里切出类名 token 集合：`a:hover:b` 是一整个 token。 */

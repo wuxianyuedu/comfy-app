@@ -1,11 +1,8 @@
 "use client";
 
-// ── 工作台视图页签的逻辑层（规范 17 §17.2 第②层）────────────────────────
+// ── 工作台视图页签的逻辑层（规范 17 §17.2 第②层）
 // 页签状态、sessionStorage 恢复/落盘、打开/选中/关闭三个动作收在这里。
-//
-// 判据要的是**按职责拆**，不是在一个函数里加注释分段 —— 组件里只留接线，
-// 页签规则的单测仍然只在 `workspace-tabs.ts` 那一层（这里只做装配，
-// 不重复实现规则）。
+// 按职责拆而非加注释分段：组件只留接线，页签规则的单测仍在 `workspace-tabs.ts` 那一层。
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -85,19 +82,10 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
   const [tabsState, setTabsState] = useState<WorkspaceTabsState>(initialWorkspaceTabs);
   const activateShellTab = useShellTabs((s) => s.activateTab);
 
-  /* ── 恢复：把上次离开时的页签从 sessionStorage 播回来 ─────────────────────
-   *
-   * 不能放进 `useState` 初始值：SSR 阶段读不到 `sessionStorage`，而 hydration
-   * **不会重跑** initializer，恢复就永远不生效。所以恢复走挂载后的 effect。
-   *
-   * ⚠️ 「恢复跑过没有」这一个布尔量**拦不住**落盘 —— 两个 effect 跑在同一个
-   * commit 里，恢复只是 `setTabsState()`（下一轮渲染才生效），而落盘拿到的仍是
-   * 这一轮的初始态（只有首页一页），于是把存储里的页签冲掉。现场就是
-   * ISSUE #1501 / #1727：刷新后 active-id 还在、页签却没了，用户被踢回首页。
-   *
-   * 正确的判据是「**这一轮要落盘的 state 是不是已与存储对过账**」：`hydrated`
-   * 作为**状态**（不是 ref）承载这件事 —— 它在恢复落地的那一轮渲染里才为真，
-   * 于是落盘天然只发生在对账之后。 */
+  /* ── 恢复：把上次离开时的页签从 sessionStorage 播回来 ──
+   * 不能放进 `useState` 初始值：SSR 读不到 sessionStorage、hydration 不重跑 initializer，恢复永远不生效。
+   * 「恢复跑过没有」布尔量**拦不住**落盘：两个 effect 同 commit，恢复只是 setTabsState（下一轮才生效），
+   * 落盘拿到仍是只有首页的初始态、把存储冲掉（ISSUE #1501 / #1727）。正确判据：`hydrated` 状态（非 ref）已对过账。 */
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
     const restored = readTabsState();

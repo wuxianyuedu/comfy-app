@@ -6,16 +6,9 @@ import { CanvasPanelToolbar } from "./CanvasPanelToolbar";
 afterEach(cleanup);
 
 /**
- * 画布面板工具条（素材库 / 历史记录）的悬停回归（ISSUE #1925 第三批收口）。
- *
- * 这一枚是**开关**（再点一次收起当前面板，`onSelect(null)`），不是单选
- * radio —— 所以它不走 `SelectChip`，而是在原地把那半个接缝补上：
- * `variant="ghost"` 自带 `hover:bg-muted hover:text-foreground`，而原来的
- * 选中分支**没有写 `hover:`** ⇒ 划过**当前打开**的那一枚时悬停档胜出，
- * 紫色高亮翻成灰底黑字，看上去像「未选中」（用户原话「悬浮和非悬浮一个紫
- * 一个白」那一族，ISSUE #1423）。
- *
- * 这里钉的是：选中档**钉住悬停值**，且与常态同值。
+ * 画布面板工具条（素材库 / 历史记录）的悬停回归（ISSUE #1925）。
+ * 这枚是开关而非单选 radio；`ghost` 自带 hover 会盖过原来没写 `hover:` 的选中档，
+ * 划过当前打开项时紫色翻成灰底黑字（ISSUE #1423）。这里钉：选中档钉住悬停值，与常态同值。
  */
 describe("CanvasPanelToolbar 打开面板的那一枚（ISSUE #1925）", () => {
   it("选中档同时钉住悬停底色与字色（不会被 ghost 的默认悬停档改写）", () => {

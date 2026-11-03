@@ -1,33 +1,7 @@
 /**
- * WorkflowNode.tsx — 自定义工作流节点的「设计驱动 + 功能承载」组件（内容层）。
- *
- * 视觉严格对齐 Ardot 稿 714503087315759（v2）：frame 3:12 NodeCard-v2。
- * 本文件是「测试自定义工作流」纯视觉稿（WorkflowNodeArdot.tsx）的功能版——
- * 同样的视觉元素（Card / Header / 3-chip / 端口行 / 生成按钮），叠加运行时逻辑：
- * NodeProps 数据、splitWorkflowIO 动态端口、生成按钮状态机。
- *
- * 与纯视觉稿的边界（按用户「除了测试节点有的元素，不要多加」）：
- *  - 不引入内层面板 #0B0B10（稿无）
- *  - 不引入结果卡 / 替换按钮（稿无，后续再补）
- *  - 端口 Handle 与稿一致：12px、描边 in #4D4D59 / out #16161C、投影、骑跨卡边
- *
- * 3 个 chip 改为真正的「独立 dropdown」——之前 3 个 chip
- *  共享同一个 `open` state + 同一个 popover（点哪个都展同一个），用户体感"不是
- *  独立的"。新版每个 chip 自己控 open、自己位置、自己列表：
- *    ① SourceFilterChip（本机 / 在线 / 全部）— popover 内 3 radio
- *    ② WorkflowPickChip（受 SourceFilter 过滤的工作流列表）— popover 列名
- *    ③ ModePickChip（按当前工作流的 modes 配置多选 + 默认）— popover 完整 multi-select
- *  增加 ④ ModelFilterChip（按用户模型标签库筛选）。
- *
- * 外壳（Card 圆角14、无 overflow-hidden 以保护 Handle 骑跨）由 CanvasNode 持有。
- *
- * 4 个 chip 的浮层统一走 `~/components/ui/popover`（规范 16 §16.2.3 P2），
- * 定位 / 外部点击关闭不再各写一份：
- *  - WorkflowSourceFilterChip.tsx    — 来源筛选 chip
- *  - WorkflowModelFilterChip.tsx     — 模型标签筛选 chip
- *  - WorkflowPickChip.tsx            — 工作流选择 chip
- *  - WorkflowModePickChip.tsx        — 模式选择 chip（含 transform 自动关闭）
- *  本文件保留类型定义与节点组装逻辑，外部导出 API 不变。
+ * WorkflowNode.tsx — 自定义工作流节点的「设计驱动 + 功能承载」组件（内容层）：视觉严格对齐 Ardot 稿 714503087315759 v2，
+ * 与纯视觉稿的区别是叠加运行时逻辑（NodeProps 数据、splitWorkflowIO 动态端口、生成按钮状态机）。
+ * 外壳（Card r14、无 overflow-hidden 保护 Handle 骑跨）由 CanvasNode 持有；4 个 chip 各自独立 dropdown，浮层走 `ui/popover`。
  */
 "use client";
 
@@ -129,14 +103,10 @@ export function WorkflowNode({
    * 每帧 O(N²)（详见 node-seq.ts）。 */
   const nodeSeq = useStore((state) => nodeSeqOf(state.nodes, id));
 
-  /* 在所有输入参数下方渲染 outputs row — 用户在
-   *  IO-edit 配的 output 在画布节点上要可见。Header (h-8) 不放，回到 Ardot
-   *  设计稿 v2 的「W + 标题 + 状态胶囊」三件套；outputs 单独成段放在
-   *  DynamicWorkflowForm 之后、生成按钮之前。
-   *  outputs 视觉与 inputs 严格对齐成「双行结构」—
-   *  第 1 行 labelRow（IO 紫点 + label + COMBO typeChip），第 2 行 dim 占位
-   *  控件（h-28 与 inputs 控件行同高），端点 PortHandle 放最右（dir="out",
-   *  right:-6）。`inputs` 一并解构出来给 ioLabel() 用作组内去重。 */
+  /* 在所有输入参数下方渲染 outputs row：用户 IO-edit 配的 output 要可见。Header (h-8)
+   * 保持 Ardot 稿 v2 的「W + 标题 + 状态胶囊」；outputs 单独成段放在
+   * DynamicWorkflowForm 之后、生成按钮之前，视觉与 inputs 严格对齐成双行结构。
+   * `inputs` 一并解构出来给 ioLabel() 用作组内去重。 */
   const { inputs, outputs } = splitWorkflowIO(workflowIO);
 
   /* 按 sourceFilter 过滤 chip2 列表 — 让 chip1 真正参与决策。
@@ -262,15 +232,10 @@ export function WorkflowNode({
             const oType = output.type;
             return (
               <div className="relative" key={`${output.nodeId}:${output.name}`}>
-                {/* 圆点几何位置上推 2px — 用户反馈
-                 *  的 `top:16`（= labelRow 中线 y=16）虽然几何计算
-                 *  完美（pt-1.5=6 + h-5/2=10 = 16），但实际渲染圆点仍视觉下
-                 *  偏 1-2px（React Flow Handle 自身 transform + 小圆点抗锯齿
-                 *  的「向下漂移」错觉）。top:14 把圆心放到 y=14，比 chip 中线
-                 *  16 往上 2px，对抗视觉下偏。PortHandle 12×12 圆, 圆心 y=14
-                 *  ⇒ 圆可视 y=8..20, 落在 labelRow y=6..26 范围内居中略偏上,
-                 *  视觉与 chip 中线 16 重合。boxShadow: \"none\" 关掉默认下偏
-                 *  阴影（4px y blur 4px 向下晕 8px 是主要下偏源）。 */}
+                {/* 圆点几何位置上推 2px —— `top:16` 计算完美（pt-1.5=6 + h-5/2=10），
+                 但实际渲染仍视觉下偏 1-2px（Handle transform + 小圆点抗锯齿错觉）。
+                 `top:14` 把圆心放到 y=14 略高于 chip 中线 16；`boxShadow: none` 关掉
+                 默认下偏阴影（4px y + 4px blur 是主要下偏源）。 */}
                 <PortHandle
                   dir="out"
                   id={output.ioKey}

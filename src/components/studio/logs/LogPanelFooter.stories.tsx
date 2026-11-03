@@ -7,19 +7,9 @@ import { tailPages } from "~/lib/page-window";
 import { logSceneArgType } from "../../../../.storybook/store-sources";
 
 /**
- * 日志面板的**页脚**：那一行「现在看的是哪一段、还有多少」+ 翻页 + 「回到最新」。
- *
- * 它是**纯 props**（`safePage` / `totalPages` / `droppedTotal` …），所以这一组
- * 里没有注入层的事。要摆的是它自己那三处**只有真数字才看得出对错**的东西：
- *
- *  · **翻页边界**（`safePage === 1` 时「更新的一页」禁用、`=== totalPages` 时
- *    「更早的一页」禁用）—— 手抄页码会在页大小改了之后继续「看着正常」；
- *  · **「更早 N 条已折叠」**：`LOG_STORE_MAX`（5000）之外的条目会被折叠，那一句
- *    只在 `droppedTotal > 0` 时出现 —— 它是「面板不是全部历史」的唯一提示；
- *  · **服务进程徽标**（`bootId`）截尾成 `:XX:YY` 的形态。
- *
- * 数字全部从**真 store 切片**读（`useLogPanel`，与 `LogPanel` 里那几行同一个
- * selector），不手抄一个 `total: 12` —— 那种数字在场景换了之后仍然显示旧值。
+ * 日志面板的**页脚**：一行「现在看的是哪一段、还有多少」+ 翻页 + 「回到最新」。纯 props。
+ * 摆三处只有真数字才看得出对错的东西：翻页边界禁用、「更早 N 条已折叠」（`droppedTotal > 0`
+ * 才出现）、服务进程徽标截尾成 `:XX:YY`；数字全从 `useLogPanel` 真切片读，不手抄 `total: 12`。
  */
 const meta = {
   title: "Studio/Logs/LogPanelFooter",
@@ -34,9 +24,7 @@ type Story = StoryObj<typeof FooterHarness>;
 
 /**
  * 适配件：照 `LogPanel` 的写法从 store 取那一组数字。
- *
- * `total` / `totalAll` / `droppedTotal` 都是 store 按真时间线派生的 —— 面板里
- * 那一份从 `panel` 切片读，这里读同一个切片（没有「story 版口径」）。
+ * `total` / `totalAll` / `droppedTotal` 都是 store 按真时间线派生的，面板与这里读同一个切片。
  */
 function FooterHarness({ withPage = false }: { withPage?: boolean }) {
   /* 与 `LogPanel` 里那几行**同一个 selector**（面板读 `header` 切片，
@@ -50,13 +38,9 @@ function FooterHarness({ withPage = false }: { withPage?: boolean }) {
   const setSearch = useLogPanel((state) => state.setSearch);
   const setPage = useLogPanel((state) => state.setPage);
 
-  /* `safePage` / `totalPages` 走**共享出口** `tailPages()`（§12.18 / P63）——
-     面板里那份也是它（`selectPageLogs` 包了一层）。这里**不自己算**
-     `Math.ceil(len / pageSize)`：页数与钳边界的算式收在 `~/lib/page-window`，
-     在 story 里重写一遍正是 P63 那条硬闸要拦的形态（本批实测被拦下过）。
-
-     取 `tailPages(...).totalPages` 而不是另算一个：那个出口的钳边界与「末页」
-     语义就是面板显示的来源。`withPage` 让「更早的一页」可点，看第二页的形态。 */
+  /* `safePage` / `totalPages` 走**共享出口** `tailPages()`（§12.18 / P63），面板里那份也是它。
+     不自己算 `Math.ceil(len / pageSize)`：页数与钳边界算式收在 `~/lib/page-window`，
+     在 story 里重写正是 P63 硬闸要拦的形态。取 `tailPages(...).totalPages`，`withPage` 让「更早的一页」可点。 */
   const { totalPages } = tailPages(filteredLogs, 1, LOG_PAGE_SIZE);
   const safePage = withPage ? Math.min(2, totalPages) : 1;
 

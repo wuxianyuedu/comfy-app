@@ -1,16 +1,10 @@
 "use client";
 
 // ── 角色定妆照会话（规范 17 §17.2 第②层）────────────────────────────────────
-// 定妆照生成是长耗时异步流程：切走页签只卸载 stage 组件，故 busy / 进度 / 日志
-// 与提取会话一样收在工坊 controller 里（见 use-workshop-pipeline 的挂载点），
-// 生成中切页签再切回，进度与候选都不丢。
-// 候选本身写在角色对象上（随草稿持久化），本 hook 只负责编排与过程状态。
-//
-// 两条硬约束：
-//   ① 生成 / 导入共用一把**单飞闸门**（`~/components/ui/use-reentrancy-lock`）——同一时刻只跑一件；
-//      渲染用的 busy / importing 只是展示态，不能拿来当并发守卫；
-//   ② 结果只回写「**发起时所属项目**」的角色列表（`writeBackCandidate`），
-//      项目被换掉时如实告知用户，不静默丢弃一次昂贵的生成。
+// 长耗时异步流程：切走页签只卸载 stage 组件，故 busy/进度/日志收在工坊 controller
+//（生成中切页签再切回不丢）；候选写在角色对象上随草稿持久化。两条硬约束：
+// ① 生成/导入共用一把单飞闸门（`~/components/ui/use-reentrancy-lock`），渲染用的
+// busy/importing 只是展示态、不能当并发守卫；② 结果只回写发起时所属项目的角色列表。
 
 import React from "react";
 import { createThrottleGate } from "~/components/ui/use-throttled-progress";

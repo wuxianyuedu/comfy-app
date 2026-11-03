@@ -1,21 +1,9 @@
 "use client";
 
 /**
- * TaskLogTimeline —— 任务执行日志的「时间线主体」：级别筛选页签（带计数）+
- * 自动滚动 + 虚拟滚动列表 + 底部计数条。
- *
- * 这套主体在 `workflow-library/WorkflowRunLogModal` 与
- * `project-canvas/GlobalStepLogPanel` 之间只差配色档与行渲染器，队列页还要
- * 再加第三份 —— 按 §12.12 收成共享组件让各处只留差异，而不是抄第三遍。
- *
- * 形态约定（消费方各自负责的部分）：
- *   · 头部（标题 / 状态徽标 / 取消 / 查看完整输出 / 加宽 / 关闭）与弹窗外壳
- *     留在各消费方 —— 它们绑的是各自的业务状态；
- *   · 本组件是纯展示（§17 第③层）：filter / autoscroll 是无副作用的视觉偏好，
- *     留在组件内（§17.12.2）；日志数据经 props 传入，不发任何请求。
- *
- * `GlobalStepLogPanel` 暂未迁移：它的筛选栏配色档（`bg-surface-1`）与
- * `data-testid` 命名自成一套，迁移要连带改它的用例，另开一批做。
+ * TaskLogTimeline —— 任务执行日志的「时间线主体」：级别筛选页签（带计数）+ 自动滚动 +
+ * 虚拟滚动列表 + 底部计数条。纯展示（§17 第③层）：filter / autoscroll 是视觉偏好留组件内，
+ * 数据经 props 传入、不发请求；`GlobalStepLogPanel` 暂未迁移（配色与 `data-testid` 自成一套）。
  */
 
 import { useState, type ReactNode } from "react";
@@ -111,13 +99,10 @@ export function TaskLogTimeline({
 
   return (
     <>
-      {/* 级别筛选栏 —— 一排里选一个，走 `ui/select-chip`（规范 16 §16.2.4.75）。
-          此前是手搓的 `variant="ghost"` + 选中三元：选中档只给了
-          `bg-surface-2 text-ink`，而 `ghost` 变体自带
-          `hover:bg-muted hover:text-foreground` 照旧生效 —— 划过**已选中**
-          的那一枚时底色/字色被悬停档改写，且 `bg-surface-2` 在浅色主题下与
-          行头底色同值（`log-row-style.ts` 记过同一件事），选中本来就弱。
-          整排交给基元后选中态四层俱在、悬停值钉回常态。 */}
+      {/* 级别筛选栏 —— 一排选一个，走 `ui/select-chip`（规范 16 §16.2.4.75）。
+          此前手搓 `ghost` + 选中三元：选中档没钉悬停值，ghost 的 hover 会改写已选中项；
+          且 `bg-surface-2` 在浅色主题下与行头底色同值（`log-row-style` 记过），选中本就弱。
+          交给基元后选中态四层俱在、悬停值钉回常态。 */}
       <div className="border-border bg-card flex shrink-0 items-center justify-between gap-3 border-b px-4 py-1.5">
         <div aria-label="日志级别筛选" className="flex items-center gap-1" role="radiogroup">
           {FILTER_LABELS.map((option) => {

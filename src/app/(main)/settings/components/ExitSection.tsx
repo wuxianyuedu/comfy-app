@@ -2,10 +2,8 @@
 
 /**
  * 退出与后台服务分区（规范 17 §17.2 第③层）。
- *
- * 桌面壳退出时的整树强杀策略由壳决定，这里只暴露「拉起时」是否让后台服务
- * 脱离进程树的偏好（ComfyUI / Ollama），以及保存出口。纯展示：读写都经
- * controller 的 `drafts.settings` / `patchSettings` / `savePrefs`。
+ * 桌面壳退出时的整树强杀策略由壳决定；这里只暴露「拉起时」后台服务是否脱离
+ * 进程树的偏好。纯展示：读写都经 controller。
  */
 
 import { SettingsCard } from "~/components/ui/settings-card";

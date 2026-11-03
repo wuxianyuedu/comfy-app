@@ -6,18 +6,10 @@ import type { WorkflowIOMap } from "~/components/studio/workflow-io";
 import type { WorkflowRow } from "./workflow-library-config";
 
 /** 详情面板的四个页签 —— 数组顺序即渲染顺序，**第一项也是默认页签**。
- *
- *  「编辑对外参数 / 实际使用」原先是「画布节点」页签内部的子页签，二者内容
- *  基本独立（前者是参数落点编辑画布，后者是填表运行），拆成顶层页签少一层
- *  嵌套。两者共用同一个常驻实例（见 `WorkflowLibraryDetailView`）：切页签
- *  只切视图模式，表单值与运行态不丢。
- *
- *  **默认页签取最轻的那个（工坊封装）**：打开一条工作流时先落在这里 —— 它是
- *  一张纯文字的口 / 落点清单，不牵画布引擎（`@xyflow/react`）、也不牵 JSON 树
- *  渲染器。默认落重型页签（画布预览）的代价是**每打开一条工作流就把画布引擎
- *  拉起来**，而多数时候用户只是想看一眼「工坊会怎么驱动它」。
- *  「编辑对外参数 / 实际使用」那一份常驻实例另见视图层的**首次访问才挂载**
- *  （`WorkflowLibraryDetailView`）：切这两页时只下载一次，之后常驻不重建。 */
+ *  「编辑对外参数 / 实际使用」原是「画布节点」内的子页签，拆成顶层页签少一层嵌套；
+ *  两者共用同一个常驻实例（见 `WorkflowLibraryDetailView`），切页签只切视图模式，
+ *  表单值与运行态不丢。默认页签取最轻的「工坊封装」：纯文字清单，不牵画布引擎与
+ *  JSON 树渲染器；否则每打开一条工作流就把画布引擎拉起来。 */
 /* SAFETY: 类型断言已复核 */
 export const DETAIL_TABS = [
   { key: "params", label: "工坊封装" },
@@ -88,14 +80,10 @@ export function buildSourceData(
 }
 
 /** 详情请求是否对**当前渲染的**工作流就绪。
- *
- *  换工作流时 `useQuery({id})` 的 data 会短暂悬空（新 key 首次拉取），但
- *  `workflow` 行数据是同步就位的 —— 此时若把「选中行有值 + 查询在飞」当成
- *  加载态，右侧会先闪一屏「加载详情中…」再被真实内容顶掉，连带整页布局
- *  跳一下。判据因此收紧为「当前 workflow 的键还没到过数据」，而不是
- *  `isLoading`（它在换 key 与后台 refetch 时为真，二者都不该出现占位）。
- *
- *  未选中工作流时不算加载（空态由视图渲染）。 */
+ *  换工作流时 `useQuery({id})` 的 data 会短暂悬空，但 `workflow` 行数据同步就位；
+ *  若把「选中行有值 + 查询在飞」当加载态，右侧会先闪一屏「加载详情中…」再被顶掉，
+ *  整页布局跳一下。判据收紧为「当前 workflow 的键还没到过数据」，而不是
+ *  `isLoading`（换 key 与后台 refetch 都为真）。未选中工作流时不算加载。 */
 export function isDetailLoadingFor(workflowId: string | null, settledId: string | null): boolean {
   if (!workflowId) {
     return false;

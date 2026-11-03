@@ -53,14 +53,9 @@ function localTimestamp(): string {
 }
 
 /** 本次启动的 runtime 日志写入器（`ollama-runtime-<时刻>.log`）。
- *
- * 一次启动一份文件（ISSUE #1326）：拉起前换一份新的，于是「这个文件属于哪一次
- * 启动」由文件本身回答。为 null（还没启动过）时写日志静默跳过 —— 状态行本来
- * 就会走响应体给出口。
- *
- * 这个模块**每次调用都会重新分配**吗？不会：句柄挂在模块作用域上，一次
- * 「启动 Ollama」的整个流程（含 stdout/stderr 回调与退出回调）共用同一份；
- * 下一次启动（用户再点一次）才换新的。 */
+ * 一次启动一份文件（ISSUE #1326）；句柄挂模块作用域，一次启动流程（含
+ * stdout/stderr 与退出回调）共用同一份，下次启动才换新。为 null 时写日志
+ * 静默跳过 —— 状态行本来就会走响应体给出口。 */
 let runtimeWriter: RuntimeLogWriter | null = null;
 
 /** 开一次启动的日志：轮转旧文件 → 换上新的一份 → 落首行标题。 */
@@ -140,12 +135,8 @@ async function ollamaServiceRunning(): Promise<boolean> {
 }
 
 /**
- * 拉起 ollama serve。
- * 退出策略：exitKillOllama=true（默认）→ bound，Ollama 挂应用进程树，应用退出
- * 连带关闭（Windows 上仍沿用非 detached，避免弹独立 cmd 窗口）；false →
- * keepAlive，脱离进程树保活，下次打开应用直接复用。开关同样只在「拉起时」生效。
- * keepAlive 路径没有直连 child 可观察秒退（真实子进程是 Start-Process/已
- * unref 的孤儿），只做「拉起命令已执行」，就绪与否交给前端按端口轮询。
+ * 拉起 ollama serve。退出策略：exitKillOllama=true（默认）→ bound，挂应用进程树、应用退出连带关闭（Windows 沿用非 detached，避免弹独立 cmd 窗口）；
+ * false → keepAlive，脱离进程树保活；keepAlive 路径没有直连 child 可观察秒退，只做「拉起命令已执行」，就绪与否交前端按端口轮询。
  */
 async function spawnOllamaServe(
   exe: string,
@@ -267,17 +258,8 @@ export async function GET(_req: NextRequest) {
 }
 
 /**
- * 端点：POST /api/llm/ollama-start
- *
- * 拉起 ollama serve：
- * 1. 先探测端口是否已就绪 → 已在运行就直接返回
- * 2. Windows 上检查是否已注册为系统服务 → 是则返回
- * 3. 互斥锁保护：同一时刻只允许一次 spawn
- * 4. 用 ollama.exe 精确路径 spawn，windowsHide + shell:false
- *    （Windows 不用 detached 避免弹独立 cmd 窗口；POSIX 用 detached
- *    防子进程随父进程退出）
- * 5. 观察 1s 确认进程存活；秒退则返回错误信息
- * 6. 启动过程与 stdout/stderr 写入 log/services/ollama-runtime.log（设置页可查看）
+ * 端点：POST /api/llm/ollama-start —— 拉起 ollama serve。顺序：端口已就绪直接返回 → Windows 已注册系统服务则返回 → 互斥锁保证同一时刻仅一次 spawn
+ *（windowsHide + shell:false；Windows 不用 detached 避免弹 cmd 窗，POSIX 用 detached 防随父退出）→ 观察 1s、秒退即报错 → 过程写入 log/services/ollama-runtime.log。
  */
 export async function POST(_req: NextRequest) {
   if (!(await requireRequestUser())) {

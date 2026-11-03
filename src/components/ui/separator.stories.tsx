@@ -2,18 +2,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { Separator } from "~/components/ui/separator";
 
-/**
- * `ui/separator` 的形态**全在两根轴上**：`orientation` 决定尺寸方向，
- * 但它真正的价值是「**在 flex 容器里怎么占位**」——
- *
- * - `horizontal`：`h-px w-full`（1 像素的分隔线，横向占满）；
- * - `vertical`：`w-px self-stretch`（竖线**撑满容器高度** —— 这一条只有放进
- *   一个高度由内容决定的 flex 行里才看得出：`self-stretch` 会跟着最高的兄弟
- *   长起来，而不是塌成 0 高）。
- *
- * 所以「竖档 0 高度」是这类组件的经典错法，也是本 story 存在的理由。
- * 枚举从 props 派生（规范 16 §16.2.3.4）。
- */
+/** `ui/separator` 的形态全在两根轴上：`orientation` 决定尺寸方向，但它真正的价值是「在 flex 容器里怎么占位」——
+ * `horizontal`：`h-px w-full`（1 像素的分隔线，横向占满）；`vertical`：`w-px self-stretch`（竖线撑满容器高度 —— 这一条只有放进一个高度由内容决定的 flex 行里才看得出：`self-stretch` 会跟着最高的兄弟长起来，而不是塌成 0 高）。
+ * 所以「竖档 0 高度」是这类组件的经典错法，也是本 story 存在的理由。枚举从 props 派生（规范 16 §16.2.3.4）。 */
 type SeparatorOrientation = NonNullable<React.ComponentProps<typeof Separator>["orientation"]>;
 
 const ORIENTATIONS: Array<SeparatorOrientation> = ["horizontal", "vertical"];

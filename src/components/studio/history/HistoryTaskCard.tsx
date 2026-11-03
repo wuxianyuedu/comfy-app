@@ -94,12 +94,9 @@ export function HistoryTaskCard({
         </Button>
 
         {/* ── 主体信息 ── */}
-        {/* 整块可点 → **原生按钮**，不是「加了 onClick 的 div」：非原生元素挂
-         * `onClick` 时键盘用户根本进不来（鼠标点得开、Tab 到不了、Enter 没反应）。
-         * 原生 `<button>` 的键语义由浏览器给，等于这条判据唯一的正解 —— 再挂一个
-         * `simpleKeyHandler` 反而是复刻浏览器默认行为（§16.2.4.57 的账要消除的
-         * 那种写法）。`text-left` 与 `p` → `span.block` 是因为 `<button>` 里不能嵌
-         * 块级元素，而它的默认排版是居中。 */}
+        {/* 整块可点 → 原生按钮，不是「加了 onClick 的 div」：非原生元素键盘用户进不来
+            （鼠标点得开、Tab 到不了、Enter 没反应）。原生 button 的键语义由浏览器给；再挂 simpleKeyHandler
+            等于复刻默认行为。text-left 与 p→span.block 因 button 不能嵌块级元素、默认排版居中。 */}
         <Button
           className="h-auto min-w-0 flex-1 cursor-pointer justify-start rounded-xl p-0 text-left font-normal whitespace-normal hover:bg-transparent"
           onClick={() => {

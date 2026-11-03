@@ -1,11 +1,9 @@
 "use client";
 
 // 文本评审（角色卡 / 剧本）共用的「AI 评审」入口 + 判定弹窗骨架（§12.12）：
-// CharacterReviewButton 与 ScriptReviewButton 的共享内核——按钮 + 弹窗 + 判定展示 +
-// 在途 / 出错 / 空判定占位；打开即评审一次（评审对象由调用方的 `review` 闭包决定）。
-// 判定与动作由调用方注入：带维度评分的场景（剧本）自动展示分数条与轮次曲线；
-// 提供 `revise` 的场景多一个「按意见改写」按钮。共享内核不放任何一侧的业务写回
-// （剧本改写后的编辑器回填等由各壳的 hook 装配，§18.4 同口径）。
+// 按钮 + 弹窗 + 判定展示 + 在途/出错/空判定占位，打开即评审一次。判定与动作由
+// 调用方注入（带维度评分的场景展示分数条与轮次曲线；提供 `revise` 多一个「按意见
+// 改写」）。共享内核不放任何一侧的业务写回（各壳的 hook 装配，§18.4 同口径）。
 import { useEffect, useState, type ReactNode } from "react";
 import { ClipboardCheck } from "lucide-react";
 

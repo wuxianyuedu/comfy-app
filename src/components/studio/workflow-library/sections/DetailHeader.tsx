@@ -59,12 +59,10 @@ export function DetailHeader({
 
   return (
     <div className="border-border-subtle border-b px-5 py-4">
-      {/* 标题区与操作按钮组同排。窗口窄 / 详情面板被挤窄时**整组按钮换到第二行**，
-          而不是被挤出去裁掉：面板根容器是 `overflow-hidden`，按钮组一旦溢出右侧就
-          直接消失（此前 `shrink-0` + 无 `flex-wrap` 的形态下，小屏看不到「删除」这
-          类最右侧的按钮）。与编辑器顶栏同一套退化顺序（见
-          workflow-editor/workflow-editor-topbar-config.ts）：让位的是标题区
-          （截断），换行的是按钮组，按钮本身绝不压扁。 */}
+      {/* 标题区与操作按钮组同排。面板被挤窄时**整组按钮换到第二行**：根容器是
+          `overflow-hidden`，按钮组溢出右侧会直接消失（此前小屏看不到「删除」）。
+          与编辑器顶栏同一套退化顺序：让位的是标题区（截断），换行的是按钮组，
+          按钮本身绝不压扁。 */}
       <div
         className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2"
         data-testid="detail-header-row"

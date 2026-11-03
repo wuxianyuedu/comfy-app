@@ -18,22 +18,8 @@ import { AppearanceBootstrap } from "~/components/AppearanceBootstrap";
 import { MessageCenterPanel } from "~/components/message-center/MessageCenterPanel";
 
 /**
- * 根元数据。它此前一直是脚手架带过来的默认值（英文的示例应用名与描述），
- * 是个不该留在成品里的残留。
- *
- * **可见面要说准**（这条容易想当然）：桌面壳的窗口标题由壳侧显式设定
- * （`src-tauri/src/lib.rs` 的 `WebviewWindowBuilder::title("Comfy APP")`），
- * 前端自绘的页签行也不读 `document.title` —— 所以它**不进桌面壳的标题栏**。
- * 真正取到它的是**浏览器形态**（`pnpm dev` 起的那条开发链路，README 里写明
- * 前端可在浏览器里调试）：页签文字、书签/历史记录名。
- *
- * `template` 而非写死品牌：子路由只声明自己的那一段（如「模型库」），
- * 品牌由这一处收口，新增页面不会漏带、也不会各页手抄一遍。
- *
- * 刻意**不**在这里补 `viewport.themeColor`：那颗 meta 管的是浏览器 UI
- * （地址栏 / 窗饰）的着色，而桌面壳没有原生装饰、窗口底色由壳侧
- * `tauri.conf.json` 的 `backgroundColor` 决定，前端这层给它一个值并不承重 ——
- * 添一个没人消费的配置项，等于给下一个人留一道「它到底管什么」的题。
+ * 根元数据。可见面：桌面壳窗口标题由壳侧设定（`src-tauri/src/lib.rs`）、页签行不读 `document.title`，真正取到它的是浏览器形态（页签文字、书签/历史名）。
+ * 用 `template` 收口品牌，子路由只声明自己那段。刻意不补 `viewport.themeColor`：桌面壳无原生装饰，底色由壳侧 `backgroundColor` 决定，给了也没人消费。
  */
 export const metadata: Metadata = {
   title: { default: "Comfy-APP", template: "%s · Comfy-APP" },

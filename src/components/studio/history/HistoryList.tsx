@@ -119,17 +119,10 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
       </ViewActions>
 
       {/* ── 状态筛选（分段 chip）──
-          这里此前是手搓的 `<Button variant="ghost">` 一排，选中档给的是
-          `bg-primary-solid text-primary-foreground` —— `bg-primary-solid`
-          **不是任何一级的 token**（`Button` 的变体叫 `primary-solid`，那是
-          `variant` 轴的取值，不是给 className 用的类名），样式表里根本没有
-          这条规则。于是选中项**没有底色**，`text-primary-foreground` 的纯白字
-          直接压在页面底色上：浅色主题下近乎消失、深色主题下只剩一团白字，
-          两套主题都读不出「哪一枚是选中的」（ISSUE #1925，用户截图）。
-          计数徽标 `bg-subtle5` 同源 —— 那个类同样不存在。
-          现在整排交给 `ui/select-chip`（「一排里选一个」的全库唯一实现，
-          规范 16 §16.2.4）：选中态有底色 / 字色 / 描边 / 字重四层，且自带
-          与常态同值的 `hover:`，不会被 `Button` 的默认悬停档吃掉。 */}
+          此前手搓 `<Button variant="ghost">`，选中档用 `bg-primary-solid text-primary-foreground` ——
+          前者是 variant 轴取值、不是 className 类，样式表无此规则，选中项无底色、白字压页面底（ISSUE #1925）；
+          计数徽标 `bg-subtle5` 同为不存在的类。
+          现交给 ui/select-chip（全库唯一「一排选一个」实现）：aria-checked 驱动四层选中态，且自带同值 hover。 */}
       <div aria-label="按状态筛选任务" className="mb-6 flex flex-wrap gap-2" role="radiogroup">
         {FILTERS.map((filterOption) => {
           const isActive = c.filter === filterOption.key;
@@ -147,13 +140,9 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
               {filterOption.tone && <StatusDot sizeClass="size-1.5" state={filterOption.tone} />}
               <span>{filterOption.label}</span>
               <span
-                /* 计数徽标：底色取**当前字色**的淡底（`bg-current/N`），
-                   于是选中 / 未选中两态都由同一份语义 token 派生，
-                   深浅两套主题各自成立，不必再手写四组类名。
-                   α 取 8% 是**量出来的**：徽标底越接近字色、字压在它上面的
-                   对比度越低 —— 实测两套主题 × 两态四组读数，
-                   0.15 时浅色未选中档掉到 4.33（低于 WCAG AA 的 4.5），
-                   0.08 时四组分别是 6.56 / 4.75 / 6.91 / 5.15，全部达标。 */
+                /* 计数徽标：底色取当前字色淡底（bg-current/N），随语义 token 两态/两主题各自成立。
+                   α = 8% 是量出来的：0.15 时浅色未选中档对比度掉到 4.33（低于 WCAG AA 4.5）；
+                   0.08 时四组读数 6.56 / 4.75 / 6.91 / 5.15 全部达标。 */
                 className="text-3xs rounded-full bg-current/8 px-1.5 py-0.5 font-bold"
               >
                 {count}

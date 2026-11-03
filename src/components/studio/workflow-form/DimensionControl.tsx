@@ -1,18 +1,9 @@
 "use client";
-/* Dimension 组合控件的入口与 W/H 形态（另见 AspectMegapixelControl.tsx）。
- *
- * 两种尺寸类别，同一块控件里都能选：
- * · 比例 + 分辨率 （1k / 2k / 4k，宽高按场景查「尺寸表」）
- * · 比例 + 百万像素 + 倍数 （1M / 2M / 4M × 宽高对齐倍数 8/16/32/64）
- * 差别只在于控件把值写到哪些端口上：
- * · 工作流暴露 width + height → 由选中的档位算出宽高写回去（本文件）；
- * · 工作流暴露 aspect_ratio + megapixels (+ multiple) → 直接写这三个值，
- * 选「分辨率」时按尺寸表换算成「百万像素 + 倍数」（AspectMegapixelControl）。
- *
- * 「像素」大类下分「分辨率」与「百万像素」两个子类；「倍数」只在选中百万像素档
- * 时出现 —— 那一档的宽高由总像素预算与对齐倍数共同决定，分辨率档则由表给定。
- * 百万像素在端口上是 FLOAT（连续量），所以那一组下面还有一条「自定义」步进器
- * （`MegapixelStepper`）—— 档位之外能填 2.5 这类任意值。 */
+/* Dimension 组合控件入口与 W/H 形态（另见 AspectMegapixelControl.tsx）。两种尺寸类别同一块控件可选：
+ * 比例+分辨率（1k/2k/4k，按场景尺寸表查宽高）与 比例+百万像素+倍数（1M/2M/4M × 对齐倍数 8/16/32/64）。
+ * 差别只在写入端口：暴露 width+height → 按档位算宽高写回（本文件）；暴露 aspect_ratio+megapixels(+multiple)
+ * → 直写三值，选「分辨率」时按尺寸表换算成「百万像素+倍数」。倍数只在百万像素档出现。
+ * megapixels 是 FLOAT（连续量），故另有 MegapixelStepper 可填 2.5 等任意值。 */
 
 import { useCallback, useMemo, useState } from "react";
 
@@ -192,13 +183,9 @@ function DimensionSizeControl({
       DEFAULT_DIM_RATIO_PRESET,
     ).label;
   }, [w0, h0]);
-  /* 清晰度预设跨两种类型挑选（"pixel" = 分辨率 1k/2k/4k；
-   *"megapixel" = 1M/2M/4M），由`pickClarityPreset` 负责，它镜像了
-   * 应用预设时用的同一张场景表 + 对齐倍数。
-   *
-   * 用户显式挑过的清晰度会锁进`explicitClarity`，好让点过
-   * 例如「4M」之后能扛过下一轮 pickClarityPreset 往返。用户经
-   * NumberField 手动改 W 或 H 时锁会被清掉，
+  /* 清晰度预设跨两种类型挑选（"pixel" 分辨率 / "megapixel" 百万像素），由 pickClarityPreset 负责，
+   * 它镜像应用预设时同一张场景表 + 对齐倍数。用户显式挑过的清晰度锁进 explicitClarity，
+   * 好让点过「4M」之后能扛过下一轮 pickClarityPreset 往返；经 NumberField 手改 W/H 时锁被清掉，
    * 这样手打值之后仍是自动检测胜出。 */
   const derivedClarity = useMemo(
     () => pickClarityPreset(w0, h0, alignMultiple, scene, table).label,
@@ -229,12 +216,9 @@ function DimensionSizeControl({
     [group, setMany, alignMultiple, scene, table],
   );
 
-  /* 改对齐倍数会把当前 W/H
-   * 重新吸附到新网格，并清掉
-   * 显式清晰度锁，好让弹层重新检测最接近的
-   * 预设（吸附后的尺寸可能已属于另一个
-   * 清晰度桶）。数值 W/H 步进器也跟随这个值，
-   * 让 +/- 按钮与吸附网格保持一致。 */
+  /* 改对齐倍数会把当前 W/H 重新吸附到新网格，并清掉显式清晰度锁，
+   * 好让弹层重新检测最接近的预设（吸附后的尺寸可能已属另一个清晰度桶）。
+   * 数值 W/H 步进器也跟随该值，让 +/- 与吸附网格一致。 */
   const handleAlignChange = useCallback(
     (next: number) => {
       const clamped = normalizeAlignMultiple(next);
@@ -378,12 +362,9 @@ function DimensionSizeControl({
         />
       </div>
 
-      {/* 宽 + 高 —— 始终可见，样式与别的节点参数字段一致
- （NumberField，两列栅格）。上面一行里挑一个预设
- 会经 applyPreset → setMany 写入真实的 W/H，所以下面的
- NumberField 会实时更新。步进器 +/- 遵循
- 用户钉住的对齐倍数，好让手动微调 W/H 落在
- 与百万像素清晰度同一张网格上。 */}
+      {/* 宽 + 高 —— 始终可见，样式与其他节点参数字段一致（NumberField，两列栅格）。
+          上面一行挑预设会经 applyPreset → setMany 写入真实 W/H，下方实时更新；
+          步进器 +/- 遵循用户钉住的对齐倍数，使手动微调落在与百万像素清晰度同一张网格上。 */}
       {!narrow && (
         <div className="grid grid-cols-2 gap-2">
           <Field label="宽度">

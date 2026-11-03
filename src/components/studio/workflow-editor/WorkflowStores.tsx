@@ -1,27 +1,9 @@
 "use client";
-/* ════════════════════════════════════════════════════════════════════════
- *  WorkflowStores.tsx — Zustand 状态层（3 个画布 store 的唯一出口）
- * ────────────────────────────────────────────────────────────────────────
- *  对外暴露 3 个按编辑器实例隔离的 store（IOEditStore、
- *  RgthreeGroupsStore、NodeJsonViewerStore），经「薄 React Context 容器」
- *  下发 —— 语义等价于此前那 3 个并列的 React Context。
- *
- *  为什么不是模块级单例？
- *    工作流编辑器（WorkflowCanvasEditor）与项目画布（ProjectCanvas）都挂载
- *    同一套 wf-editor-inner，且可同时存活（还有 drill-in 子图栈）。若用
- *    顶层单例 store，两个编辑器的 workflowIO/viewer/bypass overrides 会互相
- *    串态——这正是 React Context 当初提供隔离的原因。
- *
- *  采用的模式：createStore 工厂 + useStore，经「薄 React Context 容器」下发。
- *    • createStore(factory)     每实例一份 StoreApi（内容可突变，非 hook）
- *    • <StoreCtx.Provider value={store}>  只做“传递 store 引用”，不触发重渲
- *    • useStore(storeCtx, selector)       按 selector 订阅，避免无谓重渲
- *  这是 zustand v4/v5 官方推荐的组件级作用域 store 写法（非废弃的
- *  zustand/context.createContext：v4 已标记 deprecated，迁移用 createStore）。
- *
- *  Shape 约束：对外暴露的 API 逐字段等价于各 store 的 state，
- *  消费方（WorkflowNode / WorkflowSubgraphNode / NodeIdChip …）只读不改。
- * ════════════════════════════════════════════════════════════════════════ */
+/* ═══ WorkflowStores.tsx — Zustand 状态层（3 个画布 store 的唯一出口）═══
+ * 按编辑器实例隔离的 IOEditStore / RgthreeGroupsStore / NodeJsonViewerStore，经薄
+ * React Context 下发。**不用模块级单例**：编辑器与项目画布可同时挂载同一套
+ * wf-editor-inner（还有 drill-in 子图栈），单例会互相串态。模式：`createStore` 工厂 +
+ * Provider（只传引用）+ `useStore(storeCtx, selector)` 订阅（zustand v4/v5 官方写法）。 */
 import React, { createContext, useContext } from "react";
 import { createStore, useStore as useZustandStore, type StoreApi } from "zustand";
 import type {
@@ -42,17 +24,11 @@ import { NodeJsonPopover } from "../WorkflowNodeJsonPopover";
 import { patchWorkflowSilently } from "~/lib/workflow/workflow-mutations";
 import { reportStaleStoreAction } from "~/lib/shell/stale-store-notify";
 
-/* ───────────────────────────────────────────────────────────────────────
- *  IOEdit store
- * ───────────────────────────────────────────────────────────────────────
- *  原先由 wf-editor-inner.tsx 以 useState + useCallback 声明、经
- *  即 IOEditContext.Provider 上挂 ioEditMode / workflowIO / toggleIO 等
- *  下发。现把「状态 + 动作」一起收进 store；消费方按需订阅。
- *
- *  注意：reorderIO 会 PATCH 服务端，依赖 workflowId；故工厂参数携带
- *  workflowId。其余动作（toggleIO / setIOLabel / toggleIORequired /
- *  setIOModeOverride / purgeModeOverrides）都是纯状态更新，与编辑器其它 30+
- *  个画布 state 解耦。 */
+/* ─── IOEdit store ─── 原先在 wf-editor-inner 用 useState + useCallback 声明、
+ * 经 IOEditContext.Provider 下发 ioEditMode / workflowIO / toggleIO 等；现把「状态 +
+ * 动作」一起收进 store，消费方按需订阅。注意 `reorderIO` 会 PATCH 服务端、依赖
+ * workflowId（故工厂参数携带它）；其余动作（toggleIO / setIOLabel / toggleIORequired /
+ * setIOModeOverride / purgeModeOverrides）都是纯状态更新，与其它 30+ 画布 state 解耦。 */
 export type IOEditState = {
   ioEditMode: boolean;
   ioPreviewOpen: boolean;
@@ -78,13 +54,10 @@ export type IOEditActions = {
    *  与 setIOLabel / toggleIORequired 同路径持久化：下一次 PATCH 整体
    *  workflowIO 时一起落库，无需改表。 */
   setIOModeOverride: (key: string, mode: string, patch: WorkflowIOModeOverride | null) => void;
-  /** 开关 IO 预览面板。关闭时**一并退出 IO 编辑模式**：面板已经在画面上消失，
-   *  节点卡片上再留着勾选框，作者手上就只剩一个「看不到结果、只看到选择器」的
-   *  半截状态。打开时**一并进入编辑模式**，让勾选框与面板同时可用。
-   *
-   *  两个方向都收在这里，而不是在视图层手写两处 setState —— 顶栏按钮、
-   *  画布按钮都只调这一个动作，谁都不许绕过（源码级守卫见
-   *  `workflow-editor-topbar-config.test.ts`）。 */
+  /** 开关 IO 预览面板。关闭时**一并退出 IO 编辑模式**：面板消失后再留着勾选框，作者
+   *  只剩「看不到结果、只看到选择器」的半截状态；打开时**一并进入编辑模式**，让勾选
+   *  框与面板同时可用。两个方向都收在这里，不在视图层手写 setState —— 顶栏与画布按钮
+   *  都只调这一个动作（源码级守卫见 `workflow-editor-topbar-config.test.ts`）。 */
   setIoPreviewOpen: (open: boolean) => void;
   /** seed 类参数的「控件后行为」（fixed / increment / decrement / random）。 */
   setIOSeedMode: (key: string, mode: string) => void;
@@ -269,12 +242,10 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       });
     },
 
-    /* 拖拽排序：把 `fromKey` 移动到 `targetKey` 表示的位置。
-     *
-     *  契约：`targetKey` 是**松手时鼠标所在的那一行**（`null` = 移到末尾）；
-     *  插到它前面还是后面由 `position` **显式**给出 —— 指针在目标行上半区 =
-     *  before、下半区 = after，与指示线画的位置同源。旧版按拖动方向猜插入点，
-     *  指示线却永远画在行顶，两者打架时用户看到的就是「拖了但顺序没变」。 */
+    /* 拖拽排序：把 `fromKey` 移到 `targetKey` 的位置。契约：`targetKey` 是**松手时
+     *  鼠标所在那行**（`null` = 移到末尾）；插到它前还是后由 `position` **显式**给出
+     *  （指针在目标行上半区 = before、下半区 = after，与指示线同源）。旧版按拖动方向
+     *  猜插入点、指示线却永远画在行顶，两者打架时用户看到「拖了但顺序没变」。 */
     reorderIO: (fromKey, targetKey, position) => {
       if (fromKey === targetKey) {
         return;
@@ -330,14 +301,10 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
   }));
 }
 
-/* ───────────────────────────────────────────────────────────────────────
- *  单一 Carrier —— 由持有者（WorkflowEditorInner）创建 3 个 store 实例并下发。
- *  之所以用「单一 context 容器」而非 3 个独立 Provider：store 实例需在
- *  「状态判断逻辑（owner）」与「渲染子树（canvas + 叶子消费方）」两侧都能取到，
- *  owner 在容器之上创建 store 并用 api.getState/setState 直写，子树经 useStore
- *  订阅。这既消除 React Context 的「value 对象每次重渲重建 → 全子树重渲」问题，
- *  又保留每实例隔离。
- * ─────────────────────────────────────────────────────────────────────── */
+/* ─── 单一 Carrier ─── 由持有者（WorkflowEditorInner）创建 3 个 store 实例并下发。
+ * 用「单一 context 容器」而非 3 个独立 Provider：store 实例需在状态判断逻辑（owner）
+ * 与渲染子树两侧都能取到 —— owner 在容器之上创建并 `getState/setState` 直写，子树经
+ * `useStore` 订阅。这消除「value 对象每次重渲重建 → 全子树重渲」，又保留每实例隔离。 */
 export type WFStores = {
   io: StoreApi<IOEditStore>;
   rgthree: StoreApi<RgthreeGroupsStore>;
@@ -370,33 +337,11 @@ export function useViewerApi(): StoreApi<NodeJsonViewerStore> {
   return ctx.viewer;
 }
 
-/** 调用 store 实例上的一个动作，**动作缺失时降级而非抛错**。
- *
- *  背景：store 实例由 `useState(() => createIOEditStore(...))` 在挂载时创建一次，
- *  实例上的「动作集合」是那一刻从本模块取到的函数。而动作本身是本模块的成员，
- *  会随热更新（HMR）/ 重新编译整体替换。于是存在一个稳定可复现的窗口：
- *
- *    · 开发态 dev server 长开，拉了新提交后页面没重载；
- *    · 编辑器在改动前就已挂载（如桌面壳窗口一直开着）；
- *
- *  此时 `getState()` 返回的仍是**旧实例**——它带着旧的动作集合，可能缺少本模块
- *  新声明的动作。直接调用会抛 `xxx is not a function`，被
- *  `<WorkflowCanvasEditor>` 的 ErrorBoundary 接住 → 编辑器降级成错误页。
- *
- *  这里把「能力不存在」当降级处理而不是异常：跳过本次调用（下次依赖变化或
- *  页面重载后自然生效），只打一条可诊断的告警。与规范「L1 功能降级」一致 ——
- *  单个增强动作的时序问题不应让整个画布白屏。
- *
- *  传入 `action` 为可能为 undefined 的成员时才会走到告警分支，因此这条告警
- *  本身也是「实例陈旧」的信号，不是可以长期忽略的噪音（陈旧实例在新一轮
- *  重载后消失）。
- *
- *  **降级不能是静默的**（规范 10 §10.1 的 L1 + §10.3.1「降级不得静默」）：
- *  跳过调用只保住了「不白屏」，用户看到的是某个功能悄无声息不起作用。而
- *  「为什么跳过、该怎么办」在运行时是**可知**的——正是「页面跑过一段代码
- *  更新」这个事实。于是这里顺手把信号交给 `~/lib/stale-store-notify`：真出现
- *  陈旧实例时，应用内会弹一条带「重载即可恢复」指引的通知（去重与文案在
- *  那一层，本处只上报事实）。 */
+/** 调用 store 实例上的动作，**缺失时降级而非抛错**。实例挂载时创建一次，动作集合是
+ *  那一刻取到的函数，而动作是本模块成员、会被 HMR 整体替换：dev server 长开或编辑器
+ *  先已挂载时，`getState()` 返回旧实例、可能缺新动作，直接调用抛
+ *  `xxx is not a function` → ErrorBoundary 把编辑器降级成错误页。故跳过本次调用并在
+ *  `~/lib/stale-store-notify` 弹「重载即可恢复」通知 —— 降级**不得静默**（§10.1 L1）。 */
 export function callStoreAction<S extends object>(
   store: StoreApi<S>,
   action: keyof S & string,
@@ -428,12 +373,10 @@ export const selectIoEditMode = (s: IOEditStore) => s.ioEditMode;
 export const selectWorkflowIO = (s: IOEditStore) => s.workflowIO;
 export const selectIoPreviewOpen = (s: IOEditStore) => s.ioPreviewOpen;
 
-/* ───────────────────────────────────────────────────────────────────────
- *  RgthreeGroups store
- * ───────────────────────────────────────────────────────────────────────
- *  乐观 overrides（groupId → bypass）优先于 detail.groups[].bypass，
- *  直到一次成功的 PATCH + detail refetch 调和。工厂参数携带 workflowId +
- *  detail（读 groups 的 fallback）。 */
+/* ─── RgthreeGroups store ───
+ * 乐观 overrides（groupId → bypass）优先于 detail.groups[].bypass，直到一次成功的
+ * PATCH + detail refetch 调和。工厂参数携带 workflowId + detail（读 groups 的
+ * fallback）。 */
 export type RgthreeGroupsState = {
   /** 运行时同步进来的有效 detail / workflowId —— getBypass 每次从 get() 读，确切
    *  detail 到达（而非首次 factory 的 null）后仍反射最新 groups。 */
@@ -501,13 +444,10 @@ export function useRgthreeGroups(): RgthreeGroupsContextValue {
   return { getBypass, setBypass };
 }
 
-/* ───────────────────────────────────────────────────────────────────────
- *  NodeJsonViewer store
- * ───────────────────────────────────────────────────────────────────────
- *  requestShow（捕获 chip rect + nodeId + kind → viewer），dismiss，
- *  getNodeJson / getNodeView（detail / rawMeta / positions / 子图 raw def）。
- *  popover 本体（NodeJsonPopover）仍由 Provider 渲染并通过 context 提供，
- *  但状态/动作全部收进 store。 */
+/* ─── NodeJsonViewer store ───
+ * requestShow（捕获 chip rect + nodeId + kind → viewer）、dismiss、getNodeJson /
+ * getNodeView（detail / rawMeta / positions / 子图 raw def）。popover 本体
+ * （NodeJsonPopover）仍由 Provider 渲染并读 context，状态与动作全部收进 store。 */
 export type NodeJsonViewerState = {
   viewer: NodeJsonViewerRequest | null;
 };

@@ -1,11 +1,7 @@
 "use client";
-/* 子图封装节点的非 STRING widget 行 —— 标签 | 值框 两格行；行跨满两列并
- * 借用父 grid 的列轨道（subgrid），标签列宽 = 全部行里最长参数名，
- * 值框起点逐行一致。值格按 widget 类型三分支：
- *   • 图片类（IMAGE / MASK / IMAGEUPLOAD）→ 缩略图；
- *   • COMBO（带候选清单）→ 只读 SelectMenu；
- *   • 其余 → 「凹陷井」文本值。
- */
+/* 子图封装节点的非 STRING widget 行：标签 | 值框两格行，行跨满两列并借用父 grid 的列轨道（subgrid）；
+ * 标签列宽 = 最长参数名，值框起点逐行一致。
+ * 值格按类型分支：IMAGE/MASK/IMAGEUPLOAD → 缩略图；COMBO → 只读 SelectMenu；其余 → 凹陷井文本。 */
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { SelectMenu } from "~/components/ui/select-menu";

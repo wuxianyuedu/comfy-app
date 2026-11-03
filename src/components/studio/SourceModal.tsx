@@ -20,11 +20,7 @@ const RAW_FORMAT_CHIP =
 // p71-allow:end
 
 /**
- * 查看源文件弹窗（只读）。
- *
- * 展示的是 ComfyUI 保存的原始 JSON（`last_node_id` / `nodes[]` /
- * `widgets_values` …）—— 也就是库里的 `rawJson` 列。本应用只接受这一种格式，
- * 所以没有「另一种格式的兜底」这回事。
+ * 查看源文件弹窗（只读）。展示的是 ComfyUI 保存的原始 JSON（`last_node_id` / `nodes[]` / `widgets_values` …）—— 即库里的 `rawJson` 列。本应用只接受这一种格式，所以没有「另一种格式的兜底」这回事。
  */
 export type SourceModalData = {
   /** 当前 detail 是否来自子工作流 (drill-in 进 sub) 视图。用于文案区分。 */

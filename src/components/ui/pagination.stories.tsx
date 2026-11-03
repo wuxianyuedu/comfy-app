@@ -11,15 +11,9 @@ import {
 } from "~/components/ui/pagination";
 
 /**
- * `ui/pagination` 是**受控**分页导航：它只画，不存状态（当前页归调用处的
- * URL State 或 store —— 规范 09 §9.3）。所以 story 给的是**几种页数形状**，
- * 而不是「点一下会变」（那是调用处的逻辑，不是基元的形态）。
- *
- * 两件事只有渲染出来才看得出：
- * 1. `PaginationPrevious` / `PaginationNext` 的文案在 `sm` 以下**收成图标**
- *    （`hidden sm:block` 的 span）—— 窄画布下它只剩一个箭头；
- * 2. `PaginationLink` 的 `isActive` 走 `variant="outline"` + `aria-current`，
- *    不是自己写底色。
+ * `ui/pagination` 是受控分页导航：只画、不存状态（当前页归调用处的 URL State 或 store，规范 09 §9.3）。
+ * 两件只有渲染才看得出：`PaginationPrevious` / `Next` 的文案在 `sm` 以下收成图标（`hidden sm:block`）；
+ * `PaginationLink` 的 `isActive` 走 `variant="outline"` + `aria-current`，不自己写底色。
  */
 const meta = {
   title: "UI/Pagination",

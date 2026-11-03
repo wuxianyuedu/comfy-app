@@ -1,21 +1,10 @@
 "use client";
 
-// ── 资源库（项目页签）── 视图层（规范 17 §17.2 第③层）────────────────────────
-// 此前「资源库」只是工坊右栏里的一张计数卡（`WorkshopAside`），末尾还写着
-// 「素材在画布的素材库导入与管理，这里只做汇总展示」—— 一句自己承认它不是
-// 真身的话。本页把它提成与主页 / 画布 / 工坊 / 产出 / 成片并列的项目页签：一个页面
-// 看全本项目素材，分类、搜索、上传、删除、拖入画布都在这里做完。
-//
-// 与画布那块「素材库」抽屉的关系：
-//   · 数据与动作同源 —— 都用 `useMaterialLibrary` / `materials-client`，
-//     没有第二套网络层（§12.18 复用优先）；
-//   · 结果区**同一个组件**（`MaterialLibraryContent`），只是网格列数由本页按
-//     宽度传下去（抽屉是 2 / 3 列，这里是 2 / 3 / 5 列）。分类 / 条目 / 空态 /
-//     骨架四种形态因此只有一份实现，改一处两边同时生效。
-//
-// 「加入画布」按钮**有意不挂**：那一动作的语义是「往当前打开的画布上放一个节点」，
-// 而本页是独立页签、画布并未挂载 —— 挂一个只能先把用户送去画布再放节点的按钮
-// 属于替用户做决定。条目仍带拖拽源（`mediaDragSourceProps`），需要时拖过去即可。
+// ── 资源库（项目页签）视图层（规范 17 §17.2 第③层）──
+// 从工坊右栏的计数卡提为与主页/画布/工坊/产出/成片并列的项目页签：一个页面看全本项目素材，
+// 分类、搜索、上传、删除、拖入画布都在这里。
+// 与画布「素材库」抽屉同源：共用 useMaterialLibrary / materials-client，结果区同一个 MaterialLibraryContent
+//（抽屉 2/3 列，本页 2/3/5 列），四种形态只有一份实现。「加入画布」有意不挂：本页画布未挂载，条目仍可拖拽。
 
 import { useState } from "react";
 import { FolderOpen, Plus, Search, X } from "lucide-react";
@@ -91,14 +80,10 @@ export function ResourceLibrary() {
 
       {/* ── 作用域档 + 搜索 ── */}
       <div className="border-border mb-5 flex flex-wrap items-center gap-3 border-b pb-3">
-        {/* 作用域档走 `ui/tabs` 的 `line` 档（规范 16 §16.2.4.75）——
-            与 `project-canvas/MaterialLibraryPanel`、`HistoryPanel` 那两处
-            **逐字同形**，是同一族「下划线页签」的第五处。
-            此前是手搓的 `ToggleGroup` + `after:` 下划线：**未选中档不写下划线、
-            靠 `after:bottom-[-13px]` 硬凑对齐**，于是两枚不同高、切来切去基线
-            上下跳；语义也错了半格（`aria-pressed` 是「这开关开着吗」，可这一排
-            只能选一个）。现在由 `data-active` 一处驱动（字色 + 下划线两层），
-            两枚同高同基线。 */}
+        {/* 作用域档走 ui/tabs 的 line 档（规范 16 §16.2.4.75），与 MaterialLibraryPanel / HistoryPanel 逐字同形。
+            此前手搓 ToggleGroup + after: 下划线：未选中档不画线、靠 after:bottom-[-13px] 硬凑，
+            两枚不同高、切换基线上下跳，且 aria-pressed 语义错半格（这排只能选一个）。
+            现由 data-active 一处驱动字色 + 下划线两层，两枚同高同基线。 */}
         <Tabs
           className="gap-0"
           onValueChange={(value: unknown) => {

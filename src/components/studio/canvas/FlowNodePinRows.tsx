@@ -1,10 +1,7 @@
 "use client";
-/* 顶部针脚区 —— 纯连接型输入与输出配对在同一
- * 行上（改版）。
- * 输入（左侧目标 Handle）与输出（右侧源 Handle）按位置拉在一起
- * 让一行 22px 同时装下两者；较长一侧多出的部分继续
- * 独占后续行。句柄**始终**渲染，无论
- * 连线状态如何（「圆点常显」规则）。 */
+/* 顶部针脚区：纯连接型输入（左）与输出（右）按位置配对到同一行，
+ * 一行 22px 同时装下两者，较长一侧多出的部分独占后续行。
+ * 句柄始终渲染，无论连线状态（「圆点常显」）。 */
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { friendlyInputName } from "~/lib/comfyui/node-titles";
@@ -163,18 +160,9 @@ export function FlowNodePinRows({
                 >
                   {outDisplay}
                 </span>
-                {/* Output source Handle —— **任何视图模式下都必须挂载**。
-                 *
-                 * 它不只是「拖线的入口」，更是下游那些 `out:<name>` 边的
-                 * 锚点：React Flow 在 handleBounds 里找不到边引用的 handle id 时，
-                 * 会丢弃整条边并打 error#008 —— 用户看到的就是「这条输出没有
-                 * 连线」。IO 编辑模式下曾整个不渲染它（理由：输出按节点勾选，
-                 * 端口圆点是多余的视觉噪声），结果切进 IO 编辑那一刻，该节点
-                 * 所有下游连线集体消失。
-                 *
-                 * 保留「不误导作者去连输出口」的原意改为**视觉降级**：IO 编辑
-                 * 模式下圆点缩到几乎不可见（只留一点色晕锚点），作者看不到可
-                 * 拖的端口，线却照样画得出来。 */}
+                {/* Output source Handle 任何视图模式都必须挂载：它是下游 `out:<name>` 边的锚点，
+                     React Flow 在 handleBounds 找不到引用的 handle id 时会丢弃整条边并打 error#008；
+                     IO 编辑模式改为视觉降级（圆点近乎不可见）而非不渲染。 */}
                 <Handle
                   className="border-port-surface! rounded-full! border!"
                   id={`out:${outName}`}

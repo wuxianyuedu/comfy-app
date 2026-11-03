@@ -125,13 +125,9 @@ export default function LoginPage() {
             </span>
           </Link>
 
-          {/* Tab switcher —— 一排里选一个，走 `ui/select-chip`
-              （规范 16 §16.2.4.75）。此前是手搓的 `variant="ghost"` + 选中
-              三元：选中分支钉住了底色（`hover:bg-primary/20` 会经 `cn()` 摘掉
-              `ghost` 的 `hover:bg-muted`），但**没钉字色** ——
-              `ghost` 的 `hover:text-foreground` 留了下来，划过已选中的那一枚
-              时 `text-primary` 被翻成 `foreground`。整排交给基元后，选中态
-              由 `aria-checked` 一处驱动（底色 / 字色 / 描边 / 字重四层俱在）。 */}
+          {/* Tab switcher：一排选一个，走 `ui/select-chip`（规范 16 §16.2.4.75）。此前手搓
+              `variant="ghost"` 没钉字色，划过已选中项时 `text-primary` 被 hover 翻成
+              `foreground`；交给基元后选中态由 `aria-checked` 一处驱动。 */}
           <div
             aria-label="登录或创建账号"
             className="bg-subtle mb-6 flex gap-1 rounded-xl p-1"

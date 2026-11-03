@@ -1,21 +1,7 @@
 /**
- * 工作台「视图页签」的状态模型（纯函数，不碰 React、不碰浏览器）。
- *
- * 为什么要单独一份：workspace 此前只有一个 `viewMode`，sessionStorage 里也只存
- * 那一个值。要做常驻页签，状态就得升级成「一列页签 + 当前哪一个」；而打开/关闭/
- * 回落/去重这些规则一旦散进组件，就没有任何地方能把它全部判到。这里承载规则，
- * 组件只负责接线。
- *
- * 四条规则是拍过板的（ISSUE #1324 的推荐值），改动前先去看那里的理由：
- *   · 页签身份 = (视图, 项目) 二元组 —— 同一个「工坊」在两个项目里是两页；
- *   · 已存在的页签再开一次是**聚焦**，不产生第二页；
- *   · 首页固定不可关，关掉当前页落到**左邻**（不是"最后打开的"，那条规则用户预测不了）；
- *   · 只剩首页时列表仍然成立（不塌成"没有页签"的另一种布局）。
- *
- * 第五条是后补的（ISSUE #1784）：**瞬时页签**（`NavItem.transient`，如设置 /
- * 模型适配 / 模式契约）切换即关。不变式一句话 —— **最多只有当前页可以是 transient**；
- * 任何激活动作（开新页 / 切页 / 关页）之后都跑一次 `withTransientPruned` 把它坐实，
- * 于是「切走的那一页还在列表里」这件事在状态层就不可能出现，不依赖任何渲染时序。
+ * 工作台「视图页签」的状态模型（纯函数，不碰 React、不碰浏览器）。规则收在这里、组件只负责接线 —— 打开/关闭/回落/去重一旦散进组件就没有地方能全判到；此前 workspace 只有一个 `viewMode`，sessionStorage 也只存那一个值，要常驻页签就得升级成「一列页签 + 当前哪一个」。
+ * 四条规则（ISSUE #1324 的推荐值，改前先看理由）：页签身份 = (视图, 项目) 二元组（同一「工坊」在两个项目里是两页）；已存在的页签再开一次是**聚焦**、不产生第二页；首页固定不可关，关掉当前页落到**左邻**（不是「最后打开的」，那条规则用户预测不了）；只剩首页时列表仍然成立。
+ * 第五条后补（ISSUE #1784）：**瞬时页签**（`NavItem.transient`，如设置/模型适配/模式契约）切换即关。不变式：**最多只有当前页可以是 transient**；任何激活动作（开新页/切页/关页）之后都跑一次 `withTransientPruned` 坐实，于是「切走的那一页还在列表里」在状态层不可能出现，不依赖渲染时序。
  */
 import { clamp } from "~/lib/clamp";
 import { isProjectTab, isTransientView, type WorkspaceView } from "./NavItems";
@@ -78,12 +64,7 @@ export function isTabTransient(tab: ViewTab): boolean {
 }
 
 /**
- * 落实「最多只有当前页可以是 transient」这条不变式：
- * 把**非当前页**的瞬时页签剔掉（当前页那份留着 —— 用户正看着它）。
- *
- * 抽成函数是为了让四条入口（开/切/关/恢复）共用同一份判据，而不是各自
- * 在自己的分支里重抄一遍「哪些视图该关」—— 那种写法只要漏一处，界面就会出现
- * 一个永远关不掉的设置页，而且没有任何东西会红。
+ * 落实「最多只有当前页可以是 transient」：把**非当前页**的瞬时页签剔掉（当前页那份留着 —— 用户正看着它）。抽成函数是为了让四条入口（开/切/关/恢复）共用同一份判据，而不是各自重抄「哪些视图该关」—— 漏一处就会出现永远关不掉的设置页，且没有任何东西会红。
  */
 function withTransientPruned(tabs: Array<ViewTab>, activeKey: string): Array<ViewTab> {
   return tabs.filter((tab) => !isTabTransient(tab) || tab.key === activeKey);
@@ -100,10 +81,7 @@ function activated(tabs: Array<ViewTab>, activeKey: string): WorkspaceTabsState 
 }
 
 /**
- * 打开/聚焦一个页签。
- *
- * 已存在就是聚焦（含"同一视图同一项目"重复点侧栏），不产生第二页；
- * 造不出来（项目类视图无活跃项目）时**原样返回**，调用方不会看到半个状态被改。
+ * 打开/聚焦一个页签。已存在就是聚焦（含「同一视图同一项目」重复点侧栏），不产生第二页；造不出来（项目类视图无活跃项目）时**原样返回**，调用方不会看到半个状态被改。
  */
 export function openViewTab(
   state: WorkspaceTabsState,
@@ -123,11 +101,7 @@ export function openViewTab(
 }
 
 /**
- * 切换当前页（页签条上点某一页）。
- *
- * 与 `openViewTab` 分开是因为**没有**要开的新页：这时唯一的副作用是
- * 「离开的那一页若是瞬时页签就退场」。`find` 判据仍在（点一个不存在的 key
- * 不许把 activeKey 指到空白）。
+ * 切换当前页（页签条上点某一页）。与 `openViewTab` 分开是因为**没有**要开的新页：唯一副作用是「离开的那一页若是瞬时页签就退场」；`find` 判据仍在（点一个不存在的 key 不许把 activeKey 指到空白）。
  */
 export function focusViewTab(state: WorkspaceTabsState, key: string): WorkspaceTabsState {
   if (!findTab(state.tabs, key)) {
@@ -137,10 +111,7 @@ export function focusViewTab(state: WorkspaceTabsState, key: string): WorkspaceT
 }
 
 /**
- * 关闭一个页签。
- *
- * 首页不可关；关的不是当前页时当前页不变；关的是当前页时落到**左邻**
- * （左邻按列表位置算，不是按打开时间）。
+ * 关闭一个页签。首页不可关；关的不是当前页时当前页不变；关的是当前页时落到**左邻**（按列表位置算，不是按打开时间）。
  */
 export function closeViewTab(state: WorkspaceTabsState, key: string): WorkspaceTabsState {
   const index = state.tabs.findIndex((tab) => tab.key === key);
@@ -196,12 +167,8 @@ export function initialWorkspaceTabs(): WorkspaceTabsState {
 export const WS_TABS_KEY = "comfyapp:workspace-tabs-v2";
 
 export function serializeWorkspaceTabs(state: WorkspaceTabsState): string {
-  /* 瞬时页签**不落盘**：它是"读过即走"的配置屏，下次开机不该自己弹回来
-     —— 而落盘与恢复是两条独立的路，只要不写进去就不存在这个可能。
-     当前页恰是瞬时页时，把 activeKey 一并改指首页：否则存下来的 activeKey
-     指向一个不在列表里的页，`parseWorkspaceTabs` 会按"整份不可信"丢弃全部页签
-     （详见下面的解析口径）—— 用户就会在一次冷启动里丢掉所有常驻页，
-     只为当时正停在设置上。 */
+  /* 瞬时页签**不落盘**：它是「读过即走」的配置屏，下次开机不该自己弹回来 —— 落盘与恢复是两条独立的路，不写进去就不存在这个可能。
+     当前页恰是瞬时页时把 activeKey 一并改指首页：否则存下来的 activeKey 指向不在列表里的页，`parseWorkspaceTabs` 会按「整份不可信」丢弃全部页签（详见下面的解析口径），用户就会在一次冷启动里丢掉所有常驻页，只为当时正停在设置上。 */
   const persisted = state.tabs.filter((tab) => !isTabTransient(tab));
   const activeStillThere = persisted.some((tab) => tab.key === state.activeKey);
   return JSON.stringify({

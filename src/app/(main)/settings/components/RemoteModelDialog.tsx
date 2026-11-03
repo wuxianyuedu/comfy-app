@@ -1,14 +1,9 @@
 "use client";
 
 /**
- * 「添加 / 编辑模型」弹窗（规范 17 §17.2 第③层）。
- *
- * 接口地址 / API Key 可留空回落全局；编辑态密钥「留空不改」，可显式清除。
- * 「测试连接」成功后顺带展示服务端模型清单供点选。交互状态与动作由
- * `useRemoteModelDialogs`（第②层）承载，视图只渲染与触发。
- *
- * 字段级校验走 `~/lib/llm/remote-model-schema`（纯函数），controller 转述成
- * `fieldErrors`；视图只把文案挂在对应字段下方（口径见规范 16 §16.2.4.8）。
+ * 「添加 / 编辑模型」弹窗（规范 17 §17.2 第③层）：接口地址 / API Key 可留空回落全局，
+ * 编辑态密钥「留空不改」、可显式清除。交互态与动作由 `useRemoteModelDialogs`（第②层）承载，
+ * 字段校验走 `~/lib/llm/remote-model-schema`（纯函数），controller 转述成 `fieldErrors`。
  */
 
 import { SelectMenu } from "~/components/ui/select-menu";

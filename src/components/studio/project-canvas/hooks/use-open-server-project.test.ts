@@ -1,14 +1,7 @@
 // @vitest-environment jsdom
-// 「打开一个只在服务端的项目」那一跳的装配判据（ISSUE #1874）。
-//
-// 现场：侧栏与「所有项目」那一屏读的是**并集**，所以「服务端有一行、本机索引里
-// 没有」的项目看得见、点得着；而打开它这一跳读的是 `getProject(id)`（本地索引）
-// —— 索引里没有它时交回 null，闸门照旧弹「先创建或选择一个项目」：用户对着一个
-// 已经存在的项目，被要求**再建一个**。
-//
-// 判据是**顺序**：先 `hydrateProjectFromServer(id)` 落本机，再设为活跃并跳转。
-// 反向验证过：把那一句删掉，第一条必红（`setActive` / 跳转照旧发生，而本机仍然
-// 没有这一行 —— 跳过去还是空手）。
+// 「打开一个只在服务端的项目」这一跳的装配判据（ISSUE #1874）。
+// 必须先把服务端项目 hydrate 落本机，再 setActive 并跳转：顺序反过来就是空手。
+// 反向验证过：删掉 hydrate 那句，第一条必红。
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook } from "@testing-library/react";
 

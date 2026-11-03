@@ -177,16 +177,8 @@ describe("useModelFolderConfig", () => {
 
   /**
    * 复现（现场：没配 ComfyUI 路径的机器上，弹层仍写「● ComfyUI 已连接 · 共 0 个目录」）：
-   * 服务端那次探测必然落空（`comfyBase()` 指向没人监听的 8188 ⇒ `fetch` 抛错 ⇒ false），
-   * 所以「已连接」只能来自**客户端的乐观默认值** `useState(true)`。
-   *
-   * 为什么第一次打开是对的、第二次开始骗人：`ModelConfigModal` 随开随卸载
-   * （`{c.configOpen && <ModelConfigModal/>}`），而 QueryClient 是模块级单例
-   * （`src/trpc/query-client.ts`：staleTime 30s、gcTime 默认 5min）⇒ 第二次挂载时
-   * `useQuery` 首帧就带着缓存数据，于是「渲染期同步」那句 `data !== prevCfgData`
-   * 的初值就是这份数据 ⇒ 同步永不发生；随后 `refetch()` 拿回**逐字相同**的载荷，
-   * react-query 的结构共享（`replaceEqualDeep`）让 `data` 的引用也没变 ⇒ 仍然不同步。
-   * 结论：`comfyReachable` 会一直停在 `true`。
+   * 服务端探测必然落空，所以「已连接」只能来自客户端乐观默认值 `useState(true)`。第二次开始
+   * 骗人：弹层随开随卸载 + QueryClient 单例（staleTime 30s）首帧即带缓存，refetch 载荷逐字相同。
    */
   it("缓存已热的第二次挂载：comfyReachable 不许停在乐观默认值上", async () => {
     behavior = {
@@ -215,9 +207,8 @@ describe("useModelFolderConfig", () => {
 
   /**
    * 同一条链上的第二格：`load()` 里那句 `catch { setErr("网络错误") }` 是**死代码**。
-   * react-query v5 的 `refetch()` 失败时不 reject，而是 resolve 一个 `isError` 结果
-   * ⇒ 列表拉不下来时既不落 err、也不改 comfyReachable，界面于是把「没拿到答案」
-   * 显示成「已连接 + 没有目录」两条假结论。
+   * react-query v5 的 `refetch()` 失败时 resolve `isError` 结果而不 reject ⇒ 列表拉不下来
+   * 时既不落 err、也不改 comfyReachable，界面把「没拿到答案」显示成「已连接 + 没有目录」。
    */
   it("configList 失败：错误必须可见，且不许冒充「已连接」", async () => {
     behavior = { folders: [], comfyReachable: false, listError: "boom" };
@@ -239,11 +230,9 @@ describe("useModelFolderConfig", () => {
       wrapper: makeWrapper(),
     });
     /* 基数要等挂载链**彻底落定**之后再取。挂载期不止一个来源：`useQuery` 自己首发一次，
-     * 首次加载的 effect 又用 `setTimeout(0)` 排了一次 `refetch`（就是上面 #1803 那条修法
-     * 留下的形状）。只等「至少发过一次」就会把后面那一发算到重渲染之后 ⇒ 满载下实测正是
-     * `expected 2 to be 1` 的假红（本机 24 个忙等进程，3/3 复现）。这里用本文件既有的
-     * 落定信号：`loading` 回到 false —— 它只在 effect 那次 `refetch` 的 finally 里被写，
-     * 等到它就说「挂载期已经走完」。 */
+     * 首次加载的 effect 又用 `setTimeout(0)` 排了一次 `refetch`。只等「至少发过一次」会把
+     * 后面那一发算到重渲染之后 ⇒ 满载下假红（`expected 2 to be 1`，本机 24 个忙等进程 3/3 复现）。
+     * 落定信号：`loading` 回到 false —— 它只在 effect 那次 refetch 的 finally 里被写。 */
     await expect.poll(() => result.current.loading).toBe(false);
     /* 基数按「落定之后的实际值」取，不写死数字，也不去猜挂载期该发几次 ——
      * 断言的是**重渲染之后不再增长**这一条。 */

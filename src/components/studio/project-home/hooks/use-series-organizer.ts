@@ -1,21 +1,10 @@
 "use client";
 
 /**
- * 系列 / 季 / 集 / 角色库 组织者的逻辑层（FR-SR-01/02/03，#2508）。
- *
- * 规范 17（UI 与逻辑分离）+ 硬闸 S3：视图层不得直接调 tRPC 取数，必须经由
- * controller hook 暴露数据。本文件即该 controller —— `SeriesOrganizer.tsx`
- * 只消费这里返回的字段与动作，不再出现 `useQuery(trpc.series…)`。
- *
- * 同时本文件集中消费 `series.*` 全部分支 procedure（list/create/update/delete +
- * seasons/createSeason/updateSeason/deleteSeason + episodes/createEpisode/
- * updateEpisode/deleteEpisode + byProject/assignProject + 角色库全部分支：
- * characters/createCharacter/updateCharacter/deleteCharacter + episodeCharacters/
- * characterEpisodes/linkCharacter/unlinkCharacter + promoteFromProduction/
- * injectToProduction），以及 `seriesGeneration.*` 的整季生成
- * seasonGenerationProgress/batchGenerateSeason（FR-SR-04），
- * 满足 `tests/trpc-surface-executors.test.ts` 的消费方判据。
- */
+ * 系列 / 季 / 集 / 角色库 组织者的逻辑层（FR-SR-01/02/03，#2508）。规范 17 + 硬闸 S3：
+ * 视图层不得直接调 tRPC，必须经 controller —— SeriesOrganizer.tsx 只消费返回的字段与动作。
+ * 本文件集中消费 series.* 全部分支（list/create/update/delete + seasons + episodes + byProject/assignProject +
+ * 角色库全分支 + seriesGeneration 的 seasonGenerationProgress/batchGenerateSeason），满足 trpc-surface-executors 判据。 */
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

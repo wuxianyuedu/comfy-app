@@ -12,9 +12,8 @@ import { useDevServerLiveness } from "./use-dev-server-liveness";
 export type DevServerStatusViewModel = {
   /**
    * 当前是哪一次**启动**（launcher 的 runId）。
-   *
-   * 消息中心用它把历史消息按「每一次启动」分组，并标出哪一组是当前这一次。
-   * 见 `~/lib/shell/message-run-groups`。
+   * 消息中心用它把历史消息按「每一次启动」分组，并标出哪一组是当前这一次
+   *（见 `~/lib/shell/message-run-groups`）。
    */
   currentRunId: string | null;
   /** 上一次结束记录的落盘时刻（毫秒）；无记录为 null。 */
@@ -22,24 +21,15 @@ export type DevServerStatusViewModel = {
   /** 最近一次**真正**重启的时刻（页脚弱化展示用）。 */
   lastRestartAt: number | null;
   /**
-   * 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；整页刷新**不算**）。
-   *
-   * 状态栏自己不画它，但**它是「进程换了一个」的唯一判据**——探活失败可能只是
-   * 显示器关闭 / 后台节流 / 瞬时断网（那几条已明确不判定重启），而刷新并没有
-   * 换进程。消息中心「应用服务已启动 / 已恢复」那条记录就建在它上面（见
-   * `~/components/message-center/hooks/use-app-service-message-log`）。
-   *
-   * 顺带解决「谁去轮询」：这个 controller 是 `useDevServerLiveness` 的**唯一**
-   * 消费方，消费方把这份事实直接递给消息中心的记录 hook，于是全应用仍然只有
-   * 一条 2 秒一拍的探活循环。
+   * 这一份进程对本次页面会话来说是新的（冷启动 / 真重启；整页刷新**不算**）。它是「进程换了
+   * 一个」的唯一判据：探活失败可能只是显示器关闭 / 后台节流 / 瞬时断网，而刷新并没有换进程；
+   * 消息中心「已启动 / 已恢复」那条建在它上面，也是 `useDevServerLiveness` 的唯一消费方。
    */
   processIsNew: boolean;
   /**
    * 最后一拍之前**没人在探测**的那一段（毫秒，0 = 紧接上一拍）。
-   *
-   * 状态栏自己不画它，但「应用服务已恢复」那条消息要它：那一段里服务是否可达
-   * 没人问过，于是「断开持续了多久」这个数字必须带着这个注脚（见
-   * `~/lib/shell/app-service-message` 的 `describeAppServiceStart`）。
+   * 「应用服务已恢复」那条消息要它：那一段里服务是否可达没人问过，
+   * 「断开持续了多久」必须带这个注脚（`~/lib/shell/app-service-message`）。
    */
   unprobedMs: number;
 } & DevServerStatus;

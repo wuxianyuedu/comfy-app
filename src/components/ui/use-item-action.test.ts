@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 /**
  * `~/components/ui/use-item-action` 的契约（ISSUE #672 / 规范 16 §16.2.4.40）。
- *
- * 这条账的实质是「哪一条在忙」的执行态各写一份，且四个落点**没有一个**防了
- * 「同一条重复点」（`setBusyId` 是异步落状态的）。用例因此按**时间轴**写：
- * 忙标记什么时候落、`finally` 什么时候清、连点会不会发第二次请求。
+ * 实质是「哪一条在忙」的执行态各写一份，且四个落点都没防「同一条重复点」（`setBusyId` 异步落状态）。用例按时间轴写：忙标记何时落、`finally` 何时清、连点会不会发第二次请求。
  */
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";

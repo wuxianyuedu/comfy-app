@@ -9,18 +9,8 @@ import {
 import type { WorkflowIOMap } from "~/lib/workflow/workflow-io-types";
 
 /**
- * `studio/` 的第一个 story：这是**整批里数据形态最清楚的一个** ——
- * `RequiredSummary` 吃一份 `WorkflowIOMap`（工作流 IO 的真实投影，定义在
- * `~/lib/workflow/workflow-io-types`），算「必填几个 / 可选几个」。
- *
- * 它此前被归进「有数据依赖」那一批，但那份依赖是**纯数据**：`io` 就是一个
- * `Record<string, WorkflowIOEntry>`，既没有 tRPC 也不是运行期状态。所以它不需要
- * 注入层 —— 只要按**真类型**给一份形状对得上的 map 就够了（而不是随便捏个
- * `{ a: 1 }` 让组件渲染出 `必填 0 / 可选 0`）。
- *
- * 这一组 story 因此也是**「数据依赖」这个词的校准点**：
- * 「吃一个结构化入参」不是数据依赖，「吃一条 tRPC 链路 / 浏览器运行期」才是。
- * 后者见 `LocalComputeCard` / `HomeModelOverview` 那几条。
+ * `studio/` 的第一个 story：`RequiredSummary` 吃一份 `WorkflowIOMap`（`~/lib/workflow/workflow-io-types` 的真实投影），算「必填几个 / 可选几个」。此前被归进「有数据依赖」那批，但那份依赖是**纯数据**（`Record<string, WorkflowIOEntry>`，没有 tRPC、没有运行期状态），所以不需要注入层，按真类型给一份形状对得上的 map 就够（而不是随便捏 `{ a: 1 }` 让组件渲染出 `必填 0 / 可选 0`）。
+ * 这一组 story 因此也是「数据依赖」这个词的校准点：吃一个结构化入参不是数据依赖，吃一条 tRPC 链路 / 浏览器运行期才是（后者见 `LocalComputeCard` / `HomeModelOverview`）。
  */
 /* SAFETY: 类型断言已复核 */
 const ENTRY = {
@@ -89,12 +79,7 @@ const REAL_IO: WorkflowIOMap = {
 };
 
 /**
- * 多模式：同一个条目在不同模式下的必填性不同（`modeOverrides` 的真形状）。
- *
- * 基于 `STEPS_ENTRY` 这份**命名常量**扩展而不是 `REAL_IO["3:steps"]!` ——
- * 后者要一个非空断言（`WorkflowIOMap` 是 `Record`，索引访问的类型带 `undefined`），
- * 而那个 `!` 会撞 `scripts/check-non-null-assertions.cjs`（判据是对的：这里没有
- * 任何「我知道它一定在」的理由，换成命名常量就不需要断言了）。
+ * 多模式：同一个条目在不同模式下的必填性不同（`modeOverrides` 的真形状）。基于 `STEPS_ENTRY` 这份**命名常量**扩展而不是 `REAL_IO["3:steps"]!` —— 后者要非空断言（`WorkflowIOMap` 是 `Record`，索引访问带 `undefined`），会撞 `scripts/check-non-null-assertions.cjs`（判据是对的：这里没有「我知道它一定在」的理由，换成命名常量就不需要断言）。
  */
 const MODE_IO: WorkflowIOMap = {
   ...REAL_IO,
@@ -140,11 +125,7 @@ export const ModeOverrides: Story = {
 };
 
 /**
- * 同族的两个小徽标：`Chip`（画布 corner 上的统计胶囊）与 `FrontendOnlyBadge`
- *（「此节点只在浏览器前端运行」的标记）。
- *
- * `CHIP_NEUTRAL_COLOR` 是「中性统计」的唯一口径 —— 写死 `#a1a1aa` 在浅色底
- * 上只有 ~2:1 的对比度（读不出来），这个常量走的是随主题的弱文字 token。
+ * 同族的两个小徽标：`Chip`（画布 corner 上的统计胶囊）与 `FrontendOnlyBadge`（「此节点只在浏览器前端运行」）。`CHIP_NEUTRAL_COLOR` 是「中性统计」的唯一口径 —— 写死 `#a1a1aa` 在浅色底上只有 ~2:1 对比度（读不出来），这个常量走随主题的弱文字 token。
  */
 export const Chips: Story = {
   render: () => (

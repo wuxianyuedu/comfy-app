@@ -1,18 +1,8 @@
-/* 子工作流 / 工作流画布的「打开时聚焦」计算 —— 纯函数，无 React 依赖。
- *
- * 这套「取真实节点包围盒 → 按容器留白算 zoom → 求居中视口」的算式在子图里
- * 最容易出错，所以独立成纯函数、必须能单测。
- *
- * 子图里两个不变量（normalizeBounds 的存在理由）：
- *   ① **忽略测量为 0 的节点**：节点的 DOM 尺寸由 React Flow 测量后写回
- *      `measured`。首帧（或视口裁剪下未挂载的节点）measured 还是 0，
- *      若照常参与包围盒，缩放会被算成一个远小于实际内容的框 —— 用户看到的
- *      就是「打开子工作流停在空白区域、有节点的位置在视野外」（ISSUE #394）。
- *   ② **包含折叠节点声明的尺寸**：折叠态的节点不渲染 body，measured 只剩标题
- *      条；此时用序列化里声明的 `style.width/height` 兜底，包围盒才覆盖整份图。
- *      坐标按**卡片顶边**参与（React Flow 的 `position` 即卡片顶边，见
- *      workflow-editor-build-nodes 的锚点约定）—— 与 measured 同一套坐标口径，
- *      混用「body 顶边」会让旧式 `position` 兜底算出整体上移的框。 */
+/* 子工作流 / 工作流画布的「打开时聚焦」计算 —— 纯函数，无 React 依赖；算式在子图里最
+ * 容易出错，故独立成纯函数、必须能单测。两个不变量：① **忽略测量为 0 的节点**（首帧或
+ * 未挂载时 measured 为 0，参与包围盒会算出远小于内容的框，打开停在空白，ISSUE #394）；
+ * ② **包含折叠节点声明的尺寸**（折叠态不渲染 body，用 `style.width/height` 兜底）。
+ * 坐标按**卡片顶边**参与（与 React Flow `position` 同口径，混用 body 顶边会整体上移）。 */
 
 /** 参与包围盒计算的节点最小结构。`wfNode` / `wfSubgraph` 节点与纯数据对象都能满足。 */
 import { clamp } from "~/lib/clamp";
@@ -55,12 +45,10 @@ export const DEFAULT_VIEWPORT_PADDING: ViewportPadding = { x: 0.12, y: 0.12 };
 /** 缩放上限：单节点子图不该被放到撑满屏幕。 */
 export const DEFAULT_MAX_FIT_ZOOM = 1.5;
 /** 聚焦缩放的下限**默认值**：找不到画布自己的 `minZoom` 时用它兜底。
- *
- *  注意它只是兜底 —— 编辑器里聚焦用的是**画布设置自己的** minZoom / maxZoom
- *  （见 WorkflowEditorInner 的 fitToContent）。曾有一版把 0.35 当成编辑器的
- *  硬下限，本意是别让超宽工作流缩成噪点，代价却是「打开后整份工作流仍有大半
- *  在视口外、还得手动滚轮」（ISSUE #717）：聚焦的意义就是**看得见全部内容**，
- *  下限交给用户在画布设置里自己定。 */
+ *  它只是兜底 —— 编辑器聚焦用的是**画布设置自己的** minZoom / maxZoom（见
+ *  WorkflowEditorInner 的 fitToContent）。曾把 0.35 当编辑器硬下限，代价是「打开后
+ *  仍有大半内容在视口外、还得手动滚轮」（ISSUE #717）：聚焦的意义是**看得见全部内容**，
+ *  下限交给用户在画布设置里定。 */
 export const DEFAULT_MIN_FIT_ZOOM = 0.35;
 
 function toFiniteNumber(value: unknown): number | null {
@@ -156,13 +144,9 @@ export function computeFitViewport(
 }
 
 /**
- * 「反复测量直到收敛」的聚焦步进器 —— 节点尺寸是挂载后测出来的，而画布开着
- * 视口裁剪：首帧只有上一视图留下的那片视口里的节点有尺寸，其余是 0。把这块
- * **局部测量结果**当成整张图的范围去 fit，视口就会停在离内容很远的地方
- * （ISSUE #394）。
- *
- * 用法：构造一次，然后在每帧调用 `next()`；返回该帧应当下发的包围盒，
- * 以及是否还需要继续（false 表示已收敛或到达护栏）。
+ * 「反复测量直到收敛」的聚焦步进器 —— 节点尺寸是挂载后测出来的，而画布开着视口裁剪：
+ * 首帧只有上一视图留下的那片视口里的节点有尺寸，其余是 0，据此 fit 会停在离内容很远
+ * 的地方（ISSUE #394）。用法：构造一次，每帧调用 `next()`；返回该帧应下发的包围盒，以及是否继续（false = 已收敛或到达护栏）。
  */
 export type FitSettleStepper = {
   /** 推进一帧：`sample()` 返回当前这一帧真实量到的节点。 */
@@ -209,22 +193,9 @@ export function createFitSettleStepper(options: FitSettleOptions): FitSettleStep
 }
 
 /**
- * 「每份图只自动聚焦一次」的调度器 —— 把「是否已经聚焦过」与「聚焦是否真的
- * 下发过」分开记账。
- *
- * 为什么必须分开（ISSUE #394 第二轮）：只按「图的 key」记一个布尔，会在
- * **effect 依赖抖动**时把图标记成「已聚焦」而其实一次都没聚焦到 ——
- *
- *   · 进入子图的那一次 commit 里，打开聚焦的 effect 先跑（按新图的 key 记账
- *     并排下一帧的 rAF），紧接着 `nodes` 同步 effect 把节点整批换掉；
- *   · 节点数变化会让聚焦 effect 重跑，先执行 cleanup（取消那个还没触发的
- *     rAF），再被「已聚焦」的记账拦住、不再排新的一帧；
- *   · 结果是：图被记成已聚焦，视口却一直停在**上一个视图**（用户看到的就是
- *     「打开子工作流没聚焦到」，与修好分批测量之前一模一样）。
- *
- * 所以记账的单位是「已**下发**过聚焦的图 key」：`isSettled(key)` 只管跳过；
- * `markPending(key)` 在排程时登记，`markSettled(key)` 才在真正下发视口后调用。
- * 同一 key 的 pending 状态允许被重复排程（帧被取消后重排），不会吃掉这次聚焦。
+ * 「每份图只自动聚焦一次」的调度器 —— 「是否已聚焦」与「聚焦是否真的下发过」分开记账。只按图的 key 记一个布尔，会在 effect 依赖抖动时把图标成已聚焦而一次都没聚焦到：进入
+ * 子图时聚焦 effect 排了下一帧 rAF，紧接着 nodes 同步 effect 整批换节点、重跑 effect 并cleanup 取消那个 rAF，再被记账拦住 —— 视口停在上一个视图（ISSUE #394）。故
+ * `markPending` 排程时登记、`markSettled` 真正下发视口后才调用（pending 可重复排程）。
  */
 export type FitOnceScheduler = {
   /** 这份图是否已经**下发**过自动聚焦（是 → 无需再排程）。 */

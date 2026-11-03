@@ -2,9 +2,7 @@
 /* ════════════════════════════════════════════════════════════════════════
  *  WorkflowNodeJsonPopover.tsx — 节点 JSON 查看弹层（纯展示组件）。
  *  不 import 任何 store / context：靠这一条打破与 WorkflowStores.tsx 的循环依赖
- *    WorkflowStores.tsx  →  import { NodeJsonPopover } from 本文件
- *    Workflow*Node.tsx   →  import store hooks（消费方，无环）
- *  本文件只接收 props 渲染。
+ *  （WorkflowStores → NodeJsonPopover → store hooks 消费方，无环）；本文件只接收 props 渲染。
  * ════════════════════════════════════════════════════════════════════════ */
 import { useMemo, useState } from "react";
 import { Hint } from "~/components/ui/hint";
@@ -16,17 +14,7 @@ import { anchorRectToVirtualElement } from "~/lib/dom-rect";
 import type { NodeJsonViewerRequest, RawMetaEntry } from "./workflow-types";
 import { CHIP_NEUTRAL_COLOR, Chip } from "./RequiredSummary";
 
-/* 浮层本体。垂直堆三块：
- *   ┌────────────────────────────────────────────────┐
- *   │  头部  ─  📋 节点 JSON · #182 · class_type   │
- *   │              [⧉ 复制]   [× 关闭]                │
- *   ├────────────────────────────────────────────────┤
- *   │  元信息条 —— mode / flags / boundaries 等      │
- *   ├────────────────────────────────────────────────┤
- *   │  JSON 转储 —— 等宽、按语法着色、可复制          │
- *   └────────────────────────────────────────────────┘
- */
-/* ── 逐字段收敛的 Raw 节点 JSON 形状 ──
+/* 逐字段收敛的 Raw 节点 JSON 形状 ──
  * 服务端返回的 LiteGraph 节点/RawMeta 荷载是无约束 JSON；组件只消费下述
  * 已声明字段，其余一律保持 unknown 接收，不再以 any 逃生。 */
 export type RawNodeJson = {
@@ -53,12 +41,9 @@ export type RawNodeView = {
 };
 
 /**
- * 从「运行视图」快照组装出可展示的节点 JSON（view 页签的正文来源）。
- *
- * 组装优先级：完整 rawNode 原样透出 → 否则按 entry / raw 里**确实存在**的
- * 字段逐个收进一份新对象（mode / widgets_values / outputs / flags /
- * properties 只在非空时收），最后补 pos。全部为空返回 null（调用方退回
- * saved 页签的降级文案）。纯派生（§17.1：删掉 JSX 也能测）。
+ * 从「运行视图」快照组装可展示的节点 JSON（view 页签正文来源）：优先原样透出完整 `rawNode`，否则
+ * 按 entry / raw 里确实存在的字段收进新对象（mode / widgets_values / outputs / flags / properties
+ * 仅非空时收），最后补 pos；全空返回 null（调用方退回 saved 页签降级文案）。纯派生（§17.1）。
  */
 function buildViewJson(nodeView: RawNodeView | null): RawNodeJson | null {
   if (!nodeView) {
@@ -186,13 +171,10 @@ export function NodeJsonPopover({
         : "var(--color-success-strong)";
 
   return (
-    /* 浮层走 ui/popover（规范 16 §16.2.3 P2）：遮罩点击关闭、Esc 关闭由
-       base-ui 负责，**定位也交给它的 Positioner** —— 这里把用户点下时冻结的
-       锚点矩形包成虚拟锚点，翻转（flip）与视口内收边（shift）由 base-ui 算，
-       本组件不再自己夹紧视口。
-       此前用 `ui/dialog` 配 `top-24 left-1/2` 是**丢掉了锚点定位**：dialog 的
-       基类自带 `top-1/2 -translate-y-1/2`，与 `top-24` 叠加后浮层被推到视口之上
-       （实测 `top: -174`），头部与 JSON 开头被裁在视口外（ISSUE #717）。 */
+    /* 浮层走 ui/popover（规范 16 §16.2.3 P2）：遮罩点击、Esc 关闭与**定位**都交 base-ui —— 这里把
+       用户点下时冻结的锚点矩形包成虚拟锚点，翻转与视口内收边由 Positioner 算，本组件不再自夹紧。
+       此前 `ui/dialog` 配 `top-24 left-1/2` 丢掉了锚点：基类 `top-1/2 -translate-y-1/2` 叠加后浮层被
+       推到视口之上（实测 `top: -174`），头部与 JSON 开头被裁在视口外（ISSUE #717）。 */
     /* SAFETY: 类型断言已复核 */
     <Popover
       modal

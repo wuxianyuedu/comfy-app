@@ -1,11 +1,9 @@
 "use client";
 
-/* CanvasNode 的workflow 节点的 IO 生命周期。
- *  负责共享的 wfList / modelTagLib 拉取（带模块级在途去重）、
- *  所选工作流的动态 IO 表 + 模式加载、
- *  ioKey 的渲染期重置、默认值播种 effect 与
- *  筛选失效 effect。节点数据对象与 `patch` 由父级
- *  显式传入。 */
+/* CanvasNode workflow 节点的 IO 生命周期。
+ * 负责共享 wfList / modelTagLib 拉取（模块级在途去重）、所选工作流的动态 IO 表与模式加载、
+ * ioKey 渲染期重置、默认值播种 effect 与筛选失效 effect。节点数据与 `patch` 由父级显式传入。
+ */
 import { useEffect, useRef, useState } from "react";
 import { reconcileInputValues, type WorkflowIOMap } from "~/components/studio/workflow-io";
 import { parseModesJson } from "~/lib/workflow/workflow-types";
@@ -148,12 +146,10 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
         return;
       }
       setWfIOLoading(true);
-      /* `detailFull` 而非 `detail`：运行期表单与画布节点同样要的是**富化后**的
-       *  workflowIO（type / defaultValue / label / nodeTitle / classType 都由
-       *  服务端按 raw_inputs 回查补齐）。`detail` 直读 DB 原始列 —— 那里面只有
-       *  勾选那一刻写入的四个身份字段，type 缺失会让控件退化成单行文本框，
-       *  显示名也停留在机器名（ISSUE #349：编辑器里叫「尾帧图」，运行期还是
-       *  `image`）。两条链路必须吃同一份富化结果，否则又是「改了看着没生效」。 */
+      /* `detailFull` 而非 `detail`：运行期表单与画布节点都要**富化后**的 workflowIO
+       * （type / defaultValue / label / nodeTitle / classType 服务端按 raw_inputs 回查补齐）。
+       * `detail` 直读 DB 原始列，type 缺失会让控件退化成单行文本框、显示名停在机器名
+       * （ISSUE #349）。两条链路必须吃同一份富化结果，否则「改了看着没生效」。 */
       void vanillaApi.workflow.detailFull
         .query({ id: d.workflowId })
         .then((tpl) => {
@@ -167,13 +163,10 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           /* 一并写进节点数据：运行期（use-generate）不能依赖 hook 的异步
            *  状态，映射必须随节点一起持久化，否则刷新后运行会丢掉手工线。 */
           patch({ paramMap: paramMap ?? undefined });
-          /* 模式一致性：库卡片对 `taskType` 有 fallback（仅写
-           *  taskType 没声明 modes[] 的旧工作流也能展示单模式 chip），画布
-           *  也走完全相同的 fallback 避免「库显示文生图 / 画布显示未选」
-           *  的不一致。优先级：
-           *   1) DB 的 modes[] + defaultMode（用户通过 MultiModeSelect 声明的）
-           *   2) taskType 单模式兜底（向后兼容 之前的旧工作流）
-           *   3) 都为空才走「未选 + 该工作流没有声明可用模式」 */
+          /* 模式一致性：库卡片对 `taskType` 有 fallback，画布走同一套，避免
+           * 「库显示文生图 / 画布显示未选」。优先级：
+           *   1) DB 的 modes[] + defaultMode；2) taskType 单模式兜底（兼容旧工作流）；
+           *   3) 都为空才「未选 + 未声明可用模式」。 */
           const dbModes = parseModesJson(tpl.availableModes);
           const dbDefault = typeof tpl.defaultMode === "string" ? tpl.defaultMode : null;
           const inferredMode =

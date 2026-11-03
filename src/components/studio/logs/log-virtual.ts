@@ -1,45 +1,7 @@
 /**
- * log-virtual — 日志面板的**虚拟滚动窗口**（纯逻辑，无 React、无 DOM）。
- *
- * ── 为什么需要它（ISSUE #609 八审）────────────────────────────────────
- * 面板一页最多 2000 行（`LOG_PAGE_SIZE`），而此前是**一次性把那 2000 行全部
- * 挂进 DOM**：每行一个 `LogRow`、行内再按 ANSI / 词法切成若干 `span`
- * （一条普通消息约 3~8 个节点）——满页时 DOM 节点数在 **15000 上下**，
- * 切到这一页时浏览器要一次性布局这么多节点，用户读到的就是「切到 1000+
- * 的页签有明显卡顿」。
- *
- * 规范 02 §2.6 对这件事有硬要求（大列表必须虚拟滚动），这里把它落到
- * 「**只渲染视口里那几十行**」：DOM 节点数不再随页大小增长。
- *
- * ── 行高为什么是常量，而不是量出来的 ──────────────────────────────────
- * `@tanstack/react-virtual` 支持动态测高（`measureElement`），但那要求每次
- * 挂载/卸载都读写一遍 `getBoundingClientRect`——在 2s 一轮的日志刷新里，
- * 滚动过程中的测量本身就会打断滚动。日志行的高度是**可枚举**的：
- *
- * | 形态              | 高度              |
- * | ----------------- | ----------------- |
- * | 不换行（`truncate`）| `LOG_ROW_SINGLE`（1 行） |
- * | 换行 + N 行       | `LOG_ROW_LINE × N`       |
- *
- * 单行高度来自 `text-sm leading-snug`（1.375 × 14 ≈ 19.25）加 `py-1`
- * （上下各 4px）与 `border-b`（1px）= **28px**；多行时每多一行加 19px。
- * 字号只可能是 `text-sm` 而不是 13px 的字面量档，这一点由 `docs/DESIGN.md`
- * §Typography 的归零判据守着（12px / 13px 各只有一个名字）——上面的算式
- * 吃的正是那一档的自带行高。
- * 这两条是本模块导出的常量，视图的 class 与它们对齐（见 §7.28 的口径），
- * **改行内字号 / 行距要同时改这里**，否则滚动位置会与内容错位。
- *
- * 常量行的另一面是**诚实**：估算与实际不一致时误差会累积。所以本模块把
- * 误差换算成「多留几行」（`overscan`），并把「估算总高」钳在浏览器的
- * `scrollHeight` 上限内（§2.1.1 第 3 条的兜底）——误差只影响滚动条长度，
- * 不会让内容跑到视口外。
- *
- * ── 贴底（pin）为什么也在这里（ISSUE #637）───────────────────────────
- * 「滚不到底」的根因是视图每轮轮询把 `scrollTop` 写回基线，而那条算术
- * （目标行序号 / 该不该动 / 写多深）是纯的：放在这里可以脱离 DOM 断言，
- * 视图只剩「问 DOM 拿目标节点几何」。判据与陷阱见 §7.28.5。
- *
- * @module logs/log-virtual — 日志面板的**虚拟滚动窗口**（纯逻辑，无 React、无 DOM）
+ * log-virtual — 日志面板的**虚拟滚动窗口**（纯逻辑，无 React、无 DOM）。规范 02 §2.6 要求大列表虚拟滚动：只渲染视口内几十行（满页 2000 行含行内 span 约 1.5 万节点，布局成本就是「切到 1000+ 页签明显卡顿」，ISSUE #609）。
+ * 行高用**常量**而非 `measureElement`（动态测高在 2s 一轮刷新里会打断滚动）：单行 28px、多行每行 +19px，视图 class 必须与常量对齐，改字号行距要同步改这里。
+ * 误差由 `overscan` 与总高钳位兜住；贴底「滚到哪行」的纯算术也在这里（ISSUE #637），视图只问 DOM 拿目标几何。
  */
 
 /**
@@ -49,11 +11,9 @@
 import { clamp } from "~/lib/clamp";
 
 /**
- * 估算行高时，从面板总宽里扣掉「非正文列」的固定开销（时刻 + 级别徽标 + 来源 +
- * 复制按钮 + 内边距 + 列间距，约 260px）。`countLines` 算软换行用的是**正文列**
- * 的可用宽度，而非整面板宽 —— 此前直接拿整宽估算，会把多行消息的行数低估，正文
- * 被 `overflow-hidden` 裁掉（「超出边框看不全」）。落一个偏保守的固定值：宁可
- * 多留一点空白（本模块文件头明定的安全方向），也不让内容跑到视口外。
+ * 估算行高时从面板总宽扣掉「非正文列」的固定开销（时刻 + 级别徽标 + 来源 + 复制按钮 + 内边距 + 列间距，
+ * 约 260px）。`countLines` 算软换行用的是**正文列**可用宽度：此前直接拿整宽估算会低估行数，正文被
+ * `overflow-hidden` 裁掉（「超出边框看不全」）。取偏保守值——宁可多留空白，也不让内容跑到视口外。
  */
 export const LOG_MESSAGE_OVERHEAD = 260;
 
@@ -63,13 +23,9 @@ export const LOG_ROW_SINGLE = 28;
 export const LOG_ROW_LINE = 19;
 
 /**
- * **展开**的日志行高度（常量，不是量出来的）。
- *
- * 展开内容（comfy-cli 原始 JSON）交给 `JsonViewer` 渲染，而它自带工具栏 / 搜索
- * 与内部滚动 —— 于是树的展开、搜索命中跳转都不改变**行**高，行高只由这个常量
- * 决定。这正是虚拟滚动要的「可枚举」：{@link layoutRows} 不必测 DOM 就能给出
- * 位置，滚动位置与内容不会错开（见本模块文件头对「为什么不能 measureElement」
- * 的说明）。取 360 ≈ 单行(28) + 一份够用的 JSON 视口。
+ * **展开**的日志行高度（常量，不是量出来的）。展开内容交给 `JsonViewer`（自带工具栏 / 搜索与内部滚动），
+ * 树的展开与搜索跳转都不改变**行**高，行高只由这个常量决定——这正是虚拟滚动的「可枚举」：`layoutRows`
+ * 不必测 DOM 就能给位置，滚动位置与内容不会错开。取 360 ≈ 单行(28) + 一份够用的 JSON 视口。
  */
 export const LOG_ROW_EXPANDED = 360;
 
@@ -77,23 +33,16 @@ export const LOG_ROW_EXPANDED = 360;
 export const LOG_VIRTUAL_OVERSCAN = 12;
 
 /**
- * 估算出的总高度上限。
- *
- * 浏览器对 `scrollHeight` 有精度上限（约 33,554,400px），超过之后滚动位置会
- * 失真。这里取一个更保守的值并**按比例压缩映射**（§2.1.1 第 3 条）：牺牲极端
- * 情况下的物理滚动精度，换整体稳定。真实日志页一整页（`LOG_PAGE_SIZE` 行 ×
- * `LOG_ROW_SINGLE`）也只有几万像素，离这条线极远——它只对「超长单行堆满一整页」
- * 那种极端形态生效。
+ * 估算出的总高度上限。浏览器对 `scrollHeight` 有精度上限（约 33,554,400px），超过后滚动位置会失真；
+ * 这里取更保守的值并**按比例压缩映射**（§2.1.1 第 3 条），牺牲极端情况下的物理精度换整体稳定。
+ * 一整页（`LOG_PAGE_SIZE` 行 × `LOG_ROW_SINGLE`）只有几万像素，它只对「超长单行堆满一整页」生效。
  */
 export const LOG_SCROLL_MAX = 8_000_000;
 
 /**
- * 一条日志在页面里的高度。
- *
- * `wrap` 为假时行不换行（`truncate`），恒为 {@link LOG_ROW_SINGLE}；
- * `wrap` 为真时按显式换行符与软换行估算——软换行数由字符数除以每行容量得出，
- * 而**每行容量**取决于面板宽度（汉字与西文的宽度不同），所以这里只求
- * 「不低估」：低估会让下面几行被推到视口外，高估只是多留一点空白。
+ * 一条日志在页面里的高度：`wrap` 为假时行不换行（`truncate`），恒为 {@link LOG_ROW_SINGLE}；为真时按显式
+ * 换行符与软换行估算（软换行数由字符数除以每行容量，而容量取决于面板宽度）。这里只求「不低估」：低估会让
+ * 下面几行被推到视口外，高估只是多留一点空白。
  */
 export function estimateRowHeight(message: string, wrap: boolean): number {
   if (!wrap) {
@@ -104,14 +53,9 @@ export function estimateRowHeight(message: string, wrap: boolean): number {
 }
 
 /**
- * 消息在面板里**至少**占几行。
- *
- * 判据分两段：显式换行（`\n`，多行 JSON payload 就是这种）逐段数；
- * 每段再按宽度拆软换行——容量按**最窄的字**（中文 13px）算，
- * 于是 `ceil(段长 × 13 / 可用宽度)` 是下界。
- *
- * `availableWidth` 取不到（jsdom / 首帧未量到宽度）时只数显式换行：宁可少估
- * 也不能瞎估。
+ * 消息在面板里**至少**占几行。显式换行（`\n`，多行 JSON payload）逐段数；每段再按宽度拆软换行——容量按
+ * **最窄的字**（中文 13px）算，`ceil(段长 × 13 / 可用宽度)` 是下界。`availableWidth` 取不到（jsdom /
+ * 首帧）时只数显式换行：宁可少估也不能瞎估。
  */
 export function countLines(message: string, availableWidth = 0): number {
   const segments = message.split("\n");
@@ -144,26 +88,17 @@ export type LogLayoutOptions = {
   /** 已展开的行 id：固定为 {@link LOG_ROW_EXPANDED}。 */
   expandedIds?: ReadonlySet<string>;
   /**
-   * 折叠态**强制单行**的行 id（comfy-cli 原始 JSON 行）。
-   *
-   * 这类行的完整原文（可能几十 KB、且不含换行符）在 `wrap` 模式下会被
-   * `countLines` 按宽度估成几百行——那既是错的显示（原文本该折起来），也是
-   * 错的滚动长度。它们的折叠态恒为一行摘要，完整内容交给展开态，因此高度不
-   * 参与换行估高。
+   * 折叠态**强制单行**的行 id（comfy-cli 原始 JSON 行）。这类行的完整原文（可能几十 KB、不含换行符）在
+   * `wrap` 下会被 `countLines` 按宽度估成几百行——既是错的显示（原文本该折起）也是错的滚动长度。
+   * 折叠态恒为一行摘要，完整内容交给展开态，因此不参与换行估高。
    */
   singleLineIds?: ReadonlySet<string>;
 };
 
 /**
- * 估算整页每一行的位置与高度。
- *
- * 之所以**整页算一遍**而不是按需累加：位置是单调前缀和，`start[i]` 必须对得上
- * `sum(size[0..i-1])`，否则 `translateY` 与滚动条会各说各话。整页 2000 次乘法
- * 远低于一帧预算（实测 < 1ms），换来的是「窗口怎么取都不会错位」。
- *
- * `options` 里的两类行按 **id** 点名（不是下标）：分页窗口会随新日志前移，
- * 下标不稳定，而 id 与那一条日志一一对应——用户展开的那一行在滚动 / 轮询之后
- * 仍是同一行。
+ * 估算整页每一行的位置与高度。**整页算一遍**而不是按需累加：位置是单调前缀和，`start[i]` 必须对得上
+ * `sum(size[0..i-1])`，否则 `translateY` 与滚动条各说各话；整页 2000 次乘法远低于一帧预算（实测 < 1ms）。
+ * `options` 的两类行按 **id** 点名（不用下标）：分页窗口随新日志前移，下标不稳定，而 id 与日志一一对应。
  */
 export function layoutRows(
   entries: ReadonlyArray<{ id?: string; message: string }>,
@@ -198,13 +133,9 @@ export function layoutRows(
 }
 
 /**
- * 滚动位置 → 要渲染的行区间（左闭右开）。
- *
- * 四条边界缺一不可：
- *   - `overscan` 上下各留几行（快速滚动 / 估高小误差时不露空白）；
- *   - **空列表返回空区间**（`end` 不得为负，否则 `slice` 会拿到奇怪的东西）；
- *   - 行数不足一屏时直接给全量（`end` 不许超过 `rows.length`）；
- *   - `scrollTop` 为负 / `NaN`（jsdom 与初次布局）当 0 处理。
+ * 滚动位置 → 要渲染的行区间（左闭右开）。四条边界缺一不可：`overscan` 上下各留几行（快速滚动 / 估高
+ * 小误差不露空白）；**空列表返回空区间**（`end` 不得为负）；行数不足一屏时给全量（`end` 不超过
+ * `rows.length`）；`scrollTop` 为负 / `NaN`（jsdom 与初次布局）当 0 处理。
  */
 export function visibleRange(
   rows: ReadonlyArray<RowLayout>,
@@ -228,10 +159,8 @@ export function visibleRange(
 }
 
 /**
- * 位置 `offset` 落在哪一行的**下标**（二分）。
- *
- * 二分而不是线性扫描：滚动事件每帧都要求一次，线性扫描 2000 行在慢速设备上
- * 会直接体现在滚动掉帧上。`rows` 的 `start` 单调递增，因此二分成立。
+ * 位置 `offset` 落在哪一行的**下标**（二分）。二分而不是线性扫描：滚动事件每帧都要一次，线性扫 2000 行
+ * 在慢速设备上会直接体现为掉帧；`rows` 的 `start` 单调递增，因此二分成立。
  */
 export function firstVisibleRow(rows: ReadonlyArray<RowLayout>, offset: number): number {
   if (rows.length === 0) {
@@ -251,10 +180,8 @@ export function firstVisibleRow(rows: ReadonlyArray<RowLayout>, offset: number):
 }
 
 /**
- * 估算总高 → 实际用于撑开滚动条的高度（超限时按比例压缩，见 {@link LOG_SCROLL_MAX}）。
- *
- * 同时给出 `ratio`：滚动位置要跟着这个比例反向换算，否则「压缩后的列表」里
- * 滚一半对应的其实是真实高度里的另一处。
+ * 估算总高 → 撑开滚动条的实际高度（超限时按比例压缩，见 {@link LOG_SCROLL_MAX}）。同时给出 `ratio`：
+ * 滚动位置要跟着这个比例反向换算，否则「压缩后的列表」里滚一半对应的是真实高度里的另一处。
  */
 export function scrollHeightOf(estimated: number): {
   compressed: boolean;
@@ -272,42 +199,23 @@ export function scrollHeightOf(estimated: number): {
 }
 
 /* ── 贴底（pin）：新日志到达时把「已读水位」钉住 ────────────────────────
- *
- * 面板贴底时不追最新，只把**基线**（用户读到的最后一条）钉在原地，新行在它
- * 下面累积——见 `LogPanel` 的贴底 effect（ISSUE #262 复审）。三个判据在这里
- * 抽成纯函数：位置算得对是**可见结果**的前提（「滚不到底」正是这里算歪的），
- * 而 DOM 只提供「目标行有没有渲染 / 它的几何」，不该把算术留在视图里。
- */
+ * 面板贴底时不追最新，只把**基线**（用户读到的最后一条）钉在原地，新行在它下面累积（见 `LogPanel`
+ * 的贴底 effect，ISSUE #262 复审）。三个判据抽成纯函数：位置算得对是可见结果的前提（「滚不到底」正是
+ * 这里算歪的），DOM 只提供「目标行有没有渲染 / 它的几何」，算术不留在视图里。 */
 
 /**
- * 贴底目标行的**页内序号**：`max(基线, 已追到哪)`，并钳到本页最后一条。
- *
- * 取 max 是为了「新行一条条露出来」（不跳空），钳到末条是为了不被后面的新行
- * 无限拖走。
+ * 贴底目标行的**页内序号**：`max(基线, 已追到哪)`，并钳到本页最后一条。取 max 是为了「新行一条条露出来」
+ * （不跳空），钳到末条是为了不被后面的新行无限拖走。
  */
 export function pinTargetIndex(baseline: number, applied: number, bottomIndex: number): number {
   return Math.max(clamp(baseline, 0, bottomIndex), clamp(applied, 0, bottomIndex));
 }
 
 /**
- * 贴底要写入的 `scrollTop`：让目标行**贴住视口底边**。
- *
- * 几何**只取自位置表** `rows[...]`（`{ start, size }`，即 {@link layoutRows} 的
- * 那一份）。理由有两条，都踩过：
- *
- *   1. 位置表是 `translateY`（渲染）与滚动条（总高）共用的**同一份口径**。拿真实
- *      节点的 `offsetTop + offsetHeight` 量是第二套坐标，两套会在窗口边界上分叉；
- *   2. 虚拟化之后行的 `offsetParent` 是那层 `translateY` 过的内层容器，`offsetTop`
- *      回答的是「它在**当前窗口**里的位置」而不是「它在整页内容里的位置」。拿它算
- *      `scrollTop` 会把视口拉回**窗口起点** —— 用户滚到底立刻被推回去，2000 行的
- *      页尾永远够不到（e2e 抓到的「滚不到底」正是它）。
- *
- * 目标行在窗口外时它根本不在 DOM 里，这一支天然也走同一张表：把目标行带进窗口，
- * 下一轮 effect 按同一张表对齐 —— 两轮同解，不再有「真实节点」与「估算位置」两套坐标。
- *
- * 视口高度取不到（jsdom / 首帧）时按 0 处理：`Math.max(0, NaN)` 是 NaN，交给
- * `scrollTop` 会被静默忽略（位置不更新）。
- */
+ * 贴底要写入的 `scrollTop`：让目标行**贴住视口底边**。几何**只取自位置表** `rows[...]`：① 它是
+ * `translateY`（渲染）与滚动条（总高）共用的同一份口径，真实节点的 `offsetTop + offsetHeight` 是第二套
+ * 坐标、会在窗口边界分叉；② 虚拟化后 offsetParent 是 `translateY` 内层容器，`offsetTop` 回答「它在当前
+ * 窗口里的位置」，拿它算会把视口拉回窗口起点（e2e 的「滚不到底」）。窗口外的目标行也走同一张表，两轮同解。 */
 export function pinScrollTop(
   geometry: { size: number; start: number },
   viewportHeight: number,
@@ -318,16 +226,10 @@ export function pinScrollTop(
 }
 
 /**
- * 贴底这一轮**该不该动、动到哪一行**：返回目标行序号，`null` 表示本轮不动。
- *
- * 两层判据：
- *   1. 目标 = {@link pinTargetIndex}（基线/已追到哪取大，钳到末条）；
- *   2. **用户接管了滚动就不动** —— 当前位置 (`scrollTop`) 已不是本 effect 上次
- *      写入的 (`appliedTop`)，说明用户自己滚到了别处（例如滚到底看最新）。贴底
- *      只负责新日志到达时钉住已读水位，不负责把用户按回水位；覆盖他的位置会把
- *      「滚不到底」做成常态（本仓库 e2e 抓到的那条回归）。容差 1px：浏览器会把
- *      小数位取整，同一位置的读写不必逐位相等。
- */
+ * 贴底这一轮**该不该动、动到哪一行**：返回目标行序号，`null` 表示本轮不动。两层判据：
+ * ① 目标 = {@link pinTargetIndex}（基线/已追到哪取大，钳到末条）；② **用户接管了滚动就不动**——
+ * 当前位置 `scrollTop` 已不是本 effect 上次写入的 `appliedTop`，说明用户滚到了别处；贴底只负责钉住
+ * 已读水位、不把用户按回水位（覆盖会把「滚不到底」做成常态）。容差 1px 吸收浏览器的小数取整。 */
 export function pinPlan(input: {
   applied: number;
   appliedTop: number;

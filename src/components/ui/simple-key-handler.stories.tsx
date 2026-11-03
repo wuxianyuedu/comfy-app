@@ -4,14 +4,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { simpleKeyHandler } from "~/components/ui/simple-key-handler";
 
 /**
- * 它不是一个组件，而是「在非输入框元素上按某个键就做一件事」的**属性包**：
- * `<div role="tab" tabIndex={0} {...simpleKeyHandler(["Space", "Enter"], fn)} />`。
- * 铺出来的元素没有可见外观，所以这一屏的主角是**下方那一行回显**：
- * 先点一下方块让它拿到焦点，再按键，看回显有没有变。
- *
- * 值得单看的两档：
- *   · `ignoreRepeat` 缺省为真 —— 按住不放只触发**一次**；
- *   · 关掉它之后，按住不放会**连续**触发（对比着看才说明这个开关是活的）。
+ * 它不是组件，而是「在非输入框元素上按某个键就做一件事」的属性包：`<div role="tab" tabIndex={0} {...simpleKeyHandler(["Space", "Enter"], fn)} />`。
+ * 元素没有可见外观，主角是下方回显：先点方块拿焦点再按键。两档：`ignoreRepeat` 缺省为真（按住只触发一次）；关掉后按住会连续触发。
  */
 const meta = {
   title: "UI/SimpleKeyHandler",

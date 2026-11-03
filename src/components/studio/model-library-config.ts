@@ -59,14 +59,9 @@ export function countByType(models: Array<ModelRow>): Array<[string, number]> {
 }
 
 /**
- * 模型体积：B / KB / MB / GB 自动换挡；空值显示「—」。
- *
- * 走 `~/lib/format-bytes` 的唯一出口（此前这里与 `MaterialLibraryPanel` 各写
- * 一份，降档阈值还写成 `>` 与 `<` 两套 —— 1024 字节整给出不同答案）。
- *
- * **`0` 也当作「未知体积」**（沿用本模块原有语义，有用例钉住）：模型列表里
- * `fileSize` 为 0 表示尚未探到体积，显示 `0 B` 会让用户以为模型是空的。
- * `fmtBytes` 只把「非法 / 空值」判成 `null`，所以这层域语义留在调用处。
+ * 模型体积：B / KB / MB / GB 自动换挡；空值显示「—」。走 `~/lib/format-bytes` 唯一出口（此前两处各写一份、
+ * 阈值 `>` 与 `<` 两套，1024 字节整给出不同答案）。**`0` 也当「未知体积」**（有用例钉住）：`fileSize` 为 0
+ * 表示尚未探到体积，显示 `0 B` 会让用户以为模型是空的；`fmtBytes` 只把非法 / 空值判 `null`，故域语义留调用处。
  */
 export function fmtSize(n?: number | null): string {
   /* `0` 是**本域的**「尚未探到体积」，不是「缺值」 —— 这层语义必须显式写在

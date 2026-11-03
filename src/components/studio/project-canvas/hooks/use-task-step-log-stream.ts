@@ -2,19 +2,8 @@
 
 /**
  * useTaskStepLogStream —— 监听单个任务的执行步骤日志流（SSE）。
- *
- * 为什么是独立 hook（规范 17 / 硬规则 10）：`new EventSource(...)` 是浏览器原生
- * 网络请求，视图 `.tsx` 里不该 hand-manage 一条 SSE 长连接的建连 / 帧解析 / 关流。
- * 此前这段生命周期整块内联在 `GlobalStepLogPanel` 里，同文件别处又把网络下沉到
- * `~/lib/task-cancel-client`（视图零 IO），唯独这条流没遵循。收进本 hook 后，
- * 面板只消费 `{ logs, status, progress, error, validationErrors, connected }` 与
- * `setError` / `clear`，不再碰网络。
- *
- * 一并托管三件与「看这一条流」不可分的事：
- *   · 换任务时从跨卸载缓存播种（`loadStepLogPanelState`）；
- *   · SSE 帧解析（log / state / 终态），终态帧只作触发器、去向 DB 要权威结论（#733）；
- *   · 20s 无活动的「卡住」提示（读连接活动时间戳）——它依赖 SSE 更新的活动时刻，
- *     与连接同源，拆开放反而要跨边界传 ref。
+ * 独立成 hook（规范 17 / 硬规则 10）：EventSource 是浏览器原生请求，视图不该 hand-manage
+ * 连接/帧解析/关流。终态帧只作触发器、去向 DB 要权威结论（#733）；20s 无活动提示与连接同源一并托管。
  */
 import { useEffect, useRef, useState } from "react";
 import { useInterval } from "~/components/ui/use-interval";
@@ -198,15 +187,10 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             });
           }
         } else if (msg.type === "done" || msg.type === "error") {
-          /* 终态帧**不能直接下结论**。
-           *
-           * 现场（ISSUE #733）：任务被后端判终态（如 CANCELLED）后，迟到的
-           * 「完成」帧仍可能到达；旧实现把它当权威，直接显示「完成」并关流，
-           * 用户看到的是一个已经死掉的任务显示成功。反过来，帧里没有
-           * `status` 字段时旧实现还会把它落成 FAILED —— 成功也被显示成失败。
-           *
-           * 因此这里改为：终态帧只作为**触发器**，去向 DB 要权威结论；DB
-           * 读不到时才退回帧内信息。 */
+          /* 终态帧**不能直接下结论**（ISSUE #733）：任务被后端判终态（如 CANCELLED）后，
+           * 迟到的「完成」帧仍可能到达，旧实现当权威直接显示成功；帧里没有 `status`
+           * 时旧实现还会落成 FAILED。因此这里只把终态帧当**触发器**，去向 DB 要权威
+           * 结论，DB 读不到时才退回帧内信息。 */
           const fallback = msg.type === "error" ? "FAILED" : "SUCCEEDED";
           if (typeof msg.error === "string") {
             setError(msg.error);

@@ -1,14 +1,9 @@
 "use client";
 
 // 工坊顶栏：项目标识（只读，项目身份由首页决定）、六段流程的健康度分段条。
-// 纯展示，数据由 controller 下发。
-//
-// Phase 2：并入统一 proj_* 项目后，工坊不再有自建的项目切换器——新建 / 切换 /
-// 删除项目统一在首页（canvas-store）发生，这里只展示当前所在项目的标题。
-//
-// 这里**不挂**「模型适配 / 模式契约」：它们读写的是全局注册表（与当前项目无关），
-// 入口在侧栏、紧跟「工作流库」之后（见 `studio/NavItems.tsx` 的 `OVERLAY_NAV_ITEMS`）。
-// 挂在项目内视图的顶栏上会让人以为换项目就得重配一遍。
+// 纯展示，数据由 controller 下发。项目的新建/切换/删除统一在首页（canvas-store）。
+// 这里**不挂**「模型适配 / 模式契约」：它们读写全局注册表（与当前项目无关），
+// 入口在侧栏（`studio/NavItems.tsx` 的 `OVERLAY_NAV_ITEMS`）。
 
 import { ProgressBar } from "~/components/ui/progress-bar";
 import { toPct } from "~/lib/progress";

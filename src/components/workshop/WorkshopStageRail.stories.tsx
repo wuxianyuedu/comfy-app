@@ -10,16 +10,8 @@ import {
 } from "~/components/workshop/stage-config";
 
 /**
- * 工坊左侧的阶段轨道（六段流程入口）。
- *
- * **它没有数据依赖** —— 入参是 `tab` / `stageRatios` / `viewContext` 三个纯值。
- * 那条看起来像依赖的东西在这里有了正确的解法：`stageRatios` **不手抄**，
- * 而是调 `computeStageRatios(ctx, rendered)`（`stage-config.ts` 的纯函数）
- * 从一份 `StageViewContext` 派生 —— 那正是真机上它唯一的来源。
- *
- * 手抄一份 `{ script: 1, character: 0.5, … }` 就是这一批要消掉的那类假形态：
- * 数字看着对，而它与真实派生逻辑（以及 `stageSubtitle` 的文案规则）无关，
- * 真机上「还差几镜」的说法一旦改了，story 会在旁边继续显示旧口径。
+ * 工坊左侧的阶段轨道（六段流程入口）。无数据依赖，`stageRatios` **不手抄** —— 调 `computeStageRatios(ctx, rendered)`（`stage-config.ts` 纯函数）从
+ * `StageViewContext` 派生，那正是真机上唯一来源；手抄数字与真实派生逻辑无关，真机口径一改 story 会继续显示旧值。
  */
 const EMPTY_CTX: StageViewContext = {
   scriptReady: false,

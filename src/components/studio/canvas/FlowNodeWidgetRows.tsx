@@ -45,12 +45,10 @@ export function FlowNodeWidgetRows({
         // 的 edgeType 路径在顶部针脚区）。
         const inputType = inferInputType(data.classType, k, v);
         const typeCol = portColor(inputType);
-        // Display label: 工作流 JSON 里作者写的 label（英文业务名）优先于
-        // ComfyUI 的 zh-CN localized_name —— 与该 pin 在 IO 列表 / 运行期
-        // 表单里的取法保持一致（label → localized → name）。localized_name
-        // 是通用词（"图像"），排前面会让同一节点上多个 pin 长得一模一样。
-        // COMBO 候选串由 sanitizeComboLabel 剥掉；BOOLEAN 描述串（rgthree
-        // Settings）保留。
+        // Display label: 作者写的 label 优先于 ComfyUI zh-CN localized_name ——
+        // 与 IO 列表/运行期表单的取法一致（label → localized → name）。
+        // localized_name 是通用词（"图像"），排前面会让同节点多个 pin 重名。
+        // COMBO 候选串由 sanitizeComboLabel 剥掉；BOOLEAN 描述串（rgthree Settings）保留。
         const meta = rawMeta[k];
         const friendlyLabel =
           sanitizeComboLabel(meta?.label) ||
@@ -182,12 +180,9 @@ export function FlowNodeWidgetRows({
                   {friendlyLabel}
                 </span>
 
-                {/* **同时**带线的 widget 输入仍显示它的
-                 * 控件取值（ComfyUI 从不隐藏它）—— 只是调暗，让
-                 * 读者能看出这个活值来自连线。
-                 *
-                 * 版式对齐 ComfyUI：标签与取值之间**不画分隔线**，值紧接标签
-                 * 左对齐（此前是一条 1px 竖线 + 右对齐的值列）。 */}
+                {/* 同时带线的 widget 输入仍显示控件取值（ComfyUI 从不隐藏），只是调暗，
+                     让人看出活值来自连线。版式对齐 ComfyUI：标签与取值之间不画分隔线，
+                     值紧接标签左对齐。 */}
                 <span
                   className="text-2xs min-w-0 truncate text-left tabular-nums"
                   style={{

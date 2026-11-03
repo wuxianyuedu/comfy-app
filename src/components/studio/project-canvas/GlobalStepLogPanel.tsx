@@ -2,15 +2,8 @@
 
 /**
  * GlobalStepLogPanel —— 全局执行步骤日志面板
- *
- * 设计决策（Why 弹窗而非底部抽屉）：
- * 1. 底部抽屉会压缩画布可用空间；
- * 2. 与右下 MiniMap、底部状态栏容易重叠。
- * 故采用「应用日志」同款的居中弹窗。
- *
- * 交互约定：
- * - 「调试模式」开关仅控制入口按钮显隐；
- * - 弹窗打开后不受该开关影响，避免操作中突然消失。
+ * 用居中弹窗而非底部抽屉：抽屉会压缩画布空间，且与 MiniMap、底部状态栏易重叠。
+ * 「调试模式」开关仅控制入口按钮显隐；弹窗打开后不受该开关影响，避免操作中突然消失。
  */
 
 import { LOG_MODAL_MAX_ROWS, tailWindow } from "~/lib/page-window";
@@ -108,11 +101,9 @@ export const GlobalStepLogPanel = React.memo(function GlobalStepLogPanel() {
   const cachedIds = useMemo(
     () => listCachedTaskIds(),
     /* 依赖是**重算触发器**，不是 `listCachedTaskIds()` 真实读的输入 ——
-     * 它读的是 `stepLogCache` 的模块级 Map，静态推不出来「什么时候该重算」。
-     * 三条各自对应一次缓存写入：`taskId` 换了（新任务进了缓存）、`logs` 追加了
-     * （缓存内容推进）、`validationErrors` 更新了（同批落进来的新条目）。
-     * 属规范 §13.4 的「规则静态盲区」；去掉任一条件会让面板停在旧清单上
-     * （表现是任务选择器少一条，且不会自愈）。 */
+     * 它读 `stepLogCache` 的模块级 Map，静态推不出何时该重算。三条各对应一次
+     * 缓存写入：taskId 换（新任务进缓存）、logs 追加、validationErrors 更新。
+     * 属规范 §13.4「规则静态盲区」；去掉任一条件会让面板停在旧清单上。 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [logs, validationErrors, taskId],
   );

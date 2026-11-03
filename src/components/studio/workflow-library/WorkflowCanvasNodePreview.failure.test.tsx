@@ -1,11 +1,5 @@
-/* 工作流库画布预览的失败态 UX 回归。
- *
- * 用户两条口径：
- *   · 「实际使用」页签执行失败后，按钮要能再次点击重新执行；
- *   · 「编辑对外参数」页签是配置界面，不应展示上一次运行的执行错误。
- *
- * 这里把运行相关的副作用（生成 / SSE / 日志弹窗）打桩，用 startLocalGenerate
- * 抛错来模拟失败终态，再断言失败态在两种视图模式下的展示与清除行为。 */
+/* 工作流库画布预览失败态 UX 回归：失败后按钮可再次执行；「编辑对外参数」页签
+ * （配置界面）不展示上一次运行错误。生成/SSE/日志打桩，用抛错模拟失败终态。 */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

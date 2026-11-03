@@ -3,15 +3,8 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 
 /**
- * 三档尺寸是**字面量联合**（`default` / `sm` / `lg`），从 props 派生。
- *
- * 一张能用 data URL 的图就够了 —— 本件刻意**不**依赖网络：story 是「起工作台
- * 就能看」，不该额外要求一个能连外网的检出。
- *
- * 那张图**不带色值**：`currentColor` 在 `data:` URL 里不解析，而写死 hex 会撞
- * `check-theme-colors.cjs`（规范 03 §3.6.1 —— 表面色必须走 token）。这里要验的
- * 是「有图时走 `AvatarImage`、失败才落 fallback」，一个人形轮廓就够表达，
- * 顺带不引入一处新的写死色值。
+ * 三档尺寸是**字面量联合**（`default` / `sm` / `lg`），从 props 派生；story 刻意**不**依赖网络（一张 data URL 图就够）。
+ * 图**不带色值**：`currentColor` 在 `data:` URL 里不解析，写死 hex 会撞 `check-theme-colors.cjs`（规范 03 §3.6.1，表面色必须走 token）；这里验的正是「有图走 `AvatarImage`、失败才落 fallback」。
  */
 type AvatarSize = NonNullable<React.ComponentProps<typeof Avatar>["size"]>;
 

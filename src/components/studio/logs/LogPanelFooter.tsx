@@ -2,9 +2,8 @@
 
 /**
  * LogPanel 的页脚拆分件（§17.12 视图二次拆分：只动 JSX 物理位置，不动行为）。
- * 分页 + 「回到最新」出口 + 「正在看什么」筛选摘要（点任意一项即去掉该层）。
- * 时间线有内存上限（LOG_STORE_MAX=5000）：更旧的会被折叠，droppedTotal
- * 累计并在下方提示，完整历史仍在磁盘日志文件里。
+ * 分页 + 「回到最新」出口 + 筛选摘要（点任意一项即去掉该层）。
+ * 时间线内存上限 LOG_STORE_MAX=5000：更旧的会被折叠，droppedTotal 累计并提示，完整历史在磁盘。
  */
 import { ArrowDownToLine, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -99,13 +98,9 @@ export function LogPanelFooter(input: {
             {newLogCount > 0 ? `有 ${newLogCount} 条新的日志 · 回到最新` : "回到最新"}
           </Button>
         )}
-        {/* 翻页控件走 `ui/pagination`（规范 16 §16.2.4.6 / §16.2.4.72 的零引用
-          基元复查）：`Pagination` / `PaginationContent` / `PaginationItem` 给的是
-          `nav[aria-label="pagination"]` + `ol`/`li` 的层级语义与统一排布契约。
-          此前这里是一层裸 `span` 串两个按钮 —— 读屏器读到的是一串孤立按钮，
-          没有任何「这是一组分页控件」的说法。
-          **只借结构、不借 `PaginationLink`**：那个是带 `href` 的页链接，而本
-          面板的页码是**受控状态**（当前页归 `useLogStore`），不是地址。 */}
+        {/* 翻页控件走 `ui/pagination`（规范 16 §16.2.4.6 / §16.2.4.72）：它给 `nav` + `ol`/`li`
+          的层级语义与统一排布契约，此前裸 `span` 串两个按钮，读屏器读到的是一串孤立按钮。
+          **只借结构、不借 `PaginationLink`**：那是带 `href` 的页链接，而本面板页码是受控状态。 */}
         <Pagination className="w-auto flex-1 justify-end">
           <PaginationContent className="gap-1">
             <PaginationItem>

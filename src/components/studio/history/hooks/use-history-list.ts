@@ -80,13 +80,9 @@ export type HistoryListController = {
 };
 
 /**
- * 历史记录列表的全部逻辑。
- *
- * 「打开详情」只有列表行那一个入口（`HistoryList` 把 `openDetail` 挂在每行的
- * 点击上）。此前这里还订阅过一个 `open-task` 事件、注释写着「VideoQueueModal
- * 的详情按钮会派发它」，而那个派发方早已搬走 —— 一条**没有任何触发源**的监听器
- * 不会报错、不会红，只会让下一个读代码的人以为「别处也能打开详情」。
- * `tests/app-event-pairing.test.ts` 现在拦得住这种只剩一端的通道。
+ * 历史记录列表的全部逻辑。「打开详情」只有列表行一个入口（HistoryList 每行挂 openDetail）。
+ * 此前还订阅过一个 open-task 事件、注释称 VideoQueueModal 会派发，而派发方早已搬走 ——
+ * 无触发源的监听器不报错，只误导后来者以为别处能打开详情；tests/app-event-pairing.test.ts 现在拦得住只剩一端的通道。
  */
 export function useHistoryList(): HistoryListController {
   const trpc = useTRPC();
@@ -185,13 +181,9 @@ export function useHistoryList(): HistoryListController {
 
   const deleteTask = useMutation(trpc.task.delete.mutationOptions());
 
-  /* 反馈通道适配：本面板的「成功」走 `info`（一句陈述，不是庆祝），
-   * 「失败」走 `error`。收口前「取消失败，请稍后重试」这类**引导性文案**
-   * 是写死的，网络层原文（`ECONNREFUSED` / `Failed to fetch`）被整个丢掉 ——
-   * 现在统一走 `~/lib/async-action` 的 `errorMessage`。
-   *
-   * 成功那一侧用 `successText` 给一句陈述句；「取消失败」那条的失败文案
-   * 保留可执行动作（「稍后重试」），它是这条账里唯一值得写的引导。 */
+  /* 反馈通道：成功走 info（一句陈述，不是庆祝）、失败走 error。收口前「取消失败，请稍后重试」
+   * 等引导文案写死、网络层原文（ECONNREFUSED / Failed to fetch）被丢弃；现统一走 ~/lib/async-action 的 errorMessage。
+   * 成功侧用 successText 陈述句；「取消失败」保留可执行动作（稍后重试）。 */
   const report: ActionReport = useCallback(
     (kind, detail) => (kind === "ok" ? toast.info(detail) : toast.error(detail)),
     [toast],

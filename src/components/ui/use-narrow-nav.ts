@@ -13,31 +13,9 @@ const listeners = new Set<() => void>();
 let initialSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * 安排「进页面后补一次通知」—— 这是首帧对账的唯一触发者。
- *
- * 为什么需要它：`useSyncExternalStore` 的首帧读的是 `getServerSnapshot`（服务端
- * 按非窄窗渲染的那一份）。此后只有 store 通知才会让它重读快照，而「进页面时窗口
- * 就已经是窄窗」这种情况媒体查询**不会再 change** —— 不主动通知一次，`data-state`
- * 就停在服务端那份「展开」上。
- *
- * ⚠️ 两个都不能省的前提：
- *
- * 1. **定时器不能挂在订阅的清理函数上**。React 开发态会把 effect 跑两遍
- *    （挂载 → 卸载 → 再挂载），清理函数里的 `clearTimeout` 会把刚排的通知取消。
- *    实测（`innerWidth=1100` 首屏）：`setTimeout(0)` 排 5 次、被 `clearTimeout` 取消
- *    **2** 次，其中第二次正是 store 自己排的通知 —— 于是它**一次都没跑到**，
- *    `data-state` 只能等某个无关的重渲染（实测是 `model.configList` 的 tRPC 响应）
- *    顺带读一次快照才纠正。并发跑 E2E 时那次重渲染可以晚到 5s 之后
- *    ⇒ `nav-auto-collapse` 两条在默认并发下必红。提到模块级后，任何退订都不撤销它。
- *
- * 2. **回调里通知不到人就重新排**。双挂载期间那一刻 `listeners` 可能是空的：通知
- *    发给空气等于没发，而「排过了」的标记若照旧置真就再也不会补 —— 于是又回到
- *    「靠顺带的重渲染」。所以只有**真的通知到了订阅者**才算完，否则重排一次
- *    （`initialSyncTimer` 在此兼作「已排/未排」标记）。
- *
- * 为什么要等一个宏任务：微任务排在 React 提交完成之前，那次通知会被吞掉
- * （实测：首屏窄窗仍不收起，而 resize 之后能收起）。宏任务（下一个任务）才落在
- * 提交之后。
+ * 安排「进页面后补一次通知」—— 首帧对账的唯一触发者。
+ * `useSyncExternalStore` 首帧读 `getServerSnapshot`（服务端按非窄窗渲染）；「进页面时已是窄窗」媒体查询不会再 change，不主动通知 `data-state` 就停在「展开」。
+ * 两个前提不能省：① 定时器不能挂在订阅清理函数上（开发态双挂载的 clearTimeout 会取消刚排的通知，实测被取消 2 次、其中一次正是 store 自己排的 ⇒ nav-auto-collapse 并发必红）；② 回调里通知不到人就重新排（双挂载期间 listeners 可能为空，`initialSyncTimer` 兼作已排标记）。用宏任务而非微任务：微任务排在 React 提交前会被吞掉。
  */
 function scheduleInitialSync(): void {
   if (initialSyncTimer !== null) {
@@ -106,15 +84,9 @@ function getServerSnapshot(): NarrowNavState {
 }
 
 /**
- * 「窗口窄到装不下展开态这一笔账」+ 跨越阈值的次数。
- *
- * 与 `useIsMobile()`（768px 那条）**不是一条线**：那条切形态（固定栏 ↔ 浮层），
- * 这条切宽度让位纪律（展开 ↔ 图标），窄窗里两条同时成立。阈值与算式的唯一出处在
- * `~/lib/layout-budget`。
- *
- * 为什么要带 `crossings`：用户「在窄窗里点开展开」是一次表态，但窗口放大再缩回来
- * 已经跨越过阈值两次 —— 那次表态不该继续否决纪律。用「表态时的跨越次数」比对现在
- * 的次数就能纯推导地判过期，不用 effect、也不用 ref。
+ * 「窗口窄到装不下展开态」+ 跨越阈值的次数。
+ * 与 `useIsMobile()`（768px）不是一条线：那条切形态，这条切宽度让位纪律；阈值与算式唯一出处在 `~/lib/layout-budget`。
+ * 带 `crossings`：用户「在窄窗里点开展开」是一次表态，跨越两次阈值后该过期；用「表态时的跨越次数」比对现在即可纯推导判过期，不用 effect / ref。
  */
 export function useNarrowNavState(): NarrowNavState {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

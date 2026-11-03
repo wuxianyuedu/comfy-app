@@ -1,11 +1,7 @@
 import { Skeleton } from "~/components/ui/skeleton";
 
-/** 动态表单的骨架占位（规范 16 §16.2.3 P3）。
- *
- * 此前这里自写`animate-pulse` 的空 div —— 骨架这件事在库里已有`ui/skeleton`。
- *`Skeleton` 的`bg-muted` 会被下面的`bg-subtle` 覆盖（`cn()` 走 tailwind-merge，
- * 同一属性后面的类赢），所以保留下方原来的底色类即可。
- */
+/** 动态表单骨架占位（规范 16 §16.2.3 P3）。骨架在库里有 ui/skeleton；Skeleton 的 bg-muted
+ * 会被下面的 bg-subtle 覆盖（cn() 走 tailwind-merge，同属性后者赢），故保留下方原底色类。 */
 export function LoadingSkeleton() {
   return (
     <div className="flex flex-col gap-2">

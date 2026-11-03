@@ -48,12 +48,9 @@ export function SubgraphHeader({
         borderBottom: "1px solid var(--color-border-subtle)",
       }}
     >
-      {/* 收起 / 展开开关。与 WorkflowNode 同一个箭头；
-       *  位于头部左上角。Button 默认 type="button"。click 与
-       *  pointer-down 都 stopPropagation，好让 ReactFlow 的拖拽处理器
-       *  不把它当成节点拖拽起点，也免得外层
-       *  `onDoubleClick`（下钻）在这里起手的双击
-       *  之后被触发。 */}
+      {/* 收起/展开开关，与 WorkflowNode 同一箭头，位于头部左上角。Button 默认 type="button"；
+          click 与 pointer-down 都 stopPropagation，免得 ReactFlow 当作节点拖拽起点，
+          也避免外层 onDoubleClick（下钻）在同一双击中触发。 */}
       <Hint label={isCollapsed ? "展开" : "折叠"}>
         <Button
           aria-label={isCollapsed ? "展开子图" : "折叠子图"}
@@ -133,13 +130,8 @@ export function SubgraphHeader({
       {onEnter && (
         <Hint accessibleName label="展开子工作流">
           <Button
-            /* 从 h-4 w-4（16×16）提到 h-6 w-6
-             *  （24×24）—— 用户反馈此前这下钻章在
-             *  30px 高的标题行上目标太小。24×24 比
-             *  NODE_TITLE_H 矮 3px，所以仍像一颗
-             *  行内按钮（而不是 28-32px 的独立章观感）。
-             *  比收起箭头的 h-5 w-5 大一档，
-             *  以标记下钻是子图的*主要*动作。 */
+            /* 下钻章从 h-4 w-4（16×16）提到 h-6 w-6（24×24）—— 用户反馈 30px 标题行上目标太小。
+             * 24×24 比 NODE_TITLE_H 矮 3px，仍像行内按钮；比收起箭头 h-5 w-5 大一档，标记下钻是子图主要动作。 */
             className="text-primary-strong hover:bg-primary/30 text-3xs ml-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded transition-colors hover:text-white"
             onClick={(event) => {
               event.stopPropagation();

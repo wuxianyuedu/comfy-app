@@ -1,10 +1,6 @@
 /**
- * `CommandDialog` 必须套一层 `Command`（`command.tsx` 曾经漏掉）：`CommandInput`
- * / `CommandList` / `CommandItem` / `CommandGroup` / `CommandEmpty` 全从 `Command`
- * 的 context 取 store（cmdk 的 `useCmdk` 直接 `store.subscribe`），没有 `<Command>`
- * 祖先就 `Cannot read properties of undefined (reading 'subscribe')` —— 且只在
- * **打开面板**时炸（关闭时 base-ui `Dialog.Portal` 不渲染子节点）。这里把面板打开
- * 渲染一遍，确认不再抛错。
+ * `CommandDialog` 必须套一层 `Command`（`command.tsx` 曾漏掉）：`CommandInput` / `CommandList` / `CommandItem` / `CommandGroup` / `CommandEmpty` 全从 `Command` 的 context 取 store（cmdk 的 `useCmdk` 直接 `store.subscribe`），没有祖先就 `Cannot read properties of undefined (reading 'subscribe')`。
+ * 且只在**打开面板**时炸（关闭时 base-ui `Dialog.Portal` 不渲染子节点）；这里把面板打开渲染一遍，确认不再抛错。
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";

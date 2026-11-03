@@ -98,19 +98,13 @@ export type CustomNodesSettingsController = {
 };
 
 /**
- * ndjson 进度事件流的消费器（从 `fetchSettings` 拆出，§12.13）。
- *
- * 逐行解析设置流的 ndjson 事件（每行由 JSON.parse 自身校验，坏行跳过）：
- * discover_start / progress / discover_done 逐拍写进度（经 sinks），
- * summary / error 聚合。聚合结果（paths / summary / lastReport / byPath /
- * discoveredByParent）**原样返回**，落库（setState）由调用方统一处理——
- * 消费器本身不持有任何 React 状态。
+ * ndjson 进度事件流的消费器（§12.13）：逐行 JSON.parse（坏行跳过），经 sinks
+ * 写进度，聚合结果原样返回；不持有 React 状态，落库统一由调用方处理。
  */
 /**
- * 缓存预热路径的 blob 解析（从 `fetchSettings` 拆出，§12.13）：校验 settings
- * 存在——401 / 500 等错误响应没有 settings，原代码直接炸
- * `Cannot read properties of undefined (reading 'paths')`，真实原因被掩盖；
- * 这里读出服务端给的可读信息——返回落库所需的五元组。
+ * 缓存预热路径的 blob 解析（§12.13）：401/500 响应没有 settings，直接读会炸
+ * `Cannot read properties of undefined (reading 'paths')` 并掩盖真实原因；
+ * 这里校验存在并返回落库所需的五元组。
  */
 function parseSettingsBlob(
   data: SettingsResp & { error?: { message?: string } | string },

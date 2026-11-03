@@ -1,22 +1,9 @@
 "use client";
 
 /**
- * SettingsView —— 设置界面的**一份**主体：三态（首帧 loading / 失败降级 /
- * 就绪）+ 外壳与分区导航。
- *
- * 为什么要有这个文件：此前它存在两份逐字相近的实现 —— 独立路由
- * `src/app/(main)/settings/page.tsx` 与工作区内的全屏浮层
- * `SettingsOverlay.tsx`（后者还反过来从路由文件 import 降级视图，方向是拧的）。
- * 两份「三态」意味着改一处状态机要记得改两处，而漏掉的那处只在特定分支才现形。
- * 现在两个挂载点各只负责「多高」，内容只有一份。
- *
- * 两个挂载点的差别（刻意只剩一条：多高）：
- *   · 独立路由 `/settings`：自己给出视口高度（`SettingsShell` 的默认档）——
- *     它是浏览器地址栏直达的入口，没有「返回工作区」这一层。
- *   · 工作区视图（页签「设置」）：高度由外层视图容器给（`fillHeight`），
- *     而「关」这件事由页签自己的关闭按钮承担，视图内部不再另画一枚。
- *     （这里曾有一个 `onBack` prop 给失败态加一条「返回工作区」退路，但两个挂载点
- *     都不传 ⇒ 那条分支永远进不去，失败态看着有退路其实没有。按 §12.16 删掉。）
+ * SettingsView —— 设置界面的**一份**主体：三态（首帧 loading / 失败降级 / 就绪）+
+ * 外壳与分区导航。此前有两份逐字相近的实现（`/settings` 与工作区全屏浮层），改一处要
+ * 记得改两处；现在两个挂载点各只负责「多高」。页签里「关」由页签承担，不另画返回（§12.16）。
  */
 
 import { useCallback, useState } from "react";
@@ -117,11 +104,9 @@ export function SettingsView({ fillHeight, initialSection, onConsumeSection }: S
 }
 
 /* ── 设置页加载失败降级视图 ──────────────────────────────────────────────
- * 此前只有一行被截断的错误文案，原始报错（如 tRPC 拿到 HTML 的
- *"Unexpected token'<'"）既看不全也没有任何出口，问题无从排查（#220）。
- * 现在：完整错误可展开、可复制；并提示打开日志面板（Ctrl+Shift+L）看
- * 全局错误与启动日志——错误本身也已由 LogProvider 的全局钩子收进面板。
- * 渲染在「设置外壳」内容区：去掉整屏高度，仅居中于内容区，随外壳滚动。 */
+ * 此前只有一行被截断的错误文案，原始报错既看不全也没有任何出口（#220）。
+ * 现在：完整错误可展开、可复制；并提示打开日志面板（Ctrl+Shift+L）——错误本身
+ * 也已由 LogProvider 的全局钩子收进面板。渲染在内容区：去掉整屏高度，随外壳滚动。 */
 function SettingsLoadError({ errorText, onRetry }: { errorText: string; onRetry: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const copied = useFlashState();
@@ -154,14 +139,11 @@ function SettingsLoadError({ errorText, onRetry }: { errorText: string; onRetry:
         <p className="text-muted-foreground mt-2 truncate text-xs" title={errorText}>
           {errorText}
         </p>
-        {/* 「完整错误」是一个 disclosure：点它把下面的`<pre>` 展开 —— 用
-`Disclosure` 而不是自绘 chevron + 条件渲染（规范 16 §16.2.4.13；
- 自绘那份没有`aria-expanded` /`aria-controls`）。
- 一排按钮里只有中间那个是折叠开关，其余两个走`leading` /`trailing`
- —— 基元的 trigger 是`<button>`，往它里面塞`<Button>` 在 HTML 里
- 非法（会触发水合错误）。开关自己的外观经`className` 给（它本身就是
- 按钮，直接穿`buttonVariants` 的 outline 档），整排的排布在
-`rootClassName`，面板靠`basis-full` 独占一行。 */}
+        {/* 「完整错误」是一个 disclosure：用 `Disclosure` 而不是自绘 chevron +
+            条件渲染（规范 16 §16.2.4.13；自绘那份没有 aria-expanded/aria-controls）。
+            一排按钮里只有中间那个是折叠开关，其余两个走 `leading`/`trailing`——
+            基元的 trigger 是 `<button>`，往里面塞 `<Button>` 在 HTML 里非法（水合错误）。
+            开关外观经 `className` 给，整排排布在 `rootClassName`，面板靠 `basis-full` 独占一行。 */}
         <Disclosure
           className={cn(
             buttonVariants({ variant: "outline" }),

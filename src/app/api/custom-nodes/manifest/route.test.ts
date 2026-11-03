@@ -1,16 +1,7 @@
 /**
- * `/api/custom-nodes/manifest` 的闸门与三相出口 —— 浏览器侧注册表**唯一**的灌入源。
- *
- * 这条链的事故形状很特别：handler 在基线迁移时被删掉，而客户端那两句 `fetch`
- * 活着留了下来，于是 `if (!res.ok) return 0` 每天命中 404，注册表恒空、
- * 预览卡恒空，界面上没有任何一处说「清单没拿到」（台账 E9）。所以这里的断言
- * 不只测状态码，还钉住「哪一档该说话、哪一档该安静」—— 客户端正是靠这个
- * 区分决定要不要往控制台写错误。
- *
- * mock 边界：`~/server/auth/request-user`（鉴权两态）、
- * `~/lib/comfyui/custom-nodes-manifest.server`（读盘三相；那一层自己的
- * errno→相 映射由 `custom-nodes-manifest.server.test.ts` 真读盘判，
- * 这里只判「相 → HTTP」这一跳，所以桩件给的是相本身而不是文件系统）。
+ * `/api/custom-nodes/manifest` 的闸门与三相出口 —— 浏览器侧注册表唯一灌入源。事故形状：handler 曾
+ * 被删而客户端 `fetch` 留着，404 让注册表恒空、界面无一处说「清单没拿到」（台账 E9）。
+ * mock 边界：`request-user` 与 `custom-nodes-manifest.server` 只判「相 → HTTP」这一跳（桩件给的是相本身）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

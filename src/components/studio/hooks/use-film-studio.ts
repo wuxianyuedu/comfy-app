@@ -1,11 +1,9 @@
 "use client";
 
-// ── 成片工作室：业务逻辑层（规范 17 §17.2 第②层）────────────────────────────
-// 承载表单状态、成片轮询、一键成片/取消/重新合成三个动作与 BGM 上传。
-// FilmStudio 视图只消费本 hook 返回的 controller，不再出现 vanillaApi / fetch。
-//
-// 时间轴编辑（镜头列表、播放态、播放头）是纯视觉状态、不产生网络请求，
-// 按规范留在视图层——下沉反而要透传一堆 prop。
+// ── 成片工作室：业务逻辑层（规范 17 §17.2 第②层）
+// 承载表单状态、成片轮询、一键成片/取消/重新合成三个动作与 BGM 上传；
+// 视图只消费 controller，不再出现 vanillaApi / fetch。
+// 时间轴编辑（镜头列表、播放态、播放头）是纯视觉状态，按规范留在视图层。
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -410,12 +408,10 @@ export function useFilmStudio(): FilmStudioController {
 
   const running = useMemo(() => !!film && isFilmRunning(film.status), [film]);
 
-  /* 成片在跑时按 `FILM_POLL_MS` 轮询详情，跑完自动停 —— 「要不要轮询」由
-   * `running` 决定，不再由 `fetchDetail` 自己起停定时器。`immediate: false`：
-   * 进 running 那一次详情**已经由 `create` / `cancel` / `recompose` 显式拉过**
-   * （它们都 `await fetchDetail(...)`），这里再补一次只会把刚拿到的状态多刷
-   * 一遍、也让首个间隔的语义说不清。`useInterval` 每次渲染把回调搬进 ref，
-   * 所以下面的闭包始终读到最新的 `film.id`。 */
+  /* 成片在跑时按 `FILM_POLL_MS` 轮询详情，跑完自动停 —— 「要不要轮询」由 `running`
+   * 决定，不再由 `fetchDetail` 自己起停定时器。`immediate: false`：进 running 那一次
+   * 详情**已由 create / cancel / recompose 显式拉过**，再补一次只会重刷刚拿到的状态。
+   * `useInterval` 每次渲染把回调搬进 ref，所以闭包始终读到最新的 `film.id`。 */
   const pollId = film?.id ?? null;
   useInterval(
     () => {

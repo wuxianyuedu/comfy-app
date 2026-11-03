@@ -1,15 +1,7 @@
 /**
- * /api/logs/current 的增量读取契约（ISSUE #262 的根因回归）。
- *
- * 面板「越读越旧、只能看到 2000 条以内、时间顺序错乱」的直接原因是这里的
- * 尾部滑动窗口太窄（128KB ≈ 900~1500 行）且**与内存上限无关**：一旦文件超过
- * 窗口，首帧只能拿到最后一段，前面的日志面板永远看不到，时间线也从中间开始。
- *
- * 本用例把三条契约钉死：
- *   1. 首次打开回**行对齐**的尾部窗口，窗口内不会截出半行；
- *   2. 带游标时只回新增，不回退读；
- *   3. 游标失效（文件被新运行覆盖重建 / 游标越界）时回退到尾部窗口，
- *      且 `size` 仍是文件总长，客户端据此继续增量。
+ * /api/logs/current 的增量读取契约（ISSUE #262 的根因回归：尾部窗口太窄且与内存上限无关，
+ * 文件超过窗口后首帧只能拿到最后一段）。钉三条：首帧回行对齐的尾部窗口（不截半行）；
+ * 带游标只回新增；游标失效（文件重建/越界）回退尾部窗口且 `size` 仍是文件总长。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
@@ -133,12 +125,8 @@ describe("GET /api/logs/current 增量读取", () => {
     expect(data.size).toBe(fs.statSync(logFile).size);
   });
 
-  /* ISSUE #1326：四份 runtime 日志改成一次启动一份文件之后，「这个来源会不会
-   * 累积历史行」这一问题**从根上消失了** —— 一份文件只属于一次启动。
-   *
-   * 于是 `sessionStart` 对本族恒为 null（客户端据此不做任何行时刻裁剪）。
-   * 这条契约要紧：下发一个起点会让客户端把本次启动最早、最该被看到的行当成
-   * 「上一次运行的残留」丢掉（ISSUE #262 复审踩过的正是这个方向）。 */
+  /* ISSUE #1326：一次启动一份文件后「会不会累积历史行」从根上消失，故 `sessionStart`
+   * 对本族恒为 null —— 下发起点会让客户端把本次启动最早的行当残留丢掉（ISSUE #262 复审）。 */
   it("runtime 来源不下发会话起点（一份文件只属于一次启动）", async () => {
     writeLines(1);
     for (const source of ["app-runtime"]) {
@@ -147,12 +135,9 @@ describe("GET /api/logs/current 增量读取", () => {
     }
   });
 
-  /* ISSUE #262 复审：「启动和启动器日志丢失」的服务端一半。
-   *
-   * 会话起点取自 dev-launcher.log 的 mtime，而启动器的头几行（python / exe /
-   * cwd / 探测 Node）写在它被创建**之前**。若覆盖重建的来源也下发这个起点，
-   * 客户端就会把本次启动最早、最该被看到的行当成「上一次运行的残留」丢掉。
-   * 因此契约是：**只有跨运行累积的来源带 sessionStart**，其余恒为 null。 */
+  /* ISSUE #262 复审：会话起点取自 dev-launcher.log 的 mtime，而启动器头几行写在它创建之前。
+   * 故契约是：只有跨运行累积的来源带 sessionStart，覆盖重建的来源恒为 null
+   *（否则本次启动最早的行会被当「上一次运行的残留」丢掉）。 */
   it("覆盖重建的来源（launcher / dev-launcher）不下发会话起点", async () => {
     fs.writeFileSync(path.join(tmp, "dev-launcher.log"), "x", "utf8");
     for (const source of ["launcher", "dev-launcher", "dev"]) {
@@ -202,13 +187,8 @@ describe("GET /api/logs/current 无新增时的快速路径", () => {
   });
 });
 
-/* ── 服务端进程标识（ISSUE #360）──────────────────────────────
- * 面板此前无从判断「响应来自哪个应用服务进程」：应用服务重启前后，用户既看不到
- * 重启这件事，也说不出自己连的是哪个进程。这里把两条契约钉住：
- *   1. 每个响应都带 `bootId`（同一进程内恒定）；
- *   2. 客户端带上一轮的 bootId 时，若与当前不一致即标 `mismatch`，且**从头上读**
- *      （不能拿旧进程的游标去切新文件）。
- */
+/* ── 服务端进程标识（ISSUE #360）：每个响应带 `bootId`（同进程恒定）；客户端带的上一轮
+ * bootId 与当前不一致时标 `mismatch` 且从头上读（不能拿旧进程的游标去切新文件）。 */
 describe("GET /api/logs/current — 服务端进程标识", () => {
   async function readWithBoot(source: string, offset: number, bootId?: string) {
     const query = new URLSearchParams({ source, offset: String(offset) });

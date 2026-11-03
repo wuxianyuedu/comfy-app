@@ -41,14 +41,10 @@ export const CLARITY_HINT: Record<DimClarityPreset["kind"], string> = {
   megapixel: "总像素预算，宽高由倍数对齐",
 };
 
-/** 组合参数子 pin 的必填 / 显隐控制：grouped 行替代了各自的独立参数行，
- *  原来的必填/可选徽标与 👁 会跟着消失 —— 在组合卡内按 pin 补回。
- *  仅编辑态（IO 预览多模式作者态）传入回调时渲染。
- *
- *  required / visible 都按当前 mode 解析（resolveEntryRequired /
- *  isVisibleInMode）：IO 预览在模式页签下把必填/显隐写进 `modes[mode]`
- *  覆盖层，这里必须读同源回读，否则点完按钮 UI 不回读、看起来像“无法切换”
- *  （历史根因：原实现直读条目级 `pin.required`，与模式级写入错层）。 */
+/** 组合参数子 pin 的必填/显隐控制：grouped 行替代独立参数行，原徽标与 👁 会消失 —— 在组合卡内按 pin 补回。
+ *  仅编辑态（IO 预览多模式作者态）传入回调时渲染。required/visible 按当前 mode 解析
+ *（resolveEntryRequired / isVisibleInMode）：模式页签下写入 modes[mode] 覆盖层，这里必须同源回读，
+ *  否则点完按钮 UI 不回读、看起来像无法切换（历史根因：直读条目级 pin.required 与模式级写入错层）。 */
 export function RequiredChips({
   pins,
   onRequiredChange,

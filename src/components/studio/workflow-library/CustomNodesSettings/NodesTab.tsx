@@ -51,24 +51,9 @@ function CardRow({
 }
 
 /**
- * 单包节点卡的**窗口化列表**（ISSUE #2191，audit §C.1 F4b 剩下的那一格）。
- *
- * 现场数量级（本机真实节点包目录 D:/Comfy-Desktop/ComfyUI-CustomNode 实测）：15 个
- * 子包、最大单包 233 个节点类型、全开合计 ~503 张卡。三层里前两层已门控
- * （展开才挂载），这一层是最后一处「点开就全量 map」—— 大包一开就是两三百张
- * 交互卡（每张还是自己的 Disclosure）。
- *
- * 形态与取舍：
- *   · **窗口化用独立滚动容器**（`max-h-120 overflow-y-auto`），不用
- *     ModelLibrary / ProjectOutputs 那种「文档滚动锚 + scrollMargin」—— 那份
- *     模式适合页面顶层的单列表；这里列表嵌在树面板里、多包可**同时**展开，
- *     各自的 offsetTop 随其它面板开合漂移，页面锚方案要做跨列表的 margin 对账。
- *     容器内滚的代价是「长列表在这一格内部滚」——对嵌在树里的清单这反而更可扫读。
- *   · **`TreeChildren` 原样保留**（P36 硬闸的完整样本）：窗口化视口是它的
- *     **子内容**，不替换行容器，也不新增手写缩进 / 引导线。
- *   · 未量测环境（jsdom：clientHeight 恒 0）⇒ **全量渲染兜底**，与
- *     ModelLibrary / ProjectOutputs 的 `measured` 守卫同一条形状 —— 虚拟器在
- *     无读数环境里 `getVirtualItems()` 为空，直接用会把清单渲染成一片空白。
+ * 单包节点卡的窗口化列表（ISSUE #2191）。用独立滚动容器而非文档滚动锚：
+ * 多包可同时展开，offsetTop 会随其它面板开合漂移。TreeChildren 仍是行容器；
+ * 未量测环境（jsdom clientHeight 恒 0）退化为全量渲染，否则清单变空白。
  */
 function NodeCardList({
   nodeTypeList,
@@ -277,12 +262,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
             const parentParsed = total > 0 && cnt.unimported + cnt.missing + cnt.empty === 0;
             return (
               <div className="border-border bg-bg rounded-xl border" key={parent}>
-                {/* 父级头 —— 可点击切换。`▸/▾`、`role`、`tabIndex`、
- Enter/Space 全交给`Disclosure`（规范 16 §16.2.4.13）——
- 此前是自绘的`role="button"` div，注释里写着「不能用原生
- button 因为嵌 button 非法」，而那个嵌进去的按钮正是右侧的
- 「解析本目录」：改走基元的`trailing` 后，它不再被嵌在
- 触发按钮里。面板 = 子包列表（见下方`subs.map`）。 */}
+                {/* 父级头：`▸/▾`、role、tabIndex、Enter/Space 全交给 `Disclosure`
+                    （规范 16 §16.2.4.13）；「解析本目录」已改走 `trailing`，
+                    不再嵌在触发按钮里。 */}
                 <Disclosure
                   className="hover:bg-subtle w-auto flex-1 justify-between gap-2 rounded-xl px-3 py-2.5"
                   marker="caret"
@@ -413,13 +395,9 @@ export function NodesTab({ ctrl }: { ctrl: CustomNodesSettingsController }) {
                             </div>
                             <div className="text-muted-foreground flex shrink-0 items-center gap-3 text-xs">
                               {nodesAreLoaded ? (
-                                /* 「节点计数」单元是一个折叠开关：点开看该包
- 已加载的节点清单。此前是自绘的
-`role="button"` +`tabIndex` + 手写
- Enter/Space 处理（规范 16 §16.2.4.13）——
- 基元把这些语义一次给全。`panelClassName`
- 留空：面板是下面那个 rail（由外面的条件渲染
- 承担），此处的`Disclosure` 只接管这一行。 */
+                                /* 「节点计数」是折叠开关，语义由 `Disclosure` 提供
+                                   （规范 16 §16.2.4.13）；`panelClassName` 留空，
+                                   面板是下面那个 rail。 */
                                 <Disclosure
                                   className="hover:bg-subtle flex-row-reverse items-end justify-end gap-1 rounded-md px-1.5 py-1 text-right"
                                   marker="caret"

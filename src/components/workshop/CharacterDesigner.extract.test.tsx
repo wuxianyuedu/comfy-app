@@ -1,11 +1,8 @@
 //
 // 回归测试 ISSUE #202 问题1：从剧本「提取/导入」角色卡成功后，并入结果必须
-// 经 onCharactersChange 回写到父级状态，否则卡片不出现在下方列表中。
-// 根因：handleExtract / handleImportFile 调用了 mergeCharacterDrafts 却从未把
-// 返回的 res.list 通过 onCharactersChange 上抛，导致提取"成功"但列表不刷新。
-//
-// 提取通道只剩本地 / 远端模型（「工具」确定性解析已移除），故这里 mock 掉
-// `~/lib/llm/browser` 的 streamChat，让它返回一段角色卡 JSON，验证并入回写。
+// 经 onCharactersChange 回写到父级状态，否则卡片不出现在下方列表中（根因：
+// handleExtract / handleImportFile 从未把 mergeCharacterDrafts 的 res.list 上抛）。
+// mock `~/lib/llm/browser` 的 streamChat 返回一段角色卡 JSON，验证并入回写。
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { CharacterDesigner } from "~/components/workshop/CharacterDesigner";

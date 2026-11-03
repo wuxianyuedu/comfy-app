@@ -2,16 +2,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  normalizeProductionRun,
-  type ProductionRun,
-} from "~/lib/production/run-types";
+import { normalizeProductionRun, type ProductionRun } from "~/lib/production/run-types";
 import type { AgentRunController } from "./use-agent-run";
 import { RunControlBarView } from "./RunControlBar";
 
-function controller(
-  over: Partial<AgentRunController> = {},
-): AgentRunController {
+function controller(over: Partial<AgentRunController> = {}): AgentRunController {
   const run = normalizeProductionRun(null);
   return {
     projectId: "proj_1",
@@ -42,9 +37,7 @@ afterEach(cleanup);
 
 describe("RunControlBarView", () => {
   it("无活跃项目 → 不渲染", () => {
-    const { container } = render(
-      <RunControlBarView c={controller({ projectId: "" })} />,
-    );
+    const { container } = render(<RunControlBarView c={controller({ projectId: "" })} />);
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -56,11 +49,7 @@ describe("RunControlBarView", () => {
 
   it("idle → 「生图后自动评审」复选框，点选回抛 setAutoReview(true)", () => {
     const setAutoReview = vi.fn();
-    render(
-      <RunControlBarView
-        c={controller({ autoReview: false, setAutoReview })}
-      />,
-    );
+    render(<RunControlBarView c={controller({ autoReview: false, setAutoReview })} />);
     expect(screen.getByText("生图后自动评审")).toBeTruthy();
     fireEvent.click(screen.getByRole("checkbox"));
     expect(setAutoReview).toHaveBeenCalledWith(true);
@@ -68,9 +57,7 @@ describe("RunControlBarView", () => {
 
   it("running → 暂停 / 取消，并显示下一步", () => {
     render(
-      <RunControlBarView
-        c={{ ...withStatus("running"), action: { kind: "generate_script" } }}
-      />,
+      <RunControlBarView c={{ ...withStatus("running"), action: { kind: "generate_script" } }} />,
     );
     expect(screen.getByRole("button", { name: "暂停" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "取消" })).toBeTruthy();

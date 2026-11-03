@@ -99,13 +99,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       </div>
 
       {/* ── Tabs（下划线页签）──
-          此前是手搓的 `<Button variant="ghost">` + 下划线三元：选中档给
-          `border-b-2 border-accent`，**未选中档根本没写那条边框** —— 未选中的
-          那一枚整体比选中的矮 2px，切来切去文字基线上下跳。这就是「一排里选
-          一个」的又一处手搓，与 `project-canvas/HistoryPanel` 的作用域切换
-          **逐字同形**（规范 16 §16.2.4.75）。
-          改用 `ui/tabs` 的 `line` 档：选中态由 `data-active` 驱动（字色 +
-          下划线两层），两枚同高同基线。 */}
+          此前选中给下边框、未选中没写，未选中那枚矮 2px、切换时基线上下跳；
+          与 HistoryPanel 的作用域切换逐字同形（规范 16 §16.2.4.75）。
+          改用 `ui/tabs` 的 `line` 档：选中态由 `data-active` 驱动，两枚同高同基线。 */}
       <Tabs
         className="gap-0"
         onValueChange={(value) => {

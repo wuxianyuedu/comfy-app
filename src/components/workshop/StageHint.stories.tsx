@@ -3,12 +3,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 import { StageHint } from "~/components/workshop/StageHint";
 
 /**
- * 阶段前置温和提示条 —— 纯展示，文案与跳转目标由调用处给，**不阻断任何操作**。
- *
- * 入参只有 `text` 与 `onGo` 两个，是这一批里数据依赖最薄的一件。它值得有 story
- * 的地方不在「长得对」，而在**它与 `DraftIntegrityHint` 的分工**：两条都是琥珀色
- * 提示条，差别是「阶段还没做完」（按钮写死「去完成」）与「数据里有读不懂的东西」。
- * 两条并排放着看，下次想省一个文件把按钮改回「去完成」时能先看见代价。
+ * 阶段前置温和提示条 —— 纯展示，文案与跳转由调用处给，**不阻断任何操作**。
+ * 值得看的是它与 `DraftIntegrityHint` 的分工：同为琥珀色提示条，差别是
+ *「阶段还没做完」（按钮写死「去完成」）与「数据里有读不懂的东西」。
  */
 const meta = {
   title: "Workshop/StageHint",

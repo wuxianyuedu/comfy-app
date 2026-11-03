@@ -1,13 +1,9 @@
 "use client";
 
 /**
- * 「实际使用」测试弹窗的**字段行编辑器**（规范 17 §17.2 第②层的一个子域）。
- *
- * 它是一个**自洽的交互面**：七个动作全部只读写
- * `UsageFieldEditorState.fields`，不碰网络、不碰草稿仓库、不碰其它任何状态。
- *
- * `update` 由调用方传入（就是 `setUsageTest`）—— 子域不持有状态，
- * 只提供动作，状态仍归主 hook 一处持有。
+ * 「实际使用」测试弹窗的**字段行编辑器**（规范 17 §17.2 第②层子域）。
+ * 自洽交互面：动作只读写 `UsageFieldEditorState.fields`。`update` 由调用方传入
+ * （即 `setUsageTest`）—— 子域不持有状态，状态仍归主 hook 一处持有。
  */
 
 import type { RemoteModelKind } from "~/lib/llm/types";
@@ -119,12 +115,10 @@ export function createUsageFieldEditor<T extends UsageFieldEditorState>(
     });
   }
 
-  /** mode 行被图片覆盖时的自愈：把图片搬到 images 行（没有则新建），
-   *  mode 值复位为 text——图片不丢、mode 可见可改。
-   *
-   *  「复位成什么」不在视图层写死：`sanitizeModeValue` 是「坏值 → 可再改的
-   *  值」的唯一出口（同名卡片在 `UsageTestDialog` 里按同一个函数判「已损坏」），
-   *  这里手抄一份 `"text"` 就是同一件事的两个名字（§12.14）。 */
+  /** mode 行被图片覆盖时的自愈：把图片搬到 images 行（没有则新建），mode 值复位。
+   *  「复位成什么」不在视图层写死：`sanitizeModeValue` 是「坏值 → 可再改的值」的
+   *  唯一出口（`UsageTestDialog` 按同一函数判「已损坏」），手抄 `"text"` 就是同一
+   *  件事的两个名字（§12.14）。 */
   function rescueMediaFromMode(index: number, url: string) {
     update((prev) => {
       if (!prev) {

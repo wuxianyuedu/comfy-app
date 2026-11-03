@@ -13,17 +13,8 @@ import {
 } from "~/components/ui/card";
 
 /**
- * `ui/card` 是「有边框的独立内容块」的基元。它的形态全由**有哪些 slot**
- * 决定（不是变体）：`CardHeader` 用 `has-data-[slot=card-action]` / `has-data-
- * [slot=card-description]` 改栅格，`Card` 本体用 `has-data-[slot=card-footer]`
- * 把下内边距收掉 —— 所以下面按「拼了哪几件」分组，而不是按 props 分组。
- *
- * 两个 slot 的副作用只有并排看才明显：
- * - 有 `CardAction` → Header 变 `grid-cols-[1fr_auto]`，标题与操作位同行；
- * - 有 `CardFooter` → Card 本体的 `pb-0`，让页脚贴住底边。
- *
- * `size` 是**唯一那根轴**（`default` / `sm`），它改的是 `--card-spacing`
- * 这个 CSS 变量 —— 所有内边距都从它派生。枚举从 props 派生（规范 16 §16.2.3.4）。
+ * `ui/card` 是「有边框的独立内容块」的基元，形态由**有哪些 slot** 决定（不是变体）：`CardHeader` 用 `has-data-[slot=card-action]` / `has-data-[slot=card-description]` 改栅格，`Card` 用 `has-data-[slot=card-footer]` 收掉下内边距；有 `CardAction` → 标题与操作位同行，有 `CardFooter` → 本体 `pb-0` 让页脚贴底。
+ * `size` 是**唯一那根轴**（`default` / `sm`），改的是 `--card-spacing` CSS 变量，所有内边距由它派生；枚举从 props 派生（规范 16 §16.2.3.4）。
  */
 type CardSize = NonNullable<React.ComponentProps<typeof Card>["size"]>;
 

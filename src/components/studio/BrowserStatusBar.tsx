@@ -31,27 +31,11 @@ import { Button } from "~/components/ui/button";
 import { displayValue } from "~/lib/display-value";
 import { KeyValueRows } from "~/components/ui/key-value-rows";
 
-/* ── Tauri 窗口底部状态栏 ─────────────────────────
-   显示当前浏览器地址 + 系统资源（显存/内存）+ 实时帧率 + 应用服务状态。
-
-   设计要点：
-   1. 资源占用来自 ComfyUI `/system_stats`（服务端经 `/api/comfy/stats` 代理，
-      客户端由 use-comfy-readiness（内含 useComfyStats 轮询）折叠成显隐谓词；
-      离线时隐藏占用条并给出可见降级提示，不静默消失。
-   2. FPS 由全局 useFps 提供，取代原先画布内的 FpsMeter 悬浮层——画布不再
-      各自叠加一块，改由状态栏统一展示。
-   3. 右侧那一格显示**应用服务（dev server）**状态，不再是 ComfyUI 的连接态。
-      ComfyUI 是可选后端：没装 / 没开 / 没配路径时它一律「未连接」，而这一格
-      读起来像「应用坏了」；反过来应用服务真挂了（页面白屏、查询全失败）时
-      旧状态栏一个字也不说。「显存/内存不可用」本身就是 ComfyUI 没启动的表现，
-      信息重复且误导，故改判据（详见 src/lib/dev-server-status.ts 的 Why 注释）。
-
-   规范 08 §8.4 禁止 monkey-patch history——同步 setState 会在第三方库的
-   useInsertionEffect 阶段触发报错。改用 Next.js usePathname()：路由变化
-   自动 re-render，无需手动拦截。
-   本应用始终运行于 localhost / tauri://，连接恒为安全，故不再维护不安全态。
-   须渲染在 <LogProvider> 内部，日志开关才能工作。
-*/
+/* ── Tauri 窗口底部状态栏：地址 + 系统资源（显存/内存）+ 帧率 + 应用服务状态 ──
+   资源来自 ComfyUI `/system_stats`（经 `/api/comfy/stats` 代理）；右侧那格判**应用服务
+   （dev server）**而非 ComfyUI 连接态 —— ComfyUI 是可选后端，未装/未开一律「未连接」，
+   读起来像应用坏了。路由变化不 monkey-patch history（08 §8.4：同步 setState 会在
+   useInsertionEffect 阶段报错），改读 `usePathname()`；须渲染在 `<LogProvider>` 内。 */
 
 /** HH:mm:ss（重启标记的时间展示）。`null` 由 `displayValue` 统一给占位符。 */
 function fmtClock(t: number | null): string {
@@ -77,11 +61,8 @@ const fpsDotColor: Record<string, string> = {
 
 /**
  * 状态栏里的一项「标签 + 已用/总量 + 百分比」内联项。
- *
- * 三个资源项（显存 / 显存·ComfyUI / 内存）此前**各写一份逐字同形的三层
- * `<span>`** —— 差别只有标签文案与 title，`used/total (pct%)` 那段三份完全
- * 一致。行布局走 `KeyValueRows` 的 `inline`（P17），缺值占位走 `displayValue`
- * （P8）—— 两件事各只写一遍。
+ * 三个资源项（显存 / 显存·ComfyUI / 内存）此前各写一份逐字同形的三层 `<span>`，差别只有
+ * 标签与 title；行布局统一走 `KeyValueRows` 的 `inline`（P17）、缺值占位走 `displayValue`（P8）。
  */
 function UsageItem({
   label,
@@ -120,15 +101,9 @@ function UsageItem({
 }
 
 /**
- * 后台 schema 同步的提示格（数据源 `use-schema-sync-status`）。
- *
- * 为什么值得占一格：启动脚本把 Next 拉起来的**同时**在后台核对/同步库结构
- * （不阻塞启动），同步完成前业务请求可能 500。页面若不说「正在同步」，用户看到
- * 的就是一个报错页，无从判断该等一等还是该去查别的原因 —— 那正是「静默失败」
- * 最贵的形态。
- *
- * 说什么由 `schemaSyncNotice` 判（纯函数，见 hooks/use-schema-sync-status.ts），
- * 这里只把 tone 映射成颜色。
+ * 后台 schema 同步的提示格：启动脚本拉起 Next 的同时后台同步库结构（不阻塞启动），完成前
+ * 业务请求可能 500 —— 不说「正在同步」，用户只看到一个报错页，无从判断该等还是该查。
+ * 文案由 `schemaSyncNotice` 纯函数判定，这里只把 tone 映射成颜色。
  */
 const SCHEMA_TONE_CLASS: Record<SchemaSyncNotice["tone"], string> = {
   info: "text-ink-soft",
@@ -202,12 +177,9 @@ function SchemaSyncItem({ status }: { status: SchemaSyncStatus }) {
 }
 
 /**
- * ComfyUI 排队 / 当前执行那一格（数据源 `use-comfy-queue`）。
- *
- * 说什么由 `comfyQueueNotice` 判（纯函数），这里只渲染。它回答的是用户盯着画布
- * 转圈时最想知道的四件事：前面还堵着几个、当前跑了多久、跑的是哪个工作流、哪个
- * 模型 —— 此前这些只散在日志面板里，**耗时更是完全没暴露过**（`startedAt` 只在
- * 任务结束时被算成一句文本日志）。
+ * ComfyUI 排队 / 当前执行那一格（数据源 `use-comfy-queue`）：文案由 `comfyQueueNotice`
+ * 纯函数判定。用户盯着画布转圈时最想知道的四件事 —— 前面堵着几个、当前跑了多久、跑的
+ * 哪个工作流与模型 —— 此前只散在日志面板里，耗时更是从未暴露。
  */
 function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
   const notice = comfyQueueNotice(view);
@@ -234,15 +206,9 @@ function ComfyQueueItem({ view }: { view: ComfyQueueView }) {
 }
 
 /**
- * 「应用服务上一次为什么结束」那一格（数据源 `useDevServerStatus` 的 `exitNotice`）。
- *
- * 为什么值得占一格里**可见的文字**，而不是只挂在右侧那格的 hover 上：状态栏那一格
- * 只有 24px 高、右下角位置窄，而这句话恰恰是用户唯一想问的（ISSUE #1692 原话
- * 「前端需要能知道原因」）。把它塞进 tooltip 等于要求「先猜到自己该悬停」，而
- * 悬停本来就不是可发现的动作。
- *
- * 排版上只放**一句原因**（`why`），把「这一次具体是什么结束的」与「现在该做什么」
- * 留给 `title`：这一格是弹性的、旁边还有排队信息要共存，完整三句会把它们挤掉。
+ * 「应用服务上一次为什么结束」那一格（`useDevServerStatus` 的 `exitNotice`）：这句是用户唯一
+ * 想问的（ISSUE #1692），故占一格可见文字而不塞进 hover —— 悬停不是可发现的动作。排版只放
+ * 一句原因（`why`），细节与「现在该做什么」留给 `title`：这格弹性，旁边还有排队信息共存。
  */
 function DevServerExitItem({ notice }: { notice: AppServiceExitNotice | null }) {
   if (notice === null) {
@@ -280,15 +246,11 @@ export function BrowserStatusBar() {
   const fps = useFps();
   const { cudaVram, smiVram, ram, degradedNote, stale } = useComfyReadiness();
   const devServer = useDevServerStatus();
-  /* 「应用服务断开 / 启动」记进消息中心（时间 + 原因）。
-   *
-   * 接在**这里**而不是新起一个容器，是因为 `useDevServerStatus()` 是
-   * `useDevServerLiveness()` 的唯一消费方——探活循环全应用只有这一条
-   * （2 秒一拍打 `/api/dev/server-id`）。消息中心要的是同一份事实的**边沿**，
-   * 让它自己再轮一遍等于把探活频率翻倍。
-   *
-   * 位置在早退分支之前：非主应用页签（内嵌 ComfyUI 等）状态下状态栏整体隐藏，
-   * 但记录必须继续——否则「看的是内嵌页面时服务断了一次」就彻底没人记。 */
+  /* 「应用服务断开 / 启动」记进消息中心（时间 + 原因）。接在**这里**而不是新起容器：
+     `useDevServerStatus()` 是 `useDevServerLiveness()` 的唯一消费方（2 秒一拍打
+     `/api/dev/server-id`），消息中心要的是同一份事实的边沿，自己再轮一遍等于探活翻倍。
+     位置在早退分支之前：非主应用页签时状态栏整体隐藏，但记录必须继续，否则「看内嵌页面时
+     服务断了一次」就没人记。 */
   useAppServiceMessageLog({
     state: devServer.state,
     processIsNew: devServer.processIsNew,

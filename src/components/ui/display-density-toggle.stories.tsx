@@ -2,17 +2,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { DisplayDensityToggle } from "~/components/ui/display-density-toggle";
 
-/**
- * `ui/display-density-toggle` 是「网格 / 列表」两档的图标密度切换。
- *
- * 它抽出来之前全库有**三处逐字相同**的手搓实现（画布历史抽屉 / 画布素材
- * 抽屉 / 素材库）—— 连 `Hint` 文案与三元里的 `bg-surface-2` 都一样。
- * 三份坏在同一个看不见的接缝：选中档只给底色、**没钉字色悬停**，于是
- * `ghost` 的 `hover:text-foreground` 会在划过已选中那枚时把字色翻掉。
- *
- * **最值得看的一根轴是「选中 × 悬停」**：把鼠标移到**已选中**的那一枚上，
- * 它应当与常态逐像素相同（ISSUE #1925）。
- */
+/** `ui/display-density-toggle` 是「网格 / 列表」两档的图标密度切换；抽出来前全库有三处逐字相同的手搓实现（画布历史抽屉 / 画布素材抽屉 / 素材库），连 `Hint` 文案与三元里的 `bg-surface-2` 都一样。
+ * 三份坏在同一个看不见的接缝：选中档只给底色、没钉字色悬停，于是 `ghost` 的 `hover:text-foreground` 会在划过已选中那枚时把字色翻掉。
+ * 最值得看的一根轴是「选中 × 悬停」：把鼠标移到已选中那枚上，它应当与常态逐像素相同（ISSUE #1925）。 */
 const meta = {
   title: "UI/DisplayDensityToggle",
   component: DisplayDensityToggle,

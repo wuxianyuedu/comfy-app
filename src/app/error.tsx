@@ -6,19 +6,9 @@ import { Icon } from "~/components/ui/icon";
 import { Button } from "~/components/ui/button";
 import { ShellFullPage } from "~/components/studio/ShellFullPage";
 
-/* ── 「页面出错了」——整屏页面，窗口按钮不能跟着它一起消失 ──────────────
- *
- * 桌面壳关掉了原生装饰（`decorations: false`），最小化 / 最大化 / **关闭**
- * 三个按钮由 `TitleBarTabs` 渲染在应用最顶端那条 36px 的标题行里。而本页是
- * 路由段 error boundary：它一显示，替换掉的是 `app/layout` 的**整个
- * children** —— `ShellTabs` 连同那条标题行一起卸载，窗口按钮整排离开 DOM
- * （ISSUE #1794 的第一次修复只让了位，让的是条不存在的标题行，所以「处理过
- * 还是会被盖住」）。用户看到「页面出错了」的同时失去关闭窗口的能力，
- * 而这往往是他此刻唯一想做的事。
- *
- * 修法：套 `ShellFullPage` —— 它自带一条精简标题行（`WindowTitleBar`：
- * 拖拽区 + 三个窗口按钮，无页签），内容区在其下方自己滚。浏览器 / dev
- * 没有应用内标题行（系统窗口自带），那层自动退化成纯内容容器。 */
+/* 「页面出错了」整屏页：桌面壳关掉了原生装饰，窗口按钮由 `ShellTabs` 标题行渲染，而本页
+ * 是路由段 error boundary，一显示会替换 `app/layout` 的整个 children，标题行连同窗口按钮
+ * 卸载（ISSUE #1794）。套 `ShellFullPage`（自带精简标题行）；浏览器形态自动退化成纯内容容器。 */
 
 export default function Error({
   error,

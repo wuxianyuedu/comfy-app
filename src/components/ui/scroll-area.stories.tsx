@@ -2,16 +2,9 @@ import type { Meta, StoryObj } from "@storybook/nextjs";
 
 import { ScrollArea } from "~/components/ui/scroll-area";
 
-/**
- * `ui/scroll-area` 是「自定义滚动条」的容器：内容超出时右侧出现一条细轨
- * （`ScrollBar` 的 `w-2.5` + `Thumb` 的 `rounded-full bg-border`），
- * 而不是系统滚动条。
- *
- * 形态上唯一容易踩空的一点：**它必须有一个确定高度的祖先**。给的是
- * `h-40` / `h-64` 这类**固定高度**，不是 `max-h-*` —— `size-full` 的 Viewport
- * 需要一个能算出「溢出多少」的高度，容器高度由内容决定时滚动条永远不出现。
- * 所以下面每条 story 都给死高度，这也是调用处的真实形态（面板 / 弹层）。
- */
+/** `ui/scroll-area` 是「自定义滚动条」的容器：内容超出时右侧出现一条细轨（`ScrollBar` 的 `w-2.5` + `Thumb` 的 `rounded-full bg-border`），而不是系统滚动条。
+ * 形态上唯一容易踩空的一点：它必须有一个确定高度的祖先 —— 给的是 `h-40` / `h-64` 这类固定高度，不是 `max-h-*`：`size-full` 的 Viewport 需要一个能算出「溢出多少」的高度，容器高度由内容决定时滚动条永远不出现。
+ * 所以下面每条 story 都给死高度，这也是调用处的真实形态（面板 / 弹层）。 */
 const meta = {
   title: "UI/ScrollArea",
   component: ScrollArea,

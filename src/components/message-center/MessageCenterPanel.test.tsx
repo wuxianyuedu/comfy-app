@@ -1,13 +1,7 @@
 /**
  * 消息中心的键盘可达性（规范 06 §6.11）+ 按「每一次启动」分组的显示。
- *
- * 键盘那条钉的是**收口前后的差别**：整行「点一下标记已读」此前是 `<li onClick>`，
- * 键盘用户能 Tab 到行内的删除按钮，却**没有任何路径**标记已读 —— 鼠标点得开、
- * 键盘进不来。收口改成原生 `<Button>` 后，Enter/Space 与焦点语义是免费给的。
- *
- * 分组那条钉的是手验反馈「多次启动的记录混在了一起」：每次启动之间要有能一眼
- * 看出来的分隔，并且要标出哪一组是用户此刻身处的这一次。分组判据本身在
- * `~/lib/shell/message-run-groups` 的单测里，这里钉的是「面板真的把它渲染出来了」。
+ * 键盘这条钉收口前后的差别：`<li onClick>` 时键盘用户没有任何路径标记已读，原生
+ * `<Button>` 免费给 Enter/Space。分组这条钉「分隔 + 标出本次」真的渲染出来。
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";

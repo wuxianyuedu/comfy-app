@@ -1,12 +1,7 @@
-/* ── 生成节点的「强制取消」动作（第②层逻辑）───────────────────────────
- * 从 ImageGenerationPanel / GlobalStepLogPanel 两处视图里抽出的同一段逻辑：
- *   1. `cancelling` 标记，让按钮进入不可重复点击的「取消中…」态；
- *   2. 用 ref 持有最新的 taskId / 失败回调，异步回调里才能读到新值；
- *   3. 失败要**本地回滚**：把状态打回 error 并带上原因，否则按钮会一直挂在
- *      running，用户再点也没反应（SSE 的 error 事件未必会来）。
- *
- * 两处消费方只差「失败时怎么回报」，故这里把它做成回调参数，
- * 而不是把画布节点或日志面板的数据模型硬编进 hook。
+/* ── 生成节点的「强制取消」动作（第②层逻辑）
+ * 从 ImageGenerationPanel / GlobalStepLogPanel 抽出的同一段逻辑：`cancelling` 标记、
+ * ref 持有最新 taskId / 失败回调，以及失败时**本地回滚**打回 error 并带原因
+ * （否则按钮一直挂 running，而 SSE 的 error 未必会来）。两处只差「失败时怎么回报」。
  */
 
 "use client";

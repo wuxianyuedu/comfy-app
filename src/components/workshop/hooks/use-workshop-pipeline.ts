@@ -107,12 +107,9 @@ const serverRecoveredIds = new Set<string>();
 export type { ShotProgressMap };
 
 /** 工坊「从剧本提取」/工具类会话的界面状态。
- *
- *  角色卡 / 分镜的提取是长耗时异步流程：切走页签只卸载 stage 组件，
- *  controller 仍常驻，故把 busy/progress/status/error/channel/执行日志统一
- *  收在 controller 层 —— 提取中切页签再切回，进度与日志不丢（取代原先
- *  散落在各组件里的会话级模块缓存）。
- */
+ *  提取是长耗时异步流程：切走页签只卸载 stage 组件、controller 常驻，故
+ *  busy/progress/status/error/channel/执行日志统一收在 controller 层 ——
+ *  提取中切页签再切回，进度与日志不丢。 */
 export type ExtractSession = {
   busy: boolean;
   /** 模型下拉完整选项值（tool | local::<model> | remote::<model>） */
@@ -397,13 +394,10 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     };
   }, [activeProjectId, currentDraft, tab, rendered]);
 
-  /* 卸载兜底保存 —— 工坊常作为 workspace 的一个页签渲染，切走其它页签时本组件
-   * 会被卸载。若只靠上面的 600ms 防抖，用户在编辑/导入剧本后立刻切走，卸载时
-   * 定时器被 clear 掉还来不及落盘；更关键的是模块级草稿缓存(workshopDraftCache)
-   * 只在首次挂载读一次，重挂载时会读到首挂载那份旧缓存草稿，而不是刚写进
-   * localStorage 的新内容 —— 两处叠加正是「切页签后剧本内容丢失」的根因。
-   * 卸载时：立即把最新草稿落盘 + 让模块级缓存失效，下次挂载重新读 localStorage。
-   * ref 在每次渲染后同步最新值，卸载 cleanup 经 ref 取值，避免闭包捕获旧草稿。 */
+  /* 卸载兜底保存：只靠 600ms 防抖，编辑后立刻切页签时定时器被 clear 来不及落盘；
+   * 且模块级草稿缓存只在首次挂载读一次，重挂载会读到旧缓存 —— 两处叠加正是
+   *「切页签后剧本内容丢失」的根因。卸载时立即落盘 + 让缓存失效；cleanup 经 ref
+   * 取最新值，避免闭包捕获旧草稿。 */
   React.useEffect(() => {
     return () => {
       const draft = latestDraftRef.current;

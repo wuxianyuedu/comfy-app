@@ -9,24 +9,9 @@ import {
 } from "../../../.storybook/message-center-sources";
 
 /**
- * 消息中心全屏面板 —— 承载「只看一次就消失」的系统级提示（本地更新需重启、
- * dev server 重启、陈旧实例）。
- *
- * ## 为什么它有 story
- *
- * 它的入参只有 `children`（本件甚至没有）—— 看起来是纯展示件。但它的数据
- * **不经过 props**：`messages` 与 `open` 住在 `message-center-store` 里，组件
- * 自己 `useMessageCenterStore(...)` 取。手捏一份 `MessageRecord[]` 塞进 store
- * 就是手捏一份假形态（绕过 `push()` 的 id 生成与 `MAX_MESSAGES` 裁剪），
- * 所以走 `.storybook/message-center-sources.tsx` 那条注入层：story 声明
- * **哪一处生产方在生产**，文案由生产方现算、条目经真 action `push()` 落板。
- *
- * ## 一档容易漏的
- *
- * `open === false` 时本件 `return null` —— 所以「只推消息、不管 `open`」的
- * story 在画布上是**一片空白**，而那与 §16.2.3.4 那个「侧栏有故事、画布一片
- * 空白」的坑同形。场景里的 `open` 因此是场景的一部分，`empty` 那档也照样
- * `open: true`（「面板开着但列表空着」是个真形态，不是「空」的开关）。
+ * 消息中心全屏面板 —— 承载「只看一次就消失」的系统级提示。数据**不经过 props**：
+ * `messages` / `open` 住在 store，手捏塞进去就是假形态（绕过 `push()` 的 id 生成与
+ * `MAX_MESSAGES` 裁剪），故走注入层。注意 `open === false` 时本件 `return null`。
  */
 const meta = {
   title: "MessageCenter/Panel",
@@ -63,10 +48,8 @@ export const OverflowingUnread: Story = sceneStory("overflowingUnread");
 
 /**
  * 全部已读：头部「N 条 · 0 条未读」，「全部已读」按钮 `disabled`（`unread === 0`）。
- *
- * 这一档是**降级形态**的一种 —— 手捏消息时最容易漏，因为手捏的那份默认就是未读。
- * 末态由**真动作** `markAllRead()` 达成（场景的 `markAllRead: true`），不是逐条
- * 写 `read: true` —— 那样抄的是末态，验不到动作本身。
+ * 手捏消息最容易漏这档（手捏默认未读）；末态由真动作 `markAllRead()` 达成，
+ * 不是逐条写 `read: true` —— 那样抄的是末态，验不到动作本身。
  */
 export const AllRead: Story = sceneStory("allRead");
 

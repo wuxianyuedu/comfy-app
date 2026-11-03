@@ -1,13 +1,6 @@
 /* ── 共享的工作流 IO 模型 ──
- *
- * 「这个自定义工作流到底接受 / 产出什么」的**唯一事实源**，两个消费方共用：
- *   • CreatePanel 的「自定义工作流」面板（src/components/studio/CreatePanel.tsx）
- *   • 画布上的 `workflow` 节点（src/components/studio/project-canvas/CanvasNode.tsx）
- *
- * 数据来源口径（与用户定死的）：**只能**取画布编辑器 IO 编辑模式里作者亲手勾选的
- * `workflowIO` 集合。我们从不扫图去猜参数 —— 作者没勾的 pin 就不是对外参数。
- * 服务端在数据到达之前，会为每个条目补上 ComfyUI 数据类型与当前值
- * （见 src/app/api/workflows/[id]/route.ts 的「workflowIO 富化」段）。
+ * 「这个自定义工作流到底接受 / 产出什么」的**唯一事实源**，两个消费方共用：CreatePanel 的「自定义工作流」面板与画布上的 `workflow` 节点（`project-canvas/CanvasNode.tsx`）。
+ * 数据来源口径：**只能**取画布编辑器 IO 编辑模式里作者亲手勾选的 `workflowIO` —— 从不扫图猜参数（作者没勾的 pin 就不是对外参数）。服务端在数据到达前为每个条目补上 ComfyUI 类型与当前值（`src/app/api/workflows/[id]/route.ts` 的「workflowIO 富化」段）。
  */
 
 import { upperToken } from "~/lib/upper-token";
@@ -70,25 +63,15 @@ const LINK_ONLY = new Set([
   "UPSCALE_MODEL",
 ]);
 
-/** 「图像以**文件**形式喂入」而非经连线的类型。
- *
- *  `IMAGE` / `MASK` 是 ComfyUI 的数据类型；`IMAGEUPLOAD` 则是 ComfyUI 自己的
- *  前端盖在文件选择槽位上的 widget 类型（`LoadImage` 的 `upload`、
- *  视频辅助节点的首帧选择器等）。两者都必须渲染上传控件 ——
- *  否则喂图就只能靠连线，而作者刻意暴露出来的文件选择 pin 会显示成一行死控件。 */
+/** 「图像以**文件**形式喂入」而非经连线的类型：`IMAGE` / `MASK` 是 ComfyUI 数据类型，`IMAGEUPLOAD` 是 ComfyUI 前端盖在文件选择槽位上的 widget 类型（`LoadImage` 的 `upload`、视频辅助节点的首帧选择器等）。两者都必须渲染上传控件 —— 否则喂图只能靠连线，作者暴露的文件选择 pin 会显示成一行死控件。
+ */
 const IMAGE_TYPES = new Set(["IMAGE", "MASK", "IMAGEUPLOAD"]);
 
 /** 下游该派生出**视频**节点的输出类型。 */
 const VIDEO_TYPES = new Set(["VIDEO", "VHS_FILENAMES", "VHS_VIDEOINFO", "VHS_AUDIO", "AUDIO"]);
 
-/** 当某个 workflowIO 条目没有显式的 ComfyUI 类型时（例如保存 IO 映射时
- *  ComfyUI 离线），尝试从 pin 名 / 标签 / 默认值把控件种类**捞回来** ——
- *  让 width/height/steps/seed 等仍渲染成数字步进器，
- *  让 aspect_ratio 这类 COMBO 形态的 pin 仍渲染成下拉或文本，而不是一律纯文本。
- *
- *  这条兜底修的是「DimensionControl 消失」那次回归：没有它，
- *  每个没类型的 widget 都落到 "text"，width/height 就……
- *  pairs are never grouped and the 比例+清晰度 picker never renders. */
+/** 当 workflowIO 条目没有显式的 ComfyUI 类型时（例如保存 IO 映射时 ComfyUI 离线），从 pin 名 / 标签 / 默认值把控件种类**捞回来**：width/height/steps/seed 仍渲染成数字步进器，aspect_ratio 这类 COMBO 形态仍渲染成下拉或文本，而不是一律纯文本。
+ *  这条兜底修的是「DimensionControl 消失」那次回归：没有它，每个没类型的 widget 都落到 "text"，比例+清晰度组合控件也永远不出现。 */
 /** 某个条目是否带**声明的** ComfyUI 类型。
  *  没有（缺失 / 空串 / `*`）意味着控件种类是**推出来的**，不保证与 ComfyUI
  *  真类型一致 —— `defaultInputValues` 据此不给推断出的数值控件造默认值。 */
@@ -150,23 +133,14 @@ function inferControlFromName(e: WorkflowIOEntry): ControlKind | null {
   return null;
 }
 
-/** 在那些用**非标准类型**声明上传槽位的自定义节点上（例如 `upload`
- *  被标成 `STRING`），这些 pin **名字**表示「选一个本地文件」。
- *
- *  刻意只按名字判：ComfyUI 的 `LoadImage` 里 `image`（COMBO，上传后的文件名）
- *  与 `upload`（IMAGEUPLOAD，选择器）并存。光看 `image` 这个名字**绝不能**
- *  变成上传按钮 —— 它是**结果**槽。 */
+/** 那些用**非标准类型**声明上传槽位的自定义节点上（例如 `upload` 被标成 `STRING`），这些 pin **名字**表示「选一个本地文件」。刻意只按名字判：ComfyUI 的 `LoadImage` 里 `image`（COMBO，上传后的文件名）与 `upload`（IMAGEUPLOAD，选择器）并存，光看 `image` **绝不能**变成上传按钮 —— 它是**结果**槽。
+ */
 export function isUploadPinName(e: { name?: string }): boolean {
   return /upload|file_?picker/.test((e.name ?? "").toLowerCase());
 }
 
-/** 给 pin 的类型芯片用的、实事求是的文字。
- *
- *  用户口径：「type 是什么就显示什么类型」—— 徽章必须打印 pin 真实声明的
- *  ComfyUI 类型（`IMAGEUPLOAD` / `MASK` / `INT` …）。只有元数据里根本没有类型
- *  （ComfyUI 离线时保存的 IO）才回退到控件推导出的类型，
- *  绝不把 `COMBO` 之类已有类型改写成别的名义 ——
- *  那会让「STRING 的行显示 INT」这类错位无从解释。 */
+/** 给 pin 的类型芯片用的、实事求是的文字：用户口径「type 是什么就显示什么类型」—— 徽章必须打印 pin 真实声明的 ComfyUI 类型（`IMAGEUPLOAD` / `MASK` / `INT` …）；只有元数据里根本没有类型（ComfyUI 离线时保存的 IO）才回退到推导出的类型，绝不把 `COMBO` 之类已有类型改写成别的名义（否则「STRING 的行显示 INT」无从解释）。
+ */
 export function typeDisplay(type: string | undefined, fallback = "*"): string {
   const t = upperToken(type);
   return t.length > 0 ? t : fallback;
@@ -273,17 +247,9 @@ export function numericBounds(e: WorkflowIOEntry): {
     : { min: 0, max: 1_000_000, step: 1, decimalPlaces: 0 };
 }
 
-/** 两条记录是不是同一个 pin —— 撞名判定必须先排除「条目自己」。
- *
- *  不能只看对象身份：同一行在渲染时会按当前模式派生出拷贝
- *  （`{...entry, seedMode}`，见 DynamicWorkflowFormView 的 renderRow；
- *  GroupedControls 折叠态的行同样是现造的拷贝）。拷贝与原件是「同一个 pin
- *  的两份记录」，用身份比较会被判成「另一个撞名的条目 → 回退 name」，于是
- *  **每一行都与自己撞名**，显示名一律掉回原始 pin 名 —— 封装槽位就是
- *  `value_1`，这正是切一次 seed 行为名字就变回 `value_1` 的根因（ISSUE #349）。
- *
- *  判据按可靠度递降：对象身份 → `ioKey` → 「节点 + 方向 + 槽位名」三元组。
- *  三元组就是 ioKey 的拼法，因此任何一份拷贝都认得出来。 */
+/** 两条记录是不是同一个 pin —— 撞名判定必须先排除「条目自己」。不能只看对象身份：同一行渲染时会按当前模式派生拷贝（`{...entry, seedMode}`，见 DynamicWorkflowFormView 的 renderRow；GroupedControls 折叠态的行也是现造的拷贝），身份比较会把每一行判成「与自撞名 → 回退 name」，显示名掉回 `value_1`（ISSUE #349 的根因）。
+ *  判据按可靠度递降：对象身份 → `ioKey` →「节点 + 方向 + 槽位名」三元组（三元组就是 ioKey 的拼法，任何一份拷贝都认得出来）。
+ */
 function isSamePin(a: WorkflowIOEntry, b: WorkflowIOEntry): boolean {
   if (a === b) {
     return true;
@@ -310,26 +276,10 @@ function isMachineAliasName(name: string | undefined): boolean {
   return /^value_\d+$/.test(slot) || /^\d+$/.test(slot);
 }
 
-/** 某个暴露 pin 的最优显示标签。
- *
- * 用户口径：画布的 IO 编辑器优先用 `label` 字段，作者看到的才是
- * `positive_prompt` / `negative_prompt`，而不是光秃秃的 ComfyUI 键
- * （`text` / `text_1`）。当调用方还传入了「一起显示的完整条目清单」
- * （`allEntries`）时，标签相同的条目会退到消歧后缀，
- * 两个 pin 在视觉上仍然分得开（例如两个……）。
- * pins both labeled "图像" → shown as `inputImage` / `outputImage`).
- *
- * 两条硬性约束（ISSUE #349）：
- *   ① 「条目自己」不算撞名 —— 同一 pin 在渲染时会有派生拷贝（按模式叠加
- *      seedMode / required、组合控件折叠态现造的行），身份必须认得出它们是
- *      同一个 pin，否则每行都跟自己撞名、名字掉回原始 pin 名；
- *   ② 区分标记**绝不用机器别名** —— 封装槽位的 `name` 是 ComfyUI 自动编号的
- *      `value_1`，把它当显示名正是用户报的「名字变回 value_1」。这种情形改用
- *      宿主节点标题（作者看得懂）区分；连标题都没有时保留作者命名，宁可两行
- *      同名，也不把平台编号产物当名字显示。
- *
- * 不传 `allEntries` 时，函数返回的仍是全应用早已依赖的 `label || name` 行为，
- * CreatePanel / CanvasNode 里的既有调用方不受影响。 */
+/** 某个暴露 pin 的最优显示标签：画布 IO 编辑器优先用 `label`，让作者看到 `positive_prompt` / `negative_prompt` 而不是光秃秃的 ComfyUI 键（`text` / `text_1`）。传入 `allEntries` 时，标签相同的条目退到消歧后缀，视觉上仍分得开（两个都叫「图像」的 pin → `inputImage` / `outputImage`）。
+ *  两条硬性约束（ISSUE #349）：①「条目自己」不算撞名 —— 同一 pin 渲染时有派生拷贝（叠加 seedMode / required、折叠态现造的行），身份必须认得出，否则每行都跟自己撞名、名字掉回原始 pin 名；② 区分标记**绝不用机器别名** —— 封装槽位的 `name` 是 ComfyUI 自动编号的 `value_1`，用它当显示名正是用户报的「名字变回 value_1」，改用宿主节点标题区分；连标题都没有时保留作者命名，宁可两行同名也不显示平台编号产物。
+ *  不传 `allEntries` 时仍是全应用早已依赖的 `label || name` 行为，既有调用方不受影响。
+ */
 export function ioLabel(e: WorkflowIOEntry, allEntries?: ReadonlyArray<WorkflowIOEntry>): string {
   const candidate = e.label?.trim() ?? e.name;
   if (allEntries && allEntries.length > 1) {
@@ -356,28 +306,14 @@ export function ioLabel(e: WorkflowIOEntry, allEntries?: ReadonlyArray<WorkflowI
   return candidate;
 }
 
-/** 用户口径：参数行的顺序**由消费方自己定** —— 每一行都是独立的块，
- *  按存在哪些 IO pin 动态显示或隐藏，**不强制排序**。这里依赖 IO 映射的自然
- *  插入顺序（Object.entries 的顺序），它与用户在 IO 编辑模式里编写工作流时
- *  看到的一致。输出按标签字母序排，只作为「多个输出插入位置相同」时的
- *  稳定断开器。
- *  context.
- *
- *  See §"动态更新" in the design source-of-truth (Ardot 714503087315759):
- *    > 「每一块都是可以动态根据是否有对应的参数需要显示来动态更新的，
- *    >  参数可多可少，但是样式就是这样」
- *  每行的样式由设计固定；顺序不固定。 */
+/** 用户口径：参数行的顺序**由消费方自己定** —— 每行都是独立块，按存在哪些 IO pin 动态显示/隐藏，**不强制排序**。这里依赖 IO 映射的自然插入顺序（`Object.entries` 的顺序），与用户在 IO 编辑模式里看到的顺序一致；输出按标签字母序排，只作为「多个输出插入位置相同」时的稳定断开器。
+ *  设计出处：§"动态更新" in Ardot 714503087315759 ——「每一块都是可以动态根据是否有对应的参数需要显示来动态更新的，参数可多可少，但是样式就是这样」；每行样式由设计固定，顺序不固定。
+ */
 
-/** 把 IO 映射拆分并排序成 UI 真正需要的三个桶。
- *
- *  连线输入（kind === "param"）是「只认类型」的端口 —— 不可编辑，
- *  只能从别的节点输出接过来消费。widget 输入（kind === "widget"）带可编辑的值
- *  （下拉 / 数字 / 布尔 / 多行字符串）。输出之所以在画布上与连线输入同组，
- *  是因为两者都是「I/O 端点」—— 工作流与外界对接的地方；
- *  而 widget 输入是作者在工作流跑之前调的参数。
- *
- *  `inputs` 保留成 wireInputs + widgetInputs 的扁平拼接，
- *  让还没区分这两组的消费方继续能用。 */
+/** 把 IO 映射拆分并排序成 UI 真正需要的三个桶：连线输入（`kind === "param"`）是「只认类型」的端口、不可编辑，只能从别的节点输出接过来；widget 输入（`kind === "widget"`）带可编辑值（下拉/数字/布尔/多行字符串）。
+ *  输出在画布上与连线输入同组，因为两者都是「I/O 端点」—— 工作流与外界对接的地方；widget 输入则是作者在跑之前调的参数。
+ *  `inputs` 保留成 wireInputs + widgetInputs 的扁平拼接，让还没区分这两组的消费方继续能用。
+ */
 export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   /** 向后兼容的扁平化：[wireInputs, widgetInputs]，顺序稳定。 */
   inputs: Array<
@@ -448,13 +384,8 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
       }
     }
   }
-  /* 应用用户设定的 displayOrder。缺失（undefined）时按 +Infinity 处理，
-   *  不动 IO 映射的自然插入顺序 —— 没有顺序的既有工作流渲染结果与从前完全一样。
-   *  稳定排序保住了 displayOrder 相同项之间的相对次序
-   *  （例如一个刚勾上的项与一个手动排过位的项并排时）。
-   *  三组（wire / widget / output）各自独立排序 ——
-   *  画布侧的 IO 预览始终「连线 + widget 输入在上、输出在下」，
-   *  用户也只在这些组内部调序，这正是预览面板的设计意图。 */
+  /* 应用用户设定的 displayOrder：缺失（undefined）按 +Infinity 处理，不动自然插入顺序（没有顺序的既有工作流渲染结果与从前一样）；稳定排序保住同 displayOrder 项的相对次序（刚勾上的项与手动排过位的项并排时）。
+   *  三组（wire / widget / output）各自独立排序 —— 画布侧 IO 预览始终「连线 + widget 输入在上、输出在下」，用户只在组内调序，这正是预览面板的设计意图。 */
   const byDisplayOrder = (itemA: { displayOrder?: number }, itemB: { displayOrder?: number }) => {
     const ao = itemA.displayOrder;
     const bo = itemB.displayOrder;
@@ -480,12 +411,8 @@ export function splitWorkflowIO(io: WorkflowIOMap | undefined | null): {
   };
 }
 
-/** 按当前模式过滤掉 `modeOverrides[mode].visible === false` 的行。未开启模式时原样返回，
- *  既有调用方行为完全不变。
- *
- *  刻意只在「展示层」过滤：`defaultInputValues` 依旧给被隐藏的参数播种模式默认值，
- *  因此提交给 ComfyUI 的 payload 不会因为某个参数在当前模式不可见就缺字段——
- *  隐藏只是不打扰用户，不代表这个值不需要下发给工作流。 */
+/** 按当前模式过滤掉 `modeOverrides[mode].visible === false` 的行；未开启模式时原样返回，既有调用方行为不变。刻意只在「展示层」过滤：`defaultInputValues` 依旧给被隐藏的参数播种模式默认值，提交的 payload 不会因某参数在当前模式不可见就缺字段 —— 隐藏只是不打扰用户，不代表值不用下发。
+ */
 export function filterVisibleInMode<
   T extends { modeOverrides?: Record<string, WorkflowIOModeOverride> },
 >(entries: Array<T>, mode?: string | null): Array<T> {
@@ -523,12 +450,8 @@ export function outputTargetKind(
   return "image";
 }
 
-/** 用富化出来的 `defaultValue` 播种一份值映射。
- *
- *  多模式：传入 `mode` 时走两级回退「模式默认值 → 通用默认值」
- *  （`resolveEntryDefault`），未开启模式时与旧行为完全一致。
- *  注意：这里**不过滤**被隐藏的参数——它们同样需要拿到模式默认值，否则提交
- *  给 ComfyUI 的 payload 会缺字段。隐藏只影响展示层（filterVisibleInMode）。 */
+/** 用富化出来的 `defaultValue` 播种一份值映射。多模式：传入 `mode` 时走两级回退「模式默认值 → 通用默认值」（`resolveEntryDefault`）；这里**不过滤**被隐藏的参数 —— 它们同样要拿到模式默认值，否则 payload 缺字段（隐藏只影响展示层 `filterVisibleInMode`）。
+ */
 export function defaultInputValues(
   io: WorkflowIOMap | undefined | null,
   mode?: string | null,
@@ -540,17 +463,8 @@ export function defaultInputValues(
       continue;
     }
     /* ── 图片口**不播种图内默认值** ────────────────────────────────────
-     *  图片口的默认值是 ComfyUI 服务器上的一个**文件名**（常见的正是 `image`
-     *  这类占位名，取自 LoadImage 的 widgets_values[0]）。它既不保证在服务器
-     *  上真的存在，也**不是用户选过的图** —— 播种进来会让表单一打开就写着
-     *  「已选：image」，用户以为已经选好了一张图（实测反馈）。
-     *
-     *  播种**空值**而不是干脆不写这个键：键必须在，否则
-     *  `mergeRefreshedDefaults` 会把用户上传过的值当成「被摘掉的 pin」删掉
-     *  —— IO 每次刷新都会走那条合并，上传的图会被静默清空。
-     *
-     *  空值不下发（`toWorkflowInputsPayload` 跳过 `""`），运行期仍由 ComfyUI
-     *  按图内默认值兜底 —— 运行语义与播种前完全一致，只是不再冒充「已选」。 */
+     *  图片口的默认值是服务器上的一个**文件名**（常见是 `image` 这类占位名，取自 LoadImage 的 widgets_values[0]），既不保证存在、也不是用户选过的图 —— 播种会让表单一打开就写着「已选：image」（实测反馈）。
+     *  播种**空值**而不是不写这个键：键必须在，否则 `mergeRefreshedDefaults` 会把用户上传过的值当成「被摘掉的 pin」删掉（IO 每次刷新都走那条合并）；空值不下发（`toWorkflowInputsPayload` 跳过 `""`），运行期仍由 ComfyUI 按图内默认值兜底，语义不变、只是不再冒充「已选」。 */
     if (entry.control === "image") {
       out[entry.ioKey] = "";
       continue;
@@ -601,20 +515,9 @@ export function reconcileInputValues(
 }
 
 /**
- * 默认值刷新（保覆盖）：把新播种出来的默认值并回当前表单值。
- *
- * 语义（ISSUE #288）：IO 编辑里改了默认值后回到工作流库，**未被用户覆盖**的
- * 参数要跟着刷新到新默认值；**已被用户改过**的参数保持用户填的值。
- *
- * 「有没有被覆盖」只能靠 `当前值 === 上次播种的默认值` 判定——表单值本身不带
- * 来源标记。因此 `baseline` 必须是上一次真正播种下去的那张默认值表：若改用
- * 「按当前 IO 现算一份默认值」当基准，作者刚改的默认值会被误判成用户覆盖，
- * 界面永远刷不到新值（这正是本 issue 要修的现象）。
- *
- * @param current  当前表单值
- * @param baseline 上一次播种下去的默认值表（首次播种传 null → 直接全量采用）
- * @param fresh    按最新 IO 播种出来的默认值表
- * @returns 合并后的新值表；没有任何键需要变更时返回 null（调用方可跳过 setState）
+ * 默认值刷新（保覆盖）：把新播种出来的默认值并回当前表单值。语义（ISSUE #288）：IO 编辑里改了默认值后回到工作流库，**未被用户覆盖**的参数刷新到新默认值，**已改过**的保持用户填的值。
+ *  「有没有被覆盖」只能靠 `当前值 === 上次播种的默认值` 判定（表单值不带来源标记），因此 `baseline` 必须是上一次真正播种下去的那张默认值表；拿「按当前 IO 现算的默认值」当基准会把作者刚改的默认值误判成用户覆盖，界面永远刷不到新值。
+ *  @param current 当前表单值；@param baseline 上次播种的默认值表（首次传 null → 全量采用）；@param fresh 按最新 IO 播种的默认值表。@returns 合并后的新值表；无需变更时返回 null（调用方可跳过 setState）。
  */
 export function mergeRefreshedDefaults(
   current: Record<string, unknown>,
@@ -644,10 +547,7 @@ export function mergeRefreshedDefaults(
 }
 
 /**
- * 把扁平的 `{ ioKey: value }` 映射转成 /api/generate 消费的连线载荷，即显式的
- * (nodeId, name, value) 三元组 —— 执行点据此把值落到工作流原件上。
- * 键会重新对照实时的 IO 映射解析一次，
- * 改过名或被删掉的 pin 永远漏不过去。
+ * 把扁平的 `{ ioKey: value }` 映射转成 /api/generate 消费的连线载荷，即显式的 (nodeId, name, value) 三元组 —— 执行点据此把值落到工作流原件上；键会重新对照实时 IO 映射解析，改过名或被删掉的 pin 漏不过去。
  */
 export function toWorkflowInputsPayload(
   io: WorkflowIOMap | undefined | null,
@@ -694,12 +594,8 @@ export function isInputFilled(value: unknown): boolean {
 }
 
 /**
- * 返回所有「标了必填、但还没有可用值」的 widget 输入的 ioKey。
- * CreatePanel / CanvasNode 用它做提交守卫：作者把 `positive_prompt` 标成必填后，
- * 用户就不可能带着一个缺它的工作流入队。
- * 连线（param）型输入**刻意排除** —— 它们由画布上的接线检查在别处校验
- * （未接线的必填连线仍会以「缺参数」的形式暴露出来）。
- * connection in the form's I/O 端点 strip).
+ * 返回所有「标了必填、但还没有可用值」的 widget 输入的 ioKey。CreatePanel / CanvasNode 用它做提交守卫：作者把 `positive_prompt` 标成必填后，用户不可能带着缺它的工作流入队。
+ * 连线（param）型输入**刻意排除** —— 由画布上的接线检查在别处校验（未接线的必填连线仍会以「缺参数」暴露）。
  */
 export function getMissingRequiredInputs(
   io: WorkflowIOMap | undefined | null,

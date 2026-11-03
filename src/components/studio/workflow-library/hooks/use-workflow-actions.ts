@@ -1,16 +1,10 @@
 "use client";
 
-/** P4：从 WorkflowLibrary 的动作回调块抽出
- *  （handleUpgradeConfirm / handleDelete / patchModes / patchModelTags /
- *  downloadJson / resyncWorkflow / handleLoadPending）。该 hook 接收
- *  它需要的原始状态 setter + trpc mutation，返回稳定的
- *  回调；组件只保留状态声明与 JSX。
- *
- *  归位 `hooks/`（规范 17 §17.2 第②层 —— 此前它在 feature 根目录，
- *  名字像逻辑层、位置却不是）。`setImportErr` 同步改名为 `setActionError`：
- *  它承接的是动作失败（删除 / 下载 / 同步 / 载入），不是导入面板的校验错误，
- *  按 §17.5.4 必须走「只有用户重试才清」的通道。
- */
+/** P4：从 WorkflowLibrary 的动作回调块抽出（handleUpgradeConfirm / handleDelete /
+ *  patchModes / patchModelTags / downloadJson / resyncWorkflow / handleLoadPending）。
+ *  hook 接收原始状态 setter + trpc mutation，返回稳定回调；组件只留状态与 JSX。
+ *  归位 hooks/（规范 17 §17.2 ②）。`setImportErr` 改名 `setActionError`：它承接
+ *  动作失败（删除/下载/同步/载入），按 §17.5.4 走「只有用户重试才清」的通道。 */
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTRPC, type RouterInputs, type RouterOutputs } from "~/trpc/react";

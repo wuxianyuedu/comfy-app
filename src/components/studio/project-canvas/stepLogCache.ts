@@ -1,34 +1,9 @@
 "use client";
 
-/* ── stepLogCache.ts ──────────────────────────────
- * 跨「卸载 / 重新挂载」缓存 CanvasNode 的步骤日志面板状态。
- *
- * 为什么需要它
- * ────────────
- * 图片节点的正文用 `{selected && <ImageGenerationPanel/>}` 渲染日志面板
- *（CanvasNode.tsx:1234）。用户点走时 → React 卸载该面板 →
- * 连带拆掉 `stepLogs` 与 `validationErrors` 那两个 `useState` 槽位。
- * 点回来又挂载 → 空数组重新来过 → SSE 的 EventSource 从头重连 →
- * 用户会看到重复的「📡 已订阅…」、状态又变回「QUEUED (0%)」，
- * 20s 卡死告警的计数也重置了 —— 哪怕后端上同一个任务还在跑。
- *
- * 后端日志存在 `Task.logs`（任务表的 JSON 列）里、SSE 连上时会重放，
- * 所以**内容**大约一个往返就回来了 —— 但
- *（a）在途的告警计时器（20s 无活动）会丢，接下来 20s 的新静默没人管；
- *（b）界面给人一种「把这次运行的记忆丢了」的感觉；
- *（c）控制台噪音还让用户以为是重复订阅的 bug。
- *
- * 修法：把面板的临时状态放进模块级 Map，按 `taskId` 作键，
- *       于是同一次会话内的卸载 / 重挂载对用户不可见。
- *       用 `MAX_ENTRIES` 做上限（LRU），长时间开着的页签也不会漏内存。
- *
- * 范围
- * ────
- * 只做**标签页内**的持久化。跨整个浏览器刷新要 localStorage，
- * 那是 v1 有意排除的目标 —— 任务级状态属于服务端数据库 + SSE 重放，
- * 不属于每个标签页自己的草稿区。
- *
- * ───────────────────────────────────────────────────────────────────── */
+/* ── stepLogCache.ts ──
+ * 跨「卸载 / 重新挂载」缓存 CanvasNode 的步骤日志面板状态：节点切走时面板卸载，`stepLogs` / `validationErrors` 被拆掉，切回会重复订阅、回退到 QUEUED (0%)，20s 卡死告警也重置（Task.logs 能重放内容，在途计时器却丢）。
+ * 修法：模块级 Map 按 taskId 存（MAX_ENTRIES 做 LRU）；只做标签页内持久化，跨刷新属服务端。
+ */
 
 import type { ValidationError } from "~/lib/comfyui/validation";
 import { tailWindow } from "~/lib/page-window";

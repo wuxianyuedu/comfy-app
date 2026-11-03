@@ -1,12 +1,10 @@
 "use client";
 
-/* CanvasNode 的可折叠的错误面板。
- * 负责 errExpanded 开关状态 + shouldAutoExpand / errorSuggestion
- * 两个推导，并渲染整个面板 JSX（展开/收起、复制、重试、
- * 建议）。父组件无条件渲染 <ErrorPanel/>；节点不处于
- * 可见错误态时，组件在 hooks 之后返回 null，好让展开状态的
- * 生命周期与拆分前内联 JSX 完全一致（隐藏期间状态保留，
- * running/idle 切换时重置）。 */
+/* CanvasNode 的可折叠错误面板。
+ * 负责 errExpanded 开关 + shouldAutoExpand / errorSuggestion 推导并渲染 JSX。
+ * 父组件无条件渲染；节点不在可见错误态时在 hooks 之后返回 null，好让展开状态
+ * 生命周期与拆分前内联 JSX 一致（隐藏期间保留，running/idle 切换时重置）。
+ */
 import { useMemo, useState } from "react";
 import type { CanvasNodeData } from "~/lib/project-canvas/canvas-types";
 import { Hint } from "~/components/ui/hint";
@@ -58,15 +56,10 @@ export function ErrorPanel({
   workflowName,
   onRetry,
 }: ErrorPanelProps) {
-  /* 错误面板状态 —— 默认收起（只有一行摘要），
-   * 可展开查看后端原始错误（含 ComfyUI traceback）。
-   * 每次新运行开始时重置为收起，好让下一次失败
-   * 以干净状态呈现，用户不会看到上次残留的展开态。
-   *
-   * 错误信息里出现 ComfyUI 的
-   *"Node X not found" /"OOM" /"Cannot find model" / 5xx 形态时，
-   * 面板自动展开，让用户能看到可行动的
-   * 上下文（taskId、请求 payload、建议）。 */
+  /* 错误面板状态 —— 默认收起（只有一行摘要），可展开查看后端原始错误（含 traceback）。
+   * 每次新运行开始时重置为收起，下一次失败以干净状态呈现。
+   * 错误信息出现 ComfyUI 的 "Node X not found" / "OOM" / "Cannot find model" / 5xx
+   * 形态时自动展开，让用户看到可行动上下文（taskId、请求 payload、建议）。 */
   const [errExpanded, setErrExpanded] = useState(false);
   /* 每次新运行开始时重置为收起（渲染期间调整，
    * React 19 模式）。 */

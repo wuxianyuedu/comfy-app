@@ -1,17 +1,9 @@
 "use client";
 
 /**
- * WorkflowLibrary 的业务逻辑层（规范 17 §17.2 第②层）。
- *
- * 承载：列表/标签查询与同步、三级筛选 + 搜索的选择状态、删除/下载/同步/载入
- * 四个动作的编排（复用 `useWorkflowActions`）、导入面板状态（复用
- * `useWorkflowImport`）、画布编辑器与模型管理弹层的开关。
- *
- * 视图（`WorkflowLibrary.tsx`）只消费这里返回的 controller：不碰 tRPC、
- * 不算筛选规则、不持有任何业务状态。对外 props（`onUse`）保持不变。
- *
- * 错误通道按 §17.5.4 拆两条：动作错误（`actionError`，只有用户重试才清）
- * 与加载错误（`loadError`，重新拉取成功即消失）。
+ * WorkflowLibrary 的业务逻辑层（规范 17 §17.2 第②层）：列表/标签查询与同步、三级筛选 + 搜索、删除/下载/同步/载入四个动作（复用 `useWorkflowActions`）、导入面板
+ * 状态（复用 `useWorkflowImport`）、编辑器与模型管理弹层开关。视图只消费 controller
+ * （不碰 tRPC、不算规则）。错误通道按 §17.5.4 分 `actionError`（用户重试才清）与`loadError`（重新拉取成功即消）。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -196,20 +188,11 @@ export function useWorkflowLibrary(
     loadModelTagsRef.current();
   }, []);
 
-  /* ── 首次拉取的「卡住」判定 ───────────────────────────────────────────
-   * 场景（用户反馈）：断开应用（关掉桌面窗口 / 重开桌面壳）后
-   * 再打开工作流库，界面上只剩一句「未找到匹配的工作流 / 共 0 个工作流」，
-   * 看起来像工作流全没了。实际是列表查询迟迟不 resolve——react-query 的
-   * `isLoading` 为真时真实数据一行都没渲染，而空态文案恰好长得和「真的
-   * 没有工作流」一模一样，用户无从区分。
-   *
-   * 这里给首次拉取加一条**只读**的超时探针：超时只表示「还没拿到数据」，
-   * 不推断失败原因（服务在编译 / 数据库在迁移 / 进程刚重启都可能），因此
-   * 视图给的是「重试 + 打开日志面板」而不是断言某个根因。拿到数据或查询
-   * 报错（走 loadError 通道）即自动退出该状态。
-   *
-   * 计时器必须自己收：查询 resolve 之后挂着的 setTimeout 会让定时器
-   * 在组件树里空转，也拖慢测试里的假时钟推进。 */
+  /* ── 首次拉取的「卡住」判定 ──
+   * 断开应用后再打开工作流库，界面只剩「未找到匹配的工作流」，像是工作流全没了；
+   * 实际是列表查询迟迟不 resolve，而空态文案与真的没有工作流一模一样。
+   * 这里给首次拉取加一条**只读**超时探针：只表示「还没拿到数据」，不推断根因，
+   * 视图给「重试 + 打开日志面板」。拿到数据或报错即退出；计时器必须自己收。 */
   const [loadStalled, setLoadStalled] = useState(false);
   const awaitingData = listQ.isLoading || listQ.isFetching;
   useEffect(() => {

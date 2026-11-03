@@ -1,9 +1,6 @@
-// Workshop 前端项目草稿的服务端镜像：读 / 写 / 删。
-//   端点：GET /api/workshop/draft?project=<wsp_*>  → { exists, draft? }
-//   端点：PUT /api/workshop/draft  { project, draft } → { ok: true }
-//   端点：DELETE /api/workshop/draft?project=<wsp_*> → { ok: true }
-// 目的：工坊界面编辑的剧本/角色/分镜不再只落浏览器 localStorage —— 每次
-// 自动保存也写穿到本地 db.sqlite 的 workshopDraft 表，清缓存也不丢。
+// Workshop 前端项目草稿的服务端镜像：GET /api/workshop/draft?project=<wsp_*> → { exists, draft? }；
+// PUT { project, draft } → { ok: true }；DELETE (同上 query) → { ok: true }。
+// 目的：工坊编辑的剧本/角色/分镜不再只落 localStorage —— 每次自动保存也写穿到本地 db.sqlite 的 workshopDraft 表，清缓存也不丢。
 // 鉴权沿用 requireRequestUser（未开启登录门槛时回落本地演示用户，单机照常可用）。
 import { type NextRequest, NextResponse } from "next/server";
 

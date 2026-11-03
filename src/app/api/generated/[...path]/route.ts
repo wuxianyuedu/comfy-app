@@ -10,41 +10,14 @@ import { contentRangeHeader, resolveByteRange } from "~/server/lib/range-request
 import { requireRequestUser } from "~/server/auth/request-user";
 
 /**
- * /api/generated/[...path] — 任务产物文件流。
- *
- * executor-finalize 把产物落盘到 `<cwd>/generated/<taskId>/`，并把
- * `/api/generated/<taskId>/<file>` 形式的 localPath 写进 TaskImage /
- * resultImages —— 历史数据与所有消费方都以该前缀为 URL，但这个路由此前
- * 并不存在，产物图片在所有页面都以 404 呈现（broken image）。
- *
- * 实现按路径读产物根（`generatedRoot()`）下的文件流式返回：
- *  - 历史数据（/api 前缀）与新数据一并修复，无需迁移 DB；
- *  - 路径穿越防护：解析后必须仍落在产物根之内；
- *  - **会话 + 归属**（台账 A13）：落点命名里就写着主人的身份
- *    （`projects/<项目 id>/<任务 id>`、`materials/<项目 id>/…`、`films/<成片 id>`），
- *    所以「在根内」从来不等于「该我给你读」；
- *  - 产物根**不在 `public/` 下**（台账 A13 的结构性关法）：`public/**` 由 Next 按
- *    静态文件直发、不经过任何 handler，所以根住在那儿的时候，上面这些判定靠
- *    「把 URL 里的 `api/` 去掉」就能整条绕过（本机实测过：同一份图 200 / 401 两个
- *    答案）。搬出来之后这条静态通道不存在，`src/proxy.ts` 那条 rewrite 只剩
- *    「让老数据里 `/generated/…` 那种形状仍然走闸」这一件兼容活。
- *  - 产物不可变（taskId 目录一次性写入），长缓存安全 —— 但正因如此缓存必须是
- *    `private`：见下面 `SHARED_HEADERS` 那条。
- *  - **支持 `Range`**（台账 A13 残留清单里的第二条）：产物根搬出 `public/` 之后，
- *    图片与**视频**都只剩这一条出口，而静态文件服务本来是白送 Range 的 —— 折进
- *    handler 那一刻就把「拖进度条」退化成「整份重读」。现在按 RFC 7233 的单档
- *    形状判：合法窗口 → 206 + `Content-Range`，语法对但满足不了 → 416，
- *    不认识的形状（多档 / 非 `bytes=` / `first > last`）→ 忽略并回 200，
- *    **不因为自己解析不了就把客户端要的东西判成错误**。判据本身在
- *    `~/server/lib/range-request`（这个端点只翻状态码，别再写第二份解析）。
+ * /api/generated/[...path] — 任务产物文件流（历史 localPath 以此为前缀而路由此前不存在，全站 404）。
+ * 边界：路径穿越解析后必须仍在产物根内；会话+归属（台账 A13：「在根内」≠「该给你读」）；产物根不在 `public/` 下
+ *（否则静态直发绕过全部判定，同一份图 200/401 两个答案）。产物不可变 → 长缓存安全但必须 `private`；`Range` 按 RFC 7233 单档 206/416/忽略回 200。
  */
 
 /** 三种响应（200 / 206 / 416）共用的一份头。
- *
- *  `Accept-Ranges: bytes` 是「告诉客户端可以分段要」的那一句；没有它，
- *  浏览器第一次拖进度条才会想起发 `Range`。
- *  ⚠️ `Cache-Control` 必须是 `private`：加了归属判定之后再标 `public`，
- *  等于允许共享缓存把 A 的产物回给 B —— 那会让上面那道闸只剩形式。 */
+ *  `Accept-Ranges: bytes` 告诉客户端可以分段要；⚠️ `Cache-Control` 必须是 `private`：
+ *  加了归属判定后再标 `public` 等于允许共享缓存把 A 的产物回给 B，归属闸就只剩形式。 */
 /* SAFETY: type assertion reviewed */
 const SHARED_HEADERS = {
   "Cache-Control": "private, max-age=31536000, immutable",
@@ -80,12 +53,9 @@ export async function GET(
     return new Response("Forbidden", { status: 403 });
   }
 
-  /* 归属：判得清「这一格确定属于别人」就不读 —— 拒绝必须在 `fs.readFile` 之前，
-   * 否则「有没有把别人的文件拖出去」取决于代码写在哪一行（这里的副作用是
-   * `fs.stat` / `fs.open`，两个都必须在闸之后）。状态给 **404 而不是 403**：
-   * 与「文件不存在」同形，这个端点不该顺带回答「某个 id 存不存在」（口径同 A2 / A3 / A12）。
-   * 单用户模式（`loginRequired` 关）跳过：那时每个请求都解析成同一个演示用户，
-   * 判定不可能有不同结果，只会因历史行的 userId 漂移把自己的图打裂。 */
+  /* 归属：判得清「属于别人」就不读 —— 拒绝必须在 `fs.stat`/`fs.open` 之前。状态给 404 而非 403
+   *（与「文件不存在」同形，不顺带回答「某个 id 存不存在」，口径同 A2/A3/A12）。
+   * 单用户模式跳过：每个请求都解析成同一演示用户，只会因历史行 userId 漂移把自己的图打裂。 */
   if (getSettingsSync().loginRequired) {
     if (await isForeignOwnedArtifact(segments, user.id)) {
       return new Response("Not found", { status: 404 });

@@ -1,11 +1,7 @@
 "use client";
-/* 子图封装节点的顶部针脚区 —— FlowNodePinRows 的同型件：
- * 纯连接型输入端口（左圆点）与暴露出的输出端口（右圆点）
- * 拉在一行，与普通 WorkflowNode 完全一致。每个声明过的针脚
- * 都常显圆点（always-on），未连线的端口也看得见。
- * 与 FlowNodePinRows 的差异：行不带端口聚焦提亮（子图卡片
- * 不接 useRelatedEdgesHighlight 的级别账），行标签换行不截断
- * （长边界端口标签换多行，完整文本从原生 title 看）。 */
+/* 子图封装节点顶部针脚区，FlowNodePinRows 的同型件：纯连接型输入（左）与暴露输出（右）拉成一行；
+ * 每个声明过的针脚常显圆点（未接线也可见）。差异：行不带端口聚焦提亮（子图卡片不接该级别账），
+ * 标签换行不截断（完整文本见 title）。 */
 import { Handle, Position } from "@xyflow/react";
 import { portColor } from "~/lib/comfyui/types";
 import { IoCheckbox, type IOEditContextValue } from "./IOEditContext";

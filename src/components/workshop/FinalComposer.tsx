@@ -52,10 +52,9 @@ export function motionPromptSuffix(motion: MotionLevel | undefined): string {
 }
 
 /**
- * 成片合成 stage：消费上游产出的镜头列表（imageUrl / clipUrl /
- * duration / transition / dialogue）—— 纯客户端合成。提供
- * 顺序预览播放器、逐镜头时长与转场编辑，以及
- * 合成方案导出（JSON）作为管线的最终产物。
+ * 成片合成 stage：消费上游产出的镜头列表（imageUrl / clipUrl / duration /
+ * transition / dialogue），纯客户端合成 —— 顺序预览播放器、逐镜头时长与转场
+ * 编辑、合成方案导出（JSON）作为管线的最终产物。
  */
 export function FinalComposer({
   shots,

@@ -1,25 +1,9 @@
 "use client";
 
 /**
- * 设置页「Drizzle Studio 本地数据库可视化」分区的 sub-hook（`use-settings-page`
- * 的拆分件）。
- *
- * 收口 4 个 tRPC 通道（`dbStudioStatus` 查询 + `dbStudioStart` /
- * `dbStudioStop` / `dbStudioOpen` 三个 mutation）、3 段进行态（starting /
- * stopping / opening）、3 个动作（startDbStudio / stopDbStudio / openDbStudio）
- * 与运行时日志的「正在启动则每秒跟随、否则挂载取一次」的 `active` 判据。
- *
- * 状态查询的 `enabled` 由主 hook 传入的 `statusQueriesEnabled` 门控——首屏
- * 两份配置（`setting.get` / `llm.configGet`）就绪之前**不**发探测，避免与
- * 秒级 HTTP 探测并进同一批请求，把首屏也拖慢数秒（同 `comfyStatus` 的口径）。
- *
- * `dbStudioLogActive` = 正在启动 OR 服务端快照说 starting：与 `useRuntimeLogSource`
- * 的「跟随本次启动」联动，返回给主 hook 直接展开到 controller 的
- * `dbStudioLog: { ...log, active }`。
- *
- * 这一整块与 ComfyUI 的探测通道**共享同一 statusQueriesEnabled 门控**，
- * 但状态与动作各自独立、无交叉。返回形状与主 hook controller 逐字段一致，
- * 视图与测试都不感知——§12.18 复用优先，拆包只挪文件、不动契约。
+ * 设置页「Drizzle Studio」分区的 sub-hook：收口状态查询 + start/stop/open 三 mutation 与进行态。
+ * 状态查询由 `statusQueriesEnabled` 门控 —— 首屏两份配置就绪前不发探测，避免与秒级 HTTP 探测同批拖慢首屏。
+ * `dbStudioLogActive` = 正在启动 OR 服务端快照 starting；返回形状与 controller 逐字段一致（§12.18 拆包不动契约）。
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";

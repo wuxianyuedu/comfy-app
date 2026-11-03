@@ -1,17 +1,9 @@
 "use client";
 
 /**
- * WorkflowRunLogModal —— 工作流库「就地运行」的全屏执行日志弹窗。
- *
- * 与项目画布 GlobalStepLogPanel 同款交互（居中大弹窗 + 级别筛选 + 自动滚动 +
- * 加宽/收窄 + 取消），替代此前挂在节点下方的小日志条。日志与运行态由
- * workflow-run-store 托管：关闭窗口（组件卸载）再打开，仍能看到生成中
- * 状态与全部日志（SSE 重连由服务端回放补齐历史）。
- *
- * view 层只渲染；数据（runs/logs）经 useSyncExternalStore 从 store 读取，
- * 任务订阅逻辑在 use-workflow-run-task.ts（§17 UI/逻辑分离）。
- * 时间线主体（级别筛选 + 自动滚动 + 虚拟列表 + 底栏计数）收在共享的
- * `logs/TaskLogTimeline`（队列页执行日志弹窗同款），本文件只保留头部与外壳。
+ * WorkflowRunLogModal —— 工作流库就地运行的全屏执行日志弹窗。与项目画布GlobalStepLogPanel 同款（级别筛选 + 自动滚动 + 加宽/收窄 + 取消）。日志与运行态由
+ * workflow-run-store 托管：卸载再打开仍能看到生成中状态与全部日志（SSE 重连由服务端
+ * 回放补齐）。数据经 useSyncExternalStore 读，时间线主体收在 `logs/TaskLogTimeline`。
  */
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";

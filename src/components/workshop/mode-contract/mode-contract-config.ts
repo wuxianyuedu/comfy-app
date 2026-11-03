@@ -1,11 +1,7 @@
 // ── 「模式契约」编辑器的展示配置与派生（规范 17 §17.2 第①层：纯配置）──────
-// 契约本身（有哪些模式、每个模式有哪些统一输入口）由 `lib/workshop/
-// model-mode-contract` 定义，这里只放**两个入口共用**的展示口径：
-// 模式按类别分组、可追加的固定口清单、以及「该模式当前生效的契约」。
-//
-// 为什么独立成模块：模式契约有两个入口（工坊「模式契约」弹窗、工作流库
-// 「模式契约」弹窗），两处必须说同一套话 —— 分组顺序、标签、哪些口能追加一旦
-// 各写一份，就会在改动时静默分叉。
+// 契约本身由 `lib/workshop/model-mode-contract` 定义，这里只放**两个入口共用**的
+// 展示口径：模式按类别分组、可追加的固定口清单、「该模式当前生效的契约」。
+// 独立成模块是因为两处必须说同一套话，各写一份会在改动时静默分叉。
 
 import { upperToken } from "~/lib/upper-token";
 import {
@@ -31,19 +27,8 @@ export const CONTRACT_MODE_GROUPS: Array<{
 ];
 
 /**
- * 导航树的**一棵树**：一个父行（输出类别）+ 挂在它下面的模式项。
- *
- * 与 `CONTRACT_MODE_GROUPS` 的关系是「同一件事的两种投影」——那个给的是**类别顺序
- * 与名字**，这个把模式按类别挂上去、并顺手丢掉空组。模式的**顺序与内容**一律从
- * `CONTRACT_MODES` 派生，不在这里重抄一遍（§12.18）。
- *
- * 为什么要有这一层：模式有二十多个，平铺成一排 chip 要占三四行；收成
- * 「父行 = 类别 + 子行 = 模式」的树之后，纵向空间由子行自己的滚动条承担（与设置页
- * 分区导航同一形态，ISSUE #1694 的结论）。
- *
- * 每一组**必须非空**（空父行没有意义），并集恰好等于 `CONTRACT_MODES` ——
- * 由 `mode-contract-config.test.ts` 双向比对守住（漏项是这张表的失效模式：
- * 某个模式从导航上静默消失，界面其它地方都不会说）。
+ * 导航树的**一棵树**：父行（输出类别）+ 挂在它下面的模式项。模式的顺序与内容一律从 `CONTRACT_MODES` 派生，不在这里重抄（§12.18）；空组顺手丢掉。
+ * 每一组**必须非空**、并集恰好等于 `CONTRACT_MODES` —— 由 `mode-contract-config.test.ts` 双向比对守住（漏项是这张表的失效模式：某个模式从导航上静默消失）。
  */
 export type ContractModeTreeGroup = {
   category: "image" | "video" | "audio";
@@ -66,12 +51,8 @@ export function contractModeLabel(mode: string): string {
 }
 
 /** 某模式当前生效的契约：本机覆盖里有就用它，没有就按成品配置现算。
- *
- *  「改过 / 没改过」的判据收在这里一处：两个入口的「已改」徽标、编辑器初值、
- *  封装视图都读它，避免各自 `find` 一遍再各自判空。
- *
- *  这里传进来的 `stored` 是**本机覆盖**（`useModeContracts` 的读取结果），不是
- *  成品配置 —— 成品配置由 `derivedModeContract` 现算，没有第二处需要查。 */
+ *  「改过/没改过」的判据收在这一处（两个入口的徽标、编辑器初值、封装视图都读它）。
+ *  `stored` 是**本机覆盖**（`useModeContracts` 的读取结果），不是成品配置。 */
 export function effectiveModeContract(
   mode: string,
   stored: ReadonlyArray<ModeContract>,

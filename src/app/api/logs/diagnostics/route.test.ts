@@ -1,15 +1,7 @@
 /**
- * /api/logs/diagnostics 的打包契约（ISSUE #1326）。
- *
- * 面板的「保存到本地」只导出**它看得见的行**；用户报 bug 时真正要给的现场还包括
- * `run.json`（runId / 版本 / 分支 / commit / pid / 退出码）、上一次崩溃留下的残留、
- * comfyui 原始回执。本端点复用启动编排的 `exportDiagnostics()`，把
- * `current/` + 最近几次 `runs/` 打成一个 zip 落在 `log/exports/`。
- *
- * 钉死三条：
- *   1. 产物真的是一个能解开的 zip（用 python 的 zipfile 验，不靠「文件存在」）；
- *   2. 内容含本次运行的 `current/run.json` 与历史包 —— 缺了就等于没打包；
- *   3. 鉴权与同族端点一致（未登录不打包）。
+ * /api/logs/diagnostics 的打包契约（ISSUE #1326）：复用启动编排的 `exportDiagnostics()`，把 `current/` + 最近几次 `runs/`
+ * 打成 zip 落 `log/exports/`（面板导出只有它看得见的行，报 bug 还要 run.json / 崩溃残留 / comfyui 原始回执）。
+ * 钉三条：产物真是能解开的 zip（python zipfile 验）；内容含本次 `current/run.json` 与历史包；未登录不打包。
  */
 import fs from "node:fs";
 import os from "node:os";

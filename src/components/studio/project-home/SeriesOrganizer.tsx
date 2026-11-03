@@ -1,10 +1,8 @@
 "use client";
 
 /**
- * 系列 / 季 / 集 组织者（FR-SR-01/02/04，#2508）。
- *
- * 纯视图：所有 tRPC 取数与变更都来自 `useSeriesOrganizer`（逻辑层，规范 17 / 硬闸 S3），
- * 本文件不再出现 `useQuery(trpc.series…)`。把「一个项目 = 一集」的层级关系落地：
+ * 系列 / 季 / 集 组织者（FR-SR-01/02/04，#2508）。纯视图：tRPC 取数与变更全来自 useSeriesOrganizer
+ *（逻辑层，规范 17 / 硬闸 S3），本文件不出现 useQuery(trpc.series…)。「一个项目 = 一集」：
  * 系列 → 季 → 集，集可挂一个 projectId（assignCurrentProject）。
  */
 

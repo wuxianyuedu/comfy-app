@@ -1,16 +1,7 @@
-// 设置页逻辑层单测：hook 走真实 tRPC React 客户端（trpc.setting.* / trpc.llm.*），
-// 由 MSW 转发到可控测试 router。断言的是**编排行为**：
-//   1. 草稿从查询播种（且新的查询结果会重新播种）；
-//   2. Ollama 探测触发时机（仅本地 provider + baseUrl 变化时）；
-//   3. 按任务温度的合并规则（清空 = 删 key，而不是写 undefined）；
-//   4. 失败路径都走 flash 提示（硬规则 4：失败必须有用户可见出口）；
-//   5. openExternalUrl 把生成结果交给系统默认浏览器打开（桌面壳替代外链）。
-//
-// 自 ISSUE #1900 起，**ComfyUI 运行态那一组用例搬去了**
-// `src/components/studio/comfyui/hooks/use-comfyui-control.test.ts`：运行态、
-// 启动 / 关闭 / 打开与启动日志整块归侧栏「ComfyUI」页，判据一条没少。
-// 本文件留在这里的是设置页**自己**的编排（配置读取与播种、Ollama、保存、远端模型、
-// Drizzle Studio、外部链接），外加两条把「运行态真的走干净了」钉死的用例。
+// 设置页逻辑层单测：hook 走真实 tRPC React 客户端，经 MSW 转发到可控测试 router，断言
+// 编排行为（草稿播种与重播、Ollama 探测时机、按任务温度合并、失败走 flash、openExternalUrl）。
+// 自 ISSUE #1900 起 ComfyUI 运行态用例搬去
+// `src/components/studio/comfyui/hooks/use-comfyui-control.test.ts`。
 
 import { createElement, type ReactNode } from "react";
 import { act, cleanup, renderHook } from "@testing-library/react";
@@ -47,13 +38,9 @@ vi.mock("~/lib/shell/desktop-shell-client", () => ({
 }));
 
 // 客户端逻辑层现经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
-// app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
-// 测试保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），只 spy `postAppRuntimeLog`
-// 并记录调用参数。`runtimeLogCalls` 须用 vi.hoisted 定义，供工厂在提升后引用。
-// 客户端逻辑层现经 `postAppRuntimeLog`（走 `/api/logs/app-runtime`）把失败补记到
-// app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（见 ISSUE #282）。
-// 测试通过 `vi.importActual` 保留 `fetchFileLogSlice` 真实实现（经 MSW 返回日志），
-// 只 spy `postAppRuntimeLog` 并记录调用参数。
+// app-runtime 日志，不再直接 import Node-only 的 `app-runtime-log`（ISSUE #282）。测试保留
+// `fetchFileLogSlice` 真实实现（经 MSW 返回日志），只 spy `postAppRuntimeLog` 并记录调用参数；
+// `runtimeLogCalls` 须用 vi.hoisted 定义，供工厂在提升后引用。
 const { postAppRuntimeLogMock, runtimeLogCalls, sessionLogRequests } = vi.hoisted(() => {
   const calls: Array<{
     fields?: unknown;
@@ -164,12 +151,9 @@ type Behavior = {
 const neverSettle = (): Promise<void> => new Promise<void>(() => undefined);
 
 let behavior: Behavior = {};
-/* 「运行态变了」那条长轮询通道收到的请求（`?since=…`）。
- *
- * 这条通道**不再由设置页订阅**（运行态整块搬去了侧栏「ComfyUI」页，
- * ISSUE #1900），但仍要在默认 handler 里记账：设置页一挂载，客户端那条链是否
- * 还会连过来 —— 这一条正是「运行态真的走干净了，没有第二个消费方」的现场证据
- * （见下方「设置页不再订阅运行态通道」那条用例）。 */
+/* 「运行态变了」长轮询通道（`?since=…`）的请求记账：通道不再由设置页订阅（运行态搬去
+ * 侧栏「ComfyUI」页，ISSUE #1900），记账是「没有第二个消费方」的现场证据（见下方
+ * 「设置页不再订阅运行态通道」用例）。 */
 const stateRequests: Array<string> = [];
 /* `comfyStatus` 端点的调用次数：设置页一次都不该调到它（见对应用例）。 */
 let comfyStatusCalls = 0;
@@ -374,12 +358,9 @@ describe("useSettingsPage", () => {
     expect(result.current.drafts?.settings.comfyuiPath).toBe("D:/ComfyUI");
   });
 
-  /* 跳转落点：从别处（如 ComfyUI 页的「去设置里配置」）跳进来时载荷带目标分区，
-   * hook 直接停在它上面，并把目标登记成 `pendingJump` 交外壳去滚。
-   *
-   * 载荷**不在挂载时消费**：设置页首帧通常在 loading（外壳没有分区节），那时
-   * 消费掉载荷，等就绪外壳挂上时跳转目标已经丢了（现场：左侧停在第一项）。
-   * 只有外壳真的滚过去、调 `ackJumpSection` 之后才算落定。 */
+  /* 跳转落点：载荷带目标分区时 hook 直接停在它上面并登记 `pendingJump` 交外壳去滚。
+   * 载荷不在挂载时消费（首帧通常在 loading，消费掉会丢目标，现场：左侧停在第一项），
+   * 外壳真的滚过去调 `ackJumpSection` 才算落定。 */
   it("带 initialSection 跳进来：停在目标分区并登记待落定目标，消费等外壳回调", () => {
     const onConsume = vi.fn();
     const { result } = renderHook(
@@ -498,12 +479,9 @@ describe("useSettingsPage", () => {
       .mockResolvedValueOnce({ up: false })
       .mockResolvedValueOnce({ up: false })
       .mockResolvedValue({ up: true, models: [] });
-    /* **一个用例一把时钟**：换时钟必须在挂载之前。旧形状是「先用真实时钟
-     * `expect.poll` 等首探落定 → 再 `useFakeTimers()`」，那中间挂载链（查询 + 首探 +
-     * react-query 的调度）还挂在真实时钟上，要多久由机器给多少墙钟 —— 而 `testTimeout` 有上界：
-     * 一旦越过，被抛下的 continuation 落进下一条用例的假时钟窗口，症状就成对出现
-     * （先超时红，再 `Timer APIs are not mocked`）。
-     * 口径与实测读数见规范 11 §11.14「一个用例一把时钟，而且要在挂载之前换」。 */
+    /* 一个用例一把时钟，且换时钟必须在挂载之前（规范 11 §11.14）：否则挂载链还挂在
+     * 真实时钟上，一旦越过 testTimeout，被抛下的 continuation 落进下一条用例的假时钟
+     * 窗口，症状成对出现（先超时红，再 `Timer APIs are not mocked`）。 */
     vi.useFakeTimers();
     try {
       const { result } = renderHook(() => useSettingsPage(), {
@@ -613,14 +591,9 @@ describe("useSettingsPage", () => {
     expect(errorsAfter.length).toBe(1);
   });
 
-  /* 回归 ISSUE #304：截图中「打开设置失败」，但用户看到的是一句
-   * 「配置数据未就绪」——没有原因、没有重试、也没有日志指引，被冻在死角。
-   *
-   * 根因：`hasError` 此前判的是「两份数据都为空」，而 setting.get 成功、
-   * llm.configGet 失败时草稿仍为空却又不满足该条件；同时 `isInitialLoad`
-   * 也因「有一份数据」为假 → 容器一路落到 `!drafts` 的兜底文案。
-   *
-   * 现在 hasError = 「任一查询失败 且 草稿未就绪」，该边界落错误降级视图。 */
+  /* 回归 ISSUE #304：setting.get 成功、llm.configGet 失败时，旧 hasError 判「两份数据
+   * 都为空」不命中、isInitialLoad 也为假，用户落进「配置数据未就绪」死角（没有原因/重试/
+   * 日志指引）。现 hasError = 任一查询失败且草稿未就绪 → 该边界落错误降级视图。 */
   it("一半查询失败且草稿未就绪 → 落错误视图而非「配置数据未就绪」死角", async () => {
     behavior.llmError = "no such table: llmConfig";
     const { result } = renderHook(() => useSettingsPage(), {

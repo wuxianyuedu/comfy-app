@@ -1,17 +1,7 @@
 /**
- * `/api/materials` 的闸门用例 —— 素材库这一族**现在只有这一个入口**。
- *
- * 这里曾写着「与 tRPC 的 `material.*` 同一套判据、两个入口」：那条门后来因
- * **零消费方**删掉了（素材面板走的就是这条 REST，`~/lib/media/materials-client`），
- * 用例因此全部收拢到这一份 —— 包括原先由那扇门覆盖的分支（见「素材库根读不出来」
- * 那条）。判据本身在 `~/lib/media/materials.ts` 一处，两个入口曾经各写一份
- * `resolveScopes`、两份都不判归属，那才是这段历史的意义。
- *
- * 组织方式：读侧「越权与不存在同形」，写 / 删侧「拒绝发生在落盘之前」。
- *
- * mock 边界：`fs`（内存假象，读写调用都记下来 —— 「没落盘」与「没读盘」都是
- * 要断言的事）、`~/server/auth/request-user`（鉴权两态）、
- * `~/server/db`（内存库 + 真 Drizzle，项目归属真判）。
+ * `/api/materials` 的闸门用例 —— 素材库这一族**现在只有这一个入口**（tRPC `material.*` 因零消费方删掉，判据收在 `~/lib/media/materials.ts` 一处）。
+ * 组织方式：读侧「越权与不存在同形」，写 / 删侧「拒绝发生在落盘之前」（两个入口曾各写一份 `resolveScopes`、两份都不判归属，那才是这段历史的意义）。
+ * mock 边界：`fs`（内存假象，读写调用都记下 ——「没落盘」与「没读盘」都是要断言的事）、`request-user`（鉴权两态）、`~/server/db`（内存库 + 真 Drizzle，项目归属真判）。
  */
 import type { NextRequest } from "next/server";
 import path from "node:path";

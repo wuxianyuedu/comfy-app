@@ -1,9 +1,7 @@
 /**
- * 画布节点内部的相对层级（**不是**视口刻度）。
- *
- * 这些值只在本容器的层叠上下文里比较：便签 / 组底板在节点之下（它们常被节点
- * 压住，是背景板），普通节点 < 子图卡片（紫色描边要读得出来）< 宿主内部的
- * 暴露口（必须浮在宿主卡片描边之上）。起点取 `Z.base`，逐档 +1。
+ * 画布节点内部的相对层级（**不是**视口刻度）。这些值只在本容器的层叠上下文里比较：
+ * 便签 / 组底板在节点之下（常被节点压住，是背景板），普通节点 < 子图卡片（紫色描边要
+ * 读得出来）< 宿主内部的暴露口（必须浮在宿主卡片描边之上）。起点取 `Z.base`，逐档 +1。
  */
 const GROUP_Z = Z.base;
 const NOTE_Z = Z.base + 5;
@@ -74,43 +72,13 @@ export type BuildInitialNodesCtx = {
 };
 
 /**
- * 边界 pin → wfGroup(wfIoPort …) 栏杆布局（从 `buildInitialNodes` 拆出，§12.13）。
- *
- * The user asked: "子工作流的输入节点和输出参数节点不需要可用单独拖动，
- * 支持整体拖动即可，参数间的距离没必要那么大，紧凑些，再像图中那样
- * 加个边框就行了". So:
- *   • 每条栏杆（输入 / 输出各一条）各自包在一个 wfGroup 矩形里，用紫色可
- *     拖拽样式（draggable: true + pointerEvents: auto + cursor: move），
- *     用户抓一次分组，整列一起滑走。
- *   • 各个 wfIoPort 子节点带 parentId + extent: "parent" + draggable: false，
- *     React Flow 因此把它们锁在分组框内并随分组自动移动。
- *   • 纵向间距用 PORT_ROW_GAP（4px）、行高用 IO_PORT_HEIGHT（22px）。
- *   • 分组位置经 `detail.positions["grp:bpin:…"]` 落库：会话里保存过的覆盖
- *     位置优先于「按内部包围盒锚定」的布局兜底——前者是用户亲手拖出来的结果。
+ * 边界 pin → wfGroup(wfIoPort …) 栏杆布局（从 `buildInitialNodes` 拆出，§12.13）。用户要求：输入/输出节点不能单独拖、只支持整体拖动，参数间距紧凑并加边框。故每条栏杆
+ * 包在 wfGroup 矩形里（`draggable` + `pointerEvents: auto` + `cursor: move`）；wfIoPort
+ * 子节点带 `parentId` + `extent: "parent"` + `draggable: false`，随分组移动。间距 4px、行高 22px；位置经 `detail.positions["grp:bpin:…"]` 落库，已保存覆盖优先。
  */
 /* IO 端口节点的尺寸是文件顶部的模块级常量（IO_PORT_HEIGHT /
  *  PORT_ROW_GAP / GROUP_*）—— 下面的布局过程与 WfIoPortNode 渲染器
  *  共用同一份，两边不会各自漂移。 */
-/* ── 边界 pin → wfGroup(wfIoPort …) ──
- *
- *  The user asked: "子工作流的输入节点和输出参数节点不需要可用单独拖动，
- *  支持整体拖动即可，参数间的距离没必要那么大，紧凑些，再像图中那样
- *  加个边框就行了".  So:
- *        *    • 每条栏杆（输入 / 输出各一条）现在各自包在一个 wfGroup 矩形里，
- *        *      用紫色可拖拽样式（draggable: true + pointerEvents: auto +
- *        *      cursor: move）。用户抓一次分组，整列一起滑走。
- *        *    • 各个 wfIoPort 子节点带 parentId: <分组 id> + extent: "parent" +
- *        *      draggable: false，React Flow 因此把它们锁在分组框内，
- *        *      并随着分组自动移动（见下一条）。
- *      parent's transform.
- *        *    • 纵向间距用 PORT_ROW_GAP（4px）、行高用 IO_PORT_HEIGHT（22px）——
- *        *      行贴得很紧而标签仍不被裁。
- *      touching.
- *        *    • 分组位置经 `detail.positions["grp:bpin:…"]` 落库。会话里保存过的
- *        *      覆盖位置优先于「按内部包围盒锚定」的布局兜底 —— 前者是用户亲手
- *        *      拖出来的结果。早先「一个 pin 一张卡片」的渲染把位置写进
- *        *      positionsById（那是空操作），于是每次刷新都退回包围盒锚定；
- *        *      位置**落在分组上**才让挪过的列留得住。 */
 const buildBoundaryPinNode = (
   pin: BoundaryPin,
   kind: "input" | "output",
@@ -129,12 +97,10 @@ const buildBoundaryPinNode = (
   connectable: false,
   style: { width: IO_PORT_WIDTH, height: IO_PORT_HEIGHT },
   data: {
-    /* 显示名链路：边界 pin 的 `label` 是作者设的业务名（`FRAMES`、
-     *  `IMAGE_FINAL`、`MODEL_HIGH_1st`），**优先**读它。取不到再回落
-     *  `localized`（ComfyUI 的 i18n），最后回落 `name` ——
-     * 保证标题永远不会是空的。链路与 WfSubgraphNode.outputs.display
-     * 一致，两层渲染出同一个字符串；`name === type` 时 tooltip 会补上
-     * 解析出的类型以便区分。 */
+    /* 显示名链路：边界 pin 的 `label` 是作者设的业务名（`FRAMES`、`IMAGE_FINAL`、
+     *  `MODEL_HIGH_1st`），**优先**读它。取不到再回落 `localized`（ComfyUI 的 i18n），
+     *  最后回落 `name` —— 保证标题永远不会是空的。链路与 WfSubgraphNode.outputs.display
+     *  一致，两层渲染出同一个字符串；`name === type` 时 tooltip 会补上解析出的类型。 */
     title: pin.label ?? pin.localized ?? pin.name ?? "",
     type: pin.type,
     direction: kind,
@@ -144,21 +110,11 @@ const buildBoundaryPinNode = (
     connectsFrom: null,
   },
 });
-/* wfIoPort 子节点在它所属栏杆分组里的 X 锚点。
- *
- *  两条栏杆各自从所属 wfGroup 的**角**（右上 / 左上）锚定，而不是都从
- *  同一条左边缘锚定：早先的输入侧布局把端口贴死在 wfGroup 的右边框上
- *  （`relX = 2 * GROUP_PAD_X`），于是 `right:-4` 的 handle 整个**露在框外**
- *  ——截图里能看到绿色的圆点溢过红色的 Inputs 框。
- *
- *   - 输入 pin：名字在端口右侧（justify-end → 标签贴右边缘）；端口从
- *     wfGroup 的**右上角**锚定，让它的右边缘落在 wfGroup 边框内侧
- *     GROUP_PAD_X 处。handle（`right:-4`）最终落在框内 6px 处，
- *     与输出行严格镜像。⇒ relX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X。
- *   - 输出 pin：名字在端口左侧（justify-start → 标签贴左边缘）；端口从
- *     wfGroup 的**左上角**锚定，让它的左边缘落在 wfGroup 边框内侧
- *     GROUP_PAD_X 处。handle（`left:-4`）最终落在框内 6px 处。
- *     ⇒ relX = GROUP_PAD_X。 */
+/* wfIoPort 子节点在所属栏杆分组里的 X 锚点。两条栏杆各自从 wfGroup 的**角**锚定：
+ *  输入侧从右上角（relX = wfGroupWidth − IO_PORT_WIDTH − GROUP_PAD_X），handle
+ *  （`right:-4`）落在框内 6px 处；输出侧从左上角（relX = GROUP_PAD_X），handle
+ *  （`left:-4`）同样落在框内 6px 处，两侧严格镜像。早先输入侧把端口贴死在右边框
+ *  （`relX = 2 * GROUP_PAD_X`），`right:-4` 的 handle 整个露在框外（绿点溢出红框）。 */
 const wfGroupWidth = IO_PORT_WIDTH + 2 * GROUP_PAD_X;
 const inputRelX = wfGroupWidth - IO_PORT_WIDTH - GROUP_PAD_X;
 const outputRelX = GROUP_PAD_X;
@@ -188,18 +144,11 @@ const buildBoundaryGroup = (
     style: { width: IO_PORT_WIDTH + 2 * GROUP_PAD_X, height },
   };
 };
-/* 算出栏杆锚点位置，必要时回落到按包围盒锚定的默认值。
- *  `savedGroupPos` 里可能已经有上个会话里用户拖出来的位置 —— 尊重它。
- *
- *  这里**不**把两条栏杆硬凑成包围盒对齐的一列，而是按 ComfyUI 存在
- *  `boundaryPins.inputs[i].pos` / `boundaryPins.outputs[i].pos` 上的原始
- *  坐标给每个分组锚定。那些坐标是「未改动的工作流里，对应内部槽位端口
- *  所在的绝对画布位置」—— 正是用户当时指的东西。
- *  screenshot #2 ("这里有子图的输入节点和输出节点的位置，要按照
- *  这个来").  The fallback (bbox-anchored) only kicks in when those
- *      *  原始位置缺失或全是 0 时才落回包围盒（较旧的、或手搓的工作流）。
- *      *  pin 的 y 坐标按 `rawPinY - groupY` 推导，
- *      *  这样各行的纵向间距才保持原样。 */
+/* 算出栏杆锚点位置，必要时回落到按包围盒锚定的默认值。`savedGroupPos` 里可能已有上
+ *  个会话用户拖出来的位置 —— 尊重它。这里**不**把两条栏杆硬凑成包围盒对齐的一列，而是
+ *  按 ComfyUI 存在 `boundaryPins.inputs[i].pos` / `boundaryPins.outputs[i].pos` 上的原始
+ *  坐标给每个分组锚定（那是「未改动的工作流里对应内部槽位端口的绝对画布位置」）；原始
+ *  位置缺失或全为 0 才落回包围盒。pin 的 y 坐标按 `rawPinY - groupY` 推导，间距保持。 */
 function layoutBoundaryPins(
   detail: WorkflowDetail,
   middlePos: Record<string, { x: number; y: number }>,
@@ -398,14 +347,10 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   }
 
   /* 「本节点的 OUTPUT 槽馈入了子图边界」的**独立**视图 —— 直接从
-   *  detail.boundaryLinks（bl.kind === "output"）里推出。用作 WfNode 的
-   *  hasDownstream 判定的**备用信号**：即使服务端的 rawOutputs[].isBoundary
-   *  盖章还没传到（例如命中旧的 sessionStorage 缓存形状），边界连线也照样渲染。
-   *
-   *  这条备用通道不是多余：v4 缓存修好之后，RandomNoise 的 NOISE 槽的输出
-   *  handle 仍被旧缓存掩掉过一次 —— 判据只挂在服务端盖章上时，缓存形状一旧
-   *  就整条静默失效。顶层（非子图）工作流的 `detail.boundaryLinks` 是
-   *  undefined → 这里返回空 map。 */
+   *  detail.boundaryLinks（bl.kind === "output"）推出。用作 WfNode 的 hasDownstream
+   *  判定的**备用信号**：即使服务端 rawOutputs[].isBoundary 盖章还没传到（例如命中旧
+   *  的 sessionStorage 缓存形状），边界连线也照样渲染；判据只挂在服务端盖章上时，缓存
+   *  形状一旧就整条静默失效。顶层工作流的 boundaryLinks 是 undefined → 返回空 map。 */
   const boundaryOutputsByNodeId: Record<string, Set<string>> = {};
   /* 输入侧的镜像：bl.kind === "input" 把外层 pin 映射到「内部节点 + 输入槽名」。
    *  WfNode 用它把（rawInputs 里没有 `link` 的）widget 行标成边界行，
@@ -438,20 +383,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
     outSlotNameById,
   );
 
-  // 真实 ComfyUI 图节点的共享构建器。
-  //
-  // —— 锚点约定：React Flow 的 `position` 是**卡片**左上角（即标题栏顶部），
-  // 主体画在它**下面** NODE_TITLE_H（=30px）处。而 ComfyUI 配置里的 `pos[1]`
-  // 是节点**主体**的顶部，因此这里要**减去** NODE_TITLE_H：
-  // cardTop = bodyTop − 30。
-  // onNodeDragStop 在落库前把 NODE_TITLE_H 加回去（反向操作），
-  // 于是磁盘上的 `positions[id]` 始终遵循 ComfyUI 的「主体顶部」约定，
-  // 拖多少次也不会每次保存都累出 30px 的偏移。
-  //
-  // 给了 `n.size` 就把节点外框强制成 ComfyUI 的精确尺寸：
-  // 宽 = size[0]，高 = `size[1] + NODE_TITLE_H`（原始 `size[1]` 是**主体内容**
-  // 高度，理由见 NODE_TITLE_H 的注释）。`data.size.h` 里带的主体内容高度
-  // 正好就是 `size[1]`。
+  // 真实 ComfyUI 图节点的共享构建器。锚点：React Flow 的 `position` 是**卡片**左上角
+  // （标题栏顶部），主体画在它**下面** NODE_TITLE_H（30px）；ComfyUI 的 `pos[1]` 是
+  // 节点**主体**顶部，故这里减去 NODE_TITLE_H，onNodeDragStop 落库前再加回去 —— 磁盘上
+  // 的 `positions[id]` 始终是「主体顶部」约定，拖多少次都不会累出 30px 偏移。给了
+  // `n.size` 就把外框强制成精确尺寸：宽 = size[0]，高 = size[1] + NODE_TITLE_H。
   const NODE_ANCHOR_OFFSET_Y = NODE_TITLE_H;
   /* SAFETY: 类型断言已复核 */
   const graphById = detail.graph as Record<string, GraphEntry | undefined>;
@@ -504,13 +440,10 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
     },
   });
 
-  /* 子图封装节点：class_type 是 UUID，ComfyUI 经 proxyWidgets 暴露输入，
-   *  每个槽位带一个 localised_name。
-   *
-   *  父卡片上**不再**渲染 IO 行：它现在是一枚紧凑的「统计 + 下钻入口」
-   *  芯片（见 WfSubgraphNode）。下钻（双击，或点头部的展开按钮）才加载
-   *  子图内部的图，那里的 IO 成员节点会被包进 INPUTS / OUTPUTS wfGroup。
-   */
+  /* 子图封装节点：class_type 是 UUID，ComfyUI 经 proxyWidgets 暴露输入，每个槽位带
+   *  一个 localised_name。父卡片上**不再**渲染 IO 行：现在是一枚紧凑的「统计 + 下钻
+   *  入口」芯片（见 WfSubgraphNode）。下钻（双击，或点头部的展开按钮）才加载子图内部
+   *  的图，那里的 IO 成员节点会被包进 INPUTS / OUTPUTS wfGroup。 */
   const buildSubgraphNode = (n: ComfyGraphNode, pos: { x: number; y: number }): Node => {
     /* 有**外部**连线的子图输入，就是父工作流接进来的那些。判据取自
      *  detail.graph[子图节点id].inputs —— 这里的键，只要值是
@@ -554,15 +487,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   /* ── 分组框（背景层，在所有内容之后）── */
   const groups = detail.groups ?? [];
   const groupDepth = computeGroupDepths(groups);
-  /* ComfyUI 的分组 id 是裸整数（"1"、"2"、"32"），既可能与图节点 id 撞车，
-   *  也可能**彼此**撞车（子工作流的 `groups` 数组里合法地允许两条 `id` 相同的
-   *  记录，例如同一个内部图里出现两次 id="32"）。外层的 `group:` 前缀能挡住
-   *  与节点 id 的碰撞，对分组之间的碰撞却毫无作用 —— 后者会让 React Flow 的
-   *  <MiniMapNodes> 报
-   *  `Encountered two children with the same key, "group:32"`。
-   *  这里按「已用过的 id」去重，撞车时补 `-${i}` 后缀。
-   *  `groupDepth`（以原始 g.id 为键）与 WfGroupNode 的 data.title/color
-   *  都不受影响。 */
+  /* ComfyUI 的分组 id 是裸整数（"1"、"2"、"32"），既可能与图节点 id 撞车，也可能
+   *  **彼此**撞车（`groups` 数组合法地允许两条 id 相同的记录）。外层 `group:` 前缀挡住
+   *  与节点 id 的碰撞，对分组之间却无用 —— 后者会让 React Flow 的 <MiniMapNodes> 报
+   *  `Encountered two children with the same key, "group:32"`。这里按「已用过的 id」去重、
+   *  撞车补 `-${i}` 后缀；`groupDepth` 与 WfGroupNode 的 data.title/color 不受影响。 */
   const usedGroupIds = new Set<string>();
   const groupNodes: Array<Node> = groups
     .filter((group) => group.bounding[2] > 0 && group.bounding[3] > 0)
@@ -630,22 +559,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
    *  不再按 is_input_endpoint / is_output_endpoint 把某些节点换成 wfIoPort。
    *  那种做法在「每个节点同时带两个标记」的子图上直接塌掉，
    *  而参考布局本身要求内层节点**保持**完整卡片。 */
-  /* ── 1) Saved positions ──
-   *  Guard against an empty `{}` (which a "重置布局" (reset layout) can
-   *  （空对象是 truthy）—— 没有这道守卫，每个节点都会落到
-   *  `{padX, padY}` 默认值上、全部堆在原点。有了守卫，
-   *  空 → 视为「没有位置」→ 走 Kahn 自动布局。
-   *
-   *  同时防**部分位置**（数量少于 realNodes.length）。这个工作流可能处于
-   *  「用户只手动摆了两个节点」的状态（例如以 JSON 导入后、打开编辑器之前
-   *  随手拖了一两个）；此时「用保存的位置」那条分支会把其余没位置的节点全按
-   *  `{padX, padY}` = (80, 80) 摆，视觉上就是 100+ 个节点叠在同一个卡片后面。
-   *  判据：Object.keys(detail.positions).length < realNodes.length →
-   *  把这份快照当作「不存在」，对整个图跑 Kahn，
-   *  给一个可预期、网格状的初始布局。用户之后仍可拖动微调。
-   *  「混着来」（一部分用保存位置、一部分用 Kahn）理论上更好，
-   *  实际结果很乱：自动布局假定画布是空的，半摆好的节点会打乱最长路径的
-   *  层级划分，兜底布局反而更难看。 */
+  /* ── 1) Saved positions ── 空 `{}` 是 truthy，没有守卫时每个节点都会落到
+   *  `{padX, padY}`、全部堆在原点，故空对象视为「没有位置」走 Kahn 自动布局。同时防
+   *  **部分位置**（数量少于 realNodes.length）：用户可能只手动摆了少数节点，此时「用
+   *  保存位置」会把其余全按 (80,80) 摆，视觉上 100+ 节点叠在同一张卡后面。判据
+   *  `Object.keys(detail.positions).length < realNodes.length` → 整图跑 Kahn。 */
   // 单一格式（不再区分 RAW / API 视图）。节点布局优先使用
   // detail.positions（已含 rawJson 原始位置 + 用户拖拽覆盖），不足时退回
   // Kahn 拓扑自动布局兜底。
@@ -677,14 +595,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
     ];
   }
 
-  /* 3: hybrid — 客户端 RAW 视图的「部分 saved-positions」兜底
-   *  当 detail.positions 数量不足以覆盖所有 realNodes（典型场景：含子图
-   *  wrapper 的工作流 —— 服务端早期只提了顶层节点 pos，wrapper 内部 17 个
-   *  节点 pos 漏了；现在服务端 extractPositions 已修，理论上不会再走到这里），
-   *  不要粗暴地把整图退回 Kahn 自动布局。改为：
-   *    - 已匹配的节点 → 用真实 LiteGraph pos；
-   *    - 未匹配的节点 → 复用上面算好的 kahn 排到一块独立区域（紧贴第一行下方）。
-   *  这样至少已定位的节点不会"乱跳"，新增的 subgraph 内层节点也不会堆在 (padX, padY)。*/
+  /* 3: hybrid — 客户端 RAW 视图的「部分 saved-positions」兜底。当 positions 数量不足
+   *  覆盖所有 realNodes（典型：含子图 wrapper 的工作流，服务端早期漏了 wrapper 内部
+   *  的节点 pos；现 extractPositions 已修，理论上不再走到这里），不要粗暴退回 Kahn：
+   *  已匹配的节点用真实 LiteGraph pos，未匹配的复用 kahn 排到独立区域（紧贴第一行
+   *  下方）。这样已定位的节点不乱跳，新增内层节点也不会堆在 (padX, padY)。 */
   if (positionsCount > 0 && savedPositions) {
     const positionsById = savedPositions;
     const middleNodes = realNodes.map((realNode) => {

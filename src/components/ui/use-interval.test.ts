@@ -1,15 +1,8 @@
 // @vitest-environment jsdom
 /**
- * `useInterval` —— 「按固定间隔重复跑一个异步动作」的唯一实现
- * （规范 16 §16.2.4.15）。
- *
- * 这条账的形状与 `use-flash-state` 同族（都是时间线），但缺陷不同：
- *  ① 挂载后**不立刻跑一次**，用户要空等一个完整间隔；
- *  ② 后台标签页里**空转**（浏览器把后台定时器降到 ≥1min，请求照发）；
- *  ③ 回调放进依赖数组时**每次渲染都重建定时器**（计时被反复重置）。
- *
- * 用假定时器把时间轴控制住：「切后台暂停、回前台立即补跑」这条只有把
- * `visibilityState` 拿捏住才验得了。
+ * `useInterval` —— 「按固定间隔重复跑一个异步动作」的唯一实现（规范 16 §16.2.4.15）。
+ * 与 `use-flash-state` 同族（时间线）但缺陷不同：① 挂载后不立刻跑一次；② 后台标签页里空转；③ 回调进依赖数组时每次渲染都重建定时器。
+ * 用假定时器控制时间轴；「切后台暂停、回前台立即补跑」只有拿捏住 `visibilityState` 才验得了。
  */
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

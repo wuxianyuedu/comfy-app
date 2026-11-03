@@ -1,16 +1,9 @@
 "use client";
 
 /**
- * LogPanel 的「贴底只追到基线」行为。
- *
- * 若照「时间线一变就 scrollTop = scrollHeight」来写，它**每两秒就成立一次**
- * （几乎每轮轮询都有新行），于是内容每隔两秒整体上移一次，用户刚框住的文本立刻
- * 被滚动冲掉。现在只在**贴着底**时把「已读水位」（基线）钉住，新行在下面累积，
- * 腾出的空间交给页脚的「有 N 条新的日志 · 回到最新」。任何一层成立都不动滚动
- * 位置：不在第 1 页（在看历史）/ 用户没贴着底（自己滚走了）/ 正在框选日志文本。
- *
- * 位置怎么算是纯逻辑（`log-virtual` 的贴底一组）；这里只读写 ref，不用 state
- * ——用 state 承载会让贴底本身触发重渲染，落进「滚动 → 重渲染 → 再滚动」的循环。
+ * LogPanel 的「贴底只追到基线」行为（ISSUE #262 复审）：只在贴着底时钉住已读水位，
+ * 新行在下面累积，腾出的空间交给页脚「有 N 条新的日志 · 回到最新」；不在第 1 页 / 没贴底 /
+ * 正在框选都不动。位置算法是纯逻辑（`log-virtual`）；只读写 ref 不用 state，避免滚动重渲染循环。
  */
 import { useCallback, useEffect, useRef } from "react";
 import { pinPlan, pinScrollTop } from "./log-virtual";
@@ -54,17 +47,9 @@ export function useLogPanelPin(input: {
    * （见 `log-virtual` 的 `pinShouldYield`），是记账值，不进 state。 */
   const appliedTopRef = useRef(0);
 
-  /* ── 贴底：只追到「基线」，不再追着最新跑（ISSUE #262 复审）────────────
-   *
-   * 旧行为是「时间线一变就 scrollTop = scrollHeight」，而它**每两秒就成立一次**
-   * （几乎每轮轮询都有新行），于是内容每隔两秒整体上移一次，用户刚框住的文本立刻
-   * 被滚动冲掉。现在只在**贴着底**时把「已读水位」（基线）钉住，新行在下面累积，
-   * 腾出的空间交给页脚的「有 N 条新的日志 · 回到最新」。任何一层成立都不动滚动
-   * 位置：不在第 1 页（在看历史）/ 用户没贴着底（自己滚走了）/ 正在框选日志文本。
-   *
-   * 位置怎么算是纯逻辑（见 `log-virtual` 的贴底一组）；这里只读写 ref，不用 state
-   * ——用 state 承载会让贴底本身触发重渲染，落进「滚动 → 重渲染 → 再滚动」的循环。
-   */
+  /* ── 贴底：只追到「基线」，不再追着最新跑（ISSUE #262 复审）：只在贴着底时钉住
+   * 已读水位、新行在下面累积；不在第 1 页 / 用户没贴底 / 正在框选都不动滚动位置。
+   * 位置算法是纯逻辑（`log-virtual`）；只读写 ref 不用 state，避免「滚动 → 重渲染 → 再滚动」。 */
   useEffect(() => {
     if (!isOpen) {
       baselineRef.current = 0;
@@ -101,18 +86,9 @@ export function useLogPanelPin(input: {
     if (targetIndex === null) {
       return;
     }
-    /* 贴到目标行的下边缘（减去一个视口高）：位置一律取自**位置表**
-     * `rows[targetIndex]`，那是 `translateY` 与滚动条共用的同一份口径。
-     *
-     * ⚠️ **不能用 `target.offsetTop` 量**。虚拟化之后行的 `offsetParent` 是那层
-     * `translateY` 过的内层容器，`offsetTop` 给的是「它在**当前窗口**里的位置」
-     * 而不是「它在整页内容里的位置」；拿它算 `scrollTop` 会把视口拉回窗口起点
-     * ——用户滚到底就再也回不去底（这条 e2e 抓到的正是它）。
-     *
-     * 目标行在窗口外时它根本不在 DOM 里，这一支天然也走同一个算式：把目标行带进
-     * 窗口，下一轮 effect 按同一张表对齐（两轮同解，不再有「真实节点」与「估算
-     * 位置」两套坐标）。`rows[targetIndex]` 与 `pageLogs` 同源同长；真取不到就
-     * 什么都不做，绝不能乱滚。 */
+    /* 贴到目标行下边缘（减一个视口高）：位置一律取自位置表 `rows[targetIndex]`，与 translateY、
+     * 滚动条同一口径。不能用 `target.offsetTop`——虚拟化后 offsetParent 是 translateY 内层容器，它给
+     * 「窗口内位置」，会把视口拉回窗口起点（e2e 抓到「滚不到底」）；目标行在窗口外时走同一张表对齐，取不到就不动。 */
     const row = rows[targetIndex];
     if (!row) {
       return;
@@ -132,15 +108,9 @@ export function useLogPanelPin(input: {
      * 只读 ref 会出现「滚了但不重渲染、内容不更新」。 */
     setScrollTop(el.scrollTop);
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
-    /* 贴着底 = 用户要看最新，基线就取末条（面板打开时 `autoScroll` 已是 true，
-     * 若再要求 `!autoScroll` 则「从顶部滚到底」永远进不来，基线停在 0，下一轮
-     * 轮询会把用户按回顶部）。
-     *
-     * 这里**只重取基线**（水位锚点），不动 `appliedRef`：那个 ref 回答的是「贴底
-     * 上一次落在哪一行」，只有贴底 effect 自己写过才算数（`pinPlan` 据它判「用户
-     * 有没有接管滚动」）。把滚动事件也算成「已落位」，会让 `pinPlan` 把「贴底刚被
-     * 重取基线」误读成「用户自己滚走了」，于是本轮一步都不动 —— 用户滚到底后贴底
-     * 不再跟到页尾，又回到「滚不到底」。 */
+    /* 贴着底 = 用户要看最新，基线取末条（autoScroll 已 true 时不能再要求 !autoScroll，
+     * 否则「从顶部滚到底」进不来，基线停 0，下一轮轮询把用户按回顶部）。这里只重取基线、
+     * 不动 `appliedRef`（它只由贴底 effect 写；算成已落位会让 `pinPlan` 误读成用户滚走了）。 */
     if (nearBottom) {
       baselineRef.current = Math.max(0, visibleLogs.length - 1);
     }

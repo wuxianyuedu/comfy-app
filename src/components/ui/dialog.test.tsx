@@ -1,23 +1,7 @@
 /**
- * `ui/dialog` 的关得掉、只有一枚关闭按钮、宽度写法的三条契约。
- *
- * 这三条都不是「base-ui 会不会动」，而是**这个仓库在这层之上做过的决定**：
- *
- * 1. **内置关闭按钮只有一枚**。本仓的弹窗形态约定是「自绘 header + 自绘关闭」，
- *    调用处只要自绘就必须传 `showCloseButton={false}` —— 漏传会同时渲染出两枚
- *    位置几乎重合的 ✕：点下去命中的是 DOM 靠后、绝对定位的内置那枚，两枚之间的
- *    间隙还成了「点了没反应」的死区（`DialogContent` 的文件头写的就是这件事）。
- *    所以这里钉的是**默认值 + 关掉之后确实一枚都不剩**，而不是只数一眼。
- * 2. **宽度只有一处下限**：`max-w-[calc(100%-2rem)]`。`sm:max-w-sm` 已被删掉 ——
- *    它带变体、排在所有无变体 utility 之后，连调用处传进来的宽度一起压
- *    （三个日志弹窗的「加宽」按钮长期按了没反应，ISSUE #720）。这条是**类名层**
- *    的哨兵：真实宽度由 Tailwind 产序决定，jsdom 量不到，但「那条带变体的
- *    max-width 有没有长回来」在源码层一眼可判。
- * 3. **本体默认渲染遮罩**（ISSUE #1742）：`DialogContent` 会铺一层带色的
- *    `DialogOverlay`（base-ui 的 `Backdrop`），弹窗背后因此变暗且点不中；只有显式
- *    `showOverlay={false}` 才不铺。此前这里只铺 Portal + Popup，靠基元自动注入的
- *    **无色** `InternalBackdrop` 兜住外部点击 —— 于是绝大多数弹窗背后又亮又像能点。
- *    写这条是因为它曾经是反的（断言「不渲染 Backdrop」），而两件事读注释判不出来。
+ * `ui/dialog` 的三条契约（本仓在 base-ui 之上做过的决定）：**内置关闭按钮只有一枚**（调用处自绘 header 必须传 `showCloseButton={false}`，否则两枚 ✕ 位置几乎重合、中间还成「点了没反应」的死区）。
+ * **宽度只有一处下限** `max-w-[calc(100%-2rem)]`：`sm:max-w-sm` 已删（带变体排在所有无变体 utility 之后，会压掉调用处宽度，ISSUE #720）；jsdom 量不到真实宽度，但带变体的 max-width 有没有长回来在源码层一眼可判。
+ * **本体默认渲染遮罩**（ISSUE #1742）：`DialogContent` 会铺带色的 `DialogOverlay`，弹窗背后变暗且点不中，只有 `showOverlay={false}` 才不铺；此前靠基元无色 `InternalBackdrop` 兜外部点击，导致绝大多数弹窗背后又亮又像能点。
  */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

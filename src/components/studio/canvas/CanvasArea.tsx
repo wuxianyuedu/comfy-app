@@ -21,12 +21,8 @@ import { Button } from "~/components/ui/button";
 import { Hint } from "~/components/ui/hint";
 import { zClass } from "~/lib/shell/overlay-z";
 
-/* ── 画布区 + 右键菜单 + 底部工具栏 ────
-  给内容（如 WorkflowCanvas）包上：
-  - 右键上下文菜单
-  - 底部缩放 / 工具栏条
-  - minimap 开关（左下角）
- */
+/* 画布区：给内容（如 WorkflowCanvas）包上右键菜单、
+   底部缩放/工具栏条与左下角 minimap 开关。 */
 
 export type ContextMenuItem = {
   danger?: boolean;

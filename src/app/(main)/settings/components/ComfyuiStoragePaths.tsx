@@ -1,17 +1,9 @@
 "use client";
 
 /**
- * 「实例目录（只读）」区块（规范 17 §17.2 第③层：纯展示）。
- *
- * 回答的是「这个 ComfyUI Desktop 实例的模型 / 输入 / 输出到底指向哪个盘符」——
- * 应用此前只能给出目录**名**（`GET /api/models`），绝对路径要去 ComfyUI Desktop
- * 自己开「存储」页看。这里把同一份事实摆在设置页里，省掉一次跨应用往返。
- *
- * 严格只读：本区块不发任何请求、不提供编辑入口。数据来自 controller 的
- * `comfyStorage`（服务端读实例目录形态 + `extra_model_paths.yaml` + 桌面元数据
- * 里的启动参数），非桌面实例为 null（不拿别的形态的目录凑数）。
- *
- * 行数据的组装在 `../comfyui-storage-paths-config`（纯派生，可单测）。
+ * 「实例目录（只读）」区块（规范 17 §17.2 第③层：纯展示，不发请求、不提供编辑）。
+ * 数据来自 controller 的 `comfyStorage`（服务端读实例目录形态 + `extra_model_paths.yaml`
+ * + 桌面启动参数），非桌面实例为 null；组装在 `../comfyui-storage-paths-config`（纯派生）。
  */
 
 import type { DesktopStoragePaths } from "~/lib/comfyui/desktop-storage-paths";

@@ -23,16 +23,11 @@ import type { WorkflowIODropPosition } from "../workflow-types";
  * 拖拽经常不触发 drop（只有 dragend），表现成「拖了但顺序没变」。 */
 const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]";
 
-/** 画布`workflow` 节点的可连接端口行。连线型输入渲染一个
- * 骑在左边缘的句柄 + 一个卡片体（STRING → 内联 textarea，IMAGE → 上传
- * 按钮，纯连线型 → 只有端口）；输出渲染右对齐的名字
- * 贴着类型章 + 一个骑在右边缘的句柄。
- *
- * v3：Handle 从外层 row wrapper 移到 subrow 内（subrow 加
- *`relative`），让 Handle 圆心 = subrow 50% = subrow 16h 中心 y=8（相对 row）。
- * Ardot H-pos-in y=85 → 圆心 91 = PortRow1 y=77 + subrow 圆心 y_in_row=14 →
- * 与实测一致。字符串行（86h）= subrow 中心；数字行（33h 整行即 subrow）
- * = 16.5 ≈ 17 → 与 Ardot H-seed-in 圆心 265 一致。 */
+/** 画布 workflow 节点的可连接端口行：连线型输入渲染骑左缘的句柄 + 卡片体
+ *（STRING → 内联 textarea，IMAGE → 上传按钮，纯连线型 → 只有端口）；输出渲染右对齐名字贴类型章 + 骑右缘句柄。
+ * v3：Handle 从 row wrapper 移到 subrow（subrow relative），圆心 = subrow 50% = 16h 中心 y=8（相对 row）；
+ * Ardot H-pos-in y=85 → 圆心 91 = PortRow1 y=77 + subrow 圆心 y_in_row=14；字符串行（86h）= subrow 中心，
+ * 数字行（33h）≈ 17 → 与 Ardot H-seed-in 圆心 265 一致。 */
 export function WirePortRows({
   wireInputs,
   outputs,
@@ -66,12 +61,8 @@ export function WirePortRows({
   draggingKey?: string | null;
   dragOverKey?: string | null;
   onPortDragEnd?: () => void;
-  /** 回调，好让父级在被拖的是
-   * 端口行时同步它的`draggingKey` 状态。镜像
-   * widget 行用的契约（DynamicWorkflowForm 自己的
-   * 状态）。可选 —— 省略时端口行拖拽仍可
-   * 完成`drop` /`reorder`，只是丢掉活跃行的
-   * 高亮。 */
+  /** 回调，让父级在被拖的是端口行时同步 `draggingKey`（镜像 widget 行的契约）。
+   *  可选 —— 省略时端口行拖拽仍可完成 drop/reorder，只是丢掉活跃行高亮。 */
   onPortDragStart?: (ioKey: string) => void;
   onReorder?: (fromKey: string, targetKey: string | null, position: WorkflowIODropPosition) => void;
   onSeedModeChange?: (ioKey: string, mode: string) => void;
@@ -90,14 +81,9 @@ export function WirePortRows({
   values: Record<string, unknown>;
   wireInputs: Array<WorkflowIOEntry & { control: ControlKind; ioKey: string }>;
 }) {
-  /* 行级内联处理器 —— 每次渲染都重建，因为它们很小，
-   * 且每轮渲染重绑闭包能让`draggingKey` 保持
-   * 新鲜，无需在这条热路径上放 useMemo。
-   * 拖拽状态住在 DynamicWorkflowForm（父级），好让
-   * 高亮在 widget 行与端口行之间一致；我们把
-   *`onPortDragStart` /`onPortDragEnd` 回调上抛，好让
-   * 父级在某端口行开始 / 结束拖拽时更新它的
-   *`draggingKey` setter。 */
+  /* 行级内联处理器每轮渲染重建：它们很小，重绑闭包能让 draggingKey 保持新鲜，无需在热路径上 useMemo。
+   * 拖拽状态住在 DynamicWorkflowForm（父级），好让高亮在 widget 行与端口行之间一致；
+   * 这里上抛 onPortDragStart / onPortDragEnd，父级据此更新 draggingKey setter。 */
   /* 落点位置（指针在目标行的上/下半区）：端口行自己持有 —— 上抛给父级的
    * 只有「拖起 / 放下」这两个时机，位置随每条 dragover 变化，放父级会多余
    * 一趟重渲染。指示线画的位置与 onDrop 收到的 position 同源。 */
@@ -209,17 +195,9 @@ export function WirePortRows({
                 {label}
               </span>
               <div className="flex-1" />
-              {/*
-               *`─ value +` 左右式 stepper 替换原生
-               * <input type="number"> 上下箭头。共享 NumberField 与 AR/CR 行
-               * 已经实现的视觉规范（含按动态回弹、disabled 哑光）。
-               *
-               * 值严格 Number() 化：原件偶尔会残留字面量字符串
-               * （如 control_after_generate="fixed"/"randomize" 一旦走漏到
-               * numeric 行的 defaultValue，就会像 4-image 里那样原样露出
-               *"fixed"）。这里把 Number("fixed")=NaN || b.min → 1，恰好
-               * 落回 steps 的合理起始值。
-               */}
+              {/* `─ value +` 左右式 stepper 替换原生 <input type=number> 上下箭头，沿用共享 NumberField / AR/CR 行的视觉规范。
+                  值严格 Number() 化：原件偶尔残留字面量字符串（control_after_generate="fixed"/"randomize" 走漏到数值行
+                  defaultValue 时会原样露出 "fixed"）；Number("fixed")=NaN || b.min → 1，恰好落回 steps 合理起始值。 */}
               <div className="flex-1">
                 <NumberField
                   decimalPlaces={wireInput.control === "float" ? b.decimalPlaces : 0}
@@ -247,18 +225,11 @@ export function WirePortRows({
           );
         }
         {
-          /* ── PortRow · 非数值行 · min-h=86（对应 Ardot 3:40）───────────
- row wrapper 高度在此解锁 ——
- 1. row wrapper 由 h-[86px] overflow-hidden → min-h-[86px]
- （让真实 prompt 多行内容自然撑高，整张 Card 跟随）。
- · control 区 h-[52px] shrink-0 → flex-1 min-h-0
- （在父级 min-h=86 下填满剩余空间；超长内容时 max-h 限
- 滚动）。
- · textarea 用原生`field-sizing: content` 自适应内容高度；
- min-height 28、max-height 120（约 5-6 行）——超出滚动。
- · Handle 圆心 y_in_row=14 不变（subrow 始终锁顶），但
- y_in_card 跟随 row 高度（这是 Ardot 「placeholder=1 行」假
- 设的自然延伸）。*/
+          /* ── PortRow · 非数值行 · min-h=86（Ardot 3:40）── row wrapper 由 h-[86px] overflow-hidden → min-h-[86px]，
+            让真实 prompt 多行内容撑高、整张 Card 跟随；control 区 h-[52px] shrink-0 → flex-1 min-h-0，
+            在父级 min-h=86 下填满剩余，超长内容 max-h 限滚动；textarea 用原生 field-sizing: content 自适应，
+            min-height 28 / max-height 120（约 5-6 行），超出滚动；Handle 圆心 y_in_row=14 不变（subrow 锁顶），
+            y_in_card 跟随 row 高度。 */
         }
         return (
           <div
@@ -294,12 +265,10 @@ export function WirePortRows({
                   {typeDisplay(wireInput.type)}
                 </TypeChip>
               </div>
-              {/* control 区 fill 剩余空间（= row 高度 - pt-1.5 - subrow-16 -
- mt-1.5 - pb-1.5 = row 高度 - 34）；textarea 自适应高度 min 28
- / max 120，超长滚动。
- 外层 wrapper 兜 `overflow: hidden min-w-0`：textarea 的 box 即使被
- intrinsic content size 撑出 wrapper（Chrome `field-sizing: content`
- 的 width 接管实测不可靠），wrapper 也会视觉裁掉。*/}
+              {/* control 区 fill 剩余空间（= row 高度 - pt-1.5 - subrow-16 - mt-1.5 - pb-1.5 = row 高度 - 34）；
+                  textarea 自适应高度 min 28 / max 120，超长滚动。外层 wrapper 兜 overflow: hidden min-w-0：
+                  textarea 的 box 即使被 intrinsic content size 撑出 wrapper（Chrome field-sizing 的 width 接管实测不可靠），
+                  wrapper 也会视觉裁掉。 */}
               <div className="mt-1.5 min-h-0 min-w-0 flex-1 overflow-hidden pr-3.5 pl-3.5">
                 {wireInput.control === "textarea" && (
                   <AutoResizeTextarea

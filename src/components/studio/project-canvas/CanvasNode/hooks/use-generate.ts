@@ -1,12 +1,10 @@
 "use client";
 
 /* CanvasNode 的任务运行逻辑。
- *  负责挂载时对账 effect（陈旧 status="running" 的自愈）
- *  与 runGenerate（工作流分支 + 提示词分支，含轮询生命周期、
- *  下游接收节点自动孵化、图片自导入），以及 retryGenerate
- *  （用快照进错误面板上下文的 payload 重跑）。
- *  所有组件作用域的闭包（d / patch / wfIO / React Flow setter）
- *  都经 args 对象显式传入。 */
+ * 负责挂载时对账 effect（陈旧 status="running" 的自愈）与 runGenerate
+ * （工作流/提示词分支，含轮询生命周期、下游自动孵化、图片自导入）以及 retryGenerate。
+ * 组件作用域闭包（d / patch / wfIO / React Flow setter）都经 args 显式传入。
+ */
 import { emitAppEvent } from "~/lib/app-events";
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
@@ -60,16 +58,11 @@ export function useGenerate({
   getNode,
   screenToFlowPosition,
 }: UseGenerateArgs) {
-  /* 挂载时对账 —— 若节点带着陈旧的 `status="running"` 被
-   *  加载（例如生成进行中 dev server 重启了，或用户在运行中
-   *  关掉 / 重开了页签），内存里的 patch 链已丢失，但 DB 任务
-   *  行早被 runner 的完成回调标成终态 —— 或者 runner 自己也死了，
-   *  则由 runner.ts 里的 RUNNING 回收器标终态。没有这一步，卡片会
-   *  永远停在「● 生成中…」，即使底层任务已是 FAILED/
-   *  SUCCEEDED/CANCELLED。节点自称
-   *  `status="running" + taskId` 时我们挂载时拉一次任务，patch 成真实
-   *  结论。服务端仍在 RUNNING 的不动（那是另一个 runner 实例
-   *  上合法地在跑）。 */
+  /* 挂载时对账 —— 节点带着陈旧 `status="running"` 加载（dev server 重启 / 运行中重开页签）
+   * 时内存 patch 链已丢失，而 DB 任务行可能已被 runner 完成回调或 runner.ts 的 RUNNING
+   * 回收器标成终态；没有这一步卡片会永远停在「● 生成中…」。
+   * `status="running" + taskId` 时拉一次任务 patch 成真实结论；服务端仍 RUNNING 的不动
+   * （那是另一个 runner 实例上合法地在跑）。 */
   const taskIdForReconcile = typeof d.taskId === "string" ? d.taskId : "";
   useEffect(() => {
     if (d.status !== "running" || !taskIdForReconcile) {
@@ -290,12 +283,10 @@ export function useGenerate({
    *  一遍（不发新 task）。这样用户在保存当前错误上下文
    *  的同时，可以一键重试而无需重新输入所有字段。 */
   const retryGenerate = async (req: unknown) => {
-    /* 这一份 `req` 是**外部输入**：它来自节点上的 `errorContext.request`，而那格的
-     * 来源是任务行 `params` 列里存下来的载荷 —— 它跨过一次入参演进（今天的 schema
-     * 与写下那一行的那天不必相同）。过去这里直接 `req as Record<string, unknown>`
-     * 把它送回同一个 cast，于是「旧形状」只会在服务端变成一句英文的 zod 原文。
+    /* 这一份 `req` 是**外部输入**：来自节点 `errorContext.request`，源头是任务行 `params`
+     * 列存下的载荷，跨过入参演进（今天的 schema 与写下那天不必相同）。
      * 预检用的就是服务端那一个 `generateInputSchema`（判据不另立一份），
-     * 拒了就不发这次请求，并把能读的这句话交给错误面板。 */
+     * 拒了就不发请求，并把可读的这句话交给错误面板。 */
     const parsed = parseGenerateInput(req);
     if (!parsed.ok) {
       patch({

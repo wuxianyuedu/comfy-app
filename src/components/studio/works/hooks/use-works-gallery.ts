@@ -1,19 +1,10 @@
 "use client";
 
-// ── 「所有项目」屏的逻辑层（规范 17 §17.2 第②层）──────────────────────────
-//
-// 这一屏原本在组件里直接读 `listProjects()` + `deleteProject()`（本地索引那一侧），
-// 于是**「服务端有一行、索引里没有」的项目在界面上既看不见、也删不掉**
-//（ISSUE #1522 问的正是这个口子）。现在取数走 `listProjectsWithServer()` 的并集，
-// 删除走 `deleteProjectEverywhere()`（索引里没有的那一行也删得掉）。
-//
-// 三条口径：
-//   · 列表 = 本地索引 ∪ 服务端，按 `updatedAt` 倒序（同 id 取较新的一侧）；
-//   · 每一行标 `origin`（服务端独有 / 本地独有 / 两侧都有），视图据此如实说明
-//     这一行从哪来 —— 「服务端有但本地没有」必须看得出口，否则用户删完一个
-//     不该删的才发现删的是什么；
-//   · 拉取失败（离线 / dev server 未起）照常列本地项目，只是 `serverOk` 为 false，
-//     视图据此给一句「服务端那份没拉到」，而不是把空列表端上去。
+// ── 「所有项目」屏逻辑层（规范 17 §17.2 第②层）──
+// 原组件直接 listProjects() + deleteProject()（只本地索引），「服务端有一行、索引里没有」既看不见也删不掉
+//（ISSUE #1522）。现取数走 listProjectsWithServer() 并集、删除走 deleteProjectEverywhere()。
+// 三口径：列表 = 本地 ∪ 服务端按 updatedAt 倒序（同 id 取较新）；每行标 origin（服务端/本地/两侧）如实说明；
+// 拉取失败照常列本地项目、serverOk=false，视图据此说「服务端那份没拉到」，而非端空列表。
 
 import { useCallback, useEffect, useState } from "react";
 

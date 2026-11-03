@@ -53,12 +53,9 @@ export function NodePreviewCard({
       }}
     >
       {/* 头部 —— 可点击展开。实色色带，取自类别。 */}
-      {/* 用原生 `<button>` 而不是 `div + role="button" + onKeyDown`：Enter/Space
-       * 与焦点语义是免费给的（§16.2.4.29 里「6 处在复刻浏览器默认行为」之一）。
-       * **没有走 `~/components/ui/disclosure`**：本卡片的头部是一条取自类别
-       * 的实色色带、刻意镜像 ComfyUI 节点卡外观，与 Disclosure 的「一行文字 +
-       * 折叠标记」不是一个形态（该豁免已在 `scripts/check-ui-primitives.cjs`
-       * 的 `EXEMPT_FILES.P10` 里写明理由）。 */}
+      {/* 原生 `<button>`：Enter/Space 与焦点语义免费（§16.2.4.29）；刻意不用
+          `ui/disclosure`（形态不同，豁免见 scripts/check-ui-primitives.cjs 的
+          EXEMPT_FILES.P10）。 */}
       <Button
         /* 覆盖串排在 `variant` 之后（tailwind-merge 后面的类赢）：圆角 / 悬停底 /
          * 文字色都由这里接管，基元只提供键盘与焦点语义（§16.2.4.2 第 5 条）。 */

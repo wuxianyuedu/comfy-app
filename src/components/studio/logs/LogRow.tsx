@@ -1,17 +1,9 @@
 "use client";
 
 /**
- * 日志行的渲染层。
- *
- * 面板本体同时承担「筛选 / 分页 / 虚拟滚动 / 锚定」与「怎么画一行」两件事，
- * 而后者是完全自洽的一块 —— 行内分片缓存、关键词高亮、行级复制按钮都只被
- * `LogRow` 使用，与面板状态没有耦合。分开之后两边的改动面互不牵连：调行内
- * 配色不必进面板文件里定位。
- *
- * 契约（面板侧依赖的，拆走后不许改）：
- *   `LogRow` 的入参（entry / wrap / keyword / style）与 `data-log-*` 标记；
- *   换行与行高口径必须与 `log-virtual` 的 `LOG_ROW_SINGLE` / `LOG_ROW_LINE`
- *   一致（那个模块的注释指向的就是这里）。
+ * 日志行的渲染层。行内分片缓存、关键词高亮、行级复制按钮只被此处使用，与面板状态无耦合。
+ * 契约（拆走后不许改）：入参 `entry / wrap / keyword / style` 与 `data-log-*` 标记；
+ * 换行与行高口径须与 `log-virtual` 的常量一致。
  */
 
 import React, { memo, useMemo, useState } from "react";
@@ -38,13 +30,9 @@ import {
   type RowToken,
 } from "./log-row-style";
 
-/* 逐消息渲染缓存：一条已解析的日志行是不可变的，所以我们按原始
- * 消息串缓存产出的片段列表。这避免了在父级每次重渲染时
- *（搜索、筛选、滚动、新日志到达）对每一行重跑
- * ANSI / token 解析器 —— 旧面板里最大的单项开销。
- * 内存由 RENDER_CACHE_MAX 限制（溢出时整体清空）。开发注记：
- * Fast Refresh 会在编辑时重执行本模块，所以规则变化天然
- * 从空缓存开始 —— 无需清理陈旧条目。 */
+/* 逐消息渲染缓存：一条已解析的日志行不可变，按原始消息串缓存片段列表，避免父级每次
+ * 重渲染（搜索、筛选、滚动、新日志）都对每行重跑 ANSI / token 解析——旧面板最大开销。
+ * 内存由 RENDER_CACHE_MAX 限制（溢出整体清空）。Fast Refresh 重执行模块时规则变化天然从空缓存开始。 */
 const FRAGMENT_CACHE = new Map<string, Array<RowToken>>();
 const FRAGMENT_CACHE_MAX = 5000;
 
@@ -117,29 +105,10 @@ function highlightNeedle(text: string, needle: string): React.ReactNode {
 }
 
 /**
- * 一段文本 → 其中「像本机路径」的那几段变成可点的按钮（ISSUE #1365）。
- *
- * 用户反馈：面板里那一列路径只是紫字，看得见却点不动 —— 要打开得自己抄进资源
- * 管理器，而启动排障时正是最需要「点一下就到现场」的时候。
- *
- * 分工（三层各自有单测）：**认得出**归 `~/lib/log/log-path-tokens`（纯函数，
- * 判据在那一侧）、**点得动**归 `~/components/studio/logs/use-reveal-log-path`
- * （重入 + 成功/失败反馈）、**打得开**归 `~/lib/shell/reveal-path` 与它的路由
- * （命令形态 + 检出目录闸门）。这里只做「把区间映射成按钮」。
- *
- * 识别**在片段之内**做，不跨片段：片段是既有的视觉切分，重排它的代价是让「上色」
- * 与「可点」两层互相牵制（改一处配色要连带复核点击区间）。
- *
- * **无 ANSI 的行里，片段边界与路径边界现在恒等** —— 上色层的路径区间直接取自
- * `findLogPathTokens`（`log-row-style` 的 `styledSpans`），所以一条带空格的路径
- * （`C:\Program Files\…`）整条落在一个片段里，不会被切成「可点的前半截 + 认不出的
- * 后半截」。此前两层各持一份路径判据、且上色那份用 `[^\s]*` 断在空格处，面板给出
- * 的是指向 `C:\Program` 的按钮（点开只是「找不到可在文件管理器里打开的路径」）。
- *
- * 仍会切在路径中间的只剩一种行：**带 ANSI SGR 的行**（`parseAnsiSegments` 按颜色
- * 变化切，判据在颜色而不在文本）。那是有意的取舍 —— 尊重子进程自己给的配色，代价是
- * 这种行里的路径可能只点得到前半截；看不清的那一段最多回到「不可点」，与既有行为一致。
- */
+ * 一段文本 → 「像本机路径」的几段变成可点按钮（ISSUE #1365）。三层分工：识别归
+ * `log-path-tokens`、点击归 `use-reveal-log-path`、打开归 `reveal-path` 及路由，这里只做区间→按钮。
+ * 识别在分片内做；无 ANSI 行的区间取自 `findLogPathTokens`，带空格路径整条落一片。
+ * 带 ANSI SGR 的行仍可能切在路径中间（尊重子进程配色，代价是可能只点得到前半截）。 */
 function PathLinkedText({ text }: { text: string }): React.ReactNode {
   const tokens = findLogPathTokens(text);
   if (tokens.length === 0) {
@@ -166,14 +135,8 @@ function PathLinkedText({ text }: { text: string }): React.ReactNode {
 
 /**
  * 一个可点的路径。
- *
- * 视觉：仍是原来的紫字（`TOKEN_CLASS["magenta-bright"]` 那档不去动它 —— 它是终端
- * 观感的一部分），只加**下划线**与悬停高亮表达「这里能点」。刻意不改成链接蓝：
- * 这一列路径的紫是既有的视觉语言，换色会让老用户以为「路径没了」。
- *
- * 反馈：挂在按钮自己身上（与行内复制按钮同一套口径）—— 日志是密集列表，没有地方
- * 放常驻说明，而「点了有反应」这件事必须在**点的那一处**看得出来。失败的原因
- * （服务端给的那句）进 `title`，鼠标停一下就能看到。
+ * 视觉：保持紫字（`TOKEN_CLASS["magenta-bright"]`，终端观感的一部分），只加下划线与悬停高亮；
+ * 刻意不改链接蓝，免得老用户以为「路径没了」。反馈挂在按钮本身：失败原因（服务端那句）进 `title`。
  */
 function RevealPathButton({ path, children }: { children: React.ReactNode; path: string }) {
   /* 回执与成功态**必须同生共死**：两个独立定时器在时长一改就会漂移，留下
@@ -231,18 +194,9 @@ function RevealPathButton({ path, children }: { children: React.ReactNode; path:
 }
 
 /**
- * 一行日志末尾的复制按钮。
- *
- * 为什么必须有它（用户反馈第 2 条）：「日志多了我想复制报错文本还是复制不了，
- * 我刚选中内容就刷走了」。此前唯一的出口是标题栏上的「复制**全部**日志」——
- * 用户要的是一行，拿到的却是 2000 行，还得自己在里面搜。
- *
- * 它也让「选区」这件事变得不重要：不必先框住文本（框到一半可能被新日志/滚动
- * 打断），点一下就拿走整行。
- *
- * 反馈是本地的、按行独立的：连点不会互相覆盖，也不需要全局 toast——按钮自己
- * 在 1.2s 内显示「已复制」，且**只在成功时**改口（写剪贴板失败时说「已复制」
- * 是撒谎，反而让用户把一次失败的复制当成成功）。
+ * 一行日志末尾的复制按钮（用户反馈第 2 条：「想复制报错文本还是复制不了，刚选中就刷走了」）。
+ * 此前唯一出口是「复制全部日志」，用户要一行却拿到 2000 行，还得自己搜；它也让选区变得不重要。
+ * 反馈本地、按行独立：1.2s 内显示「已复制」，且**只在成功时**改口（失败说已复制是撒谎）。
  */
 function RowCopyButton({ entry }: { entry: LogEntry }) {
   const [outcome, setOutcome] = useState<"idle" | "done" | "failed">("idle");
@@ -318,20 +272,10 @@ function RowCopyButton({ entry }: { entry: LogEntry }) {
 }
 
 /**
- * 一行日志。
- *
- * `height` 由**虚拟窗口**给出（`log-virtual` 的估算高度），这里写成内联样式：
- * 估算与 `leading-snug` 的实际行高必须同口径，否则累计误差会让滚动位置与
- * 内容错开（行高常量见 `LOG_ROW_SINGLE` / `LOG_ROW_LINE`）。
- *
- * 同时 `overflow-hidden`：高度被钉死之后，内容若比估算的高就会溢到下一行上，
- * 把两行叠在一起（不换行时尤其明显）。
- *
- * comfy-cli 原始输出行（`[comfy-cli 原始] {json}`）多一条形态：折叠成一行、
- * 展开后经 `JsonViewer` 显示完整 JSON（判据与解析见 `~/lib/log/log-cli-json`）。
- * 展开**状态**归面板（`useExpansionSet`），展开**高度**归 `log-virtual` 的
- * `LOG_ROW_EXPANDED` —— 行内不自己测高，否则虚拟滚动会与内容错位。
- */
+ * 一行日志。`height` 由虚拟窗口给出并写成内联样式：估算与 `leading-snug` 实际行高须同口径，
+ * 否则累计误差让滚动位置与内容错开；`overflow-hidden` 防止内容溢到下一行。
+ * comfy-cli 原始输出行折叠成一行、展开经 `JsonViewer`；展开状态归面板，展开高度归
+ * `log-virtual` 的 `LOG_ROW_EXPANDED`（行内不自己测高）。 */
 export const LogRow = memo(function LogRow({
   entry,
   wrap,
@@ -399,13 +343,9 @@ export const LogRow = memo(function LogRow({
       <HighlightedText keyword={keyword} text={entry.message} />
     </span>
   );
-  /* 位置分两态（ISSUE #1703）：`src/…:123` 是可点开的业务位置；`pkg → fn` 是
-   * 「这条日志不是我们写的，是哪个库在哪一层打的」。后者**没有文件可打开**，
-   * 得在提示语里说清「这是库」，否则用户拿着 `react-dom → printWarning`
-   * 去自己的仓库里搜。
-   *
-   * 判据用 `" → "` 而不是「有没有冒号」：冒号分不开两者（Windows 盘符 `C:…`
-   * 就是反例），而 `→` 只有库那一态会产生。 */
+  /* 位置分两态（ISSUE #1703）：`src/…:123` 是可点开的业务位置；`pkg → fn` 是「这条日志
+   * 不是我们写的，是哪个库在哪层打的」。后者没有文件可打开，提示语必须说清「这是库」。
+   * 判据用 `" → "` 而不是冒号：Windows 盘符 `C:…` 是反例，`→` 只有库那一态会产生。 */
 
   const isLibraryLocation = !!location && location.includes(" → ");
   const locationHint = isLibraryLocation

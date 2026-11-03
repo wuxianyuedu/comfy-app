@@ -98,23 +98,9 @@ function OutputCard({
 }
 
 /**
- * 产出网格的**行级虚拟化**（audit §C.1 F4a / ISSUE #2190）。
- *
- * 产出数随项目历史任务数只增不减、每卡挂一个媒体缩略图（视频那一支还
- * `autoPlay`）—— 全量 `map` 的首屏挂载成本与 DOM 规模都线性上涨，而一屏
- * 看得见的只有个位数张。虚拟项 = **一行 2~4 张卡**（响应式多列 grid 不能
- * 直接照抄 ModelLibrary 那份单列行虚拟器），列数按文档型滚动容器的宽度推
- * （镜像旧 Tailwind 断点：基础 2 / ≥640 3 / ≥1024 4，宽度取 `useElementBox`
- * 的 `ResizeObserver`，窗口缩放跟着重算）。
- *
- * 滚动容器不是 window：文档型的滚动锚在 `DocumentFrame` 里
- * （`[data-document-scroll]`，见 ViewContainer 那一段）—— `closest()` 找到它
- * 交给 `useVirtualizer`；`scrollMargin` 用列表相对该锚的 `offsetTop`
- * （锚自带 `position: relative`，offsetParent 链直通）。
- *
- * 固有取舍（audit 原文「滚出视口即卸载媒体」）：视频缩略图滚出视口即卸载，
- * 滚回来重新起播 —— 这正是虚拟化换来的「不挂载」，不在视图层另加缓存绕它
- * （§12.12 / 硬规则 20）。
+ * 产出网格的**行级虚拟化**（audit §C.1 F4a / ISSUE #2190）：产出数只增不减、每卡挂媒体缩略图（视频那支还 `autoPlay`），全量 `map` 的首屏挂载成本与 DOM 规模线性上涨，而一屏看得见的只有个位数张。虚拟项 = **一行 2~4 张卡**（多列 grid 不能照抄 ModelLibrary 的单列行虚拟器），列数按 `useElementBox` 的 `ResizeObserver` 宽度推（旧断点 2 / ≥640 3 / ≥1024 4）。
+ * 滚动容器不是 window：`closest()` 找到 `DocumentFrame` 的 `[data-document-scroll]` 交给 `useVirtualizer`，`scrollMargin` 用列表相对该锚的 `offsetTop`（锚自带 `position: relative`）；未量测（jsdom 尺寸恒 0）回退全量渲染。
+ * 固有取舍：视频缩略图滚出视口即卸载、滚回来重新起播 —— 这正是虚拟化换来的「不挂载」，不在视图层另加缓存绕它（§12.12 / 硬规则 20）。
  */
 function VirtualizedOutputGrid({
   outputs,

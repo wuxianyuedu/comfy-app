@@ -2,10 +2,8 @@
 
 /**
  * 远程模型（OpenAI 兼容）分区（规范 17 §17.2 第③层）。
- *
- * 只维护模型清单：按用途（文本 / 图片 / 视频）分组展示，行内提供
- * 「测试连接」「测试生成」「编辑」「移除」。列表与动作来自 controller，
- * 弹窗交互状态来自`useRemoteModelDialogs`（第②层），两个弹窗各自成组件。
+ * 只维护模型清单（按用途分组 + 行内动作）；列表与动作来自 controller，
+ * 弹窗交互态来自 `useRemoteModelDialogs`（第②层）。
  */
 
 import type { RemoteModelKind } from "~/lib/llm/types";

@@ -140,10 +140,9 @@ describe("ModelLibrary · 前端集成（MSW 数据态流转）", () => {
   });
 
   /**
-   * 现场（业主截图）：一台**没配 ComfyUI 路径**的机器上，弹层写着
-   * 「● ComfyUI 已连接 · 共 0 个目录」，而服务端那次探测必然落空（`comfyBase()`
-   * 指向没人监听的 8188 ⇒ `fetch` 抛错 ⇒ `comfyReachable:false`）。
-   * 视图这一侧只钉一条：服务端说不可达时，「已连接」三个字不许出现在屏上。
+   * 现场（业主截图）：一台**没配 ComfyUI 路径**的机器上，弹层写着「● ComfyUI 已连接 · 共 0 个目录」，
+   * 而服务端探测必然落空（`comfyBase()` 指向没人监听的 8188 ⇒ `comfyReachable:false`）。
+   * 视图侧只钉一条：服务端说不可达时，「已连接」三个字不许出现在屏上。
    */
   it("连接状态行：服务端报不可达时不许出现「已连接」", async () => {
     setBehavior({ comfyReachable: false });

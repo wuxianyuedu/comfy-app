@@ -1,14 +1,7 @@
 /**
  * `schemaSyncNotice` 的判据 —— 状态栏那一格说什么、什么时候什么都不说。
- *
- * 为什么值得单测：这几种相位里有两种是「**不要**打扰用户」（`ready` / `unknown`），
- * 两种是「必须说，而且要给出口」（`missing` / `stale`）—— 把 `ready` 显示成
- * 「一切正常」或者把 `stale` 只说成「出错了」，都是那种只有用户会碰到的错。
- *
- * `canPush`（执行件在不在）决定 missing / stale 的出口形态：本机（仓库检出）
- * 给「立即同步」按钮（actionable，点了还要过确认弹窗）；桌包载荷刻意不带
- * `scripts/db-sync.mjs`（那里没有 drizzle-kit），回落成「跑 pnpm db:push」的
- * 纯命令提示，不给一个点了必然失败的按钮。
+ * 四相位：`ready` / `unknown` 不打扰用户；`missing` / `stale` 必须说且给出口。
+ * `canPush` 决定出口：本机给「立即同步」（需确认弹窗）；桌包不带 `scripts/db-sync.mjs` 则回落纯命令提示。
  */
 import { describe, expect, it } from "vitest";
 

@@ -1,9 +1,6 @@
-// 资源指标描述符：状态栏与首页算力卡共用那一份口径。
-//
-// 这个模块存在的理由是「同一件事只命名一次」，用例就钉这件事：
-//   · 两条显存口径必须**分开命名**（物理 vs CUDA 逻辑），被合并成一根「显存」就是撒谎；
-//   · 渲染次序固定（物理 → ComfyUI → 内存），两处消费点不该出现两种顺序；
-//   · 缺读数的档整档隐藏 —— 画成 0% 会把「读不到」说成「没用」，是另一种错法。
+// 资源指标描述符：状态栏与首页算力卡共用那一份口径。用例钉三件事 ——「同一件事只命名一次」：
+// 两条显存口径分开命名（物理 vs CUDA 逻辑，合并即撒谎）；渲染次序固定（物理 → ComfyUI → 内存）；
+// 缺读数的档整档隐藏（画成 0% 会把「读不到」说成「没用」）。
 import { describe, expect, it } from "vitest";
 
 import {
@@ -22,20 +19,14 @@ function bar(usedGiB: number, totalGiB: number, pct: number) {
 
 /** 只给选择器需要的三档，其余字段与本题无关。 */
 function view(
-  over: Partial<
-    Pick<ComfyStatusViewModel, "smiVram" | "cudaVram" | "ram">
-  > = {},
+  over: Partial<Pick<ComfyStatusViewModel, "smiVram" | "cudaVram" | "ram">> = {},
 ): Pick<ComfyStatusViewModel, "smiVram" | "cudaVram" | "ram"> {
   return { smiVram: null, cudaVram: null, ram: null, ...over };
 }
 
 describe("RESOURCE_METRICS 口径命名", () => {
   it("次序固定为 物理显存 → ComfyUI 显存 → 内存", () => {
-    expect(RESOURCE_METRICS.map((m) => m.key)).toEqual([
-      "smiVram",
-      "cudaVram",
-      "ram",
-    ]);
+    expect(RESOURCE_METRICS.map((m) => m.key)).toEqual(["smiVram", "cudaVram", "ram"]);
   });
 
   it("两条显存口径各自有名、且都在 title 里点名口径来源", () => {
@@ -69,11 +60,7 @@ describe("selectVisibleResourceMetrics", () => {
         smiVram: bar(3, 12, 25),
       }),
     );
-    expect(out.map((m) => m.descriptor.key)).toEqual([
-      "smiVram",
-      "cudaVram",
-      "ram",
-    ]);
+    expect(out.map((m) => m.descriptor.key)).toEqual(["smiVram", "cudaVram", "ram"]);
     expect(out[0]?.bar.used).toBe(3 * GIB);
   });
 
