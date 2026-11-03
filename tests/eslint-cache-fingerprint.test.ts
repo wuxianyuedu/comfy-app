@@ -199,8 +199,10 @@ describe("postinstall 入口接线（ISSUE #1399）", () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
-    const lintScript = pkg.scripts.lint ?? "";
-    expect(lintScript, "package.json 里没有 lint 脚本？").not.toBe("");
+    // #2777 第一步起 `lint` 是「eslint + oxlint」的组合命令，eslint 的参数
+    // 落在 `lint:eslint` 这一档，缓存指纹仍以它为准。
+    const lintScript = pkg.scripts["lint:eslint"] ?? pkg.scripts.lint ?? "";
+    expect(lintScript, "package.json 里没有 lint:eslint / lint 脚本？").not.toBe("");
     const location = /--cache-location\s+(\S+)/.exec(lintScript)?.[1];
     expect(location, "lint 脚本没带 --cache-location 了？").toBeTruthy();
     expect(location).toBe(CACHE_DIR_REL);
