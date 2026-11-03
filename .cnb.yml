@@ -2337,10 +2337,14 @@
   #
   # 它回答一个问题：镜像格（主列开头那一格 `GitHub 镜像同步`）派发出去的那一笔
   # head_sha，GitHub Actions 那边跑完了没有、结论是什么。**主路径**轮询
-  # `GET /repos/{owner}/{repo}/actions/runs?head_sha=<sha>` 按 workflow run 的
-  # `conclusion` 判定；主路径读不到任何 run（Actions 权限缺 / head_sha 无匹配）时
-  # **回落** `GET .../commits/{sha}/check-runs`。sha 的推导与镜像格同源
-  # （同一笔 `CNB_PULL_REQUEST_IID` → 同一镜像 ref → 同一 head_sha）。
+  # `GET /repos/{owner}/{repo}/actions/runs?event=repository_dispatch`，再用
+  # `display_title`（= pr-gate.yml 的 run-name，内含 payload 的 head_sha）认领本跑，
+  # 按 workflow run 的 `conclusion` 判定 —— 不用 `?head_sha=`：dispatch 触发的 run
+  # 其 head_sha 落默认分支 HEAD，payload 的 sha 只在 client_payload，按它过滤恒得
+  # 零条（PR #3080 线上实测）。主路径读不到本跑的 run（Actions 权限缺 /
+  # display_title 认不出）时**回落** `GET .../commits/{sha}/check-runs`（需 workflow
+  # 主动建 check-run 才有效 —— 当前未建，读到零条按「还没跑完」继续等，不误判）。
+  # sha 的推导与镜像格同源（同一笔 `CNB_PULL_REQUEST_IID` → 同一镜像 ref → 同一 head_sha）。
   #
   # 为什么排在**主列末尾**：镜像格一跑完 GitHub 那边才起跑，回读放得越靠后，
   # 留给 GitHub 完成的窗口越大；且本格只做 API 读数、零构建，挂在最后不会挡住

@@ -162,16 +162,18 @@ describe("纯函数", () => {
 
   it("dispatchPayload：event_type 与 client_payload 逐键对应 workflow 的消费面", () => {
     const p = dispatchPayload({
-      ref: mirrorRefFor("2649"),
-      headSha: SHA,
       baseSha: "aa".repeat(20),
+      cnbCommit: "bb".repeat(20),
+      headSha: SHA,
       prNumber: "2649",
+      ref: mirrorRefFor("2649"),
     });
     expect(p.event_type).toBe("cnb-pr-sync");
     expect(p.client_payload).toEqual({
-      branch: "cnb-pr-2649",
-      head_sha: SHA,
       base_sha: "a".repeat(40),
+      branch: "cnb-pr-2649",
+      cnb_commit: "b".repeat(40),
+      head_sha: SHA,
       pr_number: "2649",
     });
   });

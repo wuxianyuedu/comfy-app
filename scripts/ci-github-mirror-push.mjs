@@ -227,12 +227,18 @@ export function buildPushUrl(repo, token, user = "oauth2") {
  * 组装派发 payload（形状与 `.github/workflows/pr-gate.yml` 的
  * `client_payload` 消费面一一对应）。
  *
- * @param {{ref: string, headSha: string, baseSha: string, prNumber: string}} args
+ * @param {{ref: string, headSha: string, baseSha: string, cnbCommit: string, prNumber: string}} args
  * @returns {{event_type: string, client_payload: Record<string, string>}}
  */
-export function dispatchPayload({ baseSha, headSha, prNumber, ref }) {
+export function dispatchPayload({ baseSha, cnbCommit, headSha, prNumber, ref }) {
   return {
-    client_payload: { base_sha: baseSha, branch: ref, head_sha: headSha, pr_number: prNumber },
+    client_payload: {
+      base_sha: baseSha,
+      branch: ref,
+      cnb_commit: cnbCommit,
+      head_sha: headSha,
+      pr_number: prNumber,
+    },
     event_type: EVENT_TYPE,
   };
 }
@@ -241,7 +247,7 @@ export function dispatchPayload({ baseSha, headSha, prNumber, ref }) {
  * 从环境变量收口本次镜像的上下文；缺哪件就念哪件（fail-closed 的「读数」半边）。
  *
  * @param {{env: Record<string, string | undefined>, runGit: (args: string[]) => {code: number, stdout: string, stderr: string}}} io
- * @returns {{ok: true, repo: string, token: string, iid: string, ref: string, headSha: string, baseSha: string} | {ok: false, reasons: string[]}}
+ * @returns {{ok: true, repo: string, token: string, iid: string, ref: string, headSha: string, baseSha: string, cnbCommit: string} | {ok: false, reasons: string[]}}
  */
 export function resolveContext(io) {
   const { env, runGit } = io;
@@ -264,6 +270,10 @@ export function resolveContext(io) {
   return {
     /* base sha 只进 payload（GitHub 侧对账用），缺席不阻断 —— 那一格不读它。 */
     baseSha: (env.CNB_PULL_REQUEST_TARGET_SHA ?? "").trim(),
+    /* CNB_COMMIT（源分支 head）也只进 payload：GitHub 侧重档的「格式化提交与行为改动
+     * 分离」判据（reformat-preview-range.mjs）需要它才能认出合成合并预览的两个父。
+     * 缺席不阻断 —— 缺了那一档照旧退「没判」，与 CNB 侧缺变量的行为一致。 */
+    cnbCommit: (env.CNB_COMMIT ?? "").trim(),
     headSha: headSha.stdout.trim(),
     iid,
     ok: true,
@@ -501,6 +511,7 @@ export async function runMirror(io) {
   const url = buildPushUrl(ctx.repo, ctx.token, (env.GITHUB_MIRROR_USER ?? "").trim() || "oauth2");
   const payload = dispatchPayload({
     baseSha: ctx.baseSha,
+    cnbCommit: ctx.cnbCommit,
     headSha: ctx.headSha,
     prNumber: ctx.iid,
     ref: ctx.ref,

@@ -34,6 +34,12 @@
 #     node24，新增 pnpm v11 支持，输入面不变。
 name: PR gate (mirror)
 
+# run-name 进 run 列表的 display_title：CNB 回读格按 `event=repository_dispatch`
+# 拉 run 后靠 display_title 里的 head_sha 认领本跑（`?head_sha=` 对 dispatch 触发的
+# run 失效 —— 那类 run 的 head_sha 落默认分支 HEAD，payload 的 sha 只在 client_payload）。
+# 字段名逐字对 `scripts/ci-github-mirror-push.mjs` 的 dispatchPayload（pr_number/head_sha）。
+run-name: "PR #${{ github.event.client_payload.pr_number || 'manual' }} · ${{ github.event.client_payload.head_sha || github.event.inputs.head_sha || github.sha }}"
+
 on:
   repository_dispatch:
     types: [cnb-pr-sync]
@@ -243,6 +249,13 @@ jobs:
   heavy-gates:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      # 「格式化提交与行为改动分离」判据（reformat-preview-range.mjs）认合成合并预览
+      # 时需要 CNB_COMMIT = 源分支 head（checkout 的 head_sha 是合成 merge，CNB_COMMIT
+      # 是它的另一父）。镜像脚本派发时把 CNB 侧的 CNB_COMMIT 写进 payload 的
+      # cnb_commit，这里同名注入 —— 只做 GitHub 侧映射，不改 CNB 侧语义；payload 缺席
+      # 时留空，该判据照旧退「没判」（与 CNB 侧缺变量的行为一致）。
+      CNB_COMMIT: ${{ github.event.client_payload.cnb_commit || '' }}
     steps:
       - name: 检出（按镜像 payload 的 sha）
         uses: actions/checkout@v7
