@@ -302,7 +302,7 @@ export function themeTokens(theme: "light" | "dark", cssText: string): ThemeToke
     order += 1;
     // `@layer` 内的声明优先级低于层外声明；同一层内**后写胜出**。
     const atrule = rule.parent;
-    const layered = atrule?.type === "atrule" && /^layer/i.test(atrule.name ?? "");
+    const layered = atrule?.type === "atrule" && /^layer/i.test(atrule.name);
     const prev = values.get(decl.prop);
     const wins =
       !prev || (prev.layered && !layered) || (prev.layered === layered && prev.order < order);

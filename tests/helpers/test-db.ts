@@ -431,19 +431,18 @@ function sqliteProxyHost(client: Database.Database) {
       }
     }
     const stmt = client.prepare(sql);
-    const bound = params ?? [];
     switch (method) {
       case "get": {
-        return Promise.resolve({ rows: stmt.raw().get(...bound) });
+        return Promise.resolve({ rows: stmt.raw().get(...params) });
       }
       case "run": {
-        stmt.run(...bound);
+        stmt.run(...params);
         return Promise.resolve({ rows: [] });
       }
       case "values":
       case "all":
       default: {
-        return Promise.resolve({ rows: stmt.raw().all(...bound) });
+        return Promise.resolve({ rows: stmt.raw().all(...params) });
       }
     }
   };

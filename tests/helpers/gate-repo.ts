@@ -604,7 +604,9 @@ export function createGateRepo(options: GateRepoOptions): GateRepoHandle {
         stdio: ["ignore", "pipe", "pipe"],
         env: callEnv,
       });
+      // oxlint-disable-next-line no-unnecessary-condition -- spawnSync 起不来时 stdout 运行时为 null，保留两流合一的原始形状
       const stdout = res.stdout ?? "";
+      // oxlint-disable-next-line no-unnecessary-condition -- 同上：stderr 运行时也可能为 null
       const stderr = res.stderr ?? "";
       const both = `${stdout}${stderr}`;
       const status = typeof res.status === "number" ? res.status : null;
