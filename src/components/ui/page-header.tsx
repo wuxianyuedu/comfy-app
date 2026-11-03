@@ -147,11 +147,7 @@ export function PageHeader({
      ⚠️ `helpText` **不算**这一列的成员：没有可见标题时它并到右侧动作组去
      （孤零零贴在最左边会与页签、动作组各隔一大片空白），算进来就会渲染出一个
      只有一颗图标按钮、其余全空的壳。 */
-  const hasTitleBlock =
-    title !== undefined ||
-    titleSuffix !== undefined ||
-    extra !== undefined ||
-    (title !== undefined && helpText !== undefined);
+  const hasTitleBlock = title !== undefined || titleSuffix !== undefined || extra !== undefined;
 
   return (
     <header

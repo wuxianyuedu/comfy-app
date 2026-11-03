@@ -135,6 +135,7 @@ export function appendStepLog(
     index += 1
   ) {
     const known = prev.logs[index];
+    // oxlint-disable-next-line no-unnecessary-condition -- noUncheckedIndexedAccess 下数组下标访问可能为 undefined，? 是类型层必需
     if (known?.t === entry.t && known?.msg === entry.msg) {
       duplicated = true;
       break;

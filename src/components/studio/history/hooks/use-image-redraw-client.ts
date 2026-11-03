@@ -28,6 +28,7 @@ export function useImageRedrawClient(
         return res.workflows.map((w) => ({
           id: w.id,
           name: w.name,
+          // oxlint-disable-next-line no-unnecessary-condition -- taskType 来自 tRPC workflow.list（外部数据），旧服务端可能缺该字段，?? null 是运行期守卫
           taskType: w.taskType ?? null,
         }));
       },

@@ -37,7 +37,6 @@ import {
   ASPECT_RATIO_LABEL_PRESETS,
   CLARITY_SUBGROUP_OF_KIND,
   DEFAULT_ALIGN_MULTIPLE,
-  DEFAULT_ASPECT_RATIO_LABEL_PRESET,
   DEFAULT_DIM_RATIO_PRESET,
   normalizeAlignMultiple,
   parseRatioFromLabel,
@@ -213,7 +212,7 @@ export function AspectMegapixelControl({
    * 三个写入口（比例 / 像素 / 倍数 / 自定义百万像素）都要它，各写一遍会分叉
    * （任一处漏了末级兜底，用户没选过比例时就会被写成空串，节点静默清空）。 */
   const aspectValue = useMemo(
-    () => activeAspect?.value ?? currentAspect ?? DEFAULT_ASPECT_RATIO_LABEL_PRESET.value,
+    () => activeAspect?.value ?? currentAspect,
     [activeAspect, currentAspect],
   );
 

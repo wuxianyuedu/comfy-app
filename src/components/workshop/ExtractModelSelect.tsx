@@ -95,6 +95,7 @@ export function ExtractModelSelect({
   /* 无已缓存结果即视为校验中（探测在选中时即被 effect 触发）。 */
   const selChecking = !!selKey && !selAvail;
   let hint: React.ReactNode = null;
+  // oxlint-disable-next-line no-unnecessary-condition -- channel 由 parseChannelOption 归一化为 local/remote 两档、类型与运行值域都恒真；保留判空作防御，防未来新增空档时静默穿透
   if (channel) {
     const badge = channel === "local" ? "本地" : "远端";
     if (selChecking) {

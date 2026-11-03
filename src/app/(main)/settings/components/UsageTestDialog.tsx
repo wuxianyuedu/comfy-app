@@ -535,6 +535,7 @@ function UsageTestResultPanel({
                     onClick={() => void d.continueUsageWait()}
                     variant="warning-solid"
                   >
+                    {/* oxlint-disable-next-line no-unnecessary-condition -- 外层 !usageTest.querying 已把它收窄成 false，三元留作渲染防御 */}
                     {usageTest.querying ? (
                       <Spinner className="text-primary-foreground size-3" />
                     ) : (

@@ -62,6 +62,7 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
             <p className="text-ink-faint mb-2 text-xs font-semibold">或打开已有项目</p>
             <ul className="border-border-subtle flex max-h-56 flex-col gap-1 overflow-y-auto">
               {projects.map((project) => {
+                // oxlint-disable-next-line no-unnecessary-condition -- listProjects 读自 localStorage 的 JSON.parse(as 断言)，旧版本索引可能缺 nodes
                 const nodeCount = project.nodes?.length ?? 0;
                 return (
                   <li key={project.id}>

@@ -56,6 +56,7 @@ export function useSubgraphSourceModal(params: {
       );
     })();
     return {
+      // oxlint-disable-next-line no-unnecessary-condition -- detail 来自工作流详情响应 / sessionStorage 缓存，旧缓存可能缺 name
       name: detail.name ?? "工作流",
       source: raw,
       isSubgraph: isSubgraphView,

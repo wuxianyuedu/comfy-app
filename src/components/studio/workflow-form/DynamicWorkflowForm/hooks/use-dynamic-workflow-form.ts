@@ -30,6 +30,7 @@ const DRAG_CANCEL_SELECTOR = "input, textarea, select, button, [contenteditable]
  *  指示线画在实际插入位置，落点即所见。取不到几何信息（测试桩 / 理论上
  *  的分离节点）时退回 before。 */
 const positionOf = (event: DragEvent<HTMLDivElement>): WorkflowIODropPosition => {
+  // oxlint-disable-next-line no-unnecessary-condition -- 合成/测试事件可能缺 currentTarget，? 保留为运行时守卫
   const rect = event.currentTarget?.getBoundingClientRect?.();
   const rectPresent = Boolean(rect);
   if (!rectPresent || rect.height <= 0) {
@@ -232,7 +233,7 @@ export function useDynamicWorkflowForm(
          *  —— preventDefault 直接取消这次拖拽。 */
         /* SAFETY: 类型断言已复核 */
         const target = event.target as HTMLElement | null;
-        if (target?.closest?.(DRAG_CANCEL_SELECTOR)) {
+        if (target?.closest(DRAG_CANCEL_SELECTOR)) {
           event.preventDefault();
           return;
         }

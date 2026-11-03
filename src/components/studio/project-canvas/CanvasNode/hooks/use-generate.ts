@@ -83,6 +83,7 @@ export function useGenerate({
         const t = await vanillaApi.task.detail.query({
           id: taskIdForReconcile,
         });
+        // oxlint-disable-next-line no-unnecessary-condition -- t 来自 tRPC task.detail（外部数据），旧服务端可能缺 status，? 是运行时守卫
         if (!t?.status) {
           return;
         }

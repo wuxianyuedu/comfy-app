@@ -283,6 +283,7 @@ export function renderSubgraphWidgetValue(value: unknown): string {
   if (typeof value === "object") {
     return "{…}";
   }
+  // oxlint-disable-next-line no-unnecessary-condition -- 上方分支已穷尽 unknown 的可能类型，此处类型上恒假；保留空值兜底与同族分支形状一致
   if (value === null || value === undefined) {
     return "";
   }
@@ -504,6 +505,7 @@ export function computeKahnLayout(
   const byLevel: Record<number, Array<string>> = {};
   for (const node of realNodes) {
     const lv = level[node.id] ?? 0;
+    // oxlint-disable-next-line no-unnecessary-condition -- Record 下标类型恒为数组，但运行时未赋值时是 undefined，||= 兜底必须保留
     (byLevel[lv] ||= []).push(node.id);
   }
   for (const arr of Object.values(byLevel)) {
@@ -539,6 +541,7 @@ export function buildEdges(
    * 表里时，Flow 节点回落的也是这里。存成 map，让下面的逐边查找保持 O(1)。 */
   const rawOutById = new Map<string, Array<RawOutputMeta>>();
   for (const rawNode of detail.rawNodes ?? []) {
+    // oxlint-disable-next-line no-unnecessary-condition -- rawNodes 来自工作流 JSON 读入（平台 detail），元素可能缺 id
     if (!rawNode?.id) {
       continue;
     }
@@ -547,7 +550,7 @@ export function buildEdges(
 
   const edges: Array<Edge> = [];
   let i = 0;
-  for (const [nodeId, raw] of Object.entries(detail.graph ?? {})) {
+  for (const [nodeId, raw] of Object.entries(detail.graph)) {
     const rawPresent = Boolean(raw);
     if (!rawPresent || typeof raw !== "object") {
       continue;
@@ -715,7 +718,7 @@ export function buildConnectedOutputs(
   outSlotNameById?: Record<string, Array<string>>,
 ): Record<string, Set<string>> {
   const map: Record<string, Set<string>> = {};
-  for (const raw of Object.values(detail.graph ?? {})) {
+  for (const raw of Object.values(detail.graph)) {
     const inp = asRecord(asRecord(raw)?.inputs) ?? {};
     for (const value of Object.values(inp)) {
       if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") {
@@ -783,7 +786,7 @@ export function inferSourceOutNames(
 
     // 静态 + raw 都没有，从消费者（下游节点）的输入键反推
     const bySlot: Record<number, Array<string>> = {};
-    for (const consumerRaw of Object.values(detail.graph ?? {})) {
+    for (const consumerRaw of Object.values(detail.graph)) {
       const inp = asRecord(asRecord(consumerRaw)?.inputs) ?? {};
       for (const [inputKey, value] of Object.entries(inp)) {
         if (!Array.isArray(value) || value.length < 1 || typeof value[0] !== "string") {

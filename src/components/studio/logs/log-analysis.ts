@@ -79,6 +79,7 @@ function serializeOne(a: unknown): string {
   // 保留可能来自序列化错误对象的类栈字符串。
   if (
     typeof a === "object" &&
+    // oxlint-disable-next-line no-unnecessary-condition -- 上方已提前返回 null/undefined，此判据恒真；保留与序列化错误对象的其他分支一致的空值防御
     a !== null &&
     "stack" in a &&
     /* SAFETY: 类型断言已复核 */

@@ -65,9 +65,13 @@ import {
 function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
   return {
     meta: dto.meta,
+    // oxlint-disable-next-line no-unnecessary-condition -- dto 是 fetch 响应浅校验后的 cast（只查外层形状），服务端旧数据可能缺该字段，?? 兜底是运行时守卫
     scriptMarkdown: dto.scriptMarkdown ?? "",
+    // oxlint-disable-next-line no-unnecessary-condition -- dto 是 fetch 响应浅校验后的 cast（只查外层形状），服务端旧数据可能缺该字段，?? 兜底是运行时守卫
     scenes: dto.scenes ?? [],
+    // oxlint-disable-next-line no-unnecessary-condition -- dto 是 fetch 响应浅校验后的 cast（只查外层形状），服务端旧数据可能缺该字段，?? 兜底是运行时守卫
     characters: dto.characters ?? [],
+    // oxlint-disable-next-line no-unnecessary-condition -- dto 是 fetch 响应浅校验后的 cast（只查外层形状），服务端旧数据可能缺该字段，?? 兜底是运行时守卫
     shots: dto.shots ?? [],
     workflowId: "",
     videoWorkflowId: "",
@@ -360,8 +364,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setScenes(draft.scenes);
     setCharacters(draft.characters);
     setShots(draft.shots);
-    setWorkflowId(draft.workflowId ?? "");
-    setVideoWorkflowId(draft.videoWorkflowId ?? "");
+    setWorkflowId(draft.workflowId);
+    setVideoWorkflowId(draft.videoWorkflowId);
     setScriptMarkdown(draft.scriptMarkdown);
   }, []);
 

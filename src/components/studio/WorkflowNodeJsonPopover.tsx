@@ -83,9 +83,11 @@ function buildViewJson(nodeView: RawNodeView | null): RawNodeJson | null {
     if (r.mode !== 0) {
       out.mode = r.mode;
     }
+    // oxlint-disable-next-line no-unnecessary-condition -- widgets_values 来自 ComfyUI 原始 JSON，旧数据可能缺该字段，?. 是运行时守卫
     if (r.widgets_values?.length) {
       out.widgets_values = r.widgets_values;
     }
+    // oxlint-disable-next-line no-unnecessary-condition -- outputs 来自 ComfyUI 原始 JSON，旧数据可能缺该字段，?. 是运行时守卫
     if (r.outputs?.length) {
       out.outputs = r.outputs;
     }
@@ -116,7 +118,7 @@ export function NodeJsonPopover({
   request: NodeJsonViewerRequest;
 }) {
   const json = useMemo(() => getJson(request.nodeId), [getJson, request.nodeId]);
-  const nodeView = useMemo(() => getView?.(request.nodeId) ?? null, [getView, request.nodeId]);
+  const nodeView = useMemo(() => getView(request.nodeId) ?? null, [getView, request.nodeId]);
   const [tab, setTab] = useState<"saved" | "view">("view");
   const viewObj = useMemo(() => buildViewJson(nodeView), [nodeView]);
   const pretty = useMemo(() => {
