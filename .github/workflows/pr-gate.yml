@@ -284,6 +284,10 @@ jobs:
 
       - name: cargo 缓存
         uses: swatinem/rust-cache@v2
+        with:
+          # 仓根没有 Cargo.toml（workspace 在 src-tauri/），缺省 `cargo metadata`
+          # 在根上跑 ⇒ exit 101 噪音（不红，但每跑都刷一条）。指到真 workspace 即消。
+          workspaces: src-tauri
 
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
