@@ -114,6 +114,23 @@ export default defineConfig({
    * 根级 `settings` 不能塞 overrides 里，但 `overrides` 本身受支持。 */
   overrides: [
     {
+      /* `scripts/**` 关掉 `awesomeness/no-novel-comments`（ISSUE #2924）。
+       *
+       * 依据是抽样而不是「嫌吵」：按目录分层抽 114 条（根 91 / launcher-core 14 /
+       * base-check 4 / storybook-checks 3 / lockfile 2 / lib 1），逐条判「复述代码行为」
+       * vs 「为什么 / 契约 / JSDoc 类型 / 模块头 / 禁用理由」，结果**复述型 0 条（0%）**，
+       * 其余是 why/约束 28.1%、JSDoc 类型 57.0%、模块头 14.9%。门禁与取证脚本的长注释
+       * 基本是判据出处、阈值实测、平台/子进程的真实现场 —— 删它们等于删掉「为什么」。
+       *
+       * ⚠️ 这是**示例证据**，不是永久豁免：新增脚本仍按既定口径写注释（不复述代码行为）；
+       * 评审时一旦发现复述型注释即删，并在台账记一处。复述型占比回升到 30% 以上时，
+       * 这一条 override 就该撤掉、改回逐处处置。 */
+      files: ["scripts/**"],
+      rules: {
+        "awesomeness/no-novel-comments": "off",
+      },
+    },
+    {
       files: ["src/server/api/routers/**/*.ts"],
       rules: {
         "eslint-js/no-restricted-syntax": [
