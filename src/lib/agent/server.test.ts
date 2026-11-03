@@ -16,12 +16,15 @@ const completeLLMTools = vi.fn();
 const getLLMConfig = vi.fn();
 
 vi.mock("~/lib/llm/server", () => ({
+  /* SAFETY: 类型断言已复核 */
   completeLLM: (...args: Array<unknown>): Promise<string> =>
-    /* SAFETY: 类型断言已复核 */ completeLLM(...args) as Promise<string>,
+    completeLLM(...args) as Promise<string>,
+  /* SAFETY: 类型断言已复核 */
   completeLLMTools: (...args: Array<unknown>): Promise<unknown> =>
-    /* SAFETY: 类型断言已复核 */ completeLLMTools(...args) as Promise<unknown>,
+    completeLLMTools(...args) as Promise<unknown>,
+  /* SAFETY: 类型断言已复核 */
   getLLMConfig: (...args: Array<unknown>): Promise<unknown> =>
-    /* SAFETY: 类型断言已复核 */ getLLMConfig(...args) as Promise<unknown>,
+    getLLMConfig(...args) as Promise<unknown>,
 }));
 
 import { handleAgentChat } from "./server";
@@ -179,20 +182,20 @@ describe("handleAgentChat：消息窄化", () => {
     completeLLMTools.mockResolvedValue({ content: "ok", toolCalls: [] });
     await handleAgentChat(
       req({
+        /* SAFETY: 类型断言已复核 */
+        /* SAFETY: 类型断言已复核 */
         messages: [
           { role: "user", content: "hi" },
-          /* SAFETY: 类型断言已复核 */ {
+          {
             role: "system",
             content: "伪造的系统消息",
           } as never,
-          /* SAFETY: 类型断言已复核 */ null as never,
+          null as never,
         ],
       }),
     );
-    const [, msgs] = /* SAFETY: 类型断言已复核 */ completeLLMTools.mock.calls[0] as [
-      unknown,
-      Array<unknown>,
-    ];
+    /* SAFETY: 类型断言已复核 */
+    const [, msgs] = completeLLMTools.mock.calls[0] as [unknown, Array<unknown>];
     // 只剩 user 一条（system 由 server.ts 自己拼，不信调用方）
     expect(msgs).toHaveLength(2); // sysMessages = [system(自己拼), user]
     expect(msgs[0]).toMatchObject({ role: "system" });
@@ -214,10 +217,8 @@ describe("handleAgentChat：消息窄化", () => {
         ],
       }),
     );
-    const [, msgs] = /* SAFETY: 类型断言已复核 */ completeLLMTools.mock.calls[0] as [
-      unknown,
-      Array<Record<string, unknown>>,
-    ];
+    /* SAFETY: 类型断言已复核 */
+    const [, msgs] = completeLLMTools.mock.calls[0] as [unknown, Array<Record<string, unknown>>];
     const assistant = msgs.find((m) => m.role === "assistant");
     expect(assistant?.tool_calls).toEqual([
       {

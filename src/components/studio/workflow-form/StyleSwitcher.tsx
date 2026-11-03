@@ -44,7 +44,10 @@ export function StyleSwitcher({
          * 旁边的兄弟一变长它就被挤回内容宽。 */
         fullWidth={!narrow}
         labels={Object.fromEntries(options.map((option) => [option.value, option.label]))}
-        onChange={(value) => onChange(/* SAFETY: 类型断言已复核 */ value as GroupStyle)}
+        onChange={(value) => {
+          /* SAFETY: 类型断言已复核 */
+          onChange(value as GroupStyle);
+        }}
         options={options.map((option) => option.value)}
         value={style}
       />

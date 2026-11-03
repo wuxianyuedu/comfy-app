@@ -93,7 +93,9 @@ export function useModelFolderConfig(): ModelFolderConfigController {
     // 把首次加载延出 effect 体（React 19 规则）。
     // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     const t = setTimeout(() => void loadRef.current(), 0);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+    };
   }, []);
 
   /* 列表与连接状态**直接从查询派生**，不再镜像进 local state。

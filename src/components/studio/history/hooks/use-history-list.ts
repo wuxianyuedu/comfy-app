@@ -122,8 +122,12 @@ export function useHistoryList(): HistoryListController {
     void tasksQ.refetch();
   }, [tasksQ]);
 
-  const openDetail = useCallback((id: string) => setDetailId(id), []);
-  const closeDetail = useCallback(() => setDetailId(null), []);
+  const openDetail = useCallback((id: string) => {
+    setDetailId(id);
+  }, []);
+  const closeDetail = useCallback(() => {
+    setDetailId(null);
+  }, []);
 
   const detailQ = useQuery(
     trpc.task.detail.queryOptions({ id: detailId ?? "" }, { enabled: !!detailId }),
@@ -175,7 +179,9 @@ export function useHistoryList(): HistoryListController {
     setFilter(filterKey);
     setDisplayCount(PAGE_SIZE);
   }, []);
-  const loadMore = useCallback(() => setDisplayCount((count) => count + PAGE_SIZE), []);
+  const loadMore = useCallback(() => {
+    setDisplayCount((count) => count + PAGE_SIZE);
+  }, []);
 
   const deleteTask = useMutation(trpc.task.delete.mutationOptions());
 

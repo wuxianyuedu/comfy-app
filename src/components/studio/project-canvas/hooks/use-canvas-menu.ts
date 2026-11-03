@@ -75,7 +75,9 @@ export function useCanvasMenu({
     setMenu(null);
   }, [menu, screenToFlowPosition, setNodes, setMenu]);
 
-  const onNodeClick: NodeMouseHandler = useCallback(() => setMenu(null), [setMenu]);
+  const onNodeClick: NodeMouseHandler = useCallback(() => {
+    setMenu(null);
+  }, [setMenu]);
 
   return { onPaneContextMenu, createNode, createTestWorkflowNode, onNodeClick };
 }

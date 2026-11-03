@@ -126,7 +126,9 @@ function makeWrapper() {
   };
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 afterEach(() => {
   cleanup();
   behavior = { models: [] };
@@ -134,7 +136,9 @@ afterEach(() => {
   syncCalls = 0;
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 describe("useModelLibrary", () => {
   it("挂载：静默同步后 loading 收敛到 false，并拿到模型行", async () => {
@@ -189,14 +193,22 @@ describe("useModelLibrary", () => {
     ]);
 
     const callsBefore = listInputs.length;
-    act(() => result.current.setFilter("loras"));
+    act(() => {
+      result.current.setFilter("loras");
+    });
     expect(result.current.filtered.map((m) => m.id)).toEqual(["m2", "m3"]);
 
-    act(() => result.current.setQ("anime"));
+    act(() => {
+      result.current.setQ("anime");
+    });
     expect(result.current.filtered.map((m) => m.id)).toEqual(["m3"]);
 
-    act(() => result.current.setQ(""));
-    act(() => result.current.setFilter(ALL_TYPES));
+    act(() => {
+      result.current.setQ("");
+    });
+    act(() => {
+      result.current.setFilter(ALL_TYPES);
+    });
     expect(result.current.filtered).toHaveLength(3);
     // 筛选是纯本地派生：不应该为了筛选再发请求
     expect(listInputs.length).toBe(callsBefore);

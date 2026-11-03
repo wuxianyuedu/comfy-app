@@ -44,7 +44,11 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
           <input
             onChange={textHandler(setName)}
             value={name}
-            {...enterCommit({ onCommit: () => handleCreate() })}
+            {...enterCommit({
+              onCommit: () => {
+                handleCreate();
+              },
+            })}
             className="border-border bg-canvas-deep text-ink placeholder:text-ink-fainter focus:border-border-strong min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
             placeholder="项目名称（可留空，默认「未命名」）"
           />

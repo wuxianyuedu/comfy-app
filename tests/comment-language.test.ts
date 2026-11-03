@@ -498,11 +498,11 @@ describe("注释语言判据（硬闸，规范 §12.4.6）", () => {
 
 describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   test("doc-facts 从 reference-facts 的那一行解析出名单，而不是另存一份", async () => {
-    const mod =
-      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-        extractAsciiOnlyModules: () => Array<string>;
-        FACTS: Array<{ key: string; kind: string }>;
-      };
+    /* SAFETY: 类型断言已复核 */
+    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+      extractAsciiOnlyModules: () => Array<string>;
+      FACTS: Array<{ key: string; kind: string }>;
+    };
     const paths = mod.extractAsciiOnlyModules();
     expect(paths).toContain("src/lib/db-schema-ready.ts");
     expect(paths).toContain("src/server/db.ts");
@@ -516,10 +516,10 @@ describe("白名单只有一份（documentation ⇄ 判据共读）", () => {
   });
 
   test("事实已登记在 FACTS 里（有 key 才参与 doc:check 的核对）", async () => {
-    const mod =
-      /* SAFETY: 类型断言已复核 */ (await import("../scripts/doc-facts.cjs")) as unknown as {
-        FACTS: Array<{ key: string }>;
-      };
+    /* SAFETY: 类型断言已复核 */
+    const mod = (await import("../scripts/doc-facts.cjs")) as unknown as {
+      FACTS: Array<{ key: string }>;
+    };
     expect(mod.FACTS.some((f) => f.key === "comment.language.asciiOnly")).toBe(true);
   });
 

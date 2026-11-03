@@ -77,7 +77,9 @@ export function ShotSizePicker({
           label: shortRatioLabel(preset.label),
           render: <RatioIcon ratio={preset.ratio} />,
         })),
-        onChange: (ratio) => onChange({ ...state, ratio }),
+        onChange: (ratio) => {
+          onChange({ ...state, ratio });
+        },
       },
       {
         label: "像素",
@@ -88,14 +90,18 @@ export function ShotSizePicker({
           label: preset.label,
           subgroup: CLARITY_SUBGROUP_LABELS[preset.kind],
         })),
-        onChange: (clarity) => onChange({ ...state, clarity }),
+        onChange: (clarity) => {
+          onChange({ ...state, clarity });
+        },
         /* 百万像素是连续量：档位之外再给一个能填任意值的步进器（挨着它的选项
          *  渲染，属于「百万像素」这一组）。写出去的 label 与档位同形（"2.5M"），
          *  所以换算 / 摘要 / 下发都不需要为「自由值」多认一种形状。 */
         extra: (
           <MegapixelStepper
             disabled={disabled}
-            onChange={(megapixels) => onChange({ ...state, clarity: megapixelLabel(megapixels) })}
+            onChange={(megapixels) => {
+              onChange({ ...state, clarity: megapixelLabel(megapixels) });
+            }}
             value={currentMegapixels}
           />
         ),
@@ -110,11 +116,12 @@ export function ShotSizePicker({
           value: String(option),
           label: String(option),
         })),
-        onChange: (multiple) =>
+        onChange: (multiple) => {
           onChange({
             ...state,
             multiple: normalizeAlignMultiple(Number(multiple)),
-          }),
+          });
+        },
       });
     }
     return list;
@@ -130,7 +137,9 @@ export function ShotSizePicker({
           <div className="flex items-center gap-2">
             <Button
               className="border-border-strong text-ink-muted hover:bg-subtle hover:text-ink-bright text-3xs h-auto rounded-md px-2 py-1"
-              onClick={() => setTableOpen(true)}
+              onClick={() => {
+                setTableOpen(true);
+              }}
               size="xs"
               variant="outline"
             >
@@ -144,7 +153,14 @@ export function ShotSizePicker({
         sections={sections}
         triggerContent={shotSizeSummary(state)}
       />
-      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
+      {tableOpen && (
+        <SizePresetTableModal
+          onClose={() => {
+            setTableOpen(false);
+          }}
+          scene={scene}
+        />
+      )}
     </>
   );
 }

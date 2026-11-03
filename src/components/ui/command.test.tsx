@@ -19,6 +19,7 @@ import {
 } from "./command";
 
 beforeAll(() => {
+  /* SAFETY: 类型断言已复核 */
   if (!("ResizeObserver" in globalThis)) {
     // jsdom 没有 ResizeObserver；cmdk 的列表高度观察 effect 需要它。
     class ResizeObserverStub {
@@ -32,9 +33,7 @@ beforeAll(() => {
         void 0;
       }
     }
-    /* SAFETY: 类型断言已复核 */ (
-      globalThis as unknown as { ResizeObserver: unknown }
-    ).ResizeObserver = ResizeObserverStub;
+    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = ResizeObserverStub;
   }
   // jsdom 没有 Element.prototype.scrollIntoView；cmdk 选中项会调用它。
   if (typeof Element.prototype.scrollIntoView !== "function") {

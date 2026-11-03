@@ -88,12 +88,12 @@ vi.mock("~/lib/envfile", () => ({ readEnvVar: () => undefined }));
 vi.mock("node:fs", async (importOriginal) => {
   const real = await importOriginal<typeof nodeFs>();
   const keyOf = (p: unknown): string =>
+    /* SAFETY: 类型断言已复核 */
     typeof p === "string"
       ? p
       : p instanceof URL
         ? p.href
-        : /* SAFETY: 类型断言已复核 */
-          (p as { toString(): string }).toString();
+        : (p as { toString(): string }).toString();
   const stub = {
     ...real,
     existsSync: (p: PathLike): boolean => {
@@ -953,10 +953,8 @@ describe("GET 的 lastReport：原样透传，读不出来时按 null", () => {
     putReport("{ 半截");
     const events = await getEvents();
     expect(eventOf(events, "summary").lastReport).toBeNull();
-    expect(
-      /* SAFETY: 类型断言已复核 */ (eventOf(events, "summary").summary as Record<string, unknown>)
-        ?.totalNodes,
-    ).toBe(2);
+    /* SAFETY: 类型断言已复核 */
+    expect((eventOf(events, "summary").summary as Record<string, unknown>)?.totalNodes).toBe(2);
   });
 
   it("报告有效时逐字段原样透（视图侧要读 mode / addedNodes 这些增量字段）", async () => {
@@ -1054,10 +1052,8 @@ describe("GET 的两种返回形态：冷路径流式、热路径直接 JSON", (
     expect(events.map((e) => e.type)).toEqual(["discover_start", "summary", "done"]);
     expect(events[0]).toMatchObject({ parents: [], total: 0 });
     expect(spawnMock).not.toHaveBeenCalled();
-    expect(
-      /* SAFETY: 类型断言已复核 */ (eventOf(events, "summary").summary as Record<string, unknown>)
-        .totalNodes,
-    ).toBe(2);
+    /* SAFETY: 类型断言已复核 */
+    expect((eventOf(events, "summary").summary as Record<string, unknown>).totalNodes).toBe(2);
   });
 
   it("流内部起进程失败 → 出一条 error 事件并把流收尾，不是半截挂着", async () => {

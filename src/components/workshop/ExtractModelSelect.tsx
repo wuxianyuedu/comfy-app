@@ -55,14 +55,16 @@ export function ExtractModelSelect({
     // 服务端会用它探测（而不是拿全局 Base URL 探，避免误报 fetch failed）。
     const probe = channel === "local" ? () => fetchLocalModels() : () => fetchRemoteModels(model);
     void probe().then((res) => {
-      guard.commit(() =>
+      guard.commit(() => {
         setAvailByKey((prev) => ({
           ...prev,
           [selKey]: res.ok ? { kind: "ok" } : { kind: "err", detail: res.detail },
-        })),
-      );
+        }));
+      });
     });
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [selKey, channel, model]);
 
   const options = React.useMemo(() => {

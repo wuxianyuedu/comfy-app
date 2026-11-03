@@ -45,9 +45,13 @@ export function useMarkdownHtml(text: string): string {
       const { loadMarkdownRenderer } = await import("~/lib/markdown");
       const { markdownToHtml } = await loadMarkdownRenderer();
       /* 加载期间 `text` 可能已经变了（用户接着编辑剧本）—— 旧轮次的结果不落地。 */
-      guard.commit(() => setRendered({ from: text, html: markdownToHtml(text) }));
+      guard.commit(() => {
+        setRendered({ from: text, html: markdownToHtml(text) });
+      });
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [text]);
 
   /* 异步提交落在**别的** `text` 上时（守卫与浏览器调度都可能让这一刻晚一拍）

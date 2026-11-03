@@ -60,7 +60,9 @@ export function FlowNodeHeader({
             event.stopPropagation();
             onToggleCollapsed();
           }}
-          onMouseDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
           size="icon-xs"
           style={{ pointerEvents: "auto" }}
           variant="ghost"

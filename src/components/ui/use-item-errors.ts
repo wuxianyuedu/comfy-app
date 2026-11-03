@@ -124,7 +124,12 @@ export function useItemErrors(keys?: ReadonlyArray<string>): ItemErrors {
     [set],
   );
 
-  const clear = useCallback((key: ErrorScope) => set(key, null), [set]);
+  const clear = useCallback(
+    (key: ErrorScope) => {
+      set(key, null);
+    },
+    [set],
+  );
 
   const clearAll = useCallback(() => {
     setErrors((prev) => (Object.keys(prev).length === 0 ? prev : {}));

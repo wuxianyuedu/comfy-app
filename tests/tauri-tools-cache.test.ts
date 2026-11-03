@@ -118,10 +118,10 @@ describe("落点与根", () => {
     /* store 落在**本机真实存在的卷根**上（`path.parse` 认宿主平台，盘符写死会解析不出卷根）。 */
     const volumeRoot = path.parse(ROOT).root;
     const run = () => ({ status: 0, stdout: path.join(volumeRoot, ".pnpm-store", "v11") });
+    /* SAFETY: 类型断言已复核 */
     const pkgName = String(
-      /* SAFETY: 类型断言已复核 */ (
-        JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { name?: string }
-      ).name,
+      (JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { name?: string })
+        .name,
     ).toLowerCase();
     expect(resolveToolRoot({ cwd: ROOT, env: {}, run }).root).toBe(
       path.join(volumeRoot, "ci-tools", pkgName),

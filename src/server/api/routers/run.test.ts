@@ -327,18 +327,16 @@ describe("run 人工侧（#2480）", () => {
       rating: 3,
     });
     let row = await productionRepository.getForUser("user-a", "proj_h");
-    expect(
-      /* SAFETY: 类型断言已复核 */ (row?.shots as Array<Record<string, unknown>>)[0]?.humanRating,
-    ).toBe(3);
+    /* SAFETY: 类型断言已复核 */
+    expect((row?.shots as Array<Record<string, unknown>>)[0]?.humanRating).toBe(3);
     await createCaller(makeCtx()).setHumanRating({
       projectId: "proj_h",
       shotId: "s1",
       rating: null,
     });
     row = await productionRepository.getForUser("user-a", "proj_h");
-    expect(
-      /* SAFETY: 类型断言已复核 */ (row?.shots as Array<Record<string, unknown>>)[0]?.humanRating,
-    ).toBeNull();
+    /* SAFETY: 类型断言已复核 */
+    expect((row?.shots as Array<Record<string, unknown>>)[0]?.humanRating).toBeNull();
     await expect(
       createCaller(makeCtx()).setHumanRating({
         projectId: "proj_h",

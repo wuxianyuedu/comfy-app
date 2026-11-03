@@ -161,7 +161,9 @@ export function NodeJsonPopover({
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
   const accent = request.kind === "subgraph" ? "var(--color-primary)" : "var(--color-info)";
   /** 带透明度的 accent —— `var()` 不能拼 hex alpha，走 color-mix。 */
@@ -191,13 +193,22 @@ export function NodeJsonPopover({
        此前用 `ui/dialog` 配 `top-24 left-1/2` 是**丢掉了锚点定位**：dialog 的
        基类自带 `top-1/2 -translate-y-1/2`，与 `top-24` 叠加后浮层被推到视口之上
        （实测 `top: -174`），头部与 JSON 开头被裁在视口外（ISSUE #717）。 */
-    <Popover modal onOpenChange={(next) => !next && onDismiss()} open>
+    /* SAFETY: 类型断言已复核 */
+    <Popover
+      modal
+      onOpenChange={(next) => {
+        if (!next) onDismiss();
+      }}
+      open
+    >
       <PopoverContent
         anchor={anchorElement}
         aria-label={`节点 #${request.nodeId} 的原始 JSON`}
         className="w-115 max-w-[calc(100vw-2rem)] gap-0 border-0 bg-transparent p-0 shadow-none ring-0"
         collisionPadding={12}
-        onMouseDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => {
+          event.stopPropagation();
+        }}
         positionerClassName="max-h-[60vh]"
       >
         <span className="sr-only">节点 #{request.nodeId} 的原始 JSON</span>
@@ -281,7 +292,9 @@ export function NodeJsonPopover({
             <Hint label={copyFailed ? copyFailureText() : "复制 JSON 到剪贴板"}>
               <Button
                 className="font-normal"
-                onClick={() => handleCopy(pretty)}
+                onClick={() => {
+                  handleCopy(pretty);
+                }}
                 size="xs"
                 style={{
                   background: copied.on ? accentAlpha(15) : "var(--color-subtle)",
@@ -321,46 +334,46 @@ export function NodeJsonPopover({
               borderBottom: "1px solid var(--color-border-subtle)",
             }}
           >
-            {
-              /* SAFETY: 类型断言已复核 */ (["view", "saved"] as const).map((key) => {
-                /* 参数名**不能**叫 `tab`：它会遮蔽上面那个 `tab` state，使
+            {(["view", "saved"] as const).map((key) => {
+              /* 参数名**不能**叫 `tab`：它会遮蔽上面那个 `tab` state，使
                  `active` 恒真 —— 两个页签于是永远同时高亮（旧写法是
                  `const active = tab === tab`，自比较恒真）。 */
-                const active = tab === key;
-                return (
-                  <Hint
-                    key={key}
-                    label={
-                      key === "saved"
-                        ? "执行条目：detail.graph[nodeId] —— 从工作流原件派生的节点条目；不含画布元数据"
-                        : "RAW 格式：detail.rawJson.nodes[id] —— 与整工作流「查看 JSON」RAW 逐字节一致"
-                    }
+              const active = tab === key;
+              return (
+                <Hint
+                  key={key}
+                  label={
+                    key === "saved"
+                      ? "执行条目：detail.graph[nodeId] —— 从工作流原件派生的节点条目；不含画布元数据"
+                      : "RAW 格式：detail.rawJson.nodes[id] —— 与整工作流「查看 JSON」RAW 逐字节一致"
+                  }
+                >
+                  <Button
+                    aria-selected={active}
+                    className="h-auto font-normal"
+                    onClick={() => {
+                      setTab(key);
+                    }}
+                    role="tab"
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 11,
+                      padding: "5px 10px",
+                      borderRadius: "6px 6px 0 0",
+                      border: `1px solid ${active ? accentAlpha(33) : "var(--color-border-subtle)"}`,
+                      borderBottom: active
+                        ? `1px solid ${accentAlpha(20)}`
+                        : "1px solid var(--color-border-subtle)",
+                      background: active ? accentAlpha(13) : "var(--color-subtle)",
+                      color: active ? "var(--color-ink)" : "var(--color-ink-muted)",
+                    }}
+                    variant="ghost"
                   >
-                    <Button
-                      aria-selected={active}
-                      className="h-auto font-normal"
-                      onClick={() => setTab(key)}
-                      role="tab"
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                        padding: "5px 10px",
-                        borderRadius: "6px 6px 0 0",
-                        border: `1px solid ${active ? accentAlpha(33) : "var(--color-border-subtle)"}`,
-                        borderBottom: active
-                          ? `1px solid ${accentAlpha(20)}`
-                          : "1px solid var(--color-border-subtle)",
-                        background: active ? accentAlpha(13) : "var(--color-subtle)",
-                        color: active ? "var(--color-ink)" : "var(--color-ink-muted)",
-                      }}
-                      variant="ghost"
-                    >
-                      {key === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
-                    </Button>
-                  </Hint>
-                );
-              })
-            }
+                    {key === "saved" ? "执行 · 节点条目" : "RAW · 节点视图"}
+                  </Button>
+                </Hint>
+              );
+            })}
           </div>
           <div
             style={{

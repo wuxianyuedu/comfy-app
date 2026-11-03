@@ -73,13 +73,12 @@ describe("默认值", () => {
 });
 
 describe("环境三态", () => {
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["development", true, false, false],
-      ["test", false, false, true],
-      ["production", false, true, false],
-    ] as const,
-  )("%s → isDev/isProd/isTest 互斥且正确", async ([env, isDev, isProd, isTest]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["development", true, false, false],
+    ["test", false, false, true],
+    ["production", false, true, false],
+  ] as const)("%s → isDev/isProd/isTest 互斥且正确", async ([env, isDev, isProd, isTest]) => {
     vi.stubEnv("NODE_ENV", env);
     const { config } = await loadConfig();
     expect(config.env).toBe(env);

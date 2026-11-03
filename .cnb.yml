@@ -302,10 +302,11 @@
     #   · 2026-10-19 把**增量那一档**临时安在本地推送那一跳（`check:premerge` 的
     #     `unitTests` 段）当过渡；**2026-10-20 也撤了** —— 本地这一跳在共享机上的失效
     #     形态是 forks worker 调度超时而不是用例红（实测拦下一次、隔离复跑 1116 条全绿）。
-    #     增量档自此改成 PR 上的 `受影响用例` 一格（跑增量面、不刷整档凭证、并发按
-    #     `ci-load.mjs` 收敛）；**全量**仍归 `每日单元测试`，这一格停用的理由没变。
+    #     增量档先改成 PR 上的 `受影响用例` 一格（跑增量面、不刷整档凭证、并发按
+    #     `ci-load.mjs` 收敛）；2026-11-02 那一格连同 `固定结构用例` 也随 ISSUE #3052
+    #     撤到每日全量单测（增量面是全量子集）。**全量**仍归 `每日单元测试`，这一格停用的理由没变。
     # ⇒ 所以「全量单测在 PR 这一跳的执行者」不是平台，是**每日那一跑**（见上面那条）；
-    #   增量面（受影响用例）的执行者是 PR 上的 `受影响用例` 一格。
+    #   增量面（受影响用例）2026-11-02 起也没有 PR 级执行者了，由每日全量单测接住。
     #   这一格在 `.gates` 里以注释形态留着（可 grep 回原文）—— 判据把「停用」与「删除」分开判。
     # ⚠️ 这个键**保留而不删除**：它是「停用」这件事的执行者（判据见
     # `tests/no-platform-ci-config.test.ts` 的「停用登记」那两条）。
@@ -325,9 +326,7 @@
     # 在配置里分不开，账面全绿（这正是 ISSUE #2227 的现场）。
     COMFYAPP_CI_GATES_ELSEWHERE: >-
       格式化提交分离=scripts/check-reformat-only.cjs,
-      零消费导出=scripts/check-dead-exports.cjs,
-      core 骨架单一事实源=tests/core-spine-single-source.test.ts,
-      core 出口纪律与基类纯度=tests/core-barrel-entry-discipline.test.ts
+      零消费导出=scripts/check-dead-exports.cjs
     # 恢复动作照旧三步：`.gates` 里取消注释 → 名字挪回 `GATES` → 从本清单删掉。
     # `ESLint 零警告` 的**两段历史别读混**：
     #   · 2026-10-16 停过一次，理由是「本地 B 组每条提交都在跑同一条 lint」；那条前提随
@@ -369,22 +368,25 @@
     # 而是**取法换掉了**（分片自取：片长自适应、断了从已落盘的字节接着来），
     # 读数与判读见规范 §13.5.3.5 ⑩ 与 `.gates` 里那两段注释。
     COMFYAPP_CI_GATES: >-
-      镜像身份, 工作区复用读数, 缓存槽读数, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
-      类型检查, 固定结构用例, 受影响用例, 标题行让位, 文件结构硬规则, 跨平台动作对照,
-      import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块, 函数长度 TS,
-      函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
-      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 覆盖率上报,
-      core 骨架单一事实源, 零消费导出, core 出口纪律与基类纯度, 重档静态判据
+      镜像身份, 工作区复用读数, 缓存槽读数, GitHub 镜像同步, 环境前提, Install dependencies, 分支守卫, 提交声明核对, 同步数据库表结构,
+      类型检查, 标题行让位, 文件结构硬规则, 跨平台动作对照, import 别名统一, ComfyUI 端口口径, 内联样式注入, 跨文件重复块,
+      函数长度 TS, 函数长度 Rust, 模块循环依赖, 端口推导跨语言一致性, CHANGELOG 碎片, 主题色扫描,
+      UI/逻辑分离, lib Node-only 声明, oxfmt 格式, 格式化提交分离, 零消费导出, 重档静态判据, GitHub 判决回读
     # master 合并复核那条流水线（push 档）自己的 stage 清单 —— 第三份，按档登记。
     # 2026-10-28 起这一档从「只有合并形态复核一格」扩成「树级校验档」：判的是**合并后的
     # 树**一致不一致、这次运行的事实是什么，不是「这次改动能不能过」（那由 PR 档判），
     # 也不是「今天的 master 全量健康」（那由每日档判）。撤进来的四格入口与旗标一字未改，
-    # 只是换了档位。`覆盖率上报` 刻意**不**在挪动名单里：它读的是同跑 `受影响用例` 产出的
-    # coverage/lcov.info，push 档不跑测试 ⇒ 挪过去就是「报告不在 → 自己跳过」的静默空转。
+    # 只是换了档位。`覆盖率上报` 不在 push 档（push 不跑测试，挪过去只会静默空转）；
+    # 它 2026-11-02 从 PR 档挪到了**每日档**：每日单元测试 跑 `pnpm run test:coverage` 产出
+    # lcov，这一格接在它后面上报（见 `COMFYAPP_CI_DAILY_GATES` 与 `*daily_gates` 末尾）。
     # 名字在这儿 = 那一格必须一字不差地出现在 `master 合并复核` 流水线里（判据
     # `tests/no-platform-ci-config.test.ts` 双向核对：缺一格红、多一格红）。
+    #
+    # 2026-11-02 起加 `GitHub master 镜像` 一格：它不是校验，是这一档的出口动作 ——
+    # GitHub 侧的 schedule（daily / package-desktop）跑镜像仓的默认分支，CNB 的
+    # master 不推过去它们就每天跑一棵旧树（理由全文在 `.push-stages` 里那格的注释上）。
     COMFYAPP_CI_PUSH_GATES: >-
-      合并形态复核, 安装依赖, 生成态文档与源同步, API 文档生成与自检, 文档引用与权威源一致, 工作区出处
+      合并形态复核, GitHub master 镜像, 安装依赖, 生成态文档与源同步, API 文档生成与自检, 文档引用与权威源一致, 工作区出处
     # 定时那一跑（`master."crontab: …"`）自己的 stage 清单 —— **另一个流水线，另一份清单**。
     # 它刻意**不**与上面那一条共用：上面那份是「PR 上跑什么」，这一份是「每天跑什么」，
     # 而这两问的答案如今分在两处：会自己起一堆子进程的那两档（全量单测、`next build`）
@@ -449,7 +451,7 @@
     COMFYAPP_CI_DAILY_GATES: >-
       每日失败立案, 每日令牌权限读数, 每日工具链自证, 每日安装依赖, 每日 Python 可用性,
       每日 Python 探针读数, 每日同步数据库表结构, 每日新鲜度账, 每日生产构建,
-      每日 ESLint 零警告, 每日浏览器安装, 每日全量E2E, 每日单元测试
+      每日 ESLint 零警告, 每日浏览器安装, 每日全量E2E, 每日单元测试, 覆盖率上报
     # ⚠️ `每日浏览器安装` 与 `每日全量E2E` 的相对顺序不许动：装那一件要下 ~120 MiB
     #   （分钟级），而判「装没装成」是零成本的。2026-10-19 起这一格是**唯一**的执行者
     #   （PR 上那一格同日撤到这里）—— 撤的理由是 PR 上再没有任何一步用浏览器
@@ -652,9 +654,13 @@
 # 2026-10-28 起扩格（此前整条只有 `合并形态复核` 一格、20~35 秒）。撤进来的四格判的都是
 # 「**合并后的树**一致不一致 / 这次运行的事实是什么」，不是「这次 PR 改了什么」——
 # 那一类留在 PR 档（判据面在 `ci-incremental-gates.mjs` 的登记里逐条写着为什么收窄安全）。
+# 2026-11-02 起的 `GitHub master 镜像` 是这一档里唯一的例外：它不校验树，是出口动作
+# （把 master 镜像到 GitHub，那边的 schedule 才跑得到新树），取舍写在那格的注释里。
 # 顺序有讲究：
 #   · `合并形态复核` 排最前：形态不对（非合并提交）时后面全部 skipped，
 #     别在没资格的工作区上花 typedoc 的钱；
+#   · `GitHub master 镜像` 紧随其后：它不吃 node_modules，排在前提格之前没有成本；
+#     排在它后面反而会让「文档链红了」连带「镜像不推」—— 那不是想要的对偶；
 #   · `安装依赖` 是前提格：`API 文档生成与自检` 要跑 typedoc，而 push 是全新 job 目录、
 #     `node_modules` 恒不在场（与每日档同一形态，理由见 `每日安装依赖` 那段）。
 #     缺了它，这一档会以「找不到 typedoc」的形态红 —— 与每日档当年「找不到 next」同一族。
@@ -674,6 +680,31 @@
     # 这一格曾有「唯一没钉控制台编码」的历史（规范 §13.5.3.9）：补上那层 `$enc=…`
     # 不改变读数，但让它不依赖「控制台代码页恰好是多少」这个**继承来的**状态。
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-branch-guard.cjs --merge-commit
+  # ── GitHub master 镜像：这一档唯一的**出口动作**（不校验树）──────────────────
+  #
+  # 它要回答的事：GitHub 侧的 schedule（`.github/workflows/daily.yml` /
+  # `package-desktop.yml`）跑的是镜像仓的**默认分支** —— CNB 的 master 不推过去，
+  # 它们每天跑的就是一棵停在旧 SHA 的树，绿灯与「今天的 master 行不行」无关。
+  # 所以每一次 master push 都要把 HEAD 推成那边的 `refs/heads/master`（`--force`：
+  # 镜像语义是「跟住」，漏推之后下一推自己追平）。
+  #
+  # 排位：在 `合并形态复核` **之后**（形态不对的工作区整档 fail-stop，没资格的树不推）、
+  # 在 `安装依赖` **之前**（推送只吃 git 与令牌，不吃 node_modules —— 早推早就位，
+  # 也让后面几格校验红掉时镜像不跟着陪葬：树级校验红 ≠ master 不该被镜像）。
+  #
+  # `--readout` 与 PR 那一格 `GitHub 镜像同步` 同族同理由（#3051）：egress / 仓库 /
+  # 令牌是**外部前提**，实测这条链路上撞过 `Failed to connect to github.com port 443`，
+  # 前提没落地不许叠进树级校验的红；三态原值照旧逐行打在日志里。脚本那一侧的形态
+  # （不派发、不需要 IID、`[mirror-master]` 前缀）见 `scripts/ci-github-mirror-push.mjs`
+  # 文件头「--master」一节。令牌经 push 流水线的 `imports:` 注入（与 PR 那条同一枚）。
+  - name: GitHub master 镜像
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --master --readout
+    # 与 PR 那一格同一档外框：探活 30s×至多 3 次、推送 240s×至多 2 次都在脚本里各自
+    # 限时并对 egress 类失败带退避重试（REMOTE_PROBE_TIMEOUT_MS / PUSH_TIMEOUT_MS /
+    # PROBE_MAX_ATTEMPTS，2026-11-02 起 —— `cnb-pe2-1k6e1uhj8` 连续两跑死在探活 15s
+    # 无回话，同日 19:47 同 runner 却探活通过，是间歇抖动不是硬阻断）。10m 是包住
+    # 最坏墙钟（探活 ≈105s + 推送 ≈485s）与节点冷启动的余量。
+    timeout: 10m
   - name: 安装依赖
     # 与 PR 那一格 `Install dependencies` 的**命令行 / env / timeout 三样都逐字相同**
     # （判据 `tests/no-platform-ci-config.test.ts` 的 `CROSS_LANE_SCRIPT_MIRRORS`）。
@@ -1114,14 +1145,15 @@
     timeout: 45m
   # ── 全量单测（每天一次；为什么不在 PR 上跑，见上面 `COMFYAPP_CI_DAILY_GATES` 那段）──
   #
-  # ⚠️ **它排在整份清单的最后**（业主口径：「最容易出问题的放最后，然后执行过的就不用
-  # 重复执行了」）。这一格是这条流水线上唯一会因**这台机的负载**而单条超时的格子 ——
+  # ⚠️ **它排在整份清单里所有「会红的格」的最后**（业主口径：「最容易出问题的放最后，然后
+  # 执行过的就不用重复执行了」）。这一格是这条流水线上唯一会因**这台机的负载**而单条超时的格子 ——
   # 实测 `cnb-b0l-1k59op66t`：775 份里只 1 份红，红在 `Test timed out in 30000ms`，
   # 而同一时刻另一份检出（`comfy-app-t3-branch2`）在跑全量 vitest、又一份在跑全量 eslint。
   # 它排在中间时，那一单条抖动就把 `每日生产构建` / `每日浏览器安装` / `每日全量E2E`
   # 三格一起 skip 掉（那三格至今零执行记录）。挪到最后之后，同一跑里那三格先拿到结论，
   # 不必为了单测的抖动把前面几格重付一次。
-  # 顺序有判据：`tests/no-platform-ci-config.test.ts` 钉「这一格是每日清单的最后一条」。
+  # 顺序有判据：`tests/no-platform-ci-config.test.ts` 钉「每日单元测试 之后只允许跟
+  # 覆盖率上报（报告型尾巴）」—— 它后面的那一格是报告型、非关键，不会因它 skip 掉前面的格。
   - name: 每日单元测试
     # 入口是**跑法脚本**，不是裸 vitest（ISSUE #1979 的口径，与 `每日生产构建` 同一条
     # 理由）：它内部就是 `pnpm run test:coverage`，外面那一跳是**记账** ——
@@ -1152,6 +1184,17 @@
     #   这一格排到最后之后，被掐的代价不再是「后面三格没了」，但仍要修（见任务：
     #   `full-suite-run.mjs` 的 timeoutMs 在 Windows 上是否真收得掉子树）。
     timeout: 45m
+
+  # ── 覆盖率上报：2026-11-02 从 PR 档挪到每日档（接在 每日单元测试 之后）──────────
+  #
+  # PR 档上的 `受影响用例` / `固定结构用例` 两测试格撤到每日全量单测后，PR 上不再有产出
+  # coverage/lcov.info 的格子，这一格在 PR 上只会「报告不在 → 自己跳过」静默空转；而
+  # 每日档的 `每日单元测试` 跑 `pnpm run test:coverage`，同一 job、同一工作区产出 lcov，
+  # 这一格接在它后面把它交给平台的上报通道。它是**报告型**（不判任何东西，报告不在时跳过
+  # 而不判红），没有 `ifModify`。顺序：必须落在 每日单元测试 之后（见上面那条注释与
+  # `tests/no-platform-ci-config.test.ts`「每日单元测试 之后只允许跟 覆盖率上报」那条判据）。
+  - name: 覆盖率上报
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
 
 # ── 单跑口：三档重档各自一条，前提自动带上 ────────────────────────────────
 #
@@ -1477,18 +1520,12 @@
     - name: 令牌权限读数
       script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-token-scopes.mjs
       timeout: 5m
-    # ── GitHub 镜像同步（ISSUE #2978）：把这一跑判的那份树同步到镜像仓库并派发 ──────
+    # ── `GitHub 镜像同步` 不在这一档了（ISSUE #3051）───────────────────────────────
     #
-    # 双远端镜像（cnb 主）的推送跳：推 HEAD 到 `wuxianyuedu/comfy-app` 的 `cnb-pr-<IID>`
-    # 专属 ref + `repository_dispatch` 派发，GitHub 侧 workflow 按**同一笔 sha** 起跑
-    # —— 两边判同一份树，读数才对得上账。为什么放 endStages：它坏了既不许把门禁的红
-    # 洗成绿，也不许把自己的红叠进门禁的账（与立案格同一档语义）；可见性是它自己的读数。
-    #
-    # fail-closed：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席 ⇒ 退 2 留读数，
-    # 不冒充成功。令牌值一个字节都不回显（脚本内先脱敏，硬规则 17）。
-    - name: GitHub 镜像同步
-      script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs
-      timeout: 5m
+    # 它前移进主列（`.gates` 里 `缓存槽读数` 之后），为什么搬与「搬的是位置、不是那句不承重」
+    # 都写在那一格的锚点上。这里留一行是因为这一档剩下的两格**必须留在 `endStages`**：
+    # 它们的本职是「红也要跑」（平台 grammar：无论 stages 是否成功，endStages 都将执行），
+    # 挪进主列就会被那一次红一起 skip 掉 —— 而立案格要的正是红的时候才有用。
 
 # ── 桌面成品包那一档的失败立案（ISSUE #2550）──────────────────────────────────────
 #
@@ -1638,6 +1675,42 @@
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-cache-slot.mjs
     # 与上面那格同量级（几次 stat）。秒级的事给 5m 只为「卡死要早报」。
     timeout: 5m
+
+  # ── GitHub 镜像同步（**读数，恒不退非零**；ISSUE #2978 / #3051）──
+  #
+  # 双远端镜像（cnb 主）的推送跳：推 HEAD 到 `wuxianyuedu/comfy-app` 的 `cnb-pr-<IID>` 专属
+  # ref + `repository_dispatch` 派发，GitHub 侧 workflow 按**同一笔 sha** 起跑 —— 两边判同一份
+  # 树，读数才对得上账。
+  #
+  # ⚠️ 它从 `endStages` 前移到这里（#3051），改的是**起跑时机**：平台对 endStages 的语义是
+  # 「stages 跑完才执行」，而这条流水线实测整跑 **2546s**（全绿跑 `cnb-aju-1k6bpjnrk` 的逐格
+  # 读数：`固定结构用例` 873.2s / `Install dependencies` 446.4s / `受影响用例` 350.2s /
+  # `重档静态判据` 345.3s），于是 GitHub 那一跑最早只能在一个多小时之后开始 —— 等
+  # 「按同一笔 sha 读回 GitHub 判决」那一格上线，两条远端就成了串行。前移到
+  # `Install dependencies` **之前**，它吃的是 `Prepare` 之后那份已就位的树。
+  #
+  # ⚠️ 前移**不许顺带改掉承重性**：主列的退码是承重的 —— 某一格 `error` 会把排在它后面的格
+  # 整片 `skipped`（本仓把同一条约束写成判据：「每日链里必须有一格排在所有可能红的格之前」，
+  # `tests/no-platform-ci-config.test.ts`）。而 GitHub 这一跳今天还不通（实测
+  # `Failed to connect to github.com port 443 after 21114 ms`，另有 #3014 的令牌被拒、
+  # #3003 的 LFS 缺件、#3027 的自家钩子拦下四形），所以这一格带 `--readout`：内部三态照旧
+  # 打点、对外恒不退非零，与上面 `镜像身份` / `工作区复用读数` / `缓存槽读数` 同一族。
+  # 原来那句「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进门禁的账」**搬的正是这个语义**
+  # —— 搬的是位置，不是那句话。
+  #
+  # 什么时候翻成 fail-closed：等回读那一格上线之后（那时「推不出去」=「这一跑没判过」），
+  # 条件写在 #3051 期望第 3 条；不在本批。
+  #
+  # 令牌那一系一字未动：`GITHUB_MIRROR_TOKEN`（平台侧注入，仓库外配置）缺席 ⇒ 内部照旧判
+  # 「没跑起来」并留下读数，只是读数档不把它折成流水线的红；令牌值一个字节都不回显
+  # （脚本内先脱敏，硬规则 17）。
+  - name: GitHub 镜像同步
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-mirror-push.mjs --readout
+    # 两跳 git 调用各自带超时并对 egress 类失败带退避重试（`scripts/ci-github-mirror-push.mjs`
+    # 的 REMOTE_PROBE_TIMEOUT_MS 30s×3 / PUSH_TIMEOUT_MS 240s×2 —— 没有限时就得吃 git 自己
+    # 那个 21s 的 connect 超时，而那一形过去只被念成「令牌活不活」；重试的立案依据见
+    # 脚本文件头第 8 条）。10m 是外框，包住最坏墙钟（≈105s + ≈485s）与冷启动余量。
+    timeout: 10m
 
   # ── 环境前提（**必须排在 `Install dependencies` 之前**，ISSUE #1959）──
   #
@@ -1847,95 +1920,17 @@
   - name: 类型检查
     script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs tsc --noEmit
 
-  # ── 受影响用例（2026-10-20 新增；它的两个本地执行者同日撤销）──────────────
+  # ── 受影响用例 / 固定结构用例：2026-11-02 从本档（PR）撤到每日全量单测 ──────────
   #
-  # 判的是「固定清单 + 这个 PR 改动牵扯到的用例」（`scripts/affected-tests.mjs` 的
-  # 清单 + `run-affected-tests.mjs` 的启动与超时话术）——**判决链一个字没改**，
-  # 换的只是执行者：`.githooks/pre-commit` 的 C 组与 `.githooks/pre-push` 的
-  # `unitTests` 段同日撤掉（理由见那一格脚本的头注：本地这一跳在共享机上的失效形态
-  # 是 forks worker 调度超时，不是用例红；实测拦下一次、隔离复跑 1116 条全绿）。
-  #
-  # ⚠️ 它**不是** `单元测试` 那一格（全量 + 覆盖率 + 整档凭证）的替代：那一格按
-  #   §13.5.21 仍在每日档（`每日单元测试`），这一格跑的是**增量面**（本检出实测
-  #   88 个用例文件 / 1116 条、几分钟量级），不刷 `整档凭证`、也不判覆盖率门槛。
-  #
-  # ⚠️ 入口是**跑法脚本**（`ci-affected-tests.mjs`），不是裸 vitest：它负责算改动面
-  #   （PR 事件用平台给的 `CNB_PULL_REQUEST_TARGET_SHA` 三点 diff）、按
-  #   `ci-load.mjs` 的现场核数收敛并发（`COMFY_PRECOMMIT_MAX_WORKERS`）、把退出码
-  #   三态转出去。拿不到改动面 ⇒ 退 2（没判 ≠ 绿，§13.6.2）。
-  #
-  # ⚠️ 与其它格一样带 `ci-cp936-exit.mjs`：这一格红的时候要读的正是 vitest 的
-  #   中文输出（哪几条超时、哪几条未校验）。
-  #
-  # ⚠️ **`AggregateError` 不是「这次改动有回归」**：那一屏（一串 `Error:` + 一段
-  #   `AggregateError`）是 worker / 模块装载阶段就炸了 —— 依赖没装上、原生模块版本
-  #   对不上、或环境里串进来的 `npm_config_*` 把解析带歪。一条断言都没红，所以它
-  #   不该被当作用例红去查代码。现在有两道守卫把它分开说清楚：
-  #     · `scripts/ci-affected-tests.mjs` 起跑前先体检（`scripts/ci-worktree-deps.mjs`：
-  #       `node_modules/.modules.yaml` 在不在 + `npm_config_*` 干净不干净）⇒ 不成立退 2；
-  #     · 装载指纹（`isLaunchFailureShaped`）⇒ 那一遍记「没跑起来」、退 2，并把
-  #       「先 `pnpm install`、再清 `npm_config_*`、再重跑」写在脸上。
-  #   两处都是「未判定」而不是红：§13.6.2 那条口径 —— 没判 ≠ 绿，也不等于红。
-  #
-  # 45m：本地同一条链 4 worker 实测约 3.5 分钟，而节点是冷工作区 + 现场编译，
-  # 且并行 PR 会叠加（`lock` 只掐同一 PR 的旧跑）。与 `每日单元测试` 同档预算口径
-  # —— 卡死要早报，而真跑得完的形态离它还有一个量级。
-  #
-  # ⚠️ `timeout` 只是**兜底**，不是这一格真正承重的界：`run-affected-tests.mjs` 自带一份
-  #   墙钟预算（`affected-launch-wallclock.mjs` 的 `STAGE_WALL_CLOCK_MS`，25m），它的作用是
-  #   「自己掐断并把原因说清」，而不是等平台强杀（强杀那一屏一个用例名都没有）。
-  #   `cnb-53r-1k6b6besn` 的现场正是后者：那一跑 26 分 41 秒，而预算只有 25 分钟 ——
-  #   超出的那一段就是「自己那一条上界没生效」（判据 `tests/hook-affected-launch.test.ts`
-  #   「墙钟预算必须真的到得了第一遍」钉着它：界必须交到起进程的那一层、且在第一块之前）。
-  - name: 受影响用例
-    # ── 日志预算（平台硬上限 102400 字节，超了只留一句「The log length exceeds the limit」）──
-    #
-    # 这一格的输出量由 **vitest 的 reporter** 决定：默认 reporter 会**逐个文件**打一行
-    # 测试清单（`❯ tests/x.test.ts (12 tests)`），一跑 100+ 行是常态，而平台对超长日志
-    # 保留的是尾部 —— 被截掉的恰是**开头**，也就是「跑了哪些、哪份失败、失败原文」那一段。
-    # 现场读到的第 2 行就是 `The log length exceeds the limit(102400)`，然后整屏不可读。
-    #
-    # 处置**只换 reporter，不动任何判据**：`COMFY_AFFECTED_QUIET=1` ⇒
-    # `--reporter=dot`（每行 60~80 个点，失败用例与原文照样打）。退出码、复跑面、
-    # 超时指纹一个字不变（复跑面由 junit 给，本来就不靠这屏文本）。
-    # 开关默认关着：本地人跑这一档时要看逐文件清单（口径同 `COMFYAPP_QUIET_COVERAGE`）。
-    # 「quiet 了没有」在日志里有一行读数（`[affected-launch] reporter：…`）——
-    # 它没生效时的表现不是报错，是「日志又超长」，所以必须读得回来。
-    env:
-      COMFY_AFFECTED_QUIET: "1"
-      # 良性 stderr 噪音屏蔽（2026-10-31）：被测源码自己打出、但已知无害的日志
-      # （ECONNREFUSED/:3000、canvas-sync 重试、a11y 故意渲染的 error-boundary/lazy-chunk
-      # 故事）在回吐给平台前按行滤掉，免得它们把 102400 字节的日志预算吃光、把失败原文
-      # 挤出去。不影响任何断言判定与超时指纹（判据见
-      # `scripts/affected-launch-noise-reporter.mjs`）。本地默认关，开发者照常看全量日志。
-      # 2026-10-31 起两张清单：第二批（#2844）收的是**夹具 spawn 的 git / 探针 /
-      # 设计内失败 / storybook 警告块**那一族 stdout 噪音，见同一文件。
-      COMFY_AFFECTED_NOISE_FILTER: "1"
-      # 段开关（#2845）：固定/受影响已拆成两个 stage —— 本格只跑**增量面**；
-      # 静态契约那一半（FIXED_STRUCTURAL_TESTS）在上一格 `固定结构用例`。
-      COMFY_AFFECTED_SEGMENT: "affected"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-affected-tests.mjs
-    timeout: 45m
+  # 两格在 PR 上慢且性价比低：本地实测 3.2~3.5 分钟，但冷节点 + 并发 PR 叠加会跑到
+  # 25m+（自带墙钟预算 25m、stage 预算 45m），且偶发 `AggregateError` 假红（worker /
+  # 模块装载炸了 ≠ 改动有回归）。判据面整份被 `每日单元测试` 全量套件覆盖（固定结构契约
+  # 测试那几个文件本就在全量套件里），与 §13.5.21「全量单测只留每日档」同口径：共享节点上
+  # PR 级测试读数不可信，每日档空机才可信。附带：`core 骨架单一事实源` / `core 出口纪律与
+  # 基类纯度` 两格的执行者正是这一族的固定清单，随之记成 retired（每日全量单测覆盖）。
+  # 降级登记见 `tests/no-platform-ci-config.test.ts` 的 `GATE_TIER_LEDGER`。执行者
+  # `scripts/ci-affected-tests.mjs` 保留（仍可手动 / 单跑口复用）。
 
-  # ── 固定结构用例（ISSUE #2845：从 `受影响用例` 一格拆出来的静态契约那半）──────────
-  #
-  # 拆的理由：`受影响用例` 此前是一条 stage 里的两个块（`第 1/2 块（固定清单）` /
-  # `第 2/2 块（受影响用例）`），平台日志里两段摘要混在一格输出里分不清谁是谁，两个块的
-  # 噪音也互相掺杂。拆成两格后各自有日志、各自的 junit 与收尾复述，红的归属一格点名。
-  #
-  # ⚠️ 本格跑的是 **FIXED_STRUCTURAL_TESTS 静态清单**，**不解析改动面**（PR 三点 diff
-  #   拿不到 / 为空都照跑）—— 固定清单与「这次改了什么」无关，这正是它能独立成一格
-  #   的前提。入口与判据链跟 `受影响用例` 完全同一份（`ci-affected-tests.mjs` →
-  #   `run-affected-tests.mjs`，段开关 `COMFY_AFFECTED_SEGMENT=fixed`）。
-  # ⚠️ quiet / 噪音屏蔽两枚开关与本格族其他格同口径：本地默认关，开发者看全量。
-  # 45m：与 `受影响用例` 同一预算口径（本地 91 份实测约 3.2 分钟，节点冷区留一个量级）。
-  - name: 固定结构用例
-    env:
-      COMFY_AFFECTED_QUIET: "1"
-      COMFY_AFFECTED_NOISE_FILTER: "1"
-      COMFY_AFFECTED_SEGMENT: "fixed"
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-affected-tests.mjs
-    timeout: 45m
 
   # ── ESLint 零警告（ISSUE #2022 起恢复；停用期间的历史与两条恢复条件见下面这段）──
   # 停用期的理由（2026-10-16）：它跑得通，但那一轮它在每一格 E2E 调绿的提交里都重跑一遍，
@@ -2048,7 +2043,8 @@
   #   一堆子进程的那两档只在每天 01:00 那一跑（§13.5.21）—— 同一台机上并行 PR 会把带超时的
   #   读数变成不可信的红，而它跑绿还要刷 `整档凭证`，拿并发下的绿去刷那张账比不刷更坏。
   #   ⇒ **全量**单测归 `每日单元测试`；**增量**那一档（受影响用例）2026-10-20 起由本文件里的
-  #   `受影响用例` 一格执行（跑增量面、不刷整档凭证），本地两个执行者同日撤销。
+  #   `受影响用例` 一格执行（跑增量面、不刷整档凭证），本地两个执行者同日撤销；
+  #   2026-11-02 增量那两格也随 ISSUE #3052 撤到每日全量单测（增量面是全量子集，覆盖不丢）。
   #   恢复前提：平台能给这一格一条不与并行 PR 争抢的执行环境（那才是这条决定的边界，不是判据）。
   # - name: 单元测试
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/full-suite-run.mjs
@@ -2246,32 +2242,31 @@
   # 「**合并后的树**」一致不一致，不是「这次改动」⇒ 每次合并判一次就够，不必每个 PR
   # 各判一遍。三格原文（入口、旗标、`ifModify`）整体搬到 `.push-stages` 锚点
   # （清单在 `COMFYAPP_CI_PUSH_GATES`，判据双向核对），判据一字未改。
-  # ⚠️ `覆盖率上报` **不挪**：它读的是同跑 `受影响用例` 产出的 coverage/lcov.info，
-  # push 档不跑测试 ⇒ 挪过去是「报告不在 → 自己跳过」的静默空转。
-  # 覆盖率上报是**报告型**（它不判任何东西，只把 coverage/lcov.info 交给平台的上报通道；
-  # 报告不在时它自己跳过而不判红）。它没有 `ifModify`：它读的不是「本次改动」，
-  # 收窄它等于「只在某类改动上才记覆盖率」。
-  - name: 覆盖率上报
-    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-coverage-report.mjs
+  # ⚠️ `覆盖率上报` 从本档（PR）**挪到了每日档**（见 `*daily_gates` 末尾）：原来它读同跑
+  # `受影响用例` 产出的 coverage/lcov.info，而 `受影响用例` / `固定结构用例` 两测试格
+  # 2026-11-02 撤到每日全量单测后，PR 上不再有产出 lcov 的格子 ⇒ 这一格在 PR 上只会
+  # 静默空转。每日档的 `每日单元测试` 跑 `pnpm run test:coverage`，同一 job 产出 lcov，
+  # 这一格接在它后面上报。它仍是**报告型**（不判任何东西，报告不在时跳过而不判红），
+  # 没有 `ifModify`。
   # ── 下面这几格**没有自己的 stage**：它们的执行者在别处 ──────────────────────
   #
   # 「停用 ≠ 删除」机制在**页内**的第四种形态（前三种见 `COMFYAPP_CI_DISABLED_GATES`
   # 那两条注释与上面那段「收进聚合档」）：这几格的名字**仍在 `COMFYAPP_CI_GATES` 里**
   # （它们没被停用，是换了执行者），但它们的原文是注释形态 —— 因为执行者是：
   #   · `格式化提交分离` / `零消费导出` ⇒ 复合档 `重档静态判据` 里的条目
-  #     （执行面 = 钩子注册表，见 `scripts/ci-heavy-gates.mjs` 的头注）；
-  #   · `core 骨架单一事实源` / `core 出口纪律与基类纯度` ⇒ 「受影响用例」那一格的
-  #     固定清单（`scripts/fixed-structural-tests.mjs`），那 5 个用例文件每次 PR 都跑。
+  #     （执行面 = 钩子注册表，见 `scripts/ci-heavy-gates.mjs` 的头注）。
+  #   · `core 骨架单一事实源` / `core 出口纪律与基类纯度` 已在 2026-11-02 随固定结构用例
+  #     一道 retired（见 `GATE_TIER_LEDGER`）：它们的执行者正是固定结构清单，撤档后由
+  #     `每日单元测试` 全量套件覆盖，不再有 PR 执行者，故这一条不再列在这里。
   # 恢复动作（真要拆回独立 stage）：取消注释 → 从复合档的条目表删掉同名条目。
   #
   # - name: 格式化提交分离
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-reformat-only.cjs
-  # - name: core 骨架单一事实源
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs vitest run tests/single-logger-channel.test.ts tests/container-single-access.test.ts tests/core-spine-single-source.test.ts
   # - name: 零消费导出
   #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/check-dead-exports.cjs
-  # - name: core 出口纪律与基类纯度
-  #   script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-run-tool.mjs vitest run tests/core-barrel-entry-discipline.test.ts tests/repository-base-purity.test.ts
+  # （`core 骨架单一事实源` / `core 出口纪律与基类纯度` 曾以同样的注释形态留在这里，
+  #  2026-11-02 随固定结构用例一道 retired —— 它们不再是 PR 档的「换执行者」形态，
+  #  改由 `每日单元测试` 全量套件覆盖，故此处不再列示例；见 `GATE_TIER_LEDGER`。）
 
   # ⚠️ **执行面是钩子注册表，不是条目表**（两轮合并之后的口径）：这一格跑的命令是
   # `node scripts/ci-heavy-gates.mjs`，而它读的正是 `.githooks/pre-commit` 里那些
@@ -2337,6 +2332,35 @@
     # 平台单 stage 默认预算 20m 是硬上限（实测强杀形态见上面那段），而这一格装的是原先
     # 那几条各自独立跑的东西 —— 它的**合理**墙钟应当与原几格的总和同级。
     timeout: 45m
+
+  # ── GitHub 判决回读：主列末尾的**读数档**（ISSUE #3051 期望第 3 条的前半步）──
+  #
+  # 它回答一个问题：镜像格（主列开头那一格 `GitHub 镜像同步`）派发出去的那一笔
+  # head_sha，GitHub Actions 那边跑完了没有、结论是什么。**主路径**轮询
+  # `GET /repos/{owner}/{repo}/actions/runs?head_sha=<sha>` 按 workflow run 的
+  # `conclusion` 判定；主路径读不到任何 run（Actions 权限缺 / head_sha 无匹配）时
+  # **回落** `GET .../commits/{sha}/check-runs`。sha 的推导与镜像格同源
+  # （同一笔 `CNB_PULL_REQUEST_IID` → 同一镜像 ref → 同一 head_sha）。
+  #
+  # 为什么排在**主列末尾**：镜像格一跑完 GitHub 那边才起跑，回读放得越靠后，
+  # 留给 GitHub 完成的窗口越大；且本格只做 API 读数、零构建，挂在最后不会挡住
+  # 任何一格的墙钟。轮询总预算 45 分钟（`POLL_BUDGET_MS`，取法见脚本文件头）——
+  # 正常情况第一读就接近完整，预算耗尽按「没跑起来」exit 2 交账，**不判红**。
+  #
+  # ⚠️ **读数档**（`--readout`）：三态照常打点，退码恒 0 —— 它坏了既不许把门禁的
+  # 红洗成绿，也不许把自己的红叠进门禁的账（与镜像格同一条规矩）。翻成承重档
+  # 与摘镜像格的 `--readout` 同属 #3051 期望第 3 条，是另一批。
+  #
+  # ⚠️ 两件外部前提不落地，这一格永远只能交「没跑起来」（话术在脚本里会点名）：
+  #   ① `GITHUB_MIRROR_TOKEN`（fine-grained PAT）追加 `actions: read`（优先，主路径）
+  #      或 `checks: read`（兜底）—— 任一即可、两条都给最稳，并把新值同步进密钥
+  #      仓库 `moon-read/GITHUB_MIRROR_TOKEN`（本流水线从那里 imports）；
+  #   ② 自托管节点到 `api.github.com:443` 的出网（与镜像格同一条 egress，它通这一格
+  #      才有意义）。
+  - name: GitHub 判决回读
+    script: $enc=[Text.Encoding]::UTF8; [Console]::OutputEncoding=$enc; node scripts/ci-cp936-exit.mjs -- node scripts/ci-github-verdict-read.mjs --readout
+    # 包住 45m 轮询预算 + 进程开销；与 GitHub 侧最重格的外框同级。
+    timeout: 60m
 
   # ── 构建与产物：**这一格 2026-10-18 起不在 PR 上跑了**（口径见 §13.5.23）──
   #
@@ -2621,7 +2645,8 @@ master:
     - <<: [*common, *pr_fail_stage]
       name: 质量门禁
       # GitHub 镜像令牌（ISSUE #2978）：从密钥仓库 `moon-read/GITHUB_MIRROR_TOKEN`
-      # 导入，供 endStage「GitHub 镜像同步」的推送与派发读取。密钥文件里必须声明
+      # 导入，供主列那一格「GitHub 镜像同步」的推送与派发读取（#3051 起它在 `.gates` 里，
+      # 不在 `endStages` 了 —— 但取令牌这一跳仍然只有 PR 那条流水线需要）。密钥文件里必须声明
       # `allow_slugs: [moon-read/comfy-app-t3]` —— 默认只有密钥仓库管理员触发的
       # 流水线才读得到，而 PR 的触发者是各 PR 作者；声明后按规则校验、忽略触发者角色。
       imports:
@@ -2638,6 +2663,11 @@ master:
     - <<: *common
       name: master 合并复核
       lock: *lock_push
+      # 与 PR 那条同一枚镜像令牌（`GitHub master 镜像` 那一格要读它）。密钥文件里已声明
+      # `allow_slugs: [moon-read/comfy-app-t3]`（声明理由见 `pull_request` 那条上面的注释），
+      # push 事件的触发者按同一规则校验。
+      imports:
+        - https://cnb.cool/moon-read/GITHUB_MIRROR_TOKEN/-/blob/main/envs.yml
       stages: *push_stages
 
   # 每天一次的定时任务（官方 `zh/build/crontab.md`）：`0 0 * * *` = 每天 01:00

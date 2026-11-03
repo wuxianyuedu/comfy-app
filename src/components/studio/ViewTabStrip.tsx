@@ -94,10 +94,14 @@ export function ViewTabStrip({
             aria-selected={active}
             data-no-drag
             key={tab.key}
-            onClick={() => onSelect(tab.key)}
+            onClick={() => {
+              onSelect(tab.key);
+            }}
             role="tab"
             tabIndex={active ? 0 : -1}
-            {...simpleKeyHandler(["Space", "Enter"], () => onSelect(tab.key))}
+            {...simpleKeyHandler(["Space", "Enter"], () => {
+              onSelect(tab.key);
+            })}
             className={
               /* 选中态走 `.u-tab-active`（更亮的表面 + 顶部一条品牌色），两种形态
                  共用同一套语言 —— 原来标题行里给的是 `bg-canvas/70`，暗色下比

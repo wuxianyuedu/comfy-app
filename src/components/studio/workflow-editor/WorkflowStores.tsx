@@ -99,14 +99,16 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
     workflowIO: {},
     ioPreviewOpen: false,
 
-    setIoEditMode: (on) =>
-      set(on ? { ioEditMode: true } : { ioEditMode: false, ioPreviewOpen: false }),
-    setIoPreviewOpen: (open) =>
+    setIoEditMode: (on) => {
+      set(on ? { ioEditMode: true } : { ioEditMode: false, ioPreviewOpen: false });
+    },
+    setIoPreviewOpen: (open) => {
       set(
         open
           ? { ioPreviewOpen: true, ioEditMode: true }
           : { ioPreviewOpen: false, ioEditMode: false },
-      ),
+      );
+    },
 
     toggleIO: (ref) => {
       const key = `${ref.nodeId}::${ref.kind}::${ref.name}`;
@@ -143,7 +145,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       });
     },
 
-    setIOLabel: (key, label) =>
+    setIOLabel: (key, label) => {
       set((state) => {
         const cur = state.workflowIO[key];
         if (!cur) {
@@ -159,9 +161,10 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
         return {
           workflowIO: { ...state.workflowIO, [key]: { ...cur, label: kept } },
         };
-      }),
+      });
+    },
 
-    toggleIORequired: (key) =>
+    toggleIORequired: (key) => {
       set((state) => {
         const cur = state.workflowIO[key];
         if (!cur) {
@@ -179,9 +182,10 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             [key]: { ...cur, required: !cur.required },
           },
         };
-      }),
+      });
+    },
 
-    setIOModeOverride: (key, mode, patch) =>
+    setIOModeOverride: (key, mode, patch) => {
       set((state) => {
         const cur = state.workflowIO[key];
         if (!cur || !mode) {
@@ -209,7 +213,8 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             [key]: nextEntry,
           },
         };
-      }),
+      });
+    },
 
     purgeModeOverrides: (codes) => {
       let cleaned: Record<string, WorkflowIOParam> | null = null;
@@ -246,7 +251,7 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
       return cleaned;
     },
 
-    setIOSeedMode: (key, mode) =>
+    setIOSeedMode: (key, mode) => {
       set((state) => {
         const cur = state.workflowIO[key];
         if (cur?.kind !== "widget") {
@@ -261,7 +266,8 @@ export function createIOEditStore(workflowId: string): StoreApi<IOEditStore> {
             [key]: { ...cur, seedMode: mode },
           },
         };
-      }),
+      });
+    },
 
     /* 拖拽排序：把 `fromKey` 移动到 `targetKey` 表示的位置。
      *
@@ -583,9 +589,8 @@ export function createNodeJsonViewerStore(
         if (!subDef || !Array.isArray(subDef.nodes)) {
           const matchKey = subs
             ? Object.keys(subs).find(
-                (key) =>
-                  /* SAFETY: 类型断言已复核 */ (subs[key] as RawSubgraphDef | undefined)?.id ===
-                  targetUid,
+                /* SAFETY: 类型断言已复核 */
+                (key) => (subs[key] as RawSubgraphDef | undefined)?.id === targetUid,
               )
             : undefined;
           if (matchKey && subs) {
@@ -627,7 +632,9 @@ export function createNodeJsonViewerStore(
       set({ viewer: { anchorRect: rectToAnchorRect(rect), nodeId, kind } });
     },
 
-    dismiss: () => set({ viewer: null }),
+    dismiss: () => {
+      set({ viewer: null });
+    },
   }));
 }
 

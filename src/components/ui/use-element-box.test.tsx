@@ -68,6 +68,12 @@ describe("useElementBox", () => {
     vi.stubGlobal("ResizeObserver", FakeRO);
     render(<Probe onBox={() => undefined} />);
     expect(callbacks.length).toBeGreaterThan(0);
-    expect(() => act(() => callbacks.forEach((cb) => cb()))).not.toThrow();
+    expect(() => {
+      act(() => {
+        callbacks.forEach((cb) => {
+          cb();
+        });
+      });
+    }).not.toThrow();
   });
 });

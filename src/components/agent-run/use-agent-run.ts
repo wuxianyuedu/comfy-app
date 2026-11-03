@@ -76,12 +76,16 @@ export function useAgentRun(): AgentRunController {
     void (async () => {
       try {
         const snap = await fetchRunStatus(projectId);
-        guard.commit(() => apply(snap));
+        guard.commit(() => {
+          apply(snap);
+        });
       } catch {
         /* 拉取失败静默：轮询会再补 */
       }
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [projectId, apply]);
 
   const active = run.status === "running" || run.status === "awaiting_approval";

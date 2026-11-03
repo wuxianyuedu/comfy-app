@@ -149,8 +149,9 @@ describe("按行切分：半行要拼回来，末尾不足一行也要算一行"
   it("字符串 chunk 也接得住（流的编码由调用点决定，内核不许假设 Buffer）", () => {
     const cbs: Array<(arg: unknown) => void> = [];
     const lines: Array<string> = [];
+    /* SAFETY: 类型断言已复核 */
     forEachOutputLine(
-      /* SAFETY: 类型断言已复核 */ {
+      {
         on: (_ev: string, cb: (arg: unknown) => void) => cbs.push(cb),
       } as unknown as NodeJS.ReadableStream,
       (l) => lines.push(l),

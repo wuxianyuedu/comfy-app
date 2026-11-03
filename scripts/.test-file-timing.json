@@ -1,20 +1,65 @@
 {
   "generatedAt": "2026-10-31T11:20:00.000Z",
   "files": {
-    "tests/check-bundle-budget.test.ts": 247200,
-    "tests/eslint-gate-canary.test.ts": 238500,
-    "tests/check-commit-claims.test.ts": 169100,
-    "tests/base-check.test.ts": 103700,
-    "tests/changed-scope.test.ts": 85700,
-    "tests/affected-tests.test.ts": 48500,
-    "tests/gate-executors.test.ts": 48100,
-    "tests/tw4-hardgate-behaviour.test.ts": 47000,
-    "tests/check-merge-parents.test.ts": 42900,
-    "tests/a11y-axe-stories.test.ts": 40100,
-    "tests/ci-env-probe.test.ts": 37700,
-    "tests/scripts-typecheck-ratchet.test.ts": 35900,
-    "tests/precommit-timing.test.ts": 35400,
-    "tests/a11y-rules-gate.test.ts": 35100,
-    "tests/changelog-versions-gate.test.ts": 34900
+    "tests/check-bundle-budget.test.ts": {
+      "ms": 247200,
+      "source": "batch"
+    },
+    "tests/eslint-gate-canary.test.ts": {
+      "ms": 238500,
+      "source": "batch"
+    },
+    "tests/check-commit-claims.test.ts": {
+      "ms": 169100,
+      "source": "batch"
+    },
+    "tests/base-check.test.ts": {
+      "ms": 103700,
+      "source": "batch"
+    },
+    "tests/changed-scope.test.ts": {
+      "ms": 85700,
+      "source": "batch"
+    },
+    "tests/affected-tests.test.ts": {
+      "ms": 48500,
+      "source": "batch"
+    },
+    "tests/gate-executors.test.ts": {
+      "ms": 48100,
+      "source": "batch"
+    },
+    "tests/tw4-hardgate-behaviour.test.ts": {
+      "ms": 47000,
+      "source": "batch"
+    },
+    "tests/check-merge-parents.test.ts": {
+      "ms": 42900,
+      "source": "batch"
+    },
+    "tests/a11y-axe-stories.test.ts": {
+      "ms": 40100,
+      "source": "batch"
+    },
+    "tests/ci-env-probe.test.ts": {
+      "ms": 37700,
+      "source": "batch"
+    },
+    "tests/scripts-typecheck-ratchet.test.ts": {
+      "ms": 35900,
+      "source": "batch"
+    },
+    "tests/precommit-timing.test.ts": {
+      "ms": 35400,
+      "source": "batch"
+    },
+    "tests/a11y-rules-gate.test.ts": {
+      "ms": 35100,
+      "source": "batch"
+    },
+    "tests/changelog-versions-gate.test.ts": {
+      "ms": 34900,
+      "source": "batch"
+    }
   }
 }

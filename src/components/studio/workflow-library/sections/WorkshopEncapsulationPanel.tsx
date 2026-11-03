@@ -180,7 +180,9 @@ export function WorkshopEncapsulationPanel({
  与画布节点页签各自独立（ISSUE #611 旧形态：两个页签各写各的）。 */}
       <div className="flex flex-wrap items-center gap-2">
         <WorkflowRunLogButton
-          onOpen={() => setLogOpen(true)}
+          onOpen={() => {
+            setLogOpen(true);
+          }}
           source="encapsulation-test"
           taskId={logViewTaskId}
           workflowId={workflowId}
@@ -344,7 +346,9 @@ export function WorkshopEncapsulationPanel({
         </div>
       </div>
       <LazyWorkflowRunLogModal
-        onClose={() => setLogOpen(false)}
+        onClose={() => {
+          setLogOpen(false);
+        }}
         onViewTaskIdChange={setLogTaskId}
         open={logOpen}
         source="encapsulation-test"

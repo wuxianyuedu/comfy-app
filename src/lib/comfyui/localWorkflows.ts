@@ -360,7 +360,8 @@ function checksumOfFile(
     try {
       const hash = createHash("sha1");
       const stream = fs.createReadStream(absPath, { encoding: "utf8" });
-      stream.on("data", (chunk) => hash.update(/* SAFETY: 类型断言已复核 */ chunk as string));
+      /* SAFETY: 类型断言已复核 */
+      stream.on("data", (chunk) => hash.update(chunk as string));
       stream.on("error", () => {
         resolve(null);
       });

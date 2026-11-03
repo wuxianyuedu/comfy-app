@@ -431,7 +431,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   followResetAt: 0,
   anchorId: null,
 
-  addEntry: (entry) =>
+  addEntry: (entry) => {
     set((state) => {
       const full: LogEntry = {
         ...entry,
@@ -450,9 +450,10 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         ...applyView(derive(capped.logs, state.search, state.revision + 1), viewOf(state)),
         droppedTotal: state.droppedTotal + capped.dropped,
       };
-    }),
+    });
+  },
 
-  appendFileLogs: (entries) =>
+  appendFileLogs: (entries) => {
     set((state) => {
       const fresh = dropStaleEntries(entries, state.sessionStart);
       /* 空批次直接原样返回：计数/过滤结果不变（setState 浅合并，不覆盖
@@ -481,11 +482,12 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         ...applyView(derive(capped.logs, state.search, state.revision + 1), viewOf(state)),
         droppedTotal: state.droppedTotal + capped.dropped,
       };
-    }),
+    });
+  },
 
   /* 会话起点到达得比首次轮询晚时，时间线里可能已经混进了上次运行的行：
    * 一次性收拢到底。应用运行中的 mtime 不会后移，因此这是幂等操作。 */
-  setSessionStart: (sessionStart) =>
+  setSessionStart: (sessionStart) => {
     set((state) => {
       const logs = dropStaleEntries(state.logs, sessionStart);
       const changed = logs.length !== state.logs.length;
@@ -496,12 +498,13 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
           viewOf(state),
         ),
       };
-    }),
+    });
+  },
 
   /* 服务端进程标识变化 = 真的换了进程。旧时间线里的行属于上一个进程，与本次
    * 会话没有可比性（且新进程会从头写自己的日志文件），一次性清干净并重置游标；
    * 页脚随后会显示新的标识。 */
-  setBootId: (bootId) =>
+  setBootId: (bootId) => {
     set((state) => {
       if (state.bootId === bootId) {
         return {};
@@ -526,9 +529,10 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
             }
           : { header: { ...state.header, bootId } }),
       };
-    }),
+    });
+  },
 
-  setFilter: (f) =>
+  setFilter: (f) => {
     set((state) => {
       const next = {
         ...viewOf(state),
@@ -548,9 +552,10 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         followResetAt: 0,
         ...anchorOf(state),
       };
-    }),
+    });
+  },
 
-  setOrigin: (o) =>
+  setOrigin: (o) => {
     set((state) => {
       const next = { ...viewOf(state), origin: o, page: 1 };
       const derived = derive(state.logs, next.search, state.revision);
@@ -565,9 +570,10 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         followResetAt: 0,
         ...anchorOf(state),
       };
-    }),
+    });
+  },
 
-  setSearch: (s) =>
+  setSearch: (s) => {
     set((state) => {
       const next = { ...viewOf(state), search: s, page: 1 };
       const derived = derive(state.logs, next.search, state.revision);
@@ -582,7 +588,8 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         followResetAt: 0,
         ...anchorOf(state),
       };
-    }),
+    });
+  },
 
   /* 翻页 = 用户「把这一刻的时间线当作已读基准」：水位取到当前位置，此后新增的
    * 行才算「新来的」，页脚据此报数（ISSUE #346）。
@@ -592,7 +599,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
    * 这个错法让页脚从「有 401 条新的日志」开始报数（#262 复审）。
    *
    * 贴底基线同时按当前水位重取：换页 = 用户要在这里停下来看，新行只累积不推动。 */
-  setPage: (page) =>
+  setPage: (page) => {
     set((state) => {
       const nextPage = Math.max(1, page);
       const seen = currentWatermark(state);
@@ -610,7 +617,8 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         followResetAt: 0,
         ...anchorOf(state),
       };
-    }),
+    });
+  },
 
   /**
    * 贴底看最新 vs. 追最新：贴底（true）时面板按水位停在用户读过的地方，日志
@@ -620,7 +628,7 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
    * 解绑（{@link followBaseline}）与视图的贴底判定必须用同一份状态，否则会出现
    * 「面板说不自动滚动、却仍在滚」这种两边各说各话的形态。
    */
-  setFollowBottom: (follow) =>
+  setFollowBottom: (follow) => {
     set((state) => ({
       autoScroll: follow,
       /* 用户自己滚回底部 = 他主动追最新：锚点与贴底基线一起重取，此后新行继续
@@ -634,10 +642,11 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
           }
         : {}),
       header: { ...state.header, autoScroll: follow },
-    })),
+    }));
+  },
 
   /** 用户显式要求「回到最新」：解绑贴底基线，此后贴底一路追到最新。 */
-  jumpToLatest: () =>
+  jumpToLatest: () => {
     set((state) => ({
       followResetAt: Date.now(),
       autoScroll: true,
@@ -645,13 +654,15 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
       ...anchorOf(state),
       header: { ...state.header, autoScroll: true, page: 1 },
       page: 1,
-    })),
-  setIsOpen: (open) =>
+    }));
+  },
+  setIsOpen: (open) => {
     set((state) => ({
       isOpen: open,
       header: { ...state.header, isOpen: open },
-    })),
-  toggleOpen: () =>
+    }));
+  },
+  toggleOpen: () => {
     set((state) => {
       const isOpen = !state.isOpen;
       /* 打开面板 = 用户此刻看到的是「最新的那一段」：水位与贴底基线一起取到当前，
@@ -669,9 +680,10 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
             }
           : {}),
       };
-    }),
+    });
+  },
 
-  clear: () =>
+  clear: () => {
     set((state) => {
       const view = { ...viewOf(state), page: 1 };
       return {
@@ -686,7 +698,8 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
         anchorId: null,
         droppedTotal: 0,
       };
-    }),
+    });
+  },
 
   /* 复制的范围 = **当前筛选下的全部日志**（来源 × 级别 × 搜索词，跨所有页），
    * 而不是「全部日志」也不是「当前这一页」。用户诉求原文：「复制日志，需要只
@@ -697,7 +710,9 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
    * `filteredLogs` 正是这个范围：它与面板显示的行同源（同一个 computeFiltered），
    * 只是不受分页窗口限制——「全部日志」指的是一整类，不是一页。 */
   copyAll: () => copyLogText(formatForClipboard(get().filteredLogs)),
-  download: () => downloadLogText(formatForClipboard(get().filteredLogs)),
+  download: () => {
+    downloadLogText(formatForClipboard(get().filteredLogs));
+  },
   saveExport: (label) => saveLogExport(label, formatForClipboard(get().filteredLogs)),
   saveDiagnostics: () => saveDiagnosticsPackage(),
 }));

@@ -64,7 +64,9 @@ export const StepLogTaskPicker = memo(function StepLogTaskPicker({
           ];
         }),
       )}
-      onChange={(v) => onSelect(v || null)}
+      onChange={(v) => {
+        onSelect(v || null);
+      }}
       options={cachedIds}
       placeholder={taskId ? undefined : "（无任务）"}
       value={taskId ?? ""}

@@ -57,10 +57,11 @@ export function findInstallationById(
   if (Array.isArray(data)) {
     for (const item of data) {
       if (
+        /* SAFETY: 类型断言已复核 */
         // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         item != null &&
         typeof item === "object" &&
-        /* SAFETY: 类型断言已复核 */ (item as Record<string, unknown>).id === instanceId
+        (item as Record<string, unknown>).id === instanceId
       ) {
         /* SAFETY: 类型断言已复核 */
         return item as Record<string, unknown>;
@@ -206,9 +207,8 @@ function extractEnvVars(entry: Record<string, unknown> | null): Record<string, s
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
   if (ev != null && typeof ev === "object" && !Array.isArray(ev)) {
     const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(
-      /* SAFETY: 类型断言已复核 */ ev as Record<string, unknown>,
-    )) {
+    /* SAFETY: 类型断言已复核 */
+    for (const [k, v] of Object.entries(ev as Record<string, unknown>)) {
       if (typeof v === "string" || typeof v === "number") {
         out[k] = String(v);
       }

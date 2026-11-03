@@ -57,15 +57,17 @@ function InteractiveStrip({ inTitleBar, tabs }: { inTitleBar: boolean; tabs: Arr
         <ViewTabStrip
           activeKey={state.activeKey}
           inTitleBar={inTitleBar}
-          onClose={(key) =>
+          onClose={(key) => {
             setState((s) => ({
               ...s,
               tabs: s.tabs.filter((t) => t.key !== key),
               closed: [...s.closed, key],
-            }))
-          }
+            }));
+          }}
           onOpenView={() => undefined}
-          onSelect={(key) => setState((s) => ({ ...s, activeKey: key }))}
+          onSelect={(key) => {
+            setState((s) => ({ ...s, activeKey: key }));
+          }}
           openableViews={OPENABLE}
           projectNameOf={projectNameOf}
           tabs={state.tabs}

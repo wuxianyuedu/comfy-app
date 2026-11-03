@@ -27,8 +27,11 @@
  *      （非 PR 事件 / 手工触发）时退回 `<remote>/master` 或本地 `master` 的
  *      merge-base 两点 diff —— 与撤掉的 `premerge-check.mjs#pushBatchFiles` 同一个口径。
  *   ② **拿不到改动面 ⇒ 退 2**，不是退 0：这一格没判 = 没有证据（§13.6.2）。
- *      清单为空（diff 为空）同样退 2 —— 空清单若放行，`vitest run` 会跑成全量，
- *      而「全量绿」在 PR 这一跳上是被 §13.5.21 明确否掉的那个读数。
+ *      但「拿到了、答案是空的」是**另一个结论**（ISSUE #3026）：目标分支已经包含源分支
+ *      的全部提交时（同步 master 之后逐字节相同），平台仍会合成 merge 提交而三点 diff
+ *      为空 —— 那一跑判过了，受影响面就是固定清单那一份。所以空面要再证一次
+ *      （`confirmEmptyChangeFace()`：三点空 **且** 合成提交的 `第一父..HEAD` 也空），
+ *      证不出来才退 2。**放行空面 ≠ 放行全量**：`vitest` 收不到文件是不跑，不是跑全部。
  *   ③ **并发按现场核数收敛**：`scripts/ci-load.mjs` 的 `resolveCiWorkers()`
  *      （§13.5.21 的唯一出处）折算后经 `COMFY_PRECOMMIT_MAX_WORKERS` 交给启动器 ——
  *      这个变量只调并发、不碰任何判据（`resolveMaxWorkers()` 的注释写明）。
@@ -48,7 +51,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
-import { resolveChangedFiles } from "./changed-scope.mjs";
+import { confirmEmptyChangeFace, resolveChangedFiles } from "./changed-scope.mjs";
 import { resolveCiWorkers } from "./ci-load.mjs";
 import { describeWorktreeDeps, worktreeDepsProblem } from "./ci-worktree-deps.mjs";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
@@ -151,7 +154,7 @@ export function main(deps = {}) {
   /* 段开关（ISSUE #2845）：`fixed` 段**不算改动面** —— 固定结构清单是静态契约，
    * 与「这次改了什么」无关；这一格独立成 stage 的前提就是它不依赖 PR 三点 diff
    * （diff 拿不到 / 为空时固定那格照跑，受影响那格才退 2）。`affected` 与缺省
-   * （both）走原路：算面、面空退 2（空清单若放行会被 vitest 跑成全量）。 */
+   * （both）走原路：算面；面空先证那是不是「这个 PR 一处没改」（口径 ⑥），证不出来退 2。 */
   const segFixed = (env.COMFY_AFFECTED_SEGMENT ?? "").trim() === "fixed";
   /* 字面量必须标成 `resolveChangedFiles` 的返回类型：不标的话 TS 把 `ok: true` 拓宽成
    * `boolean`，判别联合失效，下面 `!changed.ok` 分支里的 `.reason` 读不出来。 */
@@ -164,12 +167,35 @@ export function main(deps = {}) {
     writeErr(`[ci-affected] ✗ ${changed.reason}（退 2 —— 这一格没判，不构成证据）\n`);
     return 2;
   }
+  /* 空改动面**先按结论读、再按「没判」收**（ISSUE #3026）：目标分支已经包含源分支的
+   * 全部提交时（同步 master 之后逐字节相同）平台仍会合成 merge 提交，而三点 diff 是空的。
+   * 早先这一形态直接退 2，可这一跑真的判过了 —— 答案是「零个文件」。
+   * 退 2 只留给**证明不了**空的那一种：读不到那两半（§13.6.4.1「拿不到测量 ≠ 结果是 0」）。
+   * 「空面 ⇒ 受影响面 = 固定清单」那句在 `affected-tests.mjs` 的 `withFixed()`（空集不过筛）——
+   * 本脚本不另立第二条，只负责证明那个空集是真的。 */
+  let emptyFace = false;
   if (!segFixed && changed.files.length === 0) {
+    const empty = confirmEmptyChangeFace(deps);
+    if (!empty.ok) {
+      writeErr(
+        `[ci-affected] ✗ 改动面为空（${changed.via}），但证明不了这就是那一条形态：` +
+          `${empty.reason} —— 退 2（没判 ≠ 绿）。空清单若放行，启动器会把 vitest 跑成全量，` +
+          "而全量绿在 PR 这一跳上是被 §13.5.21 否掉的读数。\n",
+      );
+      return 2;
+    }
+    emptyFace = true;
+    const lead =
+      empty.lead.length === 0
+        ? ""
+        : `其中 ${empty.lead.length} 条是同批从目标分支带进来的（${empty.lead
+            .slice(0, 5)
+            .join(" ")}${empty.lead.length > 5 ? " …" : ""}），不是这个 PR 自己的改动。`;
     writeErr(
-      `[ci-affected] ✗ 改动面为空（${changed.via}）—— 退 2。空清单若放行，` +
-        "启动器会把 vitest 跑成全量，而全量绿在 PR 这一跳上是被 §13.5.21 否掉的读数。\n",
+      `[ci-affected] · 改动面为空（${empty.via}）—— 这是「这个 PR 一处没改」那条形态：` +
+        "清单（下面递进去的那份，空）**不过筛** —— 空集在这里不是「没选」，是「没改」。" +
+        `${lead}\n`,
     );
-    return 2;
   }
   const { workers, cores, source } = resolveCiWorkers({ env });
   writeOut(
@@ -222,6 +248,20 @@ export function main(deps = {}) {
     COMFY_AFFECTED_CHANGED: changed.files.join("\n"),
     COMFY_PRECOMMIT_MAX_WORKERS: String(workers),
   };
+  if (emptyFace) {
+    /* 空面那一形态的清单**就是固定清单**——而 `固定结构用例` 那一格已经把它跑过一遍
+     * （ISSUE #2845 把两者拆成两格，同一格再跑一次只是把同一批断言跑两遍）。
+     * 这一行是**派生态**：清单完全由改动面决定，改动面空 ⇒ 这一格没有自己的对象。
+     * 它必须说出口 —— 悄悄返回 0 与「跑过且全绿」在日志里是两件长得一样的事，
+     * 而本仓最贵的失效形态正是「静默通过」。退码取 0：空清单在这里是**判过的结论**
+     * （上面那两半 git 读数就是证据），不是没跑起来。 */
+    writeErr(
+      "[ci-affected] · 受影响面为空（上面的两半 git 读数已证明这一点）⇒ 本格无对象可判，" +
+        "按绿收；固定清单那一格 `固定结构用例` 独立在跑，别把两格读成一格。\n",
+    );
+    writeErr(`[ci-affected] 收尾复述：受影响面为空 · 本格未起 vitest · 退出码 0\n`);
+    return 0;
+  }
   /** 这一跑写出的 junit 份数（收尾读数；`null` = 取不到）。 */
   let junitCount = null;
   /* 跑完就清账本（注入目录时由用例自己清）—— 收尾读数必须在删之前取，所以清理挂在

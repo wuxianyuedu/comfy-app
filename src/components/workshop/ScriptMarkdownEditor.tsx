@@ -279,8 +279,12 @@ export function ScriptMarkdownEditor({
     filterInput: false,
     target: document,
   });
-  const undoHotkey = React.useCallback(() => restoreHistory(1), [restoreHistory]);
-  const redoHotkey = React.useCallback(() => restoreHistory(-1), [restoreHistory]);
+  const undoHotkey = React.useCallback(() => {
+    restoreHistory(1);
+  }, [restoreHistory]);
+  const redoHotkey = React.useCallback(() => {
+    restoreHistory(-1);
+  }, [restoreHistory]);
   useHotkey({ key: "z", mod: true }, undoHotkey, {
     filterInput: false,
     target: document,
@@ -320,7 +324,9 @@ export function ScriptMarkdownEditor({
         insertLink={insertLink}
         insertList={insertList}
         insertTable={insertTable}
-        onTogglePreview={() => setShowPreview((prev) => !prev)}
+        onTogglePreview={() => {
+          setShowPreview((prev) => !prev);
+        }}
         restoreHistory={restoreHistory}
         showPreview={showPreview}
         wrapSelection={wrapSelection}

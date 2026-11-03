@@ -6,11 +6,12 @@ import { describeSqliteWriteError, isSqliteBusyError, sqliteAwareErrorText } fro
 /* 这两条判据的形状照 drizzle 的真实包法写：drizzle 把驱动错误放在 `cause` 上，
  * 自己的 message 只有 `Failed query: <sql>\nparams: <…>`。#1250 的现场就是日志里
  * 只有那一句，看不出原因是「锁」还是「没表」。 */
+/* SAFETY: 类型断言已复核 */
 function drizzleWrapped(cause: unknown): Error {
   const e = new Error(
     'Failed query: update "task" set "status" = ? where "task"."id" = ?\nparams: FAILED,t1',
   );
-  /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause = cause;
+  (e as { cause?: unknown }).cause = cause;
   return e;
 }
 

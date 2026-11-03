@@ -7,9 +7,10 @@
 // §17）；评审是在途异步，用 `beginStaleRun` 作废守卫（弹窗中途关闭即不落地，§16.2.4.34）；
 // 重生成走 `useBusyAction` + `runAsyncAction`（忙碌位绑 finally 复位 + 成功/失败都有可见出口，
 // §16.2.4.71 / §16.2.4.30），成功后回调通知调用方刷新镜头列表。
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";
+import { useReviewGuard } from "~/components/ui/use-review-guard";
 import { useToast } from "~/components/studio/ToastProvider";
 import { runAsyncAction, type ActionReport } from "~/lib/async-action";
 import {
@@ -19,7 +20,6 @@ import {
   setHumanVerdict,
 } from "~/lib/production/run-client";
 import type { HumanVerdict, ReviewMode, ReviewVerdict } from "~/lib/production/review-types";
-import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
 export type ShotReviewController = {
   /** 评审失败文案（就地展示，不外抛）。 */
@@ -52,42 +52,35 @@ const REGEN_SUCCESS: Record<ReviewMode, string> = {
 export function useShotReview(projectId: string, onRegenerated?: () => void): ShotReviewController {
   const [verdict, setVerdict] = useState<ReviewVerdict | null>(null);
   const [humanVerdict, setHumanVerdictState] = useState<HumanVerdict | null>(null);
-  const [error, setError] = useState("");
   const reviewBusy = useBusyAction();
   const regenBusy = useBusyAction();
   const toast = useToast();
-
-  /* 评审作废守卫：弹窗可能在 LLM 返回前被关闭 / 切到别的镜头，那一轮结果不该落到界面上。
-   * 每次评审换一把新守卫；卸载时作废当前这把。 */
-  const guardRef = useRef<StaleRunGuard>(beginStaleRun());
-  useEffect(() => {
-    const guard = guardRef.current;
-    return () => guard.dispose();
-  }, []);
+  /* 评审作废守卫（弹窗中途关闭 / 切换镜头即不落地）与就地错误文案，内核收在
+   * `useReviewGuard`（与角色卡 / 剧评 hook 共享，§16.2.4.34）。 */
+  const { begin, clearError, error, fail } = useReviewGuard();
 
   const review = useCallback(
     async (shotId: string) => {
       if (!projectId) {
         return;
       }
-      guardRef.current.dispose();
-      const guard = beginStaleRun();
-      guardRef.current = guard;
-      setError("");
+      const guard = begin();
       await reviewBusy.run(async () => {
         try {
           const v = await reviewShot(projectId, shotId);
-          guard.commit(() => setVerdict(v));
+          guard.commit(() => {
+            setVerdict(v);
+          });
         } catch (error_) {
           // 失败也走守卫：卸载后到达的错误不往界面写。原文交 errorMessage 翻译。
           guard.commit(() => {
             setVerdict(null);
-            setError(error_ instanceof Error ? error_.message : "评审失败");
           });
+          fail(guard, error_, "评审失败");
         }
       });
     },
-    [projectId, reviewBusy],
+    [projectId, reviewBusy, begin, fail],
   );
 
   const report: ActionReport = useCallback(
@@ -152,8 +145,8 @@ export function useShotReview(projectId: string, onRegenerated?: () => void): Sh
   const reset = useCallback(() => {
     setVerdict(null);
     setHumanVerdictState(null);
-    setError("");
-  }, []);
+    clearError();
+  }, [clearError]);
 
   return {
     verdict,

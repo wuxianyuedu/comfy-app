@@ -31,4 +31,8 @@ command -v git-lfs >/dev/null 2>&1 || {
 git lfs pre-push "$@" <"$refs_in" || exit $?
 
 # ── 合并前的固定动作（退 1 = 复算红了，退 2 = 没法复算，两者都不放行本次 push）──
-node scripts/premerge-proof.mjs <"$refs_in" || exit $?
+#
+# `"$1" "$2"` 是 git 给的「远端名 + 远端 URL」：推向镜像仓库 / 第三方备份远端时，
+# 这批 ref 与「这条分支要不要合进本仓 master」无关，脚本按 URL 比对后跳过复算
+# （判据在 `isForeignRemotePush()`，钩子不抄，§12.12）。
+node scripts/premerge-proof.mjs "$1" "$2" <"$refs_in" || exit $?

@@ -38,8 +38,9 @@ export function useWorkflowSaveMutation(): WorkflowSaver {
   const mutation = useMutation(trpc.workflow.update.mutationOptions());
   return useMemo(
     () => ({
-      mutate: (input: WorkflowSaveInput, options?: WorkflowSaverMutateOptions) =>
-        mutation.mutate(input, options),
+      mutate: (input: WorkflowSaveInput, options?: WorkflowSaverMutateOptions) => {
+        mutation.mutate(input, options);
+      },
       mutateAsync: (input: WorkflowSaveInput) => mutation.mutateAsync(input),
     }),
     [mutation],

@@ -6,12 +6,12 @@
 // （视图/hook 不碰 vanillaApi，§17），在途用 `beginStaleRun` 作废守卫（弹窗中途关
 // 即不落地）。改写成功后把新剧本交回调用方（编辑器切到新版），再自动复评一轮 ——
 // 「评审 → 定向改写 → 复评」的闭环在界面侧也完整可走。
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useBusyAction } from "~/components/ui/use-busy-action";
+import { useReviewGuard } from "~/components/ui/use-review-guard";
 import { reviewScript, reviseScript } from "~/lib/production/run-client";
 import type { ReviewVerdict } from "~/lib/production/review-types";
-import { beginStaleRun, type StaleRunGuard } from "~/lib/stale-run";
 
 export type ScriptReviewController = {
   error: string;
@@ -30,24 +30,15 @@ export function useScriptReview(
 ): ScriptReviewController {
   const [verdict, setVerdict] = useState<ReviewVerdict | null>(null);
   const [history, setHistory] = useState<Array<ReviewVerdict>>([]);
-  const [error, setError] = useState("");
   const reviewBusy = useBusyAction();
   const reviseBusy = useBusyAction();
-
-  const guardRef = useRef<StaleRunGuard>(beginStaleRun());
-  useEffect(() => {
-    const guard = guardRef.current;
-    return () => guard.dispose();
-  }, []);
+  const { begin, error, fail } = useReviewGuard();
 
   const review = useCallback(async () => {
     if (!projectId) {
       return;
     }
-    guardRef.current.dispose();
-    const guard = beginStaleRun();
-    guardRef.current = guard;
-    setError("");
+    const guard = begin();
     await reviewBusy.run(async () => {
       try {
         const outcome = await reviewScript(projectId);
@@ -56,21 +47,16 @@ export function useScriptReview(
           setHistory(outcome.history);
         });
       } catch (error_) {
-        guard.commit(() => {
-          setError(error_ instanceof Error ? error_.message : "评审失败");
-        });
+        fail(guard, error_, "评审失败");
       }
     });
-  }, [projectId, reviewBusy]);
+  }, [projectId, reviewBusy, begin, fail]);
 
   const revise = useCallback(async () => {
     if (!projectId) {
       return;
     }
-    guardRef.current.dispose();
-    const guard = beginStaleRun();
-    guardRef.current = guard;
-    setError("");
+    const guard = begin();
     await reviseBusy.run(async () => {
       try {
         const markdown = await reviseScript(projectId);
@@ -83,12 +69,10 @@ export function useScriptReview(
         // 定向改写完成后立即复评 —— 闭环在界面侧一次点击走完。
         await review();
       } catch (error_) {
-        guard.commit(() => {
-          setError(error_ instanceof Error ? error_.message : "改写失败");
-        });
+        fail(guard, error_, "改写失败");
       }
     });
-  }, [projectId, reviseBusy, onScriptRevised, review]);
+  }, [projectId, reviseBusy, onScriptRevised, review, begin, fail]);
 
   return {
     verdict,

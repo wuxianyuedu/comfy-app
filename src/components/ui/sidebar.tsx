@@ -134,7 +134,11 @@ function SidebarProvider({
 
   /* 开关侧栏。窄窗下官方形态是浮层，所以两档各有自己的开合态。 */
   const toggleSidebar = React.useCallback(() => {
-    return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
+    if (isMobile) {
+      setOpenMobile((open) => !open);
+    } else {
+      setOpen((open) => !open);
+    }
   }, [isMobile, setOpen, setOpenMobile]);
 
   /* ⌘/Ctrl+B 开关侧栏 —— 走 P20 的唯一出口 `useHotkey`。官方那段自己
@@ -175,8 +179,9 @@ function SidebarProvider({
         data-narrow={narrow ? "true" : "false"}
         data-narrow-crossings={crossings}
         data-slot="sidebar-wrapper"
+        /* SAFETY: 类型断言已复核 */
         style={
-          /* SAFETY: 类型断言已复核 */ {
+          {
             "--sidebar-width": SIDEBAR_WIDTH,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
             ...style,
@@ -230,8 +235,9 @@ function Sidebar({
           data-slot="sidebar"
           dir={dir}
           side={side}
+          /* SAFETY: 类型断言已复核 */
           style={
-            /* SAFETY: 类型断言已复核 */ {
+            {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
             } as React.CSSProperties
           }
@@ -678,8 +684,9 @@ function SidebarMenuSkeleton({
       <Skeleton
         className="h-4 max-w-(--skeleton-width) flex-1"
         data-sidebar="menu-skeleton-text"
+        /* SAFETY: 类型断言已复核 */
         style={
-          /* SAFETY: 类型断言已复核 */ {
+          {
             "--skeleton-width": width,
           } as React.CSSProperties
         }

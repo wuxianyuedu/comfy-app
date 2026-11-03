@@ -1,0 +1,101 @@
+# 每日档（镜像档）—— 对位 `.cnb.yml` 的「每日生产构建」（crontab 0 1 * * *，北京时间）
+#
+# 承接的格（命令与 env 逐字对位 CNB 每日档，顺序一致 —— 单 job 串行，与 CNB 同一
+# 工作区语义对齐：`每日生产构建` 的产物接着给 `每日全量E2E` 的 `COMFY_E2E_SERVER=start`
+# 用，拆成多 job 就要跨 job 传产物，那不是等价形态）：
+#   安装依赖 → 同步数据库表结构 → 新鲜度账 → 生产构建 → ESLint 零警告 →
+#   浏览器安装 → 全量E2E → 单元测试（排最后，与 CNB「最容易出问题的放最后」同口径）。
+#
+# 刻意不承接（CNB 专有或自托管节点事实）：每日失败立案 / 每日令牌权限读数
+# （CNB API）/ 每日工具链自证 / 每日 Python 可用性 / 每日 Python 探针读数
+# （自托管宿主机事实读数；GitHub runner 的工具链由镜像与 setup-* 钉死，无需自证）。
+#
+# 两处与 CNB 不同形、但判据不变：
+#   · 安装用裸 `pnpm install --frozen-lockfile`：CNB 的 `ci-install-deps.mjs` 多出来的
+#     那一半是缓存槽登记（`COMFY_CI_SLOT` 不置时一次槽都不问），GitHub 侧缓存由
+#     setup-node 的 `cache: pnpm` 承担，槽逻辑在这里是空转。
+#   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层，这里原生 UTF-8，直跑。
+#
+# ⚠️ schedule 只跑在**镜像仓默认分支**上：它成立的前提是默认分支跟着 CNB `master`
+# 走 —— 2026-11-02 起 CNB push 档有了「GitHub master 镜像」格（#3064），前提已接上。
+# `workflow_dispatch`（可指 sha）仍是手动入口。
+# `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 最新只到 v6）。
+# GitHub cron 是 UTC：北京 01:00 = UTC 17:00（前一日）。
+name: Daily (mirror)
+
+on:
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: 要判的那一笔 sha（留空 = 默认分支 HEAD）
+        required: false
+        default: ""
+
+concurrency:
+  # 对位 CNB 的 `.lock-daily`：每日档全局一把锁，新跑到来掐掉旧跑。
+  group: daily
+  cancel-in-progress: true
+
+env:
+  SKIP_ENV_VALIDATION: "1"
+  BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
+  CI: "true"
+  COMFY_TEST_TIMEOUT_SCALE: "2"
+  COMFYAPP_QUIET_COVERAGE: "1"
+  # 主体=master ⇒ 读机器分支那份权威账（对位 `.cnb.yml` 每日档各格的同名键）。
+  COMFY_CI_SUBJECT: "master"
+
+jobs:
+  daily:
+    # 钉 24.04 不跟浮动标签的理由见 pr-gate.yml 同名注释。
+    runs-on: ubuntu-24.04
+    # CNB 各格预算之和（build 30m + lint 30m + E2E 45m + 单测 45m + 安装/浏览器）≈ 160m，
+    # 冷装与现场编译留一个量级，给到 300m。GitHub 单 job 硬上限 6h，这条在它之内。
+    timeout-minutes: 300
+    steps:
+      - name: 检出
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 0
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: 安装依赖（冷装约 8 分钟；allowBuilds 清单见 pnpm-workspace.yaml）
+        run: pnpm install --frozen-lockfile
+
+      - name: 同步数据库表结构（cnb 同款判据一字不改）
+        run: node scripts/db-push.mjs
+
+      - name: 新鲜度账（cnb 同款判据一字不改）
+        run: node scripts/freshness-gate.mjs
+
+      - name: 生产构建（cnb 同款判据一字不改）
+        env:
+          COMFY_CI_BUILD_CACHE: "1"
+        run: node scripts/ci-daily-build.mjs
+
+      - name: ESLint 零警告（cnb 同款判据一字不改：pnpm run lint，不是 eslint .）
+        run: pnpm run lint
+
+      - name: 浏览器安装（cnb 同款入口；npmmirror 镜像源同 CNB）
+        env:
+          PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
+        run: node scripts/ci-toolchain-selfcheck.mjs --playwright-only
+
+      - name: 全量E2E（cnb 同款判据一字不改）
+        env:
+          COMFY_E2E_SERVER: "start"
+        run: node scripts/e2e-run.mjs
+
+      - name: 单元测试（排最后：唯一会因机器负载而红的一档，同 CNB 口径）
+        run: node scripts/full-suite-run.mjs

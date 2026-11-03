@@ -161,14 +161,14 @@ export function ComfyuiControlView({ c }: { c: ComfyuiControlController }) {
             <p className="text-warning-strong text-xs leading-relaxed">{configHint}</p>
             <Button
               className="border-warning/40 text-warning-strong hover:bg-warning/10 mt-2 h-auto gap-1 rounded-lg px-2.5 py-1"
-              onClick={() =>
+              onClick={() => {
                 emitAppEvent("workspace:navigate", {
                   view: "settings",
                   /* 落点直接停在「创作后端」那一节（本页文案写的就是
                      「设置 → 创作后端」）：只切视图的话用户还得自己再找一次。 */
                   section: "comfyui",
-                })
-              }
+                });
+              }}
               size="xs"
               variant="outline"
             >

@@ -180,15 +180,52 @@ function configFace(ts) {
  * @returns {Set<string> | null} 相对路径（正斜杠）集合；取不到时 `null`
  */
 function trackedMjs(root) {
+  const r = trackedMjsDetailed(root);
+  return r.kind === "ok" ? r.files : null;
+}
+
+/**
+ * `trackedMjs()` 的带原因版（ISSUE #2965）——「筛不了」必须分成两种原因，
+ * 不许把 `git rev-parse` 与 `git ls-files` 的失败都归成同一个 `null`：
+ *
+ * - `"ok"`          —— 真拿到 git 清单；
+ * - `"not-git-top"` —— 这棵树不是它自己的 git 顶层（或压根不是 git 仓库）：夹具/子目录
+ *   形态，面 = 磁盘展开原值，由那句「没按入库清单筛」明写，不算故障；
+ * - `"error"`       —— git 命令本身失败（起不来 / 非零退出，例如索引损坏）：**真故障**。
+ *   静默折成「面 = 磁盘展开」就会把「230 vs 229」的红说成没来历 —— 由 `main()` 退 2
+ *   （没结论）并念出 stderr 首行，与本文件头「判据自己不许静默降级」同款。
+ *
+ * @param {string} root 被测的那棵树
+ * @returns {{kind: "ok", files: Set<string>} | {kind: "not-git-top"} | {kind: "error", reason: string}}
+ */
+function trackedMjsDetailed(root) {
+  /** stderr 的首个非空行 —— 红的时候只念这一行就够定位，整段倒出来反而淹掉要点。 */
+  const firstErrLine = (stderr) =>
+    String(stderr ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .find(Boolean) ?? "(stderr 为空)";
   const top = spawnSync("git", ["rev-parse", "--show-toplevel"], {
     cwd: root,
     encoding: "utf8",
   });
+  if (top.error) {
+    return { kind: "error", reason: `git rev-parse 起不来：${top.error.message}` };
+  }
   /* `stdout` 是 `spawnSync` 出参：git 起不来时实测是 `undefined`（`@types/node` 按泛型
    * 声明非空）。本文件自己就是「取不到 ≠ 没有」的执行者，这处 `??` 是那道防线。 */
-  // oxlint-disable-next-line typescript/no-unnecessary-condition -- `spawnSync` 起不来时 stdout 实测 undefined（@types/node 按泛型声明非空）
-  if (top.status !== 0 || !String(top.stdout ?? "").trim()) {
-    return null;
+  if (top.status !== 0) {
+    /* 「不是 git 仓库」是合法的夹具形态；除此之外的非零退出（仓库损坏等）是真故障。 */
+    if (/not a git repository/i.test(String(top.stderr ?? ""))) {
+      return { kind: "not-git-top" };
+    }
+    return {
+      kind: "error",
+      reason: `git rev-parse 退出码 ${top.status}：${firstErrLine(top.stderr)}`,
+    };
+  }
+  if (!String(top.stdout ?? "").trim()) {
+    return { kind: "not-git-top" };
   }
   /* 比 realpath：Windows 上盘符大小写与 8.3 形态都会让字符串不同而目录相同。 */
   const same = (p) => {
@@ -199,23 +236,31 @@ function trackedMjs(root) {
     }
   };
   if (same(String(top.stdout).trim()) !== same(root)) {
-    return null;
+    return { kind: "not-git-top" };
   }
   const listed = spawnSync("git", ["ls-files", "-z", "--", "*.mjs"], {
     cwd: root,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
-  if (listed.status !== 0 || listed.error) {
-    return null;
+  if (listed.error) {
+    return { kind: "error", reason: `git ls-files 起不来：${listed.error.message}` };
   }
-  return new Set(
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：`ls-files` 起不来时 stdout 是 undefined
-    String(listed.stdout ?? "")
-      .split("\0")
-      .filter(Boolean)
-      .map((f) => f.replaceAll("\\", "/")),
-  );
+  if (listed.status !== 0) {
+    return {
+      kind: "error",
+      reason: `git ls-files 退出码 ${listed.status}：${firstErrLine(listed.stderr)}`,
+    };
+  }
+  return {
+    kind: "ok",
+    files: new Set(
+      String(listed.stdout ?? "")
+        .split("\0")
+        .filter(Boolean)
+        .map((f) => f.replaceAll("\\", "/")),
+    ),
+  };
 }
 
 /**
@@ -504,7 +549,20 @@ function main(io = {}) {
    * 而红只给「212 vs 210」两个数 —— 那份多出来的东西谁都没提交过，也就没人能据此行动）。
    * 求交只动「算不算进账/判不判它的红」这一半；「include 有没有被改窄」那条对账
    * （下面 `faceProblems` 的第①问）仍拿**未筛**的那一份 —— 它判的是配置，不是磁盘。 */
-  const { face, untracked, filtered } = splitTrackedFace(cfg.mjs, trackedMjs(ROOT));
+  /* ISSUE #2965：「筛不了」分两种原因 —— 「不是 git 顶层」是夹具形态（面取磁盘原值、
+   * 明写没筛）；「git 命令失败」是真故障，**不许**静默折成同一档：那样平台上的
+   * 「230 vs 229」红就说不出来历。真故障当场退 2（没结论），并念出 stderr 首行。 */
+  const tracked = trackedMjsDetailed(ROOT);
+  if (tracked.kind === "error") {
+    console.error(
+      `${TAG} ✗ 取入库清单失败（${tracked.reason}）—— git 故障不许折成「面 = 磁盘展开」（ISSUE #2965）`,
+    );
+    return 2;
+  }
+  const { face, untracked, filtered } = splitTrackedFace(
+    cfg.mjs,
+    tracked.kind === "ok" ? tracked.files : null,
+  );
   console.log(
     `${TAG} 判决面：${CONFIG_REL} 展开 ${cfg.mjs.length} 份 .mjs（入库的 ${face.length} 份；脚本档全量，不是可达闭包）`,
   );
@@ -722,6 +780,7 @@ module.exports = {
   main,
   configFace,
   trackedMjs,
+  trackedMjsDetailed,
   splitTrackedFace,
   diskFace,
   faceProblems,

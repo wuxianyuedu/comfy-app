@@ -43,20 +43,32 @@ export function useWorkshopBootstrapData(input: {
       // 技能列表（风格卡）；失败按「没有技能」处理，不打断其余两路。
       try {
         const list = await fetchWorkshopStyles();
-        guard.commit(() => setStyles(list));
+        guard.commit(() => {
+          setStyles(list);
+        });
       } catch {
         /* 失败就是空列表，界面走各自的空态 */
       }
     })();
     // API 直连通道(生图/视频)的脱敏配置视图;失败按未配置处理。
     void fetchApiChannels()
-      .then((channels) => guard.commit(() => setApiChannels(channels)))
+      .then((channels) => {
+        guard.commit(() => {
+          setApiChannels(channels);
+        });
+      })
       .catch(() => undefined);
     // 工作流库列表：工坊「生成资源」里可选择用哪个工作流生成（ISSUE #145）。
     void fetchWorkshopWorkflows()
-      .then((workflows) => guard.commit(() => setWorkflowOptions(workflows)))
+      .then((workflows) => {
+        guard.commit(() => {
+          setWorkflowOptions(workflows);
+        });
+      })
       .catch(() => undefined);
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
     /* 三个 setter 都是主钩 useState 的稳定引用：依赖列全也不会重跑，
      *  「只挂载执行一次」的语义不变（显式列出是为满足 exhaustive-deps）。 */
   }, [setApiChannels, setStyles, setWorkflowOptions]);
@@ -84,7 +96,7 @@ export function useWorkshopTaskRecovery(input: {
         const snapshot = await fetchTaskSnapshot(taskId);
         /* 恢复是异步的：期间用户可能对同一镜头重新发起（任务 id 已换）。
          * 回写只认「仍归属本任务」的镜头，不覆盖新一轮生成的状态。 */
-        const patchIfOwned = (p: Partial<Shot>) =>
+        const patchIfOwned = (p: Partial<Shot>) => {
           setShots((prev) =>
             prev.map((item) => {
               if (item.id !== shotId) {
@@ -95,6 +107,7 @@ export function useWorkshopTaskRecovery(input: {
               return owned ? { ...item, ...p } : item;
             }),
           );
+        };
         const isVideo = target === "video";
         if (!snapshot) {
           patchIfOwned(isVideo ? { clipStatus: "failed" } : { status: "failed" });

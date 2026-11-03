@@ -44,11 +44,14 @@
     "check:scripts-types": "node scripts/check-scripts-typecheck.cjs",
     "check:all": "node scripts/quality-gate.mjs",
     "check:deps-freshness": "node scripts/check-deps-freshness.mjs",
+    "check:oxlint-zero-rules": "node scripts/check-oxlint-zero-rules.mjs",
     "check:freshness": "node scripts/freshness-gate.mjs --ledger",
     "check:daily-attendance": "node scripts/check-daily-attendance.mjs",
+    "check:mirror-attendance": "node scripts/check-mirror-attendance.mjs",
     "check:comment-headers": "node scripts/check-comment-headers.mjs",
     "check:app-version": "node scripts/check-app-version.cjs",
     "check:ci-incremental": "node scripts/ci-incremental-gates.mjs --check",
+    "check:ci-yaml": "node scripts/check-ci-yaml-parse.mjs",
     "ci:image-plan": "node scripts/ci-image-plan.mjs",
     "check:base": "node scripts/base-check.mjs",
     "check:base:batch": "node scripts/base-check.mjs --base",
@@ -172,7 +175,8 @@
     "typedoc": "^0.28.20",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-eslint": "^8.72.0",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "yaml": "^2.9.1"
   },
   "ct3aMetadata": {
     "initVersion": "7.40.0"

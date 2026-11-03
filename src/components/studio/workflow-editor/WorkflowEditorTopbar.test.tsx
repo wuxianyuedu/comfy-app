@@ -41,8 +41,9 @@ function renderTopBar() {
   return render(
     <WFStoresProvider stores={makeStores()}>
       <WorkflowEditorTopBar
+        /* SAFETY: 类型断言已复核 */
         detail={
-          /* SAFETY: 类型断言已复核 */ {
+          {
             name: "wf",
             nodes: [],
             edges: [],
@@ -60,8 +61,10 @@ function renderTopBar() {
         resetLayout={noop}
         rootWorkflowName="wf"
         saving={false}
-        setSubgraphStack={/* SAFETY: 类型断言已复核 */ noop as never}
-        setViewJsonOpen={/* SAFETY: 类型断言已复核 */ noop as never}
+        /* SAFETY: 类型断言已复核 */
+        setSubgraphStack={noop as never}
+        /* SAFETY: 类型断言已复核 */
+        setViewJsonOpen={noop as never}
         subgraphStack={[]}
         viewHostNodeId=""
       />

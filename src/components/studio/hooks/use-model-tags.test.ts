@@ -103,7 +103,9 @@ describe("useModelTags", () => {
   it("addTag：成功后清空草稿、刷新列表并回调父组件", async () => {
     const onChanged = vi.fn();
     const { result } = renderHook(() => useModelTags({ initialTags: [], onChanged }));
-    act(() => result.current.setDraft("  z-image  "));
+    act(() => {
+      result.current.setDraft("  z-image  ");
+    });
     await act(async () => {
       await result.current.addTag();
     });
@@ -117,7 +119,9 @@ describe("useModelTags", () => {
 
   it("addTag：草稿为空时是空操作（不发请求）", async () => {
     const { result } = renderHook(() => useModelTags({ initialTags: [] }));
-    act(() => result.current.setDraft("   "));
+    act(() => {
+      result.current.setDraft("   ");
+    });
     await act(async () => {
       await result.current.addTag();
     });
@@ -127,7 +131,9 @@ describe("useModelTags", () => {
   it("addTag：后端返回无 tag 时给出可见错误，且不清草稿（用户可改）", async () => {
     vanilla.workflowModel.create.mutate.mockResolvedValue({ tag: null });
     const { result } = renderHook(() => useModelTags({ initialTags: [] }));
-    act(() => result.current.setDraft("x"));
+    act(() => {
+      result.current.setDraft("x");
+    });
     await act(async () => {
       await result.current.addTag();
     });
@@ -138,7 +144,9 @@ describe("useModelTags", () => {
   it("addTag 抛错：错误文案可读（失败路径必须有出口）", async () => {
     vanilla.workflowModel.create.mutate.mockRejectedValue(new Error("标签名过长"));
     const { result } = renderHook(() => useModelTags({ initialTags: [] }));
-    act(() => result.current.setDraft("x"));
+    act(() => {
+      result.current.setDraft("x");
+    });
     await act(async () => {
       await result.current.addTag();
     });
@@ -218,7 +226,9 @@ describe("useModelTags", () => {
     vanilla.workflowModel.create.mutate.mockResolvedValue({ tag: tag("new") });
     const { result } = renderHook(() => useModelTags({ initialTags: [tag("keep", 1)] }));
     vanilla.workflowModel.list.query.mockRejectedValue(new Error("500"));
-    act(() => result.current.setDraft("x"));
+    act(() => {
+      result.current.setDraft("x");
+    });
     await act(async () => {
       await result.current.addTag();
     });

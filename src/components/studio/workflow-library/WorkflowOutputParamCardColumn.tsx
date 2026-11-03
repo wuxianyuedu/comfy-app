@@ -104,7 +104,13 @@ export function WorkflowOutputParamCardColumn({
             key={output.ioKey}
             label={title}
             onReset={canWire ? () => onReset?.(output.ioKey) : undefined}
-            onSelect={onSelect ? () => onSelect(output.ioKey) : undefined}
+            onSelect={
+              onSelect
+                ? () => {
+                    onSelect(output.ioKey);
+                  }
+                : undefined
+            }
             outputPorts={[
               {
                 name: portLabel,

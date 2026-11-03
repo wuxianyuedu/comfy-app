@@ -211,15 +211,13 @@ export const workflowMutationProcedures = {
         /* 保存 IO 映射时把类型 / 默认值固化进库（fix 4）：用图里当前字面量补全
          * 缺失的 type / defaultValue，离线也能做，不依赖 object_info 重算。 */
         workflowIO:
+          /* SAFETY: 类型断言已复核 */
           rest.workflowIO === undefined
             ? undefined
             : persistEnrichedWorkflowIO(
                 /* IO 的类型 / 默认值从 RAW 原件的字面量与 object_info 富化，
                  * 存库不再有第二份可执行的 API 图。 */
-                /* SAFETY: 类型断言已复核 */ (existing.rawJson as
-                  | Record<string, unknown>
-                  | null
-                  | undefined) ?? null,
+                (existing.rawJson as Record<string, unknown> | null | undefined) ?? null,
                 parseWorkflowIOMap(rest.workflowIO),
               ),
       };
@@ -298,7 +296,8 @@ export const workflowMutationProcedures = {
         typeof existing.rawJson === "object" &&
         !Array.isArray(existing.rawJson)
       ) {
-        nextRawJson = /* SAFETY: 类型断言已复核 */ existing.rawJson as Record<string, unknown>;
+        /* SAFETY: 类型断言已复核 */
+        nextRawJson = existing.rawJson as Record<string, unknown>;
       }
       const writePositions =
         input.positions !== undefined && input.resetPositionsScope === undefined;
@@ -309,19 +308,16 @@ export const workflowMutationProcedures = {
           ? [...(nextRawJson.nodes as Array<unknown>)]
           : [];
         if (writePositions) {
-          const posMap = /* SAFETY: 类型断言已复核 */ input.positions as Record<
-            string,
-            [number, number]
-          >;
+          /* SAFETY: 类型断言已复核 */
+          const posMap = input.positions as Record<string, [number, number]>;
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
             if (!nd || typeof nd !== "object") {
               continue;
             }
             const rawId =
-              nd && "id" in nd
-                ? /* SAFETY: 类型断言已复核 */ (nd as { id?: unknown }).id
-                : undefined;
+              /* SAFETY: 类型断言已复核 */
+              nd && "id" in nd ? (nd as { id?: unknown }).id : undefined;
             const pid =
               typeof rawId === "string" ? rawId : typeof rawId === "number" ? String(rawId) : "";
             if (pid && posMap?.[pid]) {

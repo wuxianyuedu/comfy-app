@@ -44,12 +44,15 @@ export function useSizePresetTable(): SizePresetTableController {
   );
 
   const setDims = useCallback(
-    (scene: SizeScene, ratioLabel: string, tier: ResolutionTier, size: SizeDims) =>
-      setSizePresetDims(scene, ratioLabel, tier, size),
+    (scene: SizeScene, ratioLabel: string, tier: ResolutionTier, size: SizeDims) => {
+      setSizePresetDims(scene, ratioLabel, tier, size);
+    },
     [],
   );
 
-  const resetScene = useCallback((scene: SizeScene) => resetSizePresetScene(scene), []);
+  const resetScene = useCallback((scene: SizeScene) => {
+    resetSizePresetScene(scene);
+  }, []);
 
   const isModified = useCallback((scene: SizeScene) => sceneIsModified(scene, table), [table]);
 

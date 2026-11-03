@@ -48,18 +48,27 @@ function ExpansionDemo() {
   return (
     <div className="flex w-120 flex-col gap-3">
       <div className="flex flex-wrap gap-2">
-        <button className="rounded border px-2 py-1 text-xs" onClick={() => nodes.replace({})}>
+        <button
+          className="rounded border px-2 py-1 text-xs"
+          onClick={() => {
+            nodes.replace({});
+          }}
+        >
           collapseAll（全收起）
         </button>
         <button
           className="rounded border px-2 py-1 text-xs"
-          onClick={() => nodes.seedDefaults(PATHS)}
+          onClick={() => {
+            nodes.seedDefaults(PATHS);
+          }}
         >
           seedDefaults（补默认展开）
         </button>
         <button
           className="rounded border px-2 py-1 text-xs"
-          onClick={() => nodes.replace({ style_pack: false })}
+          onClick={() => {
+            nodes.replace({ style_pack: false });
+          }}
         >
           replace（保留「已收起」这一条）
         </button>
@@ -68,7 +77,9 @@ function ExpansionDemo() {
         {PATHS.map((path) => (
           <Disclosure
             key={path}
-            onOpenChange={() => nodes.toggle(path)}
+            onOpenChange={() => {
+              nodes.toggle(path);
+            }}
             open={nodes.isExpanded(path)}
             trigger={<span className="text-sm">{path}</span>}
           >
@@ -109,11 +120,18 @@ function SeedDemo() {
       <div className="flex flex-wrap gap-2">
         <button
           className="rounded border px-2 py-1 text-xs"
-          onClick={() => nodes.seedDefaults(PATHS)}
+          onClick={() => {
+            nodes.seedDefaults(PATHS);
+          }}
         >
           seedDefaults(PATHS)
         </button>
-        <button className="rounded border px-2 py-1 text-xs" onClick={() => nodes.replace({})}>
+        <button
+          className="rounded border px-2 py-1 text-xs"
+          onClick={() => {
+            nodes.replace({});
+          }}
+        >
           replace({"{ }"})
         </button>
       </div>

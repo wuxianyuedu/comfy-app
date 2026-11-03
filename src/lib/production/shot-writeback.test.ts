@@ -145,8 +145,9 @@ describe("requestShotRedo", () => {
     writeWorkshopDraft("proj_1", {
       ...emptyWorkshopDraft(),
       // rev 不在 Shot 类型上，作为未知扩展字段写入（草稿 JSON 列宽容）。
+      /* SAFETY: 类型断言已复核 */
       shots: [
-        /* SAFETY: 类型断言已复核 */ {
+        {
           ...shotA(),
           imageUrl: "/x.png",
           clipUrl: "/y.mp4",

@@ -72,14 +72,13 @@ describe("DocumentFrame（文档型）", () => {
     expect(column.className).toContain("max-w-wide");
   });
 
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["narrow", "max-w-narrow"],
-      ["medium", "max-w-medium"],
-      ["wide", "max-w-wide"],
-      ["full", "max-w-none"],
-    ] as const,
-  )("档位 %s ⇒ 只写 %s 这一个类（有数值的那三档留在令牌里）", ([width, cls]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["narrow", "max-w-narrow"],
+    ["medium", "max-w-medium"],
+    ["wide", "max-w-wide"],
+    ["full", "max-w-none"],
+  ] as const)("档位 %s ⇒ 只写 %s 这一个类（有数值的那三档留在令牌里）", ([width, cls]) => {
     const { container } = render(
       <DocumentFrame width={width}>
         <p>内容</p>

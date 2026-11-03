@@ -156,10 +156,9 @@ export function useCharacterPortrait(opts: {
   /** 更新用户选择。顺带清掉错误提示：门禁类错误（「还没选模型」）在用户补齐
    *  选择后不再成立，留着红色提示条只会误导；生成失败的详情另有一份在 log 与
    *  log/workshop/ 落盘历史里，清掉提示条不会丢信息。 */
-  const patch = React.useCallback(
-    (p: PortraitSessionPatch) => setSession((prev) => ({ ...prev, ...p, error: "" })),
-    [],
-  );
+  const patch = React.useCallback((p: PortraitSessionPatch) => {
+    setSession((prev) => ({ ...prev, ...p, error: "" }));
+  }, []);
 
   const appendLog = React.useCallback((entry: PortraitLogEntry) => {
     setSession((prev) => ({

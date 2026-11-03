@@ -48,7 +48,9 @@ function VideoField({
       <Field label={label}>
         <SelectMenu
           disabled={disabled}
-          onChange={(value) => set(entry.ioKey, value)}
+          onChange={(value) => {
+            set(entry.ioKey, value);
+          }}
           options={opts}
           value={val}
         />
@@ -137,7 +139,9 @@ function VideoField({
           disabled={disabled}
           max={bounds.max}
           min={bounds.min}
-          onChange={(nextValue) => set(entry.ioKey, nextValue)}
+          onChange={(nextValue) => {
+            set(entry.ioKey, nextValue);
+          }}
           step={bounds.step}
           value={value}
         />
@@ -152,7 +156,9 @@ function VideoField({
         aria-label={label}
         className="nodrag nopan bg-canvas-deep text-ink-soft focus:ring-primary/40 text-2xs w-full rounded-md px-2.5 py-2 outline-none focus:ring-1"
         disabled={disabled}
-        onChange={textHandler((value) => set(entry.ioKey, value))}
+        onChange={textHandler((value) => {
+          set(entry.ioKey, value);
+        })}
         value={str}
       />
     </Field>

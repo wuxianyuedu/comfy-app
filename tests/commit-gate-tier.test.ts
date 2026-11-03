@@ -108,14 +108,17 @@ describe("档位：跳过必须被说出来", () => {
     }
   });
 
-  it("pre-push 不再背受影响用例：那一段 2026-10-20 撤了，执行者换成平台那一格", () => {
+  it("受影响用例 / 固定结构用例 / 覆盖率上报 从 PR 撤出：执行者收口到每日全量单测", () => {
     /* 沿革（别读混）：`unitTests` 段 2026-10-19 从 pre-commit 的 C 组搬到 pre-push，
      * 2026-10-20 又整体撤掉 —— 本地这一跳在共享机上的失效形态是 forks worker 调度
      * 超时而不是用例红（实测拦下一次、隔离复跑 88 文件 1116 条全绿），增量档自此
      * 由 `.cnb.yml` 的 `受影响用例` 一格执行。
-     * 这里钉两件：① premerge 段表里**没有** `unitTests`（留一段恒跳过会让 `--json`
-     * 的读数里永远有一格「没跑起来」，而那一格不构成证据，§13.6.2）；② 新执行者的
-     * 三个事实都在场（GATES 里有名字、跑法脚本走同一条判决链、改动面经 env 传入）。 */
+     * 2026-11-02 起这两测试格连同 `core 骨架单一事实源` / `core 出口纪律与基类纯度`
+     * （执行者正是固定结构清单）一起从 PR 撤到每日全量单测：判据面整份被 `每日单元测试`
+     * 全量套件覆盖，与 §13.5.21 同口径。这里钉两件：① premerge 段表里**没有** `unitTests`
+     * （留一段恒跳过会让 `--json` 的读数里永远有一格「没跑起来」，而那一格不构成证据，
+     * §13.6.2）；② `受影响用例` / `固定结构用例` 在 `.cnb.yml` 里**不再有独立 stage**
+     * （PR 清单与 `*gates` 锚点都不见它们），否则这一格又会回到 PR 上跑。 */
     const src = readFileSync(path.join(ROOT, "scripts/premerge-check.mjs"), "utf8");
     expect(src).not.toContain("unitTests:");
     expect(src).not.toContain('kind: "changed"');
@@ -131,10 +134,13 @@ describe("档位：跳过必须被说出来", () => {
     expect(ci).toContain("resolveCiWorkers");
 
     const cnb = readFileSync(path.join(ROOT, ".cnb.yml"), "utf8");
-    expect(cnb).toContain("- name: 受影响用例");
-    /* #2845 起固定/受影响拆成两格：名单里两格相邻、且各有自己的 stage 块。 */
-    expect(cnb).toContain("类型检查, 固定结构用例, 受影响用例,");
-    expect(cnb).toContain("- name: 固定结构用例");
+    // 两测试格从 PR 撤出：PR 清单里不再相邻、且不再有独立 stage 块。
+    expect(cnb).not.toContain("类型检查, 固定结构用例, 受影响用例,");
+    expect(cnb).not.toMatch(/^\s*- name: 受影响用例\s*$/m);
+    expect(cnb).not.toMatch(/^\s*- name: 固定结构用例\s*$/m);
+    // `覆盖率上报` 从 PR 挪到了每日档（PR 上不再有产出 lcov 的测试格，它只会静默空转）；
+    // 它现在以 `- name: 覆盖率上报` 的形态在 `*daily_gates` 末尾。
+    expect(cnb).toMatch(/^\s*- name: 覆盖率上报\s*$/m);
     // 拿不到改动面 / 清单为空必须退 2（没判 ≠ 绿）。
     expect(ci).toMatch(/files\.length === 0[\s\S]{0,400}return 2/);
   });

@@ -10,8 +10,8 @@ function makeParams(
   extra?: Partial<WorkflowIOEnrichParams>,
 ): WorkflowIOEnrichParams {
   return {
-    workflowIORaw:
-      /* SAFETY: 类型断言已复核 */ workflowIORaw as unknown as WorkflowIOEnrichParams["workflowIORaw"],
+    /* SAFETY: 类型断言已复核 */
+    workflowIORaw: workflowIORaw as unknown as WorkflowIOEnrichParams["workflowIORaw"],
     rawInputsById: {},
     rawNodeMeta: [],
     graph: {},

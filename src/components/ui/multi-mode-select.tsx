@@ -187,6 +187,7 @@ export function MultiModeSelect({
   const plusN = Math.max(0, modes.length - 1);
 
   return (
+    /* SAFETY: 类型断言已复核 */
     <Popover onOpenChange={setOpen} open={open}>
       <span
         className={`inline-flex items-center gap-1 ${disabled ? "pointer-events-none opacity-50" : ""}`}
@@ -218,7 +219,9 @@ export function MultiModeSelect({
         {plusN > 0 && !hideExtraBadge && (
           <Button
             className="text-ink-faint bg-primary-500/10 hover:bg-primary-500/20 hover:text-primary-strong text-2xs h-auto rounded-md px-1.5 py-0.5 font-medium"
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              setOpen(true);
+            }}
             title={`还有 ${plusN} 种其他模式，点击管理`}
             variant="ghost"
           >
@@ -249,36 +252,34 @@ export function MultiModeSelect({
 
         {/* tabs — switchable 图像 / 视频 / 音频 */}
         <div className="border-border-subtle flex items-center gap-1 border-b px-2 pt-2">
-          {
-            /* SAFETY: 类型断言已复核 */ (
-              ["image", "video", "audio"] as Array<WorkflowCategory>
-            ).map((cat) => {
-              const selCount = (grouped[cat] ?? []).filter((type) => draft.has(type.code)).length;
-              const isActive = activeTab === cat;
-              return (
-                <Button
-                  className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
-                    isActive
-                      ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
-                      : "text-ink-muted hover:text-ink-strong"
-                  }`}
-                  key={cat}
-                  onClick={() => setActiveTab(cat)}
-                  variant="ghost"
-                >
-                  {CATEGORY_LABEL[cat]}
-                  {selCount > 0 && (
-                    <span className={`text-3xs ml-1 ${CATEGORY_TEXT[cat]}`}>{selCount}</span>
-                  )}
-                  {isActive && (
-                    <span
-                      className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
-                    />
-                  )}
-                </Button>
-              );
-            })
-          }
+          {(["image", "video", "audio"] as Array<WorkflowCategory>).map((cat) => {
+            const selCount = (grouped[cat] ?? []).filter((type) => draft.has(type.code)).length;
+            const isActive = activeTab === cat;
+            return (
+              <Button
+                className={`relative h-auto flex-1 rounded-t-md px-2 py-1.5 text-xs font-semibold ${
+                  isActive
+                    ? `${CATEGORY_TEXT[cat]} bg-surface-2 hover:bg-surface-2`
+                    : "text-ink-muted hover:text-ink-strong"
+                }`}
+                key={cat}
+                onClick={() => {
+                  setActiveTab(cat);
+                }}
+                variant="ghost"
+              >
+                {CATEGORY_LABEL[cat]}
+                {selCount > 0 && (
+                  <span className={`text-3xs ml-1 ${CATEGORY_TEXT[cat]}`}>{selCount}</span>
+                )}
+                {isActive && (
+                  <span
+                    className={`absolute inset-x-2 -bottom-px h-0.5 rounded-full ${CATEGORY_ACCENT[cat]}`}
+                  />
+                )}
+              </Button>
+            );
+          })}
         </div>
 
         {/* 列表 —— 只列当前页签分类下的项 */}
@@ -310,8 +311,12 @@ export function MultiModeSelect({
                    * 键判据走 `simpleKeyHandler`（§16.2.4.57 的唯一出口：归一
                    * 键名 + `preventDefault` 显式），不在这里手写第二份
                    * `event.key === " "` —— 那正是这条账要消除的形态。 */
-                  onClick={() => toggle(item.code)}
-                  {...simpleKeyHandler(["Space", "Enter"], () => toggle(item.code))}
+                  onClick={() => {
+                    toggle(item.code);
+                  }}
+                  {...simpleKeyHandler(["Space", "Enter"], () => {
+                    toggle(item.code);
+                  })}
                   aria-checked={isSelected}
                   role="checkbox"
                   tabIndex={0}
@@ -369,7 +374,9 @@ export function MultiModeSelect({
         <div className="border-border-subtle flex items-center gap-2 border-t p-2">
           <Button
             className="h-auto flex-1 rounded-md px-3 py-1.5 text-sm"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setOpen(false);
+            }}
             variant="secondary"
           >
             取消

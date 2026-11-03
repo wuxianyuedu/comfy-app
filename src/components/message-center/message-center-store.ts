@@ -105,9 +105,13 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
   messages: [],
   hydrated: false,
   currentRunId: null,
-  setOpen: (open) => set({ open }),
-  toggleOpen: () => set({ open: !get().open }),
-  push: (m) =>
+  setOpen: (open) => {
+    set({ open });
+  },
+  toggleOpen: () => {
+    set({ open: !get().open });
+  },
+  push: (m) => {
     set((s) => ({
       messages: [
         {
@@ -131,23 +135,33 @@ export const useMessageCenterStore = create<MessageCenterState>((set, get) => ({
          * 它的 push 天然比事件晚，靠插入次序摆放会把「断开 → 恢复」翻成反的。 */
         .sort((a, b) => b.time - a.time)
         .slice(0, MAX_MESSAGES),
-    })),
-  setCurrentRunId: (runId) => set({ currentRunId: runId }),
-  markRead: (id) =>
+    }));
+  },
+  setCurrentRunId: (runId) => {
+    set({ currentRunId: runId });
+  },
+  markRead: (id) => {
     set((s) => ({
       messages: s.messages.map((x) => (x.id === id ? { ...x, read: true } : x)),
-    })),
-  markAllRead: () =>
+    }));
+  },
+  markAllRead: () => {
     set((s) => ({
       messages: s.messages.map((x) => (x.read ? x : { ...x, read: true })),
-    })),
-  remove: (id) => set((s) => ({ messages: s.messages.filter((x) => x.id !== id) })),
-  clear: () => set({ messages: [] }),
-  hydrate: () =>
+    }));
+  },
+  remove: (id) => {
+    set((s) => ({ messages: s.messages.filter((x) => x.id !== id) }));
+  },
+  clear: () => {
+    set({ messages: [] });
+  },
+  hydrate: () => {
     set((s) => ({
       hydrated: true,
       messages: restoreMessages(s.messages),
-    })),
+    }));
+  },
 }));
 
 /* ── 持久化：消息中心此前是纯内存的，于是「记了等于没记」 ──────────────────

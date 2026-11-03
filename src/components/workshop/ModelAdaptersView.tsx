@@ -103,13 +103,13 @@ function InputMappingRow({
         labels={Object.fromEntries(
           WORKSHOP_INPUT_TYPES.map((t) => [t.type, `${workshopInputLabel(t.type)}（${t.type}）`]),
         )}
-        onChange={(value) =>
+        onChange={(value) => {
           onChange({
             /* SAFETY: 类型断言已复核 */
             type: value as WorkshopInputType,
             field: row.field,
-          })
-        }
+          });
+        }}
         options={WORKSHOP_INPUT_TYPES.map((t) => t.type)}
         value={row.type}
       />
@@ -119,7 +119,9 @@ function InputMappingRow({
       <input
         aria-label={`${modeLabel(mode)} 第 ${index + 1} 行的请求体字段名`}
         className="border-border bg-bg focus:border-primary min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
-        onChange={(event) => onChange({ type: row.type, field: event.target.value })}
+        onChange={(event) => {
+          onChange({ type: row.type, field: event.target.value });
+        }}
         placeholder="请求体字段名"
         value={row.field}
       />
@@ -192,7 +194,9 @@ export function ModelAdaptersView() {
             {candidates.map((c) => (
               <SelectChip
                 key={c.name}
-                onClick={() => selectModel(c.name)}
+                onClick={() => {
+                  selectModel(c.name);
+                }}
                 selected={selectedModel === c.name}
                 shape="pill"
               >
@@ -226,7 +230,9 @@ export function ModelAdaptersView() {
                   <Button
                     aria-label={`移除模式 ${modeLabel(a.mode)}`}
                     className="text-muted-foreground/60 hover:text-danger-strong hover:bg-transparent"
-                    onClick={() => setDraft((prev) => prev.filter((x) => x.mode !== a.mode))}
+                    onClick={() => {
+                      setDraft((prev) => prev.filter((x) => x.mode !== a.mode));
+                    }}
                     size="icon-xs"
                     variant="ghost"
                   >
@@ -237,7 +243,9 @@ export function ModelAdaptersView() {
               <SelectChip
                 aria-expanded={addModeOpen}
                 className="px-3 py-1 text-xs"
-                onClick={() => setAddModeOpen((v) => !v)}
+                onClick={() => {
+                  setAddModeOpen((v) => !v);
+                }}
                 selected={false}
                 shape="dashed"
               >
@@ -306,12 +314,12 @@ export function ModelAdaptersView() {
                   <input
                     {...a11y}
                     className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
-                    onChange={(event) =>
+                    onChange={(event) => {
                       updateAdapter(a.mode, (x) => ({
                         ...x,
                         endpointPath: event.target.value,
-                      }))
-                    }
+                      }));
+                    }}
                     value={a.endpointPath}
                   />
                 )}
@@ -327,24 +335,24 @@ export function ModelAdaptersView() {
                       index={i}
                       key={`${a.mode}-${row.type}-${i}`}
                       mode={a.mode}
-                      onChange={(next) =>
+                      onChange={(next) => {
                         updateAdapter(a.mode, (x) => ({
                           ...x,
                           inputs: x.inputs.map((r, j) => (j === i ? next : r)),
-                        }))
-                      }
-                      onRemove={() =>
+                        }));
+                      }}
+                      onRemove={() => {
                         updateAdapter(a.mode, (x) => ({
                           ...x,
                           inputs: x.inputs.filter((_, j) => j !== i),
-                        }))
-                      }
+                        }));
+                      }}
                       row={row}
                     />
                   ))}
                   <SelectChip
                     className="self-start px-2.5 py-1 text-xs"
-                    onClick={() =>
+                    onClick={() => {
                       updateAdapter(a.mode, (x) => {
                         const used = new Set(x.inputs.map((r) => r.type));
                         const next =
@@ -354,8 +362,8 @@ export function ModelAdaptersView() {
                           ...x,
                           inputs: [...x.inputs, { type: next.type, field: next.type }],
                         };
-                      })
-                    }
+                      });
+                    }}
                     selected={false}
                     shape="dashed"
                   >
@@ -376,12 +384,12 @@ export function ModelAdaptersView() {
                   <input
                     {...a11y}
                     className="border-border bg-bg focus:border-primary w-full rounded-lg border px-2.5 py-1.5 font-mono text-xs outline-none"
-                    onChange={(event) =>
+                    onChange={(event) => {
                       updateAdapter(a.mode, (x) => ({
                         ...x,
                         outputField: event.target.value,
-                      }))
-                    }
+                      }));
+                    }}
                     placeholder="url"
                     value={a.outputField}
                   />

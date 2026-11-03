@@ -194,3 +194,192 @@ export function perCommitShapeOf(rev, spec) {
    * 永远到不了。所以把这一条提交**直接**交给 `perCommitShape` 的 entries 形态。 */
   return perCommitShape("", limit, root, deps, [{ rev, parents: [parent] }]);
 }
+
+/**
+ * 区间里每个提交的正文（**空提交不进这份名单**，ISSUE #3034）。
+ *
+ * 这是护栏 ①（迁移声明）的取数：它判的是「区间里每个**有内容**的提交都带
+ * `format-migration:` 尾注」。空提交一份文件都没碰，对「这次重排有没有独占」
+ * 不提供任何信息 —— 而它又经常出现：`pnpm ship --rerun-ci` 推的就是一笔空提交，
+ * 正文固定为 `ci: rerun (ship --rerun-ci)`、不带任何尾注。把它数进来，代价是
+ * 「重跑一次 CI」这个动作本身会改变门禁读数：PR #2990 重跑三次之后，一个原本合规的
+ * 迁移 PR 被 `166 份里 118 份纯格式化` 判红（构建 `cnb-4ig-1k6csckqj`），
+ * 同一区间摘掉那三笔就 `[ok] 按迁移放行`。
+ *
+ * 与 `perCommitShape()` 同一个切面、同一条理由留在这里（§12.6 R5 / §12.13）。
+ *
+ * @param {string} root 工作区
+ * @param {string} revRange `A..B` 区间
+ * @returns {Array<string>} 每个有内容提交的正文（`commits.length` 可直接当计数用）
+ */
+export function commitBodies(root, revRange) {
+  /* `--no-merges`：平台侧跑的是**合并预览**（HEAD 是合并提交），而合并提交那一条
+   * 自动生成的正文不会带尾注 —— 把它算进「每个提交都要声明」等于这条门在 CI 上
+   * 永远不成立。合并提交本来就是本门禁豁免的那一档（见 `perCommitShape()` 的头注）。
+   *
+   * 正文与文件清单一次取回（`%x01` 起头、`%x00` 分隔）：判「空提交」只需要
+   * 「这一笔有没有文件名」，而多起一次 `git show` 是逐提交一次进程。 */
+  const raw = runGit(root, ["log", "--no-merges", "--format=%x01%B%x00", "--name-only", revRange]);
+  if (raw === null) {
+    return [];
+  }
+  const bodies = [];
+  for (const chunk of raw.split("\u0001")) {
+    const text = chunk.trim();
+    if (!text) {
+      continue;
+    }
+    const [body = "", ...rest] = text.split("\u0000");
+    const files = rest.join("\u0000").split("\n").filter(Boolean);
+    if (!files.length) {
+      continue;
+    }
+    bodies.push(body.trim());
+  }
+  return bodies;
+}
+
+/**
+ * 区间里每个**有内容**提交的「rev → 正文」表（护栏 ① 的取数，ISSUE #3054）。
+ *
+ * 与 `commitBodies()` 同一份 `git log`、同一套筛选（空提交与合并提交都不进名单），
+ * 差别只在形状：那一份丢掉 rev、只能按**下标**配对，而护栏 ① 要问的是「**这一笔**
+ * 带没带尾注」—— 拿下标去对是两条各自会漂的清单之间的暗契约（一次筛选口径变动就
+ * 静默错位）。这里把 rev 与正文一起交出去，配对由取数本身保证。
+ *
+ * @param {string} root 工作区
+ * @param {string} revRange `A..B` 区间
+ * @returns {Map<string, string>} rev → 正文；取不到时是空表（调用方按 fail-closed 读）
+ */
+export function commitBodyByRev(root, revRange) {
+  /* `%x01` 起头、`%x00` 分隔 —— 与 `commitBodies()` 同一个形状，两次取数不会各自
+   * 漂一份筛选口径。`--no-merges` 的理由同那一份：合并提交那一条自动生成的正文
+   * 不带尾注，把它算进「要声明」等于这条门在 CI 上永远不成立。 */
+  const raw = runGit(root, [
+    "log",
+    "--no-merges",
+    "--format=%x01%H%x00%B%x00",
+    "--name-only",
+    revRange,
+  ]);
+  if (raw === null) {
+    return new Map();
+  }
+  const out = new Map();
+  for (const chunk of raw.split("\u0001")) {
+    const text = chunk.trim();
+    if (!text) {
+      continue;
+    }
+    const [rev = "", body = "", ...rest] = text.split("\u0000");
+    const files = rest.join("\u0000").split("\n").filter(Boolean);
+    if (!rev || !files.length) {
+      continue;
+    }
+    out.set(rev.trim(), body.trim());
+  }
+  return out;
+}
+
+/**
+ * 「格式化迁移」声明：区间里**每一笔含重排的**提交都带 `format-migration:` 尾注（护栏 ①）。
+ *
+ * 为什么需要这一扇门：换格式化器时（2026-10-28 prettier → oxfmt），格式判据是**硬闸
+ * 且没有基线** ⇒ 全量重排必须**和切换同批**落地；而本判据的阈值（10）又会拦住同批里
+ * 的重排 —— 两条硬闸互锁，迁移没有可落地的形状。于是给迁移一条**显式的、一次性的**
+ * 声明：声明了就按「这是一次格式化器迁移」读，不阻断，但清单照打、读数照报（可审计）。
+ *
+ * **护栏 ① 只问「含重排的提交」，不问「每一个提交」**（ISSUE #3054）。
+ * 迁移 PR 的生命周期里**必然**会追加与迁移无关的功能提交 —— 修判据自己、补文档、
+ * 解冲突（都是正常动作），它们不碰重排、也不该撒谎写 `format-migration:`。
+ * 拿 `every()` 去要求它们，等于让合规的迁移 PR 永远凑不齐这一关。
+ *
+ * 这是同一条口径的**第二次**收窄：#3034 摘掉的是**空提交**（`commitBodies()` 只收
+ * 有内容的提交），理由一样 —— 它一份文件都没碰，对「这次重排有没有独占」不提供任何
+ * 信息，却能否决整个人证。功能提交不是空提交、摘不掉，于是同一个冲突换了一副面孔
+ * 回来（PR #2990 上 5 笔修判据的提交，把 `172 份里 118 份` 判成不走迁移）。
+ * 两次的病根是同一个：**让与迁移无关的提交参与迁移的判定**。
+ *
+ * 「含重排」的取数现成：护栏 ② 的逐提交表里 `reformatOnly > 0` 就是它 —— 这里不
+ * 另算一份（同一把尺，两处不会各自漂）。
+ *
+ * 与 `perCommitShape()` 同一个切面、同一条理由留在这里（§12.6 R5 / §12.13）。
+ *
+ * @param {string} root 工作区
+ * @param {string} revRange `A..B` 区间
+ * @param {PerCommitReport | null | undefined} perCommit 护栏 ② 的逐提交读数
+ * @param {RegExp} declarationRe 尾注正则（由入口给，口径只有一处）
+ * @returns {{declared: boolean, commits: number, missing: string[]}}
+ */
+export function migrationDeclaration(root, revRange, perCommit, declarationRe) {
+  /* 空提交 / 合并提交不进名单的理由各写在 `commitBodyByRev()` 的头注里（#3034）。 */
+  const bodies = commitBodyByRev(root, revRange);
+  if (bodies.size === 0) {
+    return { declared: false, commits: 0, missing: [] };
+  }
+  /* 没有逐提交读数 ⇒ 退回「每一条都要声明」（fail-closed）：判不出哪一笔含重排时，
+   * 放宽等于把这一关静默拆掉。 */
+  if (!perCommit) {
+    const missing = [...bodies].filter(([, body]) => !declarationRe.test(body)).map(([rev]) => rev);
+    return { declared: missing.length === 0, commits: bodies.size, missing };
+  }
+  /* **只问含重排的那批提交**（ISSUE #3054）：「这一笔有没有碰重排」取自护栏 ② 的
+   * 逐提交表（`reformatOnly > 0`），与那一关同一把尺 —— 这里不另算一份。
+   * 与迁移无关的功能提交（修判据、补文档、解冲突）不参与判定：它们不碰重排，
+   * 也不该撒谎写 `format-migration:`。 */
+  const reformatting = perCommit.commits.filter((c) => c.reformatOnly > 0).map((c) => c.rev);
+  if (reformatting.length === 0) {
+    return { declared: false, commits: bodies.size, missing: [] };
+  }
+  /* 逐提交表里点名、而正文表里取不到的那一笔按**缺声明**记（fail-closed）：两张表
+   * 不一致说明取数有洞，不许当成「已经声明过」。 */
+  const missing = reformatting.filter((rev) => !declarationRe.test(bodies.get(rev) ?? ""));
+  return { declared: missing.length === 0, commits: bodies.size, missing };
+}
+
+/**
+ * 护栏 ② 的**读数**（一行；`null` = 这一档没有逐提交读数，不必念）。
+ *
+ * ## 它治的是哪一件事
+ *
+ * 护栏 ② 只有「通过 / 不通过」两个出口，于是两种**下一动作截然相反**的形态在屏幕上
+ * 逐字相同：
+ *
+ *   · 某条提交**整条都是重排**、只是没带 `format-migration:` 声明 ⇒ 补声明；
+ *   · 重排散在几十条提交里、没有一条独占 ⇒ 形态就有问题，该拆历史。
+ *
+ * 现场（ISSUE #3038）连着两跑只有一张 `118 份` 的名单，一个「哪条提交是怎么读的」
+ * 都没有 —— 读者只能去猜是哪一种。这一格把**极值**念出来，那一句就足以分开两种形态。
+ *
+ * ## 为什么留在这里
+ *
+ * 本文件是护栏 ② 的机制层，而 `check-reformat-only.cjs` 已到 900 行硬闸（§12.6 R5）——
+ * 判决话术留在 `report()`，取数与措辞在这里。它**不改任何判定**：`ok` 仍由
+ * `perCommitShape()` 的 `offenders` 决定。
+ *
+ * @param {PerCommitReport | null | undefined} perCommit 逐提交读数
+ * @returns {string | null}
+ */
+export function perCommitReading(perCommit) {
+  if (!perCommit) {
+    return null;
+  }
+  if (perCommit.offenders.length > 0) {
+    return `护栏 ② 没通过：${perCommit.offenders.join("、")}`;
+  }
+  if (perCommit.commits.length === 0) {
+    return null;
+  }
+  const max = perCommit.commits.reduce(
+    (acc, c) => (c.reformatOnly >= acc.reformatOnly && c.reformatOnly > 0 ? c : acc),
+    { rev: "", files: 0, reformatOnly: 0 },
+  );
+  if (max.rev === "") {
+    return null;
+  }
+  const share = max.files ? `（${((max.reformatOnly / max.files) * 100).toFixed(0)}%）` : "";
+  return (
+    `护栏 ② 没拦：区间 ${perCommit.commits.length} 个提交里，单条纯格式化最多的是 ` +
+    `${max.rev.slice(0, 8)} 的 ${max.reformatOnly}/${max.files} 个${share}（逐提交读数，不参与判决）`
+  );
+}

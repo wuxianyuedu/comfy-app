@@ -22,8 +22,7 @@ vi.mock("~/lib/browser-io", () => ({
   copyText: (text: string) => copyText(text),
 }));
 
-const { copyFailureText, useCopyFeedback, useCopyResult } =
-  await import("./use-copy-feedback");
+const { copyFailureText, useCopyFeedback, useCopyResult } = await import("./use-copy-feedback");
 
 beforeEach(() => {
   copyText.mockReset();
@@ -34,9 +33,7 @@ describe("useCopyFeedback", () => {
     const onSuccess = vi.fn();
     const onFailure = vi.fn();
     copyText.mockResolvedValue(false);
-    const { result } = renderHook(() =>
-      useCopyFeedback({ onSuccess, onFailure }),
-    );
+    const { result } = renderHook(() => useCopyFeedback({ onSuccess, onFailure }));
 
     await act(async () => {
       result.current("文本");
@@ -59,9 +56,7 @@ describe("useCopyFeedback", () => {
 
   it('`onFailure: "silent"` 是显式静默（与「忘了写」行为一致、写法不同）', async () => {
     copyText.mockResolvedValue(false);
-    const { result } = renderHook(() =>
-      useCopyFeedback({ onFailure: "silent" }),
-    );
+    const { result } = renderHook(() => useCopyFeedback({ onFailure: "silent" }));
     await act(async () => {
       result.current("文本");
       await Promise.resolve();
@@ -97,7 +92,9 @@ describe("useCopyFeedback", () => {
     });
     /* 第一次落地后重入解除，可以再点。 */
     copyText.mockResolvedValue(true);
-    act(() => result.current("第三次"));
+    act(() => {
+      result.current("第三次");
+    });
     expect(copyText).toHaveBeenCalledTimes(2);
   });
 
@@ -161,12 +158,8 @@ describe("copyFailureText（复制失败的固定提示句）", () => {
 
   it("target 是可选的界面位置说明，插在「手动选中」与「复制」之间", () => {
     // 只有调用处知道「可复制物在哪一段界面里」；固定句不该把这层写死。
-    expect(copyFailureText("日志列表")).toBe(
-      "复制失败：剪贴板不可用，请手动选中日志列表后复制",
-    );
-    expect(copyFailureText("下方展开区")).toContain(
-      "请手动选中下方展开区后复制",
-    );
+    expect(copyFailureText("日志列表")).toBe("复制失败：剪贴板不可用，请手动选中日志列表后复制");
+    expect(copyFailureText("下方展开区")).toContain("请手动选中下方展开区后复制");
     expect(copyFailureText("日志列表")).not.toContain("后后");
   });
 

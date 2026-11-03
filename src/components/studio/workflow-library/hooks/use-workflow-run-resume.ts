@@ -72,7 +72,9 @@ export function watchWorkflowRun(taskId: string, handlers: WorkflowRunHandlers):
       patchWorkflowRun(taskId, { progress: pct });
       handlers.onProgress(taskId, pct, node);
     },
-    onLog: (entry) => handlers.onLog(taskId, entry),
+    onLog: (entry) => {
+      handlers.onLog(taskId, entry);
+    },
     onOutput: (output) => {
       if (output.kind === "image" && output.url) {
         patchWorkflowRun(taskId, { resultUrl: output.url });
@@ -153,10 +155,18 @@ export function useWorkflowRunResume({
      * 「生成中」视角，而不是等下一个进度帧才知道有这么一次运行。 */
     handlersRef.current.onProgress(run.taskId, run.progress ?? 0);
     return watchWorkflowRun(run.taskId, {
-      onProgress: (taskId, pct, node) => handlersRef.current.onProgress(taskId, pct, node),
-      onLog: (taskId, entry) => handlersRef.current.onLog(taskId, entry),
-      onOutput: (taskId, output) => handlersRef.current.onOutput(taskId, output),
-      onSettled: (taskId, result) => handlersRef.current.onSettled(taskId, result),
+      onProgress: (taskId, pct, node) => {
+        handlersRef.current.onProgress(taskId, pct, node);
+      },
+      onLog: (taskId, entry) => {
+        handlersRef.current.onLog(taskId, entry);
+      },
+      onOutput: (taskId, output) => {
+        handlersRef.current.onOutput(taskId, output);
+      },
+      onSettled: (taskId, result) => {
+        handlersRef.current.onSettled(taskId, result);
+      },
     });
   }, [workflowId, source]);
 }

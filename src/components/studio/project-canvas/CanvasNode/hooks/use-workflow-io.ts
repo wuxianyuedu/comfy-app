@@ -161,8 +161,8 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
             return;
           }
           setWfIO(tpl.workflowIO ?? null);
-          const paramMap =
-            /* SAFETY: 类型断言已复核 */ (tpl.paramMap as Record<string, unknown>) ?? null;
+          /* SAFETY: 类型断言已复核 */
+          const paramMap = (tpl.paramMap as Record<string, unknown>) ?? null;
           setWfParamMap(paramMap);
           /* 一并写进节点数据：运行期（use-generate）不能依赖 hook 的异步
            *  状态，映射必须随节点一起持久化，否则刷新后运行会丢掉手工线。 */
@@ -272,7 +272,9 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
         });
       }
     }, 0);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+    };
     /* `patch` / `d` / `setTimeout` 之外还读了 `seededFor`（ref，稳定引用）——
      * 三个筛选条件的变化才是本 effect 的触发点；`d` 是渲染期新对象，
      * 挂进依赖会让每次节点数据变动都重跑一遍 `setTimeout(0)` 的重置。 */

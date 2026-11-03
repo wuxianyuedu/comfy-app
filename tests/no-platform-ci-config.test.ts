@@ -93,10 +93,7 @@ const CI_CONFIG_PATHS = [".github/workflows", ".buildkite/pipeline.yml"];
  * 它与 `.cnb.yml` 并行在场，退役时两处同批收。
  */
 const REGISTERED_CI_CONFIG = ".cnb.yml";
-const REGISTERED_CI_CONFIGS: ReadonlyArray<string> = [
-  REGISTERED_CI_CONFIG,
-  ".github/workflows",
-];
+const REGISTERED_CI_CONFIGS: ReadonlyArray<string> = [REGISTERED_CI_CONFIG, ".github/workflows"];
 
 const CI_NAMES = new Set([...CI_CONFIG_FILES, ...CI_CONFIG_PATHS]);
 
@@ -355,6 +352,7 @@ const DAILY_GATES = [
   "每日浏览器安装",
   "每日全量E2E",
   "每日单元测试",
+  "覆盖率上报",
 ];
 
 /**
@@ -415,13 +413,17 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "镜像身份", tier: "PR" },
   { name: "工作区复用读数", tier: "PR" },
   { name: "缓存槽读数", tier: "PR" },
+  /* #3051 从 `endStages` 前移进主列（为的是起跑时机，不是判决），形态是**读数格**：
+   * 带 `--readout`，恒不退非零。总账里它就在 `缓存槽读数` 之后、`环境前提` 之前 ——
+   * 与 `.gates` 的实际执行序同处（下面那条「双向相等」判据比的是名字集合，顺序由
+   * `registeredGateOrder` 与 stage 序另一条判据钉）。 */
+  { name: "GitHub 镜像同步", tier: "PR" },
   { name: "环境前提", tier: "PR" },
   { name: "Install dependencies", tier: "PR" },
   { name: "分支守卫", tier: "PR" },
   { name: "提交声明核对", tier: "PR" },
   { name: "同步数据库表结构", tier: "PR" },
   { name: "类型检查", tier: "PR" },
-  { name: "受影响用例", tier: "PR" },
   { name: "标题行让位", tier: "PR" },
   { name: "文件结构硬规则", tier: "PR" },
   { name: "跨平台动作对照", tier: "PR" },
@@ -439,14 +441,15 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "lib Node-only 声明", tier: "PR" },
   { name: "oxfmt 格式", tier: "PR" },
   { name: "格式化提交分离", tier: "PR" },
-  { name: "覆盖率上报", tier: "PR" },
-  { name: "core 骨架单一事实源", tier: "PR" },
   { name: "零消费导出", tier: "PR" },
-  { name: "core 出口纪律与基类纯度", tier: "PR" },
   { name: "重档静态判据", tier: "PR" },
-  { name: "固定结构用例", tier: "PR" },
-  // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档）──
+  /* 主列末尾的读数档（`--readout`，ISSUE #3051 期望第 3 条前半步）：镜像格派发的
+   * 同一笔 head_sha，GitHub Actions 跑完没有、结论是什么。无跨档对应物，
+   * 不进 CROSS_LANE_SCRIPT_MIRRORS。 */
+  { name: "GitHub 判决回读", tier: "PR" },
+  // ── push 档（COMFYAPP_CI_PUSH_GATES，树级校验档 + 镜像出口格）──
   { name: "合并形态复核", tier: "push" },
+  { name: "GitHub master 镜像", tier: "push" },
   { name: "安装依赖", tier: "push" },
   { name: "生成态文档与源同步", tier: "push" },
   { name: "API 文档生成与自检", tier: "push" },
@@ -466,7 +469,28 @@ const GATE_TIER_LEDGER: Array<LedgerEntry> = [
   { name: "每日浏览器安装", tier: "daily" },
   { name: "每日全量E2E", tier: "daily" },
   { name: "每日单元测试", tier: "daily" },
+  { name: "覆盖率上报", tier: "daily" },
   // ── retired（降级登记，必须带理由；§13.5.30）──
+  {
+    name: "受影响用例",
+    tier: "retired",
+    note: "2026-11-02 从 PR 撤到每日全量单测：增量测试在共享节点读数不可信（fork worker 调度超时、超订变子进程），与 §13.5.21 全量单测只留每日档同口径；每日单元测试全量套件已含这一族用例，最晚 24h 发现",
+  },
+  {
+    name: "固定结构用例",
+    tier: "retired",
+    note: "同上，从 PR 撤到每日全量单测：FIXED_STRUCTURAL_TESTS 契约测试由每日单元测试全量套件覆盖；PR 上 45m 预算、冷节点易 25m+ 且偶发 AggregateError 假红，性价比低",
+  },
+  {
+    name: "core 骨架单一事实源",
+    tier: "retired",
+    note: "执行者即固定结构用例的固定清单（scripts/fixed-structural-tests.mjs）；固定结构用例 2026-11-02 撤档后这一格随之退休，由每日单元测试全量套件覆盖",
+  },
+  {
+    name: "core 出口纪律与基类纯度",
+    tier: "retired",
+    note: "执行者即固定结构用例的固定清单（scripts/fixed-structural-tests.mjs）；固定结构用例 2026-11-02 撤档后这一格随之退休，由每日单元测试全量套件覆盖",
+  },
   {
     name: "工具链自证",
     tier: "retired",
@@ -806,7 +830,9 @@ export function registeredDailyGateOrder(text: string): Array<string> {
  *
  * 2026-10-28 起 push 档从「只有合并形态复核一格」扩成「树级校验档」（形态 + 前提安装 +
  * 文档链三格 + 工作区出处），判的是**合并后的树**，不是「这次改动」（PR 档）也不是
- * 「今天的 master 全量健康」（每日档）。与每日清单同一份解析形态、同一个坑：
+ * 「今天的 master 全量健康」（每日档）。2026-11-02 起多一格 `GitHub master 镜像`：
+ * 它是这一档唯一的**出口动作**（把 master 推到 GitHub 镜像仓，那边的 schedule 才跑得到
+ * 新树），不校验树，排在 `合并形态复核` 之后、`安装依赖` 之前。与每日清单同一份解析形态、同一个坑：
  * 声明与事实（`pipelineStageNames(text, "master 合并复核")`）双向核对，只读一份时
  * 另一份漂了没人红。
  *
@@ -1702,9 +1728,9 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "「安装依赖」必须排在「API 文档生成与自检」之前 —— 否则 typedoc 跑在没有 node_modules 的检出上",
     ).toBe(true);
 
-    /* `覆盖率上报` 刻意不在这份清单里：它读的是同跑 `受影响用例` 产出的
-     * coverage/lcov.info，push 档不跑测试 ⇒ 挪过去是「报告不在 → 自己跳过」的
-     * 静默空转（红在没人声明过的东西上）。 */
+    /* `覆盖率上报` 不在 push 档（push 不跑测试，放进去只会静默空转）；它 2026-11-02 从
+     * PR 档挪到了**每日档** —— 每日档的 `每日单元测试` 跑 `pnpm run test:coverage` 产出
+     * lcov，这一格接在后面上报。 */
     expect(
       declared,
       "「覆盖率上报」不该出现在 push 清单里 —— push 档没有产出 lcov.info 的格子，它在那里只会静默跳过",
@@ -2066,7 +2092,7 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
     ).toBeLessThan(testAt);
   });
 
-  it("`每日单元测试` 是每日那一跑的**最后**一条（最不稳的那一格不许挡住其它格）", () => {
+  it("`每日单元测试` 是每日那一跑最后一个**会红的格**；其后只允许 `覆盖率上报` 这种报告型尾巴", () => {
     /* 业主口径：「将每日单元测试放最后，最容易出问题的放最后，然后执行过的就不用重复执行了」。
      * 这不是排序偏好，是**覆盖面**：CNB 的 stage 串行且**失败即停**，而这一格是这条
      * 流水线上唯一会因**这台机器的负载**而红的格子 —— 实测 `cnb-b0l-1k59op66t`：
@@ -2077,19 +2103,30 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
      *
      * 判的是**事实**（流水线里 stage 的实际顺序），不是那份声明清单：声明与事实的
      * 逐条相等由上面「跑的就是 `COMFYAPP_CI_DAILY_GATES` 那几格」那条判住，
-     * 这里再钉一次「最后」，两边就都动不了了。 */
+     * 这里再钉一次「最后会红的格」，两边就都动不了了。
+     *
+     * 2026-11-02 起 `覆盖率上报` 从 PR 档挪到每日档、接在 `每日单元测试` 之后（它读同跑
+     * 全量单测产出的 lcov 上报覆盖率）。它是**报告型、非关键**：`每日单元测试` 抖动了它
+     * 跟着被 skip 只是当天少一次覆盖率上报，不会把前面任何一格拖成 skipped，所以允许它
+     * 垫在最后。这一条判据的约束对象仍是「会红的格不许排在 `每日单元测试` 之后」。 */
     const stages = pipelineStageNames(readRegisteredConfig(), "每日生产构建");
     const last = stages.at(-1);
     expect(
       stages.length,
       "crontab 那条流水线里解析不出 stage —— 这条判据没有对象了",
     ).toBeGreaterThan(0);
+    const idx = stages.indexOf("每日单元测试");
+    expect(idx, "每日那一跑必须有 `每日单元测试`").toBeGreaterThanOrEqual(0);
+    expect(
+      stages.slice(idx + 1),
+      "每日单元测试 之后只允许跟 覆盖率上报（报告型尾巴），不能再有会红的格",
+    ).toEqual(["覆盖率上报"]);
     expect(
       last,
-      `每日那一跑现在排在最后的是「${last}」。把 ` +
-        "`每日单元测试` 挪回中间 = 让一单条负载超时决定后面几格跑不跑；" +
+      `每日那一跑最后落到的应是报告型尾巴「覆盖率上报」（当前是「${last}」）。` +
+        "把 `每日单元测试` 挪回中间 = 让一单条负载超时决定后面几格跑不跑；" +
         "要动这条顺序，先把「超时指纹 ⇒ 隔离复跑」那一档补上（任务里记着）",
-    ).toBe("每日单元测试");
+    ).toBe("覆盖率上报");
   });
 
   it("被停用的 stage 在 `COMFYAPP_CI_DISABLED_GATES` 里登记了，且原文以注释形态留着", () => {
@@ -2191,13 +2228,11 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       "ESLint 零警告",
       "单元测试",
       "重档静态判据",
-      /* 2026-10-20 新增的增量档：它起 vitest 子进程，卡死的形态与 `单元测试` 同族
-       * （实测本地 forks worker 调度超时），所以预算跟着那一族走，不因为「跑得快」
-       * 就省掉 —— 预算回答的是「卡死多久有人知道」，不是「通常跑多久」。 */
-      "受影响用例",
-      /* 2026-10-31 从 `受影响用例` 拆出来的静态契约那半（ISSUE #2845）：同一份入口链、
-       * 同一族执行者，预算口径与被拆出来的那一半完全一致。 */
-      "固定结构用例",
+      /* `GitHub 判决回读` 墙钟上限就是它的轮询预算（45m）—— 零构建但**不**是秒级，
+       * 节点 egress 抖动的现场它会顶满预算跑，预算缺席时卡死要等满 2h 才有人知道。 */
+      "GitHub 判决回读",
+      // 2026-11-02 `受影响用例` / `固定结构用例` 从 PR 撤到每日全量单测（见 GATE_TIER_LEDGER
+      // 的 retired 段）：这两个 PR stage 不再存在，预算要求随之解除。
     ].filter((name) => !disabled.includes(name));
     const missing = required.filter((name) => !timeouts.has(name));
     expect(
@@ -2603,7 +2638,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
       expect(cron, `cron 表达式不是五段：${event.cron}`).toHaveLength(5);
       const [minute, hour, dom, month, dow] = cron;
       /* 每天一次 = 分钟固定、小时固定，日 / 月 / 周都是通配。 */
-      for (const [field, name] of /* SAFETY: 类型断言已复核 */ [
+      /* SAFETY: 类型断言已复核 */
+      for (const [field, name] of [
         [minute, "分钟"],
         [hour, "小时"],
       ] as const) {
@@ -2613,7 +2649,8 @@ describe("平台侧流水线配置：形态必须是「自托管 + 已登记」�
             `写成 \`*\` / 列表 / 区间都意味着一天跑多次`,
         ).toBe(true);
       }
-      for (const [field, name] of /* SAFETY: 类型断言已复核 */ [
+      /* SAFETY: 类型断言已复核 */
+      for (const [field, name] of [
         [dom, "日"],
         [month, "月"],
         [dow, "周"],
@@ -3457,7 +3494,8 @@ describe("单跑口：三档重档各自一条，前提格的正文必须与每�
           `注册表里的「${pair.daily}」不在每日档的清单里 —— 单跑口引用的是一个每日根本不跑的格`,
         ).toContain(pair.daily);
       }
-      for (const [ev, pipeline] of /* SAFETY: 类型断言已复核 */ [
+      /* SAFETY: 类型断言已复核 */
+      for (const [ev, pipeline] of [
         [target.eventWeb, target.pipelineWeb],
         [target.eventApi, target.pipelineApi],
       ] as const) {

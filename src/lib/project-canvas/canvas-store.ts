@@ -192,8 +192,8 @@ export type ServerProjectRow = {
  * 同一列的两个形状，调用方要的只是一个能比较的毫秒数。
  */
 export async function fetchServerProjects(): Promise<Array<ServerProjectRow>> {
-  const rows =
-    /* SAFETY: 类型断言已复核 */ (await vanillaApi.project.list.query()) as Array<ServerProjectRow>;
+  /* SAFETY: 类型断言已复核 */
+  const rows = (await vanillaApi.project.list.query()) as Array<ServerProjectRow>;
   return Array.isArray(rows) ? rows : [];
 }
 

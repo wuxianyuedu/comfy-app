@@ -41,10 +41,24 @@ function ViewerWithSource({ sourceName, label, open: initialOpen }: StoryArgs) {
   const src = String(resolveSource("media", sourceName));
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button onClick={() => setOpen(true)} size="sm" variant="outline">
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+        size="sm"
+        variant="outline"
+      >
         打开查看器
       </Button>
-      {open && <ImageViewer label={label ?? sourceName} onClose={() => setOpen(false)} src={src} />}
+      {open && (
+        <ImageViewer
+          label={label ?? sourceName}
+          onClose={() => {
+            setOpen(false);
+          }}
+          src={src}
+        />
+      )}
       <p className="text-ink-muted text-xs">
         弹窗由 story 自己持有开关（组件是受控的）：点「打开查看器」再开， Esc / 点遮罩 / 右上角 ✕
         都能关。
