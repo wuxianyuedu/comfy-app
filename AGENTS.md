@@ -385,6 +385,8 @@
 
 **报错指向的文件你根本没碰过 → 先复算 master 基线再怀疑自己**：PR 在平台侧是 squash 合并、不跑本地钩子，而平台侧那条流水线（#1959 起）取自源分支、跑的是另一份清单，所以硬闸违规仍可能落进 `master` 成为所有人的基线（棘轮类有数字可记账，**硬闸类须为 0、没有「带病通行」的中间态** → 一旦落地就拦住从它分出的每一个提交）。**复算的执行者是 `node scripts/base-check.mjs <拦住你的那条>`**（整条命令 / 钩子标签 / 裸脚本名都认；`--fetch` 先拉、`--json` 给机器可读）——它把那条门禁在干净的上游提交上重跑一遍，给五态之一：`baseline-red`（别线的红，就地修或登记）/ `yours`（你自己的）/ `current-green` / `inconclusive`（**没跑起来，不构成证据**：最典型是那条判据只存在你未提交的改动里）/ `load-flake`（两侧都红且两侧输出都是超时形态 ⇒ 疑似负载假红，先隔离复跑，**不许**照 `baseline-red` 登记、**不许**抬 `testTimeout`）。五态的下一动作与**不许**为它放宽判据的口径见 §13.6.2；时间型判据在 CPU 高负载下的完整处置（含「拿不到测量 ≠ 测量结果是红的」那一档，以及「分不出哪份是超时」不等于「整块都只是超时」）见 §13.6.4 / §13.6.4.1。
 
+**「类型检查」格红了 `.mjs` 的错 ≠ 判据漂移，先读两行读数再归因**（ISSUE #3049 / §13.5.14.1）：主 `tsconfig.json` 的 `allowJs`+`checkJs` 沿 import 图把**被引到的** `.mjs` 纳入主面（硬闸零容忍），`.mjs` 全量面归 `tsconfig.scripts.json` 的棘轮——登记过的分工，不是漏洞。红行下面紧跟着 `[ci-run-tool] 判决面`（判的是哪份 tsconfig、哪把 tsc）与 `[ci-run-tool] 程序图里的 .mjs`（通道在不在场）两行读数，照它归因；别照「主面不含 `.mjs`」的旧印象去推候选根因（ISSUE #3041 的误诊现场）。
+
 启动 / 构建 / 产物层的**症状 → 已知根因**、日志顺序、端口「解析链 vs 静态链」、corepack 三形态、`dev.mjs` 静默 `exit=0`、启动页被 Explorer 压后……**全部收在 [`docs/standards/launch-and-build.md`](docs/standards/launch-and-build.md) §5 排障手册**（本项目全部历史事故都在里面）。按需定位：端口两条链与派生端口的判据见 §1.1（**文档里不要写死端口号**，`pnpm doc:check` 核这条）；起 Next 之前的两项预检（`.env` 与表结构）见 §9.1 / §9.2；corepack 三形态探测与 `pnpm check:toolchain` 自查入口见 §2.1.1–2.1.4；启动页与应用窗的前台归属见 §1.3。**日志按 §4 布局看** `log/` 分区（`launcher/` → `nextjs/` → `services/` → `tools/` → `archive/`）。改完构建 / 产物相关的东西，先跑 `node scripts/check-standalone-contents.cjs`（同时查「不该有的」与「必须有的」）。**用例红先定性再改**：`pnpm exec vitest run --no-file-parallelism <文件>` 隔离重跑，串行也红才是真红；串行绿的是预算 / 并发问题（预算与 `maxWorkers` 的实测出处见 §11.13，不要靠继续抬超时掩盖）。
 
 ## 遇到代码怪癖：当场立案，不就地绕开

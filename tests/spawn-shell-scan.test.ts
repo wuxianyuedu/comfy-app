@@ -616,6 +616,78 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
     );
   });
 
+  it("程序图读数：主跑红才念 program 里的 .mjs，绿跑不付这笔（ISSUE #3049）", () => {
+    /* 主 `tsconfig.json` 的 allowJs+checkJs 会沿 import 图把被引到的 `.mjs` 拉进主面
+     * （分工登记见 §13.5.14.1）—— 那条通道只存在于 tsc 的 program 行为里。读数用
+     * `--listFilesOnly` 把 program 里的 .mjs 念出来，只付在红跑上（绿跑没有要归因的红）。
+     * 夹具的假 tsc 按 argv 分叉：主跑退 1，探针（--listFilesOnly）回一份带 .mjs 的
+     * 文件清单 —— 判据读的就是这份回执，不依赖真编译器。 */
+    const entryBody = [
+      "const argv = process.argv.slice(2);",
+      'if (argv.includes("--listFilesOnly")) {',
+      '  process.stdout.write(["src/a.ts", "scripts/entry.mjs", "e2e/walk.mjs",',
+      '    "node_modules/x/lib.mjs"].join("\\n") + "\\n");',
+      "  process.exit(0);",
+      "}",
+      'process.exit(argv.includes("--noEmit") ? 1 : 0);',
+      "",
+    ].join("\n");
+    withFixture(
+      {
+        "node_modules/pkg/bin/tsc-fake.cjs": entryBody,
+        "node_modules/.bin/tsc": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "tsc-fake.cjs")
+            .replaceAll("\\", "/")}\n`,
+        "tsconfig.json": '{ "compilerOptions": { "strict": true } }\n',
+      },
+      (root) => {
+        const tool = path.join(ROOT, "scripts", "ci-run-tool.mjs");
+        const red = run([tool, "--root", root, "tsc", "--noEmit"], root);
+        expect(red.status, red.stderr).toBe(1);
+        expect(red.stdout).toContain("[ci-run-tool] 程序图里的 .mjs：共 3 份，仓内：");
+        /* 仓内 / 第三方分开念：node_modules 那部分不是本仓通道的证据。 */
+        expect(red.stdout).toContain("scripts/entry.mjs、e2e/walk.mjs");
+        expect(red.stdout).toContain("allowJs+checkJs 经 import 图");
+        expect(red.stdout).toContain("tsconfig.scripts.json 的棘轮，见 §13.5.14.1");
+
+        const green = run([tool, "--root", root, "tsc", "--version"], root);
+        expect(green.status, green.stderr).toBe(0);
+        expect(green.stdout, "绿跑没有要归因的红，不为读数起第二次编译器").not.toContain(
+          "程序图里的 .mjs",
+        );
+      },
+    );
+  });
+
+  it("程序图读数取不到 ⇒ 点名「读数缺一格」，不冒充也不改判定（ISSUE #3049）", () => {
+    /* 探针（--listFilesOnly）没跑成时，缺读数要说缺 —— 把它读成「0 份」或「没判过」
+     * 都是给下一次误诊递刀（#3041 的现场就是读数缺位下推出来的）。 */
+    const entryBody = [
+      "const argv = process.argv.slice(2);",
+      'if (argv.includes("--listFilesOnly")) { process.exit(7); }',
+      "process.exit(1);",
+      "",
+    ].join("\n");
+    withFixture(
+      {
+        "node_modules/pkg/bin/tsc-fake.cjs": entryBody,
+        "node_modules/.bin/tsc": (root) =>
+          `# cmd-shim-target=${path
+            .join(root, "node_modules", "pkg", "bin", "tsc-fake.cjs")
+            .replaceAll("\\", "/")}\n`,
+        "tsconfig.json": '{ "compilerOptions": { "strict": true } }\n',
+      },
+      (root) => {
+        const tool = path.join(ROOT, "scripts", "ci-run-tool.mjs");
+        const r = run([tool, "--root", root, "tsc", "--noEmit"], root);
+        expect(r.status, r.stderr).toBe(1);
+        expect(r.stdout).toContain("程序图读数取不到");
+        expect(r.stdout).toContain("读数缺一格，不影响判定");
+      },
+    );
+  });
+
   it("参数逐字转发（含带空格的值），不拼回一条字符串", () => {
     withFixture(
       {

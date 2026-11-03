@@ -185,6 +185,44 @@ function includeSummaryOf(faceFile) {
   }
 }
 
+/**
+ * 「程序图里有哪些 `.mjs`」的读数（ISSUE #3049）。
+ *
+ * 主 `tsconfig.json` 的 `allowJs` + `checkJs` 会沿 import 图把**被引到的 `.mjs`** 拉进
+ * program —— 这是登记过的分工（§13.5.14.1）：主面对它零容忍（硬闸），`.mjs` 全量面归
+ * `tsconfig.scripts.json` 的棘轮。这份通道只存在于 tsc 的 program 行为里，任何配置文件
+ * 都读不出来 —— 主跑红在一份 `.mjs` 上时，红行自己是证据，但「这份文件为什么会被判」
+ * 仍然要读者自己去推。读数把它念出来，归因就不用再走一遍 #3041 那四条命令。
+ *
+ * 取数：同一个入口再起一次 `--listFilesOnly -p <判决面>`（只列 program 不做检查），
+ * 行里以 `.mjs` 结尾的就是主面里的 JS 模块；`node_modules` 里那部分单独剔出去——
+ * 它们是第三方件的形状，不是本仓的通道证据。
+ *
+ * 只在**主跑红**的时候付这一笔：`--listFilesOnly` 也要起一次编译器（解析整张程序图），
+ * 绿跑上没有要归因的红，这笔钱不付。取不到（探针非 0 / 起不来）回 `null` —— 读数缺一格
+ * 不值得为它把失败读成判定。
+ *
+ * @param {string} entry `resolveBinEntryByName()` 解析出的编译器入口
+ * @param {string} faceFile `projectFaceOf()` 解析出的 tsconfig 文件路径
+ * @returns {{total: number, inRepo: string[]} | null} `total` 是 program 里的 .mjs 总数
+ *   （含第三方），`inRepo` 是仓内那部分（剔除 node_modules，保持 tsc 的输出顺序）
+ */
+function programMjsOf(entry, faceFile) {
+  const probe = spawnSync(process.execPath, [entry, "--listFilesOnly", "-p", faceFile], {
+    encoding: "utf8",
+    cwd: process.cwd(),
+    windowsHide: true,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (probe.error || (probe.status ?? 1) !== 0) {
+    return null;
+  }
+  const all = String(probe.stdout ?? "")
+    .split(/\r?\n/)
+    .filter((line) => line.toLowerCase().endsWith(".mjs"));
+  return { total: all.length, inRepo: all.filter((line) => !line.includes("node_modules")) };
+}
+
 const rest = process.argv.slice(2);
 let root = path.resolve(import.meta.dirname, "..");
 if (rest[0] === "--root") {
@@ -270,5 +308,29 @@ if (name === "tsc" || name === "tsgo") {
   const via = face.explicit ? "点名" : "tsc 默认（cwd 的 tsconfig.json）";
   const tail = summary === null ? "；内容读不到" : summary === "" ? "" : `；include: ${summary}`;
   process.stdout.write(`[ci-run-tool] 判决面：${face.face}（${via}${tail}）\n`);
+  /* 程序图读数（ISSUE #3049）：主面对 `.mjs` 的覆盖走的是 allowJs+checkJs 的 import
+   * 通道（登记见 §13.5.14.1），它只存在于 tsc 的 program 行为里 —— #3041 的误诊现场
+   * 就是照「主面不含 `.mjs`」这句去推的。红跑之后把 program 里的 .mjs 念出来，
+   * 「这份报错为什么会被判」就不用再推一遍。绿跑不付这笔（读数跟着归因走）。 */
+  if ((result.status ?? 1) !== 0) {
+    const mjs = programMjsOf(entry, face.face);
+    if (mjs === null) {
+      process.stdout.write(
+        "[ci-run-tool] 程序图读数取不到（--listFilesOnly 没跑成）—— 读数缺一格，不影响判定\n",
+      );
+    } else {
+      const shown = mjs.inRepo
+        .slice(0, 8)
+        .map((line) => line.replaceAll("\\", "/"))
+        .join("、");
+      const more = mjs.inRepo.length > 8 ? ` … 共 ${mjs.inRepo.length} 份仓内` : "";
+      process.stdout.write(
+        `[ci-run-tool] 程序图里的 .mjs：共 ${mjs.total} 份` +
+          (mjs.inRepo.length ? `，仓内：${shown}${more}` : "") +
+          "（allowJs+checkJs 经 import 图把被引到的 .mjs 拉进主面，零容忍；" +
+          ".mjs 全量面归 tsconfig.scripts.json 的棘轮，见 §13.5.14.1）\n",
+      );
+    }
+  }
 }
 process.exit(exitCodeFromTermination(result.status, result.signal));
