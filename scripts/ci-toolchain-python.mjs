@@ -264,8 +264,6 @@ export function currentAccount() {
 /**
  * 列出一个目录下的**子目录**全名（安装根那一层要的是版本目录，不是一个具体文件）。
  *
- * 列出一个目录下的**子目录**全名（安装根那一层要的是版本目录，不是一个具体文件）。
- *
  * @param {string} root
  * @returns {string[]}
  */
