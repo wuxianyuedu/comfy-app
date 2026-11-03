@@ -625,8 +625,7 @@ describe("scripts/ci-run-tool.mjs — 按名字直起包真身（#2572）", () =
     const entryBody = [
       "const argv = process.argv.slice(2);",
       'if (argv.includes("--listFilesOnly")) {',
-      '  process.stdout.write(["src/a.ts", "scripts/entry.mjs", "e2e/walk.mjs",',
-      '    "node_modules/x/lib.mjs"].join("\\n") + "\\n");',
+      String.raw`  process.stdout.write(["src/a.ts", "scripts/entry.mjs", "e2e/walk.mjs", "node_modules/x/lib.mjs"].join("\n") + "\n");`,
       "  process.exit(0);",
       "}",
       'process.exit(argv.includes("--noEmit") ? 1 : 0);',

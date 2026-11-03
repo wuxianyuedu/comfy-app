@@ -324,11 +324,11 @@ if (name === "tsc" || name === "tsgo") {
         .map((line) => line.replaceAll("\\", "/"))
         .join("、");
       const more = mjs.inRepo.length > 8 ? ` … 共 ${mjs.inRepo.length} 份仓内` : "";
+      const repoPart = mjs.inRepo.length ? `，仓内：${shown}${more}` : "";
       process.stdout.write(
-        `[ci-run-tool] 程序图里的 .mjs：共 ${mjs.total} 份` +
-          (mjs.inRepo.length ? `，仓内：${shown}${more}` : "") +
-          "（allowJs+checkJs 经 import 图把被引到的 .mjs 拉进主面，零容忍；" +
-          ".mjs 全量面归 tsconfig.scripts.json 的棘轮，见 §13.5.14.1）\n",
+        `[ci-run-tool] 程序图里的 .mjs：共 ${mjs.total} 份${repoPart}` +
+          `（allowJs+checkJs 经 import 图把被引到的 .mjs 拉进主面，零容忍；` +
+          `.mjs 全量面归 tsconfig.scripts.json 的棘轮，见 §13.5.14.1）\n`,
       );
     }
   }
