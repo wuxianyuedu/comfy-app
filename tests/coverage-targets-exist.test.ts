@@ -34,7 +34,7 @@ import { describe, expect, it } from "vitest";
 import vitestConfig, { COVERAGE_THRESHOLDS } from "../vitest.config";
 
 /* SAFETY: 类型断言已复核 */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// oxlint-disable-next-line typescript/no-require-imports
 const { globToRegExp } = require("../scripts/check-format.cjs") as {
   globToRegExp: (glob: string) => RegExp;
 };

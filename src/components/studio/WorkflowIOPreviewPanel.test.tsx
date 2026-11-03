@@ -22,7 +22,7 @@ afterEach(cleanup);
 vi.mock("~/trpc/vanilla", () => {
   const pending = <T,>() =>
     // 永不 resolve：落库结果不影响本文件的断言
-    // eslint-disable-next-line @typescript-eslint/no-empty-function -- never-resolve pending 桩
+    // oxlint-disable-next-line typescript/no-empty-function -- never-resolve pending 桩
     new Promise<T>(() => {});
   return {
     vanillaApi: {

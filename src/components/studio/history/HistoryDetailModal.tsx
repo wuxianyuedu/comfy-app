@@ -134,7 +134,7 @@ export function HistoryDetailModal({
               {actions.folderPopover && (
                 /* 浮层内容不关闭面板：`onClick={stopPropagation}` 是**守卫**，
                    不是交互 —— 键等价物无从谈起。 */
-                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- onClick 是 stopPropagation 守卫，不是交互 */
+                /* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-static-element-interactions -- onClick 是 stopPropagation 守卫，不是交互 */
                 <div
                   className={`border-border bg-panel-deep absolute top-13 right-5 ${zClass("popup")} w-[min(440px,calc(100vw-40px))] rounded-lg border p-3 shadow-xl`}
                   onClick={(event) => {

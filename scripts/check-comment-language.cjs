@@ -93,7 +93,7 @@ const ENGLISH_WORD_RE = /[A-Za-z]{2,}/g;
  * 解析的指令,改成中文即静默失效(不是报错,是行为悄悄变回默认)。
  *   - `@vitest-environment jsdom` —— vitest 按这一行决定用例跑在什么环境;
  *   - `@ts-ignore` / `@ts-expect-error` / `@ts-nocheck` —— TypeScript 指令;
- *   - `eslint-disable*` —— eslint 指令;
+ *   - `eslint-disable*` / `oxlint-disable*` —— lint 指令（PR-B 起以 oxlint 为主）;
  *   - `@jsx*` / `@jsxRuntime` —— 编译指示;
  *   - `turbopackIgnore: <bool>` —— Turbopack 的静态分析豁免指令,
  *     按字面量解析「这一处不要被静态追踪」(见 src/lib/comfyui/trace.ts 等 62 处)。
@@ -101,7 +101,7 @@ const ENGLISH_WORD_RE = /[A-Za-z]{2,}/g;
  * 以免把「说明某个指令」的正常中文注释一起放行。
  */
 const TOOL_DIRECTIVE_RE =
-  /^\s*\*?\s*@?(vitest-environment|ts-ignore|ts-expect-error|ts-nocheck|ts-check|jsx|jsxRuntime|jsxImportSource|ts-expectError)\b|^\s*\*?\s*eslint-(disable|enable)|^\s*\*?\s*turbopackIgnore\s*:/;
+  /^\s*\*?\s*@?(vitest-environment|ts-ignore|ts-expect-error|ts-nocheck|ts-check|jsx|jsxRuntime|jsxImportSource|ts-expectError)\b|^\s*\*?\s*(eslint|oxlint)-(disable|enable)|^\s*\*?\s*turbopackIgnore\s*:/;
 
 /**
  * JSDoc **结构行**豁免：`@param {T}` / `@returns {T}` / `@typedef {…}` /

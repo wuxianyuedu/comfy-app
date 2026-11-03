@@ -92,6 +92,10 @@ const ROOT = path.resolve(__dirname, "..");
 const CLI_ARGS = parseArgs(process.argv.slice(2));
 
 const ESLINT_CONFIG = path.join(ROOT, "eslint.config.js");
+/** #2777 PR-B：jsx-a11y 规则的**生效面**已切到 oxlint 判决配置。 */
+const OXLINT_CONFIG = path.join(ROOT, "oxlint.parity.config.mjs");
+/** 官方 recommended / strict / 全部规则元数据仍从插件对象取（不手抄规则表）。 */
+const NEXT_CONFIG = "eslint-config-next/core-web-vitals";
 
 /**
  * `eslint.config.js` 的**求值缓存**。
@@ -117,6 +121,33 @@ let configPromise;
 function loadEslintConfig() {
   configPromise ??= import(pathToFileURL(ESLINT_CONFIG).href).then((mod) => mod.default);
   return configPromise;
+}
+
+/** `oxlint.parity.config.mjs` 的求值缓存（同一进程只读一次）。 */
+let oxlintConfigPromise;
+
+/** 读一次真正的 oxlint 判决配置（`defineConfig` 的返回对象，含 `overrides`）。 */
+function loadOxlintConfig() {
+  oxlintConfigPromise ??= import(pathToFileURL(OXLINT_CONFIG).href).then((mod) => mod.default);
+  return oxlintConfigPromise;
+}
+
+/** jsx-a11y 插件对象的求值缓存（官方集合与废弃状态的唯一出处）。 */
+let a11yPluginPromise;
+
+/** 从 `eslint-config-next` 的扁平数组里取 jsx-a11y 插件对象。 */
+function loadA11yPlugin() {
+  a11yPluginPromise ??= import(NEXT_CONFIG).then((mod) => {
+    for (const config of mod.default ?? []) {
+      if (config.plugins?.["jsx-a11y"]) {
+        return config.plugins["jsx-a11y"];
+      }
+    }
+    throw new Error(
+      "eslint-config-next 里没有 jsx-a11y 插件对象 —— 本判据从它读官方 recommended / 废弃状态（不手抄规则表）。",
+    );
+  });
+  return a11yPluginPromise;
 }
 
 /**
@@ -162,16 +193,19 @@ const PREFIX = "jsx-a11y/";
  */
 async function effectiveRules() {
   /** @type {{rules?: Record<string, unknown>}[]} */
-  const flat = (await loadEslintConfig()).flat();
-  /** 扁平配置按数组顺序合并，**后者覆盖前者** —— 取最后一次出现。 */
+  const config = await loadOxlintConfig();
+  const overrides = Array.isArray(config.overrides) ? config.overrides : [];
+  /** @type {Record<string, unknown>} */
   const merged = {};
-  for (const config of flat) {
-    if (!config.rules) {
+  /* oxlint 的 overrides 按数组顺序求值、**后者覆盖前者**（与 eslint flat 配置同一条口径）。
+   * 规则名在 oxlint 侧写作 `jsx_a11y/<rule>`，判据对外仍统一成 `jsx-a11y/<rule>`。 */
+  for (const one of overrides) {
+    if (!one.rules) {
       continue;
     }
-    for (const [name, setting] of Object.entries(config.rules)) {
-      if (name.startsWith(PREFIX)) {
-        merged[name] = setting;
+    for (const [name, setting] of Object.entries(one.rules)) {
+      if (name.startsWith("jsx_a11y/")) {
+        merged[`${PREFIX}${name.slice("jsx_a11y/".length)}`] = setting;
       }
     }
   }
@@ -188,19 +222,7 @@ async function effectiveRules() {
  * 插件对象算 —— 不各抄一份规则表）。
  */
 async function officialRecommended() {
-  const flat = (await loadEslintConfig()).flat();
-  let plugin = null;
-  for (const config of flat) {
-    if (config.plugins?.["jsx-a11y"]) {
-      plugin = config.plugins["jsx-a11y"];
-    }
-  }
-  if (!plugin) {
-    throw new Error(
-      "配置里没有 jsx-a11y 插件对象 —— eslint.config.js 的结构变了？" +
-        "本判据从它那里读官方 recommended 集合（不手抄规则表）。",
-    );
-  }
+  const plugin = await loadA11yPlugin();
   const rec = plugin.configs.recommended.rules;
   /** @type {Record<string, unknown>} */
   const out = {};
@@ -270,17 +292,10 @@ function readLedger(ledgerPath) {
  * `officialRecommended()` 从插件对象算集合是同一个口径。
  */
 async function officialRuleMap() {
-  const flat = (await loadEslintConfig()).flat();
-  let plugin = null;
-  for (const config of flat) {
-    if (config.plugins?.["jsx-a11y"]) {
-      plugin = config.plugins["jsx-a11y"];
-    }
-  }
-  if (!plugin || typeof plugin.rules !== "object" || plugin.rules === null) {
+  const plugin = await loadA11yPlugin();
+  if (typeof plugin.rules !== "object" || plugin.rules === null) {
     throw new Error(
-      "配置里读不到 jsx-a11y 的 rules 表 —— eslint.config.js 的结构变了？" +
-        "本判据从它读每条规则的废弃状态（不手抄废弃名单）。",
+      "eslint-config-next 带的 jsx-a11y 插件里读不到 rules 表 —— 本判据从它读每条规则的废弃状态（不手抄废弃名单）。",
     );
   }
   /** @type {Map<string, { deprecated: boolean }>} */
@@ -307,16 +322,7 @@ async function officialRuleMap() {
  * 本判据原来只堵了前一半（③ 那一向），「没被列进来」那一半一直敞着。
  */
 async function rulesInNeitherConfig() {
-  const flat = (await loadEslintConfig()).flat();
-  let plugin = null;
-  for (const config of flat) {
-    if (config.plugins?.["jsx-a11y"]) {
-      plugin = config.plugins["jsx-a11y"];
-    }
-  }
-  if (!plugin) {
-    throw new Error("配置里没有 jsx-a11y 插件对象。");
-  }
+  const plugin = await loadA11yPlugin();
   const mentionedBy = (config) => {
     const rules = config?.rules ? config.rules : {};
     return (name) => rules[name] !== undefined;
@@ -395,12 +401,21 @@ async function judge(ledger) {
 
   const problems = [];
 
+  /* oxlint 侧只写「开着的」规则（没写的规则在判决配置里就是没开）。判据对外仍按
+   * eslint 的语义把「缺省」读成 `off` —— 否则台账里登记为 off 的方言规则
+   * 会因为「找不到这条」被误判成孤儿。 */
+  const settingOf = (name) => (name in effective ? effective[name] : "off");
+
   /* ① 官方 recommended 的每一条都必须开着、且 options 与官方逐字一致。
    *
    * 「本仓刻意改档」的那几条（台账 dialect 里登记过、且**理由与 keeper 都写全**的）
    * 从这一向里豁免 —— 它们由 ② 那一向管（台账 ⇄ 生效 双向）。不这样切的话，
    * 台账会变成一份**死账**：要么写不进去（① 恒红），要么写成「官方这条我们不看」
-   * 却仍然要过 ①（同一件事两处打架）。 */
+   * 却仍然要过 ①（同一件事两处打架）。
+   *
+   * ⚠️ PR-B 起生效面在 oxlint：那侧的 jsx_a11y 条目只有档位、没有 eslint 的
+   * options（oxlint 的这几条不接受同形 options）。所以 options **只在生效配置
+   * 确实带了 options 时**逐字比；只给档位时比档位（缺口登记在台账 PR-B 章）。 */
   for (const [name, options] of Object.entries(recommended)) {
     if (isRegisteredDialect(name)) {
       continue;
@@ -408,13 +423,15 @@ async function judge(ledger) {
     if (!(name in effective)) {
       problems.push(
         `官方 recommended 的 ${name} **没开**（配置里查不到这条规则）。\n` +
-          "    → 它要么被 next 配置的胜出档关掉了，要么本批的 a11yRecommendedRules() 没把它带进来。",
+          "    → 它要么被上一层的胜出档关掉了，要么本批的 oxlint parity 清单没把它带进来。",
       );
       continue;
     }
-    const want = normalize(options === undefined ? "error" : ["error", options]);
     const got = normalize(effective[name]);
-    if (got !== want) {
+    const gotLevel = normalize(Array.isArray(effective[name]) ? effective[name][0] : effective[name]);
+    const want = normalize(options === undefined ? "error" : ["error", options]);
+    const wantLevel = normalize("error");
+    if (gotLevel !== wantLevel || (Array.isArray(effective[name]) && got !== want)) {
       problems.push(
         `官方 recommended 的 ${name} 档位与官方不一致：\n` +
           `      生效 = ${got}\n      官方 = ${want}\n` +
@@ -442,16 +459,17 @@ async function judge(ledger) {
     }
   }
   for (const [rule, entry] of dialectByRule) {
-    if (!(rule in effective)) {
+    if (!official.has(rule)) {
       problems.push(
-        `台账 dialect 登记了 ${rule}，但生效配置里根本没这条规则（改名 / 换插件后的孤儿条目）。`,
+        `台账 dialect 登记了 ${rule}，但插件里根本没这条规则（改名 / 换插件后的孤儿条目）。`,
       );
       continue;
     }
+    const actual = settingOf(rule);
     const decided = entry.decision === "off" ? "off" : null;
-    if (decided === "off" && effective[rule] !== "off") {
+    if (decided === "off" && normalize(actual) !== normalize("off")) {
       problems.push(
-        `台账 dialect 说 ${rule} 关着，而它实际是 ${normalize(effective[rule])} —— ` +
+        `台账 dialect 说 ${rule} 关着，而它实际是 ${normalize(actual)} —— ` +
           "登记的是负债，不是赦免名单（真开了就把它从台账里摘掉）。",
       );
     }
@@ -459,7 +477,7 @@ async function judge(ledger) {
 
   /* ③ 官方 recommended 里被本仓关掉的每一条都必须登记 —— 没登记 = 悄悄关掉了判据。 */
   for (const name of Object.keys(recommended)) {
-    if (effective[name] !== "off") {
+    if (normalize(settingOf(name)) !== normalize("off")) {
       continue;
     }
     if (dialectByRule.has(name)) {
@@ -484,8 +502,8 @@ async function judge(ledger) {
     if (meta?.deprecated) {
       continue;
     }
-    const off = effective[name] === "off";
-    if (!off && name in effective) {
+    const off = normalize(settingOf(name)) === normalize("off");
+    if (!off) {
       continue;
     }
     if (dialectByRule.has(name)) {
@@ -569,6 +587,7 @@ const VERIFIED_SURFACES = Object.freeze({
   readLedger: "bin 形态（读 `--ledger <path>`）与门禁自测（台账归一形状）",
   normalize: '门禁自测（规则档位的归一：`"error"` 与 `["error"]` 同义）',
   loadEslintConfig: "门禁自测（`eslint.config.js` 求值失败时的失败路径）",
+  loadOxlintConfig: "`check-eslint-exemptions.cjs`（读文件级豁免台账）+ 门禁自测（生效档位表）",
   effectiveRules: "门禁自测（真配置里的 jsx-a11y 档位表）",
   officialRecommended: "门禁自测（官方 recommended 的有效集合，从插件对象算）",
   officialRuleMap: "门禁自测（插件全部规则 + 废弃标记）",
@@ -599,6 +618,7 @@ module.exports = {
   officialRuleMap,
   rulesInNeitherConfig,
   loadEslintConfig,
+  loadOxlintConfig,
   VERIFIED_SURFACES,
 };
 

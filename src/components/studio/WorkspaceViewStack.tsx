@@ -308,7 +308,7 @@ export function WorkspaceViewStack({
     view: WorkspaceView;
   } | null>(null);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // oxlint-disable-next-line react/set-state-in-effect
     setOpened({ view: activeView, at: performance.now() });
   }, [activeView]);
 

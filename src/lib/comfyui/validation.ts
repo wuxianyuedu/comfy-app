@@ -101,7 +101,7 @@ export function extractValidationErrors(
       // 这几个字段可能是空字符串，必须用 `||` 判空（`??` 只挡 null/undefined）；
       // eslint 的 prefer-nullish-coalescing 在这里给的是误报，故就地豁免。
       return (
-        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+        // oxlint-disable-next-line typescript/prefer-nullish-coalescing
         !!(rec.node_id || rec.class_type || rec.input_errors || rec.message) // oxlint-disable-line strict-boolean-expressions -- 字段可能为空串：有意按「任意真值」判，与上面的 `||` 豁免同因
       );
     });

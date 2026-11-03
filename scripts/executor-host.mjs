@@ -213,7 +213,7 @@ async function reconcileCancelled(runtime) {
   /* 快照迭代是**刻意的**：循环体内会 `cliProcs.delete(taskId)`，直接迭代活的
    * Map 会在删除时跳键。unicorn/no-useless-spread 不看循环体的突变，属误报，
    * 禁用一行（台账：全仓此形态仅本处）。 */
-  // eslint-disable-next-line unicorn/no-useless-spread -- 快照，见上
+  // oxlint-disable-next-line unicorn/no-useless-spread -- 快照，见上
   for (const taskId of [...cliProcs.keys()]) {
     try {
       const st = await hostRepo.findStatusAndPromptById(taskId);

@@ -56,7 +56,7 @@ function FitHarness({
         cancelAnimationFrame(raf);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- applied 是测试用的收集数组，身份稳定
+    // oxlint-disable-next-line react/exhaustive-deps -- applied 是测试用的收集数组，身份稳定
   }, [graphKey, nodeCount]);
 
   return null;

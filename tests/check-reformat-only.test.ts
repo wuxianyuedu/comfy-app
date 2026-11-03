@@ -37,7 +37,7 @@ import { previewRangeEnds } from "../scripts/reformat-preview-range.mjs";
 /** `perCommitShapeOf` 是判据的**自测入口**（理由见那一条用例的头注）。判据是 `.cjs`，
  * 所以只能 `require` —— 与 `check-format.test.ts` 同形。 */
 /* SAFETY: 类型断言已复核 */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+// oxlint-disable-next-line typescript/no-require-imports
 const { perCommitShapeOf } = require("../scripts/check-reformat-only.cjs") as {
   perCommitShapeOf: (
     rev: string,
@@ -927,7 +927,7 @@ describe("回读比对：本来就规范 / 改动后正是规范形态", { timeo
   /** 真仓库里那份判据（`HERE` 就是真仓库，oxfmt 解析不受临时仓库影响）。 */
   function realJudge() {
     /* SAFETY: 类型断言已复核 */
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // oxlint-disable-next-line typescript/no-require-imports
     return require("../scripts/check-reformat-only.cjs") as {
       classifyReformatOnly: (
         entries: Array<{ after: string; before: string; file: string }>,
@@ -977,7 +977,7 @@ describe("批量那一档：退出 0 一次给全部结论，非 0 逐文件兜�
     entries: Array<{ after: string; before: string; file: string }>,
   ): Set<string> {
     /* SAFETY: 类型断言已复核 */
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    // oxlint-disable-next-line typescript/no-require-imports
     const tempMod = require(join(repo.dir, "scripts", "check-reformat-only.cjs")) as {
       classifyReformatOnly: typeof entries extends never
         ? never
@@ -1033,7 +1033,7 @@ describe("批量那一档：退出 0 一次给全部结论，非 0 逐文件兜�
 
 describe("补丁解析（纯函数，不跑 git）", () => {
   /* SAFETY: 类型断言已复核 */
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // oxlint-disable-next-line typescript/no-require-imports
   const mod = require("../scripts/check-reformat-only.cjs") as {
     collectChangedFiles: (patch: string) => Array<{ after: string; before: string }>;
     LIMIT: number;

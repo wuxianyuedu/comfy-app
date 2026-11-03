@@ -84,7 +84,7 @@ export default function WorkspacePage() {
   useEffect(() => {
     // 首帧后同步一次活跃项目 id（getActiveId 只在客户端可读，SSR 为 null）；
     // 与本文件恢复视图处同一约定。订阅回调里的 setState 属合规的外部同步。
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // oxlint-disable-next-line react/set-state-in-effect
     refreshActiveProject();
     return subscribeAppEvent("comfyapp:canvas-store-changed", () => {
       refreshActiveProject();

@@ -83,7 +83,7 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
    * FixtureParseError）；本 fixture 不依赖其它 fixture，空解构是 API 约束，
    * no-empty-pattern 在此属误报（台账见 tests/helpers/gate-repo.ts 那处）。
    */
-  // eslint-disable-next-line no-empty-pattern
+  // oxlint-disable-next-line no-empty-pattern
   realPlatform: async ({}, use) => {
     await use(process.platform);
   },
@@ -92,7 +92,7 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
     await use(realPlatform === "win32");
   },
 
-  // eslint-disable-next-line no-empty-pattern -- 同上：vitest fixture 第一参必须解构
+  // oxlint-disable-next-line no-empty-pattern -- 同上：vitest fixture 第一参必须解构
   asPlatform: async ({}, use) => {
     /* 一次用例里可能切多次（`withWindows` 的调用点就是「切一段、跑、恢复、再跑」），
      * 所以维护一份「原值」，由本 fixture 自己负责在收尾时回滚到位 —— 用例中途
@@ -114,7 +114,7 @@ export const test = base.extend<PlatformFixtures & HostFixtures>({
     restore();
   },
 
-  // eslint-disable-next-line no-empty-pattern -- 同上：vitest fixture 第一参必须解构
+  // oxlint-disable-next-line no-empty-pattern -- 同上：vitest fixture 第一参必须解构
   makeHost: async ({}, use) => {
     await use((usable: Array<string>) => {
       const set = new Set(usable);

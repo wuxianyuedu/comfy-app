@@ -146,6 +146,6 @@ export function useWorkshopTaskRecovery(input: {
       }
     }
     // 仅挂载执行一次；镜头列表经 ref 读取（惰性初始化在首渲染已完成）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, []);
 }

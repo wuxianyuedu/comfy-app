@@ -91,7 +91,7 @@ export function useWorkspaceTabs(): WorkspaceTabsController {
     const restored = readTabsState();
     if (restored) {
       // 跳过 hydration 窗口后恢复，避免对 SSR 渲染树造成级联 setState。
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // oxlint-disable-next-line react/set-state-in-effect
       setTabsState(restored);
     }
     setHydrated(true);

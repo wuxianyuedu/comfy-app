@@ -88,7 +88,7 @@ export function useWorkflowGraphDerivation(params: {
      *  稳定引用，写进依赖只让 linter 满意、不改变触发时机；`workflowId` 随 `detail`
      *  一起变（loader 就以它为键取详情），单独挂它会在详情落地前先跑一轮，把 store 的
      *  `workflowId` 提前改成新 id 而细节还是旧的。属规范 §13.4「规则静态盲区」。 */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [detail, rawMetaById, subgraphRawContext, subgraphStackLength]);
 
   return { rawMetaById, scopeDetail, outSlotNameById, ioDetailMap, graphNodes };
