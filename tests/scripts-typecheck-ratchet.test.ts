@@ -553,3 +553,71 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
     expect(trackedNow.output).not.toContain("面外未入库");
   });
 });
+
+/**
+ * 「筛不了」必须分两种原因（ISSUE #2965）。
+ *
+ * 立案现场：平台上一跑「230 vs 229」的红说不出来历 —— `trackedMjs()` 把
+ * 「不是 git 顶层（真·夹具形态）」与「git 命令失败（真故障）」归成同一个 `null`，
+ * 后者被静默折成「面 = 磁盘展开」。现在的口径：真故障退 2（没结论）并念出
+ * stderr 首行，只有夹具形态才走「没按入库清单筛」那一档。
+ */
+describe("取不到 git 清单要分两种原因（ISSUE #2965）", () => {
+  /* SAFETY: 类型断言已复核 */
+  const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
+    trackedMjs: (root: string) => Set<string> | null;
+    trackedMjsDetailed: (
+      root: string,
+    ) => { files: Set<string>; kind: "ok" } | { kind: "not-git-top" } | { kind: "error"; reason: string };
+  };
+
+  it("真仓库根 ⇒ ok；子目录 ⇒ not-git-top；不存在的目录 ⇒ error", () => {
+    const ok = judge.trackedMjsDetailed(REPO_ROOT);
+    expect(ok.kind, ok.kind === "error" ? ok.reason : "").toBe("ok");
+    /* 真仓库里至少有一份入库的 .mjs —— 否则「ok」只是没筛的空集，证不了任何事。 */
+    expect(ok.kind === "ok" && ok.files.size > 0).toBe(true);
+
+    /* 子目录不是它自己的 git 顶层 ⇒ 夹具那一档；旧契约 `trackedMjs` 仍是 null。 */
+    expect(judge.trackedMjsDetailed(join(REPO_ROOT, "scripts")).kind).toBe("not-git-top");
+    expect(judge.trackedMjs(join(REPO_ROOT, "scripts"))).toBeNull();
+
+    /* git 起不来（cwd 不存在 ⇒ spawn 当场败）⇒ 真故障那一档，且理由可读。 */
+    const gone = judge.trackedMjsDetailed(join(REPO_ROOT, "no-such-dir-2965"));
+    expect(gone.kind).toBe("error");
+    expect(gone.kind === "error" && gone.reason.length > 0).toBe(true);
+    /* 旧契约不许破：`trackedMjs` 对两类失败都还是 null（区分走 detailed 那一份）。 */
+    expect(judge.trackedMjs(join(REPO_ROOT, "no-such-dir-2965"))).toBeNull();
+  });
+
+  it("真 git 夹具 + 索引损坏 ⇒ 退 2（没结论），不许静默折成「面 = 磁盘展开」", () => {
+    const git = (args: Array<string>, cwd: string) => gitInTempRepo(args, cwd);
+    const repo = mkdtempSync(join(tmpdir(), "2965-repo-"));
+    rmSync(repo, { recursive: true, force: true });
+    mkdirSync(repo, { recursive: true });
+    created.push(repo);
+    writeFileSync(
+      join(repo, "tsconfig.scripts.json"),
+      JSON.stringify(FIXTURE_CONFIG, null, 2),
+      "utf8",
+    );
+    mkdirSync(join(repo, "scripts"), { recursive: true });
+    writeFileSync(join(repo, "scripts", "clean.mjs"), "export const a = 1;\n", "utf8");
+    git(["init", "-q"], repo);
+    git(["add", "-A"], repo);
+    git(["commit", "-q", "-m", "seed"], repo);
+    /* 先确认它是绿的（否则下面的退 2 读不出因果）。 */
+    const seed = runCheck(["--update"], repo);
+    expect(seed.code, seed.output).toBe(0);
+
+    /* 弄坏 `.git/index`：`rev-parse --show-toplevel` 不读索引、照常成功，
+     * `ls-files` 读索引、当场非零 —— 正是立案里「git 命令失败」那一支。 */
+    writeFileSync(join(repo, ".git", "index"), "garbage-not-an-index\n", "utf8");
+    const broke = runCheck([], repo);
+    expect(broke.code, broke.output).toBe(2);
+    expect(broke.output).toContain("取入库清单失败");
+    expect(broke.output).toContain("git ls-files");
+    expect(broke.output).toContain("#2965");
+    /* 反向：不许出现「没按入库清单筛」那句 —— 那是夹具形态的台词，故障不许借它降级。 */
+    expect(broke.output).not.toContain("没按入库清单筛");
+  });
+});
