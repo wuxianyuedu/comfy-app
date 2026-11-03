@@ -128,8 +128,9 @@ function parseShotsFromJson(text: string): Array<{
                 : "",
           description: typeof rec.description === "string" ? rec.description : "",
           shotType: normalizeShotType(rec.shotType),
+          /* SAFETY: 类型断言已复核 */
           characterNames: Array.isArray(rec.characterNames)
-            ? /* SAFETY: 类型断言已复核 */ (rec.characterNames as Array<unknown>).map(String)
+            ? (rec.characterNames as Array<unknown>).map(String)
             : [],
         };
       })
@@ -157,14 +158,14 @@ export function resolveAgentTool(
         argSummary,
         execute: async () => ({
           ok: true,
-          summary: `项目「${draft.meta.title}」：剧本${draft.scriptMarkdown ? "已就绪" : "待生成"}，角色卡 ${draft.characters.length} 个，镜头 ${draft.shots.length} 个（图 ${draft.shots.filter((s) => !!s.imageUrl).length} / 视频 ${draft.shots.filter((s) => !!s.clipUrl).length}）。`,
+          summary: `项目「${draft.meta.title}」：剧本${draft.scriptMarkdown ? "已就绪" : "待生成"}，角色卡 ${draft.characters.length} 个，镜头 ${draft.shots.length} 个（图 ${draft.shots.filter((s) => Boolean(s.imageUrl)).length} / 视频 ${draft.shots.filter((s) => Boolean(s.clipUrl)).length}）。`,
           detail: JSON.stringify({
             meta: draft.meta,
             hasScript: !!draft.scriptMarkdown,
             characterCount: draft.characters.length,
             shotCount: draft.shots.length,
-            imageDone: draft.shots.filter((s) => !!s.imageUrl).length,
-            clipDone: draft.shots.filter((s) => !!s.clipUrl).length,
+            imageDone: draft.shots.filter((s) => Boolean(s.imageUrl)).length,
+            clipDone: draft.shots.filter((s) => Boolean(s.clipUrl)).length,
           }),
         }),
       };

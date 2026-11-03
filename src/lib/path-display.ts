@@ -48,7 +48,8 @@ export function toDisplayPath(raw: string | null | undefined, base?: string | nu
   if (!s) {
     return "";
   }
-  if (!base) {
+  /* 空 base 归一后同样是空串，走下面的 `!b` 出口，结果一致 */
+  if (base === undefined || base === null) {
     return s;
   }
   const b = normalizeSlashes(base).replace(/\/+$/, "");
@@ -75,7 +76,8 @@ export function toDisplayPath(raw: string | null | undefined, base?: string | nu
  * 「一个约定的命名前缀」—— 不需要分隔符语义，也不需要归一。
  */
 export function stripPathPrefix(raw: string | null | undefined, prefix: string): string {
-  if (!raw) {
+  /* 空串既不是任何前缀的命中，返回值同样是空串，与缺省一致 */
+  if (raw === undefined || raw === null) {
     return "";
   }
   return raw.startsWith(prefix) ? raw.slice(prefix.length) : raw;
@@ -155,7 +157,8 @@ export function ellipsisMiddle(text: string | null | undefined, maxLength: numbe
  * 但请注意：比较键还要 `.toLowerCase()`，那不是本函数的账（大小写在展示上要保留）。
  */
 export function normalizeSlashes(raw: string | null | undefined): string {
-  if (!raw) {
+  /* 空串归一后仍是空串，与缺省同归一个出口 */
+  if (raw === undefined || raw === null) {
     return "";
   }
   return raw.replaceAll("\\", "/").replace(/^\.\//, "");

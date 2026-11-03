@@ -98,7 +98,7 @@ vi.mock("~/lib/log/log-file-client", () => {
   const fetchLogSessions = vi.fn(async (source: string, sessionId?: string) => {
     sessionLogRequests.push({ source, session: sessionId ?? null });
     const query = new URLSearchParams({ source });
-    if (sessionId) {
+    if (sessionId !== undefined && sessionId !== "") {
       query.set("session", sessionId);
     }
     const res = await fetch(`/api/logs/sessions?${query.toString()}`);
@@ -178,7 +178,7 @@ const t = createTestTRPC();
 const mockRouter = t.router({
   setting: t.router({
     get: t.procedure.query(() => {
-      if (behavior.settingsError) {
+      if (behavior.settingsError !== undefined && behavior.settingsError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.settingsError,
@@ -187,7 +187,7 @@ const mockRouter = t.router({
       return { settings: behavior.settings ?? SETTINGS };
     }),
     save: t.procedure.mutation(() => {
-      if (behavior.saveSettingsError) {
+      if (behavior.saveSettingsError !== undefined && behavior.saveSettingsError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.saveSettingsError,
@@ -201,7 +201,7 @@ const mockRouter = t.router({
      * 那是**假红**（判据被环境吃掉），所以留一个必定计数的桩。 */
     comfyStatus: t.procedure.query(async () => {
       comfyStatusCalls += 1;
-      if (behavior.comfyStatusPending) {
+      if (behavior.comfyStatusPending === true) {
         await neverSettle();
       }
       return {
@@ -225,7 +225,7 @@ const mockRouter = t.router({
     /* Drizzle Studio：分区拉起的 status 查询与动作，均需有 mock handler，
      * 否则 onUnhandledFrame:error 会让渲染整个 hook 的用例全挂 */
     dbStudioStatus: t.procedure.query(() => {
-      if (behavior.dbStudioStatusError) {
+      if (behavior.dbStudioStatusError !== undefined && behavior.dbStudioStatusError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.dbStudioStatusError,
@@ -256,7 +256,7 @@ const mockRouter = t.router({
   }),
   llm: t.router({
     configGet: t.procedure.query(() => {
-      if (behavior.llmError) {
+      if (behavior.llmError !== undefined && behavior.llmError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.llmError,
@@ -265,7 +265,7 @@ const mockRouter = t.router({
       return { config: behavior.llm ?? LLM };
     }),
     configSave: t.procedure.mutation(() => {
-      if (behavior.saveLlmError) {
+      if (behavior.saveLlmError !== undefined && behavior.saveLlmError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.saveLlmError,
@@ -575,17 +575,17 @@ describe("useSettingsPage", () => {
 
   /* 回归 #273：设置加载失败只体现在降级 UI，不经过 console/unhandledrejection，
    * 日志面板里什么也没有。现在失败会主动落 app-runtime 错误日志（面板轮询可见）。 */
+  /* SAFETY: 类型断言已复核 */
   it("查询失败时把错误落 app-runtime 日志且同一错误只记一次", async () => {
     behavior.llmError = "数据库被锁";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    (runtimeLogCalls as unknown as Array<unknown>).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
+    /* SAFETY: 类型断言已复核 */
     await expect
       .poll(() =>
-        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
+        (runtimeLogCalls as unknown as Array<{ level: string }>).some((c) => c.level === "error"),
       )
       .toBe(true);
     /* llm.configGet 失败、setting.get 成功 → 草稿仍为空（一份都不齐）。
@@ -673,18 +673,18 @@ describe("useSettingsPage", () => {
   /* 回归 ISSUE #304：补记日志时把原始报错（tRPC code / 服务端原文 / 堆栈首行）
    * 一并落盘。此前只记翻译后的可读文案，服务端真实报错在面板里彻底丢失，
    * 拿着「请求被中断」的提示无从排查。 */
+  /* SAFETY: 类型断言已复核 */
   it("补记 app-runtime 时带上原始报错（raw 字段）", async () => {
     behavior.llmError = "no such table: llmConfig";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    (runtimeLogCalls as unknown as Array<unknown>).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
+    /* SAFETY: 类型断言已复核 */
     await expect
       .poll(() =>
-        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
+        (runtimeLogCalls as unknown as Array<{ level: string }>).some((c) => c.level === "error"),
       )
       .toBe(true);
 
@@ -702,19 +702,19 @@ describe("useSettingsPage", () => {
 
   /* 回归 ISSUE #304：两个查询同批失败时，日志字段要把**两个**查询名都记上，
    * 否则只看得到其中一条，另一条的失败在面板里无从对应。 */
+  /* SAFETY: 类型断言已复核 */
   it("两个查询都失败时，日志字段记全两条查询名", async () => {
     behavior.llmError = "llm 炸了";
     behavior.settingsError = "settings 炸了";
-    /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<unknown>).length = 0;
+    (runtimeLogCalls as unknown as Array<unknown>).length = 0;
     const { result } = renderHook(() => useSettingsPage(), {
       wrapper: makeWrapper(),
     });
     await expect.poll(() => result.current.hasError).toBe(true);
+    /* SAFETY: 类型断言已复核 */
     await expect
       .poll(() =>
-        /* SAFETY: 类型断言已复核 */ (runtimeLogCalls as unknown as Array<{ level: string }>).some(
-          (c) => c.level === "error",
-        ),
+        (runtimeLogCalls as unknown as Array<{ level: string }>).some((c) => c.level === "error"),
       )
       .toBe(true);
 

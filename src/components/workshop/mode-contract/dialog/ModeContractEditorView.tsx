@@ -198,11 +198,11 @@ function ModeContractDraftPanel({
         customInputs={draft.customInputs ?? []}
         inputs={draft.inputs}
         onAddCustom={controller.addCustomInput}
-        onAddPredefined={(type) =>
+        onAddPredefined={(type) => {
           controller.appendInput(
             type === "reference-image" ? (nextReferenceImageId ?? "reference-image") : type,
-          )
-        }
+          );
+        }}
         onRemoveCustom={controller.removeInput}
         onRenameCustom={controller.renameCustomInput}
       />
@@ -217,10 +217,10 @@ function ModeContractDraftPanel({
             video: "视频（video）",
             audio: "音频（audio）",
           }}
-          onChange={(value) =>
+          onChange={(value) => {
             /* SAFETY: 类型断言已复核 */
-            controller.setOutput(value as ModeContract["output"])
-          }
+            controller.setOutput(value as ModeContract["output"]);
+          }}
           options={["image", "video", "audio"]}
           value={draft.output}
         />
@@ -293,7 +293,9 @@ function ContractInputRow({
             aria-label={`上移 ${label}`}
             className="text-muted-foreground/70 hover:text-ink disabled:opacity-25"
             disabled={index === 0}
-            onClick={() => controller.moveInput(input, -1)}
+            onClick={() => {
+              controller.moveInput(input, -1);
+            }}
             size="icon-sm"
             variant="ghost"
           >
@@ -303,7 +305,9 @@ function ContractInputRow({
             aria-label={`下移 ${label}`}
             className="text-muted-foreground/70 hover:text-ink disabled:opacity-25"
             disabled={index === draft.inputs.length - 1}
-            onClick={() => controller.moveInput(input, 1)}
+            onClick={() => {
+              controller.moveInput(input, 1);
+            }}
             size="icon-sm"
             variant="ghost"
           >
@@ -317,14 +321,18 @@ function ContractInputRow({
           <Checkbox
             checked={controller.isRequired(input)}
             className="size-4"
-            onCheckedChange={() => controller.toggleRequired(input)}
+            onCheckedChange={() => {
+              controller.toggleRequired(input);
+            }}
           />
           必备
         </FieldLabel>
         <Button
           aria-label={`移除 ${label}`}
           className="text-muted-foreground/60 hover:text-danger-strong"
-          onClick={() => controller.removeInput(input)}
+          onClick={() => {
+            controller.removeInput(input);
+          }}
           size="icon-sm"
           variant="ghost"
         >

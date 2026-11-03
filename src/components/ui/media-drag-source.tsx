@@ -72,7 +72,7 @@ export type MediaDragSourceProps = {
 export function displayNameFromUrl(url: string): string {
   const withoutQuery = url.split(/[?#]/)[0] ?? url;
   const last = withoutQuery.split("/").pop();
-  return last && last.length > 0 ? last : url;
+  return last !== undefined && last.length > 0 ? last : url;
 }
 
 /**
@@ -88,11 +88,11 @@ export function mediaDragSourceProps({
   canDrag = true,
   className = "",
 }: MediaDragSourceArgs): MediaDragSourceProps {
-  const draggable = canDrag && !!url;
+  const draggable = canDrag && url !== undefined && url !== null && url !== "";
   return {
     draggable,
     onDragStart: (event) => {
-      if (!url) {
+      if (url === undefined || url === null || url === "") {
         /* 理论上到不了这里（`draggable` 已挡住），但拖拽事件也可能被程序化
          * 触发 —— 静默丢投正是这条账要消灭的东西，所以显式返回。 */
         return;

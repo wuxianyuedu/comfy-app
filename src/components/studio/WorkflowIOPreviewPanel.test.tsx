@@ -165,7 +165,7 @@ function renderPanel(io: IOMap) {
     </WFStoresProvider>,
   );
   /* 与生产一致：面板的 workflowIO 由 store 订阅下发，重排后重新渲染。 */
-  const refresh = () =>
+  const refresh = () => {
     view.rerender(
       <WFStoresProvider stores={stores}>
         <WorkflowIoPreviewPanel
@@ -178,6 +178,7 @@ function renderPanel(io: IOMap) {
         />
       </WFStoresProvider>,
     );
+  };
   return { stores, refresh };
 }
 

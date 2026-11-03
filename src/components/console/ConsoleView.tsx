@@ -169,7 +169,7 @@ export function ConsoleView() {
                   <Kbd>Enter</Kbd>
                   执行 · 在项目根运行，最长 10 分钟
                 </span>
-                {c.syntaxWarning && (
+                {c.syntaxWarning !== null && c.syntaxWarning !== "" && (
                   <span
                     className="text-warning-strong flex items-start gap-1.5 leading-snug"
                     data-testid="console-syntax-warning"
@@ -203,7 +203,9 @@ export function ConsoleView() {
                           : "bg-subtle text-ink-muted hover:text-ink",
                       )}
                       disabled={running}
-                      onClick={() => c.fill(item.command)}
+                      onClick={() => {
+                        c.fill(item.command);
+                      }}
                       variant="ghost"
                     >
                       {item.command}

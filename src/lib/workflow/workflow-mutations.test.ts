@@ -13,8 +13,8 @@ vi.mock("~/trpc/vanilla", () => ({
   vanillaApi: {
     workflow: {
       update: {
-        mutate: (...args: Array<unknown>) =>
-          /* SAFETY: 类型断言已复核 */ updateMutate(...args) as never,
+        /* SAFETY: 类型断言已复核 */
+        mutate: (...args: Array<unknown>) => updateMutate(...args) as never,
       },
     },
   },

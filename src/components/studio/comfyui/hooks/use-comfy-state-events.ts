@@ -42,6 +42,8 @@ export function useComfyStateEvents(input: {
     if (paused) {
       return;
     }
-    return subscribeComfyStateChanges(() => onChangeRef.current());
+    return subscribeComfyStateChanges(() => {
+      onChangeRef.current();
+    });
   }, [paused]);
 }

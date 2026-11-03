@@ -105,7 +105,7 @@ export function WorkflowParamCardColumn({
             contractEntries?.find((item) => item.id === "size")?.label ?? sizeSubLabel("size");
           return (
             <WorkflowParamCard
-              canReset={canWire && SIZE_SUB_IDS.some((id) => !!isManual?.(id))}
+              canReset={canWire && SIZE_SUB_IDS.some((id) => isManual?.(id) === true)}
               canWire={canWire}
               classLabel={paramClassStyle("size").label}
               cls="size"
@@ -122,7 +122,13 @@ export function WorkflowParamCardColumn({
                *  `resetMany`。在这里逐个上抛的话，消费方每收到一个就落一次库，
                *  后一次会把前一次的删除覆盖回去（用户口径：「重置也清不掉」）。 */
               onReset={canWire ? () => onReset?.("size") : undefined}
-              onSelect={onSelect ? () => onSelect("size") : undefined}
+              onSelect={
+                onSelect
+                  ? () => {
+                      onSelect("size");
+                    }
+                  : undefined
+              }
               /* 行 = 形态（「尺寸 · 宽高比」），不是候选端口：形态由作者从哪一行
                * 拖出去声明，handle id 就是子口 id（连线层按它反查条目）。 */
               outputPorts={forms.map((item) => {
@@ -135,10 +141,10 @@ export function WorkflowParamCardColumn({
                   name: item.id,
                   display: sizeSubLabel(item.cls),
                   type: sizeSubTypeDisplay(item.cls),
-                  connected: !!target,
+                  connected: target !== null && target !== "",
                   ioKey: target ?? "",
                   handleId: item.id,
-                  active: !!target,
+                  active: target !== null && target !== "",
                 };
               })}
               readOnly={!canWire}
@@ -156,7 +162,7 @@ export function WorkflowParamCardColumn({
           contractEntries?.find((item) => item.id === entry.id)?.label ?? entry.label;
         return (
           <WorkflowParamCard
-            canReset={canWire && !!isManual?.(entry.id)}
+            canReset={canWire && isManual?.(entry.id) === true}
             /* `canWire` 与 `readOnly` 分开表达：库里现在**可连线**（拖圆点改落点），
              * 但卡片本身仍是消费方托管的视觉本体 —— 不写「先选模式才能连线」那类
              * 编辑提示（节点上模式早就选好了，ISSUE #355）。 */
@@ -177,7 +183,13 @@ export function WorkflowParamCardColumn({
             key={entry.id}
             label={cardLabel}
             onReset={canWire ? () => onReset?.(entry.id) : undefined}
-            onSelect={onSelect ? () => onSelect(entry.id) : undefined}
+            onSelect={
+              onSelect
+                ? () => {
+                    onSelect(entry.id);
+                  }
+                : undefined
+            }
             /* **一个口一颗点**：卡片只说「这个口对外是什么」（名字 + 类型），
              *  落点由线的另一端声明（拖到宿主哪一行就是哪一行）。 */
             outputPorts={paramOutputPorts(entry, io, resolved[entry.id], cardLabel)}

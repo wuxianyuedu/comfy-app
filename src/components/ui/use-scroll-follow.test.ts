@@ -58,7 +58,9 @@ describe("useScrollFollow", () => {
 
     /* 距底 100px > 阈值 32px → 退出跟随。 */
     el.scrollTop = 700;
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(result.current.following).toBe(false);
   });
 
@@ -67,7 +69,9 @@ describe("useScrollFollow", () => {
     const { result } = renderHook(() => useScrollFollow({ containerRef: makeRef(el), watch: 0 }));
 
     el.scrollTop = 1000 - 200 - (NEAR_BOTTOM_PX - 1);
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(result.current.following).toBe(true);
   });
 
@@ -80,7 +84,9 @@ describe("useScrollFollow", () => {
     );
 
     el.scrollTop = 100;
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     rerender({ text: "b" });
     expect(el.scrollTop, "用户已接管滚动，不该被拉回底部").toBe(100);
   });
@@ -90,10 +96,14 @@ describe("useScrollFollow", () => {
     const { result } = renderHook(() => useScrollFollow({ containerRef: makeRef(el), watch: 0 }));
 
     el.scrollTop = 100;
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(result.current.following).toBe(false);
 
-    act(() => result.current.jumpToLatest());
+    act(() => {
+      result.current.jumpToLatest();
+    });
     expect(result.current.following).toBe(true);
     expect(el.scrollTop).toBe(1000);
   });
@@ -114,7 +124,9 @@ describe("useScrollFollow", () => {
     );
 
     el.scrollTop = 100;
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(changes, "上滚应把结论回传给父级").toEqual([false]);
     /* 父级还没把新值给回来时，hook 仍报父级那份值（受控语义）。 */
     expect(result.current.following).toBe(true);
@@ -134,7 +146,9 @@ describe("useScrollFollow", () => {
     );
 
     el.scrollTop = 700; // 距底 100px，小于自定义阈值 200
-    act(() => result.current.onScroll());
+    act(() => {
+      result.current.onScroll();
+    });
     expect(result.current.following).toBe(true);
   });
 });

@@ -102,7 +102,9 @@ export function ProjectHomePage({ projectName, onNavigate, projectId }: ProjectH
                 "flex h-auto flex-col items-start gap-1 rounded-2xl border p-4 text-left font-normal",
               )}
               key={entry.id}
-              onClick={() => onNavigate(entry.id)}
+              onClick={() => {
+                onNavigate(entry.id);
+              }}
               variant="ghost"
             >
               <span className="text-ink-bright text-sm font-medium">{entry.label}</span>

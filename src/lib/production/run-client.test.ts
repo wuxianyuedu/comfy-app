@@ -97,7 +97,8 @@ describe("run 控制动作", () => {
     const snap = {
       /* SAFETY: 类型断言已复核 */
       run: { status: "paused" } as never,
-      action: { kind: /* SAFETY: 类型断言已复核 */ "idle" as const },
+      /* SAFETY: 类型断言已复核 */
+      action: { kind: "idle" as const },
     };
     pauseMutate.mockResolvedValue(snap);
     resumeMutate.mockResolvedValue({

@@ -391,11 +391,12 @@ describe("扫描面 = 门禁链事实 ∪ 名字族（ISSUE #1444 残活 A）", 
 describe("入口级登记：登记成入口的每一形都要验得出（ISSUE #2530）", () => {
   /** 临时区里那份判据脚本本体（它只要名字在 `check-` 族里就进扫描面）。 */
   const PROBE = "check-probe-entry.cjs";
-  const withProbe = (repo: { write: (p: string, s: string) => void }) =>
+  const withProbe = (repo: { write: (p: string, s: string) => void }) => {
     repo.write(
       `scripts/${PROBE}`,
       `#!/usr/bin/env node\n// @ts-nocheck -- 探针\nconsole.log("entry");\nprocess.exit(0);\n`,
     );
+  };
   const ledgerWith = (entrypoints: unknown) => JSON.stringify({ onDemand: {}, entrypoints });
 
   test("两形都真有那行命令 ⇒ 不报入口问题（计数那一行由真仓库那条验）", ({ repo }) => {

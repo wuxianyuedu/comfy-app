@@ -117,7 +117,9 @@ export function useInterval(
       immediate,
       pauseWhenHidden,
       pauseWhenUnfocused,
-      onError: (err: unknown) => onErrorRef.current(err),
+      onError: (err: unknown) => {
+        onErrorRef.current(err);
+      },
     });
   }, [ms, immediate, pauseWhenHidden, pauseWhenUnfocused]);
 }

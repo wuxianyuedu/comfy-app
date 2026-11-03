@@ -85,10 +85,7 @@ describe("check-merge-parents.mjs(合并提交必须双亲)", () => {
   test("真合并提交(解冲突后 commit,MERGE_HEAD 在场)→ 放行", ({ repo }) => {
     stageConflictingMerge(repo);
     /* source=merge 是 git 在真合并时给的;消息形态也是 git 自己写的。 */
-    const { code, output } = repo.run([
-      messageFile(repo, "Merge branch 'feat/merge-me'"),
-      "merge",
-    ]);
+    const { code, output } = repo.run([messageFile(repo, "Merge branch 'feat/merge-me'"), "merge"]);
     expect(code).toBe(0);
     expect(output).toContain("2 个父提交");
   });
@@ -109,9 +106,7 @@ describe("check-merge-parents.mjs(合并提交必须双亲)", () => {
     expect(output).toContain("--no-verify");
   });
 
-  test("--amend 一个合并提交 → 放行(source=commit,父提交从 HEAD 继承)", ({
-    repo,
-  }) => {
+  test("--amend 一个合并提交 → 放行(source=commit,父提交从 HEAD 继承)", ({ repo }) => {
     /* 这条是**误报防线**:amend 一个合并提交时消息照样是 Merge…、MERGE_HEAD 也照样
      * 不在,只看消息 + MERGE_HEAD 会把真正来修合并信息的人 100% 拦下。 */
     repo.git("checkout", "-q", "-b", "feat/amend-me");
@@ -130,10 +125,7 @@ describe("check-merge-parents.mjs(合并提交必须双亲)", () => {
 
   test("正文里出现 Merge branch 不算声明(只认首行)→ 放行", ({ repo }) => {
     const { code, output } = repo.run([
-      messageFile(
-        repo,
-        "fix: 修正一处\n\n顺带说明:原先的 Merge branch 写法是错的\n",
-      ),
+      messageFile(repo, "fix: 修正一处\n\n顺带说明:原先的 Merge branch 写法是错的\n"),
     ]);
     expect(code).toBe(0);
     expect(output).toContain("未声明是合并");
@@ -147,9 +139,7 @@ describe("check-merge-parents.mjs(合并提交必须双亲)", () => {
 
   test("取不到 MERGE_HEAD 时按一个父算(单亲 + 合并消息 = 阻断)", ({ repo }) => {
     /* 与上面那条同源:本次提交的父数 = 1 + MERGE_HEAD 行数,没有它就是个父。 */
-    const { code } = repo.run([
-      messageFile(repo, "Merge remote-tracking branch 'origin/master'"),
-    ]);
+    const { code } = repo.run([messageFile(repo, "Merge remote-tracking branch 'origin/master'")]);
     expect(code).toBe(1);
   });
 });
@@ -161,11 +151,10 @@ describe("check-merge-parents.mjs(非 git 目录 / 钩子接线)", () => {
     const bare = mkdtempSync(join(tmpdir(), "merge-parents-nogit-"));
     try {
       copyFileSync(SCRIPT, join(bare, "check-merge-parents.mjs"));
-      const output = execFileSync(
-        process.execPath,
-        [join(bare, "check-merge-parents.mjs")],
-        { cwd: bare, encoding: "utf8" },
-      );
+      const output = execFileSync(process.execPath, [join(bare, "check-merge-parents.mjs")], {
+        cwd: bare,
+        encoding: "utf8",
+      });
       expect(output).toContain("保守放行");
     } finally {
       rmSync(bare, { recursive: true, force: true });

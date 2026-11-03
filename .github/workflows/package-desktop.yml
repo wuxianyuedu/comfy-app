@@ -1,0 +1,106 @@
+# 桌面成品包（镜像档）—— 对位 `.cnb.yml` 的「桌面成品包」（crontab 0 3 * * *，北京时间）
+#
+# 承接的格（命令逐字对位 CNB 桌包档）：
+#   安装依赖 → 桌包工具预置（tauri-tools-cache.mjs）→ 桌面成品构建（pnpm tauri build）。
+#
+# 刻意不承接 / 不同形：
+#   · `打包·壳工具链自证`（--rust-only）是自托管宿主机事实读数；windows-latest 镜像
+#     自带 Rust 工具链，无需自证，cargo 缓存由 swatinem/rust-cache 承担。
+#   · ⚠️ **发布落点不同形（待确认的决策点）**：CNB 那一格 `publish-desktop-bundle.mjs`
+#     发布到**本机常驻目录**（留 2 份）；GitHub runner 是即弃机，等价物是
+#     `upload-artifact`（下方最后一步）。要 GitHub Releases / 仍回写那台机的常驻目录 /
+#     两者都要，是单独一次决定 —— 决定落地前这里先出 artifact。
+#   · CNB 的 `ci-cp936-exit.mjs` 包裹是给 CP936 控制台的转码层；GitHub Windows runner
+#     的 pwsh 输出 UTF-8，直跑真命令。
+#
+# ⚠️ schedule 只跑在**镜像仓默认分支**上（同 daily.yml 那段前提，#3064 起已接上）。
+# `workflow_dispatch`（可指 sha）仍是手动入口。GitHub cron 是 UTC：北京 03:00 = UTC 19:00。
+# `uses:` 版本口径同 pr-gate.yml 文件头（有 v7 上 v7；pnpm/action-setup 与 rust-cache
+# 的最新主版本分别是 v6 与 v2）。
+name: Package desktop (mirror)
+
+on:
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+    inputs:
+      head_sha:
+        description: 要打包的那一笔 sha（留空 = 默认分支 HEAD）
+        required: false
+        default: ""
+
+concurrency:
+  # 对位 CNB 的 `.lock-package`：桌包档全局一把锁。
+  group: package
+  cancel-in-progress: true
+
+env:
+  SKIP_ENV_VALIDATION: "1"
+  BETTER_AUTH_SECRET: "ci-placeholder-secret-not-for-production-use"
+  CI: "true"
+  # NSIS 工具镜像的常驻根（resolveToolRoot 的显式出口，scripts/ci-cache-slot.mjs）。
+  # 即弃机没有「本机种过」的前提 ⇒ 根必须落在 actions/cache 接住的路径上（下方 cache 步），
+  # miss 那一跑由 tauri-tools-cache.mjs --download 从被钉的公开资产建镜像。
+  COMFY_CI_TOOLS_ROOT: "D:\\ci-tools"
+
+jobs:
+  package:
+    # 桌包的目标平台是 Windows（tauri.conf.json targets: nsis + msi）⇒ 只能 Windows runner。
+    # 钉 2022 不跟 `windows-latest` 浮动标签，理由同 pr-gate.yml 的镜像钉版口径。
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - name: 检出
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.head_sha || github.sha }}
+          fetch-depth: 0
+          # 打包要把字体真身嵌进成品（LFS 指针文件打进去就是坏包）⇒ 这一格必须拉 LFS。
+          # 对象由镜像那一格 `git lfs push` 送到；配额口径见 pr-gate.yml 同名注释。
+          lfs: true
+
+      - name: 装 pnpm（按 package.json 的 packageManager 钉死版）
+        uses: pnpm/action-setup@v6
+
+      - name: 装 Node（engines 下限 26.12.1；镜像预装只到 24，必须显式）
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+
+      - name: cargo 缓存
+        uses: swatinem/rust-cache@v2
+
+      - name: 安装依赖（冷装约 8 分钟；better-sqlite3 原生编译吃 VS 生成工具，镜像自带）
+        run: pnpm install --frozen-lockfile
+
+      # NSIS 工具镜像做成跨跑缓存：key 锁死 NSIS_PLAN 的版本（3.13），版本升上去 = 同批改
+      # 这里与 scripts/tauri-tools-cache.mjs 的 NSIS_PLAN。path 即 mirrorDir 的落点
+      # （<COMFY_CI_TOOLS_ROOT>/nsis/3.13）。命中 ⇒ 预置步的 ensure 直接补齐 bundler 缓存；
+      # miss ⇒ 预置步先 --download 建镜像（付一次下载），本步在跑尾把镜像存进缓存。
+      - name: NSIS 工具镜像缓存（锁 3.13）
+        uses: actions/cache@v6
+        with:
+          path: D:\ci-tools\nsis\3.13
+          key: comfyapp-nsis-3.13-${{ runner.os }}
+
+      # ensure || (download && ensure)：三态 fail-closed 不静默降级 —— 镜像已在场
+      # （缓存命中）⇒ ensure 补齐即过；两边都没有（缓存 miss）⇒ ensure 退 2，接 --download
+      # 从被钉的公开资产建镜像再 ensure；下载/解压失败退 2、哈希对不上退 1，都是红。
+      # 用 bash 是为了 `||`/`&&` 链式语义在所有 Windows runner 镜像上一致（不依赖 pwsh 版本）。
+      - name: 桌包工具预置（cnb 同款入口；缓存 miss 时先 --download 建镜像）
+        shell: bash
+        run: node scripts/tauri-tools-cache.mjs || (node scripts/tauri-tools-cache.mjs --download && node scripts/tauri-tools-cache.mjs)
+
+      - name: 桌面成品构建（cnb 同款判据一字不改）
+        run: pnpm tauri build
+
+      # upload-artifact v4 → v7（2026-11-02 核过 tag）：v5 起 node24 运行时，v6 起要求
+      # runner ≥ 2.327.1（托管 runner 恒满足），v7 新增 `archive` 输入（缺省 true ⇒
+      # 本步的 name/path/retention-days 用法不变）。
+      - name: 上传桌面成品（artifact；发布落点的最终决定见文件头）
+        uses: actions/upload-artifact@v7
+        with:
+          name: comfyapp-desktop-bundle
+          path: src-tauri/target/release/bundle/
+          retention-days: 14

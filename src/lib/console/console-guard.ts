@@ -24,7 +24,8 @@
 
 /** 判定一个 host 串（可能带端口）是不是回环地址。 */
 export function isLoopbackHost(value: string | null | undefined): boolean {
-  if (!value) {
+  /* 空 host 同样不是回环地址，空串与缺省同判 false */
+  if (value === undefined || value === null || value === "") {
     return false;
   }
   const raw = value.trim().toLowerCase();

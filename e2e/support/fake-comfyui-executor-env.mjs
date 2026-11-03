@@ -37,10 +37,7 @@ import { pythonCandidates as sharedPythonCandidates } from "../../src/lib/proces
 import { resolvePython } from "../../src/lib/process/python-resolve.ts";
 
 /** 替身包所在目录：它的子目录 `comfy_cli/` 就是 `python -m comfy_cli` 要找的包。 */
-export const FAKE_CLI_MODULE_ROOT = path.resolve(
-  import.meta.dirname,
-  "fake-comfyui",
-);
+export const FAKE_CLI_MODULE_ROOT = path.resolve(import.meta.dirname, "fake-comfyui");
 
 /** 失败路径的触发词（ISSUE #1621 的第二个用例）。
  *

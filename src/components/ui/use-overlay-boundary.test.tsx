@@ -19,9 +19,8 @@ import { useOverlayBoundary } from "./use-overlay-boundary";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
-  delete (
-    /* SAFETY: 类型断言已复核 */ (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
-  );
+  /* SAFETY: 类型断言已复核 */
+  delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
 });
 
 /* 「在不在壳里」的判据就是 `isDesktopShell()` 读的那个全局标记（`desktop-shell-client`）。
@@ -34,10 +33,8 @@ function setShell(on: boolean) {
       value: { invoke: async () => null, transformCallback: () => 0 },
     });
   } else {
-    delete (
-      /* SAFETY: 类型断言已复核 */ (window as unknown as Record<string, unknown>)
-        .__TAURI_INTERNALS__
-    );
+    /* SAFETY: 类型断言已复核 */
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   }
 }
 

@@ -60,7 +60,9 @@ export function FlowNodeHeader({
             event.stopPropagation();
             onToggleCollapsed();
           }}
-          onMouseDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
           size="icon-xs"
           style={{ pointerEvents: "auto" }}
           variant="ghost"
@@ -103,7 +105,7 @@ export function FlowNodeHeader({
       {/* 按节点输出复选框 —— 工作流输出按**节点**标识
        *（comfy-cli 执行字典以 nodeId 为键），不是按输出端口，
        * 所以一个复选框标记**整个**节点为工作流输出。 */}
-      {io?.ioEditMode && outputs.length > 0 && (
+      {io?.ioEditMode === true && outputs.length > 0 && (
         <IoCheckbox
           io={io}
           ioRef={

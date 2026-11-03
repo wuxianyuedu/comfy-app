@@ -57,7 +57,9 @@ export type HistoryPanelController = {
 
 export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPanelController {
   const [filter, setFilter] = useState<HistoryFilter>("all");
-  const [scope, setScope] = useState<HistoryScope>(projectId ? "project" : "all");
+  const [scope, setScope] = useState<HistoryScope>(
+    projectId !== undefined && projectId !== null && projectId !== "" ? "project" : "all",
+  );
   const [display, setDisplay] = useState<DisplayMode>("list");
 
   const [tasks, setTasks] = useState<Array<HistoryTaskRow>>([]);
@@ -83,7 +85,12 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
         projectId?: string;
         take: number;
       } = { take: TAKE };
-      if (scope === "project" && projectId) {
+      if (
+        scope === "project" &&
+        projectId !== undefined &&
+        projectId !== null &&
+        projectId !== ""
+      ) {
         params.projectId = projectId;
       }
       /* "all" 不是服务端认识的 media 枚举，只在筛选非全部时才带上。 */
@@ -92,7 +99,9 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
       }
       try {
         const rows = await fetchHistoryTasks(params);
-        guard.commit(() => setTasks(rows));
+        guard.commit(() => {
+          setTasks(rows);
+        });
       } catch (error_) {
         /* 错误文案与清空列表都属于「这一轮的结论」，一起过守卫。 */
         guard.commit(() => {
@@ -100,11 +109,15 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
           setTasks([]);
         });
       } finally {
-        guard.commit(() => setLoading(false));
+        guard.commit(() => {
+          setLoading(false);
+        });
       }
     };
     void run();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [projectId, scope, filter, reloadKey]);
 
   /* ── 本项目为空时探一次全局，以便给出「查看全部」引导 ── */
@@ -114,9 +127,13 @@ export function useHistoryPanel({ projectId }: UseHistoryPanelArgs): HistoryPane
     }
     const guard = beginStaleRun();
     void probeGlobalTaskCount().then((count) => {
-      guard.commit(() => setGlobalCount(count));
+      guard.commit(() => {
+        setGlobalCount(count);
+      });
     });
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [scope, loading, tasks.length, globalCount]);
 
   const activeCount = countActive(tasks);

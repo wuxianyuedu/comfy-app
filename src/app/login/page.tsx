@@ -74,9 +74,8 @@ export default function LoginPage() {
         const requested = readQueryParam(window.location.search, "callbackUrl")?.trim();
         /*`requested` 为空串 / 全空白时回落默认目标（`callbackUrl=` 是
          * 「没指定」而不是「跳到首页」）—— 空串归一后走`??` 读不出差别，
-         * 所以显式用`||` 的语义写在这一行，并在这里说明理由。 */
-        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空串与全空白都要回落默认目标
-        const callback = requested || "/workspace";
+         * 所以显式判「非 undefined 且非空串」。 */
+        const callback = requested !== undefined && requested !== "" ? requested : "/workspace";
         router.push(callback);
         router.refresh();
         /*`run` 返回动作的返回值，这里不读；异常不往外抛（见下）。 */
@@ -165,7 +164,7 @@ export default function LoginPage() {
               : "创建一个本地账号，开启你的 AI 创作"}
           </p>
 
-          {notice && (
+          {notice !== null && notice !== "" && (
             <Alert className="mb-4 flex items-start gap-2 px-3 py-2.5 text-sm" variant="info">
               <Icon className="mt-0.5 shrink-0" name="info" size={15} />
               <AlertDescription className="flex-1 text-sm leading-relaxed">
@@ -229,7 +228,7 @@ export default function LoginPage() {
               value={password}
             />
 
-            {error && (
+            {error !== null && error !== "" && (
               <p className="bg-destructive/10 text-destructive rounded-lg px-3 py-2 text-center text-sm">
                 {error}
               </p>
@@ -329,7 +328,9 @@ function LoginFieldRow({
             type={type}
             value={value}
           />
-          {right && <div className="absolute top-1/2 right-1.5 -translate-y-1/2">{right}</div>}
+          {Boolean(right) && (
+            <div className="absolute top-1/2 right-1.5 -translate-y-1/2">{right}</div>
+          )}
         </div>
       )}
     </FormField>

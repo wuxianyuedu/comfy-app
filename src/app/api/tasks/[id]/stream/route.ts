@@ -84,7 +84,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
               images: task.resultImages,
             });
             lastSent.status = task.status;
-            lastSent.progress = task.progress ?? 0;
+            lastSent.progress = task.progress;
             lastSent.nodeKey = JSON.stringify(task.progressNode ?? null);
             /*  回放之前任务就已终态：轮询那条「与上次发出的快照不同才动作」的判据
              * 刚被这次回放喂成了恒假，于是再没有别的退出路径 —— 只能在这里收口
@@ -186,12 +186,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
               sentLogCount = Math.max(sentLogCount, logs.length);
               if (changed) {
                 lastSent.status = cur.status;
-                lastSent.progress = cur.progress ?? 0;
+                lastSent.progress = cur.progress;
                 lastSent.nodeKey = nodeKey;
                 send({
                   type: "state",
                   status: cur.status,
-                  progress: cur.progress ?? 0,
+                  progress: cur.progress,
                   error: cur.error,
                   validationErrors: parseValidationErrors(cur.validationErrors),
                   workflowName: cur.workflowName,

@@ -180,7 +180,9 @@ export function WorkshopEncapsulationPanel({
  与画布节点页签各自独立（ISSUE #611 旧形态：两个页签各写各的）。 */}
       <div className="flex flex-wrap items-center gap-2">
         <WorkflowRunLogButton
-          onOpen={() => setLogOpen(true)}
+          onOpen={() => {
+            setLogOpen(true);
+          }}
           source="encapsulation-test"
           taskId={logViewTaskId}
           workflowId={workflowId}
@@ -195,7 +197,7 @@ export function WorkshopEncapsulationPanel({
             未配置
           </Badge>
         )}
-        {mode && (
+        {mode !== null && mode !== undefined && mode !== "" && (
           <span className="text-muted-foreground text-2xs">
             {getWorkflowType(mode)?.label ?? mode}
             <span className="text-3xs font-mono">（{mode.toUpperCase()}）</span>
@@ -328,7 +330,7 @@ export function WorkshopEncapsulationPanel({
               {test.error}
             </p>
           )}
-          {test.resultUrl && (
+          {test.resultUrl !== null && test.resultUrl !== "" && (
             <div className="flex flex-col gap-1">
               <p className="text-primary text-2xs">流程测试通过 —— {displayName} 在工坊中可用。</p>
               <MediaThumbnail
@@ -344,7 +346,9 @@ export function WorkshopEncapsulationPanel({
         </div>
       </div>
       <LazyWorkflowRunLogModal
-        onClose={() => setLogOpen(false)}
+        onClose={() => {
+          setLogOpen(false);
+        }}
         onViewTaskIdChange={setLogTaskId}
         open={logOpen}
         source="encapsulation-test"

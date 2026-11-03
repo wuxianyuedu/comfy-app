@@ -29,7 +29,9 @@ describe("useFlashState", () => {
     const { result } = renderHook(() => useFlashState());
     expect(result.current.on).toBe(false);
 
-    act(() => result.current.flash());
+    act(() => {
+      result.current.flash();
+    });
     expect(result.current.on).toBe(true);
 
     await act(async () => {
@@ -46,11 +48,15 @@ describe("useFlashState", () => {
   it("连点时以最后一次为准：第一下的复位不打断第二下", async () => {
     const { result } = renderHook(() => useFlashState(1000));
 
-    act(() => result.current.flash());
+    act(() => {
+      result.current.flash();
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
-    act(() => result.current.flash()); // 第二下
+    act(() => {
+      result.current.flash();
+    }); // 第二下
 
     /* 若旧定时器没被清，200ms 后就会被第一次的复位抹掉。 */
     await act(async () => {
@@ -68,7 +74,9 @@ describe("useFlashState", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { result, unmount } = renderHook(() => useFlashState(1000));
 
-    act(() => result.current.flash());
+    act(() => {
+      result.current.flash();
+    });
     unmount();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);
@@ -81,14 +89,20 @@ describe("useFlashState", () => {
 
   it("reset 立即复位，不等定时器", async () => {
     const { result } = renderHook(() => useFlashState(1000));
-    act(() => result.current.flash());
-    act(() => result.current.reset());
+    act(() => {
+      result.current.flash();
+    });
+    act(() => {
+      result.current.reset();
+    });
     expect(result.current.on).toBe(false);
   });
 
   it("显式时长覆盖默认（logs 的保存回执要留 8s）", async () => {
     const { result } = renderHook(() => useFlashState(8000));
-    act(() => result.current.flash());
+    act(() => {
+      result.current.flash();
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(DEFAULT_FLASH_MS);
     });
@@ -110,7 +124,9 @@ describe("useFlashLatch", () => {
   it("载荷与亮起同生共死：一次动作的两个可见值一起过期", async () => {
     const { result } = renderHook(() => useFlashLatch(1000, EMPTY));
 
-    act(() => result.current.flash({ path: "log/exports/a.txt", failed: false }));
+    act(() => {
+      result.current.flash({ path: "log/exports/a.txt", failed: false });
+    });
     expect(result.current.value).toEqual({
       path: "log/exports/a.txt",
       failed: false,
@@ -124,8 +140,12 @@ describe("useFlashLatch", () => {
 
   it("reset 立即清空载荷，不等定时器", async () => {
     const { result } = renderHook(() => useFlashLatch(1000, EMPTY));
-    act(() => result.current.flash({ path: "a.txt", failed: false }));
-    act(() => result.current.reset());
+    act(() => {
+      result.current.flash({ path: "a.txt", failed: false });
+    });
+    act(() => {
+      result.current.reset();
+    });
     expect(result.current.value).toEqual(EMPTY);
     /* 复位后旧定时器不该再动状态。 */
     await act(async () => {
@@ -137,11 +157,15 @@ describe("useFlashLatch", () => {
   it("连点时旧定时器被清（第二个载荷不被第一个的复位抹掉）", async () => {
     const { result } = renderHook(() => useFlashLatch(1000, EMPTY));
 
-    act(() => result.current.flash({ path: "a.txt", failed: false }));
+    act(() => {
+      result.current.flash({ path: "a.txt", failed: false });
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(800);
     });
-    act(() => result.current.flash({ path: null, failed: true }));
+    act(() => {
+      result.current.flash({ path: null, failed: true });
+    });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200);

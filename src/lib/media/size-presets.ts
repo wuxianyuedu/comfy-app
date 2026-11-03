@@ -726,7 +726,8 @@ export function toSizeSpec(raw: unknown): SizeSpec {
   if (typeof raw === "string") {
     return sizeSpecFromText(raw);
   }
-  if (raw && typeof raw === "object") {
+  // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+  if (raw != null && typeof raw === "object") {
     return normalizeSizeSpec(raw);
   }
   return { ...DEFAULT_SIZE_SPEC };
@@ -765,7 +766,7 @@ export function aspectLabelForDims(
       const optionRatio = parseRatioFromText(option);
       return optionRatio !== null && Math.abs(optionRatio - preset.ratio) / preset.ratio < 0.02;
     });
-    if (hit) {
+    if (hit !== undefined) {
       return hit;
     }
   }

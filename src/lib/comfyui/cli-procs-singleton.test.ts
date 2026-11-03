@@ -29,7 +29,8 @@ vi.mock("~/lib/core/logger", () => ({
 describe("cliProcs — 进程级单例（HMR 安全）", () => {
   it("模块重新求值后拿到同一个 Map，在飞任务不丢句柄", async () => {
     const first = await import("./executor-cli");
-    first.cliProcs.set("t-1", /* SAFETY: 类型断言已复核 */ {} as never);
+    /* SAFETY: 类型断言已复核 */
+    first.cliProcs.set("t-1", {} as never);
 
     // 模拟 HMR 重新求值：清模块缓存后再 import。
     // 若 cliProcs 是模块级 `new Map()`，这里会拿到一个**不同且为空**的 Map。

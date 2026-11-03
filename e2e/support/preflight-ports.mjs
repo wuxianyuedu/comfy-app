@@ -77,9 +77,15 @@ export function probePortOccupied(port, options = {}) {
       resolve(occupied);
     };
     socket.setTimeout(timeoutMs);
-    socket.on("connect", () => done(true));
-    socket.on("timeout", () => done(false));
-    socket.on("error", () => done(false));
+    socket.on("connect", () => {
+      done(true);
+    });
+    socket.on("timeout", () => {
+      done(false);
+    });
+    socket.on("error", () => {
+      done(false);
+    });
   });
 }
 
@@ -206,13 +212,11 @@ export const FAKE_SERVER_SCRIPT = "e2e/support/fake-comfyui-server.mjs";
  * 归一化反斜杠并小写：Windows 上那条命令行是 `node e2e/support/…` 或
  * `node e2e\support\…` 两种都真实存在。
  *
- * @param {string} cmdline
+ * @param {string | null | undefined} cmdline
  * @returns {boolean}
  */
 export function isFakeServerCmdline(cmdline) {
-  const text = String(cmdline ?? "")
-    .replaceAll("\\", "/")
-    .toLowerCase();
+  const text = (cmdline ?? "").replaceAll("\\", "/").toLowerCase();
   return text.includes(FAKE_SERVER_SCRIPT.toLowerCase());
 }
 

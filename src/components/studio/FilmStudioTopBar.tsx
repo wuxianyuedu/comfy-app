@@ -97,7 +97,8 @@ export function FilmStudioTopBar({
         disabled={
           c.loading ||
           !c.videoWorkflowId ||
-          (c.shotSource === "project" && (!c.activeProjectId || c.projectShotCount === 0))
+          (c.shotSource === "project" &&
+            (c.activeProjectId === null || c.activeProjectId === "" || c.projectShotCount === 0))
         }
         // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
         onClick={() => void (c.shotSource === "project" ? c.createFromProject() : c.create())}

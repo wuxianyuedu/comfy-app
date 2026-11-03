@@ -65,24 +65,25 @@ export type DraftSummary = {
 
 /** 按用户列出其所有服务端镜像摘要（用于在本地索引缺失时把云端项目找回来）。 */
 export async function listDraftsByUser(userId: string | null): Promise<Array<DraftSummary>> {
-  const rows = userId
-    ? await workshopDb
-        .select({
-          id: workshopDraft.id,
-          title: workshopDraft.title,
-          updatedAt: workshopDraft.updatedAt,
-        })
-        .from(workshopDraft)
-        .where(eq(workshopDraft.userId, userId))
-        .orderBy(desc(workshopDraft.updatedAt))
-    : await workshopDb
-        .select({
-          id: workshopDraft.id,
-          title: workshopDraft.title,
-          updatedAt: workshopDraft.updatedAt,
-        })
-        .from(workshopDraft)
-        .orderBy(desc(workshopDraft.updatedAt));
+  const rows =
+    userId !== null && userId !== ""
+      ? await workshopDb
+          .select({
+            id: workshopDraft.id,
+            title: workshopDraft.title,
+            updatedAt: workshopDraft.updatedAt,
+          })
+          .from(workshopDraft)
+          .where(eq(workshopDraft.userId, userId))
+          .orderBy(desc(workshopDraft.updatedAt))
+      : await workshopDb
+          .select({
+            id: workshopDraft.id,
+            title: workshopDraft.title,
+            updatedAt: workshopDraft.updatedAt,
+          })
+          .from(workshopDraft)
+          .orderBy(desc(workshopDraft.updatedAt));
   return rows.map((r) => ({
     id: r.id,
     title: r.title,

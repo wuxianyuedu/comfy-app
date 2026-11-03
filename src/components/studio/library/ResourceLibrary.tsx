@@ -136,7 +136,9 @@ export function ResourceLibrary() {
           <Input
             className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
             onChange={textHandler(library.setSearch)}
-            placeholder={library.folder ? "在当前分类搜索" : "搜索全部素材"}
+            placeholder={
+              library.folder !== null && library.folder !== "" ? "在当前分类搜索" : "搜索全部素材"
+            }
             type="text"
             value={library.search}
           />
@@ -144,7 +146,9 @@ export function ResourceLibrary() {
             <Hint accessibleName label="清空">
               <Button
                 className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
-                onClick={() => library.setSearch("")}
+                onClick={() => {
+                  library.setSearch("");
+                }}
                 size="icon-xs"
                 variant="ghost"
               >
@@ -167,7 +171,7 @@ export function ResourceLibrary() {
       )}
 
       {/* ── 错误条：拉取与动作失败共用一条（控制器已保证动作错误优先）── */}
-      {library.error && (
+      {library.error !== null && library.error !== "" && (
         <div className="border-destructive/30 bg-destructive/10 mb-4 flex items-start gap-2 rounded-lg border px-3 py-2">
           <span className="text-destructive min-w-0 flex-1 text-xs wrap-break-word">
             {library.error}
@@ -188,7 +192,9 @@ export function ResourceLibrary() {
           action={
             <Button
               className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary mt-4 h-auto rounded-lg px-4 py-2"
-              onClick={() => c.setScope("cross")}
+              onClick={() => {
+                c.setScope("cross");
+              }}
               variant="outline"
             >
               看跨项目素材

@@ -287,7 +287,9 @@ function printBlockedTip(lost) {
   console.error("");
   console.error("[pending-merge-loss] 阻断:本次合并把某些文件整份取了非 HEAD 侧(规范 §11.23.6)。");
   console.error(`[pending-merge-loss] 疑似整份取一侧 ${lost.length} 份:`);
-  lost.forEach((f) => console.error(`  · ${f}`));
+  lost.forEach((f) => {
+    console.error(`  · ${f}`);
+  });
   console.error("");
   console.error("[pending-merge-loss] 后果:HEAD 侧在这些文件上已合入的改动被一笔退回,而拓扑与");
   console.error(

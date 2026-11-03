@@ -115,6 +115,7 @@ export function resolveTimeoutBudget(raw: string | undefined) {
     scale: 1,
     testTimeout: BASE_TEST_TIMEOUT_MS,
     hookTimeout: BASE_HOOK_TIMEOUT_MS,
+    /* SAFETY: 类型断言已复核 */
     note: null as string | null,
   };
   if (text === "") {

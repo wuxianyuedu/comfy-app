@@ -63,7 +63,9 @@ function subscribe(onChange: () => void): () => void {
   const mql = window.matchMedia(NAV_AUTO_COLLAPSE_QUERY);
   /* 回调只负责通知；跨越次数在取值时推进（见 `getSnapshot`）—— 放在这里会漏掉
      「订阅建立之前发生的窗宽变化」，那条跨越就不该算。 */
-  const handler = (): void => onChange();
+  const handler = (): void => {
+    onChange();
+  };
   mql.addEventListener("change", handler);
   listeners.add(onChange);
   scheduleInitialSync();

@@ -7,10 +7,7 @@ import SuperJSON from "superjson";
 import { describe, expect, it, afterAll, afterEach, beforeAll } from "vitest";
 
 import { createTestQueryClient } from "../../../../tests/helpers/renderWithProviders";
-import {
-  createTestTRPC,
-  testTrpcEndpoint,
-} from "../../../../tests/helpers/test-trpc";
+import { createTestTRPC, testTrpcEndpoint } from "../../../../tests/helpers/test-trpc";
 import { setupTrpcServer } from "../../../../tests/helpers/trpc-msw";
 import { TRPCProvider, createTrpcClient } from "~/trpc/react";
 
@@ -70,9 +67,15 @@ function makeWrapper(qc: QueryClient) {
   };
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
+afterEach(() => {
+  server.resetHandlers();
+});
+afterAll(() => {
+  server.close();
+});
 
 describe("useLLMConfig 播种：本地/远端候选拆出", () => {
   it("冷启动（无缓存）能拆出 local/remote", async () => {
@@ -80,9 +83,7 @@ describe("useLLMConfig 播种：本地/远端候选拆出", () => {
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => result.current.localModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.localModels.length).toBeGreaterThan(0);
     expect(result.current.localModels).toContain("llama3");
     expect(result.current.remoteModels).toContain("gpt-4o");
   });
@@ -92,18 +93,14 @@ describe("useLLMConfig 播种：本地/远端候选拆出", () => {
     const first = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => first.result.current.localModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => first.result.current.localModels.length).toBeGreaterThan(0);
     first.unmount();
 
     // 查询缓存仍在，首帧即命中 —— 回归：播种守卫若只比引用会被缓存命中跳过。
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => result.current.localModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.localModels.length).toBeGreaterThan(0);
     expect(result.current.localModels).toContain("llama3");
     expect(result.current.remoteModels).toContain("gpt-4o");
   });
@@ -115,9 +112,7 @@ describe("useLLMConfig 远端模型 kind 过滤", () => {
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => result.current.remoteModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.remoteModels.length).toBeGreaterThan(0);
 
     // chat kind 与 kind 缺省（null → chat）都应保留
     expect(result.current.remoteModels).toContain("gpt-4o");
@@ -141,9 +136,7 @@ describe("useLLMConfig 远端生图模型清单", () => {
     const { result } = renderHook(() => useLLMConfig(), {
       wrapper: makeWrapper(qc),
     });
-    await expect
-      .poll(() => result.current.remoteImageModels.length)
-      .toBeGreaterThan(0);
+    await expect.poll(() => result.current.remoteImageModels.length).toBeGreaterThan(0);
     expect(result.current.remoteImageModels).toContain("dall-e-3");
     // chat / video 条目不进生图清单
     expect(result.current.remoteImageModels).not.toContain("gpt-4o");

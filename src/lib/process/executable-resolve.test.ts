@@ -84,7 +84,7 @@ function makeWindowsToolchain(
   if (opts.ps1 !== false) {
     writeExec(path.join(dir, `${name}.ps1`), "Write-Output '1.0.0'\n");
   }
-  if (opts.host) {
+  if (opts.host === true) {
     // `powershellHost()` 只认二进制形态（MZ 头）。
     writeExec(
       path.join(dir, "pwsh.EXE"),

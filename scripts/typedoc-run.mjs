@@ -211,8 +211,12 @@ async function spawnTypedoc(entry, outDir, root) {
         .filter(Boolean)
         .slice(-LOG_TAIL_LINES)
         .join("\n");
-    child.on("error", (error) => resolve({ status: null, signal: null, error, log: tail() }));
-    child.on("close", (status, signal) => resolve({ status, signal, error: null, log: tail() }));
+    child.on("error", (error) => {
+      resolve({ status: null, signal: null, error, log: tail() });
+    });
+    child.on("close", (status, signal) => {
+      resolve({ status, signal, error: null, log: tail() });
+    });
   });
 }
 
@@ -242,7 +246,9 @@ export async function runTypedoc({
   attempts = DEFAULT_ATTEMPTS,
   backoff = DEFAULT_BACKOFF_MS,
   spawnImpl = spawnTypedoc,
-  onProgress = (msg) => console.error(`[typedoc] ${msg}`),
+  onProgress = (msg) => {
+    console.error(`[typedoc] ${msg}`);
+  },
 }) {
   const total = Math.max(1, attempts);
   const entry = resolveTypedocEntry(root);

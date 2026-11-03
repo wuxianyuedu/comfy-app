@@ -44,9 +44,15 @@ export const useUpdateCheckStore = create<UpdateCheckState>((set) => ({
   groups: [],
   checking: false,
   manualImpl: null,
-  setEnabled: (value) => set({ enabled: value }),
-  applyResult: (groups, dirty) => set({ groups, dirty }),
-  setChecking: (value) => set({ checking: value }),
+  setEnabled: (value) => {
+    set({ enabled: value });
+  },
+  applyResult: (groups, dirty) => {
+    set({ groups, dirty });
+  },
+  setChecking: (value) => {
+    set({ checking: value });
+  },
   runChecking: async (action) => {
     set({ checking: true });
     try {
@@ -55,6 +61,10 @@ export const useUpdateCheckStore = create<UpdateCheckState>((set) => ({
       set({ checking: false });
     }
   },
-  clearDirty: () => set({ dirty: false, groups: [] }),
-  registerManual: (impl) => set({ manualImpl: impl }),
+  clearDirty: () => {
+    set({ dirty: false, groups: [] });
+  },
+  registerManual: (impl) => {
+    set({ manualImpl: impl });
+  },
 }));

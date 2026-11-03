@@ -58,9 +58,10 @@ describe("deriveModelOverview 分组与排序", () => {
 
   it("0 与「没有这一档」不是一回事：count 缺失的行按 0 处理，不混进列表", () => {
     const out = deriveModelOverview({
+      /* SAFETY: 类型断言已复核 */
       folders: [
         { folder: "a", label: "A", count: 1 },
-        /* SAFETY: 类型断言已复核 */ {
+        {
           folder: "b",
           label: "B",
         } as never,

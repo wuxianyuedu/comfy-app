@@ -60,7 +60,7 @@ export function findStringUnderKeys(value: unknown, keys: Array<string>, depth =
   if (Array.isArray(value)) {
     for (const item of value) {
       const hit = findStringUnderKeys(item, keys, depth + 1);
-      if (hit) {
+      if (hit !== null) {
         return hit;
       }
     }
@@ -78,7 +78,7 @@ export function findStringUnderKeys(value: unknown, keys: Array<string>, depth =
   for (const v of Object.values(value)) {
     if (isRecord(v) || Array.isArray(v)) {
       const hit = findStringUnderKeys(v, keys, depth + 1);
-      if (hit) {
+      if (hit !== null) {
         return hit;
       }
     }
@@ -125,7 +125,7 @@ export function extractRemoteTaskId(payload: unknown): string | null {
 /* 取出 base64 媒体载荷并包装成 data URL；取不到则为 null。 */
 export function extractBase64DataUrl(payload: unknown, mime = "image/png"): string | null {
   const b64 = findStringUnderKeys(payload, B64_KEYS, 2);
-  if (!b64) {
+  if (b64 === null) {
     return null;
   }
   /* 有些上游直接内联一个 data URL。 */

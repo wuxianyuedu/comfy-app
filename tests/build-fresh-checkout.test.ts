@@ -40,24 +40,19 @@ describe("模块级副作用不得在表未就绪时读库", () => {
     // 守卫必须收在单一入口里，而不是散落在各 sweeper 内部
     expect(src).toMatch(/function sweepOnce[\s\S]{0,200}?isSchemaReady\(\)/);
     // 首次调用与定时器都必须经该入口
-    expect(src).toMatch(
-      /sweepOnce\(\);[\s\S]{0,200}?setInterval\(sweepOnce, REAPER_MS\)/,
-    );
+    expect(src).toMatch(/sweepOnce\(\);[\s\S]{0,200}?setInterval\(sweepOnce, REAPER_MS\)/);
     // `void reapStale*Tasks()` 的调用点只允许出现在 sweepOnce 函数体内
     // （裸调会绕过守卫，正是本用例要拦的形态）
     const sweepBody = src.slice(
       src.indexOf("function sweepOnce"),
       src.indexOf("function startReaper"),
     );
-    const allCalls =
-      src.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
-    const guardedCalls =
-      sweepBody.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
+    const allCalls = src.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
+    const guardedCalls = sweepBody.match(/void reapStale(Queued|Running)Tasks\(\);/g) ?? [];
     expect(guardedCalls.length).toBeGreaterThan(0);
-    expect(
-      guardedCalls.length,
-      "sweepOnce 之外存在裸 sweeper 调用，会绕过表就绪守卫",
-    ).toBe(allCalls.length);
+    expect(guardedCalls.length, "sweepOnce 之外存在裸 sweeper 调用，会绕过表就绪守卫").toBe(
+      allCalls.length,
+    );
   });
 
   it("就绪判据模块导出三态探测与缓存入口", () => {

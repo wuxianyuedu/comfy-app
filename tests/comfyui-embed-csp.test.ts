@@ -33,9 +33,7 @@ const libRs = readFileSync(path.join(root, "src-tauri", "src", "lib.rs"), "utf8"
 
 describe("ComfyUI 页签内嵌（应用页 CSP frame-src 与壳侧拖放）", () => {
   it("next.config.js 的 CSP 用 frame-src 放行本地 ComfyUI 源", () => {
-    expect(nextConfig).toContain(
-      "frame-src 'self' http://127.0.0.1:* http://localhost:*",
-    );
+    expect(nextConfig).toContain("frame-src 'self' http://127.0.0.1:* http://localhost:*");
   });
 
   it("frame-ancestors 'none' 仍在（本应用不被别站内嵌的反点击劫持不放宽）", () => {

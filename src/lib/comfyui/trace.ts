@@ -109,7 +109,8 @@ export function traceStringify(value: unknown): string {
     return `[function ${value.name || "anonymous"}]`;
   }
   /* 此处 value 已是 string/number/boolean/bigint（其余分支均已 return）。 */
-  return `${/* SAFETY: 类型断言已复核 */ value as string | number | boolean | bigint}`;
+  /* SAFETY: 类型断言已复核 */
+  return `${value as string | number | boolean | bigint}`;
 }
 
 /** 单行截断（保留头部，尾注原始长度 —— 诊断通道最想知道「被切了多少」）。 */
@@ -247,10 +248,9 @@ export function historyOutputKeys(
   return Object.entries(outputs).map(([nodeId, v]) => ({
     nodeId,
     keys:
+      /* SAFETY: 类型断言已复核 */
       // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
-      v != null && typeof v === "object"
-        ? /* SAFETY: 类型断言已复核 */ Object.keys(v as object)
-        : [],
+      v != null && typeof v === "object" ? Object.keys(v as object) : [],
   }));
 }
 

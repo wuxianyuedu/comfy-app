@@ -36,7 +36,7 @@ const PAGE_HTML = fs.readFileSync(path.join(ROOT, PAGE_REL), "utf8");
 /** 从页面里取出内联 `<script>` 的正文（页面只有这一段）。 */
 function pageScript(html: string): string {
   const match = /<script>([\s\S]*?)<\/script>/.exec(html);
-  if (!match?.[1]) {
+  if (match?.[1] === undefined || match?.[1] === "") {
     throw new Error(`${PAGE_REL} 里找不到内联 <script>`);
   }
   return match[1];

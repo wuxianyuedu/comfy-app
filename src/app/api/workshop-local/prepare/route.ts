@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     return body;
   }
   const image = strField(body, "image");
-  if (!image) {
+  if (image === undefined || image === "") {
     return NextResponse.json({ error: "image 不能为空" }, { status: 400 });
   }
 

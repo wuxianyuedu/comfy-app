@@ -66,7 +66,12 @@ export function SizePresetTableModal({
        与 `ui/dialog` 是同一个能力的第二份实现（Esc / 点遮罩关闭、焦点归还
        只在基元那边有）。尺寸表弹窗要的是「大一点的居中卡片」，这属于形态，
        经 `popupClassName` 覆盖即可。 */
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label={`${title}配置`}
         className="max-w-3xl"
@@ -120,6 +125,7 @@ export function SizePresetTableModal({
                 <TableRow className="align-middle" key={preset.label}>
                   <TableCell className="text-ink-bright pr-2">{preset.label}</TableCell>
                   {RESOLUTION_TIERS.map((tier) => {
+                    // oxlint-disable-next-line no-unnecessary-condition -- noUncheckedIndexedAccess 下 Record 嵌套下标访问可能为 undefined，? 与 ?? 是类型层兜底
                     const dims = table[scene]?.[preset.label]?.[tier] ?? {
                       width: 1024,
                       height: 1024,
@@ -131,12 +137,12 @@ export function SizePresetTableModal({
                             className="w-24"
                             max={TABLE_MAX}
                             min={TABLE_MIN}
-                            onChange={(width) =>
+                            onChange={(width) => {
                               handleChange(preset.label, tier, {
                                 width,
                                 height: dims.height,
-                              })
-                            }
+                              });
+                            }}
                             step={8}
                             value={dims.width}
                           />
@@ -145,12 +151,12 @@ export function SizePresetTableModal({
                             className="w-24"
                             max={TABLE_MAX}
                             min={TABLE_MIN}
-                            onChange={(height) =>
+                            onChange={(height) => {
                               handleChange(preset.label, tier, {
                                 width: dims.width,
                                 height,
-                              })
-                            }
+                              });
+                            }}
                             step={8}
                             value={dims.height}
                           />
@@ -168,7 +174,9 @@ export function SizePresetTableModal({
           <Button
             className="text-2xs h-auto px-2.5 py-1"
             disabled={!modified}
-            onClick={() => resetScene(scene)}
+            onClick={() => {
+              resetScene(scene);
+            }}
             variant="outline"
           >
             恢复默认（{SIZE_SCENE_LABELS[scene]}）

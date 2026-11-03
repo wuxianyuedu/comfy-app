@@ -97,7 +97,8 @@ export function clearLaunchLoadingStub(): void {
   const w = window as unknown as {
     __comfyappStubTimer?: number;
   };
-  if (w.__comfyappStubTimer) {
+  /* 计时器 id 用 0 表示「已清」，0 与缺省都按没有计时器处理 */
+  if ((w.__comfyappStubTimer ?? 0) !== 0) {
     window.clearInterval(w.__comfyappStubTimer);
     w.__comfyappStubTimer = 0;
   }

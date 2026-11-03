@@ -65,7 +65,7 @@ export type DetailTemplate = {
 
 /** workflowIO 在旧数据里可能存成数组或非对象，这里收紧成 Map 或 null。 */
 export function normalizeWorkflowIO(raw: unknown): WorkflowIOMap | null {
-  if (!raw || Array.isArray(raw) || typeof raw !== "object") {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return null;
   }
   /* SAFETY: 类型断言已复核 */
@@ -97,7 +97,7 @@ export function buildSourceData(
  *
  *  未选中工作流时不算加载（空态由视图渲染）。 */
 export function isDetailLoadingFor(workflowId: string | null, settledId: string | null): boolean {
-  if (!workflowId) {
+  if (workflowId === null || workflowId === "") {
     return false;
   }
   return settledId !== workflowId;

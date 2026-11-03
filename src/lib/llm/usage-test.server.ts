@@ -281,7 +281,7 @@ export async function callImage(
     };
   }
   const url = extractMediaUrl(payload) ?? extractBase64DataUrl(payload);
-  if (!url) {
+  if (url === null) {
     return {
       ok: false,
       detail: `调用成功但未解析到图片 URL / b64 数据：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`,
@@ -319,18 +319,18 @@ export async function callVideo(
     };
   }
   const directUrl = extractMediaUrl(payload);
-  if (directUrl) {
+  if (directUrl !== null) {
     return { status: "done", url: directUrl };
   }
   const taskId = extractRemoteTaskId(payload);
-  if (!taskId) {
+  if (taskId === null) {
     return {
       status: "error",
       detail: `响应中未找到视频 URL 或任务 ID：${clampText(JSON.stringify(payload), { maxLength: INLINE_JSON_SNIPPET_MAX, marker: "" })}`,
     };
   }
   const doneUrl = await pollRemoteVideoTask(up.base, up.path, model, taskId, up.headers);
-  return doneUrl ? { status: "done", url: doneUrl } : { status: "pending", taskId };
+  return doneUrl === null ? { status: "pending", taskId } : { status: "done", url: doneUrl };
 }
 
 /** 「继续等待」一轮：只查既有任务，**绝不重新提交**（不重复扣费）。 */
@@ -340,7 +340,7 @@ export async function queryVideoTask(
   taskId: string,
 ): Promise<{ done: true; url: string } | { done: false }> {
   const url = await pollRemoteVideoTask(up.base, up.path, model, taskId, up.headers);
-  return url ? { done: true, url } : { done: false };
+  return url === null ? { done: false } : { done: true, url };
 }
 
 /** pending 文案（提交路由与查询路由的等待窗口是同一个常数）。 */

@@ -19,7 +19,8 @@ describe("buildProductionPayload", () => {
         logline: "一句话",
       },
       scriptMarkdown: "# 剧本",
-      shots: [/* SAFETY: 类型断言已复核 */ { id: "a" } as Shot],
+      /* SAFETY: 类型断言已复核 */
+      shots: [{ id: "a" } as Shot],
     };
     const payload = buildProductionPayload(draft, "storyboard", true);
     expect(payload).toMatchObject({

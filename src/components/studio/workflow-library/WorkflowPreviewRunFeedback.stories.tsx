@@ -138,31 +138,30 @@ export const UploadNotice: Story = {
  */
 export const ViewModeMatrix: Story = {
   render: (args) => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex flex-col gap-8">
-      {
-        /* SAFETY: 类型断言已复核 */ (["edit", "use"] as const).map((viewMode) => (
-          <div className="flex flex-col gap-3" key={viewMode}>
-            <span className="text-ink-muted font-mono text-[11px]">viewMode = {viewMode}</span>
-            {MATRIX_ROWS.map(([key, phase]) => (
-              <div className="flex flex-col gap-1" key={key}>
-                <span className="text-ink-faint font-mono text-[11px]">phase = {key}</span>
-                <div className="border-border-strong bg-surface w-152 rounded-lg border p-2">
-                  <WorkflowPreviewRunFeedback
-                    {...args}
-                    missingLabels={key === "failed" ? ["模型文件缺失"] : []}
-                    nodeLabel={key === "running" ? "K采样器" : null}
-                    pct={key === "running" ? 42 : key === "done" ? 100 : 0}
-                    phase={phase}
-                    resultUrl={key === "done" ? "/storybook-assets/sample-landscape.svg" : null}
-                    running={key === "running"}
-                    viewMode={viewMode}
-                  />
-                </div>
+      {(["edit", "use"] as const).map((viewMode) => (
+        <div className="flex flex-col gap-3" key={viewMode}>
+          <span className="text-ink-muted font-mono text-[11px]">viewMode = {viewMode}</span>
+          {MATRIX_ROWS.map(([key, phase]) => (
+            <div className="flex flex-col gap-1" key={key}>
+              <span className="text-ink-faint font-mono text-[11px]">phase = {key}</span>
+              <div className="border-border-strong bg-surface w-152 rounded-lg border p-2">
+                <WorkflowPreviewRunFeedback
+                  {...args}
+                  missingLabels={key === "failed" ? ["模型文件缺失"] : []}
+                  nodeLabel={key === "running" ? "K采样器" : null}
+                  pct={key === "running" ? 42 : key === "done" ? 100 : 0}
+                  phase={phase}
+                  resultUrl={key === "done" ? "/storybook-assets/sample-landscape.svg" : null}
+                  running={key === "running"}
+                  viewMode={viewMode}
+                />
               </div>
-            ))}
-          </div>
-        ))
-      }
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   ),
 };

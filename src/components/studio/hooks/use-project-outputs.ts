@@ -49,7 +49,10 @@ export type ProjectOutputsController = {
 export function useProjectOutputs(projectId: string | null): ProjectOutputsController {
   const trpc = useTRPC();
   const outputsQ = useQuery(
-    trpc.project.outputs.queryOptions({ projectId: projectId ?? "" }, { enabled: !!projectId }),
+    trpc.project.outputs.queryOptions(
+      { projectId: projectId ?? "" },
+      { enabled: projectId !== null && projectId !== "" },
+    ),
   );
 
   // 服务端 createdAt 是 Date，视图层要字符串做时间轴展示，这里统一收窄。

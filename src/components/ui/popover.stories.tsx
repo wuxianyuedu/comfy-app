@@ -51,19 +51,18 @@ export const Default: Story = {
  *  `flip` 会把它翻到另一边 —— 所以这里四条同时点开，能看出收边行为。 */
 export const Sides: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex items-center gap-4">
-      {
-        /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
-          <Popover key={side}>
-            <PopoverTrigger render={<Button size="sm" variant="outline" />}>
-              side={side}
-            </PopoverTrigger>
-            <PopoverContent className="w-40" side={side}>
-              <p className="text-sm">开在 {side} 这一侧</p>
-            </PopoverContent>
-          </Popover>
-        ))
-      }
+      {(["top", "right", "bottom", "left"] as const).map((side) => (
+        <Popover key={side}>
+          <PopoverTrigger render={<Button size="sm" variant="outline" />}>
+            side={side}
+          </PopoverTrigger>
+          <PopoverContent className="w-40" side={side}>
+            <p className="text-sm">开在 {side} 这一侧</p>
+          </PopoverContent>
+        </Popover>
+      ))}
     </div>
   ),
 };

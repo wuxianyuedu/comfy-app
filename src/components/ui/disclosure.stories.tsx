@@ -88,7 +88,13 @@ function ControlledDemo() {
   return (
     <div className="flex w-120 flex-col gap-3 rounded-lg border p-3">
       <div className="flex items-center gap-2">
-        <Button onClick={() => setOpen((o) => !o)} size="xs" variant="outline">
+        <Button
+          onClick={() => {
+            setOpen((o) => !o);
+          }}
+          size="xs"
+          variant="outline"
+        >
           外部按钮切换（当前 {open ? "展开" : "折叠"}）
         </Button>
       </div>

@@ -72,7 +72,7 @@ function stepValue(steps: Array<AppearanceStep>, id: string, fallbackId: string)
  * 半份生效会让界面出现"圆角是新的、字号是旧的"这种无法解释的组合。
  */
 export function parseAppearance(raw: string | null | undefined): AppearancePrefs {
-  if (!raw) {
+  if (raw === null || raw === undefined || raw === "") {
     return { ...DEFAULT_APPEARANCE };
   }
   let parsed: unknown;

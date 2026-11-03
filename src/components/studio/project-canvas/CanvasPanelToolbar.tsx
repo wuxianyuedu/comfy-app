@@ -65,7 +65,9 @@ export function CanvasPanelToolbar({ active, onSelect, floating = true }: Canvas
                   ? "bg-primary/20 text-primary-strong hover:bg-primary/20 hover:text-primary-strong shadow-primary/10 ring-primary/25 shadow-sm ring-1"
                   : "text-ink-muted hover:bg-subtle hover:text-ink-soft"
               }`}
-              onClick={() => onSelect(isActive ? null : item.id)}
+              onClick={() => {
+                onSelect(isActive ? null : item.id);
+              }}
               variant="ghost"
             >
               {item.icon}

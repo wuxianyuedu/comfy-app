@@ -68,16 +68,17 @@ export async function POST(req: NextRequest) {
 
     if (kind === "video") {
       // 异步提供方的轮询步。
-      if (remoteTaskId) {
+      if (remoteTaskId !== undefined && remoteTaskId !== "") {
         const result = await pollVideoViaApi(remoteTaskId);
         return NextResponse.json(result);
       }
       if (!prompt) {
         return NextResponse.json({ error: "prompt 不能为空" }, { status: 400 });
       }
-      const imageDataUrl = image
-        ? await resolveMediaDataUrl(image, new URL(req.url).origin)
-        : undefined;
+      const imageDataUrl =
+        image !== undefined && image !== ""
+          ? await resolveMediaDataUrl(image, new URL(req.url).origin)
+          : undefined;
       const result = await submitVideoViaApi({
         prompt,
         negative,

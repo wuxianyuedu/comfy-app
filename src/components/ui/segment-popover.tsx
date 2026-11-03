@@ -128,6 +128,7 @@ export function MultiSegmentPopover({
   sections: Array<SegmentSection>;
   triggerContent: React.ReactNode;
 }) {
+  const hasFooter = Boolean(footer);
   return (
     <Popover>
       <PopoverTrigger
@@ -153,13 +154,9 @@ export function MultiSegmentPopover({
         sideOffset={6}
       >
         {sections.map((section, i) => (
-          <Section
-            first={i === 0}
-            key={`${section.label}:${section.value ?? ""}`}
-            section={section}
-          />
+          <Section first={i === 0} key={`${section.label}:${section.value}`} section={section} />
         ))}
-        {footer ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
+        {hasFooter ? <div className="border-border-strong mt-3 border-t pt-3">{footer}</div> : null}
       </PopoverContent>
     </Popover>
   );
@@ -176,7 +173,9 @@ const Section = React.memo(function Section({
   section: SegmentSection;
 }) {
   const grouped = useMemo(() => {
-    const hasSubgroups = section.options.some((option) => option.subgroup);
+    const hasSubgroups = section.options.some(
+      (option) => option.subgroup !== undefined && option.subgroup !== "",
+    );
     if (!hasSubgroups) {
       return [{ key: "_", label: undefined, options: section.options }];
     }
@@ -197,6 +196,7 @@ const Section = React.memo(function Section({
     return order.map((key) => getOrThrow(map, key, "子组桶缺失"));
   }, [section]);
 
+  const hasExtra = Boolean(section.extra);
   return (
     <div className={first ? "" : "mt-3"}>
       <div className="text-ink-muted text-3xs mb-1.5 font-semibold tracking-wider uppercase">
@@ -221,7 +221,7 @@ const Section = React.memo(function Section({
       >
         {grouped.map((group, gi) => (
           <div className={gi > 0 ? "mt-2" : ""} key={group.key}>
-            {group.label && (
+            {group.label !== undefined && group.label !== "" && (
               <div className="text-ink-icon text-4xs mb-1 tracking-wider uppercase">
                 {group.label}
               </div>
@@ -241,7 +241,7 @@ const Section = React.memo(function Section({
           </div>
         ))}
       </ToggleGroup>
-      {section.extra ? <div className="mt-2">{section.extra}</div> : null}
+      {hasExtra ? <div className="mt-2">{section.extra}</div> : null}
     </div>
   );
 });

@@ -23,7 +23,9 @@ export function CustomNodesSettings() {
       <Hint label="从 ComfyUI 安装目录的 custom_nodes 导入自定义节点（服务端只读、绝不修改这些目录里的任何文件）">
         <Button
           className={`${HEADER_ACTION_BTN} border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright`}
-          onClick={() => ctrl.setOpen(true)}
+          onClick={() => {
+            ctrl.setOpen(true);
+          }}
           variant="outline"
         >
           <PackagePlus size={13} />
@@ -33,7 +35,12 @@ export function CustomNodesSettings() {
 
       {/* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给 `ui/dialog`：此前自绘
           遮罩 + `onClick` 关闭，Esc 没接、焦点不锁也不归还。 */}
-      <Dialog onOpenChange={(next) => ctrl.setOpen(next)} open={ctrl.open}>
+      <Dialog
+        onOpenChange={(next) => {
+          ctrl.setOpen(next);
+        }}
+        open={ctrl.open}
+      >
         <DialogContent
           aria-label="导入自定义节点"
           className="bg-transparent p-0 ring-0"
@@ -49,7 +56,9 @@ export function CustomNodesSettings() {
               <h3 className="text-ink text-base font-semibold">导入自定义节点</h3>
               <Button
                 className="text-muted-foreground hover:bg-subtle hover:text-ink rounded-lg px-2 py-1"
-                onClick={() => ctrl.setOpen(false)}
+                onClick={() => {
+                  ctrl.setOpen(false);
+                }}
                 size="sm"
                 variant="ghost"
               >

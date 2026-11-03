@@ -9,7 +9,9 @@ const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
 function subscribe(onChange: () => void): () => void {
   const mql = window.matchMedia(MOBILE_QUERY);
   mql.addEventListener("change", onChange);
-  return () => mql.removeEventListener("change", onChange);
+  return () => {
+    mql.removeEventListener("change", onChange);
+  };
 }
 
 /* 快照取「当前是否窄窗」。判据用 `innerWidth` 而不是 `mql.matches`：两者同源，

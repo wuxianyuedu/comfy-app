@@ -24,6 +24,7 @@ import {
   type WorkflowRow,
 } from "../workflow-library-config";
 import { resolveWorkflowMode } from "~/lib/workflow/workflow-types";
+import { isPlainRecord } from "~/lib/is-record";
 
 export type WorkflowLibraryDetailActions = {
   download: () => void;
@@ -113,7 +114,7 @@ export function resolveActiveMode(
   workflowId: string | null,
   defaultMode: string | null,
 ): string | null {
-  if (!workflowId || !override) {
+  if (workflowId === null || workflowId === "" || !override) {
     return defaultMode;
   }
   return override.workflowId === workflowId ? override.mode : defaultMode;
@@ -184,8 +185,12 @@ export function useWorkflowLibraryDetail(
     [workflow],
   );
 
-  const openSource = useCallback(() => setSourceOpen(true), []);
-  const closeSource = useCallback(() => setSourceOpen(false), []);
+  const openSource = useCallback(() => {
+    setSourceOpen(true);
+  }, []);
+  const closeSource = useCallback(() => {
+    setSourceOpen(false);
+  }, []);
 
   /* 未选中工作流时不发请求（enabled:false）。hooks 顺序必须稳定，因此这里不
    * 做 early return —— 空态交给视图渲染。 */
@@ -235,10 +240,7 @@ export function useWorkflowLibraryDetail(
    * 稿（它直读 DB 列，没有富化改写），缺省空对象。 */
   const paramMap = useMemo<Record<string, unknown>>(() => {
     const raw = template?.paramMap;
-    /* SAFETY: 类型断言已复核 */
-    return raw && typeof raw === "object" && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
-      : {};
+    return isPlainRecord(raw) ? raw : {};
   }, [template]);
 
   const formatFlags = useMemo(

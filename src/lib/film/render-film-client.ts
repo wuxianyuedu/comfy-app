@@ -27,10 +27,10 @@ export type RenderFilmResult = {
 
 /** 用当前项目的镜头触发一键成片（服务端逐镜生成视频 + 合成 + 回写进度）。 */
 export async function renderProjectFilm(input: RenderFilmInput): Promise<RenderFilmResult> {
-  if (!input.projectId) {
+  if (input.projectId === null || input.projectId === "") {
     return { ok: false, summary: "当前没有活跃项目，无法成片" };
   }
-  if (!input.videoWorkflowId) {
+  if (input.videoWorkflowId === undefined || input.videoWorkflowId === "") {
     return {
       ok: false,
       summary: "请先在工坊选择「视频工作流」（逐镜生成视频的唯一来源）",
@@ -40,7 +40,9 @@ export async function renderProjectFilm(input: RenderFilmInput): Promise<RenderF
     const { id } = await vanillaApi.film.createFromProject.mutate({
       projectId: input.projectId,
       videoWorkflowId: input.videoWorkflowId,
-      ...(input.imageWorkflowId ? { imageWorkflowId: input.imageWorkflowId } : {}),
+      ...(input.imageWorkflowId !== undefined && input.imageWorkflowId !== ""
+        ? { imageWorkflowId: input.imageWorkflowId }
+        : {}),
     });
     await vanillaApi.film.start.mutate({ id });
     return {

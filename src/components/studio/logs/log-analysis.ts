@@ -72,11 +72,14 @@ function serializeOne(a: unknown): string {
     return "null";
   }
   if (a instanceof Error) {
-    return a.stack ? `${a.name}: ${a.message}\n${a.stack}` : `${a.name}: ${a.message}`;
+    return a.stack !== undefined && a.stack !== ""
+      ? `${a.name}: ${a.message}\n${a.stack}`
+      : `${a.name}: ${a.message}`;
   }
   // 保留可能来自序列化错误对象的类栈字符串。
   if (
     typeof a === "object" &&
+    // oxlint-disable-next-line no-unnecessary-condition -- 上方已提前返回 null/undefined，此判据恒真；保留与序列化错误对象的其他分支一致的空值防御
     a !== null &&
     "stack" in a &&
     /* SAFETY: 类型断言已复核 */
@@ -368,7 +371,7 @@ const GET_REQUEST_TARGET = /^\s*GET\s+(\S+)/;
 export function isPanelSelfPollingLine(line: string): boolean {
   const match = GET_REQUEST_TARGET.exec(line);
   const target = match?.[1];
-  if (!target) {
+  if (target === undefined || target === "") {
     return false;
   }
   return PANEL_SELF_POLL_ENDPOINTS.some((endpoint) => {
@@ -478,7 +481,7 @@ export function parseFileLogs(
         Number(ss),
         Number(ms),
       );
-      const msgText = withRest((ns ? `[${ns}] ` : "") + (msg ?? ""));
+      const msgText = withRest((ns !== undefined && ns !== "" ? `[${ns}] ` : "") + (msg ?? ""));
       push({
         id: nextId(d.getTime()),
         time: d.getTime(),
@@ -674,7 +677,8 @@ export function computeOriginCounts(logs: Array<LogEntry>, search = ""): LogOrig
      * 任何情况下都成立，不会再出现「只在全部页签才显示、哪个分类都进不去」
      * 的行（ISSUE #262 六审）。 */
     const bucket = table[bucketOf(entry)];
-    if (!bucket) {
+    const bucketPresent = Boolean(bucket);
+    if (!bucketPresent) {
       continue;
     }
     bucket.all += 1;
@@ -733,9 +737,8 @@ export function computeFiltered(
     /* 分类开关：被关掉的分类（无论当前在看「全部来源」还是某个具体来源）一律隐藏。
      * 计数维度（`computeOriginCounts`）不读这里——下拉里仍显示真实条数，开关只
      * 影响「显示哪些行」，与「来源筛选下拉」是两条正交的轴。 */
-    const categoryOk = disabledSet
-      ? /* SAFETY: 类型断言已复核 */ !disabledSet.has(bucketOf(entry) as LogCategoryFilter)
-      : true;
+    /* SAFETY: 类型断言已复核 */
+    const categoryOk = disabledSet ? !disabledSet.has(bucketOf(entry) as LogCategoryFilter) : true;
     return levelOk && originOk && categoryOk && matchesSearch(entry, search);
   });
 }

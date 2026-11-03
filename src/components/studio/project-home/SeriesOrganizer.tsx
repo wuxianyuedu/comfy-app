@@ -39,7 +39,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
       </div>
 
       {/* ── 本项目当前归属 ─────────────────────────── */}
-      {projectId && (
+      {projectId !== undefined && projectId !== "" && (
         <div className="border-border bg-surface-1 flex items-center gap-3 rounded-xl border px-3 py-2 text-xs">
           <span className="text-ink-muted">本项目当前归属：</span>
           <span className="font-medium">
@@ -75,14 +75,18 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               />
               <Button
                 className="h-7 px-2 text-xs"
-                onClick={() => c.selectSeries(c.seriesId === s.id ? null : s.id)}
+                onClick={() => {
+                  c.selectSeries(c.seriesId === s.id ? null : s.id);
+                }}
                 variant="ghost"
               >
                 {c.seriesId === s.id ? "收起" : "展开"}
               </Button>
               <Button
                 className="text-destructive h-7 px-2 text-xs"
-                onClick={() => c.deleteSeries(s.id)}
+                onClick={() => {
+                  c.deleteSeries(s.id);
+                }}
                 variant="ghost"
               >
                 删除
@@ -112,7 +116,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
       </div>
 
       {/* ── 季（选中系列后）─────────────────────────── */}
-      {c.seriesId && (
+      {c.seriesId !== null && c.seriesId !== "" && (
         <div className="border-border flex flex-col gap-2 border-l-2 pl-3">
           <div className="text-ink-muted text-sm font-medium">季</div>
           <div className="flex flex-col gap-1.5">
@@ -136,14 +140,18 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 />
                 <Button
                   className="h-7 px-2 text-xs"
-                  onClick={() => c.selectSeason(c.seasonId === se.id ? null : se.id)}
+                  onClick={() => {
+                    c.selectSeason(c.seasonId === se.id ? null : se.id);
+                  }}
                   variant="ghost"
                 >
                   {c.seasonId === se.id ? "收起" : "展开"}
                 </Button>
                 <Button
                   className="text-destructive h-7 px-2 text-xs"
-                  onClick={() => c.deleteSeason(se.id)}
+                  onClick={() => {
+                    c.deleteSeason(se.id);
+                  }}
                   variant="ghost"
                 >
                   删除
@@ -162,7 +170,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               className="h-8"
               disabled={c.seasons === undefined}
               onClick={() => {
-                if (!c.seriesId) {
+                if (c.seriesId === null || c.seriesId === "") {
                   return;
                 }
                 c.createSeason(c.seriesId, newSeason.trim());
@@ -177,7 +185,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
       )}
 
       {/* ── 集（选中季后）───────────────────────────── */}
-      {c.seasonId && (
+      {c.seasonId !== null && c.seasonId !== "" && (
         <div className="border-border flex flex-col gap-2 border-l-2 pl-3">
           <div className="text-ink-muted text-sm font-medium">集</div>
           <div className="flex flex-col gap-1.5">
@@ -212,10 +220,12 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                     </span>
                   );
                 })()}
-                {projectId && (
+                {projectId !== undefined && projectId !== "" && (
                   <Button
                     className="h-7 px-2 text-xs"
-                    onClick={() => c.selectEpisode(c.episodeId === e.id ? null : e.id)}
+                    onClick={() => {
+                      c.selectEpisode(c.episodeId === e.id ? null : e.id);
+                    }}
                     variant="ghost"
                   >
                     {c.episodeId === e.id ? "已选" : "选定"}
@@ -223,7 +233,9 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
                 )}
                 <Button
                   className="text-destructive h-7 px-2 text-xs"
-                  onClick={() => c.deleteEpisode(e.id)}
+                  onClick={() => {
+                    c.deleteEpisode(e.id);
+                  }}
                   variant="ghost"
                 >
                   删除
@@ -242,7 +254,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               className="h-8"
               disabled={c.episodes === undefined}
               onClick={() => {
-                if (!c.seasonId) {
+                if (c.seasonId === null || c.seasonId === "") {
                   return;
                 }
                 c.createEpisode(c.seasonId, newEpisode.trim());
@@ -253,28 +265,33 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
               新建集
             </Button>
           </div>
-          {projectId && c.episodeId && (
-            <Button
-              className="mt-1 h-8"
-              onClick={() => {
-                if (c.episodeId) {
-                  c.assignCurrentProject(c.episodeId);
-                }
-              }}
-              variant="primary-solid"
-            >
-              把当前项目归入此集
-            </Button>
-          )}
+          {projectId !== undefined &&
+            projectId !== "" &&
+            c.episodeId !== null &&
+            c.episodeId !== "" && (
+              <Button
+                className="mt-1 h-8"
+                onClick={() => {
+                  if (c.episodeId !== null && c.episodeId !== "") {
+                    c.assignCurrentProject(c.episodeId);
+                  }
+                }}
+                variant="primary-solid"
+              >
+                把当前项目归入此集
+              </Button>
+            )}
 
           {/* ── 整季生成（FR-SR-04）────────────────────── */}
-          {projectId && (
+          {projectId !== undefined && projectId !== "" && (
             <div className="border-border flex flex-col gap-2 border-l-2 pl-3">
               <div className="text-ink-muted text-sm font-medium">整季生成（FR-SR-04）</div>
               <div className="flex items-center gap-2">
                 <NativeSelect
                   className="flex-1"
-                  onChange={(e) => setGenWorkflow(e.target.value)}
+                  onChange={(e) => {
+                    setGenWorkflow(e.target.value);
+                  }}
                   value={genWorkflow}
                 >
                   <NativeSelectOption value="">选择工作流…</NativeSelectOption>
@@ -306,7 +323,7 @@ export function SeriesOrganizer({ projectId }: SeriesOrganizerProps) {
       )}
 
       {/* ── 系列角色库（选中系列后）────────────────────── */}
-      {c.seriesId && (
+      {c.seriesId !== null && c.seriesId !== "" && (
         <div className="border-border flex flex-col gap-2 border-l-2 pl-3">
           <SeriesCharacterLibrary c={c} projectId={projectId} />
         </div>

@@ -128,7 +128,9 @@ export function useWidePanel(
     [id],
   );
 
-  const toggle = useCallback(() => set(!readWide(id, defaultWide)), [id, defaultWide, set]);
+  const toggle = useCallback(() => {
+    set(!readWide(id, defaultWide));
+  }, [id, defaultWide, set]);
 
   return {
     wide,

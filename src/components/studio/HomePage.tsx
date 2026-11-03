@@ -88,9 +88,8 @@ const KIND_CONFIG: Record<"canvas" | "generation" | "workflow" | "video", KindCo
  *  下恒为 `T|undefined`，逼出一串 `!`）。 */
 function kindConfigOf(kind: string | null | undefined): KindConfig {
   const key = kind ?? "generation";
-  return key in KIND_CONFIG
-    ? KIND_CONFIG[/* SAFETY: 类型断言已复核 */ key as keyof typeof KIND_CONFIG]
-    : KIND_CONFIG.generation;
+  /* SAFETY: 类型断言已复核 */
+  return key in KIND_CONFIG ? KIND_CONFIG[key as keyof typeof KIND_CONFIG] : KIND_CONFIG.generation;
 }
 
 /** 把类别色按给定透明度档降为背景（`color-mix` 现取，不硬编码透明色）。 */
@@ -121,7 +120,9 @@ function ResumeProjectCard({
     <Button
       aria-label={`继续编辑 ${proj.name}`}
       className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 mt-6 flex h-auto w-full items-stretch gap-4 rounded-xl border p-4 text-left font-normal active:scale-[0.995]"
-      onClick={() => onOpen(proj)}
+      onClick={() => {
+        onOpen(proj);
+      }}
       variant="ghost"
     >
       {/* 左：缩略图条；一张图都没有时落回类别图标块（不留空洞） */}
@@ -156,7 +157,8 @@ function ResumeProjectCard({
             style={{
               color: cfg.color,
               backgroundColor: kindTint(cfg.color, 15),
-              [/* SAFETY: 类型断言已复核 */ "--tw-ring-color" as string]: kindTint(cfg.color, 30),
+              /* SAFETY: 类型断言已复核 */
+              ["--tw-ring-color" as string]: kindTint(cfg.color, 30),
             }}
           >
             {cfg.label}
@@ -166,7 +168,9 @@ function ResumeProjectCard({
           </span>
         </div>
         <div className="text-ink-fainter flex items-center gap-2 text-xs">
-          {proj.subtitle && <span className="min-w-0 truncate">{proj.subtitle}</span>}
+          {proj.subtitle !== undefined && proj.subtitle !== "" && (
+            <span className="min-w-0 truncate">{proj.subtitle}</span>
+          )}
           {/* 「最近动过」这个措辞是刻意的：`updatedAt` 由上层给成什么口径，
               这里不许再加工成一个更精确的假象。 */}
           <span className="shrink-0">最近动过 · {proj.updatedAt}</span>
@@ -291,7 +295,8 @@ export function HomePage({
           <Button
             className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto flex-col items-start gap-2.5 rounded-2xl border p-4 text-left font-normal transition-all hover:shadow-lg hover:shadow-black/5 dark:shadow-black/10"
             key={card.id}
-            onClick={() => onNavigate?.(/* SAFETY: 类型断言已复核 */ card.id as WorkspaceView)}
+            /* SAFETY: 类型断言已复核 */
+            onClick={() => onNavigate?.(card.id as WorkspaceView)}
             variant="ghost"
           >
             <span className="bg-primary/10 text-primary-strong group-hover:bg-primary/15 flex size-10 items-center justify-center rounded-xl transition-colors">
@@ -354,7 +359,9 @@ export function HomePage({
                   <Button
                     className="group border-border bg-surface-1 hover:border-border-strong hover:bg-surface-2 flex h-auto items-start gap-3 rounded-lg border p-3.5 text-left font-normal active:scale-[0.98]"
                     key={proj.id}
-                    onClick={() => openRecent(proj)}
+                    onClick={() => {
+                      openRecent(proj);
+                    }}
                     variant="ghost"
                   >
                     {/* Kind icon */}
@@ -379,17 +386,17 @@ export function HomePage({
                           style={{
                             color: cfg.color,
                             backgroundColor: kindTint(cfg.color, 15),
-                            [/* SAFETY: 类型断言已复核 */ "--tw-ring-color" as string]: kindTint(
-                              cfg.color,
-                              30,
-                            ),
+                            /* SAFETY: 类型断言已复核 */
+                            ["--tw-ring-color" as string]: kindTint(cfg.color, 30),
                           }}
                         >
                           {cfg.label}
                         </span>
                       </div>
                       <div className="text-ink-fainter mt-1 flex items-center gap-2 text-[11.5px]">
-                        {proj.subtitle && <span>{proj.subtitle}</span>}
+                        {proj.subtitle !== undefined && proj.subtitle !== "" && (
+                          <span>{proj.subtitle}</span>
+                        )}
                         <span className="shrink-0">{proj.updatedAt}</span>
                       </div>
 

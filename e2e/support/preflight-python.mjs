@@ -90,13 +90,13 @@ export function checkPythonReady(options = {}) {
     which(found.command, {
       env,
       platform,
-      probeArgs: [...(found.args ?? []), "--version"],
+      probeArgs: [...found.args, "--version"],
     }) ?? found.path;
-  const prefix = (found.args ?? []).join(" ");
+  const prefix = found.args.join(" ");
   return {
     verdict: "ready",
-    interpreter: absolute ?? found.command,
-    detail: `用 ${found.command}${prefix ? ` ${prefix}` : ""} → ${absolute ?? "（PATH 上解析不到绝对路径，交回裸名字）"}`,
+    interpreter: absolute,
+    detail: `用 ${found.command}${prefix ? ` ${prefix}` : ""} → ${absolute}`,
   };
 }
 
@@ -216,7 +216,8 @@ export function pythonEvidence({
               .filter((k) => k.toLowerCase() === "path")
               .join(" / ") || "一个都没有"
           }）`
-        : ""}`,
+        : ""
+    }`,
   );
   for (const name of pythonCandidates(platform)) {
     const args = pythonProbeArgs(name, ["--version"]);

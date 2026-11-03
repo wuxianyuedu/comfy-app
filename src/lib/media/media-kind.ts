@@ -59,7 +59,7 @@ const AUDIO_EXT = /\.(wav|mp3|flac|ogg|m4a|aac)$/i;
  * 先图片、再视频、最后音频，故 `ogg` → `video`（与历史 `media.ts` 一致）。
  */
 export function kindOf(src?: string | null): MediaKind {
-  if (!src) {
+  if (src === undefined || src === null || src === "") {
     return "doc";
   }
   if (IMAGE_EXT.test(src)) {

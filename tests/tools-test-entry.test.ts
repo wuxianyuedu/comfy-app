@@ -103,10 +103,10 @@ describe("app-port 跨平台一致性", () => {
   it("盘符路径（Windows 写法）与正斜杠写法推导出同一端口，且与四侧锚点一致", async () => {
     // 锚点 3305 / fnv 0x97ecb3a9 由 node 生成并被 PowerShell / Python / Rust 侧
     // 引用；这条断言在 Linux（CI）上同样成立，正是跨平台修复的意义所在。
-    const { derivePortFromPath } =
-      /* SAFETY: 类型断言已复核 */ (await import("../scripts/app-port.mjs")) as {
-        derivePortFromPath: (root: string) => number;
-      };
+    /* SAFETY: 类型断言已复核 */
+    const { derivePortFromPath } = (await import("../scripts/app-port.mjs")) as {
+      derivePortFromPath: (root: string) => number;
+    };
     expect(derivePortFromPath(String.raw`F:\AI\Other\comfy-app-t3-branch`)).toBe(3305);
     expect(derivePortFromPath("F:/AI/Other/comfy-app-t3-branch")).toBe(3305);
     expect(derivePortFromPath(String.raw`F:\AI\Other\comfy-app-t3-branch2`)).not.toBe(3305);

@@ -25,6 +25,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { stripComments } from "./helpers/strip-comments";
+
 const ROOT = process.cwd();
 const SRC = join(ROOT, "src");
 
@@ -49,12 +51,14 @@ describe("仓储取用只有一个入口（ISSUE #568）", () => {
     const offenders: Array<string> = [];
     for (const file of walk(SRC)) {
       const rel = relative(ROOT, file).split("\\").join("/");
-      // 注释里说明「为什么没有容器」是允许的（判据只认代码）：整块注释先剥掉。
-      const src = readFileSync(file, "utf8").replaceAll(/\/\*[\s\S]*?\*\//g, "");
-      const code = src
-        .split("\n")
-        .filter((line) => !/^[ \t]*(\/\/|\*)/.test(line))
-        .join("\n");
+      /* 判据只认代码：注释里说明「为什么没有容器」是允许的。用唯一实现
+       * （`./helpers/strip-comments`，默认档 = 块注释 + 整行注释）。旧形那条**不跟引号状态**
+       * 的块注释正则会把 `accept: "image/*"` 之后的真代码一路吃到下一个「星号紧跟斜杠」——
+       * 实测 src/** 里 23 份文件的 199 行就是这么消失的，于是 `container.resolve`
+       * 写进那一段里就永远看不见（ISSUE #2969）。旧的第二跳还顺手剔掉以星号开头的行，
+       * 那是给没剥干净的块注释续行兜底的：helper 整段剥掉，不需要这一条（全仓实测那样的行 1 处，
+       * 且不含本判据的针脚）。 */
+      const code = stripComments(readFileSync(file, "utf8"));
       if (
         /(^|[^\w.])container\.resolve\s*\(/.test(code) ||
         /from\s+["'][^"']*core\/container["']/.test(code)

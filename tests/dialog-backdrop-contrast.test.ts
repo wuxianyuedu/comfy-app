@@ -105,12 +105,11 @@ describe("模态遮罩在真编译产物里足够可见（ISSUE #1742）", () =>
     ).toBe(true);
   });
 
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["浅色", () => light],
-      ["深色", () => dark],
-    ] as const,
-  )("%s：遮罩把应用背景压暗到能分辨", ([, get]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)("%s：遮罩把应用背景压暗到能分辨", ([, get]) => {
     const t = get();
     const scrim = parseColor(token(t, "--color-scrim"));
     /* 取这一态里**最亮**的常见表面：它是最容易「亮着、像能点」的那块，

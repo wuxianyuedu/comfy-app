@@ -61,7 +61,7 @@ export class FilmRepository extends DrizzleRepository<FilmProject> {
     id: string,
     opts: { includeShots?: boolean } = {},
   ): Promise<FilmProject | null> {
-    if (opts.includeShots) {
+    if (opts.includeShots === true) {
       return (
         (await db.query.filmProject.findFirst({
           where: and(eq(filmProject.id, id), eq(filmProject.userId, userId)),
@@ -239,8 +239,11 @@ export class FilmShotRepository {
   > {
     const where = and(
       eq(filmShot.filmId, filmId),
-      opts.status ? eq(filmShot.status, opts.status) : undefined,
-      opts.onlyWithVideo ? isNotNull(filmShot.videoPath) : undefined,
+      /* 过滤值空串与缺省同义 = 不加该条件（查询参数可能出现空串） */
+      opts.status !== undefined && opts.status !== ""
+        ? eq(filmShot.status, opts.status)
+        : undefined,
+      opts.onlyWithVideo === true ? isNotNull(filmShot.videoPath) : undefined,
     );
     return db.select().from(filmShot).where(where).orderBy(asc(filmShot.order));
   }

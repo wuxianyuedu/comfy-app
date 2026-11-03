@@ -104,7 +104,9 @@ export function AttributeMultiSelect({
             <Button
               aria-label={`移除 ${v}`}
               className="text-primary/60 hover:text-danger-strong"
-              onClick={() => removeOne(v)}
+              onClick={() => {
+                removeOne(v);
+              }}
               size="icon-xs"
               variant="ghost"
             >
@@ -176,7 +178,9 @@ export function AttributeMultiSelect({
                         <div
                           aria-selected={on}
                           key={opt}
-                          onClick={() => toggle(opt)}
+                          onClick={() => {
+                            toggle(opt);
+                          }}
                           role="option"
                           /* 行可聚焦 + Enter/Space 切换：此前只有 `onClick`，
                            * 连 `tabIndex` 都没有 —— 键盘用户完全进不来。
@@ -192,7 +196,9 @@ export function AttributeMultiSelect({
                            * 行可聚焦，Enter/Space 由 `simpleKeyHandler` 给
                            *（§16.2.4.57 的唯一出口：ARIA 的 `checkbox` 承诺「Space 可
                            * 切换」，只挂 `onClick` 就是「鼠标点得开、键盘进不来」）。 */
-                          {...simpleKeyHandler(["Space", "Enter"], () => toggle(opt))}
+                          {...simpleKeyHandler(["Space", "Enter"], () => {
+                            toggle(opt);
+                          })}
                           className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs transition-colors ${
                             on ? "bg-primary-soft text-primary" : "text-ink/80 hover:bg-subtle"
                           }`}

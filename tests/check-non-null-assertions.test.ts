@@ -130,8 +130,7 @@ export function ok(a: string | null): boolean {
     writeSrcFile(
       repo,
       "lib/padded.ts",
-      `${"\n".repeat(30)
-        }export function grab(re: RegExp, s: string): string {
+      `${"\n".repeat(30)}export function grab(re: RegExp, s: string): string {
   const m = re.exec(s);
   return m ? m[1]! : "";
 }`,

@@ -10,13 +10,11 @@ import type { WorkshopDraftDto } from "~/lib/workshop/draft-sync-shared";
 /** 把项目状态快照拼成给模型的上下文（供工具决策参考）。 */
 export function formatDraftContext(draft: WorkshopDraftDto): string {
   const meta = draft.meta;
-  const scriptPreview = draft.scriptMarkdown
-    ? draft.scriptMarkdown.slice(0, 2000)
-    : "";
+  const scriptPreview = draft.scriptMarkdown ? draft.scriptMarkdown.slice(0, 2000) : "";
   const charCount = draft.characters.length;
   const shotCount = draft.shots.length;
-  const imageDone = draft.shots.filter((s) => !!s.imageUrl).length;
-  const clipDone = draft.shots.filter((s) => !!s.clipUrl).length;
+  const imageDone = draft.shots.filter((s) => Boolean(s.imageUrl)).length;
+  const clipDone = draft.shots.filter((s) => Boolean(s.clipUrl)).length;
 
   const charNames = draft.characters
     .map((c) => c.name)
@@ -85,9 +83,7 @@ export const AGENT_FALLBACK_SYSTEM_PROMPT = `你是 ComfyAPP 工坊的「创作�
 
 /** 把模型返回的 JSON 文本归一成指令对象（扫描走全库唯一的 `extractJson`；
  *  只接受纯对象，数组 / 标量 / 空 / 解析失败一律 → null，不抛）。 */
-export function parseJsonInstruction(
-  text: string,
-): Record<string, unknown> | null {
+export function parseJsonInstruction(text: string): Record<string, unknown> | null {
   try {
     const parsed = extractJson(text);
     return isPlainRecord(parsed) ? parsed : null;

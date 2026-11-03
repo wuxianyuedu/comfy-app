@@ -112,7 +112,9 @@ export function ProjectHomeStatus({ overview, loading, onNavigate }: ProjectHome
         />
         <Button
           className="text-ink-muted hover:text-ink-strong text-2xs h-auto self-start p-0"
-          onClick={() => onNavigate("workshop")}
+          onClick={() => {
+            onNavigate("workshop");
+          }}
           variant="link"
         >
           去工坊继续 →

@@ -141,7 +141,7 @@ function guardNetworkFailure(e: unknown): never {
  * 分叉：同一实例一边判活、这边判死。本模块是纯 Node 宿主（MCP），probe.ts
  * 是零依赖叶子（只有 fetch + 地址拼接），import 安全。 */
 export async function resolveComfyBase(): Promise<string> {
-  if (resolvedBase) {
+  if (resolvedBase !== null) {
     return resolvedBase;
   }
   const raw = process.env.COMFYUI_BASE ?? comfyUiBaseUrl(COMFYUI_DEFAULT_PORT);
@@ -156,7 +156,7 @@ export async function resolveComfyBase(): Promise<string> {
   }
   for (let offset = 0; offset <= 5; offset++) {
     const base = `http://${host}:${port + offset}`;
-    if (await probeBaseOnce(base, 800)) {
+    if ((await probeBaseOnce(base, 800)) !== null) {
       resolvedBase = base;
       return base;
     }
@@ -254,7 +254,7 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
     const data = (await res.json()) as {
       name?: string;
     };
-    if (!data.name) {
+    if (data.name === undefined || data.name === "") {
       throw new Error("ComfyUI 上传未返回文件名");
     }
     return data.name;
@@ -266,7 +266,7 @@ export async function uploadComfyImage(buffer: Buffer, filename: string): Promis
 /** 解析某工坊会话（项目）的产出目录：data/workshop-outputs/{safeSessionId}。
  *  sessionId 为空时退回公共根目录（兼容无项目历史调用）。 */
 export function outputDirForSession(sessionId?: string): string {
-  if (sessionId) {
+  if (sessionId !== undefined && sessionId !== "") {
     const safe = safeFileNameSegment(sessionId);
     return path.join(OUTPUT_DIR, safe);
   }
@@ -393,7 +393,7 @@ export async function runComfyWorkflow(
 ): Promise<ComfyRunResult> {
   const posted = await postComfyPrompt(workflow);
   const promptId = posted.prompt_id;
-  if (!promptId) {
+  if (promptId === undefined || promptId === "") {
     throw new Error(`ComfyUI 未返回 prompt_id：${JSON.stringify(posted)}`);
   }
 
@@ -451,16 +451,17 @@ export async function generateImageViaComfyUI(input: {
   size?: SizeSpec;
 }): Promise<string> {
   const settings = loadSettings();
-  const workflow = settings.imageWorkflow
-    ? substitutePlaceholders(settings.imageWorkflow, {
-        prompt: input.prompt,
-        negative: input.negative,
-      })
-    : buildTxt2ImgWorkflow({
-        prompt: input.prompt,
-        negative: input.negative,
-        size: input.size,
-      });
+  const workflow =
+    settings.imageWorkflow !== undefined && settings.imageWorkflow !== null
+      ? substitutePlaceholders(settings.imageWorkflow, {
+          prompt: input.prompt,
+          negative: input.negative,
+        })
+      : buildTxt2ImgWorkflow({
+          prompt: input.prompt,
+          negative: input.negative,
+          size: input.size,
+        });
   const { files } = await runComfyWorkflow(workflow, {
     sessionId: input.sessionId,
   });
@@ -479,13 +480,13 @@ export async function submitVideoViaComfyUI(input: {
   sessionId?: string;
 }): Promise<{ url?: string }> {
   const settings = loadSettings();
-  if (!settings.videoWorkflow) {
+  if (settings.videoWorkflow === undefined || settings.videoWorkflow === null) {
     throw new Error(
       "comfyui 视频通道需要 i2v 工作流模板：请在 data/workshop-comfy-settings.json 配置 videoWorkflow（ComfyUI API 格式图，含 {{prompt}}/{{negative}}/{{image}} 占位），导出方法：ComfyUI 里点「Queue Prompt」旁 API 按钮。",
     );
   }
   let image: string | undefined;
-  if (input.imageDataUrl) {
+  if (input.imageDataUrl !== undefined && input.imageDataUrl !== "") {
     const buf = await fetchToBuffer(input.imageDataUrl);
     image = await uploadComfyImage(buf, `workshop-frame-${randomUUID().slice(0, 8)}.png`);
   }

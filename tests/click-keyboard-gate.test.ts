@@ -33,9 +33,7 @@ function write(repo: GateRepo, body: string): void {
 }
 
 describe("点击键盘门禁：该拦的形状（§6.11）", () => {
-  test("① 非原生元素 + `onClick` + 无键 → 阻断，并点名站点与章节", ({
-    repo,
-  }) => {
+  test("① 非原生元素 + `onClick` + 无键 → 阻断，并点名站点与章节", ({ repo }) => {
     write(
       repo,
       `export function A() {
@@ -106,9 +104,7 @@ describe("点击键盘门禁：该放的形状（§6.11）", () => {
     expect(r.output).toContain("OK");
   });
 
-  test("②′ 首字母大写的组件（`<Button>`）放行 —— 键语义在它的实现里", ({
-    repo,
-  }) => {
+  test("②′ 首字母大写的组件（`<Button>`）放行 —— 键语义在它的实现里", ({ repo }) => {
     write(
       repo,
       `export function A() {
@@ -130,9 +126,7 @@ describe("点击键盘门禁：该放的形状（§6.11）", () => {
     expect(repo.run().code).toBe(0);
   });
 
-  test("③′ `{...simpleKeyHandler(...)}` 属性展开放行（§16.2.4.57 的出口）", ({
-    repo,
-  }) => {
+  test("③′ `{...simpleKeyHandler(...)}` 属性展开放行（§16.2.4.57 的出口）", ({ repo }) => {
     write(
       repo,
       `export function A() {
@@ -163,9 +157,7 @@ describe("点击键盘门禁：该放的形状（§6.11）", () => {
     expect(repo.run().code).toBe(0);
   });
 
-  test("⑥ `onClick` 体里只有 `stopPropagation` → 放行（守卫，不是交互）", ({
-    repo,
-  }) => {
+  test("⑥ `onClick` 体里只有 `stopPropagation` → 放行（守卫，不是交互）", ({ repo }) => {
     write(
       repo,
       `export function A() {
@@ -176,9 +168,7 @@ describe("点击键盘门禁：该放的形状（§6.11）", () => {
     expect(repo.run().code).toBe(0);
   });
 
-  test("⑥′ `onClick` 体里 `preventDefault` + `stopPropagation` 也算守卫", ({
-    repo,
-  }) => {
+  test("⑥′ `onClick` 体里 `preventDefault` + `stopPropagation` 也算守卫", ({ repo }) => {
     write(
       repo,
       `export function A() {
@@ -208,9 +198,7 @@ describe("点击键盘门禁：翻闸后不再有收紧档（§6.11）", () => {
     expect(r.output).toContain("OK");
   });
 
-  test("⑦′ 翻闸前遗留的基线文件不影响判定（硬闸只看站点数是否为 0）", ({
-    repo,
-  }) => {
+  test("⑦′ 翻闸前遗留的基线文件不影响判定（硬闸只看站点数是否为 0）", ({ repo }) => {
     write(repo, SITE);
     repo.write(
       join("scripts", ".click-keyboard-baseline.json"),
@@ -225,9 +213,7 @@ describe("点击键盘门禁：翻闸后不再有收紧档（§6.11）", () => {
     const r = repo.run(["--update"]);
     expect(r.code).toBe(1);
     expect(r.output).toContain("站点还有 1 处");
-    expect(
-      existsSync(join(repo.dir, "scripts", ".click-keyboard-baseline.json")),
-    ).toBe(false);
+    expect(existsSync(join(repo.dir, "scripts", ".click-keyboard-baseline.json"))).toBe(false);
   });
 
   test("⑨ `--report` 只出清单不判失败，且把豁免站点一并打出来", ({ repo }) => {

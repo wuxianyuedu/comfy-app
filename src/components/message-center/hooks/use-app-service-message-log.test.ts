@@ -101,9 +101,14 @@ function mount(initial: Partial<Facts> = {}) {
     unprobedMs: 0,
     ...initial,
   };
-  const r = renderHook((props: Facts) => useAppServiceMessageLog(props), {
-    initialProps: cur,
-  });
+  const r = renderHook(
+    (props: Facts) => {
+      useAppServiceMessageLog(props);
+    },
+    {
+      initialProps: cur,
+    },
+  );
   return {
     ...r,
     rerender: (next: Partial<Facts>) => {

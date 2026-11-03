@@ -41,7 +41,7 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
-  if (req.url?.startsWith(ENDPOINT) && req.method === "POST") {
+  if (req.url?.startsWith(ENDPOINT) === true && req.method === "POST") {
     void handlePost(req, res);
     return;
   }

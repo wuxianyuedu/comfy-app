@@ -60,7 +60,8 @@ export async function POST(request: Request) {
     const fields = body.fields && typeof body.fields === "object" ? body.fields : undefined;
 
     const log = createAppRuntimeLogger(ns);
-    log[/* SAFETY: 类型断言已复核 */ level as "info" | "warn" | "error"](msg, fields);
+    /* SAFETY: 类型断言已复核 */
+    log[level as "info" | "warn" | "error"](msg, fields);
 
     return NextResponse.json({ ok: true });
   } catch {

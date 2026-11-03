@@ -69,10 +69,11 @@ async function ensureOnce(): Promise<ComfyReadyResult> {
   }
   const detail = readComfyErrorMessage(body, "ComfyUI 未就绪");
   if (
+    /* SAFETY: 类型断言已复核 */
     res.ok &&
     typeof body === "object" &&
     body !== null &&
-    /* SAFETY: 类型断言已复核 */ (body as EnsureBody).ok === true
+    (body as EnsureBody).ok === true
   ) {
     return { ok: true };
   }

@@ -43,7 +43,7 @@ export const DEFAULT_IMAGE_MIME = "image/png";
  * 还是 `?? DEFAULT_IMAGE_MIME`）。
  */
 export function mimeForExt(ext: string | null | undefined): string | null {
-  if (!ext) {
+  if (ext === undefined || ext === null || ext === "") {
     return null;
   }
   return EXT_TO_MIME[ext.replace(/^\./, "").toLowerCase()] ?? null;
@@ -58,12 +58,12 @@ export function mimeForExt(ext: string | null | undefined): string | null {
  * 语境下未必 —— 让调用处写出来，差异才看得见。
  */
 export function extForMime(mime: string | null | undefined): string | null {
-  if (!mime) {
+  if (mime === undefined || mime === null || mime === "") {
     return null;
   }
   /* `content-type` 常带参数（`image/png; charset=utf-8`），先切干净。 */
   const bare = mime.split(";")[0]?.trim().toLowerCase();
-  if (!bare) {
+  if (bare === undefined || bare === "") {
     return null;
   }
   return MIME_TO_EXT[bare] ?? null;
@@ -140,7 +140,7 @@ const MIME_TO_EXT: Record<string, string> = {
  * 当扩展名。
  */
 export function extOfPath(p: string | null | undefined): string {
-  if (!p) {
+  if (p === undefined || p === null || p === "") {
     return "";
   }
   /* 先剥查询串与 hash（URL 形态的入参很常见），再取最后一段的最后一个点。 */
@@ -165,7 +165,7 @@ export function extOfPath(p: string | null | undefined): string {
 export function contentTypeForPath(p: string): string {
   const ext = extOfPath(p);
   const media = mimeForExt(ext);
-  if (media) {
+  if (media !== null) {
     return media;
   }
   if (ext === "txt" || ext === "md" || ext === "log") {
@@ -187,7 +187,7 @@ export function contentTypeForPath(p: string): string {
  * `name.mp3.mp3`，因为那个多切的分支只有「没有点」时才走到）。
  */
 export function stemOfPath(p: string | null | undefined): string {
-  if (!p) {
+  if (p === undefined || p === null || p === "") {
     return "";
   }
   const pathPart = p.split(/[?#]/)[0] ?? "";

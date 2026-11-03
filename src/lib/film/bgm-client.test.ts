@@ -60,15 +60,14 @@ describe("uploadBgm", () => {
   it("响应体不是合法 JSON：按空对象处理，不把解析异常抛给用户", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn<typeof fetch>().mockResolvedValue(
-        /* SAFETY: 类型断言已复核 */ {
-          ok: false,
-          status: 502,
-          json: async () => {
-            throw new SyntaxError("Unexpected token <");
-          },
-        } as unknown as Response,
-      ),
+      /* SAFETY: 类型断言已复核 */
+      vi.fn<typeof fetch>().mockResolvedValue({
+        ok: false,
+        status: 502,
+        json: async () => {
+          throw new SyntaxError("Unexpected token <");
+        },
+      } as unknown as Response),
     );
     await expect(uploadBgm(new File(["x"], "a.wav"))).rejects.toThrow("BGM 上传失败");
   });

@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { collectDataSlots } from "./helpers/data-slots";
+import { stripComments } from "./helpers/strip-comments";
 
 const SRC_ROOT = fileURLToPath(new URL("../src", import.meta.url));
 const CSS_PATH = fileURLToPath(new URL("../src/app/globals.css", import.meta.url));
@@ -92,10 +93,9 @@ function collectConsumers(cls: string): Array<string> {
       } else if (/\.tsx?$/.test(entry.name)) {
         const text = readFileSync(full, "utf8");
         /* 只认 `className` 里的写法，**并且先剥注释** —— 注释里提到类名
-           不算消费（本仓库已有 18 份内联的剥注释实现，见
-           `tests/strip-comments-single-source.test.ts`；这里按同口径内联一遍，
-           它的判据是「不许再新增第 19 份」，而本文件是既有的一份）。 */
-        const code = text.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/(^|[^:])\/\/.*$/gm, "$1");
+           不算消费。剥注释走共享件（ISSUE #2969），原先这里按「同口径」内联
+           抄了一遍无锚的 `//` 全局替换，会把字符串里的 `http://…` 一并截断。 */
+        const code = stripComments(text, { trailing: true });
         if (code.includes(cls)) {
           out.push(full);
         }

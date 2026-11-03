@@ -444,11 +444,18 @@ export function resolveWorkflowMode(args: {
     (mode): mode is string => typeof mode === "string" && mode.length > 0,
   );
   const declared = args.defaultMode;
-  if (declared && (modes.length === 0 || modes.includes(declared))) {
+  /* 模式码落库数据里可能出现空串残留，语义同「没声明模式」 */
+  if (
+    declared !== undefined &&
+    declared !== null &&
+    declared !== "" &&
+    (modes.length === 0 || modes.includes(declared))
+  ) {
     return declared;
   }
   const [firstMode] = modes;
-  if (firstMode) {
+  /* modes 已过滤掉非字符串与空串，非 undefined 即有效模式 */
+  if (firstMode !== undefined) {
     return firstMode;
   }
   if (typeof args.taskType === "string" && args.taskType) {

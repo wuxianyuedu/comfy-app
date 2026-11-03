@@ -99,7 +99,8 @@ export function parseRuntimeLogFileName(name: string): RuntimeLogFileName | null
   }
   const [, source, stampText, ordinalText] = m;
   const sm = STAMP_RE.exec(stampText ?? "");
-  if (!source || !sm) {
+  /* 捕获组要求至少一个字符，source 不会是空串 */
+  if (source === undefined || !sm) {
     return null;
   }
   const [, y, mo, d, h, mi, s] = sm;
@@ -111,7 +112,8 @@ export function parseRuntimeLogFileName(name: string): RuntimeLogFileName | null
     Number(mi),
     Number(s),
   ).getTime();
-  const ordinal = ordinalText ? Number(ordinalText) : 1;
+  /* 序号捕获组要么缺省要么非空数字串 */
+  const ordinal = ordinalText === undefined ? 1 : Number(ordinalText);
   return {
     source,
     startedAt: Number.isFinite(startedAt) ? startedAt : null,
@@ -145,7 +147,8 @@ const LAUNCH_STAMP_RE = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/;
  * 多一道日历校验只会给「未来某天加了另一个写方」埋一个静默的降级分支。
  */
 export function parseLaunchStamp(value: string | undefined): Date | null {
-  const m = value ? LAUNCH_STAMP_RE.exec(value) : null;
+  /* 空串同样匹配不上时间戳正则，与 undefined 同归 null 出口 */
+  const m = value === undefined ? null : LAUNCH_STAMP_RE.exec(value);
   if (!m) {
     return null;
   }

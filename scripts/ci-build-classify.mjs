@@ -60,6 +60,26 @@ const RUNNING_STATES = new Set(["running", "pending", "queued", "waiting", "crea
 const CONFIGURED_STAGE_ID = /^(stage-\d+|prepare)$/;
 
 /**
+ * `endStages` 那一族的 id 形状（ISSUE #3047）。
+ *
+ * 平台给这一档的 id 是 `stage-endStages-<n>`，**不匹配**上面那条 `stage-\d+` —— 于是它整族
+ * 从「本仓配置的格」里掉了出去。掉出去本身不是错（`.cnb.yml:1426–1427` 引的官方 grammar
+ * 原文：「endStages 是否成功**不影响流水线状态**」，判决面本来就不该含它）；错的是这一族
+ * 从 2026-10 起开始**承载本仓判据**（`PR 失败立案` / `令牌权限读数` / **`GitHub 镜像同步`** /
+ * 桌包档的 `桌包失败立案`），而诊断与取日志两个入口比的都是那一支 `configured` ⇒
+ * 镜像那一格红了，`--diagnose` 一个字不念、`--stage-log` 按名按 id 都退 2（实测见 #3047）。
+ *
+ * 所以这里单开一支**可见性面**（`endStages` / `diagnosable` / `endFailed`），不动 `configured`：
+ * 出勤与在飞的读数（`check-daily-attendance.mjs` 念的 `configured.length`、轮询那行的
+ * 「在飞 N 格」）口径一字不变 —— 把 endStages 一刀塞进 `configured` 会让那些数顺带多算几格。
+ *
+ * 2026-11-02 之后这一族的成员变了：`GitHub 镜像同步` 前移进主列、按读数档跑（ISSUE #3051），
+ * 留在这一档的是立案格与令牌读数 —— 它们的本职是「红也要跑」，前移反而破坏它。上面那段
+ * 现场读数是它还在 `endStages` 时取的，作为**为什么要有这一支**的理由仍然成立。
+ */
+const ENDSTAGE_ID = /^stage-endStages-\d+$/;
+
+/**
  * 一格的读数。
  *
  * @typedef {Object} StageRef
@@ -71,18 +91,48 @@ const CONFIGURED_STAGE_ID = /^(stage-\d+|prepare)$/;
  */
 
 /**
+ * 逐格分类给出的「判决面」四张池子与「可见性面」三项（ISSUE #3047）。
+ *
+ * `failed` / `cancelled` / `skipped` / `configured` 是**判决面**：整跑结论由它们算，而
+ * `configured` 同时服务出勤与在飞的读数（`check-daily-attendance.mjs` 念的
+ * `configured.length`、轮询那行的「在飞 N 格」）—— 这一支的口径不许顺带变。
+ *
+ * `endStages` / `endFailed` / `diagnosable` 是**可见性面**：`diagnosable` 给「按格名/格 id
+ * 取日志」与「补平台原话」用，`endFailed` 给诊断把红在 endStage 的那一格念出来用。
+ * 三者都**不进流水线级判决**（平台自己也不把 endStages 计入流水线状态，见上面 `ENDSTAGE_ID`
+ * 那段）—— 治的是「看不见」，不是把立案格/镜像格的红升成门禁的红。
+ *
+ * @typedef {Object} StagePools
+ * @property {StageRef[]} failed 判决面：自己跑挂的那些格
+ * @property {StageRef[]} cancelled 判决面：被取消/被终止的那些格
+ * @property {StageRef[]} skipped 判决面：整跑没跑到的那些格
+ * @property {StageRef[]} configured 判决面：本仓配置的工作格（`stage-N` 与 `prepare`）
+ * @property {StageRef[]} endStages 可见性面：`stage-endStages-N` 那一族，按平台序号排
+ * @property {StageRef[]} endFailed 可见性面：其中「原话不是被终止、状态是错」的那几格
+ * @property {StageRef[]} diagnosable 可见性面：判决面那一支 ∪ `endStages`，按平台序号排
+ */
+
+/**
  * 逐格分类。
  *
- * ⚠️ 只收**这一条流水线的工作格**（`stage-N` 与 `prepare`）。若一份读数里一个都匹配不上
+ * ⚠️ 判决面只收**这一条流水线的工作格**（`stage-N` 与 `prepare`）。若一份读数里一个都匹配不上
  * （平台改了 id 形状），就退回「全收」—— 宁可多念几行平台自带的格，也不许因为
  * 认不出形状而把证据一起丢掉。
  *
  * @param {any} stages 平台给的 stage 数组
- * @returns {{failed: StageRef[], cancelled: StageRef[], skipped: StageRef[], configured: StageRef[]}}
+ * @returns {StagePools}
  */
 export function classifyStages(stages) {
-  /** @type {{failed: StageRef[], cancelled: StageRef[], skipped: StageRef[], configured: StageRef[]}} */
-  const out = { failed: [], cancelled: [], skipped: [], configured: [] };
+  /** @type {StagePools} */
+  const out = {
+    failed: [],
+    cancelled: [],
+    skipped: [],
+    configured: [],
+    endStages: [],
+    endFailed: [],
+    diagnosable: [],
+  };
   if (!Array.isArray(stages)) {
     return out;
   }
@@ -125,6 +175,25 @@ export function classifyStages(stages) {
       out.skipped.push(ref);
     }
   }
+  /* ── 可见性面（ISSUE #3047）────────────────────────────────────────────────
+   * `endStages` 那一族不进上面任何一张判决池：平台自己就不把 endStages 计入流水线状态
+   * （`.cnb.yml:1426–1427` 引的官方 grammar 原文），而本仓把立案格 / 令牌读数 / 镜像格放在
+   * 这一档，为的正是「它坏了既不许把门禁的红洗成绿，也不许把自己的红叠进门禁的账」。
+   * 但它们**确实承载本仓判据**，所以「按格名取日志」与「补平台原话」这两件事必须认得它们 ——
+   * 归属由下面这两支给出，一句判决都不改。 */
+  out.endStages = all.filter((s) => ENDSTAGE_ID.test(s.id));
+  for (const ref of out.endStages) {
+    /* 与判决面同一把尺：原话是「被终止」形状的错不算「自己跑挂」。 */
+    if (cancelledCause(ref).kind === "failed") {
+      out.endFailed.push(ref);
+    }
+  }
+  /* 上面退回「全收」那一支里，endStages 本来就在 `pool` 内 —— 不能再并一次，否则同一格会在
+   * 「按格名反查」里造出**命中多格**的假象（那一条自己退 2、让人改用 id 点名）。 */
+  out.diagnosable =
+    configured.length > 0
+      ? all.filter((s) => CONFIGURED_STAGE_ID.test(s.id) || ENDSTAGE_ID.test(s.id))
+      : all;
   return out;
 }
 
@@ -252,17 +321,28 @@ export function pipelineSn(pipelineId) {
  *   pipelines: Array<{
  *     id: string, name: string, status: string,
  *     failed: StageRef[], cancelled: StageRef[], skipped: StageRef[], configured: StageRef[],
+ *     endStages: StageRef[], endFailed: StageRef[], diagnosable: StageRef[],
  *   }>,
  *   failed: StageRef[],
  *   cancelled: StageRef[],
  *   skipped: StageRef[],
  *   configured: StageRef[],
+ *   endStages: StageRef[],
+ *   endFailed: StageRef[],
+ *   diagnosable: StageRef[],
  *   reasons: Array<{stage: string, reason: string, holder: string | null, sn: string | null,
  *     kind: "stage-cancel" | "stage-terminated" | "pipeline-cancel" | "build-cancel"}>,
  * }}
  *   `reasons` 是「为什么它没有结论」的原话清单（ISSUE #2406）：一条一条对应
  *   「哪一格 / 哪条流水线 / 构建级」被终止，`holder` 与 `sn` 是抢走锁的那一跑（认不出就
  *   null）。它只读平台原话，本仓一个字都不代写。
+ *
+ *   ⚠️ `state` **只看判决面**（`failed` / `reasons`，都出自 `configured` 那一支），
+ *   `endStages` / `endFailed` / `diagnosable` 是可见性面（ISSUE #3047）：它们让
+ *   「红在 `GitHub 镜像同步` / `PR 失败立案` 这一族」被念出来、被按名取到日志，
+ *   但**不许**把流水线级读数从绿改成红 —— 平台自己也不把 endStages 计入流水线状态，
+ *   而本仓把它们放在这一档就是为了「它坏了既不许洗绿、也不许洗红」。
+ *   多出来的三张池子也不进 `configured.length` 那句出勤读数。
  */
 export function classifyBuildOutcome(json) {
   const data = json && typeof json === "object" ? json.data : null;
@@ -275,6 +355,12 @@ export function classifyBuildOutcome(json) {
   const skipped = [];
   /** @type {ReturnType<typeof classifyStages>["configured"]} */
   const configured = [];
+  /** @type {ReturnType<typeof classifyStages>["endStages"]} */
+  const endStages = [];
+  /** @type {ReturnType<typeof classifyStages>["endFailed"]} */
+  const endFailed = [];
+  /** @type {ReturnType<typeof classifyStages>["diagnosable"]} */
+  const diagnosable = [];
   const pipelines = [];
   const table =
     data?.pipelinesStatus && typeof data.pipelinesStatus === "object" ? data.pipelinesStatus : {};
@@ -292,12 +378,18 @@ export function classifyBuildOutcome(json) {
       cancelled: c.cancelled,
       skipped: c.skipped,
       configured: c.configured,
+      endStages: c.endStages,
+      endFailed: c.endFailed,
+      diagnosable: c.diagnosable,
     };
     pipelines.push(pipeline);
     failed.push(...c.failed);
     cancelled.push(...c.cancelled);
     skipped.push(...c.skipped);
     configured.push(...c.configured);
+    endStages.push(...c.endStages);
+    endFailed.push(...c.endFailed);
+    diagnosable.push(...c.diagnosable);
   }
 
   const low = raw === null ? "" : raw.toLowerCase();
@@ -379,6 +471,9 @@ export function classifyBuildOutcome(json) {
     cancelled,
     skipped,
     configured,
+    endStages,
+    endFailed,
+    diagnosable,
     reasons,
   };
 }
@@ -445,6 +540,11 @@ export function stageInFlight(status) {
  *
  * 命中多格时如实给出多格（由人改用 id 点名），不挑一个。
  *
+ * 比的是**可见性面** `diagnosable`（= 判决面的工作格 ∪ `endStages`，ISSUE #3047），不是
+ * 只比 `configured`：镜像那一格（`GitHub 镜像同步` = `stage-endStages-2`）今天红了而
+ * 按名/按 id 都点不到，根因就是它掉在这条口径外面。判决面（`state`、出勤的
+ * `configured.length`）仍走 `configured`，两边不许混。
+ *
  * @param {ReturnType<typeof classifyBuildOutcome>} outcome
  * @param {string} ref 人给的格名或格 id
  * @returns {{hits: Array<{pipeline: ReturnType<typeof classifyBuildOutcome>["pipelines"][number], stage: StageRef}>, near: StageRef[], examined: number}}
@@ -460,7 +560,7 @@ export function findStageMatches(outcome, ref) {
   /** @type {StageRef[]} */
   const near = [];
   for (const pipeline of outcome.pipelines) {
-    for (const stage of pipeline.configured) {
+    for (const stage of pipeline.diagnosable) {
       const name = stage.name.trim().toLowerCase();
       if (stage.id.toLowerCase() === want || (name !== "" && name === want)) {
         hits.push({ pipeline, stage });
@@ -478,7 +578,7 @@ export function findStageMatches(outcome, ref) {
       }
     }
   }
-  return { hits, near, examined: outcome.configured.length };
+  return { hits, near, examined: outcome.diagnosable.length };
 }
 
 /**
@@ -494,6 +594,136 @@ export function inFlightStages(json) {
   const configured = classifyBuildOutcome(json).configured;
   const flying = configured.filter((s) => STAGE_IN_FLIGHT_STATES.has(s.status));
   return { count: flying.length, names: flying.map((s) => s.name || s.id) };
+}
+
+/**
+ * 毫秒 → 「2h24m」这种读法（只用于把工具的兜底超时念成人话）。
+ *
+ * @param {number | null} ms 毫秒（null / 非正数 ⇒ 空串，调用方据此少念一句）
+ * @returns {string}
+ */
+function humanDuration(ms) {
+  const value = Number(ms);
+  if (!Number.isFinite(value) || value <= 0) {
+    return "";
+  }
+  /* 向上取整：5092ms 读成「1m」比「0m」贴近事实（圆整会把「刚开跑」念成「没动」）。 */
+  const totalMinutes = Math.ceil(value / 60_000);
+  const d = Math.floor(totalMinutes / (60 * 24));
+  const h = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const m = totalMinutes % 60;
+  return `${d > 0 ? `${d}d` : ""}${h > 0 ? `${h}h` : ""}${m > 0 || (d === 0 && h === 0) ? `${m}m` : ""}`;
+}
+
+/**
+ * 「可能是数字」→ 数字或 null。平台的读数里这一栏有时缺、有时是字符串。
+ *
+ * @param {unknown} v
+ * @returns {number | null}
+ */
+function numericOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * 停摆的格：`status` 是在飞那一族（`start` 为典型），而平台给它的 `endTime` **不大于**
+ * `startTime`（走完的格是 `结束 > 开始`，被掐断的格也是；只有「还没回来」的那一形是相等）。
+ *
+ * ⚠️ 这是**读数**，不是判决（ISSUE #2901）：2026-11-01 那一跑（`cnb-gc2-1k69nm1n6` /
+ * `cnb-lpp-1k69nmnu9`）两条 build 在同一秒失去心跳，`get-build-stage -v` 上三个字段
+ * 自相矛盾（`duration: 5092`、`endTime == startTime`、`status: start`），而平台不出终态、
+ * 唯一的兜底是客户端 8640s 超时 ⇒ 任何轮询型消费者都在那里无声地等 2h24m。把它念出来
+ * 只改「说什么」，不改任何结论：退码仍由 `state` 决定，本函数一个字都不参与分类。
+ *
+ * @param {any} json `cnb build get-build-status -v` 的解析结果
+ * @returns {Array<{id: string, name: string, pipeline: string, pipelineId: string,
+ *   startTime: number | null, durationMs: number | null, since: number}>} 每一项的读法如下：
+ *   `since` 是「这一格从开始到现在过了多久」（毫秒；`startTime` 一定是数字，见上面的判法）
+ */
+export function stalledStages(json) {
+  const data = json && typeof json === "object" ? json.data : null;
+  const table =
+    data?.pipelinesStatus && typeof data.pipelinesStatus === "object" ? data.pipelinesStatus : {};
+  const out = [];
+  const nowMs = Date.now();
+  for (const key of Object.keys(table)) {
+    const p = table[key];
+    const stages = p && Array.isArray(p.stages) ? p.stages : [];
+    for (const { id, name, status, startTime, endTime, duration } of stages.map(
+      (/** @type {any} */ raw) => ({
+        id: String(raw?.id ?? ""),
+        name: String(raw?.name ?? ""),
+        duration: numericOrNull(raw?.duration),
+        endTime: numericOrNull(raw?.endTime),
+        startTime: numericOrNull(raw?.startTime),
+        status: typeof raw?.status === "string" ? raw.status.toLowerCase() : "",
+      }),
+    )) {
+      if (!CONFIGURED_STAGE_ID.test(id) && !ENDSTAGE_ID.test(id)) {
+        continue;
+      }
+      if (!STAGE_IN_FLIGHT_STATES.has(status)) {
+        continue;
+      }
+      /* 「`endTime` 不大于 `startTime`」是这一判的**全部**：走完的格是结束 > 开始，
+         被掐断的格也是；只有「runner 没回来」的那一形是相等（或结束早于开始那种畸形）。 */
+      if (startTime === null || endTime === null || endTime > startTime) {
+        continue;
+      }
+      out.push({
+        durationMs: duration,
+        id,
+        name: name || id,
+        pipeline: String(p.name ?? ""),
+        pipelineId: String(p.id ?? key),
+        since: Math.max(0, nowMs - startTime),
+        startTime,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * 停摆读数的**话术**（ISSUE #2901）：一格 `start` + `endTime<=startTime` 且过了阈值该说什么。
+ *
+ * 阈值那一档与 `ship-diagnose.mjs` 的 `DIAGNOSE_STALL_MINUTES` 同一个数：它答的是
+ * 「隔了 10 分钟还没动」，与这里「这一格从开始到现在过了 10 分钟还没回来」是同一件事。
+ * 纯函数（时间由 `stalledStages` 在调用那一刻算进 `since`）：用例不用等真实时间，
+ * 入参五项也都不必再解释 —— 名字本身就是它们的说明书。
+ *
+ * @param {{minutes: number, signature: string, slug: string | null, sn: string,
+ *   stalled: ReturnType<typeof stalledStages>}} input
+ * @returns {string[]} 要念的行（空数组 = 没有停摆，一个字都不说）
+ */
+export function stallReadout({ minutes, signature, slug, sn, stalled }) {
+  if (!Array.isArray(stalled) || stalled.length === 0) {
+    return [];
+  }
+  const sinceMs = Math.max(...stalled.map((s) => s.since));
+  if (sinceMs < minutes * 60_000) {
+    return [];
+  }
+  const names = stalled.map((s) => s.name).slice(0, 3);
+  const more = stalled.length > names.length ? ` 等 ${stalled.length} 格` : "";
+  const head = /** @type {ReturnType<typeof stalledStages>[number]} */ (stalled[0]);
+  const durationRead =
+    head.durationMs === null ? "" : `、平台记的 duration ${humanDuration(head.durationMs)}`;
+  return [
+    `[ship] ⚠ 疑似 runner 失联：${names.join("、")}${more} 停在 \`start\`，` +
+      `但它的 \`endTime\` 不大于 \`startTime\`${durationRead}` +
+      `（已过 ${humanDuration(sinceMs)}）`,
+    `[ship]   这不是「一格在长跑」：平台对这三件的口径自相矛盾 ⇒ 心跳停了、结果可能没回来。` +
+      `当前读数 ${signature}`,
+    `[ship]   已知结局：等下去唯一的兜底是平台的 8640s（2h24m）客户端超时，` +
+      `那一跑会以 \`ECONNABORTED\` 收场（实测 ISSUE #2901）。`,
+    slug
+      ? `[ship]   下一动作：\`pnpm ship --diagnose\` 只读复核；要重跑就 \`pnpm ship --rerun-ci\`（推空提交派生新流水线）。` +
+        `日志：https://cnb.cool/${slug}/-/build/logs/${sn}`
+      : `[ship]   下一动作：\`pnpm ship --rerun-ci\`（平台侧没有 PR 重跑入口）。`,
+    `[ship]   这一行是**读数**，不改变退码 —— 结论仍看平台有没有出终态。`,
+  ];
 }
 
 /**

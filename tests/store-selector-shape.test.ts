@@ -60,7 +60,7 @@ function realStoreHooks(): Array<string> {
       /export\s+const\s+(use[A-Za-z0-9_]+)\s*=\s*create(?:Store)?\s*[<(]/g,
     )) {
       const name = m[1];
-      if (name) {
+      if (name !== undefined && name !== "") {
         names.add(name);
       }
     }
@@ -79,7 +79,7 @@ const EXTRA_SUBSCRIBERS = [
 function configuredHooks(): Array<string> {
   const src = readFileSync(CONFIG, "utf8");
   const block = /const STORE_SELECTOR_HOOKS = \[([\s\S]*?)\];/.exec(src)?.[1];
-  if (!block) {
+  if (block === undefined || block === "") {
     return [];
   }
   return [...block.matchAll(/"([^"]+)"/g)]

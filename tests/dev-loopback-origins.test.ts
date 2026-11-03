@@ -35,10 +35,7 @@ function allowedDevOriginsEntry(): string | null {
 
 describe("dev 期回环两种拼法都在 allowedDevOrigins 里", () => {
   it("这颗键在（摘掉它就等于让 127.0.0.1 那半条链路静默失去 HMR）", () => {
-    expect(
-      allowedDevOriginsEntry(),
-      "next.config.js 少了 allowedDevOrigins",
-    ).not.toBeNull();
+    expect(allowedDevOriginsEntry(), "next.config.js 少了 allowedDevOrigins").not.toBeNull();
   });
 
   it("两种回环拼法都放行：localhost 是裸链路的规范源，127.0.0.1 是本仓收口的写法", () => {
@@ -52,9 +49,9 @@ describe("dev 期回环两种拼法都在 allowedDevOrigins 里", () => {
      所以判的是「豁免面恰好等于这两个名字」，而不是「没出现某个坏字符串」——
      后者漏得过 `10.x.`、`*.local`、端口写法等各种形态。 */
   it("豁免面只有这两个回环名，没有局域网地址或通配", () => {
-    const hosts = [
-      ...(allowedDevOriginsEntry() ?? "").matchAll(/["']([^"']+)["']/g),
-    ].map((m) => m[1]);
+    const hosts = [...(allowedDevOriginsEntry() ?? "").matchAll(/["']([^"']+)["']/g)].map(
+      (m) => m[1],
+    );
     expect(hosts.sort()).toEqual(["127.0.0.1", "localhost"]);
   });
 });

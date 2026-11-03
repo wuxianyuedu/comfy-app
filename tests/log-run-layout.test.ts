@@ -32,6 +32,7 @@ import {
   zipDirectory,
 } from "../scripts/launcher-core/run.mjs";
 import { launcherChainSource } from "./helpers/launcher-source";
+import { stripComments } from "./helpers/strip-comments";
 
 /** run.json 的形态（判据只读这几个字段）。 */
 type RunMeta = {
@@ -479,9 +480,14 @@ describe("四份 runtime 日志：一次启动一份文件（ISSUE #1326）", ()
    *
    * 不剥注释的话，一段「这里曾经有 X、现在没有」的迁移说明会把判据判红 ——
    * 而那正是本仓库要求写的东西（§12.4.2 禁止的是日期/编号式的历史流水，不是
-   * 「为什么改」）。 */
+   * 「为什么改」）。
+   *
+   * 用唯一实现（`./helpers/strip-comments`）而不是本地那份**无锚**的行跳：旧形从字符串里
+   * 第一个双斜杠一路吃到行尾，实测把 `src/lib/drizzle-studio/lifecycle.ts` 的
+   * `export const DRIZZLE_STUDIO_HOST = "https://local.drizzle.studio";` 削成半行 ——
+   * 于是下面那一圈 `includes(…) === false` 对「同一行引号之后又把旧写法写回去」是瞎的（ISSUE #2969）。 */
   function code(name: string): string {
-    return name.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/.*$/gm, "");
+    return stripComments(name, { trailing: true });
   }
 
   it("log-paths 里不再有那四个固定名常量（一次启动一份，没有单一文件可指）", () => {

@@ -47,7 +47,9 @@ function setFocused(focused: boolean) {
 describe("useInterval", () => {
   it("挂载即先跑一次（immediate 默认 true），之后按间隔重复", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: 1000 }));
+    renderHook(() => {
+      useInterval(run, { ms: 1000 });
+    });
 
     expect(run, "挂载应立即跑一次，不等第一个间隔").toHaveBeenCalledTimes(1);
 
@@ -64,7 +66,9 @@ describe("useInterval", () => {
 
   it("immediate=false 时不立刻跑，等第一个间隔", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: 1000, immediate: false }));
+    renderHook(() => {
+      useInterval(run, { ms: 1000, immediate: false });
+    });
     expect(run).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -77,38 +81,34 @@ describe("useInterval", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {
       void 0;
     });
-    renderHook(() =>
-      useInterval(() => Promise.reject(new Error("poll boom")), { ms: 1000 }),
-    );
+    renderHook(() => {
+      useInterval(() => Promise.reject(new Error("poll boom")), { ms: 1000 });
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(spy).toHaveBeenCalledWith(
-      "[use-interval] 轮询动作抛错",
-      expect.any(Error),
-    );
+    expect(spy).toHaveBeenCalledWith("[use-interval] 轮询动作抛错", expect.any(Error));
     spy.mockRestore();
   });
 
   it("两条暂停判据都关掉时不挂窗口事件监听", () => {
     const addSpy = vi.spyOn(document, "addEventListener");
-    renderHook(() =>
+    renderHook(() => {
       useInterval(vi.fn(), {
         ms: 1000,
         pauseWhenHidden: false,
         pauseWhenUnfocused: false,
-      }),
-    );
-    expect(addSpy).not.toHaveBeenCalledWith(
-      "visibilitychange",
-      expect.anything(),
-    );
+      });
+    });
+    expect(addSpy).not.toHaveBeenCalledWith("visibilitychange", expect.anything());
     addSpy.mockRestore();
   });
 
   it("ms 为 null / 0 表示不轮询", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: null }));
+    renderHook(() => {
+      useInterval(run, { ms: null });
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
@@ -117,7 +117,9 @@ describe("useInterval", () => {
 
   it("卸载后定时器停掉，不再跑", async () => {
     const run = vi.fn();
-    const { unmount } = renderHook(() => useInterval(run, { ms: 1000 }));
+    const { unmount } = renderHook(() => {
+      useInterval(run, { ms: 1000 });
+    });
     expect(run).toHaveBeenCalledTimes(1);
 
     unmount();
@@ -131,7 +133,9 @@ describe("useInterval", () => {
     const first = vi.fn();
     const second = vi.fn();
     const { rerender } = renderHook<void, { run: () => void }>(
-      (props) => useInterval(props.run, { ms: 1000 }),
+      (props) => {
+        useInterval(props.run, { ms: 1000 });
+      },
       { initialProps: { run: first } },
     );
     expect(first).toHaveBeenCalledTimes(1);
@@ -154,19 +158,23 @@ describe("useInterval", () => {
 
   it("pauseWhenHidden：切后台暂停，回前台立即补跑一次并恢复", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: 1000 }));
+    renderHook(() => {
+      useInterval(run, { ms: 1000 });
+    });
     expect(run).toHaveBeenCalledTimes(1);
 
-    act(() => setVisibility("hidden"));
+    act(() => {
+      setVisibility("hidden");
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
     expect(run, "后台不该继续跑").toHaveBeenCalledTimes(1);
 
-    act(() => setVisibility("visible"));
-    expect(run, "回前台应立即补跑一次，不等下一个间隔").toHaveBeenCalledTimes(
-      2,
-    );
+    act(() => {
+      setVisibility("visible");
+    });
+    expect(run, "回前台应立即补跑一次，不等下一个间隔").toHaveBeenCalledTimes(2);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
@@ -176,8 +184,12 @@ describe("useInterval", () => {
 
   it("pauseWhenHidden=false：后台照常跑（有意的选择）", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: 1000, pauseWhenHidden: false }));
-    act(() => setVisibility("hidden"));
+    renderHook(() => {
+      useInterval(run, { ms: 1000, pauseWhenHidden: false });
+    });
+    act(() => {
+      setVisibility("hidden");
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
@@ -186,16 +198,22 @@ describe("useInterval", () => {
 
   it("pauseWhenUnfocused=true：窗口失焦暂停、重新聚焦立即补跑一次并恢复（WebView2 遮挡场景）", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: 1000, pauseWhenUnfocused: true }));
+    renderHook(() => {
+      useInterval(run, { ms: 1000, pauseWhenUnfocused: true });
+    });
     expect(run, "挂载即先跑一次").toHaveBeenCalledTimes(1);
 
-    act(() => setFocused(false));
+    act(() => {
+      setFocused(false);
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
     expect(run, "失焦后不该继续跑").toHaveBeenCalledTimes(1);
 
-    act(() => setFocused(true));
+    act(() => {
+      setFocused(true);
+    });
     expect(run, "重新聚焦应立即补跑一次").toHaveBeenCalledTimes(2);
 
     await act(async () => {
@@ -206,9 +224,13 @@ describe("useInterval", () => {
 
   it("pauseWhenUnfocused=false：显式关时失焦仍跑（浏览器 tab 场景保留既有语义）", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: 1000, pauseWhenUnfocused: false }));
+    renderHook(() => {
+      useInterval(run, { ms: 1000, pauseWhenUnfocused: false });
+    });
     expect(run).toHaveBeenCalledTimes(1);
-    act(() => setFocused(false));
+    act(() => {
+      setFocused(false);
+    });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
@@ -221,7 +243,9 @@ describe("useInterval", () => {
   it("ms 给函数：每拍之后重新问一次「下一拍等多久」", async () => {
     const run = vi.fn();
     let ms = 1000;
-    renderHook(() => useInterval(run, { ms: () => ms }));
+    renderHook(() => {
+      useInterval(run, { ms: () => ms });
+    });
     expect(run, "挂载即先跑一次").toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -252,7 +276,9 @@ describe("useInterval", () => {
 
   it("ms 函数返回 0：立刻再跑一拍（事件驱动「不等下一拍」那一档）", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: () => 0 }));
+    renderHook(() => {
+      useInterval(run, { ms: () => 0 });
+    });
     expect(run).toHaveBeenCalledTimes(1);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
@@ -262,7 +288,9 @@ describe("useInterval", () => {
 
   it("ms 函数返回 null：下一拍不再排（调用方可再经 stop / 重建拉起）", async () => {
     const run = vi.fn();
-    renderHook(() => useInterval(run, { ms: () => null }));
+    renderHook(() => {
+      useInterval(run, { ms: () => null });
+    });
     expect(run, "挂载即先跑一次").toHaveBeenCalledTimes(1);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
@@ -278,7 +306,9 @@ describe("useInterval", () => {
           release = resolve;
         }),
     );
-    renderHook(() => useInterval(run, { ms: () => 0 }));
+    renderHook(() => {
+      useInterval(run, { ms: () => 0 });
+    });
     expect(run).toHaveBeenCalledTimes(1);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);

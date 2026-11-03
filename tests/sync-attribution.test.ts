@@ -99,11 +99,7 @@ describe("classifyChanges", () => {
   it("examples 至多两条（文案里给的是例子，不是清单）", () => {
     const c = classifyChanges(
       parseDiffEntries(
-        [
-          "A\tsrc/app/a/route.ts",
-          "A\tsrc/app/b/route.ts",
-          "A\tsrc/app/c/route.ts",
-        ].join("\n"),
+        ["A\tsrc/app/a/route.ts", "A\tsrc/app/b/route.ts", "A\tsrc/app/c/route.ts"].join("\n"),
       ),
     );
     expect(c.routes.added).toBe(3);
@@ -119,9 +115,7 @@ describe("describeChanges", () => {
   });
 
   it("改了路由结构 → 说清增删改名并给一个例子", () => {
-    const c = classifyChanges(
-      parseDiffEntries(["A\tsrc/app/api/foo/route.ts"].join("\n")),
-    );
+    const c = classifyChanges(parseDiffEntries(["A\tsrc/app/api/foo/route.ts"].join("\n")));
     const text = describeChanges(c, { headChanged: true });
     expect(text).toContain("改了路由结构");
     expect(text).toContain("新增 1");

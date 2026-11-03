@@ -100,6 +100,16 @@
         "gate": "dailyAttendance"
       },
       "executor": "按需召唤：`pnpm check:daily-attendance`（0 出勤 / 1 缺勤 / 2 没结论或取不到读数 —— 退 2 不算绿）。跑它的两个现场：① 任何一次拿「平台那一档在跑」当本地豁免理由的争论（`FRESHNESS_TRACKS[*].ciStage` 那串豁免的前提就是这句话）；② 每日档换了时刻或撤了格之后，第一次核对。口径与先天限制（睡过去的那一次当场无人可判）见 §13.5.23 末节 / ISSUE #2114"
+    },
+    {
+      "id": "mirror-attendance",
+      "name": "GitHub 镜像那一格的出勤（推成并派发了没有）",
+      "notInHook": "要上网问平台（一次构建列表 + 至多三跑的逐格正文）。与 daily-attendance 同一理由：判据自身不做网络请求（§13.10.14 那条）",
+      "fact": {
+        "kind": "gate-not-in-all",
+        "gate": "mirrorAttendance"
+      },
+      "executor": "按需召唤：`pnpm check:mirror-attendance`（0 出勤 / 1 缺勤 / 2 没结论 —— 退 2 不算绿）。跑它的现场：决定「能不能从 `COMFYAPP_CI_GATES` 摘一格去 GitHub」之前，以及通道形状每变一次之后。⚠️ 那一格自 #3051 起是**读数档**（`--readout` 恒不退非零）⇒ 它的 `status` 不是判决，出勤只从正文里那句三态原值认；形状分类（egress / 仓库没建 / 令牌 / 推送失败 / 派发被拒 / 没这一格 / 取不到正文）见 §13.5.4「在册 ≠ 出勤」同族 / ISSUE #3046"
     }
   ]
 }

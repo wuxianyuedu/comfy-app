@@ -46,8 +46,12 @@ export function useHoverElevation(): HoverElevation {
    *  我们只能拿它做 DOM 操作，不能自己渲染这个元素。 */
   const cardRef = useRef<HTMLElement | null>(null);
 
-  const onMouseEnter = useCallback(() => setHovered(true), []);
-  const onMouseLeave = useCallback(() => setHovered(false), []);
+  const onMouseEnter = useCallback(() => {
+    setHovered(true);
+  }, []);
+  const onMouseLeave = useCallback(() => {
+    setHovered(false);
+  }, []);
 
   const hoverRef = useCallback((element: HTMLElement | null) => {
     cardRef.current = element;
@@ -63,7 +67,9 @@ export function useHoverElevation(): HoverElevation {
     }
     if (hovered) {
       wrapper.setAttribute(HOVER_ATTRIBUTE, "true");
-      return () => wrapper.removeAttribute(HOVER_ATTRIBUTE);
+      return () => {
+        wrapper.removeAttribute(HOVER_ATTRIBUTE);
+      };
     }
     wrapper.removeAttribute(HOVER_ATTRIBUTE);
     return undefined;

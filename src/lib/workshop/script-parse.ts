@@ -213,7 +213,7 @@ export function matchSceneHeading(line: string): SceneHeadingInfo | null {
     /^\d{1,3}\s*[-–—.、]\s*\d{1,3}\s*(?:(场\s*景|场|SCENE)\s*)?((?:内|外|INT\.?|EXT\.?)(?=\s|[:：,.、。]|$))?\s*(.*)$/i.exec(
       s,
     );
-  if (a && (a[1] || a[2])) {
+  if (a && (a[1] !== undefined || a[2] !== undefined)) {
     return {
       heading: s,
       marker: normalizeMarker(a[2]),
@@ -260,7 +260,7 @@ function extractLocationTime(marker: string, tailRaw: string): { location: strin
     }
   }
   const t = TIME_WORDS_RE.exec(tail);
-  if (t?.[1]) {
+  if (t?.[1] !== undefined) {
     const loc = (tail.slice(0, t.index) + tail.slice(t.index + t[1].length))
       .trim()
       .replace(/^[.。、,，:：\-–—\s]+/, "")
@@ -615,7 +615,7 @@ export function matchSceneByHeading(heading: string, scenes: Array<Scene>): Scen
   }
   return (
     scenes.find((sc) => sc.heading === h) ??
-    scenes.find((sc) => sc.heading && (sc.heading.includes(h) || h.includes(sc.heading)))
+    scenes.find((sc) => sc.heading !== "" && (sc.heading.includes(h) || h.includes(sc.heading)))
   );
 }
 
@@ -630,7 +630,7 @@ export function buildShotsFromEntries(
   entries.forEach((entry, i) => {
     const scene = matchSceneByHeading(entry.sceneHeading, scenes);
     const names = entry.characterNames.map((n) => n.trim()).filter(Boolean);
-    const linked = characters.filter((c) => c.name && names.includes(c.name));
+    const linked = characters.filter((c) => c.name !== "" && names.includes(c.name));
     const heading = entry.sceneHeading.trim() || (scene?.heading ?? "") || "未命名场景";
     const shot: Shot = {
       id: workshopUid("shot"),

@@ -109,7 +109,12 @@ export function ConfirmDialog({
   const iconColor = danger ? "text-destructive" : "text-primary-strong";
 
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open={open}>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open={open}
+    >
       <DialogContent
         aria-labelledby={titleId}
         /* 卡片外观由本组件的内部 div 决定（与库里其它自绘弹窗同一惯例）：
@@ -148,7 +153,7 @@ export function ConfirmDialog({
               <h2 className="text-ink text-[15px] leading-tight font-semibold" id={titleId}>
                 {title}
               </h2>
-              {description && (
+              {Boolean(description) && (
                 <div className="text-ink-faint mt-1.5 text-sm leading-relaxed whitespace-pre-line">
                   {description}
                 </div>

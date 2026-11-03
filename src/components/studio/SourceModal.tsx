@@ -64,7 +64,12 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
      监听 + 自绘遮罩 `onClick`，焦点也不会锁在弹窗内、关闭后不归还。
      `open={data !== null}` 与调用方的条件渲染同义，多一层兜底。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open={data !== null}>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open={data !== null}
+    >
       {/* 关闭按钮由下面的 header 自绘 —— 必须关掉基元的内置那枚，
           否则会渲染出两枚重叠的 ✕（见 `ui/dialog` 的 `showCloseButton`）。 */}
       <DialogContent
@@ -87,7 +92,7 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
                 </span>
               </h2>
               <p className="text-ink-muted mt-0.5 text-xs">
-                {data?.isSubgraph
+                {data?.isSubgraph === true
                   ? "当前为子工作流的源文件内容"
                   : "工作流(RAW)格式导入，显示磁盘上的原始文件内容，未做任何转换"}
               </p>
@@ -124,9 +129,9 @@ export function SourceModal({ data, loading, error, onClose }: SourceModalProps)
 
           {/* Body — JsonViewer 自带语法着色 / 折叠 / 搜索 / 滚动。 */}
           <div className="min-h-0 flex-1 overflow-hidden">
-            {loading ? (
+            {loading === true ? (
               <p className="text-ink-muted px-5 py-3 text-sm">加载中…</p>
-            ) : error ? (
+            ) : error !== undefined && error !== "" ? (
               <p className="text-destructive px-5 py-3 text-sm">{error}</p>
             ) : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
             data?.source == null ? (

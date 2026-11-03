@@ -152,10 +152,8 @@ describe("日志行里的路径可点（ISSUE #1365）", () => {
     );
     await expect
       .poll(
-        () =>
-          /* SAFETY: 类型断言已复核 */ mutateMock.mock.calls[0]?.[0] as
-            | { path: string }
-            | undefined,
+        /* SAFETY: 类型断言已复核 */
+        () => mutateMock.mock.calls[0]?.[0] as { path: string } | undefined,
       )
       .toEqual({ path: String.raw`C:\Program Files\PowerShell\7\pwsh.EXE` });
   });

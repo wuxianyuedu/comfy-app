@@ -35,10 +35,12 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
    *  的 `{filename,subfolder,type}` 对象 / 数组而显示成 `[object Object]`），
    *  于是「封装节点选完图在界面上完全看不到」（实测反馈）。这里按类型
    *  切到缩略图；`mediaPreviewUrl` 同时吃字符串与这两种对象 / 数组形态。 */
-  const isImageType = ["IMAGE", "MASK", "IMAGEUPLOAD"].includes(inp.type ?? "");
+  const isImageType = ["IMAGE", "MASK", "IMAGEUPLOAD"].includes(inp.type);
   const previewUrl = isImageType ? mediaPreviewUrl(v) : null;
   const typeCol = portColor(inp.type);
   return (
+    /* SAFETY: 类型断言已复核 */
+    /* SAFETY: 类型断言已复核 */
     <div
       className="group text-2xs relative grid min-h-5.5 py-0.5 pr-2 pl-5"
       data-sub-widget-name={inp.name}
@@ -68,7 +70,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
        *  `max-content` 轨道按**所有行里最长的参数名**统一裁决，
        *  值框因此共享同一起点 x。 */}
       <div className="flex min-w-0 items-center gap-1.5">
-        {io?.ioEditMode && !isConn && (
+        {io?.ioEditMode === true && !isConn && (
           <IoCheckbox
             io={io}
             ioRef={{
@@ -107,9 +109,7 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
       ) : inp.type === "COMBO" &&
         /* SAFETY: 类型断言已复核 */
         Array.isArray((inp as ComboInputMeta).comboOptions) &&
-        /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (
-          (inp as ComboInputMeta).comboOptions as Array<unknown>
-        ).length > 0 ? (
+        ((inp as ComboInputMeta).comboOptions as Array<unknown>).length > 0 ? (
         /* 工作流画布上的 COMBO widget 渲染成只读的
          *  SelectMenu —— 它把当前选中的模型显示成下拉外壳，但
          *  在这里保持禁用（编辑发生在会落盘取值的项目
@@ -120,10 +120,9 @@ export function SubgraphWidgetRow({ inp, label, io, nodeId, hostNodeId }: Subgra
           disabled
           fullWidth
           onChange={() => undefined}
-          options={
-            /* SAFETY: 类型断言已复核 */ /* SAFETY: 类型断言已复核 */ (inp as ComboInputMeta)
-              .comboOptions as Array<string>
-          }
+          /* SAFETY: 类型断言已复核 */
+          /* SAFETY: 类型断言已复核 */
+          options={(inp as ComboInputMeta).comboOptions as Array<string>}
           popoverMinWidth={220}
           value={typeof v === "string" ? v : ""}
         />

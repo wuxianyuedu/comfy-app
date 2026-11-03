@@ -89,18 +89,15 @@ export const NearEdge: Story = {
 /** 四个方向：`side` 只表达「想开在哪边」，撞边时由基元的 `flip` 翻过去。 */
 export const Sides: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <TooltipProvider>
       <div className="flex items-center gap-3">
-        {
-          /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
-            <Tooltip key={side}>
-              <TooltipTrigger render={<Button size="sm" variant="outline" />}>
-                {side}
-              </TooltipTrigger>
-              <TooltipContent side={side}>开在 {side}</TooltipContent>
-            </Tooltip>
-          ))
-        }
+        {(["top", "right", "bottom", "left"] as const).map((side) => (
+          <Tooltip key={side}>
+            <TooltipTrigger render={<Button size="sm" variant="outline" />}>{side}</TooltipTrigger>
+            <TooltipContent side={side}>开在 {side}</TooltipContent>
+          </Tooltip>
+        ))}
       </div>
     </TooltipProvider>
   ),

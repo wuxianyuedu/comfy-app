@@ -9,6 +9,7 @@ import path from "node:path";
 
 import { ViewTabStrip, viewTabLabel } from "./ViewTabStrip";
 import { HOME_VIEW, initialWorkspaceTabs, openViewTab } from "./workspace-tabs";
+import { stripComments } from "../../../tests/helpers/strip-comments";
 
 afterEach(() => {
   cleanup();
@@ -121,18 +122,19 @@ describe("ViewTabStrip", () => {
  */
 const ROOT = path.resolve(__dirname, "../../..");
 
-/** 剥块注释再判：说明文字里提到 `bg-canvas` 不算有人这么写。 */
+/** 剥注释再判：说明文字里提到 `bg-canvas` 不算有人这么写（唯一实现 `tests/helpers/strip-comments`）。
+ * 旧形那条不跟引号状态的块注释正则，会把串里的斜杠紧跟星号当成注释起点一路吃到下一个闭合：
+ * 本判据两份接收者里 `TitleBarTabs.tsx` 实测有 2 行就是这么消失的，另一份没有（ISSUE #2969）。 */
 function codeOf(rel: string): string {
-  return readFileSync(path.join(ROOT, rel), "utf8").replaceAll(/\/\*[\s\S]*?\*\//g, "");
+  return stripComments(readFileSync(path.join(ROOT, rel), "utf8"));
 }
 
 describe("两类页签共用一套选中态（壳内形态 e2e 到不了）", () => {
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      "src/components/studio/ViewTabStrip.tsx",
-      "src/components/studio/TitleBarTabs.tsx",
-    ] as const,
-  )("%s 的 active 分支只走 u-tab-active，不自己写背景", (rel) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    "src/components/studio/ViewTabStrip.tsx",
+    "src/components/studio/TitleBarTabs.tsx",
+  ] as const)("%s 的 active 分支只走 u-tab-active，不自己写背景", (rel) => {
     const code = codeOf(rel);
     expect(
       /active\s*\?\s*"[^"]*u-tab-active[^"]*"/.test(code),

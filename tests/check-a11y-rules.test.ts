@@ -126,7 +126,8 @@ test(
 test("导出面：每个导出都是可调用的（不是「导了没人用」的空壳）", () => {
   /* SAFETY: 类型断言已复核 */
   const mod = loadJudgeModule() as unknown as Record<string, unknown>;
-  const { VERIFIED_SURFACES } = /* SAFETY: 类型断言已复核 */ mod as {
+  /* SAFETY: 类型断言已复核 */
+  const { VERIFIED_SURFACES } = mod as {
     VERIFIED_SURFACES: Record<string, string>;
   };
   for (const key of Object.keys(VERIFIED_SURFACES)) {

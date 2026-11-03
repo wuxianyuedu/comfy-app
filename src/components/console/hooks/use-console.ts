@@ -191,7 +191,7 @@ export function useConsole(): ConsoleController {
             );
             setVerdictOk(false);
           }
-          if (event.truncatedNote) {
+          if (event.truncatedNote !== null && event.truncatedNote !== "") {
             append(`\n${event.truncatedNote}\n`);
           }
           append(`\n[进程已退出，退出码 ${event.code ?? "未知"}]\n`);
@@ -269,7 +269,9 @@ export function useConsole(): ConsoleController {
     setPhase((prev) => (prev === "running" ? prev : "idle"));
   }, []);
 
-  const fill = useCallback((next: string) => setCommand(next), []);
+  const fill = useCallback((next: string) => {
+    setCommand(next);
+  }, []);
 
   const canRun = useMemo(
     () => phase !== "running" && command.trim().length > 0 && command.length <= MAX_COMMAND_CHARS,

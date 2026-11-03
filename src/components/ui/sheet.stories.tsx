@@ -63,27 +63,26 @@ export const Default: Story = {
  */
 export const Sides: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex flex-wrap gap-3">
-      {
-        /* SAFETY: 类型断言已复核 */ (["top", "right", "bottom", "left"] as const).map((side) => (
-          <Sheet key={side}>
-            <SheetTrigger render={<Button variant="outline" />}>side={side}</SheetTrigger>
-            <SheetContent side={side}>
-              <SheetHeader>
-                <SheetTitle>side={side}</SheetTitle>
-                <SheetDescription>
-                  {side === "top" || side === "bottom"
-                    ? "横条：铺满宽度、max-h-3/4"
-                    : "竖条：铺满高度、w-3/4"}
-                </SheetDescription>
-              </SheetHeader>
-              <div className="p-4">
-                <SheetClose render={<Button variant="ghost" />}>关闭</SheetClose>
-              </div>
-            </SheetContent>
-          </Sheet>
-        ))
-      }
+      {(["top", "right", "bottom", "left"] as const).map((side) => (
+        <Sheet key={side}>
+          <SheetTrigger render={<Button variant="outline" />}>side={side}</SheetTrigger>
+          <SheetContent side={side}>
+            <SheetHeader>
+              <SheetTitle>side={side}</SheetTitle>
+              <SheetDescription>
+                {side === "top" || side === "bottom"
+                  ? "横条：铺满宽度、max-h-3/4"
+                  : "竖条：铺满高度、w-3/4"}
+              </SheetDescription>
+            </SheetHeader>
+            <div className="p-4">
+              <SheetClose render={<Button variant="ghost" />}>关闭</SheetClose>
+            </div>
+          </SheetContent>
+        </Sheet>
+      ))}
     </div>
   ),
 };
@@ -115,7 +114,12 @@ function ControlledDemo() {
   const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button onClick={() => setOpen(true)} variant="outline">
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+        variant="outline"
+      >
         受控打开（右侧）
       </Button>
       <Sheet onOpenChange={setOpen} open={open}>

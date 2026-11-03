@@ -67,7 +67,9 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
       <Hint label={`${label}（点击管理模型标签绑定）`}>
         <Button
           className="border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink text-2xs inline-flex h-auto max-w-65 gap-1.5 rounded-lg px-2.5 py-1.5"
-          onClick={() => setOpen((value) => !value)}
+          onClick={() => {
+            setOpen((value) => !value);
+          }}
           size="xs"
           variant="outline"
         >
@@ -102,7 +104,9 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
                       : "text-ink-strong hover:bg-subtle font-normal"
                   }`}
                   key={name}
-                  onClick={() => toggle(name)}
+                  onClick={() => {
+                    toggle(name);
+                  }}
                   size="xs"
                   variant="ghost"
                 >
@@ -140,7 +144,9 @@ export function ModelTagPicker({ meta }: { meta: MetaEditorController }) {
           <DialogFooter className="mx-0 mb-0 gap-2 rounded-none border-0 bg-transparent p-0 sm:flex-row">
             <Button
               className="bg-subtle text-ink-strong hover:bg-surface-2 h-auto flex-1 rounded-md px-3 py-1.5 text-xs transition-colors"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setOpen(false);
+              }}
               type="button"
               variant="secondary"
             >

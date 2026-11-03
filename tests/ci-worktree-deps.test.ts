@@ -37,9 +37,7 @@ describe("依赖面体检：装没装上", () => {
   });
 
   it("读数里点明「这与用例红是两件事」—— 那一屏的原文就是 AggregateError", () => {
-    const text = describeWorktreeDeps(
-      worktreeDepsProblem({ installed: false }),
-    );
+    const text = describeWorktreeDeps(worktreeDepsProblem({ installed: false }));
     expect(text).toContain("AggregateError");
     expect(text).toContain("不是用例红");
     /* 这一档**不是绿也不是红**：不许被读成任何一种结论。 */
@@ -74,8 +72,7 @@ describe("依赖面体检：npm_config_* 干净不干净", () => {
   it("空串 / 只有空白不算「置着」（与 `emptyStringAsUndefined` 同一口径）", () => {
     for (const v of ["", "   "]) {
       expect(
-        worktreeDepsProblem({ installed: true, env: { npm_config_prefix: v } })
-          .ok,
+        worktreeDepsProblem({ installed: true, env: { npm_config_prefix: v } }).ok,
         `值 ${JSON.stringify(v)} 不该被读成「置着」`,
       ).toBe(true);
     }
@@ -95,8 +92,6 @@ describe("依赖面体检：npm_config_* 干净不干净", () => {
     expect(NPM_CONFIG_KEYS).toContain("npm_config_prefix");
     expect(NPM_CONFIG_KEYS).toContain("npm_config_store_dir");
     /* `npm_package_*` 是 pnpm 给 lifecycle 脚本的，不是症状。 */
-    expect(NPM_CONFIG_KEYS.some((k) => k.startsWith("npm_package"))).toBe(
-      false,
-    );
+    expect(NPM_CONFIG_KEYS.some((k) => k.startsWith("npm_package"))).toBe(false);
   });
 });

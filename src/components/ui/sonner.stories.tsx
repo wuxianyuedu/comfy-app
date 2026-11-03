@@ -66,7 +66,14 @@ function ToastDemo() {
       <Toaster />
       <div className="flex flex-wrap gap-2">
         {["default", "success", "info", "warning", "error"].map((kind) => (
-          <Button key={kind} onClick={() => fire(kind)} size="sm" variant="outline">
+          <Button
+            key={kind}
+            onClick={() => {
+              fire(kind);
+            }}
+            size="sm"
+            variant="outline"
+          >
             {kind}
           </Button>
         ))}

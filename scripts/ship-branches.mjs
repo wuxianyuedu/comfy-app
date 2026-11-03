@@ -41,8 +41,15 @@ import { cnbJson } from "./ship-exec.mjs";
 import { asArray } from "./ship-build.mjs";
 import { CODE, pullRecordForBranch } from "./ship-core.mjs";
 
-/** 翻页上限：8 页 = 800 条 PR。到顶会明说「只看了前 N 条」，不把截断念成全部。 */
-export const BRANCH_PULL_MAX_PAGES = 8;
+/**
+ * 防失控上限（ISSUE #3058）：**不是**取数窗口的目标大小 —— 正常终止只看平台形状
+ * （`has_more`/`next` 说没有更多、不足页、空页），这一格只在「平台页页都满、永远
+ * 说还有」时兜底，防退化无限翻。取 64 页 = 6400 条，远高于本仓 PR 总量（3000+
+ * 编号段）；撞到它必须显式报「取不满」（已翻几页 / 取了几条），不许静默截断。
+ * （前身是 8 页硬顶 = 800 条：PR 总量过 800 后窗口恒取不满，窗外分支全落
+ * `no-pull-in-window`，入口覆盖只剩约三成 —— 那是把「防失控」误当成了「窗口」。）
+ */
+export const BRANCH_PULL_MAX_PAGES = 64;
 
 /** 每页条数（平台侧 page-size 上限按 100 用，与 `--claims` 同形）。 */
 export const BRANCH_PULL_PAGE_SIZE = 100;
@@ -149,13 +156,51 @@ export function readLocalRefs(run, remote = "origin") {
 }
 
 /**
+ * `list-pulls` 应答里「还有下一页」的读数：**确认真 / 确认假 / 缺键**三态
+ * （ISSUE #3058，缺键口径与 #3059 同族 —— 键不在不等于「没有更多」）。
+ * 认两种平台形状：`has_more` / `hasMore`（布尔）与 `next`（非 null ⇒ 还有，
+ * 显式 `null` ⇒ 没有）。都认不到 ⇒ `null`，调用方回落「不足页」判断。
+ *
+ * @param {any} json 应答整体（键按惯例在 `data` 层；`data` 不是对象就看顶层，不猜更深）
+ * @returns {boolean | null}
+ */
+export function readListHasMore(json) {
+  if (!json || typeof json !== "object") {
+    return null;
+  }
+  /* 键可能在 data 层、也可能贴着信封顶层；data 是数组（清单本体）时不算候选。 */
+  const bags = [json.data, json].filter(
+    (b) => b && typeof b === "object" && !Array.isArray(b),
+  );
+  for (const bag of bags) {
+    for (const key of ["has_more", "hasMore"]) {
+      if (typeof bag[key] === "boolean") {
+        return bag[key];
+      }
+    }
+    if ("next" in bag) {
+      return bag.next !== null && bag.next !== undefined;
+    }
+  }
+  return null;
+}
+
+/**
  * 翻 PR 列表。**取不到就是取不到**：返回 `ok:false` 让调用方落「没结论」，
  * 不许拿一份空列表去判「这些分支都没提过 PR」。
+ *
+ * 终止只看平台形状（ISSUE #3058），**没有页数目标**：
+ *   1. `has_more`/`next` 键在 ⇒ 听它的（`false` 停、`true` 继续 —— 哪怕这页不满）；
+ *   2. 键缺（`readListHasMore` 回 `null`）⇒ 回落「不足页 ⇒ 没有下一页」；
+ *   3. **空页必停**：平台说还有却给空页是平台说谎，不跟它无限翻（按没取满收）；
+ *   4. 都挡不住 ⇒ 防失控上限 `BRANCH_PULL_MAX_PAGES`，撞线**显式报「取不满」**。
  *
  * @param {(cmd:string,args:string[])=>any} run
  * @param {string} slug
  * @param {{maxPages?: number, pageSize?: number}} [opts]
- * @returns {{ok: boolean, pulls: any[], pages: number, windowComplete: boolean, oldest: number|null, note: string|null}}
+ * @returns {{ok:boolean, pulls:any[], pages:number, windowComplete:boolean, oldest:number|null, note:string|null, stopReason:string|null, hasMoreKey:boolean}}
+ *   `stopReason` ∈ has-more-false / short-page / empty-page / ceiling（见上面终止条件四档）；
+ *   `hasMoreKey` = 这趟有没有见到平台的翻页键（缺键路径与 #3059 缺键同族，账上要看得出）。
  */
 export function fetchPullsForBranches(run, slug, opts = {}) {
   const maxPages = opts.maxPages ?? BRANCH_PULL_MAX_PAGES;
@@ -163,6 +208,22 @@ export function fetchPullsForBranches(run, slug, opts = {}) {
   /** @type {any[]} */
   const pulls = [];
   let pages = 0;
+  let hasMoreKey = false;
+  /**
+   * @param {boolean} complete
+   * @param {any} stopReason
+   * @param {string|null} note
+   */
+  const done = (complete, stopReason, note) => ({
+    ok: true,
+    pulls,
+    pages,
+    windowComplete: complete,
+    oldest: oldestNumber(pulls),
+    note,
+    stopReason,
+    hasMoreKey,
+  });
   for (let page = 1; page <= maxPages; page += 1) {
     const got = cnbJson(run, [
       "pulls",
@@ -185,6 +246,8 @@ export function fetchPullsForBranches(run, slug, opts = {}) {
         windowComplete: false,
         oldest: null,
         note: `第 ${page} 页取不到（cnb 没跑起来或响应不是 JSON）⇒ 整格没有结论`,
+        stopReason: null,
+        hasMoreKey,
       };
     }
     const list = asArray(got.json);
@@ -196,29 +259,38 @@ export function fetchPullsForBranches(run, slug, opts = {}) {
         windowComplete: false,
         oldest: null,
         note: `第 ${page} 页的形状认不出来 ⇒ 整格没有结论`,
+        stopReason: null,
+        hasMoreKey,
       };
+    }
+    const more = readListHasMore(got.json);
+    if (more !== null) {
+      hasMoreKey = true;
     }
     pulls.push(...list);
     pages = page;
-    if (list.length < pageSize) {
-      return {
-        ok: true,
-        pulls,
-        pages,
-        windowComplete: true,
-        oldest: oldestNumber(pulls),
-        note: null,
-      };
+    if (list.length === 0) {
+      /* 空页必停（防退化无限翻的硬保证）：平台没喊「还有」⇒ 正常取满；
+       * 喊了「还有」却给空页 ⇒ 平台说谎，按取不满如实报。 */
+      return more === true
+        ? done(false, "empty-page", `第 ${page} 页是空页，而平台 has-more 键仍说还有 ⇒ 不信它，按取不满收`)
+        : done(true, "empty-page", null);
     }
+    if (more === false) {
+      return done(true, "has-more-false", null);
+    }
+    if (more === null && list.length < pageSize) {
+      return done(true, "short-page", null);
+    }
+    /* more === true（听平台的，哪怕这页不满），或缺键而满页（回落：满页 ⇒ 可能有下一页）⇒ 继续。 */
   }
-  return {
-    ok: true,
-    pulls,
-    pages,
-    windowComplete: false,
-    oldest: oldestNumber(pulls),
-    note: `只翻了 ${pages} 页（${pages * pageSize} 条）就到顶 —— 窗口外的分支只能给「没取到」`,
-  };
+  return done(
+    false,
+    "ceiling",
+    `**取不满**：防失控上限 ${maxPages} 页（已取 ${pulls.length} 条）翻满，而${
+      hasMoreKey ? "平台的 has-more 键仍说还有" : "平台不给 has-more 键、页页都满"
+    } —— 窗口外的分支只能给「没取到」`,
+  );
 }
 
 /** 一批 PR 记录里最小的编号（用来把「窗口下探到哪」念出来）。 */

@@ -38,7 +38,8 @@ let target: string | null = null;
 
 /** 面板读取本次运行转录文件的路径（服务端路由用）。 */
 export function panelCaptureLogPath(): string {
-  if (target) {
+  /* 转录文件路径是拼出来的绝对路径，空串不可能出现 */
+  if (target !== null) {
     return target;
   }
   let boot = "unknown";
@@ -237,12 +238,9 @@ export function installStreamCapture(): void {
       } catch {
         /* 转录失败不吞掉输出本身 */
       }
-      return original.call(
-        stream,
-        chunk,
-        /* SAFETY: 类型断言已复核 */ encodingOrCb as never,
-        /* SAFETY: 类型断言已复核 */ cb as never,
-      );
+      /* SAFETY: 类型断言已复核 */
+      /* SAFETY: 类型断言已复核 */
+      return original.call(stream, chunk, encodingOrCb as never, cb as never);
     };
     stream.write = patched;
   };

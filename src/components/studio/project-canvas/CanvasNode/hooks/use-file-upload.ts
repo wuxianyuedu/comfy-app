@@ -30,10 +30,12 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
      * 会得到一个没人接的 Promise（eslint 的 no-misused-promises 直接拦）。 */
     onPick: (f) => {
       void uploadImageFile(f)
-        .then((name) => patch({ [uploadTo.current]: name, upstreamId: undefined }))
-        .catch((error: unknown) =>
-          patch({ error: errorMessage(error, "上传失败"), status: "error" }),
-        );
+        .then((name) => {
+          patch({ [uploadTo.current]: name, upstreamId: undefined });
+        })
+        .catch((error: unknown) => {
+          patch({ error: errorMessage(error, "上传失败"), status: "error" });
+        });
     },
   });
 
@@ -51,10 +53,12 @@ export function useFileUpload({ patch }: UseFileUploadArgs) {
     accept: "image/*,video/*",
     onPick: (f) => {
       void uploadMediaFile(f)
-        .then(({ name }) => patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined }))
-        .catch((error: unknown) =>
-          patch({ error: errorMessage(error, "上传失败"), status: "error" }),
-        );
+        .then(({ name }) => {
+          patch({ mediaPath: name, mediaName: f.name, upstreamId: undefined });
+        })
+        .catch((error: unknown) => {
+          patch({ error: errorMessage(error, "上传失败"), status: "error" });
+        });
     },
   });
 

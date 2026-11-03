@@ -102,7 +102,9 @@ describe("resetLayout", () => {
     const detail = makeDetail({ positions });
     const { result, setDetail, mutate } = renderReset({ detail });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     /* 顶层视图 → 空串 scope。 */
     expect(mutate).toHaveBeenCalledTimes(1);
@@ -127,7 +129,9 @@ describe("resetLayout", () => {
       reloadView,
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(reloadView).toHaveBeenCalledTimes(1);
     /* 有重拉就不再自己 fit：重拉回来的数据会触发一次新的 fit。 */
@@ -151,7 +155,9 @@ describe("resetLayout", () => {
       detail,
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     /* 子图内部节点的坐标属于下钻视图，顶层重置不该碰。 */
     expect(readWrittenPositions(setDetail, detail)).toEqual({
@@ -167,7 +173,9 @@ describe("resetLayout", () => {
     const detail = makeDetail({ positions: null });
     const { result, setDetail } = renderReset({ detail });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(readWrittenPositions(setDetail, detail)).toBeNull();
   });
@@ -192,12 +200,12 @@ describe("resetLayout · 子图 id 命名空间", () => {
       hostNodeId: "4",
     });
 
-    act(() =>
+    act(() => {
       result.current.onNodeDragStop(
         {},
         { id: "1001", type: "wfNode", position: { x: 30, y: 0 }, data: {} },
-      ),
-    );
+      );
+    });
 
     /* 锚点反演：wfNode 的 y 要加回 NODE_TITLE_H(30)。 */
     expect(mutate.mock.calls.at(-1)![0]).toMatchObject({
@@ -217,12 +225,12 @@ describe("resetLayout · 子图 id 命名空间", () => {
       hostNodeId: "4:5",
     });
 
-    act(() =>
+    act(() => {
       result.current.onNodeDragStop(
         {},
         { id: "1670", type: "wfNode", position: { x: 10, y: 20 }, data: {} },
-      ),
-    );
+      );
+    });
 
     expect(mutate.mock.calls.at(-1)![0]).toMatchObject({
       positions: { "4:5:1670": [10, 50] },
@@ -254,7 +262,9 @@ describe("resetLayout · 子图 id 命名空间", () => {
       hostNodeId: "4",
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(mutate.mock.calls.at(-1)![0]).toEqual({
       id: "wf-1",
@@ -285,7 +295,9 @@ describe("resetLayout · 子图 id 命名空间", () => {
       hostNodeId: "4:5",
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(mutate.mock.calls.at(-1)![0]).toEqual({
       id: "wf-1",
@@ -313,7 +325,9 @@ describe("resetLayout · 子图 id 命名空间", () => {
       reloadView,
     });
 
-    act(() => result.current.resetLayout());
+    act(() => {
+      result.current.resetLayout();
+    });
 
     expect(reloadView).toHaveBeenCalledTimes(1);
   });

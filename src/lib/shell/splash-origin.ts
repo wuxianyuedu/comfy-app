@@ -47,7 +47,8 @@ export const SPLASH_ORIGINS: ReadonlyArray<string> = [
  * 都可能让它们分叉 —— 收在本仓库的门禁 `check-non-null-assertions.cjs` 里。
  */
 export function isSplashOrigin(origin: string | null): origin is string {
-  if (!origin) {
+  /* 白名单里只有完整的绝对源，空串不可能命中，缺省只看 null */
+  if (origin === null) {
     return false;
   }
   return SPLASH_ORIGINS.includes(origin);

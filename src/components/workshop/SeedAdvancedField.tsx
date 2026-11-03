@@ -43,7 +43,9 @@ export function SeedAdvancedField({ value, onChange, disabled }: SeedAdvancedFie
           <Button
             className="text-muted-foreground hover:text-ink h-7 gap-1 px-2"
             disabled={disabled}
-            onClick={() => onChange("")}
+            onClick={() => {
+              onChange("");
+            }}
             size="xs"
             type="button"
             variant="ghost"

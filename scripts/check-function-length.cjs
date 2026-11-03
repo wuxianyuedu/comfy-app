@@ -415,7 +415,9 @@ if (REPORT_ONLY) {
   if (longFunctions.length) {
     gatePass("函数长度", `超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个（只出清单）`, {
       subject: `${SCAN_DIR}/**`,
-      out: (line) => console.log(line),
+      out: (line) => {
+        console.log(line);
+      },
     });
     for (const line of indentItems(longFunctions.map(fmt))) {
       console.log(line);
@@ -433,9 +435,7 @@ if (longFunctions.length) {
     subject: `${SCAN_DIR}/**`,
     detail: `超过 ${HINT_LINES} 行的函数 ${longFunctions.length} 个`,
     hint:
-      `判据：函数体超过 ${
-      HINT_LINES
-      } 行即应拆分（按职责切子函数 / 子组件 / 子 hook），\n` +
+      `判据：函数体超过 ${HINT_LINES} 行即应拆分（按职责切子函数 / 子组件 / 子 hook），\n` +
       `不是靠「在一个函数里加注释分段」（规范 §12.13）。\n` +
       `本判据是硬闸（无基线、无 --update）：巨型函数存量已清零，新增即阻断。`,
   });

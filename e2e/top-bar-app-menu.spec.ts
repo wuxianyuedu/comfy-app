@@ -24,9 +24,7 @@ async function openWorkspace(page: Page) {
 }
 
 test.describe("顶栏应用菜单 @critical", () => {
-  test("触发按钮带 aria-haspopup=menu（menu 的触发 props 没被 Hint 吞掉）", async ({
-    page,
-  }) => {
+  test("触发按钮带 aria-haspopup=menu（menu 的触发 props 没被 Hint 吞掉）", async ({ page }) => {
     const trigger = await openWorkspace(page);
     await expect(trigger).toHaveAttribute("aria-haspopup", "menu");
   });

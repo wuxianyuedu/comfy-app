@@ -76,20 +76,24 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
   const ioPreviewOpen = useIOEditStore(selectIoPreviewOpen);
   const debugMode = useDebugStore((state) => state.debugMode);
   const toggleDebugMode = useDebugStore((state) => state.toggleDebugMode);
+  /* detail 类型上恒真（WorkflowDetail），这里保运行期「尚未就绪」的防御判据。 */
+  const detailReady = Boolean(detail);
   /* 开关编辑模式 / 预览一律走 store 动作（不要再手写 `ioApi.setState(...)`）：
    *  关编辑模式连带走预览、关预览连带走编辑模式，两层耦合都落在 store 里。
    *  绕过动作直接写状态就会留下「没有勾选框的预览面板」，或反过来留下
    *  「面板已消失、勾选框还挂在节点上」的半截状态。 */
   const setIoEditMode = useCallback(
-    (v: boolean | ((prev: boolean) => boolean)) =>
-      ioApi.getState().setIoEditMode(typeof v === "function" ? v(ioApi.getState().ioEditMode) : v),
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      ioApi.getState().setIoEditMode(typeof v === "function" ? v(ioApi.getState().ioEditMode) : v);
+    },
     [ioApi],
   );
   const setIoPreviewOpen = useCallback(
-    (v: boolean | ((prev: boolean) => boolean)) =>
+    (v: boolean | ((prev: boolean) => boolean)) => {
       ioApi
         .getState()
-        .setIoPreviewOpen(typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v),
+        .setIoPreviewOpen(typeof v === "function" ? v(ioApi.getState().ioPreviewOpen) : v);
+    },
     [ioApi],
   );
   const toast = useToast();
@@ -225,7 +229,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
             <Hint label="强制重载（清 sessionStorage + 跳过 server LRU + 重拉数据）">
               <Button
                 className="text-2xs ml-1 h-auto rounded-md px-2 py-0.5"
-                onClick={() => forceReloadDetail(viewHostNodeId)}
+                onClick={() => {
+                  forceReloadDetail(viewHostNodeId);
+                }}
                 variant="danger"
               >
                 <RotateCw data-icon="inline-start" size={10} strokeWidth={2.5} />
@@ -248,8 +254,10 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               </>
             )}
           </p>
-          {detail.sourcePath ? (
-            detail.sourceMissing ? (
+          {detail.sourcePath !== undefined &&
+          detail.sourcePath !== null &&
+          detail.sourcePath !== "" ? (
+            detail.sourceMissing === true ? (
               <p className="border-destructive/30 bg-destructive/10 text-danger-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">本地文件已丢失：</span>
                 <span className="truncate font-mono" title={detail.sourcePath}>
@@ -259,7 +267,7 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
                   · 修改保存后刷新将自动重连
                 </span>
               </p>
-            ) : detail.sourceOutdated ? (
+            ) : detail.sourceOutdated === true ? (
               <p className="border-warning/30 bg-warning/10 text-warning-strong text-2xs mt-1 flex items-center gap-1.5 rounded-md border px-2 py-1">
                 <span className="font-semibold">磁盘文件有更新</span>
                 <span className="opacity-80">· 回工作流库点「同步」拉取最新内容</span>
@@ -319,7 +327,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         <Hint label="进入 IO 编辑模式：在每个节点参数前显示勾选框，勾选即把该参数暴露为工作流的外部输入或输出。退出编辑模式时会一并关闭 IO 预览">
           <Button
             className={topBarButtonClass(ioEditMode ? "ioOn" : "outline", "compact")}
-            onClick={() => setIoEditMode((value) => !value)}
+            onClick={() => {
+              setIoEditMode((value) => !value);
+            }}
             variant="ghost"
           >
             {ioEditMode ? "✓ 编辑 IO 中" : "📌 编辑 IO"}
@@ -351,7 +361,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
               "disabled:opacity-40",
             )}
             disabled={!ioEditMode && !ioPreviewOpen && Object.keys(workflowIO).length === 0}
-            onClick={() => setIoPreviewOpen((value) => !value)}
+            onClick={() => {
+              setIoPreviewOpen((value) => !value);
+            }}
             variant="ghost"
           >
             {ioPreviewOpen ? "👁 关闭预览" : "👁 预览 IO"}
@@ -363,9 +375,9 @@ export const WorkflowEditorTopBar = React.memo(function WorkflowEditorTopBar({
         <Hint label="查看当前工作流的 RAW 源码（基于磁盘已保存版本，未保存的画布修改不在内）" wrap>
           <Button
             className={topBarButtonClass("outline", "compact", "disabled:opacity-40")}
-            disabled={!detail}
+            disabled={!detailReady}
             onClick={() => {
-              if (!detail) {
+              if (!detailReady) {
                 toast.info("工作流尚未加载完成");
                 return;
               }

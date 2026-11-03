@@ -34,7 +34,7 @@ export function seedModeOverrides(
   const out: Array<{ name: string; nodeId: string; value: string }> = [];
   for (const [ioKey, mode] of Object.entries(seedModes)) {
     const entry = io[ioKey];
-    if (!entry?.nodeId || !mode) {
+    if (entry?.nodeId === undefined || entry.nodeId === "" || !mode) {
       continue;
     }
     out.push({

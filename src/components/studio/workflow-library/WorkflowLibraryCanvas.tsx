@@ -275,7 +275,9 @@ function WorkflowLibraryCanvasInner({
    *  三条退出路径都置 `fitted`（fitView 完成 / 视口首次变化 / 兜底定时器），
    *  任一条都不会让画布停在「永远不显形」上。 */
   const [fitted, setFitted] = useState(false);
-  const markFitted = useCallback(() => setFitted(true), []);
+  const markFitted = useCallback(() => {
+    setFitted(true);
+  }, []);
   const handleInit = useCallback(
     (instance: ReactFlowInstance) => {
       void instance.fitView(libraryFitViewOptions()).then(markFitted, markFitted);
@@ -286,7 +288,9 @@ function WorkflowLibraryCanvasInner({
    *  定时器只负责「别让画布卡在不可见」，不参与缩放口径。 */
   useEffect(() => {
     const timer = window.setTimeout(markFitted, 600);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [markFitted]);
 
   /* React Flow 通过 Delete / Backspace 删除选中线时回调：解析出每条线对应的
@@ -461,7 +465,7 @@ function WorkflowLibraryCanvasInner({
       {/* 落点失败的原因：贴在画布左下角，4 秒后自己消失（不只读，可直接重试）。
           上一版由自绘连线层给出，换 React Flow 后由 `onConnectEnd` 补回来 ——
           「拖了没反应」不许是静默的。 */}
-      {flow.dropHint && (
+      {flow.dropHint !== null && flow.dropHint !== "" && (
         // p71-allow:start workshop 域 amber 装饰色 · 拖线未落定的临时提示、非状态色（对齐 §3.6.1 与「amber 是 workshop 域专有」）
         <div
           className="z-canvas-ui text-2xs pointer-events-none absolute bottom-2 left-2 max-w-105 rounded-lg bg-amber-100 px-2.5 py-1.5 text-amber-800 shadow-sm"
@@ -491,7 +495,9 @@ function WorkflowLibraryCanvasInner({
           <Button
             aria-label="取消选中"
             className="text-primary-strong hover:bg-primary-500/20"
-            onClick={() => setSelectedEdgeIds(new Set())}
+            onClick={() => {
+              setSelectedEdgeIds(new Set());
+            }}
             size="icon-xs"
             type="button"
             variant="ghost"

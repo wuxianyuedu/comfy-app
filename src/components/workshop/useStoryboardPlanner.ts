@@ -198,7 +198,9 @@ export function useStoryboardPlanner(props: Props) {
           raws.forEach((raw) => {
             n += 1;
             const charIds = characters
-              .filter((character) => character.name && raw.characterNames.includes(character.name))
+              .filter(
+                (character) => character.name !== "" && raw.characterNames.includes(character.name),
+              )
               .map((character) => character.id);
             const shot: Shot = {
               id: workshopUid("shot"),

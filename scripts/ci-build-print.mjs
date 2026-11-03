@@ -164,6 +164,15 @@ export function formatOutcome(outcome, extra = {}) {
   for (const s of outcome.failed) {
     lines.push(`${tag}   红的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`);
   }
+  /* endStage 那一族的红**单独一行**念（ISSUE #3047：此前它整族不出现，镜像格红了诊断上
+   * 一个字都看不见）。分开念而不是并到上面那句里，是因为两边的语义不同：上面那一行是
+   * 「这一跑没验证过、去查产物」，这一行是「这一格自己坏了，但它不改流水线结论」——
+   * 平台与本项目都是这么定的（`ci-build-classify.mjs` 的 `ENDSTAGE_ID` 那段）。 */
+  for (const s of outcome.endFailed) {
+    lines.push(
+      `${tag}   红在 endStage：${s.name || s.id}（${s.id}，status=${s.status}）· 不计入流水线判决`,
+    );
+  }
   for (const s of outcome.cancelled) {
     lines.push(`${tag}   被取消的那一格：${s.name || s.id}（${s.id}，status=${s.status}）`);
   }

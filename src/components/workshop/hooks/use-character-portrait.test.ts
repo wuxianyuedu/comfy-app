@@ -68,7 +68,9 @@ function stallLocal() {
         resolveTask = resolve;
       }),
   );
-  return (value: { taskId: string; url: string }) => resolveTask(value);
+  return (value: { taskId: string; url: string }) => {
+    resolveTask(value);
+  };
 }
 
 const character = makeCharacter();

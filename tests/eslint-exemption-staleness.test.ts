@@ -26,14 +26,14 @@ type FakeMessage = {
   fatal?: boolean;
   message?: string;
   ruleId?: string | null;
-}
+};
 type FakeLinter = {
   verify: (code: string, config: unknown, opts: { filename: string }) => Array<FakeMessage>;
-}
+};
 
 /** 判据的导出面（与 `scripts/check-eslint-exemptions.cjs` 的 `module.exports` 对齐）。 */
 type JudgeModule = {
-  FILE_LEVEL_EXEMPTIONS: Array<{ removalCriterion: string; ruleId: string; }>;
+  FILE_LEVEL_EXEMPTIONS: Array<{ removalCriterion: string; ruleId: string }>;
   isGlobEntry: (entry: string) => boolean;
   judge: (input: JudgeInput) => {
     entries: number;
@@ -61,7 +61,7 @@ type JudgeModule = {
     scanned: number;
     violating: Array<string>;
   };
-}
+};
 
 type JudgeInput = {
   entries: Array<string>;
@@ -71,7 +71,7 @@ type JudgeInput = {
   ruleId: string;
   scanned: number;
   violating: Array<string>;
-}
+};
 
 /* 与 `tests/helpers/a11y-effective-config.ts` 同一形状：`.cjs` 判据用 `createRequire` 拿，
  * 加载失败**抛**出去不吞（吞了就是把「判据没跑起来」读成「没有陈旧豁免」）。 */
@@ -210,7 +210,7 @@ test("scanViolations：命中 / 未命中 / 读不到 / 解析失败 四种形�
     root: REAL_ROOT,
     readFile: (abs: string) => {
       const key = Object.keys(CONTENT).find((k) => abs.endsWith(k));
-      if (!key) {
+      if (key === undefined || key === "") {
         throw Object.assign(new Error("no such file"), { code: "ENOENT" });
       }
       const text = CONTENT[key];

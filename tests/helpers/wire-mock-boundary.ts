@@ -56,8 +56,7 @@ export function runtimeLogMockBoundary<
   const runtimeLogFile = `${process.env.TMPDIR ?? "/tmp"}/${tag}-${process.pid}-${Date.now()}/app-runtime.log`;
   return {
     ...actual,
-    createAppRuntimeLogger: (ns: string) =>
-      actual.createAppRuntimeLogger(ns, runtimeLogFile),
+    createAppRuntimeLogger: (ns: string) => actual.createAppRuntimeLogger(ns, runtimeLogFile),
   };
 }
 

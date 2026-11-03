@@ -58,6 +58,7 @@ export function ShotRow({
   const linkedChars = characters.filter((character) => shot.characterIds.includes(character.id));
   /* 本镜头的实时生成进度（ComfyUI 当前节点 + 百分比）。 */
   const progress = progressByShot?.[shot.id];
+  const progressLabel = progress?.label;
   return (
     <div className="border-border bg-surface rounded-xl border p-4">
       <div className="mb-2 flex items-center gap-2">
@@ -67,7 +68,9 @@ export function ShotRow({
         <Button
           aria-label="删除镜头"
           className="text-muted-foreground hover:text-danger-strong ml-auto"
-          onClick={() => onRemove(shot.id)}
+          onClick={() => {
+            onRemove(shot.id);
+          }}
           size="icon-sm"
           variant="ghost"
         >
@@ -82,13 +85,14 @@ export function ShotRow({
             <SelectMenu
               {...field}
               className="bg-subtle! border-border! text-xs"
-              labels={/* SAFETY: 类型断言已复核 */ SHOT_TYPE_LABELS as Record<string, string>}
-              onChange={(value) =>
+              /* SAFETY: 类型断言已复核 */
+              labels={SHOT_TYPE_LABELS as Record<string, string>}
+              onChange={(value) => {
                 onUpdate(shot.id, {
                   /* SAFETY: 类型断言已复核 */
                   shotType: value as ShotType,
-                })
-              }
+                });
+              }}
               /* 清单的唯一出处是 readonly（类型由它派生），而 `SelectMenu.options` 至今是
                * 可变 `string[]` —— 这一份浅拷贝是两边口径的接缝，不是新的真相。 */
               options={[...SHOT_TYPES]}
@@ -107,7 +111,9 @@ export function ShotRow({
               labels={Object.fromEntries(
                 styles.map((style) => [style.slug, `${style.icon} ${style.name}`]),
               )}
-              onChange={(value) => onUpdate(shot.id, { skillSlug: value || undefined })}
+              onChange={(value) => {
+                onUpdate(shot.id, { skillSlug: value || undefined });
+              }}
               options={styles.map((style) => style.slug)}
               placeholder="跟随角色/默认"
               value={shot.skillSlug ?? ""}
@@ -119,7 +125,9 @@ export function ShotRow({
       {/* Description */}
       <Textarea
         className="field-sizing-normal border-border bg-bg text-ink placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 mt-2 min-h-0 rounded-md px-2 py-1.5 text-xs"
-        onChange={(event) => onUpdate(shot.id, { description: event.target.value })}
+        onChange={(event) => {
+          onUpdate(shot.id, { description: event.target.value });
+        }}
         placeholder="画面描述（留空则使用场景动作描述）"
         rows={2}
         value={shot.description}
@@ -136,13 +144,13 @@ export function ShotRow({
                 <Button
                   className="h-auto rounded-full px-2 py-0.5"
                   key={character.id}
-                  onClick={() =>
+                  onClick={() => {
                     onUpdate(shot.id, {
                       characterIds: on
                         ? shot.characterIds.filter((id) => id !== character.id)
                         : [...shot.characterIds, character.id],
-                    })
-                  }
+                    });
+                  }}
                   size="xs"
                   variant={on ? "default" : "outline"}
                 >
@@ -167,7 +175,7 @@ export function ShotRow({
                 size="xs"
                 variant="ghost"
               >
-                {polishBusy ? "润色中…" : "✨ AI 润色"}
+                {polishBusy === true ? "润色中…" : "✨ AI 润色"}
               </Button>
             </Hint>
           )}
@@ -175,7 +183,9 @@ export function ShotRow({
         <p className="text-ink/80 text-xs leading-relaxed wrap-break-word">
           {shot.prompt || "填写描述后自动生成…"}
         </p>
-        {polishError && <p className="text-danger-strong text-2xs mt-1">{polishError}</p>}
+        {polishError !== undefined && polishError !== null && polishError !== "" && (
+          <p className="text-danger-strong text-2xs mt-1">{polishError}</p>
+        )}
         {linkedChars.length > 0 && (
           <p className="text-primary/70 mt-1 text-xs">
             关联角色：
@@ -190,7 +200,11 @@ export function ShotRow({
       {shot.status === "running" && (
         <div aria-live="polite" className="mt-2">
           <ProgressBar
-            label={progress?.label ? `正在执行 ${progress.label}` : "正在生成…"}
+            label={
+              progressLabel !== undefined && progressLabel !== ""
+                ? `正在执行 ${progressLabel}`
+                : "正在生成…"
+            }
             value={progress?.pct ?? null}
           />
         </div>
@@ -200,7 +214,9 @@ export function ShotRow({
       <Button
         className="mt-2 h-auto w-full rounded-lg py-2"
         disabled={shot.status === "running" || generating || !shot.prompt}
-        onClick={() => onGenerate(shot)}
+        onClick={() => {
+          onGenerate(shot);
+        }}
         size="xs"
         variant="primary-solid"
       >
@@ -213,7 +229,7 @@ export function ShotRow({
             : "生成此镜头"}
       </Button>
 
-      {shot.imageUrl && (
+      {shot.imageUrl !== undefined && shot.imageUrl !== "" && (
         <MediaThumbnail
           alt={shot.sceneHeading}
           className="border-border mt-2 w-full rounded-lg border"

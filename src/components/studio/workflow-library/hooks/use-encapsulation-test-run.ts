@@ -172,7 +172,9 @@ export function useEncapsulationTestRun({
                * 产物 / 终态写进运行登记表 —— 切到「画布节点」页签再切回来时，
                * 这一页的运行视角才不会清零。 */
               watchWorkflowRun(id, {
-                onProgress: (_taskId, pct) => reportProgress(pct),
+                onProgress: (_taskId, pct) => {
+                  reportProgress(pct);
+                },
                 onLog: (taskId, entry) => {
                   appendWorkflowRunLog(taskId, entry);
                 },

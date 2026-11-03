@@ -178,9 +178,8 @@ describe("advanceRunLoop", () => {
     await seed({ scriptMarkdown: "# 剧本" }, { status: "running", approvalMode: "stage" });
     await advanceRunLoop(USER, PROJ);
     const row = await readRow();
-    expect(
-      /* SAFETY: 类型断言已复核 */ (row!.characters as Array<{ name: string }>)[0],
-    ).toMatchObject({
+    /* SAFETY: 类型断言已复核 */
+    expect((row!.characters as Array<{ name: string }>)[0]).toMatchObject({
       name: "阿宁",
     });
     expect(normalizeProductionRun(row!.run).awaitingStage).toBe("character");

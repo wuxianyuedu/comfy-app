@@ -171,7 +171,7 @@ function durationValueFor(args: {
 }): number | undefined {
   const { io, resolved, values } = args;
   const target = resolved.duration;
-  const port = target ? io[target] : undefined;
+  const port = target !== undefined && target !== null && target !== "" ? io[target] : undefined;
   if (!port) {
     return values.duration ?? values.frames;
   }

@@ -135,6 +135,7 @@ const buildBoundaryPinNode = (
      * 保证标题永远不会是空的。链路与 WfSubgraphNode.outputs.display
      * 一致，两层渲染出同一个字符串；`name === type` 时 tooltip 会补上
      * 解析出的类型以便区分。 */
+    // oxlint-disable-next-line no-unnecessary-condition -- pin 来自平台 detail 的 boundaryPins（外部数据），旧数据可能缺 name，空串兜底保证 title 是字符串
     title: pin.label ?? pin.localized ?? pin.name ?? "",
     type: pin.type,
     direction: kind,
@@ -239,6 +240,7 @@ function layoutBoundaryPins(
   const rightRailX = maxX + RAIL_GAP;
 
   const rawPosOf = (pin: BoundaryPin): [number, number] | null => {
+    // oxlint-disable-next-line no-unnecessary-condition -- 类型把 pos 声明成 [number,number]，但它是从原始工作流 JSON 透出的外部数据，长度检查是运行时守卫
     if (Array.isArray(pin.pos) && pin.pos.length >= 2) {
       const x = Number(pin.pos[0]) || 0;
       const y = Number(pin.pos[1]) || 0;
@@ -251,8 +253,8 @@ function layoutBoundaryPins(
     }
     return null;
   };
-  const inputsRaw = (detail.boundaryPins.inputs ?? []).map(rawPosOf);
-  const outputsRaw = (detail.boundaryPins.outputs ?? []).map(rawPosOf);
+  const inputsRaw = detail.boundaryPins.inputs.map(rawPosOf);
+  const outputsRaw = detail.boundaryPins.outputs.map(rawPosOf);
   /* 分组的默认锚点：取所有带真实原始位置的 pin 里最小的 x
    *  （输入取最左、输出取最右）与最小的 y，然后把分组原点往左上挪，
    *  让最上面那个 pin 落在标题栏 + 约 GROUP_PAD_X 之内。
@@ -420,6 +422,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
       }
       if (bl.kind === "output") {
         (boundaryOutputsByNodeId[nid] ??= new Set()).add(slot);
+        // oxlint-disable-next-line no-unnecessary-condition -- kind 已在上一支排除 "output"，保留显式比较防服务端将来新增 kind 时静默落进 input 桶
       } else if (bl.kind === "input") {
         (boundaryInputsByNodeId[nid] ??= new Set()).add(slot);
       }
@@ -490,8 +493,8 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
        *  哨兵节点只存在于子图内部。客户端用这两个标记把每一簇节点包进
        *  INPUTS / OUTPUTS wfGroup，让用户在画布上看得见封装节点暴露的口
        *  最终落在了哪里。 */
-      isInputEndpoint: !!n.is_input_endpoint,
-      isOutputEndpoint: !!n.is_output_endpoint,
+      isInputEndpoint: n.is_input_endpoint === true,
+      isOutputEndpoint: n.is_output_endpoint === true,
       /* LiteGraph 的 `properties`。透传给 WfNode，让 rgthree 的
        *  `Fast Groups Bypasser` 能读到 `matchTitle` 等并渲染出它自己的
        *  运行期开关清单。逐字透传。 */
@@ -649,7 +652,7 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   // 单一格式（不再区分 RAW / API 视图）。节点布局优先使用
   // detail.positions（已含 rawJson 原始位置 + 用户拖拽覆盖），不足时退回
   // Kahn 拓扑自动布局兜底。
-  const kahn = computeKahnLayout(realNodes, scopeDetail.graph ?? {}, colW, rowH, padX, padY);
+  const kahn = computeKahnLayout(realNodes, scopeDetail.graph, colW, rowH, padX, padY);
 
   const savedPositions = scopeDetail.positions;
   const positionsCount = Object.keys(savedPositions ?? {}).length;
@@ -657,11 +660,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   const useSavedPositions =
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     savedPositions != null && positionsCount > 0 && positionsCount >= realNodes.length;
-  if (useSavedPositions && savedPositions) {
+  if (useSavedPositions && Boolean(savedPositions)) {
     const positionsById = savedPositions;
     const middleNodes = realNodes.map((realNode) => {
       const p = positionsById[realNode.id];
-      return realNode.is_subgraph
+      return realNode.is_subgraph === true
         ? buildSubgraphNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY })
         : buildWfNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY });
     });
@@ -698,7 +701,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
       } else {
         pos = { x: padX, y: padY };
       }
-      return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
+      return realNode.is_subgraph === true
+        ? buildSubgraphNode(realNode, pos)
+        : buildWfNode(realNode, pos);
     });
     /* SAFETY: 类型断言已复核 */
     const middlePosById = Object.fromEntries(
@@ -715,7 +720,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   /* ── 2) Auto-layout via Kahn longest-path ── (raw 视图兜底，复用上面算好的 kahn) */
   const middleNodes = realNodes.map((realNode) => {
     const pos = kahn[realNode.id] ?? { x: padX, y: padY };
-    return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
+    return realNode.is_subgraph === true
+      ? buildSubgraphNode(realNode, pos)
+      : buildWfNode(realNode, pos);
   });
   /* SAFETY: 类型断言已复核 */
   const middlePosById = Object.fromEntries(

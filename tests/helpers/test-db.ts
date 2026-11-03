@@ -431,19 +431,18 @@ function sqliteProxyHost(client: Database.Database) {
       }
     }
     const stmt = client.prepare(sql);
-    const bound = params ?? [];
     switch (method) {
       case "get": {
-        return Promise.resolve({ rows: stmt.raw().get(...bound) });
+        return Promise.resolve({ rows: stmt.raw().get(...params) });
       }
       case "run": {
-        stmt.run(...bound);
+        stmt.run(...params);
         return Promise.resolve({ rows: [] });
       }
       case "values":
       case "all":
       default: {
-        return Promise.resolve({ rows: stmt.raw().all(...bound) });
+        return Promise.resolve({ rows: stmt.raw().all(...params) });
       }
     }
   };
@@ -460,10 +459,8 @@ export function createTestDb(): TestDb {
    * 返回的是单行对象。按声明写会把 `.get()` 恒读成 undefined（宿主形状错、报错却
    * 指不到宿主，正是 #2586 这一族）。断言的目标类型取 `RemoteCallback`，
    * 让「哪里不对」只出现在这一行。 */
-  const db = drizzle(
-    /* SAFETY: 类型断言已复核 */ sqliteProxyHost(sqlite) as unknown as RemoteCallback,
-    { schema },
-  );
+  /* SAFETY: 类型断言已复核 */
+  const db = drizzle(sqliteProxyHost(sqlite) as unknown as RemoteCallback, { schema });
 
   const workflowTemplatesWithTags = (): Array<Row> => {
     const rows = allRows("workflowTemplate");
@@ -630,7 +627,7 @@ export function seedWorkflowTemplate(_tdb: TestDb, input: SeedWorkflowTemplateIn
     // insertInto 报 no column named updatedAt，14 个用例全红）
     createdAt: input.createdAt ?? new Date(),
   });
-  if (input.modelTags?.length) {
+  if (input.modelTags !== undefined && input.modelTags.length > 0) {
     for (const tag of input.modelTags) {
       insertInto("workflowModelTag", {
         id: tag.id,

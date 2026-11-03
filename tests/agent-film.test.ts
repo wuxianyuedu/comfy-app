@@ -144,7 +144,7 @@ describe("driveFilmRun（假 request 驱动轮询状态机）", () => {
       kind: string;
       ok: boolean;
       ts: string;
-    }
+    };
     const withLog = (status: string, log: Array<Step>) => ({
       run: { status, log },
       action: { kind: "idle" },

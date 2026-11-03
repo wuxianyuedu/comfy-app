@@ -65,9 +65,13 @@ import {
 function dtoToDraft(dto: WorkshopDraftDto): WorkshopDraft {
   return {
     meta: dto.meta,
+    // oxlint-disable-next-line no-unnecessary-condition -- dto 是 fetch 响应浅校验后的 cast（只查外层形状），服务端旧数据可能缺该字段，?? 兜底是运行时守卫
     scriptMarkdown: dto.scriptMarkdown ?? "",
+    // oxlint-disable-next-line no-unnecessary-condition -- dto 是 fetch 响应浅校验后的 cast（只查外层形状），服务端旧数据可能缺该字段，?? 兜底是运行时守卫
     scenes: dto.scenes ?? [],
+    // oxlint-disable-next-line no-unnecessary-condition -- dto 是 fetch 响应浅校验后的 cast（只查外层形状），服务端旧数据可能缺该字段，?? 兜底是运行时守卫
     characters: dto.characters ?? [],
+    // oxlint-disable-next-line no-unnecessary-condition -- dto 是 fetch 响应浅校验后的 cast（只查外层形状），服务端旧数据可能缺该字段，?? 兜底是运行时守卫
     shots: dto.shots ?? [],
     workflowId: "",
     videoWorkflowId: "",
@@ -92,7 +96,7 @@ function loadWorkshopDraftOnce(): WorkshopDraft | null {
   /* invalidateDraftCache() 卸载时把缓存置 null 标记「需从 localStorage 重读」，
    * 这里须用 ??=（null / undefined 都重读），否则重挂载读回旧缓存 → 切页签丢内容。 */
   const pid = getActiveId();
-  if (!pid) {
+  if (pid === null || pid === "") {
     return null;
   }
   workshopDraftCache ??= readDraft(pid);
@@ -259,11 +263,12 @@ export function useExtractSession(
           ) => Partial<
             Pick<ExtractSession, "channelValue" | "busy" | "status" | "progress" | "error">
           >),
-    ) =>
+    ) => {
       setSession((prev) => ({
         ...prev,
         ...(typeof p === "function" ? p(prev) : p),
-      })),
+      }));
+    },
     [],
   );
   const appendProgress = React.useCallback((text: string) => {
@@ -359,8 +364,8 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     setScenes(draft.scenes);
     setCharacters(draft.characters);
     setShots(draft.shots);
-    setWorkflowId(draft.workflowId ?? "");
-    setVideoWorkflowId(draft.videoWorkflowId ?? "");
+    setWorkflowId(draft.workflowId);
+    setVideoWorkflowId(draft.videoWorkflowId);
     setScriptMarkdown(draft.scriptMarkdown);
   }, []);
 
@@ -391,7 +396,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
       // Phase 3b-2：额外写穿一份「生产数据」到 production 表，供画布读取物化（3c）。
       void pushProduction(activeProjectId, buildProductionPayload(draft, tab, rendered));
     }, 600);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [activeProjectId, currentDraft, tab, rendered]);
 
   /* 卸载兜底保存 —— 工坊常作为 workspace 的一个页签渲染，切走其它页签时本组件
@@ -471,7 +478,9 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
         }
       });
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, []);
 
   /* 首挂载三路拉取（技能列表 / API 通道 / 工作流库清单）——沉在
@@ -503,7 +512,7 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
    *  说清（任务可能恰好已结束）。 */
   const cancelShotTask = React.useCallback(async (shot: Shot, target: "image" | "video") => {
     const taskId = target === "video" ? shot.clipTaskId : shot.taskId;
-    if (!taskId) {
+    if (taskId === undefined || taskId === "") {
       setNotice("该任务无法取消（非本机任务，或已经结束）");
       return;
     }
@@ -525,8 +534,12 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
     watchShotTask: generation.watchShotTask,
   });
 
-  const imageDoneCount = shots.filter((item) => !!item.imageUrl).length;
-  const clipDoneCount = shots.filter((item) => !!item.clipUrl).length;
+  const imageDoneCount = shots.filter(
+    (item) => item.imageUrl !== undefined && item.imageUrl !== "",
+  ).length;
+  const clipDoneCount = shots.filter(
+    (item) => item.clipUrl !== undefined && item.clipUrl !== "",
+  ).length;
   const scriptReady = !!scriptMarkdown.trim() || scenes.length > 0;
 
   /* 草稿里「形状不认识但仍要留着」的那些元素（台账 F13″）。
@@ -584,26 +597,28 @@ export function useWorkshopPipeline(): WorkshopPipelineController {
   /* 切到全局的「模型适配」视图页签。走 `workspace:navigate` 这条已收口的广播
      （与 `WorkshopAside` 的「在资源库中打开」同一条、同一份载荷类型），不在这里
      穿两层 props 去够 workspace 的 `navigateTo`。 */
-  const openModelAdapters = React.useCallback(
-    () => emitAppEvent("workspace:navigate", { view: "model-adapters" }),
-    [],
-  );
+  const openModelAdapters = React.useCallback(() => {
+    emitAppEvent("workspace:navigate", { view: "model-adapters" });
+  }, []);
 
   /* 阶段⑥「去成片合成 MP4」出口：复用上一条广播，view 换成 "film"。 */
-  const goToFilm = React.useCallback(
-    () => emitAppEvent("workspace:navigate", { view: "film" }),
-    [],
-  );
+  const goToFilm = React.useCallback(() => {
+    emitAppEvent("workspace:navigate", { view: "film" });
+  }, []);
 
   const handleApiChannelsSaved = React.useCallback((channels: ApiChannelsView) => {
     setApiChannels(channels);
   }, []);
 
-  const dismissNotice = React.useCallback(() => setNotice(null), []);
+  const dismissNotice = React.useCallback(() => {
+    setNotice(null);
+  }, []);
   const showNotice = React.useCallback((message: string) => {
     setNotice(message);
   }, []);
-  const markRendered = React.useCallback(() => setRendered(true), []);
+  const markRendered = React.useCallback(() => {
+    setRendered(true);
+  }, []);
 
   return {
     tab,

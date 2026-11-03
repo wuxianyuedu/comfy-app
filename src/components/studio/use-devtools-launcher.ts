@@ -47,9 +47,13 @@ export function useDevtoolsLauncher(): DevtoolsLauncher {
        卸载后到达的能力查询结果不该再回写状态。 */
     const guard = beginStaleRun();
     void devtoolsAvailable().then((ok) => {
-      guard.commit(() => setAvailable(ok));
+      guard.commit(() => {
+        setAvailable(ok);
+      });
     });
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, []);
 
   const open = useCallback(() => {

@@ -118,7 +118,7 @@ function detectMac(): boolean {
   if (typeof navigator === "undefined") {
     return false;
   }
-  const platform = navigator.platform ?? "";
+  const platform = navigator.platform;
   return /Mac|iPhone|iPad|iPod/i.test(platform);
 }
 
@@ -161,8 +161,11 @@ export function useHotkey(
       handlerRef.current();
     };
 
-    host.addEventListener("keydown", /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener);
-    return () =>
-      host.removeEventListener("keydown", /* SAFETY: 类型断言已复核 */ onKeyDown as EventListener);
+    /* SAFETY: 类型断言已复核 */
+    host.addEventListener("keydown", onKeyDown as EventListener);
+    return () => {
+      /* SAFETY: 类型断言已复核 */
+      host.removeEventListener("keydown", onKeyDown as EventListener);
+    };
   }, [enabled, filterInput, preventDefault, target, key, mod, ctrl, meta, shift, alt]);
 }

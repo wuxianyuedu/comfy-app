@@ -220,14 +220,19 @@ export function skipSitesIn(rel: string): Map<string, number> {
     if (def) {
       const aliasName = def[1];
       const aliasGuard = def[2];
-      if (aliasName && aliasGuard) {
+      if (
+        aliasName !== undefined &&
+        aliasName !== "" &&
+        aliasGuard !== undefined &&
+        aliasGuard !== ""
+      ) {
         aliases.set(aliasName, aliasGuard.trim());
         aliasNames.add(aliasName);
       }
       continue; // 定义行本身不是站点
     }
     const usedName = /^\s*(\w+)\(/.exec(line)?.[1];
-    if (usedName && aliasNames.has(usedName)) {
+    if (usedName !== undefined && usedName !== "" && aliasNames.has(usedName)) {
       const guard = aliases.get(usedName) ?? "";
       byGuard.set(guard, (byGuard.get(guard) ?? 0) + 1);
       continue;

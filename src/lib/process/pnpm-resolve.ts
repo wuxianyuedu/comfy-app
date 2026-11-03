@@ -106,7 +106,8 @@ export function pnpmInvocation(
    * 冷启动（实测那一跳 0.6~3s，见规范 §2.1.9）。判据只有 `pnpmJsEntry()` 一处。 */
   const js = pnpmJsInvocation({ name, env, platform });
   const candidate = js?.candidate ?? whichCommand(name, { env, platform });
-  if (!candidate) {
+  /* 候选是拼出来的绝对路径，空串不可能出现 */
+  if (candidate === null) {
     return null;
   }
   const usable = js
@@ -157,7 +158,8 @@ export function pnpmInvocation(
  */
 export function pnpmJsEntry(dropIn: string): string | null {
   const pkgDir = pnpmPackageDir(dropIn);
-  if (!pkgDir) {
+  /* 落点目录是拼出来的路径，空串不可能出现 */
+  if (pkgDir === null) {
     return null;
   }
   let manifest: { bin?: unknown };
@@ -173,7 +175,11 @@ export function pnpmJsEntry(dropIn: string): string | null {
   let rel: unknown;
   if (typeof bin === "string") {
     rel = bin;
-  } else if (bin && typeof bin === "object") {
+  } else if (
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    bin != null &&
+    typeof bin === "object"
+  ) {
     /* SAFETY: 类型断言已复核 */
     rel = (bin as Record<string, unknown>).pnpm;
   }
@@ -263,7 +269,8 @@ export function pnpmJsInvocation({
     .split(isWindows(platform) ? ";" : ":")
     .filter(Boolean)) {
     const entry = pnpmJsEntry(dir);
-    if (entry) {
+    /* 入口脚本是拼出来的绝对路径，空串不可能出现 */
+    if (entry !== null) {
       return {
         command: process.execPath,
         prefixArgs: [entry],
@@ -301,7 +308,8 @@ export function pnpmJsInvocation({
     }
     for (const dropIn of dropIns) {
       const entry = pnpmJsEntry(dropIn);
-      if (entry) {
+      /* 入口脚本是拼出来的绝对路径，空串不可能出现 */
+      if (entry !== null) {
         return {
           command: process.execPath,
           prefixArgs: [entry],
@@ -367,7 +375,8 @@ export function resolveCommandInvocation(
   }: WhichCommandOptions = {},
 ): ResolvedInvocation {
   const candidate = whichCommand(file, { env, platform, probe, probeArgs });
-  if (!candidate) {
+  /* 候选是 PATH 上拼出来的绝对路径，空串不可能出现 */
+  if (candidate === null) {
     return { command: file, args, resolved: false };
   }
   const usable = usableCommand(candidate, probeArgs, { env, platform, probe });

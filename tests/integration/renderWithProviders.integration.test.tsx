@@ -29,21 +29,21 @@ type Behavior = {
   delayMs?: number;
   listError?: string;
   tags: Array<string>;
-}
+};
 let behavior: Behavior = { tags: [] };
 
 const t = createTestTRPC();
 const mockRouter = t.router({
   tag: t.router({
     list: t.procedure.query(async () => {
-      if (behavior.listError) {
+      if (behavior.listError !== undefined && behavior.listError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.listError,
         });
       }
       // sleep-ok: mock 内部延迟：tRPC mock 的 delayMs 是给用例制造「接口慢一拍」的现场（行为开关），不是等条件。
-      if (behavior.delayMs) {
+      if (behavior.delayMs !== undefined && behavior.delayMs !== 0) {
         await new Promise((r) => setTimeout(r, behavior.delayMs));
       }
       return { tags: behavior.tags };
@@ -80,13 +80,17 @@ function renderTagDemo(ui: ReactElement) {
   );
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 afterEach(() => {
   cleanup();
   behavior = { tags: [] };
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 /* ---------- 本地 harness：消费 trpc.tag.list / .add（新集成：options 工厂） ---------- */
 function TagDemo() {
@@ -111,11 +115,9 @@ function TagDemo() {
       <h1>标签库</h1>
       {listQ.isLoading && <div data-testid="loading">加载中…</div>}
       {listQ.isError && (
+        /* SAFETY: 类型断言已复核 */
         <div data-testid="error">
-          {
-            /* SAFETY: 类型断言已复核 */ (listQ.error as { message?: string } | null)?.message ??
-              "加载失败"
-          }
+          {(listQ.error as { message?: string } | null)?.message ?? "加载失败"}
         </div>
       )}
       {listQ.data && (
@@ -128,7 +130,7 @@ function TagDemo() {
         </ul>
       )}
       <button onClick={add}>新增 fresh</button>
-      {err && <div data-testid="adderr">{err}</div>}
+      {err !== null && err !== "" && <div data-testid="adderr">{err}</div>}
     </div>
   );
 }

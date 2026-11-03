@@ -29,9 +29,10 @@ configureRunner({
 });
 
 /** 照 drizzle 的真实包法造一条锁错误：原因在 `cause` 上。 */
+/* SAFETY: 类型断言已复核 */
 function busyError(): Error {
   const e = new Error('Failed query: update "task" set "status" = ? where "task"."id" = ?');
-  /* SAFETY: 类型断言已复核 */ (e as { cause?: unknown }).cause = {
+  (e as { cause?: unknown }).cause = {
     code: "SQLITE_BUSY",
     message: "database is locked",
   };

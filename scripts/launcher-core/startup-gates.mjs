@@ -107,8 +107,9 @@ export async function runStartupGates(ctx, target) {
   //      `db.sqlite` 等于在别人握着句柄时换掉文件 —— 这里换是唯一安全的时刻。
   //      空转（没有标记）是绝大多数启动的形态。
   const restore = ctx.applyPendingRestoreAtBoot(root, {
-    write: (/** @type {string} */ line) =>
-      log(line.replace(/^\[db-backup\] /, "").trimEnd(), "INFO"),
+    write: (/** @type {string} */ line) => {
+      log(line.replace(/^\[db-backup\] /, "").trimEnd(), "INFO");
+    },
   });
   if (restore.status === "restored") {
     log(`数据库已从备份恢复（${restore.from}）`, "OK");

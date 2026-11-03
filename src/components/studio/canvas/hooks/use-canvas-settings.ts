@@ -97,7 +97,9 @@ export function useDebugMode() {
   const { settings, update } = useCanvasSettings();
   return {
     debugMode: settings.debugMode,
-    setDebugMode: (value: boolean) => update({ debugMode: value }),
+    setDebugMode: (value: boolean) => {
+      update({ debugMode: value });
+    },
   };
 }
 

@@ -125,7 +125,9 @@ beforeEach(() => {
   vi.mocked(buildLibraryWorkflowInput).mockReset();
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+});
 
 describe("VideoStudio 门禁与空态", () => {
   it("无镜头数据：给引导空态", () => {

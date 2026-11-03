@@ -110,7 +110,7 @@ export function useCharacterExtractFlow(input: {
   const extractChannel = parseChannelOption(extractChannelValue).channel;
   const { patch: cacheExtractPatch, appendProgress, appendLog, setLog } = extractActions;
 
-  const hasScript = !!scriptMarkdown?.trim();
+  const hasScript = scriptMarkdown !== undefined && scriptMarkdown.trim() !== "";
 
   /** 提取入口：本地模型 / 远端 API 由 LLM 输出角色卡 JSON，失败降级提示 */
   async function handleExtract() {
@@ -154,7 +154,9 @@ export function useCharacterExtractFlow(input: {
           provider: channelProvider(extractChannel),
           model: parseChannelOption(extractChannelValue).model,
         },
-        onToken: (token) => appendProgress(token),
+        onToken: (token) => {
+          appendProgress(token);
+        },
       });
       appendLog(makeExtractLog("output", "模型返回完成，正在解析…", full));
       const drafts = parseExtractedCharacters(full);
@@ -232,7 +234,9 @@ export function useCharacterExtractFlow(input: {
 
   return {
     extractChannelValue,
-    setExtractChannelValue: (value: string) => cacheExtractPatch({ channelValue: value }),
+    setExtractChannelValue: (value: string) => {
+      cacheExtractPatch({ channelValue: value });
+    },
     extractBusy,
     extractStatus,
     extractProgress,
@@ -304,7 +308,9 @@ export function useCharacterAiFlow(input: {
           messages: buildCharacterFromBriefMessages(brief),
           // 显式 provider+model：命中所选模型独立连接参数时改走该参数（与「从剧本提取」一致）
           opts: model ? { provider, model } : undefined,
-          onToken: (token) => setGenProgress((prev) => prev + token),
+          onToken: (token) => {
+            setGenProgress((prev) => prev + token);
+          },
         }),
       );
       const r = parseCharacterFull(full);

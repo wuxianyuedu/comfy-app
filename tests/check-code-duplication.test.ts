@@ -23,27 +23,14 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 造一个 `lines` 行的模块（每行都不同，避免被当成互相重复的样板）。 */
-function writeModule(
-  repo: GateRepo,
-  rel: string,
-  lines: number,
-  prefix: string,
-): void {
-  const body = Array.from(
-    { length: lines },
-    (_, i) => `const ${prefix}_${i} = ${i};`,
-  );
+function writeModule(repo: GateRepo, rel: string, lines: number, prefix: string): void {
+  const body = Array.from({ length: lines }, (_, i) => `const ${prefix}_${i} = ${i};`);
   repo.write(rel, `${body.join("\n")}\n`);
 }
 
 /** 把一份实现复制成「孪生」：**逐行相同**，只是换个文件名/头部注释 ——
  *  这正是历史上那两对孪生的形态（整段复制，注释里写着「复刻 xxx」）。 */
-function writeTwin(
-  repo: GateRepo,
-  rel: string,
-  source: string,
-  header = "// twin\n",
-): void {
+function writeTwin(repo: GateRepo, rel: string, source: string, header = "// twin\n"): void {
   repo.write(rel, header + repo.read(source));
 }
 
@@ -114,8 +101,6 @@ describe("check-code-duplication.cjs（跨文件重复门禁）", () => {
   test("硬闸：--update 不写任何基线文件", ({ repo }) => {
     writeModule(repo, "src/a.ts", 80, "x");
     expect(repo.run(["--update"]).code).toBe(0);
-    expect(
-      existsSync(join(repo.dir, "scripts", ".code-duplication-baseline.json")),
-    ).toBe(false);
+    expect(existsSync(join(repo.dir, "scripts", ".code-duplication-baseline.json"))).toBe(false);
   });
 });

@@ -17,13 +17,10 @@ import { openSettingsView } from "./support/settings-entry";
  * 设置是**瞬时页签**（`NavItem.transient`）：切走就关、不常驻 —— 所以这份里
  * 「切回首页后设置那一页还在」的旧断言已经反过来，现在判的是「它退场了」。
  */
-const stripOf = (page: Page) =>
-  page.getByRole("tablist", { name: "已打开的视图" });
+const stripOf = (page: Page) => page.getByRole("tablist", { name: "已打开的视图" });
 
 test.describe("设置作为一个视图 @critical", () => {
-  test("应用菜单点「设置」开出一页页签，页签条仍可操作，且没有对话框", async ({
-    page,
-  }) => {
+  test("应用菜单点「设置」开出一页页签，页签条仍可操作，且没有对话框", async ({ page }) => {
     await page.goto("/workspace");
     const strip = stripOf(page);
     await expect(strip).toBeVisible({ timeout: 30_000 });
@@ -53,9 +50,7 @@ test.describe("设置作为一个视图 @critical", () => {
        工作区这份挂载点**不渲染可见标题**（页签与顶栏已经在写「设置」，屏内不再
        重复，ISSUE #1872），屏名以 `sr-only` 留在 DOM —— 用 `toHaveCount` 判
        「这枚 `h1` 在场」，不拿 `toBeVisible` 去量一枚被裁到 1px 的元素。 */
-    await expect(
-      page.getByRole("heading", { level: 1, name: "设置", exact: true }),
-    ).toHaveCount(1);
+    await expect(page.getByRole("heading", { level: 1, name: "设置", exact: true })).toHaveCount(1);
 
     /* 再开一次不产生第二页（与所有视图同一条契约：已存在即聚焦）。 */
     await openSettingsView(page);
@@ -75,14 +70,10 @@ test.describe("设置作为一个视图 @critical", () => {
     await expect(settingsTab).toHaveCount(0);
 
     /* 不是对话框：设置内容不该活在 role=dialog 里（那意味着还是浮层）。 */
-    await expect(
-      page.getByRole("dialog").filter({ hasText: "外观" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("dialog").filter({ hasText: "外观" })).toHaveCount(0);
   });
 
-  test("设置页签可关，关掉后回到首页；首页那一页依然不给关闭", async ({
-    page,
-  }) => {
+  test("设置页签可关，关掉后回到首页；首页那一页依然不给关闭", async ({ page }) => {
     await page.goto("/workspace");
     const strip = stripOf(page);
     await expect(strip).toBeVisible({ timeout: 30_000 });
@@ -93,10 +84,7 @@ test.describe("设置作为一个视图 @critical", () => {
     /* 关闭按钮的可访问名是「关闭 <页签名>」，这一颗可以 exact。 */
     await strip.getByRole("button", { name: "关闭 设置", exact: true }).click();
     await expect(strip.getByRole("tab")).toHaveCount(1);
-    await expect(strip.getByRole("tab").first()).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    await expect(strip.getByRole("tab").first()).toHaveAttribute("aria-selected", "true");
     /* 关掉设置后，首页那一页依然不给关闭 —— 可关性是页签规则，不因新增视图而破。 */
     await expect(strip.getByRole("button", { name: /^关闭 / })).toHaveCount(0);
   });

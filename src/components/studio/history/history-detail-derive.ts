@@ -201,7 +201,7 @@ function findIoEntry(
   if (!io) {
     return null;
   }
-  if (nodeId) {
+  if (nodeId !== undefined && nodeId !== "") {
     const exact = io[`${nodeId}::widget::${name}`] ?? io[`${nodeId}::input::${name}`];
     if (exact) {
       return exact;

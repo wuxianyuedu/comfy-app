@@ -478,9 +478,11 @@ describe("runGate 的四条判决分支真跑（夹具）", () => {
       } finally {
         for (const [k, v] of Object.entries(saved)) {
           if (v === undefined) {
-            delete process.env[/* SAFETY: 类型断言已复核 */ k as keyof typeof saved];
+            /* SAFETY: 类型断言已复核 */
+            delete process.env[k as keyof typeof saved];
           } else {
-            process.env[/* SAFETY: 类型断言已复核 */ k as keyof typeof saved] = v;
+            /* SAFETY: 类型断言已复核 */
+            process.env[k as keyof typeof saved] = v;
           }
         }
       }

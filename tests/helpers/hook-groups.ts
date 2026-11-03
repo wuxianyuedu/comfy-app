@@ -17,7 +17,7 @@
  *      不是靠人记住（引号混进来时该组会被**静默截断**，而判据读到的是半块）。
  *   ③ 步骤行的两空格缩进就是组内 shell 的形态，行首锚定即「真调用」。
  */
-export type HookStep = { cmd: string; label: string; };
+export type HookStep = { cmd: string; label: string };
 
 /** 全文的 `  run "<标签>" <命令…>` 步骤行（**不分组** —— 门禁链的在场判据用它）。 */
 export function runSteps(hookText: string): Array<HookStep> {

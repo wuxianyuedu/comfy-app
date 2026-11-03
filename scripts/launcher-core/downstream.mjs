@@ -223,7 +223,9 @@ export function spawnExecutorHost(ctx) {
   const result = maybeSpawnExecutorHost({
     root: ctx.root,
     runTimestamp: ctx.runTimestamp,
-    logLine: (message, level = "INFO") => ctx.log(message, level),
+    logLine: (message, level = "INFO") => {
+      ctx.log(message, level);
+    },
   });
   if (!result) {
     return null;

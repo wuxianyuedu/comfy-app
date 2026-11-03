@@ -93,7 +93,7 @@ export function WorkflowRunLogModal({
   }, [open, runs, viewTaskId, onViewTaskIdChange]);
 
   const run: WorkflowRunMeta | null = useMemo(
-    () => (viewTaskId ? (runs.find((r) => r.taskId === viewTaskId) ?? null) : null),
+    () => (viewTaskId === null ? null : (runs.find((r) => r.taskId === viewTaskId) ?? null)),
     [viewTaskId, runs],
   );
   const logs = run?.logs ?? [];
@@ -122,7 +122,12 @@ export function WorkflowRunLogModal({
   /* 关闭语义（Esc / 点遮罩 / 焦点锁与归还）交给`ui/dialog`：此前自绘遮罩 +
  手写「点到自己才算关闭」的判定，Esc 没接、焦点不锁也不归还。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="执行日志"
         className="bg-transparent p-0 ring-0"
@@ -162,7 +167,7 @@ export function WorkflowRunLogModal({
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              {viewTaskId && status === "running" && (
+              {viewTaskId !== null && status === "running" && (
                 <Hint label="取消当前查看的任务" wrap>
                   <Button
                     className="text-2xs h-auto rounded-md px-2 py-0.5"
@@ -187,7 +192,9 @@ export function WorkflowRunLogModal({
                       }`,
                     ]),
                   )}
-                  onChange={(v) => onViewTaskIdChange(v || null)}
+                  onChange={(v) => {
+                    onViewTaskIdChange(v || null);
+                  }}
                   options={runs.map((r) => r.taskId)}
                   value={viewTaskId ?? ""}
                 />
@@ -196,8 +203,10 @@ export function WorkflowRunLogModal({
                 <Button
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs rounded-md px-2 py-0.5"
                   data-testid="wflib-log-raw"
-                  disabled={!viewTaskId}
-                  onClick={() => setRawOpen(true)}
+                  disabled={viewTaskId === null}
+                  onClick={() => {
+                    setRawOpen(true);
+                  }}
                   variant="ghost"
                 >
                   查看完整输出
@@ -229,7 +238,7 @@ export function WorkflowRunLogModal({
             logs={logs}
             rowTestId="wflib-modal-log-line"
             topSlot={
-              run?.errorMessage ? (
+              run?.errorMessage !== undefined && run.errorMessage !== "" ? (
                 <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
                   <div className="wrap-break-word whitespace-pre-wrap">{run.errorMessage}</div>
                 </div>
@@ -239,7 +248,9 @@ export function WorkflowRunLogModal({
         </div>
       </DialogContent>
       <WorkflowRunRawCliModal
-        onClose={() => setRawOpen(false)}
+        onClose={() => {
+          setRawOpen(false);
+        }}
         open={rawOpen}
         running={status === "running"}
         taskId={viewTaskId}

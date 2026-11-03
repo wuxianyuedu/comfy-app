@@ -256,7 +256,7 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
    *  探测只验证接口地址 / 密钥是否可达、可列出模型，不发起生成调用、不耗额度；
    *  结果内联展示在该条目下方。独立接口 / 独立密钥缺省时回落已保存的全局连接配置。 */
   async function runEntryConnectionTest(entry: RemoteModelEntry) {
-    if (rowProbe?.running && rowProbe.name === entry.name) {
+    if (rowProbe?.running === true && rowProbe.name === entry.name) {
       return;
     }
     setRowProbe({ name: entry.name, running: true, msg: null });
@@ -372,7 +372,7 @@ export function useRemoteModelDialogs(c: ReadySettingsPageController): RemoteMod
       return;
     }
     const taskId = usageTest.result?.taskId;
-    if (!taskId) {
+    if (taskId === undefined || taskId === "") {
       return;
     }
     setUsageTest({ ...usageTest, querying: true });

@@ -60,11 +60,11 @@ const mockRouter = t.router({
   workflow: t.router({
     list: t.procedure.query(async () => {
       listCalls += 1;
-      if (behavior.listDelayMs && behavior.listDelayMs > 0) {
+      if (behavior.listDelayMs !== undefined && behavior.listDelayMs > 0) {
         // sleep-ok: mock 内部延迟：tRPC mock 的 listDelayMs 是给用例制造「列表慢一拍」的现场（行为开关），不是等条件。
         await new Promise((resolve) => setTimeout(resolve, behavior.listDelayMs));
       }
-      if (behavior.listError) {
+      if (behavior.listError !== undefined && behavior.listError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.listError,
@@ -77,7 +77,7 @@ const mockRouter = t.router({
     }),
     create: t.procedure.mutation(() => ({ id: "new", warnings: [] })),
     update: t.procedure.mutation(() => {
-      if (behavior.updateError) {
+      if (behavior.updateError !== undefined && behavior.updateError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.updateError,
@@ -86,7 +86,7 @@ const mockRouter = t.router({
       return { ok: true };
     }),
     delete: t.procedure.mutation(() => {
-      if (behavior.deleteError) {
+      if (behavior.deleteError !== undefined && behavior.deleteError !== "") {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: behavior.deleteError,
@@ -147,7 +147,9 @@ function makeWrapper() {
   };
 }
 
-beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+beforeAll(() => {
+  server.listen({ onUnhandledFrame: "error" });
+});
 afterEach(() => {
   cleanup();
   behavior = { workflows: [], localPending: [], tags: [] };
@@ -155,7 +157,9 @@ afterEach(() => {
   vi.clearAllMocks();
   server.resetHandlers();
 });
-afterAll(() => server.close());
+afterAll(() => {
+  server.close();
+});
 
 describe("useWorkflowLibrary", () => {
   it("挂载后拿到列表与标签，并派生出来源 / 类型计数", async () => {
@@ -202,15 +206,25 @@ describe("useWorkflowLibrary", () => {
     await expect.poll(() => result.current.workflows).toHaveLength(2);
 
     const callsBefore = listCalls;
-    act(() => result.current.setTypeFilter("video"));
+    act(() => {
+      result.current.setTypeFilter("video");
+    });
     expect(result.current.workflows.map((workflow) => workflow.id)).toEqual(["2"]);
 
-    act(() => result.current.setTypeFilter("all"));
-    act(() => result.current.setModelFilter("flux"));
+    act(() => {
+      result.current.setTypeFilter("all");
+    });
+    act(() => {
+      result.current.setModelFilter("flux");
+    });
     expect(result.current.workflows.map((workflow) => workflow.id)).toEqual(["1"]);
 
-    act(() => result.current.setModelFilter("all"));
-    act(() => result.current.setSearch("beta"));
+    act(() => {
+      result.current.setModelFilter("all");
+    });
+    act(() => {
+      result.current.setSearch("beta");
+    });
     expect(result.current.workflows.map((workflow) => workflow.id)).toEqual(["2"]);
 
     expect(listCalls).toBe(callsBefore);
@@ -227,16 +241,24 @@ describe("useWorkflowLibrary", () => {
     });
     await expect.poll(() => result.current.workflows).toHaveLength(2);
 
-    act(() => result.current.setSelectedId("2"));
+    act(() => {
+      result.current.setSelectedId("2");
+    });
     expect(result.current.selectedRow?.name).toBe("Beta");
 
-    act(() => result.current.handleDeleteClick("2", "Beta"));
+    act(() => {
+      result.current.handleDeleteClick("2", "Beta");
+    });
     expect(result.current.selectedId).toBeNull();
     expect(result.current.pendingDelete).toEqual({ id: "2", name: "Beta" });
 
     // 删除未选中项不该动选择
-    act(() => result.current.setSelectedId("1"));
-    act(() => result.current.handleDeleteClick("2", "Beta"));
+    act(() => {
+      result.current.setSelectedId("1");
+    });
+    act(() => {
+      result.current.handleDeleteClick("2", "Beta");
+    });
     expect(result.current.selectedId).toBe("1");
   });
 

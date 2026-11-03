@@ -56,9 +56,10 @@ export function buildStorageRows(storage: DesktopStoragePaths): Array<StoragePat
  * 自己算出来的默认值。
  */
 export function describeStorageHint(storage: DesktopStoragePaths): string {
-  const fromYaml = storage.extraModelPathsFile
-    ? `共享目录来自 ${storage.extraModelPathsFile}`
-    : "该实例没有 extra_model_paths.yaml（未配置额外目录）";
+  const fromYaml =
+    storage.extraModelPathsFile !== null && storage.extraModelPathsFile !== ""
+      ? `共享目录来自 ${storage.extraModelPathsFile}`
+      : "该实例没有 extra_model_paths.yaml（未配置额外目录）";
   return (
     `只读：实例根 ${storage.instanceRoot}；${fromYaml}。` +
     "主目录可被启动参数（--base-directory 等）覆盖。修改请在 ComfyUI Desktop 里进行。"

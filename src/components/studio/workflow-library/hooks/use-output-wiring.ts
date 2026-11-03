@@ -38,7 +38,7 @@ export function useOutputWiring(params: {
     () => ({
       isManual: (ioKey: string) => outputCards.isManual(ioKey),
       connect: (outputIoKey: string, targetIoKey: string) => {
-        if (!effectiveMode || !onPatchParamMap) {
+        if (effectiveMode === null || !onPatchParamMap) {
           return;
         }
         if (!canApplyOutputBindingEdit({ ioKey: targetIoKey, mode: effectiveMode }, workflowIO)) {
@@ -61,7 +61,7 @@ export function useOutputWiring(params: {
         commitParamMap(next);
       },
       disconnect: (outputIoKey: string) => {
-        if (!effectiveMode || !onPatchParamMap) {
+        if (effectiveMode === null || !onPatchParamMap) {
           return;
         }
         commitParamMap(
@@ -73,7 +73,7 @@ export function useOutputWiring(params: {
         );
       },
       reset: (outputIoKey: string) => {
-        if (!effectiveMode || !onPatchParamMap) {
+        if (effectiveMode === null || !onPatchParamMap) {
           return;
         }
         commitParamMap(clearOutputBindingEdit(effectiveParamMap, outputIoKey, effectiveMode));

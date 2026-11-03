@@ -12,7 +12,8 @@
 
 /** 已解析的 JSON 是不是一份有内容的 ComfyUI 原始工作流（RAW / LiteGraph）。 */
 export function isRawWorkflowJson(parsed: unknown): boolean {
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  /* unknown 的真值判断逐值等价改写：0 / 空串 / false 等 falsy 值都落在「非对象」一臂 */
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return false;
   }
   /* SAFETY: 类型断言已复核 */

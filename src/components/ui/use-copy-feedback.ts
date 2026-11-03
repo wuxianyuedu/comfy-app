@@ -130,7 +130,7 @@ export type CopyController = {} & CopyRunner & CopyProducer;
  * 有 5 种说法，其中一处还漏了字。
  */
 export function copyFailureText(target?: string): string {
-  const where = target ? `${target}后复制` : "后复制";
+  const where = target !== undefined && target !== "" ? `${target}后复制` : "后复制";
   return `复制失败：剪贴板不可用，请手动选中${where}`;
 }
 
@@ -191,7 +191,12 @@ export function useCopyFeedback({
   /* 两种调用形态共用同一条重入判据与同一份反馈：
    *   · `copy("文本")` —— 最常见；
    *   · `copy(() => copyAllFromStore())` —— 文本由点击那一刻现算（日志面板）。 */
-  const run = useCallback((text: string) => report(() => copyText(text)), [report]);
+  const run = useCallback(
+    (text: string) => {
+      report(() => copyText(text));
+    },
+    [report],
+  );
   return useCallback(
     (arg: string | (() => Promise<boolean>)) => {
       if (typeof arg === "string") {

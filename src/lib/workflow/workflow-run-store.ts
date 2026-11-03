@@ -117,7 +117,8 @@ function hydrate(): void {
     }
     for (const item of parsed) {
       if (
-        item &&
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+        item != null &&
         typeof item === "object" &&
         /* SAFETY: 类型断言已复核 */
         typeof (item as WorkflowRunMeta).taskId === "string" &&

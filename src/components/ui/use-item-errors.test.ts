@@ -15,25 +15,39 @@ import { useItemErrors } from "./use-item-errors";
 describe("useItemErrors", () => {
   it("错误挂在各自的那一条上，互不覆盖", () => {
     const { result } = renderHook(() => useItemErrors());
-    act(() => result.current.report("a")("err", "「a」添加失败"));
-    act(() => result.current.report("b")("err", "「b」删除失败"));
+    act(() => {
+      result.current.report("a")("err", "「a」添加失败");
+    });
+    act(() => {
+      result.current.report("b")("err", "「b」删除失败");
+    });
     expect(result.current.get("a")).toBe("「a」添加失败");
     expect(result.current.get("b")).toBe("「b」删除失败");
   });
 
   it("成功清掉该条，不改动别条", () => {
     const { result } = renderHook(() => useItemErrors());
-    act(() => result.current.report("a")("err", "添加失败"));
-    act(() => result.current.report("b")("err", "删除失败"));
-    act(() => result.current.report("a")("ok", "已添加"));
+    act(() => {
+      result.current.report("a")("err", "添加失败");
+    });
+    act(() => {
+      result.current.report("b")("err", "删除失败");
+    });
+    act(() => {
+      result.current.report("a")("ok", "已添加");
+    });
     expect(result.current.get("a")).toBeNull();
     expect(result.current.get("b")).toBe("删除失败");
   });
 
   it("成功也清掉整表那档（重试成功后不该留着旧文案）", () => {
     const { result } = renderHook(() => useItemErrors());
-    act(() => result.current.report(null)("err", "列表刷新失败"));
-    act(() => result.current.report("a")("ok", "已添加"));
+    act(() => {
+      result.current.report(null)("err", "列表刷新失败");
+    });
+    act(() => {
+      result.current.report("a")("ok", "已添加");
+    });
     expect(result.current.get(null)).toBeNull();
   });
 
@@ -50,7 +64,9 @@ describe("useItemErrors", () => {
         keys: ["a", "b"] as ReadonlyArray<string> | undefined,
       },
     });
-    act(() => result.current.report("a")("err", "「a」失败了"));
+    act(() => {
+      result.current.report("a")("err", "「a」失败了");
+    });
     expect(result.current.get("a")).toBe("「a」失败了");
     rerender({ keys: ["b"] });
     expect(result.current.get("a")).toBeNull();
@@ -65,7 +81,9 @@ describe("useItemErrors", () => {
         keys: ["a"] as ReadonlyArray<string> | undefined,
       },
     });
-    act(() => result.current.report("a")("err", "失败了"));
+    act(() => {
+      result.current.report("a")("err", "失败了");
+    });
     const before = result.current;
     rerender({ keys: ["a"] });
     expect(result.current.get("a")).toBe("失败了");
@@ -79,32 +97,46 @@ describe("useItemErrors", () => {
         keys: ["a"] as ReadonlyArray<string> | undefined,
       },
     });
-    act(() => result.current.report(null)("err", "读取列表失败"));
+    act(() => {
+      result.current.report(null)("err", "读取列表失败");
+    });
     rerender({ keys: [] });
     expect(result.current.get(null)).toBe("读取列表失败");
   });
 
   it("不传 keys 时（条目集合不固定）不做收敛", () => {
     const { result } = renderHook(() => useItemErrors(undefined));
-    act(() => result.current.report("draft")("err", "新增失败"));
+    act(() => {
+      result.current.report("draft")("err", "新增失败");
+    });
     expect(result.current.get("draft")).toBe("新增失败");
   });
 
   it("clear / clearAll 各自只清该清的", () => {
     const { result } = renderHook(() => useItemErrors());
-    act(() => result.current.report("a")("err", "A"));
-    act(() => result.current.report("b")("err", "B"));
-    act(() => result.current.clear("a"));
+    act(() => {
+      result.current.report("a")("err", "A");
+    });
+    act(() => {
+      result.current.report("b")("err", "B");
+    });
+    act(() => {
+      result.current.clear("a");
+    });
     expect(result.current.get("a")).toBeNull();
     expect(result.current.get("b")).toBe("B");
-    act(() => result.current.clearAll());
+    act(() => {
+      result.current.clearAll();
+    });
     expect(result.current.hasAny).toBe(false);
   });
 
   it("清一条本来就没错误的条目不改变引用（避免级联渲染）", () => {
     const { result } = renderHook(() => useItemErrors());
     const before = result.current;
-    act(() => result.current.clear("nope"));
+    act(() => {
+      result.current.clear("nope");
+    });
     expect(result.current).toBe(before);
   });
 });

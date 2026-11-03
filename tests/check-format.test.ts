@@ -183,11 +183,12 @@ describe("glob 白名单判定（纯函数，不跑 prettier）", () => {
     isIgnored: (rel: string) => boolean;
   };
 
+  /* SAFETY: 类型断言已复核 */
   test.for(
     /* 表里的路径只是**分类样例**，一律用不存在的夹具路径（ISSUE #2830）：写成真路径时，
      * 「按路径引用」那一档会把整份自测算成它们的消费方 —— 改一个 `src/**` 业务文件就拉起
      * 这 40 多秒的一跑。被测脚本自己（`scripts/check-format.cjs`）照旧写真实路径，那是消费关系。 */
-    /* SAFETY: 类型断言已复核 */ [
+    [
       ["scripts/check-format.cjs", true],
       ["tests/anything.test.ts", true],
       ["e2e/fixture.spec.ts", true],
@@ -324,7 +325,7 @@ describe("oxfmt 格式判据 --staged 在合并态收窄输入面（ISSUE #2747�
       const err = error as { message: string; stderr?: string };
       /* 空串 stderr 也算「没拿到那句话」（git 走 stdout-only 失败形态时就是这样），
        * 所以这里判的是「有没有内容」而不是「是不是 undefined」—— 用 `??` 会把空串端出去。 */
-      const why = err.stderr && err.stderr.trim() !== "" ? err.stderr : err.message;
+      const why = err.stderr !== undefined && err.stderr.trim() !== "" ? err.stderr : err.message;
       throw new Error(`git ${args.join(" ")} 失败：${why}`, { cause: error });
     }
   }

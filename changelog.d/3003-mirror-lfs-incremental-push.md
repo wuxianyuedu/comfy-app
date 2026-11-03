@@ -1,0 +1,2 @@
+## Fixed
+- CI（GitHub 镜像）：`scripts/ci-github-mirror-push.mjs` 内容推送成功后补一跳 `git lfs push <镜像> HEAD`（**不带 `--all`**，只推该 ref 可达且远端还没有的对象，存量历史不重复计带宽；失败 ⇒ exit 1 且**不派发**，避免 GitHub 侧拿字体指针文件跑出假红）。失败话术分四族：egress 重试、未装 git-lfs 指去安装、配额撞墙指去 Billing（免费档 1 GiB 存储 + 1 GiB/月带宽，每次 checkout 拉取都计带宽）、端点没开指去 Settings——不静默降级。`.github/workflows/pr-gate.yml`（fixed-structural-tests / affected-tests）、`daily.yml`、`package-desktop.yml` 的 checkout 均开 `lfs: true`；heavy-gates 刻意不开（条目表不含字体用例）。用例补 `tests/ci-github-mirror-push.test.ts` 四族 LFS 分支。

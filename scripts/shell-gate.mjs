@@ -224,8 +224,12 @@ export function materializeCargoTestInputs({
   versionOutput,
   exists = (p) => fs.existsSync(p),
   mkdir = (p, o) => fs.mkdirSync(p, o),
-  copy = (a, b) => fs.copyFileSync(a, b),
-  chmod = (p, m) => fs.chmodSync(p, m),
+  copy = (a, b) => {
+    fs.copyFileSync(a, b);
+  },
+  chmod = (p, m) => {
+    fs.chmodSync(p, m);
+  },
   platform = process.platform,
 } = {}) {
   const srcTauri = path.join(root, "src-tauri");
@@ -483,13 +487,14 @@ function linesFor(result, mode = "staged") {
         out.push({
           to: "err",
           text:
-            `[shell-gate] 找不到 cargo（PATH 与 rustup 的默认安装位都没有）—— 改了 Rust 壳却编不了，等于没验证。\n${
-            probesText(step.probes)
-            }        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）\n` +
+            `[shell-gate] 找不到 cargo（PATH 与 rustup 的默认安装位都没有）—— 改了 Rust 壳却编不了，等于没验证。\n${probesText(
+              step.probes,
+            )}        装 Rust 工具链：https://rustup.rs/（或换一台能编壳的机器提交）\n` +
             `        已装却仍探不到时：PATH 里加上 $CARGO_HOME/bin（rustup 默认 <home>/.cargo/bin）${
-            mode === "base"
-              ? "\n        这一格按「没跑起来」收（退 2）—— 判据在场、执行者不在，不是「判出失败」。"
-              : ""}`,
+              mode === "base"
+                ? "\n        这一格按「没跑起来」收（退 2）—— 判据在场、执行者不在，不是「判出失败」。"
+                : ""
+            }`,
         });
       } else if (step.state === "failed") {
         out.push({
@@ -572,7 +577,8 @@ function main() {
       const dropped = face.deduped.filter((f) => SHELL_INPUT_RE.test(f));
       console.log(
         `[shell-gate] 这一跑的检出是平台合成的 merge 提交（首父 ${face.firstParent.slice(0, 8)}）：` +
-          `改动面取「首父..HEAD」（${face.files.length} 条），并剔掉基线之后别人自己落地的 ${face.deduped.length} 条${dropped.length > 0 ? `（其中壳输入 ${dropped.length} 条：${dropped.join(" ")}）` : ""
+          `改动面取「首父..HEAD」（${face.files.length} 条），并剔掉基线之后别人自己落地的 ${face.deduped.length} 条${
+            dropped.length > 0 ? `（其中壳输入 ${dropped.length} 条：${dropped.join(" ")}）` : ""
           }。`,
       );
     } else {
@@ -595,7 +601,7 @@ function main() {
     console.log(
       `[shell-gate] 本次没有壳改动（清单 ${staged.length} 条，未命中 src-tauri 的四类壳输入）${
         mode === "base" ? `；改动面来自 ${via}` : ""
-        }。`,
+      }。`,
     );
     return 0;
   }

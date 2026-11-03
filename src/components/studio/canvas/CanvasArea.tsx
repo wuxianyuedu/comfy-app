@@ -92,9 +92,13 @@ export function CanvasArea({
     if (!menu) {
       return;
     }
-    const handler = () => setMenu(null);
+    const handler = () => {
+      setMenu(null);
+    };
     window.addEventListener("pointerdown", handler, { once: true });
-    return () => window.removeEventListener("pointerdown", handler);
+    return () => {
+      window.removeEventListener("pointerdown", handler);
+    };
   }, [menu]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -126,21 +130,23 @@ export function CanvasArea({
           style={{ left: menu.x, top: menu.y }}
         >
           {contextItems.map((item) =>
-            item.divider ? (
+            item.divider === true ? (
               <div className="bg-border-strong my-1 h-px" key={item.id} />
             ) : (
               <Button
                 className={`flex h-auto w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-normal ${
-                  item.disabled
+                  item.disabled === true
                     ? "text-ink-fainter cursor-not-allowed"
-                    : item.danger
+                    : item.danger === true
                       ? "hover:bg-danger/10 text-danger-strong"
                       : "text-ink-strong hover:bg-subtle"
                 }`}
                 disabled={item.disabled}
                 key={item.id}
-                onClick={() => handleAction(item.id)}
-                variant={item.danger ? "danger" : "ghost"}
+                onClick={() => {
+                  handleAction(item.id);
+                }}
+                variant={item.danger === true ? "danger" : "ghost"}
               >
                 <span className="text-ink-fainter shrink-0">{item.icon}</span>
                 {item.label}

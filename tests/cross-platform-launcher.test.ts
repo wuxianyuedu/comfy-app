@@ -55,13 +55,13 @@ import { launcherChainSource } from "./helpers/launcher-source";
  * 那一组里）：那份是台账登记的另一型（`tests/strip-comments-single-source.test.ts`），
  * 它只服务那一组的说明符扫描，换语言面不同 —— 引它的名字会构成第二份定义。
  *
- * ⚠️ 刻意**不**用在 `#` 注释语法上的那两份接收者：`scripts/dev-launcher.ps1` 与
- * `src-tauri/Cargo.toml`。实测拿 JS 档剥 `.ps1` 前后字符数完全相同（2898 → 2898，等于没剥），
- * 而那一格自己的口径写着「判据是『不再调用』而不是『不再提及』」—— 加上去只会造出假红。
- * 那一格缺口归 ISSUE #2934，不在这里补。
+ * ⚠️ `#` 注释语法的两份接收者（`scripts/dev-launcher.ps1` 与 `src-tauri/Cargo.toml`）
+ * 走 `{ syntax: "hash" }` 这一档（ISSUE #2934）：它们用 `#` 开注释，JS 档剥不动
+ * （实测前后字符数完全相同 2898 → 2898）。那一格自己的口径写着「判据是『不再调用』
+ * 而不是『不再提及』」—— 注释里说清「以前用过什么、现在为什么不用」是有价值的。
  */
-const readCode = (rel: string): string =>
-  stripJs(fs.readFileSync(path.join(process.cwd(), rel), "utf8"), { trailing: true });
+const readCode = (rel: string, syntax: "js" | "hash" = "js"): string =>
+  stripJs(fs.readFileSync(path.join(process.cwd(), rel), "utf8"), { syntax, trailing: true });
 
 /** 数出「进程组」里还剩几个活着的标记进程（用唯一标记匹配命令行）。 */
 function countMarkedProcesses(marker: string): number {
@@ -96,7 +96,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   afterEach(() => {
     while (tmpDirs.length > 0) {
       const dir = tmpDirs.pop();
-      if (dir) {
+      if (dir !== undefined && dir !== "") {
         fs.rmSync(dir, { recursive: true, force: true });
       }
     }
@@ -276,7 +276,9 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   });
 
   it("壳侧不再依赖 Windows：Cargo 的 windows crate 在非 Windows 下不参与编译", () => {
-    const cargo = fs.readFileSync(path.join(process.cwd(), "src-tauri", "Cargo.toml"), "utf8");
+    /* `#` 注释档先剥再判（ISSUE #2934）：注释里提一句 `windows = "…"` 是文档，
+     * 不是依赖；行首锚 `/^windows\s*=/m` 的语义不变（剥后注释整行不留残渣）。 */
+    const cargo = readCode("src-tauri/Cargo.toml", "hash");
     // 无条件依赖 windows crate = Linux/macOS 上编译整棵 windows 树并失败
     // （实测 `error[E0425]: cannot find type IMarshal in windows_core::imp`）。
     expect(cargo).toMatch(/\[target\.'cfg\(windows\)'\.dependencies\]/);
@@ -306,7 +308,7 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   it("sidecar 的拉起与回收走官方 shell 插件（跨平台机制由它选）", () => {
     const root = process.cwd();
     const lib = readCode("src-tauri/src/lib.rs");
-    const cargo = fs.readFileSync(path.join(root, "src-tauri", "Cargo.toml"), "utf8");
+    const cargo = readCode("src-tauri/Cargo.toml", "hash");
     // 插件在 Rust 侧提供跨平台 spawn/kill：写死 std::process::Command + taskkill
     // 时 POSIX 分支等于「什么都不做」（sidecar 活过壳退出，继续占端口）
     expect(cargo).toContain("tauri-plugin-shell");
@@ -361,8 +363,9 @@ describe("跨平台启动编排（dev-launcher.mjs）", () => {
   });
 
   it("统一编排：Windows 走同一份 .mjs，.ps1 只剩调用入口", () => {
-    const root = process.cwd();
-    const ps1 = fs.readFileSync(path.join(root, "scripts", "dev-launcher.ps1"), "utf8");
+    /* `#` 注释档先剥再判（ISSUE #2934）：入口的注释里写着「以前调过 taskkill /…」，
+     * 那是文档；真实调用剥不掉，下面四条反向断言照样判红。 */
+    const ps1 = readCode("scripts/dev-launcher.ps1", "hash");
     // 入口只做「定位 + 转交 + 透传退出码」：不再有 Windows 专属的编排调用
     // （taskkill / Get-CimInstance / Job Object / cmd.exe）。
     expect(ps1).toContain("dev-launcher.mjs");
@@ -580,7 +583,7 @@ describe("scripts 里的 src/lib 路径字面量（模块换子域时不许静�
       const source = stripComments(fs.readFileSync(abs, "utf8"));
       for (const match of source.matchAll(SPEC_LITERAL_RE)) {
         const specifier = match[1];
-        if (!specifier) {
+        if (specifier === undefined || specifier === "") {
           continue;
         }
         checked += 1;
@@ -698,7 +701,7 @@ describe("readDiagnosticsTail（失败诊断的取词通道）", () => {
   afterEach(() => {
     while (tmpDirs.length > 0) {
       const dir = tmpDirs.pop();
-      if (dir) {
+      if (dir !== undefined && dir !== "") {
         fs.rmSync(dir, { recursive: true, force: true });
       }
     }

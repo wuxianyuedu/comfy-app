@@ -45,8 +45,9 @@ const STATUS_META: Record<"QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCE
 /** 按任务状态取展示元数据。`task.status` 是宽字符串（来自后端），这里收口
  *  「未知状态 → 排队中」这一条兜底判据，返回**非空**，调用点不再各自 `!`。 */
 function statusMetaFor(status: string): StatusMeta {
+  /* SAFETY: 类型断言已复核 */
   return status in STATUS_META
-    ? STATUS_META[/* SAFETY: 类型断言已复核 */ status as keyof typeof STATUS_META]
+    ? STATUS_META[status as keyof typeof STATUS_META]
     : STATUS_META.QUEUED;
 }
 
@@ -93,7 +94,12 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
   /* 关闭语义交给`ui/dialog`：此前这里**既没有点遮罩关闭、也没有 Esc** ——
  只能用右上角的 ✕ 关掉，键盘用户尤其难退出。 */
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="视频生成队列"
         className="bg-transparent p-0 ring-0"
@@ -153,7 +159,7 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                       key={task.id}
                     >
                       <div className="bg-canvas-deep flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-                        {task.video ? (
+                        {task.video !== null && task.video !== "" ? (
                           <MediaThumbnail
                             alt={`V${String(index + 1).padStart(2, "0")}`}
                             className="h-full w-full object-cover"
@@ -179,7 +185,7 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                         <p className="text-ink-fainter text-3xs mt-0.5 truncate font-mono">
                           {task.workflowName}
                         </p>
-                        {task.status === "FAILED" && task.error && (
+                        {task.status === "FAILED" && task.error !== null && task.error !== "" && (
                           <p
                             className="text-destructive text-3xs mt-0.5 truncate"
                             title={task.error}
@@ -197,7 +203,7 @@ export function VideoQueueModal({ open, onClose, onOpenTask }: VideoQueueModalPr
                         >
                           详情
                         </Button>
-                        {task.video && (
+                        {task.video !== null && task.video !== "" && (
                           <a
                             className="bg-primary/20 text-primary-strong hover:bg-primary/30 text-2xs rounded-md px-2.5 py-1 transition-colors"
                             download

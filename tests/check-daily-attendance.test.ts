@@ -459,9 +459,8 @@ describe("daily-attendance：命令行那一跳", () => {
       ),
     });
     expect(detailFile.code, detailFile.out).toBe(CODE.PRESENT);
-    expect(
-      /* SAFETY: 类型断言已复核 */ (JSON.parse(detailFile.out) as { verdict: string }).verdict,
-    ).toBe("present");
+    /* SAFETY: 类型断言已复核 */
+    expect((JSON.parse(detailFile.out) as { verdict: string }).verdict).toBe("present");
 
     /* **真**那份 `get-build-status -v` 只有 `status` + `pipelinesStatus`（实测），
      * 认不出它是哪一类派发、也认不出它是什么时候落的 ⇒ 必须落到「未校验」，

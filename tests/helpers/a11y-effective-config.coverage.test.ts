@@ -110,7 +110,8 @@ test("每个在进程内跑的判据脚本，它的每个导出都有人用（�
 test("`VERIFIED_SURFACES` 覆盖全部导出面（两个清单不许各说各话）", () => {
   /* SAFETY: 类型断言已复核 */
   const mod = loadJudgeModule() as unknown as Record<string, unknown>;
-  const { VERIFIED_SURFACES } = /* SAFETY: 类型断言已复核 */ mod as {
+  /* SAFETY: 类型断言已复核 */
+  const { VERIFIED_SURFACES } = mod as {
     VERIFIED_SURFACES: Record<string, string>;
   };
   /* 模块里那张表是「判据自己怎么看自己的导出面」（键是**可被判据本体调用**的面）、

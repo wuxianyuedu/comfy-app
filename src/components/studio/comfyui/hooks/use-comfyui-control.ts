@@ -84,7 +84,9 @@ export function useComfyuiControl() {
     /* 刻意不另开日志：这条失败（重问状态没成）自己就有可见出口 —— 状态行留在
      * 上一次的结论上、30s 兜底轮询随后再试一次，用户看得到结果；而它最常见的
      * 成因（服务正在重启）每重启一次打一行只是噪声。 */
-    onChange: () => fireAndForget(comfyStatusQ.refetch(), () => undefined),
+    onChange: () => {
+      fireAndForget(comfyStatusQ.refetch(), () => undefined);
+    },
   });
 
   /* ── 启动 / 关闭 ───────────────────────────────────────── */
@@ -103,8 +105,7 @@ export function useComfyuiControl() {
           return result;
         },
         {
-          report: (kind, text) =>
-            kind === "ok" ? toast.success(text) : toast.error(text),
+          report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
           failureText: "启动 ComfyUI 失败",
         },
       );
@@ -123,8 +124,7 @@ export function useComfyuiControl() {
           return result;
         },
         {
-          report: (kind, text) =>
-            kind === "ok" ? toast.success(text) : toast.error(text),
+          report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
           failureText: "关闭 ComfyUI 失败",
         },
       );
@@ -142,7 +142,7 @@ export function useComfyuiControl() {
      * `shouldUseBrowserTab` 的形态说明。 */
     if (shouldUseBrowserTab(isDesktopShell())) {
       const cached = comfyStatusQ.data?.base ?? null;
-      if (cached) {
+      if (cached !== null && cached !== "") {
         window.open(cached, "_blank", "noopener,noreferrer");
         toast.success(`已在新浏览器页签打开 ComfyUI（${cached}）`);
         return;
@@ -151,7 +151,7 @@ export function useComfyuiControl() {
       try {
         const fresh = await comfyStatusQ.refetch();
         const base = fresh.data?.base ?? null;
-        if (!base) {
+        if (base === null || base === "") {
           toast.error("ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看");
           return;
         }
@@ -172,7 +172,7 @@ export function useComfyuiControl() {
            * 里「外部已经启动了，界面却打不开」的观感来源）。 */
           const fresh = await comfyStatusQ.refetch();
           const base = fresh.data?.base ?? comfyStatusQ.data?.base ?? null;
-          if (!base) {
+          if (base === null || base === "") {
             return {
               ok: false,
               detail: "ComfyUI 未在运行，请先点「启动 ComfyUI」再打开查看",
@@ -191,8 +191,7 @@ export function useComfyuiControl() {
             label: "ComfyUI",
             url: decision.embedUrl,
             closable: true,
-            blockedReason:
-              decision.target === "blocked" ? decision.detail : null,
+            blockedReason: decision.target === "blocked" ? decision.detail : null,
             /* 不可嵌时把地址一并带进说明：用户能复制到浏览器自查，也能判断
              * 是外壳拦的还是 ComfyUI 自己拦的（ISSUE #310）。 */
             blockedUrl: decision.target === "blocked" ? decision.base : null,
@@ -203,8 +202,7 @@ export function useComfyuiControl() {
           };
         },
         {
-          report: (kind, text) =>
-            kind === "ok" ? toast.success(text) : toast.error(text),
+          report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
           failureText: "打开 ComfyUI 失败",
         },
       );
@@ -226,8 +224,7 @@ export function useComfyuiControl() {
    * 与 openComfy 一样先 refetch 一次状态，避免拿几秒前的旧结论误报「未运行」。 */
   const openComfyInBrowserAction = useExternalAction({
     target: "browser",
-    report: (kind, text) =>
-      kind === "ok" ? toast.success(text) : toast.error(text),
+    report: (kind, text) => (kind === "ok" ? toast.success(text) : toast.error(text)),
   });
   const openComfyInBrowser = useCallback(async () => {
     await openComfyInBrowserAction.run(async () => {
@@ -240,7 +237,7 @@ export function useComfyuiControl() {
    * 追加不轮转的文件（多次启动的行混在一起），服务端按会话横幅切分后回
    * 「会话列表 + 选中会话正文」。`active` = 正在启动 → 每秒跟随本次启动；
    * 否则挂载 / 刷新时取一次。 */
-  const comfyLogActive = comfyStarting || !!comfyStatusQ.data?.starting;
+  const comfyLogActive = comfyStarting || comfyStatusQ.data?.starting === true;
   const comfyLog = useRuntimeLogSource({
     source: "comfyui-runtime",
     active: comfyLogActive,
@@ -257,11 +254,11 @@ export function useComfyuiControl() {
           probing: !!status.probing,
           stopping: !!status.stopping,
           base: status.base ?? null,
-          port: status.port ?? 0,
+          port: status.port,
           via: status.via ?? null,
           /* 库里已保存的路径（服务端 `comfyStatus` 一直有这一格，此前视图没收）：
            * 它是启动动作**实际会用的那一条**，写在页上让「改了没保存」当场可见。 */
-          path: status.path ?? "",
+          path: status.path,
         }
       : null,
     /** 安装形态（路径没配时为 null，视图据此给「去设置」出口）。 */

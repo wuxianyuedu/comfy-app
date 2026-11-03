@@ -81,7 +81,9 @@ export function ConsolePresetList({ onFill, disabled }: ConsolePresetListProps) 
             className="hover:text-ink w-auto flex-1 py-1"
             key={group.id}
             marker="chevron"
-            onOpenChange={() => groups.toggle(group.id)}
+            onOpenChange={() => {
+              groups.toggle(group.id);
+            }}
             open={open}
             panelClassName="basis-full flex flex-col gap-0.5 pt-0.5"
             /* 整排的排布在 Root 上（`rootClassName`）：触发开关与右侧那个条数
@@ -121,7 +123,9 @@ export function ConsolePresetList({ onFill, disabled }: ConsolePresetListProps) 
                   className="group text-ink-muted hover:bg-subtle hover:text-ink-strong h-auto w-full justify-start gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-normal"
                   data-testid={`console-preset-${item.id}`}
                   disabled={disabled}
-                  onClick={() => onFill(item.command)}
+                  onClick={() => {
+                    onFill(item.command);
+                  }}
                   variant="ghost"
                 >
                   <ChevronRight

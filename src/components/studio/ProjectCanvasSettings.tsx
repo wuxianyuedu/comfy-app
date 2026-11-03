@@ -43,7 +43,9 @@ function ToggleRow({
     >
       <span className="flex min-w-0 flex-col">
         <span className="text-ink-bright text-[12.5px] font-medium">{label}</span>
-        {hint && <span className="text-ink-muted text-2xs mt-0.5">{hint}</span>}
+        {hint !== undefined && hint !== "" && (
+          <span className="text-ink-muted text-2xs mt-0.5">{hint}</span>
+        )}
       </span>
       {/* 开关走 ui/switch（规范 16 §16.2.3）：此前这里自绘了一个
           「圆角底 + 绝对定位圆点」的开关，与 CanvasSettingsPanel 的另一份
@@ -65,7 +67,12 @@ export function ProjectSettingsDrawer({ onClose }: { onClose: () => void }) {
   /* 抽屉走 ui/sheet（规范 16 §16.2.3 P2）：Esc 关闭、点遮罩关闭、遮罩让出
      标题行此前是本文件手写的一份，`ui/sheet` 里还有一份同源实现。 */
   return (
-    <Sheet onOpenChange={(next) => !next && onClose()} open>
+    <Sheet
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <SheetContent
         aria-label="项目画布设置"
         className="bg-panel border-border-strong text-ink-bright w-85 gap-0 border-l sm:max-w-85"

@@ -151,7 +151,10 @@ export function RemoteModelDialog({
                     }
                   }}
                   placeholder={
-                    dialog.mode === "edit" && dialog.entry.apiKey
+                    dialog.mode === "edit" &&
+                    dialog.entry.apiKey !== null &&
+                    dialog.entry.apiKey !== undefined &&
+                    dialog.entry.apiKey !== ""
                       ? "已设置独立密钥，留空保持不变"
                       : "留空则使用全局 API Key"
                   }
@@ -170,36 +173,39 @@ export function RemoteModelDialog({
               </div>
             )}
           </FormField>
-          {dialog.mode === "edit" && dialog.entry.apiKey && (
-            <p className="text-muted-foreground text-2xs mb-1">
-              {d.clearKey ? (
-                <>
-                  将清除独立密钥、改用全局 API Key。
-                  <Button
-                    className="text-primary mx-1 h-auto p-0 underline underline-offset-2"
-                    onClick={() => {
-                      d.setClearKey(false);
-                    }}
-                    variant="link"
-                  >
-                    撤销
-                  </Button>
-                </>
-              ) : (
-                !d.addForm.apiKey && (
-                  <Button
-                    className="text-primary h-auto p-0 underline underline-offset-2"
-                    onClick={() => {
-                      d.setClearKey(true);
-                    }}
-                    variant="link"
-                  >
-                    清除独立密钥，改用全局
-                  </Button>
-                )
-              )}
-            </p>
-          )}
+          {dialog.mode === "edit" &&
+            dialog.entry.apiKey !== null &&
+            dialog.entry.apiKey !== undefined &&
+            dialog.entry.apiKey !== "" && (
+              <p className="text-muted-foreground text-2xs mb-1">
+                {d.clearKey ? (
+                  <>
+                    将清除独立密钥、改用全局 API Key。
+                    <Button
+                      className="text-primary mx-1 h-auto p-0 underline underline-offset-2"
+                      onClick={() => {
+                        d.setClearKey(false);
+                      }}
+                      variant="link"
+                    >
+                      撤销
+                    </Button>
+                  </>
+                ) : (
+                  !d.addForm.apiKey && (
+                    <Button
+                      className="text-primary h-auto p-0 underline underline-offset-2"
+                      onClick={() => {
+                        d.setClearKey(true);
+                      }}
+                      variant="link"
+                    >
+                      清除独立密钥，改用全局
+                    </Button>
+                  )
+                )}
+              </p>
+            )}
           {d.testMsg && (
             <p
               className={`mb-3 rounded-lg px-3 py-2 text-xs ${
@@ -259,7 +265,7 @@ export function RemoteModelDialog({
               />
             )}
           </FormField>
-          {d.addError && (
+          {d.addError !== null && d.addError !== "" && (
             <p className="bg-destructive/10 text-danger-strong mt-2 rounded-lg px-3 py-2 text-xs">
               {d.addError}
             </p>

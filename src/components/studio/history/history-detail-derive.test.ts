@@ -39,7 +39,7 @@ function io(...entries: Array<[nodeId: string, name: string, label?: string]>): 
       kind: "widget",
       nodeId,
       name,
-      ...(label ? { label } : {}),
+      ...(label !== undefined && label !== "" ? { label } : {}),
     };
   }
   return map;

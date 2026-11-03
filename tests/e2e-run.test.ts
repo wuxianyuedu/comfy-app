@@ -1016,8 +1016,10 @@ describe("开跑前的读数：按序说出来，再拦（ISSUE #1998）", () =>
 
   it("浏览器 ready / 拿不到结论都只是读数，不拦", async () => {
     for (const verdict of [
-      { verdict: /* SAFETY: 类型断言已复核 */ "ready" as const },
-      { verdict: /* SAFETY: 类型断言已复核 */ "unknown" as const, detail: "探不动" },
+      /* SAFETY: 类型断言已复核 */
+      { verdict: "ready" as const },
+      /* SAFETY: 类型断言已复核 */
+      { verdict: "unknown" as const, detail: "探不动" },
     ]) {
       const collectors = makePreflightCollectors({
         /* SAFETY: 类型断言已复核 */

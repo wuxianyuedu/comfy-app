@@ -138,7 +138,8 @@ export class WorkflowTemplateRepository extends DrizzleRepository<WorkflowTempla
         sourcePath: input.sourcePath ?? undefined,
         sourceChecksum: input.sourceChecksum ?? undefined,
         sourceMtime: input.sourceMtime ?? undefined,
-        modes: input.modes?.length ? JSON.stringify(input.modes) : "[]",
+        modes:
+          input.modes !== undefined && input.modes.length > 0 ? JSON.stringify(input.modes) : "[]",
         defaultMode: input.defaultMode ?? undefined,
       })
       .returning();

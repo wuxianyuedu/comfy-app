@@ -15,10 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import {
-  appRuntimeLogFileName,
-  runtimeStamp,
-} from "../scripts/launcher-core/log.mjs";
+import { appRuntimeLogFileName, runtimeStamp } from "../scripts/launcher-core/log.mjs";
 import { runtimeLogFileName, LAUNCH_STAMP_ENV } from "../src/lib/log/runtime-log-file";
 import { launcherChainSource } from "./helpers/launcher-source";
 
@@ -31,16 +28,12 @@ describe("app-runtime 文件名跨语言一致（launcher ↔ dev server）", ()
       new Date(2026, 0, 1, 0, 0, 0),
       new Date(2026, 11, 31, 23, 59, 59),
     ]) {
-      expect(appRuntimeLogFileName(runtimeStamp(at))).toBe(
-        runtimeLogFileName("app-runtime", at),
-      );
+      expect(appRuntimeLogFileName(runtimeStamp(at))).toBe(runtimeLogFileName("app-runtime", at));
     }
   });
 
   it("名字里**不含冒号**（Windows 下 `:` 非法，带上它就是静默不落盘）", () => {
-    const name = appRuntimeLogFileName(
-      runtimeStamp(new Date(2026, 9, 10, 5, 30, 59)),
-    );
+    const name = appRuntimeLogFileName(runtimeStamp(new Date(2026, 9, 10, 5, 30, 59)));
     expect(name.includes(":")).toBe(false);
     expect(/[\\/*?"<>|]/.test(name)).toBe(false);
   });
@@ -69,8 +62,7 @@ describe("app-runtime 文件名跨语言一致（launcher ↔ dev server）", ()
      * （前者是这里的写法）。只认一种会让判据在下次换记法时假红，而它与
      * 「两侧同串」这条契约无关。 */
     expect(
-      launcher.includes(`env.${LAUNCH_STAMP_ENV}`) ||
-        launcher.includes(`"${LAUNCH_STAMP_ENV}"`),
+      launcher.includes(`env.${LAUNCH_STAMP_ENV}`) || launcher.includes(`"${LAUNCH_STAMP_ENV}"`),
     ).toBe(true);
     const appLog = fs.readFileSync(
       path.join(ROOT, "src", "lib", "log", "app-runtime-log.ts"),

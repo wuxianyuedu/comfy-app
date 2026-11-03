@@ -140,7 +140,9 @@ vi.mock("./final-compose", () => ({
 import * as orchestrator from "./orchestrator";
 
 describe("workshop orchestrator 全流程", () => {
-  beforeEach(() => store.clear());
+  beforeEach(() => {
+    store.clear();
+  });
 
   it("脚本 → 角色 → 分镜 → 生图 → 生视频 串联", async () => {
     const id = await orchestrator.createSession({ idea: "一个女孩在咖啡馆" });

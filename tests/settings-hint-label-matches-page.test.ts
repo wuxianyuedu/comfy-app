@@ -23,7 +23,7 @@ import { comfyCliMissingHint } from "~/lib/comfyui/comfy-cli-python";
 /** 抓 `「设置 → X → Y」` 里那两段（两处文案都用中文引号把整条路径包住）。 */
 const POINTER_RE = /设置 → ([^ →]+) → ([^」]+)」/;
 
-function pointerOf(text: string): { field: string; section: string; } {
+function pointerOf(text: string): { field: string; section: string } {
   const match = POINTER_RE.exec(text);
   return { section: match?.[1] ?? "", field: (match?.[2] ?? "").trim() };
 }
@@ -35,10 +35,7 @@ describe("解释器提示指向的设置页位置", () => {
   it("桌包「建议」指向的分区名在设置页导航里真实存在", () => {
     const pointer = pointerOf(DESKTOP_HINT);
     /* 抓不到形态 = 文案被改成不指向任何地方了，先让这一条红，别让它静默通过。 */
-    expect(
-      pointer.section,
-      `提示里没找到「设置 → X → Y」形态：${DESKTOP_HINT}`,
-    ).not.toBe("");
+    expect(pointer.section, `提示里没找到「设置 → X → Y」形态：${DESKTOP_HINT}`).not.toBe("");
     expect(SECTION_LABELS).toContain(pointer.section);
   });
 
@@ -46,14 +43,9 @@ describe("解释器提示指向的设置页位置", () => {
     /* 空串 = 建议表压根没命中这条报错（那一层由 error-advice.test.ts 管）；
      * 这里让它以「抓不到路径形态」红出来，而不是把 null 传下去。 */
     const advice =
-      adviseOnError(
-        String.raw`未找到 comfy-cli Python 解释器：C:\Users\x\python.exe`,
-      ) ?? "";
+      adviseOnError(String.raw`未找到 comfy-cli Python 解释器：C:\Users\x\python.exe`) ?? "";
     const pointer = pointerOf(advice);
-    expect(
-      pointer.section,
-      `建议里没找到「设置 → X → Y」形态：${advice}`,
-    ).not.toBe("");
+    expect(pointer.section, `建议里没找到「设置 → X → Y」形态：${advice}`).not.toBe("");
     expect(SECTION_LABELS).toContain(pointer.section);
     /* 两处必须给同一个分区名：同一句报错在两处指到不同地方，就是 #1239 之前那两份
      * 互相漏项的建议表犯过的同一种错。 */
@@ -62,10 +54,7 @@ describe("解释器提示指向的设置页位置", () => {
 
   it("指向的字段名在创作后端那张卡里渲染得出来", () => {
     const src = readFileSync(
-      join(
-        process.cwd(),
-        "src/app/(main)/settings/components/ComfyuiSection.tsx",
-      ),
+      join(process.cwd(), "src/app/(main)/settings/components/ComfyuiSection.tsx"),
       "utf8",
     );
     const field = pointerOf(DESKTOP_HINT).field;
@@ -73,8 +62,7 @@ describe("解释器提示指向的设置页位置", () => {
     expect(src).toContain(`label="${field}`);
     /* 导航项与卡标题同前缀（导航「创作后端」/ 卡「创作后端（ComfyUI）」）：
      * 用户按导航找得到卡。两张名字毫无关系时这条就该红。 */
-    const comfyLabel =
-      SETTINGS_SECTIONS.find((s) => s.id === "comfyui")?.label ?? "";
+    const comfyLabel = SETTINGS_SECTIONS.find((s) => s.id === "comfyui")?.label ?? "";
     expect(src).toContain(`title="${comfyLabel}`);
   });
 });

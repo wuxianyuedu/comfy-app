@@ -20,8 +20,7 @@ test.describe("顶栏光暗切换 @critical", () => {
     await expect(toggle).toBeVisible();
     await expect(toggle.locator("svg")).toHaveCount(2);
 
-    const htmlClass = () =>
-      page.evaluate(() => document.documentElement.className);
+    const htmlClass = () => page.evaluate(() => document.documentElement.className);
 
     const before = await htmlClass();
     const wasDark = before.includes("dark");
@@ -36,8 +35,6 @@ test.describe("顶栏光暗切换 @critical", () => {
     expect(afterFirst.includes("dark")).toBe(!wasDark);
 
     await toggle.click();
-    await expect
-      .poll(() => htmlClass(), { message: "翻不回来 —— 只能进设置页改" })
-      .toBe(before);
+    await expect.poll(() => htmlClass(), { message: "翻不回来 —— 只能进设置页改" }).toBe(before);
   });
 });

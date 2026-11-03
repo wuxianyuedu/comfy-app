@@ -131,9 +131,7 @@ describe("语法对而当前文件满足不了 → unsatisfiable（这一支才�
 
 describe("Content-Range 的拼法只有一处", () => {
   it("partial 写「起点-终点/总长」", () => {
-    expect(contentRangeHeader({ start: 0, endInclusive: 99 }, 1000)).toBe(
-      "bytes 0-99/1000",
-    );
+    expect(contentRangeHeader({ start: 0, endInclusive: 99 }, 1000)).toBe("bytes 0-99/1000");
   });
 
   it("416 那一支只写总长（没有起点终点）", () => {

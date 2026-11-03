@@ -50,7 +50,7 @@ export type MaterialFolderId = (typeof MATERIAL_FOLDERS)[number]["id"];
 const FOLDER_IDS = new Set<string>(MATERIAL_FOLDERS.map((folder) => folder.id));
 
 export function isValidFolder(id: string | null | undefined): id is MaterialFolderId {
-  return !!id && FOLDER_IDS.has(id);
+  return id !== undefined && id !== null && id !== "" && FOLDER_IDS.has(id);
 }
 
 export function folderName(id: string): string {
@@ -83,7 +83,7 @@ export function materialsRoot(): string {
  * 从源头上掐死路径穿越。
  */
 export function sanitizeScope(raw: string | null | undefined): string | null {
-  if (!raw) {
+  if (raw === undefined || raw === null || raw === "") {
     return null;
   }
   const s = raw.trim();
@@ -101,7 +101,7 @@ export function sanitizeScope(raw: string | null | undefined): string | null {
  * 的字符。返回 null 表示该名字不可用。
  */
 export function sanitizeFileName(raw: string | null | undefined): string | null {
-  if (!raw) {
+  if (raw === undefined || raw === null || raw === "") {
     return null;
   }
   // 同时按两种分隔符切，避免 Windows 上 "a/b\\c.png" 漏网
@@ -176,11 +176,15 @@ export async function visibleMaterialScopes(
     return out;
   }
   const { projectId } = opts;
-  if (projectId && (await materialScopeOwnership(userId, projectId)) === "foreign") {
+  if (
+    projectId !== null &&
+    projectId !== "" &&
+    (await materialScopeOwnership(userId, projectId)) === "foreign"
+  ) {
     // 与「这个项目根本没有素材」同形：只回共享区
     return [SHARED_SCOPE];
   }
-  return projectId ? [projectId, SHARED_SCOPE] : [SHARED_SCOPE];
+  return projectId !== null && projectId !== "" ? [projectId, SHARED_SCOPE] : [SHARED_SCOPE];
 }
 
 /** 写 / 删这一格素材的许可：共享区不限，明确属于别人的不行，库里没登记的放行
@@ -209,7 +213,7 @@ export type MaterialItem = {
 /** 列出单个 scope/folder 下的素材。目录不存在时返回空数组（不是错误）。 */
 export async function listFolderItems(scope: string, folder: string): Promise<Array<MaterialItem>> {
   const dir = folderDir(scope, folder);
-  if (!dir) {
+  if (dir === null) {
     return [];
   }
   let entries: Array<string>;

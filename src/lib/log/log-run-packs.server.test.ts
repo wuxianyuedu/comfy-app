@@ -51,7 +51,7 @@ function makePack(name: string, spec: PackSpec = {}): void {
   for (const [file, content] of Object.entries(spec.files ?? {})) {
     fs.writeFileSync(path.join(svc, file), content, "utf8");
   }
-  if (spec.noRunJson) {
+  if (spec.noRunJson === true) {
     return;
   }
   fs.writeFileSync(

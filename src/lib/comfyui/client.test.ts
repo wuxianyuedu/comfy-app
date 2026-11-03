@@ -64,12 +64,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetComfyBase();
   resetProbeMissLog();
-  vi.mocked(getSettingsSync).mockReturnValue(
-    /* SAFETY: 类型断言已复核 */ {
-      comfyuiPath: String.raw`D:\Comfy`,
-      comfyuiPort: 8188,
-    } as never,
-  );
+  /* SAFETY: 类型断言已复核 */
+  vi.mocked(getSettingsSync).mockReturnValue({
+    comfyuiPath: String.raw`D:\Comfy`,
+    comfyuiPort: 8188,
+  } as never);
   vi.mocked(resolveComfyLaunchPlan).mockReturnValue(plan);
   vi.mocked(findPidForMainPyDetailed).mockResolvedValue({
     pid: null,

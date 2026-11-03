@@ -125,7 +125,9 @@ export function LibraryHostCard({
                 autoFitFromOptions={false}
                 className="border-border-strong! text-2xs shrink-0 bg-transparent!"
                 labels={Object.fromEntries(modes.map((code) => [code, modeLabel(code)]))}
-                onChange={(code) => onModeChange(code)}
+                onChange={(code) => {
+                  onModeChange(code);
+                }}
                 options={modes}
                 popoverMinWidth={150}
                 value={effectiveMode ?? taskType}

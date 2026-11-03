@@ -83,7 +83,8 @@ async function getDemoUser(): Promise<ServerUser> {
  */
 export async function getServerUser(session: SessionLike | null): Promise<ServerUser> {
   const email = session?.user?.email;
-  if (email) {
+  /* 会话邮箱要么缺省要么是真实地址，空串同按缺省处理 */
+  if (email !== undefined && email !== null && email !== "") {
     return resolveUserByEmail(email, session?.user?.name ?? null);
   }
   return getDemoUser();
@@ -95,7 +96,8 @@ export async function getServerUser(session: SessionLike | null): Promise<Server
  */
 export async function requireServerUser(session: SessionLike | null): Promise<ServerUser | null> {
   const email = session?.user?.email;
-  if (email) {
+  /* 会话邮箱要么缺省要么是真实地址，空串同按缺省处理 */
+  if (email !== undefined && email !== null && email !== "") {
     return resolveUserByEmail(email, session?.user?.name ?? null);
   }
   if (!getSettingsSync().loginRequired) {

@@ -68,10 +68,7 @@ function putLedger(repo: GateRepo, content = EMPTY_LEDGER): void {
 
 describe("annotate 消费方门禁：该放的形状（§11.21）", () => {
   test("零站点 → 通过（纯闸门，不是存量清理）", ({ repo }) => {
-    repo.write(
-      "tests/a.test.ts",
-      `${HEAD}describe("p", () => { it("x", () => {}); });\n`,
-    );
+    repo.write("tests/a.test.ts", `${HEAD}describe("p", () => { it("x", () => {}); });\n`);
     putLedger(repo);
     const r = repo.run();
     expect(r.code).toBe(0);
@@ -90,9 +87,7 @@ describe("annotate 消费方门禁：该放的形状（§11.21）", () => {
     expect(r.output).toContain("1 条登记");
   });
 
-  test("站点写在字符串 / 注释里 → 不算站点（判据不去判自己的夹具）", ({
-    repo,
-  }) => {
+  test("站点写在字符串 / 注释里 → 不算站点（判据不去判自己的夹具）", ({ repo }) => {
     repo.write(
       "tests/a.test.ts",
       `${HEAD}export const FIXTURE = 'await ctx.annotate("理由", "type")';\n// ctx.annotate("注释里的也不算")\ndescribe("p", () => { it("x", () => {}); });\n`,
@@ -118,10 +113,7 @@ describe("annotate 消费方门禁：该拦的形状（§11.21）", () => {
      台账、台账压根不存在」。原先这一格不存在，于是那条路径从没被执行者走过 ——
      判据零站点时在读到台账之前就 return，全绿的却是「台账从没被创建过」。 */
   test("台账文件根本不在 → 阻断（零站点时也不许静默通过）", ({ repo }) => {
-    repo.write(
-      "tests/a.test.ts",
-      `${HEAD}describe("p", () => { it("x", () => {}); });\n`,
-    );
+    repo.write("tests/a.test.ts", `${HEAD}describe("p", () => { it("x", () => {}); });\n`);
     const r = repo.run();
     expect(r.code).toBe(1);
     expect(r.output).toContain(".annotate-consumers.json 不存在");
@@ -133,9 +125,7 @@ describe("annotate 消费方门禁：该拦的形状（§11.21）", () => {
     expect(r2.output).toContain(".annotate-consumers.json 不存在");
   });
 
-  test("折行站点（prettier 折开）也要被扫出来 —— 漏掉就是整片静默", ({
-    repo,
-  }) => {
+  test("折行站点（prettier 折开）也要被扫出来 —— 漏掉就是整片静默", ({ repo }) => {
     repo.write(
       "tests/a.test.ts",
       `${HEAD}describe("p", () => {\n  it("x", async (ctx) => {\n    await ctx\n      .annotate("理由", "type");\n    expect(1).toBe(1);\n  });\n});\n`,

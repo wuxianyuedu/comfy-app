@@ -46,7 +46,14 @@ function Harness() {
   if (!open) {
     return null;
   }
-  return <SourceModal data={DATA} onClose={() => setOpen(false)} />;
+  return (
+    <SourceModal
+      data={DATA}
+      onClose={() => {
+        setOpen(false);
+      }}
+    />
+  );
 }
 
 describe("查看源文件弹窗", () => {

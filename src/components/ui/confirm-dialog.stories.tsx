@@ -43,7 +43,12 @@ function Demo(props: Partial<React.ComponentProps<typeof ConfirmDialog>>) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button onClick={() => setOpen(true)} variant="outline">
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+        variant="outline"
+      >
         打开确认弹窗
       </Button>
       <ConfirmDialog
@@ -52,8 +57,12 @@ function Demo(props: Partial<React.ComponentProps<typeof ConfirmDialog>>) {
         danger={props.danger}
         description={props.description}
         icon={props.icon}
-        onClose={() => setOpen(false)}
-        onConfirm={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+        }}
+        onConfirm={() => {
+          setOpen(false);
+        }}
         open={open}
         pending={props.pending}
         title={props.title ?? "确认操作"}

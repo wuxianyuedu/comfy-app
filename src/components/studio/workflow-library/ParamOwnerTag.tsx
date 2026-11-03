@@ -9,7 +9,7 @@
  * 没有任何对外参数落到这一行时不渲染（绝大多数行都是这种情况）。 */
 
 export function ParamOwnerTag({ label }: { label?: string }) {
-  if (!label) {
+  if (label === undefined || label === "") {
     return null;
   }
   return (

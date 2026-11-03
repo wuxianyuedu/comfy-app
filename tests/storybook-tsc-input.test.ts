@@ -78,12 +78,12 @@ function staticSpecifiers(source: string): Array<string> {
   const code = stripComments(source);
   const specs: Array<string> = [];
   for (const m of code.matchAll(/from\s+["']([^"']+)["']/g)) {
-    if (m[1]) {
+    if (m[1] !== undefined && m[1] !== "") {
       specs.push(m[1]);
     }
   }
   for (const m of code.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) {
-    if (m[1]) {
+    if (m[1] !== undefined && m[1] !== "") {
       specs.push(m[1]);
     }
   }
@@ -163,8 +163,9 @@ function narrowTsconfigText(root: string, envDts: string, inheritedExclude: Arra
  * 不报错（见文件头）。
  */
 async function provisionNextEnv(outDir: string): Promise<string> {
+  /* SAFETY: 类型断言已复核 */
   const { writeAppTypeDeclarations } =
-    /* SAFETY: 类型断言已复核 */ (await import("next/dist/lib/typescript/writeAppTypeDeclarations.js")) as {
+    (await import("next/dist/lib/typescript/writeAppTypeDeclarations.js")) as {
       writeAppTypeDeclarations: (options: {
         baseDir: string;
         distDir: string;
@@ -305,7 +306,7 @@ describe("Storybook 那份「类型程序读得到、磁盘上不入库」的输
     const ignore = read(".gitignore")
       .split(/\r?\n/)
       .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith("#"));
+      .filter((line) => line !== "" && !line.startsWith("#"));
     expect(ignore).toContain("/.storybook/generated/");
     expect(ignore).toContain("/.storybook/assets/");
     expect(
@@ -733,7 +734,8 @@ function resolveTscBin(): {
   run: (args: Array<string>) => { output: string; status: number | null };
   runIn: (cwd: string, args: Array<string>) => { output: string; status: number | null };
 } | null {
-  for (const [pkg, binName] of /* SAFETY: 类型断言已复核 */ [
+  /* SAFETY: 类型断言已复核 */
+  for (const [pkg, binName] of [
     ["@typescript/native", "tsc"],
     ["typescript", "tsc6"],
   ] as const) {
@@ -748,7 +750,7 @@ function resolveTscBin(): {
     } catch {
       continue;
     }
-    if (!bin) {
+    if (bin === undefined || bin === "") {
       continue;
     }
     const file = path.resolve(path.dirname(pkgJson), bin);
@@ -816,7 +818,9 @@ describe("moveFileAcrossVolumes：跨卷退成 copy+unlink，别把节点布局�
       const spy = vi.spyOn(fs, "renameSync").mockImplementation(() => {
         throw errno("EPERM");
       });
-      expect(() => moveFileAcrossVolumes(from, to)).toThrow("EPERM");
+      expect(() => {
+        moveFileAcrossVolumes(from, to);
+      }).toThrow("EPERM");
       spy.mockRestore();
       expect(fs.existsSync(from), "报错被吞了 ⇒ 原处不该还在").toBe(true);
       expect(fs.existsSync(to), "EPERM 不该被当成「走退路」").toBe(false);

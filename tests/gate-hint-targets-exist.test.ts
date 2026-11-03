@@ -57,7 +57,7 @@ export function stripComments(text: string): string {
 export function quotedRepoPaths(text: string): Array<string> {
   const out = new Set<string>();
   for (const m of stripComments(text).matchAll(PATH_RE)) {
-    if (m[1]) {
+    if (m[1] !== undefined && m[1] !== "") {
       out.add(m[1]);
     }
   }

@@ -55,9 +55,7 @@ export function resolvePlaywrightCli(cwd = ROOT) {
   const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
   const bin = pkg?.bin?.playwright;
   if (typeof bin !== "string") {
-    throw new Error(
-      `[e2e-run] @playwright/test 没有 bin.playwright：${pkgPath}`,
-    );
+    throw new Error(`[e2e-run] @playwright/test 没有 bin.playwright：${pkgPath}`);
   }
   const entry = path.resolve(path.dirname(pkgPath), bin.replace(/^\.\//, ""));
   if (!existsSync(entry)) {
@@ -180,10 +178,7 @@ export function resolvePlaywrightFile(rel, cwd = ROOT) {
  *   `origin` 缺省 `"run"`（真实跑法）；`"test"` 表示调用方自己就是那条负向用例。
  * @returns {Promise<{status: number | null}>}
  */
-export function runChild(
-  invocation,
-  { spawnImpl = spawn, origin = "run" } = {},
-) {
+export function runChild(invocation, { spawnImpl = spawn, origin = "run" } = {}) {
   const { command, args, options } = invocation;
   return new Promise((settle) => {
     const child = spawnImpl(command, args, options);
@@ -192,7 +187,9 @@ export function runChild(
       process.stderr.write(spawnFailureLine({ command, code, origin }));
       settle({ status: null });
     });
-    child.on("close", (code) => settle({ status: code }));
+    child.on("close", (code) => {
+      settle({ status: code });
+    });
   });
 }
 
@@ -208,10 +205,9 @@ export function runChild(
 export function spawnFailureLine({ command, code, origin = "run" }) {
   const byTest = origin === "test";
   const tag = byTest ? "[e2e-run/test]" : "[e2e-run]";
-  return (
-    `${tag} ✗ 起不了 Playwright（${command}）：失败码 ${code ?? "未知"} —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）${
+  return `${tag} ✗ 起不了 Playwright（${command}）：失败码 ${code ?? "未知"} —— 盘上没有 / 起不来的形态见 resolveCommandInvocation（§2.1.1）${
     byTest
       ? "\n          ↑ 这条是**判据按设计造的失败**（负向用例要的正是这个出口），不是这一跑起不来。\n"
-      : "\n"}`
-  );
+      : "\n"
+  }`;
 }

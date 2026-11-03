@@ -84,11 +84,16 @@ export function useModelLibrary(): ModelLibraryController {
   useEffect(() => {
     // 挂载时静默同步一次，让库反映当前配置；它与 list 的首帧**并行**发车，
     // defer 出 effect body（React 19 规则：effect 内不直接 setState）。
-    const t = setTimeout(
-      () => syncMut.mutate(undefined, { onSettled: () => reloadRef.current() }),
-      0,
-    );
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      syncMut.mutate(undefined, {
+        onSettled: () => {
+          reloadRef.current();
+        },
+      });
+    }, 0);
+    return () => {
+      clearTimeout(t);
+    };
     /* 刻意只依赖 `[]`：本 effect 的语义就是「挂载时同步一次」。`syncMut` 是
      * mutation 稳定引用、`reload` 已收进 ref；把它们列进来正是上面那条
      * 自激循环的成因，不是「漏了依赖」。 */

@@ -60,11 +60,13 @@ const BodySchema = {
     const opts: LLMRequestOptions = {};
     // 原 `as any` 透传:非 "local"/"remote" 的值继续透传给 getLLMConfig(按非 remote 处理),
     // 加守卫反而会改变该退化行为,这里只恢复静态类型。
-    if (rec.provider) {
+    const hasProvider = Boolean(rec.provider);
+    if (hasProvider) {
       /* SAFETY: 类型断言已复核 */
       opts.provider = rec.provider as LLMProviderType;
     }
-    if (rec.model) {
+    const hasModel = Boolean(rec.model);
+    if (hasModel) {
       const rawModel: unknown = rec.model;
       opts.model = String(rawModel);
     }
@@ -112,7 +114,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.stream) {
     try {
       // 带 tools 参数时走工具调用链路，返回 tool_calls（Agent 场景）
-      if (parsed.opts.tools?.length) {
+      if (parsed.opts.tools !== undefined && parsed.opts.tools.length > 0) {
         const result = await completeLLMTools(cfg, parsed.messages, parsed.opts.tools);
         return NextResponse.json({
           content: result.content,

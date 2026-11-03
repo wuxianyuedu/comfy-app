@@ -20,10 +20,11 @@ export type CategoryEnabled = Record<LogCategoryFilter, boolean>;
 
 /** 全部分类默认开启。 */
 function defaultEnabled(): CategoryEnabled {
+  /* SAFETY: 类型断言已复核 */
   return LOG_CATEGORY_FILTERS.reduce<CategoryEnabled>((acc, category) => {
     acc[category] = true;
     return acc;
-  }, /* SAFETY: 类型断言已复核 */ {} as CategoryEnabled);
+  }, {} as CategoryEnabled);
 }
 
 /**

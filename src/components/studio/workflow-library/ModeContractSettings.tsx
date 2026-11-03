@@ -22,7 +22,9 @@ export function ModeContractSettings() {
     <Hint label="配置每种模式对外有哪些统一输入 / 输出 —— 本地工作流按它配落点，远端模型按它建适配器">
       <Button
         className={`${HEADER_ACTION_BTN} border-border bg-subtle text-ink-strong hover:bg-surface-2 hover:text-ink-bright`}
-        onClick={() => emitAppEvent("workspace:navigate", { view: "mode-contract" })}
+        onClick={() => {
+          emitAppEvent("workspace:navigate", { view: "mode-contract" });
+        }}
         variant="outline"
       >
         <Puzzle size={13} />

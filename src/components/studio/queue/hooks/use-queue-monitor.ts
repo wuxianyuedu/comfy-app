@@ -215,7 +215,11 @@ export function useQueueMonitor(): QueueMonitorController {
     cancel,
     openFolder,
     copyForReprint,
-    openLog: (task) => setLogRow(task),
-    closeLog: () => setLogRow(null),
+    openLog: (task) => {
+      setLogRow(task);
+    },
+    closeLog: () => {
+      setLogRow(null);
+    },
   };
 }

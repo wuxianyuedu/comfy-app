@@ -135,10 +135,9 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
     // 不是新起一次 git；那份清单的变量名随改动面拆过一次（#2905），所以只钉
     // 「从某个已有数组的 filter 结果来」这个形态。
     expect(src).toContain("const wantAdvice = affectedCount >= SCOPE_ADVICE_MIN;");
-    expect(
-      src,
-      "affectedCount 必须从已经拿到的清单算出来 —— 另起一次 git 就是白付",
-    ).toMatch(/const affectedCount = \w+\.filter\(/);
+    expect(src, "affectedCount 必须从已经拿到的清单算出来 —— 另起一次 git 就是白付").toMatch(
+      /const affectedCount = \w+\.filter\(/,
+    );
   });
 
   it("它**不改变退出码**（代价不是结论）—— 打印点自己不许 return", () => {
@@ -150,9 +149,7 @@ describe("受影响用例的启动器 —— 「大改动拆小」这条建议�
     const start = src.indexOf("if (wantAdvice) {");
     expect(start, "解不出 wantAdvice 的打印点").toBeGreaterThan(-1);
     const body = src.slice(start, src.indexOf("\n  }", start));
-    expect(body, "建议那一段里出现了 return —— 它就不再是纯信息了").not.toMatch(
-      /\breturn\b/,
-    );
+    expect(body, "建议那一段里出现了 return —— 它就不再是纯信息了").not.toMatch(/\breturn\b/);
     expect(body).toContain("scopeAdvice({");
   });
 

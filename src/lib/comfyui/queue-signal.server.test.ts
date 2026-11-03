@@ -12,8 +12,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * 模块求值阶段（导入被测模块 → 触发 mock 工厂）会撞上 `const collect` 的 TDZ。 */
 const { collect } = vi.hoisted(() => ({ collect: vi.fn() }));
 vi.mock("~/lib/comfyui/queue-status.server", () => ({
-  collectComfyQueueStatus:
-    /* SAFETY: 类型断言已复核 */ collect as unknown as () => Promise<unknown>,
+  /* SAFETY: 类型断言已复核 */
+  collectComfyQueueStatus: collect as unknown as () => Promise<unknown>,
 }));
 
 import { subscribeQueueChanged, resetQueueChangedSignalForTest } from "./queue-signal.server";

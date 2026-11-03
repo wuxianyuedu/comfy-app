@@ -61,7 +61,13 @@ function BoomDemo() {
   return (
     <div className="flex w-lg flex-col gap-3">
       <div className="flex gap-2">
-        <Button onClick={() => setExplode((e) => !e)} size="sm" variant="outline">
+        <Button
+          onClick={() => {
+            setExplode((e) => !e);
+          }}
+          size="sm"
+          variant="outline"
+        >
           {explode ? "停止抛错" : "让子树抛错"}
         </Button>
         <Button

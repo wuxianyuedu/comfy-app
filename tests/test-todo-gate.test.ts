@@ -166,9 +166,10 @@ describe("test.todo 消费方门禁：该拦的形状（§11.24）", () => {
  * `tests/global-setup-cleanup.test.ts` 会在 `tests/` 下临时造探针再删，
  * 两个 vitest 同跑时本扫描会撞上空档，于是 D 组带着一个 Node 栈崩掉。
  */
-const { readForScan } = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
-  "../scripts/check-test-todo.cjs",
-) as { readForScan: (abs: string) => string | null };
+/* SAFETY: 类型断言已复核 */
+const { readForScan } = createRequire(import.meta.url)("../scripts/check-test-todo.cjs") as {
+  readForScan: (abs: string) => string | null;
+};
 
 describe("扫描期间文件消失（并发探针）", () => {
   test("读不到的文件返回 null，而不是把整个 D 组带崩", () => {

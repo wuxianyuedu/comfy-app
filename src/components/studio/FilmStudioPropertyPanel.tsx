@@ -44,7 +44,9 @@ export function FilmStudioPropertyPanel({
             <input
               {...field}
               className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
-              onChange={textHandler((name) => onPatchShot(selectedShotId, { name }))}
+              onChange={textHandler((name) => {
+                onPatchShot(selectedShotId, { name });
+              })}
               value={selectedShot.name}
             />
           )}
@@ -58,11 +60,11 @@ export function FilmStudioPropertyPanel({
               className="border-border bg-subtle text-ink-field focus:border-primary/50 focus:ring-primary/20 h-9 w-full rounded-lg border px-3 text-sm outline-none focus:ring-1"
               max="30"
               min="0.5"
-              onChange={(event) =>
+              onChange={(event) => {
                 onPatchShot(selectedShotId, {
                   duration: formatShotDuration(Number(event.target.value)),
-                })
-              }
+                });
+              }}
               step="0.1"
               type="number"
               value={Number.parseFloat(selectedShot.duration)}
@@ -119,7 +121,9 @@ export function FilmStudioPropertyPanel({
         >
           <ToggleGroupItem
             className="h-auto flex-1 rounded-lg px-2.5 py-1 text-xs"
-            disabled={!c.activeProjectId || c.projectShotCount === 0}
+            disabled={
+              c.activeProjectId === null || c.activeProjectId === "" || c.projectShotCount === 0
+            }
             value="project"
           >
             当前项目镜头
@@ -202,7 +206,9 @@ export function FilmStudioPropertyPanel({
           <Checkbox
             checked={c.subtitleOn}
             className="accent-primary"
-            onCheckedChange={(checked) => c.setSubtitleOn(checked === true)}
+            onCheckedChange={(checked) => {
+              c.setSubtitleOn(checked === true);
+            }}
           />
         </FieldLabel>
 
@@ -221,13 +227,13 @@ export function FilmStudioPropertyPanel({
             }}
             type="file"
           />
-          {c.bgmName && (
+          {c.bgmName !== null && c.bgmName !== "" && (
             <p className="text-primary-strong text-2xs mt-1 truncate">已选：{c.bgmName}</p>
           )}
         </div>
 
         {/* Error display */}
-        {c.film?.error && (
+        {c.film !== null && c.film.error !== null && c.film.error !== "" && (
           <div className="border-destructive/30 bg-destructive/10 text-destructive text-2xs rounded-lg border px-3 py-2 leading-relaxed">
             {c.film.error}
             {c.film.status === "FAILED" &&

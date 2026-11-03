@@ -74,7 +74,9 @@ export function FinalComposer({
     duration: typeof shot.duration === "number" && shot.duration > 0 ? shot.duration : 4,
   }));
 
-  const clipsDone = timeline.filter((entry) => entry.shot.clipUrl).length;
+  const clipsDone = timeline.filter(
+    (entry) => entry.shot.clipUrl !== undefined && entry.shot.clipUrl !== "",
+  ).length;
   const totalDuration = timeline.reduce((acc, entry) => acc + entry.duration, 0);
   const current = timeline[currentIdx];
 
@@ -98,9 +100,16 @@ export function FinalComposer({
         return idx;
       }
       const next = timeline[idx + 1];
-      if (next && !next.shot.clipUrl && next.shot.imageUrl) {
+      if (
+        next &&
+        (next.shot.clipUrl === undefined || next.shot.clipUrl === "") &&
+        next.shot.imageUrl !== undefined &&
+        next.shot.imageUrl !== ""
+      ) {
         // 静止帧兜底：按住该镜头时长。
-        imageTimerRef.current = setTimeout(() => advance(), next.duration * 1000);
+        imageTimerRef.current = setTimeout(() => {
+          advance();
+        }, next.duration * 1000);
       }
       return idx + 1;
     });
@@ -116,8 +125,15 @@ export function FinalComposer({
     const first = timeline[0];
     setCurrentIdx(0);
     setPlaying(true);
-    if (first && !first.shot.clipUrl && first.shot.imageUrl) {
-      imageTimerRef.current = setTimeout(() => advance(), first.duration * 1000);
+    if (
+      first &&
+      (first.shot.clipUrl === undefined || first.shot.clipUrl === "") &&
+      first.shot.imageUrl !== undefined &&
+      first.shot.imageUrl !== ""
+    ) {
+      imageTimerRef.current = setTimeout(() => {
+        advance();
+      }, first.duration * 1000);
     }
   }
 
@@ -197,7 +213,12 @@ export function FinalComposer({
           ) : (
             <Button
               className="h-auto rounded-xl px-4 py-2 font-semibold"
-              disabled={clipsDone === 0 && timeline.every((entry) => !entry.shot.imageUrl)}
+              disabled={
+                clipsDone === 0 &&
+                timeline.every(
+                  (entry) => entry.shot.imageUrl === undefined || entry.shot.imageUrl === "",
+                )
+              }
               onClick={startPlayback}
               variant="primary-solid"
             >
@@ -243,7 +264,7 @@ export function FinalComposer({
             <span>{current.shot.sceneHeading}</span>
           </div>
           <div className="bg-bg grid min-h-60 place-items-center overflow-hidden rounded-xl">
-            {current.shot.clipUrl ? (
+            {current.shot.clipUrl !== undefined && current.shot.clipUrl !== "" ? (
               <MediaThumbnail
                 autoPlay
                 className="max-h-105 w-full"
@@ -252,7 +273,7 @@ export function FinalComposer({
                 onEnded={advance}
                 src={current.shot.clipUrl}
               />
-            ) : current.shot.imageUrl ? (
+            ) : current.shot.imageUrl !== undefined && current.shot.imageUrl !== "" ? (
               <MediaThumbnail
                 alt={current.shot.sceneHeading}
                 className="max-h-105 w-full object-contain"
@@ -262,7 +283,7 @@ export function FinalComposer({
               <span className="text-muted-foreground text-xs">该镜头缺少画面，已跳过</span>
             )}
           </div>
-          {current.shot.dialogue && (
+          {current.shot.dialogue !== undefined && current.shot.dialogue !== "" && (
             <p className="text-ink mt-2 text-center text-[12.5px]">{current.shot.dialogue}</p>
           )}
         </div>
@@ -282,7 +303,7 @@ export function FinalComposer({
             >
               <IndexDot index={idx + 1} size="lg" />
               <div className="bg-elevated h-14 w-20 shrink-0 overflow-hidden rounded-lg">
-                {shot.imageUrl ? (
+                {shot.imageUrl !== undefined && shot.imageUrl !== "" ? (
                   <MediaThumbnail
                     alt={shot.sceneHeading}
                     className="h-full w-full object-cover"
@@ -297,12 +318,14 @@ export function FinalComposer({
               <div className="min-w-0 flex-1">
                 <div className="text-ink truncate text-xs font-medium">{shot.sceneHeading}</div>
                 <div className="text-muted-foreground text-2xs mt-0.5 truncate">
-                  {shot.clipUrl
+                  {shot.clipUrl !== undefined && shot.clipUrl !== ""
                     ? "片段就绪"
-                    : shot.imageUrl
+                    : shot.imageUrl !== undefined && shot.imageUrl !== ""
                       ? "待生成视频（以静帧占位）"
                       : "待生成画面"}
-                  {shot.dialogue ? ` · 字幕: ${shot.dialogue}` : ""}
+                  {shot.dialogue !== undefined && shot.dialogue !== ""
+                    ? ` · 字幕: ${shot.dialogue}`
+                    : ""}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -313,11 +336,11 @@ export function FinalComposer({
                       className="border-border bg-bg text-ink focus-visible:border-primary focus-visible:ring-primary/30 h-auto w-14 rounded-md px-2 py-1 text-xs"
                       max={20}
                       min={1}
-                      onChange={(event) =>
+                      onChange={(event) => {
                         updateShot(shot.id, {
                           duration: clamp(Number(event.target.value) || 4, 1, 20),
-                        })
-                      }
+                        });
+                      }}
                       type="number"
                       value={entry.duration}
                     />
@@ -329,12 +352,12 @@ export function FinalComposer({
                       {...field}
                       className="bg-subtle! border-border! text-xs"
                       labels={TRANSITION_LABELS}
-                      onChange={(value) =>
+                      onChange={(value) => {
                         updateShot(shot.id, {
                           /* SAFETY: 类型断言已复核 */
                           transition: value as Transition,
-                        })
-                      }
+                        });
+                      }}
                       options={TRANSITIONS}
                       placeholder="转场"
                       value={shot.transition ?? "cut"}
@@ -347,12 +370,12 @@ export function FinalComposer({
                       {...field}
                       className="bg-subtle! border-border! text-xs"
                       labels={MOTION_LABELS}
-                      onChange={(value) =>
+                      onChange={(value) => {
                         updateShot(shot.id, {
                           /* SAFETY: 类型断言已复核 */
                           motion: value as MotionLevel,
-                        })
-                      }
+                        });
+                      }}
                       options={MOTIONS}
                       placeholder="运动"
                       value={shot.motion ?? "medium"}

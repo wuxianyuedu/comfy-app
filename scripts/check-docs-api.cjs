@@ -72,7 +72,9 @@ const TAG = "[docs-api]";
  * 这一格的 `[info]` 从前是裸 `console.log`，在平台日志里与「通过」同一种灰。 */
 const { gateFail, gatePass, gateSkip } = require("./ci-log.mjs");
 /** 中间读数：不是判决，但也不是噪音（`[info]` 标签在色带里认得出）。 */
-const info = (text) => console.log(`[info] ${text}`);
+const info = (text) => {
+  console.log(`[info] ${text}`);
+};
 
 /**
  * **闭包叶子集** —— typedoc 输入面的「根外」那一部分（ISSUE #2223）。

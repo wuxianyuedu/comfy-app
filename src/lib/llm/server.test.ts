@@ -438,14 +438,13 @@ describe("completeLLM（一次性补全）", () => {
   });
 
   it("错误响应体为空时不拼多余的冒号", async () => {
-    fetchMock.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ {
-        ok: false,
-        status: 502,
-        text: async () => "",
-        json: async () => ({}),
-      } as unknown as Response,
-    );
+    /* SAFETY: 类型断言已复核 */
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 502,
+      text: async () => "",
+      json: async () => ({}),
+    } as unknown as Response);
     await expect(completeLLM(CFG(), [])).rejects.toThrow(/LLM 请求失败 \(502\)$/);
   });
 });
@@ -481,15 +480,14 @@ describe("streamLLM（流式补全）", () => {
   });
 
   it("服务端不返回 body → 明确报「未返回数据流」", async () => {
-    fetchMock.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ {
-        ok: true,
-        status: 200,
-        body: null,
-        json: async () => ({}),
-        text: async () => "",
-      } as unknown as Response,
-    );
+    /* SAFETY: 类型断言已复核 */
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      json: async () => ({}),
+      text: async () => "",
+    } as unknown as Response);
     await expect(streamLLM(CFG(), [], noop)).rejects.toThrow(/未返回数据流/);
   });
 

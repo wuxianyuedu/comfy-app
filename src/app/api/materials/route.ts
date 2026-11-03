@@ -112,14 +112,14 @@ export async function GET(req: NextRequest) {
     }));
 
     let items: Array<MaterialItem> = [];
-    if (q) {
+    if (q !== null && q !== "") {
       // 搜索优先于 folder：跨所有分类找名字匹配的
       const pool: Array<MaterialItem> = [];
       for (const f of MATERIAL_FOLDERS) {
         pool.push(...(byFolder.get(f.id) ?? []));
       }
       items = pool.filter((it) => matchesNeedle(q, it.name));
-    } else if (folder) {
+    } else if (folder !== null && folder !== "") {
       if (!isValidFolder(folder)) {
         return NextResponse.json({ error: `未知分类：${folder}` }, { status: 400 });
       }
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
     const projectIdRaw = form.get("projectId");
     const projectId = sanitizeScope(typeof projectIdRaw === "string" ? projectIdRaw : "");
     const scope = shared ? SHARED_SCOPE : projectId;
-    if (!scope) {
+    if (scope === null || scope === "") {
       return NextResponse.json(
         { error: "缺少 projectId（或改用 shared=true 上传到共享素材）" },
         { status: 400 },
@@ -191,12 +191,12 @@ export async function POST(req: NextRequest) {
     }
 
     const safeName = sanitizeFileName(file.name);
-    if (!safeName) {
+    if (safeName === null || safeName === "") {
       return NextResponse.json({ error: "文件名不合法" }, { status: 400 });
     }
 
     const dir = folderDir(scope, folder);
-    if (!dir) {
+    if (dir === null || dir === "") {
       return NextResponse.json({ error: "路径不合法" }, { status: 400 });
     }
     await fs.mkdir(dir, { recursive: true });
@@ -244,7 +244,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const id = url.searchParams.get("id")?.trim();
-    if (!id) {
+    if (id === undefined || id === "") {
       return NextResponse.json({ error: "缺少 id" }, { status: 400 });
     }
 
@@ -255,7 +255,7 @@ export async function DELETE(req: NextRequest) {
     const scope = sanitizeScope(parts[0]);
     const folder = parts[1];
     const name = sanitizeFileName(parts[2]);
-    if (!scope || !isValidFolder(folder) || !name) {
+    if (scope === null || scope === "" || !isValidFolder(folder) || name === null || name === "") {
       return NextResponse.json({ error: "id 不合法" }, { status: 400 });
     }
     /* 归属判定必须在**碰磁盘之前**：这一条的副作用是 `fs.unlink`，
@@ -265,7 +265,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const dir = folderDir(scope, folder);
-    if (!dir) {
+    if (dir === null || dir === "") {
       return NextResponse.json({ error: "路径不合法" }, { status: 400 });
     }
 

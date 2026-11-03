@@ -123,7 +123,9 @@ export function useItemAction(keys?: ReadonlyArray<string>): ItemAction {
     [],
   );
 
-  const clear = useCallback(() => setBusyId(null), []);
+  const clear = useCallback(() => {
+    setBusyId(null);
+  }, []);
 
   const isBusy = useCallback(
     (id: ItemActionScope) => visibleBusy !== null && visibleBusy === id,

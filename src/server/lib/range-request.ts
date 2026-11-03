@@ -40,7 +40,7 @@ const FULL: ByteRangeVerdict = { kind: "full" };
 
 /** 只认非负十进制整数；带 `+`、小数、空格、符号的一律算「这条 Range 我们不解析」。 */
 function digits(raw: string | undefined): number | null {
-  if (!raw || !/^\d+$/.test(raw)) {
+  if (raw === undefined || !/^\d+$/.test(raw)) {
     return null;
   }
   const parsed = Number(raw);

@@ -81,9 +81,7 @@ describe("resolveDevHandle：取值链的第一个非空者胜出", () => {
         env: { CNB_NPC_NAME: "CodeBuddy", CNB_TOKEN_USER_NAME: "cnb" },
       }).source,
     ).toBe("CNB_NPC_NAME");
-    expect(
-      resolveDevHandle({ root, env: { CNB_TOKEN_USER_NAME: "cnb" } }).name,
-    ).toBe("cnb");
+    expect(resolveDevHandle({ root, env: { CNB_TOKEN_USER_NAME: "cnb" } }).name).toBe("cnb");
   });
 
   it("负控制：平台账号**昵称**不参与取值（它是人，不是这份检出的名字）", () => {
@@ -103,36 +101,34 @@ describe("resolveDevHandle：取值链的第一个非空者胜出", () => {
     expect(["git config user.name", "兜底"]).toContain(r.source);
     expect(SETTLED_FALLBACK).toBe("cnb");
     // 没有 `.env` 也不许抛（CI / 干净检出是常态）。
-    expect(() =>
-      resolveDevHandle({ root: path.join(root, "none"), env: {} }),
-    ).not.toThrow();
+    expect(() => resolveDevHandle({ root: path.join(root, "none"), env: {} })).not.toThrow();
   });
 
   it("`devHandle` 是同一个答案的短形态（不许出现第二套口径）", () => {
     writeEnv(`${DEV_HANDLE_ENV_KEY}="same"\n`);
-    expect(devHandle({ root, env: {} })).toBe(
-      resolveDevHandle({ root, env: {} }).name,
-    );
+    expect(devHandle({ root, env: {} })).toBe(resolveDevHandle({ root, env: {} }).name);
   });
 });
 
 describe("devHandleForEnvFile：写进 `.env` 的是取到的值，不是空值", () => {
   it("进程环境给了就写它；否则走平台身份 / git 名 / 兜底", () => {
-    expect(
-      devHandleForEnvFile({ root, env: { [DEV_HANDLE_ENV_KEY]: "manual" } }),
-    ).toEqual({ name: "manual", source: HANDLE_SOURCES.processEnv });
-    expect(
-      devHandleForEnvFile({ root, env: { CNB_NPC_NAME: "CodeBuddy" } }),
-    ).toEqual({ name: "CodeBuddy", source: "CNB_NPC_NAME" });
+    expect(devHandleForEnvFile({ root, env: { [DEV_HANDLE_ENV_KEY]: "manual" } })).toEqual({
+      name: "manual",
+      source: HANDLE_SOURCES.processEnv,
+    });
+    expect(devHandleForEnvFile({ root, env: { CNB_NPC_NAME: "CodeBuddy" } })).toEqual({
+      name: "CodeBuddy",
+      source: "CNB_NPC_NAME",
+    });
     expect(devHandleForEnvFile({ root, env: {} }).name.trim()).not.toBe("");
   });
 
   it("不读 `.env` 自己：正要写它，读到空值没有意义（也不许把旧值抄回来当「取的」）", () => {
     writeEnv(`${DEV_HANDLE_ENV_KEY}="stale"\n`);
     // 这一档只看进程环境与平台身份 ⇒ 拿不到 `.env` 里那个旧值。
-    expect(
-      devHandleForEnvFile({ root, env: { CNB_NPC_NAME: "CodeBuddy" } }).name,
-    ).toBe("CodeBuddy");
+    expect(devHandleForEnvFile({ root, env: { CNB_NPC_NAME: "CodeBuddy" } }).name).toBe(
+      "CodeBuddy",
+    );
   });
 });
 
@@ -142,12 +138,8 @@ describe("machineHandle：机器自起的账用自己的名字", () => {
   });
 
   it("宿主给了 NPC 名 ⇒ 带上它，仍以「这是机器的账」打头", () => {
-    expect(machineHandle("ci-daily", { CNB_NPC_NAME: "CodeBuddy" })).toBe(
-      "ci-daily:CodeBuddy",
-    );
-    expect(machineHandle("ci-pr", { CNB_NPC_NAME: " CodeBuddy " })).toBe(
-      "ci-pr:CodeBuddy",
-    );
+    expect(machineHandle("ci-daily", { CNB_NPC_NAME: "CodeBuddy" })).toBe("ci-daily:CodeBuddy");
+    expect(machineHandle("ci-pr", { CNB_NPC_NAME: " CodeBuddy " })).toBe("ci-pr:CodeBuddy");
   });
 
   it("负控制：传进平台账号昵称也不改变结果（不取人的名字）", () => {

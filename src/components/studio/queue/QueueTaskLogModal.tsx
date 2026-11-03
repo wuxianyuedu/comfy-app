@@ -81,9 +81,17 @@ export function QueueTaskLogModal({
   /* 还没落定才谈得上「在跑」：raw-cli 弹窗据此决定要不要保持 1.5s 轮询。 */
   const running = !stream.settled && (stream.started || task.status === "RUNNING");
   const failureMessage = stream.settled && !stream.settled.ok ? stream.settled.message : null;
+  /* 顶部错误条文案：流 settled 的失败信息优先，否则回退任务记录上的 error。
+   * 收成 `string | null`（task.error 是可选项），视图只判一次。 */
+  const bannerMessage = failureMessage ?? task.error ?? null;
 
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         aria-label="执行日志"
         className="bg-transparent p-0 ring-0"
@@ -132,7 +140,9 @@ export function QueueTaskLogModal({
                 <Button
                   className="text-ink-muted hover:bg-subtle hover:text-ink-strong text-2xs rounded-md px-2 py-0.5"
                   data-testid="queue-log-raw"
-                  onClick={() => setRawOpen(true)}
+                  onClick={() => {
+                    setRawOpen(true);
+                  }}
                   variant="ghost"
                 >
                   查看完整输出
@@ -170,11 +180,9 @@ export function QueueTaskLogModal({
             logs={stream.logs}
             rowTestId="queue-log-line"
             topSlot={
-              (failureMessage ?? task.error) ? (
+              bannerMessage !== null && bannerMessage !== "" ? (
                 <div className="border-destructive/30 bg-destructive/6 text-destructive mb-2 flex-col gap-1 rounded border p-2 text-sm">
-                  <div className="wrap-break-word whitespace-pre-wrap">
-                    {failureMessage ?? task.error}
-                  </div>
+                  <div className="wrap-break-word whitespace-pre-wrap">{bannerMessage}</div>
                 </div>
               ) : null
             }
@@ -182,7 +190,9 @@ export function QueueTaskLogModal({
         </div>
       </DialogContent>
       <WorkflowRunRawCliModal
-        onClose={() => setRawOpen(false)}
+        onClose={() => {
+          setRawOpen(false);
+        }}
         open={rawOpen}
         running={running}
         taskId={task.id}

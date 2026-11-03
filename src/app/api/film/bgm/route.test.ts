@@ -73,7 +73,8 @@ describe("POST /api/film/bgm", () => {
   it("成功的落点由 filmBgmRoot() 派生：文件名带 bgm- 前缀，后缀不重复", async () => {
     const res = await POST(reqWith(audioForm("主题曲.mp3", "audio/mpeg")));
     expect(res.status).toBe(200);
-    const { name } = /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+    /* SAFETY: 类型断言已复核 */
+    const { name } = (await res.json()) as {
       name: string;
     };
     expect(writes.mkdir).toEqual([filmBgmRoot(generatedRoot(TMP))]);
@@ -109,8 +110,9 @@ describe("POST /api/film/bgm", () => {
     }) as unknown as NextRequest;
     const res = await POST(req);
     expect(res.status).toBe(400);
+    /* SAFETY: 类型断言已复核 */
     expect(
-      /* SAFETY: 类型断言已复核 */ (await res.json()) as {
+      (await res.json()) as {
         error: string;
       },
     ).toEqual({

@@ -38,13 +38,23 @@ export function ResultCard({
   /* 业务事实（节点类型 / 产出元数据）与文件事实（扩展名）分层判断：扩展名那份
    * 判据收敛在 `media-kind.ts`（ISSUE #571），视图层不再自带第四份正则。 */
   const isVideo = kind === "video" || mediaType === "video" || isVideoSource(path);
-  const src = path?.startsWith("/") ? path : path ? `/${path}` : undefined;
+  const src =
+    path?.startsWith("/") === true
+      ? path
+      : path !== undefined && path !== ""
+        ? `/${path}`
+        : undefined;
   const meta = NODE_META[kind];
-  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串名视为无输出，需用 || 回退到 meta.label
-  const displayName = name?.trim() || meta.label;
+  const trimmedName = name?.trim();
+  /* 空字符串名视为无输出，回退到 meta.label（不能用 ??，空串不是 nullish）。 */
+  const displayName = trimmedName !== undefined && trimmedName !== "" ? trimmedName : meta.label;
 
   /* ── Text result ── */
-  if (kind === "script" || kind === "agent" || (!src && text)) {
+  if (
+    kind === "script" ||
+    kind === "agent" ||
+    ((src === undefined || src === "") && text !== undefined && text !== "")
+  ) {
     return (
       <div className="nodrag nopan border-border-strong bg-subtle relative mt-2 overflow-hidden rounded-xl border">
         {/* 头部 —— 左上：类型字符 + 名字；右上：状态徽标 */}
@@ -84,7 +94,7 @@ export function ResultCard({
             <Button
               className="text-ink-soft hover:bg-subtle text-2xs h-auto rounded-md px-2 py-1 font-normal"
               onClick={() => {
-                if (text) {
+                if (text !== undefined && text !== "") {
                   copyResult(text);
                 }
               }}
@@ -96,10 +106,12 @@ export function ResultCard({
           </Hint>
         </div>
         <div className="text-ink-bright max-h-56 overflow-auto p-3 text-xs leading-relaxed">
-          {
-            // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- 空字符串也视为无输出，需回退占位
-            text || <span className="text-ink-muted">尚无文本输出</span>
-          }
+          {/* 空字符串也视为无输出，回退占位（不能用 ??，空串不是 nullish）。 */}
+          {text !== undefined && text !== "" ? (
+            text
+          ) : (
+            <span className="text-ink-muted">尚无文本输出</span>
+          )}
         </div>
         <div className="border-border-strong flex items-center justify-center border-t py-2">
           <Button
@@ -124,7 +136,7 @@ export function ResultCard({
         <StatusBadge status={status} />
       </div>
       <div className="from-subtle to-canvas-deep relative flex aspect-video items-center justify-center bg-linear-to-br">
-        {src ? (
+        {src !== undefined && src !== "" ? (
           isVideo ? (
             <MediaThumbnail
               /* `as="video"`：`mediaType` / `kind` 已判过视频，而媒体路径

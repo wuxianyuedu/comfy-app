@@ -224,9 +224,12 @@ describe("withBuildCacheSlot：开关关着时与「没有这个机制」逐字�
 
   it("开关开着 ⇒ 接上槽、跑完摘链，常驻目录留在原处", () => {
     const repo = fakeRepo("on");
-    const storeRoot = path.parse(repo).root;
-    const slotRoot = path.join(storeRoot, "ci-build-cache", "comfy-fake");
-    slotRoots.push(slotRoot);
+    /* 槽根**注入**（#3095）：槽根按设计落在卷根下，而 POSIX 上 `/` 不可写（Windows
+     * 盘符根可写）—— 那是平台事实，不该让用例红。注入一个可写目录后，链接 / 摘链 /
+     * 常驻目录三条断言一字不改；生产路径不传这个键，照推导走。 */
+    const cacheRoot = path.join(path.dirname(repo), "ci-build-cache-root-on");
+    const slotRoot = buildCacheSlotPath(cacheRoot, String(buildFaceFingerprint(repo)));
+    slotRoots.push(cacheRoot);
     const lines: Array<string> = [];
     let linkedDuringRun = false;
     const result = withBuildCacheSlot(
@@ -238,22 +241,25 @@ describe("withBuildCacheSlot：开关关着时与「没有这个机制」逐字�
       {
         cwd: repo,
         env: { [BUILD_CACHE_ENABLED_ENV]: "1" },
+        cacheRoot,
         log: (line) => lines.push(line),
-        runStorePath: fakeStore(storeRoot),
+        runStorePath: fakeStore(path.parse(repo).root),
         hasRoom: () => ({ ok: true }),
       },
     );
     expect(result).toBe("built");
     expect(linkedDuringRun).toBe(true);
     expect(fs.existsSync(path.join(repo, ".next", "cache"))).toBe(false);
-    /* 槽留在**推导出来的那个根**下（`ci-build-cache/<包名>/<面指纹>`）。 */
+    /* 槽留在**槽根**下（`<槽根>/<面指纹>`）。 */
     expect(fs.existsSync(slotRoot)).toBe(true);
   });
 
   it("跑的东西抛错 ⇒ 链照样摘掉（收尾在 finally 里，不靠「跑完了」）", () => {
     const repo = fakeRepo("throw");
-    const storeRoot = path.parse(repo).root;
-    slotRoots.push(path.join(storeRoot, "ci-build-cache", "comfy-fake"));
+    /* 与上一条同因（#3095）：注入可写槽根，让「链接已建 ⇒ 抛错 ⇒ 照样摘链」这条
+     * 真的被走到（否则 Linux 上压根没接槽，finally 那一段就没被测）。 */
+    const cacheRoot = path.join(path.dirname(repo), "ci-build-cache-root-throw");
+    slotRoots.push(cacheRoot);
     expect(() =>
       withBuildCacheSlot(
         () => {
@@ -262,8 +268,9 @@ describe("withBuildCacheSlot：开关关着时与「没有这个机制」逐字�
         {
           cwd: repo,
           env: { [BUILD_CACHE_ENABLED_ENV]: "1" },
+          cacheRoot,
           log: () => undefined,
-          runStorePath: fakeStore(storeRoot),
+          runStorePath: fakeStore(path.parse(repo).root),
           hasRoom: () => ({ ok: true }),
         },
       ),

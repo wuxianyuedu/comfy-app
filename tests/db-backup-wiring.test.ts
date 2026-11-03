@@ -43,9 +43,7 @@ function lineOf(source: string, needle: string): number {
 describe("db-sync.mjs：--force 之前必须备份", () => {
   it("createBackup 出现在 ensureSchemaCurrent **之前**", () => {
     const src = read("scripts/db-sync.mjs");
-    expect(lineOf(src, "createBackup(")).toBeLessThan(
-      lineOf(src, "ensureSchemaCurrent("),
-    );
+    expect(lineOf(src, "createBackup(")).toBeLessThan(lineOf(src, "ensureSchemaCurrent("));
   });
 
   it("备份挂在 `force` 这一支下（非 --force 的自动同步不备份）", () => {
@@ -134,9 +132,7 @@ describe("启动链：换文件必须排在起服务之前", () => {
     ).toBe(false);
     // 编排器的执行顺序：预检桥段在任何起服务动作之前。
     const src = read("scripts/dev-launcher.mjs");
-    expect(lineOf(src, "await runStartupGates(")).toBeLessThan(
-      lineOf(src, "bootDevServerStage("),
-    );
+    expect(lineOf(src, "await runStartupGates(")).toBeLessThan(lineOf(src, "bootDevServerStage("));
   });
 
   it("三个入口排在任何会开库的东西之前：不得出现在 spawnSchemaSync 之后", () => {
@@ -148,9 +144,7 @@ describe("启动链：换文件必须排在起服务之前", () => {
         /* 编排器的 schema 同步随起服务桥段搬进了 `dev-boot.mjs`：那一份里
          * **不许**出现换文件（正面那条已断），这里只断「它不在换文件之前」。 */
         expect(
-          read("scripts/launcher-core/dev-boot.mjs").includes(
-            "applyPendingRestoreAtBoot",
-          ),
+          read("scripts/launcher-core/dev-boot.mjs").includes("applyPendingRestoreAtBoot"),
           `${label}: 换文件不许排在 schema 同步之后`,
         ).toBe(false);
         continue;
@@ -194,9 +188,7 @@ describe("设置页接线", () => {
   });
 
   it("恢复**不是**「点完就换文件」：界面说的下一步是重启", () => {
-    const section = read(
-      "src/app/(main)/settings/components/BackupSection.tsx",
-    );
+    const section = read("src/app/(main)/settings/components/BackupSection.tsx");
     expect(section).toContain("重新启动应用后生效");
     /* 反向：不许出现「恢复成功」这类把人骗去刷新页面的文案。 */
     expect(section).not.toContain("已恢复");

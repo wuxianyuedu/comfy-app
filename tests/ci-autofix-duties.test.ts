@@ -46,10 +46,7 @@ const CONFIG = readCnbConfig(process.cwd());
 describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
   it("真仓一致：登记表与两个执行面（stage + 聚合档条目）逐字同源", () => {
     const problems = checkAutofixDuties(CONFIG, ["--autofix"], HEAVY_GATES);
-    expect(
-      problems,
-      `平台侧自动修登记与配置不一致：\n${problems.join("\n")}`,
-    ).toEqual([]);
+    expect(problems, `平台侧自动修登记与配置不一致：\n${problems.join("\n")}`).toEqual([]);
   });
 
   it("登记表非空，且每条都写清了「凭什么可以自动修」", () => {
@@ -58,18 +55,11 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
     expect(AUTOFIX_DUTIES.length).toBeGreaterThan(0);
     for (const duty of AUTOFIX_DUTIES) {
       expect(duty.stage.length, "没写 stage 名").toBeGreaterThan(0);
-      expect(duty.entry, `${duty.stage} 没写入口脚本`).toMatch(
-        /^scripts\/.+\.(cjs|mjs)$/,
-      );
-      expect(duty.args.length, `${duty.stage} 的判定门是空的`).toBeGreaterThan(
-        0,
-      );
+      expect(duty.entry, `${duty.stage} 没写入口脚本`).toMatch(/^scripts\/.+\.(cjs|mjs)$/);
+      expect(duty.args.length, `${duty.stage} 的判定门是空的`).toBeGreaterThan(0);
       /* `why` 不许是「顺手加的」：两条前提（纯确定的重生成 / 红了只有一种成因）
        * 各要有一句，所以下限放在「足够长到写清这两件事」的量级上。 */
-      expect(
-        duty.why.length,
-        `${duty.stage} 没写清「凭什么可以自动修」`,
-      ).toBeGreaterThan(80);
+      expect(duty.why.length, `${duty.stage} 没写清「凭什么可以自动修」`).toBeGreaterThan(80);
     }
   });
 
@@ -91,9 +81,7 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
     for (const name of AUTOFIX_STAGE_NAMES) {
       const line = executors.get(name) ?? "";
       expect(line, `${name} 的 script 不认识（解析为空）`).not.toBe("");
-      expect(line, `${name} 少了 --check：只写不判 = 恒绿`).toContain(
-        "--check",
-      );
+      expect(line, `${name} 少了 --check：只写不判 = 恒绿`).toContain("--check");
       expect(line, `${name} 少了 --autofix`).toContain("--autofix");
     }
   });
@@ -101,9 +89,7 @@ describe("平台侧自动修档（.cnb.yml --autofix ⇄ 登记表）", () => {
   it("判据不是空转：坏配置必须被点名（三个方向各一条）", () => {
     /* ① 登记了、配置里没有这个 stage。 */
     expect(
-      checkAutofixDuties(
-        "gates: &gates\n  - name: 别的\n    script: node x.cjs\n",
-      ),
+      checkAutofixDuties("gates: &gates\n  - name: 别的\n    script: node x.cjs\n"),
     ).toContainEqual(expect.stringContaining("配置与聚合档里都没有这个名字"));
     /* ② 配置里那一档点名了入口却没带 `--autofix`。
      * 缩进按 `.gates: &gates` 那一层的真实形态写（stage 项在 `gates:` 名下，

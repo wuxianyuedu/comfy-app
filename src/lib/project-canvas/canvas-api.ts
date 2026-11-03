@@ -224,7 +224,8 @@ export async function pollTask(
         const peeled =
           typeof rawErr === "string"
             ? rawErr
-            : rawErr && typeof rawErr === "object"
+            : // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+              rawErr != null && typeof rawErr === "object"
               ? (() => {
                   try {
                     return JSON.stringify(rawErr);

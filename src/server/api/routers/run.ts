@@ -327,11 +327,12 @@ export const runRouter = createTRPCRouter({
       const list: Array<unknown> = Array.isArray(rawList) ? rawList : [];
       const rec = list.find(
         (item) =>
+          /* SAFETY: 类型断言已复核 */
           typeof item === "object" &&
           item !== null &&
-          /* SAFETY: 类型断言已复核 */ (item as { id?: unknown }).id === input.targetId,
+          (item as { id?: unknown }).id === input.targetId,
       );
-      if (!rec) {
+      if (rec === undefined) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: `找不到要裁决的${input.kind === "shot" ? "镜头" : "角色卡"}`,

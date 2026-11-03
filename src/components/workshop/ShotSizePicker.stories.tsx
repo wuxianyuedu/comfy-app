@@ -77,15 +77,14 @@ export const CustomMegapixels: Story = {
  */
 export const TwoScenes: Story = {
   render: () => (
+    /* SAFETY: 类型断言已复核 */
     <div className="flex gap-10">
-      {
-        /* SAFETY: 类型断言已复核 */ (["image", "video"] as const).map((scene) => (
-          <div className="flex flex-col gap-2" key={scene}>
-            <span className="text-ink-muted font-mono text-[11px]">scene = {scene}</span>
-            <LivePicker initial={{ ...DEFAULT_SHOT_SIZE, clarity: "2k" }} scene={scene} />
-          </div>
-        ))
-      }
+      {(["image", "video"] as const).map((scene) => (
+        <div className="flex flex-col gap-2" key={scene}>
+          <span className="text-ink-muted font-mono text-[11px]">scene = {scene}</span>
+          <LivePicker initial={{ ...DEFAULT_SHOT_SIZE, clarity: "2k" }} scene={scene} />
+        </div>
+      ))}
     </div>
   ),
 };

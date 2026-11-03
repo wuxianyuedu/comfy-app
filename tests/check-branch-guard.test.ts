@@ -69,9 +69,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("[branch-guard] OK");
   });
 
-  test("master 上的合并提交 → 放行(PR 合并不被本地门槛二次阻挡)", ({
-    repo,
-  }) => {
+  test("master 上的合并提交 → 放行(PR 合并不被本地门槛二次阻挡)", ({ repo }) => {
     repo.git("checkout", "-q", "-b", "feat/merge-me");
     repo.write("feature.txt", "feature\n");
     repo.git("add", ".");
@@ -96,11 +94,10 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     const bare = mkdtempSync(join(tmpdir(), "branch-guard-nogit-"));
     try {
       copyFileSync(SCRIPT, join(bare, "check-branch-guard.cjs"));
-      const output = execFileSync(
-        process.execPath,
-        [join(bare, "check-branch-guard.cjs")],
-        { cwd: bare, encoding: "utf8" },
-      );
+      const output = execFileSync(process.execPath, [join(bare, "check-branch-guard.cjs")], {
+        cwd: bare,
+        encoding: "utf8",
+      });
       // 取不到分支名(空) ≠ master,判据无从命中,放行而非报错
       expect(output).toContain("[branch-guard] OK");
     } finally {
@@ -120,9 +117,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("不在 master 上");
   });
 
-  test("--pr-check:目标分支还在推进、源分支已归并它(CNB 预合并形态)→ 放行", ({
-    repo,
-  }) => {
+  test("--pr-check:目标分支还在推进、源分支已归并它(CNB 预合并形态)→ 放行", ({ repo }) => {
     repo.git("checkout", "-q", "-b", "feat/pr");
     repo.write("feature.txt", "feature\n");
     repo.git("add", ".");
@@ -138,9 +133,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("[branch-guard] OK");
   });
 
-  test("--pr-check:源分支没有任何超出目标分支的提交 → 阻断(源分支就是 master)", ({
-    repo,
-  }) => {
+  test("--pr-check:源分支没有任何超出目标分支的提交 → 阻断(源分支就是 master)", ({ repo }) => {
     // 平台允许创建 source=master 的 PR,这正是本条要拦的场景。
     repo.git("checkout", "-q", "-b", "sync-with-master");
     const { code, output } = repo.run(["--pr-check", "--target", "master"]);
@@ -150,18 +143,12 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
   });
 
   test("--pr-check:取不到目标分支 → 保守放行,不误报", ({ repo }) => {
-    const { code, output } = repo.run([
-      "--pr-check",
-      "--target",
-      "release/nope",
-    ]);
+    const { code, output } = repo.run(["--pr-check", "--target", "release/nope"]);
     expect(code).toBe(0);
     expect(output).toContain("保守放行");
   });
 
-  test("--pr-check 缺省目标分支是 master(不靠环境变量,参数缺省也判得动)", ({
-    repo,
-  }) => {
+  test("--pr-check 缺省目标分支是 master(不靠环境变量,参数缺省也判得动)", ({ repo }) => {
     repo.git("checkout", "-q", "-b", "feat/pr");
     repo.write("feature.txt", "feature\n");
     repo.git("add", ".");
@@ -173,9 +160,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
 
   /* ── --merge-commit:master 的 push 事件复核 ───────────────────────── */
 
-  test("--merge-commit:master 上的合并提交 → 放行(push 事件上 HEAD 就是合并提交)", ({
-    repo,
-  }) => {
+  test("--merge-commit:master 上的合并提交 → 放行(push 事件上 HEAD 就是合并提交)", ({ repo }) => {
     repo.git("checkout", "-q", "-b", "feat/merge-me");
     repo.write("feature.txt", "feature\n");
     repo.git("add", ".");
@@ -206,9 +191,7 @@ describe("check-branch-guard.cjs（提交门槛）", () => {
     expect(output).toContain("PR 关联");
   });
 
-  test("--merge-commit:单父且无 PR 关联 → 保守放行(不误报,直推拦截在平台分支保护)", ({
-    repo,
-  }) => {
+  test("--merge-commit:单父且无 PR 关联 → 保守放行(不误报,直推拦截在平台分支保护)", ({ repo }) => {
     // 拓扑同形时判据无从命中,按「保守放行」处理 —— 与 --pr-check 的
     // 「取不到目标分支 → 保守放行」同一口径。真正拦直推的是平台分支保护
     // (规范 §13.6.1),这里不再叠加一条会误报的判据。

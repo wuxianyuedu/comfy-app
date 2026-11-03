@@ -195,7 +195,12 @@ function OriginSelect({
   value: LogOriginFilter;
 }) {
   return (
-    <Select onValueChange={(next) => onChange(next ?? "all")} value={value}>
+    <Select
+      onValueChange={(next) => {
+        onChange(next ?? "all");
+      }}
+      value={value}
+    >
       <SelectTrigger
         aria-label="按来源筛选"
         className="border-border-strong bg-canvas-deep text-ink-field h-8 rounded-lg text-xs"

@@ -94,7 +94,9 @@ import ts from "typescript";
  */
 function walk(root, fn) {
   fn(root);
-  ts.forEachChild(root, (child) => walk(child, fn));
+  ts.forEachChild(root, (child) => {
+    walk(child, fn);
+  });
 }
 
 /**

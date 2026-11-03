@@ -48,7 +48,9 @@ function VideoField({
       <Field label={label}>
         <SelectMenu
           disabled={disabled}
-          onChange={(value) => set(entry.ioKey, value)}
+          onChange={(value) => {
+            set(entry.ioKey, value);
+          }}
           options={opts}
           value={val}
         />
@@ -101,6 +103,7 @@ function VideoField({
         </Field>
       );
     }
+    // oxlint-disable-next-line no-unnecessary-condition -- role 在前两个分支已收窄为 aspect（VideoRole 仅三档），此比较恒真；保留分档写法，防未来新增视频角色时静默落入 aspect 分支
     if (role === "aspect") {
       // 数值比例 → 写浮点比值的形式预设
       const presets = DIM_RATIO_PRESETS;
@@ -137,7 +140,9 @@ function VideoField({
           disabled={disabled}
           max={bounds.max}
           min={bounds.min}
-          onChange={(nextValue) => set(entry.ioKey, nextValue)}
+          onChange={(nextValue) => {
+            set(entry.ioKey, nextValue);
+          }}
           step={bounds.step}
           value={value}
         />
@@ -152,7 +157,9 @@ function VideoField({
         aria-label={label}
         className="nodrag nopan bg-canvas-deep text-ink-soft focus:ring-primary/40 text-2xs w-full rounded-md px-2.5 py-2 outline-none focus:ring-1"
         disabled={disabled}
-        onChange={textHandler((value) => set(entry.ioKey, value))}
+        onChange={textHandler((value) => {
+          set(entry.ioKey, value);
+        })}
         value={str}
       />
     </Field>

@@ -228,7 +228,9 @@ describe("callStoreAction", () => {
         },
       },
     });
-    const ok = callStoreAction(store, "toggleIORequired", (state) => state.toggleIORequired(key));
+    const ok = callStoreAction(store, "toggleIORequired", (state) => {
+      state.toggleIORequired(key);
+    });
     expect(ok).toBe(true);
     expect(store.getState().workflowIO[key]!.required).toBe(true);
   });

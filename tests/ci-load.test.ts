@@ -41,10 +41,7 @@ describe("现场核数：平台读数优先，读不到才落本机 / 兜底", (
   it("非法读数按本机办并留一句提醒 —— 不许静默变成 0", () => {
     for (const raw of ["0", "-2", "abc", "8.5"]) {
       const r = resolveCores({ CNB_CPUS: raw });
-      expect(
-        r.cores,
-        `CNB_CPUS=${raw} 应当落回本机读数`,
-      ).toBeGreaterThanOrEqual(1);
+      expect(r.cores, `CNB_CPUS=${raw} 应当落回本机读数`).toBeGreaterThanOrEqual(1);
       expect(r.note, `CNB_CPUS=${raw} 必须留一句提醒`).toContain("CNB_CPUS");
     }
   });
@@ -64,10 +61,9 @@ describe("核数 → worker 数：方向是降载，不是放宽判据", () => {
     let prev = 0;
     for (const cores of [1, 2, 3, 4, 6, 8, 12, 16, 32]) {
       const w = workersForCores(cores);
-      expect(
-        w,
-        `${cores} 核算不出至少 ${MIN_WORKERS} 个 worker`,
-      ).toBeGreaterThanOrEqual(MIN_WORKERS);
+      expect(w, `${cores} 核算不出至少 ${MIN_WORKERS} 个 worker`).toBeGreaterThanOrEqual(
+        MIN_WORKERS,
+      );
       expect(w).toBeGreaterThanOrEqual(prev);
       prev = w;
     }
@@ -102,9 +98,7 @@ describe("人的出口：只调并发，不动任何判据", () => {
       const r = resolveCiWorkers({
         env: { CNB_CPUS: "16", COMFY_CI_MAX_WORKERS: raw },
       });
-      expect(r.workers, `COMFY_CI_MAX_WORKERS=${raw}`).toBe(
-        workersForCores(16),
-      );
+      expect(r.workers, `COMFY_CI_MAX_WORKERS=${raw}`).toBe(workersForCores(16));
       expect(r.note, `COMFY_CI_MAX_WORKERS=${raw} 必须留一句提醒`).toContain(
         "COMFY_CI_MAX_WORKERS",
       );

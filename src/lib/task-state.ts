@@ -64,7 +64,8 @@ export function taskStatusLabel(status: string | null | undefined): string {
     return "未知";
   }
   const known: ReadonlyArray<string> = Object.keys(TASK_STATUS_LABELS);
+  /* SAFETY: 类型断言已复核 */
   return known.includes(status)
-    ? TASK_STATUS_LABELS[/* SAFETY: 类型断言已复核 */ status as keyof typeof TASK_STATUS_LABELS]
+    ? TASK_STATUS_LABELS[status as keyof typeof TASK_STATUS_LABELS]
     : status;
 }

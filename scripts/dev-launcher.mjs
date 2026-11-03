@@ -224,7 +224,7 @@ export { shellStaleWarning } from "./launcher-core/preflight.mjs";
 /** 把壳 / pnpm 提醒补录进 app-runtime 通道（实现见 `launcher-core/preflight.mjs`）。
  * @param {string} message @param {string} [root] */
 export function appendRuntimeWarning(message, root = ROOT) {
-  return preflightAppendRuntimeWarning(preflightCtx, message, root);
+  preflightAppendRuntimeWarning(preflightCtx, message, root);
 }
 
 /** 预检层的注入上下文（日志出口 / 启动戳 / pnpm 提示的落点）。 */
@@ -324,7 +324,7 @@ const miscOpsCtx = {
 /** 打开浏览器（实现见 `launcher-core/misc-ops.mjs`）。 */
 /** @param {string} url */
 export function openBrowser(url) {
-  return miscOpsOpenBrowser(miscOpsCtx, url);
+  miscOpsOpenBrowser(miscOpsCtx, url);
 }
 
 /** 优雅中断：回收整树 → 归档 → 退出（实现见 `launcher-core/misc-ops.mjs`）。 */
@@ -526,7 +526,9 @@ export async function run(argv = process.argv.slice(2)) {
   const nextOut = booted.nextOut;
   const nextErr = booted.nextErr;
   staleShell = booted.staleShell;
-  const heartbeat = setInterval(() => touchHeartbeat(ROOT), HEARTBEAT_INTERVAL_MS);
+  const heartbeat = setInterval(() => {
+    touchHeartbeat(ROOT);
+  }, HEARTBEAT_INTERVAL_MS);
   clearIntervalGuard(heartbeat);
   // 9) 等就绪（dev server 先退出则立刻定性；检测到路由表 404 则自愈一次）
   // 循环本体在 `launcher-core/ready-wait.mjs`（ISSUE #1811 拆 R5 超限文件，
@@ -694,9 +696,15 @@ export async function run(argv = process.argv.slice(2)) {
     /* dev 的监听由 watchDevChild 接（它随每次轻量重启重新武装）；这里只把解析器
      * 交出去 + 接壳与信号这两条一轮会话内不会变的边。 */
     resolveLaunchEnd = resolve;
-    shell?.once("exit", (code) => resolve({ who: "shell", code: code ?? 0 }));
-    process.once("SIGINT", () => resolve({ who: "signal", code: 0 }));
-    process.once("SIGTERM", () => resolve({ who: "signal", code: 0 }));
+    shell?.once("exit", (code) => {
+      resolve({ who: "shell", code: code ?? 0 });
+    });
+    process.once("SIGINT", () => {
+      resolve({ who: "signal", code: 0 });
+    });
+    process.once("SIGTERM", () => {
+      resolve({ who: "signal", code: 0 });
+    });
     watchDevChild(dev);
   });
   runtimeWatch.stop();

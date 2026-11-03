@@ -103,7 +103,8 @@ describe("e2e tRPC 桩产出真 JSON Lines 协议", () => {
     /* `createdAt` 过线之后仍然是 `Date`（superjson 的 meta 路径带对了）；
      * 丢了 meta 时这里是字符串，而客户端 `row.createdAt.getTime()` 会抛
      * `is not a function` —— 真现场见 ISSUE #1442 的复现步骤。 */
-    const [first] = /* SAFETY: 类型断言已复核 */ (data as typeof payload).tasks;
+    /* SAFETY: 类型断言已复核 */
+    const [first] = (data as typeof payload).tasks;
     expect(first?.createdAt).toBeInstanceOf(Date);
     expect(first?.createdAt.toISOString()).toBe("2026-01-01T00:00:01.000Z");
   });

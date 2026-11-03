@@ -37,7 +37,7 @@ function boundariesSection(): { elements: Array<ElementDef>; policies: Array<Pol
     rules?: Record<string, unknown>;
     settings?: Record<string, unknown>;
   }>;
-  const section = configs.find((c) => c.plugins?.boundaries);
+  const section = configs.find((c) => Boolean(c.plugins?.boundaries));
   expect(section, "eslint.config.js 里找不到 boundaries 配置节").toBeTruthy();
   /* SAFETY: 类型断言已复核 */
   const elements = (section?.settings?.["boundaries/elements"] ?? []) as Array<ElementDef>;

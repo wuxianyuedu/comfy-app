@@ -41,7 +41,9 @@ function useActiveProjectId(): string | null {
     // 首帧后同步一次：getActiveId 读 localStorage，SSR 阶段拿不到。
     // （setState 发生在 `sync` 里而不是 effect 体直接调用，规范 08 §8.6
     //   那条 lint 不会触发，因此这里不需要 disable 指令。）
-    const sync = () => setProjectId(getActiveId());
+    const sync = () => {
+      setProjectId(getActiveId());
+    };
     sync();
     return subscribeAppEvent("comfyapp:canvas-store-changed", sync);
   }, []);
@@ -54,7 +56,12 @@ export function useResourceLibrary(): ResourceLibraryController {
 
   /* 「跨项目」聚合没有活跃项目也成立（它就是所有项目 + 共享的合集），
    * 所以只在「本项目」档下把项目缺失当成前置未满足 —— 判据交给视图。 */
-  const setScope = useCallback((scope: MaterialScope) => library.setScope(scope), [library]);
+  const setScope = useCallback(
+    (scope: MaterialScope) => {
+      library.setScope(scope);
+    },
+    [library],
+  );
 
   const totalCount = library.folders.reduce((sum, folder) => sum + folder.count, 0);
 

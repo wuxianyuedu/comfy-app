@@ -41,10 +41,10 @@ export function ExtractModelSelect({
   const probeStarted = React.useRef<Record<string, boolean>>({});
 
   React.useEffect(() => {
-    if (!selKey) {
+    if (selKey === "") {
       return;
     }
-    if (probeStarted.current[selKey]) {
+    if (probeStarted.current[selKey] === true) {
       return;
     }
     probeStarted.current[selKey] = true;
@@ -55,14 +55,16 @@ export function ExtractModelSelect({
     // 服务端会用它探测（而不是拿全局 Base URL 探，避免误报 fetch failed）。
     const probe = channel === "local" ? () => fetchLocalModels() : () => fetchRemoteModels(model);
     void probe().then((res) => {
-      guard.commit(() =>
+      guard.commit(() => {
         setAvailByKey((prev) => ({
           ...prev,
           [selKey]: res.ok ? { kind: "ok" } : { kind: "err", detail: res.detail },
-        })),
-      );
+        }));
+      });
     });
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [selKey, channel, model]);
 
   const options = React.useMemo(() => {
@@ -93,6 +95,7 @@ export function ExtractModelSelect({
   /* 无已缓存结果即视为校验中（探测在选中时即被 effect 触发）。 */
   const selChecking = !!selKey && !selAvail;
   let hint: React.ReactNode = null;
+  // oxlint-disable-next-line no-unnecessary-condition -- channel 由 parseChannelOption 归一化为 local/remote 两档、类型与运行值域都恒真；保留判空作防御，防未来新增空档时静默穿透
   if (channel) {
     const badge = channel === "local" ? "本地" : "远端";
     if (selChecking) {

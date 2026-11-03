@@ -91,13 +91,28 @@ export function EditorToolbar({
   return (
     <div className="border-border bg-panel flex items-center gap-1 border-b px-4 py-2">
       <ToolbarGroup>
-        <ToolbarButton hint="标题 1" onClick={() => insertAtLineStart("#")}>
+        <ToolbarButton
+          hint="标题 1"
+          onClick={() => {
+            insertAtLineStart("#");
+          }}
+        >
           <Heading1 size={18} />
         </ToolbarButton>
-        <ToolbarButton hint="标题 2" onClick={() => insertAtLineStart("##")}>
+        <ToolbarButton
+          hint="标题 2"
+          onClick={() => {
+            insertAtLineStart("##");
+          }}
+        >
           <Heading2 size={18} />
         </ToolbarButton>
-        <ToolbarButton hint="标题 3" onClick={() => insertAtLineStart("###")}>
+        <ToolbarButton
+          hint="标题 3"
+          onClick={() => {
+            insertAtLineStart("###");
+          }}
+        >
           <Heading3 size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -105,19 +120,44 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton hint="粗体" onClick={() => wrapSelection("**", "**", "粗体")}>
+        <ToolbarButton
+          hint="粗体"
+          onClick={() => {
+            wrapSelection("**", "**", "粗体");
+          }}
+        >
           <Bold size={18} />
         </ToolbarButton>
-        <ToolbarButton hint="斜体" onClick={() => wrapSelection("*", "*", "斜体")}>
+        <ToolbarButton
+          hint="斜体"
+          onClick={() => {
+            wrapSelection("*", "*", "斜体");
+          }}
+        >
           <Italic size={18} />
         </ToolbarButton>
-        <ToolbarButton hint="下划线" onClick={() => wrapSelection("__", "__", "下划线")}>
+        <ToolbarButton
+          hint="下划线"
+          onClick={() => {
+            wrapSelection("__", "__", "下划线");
+          }}
+        >
           <Underline size={18} />
         </ToolbarButton>
-        <ToolbarButton hint="删除线" onClick={() => wrapSelection("~~", "~~", "删除线")}>
+        <ToolbarButton
+          hint="删除线"
+          onClick={() => {
+            wrapSelection("~~", "~~", "删除线");
+          }}
+        >
           <Strikethrough size={18} />
         </ToolbarButton>
-        <ToolbarButton hint="行内代码" onClick={() => wrapSelection("`", "`", "代码")}>
+        <ToolbarButton
+          hint="行内代码"
+          onClick={() => {
+            wrapSelection("`", "`", "代码");
+          }}
+        >
           <Code size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -125,13 +165,28 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton hint="无序列表" onClick={() => insertList(false)}>
+        <ToolbarButton
+          hint="无序列表"
+          onClick={() => {
+            insertList(false);
+          }}
+        >
           <List size={18} />
         </ToolbarButton>
-        <ToolbarButton hint="有序列表" onClick={() => insertList(true)}>
+        <ToolbarButton
+          hint="有序列表"
+          onClick={() => {
+            insertList(true);
+          }}
+        >
           <ListOrdered size={18} />
         </ToolbarButton>
-        <ToolbarButton hint="引用" onClick={() => insertAtLineStart(">")}>
+        <ToolbarButton
+          hint="引用"
+          onClick={() => {
+            insertAtLineStart(">");
+          }}
+        >
           <Quote size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -153,10 +208,20 @@ export function EditorToolbar({
       <ToolbarDivider />
 
       <ToolbarGroup>
-        <ToolbarButton hint="撤销 (Ctrl+Z)" onClick={() => restoreHistory(-1)}>
+        <ToolbarButton
+          hint="撤销 (Ctrl+Z)"
+          onClick={() => {
+            restoreHistory(-1);
+          }}
+        >
           <Undo size={18} />
         </ToolbarButton>
-        <ToolbarButton hint="重做 (Ctrl+Shift+Z)" onClick={() => restoreHistory(1)}>
+        <ToolbarButton
+          hint="重做 (Ctrl+Shift+Z)"
+          onClick={() => {
+            restoreHistory(1);
+          }}
+        >
           <Redo size={18} />
         </ToolbarButton>
       </ToolbarGroup>
@@ -209,7 +274,9 @@ export function OutlineSidebar({
                       ? "text-ink-muted pl-5 font-normal"
                       : "text-ink-faint pl-8 font-normal"
                 }`}
-                onClick={() => onJump(item.line)}
+                onClick={() => {
+                  onJump(item.line);
+                }}
                 size="xs"
                 variant="ghost"
               >

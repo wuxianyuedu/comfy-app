@@ -34,7 +34,9 @@ function StorageDirLine({ dir, shared }: { dir: StoragePathRow["dirs"][number]; 
       >
         {shown}
       </span>
-      {dir.source && <span className="text-muted-foreground text-2xs">（来自 {dir.source}）</span>}
+      {dir.source !== null && dir.source !== "" && (
+        <span className="text-muted-foreground text-2xs">（来自 {dir.source}）</span>
+      )}
       {!dir.exists && <span className="text-muted-foreground text-2xs">· 目录不存在</span>}
     </li>
   );

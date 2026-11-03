@@ -248,9 +248,7 @@ describe("check-pending-merge-loss —— 提交前档（整份取非 HEAD 侧�
     expect(output).toContain(ACK_FILE);
   });
 
-  test("⑩ 只有一句「我确认了」没有落款 → 照拦（认账要说明在认哪一档账）", ({
-    repo,
-  }) => {
+  test("⑩ 只有一句「我确认了」没有落款 → 照拦（认账要说明在认哪一档账）", ({ repo }) => {
     const { code, output } = ackedMerge(
       repo,
       `Merge feat into main\n\n我确认过了，取对方那一版是 ${ACK_FILE}。\n`,
@@ -261,9 +259,7 @@ describe("check-pending-merge-loss —— 提交前档（整份取非 HEAD 侧�
 
   /* ⑪ 拆成两条用例：每条自带一份干净工作区（同一份 `repo` 上连着解两次冲突，
    * 第二次的 `checkout -b feat` 会撞上第一次留下的分支）。 */
-  test("⑪a 落款在、但只有路径没有理由 → 照拦（清单行不算「写清为什么」）", ({
-    repo,
-  }) => {
+  test("⑪a 落款在、但只有路径没有理由 → 照拦（清单行不算「写清为什么」）", ({ repo }) => {
     const { code, output } = ackedMerge(
       repo,
       `Merge feat into main\n\n整份取一侧:\n  - ${ACK_FILE}\n`,
@@ -273,9 +269,7 @@ describe("check-pending-merge-loss —— 提交前档（整份取非 HEAD 侧�
     expect(output).toContain(ACK_FILE);
   });
 
-  test("⑪b 理由给足了、点的却不是被拦的那一份 → 照拦（认账要逐份）", ({
-    repo,
-  }) => {
+  test("⑪b 理由给足了、点的却不是被拦的那一份 → 照拦（认账要逐份）", ({ repo }) => {
     const { code, output } = ackedMerge(
       repo,
       `Merge feat into main\n\n整份取一侧 src/other.ts，理由是它与本侧无关。\n`,
@@ -288,10 +282,7 @@ describe("check-pending-merge-loss —— 提交前档（整份取非 HEAD 侧�
 
 describe("check-pending-merge-loss —— 钩子接线", () => {
   test(".githooks/prepare-commit-msg 接上了这条判据并透传 $2", () => {
-    const hook = readFileSync(
-      join(process.cwd(), ".githooks", "prepare-commit-msg"),
-      "utf8",
-    );
+    const hook = readFileSync(join(process.cwd(), ".githooks", "prepare-commit-msg"), "utf8");
     /* 判据写得对、钩子没接上 = 没有执行者（§13.5.12 的立案现场）。
      * 少传 $2 会让 amend 那条误报防线失效，且是静默的；少传 $1 会让「逐份认账」那条
      * 出口永远读不到消息 —— 表现是**每一份都照拦**，而提示里还写着可以认账。 */

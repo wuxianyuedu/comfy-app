@@ -218,10 +218,9 @@ async function scoreShotImage(
   imageUrl: string,
 ): Promise<ReviewVerdict> {
   // 出场角色的生效定妆照（角色一致性对照用）。
+  /* SAFETY: 类型断言已复核 */
   const characterIds = Array.isArray(rec.characterIds)
-    ? /* SAFETY: 类型断言已复核 */ (rec.characterIds as Array<unknown>).filter(
-        (x): x is string => typeof x === "string",
-      )
+    ? (rec.characterIds as Array<unknown>).filter((x): x is string => typeof x === "string")
     : [];
   const characters = Array.isArray(row.characters) ? row.characters : [];
   const portraitUrls: Array<string> = [];
@@ -501,7 +500,11 @@ export async function regenerateShot(
   }
 
   // reprompt：优先用调用方给的提示词；否则让模型据评审意见改写。
-  const finalPrompt = newPrompt?.trim() ? newPrompt.trim() : await revisePrompt(row, rec);
+  const trimmedPrompt = newPrompt?.trim();
+  const finalPrompt =
+    trimmedPrompt !== undefined && trimmedPrompt !== ""
+      ? trimmedPrompt
+      : await revisePrompt(row, rec);
   await productionRepository.patchContent(userId, projectId, {
     shots: applyReprompt(shots, shotId, finalPrompt),
   });

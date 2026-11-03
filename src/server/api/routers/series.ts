@@ -230,7 +230,8 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertSeriesOwner(ctx, input.id);
       await ctx.db.delete(series).where(eq(series.id, input.id));
-      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
+      /* SAFETY: 类型断言已复核 */
+      return { ok: true as const };
     }),
 
   // ───────────────────────────── 季 (FR-SR-02) ─────────────────────────────
@@ -293,7 +294,8 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertSeasonOwner(ctx, input.id);
       await ctx.db.delete(season).where(eq(season.id, input.id));
-      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
+      /* SAFETY: 类型断言已复核 */
+      return { ok: true as const };
     }),
 
   // ───────────────────────────── 集 (FR-SR-02) ─────────────────────────────
@@ -380,7 +382,8 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertEpisodeOwner(ctx, input.id);
       await ctx.db.delete(episode).where(eq(episode.id, input.id));
-      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
+      /* SAFETY: 类型断言已复核 */
+      return { ok: true as const };
     }),
 
   /** 按 projectId 查它归属的集（系列层级下的定位）。无归属返回 null。 */
@@ -559,7 +562,8 @@ export const seriesRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       await assertCharacterOwner(ctx, input.id);
       await ctx.db.delete(character).where(eq(character.id, input.id));
-      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
+      /* SAFETY: 类型断言已复核 */
+      return { ok: true as const };
     }),
 
   /** 列出某集已关联的角色（含在本集中的定位 role）。 */
@@ -662,7 +666,8 @@ export const seriesRouter = createTRPCRouter({
             eq(episodeCharacter.characterId, input.characterId),
           ),
         );
-      return { ok: /* SAFETY: 类型断言已复核 */ true as const };
+      /* SAFETY: 类型断言已复核 */
+      return { ok: true as const };
     }),
 
   /**

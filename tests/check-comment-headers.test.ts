@@ -54,7 +54,7 @@ function fake(opts: {
   const calls: Array<string> = [];
   const run = (_cmd: string, args: Array<string>): FakeResult => {
     calls.push([_cmd, ...args].join(" "));
-    if (opts.listsDown) {
+    if (opts.listsDown === true) {
       return { status: -1, stdout: "", stderr: "ENOENT", error: "ENOENT" };
     }
     if (args[0] === "issues" && args[1] === "list-issues") {

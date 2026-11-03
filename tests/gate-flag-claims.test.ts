@@ -53,7 +53,9 @@ function makeWorkspace(): { dir: string; dispose: () => void } {
   writeFileSync(join(dir, "docs", "standards", "13-提交与-code-review.md"), "");
   return {
     dir,
-    dispose: () => rmSync(dir, { recursive: true, force: true }),
+    dispose: () => {
+      rmSync(dir, { recursive: true, force: true });
+    },
   };
 }
 
@@ -87,7 +89,7 @@ function writeTables(
     covered = "",
     retired = "",
     flips = "",
-  }: { covered?: string; flips?: string; retired?: string; },
+  }: { covered?: string; flips?: string; retired?: string },
 ): void {
   writeFileSync(
     join(dir, "tests", "ratchet-update-guards.test.ts"),
@@ -278,27 +280,30 @@ describe("翻闸旗标 ⇄ 散文（§13.5.16）", () => {
     const cases: Array<[string, (dir: string) => void]> = [
       [
         "钩子步骤行",
-        (dir) =>
+        (dir) => {
           writeFileSync(
             join(dir, ".githooks", "pre-commit"),
             '  run "x" node scripts/check-fake.cjs\n',
-          ),
+          );
+        },
       ],
       [
         "聚合档表项（裸 script: 形态，无 scripts/ 前缀）",
-        (dir) =>
+        (dir) => {
           writeFileSync(
             join(dir, "scripts", "run-ast-gates.cjs"),
             'const GATES = [\n  { script: "check-fake.cjs", tag: "[x]" },\n];\n',
-          ),
+          );
+        },
       ],
       [
         "按需召唤台账",
-        (dir) =>
+        (dir) => {
           writeFileSync(
             join(dir, "scripts", ".gate-executor-ledger.json"),
             JSON.stringify({ onDemand: { "check-fake.cjs": { why: "w", who: "h" } } }),
-          ),
+          );
+        },
       ],
     ];
     for (const [label, place] of cases) {

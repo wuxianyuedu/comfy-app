@@ -54,7 +54,9 @@ beforeEach(() => {
   vi.mocked(downloadJson).mockClear();
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+});
 
 describe("FinalComposer 时间线呈现", () => {
   it("空镜头列表：给引导空态而不是空面板", () => {

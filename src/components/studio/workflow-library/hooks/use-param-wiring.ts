@@ -88,7 +88,7 @@ export function useParamWiring({
 
   const connect = useCallback(
     (entryId: string, ioKey: string) => {
-      if (!activeMode) {
+      if (activeMode === null) {
         return;
       }
       commit(applyWireEdit(effective, { entryId, ioKey, mode: activeMode }));
@@ -98,7 +98,7 @@ export function useParamWiring({
 
   const disconnect = useCallback(
     (entryId: string) => {
-      if (!activeMode) {
+      if (activeMode === null) {
         return;
       }
       const edit: ParamWireEdit = { entryId, ioKey: null, mode: activeMode };
@@ -109,7 +109,7 @@ export function useParamWiring({
 
   const resetToAuto = useCallback(
     (entryId: string) => {
-      if (!activeMode) {
+      if (activeMode === null) {
         return;
       }
       commit(clearWireEdit(effective, entryId, activeMode));
@@ -122,7 +122,7 @@ export function useParamWiring({
    *  条目）—— 用户看到的正是「重置清不掉」。 */
   const resetMany = useCallback(
     (entryIds: ReadonlyArray<string>) => {
-      if (!activeMode || entryIds.length === 0) {
+      if (activeMode === null || entryIds.length === 0) {
         return;
       }
       let next = effective;

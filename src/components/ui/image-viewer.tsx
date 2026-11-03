@@ -164,7 +164,9 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
     };
 
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+    };
   }, [scrollerReady, naturalWidth, naturalHeight]);
 
   useEffect(() => {
@@ -268,7 +270,7 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
   /* 卸载时撤掉可能还排着的那一帧（弹窗在拖拽中被关掉）。 */
   useEffect(() => () => panFrameRef.current?.(), []);
 
-  if (!src) {
+  if (src === null || src === "") {
     return null;
   }
 
@@ -290,7 +292,12 @@ export function ImageViewer({ src, alt = "", label, onClose }: ImageViewerProps)
     zoom.mode === "fit" ? "适应窗口" : zoom.mode === "actual" ? "原始大小" : "自定义缩放";
 
   return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open>
+    <Dialog
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      open
+    >
       <DialogContent
         className="bg-transparent p-0 ring-0"
         data-slot="image-viewer"
@@ -475,26 +482,35 @@ export function ViewableImage({
   title = "点击查看大图",
 }: ViewableImageProps) {
   const [open, setOpen] = useState(false);
-  if (!src) {
+  if (src === undefined || src === null || src === "") {
     return null;
   }
   const name = firstText(label, alt);
   return (
     <>
       <Button
-        aria-label={name ? `查看大图：${name}` : "查看大图"}
+        aria-label={name !== null && name !== "" ? `查看大图：${name}` : "查看大图"}
         /* `h-full` 而不是 `h-auto`：调用处常在**有确定高度**的盒子里塞它
            （`aspect-square` 网格、定高缩略图位），缩略图的 `h-full` 要有参照
            才撑得满；父级高度是 auto 时 `h-full` 计算为 auto，行为不变。 */
         className="h-full w-full cursor-zoom-in rounded-xl p-0 hover:bg-transparent"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setOpen(true);
+        }}
         title={title}
         variant="ghost"
       >
         <MediaThumbnail alt={alt} className={className} fallback={fallback} src={src} />
       </Button>
       {open && (
-        <ImageViewer alt={alt} label={name ?? undefined} onClose={() => setOpen(false)} src={src} />
+        <ImageViewer
+          alt={alt}
+          label={name ?? undefined}
+          onClose={() => {
+            setOpen(false);
+          }}
+          src={src}
+        />
       )}
     </>
   );

@@ -237,18 +237,16 @@ async function resolveSourceFile(
    *     历史行」要裁 —— 会话起点这条机制对本族消失（此前它读
    *     `dev-launcher.log` 的 mtime 当起点，锚点比真实启动时刻晚，会把启动早期的
    *     行误判成历史，见 §4.1 的四审）。 */
-  if (
-    /* SAFETY: 类型断言已复核 */ (RUNTIME_LOG_SOURCES as ReadonlyArray<string>).includes(source)
-  ) {
-    const latest = await latestRuntimeLogFile(
-      /* SAFETY: 类型断言已复核 */ source as RuntimeLogSource,
-    );
+  /* SAFETY: 类型断言已复核 */
+  if ((RUNTIME_LOG_SOURCES as ReadonlyArray<string>).includes(source)) {
+    /* SAFETY: 类型断言已复核 */
+    const latest = await latestRuntimeLogFile(source as RuntimeLogSource);
     return latest ? { file: latest.file, resumable: false } : { file: "", resumable: false };
   }
   /* 「应用服务输出」：Next dev server 的 stdout/stderr 转录（本次进程一份）。 */
   if (source === "app") {
     const file = await latestPanelLogFile();
-    return file ? { file, resumable: true } : null;
+    return file !== null && file !== "" ? { file, resumable: true } : null;
   }
   /* 壳侧两路（shell = 壳自持日志；shell-launch = 壳侧编排链路）：双击启动的
    * 最早一段现场（exe / 项目根 / 启动报告）只在这两份里，应用运行后面板此前

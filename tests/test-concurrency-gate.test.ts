@@ -204,9 +204,10 @@ describe("字符串状态机：挖掉非代码区间（§11.19.4）", () => {
    * 而 eslint 禁止裸 `require()`。两者的语义在这里一样（跑一次就拿到导出），
    * 取 `createRequire` 是因为它**同步** —— 不必让一条纯函数用例变成 async。 */
   const requireCjs = createRequire(import.meta.url);
-  const { maskNonCode } = /* SAFETY: 类型断言已复核 */ requireCjs(
-    "../scripts/check-test-concurrency.cjs",
-  ) as { maskNonCode: (src: string) => string };
+  /* SAFETY: 类型断言已复核 */
+  const { maskNonCode } = requireCjs("../scripts/check-test-concurrency.cjs") as {
+    maskNonCode: (src: string) => string;
+  };
 
   it("模板串的整体被挖掉（含里面的站点字样）", () => {
     const masked = maskNonCode('const F = `it.concurrent("x", () => {});`;\nconst G = 1;');

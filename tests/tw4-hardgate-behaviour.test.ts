@@ -56,8 +56,9 @@ function tw4Fixture(script: string): GateRepoOptions {
     script,
     dirs: ["src"],
     copy: [{ from: "src/app/globals.css", to: "src/app/globals.css" }],
-    setup: (repo: GateRepo) =>
-      symlinkDir(join(process.cwd(), "node_modules"), join(repo.dir, "node_modules")),
+    setup: (repo: GateRepo) => {
+      symlinkDir(join(process.cwd(), "node_modules"), join(repo.dir, "node_modules"));
+    },
   };
 }
 

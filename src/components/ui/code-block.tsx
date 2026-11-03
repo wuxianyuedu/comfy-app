@@ -106,7 +106,7 @@ const CHUNK_LINES = 400;
 /** token 的 fontStyle 位掩码：1=italic，2=bold（shiki 约定） */
 function tokenInlineStyle(tok: ShikiToken): CSSProperties {
   const style: CSSProperties = {};
-  if (tok.color) {
+  if (tok.color !== undefined && tok.color !== "") {
     style.color = tok.color;
   }
   // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
@@ -193,7 +193,9 @@ export function CodeBlock({ code, language }: { code: string; language: string }
             /* 让出主线程一帧，长文件高亮期间 UI 保持可点 */
             setTimeout(processChunk, 0);
           } else {
-            guard.commit(() => setTokens(acc));
+            guard.commit(() => {
+              setTokens(acc);
+            });
           }
         };
 
@@ -209,10 +211,12 @@ export function CodeBlock({ code, language }: { code: string; language: string }
         });
       }
     })();
-    return () => guard.dispose();
+    return () => {
+      guard.dispose();
+    };
   }, [code, language, shikiTheme]);
 
-  if (error) {
+  if (error !== null && error !== "") {
     return (
       <div className="cb-code-block">
         <div className="cb-line">

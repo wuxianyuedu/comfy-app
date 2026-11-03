@@ -56,7 +56,9 @@ export function DisplayDensityToggle({
         <SelectChip
           aria-label="网格视图"
           className="h-auto rounded-md p-1"
-          onClick={() => onChange("grid")}
+          onClick={() => {
+            onChange("grid");
+          }}
           selected={value === "grid"}
           shape="compact"
         >
@@ -67,7 +69,9 @@ export function DisplayDensityToggle({
         <SelectChip
           aria-label="列表视图"
           className="h-auto rounded-md p-1"
-          onClick={() => onChange("list")}
+          onClick={() => {
+            onChange("list");
+          }}
           selected={value === "list"}
           shape="compact"
         >

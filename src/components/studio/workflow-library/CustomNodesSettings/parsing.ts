@@ -25,6 +25,7 @@ export function deriveRowState(sub: DiscoveredSubpkg, saved: SummaryPkg | undefi
   if (!sub.exists || sub.status === "missing") {
     return { kind: "missing" };
   }
+  // oxlint-disable-next-line no-unnecessary-condition -- DiscoveredSubpkg 来自服务端 JSON 流（浅断言），旧解析器可能缺 packageFileCount
   if (sub.status === "empty" && (sub.packageFileCount ?? 0) === 0) {
     return { kind: "empty" };
   }
@@ -33,6 +34,7 @@ export function deriveRowState(sub: DiscoveredSubpkg, saved: SummaryPkg | undefi
   }
   if (saved.status === "error") {
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line no-unnecessary-condition -- SummaryPkg 来自服务端清单 JSON，旧清单条目可能缺 errors
     const firstErr = (saved.errors ?? [])[0] as { error?: unknown } | undefined;
     const reason = typeof firstErr?.error === "string" ? firstErr.error : "解析出错";
     return { kind: "error", reason };

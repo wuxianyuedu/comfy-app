@@ -23,8 +23,9 @@ export class ModelRepository extends DrizzleRepository<Model> {
   async list(opts?: { q?: string; type?: string }): Promise<Array<Model>> {
     const where = and(
       eq(model.isAvailable, true),
-      opts?.type ? eq(model.type, opts.type) : undefined,
-      opts?.q ? like(model.name, `%${opts.q}%`) : undefined,
+      /* 过滤值空串与缺省同义 = 不加该条件（查询参数可能出现空串） */
+      opts?.type !== undefined && opts.type !== "" ? eq(model.type, opts.type) : undefined,
+      opts?.q !== undefined && opts.q !== "" ? like(model.name, `%${opts.q}%`) : undefined,
     );
     return db.select().from(model).where(where).orderBy(desc(model.createdAt)).limit(300);
   }
@@ -130,7 +131,8 @@ export class ModelRepository extends DrizzleRepository<Model> {
       .groupBy(model.folder);
     const out: Record<string, number> = {};
     for (const r of rows) {
-      if (r.folder) {
+      /* folder 是 DB 读出的可空列，空串同样按「没有分组键」跳过 */
+      if (r.folder !== null && r.folder !== "") {
         out[r.folder] = Number(r.count);
       }
     }

@@ -136,7 +136,9 @@ export function useWorkflowViewportFit(params: {
    *  结果，直接算会用到上一帧的尺寸（对刚展开/折叠过节点的画布尤其明显）。
    *  调度本身收在 `~/lib/next-frame`（规范 16 §16.2.4.42）。 */
   const recenterCanvas = useCallback(() => {
-    onNextFrame(() => fitToContent());
+    onNextFrame(() => {
+      fitToContent();
+    });
   }, [fitToContent]);
 
   /* 每打开一次工作流 / 子工作流就贴合内容一次。放在 `nodes` 之后，
@@ -155,7 +157,7 @@ export function useWorkflowViewportFit(params: {
      * 掉还没触发的那一帧 rAF。排程即记账会把这次聚焦吃掉（视口留在上一份图，
      * 表现就是「打开子工作流没聚焦到」，ISSUE #394）。 */
     const scheduler = fitSchedulerRef.current;
-    if (!scheduler?.markPending(fitKey)) {
+    if (scheduler?.markPending(fitKey) !== true) {
       return;
     }
     /* 节点是**分批**测量的：React Flow 先挂载再量 DOM，首帧里只有视口内
@@ -191,7 +193,9 @@ export function useWorkflowViewportFit(params: {
     };
     /* 延后一帧，等 ReactFlow 量好视口、摆好节点再贴合。 */
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+    };
   }, [rf, rfStore, canvasSettings, fitKey, nodesCount]);
 
   return { fitToContent, recenterCanvas };

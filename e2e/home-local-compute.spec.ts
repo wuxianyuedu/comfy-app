@@ -28,9 +28,7 @@ async function stubStats(page: Page, body: Record<string, unknown>) {
 }
 
 test.describe("首页本机算力卡 @critical", () => {
-  test("在线时三档占用条各有数值，设备名与「在线」徽标可见", async ({
-    page,
-  }) => {
+  test("在线时三档占用条各有数值，设备名与「在线」徽标可见", async ({ page }) => {
     await stubStats(page, {
       online: true,
       gpuName: "NVIDIA GeForce RTX 4090",
@@ -57,9 +55,7 @@ test.describe("首页本机算力卡 @critical", () => {
           (
             await card
               .locator('[role="progressbar"]')
-              .evaluateAll((els) =>
-                els.map((el) => el.getAttribute("aria-valuenow")),
-              )
+              .evaluateAll((els) => els.map((el) => el.getAttribute("aria-valuenow")))
           ).join(","),
         { message: "占用条没按口径次序拿到三个百分比" },
       )
@@ -85,9 +81,7 @@ test.describe("首页本机算力卡 @critical", () => {
     const card = page.locator(CARD);
     await expect(card.getByText("本机算力")).toBeVisible();
     await expect(card.getByText("离线")).toBeVisible();
-    await expect(
-      card.getByText("ComfyUI 未运行，显存/内存暂不可用"),
-    ).toBeVisible();
+    await expect(card.getByText("ComfyUI 未运行，显存/内存暂不可用")).toBeVisible();
     /* 关键判据：读不到 = 不画，而不是画成 0%。 */
     await expect(card.locator('[role="progressbar"]')).toHaveCount(0);
   });

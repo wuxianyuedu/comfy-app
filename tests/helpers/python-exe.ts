@@ -36,7 +36,7 @@ export type PythonInvocation = {
   command: string;
   /** 必须前置的参数（`py` 启动器是 `-3`；其余为空）。 */
   prefixArgs: Array<string>;
-}
+};
 
 let resolved: PythonInvocation | null | undefined;
 

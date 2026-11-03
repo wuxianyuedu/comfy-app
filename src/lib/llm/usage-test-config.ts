@@ -234,7 +234,7 @@ export function mediaExtensionFromUrl(url: string, fallback: "png" | "mp4"): str
   const u = url.trim();
   if (u.startsWith("data:image/")) {
     const m = /^data:image\/([a-zA-Z0-9.+-]+)/.exec(u);
-    if (m?.[1]) {
+    if (m?.[1] !== undefined) {
       const ext = m[1].toLowerCase().replace("jpeg", "jpg").replace("svg+xml", "svg");
       if (/^[a-z0-9]{1,8}$/.test(ext)) {
         return ext;

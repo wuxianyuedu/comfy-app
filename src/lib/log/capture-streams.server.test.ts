@@ -89,9 +89,8 @@ const written = { err: [] as Array<string>, out: [] as Array<string> };
 function silentWrite(bucket: Array<string>): typeof process.stdout.write {
   return (chunk: unknown) => {
     bucket.push(
-      typeof chunk === "string"
-        ? chunk
-        : Buffer.from(/* SAFETY: 类型断言已复核 */ chunk as Uint8Array).toString("utf8"),
+      /* SAFETY: 类型断言已复核 */
+      typeof chunk === "string" ? chunk : Buffer.from(chunk as Uint8Array).toString("utf8"),
     );
     return true;
   };

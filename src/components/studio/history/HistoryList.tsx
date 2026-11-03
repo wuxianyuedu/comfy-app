@@ -101,7 +101,10 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
           aria-label="排序"
           className="text-xs"
           labels={{ newest: "时间倒序", oldest: "时间正序" }}
-          onChange={(value) => c.setSort(/* SAFETY: 类型断言已复核 */ value as SortKey)}
+          onChange={(value) => {
+            /* SAFETY: 类型断言已复核 */
+            c.setSort(value as SortKey);
+          }}
           options={["newest", "oldest"]}
           value={c.sort}
         />
@@ -135,7 +138,9 @@ export function HistoryList({ onOpenTask: _onOpenTask }: { onOpenTask?: (id: str
             <SelectChip
               className="gap-2"
               key={filterOption.key}
-              onClick={() => c.switchFilter(filterOption.key)}
+              onClick={() => {
+                c.switchFilter(filterOption.key);
+              }}
               selected={isActive}
               shape="pill"
             >

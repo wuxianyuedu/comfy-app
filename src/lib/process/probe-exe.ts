@@ -154,7 +154,7 @@ export function probeExecutable(
     /* SAFETY: 类型断言已复核 */
     const errno = (probe.error as NodeJS.ErrnoException).code;
     // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-    const code: string = errno || "UNKNOWN";
+    const code: string = errno || "UNKNOWN"; // oxlint-disable-line strict-boolean-expressions -- 刻意保留 || 兜底：errno 为空串同样是「没有码」，不能换成 ??
     if (code === "ETIMEDOUT") {
       return { ok: false, failure: { kind: "timeout", timeoutMs } };
     }
@@ -218,7 +218,8 @@ export function firstRunnableOrEmpty(options: FirstRunnableOptions): string {
     ((candidate: string, args: Array<string>) =>
       probeExecutable(candidate, args, options.timeoutMs));
   const got = firstRunnable(options.candidates, options.probeArgs, probe);
-  if (got.hit) {
+  /* 命中的候选名不会是空串（候选本身就是非空的名字或路径） */
+  if (got.hit !== null) {
     return got.hit;
   }
   /* 一行读数走**两条出口**，它们答的是两件不同的事：

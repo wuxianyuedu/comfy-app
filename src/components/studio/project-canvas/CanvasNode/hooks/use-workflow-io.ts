@@ -86,9 +86,14 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           vanillaApi.workflowModel.list.query(),
         ]);
         if (wfRes.status === "fulfilled") {
+          // oxlint-disable-next-line no-unnecessary-condition -- workflows 来自 tRPC workflow.list（外部数据），旧服务端可能缺该字段，?? [] 是运行时守卫
           data.wfList = wfRes.value.workflows ?? [];
         }
-        if (tagRes.status === "fulfilled" && tagRes.value && Array.isArray(tagRes.value.tags)) {
+        if (
+          tagRes.status === "fulfilled" &&
+          Boolean(tagRes.value) &&
+          Array.isArray(tagRes.value.tags)
+        ) {
           data.modelTagLib = tagRes.value.tags;
         }
         return data;
@@ -138,13 +143,14 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
   useEffect(() => {
     if (
       (d.kind !== "workflow" && d.kind !== "image" && d.kind !== "video" && d.kind !== "picture") ||
-      !d.workflowId
+      d.workflowId === undefined ||
+      d.workflowId === ""
     ) {
       return;
     }
     let alive = true;
     const t = setTimeout(() => {
-      if (!d.workflowId) {
+      if (d.workflowId === undefined || d.workflowId === "") {
         return;
       }
       setWfIOLoading(true);
@@ -157,15 +163,19 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
       void vanillaApi.workflow.detailFull
         .query({ id: d.workflowId })
         .then((tpl) => {
-          if (!alive || !tpl) {
+          const tplReady = Boolean(tpl);
+          if (!alive || !tplReady) {
             return;
           }
+          // oxlint-disable-next-line no-unnecessary-condition -- workflowIO 来自 tRPC workflow.detailFull（外部数据），旧服务端可能缺该字段，?? null 是运行时守卫
           setWfIO(tpl.workflowIO ?? null);
-          const paramMap =
-            /* SAFETY: 类型断言已复核 */ (tpl.paramMap as Record<string, unknown>) ?? null;
+          /* SAFETY: 类型断言已复核 */
+          // oxlint-disable-next-line no-unnecessary-condition -- paramMap 来自 tRPC workflow.detailFull（外部数据），强转只用于类型收口，?? null 是运行时守卫
+          const paramMap = (tpl.paramMap as Record<string, unknown>) ?? null;
           setWfParamMap(paramMap);
           /* 一并写进节点数据：运行期（use-generate）不能依赖 hook 的异步
            *  状态，映射必须随节点一起持久化，否则刷新后运行会丢掉手工线。 */
+          // oxlint-disable-next-line no-unnecessary-condition -- paramMap 经上面的强转收窄为非空，运行时仍可能缺省；?? undefined 与 patch 的可空口径一致
           patch({ paramMap: paramMap ?? undefined });
           /* 模式一致性：库卡片对 `taskType` 有 fallback（仅写
            *  taskType 没声明 modes[] 的旧工作流也能展示单模式 chip），画布
@@ -177,10 +187,12 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           const dbModes = parseModesJson(tpl.availableModes);
           const dbDefault = typeof tpl.defaultMode === "string" ? tpl.defaultMode : null;
           const inferredMode =
-            typeof tpl.taskType === "string" && tpl.taskType ? tpl.taskType : null;
-          const modes = dbModes.length > 0 ? dbModes : inferredMode ? [inferredMode] : [];
+            typeof tpl.taskType === "string" && tpl.taskType !== "" ? tpl.taskType : null;
+          const modes = dbModes.length > 0 ? dbModes : inferredMode === null ? [] : [inferredMode];
           const defaultMode =
-            dbDefault && modes.includes(dbDefault) ? dbDefault : (modes[0] ?? null);
+            dbDefault !== null && dbDefault !== "" && modes.includes(dbDefault)
+              ? dbDefault
+              : (modes[0] ?? null);
           setWfModes({ modes, defaultMode });
         })
         .catch(() => {
@@ -233,7 +245,11 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
    *  复用 WorkflowNode 同款过滤谓词（sourceFilter + modelFilter）。wfList 为空
    *  视为「仍在加载」而非「被过滤」，避免挂载瞬间误清空已选工作流。 */
   useEffect(() => {
-    if ((d.kind !== "workflow" && d.kind !== "picture") || !d.workflowId) {
+    if (
+      (d.kind !== "workflow" && d.kind !== "picture") ||
+      d.workflowId === undefined ||
+      d.workflowId === ""
+    ) {
       return;
     }
     if (wfList.length === 0) {
@@ -250,7 +266,11 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
           if (sourceFilter === "local") {
             return Boolean(workflow.sourcePath);
           }
-          return !workflow.sourcePath;
+          return (
+            workflow.sourcePath === undefined ||
+            workflow.sourcePath === null ||
+            workflow.sourcePath === ""
+          );
         })
         .filter((workflow) => {
           if (modelFilter === "all") {
@@ -272,7 +292,9 @@ export function useWorkflowIo({ d, patch }: UseWorkflowIoArgs) {
         });
       }
     }, 0);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+    };
     /* `patch` / `d` / `setTimeout` 之外还读了 `seededFor`（ref，稳定引用）——
      * 三个筛选条件的变化才是本 effect 的触发点；`d` 是渲染期新对象，
      * 挂进依赖会让每次节点数据变动都重跑一遍 `setTimeout(0)` 的重置。 */

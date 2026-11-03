@@ -72,6 +72,8 @@ export function useRefreshTicket(): RefreshTicket {
    * 而 `setTicket((n) => n + 1)` 的函数式写法不读任何闭包值 —— 于是
    * `refresh` 的身份**恒定**，可以安全地传给 `useEffect` 依赖或子组件 props。
    * 收口前有两处把 `refresh` 写进了 `useCallback`，其中一处漏了依赖。 */
-  const refresh = useCallback(() => setTicket((n) => n + 1), []);
+  const refresh = useCallback(() => {
+    setTicket((n) => n + 1);
+  }, []);
   return { ticket, refresh };
 }

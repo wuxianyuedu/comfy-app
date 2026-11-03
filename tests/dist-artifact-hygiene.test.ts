@@ -90,7 +90,7 @@ function collectRelativeClosure(entry: string): Array<string> {
       .join("\n");
     for (const m of code.matchAll(/from\s+"(\.[^"]+)"|import\(\s*"(\.[^"]+)"\s*\)/g)) {
       const spec = m[1] ?? m[2];
-      if (!spec) {
+      if (spec === undefined || spec === "") {
         continue;
       }
       const target = resolve(dirname(file), spec);
@@ -848,7 +848,7 @@ describe("产物顶层的默认拒绝（ISSUE #1217）", () => {
       // src 是「祖先放行、叶子逐文件判」：RUNTIME_SRC 那条要留着，旁边的一起删掉。
       // 取 [0] 要判空（`noUncheckedIndexedAccess`），而这条用例的前提就是它存在。
       const runtimeSrcFile = RUNTIME_SRC[0];
-      if (!runtimeSrcFile) {
+      if (runtimeSrcFile === undefined || runtimeSrcFile === "") {
         throw new Error("RUNTIME_SRC 为空，本用例无从判断");
       }
       const keep = join(dir, "src", ...runtimeSrcFile.split("/"));

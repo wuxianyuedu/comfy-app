@@ -41,7 +41,7 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
       if (row.model) {
         cfg.model = row.model;
       }
-      if (row.apiKey) {
+      if (row.apiKey !== null && row.apiKey !== "") {
         cfg.apiKey = decryptLlmKey(row.apiKey);
       }
       // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
@@ -61,7 +61,7 @@ export async function getWorkshopLLMConfig(): Promise<WorkshopLLMConfig> {
 
 function headersFor(cfg: WorkshopLLMConfig): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.apiKey) {
+  if (cfg.apiKey !== null && cfg.apiKey !== "") {
     h.Authorization = `Bearer ${cfg.apiKey}`;
   }
   return h;

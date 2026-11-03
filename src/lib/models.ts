@@ -69,7 +69,8 @@ export async function syncModels(userId?: string): Promise<number> {
   // → 库为空。
   type FolderOverride = { enabled: boolean; isCustom: boolean };
   const overrides = new Map<string, FolderOverride>();
-  if (userId) {
+  /* 用户 id 是生成的标识，不会是空串；空串同按缺省走兜底 */
+  if (userId !== undefined && userId !== "") {
     const rows = await userModelConfigRepository.listByUser(userId);
     for (const r of rows) {
       overrides.set(r.folder, { enabled: r.enabled, isCustom: r.isCustom });

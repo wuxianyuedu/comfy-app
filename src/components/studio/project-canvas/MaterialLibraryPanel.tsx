@@ -108,7 +108,10 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           下划线两层），两枚同高同基线。 */}
       <Tabs
         className="gap-0"
-        onValueChange={(value) => setScope(/* SAFETY: 类型断言已复核 */ value as MaterialScope)}
+        onValueChange={(value) => {
+          /* SAFETY: 类型断言已复核 */
+          setScope(value as MaterialScope);
+        }}
         value={scope}
       >
         <TabsList
@@ -145,7 +148,7 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           <Input
             className="text-ink-bright placeholder:text-ink-fainter h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-xs focus-visible:ring-0"
             onChange={textHandler(setSearch)}
-            placeholder={folder ? "在当前分类搜索" : "搜索全部素材"}
+            placeholder={folder === null ? "搜索全部素材" : "在当前分类搜索"}
             type="text"
             value={search}
           />
@@ -153,7 +156,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
             <Hint accessibleName label="清空">
               <Button
                 className="text-ink-fainter hover:text-ink-soft h-auto shrink-0 p-0 hover:bg-transparent"
-                onClick={() => setSearch("")}
+                onClick={() => {
+                  setSearch("");
+                }}
                 size="icon-xs"
                 variant="ghost"
               >
@@ -165,9 +170,9 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
         <uploadPicker.Input />
         <Hint
           label={
-            folder
-              ? `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」`
-              : "上传到「参考素材」"
+            folder === null
+              ? "上传到「参考素材」"
+              : `上传到「${folders.find((fld) => fld.id === folder)?.name ?? folder}」`
           }
           wrap
         >
@@ -197,10 +202,12 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
           segments={breadcrumbSegments}
         />
         {/* 返回按钮：仅在进入某分类且非搜索时显示 */}
-        {showItems && !searching && folder && (
+        {showItems && !searching && folder !== null && (
           <Button
             className="text-ink-muted hover:bg-subtle hover:text-ink-soft text-2xs ml-auto h-auto shrink-0 gap-1 rounded-md px-2 py-1 font-normal"
-            onClick={() => enterFolder(null)}
+            onClick={() => {
+              enterFolder(null);
+            }}
             variant="ghost"
           >
             <ChevronLeft data-icon="inline-start" size={11} strokeWidth={2.5} />
@@ -210,7 +217,7 @@ export function MaterialLibraryPanel({ onClose, projectId, onUse }: MaterialLibr
       </div>
 
       {/* ── Error banner ── */}
-      {error && (
+      {error !== null && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
           <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">{error}</span>
           <Button

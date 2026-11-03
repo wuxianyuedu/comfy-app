@@ -87,7 +87,8 @@ function runCheck(args: Array<string>, root = fixture): { code: number; output: 
     });
     return { code: 0, output };
   } catch (error) {
-    const e = /* SAFETY: 类型断言已复核 */ error as {
+    /* SAFETY: 类型断言已复核 */
+    const e = error as {
       status?: number;
       stderr?: string;
       stdout?: string;
@@ -134,7 +135,8 @@ function baselinePath(): string {
   return join(fixture, "scripts", ".scripts-typecheck-baseline.json");
 }
 function readFixtureBaseline(): Ledger {
-  return /* SAFETY: 类型断言已复核 */ JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
+  /* SAFETY: 类型断言已复核 */
+  return JSON.parse(readFileSync(baselinePath(), "utf8")) as Ledger;
 }
 
 beforeAll(() => {
@@ -349,15 +351,15 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
           .filter(Boolean),
       );
     } catch (error) {
-      return `；git 清单取不到，定位不了是哪几份：${/* SAFETY: 类型断言已复核 */ (error as Error).message}`;
+      /* SAFETY: 类型断言已复核 */
+      return `；git 清单取不到，定位不了是哪几份：${(error as Error).message}`;
     }
     const stray = face.map((p) => String(p).replaceAll("\\", "/")).filter((p) => !tracked.has(p));
-    return (
-      `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）${
+    return `；面里有 ${stray.length} 份**不在 git 清单**（磁盘态、不入库）${
       stray.length > 0
         ? `：${stray.slice(0, 10).join(", ")} —— 修法是把它归进 exclude 或删掉，不是往账上记`
-        : ` —— 差的全是入库文件 ⇒ 有人新加了脚本，它的格子要先入账（跑 --update 之前先把它写干净）`}`
-    );
+        : ` —— 差的全是入库文件 ⇒ 有人新加了脚本，它的格子要先入账（跑 --update 之前先把它写干净）`
+    }`;
   }
 
   /**
@@ -385,7 +387,9 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       prefix,
       "认不出 canary 的临时样本目录前缀 ⇒ 这一格的豁免口径与它漂了，两边要一起改",
     ).not.toBeNull();
-    if (prefix === null) {return;}
+    if (prefix === null) {
+      return;
+    }
     const scratch = new RegExp(`^scripts/${prefix}[^/]*/`);
     expect(scratch.test(`scripts/${prefix}151192-1793363720066/node-global.mjs`)).toBe(true);
     /* 反向的两条：同名的入库脚本目录、与 canary 落在 `tests/` 那一半，都不许被豁免掉。 */
@@ -399,9 +403,8 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
      * 一天修了 8 次），改成判据自己对齐之后又变成「判定档写文件」，与「判定档只读」
      * 的那一半轮流红。现在的口径最简：份数每次现算（判据自己的 `trackedMjs()` +
      * `splitTrackedFace()`），账本里**不存在**这个数，于是不存在「两份口径」。 */
-    const judge = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)(
-      "../scripts/check-scripts-typecheck.cjs",
-    ) as {
+    /* SAFETY: 类型断言已复核 */
+    const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
       configFace: (ts: unknown) => {
         excludes?: Array<string>;
         mjs?: Array<string>;
@@ -415,13 +418,14 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       splitTrackedFace: (
         mjs: Array<string>,
         tracked: Set<string> | null,
-      ) => { face: Array<string>; filtered: boolean; untracked: Array<string>; };
+      ) => { face: Array<string>; filtered: boolean; untracked: Array<string> };
       trackedMjs: (root: string) => Set<string> | null;
     };
     /* `require("typescript")` 的返回是 `any` —— 这里只把它当**不透明句柄**交给判据
      * （判据那边只调 `readConfigFile` / `parseJsonConfigFileContent` 两件事），
      * 所以落成 `unknown`，不在用例这一侧再抄一份 TS 的类型面。 */
-    const ts = /* SAFETY: 类型断言已复核 */ createRequire(import.meta.url)("typescript") as unknown;
+    /* SAFETY: 类型断言已复核 */
+    const ts = createRequire(import.meta.url)("typescript") as unknown;
     const cfg = judge.configFace(ts);
     expect(cfg.ok, "reason" in cfg ? cfg.reason : "").toBe(true);
     /* 面取**判据自己那一份求交结果**：账本记的是「这份提交里有多少脚本」，
@@ -436,7 +440,9 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       prefix,
       "认不出 canary 的临时样本目录前缀 ⇒ 这一格的豁免口径与它漂了，两边要一起改",
     ).not.toBeNull();
-    if (prefix === null) {return;}
+    if (prefix === null) {
+      return;
+    }
     const scratch = new RegExp(`^scripts/${prefix}[^/]*/`);
     const strays = untracked.filter((p) => !scratch.test(p));
     if (strays.length !== untracked.length) {
@@ -448,9 +454,10 @@ describe("真仓的账本 ⇄ 真仓的面（这一档唯一会随全仓漂移�
       strays,
       `磁盘上有、git 清单里没有的这几份不该出现在真仓库的工作区里：${strays.join("、")}`,
     ).toEqual([]);
-    const baseline = /* SAFETY: 类型断言已复核 */ JSON.parse(
+    /* SAFETY: 类型断言已复核 */
+    const baseline = JSON.parse(
       readFileSync(join(REPO_ROOT, "scripts", ".scripts-typecheck-baseline.json"), "utf8"),
-    ) as { files: Record<string, Record<string, number>>; total: number; };
+    ) as { files: Record<string, Record<string, number>>; total: number };
     expect(
       Object.keys(baseline).sort(),
       `账本多出了字段 —— 这一档只认「(文件, TS 码) 的处数」与总数两件事；` +
@@ -486,7 +493,7 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
     splitTrackedFace: (
       mjs: Array<string>,
       tracked: Set<string> | null,
-    ) => { face: Array<string>; filtered: boolean; untracked: Array<string>; };
+    ) => { face: Array<string>; filtered: boolean; untracked: Array<string> };
     trackedMjs: (root: string) => Set<string> | null;
   };
 
@@ -544,5 +551,73 @@ describe("未入库的产物不算进判决面（ISSUE #2681）", () => {
     expect(trackedNow.output).toContain("展开 2 份 .mjs（入库的 2 份");
     expect(trackedNow.output).toContain("scripts/stray.mjs TS6133");
     expect(trackedNow.output).not.toContain("面外未入库");
+  });
+});
+
+/**
+ * 「筛不了」必须分两种原因（ISSUE #2965）。
+ *
+ * 立案现场：平台上一跑「230 vs 229」的红说不出来历 —— `trackedMjs()` 把
+ * 「不是 git 顶层（真·夹具形态）」与「git 命令失败（真故障）」归成同一个 `null`，
+ * 后者被静默折成「面 = 磁盘展开」。现在的口径：真故障退 2（没结论）并念出
+ * stderr 首行，只有夹具形态才走「没按入库清单筛」那一档。
+ */
+describe("取不到 git 清单要分两种原因（ISSUE #2965）", () => {
+  /* SAFETY: 类型断言已复核 */
+  const judge = createRequire(import.meta.url)("../scripts/check-scripts-typecheck.cjs") as {
+    trackedMjs: (root: string) => Set<string> | null;
+    trackedMjsDetailed: (
+      root: string,
+    ) => { files: Set<string>; kind: "ok" } | { kind: "not-git-top" } | { kind: "error"; reason: string };
+  };
+
+  it("真仓库根 ⇒ ok；子目录 ⇒ not-git-top；不存在的目录 ⇒ error", () => {
+    const ok = judge.trackedMjsDetailed(REPO_ROOT);
+    expect(ok.kind, ok.kind === "error" ? ok.reason : "").toBe("ok");
+    /* 真仓库里至少有一份入库的 .mjs —— 否则「ok」只是没筛的空集，证不了任何事。 */
+    expect(ok.kind === "ok" && ok.files.size > 0).toBe(true);
+
+    /* 子目录不是它自己的 git 顶层 ⇒ 夹具那一档；旧契约 `trackedMjs` 仍是 null。 */
+    expect(judge.trackedMjsDetailed(join(REPO_ROOT, "scripts")).kind).toBe("not-git-top");
+    expect(judge.trackedMjs(join(REPO_ROOT, "scripts"))).toBeNull();
+
+    /* git 起不来（cwd 不存在 ⇒ spawn 当场败）⇒ 真故障那一档，且理由可读。 */
+    const gone = judge.trackedMjsDetailed(join(REPO_ROOT, "no-such-dir-2965"));
+    expect(gone.kind).toBe("error");
+    expect(gone.kind === "error" && gone.reason.length > 0).toBe(true);
+    /* 旧契约不许破：`trackedMjs` 对两类失败都还是 null（区分走 detailed 那一份）。 */
+    expect(judge.trackedMjs(join(REPO_ROOT, "no-such-dir-2965"))).toBeNull();
+  });
+
+  it("真 git 夹具 + 索引损坏 ⇒ 退 2（没结论），不许静默折成「面 = 磁盘展开」", () => {
+    const git = (args: Array<string>, cwd: string) => gitInTempRepo(args, cwd);
+    const repo = mkdtempSync(join(tmpdir(), "2965-repo-"));
+    rmSync(repo, { recursive: true, force: true });
+    mkdirSync(repo, { recursive: true });
+    created.push(repo);
+    writeFileSync(
+      join(repo, "tsconfig.scripts.json"),
+      JSON.stringify(FIXTURE_CONFIG, null, 2),
+      "utf8",
+    );
+    mkdirSync(join(repo, "scripts"), { recursive: true });
+    writeFileSync(join(repo, "scripts", "clean.mjs"), "export const a = 1;\n", "utf8");
+    git(["init", "-q"], repo);
+    git(["add", "-A"], repo);
+    git(["commit", "-q", "-m", "seed"], repo);
+    /* 先确认它是绿的（否则下面的退 2 读不出因果）。 */
+    const seed = runCheck(["--update"], repo);
+    expect(seed.code, seed.output).toBe(0);
+
+    /* 弄坏 `.git/index`：`rev-parse --show-toplevel` 不读索引、照常成功，
+     * `ls-files` 读索引、当场非零 —— 正是立案里「git 命令失败」那一支。 */
+    writeFileSync(join(repo, ".git", "index"), "garbage-not-an-index\n", "utf8");
+    const broke = runCheck([], repo);
+    expect(broke.code, broke.output).toBe(2);
+    expect(broke.output).toContain("取入库清单失败");
+    expect(broke.output).toContain("git ls-files");
+    expect(broke.output).toContain("#2965");
+    /* 反向：不许出现「没按入库清单筛」那句 —— 那是夹具形态的台词，故障不许借它降级。 */
+    expect(broke.output).not.toContain("没按入库清单筛");
   });
 });

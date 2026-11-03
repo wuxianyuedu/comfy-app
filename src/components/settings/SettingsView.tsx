@@ -65,7 +65,7 @@ export function SettingsView({ fillHeight, initialSection, onConsumeSection }: S
      * 不会消费载荷；就绪壳挂上后再滚到目标分区。 */
     jumpSection: c.pendingJump,
     onJumpApplied: c.ackJumpSection,
-    ...(fillHeight ? { className: "h-full" } : { title: "设置" }),
+    ...(fillHeight === true ? { className: "h-full" } : { title: "设置" }),
   };
 
   /* 打开即先渲染「外壳 + 分区导航」，内容区走三态；不再用整屏 loading 挡导航。 */
@@ -111,7 +111,7 @@ export function SettingsView({ fillHeight, initialSection, onConsumeSection }: S
   return (
     <SettingsPageView
       c={{ ...c, drafts: c.drafts }}
-      {...(fillHeight ? { className: "h-full" } : { title: "设置" })}
+      {...(fillHeight === true ? { className: "h-full" } : { title: "设置" })}
     />
   );
 }
@@ -134,14 +134,18 @@ function SettingsLoadError({ errorText, onRetry }: { errorText: string; onRetry:
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
   const togglePanel = useLogPanel((s) => s.toggleOpen);
 
   /* 复制的是用户看到的这段可读文案（`errorText` 也已优先取服务端原文）；
    * 原始报错（tRPC code / 服务端 message / 堆栈首行）另见日志面板的同条记录
    * —— 视图不再手拼第二份原文，避免两处措辞漂移。 */
-  const copyErrorText = useCallback(() => copyError(errorText), [copyError, errorText]);
+  const copyErrorText = useCallback(() => {
+    copyError(errorText);
+  }, [copyError, errorText]);
 
   return (
     <div className="grid min-h-[60vh] place-items-center overflow-y-auto p-6">

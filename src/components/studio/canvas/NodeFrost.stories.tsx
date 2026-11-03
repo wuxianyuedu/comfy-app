@@ -50,8 +50,9 @@ type Story = StoryObj<typeof meta>;
 
 /** 节点卡片的摆法（`relative` + `overflow-hidden` 是毛玻璃能被裁回边界的前提）。 */
 function FrostCard({ zoom, nodeMode, label }: { label: string; nodeMode: number; zoom: number }) {
+  /* SAFETY: 类型断言已复核 */
   const palette = computeNodePalette(
-    /* SAFETY: 类型断言已复核 */ { mode: nodeMode } as Parameters<typeof computeNodePalette>[0],
+    { mode: nodeMode } as Parameters<typeof computeNodePalette>[0],
     { color: ROLE_COLOR },
     DARK_PALETTE_BASE,
   );
@@ -122,8 +123,9 @@ export const InCanvas: Story = {
 
 /** 真画布里的节点渲染器：走 `FrostLayer`，所以缩放由 store 给。 */
 function FrostDemoNode() {
+  /* SAFETY: 类型断言已复核 */
   const palette = computeNodePalette(
-    /* SAFETY: 类型断言已复核 */ { mode: 4 } as Parameters<typeof computeNodePalette>[0],
+    { mode: 4 } as Parameters<typeof computeNodePalette>[0],
     { color: ROLE_COLOR },
     DARK_PALETTE_BASE,
   );

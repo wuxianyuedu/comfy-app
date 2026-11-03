@@ -32,9 +32,7 @@ import {
 /** 过**写边界**（tRPC 入参那一半）：真判据，不是我以为它收成什么样。 */
 function throughInput(value: unknown): unknown {
   const parsed = workflowParamMapInputSchema.safeParse(value);
-  expect(parsed.success, `入参判据当场拒了：${String(parsed.error)}`).toBe(
-    true,
-  );
+  expect(parsed.success, `入参判据当场拒了：${String(parsed.error)}`).toBe(true);
   return parsed.success ? parsed.data : undefined;
 }
 
@@ -60,10 +58,7 @@ describe("paramMap 写边界 ⇄ 读边界：同一枚合法条目同读数（§
     /* 写侧不许抛：那会把「客户端多传了一个字段」升级成整次保存失败（文件头那条理由）；
      * 读侧给 `null`：调用方据此区分「这一列是空的」与「压根没有」。两侧结论同形。 */
     for (const value of [["mode:T2I"], 42, "source"]) {
-      expect(
-        throughInput(value),
-        `写侧对 ${JSON.stringify(value)} 抛了`,
-      ).toBeNull();
+      expect(throughInput(value), `写侧对 ${JSON.stringify(value)} 抛了`).toBeNull();
       expect(parseWorkflowParamMap(value)).toBeNull();
     }
   });
@@ -72,10 +67,7 @@ describe("paramMap 写边界 ⇄ 读边界：同一枚合法条目同读数（§
     /* 这一格看着细，但它是「同读数」定义的一部分：写侧 `undefined` = 这次不动这一列，
      * 读侧 `null` = 库里没有。两者**不该**相等 —— 判反了就会把「不动」写成「清空」。 */
     for (const value of [undefined, null]) {
-      expect(
-        throughInput(value),
-        `写侧该把 ${String(value)} 当「不写」`,
-      ).toBeUndefined();
+      expect(throughInput(value), `写侧该把 ${String(value)} 当「不写」`).toBeUndefined();
       expect(parseWorkflowParamMap(value)).toBeNull();
     }
   });

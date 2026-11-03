@@ -28,7 +28,7 @@ type SpawnedFailure = {
   status?: number | null;
   stderr?: string;
   stdout?: string;
-}
+};
 
 /** 跑一次入口并交出三件原值（非零退出时 `execFileSync` 会抛，那里带着 stdout/stderr）。 */
 function runBin(args: Array<string>) {

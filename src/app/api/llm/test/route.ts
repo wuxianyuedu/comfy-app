@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
      * 原样透出，不重试。 */
     if ([400, 404, 405].includes(res.status)) {
       const parent = parentBase(baseUrl);
-      if (parent) {
+      if (parent !== null && parent !== "") {
         const parentRes = await probe(parent);
         if (parentRes.ok) {
           probedBase = parent;

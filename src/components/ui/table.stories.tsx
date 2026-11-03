@@ -91,10 +91,11 @@ export const WithStatusColumn: Story = {
           ["qwen_image_edit.safetensors", "下载中", "neutral"],
           ["flux1-dev.safetensors", "缺失", "danger"],
         ].map(([name, status, tone]) => (
+          /* SAFETY: 类型断言已复核 */
           <TableRow key={name}>
             <TableCell className="font-mono text-xs">{name}</TableCell>
             <TableCell>
-              <Badge tone={/* SAFETY: 类型断言已复核 */ tone as BadgeTone}>{status}</Badge>
+              <Badge tone={tone as BadgeTone}>{status}</Badge>
             </TableCell>
             <TableCell className="text-right">
               <Button size="xs" variant="ghost">

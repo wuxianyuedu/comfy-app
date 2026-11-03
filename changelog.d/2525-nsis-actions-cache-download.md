@@ -1,0 +1,2 @@
+## Changed
+- CI（桌面打包）：`.github/workflows/package-desktop.yml` 的 NSIS 工具接 `actions/cache`（path `D:\ci-tools\nsis\3.13`，key 锁 `nsis-3.13-${{ runner.os }}`）；常驻根可由 `COMFY_CI_TOOLS_ROOT` 覆盖（GitHub hosted runner 上没有本机那条 LocalSystem 缓存前提）。`scripts/tauri-tools-cache.mjs` 新增 `--download`：从被钉死的两件公开资产（sha256 + 字节钉在 `NSIS_PLAN`）直接建常驻根镜像——镜像清单可读 ⇒ 退 0 不动；目录在而清单不可读 ⇒ 退 1 不覆盖；传输 / 解压失败 ⇒ 退 2「没有结论」不静默降级；哈希对不上 ⇒ 退 1 并指去同批改 `NSIS_PLAN`。workflow 侧 miss 那一跑先 `ensure` 再 `--download` 再 `ensure` 复核，fail-closed。用例补 `tests/tauri-tools-cache.test.ts` 五族下载分支（假 curl / tar 注入，不发真网络）。

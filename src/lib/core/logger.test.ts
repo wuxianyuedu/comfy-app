@@ -79,8 +79,9 @@ describe("core/logger — 核心层门面（实现只有一份，就是本模块
       .split("\n")
       .filter(Boolean)
       .map(
+        /* SAFETY: 类型断言已复核 */
         (l) =>
-          /* SAFETY: 类型断言已复核 */ JSON.parse(l) as {
+          JSON.parse(l) as {
             level: number;
           },
       );

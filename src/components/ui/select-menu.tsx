@@ -200,6 +200,7 @@ export function SelectMenu({
     ? (labels?.[value] ?? options.find((option) => option === value) ?? placeholder)
     : placeholder;
 
+  const hasFooter = Boolean(footer);
   return (
     <SelectPrimitive.Root
       disabled={disabled}
@@ -261,7 +262,7 @@ export function SelectMenu({
                 </SelectPrimitive.Item>
               ))}
             </SelectPrimitive.List>
-            {footer ? (
+            {hasFooter ? (
               <div className="border-border-strong mt-1 border-t pt-1">{footer}</div>
             ) : null}
           </SelectPrimitive.Popup>

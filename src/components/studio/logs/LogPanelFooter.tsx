@@ -83,7 +83,7 @@ export function LogPanelFooter(input: {
         )}
         {/* 服务端进程标识：用户报障时能说清「日志来自哪个应用服务进程」，
           也让面板在服务真重启后能自证（时间线已重置）。 */}
-        {bootId && (
+        {bootId !== null && bootId !== "" && (
           <span
             className="border-border-strong text-ink-muted text-2xs shrink-0 rounded border px-1.5 py-px"
             title={`应用服务进程标识：${bootId}（重启后会变化，面板据此重置时间线）`}
@@ -113,7 +113,9 @@ export function LogPanelFooter(input: {
                 <Button
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                   disabled={safePage <= 1}
-                  onClick={() => setPage(safePage - 1)}
+                  onClick={() => {
+                    setPage(safePage - 1);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >
@@ -130,7 +132,9 @@ export function LogPanelFooter(input: {
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md tabular-nums disabled:cursor-default"
                   data-testid="logpanel-origin-chip"
                   disabled={!origin || origin === "all"}
-                  onClick={() => setOrigin("all")}
+                  onClick={() => {
+                    setOrigin("all");
+                  }}
                   size="xs"
                   variant="ghost"
                 >
@@ -142,7 +146,9 @@ export function LogPanelFooter(input: {
                   className="enabled:hover:bg-subtle enabled:hover:text-ink rounded-md disabled:cursor-default"
                   data-testid="logpanel-level-chip"
                   disabled={filter === "all"}
-                  onClick={() => setFilter("all")}
+                  onClick={() => {
+                    setFilter("all");
+                  }}
                   size="xs"
                   variant="ghost"
                 >
@@ -153,7 +159,9 @@ export function LogPanelFooter(input: {
                 <Hint label="清空搜索">
                   <Button
                     className="hover:bg-subtle hover:text-ink max-w-40 truncate rounded-md"
-                    onClick={() => setSearch("")}
+                    onClick={() => {
+                      setSearch("");
+                    }}
                     size="xs"
                     variant="ghost"
                   >
@@ -167,7 +175,9 @@ export function LogPanelFooter(input: {
                 <Button
                   className="text-ink-soft hover:bg-subtle hover:text-ink rounded-md"
                   disabled={safePage >= totalPages}
-                  onClick={() => setPage(safePage + 1)}
+                  onClick={() => {
+                    setPage(safePage + 1);
+                  }}
                   size="icon-xs"
                   variant="ghost"
                 >

@@ -22,11 +22,14 @@ pnpm run build          # 产物级护栏（build + 剥私有输入 + 数产物 
 - **别默认用 `--no-file-parallelism` 跑全量**：串行要 2~3 小时。它的正确用途是给一条红
   **定性**（串行也红才是真红，见规范 §11.13）。
 - 提交时不必手动跑这些：`.githooks/pre-commit` 已覆盖提交自身的形态判据；**受影响用例**
-  （固定守护清单 + 沿静态 import 图解析出的那一层）2026-10-20 起由平台侧 PR 流水线的
-  `受影响用例` 一格执行（规范 §13.5.8 / §13.5.25），本地只剩 `pnpm test` / `pnpm check:all`
-  的全量入口。
+  （固定守护清单 + 沿静态 import 图解析出的那一层）2026-10-20 起由平台侧执行，
+  2026-11-02 起并入每日全量单测（ISSUE #3052：增量面是全量子集，规范 §13.5.8 / §13.5.25），
+  本地只剩 `pnpm test` / `pnpm check:all` 的全量入口。
 
 ## 单元测试（Vitest）
+
+> CI 配置文件（`.cnb.yml` / `.github/workflows`）有独立的真解析器校验：
+> 改了它们后跑 `pnpm check:ci-yaml`（判据在 `tests/ci-yaml-parse.test.ts`）。
 
 ### 配置
 

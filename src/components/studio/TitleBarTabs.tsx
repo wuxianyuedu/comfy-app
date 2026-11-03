@@ -72,13 +72,17 @@ function TitleBarTab({
     <div
       aria-selected={active}
       data-no-drag
-      onClick={() => onActivate(tab.id)}
+      onClick={() => {
+        onActivate(tab.id);
+      }}
       role="tab"
       tabIndex={0}
       /* 与 `ShellTabs` 同款：键判据走 `~/components/ui/simple-key-handler`
        *（规范 16 §16.2.4.57）—— 两种渲染形态的页签对「哪个键激活」共用
        *  同一个判据，不再各写一遍。 */
-      {...simpleKeyHandler(["Space", "Enter"], () => onActivate(tab.id))}
+      {...simpleKeyHandler(["Space", "Enter"], () => {
+        onActivate(tab.id);
+      })}
       className={`group border-border-subtle relative flex h-full max-w-52 min-w-0 cursor-pointer items-center gap-2 border-r px-3 text-sm transition-colors ${
         /* 与同一条标题行里的「应用内视图页签」共用 `.u-tab-active`：
            两类页签并列在同一横条上，选中态长两张脸就是漂移。 */

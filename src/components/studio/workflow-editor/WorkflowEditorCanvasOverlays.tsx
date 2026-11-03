@@ -52,7 +52,7 @@ export function WorkflowEditorErrorScreen({
   return (
     <EditorTransitionFrame>
       <div className="text-center">
-        <p className="text-destructive">{error ?? "未知错误"}</p>
+        <p className="text-destructive">{error}</p>
         <Button
           className="hover:bg-surface-2 mt-3 h-auto px-4 py-2 text-sm"
           onClick={onClose}

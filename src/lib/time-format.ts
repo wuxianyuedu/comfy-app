@@ -80,7 +80,7 @@ const CLOCK_FORMAT: Intl.DateTimeFormatOptions = {
 export function formatClock(value: TimeInput, opts: { millis?: boolean } = {}): string {
   return toDate(value).toLocaleTimeString("zh-CN", {
     ...CLOCK_FORMAT,
-    ...(opts.millis ? { fractionalSecondDigits: 3 } : {}),
+    ...(opts.millis === true ? { fractionalSecondDigits: 3 } : {}),
   });
 }
 
@@ -138,7 +138,7 @@ export function formatShortDate(value: TimeInput): string {
 export function formatLocalStamp(value: TimeInput, opts: { millis?: boolean } = {}): string {
   const d = toDate(value);
   const base = `${formatDate(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-  return opts.millis ? `${base}.${String(d.getMilliseconds()).padStart(3, "0")}` : base;
+  return opts.millis === true ? `${base}.${String(d.getMilliseconds()).padStart(3, "0")}` : base;
 }
 
 /**
@@ -154,7 +154,7 @@ export function formatLocalStamp(value: TimeInput, opts: { millis?: boolean } = 
 export function formatCompactStamp(value: TimeInput, opts: { millis?: boolean } = {}): string {
   const d = toDate(value);
   return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}${
-    opts.millis ? `-${String(d.getMilliseconds()).padStart(3, "0")}` : ""
+    opts.millis === true ? `-${String(d.getMilliseconds()).padStart(3, "0")}` : ""
   }`;
 }
 

@@ -141,7 +141,8 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
     const rawD = dark.raw(name);
     // 至少有一态声明了它（两态都声明时值应一致 —— 它就是纯转发）
     expect(rawL !== undefined || rawD !== undefined, `${name} 未被声明`).toBe(true);
-    for (const [label, raw] of /* SAFETY: 类型断言已复核 */ [
+    /* SAFETY: 类型断言已复核 */
+    for (const [label, raw] of [
       ["浅色", rawL],
       ["深色", rawD],
     ] as const) {
@@ -198,7 +199,7 @@ describe("T1 别名只做 var() 转发，不写第二份字面量（ISSUE #672�
     ];
     const declared = new Set<string>();
     for (const m of sourceCss.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)) {
-      if (m[1]) {
+      if (m[1] !== undefined && m[1] !== "") {
         declared.add(m[1]);
       }
     }
@@ -228,7 +229,9 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
     const themeBlock = braceBlock(sourceCss, "@theme {");
     const inlineBlock = braceBlock(sourceCss, "@theme inline {");
     const projectNames = new Set(
-      [...themeBlock.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].flatMap((m) => (m[1] ? [m[1]] : [])),
+      [...themeBlock.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].flatMap((m) =>
+        m[1] !== undefined && m[1] !== "" ? [m[1]] : [],
+      ),
     );
     /* 判据自己的视力表：命名空间一旦又落到扫描面外，这里先红。 */
     for (const mustSee of ["--font-sans", "--container-narrow", "--color-card"]) {
@@ -237,9 +240,14 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
         `@theme 的扫描面里看不到 ${mustSee} —— 取块又缩水了，这条判据正在空转`,
       ).toBe(true);
     }
+    /* SAFETY: 类型断言已复核 */
     const bridged = [
       ...inlineBlock.matchAll(/^\s*(--[a-z0-9-]+)\s*:\s*var\(--([a-z0-9-]+)\);?/gm),
-    ].flatMap((m) => (m[1] && m[2] ? [/* SAFETY: 类型断言已复核 */ [m[1], m[2]] as const] : []));
+    ].flatMap((m) =>
+      m[1] !== undefined && m[1] !== "" && m[2] !== undefined && m[2] !== ""
+        ? [[m[1], m[2]] as const]
+        : [],
+    );
     expect(bridged.length, "@theme inline 的桥一条都没有（判据失效）").toBeGreaterThan(10);
     const shadowed = bridged.filter(([name]) => projectNames.has(name));
     expect(
@@ -252,9 +260,11 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
     const inlineBlock = braceBlock(sourceCss, "@theme inline {");
     const bridged = [
       ...inlineBlock.matchAll(/^\s*--[a-z0-9-]+\s*:\s*var\(--([a-z0-9-]+)\)/gm),
-    ].flatMap((m) => (m[1] ? [m[1]] : []));
+    ].flatMap((m) => (m[1] !== undefined && m[1] !== "" ? [m[1]] : []));
     const declared = new Set(
-      [...sourceCss.matchAll(/^\s*--([a-z0-9-]+)\s*:/gm)].flatMap((m) => (m[1] ? [m[1]] : [])),
+      [...sourceCss.matchAll(/^\s*--([a-z0-9-]+)\s*:/gm)].flatMap((m) =>
+        m[1] !== undefined && m[1] !== "" ? [m[1]] : [],
+      ),
     );
     /* 软断言：一条桥指向空气时，其余坏的桥也一起报出来（§11.18）。 */
     for (const alias of bridged) {
@@ -264,12 +274,11 @@ describe("T2 @theme inline 不得重定义项目 token（ISSUE #672）", () => {
 });
 
 describe("T3 var() 引用链无环、不漏到未定义的名字", () => {
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["浅色", () => light],
-      ["深色", () => dark],
-    ] as const,
-  )("%s：每个别名都能解到一个具体值", ([, get]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)("%s：每个别名都能解到一个具体值", ([, get]) => {
     const t = get();
     /* 软断言：这三条是一张 30 条别名的清单上的逐项检查 —— 一条别名成环不该
        把其余 29 条的结论一起藏起来（§11.18）。 */
@@ -317,7 +326,7 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
   it("@theme 里不许再有 --radius-* 字面量（那份死声明别再长回来）", () => {
     const themeBlock = braceBlock(sourceCss, "@theme {");
     const stray = [...themeBlock.matchAll(/^\s*(--radius-[a-z0-9-]+)\s*:/gm)].flatMap((m) =>
-      m[1] ? [m[1]] : [],
+      m[1] !== undefined && m[1] !== "" ? [m[1]] : [],
     );
     expect(
       stray,
@@ -405,12 +414,11 @@ describe("T4 圆角刻度：一处基数 + 一张系数表（docs/DESIGN.md §Sh
 const FONT_CHAIN = ["--font-sans", "--font-heading", "--font-title", "--font-mono"] as const;
 
 describe("T5 字体链在编译产物里必须解得出具体的栈（#1434）", () => {
-  it.for(
-    /* SAFETY: 类型断言已复核 */ [
-      ["浅色", () => light],
-      ["深色", () => dark],
-    ] as const,
-  )("%s：四档字体令牌都解得到值，不留未展开的 var()", ([, get]) => {
+  /* SAFETY: 类型断言已复核 */
+  it.for([
+    ["浅色", () => light],
+    ["深色", () => dark],
+  ] as const)("%s：四档字体令牌都解得到值，不留未展开的 var()", ([, get]) => {
     const t = get();
     for (const name of FONT_CHAIN) {
       expect.soft(t.has(name), `产物里没有 ${name} 这条声明`).toBe(true);

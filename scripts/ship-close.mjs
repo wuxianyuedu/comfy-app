@@ -32,9 +32,10 @@
 /** @typedef {(cmd: string, args: string[]) => import("./ship-exec.mjs").ExecResult} CloseRun */
 
 import { asArray } from "./ship-build.mjs";
-import { CODE, combineShipCodes } from "./ship-core.mjs";
+import { CODE, codeTag, combineShipCodes } from "./ship-core.mjs";
 import { cnbJson, short } from "./ship-exec.mjs";
 import { finishIssueWork } from "./ship-claim.mjs";
+import { reportStage } from "./ship-stage.mjs";
 import { issueItemShapes } from "./ship-ticket.mjs";
 
 /**
@@ -313,15 +314,19 @@ export function decideCloseIssue({
  *   pages?: number,
  *   pageSize?: number,
  * }} ctx
- * @returns {{proofs: Map<number, {prNumber: number, title: string}>, scanned: number, ran: boolean}}
+ * @returns {{proofs: Map<number, {prNumber: number, title: string}>, unknown: Map<number, {prNumber: number}>, scanned: number, ran: boolean}}
+ *   `unknown`：标题点名了目标单子、而那条 PR 的 `is_merged` **缺键 / null / 非布尔**
+ *   （ISSUE #3059）—— 证明读数缺，不按「没证明」静默跳过。
  */
 export function findMergedPullProofs(ctx) {
   const { run, slug, numbers, pages = 5, pageSize = 20 } = ctx;
   /** @type {Map<number, {prNumber: number, title: string}>} */
   const proofs = new Map();
+  /** @type {Map<number, {prNumber: number}>} */
+  const unknown = new Map();
   const want = new Set(numbers);
-  /** @type {{proofs: Map<number, {prNumber: number, title: string}>, scanned: number, ran: boolean}} */
-  const nothing = { proofs, scanned: 0, ran: false };
+  /** @type {{proofs: Map<number, {prNumber: number, title: string}>, unknown: Map<number, {prNumber: number}>, scanned: number, ran: boolean}} */
+  const nothing = { proofs, unknown, scanned: 0, ran: false };
   if (!slug) {
     return nothing;
   }
@@ -351,6 +356,17 @@ export function findMergedPullProofs(ctx) {
     }
     for (const item of list) {
       if (item?.is_merged !== true) {
+        /* ISSUE #3059：标题点名了目标单子而 `is_merged` 缺键 ⇒ 证明读数缺，不是「没证明」。
+         * 缺键不按 false 处理：记下来，由关单那一格按读数缺失念并给独立退码。 */
+        if (typeof item?.is_merged !== "boolean") {
+          const prNumber = Number(item.number ?? 0);
+          const itemBody = pullTitleBody(String(item.title ?? ""), prNumber);
+          for (const n of claimNumbersFromTitle(itemBody)) {
+            if (want.has(n) && !unknown.has(n)) {
+              unknown.set(n, { prNumber });
+            }
+          }
+        }
         continue;
       }
       scanned += 1;
@@ -366,7 +382,7 @@ export function findMergedPullProofs(ctx) {
       break;
     }
   }
-  return { proofs, scanned, ran };
+  return { proofs, unknown, scanned, ran };
 }
 
 /**
@@ -473,7 +489,7 @@ export function closeIssues(ctx) {
   } = ctx;
   const landedVerified = landed?.verified === true;
   const title = landed?.title ?? "";
-  let scan = { proofs: new Map(), scanned: 0, ran: true };
+  let scan = { proofs: new Map(), unknown: new Map(), scanned: 0, ran: true };
   /** @type {{state: "merged" | "not-merged" | "unreadable", title: string, prNumber: number} | null} */
   let asMergedProof = null;
   if (!landedVerified && explicit.length > 0) {
@@ -527,15 +543,27 @@ export function closeIssues(ctx) {
         `（人点名才算）：要关请 pnpm ship --close-issue ${n}`,
     );
   }
+  /** @type {number[]} */
+  const codes = [];
   for (const number of plan.unproven) {
+    const unknownProof = scan.unknown.get(number);
+    if (unknownProof) {
+      /* ISSUE #3059：点名的 PR 在，但它的 is_merged 缺键 ⇒ 证明读数缺，给独立退码，
+       * 不混进「查不到证明」（那是扫遍了真没有），更不按「没落地」处理。 */
+      log(
+        `[ship] #${number} **不关**：PR #${unknownProof.prNumber} 的标题点名了它，` +
+          "但那条 PR 的 `is_merged` 缺键 ⇒ 证明读数缺" +
+          `（${codeTag(CODE.READOUT_MISSING)}）。核平台那条 PR 的页面；键补上了再重跑。`,
+      );
+      codes.push(CODE.READOUT_MISSING);
+      continue;
+    }
     log(
       `[ship] #${number} **不关**：查不到它的落地证明 ⇒ 这一格对它没有结论` +
         "（不是「它没落地」，也不是「请你手动」）",
     );
   }
 
-  /** @type {number[]} */
-  const codes = [];
   /* 预览就是预览（ISSUE #2766）。上面那些行全是**判决**：凭据从平台回读、该不该关由
    * `decideCloseIssue` 判、不关的那几张逐张说明为什么没结论 —— 它们只发读命令，
    * 所以 dry-run 底下照原样跑完，预览出来的结论与真跑那一次同一份来源。
@@ -584,7 +612,10 @@ export function closeIssues(ctx) {
       "-v",
     ]);
     const d = back?.json?.data ?? null;
-    const state = d?.state ?? "(取不到)";
+    /* ISSUE #3059：回读没跑起来 / 缺 `state` 键 ⇒ 关没关成**没有读数**（退 5），
+     * 不按「没关成」落红（行为变更：这两种此前退 1，混在「平台说没关成」里）。 */
+    const stateMissing = !d || d.state === undefined || d.state === null;
+    const state = stateMissing ? (d ? "(缺键)" : "(取不到)") : String(d.state);
     const reason = d?.state_reason ?? "(无)";
     const at = d?.closed_at ?? "(无)";
     log(
@@ -592,6 +623,9 @@ export function closeIssues(ctx) {
           ? ` · 落地那一行 sha=${short(landed.sha)}`
           : ` · 落地证明：${plan.sources.get(number) ?? "(未标注)"}`}`,
     );
+    /* 「走到哪了」（ISSUE #3083）：关单这一格的身份是 issue 号 + 回读的 state 两件
+     * 原值 —— 关没关成从这一行就看得见，不用等到「结论：exit N」。 */
+    reportStage(log, "关单", { issue: number, state, state_reason: reason, closed_at: at });
     /* 「回读里没有正文这一格」与「正文是空的」必须分开念：前者不能念成「零条」
      * （拿缺字段当结论，正是这一族反复在收的那一型）。 */
     if (typeof d?.body === "string") {
@@ -604,7 +638,13 @@ export function closeIssues(ctx) {
     } else {
       log(`[ship] #${number} 条目读数：正文没读到（回读缺这一格）⇒ **不念成「零条」**。`);
     }
-    if (state === "closed") {
+    if (stateMissing) {
+      log(
+        `[ship] #${number} 回读${d ? "缺 `state` 键" : "没跑起来"} ⇒ 关没关成**没有读数**，` +
+          `不按「没关成」处理（${codeTag(CODE.READOUT_MISSING)}）。`,
+      );
+      codes.push(CODE.READOUT_MISSING);
+    } else if (state === "closed") {
       codes.push(CODE.GREEN);
       /* 关单成功之后才做「开发结束」评论与撤处理人标签：单子还没关成就先放掉标签，
        * 等于在「还在开着的单」上宣布结束。评论失败时 `finishIssueWork` 会保留标签。 */

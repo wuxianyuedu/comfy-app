@@ -31,11 +31,13 @@ export type Listener = () => void;
 
 /** 单格宽高是否合法（正整数且在常识范围内）。 */
 function isValidDims(value: unknown): value is SizeDims {
-  if (!value || typeof value !== "object") {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
-  const width = /* SAFETY: 类型断言已复核 */ (value as { width?: unknown }).width;
-  const height = /* SAFETY: 类型断言已复核 */ (value as { height?: unknown }).height;
+  /* SAFETY: 类型断言已复核 */
+  const width = (value as { width?: unknown }).width;
+  /* SAFETY: 类型断言已复核 */
+  const height = (value as { height?: unknown }).height;
   return (
     typeof width === "number" &&
     typeof height === "number" &&
@@ -52,14 +54,19 @@ function mergeScene(fallback: SceneResolutionTable, raw: unknown): SceneResoluti
   for (const preset of SIZE_RATIO_PRESETS) {
     const fallbackRow = fallback[preset.label];
     const rawRow =
-      raw && typeof raw === "object"
-        ? /* SAFETY: 类型断言已复核 */ (raw as Record<string, unknown>)[preset.label]
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      raw != null && typeof raw === "object"
+        ? /* SAFETY: 类型断言已复核 */
+          (raw as Record<string, unknown>)[preset.label]
         : undefined;
-    const row = /* SAFETY: 类型断言已复核 */ {} as Record<ResolutionTier, SizeDims>;
+    /* SAFETY: 类型断言已复核 */
+    const row = {} as Record<ResolutionTier, SizeDims>;
     for (const tier of RESOLUTION_TIERS) {
       const candidate =
-        rawRow && typeof rawRow === "object"
-          ? /* SAFETY: 类型断言已复核 */ (rawRow as Record<string, unknown>)[tier]
+        // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+        rawRow != null && typeof rawRow === "object"
+          ? /* SAFETY: 类型断言已复核 */
+            (rawRow as Record<string, unknown>)[tier]
           : undefined;
       row[tier] = isValidDims(candidate)
         ? {
@@ -76,7 +83,8 @@ function mergeScene(fallback: SceneResolutionTable, raw: unknown): SceneResoluti
 function mergeTable(raw: unknown): SizePresetTable {
   const record =
     /* SAFETY: 类型断言已复核 */
-    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    raw != null && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return {
     image: mergeScene(DEFAULT_SIZE_PRESET_TABLE.image, record.image),
     video: mergeScene(DEFAULT_SIZE_PRESET_TABLE.video, record.video),

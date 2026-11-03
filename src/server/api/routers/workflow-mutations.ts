@@ -107,7 +107,7 @@ export const workflowMutationProcedures = {
         };
       }
 
-      if (!body.raw || typeof body.raw !== "object" || Array.isArray(body.raw)) {
+      if (typeof body.raw !== "object" || body.raw === null || Array.isArray(body.raw)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "缺少工作流 JSON。请粘贴 ComfyUI「导出 (工作流格式)」的 JSON",
@@ -211,15 +211,13 @@ export const workflowMutationProcedures = {
         /* 保存 IO 映射时把类型 / 默认值固化进库（fix 4）：用图里当前字面量补全
          * 缺失的 type / defaultValue，离线也能做，不依赖 object_info 重算。 */
         workflowIO:
+          /* SAFETY: 类型断言已复核 */
           rest.workflowIO === undefined
             ? undefined
             : persistEnrichedWorkflowIO(
                 /* IO 的类型 / 默认值从 RAW 原件的字面量与 object_info 富化，
                  * 存库不再有第二份可执行的 API 图。 */
-                /* SAFETY: 类型断言已复核 */ (existing.rawJson as
-                  | Record<string, unknown>
-                  | null
-                  | undefined) ?? null,
+                (existing.rawJson as Record<string, unknown> | null | undefined) ?? null,
                 parseWorkflowIOMap(rest.workflowIO),
               ),
       };
@@ -252,8 +250,8 @@ export const workflowMutationProcedures = {
         patch.positions = undefined;
         /* SAFETY: 类型断言已复核 */
         const cur =
-          existing.positions &&
           typeof existing.positions === "object" &&
+          existing.positions !== null &&
           !Array.isArray(existing.positions)
             ? (existing.positions as Record<string, unknown>)
             : {};
@@ -294,11 +292,12 @@ export const workflowMutationProcedures = {
       // 位置的合并 / 替换，以及把分组与便签写回 rawJson
       let nextRawJson: Record<string, unknown> | null = null;
       if (
-        existing.rawJson &&
         typeof existing.rawJson === "object" &&
+        existing.rawJson !== null &&
         !Array.isArray(existing.rawJson)
       ) {
-        nextRawJson = /* SAFETY: 类型断言已复核 */ existing.rawJson as Record<string, unknown>;
+        /* SAFETY: 类型断言已复核 */
+        nextRawJson = existing.rawJson as Record<string, unknown>;
       }
       const writePositions =
         input.positions !== undefined && input.resetPositionsScope === undefined;
@@ -309,19 +308,16 @@ export const workflowMutationProcedures = {
           ? [...(nextRawJson.nodes as Array<unknown>)]
           : [];
         if (writePositions) {
-          const posMap = /* SAFETY: 类型断言已复核 */ input.positions as Record<
-            string,
-            [number, number]
-          >;
+          /* SAFETY: 类型断言已复核 */
+          const posMap = input.positions as Record<string, [number, number]>;
           for (let i = 0; i < nodes.length; i++) {
             const nd = nodes[i];
-            if (!nd || typeof nd !== "object") {
+            if (typeof nd !== "object" || nd === null) {
               continue;
             }
             const rawId =
-              nd && "id" in nd
-                ? /* SAFETY: 类型断言已复核 */ (nd as { id?: unknown }).id
-                : undefined;
+              /* SAFETY: 类型断言已复核 */
+              "id" in nd ? (nd as { id?: unknown }).id : undefined;
             const pid =
               typeof rawId === "string" ? rawId : typeof rawId === "number" ? String(rawId) : "";
             if (pid && posMap?.[pid]) {
@@ -340,13 +336,13 @@ export const workflowMutationProcedures = {
         }
         patch.rawJson = nextRawJson;
         if (writePositions) {
-          if (mergePositions) {
+          if (mergePositions === true) {
             // 合并进已有的 positions 列（从子图 / RAW 视图拖单个键时，
             // 不能把另一个命名空间一起抹掉）。
             /* SAFETY: 类型断言已复核 */
             const cur =
-              existing.positions &&
               typeof existing.positions === "object" &&
+              existing.positions !== null &&
               !Array.isArray(existing.positions)
                 ? (existing.positions as Record<string, [number, number]>)
                 : {};
@@ -415,10 +411,10 @@ export const workflowMutationProcedures = {
       sourceChecksum: existing.sourceChecksum,
       existingTaskType: existing.taskType,
     });
-    if (result.missing) {
+    if (result.missing === true) {
       return { missing: true };
     }
-    if (result.unchanged) {
+    if (result.unchanged === true) {
       return { unchanged: true };
     }
     if (!result.update) {

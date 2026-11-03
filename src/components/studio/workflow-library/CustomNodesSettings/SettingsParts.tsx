@@ -151,7 +151,10 @@ export function ManifestSummary({ summary }: { summary: NonNullable<SettingsResp
   return (
     <div className="border-border bg-bg text-muted-foreground mb-4 rounded-lg border px-3 py-2 text-xs">
       当前清单：共 <b className="text-ink">{summary.totalNodes}</b> 个节点类型
-      {summary.generatedAt ? ` · 生成于 ${summary.generatedAt}` : ""}
+      {summary.generatedAt !== null && summary.generatedAt !== ""
+        ? ` · 生成于 ${summary.generatedAt}`
+        : ""}
+      {/* oxlint-disable-next-line no-unnecessary-condition -- summary 来自 /api/custom-nodes 响应，旧服务端可能缺 missingPaths */}
       {summary.missingPaths?.length ? ` · ⚠️ ${summary.missingPaths.length} 个目录未找到` : ""}
     </div>
   );
@@ -285,6 +288,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
         </span>
       </div>
       <div className="flex flex-col gap-2">
+        {/* oxlint-disable-next-line no-unnecessary-condition -- ParseReport 来自解析流 JSON（外部数据），旧报告可能缺 packages */}
         {(report.packages ?? []).map((pkg) => {
           const st = STATUS_STYLE[pkg.status] ?? OK_STATUS_STYLE;
           return (
@@ -314,6 +318,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   <div className="text-muted-foreground text-2xs">节点类型</div>
                 </div>
               </div>
+              {/* oxlint-disable-next-line no-unnecessary-condition -- PkgReport 来自解析流 JSON，旧报告可能缺 nodeTypes */}
               {pkg.nodeTypes?.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {pkg.nodeTypes.slice(0, 24).map((ct) => (
@@ -331,6 +336,7 @@ export function ReportCards({ report }: { report: ParseReport }) {
                   )}
                 </div>
               )}
+              {/* oxlint-disable-next-line no-unnecessary-condition -- 同上：旧报告的包条目可能缺 errors */}
               {pkg.errors?.length > 0 && (
                 <div className="mt-2 flex flex-col gap-1">
                   {pkg.errors.map((er, j) => (

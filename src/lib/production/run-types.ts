@@ -174,9 +174,8 @@ export function normalizeProductionRun(raw: unknown): ProductionRun {
     ? (obj.status as RunStatus)
     : "idle";
   /* SAFETY: 类型断言已复核 */
-  const approvalMode = APPROVAL_MODES.includes(
-    /* SAFETY: 类型断言已复核 */ obj.approvalMode as ApprovalMode,
-  )
+  /* SAFETY: 类型断言已复核 */
+  const approvalMode = APPROVAL_MODES.includes(obj.approvalMode as ApprovalMode)
     ? (obj.approvalMode as ApprovalMode)
     : "stage";
   const log: Array<RunStep> = [];

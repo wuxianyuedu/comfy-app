@@ -51,7 +51,7 @@ export function PackageFooter({
 }) {
   const resolved =
     name ??
-    (config?.custom
+    (config?.custom === true
       ? (getCustomNodePackage(classType) ?? config.rawCategory ?? "Custom")
       : "ComfyUI");
 

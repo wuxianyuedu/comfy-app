@@ -78,11 +78,11 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
       <canvas
         aria-label="重绘蒙版画布（白色为要重绘的区域）"
         className={`border-border-strong bg-panel-deep touch-none rounded-lg border ${
-          disabled ? "opacity-50" : "cursor-crosshair"
+          disabled === true ? "opacity-50" : "cursor-crosshair"
         }`}
         height={288}
         onPointerDown={(e) => {
-          if (disabled) {
+          if (disabled === true) {
             return;
           }
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -93,7 +93,7 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
           }
         }}
         onPointerMove={(e) => {
-          if (!drawingRef.current || disabled) {
+          if (!drawingRef.current || disabled === true) {
             return;
           }
           const point = pointOf(e);
@@ -123,7 +123,9 @@ export function MaskCanvas({ value, onChange, disabled }: MaskCanvasProps) {
             className="text-2xs h-6 px-2"
             disabled={disabled}
             key={size}
-            onClick={() => setBrush(size)}
+            onClick={() => {
+              setBrush(size);
+            }}
             size="sm"
             type="button"
             variant={brush === size ? "secondary" : "ghost"}

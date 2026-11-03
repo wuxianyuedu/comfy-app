@@ -150,7 +150,7 @@ export const MediaThumbnail = React.memo(function MediaThumbnail(props: MediaThu
   const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
   const failed = failedSrc !== null && failedSrc === src;
 
-  if (!src) {
+  if (src === undefined || src === null || src === "") {
     return null;
   }
   if (failed) {

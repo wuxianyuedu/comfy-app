@@ -247,6 +247,7 @@ export function linkBuildCache(io) {
  * @param {{cwd?: string, env?: Record<string, string | undefined>,
  *   log?: (line: string) => void,
  *   hasRoom?: (path: string) => {ok: boolean},
+ *   cacheRoot?: string,
  *   runStorePath?: (args: string[], opts: object) => {status: number | null, stdout?: string}}} [io]
  * @returns {T}
  */
@@ -262,7 +263,11 @@ export function withBuildCacheSlot(run, io = {}) {
   const hasRoom = io.hasRoom ?? ((p) => hasRoomForSlot({ path: p }));
   const enabled = String(env[BUILD_CACHE_ENABLED_ENV] ?? "").trim() === "1";
 
-  const resolved = resolveBuildCacheRoot({ cwd, env, run: runStorePath });
+  /* 槽根可注入：POSIX 上卷根 `/` 不可写，而槽根按设计就落在卷根下 —— 那是**平台
+     事实**，不该让用例红（#3095）。生产路径永远走推导；用例注入只是换一个可写目录。 */
+  const resolved = io.cacheRoot
+    ? { root: io.cacheRoot, from: "用例注入" }
+    : resolveBuildCacheRoot({ cwd, env, run: runStorePath });
   const face = buildFaceFingerprint(cwd);
   const localCachePresent = pathOccupied(path.join(cwd, ".next", "cache"));
   const spaceOk = resolved.root ? hasRoom(resolved.root).ok : false;

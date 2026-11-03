@@ -129,7 +129,9 @@ export function NumberField({
          * 「让这个输入框失焦」，事件目标就是它）。Esc 无「取消」语义：数值框没有
          * 草稿态，改一下就上抛了。 */
         {...enterCommit({
-          onCommit: ({ currentTarget }) => currentTarget.blur(),
+          onCommit: ({ currentTarget }) => {
+            currentTarget.blur();
+          },
         })}
         className="text-ink-bright h-6 min-w-9 flex-1 [appearance:textfield] bg-transparent py-0 text-left font-mono text-xs outline-none disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         disabled={disabled}

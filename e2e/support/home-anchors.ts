@@ -38,7 +38,5 @@ export const HOME_ENTRY_CARD_LABEL = "新建画布";
  * 不会被误抓。
  */
 export async function expectHomeReady(page: Page): Promise<void> {
-  await expect(
-    page.getByText(HOME_ENTRY_CARD_LABEL, { exact: true }).first(),
-  ).toBeVisible();
+  await expect(page.getByText(HOME_ENTRY_CARD_LABEL, { exact: true }).first()).toBeVisible();
 }

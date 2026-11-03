@@ -19,9 +19,13 @@ describe("useRefreshTicket", () => {
 
   it("每刷一次票号 +1（整数，不换类型）", () => {
     const { result } = renderHook(() => useRefreshTicket());
-    act(() => result.current.refresh());
+    act(() => {
+      result.current.refresh();
+    });
     expect(result.current.ticket).toBe(1);
-    act(() => result.current.refresh());
+    act(() => {
+      result.current.refresh();
+    });
     expect(result.current.ticket).toBe(2);
     expect(Number.isInteger(result.current.ticket)).toBe(true);
   });
@@ -39,7 +43,9 @@ describe("useRefreshTicket", () => {
   it("`refresh` 的身份恒定（可以安全进 effect 依赖 / 传给子组件）", () => {
     const { result, rerender } = renderHook(() => useRefreshTicket());
     const first = result.current.refresh;
-    act(() => result.current.refresh());
+    act(() => {
+      result.current.refresh();
+    });
     rerender();
     expect(result.current.refresh).toBe(first);
   });

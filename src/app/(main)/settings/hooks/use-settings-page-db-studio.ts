@@ -112,7 +112,7 @@ export function useSettingsDbStudio({
     await openDbStudioAction.run(() => openM.mutateAsync());
   }, [openDbStudioAction, openM]);
 
-  const logActive = starting || !!statusQ.data?.starting;
+  const logActive = starting || statusQ.data?.starting === true;
   const log = useRuntimeLogSource({
     source: "drizzle-studio-runtime",
     active: logActive,
@@ -124,7 +124,7 @@ export function useSettingsDbStudio({
       ? {
           up: !!raw.up,
           starting: !!raw.starting,
-          port: raw.port ?? 4983,
+          port: raw.port,
         }
       : null,
     dbStudioStarting: starting,

@@ -72,7 +72,7 @@ function makeFakeCheckout(name: string): string {
 function addWorktree(
   checkout: string,
   name: string,
-): { git: (args: Array<string>) => void; path: string; } {
+): { git: (args: Array<string>) => void; path: string } {
   const wt = mkdtempSync(join(tmpdir(), `base-check-snap-${name}-wt-`));
   dirs.push(wt);
   const run = (args: Array<string>) => {
@@ -139,7 +139,9 @@ describe("复算快照的依赖链接：谁在链上、收尾谁先走", () => {
   }, 30_000);
 
   it("③`unlinkDependencies(null)` 不许抛（没链成时收尾仍要走下去）", () => {
-    expect(() => unlinkDependencies(null)).not.toThrow();
+    expect(() => {
+      unlinkDependencies(null);
+    }).not.toThrow();
   });
 
   it("④生产路径里的顺序钉住：先摘链接，再 `git worktree remove`", () => {

@@ -19,6 +19,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { IN_MEMORY_QUEUE_FACE } from "../scripts/lib/execution-chain-files.mjs";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -30,10 +31,7 @@ const code = (rel: string): string => {
     trailing: true,
   });
   // 这一族全是反向断言，前提是"读到了东西"：剥完是空文 ⇒ `not.toMatch` 恒真。
-  expect(
-    stripped.trim(),
-    `${rel}：剥完注释是空文，落在它身上的反向断言恒真`,
-  ).not.toHaveLength(0);
+  expect(stripped.trim(), `${rel}：剥完注释是空文，落在它身上的反向断言恒真`).not.toHaveLength(0);
   return stripped;
 };
 
@@ -65,7 +63,7 @@ function scanRepoSources(): Array<string> {
     }
   };
   for (const layer of SCAN_LAYERS) {
-    if (statSync(path.join(ROOT, layer), { throwIfNoEntry: false })?.isDirectory()) {
+    if (statSync(path.join(ROOT, layer), { throwIfNoEntry: false })?.isDirectory() === true) {
       walk(path.join(ROOT, layer));
     }
   }
@@ -79,21 +77,21 @@ const REPO_SOURCES = scanRepoSources();
 function loopCallSites(): Array<string> {
   /* 先按原文粗筛（实测：面 1371 份、读 + prefilter 188ms、命中 3 份），
    * 只对幸存者剥注释再判形状 —— 这一格的语义不变，成本也不变成 1371 次正则。 */
-  return REPO_SOURCES
-    .filter(
-      (rel) =>
-        readFileSync(path.join(ROOT, rel), "utf8").includes("startDispatchLoop"),
+  return (
+    REPO_SOURCES.filter((rel) =>
+      readFileSync(path.join(ROOT, rel), "utf8").includes("startDispatchLoop"),
     )
-    /* 只数**调用点**：声明行（`export function startDispatchLoop(`）与 barrel 的
-     * 再导出列表都带这个名字，把它们算进来会把 dispatch 自己报成第二个启动点。 */
-    .filter((rel) =>
-      code(rel)
-        .split("\n")
-        .some(
-          (line) =>
-            line.includes("startDispatchLoop(") && !line.includes("function startDispatchLoop"),
-        ),
-    );
+      /* 只数**调用点**：声明行（`export function startDispatchLoop(`）与 barrel 的
+       * 再导出列表都带这个名字，把它们算进来会把 dispatch 自己报成第二个启动点。 */
+      .filter((rel) =>
+        code(rel)
+          .split("\n")
+          .some(
+            (line) =>
+              line.includes("startDispatchLoop(") && !line.includes("function startDispatchLoop"),
+          ),
+      )
+  );
 }
 
 describe("派发循环的启动点：每宿主一处，且只一处", () => {
@@ -109,8 +107,7 @@ describe("派发循环的启动点：每宿主一处，且只一处", () => {
     ]) {
       expect(
         REPO_SOURCES,
-        `面里不见了 ${rel} —— 派生的层或扩展名改了，` +
-          "「全仓」会退化成只判剩下那些文件",
+        `面里不见了 ${rel} —— 派生的层或扩展名改了，「全仓」会退化成只判剩下那些文件`,
       ).toContain(rel);
     }
   });
@@ -136,7 +133,7 @@ describe("派发循环的启动点：每宿主一处，且只一处", () => {
     const edgeAt = src.indexOf('process.env.NEXT_RUNTIME === "edge"');
     expect(
       edgeAt,
-      'src/instrumentation.ts 里找不到 edge 分支的起点标记 —— slice(-1) 会切成最后一个字符，' +
+      "src/instrumentation.ts 里找不到 edge 分支的起点标记 —— slice(-1) 会切成最后一个字符，" +
         "下面两条「Edge 里不许出现」就在判空文",
     ).not.toBe(-1);
     const edge = src.slice(edgeAt);
@@ -160,13 +157,10 @@ describe("派发循环的启动点：每宿主一处，且只一处", () => {
 
 describe("只有一条 pull：内存队列不再长回来", () => {
   it("执行链里没有内存队列 / 计数器 / 出队函数", () => {
-    for (const rel of [
-      "src/lib/comfyui/executor-dispatch.ts",
-      "src/lib/comfyui/enqueue.ts",
-      "src/lib/comfyui/queue-status.server.ts",
-      "src/lib/comfyui/runner-state.ts",
-      "src/lib/comfyui/runner-state-shape.ts",
-    ]) {
+    /* 这份面的唯一定义在 `scripts/lib/execution-chain-files.mjs`（ISSUE #2914）：
+     * 登记制窄面，每份进面文件的理由写在模块里；为什么它与通道闸那份 17 项派生宽面
+     * 不是同一份地图、又为何不合并，见模块文件头。 */
+    for (const rel of IN_MEMORY_QUEUE_FACE) {
       const src = code(rel);
       expect(src, `${rel} 不该再读内存队列`).not.toMatch(/\.queue\b/);
       expect(src, `${rel} 不该再维护活跃计数器`).not.toMatch(/s\.active\b/);

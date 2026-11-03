@@ -72,7 +72,9 @@ export function ContentAssetBody({
       <div className="relative">
         <Textarea
           className="border-border-strong bg-canvas-deep text-ink-bright field-sizing-normal focus-visible:ring-primary/30 focus-visible:border-primary/40 h-65 w-full resize-none rounded-xl border px-3 py-2.5 text-xs leading-relaxed transition-colors"
-          onChange={textHandler((content) => onPatch({ content }))}
+          onChange={textHandler((content) => {
+            onPatch({ content });
+          })}
           placeholder="输入要喂给下游生成节点的提示词 / 参考文字…"
           ref={textareaRef}
           value={data.content ?? ""}
@@ -106,28 +108,7 @@ export function ContentAssetBody({
 
   return (
     <div className="relative">
-      {mediaSrc ? (
-        isPic ? (
-          <MediaThumbnail
-            alt={data.mediaName ?? "参考图"}
-            className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
-            onClick={() => {
-              if (imageCount > 1) {
-                gallery.setIndex(0);
-                gallery.setOpen(true);
-              }
-            }}
-            src={mediaSrc}
-            style={imageCount > 1 ? { cursor: "pointer" } : undefined}
-          />
-        ) : (
-          <MediaThumbnail
-            className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
-            controls
-            src={mediaSrc}
-          />
-        )
-      ) : (
+      {mediaSrc === null ? (
         /* 虚线大区改为 drop-only。
          *  - 不再是按钮元素，所以点击**不会**触发文件选择器（用户要的就是这点）。
          *  - 仍然需要 `nodrag nopan` + onPointerDown/onMouseDown stopPropagation，
@@ -157,7 +138,7 @@ export function ContentAssetBody({
             event.stopPropagation();
             /* 只有当拖入的是文件（不是节点 / 边）时才高亮
              *  —— `types` 对原生文件拖拽含 "Files"。 */
-            const types = [...(event.dataTransfer.types ?? [])];
+            const types = [...event.dataTransfer.types];
             if (types.includes("Files") && !isDropOver) {
               setIsDropOver(true);
             }
@@ -167,17 +148,40 @@ export function ContentAssetBody({
             event.preventDefault();
             event.stopPropagation();
             setIsDropOver(false);
-            const f = event.dataTransfer.files?.[0];
+            const f = event.dataTransfer.files[0];
             if (f && onUploadFile) {
               void onUploadFile(f);
             }
           }}
-          onMouseDown={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
         >
           <Icon className="opacity-60" name={isPic ? "image" : "film"} size={38} />
           <span className="text-xs">{isPic ? "拖入上传图片" : "拖入上传视频"}</span>
         </div>
+      ) : isPic ? (
+        <MediaThumbnail
+          alt={data.mediaName ?? "参考图"}
+          className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
+          onClick={() => {
+            if (imageCount > 1) {
+              gallery.setIndex(0);
+              gallery.setOpen(true);
+            }
+          }}
+          src={mediaSrc}
+          style={imageCount > 1 ? { cursor: "pointer" } : undefined}
+        />
+      ) : (
+        <MediaThumbnail
+          className="border-border-strong bg-canvas-deep h-65 w-full rounded-xl border object-cover"
+          controls
+          src={mediaSrc}
+        />
       )}
       {/* "水逐渐装满" 进度覆盖层 — 仅当 status ===
        *  "running" 时渲染。absolute inset-0 + pointer-events-none 让它覆盖
@@ -187,7 +191,9 @@ export function ContentAssetBody({
       <Hint accessibleName label={isPic ? "上传图片" : "上传视频"}>
         <Button
           className="absolute right-3 bottom-3 rounded-full text-white shadow-lg shadow-black/30 transition-transform hover:scale-105 hover:bg-transparent hover:text-white"
-          onClick={() => onPickMedia(isPic ? "picture" : "movie")}
+          onClick={() => {
+            onPickMedia(isPic ? "picture" : "movie");
+          }}
           size="icon-lg"
           style={{ background: accent }}
           variant="ghost"
@@ -197,7 +203,7 @@ export function ContentAssetBody({
       </Hint>
 
       {/* 多图数量标签（右上角） */}
-      {imageCount > 1 && mediaSrc && (
+      {imageCount > 1 && mediaSrc !== null && (
         <Hint label={`查看全部 ${imageCount} 张图片`}>
           <Button
             className="hover:bg-primary/80 text-3xs absolute top-2.5 right-2.5 h-auto min-w-5 rounded-full bg-black/70 px-1.5 font-medium text-white/90 tabular-nums shadow-md ring-1 ring-white/10 hover:text-white"
@@ -218,7 +224,9 @@ export function ContentAssetBody({
           `aria-modal` / 遮罩点击都手写齐了，但 Esc 与焦点锁仍缺 —— 键盘用户
           进得来出不去。 */}
       <Dialog
-        onOpenChange={(next) => !next && gallery.setOpen(false)}
+        onOpenChange={(next) => {
+          if (!next) gallery.setOpen(false);
+        }}
         open={gallery.open && galleryImages.length > 0}
       >
         <DialogContent
@@ -246,7 +254,9 @@ export function ContentAssetBody({
           <MediaThumbnail
             alt={`图片 ${gallery.index + 1}/${galleryImages.length}`}
             className={`border-border-strong ${OVERLAY_MAX_HEIGHT} max-w-[85vw] rounded-lg border object-contain shadow-2xl`}
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
             src={comfyImageUrl({
               filename: galleryImages[gallery.index]?.localPath ?? "",
             })}

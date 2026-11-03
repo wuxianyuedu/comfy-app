@@ -20,7 +20,7 @@ export function useShotGenerationWriteback(d: CanvasNodeData): void {
   const taskId = d.taskId;
 
   useEffect(() => {
-    if (!shotId) {
+    if (shotId === undefined || shotId === "") {
       return;
     }
     // 只回写终态：running / idle 属于中间态，落库无意义且会与工坊写入面抢字段。
@@ -28,7 +28,7 @@ export function useShotGenerationWriteback(d: CanvasNodeData): void {
       return;
     }
     const projectId = getActiveId();
-    if (!projectId) {
+    if (projectId === null || projectId === "") {
       return;
     }
     const key = `${shotId}|${status}|${resultPath ?? ""}|${taskId ?? ""}`;

@@ -47,7 +47,12 @@ function WorkshopWorkflowSelect({
   return (
     <FieldLabel className="mt-3 block">
       <span className="text-muted-foreground text-2xs mb-1 block">{label}</span>
-      <Select onValueChange={(next) => onChange(next ?? "")} value={value}>
+      <Select
+        onValueChange={(next) => {
+          onChange(next ?? "");
+        }}
+        value={value}
+      >
         <SelectTrigger className="border-border bg-bg text-ink w-full text-xs" size="sm">
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
@@ -200,7 +205,9 @@ export function WorkshopAside({
             真正的分类 / 搜索 / 上传 / 删除都在那一页里做，不在两处各摆一套。 */}
         <Button
           className="text-muted-foreground bg-subtle hover:bg-surface-2 mt-3 w-full rounded-lg py-2.5 text-xs"
-          onClick={() => emitAppEvent("workspace:navigate", { view: "library" })}
+          onClick={() => {
+            emitAppEvent("workspace:navigate", { view: "library" });
+          }}
           type="button"
           variant="ghost"
         >

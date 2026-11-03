@@ -142,7 +142,7 @@ const OPEN_TAG = /<([a-zA-Z][a-zA-Z0-9-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
  *     也不会出现前导空格丢失（`rest` 自带前导空格）。
  */
 function openTag(name: string, rule: StyleRule, rest: string): string {
-  const style = rule.style ? ` style="${rule.style}"` : "";
+  const style = rule.style !== undefined && rule.style !== "" ? ` style="${rule.style}"` : "";
   return `<${name}${style}${rest}>`;
 }
 

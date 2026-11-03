@@ -91,7 +91,9 @@ function collectHits(root: JsonValue, query: string): Array<Path> {
       return;
     }
     if (Array.isArray(node)) {
-      node.forEach((value, index) => visit(value, [...path, index]));
+      node.forEach((value, index) => {
+        visit(value, [...path, index]);
+      });
       return;
     }
     // object
@@ -389,7 +391,8 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
     }
     if (e.key === "Escape") {
       setQuery("");
-      /* SAFETY: 类型断言已复核 */ (e.target as HTMLInputElement).blur();
+      /* SAFETY: 类型断言已复核 */
+      (e.target as HTMLInputElement).blur();
     }
   };
 
@@ -402,7 +405,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
       setCopyFailed(false);
       copied.flash();
     },
-    onFailure: () => setCopyFailed(true),
+    onFailure: () => {
+      setCopyFailed(true);
+    },
   });
 
   // ── 渲染 ──
@@ -417,7 +422,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
         <span className="flex-1" />
         <Button
           className="text-ink-muted hover:bg-subtle hover:text-ink-bright bg-transparent"
-          onClick={() => copy(JSON.stringify(data, null, 2))}
+          onClick={() => {
+            copy(JSON.stringify(data, null, 2));
+          }}
           size="xs"
           title={copyFailed ? copyFailureText() : "把当前 JSON 复制到剪贴板"}
           variant="outline"
@@ -449,7 +456,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
             <Button
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               disabled={hits.length === 0}
-              onClick={() => nextHit(-1)}
+              onClick={() => {
+                nextHit(-1);
+              }}
               size="icon-xs"
               title="上一个 (Shift+Enter)"
               variant="outline"
@@ -464,7 +473,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
             <Button
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
               disabled={hits.length === 0}
-              onClick={() => nextHit(1)}
+              onClick={() => {
+                nextHit(1);
+              }}
               size="icon-xs"
               title="下一个 (Enter)"
               variant="outline"
@@ -478,7 +489,9 @@ export function JsonViewer({ data, title = "JSON", initialCollapsedDepth = 1 }: 
             </Button>
             <Button
               className="text-ink-muted hover:bg-subtle border-border bg-transparent"
-              onClick={() => setQuery("")}
+              onClick={() => {
+                setQuery("");
+              }}
               size="icon-xs"
               title="清空 (Esc)"
               variant="outline"

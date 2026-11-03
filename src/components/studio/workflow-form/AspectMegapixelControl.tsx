@@ -37,7 +37,6 @@ import {
   ASPECT_RATIO_LABEL_PRESETS,
   CLARITY_SUBGROUP_OF_KIND,
   DEFAULT_ALIGN_MULTIPLE,
-  DEFAULT_ASPECT_RATIO_LABEL_PRESET,
   DEFAULT_DIM_RATIO_PRESET,
   normalizeAlignMultiple,
   parseRatioFromLabel,
@@ -213,7 +212,7 @@ export function AspectMegapixelControl({
    * 三个写入口（比例 / 像素 / 倍数 / 自定义百万像素）都要它，各写一遍会分叉
    * （任一处漏了末级兜底，用户没选过比例时就会被写成空串，节点静默清空）。 */
   const aspectValue = useMemo(
-    () => activeAspect?.value ?? currentAspect ?? DEFAULT_ASPECT_RATIO_LABEL_PRESET.value,
+    () => activeAspect?.value ?? currentAspect,
     [activeAspect, currentAspect],
   );
 
@@ -282,7 +281,9 @@ export function AspectMegapixelControl({
           label: option.label,
           render: <RatioIcon ratio={option.ratio} />,
         })),
-        onChange: (value) => apply(value, currentMp),
+        onChange: (value) => {
+          apply(value, currentMp);
+        },
       },
       {
         label: "像素",
@@ -306,7 +307,9 @@ export function AspectMegapixelControl({
         extra: (
           <MegapixelStepper
             disabled={disabled}
-            onChange={(megapixels) => apply(aspectValue, megapixels, currentMultiple)}
+            onChange={(megapixels) => {
+              apply(aspectValue, megapixels, currentMultiple);
+            }}
             value={currentMp}
           />
         ),
@@ -370,7 +373,9 @@ export function AspectMegapixelControl({
             {currentDims ? `${currentDims.width}×${currentDims.height}` : resolutionHint}
           </span>
         }
-        onOpen={() => setTableOpen(true)}
+        onOpen={() => {
+          setTableOpen(true);
+        }}
         scene={scene}
       />
     </div>
@@ -380,12 +385,12 @@ export function AspectMegapixelControl({
     <div className="flex-col gap-2.5">
       <div
         className={
-          narrow
+          narrow === true
             ? "flex items-start justify-end gap-3"
             : "border-accent/30 bg-accent/4 rounded-lg border p-2.5"
         }
       >
-        {narrow ? (
+        {narrow === true ? (
           /* 窄版（画布节点 / 库内）：组合控件**右对齐**，左侧腾出来的区域摆这三个
            * 参数本身 —— 一行一个，端点骑跨卡片左缘，与节点上其他参数行长得一样
            * （12px 大端点 + 参数名 + 类型徽章），不是控件框里那排「· 小点 + 名字」。
@@ -480,7 +485,14 @@ export function AspectMegapixelControl({
         )}
       </div>
 
-      {tableOpen && <SizePresetTableModal onClose={() => setTableOpen(false)} scene={scene} />}
+      {tableOpen && (
+        <SizePresetTableModal
+          onClose={() => {
+            setTableOpen(false);
+          }}
+          scene={scene}
+        />
+      )}
     </div>
   );
 }

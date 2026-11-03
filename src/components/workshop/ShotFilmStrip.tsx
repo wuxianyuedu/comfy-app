@@ -62,6 +62,7 @@ export function ShotFilmStrip({
       <div className="custom-scrollbar flex gap-1.5 overflow-x-auto pb-1">
         {shots.map((shot) => {
           const frame = shotFrameView(shot.status);
+          // oxlint-disable-next-line no-unnecessary-condition -- shots 元素来自浅校验的草稿解析（draft-store 只查 Array.isArray、不深查元素），脏草稿可能缺 sceneHeading，保留可选链兜底
           const heading = shot.sceneHeading?.trim();
           return (
             <Hint
@@ -79,11 +80,13 @@ export function ShotFilmStrip({
                       : " border-border bg-subtle hover:bg-surface-2"
                   }`
                 }
-                onClick={() => onJump(shot)}
+                onClick={() => {
+                  onJump(shot);
+                }}
                 type="button"
                 variant="ghost"
               >
-                {shot.imageUrl ? (
+                {shot.imageUrl !== undefined && shot.imageUrl !== "" ? (
                   <MediaThumbnail alt="" className="size-full object-cover" src={shot.imageUrl} />
                 ) : (
                   /* 还没有成图：给出镜号本身，而不是一个灰块 —— 空帧也要说得出
@@ -94,7 +97,7 @@ export function ShotFilmStrip({
                 )}
 
                 {/* 镜角标：有封面时盖在图上，仍要能看出是第几镜 */}
-                {shot.imageUrl && (
+                {shot.imageUrl !== undefined && shot.imageUrl !== "" && (
                   <span className="text-4xs absolute top-0.5 left-0.5 rounded bg-black/60 px-1 leading-4 text-white tabular-nums">
                     {formatShotIndex(shot.index)}
                   </span>

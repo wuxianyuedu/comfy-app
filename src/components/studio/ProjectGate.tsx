@@ -44,7 +44,11 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
           <input
             onChange={textHandler(setName)}
             value={name}
-            {...enterCommit({ onCommit: () => handleCreate() })}
+            {...enterCommit({
+              onCommit: () => {
+                handleCreate();
+              },
+            })}
             className="border-border bg-canvas-deep text-ink placeholder:text-ink-fainter focus:border-border-strong min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
             placeholder="项目名称（可留空，默认「未命名」）"
           />
@@ -58,6 +62,7 @@ export function ProjectGate({ onEnter, onExit }: ProjectGateProps) {
             <p className="text-ink-faint mb-2 text-xs font-semibold">或打开已有项目</p>
             <ul className="border-border-subtle flex max-h-56 flex-col gap-1 overflow-y-auto">
               {projects.map((project) => {
+                // oxlint-disable-next-line no-unnecessary-condition -- listProjects 读自 localStorage 的 JSON.parse(as 断言)，旧版本索引可能缺 nodes
                 const nodeCount = project.nodes?.length ?? 0;
                 return (
                   <li key={project.id}>

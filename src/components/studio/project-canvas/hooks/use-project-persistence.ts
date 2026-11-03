@@ -67,7 +67,7 @@ export function useProjectPersistence({
       edges: liveEdges,
       projectName: liveName,
     } = ref.current;
-    if (!pid) {
+    if (pid === null || pid === "") {
       return;
     }
 
@@ -96,11 +96,15 @@ export function useProjectPersistence({
 
   /* 500ms debounce：内容变化（含重命名）后落盘。 */
   useEffect(() => {
-    if (!projectId || !loaded) {
+    if (projectId === null || projectId === "" || !loaded) {
       return;
     }
-    const t = setTimeout(() => persistNow(), 500);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      persistNow();
+    }, 500);
+    return () => {
+      clearTimeout(t);
+    };
   }, [nodes, edges, projectId, projectName, loaded, persistNow]);
 
   /* 600ms mutation effect：跳过加载后首轮变更，后续变更落盘。 */
@@ -108,20 +112,26 @@ export function useProjectPersistence({
     if (!loaded) {
       return;
     }
-    if (!ref.current.projectId) {
+    if (ref.current.projectId === null || ref.current.projectId === "") {
       return;
     }
     if (firstMutationRef.current) {
       firstMutationRef.current = false;
       return;
     }
-    const t = setTimeout(() => persistNow(), 600);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => {
+      persistNow();
+    }, 600);
+    return () => {
+      clearTimeout(t);
+    };
   }, [nodes, edges, loaded, persistNow]);
 
   /* 切走 / 关页前立即 flush，避免丢最近一次编辑。 */
   useEffect(() => {
-    const flush = () => persistNow();
+    const flush = () => {
+      persistNow();
+    };
     window.addEventListener("beforeunload", flush);
     return () => {
       window.removeEventListener("beforeunload", flush);

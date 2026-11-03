@@ -34,8 +34,8 @@ async function assertSeasonOwner(ctx: Ctx, id: string) {
 /** task 状态优先级：SUCCEEDED > RUNNING > QUEUED > FAILED > 未生成。聚合每镜「最佳状态」用。 */
 const TASK_STATUS_RANK: Record<string, number> = { SUCCEEDED: 4, RUNNING: 3, QUEUED: 2, FAILED: 1 };
 function bestStatus(a?: string, b?: string): string {
-  const ra = a ? (TASK_STATUS_RANK[a] ?? 0) : 0;
-  const rb = b ? (TASK_STATUS_RANK[b] ?? 0) : 0;
+  const ra = a !== undefined && a !== "" ? (TASK_STATUS_RANK[a] ?? 0) : 0;
+  const rb = b !== undefined && b !== "" ? (TASK_STATUS_RANK[b] ?? 0) : 0;
   return ra >= rb ? (a ?? b ?? "PENDING") : (b ?? a ?? "PENDING");
 }
 
@@ -76,7 +76,7 @@ export const seriesGenerationRouter = createTRPCRouter({
         let failed = 0;
         let running = 0;
         let pending = 0;
-        if (ep.projectId) {
+        if (ep.projectId !== null) {
           const prod = await ctx.db.query.production.findFirst({
             where: eq(production.id, ep.projectId),
           });
@@ -93,7 +93,7 @@ export const seriesGenerationRouter = createTRPCRouter({
               .where(and(eq(task.projectId, ep.projectId), inArray(task.shotId, shotIds)));
             const statusByShot = new Map<string, string>();
             for (const t of tasks) {
-              if (!t.shotId) {
+              if (t.shotId === null) {
                 continue;
               }
               statusByShot.set(t.shotId, bestStatus(statusByShot.get(t.shotId), t.status));
@@ -153,7 +153,7 @@ export const seriesGenerationRouter = createTRPCRouter({
         .where(inArray(task.projectId, projectIds));
       const occupied = new Set<string>();
       for (const t of existing) {
-        if (!t.projectId || !t.shotId) {
+        if (t.projectId === null || t.shotId === null) {
           continue;
         }
         if (t.status === "SUCCEEDED" || t.status === "QUEUED" || t.status === "RUNNING") {
@@ -168,7 +168,7 @@ export const seriesGenerationRouter = createTRPCRouter({
       let enqueued = 0;
       let skipped = 0;
       for (const ep of eps) {
-        if (!ep.projectId) {
+        if (ep.projectId === null) {
           continue;
         }
         const prod = await ctx.db.query.production.findFirst({
@@ -178,7 +178,7 @@ export const seriesGenerationRouter = createTRPCRouter({
         const shots = Array.isArray(prod?.shots) ? (prod?.shots as Array<{ id?: string }>) : [];
         for (const s of shots) {
           const sid = s.id;
-          if (!sid) {
+          if (sid === undefined || sid === "") {
             continue;
           }
           const key = `${ep.projectId}:${sid}`;

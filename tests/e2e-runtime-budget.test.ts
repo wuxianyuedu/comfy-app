@@ -149,7 +149,8 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
     for (const platform of ["posix", "win32"] as const) {
       const inBaseline = byPlatform?.[platform];
       expect(inBaseline, `基线里缺 ${platform} 档`).toBeDefined();
-      for (const [label, re] of /* SAFETY: 类型断言已复核 */ [
+      /* SAFETY: 类型断言已复核 */
+      for (const [label, re] of [
         ["loadEventEnd", new RegExp(`${platform}: \\{ loadEventEnd: (\\d+)`)],
         [
           "firstContentfulPaint",
@@ -203,12 +204,18 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
 describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 / #1998）", () => {
   const configSrc = readFileSync(join(process.cwd(), "playwright.config.ts"), "utf8");
 
+  /* 这两条断言的语义是「核够 ⇒ 收敛到 COLD_COMPILE_WORKERS」，因此核数这个输入
+   * 必须显式注入（`CNB_CPUS`，与下面「核数是事实」那条同一个旋钮），**不能**留给
+   * 宿主机：被判函数的契约是 `min(2, cpus-1)`，在 2 核宿主机上按设计就算出 1
+   * （GitHub 镜像仓的 ubuntu-24.04 runner 正是 2 核 —— 私有仓档位，核数不是
+   * 仓库能修的环境）。注入不改判据强度：`toBe(2)` 一个字没动，小机器那档仍由
+   * 下面那条钉 `toBe(1)`。 */
   it("现场编译（未给 PNPM_START / 非 CI）⇒ 收敛到 COLD_COMPILE_WORKERS", async () => {
     const { resolveE2eWorkers } = await import("../playwright.config");
     // 不是本仓默认的 8（`vitest.config.ts` 那一档），也不是「不设」—— 是那个显式的档。
     // 2 是 #1834 的 win32 实测档：4 仍有 3 条 goto 卡 60s，单 worker 独跑同屏 14.8s。
     /* SAFETY: 类型断言已复核 */
-    expect(resolveE2eWorkers({} as unknown as NodeJS.ProcessEnv)).toBe(2);
+    expect(resolveE2eWorkers({ CNB_CPUS: "16" } as unknown as NodeJS.ProcessEnv)).toBe(2);
   });
 
   it("已构建（CI 或 PNPM_START）⇒ 同样收敛（#1998：15 worker 跑成 36 分钟）", async () => {
@@ -219,19 +226,18 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
      * Playwright 按 `cpus - 1` 铺开 15 个 ⇒ `E2E 关键流程` 跑到 36 分钟被墙钟 kill。 */
     expect(
       /* SAFETY: 类型断言已复核 */
-      resolveE2eWorkers({ CI: "1" } as unknown as NodeJS.ProcessEnv),
+      resolveE2eWorkers({ CI: "1", CNB_CPUS: "16" } as unknown as NodeJS.ProcessEnv),
     ).toBe(2);
     expect(
-      resolveE2eWorkers(
-        /* SAFETY: 类型断言已复核 */ { PNPM_START: "1" } as unknown as NodeJS.ProcessEnv,
-      ),
+      /* SAFETY: 类型断言已复核 */
+      resolveE2eWorkers({ PNPM_START: "1", CNB_CPUS: "16" } as unknown as NodeJS.ProcessEnv),
     ).toBe(2);
   });
 
   it("核数是事实：小机器上不开 2（`CNB_CPUS` 优先，读不到落本机）", async () => {
     const { resolveE2eWorkers, resolveLocalCpus } = await import("../playwright.config");
-    const env = (cnbCpus: string) =>
-      /* SAFETY: 类型断言已复核 */ ({ CNB_CPUS: cnbCpus }) as unknown as NodeJS.ProcessEnv;
+    /* SAFETY: 类型断言已复核 */
+    const env = (cnbCpus: string) => ({ CNB_CPUS: cnbCpus }) as unknown as NodeJS.ProcessEnv;
     expect(resolveE2eWorkers(env("2"))).toBe(1); // cpus - 1 = 1
     expect(resolveE2eWorkers(env("1"))).toBe(1); // 单核不收敛成 0
     expect(resolveE2eWorkers(env("16"))).toBe(2); // 16 核算出 15，取上界 2
@@ -250,22 +256,20 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
      * 读不出是哪种负载）—— 两边**刻意不互相 import**（`playwright.config.ts` 是
      * Playwright 的入口文件，拿它当纯函数库引进来会让跑法脚本依赖整个配置图的求值），
      * 所以这一条钉的是「同一个 webServer 档 + 两侧都报得出 worker 数」。 */
-    const { resolveServerMode } =
-      /* SAFETY: 类型断言已复核 */ (await import("../scripts/e2e-run.mjs")) as {
-        resolveServerMode: (env: NodeJS.ProcessEnv) => {
-          start: boolean;
-          workers: number | null;
-        };
+    /* SAFETY: 类型断言已复核 */
+    const { resolveServerMode } = (await import("../scripts/e2e-run.mjs")) as {
+      resolveServerMode: (env: NodeJS.ProcessEnv) => {
+        start: boolean;
+        workers: number | null;
       };
-    const local = resolveServerMode(
-      /* SAFETY: 类型断言已复核 */ {} as unknown as NodeJS.ProcessEnv,
-    );
+    };
+    /* SAFETY: 类型断言已复核 */
+    const local = resolveServerMode({} as unknown as NodeJS.ProcessEnv);
     expect(local.start).toBe(false);
     expect(local.workers).toBe(2);
     for (const env of [{ CI: "1" }, { PNPM_START: "1" }]) {
-      const viaRunner = resolveServerMode(
-        /* SAFETY: 类型断言已复核 */ env as unknown as NodeJS.ProcessEnv,
-      );
+      /* SAFETY: 类型断言已复核 */
+      const viaRunner = resolveServerMode(env as unknown as NodeJS.ProcessEnv);
       expect(viaRunner.start, "生产构建那一档").toBe(true);
       // `null` = 「Playwright 默认」—— 而 `CI` 档的默认正是本条要治的那一格。
       expect(
@@ -290,10 +294,10 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
      *   ③ **认不出的值抛而不是回落**：回落 = 拼错一个字母悄悄换档，而两档的负载形态
      *      完全不同，报出来的红读起来像用例问题。 */
     const { resolveWebServerCommand, E2E_SERVER_COMMANDS } = await import("../playwright.config");
-    const { resolveServerMode } =
-      /* SAFETY: 类型断言已复核 */ (await import("../scripts/e2e-run.mjs")) as {
-        resolveServerMode: (env: NodeJS.ProcessEnv) => { start: boolean };
-      };
+    /* SAFETY: 类型断言已复核 */
+    const { resolveServerMode } = (await import("../scripts/e2e-run.mjs")) as {
+      resolveServerMode: (env: NodeJS.ProcessEnv) => { start: boolean };
+    };
     /* ② + ①：四组环境，两份实现逐组对账。 */
     /* SAFETY: 类型断言已复核 */
     for (const env of [
@@ -304,9 +308,8 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
       { PNPM_START: "1" },
       {},
     ] as Array<Record<string, string>>) {
-      const command = resolveWebServerCommand(
-        /* SAFETY: 类型断言已复核 */ env as unknown as NodeJS.ProcessEnv,
-      );
+      /* SAFETY: 类型断言已复核 */
+      const command = resolveWebServerCommand(env as unknown as NodeJS.ProcessEnv);
       /* SAFETY: 类型断言已复核 */
       const mode = resolveServerMode(env as NodeJS.ProcessEnv);
       expect(command, JSON.stringify(env)).toBe(
@@ -315,12 +318,11 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
     }
     /* 显式 `dev` 压过 `CI`：这正是「PR 那条没有产物」那一档的形状。 */
     expect(
-      resolveWebServerCommand(
-        /* SAFETY: 类型断言已复核 */ {
-          COMFY_E2E_SERVER: "dev",
-          CI: "1",
-        } as unknown as NodeJS.ProcessEnv,
-      ),
+      /* SAFETY: 类型断言已复核 */
+      resolveWebServerCommand({
+        COMFY_E2E_SERVER: "dev",
+        CI: "1",
+      } as unknown as NodeJS.ProcessEnv),
       "显式的 dev 没压过 CI —— 那这个旋钮等于没有，`CI ⇒ start` 那句旧推论还在管事",
     ).toBe("pnpm dev");
     /* ③：认不出的值两份都抛。 */
@@ -329,20 +331,18 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
     for (const bad of ["deev", "production", "star"]) {
       expect(
         () =>
-          resolveWebServerCommand(
-            /* SAFETY: 类型断言已复核 */ {
-              COMFY_E2E_SERVER: bad,
-            } as unknown as NodeJS.ProcessEnv,
-          ),
+          /* SAFETY: 类型断言已复核 */
+          resolveWebServerCommand({
+            COMFY_E2E_SERVER: bad,
+          } as unknown as NodeJS.ProcessEnv),
         `配置那一份对 "${bad}" 回落了`,
       ).toThrow(/COMFY_E2E_SERVER/);
       expect(
         () =>
-          resolveServerMode(
-            /* SAFETY: 类型断言已复核 */ {
-              COMFY_E2E_SERVER: bad,
-            } as unknown as NodeJS.ProcessEnv,
-          ),
+          /* SAFETY: 类型断言已复核 */
+          resolveServerMode({
+            COMFY_E2E_SERVER: bad,
+          } as unknown as NodeJS.ProcessEnv),
         `跑法那一份对 "${bad}" 回落了`,
       ).toThrow(/COMFY_E2E_SERVER/);
     }
@@ -350,11 +350,10 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
      * 答案是不是同一句」—— 任一处把空串当成显式值去抛，配置那一份与跑法那一份就会
      * 一个抛、一个放行，而红出现在谁身上都不像配置问题。 */
     expect(
-      resolveWebServerCommand(
-        /* SAFETY: 类型断言已复核 */ {
-          COMFY_E2E_SERVER: "",
-        } as unknown as NodeJS.ProcessEnv,
-      ),
+      /* SAFETY: 类型断言已复核 */
+      resolveWebServerCommand({
+        COMFY_E2E_SERVER: "",
+      } as unknown as NodeJS.ProcessEnv),
     ).toBe("pnpm dev");
   });
 

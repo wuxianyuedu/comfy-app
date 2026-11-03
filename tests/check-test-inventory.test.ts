@@ -124,9 +124,7 @@ describe("check-test-inventory：收集面一致性", () => {
     expect(r.output).toContain("[重叠：node + happy-dom]");
   });
 
-  test("`--report` 只压退出码，清单照打（盘点档不许假装没问题）", ({
-    repo,
-  }) => {
+  test("`--report` 只压退出码，清单照打（盘点档不许假装没问题）", ({ repo }) => {
     repo.write("src/orphan/dead.test.ts", CASE);
 
     const r = repo.run(["--report"]);
@@ -137,10 +135,7 @@ describe("check-test-inventory：收集面一致性", () => {
   });
 
   test("`projects` 解析不到 ⇒ 判失败，不退回「没有档」", ({ repo }) => {
-    repo.write(
-      "vitest.config.ts",
-      "export default { test: { globals: true } };\n",
-    );
+    repo.write("vitest.config.ts", "export default { test: { globals: true } };\n");
     repo.write("src/lib/a.test.ts", CASE);
 
     const r = repo.run();
@@ -149,9 +144,7 @@ describe("check-test-inventory：收集面一致性", () => {
     expect(r.output).toContain("解析 `vitest.config.ts` 的 `projects` 失败");
   });
 
-  test("一个用例文件都枚举不到 ⇒ 判失败（空扫描面不是「没有问题」）", ({
-    repo,
-  }) => {
+  test("一个用例文件都枚举不到 ⇒ 判失败（空扫描面不是「没有问题」）", ({ repo }) => {
     /* fixture 只建了空的 src/ 与 tests/，一份用例都不放。 */
     const r = repo.run();
 
@@ -175,10 +168,7 @@ describe("judgeCoverage：判决内核（进程内喂夹具）", () => {
   ];
 
   it("绿侧：每份都恰好落在一个档", () => {
-    const r = judgeCoverage(
-      ["src/lib/a.test.ts", "src/components/b.test.tsx"],
-      TIERS,
-    );
+    const r = judgeCoverage(["src/lib/a.test.ts", "src/components/b.test.tsx"], TIERS);
     expect(r.dead).toEqual([]);
     expect(r.overlap).toEqual([]);
   });
@@ -194,9 +184,7 @@ describe("judgeCoverage：判决内核（进程内喂夹具）", () => {
       ],
     );
     expect(r.dead).toEqual(["src/orphan/dead.test.ts"]);
-    expect(r.overlap).toEqual([
-      { rel: "src/both.test.ts", tiers: ["node", "extra"] },
-    ]);
+    expect(r.overlap).toEqual([{ rel: "src/both.test.ts", tiers: ["node", "extra"] }]);
   });
 
   it("`exclude` 优先于 `include`：被排掉的那份算漏收", () => {

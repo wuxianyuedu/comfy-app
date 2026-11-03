@@ -66,7 +66,7 @@ function useDropZone(
       event.preventDefault();
       counterRef.current = 0;
       setActive(false);
-      const files = [...(event.dataTransfer.files ?? [])];
+      const files = [...event.dataTransfer.files];
       const [first] = files;
       if (!first) {
         return;
@@ -117,7 +117,9 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
     if (dropErrTimerRef.current) {
       clearTimeout(dropErrTimerRef.current);
     }
-    dropErrTimerRef.current = setTimeout(() => setDropErr(null), 4000);
+    dropErrTimerRef.current = setTimeout(() => {
+      setDropErr(null);
+    }, 4000);
   }, []);
 
   const handleImport = useCallback(async () => {
@@ -134,7 +136,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
       setImportErr("JSON 解析失败，请检查格式");
       return;
     }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       setImportErr("不是有效的工作流 JSON（应为对象）");
       return;
     }
@@ -201,7 +203,7 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         showFileError("JSON 解析失败：不是合法的工作流 JSON");
         return;
       }
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
         showFileError("不是有效的工作流 JSON（应为对象）");
         return;
       }
@@ -228,9 +230,8 @@ export function useWorkflowImport({ createMut, load }: UseWorkflowImportArgs) {
         const nodes = Array.isArray(obj.nodes) ? (obj.nodes as Array<unknown>) : [];
         for (const n of nodes) {
           const t =
-            n && typeof n === "object"
-              ? /* SAFETY: 类型断言已复核 */ (n as { type?: unknown }).type
-              : undefined;
+            /* SAFETY: 类型断言已复核 */
+            typeof n === "object" && n !== null ? (n as { type?: unknown }).type : undefined;
           if (typeof t === "string" && /image|upscale|inpaint|edit/i.test(t)) {
             suggested = "I2I";
             break;

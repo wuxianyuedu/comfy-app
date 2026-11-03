@@ -181,7 +181,7 @@ function crc32(buf: Buffer): number {
 /** 从一段源码里抠出「按平台二选一」的候选表（两份文本，逐项对账）。 */
 function candidatesInSource(text: string, constName: string): Array<string> {
   const block = new RegExp(`const ${constName}\\s*=\\s*([\\s\\S]*?);\\n`).exec(text)?.[1];
-  if (!block) {
+  if (block === undefined || block === "") {
     return [];
   }
   /* 只收**数组字面量里**的字符串：`process.platform === "win32"` 那句里的
@@ -2262,10 +2262,9 @@ function firstStdoutMatch(
   // sleep-ok: 等的是**子进程 stdout 推上来的那一行**（父亲够不到，`expect.poll` 也够不着跨进程的流），
   // 定时器只当「子进程压根没起来」的失败上限，命中即 clear。
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`)),
-      timeoutMs,
-    );
+    const timer = setTimeout(() => {
+      reject(new Error(`${what} 没在 ${timeoutMs}ms 内报出来 —— 这条用例的夹具坏了`));
+    }, timeoutMs);
     let buffered = "";
     child.stdout?.on("data", (chunk: Buffer) => {
       buffered += String(chunk);
@@ -2650,7 +2649,7 @@ describe("工具链自证：自取浏览器要能续传（ISSUE #1959 第七跑�
             ) => {
               /* 只记**取数据**那几次：上面那次 `Range: bytes=0-0` 是「问总长」，
                * 它当然从 0 开始 —— 把它算进来会让这条判据永远看着像「重下了」。 */
-              if (!opts.probeOnly) {
+              if (opts.probeOnly !== true) {
                 offsets.push(offset);
               }
               return fetchRangeToFile(url, d, offset, size, timeoutMs, opts);

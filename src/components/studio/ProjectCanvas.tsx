@@ -83,11 +83,9 @@ const edgeTypes = {
 /* MiniMap 颜色表提到模块级 Map —— 好让 `nodeColor` 回调保持引用稳定：
  * MiniMap 只在绘制时调用它，不会因为拖拽 / 状态抖动期间回调换了引用
  * 而重新渲染。 */
+/* SAFETY: 类型断言已复核 */
 const MINIMAP_COLOR_BY_KIND = new Map(
-  /* SAFETY: 类型断言已复核 */ (Object.keys(NODE_META) as Array<NodeKind>).map((k) => [
-    k,
-    NODE_META[k].color,
-  ]),
+  (Object.keys(NODE_META) as Array<NodeKind>).map((k) => [k, NODE_META[k].color]),
 );
 
 /* 默认连线选项与 proOptions 提到模块级常量 —— 内联对象字面量每次渲染都重建，
@@ -271,11 +269,11 @@ function CanvasInner({
       await hydrateFromServer();
       reapAllEmptyDrafts(); // one-shot cleanup of pre-fix pollution
       let proj: CanvasProject | null = null;
-      if (seedNew) {
+      if (seedNew === true) {
         proj = createDraftProject();
       } else {
         const activeId = getActiveId();
-        if (activeId) {
+        if (activeId !== null && activeId !== "") {
           proj = getProject(activeId);
         }
         proj ??= listProjects()[0] ?? null;
@@ -288,6 +286,7 @@ function CanvasInner({
        * 已传入。project 加载 effect 会覆盖 nodes，因此必须在这里把新节点合并进
        * baseNodes，否则原来的独立 effect 临时放置的节点会被 setNodes(baseNodes)
        * 覆盖掉，导致用户只看到已有节点被聚焦。 */
+      // oxlint-disable-next-line no-unnecessary-condition -- getProject / listProjects 读自 localStorage 的 JSON.parse(as 断言)，旧版本索引可能缺 nodes
       const baseNodes = proj.nodes ?? [];
       let nextNodes = baseNodes;
       if (pendingWorkflow) {
@@ -311,6 +310,7 @@ function CanvasInner({
       setProgress(prod ? normalizeProductionProgress(prod.progress) : null);
       setNodes(nextNodes);
 
+      // oxlint-disable-next-line no-unnecessary-condition -- 同上：旧版本索引可能缺 edges
       setEdges(proj.edges ?? []);
       setActive(proj.id);
       // fit after nodes are applied（双 rAF，等 ReactFlow 完成布局）
@@ -394,7 +394,9 @@ function CanvasInner({
         onlyRenderVisibleElements
         onNodeClick={onNodeClick}
         onNodesChange={onNodesChange}
-        onPaneClick={() => setMenu(null)}
+        onPaneClick={() => {
+          setMenu(null);
+        }}
         onPaneContextMenu={onPaneContextMenu}
         /* 惰性边交互 —— 未碰过的边保持
          *  惰性（不接删除 / 重连管线）；onEdgeClick 在首次使用时
@@ -455,9 +457,17 @@ function CanvasInner({
       {/* 项目画布设置（右上角齿轮）。从右边缘滑出抽屉，内含
        *  「调试模式」开关。状态经 useDebugMode 与
        *  工作流编辑器共享。 */}
-      <ProjectSettingsButton onClick={() => setProjectSettingsOpen(true)} />
+      <ProjectSettingsButton
+        onClick={() => {
+          setProjectSettingsOpen(true);
+        }}
+      />
       {projectSettingsOpen && (
-        <ProjectSettingsDrawer onClose={() => setProjectSettingsOpen(false)} />
+        <ProjectSettingsDrawer
+          onClose={() => {
+            setProjectSettingsOpen(false);
+          }}
+        />
       )}
 
       {/* 项目画布也需要挂载执行日志入口：面板内部靠 useActiveTaskId()
@@ -471,7 +481,9 @@ function CanvasInner({
 
       {menu && (
         <CanvasContextMenu
-          onClose={() => setMenu(null)}
+          onClose={() => {
+            setMenu(null);
+          }}
           onPick={createNode}
           onPickTest={createTestWorkflowNode}
           x={menu.x}
@@ -485,7 +497,9 @@ function CanvasInner({
         confirmLabel="清空"
         danger
         description="画布上的所有节点和连线将被移除，但项目本身会保留。"
-        onClose={() => setConfirmClear(false)}
+        onClose={() => {
+          setConfirmClear(false);
+        }}
         onConfirm={applyClearCanvas}
         open={confirmClear}
         title="清空当前画布？"
@@ -498,7 +512,9 @@ function CanvasInner({
           <CanvasPanelToolbar active={activePanel} floating={false} onSelect={setActivePanel} />
           {activePanel === "materials" && (
             <MaterialLibraryPanel
-              onClose={() => setActivePanel(null)}
+              onClose={() => {
+                setActivePanel(null);
+              }}
               onUse={(item) =>
                 placeMediaNode({
                   url: item.url,
@@ -511,7 +527,9 @@ function CanvasInner({
           )}
           {activePanel === "history" && (
             <HistoryPanel
-              onClose={() => setActivePanel(null)}
+              onClose={() => {
+                setActivePanel(null);
+              }}
               onUse={(template) =>
                 placeMediaNode({
                   url: template.cover,

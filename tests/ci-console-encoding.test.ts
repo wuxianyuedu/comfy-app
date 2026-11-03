@@ -153,9 +153,7 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
   /** 取某个锚点（`.gates` / `.daily-gates`）里**第一格**的正文（从它的 `- name:` 到下一格之前）。 */
   const firstStageBody = (yml: string, anchor: RegExp) => {
     const at = yml.search(anchor);
-    expect(at, `找不到锚点 ${anchor} —— 这条判据没有对象了`).toBeGreaterThan(
-      -1,
-    );
+    expect(at, `找不到锚点 ${anchor} —— 这条判据没有对象了`).toBeGreaterThan(-1);
     const tail = yml.slice(at);
     const start = tail.search(/^ {2}- name:/m);
     expect(start, `${anchor} 下面一格都没有`).toBeGreaterThan(-1);
@@ -180,18 +178,16 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
         .split("\n")
         .filter((l) => l.trim() !== "");
       const scriptAt = lines.findIndex((l) => /^\s+script:/.test(l));
-      expect(scriptAt, `锚点 ${anchor} 的第一格没有 script 行`).toBeGreaterThan(
-        -1,
-      );
+      expect(scriptAt, `锚点 ${anchor} 的第一格没有 script 行`).toBeGreaterThan(-1);
       /* 两种形态都要认：单行 `script: $enc=…; node …`，与块标量 `script: |` 之后的第一行。 */
       const scriptLine = lines[scriptAt] ?? "";
       const isBlock = scriptLine.trim() === "script: |";
-      const firstStatement =
-        lines[scriptAt + (isBlock ? 1 : 0)] ?? "";
+      const firstStatement = lines[scriptAt + (isBlock ? 1 : 0)] ?? "";
       expect(
         firstStatement,
-        `锚点 ${anchor} 的第一格在打中文之前没钉 [Console]::OutputEncoding：${
-          firstStatement.trim().slice(0, 90)}`,
+        `锚点 ${anchor} 的第一格在打中文之前没钉 [Console]::OutputEncoding：${firstStatement
+          .trim()
+          .slice(0, 90)}`,
       ).toContain("[Console]::OutputEncoding");
     }
   });
@@ -205,39 +201,28 @@ describe("控制台输出编码：流水线上真的在纠它", () => {
      * 于是这条顺序判据自己判错方向。 */
     const yml = read(".cnb.yml");
     const applyAt = yml.indexOf("ci-console-encoding.mjs --apply");
-    expect(
-      applyAt,
-      "没有人纠控制台输出编码 —— 日志乱码那一格因此没有任何执行者",
-    ).toBeGreaterThan(-1);
+    expect(applyAt, "没有人纠控制台输出编码 —— 日志乱码那一格因此没有任何执行者").toBeGreaterThan(
+      -1,
+    );
     /* 从 apply 往上回到它所属那一格的 `- name:`、往下到下一格之前为止：
      * 拿「自己那一格」当窗口，而不是「从这一格一直到文件末尾」（原来的写法）。 */
     const stageAt = yml.slice(0, applyAt).lastIndexOf("\n  - name:");
     expect(stageAt, "`--apply` 不在任何一个 stage 块里").toBeGreaterThan(-1);
     const nextAt = yml.slice(applyAt).search(/\n {2}- name:/);
-    const block = yml.slice(
-      stageAt + 1,
-      nextAt < 0 ? undefined : applyAt + nextAt,
-    );
+    const block = yml.slice(stageAt + 1, nextAt < 0 ? undefined : applyAt + nextAt);
     const invoked = block
       .split("\n")
       .findIndex((l) =>
-        unwrapCp936(l.trim()).startsWith(
-          "node scripts/ci-toolchain-selfcheck.mjs",
-        ),
+        unwrapCp936(l.trim()).startsWith("node scripts/ci-toolchain-selfcheck.mjs"),
       );
     expect(invoked, "同一步里找不到工具链自证的命令调用行").toBeGreaterThan(-1);
     const applyLine = block
       .split("\n")
-      .findIndex((l) =>
-        unwrapCp936(l.trim()).startsWith(
-          "node scripts/ci-console-encoding.mjs",
-        ),
-      );
+      .findIndex((l) => unwrapCp936(l.trim()).startsWith("node scripts/ci-console-encoding.mjs"));
     expect(applyLine, "同一步里找不到纠编码的命令调用行").toBeGreaterThan(-1);
-    expect(
-      applyLine < invoked,
-      "纠编码排在了第一次中文输出之后 —— 那一段照着乱码打出来",
-    ).toBe(true);
+    expect(applyLine < invoked, "纠编码排在了第一次中文输出之后 —— 那一段照着乱码打出来").toBe(
+      true,
+    );
   });
 
   it("「环境前提」把读数打出来（每一跑都能读到代码页，不靠人去猜）", () => {

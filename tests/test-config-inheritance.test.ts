@@ -137,10 +137,8 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
       expect(cfg.testTimeout, prefix).toBe(SHARED_EXPECTATIONS.testTimeout);
       expect(cfg.hookTimeout, prefix).toBe(SHARED_EXPECTATIONS.hookTimeout);
       expect(cfg.maxWorkers, prefix).toBe(SHARED_EXPECTATIONS.maxWorkers);
-      expect(
-        /* SAFETY: 类型断言已复核 */ (cfg.expect as { poll?: unknown } | undefined)?.poll,
-        prefix,
-      ).toEqual(EXPECT_POLL);
+      /* SAFETY: 类型断言已复核 */
+      expect((cfg.expect as { poll?: unknown } | undefined)?.poll, prefix).toEqual(EXPECT_POLL);
     }
   });
 
@@ -166,8 +164,9 @@ describe("根 `test` 的共享项落到两个 project 上（§11.17.3）", () =>
     const source = stripComments(await readFile(CONFIG, "utf8"));
     expect(source).not.toMatch(/extends\s*:\s*false/);
     for (const project of vitest.projects) {
+      /* SAFETY: 类型断言已复核 */
       expect(
-        /* SAFETY: 类型断言已复核 */ (project.config as unknown as Record<string, unknown>).globals,
+        (project.config as unknown as Record<string, unknown>).globals,
         `[${project.name}] 共享项缺席 = 这一档把继承关掉了`,
       ).toBe(SHARED_EXPECTATIONS.globals);
     }

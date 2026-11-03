@@ -103,7 +103,10 @@ export function WorkflowLibraryFilters({
             </span>,
           ]),
         )}
-        onChange={(v) => onSourceFilterChange(/* SAFETY: 类型断言已复核 */ v as SourceFilter)}
+        onChange={(v) => {
+          /* SAFETY: 类型断言已复核 */
+          onSourceFilterChange(v as SourceFilter);
+        }}
         options={[...SOURCE_OPTIONS]}
         popoverMinWidth={150}
         value={sourceFilter}
@@ -130,7 +133,10 @@ export function WorkflowLibraryFilters({
             </span>,
           ]),
         )}
-        onChange={(v) => onTypeFilterChange(/* SAFETY: 类型断言已复核 */ v as TypeFilter)}
+        onChange={(v) => {
+          /* SAFETY: 类型断言已复核 */
+          onTypeFilterChange(v as TypeFilter);
+        }}
         options={[...TYPE_OPTIONS]}
         popoverMinWidth={140}
         value={typeFilter}
@@ -155,7 +161,9 @@ export function WorkflowLibraryFilters({
             ]),
           ),
         }}
-        onChange={(v) => onModelFilterChange(v)}
+        onChange={(v) => {
+          onModelFilterChange(v);
+        }}
         options={["all", ...modelTags.map((tag) => tag.name)]}
         placeholder="全部模型"
         popoverMinWidth={160}

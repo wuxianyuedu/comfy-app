@@ -134,9 +134,7 @@ describe("过期判定：什么时候才值得花那 336 秒", () => {
 
   it("没有目标分支 ref ⇒ 不跑也不拦（推 tag 不该被这一跳卡住）", () => {
     const verdict = decidePremergePush({
-      candidates: mergeCandidates(
-        parseRefLines(`refs/tags/v1\t${HEAD}\trefs/tags/v1\t${HEAD}`),
-      ),
+      candidates: mergeCandidates(parseRefLines(`refs/tags/v1\t${HEAD}\trefs/tags/v1\t${HEAD}`)),
       headSha: HEAD,
       upstreamSha: UPSTREAM,
       proof: null,

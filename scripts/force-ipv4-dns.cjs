@@ -25,7 +25,7 @@ function patchLookup(lookup) {
     if (typeof options === "function") {
       callback = options;
       options = {};
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+      // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     } else if (options == null) {
       options = {};
     } else if (typeof options !== "object") {
@@ -34,7 +34,7 @@ function patchLookup(lookup) {
     if (!options.family) {
       options = { ...options, family: 4 };
     }
-    return lookup(hostname, options, callback);
+    lookup(hostname, options, callback);
   };
   return patched;
 }

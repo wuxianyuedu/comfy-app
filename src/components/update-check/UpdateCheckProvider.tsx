@@ -42,7 +42,7 @@ function bodyOf(
   groups: Array<{ files?: Array<string>; hint?: string; key: string; label: string }>,
 ): string {
   const parts = groups.map((g) => {
-    const head = `${g.label}${g.hint ? `（${g.hint}）` : ""}`;
+    const head = `${g.label}${g.hint !== undefined && g.hint !== "" ? `（${g.hint}）` : ""}`;
     const files =
       g.files && g.files.length > 0
         ? `
@@ -88,7 +88,9 @@ export function UpdateCheckProvider() {
   // 把手动检测注册给共享 store（导航栏按钮经 store 触发）
   useEffect(() => {
     registerManual(checkNow);
-    return () => registerManual(null);
+    return () => {
+      registerManual(null);
+    };
   }, [checkNow, registerManual]);
 
   /* 快捷键 ⌘/Ctrl+Shift+U 主动检测一次：无脏态时给「已是最新」的确定性反馈。

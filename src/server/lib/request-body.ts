@@ -72,9 +72,7 @@ export async function readJsonRecord(
   try {
     body = await req.json();
   } catch {
-    return errorResponse(
-      new ValidationError("请求格式错误：正文不是合法 JSON"),
-    );
+    return errorResponse(new ValidationError("请求格式错误：正文不是合法 JSON"));
   }
   /* 用 `isPlainRecord` 而不是 `isRecord`：后者的判据是「是不是对象」，
    * 而 **JSON 数组也算对象**（`typeof [] === "object"`）—— 数组体进了

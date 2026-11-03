@@ -30,7 +30,9 @@ export function openBrowser(ctx, url) {
     windowsHide: true,
   });
   // 打开浏览器是体验降级，绝不能成为启动失败：xdg-open 缺失时给一条 WARN 即可。
-  child.on("error", () => ctx.log(`未能自动打开浏览器，请手动访问 ${url}`, "WARN"));
+  child.on("error", () => {
+    ctx.log(`未能自动打开浏览器，请手动访问 ${url}`, "WARN");
+  });
   child.unref();
   ctx.log(`已尝试打开浏览器：${url}`, "INFO");
 }

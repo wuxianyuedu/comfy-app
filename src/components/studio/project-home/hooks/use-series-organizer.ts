@@ -113,33 +113,45 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
 
   const seriesList = useQuery(trpc.series.list.queryOptions());
   const seasons = useQuery(
-    trpc.series.seasons.queryOptions({ seriesId: seriesId ?? "" }, { enabled: !!seriesId }),
+    trpc.series.seasons.queryOptions(
+      { seriesId: seriesId ?? "" },
+      { enabled: seriesId !== null && seriesId !== "" },
+    ),
   );
   const episodes = useQuery(
-    trpc.series.episodes.queryOptions({ seasonId: seasonId ?? "" }, { enabled: !!seasonId }),
+    trpc.series.episodes.queryOptions(
+      { seasonId: seasonId ?? "" },
+      { enabled: seasonId !== null && seasonId !== "" },
+    ),
   );
   const currentEp = useQuery(
-    trpc.series.byProject.queryOptions({ projectId: projectId ?? "" }, { enabled: !!projectId }),
+    trpc.series.byProject.queryOptions(
+      { projectId: projectId ?? "" },
+      { enabled: projectId !== undefined && projectId !== "" },
+    ),
   );
   const characterList = useQuery(
-    trpc.series.characters.queryOptions({ seriesId: seriesId ?? "" }, { enabled: !!seriesId }),
+    trpc.series.characters.queryOptions(
+      { seriesId: seriesId ?? "" },
+      { enabled: seriesId !== null && seriesId !== "" },
+    ),
   );
   const episodeChars = useQuery(
     trpc.series.episodeCharacters.queryOptions(
       { episodeId: episodeId ?? "" },
-      { enabled: !!episodeId },
+      { enabled: episodeId !== null && episodeId !== "" },
     ),
   );
   const charEpisodes = useQuery(
     trpc.series.characterEpisodes.queryOptions(
       { characterId: inspectedCharacterId ?? "" },
-      { enabled: !!inspectedCharacterId },
+      { enabled: inspectedCharacterId !== null && inspectedCharacterId !== "" },
     ),
   );
   const seasonProgressQuery = useQuery(
     trpc.seriesGeneration.seasonGenerationProgress.queryOptions(
       { seasonId: seasonId ?? "" },
-      { enabled: !!seasonId },
+      { enabled: seasonId !== null && seasonId !== "" },
     ),
   );
   const workflowList = useQuery(trpc.workflow.list.queryOptions(undefined));
@@ -153,7 +165,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
     void qc.invalidateQueries(trpc.series.episodes.queryFilter({ seasonId: sid }));
   const invalidateCurrent = () => {
-    if (projectId) {
+    if (projectId !== undefined && projectId !== "") {
       void qc.invalidateQueries(trpc.series.byProject.queryFilter({ projectId }));
     }
   };
@@ -191,7 +203,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const createSeason = useMutation(
     trpc.series.createSeason.mutationOptions({
       onSuccess: () => {
-        if (seriesId) {
+        if (seriesId !== null && seriesId !== "") {
           invalidateSeasons(seriesId);
         }
       },
@@ -200,7 +212,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const updateSeason = useMutation(
     trpc.series.updateSeason.mutationOptions({
       onSuccess: () => {
-        if (seriesId) {
+        if (seriesId !== null && seriesId !== "") {
           invalidateSeasons(seriesId);
         }
       },
@@ -209,7 +221,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const deleteSeason = useMutation(
     trpc.series.deleteSeason.mutationOptions({
       onSuccess: () => {
-        if (seriesId) {
+        if (seriesId !== null && seriesId !== "") {
           invalidateSeasons(seriesId);
         }
         setSeasonId(null);
@@ -220,7 +232,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const createEpisode = useMutation(
     trpc.series.createEpisode.mutationOptions({
       onSuccess: () => {
-        if (seasonId) {
+        if (seasonId !== null && seasonId !== "") {
           invalidateEpisodes(seasonId);
         }
       },
@@ -229,7 +241,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const updateEpisode = useMutation(
     trpc.series.updateEpisode.mutationOptions({
       onSuccess: () => {
-        if (seasonId) {
+        if (seasonId !== null && seasonId !== "") {
           invalidateEpisodes(seasonId);
         }
       },
@@ -238,7 +250,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const deleteEpisode = useMutation(
     trpc.series.deleteEpisode.mutationOptions({
       onSuccess: () => {
-        if (seasonId) {
+        if (seasonId !== null && seasonId !== "") {
           invalidateEpisodes(seasonId);
         }
         setEpisodeId(null);
@@ -254,7 +266,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const createCharacterMut = useMutation(
     trpc.series.createCharacter.mutationOptions({
       onSuccess: () => {
-        if (seriesId) {
+        if (seriesId !== null && seriesId !== "") {
           invalidateCharacters(seriesId);
         }
       },
@@ -263,7 +275,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const updateCharacterMut = useMutation(
     trpc.series.updateCharacter.mutationOptions({
       onSuccess: () => {
-        if (seriesId) {
+        if (seriesId !== null && seriesId !== "") {
           invalidateCharacters(seriesId);
         }
       },
@@ -272,10 +284,10 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const deleteCharacterMut = useMutation(
     trpc.series.deleteCharacter.mutationOptions({
       onSuccess: () => {
-        if (seriesId) {
+        if (seriesId !== null && seriesId !== "") {
           invalidateCharacters(seriesId);
         }
-        if (episodeId) {
+        if (episodeId !== null && episodeId !== "") {
           invalidateEpisodeChars(episodeId);
         }
       },
@@ -284,7 +296,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const linkCharacterMut = useMutation(
     trpc.series.linkCharacter.mutationOptions({
       onSuccess: (_data, vars) => {
-        if (episodeId) {
+        if (episodeId !== null && episodeId !== "") {
           invalidateEpisodeChars(episodeId);
         }
         invalidateCharacterEpisodes(vars.characterId);
@@ -294,7 +306,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const unlinkCharacterMut = useMutation(
     trpc.series.unlinkCharacter.mutationOptions({
       onSuccess: (_data, vars) => {
-        if (episodeId) {
+        if (episodeId !== null && episodeId !== "") {
           invalidateEpisodeChars(episodeId);
         }
         invalidateCharacterEpisodes(vars.characterId);
@@ -304,10 +316,10 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
   const promoteMut = useMutation(
     trpc.series.promoteFromProduction.mutationOptions({
       onSuccess: () => {
-        if (seriesId) {
+        if (seriesId !== null && seriesId !== "") {
           invalidateCharacters(seriesId);
         }
-        if (episodeId) {
+        if (episodeId !== null && episodeId !== "") {
           invalidateEpisodeChars(episodeId);
         }
       },
@@ -334,7 +346,7 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
     characterEpisodes: charEpisodes.data,
     seasonProgress: seasonProgressQuery.data,
     batchGenerating: batchGenerateMut.isPending,
-    workflows: workflowList.data?.workflows?.map((w) => ({ id: w.id, name: w.name })),
+    workflows: workflowList.data?.workflows.map((w) => ({ id: w.id, name: w.name })),
     inspectedCharacterId,
     seriesId,
     seasonId,
@@ -348,37 +360,74 @@ export function useSeriesOrganizer(projectId?: string): SeriesOrganizerControlle
       setSeasonId(id);
       setEpisodeId(null);
     },
-    selectEpisode: (id) => setEpisodeId(id),
-    createSeries: (title) => createSeries.mutate({ title }),
-    renameSeries: (id, title) => updateSeries.mutate({ id, title }),
-    deleteSeries: (id) => deleteSeries.mutate({ id }),
-    createSeason: (sid, title) => createSeason.mutate({ seriesId: sid, title }),
-    renameSeason: (id, title) => updateSeason.mutate({ id, title }),
-    deleteSeason: (id) => deleteSeason.mutate({ id }),
-    createEpisode: (sid, title) => createEpisode.mutate({ seasonId: sid, title }),
-    renameEpisode: (id, title) => updateEpisode.mutate({ id, title }),
-    deleteEpisode: (id) => deleteEpisode.mutate({ id }),
+    selectEpisode: (id) => {
+      setEpisodeId(id);
+    },
+    createSeries: (title) => {
+      createSeries.mutate({ title });
+    },
+    renameSeries: (id, title) => {
+      updateSeries.mutate({ id, title });
+    },
+    deleteSeries: (id) => {
+      deleteSeries.mutate({ id });
+    },
+    createSeason: (sid, title) => {
+      createSeason.mutate({ seriesId: sid, title });
+    },
+    renameSeason: (id, title) => {
+      updateSeason.mutate({ id, title });
+    },
+    deleteSeason: (id) => {
+      deleteSeason.mutate({ id });
+    },
+    createEpisode: (sid, title) => {
+      createEpisode.mutate({ seasonId: sid, title });
+    },
+    renameEpisode: (id, title) => {
+      updateEpisode.mutate({ id, title });
+    },
+    deleteEpisode: (id) => {
+      deleteEpisode.mutate({ id });
+    },
     assignCurrentProject: (epid) => {
-      if (!projectId) {
+      if (projectId === undefined || projectId === "") {
         return;
       }
       assignProject.mutate({ episodeId: epid, projectId });
     },
-    createCharacter: (sid, name) => createCharacterMut.mutate({ seriesId: sid, name }),
-    updateCharacter: (id, patch) => updateCharacterMut.mutate({ id, ...patch }),
-    deleteCharacter: (id) => deleteCharacterMut.mutate({ id }),
-    linkCharacter: (epid, cid) => linkCharacterMut.mutate({ episodeId: epid, characterId: cid }),
-    unlinkCharacter: (epid, cid) =>
-      unlinkCharacterMut.mutate({ episodeId: epid, characterId: cid }),
-    inspectCharacterEpisodes: (cid) => setInspectedCharacterId(cid),
-    clearInspectedCharacter: () => setInspectedCharacterId(null),
+    createCharacter: (sid, name) => {
+      createCharacterMut.mutate({ seriesId: sid, name });
+    },
+    updateCharacter: (id, patch) => {
+      updateCharacterMut.mutate({ id, ...patch });
+    },
+    deleteCharacter: (id) => {
+      deleteCharacterMut.mutate({ id });
+    },
+    linkCharacter: (epid, cid) => {
+      linkCharacterMut.mutate({ episodeId: epid, characterId: cid });
+    },
+    unlinkCharacter: (epid, cid) => {
+      unlinkCharacterMut.mutate({ episodeId: epid, characterId: cid });
+    },
+    inspectCharacterEpisodes: (cid) => {
+      setInspectedCharacterId(cid);
+    },
+    clearInspectedCharacter: () => {
+      setInspectedCharacterId(null);
+    },
     batchGenerateSeason: (workflowId) => {
-      if (!seasonId) {
+      if (seasonId === null || seasonId === "") {
         return;
       }
       batchGenerateMut.mutate({ seasonId, workflowId });
     },
-    promoteFromProduction: (pid) => promoteMut.mutate({ projectId: pid }),
-    injectToProduction: (pid) => injectMut.mutate({ projectId: pid }),
+    promoteFromProduction: (pid) => {
+      promoteMut.mutate({ projectId: pid });
+    },
+    injectToProduction: (pid) => {
+      injectMut.mutate({ projectId: pid });
+    },
   };
 }

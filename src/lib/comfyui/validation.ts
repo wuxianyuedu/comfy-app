@@ -118,6 +118,7 @@ export function extractValidationErrors(
   }
   const out: Array<ValidationError> = [];
   /* SAFETY: 类型断言已复核 */
+  /* SAFETY: 类型断言已复核 */
   const entries: Array<[string, unknown]> = Array.isArray(ne)
     ? ne.map((item: unknown) => {
         /* SAFETY: 类型断言已复核 */
@@ -126,7 +127,7 @@ export function extractValidationErrors(
         /* SAFETY: 类型断言已复核 */
         return [toStringValue(rec?.node_id ?? "?"), item] as [string, unknown];
       })
-    : /* SAFETY: 类型断言已复核 */ Object.entries(ne as Record<string, unknown>);
+    : Object.entries(ne as Record<string, unknown>);
   for (const [nid, err] of entries) {
     /* SAFETY: 类型断言已复核 */
     const errRec = err as Record<string, unknown> | null | undefined;
@@ -140,13 +141,13 @@ export function extractValidationErrors(
     const inputErrors = errRec?.input_errors;
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     if (inputErrors != null && typeof inputErrors === "object") {
-      for (const [field, v] of Object.entries(
-        /* SAFETY: 类型断言已复核 */ inputErrors as Record<string, unknown>,
-      )) {
+      /* SAFETY: 类型断言已复核 */
+      for (const [field, v] of Object.entries(inputErrors as Record<string, unknown>)) {
         /* SAFETY: 类型断言已复核 */
         const fromObject =
+          /* SAFETY: 类型断言已复核 */
           ((v as { message?: string })?.message ??
-            /* SAFETY: 类型断言已复核 */ (v as { details?: string })?.details ??
+            (v as { details?: string })?.details ??
             JSON.stringify(v)) ||
           "配置错误";
         const message = typeof v === "string" ? v : fromObject;

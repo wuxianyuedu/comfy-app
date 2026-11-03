@@ -51,7 +51,7 @@ export function homeTab(): ViewTab {
  * 收在一处意味着两处不会一处放行一处白屏）。
  */
 export function makeTab(view: WorkspaceView, projectId: string | null): ViewTab | null {
-  if (isProjectTab(view) && !projectId) {
+  if (isProjectTab(view) && (projectId === null || projectId === "")) {
     return null;
   }
   const bound = isProjectTab(view) ? projectId : null;
@@ -218,7 +218,7 @@ export function parseWorkspaceTabs(
   raw: string | null,
   knownViews: ReadonlyArray<WorkspaceView>,
 ): WorkspaceTabsState | null {
-  if (!raw) {
+  if (raw === null || raw === "") {
     return null;
   }
   let parsed: unknown;
@@ -243,7 +243,8 @@ export function parseWorkspaceTabs(
     if (!Array.isArray(entry) || entry.length < 2) {
       return null;
     }
-    const [view, projectId] = /* SAFETY: 类型断言已复核 */ entry as [unknown, unknown];
+    /* SAFETY: 类型断言已复核 */
+    const [view, projectId] = entry as [unknown, unknown];
     if (
       typeof view !== "string" ||
       /* SAFETY: 类型断言已复核 */

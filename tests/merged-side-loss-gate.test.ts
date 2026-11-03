@@ -49,7 +49,7 @@ const { test, expect } = defineGateRepo({
 });
 
 /** 造一次「主干改过 f、然后分支整份取回旧版」的提交，返回它的 sha。 */
-function revertSideTake(repo: GateRepo): { bad: string; good: string; } {
+function revertSideTake(repo: GateRepo): { bad: string; good: string } {
   repo.write("src/a.ts", "export const a = 1;\n");
   repo.write("src/b.ts", "export const b = 1;\n");
   repo.git("add", "-A");

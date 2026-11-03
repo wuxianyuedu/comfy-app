@@ -17,13 +17,14 @@ export function RequiredSummary({
       return { required, optional };
     }
     for (const e of Object.values(io)) {
+      // oxlint-disable-next-line no-unnecessary-condition -- io 来自服务端富化 / 持久化的工作流 IO JSON，旧数据条目可能为 null，?. 是运行时守卫
       if (e?.direction !== "input") {
         continue;
       }
       if (e.kind !== "widget") {
         continue;
       }
-      if (resolveEntryRequired(e, mode)) {
+      if (resolveEntryRequired(e, mode) === true) {
         required++;
       } else {
         optional++;

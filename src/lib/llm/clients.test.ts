@@ -97,15 +97,14 @@ describe("ollama-client", () => {
   });
 
   it("2xx 却是非 JSON（端口上跑的是别的服务）→ 按未运行处理，而不是「0 个模型」", async () => {
-    fetchMock.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ {
-        ok: true,
-        status: 200,
-        json: async () => {
-          throw new Error("not json");
-        },
-      } as unknown as Response,
-    );
+    /* SAFETY: 类型断言已复核 */
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new Error("not json");
+      },
+    } as unknown as Response);
     await expect(probeOllama("http://x/v1")).resolves.toEqual({ up: false });
   });
 
@@ -127,15 +126,14 @@ describe("ollama-client", () => {
     await expect(startOllama()).rejects.toThrow("端口被占");
 
     // 响应体不是 JSON / 没有 error → 用兜底中文文案
-    fetchMock.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ {
-        ok: false,
-        status: 500,
-        json: async () => {
-          throw new Error("x");
-        },
-      } as unknown as Response,
-    );
+    /* SAFETY: 类型断言已复核 */
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new Error("x");
+      },
+    } as unknown as Response);
     await expect(startOllama()).rejects.toThrow(/请确认已安装 Ollama/);
     fetchMock.mockResolvedValue(jsonResponse({}, 500));
     await expect(startOllama()).rejects.toThrow(/请确认已安装 Ollama/);
@@ -190,15 +188,14 @@ describe("model-catalog-client", () => {
   });
 
   it("响应体不是 JSON → 仍给 HTTP 文案（页面不该因探测而报错）", async () => {
-    fetchMock.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ {
-        ok: false,
-        status: 502,
-        json: async () => {
-          throw new Error("html");
-        },
-      } as unknown as Response,
-    );
+    /* SAFETY: 类型断言已复核 */
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new Error("html");
+      },
+    } as unknown as Response);
     await expect(fetchLocalModels()).resolves.toEqual({
       ok: false,
       models: [],
@@ -293,15 +290,14 @@ describe("usage-test-client", () => {
   });
 
   it("响应体不可解析 → 落到「请求失败 (status)」而不是抛错", async () => {
-    fetchMock.mockResolvedValue(
-      /* SAFETY: 类型断言已复核 */ {
-        ok: false,
-        status: 500,
-        json: async () => {
-          throw new Error("html");
-        },
-      } as unknown as Response,
-    );
+    /* SAFETY: 类型断言已复核 */
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new Error("html");
+      },
+    } as unknown as Response);
     await expect(testModelUsage(INPUT)).resolves.toMatchObject({
       ok: false,
       detail: "请求失败 (500)",
@@ -345,13 +341,12 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
   it("远端 URL：下载并落到 temp/usage-test/<模型名>/，扩展名随 URL", async () => {
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
-      fetchMock.mockResolvedValue(
-        /* SAFETY: 类型断言已复核 */ {
-          ok: true,
-          status: 200,
-          arrayBuffer: async () => new TextEncoder().encode("binary").buffer,
-        } as unknown as Response,
-      );
+      /* SAFETY: 类型断言已复核 */
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new TextEncoder().encode("binary").buffer,
+      } as unknown as Response);
 
       const dest = await saveMediaToLocalTemp("image", "my model/x", "https://i/a.png");
       expect(dest).not.toBeNull();
@@ -381,22 +376,20 @@ describe("saveMediaToLocalTemp（本地落盘，失败一律静默）", () => {
   it("HTTP 失败 / 空文件 / 网络抛错 → 返回 null 而不是抛错（落盘只是增强）", async () => {
     const spy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot);
     try {
-      fetchMock.mockResolvedValue(
-        /* SAFETY: 类型断言已复核 */ {
-          ok: false,
-          status: 404,
-          arrayBuffer: async () => new ArrayBuffer(0),
-        } as unknown as Response,
-      );
+      /* SAFETY: 类型断言已复核 */
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 404,
+        arrayBuffer: async () => new ArrayBuffer(0),
+      } as unknown as Response);
       await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
 
-      fetchMock.mockResolvedValue(
-        /* SAFETY: 类型断言已复核 */ {
-          ok: true,
-          status: 200,
-          arrayBuffer: async () => new ArrayBuffer(0),
-        } as unknown as Response,
-      );
+      /* SAFETY: 类型断言已复核 */
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => new ArrayBuffer(0),
+      } as unknown as Response);
       await expect(saveMediaToLocalTemp("video", "m", "https://v/x.mp4")).resolves.toBeNull();
 
       fetchMock.mockRejectedValue(new Error("ECONNRESET"));
