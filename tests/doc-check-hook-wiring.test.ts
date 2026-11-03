@@ -630,6 +630,27 @@ describe("oxfmt 格式：本地判 + 本地修，平台只判（ISSUE #2610）",
       scriptLine,
       "平台侧的命令又指向那个会写工作区的 format-fixup 外壳（已随 #2610 删除）",
     ).not.toMatch(/format-fixup|formatfix/);
+    /* ISSUE #3011：判面必须与本地 `format:check` 是**同一事实源**。平台跑 `--changed`
+     *（改动面 ∩ 扫描面），本地若仍扫全库，printWidth 迁移的存量欠账（当时 146 份、
+     *  今天 117 份）就会被读成「工具/版本漂移」—— 而那一格在平台上一直是绿的。 */
+    expect(
+      scriptLine,
+      "平台侧那一格不再带 `--changed`：判面漂回全库，本地 `format:check` 立刻与平台分叉",
+    ).toContain("--changed");
+    const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+      devDependencies: Record<string, string>;
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts["format:check"], "本地 `format:check` 必须与平台格同一条命令").toBe(
+      "node scripts/check-format.cjs --changed",
+    );
+    expect(pkg.scripts["format:report"], "存量盘点走 `--report`（只列清单、不阻断）").toBe(
+      "node scripts/check-format.cjs --report",
+    );
+    expect(
+      pkg.devDependencies.oxfmt,
+      "oxfmt 必须是精确版本：范围写法会让本地与平台各装一份（ISSUE #3011）",
+    ).toMatch(/^[0-9]+\.[0-9]+\.[0-9]+$/);
   });
 
   it("它不在**停用**清单里（那是另一件事：临时让位，不是挪执行者）", () => {
