@@ -121,6 +121,7 @@ import {
 } from "../scripts/ship-claim.mjs";
 import { cleanBranch, createOrReusePull, reportVerdict } from "../scripts/ship-platform.mjs";
 import { pollUntilTerminal } from "../scripts/ship-poll.mjs";
+import { stalledStages, stallReadout as stallReadoutLines } from "../scripts/ci-build-readout.mjs";
 import {
   readIssueBody,
   runAppendIssueComment,
@@ -129,7 +130,7 @@ import {
 import { sameCommentBody, stripTrailingNewline } from "../scripts/ship-comment.mjs";
 import { decideReap, instanceReading, reapCheckoutInstances } from "../scripts/ship-reap.mjs";
 import { runPreflightStage } from "../scripts/ship-preflight.mjs";
-import { DIAGNOSE_STALL_MINUTES, stallReadout } from "../scripts/ship-diagnose.mjs";
+import { DIAGNOSE_STALL_MINUTES, runDiagnose, stallReadout } from "../scripts/ship-diagnose.mjs";
 import { main } from "../scripts/ship.mjs";
 import { EMPTY_COMMIT_ENV } from "../scripts/intentional-empty-commit.mjs";
 
@@ -6792,6 +6793,198 @@ describe("stallReadout：慢、没推进、没派发起来 是三件事（#2304�
     expect(text).toContain(String(DIAGNOSE_STALL_MINUTES));
     expect(text).not.toContain("疑似");
     expect(text).not.toContain("--rerun-ci");
+  });
+});
+
+/**
+ * 停摆读数（ISSUE #2901）：一格 `start` 而 `endTime<=startTime` 的那一形。
+ *
+ * 现场：`cnb-gc2-1k69nm1n6` / `cnb-lpp-1k69nmnu9` 两条 build 在同一秒失去心跳，
+ * 卡住的格在 `get-build-stage -v` 上三个字段自相矛盾（`duration: 5092`、
+ * `endTime == startTime`、`status: start`），平台不出终态，唯一兜底是 8640s 客户端超时
+ * （runner 侧日志显示那两格**都跑完且上报了** —— 丢的是平台侧）。而轮询那一判
+ * （「签名不变 + 没有一格在飞」）在这一形上**永远不会触发**：那一格就是在飞。
+ * 所以这一组钉的是「念出来这件事本身」，不是给它一个新的结论。
+ */
+describe("停摆读数：start 格 + endTime 不大于 startTime（ISSUE #2901）", () => {
+  const buildJson = (stages: Array<Record<string, unknown>>) => ({
+    data: {
+      status: "pending",
+      pipelinesStatus: {
+        "cnb-gc2-1k69nm1n6-001": {
+          id: "cnb-gc2-1k69nm1n6-001",
+          name: "pr",
+          status: "running",
+          stages,
+        },
+      },
+    },
+  });
+  const start = Date.now() - 30 * 60_000;
+
+  it("端到端：轮询第一眼就念「疑似 runner 失联」，并把两条出口点出来", async () => {
+    /* 走真轮询（不吃 `stalledStages` 的结果直接念），因为要钉的正是「它接在轮询里」——
+     * 只测那个纯函数，接线断了也照样绿。 */
+    const log: Array<string> = [];
+    let i = 0;
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-logs") {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            status: 200,
+            data: {
+              data: [
+                {
+                  sn: "b1",
+                  sha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+                  event: "pull_request",
+                },
+              ],
+            },
+          }),
+          stderr: "",
+          error: null,
+        };
+      }
+      if (args[1] === "get-build-status") {
+        i += 1;
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            status: 200,
+            data: {
+              sn: "b1",
+              status: i >= 10 ? "success" : "pending",
+              pipelinesStatus: {
+                "p-001": {
+                  id: "p-001",
+                  name: "pr",
+                  status: "running",
+                  stages: [
+                    {
+                      id: "stage-5",
+                      name: "分支守卫",
+                      status: "start",
+                      startTime: start,
+                      endTime: start,
+                      duration: 5092,
+                    },
+                  ],
+                },
+              },
+            },
+          }),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    const out = await pollUntilTerminal({
+      run,
+      log: (l) => log.push(l),
+      slug: "org/repo",
+      newSha: "d02ec96364d5f3713b77c91b0d3fe789878f1747",
+      now: () => 0,
+      sleep: async () => undefined,
+    });
+    const all = log.join("\n");
+    expect(all).toContain("疑似 runner 失联");
+    expect(all).toContain("分支守卫");
+    expect(all).toContain("--rerun-ci");
+    expect(all).toContain("8640s");
+    // 只念一次：同一句话每 20 秒复述一遍与复述「没变化」同类（那一格在飞，断流掐不掉它）。
+    expect(all.split("疑似 runner 失联").length - 1).toBe(1);
+    // 它是读数，不改退码：这一跑最后仍是平台自己给的终态。
+    expect(out.buildState).toBe("green");
+  });
+
+  it("停摆读数不出现在「走完的格」上：结束 > 开始 ⇒ 一个字都不说", () => {
+    const text = stallReadoutLines({
+      signature: "b1/pending/0-1+0/2",
+      sn: "b1",
+      stalled: stalledStages(
+        buildJson([
+          {
+            id: "stage-1",
+            name: "准备",
+            status: "success",
+            startTime: start,
+            endTime: start + 900,
+          },
+        ]),
+      ),
+      minutes: 10,
+      slug: "org/repo",
+    });
+    expect(text).toEqual([]);
+  });
+
+  it("负控制：start 格但还没到阈值 ⇒ 不下「停摆」的判断（阈值是这一判的一部分）", () => {
+    const text = stallReadoutLines({
+      signature: "b1/pending/0-1+0/2",
+      sn: "b1",
+      stalled: stalledStages(
+        buildJson([
+          { id: "stage-1", name: "分支守卫", status: "start", startTime: start, endTime: start },
+        ]),
+      ),
+      minutes: 600,
+      slug: "org/repo",
+    });
+    expect(text).toEqual([]);
+  });
+
+  it("负控制：`pending` 的格不算停摆（它还没开跑，没有心跳可言）", () => {
+    const got = stalledStages(
+      buildJson([
+        {
+          id: "stage-2",
+          name: "合并形态复核",
+          status: "pending",
+          startTime: start,
+          endTime: start,
+        },
+      ]),
+    );
+    expect(got).toEqual([]);
+  });
+
+  it("`--diagnose` 那一支也要念（只读复核的入口不许只字不提）", () => {
+    const log: Array<string> = [];
+    const run = (_cmd: string, args: Array<string>): FakeResult => {
+      if (args[1] === "get-build-status") {
+        return {
+          status: 0,
+          stdout: JSON.stringify(
+            buildJson([
+              {
+                id: "stage-5",
+                name: "分支守卫",
+                status: "start",
+                startTime: start,
+                endTime: start,
+              },
+            ]),
+          ),
+          stderr: "",
+          error: null,
+        };
+      }
+      return { status: 0, stdout: "", stderr: "", error: null };
+    };
+    const code = runDiagnose({
+      run,
+      log: (l) => log.push(l),
+      slug: "org/repo",
+      cnbOk: true,
+      sn: "cnb-gc2-1k69nm1n6",
+    });
+    const all = log.join("\n");
+    expect(all).toContain("疑似 runner 失联");
+    // 仍在跑 ⇒ 仍是 2（没拿到测量 ≠ 测量结果是红的）。
+    expect(code).toBe(CODE.NOT_RUN);
   });
 });
 

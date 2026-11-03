@@ -597,6 +597,135 @@ export function inFlightStages(json) {
 }
 
 /**
+ * 毫秒 → 「2h24m」这种读法（只用于把工具的兜底超时念成人话）。
+ *
+ * @param {number | null} ms 毫秒（null / 非正数 ⇒ 空串，调用方据此少念一句）
+ * @returns {string}
+ */
+function humanDuration(ms) {
+  const value = Number(ms);
+  if (!Number.isFinite(value) || value <= 0) {
+    return "";
+  }
+  /* 向上取整：5092ms 读成「1m」比「0m」贴近事实（圆整会把「刚开跑」念成「没动」）。 */
+  const totalMinutes = Math.ceil(value / 60_000);
+  const d = Math.floor(totalMinutes / (60 * 24));
+  const h = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const m = totalMinutes % 60;
+  return `${d > 0 ? `${d}d` : ""}${h > 0 ? `${h}h` : ""}${m > 0 || (d === 0 && h === 0) ? `${m}m` : ""}`;
+}
+
+/**
+ * 「可能是数字」→ 数字或 null。平台的读数里这一栏有时缺、有时是字符串。
+ *
+ * @param {unknown} v
+ * @returns {number | null}
+ */
+function numericOrNull(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * 停摆的格：`status` 是在飞那一族（`start` 为典型），而平台给它的 `endTime` **不大于**
+ * `startTime`（走完的格是 `结束 > 开始`，被掐断的格也是；只有「还没回来」的那一形是相等）。
+ *
+ * ⚠️ 这是**读数**，不是判决（ISSUE #2901）：2026-11-01 那一跑（`cnb-gc2-1k69nm1n6` /
+ * `cnb-lpp-1k69nmnu9`）两条 build 在同一秒失去心跳，`get-build-stage -v` 上三个字段
+ * 自相矛盾（`duration: 5092`、`endTime == startTime`、`status: start`），而平台不出终态、
+ * 唯一的兜底是客户端 8640s 超时 ⇒ 任何轮询型消费者都在那里无声地等 2h24m。把它念出来
+ * 只改「说什么」，不改任何结论：退码仍由 `state` 决定，本函数一个字都不参与分类。
+ *
+ * @param {any} json `cnb build get-build-status -v` 的解析结果
+ * @returns {Array<{id: string, name: string, pipeline: string, pipelineId: string,
+ *   startTime: number | null, durationMs: number | null, since: number}>}
+ *   `since` 是「这一格从开始到现在过了多久」（毫秒；`startTime` 一定是数字，见上面的判法）
+ */
+export function stalledStages(json) {
+  const data = json && typeof json === "object" ? json.data : null;
+  const table =
+    data?.pipelinesStatus && typeof data.pipelinesStatus === "object" ? data.pipelinesStatus : {};
+  const out = [];
+  const nowMs = Date.now();
+  for (const key of Object.keys(table)) {
+    const p = table[key];
+    const stages = p && Array.isArray(p.stages) ? p.stages : [];
+    for (const { id, name, status, startTime, endTime, duration } of stages.map(
+      (/** @type {any} */ raw) => ({
+        id: String(raw?.id ?? ""),
+        name: String(raw?.name ?? ""),
+        duration: numericOrNull(raw?.duration),
+        endTime: numericOrNull(raw?.endTime),
+        startTime: numericOrNull(raw?.startTime),
+        status: typeof raw?.status === "string" ? raw.status.toLowerCase() : "",
+      }),
+    )) {
+      if (!CONFIGURED_STAGE_ID.test(id) && !ENDSTAGE_ID.test(id)) {
+        continue;
+      }
+      if (!STAGE_IN_FLIGHT_STATES.has(status)) {
+        continue;
+      }
+      /* 「`endTime` 不大于 `startTime`」是这一判的**全部**：走完的格是结束 > 开始，
+         被掐断的格也是；只有「runner 没回来」的那一形是相等（或结束早于开始那种畸形）。 */
+      if (startTime === null || endTime === null || endTime > startTime) {
+        continue;
+      }
+      out.push({
+        durationMs: duration,
+        id,
+        name: name || id,
+        pipeline: String(p.name ?? ""),
+        pipelineId: String(p.id ?? key),
+        since: Math.max(0, nowMs - startTime),
+        startTime,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * 停摆读数的**话术**（ISSUE #2901）：一格 `start` + `endTime<=startTime` 且过了阈值该说什么。
+ *
+ * 阈值那一档与 `ship-diagnose.mjs` 的 `DIAGNOSE_STALL_MINUTES` 同一个数：它答的是
+ * 「隔了 10 分钟还没动」，与这里「这一格从开始到现在过了 10 分钟还没回来」是同一件事。
+ * 纯函数（时间由 `stalledStages` 在调用那一刻算进 `since`）：用例不用等真实时间。
+ *
+ * @param {{minutes: number, signature: string, slug: string | null, sn: string,
+ *   stalled: ReturnType<typeof stalledStages>}} input
+ * @returns {string[]} 要念的行（空数组 = 没有停摆，一个字都不说）
+ */
+export function stallReadout({ minutes, signature, slug, sn, stalled }) {
+  if (!Array.isArray(stalled) || stalled.length === 0) {
+    return [];
+  }
+  const sinceMs = Math.max(...stalled.map((s) => s.since));
+  if (sinceMs < minutes * 60_000) {
+    return [];
+  }
+  const names = stalled.map((s) => s.name).slice(0, 3);
+  const more = stalled.length > names.length ? ` 等 ${stalled.length} 格` : "";
+  const head = /** @type {ReturnType<typeof stalledStages>[number]} */ (stalled[0]);
+  const durationRead =
+    head.durationMs === null ? "" : `、平台记的 duration ${humanDuration(head.durationMs)}`;
+  return [
+    `[ship] ⚠ 疑似 runner 失联：${names.join("、")}${more} 停在 \`start\`，` +
+      `但它的 \`endTime\` 不大于 \`startTime\`${durationRead}` +
+      `（已过 ${humanDuration(sinceMs)}）`,
+    `[ship]   这不是「一格在长跑」：平台对这三件的口径自相矛盾 ⇒ 心跳停了、结果可能没回来。` +
+      `当前读数 ${signature}`,
+    `[ship]   已知结局：等下去唯一的兜底是平台的 8640s（2h24m）客户端超时，` +
+      `那一跑会以 \`ECONNABORTED\` 收场（实测 ISSUE #2901）。`,
+    slug
+      ? `[ship]   下一动作：\`pnpm ship --diagnose\` 只读复核；要重跑就 \`pnpm ship --rerun-ci\`（推空提交派生新流水线）。` +
+        `日志：https://cnb.cool/${slug}/-/build/logs/${sn}`
+      : `[ship]   下一动作：\`pnpm ship --rerun-ci\`（平台侧没有 PR 重跑入口）。`,
+    `[ship]   这一行是**读数**，不改变退码 —— 结论仍看平台有没有出终态。`,
+  ];
+}
+
+/**
  * 「还在跑」那一支的进度读数（ISSUE #2304）：签名 + 在飞格，一次遍历同时给出。
  *
  * 为什么要有这一件：诊断与轮询此前是**两个读者面**——轮询那行带 `…/pending/0-1+30/37`，

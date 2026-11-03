@@ -241,6 +241,15 @@
     },
     {
       "file": "scripts/ship-poll.mjs",
+      "const": "POLL_STALLED_MINUTES",
+      "value": 10,
+      "unit": "分钟",
+      "kind": "report",
+      "strictness": "n/a",
+      "why": "停摆读数的告警阈值（ISSUE #2901）：一格 `start` 且 `endTime<=startTime` 超过这么多分钟，就念「疑似 runner 失联」并给出口。它不是判据松紧 —— 退码与断流那一判（签名不变 + 没有一格在飞）一个字都不随它变；调它只决定「多早把『等 2h24m 兜底超时』这件事说出来」。与 DIAGNOSE_STALL_MINUTES 同数（都是 10）是刻意的：两个读者面说同一件事。"
+    },
+    {
+      "file": "scripts/ship-poll.mjs",
       "const": "POLL_STALL_MAX",
       "value": 10,
       "unit": "眼（每眼 20 秒）",
