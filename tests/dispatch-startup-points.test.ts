@@ -19,6 +19,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { IN_MEMORY_QUEUE_FACE } from "../scripts/lib/execution-chain-files.mjs";
 import { stripComments } from "./helpers/strip-comments";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -156,13 +157,10 @@ describe("派发循环的启动点：每宿主一处，且只一处", () => {
 
 describe("只有一条 pull：内存队列不再长回来", () => {
   it("执行链里没有内存队列 / 计数器 / 出队函数", () => {
-    for (const rel of [
-      "src/lib/comfyui/executor-dispatch.ts",
-      "src/lib/comfyui/enqueue.ts",
-      "src/lib/comfyui/queue-status.server.ts",
-      "src/lib/comfyui/runner-state.ts",
-      "src/lib/comfyui/runner-state-shape.ts",
-    ]) {
+    /* 这份面的唯一定义在 `scripts/lib/execution-chain-files.mjs`（ISSUE #2914）：
+     * 登记制窄面，每份进面文件的理由写在模块里；为什么它与通道闸那份 17 项派生宽面
+     * 不是同一份地图、又为何不合并，见模块文件头。 */
+    for (const rel of IN_MEMORY_QUEUE_FACE) {
       const src = code(rel);
       expect(src, `${rel} 不该再读内存队列`).not.toMatch(/\.queue\b/);
       expect(src, `${rel} 不该再维护活跃计数器`).not.toMatch(/s\.active\b/);
