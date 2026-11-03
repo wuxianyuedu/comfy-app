@@ -161,6 +161,86 @@ export function isDidNotRunShaped(output) {
 }
 
 /**
+ * 判决是 `inconclusive` 时，**是哪一侧、哪一种形态**（报告用它点名）。
+ *
+ * 单独成函数而不是从 `runState` 反推：那句话要说的是「127」「一条用例都没收集到」
+ * 与「退 2（判据自己说没有结论）」三种形态的区分，而后两种只在**输出**与**码位**上
+ * 看得见 —— 报告里给出的是「哪一侧说什么」，不是又一个需要人去解读的退出码。
+ *
+ * ⚠️ 第三种（退 2）的下一动作与前两种**不同**：前两种要「让命令真能跑起来」，
+ * 第三种是命令跑起来了、但它声明前提不成立 ⇒ 去清它点名的那个前置再复算。
+ * 混在一起报，读的人会去修一条没坏的命令（ISSUE #2791）。
+ *
+ * （ISSUE #3043 随合并态那一档从 `base-check.mjs` 搬来：判决话术归判决层，
+ * 那份文件同时越过 900 行硬闸。）
+ *
+ * @param {{cur: number, curOutput?: string, base: {code: number, output?: string} | null, baseOutput?: string}} input
+ * @returns {string}
+ */
+export function didNotRunSide({ cur, curOutput, base, baseOutput }) {
+  const sides = [];
+  if (cur === 127) {
+    sides.push("本检出：127（找不到模块 / 命令）");
+  } else if (cur === 2) {
+    sides.push("本检出：退 2（判据自己声明这一跳没有结论，不是红）");
+  } else if (isDidNotRunShaped(curOutput)) {
+    sides.push("本检出：一条用例都没收集到");
+  }
+  /* 基线那一侧的 `runGate` 结果整个传进来（`base.output`），而不是另拿一份
+   * `baseOutput` —— 两个来源曾经在这里错位过一次（报告恒空），只留一条路。 */
+  const baseCode = base ? base.code : null;
+  const baseText = base ? String(base.output ?? "") : String(baseOutput ?? "");
+  if (baseCode === 127) {
+    sides.push("基线：127（找不到模块 / 命令）");
+  } else if (baseCode === 2) {
+    sides.push("基线：退 2（判据自己声明这一跳没有结论，不是红）");
+  } else if (baseCode !== null && baseCode !== 0 && isDidNotRunShaped(baseText)) {
+    sides.push("基线：一条用例都没收集到");
+  }
+  return sides.join("；");
+}
+
+/**
+ * 合并态判决 —— **`--merge-state` 那一档专用**（ISSUE #3043），纯函数。
+ *
+ * 它判的是**第三种树**：本检出绿、平台红的现场，平台建的是**合并态**
+ * （分支 ⊕ 目标分支）—— 本地这棵树绿证明不了那棵树绿。`judge()` 在这一形下
+ * 会给出 `current-green`（「无需复算」），而那句话**不构成证据**：它只量过本地。
+ * 这一档把合并态真量出来，结论三档：
+ *
+ *   · 合并态也绿 ⇒ `current-green` —— 这次**有证据**（两棵树都量过）；
+ *   · 合并态红 ⇒ `merge-red` —— 新档：既不是 `baseline-red`（基线本身绿）、
+ *     也不是 `yours`（本检出绿），红来自两棵树的**组合**；
+ *   · 合并态没跑起来 / 判据自己没结论 ⇒ `inconclusive`（口径同 `judge()`：没量的
+ *     不冒充量的，也不冒充绿）。
+ *
+ * 本检出侧**必须已经全绿**才轮得到这一档 —— 本地有红的现场走 `judge()` 的五态归因，
+ * 那条路早就能回答「谁的红」。防御档：`currentCode !== 0` 时回 `inconclusive`
+ * （不冒充绿、也不冒充红），并由调用方的契约兜着。
+ *
+ * @param {{currentCode: number, mergeCode: number, currentOutput?: string, mergeOutput?: string}} input
+ *   （`currentCode` 是本检出侧的退出码，调用方保证为 0；`mergeCode` 是合并态树上的
+ *   那一次运行。）
+ * @returns {"current-green" | "inconclusive" | "merge-red"}
+ */
+export function judgeMergeState({ currentCode, mergeCode, mergeOutput }) {
+  if (currentCode !== 0) {
+    /* 契约外的输入：这一档只在本检出全绿后起合并树。真发生时不冒充任何结论。 */
+    return "inconclusive";
+  }
+  if (mergeCode === 0) {
+    /* 与 `judge()` 同一条边界：「跑过去了但一条用例都没收集到」退的是 0，
+     * 与真绿同形 —— 只看码会把「没判」折成「判过且没问题」（ISSUE #2400）。 */
+    return isDidNotRunShaped(mergeOutput) ? "inconclusive" : "current-green";
+  }
+  const merge = runState({ code: mergeCode, output: mergeOutput });
+  if (merge === "did-not-run" || merge === "no-conclusion") {
+    return "inconclusive";
+  }
+  return "merge-red";
+}
+
+/**
  * 判决 —— **纯函数**（好让两向都能被用例钉住）。
  *
  * **「跑不起来」也不是「判据红了」**：判据没跑起来时非零退出码与「跑了且红」同形 ——
@@ -222,13 +302,24 @@ export function judge({ currentCode, baseCode, currentOutput, baseOutput }) {
 /**
  * 结论的「下一动作」话术 —— 与 §13.6.2 的处置口径逐字对应，不在这里发明新口径。
  *
- * @param {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake"} verdict
+ * @param {"current-green" | "inconclusive" | "baseline-red" | "yours" | "load-flake" | "merge-red"} verdict
  * @param {{ref: string}} context
  * @returns {string[]}
  */
 export function nextSteps(verdict, { ref }) {
   if (verdict === "current-green") {
     return ["你的检出上这条判据已经是绿的（已修 / 或它只在别的输入面上触发）—— 无需复算。"];
+  }
+  if (verdict === "merge-red") {
+    return [
+      "本检出绿、**合并态红** ⇒ 红来自「你的分支 ⊕ 目标分支」的**组合**（ISSUE #3043 的第三种树）。",
+      "它不是 `baseline-red`（基线本身绿）、也不是 `yours`（本检出绿）—— 别照那两档的动作走：",
+      "  登记「别线的红」不对（基线没红），回滚自己的改动也不对（本地没红）。",
+      "修法：在本地把这棵树复现出来，把组合才现形的那处冲突修在**自己的分支**上 ——",
+      "  `git merge <目标分支>`（默认 `origin/master`；先 `git fetch` 保证目标不旧），解完再推。",
+      "平台那一格「本地绿 + 平台红」的归属就归这里：平台建的是合并态。",
+      "若输出是超时形态（§13.6.4 的指纹），先隔离复跑定性，别照合并态红直接改代码。",
+    ];
   }
   if (verdict === "inconclusive") {
     return [
