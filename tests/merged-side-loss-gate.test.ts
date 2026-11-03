@@ -271,4 +271,57 @@ describe("check-merged-side-loss —— 整份退回的事后复算", () => {
     expect(output).toContain("src/h.ts");
     expect(output).not.toContain("只差空白/断行");
   });
+
+  test("⑫ 台账清零（entries: []）⇒ 不是退回，且减掉的要点名（ISSUE #2994）", ({ repo }) => {
+    /* 现场形状：台账由它自己的判据管方向（`--update` 只许降），「清零」是棘轮
+     * 要求的正当收紧 —— 而空台账逐字节等于建表那一刻的版本，在这一格上**必然**
+     * 命中（那份文件的历史上只出现过空与有条目两种内容）。判别：结果版是
+     * 「entries 为空数组」的 JSON ⇒ 减掉并点名。 */
+    repo.write("ledger.json", '{"ruleVersion":1,"entries":[]}\n');
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: 建台账（空）");
+    // 进一条账，再以这笔为基线 —— 棘轮意义上的「有账」状态。
+    repo.write("ledger.json", '{"ruleVersion":1,"entries":[{"id":"a"}]}\n');
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 进一条账");
+    const good = out(repo.dir, "rev-parse", "HEAD");
+
+    // 清零：逐字节回到建表那一刻的空台账。
+    repo.write("ledger.json", '{"ruleVersion":1,"entries":[]}\n');
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "fix: 台账清零（棘轮只许降，正当收紧）");
+    const bad = out(repo.dir, "rev-parse", "HEAD");
+
+    const { code, output } = repo.run([bad, "--baseline", good]);
+    expect(code, `output=${output}`).toBe(0);
+    expect(output).toContain("台账类文件的**空态**");
+    expect(output).toContain("ledger.json");
+  });
+
+  test("⑬ 台账减除不吞非台账的真退回：普通文件退回旧版照样拦（ISSUE #2994 的边界）", ({ repo }) => {
+    /* 同一批改动里混着一份普通源码文件被整份退回 —— 台账那格减掉、源码那份照拦：
+     * 空态判别只认「entries 为空数组的 JSON」，不外溢到别的形状。 */
+    repo.write("ledger.json", '{"ruleVersion":1,"entries":[]}\n');
+    repo.write("src/k.ts", "export const k = 1;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "chore: 建台账 + 源码 v1");
+
+    repo.write("ledger.json", '{"ruleVersion":1,"entries":[{"id":"a"}]}\n');
+    repo.write("src/k.ts", "export const k = 2;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "feat: 进账 + 源码前移");
+    const good = out(repo.dir, "rev-parse", "HEAD");
+
+    repo.write("ledger.json", '{"ruleVersion":1,"entries":[]}\n');
+    repo.write("src/k.ts", "export const k = 1;\n");
+    repo.git("add", "-A");
+    repo.git("commit", "-q", "-m", "fix: 台账清零，但源码被整份退回");
+    const bad = out(repo.dir, "rev-parse", "HEAD");
+
+    const { code, output } = repo.run([bad, "--baseline", good]);
+    expect(code, `output=${output}`).toBe(1);
+    expect(output).toContain("src/k.ts");
+    expect(output).toContain("台账类文件的**空态**");
+    expect(output).toContain("ledger.json");
+  });
 });

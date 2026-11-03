@@ -49,13 +49,16 @@
  *     有巧合：空文件、逐字相同的正当改动）；
  *   · 未命中 ⇒ 无事。
  *
- * 命中里有**两道正当减除**，各有各的读数（安静地少判与「本来没事」在屏幕上长得一样）：
+ * 命中里有**三道正当减除**，各有各的读数（安静地少判与「本来没事」在屏幕上长得一样）：
  *
  *   · **本笔自身的增补**（ISSUE #3004）：一笔 N 行改动反向应用必回上一版 —— 那是
  *     恒等式不是退回（`ownDiffExplains()`）；
  *   · **同内容的另一种排版**（ISSUE #2999）：结果版与基线版剥掉全部空白后逐字相等
  *     —— printWidth 迁移把 80 列链式改回 100 列单行，逐字节正好等于格式化之前的
- *     某一版；相对基线非空白内容一个字没少，不是退回（`sameModuloWhitespace()`）。
+ *     某一版；相对基线非空白内容一个字没少，不是退回（`sameModuloWhitespace()`）；
+ *   · **台账类文件的空态**（ISSUE #2994）：结果版是 `entries: []` 的台账 —— 清零是
+ *     棘轮判据（只许降）自己要求的收紧，而空台账逐字节等于建表那一刻的版本，
+ *     在这一格上必然命中（`isLedgerZeroState()`）。
  *
  * 退出码三态，与 `base-check.mjs` / `check-commit-claims.mjs` 同口径：
  *
@@ -135,20 +138,36 @@ export function isAncestor(ancestor, descendant) {
  * 治不了现场。把两侧内容各剥掉全部空白再比，链式与单行就折成同一个串；
  * 真退回（少了一段代码）剥完仍不等。
  *
- * 只在**命中之后**对命中的那几份调用（每份两次 `cat-file blob`）——常规零命中
- * 的跑一次也不多付。读不到内容回 `false`：那是「相等性没证出来」，fail-closed。
+ * 只在**命中之后**对命中的那几份调用；内容读数在 `scan()` 的命中环里取一次、
+ * 与 #2994 的台账空态判别共用（那边见 `isLedgerZeroState()`）。
  *
- * @param {string} aSha 结果版的 blob sha
- * @param {string} bSha 基线版的 blob sha
+ * @param {string} aText 结果版内容（`cat-file blob` 的原文，取不到时调用方不会走到这）
+ * @param {string} bText 基线版内容
  * @returns {boolean}
  */
-function sameModuloWhitespace(aSha, bSha) {
-  const a = git(["cat-file", "blob", aSha]);
-  const b = git(["cat-file", "blob", bSha]);
-  if (a === null || b === null) {
+function sameModuloWhitespace(aText, bText) {
+  return aText.replaceAll(/\s+/g, "") === bText.replaceAll(/\s+/g, "");
+}
+
+/**
+ * 是不是「台账类文件」的**空态**（ISSUE #2994 的判别件）。
+ *
+ * 形状取自 #1400 建的那份依赖审计台账自己（`{"ruleVersion":N,"entries":[…]}`）：
+ * JSON 可解析、有 `entries` 字段且是**空数组**。这一态是棘轮判据自己的成功态 ——
+ * `--update` 只许降，清零是它要求的结果；而它逐字节等于建表那一刻的版本，
+ * 在这一格上必然命中。代价是别的空形态巧合会跟着漏（单子 ② 写明的取舍）。
+ * 非 JSON / 解析不过 ⇒ `false`（保持命中，fail-closed）。
+ *
+ * @param {string} text 结果版内容
+ * @returns {boolean}
+ */
+function isLedgerZeroState(text) {
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed?.entries) && parsed.entries.length === 0;
+  } catch {
     return false;
   }
-  return a.replaceAll(/\s+/g, "") === b.replaceAll(/\s+/g, "");
 }
 
 /**
@@ -162,7 +181,7 @@ function sameModuloWhitespace(aSha, bSha) {
  *
  * @param {{sha: string, baseline: string, own?: {from: string} | null}} target
  *   待查的那一笔、它对照的基线那一笔，以及（可选）本笔要减掉的那一段起点
- * @returns {{ok: true, lost: string[], reverted: string[], relaidOut: string[]} | {ok: false, reason: string}}
+ * @returns {{ok: true, lost: string[], reverted: string[], relaidOut: string[], ledgerZero: string[]} | {ok: false, reason: string}}
  *   取不到事实时给 `ok:false`；`reverted` 是**留在了命中清单里**的那一批（本笔自身的增补
  *   反向应用对不上），`lost` 是扣掉它们之后的结论。
  */
@@ -197,7 +216,7 @@ export function scan({ sha, baseline, own = null }) {
   /* 生成物先摘掉（口径 3），剩下的才是这一轮要取证的面。 */
   const files = changed.filter((f) => !isGenerated(f));
   if (files.length === 0) {
-    return { ok: true, lost: [], reverted: [], relaidOut: [] };
+    return { ok: true, lost: [], reverted: [], relaidOut: [], ledgerZero: [] };
   }
 
   /* 取证只要两次遍历：候选历史一次、全部 blob 一次（逐文件 / 逐条历史各起一个 git
@@ -234,6 +253,8 @@ export function scan({ sha, baseline, own = null }) {
   const lost = [];
   /** 命中但被「同内容另一种排版」减掉的（ISSUE #2999，读数在 main 里念）。 */
   const relaidOut = [];
+  /** 命中但被「台账空态 = 棘轮成功态」减掉的（ISSUE #2994，读数在 main 里念）。 */
+  const ledgerZero = [];
   for (const f of files) {
     const result = blob.get(`${sha}:${f}`);
     const atBaseline = blob.get(`${baseline}:${f}`);
@@ -257,12 +278,30 @@ export function scan({ sha, baseline, own = null }) {
      * 结果版（100 列单行）与基线版（80 列链式）逐字节不同、却与**格式化之前**的
      * 某一版逐字节相同，于是被读成「退回了基线之前的版本」。判据要抓的是
      * 「丢了别线的成果」，而相对基线，结果版的**非空白内容一个字没少** ——
-     * 命中只是排版巧合。判别：两个 blob 去掉全部空白后逐字相等 ⇒ 减掉；
-     * 读不到内容 ⇒ 按「相等不成立」处理（fail-closed：没读到不许被读成扣过了，
-     * 与 `own` 那一道同一条铁律）。真退回（丢整段代码）剥掉空白后仍不等，照拦。 */
-    if (sameModuloWhitespace(result, atBaseline)) {
-      relaidOut.push(f);
-      continue;
+     * 命中只是排版巧合。判别：两个 blob 去掉全部空白后逐字相等 ⇒ 减掉。
+     *
+     * **台账类文件的空态是棘轮自己的成功态**（ISSUE #2994）：`.dependency-audit-baseline.json`
+     * 那一族（`{"ruleVersion":…,"entries":[…]}`）由它自己的判据管方向 ——
+     * `--update` 判「台账只许降」。于是「清零」（结果版 `entries: []`，逐字节等于
+     * 建表那一刻的空台账）是**正当的收紧**，而它在这一格上**必然**命中（那份文件的
+     * 历史上只出现过空与有条目两种内容）。判别：结果版是「entries 为空数组」的
+     * JSON ⇒ 减掉。代价（单子 ② 写明的）：别的空形态巧合会跟着漏 —— 换来的是
+     * 棘轮要求的每一次收紧都不再被这一格拦死。
+     *
+     * 两道判别共用**同一份内容读数**（每份命中各取结果 / 基线两次 `cat-file blob`，
+     * 常规零命中的跑一次也不多付）；读不到 ⇒ 两道都不成立、保持命中 ——
+     * fail-closed：没读到不许被读成扣过了（与 `own` 那一道同一条铁律）。 */
+    const resultText = git(["cat-file", "blob", result]);
+    const baselineText = resultText === null ? null : git(["cat-file", "blob", atBaseline]);
+    if (resultText !== null && baselineText !== null) {
+      if (sameModuloWhitespace(resultText, baselineText)) {
+        relaidOut.push(f);
+        continue;
+      }
+      if (isLedgerZeroState(resultText)) {
+        ledgerZero.push(f);
+        continue;
+      }
     }
     lost.push(f);
   }
@@ -274,10 +313,10 @@ export function scan({ sha, baseline, own = null }) {
       return { ok: false, reason: "取本笔自身的 diff 没跑起来" };
     }
     if (explained) {
-      return { ok: true, lost: [], reverted: lost, relaidOut };
+      return { ok: true, lost: [], reverted: lost, relaidOut, ledgerZero };
     }
   }
-  return { ok: true, lost, reverted: lost, relaidOut };
+  return { ok: true, lost, reverted: lost, relaidOut, ledgerZero };
 }
 
 /**
@@ -363,7 +402,7 @@ function main() {
     process.exit(2);
   }
 
-  const { lost, reverted, relaidOut } = result;
+  const { lost, reverted, relaidOut, ledgerZero } = result;
   /* 被减掉的那批要念出来（ISSUE #3004）：安静地少判一批评据，与「那批本来没事」
    * 在屏幕上长得一样。只在真减掉了东西的时候念。 */
   const dropped = reverted.length - lost.length;
@@ -381,6 +420,17 @@ function main() {
         "（同一种内容的另一种排版，非空白内容一个字没少 —— 不是退回，ISSUE #2999）——",
     );
     relaidOut.forEach((f) => {
+      console.log(`  · ${f}`);
+    });
+  }
+  /* 「台账空态」那一档同样要点名（ISSUE #2994）：清零是棘轮判据自己的成功态，
+   * 但「这一格放过它」这件事要留在屏幕上 —— 不念，下一次清零还会无声地走一遍。 */
+  if (ledgerZero.length > 0) {
+    console.log(
+      `[merged-side-loss] 减掉 ${ledgerZero.length} 份：台账类文件的**空态**` +
+        "（entries: [] 是棘轮自己的成功态 —— 清零是正当收紧，不是退回，ISSUE #2994）——",
+    );
+    ledgerZero.forEach((f) => {
       console.log(`  · ${f}`);
     });
   }
