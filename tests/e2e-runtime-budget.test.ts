@@ -204,12 +204,18 @@ describe("运行时预算基线文件 ⇄ spec 常量同源", () => {
 describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 / #1998）", () => {
   const configSrc = readFileSync(join(process.cwd(), "playwright.config.ts"), "utf8");
 
+  /* 这两条断言的语义是「核够 ⇒ 收敛到 COLD_COMPILE_WORKERS」，因此核数这个输入
+   * 必须显式注入（`CNB_CPUS`，与下面「核数是事实」那条同一个旋钮），**不能**留给
+   * 宿主机：被判函数的契约是 `min(2, cpus-1)`，在 2 核宿主机上按设计就算出 1
+   * （GitHub 镜像仓的 ubuntu-24.04 runner 正是 2 核 —— 私有仓档位，核数不是
+   * 仓库能修的环境）。注入不改判据强度：`toBe(2)` 一个字没动，小机器那档仍由
+   * 下面那条钉 `toBe(1)`。 */
   it("现场编译（未给 PNPM_START / 非 CI）⇒ 收敛到 COLD_COMPILE_WORKERS", async () => {
     const { resolveE2eWorkers } = await import("../playwright.config");
     // 不是本仓默认的 8（`vitest.config.ts` 那一档），也不是「不设」—— 是那个显式的档。
     // 2 是 #1834 的 win32 实测档：4 仍有 3 条 goto 卡 60s，单 worker 独跑同屏 14.8s。
     /* SAFETY: 类型断言已复核 */
-    expect(resolveE2eWorkers({} as unknown as NodeJS.ProcessEnv)).toBe(2);
+    expect(resolveE2eWorkers({ CNB_CPUS: "16" } as unknown as NodeJS.ProcessEnv)).toBe(2);
   });
 
   it("已构建（CI 或 PNPM_START）⇒ 同样收敛（#1998：15 worker 跑成 36 分钟）", async () => {
@@ -220,11 +226,11 @@ describe("e2e 的并发档：两档都收敛，且按现场核数（ISSUE #1834 
      * Playwright 按 `cpus - 1` 铺开 15 个 ⇒ `E2E 关键流程` 跑到 36 分钟被墙钟 kill。 */
     expect(
       /* SAFETY: 类型断言已复核 */
-      resolveE2eWorkers({ CI: "1" } as unknown as NodeJS.ProcessEnv),
+      resolveE2eWorkers({ CI: "1", CNB_CPUS: "16" } as unknown as NodeJS.ProcessEnv),
     ).toBe(2);
     expect(
       /* SAFETY: 类型断言已复核 */
-      resolveE2eWorkers({ PNPM_START: "1" } as unknown as NodeJS.ProcessEnv),
+      resolveE2eWorkers({ PNPM_START: "1", CNB_CPUS: "16" } as unknown as NodeJS.ProcessEnv),
     ).toBe(2);
   });
 
