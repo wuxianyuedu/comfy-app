@@ -291,7 +291,8 @@ function readmeSection(title) {
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i] ?? "";
     const m = line.match(/^(#+)\s/);
-    if (m && m[1].length <= level) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则只有一组捕获，`?? ""` 是 noUncheckedIndexedAccess 下的类型兜底
+    if (m && (m[1] ?? "").length <= level) {
       break;
     }
     out.push(line);
