@@ -94,6 +94,7 @@ export function readBundleAccount(text) {
   /** @type {{kind:"commits"|"source-commits", n:number, rev:string|null}|{kind:"unknown"}} */
   let stale = { kind: "unknown" };
   if (since)
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- since 是正则捕获组数组，末尾组可能缺位，rev 的 null 兜底是类型必需
     {stale = { kind: "commits", n: Number(since[2]), rev: since[1] ?? null };}
   else if (byDate)
     {stale = { kind: "source-commits", n: Number(byDate[1]), rev: null };}
@@ -287,6 +288,7 @@ export function fetchBundleRedStreak({
             : `${sn} 里「${BUNDLE_GATE_STAGE}」命中 ${hits.length} 格（不替你挑一格）`,
       };}
     const hit = hits[0];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 上方 hits.length !== 1 已拦空，守卫防该判据改动后静默穿透
     if (!hit) {return { days: "unknown", note: `${sn} 的预算闸那一格认不出` };}
     if (String(hit.stage.status).toLowerCase() === "skipped")
       {return { days: "unknown", note: `${sn} 那一格没跑（skipped）` };}
@@ -362,6 +364,7 @@ export function judgeBundleStageReading({
       const { hits } = findStageMatches(outcome, BUNDLE_GATE_STAGE);
       if (hits.length === 1) {
         const hit = hits[0];
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 上方 hits.length === 1 已守住非空，守卫防该判据改动后静默穿透
         if (!hit) {return { fired: false, reason: "预算闸那一格认不出", section: "" };}
         const detail = fetchStageDetail(
           run,

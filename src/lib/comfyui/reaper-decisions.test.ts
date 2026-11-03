@@ -145,7 +145,7 @@ beforeEach(() => {
   repoMock("finalizeFromReaper").mockClear();
   comfyStartingMock().mockReturnValue(false);
   stubComfyIdle();
-  vi.clearAllMocks?.();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {

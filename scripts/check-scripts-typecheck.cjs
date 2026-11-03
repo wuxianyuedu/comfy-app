@@ -216,6 +216,7 @@ function trackedMjsDetailed(root) {
    * 声明非空）。本文件自己就是「取不到 ≠ 没有」的执行者，这处 `??` 是那道防线。 */
   if (top.status !== 0) {
     /* 「不是 git 仓库」是合法的夹具形态；除此之外的非零退出（仓库损坏等）是真故障。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 起不来时 stderr 实测为 null/undefined，@types/node 按 string 标
     if (/not a git repository/i.test(String(top.stderr ?? ""))) {
       return { kind: "not-git-top" };
     }
@@ -224,6 +225,7 @@ function trackedMjsDetailed(root) {
       reason: `git rev-parse 退出码 ${top.status}：${firstErrLine(top.stderr)}`,
     };
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 起不来时 stdout 实测为 undefined（见上方注释），@types/node 按 string 标
   if (!String(top.stdout ?? "").trim()) {
     return { kind: "not-git-top" };
   }
@@ -255,6 +257,7 @@ function trackedMjsDetailed(root) {
   return {
     kind: "ok",
     files: new Set(
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 起不来时 stdout 实测为 undefined（见上方注释），@types/node 按 string 标
       String(listed.stdout ?? "")
         .split("\0")
         .filter(Boolean)

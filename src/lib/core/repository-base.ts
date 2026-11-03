@@ -99,6 +99,7 @@ export class DrizzleRepository<T extends Identifiable> implements Repository<T> 
   async findById(id: string): Promise<T | null> {
     const rows = await db.select().from(this.table).where(eq(this.id, id)).limit(1);
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 查询无命中时 rows[0] 运行期为 undefined（断言把空数组元素抹成了 T），`?? null` 是唯一回落
     return (rows[0] as T) ?? null;
   }
 

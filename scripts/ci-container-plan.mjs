@@ -229,6 +229,7 @@ export function containerStages(text) {
       /* 只有 Job 那一层才有 `image:` 的语义 —— stage 那一层收到的东西由
        * `stageLevelImages()` 那条判据点名（见上）。 */
       current =
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 上一分支已把 stageIndent 钉成 number，TS 收窄属实；守卫留作防线
         stageIndent !== null && indent > stageIndent
           ? { name: stageName ?? name, image: "", volumes: [] }
           : null;

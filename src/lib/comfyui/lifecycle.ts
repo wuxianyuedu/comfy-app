@@ -692,6 +692,7 @@ export async function ensureComfyUiReady(
     manual: opts.manual === true,
     manualStop: st.manualStop === true,
     autoStart: !!settings.comfyuiAutoStart,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- settings 由 app-settings.json 经 JSON.parse 合并而来，历史文件里 comfyuiPath 可能为 null
     comfyuiPath: settings.comfyuiPath ?? "",
   });
   if (decision.kind === "already-up") {

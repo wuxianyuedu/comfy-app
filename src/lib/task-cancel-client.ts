@@ -35,7 +35,9 @@ export async function fetchTaskStatus(taskId: string): Promise<TaskStatusSnapsho
   try {
     const t = await vanillaApi.task.detail.query({ id: taskId });
     return {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- t 来自 /api/tasks/[id] 回包（API 响应），运行期可能为 null/缺字段
       status: t?.status ?? null,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：API 回包，error 运行期可缺
       error: typeof t?.error === "string" ? t.error : null,
     };
   } catch {

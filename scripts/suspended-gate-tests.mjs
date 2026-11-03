@@ -100,6 +100,7 @@ export const SUSPENDED_GATE_TESTS = [
  * @returns {Set<string>}
  */
 export function suspendedNames(ledger = SUSPENDED_GATE_TESTS) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：调用方显式传 null 时运行时为 null
   return new Set((ledger ?? []).map((entry) => entry.test));
 }
 
@@ -117,6 +118,7 @@ export function withoutSuspended(files, ledger = SUSPENDED_GATE_TESTS) {
   const skip = suspendedNames(ledger);
   const dropped = [];
   const kept = [];
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：调用方显式传 null 时运行时为 null
   for (const rel of files ?? []) {
     (skip.has(rel) ? dropped : kept).push(rel);
   }
@@ -134,9 +136,11 @@ export function withoutSuspended(files, ledger = SUSPENDED_GATE_TESTS) {
  * @returns {string} 末尾带换行；没有剔除项时返回空串
  */
 export function suspendedReading(dropped, ledger = SUSPENDED_GATE_TESTS) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：dropped 运行时可为 null/undefined
   if (!dropped || dropped.length === 0) {
     return "";
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：ledger
   const byTest = new Map((ledger ?? []).map((entry) => [entry.test, entry]));
   const lines = dropped.map((rel) => {
     const one = byTest.get(rel);
@@ -174,6 +178,7 @@ export function suspendedReading(dropped, ledger = SUSPENDED_GATE_TESTS) {
  * @returns {string[]}
  */
 export function excludeArgs(exclude) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：调用方显式传 null 时运行时为 null
   return (exclude ?? []).filter(Boolean).flatMap((rel) => ["--exclude", rel]);
 }
 
@@ -193,6 +198,7 @@ export function excludeArgs(exclude) {
 export function applySuspension(files, segment) {
   if (segment === "full") {
     const excludes = [...suspendedNames()];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：files 运行时可为 null/undefined
     return { files: files ?? [], excludes, reading: suspendedReading(excludes) };
   }
   const picked = withoutSuspended(files);
@@ -210,5 +216,6 @@ export function applySuspension(files, segment) {
  * @returns {string}
  */
 export function suspensionLog(applied) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：applied 运行时可为 null/undefined
   return applied?.reading ?? "";
 }

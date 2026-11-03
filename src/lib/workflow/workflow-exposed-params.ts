@@ -316,6 +316,7 @@ export function referenceImageSlotIndex(id: string): number {
 export function exposedParamLabel(id: string): string {
   /* SAFETY: 类型断言已复核 */
   const cls = id as ExposedParamClass;
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- id 是外部字符串，未知 id 索引运行期为 undefined（注释明言原样返回）
   return EXPOSED_PARAM_LABEL[cls] ?? id;
 }
 

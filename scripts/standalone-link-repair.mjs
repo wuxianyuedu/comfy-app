@@ -182,12 +182,14 @@ export function siblingVariantInstalled(nodeModules, linkText) {
   if (!m) {
     return false;
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在部分匹配形态下运行时为 undefined
   const x = m[1] ?? "";
   const plus = x.lastIndexOf("+");
   if (plus <= 0) {
     return false;
   }
   const base = x.slice(0, plus);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在部分匹配形态下运行时为 undefined
   const rest = (m[2] ?? "").split(/[\\/]/).filter(Boolean);
   if (rest.length === 0) {
     return false;

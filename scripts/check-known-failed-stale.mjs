@@ -138,7 +138,7 @@ export function judgeStillFailing(registered, runResult, commandLine, evidence) 
   // ③ 跑完了，**逐份**看这些登记文件自己的状态（不是整场退出码，见函数头注）。
   // 归一化比较：vitest 写的是绝对路径，登记表写的是仓库相对路径。
   const byAbs = new Map(
-    (evidence.files ?? []).map((f) => [f.name.replaceAll("\\", "/"), f.status]),
+    evidence.files.map((f) => [f.name.replaceAll("\\", "/"), f.status]),
   );
   const failures = [];
   for (const rel of registered) {
@@ -254,7 +254,9 @@ function runRegistered(registered) {
   });
   return {
     status: r.status,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 失败时 stdout 实测为 null，@types/node 按 string 标
     stdout: r.stdout ?? "",
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 失败时 stderr 实测为 null，@types/node 按 string 标
     stderr: r.stderr ?? "",
     ...(r.error ? { error: r.error } : {}),
     commandLine,

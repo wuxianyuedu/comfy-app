@@ -224,6 +224,7 @@ export function splitTopKeys(lines) {
     const ind = indentOf(line);
     if (ind === minIndent) {
       const m = KEY_RE.exec(line.trim());
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- KEY_RE 的捕获组在不参与匹配时运行时为 undefined
       const name = unquote(m ? (m[2] ?? "") : line.trim());
       if (!entries.has(name)) {
         entries.set(name, []);

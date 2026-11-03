@@ -199,6 +199,7 @@ export function readPlaywrightBrowserTarget({ root = undefined } = {}) {
     const parsed = JSON.parse(text);
     const entry = (parsed?.browsers ?? []).find(
       (/** @type {{name?: string, browserVersion?: string, revision?: string}} */ b) =>
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- browsers 来自 Playwright 的 JSON（外部输入），元素运行时可为 null
         b?.name === "chromium-headless-shell",
     );
     if (!entry?.browserVersion || entry.revision === undefined) {
@@ -253,6 +254,7 @@ export function playwrightProbeUrl(root, overrides = {}) {
   const target = readPlaywrightBrowserTarget();
   const version = overrides.version ?? target?.version ?? PLAYWRIGHT_FALLBACK_BROWSER_VERSION;
   const suffix = overrides.target ?? target?.target ?? platformTargetSuffix();
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- root 是外部传入的检出根，类型按 string 标窄
   const base = String(root ?? "").replace(/\/+$/, "");
   return `${base}/builds/cft/${version}/${suffix}/chrome-headless-shell-${suffix}.zip`;
 }
@@ -377,6 +379,7 @@ export function playwrightReachabilityVerdicts({
  * @returns {boolean}
  */
 export function isReachableVerdict(verdict) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- verdict 由子进程读数组装，类型按 string 标窄
   const m = /^HTTP\s+(\d{3})\b/.exec(String(verdict ?? "").trim());
   if (!m) {
     return false;
@@ -456,6 +459,7 @@ export function httpDownloadProbe(
     ["-e", DOWNLOAD_PROBE_SCRIPT, url, String(timeoutMs), String(chunkBytes), String(maxRedirects)],
     { encoding: "utf8", windowsHide: true, timeout: timeoutMs + 4000 },
   );
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 起不来时 stdout / stderr 实测为 undefined，@types/node 按 string 标
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
   return out || "（子进程没有输出）";
 }
@@ -620,6 +624,7 @@ const DOWNLOAD_PROBE_SCRIPT = `
  * @returns {"ok" | "timeout" | "worse"}
  */
 export function probeGrade(verdict) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- verdict 由子进程读数组装，类型按 string 标窄
   const text = String(verdict ?? "").trim();
   if (text.startsWith("超时")) {
     return "timeout";

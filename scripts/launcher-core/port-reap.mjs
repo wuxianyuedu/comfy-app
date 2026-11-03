@@ -266,6 +266,7 @@ export async function reconcilePort(ctx, port, root = process.cwd(), { explicit 
     /* 命令行一次批量预取：`portOwnershipVerdict` 会对每个占位 PID 各调一次
      * `cmdlineOf`，Windows 上那是每 PID 一次 PowerShell 冷启动（0.5~1.5s）；
      * 合并为一条 CIM 查询后回填进 Map，回调只查表（契约不变，仍是逐 PID 取）。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- verdict 由可注入的 inspectPort 依赖产出（用例可注入替身），运行时可能缺 pids
     const commandLines = await processCommandLines(verdict.pids ?? []);
     const decision = await portOwnershipVerdict({
       requestedPort: explicit && p === port ? port : null,

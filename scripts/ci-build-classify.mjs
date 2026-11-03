@@ -304,6 +304,7 @@ export function cancelledCause(stage) {
  * @returns {string}
  */
 export function pipelineSn(pipelineId) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自平台 API 的抢锁读数，类型按 string 标窄
   const id = String(pipelineId ?? "").trim();
   /* 流水线 id 的形状是 `<构建号>-<序号>`，而构建号自己是 `cnb-<短码>-<轮次>` ⇒
      先解到 `cnb-` 打头的那一段，再去掉尾部序号。`-\d+` 这条尾巴是唯一的收尾信号。 */
@@ -552,6 +553,7 @@ export function stageInFlight(status) {
  *   `examined` 是比过几格 —— 念出来才能把「这一跑没这一格」与「没取到这一跑的格表」分开
  */
 export function findStageMatches(outcome, ref) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自人给的命令行格名/格 id，类型按 string 标窄
   const want = String(ref ?? "")
     .trim()
     .toLowerCase();

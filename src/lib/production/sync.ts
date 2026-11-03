@@ -185,6 +185,7 @@ export function applyShotGeneration(
     hit = true;
     return { ...shot, ...patch };
   });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- hit 由 map 回调里置真，规则的控制流看不到闭包写入，运行期可为 true
   return hit ? next : shots;
 }
 
@@ -208,6 +209,7 @@ export function applyShotRedo(shots: Array<unknown>, shotId: string): Array<unkn
       rev: rev + 1,
     };
   });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：hit 由 map 回调里置真，闭包写入不可见
   return hit ? next : shots;
 }
 
@@ -227,5 +229,6 @@ export function applyReprompt(
     hit = true;
     return { ...raw, prompt: newPrompt };
   });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：hit 由 map 回调里置真，闭包写入不可见
   return hit ? applyShotRedo(withPrompt, shotId) : shots;
 }

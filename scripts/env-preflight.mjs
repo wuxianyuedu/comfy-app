@@ -43,6 +43,7 @@ export function parseEnvFile(content) {
     if (!m) {
       continue;
     }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- m[2] 是必需捕获组，noUncheckedIndexedAccess 下仍是 string | undefined
     let value = (m[2] ?? "").trim();
     // 去掉成对引号（.env.example / prepare-local-run.ps1 都写成 KEY="..."）。
     if (

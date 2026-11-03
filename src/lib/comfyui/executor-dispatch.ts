@@ -220,6 +220,7 @@ export async function claimAndDispatchOnce(options?: {
     workflowName: row.workflowName,
     rawJson: row.execPayload,
     /* SAFETY: 类型断言已复核 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- row.params 是库里的 JSON 列（unknown），运行期可能是 null 或没有 workflowInputs 字段
     overrides: (row.params as { workflowInputs?: Job["overrides"] })?.workflowInputs,
   };
 
@@ -289,7 +290,7 @@ export function startDispatchLoop(intervalMs = DISPATCH_TICK_MS): void {
     });
   }, intervalMs);
   /* `unref()`：常驻后台职责不该把事件循环吊住（dev server 关停能自然退出）。 */
-  dispatchState.handle.unref?.();
+  dispatchState.handle.unref();
 }
 
 /** 停循环（测试与关停路径用；生产里没有调用方就不假装需要）。 */

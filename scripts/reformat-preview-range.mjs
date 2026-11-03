@@ -226,6 +226,7 @@ export function syntheticMergeRange(deps) {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
     return r.status === 0 ? String(r.stdout ?? "").trim() : "";
   };
   const row = git(["rev-list", "--parents", "-n", "1", "HEAD"]).split(/\s+/).filter(Boolean);

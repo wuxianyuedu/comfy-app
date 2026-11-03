@@ -78,6 +78,7 @@ export function handleCommentState(bodies, handle) {
   const claim = commentSentence("claim", handle);
   const release = commentSentence("release", handle);
   for (const body of Array.isArray(bodies) ? bodies : []) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- bodies 是平台评论正文（外部数据），元素运行时可为 null
     const text = String(body ?? "");
     if (text.includes(claim)) {
       return "claim";

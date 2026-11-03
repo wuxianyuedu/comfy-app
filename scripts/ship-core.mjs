@@ -289,6 +289,7 @@ export function parseSlug(remoteUrl) {
     return null;
   }
   const m = s.match(/[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组在部分匹配形态下运行时为 undefined
   return m ? (m[1] ?? null) : null;
 }
 
@@ -331,6 +332,7 @@ export function parseSlug(remoteUrl) {
  * @returns {{remote: string | null, base: string | null, source: "upstream" | "remote-head" | "sole-remote" | "origin" | "none"}}
  */
 export function resolveUpstream({ upstream, remotes = [], localBranch = null, remoteHead = null }) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- remotes 来自 git 输出（外部数据），元素运行时可为 null
   const named = remotes.map((r) => (r ?? "").trim()).filter(Boolean);
   const u = (upstream ?? "").trim();
   const slash = u.indexOf("/");
@@ -621,6 +623,7 @@ export function findPullForBranch(json, branch) {
  * @returns {number | null} 命中的 PR 号；认不出（含空 sha）时 `null`
  */
 export function findMergedPullForHeadSha(json, headSha, sink = null) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- headSha 来自 git rev-parse 输出（外部数据），string 只是声明
   const sha = String(headSha ?? "").trim();
   if (!sha) {
     return null;

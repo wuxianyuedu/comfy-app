@@ -43,6 +43,7 @@ export async function createWorkflowRunTask(
   }
 
   const modes = parseModesJson(tpl.modes);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- tpl 来自 DB 行（JSON 列/历史数据），defaultMode/taskType 运行期可为 null，`??` 链是兜底
   const mode = tpl.defaultMode ?? tpl.taskType ?? modes[0] ?? null;
   const io =
     /* SAFETY: 类型断言已复核 */

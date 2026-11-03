@@ -83,6 +83,7 @@ export function junitExecutedCount(xml) {
   let skipped = 0;
   let saw = false;
   /* `xml` 是磁盘上的 junit 产物（外部数据），不是本模块自己拼出来的字符串。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上行：外部数据，string 只是声明
   for (const m of String(xml ?? "").matchAll(/<testsuite\b[^>]*>/g)) {
     const tag = m[0];
     const t = /tests="(\d+)"/.exec(tag);

@@ -254,6 +254,7 @@ function main() {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawnSync 的 error 只会是 Error 或 undefined，!== null 是防守形态
   if (res.error !== undefined && res.error !== null) {
     console.error(`[没跑起来] oxlint 进程没起来：${res.error.message}`);
     process.exit(2);

@@ -373,7 +373,7 @@ export function allPresets(): Array<ConsolePreset> {
  * 一句泛泛的「含有特殊字符」用户不知道该改哪里。
  */
 export function shellSyntaxWarning(line: string): string | null {
-  const raw = (line ?? "").trim();
+  const raw = line.trim();
   if (!raw) {
     return null;
   }
@@ -451,7 +451,7 @@ export type ParsedConsoleLine =
  *   · `echo "未闭合`                → ok:false, reason=「引号未闭合」
  */
 export function parseConsoleLine(line: string): ParsedConsoleLine {
-  const raw = (line ?? "").trim();
+  const raw = line.trim();
   if (!raw) {
     return { ok: false, reason: "命令为空" };
   }
