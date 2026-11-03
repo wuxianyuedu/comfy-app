@@ -13,9 +13,11 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  BRANCH_PULL_MAX_PAGES,
   BRANCH_PULL_PAGE_SIZE,
   branchLandingRows,
   fetchPullsForBranches,
+  readListHasMore,
 } from "../scripts/ship-branches.mjs";
 import { main } from "../scripts/ship.mjs";
 
@@ -120,7 +122,7 @@ describe("fetchPullsForBranches：取不到就是取不到", () => {
     expect(got.oldest).toBe(900);
   });
 
-  it("每页都满 ⇒ 到顶也没取满，note 里明说「窗口外的只能给没取到」", () => {
+  it("每页都满 ⇒ 撞防失控上限也没取满，note 显式报「取不满」（页数 / 条数都在）", () => {
     const full = Array.from({ length: BRANCH_PULL_PAGE_SIZE }, (_, i) =>
       pull(2000 - i, `b${i}`, true),
     );
@@ -128,7 +130,113 @@ describe("fetchPullsForBranches：取不到就是取不到", () => {
       maxPages: 2,
     });
     expect(got.windowComplete).toBe(false);
-    expect(got.note).toContain("就到顶");
+    expect(got.stopReason).toBe("ceiling");
+    expect(got.note).toContain("取不满");
+    expect(got.note).toContain("2 页（已取 200 条）");
+    expect(got.note).toContain("没取到");
+  });
+});
+
+describe("ISSUE #3058：取数窗口 —— 终止看平台形状，8 页硬顶没了", () => {
+  const ok = (stdout: string): FakeResult => ({
+    status: 0,
+    stdout,
+    stderr: "",
+    error: null,
+  });
+  /** 一页 100 条满页（编号从 start 往下数）。 */
+  const fullPage = (start: number) =>
+    Array.from({ length: BRANCH_PULL_PAGE_SIZE }, (_, i) =>
+      pull(start - i, `b${start - i}`, true),
+    );
+  /** 按 `--page` 参数给应答的假执行者（没登记的页给空页）。 */
+  const pagedRun = (pages: Record<number, unknown>, counter?: { n: number }) => {
+    return (_cmd: string, args: Array<string>): FakeResult => {
+      if (counter) {
+        counter.n += 1;
+      }
+      const page = Number(args[args.indexOf("--page") + 1]);
+      return ok(JSON.stringify(pages[page] ?? { data: [] }));
+    };
+  };
+
+  it("readListHasMore 三态：布尔键 / next 键 / 缺键（缺键 ≠ 没有更多，与 #3059 同族）", () => {
+    expect(readListHasMore({ data: { data: [], has_more: true } })).toBe(true);
+    expect(readListHasMore({ data: { data: [], hasMore: false } })).toBe(false);
+    expect(readListHasMore({ data: { data: [], next: "2" } })).toBe(true);
+    expect(readListHasMore({ data: { data: [], next: null } })).toBe(false);
+    /* 信封顶层贴键也认；data 是清单数组时不把它当键袋。 */
+    expect(readListHasMore({ data: [], has_more: true })).toBe(true);
+    expect(readListHasMore({ data: [pull(1, "a", true)] })).toBeNull();
+    expect(readListHasMore({ data: { data: [] } })).toBeNull();
+    expect(readListHasMore(null)).toBeNull();
+  });
+
+  it(">800 条（缺 next 键、靠不足页收尾）：默认上限不再掐在 8 页，9 页翻满", () => {
+    const pages: Record<number, unknown> = {};
+    for (let p = 1; p <= 8; p += 1) {
+      pages[p] = { data: fullPage(3000 - (p - 1) * 100) };
+    }
+    pages[9] = { data: [pull(2199, "tail", true), pull(2198, "tail2", false)] };
+    const got = fetchPullsForBranches(pagedRun(pages), "o/r"); /* 不传 maxPages：默认上限 */
+    expect(got.ok).toBe(true);
+    expect(got.windowComplete).toBe(true);
+    expect(got.pages).toBe(9);
+    expect(got.pulls).toHaveLength(802);
+    expect(got.stopReason).toBe("short-page");
+    expect(got.hasMoreKey).toBe(false);
+    expect(BRANCH_PULL_MAX_PAGES).toBeGreaterThan(9); /* 钉住「上限是防失控，不是窗口」 */
+  });
+
+  it("正好 800 条边界：第 9 页空页 ⇒ 取满（旧口径会在第 8 页报「没取满」冤枉它）", () => {
+    const pages: Record<number, unknown> = {};
+    for (let p = 1; p <= 8; p += 1) {
+      pages[p] = { data: fullPage(3000 - (p - 1) * 100) };
+    }
+    pages[9] = { data: [] };
+    const got = fetchPullsForBranches(pagedRun(pages), "o/r");
+    expect(got.windowComplete).toBe(true);
+    expect(got.pulls).toHaveLength(800);
+    expect(got.stopReason).toBe("empty-page");
+  });
+
+  it("平台给 has_more 键就听它的：满页但 has_more=false ⇒ 当场停（不再靠满页猜）", () => {
+    const pages: Record<number, unknown> = {
+      1: { data: { data: fullPage(3000), has_more: false } },
+    };
+    const got = fetchPullsForBranches(pagedRun(pages), "o/r");
+    expect(got.windowComplete).toBe(true);
+    expect(got.pages).toBe(1);
+    expect(got.stopReason).toBe("has-more-false");
+    expect(got.hasMoreKey).toBe(true);
+  });
+
+  it("上限触发 ⇒ 显式报「取不满」（平台 has-more 页页喊还有，翻满 3 页收）", () => {
+    const counter = { n: 0 };
+    const run = pagedRun(
+      new Proxy({}, { get: () => ({ data: { data: fullPage(3000), has_more: true } }) }),
+      counter,
+    );
+    const got = fetchPullsForBranches(run, "o/r", { maxPages: 3 });
+    expect(counter.n).toBe(3); /* 翻满上限即收，不多翻 */
+    expect(got.windowComplete).toBe(false);
+    expect(got.stopReason).toBe("ceiling");
+    expect(got.note).toContain("取不满");
+    expect(got.note).toContain("3 页（已取 300 条）");
+    expect(got.note).toContain("has-more 键仍说还有");
+  });
+
+  it("防退化无限循环：平台喊「还有」却给空页 ⇒ 停，按取不满如实报", () => {
+    const counter = { n: 0 };
+    const pages: Record<number, unknown> = {
+      1: { data: { data: fullPage(3000), has_more: true } },
+      2: { data: { data: [], has_more: true } },
+    };
+    const got = fetchPullsForBranches(pagedRun(pages, counter), "o/r");
+    expect(counter.n).toBe(2); /* 不是 64 —— 空页必停 */
+    expect(got.windowComplete).toBe(false);
+    expect(got.stopReason).toBe("empty-page");
+    expect(got.note).toContain("空页");
   });
 });
 
