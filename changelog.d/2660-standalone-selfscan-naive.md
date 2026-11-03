@@ -1,5 +1,8 @@
 ## Fixed
 
+> 接替 PR #3039（分支 `test/2660-standalone-strip-faces`，基线 `dc842a34` 已落后于主干）：
+> 本 PR 在其提交 `0c3cf3911` 的内容之上移植到当前 `master`，并重跑全门禁。
+
 - **「守卫自身的可运行性」那一组自扫描时用的是一条无锚的剥注释，它会把同一行引号之后的代码整截丢掉**
   （ISSUE #2660 的第六批收窄，对象 `tests/standalone-runtime-completeness.test.ts`；
   同时收掉的是 ISSUE #2969 普查到的 13 份"内联链式副本"里的第一份）。
