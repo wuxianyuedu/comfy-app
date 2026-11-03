@@ -147,12 +147,12 @@ function FieldSeparator({
         "relative -my-2 h-5 text-sm group-data-[variant=outline]/field-group:-mb-2",
         className,
       )}
-      data-content={!!children}
+      data-content={Boolean(children)}
       data-slot="field-separator"
       {...props}
     >
       <Separator className="absolute inset-0 top-1/2" />
-      {children && (
+      {Boolean(children) && (
         <span
           className="bg-background text-muted-foreground relative mx-auto block w-fit px-2"
           data-slot="field-separator-content"
@@ -173,11 +173,12 @@ function FieldError({
   errors?: Array<{ message?: string } | undefined>;
 }) {
   const content = useMemo(() => {
-    if (children) {
+    const hasChildren = Boolean(children);
+    if (hasChildren) {
       return children;
     }
 
-    if (!errors?.length) {
+    if (errors === undefined || errors.length === 0) {
       return null;
     }
 
@@ -189,12 +190,16 @@ function FieldError({
 
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
-        {uniqueErrors.map((error, index) => error?.message && <li key={index}>{error.message}</li>)}
+        {uniqueErrors.map((error, index) => {
+          const message = error?.message;
+          return message !== undefined && message !== "" ? <li key={index}>{message}</li> : null;
+        })}
       </ul>
     );
   }, [children, errors]);
 
-  if (!content) {
+  const hasContent = Boolean(content);
+  if (!hasContent) {
     return null;
   }
 

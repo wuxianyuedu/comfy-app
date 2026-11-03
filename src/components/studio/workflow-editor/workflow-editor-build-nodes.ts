@@ -490,8 +490,8 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
        *  哨兵节点只存在于子图内部。客户端用这两个标记把每一簇节点包进
        *  INPUTS / OUTPUTS wfGroup，让用户在画布上看得见封装节点暴露的口
        *  最终落在了哪里。 */
-      isInputEndpoint: !!n.is_input_endpoint,
-      isOutputEndpoint: !!n.is_output_endpoint,
+      isInputEndpoint: n.is_input_endpoint === true,
+      isOutputEndpoint: n.is_output_endpoint === true,
       /* LiteGraph 的 `properties`。透传给 WfNode，让 rgthree 的
        *  `Fast Groups Bypasser` 能读到 `matchTitle` 等并渲染出它自己的
        *  运行期开关清单。逐字透传。 */
@@ -657,11 +657,11 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   const useSavedPositions =
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     savedPositions != null && positionsCount > 0 && positionsCount >= realNodes.length;
-  if (useSavedPositions && savedPositions) {
+  if (useSavedPositions && Boolean(savedPositions)) {
     const positionsById = savedPositions;
     const middleNodes = realNodes.map((realNode) => {
       const p = positionsById[realNode.id];
-      return realNode.is_subgraph
+      return realNode.is_subgraph === true
         ? buildSubgraphNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY })
         : buildWfNode(realNode, p ? { x: p[0], y: p[1] } : { x: padX, y: padY });
     });
@@ -698,7 +698,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
       } else {
         pos = { x: padX, y: padY };
       }
-      return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
+      return realNode.is_subgraph === true
+        ? buildSubgraphNode(realNode, pos)
+        : buildWfNode(realNode, pos);
     });
     /* SAFETY: 类型断言已复核 */
     const middlePosById = Object.fromEntries(
@@ -715,7 +717,9 @@ export function buildInitialNodes(ctx: BuildInitialNodesCtx): Array<Node> {
   /* ── 2) Auto-layout via Kahn longest-path ── (raw 视图兜底，复用上面算好的 kahn) */
   const middleNodes = realNodes.map((realNode) => {
     const pos = kahn[realNode.id] ?? { x: padX, y: padY };
-    return realNode.is_subgraph ? buildSubgraphNode(realNode, pos) : buildWfNode(realNode, pos);
+    return realNode.is_subgraph === true
+      ? buildSubgraphNode(realNode, pos)
+      : buildWfNode(realNode, pos);
   });
   /* SAFETY: 类型断言已复核 */
   const middlePosById = Object.fromEntries(

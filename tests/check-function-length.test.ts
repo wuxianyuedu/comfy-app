@@ -31,10 +31,11 @@ function writeFunction(
   opts: { asConst?: boolean; async?: boolean } = {},
 ): string {
   const body = Array.from({ length: bodyLines }, (_, i) => `  const v${i} = ${i};`).join("\n");
-  const kw = opts.async ? "export async function" : "export function";
-  const decl = opts.asConst
-    ? `export const ${name} = (x: number) => {`
-    : `${kw} ${name}(x: number) {`;
+  const kw = opts.async === true ? "export async function" : "export function";
+  const decl =
+    opts.asConst === true
+      ? `export const ${name} = (x: number) => {`
+      : `${kw} ${name}(x: number) {`;
   const src = `${decl}\n${body}\n  return x;\n}\n`;
   repo.write(rel, src);
   return src;

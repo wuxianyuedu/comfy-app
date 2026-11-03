@@ -99,7 +99,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
           「一排里选一个」的又一处手搓（与上面类型筛选同一族）。
           改用 `ui/tabs` 的 `line` 档：它就是这一类「下划线页签」的全库实现，
           选中态由 `data-active` 驱动（字色 / 下划线两层），两枚同高同基线。 */}
-      {projectId && (
+      {projectId !== undefined && projectId !== null && projectId !== "" && (
         <Tabs
           className="gap-0"
           onValueChange={(value) => {
@@ -160,7 +160,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
       </div>
 
       {/* ── Error banner ── */}
-      {error && (
+      {error !== null && error !== "" && (
         <div className="border-destructive/30 bg-destructive/10 mx-4 mb-2 flex items-start gap-2 rounded-lg border px-3 py-2">
           <span className="text-destructive text-2xs min-w-0 flex-1 wrap-break-word">{error}</span>
           <Button
@@ -225,7 +225,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   })}
                 >
                   <div className="bg-canvas-deep flex aspect-square items-center justify-center overflow-hidden">
-                    {task.cover ? (
+                    {task.cover !== null && task.cover !== "" ? (
                       <MediaThumbnail
                         alt={titleOf(task)}
                         className="h-full w-full object-cover"
@@ -247,7 +247,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                     </span>
                   )}
                   <p className="text-ink-soft text-2xs truncate px-2 py-1.5">{titleOf(task)}</p>
-                  {onUse && cover && (
+                  {onUse && cover !== null && cover !== "" && (
                     <Hint accessibleName label="加入画布">
                       <Button
                         className="text-ink-soft absolute top-1 right-1 hidden rounded bg-black/70 group-hover:flex hover:bg-black/60 hover:text-white"
@@ -288,7 +288,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   })}
                 >
                   {/* 缩略图 / 类型占位 */}
-                  {task.cover ? (
+                  {task.cover !== null && task.cover !== "" ? (
                     <div className="bg-canvas-deep size-10 shrink-0 overflow-hidden rounded-md">
                       <MediaThumbnail
                         alt={titleOf(task)}
@@ -313,7 +313,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                           {pill.label}
                         </span>
                       )}
-                      {task.status === "FAILED" && task.error && (
+                      {task.status === "FAILED" && task.error !== null && task.error !== "" && (
                         <span
                           className="text-destructive/80 text-3xs min-w-0 truncate"
                           title={task.error}
@@ -325,7 +325,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                   </div>
 
                   <div className="hidden shrink-0 items-center gap-1 pr-1 group-hover:flex">
-                    {onUse && cover && (
+                    {onUse && cover !== null && cover !== "" && (
                       <Hint accessibleName label="加入画布">
                         <Button
                           className="text-ink-muted hover:bg-subtle hover:text-ink-bright rounded-md"
@@ -343,7 +343,7 @@ export function HistoryPanel({ onClose, projectId, onUse }: HistoryPanelProps) {
                         </Button>
                       </Hint>
                     )}
-                    {task.cover && (
+                    {task.cover !== null && task.cover !== "" && (
                       <a
                         className="text-ink-muted hover:bg-subtle hover:text-ink-bright flex size-7 items-center justify-center rounded-md transition-colors"
                         download

@@ -61,13 +61,19 @@ export class SkillRepository extends DrizzleRepository<Skill> {
     q?: string;
   }): Promise<Array<Skill>> {
     const conditions = [];
-    if (!opts.includeInactive) {
+    if (opts.includeInactive !== true) {
       conditions.push(eq(skill.isActive, true));
     }
-    if (opts.category && opts.category !== "all") {
+    /* 过滤值空串与缺省同义 = 不加该条件（查询参数可能出现空串） */
+    if (
+      opts.category !== undefined &&
+      opts.category !== null &&
+      opts.category !== "" &&
+      opts.category !== "all"
+    ) {
       conditions.push(eq(skill.category, opts.category));
     }
-    if (opts.q) {
+    if (opts.q !== undefined && opts.q !== "") {
       conditions.push(
         or(
           like(skill.name, `%${opts.q}%`),

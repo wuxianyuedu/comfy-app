@@ -106,7 +106,7 @@ export function FlowNodeCollapsedAnchors({
 }: FlowNodeCollapsedAnchorsProps) {
   // 已连线的输入（连线元组 `[]`）与已连线的输出保持锚定。
   const connectedInputs = orderedEntries.filter(([, v]) => Array.isArray(v));
-  const connectedOutputs = outputs.filter(([n]) => data.connectedOutputs?.has(n));
+  const connectedOutputs = outputs.filter(([n]) => data.connectedOutputs?.has(n) === true);
   /* 锚柱（收起时的端口载体）跟主题联动：浅色下白描白会让锚柱整个消失。 */
   const { resolvedTheme } = useTheme();
   const anchor = resolveAnchorCylinder(resolvedTheme);

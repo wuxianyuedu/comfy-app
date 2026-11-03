@@ -269,11 +269,11 @@ function CanvasInner({
       await hydrateFromServer();
       reapAllEmptyDrafts(); // one-shot cleanup of pre-fix pollution
       let proj: CanvasProject | null = null;
-      if (seedNew) {
+      if (seedNew === true) {
         proj = createDraftProject();
       } else {
         const activeId = getActiveId();
-        if (activeId) {
+        if (activeId !== null && activeId !== "") {
           proj = getProject(activeId);
         }
         proj ??= listProjects()[0] ?? null;

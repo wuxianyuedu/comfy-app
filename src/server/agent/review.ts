@@ -500,7 +500,11 @@ export async function regenerateShot(
   }
 
   // reprompt：优先用调用方给的提示词；否则让模型据评审意见改写。
-  const finalPrompt = newPrompt?.trim() ? newPrompt.trim() : await revisePrompt(row, rec);
+  const trimmedPrompt = newPrompt?.trim();
+  const finalPrompt =
+    trimmedPrompt !== undefined && trimmedPrompt !== ""
+      ? trimmedPrompt
+      : await revisePrompt(row, rec);
   await productionRepository.patchContent(userId, projectId, {
     shots: applyReprompt(shots, shotId, finalPrompt),
   });

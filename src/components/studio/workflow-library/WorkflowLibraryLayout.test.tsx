@@ -338,14 +338,14 @@ describe("局部加载不许用整列加载界面", () => {
 
   it("画布编辑器只在真的打开时才挂载（分块不再随工作流库一起下）", () => {
     const library = read("WorkflowLibrary.tsx");
-    /* 按需形态：挂载点被 `c.editingId && (` 收住（`<WorkflowCanvasEditor` 紧跟在
+    /* 按需形态：挂载点被 `c.editingId !== null && (` 收住（`<WorkflowCanvasEditor` 紧跟在
      *  这个条件表达式之后）。 */
-    expect(library).toMatch(/\{c\.editingId && \(\s*<WorkflowCanvasEditor/);
+    expect(library).toMatch(/\{c\.editingId !== null && \(\s*<WorkflowCanvasEditor/);
     /* 常驻形态的回归：`<WorkflowCanvasEditor …>` 不出现在**任何**条件之外
-     *  —— 逐个匹配点都必须在 `editingId &&` 里。取反的写法是把条件那一段剥掉
+     *  —— 逐个匹配点都必须在 `editingId !== null &&` 里。取反的写法是把条件那一段剥掉
      *  再看还剩不剩裸的 `<WorkflowCanvasEditor`。 */
     expect(
-      library.replaceAll(/\{c\.editingId && \(\s*<WorkflowCanvasEditor/g, "<GATED"),
+      library.replaceAll(/\{c\.editingId !== null && \(\s*<WorkflowCanvasEditor/g, "<GATED"),
     ).not.toMatch(/<WorkflowCanvasEditor\s+workflowId=/);
     /* 编辑器自身仍带 `open` 契约（组件 API 不变）。 */
     expect(library).toMatch(/<WorkflowCanvasEditor[\s\S]{0,180}\bopen\b/);

@@ -42,7 +42,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
   });
 
   let user: TRPCUser | null = null;
-  if (session?.user?.email) {
+  if (session?.user?.email !== undefined && session.user.email !== "") {
     let dbUser = await userRepository.findByEmail(session.user.email);
     dbUser ??= await userRepository.createUser({
       email: session.user.email,
@@ -156,7 +156,7 @@ const timingMiddleware = t.middleware(async ({ next, path, type }) => {
     // 仅当调用明显变慢（预期外的慢）才在面板给一条 warn，正常调用不打扰用户。
     if (durationMs >= SLOW_QUERY_THRESHOLD_MS) {
       const text = recordSlowQuery(path, durationMs, type);
-      if (text) {
+      if (text !== null) {
         trpcRuntimeLog.warn(text, { type });
       }
     }

@@ -50,20 +50,20 @@ export async function isForeignOwnedArtifact(
   userId: string,
 ): Promise<boolean> {
   const [first, second] = segments;
-  if (!first) {
+  if (first === undefined || first === "") {
     return false;
   }
 
   if (first === "materials") {
     // materials/<scope>/<folder>/<file>：scope 就是项目 id（或 _shared）
-    return second ? isForeignProjectScope(second, userId) : false;
+    return second !== undefined && second !== "" ? isForeignProjectScope(second, userId) : false;
   }
   if (first === "projects") {
     // projects/<项目 id>/<任务 id>/…
-    return second ? isForeignProjectScope(second, userId) : false;
+    return second !== undefined && second !== "" ? isForeignProjectScope(second, userId) : false;
   }
   if (first === "films") {
-    if (!second || UNSCOPED_PREFIXES.has(`films/${second}`)) {
+    if (second === undefined || second === "" || UNSCOPED_PREFIXES.has(`films/${second}`)) {
       return false;
     }
     const row = await filmRepository.findById(filmIdOf(second));

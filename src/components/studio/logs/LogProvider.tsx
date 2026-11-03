@@ -302,7 +302,7 @@ export function LogProvider({ children }: { children: React.ReactNode }) {
           bootIdRef.current = data.bootId;
           setBootId(data.bootId);
         }
-        if (data.mismatch) {
+        if (data.mismatch === true) {
           forceReread = true;
         }
         if (forceReread) {

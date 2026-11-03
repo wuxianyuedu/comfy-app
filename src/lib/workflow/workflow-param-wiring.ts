@@ -41,7 +41,8 @@ export function canApplyWireEdit(
   edit: ParamWireEdit,
   io: WorkflowIOMap | null | undefined,
 ): boolean {
-  if (!edit.mode) {
+  /* 模式码空串与 null 同义 =「没有模式」，落库数据可能出现空串残留 */
+  if (edit.mode === null || edit.mode === "") {
     return false;
   }
   if (edit.ioKey === null) {
@@ -79,7 +80,8 @@ export function hasWireEdit(
   entryId: string,
   mode: string | null,
 ): boolean {
-  if (!mode) {
+  /* 模式码空串与 null 同义 =「没有模式」，落库数据可能出现空串残留 */
+  if (mode === null || mode === "") {
     return false;
   }
   const parsed = parseParamMapping(paramMap);
@@ -97,7 +99,8 @@ export function clearWireEdit(
   mode: string | null,
 ): Record<string, unknown> {
   const base = paramMap && typeof paramMap === "object" ? paramMap : {};
-  if (!mode) {
+  /* 模式码空串与 null 同义 =「没有模式」，落库数据可能出现空串残留 */
+  if (mode === null || mode === "") {
     return base;
   }
   const parsed = parseParamMapping(base);

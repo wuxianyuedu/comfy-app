@@ -57,7 +57,7 @@ export async function syncFilmToProject(
   // 按 shotId 索引成片结果（只取有 videoPath 的镜头回写 clip）。
   const clipByShotId = new Map<string, FilmShotClip>();
   for (const fs of filmShots) {
-    if (fs.shotId && fs.videoPath) {
+    if (fs.shotId !== null && fs.videoPath !== null) {
       clipByShotId.set(fs.shotId, fs);
     }
   }
@@ -178,14 +178,14 @@ export async function composeFilm(id: string) {
   try {
     for (const [i, shot] of shots.entries()) {
       const { videoPath } = shot;
-      if (!videoPath) {
+      if (videoPath === null || videoPath === "") {
         // 镜头未出片（videoPath 为空）是真实故障，不是可静默跳过的分支：
         // 抛明确文案，交给外层 catch 落 markFailed + 面板日志（硬规则 4），
         // 不再用 `shot.videoPath!` 让脏数据在 path.join 里崩成栈噪声。
         throw new Error(`镜头 ${i + 1} 缺少视频文件，无法合成`);
       }
       const clip = clipPathOf(cwd, videoPath);
-      if (!clip) {
+      if (clip === null) {
         // 地址解不出落在产物根内的文件 = 这一条镜头不可能合成成功：
         // 在起 ffmpeg 之前就说清是哪一条、存的是哪个地址，别让它变成一句
         // 「No such file or directory」的 stderr 片段（硬规则 4）。
@@ -200,9 +200,10 @@ export async function composeFilm(id: string) {
 
       const srtPath = path.join(tmpDir, `seg_${i}.srt`);
       if (film.subtitleOn) {
-        // 空串标题也要回落到 prompt（|| 语义），沿用既有行为。
-        // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
-        const srtText = (shot.heading || shot.prompt).slice(0, 80);
+        // 空串标题也要回落到 prompt（沿用 || 的语义，写成显式判空），沿用既有行为。
+        const srtText = (
+          shot.heading !== null && shot.heading !== "" ? shot.heading : shot.prompt
+        ).slice(0, 80);
         await fs.writeFile(srtPath, buildSrtBody({ text: srtText, dur }), "utf8");
       }
 
@@ -252,7 +253,7 @@ export async function composeFilm(id: string) {
      * 自己拼一份前缀就会与 `taskOutputUrl()` 的形状分叉（台账 A8 的同一族）。 */
     const localPath = artifactUrl(["films", `${id}.mp4`]);
 
-    if (film.bgmName) {
+    if (film.bgmName !== null && film.bgmName !== "") {
       const bgm = path.join(filmBgmRoot(), film.bgmName);
       const bgmExists = await fs
         .stat(bgm)
@@ -300,7 +301,7 @@ export async function composeFilm(id: string) {
     /* 回写闭环（Phase 5 / §6.3 + §7）：从统一项目建的片，合成完成后把逐镜视频与项目进度
      * 回写来源项目 —— 工坊 / 画布据此共读到「哪一镜出片了 / 已出片」。回写失败不影响成片
      * 本身（已 markDone），只记一条 warn。 */
-    if (film.projectId) {
+    if (film.projectId !== null) {
       try {
         const finalShots = await filmShotRepository.listByFilm(id);
         await syncFilmToProject(

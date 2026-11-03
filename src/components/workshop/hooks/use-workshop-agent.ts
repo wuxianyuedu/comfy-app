@@ -140,7 +140,9 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
           content: JSON.stringify({
             ok: result.ok,
             summary: result.summary,
-            ...(result.detail ? { detail: result.detail } : {}),
+            ...(result.detail !== undefined && result.detail !== ""
+              ? { detail: result.detail }
+              : {}),
           }),
         } satisfies AgentMessageLike;
       } catch (error_: unknown) {
@@ -190,7 +192,11 @@ export function useWorkshopAgent(handlers: WorkshopAgentToolHandlers): WorkshopA
         });
 
         // 纯文本回复（无工具调用）→ 结束本轮
-        if (response.reply && !(response.tool_calls && response.tool_calls.length > 0)) {
+        if (
+          response.reply !== undefined &&
+          response.reply !== "" &&
+          !(response.tool_calls && response.tool_calls.length > 0)
+        ) {
           pushMsg({
             id: agentMsgId(),
             role: "assistant",

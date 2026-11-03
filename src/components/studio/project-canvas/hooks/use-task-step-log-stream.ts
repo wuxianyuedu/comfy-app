@@ -111,7 +111,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
 
   // 被查看任务一变化就重新从缓存播种。
   useEffect(() => {
-    if (!taskId) {
+    if (taskId === null) {
       return;
     }
     if (loadedForRef.current !== taskId) {
@@ -129,7 +129,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
 
   // 订阅该任务的 SSE 流。
   useEffect(() => {
-    if (!taskId) {
+    if (taskId === null) {
       esRef.current?.close();
       esRef.current = null;
       // 与「无任务 → 连接已关」这一外部系统事实同步（非渲染级联）：
@@ -154,7 +154,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
         /* SAFETY: 类型断言已复核 */
         const msg = JSON.parse(ev.data as string) as SseFrame;
         lastActivityRef.current = Date.now();
-        if (msg.type === "log" && msg.entry) {
+        if (msg.type === "log" && Boolean(msg.entry)) {
           /* SAFETY: 类型断言已复核 */
           const entry = msg.entry as StepLogEntry;
           appendStepLog(tid, entry);
@@ -190,7 +190,7 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
               }
             }
           }
-          if (msg.workflowName || msg.status) {
+          if (Boolean(msg.workflowName) || Boolean(msg.status)) {
             patchStepLogMeta(tid, {
               workflowName: typeof msg.workflowName === "string" ? msg.workflowName : undefined,
               status: typeof msg.status === "string" ? msg.status : undefined,
@@ -224,10 +224,10 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
             }
             setStatus(st);
             const reason = finalError ?? (typeof msg.error === "string" ? msg.error : null);
-            if (reason && isTerminalFailureTaskStatus(st)) {
+            if (reason !== null && reason !== "" && isTerminalFailureTaskStatus(st)) {
               setError(reason);
               appendFailureLogLine(tid, reason, setLogs);
-            } else if (reason) {
+            } else if (reason !== null && reason !== "") {
               setError(reason);
             }
           })();
@@ -277,11 +277,11 @@ export function useTaskStepLogStream(taskId: string | null): TaskStepLogStream {
         lastActivityRef.current = now;
       }
     },
-    { ms: taskId ? 10_000 : null, immediate: false },
+    { ms: taskId === null ? null : 10_000, immediate: false },
   );
 
   const clear = () => {
-    if (taskId) {
+    if (taskId !== null) {
       clearStepLogPanelState(taskId);
     }
     setLogs([]);

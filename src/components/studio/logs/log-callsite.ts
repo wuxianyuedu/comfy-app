@@ -66,7 +66,7 @@ function parseStackFrame(raw: string): StackFrame | null {
   // 取 frame 中的位置部分：优先用最后一个 (...) 里的内容，否则取整行
   const parenMatch = /\(([^)]+)\)\s*$/.exec(line);
   const loc = parenMatch ? parenMatch[1] : line.replace(/^at\s+/, "");
-  if (!loc) {
+  if (loc === undefined || loc === "") {
     return null;
   }
 
@@ -132,7 +132,7 @@ function libraryNameOf(raw: string): string | null {
     return libraryNameOf(rest.slice(inner));
   }
   if (first.startsWith("@")) {
-    return segs[1] ? `${first}/${segs[1]}` : first;
+    return segs[1] !== undefined && segs[1] !== "" ? `${first}/${segs[1]}` : first;
   }
   return first;
 }
@@ -146,12 +146,12 @@ function libraryNameOf(raw: string): string | null {
  */
 function describeLibraryFrame(frame: StackFrame): string | null {
   const pkg = libraryNameOf(frame.raw);
-  if (!pkg) {
+  if (pkg === null || pkg === "") {
     return null;
   }
   const fn = /\bat\s+([^\s(]+)\s*\(/.exec(frame.raw)?.[1];
-  const clean = fn && fn !== "" ? fn : undefined;
-  return clean ? `${pkg} → ${clean}` : pkg;
+  const clean = fn !== undefined && fn !== "" ? fn : undefined;
+  return clean !== undefined && clean !== "" ? `${pkg} → ${clean}` : pkg;
 }
 
 /**
@@ -174,7 +174,7 @@ function describeLibraryFrame(frame: StackFrame): string | null {
  * 是业务代码，也不指向任何能点开的东西，只配落进第 2 层（说出是哪个库）。
  */
 export function locateInStack(stack: string | undefined): string | undefined {
-  if (!stack) {
+  if (stack === undefined || stack === "") {
     return undefined;
   }
   try {
@@ -206,7 +206,7 @@ export function locateInStack(stack: string | undefined): string | undefined {
         continue;
       }
       const described = describeLibraryFrame(frame);
-      if (described) {
+      if (described !== null && described !== "") {
         return described;
       }
     }

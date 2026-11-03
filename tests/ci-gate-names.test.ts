@@ -54,7 +54,7 @@ function fakeCnb(opts: {
     );
   }
   lines.push("  pull_request:", "    - name: 活的", "      script: node scripts/live.cjs");
-  if (opts.commented) {
+  if (opts.commented === true) {
     lines.push("  # - name: 注释形态", "  #   script: node scripts/commented.cjs");
   }
   return lines.join("\n");

@@ -396,7 +396,7 @@ function ModelConfigModal({ onClose }: { onClose: () => void }) {
                 <span className="text-warning-strong">● ComfyUI 未连接</span>
               )}
               <span className="text-ink-muted">· 已启用 {c.enabledRows.length} 个</span>
-              {c.err && <span className="text-destructive">{c.err}</span>}
+              {c.err !== null && c.err !== "" && <span className="text-destructive">{c.err}</span>}
             </div>
             <Button
               className="border-border bg-subtle text-ink-bright hover:border-primary/40 hover:text-primary h-auto gap-1.5 rounded-lg px-3 py-1.5"

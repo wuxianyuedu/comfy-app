@@ -33,7 +33,7 @@ function purgeStaleCache(): void {
   try {
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const k = sessionStorage.key(i);
-      if (k?.startsWith("wfdetail:") && !k?.startsWith(CACHE_KEY_PREFIX)) {
+      if (k !== null && k.startsWith("wfdetail:") && !k.startsWith(CACHE_KEY_PREFIX)) {
         sessionStorage.removeItem(k);
       }
     }
@@ -48,7 +48,7 @@ function clearWorkflowCache(): void {
     const keys: Array<string> = [];
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const k = sessionStorage.key(i);
-      if (k?.startsWith("wfdetail:")) {
+      if (k?.startsWith("wfdetail:") === true) {
         keys.push(k);
       }
     }
@@ -63,7 +63,7 @@ function clearWorkflowCache(): void {
 function readCache(key: string): WorkflowDetail | null {
   try {
     const raw = sessionStorage.getItem(key);
-    if (!raw) {
+    if (raw === null || raw === "") {
       return null;
     }
     /* SAFETY: 类型断言已复核 */
@@ -176,7 +176,7 @@ export function useWorkflowDetailLoader({
       o?: { hostNodeId?: string; parentTitle?: string; subgraphUid?: string },
     ) => {
       applyDetailState(data, isSubgraph);
-      if (isSubgraph && o?.subgraphUid) {
+      if (isSubgraph && o?.subgraphUid !== undefined && o.subgraphUid !== "") {
         pushSubgraphStack(
           o.subgraphUid,
           o.parentTitle ?? data.name ?? "子工作流",
@@ -207,15 +207,16 @@ export function useWorkflowDetailLoader({
        *
        * `hostId` 是累积的「宿主:内部」链，必须进键：① 嵌套子图坐标按该前缀读回
        * （否则拖过的位置退回原始坐标）；② 同名子图在不同层级下不串用。 */
-      const cacheKey = subgraphUid
-        ? `${CACHE_KEY_PREFIX}${workflowId}|subgraph:${subgraphUid}|host:${hostId}`
-        : `${CACHE_KEY_PREFIX}${workflowId}`;
+      const cacheKey =
+        subgraphUid !== undefined && subgraphUid !== ""
+          ? `${CACHE_KEY_PREFIX}${workflowId}|subgraph:${subgraphUid}|host:${hostId}`
+          : `${CACHE_KEY_PREFIX}${workflowId}`;
 
       /* subgraphRawContext 让 SourceModal 从父 rawJson 切出子图自己的 LiteGraph
        *  json 当 RAW 渲染。用 detailRef（非闭包里的 detail）避免 stale；
        *  同一 subUid 重复调用不要覆盖已捕获的父 rawJson，防止 race 把正确的洗掉。
        *  顶层 detail 则清空，回到「SourceModal 读 detail.rawJson」常规路径。 */
-      if (subgraphUid) {
+      if (subgraphUid !== undefined && subgraphUid !== "") {
         setSubgraphRawContext((prev) =>
           prev?.subUid === subgraphUid
             ? prev
@@ -243,16 +244,17 @@ export function useWorkflowDetailLoader({
         }
         /* 后台刷新：即使命中缓存也发一次网络请求，赢了竞态就提交（比缓存更新）。
          *  不触碰子图栈。 */
-        const bg = subgraphUid
-          ? vanillaApi.workflow.subgraph.query({
-              id: workflowId,
-              uid: subgraphUid,
-              hostId,
-            })
-          : vanillaApi.workflow.detailFull.query({ id: workflowId });
+        const bg =
+          subgraphUid !== undefined && subgraphUid !== ""
+            ? vanillaApi.workflow.subgraph.query({
+                id: workflowId,
+                uid: subgraphUid,
+                hostId,
+              })
+            : vanillaApi.workflow.detailFull.query({ id: workflowId });
         void bg
           .then((data: WorkflowDetailResponse | null) => {
-            if (!data || data.error) {
+            if (!data || (data.error !== undefined && data.error !== "")) {
               return;
             }
             writeCache(cacheKey, data);
@@ -276,7 +278,7 @@ export function useWorkflowDetailLoader({
       try {
         /* SAFETY: 类型断言已复核 */
         const d = (await withTimeout(
-          subgraphUid
+          subgraphUid !== undefined && subgraphUid !== ""
             ? vanillaApi.workflow.subgraph.query({
                 id: workflowId,
                 uid: subgraphUid,
@@ -284,18 +286,18 @@ export function useWorkflowDetailLoader({
               })
             : vanillaApi.workflow.detailFull.query({
                 id: workflowId,
-                bust: opts?.bust ? true : undefined,
+                bust: opts?.bust === true ? true : undefined,
               }),
           60_000,
           {
             /* tRPC vanilla client 不支持直接传 signal，故用「与时间赛跑」在超时后
              * 抛错，避免后端长时间不返回时加载覆盖层无限转圈。底层请求超时后仍
              * 可能最终返回，但竞态守卫 + 错误提示保证 UI 不会卡死。 */
-            label: subgraphUid ? "子工作流加载" : "工作流加载",
-            message: `${subgraphUid ? "子工作流" : "工作流"}加载超时（60s），请重试`,
+            label: subgraphUid !== undefined && subgraphUid !== "" ? "子工作流加载" : "工作流加载",
+            message: `${subgraphUid !== undefined && subgraphUid !== "" ? "子工作流" : "工作流"}加载超时（60s），请重试`,
           },
         )) as WorkflowDetailResponse;
-        if (d.error) {
+        if (d.error !== undefined && d.error !== "") {
           throw new Error(d.error);
         }
         writeCache(cacheKey, d);

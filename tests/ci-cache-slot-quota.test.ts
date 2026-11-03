@@ -71,10 +71,10 @@ function makeSlot(
 ): string {
   const dir = path.join(cacheRoot, key);
   mkdirSync(dir, { recursive: true });
-  if (opts.tree) {
+  if (opts.tree === true) {
     mkdirSync(path.join(dir, "node_modules"), { recursive: true });
   }
-  if (opts.fingerprint) {
+  if (opts.fingerprint !== undefined && opts.fingerprint !== "") {
     const modules = path.join(dir, "node_modules");
     mkdirSync(modules, { recursive: true });
     writeFileSync(path.join(modules, ".ci-deps-fingerprint"), `${opts.fingerprint}\n`);
@@ -82,7 +82,7 @@ function makeSlot(
   if (typeof opts.stamp === "number") {
     writeFileSync(path.join(dir, SLOT_USED_FILE), `${opts.stamp}\n`);
   }
-  if (opts.lock) {
+  if (opts.lock === true) {
     writeFileSync(path.join(dir, ".ci-slot.lock"), "");
   }
   if (typeof opts.mtime === "number") {

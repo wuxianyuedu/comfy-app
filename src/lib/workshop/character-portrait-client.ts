@@ -127,7 +127,7 @@ export async function generateRemotePortrait(
     prompt: req.prompt,
     negative: req.negative,
     size: sizeSpecToWxH(req.size),
-    ...(opts.model ? { model: opts.model } : {}),
+    ...(opts.model !== undefined && opts.model !== "" ? { model: opts.model } : {}),
     mode: "T2I",
     /* 远端通道认「宽高比 + 百万像素」：分辨率档按场景尺寸表换算成实际总像素。 */
     ...sizeSpecToRelay(req.size),

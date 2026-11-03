@@ -215,13 +215,18 @@ export function describeAppServiceExit(record: AppServiceExitRecord): AppService
  * 结论，编出来会把故障说成正常）。
  */
 export function summarizeAppServiceExit(record: AppServiceExitRecord): string {
-  if (record.signal) {
+  /* 信号名与提示词条都不是空串，缺省只用 null / undefined 表达 */
+  if (record.signal !== null) {
     const hint = SIGNAL_HINT[record.signal];
-    return hint ? `服务被 ${record.signal} 结束：${hint}` : `服务被信号 ${record.signal} 结束`;
+    return hint === undefined
+      ? `服务被信号 ${record.signal} 结束`
+      : `服务被 ${record.signal} 结束：${hint}`;
   }
   if (record.code !== null && record.code !== 0) {
     const hint = CODE_HINT[record.code];
-    return hint ? `服务${hint}（退出码 ${record.code}）` : `服务以退出码 ${record.code} 结束`;
+    return hint === undefined
+      ? `服务以退出码 ${record.code} 结束`
+      : `服务${hint}（退出码 ${record.code}）`;
   }
   if (record.code === 0) {
     return "服务正常退出（退出码 0）";

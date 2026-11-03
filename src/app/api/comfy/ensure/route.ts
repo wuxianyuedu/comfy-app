@@ -40,7 +40,7 @@ export async function POST() {
   }
 
   const up = await probeComfyUi(1500);
-  if (up) {
+  if (up !== null && up !== "") {
     return NextResponse.json({
       ok: true,
       base: up,

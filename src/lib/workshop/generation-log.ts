@@ -66,7 +66,7 @@ export function normalizeGenerationLogEntry(raw: unknown): GenerationLogEntry | 
     ts: Number.isFinite(ts) ? ts : Date.now(),
     kind: typeof rec.kind === "string" && rec.kind ? rec.kind.slice(0, 24) : "info",
     summary,
-    ...(detail ? { detail } : {}),
+    ...(detail === undefined ? {} : { detail }),
   };
 }
 

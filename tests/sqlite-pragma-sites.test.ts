@@ -319,7 +319,10 @@ function scriptedTarget(
     async execute(sql: string): Promise<unknown> {
       target.calls.push(sql);
       if (target.calls.length <= failures) {
-        throw Object.assign(new Error(err.message), err.code ? { code: err.code } : {});
+        throw Object.assign(
+          new Error(err.message),
+          err.code !== undefined && err.code !== "" ? { code: err.code } : {},
+        );
       }
       return { rows: [] };
     },

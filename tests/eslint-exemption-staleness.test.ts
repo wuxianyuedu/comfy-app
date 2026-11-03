@@ -210,7 +210,7 @@ test("scanViolations：命中 / 未命中 / 读不到 / 解析失败 四种形�
     root: REAL_ROOT,
     readFile: (abs: string) => {
       const key = Object.keys(CONTENT).find((k) => abs.endsWith(k));
-      if (!key) {
+      if (key === undefined || key === "") {
         throw Object.assign(new Error("no such file"), { code: "ENOENT" });
       }
       const text = CONTENT[key];

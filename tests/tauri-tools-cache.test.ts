@@ -86,7 +86,7 @@ function fakeCacheTree(
   const plan = fixturePlan(dllContent);
   const root = path.join(tauriRoot, NSIS_PLAN.cacheRel);
   for (const rel of plan.required) {
-    if (opts.drop?.includes(rel)) {
+    if (opts.drop?.includes(rel) === true) {
       continue;
     }
     const abs = path.join(root, ...rel.split("/"));

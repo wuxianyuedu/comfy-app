@@ -55,11 +55,11 @@ export function readPortFocusRole(
   data: Record<string, unknown> | undefined,
   handle: string | undefined | null,
 ): EdgeFocusRole {
-  if (!handle) {
+  if (handle === undefined || handle === null || handle === "") {
     return "none";
   }
   const table = data?.[NODE_PORT_FOCUS_DATA_KEY];
-  if (!table || typeof table !== "object") {
+  if (typeof table !== "object" || table === null) {
     return "none";
   }
   /* SAFETY: 类型断言已复核 */
@@ -124,7 +124,7 @@ export function useRelatedEdgesHighlight(
     state.nodeLookup.forEach((internal, nodeId) => {
       /* SAFETY: 类型断言已复核 */
       const userNode = internal.internals.userNode as Node | undefined;
-      if (userNode?.selected) {
+      if (userNode?.selected === true) {
         selectedIds.add(nodeId);
       }
     });
@@ -272,7 +272,7 @@ export function useRelatedEdgesHighlight(
       state.nodeLookup.forEach((internal, nodeId) => {
         /* SAFETY: 类型断言已复核 */
         const userNode = internal.internals.userNode as Node | undefined;
-        if (userNode?.selected) {
+        if (userNode?.selected === true) {
           ids.push(nodeId);
         }
       });

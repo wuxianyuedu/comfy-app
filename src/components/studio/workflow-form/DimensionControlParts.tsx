@@ -65,14 +65,19 @@ export function RequiredChips({
   visibilityMode?: string | null;
 }) {
   const live = pins.filter((pin): pin is EnrichedWidget => !!pin);
-  const showAny = !!onRequiredChange || (!!onVisibilityChange && !!visibilityMode);
+  const showAny =
+    !!onRequiredChange ||
+    (!!onVisibilityChange &&
+      visibilityMode !== undefined &&
+      visibilityMode !== null &&
+      visibilityMode !== "");
   if (!showAny || live.length === 0) {
     return null;
   }
   return (
     <div className="flex flex-wrap items-center justify-end gap-1 pt-1">
       {live.map((pin) => {
-        const required = !!resolveEntryRequired(pin, mode);
+        const required = resolveEntryRequired(pin, mode) === true;
         // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
         const visible = visibilityMode == null ? true : isVisibleInMode(pin, visibilityMode);
         return (
@@ -102,36 +107,39 @@ export function RequiredChips({
                 </Button>
               </Hint>
             )}
-            {onVisibilityChange && visibilityMode && (
-              <Hint
-                label={
-                  visible
-                    ? "该参数在当前模式下已可见，点击隐藏"
-                    : "该参数在当前模式下已隐藏，点击恢复显示"
-                }
-              >
-                <Button
-                  className={`nodrag nopan h-auto rounded p-0.5 ${
+            {onVisibilityChange &&
+              visibilityMode !== undefined &&
+              visibilityMode !== null &&
+              visibilityMode !== "" && (
+                <Hint
+                  label={
                     visible
-                      ? "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
-                      : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
-                  }`}
-                  onClick={() => {
-                    onVisibilityChange(pin.ioKey, !visible);
-                  }}
-                  onMouseDown={(event) => {
-                    event.stopPropagation();
-                  }}
-                  variant="ghost"
+                      ? "该参数在当前模式下已可见，点击隐藏"
+                      : "该参数在当前模式下已隐藏，点击恢复显示"
+                  }
                 >
-                  {visible ? (
-                    <Eye data-icon="inline-start" size={11} />
-                  ) : (
-                    <EyeOff data-icon="inline-start" size={11} />
-                  )}
-                </Button>
-              </Hint>
-            )}
+                  <Button
+                    className={`nodrag nopan h-auto rounded p-0.5 ${
+                      visible
+                        ? "text-ink-soft hover:bg-surface-2 hover:text-ink-bright"
+                        : "text-ink-fainter hover:bg-surface-2 hover:text-ink-bright"
+                    }`}
+                    onClick={() => {
+                      onVisibilityChange(pin.ioKey, !visible);
+                    }}
+                    onMouseDown={(event) => {
+                      event.stopPropagation();
+                    }}
+                    variant="ghost"
+                  >
+                    {visible ? (
+                      <Eye data-icon="inline-start" size={11} />
+                    ) : (
+                      <EyeOff data-icon="inline-start" size={11} />
+                    )}
+                  </Button>
+                </Hint>
+              )}
           </span>
         );
       })}

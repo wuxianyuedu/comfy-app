@@ -153,7 +153,7 @@ export function ConfirmDialog({
               <h2 className="text-ink text-[15px] leading-tight font-semibold" id={titleId}>
                 {title}
               </h2>
-              {description && (
+              {Boolean(description) && (
                 <div className="text-ink-faint mt-1.5 text-sm leading-relaxed whitespace-pre-line">
                   {description}
                 </div>

@@ -613,7 +613,7 @@ export async function advanceRunLoop(userId: string, projectId: string): Promise
       }
       // 每执行一个动作追加一条执行日志（含成功/失败与产出摘要），随后续 saveRun 落库。
       // 纯等待步（skipLog）不追加，避免出片轮询把日志刷爆。
-      if (!res.skipLog) {
+      if (res.skipLog !== true) {
         run = appendRunStep(run, {
           ts: nowIso(),
           kind: action.kind,

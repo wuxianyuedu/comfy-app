@@ -149,7 +149,7 @@ function stubFetch(
       throw reply.throws;
     }
     const headers: Record<string, string> = {};
-    if (reply.contentType) {
+    if (reply.contentType !== undefined && reply.contentType !== null && reply.contentType !== "") {
       headers["content-type"] = reply.contentType;
     } else if (reply.contentType === "") {
       headers["content-type"] = "";

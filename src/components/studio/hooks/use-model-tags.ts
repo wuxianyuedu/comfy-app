@@ -117,7 +117,8 @@ export function useModelTags({ initialTags, onChanged }: UseModelTagsOptions): M
       runAsyncAction(
         async () => {
           const d = await vanillaApi.workflowModel.create.mutate({ name });
-          if (!d.tag) {
+          const tagCreated = Boolean(d.tag);
+          if (!tagCreated) {
             throw new Error("添加失败");
           }
           setDraft("");

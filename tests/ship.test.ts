@@ -1237,7 +1237,7 @@ describe("#2199 findMergedPullProofs：只认 is_merged，先剥尾数再找号"
     const calls: Array<string> = [];
     const run = (_c: string, args: Array<string>): FakeResult => {
       calls.push(args.join(" "));
-      if (opts.fail) {
+      if (opts.fail === true) {
         return { status: 9, stdout: "", stderr: "", error: null };
       }
       const page = Number(args[args.indexOf("--page") + 1]);
@@ -1369,16 +1369,16 @@ describe("cleanBranch：删的是 ref，判的还是回读 —— 两边各问�
         return ok("", opts.pushStatus ?? 0);
       }
       if (key.startsWith("ls-remote --heads")) {
-        if (opts.lsRemoteFails) {
+        if (opts.lsRemoteFails === true) {
           return ok("", 128);
         }
-        return ok(opts.remoteStillThere ? "abc123\trefs/heads/feat/x" : "", 0);
+        return ok(opts.remoteStillThere === true ? "abc123\trefs/heads/feat/x" : "", 0);
       }
       if (key.startsWith("branch -D")) {
         return ok("", opts.branchStatus ?? 0);
       }
       if (key.startsWith("show-ref --verify")) {
-        return ok("", opts.localStillThere ? 0 : 1);
+        return ok("", opts.localStillThere === true ? 0 : 1);
       }
       return ok("");
     };
@@ -1882,7 +1882,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         };
       }
       if (args[0] === "issues" && args[1] === "get-issue") {
-        if (opts.getIssueFails) {
+        if (opts.getIssueFails === true) {
           return { status: 0, stdout: "boom", stderr: "", error: null };
         }
         return {
@@ -1904,7 +1904,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
           labels.push(name);
         }
         // 竞态夹具：另一个会话在我之后也把它的处理人标签打了上来。
-        if (opts.writeExtraHandler) {
+        if (opts.writeExtraHandler !== undefined && opts.writeExtraHandler !== "") {
           labels.push(`处理人:${opts.writeExtraHandler}`);
         }
         return { status: 0, stdout: json({}), stderr: "", error: null };
@@ -1915,16 +1915,16 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "post-issue-comment") {
-        if (opts.postCommentFails) {
+        if (opts.postCommentFails === true) {
           return { status: 0, stdout: "boom", stderr: "", error: null };
         }
         const text = fs.readFileSync(arg(args, "--body-file"), "utf8");
-        const stored = opts.stripCommentTail ? text.replace(/\r?\n$/, "") : text;
+        const stored = opts.stripCommentTail === true ? text.replace(/\r?\n$/, "") : text;
         comments.unshift(opts.commentRewrite ? opts.commentRewrite(stored) : stored);
         return { status: 0, stdout: json({}), stderr: "", error: null };
       }
       if (args[0] === "issues" && args[1] === "list-issue-comments") {
-        if (opts.commentListFails) {
+        if (opts.commentListFails === true) {
           return { status: 0, stdout: "boom", stderr: "", error: null };
         }
         return {
@@ -1935,7 +1935,7 @@ describe("ship-claim：领取 / 结束释放 / 我的领取列表（ISSUE #2213�
         };
       }
       if (args[0] === "issues" && args[1] === "list-issues") {
-        if (opts.listFails) {
+        if (opts.listFails === true) {
           return { status: 0, stdout: "boom", stderr: "", error: null };
         }
         const page = Number(arg(args, "--page") || "1");
@@ -3117,7 +3117,7 @@ describe("pollUntilTerminal：读数连着若干次一模一样就断流，不�
             status: string;
           } = { status: p < Number(done) ? "success" : "running" };
           pipelinesStatus[`p${p}`] = pipeline;
-          if (stage) {
+          if (stage !== undefined && stage !== "") {
             /* 只有第一条 pipeline 带 stages（与本仓的真实拓扑一致：一条流水线，
              * 里面几十格）。运行中那一格的 `duration` 是占位 0 —— 平台按格缓冲。 */
             const [sDone, sTotal] = stage.split("/");
@@ -5174,7 +5174,7 @@ describe("--new-issue：一步建单并回读", () => {
       env,
       log: (l: string) => f.log.push(l),
       resolveGitDir: () => tmp.dir,
-      ...(root ? { root } : {}),
+      ...(root !== undefined && root !== "" ? { root } : {}),
     });
 
   it("建单 → 打 提单人: → get-issue 回读，三件原值念出来", async () => {
@@ -5423,7 +5423,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       calls.push([cmd, ...args].join(" "));
       const key = args.join(" ");
       if (cmd === "cnb" && args[0] === "--version") {
-        return env.cnbMissing
+        return env.cnbMissing === true
           ? { status: -1, stdout: "", stderr: "", error: "ENOENT" }
           : ok("1.15.25");
       }
@@ -5455,7 +5455,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
        * 因为这一格在 --branch 那一跳判的是「这个名字有没有被占用」—— 拿通用兜底的
        * 退 0 当默认值，等于让夹具自己担保「名字都撞车了」，于是建分支那一格永远走不到。 */
       if (cmd === "git" && key.startsWith("show-ref --verify --quiet")) {
-        return env.refExists
+        return env.refExists === true
           ? ok("9b1bade9cafe9b5a4d76e0c0d0bfb1d1a3a4f9b2")
           : { status: 1, stdout: "", stderr: "", error: null };
       }
@@ -5509,7 +5509,7 @@ describe("main()：用注入的假执行者钉住「哪些命令真的会被跑�
       /* ── 整链形状（`chain: true` 才答）───────────────────────────
        * 默认不答，是为了不惊动已有那些用例：它们中好几条判的正是「建 PR 那一跳的
        * 各种失败出口」，一旦 list-pulls 有了可解析的响应就会改走「复用」那条支路。 */
-      if (!env.chain) {
+      if (env.chain !== true) {
         return ok("");
       }
       if (cmd === "git" && key.startsWith("rev-parse --short")) {
@@ -6819,7 +6819,10 @@ describe("--rerun-ci：空提交要说出自己的意图，否则 D0 把它读�
         return {
           status: env.commitStatus ?? 0,
           stdout: "",
-          stderr: env.commitStatus ? "no changes added to commit" : "",
+          stderr:
+            env.commitStatus !== undefined && env.commitStatus !== 0
+              ? "no changes added to commit"
+              : "",
         };
       }
       if (args[0] === "rev-parse") {

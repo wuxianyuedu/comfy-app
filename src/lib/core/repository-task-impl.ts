@@ -498,7 +498,10 @@ export function createTaskRepoImpl(db: TaskRepoDb, options: { owner: TaskClaimMo
         .set({
           status: "FAILED",
           error,
-          validationErrors: validationErrors?.length ? JSON.stringify(validationErrors) : null,
+          validationErrors:
+            validationErrors !== undefined && validationErrors.length > 0
+              ? JSON.stringify(validationErrors)
+              : null,
           finishedAt: new Date(),
         })
         .where(writeGuard(taskId))

@@ -46,11 +46,11 @@ export function resolveNodePackage(
   properties?: Record<string, unknown>,
 ): string {
   const fromManifest = getCustomNodePackage(classType);
-  if (fromManifest) {
+  if (fromManifest !== undefined && fromManifest !== "") {
     return fromManifest;
   }
   const fromHeuristic = KNOWN_PACKAGE_HEURISTIC[classType];
-  if (fromHeuristic) {
+  if (fromHeuristic !== undefined && fromHeuristic !== "") {
     return fromHeuristic;
   }
   const cnr = properties?.cnr_id;
@@ -71,7 +71,7 @@ export function resolveNodePackage(
  *  暗色斜体标签。 */
 export function extractNoteTitle(text: string, fallback?: string): string {
   let raw;
-  if (fallback?.trim()) {
+  if (fallback !== undefined && fallback.trim() !== "") {
     raw = fallback.trim();
     // 剥掉 ComfyUI 给某些转换流程烤进去的 "Note:" / "Note : " 前缀，
     // 免得渲染出来的标题栏回显成 "Note: Note: X"。
@@ -308,7 +308,7 @@ export function renderSubgraphWidgetValue(value: unknown): string {
  *  现在完整描述会渲染出来，并由 widget 标签 span 上的 CSS 换行。）
  *  「Note: keep this secret」这类带冒号的普通句子同样原样保留。 */
 export function sanitizeComboLabel(label: string | undefined | null): string {
-  if (!label) {
+  if (label === undefined || label === null || label === "") {
     return "";
   }
   const colon = label.indexOf(":");
@@ -461,7 +461,7 @@ export function computeKahnLayout(
     }
     for (const value of Object.values(inputs)) {
       const srcId = linkTargetId(value);
-      if (!srcId) {
+      if (srcId === undefined || srcId === "") {
         continue;
       }
       const ownIncoming = incoming[id];
@@ -548,7 +548,8 @@ export function buildEdges(
   const edges: Array<Edge> = [];
   let i = 0;
   for (const [nodeId, raw] of Object.entries(detail.graph ?? {})) {
-    if (!raw || typeof raw !== "object") {
+    const rawPresent = Boolean(raw);
+    if (!rawPresent || typeof raw !== "object") {
       continue;
     }
     const inputs = asRecord(raw.inputs);
@@ -597,7 +598,7 @@ export function buildEdges(
         id: `e-${srcId}-${nodeId}-${inputName}-${i++}`,
         source: srcId,
         target: nodeId,
-        sourceHandle: outName ? `out:${outName}` : "out",
+        sourceHandle: outName !== null && outName !== "" ? `out:${outName}` : "out",
         targetHandle: inputName,
         animated: false,
         style: {
@@ -736,7 +737,7 @@ export function buildConnectedOutputs(
         /* `at()` 越界即 `undefined`，与上面的 `slot < length` 是同一判据。 */
         name = staticOuts.at(slot) ?? rawOuts.at(slot)?.name ?? null;
       }
-      if (!name) {
+      if (name === null || name === "") {
         continue;
       }
       map[srcId] ??= new Set();

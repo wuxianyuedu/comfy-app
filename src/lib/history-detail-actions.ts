@@ -36,7 +36,12 @@ export async function openTaskFolder(taskId: string): Promise<OpenFolderResult> 
  */
 export async function revealTaskFolder(taskId: string): Promise<{ detail: string; ok: boolean }> {
   const folder = await openTaskFolder(taskId);
-  if (!folder.opened || !folder.absolutePath) {
+  if (
+    !folder.opened ||
+    folder.absolutePath === undefined ||
+    folder.absolutePath === null ||
+    folder.absolutePath === ""
+  ) {
     return {
       ok: false,
       detail:

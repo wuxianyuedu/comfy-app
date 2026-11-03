@@ -80,7 +80,7 @@ describe("UI kit 目录只有一处（规范 16 §16.2.4）", () => {
     for (const abs of collectTsx(ROOT)) {
       const rel = relative(ROOT, abs);
       const top = rel.split(sep)[0];
-      if (top && ALLOWED_UI_DIRS.has(top)) {
+      if (top !== undefined && top !== "" && ALLOWED_UI_DIRS.has(top)) {
         continue;
       }
       const base = rel

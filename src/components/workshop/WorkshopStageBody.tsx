@@ -205,7 +205,7 @@ export function WorkshopStageBody({ controller }: WorkshopStageBodyProps) {
         </span>
       </div>
 
-      {notice && (
+      {notice !== null && notice !== "" && (
         <div className="border-destructive/30 bg-destructive/10 text-destructive mb-4 flex items-center gap-2 rounded-xl border px-4 py-2.5 text-xs">
           <Icon className="shrink-0" name="info" size={13} />
           <span className="flex-1">{notice}</span>

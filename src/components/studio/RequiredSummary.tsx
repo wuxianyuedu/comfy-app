@@ -23,7 +23,7 @@ export function RequiredSummary({
       if (e.kind !== "widget") {
         continue;
       }
-      if (resolveEntryRequired(e, mode)) {
+      if (resolveEntryRequired(e, mode) === true) {
         required++;
       } else {
         optional++;

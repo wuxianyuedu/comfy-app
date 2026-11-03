@@ -138,7 +138,7 @@ async function resolveTarget(
   }
   try {
     const entries = await remoteModelRepository.list();
-    const entry = entries.find((r) => r.name === wantedModel && r.baseUrl);
+    const entry = entries.find((r) => r.name === wantedModel && (r.baseUrl ?? "") !== "");
     if (!entry) {
       return { target: fallbackTarget(channel), channel, adapter: null };
     }

@@ -247,9 +247,10 @@ async function syncRemoteModels(
         : e.apiKey === null || e.apiKey.trim() === ""
           ? null
           : encryptLlmKey(e.apiKey.trim());
+    /* trim 后空串与缺省同义 = 清空（与 apiKey 的三态语义一致） */
     cleaned.push({
       name,
-      baseUrl: e.baseUrl?.trim() ? e.baseUrl.trim() : null,
+      baseUrl: e.baseUrl?.trim() !== undefined && e.baseUrl.trim() !== "" ? e.baseUrl.trim() : null,
       apiKey,
       kind: e.kind ?? "chat",
     });
@@ -365,7 +366,8 @@ export class RemoteModelRepository {
 
 /** 解析 remoteModel.workshopAdapters JSON 列（坏数据按空处理）。 */
 export function parseAdaptersJson(raw: string | null): Array<RemoteModeAdapter> {
-  if (!raw) {
+  /* DB 读出的 JSON 列空串与 null 同义 = 没有数据 */
+  if (raw === null || raw === "") {
     return [];
   }
   try {

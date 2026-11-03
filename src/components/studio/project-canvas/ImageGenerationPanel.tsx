@@ -97,7 +97,7 @@ export function ImageGenerationPanel({
    * 任务，使 GlobalStepLogPanel 自动跟随。ImageGenerationPanel 仅在选中节点时
    * 挂载，而用户点「生成」时必然选中，故 taskId 一旦就绪即可被捕获。 */
   useEffect(() => {
-    if (d.taskId) {
+    if (d.taskId !== undefined && d.taskId !== "") {
       setActiveTaskId(d.taskId);
     }
   }, [d.taskId]);
@@ -292,7 +292,7 @@ export function ImageGenerationPanel({
   return (
     <div className="flex flex-col gap-2">
       {/* 生成结果预览（image/video 顶部常驻；picture 由节点主体承载，不重复渲染） */}
-      {kind !== "picture" && d.resultPath ? (
+      {kind !== "picture" && d.resultPath !== undefined && d.resultPath !== "" ? (
         <ResultCard
           kind={kind}
           mediaType={d.resultMediaType}
@@ -372,7 +372,7 @@ export function ImageGenerationPanel({
       ) : null}
 
       {/* 选完工作流：按自定义工作流样式渲染参数 + CTA（Q1=B 必须选工作流）*/}
-      {d.workflowId ? (
+      {d.workflowId !== undefined && d.workflowId !== "" ? (
         <>
           <DynamicWorkflowForm
             compact
@@ -411,7 +411,7 @@ export function ImageGenerationPanel({
              * runner.cancelTask() 释放活跃槽位。
              * SSE`error` 事件会在约 100ms 内跟上，并经处理
              * 普通失败的同一条路径把`d.status` patch 成"error"。 */}
-            {d.status === "running" && d.taskId ? (
+            {d.status === "running" && d.taskId !== undefined && d.taskId !== "" ? (
               <Hint label="强制终止当前任务并释放活动槽位" wrap>
                 <Button
                   className="border-destructive/30 bg-destructive/8 text-destructive/90 hover:bg-destructive/15 text-2xs h-auto rounded border px-2.5 py-1"

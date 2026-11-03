@@ -95,10 +95,12 @@ export function useSettingsRemoteModels(input: {
       if (llmDraft.extraModels.some((e) => e.name === name)) {
         return { ok: false, error: `模型「${name}」已在列表中` };
       }
+      const trimmedBaseUrl = entry.baseUrl?.trim();
+      const trimmedApiKey = entry.apiKey?.trim();
       const cleaned: RemoteModelEntry = {
         name,
-        baseUrl: entry.baseUrl?.trim() ? entry.baseUrl.trim() : null,
-        apiKey: entry.apiKey?.trim() ? entry.apiKey.trim() : null,
+        baseUrl: trimmedBaseUrl !== undefined && trimmedBaseUrl !== "" ? trimmedBaseUrl : null,
+        apiKey: trimmedApiKey !== undefined && trimmedApiKey !== "" ? trimmedApiKey : null,
         kind: entry.kind ?? null,
       };
       const nextDraft = {
@@ -159,7 +161,11 @@ export function useSettingsRemoteModels(input: {
          * 此前这里是 `(existing?.apiKey ?? null)`，而真实场景里 `existing` 来自服务端
          * **脱敏下发**的清单（永远不带值）→ 折成 `null` → `replaceAll` 按覆盖语义把
          * 库里那把密钥清掉。草稿不该揣测保留值：「我没意见」的正确表达是缺键。 */
-        ...(typedKey ? { apiKey: typedKey } : patch.clearApiKey ? { apiKey: null } : {}),
+        ...(typedKey !== undefined && typedKey !== ""
+          ? { apiKey: typedKey }
+          : patch.clearApiKey === true
+            ? { apiKey: null }
+            : {}),
         kind: patch.kind === undefined ? (existing?.kind ?? null) : patch.kind,
       };
       const nextDraft = {

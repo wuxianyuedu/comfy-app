@@ -27,7 +27,7 @@ function productionFromBody(body: Record<string, unknown>): Record<string, unkno
 
 function projectIdFrom(q: string | null): string | null {
   const trimmed = q?.trim();
-  if (trimmed) {
+  if (trimmed !== undefined && trimmed !== "") {
     return trimmed;
   }
   return null;
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     return unauthorizedResponse();
   }
   const project = projectIdFrom(req.nextUrl.searchParams.get("project"));
-  if (!project) {
+  if (project === null || project === "") {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
   try {
@@ -66,7 +66,7 @@ export async function PUT(req: NextRequest) {
     return body;
   }
   const project = typeof body.project === "string" && body.project ? body.project : null;
-  if (!project) {
+  if (project === null || project === "") {
     return NextResponse.json({ error: "project 不能为空" }, { status: 400 });
   }
   const production = productionFromBody(body);

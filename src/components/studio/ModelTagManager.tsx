@@ -122,7 +122,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
           </div>
 
           {/* 无条目归属的那档（新增失败 / 列表刷新失败）—— 挂在新增框下方。 */}
-          {c.errors.get(null) && (
+          {c.errors.get(null) !== null && c.errors.get(null) !== "" && (
             <div className="text-danger-strong mb-3 text-xs">{c.errors.get(null)}</div>
           )}
 
@@ -137,7 +137,7 @@ export function ModelTagManager({ initialTags, onChanged, onClose }: ModelTagMan
               const rowError = c.errors.get(tag.name);
               return (
                 <div className="border-border-strong bg-subtle rounded-lg border" key={tag.id}>
-                  {rowError && (
+                  {rowError !== null && rowError !== "" && (
                     <div className="border-danger/30 text-danger-strong text-2xs border-b px-3 py-1">
                       {rowError}
                     </div>

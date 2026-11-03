@@ -105,7 +105,7 @@ export function WorkflowParamCardColumn({
             contractEntries?.find((item) => item.id === "size")?.label ?? sizeSubLabel("size");
           return (
             <WorkflowParamCard
-              canReset={canWire && SIZE_SUB_IDS.some((id) => !!isManual?.(id))}
+              canReset={canWire && SIZE_SUB_IDS.some((id) => isManual?.(id) === true)}
               canWire={canWire}
               classLabel={paramClassStyle("size").label}
               cls="size"
@@ -141,10 +141,10 @@ export function WorkflowParamCardColumn({
                   name: item.id,
                   display: sizeSubLabel(item.cls),
                   type: sizeSubTypeDisplay(item.cls),
-                  connected: !!target,
+                  connected: target !== null && target !== "",
                   ioKey: target ?? "",
                   handleId: item.id,
-                  active: !!target,
+                  active: target !== null && target !== "",
                 };
               })}
               readOnly={!canWire}
@@ -162,7 +162,7 @@ export function WorkflowParamCardColumn({
           contractEntries?.find((item) => item.id === entry.id)?.label ?? entry.label;
         return (
           <WorkflowParamCard
-            canReset={canWire && !!isManual?.(entry.id)}
+            canReset={canWire && isManual?.(entry.id) === true}
             /* `canWire` 与 `readOnly` 分开表达：库里现在**可连线**（拖圆点改落点），
              * 但卡片本身仍是消费方托管的视觉本体 —— 不写「先选模式才能连线」那类
              * 编辑提示（节点上模式早就选好了，ISSUE #355）。 */

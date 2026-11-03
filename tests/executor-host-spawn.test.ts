@@ -57,7 +57,7 @@ function mkRoot({ withHost = true } = {}) {
 afterEach(() => {
   while (tmpRoots.length) {
     const dir = tmpRoots.pop();
-    if (dir) {
+    if (dir !== undefined && dir !== "") {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   }

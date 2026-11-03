@@ -95,7 +95,7 @@ function routeTable(appDir: string): Map<string, Array<RouteToken>> {
     const dirs = path
       .relative(appDir, path.dirname(file))
       .split(/[\\/]+/)
-      .filter((seg) => seg && !/^\(.*\)$/.test(seg));
+      .filter((seg) => seg !== "" && !/^\(.*\)$/.test(seg));
     const tokens: Array<RouteToken> = [];
     for (const seg of dirs) {
       // `[...x]` 与 `[[...x]]` 都算「吃掉剩下的全部」；`[x]` 只吃一段

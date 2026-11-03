@@ -149,7 +149,9 @@ function reasonOf(error: unknown): string {
     ?.split("\n")
     .map((l) => l.replaceAll("\\", "/"))
     .find((l) => l.includes("src/components/ui/"));
-  return (frame ? `${error.message} ← ${frame.trim()}` : error.message).slice(0, 200);
+  return (
+    frame !== undefined && frame !== "" ? `${error.message} ← ${frame.trim()}` : error.message
+  ).slice(0, 200);
 }
 
 /** 一份逐字可粘的清单（判红时必须打印它 —— 红话要给得出下一步）。 */
@@ -220,7 +222,8 @@ describe("a11y 自动化：ui 基元的每个故事过 axe", () => {
         if (storyName === "default") {
           continue;
         }
-        if (!raw || typeof raw !== "object") {
+        const hasStory = Boolean(raw);
+        if (!hasStory || typeof raw !== "object") {
           continue;
         }
         /* SAFETY: 类型断言已复核 */

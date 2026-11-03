@@ -93,7 +93,7 @@ function reqOf(body: unknown, opts: { throw?: boolean } = {}): Request {
   /* SAFETY: 类型断言已复核 */
   return {
     json: async () => {
-      if (opts.throw) {
+      if (opts.throw === true) {
         throw new Error("bad json");
       }
       return body;

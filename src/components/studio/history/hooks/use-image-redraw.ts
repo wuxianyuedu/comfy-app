@@ -87,7 +87,7 @@ export function useImageRedraw(
         deps.report("err", "先从工作流库选一个模板（需要带图像输入口）");
         return;
       }
-      if (mode === "inpaint" && !mask) {
+      if (mode === "inpaint" && (mask === null || mask === "")) {
         deps.report("err", "局部重绘需要先画蒙版（白色为重绘区域）");
         return;
       }
@@ -99,12 +99,17 @@ export function useImageRedraw(
         const result = await runAsyncAction(
           async () => {
             const originalName = await deps.prepareImage(originalImageUrl);
-            const maskName = mode === "inpaint" && mask ? await deps.prepareImage(mask) : null;
+            const maskName =
+              mode === "inpaint" && mask !== null && mask !== ""
+                ? await deps.prepareImage(mask)
+                : null;
             const taskId = await deps.submit({
               workflow: selectedTemplateId,
               prompt: prompt.trim() || undefined,
               referenceImages:
-                mode === "inpaint" && maskName ? [originalName, maskName] : [originalName],
+                mode === "inpaint" && maskName !== null && maskName !== ""
+                  ? [originalName, maskName]
+                  : [originalName],
               projectId: initial.projectId ?? undefined,
               parentId: initial.parentId,
             });

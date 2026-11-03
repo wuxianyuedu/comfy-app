@@ -295,7 +295,7 @@ export const NAV_ITEMS: Array<NavItem> = [
 
 /** 主页侧栏顶部常驻的全局项（排除项目页签与项目入口）。 */
 export function globalNavItems(): Array<NavItem> {
-  return NAV_ITEMS.filter((item) => !item.projectScoped && item.id !== PROJECTS_ENTRY.id);
+  return NAV_ITEMS.filter((item) => item.projectScoped !== true && item.id !== PROJECTS_ENTRY.id);
 }
 
 /**
@@ -307,7 +307,7 @@ export function globalNavItems(): Array<NavItem> {
  * 上会连带把那两处一起删掉（设置就成了只有顶栏一个入口的孤岛）。
  */
 export function sidebarNavItems(): Array<NavItem> {
-  return globalNavItems().filter((item) => !item.sidebarHidden);
+  return globalNavItems().filter((item) => item.sidebarHidden !== true);
 }
 
 /** 某视图是不是「瞬时页签」（切走即关，不常驻）—— 规则见 `NavItem.transient`。 */
@@ -329,7 +329,7 @@ export function pageHeaderTitle(view: WorkspaceView): string {
 
 /** 项目界面顶部的切换页签（主页 / 画布 / 工坊 / 资源库 / 产出 / 成片）。 */
 export function projectTabs(): Array<NavItem> {
-  return NAV_ITEMS.filter((item) => item.projectScoped);
+  return NAV_ITEMS.filter((item) => item.projectScoped === true);
 }
 
 /** 某视图是否属于项目页签（决定要不要渲染项目内顶部标签栏）。 */

@@ -115,7 +115,7 @@ export function ImageRedrawPanel({
               controller.templates.map((t) => (
                 <SelectItem key={t.id} value={t.id}>
                   {t.name}
-                  {t.taskType ? `（${t.taskType}）` : ""}
+                  {t.taskType !== null && t.taskType !== "" ? `（${t.taskType}）` : ""}
                 </SelectItem>
               ))
             )}
@@ -150,7 +150,7 @@ export function ImageRedrawPanel({
           disabled={
             controller.busy ||
             !controller.selectedTemplateId ||
-            (controller.mode === "inpaint" && !controller.mask)
+            (controller.mode === "inpaint" && (controller.mask === null || controller.mask === ""))
           }
           // oxlint-disable-next-line no-void -- reject 由 action 内部捕获
           onClick={() => void controller.run(imageUrl)}
@@ -159,7 +159,7 @@ export function ImageRedrawPanel({
         >
           {controller.busy ? "提交中…" : "提交"}
         </Button>
-        {controller.resultTaskId && (
+        {controller.resultTaskId !== null && controller.resultTaskId !== "" && (
           <span className="text-ink-faint text-2xs">
             已入队：{controller.resultTaskId}（历史页可观察进度）
           </span>

@@ -103,7 +103,7 @@ function TabBlockedNotice({
       {/* 地址是唯一能「自己验证」的信息：复制到浏览器里能打开 → 拦的是应用外壳
        * 的跨源 frame 策略；浏览器里也打不开 → 拦的是 ComfyUI 自己。此前只剩
        * 「已阻止此内容」一句时，两种情形长得一模一样（ISSUE #310）。 */}
-      {url && (
+      {url !== undefined && url !== null && url !== "" && (
         <div className="border-border-subtle bg-subtle/40 flex max-w-xl items-center gap-2 rounded-md border px-3 py-2">
           <code className="text-ink-muted truncate text-xs">{url}</code>
           <Button
@@ -202,9 +202,11 @@ export function ShellTabs({
             className={activeTabId === tab.id ? "h-full" : "hidden h-full"}
             key={tab.id}
           >
-            {tab.blockedReason ? (
+            {tab.blockedReason !== undefined &&
+            tab.blockedReason !== null &&
+            tab.blockedReason !== "" ? (
               <TabBlockedNotice label={tab.label} reason={tab.blockedReason} url={tab.blockedUrl} />
-            ) : tab.url ? (
+            ) : tab.url !== undefined && tab.url !== null && tab.url !== "" ? (
               <iframe
                 className="h-full w-full border-0"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads allow-pointer-lock"
