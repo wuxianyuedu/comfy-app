@@ -530,9 +530,11 @@
 #   · `Install dependencies` 的**装的那一跳** —— 依赖面（锁文件 / `package.json` /
 #     `pnpm-workspace.yaml` / `next.config.js`）一项都没碰就不装，判定在
 #     `scripts/ci-install-deps.mjs`（`pnpm` 自证照旧每次都跑，判据见 §13.5.20）；
-#   · `oxfmt 格式` 的**扫描面** —— `src/**` + `.storybook/**` 是手写 glob，
-#     与 `check-format.cjs` 的 `IGNORE_GLOBS` 是两件事（`IGNORE_GLOBS` 是**排除**面）。
-#     ⚠️ 但 `IGNORE_GLOBS` 增删目录时**必须同批回来看这两行**；
+#   · `oxfmt 格式` 的**扫描面** —— 判据面是「改动面 ∩ `GLOBS`」（`check-format.cjs`，
+#     ISSUE #2979 起 `GLOBS` 含 mjs/cjs、改动面不过 `IGNORE_GLOBS`），而这一格的
+#     `ifModify` 是手写 glob，与判据面是两份表达 —— 对账在
+#     `scripts/ci-incremental-gates.mjs` 的登记条目里（双向判）。
+#     ⚠️ `GLOBS` 的扩展名或 `IGNORE_GLOBS`（全量档那半）增删时**必须同批回看这两处**；
 #   · 判据脚本**自己的触发面** —— `API 文档生成与自检` 的 globs 由
 #     `check-docs-api.cjs` 的 `INPUT_RES` 机械反推，不手抄第二份。
 #
@@ -2200,6 +2202,19 @@
     ifModify:
       - "src/**"
       - ".storybook/**"
+      - "scripts/**"
+      - "tests/**"
+      - "tools/**"
+      - "e2e/**"
+      - "*.config.js"
+      - "*.config.ts"
+      - "*.config.mjs"
+      - "*.config.cjs"
+    # 触发面 = 判据面的上界（ISSUE #2979）：平台那一格带 `--changed`，判「改动面 ∩ GLOBS」
+    # （GLOBS 含 mjs/cjs、改动面不过 IGNORE_GLOBS）—— 触发面必须盖住 GLOBS 能点到的
+    # 每一个目录，否则「改了却没人查格式」（#2942 重跑现场：三份 scripts/ 的 .mjs/.cjs
+    # 被点名，而这一格在 #2979 之前根本不执行）。逐字对账在
+    # `scripts/ci-incremental-gates.mjs` 的登记条目里，别在这里单改。
     # 口径变更（ISSUE #2610，业主拍板 2026-10-29）：**这一格只判，不再修也不再委托**。
     # 此前它跑 `ci-format-fixup.mjs --check --autofix`：红 ⇒ 就地写文件 ⇒ 复判全绿 ⇒
     # 把修复提交委托给 `api_trigger_formatfix`（可信事件、令牌 rw）回写。实测这条路在

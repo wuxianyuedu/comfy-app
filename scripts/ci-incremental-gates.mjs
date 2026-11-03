@@ -274,15 +274,28 @@ const DOC_PLACEHOLDER_GLOBS = ["docs/**"];
   },
   {
     name: "oxfmt 格式",
-    globs: ["src/**", ".storybook/**"],
+    globs: [
+      "src/**",
+      ".storybook/**",
+      "scripts/**",
+      "tests/**",
+      "tools/**",
+      "e2e/**",
+      "*.config.js",
+      "*.config.ts",
+      "*.config.mjs",
+      "*.config.cjs",
+    ],
     script: "scripts/check-format.cjs",
     why:
-      "扫描面就是 `check-format.cjs` 那两处判据面（`GLOBS` 展成候选、`IGNORE_GLOBS` 剔掉之后只剩 `src/**`(1586 份)+ `.storybook/**`(10 份)）—— " +
-      "「文件干不干净」只由这两棵树里的内容决定，一个文件都没碰到时重扫一遍结论逐字相同。" +
+      "平台那一格带 `--changed`，判的是「改动面 ∩ GLOBS」（ISSUE #2979 起 `GLOBS` 含 " +
+      "mjs/cjs、且改动面**不过** `IGNORE_GLOBS`）—— 所以触发面必须盖住 GLOBS 能点到的每一个目录：" +
+      "`src/**` + `.storybook/**`（全量档的扫描根）+ `scripts/**` `tests/**` `tools/**` `e2e/**` " +
+      "+ 根级 `*.config.*`（根级 config 也在改动面里，实测 drizzle/oxlint 两份还是存量）。" +
       "这一步是 ISSUE #2010 从本地钩子**挪过来**的（判据一字未改）：它判的东西挡不住任何一次代码回归，" +
       "而留在每一次提交里要付冷缓存 ~21s / 热缓存 ~4.5s。" +
-      "⚠️ 判据面由 `IGNORE_GLOBS` 现算，这两条 glob 是它的**补集**（手写的上界）：" +
-      "`IGNORE_GLOBS` 增删目录（例如把 `tests/` 从白名单里摘掉）时必须同批回来看这一行，否则「改了却没人查格式」或「白跑」。",
+      "⚠️ 触发面与判据面的对账由 `tests/ci-incremental-gates.test.ts` 判（逐字）；" +
+      "`GLOBS` 的扩展名或扫描根变动时必须同批回来看这一条，否则「改了却没人查格式」或「白跑」。",
   },
   {
     name: "生成态文档与源同步",

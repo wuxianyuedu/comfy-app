@@ -235,13 +235,31 @@ describe("oxfmt 格式判据 --staged 输入面跳过（ISSUE #1747）", () => {
     repo.write("src/lib/dirty.ts", DIRTY);
     repo.git("add", "-A");
     repo.commit("clean-baseline");
-    // 改一个不在 prettier 靶子里的文件：`IGNORE_GLOBS` 收 `scripts/**`。
-    repo.write("scripts/probe.cjs", "module.exports = {a:1,   b:2}\n");
-    repo.git("add", "scripts/probe.cjs");
+    // 改一个不在 `GLOBS` 靶子里的文件：`.md` 不在扩展名表里（ISSUE #2979 起
+    // 改动面两档只看 `GLOBS`、不过 `IGNORE_GLOBS`，所以这里要挑 GLOBS 本身
+    // 不认的形状 —— `scripts/*.cjs` 已经**在**面内，见下一条）。
+    repo.write("docs/README.md", "# 随手写的说明\n");
+    repo.git("add", "docs/README.md");
     const r = repo.run(["--staged"]);
     expect(r.code).toBe(0);
     expect(r.output).toContain("未触及扫描面");
     expect(r.output).not.toContain("运行 oxfmt");
+  });
+
+  test("暂存 scripts/*.cjs → 改动面判它自己（不再被 IGNORE_GLOBS 豁免，ISSUE #2979）", ({ repo }) => {
+    /* #2979 的钉子：`IGNORE_GLOBS` 收着 `scripts/**`，改动面两档从前对它整类豁免
+     * ——「本仓自己的脚本从来没被格式判据看过」。收窄之后改动面 = 改动面 ∩ GLOBS
+     * （GLOBS 含 cjs），暂存的脏脚本要被点名并阻断；全量档照旧豁免它（存量迁移
+     * 是 #2710 那条账，不随这一格走）。 */
+    repo.write("src/lib/keep.ts", CLEAN);
+    repo.git("add", "-A");
+    repo.commit("clean-baseline");
+    repo.write("scripts/probe.cjs", "module.exports = {a:1,   b:2}\n");
+    repo.git("add", "scripts/probe.cjs");
+    const r = repo.run(["--staged"]);
+    expect(r.code, r.output).toBe(1);
+    expect(r.output).not.toContain("未触及扫描面");
+    expect(r.output).toContain("scripts/probe.cjs");
   });
 
   test("暂存文件落在扫描面内 → 真扫（脏文件照旧阻断）", ({ repo }) => {

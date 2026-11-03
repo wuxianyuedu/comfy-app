@@ -205,7 +205,7 @@ C=受影响用例（它的执行者已不在本地，见下面那一行）、D=�
 ✅ node scripts/check-function-length.cjs --staged # 函数长度硬闸 TS/TSX（见 12 §12.13）；`--staged` 见下 13.5.8.2
 ✅ node scripts/check-rust-function-length.cjs # 函数长度硬闸 Rust 壳（见 12 §12.13.1）
 ✅ node scripts/check-infra-file-size.cjs --staged # 基础设施层文件长度**硬闸**：`scripts/**` 的 .cjs/.mjs 与 `tools/**` 的 .ps1，与 R5 同阈值同口径、另立一档（见 12 §12.8 R5 姊妹档）；`--staged` 见下 13.5.8.2
-✅ node scripts/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格跑 `--changed`（改动面 ∩ 扫描面）作第二层，`--staged` 见下 13.5.8.2
+✅ node scripts/check-format.cjs --staged   # oxfmt 格式**硬闸**（无基线、无 `--update`）：2026-10-29 起回到 D0（见 13.5.1.1，ISSUE #2610）。红了当场 `pnpm exec oxfmt <它点名的文件>` —— **只点本次改的**，全库 `--write` 违 §13.7；平台侧「oxfmt 格式」那一格跑 `--changed`（改动面 ∩ `GLOBS`，ISSUE #2979 起 `GLOBS` 含 mjs/cjs、不过 `IGNORE_GLOBS`）作第二层，`--staged` 见下 13.5.8.2
 ✅ node scripts/shell-gate.mjs               # 桌面壳门禁：**只在暂存命中 src-tauri 四类壳输入时**
    # 才做事 —— 有 .rs 改动就跑 `cargo test`（壳内全部 #[test] 唯一的执行者；条数随源码
    # 变动，不在文档里记账），并复用
@@ -6212,6 +6212,16 @@ COMFY_PRECOMMIT_MAX_WORKERS=1 git commit …   # 机器被别的东西占着时
 `public/` `docs/{api,generated}` `src-tauri/target/**` 与根级 `*.js` / `*.config.*`
 （`git ls-files` 跟踪 5940 份，落在面内的只有 1596 份）。于是「只加 changelog 碎片 /
 只改文档 / 只动 `scripts/` 或 `tests/`」这一大类高频提交，在这两步上**白付 6.5s**。
+
+**改动面两档的扫描面在 ISSUE #2979 撒开了 `IGNORE_GLOBS`**：`--staged` / `--changed`
+的扫描面 = **改动面 ∩ `GLOBS`**（`GLOBS` 扩到含 `mjs` / `cjs`），`IGNORE_GLOBS`
+只对全量档生效 —— 它是「存量迁移」的白名单，不是「这些文件不用管格式」的白名单
+（在它旧口径下，`scripts/**` 的格式没有任何一个判决面拦得到：本地说「跳过」、
+平台那格 `ifModify` 不含 ⇒ 根本不执行，#2942 重跑现场点名的三份全在 `scripts/`）。
+平台那一格的 `ifModify` 同批扩到 `scripts/**` `tests/**` `tools/**` `e2e/**`
++ 根级 `*.config.*`（逐字对账在 `scripts/ci-incremental-gates.mjs` 的登记条目）。
+存量读数（2026-11-04 现测）：新面内 **136 份**未过（`scripts/tests/tools/e2e`
+134 + 根级 config 2），按 #2710 的增量口径「谁碰谁迁」，不随这一格清。
 
 **改法与三条口径**（与 `check-docs-api.cjs --staged` / `check-deps-freshness.mjs --staged`
 同源）：
