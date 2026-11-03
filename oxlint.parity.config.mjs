@@ -488,12 +488,7 @@ export default defineConfig({
         "src/lib/media/materials.ts",
         "src/lib/process/executable-resolve.ts",
         "tests/ci-log.test.ts",
-        "tests/no-platform-ci-config.test.ts",
       ],
-      rules: { "no-control-regex": "off" },
-    },
-    {
-      files: ["src/lib/llm/video-task-util.ts"],
       rules: { "no-control-regex": "off" },
     },
   ],

@@ -10,8 +10,8 @@
  *
  * ── 为什么这一批改成「进程内判」而不是「每条用例 spawn 一个」────────────
  *
- * 判据的被测输入里最贵的一件是**真的 `eslint.config.js`**（它 import 了整个
- * `eslint-config-next`）。**首次**求值在干净检出上 40s+（用户侧实测，8 核 / 16G；
+ * 判据的被测输入里最贵的一件是**真的 `eslint.config.js`**（#2777 PR-C 之前它
+ * import 了整个 `eslint-config-next`）。**首次**求值在干净检出上 40s+（用户侧实测，8 核 / 16G；
  * `.next/` 在时 ~1.1–1.7s），派生链与两个数字的出处见规范 §11.19.1 的档 E。
  *
  * 33418b72 那笔把「同步 `execFileSync`」换成了异步 `execFile` + `it.concurrent` ——
@@ -121,7 +121,7 @@ async function runWithLedger(ledger: Ledger, args: Array<string> = []) {
  * 所以用例体一个字都不用改，只是不再起子进程）。
  *
  * 为什么绝大多数用例走这一条：判据的成本几乎全在「求值 `eslint.config.js`
- * 连同 `eslint-config-next`」那一步，而这一步**每进程只该付一次** ——
+ * 连同 `eslint-config-next`」那一步（PR-C 起那笔已大幅缩水），而这一步**每进程只该付一次** ——
  * 实测这台机器上单个子进程 ~9s，12 份台账各起一次进程 = 133s 首尾相接，
  * 12 个重进程并发起则在别人的机器上顶穿用例的 30s 预算（实测 90.1s / 11 条超时，
  * 红的不是判据而是排队）。判据那一侧因此把判决拆成了可导入的 `judge(ledger)`。
