@@ -261,6 +261,7 @@ function resolvePlan(io = {}) {
   const keepRaw = flag("--keep");
   const keep = keepRaw ? Number.parseInt(keepRaw, 10) : DEFAULT_KEEP;
   const context = runContext(/** @type {NodeJS.ProcessEnv} */ (env));
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- runGit 是可注入的执行者（包 git 输出），运行时可为 null/undefined
   const sha = String(runGit(["rev-parse", "HEAD"]) ?? "").trim();
   const resolved = resolveArtifactRoot({ cwd, env, run: runStore });
   const label = flag("--label") || buildLabel({ sha, buildId: context.buildId, now });
@@ -296,6 +297,7 @@ function readAppVersion(cwd) {
 /** @param {string[]} args @param {string} cwd @returns {{ok: boolean, stdout: string}} */
 function spawnSyncGit(args, cwd) {
   const r = spawnSync("git", args, { cwd, encoding: "utf8" });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- git 子进程起不来时 stdout 实测为 undefined（@types/node 声明偏窄）
   return { ok: r.status === 0, stdout: String(r.stdout ?? "").trim() };
 }
 

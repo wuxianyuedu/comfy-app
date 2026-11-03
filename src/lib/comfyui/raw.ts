@@ -228,7 +228,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
     return out;
   }
   for (const n of raw.nodes) {
-    // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 nodes 数组元素运行期可能为 null，保留防御判空
+    // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 外部 JSON 的 nodes 数组元素运行期可能为 null，保留防御判空
     if (n && Array.isArray(n.pos) && n.pos.length >= 2) {
       const id = String(n.id);
       out[id] = [Number(n.pos[0]) || 0, Number(n.pos[1]) || 0];
@@ -249,7 +249,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
   const subs = raw.definitions?.subgraphs;
   if (subs && typeof subs === "object") {
     for (const wrapper of raw.nodes) {
-      // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的 nodes 数组元素运行期可能为 null，保留防御判空
+      // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 外部 JSON 的 nodes 数组元素运行期可能为 null，保留防御判空
       if (!wrapper || typeof wrapper.type !== "string") {
         continue;
       }
@@ -269,7 +269,7 @@ export function extractPositions(raw: RawWorkflow): Record<string, [number, numb
         continue;
       }
       for (const inner of innerNodes) {
-        // oxlint-disable-next-line strict-boolean-expressions -- 外部 JSON 的子图内部 nodes 数组元素运行期可能为 null，保留防御判空
+        // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 外部 JSON 的子图内部 nodes 元素运行期可能为 null，保留防御判空
         if (inner && Array.isArray(inner.pos) && inner.pos.length >= 2) {
           const iId = String(inner.id);
           out[`${wId}:${iId}`] = [Number(inner.pos[0]) || 0, Number(inner.pos[1]) || 0];
@@ -423,7 +423,7 @@ function hasControlAfterGenerate(
   if (type !== "INT") {
     return false;
   }
-  return SEED_WIDGET_NAMES.has(name) || options?.control_after_generate === true;
+  return SEED_WIDGET_NAMES.has(name) || options.control_after_generate === true;
 }
 
 /**
@@ -448,6 +448,7 @@ export function pairWidgetValues(
   // widgets_values 时的顺序）。
   const order: Array<string> = [];
   for (const inp of inputs) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- inputs 元素来自外部工作流 JSON，运行期可能是 null，保留防御判空
     const wname = inp?.widget?.name;
     if (typeof wname !== "string") {
       continue;
@@ -550,7 +551,7 @@ function resolveWidgetOrder(cls: ObjectInfoClassDef | undefined): Array<string> 
       return;
     }
     // forceInput 的标量输入被渲染成插槽，同样不占 widgets_values 的位置。
-    if (options?.forceInput === true) {
+    if (options.forceInput === true) {
       return;
     }
     out.push(name);

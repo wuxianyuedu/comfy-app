@@ -190,8 +190,10 @@ export function pickPreviousDaily({ list, details, lanes = [] }) {
   if (daily.length === 0) {
     return { none: "列表里没有每日类派发（定时 / 手点 / API 三种事件都没有）" };
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- details 跨调用边界传入（源自平台 API 读数），类型按必填标
   const bySn = new Map((details ?? []).map((d) => [String(d.sn), d.json]));
   /** 与 `ci-pr-failure-issue` 的 `--lane` 同一口径：名单为空 = 不按档过滤。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- lanes 元素源自命令行/名单读数，跨边界，类型按 string 标窄
   const wanted = new Set((Array.isArray(lanes) ? lanes : []).map((l) => String(l ?? "").trim()));
   let stray = 0;
   for (const build of daily) {

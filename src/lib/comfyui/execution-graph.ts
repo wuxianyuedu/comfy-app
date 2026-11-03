@@ -79,7 +79,7 @@ export function prepareGraphForExecution(input: Record<string, unknown>): Execut
   const graph: Record<string, PrepEntry> = {};
 
   const removed: Array<string> = [];
-  for (const [id, n] of Object.entries(input ?? {})) {
+  for (const [id, n] of Object.entries(input)) {
     const rec = asRecord(n);
     if (!rec) {
       continue;

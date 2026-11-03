@@ -267,6 +267,7 @@ export async function fetchFact(ctx, subPath, extra = {}) {
  * @returns {{state: "denied" | "granted" | "unknown", scope?: string, status?: number, why?: string}}
  */
 export function classifyReply(raw, transport = {}) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- raw 是平台响应原文（外部输入），空值兜底保留
   const text = String(raw ?? "");
   const missing = SCOPE_PATTERN.exec(text);
   if (missing) {
@@ -560,6 +561,7 @@ export async function main(opts = {}) {
   const value = (name, fallback) => {
     const i = argv.indexOf(name);
     const v = argv[i + 1];
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- argv[i + 1] 越界时运行时是 undefined，类型按 string 标窄
     return i !== -1 && v !== undefined ? v : fallback;
   };
 

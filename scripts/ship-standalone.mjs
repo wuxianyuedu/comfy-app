@@ -242,6 +242,7 @@ export function runStandaloneAction(io) {
       opt.merge ? "--merge" : null,
       opt.cleanBranch ? "--clean-branch" : null,
       opt.reap ? "--reap" : null,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 解析器遇 --rerun-ci 会置真（ship-args.mjs），类型从初值推成字面量 false
       opt.rerunCi ? "--rerun-ci" : null,
       // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
       opt.claim == null ? null : "--claim",
@@ -251,6 +252,7 @@ export function runStandaloneAction(io) {
       opt.newIssue == null ? null : "--new-issue",
       opt.adds.length > 0 ? "--add" : null,
       opt.claims ? "--claims" : null,
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 解析器遇 --whoami 会置真（ship-args.mjs），类型从初值推成字面量 false
       opt.whoami ? "--whoami" : null,
       opt.only ? "--only" : null,
     ].filter(Boolean);

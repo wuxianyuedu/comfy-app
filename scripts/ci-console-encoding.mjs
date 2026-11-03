@@ -87,6 +87,7 @@ export const UTF8_CODE_PAGE = 65_001;
  */
 function defaultRun(cmd, args) {
   const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- spawn 失败时 stdout/stderr 实测为 null，@types/node 按 string 标
   return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
 }
 
@@ -122,6 +123,7 @@ export function readConsoleEncoding(ports) {
     "-Command",
     "[Console]::OutputEncoding.CodePage; " + `'ACP=' + (Get-ItemProperty '${nls}').ACP; ` + "chcp",
   ]);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- r.out 是子进程执行封装（可注入）的出参，类型按 string 标窄
   const out = String(r.out ?? "").trim();
   const empty = { codePage: null, chcpRaw: null, ansiCodePage: null };
   if (r.status !== 0 && out === "") {
@@ -165,6 +167,7 @@ export function applyConsoleEncoding({ runImpl, platform = process.platform } = 
     `[Text.UTF8Encoding]::new($false); ` +
     `[Console]::OutputEncoding.CodePage`;
   const r = run("powershell", ["-NoProfile", "-NonInteractive", "-Command", script]);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- r.out 是子进程执行封装（可注入）的出参，类型按 string 标窄
   const after = Number(/(\d{3,5})/.exec(r.out ?? "")?.[1] ?? Number.NaN);
   if (after === UTF8_CODE_PAGE) {
     return {

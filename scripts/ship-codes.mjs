@@ -121,6 +121,7 @@ export function codeTag(code) {
  */
 export function combineShipCodes(codes) {
   const [firstNotRun] = codes.filter((c) => c >= CODE.NOT_RUN);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- filter 空结果时解构首元素运行时为 undefined
   if (firstNotRun !== undefined) {
     return firstNotRun;
   }

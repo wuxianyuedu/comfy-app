@@ -104,7 +104,7 @@ function readLedger() {
 /** 新鲜度档的键（`FRESHNESS_TRACKS`）。 */
 async function freshnessKeys() {
   const mod = await import("../scripts/freshness-ledger.mjs");
-  return Object.keys(mod.FRESHNESS_TRACKS ?? {});
+  return Object.keys(mod.FRESHNESS_TRACKS);
 }
 
 /**

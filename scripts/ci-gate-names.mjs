@@ -57,6 +57,7 @@ const ROOT = path.resolve(HERE, "..");
  * @returns {string | null}
  */
 function foldedScalar(text, key) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自 .cnb.yml 读文件，类型按 string 标窄
   const lines = String(text ?? "").split("\n");
   const keyRe = new RegExp(`^([ \\t]*)${key}:`);
   let start = -1;
@@ -67,6 +68,7 @@ function foldedScalar(text, key) {
       continue;
     }
     start = i;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 正则捕获组末尾位可能缺位，空串兜底是类型必需
     keyIndent = (m[1] ?? "").length;
     break;
   }
@@ -175,6 +177,7 @@ export function registeredElsewhereGates(text) {
  */
 export function commentedStageNames(text) {
   const out = new Set();
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自 .cnb.yml 读文件，类型按 string 标窄
   for (const line of String(text ?? "").split("\n")) {
     const m = /^\s*#\s*-\s+name:\s*(\S.*?)\s*$/.exec(line);
     if (m?.[1]) {
@@ -196,6 +199,7 @@ export function commentedStageNames(text) {
 export function scriptPaths(text) {
   return [
     ...new Set(
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自钩子/配置文本读数，类型按 string 标窄
       String(text ?? "").match(/(?:scripts|tools|tests)\/[A-Za-z0-9._/-]+\.[A-Za-z0-9]+/g) ?? [],
     ),
   ];

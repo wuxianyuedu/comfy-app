@@ -56,6 +56,7 @@ function decryptRow(row: LlmConfig): LlmConfig {
   const apiKey = decryptLlmKey(row.apiKey);
   const extraModels = Array.isArray(row.extraModels)
     ? row.extraModels.map((item: RawExtraModel) => {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- extraModels 来自 DB json 列，元素运行期可为 null（类型只按记录形状标窄）
         if (typeof item === "object" && item !== null && "apiKey" in item) {
           const rec = { ...item };
           if (typeof rec.apiKey === "string") {
@@ -80,6 +81,7 @@ function encryptInput(
   const encKey = encryptLlmKey(apiKey ?? null);
   const encExtra = extraModels
     ? extraModels.map((item) => {
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：extraModels 来自 DB json 列，元素运行期可为 null
         if (typeof item === "object" && item !== null && "apiKey" in item) {
           return {
             ...item,

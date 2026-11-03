@@ -99,6 +99,7 @@ export const SHAPE_NOTES = {
  * @returns {{shape: keyof typeof SHAPE_NOTES, evidence: string}} `evidence` 是命中的那句原话片段
  */
 export function classifyMirrorText(text, stageStatus = "") {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 实参源自平台 API 正文，类型按 string 标窄
   const t = String(text ?? "");
   /** 命中形状的那一句原话片段（截到 160 字 —— 证据行不许变成日志转储）。 */
   const line = (/** @type {RegExp} */ re) => {
@@ -206,6 +207,7 @@ export function judgeMirrorAttendance({ builds, readings, windowHours, now }) {
     shapeCounts[r.shape] = (shapeCounts[r.shape] ?? 0) + 1;
   }
   const seen = (Array.isArray(readings) ? readings : []).filter((r) => r.shape !== "no-cell");
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- Record 索引缺键时运行时为 undefined（未开 noUncheckedIndexedAccess）
   const presentCount = shapeCounts.present ?? 0;
   const stats = {
     shapeCounts,

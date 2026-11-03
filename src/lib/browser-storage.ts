@@ -38,6 +38,7 @@ export function hasBrowserStorage(): boolean {
     return false;
   }
   try {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 某些宿主/测试环境 localStorage 运行期为 null，`!== null` 是第二道运行期防线，类型只声明 Storage
     return typeof window.localStorage !== "undefined" && window.localStorage !== null;
   } catch {
     return false;

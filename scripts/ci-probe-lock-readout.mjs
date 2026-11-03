@@ -202,7 +202,7 @@ export function readRunWindow(repo, sn) {
     /** @type {RunRow[]} */
     const rows = JSON.parse(raw)?.data?.data ?? [];
     /** @type {RunRow} */
-    const row = rows.find((r) => r?.sn === sn) ?? rows[0] ?? {};
+    const row = rows.find((r) => r?.sn === sn) ?? rows[0] ?? {}; // oxlint-disable-line typescript/no-unnecessary-condition -- rows 来自平台 JSON 且可能为空，`rows[0]` 运行时为 undefined，元素字段类型由 @type 标窄
     const create = Number(row.createTime ? Date.parse(row.createTime) : Number.NaN);
     const durationMs = Number(row.duration ?? Number.NaN);
     const ended = Number.isFinite(create) && Number.isFinite(durationMs);
@@ -540,6 +540,7 @@ function parseFlags(argv) {
     const a = argv[i];
     /* `noUncheckedIndexedAccess` 下按下标取到的是 `string | undefined`，而 `i < length`
      * 已保证这一格有值 —— 守卫只是把这件事写给类型检查器（同 `dev.mjs` 那一处）。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- argv 下标在 noUncheckedIndexedAccess 下是 string | undefined，守卫写给 tsc
     if (a === undefined) {
       continue;
     }
@@ -548,7 +549,7 @@ function parseFlags(argv) {
     }
     const k = a.slice(2);
     const next = argv[i + 1];
-    // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
+    // oxlint-disable-next-line eqeqeq, typescript/no-unnecessary-condition -- 同时判 null 与 undefined；argv[i + 1] 越界时运行时是 undefined，类型按 string 标窄
     if (next != null && !next.startsWith("--")) {
       out[k] = next;
       i += 1;
@@ -590,6 +591,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
         jobLock: f["job-lock"]
           ? { key: String(f["job-lock"]), wait: true, timeout: 900 }
           : undefined,
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- 旗标 Record 缺键时运行时是 undefined，类型按 string | boolean 标窄
         seconds: Number(f.seconds ?? 90),
       }),
     );
@@ -602,6 +604,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
       console.error(USAGE);
       process.exit(2);
     }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 旗标 Record 缺键时运行时是 undefined，类型按 string | boolean 标窄
     console.log(startProbe(repo, String(f.event), String(f.title ?? `probe ${f.event}`)));
     process.exit(0);
   }
@@ -622,6 +625,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
       console.error(USAGE);
       process.exit(2);
     }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 旗标 Record 缺键时运行时是 undefined，类型按 string | boolean 标窄
     const gap = Number(f.gap ?? 20);
     const first = startProbe(repo, String(f.event), `pair-1 ${f.event}`);
     console.log(`[probe] 第一条 ${first}，等 ${gap}s 再起第二条`);

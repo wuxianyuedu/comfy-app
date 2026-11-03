@@ -74,11 +74,13 @@ export function resolveCores(env = process.env) {
       return { cores: parsed, source: "CNB_CPUS", note: null };
     }
     return {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- os.availableParallelism 是平台 API（旧 Node 上可缺席），可选链与核数兜底保留
       cores: os.availableParallelism?.() ?? FALLBACK_CORES,
       source: "os",
       note: `CNB_CPUS="${raw}" 不是 ≥1 的整数，改按本机读数办`,
     };
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- os.availableParallelism 是平台 API（旧 Node 上可缺席），可选链保留
   const local = os.availableParallelism?.();
   if (Number.isInteger(local) && local >= 1) {
     return { cores: local, source: "os", note: null };

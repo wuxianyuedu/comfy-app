@@ -104,6 +104,7 @@ function projectFaceOf(args, cwd) {
   if (given === null || given === "") {
     return { face: path.join(cwd, "tsconfig.json"), explicit: false };
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- given 由 argv 解析，字符串面兜底保留（前有 null / 空串提前返回）
   const abs = path.resolve(cwd, given ?? "");
   return path.extname(abs) === ".json"
     ? { face: abs, explicit: true }

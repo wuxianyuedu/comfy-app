@@ -89,6 +89,7 @@ export async function streamChat({ messages, opts, onToken, signal }: ChatArgs):
     return rest;
   };
 
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- SSE 读取轮询由内部 done 判据 break，`while (true)` 是刻意写法
   while (true) {
     const { done, value } = await reader.read();
     if (done) {

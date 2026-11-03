@@ -35,7 +35,7 @@ export type DesktopLaunchArgs = {
 
 /** 从 .comfyui-desktop-* 文件内容读实例 ID（单行文本，去掉空白）。 */
 export function parseInstanceId(content: string): string | null {
-  const id = (content ?? "").trim();
+  const id = content.trim();
   return id ? id : null;
 }
 
@@ -290,7 +290,7 @@ export function splitArgTokens(s: string): Array<string> {
   const out: Array<string> = [];
   const re = /"([^"]*)"|(\S+)/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(s ?? ""))) {
+  while ((m = re.exec(s))) {
     out.push(m[1] ?? m[2] ?? "");
   }
   return out;
@@ -344,8 +344,8 @@ export async function resolveEffectiveLaunch(input: {
   }
 
   return {
-    port: input.comfyuiPort ?? 0,
-    extraArgs: splitArgTokens(input.comfyuiExtraArgs ?? ""),
+    port: input.comfyuiPort,
+    extraArgs: splitArgTokens(input.comfyuiExtraArgs),
     envVars: {},
   };
 }

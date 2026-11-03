@@ -139,6 +139,7 @@ export function issueTitle(stage, lane = "pr") {
  * @returns {number | null} PR 号；认不出时 null（不猜）
  */
 export function prIidFromUrl(url) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- url 是平台 eventUrl（外部输入），空值兜底保留
   const m = /\/pulls?\/(\d+)/.exec(String(url ?? ""));
   if (!m) {
     return null;
@@ -566,6 +567,7 @@ export function main(io = {}) {
   /* 「被取消」与「真失败」的分界那句原话只在 `get-build-stage -v` 的 `data.error` 里
    * ⇒ 分类之前先补（ISSUE #2406）。取不到就照旧按状态判，只是念不出原话。 */
   const outcome = classifyBuildOutcome(
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- firstDetail 由平台读数数组下标取，运行时可能为空；类型面标的恒真只是没建模索引
     firstDetail ? enrichStageErrors(run, slug, sn, firstDetail.json) : null,
   );
   // 这里刻意保留 ||：`name` 是展示名，缺或为空串都退 id —— `??` 管不住空串那一半。

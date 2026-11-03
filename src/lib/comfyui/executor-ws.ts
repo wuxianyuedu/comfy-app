@@ -166,7 +166,7 @@ export async function connect(): Promise<void> {
     return;
   }
   // await 期间可能已有别的调用建好了连接
-  // oxlint-disable-next-line strict-boolean-expressions -- 类型层把 s.ws 收窄成恒 null，但上面 await 期间并发 connect() 可能已建好连接（竞态见上），这是运行期防御性判空
+  // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 类型层把 s.ws 收窄成恒 null，但上面 await 期间并发 connect() 可能已建好连接（竞态见上），这是运行期防御性判空
   if (s.ws) {
     s.connecting = false;
     return;
@@ -211,7 +211,7 @@ export async function connect(): Promise<void> {
   ws.on("error", (err: Error) => {
     // 某些 ComfyUI 版本 / 网络下 error 之后不一定再发 close，
     // 这里兜底触发重连，否则队列会卡死在 RUNNING。
-    logger.warn(`[comfyui] WS(${path}) 出错：${err?.message ?? err}`);
+    logger.warn(`[comfyui] WS(${path}) 出错：${err.message}`);
     // 连接阶段（未 open）就失败：换下一条 WS 路径重试一次。
     if (!opened) {
       s.wsPathIndex += 1;

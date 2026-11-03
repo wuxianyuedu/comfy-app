@@ -4,6 +4,7 @@
  * 以及与之配对的最后一个 `]` 或 `}`。
  */
 export function extractJson(text: string): unknown {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- text 为 LLM 回复原文（API 响应 content 可缺），调用面按 string 标窄
   let trimmed = (text ?? "").trim();
 
   if (!trimmed) {

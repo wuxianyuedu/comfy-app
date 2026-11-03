@@ -39,6 +39,7 @@ const SUMMARY_TOP = 5;
  */
 export function recordTimingLedger(run, opts = {}) {
   try {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：调用方运行时可传 null/undefined
     if (!run || !Array.isArray(run.entries) || run.entries.length === 0) {
       return false;
     }
@@ -50,7 +51,9 @@ export function recordTimingLedger(run, opts = {}) {
        * 账上留一格 null 让下一份读账的工具当场哑掉。 */
       entries: run.entries
         .filter(
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- entries 来自外部读数，元素运行时可为 null
           (e) =>
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同一个 e：外部读数元素运行时可为 null，这条守卫真的走得到
             e &&
             typeof e.label === "string" &&
             e.label !== "" &&
@@ -76,6 +79,7 @@ export function recordTimingLedger(run, opts = {}) {
  * @returns {string}
  */
 export function formatTimingSummary(entries) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 导出函数入参防御：entries 与其元素运行时可为 null/undefined
   const usable = (entries ?? []).filter((e) => e?.label && Number.isFinite(e.ms) && e.ms >= 0);
   if (usable.length === 0) {
     return "[premerge-timing] 这一跑没有逐格读数（快照没建 / 段全被跳过）\n";

@@ -65,7 +65,7 @@ function noProcess(extra: Partial<InstanceQuery> = {}): InstanceQuery {
  * **有意义的中间态**：调用方应据此等待而不是换地址猜。
  */
 export async function queryInstanceByPath(comfyuiPath: string): Promise<InstanceQuery> {
-  const root = comfyuiPath?.trim();
+  const root = comfyuiPath.trim();
   if (!root) {
     return noProcess();
   }

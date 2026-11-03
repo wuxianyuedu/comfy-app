@@ -18,6 +18,7 @@ import { cn } from "~/lib/utils";
 describe("cn（ISSUE #623 迁移到 cn@0.3.0 后的契约）", () => {
   it("接受 clsx 的三种入参形态：条件串、嵌套数组、对象", () => {
     const active = true;
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 契约用例：刻意用字面量 true 固定 clsx「条件串」入参形态
     expect(cn("px-2 py-1", active && "bg-blue-500", { "text-white": active })).toBe(
       "px-2 py-1 bg-blue-500 text-white",
     );

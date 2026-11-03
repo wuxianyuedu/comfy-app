@@ -66,6 +66,7 @@ export function withGenerationAttribution(
 
 export async function startLocalGenerate(input: GenerateInput): Promise<string> {
   const res = await vanillaApi.generate.generate.mutate(input);
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- res 是 tRPC mutation 回包（API 响应），taskId 运行期可缺，`?.` 保留防御
   if (!res?.taskId) {
     throw new Error("本地生成任务创建失败");
   }
@@ -299,7 +300,9 @@ export async function buildLibraryWorkflowInput(
   contractIds?: ReadonlyArray<string>,
 ): Promise<LibraryWorkflowBuildResult> {
   const detail = await vanillaApi.workflow.detailFull.query({ id: workflowId });
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- detail 来自 tRPC 查询回包（API 响应），workflowIO 列运行期可缺，`?? null` 兜底
   const io = detail?.workflowIO ?? null;
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：API 回包里 availableModes 运行期可缺
   const modes = Array.isArray(detail?.availableModes)
     ? detail.availableModes.filter((mode): mode is string => typeof mode === "string")
     : [];
@@ -307,9 +310,10 @@ export async function buildLibraryWorkflowInput(
     // oxlint-disable-next-line eqeqeq -- 同时判 null 与 undefined
     requestedMode != null && requestedMode.trim() !== ""
       ? requestedMode
-      : (detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null);
+      : (detail?.defaultMode ?? detail?.taskType ?? modes[0] ?? null); // oxlint-disable-line typescript/no-unnecessary-condition -- API 回包字段/空数组元素运行期均可缺，四级 ?? 兜底到 null
   const { workflowInputs, unmatched } = buildEncapsulatedInputs({
     io,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上：API 回包里 paramMap 列运行期可缺
     paramMap: detail?.paramMap ?? null,
     mode,
     values,
@@ -467,43 +471,41 @@ export function watchTask(taskId: string, h: TaskWatchHandlers): () => void {
           }
           h.onProgress?.(clampPct(p), node);
         }
-        if (type === "state") {
-          // 数据库侧的实情轮询会把发射器漏掉的终态结论补发一次。
-          const st: unknown = msg.status;
-          if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
-            const err: unknown = msg.error;
-            note(`收到 state 帧 status=${st}，按失败落定`);
-            settle(false, typeof err === "string" && err.trim() ? err : `任务 ${st}`);
-          } else if (st === "SUCCEEDED") {
-            /*  成功收口走这条：终态 state 帧带 DB 的产出清单（与 TaskImage 同源，
-             * 见 executor-finalize 的 `saved`）。inline 与 host 执行的任务到这里
-             * 完全同形——进程内 done 帧已随 ADR §14 D1 退役，不存在「另一种宿主
-             * 收不到成功」的那半边流量了。
-             * 已落定时整帧跳过：产出回调不许重发（同一终态可能被轮询发两次）。 */
-            if (settled) {
-              return;
-            }
-            const outputs = extractSavedOutputs(msg.images);
-            if (outputs.length === 0) {
-              note("收到 state 帧 status=SUCCEEDED 但无产出，按失败落定");
-              settle(false, "任务完成但没有产出文件");
-              return;
-            }
-            note("收到 state 帧 status=SUCCEEDED，按成功落定");
-            outputs.forEach((out) => h.onOutput?.(out));
-            settle(true);
-          } else {
-            /* 非终态（QUEUED/RUNNING）与无 status 的 state 帧只刷进度、
-             * 不落定；同一 status 只记一行诊断，防刷屏。 */
-            const stStr = typeof st === "string" ? st : "";
-            if (stStr !== lastStateStatus) {
-              lastStateStatus = stStr;
-              note(
-                stStr
-                  ? `收到 state 帧 status=${stStr}，非终态不落定`
-                  : "收到无 status 的 state 帧，跳过",
-              );
-            }
+        // 数据库侧的实情轮询会把发射器漏掉的终态结论补发一次。
+        const st: unknown = msg.status;
+        if (st === "FAILED" || st === "CANCELLED" || st === "ERROR") {
+          const err: unknown = msg.error;
+          note(`收到 state 帧 status=${st}，按失败落定`);
+          settle(false, typeof err === "string" && err.trim() ? err : `任务 ${st}`);
+        } else if (st === "SUCCEEDED") {
+          /*  成功收口走这条：终态 state 帧带 DB 的产出清单（与 TaskImage 同源，
+           * 见 executor-finalize 的 `saved`）。inline 与 host 执行的任务到这里
+           * 完全同形——进程内 done 帧已随 ADR §14 D1 退役，不存在「另一种宿主
+           * 收不到成功」的那半边流量了。
+           * 已落定时整帧跳过：产出回调不许重发（同一终态可能被轮询发两次）。 */
+          if (settled) {
+            return;
+          }
+          const outputs = extractSavedOutputs(msg.images);
+          if (outputs.length === 0) {
+            note("收到 state 帧 status=SUCCEEDED 但无产出，按失败落定");
+            settle(false, "任务完成但没有产出文件");
+            return;
+          }
+          note("收到 state 帧 status=SUCCEEDED，按成功落定");
+          outputs.forEach((out) => h.onOutput?.(out));
+          settle(true);
+        } else {
+          /* 非终态（QUEUED/RUNNING）与无 status 的 state 帧只刷进度、
+           * 不落定；同一 status 只记一行诊断，防刷屏。 */
+          const stStr = typeof st === "string" ? st : "";
+          if (stStr !== lastStateStatus) {
+            lastStateStatus = stStr;
+            note(
+              stStr
+                ? `收到 state 帧 status=${stStr}，非终态不落定`
+                : "收到无 status 的 state 帧，跳过",
+            );
           }
         }
         return;

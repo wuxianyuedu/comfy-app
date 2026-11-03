@@ -135,6 +135,7 @@ function childProcessImports(src) {
   const names = new Set();
   for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']node:child_process["']/g)) {
     /* 类型上 `m[1]` 是 `string | undefined`（TS 不认必需分组），运行时必定是 string。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 同上行注释：为 noUncheckedIndexedAccess 收窄服务
     for (const part of (m[1] ?? "").split(",")) {
       const name = (part.trim().split(/\s+as\s+/)[0] ?? "").trim();
       if (name) {
@@ -390,6 +391,7 @@ export function findShellOptions(root = ROOT) {
 
 /* 直接执行时给人读的报告（`node scripts/spawn-shell-scan.mjs [--root <dir>]`）。
  * `--root` 供阳性对照（canary）：在临时树里放一个已知违例，确认本脚本退出码非 0。 */
+// oxlint-disable-next-line typescript/no-unnecessary-condition -- 直接执行判据：以 REPL / 无脚本入口方式入场时 argv[1] 运行时为 undefined
 if (process.argv[1] !== undefined && path.resolve(process.argv[1]) === import.meta.filename) {
   const rootFlag = process.argv.indexOf("--root");
   const scanRoot = rootFlag === -1 ? ROOT : process.argv[rootFlag + 1];

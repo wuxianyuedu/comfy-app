@@ -291,6 +291,7 @@ export const GLYPH_REPLACEMENTS = new Map([
  */
 export function normalizeCp936Glyphs(text) {
   if (!text) {
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 调用方可能越类型传 null（!text 分支含 null/undefined），类型按 string 标窄
     return { text: text ?? "", replaced: [] };
   }
   const groups = new Map();

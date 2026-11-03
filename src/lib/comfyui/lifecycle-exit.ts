@@ -210,6 +210,7 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       return;
     }
     const lookup = await deps.findPid().catch(() => ({ pid: null, failed: true }));
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- stopped 由 stop() 闭包写入，控制流分析看不到，await 查询期间可能已被置位
     if (stopped) {
       return;
     }
@@ -235,6 +236,7 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
       stop();
       deps.onExit({
         pid: seenPid,
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- startedAt 是闭包共享的可变变量，上方判空后的收窄对这种跨回调写入不可靠，运行期仍可能为 null
         uptimeMs: startedAt === null ? null : now() - startedAt,
       });
       return;
@@ -259,6 +261,7 @@ export function startComfyExitWatcher(deps: ComfyExitWatcherDeps): {
   }, interval);
   /* 监督器不该成为「进程退不出去」的原因（Node 里未 unref 的 interval 会吊住
    * 事件循环）。 */
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- handle 来自可注入的 deps.setTimer（类型只声明 Timeout），注入实现可能给出非对象句柄，判空是运行期防御
   if (typeof handle === "object" && handle !== null && "unref" in handle) {
     /* SAFETY: 类型断言已复核 */
     (handle as { unref: () => void }).unref();

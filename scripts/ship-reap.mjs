@@ -162,6 +162,7 @@ export async function reapCheckoutInstances({ root, log, run, read = readAppInst
   const codes = [];
   for (const pid of plan.pids) {
     const r = run("node", ["scripts/reap-process.mjs", String(pid)]);
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- 子进程起不来时 stdout/stderr 实测为 undefined（@types/node 声明偏窄）
     const out = `${r.stdout ?? ""}\n${r.stderr ?? ""}`.trim();
     for (const line of out.split("\n").filter(Boolean)) {
       log(`[ship]   ${pid}：${line}`);
@@ -185,6 +186,7 @@ export async function reapCheckoutInstances({ root, log, run, read = readAppInst
     );
     return CODE.NOT_RUN;
   }
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- after 变量声明即 `| null`：回读运行时可返回 null，赋值收窄把 null 洗掉了
   if (!after) {
     log("[ship] 回读没交出形状 ⇒ 同上，记「没跑起来」");
     return CODE.NOT_RUN;

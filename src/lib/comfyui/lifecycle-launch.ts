@@ -232,7 +232,9 @@ export async function runEnsureLaunch(input: {
   // 显式传 --port，保证「界面显示端口 = 实际监听端口」一致。
   const eff = await resolveEffectiveLaunch({
     comfyuiPath: settings.comfyuiPath,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- settings 由 app-settings.json 经 JSON.parse 合并而来，历史文件里 comfyuiPort 可能为 null
     comfyuiPort: settings.comfyuiPort ?? 0,
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- settings 由 app-settings.json 经 JSON.parse 合并而来，历史文件里 comfyuiExtraArgs 可能为 null
     comfyuiExtraArgs: settings.comfyuiExtraArgs ?? "",
   });
   const args = buildSpawnArgs({
@@ -404,8 +406,8 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     redirectStdoutFile: kaOutLog,
     redirectStderrFile: kaErrLog,
   });
-  if (launched.child === undefined || launched.error !== undefined) {
-    const detail = `启动 ComfyUI 失败：${launched.error ?? "未知错误"}`;
+  if (launched.child === undefined) {
+    const detail = `启动 ComfyUI 失败：${launched.error}`;
     note(detail);
     return { ok: false, base: null, detail };
   }
@@ -595,6 +597,7 @@ async function launchKeepAliveMode(host: LaunchHost, ctx: EnsureCtx): Promise<En
     note(result.detail);
     /* 端口冲突的失败带上机器可读标记：caller 不把它当终态失败，而是转
      * 「等待已有实例就绪」（占着端口的极可能就是另一个 ComfyUI）。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- portConflict 由等待循环内的闭包回调写入，控制流分析看不到，运行期可能已变 true
     return portConflict ? { ...result, portConflict: true } : result;
   }
 

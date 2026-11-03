@@ -181,6 +181,7 @@ export function runGate({
     records,
     /* 「这一档的执行者在不在平台侧」是**判决的一部分**，不是话术：调用方要据此把
      * 同一行读成「拦」或「读数」。留空 = 本地仍然是必经之路。 */
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- ciStage 来自档位登记表，可空
     ciStage: String(track.ciStage ?? "").trim(),
   };
 }
@@ -212,6 +213,7 @@ export function runGate({
  * @returns {Date | null}
  */
 export function dirtySinceToday(track, now = new Date()) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- track 由档位登记表构造，dirty 恒为数组，`!track.dirty` 是防御形态
   if (!track.dirty || track.dirty.length === 0) {
     return null;
   }
@@ -389,16 +391,13 @@ function main() {
           "这一栏只是本地留痕（谁在本地自己证过一次、按哪条命令）。\n"
         : result.exitCode === 0
           ? "        这一档现在**不缺**：账面满足当下的判据。\n"
-          : `        这一档现在**欠**一次自证（判据若跑在钩子里，这一次会被拦下）：\n${
-            result.problems.map((p) => `      · ${p}\n`).join("")}`;
+          : `        这一档现在**欠**一次自证（判据若跑在钩子里，这一次会被拦下）：\n${result.problems
+              .map((p) => `      · ${p}\n`)
+              .join("")}`;
       process.stdout.write(
-        `[freshness] ${track.label}：${reading}\n${
-          result.records
-            .map(
-              (r) => `            ${r.key}：who=${r.who || "(未写)"}；how=${r.how || "(未写)"}\n`,
-            )
-            .join("")
-          }${owed}`,
+        `[freshness] ${track.label}：${reading}\n${result.records
+          .map((r) => `            ${r.key}：who=${r.who || "(未写)"}；how=${r.how || "(未写)"}\n`)
+          .join("")}${owed}`,
       );
       continue;
     }
@@ -423,9 +422,9 @@ function main() {
        * **落点**（账文件路径），不再把「记账」整段复述一遍 —— 复述的形态是同一段话
        * 在同一屏里出现两次，而第二次读起来像两件不同的事。 */
       process.stderr.write(
-        `[freshness-gate] ✗ ${track.label} 的新鲜度账不完整：\n      · ${
-          result.problems.join("\n      · ")
-          }\n        账文件：${track.ledger}（手工补一条也可以，但要写全 who / how / verifiedAt）。\n` +
+        `[freshness-gate] ✗ ${track.label} 的新鲜度账不完整：\n      · ${result.problems.join(
+          "\n      · ",
+        )}\n        账文件：${track.ledger}（手工补一条也可以，但要写全 who / how / verifiedAt）。\n` +
           `        规范：docs/standards/11-测试与可观测性.md §11.8\n`,
       );
       continue;
@@ -434,7 +433,8 @@ function main() {
       `  [ok] ${track.label}：每档都有主（${reading}）${
         result.ciStage
           ? ` —— **执行者在平台侧**：每日档 \`${result.ciStage}\`，本地这一档不拦、只留读数\n`
-          : "\n"}`,
+          : "\n"
+      }`,
     );
   }
   return failed;

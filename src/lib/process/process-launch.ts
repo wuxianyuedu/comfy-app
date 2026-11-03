@@ -124,7 +124,7 @@ export function buildStartProcessArgumentList(args: Array<string>): string {
  * 每个可见字符间夹 \x00 的乱码。这里剥 BOM 后按 utf16le 解码。
  */
 export function decodePowerShellOutput(buf: Buffer): string {
-  // oxlint-disable-next-line strict-boolean-expressions -- 类型上恒为 Buffer，但守卫顺带挡住跨语言调用侧的空值，防御性判空保留
+  // oxlint-disable-next-line strict-boolean-expressions, typescript/no-unnecessary-condition -- 类型上恒为 Buffer，但守卫顺带挡住跨语言调用侧的空值，防御性判空保留
   if (!buf || buf.length === 0) {
     return "";
   }
