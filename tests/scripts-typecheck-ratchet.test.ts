@@ -568,7 +568,7 @@ describe("取不到 git 清单要分两种原因（ISSUE #2965）", () => {
     trackedMjs: (root: string) => Set<string> | null;
     trackedMjsDetailed: (
       root: string,
-    ) => { kind: "ok"; files: Set<string> } | { kind: "not-git-top" } | { kind: "error"; reason: string };
+    ) => { files: Set<string>; kind: "ok" } | { kind: "not-git-top" } | { kind: "error"; reason: string };
   };
 
   it("真仓库根 ⇒ ok；子目录 ⇒ not-git-top；不存在的目录 ⇒ error", () => {
