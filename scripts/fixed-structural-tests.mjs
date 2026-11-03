@@ -237,7 +237,7 @@ export const FIXED_STRUCTURAL_TESTS = [
   // pre-commit 耗时账的接线（规范 §13.5.8.3）：记账**刻意不阻断**，所以「账本少记一条、
   // 记错刻度、或者根本没被钩子调用」三种失效形态都**不会让任何提交红** —— 只有这里的
   // 形态判据看得见。与 `doc-check-hook-wiring` 同因进固定清单：改 `.githooks/**` 会让
-  // 增量层放弃收窄（`mode: all` 也只跑固定清单），而「有人把两处 source 摘掉一处 /
+  // 增量层放弃收窄（`mode: all` 时固定清单全跑、另加本次变更命中，ISSUE #2792），而「有人把两处 source 摘掉一处 /
   // 把 `run()` 换回不记时的版本 / 抹掉 `export LOGD`」恰好落在 `.githooks/**` 上。
   "tests/precommit-timing.test.ts",
   // AST 判据聚合档的接线（规范 §13.5.8.2「第四笔账」）：6 条判据从 6 个进程收成
